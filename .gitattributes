@@ -1,0 +1,13 @@
+# 行尾统一，避免 Windows 检出后出现「整个文件都改了」的假 diff。
+# 仓库里一律存 LF，检出时按类型给：
+* text=auto eol=lf
+
+# Windows 批处理必须是 CRLF，否则有些解析器会出错
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 二进制，别做任何行尾/编码处理
+*.png binary
+*.ico binary
+*.exe binary
+*.zip binary

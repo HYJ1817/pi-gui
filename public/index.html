@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pi GUI</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="rail">
+    <header class="rail-head">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 8h15M9.5 8v11M15.5 8v8"/></svg>
+        <span>Pi</span>
+      </div>
+      <div class="rail-actions">
+        <button class="icon-btn" id="btnReload" title="重载 pi 配置">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5.5V11h-5.5"/></svg>
+        </button>
+        <button class="icon-btn" id="btnCompact" title="压缩上下文">
+          <svg viewBox="0 0 24 24"><path d="M8 9l4-4 4 4"/><path d="M16 15l-4 4-4-4"/><path d="M12 5v14"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <nav class="rail-nav">
+      <div class="nav-item" id="navNew">
+        <svg class="ni-ic" viewBox="0 0 24 24"><path d="M20 12.5a2.5 2.5 0 0 1-2.5 2.5H8l-4 3.5V5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5z"/></svg>
+        <span class="ni-label">新对话</span>
+        <svg class="ni-end" viewBox="0 0 24 24"><path d="M12 6.5v11M6.5 12h11"/></svg>
+      </div>
+      <div class="nav-item" id="navBranches">
+        <svg class="ni-ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h4a3 3 0 0 1 3 3v.5"/></svg>
+        <span class="ni-label">分支</span>
+        <span class="ni-count" id="branchCount"></span>
+      </div>
+    </nav>
+
+    <div class="rail-group">
+      <div class="group-head" id="groupHead">
+        <span>项目</span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>
+      </div>
+      <div class="group-body" id="groupBody">
+        <div class="projects" id="projects">
+          <div class="hint-empty">加载中…</div>
+        </div>
+        <div class="group-add" id="btnAddProject">
+          <svg viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>
+          <span>添加文件夹</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rail-spacer"></div>
+
+    <div class="rail-prov" id="navProviders" title="添加 / 管理模型供应商">
+      <svg class="rp-ic" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1.8"/><circle cx="16.8" cy="16.8" r="3.7"/></svg>
+      <span class="rp-label">模型供应商</span>
+      <span class="rp-count" id="providerCount"></span>
+    </div>
+
+    <div class="quota">
+      <div class="quota-head">
+        <svg class="quota-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.5-4.5"/></svg>
+        <span>用量</span>
+        <b id="uPct">—</b>
+      </div>
+      <div class="bar"><span id="uCtxBar"></span></div>
+      <div class="quota-note" id="uNote">上下文 —</div>
+      <div class="quota-rows">
+        <div><span>输入 / 输出</span><b id="uTok">—</b></div>
+        <div><span>缓存读取</span><b id="uCache">—</b></div>
+        <div><span>累计成本</span><b id="uCost">—</b></div>
+      </div>
+    </div>
+
+    <footer class="rail-foot">
+      <span class="avatar">π</span>
+      <span class="foot-name" id="footName">—</span>
+      <span class="grow"></span>
+      <span class="conn" id="conn"></span>
+      <span class="foot-state" id="connText">连接中</span>
+    </footer>
+  </aside>
+
+  <main class="stage">
+    <header class="stage-head">
+      <button class="icon-btn" id="btnTree" title="分支树">
+        <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h4a3 3 0 0 1 3 3v.5"/></svg>
+      </button>
+      <h1 id="title">新会话</h1>
+      <div class="head-right">
+        <button class="icon-btn" id="btnMore" title="更多">
+          <svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>
+        </button>
+        <button class="share-btn" id="btnShare">
+          <svg viewBox="0 0 24 24"><path d="M12 15.5V4"/><path d="M8 8l4-4 4 4"/><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
+          <span>分享</span>
+        </button>
+        <button class="icon-btn" id="btnStats" title="会话统计">
+          <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="stream" id="stream">
+      <div class="welcome" id="welcome">
+        <!-- 两块引导一开始就都藏着，等 /api/status 回来再决定显哪一块
+             （applyProjectState）。
+             先显任何一块都会在另一半情况下「闪一下错的文案」——
+             尤其不能先显「Pi 已就绪」，首次启动的用户会以为已经能用了。 -->
+        <!-- 形态 A：已选项目，pi 就绪 -->
+        <div class="welcome-pane" id="welcomeReady" hidden>
+          <svg class="welcome-mark" viewBox="0 0 24 24"><path d="M4.5 8h15M9.5 8v11M15.5 8v8"/></svg>
+          <h2>Pi 已就绪</h2>
+          <p>在下面描述你的任务。文件改动与命令执行会实时显示在这里。</p>
+          <div class="welcome-keys">
+            <span><kbd>Enter</kbd> 发送</span>
+            <span><kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
+            <span><kbd>Esc</kbd> 停止</span>
+          </div>
+        </div>
+
+        <!-- 形态 B：还没选项目。
+             这里刻意不猜一个默认目录（以前是用户主目录），而是明确让用户选一个 ——
+             pi 会在那个目录里读写文件、执行命令，选错了是要出事的，
+             不该由程序替用户决定。 -->
+        <div class="welcome-pane" id="welcomeNoProj" hidden>
+          <svg class="welcome-mark" viewBox="0 0 24 24">
+            <path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h3.2l1.6 2h8.2a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>
+          </svg>
+          <h2>先添加一个文件夹</h2>
+          <p>pi 会在你选定的目录里读写文件、执行命令。<br>选一个项目文件夹就可以开始了。</p>
+          <button class="welcome-cta" id="btnPickProject">
+            <svg viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>
+            <span>添加文件夹</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-box" id="composerBox">
+        <div class="attach-tray" id="attachTray" hidden></div>
+        <textarea id="input" rows="1" placeholder="随心输入"></textarea>
+        <div class="composer-bar">
+          <div class="cb-left">
+            <button class="icon-btn" id="btnAttach" title="添加文件：图片 / PDF / Word / 文本">
+              <svg viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>
+            </button>
+            <input type="file" id="fileInput" multiple hidden>
+            <span class="status-text" id="statusText"></span>
+          </div>
+          <div class="cb-right">
+            <button class="ctx-chip" id="btnCtx" title="上下文占用">
+              <svg class="ctx-ring" viewBox="0 0 36 36" aria-hidden="true">
+                <circle class="ring-bg" cx="18" cy="18" r="15.5"></circle>
+                <circle class="ring-fg" id="ctxRing" cx="18" cy="18" r="15.5"></circle>
+              </svg>
+              <span id="ctxPct">—</span>
+            </button>
+            <button class="chip" id="btnModel" title="切换模型">
+              <span class="chip-dot"></span>
+              <span id="modelText">模型</span>
+            </button>
+            <button class="chip" id="btnThink" title="思考强度">
+              <span id="thinkText">思考 —</span>
+            </button>
+            <button class="btn-stop" id="btnStop" hidden>
+              <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
+              <span>停止</span>
+            </button>
+            <button class="mic-btn" id="btnSend" disabled title="发送">
+              <svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div>
+  </main>
+
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" id="modalCard"></div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

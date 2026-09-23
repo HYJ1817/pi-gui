@@ -1,0 +1,50 @@
+{
+  "name": "pi-gui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi Coding Agent 的 Web GUI —— 通过 pi --mode rpc 驱动，不修改全局 pi 安装",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "app": "electron .",
+    "icon": "node scripts/make-icon.mjs --preview",
+    "test": "node tests/smoke.cjs && node tests/body-integrity.cjs && node tests/dev-server.cjs",
+    "test:ui": "node tests/smoke.cjs",
+    "test:body": "node tests/body-integrity.cjs",
+    "test:server": "node tests/dev-server.cjs",
+    "fixtures": "node tests/fixtures.mjs",
+    "harness": "node tests/visual-harness.cjs",
+    "shots": "node tests/cdp-shot.cjs",
+    "shots:harness": "node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=h",
+    "probe": "node tests/probe-page.cjs",
+    "shots:app": "node tests/shot-app.cjs",
+    "diag:cdp": "node tests/diag-cdp.cjs",
+    "e2e": "node tests/e2e-attach.cjs",
+    "e2e:app": "node tests/e2e-app.cjs",
+    "test:exe": "node tests/exe-check.cjs",
+    "test:app": "node tests/app-check.cjs",
+    "test:window": "node tests/window-state.cjs",
+    "diag:content": "node tests/diag-content.cjs",
+    "build:exe": "node scripts/build-exe.mjs",
+    "build:app": "node scripts/build-app.mjs",
+    "build:installer": "node scripts/build-installer.mjs",
+    "test:installer": "node tests/installer-check.cjs",
+    "test:portable": "node tests/portable-check.cjs",
+    "build:dist": "npm run build:app && npm run build:installer -- --zip"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^44.4.3",
+    "esbuild": "^0.28.2",
+    "jsdom": "^26.0.0",
+    "postject": "^1.0.0-alpha.6"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.3.289"
+  }
+}

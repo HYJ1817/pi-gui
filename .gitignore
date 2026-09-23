@@ -1,0 +1,18 @@
+node_modules/
+.uploads/
+.shots/
+projects.json
+
+# 构建产物
+build/
+dist-app/
+
+# 安装程序 / 便携版。上百 MB，不要进仓库 ——
+# 要分发就走 GitHub Release 的附件，别用 git 传二进制。
+dist-installer/
+
+# 排查问题时随手写的小探针，不是项目的一部分
+.probe/
+
+# clearDir 在删不掉时把旧目录改名留下的残骸
+*.trash-*
