@@ -1,6 +1,7 @@
 {
   "name": "pi-gui",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Pi Coding Agent 的 Web GUI —— 通过 pi --mode rpc 驱动，不修改全局 pi 安装",

@@ -81,3 +81,18 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
 - `tests/` — 上面那几组测试
 
 `dist-installer/` 不进仓库（上百 MB 的二进制）。要分发就传到 GitHub Release 的附件里。
+
+## 许可证
+
+本项目是 [MIT](LICENSE)。
+
+打包出去的安装程序 / 便携版里还内嵌了这些第三方组件，各自的许可证随包附在
+`resources/app/THIRD-PARTY-NOTICES.txt`：
+
+| 组件 | 许可证 | 说明 |
+| --- | --- | --- |
+| [pdfjs-dist](https://github.com/mozilla/pdf.js) | Apache-2.0 | PDF 文本抽取，会打进包里 |
+| [Electron](https://github.com/electron/electron) | MIT | 桌面窗口运行时 |
+| [esbuild](https://github.com/evanw/esbuild) | MIT | 只在构建期用 |
+
+**界面本身不含 pi 的代码** —— 它是通过 RPC 调用你本机安装的 pi（pi 是 MIT）。

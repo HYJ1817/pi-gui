@@ -21,6 +21,8 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const APP = path.join(ROOT, 'dist-app', 'Pi GUI-win32-x64', 'resources', 'app');
+const APP_EXE = path.join(ROOT, 'dist-app', 'Pi GUI-win32-x64', 'Pi GUI.exe');
+const ICON = path.join(ROOT, 'build', 'icon.ico');
 const SANDBOX = path.join(os.tmpdir(), 'pi-gui-appcheck');
 const DATA = path.join(os.tmpdir(), 'pi-gui-appcheck-data');
 /* pi 的工作目录必须显式给。
@@ -96,6 +98,52 @@ async function main() {
   check('随包资源齐全', () => {
     for (const p of ['server.cjs', 'main.cjs', 'asset-manifest.json', 'pdfjs/standard_fonts', 'pdfjs/cmaps', 'pdfjs/worker/pdf.worker.mjs']) {
       if (!fs.existsSync(path.join(SANDBOX, p))) return '缺 ' + p;
+    }
+    return true;
+  });
+
+  /* 图标必须真的嵌进应用 exe。
+   *
+   * 这个失败模式是**静默**的：packager 拿到一个不存在的图标路径不报错，
+   * 直接出一个顶着 Electron 默认图标的应用。而 build-exe.mjs 会清空整个
+   * build/，所以「先生成图标后构建后端」这个顺序会让 icon.ico 在打包前一刻
+   * 被删掉 —— 实测就这么错过很久，只有盯着任务栏图标才发现。
+   * 做法：把 ico 每个条目的特征字节拿去 exe 里搜，全都没命中就说明没嵌进去。 */
+  check('应用图标已嵌入 exe', () => {
+    if (!fs.existsSync(ICON)) return `没有 ${ICON}（构建顺序错了？图标步骤必须排在后端构建之后）`;
+    if (!fs.existsSync(APP_EXE)) return `没有 ${APP_EXE}`;
+    const ico = fs.readFileSync(ICON);
+    const exe = fs.readFileSync(APP_EXE);
+    const count = ico.readUInt16LE(4);
+    if (!count) return 'icon.ico 里没有条目';
+    let hit = 0;
+    for (let i = 0; i < count; i++) {
+      const off = 6 + i * 16;
+      const size = ico.readUInt32LE(off + 8);
+      const start = ico.readUInt32LE(off + 12);
+      if (!size || start + size > ico.length) continue;
+      const probe = ico.subarray(start + Math.floor(size * 0.5), start + Math.floor(size * 0.5) + 96);
+      if (probe.length && exe.includes(probe)) hit++;
+    }
+    return hit === count ? true : `icon.ico 有 ${count} 个尺寸，exe 里只找到 ${hit} 个 —— 应用在用默认图标`;
+  });
+
+  /* 许可证必须跟着二进制走。
+   *
+   * pdfjs-dist 是 Apache-2.0，它的代码被打进包里一起分发，而 Apache-2.0 §4
+   * 要求分发时附上许可证副本 —— 只在仓库根目录放个 LICENSE 不够，
+   * 下载安装包的人不会去看仓库。这条断言就是防它被构建脚本改漏。 */
+  check('随包带了许可证与第三方署名', () => {
+    const lic = path.join(SANDBOX, 'LICENSE');
+    const notices = path.join(SANDBOX, 'THIRD-PARTY-NOTICES.txt');
+    if (!fs.existsSync(lic)) return '缺 LICENSE';
+    if (!fs.existsSync(notices)) return '缺 THIRD-PARTY-NOTICES.txt';
+    if (!/MIT License/.test(fs.readFileSync(lic, 'utf8'))) return 'LICENSE 里没有 MIT 正文';
+    const n = fs.readFileSync(notices, 'utf8');
+    if (!/pdfjs-dist/.test(n)) return '署名里没提 pdfjs-dist';
+    if (!/Apache License/.test(n)) return '署名里没提 Apache License';
+    if (!/TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION/.test(n)) {
+      return '只写了组件名，没附 Apache-2.0 许可证正文';
     }
     return true;
   });

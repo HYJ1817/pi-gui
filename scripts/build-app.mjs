@@ -30,6 +30,9 @@ const OUT = path.join(ROOT, 'dist-app');
 const PDFJS = path.join(ROOT, 'node_modules', 'pdfjs-dist');
 const APP_NAME = 'Pi GUI';
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+/* 由 make-icon.mjs 生成。注意它在 build/ 里，而 build-exe.mjs 会清空 build/ —— 
+ * 所以生成图标的步骤必须排在构建后端之后（见下面的步骤顺序）。 */
+const ICON = path.join(BUILD, 'icon.ico');
 
 /* Chromium 自带几十种语言的 .pak，我们只需要中文和英文兜底，其余全部删掉。
  * 语言包不删的话光这一项就 48 MB。 */
@@ -37,18 +40,24 @@ const KEEP_LOCALES = new Set(['zh-CN.pak', 'en-US.pak']);
 
 const step = (n, msg) => console.log(`\n[${n}] ${msg}`);
 
-/* 1. 图标 */
-step(1, '生成图标');
-execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'make-icon.mjs')], { stdio: 'inherit', cwd: ROOT });
-
-/* 2. 后端产物：server.cjs（含 pdfjs 代码）+ asset-manifest.json */
-step(2, '构建后端产物');
+/* 1. 后端产物：server.cjs（含 pdfjs 代码）+ asset-manifest.json
+ *
+ * **必须在生成图标之前。** build-exe.mjs 开头会把整个 build/ 清掉重建，
+ * 谁先写进去都会被它删掉 —— 早先的顺序是「先图标后后端」，
+ * 于是 build/icon.ico 每次都在打包前一刻被删，Electron 拿到一个不存在的
+ * 图标路径又不报错，结果应用一直顶着 Electron 默认图标。
+ * 这类「参数指向不存在的文件但静默通过」的问题，只能靠顺序约束 + 断言挡住。 */
+step(1, '构建后端产物');
 const serverCjs = path.join(BUILD, 'server.cjs');
 if (process.argv.includes('--rebuild') || !fs.existsSync(serverCjs)) {
   execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-exe.mjs')], { stdio: 'inherit', cwd: ROOT });
 } else {
   console.log('  复用已有的 build/server.cjs（要重建加 --rebuild）');
 }
+
+/* 2. 图标 */
+step(2, '生成图标');
+execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'make-icon.mjs')], { stdio: 'inherit', cwd: ROOT });
 
 /* 3. 组装应用目录
  *
@@ -84,10 +93,51 @@ const worker = path.join(PDFJS, 'legacy', 'build', 'pdf.worker.mjs');
 if (!fs.existsSync(worker)) throw new Error('缺少 pdf.worker.mjs，先运行 npm install');
 copyInto(path.join(STAGE, 'pdfjs', 'worker'), worker, 'pdf.worker.mjs');
 
+/* 随包分发的第三方许可证。
+ *
+ * pdfjs-dist 是 Apache-2.0，它的代码会被打进包里，而 Apache-2.0 §4 要求
+ * 分发时**附上许可证副本** —— 只在仓库根目录放个 LICENSE 不够，
+ * 得跟着二进制走：下载安装包的人根本不会去看仓库。
+ *
+ * （Electron 自己的 LICENSE 与 LICENSES.chromium.html 由 packager 放在应用根目录，
+ *   不需要在这里重复。） */
+const pdfjsLicense = path.join(PDFJS, 'LICENSE');
+if (!fs.existsSync(pdfjsLicense)) throw new Error(`缺少 ${pdfjsLicense}，先运行 npm install`);
+const pdfjsVersion = JSON.parse(fs.readFileSync(path.join(PDFJS, 'package.json'), 'utf8')).version;
+
+fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(STAGE, 'LICENSE'));
+fs.writeFileSync(
+  path.join(STAGE, 'THIRD-PARTY-NOTICES.txt'),
+  [
+    'Pi GUI —— 随包分发的第三方组件',
+    '',
+    `pdfjs-dist ${pdfjsVersion}   Apache License 2.0`,
+    'https://github.com/mozilla/pdf.js',
+    '用途：从 PDF 里抽取文本（PDF 附件功能）。',
+    '',
+    'Electron 及内嵌 Chromium 的许可证在应用根目录：',
+    '  LICENSE、LICENSES.chromium.html',
+    '',
+    'Pi GUI 本身的许可证见同目录的 LICENSE（MIT）。',
+    '',
+    '='.repeat(72),
+    '',
+    fs.readFileSync(pdfjsLicense, 'utf8'),
+  ].join('\n'),
+  'utf8'
+);
+
 console.log(`  应用目录 ${(sizeOf(STAGE) / 1024 / 1024).toFixed(1)} MB`);
 
 /* 4. 打 Electron 应用 */
 step(4, '打包 Electron 应用');
+
+/* 图标必须在打包前真的存在。packager 拿到不存在的路径**不会报错**，
+ * 只会默默出一个默认图标的应用 —— 静默失败，只有对着窗口看图标才发现。
+ * 所以这里显式挡一道（顺序问题见第 1 步的说明）。 */
+if (!fs.existsSync(ICON)) {
+  throw new Error(`图标不存在：${ICON}\n  先跑 npm run build:app（顺序由脚本保证，不要手动打乱步骤）`);
+}
 
 /* packager 的 overwrite 走 fs.promises.rm，在带「批量删除保护」的环境里
  * 会因为文件数超阈值直接抛错。所以先自己把旧产物挪开（见 clearDir 的说明）——
@@ -104,7 +154,7 @@ const appPaths = await packager({
   asar: false, // 后端要往磁盘写上传临时文件，asar 里写不了
   prune: false,
   quiet: true,
-  icon: path.join(BUILD, 'icon.ico'),
+  icon: ICON,
   appVersion: VERSION,
   win32metadata: {
     CompanyName: 'Pi GUI',
