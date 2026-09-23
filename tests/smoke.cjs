@@ -668,6 +668,81 @@ staticCheck();
     window.document.getElementById('welcomeNoProj').hidden === true ? true : '还露着「先添加文件夹」'
   );
 
+  /* --- 模型列表行格式：id|显示名|key=value --- */
+  const P = window.parseModelLine;
+  check('parseModelLine 已暴露到全局', () => typeof P === 'function' || typeof P);
+
+  if (typeof P === 'function') {
+    check('只写 id', () => {
+      const m = P('gpt-4o');
+      return (m && m.id === 'gpt-4o' && m.name === undefined) || JSON.stringify(m);
+    });
+    check('id|显示名', () => P('gpt-4o|GPT-4o').name === 'GPT-4o' || JSON.stringify(P('gpt-4o|GPT-4o')));
+    check('带全套能力参数', () => {
+      const m = P(
+        'deepseek-v4-pro|DeepSeek V4 Pro|contextWindow=1000000|maxTokens=384000|reasoning=true|input=text,image'
+      );
+      return (
+        m.id === 'deepseek-v4-pro' &&
+        m.name === 'DeepSeek V4 Pro' &&
+        m.contextWindow === 1000000 &&
+        m.maxTokens === 384000 &&
+        m.reasoning === true &&
+        JSON.stringify(m.input) === '["text","image"]'
+      ) ? true : JSON.stringify(m);
+    });
+    check('ctx / max 是长名字的别名', () => {
+      const m = P('x|X|ctx=200000|max=64000');
+      return m.contextWindow === 200000 && m.maxTokens === 64000 || JSON.stringify(m);
+    });
+    // 这条是格式设计的核心：不带 = 的片段只能是显示名，不能当布尔旗标
+    check('显示名不会被误当成布尔旗标', () =>
+      P('x|reasoning').name === 'reasoning' || JSON.stringify(P('x|reasoning'))
+    );
+    check('未知键被忽略且不破坏整行', () => {
+      const m = P('x|X|bogus=1|contextWindow=1000');
+      return m.contextWindow === 1000 && m.bogus === undefined || JSON.stringify(m);
+    });
+    check('非法数值被丢弃', () => {
+      const m = P('x|X|contextWindow=-1|maxTokens=abc');
+      return m.contextWindow === undefined && m.maxTokens === undefined || JSON.stringify(m);
+    });
+    check('空行返回 null', () => P('') === null || JSON.stringify(P('')));
+
+    check('modelLine 与 parseModelLine 能往返', () => {
+      const src = 'a|A|contextWindow=1000|maxTokens=500|reasoning=true|input=text,image';
+      const back = window.modelLine(P(src));
+      return back === src || back;
+    });
+    check('modelLine 会换掉显示名里的竖线（否则把行切乱）', () => {
+      const line = window.modelLine({ id: 'a', name: 'x|y' });
+      return line === 'a|x/y' || line;
+    });
+    check('fmtTokens 格式化', () => {
+      const got = `${window.fmtTokens(1048576)}/${window.fmtTokens(262144)}/${window.fmtTokens(512)}`;
+      return got === '1M/262K/512' || got;
+    });
+  }
+
+  /* --- 添加供应商弹层里的拉取入口 --- */
+  check('弹层有「拉取」按钮，且拉取面板默认收起', () => {
+    window.openAddProvider();
+    const card = $('modalCard');
+    if (!card) return '弹层没打开';
+
+    const btn = [...card.querySelectorAll('.field-head .btn')].find((b) => b.textContent === '拉取');
+    const panel = card.querySelector('.fetch-panel');
+
+    // 收拾干净，别影响后面的检查
+    $('modal').hidden = true;
+    card.innerHTML = '';
+
+    if (!btn) return '没有拉取按钮';
+    if (!panel) return '没有拉取面板';
+    if (panel.hidden !== true) return '拉取面板默认应该藏着';
+    return true;
+  });
+
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;

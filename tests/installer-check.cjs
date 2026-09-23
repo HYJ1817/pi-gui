@@ -208,6 +208,17 @@ async function launchInstalled() {
   const sentinel = path.join(USER_DATA, 'installer-check-sentinel.txt');
   fs.writeFileSync(sentinel, '卸载后这个文件应该还在\n', 'utf8');
 
+  /* 先清掉上一轮可能留下的桌面快捷方式和开始菜单项。
+   *
+   * 这一条是踩出来的：如果同名快捷方式已经在那儿，本轮卸载删掉的当然是
+   * 「本轮新建的那个」，但断言只看「文件还在不在」—— 残留会让断言变成
+   * 「这一轮到底删没删」的不可复现失败。实测遇到过一次，查了半天才确认
+   * 卸载脚本本身没问题（手工装+卸一次，桌面快捷方式确实被删掉了）。
+   * 顺便也把 desk 提前解析出来，安装后再算一次会拿到不同的目录。 */
+  const desk = desktopDir();
+  if (desk) rmrf(path.join(desk, `${APP}.lnk`));
+  rmrf(START_MENU);
+
   console.log('\n[1] 静默安装（走默认位置）');
   const r1 = await run(SETUP, ['/S']);
   check('安装程序退出码为 0', () => r1.code === 0 || `退出码 ${r1.code}\n${r1.out.slice(-400)}`);
@@ -228,7 +239,6 @@ async function launchInstalled() {
   check('卸载程序已生成', () => fs.existsSync(path.join(INSTALL, `Uninstall ${APP}.exe`)) || '缺卸载程序');
   check('开始菜单有快捷方式', () => fs.existsSync(path.join(START_MENU, `${APP}.lnk`)) || '没找到');
   check('开始菜单有卸载入口', () => fs.existsSync(path.join(START_MENU, `卸载 ${APP}.lnk`)) || '没找到');
-  const desk = desktopDir();
   if (desk) {
     check('桌面有快捷方式', () => fs.existsSync(path.join(desk, `${APP}.lnk`)) || '没找到');
   } else {
@@ -256,6 +266,16 @@ async function launchInstalled() {
   const launched = await launchInstalled();
   check('装好的程序能起来（窗口 + 内嵌后端）', () =>
     launched.ok === true || `没能就绪。日志：\n${launched.log.slice(-600)}`
+  );
+
+  /* 应用正开着的时候再静默装一遍 —— 这是 MessageBox 那条路径。
+   * NSIS 的 /S 只跳过向导页，**不抑制 MessageBox**；只有带 /SD 才会在静默模式
+   * 下自动取默认值。少了 /SD，这里会一直等人点「确定」，永久挂住。
+   * 超时给 90 秒：正常几秒就完，挂了就是挂了，不用等满 240。 */
+  console.log('[2b] 应用运行时再次静默安装（验证不会卡在对话框上）');
+  const r1b = await run(SETUP, ['/S'], 90000);
+  check('应用正在运行时静默安装也能自己走完（不卡对话框）', () =>
+    r1b.code === 0 || `退出码 ${r1b.code} —— 很可能卡在 MessageBox 上了，检查 /SD`
   );
 
   console.log('[3] 静默卸载');

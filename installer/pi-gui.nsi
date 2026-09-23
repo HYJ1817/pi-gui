@@ -104,10 +104,15 @@ Function CloseRunningInstance
   Pop $1 ; 输出（不用）
 
   ${If} $0 == 0
-    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
-      "${APP_NAME} 正在运行，需要先关闭它才能继续。$\r$\n$\r$\n点“确定”自动关闭并继续。" \
-      IDOK do_close
-    MessageBox MB_ICONSTOP|MB_OK "安装已取消。请手动关闭 ${APP_NAME} 后重新运行本安装程序。"
+    ; /SD 是必须的：NSIS 的 /S 只跳过向导页，**不会抑制 MessageBox**。
+    ; 没有 /SD 时，静默安装会弹出这个框一直等人点 —— 升级脚本、CI、
+    ; 以及本仓库的 test:installer 都会永久挂住。加了 /SD 之后，
+    ; 静默模式自动按「确定」处理，即自动关掉正在运行的实例再继续。
+    ; /SD 必须写在**文本之后**（写成 options 和文本之间会让 NSIS 把文本当成
+    ; 跳转标签，报 could not resolve label）。
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "${APP_NAME} 正在运行，需要先关闭它才能继续。$\r$\n$\r$\n点“确定”自动关闭并继续。" /SD IDOK IDOK do_close
+    ; 走到这里说明用户点了“取消”。同样加 /SD，避免静默模式下卡住。
+    MessageBox MB_ICONSTOP|MB_OK "安装已取消。请手动关闭 ${APP_NAME} 后重新运行本安装程序。" /SD IDOK
     Quit
 do_close:
     ExecWait 'taskkill /IM "${APP_EXE}" /F /T'

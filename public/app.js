@@ -1741,6 +1741,79 @@ const PRESETS = {
   gemini: { label: 'Google Gemini', name: 'google', api: 'google-generative-ai', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', apiKey: '$GEMINI_API_KEY', models: 'gemini-2.5-pro|Gemini 2.5 Pro' },
 };
 
+/* 模型列表里的一行。
+ *
+ * 基础形式是 `id` 或 `id|显示名`，后面可以跟任意个 `key=value` 参数，
+ * 它们会被写进 pi 的模型条目（见 pi docs/models.md 的 Model Configuration）。
+ *
+ * 为什么参数必须带 `=`：否则 `id|reasoning` 无法区分「显示名叫 reasoning」
+ * 和「这是个布尔旗标」。要求 key=value 就没有歧义了。 */
+const MODEL_PARAM_ALIAS = {
+  ctx: 'contextWindow',
+  context: 'contextWindow',
+  contextwindow: 'contextWindow',
+  max: 'maxTokens',
+  maxtokens: 'maxTokens',
+};
+
+function parseModelLine(line) {
+  const parts = String(line).split('|').map((s) => s.trim());
+  const id = parts.shift();
+  if (!id) return null;
+
+  const model = { id };
+
+  for (const part of parts) {
+    if (!part) continue;
+
+    const eq = part.indexOf('=');
+    if (eq === -1) {
+      // 第一个不带 = 的片段是显示名
+      if (!model.name) model.name = part;
+      continue;
+    }
+
+    const rawKey = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    const key =
+      MODEL_PARAM_ALIAS[rawKey.toLowerCase()] ||
+      ['contextWindow', 'maxTokens', 'reasoning', 'input'].find(
+        (k) => k.toLowerCase() === rawKey.toLowerCase()
+      );
+    if (!key) continue; // 未知键静默忽略，别让一个笔误毁掉整行
+
+    if (key === 'reasoning') {
+      model.reasoning = /^(1|true|yes|on)$/i.test(value);
+    } else if (key === 'input') {
+      const kinds = value.split(',').map((s) => s.trim()).filter(Boolean);
+      if (kinds.length) model.input = kinds;
+    } else {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) model[key] = Math.round(n);
+    }
+  }
+
+  return model;
+}
+
+/** parseModelLine 的逆运算。显示名里的 `|` 会被换掉，否则会把这一行切乱。 */
+function modelLine(m) {
+  const parts = [m.id];
+  if (m.name) parts.push(String(m.name).replace(/\|/g, '/'));
+  if (m.contextWindow) parts.push(`contextWindow=${m.contextWindow}`);
+  if (m.maxTokens) parts.push(`maxTokens=${m.maxTokens}`);
+  if (m.reasoning) parts.push('reasoning=true');
+  if (Array.isArray(m.input) && m.input.includes('image')) parts.push(`input=${m.input.join(',')}`);
+  return parts.join('|');
+}
+
+/** 128000 → 128K，1048576 → 1M。只用于展示，不参与计算。 */
+function fmtTokens(n) {
+  if (n >= 1e6) return `${Number((n / 1e6).toFixed(1))}M`;
+  if (n >= 1000) return `${Math.round(n / 1000)}K`;
+  return String(n);
+}
+
 let providerData = { path: '', providers: {}, keyStates: {} };
 
 async function loadProviders(container) {
@@ -1927,17 +2000,172 @@ function openAddProvider() {
     );
 
     const fModels = mk('div', 'field');
-    fModels.innerHTML = '<label>模型列表</label>';
+    const mHead = mk('div', 'field-head');
+    mHead.appendChild(mk('label', '', { textContent: '模型列表' }));
+    const btnFetch = mk('button', 'btn tiny', { textContent: '拉取', type: 'button' });
+    mHead.appendChild(btnFetch);
+
     const iModels = mk('textarea', '', {
       rows: 4,
-      placeholder: 'llama3.1:8b\nqwen2.5-coder:7b|Qwen Coder',
+      placeholder: 'deepseek-chat|DeepSeek Chat\nqwen3-max|Qwen3 Max|contextWindow=262144',
     });
-    fModels.append(
-      iModels,
-      mk('div', 'hint', { textContent: '每行一个模型。用 id|显示名 的格式可指定显示名称。' })
-    );
+    const mHint = mk('div', 'hint', {
+      textContent:
+        '每行一个模型：id 或 id|显示名，后面可跟 contextWindow=… / maxTokens=… / reasoning=true / input=text,image。' +
+        '点「拉取」可直接从供应商读取。',
+    });
+
+    /* ---- 拉取面板 ---- */
+    const panel = mk('div', 'fetch-panel', { hidden: true });
+    const bar = mk('div', 'fetch-bar');
+    const fSearch = mk('input', 'fetch-search', { placeholder: '搜索模型…', type: 'search' });
+    const btnAll = mk('button', 'btn tiny', { textContent: '全选', type: 'button' });
+    const btnNone = mk('button', 'btn tiny', { textContent: '清空', type: 'button' });
+    const btnCollapse = mk('button', 'btn tiny', { textContent: '收起', type: 'button' });
+    bar.append(fSearch, btnAll, btnNone, btnCollapse);
+
+    const listBox = mk('div', 'fetch-list');
+    const foot = mk('div', 'fetch-foot');
+    const note = mk('div', 'fetch-note');
+    const btnAdd = mk('button', 'btn tiny primary', { textContent: '加入列表', type: 'button' });
+    foot.append(note, btnAdd);
+
+    panel.append(bar, listBox, foot);
+    fModels.append(mHead, iModels, mHint, panel);
 
     card.append(fName, row, fKey, fModels);
+
+    let fetched = [];
+    const picked = new Set();
+
+    const visible = () => {
+      const q = fSearch.value.trim().toLowerCase();
+      if (!q) return fetched;
+      return fetched.filter(
+        (m) => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q)
+      );
+    };
+
+    const syncPick = () => {
+      btnAdd.textContent = picked.size ? `加入列表 (${picked.size})` : '加入列表';
+    };
+
+    const renderFetchList = () => {
+      const shown = visible();
+      listBox.innerHTML = '';
+      if (!shown.length) {
+        listBox.innerHTML = '<div class="hint-empty">没有匹配的模型</div>';
+        return;
+      }
+
+      for (const m of shown) {
+        const rowEl = mk('div', 'fetch-row');
+        const cb = mk('input', '', { type: 'checkbox', checked: picked.has(m.id) });
+        const commit = () => {
+          if (cb.checked) picked.add(m.id);
+          else picked.delete(m.id);
+          syncPick();
+        };
+        cb.onchange = commit;
+        // 点整行也能勾选。点 checkbox 本身时交给它自己处理，否则会被切两次。
+        rowEl.onclick = (e) => {
+          if (e.target === cb) return;
+          cb.checked = !cb.checked;
+          commit();
+        };
+
+        rowEl.appendChild(cb);
+        rowEl.appendChild(mk('span', 'fetch-id', { textContent: m.id }));
+        if (m.name) rowEl.appendChild(mk('span', 'fetch-name', { textContent: m.name }));
+
+        const badges = [];
+        if (m.contextWindow) badges.push(`ctx ${fmtTokens(m.contextWindow)}`);
+        if (m.maxTokens) badges.push(`max ${fmtTokens(m.maxTokens)}`);
+        if (m.reasoning) badges.push('推理');
+        if (Array.isArray(m.input) && m.input.includes('image')) badges.push('图片');
+        for (const b of badges) rowEl.appendChild(mk('span', 'fetch-badge', { textContent: b }));
+
+        listBox.appendChild(rowEl);
+      }
+    };
+
+    fSearch.oninput = renderFetchList;
+
+    btnAll.onclick = () => {
+      for (const m of visible()) picked.add(m.id);
+      renderFetchList();
+      syncPick();
+    };
+
+    btnNone.onclick = () => {
+      picked.clear();
+      renderFetchList();
+      syncPick();
+    };
+
+    btnCollapse.onclick = () => {
+      panel.hidden = true;
+    };
+
+    btnAdd.onclick = () => {
+      const chosen = fetched.filter((m) => picked.has(m.id));
+      if (!chosen.length) return toast('还没有选中任何模型', 'warn');
+
+      const lines = iModels.value.split('\n').map((s) => s.trim()).filter(Boolean);
+      const have = new Set();
+      for (const l of lines) {
+        const p = parseModelLine(l);
+        if (p) have.add(p.id);
+      }
+
+      let added = 0;
+      for (const m of chosen) {
+        if (have.has(m.id)) continue;
+        lines.push(modelLine(m));
+        have.add(m.id);
+        added += 1;
+      }
+      iModels.value = lines.join('\n');
+      toast(added ? `已加入 ${added} 个模型` : '选中的模型都已在列表里', added ? 'info' : 'warn');
+    };
+
+    btnFetch.onclick = async () => {
+      const baseUrl = iBase.value.trim();
+      if (!baseUrl) return toast('请先填写 Base URL', 'warn');
+
+      btnFetch.disabled = true;
+      btnFetch.textContent = '拉取中…';
+      try {
+        const r = await fetch('/api/providers/models', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseUrl, api: sApi.value, apiKey: iKey.value.trim() }),
+        });
+        const j = await r.json();
+        if (!j.ok) {
+          toast(j.error || '拉取失败', 'error');
+          return;
+        }
+
+        fetched = j.models || [];
+        picked.clear();
+        panel.hidden = false;
+        fSearch.value = '';
+        renderFetchList();
+        syncPick();
+        // 弹层内容比视口高（max-height:78vh + 内部滚动），面板默认落在折叠线以下。
+        // 不主动滚一下，用户会以为「点了拉取什么都没发生」。
+        panel.scrollIntoView({ block: 'nearest' });
+        note.textContent = `${fetched.length} 个模型 · ${j.source}`;
+        note.title = (j.tried || []).length > 1 ? `尝试过：\n${j.tried.join('\n')}` : j.source;
+        toast(`取到 ${fetched.length} 个模型`, 'info');
+      } catch (err) {
+        toast('拉取失败：' + err.message, 'error');
+      } finally {
+        btnFetch.disabled = false;
+        btnFetch.textContent = '拉取';
+      }
+    };
 
     for (const p of Object.values(PRESETS)) {
       const b = mk('button', 'preset', { textContent: p.label, type: 'button' });
@@ -1949,6 +2177,9 @@ function openAddProvider() {
         iBase.value = p.baseUrl;
         iKey.value = p.apiKey;
         iModels.value = p.models;
+        // 有的预设（例如 OpenRouter）模型太多，没法预置 —— 直接告诉用户去拉取，
+        // 否则会以为「填了预设却还是空的」是坏了。
+        if (!p.models) toast(`${p.label} 的模型太多，没有预置。点「拉取」读取。`, 'info');
       };
       presets.appendChild(b);
     }
@@ -1968,10 +2199,8 @@ function openAddProvider() {
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean)
-        .map((l) => {
-          const [id, label] = l.split('|').map((s) => s.trim());
-          return label ? { id, name: label } : { id };
-        });
+        .map(parseModelLine)
+        .filter(Boolean);
 
       try {
         const r = await fetch('/api/providers', {

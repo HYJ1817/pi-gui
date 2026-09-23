@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { extract, clampInline, maxBytes } from './lib/extract.js';
 import { readPublic, isSea } from './lib/assets.js';
+import { fetchModels } from './lib/models-api.js';
 
 // 数据目录：projects.json 和上传缓存放这里。
 //
@@ -381,6 +382,40 @@ const API_TYPES = new Set([
   'google-generative-ai',
 ]);
 
+/* pi 的模型条目字段白名单（见 pi docs/models.md 的 Model Configuration）。
+ * 前端只允许写这几个 —— 其余键一律丢弃，避免把任意结构塞进用户配置。
+ * 数值做范围检查：写进 0 或负数会让 pi 的上下文压缩阈值算错。 */
+const MODEL_FIELDS = {
+  name: (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined),
+  contextWindow: (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+  },
+  maxTokens: (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+  },
+  reasoning: (v) => (typeof v === 'boolean' ? v : undefined),
+  input: (v) => {
+    if (!Array.isArray(v)) return undefined;
+    const kinds = [...new Set(v.filter((x) => x === 'text' || x === 'image'))];
+    return kinds.length ? kinds : undefined;
+  },
+};
+
+function cleanModelEntry(m) {
+  if (!m || typeof m !== 'object') return null;
+  const id = String(m.id ?? '').trim();
+  if (!id) return null;
+
+  const out = { id: id.slice(0, 300) };
+  for (const [key, coerce] of Object.entries(MODEL_FIELDS)) {
+    const value = coerce(m[key]);
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 /* pi 的 apiKey 支持三种写法：$ENV_VAR 引用环境变量、!command 执行命令取值、字面量。
  * 实测：$VAR 未设置时 pi 会**静默丢掉整个供应商**——get_available_models 里完全查不到，
  * 也不报错。所以这里主动检查并提示，否则用户根本不知道为什么加完没反应。 */
@@ -394,7 +429,10 @@ function apiKeyState(apiKey) {
     return { kind: 'literal', ok: true, note: '' };
   }
   if (raw.startsWith('$')) {
-    const name = raw.slice(1);
+    // 两种等价写法：$NAME 和 ${NAME}。只取 slice(1) 会把 ${NAME} 解析成 "{NAME}"，
+    // 于是一个明明设置好的变量被误报成「没有设置」。
+    const body = raw.slice(1);
+    const name = body.startsWith('{') && body.endsWith('}') ? body.slice(1, -1) : body;
     if (process.env[name]) return { kind: 'env', ok: true, note: `已从环境变量 ${name} 取值` };
     return {
       kind: 'env',
@@ -462,9 +500,7 @@ function handleProviders(req, res, url) {
         if (config.apiKey && String(config.apiKey).trim()) {
           clean.apiKey = String(config.apiKey).trim();
         }
-        clean.models = config.models
-          .filter((m) => m && m.id)
-          .map((m) => (m.name ? { id: String(m.id), name: String(m.name) } : { id: String(m.id) }));
+        clean.models = config.models.map(cleanModelEntry).filter(Boolean);
 
         const cfg = readModelsConfig();
         cfg.providers[name] = clean;
@@ -774,6 +810,45 @@ function handleCommand(req, res) {
     .catch((err) => json(res, 413, { ok: false, error: String(err.message) }));
 }
 
+/* 从供应商的 /models 接口拉取模型列表。
+ *
+ * 必须由服务端代发：浏览器直连会撞 CORS。实现细节在 lib/models-api.js。
+ * 无论成功失败都回 200，让前端统一走「解析 JSON 里的 ok」这条路径 ——
+ * 否则前端要同时处理 HTTP 错误和业务错误两套逻辑。 */
+function handleProviderModels(req, res) {
+  readBody(req)
+    .then(async (raw) => {
+      let payload;
+      try {
+        payload = JSON.parse(raw || '{}');
+      } catch {
+        return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
+      }
+
+      const baseUrl = String(payload.baseUrl || '').trim();
+      if (!baseUrl) return json(res, 200, { ok: false, error: '请先填写 Base URL' });
+
+      const api = API_TYPES.has(payload.api) ? payload.api : 'openai-completions';
+
+      const out = await fetchModels({
+        baseUrl,
+        api,
+        apiKey: payload.apiKey,
+        headers: payload.headers && typeof payload.headers === 'object' ? payload.headers : {},
+      });
+
+      if (!out.ok) return json(res, 200, { ok: false, error: out.error, tried: out.tried });
+      return json(res, 200, {
+        ok: true,
+        source: out.source,
+        keySource: out.keySource,
+        tried: out.tried,
+        models: out.models,
+      });
+    })
+    .catch((err) => json(res, 500, { ok: false, error: String(err.message) }));
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
@@ -789,6 +864,11 @@ const server = http.createServer((req, res) => {
       // 但显式给一个字段更不容易被将来的改动弄丢。
       hasProject: Boolean(currentCwd),
     });
+  }
+  // 必须排在下面那条前缀匹配之前 —— 否则 /api/providers/models 会被
+  // 当成「保存一个叫 models 的供应商」，而且前端拿不到任何报错。
+  if (url.pathname === '/api/providers/models' && req.method === 'POST') {
+    return handleProviderModels(req, res);
   }
   if (url.pathname === '/api/providers' || url.pathname.startsWith('/api/providers/')) {
     return handleProviders(req, res, url);
