@@ -191,10 +191,26 @@ async function main() {
     check('启动日志不出现 0.0.0.0', () => st.out.includes('0.0.0.0') === false || '日志暗示可从任意地址访问');
     check('启动日志说明令牌校验已启用', () => /令牌校验已启用/.test(st.out) || '没看到令牌状态提示');
 
-    /* ---- 6. 静态检查：listen 显式绑定回环 ---- */
-    const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
-    check('server.js 显式 listen 到 127.0.0.1', () => /server\.listen\(\s*PORT\s*,\s*'127\.0\.0\.1'/.test(src) || '没有显式绑定回环地址');
-    check('server.js 不把令牌交给 pi 子进程', () => /delete\s+env\.PI_GUI_TOKEN/.test(src) || '令牌可能被传给 pi 子进程');
+    /* ---- 6. 静态检查：listen 显式绑定回环 + 令牌不进 pi 环境 ----
+     *
+     * 后端已拆成 server.js + server/*.js。守卫跟着代码走 ——
+     * 扫「整个后端源码集合」而不是只扫 server.js，这样以后再把某段逻辑挪到
+     * 别的模块里，守卫仍然拦得住；反过来只盯一个文件，就会出现
+     * 「代码搬走了、守卫还在原地空转」这种假绿。
+     *
+     * 令牌那条的正则放宽成任意变量名：rpc-bridge.js 里是
+     * `const childEnv = { ...env }; delete childEnv.PI_GUI_TOKEN;`，
+     * 写死 `env.` 会漏掉。 */
+    const backendSrc = [
+      fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8'),
+      ...fs
+        .readdirSync(path.join(ROOT, 'server'))
+        .filter((f) => f.endsWith('.js'))
+        .map((f) => fs.readFileSync(path.join(ROOT, 'server', f), 'utf8')),
+    ].join('\n');
+
+    check('后端显式 listen 到 127.0.0.1', () => /server\.listen\(\s*PORT\s*,\s*'127\.0\.0\.1'/.test(backendSrc) || '没有显式绑定回环地址');
+    check('后端不把令牌交给 pi 子进程', () => /delete\s+[A-Za-z_$][\w$]*\.PI_GUI_TOKEN/.test(backendSrc) || '令牌可能被传给 pi 子进程');
 
     /* ---- 7. API Key 不得出现在错误响应或日志里 ----
      *
@@ -231,7 +247,7 @@ async function main() {
 
     check('错误路径全程没有把 apiKey 写进日志', () => st.out.includes(KEY) === false || '日志里出现了 apiKey');
     check('日志语句不引用请求体（结构上避免整包打日志）', () => {
-      const lines = src.split('\n').filter((l) => /console\.(log|error|warn)/.test(l));
+      const lines = backendSrc.split('\n').filter((l) => /console\.(log|error|warn)/.test(l));
       const leaky = lines.filter((l) => /\b(payload|raw|apiKey|body)\b/.test(l));
       return leaky.length === 0 || `可疑行：${leaky[0].trim()}`;
     });

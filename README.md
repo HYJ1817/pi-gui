@@ -273,12 +273,15 @@ PI_GUI_ELECTRON_ZIP_DIR="$LOCALAPPDATA/electron/Cache/<hash>" npm run build:app
 ## 测试
 
 ```bash
-npm test                # 前端冒烟 + Git 变更 + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
+npm test                # 前端冒烟 + Git 变更 + 后端模块单测 + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
 npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全、工具时间线、
                         #   变更面板、diff 渲染；工具时间线那一段还会用
                         #   tests/fixtures/ 里的真实会话 fixture 重建一遍）
 npm run test:git        # Git 变更：临时仓库里跑真实的 M/A/D/R/??/中文/空格/二进制、路径越权、
                         #   取消暂存、撤销全部、diff 上下文，外加写路径的静态守卫
+npm run test:modules    # 后端各模块的纯单测：auth 判定顺序、SSE 的 _seq/backlog、
+                        #   路由分发顺序与静态资源、rpc-bridge 的参数拼装与错误路径，
+                        #   外加「模块之间不许成环」的依赖方向检查。不起服务、不 spawn 进程
 npm run test:models     # 单跑模型拉取：桩上游 + 三种 API 形态 + 路径回退 + key 不泄露
 npm run test:security   # 后端访问控制：令牌认证、来源校验、只监听回环、密钥不进日志
 npm run test:guard      # Electron 侧判定：陌生服务不复用、外部 URL 不导航、preload 桥的形状
@@ -295,7 +298,22 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
 
 ## 目录说明
 
-- `server.js` — 后端。转发 pi 的 RPC、静态资源、附件抽取、Git 变更接口、访问控制
+- `server.js` — 后端**装配层**。只做：读环境变量、建共享运行态、按依赖顺序组装各模块、
+  创建 HTTP server、启动 pi 桥接、listen、管生命周期。具体业务在 `server/` 下
+- `server/` — 后端各职责模块。全部由 `server.js` 装配，模块之间不互相 import
+  （唯一例外是 `git-routes` 调 `lib/git.js`），依赖方向永远是 `server.js → 模块`：
+  - `auth.js` — 访问控制（令牌 + Origin）与身份探测端点。令牌定长比较，错误信息不回显收到的值
+  - `rpc-bridge.js` — pi 子进程：spawn / stdout JSONL 解析（**只按 LF 切分**）/
+    stdin 写入 / 崩溃重启。**令牌在这里从 pi 的环境里摘掉**
+  - `sse.js` — 事件总线：clients / backlog / `_seq`。断线重连靠 `_seq` 去重
+  - `projects.js` — 项目列表、目录浏览、切换项目
+  - `providers.js` — `~/.pi/agent/models.json` 的读写、供应商 CRUD、模型拉取
+  - `uploads.js` — 附件上传与落盘
+  - `git-routes.js` — Git 接口的 **HTTP 适配层**，业务逻辑全在 `lib/git.js`
+  - `router.js` — 路由表与静态资源。**顺序即语义**，几处「必须排在前面」的注释都是踩过的坑
+  - `runtime.js` — 共享运行态（`currentCwd` / `shuttingDown`）的**唯一权威**。
+    拆模块最容易出的问题是 cwd 漂移，所以这两个变量只在这里存一份
+  - `http-utils.js` — `json` / `readBody` / `readRawBody`。被五条链路共用，不能各复制一份
 - `lib/git.js` — Git 状态 / diff / 撤销。默认只读；写操作只有「撤销单个文件」
   与「撤销全部」，且两条权限闸门（删未跟踪文件、取消暂存）默认关闭
 - `lib/safe-path.js` — 项目内路径校验，被 diff / 打开 / 撤销三条链路共用
