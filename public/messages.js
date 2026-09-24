@@ -419,11 +419,27 @@ export function noteBlock(text) {
 }
 
 /* 重试开始时撤掉上一次留下的错误块（message_end 已经把 S.current 清空了，
- * 所以还要能回退到对话区里最后一条助手消息） */
+ * 所以还要能回退到对话区里最后一条助手消息）。
+ *
+ * **只撤错误块是不够的**：pi 每重试一次就重发一次 message_start，所以失败那轮
+ * 已经建好了一个新的「Pi」外壳（createAssistant）。错误块一撤，外壳就成了一条
+ * 没有正文的空白「Pi」；上游连续失败三次，对话里就是三条空白（实测如此，
+ * 数据见会话 jsonl：三条 stopReason=error 且 content 为空的消息）。
+ * 所以外壳空了就连它一起收走。
+ *
+ * 反过来，body 里还有别的东西（失败前已经流出来的正文）时**保留外壳** ——
+ * 那是用户已经看到的内容，不该跟着错误块消失。
+ * S.current 还指着它时也不动：那说明 message_end 还没跑，外壳马上会被复用。 */
 export function dropTrailingError() {
-  const box = S.current?.body || [...document.querySelectorAll('#stream .thread .msg.assistant .msg-body')].pop();
-  const last = box?.lastElementChild;
+  const body = S.current?.body || [...document.querySelectorAll('#stream .thread .msg.assistant .msg-body')].pop();
+  if (!body) return;
+
+  const last = body.lastElementChild;
   if (last && last.classList.contains('msg-err')) last.remove();
+
+  if (!body.childElementCount && S.current?.wrap !== body.parentElement) {
+    body.parentElement?.remove();
+  }
 }
 
 export function rebuildAssistant(bodyEl, msg) {

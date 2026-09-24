@@ -116,8 +116,9 @@ function handle(evt) {
     case 'compaction_end':
       return setStatus('');
     case 'auto_retry_start':
-      // pi 会为每次重试单独发一轮 message_end，上一次的错误块先撤掉，
-      // 否则重试成功后对话区里还留着一张失败卡片
+      // pi 会为每次重试单独发一轮 message_start / message_end，上一次那轮的
+      // 错误卡片和已经空掉的外壳一起撤掉，否则重试成功后对话区里会留下
+      // 一张失败卡片 + 一串没有正文的空白「Pi」（见 dropTrailingError）
       dropTrailingError();
       return setStatus(`请求失败，第 ${evt.attempt}/${evt.maxAttempts} 次重试…`);
     case 'auto_retry_end':

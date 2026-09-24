@@ -281,6 +281,36 @@ staticCheck();
   // 重试开始时撤掉上一次的错误块，避免重试成功后还留着一张失败卡片
   es.emit({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3 });
   check('重试时撤掉错误块', () => window.document.querySelectorAll('.msg-err').length === 0);
+  /* 光撤错误块不够：pi 每重试一次就重发一次 message_start，所以失败那轮已经
+   * 建好了一个「Pi」外壳，撤掉错误块后它就成了一条没有正文的空白。
+   * 上游连续失败三次，对话里就是三条空白（实测截图里那一列空「Pi」）。 */
+  check('重试时空掉的助手外壳一起收走', () => window.document.querySelectorAll('.msg.assistant').length === 1);
+  check('没有留下没有正文的助手消息', () =>
+    [...window.document.querySelectorAll('.msg.assistant .msg-body')].every((b) => b.childElementCount > 0)
+  );
+  es.emit({ type: 'auto_retry_end' });
+
+  // 失败前已经流出来的正文不该跟着错误块一起消失 —— 那种情况下外壳是有意义的
+  es.emit({ type: 'message_start', message: { role: 'assistant', content: [] } });
+  es.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_start', contentIndex: 0 } });
+  es.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '先说了半句' } });
+  es.emit({
+    type: 'message_end',
+    message: {
+      role: 'assistant', content: [{ type: 'text', text: '先说了半句' }],
+      stopReason: 'error', errorMessage: '429 Too Many Requests',
+    },
+  });
+  const assistantsBeforeRetry = window.document.querySelectorAll('.msg.assistant').length;
+  es.emit({ type: 'auto_retry_start', attempt: 2, maxAttempts: 3 });
+  check('失败前已有正文时保留外壳', () =>
+    window.document.querySelectorAll('.msg.assistant').length === assistantsBeforeRetry
+  );
+  check('失败前已有正文时正文仍在', () => {
+    const bodies = [...window.document.querySelectorAll('.msg.assistant .msg-body')];
+    return bodies[bodies.length - 1].textContent.includes('先说了半句');
+  });
+  check('失败前已有正文时错误块仍被撤掉', () => window.document.querySelectorAll('.msg-err').length === 0);
   es.emit({ type: 'auto_retry_end' });
 
   // 错误翻译表
