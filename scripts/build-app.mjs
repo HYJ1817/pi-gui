@@ -149,6 +149,26 @@ if (!fs.existsSync(ICON)) {
  * dist-app/ 完全是可再生的构建输出，挪走没有任何风险。 */
 clearDir(OUT);
 
+/* 离线打包的逃生口。
+ *
+ * packager 默认让 @electron/get 去 GitHub 取 Electron 发行包，**同时**取一份
+ * SHASUMS256.txt 来校验。网络不通时，即使 zip 早就躺在
+ * `%LOCALAPPDATA%\electron\Cache\` 里，它也会因为拿不到校验和而判定
+ * 「缓存不匹配」，退回重新下载，最后整个构建挂掉 —— 日志里那句
+ * `Cache hit` 后面紧跟 `Artifact in cache didn't match checksums` 就是它。
+ *
+ * 给了 PI_GUI_ELECTRON_ZIP_DIR 就直接用本机的 zip，一次网络都不走。
+ * 代价是**跳过校验和**，所以只在你自己确认过那个 zip 可信时才用
+ * （正常来源就是本机 Electron 缓存 —— npm install 时已经校验并解压过一次）。
+ *
+ * 不做自动探测：缓存目录名是 URL 的 sha256，属于 @electron/get 的内部实现，
+ * 跟着它猜迟早会错。宁可让用的人显式给一次。 */
+const electronZipDir = process.env.PI_GUI_ELECTRON_ZIP_DIR;
+if (electronZipDir && !fs.existsSync(electronZipDir)) {
+  throw new Error(`PI_GUI_ELECTRON_ZIP_DIR 指向的目录不存在：${electronZipDir}`);
+}
+if (electronZipDir) console.log(`  离线模式：用本机 zip（${electronZipDir}）`);
+
 const appPaths = await packager({
   dir: STAGE,
   name: APP_NAME,
@@ -161,6 +181,7 @@ const appPaths = await packager({
   quiet: true,
   icon: ICON,
   appVersion: VERSION,
+  ...(electronZipDir ? { electronZipDir } : {}),
   win32metadata: {
     CompanyName: 'Pi GUI',
     FileDescription: 'Pi Coding Agent 桌面客户端',

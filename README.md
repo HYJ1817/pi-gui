@@ -257,6 +257,19 @@ npm run build:dist      # 应用目录 + 安装程序 + 便携版 → dist-insta
 npm run build:app -- --rebuild
 ```
 
+`--rebuild` 影响的是后端产物；前端 `public/` 每次构建都会重新拷进包里。
+
+打包那一步默认会去 GitHub 取 Electron 发行包（顺带取一份 `SHASUMS256.txt` 校验）。
+网络不通时，即使 zip 已经在本机 Electron 缓存里，它也会因为拿不到校验和而判定
+「缓存不匹配」、退回重新下载，最后整个构建挂掉。要离线构建就显式指一下本机缓存：
+
+```bash
+PI_GUI_ELECTRON_ZIP_DIR="$LOCALAPPDATA/electron/Cache/<hash>" npm run build:app
+```
+
+（`<hash>` 是缓存目录名，按 URL 的 sha256 算出来，不同版本不一样，进去看一眼就知道。
+这条路跳过校验和，只在本机缓存可信时用。）
+
 ## 测试
 
 ```bash
