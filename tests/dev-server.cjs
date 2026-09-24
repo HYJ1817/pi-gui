@@ -92,6 +92,18 @@ async function waitReady(ms = 20000) {
       'styles.css 保留了 [hidden] 兜底规则',
       () => /\[hidden\]\s*\{[^}]*display\s*:\s*none\s*!important/.test(css.body) || '缺少 [hidden]{display:none !important}'
     );
+    /* 二次确认层必须压在其他弹层之上。
+     * 它经常盖在「文件变更」面板上（在面板里点撤销），层级搞反的话确认框会被
+     * 面板挡住 —— 而 jsdom 不算层叠，这条只能在真样式表上验。 */
+    check('styles.css 里确认层的 z-index 高于普通弹层', () => {
+      const z = (sel) => {
+        const m = css.body.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{[^}]*z-index\\s*:\\s*(\\d+)'));
+        return m ? Number(m[1]) : NaN;
+      };
+      const base = z('.modal');
+      const confirm = z('.modal.confirm');
+      return (Number.isFinite(base) && Number.isFinite(confirm) && confirm > base) || `.modal=${base} .modal.confirm=${confirm}`;
+    });
 
     /* 前端是原生 ES Module：app.js 只是入口，真正的代码在同目录的一堆模块里
      * （含 public/ui/ 子目录）。所以这里不能只看 app.js 的大小 ——

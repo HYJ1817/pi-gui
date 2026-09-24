@@ -19,6 +19,16 @@ const sources = bundled.sources;
 
 const errors = [];
 const commands = [];
+/* /api/git/* 的调用流水（按顺序记 kind + body），用来断言「什么时候真的去问了后端」。 */
+const gitCalls = [];
+/* /api/git/* 的可变桩。测试里改 gitStub 就能模拟后端的各种状态
+ * （干净工作区 / 不是仓库 / 没装 git / 没有项目 / 二进制 / 截断 …）。 */
+const gitStub = {
+  status: { ok: true, isRepo: true, files: [] },
+  diff: { ok: true, isRepo: true, path: '', untracked: false, isDir: false, binary: false, working: '', staged: '', truncated: false, limit: 524288, notice: '' },
+  restore: { ok: true, action: 'restored' },
+  open: { ok: true, abs: 'C:\\pi-GUI\\x.txt', rel: 'x.txt' },
+};
 let es = null;
 /* /api/status 里「当前项目目录」的可变桩。
  * 置空就能模拟「还没选项目」—— 后端此时不启动 pi，界面要整体切到引导形态。 */
@@ -69,6 +79,11 @@ window.fetch = async (url, opts) => {
         hasProject: Boolean(stubCwd),
       }),
     };
+  }
+  if (u.includes('/api/git/')) {
+    const kind = u.slice(u.indexOf('/api/git/') + '/api/git/'.length).split('?')[0];
+    gitCalls.push({ kind, body: opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null });
+    return { json: async () => gitStub[kind] || { ok: true } };
   }
   if (u.includes('/api/command')) {
     const body = JSON.parse(opts.body);
@@ -328,6 +343,286 @@ staticCheck();
     es.emit({ type: 'tool_execution_end', toolCallId: 'w4', isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
     return changeEvents === before && window.listChanges().length === 1;
   });
+  window.clearChanges();
+
+  /* --- Git 变更面板（v0.3.0） ---
+   *
+   * 前端这一侧要验的是「后端给什么就渲染什么」，以及几条容易做错的行为：
+   * 徽标、空状态、不是仓库时的中性降级、diff 就地展开且无 XSS、
+   * 撤销必须二次确认、工具结束后的防抖刷新。
+   * 真实的 git 行为（路径逃逸、重命名、中文文件名、restore…）在 tests/git.cjs 里
+   * 用临时仓库验，这里全部走桩，不碰开发者的仓库。 */
+
+  const chgRows = () => [...window.document.querySelectorAll('#modalCard .chg-row')];
+  const chgText = () => ($('modalCard') ? $('modalCard').textContent : '');
+  const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
+  const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
+  const LIVE_SEL = 'script,img,iframe,svg,object,embed,style,link,meta,form,input,base';
+  /* 「有没有危险元素」查**解析树**而不是正则扫 innerHTML。
+   * 原因：行上的 title="…" 属性里会出现未转义的 `<`（属性值里它是合法字面量，
+   * 浏览器绝不会把它当标签），正则扫字符串会误报。真正要问的是
+   * 「有没有东西真的被解析成了元素」，那就直接问 DOM。
+   * diff 那处例外：它的 innerHTML 是由字符串注入的，正则才有意义（两处都查）。 */
+  const liveCount = (root) => root.querySelectorAll(LIVE_SEL).length;
+  const noLiveTagIn = (html) => !/<\s*(script|img|iframe|svg|object|embed|style|link|meta|form|input|base)\b/i.test(html);
+
+  check('侧栏有「文件变更」入口（在顶部导航里）', () => window.document.querySelector('.rail-nav #navChanges') !== null);
+
+  gitStub.status = {
+    ok: true,
+    isRepo: true,
+    files: [
+      { path: 'src/app.js', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 12, deletions: 3, binary: false, oldPath: null },
+      { path: 'docs/中文 说明.md', status: 'A', index: 'A', worktree: ' ', staged: true, untracked: false, isDir: false, additions: 5, deletions: 0, binary: false, oldPath: null },
+      { path: 'tmp/<img onerror=alert(1)>.txt', status: '??', index: '?', worktree: '?', staged: false, untracked: true, isDir: false, additions: 2, deletions: 0, binary: false, oldPath: null },
+      { path: 'big.log', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 900, deletions: 0, binary: false, oldPath: null },
+      { path: 'newdir/', status: '??', index: '?', worktree: '?', staged: false, untracked: true, isDir: true, additions: null, deletions: null, binary: false, oldPath: null },
+    ],
+  };
+  await window.loadGitStatus();
+  check('徽标显示变更数', () => ($('changesCount').textContent === '5' && $('changesCount').hidden === false) || $('changesCount').textContent);
+
+  $('navChanges').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('变更面板打开', () => $('modal').hidden === false);
+  check('列表渲染 5 行', () => chgRows().length === 5);
+  check('状态字母正确', () => chgRows().map((x) => x.querySelector('.chg-code').textContent).join('') === 'MA??M??');
+  check('含空格与中文的路径原样渲染', () => chgRows().some((x) => x.querySelector('.chg-path').textContent === 'docs/中文 说明.md'));
+  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('modalCard')) === 0 || `解析出了 ${liveCount($('modalCard'))} 个危险元素`);
+  check('恶意文件名仍以原样文本呈现（没被截断或吃掉）', () =>
+    chgRows().some((x) => x.querySelector('.chg-path').textContent === 'tmp/<img onerror=alert(1)>.txt'));
+  check('增删行数渲染', () => {
+    const t = chgRows().map((x) => x.querySelector('.chg-stat').textContent).join('|');
+    return (t.includes('+12') && t.includes('−3') && t.includes('+900')) || t;
+  });
+  check('未跟踪文件标注「未跟踪」', () => chgRows().some((x) => x.querySelector('.chg-meta').textContent.includes('未跟踪')));
+  check('已暂存文件标注「已暂存」', () => chgRows().some((x) => x.querySelector('.chg-meta').textContent.includes('已暂存')));
+  check('未跟踪目录标注「目录」', () => chgRows().some((x) => x.querySelector('.chg-meta').textContent.includes('目录')));
+  check('说明文字不重复（未跟踪只出现一次）', () => {
+    const m = chgRows()[2].querySelector('.chg-meta').textContent;
+    return (m.match(/未跟踪/g) || []).length === 1 || m;
+  });
+  check('未跟踪目录的说明是「未跟踪 · 目录」', () => {
+    const m = chgRows()[4].querySelector('.chg-meta').textContent;
+    return m === '未跟踪 · 目录' || m;
+  });
+  check('每行都有「打开」与撤销按钮', () => {
+    const r = chgRows()[0];
+    const b = [...r.querySelectorAll('.chg-acts .btn')].map((x) => x.textContent);
+    return b.join(',') === '打开,撤销' || b.join(',');
+  });
+  check('未跟踪文件的按钮写「删除」而非「撤销」', () => {
+    const b = [...chgRows()[2].querySelectorAll('.chg-acts .btn')].map((x) => x.textContent);
+    return b.join(',') === '打开,删除' || b.join(',');
+  });
+
+  /* --- diff 就地展开 --- */
+  const DIFF_WORKING = 'diff --git a/src/app.js b/src/app.js\nindex 111..222 100644\n--- a/src/app.js\n+++ b/src/app.js\n@@ -1,2 +1,2 @@\n-旧\n+新\n 不变\n';
+  const DIFF_STAGED = 'diff --git a/src/app.js b/src/app.js\n@@ -0,0 +1 @@\n+暂存的一行\n';
+
+  gitStub.diff = { ok: true, isRepo: true, path: 'src/app.js', untracked: false, isDir: false, binary: false, working: DIFF_WORKING, staged: DIFF_STAGED, truncated: false, limit: 524288, notice: '' };
+  chgRows()[0].querySelector('.chg-main').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('点击行会去拉 diff（带正确路径）', () => {
+    const c = gitCalls[gitCalls.length - 1];
+    return (c && c.kind === 'diff' && c.body && c.body.path === 'src/app.js') || JSON.stringify(c);
+  });
+  check('diff 就地展开', () => chgRows()[0].querySelector('.chg-diff').hidden === false);
+  check('diff 用等宽容器（pre.diff-body）', () => !!chgRows()[0].querySelector('.chg-diff .diff-body'));
+  check('暂存区与工作区分段显示', () => {
+    const l = [...chgRows()[0].querySelectorAll('.chg-label')].map((x) => x.textContent);
+    return (l.length === 2 && l[0].includes('暂存区') && l[1].includes('工作区')) || l.join('|');
+  });
+  check('diff 行分类：新增 / 删除 / hunk / 元信息', () => {
+    const b = chgRows()[0].querySelector('.chg-diff');
+    const add = b.querySelectorAll('.d-add').length;
+    const del = b.querySelectorAll('.d-del').length;
+    const hunk = b.querySelectorAll('.d-hunk').length;
+    const meta = b.querySelectorAll('.d-meta').length;
+    return (add === 2 && del === 1 && hunk === 2 && meta >= 4) || `add=${add} del=${del} hunk=${hunk} meta=${meta}`;
+  });
+  check('`+++ b/x` 被当成元信息而不是新增行', () => {
+    const metas = [...chgRows()[0].querySelectorAll('.chg-diff .d-meta')].map((x) => x.textContent);
+    return metas.some((t) => t.startsWith('+++ b/')) && !metas.some((t) => t.startsWith('+ ')) || metas.join('|');
+  });
+  check('再点一次收起 diff', () => {
+    chgRows()[0].querySelector('.chg-main').click();
+    return chgRows()[0].querySelector('.chg-diff').hidden === true;
+  });
+  check('收起后不重复请求', () => {
+    const before = gitCalls.filter((c) => c.kind === 'diff').length;
+    chgRows()[0].querySelector('.chg-main').click();
+    return gitCalls.filter((c) => c.kind === 'diff').length === before;
+  });
+
+  /* --- diff 的 XSS：文件名与内容都可能被 Agent 间接控制 --- */
+  gitStub.diff = {
+    ok: true, isRepo: true, path: 'tmp/x', untracked: true, isDir: false, binary: false,
+    working: 'diff --git a/<img src=x onerror=alert(1)> b/<img src=x onerror=alert(1)>\n@@ -0,0 +1 @@\n+<script>alert(1)</script>\n',
+    staged: '', truncated: false, limit: 524288, notice: '',
+  };
+  chgRows()[2].querySelector('.chg-main').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('恶意文件名与内容不产生活标签', () => {
+    const box = chgRows()[2].querySelector('.chg-diff');
+    return (noLiveTagIn(box.innerHTML) && liveCount(box) === 0) || box.innerHTML.slice(0, 200);
+  });
+  check('<script> 被转义成可读文本', () => {
+    const b = chgRows()[2].querySelector('.chg-diff');
+    return (b.textContent.includes('<script>alert(1)</script>') && b.innerHTML.includes('&lt;script')) || b.textContent;
+  });
+  check('未跟踪文件的 diff 标为「未跟踪文件的内容」', () => {
+    const l = [...chgRows()[2].querySelectorAll('.chg-label')].map((x) => x.textContent);
+    return l.some((t) => t.includes('未跟踪')) || l.join('|');
+  });
+
+  /* --- 二进制 / 截断 --- */
+  gitStub.diff = { ok: true, isRepo: true, path: 'logo.png', untracked: false, isDir: false, binary: true, working: 'Binary files a/logo.png and b/logo.png differ\n', staged: '', truncated: false, limit: 524288, notice: '' };
+  chgRows()[1].querySelector('.chg-main').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('二进制文件明确提示看不了', () => chgText().includes('二进制文件'));
+  check('二进制不渲染文本 diff 块', () => chgRows()[1].querySelector('.chg-diff .diff-body') === null);
+
+  gitStub.diff = { ok: true, isRepo: true, path: 'big.log', untracked: false, isDir: false, binary: false, working: '@@ -1 +1 @@\n+一行\n', staged: '', truncated: true, limit: 524288, notice: '' };
+  chgRows()[3].querySelector('.chg-main').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('超限的 diff 有截断提示', () => chgText().includes('已截断') && chgText().includes('512 KB'));
+
+  /* --- 后端没给 numstat 时，从 diff 正文补行数 --- */
+  window.renderChangesBody();
+  gitStub.diff = { ok: true, isRepo: true, path: 'newdir', untracked: true, isDir: true, binary: false, working: '@@ -0,0 +1,2 @@\n+甲\n-乙\n+丙\n', staged: '', truncated: false, limit: 524288, notice: '这是一个未被 Git 跟踪的目录，没有展开显示其中的文件。' };
+  chgRows()[4].querySelector('.chg-main').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('未跟踪目录的 notice 会显示', () => chgText().includes('未被 Git 跟踪的目录'));
+  check('缺 numstat 时从 diff 正文补出 +N −M', () => {
+    const t = chgRows()[4].querySelector('.chg-stat').textContent;
+    return (t.includes('+2') && t.includes('−1')) || t;
+  });
+
+  /* --- 撤销：必须二次确认 --- */
+  window.renderChangesBody();
+  gitStub.restore = { ok: true, action: 'restored' };
+  const restoreBefore = gitCalls.filter((c) => c.kind === 'restore').length;
+  chgRows()[0].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 10));
+  check('撤销先弹二次确认', () => $('confirmLayer').hidden === false && confirmText().includes('尚未提交的改动会丢失'));
+  check('确认层不破坏下层面板', () => $('modal').hidden === false && chgRows().length === 5);
+  confirmBtn('取消').click();
+  await new Promise((r) => setTimeout(r, 10));
+  check('取消确认则不发起撤销', () => gitCalls.filter((c) => c.kind === 'restore').length === restoreBefore);
+  check('取消后确认层收起、面板还在', () => $('confirmLayer').hidden === true && chgRows().length === 5);
+
+  chgRows()[0].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 10));
+  confirmBtn('撤销改动').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('确认后按 tracked 方式撤销（不带 deleteUntracked）', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore').pop();
+    return (c && c.body.path === 'src/app.js' && c.body.deleteUntracked === false) || JSON.stringify(c);
+  });
+
+  /* --- 撤销未跟踪文件：文案不同，且必须显式带 deleteUntracked --- */
+  gitStub.restore = { ok: true, action: 'deleted-untracked' };
+  const rowsAfterRestore = chgRows();
+  const stBeforeDelete = gitCalls.filter((c) => c.kind === 'status').length;
+  rowsAfterRestore[2].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 10));
+  check('未跟踪文件的确认文案点明「将删除该文件」', () => confirmText().includes('这个文件尚未被 Git 跟踪。撤销将删除该文件'));
+  confirmBtn('删除文件').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('确认后带 deleteUntracked=true', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore').pop();
+    return (c && c.body.deleteUntracked === true) || JSON.stringify(c);
+  });
+  check('撤销成功后提示已删除', () => [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已删除未跟踪文件')));
+  check('撤销后自动重拉状态并重画面板', () => {
+    const n = gitCalls.filter((c) => c.kind === 'status').length;
+    return (n > stBeforeDelete && chgRows().length === 5) || `status=${n} rows=${chgRows().length}`;
+  });
+
+  /* --- 后端说「还需要确认」时再问一次（客户端状态过期的兜底） --- */
+  gitStub.restore = { ok: false, needsConfirm: true, error: '这个文件尚未被 Git 跟踪。撤销将删除该文件。' };
+  window.renderChangesBody();
+  chgRows()[0].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 10));
+  confirmBtn('撤销改动').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('后端要求再确认时会追问一轮', () => confirmText().includes('尚未被 Git 跟踪'));
+  confirmBtn('删除文件').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('追问后以 deleteUntracked=true 重试', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore').pop();
+    return (c && c.body.deleteUntracked === true) || JSON.stringify(c);
+  });
+
+  /* --- 各种「不是错误」的状态 --- */
+  gitStub.status = { ok: true, isRepo: true, files: [] };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  check('工作区干净时提示 No changes', () => chgText().includes('工作区干净'));
+  check('干净时徽标隐藏', () => $('changesCount').hidden === true);
+
+  gitStub.status = { ok: true, isRepo: false, files: [] };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  check('非 Git 仓库给中性提示（不是报错）', () => chgText().includes('当前项目不是 Git 仓库') && chgText().includes('不受影响'));
+
+  gitStub.status = { ok: false, noGit: true, isRepo: false, files: [], error: 'spawn git ENOENT' };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  check('没装 git 时给友好文案', () => chgText().includes('没有找到 git 命令'));
+
+  gitStub.status = { ok: true, isRepo: false, files: [], noProject: true };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  check('没有项目时引导去添加文件夹', () => chgText().includes('还没有选择项目'));
+
+  gitStub.status = { ok: true, isRepo: true, truncated: true, files: [{ path: 'a.txt', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 1, deletions: 0, binary: false, oldPath: null }] };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  check('列表过长时有截断提示', () => chgText().includes('变更列表过长'));
+
+  gitStub.status = { ok: true, isRepo: true, files: [] };
+  await window.loadGitStatus();
+  $('modal').click();
+  check('变更面板可关闭', () => $('modal').hidden === true);
+
+  /* --- 自动刷新：工具结束后防抖 ---
+   *
+   * 先等一拍再开始计数：前面「账本」那段用例发过 write / edit，会留下一个
+   * 450ms 的防抖定时器。不等它落地，它就会掉进下面第一个断言的时间窗里，
+   * 把「read 不该刷新」误判成失败。 */
+  await new Promise((r) => setTimeout(r, 600));
+
+  const statusCount = () => gitCalls.filter((c) => c.kind === 'status').length;
+
+  let n0 = statusCount();
+  es.emit({ type: 'tool_execution_start', toolCallId: 'r1', toolName: 'read', args: { file_path: '/tmp/a.txt' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 'r1', isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
+  await new Promise((r) => setTimeout(r, 600));
+  check('只读工具（read）不触发刷新', () => statusCount() === n0 || `多了 ${statusCount() - n0} 次`);
+
+  n0 = statusCount();
+  for (const id of ['w5', 'w6', 'w7']) {
+    es.emit({ type: 'tool_execution_start', toolCallId: id, toolName: 'write', args: { file_path: '/tmp/' + id + '.txt' } });
+    es.emit({ type: 'tool_execution_end', toolCallId: id, isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  check('write 结束后自动刷新', () => statusCount() === n0 + 1 || `刷了 ${statusCount() - n0} 次`);
+  check('连续多次改动被防抖合并成一次', () => statusCount() === n0 + 1 || `刷了 ${statusCount() - n0} 次`);
+
+  n0 = statusCount();
+  es.emit({ type: 'tool_execution_start', toolCallId: 'b9', toolName: 'bash', args: { command: 'echo x > f.txt' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 'b9', isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
+  await new Promise((r) => setTimeout(r, 600));
+  check('bash 结束后也会刷新（它可能改了文件）', () => statusCount() === n0 + 1 || `刷了 ${statusCount() - n0} 次`);
+
+  n0 = statusCount();
+  es.emit({ type: 'tool_execution_start', toolCallId: 'w8', toolName: 'write', args: { file_path: '/tmp/boom.txt' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 'w8', isError: true, result: { content: [{ type: 'text', text: 'boom' }] } });
+  await new Promise((r) => setTimeout(r, 600));
+  check('失败的工具不触发刷新', () => statusCount() === n0 || `多了 ${statusCount() - n0} 次`);
+
   window.clearChanges();
 
   // --- 弹层：分支 ---

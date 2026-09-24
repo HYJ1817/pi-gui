@@ -16,6 +16,7 @@ import {
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { loadStatus } from './shell.js';
+import { refreshGitNow, resetChanges } from './git.js';
 import { clearThread } from './messages.js';
 
 let projectData = { active: '', items: [] };
@@ -93,6 +94,10 @@ export async function removeProject(target) {
   /* 移掉的可能是当前正在用的那个项目。后端会把「上次激活」清掉但让会话继续跑，
    * 所以这里回读一次状态，让界面高亮和底部连接指示跟着走，别停在旧状态上。 */
   await loadStatus();
+  /* 变更列表是按项目算的，换了项目就必须整体重来 ——
+   * 留着上一个项目的文件列表比空着更糟。 */
+  resetChanges();
+  refreshGitNow();
 }
 
 export async function activateProject(target, label) {
@@ -107,6 +112,9 @@ export async function activateProject(target, label) {
    * 而 hasProject 决定输入框解锁 —— 第一次添加项目时正是靠它从「未选项目」切过来。 */
   await loadStatus();
   await loadProjects();
+  /* 变更列表是按项目算的。先清空再重拉，避免在新项目下短暂显示上一个项目的文件。 */
+  resetChanges();
+  refreshGitNow();
   toast(`已切换到 ${title}，pi 正在重启…`, 'info');
 }
 

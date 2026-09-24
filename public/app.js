@@ -51,6 +51,7 @@ import { openCtxTip, renderCtxChip } from './usage.js';
 import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker } from './projects.js';
 import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
+import { loadGitStatus, openChangesPanel } from './git.js';
 
 /* ---------- 装配 ---------- */
 
@@ -659,6 +660,7 @@ $('btnStats').onclick = openStatsPanel;
 // 侧栏导航
 $('navNew').onclick = newSession;
 $('navBranches').onclick = openBranchPanel;
+$('navChanges').onclick = openChangesPanel;
 $('navProviders').onclick = openProvidersPanel;
 
 // 侧栏头部 / 项目
@@ -693,6 +695,10 @@ syncWelcome();
 
 loadProjects();
 loadProviders();
+/* Git 工作区状态先拉一次，把侧栏的「文件变更 N」填上。
+ * 失败也无所谓 —— 不是 Git 仓库、没装 git、还没选项目都是正常情况，
+ * 面板会各自给出中性文案（见 git.js 的 renderChangesBody）。 */
+loadGitStatus();
 autoGrow();
 /* 先按「还没选项目」摆一次，锁住输入区。
  * 真的有项目时 loadStatus 会立刻把它打开 —— 那一瞬间两块引导都是藏着的，

@@ -1,7 +1,8 @@
 # Pi GUI
 
 给 [pi](https://github.com/earendil-works/pi) 套一个本地桌面界面：选一个文件夹当项目，
-在输入框里说要做什么，文件改动与命令执行实时显示在窗口里。
+在输入框里说要做什么，文件改动与命令执行实时显示在窗口里；改完哪些文件、
+具体改了什么，在侧栏「文件变更」里看 diff，然后决定留着还是撤销。
 
 后端是个纯 Node 的 HTTP 服务，前端是原生 JS（没有构建步骤、没有框架），
 Electron 只负责装一个窗口 —— 不联网、不开浏览器，全部跑在本机。
@@ -129,6 +130,39 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 分发两个 UMD 文件（含 Apache-2.0 的署名义务），而上面这套结构性防护已经把主要收益
 拿到了。渲染完整度上的差距，用增量补齐更划算。
 
+## 文件变更与撤销
+
+侧栏的「文件变更」列出**当前 Git 工作区**里相对 HEAD 有差异的文件：
+`M` 修改 / `A` 新增 / `D` 删除 / `R` 重命名 / `C` 复制 / `U` 冲突 / `??` 未跟踪，
+外加相对路径和 `+N −M` 行数。点一行就地展开 unified diff，可以「打开」或「撤销」。
+
+Agent 执行 `write` / `edit` / `bash` 之后会自动刷新（防抖 450ms，连续改多个文件
+只查一次 `git status`），也可以手动点「刷新」。
+
+**这一版刻意不做的事**：不内置代码编辑器（「打开」交给系统默认程序）、
+不做 side-by-side、不做合并冲突编辑、不做 commit / push / branch 管理。
+定位是「看清改了什么、决定留还是撤」，不是 IDE。
+
+几条设计上的取舍：
+
+- **以 Git 为准。** 界面上的数字来自 `git status`，不是「Agent 声称改过什么」。
+  两者会不一致（Agent 改了又自己撤回、或者你手动 revert 过），这时以后者为准。
+  会话内的改动账本（`public/changes.js`）单独存在，用于将来做「本次会话摘要」。
+- **不是 Git 仓库不是错误。** Pi GUI 允许打开普通文件夹，那种情况下聊天、改代码、
+  跑命令全部照常，只是没有变更信息 —— 界面给一句中性说明，不弹错、不自动 `git init`。
+- **撤销只动工作区，不动暂存区。** `M` / `D` 走 `git restore -- <path>`；
+  已经 `git add` 过的文件一律拒绝（擅自改 index 等于替用户决定提交内容，且无法一条命令回退），
+  重命名 / 复制同样拒绝（只恢复一条腿会让文件处于半吊子状态）。
+  **不会**用 `git reset --hard` 或 `git clean -fd`。
+- **删除未跟踪文件要单独确认。** `??` 文件撤销等于删文件，确认框会明写
+  「这个文件尚未被 Git 跟踪。撤销将删除该文件。」，按钮也是「删除文件」而不是「撤销」。
+- **diff 有大小上限**（默认 512 KB，`PI_GUI_GIT_DIFF_MAX_BYTES` 可调），超了就截断并提示；
+  二进制文件直接说明「看不了文本差异」，不会塞一堆乱码进界面。
+
+所有 Git 命令都指定项目目录、走参数数组、`shell: false`，路径经
+`lib/safe-path.js` 校验（`../`、绝对路径、符号链接 / junction 逃逸一律拒绝），
+并带超时与输出字节上限。
+
 ## 从源码构建
 
 ```bash
@@ -145,27 +179,34 @@ npm run build:app -- --rebuild
 ## 测试
 
 ```bash
-npm test                # 前端冒烟 + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
-npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全与渲染）
+npm test                # 前端冒烟 + Git 变更 + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
+npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全、变更面板、diff 渲染）
+npm run test:git        # Git 变更：临时仓库里跑真实的 M/A/D/R/??/中文/空格/二进制、路径越权、restore
 npm run test:models     # 单跑模型拉取：桩上游 + 三种 API 形态 + 路径回退 + key 不泄露
 npm run test:security   # 后端访问控制：令牌认证、来源校验、只监听回环、密钥不进日志
-npm run test:guard      # Electron 侧判定：陌生服务不复用、外部 URL 不导航
+npm run test:guard      # Electron 侧判定：陌生服务不复用、外部 URL 不导航、preload 桥的形状
 npm run test:app        # 打包后的应用目录（抽取、静态资源、无项目时的行为）
 npm run test:exe        # 单文件 exe
 npm run test:portable   # 便携版 zip：解压 → 直接跑 → 页面能开
 npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册表、建快捷方式，测完卸掉）
 ```
 
+`test:git` 全程在 `os.tmpdir()` 下新建临时仓库，**不会碰你自己的仓库** ——
+这个套件里有真的会删文件的用例，所以这一点是硬要求。
+
 后三条要先把 `npm run build:dist` 跑过一遍。
 
 ## 目录说明
 
-- `server.js` — 后端。转发 pi 的 RPC、静态资源、附件抽取、访问控制
+- `server.js` — 后端。转发 pi 的 RPC、静态资源、附件抽取、Git 变更接口、访问控制
+- `lib/git.js` — Git 状态 / diff / 撤销（只读为主，唯一会写磁盘的是「撤销单个文件」）
+- `lib/safe-path.js` — 项目内路径校验，被 diff / 打开 / 撤销三条链路共用
 - `lib/models-api.js` — 从供应商 `/models` 拉模型列表（路径回退、按 API 类型适配）
 - `public/` — 前端。原生 ES Module，`app.js` 只做装配，其余按职责分模块
-  （`api.js` 网络、`state.js` 状态、`markdown.js` 渲染、`changes.js` 文件变更账本、
-  `ui/` 通用组件……），无构建步骤
+  （`api.js` 网络、`state.js` 状态、`markdown.js` 渲染、`git.js` 变更面板、
+  `diff.js` unified diff 渲染、`changes.js` 会话改动账本、`ui/` 通用组件……），无构建步骤
 - `electron/main.cjs` — Electron 主进程，拉起内嵌后端、管窗口与导航
+- `electron/preload.cjs` — 渲染进程与主进程之间唯一的桥（只暴露「用系统默认程序打开文件」）
 - `electron/net-probe.cjs` — 端口探测与 URL 判定（纯逻辑，不依赖 electron，因此可单测）
 - `installer/pi-gui.nsi` — 安装程序脚本（用 NSIS 编）
 - `scripts/` — 构建脚本；`scripts/util.mjs` 是几个脚本共用的小工具

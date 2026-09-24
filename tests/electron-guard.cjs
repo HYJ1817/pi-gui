@@ -211,6 +211,37 @@ async function main() {
     return true;
   });
 
+  /* ---------- 7. preload 桥（只为「用系统默认程序打开文件」而存在） ----------
+   *
+   * 这个桥是渲染进程唯一能碰到主进程的地方，所以它的形状要钉死：
+   * 只暴露一个函数、不暴露 ipcRenderer 本身、不碰任何凭据。 */
+  const preloadSrc = fs.readFileSync(path.join(ROOT, 'electron', 'preload.cjs'), 'utf8');
+  /* 结构性断言必须只看**代码**，不看注释 —— 否则一句解释性的
+   * 「校验留在后端，比如 ../ 和 realpath」就会把断言判成失败。
+   * 这类误报很坑：它逼着人把注释写含糊，反而降低了可读性。 */
+  const preloadCode = preloadSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+
+  check('主窗口挂了 preload', () => /preload:\s*path\.join\(__dirname,\s*'preload\.cjs'\)/.test(mainSrc) || 'webPreferences 里没有 preload');
+  check('contextIsolation 仍然开启', () => /contextIsolation:\s*true/.test(mainSrc) || 'contextIsolation 被关掉了');
+  check('nodeIntegration 仍然关闭', () => /nodeIntegration:\s*false/.test(mainSrc) || 'nodeIntegration 被打开了');
+  check('preload 只经 contextBridge 暴露一个入口', () => {
+    const n = (preloadCode.match(/exposeInMainWorld\(/g) || []).length;
+    return n === 1 || `exposeInMainWorld 出现 ${n} 次`;
+  });
+  check('preload 不把 ipcRenderer 整个暴露出去', () => !/exposeInMainWorld\([\s\S]*?\bipcRenderer\b\s*[,}]/.test(preloadCode) || '把 ipcRenderer 暴露了');
+  check('preload 不接触令牌', () => !/TOKEN/.test(preloadCode) || 'preload 里出现了令牌');
+  check('preload 不做路径判断（校验留在后端）', () => !/isAbsolute|realpath|path\.resolve|\.\.\//.test(preloadCode) || 'preload 里出现了路径校验');
+  check('IPC 处理器只转发给后端，不自己判断路径', () => {
+    if (!/ipcMain\.handle\('pi-gui:open-path'/.test(mainSrc)) return '没有注册 open-path 处理器';
+    if (!/\/api\/git\/open/.test(mainSrc)) return '没有转发到后端的 /api/git/open';
+    return true;
+  });
+  check('IPC 处理器在开窗之前注册', () => {
+    const reg = mainSrc.indexOf('installOpenPathHandler();');
+    const win = mainSrc.indexOf('createWindow();');
+    return (reg > 0 && win > 0 && reg < win) || `register=${reg} createWindow=${win}`;
+  });
+
   console.log('');
   console.log(`${pass}/${pass + fail} 通过`);
   process.exitCode = fail ? 1 : 0;

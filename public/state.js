@@ -34,9 +34,12 @@ export const el = {
   projects: $('projects'),
   groupHead: $('groupHead'),
   branchCount: $('branchCount'),
+  changesCount: $('changesCount'),
   providerCount: $('providerCount'),
   modal: $('modal'),
   modalCard: $('modalCard'),
+  confirmLayer: $('confirmLayer'),
+  confirmCard: $('confirmCard'),
   toasts: $('toasts'),
   composerBox: $('composerBox'),
   attachTray: $('attachTray'),
@@ -56,7 +59,7 @@ export const el = {
  * 节点上：不报错，但界面上什么都不出现，属于最难查的一类问题。
  * 早先是两个模块级 let（treeContainer / providerContainer），
  * 拆模块后导入绑定不可写，改成同一个对象上的两个槽位。 */
-export const panels = { tree: null, providers: null };
+export const panels = { tree: null, providers: null, changes: null };
 
 export const S = {
   seq: 0,
@@ -78,4 +81,12 @@ export const S = {
   /* 有没有选项目。没有的话 pi 根本没启动（见 server.js 的 startPi），
    * 界面要整体切到「先添加文件夹」的形态，而不是给一个发不出去的输入框。 */
   hasProject: false,
+  /* Git 工作区变更（磁盘真实状态）。
+   *
+   * 与 changes.js 的账本是两件事，不要混：
+   *   - changes.js  = **Agent 事件**账本（这次会话里 Agent 声称改过哪些文件），
+   *                   由工具事件驱动，随会话清空。
+   *   - S.changes   = **Git 工作区**状态，由 git status 得到，是磁盘的权威事实。
+   * 两者不一致时以 Git 为准（例如 Agent 改了又自己撤回，账本还留着记录）。 */
+  changes: { isRepo: false, loaded: false, files: [], error: '', noGit: false, noProject: false },
 };

@@ -426,6 +426,8 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   align-items:center;justify-content:center;z-index:60;padding:24px;
 }
 .modal[hidden]{display:none}
+/* 二次确认层永远压在其他弹层之上（它经常盖在「文件变更」面板上）。 */
+.modal.confirm{z-index:70}
 .modal-card{
   width:100%;max-width:440px;max-height:78vh;overflow:auto;background:#1c1c1c;
   border:1px solid #333;border-radius:14px;padding:18px;
@@ -455,6 +457,83 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   outline:0;margin-bottom:14px;resize:vertical;
 }
 .modal-input:focus{border-color:#3d3d3d}
+.btn.danger{border-color:rgba(248,113,113,.35);color:#f0a5a5}
+.btn.danger:hover{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.55);color:#ffc4c4}
+
+/* ============ 文件变更面板 ============ */
+
+/* 比 .wide 再宽一档：diff 是等宽文本，横向空间直接决定可读性。
+ * 用 min() 兜住小窗口，免得在窄屏上把弹层撑出可视区。 */
+.modal-card.changes{max-width:min(980px,92vw);display:flex;flex-direction:column;overflow:hidden}
+.chg-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.chg-head h3{margin-bottom:0}
+.chg-sub{font-size:11px;color:var(--t3)}
+.chg-body{min-height:0;display:flex;flex-direction:column;gap:8px}
+
+.chg-hint{
+  font-size:12px;color:var(--t2);line-height:1.7;white-space:pre-wrap;
+  background:#161616;border:1px solid var(--line-soft);border-radius:9px;padding:11px 13px;
+}
+.chg-hint.err{color:#f0a5a5;border-color:rgba(248,113,113,.24);background:rgba(248,113,113,.05)}
+.chg-hint.warn{color:#e8c67a;border-color:rgba(251,191,36,.2);background:rgba(251,191,36,.05)}
+
+.chg-list{
+  display:flex;flex-direction:column;gap:2px;overflow:auto;
+  max-height:56vh;border:1px solid var(--line-soft);border-radius:9px;background:#151515;
+}
+.chg-row{border-bottom:1px solid #1e1e1e}
+.chg-row:last-child{border-bottom:0}
+.chg-row.open{background:#171717}
+.chg-main{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  background:transparent;border:0;padding:7px 10px;font-family:inherit;cursor:pointer;color:inherit;
+}
+.chg-main:hover{background:var(--hover)}
+.chg-row.open .chg-main{background:var(--hover)}
+
+/* 状态字母。配色只区分「加 / 改 / 删」三档，不再细分 —— 字母本身已经说明了类型。 */
+.chg-code{
+  flex:0 0 auto;width:20px;height:18px;border-radius:5px;font-family:var(--mono);
+  font-size:10.5px;line-height:18px;text-align:center;background:#262626;color:#b8b8b8;
+}
+.chg-code[data-s="A"]{background:rgba(74,222,128,.14);color:#6ee7a0}
+.chg-code[data-s="??"]{background:rgba(74,222,128,.1);color:#5ec98d}
+.chg-code[data-s="D"]{background:rgba(248,113,113,.14);color:#f0a5a5}
+.chg-code[data-s="R"],.chg-code[data-s="C"]{background:rgba(122,162,247,.14);color:#9dbaf8}
+.chg-code[data-s="U"]{background:rgba(251,191,36,.16);color:#e8c67a}
+
+.chg-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.chg-path{
+  font-family:var(--mono);font-size:11.5px;color:#d0d0d0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;
+}
+.chg-meta{font-size:10.5px;color:var(--t3)}
+.chg-stat{flex:0 0 auto;display:flex;gap:6px;font-family:var(--mono);font-size:11px;color:var(--t3)}
+.chg-stat .add{color:#3dd68c;font-weight:400}
+.chg-stat .del{color:#e06c75;font-weight:400}
+.chg-acts{flex:0 0 auto;display:flex;gap:5px}
+
+/* 就地展开的 diff */
+.chg-diff{padding:0 10px 10px;display:flex;flex-direction:column;gap:6px}
+.chg-label{font-size:10.5px;color:var(--t3);letter-spacing:.02em}
+
+/* ---------- Unified Diff 正文 ----------
+ * 只负责「像 diff 该有的样子」：等宽、保留空格、横向滚动、行不断行。
+ * 纵向由 .chg-list 滚，这里只管横向，免得出现两个纵向滚动条。 */
+.diff{
+  border:1px solid #262626;border-radius:8px;background:#131313;
+  overflow-x:auto;overflow-y:visible;
+}
+.diff-body{
+  margin:0;padding:7px 0;font-family:var(--mono);font-size:11.5px;line-height:1.62;
+  color:#a8a8a8;white-space:pre;tab-size:4;
+}
+.diff-body>span{display:block;padding:0 10px}
+.diff-body .d-add{color:#3dd68c;background:rgba(74,222,128,.06)}
+.diff-body .d-del{color:#e06c75;background:rgba(248,113,113,.06)}
+.diff-body .d-hunk{color:#7aa2f7}
+.diff-body .d-meta{color:#6f6f6f}
+.diff-body .d-note{color:#7d7d7d;font-style:italic}
 
 /* 表单 */
 .field{margin-bottom:12px}

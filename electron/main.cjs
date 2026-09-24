@@ -25,7 +25,7 @@ if (process.env.ELECTRON_RUN_AS_NODE && process.versions.electron) {
   return;
 }
 
-const { app, BrowserWindow, Menu, shell, dialog, screen, session } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain } = require('electron');
 
 if (!app || typeof app.whenReady !== 'function') {
   console.error(
@@ -200,10 +200,65 @@ async function ensureServer() {
  *
  * 放在主进程（而不是页面里用 fetch 包装）的理由：渲染进程永远拿不到令牌，
  * 因此页面上的任何脚本 —— 包括被注入的 —— 都无法读取或伪造它。
- * 同时也省掉一个 preload 脚本，Electron 这一层继续保持「薄壳」。 */
+ *
+ * 注意这一层不再能省掉 preload 脚本了：preload.cjs 只为「用系统默认程序打开
+ * 文件」这一个能力而存在（见 installOpenPathHandler）。令牌依然不进渲染进程 ——
+ * preload 只转发**项目相对路径**，一个字节的凭据都不碰。 */
 function installTokenHeader() {
   session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`${ORIGIN}/*`] }, (details, callback) => {
     callback({ requestHeaders: { ...details.requestHeaders, [TOKEN_HEADER]: AUTH_TOKEN } });
+  });
+}
+
+/** 处理渲染进程发来的「用系统默认程序打开这个文件」。
+ *
+ * ---------- 为什么这里不自己判断路径 ----------
+ *
+ * 「这个路径在不在当前项目里」的判定在 lib/git.js 的 resolveProjectPath 里：
+ * realpath 解 junction / symlink、盘符大小写归一、`..` 与绝对路径拒绝，都实现了
+ * 而且被测过。在主进程复制一份必然漂移，最后变成「两套规则里更松的那套说了算」。
+ *
+ * 所以主进程只做转发：把相对路径交给后端的 POST /api/git/open，由后端给出
+ * **它认可的**绝对路径，主进程再交给 shell.openPath。即使页面被注入脚本，
+ * 它能做到的也仅限于「请求打开一个后端认可的项目内文件」。
+ *
+ * 顺带一提，主进程发的 fetch 不会被 onBeforeSendHeaders 覆盖（那只作用于
+ * 渲染进程的 session），所以这里要自己带令牌头。 */
+function installOpenPathHandler() {
+  ipcMain.handle('pi-gui:open-path', async (_e, relPath) => {
+    if (typeof relPath !== 'string' || !relPath.trim()) {
+      return { ok: false, error: '缺少文件路径' };
+    }
+
+    let body = null;
+    let status = 0;
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 5000);
+      try {
+        const res = await fetch(`${ORIGIN}/api/git/open`, {
+          method: 'POST',
+          signal: ctl.signal,
+          headers: { 'Content-Type': 'application/json', [TOKEN_HEADER]: AUTH_TOKEN },
+          body: JSON.stringify({ path: relPath }),
+        });
+        status = res.status;
+        body = await res.json().catch(() => null);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      return { ok: false, error: '无法连接后端：' + err.message };
+    }
+
+    if (!body || body.ok !== true || typeof body.abs !== 'string') {
+      return { ok: false, error: (body && body.error) || `后端未认可这个路径（HTTP ${status}）` };
+    }
+
+    // openPath 成功时返回空串，失败时返回错误描述（不会 reject）
+    const err = await shell.openPath(body.abs);
+    if (err) return { ok: false, error: err };
+    return { ok: true, abs: body.abs };
   });
 }
 
@@ -475,6 +530,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
+      /* 只为「用系统默认程序打开文件」挂一个桥（见 preload.cjs）。
+       * contextIsolation 保持开启 —— 桥经 contextBridge 暴露，
+       * 页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
 
@@ -606,6 +665,9 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(null);
     // 令牌头的注入必须赶在窗口发第一个请求之前装好
     installTokenHeader();
+    // 「用系统默认程序打开文件」的 IPC —— 必须在 createWindow 之前注册，
+    // 否则页面首帧就调用的话会拿到 "No handler registered"。
+    installOpenPathHandler();
     // 用户数据目录先建出来 —— 后端启动就要往里写 projects.json
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true });

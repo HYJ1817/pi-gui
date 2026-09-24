@@ -70,6 +70,15 @@ export const saveProvider = (name, config) => sendJSON('/api/providers', { body:
 export const deleteProvider = (name) => sendJSON('/api/providers/' + encodeURIComponent(name), { method: 'DELETE' });
 export const fetchProviderModels = (payload) => sendJSON('/api/providers/models', { body: payload });
 
+/* ---------- Git 变更 ---------- */
+
+export const fetchGitStatus = () => getJSON('/api/git/status');
+export const fetchGitDiff = (path) => sendJSON('/api/git/diff', { body: { path } });
+export const restoreGitPath = (path, deleteUntracked = false) =>
+  sendJSON('/api/git/restore', { body: { path, deleteUntracked: Boolean(deleteUntracked) } });
+/** 只做校验并拿回绝对路径；真正「用系统默认程序打开」由 Electron 侧完成。 */
+export const resolveGitOpenTarget = (path) => sendJSON('/api/git/open', { body: { path } });
+
 /* ---------- 附件上传 ---------- */
 
 /** 上传走裸二进制（文件名放 query），省掉 multipart 解析。 */

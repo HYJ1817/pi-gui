@@ -10,7 +10,16 @@
 import { S } from './state.js';
 import { ICONS } from './util.js';
 import { recordToolChange } from './changes.js';
+import { scheduleGitRefresh } from './git.js';
 import { ensureThread, moveWorkingToEnd, resultText, scrollBottom } from './messages.js';
+
+/* 会改动磁盘、因而值得重读 Git 状态的工具。
+ *
+ * write / edit 是明确的。bash 单列进来的理由：它改文件的方式太多
+ * （`> file`、`sed -i`、`mv`、`rm`、装依赖…），靠解析命令去猜「这次到底改没改」
+ * 既不可靠也不值得；而刷新本身是**只读 + 防抖**的，多刷一次的代价远小于
+ * 「Agent 明明改了文件，Changes 里却没有」。 */
+const REFRESH_TOOLS = new Set(['write', 'edit', 'bash']);
 
 export const TOOL_META = {
   bash: { label: '执行命令', icon: 'terminal' },
@@ -101,7 +110,13 @@ export function onToolEnd(evt) {
 
   // 记一笔「改动了哪些文件」。只在成功时记 —— 失败的工具没真正改到磁盘，
   // 记进去会让将来的变更列表出现幽灵条目。
-  if (!evt.isError) recordToolChange(card._tool || evt.toolName, card._args);
+  const tool = card._tool || evt.toolName;
+  if (!evt.isError) {
+    recordToolChange(tool, card._args);
+    /* 顺带安排一次 Git 状态刷新（防抖 450ms）。一次 Agent 回合里连改 5 个文件
+     * 只会产生 1 次 git status —— 见 git.js 的 scheduleGitRefresh。 */
+    if (REFRESH_TOOLS.has(tool)) scheduleGitRefresh();
+  }
 
   S.tools.delete(evt.toolCallId);
   moveWorkingToEnd();

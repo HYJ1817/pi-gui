@@ -37,6 +37,13 @@
         <span class="ni-label">分支</span>
         <span class="ni-count" id="branchCount"></span>
       </div>
+      <!-- 文件变更（Git 工作区）。数字来自 git status，不是会话账本 ——
+           两者可能不一致时以 Git 为准，见 public/git.js 顶部的说明。 -->
+      <div class="nav-item" id="navChanges" title="Git 工作区变更">
+        <svg class="ni-ic" viewBox="0 0 24 24"><path d="M7 4.5h10a2 2 0 0 1 2 2v13l-3-2-3 2-3-2-3 2v-13a2 2 0 0 1 2-2z"/><path d="M10 9.5h4M10 13h4"/></svg>
+        <span class="ni-label">文件变更</span>
+        <span class="ni-count" id="changesCount" hidden></span>
+      </div>
     </nav>
 
     <div class="rail-group">
@@ -189,6 +196,15 @@
 
 <div class="modal" id="modal" hidden>
   <div class="modal-card" id="modalCard"></div>
+</div>
+
+<!-- 二次确认层。
+     刻意**不复用** #modal：确认往往发生在另一个弹层之上（最典型的是「文件变更」
+     面板里点撤销），而复用同一个容器会把下层面板一起清空 —— 用户确认完，
+     面板和里面的 diff 全没了。单独一层就没有这个问题，层级关系也更好读：
+     确认永远在最上面。 -->
+<div class="modal confirm" id="confirmLayer" hidden>
+  <div class="modal-card" id="confirmCard"></div>
 </div>
 
 <div class="toasts" id="toasts"></div>
