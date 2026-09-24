@@ -11,6 +11,7 @@
     "dev": "node --watch server.js",
     "app": "electron .",
     "icon": "node scripts/make-icon.mjs --preview",
+    "icon:src": "electron scripts/make-icon-src.mjs",
     "test": "node tests/smoke.cjs && node tests/git.cjs && node tests/body-integrity.cjs && node tests/dev-server.cjs && node tests/models-api.cjs && node tests/server-security.cjs && node tests/electron-guard.cjs",
     "test:ui": "node tests/smoke.cjs",
     "test:body": "node tests/body-integrity.cjs",

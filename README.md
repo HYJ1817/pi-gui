@@ -246,6 +246,8 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
 - `electron/preload.cjs` — 渲染进程与主进程之间唯一的桥（只暴露「用系统默认程序打开文件」）
 - `electron/net-probe.cjs` — 端口探测与 URL 判定（纯逻辑，不依赖 electron，因此可单测）
 - `installer/pi-gui.nsi` — 安装程序脚本（用 NSIS 编）
+- `assets/icon-src.png` — 应用图标的母图（正方形 PNG）。`scripts/make-icon.mjs`
+  会读它、切圆角、编码成 `build/icon.ico`；这个文件不在就退回程序化绘制的 π
 - `scripts/` — 构建脚本；`scripts/util.mjs` 是几个脚本共用的小工具
 - `tests/` — 上面那几组测试
 

@@ -18,6 +18,7 @@ const { spawn, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const zlib = require('node:zlib');
 
 const ROOT = path.join(__dirname, '..');
 const APP = path.join(ROOT, 'dist-app', 'Pi GUI-win32-x64', 'resources', 'app');
@@ -60,6 +61,20 @@ function rmrf(p) {
   }
 }
 
+/** 把 PNG 里所有 IDAT 块的数据拼起来（还没解压）。
+ *  只给上面「图标圆角」那条断言用，所以不处理调色板 / 隔行这些分支。 */
+function readPngIdat(buf) {
+  const parts = [];
+  let off = 8;
+  while (off + 8 <= buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString('ascii', off + 4, off + 8);
+    if (type === 'IDAT') parts.push(buf.subarray(off + 8, off + 8 + len));
+    else if (type === 'IEND') break;
+    off += 12 + len; // 4(长度) + 4(类型) + len(数据) + 4(CRC)
+  }
+  return Buffer.concat(parts);
+}
 
 const results = [];
 function check(name, fn) {
@@ -126,6 +141,44 @@ async function main() {
       if (probe.length && exe.includes(probe)) hit++;
     }
     return hit === count ? true : `icon.ico 有 ${count} 个尺寸，exe 里只找到 ${hit} 个 —— 应用在用默认图标`;
+  });
+
+  /* 图标的结构与「圆角真的切了」。
+   *
+   * 上面那条只证明「有东西嵌进去了」。图标来源有两条路（assets/icon-src.png 或
+   * 退回程序化 π），**退回是静默的**，所以还得验一下圆角遮罩那条路真的跑了。
+   * 判据：四角透明、中心不透明。编码器写歪（PNG 条目坏掉、遮罩没生效）时，
+   * rcedit 照样会把字节塞进 exe，只有任务栏图标变成一坨才暴露。 */
+  check('icon.ico 结构正确且圆角已切', () => {
+    const ico = fs.readFileSync(ICON);
+    const count = ico.readUInt16LE(4);
+    const sizes = [];
+    let png256 = null;
+    for (let i = 0; i < count; i++) {
+      const off = 6 + i * 16;
+      const w = ico[off] || 256; // 256 在目录里写 0
+      const size = ico.readUInt32LE(off + 8);
+      const start = ico.readUInt32LE(off + 12);
+      sizes.push(w);
+      if (start + size > ico.length) return `${w}px 条目越界`;
+      const entry = ico.subarray(start, start + size);
+      if (w >= 128) {
+        // 大尺寸必须是 PNG 条目（rcedit 对 BMP 大图不友好，见 make-icon.mjs 的说明）
+        if (entry.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return `${w}px 不是 PNG 条目`;
+        if (w === 256) png256 = entry;
+      }
+    }
+    if (sizes.join('/') !== '16/24/32/48/64/128/256') return `尺寸不对：${sizes.join('/')}`;
+    if (!png256) return '没有 256px 条目';
+
+    /* 取出 IDAT 解压后的原始扫描线。编码器逐行写 filter=0，
+     * 所以第 y 行的像素从 y*(w*4+1)+1 开始，每像素 4 字节。 */
+    const w = 256;
+    const raw = zlib.inflateSync(readPngIdat(png256));
+    const alphaAt = (x, y) => raw[y * (w * 4 + 1) + 1 + x * 4 + 3];
+    if (alphaAt(0, 0) !== 0 || alphaAt(w - 1, w - 1) !== 0) return '四角不是透明的 —— 圆角遮罩没生效';
+    if (alphaAt(w / 2, w / 2) < 200) return `中心是透明的（alpha=${alphaAt(w / 2, w / 2)}）—— 母图没读到`;
+    return true;
   });
 
   /* 许可证必须跟着二进制走。

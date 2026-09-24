@@ -1,11 +1,18 @@
 /* 生成应用图标 build/icon.ico。
  *
- * 为什么要自己画：Electron 打包不带图标时用的是 Electron 官方 logo，
- * 一眼就是「没做完」。装 canvas / sharp 这种依赖只为画一个 π 又不值当，
- * 所以这里手写光栅化 + PNG/ICO 编码，零依赖。
+ * 两条来源，按优先级：
+ *   1) assets/icon-src.png 存在 → 用它当母图（当前用的是一张插画）。
+ *   2) 不存在 → 退回程序化绘制的 π（原先的默认图标）。
  *
- * 画法：先在 4 倍尺寸上按硬边绘制（不做抗锯齿），再盒式降采样回目标尺寸，
- * 边缘自然就平滑了 —— 比逐像素算覆盖率简单得多。
+ * 为什么要自己画 / 自己解码：Electron 打包不带图标时用的是 Electron 官方 logo，
+ * 一眼就是「没做完」。装 canvas / sharp 这种依赖只为处理一个图标又不值当，
+ * 所以这里手写光栅化 + PNG/ICO 编解码，零依赖。
+ *
+ * 程序化那条的画法：先在 4 倍尺寸上按硬边绘制（不做抗锯齿），再盒式降采样回
+ * 目标尺寸，边缘自然就平滑了 —— 比逐像素算覆盖率简单得多。
+ *
+ * 源图那条：母图已经是光栅，没有可降采样的矢量信息，所以圆角遮罩要自己做
+ * 子像素采样（见 applyRoundedMask）。母图尺寸由文件本身决定，不再固定 256。
  *
  * ICO 里小尺寸用 BMP(DIB) 条目、大尺寸用 PNG 条目：
  * rcedit（packager 用来写 exe 图标）对 PNG 条目的兼容性不如 BMP，混着来最稳。
@@ -17,10 +24,17 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'build', 'icon.ico');
+const SRC = path.join(ROOT, 'assets', 'icon-src.png');
 
 const AMBER = [0xe8, 0xa3, 0x3d]; // Codex 风格的琥珀色
 const BG_TOP = [0x24, 0x24, 0x24];
 const BG_BOT = [0x12, 0x12, 0x12];
+
+/* 圆角方块的形状。用源图时按**满幅**切圆角（不内缩）：
+ * 插画本身的底色就是深色，内缩一圈只会让画面变小、还多出一圈空边。
+ * 半径 22% 接近 Windows 11 应用图标的观感。 */
+const PAD_RATIO = 0;
+const RADIUS_RATIO = 0.22;
 
 /* ---------- 几何：圆角矩形命中测试 ---------- */
 function inRoundRect(px, py, x, y, w, h, r) {
@@ -31,7 +45,134 @@ function inRoundRect(px, py, x, y, w, h, r) {
   return dx * dx + dy * dy <= r * r;
 }
 
-/* ---------- 在 size×size 上绘制（硬边，SS 倍超采样后降采样即得抗锯齿） ---------- */
+/* ---------- PNG 解码 ----------
+ * 只用来读 assets/icon-src.png，所以刻意做得窄：8 位深、非隔行、不处理调色板。
+ * 碰到不支持的形态**直接报错**，不要静默回退到 π —— 否则「换了图但图标没变」
+ * 会变成一个查不出原因的现象。 */
+function decodePng(buf) {
+  if (buf.length < 8 || buf.readUInt32BE(0) !== 0x89504e47 || buf.readUInt32BE(4) !== 0x0d0a1a0a) {
+    throw new Error('不是 PNG（文件签名不对）');
+  }
+
+  let off = 8;
+  let ihdr = null;
+  const idat = [];
+  while (off + 8 <= buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString('ascii', off + 4, off + 8);
+    if (type === 'IHDR') ihdr = buf.subarray(off + 8, off + 8 + len);
+    else if (type === 'IDAT') idat.push(buf.subarray(off + 8, off + 8 + len));
+    else if (type === 'IEND') break;
+    off += 12 + len; // 4(长度) + 4(类型) + len(数据) + 4(CRC)
+  }
+  if (!ihdr) throw new Error('PNG 里没有 IHDR');
+  if (!idat.length) throw new Error('PNG 里没有 IDAT');
+
+  const w = ihdr.readUInt32BE(0);
+  const h = ihdr.readUInt32BE(4);
+  const depth = ihdr[8];
+  const color = ihdr[9];
+  const interlace = ihdr[12];
+  if (depth !== 8) throw new Error(`只支持 8 位深的 PNG，这个是 ${depth} 位`);
+  if (interlace !== 0) throw new Error('不支持隔行扫描（interlaced）的 PNG');
+  const CH = { 0: 1, 2: 3, 4: 2, 6: 4 }[color];
+  if (!CH) throw new Error(`不支持的 PNG 颜色类型 ${color}（调色板类型请先转成 RGB/RGBA）`);
+
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = w * CH;
+  const out = Buffer.alloc(w * h * 4);
+  const line = Buffer.alloc(stride);
+  const prev = Buffer.alloc(stride);
+  let p = 0;
+
+  for (let y = 0; y < h; y++) {
+    const filter = raw[p++];
+    raw.copy(line, 0, p, p + stride);
+    p += stride;
+    /* 逐字节反滤波。a/b/c 取的都是**已重建**的值（line 就地覆盖），
+     * 这正是 PNG 规范要求的顺序 —— 用原始字节算会得到一堆噪点。 */
+    for (let i = 0; i < stride; i++) {
+      const a = i >= CH ? line[i - CH] : 0;
+      const b = prev[i];
+      const c = i >= CH ? prev[i - CH] : 0;
+      let v = line[i];
+      if (filter === 1) v += a;
+      else if (filter === 2) v += b;
+      else if (filter === 3) v += (a + b) >> 1;
+      else if (filter === 4) {
+        const pa = Math.abs(b - c);
+        const pb = Math.abs(a - c);
+        const pc = Math.abs(a + b - 2 * c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      line[i] = v & 0xff;
+    }
+    for (let x = 0; x < w; x++) {
+      const s = x * CH;
+      const d = (y * w + x) * 4;
+      if (CH === 1) {
+        out[d] = out[d + 1] = out[d + 2] = line[s];
+        out[d + 3] = 255;
+      } else if (CH === 2) {
+        out[d] = out[d + 1] = out[d + 2] = line[s];
+        out[d + 3] = line[s + 1];
+      } else if (CH === 3) {
+        out[d] = line[s];
+        out[d + 1] = line[s + 1];
+        out[d + 2] = line[s + 2];
+        out[d + 3] = 255;
+      } else {
+        out[d] = line[s];
+        out[d + 1] = line[s + 1];
+        out[d + 2] = line[s + 2];
+        out[d + 3] = line[s + 3];
+      }
+    }
+    line.copy(prev);
+  }
+  return { rgba: out, width: w, height: h };
+}
+
+/* ---------- 圆角遮罩 ----------
+ * 母图是光栅，不能像程序化那条靠「超采样绘制再降采样」拿到平滑边缘，
+ * 所以这里对每个像素做 samples×samples 子像素采样，把覆盖率乘进 alpha。
+ * 4×4 在这个尺寸上已经看不出锯齿，再高只是白费时间。 */
+function applyRoundedMask(rgba, size, padRatio = PAD_RATIO, radiusRatio = RADIUS_RATIO, samples = 4) {
+  const out = Buffer.from(rgba);
+  const pad = size * padRatio;
+  const x0 = pad;
+  const y0 = pad;
+  const w = size - pad * 2;
+  const h = size - pad * 2;
+  const r = size * radiusRatio;
+  const inv = 1 / (samples * samples);
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let cov = 0;
+      for (let sy = 0; sy < samples; sy++) {
+        for (let sx = 0; sx < samples; sx++) {
+          if (inRoundRect(x + (sx + 0.5) / samples, y + (sy + 0.5) / samples, x0, y0, w, h, r)) cov++;
+        }
+      }
+      const o = (y * size + x) * 4;
+      out[o + 3] = Math.round(out[o + 3] * cov * inv);
+    }
+  }
+  return out;
+}
+
+/* ---------- 母图来源一：assets/icon-src.png ---------- */
+function loadImageMaster() {
+  if (!fs.existsSync(SRC)) return null;
+  const png = decodePng(fs.readFileSync(SRC));
+  if (png.width !== png.height) {
+    throw new Error(`assets/icon-src.png 必须是正方形，现在是 ${png.width}x${png.height}`);
+  }
+  return { rgba: applyRoundedMask(png.rgba, png.width), size: png.width };
+}
+
+/* ---------- 母图来源二：程序化绘制 π ---------- */
 function renderMaster(size) {
   const SS = 4;
   const N = size * SS;
@@ -215,9 +356,11 @@ function buildIco(entries) {
 }
 
 /* ---------- 主流程 ---------- */
-const master = renderMaster(256);
+const fromImage = loadImageMaster();
+const master = fromImage ? fromImage.rgba : renderMaster(256);
+const masterSize = fromImage ? fromImage.size : 256;
 
-// 大尺寸：从 256 直接盒式降到目标尺寸，保证质量
+// 大尺寸：从母图直接盒式降到目标尺寸，保证质量
 function downscale(rgba, from, to) {
   if (from === to) return rgba;
   const f = from / to;
@@ -250,11 +393,11 @@ function downscale(rgba, from, to) {
 
 const entries = [];
 for (const size of [16, 24, 32, 48, 64]) {
-  const small = downscale(master, 256, size);
+  const small = downscale(master, masterSize, size);
   entries.push({ size, data: toDib(small, size) });
 }
 for (const size of [128, 256]) {
-  const big = downscale(master, 256, size);
+  const big = downscale(master, masterSize, size);
   entries.push({ size, data: toPng(big, size) });
 }
 
@@ -263,7 +406,7 @@ const ico = buildIco(entries);
 fs.writeFileSync(OUT, ico);
 
 // 顺手导一张 256 PNG，方便在别处复用（比如网页 favicon）
-fs.writeFileSync(path.join(ROOT, 'build', 'icon.png'), toPng(master, 256));
+fs.writeFileSync(path.join(ROOT, 'build', 'icon.png'), toPng(downscale(master, masterSize, 256), 256));
 
 // --preview：把小尺寸放大 6 倍拼一张对照图，人眼确认 16px 下还认不认得出
 if (process.argv.includes('--preview')) {
@@ -275,7 +418,7 @@ if (process.argv.includes('--preview')) {
   const sheet = Buffer.alloc(W * H * 4);
   let ox = gap;
   for (const s of sizes) {
-    const small = downscale(master, 256, s);
+    const small = downscale(master, masterSize, s);
     for (let y = 0; y < s * Z; y++) {
       for (let x = 0; x < s * Z; x++) {
         const src = Math.floor(y / Z) * s + Math.floor(x / Z);
@@ -291,5 +434,6 @@ if (process.argv.includes('--preview')) {
   fs.writeFileSync(path.join(ROOT, 'build', 'icon-preview.png'), toPng(sheet, W, H));
 }
 
+console.log(`母图  ${fromImage ? `assets/icon-src.png（${masterSize}px）` : '程序化绘制（256px）'}`);
 console.log(`icon.ico  ${(ico.length / 1024).toFixed(1)} KB`);
 for (const e of entries) console.log(`  ${String(e.size).padStart(3)}px  ${e.data.length} B`);
