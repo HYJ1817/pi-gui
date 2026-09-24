@@ -335,6 +335,28 @@ staticCheck();
     return bodies[bodies.length - 1].querySelector('.msg-note')?.textContent === '已中断';
   });
 
+  /* 只有工具调用的助手消息：content 全是 toolCall，渲染不出任何正文。
+   * 早先这里会留下一条没有正文的空白「Pi」（扫 11 个真实会话共 20 条），
+   * 现在整条外壳（含角色行）收掉 —— 工具卡片挂在 thread 上，不受影响。 */
+  const assistantsBeforeToolOnly = window.document.querySelectorAll('.msg.assistant').length;
+  es.emit({ type: 'message_start', message: { role: 'assistant', content: [] } });
+  es.emit({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: 'tc1', name: 'bash', arguments: { command: 'ls' } }],
+      stopReason: 'toolUse',
+    },
+  });
+  check('只有工具调用的消息不留空白「Pi」', () => {
+    const n = window.document.querySelectorAll('.msg.assistant').length;
+    return n === assistantsBeforeToolOnly ? true : `多出了 ${n - assistantsBeforeToolOnly} 条助手外壳`;
+  });
+  check('每条助手消息的正文都非空', () => {
+    const empty = [...window.document.querySelectorAll('.msg.assistant .msg-body')].filter((b) => !b.childElementCount);
+    return empty.length === 0 ? true : `${empty.length} 条助手正文是空的`;
+  });
+
   // --- 工具调用 ---
   es.emit({ type: 'tool_execution_start', toolCallId: 't1', toolName: 'bash', args: { command: 'ls -la' } });
   check('工具卡片出现', () => window.document.querySelectorAll('.tool').length === 1);
@@ -1529,6 +1551,36 @@ staticCheck();
     if (panel.hidden !== true) return '拉取面板默认应该藏着';
     return true;
   });
+
+  /* --- 重建历史时同样不留空白「Pi」 ---
+   *
+   * 从 pi 的会话 jsonl 恢复对话走的是 rebuildFromMessages（不是事件流），
+   * 只有工具调用的那轮同样渲染不出正文。这里钉住「整条跳过」，
+   * 同时确认同一次重建里正文那条和用户消息都还在（别把跳过写成清空）。
+   *
+   * 这条会 clearThread()，所以放在最后 —— 前面所有用例都依赖线程状态。 */
+  window.rebuildFromMessages({
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: '跑一下' }] },
+      {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'tc2', name: 'bash', arguments: { command: 'ls' } }],
+        stopReason: 'toolUse',
+      },
+      { role: 'assistant', content: [{ type: 'text', text: '跑完了' }] },
+    ],
+  });
+  check('重建历史时跳过只有工具调用的助手消息', () => {
+    const n = window.document.querySelectorAll('.msg.assistant').length;
+    return n === 1 ? true : `重建出 ${n} 条助手消息，应该是 1 条`;
+  });
+  check('重建历史时正文那条仍在', () => {
+    const body = window.document.querySelector('.msg.assistant .msg-body');
+    return body?.textContent.includes('跑完了') ? true : '正文丢了';
+  });
+  check('重建历史时用户消息仍在', () =>
+    window.document.querySelectorAll('.msg.user').length === 1 ? true : '用户消息丢了'
+  );
 
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 

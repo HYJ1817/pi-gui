@@ -8,7 +8,13 @@
  * 另外有一条硬规则：**助手消息绝不允许静默空白**。
  * 上游报错时 pi 返回的是 {content:[], stopReason:'error', errorMessage:'402: …'}，
  * 早期实现遇到空 content 就直接 return，用户看到的是一个空白的「Pi」，
- * 完全不知道发生了什么。现在失败、中断、真没内容三种情况都有对应呈现。 */
+ * 完全不知道发生了什么。现在失败、中断、真没内容三种情况都有对应呈现。
+ *
+ * 空白还有第二个来源：**只有工具调用**的助手消息（content 全是 toolCall，
+ * 没有 text / thinking）。这类消息渲染不出任何正文，外壳留着就是一条孤零零的
+ * 「Pi」—— 实测 11 个真实会话里有 20 条。所以整条外壳（含角色行）直接收掉，
+ * 由 rebuildAssistant 的返回值告诉调用方「这次有没有值得占位的正文」。
+ * 工具卡片是挂在 thread 上的，不随外壳一起消失。 */
 
 import { el, S } from './state.js';
 import { esc, icon, iconFor } from './util.js';
@@ -348,7 +354,11 @@ export function onMessageEnd(evt) {
   const msg = evt.message;
   if (msg?.role === 'assistant' && S.current) {
     // message_end.message 是权威，用它校正渲染结果
-    rebuildAssistant(S.current.body, msg);
+    const keep = rebuildAssistant(S.current.body, msg);
+    /* 只有工具调用、没有正文时整条外壳收掉。
+     * 工具卡片由 tools.js 直接挂在 thread 上，不在这个 body 里，所以不受影响；
+     * 下一轮 message_start 会再建一个新的外壳。 */
+    if (!keep) S.current.wrap.remove();
   }
   S.current = null;
   S.blocks.clear();
@@ -442,16 +452,20 @@ export function dropTrailingError() {
   }
 }
 
+/* 用 message_end 的权威内容重建一条助手消息的正文。
+ *
+ * **返回值 = 这条消息有没有值得占位的正文**（bodyEl 里落了东西就是 true）。
+ * 调用方据此决定要不要保留外层那圈「Pi」角色行 —— 只有 toolCall 的助手消息
+ * 渲染不出任何东西，返回 false，调用方把整个外壳收掉，别留空白。
+ *
+ * 三种「没有正文」要分开看，别混成一种：
+ *   - 有 toolCall 之类不可渲染的 part → 什么都不加，返回 false（收掉外壳）
+ *   - content 真的为空、也不是失败/中断 → 加一句提示，返回 true（不是空白）
+ *   - 失败 / 中断 → 加错误卡片或「已中断」，返回 true */
 export function rebuildAssistant(bodyEl, msg) {
   const content = Array.isArray(msg.content) ? msg.content : [];
   const failed = msg?.stopReason === 'error' || Boolean(msg?.errorMessage);
   const aborted = msg?.stopReason === 'aborted';
-
-  // 既没内容也不是失败 —— pi 这次什么都没返回，给个提示别留空白
-  if (!content.length && !failed && !aborted) {
-    bodyEl.appendChild(noteBlock('（这次没有返回内容）'));
-    return;
-  }
 
   const html = content
     .map((c) => {
@@ -468,10 +482,15 @@ export function rebuildAssistant(bodyEl, msg) {
     bodyEl.querySelectorAll('.think-head').forEach((h) => {
       h.onclick = () => h.parentElement.classList.toggle('collapsed');
     });
+  } else if (!content.length && !failed && !aborted) {
+    // 既没内容也不是失败 —— pi 这次什么都没返回，给个提示别留空白
+    bodyEl.appendChild(noteBlock('（这次没有返回内容）'));
   }
 
   if (failed) bodyEl.appendChild(errorBlock(msg));
   else if (aborted) bodyEl.appendChild(noteBlock('已中断'));
+
+  return bodyEl.childElementCount > 0;
 }
 
 export function rebuildFromMessages(data) {
@@ -491,7 +510,10 @@ export function rebuildFromMessages(data) {
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');
       body.className = 'msg-body';
-      rebuildAssistant(body, m);
+      /* 重建历史时同样不留空白「Pi」：只有工具调用的那轮没有正文可渲染，
+       * 整条跳过。（代价是那轮的工具调用在历史里看不到 —— 当前不渲染历史
+       * 工具卡片，等做了再把它一起补上。） */
+      if (!rebuildAssistant(body, m)) continue;
       wrap.appendChild(body);
       t.appendChild(wrap);
     }
