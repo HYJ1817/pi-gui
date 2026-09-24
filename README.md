@@ -130,6 +130,52 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 分发两个 UMD 文件（含 Apache-2.0 的署名义务），而上面这套结构性防护已经把主要收益
 拿到了。渲染完整度上的差距，用增量补齐更划算。
 
+## 工具执行时间线
+
+Agent 的工具调用渲染成**嵌在对话流里的连续时间线**，而不是一张张彼此孤立的卡片：
+
+```
+操作 3 项
+  ✓ 读取文件   src/app.js                    0.3s   128 行
+  ✗ 执行命令   npm test                      12.4s  exit code 1
+  ✓ 修改文件   src/util.js                   0.1s   +12 −3
+```
+
+每条给出语义名、关键参数（命令原文 / 文件路径 / 搜索词）、状态、时长、
+一行最有价值的结果，以及 Git 报的 `+N −M`。点一下展开完整输出与原始参数。
+
+**实时和历史走同一条渲染路径。** 刷新页面之后工具执行从 `get_messages` 重建：
+`assistant.content[]` 里的 `toolCall` 与独立成条的 `toolResult` 按 `toolCallId` 配对，
+配对结果先归一成同一个中间结构（`public/tool-model.js` 的 `ToolEntry`），
+视图只认这个结构。所以「刷新前后语义一致」不是靠对齐两套代码维持的，
+而是因为压根只有一套。
+
+几种退化情况都有明确归宿，**都不允许静默消失**：
+
+| 情况 | 呈现 |
+|---|---|
+| 有 `toolCall` 没有 `toolResult`（中断 / 崩溃 / 会话被切走） | 「未完成」，虚线圆圈图标 |
+| 有 `toolResult` 没有 `toolCall`（孤儿） | 在它自己的位置降级成一条，不吞掉 |
+| 未知工具（扩展注册的 / 以后新加的） | 「执行工具 + 原始名字」，不报错 |
+| `agent_settled` 时还有条目在 running | 收成「未完成」，不让它永远转下去 |
+| 只有 `toolCall` 的助手消息 | 整条外壳（含「Pi」角色行）收掉，不留空白 |
+
+几条协议上的事实，都是实测出来的，代码里没有一处靠猜：
+
+- `tool_execution_update.partialResult` 是**累积值**不是增量，所以整体替换；
+  但空文本不覆盖已有内容（`bash` 的 `onUpdate` 会先发一次空的）。
+- `tool_execution_end` **不保证带 `toolName` / `args`**，工具名与参数在 `start` 时存下来。
+- 协议里**没有结构化的退出码**（`bash` 的 `details` 只有 `truncation` / `fullOutputPath`），
+  只能从输出文本里解析 pi 自己拼的那句 `Command exited with code N`；解析不到就不显示，
+  绝不按 `isError` 猜一个数字。
+- `edit` 的 `details.diff` 是工具当场给的**单次**改动量，只作兜底；
+  文件级的权威 `+N −M` 由 `git status` 给，刷新回来后覆盖（见下一节）。
+- 输出默认折叠，长命令不会把对话撑成一片墙。折叠按钮、悬停提示都跟着状态走。
+
+安全上，工具的一切内容都是不可信输入（命令来自模型，输出来自被执行的程序）。
+`public/tool-view.js` **一次 `innerHTML` 都不用**（除自己写死的 SVG 图标常量），
+所有文本走 `textContent` —— 于是「记得转义」这件事不需要被记住。
+
 ## 文件变更与撤销
 
 侧栏的「文件变更」列出**当前 Git 工作区**里相对 HEAD 有差异的文件：
@@ -215,7 +261,9 @@ npm run build:app -- --rebuild
 
 ```bash
 npm test                # 前端冒烟 + Git 变更 + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
-npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全、变更面板、diff 渲染）
+npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全、工具时间线、
+                        #   变更面板、diff 渲染；工具时间线那一段还会用
+                        #   tests/fixtures/ 里的真实会话 fixture 重建一遍）
 npm run test:git        # Git 变更：临时仓库里跑真实的 M/A/D/R/??/中文/空格/二进制、路径越权、
                         #   取消暂存、撤销全部、diff 上下文，外加写路径的静态守卫
 npm run test:models     # 单跑模型拉取：桩上游 + 三种 API 形态 + 路径回退 + key 不泄露
@@ -242,6 +290,12 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
 - `public/` — 前端。原生 ES Module，`app.js` 只做装配，其余按职责分模块
   （`api.js` 网络、`state.js` 状态、`markdown.js` 渲染、`git.js` 变更面板、
   `diff.js` unified diff 渲染、`changes.js` 会话改动账本、`ui/` 通用组件……），无构建步骤
+  - `tool-model.js` — 工具执行的**数据模型**：实时事件与历史消息都归一成 `ToolEntry`。
+    纯数据 + 纯函数，不碰 DOM（所以能单测）
+  - `tool-view.js` — 只认 `ToolEntry` 的视图层，实时与历史共用；零 `innerHTML`
+  - `tool-history.js` — 从 `get_messages` 的消息数组算出渲染计划（配对、降级、顺序），
+    纯函数，不碰 DOM
+  - `tools.js` — 实时侧的调度：事件 → 模型 → 视图，批量重画、运行时长 ticker、分组边界
 - `electron/main.cjs` — Electron 主进程，拉起内嵌后端、管窗口与导航
 - `electron/preload.cjs` — 渲染进程与主进程之间唯一的桥（只暴露「用系统默认程序打开文件」）
 - `electron/net-probe.cjs` — 端口探测与 URL 判定（纯逻辑，不依赖 electron，因此可单测）
@@ -250,6 +304,9 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
   会读它、切圆角、编码成 `build/icon.ico`；这个文件不在就退回程序化绘制的 π
 - `scripts/` — 构建脚本；`scripts/util.mjs` 是几个脚本共用的小工具
 - `tests/` — 上面那几组测试
+- `tests/fixtures/tool-history.json` — 从真实会话 jsonl 切出来的一段消息
+  （脱敏 + 长正文截断，结构一字未改），用来验证历史重建。
+  来源与脱敏规则见 `tests/fixtures/README.md`
 
 `dist-installer/` 不进仓库（上百 MB 的二进制）。要分发就传到 GitHub Release 的附件里。
 

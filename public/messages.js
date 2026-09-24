@@ -14,7 +14,10 @@
  * 没有 text / thinking）。这类消息渲染不出任何正文，外壳留着就是一条孤零零的
  * 「Pi」—— 实测 11 个真实会话里有 20 条。所以整条外壳（含角色行）直接收掉，
  * 由 rebuildAssistant 的返回值告诉调用方「这次有没有值得占位的正文」。
- * 工具卡片是挂在 thread 上的，不随外壳一起消失。 */
+ *
+ * 收掉外壳**不等于那次工具调用消失了** —— 它由 Tool Timeline 呈现
+ * （实时见 tools.js，历史见下面的 rebuildFromMessages + tool-history.js）。
+ * 两者渲染的是同一个 ToolEntry 结构，所以刷新前后语义一致。 */
 
 import { el, S } from './state.js';
 import { esc, icon, iconFor } from './util.js';
@@ -22,6 +25,9 @@ import { md } from './markdown.js';
 import { sendCommand } from './api.js';
 import { updateSendState } from './composer.js';
 import { FILE_BLOCK_RE } from './attachments.js';
+import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
+import { planHistory } from './tool-history.js';
+import { addToGroup, createGroup, renderEntry } from './tool-view.js';
 
 /* ---------- 线程与滚动 ---------- */
 
@@ -56,6 +62,10 @@ export function clearThread() {
   S.current = null;
   S.blocks.clear();
   S.tools.clear();
+  /* 时间线的实时状态也要清 —— 留着的话，换会话之后 applyGitStats 还会去扫
+   * 一批已经不在 DOM 里的旧条目。ticker 会自己停（S.tools 空了就没有 running）。 */
+  clearLiveEntries();
+  S.tlGroup = null;
   hideWorking();
 }
 
@@ -79,6 +89,7 @@ export function showWorking() {
   w.innerHTML = '<span class="spinner"></span><span>Pi 正在处理…</span>';
   t.appendChild(w);
   S.working = w;
+  syncToolWorking();
 }
 
 export function hideWorking() {
@@ -90,6 +101,22 @@ export function hideWorking() {
 
 export function moveWorkingToEnd() {
   if (S.working && S.thread) S.thread.appendChild(S.working);
+}
+
+/* 有工具在跑时把「Pi 正在处理…」收起来（§14）。
+ *
+ * 时间线上的 running 条目本身已经把「正在工作」说清楚了，再挂一句
+ * 「Pi 正在处理…」就是同一句话说两遍；更糟的是它会夹在工具条目之间反复出现，
+ * 看起来像状态在横跳。
+ *
+ * 这里只做**弱化**（把指示器藏起来），不碰 streaming 状态机 ——
+ * setStreaming / showWorking / hideWorking 的时序一行没改。
+ *
+ * 用 hidden 而不是 remove：working 元素会被 moveWorkingToEnd 反复搬位置，
+ * 删掉它就得在每条路径上判断「要不要重建」，反而更容易漏。 */
+export function syncToolWorking() {
+  if (!S.working) return;
+  S.working.hidden = hasRunning();
 }
 
 export function setStreaming(on) {
@@ -104,6 +131,11 @@ export function onSettled() {
   setStreaming(false);
   S.current = null;
   S.blocks.clear();
+  /* agent 已经收尾了，还有条目停在 running —— 说明那次工具执行没有等到
+   * tool_execution_end（用户中断 / 进程被杀 / 上游报错）。让它们永远转下去
+   * 是不对的：界面会一直显示「运行中」，而且 hasRunning() 恒为真会让
+   * 「Pi 正在处理…」再也不出现。 */
+  settleRunning();
   sendCommand({ type: 'get_session_stats' });
   sendCommand({ type: 'get_state' });
   sendCommand({ type: 'get_tree' });
@@ -201,16 +233,15 @@ export function textOf(msg) {
   return '';
 }
 
-export function resultText(res) {
-  if (!res) return '';
-  if (typeof res === 'string') return res;
-  if (Array.isArray(res.content)) return res.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
-  if (typeof res.text === 'string') return res.text;
-  return '';
-}
+/* resultText 搬去了 tool-model.js —— 它是「工具返回值长什么样」的协议知识，
+ * 时间线（实时 + 历史）和消息渲染都要用，放在数据模型那一层更合适。 */
 
 function renderUser(msg) {
   const t = ensureThread();
+  /* 用户消息是工具分组的硬边界：上一条 assistant 那批工具已经彻底结束了。
+   * 放在这里而不是靠时间判断 —— §12 明确禁止「超过几秒算新组」那种猜测。 */
+  S.tlGroup = null;
+
   const wrap = document.createElement('div');
   wrap.className = 'msg user';
 
@@ -248,8 +279,14 @@ function createAssistant() {
 
 export function onMessageStart(evt) {
   const msg = evt.message || {};
-  if (msg.role === 'user') renderUser(msg);
-  else if (msg.role === 'assistant') createAssistant();
+  if (msg.role === 'user') return renderUser(msg);
+  if (msg.role !== 'assistant') return;
+
+  /* 新的 assistant 消息开始 = 上一批工具调用已经跑完了（实测的事件顺序是
+   * message_end → tool_execution_start，所以组在这里关掉正好）。
+   * 这是**真实边界**：消息本身就是边界。 */
+  S.tlGroup = null;
+  createAssistant();
 }
 
 /* ---------- 流式块组装 ---------- */
@@ -496,27 +533,46 @@ export function rebuildAssistant(bodyEl, msg) {
 export function rebuildFromMessages(data) {
   const msgs = Array.isArray(data) ? data : data?.messages || [];
   clearThread();
+
   const t = ensureThread();
-  for (const m of msgs) {
-    if (m.role === 'user') {
+  /* 先全拼进 DocumentFragment 再一次性挂上去（§17）：一段历史可能有几百条，
+   * 逐条 append 会触发同样多次布局计算。 */
+  const frag = document.createDocumentFragment();
+
+  /* 配对规则全部在 tool-history.js 里（纯函数，可单独测）：
+   * toolCall + 对应 toolResult → 一条完整的时间线条目；
+   * 缺 result → 「未完成」；孤儿 result → 就地降级显示，不丢也不崩。 */
+  for (const item of planHistory(msgs)) {
+    if (item.kind === 'user') {
       const wrap = document.createElement('div');
       wrap.className = 'msg user';
       wrap.innerHTML = '<div class="msg-role">你</div>';
-      wrap.appendChild(userBody(m));
-      t.appendChild(wrap);
-    } else if (m.role === 'assistant') {
+      wrap.appendChild(userBody(item.message));
+      frag.appendChild(wrap);
+      continue;
+    }
+
+    if (item.kind === 'assistant') {
       const wrap = document.createElement('div');
       wrap.className = 'msg assistant';
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');
       body.className = 'msg-body';
       /* 重建历史时同样不留空白「Pi」：只有工具调用的那轮没有正文可渲染，
-       * 整条跳过。（代价是那轮的工具调用在历史里看不到 —— 当前不渲染历史
-       * 工具卡片，等做了再把它一起补上。） */
-      if (!rebuildAssistant(body, m)) continue;
+       * 整条跳过。那次工具调用不会因此消失 —— 紧跟其后的 tools 计划项会画它。 */
+      if (!rebuildAssistant(body, item.message)) continue;
       wrap.appendChild(body);
-      t.appendChild(wrap);
+      frag.appendChild(wrap);
+      continue;
+    }
+
+    if (item.kind === 'tools' && item.entries.length) {
+      const g = createGroup();
+      for (const entry of item.entries) addToGroup(g, renderEntry(entry));
+      frag.appendChild(g);
     }
   }
+
+  t.appendChild(frag);
   scrollBottom(true);
 }

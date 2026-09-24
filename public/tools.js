@@ -1,17 +1,48 @@
-/* 工具调用卡片。
+/* Tool Timeline —— 实时侧。
  *
  * pi 的事件：tool_execution_start → (update)* → end。
- * 注意 **partialResult 是累积值不是增量**，直接整体替换即可（见 onToolUpdate）。
  *
- * 「哪些文件被改过」这件事不在这里维护 —— 统一交给 changes.js 的账本，
- * 本文件只负责在工具结束时把参数转交过去。这样将来加 diff 面板时，
- * 消费方订阅账本即可，不必依赖工具卡片的渲染细节。 */
+ * 本文件只负责「事件 → 模型 → 视图」这条链上的调度，三件事都别塞进来：
+ *   数据模型  → tool-model.js（纯数据，无 DOM）
+ *   渲染      → tool-view.js（只认 ToolEntry）
+ *   历史重建  → tool-history.js + messages.js
+ *
+ * ---------- 三条踩过的坑 ----------
+ *
+ * 1. **partialResult 是累积值不是增量**，直接整体替换（见 tool-model.applyUpdate）。
+ *    累加会把输出变成 N 份重复。
+ *
+ * 2. **tool_execution_end 不保证带 toolName / args**（实测 end 只有
+ *    toolCallId / result / isError）。所以工具名和参数在 start 时就存进 entry，
+ *    结束时只按 id 取回来 —— 不能指望 end 事件把它们再送一遍。
+ *
+ * 3. **别在结束时就把它从实时表里摘掉**。+N −M 要等 Git 状态刷新回来才回填
+ *    （§9：Git 是最终权威），而刷新是防抖 450ms 之后的事。提前摘掉，
+ *    那个数字永远补不上。
+ *
+ * ---------- 分组的边界 ----------
+ *
+ * 一组 = 一条 assistant 消息里的全部 toolCall（§12 要求依据真实边界，
+ * 不许用「超过几秒算一组」这种猜测）。实际事件顺序是
+ * message_start → … → message_end → tool_execution_start…，
+ * 所以「新的 assistant 消息开始」正好是上一组结束的位置。
+ * 用户消息进来同样关组。 */
 
 import { S } from './state.js';
-import { ICONS } from './util.js';
+import { ensureThread, moveWorkingToEnd, scrollBottom, syncToolWorking } from './messages.js';
 import { recordToolChange } from './changes.js';
-import { scheduleGitRefresh } from './git.js';
-import { ensureThread, moveWorkingToEnd, resultText, scrollBottom } from './messages.js';
+import { scheduleGitRefresh, setGitStatusHook } from './git.js';
+import {
+  applyEnd,
+  applyGitStats,
+  applyUpdate,
+  clearLiveEntries,
+  hasRunning,
+  makeEntry,
+  registerEntry,
+  setEntryDirtyHandler,
+} from './tool-model.js';
+import { addToGroup, createGroup, renderEntry, updateEntry } from './tool-view.js';
 
 /* 会改动磁盘、因而值得重读 Git 状态的工具。
  *
@@ -21,104 +52,135 @@ import { ensureThread, moveWorkingToEnd, resultText, scrollBottom } from './mess
  * 「Agent 明明改了文件，Changes 里却没有」。 */
 const REFRESH_TOOLS = new Set(['write', 'edit', 'bash']);
 
-export const TOOL_META = {
-  bash: { label: '执行命令', icon: 'terminal' },
-  read: { label: '读取文件', icon: 'file' },
-  write: { label: '写入文件', icon: 'file' },
-  edit: { label: '编辑文件', icon: 'edit' },
-  glob: { label: '查找文件', icon: 'search' },
-  grep: { label: '搜索内容', icon: 'search' },
-};
+/* 流式输出的批量窗口。§17 给的区间是 100~250ms：再短会让长时间命令
+ * （npm test 能吐几千行）把主线程堵在 layout 上，再长会让输出看起来卡顿。 */
+const PAINT_MS = 150;
 
-export function summarizeArgs(name, args) {
-  if (!args) return '';
-  if (typeof args === 'string') return args;
-  for (const k of ['command', 'file_path', 'path', 'pattern', 'query']) {
-    if (typeof args[k] === 'string') return args[k];
-  }
-  const first = Object.values(args).find((v) => typeof v === 'string');
-  return first || JSON.stringify(args).slice(0, 90);
+/* 运行中条目的时长刷新间隔。§7：小于 1 秒不必每 10ms 更新，
+ * 250~500ms 一次就够 —— 反正显示精度只到 0.1s。 */
+const TICK_MS = 300;
+
+/* ---------- 批量重画 ---------- */
+
+const pending = new Set();
+let paintTimer = null;
+
+function schedulePaint(rec) {
+  pending.add(rec);
+  if (paintTimer) return;
+  paintTimer = setTimeout(flushPaint, PAINT_MS);
 }
 
-/* 改动类工具的判定与路径提取在 changes.js（那里是账本的唯一归属）。
- * 本模块只消费它，不再对外转出 —— 项目约定不使用 re-export。 */
+function flushPaint() {
+  paintTimer = null;
+  for (const rec of pending) {
+    /* 线程被清空（换会话 / 换项目）之后 pending 里可能还留着旧条目，
+     * 往已经卸掉的节点上写不会报错但也没意义，所以先确认它还活着。 */
+    if (S.tools.get(rec.entry.id) !== rec) continue;
+    updateEntry(rec.node, rec.entry);
+  }
+  pending.clear();
+  scrollBottom();
+}
+
+/* ---------- 运行时长 ---------- */
+
+let ticker = null;
+
+function startTicker() {
+  if (ticker) return;
+  ticker = setInterval(() => {
+    let anyRunning = false;
+    for (const rec of S.tools.values()) {
+      if (rec?.entry?.status !== 'running') continue;
+      anyRunning = true;
+      rec.entry.durationMs = Date.now() - rec.entry.startedAt;
+      updateEntry(rec.node, rec.entry);
+    }
+    if (!anyRunning) stopTicker();
+  }, TICK_MS);
+}
+
+function stopTicker() {
+  if (!ticker) return;
+  clearInterval(ticker);
+  ticker = null;
+}
+
+/** 清空时间线的实时状态。换会话 / 换项目时由 clearThread 调用。 */
+export function resetTimeline() {
+  stopTicker();
+  pending.clear();
+  if (paintTimer) {
+    clearTimeout(paintTimer);
+    paintTimer = null;
+  }
+  clearLiveEntries();
+  S.tlGroup = null;
+}
+
+/* ---------- 事件 ---------- */
 
 export function onToolStart(evt) {
+  const entry = registerEntry(makeEntry(evt));
+  const node = renderEntry(entry);
+
   const t = ensureThread();
-  const meta = TOOL_META[evt.toolName] || { label: evt.toolName, icon: 'tool' };
+  /* 上一条 assistant 消息已经结束（message_end 早于 tool_execution_start），
+   * 所以这里没组就说明这是一批新的工具调用。 */
+  if (!S.tlGroup) {
+    S.tlGroup = createGroup();
+    t.appendChild(S.tlGroup);
+  }
+  addToGroup(S.tlGroup, node);
 
-  const card = document.createElement('div');
-  card.className = 'tool running';
-  card.innerHTML = `
-    <div class="tool-head">
-      <span class="tool-icon">${ICONS[meta.icon] || ICONS.tool}</span>
-      <span class="tool-name"></span>
-      <span class="tool-args"></span>
-      <span class="tool-state">运行中</span>
-    </div>
-    <pre class="tool-out"></pre>`;
+  S.tools.set(entry.id, { entry, node });
 
-  card.querySelector('.tool-name').textContent = meta.label;
-  card.querySelector('.tool-args').textContent = summarizeArgs(evt.toolName, evt.args);
-  card.querySelector('.tool-head').onclick = () => card.classList.toggle('open');
-
-  t.appendChild(card);
-  S.tools.set(evt.toolCallId, card);
-  /* 把工具名与参数寄存在卡片上。
-   *
-   * tool_execution_end 事件**不保证**带 toolName / args（实测 end 只有
-   * toolCallId / result / isError），而记账两样都要。存在卡片上比再开一张
-   * toolCallId → 元数据 的表要省事，卡片一被回收，寄存也就跟着没了。 */
-  card._tool = evt.toolName;
-  card._args = evt.args;
+  startTicker();
+  syncToolWorking();
   moveWorkingToEnd();
   scrollBottom(true);
 }
 
 export function onToolUpdate(evt) {
-  const card = S.tools.get(evt.toolCallId);
-  if (!card) return;
-  // partialResult 是累积值，直接替换
-  const text = resultText(evt.partialResult);
-  if (!text) return;
-  const out = card.querySelector('.tool-out');
-  if (!out) return;
-  out.textContent = text;
-  card.classList.add('open');
-  scrollBottom();
+  const rec = S.tools.get(evt.toolCallId);
+  if (!rec) return;
+  applyUpdate(rec.entry, evt);
+  schedulePaint(rec);
+  startTicker();
 }
 
 export function onToolEnd(evt) {
-  const card = S.tools.get(evt.toolCallId);
-  if (!card) return;
+  const rec = S.tools.get(evt.toolCallId);
+  if (!rec) return;
 
-  card.classList.remove('running');
-  card.classList.add(evt.isError ? 'err' : 'done');
-  card.querySelector('.tool-state').textContent = evt.isError ? '失败' : '完成';
-
-  const text = resultText(evt.result);
-  const out = card.querySelector('.tool-out');
-  if (text && out) {
-    out.textContent = text;
-  } else if (out) {
-    out.remove();
-    const empty = document.createElement('div');
-    empty.className = 'tool-empty';
-    empty.textContent = '无输出';
-    card.appendChild(empty);
-  }
+  applyEnd(rec.entry, evt);
+  updateEntry(rec.node, rec.entry);
 
   // 记一笔「改动了哪些文件」。只在成功时记 —— 失败的工具没真正改到磁盘，
-  // 记进去会让将来的变更列表出现幽灵条目。
-  const tool = card._tool || evt.toolName;
+  // 记进去会让变更列表出现幽灵条目。
   if (!evt.isError) {
-    recordToolChange(tool, card._args);
+    recordToolChange(rec.entry.name, rec.entry.args);
     /* 顺带安排一次 Git 状态刷新（防抖 450ms）。一次 Agent 回合里连改 5 个文件
-     * 只会产生 1 次 git status —— 见 git.js 的 scheduleGitRefresh。 */
-    if (REFRESH_TOOLS.has(tool)) scheduleGitRefresh();
+     * 只会产生 1 次 git status —— 见 git.js 的 scheduleGitRefresh。
+     * 刷新完成后 applyGitStats 会把 +N −M 回填到这条 entry 上。 */
+    if (REFRESH_TOOLS.has(rec.entry.name)) scheduleGitRefresh();
   }
 
-  S.tools.delete(evt.toolCallId);
+  if (!hasRunning()) stopTicker();
+  syncToolWorking();
   moveWorkingToEnd();
   scrollBottom();
 }
+
+/* ---------- 接线 ---------- */
+
+/* entry 被外部改动（目前只有 Git 回填 +N −M）后重画那一条。
+ * 注册在这里而不是 tool-model.js：模型层不碰 DOM。 */
+setEntryDirtyHandler((entry) => {
+  const rec = S.tools.get(entry.id);
+  if (rec) updateEntry(rec.node, entry);
+});
+
+/* Git 状态刷新完成 → 给 write / edit 补上权威的 +N −M。 */
+setGitStatusHook(applyGitStats);

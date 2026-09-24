@@ -320,31 +320,61 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .think-body{white-space:pre-wrap;word-break:break-word;padding-top:4px}
 .think.collapsed .think-body{display:none}
 
-/* 工具卡片 */
-.tool{border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden;margin:8px 0}
-.tool-head{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;user-select:none}
-.tool-head:hover{background:#222}
-.tool-icon{
-  width:22px;height:22px;border-radius:6px;background:#262626;color:#a0a0a0;
-  display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+/* ============ Tool Timeline ============
+ *
+ * 定位是「嵌在对话流里的执行记录」，不是独立日志控制台：紧凑、无大卡片、
+ * 无满屏边框。一条 = 图标 + 标题 + 关键参数 + 耗时（+ 结果行），
+ * 完整输出收在折叠区里。
+ *
+ * 状态靠 data-status 区分，不靠颜色本身 —— 图标形状（对勾 / 叉 / 虚线圈）
+ * 在灰度下也能分辨。 */
+.tl-group{display:flex;flex-direction:column;gap:2px;margin:4px 0 12px}
+.tl-group-head{font-size:11px;color:var(--t3);letter-spacing:.3px;padding:0 0 3px 2px}
+.tl-list{display:flex;flex-direction:column;gap:1px}
+
+.tl-item{display:flex;gap:8px;padding:4px 8px 5px 6px;border-radius:7px}
+.tl-item:hover{background:#181818}
+.tl-item.open{background:#181818}
+
+.tl-dot{flex:0 0 14px;width:14px;height:14px;margin-top:2px;display:flex;align-items:center;justify-content:center;color:var(--t3)}
+.tl-dot svg{width:13px;height:13px;stroke-width:2}
+.tl-item[data-status=running] .tl-dot{color:var(--run)}
+.tl-item[data-status=success] .tl-dot{color:var(--ok)}
+.tl-item[data-status=error] .tl-dot{color:var(--err)}
+.tl-item[data-status=incomplete] .tl-dot{color:var(--warn)}
+/* 运行中只做一个缓慢的明暗呼吸 —— 转圈之类会持续抢注意力 */
+.tl-item[data-status=running] .tl-dot svg{animation:tl-breathe 1.2s ease-in-out infinite}
+@keyframes tl-breathe{0%,100%{opacity:.3}50%{opacity:1}}
+
+.tl-body{flex:1;min-width:0}
+.tl-head{display:flex;align-items:baseline;gap:8px;min-width:0;cursor:pointer;user-select:none}
+.tl-label{font-size:12.5px;color:#cfcfcf;flex:0 0 auto}
+.tl-arg{font-family:var(--mono);font-size:11.5px;color:var(--t3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-stat{flex:0 0 auto;font-family:var(--mono);font-size:11px;display:flex;gap:5px}
+.tl-stat .add{color:#3dd68c}
+.tl-stat .del{color:#e06c75}
+.tl-time{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--t3);min-width:40px;text-align:right}
+
+.tl-result{font-family:var(--mono);font-size:11.5px;color:var(--t2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-item[data-status=error] .tl-result{color:#e8a2a2}
+.tl-item[data-status=incomplete] .tl-result{color:var(--warn)}
+
+.tl-acts{margin-top:3px}
+.tl-toggle{background:none;border:0;padding:0;color:var(--t3);font-size:11px;cursor:pointer;font-family:var(--font)}
+.tl-toggle:hover{color:var(--accent)}
+
+.tl-more{margin-top:6px}
+.tl-sec{font-size:10.5px;color:var(--t3);letter-spacing:.4px;margin:7px 0 3px}
+/* 输出与详细参数：等宽、保留换行（pre）、横向滚动、限高内部滚动。
+ * 几千行的 shell 输出绝不能把聊天记录撑满 —— 所以 max-height 是硬要求。 */
+.tl-out,.tl-args{
+  margin:0;font-family:var(--mono);font-size:11.5px;line-height:1.5;
+  color:#b4b4b4;background:#141414;border:1px solid var(--line-soft);border-radius:7px;
+  padding:7px 9px;white-space:pre;overflow:auto;max-height:260px;
 }
-.tool-icon svg{width:12px;height:12px}
-.tool-name{font-size:12.5px;color:#cfcfcf;flex:0 0 auto}
-.tool-args{font-family:var(--mono);font-size:11.5px;color:var(--t3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tool-state{font-size:11px;flex:0 0 auto;display:flex;align-items:center;gap:5px;color:var(--t3)}
-.tool-state::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
-.tool.running .tool-state{color:var(--run)}
-.tool.done .tool-state{color:var(--ok)}
-.tool.err .tool-state{color:var(--err)}
-.tool-out{
-  display:none;font-family:var(--mono);font-size:11.5px;line-height:1.62;
-  background:#111;border-top:1px solid var(--line-soft);padding:10px 13px;
-  max-height:340px;overflow:auto;color:#b4b4b4;white-space:pre-wrap;word-break:break-word;
-}
-.tool.open .tool-out{display:block}
-.tool-out::-webkit-scrollbar{width:8px;height:8px}
-.tool-out::-webkit-scrollbar-thumb{background:#303030;border-radius:4px}
-.tool-empty{padding:9px 13px;font-size:11.5px;color:var(--t3);border-top:1px solid var(--line-soft)}
+.tl-args{color:var(--t2);max-height:180px}
+.tl-out::-webkit-scrollbar,.tl-args::-webkit-scrollbar{width:8px;height:8px}
+.tl-out::-webkit-scrollbar-thumb,.tl-args::-webkit-scrollbar-thumb{background:#303030;border-radius:4px}
 
 .note{
   display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3);

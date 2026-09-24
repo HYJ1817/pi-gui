@@ -357,14 +357,414 @@ staticCheck();
     return empty.length === 0 ? true : `${empty.length} 条助手正文是空的`;
   });
 
-  // --- 工具调用 ---
+  /* ================================================================
+   * Tool Timeline
+   *
+   * 这一段钉住三件事：
+   *   1. 实时事件 → 时间线条目（状态 / 时长 / 退出码 / 折叠 / 安全）；
+   *   2. 历史重建 → 同一套条目（配对 / 降级 / 顺序）；
+   *   3. 两条路径画出来的东西**语义一致** —— 刷新前后不能变样。
+   *
+   * DOM 断言一律按 `data-id` 定位，不用「第几条」：时间线是顺序追加的，
+   * 用下标写断言会在插入新用例时集体错位，而错位后的失败信息毫无指向性。
+   * ================================================================ */
+
+  /* 「有没有危险元素」查**解析树**而不是正则扫 innerHTML。
+   * 原因：属性值里出现未转义的 `<` 是合法字面量，浏览器绝不会把它当标签，
+   * 正则扫字符串会误报。真正要问的是「有没有东西真的被解析成了元素」。
+   * diff 那处例外：它的 innerHTML 由字符串注入，正则才有意义（两处都查）。 */
+  const LIVE_SEL = 'script,img,iframe,svg,object,embed,style,link,meta,form,input,base';
+  const liveCount = (root) => root.querySelectorAll(LIVE_SEL).length;
+  const noLiveTagIn = (html) => !/<\s*(script|img|iframe|svg|object|embed|style|link|meta|form|input|base)\b/i.test(html);
+
+  console.log('\n--- Tool Timeline：实时 ---');
+
+  const tlItems = () => [...window.document.querySelectorAll('.tl-item')];
+  const tlItem = (id) => window.document.querySelector(`.tl-item[data-id="${id}"]`);
+  const tlPart = (id, sel) => tlItem(id)?.querySelector(sel) ?? null;
+  const tlText = (id, sel) => tlPart(id, sel)?.textContent ?? '(缺少节点)';
+  /* 工具输出的批量重画窗口是 150ms（tools.js 的 PAINT_MS），
+   * 断言 DOM 之前必须让它落地，否则拿到的是上一帧的内容。 */
+  const settle = (ms = 220) => new Promise((r) => setTimeout(r, ms));
+
+  /* --- start：建 running 条目 --- */
   es.emit({ type: 'tool_execution_start', toolCallId: 't1', toolName: 'bash', args: { command: 'ls -la' } });
-  check('工具卡片出现', () => window.document.querySelectorAll('.tool').length === 1);
-  es.emit({ type: 'tool_execution_update', toolCallId: 't1', partialResult: 'a\nb\n' });
-  es.emit({ type: 'tool_execution_update', toolCallId: 't1', partialResult: 'a\nb\nc\n' });
-  check('partialResult 为累积值', () => window.document.querySelector('.tool-out').textContent === 'a\nb\nc\n');
+  check('tool start 建出 running 条目', () => {
+    const it = tlItem('t1');
+    if (!it) return '时间线上没有出现这条';
+    return it.dataset.status === 'running' || it.dataset.status;
+  });
+  check('条目挂在时间线分组里', () => Boolean(tlItem('t1').closest('.tl-group .tl-list')));
+  check('显示工具语义名而不是原始名', () => {
+    const t = tlText('t1', '.tl-label');
+    return t === '执行命令' || t;
+  });
+  check('显示参数摘要（命令原文）', () => {
+    const t = tlText('t1', '.tl-arg');
+    return t === 'ls -la' || t;
+  });
+  check('running 的图标是实心圆（不是对勾）', () => {
+    const d = tlPart('t1', '.tl-dot');
+    return (d?.title === '运行中' && !d.innerHTML.includes('polyline')) || d?.title;
+  });
+
+  /* --- update：partialResult 是累积值 --- */
+  es.emit({ type: 'tool_execution_update', toolCallId: 't1', partialResult: { content: [{ type: 'text', text: 'a\nb\n' }] } });
+  es.emit({ type: 'tool_execution_update', toolCallId: 't1', partialResult: { content: [{ type: 'text', text: 'a\nb\nc\n' }] } });
+  await settle();
+  check('partialResult 是累积值：整体替换而不是累加', () => {
+    const t = tlText('t1', '.tl-out');
+    return t === 'a\nb\nc\n' || JSON.stringify(t);
+  });
+  check('update 不会把状态改掉', () => tlItem('t1').dataset.status === 'running' || tlItem('t1').dataset.status);
+  check('运行中给一行「在动」的反馈（输出尾巴）', () => {
+    const t = tlText('t1', '.tl-result');
+    return t === 'c' || t;
+  });
+  /* bash 的 onUpdate 会先发一次空 partialResult（{content:[], details:undefined}）。
+   * 用它把已经显示的内容清掉是错的 —— 长命令的输出会一闪一闪地消失。 */
+  es.emit({ type: 'tool_execution_update', toolCallId: 't1', partialResult: { content: [], details: undefined } });
+  await settle();
+  check('空的 partialResult 不会清掉已有输出', () => {
+    const t = tlText('t1', '.tl-out');
+    return t === 'a\nb\nc\n' || JSON.stringify(t);
+  });
+
+  /* --- end：成功 --- */
   es.emit({ type: 'tool_execution_end', toolCallId: 't1', isError: false, result: { content: [{ type: 'text', text: 'done' }] } });
-  check('工具完成态', () => window.document.querySelector('.tool').classList.contains('done'));
+  check('end 转 success', () => tlItem('t1').dataset.status === 'success' || tlItem('t1').dataset.status);
+  check('end 用权威结果覆盖流式输出', () => {
+    const t = tlText('t1', '.tl-out');
+    return t === 'done' || JSON.stringify(t);
+  });
+  check('成功后图标换成对勾', () => tlPart('t1', '.tl-dot')?.title === '成功' || tlPart('t1', '.tl-dot')?.title);
+  check('成功后给出时长（0.1s 精度）', () => {
+    const t = tlText('t1', '.tl-time');
+    return /^\d+\.\d+s$/.test(t) || t;
+  });
+  check('成功条目不编造退出码', () => {
+    const t = tlText('t1', '.tl-result');
+    return t === 'done' || t;
+  });
+
+  /* --- end：失败 + 退出码 --- */
+  es.emit({ type: 'tool_execution_start', toolCallId: 't2', toolName: 'bash', args: { command: 'npm test' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 't2', isError: true, result: { content: [{ type: 'text', text: '1 failing\nCommand exited with code 1' }] } });
+  check('失败的工具转 error 状态', () => tlItem('t2').dataset.status === 'error' || tlItem('t2').dataset.status);
+  check('失败图标是叉', () => tlPart('t2', '.tl-dot')?.title === '失败' || tlPart('t2', '.tl-dot')?.title);
+  /* 协议里**没有**结构化的 exitCode（bash 的 details 只有 truncation /
+   * fullOutputPath），只能从输出文本里解析 pi 自己拼的那句话。 */
+  check('从输出文本里解析出 exit code', () => {
+    const t = tlText('t2', '.tl-result');
+    return t === 'exit code 1' || t;
+  });
+  es.emit({ type: 'tool_execution_start', toolCallId: 't3', toolName: 'bash', args: { command: 'x' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 't3', isError: true, result: { content: [{ type: 'text', text: 'killed by signal' }] } });
+  check('解析不到退出码时不按 isError 猜一个', () => {
+    const t = tlText('t3', '.tl-result');
+    return !/exit code/.test(t) || t;
+  });
+
+  /* --- 长输出默认折叠 --- */
+  const LONG = Array.from({ length: 60 }, (_, i) => 'line ' + i).join('\n');
+  es.emit({ type: 'tool_execution_start', toolCallId: 't4', toolName: 'read', args: { path: 'big.txt' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 't4', isError: false, result: { content: [{ type: 'text', text: LONG }] } });
+  check('长输出默认折叠', () => tlPart('t4', '.tl-more')?.hidden === true || tlPart('t4', '.tl-more')?.hidden);
+  check('折叠时不在时间线上铺全文', () => !tlText('t4', '.tl-result').includes('line 59'));
+  check('read 的结果行报行数而不是贴内容', () => {
+    const t = tlText('t4', '.tl-result');
+    return t === '60 行' || t;
+  });
+  check('有输出时展开按钮可见', () => tlPart('t4', '.tl-toggle')?.hidden === false || tlPart('t4', '.tl-toggle')?.hidden);
+  check('折叠状态下悬停能看到输出', () => Boolean(tlItem('t4').title));
+  tlPart('t4', '.tl-toggle').click();
+  check('展开后显示完整输出', () => {
+    const open = tlPart('t4', '.tl-more').hidden === false;
+    const same = tlText('t4', '.tl-out') === LONG;
+    return (open && same) || `展开=${open} 内容一致=${same}`;
+  });
+  check('展开后按钮文案变成「收起」', () => tlText('t4', '.tl-toggle') === '收起' || tlText('t4', '.tl-toggle'));
+  tlPart('t4', '.tl-toggle').click();
+  check('可以再收起', () => tlPart('t4', '.tl-more').hidden === true || tlPart('t4', '.tl-more').hidden);
+
+  /* --- 未知工具（扩展注册的 / 以后新加的）不能把时间线搞崩 --- */
+  es.emit({ type: 'tool_execution_start', toolCallId: 't5', toolName: 'mcp_docs_search', args: { q: 'x' } });
+  check('未知工具降级显示，不报错', () => {
+    const t = tlText('t5', '.tl-label');
+    return t === '执行工具 mcp_docs_search' || t;
+  });
+  es.emit({ type: 'tool_execution_end', toolCallId: 't5', isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
+  check('未知工具也能正常收尾', () => tlItem('t5').dataset.status === 'success' || tlItem('t5').dataset.status);
+
+  /* --- 安全：参数来自模型，输出来自被执行的程序，两者都不可信 --- */
+  es.emit({ type: 'tool_execution_start', toolCallId: 't6', toolName: 'bash', args: { command: 'echo "<img src=x onerror=alert(1)>"' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 't6', isError: false, result: { content: [{ type: 'text', text: '<script>alert(1)</script>\n</pre><img src=x onerror=alert(2)>' }] } });
+  /* 只查 .tl-body：状态图标是我们自己写死的 SVG，挂在 .tl-dot 里，
+   * 与工具内容无关，不该算进「危险元素」。 */
+  check('工具参数里的 HTML 不产生活元素', () => {
+    const n = liveCount(tlPart('t6', '.tl-body'));
+    return n === 0 || `解析出 ${n} 个危险元素`;
+  });
+  check('工具输出里的 <script> 只是文本', () => {
+    const it = tlItem('t6');
+    const ok = it.textContent.includes('<script>alert(1)</script>') && liveCount(it.querySelector('.tl-body')) === 0;
+    return ok || it.textContent.slice(0, 160);
+  });
+  check('时间线正文里没有任何非白名单活标签', () => {
+    const bad = tlItems().map((x) => x.querySelector('.tl-body').innerHTML).filter((h) => !noLiveTagIn(h));
+    if (!bad.length) return true;
+    const m = /<\s*(script|img|iframe|svg|object|embed|style|link|meta|form|input|base)\b/i.exec(bad[0]);
+    const at = m ? m.index : 0;
+    return `命中 ${m ? m[0] : '?'} :: ${bad[0].slice(Math.max(0, at - 70), at + 70)}`;
+  });
+
+  /* --- 分组的真实边界：一条 assistant 消息 = 一组 --- */
+  const firstGroup = window.document.querySelector('.tl-group');
+  check('同一批工具落在同一个组里', () => firstGroup.querySelectorAll('.tl-item').length === 6 || firstGroup.querySelectorAll('.tl-item').length);
+  check('一组超过一项时显示「操作 N 项」', () => {
+    const n = firstGroup.querySelectorAll('.tl-item').length;
+    const head = firstGroup.querySelector('.tl-group-head');
+    return (n >= 2 && head.hidden === false && head.textContent === `操作 ${n} 项`) || `${head.hidden} ${head.textContent}`;
+  });
+
+  es.emit({ type: 'message_start', message: { role: 'assistant', content: [] } });
+  es.emit({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: '再看一个文件' }] } });
+  es.emit({ type: 'tool_execution_start', toolCallId: 'g1', toolName: 'read', args: { path: 'a.txt' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 'g1', isError: false, result: { content: [{ type: 'text', text: 'x' }] } });
+  check('新的 assistant 消息开启新的一组', () => window.document.querySelectorAll('.tl-group').length === 2 || window.document.querySelectorAll('.tl-group').length);
+  check('只有一项的组不摆「操作 1 项」的废话标题', () => {
+    const g = window.document.querySelectorAll('.tl-group')[1];
+    const head = g.querySelector('.tl-group-head');
+    return (head.hidden === true && head.textContent === '') || `${head.hidden} ${head.textContent}`;
+  });
+
+  /* --- 实时与历史必须画出同一种东西（§21：刷新前后语义一致） --- */
+  const snapOf = (it) => ({
+    status: it.dataset.status,
+    label: it.querySelector('.tl-label').textContent,
+    arg: it.querySelector('.tl-arg').textContent,
+    result: it.querySelector('.tl-result').textContent,
+    out: it.querySelector('.tl-out').textContent,
+  });
+
+  es.emit({ type: 'tool_execution_start', toolCallId: 'c1', toolName: 'bash', args: { command: 'echo hi' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 'c1', isError: true, result: { content: [{ type: 'text', text: 'boom\nCommand exited with code 2' }] } });
+  const liveSnap = snapOf(tlItem('c1'));
+
+  window.rebuildFromMessages({
+    messages: [
+      { role: 'assistant', content: [{ type: 'toolCall', id: 'c1', name: 'bash', arguments: { command: 'echo hi' } }], timestamp: 1000, stopReason: 'toolUse' },
+      { role: 'toolResult', toolCallId: 'c1', toolName: 'bash', content: [{ type: 'text', text: 'boom\nCommand exited with code 2' }], isError: true, timestamp: 1600 },
+    ],
+  });
+  const histSnap = snapOf(window.document.querySelector('.tl-item'));
+  check('刷新（历史重建）后条目语义与实时一致', () => {
+    const a = JSON.stringify(liveSnap);
+    const b = JSON.stringify(histSnap);
+    return a === b || `实时 ${a} ≠ 历史 ${b}`;
+  });
+  /* 唯一允许不同的就是时长：协议里没有工具级的起止时间戳，
+   * 历史只能拿「assistant 消息 → toolResult 消息」的时间戳来估
+   * （见 tool-model.entryFromHistory 的说明）。 */
+  check('历史重建的时长由消息时间戳估出', () => tlText('c1', '.tl-time') === '0.6s' || tlText('c1', '.tl-time'));
+
+  console.log('\n--- Tool Timeline：历史重建 ---');
+
+  /* 配对规则本身是纯函数，先单独钉一遍（planHistory 不碰 DOM） */
+  check('planHistory 把消息分成 user / assistant / tools 三类', () => {
+    const p = window.planHistory([
+      { role: 'user', content: [{ type: 'text', text: '跑一下' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '好' }, { type: 'toolCall', id: 'x1', name: 'bash', arguments: { command: 'ls' } }] },
+      { role: 'toolResult', toolCallId: 'x1', toolName: 'bash', content: [{ type: 'text', text: 'a\nb' }] },
+    ]);
+    const got = p.map((i) => i.kind).join(',');
+    return got === 'user,assistant,tools' || got;
+  });
+  check('toolResult 不单独成项（被前面的 assistant 收走）', () => {
+    const p = window.planHistory([
+      { role: 'assistant', content: [{ type: 'toolCall', id: 'x1', name: 'bash', arguments: {} }] },
+      { role: 'toolResult', toolCallId: 'x1', toolName: 'bash', content: [{ type: 'text', text: 'a' }] },
+    ]);
+    return (p.length === 2 && p[1].kind === 'tools' && p[1].entries.length === 1) || p.map((i) => i.kind).join(',');
+  });
+
+  window.rebuildFromMessages({
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: '跑一下测试' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '先看看' }, { type: 'toolCall', id: 'h1', name: 'bash', arguments: { command: 'npm test' } }], timestamp: 1000, stopReason: 'toolUse' },
+      { role: 'toolResult', toolCallId: 'h1', toolName: 'bash', content: [{ type: 'text', text: '318 tests passed' }], isError: false, timestamp: 1600 },
+      { role: 'assistant', content: [{ type: 'text', text: '全过了' }], timestamp: 1700 },
+    ],
+  });
+  check('历史重建把工具调用画成时间线条目', () => window.document.querySelectorAll('.tl-item').length === 1 || window.document.querySelectorAll('.tl-item').length);
+  check('历史重建的条目是成功态', () => window.document.querySelector('.tl-item').dataset.status === 'success' || window.document.querySelector('.tl-item').dataset.status);
+  check('历史重建的关键结果行来自 toolResult 正文', () => {
+    const t = tlText('h1', '.tl-result');
+    return t === '318 tests passed' || t;
+  });
+  check('历史重建时正文与用户消息都还在', () => {
+    const txt = window.document.querySelector('.thread').textContent;
+    return (txt.includes('跑一下测试') && txt.includes('先看看') && txt.includes('全过了')) || txt.slice(0, 120);
+  });
+  check('文本 → 工具 → 文本 的交错顺序被保留', () => {
+    const kids = [...window.document.querySelector('.thread').children]
+      .filter((n) => n.classList.contains('msg') || n.classList.contains('tl-group'))
+      .map((n) => (n.classList.contains('tl-group') ? 'tools' : n.classList.contains('user') ? 'user' : 'assistant'));
+    return kids.join(',') === 'user,assistant,tools,assistant' || kids.join(',');
+  });
+
+  /* --- 退化情况：缺结果 / 孤儿结果 --- */
+  window.rebuildFromMessages({
+    messages: [
+      { role: 'assistant', content: [{ type: 'toolCall', id: 'h2', name: 'bash', arguments: { command: 'sleep 999' } }], timestamp: 2000, stopReason: 'toolUse' },
+    ],
+  });
+  check('缺 toolResult 的调用降级为「未完成」，而不是消失', () => {
+    const it = window.document.querySelector('.tl-item');
+    if (!it) return '这条调用整个消失了';
+    const r = it.querySelector('.tl-result').textContent;
+    return (it.dataset.status === 'incomplete' && r === '未完成 · 没有结果') || `${it.dataset.status} / ${r}`;
+  });
+  check('「未完成」的图标是虚线圆（区别于成功/失败）', () => {
+    const d = window.document.querySelector('.tl-item .tl-dot');
+    return (d.title === '未完成' && d.innerHTML.includes('stroke-dasharray')) || d.title;
+  });
+  check('缺结果时不留下空白「Pi」外壳', () => {
+    const n = window.document.querySelectorAll('.msg.assistant').length;
+    return n === 0 || `留下了 ${n} 条助手外壳`;
+  });
+
+  window.rebuildFromMessages({
+    messages: [{ role: 'toolResult', toolCallId: 'ghost', toolName: 'bash', content: [{ type: 'text', text: '孤儿结果' }], isError: false, timestamp: 3000 }],
+  });
+  check('孤儿 toolResult 就地降级显示，不被静默吃掉', () => {
+    const it = window.document.querySelector('.tl-item');
+    if (!it) return '孤儿结果整个丢了';
+    return it.textContent.includes('孤儿结果') || it.textContent.slice(0, 120);
+  });
+  check('未知 role 不会打断整段重建', () => {
+    window.rebuildFromMessages({
+      messages: [
+        { role: 'system', content: '扩展注册的自定义消息' },
+        { role: 'assistant', content: [{ type: 'text', text: '照常渲染' }] },
+      ],
+    });
+    return window.document.querySelector('.msg.assistant')?.textContent.includes('照常渲染') || '重建被未知 role 打断了';
+  });
+
+  /* --- 一条消息里的多个调用 --- */
+  window.rebuildFromMessages({
+    messages: [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'toolCall', id: 'm1', name: 'read', arguments: { path: 'a.txt' } },
+          { type: 'toolCall', id: 'm2', name: 'read', arguments: { path: 'b.txt' } },
+          { type: 'toolCall', id: 'm3', name: 'read', arguments: { path: 'c.txt' } },
+        ],
+        timestamp: 4000,
+        stopReason: 'toolUse',
+      },
+      { role: 'toolResult', toolCallId: 'm1', toolName: 'read', content: [{ type: 'text', text: 'A' }], isError: false, timestamp: 4100 },
+      { role: 'toolResult', toolCallId: 'm2', toolName: 'read', content: [{ type: 'text', text: 'B' }], isError: false, timestamp: 4200 },
+      { role: 'toolResult', toolCallId: 'm3', toolName: 'read', content: [{ type: 'text', text: 'C' }], isError: false, timestamp: 4300 },
+    ],
+  });
+  check('一条 assistant 消息里的多个工具调用按原顺序渲染', () => {
+    const got = [...window.document.querySelectorAll('.tl-item .tl-arg')].map((x) => x.textContent).join(',');
+    return got === 'a.txt,b.txt,c.txt' || got;
+  });
+  check('多调用落在同一个组里', () => window.document.querySelectorAll('.tl-group').length === 1 || window.document.querySelectorAll('.tl-group').length);
+  check('多调用各自都有时长', () => {
+    const ts = [...window.document.querySelectorAll('.tl-item .tl-time')].map((x) => x.textContent);
+    return ts.every((t) => /^\d+\.\d+s$/.test(t)) || ts.join('|');
+  });
+
+  /* --- 中断：没有 tool_execution_end 的条目不能永远转下去 --- */
+  console.log('\n--- Tool Timeline：中断收尾 ---');
+  window.rebuildFromMessages({ messages: [] });
+  es.emit({ type: 'tool_execution_start', toolCallId: 'a1', toolName: 'bash', args: { command: 'sleep 999' } });
+  check('工具跑着时是 running', () => tlItem('a1').dataset.status === 'running' || tlItem('a1').dataset.status);
+  es.emit({ type: 'agent_settled' });
+  check('agent 收尾时把没有 end 的条目收成「未完成」', () => {
+    const it = tlItem('a1');
+    return (it && it.dataset.status === 'incomplete') || it?.dataset.status;
+  });
+  check('收尾后不残留 running 条目', () => window.document.querySelectorAll('.tl-item[data-status=running]').length === 0 || window.document.querySelectorAll('.tl-item[data-status=running]').length);
+
+  /* ================================================================
+   * 真实会话 fixture（tests/fixtures/tool-history.json）
+   *
+   * 手写的假数据只能证明「代码符合我对协议的想象」。这一份是从真实会话
+   * jsonl 里切出来的一段（脱敏 + 长正文截断，结构一字未改），
+   * 用来证明「协议本来就是这样」。生成方式与脱敏规则见同目录的 README.md。
+   * ================================================================ */
+  console.log('\n--- Tool Timeline：真实会话 fixture ---');
+  const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tool-history.json'), 'utf8'));
+  const fxCalls = fx
+    .filter((m) => m.role === 'assistant')
+    .reduce((n, m) => n + (m.content || []).filter((c) => c.type === 'toolCall').length, 0);
+  const fxResults = fx.filter((m) => m.role === 'toolResult');
+  const fxGroups = fx.filter((m) => m.role === 'assistant' && (m.content || []).some((c) => c.type === 'toolCall')).length;
+  const fxErrors = fxResults.filter((r) => r.isError).length;
+
+  check('fixture 自身自洽（每条 toolCall 都有 toolResult）', () => {
+    const ids = new Set();
+    for (const m of fx) {
+      if (m.role !== 'assistant') continue;
+      for (const c of m.content || []) if (c.type === 'toolCall') ids.add(c.id);
+    }
+    const resIds = new Set(fxResults.map((r) => r.toolCallId));
+    const missing = [...ids].filter((x) => !resIds.has(x)).length;
+    const orphan = [...resIds].filter((x) => !ids.has(x)).length;
+    return (missing === 0 && orphan === 0) || `缺 ${missing} / 孤儿 ${orphan}`;
+  });
+
+  window.rebuildFromMessages({ messages: fx });
+  check('真实会话重建：每条 toolCall 都画出来了', () => {
+    const n = window.document.querySelectorAll('.tl-item').length;
+    return n === fxCalls || `画了 ${n} 条，数据里有 ${fxCalls} 条`;
+  });
+  check('真实会话重建：分组数 = 带工具调用的 assistant 消息数', () => {
+    const n = window.document.querySelectorAll('.tl-group').length;
+    return n === fxGroups || `分了 ${n} 组，数据里是 ${fxGroups} 组`;
+  });
+  check('真实会话重建：失败条目数与 isError 一致', () => {
+    const n = window.document.querySelectorAll('.tl-item[data-status=error]').length;
+    return n === fxErrors || `画了 ${n} 条失败，数据里是 ${fxErrors} 条`;
+  });
+  check('真实会话重建：没有凭空多出「未完成」', () => {
+    const n = window.document.querySelectorAll('.tl-item[data-status=incomplete]').length;
+    return n === 0 || `多出 ${n} 条未完成`;
+  });
+  check('真实会话重建：退出码从输出文本里解析出来', () => {
+    const got = [...window.document.querySelectorAll('.tl-item[data-status=error] .tl-result')].map((x) => x.textContent);
+    const ok = got.filter((t) => /^exit code -?\d+/.test(t)).length;
+    return ok === fxErrors || got.join(' | ');
+  });
+  check('真实会话重建：edit 的 +N −M 来自工具自己的 details.diff', () => {
+    const stats = [...window.document.querySelectorAll('.tl-item .tl-stat')].map((x) => x.textContent).filter(Boolean);
+    return stats.length > 0 || '一条 +N −M 都没有';
+  });
+  check('真实会话重建：write 的结果行报字节数', () => {
+    const lines = [...window.document.querySelectorAll('.tl-item .tl-result')].map((x) => x.textContent);
+    return lines.some((t) => /^已写入 \d+ 字节$/.test(t)) || lines.slice(0, 8).join(' | ');
+  });
+  check('真实会话重建：全篇不产生活元素', () => {
+    const n = [...window.document.querySelectorAll('.tl-item .tl-body')].reduce((a, b) => a + liveCount(b), 0);
+    return n === 0 || `解析出 ${n} 个危险元素`;
+  });
+  check('真实会话重建：没有留下空白「Pi」', () => {
+    const empty = [...window.document.querySelectorAll('.msg.assistant .msg-body')].filter((b) => !b.childElementCount);
+    return empty.length === 0 || `${empty.length} 条助手正文是空的`;
+  });
+  check('真实会话重建：用户 / 正文 / 工具交替出现', () => {
+    const kinds = [...window.document.querySelector('.thread').children]
+      .filter((n) => n.classList.contains('msg') || n.classList.contains('tl-group'))
+      .map((n) => (n.classList.contains('tl-group') ? 'T' : n.classList.contains('user') ? 'U' : 'A'));
+    return (kinds.includes('T') && kinds.includes('A') && kinds.includes('U')) || kinds.join('');
+  });
+  check('真实会话重建不产生运行时错误', () => errors.length === 0 || errors.join(' | '));
 
   // --- 文件变更账本（为 Diff/Git 预留的结构，当前不渲染 UI）---
   check('非改动类工具不入账', () => window.listChanges().length === 0);
@@ -414,14 +814,6 @@ staticCheck();
   const chgText = () => ($('modalCard') ? $('modalCard').textContent : '');
   const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
   const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
-  const LIVE_SEL = 'script,img,iframe,svg,object,embed,style,link,meta,form,input,base';
-  /* 「有没有危险元素」查**解析树**而不是正则扫 innerHTML。
-   * 原因：行上的 title="…" 属性里会出现未转义的 `<`（属性值里它是合法字面量，
-   * 浏览器绝不会把它当标签），正则扫字符串会误报。真正要问的是
-   * 「有没有东西真的被解析成了元素」，那就直接问 DOM。
-   * diff 那处例外：它的 innerHTML 是由字符串注入的，正则才有意义（两处都查）。 */
-  const liveCount = (root) => root.querySelectorAll(LIVE_SEL).length;
-  const noLiveTagIn = (html) => !/<\s*(script|img|iframe|svg|object|embed|style|link|meta|form|input|base)\b/i.test(html);
 
   check('侧栏有「文件变更」入口（在顶部导航里）', () => window.document.querySelector('.rail-nav #navChanges') !== null);
 
@@ -1024,6 +1416,63 @@ staticCheck();
 
   window.clearChanges();
 
+  /* --- Tool Timeline：Git 回填 +N −M ---
+   *
+   * §9：**Git 是最终权威，工具事件只是 Agent 的行为记录**。
+   * 工具自己的 details.diff 只说明「这一次 edit 改了多少」，整文件的行数
+   * 只有 Git 知道。所以工具结束后安排一次防抖刷新，刷新回来再把权威数字
+   * 回填到已经画出来的条目上 —— 这条链路的每一环都在这里钉住。
+   *
+   * 位置说明：必须放在这一段之后 —— 上面已经用 600ms 的等待把前面用例
+   * 留下的防抖定时器排空了，这里再排一次才不会互相干扰。 */
+  console.log('\n--- Tool Timeline：Git 回填 ---');
+  window.clearChanges();
+  /* 不用清线程：上一条用例重建历史时已经把 S.tlGroup 归零、S.tools 清空，
+   * 下一次工具事件自然会开一个新组。清掉反而会顺手删掉前面用例留下的
+   * 用户消息，让后面按 `.msg.user` 定位的断言指向另一条节点。 */
+
+  const ONE_EDIT_DIFF = '--- a/src/app.js\n+++ b/src/app.js\n@@ -1 +1 @@\n-旧\n+新\n';
+  es.emit({ type: 'tool_execution_start', toolCallId: 'gs1', toolName: 'edit', args: { path: 'C:\\pi-GUI\\src\\app.js' } });
+  es.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'gs1',
+    isError: false,
+    result: {
+      content: [{ type: 'text', text: 'Successfully replaced 1 block(s) in C:\\pi-GUI\\src\\app.js' }],
+      details: { diff: ONE_EDIT_DIFF, patch: '', firstChangedLine: 1 },
+    },
+  });
+  check('先用工具自己 details.diff 的单次统计', () => {
+    const t = tlText('gs1', '.tl-stat');
+    return t === '+1−1' || t;
+  });
+
+  gitStub.status = {
+    ok: true,
+    isRepo: true,
+    projectRoot: 'C:\\pi-GUI',
+    files: [{ path: 'src/app.js', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 12, deletions: 3, binary: false, oldPath: null }],
+  };
+  await new Promise((r) => setTimeout(r, 600)); // 等防抖的 450ms 刷新落地
+  check('Git 刷新回来后用整文件数字覆盖单次统计', () => {
+    const t = tlText('gs1', '.tl-stat');
+    return t === '+12−3' || t;
+  });
+
+  /* 文件从 Git 变更列表里消失（提交了 / 被撤销了）→ 之前回填的数字要撤掉。
+   * 「以 Git 为准」这条规则在**消失**的方向上同样要成立，否则时间线上会
+   * 一直挂着一个已经不对的数字。 */
+  gitStub.status = { ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: [] };
+  await window.loadGitStatus();
+  check('文件离开变更列表后撤掉回填的数字', () => {
+    const t = tlText('gs1', '.tl-stat');
+    return t === '+1−1' || t;
+  });
+
+  gitStub.status = { ok: true, isRepo: true, files: [] };
+  await window.loadGitStatus();
+  window.clearChanges();
+
   // --- 弹层：分支 ---
   $('navBranches').click();
   check('分支弹层打开', () => $('modal').hidden === false);
@@ -1224,7 +1673,17 @@ staticCheck();
   window.document.querySelector('.msg-file-head').click();
   check('点击可展开', () => window.document.querySelector('.msg-file').classList.contains('open'));
   check('展开后能看到内容', () => window.document.querySelector('.msg-file-body').textContent.includes('这里是很长的正文内容'));
-  check('长正文没有铺在气泡里', () => window.document.querySelector('.msg.user .msg-body').textContent.includes('这里是很长的正文内容') === false);
+  /* 「长正文没有铺在气泡里」= 它只出现在折叠卡片内部，不在气泡的正文段落里。
+   *
+   * 不能直接拿整个 .msg-body 的 textContent 判 —— 卡片本身就在 body 里，
+   * 全文当然在 textContent 里。也不能按「第一条用户消息」定位：对话区里
+   * 多出任何一条更早的用户消息（历史重建留下的），querySelector 拿到的
+   * 就不是这一条了，断言会悄悄失效。所以按**段落**判，并且取最后一条。 */
+  check('长正文没有铺在气泡里', () => {
+    const bodies = [...window.document.querySelectorAll('.msg.user .msg-body')];
+    const segs = [...bodies[bodies.length - 1].children].filter((n) => !n.classList.contains('msg-file'));
+    return segs.every((n) => !n.textContent.includes('这里是很长的正文内容')) || segs.map((n) => n.textContent).join(' | ');
+  });
 
   // 回归：刷新页面 / 切换项目时走 get_messages 重建对话区，
   // 这条路径曾经直接把 <pi-file> 裸标签当纯文本显示，折叠卡片丢失。

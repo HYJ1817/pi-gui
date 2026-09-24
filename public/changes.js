@@ -10,10 +10,11 @@
  *   2. 反过来，tools.js 要调用记录函数 —— 如果定义放在 tools.js，
  *      账本自身想被别的模块（例如将来的 diff 面板）引用就会绕回去，容易成环。
  *
- * 依赖方向：tools.js → changes.js（单向）。本文件不引任何业务模块。 */
+ * 依赖方向：tools.js → changes.js（单向）。本文件只引 tool-model.js 的
+ * MUTATING_TOOLS —— 那是「哪些工具会动磁盘」的唯一定义，时间线的 +N −M 判定
+ * 用的是同一个集合，各写一份迟早会漂移。 */
 
-/** 会改动磁盘的工具。判定依据是工具名，不解析命令内容 —— 宁可少判也不错判。 */
-export const MUTATING_TOOLS = new Set(['write', 'edit']);
+import { MUTATING_TOOLS } from './tool-model.js';
 
 /** 从一次工具调用的参数里提取涉及的文件路径。
  *

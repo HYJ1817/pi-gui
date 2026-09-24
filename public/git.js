@@ -24,6 +24,7 @@
  */
 
 import { el, panels, S } from './state.js';
+import { toProjectRel } from './util.js';
 import {
   fetchGitDiff,
   fetchGitStatus,
@@ -77,6 +78,31 @@ let restoringAll = false;
 
 /* ---------- 状态 ---------- */
 
+/* 「Git 状态刷新完了」的通知点。
+ *
+ * 为什么要有它：时间线要给 write / edit 补上 +N −M，而那个数字只有 Git 知道
+ * （§9：Git 是最终权威）。但 git.js 不能 import tools.js —— tools.js 已经
+ * import 了 git.js，会成环。所以这里反过来：谁关心谁来登记，刷新完成后挨个叫。
+ *
+ * 由 tools.js 在模块加载时登记（和本文件末尾那个 onChanges(...) 一个路数）。 */
+const statusHooks = new Set();
+
+export function setGitStatusHook(fn) {
+  if (typeof fn !== 'function') return () => {};
+  statusHooks.add(fn);
+  return () => statusHooks.delete(fn);
+}
+
+function emitGitStatus() {
+  for (const fn of statusHooks) {
+    try {
+      fn(S.changes);
+    } catch {
+      /* 订阅者自己炸了不该带塌刷新流程 */
+    }
+  }
+}
+
 function blankChanges() {
   return {
     isRepo: false,
@@ -108,6 +134,7 @@ export async function loadGitStatus() {
     c.truncated = false;
     c.error = '无法连接后端，变更信息暂不可用。';
     renderChangesBadge();
+    emitGitStatus();
     return c;
   }
 
@@ -120,6 +147,7 @@ export async function loadGitStatus() {
   c.error = j.ok === false ? String(j.error || '读取 Git 状态失败') : '';
 
   renderChangesBadge();
+  emitGitStatus();
   return c;
 }
 
@@ -142,39 +170,8 @@ export function renderChangesBadge() {
 
 /* ---------- 会话账本 → 项目相对路径 ---------- */
 
-/** 路径看起来是不是 Windows 形态。用来决定比较时是否忽略大小写 ——
- *  不靠 navigator.platform：那个值在 jsdom 和真实浏览器里不一样，
- *  而路径字符串本身已经足够说明问题。 */
-const looksWindows = (p) => /^[a-z]:[\\/]/i.test(String(p)) || String(p).includes('\\');
-
-/**
- * 把账本里的路径归一成「项目相对路径」，才能和 git status 的 path 对上。
- *
- * 账本记的是 pi 工具参数里的**原始**路径：多数时候是绝对路径
- * （`C:\proj\src\a.js`），偶尔是相对的。Git 给的一律是相对项目根的路径。
- * 两边都得归一到同一个坐标系。
- *
- * 返回 '' 表示「这个路径不参与匹配」（在项目外，或者拿不到项目根）。
- * 返回 '' 而不是抛错：账本里混进一个项目外的路径只是不该被标记，不是故障。
- */
-function toProjectRel(p, projectRoot) {
-  const s = String(p ?? '').replace(/\\/g, '/');
-  const root = String(projectRoot ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
-  if (!s || !root) return '';
-
-  // Windows 上盘符与目录名的大小写经常和实际不一致，比较时统一小写
-  const ci = looksWindows(root);
-  const a = ci ? s.toLowerCase() : s;
-  const b = ci ? root.toLowerCase() : root;
-
-  if (a === b) return '';
-  if (a.startsWith(b + '/')) return s.slice(root.length + 1);
-
-  /* 相对路径：没有盘符、也不以 / 开头。直接原样用（剥掉可能的前导 ./）。 */
-  if (!looksWindows(s) && !s.startsWith('/')) return s.replace(/^\.\//, '');
-
-  return ''; // 绝对路径但落在项目外
-}
+/* 归一化规则本身搬去了 util.js 的 toProjectRel —— 时间线的 +N −M 回填
+ * （tool-model.js）也要用同一份规则，各写一份迟早会漂移。 */
 
 /** 本次会话改过的文件，归一成项目相对路径的集合。 */
 export function sessionFileSet() {

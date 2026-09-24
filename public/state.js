@@ -68,6 +68,11 @@ export const S = {
   current: null,
   blocks: new Map(),
   tools: new Map(),
+  /* 当前打开的 Tool Timeline 组（§12）。
+   * 一组 = 一条 assistant 消息里的全部 toolCall。放在 S 上而不是 tools.js 的
+   * 模块级变量：messages.js 也要在「新的 assistant 消息开始」「用户消息进来」
+   * 这两个边界上把它关掉，而 messages.js 不能 import tools.js（会成环）。 */
+  tlGroup: null,
   working: null,
   models: [],
   thinkingLevels: [],

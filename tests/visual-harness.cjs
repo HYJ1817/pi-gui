@@ -82,6 +82,61 @@ const MESSAGES = [
       },
     ],
   },
+  /* 一段真实的工具执行：多调用 + 成功 + 失败（带退出码）+ 写文件。
+   * 走的是 get_messages 重建这条路 —— 和刷新页面之后看到的是同一条路径，
+   * 所以这里能同时核对「时间线长什么样」和「历史重建对不对」。 */
+  {
+    role: 'assistant',
+    content: [
+      { type: 'thinking', thinking: '先把文档里的数字和仓库里的实现对一遍。' },
+      { type: 'text', text: '我核对一下仓库里的实现。' },
+      { type: 'toolCall', id: 'fx1', name: 'read', arguments: { path: 'src/fermenter/sizing.js' } },
+      { type: 'toolCall', id: 'fx2', name: 'bash', arguments: { command: 'npm test -- fermenter' } },
+      { type: 'toolCall', id: 'fx3', name: 'edit', arguments: { path: 'src/fermenter/sizing.js' } },
+    ],
+    timestamp: 1787125575000,
+    stopReason: 'toolUse',
+  },
+  {
+    role: 'toolResult',
+    toolCallId: 'fx1',
+    toolName: 'read',
+    content: [{ type: 'text', text: 'export function outletDiameter(q, v) {\n  return Math.sqrt((4 * q) / (Math.PI * v));\n}\n\nexport function airFlow(vvm, volume, fill) {\n  return vvm * volume * fill;\n}\n' }],
+    isError: false,
+    timestamp: 1787125575300,
+  },
+  {
+    role: 'toolResult',
+    toolCallId: 'fx2',
+    toolName: 'bash',
+    content: [{ type: 'text', text: '> fermenter@1.0.0 test\n> node --test tests/fermenter\n\n✔ airFlow 用装料系数折算 (1.2ms)\n✔ outletDiameter 取 v=12 得 0.282 (0.8ms)\n✖ 圆整到 DN 系列 (2.1ms)\n\n  AssertionError: expected DN250 to equal DN300\n\n1 failing\nCommand exited with code 1' }],
+    isError: true,
+    timestamp: 1787125585000,
+  },
+  {
+    role: 'toolResult',
+    toolCallId: 'fx3',
+    toolName: 'edit',
+    content: [{ type: 'text', text: 'Successfully replaced 1 block(s) in src/fermenter/sizing.js' }],
+    details: {
+      diff: '  11   const table = [200, 250, 300, 350];\n- 12   return table.find((d) => d >= mm);\n+ 12   return table.find((d) => d >= mm) ?? table[table.length - 1];\n  13 }\n',
+      patch: '',
+      firstChangedLine: 12,
+    },
+    isError: false,
+    timestamp: 1787125586400,
+  },
+  {
+    role: 'assistant',
+    content: [
+      {
+        type: 'text',
+        text: '对完了：\n\n- `airFlow` / `outletDiameter` 与文档公式一致；\n- 单测挂在圆整这一步：`find()` 找不到比 0.282 m 大的 DN 时返回 `undefined`，已补上兜底并重新跑通。',
+      },
+    ],
+    timestamp: 1787125587000,
+    stopReason: 'stop',
+  },
 ];
 
 /* ---------------- 工具 ---------------- */
