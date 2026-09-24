@@ -25,7 +25,7 @@ import { spawn } from 'node:child_process';
 import { extract, clampInline, maxBytes } from './lib/extract.js';
 import { readPublic, isSea } from './lib/assets.js';
 import { fetchModels } from './lib/models-api.js';
-import { gitDiff, gitRestore, gitStatus, resolveOpenTarget } from './lib/git.js';
+import { gitDiff, gitRestore, gitStatus, resolveOpenTarget, restoreAllGit } from './lib/git.js';
 
 // 数据目录：projects.json 和上传缓存放这里。
 //
@@ -830,6 +830,10 @@ function handleProjects(req, res, url) {
  *     拒绝，用 403 表态，便于审计与测试。
  *   - 路径安全统一由 lib/safe-path.js 把关（见那里的说明）。这里只负责把
  *     结果映射成 HTTP 语义。
+ *
+ * 写操作有两条**默认关闭**的闸门（删未跟踪文件 / 取消暂存）。没有授权时后端
+ * 不会动手，而是回 `needsPlan` / `needsUnstage` / `needsConfirm` + 一份计划，
+ * 由前端问过用户再带授权重发 —— 所以这里不需要为「需要确认」单独设计状态码。
  */
 
 /** 越权类错误 → 403；参数缺失 → 400；其余（非仓库 / git 未安装 / 没有改动 / 需确认）→ 200。 */
@@ -867,16 +871,30 @@ function handleGit(req, res, url) {
         return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
       }
 
+      /* 撤销全部。不接受 path —— 它作用于整个工作区，多一个参数只会让
+       * 「到底撤了什么」变得含糊。放在 `path` 校验**之前**，因为它本来就不需要。 */
+      if (sub === 'restore-all') {
+        const r = await restoreAllGit(currentCwd, {
+          deleteUntracked: payload.deleteUntracked === true,
+          unstage: payload.unstage === true,
+          planned: payload.planned === true,
+        });
+        return json(res, gitStatusOf(r), r);
+      }
+
       const rel = String(payload.path ?? '');
       if (!rel.trim()) return json(res, 400, { ok: false, error: '缺少 path' });
 
       if (sub === 'diff') {
-        const r = await gitDiff(currentCwd, rel);
+        const r = await gitDiff(currentCwd, rel, { context: payload.context });
         return json(res, gitStatusOf(r), r);
       }
 
       if (sub === 'restore') {
-        const r = await gitRestore(currentCwd, rel, { deleteUntracked: payload.deleteUntracked === true });
+        const r = await gitRestore(currentCwd, rel, {
+          deleteUntracked: payload.deleteUntracked === true,
+          unstage: payload.unstage === true,
+        });
         return json(res, gitStatusOf(r), r);
       }
 

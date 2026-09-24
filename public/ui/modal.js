@@ -45,10 +45,10 @@ export function openModal(build, onClose) {
 
 /* 二次确认。
  *
- * 返回 Promise<boolean>；点遮罩 / 未作答就关闭一律算「取消」。
+ * 返回 Promise<true | 'alt' | false>；点遮罩 / 未作答就关闭一律算「取消」。
  *
  * 存在价值是把「危险操作必须二次确认」收敛成一个固定形态 ——
- * 撤销文件、删除未跟踪文件都走它，不会各自实现一遍、各自漏掉取消路径。
+ * 撤销文件、删除未跟踪文件、撤销全部都走它，不会各自实现一遍、各自漏掉取消路径。
  *
  * ---------- 为什么它有自己的 DOM 层（#confirmLayer） ----------
  *
@@ -56,6 +56,14 @@ export function openModal(build, onClose) {
  * 确认框必须叠在那个面板之上。如果复用 #modal / #modalCard，openModal 会先
  * `innerHTML = ''` 把面板连同已展开的 diff 一起清掉 —— 用户确认完回来发现
  * 面板没了。所以确认单独一层，`closeModal()` 也不碰它。
+ *
+ * ---------- altText：第三条路径 ----------
+ *
+ * 有些危险操作不是「做 / 不做」二选一，而是「做到什么程度」。
+ * 最典型的是「撤销全部」：工作区里既有被改的旧文件，也有新建的未跟踪文件 ——
+ * 「把改动撤了」和「把新文件删了」是两个不同的意愿。只给一个确认按钮，
+ * 就是在逼用户把两件事一起接受；分成两个弹窗，用户会在第二个上条件反射地点确认。
+ * 所以给一个中间的选项，一次把话说完。
  *
  * 同时只允许存在一个确认框：新的把旧的按「取消」结掉，否则旧 Promise 会永久挂着。 */
 
@@ -75,7 +83,7 @@ function closeConfirm(value) {
   }
 }
 
-export function confirmModal({ title, message, okText = '确认', cancelText = '取消', danger = false }) {
+export function confirmModal({ title, message, okText = '确认', cancelText = '取消', altText = '', danger = false }) {
   if (confirmResolve) closeConfirm(false);
 
   return new Promise((resolve) => {
@@ -101,6 +109,17 @@ export function confirmModal({ title, message, okText = '确认', cancelText = '
     no.className = 'btn';
     no.textContent = cancelText;
     no.onclick = () => closeConfirm(false);
+    actions.appendChild(no);
+
+    // 中间那条路径：只有调用方明确要求时才出现
+    if (altText) {
+      const alt = document.createElement('button');
+      alt.type = 'button';
+      alt.className = 'btn alt';
+      alt.textContent = altText;
+      alt.onclick = () => closeConfirm('alt');
+      actions.appendChild(alt);
+    }
 
     const yes = document.createElement('button');
     yes.type = 'button';
@@ -108,7 +127,7 @@ export function confirmModal({ title, message, okText = '确认', cancelText = '
     yes.textContent = okText;
     yes.onclick = () => closeConfirm(true);
 
-    actions.append(no, yes);
+    actions.appendChild(yes);
     el.confirmCard.appendChild(actions);
 
     el.confirmLayer.hidden = false;

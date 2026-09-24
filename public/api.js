@@ -73,9 +73,31 @@ export const fetchProviderModels = (payload) => sendJSON('/api/providers/models'
 /* ---------- Git 变更 ---------- */
 
 export const fetchGitStatus = () => getJSON('/api/git/status');
-export const fetchGitDiff = (path) => sendJSON('/api/git/diff', { body: { path } });
-export const restoreGitPath = (path, deleteUntracked = false) =>
-  sendJSON('/api/git/restore', { body: { path, deleteUntracked: Boolean(deleteUntracked) } });
+
+/** 拉某个文件的 diff。`context` 为 undefined 时不传，由 git 用默认上下文；
+ *  传数字或 'all' 则是用户显式要求展开更多上下文 —— 这必须重新问后端，
+ *  前端无法从已截断的正文里补出被 git 裁掉的上下文行。 */
+export const fetchGitDiff = (path, context) =>
+  sendJSON('/api/git/diff', { body: context === undefined || context === null ? { path } : { path, context } });
+
+/** 撤销单个文件。两个布尔是**授权开关**，默认全关：
+ *  deleteUntracked 允许删除未跟踪文件，unstage 允许取消暂存（会改 index）。 */
+export const restoreGitPath = (path, { deleteUntracked = false, unstage = false } = {}) =>
+  sendJSON('/api/git/restore', {
+    body: { path, deleteUntracked: Boolean(deleteUntracked), unstage: Boolean(unstage) },
+  });
+
+/** 撤销全部。不接受 path —— 作用于整个工作区。
+ *
+ *  不带 `planned` 是**干跑**：只拿回计划（会恢复几个 / 取消暂存几个 / 删几个），
+ *  一个字都不动。用户看过计划点头后再带 `planned: true` 重发，这次才真的执行。
+ *  两个布尔是授权开关：unstage 允许取消暂存（会改 index），
+ *  deleteUntracked 允许删除未跟踪文件。 */
+export const restoreAllGitPaths = ({ deleteUntracked = false, unstage = false, planned = false } = {}) =>
+  sendJSON('/api/git/restore-all', {
+    body: { deleteUntracked: Boolean(deleteUntracked), unstage: Boolean(unstage), planned: Boolean(planned) },
+  });
+
 /** 只做校验并拿回绝对路径；真正「用系统默认程序打开」由 Electron 侧完成。 */
 export const resolveGitOpenTarget = (path) => sendJSON('/api/git/open', { body: { path } });
 

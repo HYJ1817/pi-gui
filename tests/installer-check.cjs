@@ -154,7 +154,12 @@ function run(file, args, ms = 240000) {
  *  光检查「文件在不在」不够：漏拷文件的话 exe 照样在那，一双击才报错。 */
 async function launchInstalled() {
   const env = { ...process.env, PI_CWD: WORK, PI_GUI_DATA: DATA, PI_GUI_OPEN: '0', PORT: String(APP_PORT) };
+  /* agent shell 会注入这两个变量，打包后的 Electron 应用都受不了：
+   *   ELECTRON_RUN_AS_NODE=1 → exe 退化成普通 node，app 变 undefined
+   *   NODE_OPTIONS=--require=… → Electron 明确报「打包应用不支持 NODE_OPTIONS」
+   * 都是**环境**的干扰，不是产品缺陷，所以起测试实例前一律摘掉。 */
   delete env.ELECTRON_RUN_AS_NODE;
+  delete env.NODE_OPTIONS;
   for (const d of [WORK, DATA]) fs.mkdirSync(d, { recursive: true });
 
   const p = spawn(path.join(INSTALL, EXE), [`--remote-debugging-port=${CDP_PORT}`, '--no-sandbox', '--in-process-gpu'], {
@@ -168,10 +173,18 @@ async function launchInstalled() {
   p.stderr.on('data', (d) => (log += d));
 
   try {
+    /* 就绪探测走 /api/health，**不能**走 /api/status。
+     *
+     * 装出来的桌面版会由主进程生成随机令牌注入后端，于是除 /api/health 外的
+     * 所有 /api/* 都要带令牌；而令牌只存在于主进程内存里、由 webRequest 注入
+     * 页面请求 —— 测试进程拿不到，用 /api/status 探测只会稳定拿到 401，
+     * 永远等不到「就绪」，把一个正常的安装报成「程序起不来」。
+     * /api/health 免认证正是为这个场景留的（见 server.js 的 handleHealth）。 */
     for (let i = 0; i < 80; i++) {
       await sleep(500);
       try {
-        if ((await fetch(`http://127.0.0.1:${APP_PORT}/api/status`)).ok) return { ok: true, log };
+        const r = await fetch(`http://127.0.0.1:${APP_PORT}/api/health`);
+        if (r.ok && (await r.json()).app === 'pi-gui') return { ok: true, log };
       } catch {
         /* 还没起来 */
       }

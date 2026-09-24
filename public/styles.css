@@ -428,6 +428,11 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .modal[hidden]{display:none}
 /* 二次确认层永远压在其他弹层之上（它经常盖在「文件变更」面板上）。 */
 .modal.confirm{z-index:70}
+/* 「撤销全部」的计划正文可能很长（列出一批将被删除的路径），
+ * 给它自己的滚动区，别把按钮顶出可视区。
+ * overflow-wrap:anywhere 是为了长路径 —— 一个没有空格的 60 字符路径
+ * 用默认规则会直接撑破卡片。 */
+.modal.confirm .modal-desc{max-height:46vh;overflow:auto;overflow-wrap:anywhere}
 .modal-card{
   width:100%;max-width:440px;max-height:78vh;overflow:auto;background:#1c1c1c;
   border:1px solid #333;border-radius:14px;padding:18px;
@@ -459,6 +464,10 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .modal-input:focus{border-color:#3d3d3d}
 .btn.danger{border-color:rgba(248,113,113,.35);color:#f0a5a5}
 .btn.danger:hover{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.55);color:#ffc4c4}
+/* 确认框里的第三条路径（「做到什么程度」的中间选项）。
+ * 刻意比主按钮弱、又比「取消」显眼一点 —— 它是备选，不是推荐。 */
+.btn.alt{border-color:rgba(122,162,247,.35);color:#9dbaf8}
+.btn.alt:hover{background:rgba(122,162,247,.1);border-color:rgba(122,162,247,.55);color:#c3d5fb}
 
 /* ============ 文件变更面板 ============ */
 
@@ -513,9 +522,36 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .chg-stat .del{color:#e06c75;font-weight:400}
 .chg-acts{flex:0 0 auto;display:flex;gap:5px}
 
+/* 「本会话」标记。只是一个徽章 —— 它不改变这一行在不在列表里（那是过滤的事），
+ * 只回答「这一条是不是 Agent 改的」。用中性色，别和状态字母抢注意力。 */
+.chg-sess{
+  flex:0 0 auto;font-size:10px;line-height:15px;padding:0 6px;border-radius:5px;
+  background:rgba(122,162,247,.12);color:#9dbaf8;border:1px solid rgba(122,162,247,.22);
+  white-space:nowrap;
+}
+
+/* 列表上方的过滤行：「全部 / 仅本次会话」 */
+.chg-filter{display:flex;align-items:center;gap:6px}
+.chg-tab{
+  display:flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:7px;
+  border:1px solid var(--line);background:transparent;color:#b0b0b0;
+  font-family:inherit;font-size:11.5px;cursor:pointer;
+}
+.chg-tab:hover{background:var(--hover);color:var(--t1)}
+.chg-tab.on{background:var(--accent-soft);border-color:rgba(232,163,61,.32);color:#f0cf9a}
+.chg-tab-n{font-family:var(--mono);font-size:11px;font-weight:400;opacity:.85}
+.chg-filter-note{margin-left:auto;font-size:10.5px;color:var(--t3)}
+
 /* 就地展开的 diff */
-.chg-diff{padding:0 10px 10px;display:flex;flex-direction:column;gap:6px}
+.chg-diff{padding:0 10px 10px}
+/* 每次重画都新建这一层：事件委托挂在这里，挂到外层 .chg-diff 上会随重画累积。 */
+.chg-diff-inner{display:flex;flex-direction:column;gap:6px}
 .chg-label{font-size:10.5px;color:var(--t3);letter-spacing:.02em}
+
+/* diff 工具条：上下文行数 + 折叠控制 */
+.chg-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.chg-tools-label{font-size:10.5px;color:var(--t3);margin-right:1px}
+.btn.chg-ctx.on{background:var(--accent-soft);border-color:rgba(232,163,61,.32);color:#f0cf9a}
 
 /* ---------- Unified Diff 正文 ----------
  * 只负责「像 diff 该有的样子」：等宽、保留空格、横向滚动、行不断行。
@@ -528,12 +564,31 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   margin:0;padding:7px 0;font-family:var(--mono);font-size:11.5px;line-height:1.62;
   color:#a8a8a8;white-space:pre;tab-size:4;
 }
-.diff-body>span{display:block;padding:0 10px}
+.diff-body>span,.d-hunkwrap>span{display:block;padding:0 10px}
 .diff-body .d-add{color:#3dd68c;background:rgba(74,222,128,.06)}
 .diff-body .d-del{color:#e06c75;background:rgba(248,113,113,.06)}
 .diff-body .d-hunk{color:#7aa2f7}
 .diff-body .d-meta{color:#6f6f6f}
 .diff-body .d-note{color:#7d7d7d;font-style:italic}
+
+/* ---------- 可折叠的 hunk ----------
+ * 一个 hunk 块 = 可点击的标题栏 + 若干行。折叠就是隐藏块内的行。
+ * 容器仍是 <pre>（.d-hunkwrap 是 span + display:block，在 <pre> 里合法），
+ * 于是等宽 / 保留空格 / 横向滚动这些约定一行都不用改。 */
+.d-hunkwrap{display:block}
+.d-hunkwrap[data-open="0"]>span{display:none}
+
+.d-hunkbar{
+  display:flex;align-items:center;gap:7px;width:100%;box-sizing:border-box;
+  padding:0 10px;margin:0;border:0;background:transparent;color:inherit;
+  font:inherit;text-align:left;cursor:pointer;
+}
+.d-hunkbar:hover{background:var(--hover)}
+.d-hunkbar:focus-visible{outline:1px solid rgba(232,163,61,.5);outline-offset:-1px}
+.d-chev{flex:0 0 auto;font-size:9px;color:#7d7d7d;line-height:1}
+.d-hunkstat{flex:0 0 auto;display:flex;gap:5px;font-family:var(--mono);font-size:10.5px;margin-left:auto}
+.d-hunkstat .add{color:#3dd68c;font-weight:400}
+.d-hunkstat .del{color:#e06c75;font-weight:400}
 
 /* 表单 */
 .field{margin-bottom:12px}

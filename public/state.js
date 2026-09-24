@@ -87,6 +87,19 @@ export const S = {
    *   - changes.js  = **Agent 事件**账本（这次会话里 Agent 声称改过哪些文件），
    *                   由工具事件驱动，随会话清空。
    *   - S.changes   = **Git 工作区**状态，由 git status 得到，是磁盘的权威事实。
-   * 两者不一致时以 Git 为准（例如 Agent 改了又自己撤回，账本还留着记录）。 */
-  changes: { isRepo: false, loaded: false, files: [], error: '', noGit: false, noProject: false },
+   * 两者不一致时以 Git 为准（例如 Agent 改了又自己撤回，账本还留着记录）。
+   *
+   * projectRoot 来自后端的 git status（已 realpath 过）。它存在的唯一理由是
+   * 「会话过滤」：账本里记的是 pi 工具参数里的原始路径（可能是绝对路径），
+   * 而 Git 给的是项目相对路径，两边要先归一到同一个坐标系才能求交集。 */
+  changes: {
+    isRepo: false,
+    loaded: false,
+    files: [],
+    error: '',
+    noGit: false,
+    noProject: false,
+    projectRoot: '',
+    truncated: false,
+  },
 };

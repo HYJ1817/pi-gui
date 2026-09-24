@@ -9,23 +9,32 @@
  *                 「磁盘上现在是什么样」。
  *
  * 两者会不一致，而且**以 Git 为准**：Agent 改了又自己撤回、或者用户手动
- * revert，账本还留着记录而工作区已经干净了。所以界面上的数字（侧栏 Changes N）
- * 一律来自这里，账本只用于将来做「本次会话的改动摘要」。
+ * revert，账本还留着记录而工作区已经干净了。所以：
+ *   - 侧栏徽标（Changes N）**永远**是 Git 的总数，不受任何过滤影响；
+ *   - 账本只用来给列表加一个「本会话」标记，以及「仅本次会话」这个视角。
+ *
+ * 依赖方向：tools.js → git.js → changes.js。这条边是单向的、不成环
+ * （changes.js 不 import 任何业务模块，它只认工具名和参数），
+ * 所以这里可以放心引账本。
  *
  * ---------- 这一版刻意不做的事 ----------
  *   不做代码编辑器（打开文件交给系统默认程序）、不做 side-by-side、不做
  *   merge conflict 编辑、不做 commit/push/branch。定位是
  *   Coding Agent Workspace 的「看到改了什么 → 决定留还是撤」，不是 IDE。
- *
- * 依赖方向：tools.js → git.js（单向）。本文件不引 tools.js / changes.js，
- * 免得和账本形成环。
  */
 
 import { el, panels, S } from './state.js';
-import { fetchGitDiff, fetchGitStatus, resolveGitOpenTarget, restoreGitPath } from './api.js';
+import {
+  fetchGitDiff,
+  fetchGitStatus,
+  resolveGitOpenTarget,
+  restoreAllGitPaths,
+  restoreGitPath,
+} from './api.js';
+import { listChanges, onChanges } from './changes.js';
 import { toast } from './ui/toast.js';
 import { confirmModal, openModal } from './ui/modal.js';
-import { countDiffLines, diffHtml } from './diff.js';
+import { allHunksOpen, bindDiffToggles, countDiffLines, diffHtml, setAllHunks } from './diff.js';
 
 /* 自动刷新的防抖窗口。
  *
@@ -48,6 +57,24 @@ const STATUS_LABEL = {
   '??': '未跟踪',
 };
 
+/* ---------- 视图状态（只活在这次运行里，不写 localStorage） ---------- */
+
+const view = {
+  /* 「仅本次会话」是个临时视角，不是设置 —— 用户下次打开面板时想看的
+   * 多半还是全部（磁盘上现在什么样）。所以只记在内存里。 */
+  sessionOnly: false,
+};
+
+/* 用户最后一次选的上下文行数。新展开的文件沿用这个选择 ——
+ * 「我要看更多上下文」通常是对整个仓库的偏好，不是对某一个文件的。 */
+let lastContext = null;
+
+/* 「全部撤销」按钮的引用。它长在面板头上（不随列表重绘），
+ * 但可用状态要跟着列表走，所以留一个槽位。 */
+let restoreAllBtn = null;
+/* 批量撤销进行中标记：连点两次会把同一个仓库撤两遍，第二次结果毫无意义。 */
+let restoringAll = false;
+
 /* ---------- 状态 ---------- */
 
 function blankChanges() {
@@ -58,6 +85,7 @@ function blankChanges() {
     error: '',
     noGit: false,
     noProject: false,
+    projectRoot: '',
     truncated: false,
   };
 }
@@ -76,6 +104,7 @@ export async function loadGitStatus() {
     c.files = [];
     c.noGit = false;
     c.noProject = false;
+    c.projectRoot = '';
     c.truncated = false;
     c.error = '无法连接后端，变更信息暂不可用。';
     renderChangesBadge();
@@ -87,6 +116,7 @@ export async function loadGitStatus() {
   c.isRepo = Boolean(j.isRepo);
   c.files = Array.isArray(j.files) ? j.files : [];
   c.truncated = Boolean(j.truncated);
+  c.projectRoot = typeof j.projectRoot === 'string' ? j.projectRoot : '';
   c.error = j.ok === false ? String(j.error || '读取 Git 状态失败') : '';
 
   renderChangesBadge();
@@ -96,16 +126,81 @@ export async function loadGitStatus() {
 /** 换项目时清空 —— 上一个项目的变更列表留在界面上是纯粹的误导。 */
 export function resetChanges() {
   Object.assign(S.changes, blankChanges());
+  view.sessionOnly = false;
   renderChangesBadge();
 }
 
-/** 侧栏徽标。0 条时隐藏而不是显示 0 —— 常态是「干净」，不该常驻一个数字。 */
+/** 侧栏徽标。0 条时隐藏而不是显示 0 —— 常态是「干净」，不该常驻一个数字。
+ *  **注意这里数的是 Git 的总数**，与「仅本次会话」过滤无关：
+ *  徽标回答的是「磁盘上有多少没提交的东西」，那是权威数字，不该被视角改变。 */
 export function renderChangesBadge() {
   if (!el.changesCount) return;
   const n = S.changes.files.length;
   el.changesCount.textContent = n ? String(n) : '';
   el.changesCount.hidden = n === 0;
 }
+
+/* ---------- 会话账本 → 项目相对路径 ---------- */
+
+/** 路径看起来是不是 Windows 形态。用来决定比较时是否忽略大小写 ——
+ *  不靠 navigator.platform：那个值在 jsdom 和真实浏览器里不一样，
+ *  而路径字符串本身已经足够说明问题。 */
+const looksWindows = (p) => /^[a-z]:[\\/]/i.test(String(p)) || String(p).includes('\\');
+
+/**
+ * 把账本里的路径归一成「项目相对路径」，才能和 git status 的 path 对上。
+ *
+ * 账本记的是 pi 工具参数里的**原始**路径：多数时候是绝对路径
+ * （`C:\proj\src\a.js`），偶尔是相对的。Git 给的一律是相对项目根的路径。
+ * 两边都得归一到同一个坐标系。
+ *
+ * 返回 '' 表示「这个路径不参与匹配」（在项目外，或者拿不到项目根）。
+ * 返回 '' 而不是抛错：账本里混进一个项目外的路径只是不该被标记，不是故障。
+ */
+function toProjectRel(p, projectRoot) {
+  const s = String(p ?? '').replace(/\\/g, '/');
+  const root = String(projectRoot ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!s || !root) return '';
+
+  // Windows 上盘符与目录名的大小写经常和实际不一致，比较时统一小写
+  const ci = looksWindows(root);
+  const a = ci ? s.toLowerCase() : s;
+  const b = ci ? root.toLowerCase() : root;
+
+  if (a === b) return '';
+  if (a.startsWith(b + '/')) return s.slice(root.length + 1);
+
+  /* 相对路径：没有盘符、也不以 / 开头。直接原样用（剥掉可能的前导 ./）。 */
+  if (!looksWindows(s) && !s.startsWith('/')) return s.replace(/^\.\//, '');
+
+  return ''; // 绝对路径但落在项目外
+}
+
+/** 本次会话改过的文件，归一成项目相对路径的集合。 */
+export function sessionFileSet() {
+  const set = new Set();
+  for (const e of listChanges()) {
+    const rel = toProjectRel(e.path, S.changes.projectRoot);
+    if (rel) set.add(rel);
+  }
+  return set;
+}
+
+/** 会话集合的指纹，用来判断「账本真的变了吗」。
+ *  没有它的话，每一次工具调用都会重画面板 —— 用户展开的 diff 会被反复清掉。 */
+const sessionSignature = () => [...sessionFileSet()].sort().join('\n');
+
+let lastSessionSig = sessionSignature();
+
+/* 账本变了：过滤关着时只需刷新计数，过滤开着时列表本身会变，必须重画。 */
+onChanges(() => {
+  const sig = sessionSignature();
+  if (sig === lastSessionSig) return;
+  lastSessionSig = sig;
+  if (!panels.changes) return;
+  if (view.sessionOnly) renderChangesBody();
+  else updateFilterCounts();
+});
 
 /* ---------- 刷新（防抖） ---------- */
 
@@ -143,13 +238,23 @@ export function openChangesPanel() {
     const grow = document.createElement('span');
     grow.className = 'grow';
 
+    /* 全部撤销。危险操作，所以用 danger 配色；具体确认在 restoreAll() 里，
+     * 那时会拿到后端算出的**权威**计划（恢复几个 / 取消暂存几个 / 删几个）。 */
+    const btnAll = document.createElement('button');
+    btnAll.type = 'button';
+    btnAll.className = 'btn tiny danger';
+    btnAll.textContent = '全部撤销';
+    btnAll.title = '把工作区所有改动恢复成 Git 中的版本';
+    btnAll.onclick = () => restoreAll();
+    restoreAllBtn = btnAll;
+
     const btnRefresh = document.createElement('button');
     btnRefresh.type = 'button';
     btnRefresh.className = 'btn tiny';
     btnRefresh.textContent = '刷新';
     btnRefresh.onclick = () => refreshGitNow();
 
-    head.append(h, sub, grow, btnRefresh);
+    head.append(h, sub, grow, btnAll, btnRefresh);
     card.appendChild(head);
 
     const body = document.createElement('div');
@@ -174,6 +279,8 @@ export function renderChangesBody() {
 
   box.innerHTML = '';
   const c = S.changes;
+
+  syncRestoreAllBtn(c);
 
   if (!c.loaded) {
     box.appendChild(hint('正在读取 Git 状态…'));
@@ -202,12 +309,89 @@ export function renderChangesBody() {
     return;
   }
 
+  const session = sessionFileSet();
+  box.appendChild(filterRow(session));
+
+  const shown = view.sessionOnly ? c.files.filter((f) => session.has(f.path)) : c.files;
+
+  if (!shown.length) {
+    /* 两种情况要分开说：账本本身是空的，和账本里有东西但都对不上当前工作区。
+     * 混成一句话会让「Agent 明明改过」的用户以为是工具坏了。 */
+    box.appendChild(
+      hint(
+        session.size
+          ? '本次会话碰过的文件现在都没有未提交的改动 —— 可能已经提交、或者被撤销了。\n切到「全部」可以看到工作区里剩下的改动。'
+          : '本次会话还没有记录到文件改动。\n账本只记 write / edit 这两个工具 —— 通过 bash 改的文件不会出现在这里，切到「全部」可以看到它们。'
+      )
+    );
+    return;
+  }
+
   const list = document.createElement('div');
   list.className = 'chg-list';
-  for (const f of c.files) list.appendChild(changeRow(f));
+  for (const f of shown) list.appendChild(changeRow(f, session.has(f.path)));
   box.appendChild(list);
 
   if (c.truncated) box.appendChild(hint('变更列表过长，已截断显示。', 'warn'));
+}
+
+/** 「全部 / 仅本次会话」切换。 */
+function filterRow(session) {
+  const row = document.createElement('div');
+  row.className = 'chg-filter';
+
+  const mk = (id, label, n, on) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.id = id;
+    b.className = 'chg-tab' + (on ? ' on' : '');
+    const t = document.createElement('span');
+    t.textContent = label;
+    const c = document.createElement('b');
+    c.className = 'chg-tab-n';
+    c.textContent = String(n);
+    b.append(t, c);
+    b.onclick = () => {
+      if (view.sessionOnly === on) return;
+      view.sessionOnly = on;
+      renderChangesBody();
+    };
+    return b;
+  };
+
+  row.append(
+    mk('chgFilterAll', '全部', S.changes.files.length, false),
+    mk('chgFilterSession', '仅本次会话', session.size, true)
+  );
+
+  const note = document.createElement('span');
+  note.className = 'chg-filter-note';
+  note.textContent = '本次会话 = write / edit 碰过的文件';
+  row.appendChild(note);
+
+  return row;
+}
+
+/** 只更新过滤行上的数字，不动列表 —— 账本变了但过滤关着时走这条，
+ *  这样用户展开的 diff 不会被重画清掉。 */
+function updateFilterCounts() {
+  const box = panels.changes;
+  if (!box) return;
+  const all = box.querySelector('#chgFilterAll .chg-tab-n');
+  const sess = box.querySelector('#chgFilterSession .chg-tab-n');
+  if (all) all.textContent = String(S.changes.files.length);
+  if (sess) sess.textContent = String(sessionFileSet().size);
+}
+
+/** 「全部撤销」按钮的可用状态：没有可撤销的东西时禁用，
+ *  而不是让它点了之后弹一句「没有改动」。 */
+function syncRestoreAllBtn(c) {
+  if (!restoreAllBtn) return;
+  const usable = Boolean(c.loaded && c.isRepo && !c.noGit && !c.noProject && c.files.length);
+  restoreAllBtn.disabled = !usable || restoringAll;
+  restoreAllBtn.title = usable
+    ? `把工作区这 ${c.files.length} 项改动恢复成 Git 中的版本`
+    : '当前没有可撤销的改动';
 }
 
 /* ---------- 列表项 ---------- */
@@ -266,7 +450,7 @@ function fillStat(span, add, del) {
   }
 }
 
-function changeRow(f) {
+function changeRow(f, inSession) {
   const row = document.createElement('div');
   row.className = 'chg-row';
 
@@ -298,7 +482,17 @@ function changeRow(f) {
   if (f.binary) stat.textContent = '二进制';
   else fillStat(stat, f.additions, f.deletions);
 
-  main.append(code, info, stat);
+  /* 「本会话」标记。只是标记，不是过滤条件 —— 它回答「这一条是不是 Agent 改的」，
+   * 而列表里有没有它由上面的过滤决定。 */
+  if (inSession) {
+    const s = document.createElement('span');
+    s.className = 'chg-sess';
+    s.textContent = '本会话';
+    s.title = '这次会话里 write / edit 碰过这个文件';
+    main.append(code, info, stat, s);
+  } else {
+    main.append(code, info, stat);
+  }
 
   const acts = document.createElement('span');
   acts.className = 'chg-acts';
@@ -315,11 +509,31 @@ function changeRow(f) {
   diffBox.hidden = true;
   row.appendChild(diffBox);
 
+  /* 这一个文件的 diff 视图状态。context 是**按文件**记的：想细看某个文件的
+   * 上下文是局部需求，不该顺手把别的文件也重拉一遍。 */
+  const dstate = { context: lastContext, loaded: false, busy: false };
+
+  async function reloadDiff() {
+    dstate.busy = true;
+    diffBox.innerHTML = '';
+    diffBox.appendChild(hint('正在读取差异…'));
+
+    const r = await fetchGitDiff(f.path, dstate.context);
+    dstate.busy = false;
+    dstate.loaded = true;
+
+    // 后端没给出增删行数时（未跟踪文件超限被跳过），从 diff 正文里补一次
+    if (!f.binary && f.additions === null && f.deletions === null && r && r.ok) {
+      const n = countDiffLines(String(r.working || '') + String(r.staged || ''));
+      if (n.add || n.del) fillStat(stat, n.add, n.del);
+    }
+
+    renderDiffInto(diffBox, r, f, dstate, reloadDiff);
+  }
+
   /* 点击行 = 就地展开 unified diff。
    * 用「就地展开」而不是再开一层弹层：diff 常常要对照着文件列表看，
    * 而且嵌套弹层的返回路径（Esc 关哪一层）很容易做错。 */
-  let loaded = false;
-  let busy = false;
   main.onclick = async () => {
     if (!diffBox.hidden) {
       diffBox.hidden = true;
@@ -328,23 +542,8 @@ function changeRow(f) {
     }
     diffBox.hidden = false;
     row.classList.add('open');
-    if (loaded || busy) return;
-
-    busy = true;
-    diffBox.innerHTML = '';
-    diffBox.appendChild(hint('正在读取差异…'));
-
-    const r = await fetchGitDiff(f.path);
-    busy = false;
-    loaded = true;
-
-    // 后端没给出增删行数时（未跟踪文件超限被跳过），从 diff 正文里补一次
-    if (!f.binary && f.additions === null && f.deletions === null && r && r.ok) {
-      const n = countDiffLines(String(r.working || '') + String(r.staged || ''));
-      if (n.add || n.del) fillStat(stat, n.add, n.del);
-    }
-
-    renderDiffInto(diffBox, r, f);
+    if (dstate.loaded || dstate.busy) return;
+    await reloadDiff();
   };
 
   return row;
@@ -365,50 +564,142 @@ function diffBlock(text) {
   const d = document.createElement('div');
   d.className = 'chg-block';
   d.innerHTML = diffHtml(text);
+  const root = d.querySelector('.diff');
+  if (root) bindDiffToggles(root);
   return d;
 }
 
-function renderDiffInto(box, r, f) {
+/**
+ * 渲染一个文件的 diff。
+ *
+ * @param dstate  该文件的视图状态（context / loaded）
+ * @param reload  重新拉取并重画（切上下文时用）。切换上下文**必须重新问后端**：
+ *                diff 正文是 git 按 -U 现算的，前端没法从已截断的文本里
+ *                「补出」被裁掉的上下文行。
+ */
+function renderDiffInto(box, r, f, dstate, reload) {
   box.innerHTML = '';
 
+  // 所有内容塞进一个**每次重画都新建**的容器里挂事件。
+  // 直接挂在 box 上会随着一次次重画累积监听器（box 是复用的节点）。
+  const wrap = document.createElement('div');
+  wrap.className = 'chg-diff-inner';
+  box.appendChild(wrap);
+
   if (!r || r.network) {
-    box.appendChild(hint('无法连接后端，读取差异失败。', 'err'));
+    wrap.appendChild(hint('无法连接后端，读取差异失败。', 'err'));
     return;
   }
   if (!r.ok) {
-    box.appendChild(hint(r.error || '读取差异失败。', 'err'));
+    wrap.appendChild(hint(r.error || '读取差异失败。', 'err'));
     return;
   }
-  if (r.notice) box.appendChild(hint(r.notice, 'warn'));
+  if (r.notice) wrap.appendChild(hint(r.notice, 'warn'));
 
   const staged = String(r.staged || '');
   const working = String(r.working || '');
+  const hasBody = Boolean(staged.trim() || working.trim()) && !r.binary;
 
   /* 二进制：git 给的就是一行 `Binary files … differ`，把它当文本逐行着色没有意义，
    * 直接说明「看不了」并建议用系统编辑器打开。 */
   if (r.binary) {
-    box.appendChild(hint('二进制文件，没有可显示的文本差异。用「打开」交给系统程序查看。'));
-    if (r.truncated) box.appendChild(truncatedHint(r));
+    wrap.appendChild(hint('二进制文件，没有可显示的文本差异。用「打开」交给系统程序查看。'));
+    if (r.truncated) wrap.appendChild(truncatedHint(r));
     return;
   }
 
-  if (!staged.trim() && !working.trim()) {
-    box.appendChild(hint('没有可显示的差异：文件内容与 Git 中的版本一致。'));
+  if (!hasBody) {
+    wrap.appendChild(hint('没有可显示的差异：文件内容与 Git 中的版本一致。'));
     return;
   }
+
+  // 工具条只在真有正文时出现 —— 对着「没有差异」的提示调上下文是没意义的
+  const tools = diffTools(wrap, dstate, reload);
+  wrap.appendChild(tools.bar);
 
   /* 暂存区与工作区分开显示 —— 只给一份的话，`MM` 这种「既暂存又改了」的文件
    * 会让人看不懂到底在跟谁比。 */
   if (staged.trim()) {
-    box.appendChild(sectionLabel('暂存区（已 git add，尚未提交）'));
-    box.appendChild(diffBlock(staged));
+    wrap.appendChild(sectionLabel('暂存区（已 git add，尚未提交）'));
+    wrap.appendChild(diffBlock(staged));
   }
   if (working.trim()) {
-    box.appendChild(sectionLabel(r.untracked ? '未跟踪文件的内容' : '工作区（尚未 git add）'));
-    box.appendChild(diffBlock(working));
+    wrap.appendChild(sectionLabel(r.untracked ? '未跟踪文件的内容' : '工作区（尚未 git add）'));
+    wrap.appendChild(diffBlock(working));
   }
 
-  if (r.truncated) box.appendChild(truncatedHint(r));
+  /* 折叠按钮的文案和可见性要等**两个 diff 块都挂上去之后**再同步。
+   * 在 diffTools() 内部同步的话，那时 scope 里还没有 .diff，
+   * 它会算出「一个可折叠的块都没有」，于是把自己藏起来再也不出现。 */
+  tools.sync();
+
+  if (r.truncated) wrap.appendChild(truncatedHint(r));
+}
+
+/** 上下文行数选择 + 全部展开 / 折叠。
+ *
+ *  `scope` 是本次渲染的容器（每次重画都新建），所以这里的监听器不会累积。
+ *
+ *  @returns {{bar:HTMLElement, sync:() => void}} `sync` 由调用方在内容挂好之后调。
+ */
+function diffTools(scope, dstate, reload) {
+  const bar = document.createElement('div');
+  bar.className = 'chg-tools';
+
+  const lab = document.createElement('span');
+  lab.className = 'chg-tools-label';
+  lab.textContent = '上下文';
+  bar.appendChild(lab);
+
+  /* null = 不传 -U，跟随用户的 diff.context 配置。
+   * 不写死成「3 行」—— 用户可能自己配了别的值，我们不该覆盖他的选择。 */
+  const OPTIONS = [
+    [null, '默认', '跟随 Git 配置（通常 3 行）'],
+    [20, '20 行', '上下各多给 20 行上下文'],
+    ['all', '全部', '展开整个文件（输出量仍受大小上限约束）'],
+  ];
+
+  for (const [v, text, title] of OPTIONS) {
+    const b = tinyBtn(text, () => {
+      if (dstate.context === v) return;
+      dstate.context = v;
+      lastContext = v; // 下一个文件沿用这个选择
+      reload();
+    });
+    b.classList.add('chg-ctx');
+    b.title = title;
+    if (dstate.context === v) b.classList.add('on');
+    bar.appendChild(b);
+  }
+
+  const grow = document.createElement('span');
+  grow.className = 'grow';
+  bar.appendChild(grow);
+
+  const roots = () => [...scope.querySelectorAll('.diff')];
+
+  const all = tinyBtn('折叠全部块', () => {
+    const anyClosed = roots().some((x) => !allHunksOpen(x));
+    for (const x of roots()) setAllHunks(x, anyClosed);
+    syncAll();
+  });
+  all.classList.add('chg-hunkall');
+
+  /* 按钮文案跟着实际状态走：只要还有折叠着的块，它就该是「展开全部块」。
+   * 单独点某个 hunk 头也要能反映过来，所以另挂一个委托监听。 */
+  function syncAll() {
+    const anyClosed = roots().some((x) => !allHunksOpen(x));
+    all.textContent = anyClosed ? '展开全部块' : '折叠全部块';
+    all.hidden = roots().length === 0;
+  }
+
+  bar.appendChild(all);
+
+  scope.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('.d-hunkbar')) syncAll();
+  });
+
+  return { bar, sync: syncAll };
 }
 
 function truncatedHint(r) {
@@ -446,26 +737,89 @@ async function openFile(f) {
   toast('网页版无法调用系统程序。文件：' + r.abs, 'warn');
 }
 
+/** 这个文件撤销时需不需要「取消暂存」这道额外授权。
+ *  与后端 applyRestore 的判断保持一致：冲突 / 重命名 / 复制一律拒绝，
+ *  它们连暂存都不该动。 */
+const needsUnstage = (f) =>
+  Boolean(f.staged) && !f.untracked && f.status !== 'U' && f.status !== 'R' && f.status !== 'C';
+
 /** 撤销单个文件的改动。危险操作，一律先二次确认。 */
 async function restoreFile(f) {
   const untracked = Boolean(f.untracked);
+  const unstage = needsUnstage(f);
 
-  const ok = await confirmModal({
-    title: untracked ? '删除未跟踪文件' : '撤销文件改动',
-    message: untracked
-      ? `这个文件尚未被 Git 跟踪。撤销将删除该文件。\n\n${f.path}\n\n此操作不可恢复。`
-      : `将把下面的文件恢复成 Git 中的版本，该文件上尚未提交的改动会丢失。\n\n${f.path}`,
-    okText: untracked ? '删除文件' : '撤销改动',
-    danger: true,
-  });
+  /* 未跟踪的**目录**：后端一律拒绝（不会递归删目录 —— 那是 `git clean -fd`
+   * 的活儿，我们不做）。所以这里先说明白，不浪费一次往返，也不给一个
+   * 「点了会被拒绝」的按钮。 */
+  if (f.isDir) {
+    toast('未跟踪的目录不在这里删除，请手动处理。', 'warn');
+    return;
+  }
+
+  /* 已暂存的**新增**文件（`A`）：取消暂存后它就变成未跟踪文件，
+   * 「撤销」等于把它删掉。这件事必须在一次对话里说清楚 ——
+   * 分成两次问，用户很容易在第二个弹窗上条件反射地点确认。 */
+  const stagedAdd = unstage && f.index === 'A';
+
+  /* 授权在**点确认之前**就给全，而不是先试一次等后端说「还缺授权」。
+   *
+   * 因为对话框里已经把后果写清楚了：未跟踪文件的按钮就叫「删除文件」，
+   * 文案里写着「撤销将删除该文件」。用户点了确认，授权就已经拿到了 ——
+   * 再让后端拒绝一次、再弹一个框，是纯粹的多余动作。
+   *
+   * 下面那段 needsConfirm 分支仍然保留，它处理的是另一种情况：
+   * 列表过期了（点开面板之后文件才被 git add），此时我们的判断是错的，
+   * 该由后端说了算。 */
+  let opts = {};
+  if (untracked) opts = { deleteUntracked: true };
+  else if (unstage) opts = { unstage: true };
+  if (stagedAdd) opts = { unstage: true, deleteUntracked: true };
+
+  const title = untracked ? '删除未跟踪文件' : stagedAdd ? '取消暂存并删除文件' : unstage ? '取消暂存并撤销' : '撤销文件改动';
+
+  let message;
+  if (untracked) {
+    message = `这个文件尚未被 Git 跟踪。撤销将删除该文件。\n\n${f.path}\n\n此操作不可恢复。`;
+  } else if (stagedAdd) {
+    message = `这个文件是已暂存的新增文件。撤销会先取消暂存（它随即变成未跟踪文件），然后删除该文件。\n\n${f.path}\n\n此操作不可恢复。`;
+  } else if (unstage) {
+    message = `这个文件的改动已进入暂存区。撤销会先取消暂存（改动 Git 暂存内容），再把它恢复成 Git 中的版本。\n\n${f.path}`;
+  } else {
+    message = `将把下面的文件恢复成 Git 中的版本，该文件上尚未提交的改动会丢失。\n\n${f.path}`;
+  }
+
+  const okText = untracked ? '删除文件' : stagedAdd ? '取消暂存并删除' : unstage ? '取消暂存并撤销' : '撤销改动';
+
+  const ok = await confirmModal({ title, message, okText, danger: true });
   if (!ok) return;
 
-  let r = await restoreGitPath(f.path, untracked);
+  let r = await restoreGitPath(f.path, opts);
 
-  /* 后端以**它此刻看到的**状态为准。若它认为还需要确认（客户端的列表过期了，
-   * 例如文件刚变成未跟踪），就把后端的原话再问一次 —— 但只追问一轮，
-   * 不做循环重试，免得出现「点了取消却反复弹」这种失控形态。 */
-  if (r && r.needsConfirm && !untracked) {
+  /* 列表可能已经过期（比如这个文件刚被 git add 了）。后端会把「还需要什么
+   * 授权」原样告诉我们，这里最多再问一轮 —— 不做循环重试，
+   * 免得出现「点了取消却反复弹」这种失控形态。
+   *
+   * requiresUnstage 是后端在**动 index 之前**就拦下来的情况（已暂存的新增文件），
+   * 所以两个授权要一次给全，否则会留下「index 已改、文件还在」的半吊子状态。 */
+  if (r && r.needsConfirm && r.requiresUnstage && !(opts.unstage && opts.deleteUntracked)) {
+    const again = await confirmModal({
+      title: '取消暂存并删除文件',
+      message: String(r.error || '') + `\n\n${f.path}\n\n此操作不可恢复。`,
+      okText: '取消暂存并删除',
+      danger: true,
+    });
+    if (!again) return;
+    r = await restoreGitPath(f.path, { unstage: true, deleteUntracked: true });
+  } else if (r && r.needsUnstage && !opts.unstage) {
+    const again = await confirmModal({
+      title: '取消暂存并撤销',
+      message: String(r.error || '') + `\n\n${f.path}`,
+      okText: '取消暂存并撤销',
+      danger: true,
+    });
+    if (!again) return;
+    r = await restoreGitPath(f.path, { ...opts, unstage: true });
+  } else if (r && r.needsConfirm && !opts.deleteUntracked) {
     const again = await confirmModal({
       title: '删除未跟踪文件',
       message: String(r.error || '这个文件尚未被 Git 跟踪。撤销将删除该文件。') + `\n\n${f.path}\n\n此操作不可恢复。`,
@@ -473,7 +827,7 @@ async function restoreFile(f) {
       danger: true,
     });
     if (!again) return;
-    r = await restoreGitPath(f.path, true);
+    r = await restoreGitPath(f.path, { ...opts, deleteUntracked: true });
   }
 
   if (!r || r.network) {
@@ -485,6 +839,118 @@ async function restoreFile(f) {
     return;
   }
 
-  toast(r.action === 'deleted-untracked' ? '已删除未跟踪文件' : '已撤销该文件的改动', 'info');
+  toast(restoreDoneText(r.action), 'info');
   await refreshGitNow();
+}
+
+/** 把后端的 action 翻成一句人话。action 可能是 `unstaged-` 前缀的复合值。 */
+function restoreDoneText(action) {
+  const a = String(action || '');
+  const unstaged = a.startsWith('unstaged');
+  const tail = unstaged ? a.slice('unstaged-'.length) : a;
+
+  let core;
+  if (tail === 'deleted-untracked') core = '已删除未跟踪文件';
+  else if (tail === 'restored-deleted') core = '已恢复被删除的文件';
+  else if (tail === 'restored') core = '已撤销该文件的改动';
+  else core = '已取消暂存';
+
+  return unstaged && core !== '已取消暂存' ? '已取消暂存并' + core.replace(/^已/, '') : core;
+}
+
+/* ---------- 撤销全部 ---------- */
+
+/** 撤销整个工作区的改动。
+ *
+ * 三段式，每一段都必要：
+ *   1. **干跑**拿后端的权威计划。不让前端按自己那份可能过期的列表算 ——
+ *      「对话框里写的」和「真正会发生的」必须是同一件事。
+ *   2. **一次确认**，把三件事一起摊开：恢复几个、取消暂存几个、删几个。
+ *      有未跟踪文件时给第二条路径「仅撤销已跟踪文件」，因为「撤销改动」和
+ *      「删掉新文件」是两个不同的意愿，不该捆成一个按钮。
+ *   3. 带授权执行，然后如实汇报结果（恢复了多少、多少没处理、多少要手动）。 */
+async function restoreAll() {
+  if (restoringAll) return;
+  restoringAll = true;
+  syncRestoreAllBtn(S.changes);
+
+  try {
+    const plan = await restoreAllGitPaths({});
+
+    if (!plan || plan.network) {
+      toast('无法连接后端，未执行。', 'error');
+      return;
+    }
+    if (plan.ok && plan.total === 0) {
+      toast('工作区已经是干净的。', 'info');
+      return;
+    }
+    if (!plan.ok && !plan.needsPlan) {
+      toast(plan.error || '无法读取变更', 'error');
+      return;
+    }
+
+    const p = plan.plan || {};
+    const nPlain = (p.plain || []).length;
+    const nStaged = (p.staged || []).length;
+    const nUntracked = (p.untracked || []).length;
+    const nSkip = (p.skipped || []).length;
+
+    const choice = await confirmModal({
+      title: '撤销全部改动',
+      message: planMessage({ nPlain, nStaged, nUntracked, nSkip, p }),
+      okText: nUntracked ? `撤销全部（含删除 ${nUntracked} 个文件）` : '撤销全部',
+      // 有未跟踪文件时给第二条路径。「撤销改动」和「删掉新文件」是两个意愿。
+      altText: nUntracked ? `仅撤销已跟踪文件（保留 ${nUntracked} 个）` : '',
+      danger: true,
+    });
+    if (!choice) return;
+
+    /* confirmModal 的返回值：主按钮 `true`、备选 `'alt'`、取消 `false`。
+     * 只有走主路径才删未跟踪文件 —— 「仅撤销已跟踪文件」这条路径存在的全部意义
+     * 就是不删东西。 */
+    const del = choice === true && nUntracked > 0;
+    const r = await restoreAllGitPaths({ planned: true, unstage: true, deleteUntracked: del });
+
+    if (!r || r.network) {
+      toast('无法连接后端，未执行。', 'error');
+      return;
+    }
+    if (!r.ok) {
+      toast(r.error || '撤销全部失败', 'error');
+      return;
+    }
+
+    const parts = [`已撤销 ${r.restored.length} 个文件`];
+    if (r.kept.length) parts.push(`${r.kept.length} 个因未授权被保留`);
+    if (r.skipped.length) parts.push(`${r.skipped.length} 个需手动处理`);
+    toast(parts.join('，'), r.kept.length || r.skipped.length ? 'warn' : 'info');
+
+    await refreshGitNow();
+  } finally {
+    restoringAll = false;
+    syncRestoreAllBtn(S.changes);
+  }
+}
+
+/** 拼确认框正文。**把数字和路径都写出来** —— 只说「撤销全部」而
+ *  不说要删几个文件，等于没问。 */
+function planMessage({ nPlain, nStaged, nUntracked, nSkip, p }) {
+  const lines = [];
+  if (nPlain) lines.push(`· 恢复 ${nPlain} 个已修改 / 已删除的文件`);
+  if (nStaged) lines.push(`· 先取消暂存，再恢复 ${nStaged} 个已暂存的文件（会改动 Git 暂存内容）`);
+  if (nUntracked) lines.push(`· 删除 ${nUntracked} 个未跟踪文件（这些文件不在 Git 里，删掉无法找回）`);
+  if (nSkip) lines.push(`· ${nSkip} 个文件需要手动处理（重命名 / 复制 / 冲突 / 未跟踪目录），不会被自动改动`);
+
+  const body = ['将把工作区恢复成 Git 中的版本：', '', ...lines];
+
+  // 删除类的路径逐条列出来。数量多时截断，但**一定给出总数**。
+  if (nUntracked) {
+    body.push('', '将被删除的文件：');
+    for (const path of (p.untracked || []).slice(0, 20)) body.push('  ' + path);
+    if (nUntracked > 20) body.push(`  …以及另外 ${nUntracked - 20} 个`);
+    body.push('', '这些文件尚未被 Git 跟踪，删除后无法通过 Git 找回。');
+  }
+
+  return body.join('\n');
 }

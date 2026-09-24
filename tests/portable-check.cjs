@@ -8,6 +8,21 @@
  * 不是说零残留：Electron 的 userData 仍会落在 %APPDATA%。
  * 所以这里用 PI_GUI_DATA 指到临时目录，避免污染真实用户数据。
  *
+ * ---------- 就绪探测为什么走 /api/health ----------
+ *
+ * 桌面版会由主进程生成一个随机令牌、经环境变量注入后端，于是**除 /api/health
+ * 之外**的所有 /api/* 都要带令牌（见 server.js 的 denyRequest）。而令牌只存在于
+ * 主进程内存里，由 webRequest 注入到页面发出的请求上 —— 测试进程**拿不到**，
+ * 用 /api/status 探测只会稳定拿到 401，永远等不到「就绪」。
+ *
+ * /api/health 免认证正是为这个场景留的：它的职责就是回答「这个端口上是不是
+ * Pi GUI」。反过来，「无令牌的 /api/status 必须被拒」本身也是一条值得在
+ * **交付物**上验一遍的安全边界，所以下面把它写成了断言。
+ *
+ * 副作用：/api/status 里的 cwd 无法从这里读到（令牌不下发）。cwd 的贯通由
+ * tests/app-check.cjs 与 tests/e2e-app.cjs 覆盖 —— 它们直接跑后端，
+ * 不受桌面版令牌的影响。
+ *
  * 用法：npm run build:dist && npm run test:portable
  */
 const { spawn, execFileSync } = require('node:child_process');
@@ -97,7 +112,12 @@ async function until(fn, ms, label) {
     PI_GUI_OPEN: '0',
     PORT: String(PORT),
   };
+  /* agent shell 会注入这两个变量，打包后的 Electron 应用都受不了：
+   *   ELECTRON_RUN_AS_NODE=1 → exe 退化成普通 node，app 变 undefined
+   *   NODE_OPTIONS=--require=… → Electron 明确报「打包应用不支持 NODE_OPTIONS」
+   * 都是**环境**的干扰，不是产品缺陷，所以起测试实例前一律摘掉。 */
   delete env.ELECTRON_RUN_AS_NODE;
+  delete env.NODE_OPTIONS;
 
   const p = spawn(path.join(APP_DIR, EXE), ['--no-sandbox'], {
     cwd: APP_DIR,
@@ -109,12 +129,12 @@ async function until(fn, ms, label) {
   p.stdout.on('data', (d) => (log += d));
   p.stderr.on('data', (d) => (log += d));
 
-  let status = null;
+  let health = null;
   try {
-    status = await until(
+    health = await until(
       async () => {
         try {
-          const r = await fetch(`http://127.0.0.1:${PORT}/api/status`);
+          const r = await fetch(`http://127.0.0.1:${PORT}/api/health`);
           return r.ok ? await r.json() : null;
         } catch {
           return null;
@@ -123,9 +143,17 @@ async function until(fn, ms, label) {
       60000
     );
 
-    check('解压后能直接跑起来（不需要安装）', () => Boolean(status) || `后端没就绪。日志：\n${log.slice(-600)}`);
-    if (status) {
-      check('工作目录是传入的项目目录', () => status.cwd === WORK || `cwd=${status.cwd}`);
+    check('解压后能直接跑起来（不需要安装）', () => Boolean(health) || `后端没就绪。日志：\n${log.slice(-600)}`);
+    /* 不能只断言「有东西在 7788 上监听」—— 端口被别的程序占了也会「就绪」。
+     * /api/health 回的是应用身份，对不上就说明窗口会被指向一个陌生服务。 */
+    check('探到的是本应用的后端（身份对得上）', () =>
+      (health && health.app === 'pi-gui' && health.protocol === 1) || `health=${JSON.stringify(health)}`
+    );
+    if (health) {
+      /* 打包后的桌面版必须**开着**令牌闸门。这条断言的要点是「交付物上验一遍」：
+       * 源码里有 denyRequest 不等于装出来的这个 exe 真的启用了它。 */
+      const denied = await fetch(`http://127.0.0.1:${PORT}/api/status`);
+      check('桌面版启用了令牌校验（无令牌访问 API 被拒）', () => denied.status === 401 || `状态 ${denied.status}`);
 
       const page = await fetch(`http://127.0.0.1:${PORT}/`);
       const html = await page.text();

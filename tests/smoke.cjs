@@ -25,8 +25,10 @@ const gitCalls = [];
  * （干净工作区 / 不是仓库 / 没装 git / 没有项目 / 二进制 / 截断 …）。 */
 const gitStub = {
   status: { ok: true, isRepo: true, files: [] },
-  diff: { ok: true, isRepo: true, path: '', untracked: false, isDir: false, binary: false, working: '', staged: '', truncated: false, limit: 524288, notice: '' },
+  diff: { ok: true, isRepo: true, path: '', untracked: false, isDir: false, binary: false, working: '', staged: '', truncated: false, limit: 524288, notice: '', context: null },
   restore: { ok: true, action: 'restored' },
+  // 键名带连字符，和 URL 里的子路径一致
+  'restore-all': { ok: true, total: 0, restored: [], skipped: [], kept: [] },
   open: { ok: true, abs: 'C:\\pi-GUI\\x.txt', rel: 'x.txt' },
 };
 let es = null;
@@ -139,8 +141,11 @@ const results = [];
 function check(name, fn) {
   try {
     const r = fn();
-    results.push([r === true || r === undefined ? 'PASS' : 'FAIL', name, r === true || r === undefined ? '' : String(r)]);
+    const st = r === true || r === undefined ? 'PASS' : 'FAIL';
+    if (process.env.SMOKE_LIVE) console.error(`${st === 'PASS' ? '  ok  ' : ' FAIL '} ${name}${st === 'FAIL' ? '  → ' + r : ''}`);
+    results.push([st, name, r === true || r === undefined ? '' : String(r)]);
   } catch (e) {
+    if (process.env.SMOKE_LIVE) console.error(' FAIL ' + name + '  → ' + e.message);
     results.push(['FAIL', name, e.message]);
   }
 }
@@ -555,12 +560,354 @@ staticCheck();
     return (c && c.body.deleteUntracked === true) || JSON.stringify(c);
   });
 
+  /* ================================================================
+   * v0.4.0 新增：会话过滤 / hunk 折叠 / 上下文切换 / 全部撤销 / 取消暂存
+   * ================================================================ */
+
+  /* 先把前面工具事件留下的**防抖定时器**排空。
+   *
+   * tools.js 在 write / edit / bash 结束后会排一次 450ms 的延迟刷新；那些事件
+   * 发生在本段之前，定时器还没到点。它一旦落在下面的 `await` 里，就会
+   * `refreshGitNow()` 把面板整个重画一遍 —— 我们刚点开的行、刚展开的 diff
+   * 全被换成新节点，于是「点了没反应」这种最费解的现象就出现了。
+   * 这一段的断言都建立在「点开的那个节点还在」之上，所以先等干净。 */
+  await new Promise((r) => setTimeout(r, 600));
+
+  const FILES5 = [
+    { path: 'src/app.js', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 12, deletions: 3, binary: false, oldPath: null },
+    { path: 'docs/中文 说明.md', status: 'A', index: 'A', worktree: ' ', staged: true, untracked: false, isDir: false, additions: 5, deletions: 0, binary: false, oldPath: null },
+    { path: 'tmp/<img onerror=alert(1)>.txt', status: '??', index: '?', worktree: '?', staged: false, untracked: true, isDir: false, additions: 2, deletions: 0, binary: false, oldPath: null },
+    { path: 'big.log', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 900, deletions: 0, binary: false, oldPath: null },
+    { path: 'newdir/', status: '??', index: '?', worktree: '?', staged: false, untracked: true, isDir: true, additions: null, deletions: null, binary: false, oldPath: null },
+  ];
+
+  /* --- 会话过滤：账本路径必须先归一成项目相对路径才能和 git status 对上 --- */
+  console.log('\n--- 会话过滤 ---');
+  gitStub.status = { ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: FILES5 };
+  await window.loadGitStatus();
+  window.clearChanges();
+  window.recordToolChange('write', { file_path: 'C:\\pi-GUI\\src\\app.js' }); // 反斜杠绝对路径
+  window.recordToolChange('edit', { file_path: 'C:/pi-GUI/big.log' }); // 正斜杠绝对路径
+  window.recordToolChange('write', { file_path: 'C:\\别的地方\\outside.js' }); // 项目外
+  window.renderChangesBody();
+
+  check('过滤行有「全部」与「仅本次会话」两个页签', () =>
+    !!$('chgFilterAll') && !!$('chgFilterSession'));
+  check('「全部」页签显示 Git 总数', () => $('chgFilterAll').textContent.includes('5') || $('chgFilterAll').textContent);
+  check('「仅本次会话」只算项目内的账本条目', () => $('chgFilterSession').textContent.includes('2') || $('chgFilterSession').textContent);
+  check('项目外的账本路径不参与匹配', () => window.sessionFileSet().size === 2 || [...window.sessionFileSet()].join(','));
+  check('匹配到的行带「本会话」标记', () => chgRows().filter((x) => x.querySelector('.chg-sess')).length === 2);
+  check('「本会话」标记不改变行数（仍是全部 5 行）', () => chgRows().length === 5);
+
+  $('chgFilterSession').click();
+  check('切到「仅本次会话」后只剩匹配的 2 行', () => chgRows().length === 2 || chgRows().length);
+  check('过滤后剩下的确实是被改过的那两个文件', () => {
+    const paths = chgRows().map((x) => x.querySelector('.chg-path').textContent).sort().join(',');
+    return paths === 'big.log,src/app.js' || paths;
+  });
+  check('侧栏徽标仍是 Git 总数，不受过滤影响', () => $('changesCount').textContent === '5' || $('changesCount').textContent);
+
+  $('chgFilterAll').click();
+  check('切回「全部」恢复 5 行', () => chgRows().length === 5);
+
+  /* 账本里没有这个文件时，过滤视图要给一句能解释清楚的话 */
+  window.clearChanges();
+  window.renderChangesBody();
+  $('chgFilterSession').click();
+  check('本会话无记录时给出解释（并说明 bash 不计入）', () =>
+    chgText().includes('本次会话还没有记录到文件改动') && chgText().includes('bash'));
+
+  /* 账本里有东西、但都对不上当前工作区时，是**另一句话** ——
+   * 混成一句会让「Agent 明明改过」的用户以为工具坏了。 */
+  window.recordToolChange('write', { file_path: 'C:\\pi-GUI\\已经提交过的文件.js' });
+  window.renderChangesBody();
+  check('账本有记录但对不上时给的是另一种解释', () =>
+    chgText().includes('都没有未提交的改动') || chgText().slice(0, 160));
+  check('两种情况不会混用同一句话', () => !chgText().includes('还没有记录到文件改动'));
+
+  $('chgFilterAll').click();
+  check('切回全部后列表回来', () => chgRows().length === 5);
+  window.clearChanges();
+
+  /* --- hunk 折叠 --- */
+  console.log('\n--- hunk 折叠 ---');
+  const DIFF_TWO_HUNKS =
+    'diff --git a/src/app.js b/src/app.js\n' +
+    'index 111..222 100644\n' +
+    '--- a/src/app.js\n' +
+    '+++ b/src/app.js\n' +
+    '@@ -1,3 +1,3 @@\n' +
+    ' 上\n' +
+    '-旧\n' +
+    '+新\n' +
+    '@@ -50,3 +50,3 @@ function foo()\n' +
+    ' 上2\n' +
+    '-旧2\n' +
+    '+新2\n';
+
+  /* 断言一律针对**点开时抓到的那个节点**，而不是每次重新 querySelector。
+   * 面板任何一次重画都会换掉行节点，重新查询就会拿到一个没被点开的新行，
+   * 于是断言集体失败、原因却看不出来。抓住引用，问题就只会在该出现的地方出现。 */
+  const openRow = async (stubDiff, index = 0) => {
+    gitStub.diff = stubDiff;
+    window.renderChangesBody();
+    const row = chgRows()[index];
+    row.querySelector('.chg-main').click();
+    await new Promise((r) => setTimeout(r, 20));
+    return row;
+  };
+
+  const diffRootOf = (r) => r.querySelector('.chg-diff .diff');
+  const wrapsOf = (r) => [...r.querySelectorAll('.chg-diff .d-hunkwrap')];
+  const allBtnOf = (r) => r.querySelector('.chg-diff .chg-hunkall');
+  const ctxBtnsOf = (r) => [...r.querySelectorAll('.chg-diff .chg-ctx')];
+
+  const diffStub = (working) => ({
+    ok: true, isRepo: true, path: 'src/app.js', untracked: false, isDir: false, binary: false,
+    working, staged: '', truncated: false, limit: 524288, notice: '', context: null,
+  });
+
+  const hunkRow = await openRow(diffStub(DIFF_TWO_HUNKS));
+  check('diff 根节点标出 hunk 数量', () => diffRootOf(hunkRow).dataset.hunks === '2' || diffRootOf(hunkRow).dataset.hunks);
+  check('每个 hunk 一个可折叠块', () => wrapsOf(hunkRow).length === 2 || wrapsOf(hunkRow).length);
+  check('hunk 默认是展开的', () => wrapsOf(hunkRow).every((w) => w.dataset.open === '1'));
+  check('每个 hunk 都有可点击的标题栏', () => hunkRow.querySelectorAll('.chg-diff .d-hunkbar').length === 2);
+  check('展开态显示下三角', () => hunkRow.querySelector('.d-chev').textContent === '▾');
+  check('hunk 标题栏标出该块的 +N −M', () => {
+    const t = [...hunkRow.querySelectorAll('.d-hunkstat')].map((x) => x.textContent).join('|');
+    return t === '+1−1|+1−1' || t;
+  });
+  check('hunk 头文本原样保留（含函数上下文）', () => chgText().includes('@@ -50,3 +50,3 @@ function foo()'));
+  /* 折叠按钮的文案/可见性必须在两个 diff 块挂好之后才同步 ——
+   * 早一步同步会算出「没有块可折叠」并把自己藏起来，而且再也不出现。 */
+  check('首次渲染时折叠按钮就可见（不会把自己藏起来）', () => allBtnOf(hunkRow).hidden === false);
+  check('全展开状态下按钮写「折叠全部块」', () => allBtnOf(hunkRow).textContent === '折叠全部块' || allBtnOf(hunkRow).textContent);
+
+  wrapsOf(hunkRow)[0].querySelector('.d-hunkbar').click();
+  check('点标题栏折叠这一个 hunk', () => wrapsOf(hunkRow)[0].dataset.open === '0');
+  check('折叠后三角朝右', () => wrapsOf(hunkRow)[0].querySelector('.d-chev').textContent === '▸');
+  check('另一个 hunk 不受影响', () => wrapsOf(hunkRow)[1].dataset.open === '1');
+
+  check('有折叠块时按钮是「展开全部块」', () => allBtnOf(hunkRow).textContent === '展开全部块' || allBtnOf(hunkRow).textContent);
+  allBtnOf(hunkRow).click();
+  check('「展开全部块」把两个都展开', () => wrapsOf(hunkRow).every((w) => w.dataset.open === '1'));
+  check('全展开后按钮变成「折叠全部块」', () => allBtnOf(hunkRow).textContent === '折叠全部块' || allBtnOf(hunkRow).textContent);
+  allBtnOf(hunkRow).click();
+  check('「折叠全部块」把两个都折叠', () => wrapsOf(hunkRow).every((w) => w.dataset.open === '0'));
+  allBtnOf(hunkRow).click();
+  check('再点回来又是全展开', () => wrapsOf(hunkRow).every((w) => w.dataset.open === '1'));
+
+  /* hunk 内部以 `++` 开头的**新增代码**，diff 里写作 `+++ …`。
+   * 它不该被当成 `+++ b/…` 文件头 —— 这是按 hunk 分块顺手修掉的老毛病。 */
+  const inlineRow = await openRow(
+    diffStub('diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,3 @@\n 上下文\n+++ b/这不是文件头\n')
+  );
+  check('hunk 内部的 `+++ x` 算新增行而不是文件头', () => {
+    const adds = [...inlineRow.querySelectorAll('.chg-diff .d-add')].map((x) => x.textContent);
+    return adds.includes('+++ b/这不是文件头') || adds.join('|');
+  });
+  check('hunk 内部的 `+++ x` 不会同时被当成元信息', () => {
+    const metas = [...inlineRow.querySelectorAll('.chg-diff .d-meta')].map((x) => x.textContent);
+    return !metas.includes('+++ b/这不是文件头') || metas.join('|');
+  });
+
+  /* --- 上下文切换：必须重新问后端 --- */
+  console.log('\n--- 上下文切换 ---');
+  const ctxRow = await openRow(diffStub(DIFF_TWO_HUNKS));
+
+  check('工具条有三个上下文档位', () => ctxBtnsOf(ctxRow).length === 3 || ctxBtnsOf(ctxRow).map((b) => b.textContent).join('|'));
+  check('默认档是「默认」（不传 -U）', () => ctxBtnsOf(ctxRow)[0].classList.contains('on'));
+  check('首次拉 diff 不带 context 参数', () => {
+    const c = gitCalls.filter((x) => x.kind === 'diff').pop();
+    return (c && c.body.context === undefined) || JSON.stringify(c && c.body);
+  });
+
+  const diffCallsBefore = gitCalls.filter((c) => c.kind === 'diff').length;
+  ctxBtnsOf(ctxRow)[1].click(); // 「20 行」
+  await new Promise((r) => setTimeout(r, 20));
+  check('切到 20 行会重新问后端（不是本地重排）', () => gitCalls.filter((c) => c.kind === 'diff').length > diffCallsBefore);
+  check('重拉时带上了 context=20', () => {
+    const c = gitCalls.filter((x) => x.kind === 'diff').pop();
+    return (c && c.body.context === 20) || JSON.stringify(c && c.body);
+  });
+  check('切换后「20 行」成为选中档', () => {
+    const bs = ctxBtnsOf(ctxRow);
+    return (bs[1].classList.contains('on') && !bs[0].classList.contains('on')) || bs.map((b) => b.textContent + (b.classList.contains('on') ? '*' : '')).join('|');
+  });
+
+  ctxBtnsOf(ctxRow)[2].click(); // 「全部」
+  await new Promise((r) => setTimeout(r, 20));
+  check("切到「全部」传的是字符串 'all'", () => {
+    const c = gitCalls.filter((x) => x.kind === 'diff').pop();
+    return (c && c.body.context === 'all') || JSON.stringify(c && c.body);
+  });
+  check('切换上下文后 hunk 折叠状态重建（仍是默认展开）', () => wrapsOf(ctxRow).every((w) => w.dataset.open === '1'));
+
+  /* 新展开的文件沿用上次选的档位 —— 「要看更多上下文」是仓库级偏好 */
+  const inheritRow = await openRow(diffStub(DIFF_TWO_HUNKS), 3);
+  check('新文件沿用上次选的上下文档位', () => {
+    const c = gitCalls.filter((x) => x.kind === 'diff').pop();
+    return (c && c.body.context === 'all') || JSON.stringify(c && c.body);
+  });
+  check('沿用的档位在界面上也是选中态', () => ctxBtnsOf(inheritRow)[2].classList.contains('on'));
+
+  /* --- 全部撤销 --- */
+  console.log('\n--- 全部撤销 ---');
+  const allBtnInHead = () => $('modalCard').querySelector('.chg-head .btn.danger');
+
+  gitStub.status = { ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: FILES5 };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  check('有变更时「全部撤销」可用', () => allBtnInHead().disabled === false);
+
+  const PLAN3 = {
+    ok: false, needsPlan: true, total: 3,
+    plan: { total: 3, plain: ['a.txt'], staged: ['s.txt'], untracked: ['u.txt'], skipped: [] },
+  };
+  gitStub['restore-all'] = PLAN3;
+  const allCallsBefore = gitCalls.filter((c) => c.kind === 'restore-all').length;
+  allBtnInHead().click();
+  await new Promise((r) => setTimeout(r, 30));
+  check('「全部撤销」先干跑拿计划（不带 planned）', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore-all').pop();
+    return (gitCalls.filter((x) => x.kind === 'restore-all').length > allCallsBefore && c.body.planned !== true) || JSON.stringify(c && c.body);
+  });
+  check('确认框列出三类数量', () => {
+    const t = confirmText();
+    return (t.includes('恢复 1 个') && t.includes('取消暂存') && t.includes('删除 1 个')) || t;
+  });
+  check('确认框逐条列出将被删除的文件', () => confirmText().includes('u.txt') || confirmText());
+  check('有未跟踪文件时给第二条路径', () => !!confirmBtn('仅撤销已跟踪文件（保留 1 个）'));
+
+  gitStub['restore-all'] = { ok: true, total: 3, restored: [{ path: 'a.txt', action: 'restored' }], skipped: [], kept: [] };
+  confirmBtn('撤销全部（含删除 1 个文件）').click();
+  await new Promise((r) => setTimeout(r, 30));
+  check('主路径带 planned + unstage + deleteUntracked', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore-all').pop();
+    return (c && c.body.planned === true && c.body.unstage === true && c.body.deleteUntracked === true) || JSON.stringify(c && c.body);
+  });
+  check('撤销全部后提示结果并重拉状态', () =>
+    [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已撤销 1 个文件')) || chgText().slice(0, 120));
+
+  /* 第二条路径：只撤销已跟踪的，一个文件都不删 */
+  gitStub['restore-all'] = PLAN3;
+  window.renderChangesBody();
+  allBtnInHead().click();
+  await new Promise((r) => setTimeout(r, 30));
+  gitStub['restore-all'] = { ok: true, total: 3, restored: [{ path: 'a.txt', action: 'restored' }], skipped: [], kept: [{ path: 'u.txt', reason: '未授权' }] };
+  confirmBtn('仅撤销已跟踪文件（保留 1 个）').click();
+  await new Promise((r) => setTimeout(r, 30));
+  check('第二条路径带 deleteUntracked=false', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore-all').pop();
+    return (c && c.body.planned === true && c.body.deleteUntracked === false && c.body.unstage === true) || JSON.stringify(c && c.body);
+  });
+  check('有保留项时提示里说明「被保留」', () =>
+    [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('被保留')) || '没有找到对应提示');
+
+  /* 取消确认 → 一个字都不执行 */
+  gitStub['restore-all'] = PLAN3;
+  window.renderChangesBody();
+  allBtnInHead().click();
+  await new Promise((r) => setTimeout(r, 30));
+  const beforeCancel = gitCalls.filter((c) => c.kind === 'restore-all' && c.body.planned === true).length;
+  confirmBtn('取消').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('取消确认后不执行（没有带 planned 的调用）', () =>
+    gitCalls.filter((c) => c.kind === 'restore-all' && c.body.planned === true).length === beforeCancel);
+
+  gitStub.status = { ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: [] };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  check('工作区干净时「全部撤销」禁用', () => allBtnInHead().disabled === true);
+
+  /* --- 已暂存文件的单文件撤销 --- */
+  console.log('\n--- 取消暂存（单文件） ---');
+  gitStub.status = {
+    ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI',
+    files: [{ path: 's.txt', status: 'M', index: 'M', worktree: ' ', staged: true, untracked: false, isDir: false, additions: 1, deletions: 1, binary: false, oldPath: null }],
+  };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  gitStub.restore = { ok: true, action: 'unstaged-restored' };
+  chgRows()[0].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('已暂存文件的确认框点明「会改动暂存内容」', () => confirmText().includes('取消暂存') && confirmText().includes('暂存') || confirmText());
+  check('确认按钮写「取消暂存并撤销」', () => !!confirmBtn('取消暂存并撤销'));
+  confirmBtn('取消暂存并撤销').click();
+  await new Promise((r) => setTimeout(r, 30));
+  check('已暂存文件带 unstage=true 撤销（不带删除授权）', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore').pop();
+    return (c && c.body.unstage === true && c.body.deleteUntracked === false) || JSON.stringify(c && c.body);
+  });
+  check('提示语说明已取消暂存', () =>
+    [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已取消暂存并撤销')) ||
+    [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | '));
+
+  /* 已暂存的**新增**文件：一次问清「取消暂存 + 删除」 */
+  gitStub.status = {
+    ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI',
+    files: [{ path: 'added.txt', status: 'A', index: 'A', worktree: ' ', staged: true, untracked: false, isDir: false, additions: 3, deletions: 0, binary: false, oldPath: null }],
+  };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  gitStub.restore = { ok: true, action: 'unstaged-deleted-untracked' };
+  chgRows()[0].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('已暂存新增文件的确认框点明会删除', () => confirmText().includes('删除该文件') || confirmText());
+  check('确认按钮写「取消暂存并删除」', () => !!confirmBtn('取消暂存并删除'));
+  confirmBtn('取消暂存并删除').click();
+  await new Promise((r) => setTimeout(r, 30));
+  check('两个授权一次给全（unstage + deleteUntracked）', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore').pop();
+    return (c && c.body.unstage === true && c.body.deleteUntracked === true) || JSON.stringify(c && c.body);
+  });
+
+  /* 后端在动 index 之前就拦下来时，前端要一次给全两个授权重试 */
+  gitStub.status = {
+    ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI',
+    files: [{ path: 'stale.txt', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 1, deletions: 0, binary: false, oldPath: null }],
+  };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  gitStub.restore = { ok: false, needsConfirm: true, requiresUnstage: true, error: '这个文件是已暂存的新增文件。取消暂存后它会变成未跟踪文件，撤销将删除该文件。' };
+  chgRows()[0].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 20));
+  confirmBtn('撤销改动').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('后端说 requiresUnstage 时会追问一次', () => confirmText().includes('未跟踪文件') || confirmText());
+  gitStub.restore = { ok: true, action: 'unstaged-deleted-untracked' };
+  confirmBtn('取消暂存并删除').click();
+  await new Promise((r) => setTimeout(r, 30));
+  check('追问后一次带上两个授权', () => {
+    const c = gitCalls.filter((x) => x.kind === 'restore').pop();
+    return (c && c.body.unstage === true && c.body.deleteUntracked === true) || JSON.stringify(c && c.body);
+  });
+
+  /* 未跟踪目录：后端一律拒绝递归删，所以界面**不该**给一个点了会被拒的按钮 */
+  gitStub.status = {
+    ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI',
+    files: [{ path: 'newdir/', status: '??', index: '?', worktree: '?', staged: false, untracked: true, isDir: true, additions: null, deletions: null, binary: false, oldPath: null }],
+  };
+  await window.loadGitStatus();
+  window.renderChangesBody();
+  const dirRestoreBefore = gitCalls.filter((c) => c.kind === 'restore').length;
+  chgRows()[0].querySelector('.chg-acts .btn.danger').click();
+  await new Promise((r) => setTimeout(r, 20));
+  check('未跟踪目录不弹删除确认框', () => $('confirmLayer').hidden === true);
+  check('未跟踪目录只给一句说明，不发起撤销请求', () =>
+    gitCalls.filter((c) => c.kind === 'restore').length === dirRestoreBefore);
+  check('未跟踪目录的提示说明要手动处理', () =>
+    [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('未跟踪的目录')) ||
+    [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | '));
+
   /* --- 各种「不是错误」的状态 --- */
+  window.clearChanges();
   gitStub.status = { ok: true, isRepo: true, files: [] };
   await window.loadGitStatus();
   window.renderChangesBody();
   check('工作区干净时提示 No changes', () => chgText().includes('工作区干净'));
   check('干净时徽标隐藏', () => $('changesCount').hidden === true);
+  check('干净时没有过滤行（没有东西可过滤）', () => $('chgFilterAll') === null);
 
   gitStub.status = { ok: true, isRepo: false, files: [] };
   await window.loadGitStatus();

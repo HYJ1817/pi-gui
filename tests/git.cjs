@@ -149,7 +149,7 @@ async function probe(env, body) {
   const file = path.join(TMP, `probe-${Math.random().toString(36).slice(2)}.mjs`);
   fs.writeFileSync(
     file,
-    `import { gitStatus, gitDiff } from ${JSON.stringify(LIB_URL)};\n` +
+    `import { gitStatus, gitDiff, gitRestore, restoreAllGit } from ${JSON.stringify(LIB_URL)};\n` +
       `const out = await (async () => { ${body} })();\n` +
       `console.log('@@' + JSON.stringify(out));\n`,
     'utf8'
@@ -261,7 +261,7 @@ const post = (p, payload, extra = {}) => jsonReq(p, authed({ method: 'POST', bod
 /* ---------- 主流程 ---------- */
 
 (async () => {
-  const { gitStatus, gitDiff, gitRestore, resolveOpenTarget } = await import(LIB_URL);
+  const { gitStatus, gitDiff, gitRestore, resolveOpenTarget, restoreAllGit } = await import(LIB_URL);
 
   console.log('\n=== 1. 临时仓库：状态解析 ===');
   await buildRepo();
@@ -515,6 +515,263 @@ const post = (p, payload, extra = {}) => jsonReq(p, authed({ method: 'POST', bod
   }
   killServer(srv);
   srv = null;
+
+  /* ==================================================================
+   * v0.4.0 新增：取消暂存 / 撤销全部 / diff 上下文
+   *
+   * 单独用一个**全新的临时仓库**（REPO2），不接着改上面那个 ——
+   * 上面那个经过第 7 段的一通撤销，状态已经不好推理了，
+   * 而下面这些用例必须从「已知的初始状态」出发才能断言得准。
+   * ================================================================== */
+
+  const REPO2 = path.join(TMP, 'repo2');
+  fs.mkdirSync(REPO2, { recursive: true });
+  await gitIn(REPO2, ['init', '-q']);
+  await gitIn(REPO2, ['config', 'user.email', 'pi-gui-test@example.com']);
+  await gitIn(REPO2, ['config', 'user.name', 'Pi GUI Test']);
+  await gitIn(REPO2, ['config', 'commit.gpgsign', 'false']);
+  await gitIn(REPO2, ['config', 'core.autocrlf', 'false']);
+
+  w(path.join(REPO2, 'mod.txt'), 'v1\n');
+  w(path.join(REPO2, 'del.txt'), 'v1\n');
+  w(path.join(REPO2, 'ctx.txt'), Array.from({ length: 120 }, (_, i) => 'L' + i).join('\n') + '\n');
+  await gitIn(REPO2, ['add', '-A']);
+  await gitIn(REPO2, ['commit', '-q', '-m', 'init']);
+  const REPO2_REAL = real(REPO2);
+
+  const statusPaths = async (root = REPO2_REAL) =>
+    (await gitStatus(root)).files.map((f) => `${f.path}:${f.status}`).sort().join(' ');
+
+  console.log('\n=== 11. 取消暂存（默认绝不碰 index） ===');
+
+  // 已暂存的修改：`M `（index 改了，工作区和 index 一致）
+  w(path.join(REPO2, 'mod.txt'), 'v2\n');
+  await gitIn(REPO2, ['add', '--', 'mod.txt']);
+
+  const rNoUnstage = await gitRestore(REPO2_REAL, 'mod.txt');
+  check('已暂存且未授权 → 拒绝，并明确标出 needsUnstage', () =>
+    (rNoUnstage.ok === false && rNoUnstage.needsUnstage === true && /暂存区/.test(rNoUnstage.error || '')) || JSON.stringify(rNoUnstage));
+  const cachedBefore = await gitIn(REPO2, ['diff', '--cached', '--name-only']);
+  check('拒绝之后暂存内容确实没变（index 没被偷偷改）', () => cachedBefore.stdout.includes('mod.txt') || cachedBefore.stdout);
+
+  const rUnstage = await gitRestore(REPO2_REAL, 'mod.txt', { unstage: true });
+  check('授权后 → 先取消暂存，再恢复工作区', () =>
+    (rUnstage.ok === true && rUnstage.action === 'unstaged-restored') || JSON.stringify(rUnstage));
+  check('mod.txt 已回到 Git 版本', () =>
+    fs.readFileSync(path.join(REPO2, 'mod.txt'), 'utf8') === 'v1\n' || fs.readFileSync(path.join(REPO2, 'mod.txt'), 'utf8'));
+  const afterUnstage = await statusPaths();
+  check('取消暂存 + 恢复之后工作区彻底干净', () => afterUnstage === '' || afterUnstage);
+
+  // 已暂存的删除
+  fs.unlinkSync(path.join(REPO2, 'del.txt'));
+  await gitIn(REPO2, ['add', '-A']);
+  const rDelStaged = await gitRestore(REPO2_REAL, 'del.txt', { unstage: true });
+  check('已暂存的删除 → 取消暂存后恢复', () => (rDelStaged.ok === true && rDelStaged.action === 'unstaged-restored-deleted') || JSON.stringify(rDelStaged));
+  check('被删的文件真的回来了', () => fs.existsSync(path.join(REPO2, 'del.txt')));
+
+  /* 已暂存的**新增**文件是最危险的一类：取消暂存后它变成未跟踪文件，
+   * 「撤销」就等于删掉它。后端必须在动 index **之前**就把这件事问清楚。 */
+  w(path.join(REPO2, 'added.txt'), 'brand new\n');
+  await gitIn(REPO2, ['add', '--', 'added.txt']);
+  const rAdd1 = await gitRestore(REPO2_REAL, 'added.txt', { unstage: true });
+  check('已暂存的新增文件：只给 unstage 仍要确认', () =>
+    (rAdd1.ok === false && rAdd1.needsConfirm === true && rAdd1.requiresUnstage === true) || JSON.stringify(rAdd1));
+  check('文案说清「取消暂存后会变成未跟踪文件」', () => /未跟踪文件/.test(rAdd1.error || '') || rAdd1.error);
+  const cachedAfterAdd = await gitIn(REPO2, ['diff', '--cached', '--name-only']);
+  check('被拒时 index 一个字都没改（仍是 A，文件也还在）', () =>
+    (cachedAfterAdd.stdout.includes('added.txt') && fs.existsSync(path.join(REPO2, 'added.txt'))) || cachedAfterAdd.stdout);
+
+  const rAdd2 = await gitRestore(REPO2_REAL, 'added.txt', { unstage: true, deleteUntracked: true });
+  check('两个授权一起给 → 取消暂存并删除', () => (rAdd2.ok === true && rAdd2.action === 'unstaged-deleted-untracked') || JSON.stringify(rAdd2));
+  check('文件真的被删掉了', () => !fs.existsSync(path.join(REPO2, 'added.txt')));
+
+  console.log('\n=== 12. 撤销全部：计划 → 授权 → 执行 ===');
+
+  // 造出三类：普通工作区改动、已暂存改动、未跟踪文件
+  w(path.join(REPO2, 'mod.txt'), 'v3\n');
+  await gitIn(REPO2, ['add', '--', 'mod.txt']);
+  w(path.join(REPO2, 'del.txt'), 'v9\n'); // 工作区改动（未暂存）
+  w(path.join(REPO2, 'untracked-a.txt'), 'ua\n');
+  w(path.join(REPO2, 'untracked-b.txt'), 'ub\n');
+
+  /* 计划模式的断言不写死字符串，而是和「计划之前」的真实状态比 ——
+   * 写死的话，将来往这个仓库里多加一个文件就会莫名其妙地红。 */
+  const stateBeforePlan = await statusPaths();
+  const planRes = await restoreAllGit(REPO2_REAL);
+  check('不带 planned → 只回报计划', () => (planRes.ok === false && planRes.needsPlan === true) || JSON.stringify(planRes).slice(0, 300));
+  check('计划里区分 plain / staged / untracked', () => {
+    const p = planRes.plan || {};
+    return (
+      (p.plain || []).includes('del.txt') &&
+      (p.staged || []).includes('mod.txt') &&
+      (p.untracked || []).sort().join(',') === 'untracked-a.txt,untracked-b.txt'
+    ) || JSON.stringify(p);
+  });
+  const stateAfterPlan = await statusPaths();
+  check('计划模式一个字都没动（工作区与计划前完全一致）', () =>
+    (stateAfterPlan === stateBeforePlan && stateBeforePlan.includes('mod.txt:M')) || `${stateBeforePlan} → ${stateAfterPlan}`);
+
+  const keepUntracked = await restoreAllGit(REPO2_REAL, { planned: true, unstage: true });
+  check('给 unstage 不给删 → 已跟踪的恢复、未跟踪的保留', () =>
+    (keepUntracked.ok === true && keepUntracked.restored.length === 2 && keepUntracked.kept.length === 2) ||
+    JSON.stringify(keepUntracked).slice(0, 300));
+  check('未跟踪文件仍在磁盘上', () => fs.existsSync(path.join(REPO2, 'untracked-a.txt')) && fs.existsSync(path.join(REPO2, 'untracked-b.txt')));
+  check('已跟踪的两个都回到 Git 版本', () =>
+    fs.readFileSync(path.join(REPO2, 'mod.txt'), 'utf8') === 'v1\n' && fs.readFileSync(path.join(REPO2, 'del.txt'), 'utf8') === 'v1\n');
+  check('保留项被标成 needsConfirm（还有事没做完）', () => keepUntracked.needsConfirm === true || JSON.stringify(keepUntracked.kept));
+
+  const clearAll = await restoreAllGit(REPO2_REAL, { planned: true, unstage: true, deleteUntracked: true });
+  check('两个授权都给 → 全部清掉', () => (clearAll.ok === true && clearAll.restored.length === 2 && clearAll.kept.length === 0) || JSON.stringify(clearAll).slice(0, 300));
+  const clearedState = await statusPaths();
+  check('撤销全部之后 status 里一个文件都不剩', () => clearedState === '' || clearedState);
+
+  /* 重命名 / 复制即使给全授权也不该被自动撤销 —— 只恢复一条腿会让文件
+   * 处于「新名字不在、旧名字也在」的半吊子状态。 */
+  await gitIn(REPO2, ['mv', 'mod.txt', 'mod-renamed.txt']);
+  const renPlan = await restoreAllGit(REPO2_REAL);
+  check('重命名归入 skipped 而不是 staged/plain', () => {
+    const p = renPlan.plan || {};
+    return ((p.skipped || []).some((x) => /mod-renamed/.test(x.path)) && !(p.staged || []).includes('mod-renamed.txt')) || JSON.stringify(p);
+  });
+  const renExec = await restoreAllGit(REPO2_REAL, { planned: true, unstage: true, deleteUntracked: true });
+  check('执行阶段也确实跳过了重命名', () =>
+    (renExec.restored.length === 0 && renExec.skipped.some((x) => /mod-renamed/.test(x.path))) || JSON.stringify(renExec).slice(0, 300));
+  await gitIn(REPO2, ['restore', '--staged', '--', 'mod.txt', 'mod-renamed.txt']);
+  fs.unlinkSync(path.join(REPO2, 'mod-renamed.txt'));
+  await gitIn(REPO2, ['checkout', '--', 'mod.txt']);
+
+  // 干净的仓库：不该弹计划，直接说「没什么可撤的」
+  const cleanAll = await restoreAllGit(REPO2_REAL);
+  check('工作区干净时不要求计划，直接回 total:0', () => (cleanAll.ok === true && cleanAll.total === 0) || JSON.stringify(cleanAll).slice(0, 200));
+
+  const capRes = await probe({ PI_GUI_GIT_RESTORE_ALL_MAX: '1' }, `return await restoreAllGit(${JSON.stringify(REPO2_REAL)});`);
+  check('空仓库下上限不误伤（total:0 直接返回）', () => (capRes.ok === true && capRes.total === 0) || JSON.stringify(capRes).slice(0, 200));
+
+  w(path.join(REPO2, 'cap1.txt'), '1\n');
+  w(path.join(REPO2, 'cap2.txt'), '2\n');
+  const capped = await probe({ PI_GUI_GIT_RESTORE_ALL_MAX: '1' }, `return await restoreAllGit(${JSON.stringify(REPO2_REAL)});`);
+  check('超过上限时整体拒绝，不做「尽力而为」', () =>
+    (capped.ok === false && /过多/.test(capped.error || '') && capped.limit === 1) || JSON.stringify(capped).slice(0, 300));
+  check('超限拒绝时一个文件都没删', () => fs.existsSync(path.join(REPO2, 'cap1.txt')) && fs.existsSync(path.join(REPO2, 'cap2.txt')));
+  fs.unlinkSync(path.join(REPO2, 'cap1.txt'));
+  fs.unlinkSync(path.join(REPO2, 'cap2.txt'));
+
+  const nonRepoAll = await restoreAllGit(NONREPO);
+  check('撤销全部在非仓库上也是「不是错误」', () => (nonRepoAll.ok === false && nonRepoAll.isRepo === false) || JSON.stringify(nonRepoAll));
+  const noProjectAll = await restoreAllGit('');
+  check('撤销全部没有项目时给出指引', () => (noProjectAll.noProject === true && /添加文件夹/.test(noProjectAll.error || '')) || JSON.stringify(noProjectAll));
+
+  console.log('\n=== 13. Diff 上下文（默认不动用户的 diff.context） ===');
+
+  {
+    const lines = Array.from({ length: 120 }, (_, i) => 'L' + i);
+    lines[60] = 'CHANGED';
+    w(path.join(REPO2, 'ctx.txt'), lines.join('\n') + '\n');
+  }
+
+  /* 上下文行的判定：hunk 里以单个空格开头的行。 */
+  const ctxLines = (d) => String(d.working || '').split('\n').filter((l) => l.startsWith(' ')).length;
+
+  const dDefault = await gitDiff(REPO2_REAL, 'ctx.txt');
+  check('默认不传 -U（回显 context 为 null）', () => dDefault.context === null || JSON.stringify(dDefault.context));
+  check('默认上下文是 3 行（前后各 3 = 6 行）', () => ctxLines(dDefault) === 6 || ctxLines(dDefault));
+
+  const d20 = await gitDiff(REPO2_REAL, 'ctx.txt', { context: 20 });
+  check('context=20 → 上下文 40 行', () => ctxLines(d20) === 40 || ctxLines(d20));
+  check('context=20 被回显', () => d20.context === 20 || JSON.stringify(d20.context));
+
+  const dAll = await gitDiff(REPO2_REAL, 'ctx.txt', { context: 'all' });
+  check("context='all' → 展开整个文件（119 行上下文）", () => ctxLines(dAll) === 119 || ctxLines(dAll));
+  check("context='all' 被回显成字符串 'all'", () => dAll.context === 'all' || JSON.stringify(dAll.context));
+  check('上下文变多时新增/删除行数不变', () => {
+    const add = (d) => String(d.working).split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++')).length;
+    return (add(dDefault) === 1 && add(d20) === 1 && add(dAll) === 1) || `${add(dDefault)}/${add(d20)}/${add(dAll)}`;
+  });
+
+  const dBad = await gitDiff(REPO2_REAL, 'ctx.txt', { context: 'not-a-number' });
+  check('非法 context 被忽略，退回默认（不是 NaN 泄漏出来）', () =>
+    (dBad.context === null ? true : `context=${JSON.stringify(dBad.context)}`));
+  check('非法 context 的实际上下文行数与默认一致', () => ctxLines(dBad) === ctxLines(dDefault) || ctxLines(dBad));
+
+  const dBig = await gitDiff(REPO2_REAL, 'ctx.txt', { context: 99999 });
+  check('超大 context 被钳到 200（文件只有 119 行可用）', () => ctxLines(dBig) === 119 || ctxLines(dBig));
+
+  const dZero = await gitDiff(REPO2_REAL, 'ctx.txt', { context: 0 });
+  check('context=0 也是合法值（只要改动的行）', () => ctxLines(dZero) === 0 || ctxLines(dZero));
+
+  console.log('\n=== 14. HTTP 层：restore-all 与 context 透传 ===');
+
+  // 重新造点脏数据，走完整的 HTTP 往返
+  w(path.join(REPO2, 'mod.txt'), 'v4\n');
+  w(path.join(REPO2, 'http-new.txt'), 'hn\n');
+
+  await waitDown();
+  srv = startServer({ PI_CWD: REPO2_REAL });
+  if (await waitUp()) {
+    const planHttp = await post('/api/git/restore-all', {});
+    check('restore-all 不需要 path，也不报 400', () => planHttp.status === 200 || `HTTP ${planHttp.status}`);
+    check('restore-all 默认是干跑（needsPlan）', () => planHttp.body?.needsPlan === true || JSON.stringify(planHttp.body).slice(0, 300));
+    check('干跑后文件都还在', () => fs.existsSync(path.join(REPO2, 'http-new.txt')));
+
+    const ctxHttp = await post('/api/git/diff', { path: 'ctx.txt', context: 20 });
+    check('HTTP 透传 context=20', () => (ctxHttp.status === 200 && ctxHttp.body?.context === 20) || JSON.stringify(ctxHttp.body).slice(0, 200));
+    check('HTTP 的 context=20 真的多给了上下文', () => ctxLines(ctxHttp.body) === 40 || ctxLines(ctxHttp.body));
+
+    const allHttp = await post('/api/git/diff', { path: 'ctx.txt', context: 'all' });
+    check("HTTP 透传 context='all'", () => (allHttp.status === 200 && allHttp.body?.context === 'all') || JSON.stringify(allHttp.body).slice(0, 200));
+
+    const execHttp = await post('/api/git/restore-all', { planned: true, deleteUntracked: true });
+    check('planned + 授权 → 真的执行了', () => (execHttp.status === 200 && execHttp.body?.ok === true && execHttp.body.restored.length >= 2) || JSON.stringify(execHttp.body).slice(0, 300));
+    check('执行后未跟踪文件被删掉', () => !fs.existsSync(path.join(REPO2, 'http-new.txt')));
+    check('执行后 mod.txt 回到 Git 版本', () => fs.readFileSync(path.join(REPO2, 'mod.txt'), 'utf8') === 'v1\n');
+
+    const stagedHttp = await post('/api/git/restore-all', { planned: true });
+    check('planned 但不给 unstage → 不碰 index（此处已无暂存内容，故为 total:0 或 kept）', () => {
+      const b = stagedHttp.body || {};
+      return b.ok === true || JSON.stringify(b).slice(0, 200);
+    });
+
+    const restoreHttp = await post('/api/git/restore', { path: 'mod.txt', unstage: true });
+    check('单文件 restore 也接受 unstage 参数', () => (restoreHttp.status === 200 && restoreHttp.body?.ok === false) || JSON.stringify(restoreHttp.body).slice(0, 200));
+  } else {
+    note('restore-all 的 HTTP 用例：服务器没能起来');
+  }
+  killServer(srv);
+  srv = null;
+
+  /* ==================================================================
+   * 15. 静态守卫：写操作路径不许出现危险命令
+   *
+   * 这一段不跑 git，只扫 lib/git.js 的源码。
+   * 存在的理由：v0.4.0 给写路径加了「取消暂存」（会动 index），
+   * 而这一层一旦有人顺手用上 `git reset --hard` / `git clean -fd` /
+   * `shell: true`，前面所有「只撤销该撤销的」的设计就全部作废 ——
+   * 而且这种改动在功能测试里**看不出来**（它「能用」，只是会毁掉未提交的工作）。
+   * 所以用几条结构性断言把它钉住。
+   * ================================================================== */
+
+  console.log('\n=== 15. 静态守卫：写操作路径不许出现危险命令 ===');
+
+  const gitSrc = fs.readFileSync(path.join(ROOT, 'lib', 'git.js'), 'utf8');
+  /* 先剥注释。文件里**故意**写着「不用 reset --hard / clean -fd」这类说明，
+   * 不剥的话这些说明文字会把断言判失败 —— 同一个坑在 preload 那边踩过一次。 */
+  const gitCode = gitSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+
+  check('不开 shell（参数只经数组传递）', () => !/shell:\s*true/.test(gitCode) || '出现了 shell: true');
+  check('spawn 显式写出 shell: false', () => /shell:\s*false/.test(gitCode) || '没有显式关掉 shell');
+  check('没有 reset --hard', () => !/reset[^\n]*--hard/.test(gitCode) || '出现了 reset --hard');
+  check('没有 clean -f / -fd', () => !/clean[^\n]*-[a-zA-Z]*f/.test(gitCode) || '出现了 git clean -f');
+  check('没有 checkout 整个工作区（checkout -- .）', () => !/checkout[^\n]*--\s*\./.test(gitCode) || '出现了整工作区 checkout');
+  check('不做 commit / push / pull / branch / merge / rebase', () =>
+    !/['"](commit|push|pull|branch|merge|rebase|stash)['"]/.test(gitCode) || '出现了超出职责的写操作');
+  check('git 参数里没有模板字符串拼接', () => !/gitArgs\(`/.test(gitCode) && !/`\s*git\s/.test(gitCode) || 'git 参数是拼出来的');
+  check('本模块不做文件写入（只有删未跟踪文件的 unlink）', () =>
+    !/writeFileSync|appendFileSync|rmSync|rmdirSync|mkdirSync|createWriteStream/.test(gitCode) || '出现了文件写入');
+  check('applyRestore 用项目根解析路径，不信任 entry 里的字符串', () =>
+    /path\.resolve\(projectReal,\s*entry\.path\)/.test(gitCode) || '路径没有用项目根解析');
+  check('单文件撤销仍走 resolveProjectPath 校验', () =>
+    /export async function gitRestore\([\s\S]*?resolveProjectPath\(projectRoot,\s*relPath\)/.test(gitCode) ||
+    'gitRestore 没有做路径校验');
 
   finish();
 
