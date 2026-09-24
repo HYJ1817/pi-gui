@@ -270,6 +270,48 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   overflow-x:auto;color:#c8c8c8;
 }
 .msg-body pre.code code{background:none;border:0;padding:0;color:inherit;font-size:12px}
+/* 语言标签：用 data-lang + ::before 而不是额外包一层 DOM，
+   这样 <pre class="code"> 的结构保持不变（既有样式和测试都不用动）。 */
+.msg-body pre.code[data-lang]{position:relative;padding-top:22px}
+.msg-body pre.code[data-lang]::before{
+  content:attr(data-lang);position:absolute;top:6px;right:10px;
+  font-size:10px;letter-spacing:.4px;color:var(--t3);text-transform:lowercase;
+}
+/* diff 逐行着色：行首字符决定类型，跟 git 的习惯一致 */
+.msg-body pre.code .d-add{color:#3dd68c}
+.msg-body pre.code .d-del{color:#e06c75}
+.msg-body pre.code .d-hunk{color:#7aa2f7}
+
+/* 链接：只可能是本文件生成的白名单链接（见 markdown.js 的安全模型） */
+.msg-body a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(232,163,61,.35)}
+.msg-body a:hover{border-bottom-color:var(--accent)}
+.msg-body em{font-style:italic;color:#e2e2e2}
+.msg-body del{color:var(--t3)}
+.msg-body hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+.msg-body blockquote{
+  margin:10px 0;padding:2px 0 2px 12px;border-left:2px solid #333;color:#a8a8a8;
+}
+.msg-body blockquote>*:last-child{margin-bottom:0}
+
+/* 表格：外层 div 负责横向滚动，否则宽表会把对话区撑破 */
+.msg-body .md-table{margin:10px 0;overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.msg-body .md-table table{border-collapse:collapse;width:100%;font-size:12.5px}
+.msg-body .md-table th,.msg-body .md-table td{
+  padding:6px 11px;text-align:left;border-bottom:1px solid var(--line-soft);white-space:nowrap;
+}
+.msg-body .md-table thead th{background:#181818;color:var(--t2);font-weight:600;font-size:11.5px}
+.msg-body .md-table tbody tr:last-child td{border-bottom:0}
+
+/* 任务列表：画一个方框，勾选态用琥珀色对勾 */
+.msg-body .md-task{
+  display:inline-block;width:11px;height:11px;margin-right:6px;vertical-align:-1px;
+  border:1px solid #4a4a4a;border-radius:3px;position:relative;
+}
+.msg-body .md-task.on{background:var(--accent);border-color:var(--accent)}
+.msg-body .md-task.on::after{
+  content:"";position:absolute;left:3px;top:.5px;width:3px;height:6px;
+  border:solid #171717;border-width:0 1.6px 1.6px 0;transform:rotate(45deg);
+}
 
 .think{border-left:2px solid #333;padding:2px 0 2px 12px;margin:0 0 12px;color:#7d7d7d;font-size:12.5px;line-height:1.7}.think-head{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;color:var(--t3);font-size:11.5px;padding:2px 0}
 .think-head:hover{color:var(--t2)}

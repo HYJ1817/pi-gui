@@ -74,6 +74,7 @@ function main() {
   console.log(`  资源 ${Object.keys(assets).length} 项`);
 
   /* 2. 打包服务端代码 */
+  const pkgVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
   esbuild.buildSync({
     entryPoints: [path.join(ROOT, 'server.js')],
     bundle: true,
@@ -82,7 +83,12 @@ function main() {
     target: 'node22',
     outfile: path.join(BUILD, 'server.cjs'),
     // 打包后是单文件，import.meta.url 在 CJS 下会变空，用 banner 注入真实路径
-    define: { 'import.meta.url': '__SEA_URL__' },
+    define: {
+      'import.meta.url': '__SEA_URL__',
+      // /api/health 要报版本号，而打包后没有 package.json 可读（SEA 里没有这个文件）。
+      // 构建期把字面量写死进代码，开发时 server.js 走 typeof 兜底读磁盘。
+      __PI_GUI_VERSION__: JSON.stringify(pkgVersion),
+    },
     banner: { js: 'var __SEA_URL__=require("url").pathToFileURL(__filename).href;' },
     logLevel: 'warning',
   });

@@ -25,7 +25,7 @@ if (process.env.ELECTRON_RUN_AS_NODE && process.versions.electron) {
   return;
 }
 
-const { app, BrowserWindow, Menu, shell, dialog, screen } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, screen, session } = require('electron');
 
 if (!app || typeof app.whenReady !== 'function') {
   console.error(
@@ -36,13 +36,32 @@ if (!app || typeof app.whenReady !== 'function') {
   process.exit(1);
 }
 const { spawn } = require('node:child_process');
-const net = require('node:net');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const fs = require('node:fs');
+
+/* 端口探测与导航判定抽在 net-probe.cjs —— 那部分是纯逻辑，
+ * 抽出来才能在没有 GUI 的环境下直接测（见 tests/electron-guard.cjs）。
+ * 身份常量也从那里取，避免两处各写一份写歪。 */
+const {
+  getJson,
+  probe: probeExistingServer,
+  isSelfUrl: isSelfUrlOf,
+  isSafeExternal,
+} = require('./net-probe.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const ROOT = path.resolve(__dirname, '..');
+
+/* 本进程与后端之间的共享令牌。
+ *
+ * 每个实例现生成一份随机值，经环境变量交给后端，再由下面的
+ * installTokenHeader() 统一给发往本后端的请求加头。
+ * 这样做的关键收益：**token 从不进入渲染进程**。页面拿不到它，
+ * 于是即便页面里有 XSS，也偷不走；同时也满足「不打印、不进 URL、不落盘」。 */
+const AUTH_TOKEN = crypto.randomBytes(32).toString('hex');
+const TOKEN_HEADER = 'X-Pi-Gui-Token';
 
 let win = null;
 let server = null;
@@ -74,33 +93,69 @@ function serverCommand() {
   return { cmd: process.execPath, args: [path.join(ROOT, 'server.js')], cwd: ROOT };
 }
 
-/** 端口上有没有人在听 —— 用来复用已经在跑的服务，而不是硬起第二个。 */
-function isPortOpen(timeout = 500) {
-  return new Promise((resolve) => {
-    const sock = net.connect({ port: PORT, host: '127.0.0.1' });
-    const done = (v) => {
-      sock.destroy();
-      resolve(v);
-    };
-    sock.setTimeout(timeout);
-    sock.once('connect', () => done(true));
-    sock.once('error', () => done(false));
-    sock.once('timeout', () => done(false));
-  });
+/* 端口探测（isPortOpen / getJson / probeExistingServer）见 net-probe.cjs。
+ * 这里只保留一个绑定到本实例端口的薄封装，调用点读起来更顺。 */
+const probePort = (timeout) => probeExistingServer(ORIGIN, PORT, timeout);
+const isSelfUrl = (url) => isSelfUrlOf(url, ORIGIN);
+
+/** 复用之前还要确认「用得了」。
+ *
+ * 身份对得上 ≠ 令牌对得上：如果那个后端是**另一个 Pi GUI 实例**留下的
+ * （上一份进程崩了、后端成了孤儿），它认的是那个实例的令牌，我们发什么都 401。
+ * 这时候硬复用只会得到一个「界面能开、所有操作都失败」的壳子，
+ * 所以要提前查出来并明确报错。 */
+async function verifyAccess(timeout = 1500) {
+  const r = await getJson(`${ORIGIN}/api/status`, timeout, { [TOKEN_HEADER]: AUTH_TOKEN });
+  if (r.status === 401) return { ok: false, reason: 'token' };
+  if (!r.ok) return { ok: false, reason: 'http', detail: r.detail || `HTTP ${r.status}` };
+  return { ok: true };
 }
 
 async function waitForServer(ms = 25000) {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
-    if (await isPortOpen()) return true;
+    const probe = await probePort(500);
+    if (probe.state === 'pi-gui') return true;
+    // 端口被别的程序抢了，再等也不会变好
+    if (probe.state === 'foreign-service') return false;
     if (server && server.exitCode !== null) return false; // 子进程已经挂了，再等也没用
     await new Promise((r) => setTimeout(r, 150));
   }
   return false;
 }
 
+/** 端口被别的程序占用时的统一提示。
+ *  必须同时给出「关掉占用程序」和「换端口」两条出路，否则用户只能干瞪眼。 */
+function foreignServiceMessage(detail) {
+  return (
+    `端口 ${PORT} 已被其他程序占用，请关闭占用程序或通过 PORT 环境变量修改 Pi GUI 端口。\n\n` +
+    `（探测到该端口上有服务在监听，但它不是 Pi GUI：${detail || '身份不匹配'}）`
+  );
+}
+
 async function ensureServer() {
-  if (await isPortOpen()) return { reused: true };
+  const probe = await probePort();
+
+  if (probe.state === 'pi-gui') {
+    const access = await verifyAccess();
+    if (!access.ok) {
+      const why =
+        access.reason === 'token'
+          ? '它的访问令牌与本实例不一致（通常意味着那是一个残留的 Pi GUI 后端进程）。'
+          : `它没有正常响应：${access.detail}`;
+      throw new Error(
+        `${ORIGIN} 上已经有一个 Pi GUI 后端在运行，但本实例用不了它。\n\n` +
+          `${why}\n\n` +
+          `请先结束那个进程（或在任务管理器里结束残留的 electron / node 进程），` +
+          `或者用 PORT 环境变量换一个端口再启动。`
+      );
+    }
+    return { reused: true, version: probe.version };
+  }
+
+  if (probe.state === 'foreign-service') {
+    throw new Error(foreignServiceMessage(probe.detail));
+  }
 
   const { cmd, args, cwd } = serverCommand();
   server = spawn(cmd, args, {
@@ -110,6 +165,9 @@ async function ensureServer() {
       ELECTRON_RUN_AS_NODE: '1', // 让 electron.exe 以纯 Node 身份跑后端
       PI_GUI_OPEN: '0', // 桌面版自己有窗口，别再去开浏览器
       PORT: String(PORT),
+      // 本实例的访问令牌。后端据此要求所有 /api/* 带令牌，
+      // 而令牌只经由下面的 installTokenHeader() 注入到请求头里。
+      PI_GUI_TOKEN: AUTH_TOKEN,
       // projects.json 和上传缓存要写到可写的地方。默认是应用安装目录，
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
@@ -130,9 +188,23 @@ async function ensureServer() {
   });
 
   if (!(await waitForServer())) {
+    // 起不来的原因可能不止一个，所以这里再探一次，把「被占了」和「自己崩了」分开说
+    const again = await probePort(500);
+    if (again.state === 'foreign-service') throw new Error(foreignServiceMessage(again.detail));
     throw new Error(`后端服务没能在 ${PORT} 端口起来。\n\n${log.join('').trim() || '（没有任何输出）'}`);
   }
   return { reused: false };
+}
+
+/** 给发往本后端的请求统一加上令牌头。
+ *
+ * 放在主进程（而不是页面里用 fetch 包装）的理由：渲染进程永远拿不到令牌，
+ * 因此页面上的任何脚本 —— 包括被注入的 —— 都无法读取或伪造它。
+ * 同时也省掉一个 preload 脚本，Electron 这一层继续保持「薄壳」。 */
+function installTokenHeader() {
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`${ORIGIN}/*`] }, (details, callback) => {
+    callback({ requestHeaders: { ...details.requestHeaders, [TOKEN_HEADER]: AUTH_TOKEN } });
+  });
 }
 
 /** 连同 pi 子进程一起收掉。只 kill 父进程会把 pi 留成孤儿。 */
@@ -333,6 +405,37 @@ function scheduleSaveWindowState() {
   stateTimer = setTimeout(saveWindowState, 400);
 }
 
+/* ---------- 导航与链接的收口 ---------- */
+
+/* isSelfUrl / isSafeExternal 的判定实现在 net-probe.cjs（纯逻辑，可单测）。
+ * 这里只负责把本实例的 ORIGIN 绑进去。 */
+
+/** 把「窗口只能待在自家页面里」这条规则钉死。
+ *
+ * 挂在 app 的 web-contents-created 上而不是 win.webContents 上：
+ * 前者对**每一个** webContents 生效，以后万一多出别的窗口/预览面板，
+ * 不用记得再去补一遍 —— 漏补一次就等于开了一个导航缺口。
+ *
+ * 三条路径都要堵：
+ *   - window.open / target=_blank  → setWindowOpenHandler 直接 deny
+ *   - window.location / <a href>   → will-navigate 拦下
+ *   - 服务端 30x 跳转              → will-redirect 拦下（它不走 will-navigate） */
+function hardenWebContents(wc) {
+  wc.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternal(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  const guard = (e, url) => {
+    if (isSelfUrl(url)) return; // 自己的页面随便跳
+    e.preventDefault();
+    if (isSafeExternal(url)) shell.openExternal(url);
+  };
+
+  wc.on('will-navigate', guard);
+  wc.on('will-redirect', guard);
+}
+
 function createWindow() {
   // 打包后 exe 自己就带着图标，这个参数只在开发时有用
   const iconFile = path.join(ROOT, 'build', 'icon.ico');
@@ -437,17 +540,7 @@ function createWindow() {
     );
   });
 
-  // 站外链接一律交给系统浏览器，别把应用窗口导航走
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/i.test(url)) shell.openExternal(url);
-    return { action: 'deny' };
-  });
-  win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(ORIGIN)) {
-      e.preventDefault();
-      shell.openExternal(url);
-    }
-  });
+  // 站外链接与导航的收口见下面的 hardenWebContents()（挂在 app 级事件上）
 
   /* 应用菜单被藏掉了，快捷键就得自己接。
    *
@@ -505,8 +598,14 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
 
+  /* 所有 webContents 的导航规则统一在这里钉死（见 hardenWebContents 的说明）。
+   * 放在 app 级而不是逐个窗口上，是为了以后新增窗口时不会漏掉。 */
+  app.on('web-contents-created', (_e, wc) => hardenWebContents(wc));
+
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    // 令牌头的注入必须赶在窗口发第一个请求之前装好
+    installTokenHeader();
     // 用户数据目录先建出来 —— 后端启动就要往里写 projects.json
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true });
@@ -516,6 +615,9 @@ if (!app.requestSingleInstanceLock()) {
     try {
       await ensureServer();
     } catch (err) {
+      /* 注意：走到这里绝不能再去 loadURL。
+       * 端口被别的程序占用时把窗口指向那个端口，用户会看到一个陌生的页面
+       * 加一堆查不出原因的 API 报错 —— 那比直接报错难排查得多。 */
       dialog.showErrorBox('Pi GUI 启动失败', String(err.message || err));
       app.exit(1);
       return;

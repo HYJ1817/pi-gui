@@ -232,7 +232,7 @@ async function launchInstalled() {
   });
   check('主程序已落地', () => fs.existsSync(path.join(INSTALL, EXE)) || '没找到 ' + EXE);
   check('随包资源齐全（resources/app）', () =>
-    ['main.cjs', 'server.cjs', 'public/index.html', 'pdfjs/cmaps'].every((f) =>
+    ['main.cjs', 'net-probe.cjs', 'server.cjs', 'public/index.html', 'pdfjs/cmaps'].every((f) =>
       fs.existsSync(path.join(INSTALL, 'resources', 'app', f))
     ) || 'resources/app 下缺东西'
   );

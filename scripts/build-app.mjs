@@ -73,7 +73,12 @@ fs.writeFileSync(
   path.join(STAGE, 'package.json'),
   JSON.stringify({ name: 'pi-gui', productName: APP_NAME, version: VERSION, main: 'main.cjs' }, null, 2)
 );
-fs.copyFileSync(path.join(ROOT, 'electron', 'main.cjs'), path.join(STAGE, 'main.cjs'));
+/* 主进程相关的 .cjs 全部带上 —— main.cjs 会 require 同目录的 net-probe.cjs，
+ * 少带一个就是「打包后启动即崩、开发时完全正常」的经典形态。
+ * 用遍历而不是逐个 copyFileSync：以后再加同目录模块不必记得回来补一行。 */
+for (const f of fs.readdirSync(path.join(ROOT, 'electron')).filter((n) => n.endsWith('.cjs'))) {
+  fs.copyFileSync(path.join(ROOT, 'electron', f), path.join(STAGE, f));
+}
 fs.copyFileSync(serverCjs, path.join(STAGE, 'server.cjs'));
 fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset-manifest.json'));
 

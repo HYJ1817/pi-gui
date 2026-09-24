@@ -79,7 +79,7 @@ async function until(fn, ms, label) {
     fs.existsSync(path.join(APP_DIR, EXE)) || 'exe 不在解压出来的目录里'
   );
   check('随包资源齐全', () =>
-    ['resources/app/main.cjs', 'resources/app/server.cjs', 'resources/app/public/index.html'].every((f) =>
+    ['resources/app/main.cjs', 'resources/app/net-probe.cjs', 'resources/app/server.cjs', 'resources/app/public/index.html'].every((f) =>
       fs.existsSync(path.join(APP_DIR, f))
     ) || 'resources/app 下缺东西'
   );

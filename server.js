@@ -19,6 +19,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { extract, clampInline, maxBytes } from './lib/extract.js';
@@ -35,6 +36,31 @@ const DATA_DIR = process.env.PI_GUI_DATA || __dirname;
 const PORT = Number(process.env.PORT || 7788);
 const PI_BIN = process.env.PI_BIN || 'pi';
 const IS_WIN = process.platform === 'win32';
+
+/* 应用身份。
+ *
+ * Electron 启动时要判断「7788 上跑的到底是不是 Pi GUI」，而不是
+ * 「7788 上有没有人监听」—— 后者会把任何一个恰好占了这个端口的程序
+ * 当成自己的后端，然后加载出一个别人的页面。判断依据就是这两个字段。 */
+const APP_ID = 'pi-gui';
+const PROTOCOL = 1;
+
+/* 版本号。
+ *
+ * 构建脚本用 esbuild `--define:__PI_GUI_VERSION__` 注入 —— 打包后没有
+ * package.json 可读（SEA 里根本没有这个文件，Electron 的 resources/app
+ * 那份是构建时另写的精简版）。直接 `node server.js` 开发时没有这个常量，
+ * 退回读磁盘上的 package.json。
+ * 注意 `typeof` 对未声明的标识符是合法的，不会抛 ReferenceError。 */
+const VERSION = typeof __PI_GUI_VERSION__ === 'undefined' ? readOwnVersion() : __PI_GUI_VERSION__;
+
+function readOwnVersion() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
 
 // pi 的用户级自定义供应商配置。
 // 注意：这是「用户配置」，与 pi 自身的 models-store.json（模型目录缓存）不是一回事。
@@ -126,9 +152,17 @@ function publish(event) {
  * （args 只拼接不转义），每次启动刷两行弃用警告，双击启动时看着像报错。
  * 改成按 Node 文档认可的方式自己拼一条命令字符串 —— 实测不再报警告。 */
 function spawnPi(bin, args) {
+  /* 把访问令牌从 pi 的环境里摘掉。
+   *
+   * pi 自带 bash 工具，环境变量对它（以及它跑的任何命令）都是可读的。
+   * 令牌一旦被读进工具输出，就会随对话内容一起进模型上下文 —— 属于
+   * 没必要存在的暴露面。pi 本身也不需要这个变量。 */
+  const env = { ...process.env };
+  delete env.PI_GUI_TOKEN;
+
   const opts = {
     cwd: currentCwd,
-    env: process.env,
+    env,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   };
@@ -254,6 +288,64 @@ const MIME = {
 function json(res, code, payload) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(payload));
+}
+
+/* ---------- 本地访问控制 ---------- */
+
+/* 这个服务的权限相当大：能把任意命令写进 pi 的 stdin（pi 自带 bash 工具）、
+ * 能读写项目文件、能改 ~/.pi/agent/models.json、能接收文件上传。
+ *
+ * 「只监听 127.0.0.1」并不足够 —— CORS 只拦「读响应」，不拦「发请求」，
+ * 所以用户浏览器里打开的任意网页都能向 127.0.0.1:7788 发 POST。
+ * 于是加两层：
+ *
+ *   1. Origin 校验。带了 Origin 且不是自己人，直接拒。挡掉网页发起的跨站请求。
+ *      只在自己这个端口上服务页面，所以「同源」= 自己人，判据很干净。
+ *
+ *   2. 共享令牌。桌面版由 Electron 生成 32 字节随机 token，经环境变量传进来，
+ *      再由主进程用 webRequest 统一给发往本后端的请求加头 —— 于是 token
+ *      不进页面、不进 URL、不进日志、不落盘。浏览器里根本拿不到它。
+ *
+ * 没设令牌时退化成「开发模式」：只做 Origin 校验，启动日志会明确写出来。
+ * 这样 `npm start` 的纯浏览器开发流程完全不受影响。 */
+const AUTH_TOKEN = String(process.env.PI_GUI_TOKEN || '').trim();
+const TOKEN_HEADER = 'x-pi-gui-token';
+const SELF_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]);
+
+/** 定长比较，避免按字符前缀提前返回。长度不等直接判否。 */
+function tokenEquals(a, b) {
+  const x = Buffer.from(String(a), 'utf8');
+  const y = Buffer.from(String(b), 'utf8');
+  if (x.length !== y.length) return false;
+  return crypto.timingSafeEqual(x, y);
+}
+
+/** 返回 null 表示放行；否则返回 {code, error}。
+ *  错误信息里**不回显**收到的值，也不回显令牌本身。 */
+function denyRequest(req) {
+  const origin = req.headers.origin;
+  if (origin && !SELF_ORIGINS.has(origin)) {
+    return { code: 403, error: '拒绝来自其他站点的请求' };
+  }
+  if (!AUTH_TOKEN) return null;
+
+  const header = req.headers[TOKEN_HEADER];
+  const auth = String(req.headers.authorization || '');
+  const bearer = /^Bearer\s+/i.test(auth) ? auth.replace(/^Bearer\s+/i, '') : '';
+  const given = String((Array.isArray(header) ? header[0] : header) || bearer || '').trim();
+
+  if (given && tokenEquals(given, AUTH_TOKEN)) return null;
+  return { code: 401, error: '缺少或无效的访问令牌' };
+}
+
+/* 身份探测端点：**免认证**。
+ *
+ * Electron 要在「还没建立任何信任」之前就问出「这个端口上是不是 Pi GUI」，
+ * 所以它必须无门槛 —— 否则拿不到令牌的探测请求会被 401，而 401 恰恰
+ * 也是一个「不是随便什么服务」的信号，会让 foreign-service 的判定变模糊。
+ * 这里暴露的信息只有应用名、协议号和版本号，不构成风险。 */
+function handleHealth(res) {
+  return json(res, 200, { ok: true, app: APP_ID, protocol: PROTOCOL, version: VERSION });
 }
 
 // ---------- 供应商配置（~/.pi/agent/models.json） ----------
@@ -852,6 +944,17 @@ function handleProviderModels(req, res) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
+  // 身份探测：必须排在鉴权之前（见 handleHealth 的说明）
+  if (url.pathname === '/api/health' && req.method === 'GET') return handleHealth(res);
+
+  /* 其余 /api/* 一律先过访问控制。
+   * 注意是「全部」而不是挑几个敏感的 —— 逐个列敏感项迟早会漏一个，
+   * 而漏掉的那个正好是新加的功能。静态资源不受影响。 */
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    const denied = denyRequest(req);
+    if (denied) return json(res, denied.code, { ok: false, error: denied.error });
+  }
+
   if (url.pathname === '/api/events' && req.method === 'GET') return handleEvents(req, res);
   if (url.pathname === '/api/command' && req.method === 'POST') return handleCommand(req, res);
   if (url.pathname === '/api/status' && req.method === 'GET') {
@@ -962,12 +1065,22 @@ server.on('error', (err) => {
 });
 
 startPi();
+/* 显式绑定回环地址。
+ *
+ * 不要依赖 Node 的默认行为，也不要写 '0.0.0.0' —— 这个服务能驱动 pi 执行
+ * 任意命令，一旦暴露到局域网就是一台无认证的远程 shell。
+ * 日志里也只用 127.0.0.1，不给任何「可以从别的机器访问」的暗示。 */
 server.listen(PORT, '127.0.0.1', () => {
   console.log('');
   console.log('  Pi GUI 已启动');
   console.log(`  → http://127.0.0.1:${PORT}`);
   console.log(`  → 工作目录: ${currentCwd || '（未选择 —— 在界面里「添加文件夹」）'}`);
   if (currentCwd) console.log(`  → pi 子进程: ${PI_BIN} ${buildPiArgs().join(' ')}`);
+  console.log(
+    AUTH_TOKEN
+      ? '  → 访问控制: 令牌校验已启用（由桌面端注入，浏览器直连会被拒）'
+      : '  → 访问控制: 开发模式（未配置令牌，仅校验请求来源；仅供本机开发使用）'
+  );
   console.log('');
   if (AUTO_OPEN) openBrowser(`http://127.0.0.1:${PORT}`);
 });

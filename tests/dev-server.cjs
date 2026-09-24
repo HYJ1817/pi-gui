@@ -93,10 +93,54 @@ async function waitReady(ms = 20000) {
       () => /\[hidden\]\s*\{[^}]*display\s*:\s*none\s*!important/.test(css.body) || '缺少 [hidden]{display:none !important}'
     );
 
+    /* 前端是原生 ES Module：app.js 只是入口，真正的代码在同目录的一堆模块里
+     * （含 public/ui/ 子目录）。所以这里不能只看 app.js 的大小 ——
+     * 要顺着 import 把整张图走一遍，逐个确认能被静态托管出去。
+     * 嵌套路径（/ui/modal.js）和 SEA 内嵌资源都是新的失败面，值得盯。 */
     const js = await get('/app.js');
     check('app.js 200', () => js.status === 200 || '状态 ' + js.status);
-    check('app.js 有内容', () => js.body.length > 50000 || '只有 ' + js.body.length + ' 字节');
     check('app.js 不是 HTML 兜底', () => !js.body.includes('<title>') || '返回了 HTML');
+    check('app.js 是模块入口（含 import）', () => /^\s*import\s/m.test(js.body) || '没看到 import 语句');
+
+    const seen = new Set();
+    const queue = ['/app.js'];
+    const specRe = /^\s*import\s*\{[\s\S]*?\}\s*from\s*['"](\.[^'"]+)['"]/gm;
+    let total = 0;
+    const bad = [];
+
+    while (queue.length) {
+      const p = queue.shift();
+      if (seen.has(p)) continue;
+      seen.add(p);
+
+      const r = await get(p);
+      if (r.status !== 200) {
+        bad.push(`${p} → ${r.status}`);
+        continue;
+      }
+      if (r.body.includes('<title>')) {
+        bad.push(`${p} → 返回了 HTML`);
+        continue;
+      }
+      total += r.body.length;
+
+      // 相对说明符 → 绝对路径（只用到 './x.js' 与 '../y.js' 两种，够用）
+      const dir = p.replace(/\/[^/]*$/, '');
+      for (const m of r.body.matchAll(specRe)) {
+        const parts = (dir + '/' + m[1]).split('/');
+        const stack = [];
+        for (const seg of parts) {
+          if (!seg || seg === '.') continue;
+          if (seg === '..') stack.pop();
+          else stack.push(seg);
+        }
+        queue.push('/' + stack.join('/'));
+      }
+    }
+
+    check('前端模块图能全部取到', () => (bad.length ? bad.join(', ') : true));
+    check(`模块图共 ${seen.size} 个文件`, () => seen.size >= 10 || '只取到 ' + seen.size + ' 个');
+    check('模块图总量够大（不是空壳）', () => total > 50000 || '合计只有 ' + total + ' 字节');
 
     const missing = await get('/nope-does-not-exist.js');
     check('不存在的文件返回 404', () => missing.status === 404 || '状态 ' + missing.status);

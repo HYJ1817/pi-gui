@@ -96,7 +96,7 @@ async function main() {
     return hit ? `意外找到 ${hit}\\node_modules` : true;
   });
   check('随包资源齐全', () => {
-    for (const p of ['server.cjs', 'main.cjs', 'asset-manifest.json', 'pdfjs/standard_fonts', 'pdfjs/cmaps', 'pdfjs/worker/pdf.worker.mjs']) {
+    for (const p of ['server.cjs', 'main.cjs', 'net-probe.cjs', 'asset-manifest.json', 'pdfjs/standard_fonts', 'pdfjs/cmaps', 'pdfjs/worker/pdf.worker.mjs']) {
       if (!fs.existsSync(path.join(SANDBOX, p))) return '缺 ' + p;
     }
     return true;

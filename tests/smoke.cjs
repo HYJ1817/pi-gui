@@ -1,12 +1,21 @@
-/* Pi GUI 前端冒烟测试：在 jsdom 里真实加载 index.html + app.js，
- * 用假的 EventSource / fetch 灌入 pi 的 RPC 事件，检查渲染结果与报错。 */
+/* Pi GUI 前端冒烟测试：在 jsdom 里真实加载 index.html + 前端模块图，
+ * 用假的 EventSource / fetch 灌入 pi 的 RPC 事件，检查渲染结果与报错。
+ *
+ * 前端是原生 ES Module（public/app.js + 若干模块），而 jsdom 不支持 ESM，
+ * 所以先用 tests/esm-bundle.cjs 把模块图链接成一份普通脚本再 window.eval。
+ * 附带好处是模块的具名导出都会挂到 window 上，断言可以直接调内部函数。 */
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
+const { bundle } = require('./esm-bundle.cjs');
 
 const PUB = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
-const code = fs.readFileSync(path.join(PUB, 'app.js'), 'utf8');
+const bundled = bundle(path.join(PUB, 'app.js'));
+const code = bundled.code;
+/* 静态检查要读**原始**源码（未被链接器改写过），否则 `export ` 前缀被剥掉之后
+ * 那些按源码形态写的正则就对不上了。 */
+const sources = bundled.sources;
 
 const errors = [];
 const commands = [];
@@ -121,16 +130,21 @@ function check(name, fn) {
   }
 }
 
-/* --- 静态检查：el.X 必须在 el 对象里，$('id') 必须在 HTML 里 --- */
+/* --- 静态检查：el.X 必须在 el 对象里，$('id') 必须在 HTML 里 ---
+ * 扫的是全部模块的源码：`el` 定义在 state.js、引用散落在各模块，
+ * 只看 app.js 会漏掉绝大多数。 */
 function staticCheck() {
-  const elBlock = code.match(/const el = \{([\s\S]*?)\n\};/);
+  const elBlock = sources.match(/const el = \{([\s\S]*?)\n\};/);
+  check('找得到 el 定义', () => (elBlock ? true : 'state.js 里没有 const el = {…}'));
+  if (!elBlock) return;
+
   const keys = new Set([...elBlock[1].matchAll(/^\s*([a-zA-Z0-9_]+)\s*:/gm)].map((m) => m[1]));
-  const used = new Set([...code.matchAll(/\bel\.([a-zA-Z0-9_]+)/g)].map((m) => m[1]));
+  const used = new Set([...sources.matchAll(/\bel\.([a-zA-Z0-9_]+)/g)].map((m) => m[1]));
   const missing = [...used].filter((k) => !keys.has(k));
   check('el 对象覆盖全部引用', () => (missing.length ? '缺失: ' + missing.join(', ') : true));
 
   const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
-  const wanted = new Set([...code.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]));
+  const wanted = new Set([...sources.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]));
   const noId = [...wanted].filter((k) => !ids.has(k));
   check("$('id') 全部存在于 HTML", () => (noId.length ? '缺失: ' + noId.join(', ') : true));
 }
@@ -279,6 +293,42 @@ staticCheck();
   check('partialResult 为累积值', () => window.document.querySelector('.tool-out').textContent === 'a\nb\nc\n');
   es.emit({ type: 'tool_execution_end', toolCallId: 't1', isError: false, result: { content: [{ type: 'text', text: 'done' }] } });
   check('工具完成态', () => window.document.querySelector('.tool').classList.contains('done'));
+
+  // --- 文件变更账本（为 Diff/Git 预留的结构，当前不渲染 UI）---
+  check('非改动类工具不入账', () => window.listChanges().length === 0);
+  let changeEvents = 0;
+  const offChanges = window.onChanges(() => changeEvents++);
+  es.emit({ type: 'tool_execution_start', toolCallId: 'w1', toolName: 'write', args: { file_path: '/tmp/a.txt', content: 'x' } });
+  es.emit({ type: 'tool_execution_end', toolCallId: 'w1', isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
+  check('write 成功记入账本', () => window.listChanges().length === 1 && window.listChanges()[0].path === '/tmp/a.txt');
+  check('账本变化触发订阅', () => changeEvents === 1);
+  check('同文件重复改动累加计数', () => {
+    es.emit({ type: 'tool_execution_start', toolCallId: 'w2', toolName: 'edit', args: { file_path: '/tmp/a.txt', old_string: 'x', new_string: 'y' } });
+    es.emit({ type: 'tool_execution_end', toolCallId: 'w2', isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
+    const l = window.listChanges();
+    return l.length === 1 && l[0].count === 2 && l[0].tool === 'edit';
+  });
+  check('失败的工具不入账', () => {
+    es.emit({ type: 'tool_execution_start', toolCallId: 'w3', toolName: 'write', args: { file_path: '/tmp/b.txt' } });
+    es.emit({ type: 'tool_execution_end', toolCallId: 'w3', isError: true, result: { content: [{ type: 'text', text: 'boom' }] } });
+    return window.listChanges().some((c) => c.path === '/tmp/b.txt') === false;
+  });
+  check('对外给的是副本（改不动账本）', () => {
+    window.listChanges()[0].path = '篡改';
+    return window.listChanges()[0].path === '/tmp/a.txt';
+  });
+  check('clearChanges 清空账本', () => {
+    window.clearChanges();
+    return window.listChanges().length === 0;
+  });
+  check('取消订阅后不再触发', () => {
+    const before = changeEvents;
+    offChanges();
+    es.emit({ type: 'tool_execution_start', toolCallId: 'w4', toolName: 'write', args: { file_path: '/tmp/c.txt' } });
+    es.emit({ type: 'tool_execution_end', toolCallId: 'w4', isError: false, result: { content: [{ type: 'text', text: 'ok' }] } });
+    return changeEvents === before && window.listChanges().length === 1;
+  });
+  window.clearChanges();
 
   // --- 弹层：分支 ---
   $('navBranches').click();
@@ -525,6 +575,71 @@ staticCheck();
   check('行内代码仍然生效', () => md('看 `x` 这里').includes('<code>x</code>'));
   check('加粗仍然生效', () => md('**粗**').includes('<strong>粗</strong>'));
   check('HTML 被转义', () => md('<img src=x>').includes('&lt;img'));
+
+  // --- markdown 安全：模型输出是不可信输入，危险内容不得变成可执行 HTML ---
+  // 这里断言的是「结构性防护」：原文先整体转义，尖括号只可能来自渲染器自身。
+  // 所以判断标准不是「某几个向量被过滤」，而是「渲染结果里不存在非白名单活标签」。
+  const noLiveTag = (html) => !/<\s*(script|img|iframe|svg|object|embed|style|link|meta|form|input|base)\b/i.test(html);
+  check('原始 script 标签被转义', () => noLiveTag(md('<script>alert(1)</script>')) && md('<script>alert(1)</script>').includes('&lt;script'));
+  check('img + onerror 不产生活标签', () => noLiveTag(md('<img src=x onerror=alert(1)>')));
+  check('iframe 被转义', () => noLiveTag(md('<iframe src="https://evil.example"></iframe>')));
+  check('svg/onload 被转义', () => noLiveTag(md('<svg onload=alert(1)></svg>')));
+  check('不生成任何 on* 事件属性', () => !/<[a-z][^>]*\son\w+\s*=/i.test(md('<a href="#" onclick="alert(1)">x</a>')));
+  check('危险 scheme 一律不产生链接', () => {
+    const payloads = [
+      '[x](javascript:alert(1))',
+      '[x](JaVaScRiPt:alert(1))',
+      '[x](vbscript:msgbox(1))',
+      '[x](data:text/html;base64,PHNjcmlwdD4=)',
+      '[x](file:///etc/passwd)',
+      '[x](blob:https://a/b)',
+    ];
+    return payloads.every((p) => md(p).includes('<a') === false);
+  });
+  check('javascript: 链接退化成可读纯文本', () => {
+    const h = md('[点我](javascript:alert(1))');
+    return !h.includes('<a') && h.includes('点我') && h.includes('javascript:');
+  });
+  check('图片不产生远程加载', () => md('![x](https://evil.example/p.png)').includes('<img') === false);
+  check('http(s) 链接正常放行且带 noopener', () => {
+    const h = md('[官网](https://example.com/a?b=1)');
+    return h.includes('href="https://example.com/a?b=1"') && h.includes('rel="noopener noreferrer"');
+  });
+  check('相对链接放行', () => md('[本地](/docs/x)').includes('href="/docs/x"'));
+  check('混合脏输入不产生活标签', () => {
+    const dirty = [
+      '<div onclick="x">a</div>',
+      '<body onload=alert(1)>',
+      '<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>',
+      '<a href="javascript:alert(1)">go</a>',
+      '"><script>alert(1)</script>',
+    ];
+    // 注意：转义后的原文里 on* 仍以**字面文本**存在（无害），
+    // 所以只检测「真实标签内部」的事件属性，即 <tag ... on*= 。
+    return dirty.every((d) => noLiveTag(md(d)) && !/<[a-z][^>]*\son\w+\s*=/i.test(md(d)));
+  });
+
+  // --- markdown 新增能力 ---
+  check('表格渲染成 table', () => {
+    const h = md('| 名 | 值 |\n| --- | --- |\n| 甲 | 1 |');
+    return h.includes('<table>') && h.includes('<th>名</th>') && h.includes('<td>甲</td>');
+  });
+  check('表格对齐方式生效', () => md('| 左 | 右 |\n| :-- | --: |\n| a | b |').includes('text-align:right'));
+  check('正文里的竖线不误判成表格', () => md('a | b').includes('<table>') === false);
+  check('引用渲染成 blockquote', () => md('> 引用一行').includes('<blockquote>'));
+  check('分隔线渲染成 hr', () => md('---').includes('<hr>'));
+  check('一级标题也渲染成 h4', () => md('# 大标题').includes('<h4>大标题</h4>'));
+  check('嵌套列表塞进父 li 内', () => md('- 甲\n  - 甲一').includes('<li>甲<ul><li>甲一</li></ul></li>'));
+  check('任务列表未勾选', () => md('- [ ] 待办').includes('<span class="md-task"></span>待办'));
+  check('任务列表已勾选', () => md('- [x] 完成').includes('<span class="md-task on"></span>完成'));
+  check('删除线渲染成 del', () => md('~~旧~~').includes('<del>旧</del>'));
+  check('斜体渲染成 em', () => md('这是 *强调* 词').includes('<em>强调</em>'));
+  check('snake_case 不被当成斜体', () => md('变量 some_name_here 保持原样').includes('<em>') === false);
+  check('代码块带语言标签', () => md('```js\nlet a = 1\n```').includes('data-lang="js"'));
+  check('diff 代码块逐行着色', () => {
+    const h = md('```diff\n@@ -1 +1 @@\n-旧\n+新\n 不变\n```');
+    return h.includes('class="d-hunk"') && h.includes('class="d-del"') && h.includes('class="d-add"');
+  });
 
   // --- 发送 ---
   $('input').value = '跑一下测试';

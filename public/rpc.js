@@ -1,0 +1,155 @@
+/* pi 的 RPC 命令层：发命令、处理应答、以及由会话生命周期触发的动作。
+ *
+ * 约定（踩过的坑，别改回去）：
+ *   - 应答事件必须**同时**带 type:'response' 和 command:'xxx'。
+ *     只有 command 会被前端静默丢弃 —— 症状是「流式能渲染，但模型名/统计/对话区全空」。
+ *   - set_model 需要 provider + modelId 两个字段；只传 model 会报
+ *     "Model not found: <provider>/undefined"（官方文档没写）。
+ *   - pi 对非法的思考档位也回 {ok:true}（medium 被静默夹成 high、bogus 被忽略），
+ *     所以设置类命令一律**回读 get_state**，不然界面会显示一个 pi 根本没接受的值。 */
+
+import { el, S } from './state.js';
+import { absPath } from './util.js';
+import { sendCommand } from './api.js';
+import { toast } from './ui/toast.js';
+import { setStatus } from './shell.js';
+import { clearThread, rebuildFromMessages } from './messages.js';
+import { applyTree } from './tree.js';
+import { applyState, applyStats, onModels, onThinkingLevels } from './usage.js';
+import { autoGrow, updateSendState } from './composer.js';
+import { attachmentImages, buildMessage, renderAttachments } from './attachments.js';
+import { clearChanges } from './changes.js';
+
+/** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
+export function boot() {
+  sendCommand({ type: 'get_state' });
+  sendCommand({ type: 'get_session_stats' });
+  sendCommand({ type: 'get_tree' });
+  // 切换项目 / 重载配置后 pi 会恢复该目录的历史会话，用 get_messages 重建对话区
+  sendCommand({ type: 'get_messages' });
+  sendCommand({ type: 'get_available_models' });
+  sendCommand({ type: 'get_available_thinking_levels' });
+}
+
+export function onResponse(evt) {
+  if (!evt.success) {
+    if (evt.command !== 'get_available_thinking_levels') {
+      toast(evt.error || `命令 ${evt.command} 执行失败`, 'error');
+    }
+    // 设置类命令失败后，之前乐观更新的显示会与 pi 不一致，回读一次纠正
+    if (evt.command === 'set_model' || evt.command === 'set_thinking_level') sendCommand({ type: 'get_state' });
+    return;
+  }
+  const d = evt.data || {};
+  switch (evt.command) {
+    case 'get_state':
+      return applyState(d);
+    case 'get_session_stats':
+      return applyStats(d);
+    case 'get_tree':
+      return applyTree(d);
+    case 'get_messages':
+      return rebuildFromMessages(d);
+    case 'get_available_models':
+      return onModels(d);
+    case 'get_available_thinking_levels':
+      return onThinkingLevels(d);
+    case 'set_model':
+      if (d.name || d.id) el.modelText.textContent = d.name || d.id;
+      toast('已切换到 ' + (d.name || d.id), 'info');
+      return;
+    case 'new_session':
+      clearThread();
+      // 新会话意味着换了一条工作线，上一段的文件变更记录不再适用。
+      // 注意 fork 不清：分叉不改磁盘，之前改过的文件依然处于改动状态。
+      clearChanges();
+      toast('已开始新会话', 'info');
+      setTimeout(boot, 250);
+      return;
+    case 'fork':
+      clearThread();
+      toast('已从该节点分叉', 'info');
+      setTimeout(() => {
+        sendCommand({ type: 'get_messages' });
+        boot();
+      }, 250);
+      return;
+    case 'compact':
+      toast('上下文压缩完成', 'info');
+      return;
+    case 'export_html':
+      toast('已导出会话：' + absPath(d.path || ''), 'info');
+      return;
+    default:
+      return;
+  }
+}
+
+/* ---------- 会话动作 ---------- */
+
+export function respond(id, payload) {
+  sendCommand({ type: 'extension_ui_response', id, ...payload });
+}
+
+export async function submit() {
+  if (!S.hasProject) {
+    toast('还没有选择项目：先在左侧「添加文件夹」选一个目录。', 'info');
+    return;
+  }
+  const text = el.input.value.trim();
+  const atts = S.attachments.slice();
+  if (!text && !atts.length) return;
+
+  const message = buildMessage(text);
+  const images = attachmentImages();
+
+  el.input.value = '';
+  S.attachments = [];
+  renderAttachments();
+  autoGrow();
+  updateSendState();
+
+  const cmd = { message };
+  if (images.length) cmd.images = images;
+
+  if (S.streaming) {
+    // 运行中发送 → 作为引导消息插话
+    await sendCommand({ type: 'steer', ...cmd });
+    toast('已作为引导消息排队', 'info');
+  } else {
+    await sendCommand({ type: 'prompt', ...cmd });
+  }
+}
+
+export async function stop() {
+  if (!S.streaming) return;
+  await sendCommand({ type: 'abort' });
+  setStatus('已请求停止…');
+}
+
+export const newSession = () => sendCommand({ type: 'new_session' });
+
+export const forkFrom = (entryId) => sendCommand({ type: 'fork', entryId });
+
+export const exportHtml = () => sendCommand({ type: 'export_html' });
+
+export const setSessionName = (name) => sendCommand({ type: 'set_session_name', name });
+
+export function compactNow() {
+  sendCommand({ type: 'compact' });
+  toast('已请求压缩上下文', 'info');
+}
+
+/* 设置类命令：先乐观更新显示，再回读状态让 pi 说了算。
+ * 成功提示放在 onResponse 的 set_model 分支里 —— 点选时不抢先弹。 */
+export function setModel(provider, modelId, label) {
+  sendCommand({ type: 'set_model', provider, modelId });
+  if (label) el.modelText.textContent = label;
+  sendCommand({ type: 'get_state' });
+}
+
+export function setThinkingLevel(level) {
+  sendCommand({ type: 'set_thinking_level', level });
+  el.thinkText.textContent = '思考 ' + level;
+  sendCommand({ type: 'get_state' });
+}
