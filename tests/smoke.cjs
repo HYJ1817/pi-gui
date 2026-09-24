@@ -36,6 +36,27 @@ let es = null;
  * 置空就能模拟「还没选项目」—— 后端此时不启动 pi，界面要整体切到引导形态。 */
 let stubCwd = 'C:\\pi-GUI';
 
+/* /api/project-config 的可变桩。改 stubProjectConfig 就能模拟
+ * 「有配置 / 没项目 / 模型失效 / 环境变量钉住 / 配置读坏了」各种状态。 */
+const CFG_DEFAULTS = { version: 1, model: null, thinking: null, instructions: '', ignore: [], commands: [] };
+let stubProjectConfig = {
+  ok: true,
+  hasProject: true,
+  exists: true,
+  cwd: 'C:\\pi-GUI',
+  path: 'C:\\pi-GUI\\.pi-gui\\config.json',
+  config: { ...CFG_DEFAULTS },
+  warnings: [],
+  env: { provider: false, model: false, thinking: false },
+  thinkingLevels: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+  limits: { instructions: 32768 },
+  defaults: { ...CFG_DEFAULTS },
+};
+/* PUT 的应答桩；置为对象就能模拟「保存失败」。 */
+let stubSaveResult = null;
+/* 每次 /api/project-config 调用的流水（方法 + body）。 */
+const projectConfigCalls = [];
+
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
 const { window } = dom;
 
@@ -91,6 +112,25 @@ window.fetch = async (url, opts) => {
     const body = JSON.parse(opts.body);
     commands.push(body);
     return { json: async () => ({ ok: true }) };
+  }
+  if (u.includes('/api/project-config')) {
+    const isPut = Boolean(opts && opts.method === 'PUT');
+    const body = isPut && opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
+    projectConfigCalls.push({ method: isPut ? 'PUT' : 'GET', body });
+    if (isPut) {
+      if (stubSaveResult) return { json: async () => stubSaveResult };
+      return {
+        json: async () => ({
+          ok: true,
+          path: stubProjectConfig.path,
+          config: { ...CFG_DEFAULTS, ...body },
+          warnings: [],
+          restartRequired: false,
+          restarted: false,
+        }),
+      };
+    }
+    return { json: async () => stubProjectConfig };
   }
   if (u.includes('/api/projects')) {
     return {
@@ -2010,6 +2050,247 @@ staticCheck();
     if (panel.hidden !== true) return '拉取面板默认应该藏着';
     return true;
   });
+
+  /* --- 项目配置：偏好恢复 ---
+   *
+   * 这一段的重点是**降级路径**：项目配置里存的模型可能已经不存在了。
+   * 后端的做法是不把模型当启动参数传（过期引用会让 pi exit(1)，项目直接打不开），
+   * 前端的做法是先跟 get_available_models 核对，核对不过就沿用当前模型 + 提示一次。
+   * 所以这里盯的是「核对不过时**不发** set_model」，而不是「发了什么」。 */
+  {
+    const savedModels = window.S.models;
+    const savedState = window.S.state;
+    const savedSeq = commands.length;
+
+    const reset = (cfg, { models, state, env, cwd } = {}) => {
+      commands.length = 0;
+      window.S.models = models || [{ provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' }];
+      window.S.state = state || { model: { provider: 'anthropic', id: 'claude-sonnet-4-5' }, thinkingLevel: 'high' };
+      stubProjectConfig = {
+        ...stubProjectConfig,
+        hasProject: true,
+        cwd: cwd || 'C:\\pi-GUI',
+        config: { ...CFG_DEFAULTS, ...cfg },
+        warnings: [],
+        env: { provider: false, model: false, thinking: false, ...(env || {}) },
+      };
+      $('toasts').innerHTML = '';
+    };
+    const setModels = () => commands.filter((c) => c.type === 'set_model');
+
+    reset({ model: { provider: 'deepseek', id: 'deepseek-chat' } });
+    await window.applyProjectPreferences();
+    check('恢复偏好：配置里的模型可用 → 发 set_model 且带 provider + modelId', () => {
+      const m = setModels();
+      return (m.length === 1 && m[0].provider === 'deepseek' && m[0].modelId === 'deepseek-chat') || JSON.stringify(m);
+    });
+
+    /* 可用模型列表还没到手（get_available_models 没回来 / 超时）：
+     * 不能猜一个模型去 set_model —— 猜错就是把用户的会话换到他没选的模型上。 */
+    reset({ model: { provider: 'deepseek', id: 'deepseek-chat' } }, { models: [] });
+    const pending = window.applyProjectPreferences();
+    await new Promise((r) => setTimeout(r, 0)); // 先让配置那次 GET 落地
+    window.onModels([]); // 应答到了，但列表是空的
+    await pending;
+    check('恢复偏好：拿不到可用模型列表时不猜模型、不发 set_model', () => {
+      const m = setModels();
+      return m.length === 0 || JSON.stringify(m);
+    });
+
+    /* 切换项目：A 的配置不能跟到 B 上。
+     * 这条是回归守卫 —— 前端一度把配置缓存在模块变量里，切项目时没人清，
+     * 于是「切到 B 之后仍按 A 的模型 set_model」，正好是 P2 要消灭的那种漂移。 */
+    reset({ model: { provider: 'deepseek', id: 'deepseek-chat' } }, { cwd: 'C:\\proj-a' });
+    await window.applyProjectPreferences();
+    check('恢复偏好：A 项目按 A 的配置发 set_model', () => {
+      const m = setModels();
+      return (m.length === 1 && m[0].modelId === 'deepseek-chat') || JSON.stringify(m);
+    });
+
+    commands.length = 0;
+    window.S.models = [
+      { provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' },
+      { provider: 'anthropic', id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5' },
+    ];
+    /* 切到 B 之后 pi 是重启过的，会话停在 A 那个模型上 ——
+     * 这正是要消灭的漂移：B 的配置必须把它拉回 B 的模型。 */
+    window.S.state = { model: { provider: 'deepseek', id: 'deepseek-chat' }, thinkingLevel: 'high' };
+    stubProjectConfig = {
+      ...stubProjectConfig,
+      cwd: 'C:\\proj-b',
+      config: { ...CFG_DEFAULTS, model: { provider: 'anthropic', id: 'claude-sonnet-4-5' } },
+    };
+    await window.applyProjectPreferences();
+    check('恢复偏好：切到 B 项目后按 B 的配置走（不继承上一个项目的配置）', () => {
+      const m = setModels();
+      return (m.length === 1 && m[0].provider === 'anthropic' && m[0].modelId === 'claude-sonnet-4-5') ||
+        JSON.stringify(m);
+    });
+
+    reset({ model: { provider: 'deepseek', id: 'deepseek-gone' } });
+    await window.applyProjectPreferences();
+    check('恢复偏好：模型失效时给一次轻提示（不是静默）', () =>
+      /已不可用/.test($('toasts').textContent) || $('toasts').textContent);
+    check('恢复偏好：模型失效时不发 set_model', () => setModels().length === 0 || JSON.stringify(setModels()));
+
+    reset({ model: { provider: 'deepseek', id: 'deepseek-gone' } });
+    await window.applyProjectPreferences();
+    check('恢复偏好：同一个失效模型不重复提示（重启多次也只说一次）', () =>
+      !/已不可用/.test($('toasts').textContent) || $('toasts').textContent);
+
+    reset({ model: { provider: 'deepseek', id: 'deepseek-chat' } }, { env: { model: true, provider: true } });
+    await window.applyProjectPreferences();
+    check('恢复偏好：环境变量钉住模型时项目配置不参与（env > 项目配置）', () =>
+      setModels().length === 0 || JSON.stringify(setModels()));
+
+    reset({ model: { provider: 'deepseek', id: 'deepseek-chat' } }, {
+      state: { model: { provider: 'deepseek', id: 'deepseek-chat' } },
+    });
+    await window.applyProjectPreferences();
+    check('恢复偏好：已经是这个模型 → 不发多余的 set_model', () => setModels().length === 0 || JSON.stringify(setModels()));
+
+    reset({ thinking: 'high' });
+    await window.applyProjectPreferences();
+    check('恢复偏好：不碰思考档位（那是 pi 的启动参数，不是会话命令）', () =>
+      commands.filter((c) => c.type === 'set_thinking_level').length === 0 || JSON.stringify(commands));
+
+    // 没有项目时什么都不能做，也不能崩
+    commands.length = 0;
+    stubProjectConfig = { ...stubProjectConfig, hasProject: false, config: null };
+    let threw = '';
+    try {
+      await window.applyProjectPreferences();
+    } catch (e) {
+      threw = e.message;
+    }
+    check('恢复偏好：没有项目时安静跳过、不发命令、不抛错', () =>
+      (!threw && commands.length === 0) || JSON.stringify({ threw, commands }));
+
+    window.S.models = savedModels;
+    window.S.state = savedState;
+    commands.length = savedSeq;
+    stubProjectConfig = { ...stubProjectConfig, hasProject: true, config: { ...CFG_DEFAULTS } };
+  }
+
+  /* --- 项目配置：设置弹层 --- */
+  {
+    const savedModels = window.S.models;
+    const savedState = window.S.state;
+
+    window.S.models = [
+      { provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' },
+      { provider: 'anthropic', id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5' },
+    ];
+    window.S.state = { model: { provider: 'deepseek', id: 'deepseek-chat' }, thinkingLevel: 'high' };
+    stubProjectConfig = {
+      ...stubProjectConfig,
+      hasProject: true,
+      warnings: [],
+      config: {
+        ...CFG_DEFAULTS,
+        model: { provider: 'anthropic', id: 'claude-sonnet-4-5' },
+        thinking: 'high',
+        instructions: '这个项目用 TypeScript',
+        ignore: ['node_modules', 'dist'],
+        commands: [{ name: 'Test', command: 'npm test' }],
+      },
+    };
+    projectConfigCalls.length = 0;
+
+    await window.openProjectSettings();
+    const card = $('modalCard');
+    const sels = [...card.querySelectorAll('select')];
+    const tas = [...card.querySelectorAll('textarea')];
+
+    check('设置弹层：打开后有模型 / 思考两个下拉与指令 / 忽略两个文本域', () =>
+      (sels.length === 2 && tas.length === 2) || `select=${sels.length} textarea=${tas.length}`);
+    check('设置弹层：模型下拉按供应商分组（optgroup）', () => {
+      const groups = [...sels[0].querySelectorAll('optgroup')].map((g) => g.label);
+      return (groups.includes('deepseek') && groups.includes('anthropic')) || groups.join(',');
+    });
+    check('设置弹层：已保存的模型被选中（不是默认落到第一项）', () => {
+      const cur = sels[0].options[sels[0].selectedIndex];
+      return /Claude Sonnet 4\.5/.test(cur.textContent) || cur.textContent;
+    });
+    check('设置弹层：思考档位用 pi 的完整列表（不是当前模型支持的那几个）', () => {
+      const vals = [...sels[1].options].map((o) => o.value);
+      return (vals.includes('xhigh') && vals.includes('max') && vals.includes('')) || vals.join(',');
+    });
+    check('设置弹层：已保存的思考档位被选中', () => sels[1].value === 'high' || sels[1].value);
+    check('设置弹层：指令文本域带上了已保存内容', () =>
+      tas[0].value === '这个项目用 TypeScript' || tas[0].value);
+    check('设置弹层：忽略规则每行一条', () => tas[1].value === 'node_modules\ndist' || tas[1].value);
+    check('设置弹层：常用命令渲染成「名称 + 命令」两栏', () => {
+      const rows = card.querySelectorAll('.cfg-cmd');
+      return (rows.length === 1 && rows[0].querySelector('.cfg-cmd-name').value === 'Test') || rows.length;
+    });
+    check('设置弹层：说了不保存密钥', () => /不会保存任何密钥/.test(card.textContent) || card.textContent.slice(0, 200));
+    check('设置弹层：显示当前生效的模型与档位（和已保存值区分开）', () =>
+      /生效中的模型 deepseek\/deepseek-chat/.test(card.textContent) || card.textContent.slice(0, 300));
+
+    /* 保存：改模型 + 加一条命令，看 PUT 的 body 形状 */
+    sels[0].value = String([...sels[0].options].findIndex((o) => /DeepSeek Chat/.test(o.textContent)));
+    tas[0].value = '改过的指令';
+    const btnSave = [...card.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === '保存');
+    btnSave.onclick();
+    await new Promise((r) => setTimeout(r, 30));
+
+    const put = projectConfigCalls.filter((c) => c.method === 'PUT').pop();
+    check('保存：发出 PUT，且 model 是 { provider, id } 结构', () =>
+      (put && put.body.model && put.body.model.provider === 'deepseek' && put.body.model.id === 'deepseek-chat') ||
+      JSON.stringify(put && put.body));
+    check('保存：instructions / ignore / commands 按形状发出', () =>
+      (put &&
+        put.body.instructions === '改过的指令' &&
+        Array.isArray(put.body.ignore) &&
+        Array.isArray(put.body.commands) &&
+        put.body.commands[0].name === 'Test') ||
+      JSON.stringify(put && put.body));
+    check('保存：成功后弹层关闭', () => $('modal').hidden === true || '还开着');
+
+    /* 失效模型：下拉里要有占位项，不能被静默改成别的模型 */
+    stubProjectConfig = {
+      ...stubProjectConfig,
+      config: { ...CFG_DEFAULTS, model: { provider: 'deepseek', id: 'deepseek-gone' } },
+    };
+    await window.openProjectSettings();
+    const card2 = $('modalCard');
+    const sel2 = card2.querySelector('select');
+    check('设置弹层：配置里的模型当前不可用时，下拉里有「当前不可用」占位项', () =>
+      [...sel2.options].some((o) => /当前不可用/.test(o.textContent)) || [...sel2.options].map((o) => o.textContent).join(' | '));
+    check('设置弹层：默认选中的就是那个占位项（打开设置不会被悄悄换模型）', () =>
+      /当前不可用/.test(sel2.options[sel2.selectedIndex].textContent) || sel2.options[sel2.selectedIndex].textContent);
+    $('modal').hidden = true;
+    card2.innerHTML = '';
+
+    /* 配置读不出来时，弹层里必须看得见 */
+    stubProjectConfig = {
+      ...stubProjectConfig,
+      config: { ...CFG_DEFAULTS },
+      warnings: ['配置文件不是合法 JSON（Unexpected token），已按默认值处理'],
+    };
+    await window.openProjectSettings();
+    const card3 = $('modalCard');
+    check('设置弹层：配置有警告时在弹层里显式说明', () =>
+      /不是合法 JSON/.test(card3.textContent) || card3.textContent.slice(0, 200));
+
+    /* 保存失败：弹层必须留着，输入不能丢 */
+    stubSaveResult = { ok: false, error: '保存失败：EACCES' };
+    $('toasts').innerHTML = '';
+    const btnSave2 = [...card3.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === '保存');
+    btnSave2.onclick();
+    await new Promise((r) => setTimeout(r, 30));
+    check('保存失败：弹层不关闭（用户输入不丢）', () => $('modal').hidden === false || '被关掉了');
+    check('保存失败：明确报错，不假装成功', () =>
+      /保存失败/.test($('toasts').textContent) || $('toasts').textContent);
+
+    stubSaveResult = null;
+    $('modal').hidden = true;
+    $('modalCard').innerHTML = '';
+    stubProjectConfig = { ...stubProjectConfig, warnings: [] };
+    window.S.models = savedModels;
+    window.S.state = savedState;
+  }
 
   /* --- 重建历史时同样不留空白「Pi」 ---
    *

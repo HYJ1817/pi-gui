@@ -102,8 +102,44 @@ export function openCtxTip() {
 
 /* ---------- 可用模型 / 思考档位 ---------- */
 
+/* 等模型列表到手的等待者。
+ *
+ * 为什么需要：项目配置里保存的模型要落到会话上之前，必须先知道**哪些模型真的存在**
+ * （见 project-config.js 的 applyProjectPreferences）—— 拿一份过期引用去 set_model
+ * 会被 pi 拒掉，用户看到的是「切了但没生效」。而 get_available_models 是异步应答，
+ * 所以这里给一个「等到就返回、超时就算了」的口子。
+ *
+ * 超时不报错：拿不到列表时上层会跳过应用（沿用当前模型），比卡住好。 */
+let modelWaiters = [];
+
 export function onModels(d) {
   S.models = Array.isArray(d) ? d : d?.models || [];
+  if (modelWaiters.length) {
+    const ws = modelWaiters;
+    modelWaiters = [];
+    for (const w of ws) w(S.models);
+  }
+}
+
+/** 拿到可用模型列表；已经在手就立刻返回，否则等一次应答（最多 timeoutMs）。 */
+export function whenModels(timeoutMs = 4000) {
+  if (S.models.length) return Promise.resolve(S.models);
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      modelWaiters = modelWaiters.filter((w) => w !== onReady);
+      resolve([]);
+    }, timeoutMs);
+    function onReady(list) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(list);
+    }
+    modelWaiters.push(onReady);
+  });
 }
 
 export function onThinkingLevels(d) {

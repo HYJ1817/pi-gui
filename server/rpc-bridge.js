@@ -21,18 +21,47 @@ import { spawn } from 'node:child_process';
 const RESTART_DELAY_MS = 1200;
 
 /**
- * @param runtime     共享运行态（要 cwd）。只读，不改。
- * @param publish     事件出口（SSE 总线的 publish）。
- * @param piBin       pi 可执行文件（默认 'pi'，可用 PI_BIN 覆盖）。
- * @param isWin       是否 Windows。显式传入而不是自己判断平台 —— 便于单测。
- * @param env         环境变量来源，默认 process.env。单测可以注入。
+ * @param runtime       共享运行态（要 cwd）。只读，不改。
+ * @param publish       事件出口（SSE 总线的 publish）。
+ * @param piBin         pi 可执行文件（默认 'pi'，可用 PI_BIN 覆盖）。
+ * @param isWin         是否 Windows。显式传入而不是自己判断平台 —— 便于单测。
+ * @param env           环境变量来源，默认 process.env。单测可以注入。
+ * @param projectLaunch 项目配置贡献的启动参数（可选）。**刻意只认两个方法**，
+ *                      为的是把「有副作用」和「纯读」分开：
+ *                        - prepareLaunch() 允许写磁盘（同步项目指令文件），
+ *                          每次 spawn 前调用一次；
+ *                        - launchArgs() 必须是纯读，getState / 启动日志会反复调用。
+ *                      两者都返回 { args: string[], warnings: string[] }。
+ *                      默认 null —— 不传时行为与没有项目配置时完全一致。
+ *
+ *                      注意本模块**不**知道项目配置里有什么。哪些参数能安全地
+ *                      当启动参数传（以及为什么模型不能）是 project-config 的判断，
+ *                      见那里的 launchArgs 说明。
  */
-export function createRpcBridge({ runtime, publish, piBin, isWin, env = process.env }) {
+export function createRpcBridge({
+  runtime,
+  publish,
+  piBin,
+  isWin,
+  env = process.env,
+  projectLaunch = null,
+}) {
   let pi = null;
   let stdoutBuf = '';
 
-  /** pi 的启动参数。 */
-  function buildArgs() {
+  /** 项目配置贡献的参数。纯读，失败不抛（拿不到就当没有）。 */
+  function projectArgs() {
+    if (!projectLaunch || typeof projectLaunch.launchArgs !== 'function') return [];
+    try {
+      const r = projectLaunch.launchArgs();
+      return (r && r.args) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** pi 的启动参数。extra 用来复用「spawn 前刚算好的那份」，避免算两次。 */
+  function buildArgs(extra = null) {
     const args = ['--mode', 'rpc'];
     // --continue 恢复该 cwd 下最近的会话；实测在没有历史的目录下也不会报错，会正常新建
     if (env.PI_NO_CONTINUE !== '1') args.push('--continue');
@@ -40,6 +69,10 @@ export function createRpcBridge({ runtime, publish, piBin, isWin, env = process.
     if (env.PI_MODEL) args.push('--model', env.PI_MODEL);
     if (env.PI_THINKING) args.push('--thinking', env.PI_THINKING);
     if (env.PI_NO_SESSION === '1') args.push('--no-session');
+    // 项目配置的参数排在环境变量之后。两者不会互相覆盖：project-config 对
+    // 已被环境变量钉住的开关不会再给值（优先级：环境变量 > 项目配置）。
+    const tail = extra || projectArgs();
+    if (tail.length) args.push(...tail);
     return args;
   }
 
@@ -84,7 +117,29 @@ export function createRpcBridge({ runtime, publish, piBin, isWin, env = process.
       return;
     }
 
-    const args = buildArgs();
+    /* 项目配置要先「准备」再取参数。
+     *
+     * prepareLaunch 会把项目指令同步成一个 pi 能读的文件（那是写磁盘的动作），
+     * launchArgs 只做纯读。顺序不能反 —— 反了就会漏掉刚写出来的文件，
+     * 表现为「指令保存了但这次启动没生效，下次才生效」。
+     *
+     * 这一步同时覆盖了「切项目」的场景：projects.activate 先更新 runtime.cwd
+     * 再调 restart()，所以这里读到的已经是新项目的配置 —— 不存在
+     * 「先按旧项目启动 pi、再改模型、再重启一次」的双重启动。 */
+    let extra = [];
+    if (projectLaunch && typeof projectLaunch.prepareLaunch === 'function') {
+      try {
+        const r = projectLaunch.prepareLaunch();
+        extra = (r && r.args) || [];
+        for (const w of (r && r.warnings) || []) {
+          publish({ type: 'project_config_notice', level: 'warn', message: w });
+        }
+      } catch (err) {
+        publish({ type: 'project_config_notice', level: 'warn', message: `项目配置未能应用：${err.message}` });
+      }
+    }
+
+    const args = buildArgs(extra);
     publish({ type: 'bridge_status', state: 'starting', bin: piBin, args, cwd });
 
     try {
@@ -187,7 +242,10 @@ export function createRpcBridge({ runtime, publish, piBin, isWin, env = process.
     }
   }
 
-  /** /api/status 要的那几个字段。args 每次现算，与启动时保持一致。 */
+  /** /api/status 要的那几个字段。
+   * args 每次现算（含项目配置贡献的那部分），与启动时一致 —— 除非两次之间
+   * 用户改了项目配置，那种情况下这里给的是「按当前配置启动会是哪些参数」，
+   * 也正是界面该显示的。 */
   function getState() {
     const cwd = runtime.getCurrentCwd();
     return {

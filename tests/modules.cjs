@@ -341,6 +341,91 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     check('getState 带 cwd 与 hasProject', () => (st.cwd === 'C:\\proj' && st.hasProject === true) || JSON.stringify(st));
     check('getState 带 args', () => Array.isArray(st.args) && st.args.length > 0 || JSON.stringify(st.args));
   }
+
+  /* ---------- projectLaunch 注入 ----------
+   *
+   * rpc-bridge 不知道项目配置里有什么，只认 prepareLaunch()（spawn 前，允许写文件）
+   * 与 launchArgs()（纯读）两个方法。这一段盯住的就是这两条契约：
+   * 参数有没有被追加、抛错会不会带塌启动、纯读路径会不会被误当成写路径。
+   * 真正的「写文件」由 tests/project-config.cjs 覆盖。 */
+  {
+    const mkWithLaunch = (cwd, launch, env = {}) =>
+      createRpcBridge({
+        runtime: createRuntime({ initialCwd: cwd }),
+        publish: () => {},
+        piBin: 'pi',
+        isWin: false,
+        env,
+        projectLaunch: launch,
+      });
+
+    {
+      const b = mkWithLaunch('C:\\proj', { launchArgs: () => ({ args: ['--thinking', 'high'], warnings: [] }) });
+      check('projectLaunch 的参数被追加到启动参数末尾', () =>
+        b.buildArgs().join(' ') === '--mode rpc --continue --thinking high' || b.buildArgs().join(' '));
+      check('projectLaunch 的参数出现在 getState().args 里（界面能看到真实启动参数）', () =>
+        b.getState().args.join(' ').includes('--thinking high') || b.getState().args.join(' '));
+    }
+    {
+      // 环境变量已经给了 --thinking 时，项目配置不该再给一份（否则后者覆盖前者）
+      const b = mkWithLaunch(
+        'C:\\proj',
+        { launchArgs: () => ({ args: [], warnings: [] }) },
+        { PI_THINKING: 'low' }
+      );
+      check('环境变量与项目配置不会给出两份 --thinking', () => {
+        const a = b.buildArgs();
+        return a.filter((x) => x === '--thinking').length === 1 || a.join(' ');
+      });
+    }
+    {
+      const b = mkWithLaunch('C:\\proj', {
+        launchArgs: () => {
+          throw new Error('配置读坏了');
+        },
+      });
+      check('projectLaunch 抛错时不带塌 buildArgs（退回不带项目参数）', () =>
+        b.buildArgs().join(' ') === '--mode rpc --continue' || b.buildArgs().join(' '));
+    }
+    {
+      /* 无项目 → start() 在拿到 cwd 之前就返回了，所以既不会 spawn pi，
+       * 也不会走到 prepareLaunch。这一条的价值是：确认「没有项目时后端
+       * 不往任何目录写东西」—— prepareLaunch 是会写文件的。 */
+      let prepared = 0;
+      const events = [];
+      const b2 = createRpcBridge({
+        runtime: createRuntime({ initialCwd: null }),
+        publish: (e) => events.push(e),
+        piBin: 'pi',
+        isWin: false,
+        env: {},
+        projectLaunch: {
+          prepareLaunch: () => {
+            prepared++;
+            return { args: [], warnings: [] };
+          },
+          launchArgs: () => ({ args: [], warnings: [] }),
+        },
+      });
+      b2.start();
+      check('无项目时 start() 不调 prepareLaunch（不启动 pi，也不写任何文件）', () =>
+        (prepared === 0 && events.length === 1 && events[0].state === 'no-project') || JSON.stringify({ prepared, events }));
+    }
+
+    // 顺序契约：prepareLaunch（可能写文件）必须在 buildArgs 之前调用，
+    // 否则刚同步出来的指令文件不会被带上参数。用源码顺序守住它 ——
+    // 这条顺序错了的表现是「指令保存了但这次启动没生效」，很难从外部看出来。
+    const src = fs.readFileSync(path.join(SERVER_DIR, 'rpc-bridge.js'), 'utf8');
+    check('rpc-bridge 里 prepareLaunch() 排在 buildArgs(extra) 之前', () => {
+      const p = src.indexOf('projectLaunch.prepareLaunch()');
+      const b = src.indexOf('buildArgs(extra)');
+      return (p !== -1 && b !== -1 && p < b) || `prepareLaunch@${p} buildArgs@${b}`;
+    });
+    check('rpc-bridge 不 import 任何业务模块（只靠注入认识项目配置）', () => {
+      const imports = [...src.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
+      return imports.every((i) => i.startsWith('node:')) || imports.join(',');
+    });
+  }
   {
     const { bridge } = mkBridge(null);
     const st = bridge.getState();
@@ -367,6 +452,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     rpc: { send: stub('rpc.send'), restart: stub('rpc.restart'), getState: () => ({ ok: true, handler: 'rpc.getState' }) },
     providers: { handle: stub('providers'), handleModels: stub('providers.models') },
     projects: { handle: stub('projects'), handleFs: stub('projects.fs') },
+    projectConfig: { handle: stub('projectConfig') },
     gitRoutes: { handle: stub('git') },
     uploads: { handle: stub('uploads') },
   });
@@ -451,6 +537,25 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     calls.length = 0;
     hit('POST', '/api/restart', authHeaders);
     return calls[0] === 'rpc.restart' || calls.join(',');
+  });
+
+  /* 项目配置刻意用了独立的顶层路径而不是 /api/projects/config ——
+   * 后者会被上面那条 /api/projects/ 前缀匹配吃掉（前缀在它之前），
+   * 而且症状是静默的：GET 返回项目列表、PUT 落进 405，都不是报错。 */
+  check('/api/project-config 命中 projectConfig（不被 /api/projects 前缀吃掉）', () => {
+    calls.length = 0;
+    hit('GET', '/api/project-config', authHeaders);
+    return calls[0] === 'projectConfig' || calls.join(',');
+  });
+  check('/api/project-config 的 PUT 也命中 projectConfig', () => {
+    calls.length = 0;
+    hit('PUT', '/api/project-config', authHeaders);
+    return calls[0] === 'projectConfig' || calls.join(',');
+  });
+  check('/api/projects 仍然命中 projects（两条路径不互相遮蔽）', () => {
+    calls.length = 0;
+    hit('GET', '/api/projects', authHeaders);
+    return calls[0] === 'projects' || calls.join(',');
   });
 
   /* Git 前缀必须排在「非 GET → 405」之前，否则 /api/git/status 会被 405 掉。 */

@@ -63,6 +63,16 @@ export const listDirectory = (target) =>
 
 export const restartBackend = () => sendJSON('/api/restart');
 
+/* ---------- 当前项目的配置 ---------- */
+
+/** 当前项目的偏好设置。没有项目时后端也回 200，只是 hasProject=false、config=null ——
+ *  调用方不需要为「还没选项目」写一条错误分支。 */
+export const fetchProjectConfig = () => getJSON('/api/project-config');
+
+/** 保存当前项目的偏好。只发要改的字段即可（后端做合并），
+ *  但界面上是整表单提交，所以这里是全量发。 */
+export const saveProjectConfig = (config) => sendJSON('/api/project-config', { method: 'PUT', body: config });
+
 /* ---------- 供应商 ---------- */
 
 export const fetchProviders = () => getJSON('/api/providers');

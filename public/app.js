@@ -51,6 +51,7 @@ import { openCtxTip, renderCtxChip } from './usage.js';
 import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker } from './projects.js';
 import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
+import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel } from './git.js';
 
 /* ---------- 装配 ---------- */
@@ -89,6 +90,9 @@ function handle(evt) {
       return onStderr(evt);
     case 'bridge_parse_error':
       return;
+    case 'project_config_notice':
+      // 后端在同步项目指令、应用项目配置时的警告（写入失败、版本不认识…）
+      return toast(evt.message, evt.level === 'error' ? 'error' : 'warn');
     case 'response':
       return onResponse(evt);
     case 'agent_start':
@@ -137,6 +141,11 @@ function onBridge(evt) {
     case 'ready':
       setConn('ok', '已连接');
       boot();
+      /* 项目偏好要在 pi 起来之后再落到会话上。
+       * 模型不能当启动参数传（过期引用会让 pi 退出，见 project-config.js 的说明），
+       * 只能等 get_available_models 回来核对过再 set_model —— 所以它排在这里，
+       * 而不是跟 --thinking 一起进启动参数。 */
+      applyProjectPreferences();
       return;
     case 'exited':
       setConn('bad', `pi 已退出 (${evt.code ?? evt.signal ?? '?'})`);
@@ -670,6 +679,7 @@ $('btnReload').onclick = reloadPi;
 $('btnCompact').onclick = compactNow;
 $('btnAddProject').onclick = openDirPicker;
 $('btnPickProject').onclick = openDirPicker;
+$('btnProjectSettings').onclick = openProjectSettings;
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').parentElement;

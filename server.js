@@ -16,6 +16,7 @@
  *   server/sse.js         事件总线：clients / backlog / seq
  *   server/projects.js    项目列表、目录浏览、切换项目
  *   server/providers.js   ~/.pi/agent/models.json 的读写与模型拉取
+ *   server/project-config.js  <project>/.pi-gui/config.json 的读写与 pi 启动参数
  *   server/uploads.js     附件上传与落盘
  *   server/git-routes.js  Git 接口的 HTTP 适配（业务在 lib/git.js）
  *   server/router.js      路由表与静态资源
@@ -36,6 +37,7 @@ import { createAuth } from './server/auth.js';
 import { createEventBus } from './server/sse.js';
 import { createGitRoutes } from './server/git-routes.js';
 import { createProjects, resolveInitialCwd } from './server/projects.js';
+import { createProjectConfig } from './server/project-config.js';
 import { createProviders } from './server/providers.js';
 import { createRouter } from './server/router.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
@@ -103,14 +105,38 @@ const auth = createAuth({
   version: VERSION,
 });
 
-const rpc = createRpcBridge({ runtime, publish: sse.publish, piBin: PI_BIN, isWin: IS_WIN });
+/* 项目配置。它的读写目标永远是 runtime 里的 cwd，不接受任何调用方传路径，
+ * 所以这里不用注入「项目从哪来」—— runtime 就是唯一来源。 */
+const projectConfig = createProjectConfig({
+  runtime,
+  env: process.env,
+  restartPi: () => rpc.restart(),
+});
+
+/* pi 桥接。projectLaunch 就是 projectConfig 本身 —— rpc-bridge 只认
+ * prepareLaunch()（spawn 前，允许写文件）与 launchArgs()（纯读）两个方法，
+ * 不知道配置里有什么。见 server/rpc-bridge.js 的参数说明。 */
+const rpc = createRpcBridge({
+  runtime,
+  publish: sse.publish,
+  piBin: PI_BIN,
+  isWin: IS_WIN,
+  projectLaunch: projectConfig,
+});
 
 /* 依赖方向：projects → rpc 通过**注入回调**表达，而不是 import ——
- * 否则 projects ↔ rpc-bridge 会成环。 */
+ * 否则 projects ↔ rpc-bridge 会成环。
+ *
+ * 切项目时先同步该项目的指令文件再重启：pi 只在启动时读那个文件，
+ * 顺序反了就是「这次不生效、下次才生效」。此刻 runtime.cwd 已经是新项目
+ * （activate 里先 setCurrentCwd 再调这里），所以同步到的是新项目的那份。 */
 const projects = createProjects({
   projectsFile: PROJECTS_FILE,
   runtime,
-  restartPi: () => rpc.restart(),
+  restartPi: () => {
+    projectConfig.syncInstructionsFile();
+    rpc.restart();
+  },
   isWin: IS_WIN,
 });
 
@@ -118,7 +144,16 @@ const providers = createProviders({ modelsJson: MODELS_JSON });
 const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({ runtime });
 
-const route = createRouter({ auth, sse, rpc, providers, projects, gitRoutes, uploads });
+const route = createRouter({
+  auth,
+  sse,
+  rpc,
+  providers,
+  projects,
+  projectConfig,
+  gitRoutes,
+  uploads,
+});
 
 const server = http.createServer(route);
 
@@ -185,6 +220,17 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  → http://127.0.0.1:${PORT}`);
   console.log(`  → 工作目录: ${currentCwd || '（未选择 —— 在界面里「添加文件夹」）'}`);
   if (currentCwd) console.log(`  → pi 子进程: ${PI_BIN} ${rpc.buildArgs().join(' ')}`);
+  if (currentCwd) {
+    // 配置读不出来不是致命问题（会退回默认值），但启动日志里得看得见，
+    // 否则用户只会觉得「我设的模型怎么没生效」。
+    const cfg = projectConfig.read();
+    const bits = [];
+    if (cfg.config && cfg.config.model) bits.push(`模型偏好 ${cfg.config.model.provider}/${cfg.config.model.id}`);
+    if (cfg.config && cfg.config.thinking) bits.push(`思考 ${cfg.config.thinking}`);
+    if (cfg.config && cfg.config.instructions.trim()) bits.push(`项目指令 ${cfg.config.instructions.length} 字`);
+    console.log(`  → 项目配置: ${bits.length ? bits.join('，') : '（未设置）'}  [${cfg.path}]`);
+    for (const w of cfg.warnings) console.log(`  ! ${w}`);
+  }
   console.log(
     auth.isDevMode
       ? '  → 访问控制: 开发模式（未配置令牌，仅校验请求来源；仅供本机开发使用）'

@@ -58,16 +58,26 @@ function serveStatic(res, pathname) {
 const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 1024 * 1024);
 
 /**
- * @param auth      本地访问控制（denyRequest / handleHealth）
- * @param sse       事件总线（subscribe）
- * @param rpc       pi 桥接（send / restart / getState）
- * @param providers 供应商（handle / handleModels）
- * @param projects  项目（handle / handleFs）
- * @param gitRoutes Git 路由（handle）
- * @param uploads   附件上传（handle）
+ * @param auth          本地访问控制（denyRequest / handleHealth）
+ * @param sse           事件总线（subscribe）
+ * @param rpc           pi 桥接（send / restart / getState）
+ * @param providers     供应商（handle / handleModels）
+ * @param projects      项目（handle / handleFs）
+ * @param projectConfig 当前项目的配置（handle）
+ * @param gitRoutes     Git 路由（handle）
+ * @param uploads       附件上传（handle）
  * @returns {import('node:http').RequestListener}
  */
-export function createRouter({ auth, sse, rpc, providers, projects, gitRoutes, uploads }) {
+export function createRouter({
+  auth,
+  sse,
+  rpc,
+  providers,
+  projects,
+  projectConfig,
+  gitRoutes,
+  uploads,
+}) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
     // 把多字节字符切开，中文就会变成乱码。
@@ -115,6 +125,16 @@ export function createRouter({ auth, sse, rpc, providers, projects, gitRoutes, u
     }
     if (url.pathname === '/api/providers' || url.pathname.startsWith('/api/providers/')) {
       return providers.handle(req, res, url);
+    }
+    /* 项目配置单独一条顶层路径，**刻意不挂在 /api/projects/ 下面**。
+     *
+     * 挂成 /api/projects/config 的话，就必须排在下面那条前缀匹配之前 ——
+     * 那是本文件里第三处「顺序即语义」的坑（前两处见 providers/models 与 git）。
+     * 而这种坑漏掉的代价是静默的：GET 会返回项目列表，PUT 会落进 405，
+     * 前端拿到的都不是报错，是一个看起来正常但完全不对的结果。
+     * 换成独立路径就没有这个约束，也不用在注释里维护「谁必须排在谁前面」。 */
+    if (url.pathname === '/api/project-config') {
+      return projectConfig.handle(req, res, url);
     }
     if (url.pathname === '/api/projects' || url.pathname.startsWith('/api/projects/')) {
       return projects.handle(req, res, url);

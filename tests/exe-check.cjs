@@ -138,6 +138,94 @@ async function main() {
     const bad2 = await fetch(BASE + '/%2e%2e%2fpackage.json');
     check('编码后的穿越也被挡', () => bad2.status !== 200 || '返回了 ' + bad2.status);
 
+    /* 项目配置在 SEA 里的读写。
+     *
+     * 单文件 exe 最容易在这里翻车：模块没进包 → 路由 404；或者路径拼装依赖了
+     * 开发期才有的东西（process.cwd()、import.meta.url）→ 写不进去。
+     * 所以这里不只问接口，还要**去磁盘上确认文件真的出现了**。 */
+    const cfgFile = path.join(WORK, '.pi-gui', 'config.json');
+    const genFile = path.join(WORK, '.pi-gui', 'instructions.generated.md');
+
+    const cfg0 = await (await fetch(BASE + '/api/project-config')).json();
+    check('exe 内 GET /api/project-config 通（模块进包了）', () => cfg0.ok === true || JSON.stringify(cfg0));
+    check('exe 内认得出当前项目（hasProject + cwd）', () =>
+      (cfg0.hasProject === true && cfg0.cwd === WORK) || `hasProject=${cfg0.hasProject} cwd=${cfg0.cwd}`);
+    check('exe 内没有配置文件时给默认值，不报错', () =>
+      (cfg0.exists === false && cfg0.config && cfg0.config.version === 1 && cfg0.config.model === null) ||
+      JSON.stringify(cfg0.config));
+
+    const put1 = await (
+      await fetch(BASE + '/api/project-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ignore: ['node_modules', 'dist'],
+          commands: [{ name: '测试', command: 'npm test' }],
+          // 顺手混进未知字段和错误类型，验证「只写白名单 + 丢弃坏数据」
+          apiKey: 'sk-MUST-NOT-BE-WRITTEN',
+          nonsense: { a: 1 },
+          thinking: 123,
+        }),
+      })
+    ).json();
+    check('exe 内 PUT 项目配置成功', () => put1.ok === true || JSON.stringify(put1));
+    check('exe 内只改 ignore / commands 时不触发重启', () =>
+      put1.restartRequired === false || 'restartRequired=' + put1.restartRequired);
+    check('exe 内配置文件真的落到磁盘上', () => fs.existsSync(cfgFile) || '没有 ' + cfgFile);
+
+    if (fs.existsSync(cfgFile)) {
+      const raw = fs.readFileSync(cfgFile, 'utf8');
+      let saved = null;
+      try {
+        saved = JSON.parse(raw);
+      } catch (e) {
+        saved = null;
+      }
+      check('exe 内配置是合法 JSON', () => saved !== null || raw.slice(0, 120));
+      check('exe 内配置写上了 version', () => (saved && saved.version === 1) || JSON.stringify(saved));
+      check('exe 内未知字段被丢弃（没落盘）', () =>
+        saved && saved.nonsense === undefined || JSON.stringify(saved));
+      check('exe 内错误类型被丢弃（thinking 是数字）', () =>
+        saved && (saved.thinking === null || saved.thinking === undefined) || JSON.stringify(saved));
+      check('exe 内 ignore / commands 原样保存', () =>
+        (saved &&
+          Array.isArray(saved.ignore) &&
+          saved.ignore[0] === 'node_modules' &&
+          Array.isArray(saved.commands) &&
+          saved.commands[0].name === '测试') ||
+        JSON.stringify(saved));
+      check('exe 内配置文件里没有出现 apiKey（密钥边界）', () => !raw.includes('apiKey') || '出现了 apiKey');
+      check('exe 内配置文件里没有出现传入的密钥值', () => !raw.includes('sk-MUST-NOT-BE-WRITTEN') || '密钥被写进去了');
+    }
+
+    /* 指令：落成产物文件 + 走启动参数（所以会重启一次 pi） */
+    const put2 = await (
+      await fetch(BASE + '/api/project-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instructions: '这个项目用 TypeScript\n不要改 generated/' }),
+      })
+    ).json();
+    check('exe 内保存项目指令成功', () => put2.ok === true || JSON.stringify(put2));
+    check('exe 内指令落成了可注入的文件', () =>
+      (fs.existsSync(genFile) && fs.readFileSync(genFile, 'utf8').includes('不要改 generated/')) ||
+      '没有 ' + genFile);
+    check('exe 内改指令会要求重启 pi（走启动参数生效）', () =>
+      put2.restartRequired === true || 'restartRequired=' + put2.restartRequired);
+
+    const cfg1 = await (await fetch(BASE + '/api/project-config')).json();
+    check('exe 内回读拿到刚保存的内容（读-写闭环）', () =>
+      (cfg1.exists === true &&
+        cfg1.config.instructions.includes('这个项目用 TypeScript') &&
+        cfg1.config.ignore.length === 2) ||
+      JSON.stringify(cfg1.config));
+
+    const cfgQ = await (
+      await fetch(BASE + '/api/project-config?projectPath=' + encodeURIComponent('C:\\') + '&path=../../')
+    ).json();
+    check('exe 内带 projectPath / 穿越参数不改变目标项目（唯一来源是 runtime 的 cwd）', () =>
+      cfgQ.cwd === WORK || 'cwd=' + cfgQ.cwd);
+
     /* 附件抽取：pdfjs 的 worker 在 SEA 下最容易坏 */
     if (fs.existsSync(PDF)) {
       const buf = fs.readFileSync(PDF);

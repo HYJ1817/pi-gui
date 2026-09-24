@@ -734,6 +734,31 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   border-radius:6px;padding:4px 7px;
 }
 
+/* 项目设置（当前项目的偏好弹层）
+   刻意复用 .field / .modal-actions 那套，只补这个弹层特有的三样：
+   说明条、命令行、字数超限。 */
+.cfg-note{
+  font-size:11px;line-height:1.6;color:var(--t3);margin-bottom:10px;
+  background:rgba(255,255,255,.03);border:1px solid var(--line);
+  border-radius:7px;padding:6px 9px;
+}
+.cfg-note.warn{color:var(--warn);border-color:rgba(251,191,36,.22);background:rgba(251,191,36,.06)}
+.cfg-note.dim{color:var(--t3)}
+
+.cfg-cmds{display:flex;flex-direction:column;gap:6px;margin-bottom:7px}
+.cfg-cmd{display:flex;gap:6px;align-items:center}
+.cfg-cmd input{flex:1;min-width:0}
+.cfg-cmd .cfg-cmd-name{flex:0 0 28%}
+.cfg-cmd-del{
+  flex:0 0 auto;width:24px;height:24px;border-radius:6px;font-size:14px;line-height:1;
+  background:transparent;border:1px solid var(--line);color:var(--t3);cursor:pointer;
+  transition:background .12s,color .12s;
+}
+.cfg-cmd-del:hover{background:#3a1d1d;border-color:#4a2626;color:#f0a0a0}
+
+/* 指令字数超限：输入的时候就要看得见，而不是等保存被截断 */
+.field .hint.over{color:var(--err)}
+
 /* 分支树 */
 .tree{display:flex;flex-direction:column;gap:1px}
 .tree-node{
