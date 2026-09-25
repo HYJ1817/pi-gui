@@ -3,10 +3,10 @@ import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
 function node(tag, cls = '', text = '') {
-  const el = document.createElement(tag);
-  if (cls) el.className = cls;
-  if (text !== '') el.textContent = String(text);
-  return el;
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== '') n.textContent = String(text);
+  return n;
 }
 
 function row(label, value) {
