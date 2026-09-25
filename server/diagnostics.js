@@ -96,7 +96,6 @@ export function createDiagnostics({
       available: Boolean(a.available),
       version: a.version || null,
       reason: a.reason || null,
-      detail: a.detail || null,
       capabilities: a.capabilities || null,
     }));
 
