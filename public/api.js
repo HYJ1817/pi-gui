@@ -55,6 +55,7 @@ export async function sendCommand(cmd) {
 /* ---------- 状态 / 项目 ---------- */
 
 export const fetchStatus = () => getJSON('/api/status');
+export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProjects = () => getJSON('/api/projects');
 
 export const createProject = (path, name) => sendJSON('/api/projects', { body: { path, name } });
