@@ -165,7 +165,7 @@ export function createDiagnostics({
         conversationContentIncluded: false,
         configFileContentIncluded: false,
         environmentIncluded: false,
-        secretsRedacted: true,
+        redactionApplied: true,
       },
     };
 
