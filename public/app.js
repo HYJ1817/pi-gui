@@ -57,6 +57,7 @@ import { applyProjectPreferences, openProjectSettings } from './project-config.j
 import { loadGitStatus, openChangesPanel } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
+import { loadSessionsBadge, openSessions } from './sessions.js';
 
 /* ---------- 装配 ---------- */
 
@@ -175,7 +176,8 @@ function onBridge(evt) {
       setStatus('');
       setBridgeState('ready');
       loadExtensionsBadge();
-  loadPlannerBadge();
+      loadPlannerBadge();
+      loadSessionsBadge();
       boot();
       /* 项目偏好要在 pi 起来之后再落到会话上。
        * 模型不能当启动参数传（过期引用会让 pi 退出，见 project-config.js 的说明），
@@ -739,6 +741,7 @@ $('btnProjectSettings').onclick = openProjectSettings;
 // 扩展能力（Skills / MCP）—— 跨项目的入口，和「模型供应商」同一组
 $('navExtensions').onclick = openExtensions;
 $('navPlanner').onclick = openPlanner;
+$('navSessions').onclick = openSessions;
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').parentElement;
@@ -768,6 +771,9 @@ loadProviders();
 /* 侧栏「扩展」右边那个数字：发现了几条 skill。
  * 只做展示，失败就留空 —— 这个数字不该在启动路径上弹任何错。 */
 loadExtensionsBadge();
+/* 侧栏「会话」右边那个数字：当前项目有几个会话文件。
+ * 同样只做展示 —— 还没选项目、目录读不到都只是留空。 */
+loadSessionsBadge();
 /* Git 工作区状态先拉一次，把侧栏的「文件变更 N」填上。
  * 失败也无所谓 —— 不是 Git 仓库、没装 git、还没选项目都是正常情况，
  * 面板会各自给出中性文案（见 git.js 的 renderChangesBody）。 */

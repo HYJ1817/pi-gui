@@ -66,6 +66,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param projectConfig 当前项目的配置（handle）
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
+ * @param sessions      会话列表与切换（handle）
  * @param planner       Planner / Agent 编排（handle）
  * @param gitRoutes     Git 路由（handle）
  * @param uploads       附件上传（handle）
@@ -80,6 +81,7 @@ export function createRouter({
   projectConfig,
   skills,
   mcp,
+  sessions,
   planner,
   gitRoutes,
   uploads,
@@ -152,6 +154,10 @@ export function createRouter({
     }
     if (url.pathname === '/api/mcp') {
       return mcp.handle(req, res, url);
+    }
+    /* 会话列表与切换。切换是 POST，**必须排在 405 兜底之前**。 */
+    if (url.pathname === '/api/sessions' || url.pathname.startsWith('/api/sessions/')) {
+      return sessions.handle(req, res, url);
     }
     /* Planner / Agent 编排（P5）。和上面同理用独立顶层路径。
      * 位置要求：**必须排在下面 `req.method !== 'GET' → 405` 之前** ——

@@ -225,6 +225,23 @@ let stubGenerate = { ok: false, error: '模型生成的计划没有通过校验'
 
 const plannerCalls = [];
 
+
+/* /api/sessions 的桩：两条会话，一条是当前。形状照抄后端真实返回
+ * （**注意不含任何绝对路径** —— 这是后端的硬约束，桩也不能带，
+ * 否则 UI 断言「DOM 里没有路径」就成了假绿）。 */
+const stubSessions = {
+  ok: true,
+  hasProject: true,
+  currentId: 'aaaaaaaaaaaaaaaa',
+  diagnostics: [],
+  sessions: [
+    { id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能', sessionId: '01a0d257-4f74-71fc-8f53', createdAt: '2026-09-24T07:35:32.469Z', lastMessageAt: '2026-09-25T10:22:03.235Z', updatedAt: 1758800000000, messageCount: 14, current: false, truncated: false },
+    { id: 'aaaaaaaaaaaaaaaa', title: '你好', sessionId: '01a0d999-1111-2222-3333', createdAt: '2026-09-25T09:00:00.000Z', lastMessageAt: '2026-09-25T10:00:00.000Z', updatedAt: 1758790000000, messageCount: 2, current: true, truncated: false },
+  ],
+};
+let stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能' };
+const sessionCalls = [];
+
 window.fetch = async (url, opts) => {
   const u = String(url);
   if (u.includes('/api/upload')) {
@@ -287,6 +304,19 @@ window.fetch = async (url, opts) => {
       };
     }
     return { json: async () => stubProjectConfig };
+  }
+  if (u.includes('/api/sessions')) {
+    const method = (opts && opts.method) || 'GET';
+    let body = null;
+    try {
+      body = opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
+    } catch {
+      body = null;
+    }
+    sessionCalls.push({ method, url: u, body });
+    if (u.includes('/switch')) return { json: async () => stubSwitch };
+    if (u.includes('/name')) return { json: async () => ({ ok: true, name: (body && body.name) || '' }) };
+    return { json: async () => stubSessions };
   }
   if (u.includes('/api/agents')) {
     return { json: async () => stubAgents };
@@ -2833,7 +2863,67 @@ staticCheck();
   }
 
   await extSection();
+
+  /* ---------- 会话面板（切回旧对话） ---------- */
+  async function sessionSection() {
+    sessionCalls.length = 0;
+    $('toasts').innerHTML = '';
+
+    window.openSessions();
+    await new Promise((r) => setTimeout(r, 40));
+    const card = $('modalCard');
+
+    check('会话面板：列出当前项目的会话', () => {
+      const n = card.querySelectorAll('.sess-item').length;
+      return n === 2 || `渲染了 ${n} 条`;
+    });
+    check('会话面板：标题是第一条用户消息（不是文件名/时间戳）', () => {
+      const titles = [...card.querySelectorAll('.sess-item-title')].map((t) => t.textContent);
+      return (titles.includes('帮我写个登录功能') && titles.includes('你好')) || JSON.stringify(titles);
+    });
+    check('会话面板：当前会话被标出来，且不给点', () => {
+      const cur = card.querySelector('.sess-item.on');
+      return Boolean(cur && cur.querySelector('.sess-cur') && !cur.onclick) || (cur ? cur.textContent.slice(0, 60) : '没有当前项');
+    });
+    check('会话面板：显示消息条数与创建时间', () => {
+      const txt = card.textContent;
+      return (/14 条消息/.test(txt) && /创建于/.test(txt)) || txt.slice(0, 160);
+    });
+    check('会话面板：说明旧会话不会丢（「新对话」不覆盖任何东西）', () =>
+      /不会丢/.test(card.textContent) || card.textContent.slice(0, 200));
+    check('会话面板：DOM 里没有任何绝对路径', () =>
+      !/[A-Za-z]:\\|[A-Za-z]:\//.test(card.textContent) || '出现了疑似路径');
+
+    // 点另一条 → 切过去
+    {
+      const rows = [...card.querySelectorAll('.sess-item')];
+      const other = rows.find((r) => !r.classList.contains('on'));
+      other.onclick();
+      await new Promise((r) => setTimeout(r, 80));
+      const hit = sessionCalls.find((c) => /\/switch/.test(c.url));
+      check('会话面板：点一条会调 /api/sessions/switch，且传的是 ID 不是路径', () =>
+        Boolean(hit && hit.body && hit.body.id === 'bbbbbbbbbbbbbbbb') || JSON.stringify(sessionCalls));
+    }
+
+    // 改名
+    {
+      window.openSessions();
+      await new Promise((r) => setTimeout(r, 40));
+      const card2 = $('modalCard');
+      const input = card2.querySelector('.sess-name-input');
+      input.value = '我的登录功能开发';
+      [...card2.querySelectorAll('button')].find((b) => b.textContent === '保存名字').onclick();
+      await new Promise((r) => setTimeout(r, 60));
+      const hit = sessionCalls.find((c) => /\/name/.test(c.url));
+      check('会话面板：改名调 /api/sessions/name', () => Boolean(hit && hit.body.name === '我的登录功能开发') || JSON.stringify(sessionCalls.map((c) => c.url)));
+    }
+
+    window.closeModal();
+    await new Promise((r) => setTimeout(r, 20));
+  }
+
   await plannerSection();
+  await sessionSection();
 
   /* --- 重建历史时同样不留空白「Pi」 ---
    *

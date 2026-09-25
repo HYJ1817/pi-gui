@@ -170,3 +170,16 @@ const taskUrl = (id, taskId, action) =>
 export const retryPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'retry'), {});
 export const cancelPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'cancel'), {});
 export const skipPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'skip'), {});
+
+/* ---------- 会话列表与切换 ---------- */
+
+/** 当前项目的会话列表。pi 的 RPC 没有「列出会话」，这是后端扫 sessions 目录得到的。
+ *  返回里带 currentId（哪个是界面正在显示的）。 */
+export const fetchSessions = () => getJSON('/api/sessions');
+
+/** 切到某个会话。**只传后端给的稳定 ID**，不传路径 —— 后端会在自己的索引里
+ *  解析，并核对那条会话确实属于当前项目。 */
+export const switchSession = (id) => sendJSON('/api/sessions/switch', { body: { id } });
+
+/** 给**当前**会话起个名字（pi 的 set_session_name 只作用于当前会话）。 */
+export const renameSession = (name) => sendJSON('/api/sessions/name', { body: { name } });

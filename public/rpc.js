@@ -59,19 +59,12 @@ export function onResponse(evt) {
       toast('已切换到 ' + (d.name || d.id), 'info');
       return;
     case 'new_session':
-      clearThread();
-      // 新会话意味着换了一条工作线，上一段的文件变更记录不再适用。
-      // 注意 fork 不清：分叉不改磁盘，之前改过的文件依然处于改动状态。
-      clearChanges();
-      toast('已开始新会话', 'info');
-      setTimeout(boot, 250);
+      afterSessionSwitch();
+      toast('已开始新会话（旧会话还在，「会话」面板里可以切回去）', 'info');
       return;
     case 'fork':
-      clearThread();
+      afterSessionSwitch();
       toast('已从该节点分叉', 'info');
-      setTimeout(() => {
-        boot();
-      }, 250);
       return;
     case 'compact':
       toast('上下文压缩完成', 'info');
@@ -135,6 +128,22 @@ export async function stop() {
 }
 
 export const newSession = () => sendCommand({ type: 'new_session' });
+
+/**
+ * 会话换掉之后要做的界面收尾：清空对话区与变更账本，再 boot() 按新会话重建。
+ *
+ * 抽出来是因为**有两条路径**都会换会话：pi 主动报的 `new_session` / `fork`
+ * （走 onResponse），以及用户在「会话」面板里切到某个旧会话（走后端 HTTP，
+ * 不经过这里）。两条路径必须做同一件事 —— 否则切完会话界面还挂着上一个会话的
+ * 消息，看起来就像「切了但没生效」。
+ */
+export function afterSessionSwitch() {
+  clearThread();
+  // 换了一条工作线，上一段的文件变更记录不再适用。
+  // 注意 fork 也不清：分叉不改磁盘，之前改过的文件依然处于改动状态。
+  clearChanges();
+  setTimeout(boot, 250);
+}
 
 export const forkFrom = (entryId) => sendCommand({ type: 'fork', entryId });
 

@@ -19,6 +19,7 @@
  *   server/project-config.js  <project>/.pi-gui/config.json 的读写与 pi 启动参数
  *   server/skills.js      Skills 的发现 / 详情 / 启停（只读 pi 的官方机制，不自造一套）
  *   server/mcp.js         MCP 能力报告（pi 0.87.0 无原生 MCP，如实说明 + 扩展清单）
+ *   server/sessions.js    会话列表与切换（pi 有 switch_session 但没有「列出会话」的 RPC）
  *   server/uploads.js     附件上传与落盘
  *   server/git-routes.js  Git 接口的 HTTP 适配（业务在 lib/git.js）
  *   server/router.js      路由表与静态资源
@@ -45,6 +46,7 @@ import { createRouter } from './server/router.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createRuntime } from './server/runtime.js';
 import { createMcp } from './server/mcp.js';
+import { createSessions } from './server/sessions.js';
 import { createSkills } from './server/skills.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
@@ -176,6 +178,11 @@ const gitRoutes = createGitRoutes({ runtime });
 const skills = createSkills({ runtime, rpc, env: process.env });
 const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
 
+/* 会话列表。pi 的 RPC 里有 switch_session 却没有「列出会话」——
+ * 它的 TUI picker 不对外，所以列表得我们自己扫 <agentDir>/sessions/。
+ * 归属判定只认每个会话文件 header 里的 cwd，不信目录名。 */
+const sessions = createSessions({ runtime, rpc, env: process.env });
+
 /* Planner / Multi-Agent 编排层（P5）。
  *
  * 说清楚一件事：**pi 没有原生 sub-agent / plan mode**，所以这一层是
@@ -230,6 +237,7 @@ const route = createRouter({
   projectConfig,
   skills,
   mcp,
+  sessions,
   planner,
   gitRoutes,
   uploads,
