@@ -201,12 +201,21 @@ async function main() {
      * 令牌那条的正则放宽成任意变量名：rpc-bridge.js 里是
      * `const childEnv = { ...env }; delete childEnv.PI_GUI_TOKEN;`，
      * 写死 `env.` 会漏掉。 */
+    /* 递归收集 —— 早先只看 server/ 顶层，加了 agents/ 与 planner/ 之后
+     * 这两个子目录整个漏出了扫描范围。源码搬进子目录而守卫没跟上，
+     * 会得到一条没有意义的绿灯。 */
+    const collectBackend = (dir) => {
+      const out = [];
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) out.push(...collectBackend(full));
+        else if (e.name.endsWith('.js')) out.push(full);
+      }
+      return out;
+    };
     const backendSrc = [
       fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8'),
-      ...fs
-        .readdirSync(path.join(ROOT, 'server'))
-        .filter((f) => f.endsWith('.js'))
-        .map((f) => fs.readFileSync(path.join(ROOT, 'server', f), 'utf8')),
+      ...collectBackend(path.join(ROOT, 'server')).map((f) => fs.readFileSync(f, 'utf8')),
     ].join('\n');
 
     check('后端显式 listen 到 127.0.0.1', () => /server\.listen\(\s*PORT\s*,\s*'127\.0\.0\.1'/.test(backendSrc) || '没有显式绑定回环地址');

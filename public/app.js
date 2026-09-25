@@ -56,6 +56,7 @@ import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
+import { loadPlannerBadge, openPlanner } from './planner.js';
 
 /* ---------- 装配 ---------- */
 
@@ -100,6 +101,13 @@ function handle(evt) {
     case 'project_config_notice':
       // 后端在同步项目指令、应用项目配置时的警告（写入失败、版本不认识…）
       return toast(evt.message, evt.level === 'error' ? 'error' : 'warn');
+    case 'execution_event':
+      /* Planner / Agent 编排的执行事件。**刻意不并进主对话时间线** ——
+       * 那是另一个进程在另一个工作目录里干的事，混进当前聊天会让人以为
+       * 是自己这轮对话的一部分（规格 §11 明确要求分开）。
+       * 但它复用同一套渲染语言（状态点 / 工具名 / 耗时），并且事件里带
+       * planId / taskId / agent，所以界面上能看清「谁在跑」。 */
+      return onExecutionEvent(evt);
     case 'response':
       onResponse(evt);
       if (S.syncPending && evt.success && (evt.command === 'get_state' || evt.command === 'get_messages')) {
@@ -167,6 +175,7 @@ function onBridge(evt) {
       setStatus('');
       setBridgeState('ready');
       loadExtensionsBadge();
+  loadPlannerBadge();
       boot();
       /* 项目偏好要在 pi 起来之后再落到会话上。
        * 模型不能当启动参数传（过期引用会让 pi 退出，见 project-config.js 的说明），
@@ -729,6 +738,7 @@ $('btnProjectSettings').onclick = openProjectSettings;
 
 // 扩展能力（Skills / MCP）—— 跨项目的入口，和「模型供应商」同一组
 $('navExtensions').onclick = openExtensions;
+$('navPlanner').onclick = openPlanner;
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').parentElement;

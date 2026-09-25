@@ -46,6 +46,11 @@ import { createRpcBridge } from './server/rpc-bridge.js';
 import { createRuntime } from './server/runtime.js';
 import { createMcp } from './server/mcp.js';
 import { createSkills } from './server/skills.js';
+import { createAgentRegistry } from './server/agents/index.js';
+import { createPlanStore } from './server/planner/store.js';
+import { createScheduler } from './server/planner/scheduler.js';
+import { createPlanner } from './server/planner/index.js';
+import { gitStatus } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
 
@@ -135,6 +140,10 @@ const rpc = createRpcBridge({
  * 切项目时先同步该项目的指令文件再重启：pi 只在启动时读那个文件，
  * 顺序反了就是「这次不生效、下次才生效」。此刻 runtime.cwd 已经是新项目
  * （activate 里先 setCurrentCwd 再调这里），所以同步到的是新项目的那份。 */
+/* Planner 的引用占位。projects 的闸门要用到它，但 planner 依赖 runtime / sse，
+ * 只能排在 projects 之后 —— 所以先声明、后回填（闸门只在请求时被调用）。 */
+let plannerRef = null;
+
 const projects = createProjects({
   projectsFile: PROJECTS_FILE,
   runtime,
@@ -143,6 +152,12 @@ const projects = createProjects({
     rpc.restart();
   },
   isWin: IS_WIN,
+  /* §40：有计划正在执行时拒绝切项目。plannerRef 稍后才赋值，所以这里用
+   * 惰性读取 —— 闸门只在用户真的点「切换」时才会被调用，那时它已经就位。 */
+  beforeActivate: () =>
+    plannerRef && plannerRef.activePlanId()
+      ? '当前有任务正在执行。请先停止计划再切换项目 —— 否则任务的输出会归属到说不清的项目上。'
+      : null,
 });
 
 const providers = createProviders({ modelsJson: MODELS_JSON });
@@ -161,6 +176,51 @@ const gitRoutes = createGitRoutes({ runtime });
 const skills = createSkills({ runtime, rpc, env: process.env });
 const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
 
+/* Planner / Multi-Agent 编排层（P5）。
+ *
+ * 说清楚一件事：**pi 没有原生 sub-agent / plan mode**，所以这一层是
+ * Pi GUI 自己的编排，不是 pi 的能力。界面文案也不许写成「pi 的多 Agent」。
+ *
+ * 依赖方向（照旧：server.js 装配，模块之间不互相 import）：
+ *   Agent Registry  ← 唯一认识各 adapter 的地方
+ *   Plan Store      ← 计划持久化（<DATA_DIR>/plans/）
+ *   Scheduler       ← 只执行，不认识「怎么生成计划」
+ *   Planner（路由） ← 只生成/编辑，不认识「怎么执行」
+ *
+ * sessionDir 给 pi 适配器一个**独立会话目录**：Planner 任务用 pi 跑时
+ * 会话落在那里，不会混进 ~/.pi/agent/sessions/。这一点很关键 —— 主聊天用的是
+ * `--continue`（取该 cwd 下最近的会话），混进去就会让用户下次聊天莫名其妙
+ * 接上某个任务的上下文。
+ *
+ * gitStatus 注入给 scheduler 用：每个 task 前后各取一次工作区快照，
+ * 差集就是「执行期间观察到的工作区变化」（不声称是 Agent 改的）。 */
+const agentRegistry = createAgentRegistry({
+  env: process.env,
+  sessionDir: path.join(DATA_DIR, 'planner-sessions'),
+});
+const planStore = createPlanStore({ dataDir: DATA_DIR });
+/* 崩溃恢复**只在进程启动时做一次**（§31）。早先写成「每次读计划都恢复」，
+ * 结果前端一轮询详情就把正在跑的任务翻成了 interrupted —— 光看文件分不出
+ * 「上个进程死了」和「本进程正在跑」。 */
+const planRecovery = planStore.recoverAll();
+const scheduler = createScheduler({
+  store: planStore,
+  registry: agentRegistry,
+  runtime,
+  publish: sse.publish,
+  gitStatus,
+});
+/* projects 在 planner 之前建好了，所以用上面那个可变引用回填 —— 避免为了
+ * 一个闸门把装配顺序搅乱（projects 需要 planner，planner 又需要 runtime）。 */
+const planner = createPlanner({
+  runtime,
+  registry: agentRegistry,
+  store: planStore,
+  scheduler,
+  env: process.env,
+});
+plannerRef = planner;
+
 const route = createRouter({
   auth,
   sse,
@@ -170,6 +230,7 @@ const route = createRouter({
   projectConfig,
   skills,
   mcp,
+  planner,
   gitRoutes,
   uploads,
 });
@@ -180,6 +241,14 @@ const server = http.createServer(route);
 
 function shutdown() {
   runtime.setShuttingDown(true);
+  /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted
+   * 再落盘。不这么做的话它们会以 running 留在盘上，下次启动才被恢复 ——
+   * 中间那段时间界面会显示一个永远不会动的「运行中」。 */
+  try {
+    scheduler.shutdown();
+  } catch {
+    /* 收尾失败不能挡住退出 */
+  }
   sse.closeAll();
   rpc.stop();
   server.close(() => process.exit(0));
@@ -284,6 +353,18 @@ server.listen(PORT, '127.0.0.1', () => {
     console.log(
       `  → MCP: ${mcpReport.supported === false ? 'pi 无原生 MCP 支持' : mcpReport.supported === true ? '检测到 MCP 相关模块（Pi GUI 尚未适配）' : '无法检测'}${mcpReport.piVersion ? `  [pi ${mcpReport.piVersion}]` : ''}`,
     );
+
+    /* Planner / Agent 编排。必须说清「这是 Pi GUI 自己的编排，不是 pi 的能力」——
+     * pi 0.87.0 没有原生 sub-agent / plan mode。 */
+    const agentList = agentRegistry.list();
+    const okAgents = agentList.filter((a) => a.available);
+    console.log(
+      `  → Agent: ${okAgents.length ? okAgents.map((a) => `${a.id} ${a.version || '?'}`).join(' / ') : '本机没有可用的 Agent'}${agentList.length > okAgents.length ? `（不可用：${agentList.filter((a) => !a.available).map((a) => a.id).join(' ')}）` : ''}`
+    );
+    console.log(`  → Planner: Pi GUI 自己的编排层（pi 没有原生 sub-agent / plan mode）`);
+    if (planRecovery.recovered > 0) {
+      console.log(`  ! 计划恢复：${planRecovery.recovered} 个计划上次被中断，已标成 interrupted（可重试）`);
+    }
   }
   console.log(
     auth.isDevMode

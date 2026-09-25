@@ -52,8 +52,12 @@ export function resolveInitialCwd(projectsFile, env = process.env) {
  * @param restartPi    切换项目后重启 pi 的回调（注入而不是 import，
  *                     避免 projects ↔ rpc-bridge 互相 import）
  * @param isWin        是否 Windows（影响盘符列举与路径大小写归一）
+ * @param beforeActivate 可选的「切换前闸门」。返回非空字符串 = 拒绝切换，
+ *                     字符串就是给用户看的原因。存在的理由是 Planner：
+ *                     有计划正在跑的时候切项目，会让某个 task 的输出归属
+ *                     变得说不清（见 server/planner/index.js 的说明）。
  */
-export function createProjects({ projectsFile, runtime, restartPi, isWin }) {
+export function createProjects({ projectsFile, runtime, restartPi, isWin, beforeActivate = null }) {
   function read() {
     try {
       const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
@@ -223,6 +227,15 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin }) {
             if (!fs.statSync(resolved).isDirectory()) throw new Error('not a directory');
           } catch {
             return json(res, 400, { ok: false, error: `目录不可用：${resolved}` });
+          }
+
+          /* 有计划正在执行时不许切项目。
+           * 技术上能切，但切完之后「某个 task 的输出属于哪个项目」就得靠
+           * generation 去猜 —— 那是最难查的一类状态错。第一版直接拒绝，
+           * 让用户先停止计划（界面上有停止按钮）。 */
+          if (beforeActivate) {
+            const reason = beforeActivate();
+            if (reason) return json(res, 409, { ok: false, code: 'plan-running', error: reason });
           }
 
           const cfg = read();

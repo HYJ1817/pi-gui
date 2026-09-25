@@ -455,6 +455,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     projectConfig: { handle: stub('projectConfig') },
     skills: { handle: stub('skills') },
     mcp: { handle: stub('mcp') },
+    planner: { handle: stub('planner') },
     gitRoutes: { handle: stub('git') },
     uploads: { handle: stub('uploads') },
   });
@@ -595,6 +596,54 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     return calls[0] === 'projects' || calls.join(',');
   });
 
+  /* ---- Planner / Agent 编排（P5） ---- */
+
+  check('GET /api/agents 命中 planner', () => {
+    const res = hit('GET', '/api/agents', authHeaders);
+    return JSON.parse(res.body()).handler === 'planner' || res.body();
+  });
+  check('GET /api/plans 命中 planner', () => {
+    const res = hit('GET', '/api/plans', authHeaders);
+    return JSON.parse(res.body()).handler === 'planner' || res.body();
+  });
+  check('POST /api/plans 命中 planner（不被 405 兜底吃掉）', () => {
+    const res = hit('POST', '/api/plans', authHeaders);
+    return JSON.parse(res.body()).handler === 'planner' || res.body();
+  });
+  check('POST /api/plans/<id>/start 命中 planner', () => {
+    const res = hit('POST', '/api/plans/plan-1/start', authHeaders);
+    return JSON.parse(res.body()).handler === 'planner' || res.body();
+  });
+  check('POST /api/plans/<id>/tasks/<tid>/retry 命中 planner', () => {
+    const res = hit('POST', '/api/plans/plan-1/tasks/t1/retry', authHeaders);
+    return JSON.parse(res.body()).handler === 'planner' || res.body();
+  });
+  check('GET /api/plans/<id> 命中 planner', () => {
+    const res = hit('GET', '/api/plans/plan-1', authHeaders);
+    return JSON.parse(res.body()).handler === 'planner' || res.body();
+  });
+  check('PUT /api/plans/<id> 命中 planner（不被 405 兜底吃掉）', () => {
+    const res = hit('PUT', '/api/plans/plan-1', authHeaders);
+    return JSON.parse(res.body()).handler === 'planner' || res.body();
+  });
+  check('/api/plans 不带令牌 → 401', () => {
+    const res = hit('GET', '/api/plans');
+    return res.code === 401 || res.code;
+  });
+  check('/api/agents 不带令牌 → 401', () => {
+    const res = hit('GET', '/api/agents');
+    return res.code === 401 || res.code;
+  });
+  check('/api/plans 不遮蔽 /api/projects（前缀不重叠）', () => {
+    const res = hit('GET', '/api/projects', authHeaders);
+    return JSON.parse(res.body()).handler === 'projects' || res.body();
+  });
+  check('/api/agents 不遮蔽 /api/plans（两者是独立路径）', () => {
+    const a = hit('GET', '/api/agents', authHeaders);
+    const b = hit('GET', '/api/plans', authHeaders);
+    return (JSON.parse(a.body()).handler === 'planner' && JSON.parse(b.body()).handler === 'planner') || a.body() + ' / ' + b.body();
+  });
+
   /* Git 前缀必须排在「非 GET → 405」之前，否则 /api/git/status 会被 405 掉。 */
   check('GET /api/git/status 不被 405 兜底吃掉', () => {
     const res = hit('GET', '/api/git/status', authHeaders);
@@ -645,21 +694,65 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
 
   /* ================= 模块边界 ================= */
   console.log('\n--- 依赖方向（不许成环） ---');
-  const files = fs.readdirSync(SERVER_DIR).filter((f) => f.endsWith('.js'));
 
+  /* 递归收集 server/ 下**所有** .js。
+   *
+   * 早先是 `readdirSync(SERVER_DIR).filter(.js)` —— 只看顶层。加了
+   * server/agents/ 与 server/planner/ 之后，这两个子目录**完全没被扫到**，
+   * 守卫仍然全绿但已经不覆盖新代码了。这种「代码搬走了、守卫还在原地空转」
+   * 的假绿比没有守卫更危险，所以改成递归。 */
+  const collectServerFiles = (dir) => {
+    const out = [];
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) out.push(...collectServerFiles(full));
+      else if (e.name.endsWith('.js')) out.push(full);
+    }
+    return out;
+  };
+
+  const files = collectServerFiles(SERVER_DIR);
+  const relOf = (p) => path.relative(ROOT, p).split(path.sep).join('/');
+  const serverSet = new Set(files.map((f) => path.resolve(f)));
+  const LIB_DIR = path.join(ROOT, 'lib') + path.sep;
+  const HTTP_UTILS = path.resolve(path.join(SERVER_DIR, 'http-utils.js'));
+  const SERVER_JS = path.resolve(path.join(ROOT, 'server.js'));
+
+  const rawImports = new Map();
   const deps = new Map();
   for (const f of files) {
-    const src = fs.readFileSync(path.join(SERVER_DIR, f), 'utf8');
-    const found = [...src.matchAll(/from\s+['"]\.\/([\w.-]+\.js)['"]/g)].map((m) => m[1]);
-    deps.set(f, found);
+    const src = fs.readFileSync(f, 'utf8');
+    const found = [...src.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
+    rawImports.set(relOf(f), found);
+    const inside = [];
+    for (const spec of found) {
+      if (!spec.startsWith('.')) continue;
+      const abs = path.resolve(path.dirname(f), spec);
+      if (serverSet.has(abs)) inside.push(relOf(abs));
+    }
+    deps.set(relOf(f), inside);
   }
 
-  check('server/ 下的模块只 import 同目录兄弟或 ../lib', () => {
+  check(`server/ 递归扫到 ${files.length} 个模块（含 agents/ 与 planner/）`, () => files.length >= 15 || files.length);
+  check('server/ 下的模块只 import 同目录兄弟、http-utils 或 lib', () => {
+    /* 规则：
+     *   - 同一个目录里的兄弟 → 允许（agents/ 内部、planner/ 内部）
+     *   - lib/（仓库根的共享库）→ 允许
+     *   - server/http-utils.js → **显式放行**：它是被五条链路共用的 HTTP 工具，
+     *     不是一个业务模块。和已有的「git-routes → lib/git.js」是同一类例外。
+     *   - 其它跨目录 import → 不允许。跨子系统协作一律走 server.js 装配 + 依赖注入。 */
     const bad = [];
     for (const f of files) {
-      const src = fs.readFileSync(path.join(SERVER_DIR, f), 'utf8');
-      for (const m of src.matchAll(/from\s+['"](\.\.\/[^'"]+)['"]/g)) {
-        if (!m[1].startsWith('../lib/')) bad.push(`${f} → ${m[1]}`);
+      const rel = relOf(f);
+      for (const spec of rawImports.get(rel)) {
+        if (!spec.startsWith('.')) continue;
+        const abs = path.resolve(path.dirname(f), spec);
+        if (serverSet.has(abs)) {
+          const sameDir = path.dirname(abs) === path.dirname(f);
+          if (!sameDir && abs !== HTTP_UTILS) bad.push(`${rel} → ${spec}`);
+          continue;
+        }
+        if (!abs.startsWith(LIB_DIR)) bad.push(`${rel} → ${spec}`);
       }
     }
     return bad.length === 0 || bad.join(', ');
@@ -668,8 +761,10 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
   check('没有任何模块 import server.js（否则成环）', () => {
     const bad = [];
     for (const f of files) {
-      const src = fs.readFileSync(path.join(SERVER_DIR, f), 'utf8');
-      if (/from\s+['"]\.\.\/server\.js['"]/.test(src)) bad.push(f);
+      for (const spec of rawImports.get(relOf(f))) {
+        if (!spec.startsWith('.')) continue;
+        if (path.resolve(path.dirname(f), spec) === SERVER_JS) bad.push(relOf(f));
+      }
     }
     return bad.length === 0 || bad.join(', ');
   });
@@ -677,6 +772,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
   check('模块之间无循环依赖', () => {
     const cycles = [];
     const seen = new Set();
+    const keys = [...deps.keys()];
     const walk = (node, stack) => {
       if (stack.includes(node)) {
         cycles.push([...stack, node].join(' → '));
@@ -686,16 +782,16 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
       if (seen.has(key)) return;
       seen.add(key);
       for (const next of deps.get(node) || []) {
-        if (files.includes(next)) walk(next, [...stack, node]);
+        if (keys.includes(next)) walk(next, [...stack, node]);
       }
     };
-    for (const f of files) walk(f, []);
+    for (const f of keys) walk(f, []);
     return cycles.length === 0 || cycles.join(' | ');
   });
 
   check('router.js 不 import 任何业务模块（只依赖 http-utils 与 lib）', () => {
-    const d = deps.get('router.js') || [];
-    const bad = d.filter((x) => x !== 'http-utils.js');
+    const d = deps.get('server/router.js') || [];
+    const bad = d.filter((x) => x !== 'server/http-utils.js');
     return bad.length === 0 || bad.join(', ');
   });
 

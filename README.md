@@ -466,7 +466,124 @@ override 语义，需要同步更新 `server/skills.js`（它里面每一条规�
 MCP 部分不硬编码版本结论 —— 它会去读你装的 pi 包，所以 pi 真加了 MCP 支持时，
 报告会自动从「没有原生支持」变成「检测到 MCP 模块，但 Pi GUI 还没适配」。
 
+## 任务（Planner / 多 Agent 编排）
+
+侧栏的**任务**是 Pi GUI 自己的编排层：写一个较大的目标 → 拆成带依赖的任务 →
+指定执行 Agent → 按依赖串行跑 → 状态实时进面板。
+
+### 先说清楚：这不是 pi 的能力
+
+**pi 没有原生 sub-agent，也没有 plan mode**（`docs/usage.md` 明确把它列为
+「有意不做」的东西，和内置 MCP 一起）。所以这一层是 Pi GUI 在 pi 之上做的编排，
+界面文案里也不会写成「pi 的多 Agent」——那是冒领别人的能力。
+
+### Planner 和 Executor 是两个按钮
+
+```
+写目标 → [生成计划] → 看到任务列表 → 可以改 → [开始执行]
+```
+
+**不存在「一生成就自动开跑」这条路。** 生成之后你可以在运行前改标题、改描述、
+换 Agent、调依赖、删任务、加任务。运行中结构会锁定（只允许停止 / 重试 / 跳过），
+因为执行中途改依赖图会让调度器复杂度立刻失控。
+
+即使 AI Planner 完全不可用，**手工新建空计划 + 自己加任务**这条路照样能跑 ——
+这本身就是「Planner ≠ Executor」的证明。
+
+### Agent
+
+每个任务指定一个 Agent，必须来自内置 registry：
+
+| Agent | 本机状态 | 非交互调用方式 | 工具级事件 |
+| --- | --- | --- | --- |
+| `pi` | 已装 0.87.0 | `--print --mode json` + 独立 `--session-dir` | ✅ 有 |
+| `codex` | 已装 0.144.1 | `exec --json` | ✅ 有（item 级） |
+| `gemini` | 已装 0.50.0 | `-p --approval-mode auto_edit` | ❌ 只有文本 |
+| `claude` | 装了但**入口文件缺失** | `-p --output-format stream-json` | ✅ 有 |
+| `opencode` | 未安装 | 未适配 | — |
+
+`auto` 的规则刻意保持可预测：**优先 pi，否则按注册顺序取第一个可用的**。
+不做评分、不做黑箱排序 —— 你要能自己算出来它会选谁。
+
+**不可用的 Agent 会在你点「开始执行」之前就被拦下来**，并列出是哪个任务、
+为什么不可用（「装了但入口缺失」和「压根没装」是两种不同的原因），
+然后你可以换成别的。不会启动到一半才报 command not found。
+
+### 依赖是真正的 DAG
+
+```json
+[
+  { "id": "inspect",  "agent": "pi",    "dependsOn": [] },
+  { "id": "backend",  "agent": "codex", "dependsOn": ["inspect"] },
+  { "id": "frontend", "agent": "claude","dependsOn": ["inspect"] },
+  { "id": "verify",   "agent": "pi",    "dependsOn": ["backend", "frontend"] }
+]
+```
+
+执行前会校验：id 唯一、依赖存在、没有自依赖、**没有环**（报出环路径）、
+至少有一个入口任务、agent 存在、工作目录在项目内。
+**任何一条不过就不许执行** —— Planner 的输出一律视为不可信输入。
+
+### 默认串行
+
+`dependsOn` 全 success → 就绪；任一依赖 failed / cancelled / skipped → **阻塞**。
+默认并发是 **1**（可配到 2，不能再高）。
+
+为什么第一版串行：多个 coding agent 同时改同一个工作区会互相覆盖文件、
+把 git diff 混成一团、跑测试互相干扰、抢 `index.lock`，出了问题还说不清是谁改的。
+DAG 结构上支持并行，但默认不用。
+
+**同一时间只允许一个计划在跑**，而且**计划运行期间不能切换项目** ——
+否则「某个任务的输出属于哪个项目」就得靠猜。要切就先停计划。
+
+### 失败 / 停止 / 重试
+
+- **失败就暂停整个计划**，不自动跳过、不自动重试、不把失败当成功往下跑。
+  界面给你三个选择：重试 / 跳过 / 停止。
+- **跳过不会自动放行依赖者** —— 依赖它的任务仍然是「被阻塞」，要跑就得先改依赖。
+- **重试是 `attempt++`，历史 attempt 全部保留**，失败证据不会被覆盖。
+- **取消不是失败**：`cancelled` 用灰色，`failed` 才用红色。你自己按的停止，
+  标红会让你以为出错了，然后去重试一个刚放弃的任务。
+
+### 每个任务都能看到
+
+Agent、状态、耗时、退出码、结果摘要、attempt 历史、**执行期间观察到的工作区变化**。
+
+最后一条的措辞是刻意的：不写「Agent 修改了这些文件」。用户自己、编辑器、
+其它工具都可能在同一时间段改文件，把 git diff 全记在 Agent 头上是在编造因果。
+
+### 崩溃恢复
+
+计划存在 **`<PI_GUI_DATA>/plans/`**，不在项目仓库里（执行历史属于本地运行状态，
+写进仓库会弄脏你的 working tree），也**不放进 `.pi-gui/config.json`**
+（那是「项目偏好」，计划是「执行实例」，两者生命周期完全不同）。
+
+只在状态真的变了的时候写盘（任务状态变化 / attempt 起止 / 计划状态变化），
+不按 token 写；写盘是临时文件 + rename 的原子写。
+
+App 重开时如果看到某个任务还是 `running`，**不会假装它还在跑** ——
+原进程已经不存在了，它会恢复成 `interrupted` 并允许重试。
+
+### 边界
+
+- 不自动创建 git commit / push / reset / clean。Agent 可以改工作区，但提交由你决定。
+- `verification` 字段只保存描述，**由 Agent 执行**，Pi GUI 不自己 shell 执行它 ——
+  「谁执行」这件事必须只有一个答案。
+- 所有 Agent 都经过适配器调用：**`shell:false` + 参数数组**，没有一处拼接命令字符串。
+  Agent 的 stdout 是不可信文本，前端渲染路径一次 `innerHTML` 都不用。
+- 不提供「客户端传任意可执行文件」或「把 shell 命令当 agent」的入口。
+
+### 当前限制
+
+- 只在**一个工作区串行**跑，没有并行、没有跨机器、没有云端队列。
+- `claude` 在本机是「装了但入口文件缺失」（`bin/claude.exe` 被改名成
+  `claude.exe.old.<时间戳>`），重装 `@anthropic-ai/claude-code` 即可恢复；
+  它的调用方式是按官方 CLI 文档实现的，但**没有在本机真跑验证过**。
+- `opencode` 本机未安装，所以只做探测、**没有照印象写调用参数**。
+- Agent 之间不会互相通信，也不会递归创建任务。
+
 ## 从源码构建
+
 
 ```bash
 npm run build:dist      # 应用目录 + 安装程序 + 便携版 → dist-installer/
@@ -495,7 +612,7 @@ PI_GUI_ELECTRON_ZIP_DIR="$LOCALAPPDATA/electron/Cache/<hash>" npm run build:app
 ## 测试
 
 ```bash
-npm test                # 前端冒烟 + Git 变更 + 后端模块单测 + 项目配置 + Skills/MCP + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
+npm test                # 前端冒烟 + Git 变更 + 后端模块单测 + 可靠性 + 项目配置 + Skills/MCP + Planner + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
 npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全、工具时间线、
                         #   变更面板、diff 渲染；工具时间线那一段还会用
                         #   tests/fixtures/ 里的真实会话 fixture 重建一遍）
@@ -514,6 +631,13 @@ npm run test:skills     # Skills / MCP：发现规则（两种 collect 模式）
                         #   unknown）、详情与路径逃逸、启停写盘（保留未知字段 / 原子写 /
                         #   409 不动坏文件）、真实 router 的令牌与 Origin、MCP 能力报告与
                         #   密钥不外泄。全程在 os.tmpdir() 里造世界，不 spawn 进程、不联网
+npm run test:planner    # Planner / 多 Agent：Plan 与 Task 模型、DAG 校验（id 唯一 / 依赖存在 /
+                        #   无自依赖 / 无环 / 有入口 / 未知 agent / cwd 逃逸）、Scheduler 状态机
+                        #   （依赖解锁 / 失败暂停 / 取消≠失败 / 重试 attempt++ / 单活跃 / 崩溃恢复）、
+                        #   Agent registry 探测、进程层（真子进程打 ENOENT / 超时 / 取消 /
+                        #   进程树 kill / stdout 截断 / args 不被 shell 解释）、持久化与隔离、
+                        #   SSE 事件字段，外加 fake-agent 的完整 Scheduler E2E。
+                        #   全程 os.tmpdir()，不联网、不消耗模型额度
 npm run test:skills-live # 【要真 pi，约 2-3 分钟】拉起真的 pi 子进程，用真的 get_commands
                         #   对拍：项目级默认不加载 / --approve 才加载、同名冲突项目胜出、
                         #   停用语法（带 skills/ 前缀有效、裸名字无效、glob 有效）、
@@ -558,6 +682,19 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
   - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。pi 没有原生 MCP，所以这里不列
     Server，而是去读本机装的 pi 包、给出「支不支持」的结论与原文证据，并列出
     官方替代路径 extension 下已有哪些东西。**只读名字，不读内容、不执行**
+  - `agents/` — Agent 适配器与 registry。**唯一认识各 CLI 的地方**，Planner 不直接
+    spawn 任何东西。所有调用都是 `shell:false` + 参数数组；`.cmd` shim 会被解析成
+    包里真正的入口（`.js` 用 `process.execPath` 跑，`.exe` 直接跑）；取消走
+    `taskkill /T` 收整棵进程树
+    - `cli.js` — 共享的进程执行层（spawn / 行切分 / 超时 / 取消 / stdout 上限）
+    - `pi.js` / `codex.js` / `claude.js` / `opencode.js` / `gemini.js` — 各 CLI 的适配
+    - `fake.js` — 测试用适配器（确定性、进程内、不消耗额度）
+    - `index.js` — registry：register / detect / get / list / resolveAuto
+  - `planner/` — Planner / 多 Agent 编排。**Planner 与 Executor 严格分开**
+    - `model.js` — Plan / Task 模型、DAG 校验、cwd 安全（复用 `lib/safe-path.js`）
+    - `store.js` — 计划持久化（`<DATA_DIR>/plans/`，原子写，崩溃恢复只在启动时做）
+    - `scheduler.js` — 只负责执行已确认的计划：依赖推进、串行、失败暂停、取消、重试
+    - `index.js` — HTTP 路由 + 计划生成（用 pi 适配器 + 独立会话，不污染主聊天）
   - `uploads.js` — 附件上传与落盘
   - `git-routes.js` — Git 接口的 **HTTP 适配层**，业务逻辑全在 `lib/git.js`
   - `router.js` — 路由表与静态资源。**顺序即语义**，几处「必须排在前面」的注释都是踩过的坑
@@ -575,6 +712,9 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
   - `extensions.js` — Skills / MCP 两个标签页。列表 + 搜索 + 作用域/状态筛选、
     详情只读、启停带二次确认与重启提示。**刻意不用 `innerHTML`**（全走
     `textContent` / `createElement`），一条坏 skill 不会拖垮整页
+  - `planner.js` — 任务面板。计划列表 + 任务编辑器（改标题/描述/Agent/依赖）+
+    运行控制（开始/停止/重试/跳过）+ 实时事件 + 生成失败的诊断区。
+    同样不用 `innerHTML`；Agent 的 stdout 一律当不可信文本渲染
   - `tool-model.js` — 工具执行的**数据模型**：实时事件与历史消息都归一成 `ToolEntry`。
     纯数据 + 纯函数，不碰 DOM（所以能单测）
   - `tool-view.js` — 只认 `ToolEntry` 的视图层，实时与历史共用；零 `innerHTML`

@@ -66,6 +66,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param projectConfig 当前项目的配置（handle）
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
+ * @param planner       Planner / Agent 编排（handle）
  * @param gitRoutes     Git 路由（handle）
  * @param uploads       附件上传（handle）
  * @returns {import('node:http').RequestListener}
@@ -79,6 +80,7 @@ export function createRouter({
   projectConfig,
   skills,
   mcp,
+  planner,
   gitRoutes,
   uploads,
 }) {
@@ -150,6 +152,12 @@ export function createRouter({
     }
     if (url.pathname === '/api/mcp') {
       return mcp.handle(req, res, url);
+    }
+    /* Planner / Agent 编排（P5）。和上面同理用独立顶层路径。
+     * 位置要求：**必须排在下面 `req.method !== 'GET' → 405` 之前** ——
+     * 计划的所有操作都是 POST / PUT / DELETE。 */
+    if (url.pathname === '/api/agents' || url.pathname === '/api/plans' || url.pathname.startsWith('/api/plans/')) {
+      return planner.handle(req, res, url);
     }
     if (url.pathname === '/api/projects' || url.pathname.startsWith('/api/projects/')) {
       return projects.handle(req, res, url);

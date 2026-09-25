@@ -1072,3 +1072,156 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   .ext-list{flex:0 0 46%}
   .ext-detail{border-left:0;border-top:1px solid var(--line-soft);padding-left:0;padding-top:10px}
 }
+
+
+/* ============ Planner / 多 Agent 编排（P5） ============ */
+
+.modal-card.planner {
+  max-width: min(1180px, 96vw);
+  height: min(820px, 92vh);
+}
+
+.planner-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.planner-bar {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+.planner-bar-l { flex: 1 1 auto; min-width: 0; }
+.planner-bar-r { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.planner-goal {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.planner-goal:focus { outline: none; border-color: var(--accent); }
+
+.planner-list { max-height: none; }
+.planner-detail { overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+
+.planner-head { display: flex; align-items: center; gap: 8px; }
+.planner-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.planner-title:disabled { border-color: transparent; background: transparent; padding-left: 0; }
+.planner-goal-view {
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  padding: 6px 8px;
+  border-left: 2px solid var(--line);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.planner-progress {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--fg-dim);
+}
+.planner-warn { color: var(--warn, #d9a441); }
+
+.planner-tasks { display: flex; flex-direction: column; gap: 8px; }
+.planner-task {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-soft);
+}
+.planner-task-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.planner-task-id { font-weight: 600; }
+.planner-task-agent { color: var(--fg-dim); }
+.planner-task-dep { color: var(--fg-dim); }
+.planner-task-attempt { color: var(--warn, #d9a441); }
+.planner-task-dur { color: var(--fg-dim); margin-left: auto; }
+.planner-task-title,
+.planner-task-desc {
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.planner-task-desc { resize: vertical; line-height: 1.45; }
+.planner-task-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+.planner-lbl { color: var(--fg-dim); margin-right: 4px; }
+.planner-deps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.planner-dep { display: inline-flex; align-items: center; gap: 4px; color: var(--fg-dim); }
+
+.planner-task-err {
+  font-size: 12px;
+  color: var(--err, #e5534b);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.planner-task-summary {
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+  padding: 6px 8px;
+  border-left: 2px solid var(--line);
+}
+.planner-changes { display: flex; flex-direction: column; gap: 3px; }
+.planner-change { display: flex; gap: 8px; font-size: 12px; align-items: baseline; }
+.planner-change-path { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.planner-change-kind { color: var(--fg-dim); }
+.planner-change-num { color: var(--fg-dim); margin-left: auto; }
+.planner-attempts, .planner-livelog { display: flex; flex-direction: column; gap: 3px; }
+.planner-attempt, .planner-live-line { display: flex; gap: 8px; font-size: 12px; align-items: baseline; }
+.planner-attempt-err { color: var(--fg-dim); }
+.planner-live-tool { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.planner-live-detail { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planner-live-text { color: var(--fg-dim); white-space: pre-wrap; word-break: break-word; }
+
+.planner-diag {
+  border: 1px solid var(--err, #e5534b);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+.planner-diag-msg { font-size: 13px; color: var(--err, #e5534b); }
+.planner-diag-list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--fg-dim); }
+
+@media (max-width: 900px) {
+  .planner-bar { flex-direction: column; }
+  .planner-bar-r { flex-direction: row; }
+}

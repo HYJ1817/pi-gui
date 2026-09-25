@@ -164,6 +164,67 @@ class FakeES {
 }
 window.EventSource = FakeES;
 
+
+/* /api/agents 与 /api/plans 的桩。形状照抄后端真实返回。
+ * 覆盖规格 §48 的 UI 组（47-53）需要的四种状态：成功 / 失败（带 attempt 历史）/
+ * 运行中 / 被阻塞，外加一个「不可用 agent」与一条「生成失败」的响应。 */
+const stubAgents = {
+  ok: true,
+  available: ['pi', 'codex'],
+  auto: 'pi',
+  hasProject: true,
+  activePlanId: null,
+  agents: [
+    { id: 'pi', name: 'Pi', description: 'pi coding agent', available: true, version: '0.87.0', reason: '', detail: '', capabilities: { streaming: true, cancellation: true, resume: true, toolEvents: true }, notes: [], testOnly: false },
+    { id: 'codex', name: 'Codex', description: 'OpenAI Codex CLI', available: true, version: '0.144.1', reason: '', detail: '', capabilities: { streaming: true, cancellation: true, resume: true, toolEvents: true }, notes: [], testOnly: false },
+    { id: 'claude', name: 'Claude Code', description: 'Anthropic Claude Code CLI', available: false, version: '2.1.142', reason: 'entry-missing', detail: '@anthropic-ai/claude-code@2.1.142 已安装，但入口文件不存在：bin/claude.exe', capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false }, notes: ['安装不完整'], testOnly: false },
+    { id: 'opencode', name: 'OpenCode', description: 'OpenCode CLI', available: false, version: '', reason: 'not-installed', detail: '找不到 npm 包 opencode-ai', capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false }, notes: [], testOnly: false },
+  ],
+};
+
+const stubPlan = {
+  id: 'plan-1',
+  title: '给这个项目补登录功能',
+  goal: '补完整的登录功能，并跑测试',
+  status: 'paused',
+  createdAt: 1,
+  updatedAt: 2,
+  startedAt: 1,
+  endedAt: null,
+  projectRoot: 'C:/demo',
+  concurrency: 1,
+  recoveryNotes: [],
+  tasks: [
+    { id: 'inspect', title: '分析认证架构', description: '读现有代码', agent: 'pi', workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '', verification: null,
+      attempts: [{ attempt: 1, success: true, error: '', summary: '读完了', exitCode: 0, startedAt: 1, endedAt: 2 }],
+      result: { success: true, exitCode: 0, summary: '已分析完现有认证架构', toolCalls: 2, durationMs: 12000, raw: null, changes: { available: true, files: [{ path: 'src/auth.js', change: 'modified', status: 'M', additions: 31, deletions: 12 }], note: '执行期间观察到的工作区变化（可能也包含其它来源的改动）' } } },
+    { id: 'backend', title: '实现后端接口', description: '写接口', agent: 'codex', workingDirectory: '.', dependsOn: ['inspect'], status: 'failed', startedAt: 3, endedAt: 4, attempt: 2, error: '第一次故意失败：模型报 402', verification: null,
+      attempts: [
+        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4 },
+        { attempt: 2, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6 },
+      ],
+      result: { success: false, exitCode: 1, summary: '', toolCalls: 0, durationMs: 3000, raw: null, changes: { available: true, files: [], note: '' } } },
+    { id: 'frontend', title: '实现前端界面', description: '写页面', agent: 'claude', workingDirectory: '.', dependsOn: ['inspect'], status: 'cancelled', startedAt: 7, endedAt: 8, attempt: 1, error: '已取消', verification: null, attempts: [{ attempt: 1, success: false, error: '已取消', summary: '', exitCode: null, startedAt: 7, endedAt: 8 }], result: { success: false, exitCode: null, summary: '', toolCalls: 0, durationMs: 500, raw: null, changes: { available: false, files: [], note: '' } } },
+    { id: 'verify', title: '运行测试验证', description: '跑 npm test', agent: 'pi', workingDirectory: '.', dependsOn: ['backend', 'frontend'], status: 'blocked', startedAt: null, endedAt: null, attempt: 0, error: '', verification: { command: 'npm test' }, attempts: [], result: null },
+  ],
+};
+
+const stubPlans = {
+  ok: true,
+  hasProject: true,
+  activePlanId: null,
+  broken: [],
+  plans: [
+    { id: 'plan-1', title: '给这个项目补登录功能', goal: 'g', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/demo', counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, recoveryNotes: [] },
+    { id: 'plan-2', title: '已经跑完的老计划', goal: 'g', status: 'completed', createdAt: 0, updatedAt: 0, startedAt: 0, endedAt: 0, projectRoot: 'C:/demo', counts: { total: 2, success: 2, failed: 0, cancelled: 0, skipped: 0 }, recoveryNotes: ['上次运行被中断：1 个任务需要重试'] },
+  ],
+};
+
+/* 生成失败的桩：验证 §33「把原因与原始输出摆出来，而不是 500 / 崩溃」 */
+let stubGenerate = { ok: false, error: '模型生成的计划没有通过校验', errors: ['依赖成环：a → b → a', '没有任何无依赖的任务（没有入口，无法开始执行）'], raw: '```json\n{"tasks":[{"id":"a","dependsOn":["b"]}]}\n```' };
+
+const plannerCalls = [];
+
 window.fetch = async (url, opts) => {
   const u = String(url);
   if (u.includes('/api/upload')) {
@@ -226,6 +287,23 @@ window.fetch = async (url, opts) => {
       };
     }
     return { json: async () => stubProjectConfig };
+  }
+  if (u.includes('/api/agents')) {
+    return { json: async () => stubAgents };
+  }
+  if (u.includes('/api/plans')) {
+    const method = (opts && opts.method) || 'GET';
+    let body = null;
+    try {
+      body = opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
+    } catch {
+      body = null;
+    }
+    plannerCalls.push({ method, url: u, body });
+    if (u.includes('/generate')) return { json: async () => stubGenerate };
+    if (method !== 'GET') return { json: async () => ({ ok: true, planId: 'plan-1', taskId: 'backend' }) };
+    if (/\/api\/plans\/[^/?]+/.test(u)) return { json: async () => ({ ok: true, plan: stubPlan, counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, agents: [], activePlanId: null }) };
+    return { json: async () => stubPlans };
   }
   if (u.includes('/api/mcp')) {
     mcpCalls.push(true);
@@ -2616,7 +2694,146 @@ staticCheck();
     $('confirmLayer').hidden = true;
     $('confirmCard').innerHTML = '';
   }
+
+  /* ---------- Planner / 多 Agent 编排面板（规格 §48 的 47-53） ---------- */
+  async function plannerSection() {
+    plannerCalls.length = 0;
+    $('toasts').innerHTML = '';
+
+    window.openPlanner();
+    await new Promise((r) => setTimeout(r, 40));
+    const card = $('modalCard');
+
+    check('Planner：面板有「计划」与「Agent」两个 Tab', () => {
+      const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
+      return (labels.length === 2 && labels[0] === '计划' && labels[1] === 'Agent') || JSON.stringify(labels);
+    });
+    check('Planner：计划列表渲染出当前项目的计划（含已完成的旧计划）', () => {
+      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+      return (names.includes('给这个项目补登录功能') && names.includes('已经跑完的老计划')) || JSON.stringify(names);
+    });
+    check('Planner：未选中时提示先选一个计划（不是空白页）', () =>
+      /选一个计划|先生成一个/.test(card.querySelector('.planner-detail').textContent) || card.querySelector('.planner-detail').textContent.slice(0, 80));
+
+    /* 按 task id 精确定位。**不能**用 textContent.includes(id) ——
+     * 每个任务的依赖选择器里都列着其它任务的 id，那样会全部命中第一个任务
+     * （第一版就是这么写的，结果三条断言全看的是同一个任务）。 */
+    const taskEl = (id) =>
+      [...card.querySelectorAll('.planner-task')].find(
+        (x) => x.querySelector('.planner-task-id') && x.querySelector('.planner-task-id').textContent === id
+      );
+
+    // 47. 选中一个计划 → 详情渲染
+    card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+    await new Promise((r) => setTimeout(r, 40));
+    check('47. 选中后详情渲染出 4 个任务，标题可编辑', () => {
+      const tasks = card.querySelectorAll('.planner-task');
+      const title = card.querySelector('.planner-title');
+      return (tasks.length === 4 && title && title.value === '给这个项目补登录功能') || `tasks=${tasks.length}`;
+    });
+    check('47b. 每个任务显示 agent 与依赖', () => {
+      const t = taskEl('verify');
+      return (t && /pi/.test(t.textContent) && /依赖 backend, frontend/.test(t.textContent)) || (t ? t.textContent.slice(0, 160) : '没找到 verify');
+    });
+
+    // 49/50. 运行中与失败状态
+    check('49/50. 四种状态各自渲染：成功 / 失败 / 已取消 / 被阻塞', () => {
+      const txt = card.querySelector('.planner-detail').textContent;
+      return (txt.includes('成功') && txt.includes('失败') && txt.includes('已取消') && txt.includes('被阻塞')) || txt.slice(0, 200);
+    });
+    check('49b. 状态圆点区分开：成功=ok、失败=err、取消=dim（不标红）', () => {
+      const dotOf = (id) => {
+        const it = taskEl(id);
+        const d = it && it.querySelector('.planner-task-top .ext-dot');
+        return d ? d.className : '';
+      };
+      const okDot = dotOf('inspect');
+      const errDot = dotOf('backend');
+      const cancelDot = dotOf('frontend');
+      const blockedDot = dotOf('verify');
+      return (okDot.includes('ok') && errDot.includes('err') && cancelDot.includes('dim') && blockedDot.includes('warn')) || `${okDot} / ${errDot} / ${cancelDot} / ${blockedDot}`;
+    });
+    check('§25. 取消不是失败：已取消那条**没有**用错误色', () => {
+      const it = taskEl('frontend');
+      const dot = it && it.querySelector('.planner-task-top .ext-dot');
+      return (dot && !dot.className.includes('err')) || (dot ? dot.className : '没找到');
+    });
+    check('50b. 失败任务把错误文本显示出来', () =>
+      /第一次故意失败/.test(card.querySelector('.planner-detail').textContent) || '没显示错误');
+
+    // 51. 重试
+    check('51. 失败/被中断的任务有「重试」按钮', () => {
+      const it = taskEl('backend');
+      const has = it && [...it.querySelectorAll('button')].some((b) => b.textContent === '重试');
+      return has || (it ? [...it.querySelectorAll('button')].map((b) => b.textContent).join(',') : '没找到');
+    });
+    check('53. attempt 历史被保留（两次尝试都列出来，没被覆盖）', () => {
+      const txt = card.querySelector('.planner-detail').textContent;
+      return (/尝试历史/.test(txt) && /第 1 次/.test(txt) && /第 2 次/.test(txt)) || '没有历史';
+    });
+    check('§19. 任务结果展示 Changes（含 +N −M）与「执行期间观察到」的措辞', () => {
+      const txt = card.querySelector('.planner-detail').textContent;
+      return (/src\/auth\.js/.test(txt) && /\+31/.test(txt) && /执行期间观察到/.test(txt)) || txt.slice(0, 240);
+    });
+    check('§26. 暂停时明确提示要用户选「重试 / 跳过 / 停止」', () =>
+      /重试 \/ 跳过 \/ 停止/.test(card.textContent) || card.textContent.slice(0, 200));
+
+    // 51b. 点重试真的打到了 retry 接口
+    {
+      const it = taskEl('backend');
+      const retryBtn = [...it.querySelectorAll('button')].find((b) => b.textContent === '重试');
+      retryBtn.onclick();
+      await new Promise((r) => setTimeout(r, 60));
+      const hit = plannerCalls.find((c) => /\/tasks\/backend\/retry/.test(c.url));
+      check('51b. 点「重试」调用 /api/plans/:id/tasks/:taskId/retry', () => Boolean(hit) || JSON.stringify(plannerCalls.map((c) => c.url)));
+    }
+
+    // 48. Agent Tab
+    card.querySelectorAll('.ext-tab')[1].onclick();
+    await new Promise((r) => setTimeout(r, 40));
+    check('48. Agent Tab 列出全部 agent，并标出可用的', () => {
+      const txt = [...card.querySelectorAll('.ext-panel')].find((p) => p.style.display !== 'none').textContent;
+      return (/Pi/.test(txt) && /Codex/.test(txt) && /可用/.test(txt)) || txt.slice(0, 200);
+    });
+    check('48b. 不可用的 agent 显式说明原因（装坏了 vs 没装）', () => {
+      const txt = [...card.querySelectorAll('.ext-panel')].find((p) => p.style.display !== 'none').textContent;
+      return (/入口文件不存在/.test(txt) && /找不到 npm 包/.test(txt)) || txt.slice(0, 300);
+    });
+    check('48c. Agent Tab 说清「pi 没有原生 sub-agent / plan mode」（不冒领能力）', () => {
+      const txt = [...card.querySelectorAll('.ext-panel')].find((p) => p.style.display !== 'none').textContent;
+      return /没有原生 sub-agent/.test(txt) || txt.slice(0, 240);
+    });
+    check('§10. 能力用统一字段展示（不出现 if codex / if claude 那种硬编码文案）', () => {
+      const txt = [...card.querySelectorAll('.ext-panel')].find((p) => p.style.display !== 'none').textContent;
+      return /工具级事件|仅文本摘要/.test(txt) || txt.slice(0, 240);
+    });
+
+    // 33. 生成失败 → 诊断区
+    card.querySelectorAll('.ext-tab')[0].onclick();
+    const goal = card.querySelector('.planner-goal');
+    goal.value = '随便一个目标';
+    card.querySelector('.planner-bar-r button').onclick();
+    await new Promise((r) => setTimeout(r, 60));
+    check('§33. 生成失败：显示失败原因 + 校验错误清单', () => {
+      const txt = card.querySelector('.planner-diag').textContent;
+      return (/没有通过校验/.test(txt) && /依赖成环/.test(txt)) || txt.slice(0, 200);
+    });
+    check('§33b. 生成失败：把 Planner 的原始输出摆出来（诊断区，不是崩溃）', () => {
+      const txt = card.querySelector('.planner-diag').textContent;
+      return /原始输出/.test(txt) && /dependsOn/.test(txt) || txt.slice(0, 200);
+    });
+    check('§33c. 诊断区有「重新生成」入口', () =>
+      [...card.querySelectorAll('.planner-diag button')].some((b) => b.textContent === '重新生成') || '没有');
+
+    check('Planner：DOM 里没有密钥样式的字符串', () =>
+      !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(card.innerHTML) || '出现了疑似密钥');
+
+    window.closeModal();
+    await new Promise((r) => setTimeout(r, 20));
+  }
+
   await extSection();
+  await plannerSection();
 
   /* --- 重建历史时同样不留空白「Pi」 ---
    *

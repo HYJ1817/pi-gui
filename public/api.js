@@ -140,3 +140,33 @@ export const uploadFile = (file, name) =>
     body: file,
     contentType: 'application/octet-stream',
   });
+
+
+/* ---------- Planner / Agent 编排（P5） ---------- */
+
+/** 本机检测到哪些 Agent、各自能力。前端只消费统一 capability，不写 if codex / if claude。 */
+export const fetchAgents = () => getJSON('/api/agents');
+
+/** 当前项目的计划列表（摘要）。 */
+export const fetchPlans = () => getJSON('/api/plans');
+
+export const fetchPlan = (id) => getJSON('/api/plans/' + encodeURIComponent(id));
+
+/** 手工新建（空计划或带 tasks）。Planner 不是唯一入口 —— AI 不可用时执行器照样能用。 */
+export const createPlan = (body) => sendJSON('/api/plans', { body });
+
+/** 让 Planner 生成计划。失败时返回 ok:false + 原因 + 原始输出（诊断区用），不是 500。 */
+export const generatePlan = (body) => sendJSON('/api/plans/generate', { body });
+
+export const updatePlan = (id, body) => sendJSON('/api/plans/' + encodeURIComponent(id), { method: 'PUT', body });
+export const deletePlan = (id) => sendJSON('/api/plans/' + encodeURIComponent(id), { method: 'DELETE' });
+
+export const startPlan = (id) => sendJSON('/api/plans/' + encodeURIComponent(id) + '/start', {});
+export const stopPlan = (id) => sendJSON('/api/plans/' + encodeURIComponent(id) + '/stop', {});
+
+/** 单个任务的三个操作。cancelled 与 failed 分开，前端也按不同颜色呈现。 */
+const taskUrl = (id, taskId, action) =>
+  '/api/plans/' + encodeURIComponent(id) + '/tasks/' + encodeURIComponent(taskId) + '/' + action;
+export const retryPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'retry'), {});
+export const cancelPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'cancel'), {});
+export const skipPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'skip'), {});
