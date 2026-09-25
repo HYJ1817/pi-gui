@@ -29,13 +29,20 @@ const DATA = path.join(os.tmpdir(), 'pi-gui-execheck-data');
  *
  * 「pi 子进程已拉起」要验的是**打包出来的 exe 还能 spawn 外部命令并跟踪生命周期**，
  * 不是「这台机器装了 pi」。原来直接依赖本机安装 → 开发机绿、干净 CI runner 红。
- * rpc-bridge 在 Windows 上走 shell:true，所以一个 .cmd 就够。 */
+ * rpc-bridge 在 Windows 上走 shell:true，所以一个 .cmd 就够。
+ *
+ * ⚠️ 必须用**脚本文件**而不是 `node -e "..."`：rpc-bridge 会把 `--mode rpc ...`
+ * 传下来，而 `node -e "代码" --mode rpc` 会被 node 当成选项解析、报
+ * `bad option: --mode` 后直接退出（Node 22 / 24 都一样）—— 假 pi 秒退，
+ * piRunning 就成了 false。 */
 const FAKE_PI_DIR = path.join(os.tmpdir(), 'pi-gui-execheck-bin');
 fs.mkdirSync(FAKE_PI_DIR, { recursive: true });
+const FAKE_PI_SCRIPT = path.join(FAKE_PI_DIR, 'fake-pi.cjs');
+fs.writeFileSync(FAKE_PI_SCRIPT, 'setInterval(function () {}, 1e9);\n', 'utf8');
 const FAKE_PI = path.join(FAKE_PI_DIR, 'fake-pi.cmd');
 fs.writeFileSync(
   FAKE_PI,
-  '@echo off\r\n"' + process.execPath + '" -e "setInterval(function(){},1e9)" %*\r\n',
+  '@echo off\r\n"' + process.execPath + '" "' + FAKE_PI_SCRIPT + '" %*\r\n',
   'utf8'
 );
 

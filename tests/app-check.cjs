@@ -46,13 +46,21 @@ const FIX = path.join(os.tmpdir(), 'pi-gui-fixtures');
  * 于是在开发机上是绿的、在干净 CI runner 上红（第一次 CI 就是这么暴露的）。
  *
  * rpc-bridge 在 Windows 上走 shell:true，所以一个 .cmd 就够了；假 pi 什么都不用做，
- * 活着就能让 /api/status 的 piRunning 为 true。这样这条断言在任何机器上都确定。 */
+ * 活着就能让 /api/status 的 piRunning 为 true。这样这条断言在任何机器上都确定。
+ *
+ * ⚠️ 必须用**脚本文件**而不是 `node -e "..."`：rpc-bridge 会把 `--mode rpc ...`
+ * 作为参数传下来，而 `node -e "代码" --mode rpc` 会被 node 当成选项解析并直接
+ * 报 `bad option: --mode` 退出（Node 22 / 24 都一样）—— 假 pi 秒退，
+ * piRunning 就成了 false。这个坑在本地跑不出来（见下），是 CI 抓出来的。
+ * `node 脚本.js --mode rpc` 则一切正常：脚本名之后的都是 argv。 */
 const FAKE_PI_DIR = path.join(os.tmpdir(), 'pi-gui-appcheck-bin');
 fs.mkdirSync(FAKE_PI_DIR, { recursive: true });
+const FAKE_PI_SCRIPT = path.join(FAKE_PI_DIR, 'fake-pi.cjs');
+fs.writeFileSync(FAKE_PI_SCRIPT, 'setInterval(function () {}, 1e9);\n', 'utf8');
 const FAKE_PI = path.join(FAKE_PI_DIR, 'fake-pi.cmd');
 fs.writeFileSync(
   FAKE_PI,
-  '@echo off\r\n"' + process.execPath + '" -e "setInterval(function(){},1e9)" %*\r\n',
+  '@echo off\r\n"' + process.execPath + '" "' + FAKE_PI_SCRIPT + '" %*\r\n',
   'utf8'
 );
 
