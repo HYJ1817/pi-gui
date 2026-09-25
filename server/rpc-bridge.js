@@ -14,11 +14,21 @@
  *   2. **Windows 上经 shell 启动**（pi 是 npm 的 .cmd 包装脚本），且自己拼命令串，
  *      不用 spawn(..., {shell:true}) —— 后者会触发 DEP0190 刷弃用警告。
  *   3. **令牌不能进 pi 的环境**（见 spawnPi 的说明）。
+ *
+ * 除了 fire-and-forget 的 send()，这里还提供 request()：把命令发出去并等它那条
+ * 应答。pi 的应答信封是 `{ id, type:"response", command, success, data }` ——
+ * **id 会原样回显**，所以按 id 配对是可靠的。需要它的场景是后端自己要读 pi 的
+ * 权威状态（例如 server/skills.js 用 `get_commands` 拿「pi 实际加载了哪些 skill」）。
+ * 注意 request() 不影响 SSE：同一条应答仍然照常 publish 给前端。
  */
 import { spawn } from 'node:child_process';
 
 /** 崩溃后自动重启的延迟。 */
 const RESTART_DELAY_MS = 1200;
+
+/** request() 的默认超时。pi 冷启动约 20 秒，但 request() 只在 pi 已经起来之后才用，
+ *  所以这里给 10 秒足够；超时返回 null 而不是抛错，让调用方自己降级。 */
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 
 /**
  * @param runtime       共享运行态（要 cwd）。只读，不改。
@@ -48,6 +58,23 @@ export function createRpcBridge({
 }) {
   let pi = null;
   let stdoutBuf = '';
+
+  /* 挂起的请求：id → { resolve, timer }。
+   *
+   * id 由本模块自己发号（从 1 递增），与前端发命令用的 id 空间**不重叠**
+   * 是不必要的 —— pi 只是原样回显，本模块只认自己发出去的那些 id。
+   * 真正需要防的是「同一时刻有多条 request 在等」，所以用 Map 而不是单变量。 */
+  const pending = new Map();
+  let nextRequestId = 1;
+
+  /** 结束所有挂起请求（超时/退出/重启时用）。reason 只用于内部排查，不外发。 */
+  function settleAllPending(value) {
+    for (const [, entry] of pending) {
+      clearTimeout(entry.timer);
+      entry.resolve(value);
+    }
+    pending.clear();
+  }
 
   /** 项目配置贡献的参数。纯读，失败不抛（拿不到就当没有）。 */
   function projectArgs() {
@@ -105,6 +132,9 @@ export function createRpcBridge({
   }
 
   function start() {
+    /* 新进程的 id 空间是干净的 —— 上一轮挂起的请求不会有应答了，先放掉。
+     * （正常路径上 exit 回调已经放过一次，这里是幂等的兜底。） */
+    settleAllPending(null);
     /* 没有项目就不启动 pi。
      *
      * pi 的 cwd 只能在启动时确定，没有 cwd 就没有合理的启动参数；
@@ -168,11 +198,23 @@ export function createRpcBridge({
         stdoutBuf = stdoutBuf.slice(nl + 1);
         if (line.endsWith('\r')) line = line.slice(0, -1);
         if (!line) continue;
+        let msg;
         try {
-          publish(JSON.parse(line));
+          msg = JSON.parse(line);
         } catch {
           publish({ type: 'bridge_parse_error', raw: line.slice(0, 400) });
+          continue;
         }
+        /* 先看是不是某条挂起请求的应答。
+         * 只认 type:"response" 且 id 在 pending 里 —— 事件（type 不是 response）
+         * 和别人的应答都直接落到下面的 publish。 */
+        if (msg && msg.type === 'response' && pending.has(msg.id)) {
+          const entry = pending.get(msg.id);
+          pending.delete(msg.id);
+          clearTimeout(entry.timer);
+          entry.resolve(msg.success === false ? { __error: msg.error || '命令失败' } : (msg.data ?? {}));
+        }
+        publish(msg);
       }
     });
 
@@ -188,6 +230,8 @@ export function createRpcBridge({
     pi.on('exit', (code, signal) => {
       pi = null;
       stdoutBuf = '';
+      // 进程没了，挂起的请求不可能再有应答 —— 立刻放掉，别让调用方干等到超时
+      settleAllPending(null);
       publish({ type: 'bridge_status', state: 'exited', code, signal });
       if (!runtime.isShuttingDown()) {
         setTimeout(start, RESTART_DELAY_MS);
@@ -207,8 +251,42 @@ export function createRpcBridge({
     pi.stdin.write(JSON.stringify(cmd) + '\n');
   }
 
+  /* 发一条命令并等它的应答。**永不 reject**，失败一律回 null ——
+   * 调用方（如 /api/skills）要的是「拿不到就降级」，不是让一个读接口抛 500。
+   *
+   * 返回：成功 → pi 应答里的 data 对象（无 data 时是 {}）；
+   *       pi 明确报错 → { __error: "..." }（调用方自己决定要不要展示）；
+   *       超时 / 子进程没起来 / 进程退出 → null。
+   *
+   * 注意这里**不**校验 cmd.id —— 由本模块发号，调用方传的 id 会被覆盖。 */
+  function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
+    return new Promise((resolve) => {
+      if (!runtime.getCurrentCwd() || !pi || !pi.stdin || pi.stdin.destroyed) {
+        resolve(null);
+        return;
+      }
+      const id = nextRequestId++;
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        resolve(null);
+      }, timeoutMs);
+      // timer.unref() 让一个挂起的请求不会拖住进程退出
+      if (typeof timer.unref === 'function') timer.unref();
+      pending.set(id, { resolve, timer });
+      try {
+        pi.stdin.write(JSON.stringify({ ...cmd, id }) + '\n');
+      } catch {
+        clearTimeout(timer);
+        pending.delete(id);
+        resolve(null);
+      }
+    });
+  }
+
   /** 重启 pi 子进程 —— 用于让它重新读取 ~/.pi/agent/models.json */
   function restart() {
+    // 重启等于把挂起请求的应答机会掐掉，先放掉再动进程
+    settleAllPending(null);
     if (pi) {
       publish({ type: 'bridge_status', state: 'restarting', reason: 'reload-config' });
       try {
@@ -229,6 +307,7 @@ export function createRpcBridge({
 
   /** 收尾时关掉子进程。不触发自动重启（shuttingDown 由 runtime 表达）。 */
   function stop() {
+    settleAllPending(null);
     if (!pi) return;
     try {
       pi.stdin.end();
@@ -259,5 +338,5 @@ export function createRpcBridge({
     };
   }
 
-  return { start, send, restart, stop, getState, buildArgs };
+  return { start, send, request, restart, stop, getState, buildArgs };
 }

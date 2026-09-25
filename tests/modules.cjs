@@ -453,6 +453,8 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     providers: { handle: stub('providers'), handleModels: stub('providers.models') },
     projects: { handle: stub('projects'), handleFs: stub('projects.fs') },
     projectConfig: { handle: stub('projectConfig') },
+    skills: { handle: stub('skills') },
+    mcp: { handle: stub('mcp') },
     gitRoutes: { handle: stub('git') },
     uploads: { handle: stub('uploads') },
   });
@@ -555,6 +557,41 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
   check('/api/projects 仍然命中 projects（两条路径不互相遮蔽）', () => {
     calls.length = 0;
     hit('GET', '/api/projects', authHeaders);
+    return calls[0] === 'projects' || calls.join(',');
+  });
+
+  /* 扩展能力：Skills 有 PUT（启停），所以必须排在「非 GET → 405」之前。 */
+  check('GET /api/skills 命中 skills', () => {
+    calls.length = 0;
+    hit('GET', '/api/skills', authHeaders);
+    return calls[0] === 'skills' || calls.join(',');
+  });
+  check('PUT /api/skills/<id> 命中 skills（不被 405 兜底吃掉）', () => {
+    calls.length = 0;
+    const res = hit('PUT', '/api/skills/abcdef0123456789', authHeaders);
+    return (calls[0] === 'skills' && res.code !== 405) || calls.join(',') + '/' + res.code;
+  });
+  check('GET /api/skills/<id> 命中 skills', () => {
+    calls.length = 0;
+    hit('GET', '/api/skills/abcdef0123456789', authHeaders);
+    return calls[0] === 'skills' || calls.join(',');
+  });
+  check('GET /api/mcp 命中 mcp', () => {
+    calls.length = 0;
+    hit('GET', '/api/mcp', authHeaders);
+    return calls[0] === 'mcp' || calls.join(',');
+  });
+  check('/api/skills 不带令牌 → 401（和其余 /api/* 一样过访问控制）', () => {
+    const res = hit('GET', '/api/skills');
+    return res.code === 401 || res.code;
+  });
+  check('/api/mcp 不带令牌 → 401', () => {
+    const res = hit('GET', '/api/mcp');
+    return res.code === 401 || res.code;
+  });
+  check('/api/skills 不遮蔽 /api/projects（前缀不重叠）', () => {
+    calls.length = 0;
+    hit('GET', '/api/projects/abc', authHeaders);
     return calls[0] === 'projects' || calls.join(',');
   });
 

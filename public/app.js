@@ -53,6 +53,7 @@ import { loadProjects, openDirPicker } from './projects.js';
 import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel } from './git.js';
+import { loadExtensionsBadge, openExtensions } from './extensions.js';
 
 /* ---------- 装配 ---------- */
 
@@ -681,6 +682,9 @@ $('btnAddProject').onclick = openDirPicker;
 $('btnPickProject').onclick = openDirPicker;
 $('btnProjectSettings').onclick = openProjectSettings;
 
+// 扩展能力（Skills / MCP）—— 跨项目的入口，和「模型供应商」同一组
+$('navExtensions').onclick = openExtensions;
+
 // 项目分组折叠状态记忆
 const group = $('groupHead').parentElement;
 try {
@@ -706,6 +710,9 @@ syncWelcome();
 
 loadProjects();
 loadProviders();
+/* 侧栏「扩展」右边那个数字：发现了几条 skill。
+ * 只做展示，失败就留空 —— 这个数字不该在启动路径上弹任何错。 */
+loadExtensionsBadge();
 /* Git 工作区状态先拉一次，把侧栏的「文件变更 N」填上。
  * 失败也无所谓 —— 不是 Git 仓库、没装 git、还没选项目都是正常情况，
  * 面板会各自给出中性文案（见 git.js 的 renderChangesBody）。 */

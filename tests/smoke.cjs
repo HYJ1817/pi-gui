@@ -57,6 +57,101 @@ let stubSaveResult = null;
 /* 每次 /api/project-config 调用的流水（方法 + body）。 */
 const projectConfigCalls = [];
 
+/* /api/skills 的可变桩。默认摆一组「各种状态都有」的样例 ——
+ * 一条正常、一条被设置关掉、一条项目未信任、一条坏掉、一条 pi 没加载，
+ * 用来钉住「每条独立展示、一条坏了不带塌整页」这件事。 */
+const SKILL_BASE = {
+  scope: 'user',
+  source: 'auto',
+  origin: 'top-level',
+  mode: 'pi',
+  rootLabel: '~/.pi/agent/skills',
+  path: 'C:\\Users\\21022\\.pi\\agent\\skills\\demo\\SKILL.md',
+  dir: 'C:\\Users\\21022\\.pi\\agent\\skills\\demo',
+  file: 'SKILL.md',
+  rel: 'skills/demo/SKILL.md',
+  baseDir: 'C:\\Users\\21022\\.pi\\agent',
+  loaded: true,
+  state: 'enabled',
+  stateNote: '',
+  shadowedBy: null,
+  disablePattern: '-skills/demo/SKILL.md',
+  settingsPath: 'C:\\Users\\21022\\.pi\\agent\\settings.json',
+  toggleable: true,
+  blockedByTrust: false,
+  disabledBy: '',
+  disableModelInvocation: false,
+  license: '',
+  compatibility: '',
+  bytes: 42,
+  errors: [],
+};
+let stubSkills = {
+  ok: true,
+  hasProject: true,
+  cwd: 'C:\\pi-GUI',
+  agentDir: 'C:\\Users\\21022\\.pi\\agent',
+  homeDir: 'C:\\Users\\21022',
+  globalSettings: 'C:\\Users\\21022\\.pi\\agent\\settings.json',
+  projectSettings: 'C:\\pi-GUI\\.pi\\settings.json',
+  trust: { trusted: false, requiresTrust: true, reason: 'ask-no-ui', trustFile: 'C:\\Users\\21022\\.pi\\agent\\trust.json' },
+  piReachable: true,
+  roots: [
+    { label: '~/.pi/agent/skills', dir: 'C:\\Users\\21022\\.pi\\agent\\skills', scope: 'user', mode: 'pi', exists: true, blockedByTrust: false },
+    { label: '<项目>/.pi/skills', dir: 'C:\\pi-GUI\\.pi\\skills', scope: 'project', mode: 'pi', exists: true, blockedByTrust: true },
+  ],
+  diagnostics: [],
+  counts: { total: 5, enabled: 1, project: 1, user: 4 },
+  skills: [
+    { ...SKILL_BASE, id: 'aaaaaaaaaaaaaaaa', name: 'code-review', description: 'Review source code for bugs', state: 'enabled', loaded: true },
+    {
+      ...SKILL_BASE, id: 'bbbbbbbbbbbbbbbb', name: 'pdf-tools', description: 'Work with PDF files',
+      state: 'disabled', loaded: false, disabledBy: '-skills/pdf-tools/SKILL.md',
+      stateNote: '被 settings 里的 -skills/pdf-tools/SKILL.md 关掉了',
+    },
+    {
+      ...SKILL_BASE, id: 'cccccccccccccccc', name: 'proj-only', description: 'Project scoped skill',
+      scope: 'project', rel: 'skills/proj-only/SKILL.md', state: 'untrusted', loaded: false,
+      blockedByTrust: true, stateNote: '项目未被信任：pi 在非交互模式下不加载项目级资源',
+    },
+    {
+      ...SKILL_BASE, id: 'dddddddddddddddd', name: 'broken-skill', description: '',
+      state: 'invalid', loaded: false,
+      stateNote: '没有 description，pi 不会加载',
+      errors: [{ level: 'error', message: 'frontmatter 里没有 description —— pi 不会加载它' }],
+    },
+    {
+      ...SKILL_BASE, id: 'eeeeeeeeeeeeeeee', name: 'mystery-skill', description: 'On disk but not reported by pi',
+      state: 'not-loaded', loaded: false, stateNote: '磁盘上有，但 pi 没有加载它',
+    },
+  ],
+};
+/* PUT /api/skills/<id> 的应答桩；置为对象就能模拟失败。 */
+let stubSkillToggle = null;
+const skillsCalls = [];
+
+/* /api/mcp 的桩。形状照抄后端真实返回（含 evidence 与 extensionRoute）。 */
+let stubMcp = {
+  ok: true,
+  supported: false,
+  reason: '这个 pi 包里没有任何 MCP 模块或配置约定（pi 官方明确表示不内置 MCP）',
+  evidence: 'docs/usage.md: It intentionally does not include built-in MCP, sub-agents, permission popups, plan mode, to-dos, or background bash.',
+  piVersion: '0.87.0',
+  piPackageDir: 'C:\\Users\\21022\\AppData\\Roaming\\npm\\node_modules\\@earendil-works\\pi-coding-agent',
+  servers: [],
+  serversNote: 'pi 没有 MCP 配置文件约定，所以没有 Server 可以列出。',
+  extensionRoute: {
+    note: 'pi 官方建议把 MCP 这类能力做成 extension 或 package。',
+    userDir: 'C:\\Users\\21022\\.pi\\agent\\extensions',
+    projectDir: 'C:\\pi-GUI\\.pi\\extensions',
+    user: { exists: false, entries: [], count: 0, error: '' },
+    project: { exists: true, entries: [{ name: 'my-ext', kind: 'file', size: 1200, mtime: 1 }], count: 1, error: '' },
+    fromSettings: [],
+    packages: [],
+  },
+};
+const mcpCalls = [];
+
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
 const { window } = dom;
 
@@ -131,6 +226,35 @@ window.fetch = async (url, opts) => {
       };
     }
     return { json: async () => stubProjectConfig };
+  }
+  if (u.includes('/api/mcp')) {
+    mcpCalls.push(true);
+    return { json: async () => stubMcp };
+  }
+  if (u.includes('/api/skills')) {
+    const isPut = Boolean(opts && opts.method === 'PUT');
+    const body = isPut && opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
+    skillsCalls.push({ method: isPut ? 'PUT' : 'GET', body, url: u });
+    if (isPut) return { json: async () => stubSkillToggle || { ok: true, changed: true, restartRequired: true, warnings: [] } };
+    // 详情：/api/skills/<id>
+    const m = /\/api\/skills\/([^/?]+)/.exec(u);
+    if (m) {
+      const rec = stubSkills.skills.find((s) => s.id === decodeURIComponent(m[1]));
+      if (!rec) return { json: async () => ({ ok: false, error: '找不到这个 skill' }) };
+      return {
+        json: async () => ({
+          ok: true,
+          skill: rec,
+          readable: true,
+          truncated: false,
+          bytes: 42,
+          content: `---\nname: ${rec.name}\ndescription: ${rec.description}\n---\n\n# ${rec.name}\n`,
+          files: [{ name: 'SKILL.md', dir: false, size: 42 }, { name: 'scripts', dir: true, size: null }],
+          note: '',
+        }),
+      };
+    }
+    return { json: async () => stubSkills };
   }
   if (u.includes('/api/projects')) {
     return {
@@ -2291,6 +2415,198 @@ staticCheck();
     window.S.models = savedModels;
     window.S.state = savedState;
   }
+
+  /* --- 扩展面板（Skills / MCP） ---
+   *
+   * 这一段的重点是**诚实性**与**降级能力**，不是「功能多」：
+   *   - 状态必须区分「磁盘上有」和「pi 加载了」；
+   *   - pi 没应答时必须说「无法确认」，不许显示成「未启用」；
+   *   - 项目未信任必须显式说明，否则用户只会觉得配置丢了；
+   *   - 一条坏 skill 不能带塌整页；
+   *   - MCP 必须说清 pi 没有原生支持，而不是给一个假列表。 */
+  async function extSection() {
+    skillsCalls.length = 0;
+    mcpCalls.length = 0;
+    $('toasts').innerHTML = '';
+
+    window.openExtensions();
+    await new Promise((r) => setTimeout(r, 30));
+    const card = $('modalCard');
+
+    check('扩展面板：打开后有 Skills / MCP 两个 Tab', () => {
+      const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
+      return (labels.length === 2 && labels[0] === 'Skills' && labels[1] === 'MCP') || JSON.stringify(labels);
+    });
+    check('扩展面板：Skills 列表渲染出名称与状态', () => {
+      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+      return names.includes('code-review') || JSON.stringify(names);
+    });
+    check('扩展面板：已启用的那条有绿色圆点，被停用的那条有灰圆点', () => {
+      const items = [...card.querySelectorAll('.ext-item')];
+      const on = items.find((i) => i.textContent.includes('code-review'));
+      const off = items.find((i) => i.textContent.includes('pdf-tools'));
+      const ok = Boolean(on && on.querySelector('.ext-dot.on') && off && off.querySelector('.ext-dot.off'));
+      return ok || `${on ? on.innerHTML.slice(0, 80) : 'no on'} | ${off ? off.innerHTML.slice(0, 80) : 'no off'}`;
+    });
+    check('扩展面板：一条坏 skill 只影响它自己（其余四条仍在）', () => {
+      const n = card.querySelectorAll('.ext-item').length;
+      return n === 5 || `渲染了 ${n} 条，应该是 5 条`;
+    });
+    check('扩展面板：坏 skill 的错误就地显示，不是整页报错', () => {
+      const item = [...card.querySelectorAll('.ext-item')].find((i) => i.textContent.includes('broken-skill'));
+      return (item && /没有 description/.test(item.textContent)) || (item ? item.textContent : '没找到这条');
+    });
+    check('扩展面板：项目未信任时显式说明原因（否则用户以为配置丢了）', () =>
+      /项目未被信任/.test(card.textContent) || card.textContent.slice(0, 200));
+    check('扩展面板：未信任那条自己也带说明', () => {
+      const item = [...card.querySelectorAll('.ext-item')].find((i) => i.textContent.includes('proj-only'));
+      return (item && /项目未被信任/.test(item.textContent)) || (item ? item.textContent : '没找到这条');
+    });
+    check('扩展面板：DOM 里没有密钥样式的字符串', () =>
+      !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(card.innerHTML) || '出现了疑似密钥');
+
+    // 搜索
+    const search = card.querySelector('.ext-search');
+    search.value = 'pdf';
+    search.dispatchEvent(new window.Event('input'));
+    await new Promise((r) => setTimeout(r, 10));
+    check('扩展面板：搜索能过滤（只剩 pdf-tools）', () => {
+      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+      return (names.length === 1 && names[0] === 'pdf-tools') || JSON.stringify(names);
+    });
+    search.value = 'SKILL.md';
+    search.dispatchEvent(new window.Event('input'));
+    await new Promise((r) => setTimeout(r, 10));
+    check('扩展面板：搜索也覆盖路径（否则「按文件找」做不到）', () => {
+      const n = card.querySelectorAll('.ext-item').length;
+      return n === 5 || `路径搜索命中 ${n} 条，应该是 5 条`;
+    });
+    search.value = 'zzzz-no-match';
+    search.dispatchEvent(new window.Event('input'));
+    await new Promise((r) => setTimeout(r, 10));
+    check('扩展面板：搜不到时给中性文案，不是空白', () =>
+      /没有符合筛选条件/.test(card.textContent) || card.textContent.slice(0, 120));
+    search.value = '';
+    search.dispatchEvent(new window.Event('input'));
+    await new Promise((r) => setTimeout(r, 10));
+
+    // 作用域筛选
+    const selScope = card.querySelectorAll('.ext-sel')[0];
+    selScope.value = 'project';
+    selScope.dispatchEvent(new window.Event('change'));
+    await new Promise((r) => setTimeout(r, 10));
+    check('扩展面板：作用域筛选（项目）只剩项目级那条', () => {
+      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+      return (names.length === 1 && names[0] === 'proj-only') || JSON.stringify(names);
+    });
+    selScope.value = '';
+    selScope.dispatchEvent(new window.Event('change'));
+
+    // 状态筛选
+    const selState = card.querySelectorAll('.ext-sel')[1];
+    selState.value = 'enabled';
+    selState.dispatchEvent(new window.Event('change'));
+    await new Promise((r) => setTimeout(r, 10));
+    check('扩展面板：状态筛选（已启用）只剩已加载那条', () => {
+      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+      return (names.length === 1 && names[0] === 'code-review') || JSON.stringify(names);
+    });
+    selState.value = '';
+    selState.dispatchEvent(new window.Event('change'));
+    await new Promise((r) => setTimeout(r, 10));
+
+    // 详情
+    const item = [...card.querySelectorAll('.ext-item')].find((i) => i.textContent.includes('code-review'));
+    item.onclick();
+    await new Promise((r) => setTimeout(r, 30));
+    check('扩展面板：点一条能看详情，且带 SKILL.md 正文（只读）', () => {
+      const code = card.querySelector('.ext-code');
+      return (code && /# code-review/.test(code.textContent)) || (code ? code.textContent : '没有正文区');
+    });
+    check('扩展面板：详情里列出了同目录文件', () => {
+      const files = [...card.querySelectorAll('.ext-file')].map((f) => f.textContent);
+      return (files.includes('SKILL.md') && files.includes('scripts/')) || JSON.stringify(files);
+    });
+    check('扩展面板：详情里区分「pi 是否加载」与「磁盘上有」', () =>
+      /pi 是否加载/.test(card.textContent) || card.textContent.slice(-200));
+
+    // 启停
+    const btnToggle = [...card.querySelectorAll('.ext-acts .btn')].find((b) => b.textContent === '停用');
+    check('扩展面板：可启停的那条给了「停用」按钮', () => Boolean(btnToggle) || '没有按钮');
+    if (btnToggle) {
+      btnToggle.onclick();
+      await new Promise((r) => setTimeout(r, 30));
+      const confirmOk = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '停用');
+      check('扩展面板：停用前先二次确认（且说明不会动 skill 文件）', () =>
+        (confirmOk && /不会删除或移动/.test($('confirmCard').textContent)) || $('confirmCard').textContent);
+      confirmOk.onclick();
+      await new Promise((r) => setTimeout(r, 40));
+      const put = skillsCalls.find((c) => c.method === 'PUT');
+      check('扩展面板：确认后发 PUT，且 enabled=false', () => (put && put.body && put.body.enabled === false) || JSON.stringify(put));
+      check('扩展面板：PUT 走的是 ID 路径，不发绝对路径', () => (put && /\/api\/skills\/[0-9a-f]{16}$/.test(put.url)) || (put ? put.url : '没有 PUT'));
+    }
+    // 重启提示（改 settings 必须重启 pi）
+    await new Promise((r) => setTimeout(r, 40));
+    check('扩展面板：改完提示需要重启 pi 才生效', () =>
+      /需要重启 pi/.test($('confirmCard').textContent + $('toasts').textContent) || $('confirmCard').textContent.slice(0, 120));
+    // 关掉重启确认框
+    const cancelRestart = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '取消');
+    if (cancelRestart) cancelRestart.onclick();
+    await new Promise((r) => setTimeout(r, 30));
+
+    /* pi 没应答时：loaded 是 null → 必须显示「无法确认」，不能显示成「未启用」。
+     * 这是最容易糊弄过去的一条 —— 把 null 当成 false 显示，用户会以为 skill 坏了。 */
+    const savedSkills = stubSkills;
+    stubSkills = {
+      ...savedSkills,
+      piReachable: false,
+      counts: { ...savedSkills.counts, enabled: 0 },
+      skills: savedSkills.skills.map((s) => ({ ...s, loaded: null, state: 'unknown', stateNote: 'pi 未运行，无法确认加载状态' })),
+    };
+    $('modalCard').innerHTML = '';
+    $('modal').hidden = true;
+    window.openExtensions();
+    await new Promise((r) => setTimeout(r, 30));
+    check('扩展面板：pi 没应答时显示「状态未知」，并说明原因', () =>
+      /无法确认/.test($('modalCard').textContent) || $('modalCard').textContent.slice(0, 200));
+    // 点一条看详情：这里必须写「无法确认（pi 未运行）」，
+    // 把 loaded=null 显示成「否」会让用户以为 skill 坏了
+    const firstItem = $('modalCard').querySelector('.ext-item');
+    if (firstItem) firstItem.onclick();
+    await new Promise((r) => setTimeout(r, 30));
+    check('扩展面板：pi 没应答时详情里写「无法确认」而不是「否」', () =>
+      /无法确认（pi 未运行）/.test($('modalCard').textContent) || $('modalCard').textContent.slice(-300));
+    stubSkills = savedSkills;
+
+    // 切到 MCP
+    const mcpTab = [...$('modalCard').querySelectorAll('.ext-tab')].find((b) => b.textContent === 'MCP');
+    mcpTab.onclick();
+    await new Promise((r) => setTimeout(r, 40));
+    const mcpCard = $('modalCard');
+    check('MCP 标签页：明确说 pi 没有原生 MCP 支持', () =>
+      /没有原生 MCP 支持/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
+    check('MCP 标签页：给出可核对的出处（不是空口断言）', () =>
+      /docs\/usage\.md/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
+    check('MCP 标签页：显示检测到的 pi 版本', () => /0\.87\.0/.test(mcpCard.textContent) || '没显示版本');
+    check('MCP 标签页：servers 为空时说明原因，不是一页空白', () =>
+      /没有 MCP 配置文件约定/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
+    check('MCP 标签页：指出官方替代路径是 extension 并列出本机已有的', () => {
+      const names = [...mcpCard.querySelectorAll('.ext-name')].map((n) => n.textContent);
+      return (/extension/.test(mcpCard.textContent) && names.includes('my-ext')) || JSON.stringify(names);
+    });
+    check('MCP 标签页：声明不安装 / 不执行扩展（边界说清楚）', () =>
+      /不安装、不启用、也不执行/.test(mcpCard.textContent) || '没写边界');
+    check('MCP 标签页：没有假装出「已配置 / 已连接」的状态', () =>
+      !/已连接|已配置/.test(mcpCard.textContent) || '出现了没有数据支撑的状态');
+    check('MCP 标签页：DOM 里没有密钥样式的字符串', () =>
+      !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(mcpCard.innerHTML) || '出现了疑似密钥');
+
+    $('modal').hidden = true;
+    $('modalCard').innerHTML = '';
+    $('confirmLayer').hidden = true;
+    $('confirmCard').innerHTML = '';
+  }
+  await extSection();
 
   /* --- 重建历史时同样不留空白「Pi」 ---
    *

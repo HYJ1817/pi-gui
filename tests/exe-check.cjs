@@ -226,6 +226,30 @@ async function main() {
     check('exe 内带 projectPath / 穿越参数不改变目标项目（唯一来源是 runtime 的 cwd）', () =>
       cfgQ.cwd === WORK || 'cwd=' + cfgQ.cwd);
 
+    /* 扩展能力（Skills / MCP）。和 project-config 同理：单文件 exe 里模块没进包
+     * 就是 404，所以这两个 GET 必须真的通。 */
+    const sk = await (await fetch(BASE + '/api/skills')).json();
+    check('exe 内 GET /api/skills 通（模块进包了）', () => sk.ok === true || JSON.stringify(sk));
+    check('exe 内 skills 列表是数组、counts 齐全', () =>
+      (Array.isArray(sk.skills) && sk.counts && typeof sk.counts.total === 'number') || JSON.stringify(sk.counts));
+    check('exe 内 skills 报出四个发现根', () => (sk.roots || []).length >= 3 || JSON.stringify(sk.roots));
+    check('exe 内认得出 agentDir（PI_CODING_AGENT_DIR 被 exe 读到了）', () =>
+      typeof sk.agentDir === 'string' && sk.agentDir.length > 0 || sk.agentDir);
+    check('exe 内 skills 负载里没有密钥字段', () => !/apiKey|password|secret/i.test(JSON.stringify(sk)) || '出现了敏感词');
+
+    const skDetail = await fetch(BASE + '/api/skills/' + '0'.repeat(16));
+    check('exe 内未知 skill ID → 404（不崩）', () => skDetail.status === 404 || skDetail.status);
+    const skDel = await fetch(BASE + '/api/skills', { method: 'DELETE' });
+    check('exe 内 DELETE /api/skills → 405', () => skDel.status === 405 || skDel.status);
+
+    const mc = await (await fetch(BASE + '/api/mcp')).json();
+    check('exe 内 GET /api/mcp 通（模块进包了）', () => mc.ok === true || JSON.stringify(mc));
+    check('exe 内 mcp 报告带 supported / servers / extensionRoute 三个字段', () =>
+      Boolean('supported' in mc && Array.isArray(mc.servers) && mc.extensionRoute) || JSON.stringify(Object.keys(mc)));
+    check('exe 内 mcp 不假装有 Server（servers 为空）', () => mc.servers.length === 0 || JSON.stringify(mc.servers));
+    check('exe 内 mcp 报告里没有「已连接」这类没数据支撑的状态', () =>
+      !/已连接|connected/i.test(JSON.stringify(mc)) || '出现了不该有的状态词');
+
     /* 附件抽取：pdfjs 的 worker 在 SEA 下最容易坏 */
     if (fs.existsSync(PDF)) {
       const buf = fs.readFileSync(PDF);

@@ -111,6 +111,25 @@ export const restoreAllGitPaths = ({ deleteUntracked = false, unstage = false, p
 /** 只做校验并拿回绝对路径；真正「用系统默认程序打开」由 Electron 侧完成。 */
 export const resolveGitOpenTarget = (path) => sendJSON('/api/git/open', { body: { path } });
 
+/* ---------- 扩展能力（Skills / MCP） ---------- */
+
+/** 当前可用的 Skills。后端会自己去问 pi（get_commands）确认哪些真的加载了，
+ *  所以这个接口可能比普通 GET 慢一点（一次 RPC 往返）。 */
+export const fetchSkills = () => getJSON('/api/skills');
+
+/** 单个 Skill 的详情（含 SKILL.md 正文）。id 是后端给的稳定 ID ——
+ *  前端**不传路径**，路径由后端在自己的索引里查。 */
+export const fetchSkillDetail = (id) => getJSON('/api/skills/' + encodeURIComponent(id));
+
+/** 启用 / 停用。后端会写进 pi 官方的 settings.json（用户级写全局、项目级写项目），
+ *  返回里带 restartRequired —— pi 只在启动时读 settings，所以要重启才生效。 */
+export const setSkillEnabled = (id, enabled) =>
+  sendJSON('/api/skills/' + encodeURIComponent(id), { method: 'PUT', body: { enabled } });
+
+/** MCP 能力报告。pi 0.87.0 没有原生 MCP，所以这里返回的是「为什么没有 + 怎么办」，
+ *  不是一份 Server 列表。 */
+export const fetchMcp = () => getJSON('/api/mcp');
+
 /* ---------- 附件上传 ---------- */
 
 /** 上传走裸二进制（文件名放 query），省掉 multipart 解析。 */

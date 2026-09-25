@@ -60,10 +60,12 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
 /**
  * @param auth          本地访问控制（denyRequest / handleHealth）
  * @param sse           事件总线（subscribe）
- * @param rpc           pi 桥接（send / restart / getState）
+ * @param rpc           pi 桥接（send / request / restart / getState）
  * @param providers     供应商（handle / handleModels）
  * @param projects      项目（handle / handleFs）
  * @param projectConfig 当前项目的配置（handle）
+ * @param skills        Skills（handle）
+ * @param mcp           MCP 能力报告（handle）
  * @param gitRoutes     Git 路由（handle）
  * @param uploads       附件上传（handle）
  * @returns {import('node:http').RequestListener}
@@ -75,6 +77,8 @@ export function createRouter({
   providers,
   projects,
   projectConfig,
+  skills,
+  mcp,
   gitRoutes,
   uploads,
 }) {
@@ -135,6 +139,17 @@ export function createRouter({
      * 换成独立路径就没有这个约束，也不用在注释里维护「谁必须排在谁前面」。 */
     if (url.pathname === '/api/project-config') {
       return projectConfig.handle(req, res, url);
+    }
+    /* 扩展能力（Skills / MCP）。和 project-config 同理用独立顶层路径，
+     * 不挂在别的前缀下面，省掉一条「谁必须排在谁前面」的隐式约束。
+     *
+     * 位置要求：**必须排在下面 `req.method !== 'GET' → 405` 之前** ——
+     * 启停 skill 用的是 PUT。 */
+    if (url.pathname === '/api/skills' || url.pathname.startsWith('/api/skills/')) {
+      return skills.handle(req, res, url);
+    }
+    if (url.pathname === '/api/mcp') {
+      return mcp.handle(req, res, url);
     }
     if (url.pathname === '/api/projects' || url.pathname.startsWith('/api/projects/')) {
       return projects.handle(req, res, url);

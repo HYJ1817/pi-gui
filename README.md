@@ -363,6 +363,109 @@ Agent 执行 `write` / `edit` / `bash` 之后会自动刷新（防抖 450ms，�
 「项目设置」里的**恢复默认**只把表单填回默认值，点了「保存」才真正写盘 ——
 误点的代价太大，多一步确认。
 
+## 扩展（Skills / MCP）
+
+侧栏的**扩展**是 Skills 与 MCP 两个标签页。它管的是**你已经装好的**能力，
+不是商店 —— 没有下载、没有安装、没有远程代码执行。
+
+### Skills
+
+Skill 是 pi 的原生能力（实现的是 Agent Skills 标准）。Pi GUI 只做发现、查看、
+启停三件事，**不发明任何 pi 不认识的概念**。
+
+**从哪发现**（与 pi 的 `addAutoDiscoveredResources` 一致）：
+
+| 位置 | 作用域 | 生效条件 |
+| --- | --- | --- |
+| `~/.pi/agent/skills` | 用户 | 总是 |
+| `~/.agents/skills` | 用户 | 总是 |
+| `<项目>/.pi/skills` | 项目 | 项目被信任时 |
+| `<项目>` 及祖先的 `.agents/skills` | 项目 | 项目被信任时 |
+
+另外 `settings.json` 的 `skills` 数组里的普通路径条目、package、以及命令行的
+`--skill <路径>` 也是来源。`PI_CODING_AGENT_DIR` 可以改掉 agent 目录的位置。
+
+两种目录的收集规则**不完全一样**，这是 pi 的行为，照搬：`.pi/skills` 里
+**根级的 `.md` 也算一个 skill**；`.agents/skills` 里**只认子目录**（根级 `.md` 会被忽略）。
+两者都是「目录里直接有 `SKILL.md` 就把它当成一个 skill，不再往里递归」，并跳过
+点开头的条目与 `node_modules`。
+
+**同名冲突：项目级胜出**。这一点和直觉相反（容易以为用户级覆盖项目级）。
+pi 的优先级排序把 project 排在 user 前面，而加载是「先到者胜」。
+被抢先的那条在界面上标成**被覆盖**，并显示是谁占了它 —— 不会两条都显示「已启用」。
+
+**启停**用的是 pi 官方的 override 机制，写在 `settings.json` 的 `skills` 数组里：
+
+```json
+{ "skills": ["-skills/code-review/SKILL.md", "!*experimental*"] }
+```
+
+- `-<路径>` 精确停用，`!<glob>` 按模式停用，`+<路径>` 强制包含（`-` 优先级最高）。
+- 模式匹配的是**相对发现基准目录的 posix 路径**，所以**一定带 `skills/` 前缀**。
+  `-code-review` 这种裸名字**不生效** —— 这是最容易踩的坑。
+- **作用域必须配对**：用户级 skill 只吃全局 `settings.json`，
+  项目级 skill 只吃 `<项目>/.pi/settings.json`。用全局设置关不掉项目级 skill。
+
+界面上的开关只增删**它自己写的那一条** `-` 模式，保留文件里的一切其它字段和
+你手写的通配。如果还有别的模式也在关着它，会明确告诉你「只删掉这条不会生效」。
+
+**改完必须重启 pi**。pi 只在启动时读 `settings.json`，没有文件监听 ——
+所以保存后 Pi GUI 会直接重启 pi，不需要你去猜为什么没生效。
+反过来，纯查看、搜索、筛选这类操作不会触发重启。
+
+**为什么有些项目级 Skill 是灰的**：Pi GUI 用 `pi --mode rpc` 驱动 pi，
+这是非交互模式、没有 UI，pi 的项目信任判定会落到 `defaultProjectTrust: "ask"`
+的「无 UI」分支 —— 结果是**项目级资源默认不加载**。界面上会标成「项目未被信任」
+并说明原因。要让它生效，用 `pi --approve` 启动一次，或在 `~/.pi/agent/trust.json`
+里记下这个项目，或把 `defaultProjectTrust` 设成 `always`。
+
+**正文只读**。要看 `SKILL.md` 就点「打开文件」交给系统编辑器 —— 第一版不内置
+文本编辑器，避免两边同时写同一个文件。
+
+### MCP
+
+**pi 没有内置 MCP，而且是有意为之。** `docs/usage.md` 原文：
+
+> It intentionally does not include built-in MCP, sub-agents, permission popups,
+> plan mode, to-dos, or background bash. You can build or install those workflows
+> as extensions or packages, or use external tools such as containers and tmux.
+
+pi 包里没有任何 MCP 模块，也没有 `mcpServers` / `.mcp.json` 这类配置约定。
+
+所以 MCP 标签页**不是**一个 Server 列表 —— 它是一份能力报告：
+
+- 读你本机真正装着的那个 pi 包，报出版本号、**它到底支不支持 MCP**，
+  以及支撑这个结论的**原文出处**（可自己核对）。
+- 检测不出来时如实说「无法确定」，**不猜成不支持**。
+- 列出 pi 官方给的替代路径：`~/.pi/agent/extensions` 与 `<项目>/.pi/extensions`
+  下已有哪些扩展，以及 `settings.json` 里声明的 `extensions` / `packages`。
+
+Pi GUI 在这件事上刻意**不做**三件事，做了就是撒谎：
+
+1. 不假装有 Server 可以增删改（没有配置文件可读，就没有 Server）；
+2. 不在 `.pi-gui/` 里自己存一份 MCP 配置 —— pi 不会读它，那是个假开关；
+3. 不显示「已配置 / 已连接」这种没有数据支撑的状态。
+
+**扩展目录只列名字、类型、大小、时间，不读内容、不执行。** 所以哪怕扩展文件里
+写着密钥，它也不会出现在接口响应里。
+
+### 边界
+
+- 不联网、不下载、不安装任何东西；没有 Skill / MCP 商店。
+- 不接受客户端传路径：前端只拿得到 skill 的稳定 ID（路径的哈希前缀），
+  真实路径由后端在自己的索引里查。读文件前还会再校验一次「确实落在已知发现根之下」。
+- 写 `settings.json` 走 `读 → 合并 → 校验 → 原子写`，保留一切未知字段。
+  文件坏了或 `skills` 不是数组时返回 409 并**一字不改**，让你自己修。
+- 一条 skill 坏了（缺 `description`、读不出来、frontmatter 不合法）只影响它自己，
+  在它那一行就地报错 —— 不会让整页打不开。
+
+### 哪些能力依赖 pi 版本
+
+发现规则、启停语法、信任判定都跟着 pi 的实现走。如果将来的 pi 改了目录约定或
+override 语义，需要同步更新 `server/skills.js`（它里面每一条规则都注明了源码出处）。
+MCP 部分不硬编码版本结论 —— 它会去读你装的 pi 包，所以 pi 真加了 MCP 支持时，
+报告会自动从「没有原生支持」变成「检测到 MCP 模块，但 Pi GUI 还没适配」。
+
 ## 从源码构建
 
 ```bash
@@ -392,7 +495,7 @@ PI_GUI_ELECTRON_ZIP_DIR="$LOCALAPPDATA/electron/Cache/<hash>" npm run build:app
 ## 测试
 
 ```bash
-npm test                # 前端冒烟 + Git 变更 + 后端模块单测 + 项目配置 + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
+npm test                # 前端冒烟 + Git 变更 + 后端模块单测 + 项目配置 + Skills/MCP + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
 npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全、工具时间线、
                         #   变更面板、diff 渲染；工具时间线那一段还会用
                         #   tests/fixtures/ 里的真实会话 fixture 重建一遍）
@@ -406,10 +509,20 @@ npm run test:config     # 项目配置：无项目 / 无配置文件 / 默认值
                         #   路径不可由客户端指定 / 密钥不进配置 / 真跑一次 esbuild 查产物指纹。
                         #   全程在 os.tmpdir() 里造临时项目，不碰真实项目
 npm run test:models     # 单跑模型拉取：桩上游 + 三种 API 形态 + 路径回退 + key 不泄露
+npm run test:skills     # Skills / MCP：发现规则（两种 collect 模式）、同名冲突、信任判定、
+                        #   状态判定（enabled/disabled/untrusted/invalid/shadowed/not-loaded/
+                        #   unknown）、详情与路径逃逸、启停写盘（保留未知字段 / 原子写 /
+                        #   409 不动坏文件）、真实 router 的令牌与 Origin、MCP 能力报告与
+                        #   密钥不外泄。全程在 os.tmpdir() 里造世界，不 spawn 进程、不联网
+npm run test:skills-live # 【要真 pi，约 2-3 分钟】拉起真的 pi 子进程，用真的 get_commands
+                        #   对拍：项目级默认不加载 / --approve 才加载、同名冲突项目胜出、
+                        #   停用语法（带 skills/ 前缀有效、裸名字无效、glob 有效）、
+                        #   改 settings 不热加载必须重启、enableSkillCommands=false 时
+                        #   get_commands 仍返回、--no-skills。不在 npm test 链里
 npm run test:security   # 后端访问控制：令牌认证、来源校验、只监听回环、密钥不进日志
 npm run test:guard      # Electron 侧判定：陌生服务不复用、外部 URL 不导航、preload 桥的形状
 npm run test:app        # 打包后的应用目录（抽取、静态资源、无项目时的行为）
-npm run test:exe        # 单文件 exe（含打包后项目配置的读写闭环）
+npm run test:exe        # 单文件 exe（含打包后项目配置与扩展接口的读写闭环）
 npm run test:inject     # 项目指令真的进了系统提示词吗：拉起真 pi，挂扩展在
                         #   before_agent_start dump 组装后的提示词，带/不带参数对照。
                         #   顺带钉住「假 provider 会让 pi exit(1)」这条设计前提
@@ -437,6 +550,14 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
     归一化 / 原子写入 / 默认值，以及「给 pi 的启动参数」。**不存任何密钥**。
     唯一对外暴露的项目来源是 `runtime.getCurrentCwd()` —— 接口不接受客户端传路径
   - `providers.js` — `~/.pi/agent/models.json` 的读写、供应商 CRUD、模型拉取
+  - `skills.js` — Skill 的发现 / 详情 / 启停。**移植 pi 自己的规则**（发现位置、
+    两种 collect 模式、同名优先级、信任闸门、override 语法），每条都注明源码出处。
+    「pi 实际加载了哪些」以 RPC `get_commands` 为准，**按 `sourceInfo.path` 配对**
+    （只按名字会让被抢先的那条也显示已启用）。前端只拿得到路径哈希当 ID，
+    拿不到也传不了绝对路径。写盘是读-合并-校验-原子写，只增删自己那条 `-` 模式
+  - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。pi 没有原生 MCP，所以这里不列
+    Server，而是去读本机装的 pi 包、给出「支不支持」的结论与原文证据，并列出
+    官方替代路径 extension 下已有哪些东西。**只读名字，不读内容、不执行**
   - `uploads.js` — 附件上传与落盘
   - `git-routes.js` — Git 接口的 **HTTP 适配层**，业务逻辑全在 `lib/git.js`
   - `router.js` — 路由表与静态资源。**顺序即语义**，几处「必须排在前面」的注释都是踩过的坑
@@ -449,7 +570,11 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
 - `lib/models-api.js` — 从供应商 `/models` 拉模型列表（路径回退、按 API 类型适配）
 - `public/` — 前端。原生 ES Module，`app.js` 只做装配，其余按职责分模块
   （`api.js` 网络、`state.js` 状态、`markdown.js` 渲染、`git.js` 变更面板、
-  `diff.js` unified diff 渲染、`changes.js` 会话改动账本、`ui/` 通用组件……），无构建步骤
+  `diff.js` unified diff 渲染、`changes.js` 会话改动账本、`extensions.js` 扩展面板、
+  `ui/` 通用组件……），无构建步骤
+  - `extensions.js` — Skills / MCP 两个标签页。列表 + 搜索 + 作用域/状态筛选、
+    详情只读、启停带二次确认与重启提示。**刻意不用 `innerHTML`**（全走
+    `textContent` / `createElement`），一条坏 skill 不会拖垮整页
   - `tool-model.js` — 工具执行的**数据模型**：实时事件与历史消息都归一成 `ToolEntry`。
     纯数据 + 纯函数，不碰 DOM（所以能单测）
   - `tool-view.js` — 只认 `ToolEntry` 的视图层，实时与历史共用；零 `innerHTML`

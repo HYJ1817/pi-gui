@@ -17,6 +17,8 @@
  *   server/projects.js    项目列表、目录浏览、切换项目
  *   server/providers.js   ~/.pi/agent/models.json 的读写与模型拉取
  *   server/project-config.js  <project>/.pi-gui/config.json 的读写与 pi 启动参数
+ *   server/skills.js      Skills 的发现 / 详情 / 启停（只读 pi 的官方机制，不自造一套）
+ *   server/mcp.js         MCP 能力报告（pi 0.87.0 无原生 MCP，如实说明 + 扩展清单）
  *   server/uploads.js     附件上传与落盘
  *   server/git-routes.js  Git 接口的 HTTP 适配（业务在 lib/git.js）
  *   server/router.js      路由表与静态资源
@@ -42,6 +44,8 @@ import { createProviders } from './server/providers.js';
 import { createRouter } from './server/router.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createRuntime } from './server/runtime.js';
+import { createMcp } from './server/mcp.js';
+import { createSkills } from './server/skills.js';
 import { createUploads } from './server/uploads.js';
 
 // 数据目录：projects.json 和上传缓存放这里。
@@ -144,6 +148,18 @@ const providers = createProviders({ modelsJson: MODELS_JSON });
 const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({ runtime });
 
+/* Skills 与 MCP。
+ *
+ * 依赖方向照旧：两者都只读 runtime，Skills 额外通过注入拿到 rpc —— 因为
+ * 「pi 实际加载了哪些 skill」只有 pi 自己说了算（RPC get_commands），
+ * 而这个答案不能靠 Pi GUI 猜。rpc 只在 server.js 里装配，模块之间不互相 import。
+ *
+ * env 传 process.env 是有意的：pi 的 agent 目录（PI_CODING_AGENT_DIR）与主目录
+ * （HOME）决定了去哪找 skill，必须和 spawn pi 时用的是同一份环境，否则会出现
+ * 「界面说有一堆 skill、pi 一个都没加载」。 */
+const skills = createSkills({ runtime, rpc, env: process.env });
+const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
+
 const route = createRouter({
   auth,
   sse,
@@ -151,6 +167,8 @@ const route = createRouter({
   providers,
   projects,
   projectConfig,
+  skills,
+  mcp,
   gitRoutes,
   uploads,
 });
@@ -230,6 +248,36 @@ server.listen(PORT, '127.0.0.1', () => {
     if (cfg.config && cfg.config.instructions.trim()) bits.push(`项目指令 ${cfg.config.instructions.length} 字`);
     console.log(`  → 项目配置: ${bits.length ? bits.join('，') : '（未设置）'}  [${cfg.path}]`);
     for (const w of cfg.warnings) console.log(`  ! ${w}`);
+
+    /* 扩展能力摘要。
+     *
+     * Skills 这段是异步的 —— 「哪些真的被 pi 加载了」要问 pi（RPC get_commands），
+     * 不能靠数文件。所以它会在下面那几行之后才打印出来。
+     * 项目未被信任时必须显式说出来，否则用户只会觉得「我明明放了 skill 怎么没生效」。 */
+    skills
+      .readIndex()
+      .then((idx) => {
+        const loaded = idx.skills.filter((s) => s.state === 'enabled').length;
+        console.log(
+          `  → Skills: 发现 ${idx.skills.length} 个，pi 已加载 ${idx.piReachable ? loaded : '？（pi 未应答）'}  [${idx.agentDir}]`,
+        );
+        for (const r of idx.roots) {
+          if (r.scope === 'project' && r.exists) {
+            console.log(`      ${r.blockedByTrust ? '（未加载：项目未被信任）' : ''} ${r.dir}`);
+          }
+        }
+        if (idx.trust.requiresTrust && !idx.trust.trusted) {
+          console.log('  ! 项目未被信任：pi 在非交互模式下不加载项目级 Skills / Extensions');
+        }
+      })
+      .catch(() => {
+        /* 摘要打不出来不影响服务 */
+      });
+
+    const mcpReport = mcp.readReport();
+    console.log(
+      `  → MCP: ${mcpReport.supported === false ? 'pi 无原生 MCP 支持' : mcpReport.supported === true ? '检测到 MCP 相关模块（Pi GUI 尚未适配）' : '无法检测'}${mcpReport.piVersion ? `  [pi ${mcpReport.piVersion}]` : ''}`,
+    );
   }
   console.log(
     auth.isDevMode
