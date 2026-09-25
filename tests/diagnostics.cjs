@@ -123,7 +123,7 @@ const path = require('node:path');
     assert.ok(!serialized.includes('ultra-secret'));
     assert.ok(!serialized.includes('do-not-leak'));
     assert.equal(snapshot.privacy.environmentIncluded, false);
-    assert.equal(snapshot.privacy.secretsRedacted, true);
+    assert.equal(snapshot.privacy.redactionApplied, true);
   });
 
   ok('目录健康检查是只读 access 检查', () => {
