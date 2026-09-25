@@ -1,13 +1,14 @@
 # 测试分层与 CI
 
 这份文档回答一个问题：**改了代码之后，该跑哪些测试、在哪里跑。**
-具体每条测试覆盖什么，README 的「测试」一节有更细的说明；这里只讲分层与边界。
+这份文档讲**分层与边界**：哪些测试进 CI、哪些要真 pi、哪些只在发布前跑。
+每条套件具体覆盖什么，README 里只留一句话索引，细节不重复维护。
 
 ## 一、总览
 
 | 层 | 命令 | 需要什么 | 跑在哪 |
 |---|---|---|---|
-| **A. 基础测试** | `npm test` | 只要 Node ≥ 22.12 | 每次 push / PR（CI）+ 本地 |
+| **A. 基础测试** | `npm test` | 只要 Node ≥ 22.19 | 每次 push / PR（CI）+ 本地 |
 | **B. 打包验证** | `npm run test:exe` / `test:app` | 先跑 `npm run fixtures` 与 `build:exe` / `build:app` | CI 的 build-check job |
 | **C. 安装程序验证** | `npm run test:portable` / `test:installer` | 先跑 `build:installer`，且本机有 NSIS | 手动（release-check）或本地 |
 | **D. 真 pi 验证** | `npm run test:skills-live` / `test:reliability-live` / `test:inject` | 本机装了 `pi` | 只在本地 / 手动 |
@@ -30,7 +31,7 @@
 
 ```
 smoke 555 · git 151 · modules 114 · reliability · interactions · port-owner
-project-config 115 · skills 182 · planner 111 · sessions 77 · body-integrity 5
+project-config 115 · skills 182 · planner 115 · sessions 77 · body-integrity 5
 dev-server 19 · models-api 50 · server-security 36 · electron-guard 50
 ```
 
@@ -80,21 +81,22 @@ dev-server 19 · models-api 50 · server-security 36 · electron-guard 50
 `build-check` 刻意**不**跑 `build:installer` / `build:dist`：那要 NSIS 和 ~430MB 产物，
 属于发布前验证。见下一节。
 
-### Node 版本：为什么是 22 而不是 20
+### Node 版本：最低 22.19，CI 测 22 与 24
 
-`package.json` 里写的是 `engines.node >= 20`，但**依赖树要求 ≥ 22.12**：
+`package.json` 的 `engines.node` 是 **`>=22.19`** —— 这个下限由依赖链决定，
+不是随手定的：
 
-| 包 | 声明 | 类型 |
+| 来源 | 要求 | 说明 |
 |---|---|---|
-| `pdfjs-dist` | `>=22.13.0 \|\| >=24` | **运行时依赖** |
-| `electron` / `@electron/packager` / `@electron/asar` 等 13 个 | `>= 22.12.0` | 开发依赖（打包链路） |
+| `pi-coding-agent`（被 GUI 驱动的那个 pi） | `>= 22.19.0` | 装 pi 本身的要求，也是这里的上限来源 |
+| `pdfjs-dist` | `>=22.13.0 \|\| >=24` | **运行时依赖**，PDF 抽取用 |
+| `electron` / `@electron/packager` 等 11 个 | `>= 22.12.0` | 开发依赖（打包链路） |
 
-在 Node 20 上 `npm ci` 会刷 15 条 `EBADENGINE`，而 PDF 抽取用的 `pdfjs-dist`
-明确声明不支持 20。所以 CI 取「依赖树真正的地板」**22**，再加一个最新版 **24**
-（也是开发机在用的版本）。
+取其中最严的一条 ⇒ **22.19**。
 
-`engines` 那行与实际不符是**已知问题**，改它会影响 npm 对使用者的提示行为，
-所以没有在这次 CI 改造里动 —— 见「已知风险」。
+CI 的 matrix 是 **22 与 24**：22 是这条下限所在的大版本，24 是当前最新
+（也是开发机在用的版本）。不按 22.19 建 matrix —— 那只会多出一个几乎重复的
+runner，而 22.x 内部的补丁差异不是这个项目要防的风险。
 
 ## 四、不进默认 CI 的测试
 
@@ -145,7 +147,7 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 ```
 npm test                          # A 层
 npm run build:app -- --rebuild    # 两条打包链路
-npm run test:exe                  # 单文件 exe（45 项）
+npm run test:exe                  # 单文件 exe（47 项）
 npm run test:app                  # Electron 应用目录（25 项）
 npm run build:installer -- --zip  # 安装程序 + 便携版 + SHA256SUMS.txt
 npm run test:portable             # 便携版 zip（11 项）
@@ -154,8 +156,17 @@ npm run test:installer            # 真装一遍再卸（20 项，本机 5 条�
 
 等价的手动入口：GitHub Actions 里跑 **Release check**（`workflow_dispatch`）。
 
-发版还要做两条独立核实（附件摘要 + git ref），步骤见 README 的「从源码构建」一节
-与 `.probe/release-notes-*.md` 的历史记录。
+发版还要做两条独立核实（附件摘要 + git ref），步骤见
+[development.md](development.md) 的「发版流程」。
+
+## 八、相关文档
+
+- [architecture.md](architecture.md) — 模块地图与数据目录
+- [development.md](development.md) — 构建与发版（`test:app` / `test:exe` /
+  `test:portable` / `test:installer` 需要先构建）
+- [sessions.md](sessions.md) / [planner.md](planner.md) /
+  [extensions.md](extensions.md) — 各子系统末尾都列了自己的测试入口
+- [security.md](security.md) — 安全守卫由哪些测试盯着
 
 ## 六、环境隔离（改测试时的硬要求）
 
@@ -174,11 +185,12 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 
 ## 七、已知风险
 
-1. **`engines.node` 与实际不符**：写的是 `>= 20`，依赖树要求 `>= 22.12`。
-   CI 因此显式钉 22/24。要么把 `engines` 改成 `>=22.12`，要么把 `pdfjs-dist` 与
-   Electron 工具链降到支持 20 的版本 —— 后者是产品变更，需要单独决策。
-2. **部分测试套件硬编码端口**（`tests/*.cjs` 里的 `7791`–`7799`）。
-   这些端口落在**某些机器**的 Windows 动态端口范围里（本机是 1024–15000），
+1. **部分测试套件硬编码端口**（`tests/*.cjs` 里的 `7791`–`7799`）。
+   这些端口落在**某些机器**的 Windows 动态端口范围里 —— 默认动态范围是
+   49152 起，但有些机器被改成从很低的端口开始，那就正好覆盖了 7791–7799。
    被别的进程当临时源端口占掉时 `listen` 会报 `EACCES`，表现为随机假红。
-   GitHub 的 windows runner 用默认动态范围（49152 起），所以 CI 上不会撞到；
-   但本机如果频繁出现 `EACCES`，需要把端口改成动态分配。
+   GitHub 的 windows runner 用默认动态范围，所以 CI 上不会撞到；
+   但本机如果出现 `EACCES`，需要把端口改成动态分配。
+2. **`docs/testing.md` 里的断言数量会随测试增长而过时**。它们只是「这些套件确实
+   在断言东西」的量级参考，不参与任何判断 —— 真实数字以 `npm test` 的输出为准。
+   不要为同步它们引入脚本生成文档。
