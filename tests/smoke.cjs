@@ -2863,67 +2863,82 @@ staticCheck();
   }
 
   await extSection();
+  await plannerSection();
+  await sessionSection();
 
-  /* ---------- 会话面板（切回旧对话） ---------- */
+  /* ---------- 侧栏的会话列表（参考 Codex，不单开窗口） ---------- */
   async function sessionSection() {
     sessionCalls.length = 0;
     $('toasts').innerHTML = '';
 
-    window.openSessions();
-    await new Promise((r) => setTimeout(r, 40));
-    const card = $('modalCard');
+    // 重渲染项目列表 —— 会话是挂在「当前项目」那一行下面的
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 60));
 
-    check('会话面板：列出当前项目的会话', () => {
-      const n = card.querySelectorAll('.sess-item').length;
-      return n === 2 || `渲染了 ${n} 条`;
+    const proj = $('projects');
+    const active = proj.querySelector('.project.active');
+    const box = proj.querySelector('.pj-sessions');
+
+    check('会话：没有独立的会话入口了（不再单开窗口）', () =>
+      !$('navSessions') || '侧栏还有独立的「会话」入口');
+    check('会话：列表挂在**当前项目那一行下面**（不是别处）', () => {
+      if (!box || !active) return `box=${Boolean(box)} active=${Boolean(active)}`;
+      return box.previousElementSibling === active || '会话块不在当前项目下面';
     });
-    check('会话面板：标题是第一条用户消息（不是文件名/时间戳）', () => {
-      const titles = [...card.querySelectorAll('.sess-item-title')].map((t) => t.textContent);
+    check('会话：只挂在当前项目上，别的项目下面没有', () => {
+      const all = proj.querySelectorAll('.pj-sessions');
+      return all.length === 1 || `渲染了 ${all.length} 块`;
+    });
+    check('会话：标题是第一条用户消息（不是文件名/时间戳）', () => {
+      const titles = [...proj.querySelectorAll('.pj-sess-title')].map((t) => t.textContent);
       return (titles.includes('帮我写个登录功能') && titles.includes('你好')) || JSON.stringify(titles);
     });
-    check('会话面板：当前会话被标出来，且不给点', () => {
-      const cur = card.querySelector('.sess-item.on');
-      return Boolean(cur && cur.querySelector('.sess-cur') && !cur.onclick) || (cur ? cur.textContent.slice(0, 60) : '没有当前项');
+    check('会话：当前会话高亮，且不给点', () => {
+      const cur = proj.querySelector('.pj-sess.on');
+      return Boolean(cur && !cur.onclick) || (cur ? '当前项仍可点' : '没有当前项');
     });
-    check('会话面板：显示消息条数与创建时间', () => {
-      const txt = card.textContent;
-      return (/14 条消息/.test(txt) && /创建于/.test(txt)) || txt.slice(0, 160);
+    check('会话：显示相对时间', () => {
+      const t = proj.querySelector('.pj-sess-time');
+      return Boolean(t && t.textContent) || '没显示时间';
     });
-    check('会话面板：说明旧会话不会丢（「新对话」不覆盖任何东西）', () =>
-      /不会丢/.test(card.textContent) || card.textContent.slice(0, 200));
-    check('会话面板：DOM 里没有任何绝对路径', () =>
-      !/[A-Za-z]:\\|[A-Za-z]:\//.test(card.textContent) || '出现了疑似路径');
+    check('会话：侧栏里没有任何绝对路径', () =>
+      !/[A-Za-z]:\\|[A-Za-z]:\//.test(box ? box.textContent : '') || '出现了疑似路径');
 
     // 点另一条 → 切过去
     {
-      const rows = [...card.querySelectorAll('.sess-item')];
-      const other = rows.find((r) => !r.classList.contains('on'));
+      const other = [...proj.querySelectorAll('.pj-sess')].find((r) => !r.classList.contains('on'));
       other.onclick();
       await new Promise((r) => setTimeout(r, 80));
       const hit = sessionCalls.find((c) => /\/switch/.test(c.url));
-      check('会话面板：点一条会调 /api/sessions/switch，且传的是 ID 不是路径', () =>
-        Boolean(hit && hit.body && hit.body.id === 'bbbbbbbbbbbbbbbb') || JSON.stringify(sessionCalls));
+      check('会话：点一条会调 /api/sessions/switch，且传的是 ID 不是路径', () =>
+        Boolean(hit && hit.body && hit.body.id === 'bbbbbbbbbbbbbbbb') || JSON.stringify(sessionCalls.map((c) => c.url)));
     }
 
-    // 改名
+    // 改名：铅笔只出现在当前会话那一条上
     {
-      window.openSessions();
-      await new Promise((r) => setTimeout(r, 40));
-      const card2 = $('modalCard');
-      const input = card2.querySelector('.sess-name-input');
-      input.value = '我的登录功能开发';
-      [...card2.querySelectorAll('button')].find((b) => b.textContent === '保存名字').onclick();
+      sessionCalls.length = 0;
+      window.renderProjects();
       await new Promise((r) => setTimeout(r, 60));
-      const hit = sessionCalls.find((c) => /\/name/.test(c.url));
-      check('会话面板：改名调 /api/sessions/name', () => Boolean(hit && hit.body.name === '我的登录功能开发') || JSON.stringify(sessionCalls.map((c) => c.url)));
+      const proj2 = $('projects');
+      const pens = proj2.querySelectorAll('.pj-sess-pen');
+      check('会话：改名铅笔**只**出现在当前会话那一条上', () => pens.length === 1 || `有 ${pens.length} 个铅笔`);
+      const cur = proj2.querySelector('.pj-sess.on');
+      cur.querySelector('.pj-sess-pen').onclick({ stopPropagation() {} });
+      await new Promise((r) => setTimeout(r, 20));
+      const input = cur.querySelector('.pj-sess-input');
+      check('会话：点铅笔变成行内输入框（不是弹窗）', () => Boolean(input) || '没出现输入框');
+      if (input) {
+        input.value = '我的登录功能开发';
+        input.onkeydown({ key: 'Enter' });
+        await new Promise((r) => setTimeout(r, 60));
+        const hit = sessionCalls.find((c) => /\/name/.test(c.url));
+        check('会话：回车保存 → 调 /api/sessions/name', () => Boolean(hit && hit.body.name === '我的登录功能开发') || JSON.stringify(sessionCalls.map((c) => c.url)));
+      } else {
+        check('会话：回车保存 → 调 /api/sessions/name', () => '上一条已失败');
+      }
     }
-
-    window.closeModal();
-    await new Promise((r) => setTimeout(r, 20));
   }
 
-  await plannerSection();
-  await sessionSection();
 
   /* --- 重建历史时同样不留空白「Pi」 ---
    *

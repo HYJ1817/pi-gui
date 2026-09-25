@@ -31,6 +31,14 @@ const SVG_UP =
 const SVG_X =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>';
 
+/* 会话列表要挂在**当前项目那一行下面**（参考 Codex：会话属于项目，
+ * 不该单开一个窗口）。projects.js 不 import sessions.js —— 由 app.js 把
+ * 渲染函数注入进来，保持两边不互相依赖。 */
+let sessionsSlot = null;
+export function setSessionsSlot(fn) {
+  sessionsSlot = fn;
+}
+
 export async function loadProjects(generation = S.workspaceGeneration) {
   const order = ++projectLoadOrder;
   projectLoadState = 'loading';
@@ -118,6 +126,10 @@ export function renderProjects() {
     }
 
     el.projects.appendChild(item);
+
+    /* 会话挂在当前项目下面。放在 append 之后、且只在 active 那条上 ——
+     * 别的项目不展开（切过去才看得到它的会话）。 */
+    if (isActive && sessionsSlot) sessionsSlot(item, p);
   }
 }
 
