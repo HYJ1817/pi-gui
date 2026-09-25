@@ -60,6 +60,7 @@ import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
 import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
+import { openDiagnostics } from './diagnostics.js';
 
 /* ---------- 装配 ---------- */
 
@@ -743,6 +744,7 @@ $('navNew').onclick = newSession;
 $('navBranches').onclick = openBranchPanel;
 $('navChanges').onclick = openChangesPanel;
 $('navProviders').onclick = openProvidersPanel;
+$('navDiagnostics').onclick = openDiagnostics;
 
 // 侧栏头部 / 项目
 // 「添加文件夹」在两处：侧栏分组下常年有一个，欢迎块上在未选项目时再补一个
