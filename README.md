@@ -60,7 +60,7 @@ API Key 可以填字面量或 `$ENV_VAR`。**拉取功能不会执行 `!command`
 | `Pi-GUI-<版本>-portable.zip` | 便携版。解压后直接跑 `Pi GUI.exe`，不用装 |
 
 安装程序是**单用户**的：装在 `%LOCALAPPDATA%\Programs\Pi GUI`，不弹 UAC、不写系统目录。
-卸载走「添加或删除程序」，只删程序文件 —— `%APPDATA%\pi-gui` 下的项目列表和窗口布局会保留，重装接着用。
+卸载走「添加或删除程序」，只删程序文件 —— `%APPDATA%\Pi GUI` 下的项目列表和窗口布局会保留，重装接着用。
 
 下载后建议核一下 `SHA256SUMS.txt`：
 
@@ -280,11 +280,11 @@ pi 在会话**还没有任何内容时不落盘**：点了「新对话」之后 
 会话文件是真实的对话记录，一次误点不该是不可逆的。
 
 ```
-%APPDATA%\pi-gui\trash-sessions\<会话 id>.jsonl
+%APPDATA%\Pi GUI\trash-sessions\<会话 id>.jsonl
 ```
 
 同时会把「原来是谁、哪个项目、多少条消息、什么时候删的」记进
-`%APPDATA%\pi-gui\session-flags.json`，所以事后想找回是查得到的。
+`%APPDATA%\Pi GUI\session-flags.json`，所以事后想找回是查得到的。
 （`PI_GUI_DATA` 可以改掉这个数据目录。）
 
 删除要过二次确认，**正在进行的会话不能删除** —— pi 正开着那个文件往里追加。
