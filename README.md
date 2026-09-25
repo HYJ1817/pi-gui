@@ -23,6 +23,7 @@ Electron 只负责装一个窗口 —— 不联网、不开浏览器，全部跑
 - **Skills 管理** —— 发现、查看、启用/停用你已装的 Skills
 - **任务编排** —— 把大目标拆成带依赖的任务，交给不同 CLI 依次执行
 - **模型供应商** —— 不用手写 JSON 就能加自定义供应商，还能直接拉模型列表
+- **诊断** —— 查看版本、bridge、Agent 与目录健康状态，复制脱敏 JSON 用于排障
 
 ## 安装
 
@@ -198,7 +199,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 15 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 16 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -209,7 +210,7 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 通过后做一次 Electron 打包并验产物（25 项 + 47 项）。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
-`test:skills` / `test:planner` / `test:sessions` / `test:security` / `test:guard`。
+`test:skills` / `test:planner` / `test:sessions` / `test:security` / `test:diagnostics` / `test:guard`。
 
 > jsdom **不做布局**，所以改了 `public/` 的样式或排版，**必须真看一眼截图** ——
 > 测试全绿也说明不了排版对不对。
@@ -229,6 +230,7 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 | [project-config.md](docs/project-config.md) | 项目配置：位置、字段、优先级、指令注入、坏配置行为 |
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
+| [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
 
 ## 许可证
 
