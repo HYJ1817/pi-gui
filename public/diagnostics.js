@@ -32,6 +32,24 @@ async function copyText(text) {
   }
 }
 
+function downloadJSON(text) {
+  try {
+    const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pi-gui-diagnostics.json';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    toast('诊断文件已导出', 'info');
+  } catch {
+    toast('导出失败，请使用复制诊断 JSON', 'warn');
+  }
+}
+
 function render(card, close, payload) {
   card.innerHTML = '';
   const d = payload?.diagnostics;
@@ -98,13 +116,16 @@ function render(card, close, payload) {
   const copy = node('button', 'btn', '复制诊断 JSON');
   copy.type = 'button';
   copy.onclick = () => copyText(pre.textContent || '');
+  const download = node('button', 'btn', '导出 JSON');
+  download.type = 'button';
+  download.onclick = () => downloadJSON(pre.textContent || '');
   const refresh = node('button', 'btn', '刷新');
   refresh.type = 'button';
   refresh.onclick = () => loadInto(card, close);
   const done = node('button', 'btn primary', '关闭');
   done.type = 'button';
   done.onclick = close;
-  actions.append(copy, refresh, done);
+  actions.append(copy, download, refresh, done);
   card.appendChild(actions);
 }
 
