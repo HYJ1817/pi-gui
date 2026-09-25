@@ -1338,3 +1338,55 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .pj-sess-more:hover{background:var(--hover);color:var(--t2)}
 .pj-sess-hint{padding:4px 7px;font-size:11px;color:var(--t3)}
+
+/* ============ 会话内提问导航（Conversation Minimap） ============ */
+/* 聊天区左边一列低对比度短线，每条对应当前会话里的一次用户提问。
+   是**同一会话内的导航**，不是会话历史列表。 */
+
+/* .stream 原来是 .stage 的直接子元素（flex:1）。这里插一层 .convo 当定位容器，
+   让导航和正文并排而不是叠在一起。 */
+.convo{flex:1;min-height:0;display:flex;position:relative}
+
+.convo-nav{
+  position:absolute;top:0;bottom:0;z-index:3;
+  /* 正文是 760px 居中，所以左侧空档 = (宽度-760)/2。
+     贴在正文左边 30px 处；窗口窄到没空档时退回 4px，反正那时会被媒体查询隐藏。 */
+  left:max(4px,calc(50% - 380px - 30px));
+  width:22px;
+  pointer-events:none; /* 只有 marker 自己可点，不挡正文的选中与点击 */
+}
+
+.cn-marker{
+  position:absolute;left:50%;transform:translateX(-50%);
+  width:9px;height:2px;padding:0;border:0;border-radius:1px;
+  background:#3a3a3a;cursor:pointer;pointer-events:auto;
+  transition:background .15s,width .15s,height .15s;
+  /* 变长时向左长，视觉上贴着正文一侧 */
+  transform-origin:center;
+}
+.cn-marker:hover,.cn-marker:focus-visible{
+  background:#7a7a7a;width:14px;outline:none;
+}
+/* 当前所在的那次提问：更亮更长 */
+.cn-marker.on{background:var(--accent);width:18px;height:3px}
+.cn-marker.on:hover{background:var(--accent)}
+
+/* hover / 键盘聚焦时的摘要提示。刻意不用原生 title —— 需要控制截断与样式。 */
+.cn-tip{
+  position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);
+  max-width:220px;padding:5px 9px;border-radius:7px;
+  background:var(--hover);border:1px solid var(--line);color:var(--t1);
+  font-size:11.5px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  opacity:0;pointer-events:none;transition:opacity .12s;
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+}
+.cn-marker:hover .cn-tip,.cn-marker:focus-visible .cn-tip{opacity:1}
+
+/* 顶部固定区（.stage-head，46px）会盖住跳过去的消息 —— 交给浏览器留空间，
+   不要用「先 scrollIntoView 再 scrollBy(-N)」那种靠 timeout 猜的修法。 */
+.msg.user{scroll-margin-top:56px}
+
+/* 窄窗口下直接隐藏：与其把正文挤窄，不如不要这一列（正文才是主体） */
+@media (max-width:900px){
+  .convo-nav{display:none}
+}

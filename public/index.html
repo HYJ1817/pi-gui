@@ -135,7 +135,10 @@
       </div>
     </header>
 
-    <div class="stream" id="stream">
+    <!-- 会话内导航（Conversation Minimap）放在正文左侧的独立列里，
+         不叠在滚动条上 —— 叠上去会有点击冲突，而且窄窗口下会挤正文。 -->
+    <div class="convo">
+      <div class="stream" id="stream">
       <div class="welcome" id="welcome">
         <div class="welcome-pane" id="welcomeRestore" hidden>
           <h2>正在恢复工作区…</h2>
@@ -173,6 +176,8 @@
           </button>
         </div>
       </div>
+      </div>
+      <nav class="convo-nav" id="convoNav" aria-label="会话内提问导航"></nav>
     </div>
 
     <div class="composer">

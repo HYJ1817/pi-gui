@@ -20,6 +20,7 @@
  * 两者渲染的是同一个 ToolEntry 结构，所以刷新前后语义一致。 */
 
 import { el, S } from './state.js';
+import { registerConversationAnchor, rebuildConversationNav, clearConversationNav } from './conversation-nav.js';
 import { esc, icon, iconFor } from './util.js';
 import { md } from './markdown.js';
 import { sendCommand } from './api.js';
@@ -67,6 +68,9 @@ export function clearThread() {
   clearLiveEntries();
   S.tlGroup = null;
   hideWorking();
+  /* 对话区清空了，导航也跟着清 —— 否则换会话/切项目时会短暂留着上一个
+   * 会话的标记（§13 明确不许）。 */
+  clearConversationNav();
 }
 
 export function scrollBottom(force) {
@@ -255,6 +259,9 @@ function renderUser(msg) {
 
   wrap.append(role, userBody(msg));
   t.appendChild(wrap);
+  /* 立刻注册导航点（§11）：不等 assistant 回复完 —— 用户刚发完就该能
+   * 在左边看到自己这一条的位置。 */
+  registerConversationAnchor(wrap);
   moveWorkingToEnd();
   scrollBottom(true);
 }
@@ -578,5 +585,9 @@ export function rebuildFromMessages(data) {
   }
 
   t.appendChild(frag);
+  /* 历史重建完之后**重新扫一遍 DOM** 建导航（§10）—— 刷新页面、重开 App、
+   * 恢复旧会话、fork、retry 之后走的都是这条路。不自己维护消息副本，
+   * 所以这里不需要知道「刚才删了哪几条」。 */
+  rebuildConversationNav();
   scrollBottom(true);
 }

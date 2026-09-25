@@ -2865,6 +2865,270 @@ staticCheck();
   await extSection();
   await plannerSection();
   await sessionSection();
+  await convNavSection();
+
+  /* ---------- 会话内提问导航（Conversation Minimap） ----------
+   *
+   * jsdom **不做布局**（getBoundingClientRect 恒为 0），所以位置与「当前是第几条」
+   * 这类断言必须先把几何量打桩。这里的桩是**忠实的**：把消息的 top 表示成
+   * 「内容偏移 - scrollTop」，和真实浏览器里 getBoundingClientRect 的语义一致，
+   * 所以模块里那套坐标换算真的被验到了。 */
+  async function convNavSection() {
+    const stream = $('stream');
+    const nav = $('convoNav');
+
+    // ---- 几何桩 ----
+    let scrollTopVal = 0;
+    let msgStep = 300;   // 每条消息占多高（用来模拟长短不一的回答）
+    let navHeight = 600;
+    const define = (obj, key, get, set) =>
+      Object.defineProperty(obj, key, { configurable: true, get, set });
+
+    define(stream, 'scrollTop', () => scrollTopVal, (v) => { scrollTopVal = v; });
+    define(stream, 'clientHeight', () => 600);
+    define(stream, 'scrollHeight', () => Math.max(1, userEls().length * msgStep));
+    define(nav, 'clientHeight', () => navHeight);
+
+    const userEls = () => [...$('stream').querySelector('.thread').querySelectorAll('.msg.user')];
+    const origRect = window.Element.prototype.getBoundingClientRect;
+    window.Element.prototype.getBoundingClientRect = function () {
+      if (this === stream) return { top: 0, bottom: 600, left: 0, right: 800, width: 800, height: 600 };
+      const els = userEls();
+      const i = els.indexOf(this);
+      if (i >= 0) {
+        // 视口坐标 = 内容偏移 - 已滚动距离（和真实浏览器一致）
+        const top = i * msgStep - scrollTopVal;
+        return { top, bottom: top + 20, left: 0, right: 700, width: 700, height: 20 };
+      }
+      return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
+    };
+
+    const mkMsgs = (n) => {
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        out.push({ role: 'user', content: [{ type: 'text', text: `第 ${i + 1} 次提问的内容` }] });
+        out.push({ role: 'assistant', content: [{ type: 'text', text: `第 ${i + 1} 次回答` }] });
+      }
+      return out;
+    };
+    const rebuild = async (msgs) => {
+      window.rebuildFromMessages({ messages: msgs });
+      await new Promise((r) => setTimeout(r, 30));
+    };
+
+    // 1. 空会话 → 无 marker
+    await rebuild([]);
+    check('导航 1. 空会话 → 没有 marker', () => nav.querySelectorAll('.cn-marker').length === 0 || `有 ${nav.querySelectorAll('.cn-marker').length} 个`);
+
+    // 2. 1 条 user → 1 marker
+    await rebuild([{ role: 'user', content: [{ type: 'text', text: '只有一次提问' }] }]);
+    check('导航 2. 一条用户消息 → 1 个 marker', () => nav.querySelectorAll('.cn-marker').length === 1 || nav.querySelectorAll('.cn-marker').length);
+
+    // 3. user + assistant → 仍然 1 marker
+    await rebuild([
+      { role: 'user', content: [{ type: 'text', text: '一次提问' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '一段回答' }] },
+    ]);
+    check('导航 3. user + assistant → 仍然只有 1 个 marker（assistant 不画点）', () =>
+      nav.querySelectorAll('.cn-marker').length === 1 || nav.querySelectorAll('.cn-marker').length);
+
+    // 4. 3 次问答 → 3 markers
+    await rebuild(mkMsgs(3));
+    check('导航 4. 三次问答 → 3 个 marker', () => nav.querySelectorAll('.cn-marker').length === 3 || nav.querySelectorAll('.cn-marker').length);
+
+    // 5. tool calls 不增加 marker
+    await rebuild([
+      { role: 'user', content: [{ type: 'text', text: '跑一下测试' }] },
+      { role: 'assistant', content: [{ type: 'toolCall', id: 't1', name: 'bash', arguments: { command: 'npm test' } }] },
+      { role: 'toolResult', toolCallId: 't1', content: [{ type: 'text', text: 'ok' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '跑完了' }] },
+    ]);
+    check('导航 5. tool call / tool result 不产生 marker', () =>
+      nav.querySelectorAll('.cn-marker').length === 1 || nav.querySelectorAll('.cn-marker').length);
+
+    // 6. historical rebuild 重建 markers
+    await rebuild(mkMsgs(4));
+    check('导航 6. 历史重建（rebuildFromMessages）会重建 markers', () =>
+      nav.querySelectorAll('.cn-marker').length === 4 || nav.querySelectorAll('.cn-marker').length);
+    check('导航 6b. 每条用户消息有稳定的 data-nav-id', () => {
+      const ids = userEls().map((e) => e.dataset.navId);
+      return ids.every((x) => /^msg-\d+$/.test(x || '')) || JSON.stringify(ids);
+    });
+
+    // 7. realtime user message 增加 marker（走 SSE 事件，不是重建）
+    {
+      const before = nav.querySelectorAll('.cn-marker').length;
+      es.emit({
+        type: 'message_start',
+        message: { role: 'user', content: [{ type: 'text', text: '实时新增的一次提问' }] },
+      });
+      await new Promise((r) => setTimeout(r, 30));
+      check('导航 7. 实时新增用户消息立刻加 marker（不等 assistant 回复完）', () =>
+        nav.querySelectorAll('.cn-marker').length === before + 1 || `${before} → ${nav.querySelectorAll('.cn-marker').length}`);
+    }
+
+    // 19. 位置按「消息在整段内容里的相对位置」映射，不是按序号均分
+    await rebuild(mkMsgs(3));
+    {
+      const e = window.navEntries();
+      check('导航 19. marker 位置按内容偏移映射（第 2 条恰在中点附近）', () => {
+        if (e.length !== 3) return `entries=${e.length}`;
+        // 3 条、每条 300px、scrollHeight=900 → 期望 0 / 200 / 400
+        const expect = [0, 200, 400];
+        const ok = e.every((x, i) => Math.abs(x.top - expect[i]) <= 2);
+        return ok || JSON.stringify(e.map((x) => x.top));
+      });
+
+    }
+
+    // 18 / 22. 长会话：marker 不重叠、不超出容器
+    await rebuild(mkMsgs(100));
+    {
+      const e = window.navEntries();
+      check('导航 20. 100 条用户消息 → 100 个 marker', () => e.length === 100 || e.length);
+      check('导航 22. 100 条时 marker 不超出容器高度', () =>
+        e.every((x) => x.top >= 0 && x.top <= navHeight) || `max=${Math.max(...e.map((x) => x.top))} navH=${navHeight}`);
+      const tops = e.map((x) => x.top);
+      const sorted = [...tops].sort((a, b) => a - b);
+      check('导航 18. 密集时仍保持最小间距（不糊成一根实线）', () =>
+        sorted.every((v, i) => i === 0 || v - sorted[i - 1] >= 2) || JSON.stringify(sorted.slice(0, 12)));
+    }
+    await rebuild(mkMsgs(500));
+    {
+      const e = window.navEntries();
+      check('导航 21. 500 条用户消息不崩，且仍不超出容器', () =>
+        (e.length === 500 && e.every((x) => x.top >= 0 && x.top <= navHeight)) || `n=${e.length} max=${Math.max(...e.map((x) => x.top))}`);
+    }
+
+    // 13. current marker 跟随滚动
+    await rebuild(mkMsgs(4));
+    {
+      const idxAt = async (top) => {
+        scrollTopVal = top;
+        stream.dispatchEvent(new window.Event('scroll'));
+        await new Promise((r) => setTimeout(r, 200)); // 等 rAF / debounce
+        return window.currentNavIndex();
+      };
+      const i0 = await idxAt(0);
+      check('导航 13a. scrollTop=0 → current=0', () => i0 === 0 || i0);
+      const i2 = await idxAt(300 * 2);
+      check('导航 13b. 滚到第 3 条 → current=2', () => i2 === 2 || i2);
+      const i3 = await idxAt(300 * 3 + 100);
+      check('导航 13c. 滚到第 4 条内部 → current=3（回答再长也属于它前面那次提问）', () => i3 === 3 || i3);
+      check('导航 13d. 高亮的那条带 .on 类', () => {
+        const on = nav.querySelectorAll('.cn-marker.on');
+        return on.length === 1 || `有 ${on.length} 个高亮`;
+      });
+      check('导航 28. 当前提问的消息带 data-current-question', () => {
+        const cur = $('stream').querySelector('.thread').querySelectorAll('.msg.user[data-current-question="true"]');
+        return cur.length === 1 || `有 ${cur.length} 个`;
+      });
+    }
+
+    // 12. 点击 marker 滚动目标
+    {
+      let scrolled = null;
+      const origScrollIntoView = window.Element.prototype.scrollIntoView;
+      window.Element.prototype.scrollIntoView = function (opts) {
+        scrolled = { el: this, opts };
+      };
+      nav.querySelectorAll('.cn-marker')[2].click();
+      await new Promise((r) => setTimeout(r, 20));
+      check('导航 12. 点 marker → 对应用户消息 scrollIntoView（平滑、block:start）', () =>
+        (scrolled && scrolled.el === userEls()[2] && scrolled.opts && scrolled.opts.behavior === 'smooth' && scrolled.opts.block === 'start') ||
+        JSON.stringify(scrolled && { same: scrolled.el === userEls()[2], opts: scrolled.opts }));
+      window.Element.prototype.scrollIntoView = origScrollIntoView;
+    }
+
+    // 23 / 24. 键盘可达
+    check('导航 23/24. marker 是 button（Enter / Space 天然可用），且有 aria-label', () => {
+      const m = nav.querySelector('.cn-marker');
+      return (m && m.tagName === 'BUTTON' && /^跳转到：/.test(m.getAttribute('aria-label'))) || (m ? m.outerHTML.slice(0, 120) : '没有 marker');
+    });
+
+    // 14 / 15 / 16. hover preview
+    await rebuild([
+      { role: 'user', content: [{ type: 'text', text: '  修掉这个   retry 后的空白 Pi 块\n还有第二行  ' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '好的' }] },
+    ]);
+    check('导航 14. hover 提示取对应用户消息正文', () => {
+      const tip = nav.querySelector('.cn-tip');
+      return (tip && /修掉这个 retry 后的空白 Pi 块/.test(tip.textContent)) || (tip ? tip.textContent : '没有提示');
+    });
+    check('导航 15. 预览折掉换行与多余空格', () => {
+      const tip = nav.querySelector('.cn-tip').textContent;
+      return !/[\n\r]/.test(tip) && !/ {2,}/.test(tip) || JSON.stringify(tip);
+    });
+    check('导航 15b. 长文本被截断（不把完整 prompt 塞进提示）', () => {
+      const long = '这是一段很长很长的提问'.repeat(20);
+      window.rebuildFromMessages({ messages: [{ role: 'user', content: [{ type: 'text', text: long }] }] });
+      const tip = nav.querySelector('.cn-tip').textContent;
+      return (tip.length <= 41 && tip.endsWith('…')) || `${tip.length} 字`;
+    });
+    check('导航 16. 中文预览正常（不出现乱码或截半个字）', () => {
+      const tip = nav.querySelector('.cn-tip').textContent;
+      return (/[\u4e00-\u9fa5]/.test(tip) && !/\uFFFD/.test(tip)) || tip;
+    });
+
+    // 8. new_session 清空
+    {
+      await rebuild(mkMsgs(3));
+      es.emit({ type: 'response', command: 'new_session', success: true, data: {} });
+      await new Promise((r) => setTimeout(r, 30));
+      check('导航 8. new_session → 清空 minimap', () =>
+        nav.querySelectorAll('.cn-marker').length === 0 || nav.querySelectorAll('.cn-marker').length);
+    }
+
+    // 9. project switch 清空旧 markers
+    {
+      await rebuild(mkMsgs(3));
+      window.clearThread();
+      check('导航 9. 清空对话区（切项目会走这条）→ marker 同时清掉，不会短暂留着旧的', () =>
+        nav.querySelectorAll('.cn-marker').length === 0 || nav.querySelectorAll('.cn-marker').length);
+    }
+
+    // 17 / 18（重算）：resize / streaming 高度变化后位置重算
+    await rebuild(mkMsgs(4));
+    {
+      const before = window.navEntries().map((x) => x.top);
+      navHeight = 300;
+      window.scheduleLayout();
+      await new Promise((r) => setTimeout(r, 220));
+      const after = window.navEntries().map((x) => x.top);
+      check('导航 17. 容器高度变化后重算位置（等比压缩）', () =>
+        after[after.length - 1] < before[before.length - 1] || JSON.stringify({ before, after }));
+      navHeight = 600;
+      window.scheduleLayout();
+      await new Promise((r) => setTimeout(r, 220));
+    }
+    {
+      const before = window.navEntries().map((x) => x.topInContent);
+      msgStep = 500; // 模拟 streaming 把内容撑高 / Timeline 展开
+      window.scheduleLayout();
+      await new Promise((r) => setTimeout(r, 220));
+      const after = window.navEntries().map((x) => x.topInContent);
+      check('导航 18b. 内容高度变化（streaming / Timeline 折叠）后重算内容偏移', () =>
+        after[after.length - 1] > before[before.length - 1] || JSON.stringify({ before, after }));
+      msgStep = 300;
+    }
+
+    // 25. DOM 不使用 raw user content innerHTML
+    check('导航 25. 预览走 textContent，没有把用户正文拼进 innerHTML', () => {
+      const src = sources;
+      const block = src.slice(src.indexOf('function previewOf'), src.indexOf('function makeMarker'));
+      return !/innerHTML/.test(block) || '预览路径里出现了 innerHTML';
+    });
+    check('导航 25b. marker 与提示都只有文本节点，没有 HTML 注入面', () => {
+      const m = nav.querySelector('.cn-marker');
+      if (!m) return '没有 marker';
+      return m.querySelectorAll('*').length === 1 || `marker 里有 ${m.querySelectorAll('*').length} 个子元素`;
+    });
+
+    // 还原几何桩，别影响后面的用例
+    window.Element.prototype.getBoundingClientRect = origRect;
+    scrollTopVal = 0;
+  }
+
 
   /* ---------- 侧栏的会话列表（参考 Codex，不单开窗口） ---------- */
   async function sessionSection() {
