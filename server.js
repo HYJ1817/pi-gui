@@ -45,6 +45,7 @@ import { createProviders } from './server/providers.js';
 import { createRouter } from './server/router.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createRuntime } from './server/runtime.js';
+import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
 import { createSessions } from './server/sessions.js';
 import { createSkills } from './server/skills.js';
@@ -229,6 +230,18 @@ const planner = createPlanner({
 });
 plannerRef = planner;
 
+/* P2 diagnostics：只读运行态与能力摘要，不读取会话正文、配置文件内容或环境变量。
+ * 输出还会在模块内部做路径与 secret 脱敏，适合后续直接用于故障报告。 */
+const diagnostics = createDiagnostics({
+  runtime,
+  rpc,
+  agentRegistry,
+  mcp,
+  dataDir: DATA_DIR,
+  version: VERSION,
+  env: process.env,
+});
+
 const route = createRouter({
   auth,
   sse,
@@ -242,6 +255,7 @@ const route = createRouter({
   planner,
   gitRoutes,
   uploads,
+  diagnostics,
 });
 
 const server = http.createServer(route);
