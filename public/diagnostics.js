@@ -119,7 +119,6 @@ async function loadInto(card, close) {
 
 export function openDiagnostics() {
   openModal((card, close) => {
-    card.classList.add('diagnostics');
     loadInto(card, close);
   });
 }
