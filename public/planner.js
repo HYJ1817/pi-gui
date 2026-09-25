@@ -127,6 +127,7 @@ export function openPlanner() {
     const body = el('div', 'ext-body');
     const plansPane = el('div', 'ext-panel planner-pane');
     const agentsPane = el('div', 'ext-panel');
+    agentsPane.classList.add('planner-agents');
     agentsPane.style.display = 'none';
     body.append(plansPane, agentsPane);
     card.append(tabs, body);
@@ -622,38 +623,109 @@ export function openPlanner() {
       }
     }
 
+    /* Agent 页。
+     *
+     * 早先这里复用了 Skills 列表的 .ext-item 样式，而 .ext-item.static 是
+     * **flex 行**布局 —— 于是「标题行 + 描述 + 能力 + 不可用原因」全部并排挤在
+     * 一行里，Claude 那条的原因还被推到右侧窄列折行折断。整宽的页面需要的是
+     * **纵向卡片**：标题行（状态/名称/版本）→ 描述 → 能力胶囊 → 原因块。
+     *
+     * 能力不再拼成「·」分隔的一长串，改成胶囊：一眼能看出谁支持什么，
+     * 缺哪项用虚线弱化。不可用的卡片整体降调，但**它的原因块最显眼** ——
+     * 那一行里最该被读到的就是「为什么不可用、该怎么办」。 */
+    const AGENT_REASON = {
+      'not-installed': '未安装',
+      'entry-missing': '安装不完整',
+      'no-bin': '包缺少 bin 定义',
+      'unsupported-entry': '入口类型不支持',
+      'detect-failed': '探测失败',
+      'not-adapted': '尚未适配调用方式',
+    };
+    const AGENT_CAPS = [
+      ['streaming', '流式输出', '无流式'],
+      ['cancellation', '可取消', '不可取消'],
+      ['resume', '可续会话', '不续会话'],
+      ['toolEvents', '工具级事件', '仅文本摘要'],
+    ];
+
+    /** 后端给的 note 有时会以原因标签开头（「安装不完整：…」），
+     *  而上面那块已经写了同样的标签 —— 渲染时把重复的前缀去掉。 */
+    function stripReasonPrefix(text, label) {
+      if (!label) return text;
+      for (const sep of ['：', ':']) {
+        if (text.startsWith(label + sep)) return text.slice(label.length + sep.length).trim();
+      }
+      return text;
+    }
+
+    function renderAgentCard(a) {
+      const card = el('div', 'agent-card' + (a.available ? '' : ' off'));
+
+      /* 标题行：状态点 + 可用/不可用 + 名称 + id + 版本，**全部靠左成组**。
+       * 早先把版本用 margin-left:auto 推到最右，卡片宽 1100px 时它离名字
+       * 900px 远，看着像布局坏了；而且「可用/不可用」已经用颜色点出来了，
+       * 右边那一列并不承担扫描作用。 */
+      const head = el('div', 'agent-head');
+      head.append(el('span', dotClass(a.available ? { dot: 'ok' } : { dot: 'err' }), ''));
+      head.append(el('span', 'agent-status ' + (a.available ? 'ok' : 'err'), a.available ? '可用' : '不可用'));
+      head.append(el('span', 'agent-name', a.name));
+      head.append(el('span', 'agent-id', a.id));
+      if (a.version) head.append(el('span', 'agent-ver', 'v' + a.version));
+      card.append(head);
+
+      if (a.description) card.append(el('div', 'agent-desc', a.description));
+
+      const caps = a.capabilities || {};
+      const capBox = el('div', 'agent-caps');
+      for (const [key, yes, no] of AGENT_CAPS) {
+        const on = Boolean(caps[key]);
+        capBox.append(el('span', 'agent-cap' + (on ? '' : ' no'), on ? yes : no));
+      }
+      card.append(capBox);
+
+      if (!a.available) {
+        /* 原因与建议**合成一块**：分开渲染会出现两块彩色框、而且「安装不完整」
+         * 这句会重复两遍。事实在前、建议用 → 起一行，一块就够。 */
+        const label = AGENT_REASON[a.reason] || a.reason || '不可用';
+        const box = el('div', 'agent-reason err');
+        box.append(el('div', 'agent-reason-k', label));
+        if (a.detail) box.append(el('div', 'agent-reason-v', a.detail));
+        for (const n of a.notes || []) {
+          box.append(el('div', 'agent-reason-v agent-advice', '→ ' + stripReasonPrefix(n, label)));
+        }
+        card.append(box);
+      } else {
+        /* 可用的 agent 只是「注意」（例如「这个 CLI 没有 JSON 事件流」），
+         * 用警示色边框太响 —— 降成一行淡色说明。 */
+        for (const n of a.notes || []) card.append(el('div', 'agent-note', n));
+      }
+      return card;
+    }
+
     async function loadAgents() {
       try {
         const r = await fetchAgents();
         agents = r.agents || [];
+        const okCount = agents.filter((a) => a.available).length;
         agentsPane.replaceChildren();
-        agentsPane.append(el('div', 'ext-sec-head', '本机检测到的 Agent'));
+
+        const sum = el('div', 'agent-summary');
+        sum.append(el('span', null, `本机检测到 ${agents.length} 个 Agent，其中 ${okCount} 个可用`));
+        if (r.auto) sum.append(el('span', 'agent-auto', `auto → ${r.auto}`));
+        agentsPane.append(sum);
+
         agentsPane.append(
-          el('div', 'ext-item-note', 'Agent 一律经过适配器调用（shell:false + 参数数组），Planner 不会直接拼命令。不可用的会在这里说清原因。')
+          el(
+            'div',
+            'agent-hint',
+            '所有 Agent 都经适配器调用（shell:false + 参数数组），Planner 不拼命令字符串。不可用的会在点「开始执行」之前被拦下来，并说明是哪个任务。'
+          )
         );
-        for (const a of agents) {
-          const item = el('div', 'ext-item static');
-          const top = el('div', 'ext-item-top');
-          top.append(el('span', dotClass(a.available ? { dot: 'ok' } : { dot: 'err' }), a.available ? '可用' : '不可用'));
-          top.append(el('span', 'ext-name', a.name));
-          top.append(el('span', 'ext-badge', a.id));
-          if (a.version) top.append(el('span', 'ext-badge', 'v' + a.version));
-          item.append(top);
-          if (a.description) item.append(el('div', 'ext-item-desc', a.description));
-          const caps = a.capabilities || {};
-          const capLine = [
-            caps.streaming ? '流式输出' : '无流式',
-            caps.cancellation ? '可取消' : '不可取消',
-            caps.resume ? '可续会话' : '不续会话',
-            caps.toolEvents ? '有工具级事件' : '仅文本摘要',
-          ].join(' · ');
-          item.append(el('div', 'ext-item-desc', capLine));
-          if (!a.available && a.detail) item.append(el('div', 'ext-item-note', a.detail));
-          for (const n of a.notes || []) item.append(el('div', 'ext-item-note', n));
-          agentsPane.append(item);
-        }
+
+        for (const a of agents) agentsPane.append(renderAgentCard(a));
+
         agentsPane.append(
-          el('div', 'ext-item-note', '注：pi 没有原生 sub-agent / plan mode —— 这一层是 Pi GUI 自己的编排，不是 pi 的能力。')
+          el('div', 'agent-boundary', '注：pi 没有原生 sub-agent / plan mode —— 这一层是 Pi GUI 自己的编排，不是 pi 的能力。')
         );
       } catch (err) {
         agentsPane.replaceChildren(el('div', 'ext-empty', '读取 Agent 失败：' + err.message));

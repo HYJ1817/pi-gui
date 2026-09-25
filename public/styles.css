@@ -1225,3 +1225,67 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   .planner-bar { flex-direction: column; }
   .planner-bar-r { flex-direction: row; }
 }
+
+
+/* ---- Planner：Agent 页（纵向卡片） ----
+ *
+ * 这里刻意**不复用** Skills 的 .ext-item：那个是窄列表里的一行（flex 行布局），
+ * 塞进「标题 + 描述 + 能力 + 原因」会全部并排挤成一行。整宽页面要的是纵向卡片。 */
+
+.planner-agents{overflow:auto;padding:2px 2px 10px}
+
+.agent-summary{
+  display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;
+  font-size:11px;color:var(--t3);margin-bottom:6px;
+}
+.agent-auto{color:var(--accent);font-family:var(--mono)}
+.agent-hint{font-size:11px;color:var(--t3);line-height:1.65;margin-bottom:12px}
+
+.agent-card{
+  border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  background:var(--card);margin-bottom:8px;min-width:0;
+}
+/* 不可用的整体降调，但里面的原因块仍然最显眼 —— 那一行最该被读到的
+   就是「为什么不可用」。 */
+.agent-card.off{background:transparent;border-color:var(--line-soft)}
+
+.agent-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.agent-status{font-size:10.5px;flex:0 0 auto;letter-spacing:.02em}
+.agent-status.ok{color:var(--ok)}
+.agent-status.err{color:var(--err)}
+.agent-name{font-size:13px;font-weight:500;color:var(--t1);flex:0 0 auto;min-width:0}
+.agent-card.off .agent-name{color:var(--t2)}
+.agent-id{
+  flex:0 0 auto;font-family:var(--mono);font-size:10.5px;color:var(--t3);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px;line-height:1.5;
+}
+.agent-ver{flex:0 0 auto;font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+
+/* 描述是「这个 agent 是什么」，比备注重要 —— 用 --t2 保证深底上读得清 */
+.agent-desc{font-size:11.5px;color:var(--t2);line-height:1.55;margin-top:5px}
+
+.agent-caps{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.agent-cap{
+  font-size:10.5px;line-height:1.5;border-radius:6px;padding:2px 7px;
+  border:1px solid var(--line);color:var(--t2);flex:0 0 auto;
+}
+/* 缺的那项用虚线弱化，扫一眼就能看出谁支持什么 */
+.agent-cap.no{border-style:dashed;color:var(--t3);opacity:.7}
+
+.agent-reason{
+  margin-top:8px;padding:7px 10px;border-radius:0 7px 7px 0;
+  border-left:2px solid var(--err);background:rgba(248,113,113,.06);
+}
+.agent-reason-k{font-size:10.5px;color:var(--warn);margin-bottom:3px;letter-spacing:.02em}
+.agent-reason .agent-reason-k{color:var(--err)}
+.agent-advice{margin-top:4px}
+.agent-note{font-size:11px;color:var(--t3);line-height:1.6;margin-top:6px}
+.agent-reason-v{
+  font-size:11.5px;color:var(--t2);line-height:1.6;
+  word-break:break-word;overflow-wrap:anywhere;
+}
+
+.agent-boundary{
+  margin-top:12px;padding:8px 11px;border:1px dashed var(--line);border-radius:8px;
+  font-size:11px;color:var(--t3);line-height:1.65;
+}
