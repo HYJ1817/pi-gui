@@ -186,13 +186,78 @@ async function mkProject(name) {
   /* ================= B. Agent Registry（§48 的 19-23） ================= */
   section('B. Agent Registry');
 
+  /* ⚠️ 这一组**绝不能依赖「跑测试这台机器装了什么」**。
+   *
+   * 第一版直接拿 `process.env` 去探测，断言「pi 能被探测到」——
+   * 于是它在装了 pi 的开发机上是绿的，在干净的 CI runner 上直接红。
+   * 它测的不是 registry 的逻辑，而是那台机器的状态。
+   *
+   * 探测逻辑真正依赖的是 `env.APPDATA` 这条路径（见 server/agents/cli.js 的
+   * npmGlobalRoots），而 env 本来就是注入进来的 —— 所以这件事**本来就能测**。
+   * 下面用 fixture 造一个假的全局 npm 目录，把 APPDATA 指过去。
+   *
+   * 顺带把「包在、入口不在」这条也钉住：它是「装坏了」与「没装」的分界线，
+   * 之前只是靠本机 claude 恰好是坏的才被顺带覆盖到。 */
+  function makeGlobalPkg(appdata, pkgName, { version = '9.9.9', binName, binRel = 'dist/cli.js', withEntry = true } = {}) {
+    const dir = path.join(appdata, 'npm', 'node_modules', ...pkgName.split('/'));
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ name: pkgName, version, bin: { [binName]: binRel } }),
+      'utf8'
+    );
+    if (withEntry) {
+      const entry = path.join(dir, binRel);
+      fs.mkdirSync(path.dirname(entry), { recursive: true });
+      fs.writeFileSync(entry, '// fixture\n', 'utf8');
+    }
+    return dir;
+  }
+
+  /** 一个「什么都装不到」的 env —— 所有全局位置都指向不存在的路径。 */
+  const emptyEnv = {
+    APPDATA: path.join(TMP, 'no-such-appdata'),
+    LOCALAPPDATA: path.join(TMP, 'no-such-localappdata'),
+    PREFIX: path.join(TMP, 'no-such-prefix'),
+    HOME: path.join(TMP, 'no-such-home'),
+    USERPROFILE: path.join(TMP, 'no-such-home'),
+  };
+
   {
-    const reg = createAgentRegistry({ env: process.env, sessionDir: path.join(TMP, 'sess') });
+    /* ---- 干净机器：什么都没装 ---- */
+    const regClean = createAgentRegistry({ env: emptyEnv, sessionDir: path.join(TMP, 'sess') });
+    const cleanList = regClean.list();
+    check('19a. 干净机器上如实报 not-installed，不假装可用', () => {
+      const pi = cleanList.find((a) => a.id === 'pi');
+      return Boolean(pi && !pi.available && pi.reason === 'not-installed' && pi.detail) || JSON.stringify(pi);
+    });
+    check('19b. 干净机器上 auto 不会硬指一个不可用的 agent', () => {
+      const auto = regClean.resolveAuto();
+      return auto === null || 'auto=' + auto;
+    });
+
+    /* ---- fixture：造一个装了 pi 与 codex 的全局目录 ---- */
+    const appdata = fs.mkdtempSync(path.join(TMP, 'appdata-'));
+    makeGlobalPkg(appdata, '@earendil-works/pi-coding-agent', { version: '9.9.9', binName: 'pi', binRel: 'dist/bundle/cli.js' });
+    makeGlobalPkg(appdata, '@openai/codex', { version: '8.8.8', binName: 'codex', binRel: 'bin/codex.js' });
+
+    const reg = createAgentRegistry({ env: { ...emptyEnv, APPDATA: appdata }, sessionDir: path.join(TMP, 'sess') });
     const list = reg.list();
     check('19. pi 能被探测到，且能力里有 toolEvents（唯一有工具级事件的）', () => {
       const pi = list.find((a) => a.id === 'pi');
-      return Boolean(pi && pi.available && pi.capabilities.toolEvents === true && pi.version) || JSON.stringify(pi);
+      return Boolean(pi && pi.available && pi.capabilities.toolEvents === true && pi.version === '9.9.9') || JSON.stringify(pi);
     });
+    check('19c. 解析出的入口是 node 类型（.js 走 process.execPath，不拼 shell）', () => {
+      const e = resolveEntry({ pkgName: '@earendil-works/pi-coding-agent', binName: 'pi', env: { ...emptyEnv, APPDATA: appdata } });
+      return (e.ok && e.kind === 'node' && Array.isArray(e.baseArgs)) || JSON.stringify(e);
+    });
+    check('19d. 「包在、入口不在」报 entry-missing（与 not-installed 区分开）', () => {
+      const broken = fs.mkdtempSync(path.join(TMP, 'appdata-broken-'));
+      makeGlobalPkg(broken, '@earendil-works/pi-coding-agent', { version: '9.9.9', binName: 'pi', binRel: 'dist/bundle/cli.js', withEntry: false });
+      const pi = createAgentRegistry({ env: { ...emptyEnv, APPDATA: broken } }).list().find((a) => a.id === 'pi');
+      return (pi && !pi.available && pi.reason === 'entry-missing' && pi.version === '9.9.9') || JSON.stringify(pi);
+    });
+
     check('20/21/22. 不可用的 agent 如实报 unavailable，并给出可核对的原因', () => {
       const bad = list.filter((a) => !a.available);
       return bad.every((a) => a.reason && a.detail) || JSON.stringify(bad.map((a) => [a.id, a.reason]));
@@ -210,11 +275,10 @@ async function mkProject(name) {
       return bad.length === 0 || JSON.stringify(bad.map((a) => a.id));
     });
     check('auto 的解析可预测：优先 pi', () => reg.resolveAuto() === 'pi' || reg.resolveAuto());
-    check('auto 在 preferred 可用时听 preferred', () => {
+    check('auto 在 preferred 可用时听 preferred（fixture 里 codex 也可用）', () => {
       const avail = list.filter((a) => a.available).map((a) => a.id);
-      if (avail.length < 2) return true;
-      const other = avail.find((x) => x !== 'pi');
-      return reg.resolveAuto(other) === other || reg.resolveAuto(other);
+      if (!avail.includes('codex')) return 'fixture 没造出可用的 codex：' + JSON.stringify(avail);
+      return reg.resolveAuto('codex') === 'codex' || reg.resolveAuto('codex');
     });
     check('register 会校验 adapter 形状（缺 start 直接抛）', () => {
       try {

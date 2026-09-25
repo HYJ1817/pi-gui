@@ -35,6 +35,23 @@ dev-server 19 · models-api 50 · server-security 36 · electron-guard 50
   写盘的用例（改 settings、会话改名/删除）**必须**走临时 fixture。
 - **不需要模型额度。** 一条 prompt 都不发。
 - **不需要显示器。** jsdom 跑前端，打包验证用 `node` 直接跑打包后的 `server.cjs`。
+- **不依赖「跑测试这台机器装了什么」。** 要探测外部程序的地方用 **fixture 驱动**
+  —— 造一个假的全局 npm 目录、把 `env.APPDATA` 指过去，而不是断言「本机装了 pi」。
+
+最后一条是真实踩出来的，值得单独讲：
+
+> `tests/planner.cjs` 原来断言「pi 能被探测到，且能力里有 toolEvents」，
+> 而它拿的是 `process.env`。结果这条断言**在开发机上是绿的、在干净的 CI runner 上直接红**
+> —— 它测的不是 registry 的逻辑，而是那台机器的状态。
+>
+> 探测逻辑真正依赖的是 `env.APPDATA\npm\node_modules` 这条路径（`server/agents/cli.js`
+> 的 `npmGlobalRoots`），而 `env` 本来就是注入进 registry 的 —— 所以这件事**本来就能测**。
+> 现在用 fixture 造出「什么都没装」与「装了 pi + codex」两种世界，分别断言
+> `not-installed`、`entry-missing`、版本号、入口类型，以及 `auto` 的解析规则。
+>
+> ⚠️ 顺带一个坑：本地模拟 CI 时**只把全局 npm bin 从 PATH 里摘掉是不够的** ——
+> 那条路径跟 PATH 无关，`pi` 照样会被探测到，于是模拟是绿的、真 CI 是红的。
+> 模拟干净 runner 要把 `APPDATA` / `LOCALAPPDATA` 也一起指走。
 
 ## 三、CI 里跑什么
 
@@ -134,9 +151,11 @@ npm run test:installer            # 真装一遍再卸（20 项，本机 5 条�
 - `tests/dev-server.cjs` 一度没设 `PI_GUI_DATA`，于是 `server.js` 把仓库根当数据目录、
   读到了开发机上的 `projects.json`，把上次的项目当初始 cwd，**真的拉起了一个 pi 会话**。
   现在它显式隔离，并且有一条守卫断言「工作目录为空」盯着这件事。
+- `tests/planner.cjs` 一度断言「本机装了 pi」—— 见上一节，它让第一次 CI 直接红。
 
-CI 上这些坑大多不会触发（干净检出里没有 `projects.json`），但**「靠一个未跟踪的本地
-文件碰巧不触发」不算隔离** —— 行为必须在任何机器上都一样。
+CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runner 上没装 pi），
+但**「靠开发机的偶然状态碰巧不触发」不算隔离** —— 行为必须在任何机器上都一样。
+上面第二条与第三条都是**被 CI 抓出来的**，不是靠 code review 看出来的。
 
 ## 七、已知风险
 
