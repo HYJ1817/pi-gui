@@ -9,11 +9,29 @@
  * 所以这里就干一件事：起真的服务，把关键静态资源挨个取一遍。
  */
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.TEST_PORT || 7791);
 const BASE = `http://127.0.0.1:${PORT}`;
+
+/* 数据目录必须显式隔离。
+ *
+ * 不设 PI_GUI_DATA 时 server.js 会把数据目录算成「代码所在目录」（就是仓库根），
+ * 于是这个测试会去读**开发机上的** `projects.json` —— 那份文件里记着上次打开的
+ * 项目，`resolveInitialCwd()` 会把它当成初始 cwd，接着 rpc-bridge 就**真的把 pi
+ * 拉起来**（实测：`bridge_status: starting, args:["--mode","rpc","--continue"]`）。
+ * 结果是跑一次静态资源测试就顺手启动了开发者的真实 pi 会话。
+ *
+ * 在 CI 上这件事碰巧不会发生（`projects.json` 被 gitignore，干净检出里没有），
+ * 但「靠一个未跟踪的本地文件碰巧不触发」不算隔离。显式指到临时目录 + PI_CWD 置空
+ * 之后，行为在任何机器上都一样。
+ *
+ * PI_BIN 指到一个不存在的命令是双保险：即使将来有人把 PI_CWD 加回来，
+ * 重试循环也只会立刻失败，不会真去拉起一个 pi 会话（同 tests/git.cjs 的做法）。 */
+const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-devserver-'));
 
 let pass = 0;
 let fail = 0;
@@ -47,7 +65,14 @@ async function waitReady(ms = 20000) {
 (async () => {
   const server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), PI_GUI_OPEN: '0' },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      PI_GUI_OPEN: '0',
+      PI_GUI_DATA: DATA,
+      PI_CWD: '',
+      PI_BIN: 'pi-gui-test-nonexistent-bin',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let out = '';
@@ -68,6 +93,13 @@ async function waitReady(ms = 20000) {
 
   try {
     check('服务能起来', await waitReady(), out.slice(0, 300));
+
+    /* 隔离守卫：这个测试必须跑在「没有项目」的状态下。
+     * 一旦有人把 PI_GUI_DATA / PI_CWD 去掉，server.js 就会去读开发机上的
+     * projects.json、把上次的项目当初始 cwd，进而真的拉起 pi —— 这条断言
+     * 会在那一步之前就红掉。 */
+    check('隔离：没有读到开发机上的 projects.json（工作目录为空）', () =>
+      /工作目录: （未选择/.test(out) || out.slice(0, 300));
 
     const get = async (p) => {
       const r = await fetch(BASE + p);
@@ -169,6 +201,11 @@ async function waitReady(ms = 20000) {
     check('不存在的文件返回 404', () => missing.status === 404 || '状态 ' + missing.status);
   } finally {
     cleanup();
+    try {
+      fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 3 });
+    } catch {
+      /* Windows 偶发占用，留在 tmp 里不影响 */
+    }
   }
 
   console.log('');

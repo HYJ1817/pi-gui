@@ -1,0 +1,108 @@
+# 基础 CI：每次 push / PR 都跑。
+#
+# 两条原则：
+#   1. **package.json 是测试入口的唯一真相** —— 这里只调 `npm test`，
+#      不把它的子测试一条条抄进 workflow。否则以后加了新测试套件，
+#      要记得同时改两处，漏一处就是「本地跑了、CI 没跑」的假绿。
+#   2. **CI 里不装 pi** —— `npm test` 全是纯自动化测试，不需要真实的
+#      pi-coding-agent，也不消耗任何模型额度。需要真 pi 的套件见
+#      docs/testing.md 的「只在本地 / 发布前跑」一节。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 最小权限：CI 只读仓库。发版走单独的流程，不在这里写任何东西。
+permissions:
+  contents: read
+
+# 同一个分支/PR 有新提交时取消上一轮 —— 连续推送不会留下一堆过期任务
+# 同时跑。用 ref 而不是固定 group：不同分支之间互不干扰。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- 测试
+  test:
+    name: Core tests (Node ${{ matrix.node }})
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      # 一个版本挂了也要把另一个跑完 —— 否则只看得到第一个失败，
+      # 分不清是「Node 版本问题」还是「代码问题」。
+      fail-fast: false
+      matrix:
+        # 为什么不是 20：
+        #   package.json 里写的是 engines.node >= 20，但**依赖树要求 >= 22.12**
+        #   （electron / @electron/packager 等 14 个包声明 >=22.12.0，
+        #   运行时依赖 pdfjs-dist 声明 >=22.13.0 || >=24）。
+        #   Node 20 上 `npm ci` 会刷 15 条 EBADENGINE，而 PDF 抽取用的
+        #   pdfjs-dist 明确声明不支持 20。所以这里取「依赖树真正的地板」22，
+        #   再加一个最新版 24（也是开发机在用的版本）。
+        node: [22, 24]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          # setup-node 自带的 npm 缓存。**不要**缓存 node_modules ——
+          # 平台相关的二进制（esbuild / electron）跨平台复用会出各种怪问题。
+          cache: npm
+
+      # 必须是 ci 而不是 install：ci 严格按 lockfile 装，
+      # lockfile 与 package.json 不一致时直接失败，不会悄悄改写依赖。
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run core tests
+        run: npm test
+
+  # ------------------------------------------------------- 打包链路验证
+  build-check:
+    name: Electron build check
+    # 测试不过就不必浪费几分钟去打包。
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # 打包链路只验一个版本就够 —— 它是构建工具链，与运行时矩阵无关。
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 这一步会：esbuild 打后端单文件 → 生成 SEA blob → 注入 node.exe 得到
+      # 单文件 exe → 收集 public/ 与 pdfjs 资源 → 用 @electron/packager 组装
+      # 出 dist-app/<App>-win32-x64。也就是说两条打包链路（SEA 与 Electron）
+      # 都在这一步里被真的走了一遍。
+      #
+      # 不跑 build:installer / build:dist：那要 NSIS 与 ~430MB 产物，
+      # 属于发布前验证（见 release-check.yml 与 docs/testing.md）。
+      - name: Build Electron app
+        run: npm run build:app -- --rebuild
+
+      # test:app 会把 dist-app 里的 resources/app 拷出来，用 node 直接跑
+      # 打包后的 server.cjs，检查静态资源、无项目时的行为等 25 项 ——
+      # 验证的是「打出来的包真的能跑」，而不只是「文件存在」。
+      - name: Verify packaged app
+        run: npm run test:app
+
+      # 单文件 exe（Node SEA）走的是另一条资源解析路径（内嵌），
+      # 45 项检查里有「内嵌资源与磁盘一致」这类只有真跑 exe 才能发现的断言。
+      - name: Verify single-file exe
+        run: npm run test:exe

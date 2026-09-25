@@ -1,0 +1,105 @@
+# 发布前验证：**手动触发**，不挂在 push / PR 上。
+#
+# 为什么单独一个 workflow：这里的每一步都比 ci.yml 贵一个量级 ——
+# 完整打包要几分钟、安装程序要 NSIS 与 ~430MB 产物、还要真的把应用装一遍
+# 再卸一遍。把它们塞进每次 push 只会让 CI 变慢变脆，而它们真正需要被验证的
+# 时机是「准备发版」，不是「改了一行代码」。
+#
+# 与 ci.yml 的分工见 docs/testing.md。
+name: Release check
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer:
+        description: '同时验证安装程序与便携版（需要装 NSIS，约多花 15 分钟）'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-check-${{ github.ref }}
+  # 发版验证不做「取消旧的」—— 它本来就可能跑十几分钟，
+  # 中途被取消反而要重来一遍。
+  cancel-in-progress: false
+
+jobs:
+  # ------------------------------------------------ 测试 + 两条打包链路
+  verify:
+    name: Tests and packaging
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run core tests
+        run: npm test
+
+      - name: Build Electron app
+        run: npm run build:app -- --rebuild
+
+      - name: Verify packaged app
+        run: npm run test:app
+
+      - name: Verify single-file exe
+        run: npm run test:exe
+
+  # ------------------------------------------------- 安装程序 / 便携版
+  installer:
+    name: Installer and portable
+    needs: verify
+    if: ${{ inputs.installer }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # NSIS 不在 windows-latest 的预装清单里，而 build:installer 需要
+      # makensis。装完之后 scripts/build-installer.mjs 的 findMakensis()
+      # 会在 `C:\Program Files (x86)\NSIS\makensis.exe` 找到它（它本来就
+      # 把这个路径列在候选里），不需要额外传 --nsis=。
+      #
+      # 这是本 workflow 唯一一个 CI 专用依赖，所以它只出现在这个
+      # 手动触发的 workflow 里，不进 ci.yml。
+      - name: Install NSIS
+        run: choco install nsis --no-progress -y
+
+      - name: Build Electron app
+        run: npm run build:app -- --rebuild
+
+      # 安装程序与便携版都从 dist-installer/ 读产物，文件名带 package.json
+      # 里的版本号，所以必须排在 build:app 之后。
+      - name: Build installer and portable zip
+        run: npm run build:installer -- --zip
+
+      - name: Verify portable zip
+        run: npm run test:portable
+
+      - name: Verify installer
+        run: npm run test:installer
+        # 这一步会真的安装（写 %LOCALAPPDATA%）、建快捷方式、启动一次、
+        # 再从「添加或删除程序」卸掉。runner 是一次性虚拟机，测完即弃。
+        # 注意：本机开发环境里 reg.exe 被安全策略拉黑，有 5 条注册表断言
+        # 会被跳过；GitHub runner 上没有这个限制，应该 20 条全部执行。

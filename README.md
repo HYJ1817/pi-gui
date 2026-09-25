@@ -1,5 +1,7 @@
 # Pi GUI
 
+[![CI](https://github.com/HYJ1817/pi-gui/actions/workflows/ci.yml/badge.svg)](https://github.com/HYJ1817/pi-gui/actions/workflows/ci.yml)
+
 给 [pi](https://github.com/earendil-works/pi) 套一个本地桌面界面：选一个文件夹当项目，
 在输入框里说要做什么，文件改动与命令执行实时显示在窗口里；改完哪些文件、
 具体改了什么，在侧栏「文件变更」里看 diff，然后决定留着还是撤销。
@@ -665,6 +667,20 @@ PI_GUI_ELECTRON_ZIP_DIR="$LOCALAPPDATA/electron/Cache/<hash>" npm run build:app
 
 ## 测试
 
+**改了代码该跑哪些测试、在哪里跑，看 [docs/testing.md](docs/testing.md)。**
+一句话版本：
+
+| 什么时候 | 跑什么 |
+|---|---|
+| push / PR 到 main（CI，windows runner） | `npm test` + `npm run build:app` + `test:app` / `test:exe` |
+| 本地日常 | `npm test`（约 3-4 分钟，纯自动化，不联网、不花模型额度） |
+| 改了 `public/` 的样式或布局 | 还得真截图看一眼 —— jsdom 不做布局，测试全绿也说明不了排版对不对 |
+| 发版前 / 手动 | GitHub Actions 里的 **Release check**，或按下面这套跑一遍 |
+
+`npm test` 是测试入口的**唯一真相**（CI 只调它，不把子测试抄进 workflow）。
+需要真 pi 的（`test:skills-live` / `test:reliability-live` / `test:inject`）、
+需要 NSIS 的（`test:portable` / `test:installer`）都不进默认 CI。
+
 ```bash
 npm test                # 前端冒烟 + Git 变更 + 后端模块单测 + 可靠性 + 项目配置 + Skills/MCP + Planner + 会话 + 消息体完整性 + 后端接口 + 模型拉取 + 访问控制 + Electron 安全边界
 npm run test:ui         # 前端冒烟（jsdom 里跑真模块图，含 Markdown 安全、工具时间线、
@@ -804,6 +820,8 @@ npm run test:installer  # 真装一遍 → 启动 → 卸一遍（会写注册�
   会读它、切圆角、编码成 `build/icon.ico`；这个文件不在就退回程序化绘制的 π
 - `scripts/` — 构建脚本；`scripts/util.mjs` 是几个脚本共用的小工具
 - `tests/` — 上面那几组测试
+- `docs/testing.md` — 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑
+- `.github/workflows/` — `ci.yml`（push / PR 自动跑）、`release-check.yml`（手动）
 - `tests/fixtures/tool-history.json` — 从真实会话 jsonl 切出来的一段消息
   （脱敏 + 长正文截断，结构一字未改），用来验证历史重建。
   来源与脱敏规则见 `tests/fixtures/README.md`
