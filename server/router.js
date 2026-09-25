@@ -70,6 +70,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param planner       Planner / Agent 编排（handle）
  * @param gitRoutes     Git 路由（handle）
  * @param uploads       附件上传（handle）
+ * @param diagnostics   诊断信息（handle）
  * @returns {import('node:http').RequestListener}
  */
 export function createRouter({
@@ -85,6 +86,7 @@ export function createRouter({
   planner,
   gitRoutes,
   uploads,
+  diagnostics,
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -125,6 +127,9 @@ export function createRouter({
     if (url.pathname === '/api/command' && req.method === 'POST') return handleCommand(req, res);
     if (url.pathname === '/api/status' && req.method === 'GET') {
       return json(res, 200, rpc.getState());
+    }
+    if (url.pathname === '/api/diagnostics') {
+      return diagnostics.handle(req, res, url);
     }
     // 必须排在下面那条前缀匹配之前 —— 否则 /api/providers/models 会被
     // 当成「保存一个叫 models 的供应商」，而且前端拿不到任何报错。
