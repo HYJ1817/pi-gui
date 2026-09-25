@@ -8,10 +8,17 @@
 | 层 | 命令 | 需要什么 | 跑在哪 |
 |---|---|---|---|
 | **A. 基础测试** | `npm test` | 只要 Node ≥ 22.12 | 每次 push / PR（CI）+ 本地 |
-| **B. 打包验证** | `npm run test:exe` / `test:app` | 先跑 `build:exe` / `build:app` | CI 的 build-check job |
+| **B. 打包验证** | `npm run test:exe` / `test:app` | 先跑 `npm run fixtures` 与 `build:exe` / `build:app` | CI 的 build-check job |
 | **C. 安装程序验证** | `npm run test:portable` / `test:installer` | 先跑 `build:installer`，且本机有 NSIS | 手动（release-check）或本地 |
 | **D. 真 pi 验证** | `npm run test:skills-live` / `test:reliability-live` / `test:inject` | 本机装了 `pi` | 只在本地 / 手动 |
 | **E. 界面视觉核对** | `npm run harness` + `shots` / `test:window` | 真浏览器 / 真窗口 | 只在本地 |
+
+> **B 层要先跑 `npm run fixtures`。** 它生成测试用的 docx / png / pdf
+> （放在 `os.tmpdir()/pi-gui-fixtures`）。PDF 以前只能靠 LibreOffice 转，
+> runner 上没有 → 那几条断言在干净机器上必然红。现在脚本内置了一个
+> **纯 Node 写的最小 PDF**，任何机器都能生成；有 LibreOffice 时仍会用
+> 它转出的中文版覆盖掉（本地行为不变）。
+> 想强制走最小 PDF 那条路（复现 CI）：`PI_GUI_SKIP_LIBREOFFICE=1 npm run fixtures`。
 
 ## 二、`npm test` 的定位
 
@@ -36,11 +43,12 @@ dev-server 19 · models-api 50 · server-security 36 · electron-guard 50
 - **不需要模型额度。** 一条 prompt 都不发。
 - **不需要显示器。** jsdom 跑前端，打包验证用 `node` 直接跑打包后的 `server.cjs`。
 - **不依赖「跑测试这台机器装了什么」。** 要探测外部程序的地方用 **fixture 驱动**
-  —— 造一个假的全局 npm 目录、把 `env.APPDATA` 指过去，而不是断言「本机装了 pi」。
+  —— 造一个假的全局 npm 目录、把 `env.APPDATA` 指过去；要验「能 spawn 外部命令」
+  就给一个假的 `.cmd` shim，而不是断言「本机装了 pi」。
 
-最后一条是真实踩出来的，值得单独讲：
+最后一条是真实踩出来的，值得单独讲（三处都让 CI 红过）：
 
-> `tests/planner.cjs` 原来断言「pi 能被探测到，且能力里有 toolEvents」，
+> **① `tests/planner.cjs`** 原来断言「pi 能被探测到，且能力里有 toolEvents」，
 > 而它拿的是 `process.env`。结果这条断言**在开发机上是绿的、在干净的 CI runner 上直接红**
 > —— 它测的不是 registry 的逻辑，而是那台机器的状态。
 >
@@ -48,6 +56,13 @@ dev-server 19 · models-api 50 · server-security 36 · electron-guard 50
 > 的 `npmGlobalRoots`），而 `env` 本来就是注入进 registry 的 —— 所以这件事**本来就能测**。
 > 现在用 fixture 造出「什么都没装」与「装了 pi + codex」两种世界，分别断言
 > `not-installed`、`entry-missing`、版本号、入口类型，以及 `auto` 的解析规则。
+>
+> **② `tests/app-check.cjs` / `tests/exe-check.cjs`** 同样断言「pi 子进程已拉起」。
+> 这里要验的其实是**打包出来的应用还能不能 spawn 外部命令并跟踪它的生命周期**，
+> 与「本机装没装 pi」无关。现在给一个假的 `.cmd` shim（`PI_BIN` 指过去），
+> 它只负责活着 —— 断言因此在任何机器上都确定。
+>
+> **③ 这两个测试还依赖 PDF 固件**，而固件原本只能靠 LibreOffice 转（见上面 B 层的说明）。
 >
 > ⚠️ 顺带一个坑：本地模拟 CI 时**只把全局 npm bin 从 PATH 里摘掉是不够的** ——
 > 那条路径跟 PATH 无关，`pi` 照样会被探测到，于是模拟是绿的、真 CI 是红的。

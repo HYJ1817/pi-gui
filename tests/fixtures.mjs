@@ -162,6 +162,52 @@ const pngPath = path.join(tmp, 'red.png');
 fs.writeFileSync(pngPath, png(24, 24, [220, 60, 50]));
 console.log('已生成 png: ' + pngPath + '  (' + fs.statSync(pngPath).size + ' 字节)');
 
+/* ---------- 最小 PDF（纯 Node，不依赖 LibreOffice） ----------
+ *
+ * 为什么要它：`test:app` / `test:exe` 都要拿一个**真 PDF** 去验「打包之后
+ * PDF 抽取还能用」，而 PDF 原本只能靠 LibreOffice 转出来 —— CI runner 上没有
+ * LibreOffice，于是那几条断言在干净机器上必然红（第一次 CI 就是这么红的）。
+ *
+ * 这里手写一个结构完整的最小 PDF：一页、几行 ASCII 文本、xref 表齐全。
+ * 文本刻意用英文并带上 DN300（那几条断言查的就是它），因为内置的 Helvetica
+ * 基字体渲染不了中文，而断言里有「正文无乱码（不出现替换字符）」。
+ *
+ * 本机有 LibreOffice 时下面会用它转出的中文版**覆盖**掉这个文件 ——
+ * 开发机上的行为一个字都没变。 */
+function minimalPdf(lines) {
+  const esc = (s) => String(s).replace(/[\\()]/g, (m) => '\\' + m);
+  const content = 'BT /F1 14 Tf 72 760 Td 20 TL\n' + lines.map((t) => `(${esc(t)}) Tj T*`).join('\n') + '\nET\n';
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}endstream`,
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objs.forEach((body, i) => {
+    offsets.push(Buffer.byteLength(out));
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefStart = Buffer.byteLength(out);
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) out += String(off).padStart(10, '0') + ' 00000 n \n';
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
+const pdfPath = path.join(tmp, '发酵罐空气分布器设计.pdf');
+fs.writeFileSync(
+  pdfPath,
+  minimalPdf([
+    'Fermenter air sparger design',
+    'Air flow Q = 0.75 m3/s, outlet velocity v = 12 m/s',
+    'Outlet inner diameter d = 0.282 m, rounded to DN300 seamless pipe',
+  ])
+);
+console.log('已生成最小 PDF: ' + pdfPath + '  (' + fs.statSync(pdfPath).size + ' 字节)');
+
 /* ---------- 1. 测 docx 抽取 ---------- */
 const r1 = extractDocx(fs.readFileSync(docxPath));
 console.log('\n=== docx 抽取 ===');
@@ -173,33 +219,41 @@ if (hits1.length !== PARAS.length) {
   console.log('未命中: ' + JSON.stringify(PARAS.filter((p) => !r1.text.includes(p))));
 }
 
-/* ---------- 2. 转 PDF 并测 PDF 抽取 ---------- */
-const soffice = 'C:/Program Files/LibreOffice/program/soffice.exe';
+/* ---------- 2. 有 LibreOffice 就用它转一版中文 PDF，覆盖最小 PDF ---------- */
+/* PI_GUI_SKIP_LIBREOFFICE=1 可以强制走「最小 PDF」那条路 ——
+ * CI 上就是这条路（runner 没有 LibreOffice），本地想复现也得能强制。 */
+const soffice = process.env.PI_GUI_SKIP_LIBREOFFICE
+  ? ''
+  : 'C:/Program Files/LibreOffice/program/soffice.exe';
 if (fs.existsSync(soffice)) {
-  console.log('\n=== 用 LibreOffice 转 PDF ===');
+  console.log('\n=== 用 LibreOffice 转 PDF（覆盖最小 PDF） ===');
   try {
     execFileSync(soffice, ['--headless', '--norestore', '--convert-to', 'pdf', '--outdir', tmp, docxPath], {
       stdio: 'ignore',
       timeout: 120000,
     });
-    const pdfPath = path.join(tmp, '发酵罐空气分布器设计.pdf');
     if (!fs.existsSync(pdfPath)) throw new Error('转换后没有找到 PDF');
     console.log('已生成 PDF: ' + fs.statSync(pdfPath).size + ' 字节');
-
-    const r2 = await extractPdf(fs.readFileSync(pdfPath));
-    console.log('\n=== PDF 抽取（中文） ===');
-    console.log('页数: ' + r2.pages + '，长度: ' + r2.text.length + ' 字符');
-    console.log('前 200 字: ' + JSON.stringify(r2.text.slice(0, 200)));
-    const hits2 = PARAS.filter((p) => r2.text.includes(p));
-    console.log('段落命中: ' + hits2.length + '/' + PARAS.length);
-    if (hits2.length !== PARAS.length) {
-      console.log('未命中: ' + JSON.stringify(PARAS.filter((p) => !r2.text.includes(p))));
-    }
   } catch (e) {
-    console.log('PDF 环节失败: ' + e.message);
+    console.log('LibreOffice 转换失败，保留最小 PDF: ' + e.message);
   }
 } else {
-  console.log('\n跳过 PDF 测试：没找到 LibreOffice');
+  console.log('\n没有 LibreOffice —— 用内置的最小 PDF（CI 走的就是这条）');
+}
+
+/* 不管上面走哪条路，都对**最终那个 PDF** 验一次抽取 ——
+ * 否则「最小 PDF 到底能不能被 pdfjs 读」就没人知道了。 */
+{
+  const r2 = await extractPdf(fs.readFileSync(pdfPath));
+  console.log('\n=== PDF 抽取 ===');
+  console.log('页数: ' + r2.pages + '，长度: ' + r2.text.length + ' 字符');
+  console.log('前 200 字: ' + JSON.stringify(r2.text.slice(0, 200)));
+  const hits2 = PARAS.filter((p) => r2.text.includes(p));
+  console.log('中文段落命中: ' + hits2.length + '/' + PARAS.length + '（最小 PDF 是英文的，0 属正常）');
+  console.log('含 DN300: ' + r2.text.includes('DN300'));
+  if (!r2.text.includes('DN300')) {
+    console.log('!! 抽取结果里没有 DN300 —— test:app / test:exe 会红，请检查上面的 PDF 生成');
+  }
 }
 
 /* ---------- 3. 测统一入口 ---------- */

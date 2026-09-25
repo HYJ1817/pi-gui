@@ -39,6 +39,23 @@ const PORT = Number(process.env.CHECK_PORT || 7798);
 const BASE = `http://127.0.0.1:${PORT}`;
 const FIX = path.join(os.tmpdir(), 'pi-gui-fixtures');
 
+/* 假 pi：一个只负责「活着」的 .cmd shim。
+ *
+ * 「pi 子进程已拉起」那条断言要验的是**打包后的应用还能正常 spawn 外部命令并
+ * 跟踪它的生命周期**，不是「这台机器装了 pi」。原来它直接依赖本机安装 ——
+ * 于是在开发机上是绿的、在干净 CI runner 上红（第一次 CI 就是这么暴露的）。
+ *
+ * rpc-bridge 在 Windows 上走 shell:true，所以一个 .cmd 就够了；假 pi 什么都不用做，
+ * 活着就能让 /api/status 的 piRunning 为 true。这样这条断言在任何机器上都确定。 */
+const FAKE_PI_DIR = path.join(os.tmpdir(), 'pi-gui-appcheck-bin');
+fs.mkdirSync(FAKE_PI_DIR, { recursive: true });
+const FAKE_PI = path.join(FAKE_PI_DIR, 'fake-pi.cmd');
+fs.writeFileSync(
+  FAKE_PI,
+  '@echo off\r\n"' + process.execPath + '" -e "setInterval(function(){},1e9)" %*\r\n',
+  'utf8'
+);
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** 删临时目录 —— 带命令行兜底。
@@ -205,7 +222,7 @@ async function main() {
     cwd: SANDBOX,
     // PI_GUI_DATA 是桌面版用来把 projects.json / .uploads 挪到可写位置的机制。
     // 这里指向一个独立目录，顺便验证「不会污染应用安装目录」。
-    env: { ...process.env, PORT: String(PORT), PI_GUI_OPEN: '0', PI_GUI_DATA: DATA, PI_CWD: WORK },
+    env: { ...process.env, PORT: String(PORT), PI_GUI_OPEN: '0', PI_GUI_DATA: DATA, PI_CWD: WORK, PI_BIN: FAKE_PI },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });

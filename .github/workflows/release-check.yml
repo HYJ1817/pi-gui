@@ -47,6 +47,12 @@ jobs:
       - name: Run core tests
         run: npm test
 
+      # test:app / test:exe 需要 PDF 固件（见 ci.yml 里同一处的说明）。
+      - name: Generate test fixtures
+        run: npm run fixtures
+        env:
+          PI_GUI_SKIP_LIBREOFFICE: '1'
+
       - name: Build Electron app
         run: npm run build:app -- --rebuild
 

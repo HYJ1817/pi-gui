@@ -86,6 +86,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # test:app / test:exe 都要拿一个真 PDF 去验「打包后 PDF 抽取还能用」。
+      # 这个脚本以前只能靠 LibreOffice 转 PDF，而 runner 上没有 LibreOffice ——
+      # 于是那几条断言在干净机器上必然红（第一次 CI 就是这么红的）。
+      # 现在它内置了一个纯 Node 写的最小 PDF，任何机器都能跑。
+      # 显式跳过 LibreOffice：CI 要的是确定性，不是「碰巧有就用」。
+      - name: Generate test fixtures
+        run: npm run fixtures
+        env:
+          PI_GUI_SKIP_LIBREOFFICE: '1'
+
       # 这一步会：esbuild 打后端单文件 → 生成 SEA blob → 注入 node.exe 得到
       # 单文件 exe → 收集 public/ 与 pdfjs 资源 → 用 @electron/packager 组装
       # 出 dist-app/<App>-win32-x64。也就是说两条打包链路（SEA 与 Electron）

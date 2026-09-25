@@ -20,6 +20,24 @@ const PDF = path.join(os.tmpdir(), 'pi-gui-fixtures', '发酵罐空气分布器�
  * 没有项目就不启动 pi，所以想验证「pi 子进程已拉起」必须显式给一个目录。
  * 用临时目录而不是 build/：pi 会把会话写进工作目录，别污染构建产物。 */
 const WORK = path.join(os.tmpdir(), 'pi-gui-execheck-work');
+/* 数据目录也必须显式给。不给的话 server.js 会把「exe 所在目录」当数据目录
+ * （单文件 exe 的便携模式），于是测试会往 build/ 里写 projects.json / .uploads
+ * —— 既是污染，也让「产物没被改动」这件事没法断言。 */
+const DATA = path.join(os.tmpdir(), 'pi-gui-execheck-data');
+
+/* 假 pi：只负责「活着」的 .cmd shim。
+ *
+ * 「pi 子进程已拉起」要验的是**打包出来的 exe 还能 spawn 外部命令并跟踪生命周期**，
+ * 不是「这台机器装了 pi」。原来直接依赖本机安装 → 开发机绿、干净 CI runner 红。
+ * rpc-bridge 在 Windows 上走 shell:true，所以一个 .cmd 就够。 */
+const FAKE_PI_DIR = path.join(os.tmpdir(), 'pi-gui-execheck-bin');
+fs.mkdirSync(FAKE_PI_DIR, { recursive: true });
+const FAKE_PI = path.join(FAKE_PI_DIR, 'fake-pi.cmd');
+fs.writeFileSync(
+  FAKE_PI,
+  '@echo off\r\n"' + process.execPath + '" -e "setInterval(function(){},1e9)" %*\r\n',
+  'utf8'
+);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -61,7 +79,7 @@ async function main() {
 
   const exe = spawn(EXE, [], {
     cwd: path.join(ROOT, 'build'),
-    env: { ...process.env, PORT: String(PORT), PI_GUI_OPEN: '0', PI_CWD: WORK },
+    env: { ...process.env, PORT: String(PORT), PI_GUI_OPEN: '0', PI_CWD: WORK, PI_GUI_DATA: DATA, PI_BIN: FAKE_PI },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -293,13 +311,19 @@ async function main() {
     }
 
     check('运行期没有崩栈输出', () => !/Error:|throw/i.test(stdout) || stdout.slice(0, 300));
+    /* 单文件 exe 的便携模式会把数据目录算成「exe 所在目录」——
+     * 所以这里显式给了 PI_GUI_DATA，顺便确认它真的生效了：
+     * 数据落在临时目录，而不是被写进 build/（构建产物不该被测试改脏）。 */
+    check('数据目录用的是 PI_GUI_DATA 指的地方', () => fs.existsSync(DATA) || '临时数据目录没有被创建：' + DATA);
+    check('产物目录没有被写入（没有在 build/ 里生成 projects.json）', () => !fs.existsSync(path.join(ROOT, 'build', 'projects.json')) || 'build/ 里出现了 projects.json');
   } finally {
     stop();
   }
 
-  /* 收尾清掉工作目录。pi 会把会话写进去，留着只会越攒越多。 */
+  /* 收尾清掉工作目录与数据目录。pi 会把会话写进工作目录，留着只会越攒越多。 */
   await sleep(1200);
   rmrf(WORK);
+  rmrf(DATA);
 
   const failed = results.filter((r) => r[0] === 'FAIL');
   for (const [st, name, note] of results) console.log(`  ${st === 'PASS' ? 'ok  ' : 'FAIL'} ${name}${note ? '  → ' + note : ''}`);
