@@ -37,13 +37,15 @@ jobs:
       # 分不清是「Node 版本问题」还是「代码问题」。
       fail-fast: false
       matrix:
-        # 为什么不是 20：
-        #   package.json 里写的是 engines.node >= 20，但**依赖树要求 >= 22.12**
-        #   （electron / @electron/packager 等 14 个包声明 >=22.12.0，
-        #   运行时依赖 pdfjs-dist 声明 >=22.13.0 || >=24）。
-        #   Node 20 上 `npm ci` 会刷 15 条 EBADENGINE，而 PDF 抽取用的
-        #   pdfjs-dist 明确声明不支持 20。所以这里取「依赖树真正的地板」22，
-        #   再加一个最新版 24（也是开发机在用的版本）。
+        # package.json 的 engines.node 是 >=22.19 —— 这个下限由依赖链决定：
+        #   pi-coding-agent（被 GUI 驱动的 pi）要 >=22.19.0
+        #   pdfjs-dist（运行时依赖，PDF 抽取）要 >=22.13.0 || >=24
+        #   electron / @electron/packager 等 11 个开发依赖要 >=22.12.0
+        # 取其中最严的一条。
+        #
+        # matrix 取 22 与 24：22 是这条下限所在的大版本，24 是当前最新
+        # （也是开发机在用的）。不按 22.19 建 matrix —— 那只会多出一个几乎重复的
+        # runner，而 22.x 内部的补丁差异不是这个项目要防的风险。
         node: [22, 24]
     steps:
       - name: Checkout
