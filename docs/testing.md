@@ -159,15 +159,6 @@ npm run test:installer            # 真装一遍再卸（20 项，本机 5 条�
 发版还要做两条独立核实（附件摘要 + git ref），步骤见
 [development.md](development.md) 的「发版流程」。
 
-## 八、相关文档
-
-- [architecture.md](architecture.md) — 模块地图与数据目录
-- [development.md](development.md) — 构建与发版（`test:app` / `test:exe` /
-  `test:portable` / `test:installer` 需要先构建）
-- [sessions.md](sessions.md) / [planner.md](planner.md) /
-  [extensions.md](extensions.md) — 各子系统末尾都列了自己的测试入口
-- [security.md](security.md) — 安全守卫由哪些测试盯着
-
 ## 六、环境隔离（改测试时的硬要求）
 
 测试跑在开发机上，所以**任何一处忘了隔离都会打到真实数据**。已经踩过的坑：
@@ -194,3 +185,12 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 2. **`docs/testing.md` 里的断言数量会随测试增长而过时**。它们只是「这些套件确实
    在断言东西」的量级参考，不参与任何判断 —— 真实数字以 `npm test` 的输出为准。
    不要为同步它们引入脚本生成文档。
+
+## 八、相关文档
+
+- [architecture.md](architecture.md) — 模块地图与数据目录
+- [development.md](development.md) — 构建与发版（`test:app` / `test:exe` /
+  `test:portable` / `test:installer` 需要先构建）
+- [sessions.md](sessions.md) / [planner.md](planner.md) /
+  [extensions.md](extensions.md) — 各子系统末尾都列了自己的测试入口
+- [security.md](security.md) — 安全守卫由哪些测试盯着
