@@ -70,7 +70,6 @@ export function onResponse(evt) {
       clearThread();
       toast('已从该节点分叉', 'info');
       setTimeout(() => {
-        sendCommand({ type: 'get_messages' });
         boot();
       }, 250);
       return;
@@ -92,7 +91,8 @@ export function respond(id, payload) {
 }
 
 export async function submit() {
-  if (!S.hasProject) {
+  if (S.submitting) return;
+  if (!S.hasProject || S.switching || S.bridgeState !== 'ready') {
     toast('还没有选择项目：先在左侧「添加文件夹」选一个目录。', 'info');
     return;
   }
@@ -103,21 +103,28 @@ export async function submit() {
   const message = buildMessage(text);
   const images = attachmentImages();
 
-  el.input.value = '';
-  S.attachments = [];
-  renderAttachments();
-  autoGrow();
-  updateSendState();
-
   const cmd = { message };
   if (images.length) cmd.images = images;
 
-  if (S.streaming) {
-    // 运行中发送 → 作为引导消息插话
-    await sendCommand({ type: 'steer', ...cmd });
-    toast('已作为引导消息排队', 'info');
-  } else {
-    await sendCommand({ type: 'prompt', ...cmd });
+  S.submitting = true;
+  updateSendState();
+  try {
+    let result;
+    if (S.streaming) {
+      // 运行中发送 → 作为引导消息插话
+      result = await sendCommand({ type: 'steer', ...cmd });
+      if (result.ok) toast('已作为引导消息排队', 'info');
+    } else {
+      result = await sendCommand({ type: 'prompt', ...cmd });
+    }
+    if (!result?.ok) return; // 失败时保留输入和附件，用户可以重试
+    if (el.input.value.trim() === text) el.input.value = '';
+    S.attachments = S.attachments.filter((item) => !atts.includes(item));
+    renderAttachments();
+    autoGrow();
+  } finally {
+    S.submitting = false;
+    updateSendState();
   }
 }
 

@@ -20,7 +20,8 @@ import { sendCommand } from './api.js';
 import { toast } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popLabel, popTitle, popVisible } from './ui/popover.js';
 import { openModal } from './ui/modal.js';
-import { applyProjectState, loadStatus, setConn, setStatus, setTitleText } from './shell.js';
+import { applyProjectState, loadStatus, setBridgeState, setConn, setStatus, setTitleText } from './shell.js';
+import { samePath } from './util.js';
 import { autoGrow, updateSendState } from './composer.js';
 import {
   boot,
@@ -42,6 +43,7 @@ import {
   onMessageStart,
   onMessageUpdate,
   onSettled,
+  interruptActive,
   setStreaming,
   syncWelcome,
 } from './messages.js';
@@ -84,6 +86,10 @@ function connect() {
 }
 
 function handle(evt) {
+  if (Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun < S.bridgeRun) return;
+  if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
+    if (evt.bridgeRun !== S.bridgeRun) return;
+  }
   switch (evt.type) {
     case 'bridge_status':
       return onBridge(evt);
@@ -95,7 +101,16 @@ function handle(evt) {
       // 后端在同步项目指令、应用项目配置时的警告（写入失败、版本不认识…）
       return toast(evt.message, evt.level === 'error' ? 'error' : 'warn');
     case 'response':
-      return onResponse(evt);
+      onResponse(evt);
+      if (S.syncPending && evt.success && (evt.command === 'get_state' || evt.command === 'get_messages')) {
+        S.syncPending[evt.command === 'get_state' ? 'state' : 'messages'] = false;
+        if (!S.syncPending.state && !S.syncPending.messages) {
+          S.switching = false;
+          S.syncPending = null;
+          applyProjectState();
+        }
+      }
+      return;
     case 'agent_start':
       return setStreaming(true);
     case 'agent_end':
@@ -135,34 +150,64 @@ function handle(evt) {
   }
 }
 
+let lastBridgeError = '';
 function onBridge(evt) {
+  if (S.switching && evt.cwd && !samePath(evt.cwd, S.desiredCwd)) return;
+  if (S.switching && evt.state === 'ready' && Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun <= S.bridgeRun) return;
   switch (evt.state) {
     case 'starting':
-      return setConn('busy', '正在启动 pi…');
+      return setBridgeState('starting');
     case 'ready':
-      setConn('ok', '已连接');
+      if (Number.isInteger(evt.bridgeRun) && evt.bridgeRun === S.bridgeRun && S.bridgeState === 'ready' && !S.switching) return;
+      if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
+      S.cwd = evt.cwd || S.cwd;
+      S.hasProject = Boolean(S.cwd);
+      S.models = [];
+      lastBridgeError = '';
+      setStatus('');
+      setBridgeState('ready');
+      loadExtensionsBadge();
       boot();
       /* 项目偏好要在 pi 起来之后再落到会话上。
        * 模型不能当启动参数传（过期引用会让 pi 退出，见 project-config.js 的说明），
        * 只能等 get_available_models 回来核对过再 set_model —— 所以它排在这里，
        * 而不是跟 --thinking 一起进启动参数。 */
       applyProjectPreferences();
+      if (S.switching) {
+        const generation = S.workspaceGeneration;
+        setTimeout(() => {
+          if (S.switching && generation === S.workspaceGeneration && S.bridgeState === 'ready') {
+            S.switching = false;
+            S.syncPending = null;
+            applyProjectState();
+            setStatus('状态同步超时。可以重试切换项目或重启 pi。');
+          }
+        }, 12000);
+      }
       return;
     case 'exited':
-      setConn('bad', `pi 已退出 (${evt.code ?? evt.signal ?? '?'})`);
-      setStreaming(false);
+      if (!lastBridgeError) setBridgeState('exited', `pi 已退出 (${evt.code ?? evt.signal ?? '?'})`);
+      interruptActive();
       return;
     case 'restarting':
-      return setConn('busy', '正在重启 pi…');
+      return setBridgeState('restarting');
     case 'no-project':
       /* 后端明确告知「没有项目所以没启动 pi」。
        * 这不是错误状态 —— 底部连接指示不能说「连接断开」，那会让用户以为网络坏了。
        * 传空 kind 用 .conn 的默认灰点：中性、不刺眼。 */
-      setConn('', '未选择项目');
+      setBridgeState('no-project');
       return;
     case 'error':
-      setConn('bad', 'pi 启动失败');
-      toast([evt.error, evt.hint].filter(Boolean).join('\n'), 'error');
+      setBridgeState('error');
+      if (S.switching) {
+        S.switching = false;
+        S.syncPending = null;
+        applyProjectState();
+      }
+      const message = [evt.error, evt.hint].filter(Boolean).join('\n');
+      setStatus(message);
+      if (message !== lastBridgeError) toast(message, 'error');
+      lastBridgeError = message;
       return;
     default:
       return;

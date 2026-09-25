@@ -55,9 +55,14 @@ export function createRpcBridge({
   isWin,
   env = process.env,
   projectLaunch = null,
+  spawnProcess = spawn,
+  restartDelayMs = RESTART_DELAY_MS,
 }) {
   let pi = null;
-  let stdoutBuf = '';
+  let restartTimer = null;
+  let restartRequested = false;
+  let bridgeRun = 0;
+  let crashStreak = 0;
 
   /* 挂起的请求：id → { resolve, timer }。
    *
@@ -124,14 +129,19 @@ export function createRpcBridge({
       windowsHide: true,
     };
 
-    if (!isWin) return spawn(bin, args, opts);
+    if (!isWin) return spawnProcess(bin, args, opts);
 
     // 参数都是命令行开关和模型名，不含引号；万一有就剔掉，避免把命令拼坏
     const q = (s) => `"${String(s).replace(/"/g, '')}"`;
-    return spawn([bin, ...args].map(q).join(' '), { ...opts, shell: true });
+    return spawnProcess([bin, ...args].map(q).join(' '), { ...opts, shell: true });
   }
 
   function start() {
+    if (runtime.isShuttingDown() || pi) return;
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
     /* 新进程的 id 空间是干净的 —— 上一轮挂起的请求不会有应答了，先放掉。
      * （正常路径上 exit 回调已经放过一次，这里是幂等的兜底。） */
     settleAllPending(null);
@@ -143,9 +153,11 @@ export function createRpcBridge({
      * 这里只发一个状态，前端据此切到「先添加文件夹」的引导形态。 */
     const cwd = runtime.getCurrentCwd();
     if (!cwd) {
+      restartRequested = false;
       publish({ type: 'bridge_status', state: 'no-project' });
       return;
     }
+    const run = ++bridgeRun;
 
     /* 项目配置要先「准备」再取参数。
      *
@@ -170,26 +182,34 @@ export function createRpcBridge({
     }
 
     const args = buildArgs(extra);
-    publish({ type: 'bridge_status', state: 'starting', bin: piBin, args, cwd });
+    publish({ type: 'bridge_status', state: 'starting', bin: piBin, args, cwd, bridgeRun: run });
 
+    let child;
     try {
-      pi = spawnPi(piBin, args);
+      child = spawnPi(piBin, args);
+      pi = child;
     } catch (err) {
-      publish({ type: 'bridge_status', state: 'error', error: String(err.message) });
+      restartRequested = false;
+      publish({ type: 'bridge_status', state: 'error', error: String(err.message), cwd, bridgeRun: run });
       return;
     }
 
-    pi.on('error', (err) => {
+    child.on('error', (err) => {
+      restartRequested = false;
       publish({
         type: 'bridge_status',
         state: 'error',
         error: `无法启动 pi：${err.message}`,
         hint: '确认 pi 已安装并在 PATH 中，或用环境变量 PI_BIN 指定完整路径。',
+        cwd,
+        bridgeRun: run,
       });
     });
 
-    pi.stdout.setEncoding('utf8');
-    pi.stdout.on('data', (chunk) => {
+    let stdoutBuf = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      if (pi !== child) return;
       stdoutBuf += chunk;
       let nl;
       // 只按 LF 切分 —— pi 协议明确要求
@@ -214,29 +234,43 @@ export function createRpcBridge({
           clearTimeout(entry.timer);
           entry.resolve(msg.success === false ? { __error: msg.error || '命令失败' } : (msg.data ?? {}));
         }
-        publish(msg);
+        publish({ ...msg, bridgeRun: run, cwd });
       }
     });
 
-    pi.stderr.setEncoding('utf8');
-    pi.stderr.on('data', (text) => {
-      publish({ type: 'bridge_stderr', text });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (text) => {
+      if (pi !== child) return;
+      publish({ type: 'bridge_stderr', text, bridgeRun: run, cwd });
     });
 
-    pi.on('spawn', () => {
-      publish({ type: 'bridge_status', state: 'ready', pid: pi?.pid ?? null });
+    child.on('spawn', () => {
+      if (pi !== child) return;
+      restartRequested = false;
+      publish({ type: 'bridge_status', state: 'ready', pid: child.pid ?? null, cwd, bridgeRun: run });
     });
 
-    pi.on('exit', (code, signal) => {
+    const startedAt = Date.now();
+    const onStopped = (code, signal) => {
+      if (pi !== child) return;
       pi = null;
-      stdoutBuf = '';
       // 进程没了，挂起的请求不可能再有应答 —— 立刻放掉，别让调用方干等到超时
       settleAllPending(null);
-      publish({ type: 'bridge_status', state: 'exited', code, signal });
+      publish({ type: 'bridge_status', state: 'exited', code, signal, cwd, bridgeRun: run });
       if (!runtime.isShuttingDown()) {
-        setTimeout(start, RESTART_DELAY_MS);
+        const deliberate = restartRequested;
+        crashStreak = deliberate || Date.now() - startedAt >= 5000 ? 0 : crashStreak + 1;
+        const delay = deliberate ? 0 : Math.min(restartDelayMs * 2 ** Math.max(0, crashStreak - 1), 30000);
+        restartRequested = false;
+        restartTimer = setTimeout(() => {
+          restartTimer = null;
+          start();
+        }, delay);
       }
-    });
+    };
+    child.on('exit', onStopped);
+    // spawn ENOENT 只有 error + close，没有 exit；否则 pi 会永远卡在非空的旧 child。
+    child.on('close', onStopped);
   }
 
   /** 把一条命令写进 pi 的 stdin。 */
@@ -245,10 +279,15 @@ export function createRpcBridge({
     if (!runtime.getCurrentCwd()) {
       throw new Error('还没有选择项目：先在左侧「添加文件夹」选一个目录，再发送消息。');
     }
+    if (restartRequested) throw new Error('pi 正在重启，请稍后重试');
     if (!pi || !pi.stdin || pi.stdin.destroyed) {
       throw new Error('pi 子进程未运行');
     }
-    pi.stdin.write(JSON.stringify(cmd) + '\n');
+    if (cmd.__bridgeRun != null && cmd.__bridgeRun !== bridgeRun) {
+      throw new Error('项目已切换，请在当前项目重试此操作');
+    }
+    const { __bridgeRun, ...wireCommand } = cmd;
+    pi.stdin.write(JSON.stringify(wireCommand) + '\n');
   }
 
   /* 发一条命令并等它的应答。**永不 reject**，失败一律回 null ——
@@ -261,7 +300,7 @@ export function createRpcBridge({
    * 注意这里**不**校验 cmd.id —— 由本模块发号，调用方传的 id 会被覆盖。 */
   function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
     return new Promise((resolve) => {
-      if (!runtime.getCurrentCwd() || !pi || !pi.stdin || pi.stdin.destroyed) {
+      if (!runtime.getCurrentCwd() || restartRequested || !pi || !pi.stdin || pi.stdin.destroyed) {
         resolve(null);
         return;
       }
@@ -274,7 +313,12 @@ export function createRpcBridge({
       if (typeof timer.unref === 'function') timer.unref();
       pending.set(id, { resolve, timer });
       try {
-        pi.stdin.write(JSON.stringify({ ...cmd, id }) + '\n');
+        pi.stdin.write(JSON.stringify({ ...cmd, id }) + '\n', (err) => {
+          if (!err || !pending.has(id)) return;
+          clearTimeout(timer);
+          pending.delete(id);
+          resolve(null);
+        });
       } catch {
         clearTimeout(timer);
         pending.delete(id);
@@ -288,7 +332,9 @@ export function createRpcBridge({
     // 重启等于把挂起请求的应答机会掐掉，先放掉再动进程
     settleAllPending(null);
     if (pi) {
-      publish({ type: 'bridge_status', state: 'restarting', reason: 'reload-config' });
+      if (restartRequested) return;
+      restartRequested = true;
+      publish({ type: 'bridge_status', state: 'restarting', reason: 'reload-config', bridgeRun, cwd: runtime.getCurrentCwd() });
       try {
         pi.stdin.end();
       } catch {
@@ -301,6 +347,11 @@ export function createRpcBridge({
       }
       // exit 回调里会自动重新拉起
     } else {
+      if (restartTimer) {
+        clearTimeout(restartTimer);
+        restartTimer = null;
+      }
+      restartRequested = true;
       start();
     }
   }
@@ -308,6 +359,10 @@ export function createRpcBridge({
   /** 收尾时关掉子进程。不触发自动重启（shuttingDown 由 runtime 表达）。 */
   function stop() {
     settleAllPending(null);
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
     if (!pi) return;
     try {
       pi.stdin.end();
@@ -330,6 +385,7 @@ export function createRpcBridge({
     return {
       piRunning: Boolean(pi),
       pid: pi?.pid ?? null,
+      bridgeRun,
       args: buildArgs(),
       cwd,
       // 前端用它决定「显示引导还是显示输入框」。cwd 为空就等价于没有项目，

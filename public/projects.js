@@ -4,7 +4,7 @@
  * 等于用新的 cwd 重启子进程；会话则按 cwd 分目录存在
  * ~/.pi/agent/sessions/--<转义cwd>--/ 下。 */
 
-import { el } from './state.js';
+import { el, S, beginWorkspaceSwitch, ownsWorkspace } from './state.js';
 import { samePath } from './util.js';
 import {
   activateProject as apiActivateProject,
@@ -15,11 +15,14 @@ import {
 } from './api.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
-import { loadStatus } from './shell.js';
+import { applyProjectState, loadStatus, setBridgeState } from './shell.js';
 import { refreshGitNow, resetChanges } from './git.js';
-import { clearThread } from './messages.js';
+import { clearThread, setStreaming } from './messages.js';
 
 let projectData = { active: '', items: [] };
+let activationQueue = Promise.resolve();
+let projectLoadState = 'loading';
+let projectLoadOrder = 0;
 
 const SVG_FOLDER =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
@@ -28,18 +31,43 @@ const SVG_UP =
 const SVG_X =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>';
 
-export async function loadProjects() {
+export async function loadProjects(generation = S.workspaceGeneration) {
+  const order = ++projectLoadOrder;
+  projectLoadState = 'loading';
+  renderProjects();
   const j = await fetchProjects();
-  if (j && j.ok !== false) projectData = { active: j.active || '', items: j.items || [] };
-  else projectData = { active: '', items: [] };
+  if (!ownsWorkspace(generation) || order !== projectLoadOrder) return;
+  if (j && j.ok !== false) {
+    projectData = { active: j.active || '', items: j.items || [] };
+    projectLoadState = 'content';
+  } else {
+    projectLoadState = 'error';
+  }
   renderProjects();
 }
 
 export function renderProjects() {
   el.projects.innerHTML = '';
 
+  if (projectLoadState === 'loading' && !projectData.items.length) {
+    el.projects.innerHTML = '<div class="hint-empty">正在加载项目…</div>';
+    return;
+  }
+  if (projectLoadState === 'error') {
+    const notice = document.createElement('div');
+    notice.className = 'hint-empty';
+    notice.textContent = '项目列表加载失败。';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'btn';
+    retry.textContent = '重试';
+    retry.onclick = () => loadProjects();
+    notice.appendChild(retry);
+    el.projects.appendChild(notice);
+  }
+
   if (!projectData.items.length) {
-    el.projects.innerHTML = '<div class="hint-empty">还没有项目，点下面的「添加文件夹」。</div>';
+    if (projectLoadState !== 'error') el.projects.innerHTML = '<div class="hint-empty">还没有项目，点下面的「添加文件夹」。</div>';
     return;
   }
 
@@ -49,6 +77,10 @@ export function renderProjects() {
     const item = document.createElement('div');
     item.className = 'project' + (isActive ? ' active' : '');
     item.title = p.path;
+    if (!isActive) {
+      item.setAttribute('role', 'button');
+      item.tabIndex = 0;
+    }
 
     const icon = document.createElement('span');
     icon.className = 'pj-icon';
@@ -66,6 +98,7 @@ export function renderProjects() {
 
     const del = document.createElement('button');
     del.className = 'pj-del';
+    del.type = 'button';
     del.title = '从列表移除（不会删除磁盘文件）';
     del.innerHTML = SVG_X;
     del.onclick = (e) => {
@@ -74,7 +107,15 @@ export function renderProjects() {
     };
 
     item.append(icon, body, del);
-    if (!isActive) item.onclick = () => activateProject(p.path, p.name || p.path);
+    if (!isActive) {
+      item.onclick = () => activateProject(p.path, p.name || p.path);
+      item.onkeydown = (e) => {
+        if (e.target !== item) return;
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        activateProject(p.path, p.name || p.path);
+      };
+    }
 
     el.projects.appendChild(item);
   }
@@ -100,22 +141,39 @@ export async function removeProject(target) {
   refreshGitNow();
 }
 
-export async function activateProject(target, label) {
-  const j = await apiActivateProject(target);
-  if (!j.ok) return toast(j.error || '切换失败', 'error');
-
+export function activateProject(target, label) {
+  const generation = beginWorkspaceSwitch(target);
   clearThread();
+  setStreaming(false);
+  S.models = [];
+  S.state = null;
+  S.stats = null;
+  resetChanges();
   const title = label || target;
   el.title.textContent = title;
   el.footName.textContent = title;
-  /* 先回读状态再等 pi 起来：S.cwd 是相对路径补成绝对的依据，
-   * 而 hasProject 决定输入框解锁 —— 第一次添加项目时正是靠它从「未选项目」切过来。 */
-  await loadStatus();
-  await loadProjects();
-  /* 变更列表是按项目算的。先清空再重拉，避免在新项目下短暂显示上一个项目的文件。 */
-  resetChanges();
-  refreshGitNow();
-  toast(`已切换到 ${title}，pi 正在重启…`, 'info');
+  setBridgeState('restarting');
+  applyProjectState();
+  // HTTP 激活按用户点击顺序串行；尚未发出的中间选择直接跳过。
+  // 已在途的请求结束后，只有最后一次选择可以更新界面。
+  const task = activationQueue.catch(() => {}).then(async () => {
+    if (!ownsWorkspace(generation)) return;
+    const j = await apiActivateProject(target);
+    if (!ownsWorkspace(generation)) return;
+    if (!j.ok) {
+      S.switching = false;
+      S.syncPending = null;
+      await Promise.all([loadStatus(generation), loadProjects(generation)]);
+      setBridgeState(S.hasProject ? 'ready' : 'no-project');
+      toast(j.error || '切换失败', 'error');
+      return;
+    }
+    S.cwd = j.cwd || target;
+    S.hasProject = true;
+    await Promise.all([loadStatus(generation), loadProjects(generation), refreshGitNow()]);
+  });
+  activationQueue = task;
+  return task;
 }
 
 /* ---------- 目录选择器 ---------- */

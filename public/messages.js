@@ -128,6 +128,14 @@ export function setStreaming(on) {
 }
 
 export function onSettled() {
+  interruptActive();
+  sendCommand({ type: 'get_session_stats' });
+  sendCommand({ type: 'get_state' });
+  sendCommand({ type: 'get_tree' });
+  el.input.focus();
+}
+
+export function interruptActive() {
   setStreaming(false);
   S.current = null;
   S.blocks.clear();
@@ -136,10 +144,6 @@ export function onSettled() {
    * 是不对的：界面会一直显示「运行中」，而且 hasRunning() 恒为真会让
    * 「Pi 正在处理…」再也不出现。 */
   settleRunning();
-  sendCommand({ type: 'get_session_stats' });
-  sendCommand({ type: 'get_state' });
-  sendCommand({ type: 'get_tree' });
-  el.input.focus();
 }
 
 /* ---------- 用户消息 ---------- */

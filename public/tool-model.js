@@ -155,6 +155,14 @@ export function resultText(res) {
   return '';
 }
 
+const MAX_OUTPUT_CHARS = 200000;
+function boundedOutput(value) {
+  const text = String(value ?? '');
+  if (text.length <= MAX_OUTPUT_CHARS) return { text, truncated: false };
+  const notice = '…（输出过长，仅显示末尾）\n';
+  return { text: notice + text.slice(-(MAX_OUTPUT_CHARS - notice.length)), truncated: true };
+}
+
 /* bash 失败时 pi 把退出码写在**输出文本**里（协议里没有结构化字段）。
  * 这是 pi 自己拼的固定句式，所以按它解析不算「猜」；解析不到就返回 null。 */
 const EXIT_RE = /Command exited with code\s+(-?\d+)/;
@@ -318,6 +326,7 @@ export function makeEntry(evt, now = Date.now()) {
     endedAt: null,
     durationMs: null,
     output: '',
+    outputTruncated: false,
     error: '',
     exitCode: null,
     resultLine: '',
@@ -339,7 +348,11 @@ export function makeEntry(evt, now = Date.now()) {
  */
 export function applyUpdate(entry, evt, now = Date.now()) {
   const text = resultText(evt?.partialResult);
-  if (text) entry.output = text;
+  if (text) {
+    const bounded = boundedOutput(text);
+    entry.output = bounded.text;
+    entry.outputTruncated = bounded.truncated;
+  }
   entry.updatedAt = now;
   entry.resultLine = resultLineOf(entry); // 运行中 → 跟着输出尾巴走
   return entry;
@@ -352,11 +365,15 @@ export function applyEnd(entry, evt, now = Date.now()) {
 
   const res = evt?.result;
   const text = resultText(res);
-  if (text) entry.output = text;
+  if (text) {
+    const bounded = boundedOutput(text);
+    entry.output = bounded.text;
+    entry.outputTruncated = bounded.truncated;
+  }
 
   entry.details = (res && typeof res === 'object' && res.details) || null;
   entry.status = evt?.isError ? 'error' : 'success';
-  if (evt?.isError) entry.error = text || entry.output;
+  if (evt?.isError) entry.error = entry.output;
   entry.exitCode = parseExitCode(entry.output);
   entry.truncated = truncationOf(entry.details);
   entry.diffStat = diffStatOf(entry.details);
@@ -382,7 +399,9 @@ export function entryFromHistory(call, result, assistantMsg) {
   const args = call?.arguments ?? null;
   const s = summarize(name, args);
 
-  const text = resultText(result?.content ?? result);
+  const rawText = resultText(result?.content ?? result);
+  const bounded = boundedOutput(rawText);
+  const text = bounded.text;
   const startedAt = Number.isFinite(assistantMsg?.timestamp) ? assistantMsg.timestamp : null;
   const endedAt = Number.isFinite(result?.timestamp) ? result.timestamp : null;
 
@@ -404,6 +423,7 @@ export function entryFromHistory(call, result, assistantMsg) {
     endedAt,
     durationMs: startedAt != null && endedAt != null && endedAt >= startedAt ? endedAt - startedAt : null,
     output: text,
+    outputTruncated: bounded.truncated,
     error: result?.isError ? text : '',
     exitCode: parseExitCode(text),
     resultLine: '',

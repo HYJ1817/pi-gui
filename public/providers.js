@@ -98,13 +98,18 @@ export function modelLine(m) {
 }
 
 let providerData = { path: '', providers: {}, keyStates: {} };
+let providerError = '';
+let providerRequest = 0;
 
 export async function loadProviders(container) {
+  const request = ++providerRequest;
   const j = await fetchProviders();
+  if (request !== providerRequest) return;
   if (j && j.ok !== false) {
     providerData = { path: j.path || '', providers: j.providers || {}, keyStates: j.keyStates || {} };
+    providerError = '';
   } else {
-    providerData = { path: '', providers: {}, keyStates: {} };
+    providerError = (j && j.error) || '读取供应商失败';
   }
   renderProviders(container || panels.providers);
 }
@@ -116,6 +121,20 @@ export function renderProviders(box) {
   if (!box) return;
 
   box.innerHTML = '';
+
+  if (providerError) {
+    const error = document.createElement('div');
+    error.className = 'hint-empty';
+    error.textContent = providerError;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'btn tiny';
+    retry.textContent = '重试';
+    retry.onclick = () => loadProviders(box);
+    error.appendChild(retry);
+    box.appendChild(error);
+    return;
+  }
 
   if (!names.length) {
     box.innerHTML =

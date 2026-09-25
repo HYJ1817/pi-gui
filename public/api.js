@@ -8,6 +8,7 @@
  * 「用户点了按钮却什么都没发生」是最糟的体验，所以写操作必须能说出原因。 */
 
 import { toast } from './ui/toast.js';
+import { S } from './state.js';
 
 /** GET 一个 JSON 接口。网络层失败返回 {ok:false, network:true}。 */
 export async function getJSON(url) {
@@ -41,7 +42,8 @@ export async function sendJSON(url, { method = 'POST', body, contentType } = {})
 
 /** 把一条 RPC 命令发进后端。这是驱动 pi 的唯一出口。 */
 export async function sendCommand(cmd) {
-  const j = await sendJSON('/api/command', { body: cmd });
+  const wire = Number.isInteger(S.bridgeRun) ? { ...cmd, __bridgeRun: S.bridgeRun } : cmd;
+  const j = await sendJSON('/api/command', { body: wire });
   if (j.network) {
     toast('无法连接后端：' + j.error, 'error');
     return { ok: false };
@@ -71,7 +73,7 @@ export const fetchProjectConfig = () => getJSON('/api/project-config');
 
 /** 保存当前项目的偏好。只发要改的字段即可（后端做合并），
  *  但界面上是整表单提交，所以这里是全量发。 */
-export const saveProjectConfig = (config) => sendJSON('/api/project-config', { method: 'PUT', body: config });
+export const saveProjectConfig = (config) => sendJSON('/api/project-config', { method: 'PUT', body: { ...config, __expectedCwd: S.cwd } });
 
 /* ---------- 供应商 ---------- */
 

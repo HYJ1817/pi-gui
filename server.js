@@ -47,6 +47,7 @@ import { createRuntime } from './server/runtime.js';
 import { createMcp } from './server/mcp.js';
 import { createSkills } from './server/skills.js';
 import { createUploads } from './server/uploads.js';
+import { probeOccupiedPort } from './server/port-owner.js';
 
 // 数据目录：projects.json 和上传缓存放这里。
 //
@@ -211,14 +212,19 @@ function openBrowser(url) {
 }
 
 // 端口被占用：多半是已经开着一个，直接把浏览器指过去，别报一堆错吓人
-server.on('error', (err) => {
+server.on('error', async (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.log('');
-    console.log(`  端口 ${PORT} 已被占用，说明已经有一个 Pi GUI 在跑。`);
-    console.log(`  直接用它：http://127.0.0.1:${PORT}`);
-    console.log(`  （想开新的：set PORT=7799 && node server.js）`);
-    if (AUTO_OPEN) openBrowser(`http://127.0.0.1:${PORT}`);
-    setTimeout(() => process.exit(0), 400);
+    runtime.setShuttingDown(true);
+    rpc.stop();
+    const owner = await probeOccupiedPort(PORT);
+    if (owner === 'pi-gui') {
+      console.log(`端口 ${PORT} 上已有 Pi GUI。直接使用 http://127.0.0.1:${PORT}`);
+      if (AUTO_OPEN) openBrowser(`http://127.0.0.1:${PORT}`);
+      setTimeout(() => process.exit(0), 400);
+      return;
+    }
+    console.error(`端口 ${PORT} 已被其他程序占用。请关闭占用程序，或设置 PORT 使用其他端口。`);
+    process.exit(1);
     return;
   }
   console.error('\n  启动失败：' + err.message + '\n');

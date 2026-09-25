@@ -498,6 +498,10 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
  * 刻意比主按钮弱、又比「取消」显眼一点 —— 它是备选，不是推荐。 */
 .btn.alt{border-color:rgba(122,162,247,.35);color:#9dbaf8}
 .btn.alt:hover{background:rgba(122,162,247,.1);border-color:rgba(122,162,247,.55);color:#c3d5fb}
+.btn:disabled,.btn.primary:disabled,.btn.danger:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
 
 /* ============ 文件变更面板 ============ */
 

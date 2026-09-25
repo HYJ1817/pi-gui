@@ -16,6 +16,7 @@ export const DEFAULT_BACKLOG_MAX = 800;
 
 export function createEventBus({ backlogMax = DEFAULT_BACKLOG_MAX } = {}) {
   const clients = new Set();
+  const pings = new Map();
   const backlog = [];
   let seq = 0;
 
@@ -63,9 +64,11 @@ export function createEventBus({ backlogMax = DEFAULT_BACKLOG_MAX } = {}) {
         /* noop */
       }
     }, 25000);
+    pings.set(res, ping);
 
     req.on('close', () => {
       clearInterval(ping);
+      pings.delete(res);
       clients.delete(res);
     });
   }
@@ -73,6 +76,7 @@ export function createEventBus({ backlogMax = DEFAULT_BACKLOG_MAX } = {}) {
   /** 关闭时把所有连接收掉 —— 否则 server.close() 会一直等它们自然结束。 */
   function closeAll() {
     for (const res of clients) {
+      clearInterval(pings.get(res));
       try {
         res.end();
       } catch {
@@ -80,6 +84,7 @@ export function createEventBus({ backlogMax = DEFAULT_BACKLOG_MAX } = {}) {
       }
     }
     clients.clear();
+    pings.clear();
   }
 
   return {

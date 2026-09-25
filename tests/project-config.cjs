@@ -539,6 +539,12 @@ function cleanup() {
       (onA2.thinking === 'medium' && onB.thinking === 'low') || JSON.stringify({ a: onA2.thinking, b: onB.thinking }));
     check('18. 那些路径字段本身不会被写进配置文件', () =>
       !/projectPath|absolutePath/.test(fs.readFileSync(configPath(a), 'utf8')) || fs.readFileSync(configPath(a), 'utf8'));
+    runtime.setCurrentCwd(b);
+    const staleSave = await call(pc, 'PUT', '/api/project-config', {
+      body: JSON.stringify({ thinking: 'max', __expectedCwd: a }),
+    });
+    check('18. 旧项目的延迟保存返回 409，不能写到新项目', () =>
+      staleSave.code === 409 && JSON.parse(fs.readFileSync(configPath(b), 'utf8')).thinking === 'low');
 
     // 17：currentCwd 是唯一来源 —— 改 runtime 之外没有任何办法影响读写目标
     runtime.setCurrentCwd(null);

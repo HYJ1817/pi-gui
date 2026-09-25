@@ -4,7 +4,7 @@
  * 而它们本身又不属于任何一个业务域。放在这里可以避免
  * projects → app → projects 这类循环。 */
 
-import { el, S } from './state.js';
+import { el, S, ownsWorkspace } from './state.js';
 import { fetchStatus } from './api.js';
 import { updateSendState } from './composer.js';
 
@@ -15,6 +15,21 @@ export function setConn(kind, text) {
 
 export function setStatus(text) {
   el.statusText.textContent = text || '';
+}
+
+export function setBridgeState(state, detail = '') {
+  S.bridgeState = state;
+  const labels = {
+    'no-project': ['', '未选择项目'],
+    starting: ['busy', '正在启动 pi…'],
+    ready: ['ok', '已连接'],
+    restarting: ['busy', '正在重启 pi…'],
+    exited: ['bad', detail || 'pi 已退出'],
+    error: ['bad', 'pi 启动失败'],
+  };
+  const [kind, label] = labels[state] || ['', detail];
+  setConn(kind, label);
+  applyProjectState();
 }
 
 export function setTitleText(t) {
@@ -31,22 +46,30 @@ export function setTitleText(t) {
  * 幂等：loadStatus / 增删项目后都会调，重复调用无副作用。 */
 export function applyProjectState() {
   const ready = S.hasProject;
-  el.welcomeReady.hidden = !ready;
-  el.welcomeNoProj.hidden = ready;
-  el.composerBox.classList.toggle('is-locked', !ready);
-  el.input.disabled = !ready;
-  el.input.placeholder = ready ? '随心输入' : '先添加一个文件夹';
+  const canUse = ready && !S.switching && S.bridgeState === 'ready';
+  el.welcomeRestore.hidden = !S.restoring;
+  el.welcomeReady.hidden = S.restoring || !ready;
+  el.welcomeNoProj.hidden = S.restoring || ready;
+  el.composerBox.classList.toggle('is-locked', !canUse);
+  el.input.disabled = !canUse;
+  el.input.placeholder = !ready ? '先添加一个文件夹' : S.switching ? '正在切换项目…' : canUse ? '随心输入' : '等待 pi 就绪…';
+  el.btnAttach.disabled = !canUse;
+  el.btnModel.disabled = !canUse;
+  el.btnThink.disabled = !canUse;
   updateSendState();
 }
 
 /** 回读 /api/status。
  *  S.cwd 用于把相对路径补成绝对路径；hasProject 决定输入框解不解锁。 */
-export async function loadStatus() {
+export async function loadStatus(generation = S.workspaceGeneration) {
   const j = await fetchStatus();
+  if (!ownsWorkspace(generation)) return;
+  S.restoring = false;
   if (j && j.ok !== false) {
     S.cwd = j.cwd || '';
     // hasProject 由后端显式给出；老后端没有这个字段时退回「cwd 非空」的判断
     S.hasProject = j.hasProject ?? Boolean(S.cwd);
+    if (!S.switching && Number.isInteger(j.bridgeRun)) S.bridgeRun = j.bridgeRun;
   } else {
     S.cwd = '';
     S.hasProject = false;

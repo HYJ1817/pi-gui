@@ -22,7 +22,7 @@
  * 前端只拿得到稳定 ID（路径的 sha1 前 16 位）。**没有任何一处把路径发回后端** ——
  * 后端在自己的索引里按 ID 查真实路径。所以这里不需要、也不应该做路径校验。
  */
-import { S } from './state.js';
+import { S, ownsWorkspace } from './state.js';
 import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, restartBackend } from './api.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
@@ -146,6 +146,7 @@ function skillsTab(card) {
 
   async function showDetail(skill) {
     const seq = ++detailSeq;
+    const generation = S.workspaceGeneration;
     detailBox.innerHTML = '';
     if (!skill) {
       detailBox.appendChild(el('div', 'ext-empty', '选一个 Skill 看详情'));
@@ -239,7 +240,7 @@ function skillsTab(card) {
     detailBox.appendChild(pre);
 
     const d = await fetchSkillDetail(skill.id);
-    if (seq !== detailSeq) return; // 用户已经点了别的
+    if (seq !== detailSeq || !ownsWorkspace(generation)) return; // 用户已经点了别的或切换项目
     if (!d || d.ok === false) {
       pre.textContent = (d && d.error) || '读不到详情';
       return;
@@ -306,11 +307,30 @@ function skillsTab(card) {
   }
 
   async function load(isRefresh) {
+    const generation = S.workspaceGeneration;
     if (isRefresh) summary.innerHTML = '';
+    listBox.innerHTML = '';
+    listBox.appendChild(el('div', 'ext-empty', '正在读取 Skills…'));
     const j = await fetchSkills();
+    if (!card.isConnected) return;
+    if (!ownsWorkspace(generation)) {
+      listBox.innerHTML = '';
+      const stale = el('div', 'ext-empty', '项目已切换，刷新后查看当前项目的 Skills。');
+      const retry = el('button', 'btn tiny', '刷新');
+      retry.type = 'button';
+      retry.onclick = () => load(true);
+      stale.appendChild(retry);
+      listBox.appendChild(stale);
+      return;
+    }
     if (!j || j.ok === false) {
       listBox.innerHTML = '';
-      listBox.appendChild(el('div', 'ext-empty', (j && j.error) || '读取 Skills 失败'));
+      const error = el('div', 'ext-empty', (j && j.error) || '读取 Skills 失败');
+      const retry = el('button', 'btn tiny', '重试');
+      retry.type = 'button';
+      retry.onclick = () => load(true);
+      error.appendChild(retry);
+      listBox.appendChild(error);
       if (j && j.diagnostics) for (const d of j.diagnostics) summary.appendChild(note(d.message, 'warn'));
       return;
     }
@@ -424,7 +444,9 @@ function mcpTab(card) {
 /** 侧栏那个数字。只显示「发现了几个」，不显示「几个生效」——
  *  后者要问 pi，启动时问一次不值得（而且 pi 可能还没起来）。 */
 export async function loadExtensionsBadge() {
+  const generation = S.workspaceGeneration;
   const j = await fetchSkills();
+  if (!ownsWorkspace(generation)) return;
   const node = document.getElementById('extCount');
   if (!node) return;
   if (!j || j.ok === false || !j.counts) {

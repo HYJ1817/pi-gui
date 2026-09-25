@@ -14,7 +14,7 @@ export function autoGrow() {
 
 export function updateSendState() {
   // 没有项目时 pi 没起来，发出去只会 503 —— 直接按住发送键
-  if (!S.hasProject) {
+  if (!S.hasProject || S.switching || S.bridgeState !== 'ready' || S.submitting) {
     el.btnSend.disabled = true;
     return;
   }

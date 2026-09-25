@@ -10,6 +10,43 @@ import { el, panels } from '../state.js';
 
 /* 当前弹层的关闭回调。只可能有一个弹层，所以用单个槽位就够。 */
 let closeHook = null;
+let modalReturnFocus = null;
+let confirmReturnFocus = null;
+
+function focusDialog(card, fallback) {
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-modal', 'true');
+  card.tabIndex = -1;
+  (fallback || card.querySelector('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])') || card).focus();
+}
+
+function restoreFocus(node) {
+  if (node && node.isConnected && typeof node.focus === 'function') node.focus();
+}
+
+function trapTab(card, e) {
+  if (e.key !== 'Tab') return;
+  const items = [...card.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]')];
+  if (!items.length) {
+    e.preventDefault();
+    card.focus();
+    return;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (document.activeElement === card) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+    return;
+  }
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
 
 export function closeModal() {
   const hook = closeHook;
@@ -20,6 +57,8 @@ export function closeModal() {
   panels.tree = null;
   panels.providers = null;
   panels.changes = null;
+  const returnFocus = modalReturnFocus;
+  modalReturnFocus = null;
 
   if (hook) {
     try {
@@ -28,9 +67,12 @@ export function closeModal() {
       /* 回调自己炸了不该带塌关闭流程 */
     }
   }
+  restoreFocus(returnFocus);
 }
 
 export function openModal(build, onClose) {
+  if (!el.modal.hidden) closeModal();
+  modalReturnFocus = document.activeElement;
   closeHook = null;
   el.modalCard.innerHTML = '';
   // 弹层里的动态区域在关闭时失效，避免继续往已卸载的节点里写
@@ -41,6 +83,7 @@ export function openModal(build, onClose) {
   build(el.modalCard, closeModal);
   el.modal.hidden = false;
   closeHook = typeof onClose === 'function' ? onClose : null;
+  focusDialog(el.modalCard);
 }
 
 /* 二次确认。
@@ -74,6 +117,8 @@ function closeConfirm(value) {
   confirmResolve = null;
   el.confirmLayer.hidden = true;
   el.confirmCard.innerHTML = '';
+  const returnFocus = confirmReturnFocus;
+  confirmReturnFocus = null;
   if (fn) {
     try {
       fn(value);
@@ -81,12 +126,14 @@ function closeConfirm(value) {
       /* 调用方自己炸了不该带塌关闭流程 */
     }
   }
+  restoreFocus(returnFocus);
 }
 
 export function confirmModal({ title, message, okText = '确认', cancelText = '取消', altText = '', danger = false }) {
   if (confirmResolve) closeConfirm(false);
 
   return new Promise((resolve) => {
+    confirmReturnFocus = document.activeElement;
     confirmResolve = resolve;
     el.confirmCard.innerHTML = '';
 
@@ -131,8 +178,35 @@ export function confirmModal({ title, message, okText = '确认', cancelText = '
     el.confirmCard.appendChild(actions);
 
     el.confirmLayer.hidden = false;
+    focusDialog(el.confirmCard, no);
   });
 }
+
+document.addEventListener('keydown', (e) => {
+  if (!el.confirmLayer.hidden) {
+    trapTab(el.confirmCard, e);
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeConfirm(false);
+    } else if (e.key === 'Enter') {
+      // 危险操作必须显式点击；键盘 Enter 不能误把默认确认按钮按下。
+      const dangerous = Boolean(el.confirmCard.querySelector('.btn.danger'));
+      if (dangerous) e.preventDefault();
+      else if (document.activeElement === el.confirmCard) {
+        e.preventDefault();
+        el.confirmCard.querySelector('.btn.primary')?.click();
+      }
+    }
+    return;
+  }
+  if (!el.modal.hidden) trapTab(el.modalCard, e);
+  if (e.key === 'Escape' && !el.modal.hidden) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeModal();
+  }
+}, true);
 
 // 点遮罩关闭
 el.modal.addEventListener('click', (e) => {

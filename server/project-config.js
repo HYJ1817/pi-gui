@@ -560,6 +560,9 @@ export function createProjectConfig({ runtime, env = process.env, restartPi = nu
           if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
             return json(res, 400, { ok: false, error: '请求体必须是 JSON 对象' });
           }
+          if (payload.__expectedCwd != null && payload.__expectedCwd !== runtime.getCurrentCwd()) {
+            return json(res, 409, { ok: false, error: '项目已切换，当前设置未保存。请重新打开项目设置。' });
+          }
 
           const before = launchSignature();
           const current = read();

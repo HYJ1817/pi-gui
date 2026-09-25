@@ -344,6 +344,10 @@ staticCheck();
   }
 
   check('模块加载无异常', () => errors.length === 0 || errors.join(' | '));
+  check('静态按钮都声明 type', () => [...window.document.querySelectorAll('button')].every((button) => button.hasAttribute('type')));
+  check('消息输入有可识别名称', () => Boolean($('input').getAttribute('aria-label')));
+  check('启动首帧显示恢复中而不闪未选项目', () =>
+    $('welcomeRestore') && $('welcomeRestore').hidden === false && $('welcomeNoProj').hidden === true);
 
   await new Promise((r) => setTimeout(r, 30)); // 等 loadStatus → connect / loadProjects / loadProviders
   check('EventSource 已连接', () => es && es.url === '/api/events');
@@ -1513,7 +1517,7 @@ staticCheck();
   gitStub.status = { ok: true, isRepo: true, files: [] };
   await window.loadGitStatus();
   window.renderChangesBody();
-  check('工作区干净时提示 No changes', () => chgText().includes('工作区干净'));
+  check('工作区干净时有明确空状态', () => chgText().includes('工作区是干净的'));
   check('干净时徽标隐藏', () => $('changesCount').hidden === true);
   check('干净时没有过滤行（没有东西可过滤）', () => $('chgFilterAll') === null);
 
@@ -2090,6 +2094,8 @@ staticCheck();
    * 那就比原来更糟。 */
   stubCwd = 'C:\\pi-GUI';
   await window.loadStatus();
+  window.S.switching = false; // 上面的项目切换桩没有模拟 pi ready；此处重置到独立用例的就绪态
+  window.setBridgeState('ready');
   check('选了项目后输入区解锁', () => {
     if (window.document.getElementById('input').disabled !== false) return '输入框还锁着';
     return window.document.getElementById('welcomeReady').hidden === false
@@ -2184,6 +2190,7 @@ staticCheck();
   {
     const savedModels = window.S.models;
     const savedState = window.S.state;
+    const savedCwd = window.S.cwd;
     const savedSeq = commands.length;
 
     const reset = (cfg, { models, state, env, cwd } = {}) => {
@@ -2198,6 +2205,7 @@ staticCheck();
         warnings: [],
         env: { provider: false, model: false, thinking: false, ...(env || {}) },
       };
+      window.S.cwd = stubProjectConfig.cwd;
       $('toasts').innerHTML = '';
     };
     const setModels = () => commands.filter((c) => c.type === 'set_model');
@@ -2244,6 +2252,7 @@ staticCheck();
       cwd: 'C:\\proj-b',
       config: { ...CFG_DEFAULTS, model: { provider: 'anthropic', id: 'claude-sonnet-4-5' } },
     };
+    window.S.cwd = stubProjectConfig.cwd;
     await window.applyProjectPreferences();
     check('恢复偏好：切到 B 项目后按 B 的配置走（不继承上一个项目的配置）', () => {
       const m = setModels();
@@ -2292,6 +2301,7 @@ staticCheck();
 
     window.S.models = savedModels;
     window.S.state = savedState;
+    window.S.cwd = savedCwd;
     commands.length = savedSeq;
     stubProjectConfig = { ...stubProjectConfig, hasProject: true, config: { ...CFG_DEFAULTS } };
   }
@@ -2637,6 +2647,75 @@ staticCheck();
   check('重建历史时用户消息仍在', () =>
     window.document.querySelectorAll('.msg.user').length === 1 ? true : '用户消息丢了'
   );
+  const hugeEntry = window.makeEntry({ toolCallId: 'large', toolName: 'bash', args: { command: 'large-output' } });
+  window.applyUpdate(hugeEntry, { partialResult: 'x'.repeat(300000) + 'TAIL' });
+  check('超大 Tool 输出有上限并保留尾部', () => hugeEntry.output.length <= 200000 && hugeEntry.output.endsWith('TAIL') && hugeEntry.outputTruncated === true);
+
+  // P4：旧项目的 HTTP 结果与 SSE 事件不得覆盖最后一次选择。
+  {
+    const baseFetch = window.fetch;
+    const delayed = {};
+    const oldBadge = $('extCount').textContent;
+    const oldGitFiles = window.S.changes.files.length;
+    window.fetch = (url, opts) => {
+      const u = String(url);
+      if (u === '/api/git/status' && !delayed.git) return new Promise((resolve) => { delayed.git = resolve; });
+      if (u === '/api/project-config' && !delayed.config) return new Promise((resolve) => { delayed.config = resolve; });
+      if (u === '/api/skills' && !delayed.skills) return new Promise((resolve) => { delayed.skills = resolve; });
+      return baseFetch(url, opts);
+    };
+    const oldGit = window.loadGitStatus();
+    const oldConfig = window.loadProjectConfig();
+    const oldSkills = window.loadExtensionsBadge();
+    window.beginWorkspaceSwitch('C:\\project-final');
+    delayed.git({ json: async () => ({ ok: true, isRepo: true, files: [{ path: 'OLD.txt' }] }) });
+    delayed.config({ json: async () => ({ ok: true, hasProject: true, cwd: 'C:\\old', config: { ...CFG_DEFAULTS } }) });
+    delayed.skills({ json: async () => ({ ok: true, counts: { total: 99, enabled: 99 } }) });
+    const staleConfig = await oldConfig;
+    await Promise.all([oldGit, oldSkills]);
+    check('旧 Project Config 响应被丢弃', () => staleConfig === null);
+    check('旧 Git refresh 被丢弃', () => window.S.changes.files.length === oldGitFiles);
+    check('旧 Skills badge 响应被丢弃', () => $('extCount').textContent === oldBadge);
+
+    const activated = [];
+    window.fetch = (url, opts) => {
+      const u = String(url);
+      if (u === '/api/projects/activate') {
+        const path = JSON.parse(opts.body).path;
+        activated.push(path);
+        return Promise.resolve({ json: async () => ({ ok: true, cwd: path }) });
+      }
+      if (u === '/api/projects') return Promise.resolve({ json: async () => ({ ok: true, active: 'C:\\project-c', items: [{ path: 'C:\\project-c', name: 'C' }] }) });
+      return baseFetch(url, opts);
+    };
+    stubCwd = 'C:\\project-c';
+    const switches = [
+      window.activateProject('C:\\project-a', 'A'),
+      window.activateProject('C:\\project-b', 'B'),
+      window.activateProject('C:\\project-c', 'C'),
+    ];
+    await Promise.all(switches);
+    es.emit({ type: 'bridge_status', state: 'ready', cwd: 'C:\\project-c', bridgeRun: 500, _seq: 10000 });
+    es.emit({ type: 'response', command: 'get_state', success: true, bridgeRun: 500, _seq: 10001, data: { sessionName: 'C', isStreaming: false } });
+    es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 500, _seq: 10002, data: { messages: [{ role: 'user', content: [{ type: 'text', text: 'C history' }] }] } });
+    es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 499, _seq: 10003, data: { messages: [{ role: 'user', content: [{ type: 'text', text: 'OLD history' }] }] } });
+    check('A→B→C 仅 C 更新项目与消息', () =>
+      window.S.cwd === 'C:\\project-c' && $('title').textContent === 'C' && $('stream').textContent.includes('C history') && !$('stream').textContent.includes('OLD history'));
+    check('中间项目 B 不触发多余 restart', () => !activated.includes('C:\\project-b'));
+    check('项目完成同步后输入恢复', () => window.S.switching === false && $('input').disabled === false);
+    es.emit({ type: 'tool_execution_start', toolCallId: 'p4-tool', toolName: 'bash', args: { command: 'sleep 1' }, bridgeRun: 500, _seq: 10004 });
+    const toolCount = window.document.querySelectorAll('.tl-item[data-id="p4-tool"]').length;
+    es.emit({ type: 'tool_execution_start', toolCallId: 'p4-tool', toolName: 'bash', args: { command: 'sleep 1' }, bridgeRun: 500, _seq: 10004 });
+    check('SSE backlog 重放不重复 Tool Entry', () => window.document.querySelectorAll('.tl-item[data-id="p4-tool"]').length === toolCount);
+    es.emit({ type: 'bridge_status', state: 'exited', bridgeRun: 500, cwd: 'C:\\project-c', _seq: 10005, code: 1 });
+    check('pi crash 收尾 running Tool', () => window.document.querySelectorAll('.tl-item[data-status="running"]').length === 0);
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: 501, cwd: 'C:\\project-c', _seq: 10006 });
+    const restored = { messages: [{ role: 'user', content: [{ type: 'text', text: 'restored once' }] }] };
+    es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 501, _seq: 10007, data: restored });
+    es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 501, _seq: 10008, data: restored });
+    check('重复历史重建仍只有一份消息', () => window.document.querySelectorAll('.msg.user').length === 1);
+    window.fetch = baseFetch;
+  }
 
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 

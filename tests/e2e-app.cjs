@@ -24,6 +24,7 @@ const CDP_PORT = Number(process.env.CDP_PORT || 9224);
 const APP = `http://127.0.0.1:${APP_PORT}/`;
 
 const WORK = path.join(os.tmpdir(), 'pi-gui-e2e-work');
+const WORK_B = path.join(os.tmpdir(), 'pi-gui-e2e-work-b');
 const DATA = path.join(os.tmpdir(), 'pi-gui-e2e-data');
 const ASK = '请只回复两个字：收到';
 
@@ -138,6 +139,7 @@ async function main() {
   if (!fs.existsSync(EXE)) throw new Error(`没有 ${EXE}，先运行 npm run build:app`);
 
   fs.rmSync(WORK, { recursive: true, force: true });
+  fs.rmSync(WORK_B, { recursive: true, force: true });
   fs.rmSync(DATA, { recursive: true, force: true });
   fs.mkdirSync(WORK, { recursive: true });
   fs.mkdirSync(DATA, { recursive: true });
@@ -182,13 +184,15 @@ async function main() {
 
   let stopWatch = () => {};
   let ws;
+  let reopenedProc;
+  let reopenedWs;
   try {
     /* 1. 后端起来 */
     let up = false;
     for (let i = 0; i < 80; i++) {
       await sleep(500);
       try {
-        if ((await fetch(APP + 'api/status')).ok) {
+        if ((await fetch(APP + 'api/health')).ok) {
           up = true;
           break;
         }
@@ -199,11 +203,7 @@ async function main() {
     if (!up) throw new Error('应用后端没起来：\n' + appLog.slice(0, 600));
     console.log('\n1) 应用已启动（窗口 + 内嵌后端都在）');
 
-    /* 2. 接事件流 */
-    const events = [];
-    stopWatch = watchEvents((e) => events.push(e));
-
-    /* 3. 连窗口 —— 这一步已经保证页面加载完了 */
+    /* 2. 连窗口 —— 带令牌的事件流只能从 Electron 渲染进程访问 */
     const page = await pickPage().catch((e) => {
       const killed = /Renderer process killed|render-process-gone/.test(appLog);
       throw new Error(
@@ -221,13 +221,18 @@ async function main() {
     // 只开 Runtime（要用它收异常事件 + 求值）。
     // 截图（Page.captureScreenshot）不开 Page 域也能用，所以不特意开。
     await cdp.send('Runtime.enable');
+    await cdp.evalJs(`(() => {
+      window.__e2eEvents = [];
+      window.__e2eSource = new EventSource('/api/events');
+      window.__e2eSource.onmessage = e => { try { window.__e2eEvents.push(JSON.parse(e.data)); } catch {} };
+    })()`);
 
     await waitFor(cdp.evalJs, `document.querySelector('#connText')?.textContent === '已连接'`, 40000, 'pi 连接就绪');
 
     /* 确认「当前项目」就是隔离目录。
      * 界面上的 cwd 来自 /api/status，直接问后端比猜 DOM 选择器稳。
      * 这条要是错了，说明桌面版会去动用户真实的目录，那是很严重的问题。 */
-    const status = await (await fetch(APP + 'api/status')).json();
+    const status = JSON.parse(await cdp.evalJs(`fetch('/api/status').then(r => r.json()).then(JSON.stringify)`));
     const cwdOk = path.resolve(status.cwd || '') === path.resolve(WORK);
     console.log('2) pi 已连接');
     console.log(`   工作目录 ${status.cwd} ${cwdOk ? '✓ 与隔离目录一致' : '✗ 与隔离目录不符（期望 ' + WORK + '）'}`);
@@ -257,6 +262,7 @@ async function main() {
     console.log('4) pi 已结束');
 
     /* 7. 断言 A：pi 真的收到了这条消息 */
+    const events = JSON.parse(await cdp.evalJs(`JSON.stringify(window.__e2eEvents || [])`));
     const userMsg =
       events
         .filter((e) => e.type === 'message_end' && e.message?.role === 'user')
@@ -281,6 +287,40 @@ async function main() {
       })()`)
     );
     console.log('6) 界面: ' + JSON.stringify(dom));
+
+    /* 在真实窗口里走 A→B→A，确认项目切换后 UI、cwd 与输入状态一致。 */
+    fs.mkdirSync(WORK_B, { recursive: true });
+    for (const projectPath of [WORK, WORK_B]) {
+      const added = JSON.parse(await cdp.evalJs(`fetch('/api/projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: ${JSON.stringify(projectPath)} })
+      }).then(r => r.json()).then(JSON.stringify)`));
+      if (!added.ok) throw new Error('添加隔离项目失败: ' + JSON.stringify(added));
+    }
+    await cdp.evalJs(`import('/projects.js').then(m => m.loadProjects())`);
+    for (const projectPath of [WORK_B, WORK]) {
+      const clicked = await cdp.evalJs(`(() => {
+        const target = ${JSON.stringify(projectPath)}.toLowerCase();
+        const row = [...document.querySelectorAll('.project')].find(e => e.title.toLowerCase() === target);
+        if (!row) return false;
+        row.click();
+        return true;
+      })()`);
+      if (!clicked) throw new Error('找不到项目行: ' + projectPath);
+      await waitFor(cdp.evalJs, `fetch('/api/status').then(r => r.json()).then(s =>
+        s.cwd?.toLowerCase() === ${JSON.stringify(projectPath.toLowerCase())} && s.piRunning)`, 40000, '切换到 ' + projectPath);
+      await waitFor(cdp.evalJs, `document.querySelector('#connText')?.textContent === '已连接' &&
+        !document.querySelector('#input')?.disabled`, 40000, '项目界面同步');
+    }
+    const beforeConfig = JSON.parse(await cdp.evalJs(`fetch('/api/status').then(r => r.json()).then(JSON.stringify)`)).bridgeRun;
+    const saved = JSON.parse(await cdp.evalJs(`fetch('/api/project-config', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thinking: 'low', __expectedCwd: ${JSON.stringify(WORK)} })
+    }).then(r => r.json()).then(JSON.stringify)`));
+    if (!saved.ok) throw new Error('保存隔离项目设置失败: ' + JSON.stringify(saved));
+    await waitFor(cdp.evalJs, `fetch('/api/status').then(r => r.json()).then(s =>
+      s.bridgeRun > ${beforeConfig} && s.piRunning)`, 40000, '项目配置触发重启');
+    console.log('7) 真实窗口 A→B→A、配置保存和 pi 重启：通过');
 
     const lastAssistant = events.filter((e) => e.type === 'message_end' && e.message?.role === 'assistant').pop();
     const am = lastAssistant?.message || {};
@@ -309,6 +349,27 @@ async function main() {
       console.log('❌ 端到端未通过');
     }
     console.log('页面异常: ' + (cdp.errs.length ? cdp.errs.join(' | ') : '无'));
+    if (pass) {
+      ws.close();
+      killApp();
+      await Promise.race([new Promise((resolve) => appProc.once('exit', resolve)), sleep(10000)]);
+      if (appProc.exitCode === null) throw new Error('关闭应用后进程仍在');
+      reopenedProc = spawn(EXE, [`--remote-debugging-port=${CDP_PORT}`, '--no-sandbox', '--in-process-gpu'], {
+        cwd: path.dirname(EXE),
+        env: { ...env, PI_CWD: '' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      const reopenedPage = await pickPage(60000);
+      const reopened = connect(reopenedPage.webSocketDebuggerUrl);
+      reopenedWs = reopened.ws;
+      await reopened.ready;
+      await waitFor(reopened.evalJs, `document.querySelector('#connText')?.textContent === '已连接'`, 40000, '重新打开后连接');
+      const restored = JSON.parse(await reopened.evalJs(`fetch('/api/status').then(r => r.json()).then(JSON.stringify)`));
+      if (path.resolve(restored.cwd || '') !== path.resolve(WORK)) throw new Error('重新打开后没有恢复 A 项目');
+      await waitFor(reopened.evalJs, `document.querySelector('#stream')?.textContent.includes(${JSON.stringify(ASK)})`, 40000, '重新打开后历史恢复');
+      console.log('8) 关闭并重新打开：项目 A 与消息历史恢复');
+    }
     process.exitCode = pass ? 0 : 1;
   } finally {
     stopWatch();
@@ -317,9 +378,15 @@ async function main() {
     } catch {
       /* noop */
     }
+    try { reopenedWs?.close(); } catch { /* noop */ }
     killApp();
+    if (reopenedProc?.pid) {
+      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(reopenedProc.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+      else reopenedProc.kill();
+    }
     await sleep(1200);
     fs.rmSync(WORK, { recursive: true, force: true });
+    fs.rmSync(WORK_B, { recursive: true, force: true });
     fs.rmSync(DATA, { recursive: true, force: true });
     setTimeout(() => process.exit(process.exitCode ?? 0), 600);
   }

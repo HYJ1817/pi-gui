@@ -23,7 +23,7 @@
  *   Coding Agent Workspace 的「看到改了什么 → 决定留还是撤」，不是 IDE。
  */
 
-import { el, panels, S } from './state.js';
+import { el, panels, S, ownsWorkspace } from './state.js';
 import { toProjectRel } from './util.js';
 import {
   fetchGitDiff,
@@ -47,6 +47,7 @@ const REFRESH_DEBOUNCE_MS = 450;
 /* 一次会话里可能连续发生几十次改动，所以只留一个定时器 —— 后一次调用把前一次
  * 顶掉，于是「连续 N 次操作」只产生 1 次刷新。 */
 let refreshTimer = null;
+let statusRequest = 0;
 
 const STATUS_LABEL = {
   M: '已修改',
@@ -119,8 +120,11 @@ function blankChanges() {
 /** 拉一次 Git 工作区状态，写进 S.changes 并更新侧栏徽标。
  *  永远不抛：网络失败也落到「结构化错误」上，界面显示降级文案而不是崩掉。 */
 export async function loadGitStatus() {
+  const generation = S.workspaceGeneration;
+  const request = ++statusRequest;
   const c = S.changes;
   const j = await fetchGitStatus();
+  if (!ownsWorkspace(generation) || request !== statusRequest) return null;
 
   c.loaded = true;
 
@@ -153,9 +157,13 @@ export async function loadGitStatus() {
 
 /** 换项目时清空 —— 上一个项目的变更列表留在界面上是纯粹的误导。 */
 export function resetChanges() {
+  statusRequest++;
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = null;
   Object.assign(S.changes, blankChanges());
   view.sessionOnly = false;
   renderChangesBadge();
+  renderChangesBody();
 }
 
 /** 侧栏徽标。0 条时隐藏而不是显示 0 —— 常态是「干净」，不该常驻一个数字。
@@ -212,7 +220,8 @@ export function scheduleGitRefresh(delay = REFRESH_DEBOUNCE_MS) {
 
 /** 立刻刷新：拉状态 + 重画面板（面板没开时只更新徽标）。 */
 export async function refreshGitNow() {
-  await loadGitStatus();
+  const result = await loadGitStatus();
+  if (!result) return;
   renderChangesBody();
 }
 
@@ -293,16 +302,17 @@ export function renderChangesBody() {
     box.appendChild(hint('没有找到 git 命令，无法读取变更。\n装上 Git 并重启即可；聊天与代码修改不受影响。'));
     return;
   }
+  if (c.error) {
+    box.appendChild(hint('读取 Git 状态失败：' + c.error, 'err'));
+    box.appendChild(tinyBtn('重试', () => refreshGitNow()));
+    return;
+  }
   if (!c.isRepo) {
     box.appendChild(hint('当前项目不是 Git 仓库，没有可比较的文件变更。\n聊天与代码修改不受影响。'));
     return;
   }
-  if (c.error) {
-    box.appendChild(hint('读取 Git 状态失败：' + c.error, 'err'));
-    return;
-  }
   if (!c.files.length) {
-    box.appendChild(hint('工作区干净 · No changes'));
+    box.appendChild(hint('没有文件变更。工作区是干净的。'));
     return;
   }
 

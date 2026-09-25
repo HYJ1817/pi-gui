@@ -50,6 +50,7 @@ export const el = {
   ctxPct: $('ctxPct'),
   welcomeReady: $('welcomeReady'),
   welcomeNoProj: $('welcomeNoProj'),
+  welcomeRestore: $('welcomeRestore'),
   btnPickProject: $('btnPickProject'),
 };
 
@@ -63,7 +64,15 @@ export const panels = { tree: null, providers: null, changes: null };
 
 export const S = {
   seq: 0,
+  workspaceGeneration: 0,
+  restoring: true,
+  switching: false,
+  desiredCwd: '',
+  bridgeRun: null,
+  bridgeState: 'starting',
+  syncPending: null,
   streaming: false,
+  submitting: false,
   thread: null,
   current: null,
   blocks: new Map(),
@@ -108,3 +117,14 @@ export const S = {
     truncated: false,
   },
 };
+
+export function beginWorkspaceSwitch(cwd) {
+  S.workspaceGeneration++;
+  S.switching = true;
+  S.desiredCwd = cwd;
+  S.syncPending = { state: true, messages: true };
+  S.bridgeState = 'restarting';
+  return S.workspaceGeneration;
+}
+
+export const ownsWorkspace = (generation) => generation === S.workspaceGeneration;

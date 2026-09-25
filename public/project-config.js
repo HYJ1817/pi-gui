@@ -25,7 +25,7 @@
  *
  * 生效值只有 pi 的 get_state 说了算（不支持的档位会被 pi 自己夹到邻近档位）。
  * 这里只拿它做对比展示，绝不缓存成另一份状态。 */
-import { S } from './state.js';
+import { S, ownsWorkspace } from './state.js';
 import { fetchProjectConfig, saveProjectConfig } from './api.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
@@ -50,9 +50,9 @@ let warnedMissingModel = '';
  * 配置的唯一权威始终是后端那份文件，与 runtime 是唯一 cwd 权威同一个道理。 */
 
 /** 读当前项目的配置。失败返回 null（调用方一律按「没配置」处理）。 */
-export async function loadProjectConfig() {
+export async function loadProjectConfig(generation = S.workspaceGeneration) {
   const j = await fetchProjectConfig();
-  return j && j.ok !== false ? j : null;
+  return ownsWorkspace(generation) && j && j.ok !== false ? j : null;
 }
 
 /* ---------- 恢复偏好 ---------- */
@@ -67,8 +67,12 @@ export async function loadProjectConfig() {
  *                  省掉一次重复 GET）。不传就现读。
  */
 export async function applyProjectPreferences(preloaded = null) {
-  const j = preloaded || (await loadProjectConfig());
+  const generation = S.workspaceGeneration;
+  const bridgeRun = S.bridgeRun;
+  const j = preloaded || (await loadProjectConfig(generation));
+  if (!ownsWorkspace(generation) || bridgeRun !== S.bridgeRun || S.bridgeState !== 'ready') return;
   if (!j || !j.hasProject || !j.config) return;
+  if (j.cwd && S.cwd && j.cwd !== S.cwd) return;
 
   const cfg = j.config;
   const pins = j.env || {};
@@ -78,6 +82,7 @@ export async function applyProjectPreferences(preloaded = null) {
 
   // 拿不到可用模型列表就沿用当前模型，不猜一个出来
   const models = await whenModels();
+  if (!ownsWorkspace(generation) || bridgeRun !== S.bridgeRun || S.bridgeState !== 'ready') return;
   if (!models.length) return;
 
   const want = `${cfg.model.provider}/${cfg.model.id}`;
@@ -130,9 +135,21 @@ export async function openProjectSettings() {
     return;
   }
 
-  const j = await loadProjectConfig();
+  const generation = S.workspaceGeneration;
+  const j = await loadProjectConfig(generation);
+  if (!ownsWorkspace(generation)) return;
   if (!j || !j.hasProject || !j.config) {
-    toast('读取项目配置失败', 'error');
+    openModal((card, close) => {
+      const title = document.createElement('h3');
+      title.textContent = '项目设置';
+      const error = note('读取项目配置失败。请检查项目目录是否仍可访问。', 'warn');
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'btn primary';
+      retry.textContent = '重试';
+      retry.onclick = () => { close(); openProjectSettings(); };
+      card.append(title, error, retry);
+    });
     return;
   }
 
@@ -378,6 +395,7 @@ export async function openProjectSettings() {
       const r = await saveProjectConfig(payload);
       btnSave.disabled = false;
       btnSave.textContent = '保存';
+      if (!ownsWorkspace(generation)) return;
 
       if (!r || r.ok !== true) {
         // 保存失败就把弹层留着，用户的输入不能丢
