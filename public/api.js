@@ -183,3 +183,9 @@ export const switchSession = (id) => sendJSON('/api/sessions/switch', { body: { 
 
 /** 给**当前**会话起个名字（pi 的 set_session_name 只作用于当前会话）。 */
 export const renameSession = (name) => sendJSON('/api/sessions/name', { body: { name } });
+
+/** 归档 / 取消归档。归档只影响 Pi GUI 的列表，pi 那边文件原地不动。 */
+export const archiveSession = (id, archived = true) => sendJSON('/api/sessions/archive', { body: { id, archived } });
+
+/** 删除会话（后端是软删除：文件移进 Pi GUI 的回收站目录，不是 unlink）。 */
+export const deleteSession = (id) => sendJSON('/api/sessions/delete', { body: { id } });

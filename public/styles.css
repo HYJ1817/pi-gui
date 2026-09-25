@@ -469,6 +469,23 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   box-shadow:0 18px 48px rgba(0,0,0,.6);
 }
 .modal-card.wide{max-width:540px}
+/* 弹层里的滚动条。
+ *
+ * 不写这段就落回浏览器默认样式 —— 一条浅色的宽条压在深色卡片上，
+ * 比内容本身还显眼。外观对齐 .stream / .pop：细、深、圆角、轨道透明。
+ * ::-webkit-scrollbar 不会继承，所以每个滚动容器都要点名。 */
+.modal-card::-webkit-scrollbar,
+.modal-card .modal-list::-webkit-scrollbar,
+.modal-card .tree::-webkit-scrollbar{width:9px}
+.modal-card::-webkit-scrollbar-thumb,
+.modal-card .modal-list::-webkit-scrollbar-thumb,
+.modal-card .tree::-webkit-scrollbar-thumb{background:#2c2c2c;border-radius:5px}
+.modal-card::-webkit-scrollbar-thumb:hover,
+.modal-card .modal-list::-webkit-scrollbar-thumb:hover,
+.modal-card .tree::-webkit-scrollbar-thumb:hover{background:#3c3c3c}
+.modal-card::-webkit-scrollbar-track,
+.modal-card .modal-list::-webkit-scrollbar-track,
+.modal-card .tree::-webkit-scrollbar-track{background:transparent}
 .modal-card h3{font-size:14px;font-weight:500;color:#e6e6e6;margin-bottom:6px}
 .modal-desc{font-size:12.5px;color:var(--t2);line-height:1.65;margin-bottom:14px;white-space:pre-wrap}
 .modal-list{display:flex;flex-direction:column;gap:3px;margin-bottom:14px;max-height:46vh;overflow:auto}
@@ -771,8 +788,30 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   transition:background .12s,color .12s;
 }
 .tree-node:hover{background:var(--hover);color:var(--t1)}
+/* 没有 id 的节点点不了（pi 的树理论上都有，但别让它看着能点） */
+.tree-node.static{cursor:default}
 .tree-text{flex:1;min-width:0;word-break:break-word}
 .tree-label{font-size:10px;color:var(--accent);margin-left:5px}
+/* 分叉点标记。缩进阶梯去掉之后，这里是唯一还能看出「结构」的地方。 */
+.tree-fork{
+  flex:0 0 auto;font-size:10px;color:var(--t3);border:1px solid var(--line);
+  border-radius:5px;padding:0 5px;line-height:15px;align-self:center;
+}
+
+/* 分支弹层：与 .ext / .changes 同一套思路 —— 标题、说明、按钮都固定，
+ * 只有树体滚动。原来整张卡片滚，节点一多底部按钮就被滚出可视区，
+ * 想关掉得先滚到底；滚动条也贴在卡片边缘而不是贴着内容。 */
+.modal-card.tree-modal{
+  max-width:min(620px,92vw);display:flex;flex-direction:column;overflow:hidden;
+}
+.modal-card.tree-modal h3,
+.modal-card.tree-modal .modal-desc,
+.modal-card.tree-modal .modal-actions{flex:0 0 auto}
+.modal-card.tree-modal .modal-actions{margin-top:12px}
+.modal-card.tree-modal .tree{
+  flex:1 1 auto;min-height:0;max-height:56vh;overflow:auto;
+  border:1px solid var(--line-soft);border-radius:9px;background:#151515;padding:4px;
+}
 
 /* 统计表 */
 .stat-rows{display:flex;flex-direction:column;gap:1px;margin-bottom:14px}
@@ -1318,14 +1357,30 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .pj-sess-time{flex:0 0 auto;font-size:10.5px;color:var(--t3)}
 .pj-sess.on .pj-sess-time{color:rgba(240,207,154,.6)}
 
-/* 铅笔只在当前会话那一条上出现，且默认透明、悬停才显形 */
-.pj-sess-pen{
-  flex:0 0 auto;border:0;background:transparent;color:var(--t3);
-  font-size:11px;line-height:1;padding:2px 3px;border-radius:4px;cursor:pointer;
-  opacity:0;transition:opacity .12s,color .12s;
+/* 行内动作（改名 / 归档 / 删除）：默认透明、悬停才显形。
+ * 每行常驻三个图标会把标题挤没 —— 和最初那支铅笔是同一个思路。 */
+.pj-sess-acts{
+  flex:0 0 auto;display:flex;align-items:center;gap:1px;
+  opacity:0;transition:opacity .12s;
 }
-.pj-sess:hover .pj-sess-pen{opacity:1}
-.pj-sess-pen:hover{color:var(--accent);background:rgba(232,163,61,.12)}
+.pj-sess:hover .pj-sess-acts{opacity:1}
+.pj-sess-act{
+  border:0;background:transparent;color:var(--t3);
+  font-size:11px;line-height:1;padding:2px 3px;border-radius:4px;cursor:pointer;
+}
+.pj-sess-act:hover{color:var(--accent);background:rgba(232,163,61,.12)}
+.pj-sess-act.danger:hover{color:var(--err);background:rgba(248,113,113,.12)}
+
+/* 新会话：pi 在会话有内容之前不落盘，所以磁盘上还查不到它。
+ * 淡化处理，并且不给它「切换 / 归档 / 删除」——那些动作现在都做不到。 */
+.pj-sess.pending{color:var(--t3);cursor:default}
+.pj-sess.pending .pj-sess-title{font-style:italic}
+
+/* 「已归档 N 条」那一行：和上面进行中的会话隔开 */
+.pj-sess-arch-toggle{
+  margin-top:3px;border-top:1px solid var(--line-soft);border-radius:0;
+  padding-top:5px;color:var(--t3);
+}
 
 .pj-sess-input{
   flex:1;min-width:0;height:22px;padding:0 6px;border-radius:5px;

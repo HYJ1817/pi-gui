@@ -153,7 +153,14 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
     fs.utimesSync(files.a2, future / 1000, future / 1000);
   }
 
-  const mk = (cwd, rpc) => createSessions({ runtime: { getCurrentCwd: () => cwd }, rpc, env: { HOME: TMP, PI_CODING_AGENT_DIR: AGENT } });
+  const mk = (cwd, rpc) =>
+    createSessions({
+      runtime: { getCurrentCwd: () => cwd },
+      rpc,
+      env: { HOME: TMP, PI_CODING_AGENT_DIR: AGENT },
+      // 归档 / 回收站落在自己的数据目录里，测试全程隔离在 TMP 下
+      dataDir: path.join(TMP, 'data'),
+    });
 
   {
     const mod = mk(PROJ_A, { request: async () => ({ sessionFile: files.a1 }) });
@@ -357,6 +364,159 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
     check('6d. id 不是字符串 → 400', () => badId.code === 400 || badId.code);
     const put = await hit('PUT', '/api/sessions', { 'x-pi-gui-token': 'T' });
     check('6e. PUT /api/sessions → 405', () => put.code === 405 || put.code);
+    /* 新增的两条路由也要确认**没被前缀匹配吃掉**。
+     * 只测「不被 405 兜底」和「坏 id → 400」，不传合法 id —— 那会真的删掉东西。 */
+    const archGet = await hit('GET', '/api/sessions/archive', { 'x-pi-gui-token': 'T' });
+    check('6f. GET /api/sessions/archive → 405（不被静态兜底吃掉）', () => archGet.code === 405 || archGet.code);
+    const delBad = await hit('POST', '/api/sessions/delete', { 'x-pi-gui-token': 'T' }, { id: '' });
+    check('6g. POST /api/sessions/delete 空 id → 400', () => delBad.code === 400 || delBad.code);
+    const delNoTok = await hit('POST', '/api/sessions/delete', {}, { id: '0'.repeat(16) });
+    check('6h. 删除同样要令牌（不带 → 401）', () => delNoTok.code === 401 || delNoTok.code);
+  }
+
+  /* ================= 7. 归档 / 删除 ================= */
+  section('7. 归档 / 删除（Pi GUI 自己的状态，不碰 pi）');
+
+  {
+    const DATA = path.join(TMP, 'data');
+    const TRASH = path.join(DATA, 'trash-sessions');
+    const FLAGS = path.join(DATA, 'session-flags.json');
+    const mod = mk(PROJ_A, { request: async () => ({ sessionFile: files.a1 }) });
+    const idOf = async (sid) => (await mod.list()).sessions.find((s) => s.sessionId === sid).id;
+    const a1 = await idOf('a1');
+    const a2 = await idOf('a2');
+
+    /* ---- 归档 ---- */
+    const r1 = await mod.setArchived(a2, true);
+    check('7a. 归档成功', () => (r1.ok && r1.archived === true) || JSON.stringify(r1));
+    check('7b. 归档响应里不含绝对路径', () => !/[A-Za-z]:\\\\|[A-Za-z]:\//.test(JSON.stringify(r1)) || JSON.stringify(r1));
+    {
+      const s = (await mod.list()).sessions.find((x) => x.sessionId === 'a2');
+      check('7c. 列表里该条 archived=true', () => (s && s.archived === true) || JSON.stringify(s));
+    }
+    check('7d. 归档**不动磁盘**：文件还在原处（可逆的纯组织动作）', () => fs.existsSync(files.a2) || '文件不见了');
+    {
+      const s = (await mod.list()).sessions.find((x) => x.sessionId === 'a1');
+      check('7e. 没归档的那条仍是 archived=false', () => (s && s.archived === false) || JSON.stringify(s));
+    }
+    check('7f. flags 用 pi 的 sessionId 记（文件挪位置也不失配）', () => {
+      const j = JSON.parse(fs.readFileSync(FLAGS, 'utf8'));
+      return j.archived.includes('a2') || JSON.stringify(j);
+    });
+    check('7g. flags 是原子写：目录里没有 .tmp 残留', () => {
+      const left = fs.readdirSync(DATA).filter((n) => n.includes('.tmp-'));
+      return left.length === 0 || JSON.stringify(left);
+    });
+
+    const r2 = await mod.setArchived(a2, false);
+    check('7h. 取消归档', () => (r2.ok && r2.archived === false) || JSON.stringify(r2));
+    {
+      const s = (await mod.list()).sessions.find((x) => x.sessionId === 'a2');
+      check('7i. 取消归档后 archived=false', () => (s && s.archived === false) || JSON.stringify(s));
+    }
+
+    const rCur = await mod.setArchived(a1, true);
+    check('7j. 当前会话拒绝归档（pi 正开着它）', () => (!rCur.ok && /正在进行/.test(rCur.error)) || JSON.stringify(rCur));
+    check('7k. 被拒的归档没有偷偷写进 flags', () => {
+      const j = JSON.parse(fs.readFileSync(FLAGS, 'utf8'));
+      return !j.archived.includes('a1') || JSON.stringify(j);
+    });
+
+    const rBad = await mod.setArchived('0'.repeat(16), true);
+    check('7l. 未知 id 归档 → 报错不抛', () => (!rBad.ok && /找不到/.test(rBad.error)) || JSON.stringify(rBad));
+
+    /* ---- 删除（软删除） ---- */
+    const rDel = await mod.remove(a2);
+    check('7m. 删除成功', () => (rDel.ok && rDel.title === 'A 的第二次对话') || JSON.stringify(rDel));
+    check('7n. 删除响应里不含绝对路径', () => !/[A-Za-z]:\\\\|[A-Za-z]:\//.test(JSON.stringify(rDel)) || JSON.stringify(rDel));
+    check('7o. 原文件已被移走（不是留在原地）', () => !fs.existsSync(files.a2) || '原文件还在');
+    check('7p. 文件进了回收站目录（**不是 unlink** —— 误点可人工找回）', () =>
+      fs.existsSync(path.join(TRASH, 'a2.jsonl')) || JSON.stringify(fs.readdirSync(TRASH)));
+    check('7q. 回收站里那份内容与原文件一致', () => {
+      const t = fs.readFileSync(path.join(TRASH, 'a2.jsonl'), 'utf8');
+      return (t.includes('"id":"a2"') && t.includes('A 的第二次对话')) || t.slice(0, 120);
+    });
+    {
+      const ids = (await mod.list()).sessions.map((s) => s.sessionId);
+      check('7r. 删除后不再出现在列表里', () => !ids.includes('a2') || JSON.stringify(ids));
+    }
+    check('7s. 删除记进了 flags（可追溯是谁被删的）', () => {
+      const j = JSON.parse(fs.readFileSync(FLAGS, 'utf8'));
+      const rec = j.deleted.find((x) => x.sessionId === 'a2');
+      return (rec && rec.title === 'A 的第二次对话' && rec.trashedAs === 'a2.jsonl') || JSON.stringify(j.deleted);
+    });
+
+    const rDelCur = await mod.remove(a1);
+    check('7t. 当前会话拒绝删除', () => (!rDelCur.ok && /正在进行/.test(rDelCur.error)) || JSON.stringify(rDelCur));
+    check('7u. 被拒的删除没有动文件', () => fs.existsSync(files.a1) || '当前会话的文件被删了');
+
+    const rDelBad = await mod.remove('0'.repeat(16));
+    check('7v. 未知 id 删除 → 报错不抛', () => (!rDelBad.ok && /找不到/.test(rDelBad.error)) || JSON.stringify(rDelBad));
+    const rDelTrav = await mod.remove('../../../../etc/passwd');
+    check('7w. 路径穿越字符串当 id → 拒绝（不会被当路径删）', () => !rDelTrav.ok || JSON.stringify(rDelTrav));
+
+    /* ---- 坏 flags 不能拖垮列表 ---- */
+    fs.writeFileSync(FLAGS, '{ 这不是 JSON\n', 'utf8');
+    {
+      const r = await mod.list();
+      const s = r.sessions.find((x) => x.sessionId === 'a1');
+      check('7x. flags 坏掉时列表照常打开，归档状态当 false', () =>
+        (r.ok && s && s.archived === false) || JSON.stringify({ ok: r.ok, s }));
+    }
+  }
+
+  /* ================= 8. 当前会话补位（pi 还没落盘） ================= */
+  section('8. 当前会话补位');
+
+  {
+    /* 实测（.probe/probe-sessions-new.cjs）：pi 在会话没有内容时**不落盘** ——
+     * new_session 之后 get_state 已经给了新的 sessionFile，但磁盘上还没有它。
+     * 不补这一条的话，刚开的空会话不在列表里，界面上「当前项」仍然是旧会话，
+     * 而当前项不给点 ⇒ 用户再也回不到旧对话（「开新对话后旧对话消失」）。 */
+    const ghost = path.join(ROOT, I.dirNameFor(PROJ_A), 'not-written-yet.jsonl');
+    const mod = mk(PROJ_A, {
+      request: async () => ({ sessionFile: ghost, sessionId: 'ghost-1', sessionName: '', messageCount: 0 }),
+    });
+    const r = await mod.list();
+    check('8a. 磁盘上不存在的当前会话会被补进列表', () => {
+      const g = r.sessions.find((s) => s.pending);
+      return Boolean(g) || JSON.stringify(r.sessions.map((s) => ({ t: s.title, p: s.pending })));
+    });
+    check('8b. 补位那条带 current 与 pending 两个标记', () => {
+      const g = r.sessions.find((s) => s.pending);
+      return (g && g.current === true && g.pending === true) || JSON.stringify(g);
+    });
+    check('8c. 补位那条给了中性标题（不显示成空字符串）', () => {
+      const g = r.sessions.find((s) => s.pending);
+      return (g && g.title && g.title.length > 0) || JSON.stringify(g);
+    });
+    check('8d. 补位那条排在最前面（它就是当前会话）', () => r.sessions[0].pending === true || JSON.stringify(r.sessions.map((s) => s.pending)));
+    check('8e. 磁盘上的会话仍然都在（补位不是替换）', () => {
+      const ids = r.sessions.filter((s) => !s.pending).map((s) => s.sessionId);
+      return ids.includes('a1') || JSON.stringify(ids);
+    });
+    const gId = r.sessions.find((s) => s.pending).id;
+    const rArch = await mod.setArchived(gId, true);
+    check('8f. 补位那条不能被归档（磁盘上还没有它）', () => !rArch.ok || JSON.stringify(rArch));
+  }
+
+  {
+    /* pi 给了 sessionName 就用它 */
+    const mod = mk(PROJ_A, {
+      request: async () => ({ sessionFile: path.join(ROOT, 'x', 'nope.jsonl'), sessionId: 'ghost-2', sessionName: '给新会话起的名字', messageCount: 3 }),
+    });
+    const r = await mod.list();
+    const g = r.sessions.find((s) => s.pending);
+    check('8g. 有名字就用名字，messageCount 也带过来', () =>
+      (g && g.title === '给新会话起的名字' && g.messageCount === 3) || JSON.stringify(g));
+  }
+
+  {
+    /* 当前会话在磁盘上时**不该**再补一条（否则列表里会出现两个「当前」） */
+    const mod = mk(PROJ_A, { request: async () => ({ sessionFile: files.a1, sessionId: 'a1', sessionName: 'A 的第一次对话' }) });
+    const r = await mod.list();
+    const cur = r.sessions.filter((s) => s.current);
+    check('8h. 当前会话已在磁盘上时不重复补位', () => (cur.length === 1 && !cur[0].pending) || JSON.stringify(r.sessions.map((s) => ({ t: s.title, c: s.current, p: s.pending }))));
   }
 
   /* ---------- 收尾 ---------- */

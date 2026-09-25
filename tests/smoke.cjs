@@ -235,8 +235,9 @@ const stubSessions = {
   currentId: 'aaaaaaaaaaaaaaaa',
   diagnostics: [],
   sessions: [
-    { id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能', sessionId: '01a0d257-4f74-71fc-8f53', createdAt: '2026-09-24T07:35:32.469Z', lastMessageAt: '2026-09-25T10:22:03.235Z', updatedAt: 1758800000000, messageCount: 14, current: false, truncated: false },
-    { id: 'aaaaaaaaaaaaaaaa', title: '你好', sessionId: '01a0d999-1111-2222-3333', createdAt: '2026-09-25T09:00:00.000Z', lastMessageAt: '2026-09-25T10:00:00.000Z', updatedAt: 1758790000000, messageCount: 2, current: true, truncated: false },
+    { id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能', sessionId: '01a0d257-4f74-71fc-8f53', createdAt: '2026-09-24T07:35:32.469Z', lastMessageAt: '2026-09-25T10:22:03.235Z', updatedAt: 1758800000000, messageCount: 14, current: false, pending: false, archived: false, truncated: false },
+    { id: 'cccccccccccccccc', title: '上周的排查记录', sessionId: '01a0d111-2222-3333-4444', createdAt: '2026-09-20T07:35:32.469Z', lastMessageAt: '2026-09-20T08:00:00.000Z', updatedAt: 1758300000000, messageCount: 5, current: false, pending: false, archived: true, truncated: false },
+    { id: 'aaaaaaaaaaaaaaaa', title: '你好', sessionId: '01a0d999-1111-2222-3333', createdAt: '2026-09-25T09:00:00.000Z', lastMessageAt: '2026-09-25T10:00:00.000Z', updatedAt: 1758790000000, messageCount: 2, current: true, pending: false, archived: false, truncated: false },
   ],
 };
 let stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能' };
@@ -507,19 +508,84 @@ staticCheck();
   check('成本显示', () => $('uCost').textContent === '$0.4512');
 
   // --- get_tree ---
+  /* ⚠️ fixture 必须照 pi 的**真实形状**造。
+   *
+   * pi 的条目按类型各不相同，消息体嵌在 `entry.message` 里（不是顶层
+   * role/content）—— 依据 pi 源码 dist/bundle/chunks/chunk-4DKZACXI.js 的
+   * append* 系列：appendMessage 造的是 {type:'message', id, parentId,
+   * timestamp, message}。
+   *
+   * 这里原来用的是扁平形状（role/content 摆顶层，pi 里根本不存在），
+   * 于是 tree.js 只读顶层也能全绿 —— 而真实会话里每个消息节点都渲染成
+   * 「message: [object Object]」。**错 fixture 把真实缺陷藏了一整版。** */
+  const msgEntry = (id, role, text) => ({
+    type: 'message', id, timestamp: '2026-09-25T10:00:00.000Z',
+    message: { role, content: [{ type: 'text', text }] },
+  });
   es.emit({
     type: 'response', command: 'get_tree', success: true,
     data: {
       tree: [
-        { entry: { type: 'message', id: 'a', role: 'user', content: '你好' }, children: [
-          { entry: { type: 'message', id: 'b', role: 'assistant', content: '在的' }, children: [
-            { entry: { type: 'message', id: 'c', role: 'user', content: '改一下' }, children: [] },
-          ] },
-        ] },
+        {
+          entry: msgEntry('a', 'user', '帮我看看 server.js'),
+          children: [
+            { entry: msgEntry('b', 'assistant', '文件没问题。'), children: [], label: '关键结论' },
+            /* 一次 model_change 夹在两条消息中间 —— 它自己不该出现，
+             * 但它的子节点必须**上提到最近的可见祖先**（a），
+             * 否则一次切换模型就会把后面整段对话从树里切掉。 */
+            {
+              entry: { type: 'model_change', id: 'm1', timestamp: '2026-09-25T10:00:01.000Z', provider: 'deepseek', modelId: 'deepseek-v4-pro' },
+              children: [
+                {
+                  entry: { type: 'thinking_level_change', id: 't1', timestamp: '2026-09-25T10:00:02.000Z', thinkingLevel: 'high' },
+                  children: [{ entry: msgEntry('c', 'assistant', '换个模型再答一次'), children: [] }],
+                },
+              ],
+            },
+          ],
+        },
       ],
     },
   });
-  check('分支计数 = 3', () => $('branchCount').textContent === '3');
+  // 可见条目 = a / b / c（model_change 与 thinking_level_change 被过滤掉）
+  check('分支计数 = 3（只算对话条目）', () => $('branchCount').textContent === '3');
+
+  /* 条目文本映射：每种类型的字段位置都不一样，逐类钉住。
+   * 这一组是回归守卫 —— 没有它，改回「只读顶层」也不会有人发现。 */
+  check('message 取嵌套消息体（真实形状）', () =>
+    window.entryText(msgEntry('x', 'user', '你好')) === '你：你好');
+  check('message 兼容扁平形状（顶层 role/content）', () =>
+    window.entryText({ type: 'message', role: 'assistant', content: '在的' }) === 'Pi：在的');
+  check('message 的 content 是块数组时取 text 块', () =>
+    window.entryText({ type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'A' }, { type: 'thinking', text: 'B' }, { type: 'text', text: 'C' }] } }) === 'Pi：A （思考） C');
+  check('message 只有 toolCall 时不空白', () =>
+    window.entryText({ type: 'message', message: { role: 'assistant', content: [{ type: 'toolCall', name: 'bash' }] } }) === 'Pi：调用 bash');
+  check('model_change 带出 provider/modelId', () =>
+    window.entryText({ type: 'model_change', provider: 'deepseek', modelId: 'deepseek-v4-pro' }) === '模型 → deepseek/deepseek-v4-pro');
+  check('thinking_level_change 带出档位', () =>
+    window.entryText({ type: 'thinking_level_change', thinkingLevel: 'high' }) === '思考档位 → high');
+  check('context_edit 带出目标 id', () =>
+    window.entryText({ type: 'context_edit', targetId: 'abcdef1234567890', replacement: null }) === '还原上下文 → abcdef12');
+  check('session_info 带出会话名', () =>
+    window.entryText({ type: 'session_info', name: '我的登录功能开发' }) === '会话名 → 我的登录功能开发');
+  check('label 带出标签', () => window.entryText({ type: 'label', label: '重点' }) === '标签 → 重点');
+  check('compaction 带出 tokens', () =>
+    window.entryText({ type: 'compaction', tokensBefore: 12345 }) === '压缩摘要（12345 tokens）');
+  check('未知类型有兜底（不出现 undefined）', () => {
+    const t = window.entryText({ type: 'brand_new_thing' });
+    return t === 'brand_new_thing' || t;
+  });
+  check('任何条目都不会渲染成 [object Object]', () => {
+    const samples = [
+      msgEntry('x', 'user', 'hi'),
+      { type: 'model_change', provider: 'p', modelId: 'm' },
+      { type: 'usage', kind: 'message', provider: 'p', model: 'm', usage: {} },
+      { type: 'custom', customType: 'note', data: { a: 1 } },
+      { type: 'compaction', summary: 'S', tokensBefore: 1, details: {} },
+    ];
+    const bad = samples.map((s) => window.entryText(s)).filter((t) => t.includes('[object'));
+    return bad.length === 0 || '出现：' + bad.join(' | ');
+  });
 
   // --- 对话流 ---
   es.emit({ type: 'message_start', message: { role: 'user', content: '帮我看看 server.js' } });
@@ -1753,6 +1819,38 @@ staticCheck();
   $('navBranches').click();
   check('分支弹层打开', () => $('modal').hidden === false);
   check('分支树渲染 3 个节点', () => window.document.querySelectorAll('#modalCard .tree-node').length === 3);
+  check('分支节点文本不是 [object Object]', () => {
+    const t = [...window.document.querySelectorAll('#modalCard .tree-text')].map((x) => x.textContent).join(' | ');
+    return !t.includes('[object') || t;
+  });
+  check('分支节点只列对话条目', () => {
+    const t = [...window.document.querySelectorAll('#modalCard .tree-text')].map((x) => x.textContent);
+    const want = ['你：帮我看看 server.js', 'Pi：文件没问题。', 'Pi：换个模型再答一次'];
+    return t.every((s, i) => s.startsWith(want[i])) || t.join(' | ');
+  });
+  check('操作类条目不出现在分支树里', () => {
+    const t = [...window.document.querySelectorAll('#modalCard .tree-text')].map((x) => x.textContent).join(' | ');
+    return !/模型 →|思考档位 →|model_change|thinking_level_change/.test(t) || t;
+  });
+  check('分叉点标出支线数', () => {
+    const f = window.document.querySelector('#modalCard .tree-fork');
+    return (f && f.textContent === '2 条支线') || (f ? f.textContent : '没有分叉标记');
+  });
+  check('分支树左对齐（不按深度递进缩进）', () => {
+    const nodes = [...window.document.querySelectorAll('#modalCard .tree-node')];
+    const bad = nodes.filter((n) => n.style.paddingLeft);
+    return bad.length === 0 || `有 ${bad.length} 个节点带 paddingLeft`;
+  });
+  check('节点上的 label 作为徽标渲染', () => {
+    const lb = window.document.querySelector('#modalCard .tree-label');
+    return (lb && lb.textContent === '关键结论') || '缺少 label 徽标';
+  });
+  check('分支弹层是「按钮固定 + 树体滚动」布局', () =>
+    $('modalCard').classList.contains('tree-modal') || '缺少 tree-modal');
+  check('节点悬停给出完整文本与可点击说明', () => {
+    const first = window.document.querySelector('#modalCard .tree-node');
+    return first.title.includes('点击从此节点分叉') || first.title;
+  });
   $('modal').click();
 
   // --- 弹层：供应商 ---
@@ -3184,10 +3282,12 @@ staticCheck();
       window.renderProjects();
       await new Promise((r) => setTimeout(r, 60));
       const proj2 = $('projects');
-      const pens = proj2.querySelectorAll('.pj-sess-pen');
-      check('会话：改名铅笔**只**出现在当前会话那一条上', () => pens.length === 1 || `有 ${pens.length} 个铅笔`);
       const cur = proj2.querySelector('.pj-sess.on');
-      cur.querySelector('.pj-sess-pen').onclick({ stopPropagation() {} });
+      check('会话：改名动作**只**出现在当前会话那一条上', () => {
+        const pens = [...proj2.querySelectorAll('.pj-sess-act')].filter((b) => b.title.includes('名字'));
+        return (pens.length === 1 && cur.contains(pens[0])) || `有 ${pens.length} 个改名动作`;
+      });
+      cur.querySelector('.pj-sess-act').onclick({ stopPropagation() {} });
       await new Promise((r) => setTimeout(r, 20));
       const input = cur.querySelector('.pj-sess-input');
       check('会话：点铅笔变成行内输入框（不是弹窗）', () => Boolean(input) || '没出现输入框');
@@ -3200,6 +3300,73 @@ staticCheck();
       } else {
         check('会话：回车保存 → 调 /api/sessions/name', () => '上一条已失败');
       }
+    }
+
+    // 归档 / 删除
+    {
+      window.renderProjects();
+      await new Promise((r) => setTimeout(r, 60));
+      let proj3 = $('projects');
+      const row = [...proj3.querySelectorAll('.pj-sess')].find((x) => !x.classList.contains('on'));
+      const acts = row.querySelectorAll('.pj-sess-act');
+      check('会话：非当前会话有「归档」「删除」两个动作', () => acts.length === 2 || `有 ${acts.length} 个`);
+      check('会话：删除按钮是危险色', () => Boolean(row.querySelector('.pj-sess-act.danger')) || '删除按钮不是 danger');
+      check('会话：当前会话只给改名，不给归档/删除', () => {
+        const cur = proj3.querySelector('.pj-sess.on');
+        const a = cur.querySelectorAll('.pj-sess-act');
+        return (a.length === 1 && !cur.querySelector('.pj-sess-act.danger')) || `当前项有 ${a.length} 个动作`;
+      });
+
+      // 归档
+      sessionCalls.length = 0;
+      acts[0].onclick({ stopPropagation() {} });
+      await new Promise((r) => setTimeout(r, 80));
+      const arch = sessionCalls.find((c) => /\/archive/.test(c.url));
+      check('会话：点归档 → POST /api/sessions/archive（带 id 与 archived:true）', () =>
+        Boolean(arch && arch.body.id === 'bbbbbbbbbbbbbbbb' && arch.body.archived === true) ||
+        JSON.stringify(sessionCalls.map((c) => c.method + ' ' + c.url)));
+
+      // 已归档那一组默认收起
+      window.renderProjects();
+      await new Promise((r) => setTimeout(r, 60));
+      proj3 = $('projects');
+      const toggle = proj3.querySelector('.pj-sess-arch-toggle');
+      check('会话：已归档的收进折叠组（默认不列出来）', () => {
+        const titles = [...proj3.querySelectorAll('.pj-sess-title')].map((t) => t.textContent);
+        return (toggle && toggle.textContent.includes('已归档 1 条') && !titles.includes('上周的排查记录')) || JSON.stringify(titles);
+      });
+      check('会话：折叠组的标题里没有绝对路径', () =>
+        !/[A-Za-z]:\\|[A-Za-z]:\//.test(toggle ? toggle.textContent : '') || '出现了疑似路径');
+      toggle.onclick();
+      await new Promise((r) => setTimeout(r, 20));
+      check('会话：展开折叠组后能看到已归档那条', () => {
+        const titles = [...proj3.querySelectorAll('.pj-sess-title')].map((t) => t.textContent);
+        return titles.includes('上周的排查记录') || JSON.stringify(titles);
+      });
+      check('会话：已归档那条的动作是「取消归档」', () => {
+        const r = [...proj3.querySelectorAll('.pj-sess')].find((x) => x.textContent.includes('上周的排查记录'));
+        const t = r && r.querySelector('.pj-sess-act');
+        return Boolean(t && t.title === '取消归档') || (t ? t.title : '找不到那一行');
+      });
+
+      // 删除：必须先二次确认
+      sessionCalls.length = 0;
+      const delRow = [...proj3.querySelectorAll('.pj-sess')].find((x) => x.textContent.includes('帮我写个登录功能'));
+      delRow.querySelector('.pj-sess-act.danger').onclick({ stopPropagation() {} });
+      await new Promise((r) => setTimeout(r, 20));
+      check('会话：删除先弹二次确认（不是点一下就删）', () =>
+        $('confirmLayer').hidden === false || '没有弹确认框');
+      check('会话：删除确认文案说明文件没被抹掉', () =>
+        /回收站/.test($('confirmCard').textContent) || $('confirmCard').textContent);
+      check('会话：未确认时不发删除请求', () =>
+        !sessionCalls.some((c) => /\/delete/.test(c.url)) || '未确认就发了请求');
+      $('confirmCard').querySelector('.btn.danger').onclick();
+      await new Promise((r) => setTimeout(r, 80));
+      const del = sessionCalls.find((c) => /\/delete/.test(c.url));
+      check('会话：确认后 → POST /api/sessions/delete（传 ID）', () =>
+        Boolean(del && del.body.id === 'bbbbbbbbbbbbbbbb') ||
+        JSON.stringify(sessionCalls.map((c) => c.method + ' ' + c.url)));
+      check('会话：删除后确认框关掉了', () => $('confirmLayer').hidden === true || '确认框还开着');
     }
   }
 
@@ -3301,6 +3468,25 @@ staticCheck();
     es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 501, _seq: 10008, data: restored });
     check('重复历史重建仍只有一份消息', () => window.document.querySelectorAll('.msg.user').length === 1);
     window.fetch = baseFetch;
+  }
+
+  /* --- 会话一变就要重画侧栏列表 ---
+   *
+   * 回归守卫。列表原本只在 renderProjects() 里渲染，而 new_session / fork /
+   * 切换都不触发它 —— 于是列表停在旧状态：旧会话仍然带着 current 标记，
+   * 而当前项是**不给点**的（你已经在里面了），用户就再也回不到那条对话。
+   * 用户的原话是「开新对话了，旧对话就消失」。
+   *
+   * 放在最后：afterSessionSwitch 会 clearThread()，前面所有用例都依赖线程状态。 */
+  {
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 60));
+    sessionCalls.length = 0;
+    window.onResponse({ type: 'response', command: 'new_session', success: true });
+    await new Promise((r) => setTimeout(r, 80));
+    check('会话：new_session 之后侧栏列表会重画（回归守卫）', () =>
+      sessionCalls.some((c) => c.method === 'GET' && /\/api\/sessions$/.test(c.url)) ||
+      JSON.stringify(sessionCalls.map((c) => c.method + ' ' + c.url)));
   }
 
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));

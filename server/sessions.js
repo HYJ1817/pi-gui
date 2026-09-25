@@ -33,6 +33,9 @@ import { json, readBody } from './http-utils.js';
 const MAX_READ_BYTES = 4 * 1024 * 1024;
 const MAX_TITLE = 80;
 const MAX_SESSIONS = 200;
+const MAX_FLAGS = 5000;
+const FLAGS_FILE = 'session-flags.json';
+const TRASH_DIR = 'trash-sessions';
 
 /** 稳定 ID：路径的 sha1 前 16 位（与 skills.js 同一个做法）。 */
 function sessionId(file) {
@@ -74,10 +77,20 @@ function textOf(content) {
     .trim();
 }
 
-export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null } = {}) {
+export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null } = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, '.pi', 'agent');
   const ROOT = path.join(AGENT_DIR, 'sessions');
+
+  /* 归档与回收站是 **Pi GUI 自己的**状态，pi 根本没有这两个概念 ——
+   * 所以不往 pi 的目录里塞任何东西，只记在我们自己的数据目录里
+   * （`<PI_GUI_DATA>/session-flags.json` + `trash-sessions/`）。
+   *
+   * 记的是 pi 的 sessionId（header 里的 UUID）而不是我们自己那个
+   * 「路径 sha1」ID：前者跟着会话走，文件挪了位置也不会失配。 */
+  const DATA = dataDir || path.join(AGENT_DIR, '.pi-gui');
+  const FLAGS = path.join(DATA, FLAGS_FILE);
+  const TRASH = path.join(DATA, TRASH_DIR);
 
   /** pi 把 cwd 编码成目录名。只用来**缩小扫描范围**，不用来判定归属。 */
   function dirNameFor(cwd) {
@@ -204,11 +217,41 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     /* 当前会话从 pi 那里问（get_state 给 sessionFile），而不是靠猜 ——
      * 「界面显示的是哪个会话」只有 pi 自己说了算。 */
     let currentFile = null;
+    let curState = null;
     if (rpc && typeof rpc.request === 'function') {
       const st = await rpc.request({ type: 'get_state' });
-      if (st && !st.__error && st.sessionFile) currentFile = String(st.sessionFile);
+      if (st && !st.__error && st.sessionFile) {
+        currentFile = String(st.sessionFile);
+        curState = st;
+      }
     }
     const currentId = currentFile ? sessionId(currentFile) : null;
+
+    /* ⚠️ pi 在会话还没有任何内容时**不落盘**。
+     * 实测（`.probe/probe-sessions-new.cjs`）：`new_session` 之后 get_state 已经
+     * 给出了新的 sessionFile，但那个文件在磁盘上还不存在，要等第一条消息才写。
+     * 只按磁盘文件列的话，刚开的空会话不在列表里 ⇒ 界面上「当前项」仍然是旧会话，
+     * 而当前项是不给点的（你已经在里面了）⇒ **用户再也回不到旧对话**，
+     * 症状就是「开个新对话，旧对话就消失了」。
+     * 所以把 pi 报的当前会话补进来，标成 pending（磁盘上还没有这个文件）。 */
+    if (currentId && !sessions.some((s) => s.id === currentId)) {
+      sessions.unshift({
+        id: currentId,
+        file: currentFile,
+        sessionId: curState && curState.sessionId ? String(curState.sessionId) : '',
+        cwd,
+        createdAt: null,
+        lastMessageAt: null,
+        updatedAt: Date.now(),
+        messageCount: curState && typeof curState.messageCount === 'number' ? curState.messageCount : 0,
+        title: String((curState && curState.sessionName) || '').trim() || '新会话（还没有消息）',
+        truncated: false,
+        bytes: 0,
+        pending: true,
+      });
+    }
+
+    const archivedKeys = new Set(readFlags().archived);
 
     /* 只回 currentId，**不回 currentFile / cwd**。
      * 会话文件的绝对路径没有必要给前端 —— 切换只认我们自己发的 ID，
@@ -228,6 +271,10 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
         updatedAt: s.updatedAt,
         messageCount: s.messageCount,
         current: s.id === currentId,
+        /* pending = 磁盘上还没有这个文件（刚开的新会话）。这种条目不能切、
+         * 不能归档、不能删 —— 界面上也就不给它那些动作。 */
+        pending: Boolean(s.pending),
+        archived: !s.pending && archivedKeys.has(s.sessionId || s.id),
         truncated: s.truncated,
       })),
     };
@@ -247,6 +294,133 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       return s;
     }
     return null;
+  }
+
+  /* ---------- 归档 / 删除（Pi GUI 自己的状态，不碰 pi） ---------- */
+
+  /** 读 flags。坏文件一律当空的 —— 不能因为一个坏文件就让整个会话列表打不开。 */
+  function readFlags() {
+    try {
+      const j = JSON.parse(fs.readFileSync(FLAGS, 'utf8'));
+      return {
+        archived: Array.isArray(j.archived) ? j.archived.filter((x) => typeof x === 'string') : [],
+        deleted: Array.isArray(j.deleted) ? j.deleted.filter((x) => x && typeof x === 'object') : [],
+      };
+    } catch {
+      return { archived: [], deleted: [] };
+    }
+  }
+
+  /** 原子写（同目录临时文件 → rename）。保留版本号，方便以后改格式。 */
+  function writeFlags(flags) {
+    const body = JSON.stringify(
+      {
+        version: 1,
+        archived: [...new Set(flags.archived)].slice(-MAX_FLAGS),
+        deleted: flags.deleted.slice(-MAX_FLAGS),
+      },
+      null,
+      2
+    );
+    fs.mkdirSync(DATA, { recursive: true });
+    const tmp = `${FLAGS}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, body, 'utf8');
+    fs.renameSync(tmp, FLAGS);
+  }
+
+  /** flags 里用的键：pi 的 sessionId 优先（稳定），退到我们自己的路径 ID。 */
+  const flagKey = (s) => s.sessionId || s.id;
+
+  /** 问 pi 当前会话是哪个（只回我们的稳定 ID，不回路径）。 */
+  async function currentSessionId() {
+    if (!rpc || typeof rpc.request !== 'function') return null;
+    const st = await rpc.request({ type: 'get_state' });
+    if (!st || st.__error || !st.sessionFile) return null;
+    return sessionId(String(st.sessionFile));
+  }
+
+  /**
+   * 归档 / 取消归档。
+   * 归档只影响**我们的列表**：文件原地不动，pi 也照旧看得见它。
+   * 这样「归档」是可逆的纯组织动作，不会让 pi 的 --continue 行为变得不可预测。
+   */
+  async function setArchived(id, archived) {
+    const target = resolveId(id);
+    if (!target) return { ok: false, error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
+    if (archived) {
+      const cur = await currentSessionId();
+      if (cur && cur === sessionId(target.file)) {
+        return { ok: false, error: '不能归档正在进行的会话 —— 先切到别的会话再归档' };
+      }
+    }
+    const key = flagKey(target);
+    const flags = readFlags();
+    const set = new Set(flags.archived);
+    if (archived) set.add(key);
+    else set.delete(key);
+    flags.archived = [...set];
+    try {
+      writeFlags(flags);
+    } catch (err) {
+      return { ok: false, error: '写不进归档记录：' + String(err.message || err) };
+    }
+    return { ok: true, id, archived: Boolean(archived), title: target.title };
+  }
+
+  /**
+   * 删除（软删除）。
+   *
+   * **不是 unlink** —— 会话文件是用户真实的对话记录，一次误点不该是不可逆的。
+   * 把文件移进 `<PI_GUI_DATA>/trash-sessions/`，并把「原来是谁」记进 flags，
+   * 所以事后还能人工找回（README 里写了位置）。
+   *
+   * 当前会话拒绝删除：pi 正开着那个文件往里追加，删掉它等于把正在写的会话弄坏。
+   */
+  async function remove(id) {
+    const target = resolveId(id);
+    if (!target) return { ok: false, error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
+    const cur = await currentSessionId();
+    if (cur && cur === sessionId(target.file)) {
+      return { ok: false, error: '不能删除正在进行的会话 —— 先切到别的会话再删' };
+    }
+
+    const key = flagKey(target);
+    const name = `${key}.jsonl`;
+    const dest = path.join(TRASH, name);
+    try {
+      fs.mkdirSync(TRASH, { recursive: true });
+      try {
+        fs.renameSync(target.file, dest);
+      } catch (err) {
+        // 跨盘符时 rename 会 EXDEV —— 退到「复制 + 删原件」
+        if (err && err.code === 'EXDEV') {
+          fs.copyFileSync(target.file, dest);
+          fs.unlinkSync(target.file);
+        } else {
+          throw err;
+        }
+      }
+    } catch (err) {
+      return { ok: false, error: '删除失败：' + String(err.message || err) };
+    }
+
+    try {
+      const flags = readFlags();
+      flags.archived = flags.archived.filter((x) => x !== key);
+      flags.deleted.push({
+        sessionId: key,
+        title: target.title,
+        cwd: target.cwd,
+        messageCount: target.messageCount,
+        bytes: target.bytes,
+        deletedAt: Date.now(),
+        trashedAs: name,
+      });
+      writeFlags(flags);
+    } catch {
+      /* 文件已经移走了，元数据没记上不该把删除报成失败 —— 只是少了可追溯性 */
+    }
+    return { ok: true, id, title: target.title };
   }
 
   async function switchTo(id) {
@@ -269,6 +443,23 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     return { ok: true, name: clean };
   }
 
+  /** 解析 POST body 并取出会话 ID。三条路由（switch / archive / delete）共用，
+   * 免得同一个校验复制三遍、各自漏一条。 */
+  async function readId(req) {
+    const raw = await readBody(req).catch((err) => ({ __tooBig: String(err.message || err) }));
+    if (raw && raw.__tooBig) return { err: { status: 413, body: { ok: false, error: raw.__tooBig } } };
+    let body;
+    try {
+      body = JSON.parse(raw || '{}');
+    } catch {
+      return { err: { status: 400, body: { ok: false, error: '请求体不是合法 JSON' } } };
+    }
+    if (typeof body.id !== 'string' || !body.id || body.id.length > 64) {
+      return { err: { status: 400, body: { ok: false, error: '缺少合法的会话 ID' } } };
+    }
+    return { id: body.id, body };
+  }
+
   async function handle(req, res, url) {
     const p = url.pathname;
     if (p === '/api/sessions') {
@@ -282,19 +473,10 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     }
     if (p === '/api/sessions/switch') {
       if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
-      const raw = await readBody(req).catch((err) => ({ __tooBig: String(err.message || err) }));
-      if (raw && raw.__tooBig) return json(res, 413, { ok: false, error: raw.__tooBig });
-      let body;
-      try {
-        body = JSON.parse(raw || '{}');
-      } catch {
-        return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
-      }
-      if (typeof body.id !== 'string' || !body.id || body.id.length > 64) {
-        return json(res, 400, { ok: false, error: '缺少合法的会话 ID' });
-      }
-      const r = await switchTo(body.id);
-      return json(res, r.ok ? 200 : 200, r);
+      const { id, err } = await readId(req);
+      if (err) return json(res, err.status, err.body);
+      // 业务失败一律回 200 + ok:false —— 前端只看 ok 字段，不必分辨状态码
+      return json(res, 200, await switchTo(id));
     }
     if (p === '/api/sessions/name') {
       if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
@@ -305,11 +487,33 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       } catch {
         return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
       }
-      const r = await rename(body.name);
-      return json(res, 200, r);
+      return json(res, 200, await rename(body.name));
+    }
+    if (p === '/api/sessions/archive') {
+      if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
+      const { id, body, err } = await readId(req);
+      if (err) return json(res, err.status, err.body);
+      return json(res, 200, await setArchived(id, body.archived !== false));
+    }
+    if (p === '/api/sessions/delete') {
+      if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
+      const { id, err } = await readId(req);
+      if (err) return json(res, err.status, err.body);
+      return json(res, 200, await remove(id));
     }
     return json(res, 404, { ok: false, error: 'Not found' });
   }
 
-  return { handle, list, switchTo, rename, _internals: { sessionId, dirNameFor, summarize, normCwd }, root: ROOT, agentDir: AGENT_DIR };
+  return {
+    handle,
+    list,
+    switchTo,
+    rename,
+    setArchived,
+    remove,
+    _internals: { sessionId, dirNameFor, summarize, normCwd, readFlags, writeFlags },
+    root: ROOT,
+    agentDir: AGENT_DIR,
+    dataDir: DATA,
+  };
 }

@@ -180,8 +180,9 @@ const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
 
 /* 会话列表。pi 的 RPC 里有 switch_session 却没有「列出会话」——
  * 它的 TUI picker 不对外，所以列表得我们自己扫 <agentDir>/sessions/。
- * 归属判定只认每个会话文件 header 里的 cwd，不信目录名。 */
-const sessions = createSessions({ runtime, rpc, env: process.env });
+ * 归属判定只认每个会话文件 header 里的 cwd，不信目录名。
+ * 归档 / 回收站是 Pi GUI 自己的状态，落在 <PI_GUI_DATA>/（不进 pi 的目录）。 */
+const sessions = createSessions({ runtime, rpc, env: process.env, dataDir: DATA_DIR });
 
 /* Planner / Multi-Agent 编排层（P5）。
  *

@@ -60,7 +60,7 @@ export function onResponse(evt) {
       return;
     case 'new_session':
       afterSessionSwitch();
-      toast('已开始新会话（旧会话还在，「会话」面板里可以切回去）', 'info');
+      toast('已开始新会话（旧会话还在侧栏项目下面，点一下就能切回去）', 'info');
       return;
     case 'fork':
       afterSessionSwitch();
@@ -129,19 +129,34 @@ export async function stop() {
 
 export const newSession = () => sendCommand({ type: 'new_session' });
 
+/* 会话列表的刷新回调。
+ *
+ * 用注册而不是 import：sessions.js 要 import 本模块的 afterSessionSwitch，
+ * 本模块再 import 回去就成环了（ESM 链接器会把环断掉，症状是「某个导出是 undefined」）。
+ * 由 app.js 在装配阶段把 sessions.js 的 refreshSidebarSessions 注进来。 */
+let refreshSessionList = () => {};
+export function setSessionListRefresh(fn) {
+  refreshSessionList = typeof fn === 'function' ? fn : () => {};
+}
+
 /**
  * 会话换掉之后要做的界面收尾：清空对话区与变更账本，再 boot() 按新会话重建。
  *
- * 抽出来是因为**有两条路径**都会换会话：pi 主动报的 `new_session` / `fork`
- * （走 onResponse），以及用户在「会话」面板里切到某个旧会话（走后端 HTTP，
- * 不经过这里）。两条路径必须做同一件事 —— 否则切完会话界面还挂着上一个会话的
- * 消息，看起来就像「切了但没生效」。
+ * 抽出来是因为**有三条路径**都会换会话：pi 主动报的 `new_session` / `fork`
+ * （走 onResponse）、以及用户在侧栏点某条旧会话（走后端 HTTP，不经过这里）。
+ * 三条路径必须做同一件事 —— 否则切完会话界面还挂着上一个会话的消息，
+ * 看起来就像「切了但没生效」。
+ *
+ * ⚠️ **必须顺带重画侧栏的会话列表**：列表只在 renderProjects() 里渲染，
+ * 不在这里刷的话它会停在旧状态 —— 旧会话仍然带着 current 标记，而当前项是
+ * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
 export function afterSessionSwitch() {
   clearThread();
   // 换了一条工作线，上一段的文件变更记录不再适用。
   // 注意 fork 也不清：分叉不改磁盘，之前改过的文件依然处于改动状态。
   clearChanges();
+  refreshSessionList();
   setTimeout(boot, 250);
 }
 

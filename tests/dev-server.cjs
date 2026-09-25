@@ -104,6 +104,17 @@ async function waitReady(ms = 20000) {
       const confirm = z('.modal.confirm');
       return (Number.isFinite(base) && Number.isFinite(confirm) && confirm > base) || `.modal=${base} .modal.confirm=${confirm}`;
     });
+    /* 弹层滚动条：不写 ::-webkit-scrollbar 就落回浏览器默认那条浅色宽条，
+     * 压在深色卡片上比内容本身还显眼。jsdom 不套用外部样式表，测不出来，所以在这盯着。 */
+    check('styles.css 给弹层滚动条上了样式', () =>
+      /\.modal-card::-webkit-scrollbar\s*[,{]/.test(css.body) || '缺少 .modal-card::-webkit-scrollbar');
+    /* 分支弹层的「标题/说明/按钮固定 + 只有树体滚动」。
+     * 少了它整张卡片滚，节点一多底部按钮就被滚出可视区。 */
+    check('styles.css 有分支弹层的固定头尾布局', () => {
+      const m = css.body.match(/\.modal-card\.tree-modal\s*\{([^}]*)\}/);
+      if (!m) return '缺少 .modal-card.tree-modal';
+      return (/display\s*:\s*flex/.test(m[1]) && /overflow\s*:\s*hidden/.test(m[1])) || m[1].trim();
+    });
 
     /* 前端是原生 ES Module：app.js 只是入口，真正的代码在同目录的一堆模块里
      * （含 public/ui/ 子目录）。所以这里不能只看 app.js 的大小 ——

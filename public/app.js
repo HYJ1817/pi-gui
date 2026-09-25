@@ -33,6 +33,7 @@ import {
   respond,
   setModel,
   setSessionName,
+  setSessionListRefresh,
   setThinkingLevel,
   stop,
   submit,
@@ -57,7 +58,7 @@ import { applyProjectPreferences, openProjectSettings } from './project-config.j
 import { loadGitStatus, openChangesPanel } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
-import { renderSidebarSessions } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 
 /* ---------- 装配 ---------- */
@@ -69,6 +70,11 @@ setForkHandler(forkFrom);
 /* 会话列表挂在当前项目那一行下面（参考 Codex，不单开窗口）。
  * projects.js 不 import sessions.js，由这里把渲染函数递进去。 */
 setSessionsSlot(renderSidebarSessions);
+
+/* 会话一变（新开 / 分叉 / 切换）就要重画侧栏那块列表。
+ * rpc.js 不能 import sessions.js（sessions.js 已经 import 了 rpc.js，会成环），
+ * 所以同样由装配层把回调递进去。 */
+setSessionListRefresh(refreshSidebarSessions);
 
 /* 会话内提问导航：只装配一次（挂 scroll / resize / ResizeObserver）。
  * 标记本身由 messages.js 在渲染消息时注册。 */
