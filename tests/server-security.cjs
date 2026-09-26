@@ -94,11 +94,46 @@ async function waitUp(timeoutMs = 20000) {
   while (Date.now() < deadline) {
     try {
       const r = await fetch(ORIGIN + '/api/health');
-      if (r.status) return true;
+      const body = await r.json().catch(() => null);
+      /* 必须确认应答的就是我们的服务。原来只判断「r.status 有值」，
+       * 于是端口上任何一个还在跑的东西都能让它返回 true —— 见下面
+       * killServerAndWait 的说明，那正是「假红」的帮凶。 */
+      if (r.status && body?.app === 'pi-gui') return true;
     } catch {
       /* 还没起来 */
     }
     await sleep(300);
+  }
+  return false;
+}
+
+/** 这个端口现在能立刻 bind 上吗。 */
+function portFree(port) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
+/* 关掉服务，并**等端口真的空出来**再返回。
+ *
+ * 不能 kill 完 sleep 一个固定时长就算了：Windows 上 `taskkill /T /F` 是异步的，
+ * 实测端口要 **819–949ms** 才释放（.probe/race-server-kill.cjs 量了 6 轮）。
+ * 原来这里写死 sleep(1000)，余量只剩 50–180ms —— 机器一忙就超时：下一个
+ * server.js 启动时 EADDRINUSE 直接退出，而 waitUp() 又连到了**上一个还在跑的**
+ * 服务上。症状是全链条跑时偶发假红：「开发模式无令牌可访问」拿到 401、
+ * 「日志说明是开发模式」找不到文案；而「跨站 Origin → 403」那条反而照常通过
+ * （旧服务确实要求令牌）—— 这个组合就是它的指纹。
+ *
+ * 改成轮询到端口真空出来，不再依赖时长。 */
+async function killServerAndWait(state, timeoutMs = 15000) {
+  killServer(state);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await portFree(PORT)) return true;
+    await sleep(100);
   }
   return false;
 }
@@ -261,10 +296,8 @@ async function main() {
       return leaky.length === 0 || `可疑行：${leaky[0].trim()}`;
     });
   } finally {
-    killServer(st);
+    await killServerAndWait(st);
   }
-
-  await sleep(1000);
 
   /* ============ 无令牌（浏览器开发模式） ============ */
   st = startServer({ PI_GUI_TOKEN: '' });
@@ -280,10 +313,9 @@ async function main() {
 
     check('开发模式日志说明是开发模式', () => /开发模式/.test(st.out) || '没看到开发模式提示');
   } finally {
-    killServer(st);
+    await killServerAndWait(st);
   }
 
-  await sleep(600);
   try {
     fs.rmSync(DATA, { recursive: true, force: true });
   } catch {
