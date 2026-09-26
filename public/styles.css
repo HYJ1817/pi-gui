@@ -813,6 +813,23 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   border:1px solid var(--line-soft);border-radius:9px;background:#151515;padding:4px;
 }
 
+/* 诊断弹层：与 .changes / .ext / .tree-modal 同一套思路 —— 标题、说明、按钮固定，
+ * 只有中间的内容区滚动。用默认的 .modal-card（整卡滚）时，几行内容加上 JSON 预览
+ * 就把底部的「复制 / 导出 / 刷新 / 关闭」推出了可视区，想关掉得先滚到底。 */
+.modal-card:has(> .diag-body){
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.modal-card:has(> .diag-body) h3,
+.modal-card:has(> .diag-body) .modal-desc,
+.modal-card:has(> .diag-body) .modal-actions{flex:0 0 auto}
+.modal-card:has(> .diag-body) .modal-actions{margin-top:12px}
+.modal-card:has(> .diag-body) > .diag-body{flex:1 1 auto;min-height:0;overflow:auto}
+
+/* 选 :has(> .diag-body) 而不是给卡片加一个类，是因为 openModal() 只清 innerHTML、
+ * 不清 class —— 加在卡片上的类会在弹层之间残留（诊断之后打开别的弹层会继承这里的
+ * overflow:hidden 而被裁掉内容）。挂在内容容器上没有这个问题：内容一清，选择器
+ * 自然不再匹配。 */
+
 /* 统计表 */
 .stat-rows{display:flex;flex-direction:column;gap:1px;margin-bottom:14px}
 .stat-rows>div{

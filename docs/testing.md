@@ -32,7 +32,7 @@
 ```
 smoke 555 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · sessions 77 · body-integrity 5
-dev-server 19 · models-api 50 · server-security 36 · diagnostics · electron-guard 50
+dev-server 20 · models-api 50 · server-security 36 · diagnostics · electron-guard 50
 ```
 
 它们的共同约束（新加测试时要守住）：

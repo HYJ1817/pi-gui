@@ -147,6 +147,19 @@ async function waitReady(ms = 20000) {
       if (!m) return '缺少 .modal-card.tree-modal';
       return (/display\s*:\s*flex/.test(m[1]) && /overflow\s*:\s*hidden/.test(m[1])) || m[1].trim();
     });
+    /* 诊断弹层的固定头尾布局（同一个毛病：整卡滚，几行内容加 JSON 预览就把底部
+     * 「复制 / 导出 / 刷新 / 关闭」推出可视区，想关掉得先滚到底）。
+     * 这里两半都要验，只验其一是静默的：卡片那半管「头尾不动」，.diag-body 那半管
+     * 「中间还能滚」—— 只删掉后者，卡片依旧 display:flex / overflow:hidden，
+     * 内容会被直接裁掉且滚不动。 */
+    check('styles.css 有诊断弹层的固定头尾布局', () => {
+      const card = css.body.match(/\.modal-card:has\(>\s*\.diag-body\)\s*\{([^}]*)\}/);
+      if (!card) return '缺少 .modal-card:has(> .diag-body)';
+      if (!(/display\s*:\s*flex/.test(card[1]) && /overflow\s*:\s*hidden/.test(card[1]))) return card[1].trim();
+      const body = css.body.match(/\.modal-card:has\(>\s*\.diag-body\)\s*>\s*\.diag-body\s*\{([^}]*)\}/);
+      if (!body) return '缺少 .modal-card:has(> .diag-body) > .diag-body';
+      return (/flex\s*:\s*1\s+1\s+auto/.test(body[1]) && /overflow\s*:\s*auto/.test(body[1])) || body[1].trim();
+    });
 
     /* 前端是原生 ES Module：app.js 只是入口，真正的代码在同目录的一堆模块里
      * （含 public/ui/ 子目录）。所以这里不能只看 app.js 的大小 ——

@@ -75,6 +75,11 @@ function render(card, close, payload) {
     )
   );
 
+  /* 中间这一段（概览 / 健康检查 / Agent / JSON）是滚动区，
+   * 标题、说明与底部按钮固定 —— 见 styles.css 的 :has(> .diag-body)。
+   * 否则内容一多，底部四个按钮会被推出可视区。 */
+  const body = node('div', 'diag-body');
+
   const rows = node('div', 'stat-rows');
   rows.append(
     row('Pi GUI', d.app?.version),
@@ -85,16 +90,16 @@ function render(card, close, payload) {
     row('Bridge', d.project?.selected ? (d.bridge?.piRunning ? '运行中' : '未运行') : '未选择项目'),
     row('MCP', d.mcp?.supported === true ? '检测到相关模块' : d.mcp?.supported === false ? 'pi 无原生支持' : '未知')
   );
-  card.appendChild(rows);
+  body.appendChild(rows);
 
   const title = node('div', 'ext-sec-head', '健康检查');
-  card.appendChild(title);
+  body.appendChild(title);
   const checks = node('div', 'stat-rows');
   for (const check of d.checks || []) checks.appendChild(row(check.id, statusText(check.ok)));
-  card.appendChild(checks);
+  body.appendChild(checks);
 
   const agentsTitle = node('div', 'ext-sec-head', 'Agent');
-  card.appendChild(agentsTitle);
+  body.appendChild(agentsTitle);
   const agents = node('div', 'stat-rows');
   if (!(d.agents || []).length) {
     agents.appendChild(row('Agent', '未检测到'));
@@ -104,13 +109,15 @@ function render(card, close, payload) {
       agents.appendChild(row(a.id, status));
     }
   }
-  card.appendChild(agents);
+  body.appendChild(agents);
 
   const jsonTitle = node('div', 'ext-sec-head', '脱敏后的诊断 JSON');
-  card.appendChild(jsonTitle);
+  body.appendChild(jsonTitle);
   const pre = node('pre', 'ext-code', JSON.stringify(d, null, 2));
   pre.style.maxHeight = '240px';
-  card.appendChild(pre);
+  body.appendChild(pre);
+
+  card.appendChild(body);
 
   const actions = node('div', 'modal-actions');
   const copy = node('button', 'btn', '复制诊断 JSON');
