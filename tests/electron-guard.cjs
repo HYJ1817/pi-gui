@@ -332,9 +332,19 @@ async function main() {
       '前端没有走 preload 的桥，或用了 window.open'
     );
   });
+  /* 这条要问的是「前端有没有**发请求**给 GitHub」，不是「前端有没有提到 GitHub」。
+   *
+   * 原先写成裸子串扫描（`/api\.github\.com|github\.com\/HYJ1817/`），当时前端确实
+   * 一个字都不该提 GitHub。P5 之后前端**合法地**持有 host 白名单
+   * （`RELEASE_HOSTS` 里就有 `'api.github.com'`）—— 那是一份「允许打开哪些 host」
+   * 的名单，不是请求。子串扫描会把名单本身判成违规。
+   * 所以改成看**请求调用**，并额外挡住硬编码的 API URL。 */
   check('前端不直接访问 GitHub API（只打自己的后端）', () => {
     const src = fs.readFileSync(path.join(ROOT, 'public', 'update.js'), 'utf8');
-    return !/api\.github\.com|github\.com\/HYJ1817/.test(src) || '前端里出现了 GitHub 地址';
+    if (/https:\/\/api\.github\.com\//.test(src)) return '前端里出现了硬编码的 GitHub API URL';
+    const requests = [...src.matchAll(/\b(fetch|XMLHttpRequest|EventSource|sendBeacon)\s*\(([^\n]{0,160})/g)];
+    const bad = requests.filter((m) => /github/i.test(m[2]));
+    return bad.length === 0 || '前端里出现了指向 GitHub 的请求：' + bad.map((m) => m[0].slice(0, 70)).join(' | ');
   });
 
   console.log('');

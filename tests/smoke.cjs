@@ -4112,11 +4112,38 @@ staticCheck();
       (nEl ? nEl.innerHTML.slice(0, 200) : '没有 notes'));
     check('更新：notes 里的 <script> 原样显示为文本（不是被过滤掉，是语法上不成立）', () =>
       Boolean(nEl && nEl.textContent.includes('<script>alert(2)</script>')) || (nEl ? nEl.textContent.slice(0, 120) : ''));
-    check('更新：notes 里的 javascript: 链接不产生 <a>', () =>
-      Boolean(nEl && ![...nEl.querySelectorAll('a')].some((a) => /javascript:/i.test(a.getAttribute('href') || ''))) ||
-      'javascript: 变成了链接');
+    check('更新：notes 里的 javascript: 链接不产生任何可点元素', () =>
+      Boolean(
+        nEl &&
+          ![...nEl.querySelectorAll('a, [data-release-href]')].some((x) =>
+            /javascript:/i.test(x.getAttribute('href') || x.getAttribute('data-release-href') || '')
+          )
+      ) || 'javascript: 变成了可点元素');
 
-    /* 外链：页面只能说「请打开这个 URL」，判定在主进程 */
+    /* ---------- 外链：白名单在**渲染时**就生效 ----------
+     *
+     * 这一组是回归守卫。早先只在 click 上拦，于是有两条漏网的路：
+     *   ① 真 <a href> 的中键 / 右键菜单「在新标签页打开」根本不走 click；
+     *   ② 网页版（没有 piGuiDesktop）的 fallback 只检查 https://，
+     *      于是 notes 里的 https://evil.example/a.exe 会被真的打开。
+     * 现在白名单外的链接在渲染时就被降级成纯文本，白名单内的也不是真 <a>。 */
+    check('更新：notes 里的站外链接**退化成纯文本**（看得见原文，点不动）', () => {
+      const hrefs = [...nEl.querySelectorAll('a, [data-release-href]')].map(
+        (x) => x.getAttribute('href') || x.getAttribute('data-release-href') || ''
+      );
+      return (
+        (!hrefs.some((h) => h.includes('evil.example')) &&
+          nEl.textContent.includes('https://evil.example/a.exe')) ||
+        hrefs.join('|')
+      );
+    });
+    check('更新：notes 里一个真 <a> 都没有（中键 / 右键菜单绕不过校验）', () =>
+      nEl.querySelectorAll('a').length === 0 || `还有 ${nEl.querySelectorAll('a').length} 个 <a>`);
+    check('更新：notes 里的 GitHub 链接是白名单内的可点元素', () => {
+      const hits = [...nEl.querySelectorAll('[data-release-href]')].map((x) => x.getAttribute('data-release-href'));
+      return hits.includes('https://github.com/HYJ1817/pi-gui') || JSON.stringify(hits);
+    });
+
     const opened = [];
     window.piGuiDesktop = {
       openExternal: async (url) => {
@@ -4124,27 +4151,112 @@ staticCheck();
         return { ok: true };
       },
     };
-    const link = (needle) => [...nEl.querySelectorAll('a')].find((a) => (a.getAttribute('href') || '').includes(needle));
-    const evil = link('evil.example');
-    check('更新：notes 里的站外链接仍然渲染成可点的链接（由主进程决定放不放行）', () =>
-      Boolean(evil) || [...nEl.querySelectorAll('a')].map((a) => a.getAttribute('href')).join('|'));
-    if (evil) {
-      evil.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const ghLink = [...nEl.querySelectorAll('[data-release-href]')].find(
+      (x) => x.getAttribute('data-release-href') === 'https://github.com/HYJ1817/pi-gui'
+    );
+    if (ghLink) {
+      ghLink.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
       await sleep(20);
-      check('更新：notes 里的链接点击被拦下并交给主进程（页面自己不做导航）', () =>
-        opened.includes('https://evil.example/a.exe') || JSON.stringify(opened));
+      check('更新：点白名单内的 notes 链接会交给主进程（页面自己不做导航）', () =>
+        opened.includes('https://github.com/HYJ1817/pi-gui') || JSON.stringify(opened));
     } else {
-      check('更新：notes 里的链接点击被拦下并交给主进程（页面自己不做导航）', () => '没有可点的站外链接');
+      check('更新：点白名单内的 notes 链接会交给主进程（页面自己不做导航）', () => '没有白名单内的链接');
     }
 
-    /* 主进程拒绝时，界面必须说出来，不能静默 */
-    window.piGuiDesktop = { openExternal: async () => ({ ok: false, error: '已拒绝打开非 GitHub 官方链接' }) };
+    /* ---------- 前端白名单纯函数（网页版唯一的一道边界）---------- */
+    check('更新：前端 isSafeReleaseUrl 允许 GitHub 官方 host', () =>
+      window.isSafeReleaseUrl('https://github.com/HYJ1817/pi-gui/releases/tag/v0.12.0') &&
+      window.isSafeReleaseUrl('https://api.github.com/repos/x') &&
+      window.isSafeReleaseUrl('https://objects.githubusercontent.com/x') &&
+      window.isSafeReleaseUrl('HTTPS://GITHUB.COM/x') ||
+      '官方 host 被判成不安全');
+    check('更新：前端 isSafeReleaseUrl 拒绝第三方 host 与危险 scheme', () => {
+      const bad = [
+        'https://evil.example/a.exe',
+        'https://github.com.evil.example/x',
+        'https://evilgithubusercontent.com/x',
+        'https://user:pw@github.com/x',
+        'http://github.com/x',
+        'javascript:alert(1)',
+        'file:///C:/Windows/win.ini',
+        'data:text/html,<script>alert(1)</script>',
+        'ftp://github.com/x',
+        'not a url',
+      ];
+      const leaked = bad.filter((u) => window.isSafeReleaseUrl(u));
+      return leaked.length === 0 || '被放行：' + leaked.join(' , ');
+    });
+    /* 三份实现两两对拍：后端 ↔ 主进程在 tests/update-check.cjs，
+     * 前端 ↔ 主进程在这里 —— 传递出三份一致。 */
+    check('更新：前端白名单与主进程实现完全一致（三份实现不许漂开）', () => {
+      const cases = [
+        'https://github.com/x',
+        'https://api.github.com/x',
+        'https://objects.githubusercontent.com/x',
+        'https://raw.githubusercontent.com/x',
+        'https://evil.example/x',
+        'https://github.com.evil.example/x',
+        'https://evilgithubusercontent.com/x',
+        'https://user:pw@github.com/x',
+        'http://github.com/x',
+        'javascript:alert(1)',
+        'file:///C:/x',
+        'data:text/html,x',
+        'not a url',
+      ];
+      const probe = require('../electron/net-probe.cjs');
+      const drift = cases.filter((u) => window.isSafeReleaseUrl(u) !== probe.isSafeReleaseUrl(u));
+      return drift.length === 0 || '判定不一致：' + drift.join(' , ');
+    });
+
+    /* ---------- 网页版 fallback（没有 piGuiDesktop）----------
+     *
+     * 这是本轮修掉的那个缺口：网页版没有主进程可转发，
+     * **它自己就是最后一道边界**，所以必须执行同一套 https + GitHub host 白名单，
+     * 不能只检查 https://。
+     *
+     * 「有没有真的去打开」用桩掉 HTMLAnchorElement.prototype.click 来观察 ——
+     * 既拿到了确切证据，又不会让 jsdom 报 navigation not implemented 的噪声。 */
+    delete window.piGuiDesktop;
+    const clicked = [];
+    const origClick = window.HTMLAnchorElement.prototype.click;
+    window.HTMLAnchorElement.prototype.click = function () {
+      clicked.push(this.getAttribute('href'));
+    };
+    try {
+      $('toasts').innerHTML = '';
+      const evilR = await window.openExternal('https://evil.example/a.exe');
+      check('网页版：站外 host 被拒绝，且**没有**真的去打开', () =>
+        evilR.ok === false && clicked.length === 0 || `ok=${evilR.ok} clicked=${JSON.stringify(clicked)}`);
+      check('网页版：拒绝时明确说出来（不静默）', () =>
+        /已拒绝打开非 GitHub 官方链接/.test($('toasts').textContent) || $('toasts').textContent);
+
+      for (const bad of ['javascript:alert(1)', 'file:///C:/Windows/win.ini', 'data:text/html,x', 'http://github.com/x']) {
+        const r = await window.openExternal(bad);
+        check(`网页版：拒绝 ${bad.slice(0, 30)}`, () => r.ok === false || JSON.stringify(r));
+      }
+      check('网页版：所有被拒的都没产生打开动作', () =>
+        clicked.length === 0 || JSON.stringify(clicked));
+
+      const okR = await window.openExternal('https://github.com/HYJ1817/pi-gui/releases/tag/v0.12.0');
+      check('网页版：GitHub 官方链接正常放行（退化成新标签页）', () =>
+        okR.ok === true && clicked.length === 1 &&
+        clicked[0] === 'https://github.com/HYJ1817/pi-gui/releases/tag/v0.12.0' || JSON.stringify(clicked));
+    } finally {
+      window.HTMLAnchorElement.prototype.click = origClick;
+    }
+
+    /* 主进程拒绝时，界面必须说出来，不能静默。
+     * 桩的文案与上面「网页版」那组**故意不同** —— toast() 对同一条文案有 2.5 秒
+     * 去重，用同一句话会测成「被去重吃掉了」而不是「界面没说出来」。 */
+    const MAIN_DENY = '已拒绝打开非 GitHub 官方链接（主进程判定）';
+    window.piGuiDesktop = { openExternal: async () => ({ ok: false, error: MAIN_DENY }) };
     $('toasts').innerHTML = '';
     const anyBtn = [...$('modalCard').querySelectorAll('.update-acts .btn')].find((b) => b.textContent === '查看 Release');
     anyBtn.onclick();
     await sleep(20);
     check('更新：主进程拒绝打开时界面明确说明（不静默失败）', () =>
-      /已拒绝打开非 GitHub 官方链接/.test($('toasts').textContent) || $('toasts').textContent);
+      $('toasts').textContent.includes(MAIN_DENY) || $('toasts').textContent);
 
     /* 允许的情况：走的是 preload 的桥，不是 window.open */
     opened.length = 0;
