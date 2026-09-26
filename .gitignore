@@ -11,6 +11,11 @@ dist-app/
 # 要分发就走 GitHub Release 的附件，别用 git 传二进制。
 dist-installer/
 
+# 正式发布目录：只放要上传 GitHub Release 的那三个文件
+# （Pi-GUI-Setup-<v>.exe / Pi-GUI-<v>-portable.zip / SHA256SUMS.txt）。
+# 由 npm run release:collect 从 dist-installer 收集而来，同样是可再生的产物。
+dist-release/
+
 # 排查问题时随手写的小探针，不是项目的一部分
 .probe/
 

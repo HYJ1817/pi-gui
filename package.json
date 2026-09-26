@@ -12,7 +12,7 @@
     "app": "electron .",
     "icon": "node scripts/make-icon.mjs --preview",
     "icon:src": "electron scripts/make-icon-src.mjs",
-    "test": "node tests/smoke.cjs && node tests/git.cjs && node tests/modules.cjs && node tests/reliability.cjs && node tests/interactions.cjs && node tests/port-owner.cjs && node tests/project-config.cjs && node tests/skills.cjs && node tests/planner.cjs && node tests/sessions.cjs && node tests/session-search.cjs && node tests/pi-compat.cjs && node tests/body-integrity.cjs && node tests/dev-server.cjs && node tests/models-api.cjs && node tests/server-security.cjs && node tests/diagnostics.cjs && node tests/update-check.cjs && node tests/electron-guard.cjs",
+    "test": "node tests/smoke.cjs && node tests/git.cjs && node tests/modules.cjs && node tests/reliability.cjs && node tests/interactions.cjs && node tests/port-owner.cjs && node tests/project-config.cjs && node tests/skills.cjs && node tests/planner.cjs && node tests/sessions.cjs && node tests/session-search.cjs && node tests/pi-compat.cjs && node tests/body-integrity.cjs && node tests/dev-server.cjs && node tests/models-api.cjs && node tests/server-security.cjs && node tests/diagnostics.cjs && node tests/update-check.cjs && node tests/version-consistency.cjs && node tests/release-artifacts.cjs && node tests/electron-guard.cjs",
     "test:ui": "node tests/smoke.cjs",
     "test:body": "node tests/body-integrity.cjs",
     "test:server": "node tests/dev-server.cjs",
@@ -30,6 +30,8 @@
     "test:security": "node tests/server-security.cjs",
     "test:diagnostics": "node tests/diagnostics.cjs",
     "test:update": "node tests/update-check.cjs",
+    "test:version": "node tests/version-consistency.cjs",
+    "test:release": "node tests/release-artifacts.cjs",
     "test:guard": "node tests/electron-guard.cjs",
     "fixtures": "node tests/fixtures.mjs",
     "harness": "node tests/visual-harness.cjs",
@@ -50,7 +52,14 @@
     "build:installer": "node scripts/build-installer.mjs",
     "test:installer": "node tests/installer-check.cjs",
     "test:portable": "node tests/portable-check.cjs",
-    "build:dist": "npm run build:app && npm run build:installer -- --zip"
+    "build:dist": "npm run build:app && npm run build:installer -- --zip",
+    "version:set": "node scripts/set-version.mjs",
+    "version:check": "node scripts/check-version.mjs",
+    "release:collect": "node scripts/collect-release-artifacts.mjs",
+    "release:verify": "node scripts/check-release-artifacts.mjs",
+    "release:checksums": "node scripts/make-checksums.mjs",
+    "release:prepare": "node scripts/release-check.mjs --skip-tests",
+    "release:check": "node scripts/release-check.mjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
