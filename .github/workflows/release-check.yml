@@ -5,7 +5,23 @@
 # 再卸一遍。把它们塞进每次 push 只会让 CI 变慢变脆，而它们真正需要被验证的
 # 时机是「准备发版」，不是「改了一行代码」。
 #
-# 与 ci.yml 的分工见 docs/testing.md。
+# ---------- 与 release.yml / ci.yml 的分工 ----------
+#
+#   ci.yml            每次 push / PR：npm test + build:app + test:app + test:exe
+#   release-check.yml **本文件**：不创建 Release，只把完整发布路径跑一遍
+#                     （含安装程序 / 便携版 / 产物守卫 / 校验和）
+#   release.yml       tag 触发：跑同一套预检，**通过之后**才创建并发布 Release
+#
+# 三者调用的是**同一套 npm 脚本**（npm test / build:app / build:installer /
+# test:* / release:collect / release:verify），没有各自手写一份构建逻辑。
+# release.yml 更进一步，直接调那一条 `npm run release:check` 入口 ——
+# 所以本机跑通 release:check 就意味着这里也该通过。
+#
+# 为什么**不**挂 pull_request：完整跑一次要 45-60 分钟（真装真卸 + 打 430MB 产物），
+# 挂在每个 PR 上会让贡献者等到放弃。而 PR 需要的版本一致性守卫已经在
+# `npm test` 里（tests/version-consistency.cjs 与 tests/release-artifacts.cjs），
+# ci.yml 每次 push/PR 都会跑 —— 所以「改了版本号忘了同步 lock」「资产命名漂了」
+# 这类问题在 PR 阶段就能被拦住，不需要等这个 workflow。
 #
 # action 版本与 ci.yml 保持一致（都钉 v5，理由见 ci.yml 头部备注）。
 name: Release check
@@ -101,6 +117,16 @@ jobs:
       # 里的版本号，所以必须排在 build:app 之后。
       - name: Build installer and portable zip
         run: npm run build:installer -- --zip
+
+      # 把正式资产集中到 dist-release/ 并跑发布守卫 —— 与 release.yml 里
+      # `npm run release:check` 最后两步完全同一套脚本。
+      # 目的：在这里就能发现「资产命名漂了 / 校验和与文件对不上 / 混进了
+      # 调试文件 / 版本号对不上」，而不是等 tag 推上去之后。
+      - name: Collect release artifacts
+        run: npm run release:collect
+
+      - name: Verify release artifacts
+        run: npm run release:verify
 
       - name: Verify portable zip
         run: npm run test:portable

@@ -1,0 +1,188 @@
+# 正式发布：**只由 tag 触发**。
+#
+#   git tag v0.13.0 && git push origin v0.13.0
+#
+# ---------- 为什么不挂 push main ----------
+#
+# 「每次合并到 main 就自动发版」是不可接受的：版本号必须由人决定，而 main 上
+# 的提交大多不是发版。见 docs/releasing.md 的「版本号必须在 tag 之前进仓库」——
+# 这个 workflow **不会**根据 tag 去改 package.json。tag 只是证明
+# 「这个 commit 就是 0.13.0」，它必须已经在代码里声明过了。
+#
+# ---------- 失败不留半成品 ----------
+#
+# 顺序刻意是「**全部验证通过之后**才碰 GitHub」：
+#   版本/tag 一致性 → npm test → 构建 → 产物守卫 → 创建 draft → 上传 → 核对 → 发布
+# 所以任何一个验证步骤失败时，**根本还没有 Release**。
+#
+# 真正需要 draft 的只有「上传」这一段：上传可能中途失败，而 GitHub 没有事务。
+# 用 draft 兜住它：draft 对用户不可见，上传 + 核对全过了才 publish。
+# 核对用的是 GitHub 自己算的 sha256（见 scripts/verify-uploaded-release.mjs），
+# 所以「传上去的字节 == 本地验证过的字节」是验过的，不是假设的。
+#
+# 重复执行：tag 上已经有**已发布**的 Release → 直接失败，绝不覆盖已发布的二进制。
+# 只剩一个 draft → 复用它（那是上一次失败的残留，draft 对用户不可见）。
+#
+# ---------- 权限 ----------
+#
+# 只开 contents: write（创建 Release / 上传附件需要）。
+# 不需要 issues / pull-requests / actions / packages，所以一个都不给。
+# 用内置的 GITHUB_TOKEN，**不用个人 PAT** —— PAT 会绕过分支保护、无法随仓库
+# 转移、也容易过期。
+#
+# action 版本与 ci.yml 保持一致（都钉 v5，理由见 ci.yml 头部备注）。
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  # 发版不能中途取消 —— 取消一个正在上传的 Release 只会留下更难收拾的状态。
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, verify and publish
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      # gh 读 GH_TOKEN。这里用的是内置的 GITHUB_TOKEN，不是 PAT。
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # NSIS 不在 windows-latest 的预装清单里，而 build:installer 需要 makensis。
+      # 装完之后 scripts/build-installer.mjs 的 findMakensis() 会在
+      # `C:\Program Files (x86)\NSIS\makensis.exe` 找到它（它本来就列了这个候选）。
+      - name: Install NSIS
+        run: choco install nsis --no-progress -y
+
+      # ---------------------------------------------------------------- 预检
+      #
+      # **一条命令**跑完「打 tag 之前该做的事」，本机与 CI 跑的是同一套：
+      #   版本一致性（含 tag 必须等于 v<package.json 的 version>）
+      #   → npm test
+      #   → build:app / build:installer --zip
+      #   → test:app / test:exe / test:portable / test:installer
+      #   → 集中到 dist-release/ + 产物守卫 + 独立复算 SHA256
+      #
+      # --with-installer 是必须的：安装程序是「构建成功但一跑就废」的重灾区，
+      # 只有真装一遍才验得出来。runner 是一次性虚拟机，装完即弃。
+      #
+      # 版本一致性在这里**带 tag 校验**：tag 与 package.json 不一致就直接失败，
+      # 绝不「猜一个版本然后继续」。
+      - name: Release precheck (version, tests, build, artifact guards)
+        run: npm run release:check -- --tag=${{ github.ref_name }} --with-installer
+
+      # ------------------------------------------------- draft：只在这一段用
+      - name: Create or reuse draft release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          STATE=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || echo missing)
+          case "$STATE" in
+            true)
+              echo "已存在 draft Release $TAG —— 复用它（上一次运行留下的，draft 对用户不可见）"
+              ;;
+            false)
+              echo "::error::Release $TAG 已经发布过了。请人工处理（不要覆盖已发布的二进制）。"
+              exit 1
+              ;;
+            *)
+              echo "创建 draft Release $TAG"
+              gh release create "$TAG" --draft --title "Pi GUI $TAG" --generate-notes
+              ;;
+          esac
+
+      # 只上传 dist-release/ —— 那是 release:check 刚验证过的那几个文件。
+      # 不对整个项目做 glob：发布目录的白名单就是「什么算正式资产」的定义。
+      - name: Upload assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la dist-release
+          gh release upload "${{ github.ref_name }}" dist-release/* --clobber
+
+      # 上传的退出码是 0 只说明「这条命令跑完了」。这里把 GitHub 报告的
+      # 附件名 / 大小 / sha256 与本地逐项比对 —— 不一致就**停在这里**，
+      # 此时还只是 draft，用户可以完全不知道它存在过。
+      - name: Verify uploaded assets against local
+        run: node scripts/verify-uploaded-release.mjs --tag=${{ github.ref_name }}
+
+      # Release 页面上要说清每个附件是什么 —— 光有文件名，用户得自己猜。
+      # 用 <版本> 占位而不是插真实版本号：这样这段文案永远不需要跟着发版改。
+      - name: Append asset description
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          gh release view "$TAG" --json body -q .body > body.md
+          cat >> body.md << 'EOF'
+
+          ---
+
+          ## 交付物
+
+          | 文件 | 说明 |
+          | --- | --- |
+          | `Pi-GUI-Setup-<版本>.exe` | 安装程序（单用户，不弹 UAC）。装在 `%LOCALAPPDATA%\Programs\Pi GUI` |
+          | `Pi-GUI-<版本>-portable.zip` | 便携版，解压直接跑 `Pi GUI.exe`，不用装 |
+          | `SHA256SUMS.txt` | 上面两个文件的 SHA-256 校验和 |
+
+          下载后建议核一下（把 `<版本>` 换成实际版本号）：
+
+          ```powershell
+          certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
+          ```
+
+          与 `SHA256SUMS.txt` 里的值逐位比对。
+
+          卸载只删程序文件 —— `%APPDATA%\Pi GUI` 下的项目列表与窗口布局会保留。
+
+          ## 前置条件
+
+          界面本身不含 pi。**本机要先装好 pi 并配好模型供应商**：
+
+          ```bash
+          npm i -g @earendil-works/pi-coding-agent   # 需要 Node >= 22.19.0
+          pi --version
+          ```
+
+          否则界面能打开，但发出去的消息会报错。
+          EOF
+          gh release edit "$TAG" --notes-file body.md
+
+      # --------------------------------------------------------- 最后才发布
+      - name: Publish release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          gh release edit "$TAG" --draft=false
+          # 发布之后再确认一次：draft=false 且附件数没变。
+          # 「publish 命令退出 0」同样不构成完整成功判据。
+          node -e "
+            const { execFileSync } = require('node:child_process');
+            const tag = process.argv[1];
+            const j = JSON.parse(execFileSync('gh', ['release', 'view', tag, '--json', 'isDraft,assets,url'], { encoding: 'utf8' }));
+            if (j.isDraft !== false) { console.error('仍然是 draft'); process.exit(1); }
+            if ((j.assets || []).length !== 3) { console.error('附件数不是 3：' + (j.assets || []).length); process.exit(1); }
+            console.log('已发布：' + j.url + '（' + j.assets.length + ' 个附件）');
+          " "$TAG"
