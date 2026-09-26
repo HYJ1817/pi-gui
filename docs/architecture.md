@@ -214,6 +214,9 @@ get_messages ─┘
     错误信息不回显收到的值
   - `rpc-bridge.js` — pi 子进程：spawn / stdout JSONL 解析（**只按 LF 切分**）/
     stdin 写入 / 崩溃重启 / `request()` 配对。**令牌在这里从 pi 的环境里摘掉**
+  - `pi-compat.js` — **pi 兼容层**：能力探测、response 形状规范化、协议异常记录。
+    **只观察、不参与判断**，也不联网 / 不发请求 / 不碰磁盘 —— 证据全部来自
+    bridge 与 sessions 已有的链路。见 [pi-compatibility.md](pi-compatibility.md)
   - `sse.js` — 事件总线：clients / backlog / `_seq`。断线重连靠 `_seq` 去重
   - `runtime.js` — 共享运行态（`currentCwd` / `shuttingDown`）的**唯一权威**。
     拆模块最容易出的问题是 cwd 漂移，所以这两个变量只在这里存一份

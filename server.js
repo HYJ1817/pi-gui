@@ -49,6 +49,7 @@ import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
 import { createSessions } from './server/sessions.js';
 import { createSessionSearch } from './server/session-search.js';
+import { createPiCompat } from './server/pi-compat.js';
 import { createSkills } from './server/skills.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
@@ -127,6 +128,22 @@ const projectConfig = createProjectConfig({
   restartPi: () => rpc.restart(),
 });
 
+/* Pi 兼容层（P4）。
+ *
+ * 它在**最前面**建，因为 rpc-bridge 与 sessions 都要把它当观察者注入进去。
+ * 它只累积证据、不参与判断，所以谁先谁后不影响行为。
+ *
+ * 版本探测是**惰性**的（report() 被调用时才求值），所以这里引用后面才建的
+ * agentRegistry 不会踩 TDZ；万一真求值失败，pi-compat 自己会把它当「版本未知」，
+ * 而那**不是**判不兼容的理由（见该模块头部的规矩 1）。 */
+const piCompat = createPiCompat({
+  piVersionProbe: () => {
+    // 版本来自「本机已装的 pi 包」（读 package.json）—— 不跑 pi、不联网
+    const pi = agentRegistry.list().find((a) => a.id === 'pi');
+    return pi && pi.version ? pi.version : null;
+  },
+});
+
 /* pi 桥接。projectLaunch 就是 projectConfig 本身 —— rpc-bridge 只认
  * prepareLaunch()（spawn 前，允许写文件）与 launchArgs()（纯读）两个方法，
  * 不知道配置里有什么。见 server/rpc-bridge.js 的参数说明。 */
@@ -136,6 +153,7 @@ const rpc = createRpcBridge({
   piBin: PI_BIN,
   isWin: IS_WIN,
   projectLaunch: projectConfig,
+  compat: piCompat,
 });
 
 /* 依赖方向：projects → rpc 通过**注入回调**表达，而不是 import ——
@@ -184,7 +202,7 @@ const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
  * 它的 TUI picker 不对外，所以列表得我们自己扫 <agentDir>/sessions/。
  * 归属判定只认每个会话文件 header 里的 cwd，不信目录名。
  * 归档 / 回收站是 Pi GUI 自己的状态，落在 <PI_GUI_DATA>/（不进 pi 的目录）。 */
-const sessions = createSessions({ runtime, rpc, env: process.env, dataDir: DATA_DIR });
+const sessions = createSessions({ runtime, rpc, env: process.env, dataDir: DATA_DIR, compat: piCompat });
 
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
  * import，而搜索必须复用同一处归属判定（见 server/session-search.js 的文件头）。
@@ -243,6 +261,7 @@ const diagnostics = createDiagnostics({
   rpc,
   agentRegistry,
   mcp,
+  compat: piCompat,
   dataDir: DATA_DIR,
   version: VERSION,
   env: process.env,
@@ -263,6 +282,7 @@ const route = createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  compat: piCompat,
 });
 
 const server = http.createServer(route);

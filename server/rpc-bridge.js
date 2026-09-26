@@ -55,9 +55,33 @@ export function createRpcBridge({
   isWin,
   env = process.env,
   projectLaunch = null,
+  compat = null,
   spawnProcess = spawn,
   restartDelayMs = RESTART_DELAY_MS,
 }) {
+  /* 兼容层（P4，可选注入）。
+   *
+   * 它只**观察**，不参与任何判断 —— 桥接的行为一行都不因它改变。
+   * 三处喂证据：bridge_status（生命周期）、stdout 上来的每一条消息
+   * （信封 / 能力 / 未知事件）、以及解析失败的那一行。
+   * 全部包在 try 里：兼容层自己出问题绝不能影响 pi 的正常工作。 */
+  function observeCompat(fn) {
+    if (!compat) return;
+    try {
+      fn(compat);
+    } catch {
+      /* 观察失败就当没看见 —— 它只是个旁路 */
+    }
+  }
+
+  /* 所有往外发的事件都从这里过一遍。
+   * 这样不必在十来个 publish 调用点各加一行（那种改法以后新加一处就会漏）。 */
+  const rawPublish = publish;
+  publish = (evt) => {
+    if (evt && evt.type === 'bridge_status') observeCompat((c) => c.observeBridge(evt));
+    rawPublish(evt);
+  };
+
   let pi = null;
   let restartTimer = null;
   let restartRequested = false;
@@ -222,9 +246,13 @@ export function createRpcBridge({
         try {
           msg = JSON.parse(line);
         } catch {
+          observeCompat((c) => c.observeParseError());
           publish({ type: 'bridge_parse_error', raw: line.slice(0, 400) });
           continue;
         }
+        /* 兼容层先看一眼上游发了什么 —— 应答与事件都看。
+         * **放在配对之前**：后端自己发起的 request 的应答也要被观察到。 */
+        observeCompat((c) => c.observeUpstream(msg));
         /* 先看是不是某条挂起请求的应答。
          * 只认 type:"response" 且 id 在 pending 里 —— 事件（type 不是 response）
          * 和别人的应答都直接落到下面的 publish。 */

@@ -232,6 +232,7 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
+| [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、升级 pi 后怎么验 |
 
 ## 许可证
 

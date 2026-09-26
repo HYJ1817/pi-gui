@@ -36,6 +36,10 @@ let es = null;
  * 置空就能模拟「还没选项目」—— 后端此时不启动 pi，界面要整体切到引导形态。 */
 let stubCwd = 'C:\\pi-GUI';
 
+/* /api/status 里的**兼容摘要**（P4）。改它就能模拟「某个能力被证实不可用」；
+ * null = 后端没给这个字段（老后端 / 状态还没回来）→ 前端一律按可用处理。 */
+let stubCompat = null;
+
 /* /api/project-config 的可变桩。改 stubProjectConfig 就能模拟
  * 「有配置 / 没项目 / 模型失效 / 环境变量钉住 / 配置读坏了」各种状态。 */
 const CFG_DEFAULTS = { version: 1, model: null, thinking: null, instructions: '', ignore: [], commands: [] };
@@ -330,6 +334,7 @@ window.fetch = async (url, opts) => {
         cwd: stubCwd,
         args: ['--mode', 'rpc', '--continue'],
         hasProject: Boolean(stubCwd),
+        ...(stubCompat ? { compat: stubCompat } : {}),
       }),
     };
   }
@@ -3728,6 +3733,153 @@ staticCheck();
     }
 
     await typeIn('', 140); // 收尾：别把搜索状态留给后面的用例
+  }
+
+  /* --- 上游新增未知事件必须安全忽略 ---
+   *
+   * pi 以后会加事件类型。前端对不认识的事件是 switch 的 default: return ——
+   * 不抛、不重置 bridge、不清当前会话。代码「现在是安全的」不够，得有守卫拦住
+   * 以后有人把 default 改成别的（比如顺手 reset 一下）。
+   *
+   * ⚠️ 事件里的 bridgeRun **必须与当前值一致** —— 否则会被 stale 过滤丢掉，
+   * 这条守卫就变成「因为被过滤所以没事」的假绿。 */
+  {
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: 500, cwd: 'C:\\project-c' });
+    es.emit({
+      type: 'response',
+      command: 'get_messages',
+      success: true,
+      bridgeRun: 500,
+      _seq: 15000,
+      data: { messages: [{ role: 'user', content: [{ type: 'text', text: '未知事件守卫的锚点消息' }] }] },
+    });
+    await new Promise((r) => setTimeout(r, 80));
+
+    // 用**当前**的 bridgeRun 发未知事件，确保它们真的进了 handle()
+    const run = window.S.bridgeRun;
+    const before = {
+      run,
+      msgCount: window.document.querySelectorAll('.msg.user').length,
+      text: $('stream').textContent,
+      errs: errors.length,
+      conn: $('connText').textContent,
+    };
+    check('未知事件守卫：前置状态成立（有消息、bridgeRun 是数字）', () =>
+      (before.msgCount >= 1 && Number.isInteger(before.run)) || JSON.stringify(before));
+
+    let seq = 15100;
+    for (const type of ['brand_new_event', 'another_upstream_event', 'session_pinned', 'workspace_snapshot']) {
+      es.emit({ type, bridgeRun: before.run, _seq: seq++, payload: { anything: true }, someNewField: 1 });
+      es.emit({ type, bridgeRun: before.run, _seq: seq++, message: { role: 'user', content: [{ type: 'text', text: '不该被渲染' }] } });
+    }
+    await new Promise((r) => setTimeout(r, 100));
+
+    check('未知事件不产生运行时错误', () => errors.length === before.errs || errors.slice(before.errs).join(' | '));
+    check('未知事件不改 bridgeRun', () => window.S.bridgeRun === before.run || `${before.run} → ${window.S.bridgeRun}`);
+    check('未知事件不清当前会话（消息还在）', () =>
+      window.document.querySelectorAll('.msg.user').length === before.msgCount ||
+      `${before.msgCount} → ${window.document.querySelectorAll('.msg.user').length}`);
+    check('未知事件不把内容渲染进对话区', () => !$('stream').textContent.includes('不该被渲染') || '被渲染了');
+    check('未知事件不影响连接状态', () => $('connText').textContent === before.conn || $('connText').textContent);
+  }
+
+  /* --- 未知 response command 也必须安全忽略 --- */
+  {
+    const before = { errs: errors.length, text: $('stream').textContent };
+    es.emit({ type: 'response', command: 'brand_new_command', success: true, bridgeRun: window.S.bridgeRun, _seq: 15500, data: { whatever: 1 } });
+    await new Promise((r) => setTimeout(r, 80));
+    check('未知 response command 不抛', () => errors.length === before.errs || errors.slice(before.errs).join(' | '));
+    check('未知 response command 不改动对话区内容', () => $('stream').textContent === before.text || '对话区变了');
+    /* 注意：**失败的** `get_messages` 是另一回事 —— 它会刻意在对话区留一条说明
+     * （见下面「按能力局部降级」那一段），这里不重复断言。 */
+  }
+
+  /* --- P4：按能力局部降级 ---
+   *
+   * 三条规矩：① 只有**被证实不可用**的能力才降级（未验证 ≠ 不支持）；
+   * ② 没拿到兼容摘要时一律按可用处理；③ 降级要说清原因，不能点了没反应。 */
+  {
+    const proj = () => $('projects');
+
+    // ① 没有兼容摘要（老后端 / 状态还没回来）→ 一切照旧
+    stubCompat = null;
+    await window.loadStatus();
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 80));
+    check('降级：没有兼容摘要时改名入口照常出现（未验证 ≠ 不支持）', () => {
+      const cur = proj().querySelector('.pj-sess.on');
+      return Boolean(cur && cur.querySelector('.pj-sess-act')) || '改名入口不见了';
+    });
+
+    // ② sessionNaming 被证实不可用 → 藏起改名铅笔
+    stubCompat = { status: 'partial', missing: ['sessionNaming'] };
+    await window.loadStatus();
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 80));
+    check('降级：sessionNaming 不可用 → 隐藏改名入口', () => {
+      const cur = proj().querySelector('.pj-sess.on');
+      return !(cur && cur.querySelector('.pj-sess-act[title*="名字"]')) || '改名入口还在';
+    });
+
+    // ③ switchSession 被证实不可用 → 不给点，并说明原因
+    stubCompat = { status: 'partial', missing: ['switchSession'] };
+    await window.loadStatus();
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 80));
+    const other = () => [...proj().querySelectorAll('.pj-sess')].find((r) => !r.classList.contains('on') && !r.classList.contains('pending'));
+    check('降级：switchSession 不可用 → 会话行不给点', () => {
+      const o = other();
+      return (Boolean(o) && !o.onclick) || (o ? '仍可点' : '没有可切的会话行');
+    });
+    check('降级：禁用的会话行带 off 类并写明原因', () => {
+      const off = proj().querySelector('.pj-sess.pj-sess-off');
+      return Boolean(off && /没有提供/.test(off.title)) || (off ? off.title : '没有 off 类');
+    });
+
+    // ④ 核心能力不可用 → **一次性**明显提示（不做常驻横幅）
+    $('toasts').innerHTML = '';
+    stubCompat = { status: 'incompatible', missing: ['rpc', 'getState'] };
+    await window.loadStatus();
+    await new Promise((r) => setTimeout(r, 60));
+    check('降级：核心能力不可用时给一次明显提示', () => /关键能力不可用/.test($('toasts').textContent) || $('toasts').textContent.slice(0, 80));
+    check('降级：提示措辞说事实（不是「版本不支持」）', () => !/版本不支持/.test($('toasts').textContent) || '措辞在猜版本');
+
+    $('toasts').innerHTML = '';
+    await window.loadStatus();
+    await new Promise((r) => setTimeout(r, 60));
+    check('降级：同类提示不重复弹（不是每次回读状态都弹）', () => !/关键能力不可用/.test($('toasts').textContent) || '又弹了一次');
+
+    // ⑤ get_messages 失败 → 对话区留一条**留得住**的说明（不是只弹 toast）
+    //
+    // ⚠️ 这里**不能**用 `$('stream').innerHTML = ''` 清场：那会把 .thread 摘下来，
+    // 而 ensureThread() 只看 S.thread 引用、不检查它还挂不挂在 DOM 上 ——
+    // 后续重建就写进了一个脱离的节点（画面全空）。所以只断言「多出了这句话」。
+    const streamTextBefore = $('stream').textContent;
+    es.emit({
+      type: 'response',
+      command: 'get_messages',
+      success: false,
+      error: '上游没有这个命令',
+      bridgeRun: window.S.bridgeRun,
+      _seq: 15600,
+    });
+    await new Promise((r) => setTimeout(r, 60));
+    check('降级：历史读不出来 → 对话区留一条说明（而不是空白）', () =>
+      /无法读取历史消息/.test($('stream').textContent) || $('stream').textContent.slice(0, 80));
+    check('降级：这条说明是**追加**的，没有把已有内容冲掉', () =>
+      $('stream').textContent.indexOf(streamTextBefore.slice(0, 20)) === 0 ||
+      streamTextBefore === '' ||
+      '原有内容被替换了');
+
+    // 收尾：恢复成「没有兼容摘要」的常态
+    stubCompat = null;
+    await window.loadStatus();
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 80));
+    check('降级：恢复后改名入口回来了', () => {
+      const cur = proj().querySelector('.pj-sess.on');
+      return Boolean(cur && cur.querySelector('.pj-sess-act')) || '改名入口没回来';
+    });
   }
 
   await searchSection();

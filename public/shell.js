@@ -7,6 +7,7 @@
 import { el, S, ownsWorkspace } from './state.js';
 import { fetchStatus } from './api.js';
 import { updateSendState } from './composer.js';
+import { toast } from './ui/toast.js';
 
 export function setConn(kind, text) {
   el.conn.className = 'conn' + (kind ? ' ' + kind : '');
@@ -59,6 +60,20 @@ export function applyProjectState() {
   updateSendState();
 }
 
+/* 核心能力不可用时给**一次**明显提示。
+ *
+ * 刻意不做常驻横幅（§17）：这类问题少见，常驻的大警告会变成噪声。
+ * 措辞按事实说 —— 「关键能力不可用」，不说「pi 版本不支持」
+ * （那需要证据，而我们只有能力证据；版本号本身不参与判定）。 */
+let compatWarned = false;
+function warnIfIncompatible() {
+  if (compatWarned || !S.compat) return;
+  if (S.compat.status !== 'incompatible') return;
+  compatWarned = true;
+  const miss = (S.compat.missing || []).join('、');
+  toast(`pi 的关键能力不可用${miss ? '（' + miss + '）' : ''} —— 部分功能暂时用不了。详情见侧栏「诊断」。`, 'error');
+}
+
 /** 回读 /api/status。
  *  S.cwd 用于把相对路径补成绝对路径；hasProject 决定输入框解不解锁。 */
 export async function loadStatus(generation = S.workspaceGeneration) {
@@ -70,6 +85,9 @@ export async function loadStatus(generation = S.workspaceGeneration) {
     // hasProject 由后端显式给出；老后端没有这个字段时退回「cwd 非空」的判断
     S.hasProject = j.hasProject ?? Boolean(S.cwd);
     if (!S.switching && Number.isInteger(j.bridgeRun)) S.bridgeRun = j.bridgeRun;
+    /* 兼容摘要（P4）。老后端 / 单测没有这个字段 → 保持 null（= 全部按可用处理）。 */
+    S.compat = j.compat || null;
+    warnIfIncompatible();
   } else {
     S.cwd = '';
     S.hasProject = false;

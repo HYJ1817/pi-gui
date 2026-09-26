@@ -13,7 +13,7 @@ import { absPath } from './util.js';
 import { sendCommand } from './api.js';
 import { toast } from './ui/toast.js';
 import { setStatus } from './shell.js';
-import { clearThread, rebuildFromMessages } from './messages.js';
+import { clearThread, rebuildFromMessages, noteLoadFailure } from './messages.js';
 import { applyTree } from './tree.js';
 import { applyState, applyStats, onModels, onThinkingLevels } from './usage.js';
 import { autoGrow, updateSendState } from './composer.js';
@@ -35,6 +35,12 @@ export function onResponse(evt) {
   if (!evt.success) {
     if (evt.command !== 'get_available_thinking_levels') {
       toast(evt.error || `命令 ${evt.command} 执行失败`, 'error');
+    }
+    /* 历史读不出来时对话区会是一片空白 —— 用户会以为「对话丢了」。
+     * toast 会自己消失，所以再在对话区留一条**留得住**的说明。
+     * （降级路径之一：某些 pi 版本 / 构建可能没有 get_messages。） */
+    if (evt.command === 'get_messages') {
+      noteLoadFailure(`无法读取历史消息：${evt.error || '上游没有说明原因'}`);
     }
     // 设置类命令失败后，之前乐观更新的显示会与 pi 不一致，回读一次纠正
     if (evt.command === 'set_model' || evt.command === 'set_thinking_level') sendCommand({ type: 'get_state' });

@@ -90,6 +90,11 @@ export const S = {
   treeData: [],
   onStats: null,
   cwd: '',
+  /* Pi 兼容摘要（P4），由 /api/status 带回来：`{ status, missing[] }`。
+   * 只用来**局部降级**（某个能力确定不可用时藏起对应入口）。
+   * 还没拿到（null）时一律按「可用」处理 —— 宁可乐观，也不要因为状态没到
+   * 就把功能藏起来。 */
+  compat: null,
   attachments: [],
   ready: false,
   /* 有没有选项目。没有的话 pi 根本没启动（见 server.js 的 startPi），

@@ -65,6 +65,16 @@ function el(tag, cls, text) {
   return n;
 }
 
+/**
+ * 某个 pi 能力是否**已被证实**不可用（兼容层报告，见 server/pi-compat.js）。
+ *
+ * 没拿到兼容摘要时一律返回 false（= 按可用处理）。这是刻意的：**未验证 ≠ 不支持**，
+ * 而且宁可让用户点一下发现不行，也不要在状态还没回来时先把功能藏了。
+ */
+function capMissing(name) {
+  return Boolean(S.compat && Array.isArray(S.compat.missing) && S.compat.missing.indexOf(name) !== -1);
+}
+
 /* fmtTime 搬去了 util.js —— 搜索模块也要用同一套相对时间写法，
  * 各写一份会让同一个会话在侧栏和搜索结果里显示成两个时间。 */
 
@@ -257,7 +267,8 @@ function makeRow(s) {
   if (s.current) {
     // 改名只对当前会话有效（pi 的 set_session_name 就是只作用当前会话），
     // 所以铅笔只出现在这一条上 —— 不做一个做不到的按钮。
-    acts.append(actBtn('给当前会话起个名字', '✎', () => startRename(row, title, s)));
+    // 兼容层证实这个能力不可用时，连按钮都不给（见 capMissing 的说明）。
+    if (!capMissing('sessionNaming')) acts.append(actBtn('给当前会话起个名字', '✎', () => startRename(row, title, s)));
   } else if (!s.pending) {
     acts.append(
       actBtn(s.archived ? '取消归档' : '归档', s.archived ? '↩' : '⤓', () => doArchive(s, !s.archived))
@@ -266,7 +277,16 @@ function makeRow(s) {
   }
   if (acts.childElementCount) row.append(acts);
 
-  if (!s.current && !s.pending) row.onclick = () => doSwitch(s);
+  /* 切换会话要 pi 的 `switch_session`。它被证实不可用时不给点，并在 title 里
+   * 说明原因 —— 留一个点了毫无反应的入口比藏起来更让人困惑。 */
+  if (!s.current && !s.pending) {
+    if (capMissing('switchSession')) {
+      row.classList.add('pj-sess-off');
+      row.title = '当前 pi 没有提供「切换会话」能力（详情见侧栏「诊断」）';
+    } else {
+      row.onclick = () => doSwitch(s);
+    }
+  }
 
   return row;
 }
@@ -352,6 +372,10 @@ async function doSwitch(s, locateUserIndex = null) {
  */
 function pickResult(res, match) {
   if (!res) return;
+  if (capMissing('switchSession')) {
+    toast('当前 pi 没有提供「切换会话」能力（详情见侧栏「诊断」）', 'warn');
+    return;
+  }
   doSwitch({ id: res.id, title: res.title, archived: res.archived }, match ? match.userIndex : null);
 }
 

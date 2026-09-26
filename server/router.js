@@ -89,6 +89,7 @@ export function createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  compat = null,
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -128,7 +129,17 @@ export function createRouter({
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
     if (url.pathname === '/api/command' && req.method === 'POST') return handleCommand(req, res);
     if (url.pathname === '/api/status' && req.method === 'GET') {
-      return json(res, 200, rpc.getState());
+      const st = rpc.getState();
+      /* Pi 兼容摘要（P4）：前端据此**局部降级**（隐藏改名、禁用切换…）。
+       * 只加字段不删字段，老前端不受影响；没注入 compat 时（单测）就不加。 */
+      if (compat && typeof compat.summary === 'function') {
+        try {
+          st.compat = compat.summary();
+        } catch {
+          /* 兼容摘要拿不到不该让 /api/status 挂掉 */
+        }
+      }
+      return json(res, 200, st);
     }
     if (url.pathname === '/api/diagnostics') {
       return diagnostics.handle(req, res, url);

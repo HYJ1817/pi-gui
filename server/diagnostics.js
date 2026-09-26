@@ -77,6 +77,7 @@ export function createDiagnostics({
   rpc,
   agentRegistry,
   mcp,
+  compat = null,
   dataDir,
   version,
   env = process.env,
@@ -87,6 +88,31 @@ export function createDiagnostics({
   nodeVersion = process.version,
   now = () => new Date(),
 } = {}) {
+  /* Pi 兼容性报告（P4）。
+   *
+   * 报告本身**只含结构信息**（版本、能力三值、缺失清单、异常的字段名与类型）——
+   * 它在 pi-compat 里就从来没存过 payload。这里再走一遍递归脱敏是双保险。
+   * 没注入 compat（老调用方 / 单测）时给 null，不影响既有断言。 */
+  function compatBlock() {
+    if (!compat || typeof compat.report !== 'function') return null;
+    try {
+      const r = compat.report();
+      return {
+        status: r.status,
+        detected: r.detected,
+        piVersion: r.version,
+        versionKnown: r.versionKnown,
+        capabilities: r.capabilities,
+        missing: r.missing,
+        unverified: r.unverified,
+        protocol: r.protocol,
+        issues: r.issues,
+      };
+    } catch (err) {
+      return { status: 'unknown', detected: false, error: String((err && err.message) || err) };
+    }
+  }
+
   function readSnapshot() {
     const cwd = runtime?.getCurrentCwd?.() || null;
     const bridge = rpc?.getState?.() || {};
@@ -160,11 +186,15 @@ export function createDiagnostics({
         { id: 'project-writable', ok: cwd ? projectWritable : null },
         { id: 'pi-running', ok: cwd ? Boolean(bridge.piRunning) : null },
       ],
+      compatibility: compatBlock(),
       privacy: {
         absolutePathsIncluded: false,
         conversationContentIncluded: false,
         configFileContentIncluded: false,
         environmentIncluded: false,
+        /* 兼容层的异常只记「字段名 + 期望形状 + 实际类型」，不记 payload ——
+         * 这条是那个模块的硬规矩（见 server/pi-compat.js 头部规矩 3）。 */
+        protocolPayloadsIncluded: false,
         redactionApplied: true,
       },
     };

@@ -831,13 +831,21 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 自然不再匹配。 */
 
 /* 统计表 */
-.stat-rows{display:flex;flex-direction:column;gap:1px;margin-bottom:14px}
-.stat-rows>div{
+.stat-rows{display:flex;flex-direction:column;gap:1px;margin-bottom:14px}.stat-rows>div{
   display:flex;align-items:baseline;justify-content:space-between;gap:14px;
   padding:6px 10px;border-radius:6px;font-size:12px;color:var(--t2);
 }
 .stat-rows>div:nth-child(odd){background:#181818}
 .stat-rows b{font-weight:400;font-family:var(--mono);font-size:11.5px;color:#d0d0d0;text-align:right;word-break:break-all}
+/* 诊断面板里的值有「标签」语义：正常 / 不支持 / 未验证 要一眼分得开。
+ * 不支持用警示色，未验证用弱化色（未验证 ≠ 有问题）。 */
+.stat-rows b.warn{color:#f0a5a5}
+.stat-rows b.dim{color:var(--t3)}
+/* 兼容性区下面的说明（缺少的能力、协议异常）。等宽字体给操作名用。 */
+.diag-note{
+  font-size:11.5px;color:var(--t2);line-height:1.65;white-space:pre-wrap;
+  margin:2px 0 10px;padding-left:2px;
+}
 
 /* ============ 浮层（锚定在触发元素上方的弹层） ============ */
 
@@ -1392,6 +1400,11 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 淡化处理，并且不给它「切换 / 归档 / 删除」——那些动作现在都做不到。 */
 .pj-sess.pending{color:var(--t3);cursor:default}
 .pj-sess.pending .pj-sess-title{font-style:italic}
+
+/* 切换被禁用（兼容层证实 pi 不支持 switch_session）：不给点，淡一档。
+ * 不做成「看起来能点但点了没反应」—— 那种最让人困惑。 */
+.pj-sess.pj-sess-off{cursor:default;opacity:.55}
+.pj-sess.pj-sess-off:hover{background:transparent;color:var(--t2)}
 
 /* 「已归档 N 条」那一行：和上面进行中的会话隔开 */
 .pj-sess-arch-toggle{

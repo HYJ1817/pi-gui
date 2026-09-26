@@ -476,6 +476,17 @@ export function noteBlock(text) {
   return d;
 }
 
+/**
+ * 在对话区里留一条**留得住**的说明（历史读不出来时用）。
+ *
+ * 为什么不用 toast：toast 会自己消失，而且对话区仍然一片空白 —— 用户会以为
+ * 「对话丢了」。这条留在那里，直到下一次成功的历史重建把它清掉。
+ */
+export function noteLoadFailure(text) {
+  const t = ensureThread();
+  t.appendChild(noteBlock(text));
+}
+
 /* 重试开始时撤掉上一次留下的错误块（message_end 已经把 S.current 清空了，
  * 所以还要能回退到对话区里最后一条助手消息）。
  *

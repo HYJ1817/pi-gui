@@ -16,6 +16,9 @@ Pi GUI 的“诊断”面板用于把故障排查需要的运行状态收敛成�
 - pi 是否可用及版本
 - 已适配 Agent 的可用性、版本、不可用原因与 capability
 - MCP 能力检测的摘要
+- **Pi 兼容性报告**：pi 版本、兼容状态、九个能力的支持情况（支持 / 不支持 / 未验证）、
+  缺少的能力，以及最近若干条**协议异常**（只记操作名、字段名与类型）。见
+  [pi-compatibility.md](pi-compatibility.md)
 - 一组结构化健康检查
 
 接口为：
@@ -44,6 +47,11 @@ GET /api/diagnostics
 - 项目绝对路径
 - Pi GUI 数据目录绝对路径
 - HOME 绝对路径
+
+兼容性报告里的**协议异常也只记结构**：操作名、问题类型、字段名、以及「实际是什么
+类型 / 有哪些键」—— 对象只记键名、数组只记长度、其余只记 `typeof`。
+**从不记录原始 payload**，所以 prompt、模型回复、工具输出、密钥都不会进来。
+（那条规矩钉在 [pi-compatibility.md](pi-compatibility.md) 第六节。）
 
 Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含本机安装路径，而故障定位通常只需要 `available / version / reason / capabilities`。
 
@@ -84,6 +92,8 @@ npm run test:diagnostics
 测试会覆盖：
 
 - secret key 递归脱敏
+- 兼容性块：状态、三值能力、缺失清单（未验证的不进 missing）
+- 协议异常**不含 secret、不含绝对路径**，且异常对象的字段在白名单内
 - Bearer / sk token / 环境变量式 secret 脱敏
 - 项目和数据目录绝对路径不外泄
 - PID 不外泄

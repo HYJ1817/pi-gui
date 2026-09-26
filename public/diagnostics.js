@@ -9,13 +9,34 @@ function node(tag, cls = '', text = '') {
   return n;
 }
 
-function row(label, value) {
+function row(label, value, cls) {
   const r = node('div');
   const a = node('span', '', label);
   const b = node('b', '', value == null || value === '' ? '—' : value);
+  if (cls) b.className = cls;
   r.append(a, b);
   return r;
 }
+
+/* 能力的中文名。顺序即展示顺序（与后端 CAPABILITIES 一致）。 */
+const CAP_LABEL = {
+  rpc: 'RPC',
+  getState: '会话状态',
+  getMessages: '历史消息',
+  newSession: '新会话',
+  switchSession: '会话切换',
+  sessionNaming: '会话重命名',
+  toolEvents: 'Tool Events',
+  extensionUi: '扩展 UI',
+  sessionJsonl: '会话文件',
+};
+
+const COMPAT_STATUS = {
+  compatible: '正常',
+  partial: '部分兼容',
+  unknown: '未知',
+  incompatible: '不兼容',
+};
 
 function statusText(ok) {
   if (ok === true) return '正常';
@@ -92,9 +113,50 @@ function render(card, close, payload) {
   );
   body.appendChild(rows);
 
+  /* ---------- Pi 兼容性（P4） ----------
+   *
+   * 三值要分清楚：**未验证 ≠ 不支持**。没验证过只说明还没用到那个能力，
+   * 说成「不支持」是在冤枉上游。 */
+  if (d.compatibility) {
+    const c = d.compatibility;
+    body.appendChild(node('div', 'ext-sec-head', 'Pi 兼容性'));
+
+    const cap = node('div', 'stat-rows');
+    cap.appendChild(row('Pi 版本', c.versionKnown ? c.piVersion : '未知（不影响兼容判定）'));
+    cap.appendChild(
+      row(
+        '兼容状态',
+        COMPAT_STATUS[c.status] || c.status || '未知',
+        c.status === 'compatible' ? '' : c.status === 'unknown' ? 'dim' : 'warn'
+      )
+    );
+    for (const k of Object.keys(CAP_LABEL)) {
+      const v = c.capabilities ? c.capabilities[k] : null;
+      cap.appendChild(
+        row(CAP_LABEL[k], v === true ? '支持' : v === false ? '不支持' : '未验证', v === false ? 'warn' : v === null ? 'dim' : '')
+      );
+    }
+    body.appendChild(cap);
+
+    const label = (k) => CAP_LABEL[k] || k;
+    if ((c.missing || []).length) {
+      body.appendChild(node('div', 'diag-note', '缺少能力（对应功能已降级）：' + c.missing.map(label).join('、')));
+    }
+    if ((c.unverified || []).length) {
+      body.appendChild(node('div', 'diag-note', '尚未验证（还没用到，不代表不支持）：' + c.unverified.map(label).join('、')));
+    }
+    if ((c.issues || []).length) {
+      /* 只列最近几条 —— 异常里**没有 payload**，只有操作名 / 字段名 / 类型。 */
+      const recent = c.issues
+        .slice(-5)
+        .map((i) => `${i.operation || '?'} · ${i.issue || '?'}${i.field ? ' · ' + i.field : ''}`)
+        .join('\n');
+      body.appendChild(node('div', 'diag-note', `最近的协议异常（共 ${c.issues.length} 条，只记结构与类型）：\n${recent}`));
+    }
+  }
+
   const title = node('div', 'ext-sec-head', '健康检查');
-  body.appendChild(title);
-  const checks = node('div', 'stat-rows');
+  body.appendChild(title);  const checks = node('div', 'stat-rows');
   for (const check of d.checks || []) checks.appendChild(row(check.id, statusText(check.ok)));
   body.appendChild(checks);
 

@@ -52,6 +52,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { json } from './http-utils.js';
+import { sessionMessageBody } from './pi-compat.js';
 
 /* 上限。存在的意义是**兜底**，不是「防恶意」—— 服务只监听回环，
  * 真正要防的是「一个异常的大会话把一次搜索拖死」。
@@ -179,7 +180,10 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
         continue; // 截断的半行 / 坏行，跳过这一条
       }
       if (!e || e.type !== 'message') continue;
-      const body = e.message && typeof e.message === 'object' ? e.message : e;
+      /* 消息体可能嵌在 `message` 下、也可能在顶层 —— 判形状的逻辑只在
+       * pi-compat 里一处（sessions.js 与这里共用），免得两处各判一遍还判得不一样。 */
+      const body = sessionMessageBody(e);
+      if (!body) continue;
 
       if (body.role === 'user') {
         const text = textParts(body.content);

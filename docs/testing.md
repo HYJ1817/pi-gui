@@ -27,13 +27,13 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 17 个套件，全部是**纯自动化**：
+`npm test` 里现在有 18 个套件，全部是**纯自动化**：
 
 ```
-smoke 582 · git 151 · modules 114 · reliability · interactions · port-owner
+smoke 602 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 72
-body-integrity 5 · dev-server 20 · models-api 50 · server-security 36
-diagnostics · electron-guard 50
+pi-compat 55 · body-integrity 5 · dev-server 20 · models-api 50
+server-security 36 · diagnostics · electron-guard 50
 ```
 
 它们的共同约束（新加测试时要守住）：
@@ -197,3 +197,4 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
   [extensions.md](extensions.md) — 各子系统末尾都列了自己的测试入口
 - [security.md](security.md) — 安全守卫由哪些测试盯着
 - [diagnostics.md](diagnostics.md) — 诊断快照的采集范围、脱敏与隐私边界
+- [pi-compatibility.md](pi-compatibility.md) — 兼容层测什么、升级 pi 后怎么验

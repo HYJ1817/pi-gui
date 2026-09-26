@@ -29,6 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { json, readBody } from './http-utils.js';
+import { piState, sessionMessageBody } from './pi-compat.js';
 
 const MAX_READ_BYTES = 4 * 1024 * 1024;
 const MAX_TITLE = 80;
@@ -77,10 +78,21 @@ function textOf(content) {
     .trim();
 }
 
-export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null } = {}) {
+export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null } = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, '.pi', 'agent');
   const ROOT = path.join(AGENT_DIR, 'sessions');
+
+  /* 兼容层（P4，可选注入）。它只**观察**，不参与任何判断 ——
+   * 会话逻辑一行都不因它改变。 */
+  function notifyCompat(fn) {
+    if (!compat) return;
+    try {
+      fn(compat);
+    } catch {
+      /* 观察失败就当没看见 */
+    }
+  }
 
   /* 归档与回收站是 **Pi GUI 自己的**状态，pi 根本没有这两个概念 ——
    * 所以不往 pi 的目录里塞任何东西，只记在我们自己的数据目录里
@@ -112,6 +124,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
 
     let firstUserText = '';
     let named = '';
+    let sawNestedBody = false;
     let messageCount = 0;
     let lastTs = header.timestamp || null;
     for (let i = 1; i < lines.length; i++) {
@@ -139,10 +152,12 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       /* 消息体是**嵌在 `message` 字段下**的：
        *   {"type":"message","id":…,"timestamp":…,"message":{"role":"user","content":…}}
        * 不是顶层的 role/content（第一版按顶层读，结果 14 条消息一条标题都抽不出来）。
-       * 两种形状都认，免得 pi 换格式时又静默失效。 */
-      const body = e.message && typeof e.message === 'object' ? e.message : e;
+       * 两种形状都认（`sessionMessageBody` 是服务端**唯一**一处判形状的地方，
+       * session-search.js 与它共用），免得 pi 换格式时又静默失效。 */
+      if (e.message && typeof e.message === 'object' && !Array.isArray(e.message)) sawNestedBody = true;
+      const body = sessionMessageBody(e);
       // 标题退路取**第一条用户消息** —— 那是人一眼能认出「这是哪次对话」的东西
-      if (!firstUserText && body.role === 'user') {
+      if (!firstUserText && body && body.role === 'user') {
         firstUserText = textOf(body.content).replace(/\s+/g, ' ').slice(0, MAX_TITLE);
       }
     }
@@ -166,6 +181,10 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       title: named || firstUserText || '（还没有消息）',
       truncated: r.truncated,
       bytes: r.size,
+      /* 下面两个是**给兼容层看的内部标记**，不进任何接口响应
+       * （list() 的映射是显式列字段的，多出来的不会漏出去）。 */
+      sawNestedBody,
+      sawName: Boolean(named),
     };
   }
 
@@ -215,15 +234,27 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     const archived = new Set(flags.archived);
     const items = [];
     let skipped = 0;
+    /* 顺带记下「这一遍扫到了什么形状」—— 兼容层的证据来源之一。
+     * **只统计，不参与本函数的任何判断。** */
+    let attempted = 0;
+    let headerOk = 0;
+    let cwdOk = 0;
+    let namingSeen = false;
+    let sawNested = false;
 
     for (const f of candidateFiles(cwd).slice(0, MAX_SESSIONS * 4)) {
+      attempted++;
       const s = summarize(f);
       if (!s) {
         skipped++;
         continue;
       }
+      headerOk++;
+      if (s.sawName) namingSeen = true;
+      if (s.sawNestedBody) sawNested = true;
       // **归属判定只认 header.cwd**，不认目录名
       if (normCwd(s.cwd) !== want) continue;
+      cwdOk++;
       const key = flagKey(s);
       /* 软删除是把文件**移出** sessions 目录，所以正常路径下它已经不在
        * candidateFiles 里了；这里再按 flags 挡一道，是为了「文件被手工挪回来」
@@ -232,6 +263,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       s.archived = archived.has(key);
       items.push(s);
     }
+    notifyCompat((c) => c.observeSessionScan({ attempted, headerOk, cwdOk, namingSeen, shapes: { nested: sawNested } }));
     return { cwd, items, skipped };
   }
 
@@ -251,16 +283,14 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
     /* 当前会话从 pi 那里问（get_state 给 sessionFile），而不是靠猜 ——
-     * 「界面显示的是哪个会话」只有 pi 自己说了算。 */
-    let currentFile = null;
-    let curState = null;
+     * 「界面显示的是哪个会话」只有 pi 自己说了算。
+     * 判据（sessionFile 在不在）收敛在 pi-compat 的 piState() 里，
+     * 本文件另一处问 get_state 也用它 —— 同一条规则不写两遍。 */
+    let curState = { ok: false };
     if (rpc && typeof rpc.request === 'function') {
-      const st = await rpc.request({ type: 'get_state' });
-      if (st && !st.__error && st.sessionFile) {
-        currentFile = String(st.sessionFile);
-        curState = st;
-      }
+      curState = piState(await rpc.request({ type: 'get_state' }));
     }
+    const currentFile = curState.ok ? curState.sessionFile : null;
     const currentId = currentFile ? sessionId(currentFile) : null;
 
     /* ⚠️ pi 在会话还没有任何内容时**不落盘**。
@@ -274,13 +304,13 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       sessions.unshift({
         id: currentId,
         file: currentFile,
-        sessionId: curState && curState.sessionId ? String(curState.sessionId) : '',
+        sessionId: curState.sessionId ? String(curState.sessionId) : '',
         cwd,
         createdAt: null,
         lastMessageAt: null,
         updatedAt: Date.now(),
-        messageCount: curState && typeof curState.messageCount === 'number' ? curState.messageCount : 0,
-        title: String((curState && curState.sessionName) || '').trim() || '新会话（还没有消息）',
+        messageCount: typeof curState.messageCount === 'number' ? curState.messageCount : 0,
+        title: String(curState.sessionName || '').trim() || '新会话（还没有消息）',
         truncated: false,
         bytes: 0,
         pending: true,
@@ -368,9 +398,8 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
   /** 问 pi 当前会话是哪个（只回我们的稳定 ID，不回路径）。 */
   async function currentSessionId() {
     if (!rpc || typeof rpc.request !== 'function') return null;
-    const st = await rpc.request({ type: 'get_state' });
-    if (!st || st.__error || !st.sessionFile) return null;
-    return sessionId(String(st.sessionFile));
+    const st = piState(await rpc.request({ type: 'get_state' }));
+    return st.ok ? sessionId(st.sessionFile) : null;
   }
 
   /**
