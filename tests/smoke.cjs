@@ -303,6 +303,74 @@ const planSearch = (...items) => {
   searchPlan = items.slice();
 };
 
+/* ---------- 版本检查（P5）的桩 ----------
+ *
+ * /api/update 的可变桩 + 调用流水。默认「已是最新版」—— 大多数用例不该
+ * 被更新提示打扰；要测更新提示的用例自己改 stubUpdate。
+ * updatePlan 与 searchPlan 同形：按顺序取 { delayMs, payload }，用来造竞态。
+ *
+ * ⚠️ 这里的版本号（0.11.1 / 0.12.0）是**桩值，故意不跟 package.json 联动** ——
+ * 断言的是「界面把后端给的版本号如实显示出来」，不是「界面显示的是 0.12.0」。
+ * 跟着真实版本号走会让每次发版都要改测试，而且改错了也看不出来。 */
+const UPDATE_LATEST = { ok: true, currentVersion: '0.11.1', latestVersion: '0.11.1', updateAvailable: false, cached: false };
+const UPDATE_AVAILABLE = {
+  ok: true,
+  currentVersion: '0.11.1',
+  latestVersion: '0.12.0',
+  updateAvailable: true,
+  cached: false,
+  release: {
+    name: 'Pi GUI v0.12.0',
+    tag: 'v0.12.0',
+    publishedAt: '2026-09-30T09:00:00Z',
+    notes: '## 新增\n\n- 版本检查与更新体验\n',
+    notesTruncated: false,
+    url: 'https://github.com/HYJ1817/pi-gui/releases/tag/v0.12.0',
+    assets: [
+      { name: 'Pi-GUI-Setup-0.12.0.exe', size: 105020429, url: 'https://github.com/HYJ1817/pi-gui/releases/download/v0.12.0/Pi-GUI-Setup-0.12.0.exe', kind: 'installer' },
+      { name: 'Pi-GUI-0.12.0-portable.zip', size: 342487040, url: 'https://github.com/HYJ1817/pi-gui/releases/download/v0.12.0/Pi-GUI-0.12.0-portable.zip', kind: 'portable' },
+      { name: 'SHA256SUMS.txt', size: 183, url: 'https://github.com/HYJ1817/pi-gui/releases/download/v0.12.0/SHA256SUMS.txt', kind: 'checksums' },
+    ],
+    droppedAssets: 0,
+  },
+};
+let stubUpdate = { ...UPDATE_LATEST };
+let updatePlan = [];
+const planUpdate = (...items) => {
+  updatePlan = items.slice();
+};
+const updateCalls = [];
+
+/* /api/diagnostics 的桩。形状照抄后端真实返回（含 app.version）。 */
+const stubDiagnostics = {
+  schemaVersion: 1,
+  generatedAt: '2026-09-26T00:00:00.000Z',
+  app: { id: 'pi-gui', version: '0.11.1' },
+  system: { platform: 'win32', arch: 'x64', node: 'v24.14.0', os: 'Windows_NT', release: '10.0.26100' },
+  project: { selected: true, name: 'pi-GUI', readable: true, writable: true },
+  data: { readable: true, writable: true },
+  bridge: { piRunning: true, bridgeRun: 1, hasProject: true, args: ['--mode', 'rpc'] },
+  pi: { configuredBin: 'pi', available: true, version: '0.87.0' },
+  agents: [{ id: 'pi', available: true, version: '0.87.0', reason: null, capabilities: null }],
+  mcp: { supported: false, piVersion: '0.87.0', error: null },
+  checks: [
+    { id: 'data-readable', ok: true },
+    { id: 'data-writable', ok: true },
+    { id: 'project-readable', ok: true },
+    { id: 'project-writable', ok: true },
+    { id: 'pi-running', ok: true },
+  ],
+  compatibility: null,
+  privacy: {
+    absolutePathsIncluded: false,
+    conversationContentIncluded: false,
+    configFileContentIncluded: false,
+    environmentIncluded: false,
+    protocolPayloadsIncluded: false,
+    redactionApplied: true,
+  },
+};
+
 window.fetch = async (url, opts) => {
   const u = String(url);
   if (u.includes('/api/upload')) {
@@ -337,6 +405,20 @@ window.fetch = async (url, opts) => {
         ...(stubCompat ? { compat: stubCompat } : {}),
       }),
     };
+  }
+  if (u.includes('/api/update')) {
+    updateCalls.push({ url: u, force: u.includes('force=1') });
+    const plan = updatePlan.shift() || {};
+    return {
+      json: async () => {
+        if (plan.delayMs) await new Promise((r) => setTimeout(r, plan.delayMs));
+        if (plan.payload) return plan.payload;
+        return { ...stubUpdate };
+      },
+    };
+  }
+  if (u.includes('/api/diagnostics')) {
+    return { json: async () => ({ ok: true, diagnostics: stubDiagnostics }) };
   }
   if (u.includes('/api/git/')) {
     const kind = u.slice(u.indexOf('/api/git/') + '/api/git/'.length).split('?')[0];
@@ -3882,7 +3964,304 @@ staticCheck();
     });
   }
 
+  /* --- 版本检查与更新体验（P5） ---
+   *
+   * 这一段的重点是**诚实性**与**边界**，不是「功能多」：
+   *   - 当前版本来自后端快照，前端不硬编码；
+   *   - 「已是最新版」与「检查失败」必须是两个状态，绝不混；
+   *   - Release Notes 是不可信外部 Markdown，不能变成可执行 HTML；
+   *   - 外链只经 preload 的桥递出去，页面自己不做导航；
+   *   - 连点不出并发请求、不出现旧结果盖新结果；
+   *   - 自动检查失败/无更新完全静默，只有真发现新版才轻提示一次。 */
+  async function updateSection() {
+    /* 先接管时序：app.js 已经排了一个延迟自动检查，慢机器上它可能落在
+     * 这一段的中间，把状态改成我们没预期的样子。取消掉，由下面按需自己触发。 */
+    window.cancelUpdateAuto();
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const openDiag = async () => {
+      window.openDiagnostics();
+      await sleep(40);
+      return $('modalCard');
+    };
+    const closeDiag = () => {
+      $('modal').hidden = true;
+      $('modalCard').innerHTML = '';
+    };
+    const updateBtn = () => [...$('modalCard').querySelectorAll('.update-head .btn')][0];
+    const notes = () => $('modalCard').querySelector('.update-notes');
+
+    updateCalls.length = 0;
+    $('toasts').innerHTML = '';
+    closeDiag();
+    stubUpdate = { ...UPDATE_LATEST };
+
+    /* ① 当前版本 + 检查更新入口 */
+    let card = await openDiag();
+    check('更新：诊断面板顶部有「版本」小节', () =>
+      Boolean(card.querySelector('.update-sec')) || card.textContent.slice(0, 120));
+    check('更新：当前版本来自诊断快照（前端不硬编码版本号）', () => {
+      const t = card.querySelector('.update-title');
+      return (t && t.textContent === 'Pi GUI v0.11.1') || (t ? t.textContent : '没有 .update-title');
+    });
+    check('更新：有「检查更新」按钮', () =>
+      (updateBtn() && updateBtn().textContent === '检查更新') || (updateBtn() ? updateBtn().textContent : '没有按钮'));
+    check('更新：idle 时不显示任何下载按钮', () => !card.querySelector('.update-acts'));
+
+    /* ② 点击 → checking（同步进入，按钮立刻禁用） */
+    planUpdate({ delayMs: 60, payload: { ...UPDATE_LATEST } });
+    updateCalls.length = 0;
+    updateBtn().onclick();
+    check('更新：点「检查更新」立刻进入 checking（按钮禁用 + 文案变化）', () => {
+      const b = updateBtn();
+      return (b.disabled === true && b.textContent === '检查中…' && /正在检查更新/.test(card.textContent)) ||
+        `disabled=${b.disabled} text=${b.textContent}`;
+    });
+    check('更新：手动检查走 force=1（绕过后端缓存）', () =>
+      updateCalls.length === 1 && updateCalls[0].force === true || JSON.stringify(updateCalls));
+    await sleep(120);
+
+    /* ③ latest：无更新 */
+    check('更新：无更新时明确说「当前已是最新版本」', () =>
+      /当前已是最新版本/.test(card.textContent) || card.textContent.slice(0, 160));
+    check('更新：无更新时显示版本号', () => /v0\.11\.1/.test(card.textContent));
+    check('更新：无更新时没有下载按钮（不给一个能点但没意义的入口）', () =>
+      !card.querySelector('.update-acts') || card.querySelector('.update-acts').children.length === 0);
+    check('更新：无更新时侧栏小点不亮', () => $('updateDot').hidden === true);
+
+    /* ④ error：「检查失败」绝不能显示成「已是最新版」 */
+    /* 先把 currentVersion 清空 —— 来一次「成功但响应里没有 currentVersion」的
+     * 检查。后端正常时不会这样，但只有这样才能构造出「必须靠兜底值显示版本」
+     * 的最小条件，否则下面那条守卫是空转的（前一次成功已经把版本填上了）。 */
+    stubUpdate = { ok: true, latestVersion: '0.11.1', updateAvailable: false };
+    updateBtn().onclick();
+    await sleep(40);
+    stubUpdate = { ok: false, error: '暂时无法连接 GitHub', code: 'network' };
+    updateBtn().onclick();
+    await sleep(40);
+    check('更新：失败时说「暂时无法检查更新」，并给出后端文案', () =>
+      /暂时无法检查更新/.test(card.textContent) && /无法连接 GitHub/.test(card.textContent) ||
+      card.textContent.slice(0, 200));
+    check('更新：失败时**不出现**「已是最新版」这类错误结论', () =>
+      !/当前已是最新版本/.test(card.textContent) || '把网络失败显示成了已是最新版');
+    check('更新：失败时按钮变成「重试」', () =>
+      updateBtn().textContent === '重试' || updateBtn().textContent);
+    /* 回归守卫：失败响应里**没有** currentVersion，而 setState 会重画 ——
+     * 早先重画时丢了兜底值，标题就从「Pi GUI v0.11.1」退化成「Pi GUI」，
+     * 也就是「检查失败一次，当前版本就不见了」。真实截图抓出来的。 */
+    check('更新：检查失败后当前版本**仍然可见**（不会退化成没有版本号）', () => {
+      const t = card.querySelector('.update-title');
+      return (t && /^Pi GUI v\d+\.\d+\.\d+$/.test(t.textContent)) || (t ? t.textContent : '没有 .update-title');
+    });
+
+    /* ⑤ 重试成功 */
+    stubUpdate = { ...UPDATE_AVAILABLE };
+    updateBtn().onclick();
+    await sleep(40);
+    check('更新：点「重试」能恢复正常', () => /发现新版本 v0\.12\.0/.test(card.textContent) || card.textContent.slice(0, 200));
+
+    /* ⑥ available：版本、时间、Release / 下载入口 */
+    check('更新：有更新时显示新版本号与当前版本', () =>
+      /v0\.12\.0/.test(card.textContent) && /当前版本 v0\.11\.1/.test(card.textContent) || card.textContent.slice(0, 200));
+    check('更新：有更新时显示发布时间', () => /发布时间：2026-09-30/.test(card.textContent) || card.textContent.slice(0, 260));
+    check('更新：有更新时侧栏「诊断」上的小点亮起', () => $('updateDot').hidden === false);
+    check('更新：按钮里有「查看 Release」', () =>
+      [...card.querySelectorAll('.update-acts .btn')].some((b) => b.textContent === '查看 Release') ||
+      [...card.querySelectorAll('.update-acts .btn')].map((b) => b.textContent).join('|'));
+    check('更新：识别出的资产给中文标签（安装版 / 便携版 / 校验和）', () => {
+      const labels = [...card.querySelectorAll('.update-acts .btn')].map((b) => b.textContent);
+      return (
+        labels.includes('安装版') && labels.includes('便携版') && labels.includes('校验和') ||
+        JSON.stringify(labels)
+      );
+    });
+    check('更新：下载按钮带上真实文件名（鼠标悬停能看到，不是猜的）', () => {
+      const b = [...card.querySelectorAll('.update-acts .btn')].find((x) => x.textContent === '安装版');
+      return (b && b.title === 'Pi-GUI-Setup-0.12.0.exe') || (b ? b.title : '没有安装版按钮');
+    });
+
+    /* ⑦ Release Notes 渲染 + 安全性 */
+    check('更新：Release Notes 渲染出来了', () => {
+      const n = notes();
+      return (n && /版本检查与更新体验/.test(n.textContent)) || (n ? n.textContent.slice(0, 120) : '没有 .update-notes');
+    });
+    check('更新：Release Notes 是可滚动容器（长说明不会把底部按钮顶出去）', () => {
+      const n = notes();
+      return Boolean(n && n.classList.contains('update-notes')) || 'notes 容器不在';
+    });
+    check('更新：Release Notes 复用消息区的 Markdown 排版（不另抄一套）', () => {
+      const n = notes();
+      return Boolean(n && n.classList.contains('msg-body')) || 'notes 没有复用 .msg-body 排版';
+    });
+
+    /* 恶意 notes：外部 Markdown 是不可信输入 */
+    stubUpdate = {
+      ...UPDATE_AVAILABLE,
+      release: {
+        ...UPDATE_AVAILABLE.release,
+        notes:
+          '<img src=x onerror=alert(1)>\n\n<script>alert(2)</script>\n\n' +
+          '[点我](javascript:alert(3))\n\n[领奖](https://evil.example/a.exe)\n\n[官方](https://github.com/HYJ1817/pi-gui)\n',
+      },
+    };
+    updateBtn().onclick();
+    await sleep(40);
+    const nEl = notes();
+    check('更新：notes 里的原始 HTML 被转义，DOM 里没有活标签', () =>
+      (nEl && nEl.querySelectorAll('script,img,iframe,svg,object,embed').length === 0) ||
+      (nEl ? nEl.innerHTML.slice(0, 200) : '没有 notes'));
+    check('更新：notes 里的 <script> 原样显示为文本（不是被过滤掉，是语法上不成立）', () =>
+      Boolean(nEl && nEl.textContent.includes('<script>alert(2)</script>')) || (nEl ? nEl.textContent.slice(0, 120) : ''));
+    check('更新：notes 里的 javascript: 链接不产生 <a>', () =>
+      Boolean(nEl && ![...nEl.querySelectorAll('a')].some((a) => /javascript:/i.test(a.getAttribute('href') || ''))) ||
+      'javascript: 变成了链接');
+
+    /* 外链：页面只能说「请打开这个 URL」，判定在主进程 */
+    const opened = [];
+    window.piGuiDesktop = {
+      openExternal: async (url) => {
+        opened.push(url);
+        return { ok: true };
+      },
+    };
+    const link = (needle) => [...nEl.querySelectorAll('a')].find((a) => (a.getAttribute('href') || '').includes(needle));
+    const evil = link('evil.example');
+    check('更新：notes 里的站外链接仍然渲染成可点的链接（由主进程决定放不放行）', () =>
+      Boolean(evil) || [...nEl.querySelectorAll('a')].map((a) => a.getAttribute('href')).join('|'));
+    if (evil) {
+      evil.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+      await sleep(20);
+      check('更新：notes 里的链接点击被拦下并交给主进程（页面自己不做导航）', () =>
+        opened.includes('https://evil.example/a.exe') || JSON.stringify(opened));
+    } else {
+      check('更新：notes 里的链接点击被拦下并交给主进程（页面自己不做导航）', () => '没有可点的站外链接');
+    }
+
+    /* 主进程拒绝时，界面必须说出来，不能静默 */
+    window.piGuiDesktop = { openExternal: async () => ({ ok: false, error: '已拒绝打开非 GitHub 官方链接' }) };
+    $('toasts').innerHTML = '';
+    const anyBtn = [...$('modalCard').querySelectorAll('.update-acts .btn')].find((b) => b.textContent === '查看 Release');
+    anyBtn.onclick();
+    await sleep(20);
+    check('更新：主进程拒绝打开时界面明确说明（不静默失败）', () =>
+      /已拒绝打开非 GitHub 官方链接/.test($('toasts').textContent) || $('toasts').textContent);
+
+    /* 允许的情况：走的是 preload 的桥，不是 window.open */
+    opened.length = 0;
+    window.piGuiDesktop = { openExternal: async (url) => { opened.push(url); return { ok: true }; } };
+    $('toasts').innerHTML = '';
+    anyBtn.onclick();
+    await sleep(20);
+    check('更新：允许时经 preload 的桥打开，且 URL 就是 Release 页', () =>
+      opened.length === 1 && opened[0] === 'https://github.com/HYJ1817/pi-gui/releases/tag/v0.12.0' || JSON.stringify(opened));
+
+    /* ⑧ assets 为空时 UI 不崩 */
+    stubUpdate = { ...UPDATE_AVAILABLE, release: { ...UPDATE_AVAILABLE.release, assets: [] } };
+    updateBtn().onclick();
+    await sleep(40);
+    check('更新：assets 为空时 UI 不崩，只剩「查看 Release」', () => {
+      const labels = [...$('modalCard').querySelectorAll('.update-acts .btn')].map((b) => b.textContent);
+      return (labels.length === 1 && labels[0] === '查看 Release') || JSON.stringify(labels);
+    });
+    check('更新：assets 为空时也没有下载按钮', () =>
+      ![...$('modalCard').querySelectorAll('.update-acts .btn')].some((b) => b.textContent === '安装版'));
+
+    /* ⑨ 连点不产生并发请求，也不出现旧结果盖新结果 */
+    stubUpdate = { ...UPDATE_AVAILABLE };
+    planUpdate({ delayMs: 60, payload: { ...UPDATE_AVAILABLE } });
+    updateCalls.length = 0;
+    updateBtn().onclick();
+    updateBtn().onclick();
+    updateBtn().onclick();
+    check('更新：连点三次只产生一次请求', () => updateCalls.length === 1 || `requests=${updateCalls.length}`);
+    await sleep(120);
+    check('更新：连点之后 UI 与唯一那次响应一致（没有 stale 状态）', () =>
+      /发现新版本 v0\.12\.0/.test($('modalCard').textContent) || $('modalCard').textContent.slice(0, 160));
+
+    stubUpdate = {
+      ...UPDATE_AVAILABLE,
+      latestVersion: '0.13.0',
+      release: { ...UPDATE_AVAILABLE.release, tag: 'v0.13.0', url: 'https://github.com/HYJ1817/pi-gui/releases/tag/v0.13.0' },
+    };
+    updateBtn().onclick();
+    await sleep(40);
+    check('更新：再检查一次后 UI 反映最新结果（不是上一次的）', () =>
+      (/v0\.13\.0/.test($('modalCard').textContent) && !/v0\.12\.0/.test($('modalCard').textContent)) ||
+      $('modalCard').textContent.slice(0, 160));
+
+    /* ⑩ 关掉再打开：状态不丢（状态在模块作用域，不在 DOM 上） */
+    closeDiag();
+    await sleep(10);
+    card = await openDiag();
+    check('更新：关闭再打开诊断，更新状态仍在（没有回到 idle）', () =>
+      /发现新版本 v0\.13\.0/.test(card.textContent) || card.textContent.slice(0, 160));
+    check('更新：关闭再打开后按钮仍然可用（没有被禁用状态卡住）', () =>
+      updateBtn().disabled === false || `disabled=${updateBtn().disabled}`);
+
+    /* ⑪ 自动检查：失败静默、无更新静默、有更新才轻提示一次、绝不自动弹 Modal
+     *
+     * 这里刻意**先把诊断弹层关掉**：只有关着，才能证明「自动检查不会自己
+     * 弹出一个大 Modal」—— 弹层开着时那个断言是空转的。 */
+    closeDiag();
+
+    $('toasts').innerHTML = '';
+    stubUpdate = { ok: false, error: '暂时无法连接 GitHub', code: 'network' };
+    window.initUpdateAuto({ delayMs: 0 });
+    await sleep(60);
+    check('更新：自动检查失败完全静默（不弹提示）', () => $('toasts').textContent === '' || $('toasts').textContent);
+    check('更新：自动检查失败不自动弹 Modal', () => $('modal').hidden === true || '自动弹出了 Modal');
+
+    card = await openDiag();
+    check('更新：自动检查失败后回到 idle，不留一个用户没请求过的错误态', () =>
+      (/在应用内检查 GitHub/.test(card.textContent) && !/暂时无法检查更新/.test(card.textContent)) ||
+      card.textContent.slice(0, 160));
+    closeDiag();
+
+    $('toasts').innerHTML = '';
+    updateCalls.length = 0;
+    stubUpdate = { ...UPDATE_LATEST };
+    window.initUpdateAuto({ delayMs: 0 });
+    await sleep(60);
+    check('更新：自动检查无更新时静默（不弹提示）', () => $('toasts').textContent === '' || $('toasts').textContent);
+    check('更新：自动检查走不带 force 的普通请求（吃后端缓存，避开限流）', () =>
+      updateCalls.length === 1 && updateCalls[0].force === false || JSON.stringify(updateCalls));
+
+    $('toasts').innerHTML = '';
+    stubUpdate = { ...UPDATE_AVAILABLE };
+    window.initUpdateAuto({ delayMs: 0 });
+    await sleep(60);
+    check('更新：自动发现新版本时给一次轻提示', () => /已发布/.test($('toasts').textContent) || $('toasts').textContent);
+    check('更新：自动发现新版本也不弹 Modal', () => $('modal').hidden === true || '自动弹出了 Modal');
+
+    /* 同一个版本不重复弹 */
+    $('toasts').innerHTML = '';
+    window.initUpdateAuto({ delayMs: 0 });
+    await sleep(60);
+    check('更新：同一个版本不重复弹提示', () => $('toasts').textContent === '' || $('toasts').textContent);
+
+    /* 自动检查是「延迟任务」而不是启动路径的一部分：调用之后立刻没有请求，
+     * 到点才发出去。 */
+    $('toasts').innerHTML = '';
+    updateCalls.length = 0;
+    window.initUpdateAuto({ delayMs: 80 });
+    check('更新：initUpdateAuto 立刻返回，且不马上发请求（不阻塞启动）', () =>
+      updateCalls.length === 0 || `立刻发了 ${updateCalls.length} 次请求`);
+    await sleep(140);
+    check('更新：到点后自动检查才真的发出去', () => updateCalls.length === 1 || `requests=${updateCalls.length}`);
+
+    /* 收尾：恢复常态，别把状态漏给后面的用例 */
+    window.cancelUpdateAuto();
+    delete window.piGuiDesktop;
+    stubUpdate = { ...UPDATE_LATEST };
+    updatePlan = [];
+    updateCalls.length = 0;
+    $('toasts').innerHTML = '';
+    closeDiag();
+    await sleep(10);
+  }
+
   await searchSection();
+  await updateSection();
 
   /* --- 会话一变就要重画侧栏列表 ---
    *

@@ -15,7 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const { probe, classifyHealth, isSelfUrl, isSafeExternal, APP_ID, PROTOCOL } = require('../electron/net-probe.cjs');
+const { probe, classifyHealth, isSelfUrl, isSafeExternal, isSafeReleaseUrl, APP_ID, PROTOCOL } = require('../electron/net-probe.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.GUARD_PORT || 7796);
@@ -182,6 +182,41 @@ async function main() {
     check(`isSafeExternal(${why}) = ${want}`, () => isSafeExternal(url) === want || `得到 ${isSafeExternal(url)}`);
   }
 
+  /* ---------- 4b. 版本检查的 Release / 下载外链（P5） ----------
+   *
+   * 这一份比 isSafeExternal 更严：**https + GitHub 官方 host**。
+   * 它守着的是「版本检查」那条路 —— 那里的 URL 来自外部响应
+   * （GitHub API 的 html_url / browser_download_url），仓库被投毒或账号被接管时
+   * 一个指向 evil.example 的「安装包」会被用户当成官方下载。
+   *
+   * 与后端 server/update-check.js 的同名实现必须一致（那一边有对拍断言）。 */
+  const releaseAllow = [
+    ['https://github.com/HYJ1817/pi-gui/releases/tag/v0.12.0', 'Release 页面'],
+    ['https://github.com/HYJ1817/pi-gui/releases/download/v0.12.0/Pi-GUI-Setup-0.12.0.exe', '下载 asset'],
+    ['https://api.github.com/repos/HYJ1817/pi-gui/releases/latest', 'API 地址'],
+    ['https://objects.githubusercontent.com/x', '下载重定向落地域'],
+    ['https://raw.githubusercontent.com/x', 'raw 域'],
+  ];
+  for (const [url, why] of releaseAllow) {
+    check(`isSafeReleaseUrl 允许：${why}`, () => isSafeReleaseUrl(url) === true || url);
+  }
+
+  const releaseDeny = [
+    ['https://evil.example/a.exe', '第三方 host'],
+    ['https://github.com.evil.example/x', '后缀伪装'],
+    ['https://evilgithubusercontent.com/x', '后缀伪装（缺那个点）'],
+    ['https://user:pw@github.com/x', '带凭据的 URL'],
+    ['http://github.com/x', 'http（非 https）'],
+    ['javascript:alert(1)', 'javascript:'],
+    ['file:///C:/Windows/win.ini', 'file:'],
+    ['data:text/html,<script>alert(1)</script>', 'data:'],
+    ['ftp://github.com/x', 'ftp:'],
+    ['not a url', '非法 URL'],
+  ];
+  for (const [url, why] of releaseDeny) {
+    check(`isSafeReleaseUrl 拒绝：${why}`, () => isSafeReleaseUrl(url) === false || url);
+  }
+
   /* ---------- 5. classifyHealth 的边界 ---------- */
   check('classifyHealth 容忍 undefined', () => classifyHealth(undefined).state === 'foreign-service');
   check('classifyHealth 容忍 body 为 null', () => classifyHealth({ ok: true, status: 200, body: null }).state === 'foreign-service');
@@ -211,10 +246,11 @@ async function main() {
     return true;
   });
 
-  /* ---------- 7. preload 桥（只为「用系统默认程序打开文件」而存在） ----------
+  /* ---------- 7. preload 桥（只为两个转发动作而存在） ----------
    *
    * 这个桥是渲染进程唯一能碰到主进程的地方，所以它的形状要钉死：
-   * 只暴露一个函数、不暴露 ipcRenderer 本身、不碰任何凭据。 */
+   * 只暴露一个入口对象、不暴露 ipcRenderer 本身、不碰任何凭据、
+   * 也不自己判断路径与 URL（判定分别留在后端与主进程）。 */
   const preloadSrc = fs.readFileSync(path.join(ROOT, 'electron', 'preload.cjs'), 'utf8');
   /* 结构性断言必须只看**代码**，不看注释 —— 否则一句解释性的
    * 「校验留在后端，比如 ../ 和 realpath」就会把断言判成失败。
@@ -240,6 +276,65 @@ async function main() {
     const reg = mainSrc.indexOf('installOpenPathHandler();');
     const win = mainSrc.indexOf('createWindow();');
     return (reg > 0 && win > 0 && reg < win) || `register=${reg} createWindow=${win}`;
+  });
+
+  /* ---------- 8. 版本检查的外链桥（P5） ----------
+   *
+   * 「用系统浏览器打开 Release 链接」这条路的关键约束：**判定必须在主进程**。
+   * 页面只能说「请打开这个 URL」，能不能打开由这里说了算 —— 所以 renderer
+   * 里不该出现任何 shell / ipcRenderer 的痕迹。 */
+  check('主进程注册了 pi-gui:open-external', () =>
+    /ipcMain\.handle\('pi-gui:open-external'/.test(mainSrc) || '没有注册 open-external 处理器');
+  check('openExternal 的判定用 isSafeReleaseUrl（比通用导航更严）', () =>
+    /isSafeReleaseUrl\(target\)/.test(mainSrc) || '处理器里没有用 isSafeReleaseUrl 把关');
+  check('open-external 处理器在开窗之前注册', () => {
+    const reg = mainSrc.indexOf('installOpenExternalHandler();');
+    const win = mainSrc.indexOf('createWindow();');
+    return (reg > 0 && win > 0 && reg < win) || `register=${reg} createWindow=${win}`;
+  });
+  check('preload 暴露的是两个转发函数（openPath + openExternal）', () =>
+    /openPath:\s*\(/.test(preloadCode) && /openExternal:\s*\(/.test(preloadCode) || '少了一个转发函数');
+  check('preload 的 openExternal 只转发，不自己判断 URL', () =>
+    !/isSafeReleaseUrl|isSafeExternal|github\.com/.test(preloadCode) || 'preload 里出现了 URL 判断逻辑');
+
+  /* renderer 侧：**不许**碰 shell / ipcRenderer / 自己导航。
+   * 结构性断言只看代码、不看注释（注释里解释「页面没有 shell 能力」是正常的）。 */
+  const collectJs = (dir) => {
+    const out = [];
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) out.push(...collectJs(full));
+      else if (e.name.endsWith('.js')) out.push(full);
+    }
+    return out;
+  };
+  const publicCode = collectJs(path.join(ROOT, 'public'))
+    .map((f) => fs.readFileSync(f, 'utf8'))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ \t]*\/\/.*$/gm, '');
+
+  /* 只认 Electron 的 shell **API**，不认 `from './shell.js'` 这类模块路径 ——
+   * 项目里恰好有一个叫 shell.js 的前端模块（外壳状态），用宽泛的
+   * `\bshell\s*\.` 会把它的 import 全判成违规。 */
+  check('renderer 里不调用 Electron shell API（页面没有 shell 权限）', () =>
+    !/shell\.(openExternal|openPath|openItem|showItemInFolder|beep)\s*\(/.test(publicCode) ||
+    '前端代码里出现了 shell API 调用');
+  check('renderer 里不出现 ipcRenderer', () => !/ipcRenderer/.test(publicCode) || '前端代码里出现了 ipcRenderer');
+  check('renderer 里不 require electron', () =>
+    !/require\(\s*['"]electron['"]\s*\)/.test(publicCode) || '前端代码里 require 了 electron');
+  check('前端打开外链只用 preload 的桥，不用 window.open', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'public', 'update.js'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^[ \t]*\/\/.*$/gm, '');
+    return (
+      /piGuiDesktop/.test(src) && /bridge\.openExternal\(/.test(src) && !/window\.open\(/.test(src) ||
+      '前端没有走 preload 的桥，或用了 window.open'
+    );
+  });
+  check('前端不直接访问 GitHub API（只打自己的后端）', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'public', 'update.js'), 'utf8');
+    return !/api\.github\.com|github\.com\/HYJ1817/.test(src) || '前端里出现了 GitHub 地址';
   });
 
   console.log('');
