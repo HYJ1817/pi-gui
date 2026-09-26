@@ -27,14 +27,20 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 19 个套件，全部是**纯自动化**：
+`npm test` 里现在有 21 个套件，全部是**纯自动化**：
 
 ```
 smoke 663 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 72
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
-server-security 36 · diagnostics · update-check 87 · electron-guard 75
+server-security 36 · diagnostics · update-check 87
+version-consistency 29 · release-artifacts 54 · electron-guard 75
 ```
+
+最后三个里，`version-consistency` 与 `release-artifacts` 是**发版守卫**：
+前者管 package / lock / tag 一致与「构建链路里有没有写死版本号」，
+后者管发布目录的资产命名、校验和与 P5 兼容性。两者都在 `os.tmpdir()` 上跑
+fixture，不需要先构建 —— 所以放在默认 CI 里是便宜的。
 
 它们的共同约束（新加测试时要守住）：
 
@@ -73,15 +79,19 @@ server-security 36 · diagnostics · update-check 87 · electron-guard 75
 
 ## 三、CI 里跑什么
 
-`.github/workflows/ci.yml`，触发：push 到 main / PR 到 main / 手动。
+三个 workflow，分工按「多贵」划：
 
-| job | 内容 | 为什么存在 |
-|---|---|---|
-| `test` | `npm ci` → `npm test`（matrix：Node 22 与 24） | 守住 A 层 |
-| `build-check` | `needs: test` → `build:app --rebuild` → `test:app` → `test:exe` | 守住 B 层：打包链路坏掉时，测试全绿也照样发不出去 |
+| workflow | 触发 | 内容 | 为什么这样分 |
+|---|---|---|---|
+| `ci.yml` | push / PR 到 main、手动 | `test`（matrix Node 22/24 跑 `npm test`）+ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`） | 每次提交都要跑的便宜层。`build-check` 刻意**不**跑 `build:installer` —— 那要 NSIS 和 ~430MB 产物 |
+| `release-check.yml` | **手动**（`workflow_dispatch`） | 完整发布路径：`npm test` → 两条打包链路 → `test:app` / `test:exe` / `test:portable` / `test:installer` → `release:collect` → `release:verify` | 45-60 分钟，**不创建 Release**。挂到每个 PR 上会让贡献者等到放弃；而 PR 需要的版本一致性守卫已经在 `npm test` 里 |
+| `release.yml` | **tag `v*`** | `npm run release:check -- --tag=<tag> --with-installer` → draft → 上传 → 核对 sha256 → publish | 正式发布。**全部验证通过之后才碰 GitHub**，所以失败不会留下半成品 |
 
-`build-check` 刻意**不**跑 `build:installer` / `build:dist`：那要 NSIS 和 ~430MB 产物，
-属于发布前验证。见下一节。
+三者调用的是**同一套 npm 脚本**，没有各自手写构建逻辑 ——
+`release.yml` 更是直接调那一条 `npm run release:check` 入口。
+
+`ci.yml` 的 `build-check` 只验两条打包链路能出产物；安装程序 / 便携版的真装真跑
+放在后面两个 workflow 里，因为那要 NSIS 与 ~430MB 产物。见下一节。
 
 ### Node 版本：最低 22.19，CI 测 22 与 24
 
@@ -145,22 +155,37 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 
 改了 `public/` 里的样式或布局之后，**必须真看一眼截图**，不能只看测试是不是绿的。
 
-## 五、发布前验证
+## 五、发布前验证（F 层）
+
+**一条命令**：
 
 ```
-npm test                          # A 层
-npm run build:app -- --rebuild    # 两条打包链路
-npm run test:exe                  # 单文件 exe（47 项）
-npm run test:app                  # Electron 应用目录（25 项）
-npm run build:installer -- --zip  # 安装程序 + 便携版 + SHA256SUMS.txt
-npm run test:portable             # 便携版 zip（11 项）
-npm run test:installer            # 真装一遍再卸（20 项）
+npm run release:check -- --with-installer
 ```
 
-等价的手动入口：GitHub Actions 里跑 **Release check**（`workflow_dispatch`）。
+它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
-发版还要做两条独立核实（附件摘要 + git ref），步骤见
-[development.md](development.md) 的「发版流程」。
+```
+版本一致性（含 tag）  →  npm test（A 层 21 个套件）
+  →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
+  →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
+  →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
+```
+
+通过时最后一行是 `READY TO RELEASE`。
+
+> **`--with-installer` 为什么是显式开关**：`test:installer` 会**真的安装**
+> Pi GUI（写注册表、建快捷方式）再卸掉。一次性 runner 上没问题，但开发机上
+> 可能装着一份你在用的 Pi GUI —— 跑一遍就把它卸了。所以本机默认不跑。
+> 代价是：不带这个开关时，安装程序**没有被真正执行过** ——
+> 半截的 `Setup.exe`（名字、大小、校验和全都正常）只有真去装才会暴露。
+
+**CI 与 Release 用的是同一套**：`release.yml` 直接调这条入口，
+`release-check.yml` 调同一批 npm 脚本。所以本机通过就意味着 CI 也该通过。
+
+手动入口：GitHub Actions 里跑 **Release check**（`workflow_dispatch`，
+不创建 Release）；正式发布是 tag 触发的 **Release** workflow。
+完整发版步骤见 [releasing.md](releasing.md)。
 
 ## 六、环境隔离（改测试时的硬要求）
 
@@ -200,3 +225,4 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 - [diagnostics.md](diagnostics.md) — 诊断快照的采集范围、脱敏与隐私边界
 - [pi-compatibility.md](pi-compatibility.md) — 兼容层测什么、升级 pi 后怎么验
 - [updates.md](updates.md) — 版本检查测什么、为什么默认测试不访问 GitHub
+- [releasing.md](releasing.md) — 发版流程（F 层在哪一步跑、产物守卫查什么）

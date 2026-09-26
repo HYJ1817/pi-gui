@@ -232,12 +232,25 @@ npm test           # 19 个套件，纯自动化，约 3-4 分钟（不联网、
 需要真 pi 的（`test:skills-live` 等）与需要 NSIS 的
 （`test:portable` / `test:installer`）都不进默认 CI。
 
+三个 workflow 分工按「多贵」划：`ci.yml`（每次提交）→ `release-check.yml`
+（手动，跑完整发布路径但不发版）→ `release.yml`（tag 触发，验证全过才发布）。
+三者调的是同一套 npm 脚本。
+
 CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 通过后做一次 Electron 打包并验产物（25 项 + 47 项）。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
 `test:skills` / `test:planner` / `test:sessions` / `test:security` /
-`test:diagnostics` / `test:update` / `test:guard`。
+`test:diagnostics` / `test:update` / `test:version` / `test:release` / `test:guard`。
+
+准备发版时有一条命令跑完的入口（版本一致性 + 全部测试 + 两条打包链路 +
+产物验证 + 校验和）：
+
+```bash
+npm run release:check -- --with-installer    # → READY TO RELEASE
+```
+
+流程见 [releasing.md](docs/releasing.md)。
 
 > jsdom **不做布局**，所以改了 `public/` 的样式或排版，**必须真看一眼截图** ——
 > 测试全绿也说明不了排版对不对。
@@ -260,6 +273,7 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
 | [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、升级 pi 后怎么验 |
 | [updates.md](docs/updates.md) | 版本检查：数据源、SemVer、缓存与 single-flight、外链白名单、隐私、为什么不自动安装 |
+| [releasing.md](docs/releasing.md) | 发版：一条命令的发布预检、版本一致性守卫、资产命名契约、tag → 自动发布、失败不留半成品 |
 
 ## 许可证
 
