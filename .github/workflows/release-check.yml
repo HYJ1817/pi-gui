@@ -6,6 +6,8 @@
 # 时机是「准备发版」，不是「改了一行代码」。
 #
 # 与 ci.yml 的分工见 docs/testing.md。
+#
+# action 版本与 ci.yml 保持一致（都钉 v5，理由见 ci.yml 头部备注）。
 name: Release check
 
 on:
@@ -33,10 +35,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -71,10 +73,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

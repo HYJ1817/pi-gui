@@ -7,6 +7,12 @@
 #   2. **CI 里不装 pi** —— `npm test` 全是纯自动化测试，不需要真实的
 #      pi-coding-agent，也不消耗任何模型额度。需要真 pi 的套件见
 #      docs/testing.md 的「只在本地 / 发布前跑」一节。
+#
+# 关于 action 版本：`checkout` / `setup-node` 都钉 **v5**。
+# 选 v5 而不是更早或更新，是因为 **v4 跑在 Node 20 上**（GitHub 已经提示
+# deprecation），而 v5 相对 v4 **只改了运行时到 Node 24**，没有任何行为变更 ——
+# 正好是最小的那一步。v6/v7 各自带行为变更（凭据落盘位置、ESM 迁移、
+# 自动缓存的范围），这里用不到，不跟着动。
 name: CI
 
 on:
@@ -49,10 +55,10 @@ jobs:
         node: [22, 24]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           # setup-node 自带的 npm 缓存。**不要**缓存 node_modules ——
@@ -76,10 +82,10 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # 打包链路只验一个版本就够 —— 它是构建工具链，与运行时矩阵无关。
           node-version: 22
