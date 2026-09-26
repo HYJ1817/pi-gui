@@ -7,7 +7,11 @@
 具体改了什么，在侧栏「文件变更」里看 diff，然后决定留着还是撤销。
 
 后端是个纯 Node 的 HTTP 服务，前端是原生 JS（没有构建步骤、没有框架），
-Electron 只负责装一个窗口 —— 不联网、不开浏览器，全部跑在本机。
+Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
+
+**唯一的对外请求是「版本检查」**：读 GitHub 上的公开 Release 信息，看有没有新版。
+它可以在诊断里手动触发，也可以在启动后自动跑一次（延迟、可静默失败），
+**不上传任何使用数据**，无网时主功能完全不受影响。除此之外没有任何网络行为。
 
 窗口大致是这样：左侧是项目 / 会话 / 文件变更，中间是连续的对话流
 （工具执行直接嵌在对话里），底部是输入框。
@@ -25,6 +29,7 @@ Electron 只负责装一个窗口 —— 不联网、不开浏览器，全部跑
 - **任务编排** —— 把大目标拆成带依赖的任务，交给不同 CLI 依次执行
 - **模型供应商** —— 不用手写 JSON 就能加自定义供应商，还能直接拉模型列表
 - **诊断** —— 查看版本、bridge、Agent 与目录健康状态，复制脱敏 JSON 用于排障
+- **版本检查** —— 在应用内检查 GitHub Release，新版本可直接查看发布说明和下载
 
 ## 安装
 
@@ -60,7 +65,7 @@ pi 本身还要配好模型供应商（API Key 之类），否则界面能打开
 下载后建议核一下 `SHA256SUMS.txt`：
 
 ```powershell
-certutil -hashfile Pi-GUI-Setup-0.10.0.exe SHA256
+certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 ```
 
 ## 快速开始
@@ -166,6 +171,26 @@ OpenAI / DeepSeek / Anthropic 基本只有一个 id，那就只填 id。
 
 → [architecture.md](docs/architecture.md#八模型供应商与模型列表)
 
+### 版本检查与更新
+
+侧栏「诊断」顶部有个「版本」小节：显示当前版本，一个 `[检查更新]` 按钮。
+
+启动后也会**低打扰地**自动检查一次（延迟 8 秒、不阻塞启动）。发现新版本时
+只有一次轻提示 + 诊断入口上的一个小点 —— 不弹窗、不重复打扰；
+失败与无更新完全静默。
+
+有更新时会摆出版本号、发布时间和**发布说明**，并给出「查看 Release」
+与「安装版 / 便携版 / 校验和」的下载入口 —— 点开走系统浏览器，由 GitHub 下载。
+
+**它不下载、不安装、不静默升级、不改 exe、不重启。** 这一层只负责
+「发现 + 展示 + 让你自己点」，安全边界最简单。
+
+只读取公开的 GitHub Release 元数据，**不上传任何使用数据**：没有 telemetry、
+不带任何凭据、请求里只有 GitHub API 必需的 `User-Agent` 与 `Accept`。
+无网时主功能完全不受影响。
+
+→ [updates.md](docs/updates.md)
+
 ## 安全
 
 后端能驱动 pi 执行任意命令，所以**它的边界是唯一防线**。三条主要约束：
@@ -200,7 +225,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 16 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 19 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -211,7 +236,8 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 通过后做一次 Electron 打包并验产物（25 项 + 47 项）。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
-`test:skills` / `test:planner` / `test:sessions` / `test:security` / `test:diagnostics` / `test:guard`。
+`test:skills` / `test:planner` / `test:sessions` / `test:security` /
+`test:diagnostics` / `test:update` / `test:guard`。
 
 > jsdom **不做布局**，所以改了 `public/` 的样式或排版，**必须真看一眼截图** ——
 > 测试全绿也说明不了排版对不对。
@@ -233,6 +259,7 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
 | [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、升级 pi 后怎么验 |
+| [updates.md](docs/updates.md) | 版本检查：数据源、SemVer、缓存与 single-flight、外链白名单、隐私、为什么不自动安装 |
 
 ## 许可证
 

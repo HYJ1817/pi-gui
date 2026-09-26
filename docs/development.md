@@ -107,8 +107,26 @@ git tag vX.Y.Z <提交> && git push origin vX.Y.Z
 gh release create vX.Y.Z --title "…" --notes-file <发布说明> <3 个附件>
 ```
 
-**版本号只有一个来源，但不止一个文件**：`package.json` 与 `package-lock.json`
-都有 `version`。用 npm 自带的命令一次改齐，别手改：
+> 单跑版本检查那套（不需要构建产物）：`npm run test:update`。
+
+### 发完版之后：应用内就能看到
+
+Release 一发出来，Pi GUI 的「诊断 → 版本」就会读到它（`docs/updates.md`）。
+两件事值得知道：
+
+- **缓存 30 分钟**。刚发完版自己测的时候要点 `[检查更新]`（它带 `?force=1`），
+  自动检查走的是缓存。
+- **版本号只有一个来源**：`server.js` 的 `VERSION`（打包期由 esbuild 写死，
+  开发期读 `package.json`），它同时喂给 `/api/health`、诊断快照和更新检查。
+  所以发版时改 `package.json` 就够，**不要**在别处再写一份版本号。
+
+`release-check.yml` 里刻意**不跑**需要联网的更新检查用例 ——
+`npm test` 里的那套全部走注入的假 fetch，所以 CI 期间不访问真实 GitHub。
+
+### 版本号只有一个来源，但不止一个文件
+
+`package.json` 与 `package-lock.json` 都有 `version`。
+用 npm 自带的命令一次改齐，别手改：
 
 ```bash
 npm version X.Y.Z --no-git-tag-version
@@ -146,3 +164,4 @@ npm version X.Y.Z --no-git-tag-version
 
 - 构建产物的验收测试：[testing.md](testing.md)
 - 模块地图与数据目录：[architecture.md](architecture.md)
+- 版本检查与发版之后怎么被看到：[updates.md](updates.md)

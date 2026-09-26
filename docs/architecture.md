@@ -234,6 +234,10 @@ get_messages ─┘
     「支不支持」的结论与原文证据，并列出官方替代路径 extension 下已有哪些东西。
     **只读名字，不读内容、不执行**
   - `sessions.js` — 会话列表 / 切换 / 改名 / 归档 / 删除。见 [sessions.md](sessions.md)
+  - `update-check.js` — **版本检查**：只读公开 GitHub Release 元数据，判断有没有新版。
+    自带 SemVer 纯函数、30 分钟内存缓存、single-flight 与错误分类；
+    **不下载、不安装、不发 telemetry、请求不带任何凭据**，
+    响应里的外链先过一遍白名单。见 [updates.md](updates.md)
   - `agents/` — Agent 适配器与 registry。**唯一认识各 CLI 的地方**，Planner 不直接
     spawn 任何东西。所有调用都是 `shell:false` + 参数数组；`.cmd` shim 会被解析成
     包里真正的入口（`.js` 用 `process.execPath` 跑，`.exe` 直接跑）；取消走

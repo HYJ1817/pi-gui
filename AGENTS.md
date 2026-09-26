@@ -33,6 +33,9 @@
 - **零第三方依赖。** 前端原生 ES Module（零构建、零前端依赖），后端纯 `node:http`。
   要加依赖先说服人，不要顺手加。
 - **不联网。** 不查 npm registry / GitHub Release / 官网；运行时不依赖网络。
+  （**唯一的例外是产品功能本身**：P5 的版本检查会读 GitHub 的公开 Release API。
+  它是显式设计、可静默失败、不上传任何数据，见 [updates.md](docs/updates.md)。
+  这条约束说的是**你**别去联网查资料，以及别让任何功能**依赖**网络可用。）
 - **不碰 pi 本体。** pi 是**外部程序**，只通过 `pi --mode rpc` 的 stdio 通信。
   不 fork、不 monkey patch、不改它的 session schema、不动用户的全局 npm。
 - **不拿用户真实数据做写操作。** 会写盘的用例一律用 `os.tmpdir()` 里的 fixture；

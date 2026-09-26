@@ -27,18 +27,19 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 18 个套件，全部是**纯自动化**：
+`npm test` 里现在有 19 个套件，全部是**纯自动化**：
 
 ```
-smoke 602 · git 151 · modules 114 · reliability · interactions · port-owner
+smoke 649 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 72
-pi-compat 55 · body-integrity 5 · dev-server 20 · models-api 50
-server-security 36 · diagnostics · electron-guard 50
+pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
+server-security 36 · diagnostics · update-check 87 · electron-guard 75
 ```
 
 它们的共同约束（新加测试时要守住）：
 
-- **不联网。** 上游接口一律打桩（`models-api` 自己起一个假供应商）。
+- **不联网。** 上游接口一律打桩（`models-api` 自己起一个假供应商；
+  `update-check` 把 `fetch` 作为依赖注入，默认测试**绝不**打真 GitHub）。
 - **不 spawn 真 pi。** 需要 pi 的地方用桩 rpc，或者把 `PI_BIN` 指到不存在的命令。
 - **不碰真实用户目录。** 数据目录、agent 目录、HOME 一律用 `os.tmpdir()`；
   写盘的用例（改 settings、会话改名/删除）**必须**走临时 fixture。
@@ -198,3 +199,4 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 - [security.md](security.md) — 安全守卫由哪些测试盯着
 - [diagnostics.md](diagnostics.md) — 诊断快照的采集范围、脱敏与隐私边界
 - [pi-compatibility.md](pi-compatibility.md) — 兼容层测什么、升级 pi 后怎么验
+- [updates.md](updates.md) — 版本检查测什么、为什么默认测试不访问 GitHub

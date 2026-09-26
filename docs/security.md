@@ -78,8 +78,25 @@
 - 项目的绝对路径（除了用户自己选的那个，那是必要信息）
 
 Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
-只暴露「用系统默认程序打开文件」这一个入口 —— 不暴露整个 `ipcRenderer`。
+只暴露两个转发动作 —— 「用系统默认程序打开项目内的一个文件」和
+「用系统浏览器打开一个 Release / 下载链接」—— 不暴露整个 `ipcRenderer`。
+两个动作的**判定都不在页面里**：前者在后端（`lib/git.js` 的路径校验），
+后者在主进程（`electron/net-probe.cjs` 的 `isSafeReleaseUrl`）。
 `tests/electron-guard.cjs` 钉住了这个形状。
+
+### 外链白名单
+
+「交给系统浏览器打开」分两条路，判据**刻意不同**：
+
+| 用途 | 判据 | 为什么 |
+|---|---|---|
+| 通用导航（对话里的链接、`target=_blank`） | `isSafeExternal`：只放行 `http` / `https` | 这是既有行为，收窄它会让正常链接打不开 |
+| 版本检查的 Release / 下载 | `isSafeReleaseUrl`：**必须 `https` + GitHub 官方 host** | URL 来自外部响应，仓库被投毒时会变成「官方安装包」 |
+
+第二条在**两个独立位置**各做一遍：后端过滤 API 响应（不让站外 URL 进 DOM），
+主进程在 `shell.openExternal` 之前再拦一次（即便页面被注入脚本也打不开站外地址）。
+`tests/update-check.cjs` 有断言对拍两份实现，防止名单漂开。
+细节见 [updates.md](updates.md)。
 
 ## 三、不可信输入
 
@@ -109,6 +126,20 @@ Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
 **为什么不用 markdown-it 之类的成熟库**：本项目零构建、零前端依赖，引入它要
 额外随包分发两个 UMD 文件（含 Apache-2.0 的署名义务），而上面这套结构性防护
 已经把主要收益拿到了。渲染完整度上的差距，用增量补齐更划算。
+
+### GitHub Release 说明
+
+**威胁**：版本检查会把 Release 的 `body`（发布说明）显示出来，而它是
+**外部 Markdown** —— 仓库被投毒 / 账号被接管时，它可以带任意内容进来。
+
+**做法**：同一个渲染器（`public/markdown.js`），所以「转义优先」的结构性防护
+照旧成立；额外再加两条：
+
+- **最大 4000 字**，超出截断（否则一篇长文能塞进几万个链接）
+- **说明里的链接点击被拦下**，改走 Release 那条外链白名单 ——
+  否则一条「[点这里领奖](https://evil.example)」就能把用户引到站外
+
+见 [updates.md](updates.md)。
 
 ### 工具输出与 Agent stdout
 

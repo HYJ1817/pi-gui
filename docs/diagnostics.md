@@ -71,6 +71,10 @@ Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含
 
 诊断面板提供：
 
+- **「版本」小节**（顶部）：当前 Pi GUI 版本 + `[检查更新]`。
+  版本号来自上面的诊断快照（后端 `VERSION` 是唯一真相），前端不硬编码。
+  五种状态：`idle` / `checking` / `latest` / `available` / `error` ——
+  **「已是最新版」与「检查失败」永远是两句不同的话**。见 [updates.md](updates.md)
 - 基础版本与运行状态
 - 目录 / bridge 健康检查
 - Agent 状态
@@ -83,10 +87,14 @@ Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含
 
 当前阶段没有自动上传，也不会把诊断发送到任何服务器。
 
+> 更新检查**不读也不写**诊断内容：它只发一个带 `User-Agent` 与 `Accept`
+> 的 GitHub 请求，请求里没有 cwd、没有诊断快照、没有任何凭据。
+
 ## 测试
 
 ```bash
 npm run test:diagnostics
+npm run test:update        # 版本检查（含「诊断里的版本来自快照」那类断言在前端 smoke 里）
 ```
 
 测试会覆盖：
