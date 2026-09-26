@@ -158,6 +158,12 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .rail-prov:hover .rp-ic{color:var(--accent)}
 .rp-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rp-count{font-size:11px;color:var(--t3);font-family:var(--mono);flex:0 0 auto}
+/* 「诊断」入口上的小点：发现新版本时亮起（public/update.js 控制 hidden）。
+   只是一个提示点，不占位、不改变行高 —— 亮起时行布局不跳动。 */
+.rp-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--accent);
+  flex:0 0 auto;box-shadow:0 0 0 2px rgba(232,163,61,.16);
+}
 
 /* 用量卡片（对应 Codex 的额度卡） */
 .quota{
@@ -846,6 +852,37 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   font-size:11.5px;color:var(--t2);line-height:1.65;white-space:pre-wrap;
   margin:2px 0 10px;padding-left:2px;
 }
+
+/* ============ 版本与更新（P5） ============
+ *
+ * 挂在诊断面板最前面。三条布局要求（都是实测踩出来的）：
+ *   1. 说明文字用 --t2 而不是 --t3 —— 深色底上 11.5px 的 --t3 读不清；
+ *   2. Release Notes 必须**自己可滚动**，否则一篇长说明会把下面的
+ *      「健康检查 / Agent / JSON」和底部按钮一起顶出可视区
+ *      （诊断面板的滚动区是 .diag-body，见上面的 :has(> .diag-body)）；
+ *   3. 按钮区 flex-wrap，窄窗口下换行而不是横向溢出。 */
+.update-sec{margin:2px 0 16px}
+.update-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.update-title{
+  flex:1;min-width:0;font-family:var(--mono);font-size:13px;color:var(--t1);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.update-head .btn{flex:0 0 auto}
+.update-hint{font-size:12px;color:var(--t2);line-height:1.65;margin-bottom:3px}
+.update-hint.ok{color:var(--ok)}
+.update-hint.warn{color:#f0a5a5}
+.update-sub{font-size:11.5px;color:var(--t2);font-family:var(--mono);margin-bottom:3px}
+.update-label{font-size:11.5px;color:var(--t2);margin:8px 0 4px}
+.update-notes{
+  font-size:12px;color:var(--t2);line-height:1.7;
+  background:#141414;border:1px solid var(--line);border-radius:8px;
+  padding:9px 11px;max-height:220px;overflow:auto;
+}
+/* Notes 的正文排版**直接复用 .msg-body**（元素上同时挂这两个类）——
+ * 它是项目里唯一一处已经调好的 Markdown 排版（标题 / 列表 / 代码块 / 表格 /
+ * 引用 / 链接）。在这里再抄一套必然和消息区漂开，而且以后改消息区不会同步过来。
+ * 所以这里只加「容器」相关的东西：盒子、限高、滚动。 */
+.update-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 
 /* ============ 浮层（锚定在触发元素上方的弹层） ============ */
 

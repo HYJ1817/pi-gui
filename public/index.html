@@ -85,9 +85,12 @@
       <span class="rp-count" id="extCount"></span>
     </div>
 
+    <!-- 诊断入口上的小点：发现新版本时亮起（由 public/update.js 控制）。
+         刻意不新增侧栏一级入口 —— 版本检查属于诊断，不是一个新导航项。 -->
     <div class="rail-prov" id="navDiagnostics" title="运行状态与故障诊断">
       <svg class="rp-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4M12 16h.01"/><path d="M8.5 3.8l1 2M15.5 3.8l-1 2"/></svg>
       <span class="rp-label">诊断</span>
+      <span class="rp-dot" id="updateDot" hidden></span>
     </div>
 
     <div class="rail-prov" id="navProviders" title="添加 / 管理模型供应商">

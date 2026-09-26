@@ -20,6 +20,7 @@
  *   server/skills.js      Skills 的发现 / 详情 / 启停（只读 pi 的官方机制，不自造一套）
  *   server/mcp.js         MCP 能力报告（pi 0.87.0 无原生 MCP，如实说明 + 扩展清单）
  *   server/sessions.js    会话列表与切换（pi 有 switch_session 但没有「列出会话」的 RPC）
+ *   server/update-check.js 版本检查：只读 GitHub Release 元数据（不下载、不安装、不联网以外无副作用）
  *   server/uploads.js     附件上传与落盘
  *   server/git-routes.js  Git 接口的 HTTP 适配（业务在 lib/git.js）
  *   server/router.js      路由表与静态资源
@@ -51,6 +52,7 @@ import { createSessions } from './server/sessions.js';
 import { createSessionSearch } from './server/session-search.js';
 import { createPiCompat } from './server/pi-compat.js';
 import { createSkills } from './server/skills.js';
+import { createUpdateCheck } from './server/update-check.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
 import { createScheduler } from './server/planner/scheduler.js';
@@ -267,6 +269,17 @@ const diagnostics = createDiagnostics({
   env: process.env,
 });
 
+/* P5 版本检查：只读公开 GitHub Release 元数据，判断有没有新版。
+ *
+ * 版本号**从上面那个 VERSION 注入** —— 那是全项目版本号的唯一真相
+ * （打包期由 esbuild 写死，开发期读 package.json）。这里刻意不自己再读一次
+ * package.json：两份来源迟早会漂，而「诊断说 0.11.1、更新检查说 0.11.0」
+ * 这种自相矛盾极难排查。
+ *
+ * fetch 用全局的（Node ≥ 22 自带），不注入就代表走真实网络；
+ * 测试一律显式注入假 fetch，所以**默认测试不访问公网**。 */
+const updateCheck = createUpdateCheck({ version: VERSION });
+
 const route = createRouter({
   auth,
   sse,
@@ -282,6 +295,7 @@ const route = createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  updateCheck,
   compat: piCompat,
 });
 

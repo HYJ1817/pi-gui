@@ -1,4 +1,5 @@
 import { fetchDiagnostics } from './api.js';
+import { renderUpdateSection } from './update.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
@@ -101,9 +102,18 @@ function render(card, close, payload) {
    * 否则内容一多，底部四个按钮会被推出可视区。 */
   const body = node('div', 'diag-body');
 
+  /* ---------- 版本与更新（P5） ----------
+   *
+   * 放在最前面：这是用户来诊断面板常找的东西之一，而「检查更新」需要一个
+   * 稳定、可见的落点。**刻意不在侧栏新开一级入口** —— 更新检查是诊断的一部分，
+   * 不是第七个主导航项。
+   *
+   * 版本号由这里传进去（来自诊断快照的 app.version，后端 VERSION 是唯一真相），
+   * 前端不硬编码。状态由 update.js 持有，所以关掉再打开面板状态不会丢。 */
+  renderUpdateSection(body, d.app?.version);
+
   const rows = node('div', 'stat-rows');
   rows.append(
-    row('Pi GUI', d.app?.version),
     row('系统', [d.system?.os, d.system?.release, d.system?.arch].filter(Boolean).join(' ')),
     row('Node', d.system?.node),
     row('项目', d.project?.selected ? d.project?.name || '已选择' : '未选择'),

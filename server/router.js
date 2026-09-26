@@ -72,6 +72,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param gitRoutes     Git 路由（handle）
  * @param uploads       附件上传（handle）
  * @param diagnostics   诊断信息（handle）
+ * @param updateCheck   版本检查（handle）
  * @returns {import('node:http').RequestListener}
  */
 export function createRouter({
@@ -89,6 +90,7 @@ export function createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  updateCheck,
   compat = null,
 }) {
   function handleCommand(req, res) {
@@ -143,6 +145,13 @@ export function createRouter({
     }
     if (url.pathname === '/api/diagnostics') {
       return diagnostics.handle(req, res, url);
+    }
+    /* 版本检查（P5）。独立顶层路径，**必须排在下面 `req.method !== 'GET' → 405`
+     * 之前** —— 它自己要能给 POST 回 405（而不是被兜底吞掉，那种静默失败
+     * 前端只会看到一个没有 JSON 的 405）。 */
+    if (url.pathname === '/api/update') {
+      if (!updateCheck) return json(res, 503, { ok: false, error: '更新检查未启用' });
+      return updateCheck.handle(req, res, url);
     }
     // 必须排在下面那条前缀匹配之前 —— 否则 /api/providers/models 会被
     // 当成「保存一个叫 models 的供应商」，而且前端拿不到任何报错。

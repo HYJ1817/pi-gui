@@ -48,6 +48,7 @@ const {
   probe: probeExistingServer,
   isSelfUrl: isSelfUrlOf,
   isSafeExternal,
+  isSafeReleaseUrl,
 } = require('./net-probe.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
@@ -259,6 +260,41 @@ function installOpenPathHandler() {
     const err = await shell.openPath(body.abs);
     if (err) return { ok: false, error: err };
     return { ok: true, abs: body.abs };
+  });
+}
+
+/** 处理渲染进程发来的「用系统浏览器打开这个链接」（版本检查的 Release / 下载）。
+ *
+ * ---------- 为什么判定放在这里，而不是页面里 ----------
+ *
+ * 页面只能说「请打开这个 URL」，**能不能打开由主进程决定**。这是本项目一贯的
+ * 做法（和 openPath 那条同一个思路）：renderer 永远不持有 shell 能力，
+ * 所以即便页面被注入脚本，它能做到的也只是「请求主进程打开一个
+ * https + GitHub 官方 host 的地址」。
+ *
+ * 判据是 net-probe.cjs 的 isSafeReleaseUrl —— 比通用导航用的 isSafeExternal
+ * 更严：**必须 https，且 host 在 GitHub 官方白名单里**。
+ * 这样「用系统浏览器打开站外地址」这条路在桌面版里根本不成立。
+ *
+ * 注意这里**不查后端**：URL 本身就是判据，不需要向任何服务求证。
+ * 另外刻意不做「先 GET 一下看看」这类预检 —— 那会给用户点开的链接
+ * 平白多出一次请求，而且和浏览器实际发的请求并不是同一个。 */
+function installOpenExternalHandler() {
+  ipcMain.handle('pi-gui:open-external', async (_e, url) => {
+    const target = typeof url === 'string' ? url.trim() : '';
+    if (!target) return { ok: false, error: '缺少链接' };
+    if (!isSafeReleaseUrl(target)) {
+      /* 不回显被拒的 URL —— 它可能是页面被注入后塞进来的东西，
+       * 没必要再让它出现在 toast / 日志里。 */
+      return { ok: false, error: '已拒绝打开非 GitHub 官方链接' };
+    }
+    // openExternal 失败时 reject（不是返回错误串，与 openPath 相反）
+    try {
+      await shell.openExternal(target);
+    } catch (err) {
+      return { ok: false, error: '打开失败：' + (err && err.message ? err.message : String(err)) };
+    }
+    return { ok: true };
   });
 }
 
@@ -530,9 +566,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      /* 只为「用系统默认程序打开文件」挂一个桥（见 preload.cjs）。
-       * contextIsolation 保持开启 —— 桥经 contextBridge 暴露，
-       * 页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
+      /* 只为「用系统默认程序打开文件」与「用系统浏览器打开 Release 链接」
+       * 挂一个桥（见 preload.cjs）。contextIsolation 保持开启 —— 桥经
+       * contextBridge 暴露，页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
       preload: path.join(__dirname, 'preload.cjs'),
     },
   });
@@ -665,9 +701,11 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(null);
     // 令牌头的注入必须赶在窗口发第一个请求之前装好
     installTokenHeader();
-    // 「用系统默认程序打开文件」的 IPC —— 必须在 createWindow 之前注册，
-    // 否则页面首帧就调用的话会拿到 "No handler registered"。
+    // 「用系统默认程序打开文件」与「用系统浏览器打开链接」两个 IPC ——
+    // 必须在 createWindow 之前注册，否则页面首帧就调用的话会拿到
+    // "No handler registered"。
     installOpenPathHandler();
+    installOpenExternalHandler();
     // 用户数据目录先建出来 —— 后端启动就要往里写 projects.json
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true });

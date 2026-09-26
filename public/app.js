@@ -61,6 +61,7 @@ import { loadPlannerBadge, openPlanner } from './planner.js';
 import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics } from './diagnostics.js';
+import { initUpdateAuto } from './update.js';
 
 /* ---------- 装配 ---------- */
 
@@ -803,3 +804,9 @@ el.input.focus();
 
 // 先拿到 cwd 再连事件流，保证导出提示里的路径一开始就是绝对的
 loadStatus().then(connect);
+
+/* 版本检查：启动后**延迟**跑一次，不阻塞启动、不在启动瞬间请求
+ * （那时 pi 桥接正在拉起，任何并发都只会互相干扰）。
+ * 失败与无更新都完全静默，只有真的发现新版才给一次轻提示 ——
+ * 不弹 Modal、不重复打扰。详见 public/update.js。 */
+initUpdateAuto();

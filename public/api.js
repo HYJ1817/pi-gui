@@ -58,6 +58,13 @@ export const fetchStatus = () => getJSON('/api/status');
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProjects = () => getJSON('/api/projects');
 
+/** 版本检查（P5）。后端只读公开 GitHub Release 元数据，不下载、不安装。
+ *
+ *  `force` 绕过后端 30 分钟的缓存 —— 只有用户**主动**点「检查更新」时才用；
+ *  自动检查走缓存，避免每次启动都打 GitHub（也避开限流）。
+ *  后端对并发请求做了 single-flight，所以连点也不会打出一串请求。 */
+export const fetchUpdate = (force = false) => getJSON('/api/update' + (force ? '?force=1' : ''));
+
 export const createProject = (path, name) => sendJSON('/api/projects', { body: { path, name } });
 export const deleteProject = (path) => sendJSON('/api/projects?path=' + encodeURIComponent(path), { method: 'DELETE' });
 export const activateProject = (path) => sendJSON('/api/projects/activate', { body: { path } });
