@@ -31,7 +31,7 @@
 
 ```
 smoke 582 · git 151 · modules 114 · reliability · interactions · port-owner
-project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 71
+project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 72
 body-integrity 5 · dev-server 20 · models-api 50 · server-security 36
 diagnostics · electron-guard 50
 ```
@@ -127,8 +127,9 @@ runner，而 22.x 内部的补丁差异不是这个项目要防的风险。
 `test:installer` 会真的安装、建快捷方式、启动一次、再卸载。runner 是一次性虚拟机，
 所以这是安全的；但它比 CI 慢一个量级，不该挂在每次 push 上。
 
-> ⚠️ 本机开发环境里 `reg.exe` 被安全策略拉黑，`test:installer` 有 5 条注册表断言
-> 会被跳过（显示 `15/15 通过（5 条跳过）`）。GitHub runner 上没有这个限制。
+> ⚠️ **受限环境里 `reg.exe` 会被安全策略拉黑** —— 那时 4 条注册表断言
+> （以及解析不到桌面目录时的桌面快捷方式断言）会被**跳过**，而不是误报失败；
+> 跳过的条目会在输出里逐条点名。GitHub runner 上一般都能跑全。
 
 ### E. 界面视觉核对
 
@@ -152,7 +153,7 @@ npm run test:exe                  # 单文件 exe（47 项）
 npm run test:app                  # Electron 应用目录（25 项）
 npm run build:installer -- --zip  # 安装程序 + 便携版 + SHA256SUMS.txt
 npm run test:portable             # 便携版 zip（11 项）
-npm run test:installer            # 真装一遍再卸（20 项，本机 5 条跳过）
+npm run test:installer            # 真装一遍再卸（20 项）
 ```
 
 等价的手动入口：GitHub Actions 里跑 **Release check**（`workflow_dispatch`）。
