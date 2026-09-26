@@ -882,6 +882,14 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 它是项目里唯一一处已经调好的 Markdown 排版（标题 / 列表 / 代码块 / 表格 /
  * 引用 / 链接）。在这里再抄一套必然和消息区漂开，而且以后改消息区不会同步过来。
  * 所以这里只加「容器」相关的东西：盒子、限高、滚动。 */
+/* Notes 里的链接是 <span data-release-href> 而**不是** <a> —— 真 <a href> 的
+   导航不止左键一种（中键走 auxclick、右键菜单「在新标签页打开」根本不经 JS），
+   换成 span 才能保证所有触发方式都走 openExternal 的白名单校验。
+   所以 .msg-body a 那套外观在这里不生效，要自己给一份。 */
+.update-notes .update-link{
+  color:var(--accent);cursor:pointer;border-bottom:1px solid rgba(232,163,61,.35);
+}
+.update-notes .update-link:hover{border-bottom-color:var(--accent)}
 .update-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 
 /* ============ 浮层（锚定在触发元素上方的弹层） ============ */

@@ -19,9 +19,15 @@
  * ---------- Release Notes 是不可信外部 Markdown ----------
  *
  * 复用 public/markdown.js（先整体转义再插白名单标签，XSS 在语法层面不成立），
- * **绝不** `innerHTML = release.body`。除此之外这里还多做一件事：
- * 笔记里的链接点击被拦下，改走同一套外链白名单 —— 否则一条
- * 「[点这里领奖](https://evil.example)」就能把用户引到站外。
+ * **绝不** `innerHTML = release.body`。除此之外这里还多做两件事：
+ *
+ *   1. 笔记里的链接**按 host 白名单过滤**（见 sanitizeNoteLinks）——
+ *      否则一条「[点这里领奖](https://evil.example)」就能把用户引到站外。
+ *   2. 通过白名单的链接也**不渲染成真 `<a>`**，而是 `<span data-release-href>`。
+ *      真 `<a href>` 的导航不止左键一种：中键走 auxclick、右键菜单
+ *      「在新标签页打开」根本不经 JS —— 只在 click 上拦，其余路径会落到
+ *      Electron 的 will-navigate（那里的判据是宽松的 isSafeExternal）
+ *      或浏览器的默认行为上，语义就漏了。
  */
 
 import { fetchUpdate } from './api.js';
@@ -99,21 +105,78 @@ function setState(next) {
   applyDot();
   if (mounted && mounted.isConnected) paint(mounted);
 }
-/* ---------- 外链 ----------
+/* ---------- 外链白名单 ----------
+ *
+ * 判定与 `server/update-check.js`（后端 ESM）和 `electron/net-probe.cjs`
+ * （主进程 CJS）**必须一致**。为什么是三份而不是一份：浏览器只能加载
+ * `public/` 下的模块，后端那两份分别在 `server/` 与 `electron/` 里、且后者是 CJS，
+ * 跨这三种运行时共享一个模块要么得把它塞进后端 bundle（把 Electron 代码拖进
+ * 服务器）、要么得在运行时按相对路径 require（打包后路径不同）—— 代价都比这十行大。
+ *
+ * 三份都由测试钉着，且**两两对拍**：
+ *   tests/update-check.cjs：后端 ↔ 主进程
+ *   tests/smoke.cjs：       前端 ↔ 主进程   （传递出三份一致）
+ *
+ * 为什么前端这一份**不是**可有可无的「预检」：网页版（npm start）没有主进程
+ * 可转发，**浏览器就是最后一道边界**。安全语义不该因为少了一层而变松。
+ */
+const RELEASE_HOSTS = ['github.com', 'api.github.com', 'githubusercontent.com'];
+const GITHUBUSERCONTENT_SUFFIX = '.githubusercontent.com';
+
+/** 这个 URL 能不能作为 Release / 下载链接打开。纯函数，不抛。 */
+export function isSafeReleaseUrl(url) {
+  let u;
+  try {
+    u = new URL(String(url || ''));
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'https:') return false;
+  // 带用户名/密码的 URL 不认 —— `https://evil@github.com/` 会被当成 github.com
+  if (u.username || u.password) return false;
+  const host = u.hostname.toLowerCase();
+  if (RELEASE_HOSTS.includes(host)) return true;
+  // 带点的后缀匹配，`evilgithubusercontent.com` 不会命中
+  return host.endsWith(GITHUBUSERCONTENT_SUFFIX);
+}
+
+/** 把 Release Notes 里的链接收进白名单。
+ *
+ * 处理方式与 markdown.js 对危险 scheme 的做法一致：**白名单外的一律退化成
+ * 纯文本**（`文案（URL）`）—— 用户看得见原文，但点不动；白名单内的换成
+ * `<span data-release-href>`，于是所有触发方式都得走 openExternal。
+ *
+ * 这一步必须在**渲染时**做。只在 click 上拦是不够的（见文件头的说明）。 */
+function sanitizeNoteLinks(root) {
+  for (const a of [...root.querySelectorAll('a')]) {
+    const href = a.getAttribute('href') || '';
+    if (!isSafeReleaseUrl(href)) {
+      a.replaceWith(document.createTextNode(`${a.textContent || ''}（${href}）`));
+      continue;
+    }
+    const span = document.createElement('span');
+    span.className = 'update-link';
+    span.setAttribute('data-release-href', href);
+    // 搬子节点而不是 textContent —— 链接文案里可能有 **粗体** / `代码` 这类行内标记
+    while (a.firstChild) span.appendChild(a.firstChild);
+    a.replaceWith(span);
+  }
+}
+
+/* ---------- 打开外链 ----------
  *
  * 页面只能说「请打开这个 URL」，**能不能打开由主进程决定**
  * （electron/main.cjs 的 pi-gui:open-external → net-probe.cjs 的
- * isSafeReleaseUrl：https + GitHub 官方 host）。页面从来不持有 shell 能力。
+ * isSafeReleaseUrl）。页面从来不持有 shell 能力。
  *
- * 这里只做一层很薄的 scheme 预检，为的是网页版（npm start，没有主进程可转发）
- * 那条回退分支 —— 那种情况下浏览器是唯一的边界，而它只认 https 才安全。
- * **host 白名单的权威判定在主进程，不在页面。**
+ * 但**白名单在两种运行形态下都执行**：网页版没有主进程可转发，
+ * 那时这里就是最后一道边界 —— 语义不能因为少了一层而变松。
  */
 export async function openExternal(url) {
   const target = String(url || '');
-  if (!/^https:\/\//i.test(target)) {
-    toast('已拒绝打开非 https 链接', 'warn');
-    return { ok: false, error: '已拒绝打开非 https 链接' };
+  if (!isSafeReleaseUrl(target)) {
+    toast('已拒绝打开非 GitHub 官方链接', 'warn');
+    return { ok: false, error: '已拒绝打开非 GitHub 官方链接' };
   }
 
   const bridge = globalThis.piGuiDesktop;
@@ -303,14 +366,15 @@ function paintAvailable(box, shownVersion) {
      * 本文件里往 innerHTML 写**内容**只有这一处，且来源是 md() 的返回值，
      * 不是外部原文 —— 绝不 `innerHTML = release.body`。 */
     notesEl.innerHTML = md(notes);
-    /* 笔记里的链接同样要过外链白名单 —— 否则一条恶意 release note 里的
-     * 「[点这里](https://evil.example)」就能把用户引到站外。 */
+    /* 渲染完立刻把链接收进白名单：白名单外的退化成纯文本、白名单内的换成
+     * 非 <a> 的可点元素。必须在渲染时做，见 sanitizeNoteLinks 的说明。 */
+    sanitizeNoteLinks(notesEl);
     notesEl.addEventListener('click', (e) => {
-      const a = e.target && e.target.closest ? e.target.closest('a') : null;
-      if (!a) return;
+      const t = e.target && e.target.closest ? e.target.closest('[data-release-href]') : null;
+      if (!t) return;
       e.preventDefault();
       e.stopPropagation();
-      openExternal(a.getAttribute('href'));
+      openExternal(t.getAttribute('data-release-href'));
     });
     box.appendChild(notesEl);
     if (release.notesTruncated) {
