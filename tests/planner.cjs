@@ -354,17 +354,32 @@ async function mkProject(name) {
     treeAc.abort();
     await treePromise;
     await sleep(3200);
+    /* ⚠️ 判「孙子还活着」不能只看 PID。
+     *
+     * `tasklist /FI "PID eq N"` 在 PID 被复用时会把**别的进程**当成它 ——
+     * 而这台机器上跑测试时会起大量 node 进程，复用得很快，于是偶发假红
+     * （单独跑必过、全链条里偶尔失败）。
+     *
+     * 改成核对**命令行**：孙子是 `node -e <脚本> <marker 路径>` 起来的，
+     * 所以只有命令行里含那个唯一 marker 路径的，才算「我们那个孙子」。
+     * 这一条与 PID 复用无关。 */
     const pidAlive = (pid) => {
       try {
-        const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`], { encoding: 'utf8', windowsHide: true });
-        return out.includes(String(pid));
+        const out = execFileSync(
+          'powershell',
+          ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`],
+          { encoding: 'utf8', windowsHide: true, timeout: 20000 }
+        );
+        return out.includes(marker);
       } catch {
-        return false; // tasklist 不可用时不据此判否
+        return false; // 查不到就当它已经不在了（PID 不存在时 CIM 返回空）
       }
     };
-    check('29. 取消时收掉整棵进程树（孙进程 PID 已经不在了）', () => {
+    check('29. 取消时收掉整棵进程树（孙子已经不在了）', () => {
       if (!gcPid) return '没拿到孙进程 PID（父进程可能没起来）';
-      return (!pidAlive(gcPid) && !fs.existsSync(marker)) || `孙进程还活着 pid=${gcPid} 或写下了文件`;
+      const alive = pidAlive(gcPid);
+      const wrote = fs.existsSync(marker);
+      return (!alive && !wrote) || `孙子还在=${alive} / 写下了文件=${wrote}`;
     });
 
     // 注意：不能在 -e 脚本里内联 300KB 字符串 —— Windows 命令行长度上限会先把它截掉，
