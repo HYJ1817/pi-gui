@@ -54,13 +54,20 @@ import path from 'node:path';
 import { json } from './http-utils.js';
 
 /* 上限。存在的意义是**兜底**，不是「防恶意」—— 服务只监听回环，
- * 真正要防的是「一个异常的大会话把一次搜索拖死」。 */
+ * 真正要防的是「一个异常的大会话把一次搜索拖死」。
+ *
+ * ⚠️ 这里**没有**「最多扫几个会话」这一项，是有意的：加一个数量上限会让
+ * 「第 N 个以后的会话永远搜不到」（按更新时间倒序截断的话，越老的越搜不到）。
+ * 一次搜索实际上被三样东西夹住：
+ *   1. **候选集** —— `sessions.ownedSessions()` 自己扫目录，它有一条候选上限
+ *      （`MAX_SESSIONS * 4`，见 server/sessions.js）；
+ *   2. **单个会话读多少** —— `maxSessionBytes`；
+ *   3. **一共读多少** —— `maxTotalBytes`，到顶就停，并在 `scanned.truncated` 里报出来。
+ * 结果侧另有 `maxResults` / `maxMatchesPerSession`。 */
 export const LIMITS = Object.freeze({
-  /** 单次搜索最多看几个会话（按更新时间倒序）。 */
-  maxSessions: 200,
   /** 单个会话最多读多少字节（超出部分不索引，并在结果里标 truncated）。 */
   maxSessionBytes: 8 * 1024 * 1024,
-  /** 单次搜索的总读取预算 —— 防止「200 × 8MB」这种量级。 */
+  /** 单次搜索的总读取预算 —— 到顶就停，而不是无限读下去。 */
   maxTotalBytes: 48 * 1024 * 1024,
   /** 每个会话最多回几条命中。 */
   maxMatchesPerSession: 5,
