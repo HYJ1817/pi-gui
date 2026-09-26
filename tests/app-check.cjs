@@ -56,7 +56,23 @@ const FIX = path.join(os.tmpdir(), 'pi-gui-fixtures');
 const FAKE_PI_DIR = path.join(os.tmpdir(), 'pi-gui-appcheck-bin');
 fs.mkdirSync(FAKE_PI_DIR, { recursive: true });
 const FAKE_PI_SCRIPT = path.join(FAKE_PI_DIR, 'fake-pi.cjs');
-fs.writeFileSync(FAKE_PI_SCRIPT, 'setInterval(function () {}, 1e9);\n', 'utf8');
+/* ⚠️ 假 pi 必须**父进程一死就自己退出**。
+ *
+ * 否则它会变成孤儿进程占住 cwd（= WORK），Windows 上那个目录就再也删不掉 ——
+ * 下一次跑这个测试，开头 `rmSync(WORK)` 直接 EPERM，**连跑两次必复现**。
+ * 实测泄漏出来的进程父 PID 已经不存在了：`taskkill /T` 是按进程树杀的，
+ * 中间那层 cmd.exe 先死之后，孙子就逃出了树。 */
+fs.writeFileSync(
+  FAKE_PI_SCRIPT,
+  [
+    'const parentPid = process.ppid;',
+    'setInterval(() => {',
+    '  try { process.kill(parentPid, 0); } catch { process.exit(0); }',
+    '}, 400);',
+    '',
+  ].join('\n'),
+  'utf8'
+);
 const FAKE_PI = path.join(FAKE_PI_DIR, 'fake-pi.cmd');
 /* ⚠️ shim 的**正文必须是纯 ASCII**。
  *
