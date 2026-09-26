@@ -197,7 +197,8 @@ GitHub 的 `body` 是**不可信外部 Markdown**，所以：
 - 复用项目已有的安全渲染器 `public/markdown.js`（**先整体转义，再插入自己
   生成的白名单标签** ⇒ XSS 在语法层面不成立），**绝不** `innerHTML = release.body`
 - 最大展示 4000 字，超出截断并提示「完整内容见 Release 页面」
-- 说明里的**链接点击会被拦下**，改走同一套外链白名单 —— 否则一条
+- 说明里的**链接按 host 白名单在渲染时就收口**（见第八节的
+  「Release Notes 里的链接为什么不是 `<a>`」）—— 否则一条
   「[点这里领奖](https://evil.example)」就能把用户引到站外
 
 ### 资产识别
@@ -226,34 +227,64 @@ githubusercontent.com        （含 objects. / raw. 等 *.githubusercontent.com�
 `http:` / `file:` / `javascript:` / `data:` / `ftp:` 与任意第三方 host 一律拒绝，
 **连响应里都不会出现**（后端先过滤）。
 
-判定在**两个独立的位置**各做一遍：
+判定在**三个位置**各做一遍，而且**语义完全相同**：
 
 | 位置 | 作用 |
 |---|---|
 | `server/update-check.js` | 过滤 API 响应，不让站外 URL 进 DOM |
+| `public/update.js`（渲染时） | Release Notes 里的链接按 host 收口：白名单外的**退化成纯文本**，白名单内的也不渲染成真 `<a>` |
 | `electron/net-probe.cjs` | 主进程在 `shell.openExternal` 之前再拦一次 |
 
-两处都做，是因为它们是**两个不同的边界**：前者保护的是「不进 DOM」，
-后者保护的是「即便页面被注入脚本，也打不开站外地址」。
-`tests/update-check.cjs` 里有一条断言专门对拍两份实现的判定结果，防止名单漂开。
+三处都做，因为它们是**三个不同的边界**：后端保护的是「不进 DOM」，
+前端保护的是「网页版没有主进程时的最后一道」+「真 `<a>` 的所有触发方式」，
+主进程保护的是「即便页面被注入脚本，也打不开站外地址」。
+
+三份实现必须一致，且**两两对拍**（`tests/update-check.cjs` 对后端 ↔ 主进程，
+`tests/smoke.cjs` 对前端 ↔ 主进程，传递出三份一致）。
+为什么不共享一份：浏览器只能加载 `public/` 下的模块，另外两份分别在
+`server/` 与 `electron/` 里、且后者是 CJS —— 跨这三种运行时共享一个模块的代价
+比这十行大。
 
 > ⚠️ 这份名单与通用导航用的 `isSafeExternal`（只卡 scheme）**是两回事**，
 > 不要合并：收窄通用导航会改变既有行为（对话里的链接会打不开）。
 
 ### 谁来决定「能不能打开」
 
-**主进程。** 页面只能说「请打开这个 URL」：
+**桌面版是主进程；网页版是前端自己。** 两种形态下都是同一套白名单。
 
 ```js
 // public/update.js
-bridge.openExternal(url)   // 经 preload 的 contextBridge
-// → ipcMain.handle('pi-gui:open-external')
-// → isSafeReleaseUrl(url) 通过才 shell.openExternal
+isSafeReleaseUrl(url)      // ① 先过白名单（两种形态都执行）
+  ├─ 有 piGuiDesktop  → bridge.openExternal(url)   // 经 preload 的 contextBridge
+  │                     // → ipcMain.handle('pi-gui:open-external')
+  │                     // → isSafeReleaseUrl(url) 通过才 shell.openExternal
+  └─ 没有（npm start） → 新标签页
 ```
 
 页面里没有 `shell`、没有 `ipcRenderer`、也不用 `window.open` ——
-`tests/electron-guard.cjs` 有几条结构性断言盯着这件事。网页版
-（`npm start`）没有主进程可转发，退化成新标签页；那种情况下浏览器自己是边界。
+`tests/electron-guard.cjs` 有几条结构性断言盯着这件事。
+
+**网页版不是「浏览器自己是边界」。** 它没有主进程可转发，所以它**自己**就是
+最后一道边界，执行的是同一套 `https + GitHub 官方 host` 白名单 ——
+安全语义不因为少了一层而变松。`tests/smoke.cjs` 有专门一组断言在**没有**
+`piGuiDesktop` 的条件下验证：站外 host 被拒且**没有真的去打开**、
+`javascript:` / `file:` / `data:` / `http:` 全拒、GitHub 官方链接正常放行。
+
+### Release Notes 里的链接为什么不是 `<a>`
+
+`md()` 会把任意 `http(s)` 链接渲染成 `<a href target="_blank">`，而真 `<a>` 的
+导航**不止左键一种**：中键走 `auxclick`、右键菜单「在新标签页打开」根本不经 JS。
+只在 `click` 上拦，其余路径会落到 Electron 的 `will-navigate`
+（那里的判据是宽松的 `isSafeExternal`）或浏览器的默认行为上 —— 语义就漏了。
+
+所以渲染完立刻做一次收口（`sanitizeNoteLinks`）：
+
+- **白名单外** → 退化成纯文本 `文案（URL）`，用户看得见原文但点不动
+  （与 `markdown.js` 处理危险 scheme 的做法一致）
+- **白名单内** → 换成 `<span data-release-href>`，于是所有触发方式都得走
+  `openExternal`
+
+结果：Release Notes 里**一个真 `<a>` 都没有**，绕不过校验。
 
 ## 九、无网时会发生什么
 
@@ -325,8 +356,10 @@ npm run test:update        # 版本检查（87 项）
 **默认测试绝不访问真实 GitHub** —— 所有请求都走注入的假 fetch，
 而且有一条断言盯着「假 fetch 真的被用上了」。
 
-前端部分在 `tests/smoke.cjs` 的「版本检查与更新体验」一节（47 项）：
-状态机五种取值、连点、关闭再开、恶意 Release Notes、自动检查的静默与轻提示。
+前端部分在 `tests/smoke.cjs` 的「版本检查与更新体验」一节（61 项）：
+状态机五种取值、连点、关闭再开、恶意 Release Notes（含「一个真 `<a>` 都没有」）、
+**网页版 fallback 的白名单**（站外 host 被拒且没有真的去打开）、
+前端白名单与主进程实现的对拍、自动检查的静默与轻提示。
 主进程外链判定在 `tests/electron-guard.cjs`。
 
 ## 十三、相关文档

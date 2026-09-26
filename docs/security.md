@@ -93,10 +93,16 @@ Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
 | 通用导航（对话里的链接、`target=_blank`） | `isSafeExternal`：只放行 `http` / `https` | 这是既有行为，收窄它会让正常链接打不开 |
 | 版本检查的 Release / 下载 | `isSafeReleaseUrl`：**必须 `https` + GitHub 官方 host** | URL 来自外部响应，仓库被投毒时会变成「官方安装包」 |
 
-第二条在**两个独立位置**各做一遍：后端过滤 API 响应（不让站外 URL 进 DOM），
-主进程在 `shell.openExternal` 之前再拦一次（即便页面被注入脚本也打不开站外地址）。
-`tests/update-check.cjs` 有断言对拍两份实现，防止名单漂开。
-细节见 [updates.md](updates.md)。
+第二条在**三个位置**各做一遍，**语义完全相同**：后端过滤 API 响应
+（不让站外 URL 进 DOM）；前端在渲染 Release Notes 时按 host 收口
+（白名单外的链接退化成纯文本、白名单内的也不渲染成真 `<a>` —— 因为真 `<a>`
+的中键与右键菜单不经 JS，只在 click 上拦会漏）；主进程在 `shell.openExternal`
+之前再拦一次（即便页面被注入脚本也打不开站外地址）。
+
+**网页版没有主进程可转发，所以前端自己就是最后一道边界** ——
+它执行的是同一套白名单，安全语义不因为少了一层而变松。
+`tests/update-check.cjs` 对拍后端 ↔ 主进程，`tests/smoke.cjs` 对拍前端 ↔ 主进程，
+传递出三份一致。细节见 [updates.md](updates.md)。
 
 ## 三、不可信输入
 
@@ -136,7 +142,8 @@ Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
 照旧成立；额外再加两条：
 
 - **最大 4000 字**，超出截断（否则一篇长文能塞进几万个链接）
-- **说明里的链接点击被拦下**，改走 Release 那条外链白名单 ——
+- **说明里的链接按 host 白名单在渲染时收口**：白名单外的退化成纯文本，
+  白名单内的也不渲染成真 `<a>`（真 `<a>` 的中键 / 右键菜单不经 JS）——
   否则一条「[点这里领奖](https://evil.example)」就能把用户引到站外
 
 见 [updates.md](updates.md)。

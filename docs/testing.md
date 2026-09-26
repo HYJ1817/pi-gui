@@ -30,7 +30,7 @@
 `npm test` 里现在有 19 个套件，全部是**纯自动化**：
 
 ```
-smoke 649 · git 151 · modules 114 · reliability · interactions · port-owner
+smoke 663 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 72
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics · update-check 87 · electron-guard 75
