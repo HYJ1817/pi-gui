@@ -544,7 +544,6 @@ export function rebuildAssistant(bodyEl, msg) {
 export function rebuildFromMessages(data) {
   const msgs = Array.isArray(data) ? data : data?.messages || [];
   clearThread();
-
   const t = ensureThread();
   /* 先全拼进 DocumentFragment 再一次性挂上去（§17）：一段历史可能有几百条，
    * 逐条 append 会触发同样多次布局计算。 */
@@ -589,5 +588,35 @@ export function rebuildFromMessages(data) {
    * 恢复旧会话、fork、retry 之后走的都是这条路。不自己维护消息副本，
    * 所以这里不需要知道「刚才删了哪几条」。 */
   rebuildConversationNav();
-  scrollBottom(true);
+
+  /* 有人接管了定位就不再把视图拽到底部。
+   * scrollBottom 走的是 requestAnimationFrame —— 若定位在这之后同步发生，
+   * 那一帧会把刚滚到的位置又拉回最底（用户看到的是「跳转没生效」）。 */
+  let handled = false;
+  if (afterHistoryRendered) {
+    try {
+      handled = afterHistoryRendered() === true;
+    } catch {
+      /* 监听方自己炸了不该带塌历史重建 */
+      handled = false;
+    }
+  }
+  if (!handled) scrollBottom(true);
+}
+
+/* 「历史已经渲染完了」的生命周期事件。
+ *
+ * 为什么需要它：切会话是**异步**的 —— `afterSessionSwitch()` 只是
+ * `setTimeout(boot, 250)`，还要再等 `get_messages` 一个来回，重建才真的发生。
+ * 「切过去并跳到某次提问」如果靠 setTimeout(几百毫秒) 猜，在慢机器或大会话上
+ * 必然错。所以给一个明确的完成信号，而不是猜时间。
+ *
+ * 触发点放在**导航重建之后**：那一刻 DOM 与 minimap 都已就绪，滚动定位才有意义。
+ * 监听方返回 `true` 表示「这次位置由我决定」，调用方就不再滚到底。
+ *
+ * 用注册回调而不是 import —— messages.js 不能 import sessions.js / 搜索模块
+ * （会成环），而它也不该知道有谁在听。 */
+let afterHistoryRendered = null;
+export function setAfterHistoryRendered(fn) {
+  afterHistoryRendered = typeof fn === 'function' ? fn : null;
 }

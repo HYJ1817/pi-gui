@@ -310,6 +310,28 @@ function scrollToEntry(entry) {
   entry.element.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/**
+ * 跳到本会话的**第 N 次提问**（会话搜索结果的落点）。
+ *
+ * 复用现有的锚点表，**不另搞一套滚动定位**：`entries` 就是 DOM 里 `.msg.user`
+ * 的顺序，与后端扫会话文件时算出的 `userIndex` 是同一个序
+ * （见 server/session-search.js）。所以「第 N 次提问」两边指的是同一条消息。
+ *
+ * 越界就什么都不做、回 false，让调用方决定兜底 —— **定位失败不是错误**，
+ * 不该抛，也不该弹提示（用户看到会话已经切过去了就够了）。
+ *
+ * @returns {boolean} 真的滚动了才回 true
+ */
+export function scrollToUserTurn(index) {
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= entries.length) return false;
+  const e = entries[i];
+  if (!e || !e.element || !e.element.isConnected) return false;
+  scrollToEntry(e);
+  setCurrent(i);
+  return true;
+}
+
 /* ---------- 一次性装配 ---------- */
 
 export function initConversationNav() {

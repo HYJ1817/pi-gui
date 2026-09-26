@@ -243,6 +243,62 @@ const stubSessions = {
 let stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能' };
 const sessionCalls = [];
 
+/* ---------- /api/sessions/search 的桩（P3） ----------
+ *
+ * 形状照抄后端真实返回（server/session-search.js）。
+ * ⚠️ matches[].snippet 是**会话正文**，属于不可信输入 —— 所以这里故意塞一段
+ * HTML 进去，用来验证前端是当**文本**渲染的（textContent / 文本节点），
+ * 而不是拼进 innerHTML。把这条桩改成干净文本，那条断言就变成空转了。
+ *
+ * updatedAt 用「相对现在」算，这样 fmtTime 的输出稳定可断言。 */
+const SEARCH_ARCHIVED_HIT = {
+  id: 'cccccccccccccccc',
+  sessionId: '01a0d111-2222-3333-4444',
+  title: '上周的排查记录',
+  archived: true,
+  createdAt: '2026-09-20T07:35:32.469Z',
+  updatedAt: Date.now() - 3 * 86400_000,
+  messageCount: 5,
+  matchCount: 1,
+  matches: [{ type: 'assistant', index: 3, userIndex: 1, messageId: 'm3', timestamp: null, snippet: '失败任务 retry 后 attempt history 会重建' }],
+};
+const SEARCH_ACTIVE_HIT = {
+  id: 'bbbbbbbbbbbbbbbb',
+  sessionId: '01a0d257-4f74-71fc-8f53',
+  title: '修复 SSE 重连',
+  archived: false,
+  createdAt: '2026-09-24T07:35:32.469Z',
+  updatedAt: Date.now() - 3600_000,
+  messageCount: 6,
+  matchCount: 2,
+  matches: [
+    { type: 'title', index: 0, userIndex: 0, messageId: null, timestamp: null, snippet: '修复 SSE 重连' },
+    {
+      type: 'user',
+      index: 2,
+      userIndex: 1,
+      messageId: 'm2',
+      timestamp: null,
+      snippet: '为什么 bridgeRun 会重复增长 <img src=x onerror=alert(1)> 这一段',
+    },
+  ],
+};
+const stubSearch = {
+  ok: true,
+  query: 'bridge',
+  scope: 'active',
+  hasProject: true,
+  results: [SEARCH_ACTIVE_HIT, SEARCH_ARCHIVED_HIT],
+  scanned: { sessions: 3, bytes: 1234, skipped: 0, truncated: false },
+};
+const searchCalls = [];
+/* 每次搜索请求按顺序取一个计划项：{ delayMs, payload }。
+ * 用它造「旧请求回来得比新请求晚」的竞态。 */
+let searchPlan = [];
+const planSearch = (...items) => {
+  searchPlan = items.slice();
+};
+
 window.fetch = async (url, opts) => {
   const u = String(url);
   if (u.includes('/api/upload')) {
@@ -305,6 +361,24 @@ window.fetch = async (url, opts) => {
       };
     }
     return { json: async () => stubProjectConfig };
+  }
+  /* 搜索必须排在下面那条通用的 /api/sessions **前面** —— 否则会被它吃掉，
+   * 拿到一份会话列表当搜索结果（与后端路由那处「顺序即语义」是同一个坑）。 */
+  if (u.includes('/api/sessions/search')) {
+    const qs = new URL(u, 'http://x').searchParams;
+    const q = qs.get('q') || '';
+    const scope = qs.get('scope') || 'active';
+    searchCalls.push({ q, scope, url: u });
+    const plan = searchPlan.shift() || {};
+    return {
+      json: async () => {
+        if (plan.delayMs) await new Promise((r) => setTimeout(r, plan.delayMs));
+        if (plan.payload) return plan.payload;
+        // 默认：按 scope 过滤掉不符合的
+        const results = stubSearch.results.filter((r) => scope === 'all' || (scope === 'archived') === r.archived);
+        return { ...stubSearch, query: q, scope, results };
+      },
+    };
   }
   if (u.includes('/api/sessions')) {
     const method = (opts && opts.method) || 'GET';
@@ -3469,6 +3543,194 @@ staticCheck();
     check('重复历史重建仍只有一份消息', () => window.document.querySelectorAll('.msg.user').length === 1);
     window.fetch = baseFetch;
   }
+
+  /* ---------- 会话搜索（P3） ----------
+   *
+   * 放在最后：点搜索结果会 switch 会话 → afterSessionSwitch() → clearThread()，
+   * 前面所有依赖线程状态的用例都会被搅乱。 */
+  async function searchSection() {
+    searchCalls.length = 0;
+    searchPlan = [];
+    $('toasts').innerHTML = '';
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 80));
+
+    const proj = () => $('projects');
+    const box = () => proj().querySelector('.pj-sessions');
+    const input = () => proj().querySelector('.pj-search-input');
+    const area = () => proj().querySelector('.pj-sess-list');
+    const typeIn = async (v, waitMs) => {
+      input().value = v;
+      input().dispatchEvent(new window.Event('input', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, waitMs));
+    };
+
+    check('搜索：输入框就在会话区域里（不是新面板、不是弹层）', () => Boolean(box() && input()) || '没有搜索框');
+    check('搜索：有「活跃 / 已归档 / 全部」三个范围', () => {
+      const s = [...proj().querySelectorAll('.pj-search-scope')].map((b) => b.textContent);
+      return JSON.stringify(s) === JSON.stringify(['活跃', '已归档', '全部']) || JSON.stringify(s);
+    });
+    check('搜索：空关键词不发请求', () => searchCalls.length === 0 || JSON.stringify(searchCalls));
+    check('搜索：空关键词时显示普通会话列表', () => {
+      const rows = area() && area().querySelectorAll('.pj-sess');
+      return Boolean(rows && rows.length) || '列表是空的';
+    });
+
+    // 不足 2 个字符：提示、不发请求
+    await typeIn('b', 320);
+    check('搜索：关键词不足 2 个字符 → 提示、不发请求', () =>
+      (searchCalls.length === 0 && /至少 2 个字符/.test(area().textContent)) ||
+      JSON.stringify({ calls: searchCalls.length, t: area().textContent.slice(0, 60) }));
+
+    // debounce
+    searchCalls.length = 0;
+    input().value = 'bridge';
+    input().dispatchEvent(new window.Event('input', { bubbles: true }));
+    check('搜索：debounce —— 刚敲完不立刻发请求', () => searchCalls.length === 0 || JSON.stringify(searchCalls));
+    check('搜索：debounce 期间显示「正在搜索…」', () => /正在搜索/.test(area().textContent) || area().textContent.slice(0, 60));
+    await new Promise((r) => setTimeout(r, 400));
+    check('搜索：debounce 到点后只发一次请求，关键词正确', () =>
+      (searchCalls.length === 1 && searchCalls[0].q === 'bridge') || JSON.stringify(searchCalls));
+
+    // 结果渲染
+    check('搜索：结果里有会话标题', () => /修复 SSE 重连/.test(area().textContent) || area().textContent.slice(0, 120));
+    check('搜索：结果里有相对时间', () =>
+      /小时前|天前|分钟前|刚刚|\d\d-\d\d/.test(area().textContent) || area().textContent.slice(0, 120));
+    check('搜索：结果里有命中类型标记', () => {
+      const types = [...area().querySelectorAll('.pj-sr-type')].map((t) => t.textContent);
+      return (types.includes('标题') && types.includes('你问的')) || JSON.stringify(types);
+    });
+    check('搜索：活跃范围下不出现已归档的会话', () =>
+      area().querySelectorAll('.pj-sr-badge').length === 0 ||
+      JSON.stringify([...area().querySelectorAll('.pj-sr-badge')].map((b) => b.textContent)));
+    check('搜索：显示命中数量', () => /\d+ 处命中/.test(area().textContent) || area().textContent.slice(0, 120));
+    check('搜索：结果里不出现 .jsonl 文件名或绝对路径', () =>
+      !/\.jsonl|[A-Za-z]:[\\/]/.test(area().textContent) || '出现了文件名/路径');
+
+    /* snippet 是会话正文（不可信输入）—— 桩里故意塞了 <img onerror>，
+     * 它必须**原样显示成文本**，且 DOM 里不能真的出现 img 元素。 */
+    check('搜索：snippet 走文本节点（桩里的 <img onerror> 原样显示为文本）', () =>
+      area().textContent.includes('<img src=x onerror=alert(1)>') || 'HTML 被当成标签了');
+    check('搜索：snippet 里没有真的插入 img 元素（即没走 innerHTML）', () =>
+      area().querySelectorAll('img').length === 0 || `插进了 ${area().querySelectorAll('img').length} 个 img`);
+    check('搜索：关键词高亮是 <mark> 元素（安全建出来的）', () => {
+      const marks = [...area().querySelectorAll('.pj-sr-snip mark')].map((m) => m.textContent.toLowerCase());
+      return (marks.length > 0 && marks.every((m) => m === 'bridge')) || JSON.stringify(marks);
+    });
+
+    // 范围筛选
+    searchCalls.length = 0;
+    proj().querySelector('.pj-search-scope[data-scope="archived"]').onclick();
+    await new Promise((r) => setTimeout(r, 220));
+    check('搜索：点「已归档」立刻重搜且带 scope=archived', () =>
+      (searchCalls.length === 1 && searchCalls[0].scope === 'archived') || JSON.stringify(searchCalls));
+    check('搜索：归档范围的结果里只剩归档会话', () => {
+      const ids = [...area().querySelectorAll('.pj-sr')].map((r) => r.dataset.sessionId);
+      return (ids.length === 1 && ids[0] === 'cccccccccccccccc') || JSON.stringify(ids);
+    });
+    proj().querySelector('.pj-search-scope[data-scope="active"]').onclick();
+    await new Promise((r) => setTimeout(r, 220));
+
+    // 「全部」范围：归档会话要能被搜到，并且带「已归档」标记
+    proj().querySelector('.pj-search-scope[data-scope="all"]').onclick();
+    await new Promise((r) => setTimeout(r, 220));
+    check('搜索：「全部」范围下归档会话也能被搜到', () => {
+      const ids = [...area().querySelectorAll('.pj-sr')].map((r) => r.dataset.sessionId);
+      return ids.includes('cccccccccccccccc') || JSON.stringify(ids);
+    });
+    check('搜索：归档会话带「已归档」标记', () => {
+      const badges = [...area().querySelectorAll('.pj-sr-badge')].map((b) => b.textContent);
+      return badges.includes('已归档') || JSON.stringify(badges);
+    });
+    proj().querySelector('.pj-search-scope[data-scope="active"]').onclick();
+    await new Promise((r) => setTimeout(r, 220));
+
+    // 失败态 / 空态
+    searchPlan = [{ payload: { ok: false, error: '后端炸了' } }];
+    await typeIn('boom', 420);
+    check('搜索：失败时显示「搜索失败」而不是空白', () => /搜索失败/.test(area().textContent) || area().textContent.slice(0, 80));
+
+    searchPlan = [{ payload: { ok: true, query: 'zzz', scope: 'active', results: [] } }];
+    await typeIn('zzz', 420);
+    check('搜索：没有命中时显示「没有找到相关会话」', () =>
+      /没有找到相关会话/.test(area().textContent) || area().textContent.slice(0, 80));
+
+    // 清空 → 回到普通列表
+    await typeIn('', 140);
+    check('搜索：清空关键词 → 恢复普通会话列表', () => {
+      const rows = area() && area().querySelectorAll('.pj-sess');
+      return Boolean(rows && rows.length) || '没回到列表';
+    });
+
+    // stale：慢的旧请求回来时不能覆盖新结果
+    {
+      searchPlan = [
+        { delayMs: 320, payload: { ok: true, query: 'ab', scope: 'active', results: [{ ...SEARCH_ACTIVE_HIT, title: '【旧】不该出现' }] } },
+        { delayMs: 0, payload: { ok: true, query: 'abc', scope: 'active', results: [{ ...SEARCH_ACTIVE_HIT, title: '【新】应该留下' }] } },
+      ];
+      await typeIn('ab', 260); // 第一次请求（慢）
+      await typeIn('abc', 260); // 第二次请求（快），先回来
+      await new Promise((r) => setTimeout(r, 420)); // 等慢的那次也回来
+      const t = area().textContent;
+      check('搜索：旧请求回来晚了会被丢弃（不覆盖新结果）', () =>
+        (t.includes('【新】应该留下') && !t.includes('【旧】不该出现')) || JSON.stringify(t.slice(0, 140)));
+    }
+
+    // 切项目 → 丢掉搜索状态
+    {
+      searchPlan = [];
+      await typeIn('bridge', 420);
+      const before = area().textContent.includes('修复 SSE 重连');
+      window.renderProjects();
+      await new Promise((r) => setTimeout(r, 140));
+      check('搜索：切项目后搜索框清空、不再显示上一个项目的搜索结果', () =>
+        (before && input().value === '' && !area().textContent.includes('修复 SSE 重连')) ||
+        JSON.stringify({ before, val: input().value, t: area().textContent.slice(0, 60) }));
+    }
+
+    /* 点结果 → 切会话 → **定位到命中那次提问**。
+     * 放在最后：这一步会 clearThread()。 */
+    {
+      /* jsdom 没有 scrollIntoView，打个桩记录被滚到的是哪个元素 ——
+       * 这样能验证整条链路：点击 → switch → get_messages → 历史重建 →
+       * 「渲染完成」生命周期回调 → 滚到第 userIndex 次提问。 */
+      const scrolled = [];
+      const proto = window.Element.prototype;
+      const origScroll = proto.scrollIntoView;
+      proto.scrollIntoView = function () {
+        scrolled.push(this);
+      };
+
+      searchPlan = [];
+      await typeIn('bridge', 420);
+      sessionCalls.length = 0;
+      /* 用「你问的」那一条命中（桩里 userIndex=1）—— 定位要用的是**提问序号**，
+       * 不是消息 ID（前端 nav id 是渲染时现发的计数器，跨重建不稳定）。 */
+      const userHit = [...area().querySelectorAll('.pj-sr-hit')].find((h) => h.dataset.matchType === 'user');
+      check('搜索：结果里有可点的「你问的」命中行', () => Boolean(userHit) || '没找到');
+      if (userHit) userHit.onclick({ stopPropagation() {} });
+      await new Promise((r) => setTimeout(r, 140));
+      const hit = sessionCalls.find((c) => /\/switch/.test(c.url));
+      check('搜索：点结果会切到那个会话，传的是稳定 ID 而不是路径', () =>
+        Boolean(hit && hit.body && /^[0-9a-f]{16}$/.test(hit.body.id)) ||
+        JSON.stringify(sessionCalls.map((c) => c.url)));
+
+      // 历史回来了 → 应当滚到第 2 条用户消息（userIndex = 1）
+      const msgs = [1, 2, 3].map((i) => ({ role: 'user', content: [{ type: 'text', text: `第 ${i} 次提问` }] }));
+      es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: window.S.bridgeRun, _seq: 20001, data: { messages: msgs } });
+      await new Promise((r) => setTimeout(r, 140));
+      const users = [...$('stream').querySelectorAll('.msg.user')];
+      check('搜索：历史渲染完成后定位到命中那次提问（第 2 条，不是最底）', () =>
+        (users.length === 3 && scrolled.includes(users[1])) ||
+        JSON.stringify({ users: users.length, scrolled: scrolled.map((e) => users.indexOf(e)) }));
+
+      proto.scrollIntoView = origScroll;
+    }
+
+    await typeIn('', 140); // 收尾：别把搜索状态留给后面的用例
+  }
+
+  await searchSection();
 
   /* --- 会话一变就要重画侧栏列表 ---
    *

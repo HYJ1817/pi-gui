@@ -48,6 +48,7 @@ import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
 import { createSessions } from './server/sessions.js';
+import { createSessionSearch } from './server/session-search.js';
 import { createSkills } from './server/skills.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
@@ -185,6 +186,11 @@ const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
  * 归档 / 回收站是 Pi GUI 自己的状态，落在 <PI_GUI_DATA>/（不进 pi 的目录）。 */
 const sessions = createSessions({ runtime, rpc, env: process.env, dataDir: DATA_DIR });
 
+/* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
+ * import，而搜索必须复用同一处归属判定（见 server/session-search.js 的文件头）。
+ * 它只回答「关键词命中哪些会话的哪些消息」，切会话仍然走 sessions.switchTo。 */
+const sessionSearch = createSessionSearch({ runtime, sessions });
+
 /* Planner / Multi-Agent 编排层（P5）。
  *
  * 说清楚一件事：**pi 没有原生 sub-agent / plan mode**，所以这一层是
@@ -252,6 +258,7 @@ const route = createRouter({
   skills,
   mcp,
   sessions,
+  sessionSearch,
   planner,
   gitRoutes,
   uploads,

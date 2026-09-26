@@ -320,6 +320,7 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
       skills: { handle: passthrough('skills') },
       mcp: { handle: passthrough('mcp') },
       sessions: mod,
+      sessionSearch: { handle: passthrough('sessionSearch') },
       planner: { handle: passthrough('planner') },
       gitRoutes: { handle: passthrough('git') },
       uploads: { handle: passthrough('uploads') },

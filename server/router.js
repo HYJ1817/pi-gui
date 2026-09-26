@@ -67,6 +67,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
  * @param sessions      会话列表与切换（handle）
+ * @param sessionSearch 会话全文搜索（handle）
  * @param planner       Planner / Agent 编排（handle）
  * @param gitRoutes     Git 路由（handle）
  * @param uploads       附件上传（handle）
@@ -83,6 +84,7 @@ export function createRouter({
   skills,
   mcp,
   sessions,
+  sessionSearch,
   planner,
   gitRoutes,
   uploads,
@@ -159,6 +161,13 @@ export function createRouter({
     }
     if (url.pathname === '/api/mcp') {
       return mcp.handle(req, res, url);
+    }
+    /* 会话全文搜索（P3）。
+     * **必须排在下面 `/api/sessions/` 前缀匹配之前** —— 否则会被会话模块整个吃掉，
+     * 症状是静默的（搜索请求拿到的是会话列表 / 405）。这与 providers/models
+     * 和 project-config 那两处是同一类坑：顺序即语义。 */
+    if (url.pathname === '/api/sessions/search') {
+      return sessionSearch.handle(req, res, url);
     }
     /* 会话列表与切换。切换是 POST，**必须排在 405 兜底之前**。 */
     if (url.pathname === '/api/sessions' || url.pathname.startsWith('/api/sessions/')) {

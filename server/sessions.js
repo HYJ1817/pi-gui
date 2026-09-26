@@ -110,16 +110,27 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     }
     if (!header || header.type !== 'session' || !header.id) return null;
 
-    let title = '';
+    let firstUserText = '';
+    let named = '';
     let messageCount = 0;
     let lastTs = header.timestamp || null;
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
-      if (!line || line.indexOf('"message"') === -1) continue;
+      /* 快筛：只关心 message 与 session_info 两类行，其余（模型切换、用量、
+       * 标签、压缩…）不做 JSON.parse。 */
+      if (!line || (line.indexOf('"message"') === -1 && line.indexOf('"session_info"') === -1)) continue;
       let e;
       try {
         e = JSON.parse(line);
       } catch {
+        continue;
+      }
+      if (e.type === 'session_info') {
+        /* pi 的 `set_session_name` 把名字写在这里。**用户明确起的名字优先于
+         * 第一条用户消息** —— 不读它的话，改名一刷新就退回原样（列表上看着
+         * 像「改名没生效」），而 P3 的搜索又要按标题搜。
+         * 多条时后者胜（后一次改名覆盖前一次）。 */
+        if (typeof e.name === 'string' && e.name.trim()) named = e.name.trim().replace(/\s+/g, ' ').slice(0, MAX_TITLE);
         continue;
       }
       if (e.type !== 'message') continue;
@@ -130,9 +141,9 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
        * 不是顶层的 role/content（第一版按顶层读，结果 14 条消息一条标题都抽不出来）。
        * 两种形状都认，免得 pi 换格式时又静默失效。 */
       const body = e.message && typeof e.message === 'object' ? e.message : e;
-      // 标题取**第一条用户消息** —— 那是人一眼能认出「这是哪次对话」的东西
-      if (!title && body.role === 'user') {
-        title = textOf(body.content).replace(/\s+/g, ' ').slice(0, MAX_TITLE);
+      // 标题退路取**第一条用户消息** —— 那是人一眼能认出「这是哪次对话」的东西
+      if (!firstUserText && body.role === 'user') {
+        firstUserText = textOf(body.content).replace(/\s+/g, ' ').slice(0, MAX_TITLE);
       }
     }
 
@@ -152,7 +163,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       lastMessageAt: lastTs,
       updatedAt: mtime,
       messageCount,
-      title: title || '（还没有消息）',
+      title: named || firstUserText || '（还没有消息）',
       truncated: r.truncated,
       bytes: r.size,
     };
@@ -187,20 +198,25 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
   }
 
   /**
-   * 当前项目的会话列表。
-   * @returns {{ok:boolean, hasProject:boolean, sessions:Array, currentId:string|null, diagnostics:Array}}
-   *   **不回绝对路径**（见下面的说明）。
+   * 当前项目**归属正确**的会话（含归档标记），**排除软删除**。
+   *
+   * 列表与搜索**共用这一处归属判定** —— 安全上只允许有一个地方回答
+   * 「这条会话属不属于当前项目」。搜索另写一份的话，两份迟早会漂，
+   * 而漂掉的那一份就是一个跨项目读取的口子。
+   *
+   * @returns {{cwd:string|null, items:Array, skipped:number}}
+   *   items 的每一项都带 `file`（**绝对路径，只给后端内部用，不许出现在响应里**）。
    */
-  async function list() {
-    const cwd = runtime.getCurrentCwd();
-    const diagnostics = [];
-    if (!cwd) return { ok: true, hasProject: false, sessions: [], currentId: null, diagnostics };
-
+  function ownedSessions(cwd = runtime.getCurrentCwd()) {
+    if (!cwd) return { cwd: null, items: [], skipped: 0 };
     const want = normCwd(cwd);
-    const files = candidateFiles(cwd).slice(0, MAX_SESSIONS * 4);
-    const sessions = [];
+    const flags = readFlags();
+    const deleted = new Set(flags.deleted.map((d) => d && d.sessionId).filter((x) => typeof x === 'string'));
+    const archived = new Set(flags.archived);
+    const items = [];
     let skipped = 0;
-    for (const f of files) {
+
+    for (const f of candidateFiles(cwd).slice(0, MAX_SESSIONS * 4)) {
       const s = summarize(f);
       if (!s) {
         skipped++;
@@ -208,8 +224,28 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       }
       // **归属判定只认 header.cwd**，不认目录名
       if (normCwd(s.cwd) !== want) continue;
-      sessions.push(s);
+      const key = flagKey(s);
+      /* 软删除是把文件**移出** sessions 目录，所以正常路径下它已经不在
+       * candidateFiles 里了；这里再按 flags 挡一道，是为了「文件被手工挪回来」
+       * 时不至于让它复活 —— 删除在用户看来必须是不可见的。 */
+      if (deleted.has(key)) continue;
+      s.archived = archived.has(key);
+      items.push(s);
     }
+    return { cwd, items, skipped };
+  }
+
+  /**
+   * 当前项目的会话列表。
+   * @returns {{ok:boolean, hasProject:boolean, sessions:Array, currentId:string|null, diagnostics:Array}}
+   *   **不回绝对路径**（见下面的说明）。
+   */
+  async function list() {
+    const { cwd, items, skipped } = ownedSessions();
+    const diagnostics = [];
+    if (!cwd) return { ok: true, hasProject: false, sessions: [], currentId: null, diagnostics };
+
+    const sessions = items;
     if (skipped) diagnostics.push({ level: 'warn', message: `有 ${skipped} 个会话文件读不出来，已跳过` });
 
     sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -251,8 +287,6 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       });
     }
 
-    const archivedKeys = new Set(readFlags().archived);
-
     /* 只回 currentId，**不回 currentFile / cwd**。
      * 会话文件的绝对路径没有必要给前端 —— 切换只认我们自己发的 ID，
      * 前端拿不到路径就少一条「顺着路径去猜别的文件」的路子。
@@ -274,7 +308,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
         /* pending = 磁盘上还没有这个文件（刚开的新会话）。这种条目不能切、
          * 不能归档、不能删 —— 界面上也就不给它那些动作。 */
         pending: Boolean(s.pending),
-        archived: !s.pending && archivedKeys.has(s.sessionId || s.id),
+        archived: !s.pending && Boolean(s.archived),
         truncated: s.truncated,
       })),
     };
@@ -512,6 +546,13 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     setArchived,
     remove,
     _internals: { sessionId, dirNameFor, summarize, normCwd, readFlags, writeFlags },
+    /* 会话搜索（server/session-search.js）用的只读原语。
+     *
+     * 走**依赖注入**而不是 import —— 模块之间不许互相 import（`server.js → 模块`
+     * 是唯一的依赖方向，`tests/modules.cjs` 有 DFS 找环守卫）。
+     * 归属判定只有 ownedSessions 一处，搜索不许自己再实现一遍：
+     * 两份判定迟早会漂，漂掉的那份就是跨项目读取的口子。 */
+    forSearch: { ownedSessions, readCapped, normCwd, maxReadBytes: MAX_READ_BYTES },
     root: ROOT,
     agentDir: AGENT_DIR,
     dataDir: DATA,

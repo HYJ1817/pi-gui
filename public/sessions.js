@@ -32,12 +32,26 @@
  *    现在由 rpc.js 的 afterSessionSwitch() 通过 setSessionListRefresh() 回调触发。
  * 5. **归档 / 删除不能碰当前会话**：pi 正开着那个文件往里追加。后端也会拒，
  *    界面这一层先不给按钮，避免用户点出一个必然失败的确认框。
+ * 6. **搜索框只建一次，重画只画列表区。** 输入框挂在列表区上面；跟着列表区
+ *    一起重建的话，每敲一个字都会丢焦点与光标位置。搜索状态本体在
+ *    `session-search.js` 里，本模块只负责「按状态决定列表区画什么」。
  */
 import { fetchSessions, switchSession, renameSession, archiveSession, deleteSession } from './api.js';
 import { afterSessionSwitch } from './rpc.js';
 import { S } from './state.js';
+import { fmtTime } from './util.js';
 import { toast } from './ui/toast.js';
 import { confirmModal } from './ui/modal.js';
+import { setAfterHistoryRendered } from './messages.js';
+import { scrollToUserTurn } from './conversation-nav.js';
+import {
+  createSearchBar,
+  renderSearchResults,
+  searchViewMode,
+  resetSearch,
+  refreshSearch,
+  setSearchChangeHandler,
+} from './session-search.js';
 
 /** 进行中的会话一次最多列几条，超出折叠（和 Codex 一样给个「展开显示」）。 */
 const COLLAPSED = 6;
@@ -51,25 +65,41 @@ function el(tag, cls, text) {
   return n;
 }
 
-function fmtTime(ms) {
-  if (!ms) return '';
-  const d = new Date(ms);
-  const diff = Date.now() - ms;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
-  const pad = (n) => String(n).padStart(2, '0');
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  const base = `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return sameYear ? base : `${d.getFullYear()}-${base}`;
-}
+/* fmtTime 搬去了 util.js —— 搜索模块也要用同一套相对时间写法，
+ * 各写一份会让同一个会话在侧栏和搜索结果里显示成两个时间。 */
 
-/* 当前挂着的那块列表，以及两个折叠开关。
- * 只可能有一块（会话只列在当前项目下面），所以用模块级状态就够。 */
+/* 当前挂着的那块列表、它的「列表区」、以及这份会话数据。
+ * 只可能有一块（会话只列在当前项目下面），所以用模块级状态就够。
+ *
+ * 为什么要把「列表区」单独拎出来：搜索框挂在列表区**上面**且只建一次，
+ * 输入时只重画列表区 —— 否则每敲一个字都会重建输入框，光标和焦点全丢。 */
 let boxRef = null;
+let listRef = null;
+let dataRef = null;
 let loadToken = 0;
 let expanded = false;
 let archivedOpen = false;
+
+/* 点了搜索结果之后要跳到的那次提问。切会话是异步的（afterSessionSwitch 只是
+ * setTimeout(boot,250)，还要等 get_messages 一个来回），所以**不能在点击处
+ * 直接滚** —— 那时新历史还没渲染出来。存下来，等「历史渲染完成」的生命周期
+ * 回调来消费。带时间戳是为了兜底：万一那个会话没渲染成功（切失败 / 文件没了），
+ * 这个待办不能一直挂着等下一次重建时错误地生效。 */
+let pendingLocate = null;
+const LOCATE_TTL_MS = 15000;
+
+setAfterHistoryRendered(() => {
+  const p = pendingLocate;
+  pendingLocate = null;
+  if (!p) return false;
+  if (Date.now() - p.at > LOCATE_TTL_MS) return false; // 过期了，宁愿不跳也不要乱跳
+  return scrollToUserTurn(p.userIndex);
+});
+
+/* 搜索结果变化 → 重画列表区（不碰输入框）。 */
+setSearchChangeHandler(() => {
+  paintList();
+});
 
 function moreBtn(text, onclick, cls) {
   const b = el('div', 'pj-sess-more' + (cls ? ' ' + cls : ''), text);
@@ -106,8 +136,15 @@ export async function renderSidebarSessions(projectEl) {
   box.append(el('div', 'pj-sess-hint', '读取会话…'));
 
   boxRef = box;
+  listRef = null;
+  dataRef = null;
   expanded = false;
   archivedOpen = false;
+  /* 换了项目就丢掉上一个项目的搜索状态。searchViewMode() 是模块级的，
+   * 不清的话会拿着 A 的结果去画 B 的侧栏（迟到的响应虽然会被 generation
+   * 校验丢掉，但那只是「刚好没出错」）。 */
+  pendingLocate = null;
+  resetSearch();
   await fill(box, ++loadToken);
 }
 
@@ -143,41 +180,69 @@ async function fill(box, token) {
 }
 
 function paint(box, data) {
+  dataRef = data;
   box.replaceChildren();
+
+  /* 搜索框**只在这里建一次**。列表区由 paintList() 反复重画，输入框始终不重建
+   * —— 否则每敲一个字都会丢焦点、丢光标位置。 */
+  box.append(createSearchBar());
+
+  const listArea = el('div', 'pj-sess-list');
+  box.append(listArea);
+  listRef = listArea;
+  paintList();
+}
+
+/** 只重画列表区：搜索态画结果，否则画普通会话列表。 */
+function paintList() {
+  const area = listRef;
+  const data = dataRef;
+  if (!area || !area.isConnected || !data) return;
+
+  /* 关键词非空时，整块列表区交给搜索视图（结果 / 正在搜索 / 没找到 / 失败 /
+   * 「还差几个字」）。空关键词才回落到普通列表 —— 这正是「清空搜索恢复普通
+   * 列表」那条要求的落点。 */
+  if (searchViewMode() !== 'list') {
+    renderSearchResults(area, { onPick: pickResult });
+    return;
+  }
+
+  area.dataset.view = 'list';
+  area.replaceChildren();
 
   const all = data.sessions || [];
   const live = all.filter((s) => !s.archived);
   const arch = all.filter((s) => s.archived);
 
   const shown = expanded ? live : live.slice(0, COLLAPSED);
-  for (const s of shown) box.append(makeRow(s, box, data));
+  for (const s of shown) area.append(makeRow(s));
 
   if (live.length > COLLAPSED) {
-    box.append(
+    area.append(
       moreBtn(expanded ? '收起' : `展开显示（还有 ${live.length - COLLAPSED} 条）`, () => {
         expanded = !expanded;
-        paint(box, data);
+        paintList();
       })
     );
   }
 
   if (arch.length) {
-    box.append(
+    area.append(
       moreBtn(archivedOpen ? `已归档 ${arch.length} 条 · 收起` : `已归档 ${arch.length} 条`, () => {
         archivedOpen = !archivedOpen;
-        paint(box, data);
+        paintList();
       }, 'pj-sess-arch-toggle')
     );
     if (archivedOpen) {
-      for (const s of arch.slice(0, MAX_ARCHIVED)) box.append(makeRow(s, box, data));
+      for (const s of arch.slice(0, MAX_ARCHIVED)) area.append(makeRow(s));
       if (arch.length > MAX_ARCHIVED) {
-        box.append(el('div', 'pj-sess-hint', `还有 ${arch.length - MAX_ARCHIVED} 条已归档未显示`));
+        area.append(el('div', 'pj-sess-hint', `还有 ${arch.length - MAX_ARCHIVED} 条已归档未显示`));
       }
     }
   }
 }
 
-function makeRow(s, box, data) {
+function makeRow(s) {
   const row = el('div', 'pj-sess' + (s.current ? ' on' : '') + (s.pending ? ' pending' : ''));
   row.title = s.pending
     ? '新会话：还没有消息，pi 还没把它写到磁盘上'
@@ -192,7 +257,7 @@ function makeRow(s, box, data) {
   if (s.current) {
     // 改名只对当前会话有效（pi 的 set_session_name 就是只作用当前会话），
     // 所以铅笔只出现在这一条上 —— 不做一个做不到的按钮。
-    acts.append(actBtn('给当前会话起个名字', '✎', () => startRename(row, title, s, box, data)));
+    acts.append(actBtn('给当前会话起个名字', '✎', () => startRename(row, title, s)));
   } else if (!s.pending) {
     acts.append(
       actBtn(s.archived ? '取消归档' : '归档', s.archived ? '↩' : '⤓', () => doArchive(s, !s.archived))
@@ -206,7 +271,7 @@ function makeRow(s, box, data) {
   return row;
 }
 
-function startRename(row, titleEl, s, box, data) {
+function startRename(row, titleEl, s) {
   const input = el('input', 'pj-sess-input');
   input.type = 'text';
   input.value = s.title || '';
@@ -231,7 +296,7 @@ function startRename(row, titleEl, s, box, data) {
         toast('改名失败：' + err.message, 'error');
       }
     }
-    paint(box, data);
+    paintList();
   };
   input.onkeydown = (e) => {
     if (e.key === 'Enter') finish(true);
@@ -242,28 +307,52 @@ function startRename(row, titleEl, s, box, data) {
 
 let busy = false;
 
-async function doSwitch(s) {
+/**
+ * 切到某个会话。
+ * @param s               会话（来自普通列表或搜索结果；只要有 id / title）
+ * @param locateUserIndex 可选：切过去之后跳到第 N 次提问（搜索结果带的 userIndex）
+ */
+async function doSwitch(s, locateUserIndex = null) {
   if (busy) return;
   if (S.streaming) {
     toast('正在生成回答，等这一轮结束再切（或先点停止）', 'warn');
     return;
   }
   busy = true;
+  /* **先挂待办再切** —— 顺序反了就可能挂在「历史已重建」回调之后，
+   * 那一次定位永远等不到。 */
+  pendingLocate = Number.isInteger(locateUserIndex) ? { userIndex: locateUserIndex, at: Date.now() } : null;
   try {
     const r = await switchSession(s.id);
     if (!r.ok) {
+      pendingLocate = null; // 没切成功就把待办撤掉，别留给下一次重建
       toast(r.error || '切换失败', 'error');
       return;
     }
     // 换会话之后必须清界面再重建，否则旧消息还挂在上面。
-    // 列表的重画由 afterSessionSwitch 的回调负责（见文件头规矩 4）。
+    // 列表的重画由 afterSessionSwitch 的回调负责（见文件头规矩 4）；
+    // 「跳到第 N 次提问」由 messages.js 的「历史渲染完成」回调消费（规矩 6）。
     afterSessionSwitch();
     toast('已切到：' + (s.title || '（无标题）'), 'info');
   } catch (err) {
+    pendingLocate = null;
     toast('切换失败：' + err.message, 'error');
   } finally {
     busy = false;
   }
+}
+
+/**
+ * 点了一条搜索结果：切到那个会话，并尽量跳到命中的那次提问。
+ *
+ * 定位用 `match.userIndex`（后端扫文件时算好的「第几次用户提问」），
+ * **不用消息 ID** —— 前端的 nav id（`msg-N`）是渲染时按顺序现发的计数器，
+ * 跨重建不稳定；只有「第 N 次提问」这个序号在两边语义一致
+ * （见 conversation-nav.js 的 scrollToUserTurn）。
+ */
+function pickResult(res, match) {
+  if (!res) return;
+  doSwitch({ id: res.id, title: res.title, archived: res.archived }, match ? match.userIndex : null);
 }
 
 async function doArchive(s, archived) {
@@ -276,6 +365,9 @@ async function doArchive(s, archived) {
     toast(archived ? '已归档：' + s.title : '已取消归档：' + s.title, 'info');
     // 归档只影响我们自己的列表，不需要重开会话
     await refreshSidebarSessions();
+    /* 归档会影响 scope 过滤（active / archived / all），所以搜索开着的时候
+     * 要重搜一次 —— 不然刚归档的那条还挂在「活跃」结果里。 */
+    refreshSearch();
   } catch (err) {
     toast('操作失败：' + err.message, 'error');
   }
@@ -299,6 +391,8 @@ async function doDelete(s) {
     }
     toast('已删除：' + (s.title || '（无标题）'), 'info');
     await refreshSidebarSessions();
+    // 删掉的东西不该再出现在搜索结果里
+    refreshSearch();
   } catch (err) {
     toast('删除失败：' + err.message, 'error');
   }

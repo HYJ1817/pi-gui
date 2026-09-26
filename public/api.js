@@ -190,3 +190,11 @@ export const archiveSession = (id, archived = true) => sendJSON('/api/sessions/a
 
 /** 删除会话（后端是软删除：文件移进 Pi GUI 的回收站目录，不是 unlink）。 */
 export const deleteSession = (id) => sendJSON('/api/sessions/delete', { body: { id } });
+
+/** 在当前项目里搜会话标题与消息正文（P3）。
+ *
+ *  **只传关键词与范围，不传路径、不传会话 ID** —— 后端自己决定扫哪些文件，
+ *  并且只回「属于当前项目」的那些。scope：active（默认）/ archived / all。
+ *  软删除的会话不参与搜索（文件已被移出 sessions 目录）。 */
+export const searchSessions = (q, scope = 'active') =>
+  getJSON('/api/sessions/search?q=' + encodeURIComponent(q) + '&scope=' + encodeURIComponent(scope));

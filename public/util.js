@@ -36,6 +36,26 @@ export function fmtSize(n) {
   return (n / 1024 / 1024).toFixed(1) + ' MB';
 }
 
+/**
+ * 相对时间：刚刚 / N 分钟前 / N 小时前 / MM-DD HH:mm（跨年再补年份）。
+ *
+ * 会话列表与搜索结果都要显示「这是多久以前的」，两处必须是同一套写法 ——
+ * 各写一份的话，同一个会话在侧栏和结果里会显示成两个时间。
+ * 传毫秒时间戳（会话的 updatedAt）。
+ */
+export function fmtTime(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
+  const pad = (n) => String(n).padStart(2, '0');
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const base = `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return sameYear ? base : `${d.getFullYear()}-${base}`;
+}
+
 /** 路径比较。
  *
  * Windows / macOS 的路径不区分大小写，去重必须归一后再比，
