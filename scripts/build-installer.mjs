@@ -16,10 +16,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sizeOf, mb, kb, clearDir, slash } from './util.mjs';
+import { sizeOf, mb, kb, clearDir, slash, requireBsdtar, fileMagicMismatch } from './util.mjs';
+import { writeChecksums } from './make-checksums.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP_NAME = 'Pi GUI';
@@ -179,20 +179,30 @@ console.log(`  耗时 ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 let zipPath = null;
 if (wantsZip) {
   step(3, '打便携版 zip');
-  /* 用系统自带的 tar（Windows 10+ 的 bsdtar），-a 按扩展名自动选压缩方式。
-   * 不引第三方压缩库 —— 只为出一个 zip 装一个大依赖不划算。
+  /* 用 **bsdtar** 打一个**真正的 zip**。
    *
-   * 两条限制都得绕：
+   * ⚠️ 这里踩过一个真坑，别再走回去：
+   * 早先用的是 PATH 上的 `tar -a -cf <名字>.zip`。Git for Windows 装的是
+   * **GNU tar**，而 GNU tar **不支持 zip** —— `-a` 对 `.zip` 既不报错也不压缩，
+   * **静默产出一个普通 tar**。于是「便携版 zip」其实是 tar 改了个名：
+   *   - 前 4 字节是文件名（`Pi  `）而不是 `PK\x03\x04`
+   *   - Windows 用户双击打不开（Expand-Archive：「找不到中央目录结尾记录」）
+   * 更糟的是 `portable-check.cjs` 当时也用同一个 tar 去解，所以**测试全绿** ——
+   * 造和验用的是同一把错误的尺子。这个缺陷一直发到了 v0.11.1。
+   *
+   * 现在改成 bsdtar + 显式 `--format=zip`，并且**打完立刻验魔数**，
+   * 让它在下一次也第一时间失败，而不是等发布守卫。
+   *
+   * 另外两条限制照旧得绕：
    *   1) 路径不能带盘符：Windows 的 tar 会把 "C:\..." 里的 "C:" 当成 rsh 远程主机
-   *      （"Cannot connect to C: resolve failed"）。-f 一样中招，不是只有 -C。
-   *      → 用 cwd + 相对路径。
+   *      （"Cannot connect to C: resolve failed"）。→ 用 cwd + 相对路径。
    *   2) 相对路径里的反斜杠是**转义字符**：`dist-app\7zip` 会被解析成八进制转义，
-   *      路径变形后报 "Cannot open"，看不出跟分隔符有关。→ 一律换成正斜杠。
-   *      （这条是 portable-check 里踩到的，当时路径里有个 `\21022`。） */
+   *      路径变形后报 "Cannot open"，看不出跟分隔符有关。→ 一律换成正斜杠。 */
+  const bsdtar = requireBsdtar();
   execFileSync(
-    'tar',
+    bsdtar,
     [
-      '-a',
+      '--format=zip',
       '-cf',
       slash(path.relative(ROOT, ZIP)),
       '-C',
@@ -202,23 +212,34 @@ if (wantsZip) {
     { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] },
   );
   zipPath = ZIP;
-  console.log(`  ${path.basename(ZIP)}  ${mb(sizeOf(ZIP))}`);
+
+  /* 打完立刻验：产物必须是真 zip。这一步比发布守卫早，失败定位更直接。 */
+  const bad = fileMagicMismatch(ZIP);
+  if (bad) {
+    throw new Error(
+      `便携版不是有效的 zip：${bad}\n` +
+        `  用的打包工具是 ${bsdtar}\n` +
+        '  如果是 GNU tar，它不支持 zip 且会**静默产出 tar** —— 必须用 bsdtar。'
+    );
+  }
+
+  console.log(`  ${path.basename(ZIP)}  ${mb(sizeOf(ZIP))}  （bsdtar --format=zip）`);
 }
 
 /* ---------- 5. 校验和 ---------- */
 
+/* 校验和的实现在 scripts/make-checksums.mjs —— 发版流程还要对 dist-release/
+ * 再算一次，**必须是同一份实现**（两份必然漂，而「校验和与文件对不上」
+ * 是发版里最不该出现的错）。这里只负责把要算的文件传进去。 */
 step(wantsZip ? 4 : 3, '生成校验和');
-const sums = [SETUP, zipPath].filter(Boolean).map((p) => {
-  const h = crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
-  return `${h}  ${path.basename(p)}`;
-});
-fs.writeFileSync(path.join(OUT, 'SHA256SUMS.txt'), sums.join('\n') + '\n', 'utf8');
-for (const l of sums) console.log('  ' + l);
+const targets = [path.basename(SETUP), zipPath ? path.basename(zipPath) : null].filter(Boolean);
+const { entries } = writeChecksums({ dir: OUT, names: targets });
+for (const e of entries) console.log(`  ${e.hash}  ${e.name}`);
 
 /* ---------- 结果 ---------- */
 
 console.log('\n  完成 → ' + path.relative(ROOT, OUT));
 console.log(`  安装程序  ${path.basename(SETUP)}  ${mb(sizeOf(SETUP))}`);
 if (zipPath) console.log(`  便携版    ${path.basename(zipPath)}  ${mb(sizeOf(zipPath))}`);
-console.log('\n  上传 GitHub 时把 dist-installer 里的文件一起传上去；');
-console.log('  建议再附一句：需要本机已安装 pi（pi-coding-agent）。');
+console.log('\n  要发布的话别直接传这个目录 —— 先跑 `npm run release:collect`，');
+console.log('  它会把正式资产集中到 dist-release/ 并重新算一遍校验和。');

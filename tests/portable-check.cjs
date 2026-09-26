@@ -68,20 +68,40 @@ async function until(fn, ms, label) {
 (async () => {
   if (!fs.existsSync(ZIP)) throw new Error(`没有 ${ZIP}，先跑 npm run build:dist`);
 
+  /* 先验「它真的是个 zip」—— 这条是本轮补上的回归守卫。
+   *
+   * 早先这里直接跳到解压，而解压用的 GNU tar 恰好**也能读 tar**，
+   * 于是「便携版 zip 其实是 tar 改名」这件事两边都看不出来（见下面的说明）。
+   * 现在先查魔数与中央目录结尾记录，再解压。 */
+  {
+    const { fileMagicMismatch } = await import('../scripts/util.mjs');
+    const bad = fileMagicMismatch(ZIP);
+    check('便携版是真正的 zip（魔数 + 中央目录结尾记录）', () => !bad || bad);
+  }
+
   console.log('\n[1] 解压');
   fs.rmSync(DEST, { recursive: true, force: true });
   fs.mkdirSync(DEST, { recursive: true });
-  /* 用系统自带的 tar 解。三个限制叠加，得一起绕：
+  /* 用 **bsdtar** 解。⚠️ 这里以前用的是 PATH 上的 `tar`，而 Git for Windows 装的
+   * 是 GNU tar —— 它**读不了 zip**（"This does not look like a tar archive"）。
+   * 当时之所以全绿，是因为造 zip 的 build-installer 也用了同一个 GNU tar，
+   * 于是「便携版 zip」其实是 tar 改名，两边正好凑成一对：
+   * **造和验用同一把错误的尺子，测试全绿而产物用户打不开。**
+   * 现在两边都走 util.mjs 的 requireBsdtar()，读到的和 Windows 用户读到的一致。
+   *
+   * 三条限制照旧得绕：
    *   1) 不能带盘符："C:" 会被当成 rsh 远程主机（Cannot connect to C: resolve failed）；
    *   2) 反斜杠会被当**转义字符**（认八进制，`\21022` 会被吃掉）→ 必须用正斜杠；
    *   3) zip 在项目里、目的地却在系统临时目录，相对项目根要写 "..\Users\..."。
    *   → 以**盘符根**为基准算相对路径 + 全部转正斜杠 + cwd 设成盘符根。 */
+  const { requireBsdtar } = await import('../scripts/util.mjs');
+  const bsdtar = requireBsdtar();
   const drive = path.parse(ROOT).root;
   if (path.parse(DEST).root !== drive) {
     throw new Error(`zip 与临时目录不在同一个盘（${drive} / ${path.parse(DEST).root}），跨盘只能给带盘符路径，tar 不接受`);
   }
   const slashed = (p) => path.relative(drive, p).split(path.sep).join('/');
-  execFileSync('tar', ['-xf', slashed(ZIP), '-C', slashed(DEST)], {
+  execFileSync(bsdtar, ['-xf', slashed(ZIP), '-C', slashed(DEST)], {
     cwd: drive,
     stdio: ['ignore', 'ignore', 'pipe'],
   });

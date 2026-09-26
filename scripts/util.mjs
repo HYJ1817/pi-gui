@@ -7,6 +7,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+/* 仓库根目录。
+ *
+ * 放在这里（而不是某个业务脚本里）是为了**分层干净**：`util.mjs` 不 import
+ * 任何别的项目内模块，所以谁都能安全地引用它。早先 ROOT 定义在
+ * check-version.mjs 里，于是「算校验和」反过来依赖「版本守卫」——
+ * 依赖方向是反的，提交边界也跟着纠缠。 */
+export const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+export const ROOT = path.resolve(SCRIPT_DIR, '..');
 
 /** 递归算体积（目录或文件） */
 export const sizeOf = (p) => {
@@ -102,4 +112,138 @@ export function clearDir(dir, label) {
       `既删不掉也挪不走 ${dir}：${e.message}\n` + '  多半是有进程正占用它（比如应用还开着）。关掉后重试。'
     );
   }
+}
+
+/* ---------- bsdtar（打 / 解 zip 必须用它） ----------
+ *
+ * ⚠️ **不能用 PATH 上的 `tar`。** Git for Windows 装的是 **GNU tar**，它：
+ *   - **不支持 zip**：`tar -a -cf x.zip` 不报错，但**静默产出普通 tar**；
+ *   - 也**读不了** zip（"This does not look like a tar archive"）。
+ *
+ * 这条是实测踩出来的，代价不小：`build:installer --zip` 一直用 `tar -a` 出
+ * 「便携版 zip」，而产物其实是 tar 改名 —— Windows 用户双击打不开
+ * （Expand-Archive：「找不到中央目录结尾记录」）。而 portable-check 用同一个
+ * tar 去解，所以**测试全绿**：造和验用的是同一把错误的尺子。
+ *
+ * Windows 10+ 自带 `C:\Windows\System32\tar.exe`（bsdtar / libarchive），
+ * macOS 的 `/usr/bin/tar` 本身就是 bsdtar。
+ */
+let bsdtarCache;
+
+function looksLikeBsdtar(bin) {
+  try {
+    const out = execFileSync(bin, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return /bsdtar|libarchive/i.test(out);
+  } catch {
+    return false;
+  }
+}
+
+/** 找到 bsdtar；找不到返回 null。结果会缓存。 */
+export function findBsdtar() {
+  if (bsdtarCache !== undefined) return bsdtarCache;
+
+  const candidates = [];
+  if (process.env.PI_GUI_BSDTAR) candidates.push(process.env.PI_GUI_BSDTAR);
+  if (process.platform === 'win32') {
+    candidates.push(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'));
+  }
+  // PATH 上的 bsdtar / tar —— 但**只有真的是 bsdtar 才用**（见上面的说明）
+  for (const name of ['bsdtar', 'tar']) {
+    try {
+      const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [name], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      for (const line of out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) candidates.push(line);
+    } catch {
+      /* 没有就算了 */
+    }
+  }
+
+  for (const c of candidates) {
+    if (!fs.existsSync(c)) continue;
+    if (looksLikeBsdtar(c)) {
+      bsdtarCache = c;
+      return c;
+    }
+  }
+  bsdtarCache = null;
+  return null;
+}
+
+/** 同上，但找不到就抛一个能照着做的错。 */
+export function requireBsdtar() {
+  const p = findBsdtar();
+  if (!p) {
+    throw new Error(
+      '没找到 bsdtar（libarchive 的 tar）。\n' +
+        '  打 / 解 zip 必须用它 —— GNU tar（Git for Windows 装的那个）不支持 zip，\n' +
+        '  用 `tar -a` 会**静默产出普通 tar**，用户双击打不开。\n' +
+        '  Windows 10+ 自带 C:\\Windows\\System32\\tar.exe，正常不会缺；\n' +
+        '  实在没有就用 PI_GUI_BSDTAR=<路径> 指定一个。'
+    );
+  }
+  return p;
+}
+
+/* ---------- 文件魔数 ---------- */
+
+const MAGIC = {
+  '.exe': [[0x4d, 0x5a]], // 'MZ'
+  '.zip': [
+    [0x50, 0x4b, 0x03, 0x04], // 普通 zip
+    [0x50, 0x4b, 0x05, 0x06], // 空归档
+  ],
+};
+
+/** 读文件头几个字节。 */
+function headOf(file, n) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const b = Buffer.alloc(n);
+    fs.readSync(fd, b, 0, n, 0);
+    return b;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * 文件内容与扩展名是否匹配。返回 null = 正常，否则返回人话描述。
+ *
+ * 挡的是「存在、非空、名字对，但内容根本不是那个东西」：
+ *   - 下载失败时把 HTML 错误页存成了 .exe
+ *   - 被中断的构建留下的半截文件
+ *   - **tar 改名成 .zip**（zip 还要额外查中央目录结尾记录 EOCD ——
+ *     「开头是 PK」可以伪造，但没有 EOCD 的 zip 谁都解不开）
+ */
+export function fileMagicMismatch(file) {
+  const ext = path.extname(file).toLowerCase();
+  const wants = MAGIC[ext];
+  if (!wants) return null;
+
+  const size = fs.statSync(file).size;
+  const head = headOf(file, Math.min(4, size));
+  if (!wants.some((sig) => sig.every((b, i) => head[i] === b))) {
+    return '开头字节是 ' + head.toString('hex') + '，不是合法的 ' + ext;
+  }
+
+  if (ext === '.zip') {
+    /* EOCD 在文件末尾（注释最长 65535，所以最后 66000 字节里一定有）。 */
+    const tailLen = Math.min(size, 66000);
+    const fd = fs.openSync(file, 'r');
+    let tail;
+    try {
+      tail = Buffer.alloc(tailLen);
+      fs.readSync(fd, tail, 0, tailLen, size - tailLen);
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (!tail.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06]))) {
+      return '没有中央目录结尾记录（EOCD）—— 不是有效的 zip（常见的成因：用 GNU tar 的 -a 打出来的其实是 tar）';
+    }
+  }
+
+  return null;
 }
