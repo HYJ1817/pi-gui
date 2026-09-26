@@ -58,11 +58,17 @@ fs.mkdirSync(FAKE_PI_DIR, { recursive: true });
 const FAKE_PI_SCRIPT = path.join(FAKE_PI_DIR, 'fake-pi.cjs');
 fs.writeFileSync(FAKE_PI_SCRIPT, 'setInterval(function () {}, 1e9);\n', 'utf8');
 const FAKE_PI = path.join(FAKE_PI_DIR, 'fake-pi.cmd');
-fs.writeFileSync(
-  FAKE_PI,
-  '@echo off\r\n"' + process.execPath + '" "' + FAKE_PI_SCRIPT + '" %*\r\n',
-  'utf8'
-);
+/* ⚠️ shim 的**正文必须是纯 ASCII**。
+ *
+ * node 的安装路径可能含非 ASCII 字符（本机就是 `C:\A看剧\node.exe`），而
+ * `.cmd` 是按 UTF-8 写盘的、cmd.exe 却按**系统 ANSI 代码页**（中文 Windows 是
+ * GBK）去读 —— 中文路径会变乱码，于是报「系统找不到指定的路径」，假 pi 根本
+ * 起不来，`piRunning` 就成了 false。纯 ASCII 路径的机器（CI runner、多数开发机）
+ * 上完全不出现，所以只在特定环境里假红。
+ *
+ * 解法：路径走**环境变量**（经 OS 传递，不经过代码页），脚本用 `%~dp0`
+ * 在运行时解析自身所在目录 —— 正文里一个非 ASCII 字符都没有。 */
+fs.writeFileSync(FAKE_PI, '@echo off\r\n"%FAKE_PI_NODE%" "%~dp0fake-pi.cjs" %*\r\n', 'utf8');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -230,7 +236,16 @@ async function main() {
     cwd: SANDBOX,
     // PI_GUI_DATA 是桌面版用来把 projects.json / .uploads 挪到可写位置的机制。
     // 这里指向一个独立目录，顺便验证「不会污染应用安装目录」。
-    env: { ...process.env, PORT: String(PORT), PI_GUI_OPEN: '0', PI_GUI_DATA: DATA, PI_CWD: WORK, PI_BIN: FAKE_PI },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      PI_GUI_OPEN: '0',
+      PI_GUI_DATA: DATA,
+      PI_CWD: WORK,
+      PI_BIN: FAKE_PI,
+      // 假 pi shim 靠它找到 node —— 见上面「正文必须纯 ASCII」的说明
+      FAKE_PI_NODE: process.execPath,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
