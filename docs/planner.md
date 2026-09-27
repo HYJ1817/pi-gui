@@ -186,6 +186,34 @@ Agent、状态、耗时、退出码、结果摘要、attempt 历史、
 一句话版：关系挂在 `attempts[]` 上，`sessionId` 是稳定 id 而不是路径，
 `filesChanged` 只有项目相对路径，**没有第二份索引**（反查是运行时扫 plan 文件）。
 
+## 七之三、人工验收（P8）
+
+每次执行结果都可以人工验收，入口就在**那条 attempt 卡片里**（不新开页面、
+不加 Tab）。完整语义见 **[reviews.md](reviews.md)**，这里只记与 Planner 有关的三点。
+
+**一句话版语义：**
+
+```
+执行成功  ≠  人工验收      人工验收  ≠  自动验证
+历史验收  ≠  当前工作区仍然保持原样
+```
+
+- **三个状态**：`待审阅` / `已接受` / `需修改`。只有**执行成功**的 attempt
+  能被「接受」；失败 / 取消 / 被中断的只能标「需修改」（后端也会独立拒绝）。
+- **每条 attempt 各自带**：验证要求（`verificationSnapshot`，执行开始时冻结的）、
+  验证结果（**永远是「尚未独立确认」** —— Pi GUI 不会替你去跑验证）、
+  关联会话、执行期间涉及的文件 + 每个文件的**当前** diff 入口。
+- **审阅说明**纯文本、上限 1000 字，支持清除回 `pending`。
+
+**Review 不驱动执行。** 保存审阅只写审阅：不重试、不暂停、不动 DAG、
+不改 `task.status`、不调 Agent、不碰 Git。标了「需修改」**不会**自动重试；
+标了「已接受」**不会**自动 commit，也不锁定任务。
+
+**Plan 顶部的审阅汇总只是信息展示**，而且**只看每个任务的最新一次 attempt**：
+`Attempt 1 成功且被接受、Attempt 2 失败` 的任务算**失败**。失败 / 取消 / 被中断的
+最新结果不进「待审阅」的分母；没有 attempt 的任务算「尚无结果」。
+`needs_changes` 再多也不会暂停计划。
+
 ## 八、崩溃恢复
 
 计划存在 **`<PI_GUI_DATA>/plans/`**：
@@ -258,3 +286,22 @@ cancelled / failed 保留关系、filesChanged 的新增 / 修改 / 删除 / ren
 
 > Agent 探测那几条是**用 fixture 驱动**的（造一个假的全局 npm 目录，
 > 把 `env.APPDATA` 指过去），不依赖「跑测试这台机器装了什么」。
+
+`npm run test:reviews`（132 条，P8-A）：审阅的数据契约与并发写者 —— 归一化与
+旧数据兼容、`verificationSnapshot` 的冻结时机、审阅资格（成功可接受 / 失败与取消
+与中断不可接受 / 运行中不可审阅）、按 attempt 精确定位、`revision` 冲突
+（含**真的并发**两个请求只允许一个成功）、持久化与清除、重试不覆盖历史、
+计划编辑不擦审阅、跨项目 403、隐私、写盘失败如实报错。
+
+`npm run test:lifecycle`（98 条，P8-B）：retry / cancel / stop / shutdown /
+restart 对**历史**的影响，以及运行期的状态所有权（active Plan 下 retry 被拒、
+cancel / skip 作用于 `active.plan` 且不被收尾写盘冲掉）。见
+[workflows.md](docs/workflows.md) 第六节。
+
+`npm run test:ui` 里的 **P8-C 段**（54 条）：人工审阅的前端行为 —— 三态文案、
+哪些执行结论不能「接受」、编辑态与字数上限、保存 / 清除走的接口与
+`expectedRevision`、失败显示后端原话且输入不丢、冲突保留输入且不自动重试、
+验证快照三种情形、当前 diff 的两个分支（有差异给按钮 / 已 clean 给说明）、
+20 个文件收起、说明的 XSS（注入节点为零）、Plan 汇总的最新 attempt 规则
+与分母、以及切项目之后回来的响应不写界面（stale 守卫）。
+视觉场景见 [testing.md](testing.md)。

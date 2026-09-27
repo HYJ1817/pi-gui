@@ -30,14 +30,18 @@
 `npm test` 里现在有 24 个套件，全部是**纯自动化**：
 
 ```
-smoke 686 · git 151 · modules 114 · reliability · interactions · port-owner
+smoke 740 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
 attempt-lifecycle 98
-sessions 77 · session-search 72
+sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
-server-security 36 · diagnostics · update-check 87
+server-security 36 · diagnostics 10 · update-check 87
 version-consistency 29 · release-artifacts 67 · electron-guard 75
 ```
+
+> `reliability` / `interactions` / `port-owner` 是早期套件，只打印
+> `X: passed`、不报条数（断言失败就直接抛）。**没有数字不等于没有断言**，
+> 所以别拿这张表去推「总共有多少条」—— 那个数字看 `npm test` 的实际输出。
 
 `workflow-relations`（P7）测的是任务 ↔ 会话 / 任务 ↔ 文件的全部关系语义，
 见 [workflows.md](workflows.md)。它和 `planner` 一样全程 `os.tmpdir()` + fake adapter，
@@ -62,6 +66,29 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 按 attempt 精确定位、`revision` 冲突（含**真的并发**两个请求只允许一个成功）、
 持久化与清除、重试不覆盖历史、计划编辑不擦审阅、跨项目 403、隐私，
 以及写盘失败必须如实报错。同样全程 fixture。
+
+`smoke`（`npm run test:ui`）里的 **P8-C 段**（54 条）测人工审阅的**前端行为** ——
+后端契约已经有 `reviews` 覆盖，所以这一段只测界面怎么解释它：
+
+- 三种审阅态的文案；状态**带文字**不只靠颜色；失败 / 取消 / 被中断
+  **只有「需要修改」**；运行中的那一次不给审阅操作。
+- 点状态按钮只进编辑态、**不发请求**；说明 `maxlength=1000` 与字数反馈；
+  保存带上 `expectedRevision`（夹具里是 3，用来证明它**不是写死的 0**）。
+- 保存**不顺手重试任务**（只允许 `PUT …/review`，没有 retry / cancel / skip）。
+- 清除走**同一个** API（`status=pending`）且先确认。
+- 保存失败显示**后端原话**、输入不丢、按钮变「重试」；
+  冲突显示「已在其他窗口被修改」+「重新加载」、**本地输入不丢**、
+  **不自动重试**（只发一次请求）、不 last-write-wins；
+  「重新加载」只重拉一次 plan detail。
+- 验证快照三种情形（`command` / `description` / 无快照 + 「当前任务验证要求」）
+  与「尚未独立确认」；全卡片**不出现**「验证通过 / 已验证」字样。
+- 当前 diff 的**两个分支**：把 Git 工作区状态打桩成「只有 mod-0 还有差异」，
+  于是「给按钮」与「已无该文件的未提交差异」都被真的断言到。
+- 说明的 XSS：`<img onerror>` / `<script>` / `<svg onload>` 一律按纯文本渲染，
+  **DOM 里注入节点数为 0**。
+- Plan 汇总的**最新一次 attempt 规则**与分母（失败 / 取消 / 被中断不进「待审阅」）。
+- **stale 守卫**：保存还没回来就切项目（`S.workspaceGeneration++`），
+  响应回来后**界面零变化**，别的 attempt 也不受影响。
 
 最后三个里，`version-consistency` 与 `release-artifacts` 是**发版守卫**：
 前者管 package / lock / tag 一致与「构建链路里有没有写死版本号」，
@@ -182,6 +209,25 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 
 改了 `public/` 里的样式或布局之后，**必须真看一眼截图**，不能只看测试是不是绿的。
 
+**P8-C 人工审阅的场景**（`shots:harness` 的 11–22）：夹具在
+`tests/visual-harness.cjs` 的 `PLAN_DETAIL` 与 `PLAN_STRESS` 里，
+**全部是脚本数据，不跑任何 Agent**。它把审阅 UI 的每条分支都摆了出来：
+
+| 场景 | 验什么 |
+|---|---|
+| `11-rev-summary` | Plan 顶部两行汇总（执行结果 / 成功结果审阅） |
+| `12-rev-pending` | 成功 + 待审阅 + 验证要求（`description`）+ 会话 + 当前 Diff 入口 |
+| `13-rev-accepted` | 已接受 + 说明 + `reviewedAt` |
+| `14-rev-needs-changes` | 需修改 |
+| `15-rev-retry-history` | Attempt 1 已接受 + Attempt 2 执行中（运行期不给审阅操作） |
+| `16-rev-failed` | 失败的 Attempt **只有**「需要修改」 |
+| `17-rev-null-snapshot` | 没有历史验证要求 → 另起一行标「当前任务验证要求」 |
+| `18-rev-editor` | 编辑态：状态选择 + 说明 + 字数 + 保存 |
+| `19-rev-conflict` | 冲突：本地输入保留、等用户点「重新加载」 |
+| `20-stress-long-note` | 压力：1000 字说明 + 20 个变更文件 + 超长路径 |
+| `21-stress-many-attempts` | 压力：10 次尝试 |
+| `22-stress-narrow-700` | 压力：窄窗口 700px（脚本会打印是否横向溢出，判据是**数值**不是肉眼） |
+
 ## 五、发布前验证（F 层）
 
 **一条命令**：
@@ -255,6 +301,8 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
   `test:portable` / `test:installer` 需要先构建）
 - [sessions.md](sessions.md) / [planner.md](planner.md) /
   [extensions.md](extensions.md) — 各子系统末尾都列了自己的测试入口
+- [reviews.md](reviews.md) / [workflows.md](workflows.md) — 人工审阅与任务工作流的
+  语义（审阅的**前端行为**测在 `smoke` 的 P8-C 段里，见第二节）
 - [security.md](security.md) — 安全守卫由哪些测试盯着
 - [diagnostics.md](diagnostics.md) — 诊断快照的采集范围、脱敏与隐私边界
 - [pi-compatibility.md](pi-compatibility.md) — 兼容层测什么、升级 pi 后怎么验

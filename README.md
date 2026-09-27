@@ -29,6 +29,8 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 - **任务编排** —— 把大目标拆成带依赖的任务，交给不同 CLI 依次执行
 - **任务工作流** —— Planner 的每次 Agent 执行可关联对应会话与执行期间文件变化，
   任务、会话和 Git Changes 可以互相追踪
+- **任务验收** —— 对每次 Agent 执行结果做人工审阅，可查看关联会话与当前文件差异，
+  并记录「已接受 / 需修改」
 - **模型供应商** —— 不用手写 JSON 就能加自定义供应商，还能直接拉模型列表
 - **诊断** —— 查看版本、bridge、Agent 与目录健康状态，复制脱敏 JSON 用于排障
 - **版本检查** —— 在应用内检查 GitHub Release，新版本可直接查看发布说明和下载
@@ -157,8 +159,11 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 - 默认串行（多个 agent 同时改一个工作区会互相覆盖）
 - 失败就暂停整个计划，给你重试 / 跳过 / 停止三个选择
 - 可指定 `pi` / `codex` / `gemini` / `claude` 执行，可用性在运行时探测
+- **每次执行结果可以人工验收**：看那次关联的会话、执行期间涉及的文件与**当前**
+  Git diff，然后记下「已接受 / 需修改」。执行成功**不等于**验收通过 ——
+  Pi GUI 不会替你去跑验证，所以「验证结果」永远显示「尚未独立确认」
 
-→ [planner.md](docs/planner.md)
+→ [planner.md](docs/planner.md) · [reviews.md](docs/reviews.md)
 
 ### 模型供应商
 
@@ -271,6 +276,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [git-changes.md](docs/git-changes.md) | 文件变更：diff 渲染、撤销规则、权限闸门、设计取舍 |
 | [planner.md](docs/planner.md) | 任务编排：Planner/Executor、Agent registry、DAG、失败与恢复、限制 |
 | [workflows.md](docs/workflows.md) | 任务工作流：任务 ↔ 会话、任务 ↔ 文件、打开会话、项目隔离、元数据边界 |
+| [reviews.md](docs/reviews.md) | 人工审阅：执行结果 ≠ 验收、三个审阅状态、验证快照、当前 diff、冲突与 revision、限制 |
 | [extensions.md](docs/extensions.md) | Skills 发现与启停、项目信任、MCP 能力报告与为什么不虚构 Server |
 | [project-config.md](docs/project-config.md) | 项目配置：位置、字段、优先级、指令注入、坏配置行为 |
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
