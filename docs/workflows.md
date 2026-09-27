@@ -266,7 +266,7 @@ A 还拿着 2，保存 accepted → **409 review-conflict**（不是 last-write-
 都拿着同一个旧 revision 通过检查，后写的把先写的无声覆盖。所以保存前会**重新读一次**
 计划，而且从重读到 `store.save()` 之间没有任何 await。
 
-### 5.7 三个写者：谁拥有哪些字段
+### 5.7 四个写者：谁拥有哪些字段
 
 计划是**一个文件装着一堆互不相同的所有权**，所以「谁写谁的字段」必须说清楚：
 
@@ -274,6 +274,7 @@ A 还拿着 2，保存 accepted → **409 review-conflict**（不是 last-write-
 |---|---|
 | **Scheduler** | 执行状态 / attempt 创建 / `result` / `sessionId` / `filesChanged` / `verificationSnapshot` / `outcomeStatus` |
 | **Review API** | `attempt.review` |
+| **Verifier**（P9） | `attempt.verificationResult` |
 | **PUT /api/plans/:id** | 计划结构（标题、目标、任务、依赖、verification、concurrency） |
 
 **一个写者保存自己的变化时，不该覆盖一个它不拥有的字段。**
@@ -287,16 +288,29 @@ A 还拿着 2，保存 accepted → **409 review-conflict**（不是 last-write-
   → A 的审阅被内存里那份陈旧副本冲掉      ← 用户看不到任何报错
 ```
 
-两处必须做（都已实现并有回归守卫）：
+P9 之后同一条路径对验证证据也成立（只是方向反过来）：
+
+```
+用户点「运行验证」→ 命令跑完，Verifier 把结果写进磁盘
+  → 紧接着 Scheduler 收尾整份写盘（内存里那份没有 verificationResult）
+  → 刚拿到的验证证据被冲掉，界面回到「尚未独立确认」
+```
+
+三处必须做（都已实现并有回归守卫）：
 
 1. **Scheduler 的 `persist()` 先合并外部字段**：`mergeExternalAttemptState()` 重读磁盘，
-   把 `attempt.review` 按「只采纳 revision 更大的那个」合回内存副本，再落盘。
-   ⚠️ 刻意**只合并这一个字段**，不做通用 merge engine —— 通用的那种要么写不对，
+   把 `attempt.review` 按「只采纳 revision 更大的那个」合回内存副本，
+   再把 `attempt.verificationResult` 按「**磁盘上有就以磁盘为准**」合回来
+   （Scheduler 从不写它，所以内存里那份永远只会更旧，不需要比谁更新）。
+   ⚠️ 刻意**只合并这两个字段**，不做通用 merge engine —— 通用的那种要么写不对，
    要么把「谁拥有什么」这件事变得不可读。
 2. **`PUT /api/plans/:id` 在合并历史前重读**：它进入分支时 load 过一次，但那之后夹着
    一条 `await readBody(...)`；不重读就会用陈旧快照去「保留历史」。
+3. **Verifier 保存前重读**：它跑命令要跨好几秒（甚至十分钟）的 await，
+   落盘时**必须重新 load 一次**、只改目标 attempt 的 `verificationResult`、再 save ——
+   改的是刚读出来的那一份，所以这期间别人（Review API / Scheduler）写进去的东西都在。
 
-两者与 Review API 的 `revision` 检查遵循同一条规矩：**读—改—写不能跨异步边界**。
+四者与 Review API 的 `revision` 检查遵循同一条规矩：**读—改—写不能跨异步边界**。
 只要中间有一个 `await`，两个写者就能都通过检查、后写的无声覆盖先写的。
 
 ### 5.8 老数据
@@ -455,6 +469,8 @@ Attempt 1 的响应在结构上就改不到 Attempt 2 的界面。
 | `GET /api/plans/relations?sessionId=` | 会话 → 任务 的反查。**没有第二份索引**，直接扫当前项目的 plan 文件 |
 | `POST /api/plans/:id/tasks/:taskId/open-session?attempt=` | 打开某次尝试的会话。校验计划归属 + 任务非运行中 + 会话可解析 |
 | `PUT /api/plans/:id/tasks/:taskId/attempts/:attempt/review` | 写/清除某次尝试的人工审阅（P8-A）。body：`{status, note, expectedRevision}`；冲突返回 **409 + `code:review-conflict`** |
+| `POST /api/plans/:id/tasks/:taskId/attempts/:attempt/verify` | **启动**一次独立验证（P9）。跑的是那条 attempt 冻结的 `verificationSnapshot.command`；`ok:false` 时带稳定 `code`（`no-command` / `plan-active` / `already-running` / `invalid-cwd` / `workspace-stale` / `attempt-not-found`） |
+| `POST …/attempts/:attempt/verify/stop` | 停止正在跑的那次验证；取消后收成 `interrupted`（不是 `failed`） |
 
 刻意**没有**新增 `/api/workflow/*` / `/api/task-links/*` 这类平行概念 ——
 关系是 Planner 数据的一部分，就挂在 Planner 的接口上。

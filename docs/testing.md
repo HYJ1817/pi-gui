@@ -27,12 +27,12 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 24 个套件，全部是**纯自动化**：
+`npm test` 里现在有 25 个套件，全部是**纯自动化**：
 
 ```
-smoke 749 · git 151 · modules 114 · reliability · interactions · port-owner
+smoke 767 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
-attempt-lifecycle 98
+verification 86 · attempt-lifecycle 98
 sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
@@ -97,6 +97,35 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
     旧面板被收成提示且**没有可点的审阅控件**；再加一组**实例隔离**断言 ——
     旧面板的响应回来时**不会关掉后来打开的新 Planner**、也不往它里面写提示。
     （modal 只有一个槽位且没有实例 token，所以这条边界必须真的测。）
+
+`verification`（P9，86 条）测 **Pi GUI 自己跑命令**这件事。绝大多数用**注入的假
+`runShell`**（确定性、不 spawn 真进程），只有最后一节故意用真 shell 跑一条无害命令，
+证明那条路真的通：
+
+- 跑起来、拿到真结果：启动先落盘 `running`（结论字段一律为空）→ 结束写
+  `passed` / `failed`，退出码 / 耗时 / 输出摘要齐全；命令起不来与超时都算 `failed`
+  并说明原因（不冒充「跑失败了」）。
+- 输出上限：落盘摘要截到 2000 字符、**保留末尾**、带 `truncated`，
+  并断言计划文件实际大小仍在 KB 级。
+- 准入拒绝（`code` 是契约）：`no-command`（含「只有 description」那条独立措辞）、
+  `attempt-not-found`、`invalid-cwd`（目录不存在 / `../` 逃逸）、`workspace-stale`、
+  `no-project`、`plan-active`、`already-running`。
+- 收口：停止 → `interrupted`；优雅退出 → `interrupted` 且退出之后回来的结果
+  **不会**把它改写；硬崩 → `recoverAll()` 才翻；**普通 `load()` 绝不翻**
+  （否则前端轮询会把正在跑的那次标成中断）。
+- 不变式：验证**不改** `task.status` / `outcomeStatus`、不自动 Retry、
+  验证通过不把 `needs_changes` 改成 `accepted`、验证失败不改写 `accepted`。
+- Retry：旧 attempt 的验证结果原样保留，新 attempt 默认没有，两者命令各自独立。
+- **两个写者**（三组）：验证跑着时保存审阅 → 两边都在；已有验证结果时保存审阅 →
+  验证结果不丢；Scheduler 整份写盘 → 验证证据不丢。
+  最后一组**验证过会红**：去掉 `mergeExternalAttemptState` 里那行合并，它立刻报 `null`。
+- 重复验证是**替换**不是追加；老计划（没有该字段）读得出来且照常能验证；
+  `schemaVersion` 仍是 1。
+
+`smoke` 里的 **P9 段**（18 条）测验证的**前端行为**：有命令才给「运行验证」、
+只有 description 不给按钮、四种状态文案（都带文字）、命令 / 退出码 / 耗时 /
+输出摘要、长命令有 `title`、**输出按纯文本渲染（XSS 注入节点为 0）**、
+点运行/停止调对接口、被拒绝时显示后端原话、切项目后旧响应不写界面。
 
 最后三个里，`version-consistency` 与 `release-artifacts` 是**发版守卫**：
 前者管 package / lock / tag 一致与「构建链路里有没有写死版本号」，
@@ -235,6 +264,18 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 | `20-stress-long-note` | 压力：1000 字说明 + 20 个变更文件 + 超长路径 |
 | `21-stress-many-attempts` | 压力：10 次尝试 |
 | `22-stress-narrow-700` | 压力：窄窗口 700px（脚本会打印是否横向溢出，判据是**数值**不是肉眼） |
+
+**P9 独立验证的场景**（`shots:harness` 的 24–30）：
+
+| 场景 | 验什么 |
+|---|---|
+| `24-verify-never` | 从未验证 ——「尚未独立确认」+「运行验证」 |
+| `25-verify-passed` | 通过 —— 命令 / 退出码 / 耗时 / 输出摘要 |
+| `26-verify-failed` | 失败 —— 失败输出 +「输出已截断」 |
+| `27-verify-interrupted` | 已中断 +「重新运行验证」 |
+| `28-verify-running` | 正在验证… +「停止验证」（且**没有**结果行） |
+| `29-verify-long` | 压力：长命令（带满参数）+ 长输出（含超长无空格行） |
+| `30-verify-narrow-700` | 压力：窄窗口 700px 下的验证明细 |
 
 ## 五、发布前验证（F 层）
 
