@@ -31,10 +31,11 @@ import {
   cancelPlanTask,
   skipPlanTask,
   openPlanTaskSession,
+  updateAttemptReview,
 } from './api.js';
 import { openModal, closeModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
-import { S } from './state.js';
+import { S, ownsWorkspace } from './state.js';
 import { afterSessionSwitch } from './rpc.js';
 import { openChangesPanel } from './git.js';
 
@@ -72,8 +73,20 @@ function el(tag, cls, text) {
   if (text != null) n.textContent = String(text);
   return n;
 }
+/**
+ * 面板里的标准按钮。
+ *
+ * ⚠️ **`btn` 基类必须带上。** styles.css 里只有 `.btn` / `.btn.primary` /
+ * `.btn.danger` 这一组规则 —— 裸的 `primary` / `danger` **一个选择器都不匹配**，
+ * 会落回浏览器默认的浅色按钮（深色主题下是刺眼的白块）。
+ * P7 之前这里传的就是裸类名，那 11 个按钮一直是 UA 默认样式；现在统一在
+ * 这里加前缀，新写的调用就不可能再犯。
+ *
+ * 已经自带完整样式的类（`planner-open-sess` / `planner-rel-btn`）作为修饰符
+ * 叠在 `.btn` 上即可：它们在 styles.css 里更靠后，尺寸与配色照样是它们自己的。
+ */
 function btn(label, cls, onClick) {
-  const b = el('button', cls, label);
+  const b = el('button', cls ? 'btn ' + cls : 'btn', label);
   b.type = 'button';
   if (onClick) b.onclick = onClick;
   return b;
@@ -83,6 +96,130 @@ function fmtDuration(ms) {
   const s = Math.round(ms / 1000);
   if (s < 60) return s + 's';
   return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+}
+
+/** 时间戳 → 本地时间。**真相来自后端**（review.reviewedAt），不拿浏览器本地时间充数 ——
+ *  用户可能改了系统时间，或两个窗口在不同时区看到同一条记录。 */
+function fmtTime(ms) {
+  if (!Number.isFinite(ms)) return '';
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/* ---------- P8-C：人工审阅 ----------
+ *
+ * 一条贯穿全段的语义（与后端 model.js 完全一致）：
+ *
+ *     执行状态  ≠  人工审阅状态
+ *
+ * 执行状态（success / failed / cancelled / interrupted）是**机器跑出来什么**；
+ * 审阅状态（pending / accepted / needs_changes）是**人认不认这个结果**。
+ * 保存审阅永远不改执行状态：不重试、不暂停、不动 DAG、不碰 Git。
+ *
+ * 这里**不做「验证通过」这类判断**：Agent 说 success、exitCode 0、
+ * summary 里写着 tests passed，都**不算**独立验证证据。界面上默认只写
+ * 「尚未独立确认」。
+ */
+
+const REVIEW_STATE = {
+  pending: { cls: 'pending', mark: '○', label: '待审阅' },
+  accepted: { cls: 'ok', mark: '✓', label: '已接受' },
+  needs_changes: { cls: 'warn', mark: '↻', label: '需修改' },
+};
+/** 与后端 MAX_REVIEW_NOTE 对齐。前端 maxlength 只是顺手，**后端才是最终权威**。 */
+const REVIEW_NOTE_MAX = 1000;
+/** 一个 attempt 的变更文件默认列几个。20 个文件一次铺开会把卡片糊成一面墙；
+ *  超出的收进「展开其余 N 个」，**不隐藏**（历史关系仍然保留）。 */
+const FILES_PREVIEW = 5;
+
+/**
+ * 一次尝试的**稳定执行结论**。
+ *
+ * 优先 `outcomeStatus`（P8-A 起写入，唯一权威）。老记录（P7 及更早）没有它，
+ * 依次退到 `success` 布尔与 `error` 文案里的「取消」线索 —— 那只是为了把历史
+ * 渲染得跟以前一样，**任何业务判定都不依赖它**（审阅资格只认 `success`）。
+ */
+function attemptOutcome(a) {
+  const known = ['success', 'failed', 'cancelled', 'interrupted'];
+  if (a && known.includes(a.outcomeStatus)) return a.outcomeStatus;
+  if (a && a.success === true) return 'success';
+  if (/取消/.test(String((a && a.error) || ''))) return 'cancelled';
+  return 'failed';
+}
+
+/**
+ * 归一化一条审阅记录 —— 与后端 `normalizeReview` 同一套语义。
+ *
+ * 后端已经保证形状，这里再挡一道是为了「夹具 / 升级上来的老数据」：
+ * P8-A 之前的 attempt 根本没有 `review` 字段。
+ *
+ * `pending` 就是「清除」，所以 note / reviewedAt 一律清空 ——
+ * 否则会出现「待审阅却带着上次的说明」这种自相矛盾的展示。
+ */
+function reviewOf(a) {
+  const r = a && a.review && typeof a.review === 'object' ? a.review : null;
+  const status = r && Object.prototype.hasOwnProperty.call(REVIEW_STATE, r.status) ? r.status : 'pending';
+  const revision = Number.isInteger(r && r.revision) && r.revision >= 0 ? r.revision : 0;
+  if (status === 'pending') return { status, note: '', reviewedAt: null, revision };
+  return {
+    status,
+    note: typeof r.note === 'string' ? r.note.slice(0, REVIEW_NOTE_MAX) : '',
+    reviewedAt: Number.isFinite(r && r.reviewedAt) ? r.reviewedAt : null,
+    revision,
+  };
+}
+
+/** 只有**执行成功**的尝试才允许标「已接受」—— 与后端 `canAcceptAttempt` 同一条规则。
+ *  前端只是不让用户点了白点一次；**即使被绕过，后端也会拒绝**。 */
+const canAccept = (a) => attemptOutcome(a) === 'success';
+
+/** 验证要求 / 当前任务验证要求 → 一行可读文本。只认 command 与 description 两个键
+ *  （与后端 `normalizeVerificationSnapshot` 同一个形状）。 */
+function verificationText(v) {
+  if (typeof v === 'string') {
+    const s = v.trim();
+    return s || '';
+  }
+  if (!v || typeof v !== 'object') return '';
+  const c = typeof v.command === 'string' ? v.command.trim() : '';
+  if (c) return c;
+  const d = typeof v.description === 'string' ? v.description.trim() : '';
+  return d || '';
+}
+
+/**
+ * Plan 顶部的审阅汇总。
+ *
+ * ⚠️ **只看每个 Task 的「最新一次 attempt」。** 历史 accepted 仍然留在它自己那张
+ * Attempt 卡片里，但**不进这个汇总** —— 否则「Attempt 1 成功被接受、Attempt 2 失败」
+ * 的任务会同时算作 accepted 和 failed，那个数字就没人能解释了。
+ *
+ * 「最新」按 `attempt` 号取最大，不按数组顺序 —— 顺序是写入顺序，不是语义。
+ */
+function reviewSummary(plan) {
+  const exec = { success: 0, failed: 0, cancelled: 0, none: 0 };
+  const rev = { pending: 0, accepted: 0, needs_changes: 0 };
+  for (const t of plan.tasks || []) {
+    const arr = Array.isArray(t.attempts) ? t.attempts : [];
+    if (!arr.length) {
+      exec.none++;
+      continue;
+    }
+    const last = arr.reduce((m, a) => (!m || (a.attempt || 0) > (m.attempt || 0) ? a : m), null);
+    const outcome = attemptOutcome(last);
+    if (outcome === 'success') {
+      exec.success++;
+      /* 只有「最新一次成功了」的尝试才进人工审阅的分母。
+       * 失败 / 取消 / 被中断的最新结果不产生「待审阅」—— 那不是一个待验收的产物。 */
+      rev[reviewOf(last).status]++;
+    } else if (outcome === 'cancelled') {
+      exec.cancelled++;
+    } else {
+      exec.failed++;
+    }
+  }
+  return { exec, rev };
 }
 
 /**
@@ -159,6 +296,23 @@ export function openPlanner(focus = null) {
   /* P7 §18/§19：Plan 级汇总的两个展开开关（默认收起，别把详情页撑长）。 */
   let relOpen = false;
   let filesOpen = false;
+
+  /* ---------- P8-C：审阅编辑的临时状态 ----------
+   *
+   * key = `${planId}:${taskId}:${attempt}`，value = 草稿。
+   * **只活在内存里**：不写 localStorage、不写 plan 文件 —— 没点保存就不该持久化
+   * 任何东西（§四十五）。关掉面板就没了；换项目时整体清掉，绝不跨项目复用。
+   *
+   * 之所以按 `planId:taskId:attempt` 而不是「当前展开的那条」做键：
+   * 保存是异步的，回来时用户可能已经切到别的 attempt 了。键里带全身份，
+   * 响应就只能落回它自己那一条（§三十八）。 */
+  const reviewDrafts = new Map();
+  /** 正在「清除」的 attempt（清除没有草稿，用这个集合做按钮禁用态）。 */
+  const clearingReview = new Set();
+  /** 文件列表展开过的 attempt（默认只列前几个，避免 20 个文件糊成一面墙）。 */
+  const filesExpanded = new Set();
+  /** 打开这个面板时的工作区代号。切过项目之后回来的响应一律丢弃（§三十九）。 */
+  const openedGeneration = S.workspaceGeneration;
 
   openModal((card) => {
     card.classList.add('wide', 'planner');
@@ -299,7 +453,12 @@ export function openPlanner(focus = null) {
       for (const p of plans) {
         const item = el('div', 'ext-item' + (current && current.id === p.id ? ' on' : ''));
         const top = el('div', 'ext-item-top');
-        top.append(el('span', dotClass(PLAN_STATE[p.status]), (PLAN_STATE[p.status] || {}).label || p.status));
+        /* ⚠️ 状态文字**不能塞进 `.ext-dot`** —— 那是个 7×7 的圆点：
+         * 文字进去会被挤成一个 7px 宽的文字列，渲染成竖排单字（overflow 可见，
+         * 所以还叠在标题上）。拆成「圆点 + 文字」两个 span 才读得出来。
+         * 这也是 §五十二 的要求：状态不能只靠颜色，必须有文字。 */
+        top.append(el('span', dotClass(PLAN_STATE[p.status]), ''));
+        top.append(el('span', 'ext-item-state', (PLAN_STATE[p.status] || {}).label || p.status));
         top.append(el('span', 'ext-name', p.title));
         item.append(top);
         const c = p.counts || {};
@@ -344,7 +503,8 @@ export function openPlanner(focus = null) {
         markDirty();
       };
       head.append(title);
-      head.append(el('span', dotClass(PLAN_STATE[current.status]), (PLAN_STATE[current.status] || {}).label || current.status));
+      head.append(el('span', dotClass(PLAN_STATE[current.status]), ''));
+      head.append(el('span', 'planner-head-state', (PLAN_STATE[current.status] || {}).label || current.status));
       detailWrap.append(head);
 
       if (current.goal) detailWrap.append(el('div', 'planner-goal-view', current.goal));
@@ -369,6 +529,34 @@ export function openPlanner(focus = null) {
         prog.append(el('span', 'planner-warn', '已暂停：有任务失败，请选择重试 / 跳过 / 停止'));
       }
       detailWrap.append(prog);
+
+      /* ---------- P8-C：执行结果 + 人工审阅汇总 ----------
+       *
+       * **只看每个任务的「最新一次 attempt」**（§二十六/§二十七）。所以
+       * 「Attempt 1 成功且被接受、Attempt 2 失败」的任务算作**失败**，
+       * 不会因为历史上曾成功而多算一个「已接受」。历史判断仍然留在它自己那张
+       * Attempt 卡片里 —— 那是「那次执行曾经被接受」，与「这个任务现在怎样」是两回事。
+       *
+       * 这是一个**纯展示的汇总，不是闸门**：needs_changes 再多也不会暂停计划、
+       * 不会禁止下游、不会改 DAG（§二十九）。 */
+      const sum = reviewSummary(current);
+      const sumBox = el('div', 'planner-revsum');
+      const row1 = el('div', 'planner-revsum-row');
+      row1.append(el('span', 'planner-revsum-k', '执行结果'));
+      const parts = [`成功 ${sum.exec.success}`, `失败 ${sum.exec.failed}`];
+      if (sum.exec.cancelled) parts.push(`取消 ${sum.exec.cancelled}`);
+      if (sum.exec.none) parts.push(`尚无结果 ${sum.exec.none}`);
+      row1.append(el('span', 'planner-revsum-v', parts.join(' · ')));
+      sumBox.append(row1);
+      /* 审阅汇总只在**确实有成功结果**时才出现 —— 否则是一行全零，纯噪声。
+       * 分母也只有「最新一次成功」的那些任务：失败/取消/被中断的结果不是待验收的产物。 */
+      if (sum.exec.success > 0) {
+        const row2 = el('div', 'planner-revsum-row');
+        row2.append(el('span', 'planner-revsum-k', '成功结果审阅'));
+        row2.append(el('span', 'planner-revsum-v', `已接受 ${sum.rev.accepted} · 需修改 ${sum.rev.needs_changes} · 待审阅 ${sum.rev.pending}`));
+        sumBox.append(row2);
+      }
+      detailWrap.append(sumBox);
 
       /* ---------- P7 §18/§19：这个目标一共关联了什么 ----------
        *
@@ -452,10 +640,256 @@ export function openPlanner(focus = null) {
       if (b && !b.classList.contains('primary')) b.classList.add('primary');
     }
 
+    /* ================= P8-C：人工审阅 ================= */
+
+    /** 一条紧凑按钮（attempt 行内用）。评审动作全在这里，避免又长又重的按钮。 */
+    const miniBtn = (label, cls, onClick) => {
+      const b = el('button', 'planner-mini' + (cls ? ' ' + cls : ''), label);
+      b.type = 'button';
+      if (onClick) b.onclick = onClick;
+      return b;
+    };
+
+    const draftKey = (planId, taskId, attempt) => `${planId}:${taskId}:${attempt}`;
+
     /**
-     * 一条 attempt：状态 + 关联会话 + 执行期间变更（P7 §6 / §10）。
+     * 按**身份**在当前计划里现查一条 attempt。
      *
-     * 三种「没有会话」的情形分开说，因为用户该做的事完全不同：
+     * 不缓存、不认闭包里的旧引用 —— 所有异步回来的响应都靠它重新定位。
+     * 「保存 Attempt 1 → 用户切去看 Attempt 2 → 响应回来」时，我们改的是
+     * 按 taskId+attempt 查出来的那一条，**碰不到 Attempt 2 的界面**（§三十八）。
+     */
+    function attemptOf(taskId, attempt) {
+      const t = current && (current.tasks || []).find((x) => x.id === taskId);
+      const arr = t && Array.isArray(t.attempts) ? t.attempts : [];
+      return arr.find((a) => a.attempt === attempt) || null;
+    }
+
+    /** 这个路径**现在**还有没有未提交差异。
+     *  三值：'changed' / 'clean' / 'unknown' —— git 状态还没加载时不许猜（§二十二）。 */
+    function currentChangeState(p) {
+      const c = S.changes;
+      if (!c || !c.loaded || !c.isRepo) return 'unknown';
+      return c.files.some((f) => f && f.path === p) ? 'changed' : 'clean';
+    }
+
+    /** 进入编辑态。**点状态按钮不直接保存** —— 用户很可能还要补一句说明（§十一）。 */
+    function openEditor(planId, taskId, attempt, status, note) {
+      const cur = reviewOf(attemptOf(taskId, attempt));
+      reviewDrafts.set(draftKey(planId, taskId, attempt), {
+        status,
+        note: note != null ? note : cur.note,
+        saving: false,
+        error: '',
+        conflict: false,
+        conflictRevision: null,
+      });
+      renderDetail();
+    }
+
+    function closeEditor(planId, taskId, attempt) {
+      reviewDrafts.delete(draftKey(planId, taskId, attempt));
+      renderDetail();
+    }
+
+    /**
+     * 真正发请求 + 处理结果。草稿有无都能走（「清除」就是无草稿那条路）。
+     *
+     * 三道身份确认，缺一不可：
+     *   1. 项目没换（`ownsWorkspace`）
+     *   2. 还是同一个计划（`current.id === planId`）
+     *   3. 目标 attempt 仍在当前计划里（按 taskId + attempt 现查）
+     * 任何一条不成立就**直接丢弃响应，不写 DOM** —— 这是「切换后回来不许污染」
+     * 唯一的实现方式，不是可有可无的保险。
+     */
+    async function submitReview(planId, taskId, attempt, status, note) {
+      const key = draftKey(planId, taskId, attempt);
+      const draft = reviewDrafts.get(key);
+      const target = attemptOf(taskId, attempt);
+      if (!target) {
+        toast('这次尝试已经不在当前计划里了，请重新加载', 'warn');
+        return;
+      }
+      /* 乐观并发：用**当前渲染这一版的 revision**，永远不是写死的 0（§三十七）。 */
+      const revision = reviewOf(target).revision;
+      const gen = S.workspaceGeneration;
+
+      if (draft) {
+        if (draft.saving) return; // 防双击
+        draft.saving = true;
+        draft.error = '';
+        draft.conflict = false;
+      } else {
+        if (clearingReview.has(key)) return;
+        clearingReview.add(key);
+      }
+      renderDetail();
+
+      let r;
+      try {
+        r = await updateAttemptReview(planId, taskId, attempt, { status, note, expectedRevision: revision });
+      } catch (err) {
+        r = { ok: false, error: err.message || '网络错误' };
+      }
+      clearingReview.delete(key);
+
+      /* ---- 先确认「还是那个上下文」，再决定要不要碰 DOM ---- */
+      if (!ownsWorkspace(gen)) return; // 切项目了
+      if (!current || current.id !== planId) return; // 切计划了
+      const t2 = attemptOf(taskId, attempt);
+      if (!t2) return; // 计划被换成另一份了 —— 宁可不画，也不要画错
+
+      if (r && r.ok) {
+        /* **只更新目标那一条**，不重置整个 Planner（§三十二）。 */
+        t2.review = r.review || { status, note, reviewedAt: Date.now(), revision: revision + 1 };
+        reviewDrafts.delete(key);
+        renderDetail();
+        toast(status === 'pending' ? '已清除审阅判断' : '审阅已保存', 'ok');
+        return;
+      }
+
+      const d2 = reviewDrafts.get(key);
+      if (d2) {
+        d2.saving = false;
+        if (r && r.code === 'review-conflict') {
+          /* 冲突：**不自动重试、不 last-write-wins、不自动合并 note**（§三十五）。
+           * 本地输入原样留着，等用户明确点「重新加载」。 */
+          d2.conflict = true;
+          d2.conflictRevision = Number.isInteger(r.currentRevision) ? r.currentRevision : null;
+        } else {
+          /* 校验失败 / 保存失败：把后端的原话显示出来，**输入不能丢**（§三十三 / §三十四）。 */
+          d2.error = (r && r.error) || '保存失败';
+        }
+      } else {
+        toast((r && r.error) || '清除失败', 'error');
+      }
+      renderDetail();
+    }
+
+    async function doClearReview(planId, taskId, attempt) {
+      const ok = await confirmModal({
+        title: '清除这条审阅？',
+        message: '判断与说明会一起清掉，回到「待审阅」。执行结果本身不受影响。',
+        okText: '清除',
+        danger: true,
+      });
+      if (!ok) return;
+      /* 走**同一个 API**：pending 就是「清除」的语义，没有单独的 DELETE 接口，
+       * 也不在前端假装删掉（§十二）。 */
+      await submitReview(planId, taskId, attempt, 'pending', '');
+    }
+
+    /**
+     * 一条 attempt 的审阅块。
+     *
+     * 三态只有 pending / accepted / needs_changes，**刻意不含 verified / rejected /
+     * stale / superseded** —— 状态一多，用户就得先学一套词汇才能表达「我认不认」。
+     */
+    function renderReview(planId, task, a, isRunning) {
+      const wrap = el('div', 'planner-rv');
+      wrap.append(el('span', 'planner-lbl', '人工审阅'));
+
+      if (isRunning) {
+        /* 正在跑的那一次**还没有历史记录**（attempt 号在开始时涨上去，记录是结束时写的），
+         * 此刻没有可审阅的对象 —— 所以不发请求、不给按钮，直接说明（§九）。 */
+        wrap.append(el('span', 'planner-rv-hint', '任务仍在执行，完成后可进行人工审阅'));
+        return wrap;
+      }
+
+      const key = draftKey(planId, task.id, a.attempt);
+      const draft = reviewDrafts.get(key);
+      const saved = reviewOf(a);
+
+      if (!draft) {
+        /* ---------- 展示态 ---------- */
+        const meta = REVIEW_STATE[saved.status];
+        const line = el('div', 'planner-rv-view');
+        /* **状态必须有文字**，不能只靠颜色区分（§五十二）。 */
+        line.append(el('span', 'planner-rv-state ' + meta.cls, meta.mark + ' ' + meta.label));
+        if (saved.reviewedAt) line.append(el('span', 'planner-rv-time', fmtTime(saved.reviewedAt)));
+        wrap.append(line);
+        if (saved.note) wrap.append(el('div', 'planner-rv-note', saved.note));
+
+        const acts = el('div', 'planner-rv-acts');
+        if (clearingReview.has(key)) {
+          acts.append(el('span', 'planner-rv-hint', '正在清除…'));
+        } else if (saved.status === 'pending') {
+          /* 「接受本次结果」只给执行成功的尝试 —— 与后端同一条规则。
+           * 失败 / 取消 / 被中断的**只有「需要修改」**（§八）。 */
+          if (canAccept(a)) acts.append(miniBtn('接受本次结果', 'primary', () => openEditor(planId, task.id, a.attempt, 'accepted')));
+          acts.append(miniBtn('需要修改', '', () => openEditor(planId, task.id, a.attempt, 'needs_changes')));
+        } else {
+          acts.append(miniBtn('修改判断', '', () => openEditor(planId, task.id, a.attempt, saved.status, saved.note)));
+          acts.append(miniBtn('清除', '', () => doClearReview(planId, task.id, a.attempt)));
+        }
+        wrap.append(acts);
+        return wrap;
+      }
+
+      /* ---------- 编辑态 ---------- */
+      const pick = el('div', 'planner-rv-pick');
+      const mkPick = (value, label) => {
+        const b = el('button', 'planner-rv-opt' + (draft.status === value ? ' on' : ''), label);
+        b.type = 'button';
+        b.disabled = Boolean(draft.saving);
+        b.onclick = () => {
+          draft.status = value;
+          renderDetail();
+        };
+        return b;
+      };
+      if (canAccept(a)) pick.append(mkPick('accepted', '✓ 接受本次结果'));
+      pick.append(mkPick('needs_changes', '↻ 需要修改'));
+      wrap.append(pick);
+
+      wrap.append(el('div', 'planner-lbl planner-rv-lbl2', '说明'));
+      const counter = el('div', 'planner-rv-count');
+      const ta = el('textarea', 'planner-rv-note-in');
+      ta.rows = 3;
+      ta.maxLength = REVIEW_NOTE_MAX;
+      ta.value = draft.note;
+      ta.disabled = Boolean(draft.saving);
+      ta.placeholder = '写一句判断依据（可选）';
+      ta.oninput = () => {
+        draft.note = ta.value;
+        counter.textContent = ta.value.length + ' / ' + REVIEW_NOTE_MAX;
+      };
+      counter.textContent = draft.note.length + ' / ' + REVIEW_NOTE_MAX;
+      wrap.append(ta, counter);
+
+      const acts = el('div', 'planner-rv-acts');
+      const saveLabel = draft.saving ? '正在保存…' : draft.error ? '重试' : '保存';
+      const save = miniBtn(saveLabel, 'primary', () => submitReview(planId, task.id, a.attempt, draft.status, draft.note));
+      save.disabled = Boolean(draft.saving);
+      acts.append(save);
+      if (!draft.saving) {
+        /* 冲突时不提供「取消」这个逃生口之外的静默路径 —— 用户要么重新加载，
+         * 要么继续编辑，两条路都是明确的。 */
+        const cancel = miniBtn('取消', '', () => closeEditor(planId, task.id, a.attempt));
+        acts.append(cancel);
+      }
+      wrap.append(acts);
+
+      if (draft.conflict) {
+        const box = el('div', 'planner-rv-msg err');
+        box.append(el('div', null, '这条审阅已经在其他窗口被修改。你写的内容还留着 —— 点「重新加载」会拿服务端最新的那一版覆盖它。'));
+        box.append(miniBtn('重新加载', '', () => {
+          /* 用户明确选择覆盖：丢掉草稿，重新拉一次计划（§四十一）。
+           * 只重拉 plan detail，不刷新整个窗口。 */
+          reviewDrafts.delete(key);
+          refreshCurrent();
+        }));
+        wrap.append(box);
+      } else if (draft.error) {
+        wrap.append(el('div', 'planner-rv-msg err', '保存失败：' + draft.error));
+      }
+      return wrap;
+    }
+
+    /**
+     * 一条 attempt：状态 + 关联会话 + 执行期间变更 + 验证要求 + 人工审阅。
+     *
+     * 四种「没有会话」的情形分开说，因为用户该做的事完全不同：
      *   - 这次执行没关联到会话（Agent 不支持）→ 「无可关联会话」
      *   - 关联过，但会话文件已经找不到了 → 「关联会话已删除」
      *   - 有会话且能找到 → 显示标题 + 「打开会话」
@@ -464,9 +898,13 @@ export function openPlanner(focus = null) {
     function renderAttempt(planId, task, a) {
       const row = el('div', 'planner-attempt');
       const head = el('div', 'planner-attempt-head');
-      const meta = a.success ? TASK_STATE.success : /取消/.test(String(a.error || '')) ? TASK_STATE.cancelled : TASK_STATE.failed;
+      /* 执行结论用**稳定字段**（`outcomeStatus`），不再从 error 文案猜 ——
+       * 文案是给人看的，改一次就静默失效（见 attemptOutcome 的说明）。 */
+      const outcome = attemptOutcome(a);
+      const meta = TASK_STATE[outcome] || { dot: 'dim', label: outcome };
       head.append(el('span', dotClass(meta), ''));
       head.append(el('span', 'planner-attempt-no', `第 ${a.attempt} 次`));
+      head.append(el('span', 'planner-attempt-state', meta.label));
       if (Number.isFinite(a.startedAt) && Number.isFinite(a.endedAt)) {
         head.append(el('span', 'planner-attempt-dur', fmtDuration(a.endedAt - a.startedAt)));
       }
@@ -490,18 +928,115 @@ export function openPlanner(focus = null) {
         const frow = el('div', 'planner-attempt-files');
         /* 措辞刻意是「执行期间变更」，**不是**「该 Agent 修改」（规格 §11）：
          * 用户自己、编辑器、另一个并行任务都可能在同一时间段动过这些文件。
-         * 这个字符串同时也是 planner.cjs / workflow-relations.cjs 的断言对象。 */
+         * 这个字符串同时也是 smoke.cjs 的断言对象。 */
         frow.append(el('span', 'planner-lbl', '执行期间变更'));
         const list = el('div', 'planner-file-list');
-        for (const p of files.slice(0, 20)) list.append(el('span', 'planner-file', p));
+        /* 展开态按 attempt 记，不按 task —— 同一个 task 的不同 attempt 各管各的。 */
+        const expandKey = draftKey(planId, task.id, a.attempt) + ':files';
+        const expanded = filesExpanded.has(expandKey);
+        let anyChanged = false;
+        for (const p of expanded ? files : files.slice(0, FILES_PREVIEW)) {
+          const line = el('div', 'planner-file-row');
+          /* 路径仍然是**纯 `.planner-file` 文本节点** —— 现有测试按 textContent 断言它，
+           * 所以「查看当前 Diff」必须是它的兄弟节点，不能塞进去。 */
+          const chip = el('span', 'planner-file', p);
+          /* 超长路径会被 CSS 截断，悬停时用 title 给全路径（§四十八）。 */
+          chip.title = p;
+          line.append(chip);
+          const state = currentChangeState(p);
+          if (state === 'clean') {
+            /* 历史文件关系保留、**不隐藏这个文件**，只是如实说明现在没差异了（§二十二）。 */
+            line.append(el('span', 'planner-rv-hint', '当前工作区已无该文件的未提交差异'));
+          } else {
+            if (state === 'changed') anyChanged = true;
+            line.append(
+              miniBtn('查看当前 Diff', '', () => {
+                /* 复用现有的 Git 变更面板，**不新做 reviewDiff / historicalDiff**（§二十）：
+                 * P7/P8 从来没有保存过「这次执行当时的 diff」，能给的只有当前工作区。 */
+                closeModal();
+                openChangesPanel();
+              })
+            );
+          }
+          list.append(line);
+        }
+        if (files.length > FILES_PREVIEW) {
+          list.append(
+            miniBtn(expanded ? `收起（共 ${files.length} 个）` : `展开其余 ${files.length - FILES_PREVIEW} 个`, '', () => {
+              if (expanded) filesExpanded.delete(expandKey);
+              else filesExpanded.add(expandKey);
+              renderDetail();
+            })
+          );
+        }
         frow.append(list);
-        if (files.length > 20) frow.append(el('span', 'planner-file-more', `等 ${files.length} 个文件`));
+        if (a.changeCaptureIncomplete) {
+          /* 有文件但采集不全 —— 不能因为「有内容」就不提这件事（§二十三）。 */
+          frow.append(el('span', 'planner-rv-warn', '⚠ 执行期间文件变化未完整采集'));
+        }
         row.append(frow);
+        if (anyChanged) {
+          /* Diff 的语义必须写在 UI 上（§二十一）：它是**当前工作区**的差异，
+           * 不是这次执行当时的快照 —— 两者可能完全不同。 */
+          row.append(el('div', 'planner-attempt-note', '「查看当前 Diff」打开的是**当前工作区**的差异，不是这次执行当时的快照。'));
+        }
       } else if (a.changeCaptureIncomplete) {
         row.append(el('div', 'planner-attempt-note', '执行期间变更：采集不到（这个项目不是 git 仓库，或这次执行被中断）'));
       } else {
         row.append(el('div', 'planner-attempt-note', '执行期间未观察到文件变化'));
       }
+
+      /* ---------- 验证要求 / 验证结果（P8-A 的 verificationSnapshot） ----------
+       *
+       * 「验证要求」是**这次执行开始时**冻结下来的，所以之后改 task.verification
+       * 不会篡改历史。老 attempt 没有快照时如实说没有 —— 并把**当前任务**的要求
+       * 另起一行标出来，前缀必须写「当前任务」，否则用户会以为那是当时的要求（§十六）。 */
+      const snap = verificationText(a.verificationSnapshot);
+      const vrow = el('div', 'planner-attempt-verify');
+      vrow.append(el('span', 'planner-lbl', '验证要求'));
+      if (snap) {
+        vrow.append(el('span', 'planner-verify-cmd', snap));
+      } else {
+        vrow.append(el('span', 'planner-rv-hint', '该次执行没有保存历史验证要求'));
+      }
+      row.append(vrow);
+      if (!snap) {
+        const curV = verificationText(task.verification);
+        if (curV) {
+          const crow = el('div', 'planner-attempt-verify');
+          crow.append(el('span', 'planner-lbl', '当前任务验证要求'));
+          crow.append(el('span', 'planner-verify-cmd', curV));
+          row.append(crow);
+        }
+      }
+      const rrow = el('div', 'planner-attempt-verify');
+      rrow.append(el('span', 'planner-lbl', '验证结果'));
+      /* **默认就是这句，永远是这句。** Agent 报 success、exitCode 0、
+       * summary 里写着 tests passed —— 都不构成独立验证证据，所以这里不做任何
+       * 自动判断，也不提供「标记为已验证」这种入口（§十七）。 */
+      rrow.append(el('span', 'planner-rv-hint', '尚未独立确认'));
+      row.append(rrow);
+
+      /* ---------- P8-C：人工审阅 ---------- */
+      row.append(renderReview(planId, task, a, false));
+      return row;
+    }
+
+    /**
+     * 正在执行的那一次尝试。
+     *
+     * 它**在历史里还不存在**（attempt 号在开始时涨上去，记录是结束时才写的），
+     * 但正因如此界面必须显式占位 —— 否则用户看到「第 2 次执行中」却没有第 2 条的
+     * 任何痕迹，会以为记录丢了。这一行只说明状态，**不给任何审阅操作**（§九）。
+     */
+    function renderRunningAttempt(planId, task) {
+      const row = el('div', 'planner-attempt planner-attempt-live');
+      const head = el('div', 'planner-attempt-head');
+      head.append(el('span', dotClass(TASK_STATE.running), ''));
+      head.append(el('span', 'planner-attempt-no', `第 ${task.attempt} 次`));
+      head.append(el('span', 'planner-attempt-state', '执行中'));
+      row.append(head);
+      row.append(renderReview(planId, task, { attempt: task.attempt }, true));
       return row;
     }
 
@@ -541,7 +1076,8 @@ export function openPlanner(focus = null) {
       if (focus && focus.taskId === t.id) wrap.classList.add('focus');
       const meta = TASK_STATE[t.status] || { dot: 'dim', label: t.status };
       const top = el('div', 'planner-task-top');
-      top.append(el('span', dotClass(meta), meta.label));
+      top.append(el('span', dotClass(meta), ''));
+      top.append(el('span', 'planner-task-state', meta.label));
       top.append(el('span', 'planner-task-id', t.id));
       top.append(el('span', 'planner-task-agent', t.agent));
       if (t.dependsOn && t.dependsOn.length) top.append(el('span', 'planner-task-dep', '依赖 ' + t.dependsOn.join(', ')));
@@ -637,6 +1173,13 @@ export function openPlanner(focus = null) {
         const hist = el('div', 'planner-attempts');
         hist.append(el('div', 'ext-sec-head', t.attempts.length > 1 ? '尝试历史' : '本次执行'));
         for (const a of t.attempts) hist.append(renderAttempt(current.id, t, a));
+        /* P8-C：正在跑的那一次也占一行（它在历史里还不存在，见 renderRunningAttempt）。 */
+        if (t.status === 'running') hist.append(renderRunningAttempt(current.id, t));
+        wrap.append(hist);
+      } else if (t.status === 'running') {
+        const hist = el('div', 'planner-attempts');
+        hist.append(el('div', 'ext-sec-head', '本次执行'));
+        hist.append(renderRunningAttempt(current.id, t));
         wrap.append(hist);
       }
 

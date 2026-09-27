@@ -1672,3 +1672,109 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 
 /* 从会话跳进来时高亮目标任务，否则用户要自己在长计划里找 */
 .planner-task.focus { border-left: 2px solid var(--accent); padding-left: 8px; }
+
+/* ============ P8-C：Attempt 人工审阅 ============
+ *
+ * 这一块全部挂在**已有的 attempt 卡片内部**，不新开页面 / Tab / Dashboard：
+ * P8 是 Planner 工作流的一段，验收对象就是那一次执行。 */
+
+/* 紧凑按钮（attempt 行内用）。高度对齐 .planner-open-sess ——
+ * 同一行里一边 30px（.btn）一边 19px 会看着像两套 UI。 */
+.planner-mini {
+  flex: 0 0 auto; height: 20px; padding: 0 8px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: #c5c5c5;
+  font-size: 11px; font-family: inherit; white-space: nowrap;
+}
+.planner-mini:hover { background: var(--hover); }
+.planner-mini.primary { border-color: rgba(232,163,61,.4); background: var(--accent-soft); color: #f0cf9a; }
+.planner-mini.primary:hover { background: rgba(232,163,61,.2); }
+.planner-mini:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 审阅块：展示态与编辑态都以一行标签起步 */
+.planner-rv { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; }
+.planner-rv-view { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+/* **状态必须带文字**（已接受 / 需修改 / 待审阅），颜色只是辅助 ——
+ * 只画绿点红点会让色觉障碍用户读不出状态（§五十二）。 */
+.planner-rv-state { flex: 0 0 auto; }
+.planner-rv-state.pending { color: var(--t3); }
+.planner-rv-state.ok { color: var(--ok); }
+.planner-rv-state.warn { color: var(--warn); }
+.planner-rv-time { color: var(--t3); }
+/* 1000 字说明也要能读：保留换行、长串强制断行（§四十七）。 */
+.planner-rv-note {
+  color: #c9c9c9; background: var(--hover); border-radius: 6px; padding: 5px 8px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.planner-rv-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.planner-rv-hint { color: var(--t3); }
+.planner-rv-warn { color: var(--warn); font-size: 11px; }
+.planner-rv-lbl2 { margin-top: 2px; }
+
+/* 编辑态 */
+.planner-rv-pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.planner-rv-opt {
+  height: 22px; padding: 0 9px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: #c5c5c5;
+  font-size: 11.5px; font-family: inherit;
+}
+.planner-rv-opt:hover { background: var(--hover); }
+.planner-rv-opt.on { border-color: rgba(232,163,61,.4); background: var(--accent-soft); color: #f0cf9a; }
+.planner-rv-opt:disabled { opacity: .45; cursor: not-allowed; }
+.planner-rv-note-in {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 52px;
+  background: var(--input); border: 1px solid var(--line); border-radius: 7px;
+  padding: 6px 8px; color: var(--t1); font-family: inherit; font-size: 11.5px; line-height: 1.5;
+}
+.planner-rv-note-in:focus { outline: none; border-color: #3d3d3d; }
+.planner-rv-count { color: var(--t3); font-size: 10.5px; text-align: right; }
+.planner-rv-msg {
+  display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
+  border-radius: 6px; padding: 6px 8px; font-size: 11px;
+}
+.planner-rv-msg.err { border: 1px solid rgba(248,113,113,.3); background: rgba(248,113,113,.07); color: #f0a5a5; }
+
+/* 每个变更文件一行：路径 + 「查看当前 Diff」（或「已无差异」说明）。
+ * 超长路径**截断 + title 提示**，绝不允许把卡片撑爆（§四十八）。 */
+.planner-file-row { display: flex; align-items: center; gap: 7px; min-width: 0; flex-wrap: wrap; width: 100%; }
+.planner-file-list .planner-file {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* 验证要求 / 验证结果（照抄后端 normalizeVerificationSnapshot 的两个键） */
+.planner-attempt-verify {
+  display: flex; align-items: baseline; gap: 7px; font-size: 11.5px; min-width: 0; flex-wrap: wrap;
+}
+.planner-verify-cmd {
+  font-family: var(--mono); font-size: 11px; color: #bdbdbd;
+  background: var(--hover); border-radius: 4px; padding: 1px 5px;
+  max-width: 100%; overflow-wrap: anywhere;
+}
+
+/* 执行中那一行弱化，别跟已完成的尝试抢注意力 */
+.planner-attempt-live { opacity: .85; }
+
+/* Plan 顶部汇总：两行轻量文字，**不做四个 dashboard 卡片**（§六十）。 */
+.planner-revsum {
+  display: flex; flex-direction: column; gap: 3px;
+  border: 1px solid var(--line-soft); border-radius: 7px; padding: 7px 10px; background: var(--card);
+}
+.planner-revsum-row { display: flex; align-items: baseline; gap: 10px; font-size: 11.5px; flex-wrap: wrap; }
+.planner-revsum-k { flex: 0 0 auto; color: var(--t3); min-width: 76px; }
+.planner-revsum-v { color: #c9c9c9; min-width: 0; }
+
+/* 状态文字（圆点旁边的那一份）。
+ *
+ * ⚠️ 它**必须**是独立节点，不能塞进 `.ext-dot` —— 那是个 7×7 的圆点，
+ * 文字进去会被挤成一个 7px 宽的文字列、渲染成竖排单字还叠在标题上
+ * （overflow 是 visible，所以不会有任何报错，只是难看且读不出来）。
+ * 圆点只管颜色，文字只管可读 —— §五十二 要求状态不能只靠颜色。 */
+.planner-head-state,
+.planner-task-state,
+.ext-item-state { flex: 0 0 auto; white-space: nowrap; }
+.planner-head-state,
+.planner-task-state { color: var(--t2); }
+.ext-item-state { color: var(--t3); }
+
+/* attempt 历史与任务操作之间留一点间距 —— 否则「跳过」紧贴在审阅块下面，
+   看着像是审阅的一个动作（它其实是任务级操作）。 */
+.planner-attempts + .ext-acts { margin-top: 8px; }

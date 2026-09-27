@@ -179,6 +179,36 @@ export const retryPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'retry
 export const cancelPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'cancel'), {});
 export const skipPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'skip'), {});
 
+/* ---------- 人工审阅（P8-C） ---------- */
+
+/** 保存 / 清除某次尝试的人工审阅。
+ *
+ *  `PUT /api/plans/:planId/tasks/:taskId/attempts/:attempt/review`
+ *  body = `{ status, note, expectedRevision }`，status 只有三个值。
+ *
+ *  ⚠️ **冲突判定看 body 里的 `code`，不要看 HTTP 状态码。**
+ *
+ *  上面这两个 helper 只做 `await r.json()`，**从不读 `r.status` / `r.ok`** ——
+ *  所以 409 到这里就是一个普通对象，唯一能识别它的是
+ *  `code === 'review-conflict'`。不要改成 `res.status === 409`：那会在
+ *  「后端换了个状态码」或「哪天加了 res.ok 判断」时静默失效，
+ *  而失效的表现是**把冲突当成保存成功**（最糟的一种）。
+ *
+ *  后端在这些情形回的是**同一个 200**（都属于「业务上不允许」，不是协议错误）：
+ *  目标状态与执行结论不符（例如给失败的执行标「已接受」）、note 超长、
+ *  attempt 还在执行还没有记录。所以调用方要**一律先看 `r.ok`，再看 `r.code`**。 */
+export const updateAttemptReview = (planId, taskId, attempt, body) =>
+  sendJSON(
+    '/api/plans/' +
+      encodeURIComponent(planId) +
+      '/tasks/' +
+      encodeURIComponent(taskId) +
+      '/attempts/' +
+      encodeURIComponent(attempt) +
+      '/review',
+    { method: 'PUT', body }
+  );
+
 /* ---------- 任务 ↔ 会话 / 任务 ↔ 文件（P7） ---------- */
 
 /** 打开某个任务某次尝试对应的会话。
