@@ -627,8 +627,8 @@ const SUMS = 'SHA256SUMS.txt';
     const seq = m.calls.map((c) => `${c[1]}${c.includes('--draft=false') ? ':publish' : ''}`);
     const upload = seq.findIndex((x) => x === 'upload');
     const verifyView = seq.findIndex((x, i) => x === 'view' && i > upload);
-    const publish = seq.findIndex((x) => x === 'edit:publish');
-    return (upload >= 0 && verifyView > upload && publish > verifyView) || JSON.stringify(seq);
+    const publishIndex = seq.findIndex((x) => x === 'edit:publish');
+    return (upload >= 0 && verifyView > upload && publishIndex > verifyView) || JSON.stringify(seq);
   });
 
   check('29. --dry-run：做到核对通过就停，**不**发布（远端留下 draft）', () => {
