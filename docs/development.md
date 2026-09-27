@@ -158,6 +158,17 @@ Release 一发出来，Pi GUI 的「诊断 → 版本」就会读到它（[updat
 
 ## 五、这条路上踩过的坑
 
+- ⚠️ **「本机跑得通」不等于「runner 上跑得通」——盘符布局就不一样，而且方向是反的。**
+  本机更**宽松**：仓库与 `TEMP` 都在 `C:`。GitHub runner 更**严格**：
+  workspace 在 `D:\`、`TEMP` 在 `C:\`。
+  `portable-check.cjs` 里曾有一条「zip 与临时目录必须同盘」的限制（当年为 GNU tar
+  加的，GNU tar 会把 `C:` 当成 rsh 远程主机），在本机永远不触发，
+  而在 runner 上**必然触发** —— `Verify portable zip` 1 秒钟就抛错退出。
+  换用 bsdtar 之后这条前提早就不成立了（bsdtar 原生支持盘符），
+  但没人去删它，于是 `release-check.yml` 第一次被真正触发时才暴露。
+  → 凡是要在 runner 上跑的东西，**必须真的在 runner 上跑过一次**，
+  不能只靠本机绿灯 + 静态校验。本机想复现跨盘可以用
+  `subst D: <某个目录>` 造一个第二盘，再把 `TEMP` 指过去。
 - ⚠️ **`tar -a -cf x.zip` 打出来的不是 zip —— 而且不报错。**
   Git for Windows 装的是 **GNU tar**，它不支持 zip：`-a` 对 `.zip` 既不压缩也不
   报错，**静默产出一个普通 tar**。于是「便携版 zip」其实是 tar 改了个名：

@@ -187,6 +187,13 @@ npm run release:check -- --with-installer
 不创建 Release）；正式发布是 tag 触发的 **Release** workflow。
 完整发版步骤见 [releasing.md](releasing.md)。
 
+> ⚠️ **`test:portable` / `test:installer` 必须在 runner 上真跑过一次。**
+> 它们的失败模式常常是环境相关的，而本机环境比 runner **更宽松**：
+> 仓库与 `TEMP` 都在 `C:`，而 runner 的 workspace 在 `D://`、`TEMP` 在 `C://`。
+> 已经因此漏过一次（同盘限制，本机永远不触发）——见
+> [development.md](development.md) 的「坑」一节。本机想复现跨盘可以用
+> `subst D: <某个目录>` 造一个第二盘再把 `TEMP` 指过去。
+
 ## 六、环境隔离（改测试时的硬要求）
 
 测试跑在开发机上，所以**任何一处忘了隔离都会打到真实数据**。已经踩过的坑：
