@@ -247,6 +247,66 @@ const stubPlanP7 = {
   ],
 };
 
+/* ---------- P8-C 专用夹具：人工审阅 ----------
+ *
+ * 一次铺开「三种审阅态 + 三种不可接受的执行结论 + 运行中 + 多次尝试 +
+ * 无 attempt + 极端内容」，让审阅 UI 的每条规则都有真实数据可断言。
+ *
+ * 字段形状照抄后端 planView() + normalizeAttempt()：
+ *   outcomeStatus          success / failed / cancelled / interrupted
+ *   verificationSnapshot   {command} 或 {description} 或 null
+ *   review                 {status, note, reviewedAt, revision}
+ *                          （pending 时 note 是空串、reviewedAt 是 null ——
+ *                            与后端 normalizeReview 完全一致，别在夹具里造
+ *                            「pending 却带着旧说明」这种形状）
+ * 会话状态字段同 P7：sessionId / sessionAvailable / sessionTitle。
+ */
+const XSS_NOTE = '<img src=x onerror=alert(1)> <script>alert(2)</script> <svg/onload=alert(3)>';
+const R_LONG_PATH = 'packages/something/really/really/really/long/path/to/generated/adapter/implementation.js';
+const R_MANY_FILES = Array.from({ length: 20 }, (_, i) => (i === 3 ? R_LONG_PATH : `src/gen/mod-${i}.js`));
+
+function mkAtt(n, over) {
+  return Object.assign(
+    {
+      attempt: n, success: true, error: '', summary: '', exitCode: 0, startedAt: n * 10, endedAt: n * 10 + 5,
+      sessionId: `sess-r${n}`, sessionAvailable: true, sessionTitle: `第 ${n} 次的会话`,
+      filesChanged: [], changeCaptureIncomplete: false,
+      outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+      review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+    },
+    over || {}
+  );
+}
+function mkTask(id, attempts, over) {
+  return Object.assign(
+    {
+      id, title: '任务 ' + id, description: '', agent: 'pi', workingDirectory: '.', dependsOn: [],
+      status: 'success', startedAt: 1, endedAt: 2, attempt: attempts.length, error: '',
+      verification: null, attempts, result: null,
+    },
+    over || {}
+  );
+}
+
+const stubPlanReview = {
+  id: 'plan-1', title: '审阅夹具', goal: 'g', status: 'paused', createdAt: 1, updatedAt: 2,
+  startedAt: 1, endedAt: null, projectRoot: 'C:/demo', concurrency: 1, recoveryNotes: [],
+  tasks: [
+    mkTask('okcmd', [mkAtt(1)]),
+    mkTask('okdesc', [mkAtt(1, { verificationSnapshot: { description: '确认登录错误提示' }, review: { status: 'accepted', note: '第一次通过', reviewedAt: 1758800000000, revision: 3 } })]),
+    mkTask('oknull', [mkAtt(1, { verificationSnapshot: null })], { verification: { command: 'npm run test:unit' } }),
+    mkTask('revneed', [mkAtt(1, { review: { status: 'needs_changes', note: '缺少边界用例', reviewedAt: 1758800100000, revision: 1 } })]),
+    mkTask('xsstask', [mkAtt(1, { review: { status: 'accepted', note: XSS_NOTE, reviewedAt: 1758800200000, revision: 1 } })]),
+    mkTask('manyfiles', [mkAtt(1, { filesChanged: R_MANY_FILES, review: { status: 'accepted', note: '二十个文件', reviewedAt: 1758800300000, revision: 1 } })]),
+    mkTask('failed', [mkAtt(1, { success: false, exitCode: 1, error: '模型报 402', outcomeStatus: 'failed' })], { status: 'failed' }),
+    mkTask('cancelled', [mkAtt(1, { success: false, exitCode: null, error: '已取消', outcomeStatus: 'cancelled' })], { status: 'cancelled' }),
+    mkTask('interrupted', [mkAtt(1, { success: false, exitCode: null, error: '应用关闭时被中断', outcomeStatus: 'interrupted', filesChanged: [], changeCaptureIncomplete: true, verificationSnapshot: null })], { status: 'interrupted' }),
+    mkTask('live', [mkAtt(1, { review: { status: 'accepted', note: '第一轮保留', reviewedAt: 1758800400000, revision: 1 } })], { status: 'running', attempt: 2 }),
+    mkTask('multrev', [mkAtt(1, { review: { status: 'accepted', note: '第一次曾经通过', reviewedAt: 1758800500000, revision: 1 } }), mkAtt(2)]),
+    mkTask('noattempt', [], { status: 'pending', attempt: 0 }),
+  ],
+};
+
 /* 计划详情接口回什么 —— 默认 stubPlan，P7 段临时换成 stubPlanP7。 */
 let stubPlanDetail = stubPlan;
 
@@ -265,6 +325,18 @@ const stubRelations = {
 /* 打开会话的响应 —— 可被测试临时改成失败，验证「正常结果不当错误」 */
 let stubOpenSession = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '修复 bridgeRun stale response', sessionId: 'sess-a', taskId: 'linked', attempt: 1 };
 const openSessionCalls = [];
+
+/* P8-C：人工审阅的保存响应 —— 同样可被测试临时替换。
+ *
+ * 默认回一条**像真后端那样**的成功体：`{ok, planId, taskId, attempt, review}`，
+ * review 的形状就是 `normalizeReview` 的输出（pending 时 note 为空串、reviewedAt 为 null）。
+ *
+ * ⚠️ 冲突**不能用 HTTP 状态码表达** —— api.js 只做 `await r.json()`，从不看
+ * `res.status`。所以冲突桩必须是 `{ok:false, code:'review-conflict', …}`，
+ * 前端也正是靠 body 里的 `code` 认出来的。这一点与真后端的 409 行为一致。 */
+const reviewCalls = [];
+let stubReviewResult = null;
+let reviewDelayMs = 0;
 
 const stubPlans = {
   ok: true,
@@ -550,6 +622,20 @@ window.fetch = async (url, opts) => {
      * 否则会被当成「查一个 id 叫 relations 的计划」。这和 router.js 里
      * 「顺序即语义」是同一类坑。 */
     if (u.includes('/relations')) return { json: async () => stubRelations };
+    /* P8-C：审阅保存。必须排在 `method !== 'GET'` 那条兜底之前 ——
+     * 否则会和 retry / cancel / skip 落到同一个「一律 ok」的桩上，
+     * 冲突与失败两条路径就永远测不到（它们是这一段最该测的东西）。 */
+    if (/\/attempts\/\d+\/review/.test(u)) {
+      reviewCalls.push({ method, url: u, body });
+      return {
+        json: async () => {
+          /* 延迟钩子：用来制造「保存还没回来就切了项目 / 切了计划」的窗口
+           *（§三十八 / §三十九 / §四十 的 stale 守卫必须真的测到）。 */
+          if (reviewDelayMs) await new Promise((r) => setTimeout(r, reviewDelayMs));
+          return stubReviewResult || { ok: true, planId: 'plan-1', taskId: 'linked', attempt: 1, review: { status: (body && body.status) || 'accepted', note: (body && body.note) || '', reviewedAt: 1758800000000, revision: ((body && body.expectedRevision) || 0) + 1 } };
+        },
+      };
+    }
     if (u.includes('/open-session')) {
       openSessionCalls.push({ method, url: u, body });
       return { json: async () => stubOpenSession };
@@ -3186,6 +3272,7 @@ staticCheck();
   await plannerSection();
   await sessionSection();
   await p7Section();
+  await reviewSection();
   await convNavSection();
 
   /* ---------- 会话内提问导航（Conversation Minimap） ----------
@@ -3589,6 +3676,344 @@ staticCheck();
     check('P7. 换项目/无会话时窄条被清空并隐藏（不残留上一个项目的关联）', () =>
       ($('sessionPlans').hidden === true && $('sessionPlans').childElementCount === 0) ||
       `hidden=${$('sessionPlans').hidden} children=${$('sessionPlans').childElementCount}`);
+  }
+
+  /* ================= P8-C：Attempt 人工审阅 ================= */
+
+  async function reviewSection() {
+    console.log('\n--- P8-C 人工审阅：三态 / 编辑 / 冲突 / 汇总 / stale ---');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const T = (e) => (e && e.textContent) || '';
+
+    stubPlanDetail = stubPlanReview;
+    stubReviewResult = null;
+    reviewDelayMs = 0;
+    reviewCalls.length = 0;
+    window.closeModal();
+    window.openPlanner();
+    await wait(80);
+    let card = $('modalCard');
+    card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+    await wait(90);
+
+    /* 每次都用 dataset 现查，DOM 一重画就重新定位（不缓存节点引用） */
+    const taskEl = (id) => [...card.querySelectorAll('.planner-task')].find((x) => x.dataset.taskId === id);
+    const attEl = (id, n) => {
+      const it = taskEl(id);
+      if (!it) return null;
+      return (
+        [...it.querySelectorAll('.planner-attempt')].find((a) => {
+          const no = a.querySelector('.planner-attempt-no');
+          return no && no.textContent.trim() === `第 ${n} 次`;
+        }) || null
+      );
+    };
+    /** 审阅块：给了 attempt 号就取那一条 attempt 的，否则取任务级的。 */
+    const rvEl = (id, n) => {
+      const host = n ? attEl(id, n) : taskEl(id);
+      return host ? host.querySelector('.planner-rv') : null;
+    };
+    const rvBtn = (id, text, n) => {
+      const box = rvEl(id, n);
+      return box ? [...box.querySelectorAll('button')].find((b) => b.textContent.trim() === text) || null : null;
+    };
+
+    /* ---------- 汇总（必须在任何写操作之前断言 —— 后面的保存会改状态） ----------
+     *
+     * 夹具的设计值：成功 8（okcmd/okdesc/oknull/revneed/xsstask/manyfiles/live/
+     * multrev）、失败 2（failed + interrupted）、取消 1、尚无结果 1（noattempt）。
+     * 审阅分母**只有「最新一次成功」的 8 个**：已接受 4（okdesc/xsstask/manyfiles/live）、
+     * 需修改 1（revneed）、待审阅 3（okcmd/oknull/multrev）。 */
+    check('R24. Plan 汇总：执行结果按最新一次 attempt 归类', () => {
+      const s = T(card.querySelector('.planner-revsum'));
+      return (/成功 8/.test(s) && /失败 2/.test(s) && /取消 1/.test(s) && /尚无结果 1/.test(s)) || s;
+    });
+    check('R25. Plan 汇总：审阅分母只含「最新一次成功」的任务', () => {
+      const s = T(card.querySelector('.planner-revsum'));
+      return (/已接受 4/.test(s) && /需修改 1/.test(s) && /待审阅 3/.test(s)) || s;
+    });
+    check('R25b. 失败 / 取消 / 被中断的最新结果**不进**「待审阅」分母', () => {
+      const s = T(card.querySelector('.planner-revsum'));
+      /* 若三个不可接受的最新结果被算进分母，pending 会变成 6 而不是 3 */
+      return !/待审阅 6/.test(s) || s;
+    });
+    check('R26. 「最新一次 attempt」规则：multrev 的最新一次是 pending，不是历史那次 accepted', () => {
+      /* Task 的当前审阅 = 最新 attempt 的（pending）；历史那条仍显示在 Attempt 1 卡片里 */
+      const a1 = T(rvEl('multrev', 1));
+      const a2 = T(rvEl('multrev', 2));
+      return (/已接受/.test(a1) && /待审阅/.test(a2) && !/已接受/.test(a2)) || `a1=${a1} | a2=${a2}`;
+    });
+    check('R27. 旧 attempt 的 accepted 不被隐藏、也不改写成「已过期 / 旧版」', () => {
+      const a1 = T(rvEl('multrev', 1));
+      return (/第一次曾经通过/.test(a1) && !/已过期|旧版|stale/.test(a1)) || a1;
+    });
+    check('R28. 没有 attempt 的任务算「尚无结果」，不算「待审阅」', () => {
+      const it = taskEl('noattempt');
+      return Boolean(it) && !it.querySelector('.planner-rv') || (it ? '无 attempt 却渲染了审阅块' : '没找到任务');
+    });
+
+    /* ---------- 三种审阅态的文案 ---------- */
+    check('R1. 成功的 attempt 有「人工审阅」区', () => Boolean(rvEl('okcmd', 1)) || '没有审阅区');
+    check('R2. 未审阅显示「待审阅」', () => /待审阅/.test(T(rvEl('okcmd', 1))) || T(rvEl('okcmd', 1)));
+    check('R3. 已保存的审阅显示「已接受」+ 说明 + 本地时间', () => {
+      const t = T(rvEl('okdesc', 1));
+      return (/已接受/.test(t) && /第一次通过/.test(t) && /\d+月\d+日 \d+:\d+/.test(t)) || t;
+    });
+    check('R4. 「需修改」态照常显示', () => /需修改/.test(T(rvEl('revneed', 1))) || T(rvEl('revneed', 1)));
+    check('R4b. 状态文字是**真文字**，不只靠颜色（圆点旁边还有标签）', () =>
+      Boolean(rvEl('okdesc', 1).querySelector('.planner-rv-state')) || '只有圆点没有文字');
+
+    /* ---------- 哪些执行结论不能「接受」 ---------- */
+    check('R5. 失败的 attempt 只有「需要修改」，没有「接受本次结果」', () =>
+      Boolean(rvBtn('failed', '需要修改', 1)) && !rvBtn('failed', '接受本次结果', 1) || '失败却给了接受按钮');
+    check('R6. 已取消的 attempt 只有「需要修改」', () =>
+      Boolean(rvBtn('cancelled', '需要修改', 1)) && !rvBtn('cancelled', '接受本次结果', 1) || '取消却给了接受按钮');
+    check('R7. 被中断的 attempt 只有「需要修改」', () =>
+      Boolean(rvBtn('interrupted', '需要修改', 1)) && !rvBtn('interrupted', '接受本次结果', 1) || '中断却给了接受按钮');
+    check('R8. 正在执行的那一次不给审阅操作，只说明完成后可审阅', () => {
+      const box = rvEl('live', 2);
+      return (Boolean(box) && /完成后可进行人工审阅/.test(T(box)) && !box.querySelector('button')) || T(box);
+    });
+    check('R8b. 执行中那次尝试在历史里**显式占位**（不会凭空消失）', () => {
+      const a = attEl('live', 2);
+      return Boolean(a) && /执行中/.test(T(a)) || (a ? T(a) : '没有第 2 次的占位');
+    });
+
+    /* ---------- 验证快照 / 验证结果 ---------- */
+    check('R17. verificationSnapshot 的 command 直接显示', () => /npm test/.test(T(attEl('okcmd', 1))) || T(attEl('okcmd', 1)));
+    check('R18. verificationSnapshot 的 description 直接显示', () => /确认登录错误提示/.test(T(attEl('okdesc', 1))) || T(attEl('okdesc', 1)));
+    check('R19. 没有快照时如实说没有，并把「当前任务」的要求另起一行标出', () => {
+      const t = T(attEl('oknull', 1));
+      return (/该次执行没有保存历史验证要求/.test(t) && /当前任务验证要求/.test(t) && /npm run test:unit/.test(t)) || t;
+    });
+    check('R20. 验证结果永远是「尚未独立确认」，且全卡片没有「验证通过」类字样', () => {
+      const t = T(attEl('okcmd', 1));
+      return (/尚未独立确认/.test(t) && !/验证通过|已验证|Tests passed/.test(t)) || t;
+    });
+
+    /* ---------- 会话 / 当前 Diff 入口 ---------- */
+    check('R21. 会话入口仍然存在（复用 P7，不重做一套）', () => {
+      const it = attEl('okcmd', 1);
+      return Boolean(it) && [...it.querySelectorAll('button')].some((b) => b.textContent.trim() === '打开会话') || '没有打开会话按钮';
+    });
+    /* Diff 入口的两种分支都要真的断言到（§二十一 / §二十二）：
+     * 把 Git 工作区状态打桩成「只有 mod-0 还有未提交差异」，然后重画。 */
+    const savedChanges = window.S.changes;
+    window.S.changes = { loaded: true, isRepo: true, files: [{ path: 'src/gen/mod-0.js' }] };
+    card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+    await wait(90);
+    check('R22. 还有未提交差异的文件给出「查看当前 Diff」入口', () => {
+      const row = [...attEl('manyfiles', 1).querySelectorAll('.planner-file-row')].find((r) => /mod-0\.js/.test(r.textContent));
+      return Boolean(row) && /查看当前 Diff/.test(row.textContent) || (row ? row.textContent : '没找到那一行');
+    });
+    check('R22b. 已经 clean 的文件**仍然列出**，只是如实说明已无差异（不隐藏历史关系）', () => {
+      const row = [...attEl('manyfiles', 1).querySelectorAll('.planner-file-row')].find((r) => /mod-1\.js/.test(r.textContent));
+      if (!row) return '文件被隐藏了';
+      return (/当前工作区已无该文件的未提交差异/.test(row.textContent) && !/查看当前 Diff/.test(row.textContent)) || row.textContent;
+    });
+    check('R22c. 明显写明 diff 是**当前工作区**的，不是这次执行当时的快照', () => /当前工作区/.test(T(attEl('manyfiles', 1))) || T(attEl('manyfiles', 1)));
+    check('R22d. 20 个文件默认收起，可展开（不糊成一面墙）', () => {
+      const it = attEl('manyfiles', 1);
+      const more = it && [...it.querySelectorAll('button')].find((b) => /展开其余 15 个/.test(b.textContent));
+      if (!more) return it ? [...it.querySelectorAll('button')].map((b) => b.textContent).join(',') : '没找到';
+      more.onclick();
+      const n = attEl('manyfiles', 1).querySelectorAll('.planner-file-row').length;
+      return n === 20 || `展开后 ${n} 行`;
+    });
+    check('R23. 超长路径被截断但带 title 全路径（不撑爆卡片）', () => {
+      const chip = [...attEl('manyfiles', 1).querySelectorAll('.planner-file')].find((c) => c.textContent === R_LONG_PATH);
+      return Boolean(chip && chip.title === R_LONG_PATH) || (chip ? 'title 不是全路径' : '没找到长路径');
+    });
+    check('R23b. 采集不全时明确标出（不因为「有内容」就不提）', () => {
+      const t = T(attEl('interrupted', 1));
+      return /未完整采集|采集不到/.test(t) || t;
+    });
+
+    /* ---------- XSS：说明一律当纯文本 ---------- */
+    check('R29. 审阅说明按纯文本渲染（img/script/svg 都进不了 DOM）', () => {
+      const bad = card.querySelectorAll('.planner-rv img, .planner-rv script, .planner-rv svg, .planner-rv iframe, .planner-rv object, .planner-rv embed');
+      const shown = /onerror=alert\(1\)/.test(T(rvEl('xsstask', 1)));
+      return (bad.length === 0 && shown) || `注入节点 ${bad.length} 个 / 文本=${shown}`;
+    });
+
+    /* ---------- 编辑态 ---------- */
+    check('R9. 点「接受本次结果」进入编辑态（**先不保存**）', () => {
+      const b = rvBtn('okcmd', '接受本次结果', 1);
+      if (!b) return '没有按钮';
+      b.onclick();
+      return Boolean(rvEl('okcmd', 1).querySelector('.planner-rv-note-in')) || '没进入编辑态';
+    });
+    check('R9b. 进入编辑态没有发任何保存请求', () => reviewCalls.length === 0 || JSON.stringify(reviewCalls.map((c) => c.url)));
+    check('R10. 说明框 maxlength=1000 且有字数计数', () => {
+      const ta = rvEl('okcmd', 1).querySelector('.planner-rv-note-in');
+      const cnt = rvEl('okcmd', 1).querySelector('.planner-rv-count');
+      return (ta && ta.maxLength === 1000 && /0 \/ 1000/.test(T(cnt))) || `max=${ta && ta.maxLength} cnt=${T(cnt)}`;
+    });
+    check('R11. 编辑态有「保存」与「取消」', () =>
+      Boolean(rvBtn('okcmd', '保存', 1) && rvBtn('okcmd', '取消', 1)) || '缺按钮');
+    check('R12. 可在两个状态间切换（切换只是改选择，仍不保存）', () => {
+      const need = [...rvEl('okcmd', 1).querySelectorAll('.planner-rv-opt')].find((b) => /需要修改/.test(b.textContent));
+      if (!need) return '没有「需要修改」选项';
+      need.onclick();
+      const after = [...rvEl('okcmd', 1).querySelectorAll('.planner-rv-opt')].find((b) => /需要修改/.test(b.textContent));
+      return (after && after.classList.contains('on') && reviewCalls.length === 0) || `on=${after && after.classList.contains('on')} calls=${reviewCalls.length}`;
+    });
+    check('R12b. 失败的 attempt 在编辑态里**没有**「接受本次结果」这个选项', () => {
+      rvBtn('cancelled', '需要修改', 1).onclick();
+      const opts = [...rvEl('cancelled', 1).querySelectorAll('.planner-rv-opt')].map((b) => b.textContent);
+      rvBtn('cancelled', '取消', 1).onclick();
+      return opts.length === 1 && /需要修改/.test(opts[0]) || JSON.stringify(opts);
+    });
+
+    /* ---------- 保存 ---------- */
+    {
+      const ta = rvEl('okcmd', 1).querySelector('.planner-rv-note-in');
+      ta.value = '人工确认过了';
+      ta.oninput();
+      check('R13-prep. 说明输入有实时字数反馈', () => /6 \/ 1000/.test(T(rvEl('okcmd', 1).querySelector('.planner-rv-count'))) || T(rvEl('okcmd', 1).querySelector('.planner-rv-count')));
+      reviewCalls.length = 0;
+      plannerCalls.length = 0;
+      rvBtn('okcmd', '保存', 1).onclick();
+      await wait(140);
+      check('R13. 保存把状态与说明按身份发给后端', () => {
+        const c = reviewCalls[0];
+        return (
+          Boolean(c) &&
+          c.method === 'PUT' &&
+          /\/api\/plans\/plan-1\/tasks\/okcmd\/attempts\/1\/review$/.test(c.url) &&
+          c.body.status === 'needs_changes' &&
+          c.body.note === '人工确认过了' &&
+          c.body.expectedRevision === 0
+        ) || JSON.stringify(c);
+      });
+      check('R14. 保存成功后回到展示态、显示新判断', () => /需修改/.test(T(rvEl('okcmd', 1))) || T(rvEl('okcmd', 1)));
+      check('R14b. 保存成功后编辑框收起', () => !rvEl('okcmd', 1).querySelector('.planner-rv-note-in') || '编辑框还在');
+      check('R14c. 保存不会顺手重试任务 / 改执行状态（只写审阅）', () => {
+        const hits = plannerCalls.filter((c) => /\/(retry|cancel|skip)/.test(c.url));
+        return hits.length === 0 || JSON.stringify(hits.map((c) => c.url));
+      });
+    }
+
+    /* ---------- expectedRevision 用的是渲染那一版，不是写死的 0 ---------- */
+    {
+      reviewCalls.length = 0;
+      rvBtn('okdesc', '修改判断', 1).onclick();
+      rvBtn('okdesc', '保存', 1).onclick();
+      await wait(140);
+      check('R15. expectedRevision 用的是**当前渲染那一版**（夹具里是 3，不是 0）', () => {
+        const c = reviewCalls[0];
+        return Boolean(c) && c.body.expectedRevision === 3 || JSON.stringify(c && c.body);
+      });
+    }
+
+    /* ---------- 清除：走同一个 API，且先确认 ---------- */
+    {
+      reviewCalls.length = 0;
+      const clr = rvBtn('revneed', '清除', 1);
+      check('R16. 已有判断时提供「清除」', () => Boolean(clr) || '没有清除按钮');
+      clr.onclick();
+      await wait(40);
+      const danger = $('confirmCard').querySelector('.btn.danger');
+      check('R16b. 清除前有确认（不静默丢掉说明）', () => Boolean(danger) || '没有确认框');
+      danger.onclick();
+      await wait(160);
+      check('R16c. 清除走**同一个** API（status=pending），没有 DELETE 接口', () => {
+        const c = reviewCalls[0];
+        return Boolean(c) && c.method === 'PUT' && c.body.status === 'pending' && c.body.note === '' || JSON.stringify(c);
+      });
+      check('R16d. 清除后回到「待审阅」', () => /待审阅/.test(T(rvEl('revneed', 1))) || T(rvEl('revneed', 1)));
+    }
+
+    /* ---------- 保存失败：显示后端原话，且输入不丢 ---------- */
+    {
+      stubReviewResult = { ok: false, error: '这次执行没有成功，不能标记为「已接受」（可以标记「需修改」）' };
+      reviewCalls.length = 0;
+      rvBtn('cancelled', '需要修改', 1).onclick();
+      const ta = rvEl('cancelled', 1).querySelector('.planner-rv-note-in');
+      ta.value = '不能丢的内容';
+      ta.oninput();
+      rvBtn('cancelled', '保存', 1).onclick();
+      await wait(160);
+      check('R30. 保存失败显示**后端原话**，不是「出错了」', () => {
+        const t = T(rvEl('cancelled', 1));
+        return /不能标记为「已接受」/.test(t) || t;
+      });
+      check('R30b. 失败后仍是编辑态，输入不丢', () => {
+        const box = rvEl('cancelled', 1).querySelector('.planner-rv-note-in');
+        return Boolean(box) && box.value === '不能丢的内容' || (box ? box.value : '输入框没了');
+      });
+      check('R30c. 失败后按钮变成「重试」（失败不能把用户困在原地）', () =>
+        Boolean(rvBtn('cancelled', '重试', 1)) || [...rvEl('cancelled', 1).querySelectorAll('button')].map((b) => b.textContent).join(','));
+    }
+
+    /* ---------- 冲突：不自动重试、不覆盖、本地输入保留 ---------- */
+    {
+      /* 先退出上一步的错误态，从干净的编辑态开始 */
+      rvBtn('cancelled', '取消', 1).onclick();
+      stubReviewResult = { ok: false, code: 'review-conflict', error: '这条审阅记录已经在其他窗口被修改，请重新加载。', currentRevision: 7 };
+      rvBtn('cancelled', '需要修改', 1).onclick();
+      const ta = rvEl('cancelled', 1).querySelector('.planner-rv-note-in');
+      ta.value = '不能丢的内容';
+      ta.oninput();
+      reviewCalls.length = 0;
+      rvBtn('cancelled', '保存', 1).onclick();
+      await wait(160);
+      check('R31. 冲突显示「已在其他窗口被修改」+「重新加载」', () => {
+        const t = T(rvEl('cancelled', 1));
+        return (/其他窗口/.test(t) && /重新加载/.test(t)) || t;
+      });
+      check('R31b. 冲突时本地输入原样保留', () => {
+        const box = rvEl('cancelled', 1).querySelector('.planner-rv-note-in');
+        return Boolean(box) && box.value === '不能丢的内容' || (box ? box.value : '输入框没了');
+      });
+      check('R31c. 冲突不自动重试（只发了这一次请求）', () => reviewCalls.length === 1 || `发了 ${reviewCalls.length} 次`);
+      check('R31d. 冲突不 last-write-wins（界面没有变成「已接受」）', () => !/已接受/.test(T(rvEl('cancelled', 1))) || T(rvEl('cancelled', 1)));
+
+      /* 重新加载 = 重拉 plan detail，不是刷新整个窗口 */
+      stubReviewResult = null;
+      plannerCalls.length = 0;
+      rvBtn('cancelled', '重新加载', 1).onclick();
+      await wait(180);
+      check('R31e. 点「重新加载」重新拉一次计划详情', () =>
+        plannerCalls.some((c) => c.method === 'GET' && /\/api\/plans\/plan-1$/.test(c.url)) || JSON.stringify(plannerCalls.map((c) => c.method + ' ' + c.url).slice(-4)));
+    }
+
+    /* ---------- stale 守卫：切项目之后回来的响应不许写界面 ---------- */
+    {
+      window.closeModal();
+      window.openPlanner();
+      await wait(80);
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      stubReviewResult = null;
+      reviewDelayMs = 300;
+      /* 用 oknull：它还没被动过，仍是「成功 + 待审阅」，有「接受本次结果」。
+       * （okcmd 在上面的保存测试里已经被改成「需修改」，桩返回的是同一个对象，
+       *   所以夹具状态会跨检查发生变化 —— 汇总那几条断言因此必须放在最前面。） */
+      rvBtn('oknull', '接受本次结果', 1).onclick();
+      rvBtn('oknull', '保存', 1).onclick();
+      await wait(40);
+      /* 保存还在飞的时候切项目 */
+      window.S.workspaceGeneration++;
+      await wait(500);
+      reviewDelayMs = 0;
+      check('R32. 切项目之后回来的审阅响应不写进界面（stale 守卫）', () => {
+        const t = T(rvEl('oknull', 1));
+        return !/已接受/.test(t) || `被写进去了：${t.slice(0, 120)}`;
+      });
+      check('R32b. 响应只会落到它自己那条 attempt（别的 attempt 不受影响）', () => {
+        const t = T(rvEl('okcmd', 1));
+        return (/人工确认过了/.test(t) && !/已接受/.test(t)) || `okcmd 被改了：${t.slice(0, 120)}`;
+      });
+      window.closeModal();
+      await wait(20);
+    }
+
+    /* 还原被本段打桩过的 Git 工作区状态，别影响后面的段落 */
+    window.S.changes = savedChanges;
+    stubPlanDetail = stubPlan;
+    stubReviewResult = null;
+    reviewDelayMs = 0;
   }
 
   async function sessionSection() {

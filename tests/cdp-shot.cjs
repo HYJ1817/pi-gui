@@ -275,6 +275,91 @@ async function main() {
     await shot('10-file-expanded');
   }
 
+  /* ================= P8-C：Attempt 人工审阅（视觉核对场景） =================
+   *
+   * 场景数据全部来自 tests/visual-harness.cjs 的 PLAN_DETAIL / PLAN_STRESS ——
+   * **不依赖真实后端、不跑任何 Agent**（§五十九）。判据也刻意不是「文本包含 X」，
+   * 而是真实的排版截图：jsdom 不做布局，那种断言全绿也说明不了排版对不对。 */
+  const shotOf = async (sel, n, label) => {
+    const ok = await evalJs(
+      `(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return false; e.scrollIntoView({ block: 'center' }); return true; })()`
+    );
+    if (!ok) {
+      console.log('  跳过（找不到 ' + sel + '）');
+      return false;
+    }
+    await sleep(450);
+    await shot(n);
+    if (label) console.log('      ' + label);
+    return true;
+  };
+  const clickIn = async (sel, text) =>
+    evalJs(
+      `(() => {
+        const b = [...document.querySelectorAll(${JSON.stringify(sel)})].find((x) => x.textContent.trim() === ${JSON.stringify(text)});
+        if (!b) return false;
+        b.onclick();
+        return true;
+      })()`
+    );
+
+  await evalJs('document.querySelector("#navPlanner").click()');
+  await sleep(900);
+  const pickPlan = async (i) => {
+    const ok = await evalJs(
+      `(() => { const r = document.querySelectorAll('#modalCard .planner-list .ext-item')[${i}]; if (!r) return false; r.onclick(); return true; })()`
+    );
+    await sleep(800);
+    return ok;
+  };
+
+  console.log('\n--- P8-C：人工审阅场景 ---');
+  if (await pickPlan(0)) {
+    await shotOf('.planner-revsum', '11-rev-summary', 'Plan 顶部审阅汇总（只看最新一次 attempt）');
+    await shotOf('.planner-task[data-task-id="tests"] .planner-attempt:last-of-type', '12-rev-pending', 'Scene 1：成功 + 待审阅 + 验证要求(description) + 会话 + 当前 Diff 入口');
+    await shotOf('.planner-task[data-task-id="analyze"] .planner-attempt:last-of-type', '13-rev-accepted', 'Scene 2：已接受 + 说明 + reviewedAt');
+    await shotOf('.planner-task[data-task-id="backend"] .planner-attempt:last-of-type', '14-rev-needs-changes', 'Scene 3：需修改（失败 + 已写明理由）');
+    await shotOf('.planner-task[data-task-id="live"] .planner-attempts', '15-rev-retry-history', 'Scene 4：Attempt 1 已接受 + Attempt 2 执行中（运行期不给审阅操作）');
+    /* Scene 5 用 backend 的**第 1 次**尝试：它失败了且还没审阅，
+       所以只该出现「需要修改」，不该有「接受本次结果」。 */
+    await shotOf('.planner-task[data-task-id="backend"] .planner-attempts > .planner-attempt', '16-rev-failed', 'Scene 5：失败的 Attempt 只有「需要修改」');
+    await shotOf('.planner-task[data-task-id="docs"] .planner-attempt:last-of-type', '17-rev-null-snapshot', '没有历史验证要求 → 另起一行标「当前任务验证要求」');
+
+    /* 编辑态 → 保存。夹具对 `tests` 的保存回冲突，所以这一条正好截到 Scene 6。 */
+    const opened = await clickIn('.planner-task[data-task-id="tests"] .planner-rv-acts button', '接受本次结果');
+    await sleep(450);
+    if (opened) {
+      await evalJs(
+        `(() => { const ta = document.querySelector('.planner-task[data-task-id="tests"] .planner-rv-note-in'); if (!ta) return false; ta.value = '本地写的内容：这条断言我还没确认'; ta.oninput(); return true; })()`
+      );
+      await sleep(250);
+      await shotOf('.planner-task[data-task-id="tests"] .planner-rv', '18-rev-editor', '编辑态：状态选择 + 说明 + 字数 + 保存');
+      await clickIn('.planner-task[data-task-id="tests"] .planner-rv-acts button', '保存');
+      await sleep(800);
+      await shotOf('.planner-task[data-task-id="tests"] .planner-rv', '19-rev-conflict', 'Scene 6：冲突 —— 本地输入保留，等你点重新加载');
+    } else {
+      console.log('  跳过：没找到「接受本次结果」');
+    }
+
+    /* 压力项（§五十八）：1000 字说明 / 20 个变更文件 / 超长路径 / 10 次尝试 / 窄窗口 */
+    if (await pickPlan(1)) {
+      await shotOf('.planner-task[data-task-id="longnote"] .planner-attempt:last-of-type', '20-stress-long-note', '压力：1000 字说明 + 20 个文件 + 超长路径');
+      await shotOf('.planner-task[data-task-id="manyattempts"] .planner-attempts', '21-stress-many-attempts', '压力：10 次尝试');
+      await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 950, deviceScaleFactor: 1, mobile: false });
+      await sleep(700);
+      const of = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
+      console.log('      窄窗口 700：scrollWidth=' + of.sw + ' innerWidth=' + of.iw + ' → 横向溢出=' + (of.sw > of.iw + 1));
+      await shotOf('.planner-task[data-task-id="longnote"] .planner-attempt:last-of-type', '22-stress-narrow-700', '压力：窄窗口 700px');
+      await send('Emulation.clearDeviceMetricsOverride');
+      await sleep(400);
+    }
+
+    await evalJs('document.body.dispatchEvent(new MouseEvent("mousedown", {bubbles:true}))');
+    await sleep(300);
+  } else {
+    console.log('  跳过：打不开 Planner 面板（夹具服务里没有计划？）');
+  }
+
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
 
   ws.close();

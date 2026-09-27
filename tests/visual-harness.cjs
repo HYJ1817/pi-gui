@@ -29,8 +29,25 @@ const MIME = {
 
 /* ---------------- 脚本数据 ---------------- */
 
+/* 1000 字的审阅说明（§四十七的压力项）—— 中文按 1 字计，正好卡在上限。 */
+const LONG_NOTE = '这段实现把重连窗口里的过期响应丢掉了，但我对边界条件仍有疑问：高并发下 bridgeRun 的自增与读取之间还有一个窗口，需要补一个针对性的用例。'.repeat(20).slice(0, 1000);
+/* 超长路径（§四十八）—— 必须被截断 + title 提示，不能把卡片撑爆。 */
+const LONG_PATH = 'packages/something/really/really/really/long/path/to/generated/adapter/implementation.js';
+
 /* P7 计划详情夹具：四种「会话」状态各一条，外加两次尝试。
- * 形状照抄后端 `planView()` 的输出（attempt 上带 sessionAvailable / sessionTitle）。 */
+ * 形状照抄后端 `planView()` 的输出（attempt 上带 sessionAvailable / sessionTitle）。
+ *
+ * P8-C 在同一份夹具上补齐审阅场景（§五十七 Scene 1–5）：
+ *   analyze  成功 + 已接受 + 说明 + verificationSnapshot(command)  → Scene 2
+ *   backend  Attempt1 失败、Attempt2 失败 + 需修改 + 说明           → Scene 3 / Scene 5
+ *   tests    成功 + 待审阅 + snapshot(description)                 → Scene 1
+ *   docs     成功 + 待审阅 + 没有快照 + changeCaptureIncomplete     → 「没有历史验证要求」
+ *   live     Attempt1 已接受、Attempt2 执行中（运行期不给审阅操作）  → Scene 4 / §九
+ *
+ * 【审阅状态字段名】`review.status` 只有 pending / accepted / needs_changes 三态，
+ * 与后端 REVIEW_STATUS 一致 —— 夹具不能自己发明 `verified` / `stale`。
+ * 【形状】attempt 上的 review 就是后端 `normalizeReview` 的形状：
+ * `{status, note, reviewedAt, revision}`；pending 时 note 为空串、reviewedAt 为 null。 */
 const PLAN_DETAIL = {
   id: 'plan-1',
   title: '修复 SSE 重连问题',
@@ -47,7 +64,13 @@ const PLAN_DETAIL = {
     {
       id: 'analyze', title: '分析原因', description: '读 rpc-bridge 的重连路径', agent: 'pi',
       workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '', verification: null,
-      attempts: [{ attempt: 1, success: true, error: '', summary: '读完了', exitCode: 0, startedAt: 1, endedAt: 2, sessionId: 'pi-gui-plan-1-analyze-a1', sessionAvailable: true, sessionTitle: 'SSE race analysis', filesChanged: [], changeCaptureIncomplete: false }],
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '读完了', exitCode: 0, startedAt: 1, endedAt: 2,
+        sessionId: 'pi-gui-plan-1-analyze-a1', sessionAvailable: true, sessionTitle: 'SSE race analysis',
+        filesChanged: ['src/auth.js'], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'accepted', note: '第一次实现已确认', reviewedAt: 1758800000000, revision: 2 },
+      }],
       result: { success: true, exitCode: 0, summary: '重连时 bridgeRun 会自增，但过期响应仍会写回状态', toolCalls: 4, durationMs: 42000, raw: null, sessionId: 'pi-gui-plan-1-analyze-a1', changes: { available: true, files: [], note: '' } },
     },
     {
@@ -55,21 +78,98 @@ const PLAN_DETAIL = {
       workingDirectory: '.', dependsOn: ['analyze'], status: 'failed', startedAt: 3, endedAt: 6, attempt: 2, error: '第一次故意失败：模型报 402',
       verification: null,
       attempts: [
-        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'pi-gui-plan-1-backend-a1', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第一次）', filesChanged: ['server/rpc-bridge.js'], changeCaptureIncomplete: false },
-        { attempt: 2, success: false, error: '第二次也失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6, sessionId: 'pi-gui-plan-1-backend-a2', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第二次）', filesChanged: ['server/rpc-bridge.js', 'server/sse.js'], changeCaptureIncomplete: false },
+        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'pi-gui-plan-1-backend-a1', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第一次）', filesChanged: ['server/rpc-bridge.js'], changeCaptureIncomplete: false, outcomeStatus: 'failed', verificationSnapshot: { command: 'npm test' }, review: { status: 'pending', note: '', reviewedAt: null, revision: 0 } },
+        { attempt: 2, success: false, error: '第二次也失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6, sessionId: 'pi-gui-plan-1-backend-a2', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第二次）', filesChanged: ['server/rpc-bridge.js', 'server/sse.js'], changeCaptureIncomplete: false, outcomeStatus: 'failed', verificationSnapshot: { command: 'npm test' }, review: { status: 'needs_changes', note: '两次都报 402，先把 provider 配额确认了再重试', reviewedAt: 1758800100000, revision: 1 } },
       ],
       result: { success: false, exitCode: 1, summary: '', toolCalls: 0, durationMs: 3000, raw: null, sessionId: 'pi-gui-plan-1-backend-a2', changes: { available: true, files: [{ path: 'server/rpc-bridge.js', change: 'modified', status: 'M', additions: 12, deletions: 3 }, { path: 'server/sse.js', change: 'modified', status: 'M', additions: 4, deletions: 0 }], note: '执行期间观察到的工作区变化（可能也包含其它来源的改动）' } },
     },
     {
       id: 'tests', title: '补测试', description: '加可靠性用例', agent: 'codex',
       workingDirectory: '.', dependsOn: ['backend'], status: 'blocked', startedAt: 7, endedAt: 8, attempt: 1, error: '', verification: null,
-      attempts: [{ attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 7, endedAt: 8, sessionId: null, sessionAvailable: false, sessionTitle: '', filesChanged: ['tests/reliability.cjs'], changeCaptureIncomplete: false }],
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 7, endedAt: 8,
+        sessionId: null, sessionAvailable: false, sessionTitle: '',
+        filesChanged: ['tests/reliability.cjs'], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { description: '确认登录错误提示' },
+        review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+      }],
       result: null,
     },
     {
       id: 'docs', title: '更新文档', description: '把语义写清楚', agent: 'pi',
-      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 9, endedAt: 10, attempt: 1, error: '', verification: null,
-      attempts: [{ attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 9, endedAt: 10, sessionId: 'pi-gui-plan-1-docs-a1', sessionAvailable: false, sessionTitle: '', filesChanged: [], changeCaptureIncomplete: true }],
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 9, endedAt: 10, attempt: 1, error: '',
+      verification: { command: 'npm run test:unit' },
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 9, endedAt: 10,
+        sessionId: 'pi-gui-plan-1-docs-a1', sessionAvailable: false, sessionTitle: '',
+        filesChanged: [], changeCaptureIncomplete: true,
+        outcomeStatus: 'success', verificationSnapshot: null,
+        review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+      }],
+      result: null,
+    },
+    {
+      /* 正在执行的任务：历史里有一次已接受的尝试，第 2 次正在跑（历史里还没有它）。
+       * 用来核对 §九「运行期不给审阅操作」与 §二十四「历史 accepted 不被隐藏」。 */
+      id: 'live', title: '正在跑的任务', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'running', startedAt: 11, endedAt: null, attempt: 2, error: '',
+      verification: null,
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 11, endedAt: 12,
+        sessionId: 'pi-gui-plan-1-live-a1', sessionAvailable: true, sessionTitle: '第一轮（已接受）',
+        filesChanged: ['server/sse.js'], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'accepted', note: '第一轮的实现保留', reviewedAt: 1758800200000, revision: 1 },
+      }],
+      result: null,
+    },
+  ],
+};
+
+/* 压力夹具（§五十八）：1000 字说明 / 20 个变更文件 / 超长路径 / 10 次尝试。
+ * 单独一个计划是为了让上面的默认场景保持干净 —— 组合在一起截图会糊成一片。 */
+const PLAN_STRESS = {
+  id: 'plan-stress',
+  title: '压力场景：长说明 / 多文件 / 多次尝试',
+  goal: '验证极端内容不破布局',
+  status: 'completed',
+  createdAt: 1,
+  updatedAt: 2,
+  startedAt: 1,
+  endedAt: 9,
+  projectRoot: 'C:/pi-GUI',
+  concurrency: 1,
+  recoveryNotes: [],
+  tasks: [
+    {
+      id: 'longnote', title: '带 1000 字说明的任务', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '', verification: null,
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 1, endedAt: 2,
+        sessionId: 'pi-gui-plan-stress-a1', sessionAvailable: true, sessionTitle: '长说明',
+        filesChanged: Array.from({ length: 20 }, (_, i) => (i === 3 ? LONG_PATH : `src/generated/module-${i}.js`)),
+        changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'accepted', note: LONG_NOTE, reviewedAt: 1758800300000, revision: 1 },
+      }],
+      result: null,
+    },
+    {
+      id: 'manyattempts', title: '跑了 10 次的任务', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'failed', startedAt: 1, endedAt: 9, attempt: 10, error: '第十次仍然失败：断言超时',
+      verification: null,
+      attempts: Array.from({ length: 10 }, (_, i) => ({
+        attempt: i + 1,
+        success: i === 9 ? false : i % 2 === 0,
+        error: i === 9 ? '第十次仍然失败：断言超时' : i % 2 === 0 ? '' : `第 ${i + 1} 次失败：连接超时`,
+        summary: '', exitCode: i % 2 === 0 ? 0 : 1,
+        startedAt: i * 10 + 1, endedAt: i * 10 + 5,
+        sessionId: `pi-gui-plan-stress-many-a${i + 1}`, sessionAvailable: true, sessionTitle: `第 ${i + 1} 次尝试的会话`,
+        filesChanged: [`src/try-${i + 1}.js`], changeCaptureIncomplete: false,
+        outcomeStatus: i === 9 ? 'failed' : i % 2 === 0 ? 'success' : 'failed',
+        verificationSnapshot: { command: 'npm test' },
+        review: i === 0 ? { status: 'accepted', note: '第一次曾经通过', reviewedAt: 1758800400000, revision: 1 } : { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+      })),
       result: null,
     },
   ],
@@ -392,14 +492,58 @@ const server = http.createServer(async (req, res) => {
       activePlanId: null,
       broken: [],
       plans: [
-        { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 4, success: 2, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+        { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 5, success: 3, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+        { id: 'plan-stress', title: '压力场景：长说明 / 多文件 / 多次尝试', goal: '验证极端内容不破布局', status: 'completed', createdAt: 0, updatedAt: 9, startedAt: 1, endedAt: 9, projectRoot: 'C:/pi-GUI', counts: { total: 2, success: 1, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
       ],
+    });
+  }
+
+  /* 人工审阅的保存（P8-C）。真后端是 `PUT …/attempts/:attempt/review`。
+   * 这里按 taskId 分流三种结果，好让视觉核对能截到**冲突**与**业务失败**两种 UI：
+   *   tests → 409 冲突（别的窗口已经改过这条审阅）
+   *   docs  → 200 但业务失败（状态与执行结论不符）
+   *   其它  → 正常保存，回 revision + 1
+   * ⚠️ 冲突在这里是**真 409**，但前端只能靠 body 里的 `code` 认出来 ——
+   *    api.js 只读 `r.json()`，从不看状态码。 */
+  const reviewHit = /^\/api\/plans\/([^/]+)\/tasks\/([^/]+)\/attempts\/(\d+)\/review$/.exec(p);
+  if (reviewHit && req.method === 'PUT') {
+    const planId = reviewHit[1];
+    const taskId = reviewHit[2];
+    const attempt = Number(reviewHit[3]);
+    let body = {};
+    try {
+      body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    } catch {
+      return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
+    }
+    const expected = Number.isInteger(body.expectedRevision) ? body.expectedRevision : 0;
+    if (taskId === 'tests' && body.status !== 'pending') {
+      return json(res, 409, { ok: false, code: 'review-conflict', error: '这条审阅记录已经在其他窗口被修改，请重新加载。', currentRevision: expected + 1 });
+    }
+    if (taskId === 'docs' && body.status !== 'pending') {
+      return json(res, 200, { ok: false, error: '这次执行没有成功，不能标记为「已接受」（可以标记「需修改」）' });
+    }
+    return json(res, 200, {
+      ok: true,
+      planId,
+      taskId,
+      attempt,
+      review: {
+        status: body.status,
+        note: body.status === 'pending' ? '' : String(body.note || ''),
+        reviewedAt: body.status === 'pending' ? null : Date.now(),
+        revision: expected + 1,
+      },
     });
   }
 
   if (p === '/api/plans/plan-1') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-1' });
-    return json(res, 200, { ok: true, plan: PLAN_DETAIL, counts: { total: 4, success: 2, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+    return json(res, 200, { ok: true, plan: PLAN_DETAIL, counts: { total: 5, success: 3, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+  }
+  if (p === '/api/plans/plan-stress') {
+    if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-stress' });
+    return json(res, 200, { ok: true, plan: PLAN_STRESS, counts: { total: 2, success: 1, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
   }
   if (p.startsWith('/api/plans/')) {
     return json(res, 200, { ok: true, planId: 'plan-1', taskId: 'backend', title: '修复 bridgeRun stale response' });
