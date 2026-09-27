@@ -10,25 +10,28 @@ git status -sb && git pull
 # 1. 改版本号（同步 package.json + package-lock.json）
 npm run version:set -- 0.13.0
 
-# 2. 本机跑完整发布预检（版本 + 全部测试 + 两条打包链路 + 产物验证 + 校验和）
+# 2. 更新本版摘要（首行版本标记也要同步）
+#    编辑 .github/release-summary.md，写 3–6 条用户能看懂的变化
+
+# 3. 本机跑完整发布预检（版本 + 摘要 + 全部测试 + 两条打包链路 + 产物验证 + 校验和）
 npm run release:check -- --with-installer
 #   → 最后一行必须是 READY TO RELEASE
 
-# 3. 提交并推送
-git add package.json package-lock.json
+# 4. 提交并推送
+git add package.json package-lock.json .github/release-summary.md
 git commit -m "v0.13.0"
 git push
 
-# 4. 打 tag 并推送 —— **这一步才会触发发布**
+# 5. 打 tag 并推送 —— **这一步才会触发发布**
 git tag v0.13.0
 git push origin v0.13.0
 
-# 5. 等 GitHub Actions 的 Release workflow 跑完（约 10-15 分钟）
+# 6. 等 GitHub Actions 的 Release workflow 跑完（约 10-15 分钟）
 
-# 6. 核对 Release
+# 7. 核对 Release
 gh release view v0.13.0 --json isDraft,assets -q '.isDraft, (.assets[] | .name)'
 
-# 7. 用**旧版本**的 Pi GUI 手动点一次「检查更新」，确认能发现 0.13.0
+# 8. 用**旧版本**的 Pi GUI 手动点一次「检查更新」，确认能发现 0.13.0
 ```
 
 > 版本号示例用 `0.13.0`。实际以你决定的下一个版本为准。
@@ -68,6 +71,11 @@ gh release view v0.13.0 --json isDraft,assets -q '.isDraft, (.assets[] | .name)'
 
 刻意**不**扫 `tests/` 与 `docs/`：测试里的版本号是桩值（`tests/smoke.cjs` 明确
 写了「故意不跟 package.json 联动」），文档里的历史版本是叙述。
+
+`.github/release-summary.md` 也不是版本源，它只是“本次准备发布什么”的短文案。
+首行必须写 `<!-- pi-gui-release-summary: <版本> -->`，版本一致性校验会要求这里的
+版本与 `package.json` 完全相同。这样 bump 版本后忘记改摘要会直接报错，不会把
+上一版的说明带进下一版。
 
 ### 只支持稳定版
 
@@ -129,7 +137,7 @@ dist-release/       ← 只放要上传的那三个文件
 一条命令，顺序钉在代码里（`scripts/release-check.mjs`）：
 
 1. **版本一致性** —— package / lock /（可选）tag，外加「构建链路里有没有写死版本号」
-2. **`npm test`** —— 全部 21 个套件
+2. **`npm test`** —— 全部 24 个套件
 3. **`build:app --rebuild`** → `fixtures` → `test:app` → `test:exe`
 4. **`build:installer --zip`** → `test:portable` →（`--with-installer` 时）`test:installer`
 5. **`release:collect`** —— 集中到 `dist-release/` 并重算校验和
@@ -233,14 +241,23 @@ node scripts/publish-release.mjs --tag=v0.13.0 --dry-run
 
 ## 八、Release Notes
 
-用 GitHub 自动生成的 notes（`gh release create --generate-notes`），
-再由 workflow 追加一段固定说明：三个附件分别是什么、怎么核对 SHA-256、
-前置条件（本机要先装 pi）。
+Release 页面现在分三层，顺序固定：
 
-那段固定文案用 `<版本>` 占位而不是插真实版本号 —— 这样它永远不需要跟着发版改。
+1. `.github/release-summary.md` 的“本版摘要” —— 只写 3–6 条用户最关心的变化。
+2. GitHub 自动生成的 notes（`gh release create --generate-notes`）—— 保留完整提交范围与 Full Changelog。
+3. 脚本追加的固定交付说明 —— 三个附件分别是什么、怎么核对 SHA-256、前置条件是什么。
 
-**不引入 changelog 系统**：commit 信息本身已经写得足够详细（见仓库的提交历史），
-再造一套 changelog 就是第二个真相。
+摘要文件只维护**当前准备发布的版本**，历史版本不在仓库里重复保存；一旦发布，
+那一版文字已经永久保存在 GitHub Release 页面。下一次发版直接覆写这一个文件即可，
+所以它不是第二套 CHANGELOG。
+
+摘要首行的版本标记会被 `version:check` 校验。正文由人写，版本由机器核对：
+既避免自动 notes 只有一个 Full Changelog 链接，也避免把上一版摘要误发到下一版。
+
+发布脚本给“本版摘要”和“交付物”各加了内部 HTML marker。复用 draft、先 dry-run
+再正式发布时会先剥掉旧的 managed block 再重写，所以不会越跑越多、重复叠加。
+
+固定交付文案继续使用 `<版本>` 占位，不把具体版本号写死在发布脚本里。
 
 ## 九、权限与供应链
 
