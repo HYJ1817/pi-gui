@@ -21,6 +21,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseVersion } from '../server/update-check.js';
 import { ROOT } from './util.mjs';
+import { readReleaseSummary } from './release-summary.mjs';
 
 /* 继续 re-export：ROOT 的真身在 util.mjs（那边不依赖任何项目内模块），
  * 这里转出去只是为了让 `from './check-version.mjs'` 的老调用方不用改。 */
@@ -213,6 +214,19 @@ function main() {
       `这些构建 / 发布链路的文件里写死了版本号 ${result.version}，应该从 package.json 派生：${hard.join('、')}`
     );
     result.ok = false;
+  }
+
+  /* Release 摘要不是新的版本源，但它描述的是“这一版”，所以必须带一个
+   * 与 package.json 完全一致的版本标记。这样下一次 bump 版本后如果忘了
+   * 更新摘要，预检会在碰 GitHub 之前直接失败，不会把旧文案带进新 Release。 */
+  if (result.ok) {
+    try {
+      const summary = readReleaseSummary({ expectedVersion: result.version });
+      console.log(`    Release 摘要       ${path.relative(ROOT, summary.path).split(path.sep).join('/')} ✓`);
+    } catch (err) {
+      result.errors.push(err.message);
+      result.ok = false;
+    }
   }
 
   if (!result.ok) {
