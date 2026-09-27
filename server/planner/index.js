@@ -602,21 +602,34 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
           } catch {
             return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
           }
+          /* ⚠️ **重新读一次最新计划，再往下走。**
+           *
+           * 进入 `:id` 分支时已经 load 过一次，但那之后夹着一条
+           * `await readBody(...)` —— 磁盘可能已经变了。最典型的场景：
+           * 另一个窗口在这段时间里给某个**历史 attempt** 写了一条人工审阅，
+           * 而下面「保留历史」用的是那份陈旧快照 ⇒ 刚写进去的审阅被抹掉。
+           *
+           * 从这次重读到 `store.save()` 之间**没有 await**，所以
+           * 「重读 → 合并历史 → 写盘」是一个原子块。这和 Review API 那边
+           * 是同一条规矩：读—改—写不能跨异步边界。 */
+          const reread = store.load(plan.id);
+          const disk = reread ? reread.plan : plan;
+
           const cwd = runtime.getCurrentCwd();
           const normalized = normalizePlan(
             {
-              id: plan.id,
-              title: typeof body.title === 'string' ? body.title : plan.title,
-              goal: typeof body.goal === 'string' ? body.goal : plan.goal,
-              tasks: Array.isArray(body.tasks) ? body.tasks : plan.tasks,
-              source: plan.source,
+              id: disk.id,
+              title: typeof body.title === 'string' ? body.title : disk.title,
+              goal: typeof body.goal === 'string' ? body.goal : disk.goal,
+              tasks: Array.isArray(body.tasks) ? body.tasks : disk.tasks,
+              source: disk.source,
             },
             { agentIds: registry.ids(), projectRoot: cwd }
           );
           if (!normalized.ok) return json(res, 200, { ok: false, error: '计划不合法', errors: normalized.errors });
           const next = normalized.plan;
-          next.createdAt = plan.createdAt;
-          next.status = plan.status === PLAN_STATUS.DRAFT ? PLAN_STATUS.DRAFT : next.status;
+          next.createdAt = disk.createdAt;
+          next.status = disk.status === PLAN_STATUS.DRAFT ? PLAN_STATUS.DRAFT : next.status;
 
           /* 保留原计划的历史信息（createdAt / 已有 attempt）。
            *
@@ -627,11 +640,11 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
            * 放宽成「跑过 / 有 attempt 记录 / 已是终态」三个条件任一成立。
            * 放宽的方向是**更保守**（宁可多保留，不可多丢），所以不会引入新的丢失。
            *
-           * 注意 `plan` 是刚从磁盘读出来的，而 `next.tasks` 来自请求体 ——
+           * 注意 `disk` 是**刚刚**重读出来的，而 `next.tasks` 来自请求体 ——
            * 也就是说 **attempts / review / 执行结论一律以磁盘为准**，
            * 前端手里的旧副本覆盖不了它们（规格 §25）。 */
           for (const t of next.tasks) {
-            const old = plan.tasks.find((x) => x.id === t.id);
+            const old = disk.tasks.find((x) => x.id === t.id);
             const hasHistory =
               old && (old.attempt > 0 || (Array.isArray(old.attempts) && old.attempts.length > 0) || TERMINAL_TASK_STATUS.includes(old.status));
             if (hasHistory) {

@@ -187,8 +187,62 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     return plan;
   }
 
+  /**
+   * 把**不归 Scheduler 所有**的字段从磁盘最新值合并回来。
+   *
+   * ---------- 为什么必须有这一步 ----------
+   *
+   * Scheduler 在**内存里**持有一份计划，`persist()` 时整份写盘。而人工审阅是
+   * Review API 直接写到磁盘上的 —— Scheduler 内存里那条 attempt 还停在
+   * `review = pending`。于是会出现：
+   *
+   *     计划还在跑
+   *     → 任务 A 先结束，用户审阅了 A（写进磁盘）
+   *     → 任务 B 跑完，Scheduler persist() 整份写盘
+   *     → **A 的审阅被内存里那份陈旧副本冲掉了**
+   *
+   * 计划是「一个文件装着一堆互不相同的所有权」，所以**谁写谁的字段**必须说清楚：
+   *
+   *     Scheduler 拥有：执行状态 / attempt 创建 / result / sessionId /
+   *                     filesChanged / verificationSnapshot / outcomeStatus
+   *     Review API 拥有：attempt.review
+   *
+   * Scheduler 保存自己的执行变化时，**不该覆盖一个它不拥有的字段**。
+   *
+   * ⚠️ 刻意**只合并 attempt.review 这一个字段**，不做通用 merge engine ——
+   * 通用的那种要么写不对，要么把「谁拥有什么」这件事变得不可读。
+   * 而且只采纳**磁盘上 revision 更大**的值：方向永远是「不降级」，
+   * 所以即使将来有别的写者，也不会被这份内存副本倒推回去。
+   *
+   * 读失败（文件被删、JSON 坏了）一律**跳过合并照常写** ——
+   * 不能让「合并」这个附加动作挡住执行状态的持久化。
+   */
+  function mergeExternalAttemptState(plan) {
+    if (!plan || typeof store.load !== 'function') return;
+    let latest = null;
+    try {
+      const r = store.load(plan.id);
+      latest = r ? r.plan : null;
+    } catch {
+      return;
+    }
+    if (!latest || !Array.isArray(latest.tasks)) return;
+    for (const t of plan.tasks) {
+      const lt = latest.tasks.find((x) => x.id === t.id);
+      if (!lt || !Array.isArray(lt.attempts)) continue;
+      for (const a of Array.isArray(t.attempts) ? t.attempts : []) {
+        const la = lt.attempts.find((x) => x.attempt === a.attempt);
+        if (!la) continue;
+        if (normalizeReview(la.review).revision > normalizeReview(a.review).revision) {
+          a.review = la.review;
+        }
+      }
+    }
+  }
+
   function persist(plan) {
     try {
+      mergeExternalAttemptState(plan);
       store.save(plan);
     } catch (err) {
       emit(plan.id, null, null, 'plan_error', { message: `状态保存失败：${err.message}` });

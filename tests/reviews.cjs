@@ -132,6 +132,9 @@ const reviewUrl = (planId, taskId, attempt) =>
     /* 「先失败、再成功」——这是**唯一**能产生两条 attempt 的路径：
      * retryTask 拒绝重试已成功的任务（既有策略），所以 attempt 1 必须先失败。 */
     two: [{ ok: false, error: '第一次故意失败' }, { ok: true, summary: '第二次成功' }],
+    /* 慢任务：用来制造「同一个计划里 A 已完成、B 还在跑」的窗口 ——
+     * 那正是「审阅写入」与「Scheduler 持久化」两个写者重叠的时刻。 */
+    slowB: [{ slowMs: 700, ok: true, summary: 'B 完成' }],
   };
 
   const registry = createAgentRegistry({ env: process.env, includeFake: true, fakeBehaviors: BEHAVIORS });
@@ -758,6 +761,104 @@ const reviewUrl = (planId, taskId, attempt) =>
       const rv = r.body.review;
       return rv.status === 'accepted' && rv.note === '最后一次' && Number.isFinite(rv.reviewedAt) && rv.revision === 9;
     }, JSON.stringify(r.body.review));
+  }
+
+  /* ================= N. 审阅写入 vs Scheduler 持久化 ================= */
+  section('N. 两个写者不互相覆盖（计划仍 active 时写审阅）');
+
+  /** 轮询到条件成立为止（用来等出「A 完成、B 在跑」这个窗口）。 */
+  async function waitUntil(planId, pred, timeoutMs = 10000) {
+    const t0 = Date.now();
+    for (;;) {
+      const p = store.load(planId).plan;
+      if (pred(p)) return p;
+      if (Date.now() - t0 > timeoutMs) return null;
+      await sleep(25);
+    }
+  }
+  const statusOf = (p, id) => {
+    const t = p.tasks.find((x) => x.id === id);
+    return t ? t.status : '';
+  };
+
+  {
+    /* Scheduler 在**内存里**持有计划对象，persist() 时整份写盘。
+     * 而审阅是 Review API 写到磁盘上的 —— Scheduler 内存里那份的 attempt
+     * 还停在 review=pending。于是 B 跑完时的 persist() 会把刚落盘的审阅冲掉。
+     * 这一条就是那个缺陷的复现。 */
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({ id: 'plan-n1', tasks: [{ id: 'okDoc' }, { id: 'slowB' }] }));
+    const started = await scheduler.start(store.load('plan-n1').plan);
+    check('N-prep. 计划已启动', () => started.ok === true, JSON.stringify(started));
+
+    const win = await waitUntil('plan-n1', (p) => statusOf(p, 'okDoc') === 'success' && statusOf(p, 'slowB') === 'running');
+    check('N-prep2. 拿到了「A 已完成、B 还在跑」的窗口（计划仍 active）', () => Boolean(win), win ? 'ok' : '没等到窗口');
+    check('N-prep3. 此刻调度器确实认为计划在跑', () => scheduler.activePlanId() === 'plan-n1', String(scheduler.activePlanId()));
+
+    const r = await hit(planner, 'PUT', reviewUrl('plan-n1', 'okDoc', 1), { status: 'accepted', note: 'A 的结果我接受了', expectedRevision: 0 });
+    check('N1. 计划运行中也能给**已结束**的 attempt 写审阅（不需要禁止）', () => r.body.ok === true, JSON.stringify(r.body));
+
+    await scheduler.waitIdle(20000);
+    const after = store.load('plan-n1').plan;
+    const a = attemptOf(after, 'okDoc', 1);
+    check('N2. B 跑完（Scheduler 又 persist 过一次）之后，A 的审阅**没有丢**', () => {
+      const rv = model.normalizeReview(a.review);
+      return (rv.status === 'accepted' && rv.revision === 1 && rv.note === 'A 的结果我接受了') || JSON.stringify(rv);
+    }, JSON.stringify(a.review));
+    check('N2b. B 自己的 attempt 也正常落盘了', () => {
+      const b = attemptOf(after, 'slowB', 1);
+      return Boolean(b && b.outcomeStatus === 'success');
+    });
+    check('N2c. B 的 review 是默认 pending（没人审阅过它）', () => {
+      const b = attemptOf(after, 'slowB', 1);
+      return b.review.status === 'pending' && b.review.revision === 0;
+    });
+  }
+
+  {
+    /* concurrency=2：A/B 并行，A 先完成 → 审阅 A → B 后完成。
+     * 与上一条同一个机制，只是把「串行」换成「并行」，顺带验并行下也不丢。 */
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({ id: 'plan-n2', tasks: [{ id: 'okDoc' }, { id: 'slowB' }], concurrency: 2 }));
+    await scheduler.start(store.load('plan-n2').plan);
+    const win = await waitUntil('plan-n2', (p) => statusOf(p, 'okDoc') === 'success' && statusOf(p, 'slowB') === 'running');
+    check('N3-prep. 并行下也拿到了那个窗口', () => Boolean(win), win ? 'ok' : '没等到窗口');
+
+    const r = await hit(planner, 'PUT', reviewUrl('plan-n2', 'okDoc', 1), { status: 'needs_changes', note: '并行时写的', expectedRevision: 0 });
+    check('N3. 并行时给已完成的 A 写审阅成功', () => r.body.ok === true, JSON.stringify(r.body));
+
+    await scheduler.waitIdle(20000);
+    const a = attemptOf(store.load('plan-n2').plan, 'okDoc', 1);
+    check('N4. 并行的 B 完成后，A 的审阅没有丢', () => {
+      const rv = model.normalizeReview(a.review);
+      return (rv.status === 'needs_changes' && rv.revision === 1 && rv.note === '并行时写的') || JSON.stringify(rv);
+    }, JSON.stringify(a.review));
+  }
+
+  {
+    /* 第三个写者：`PUT /api/plans/:id`（计划结构编辑）。
+     * 它同样**不拥有** attempt.review —— 「保留历史」必须用**重读之后**的磁盘值，
+     * 否则它那份陈旧快照会把刚写进去的审阅抹掉。 */
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({ id: 'plan-n3', tasks: [{ id: 'okDoc' }] }));
+    await scheduler.start(store.load('plan-n3').plan);
+    await scheduler.waitIdle(20000);
+
+    /* 两条请求都先 load 一次计划、再 await readBody。审阅先发，所以它先恢复并
+     * 落盘 revision 1；随后 PUT 恢复 —— 如果它用自己那份陈旧快照去合并历史，
+     * 就会把审阅覆盖回 pending。 */
+    const [rv, put] = await Promise.all([
+      hit(planner, 'PUT', reviewUrl('plan-n3', 'okDoc', 1), { status: 'accepted', note: '先审阅', expectedRevision: 0 }),
+      hit(planner, 'PUT', '/api/plans/plan-n3', { title: '并发改标题' }),
+    ]);
+    check('N5-prep. 审阅写入成功', () => rv.body.ok === true, JSON.stringify(rv.body));
+    check('N5-prep2. 并发的 PUT 也成功（没被拒）', () => put.body.ok === true, JSON.stringify(put.body).slice(0, 160));
+    check('N5b. PUT 的标题确实改了（证明它真的执行过）', () => store.load('plan-n3').plan.title === '并发改标题', store.load('plan-n3').plan.title);
+    const a = attemptOf(store.load('plan-n3').plan, 'okDoc', 1);
+    check('N5. 并发的 Plan 编辑没有擦掉刚落盘的审阅', () => {
+      const rv2 = model.normalizeReview(a.review);
+      return (rv2.status === 'accepted' && rv2.revision === 1 && rv2.note === '先审阅') || JSON.stringify(rv2);
+    }, JSON.stringify(a.review));
   }
 
   cleanup();

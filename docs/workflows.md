@@ -266,7 +266,40 @@ A 还拿着 2，保存 accepted → **409 review-conflict**（不是 last-write-
 都拿着同一个旧 revision 通过检查，后写的把先写的无声覆盖。所以保存前会**重新读一次**
 计划，而且从重读到 `store.save()` 之间没有任何 await。
 
-### 5.7 老数据
+### 5.7 三个写者：谁拥有哪些字段
+
+计划是**一个文件装着一堆互不相同的所有权**，所以「谁写谁的字段」必须说清楚：
+
+| 写者 | 拥有 |
+|---|---|
+| **Scheduler** | 执行状态 / attempt 创建 / `result` / `sessionId` / `filesChanged` / `verificationSnapshot` / `outcomeStatus` |
+| **Review API** | `attempt.review` |
+| **PUT /api/plans/:id** | 计划结构（标题、目标、任务、依赖、verification、concurrency） |
+
+**一个写者保存自己的变化时，不该覆盖一个它不拥有的字段。**
+
+这不是理论洁癖，是一条会**静默丢数据**的路径：
+
+```
+计划还在跑
+  → 任务 A 先结束，用户审阅了 A（写进磁盘）
+  → 任务 B 跑完，Scheduler persist() 整份写盘
+  → A 的审阅被内存里那份陈旧副本冲掉      ← 用户看不到任何报错
+```
+
+两处必须做（都已实现并有回归守卫）：
+
+1. **Scheduler 的 `persist()` 先合并外部字段**：`mergeExternalAttemptState()` 重读磁盘，
+   把 `attempt.review` 按「只采纳 revision 更大的那个」合回内存副本，再落盘。
+   ⚠️ 刻意**只合并这一个字段**，不做通用 merge engine —— 通用的那种要么写不对，
+   要么把「谁拥有什么」这件事变得不可读。
+2. **`PUT /api/plans/:id` 在合并历史前重读**：它进入分支时 load 过一次，但那之后夹着
+   一条 `await readBody(...)`；不重读就会用陈旧快照去「保留历史」。
+
+两者与 Review API 的 `revision` 检查遵循同一条规矩：**读—改—写不能跨异步边界**。
+只要中间有一个 `await`，两个写者就能都通过检查、后写的无声覆盖先写的。
+
+### 5.8 老数据
 
 P8-A 的字段全是 additive：老 attempt 缺 `review` → 归一化成
 `{status:'pending', note:'', reviewedAt:null, revision:0}`；缺 `verificationSnapshot` → `null`；
