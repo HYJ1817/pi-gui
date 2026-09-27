@@ -434,6 +434,19 @@ Retry           →  只允许计划不再 active 时
 「按 taskId + attempt 现查出来的那一条」，而不是闭包里捕获的节点引用 ——
 Attempt 1 的响应在结构上就改不到 Attempt 2 的界面。
 
+**第 ① 条（项目换了）要额外做一件事：把这个面板实例的临时状态整体作废** ——
+`reviewDrafts`（连带草稿里的 `saving` 标记，不清就会永久停在「正在保存…」）、
+`clearingReview`、`filesExpanded`。它们都属于旧 workspace，项目一切就都不该再存在。
+然后旧面板被收成「项目已切换，请重新打开 Planner」，里面的审阅控件随之消失，
+旧实例不可能再对旧项目发出任何写操作。
+
+⚠️ **收尾刻意不调 `closeModal()`。** modal 只有一个槽位
+（`public/ui/modal.js` 的 `closeHook`）且**没有实例 token** ——
+从旧实例关掉它会**把用户刚打开的新 Planner 一起关掉**。所以旧实例只清自己的状态、
+只往**自己那份** detailWrap 里写提示；若 modal 已被新实例重建，旧节点早已脱离文档，
+那些写入是空操作。`renderDetail` / `renderList` / `refreshCurrent` / `reload`
+以及审阅的三个入口都受同一条身份（`openedGeneration`）保护。
+
 ## 七、接口
 
 | 接口 | 用途 |
