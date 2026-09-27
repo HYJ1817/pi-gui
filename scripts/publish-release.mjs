@@ -206,7 +206,13 @@ function main() {
   const dryRun = argv.includes('--dry-run');
 
   if (!tag) {
-    console.error('用法：node scripts/publish-release.mjs --tag=v0.13.0 [--dry-run]');
+    /* ⚠️ 这里**不能写具体的版本号**。静态守卫（scripts/check-version.mjs 的
+     * `findHardcodedVersions`）扫的就是「构建 / 发布链路里有没有把版本号写死」，
+     * 而它只看代码、剥掉注释 —— 这一行是 `console.error` 的**字符串字面量**，
+     * 剥不掉。写死一个版本号，等发到那一个版本时 `release:check` 会在第 1 步
+     * 直接红（`✗ 构建 / 发布链路里写死了版本号 X.Y.Z`），而修法只能是改这一行。
+     * 用 `<版本>` 占位就永远不用跟着发版改（与 docs/releasing.md §八 同一条规矩）。 */
+    console.error('用法：node scripts/publish-release.mjs --tag=v<版本> [--dry-run]');
     process.exit(1);
   }
 
