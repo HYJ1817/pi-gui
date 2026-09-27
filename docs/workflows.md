@@ -272,10 +272,15 @@ A 还拿着 2，保存 accepted → **409 review-conflict**（不是 last-write-
 
 | 写者 | 拥有 |
 |---|---|
-| **Scheduler** | 执行状态 / attempt 创建 / `result` / `sessionId` / `filesChanged` / `verificationSnapshot` / `outcomeStatus` |
+| **Scheduler** | 执行状态 / attempt 创建 / `result` / `sessionId` / `filesChanged` / `verificationSnapshot` / `workingDirectorySnapshot` / `outcomeStatus` |
 | **Review API** | `attempt.review` |
 | **Verifier**（P9） | `attempt.verificationResult` |
 | **PUT /api/plans/:id** | 计划结构（标题、目标、任务、依赖、verification、concurrency） |
+
+> `verificationSnapshot` 与 `workingDirectorySnapshot` 都在 **attempt 开始时**由
+> Scheduler 冻结（前者是「要求验证什么」，后者是「在哪个目录执行」）—— 两个都是
+> **执行前就确定的值**，之后改 task 不影响它们。`verificationResult` 才是
+> 「后来真的跑了什么」，归 Verifier。
 
 **一个写者保存自己的变化时，不该覆盖一个它不拥有的字段。**
 
@@ -311,6 +316,36 @@ P9 之后同一条路径对验证证据也成立（只是方向反过来）：
    改的是刚读出来的那一份，所以这期间别人（Review API / Scheduler）写进去的东西都在。
 
 四者与 Review API 的 `revision` 检查遵循同一条规矩：**读—改—写不能跨异步边界**。
+
+### 5.7b 运行期排他：同一时间只有一个「实际执行者」（P9 收口）
+
+字段所有权管的是「谁能写哪个字段」。还有一条**运行期**的规矩：
+**同一个 Pi GUI workspace 同一时间只允许一个会实际执行工作区命令的主体。**
+验证命令和 coding agent 同时跑，会一起改同一个工作区、抢 `index.lock`、
+把测试结果搅成一团 —— 出了问题说不清是谁的。
+
+```
+Scheduler 在跑（**任意**计划）  →  任何验证都起不来          → plan-active
+验证在跑                        →  起不了计划 / 起不了第二条验证 → verification-active
+                                   不能 Retry                → verification-active
+                                   不能 PUT / DELETE 计划     → verification-active（409）
+                                   不能切项目                 → 闸门给理由
+Review 保存 / 清除              →  **不受影响**（见 5.7）
+纯读取 + 停止验证               →  **不受影响**
+```
+
+两件实现上的事：
+
+1. **两条闸门对称，但方向相反地注入。** Verifier 拿 `scheduler.activePlanId()`
+   判「有没有计划在跑」；Scheduler 拿一个注入的 `hasActiveVerification()`
+   判「有没有验证在跑」。**谁也不 import 谁**（`server/` 下的模块不互相 import），
+   都在 `server.js` 里装配 —— 与 scheduler 拿 `gitStatus` 是同一种做法。
+   `verifierRef` / `plannerRef` 用惰性引用解「两个对象互相需要」的顺序问题。
+2. **切项目的理由在 planner 里、不在 server.js 里。** `projectSwitchBlockReason()`
+   返回拒绝原因或 null；server.js 的 `beforeActivate` 只做一行透传。放那边才**测得到**
+   （server.js 一 import 就起服务，测不了），而且规则只有一份。
+   前端也有 `workspaceGeneration` 守卫，但那是 **stale UI 防护**，管不了这个 ——
+   这里要的是后端生命周期安全。
 只要中间有一个 `await`，两个写者就能都通过检查、后写的无声覆盖先写的。
 
 ### 5.8 老数据
@@ -469,7 +504,7 @@ Attempt 1 的响应在结构上就改不到 Attempt 2 的界面。
 | `GET /api/plans/relations?sessionId=` | 会话 → 任务 的反查。**没有第二份索引**，直接扫当前项目的 plan 文件 |
 | `POST /api/plans/:id/tasks/:taskId/open-session?attempt=` | 打开某次尝试的会话。校验计划归属 + 任务非运行中 + 会话可解析 |
 | `PUT /api/plans/:id/tasks/:taskId/attempts/:attempt/review` | 写/清除某次尝试的人工审阅（P8-A）。body：`{status, note, expectedRevision}`；冲突返回 **409 + `code:review-conflict`** |
-| `POST /api/plans/:id/tasks/:taskId/attempts/:attempt/verify` | **启动**一次独立验证（P9）。跑的是那条 attempt 冻结的 `verificationSnapshot.command`；`ok:false` 时带稳定 `code`（`no-command` / `plan-active` / `already-running` / `invalid-cwd` / `workspace-stale` / `attempt-not-found`） |
+| `POST /api/plans/:id/tasks/:taskId/attempts/:attempt/verify` | **启动**一次独立验证（P9）。跑的是那条 attempt 冻结的 `verificationSnapshot.command`、在它冻结的 `workingDirectorySnapshot` 里；`ok:false` 时带稳定 `code`（`no-command` / `plan-active` / `already-running` / `verification-active` / `invalid-cwd` / `workspace-stale` / `attempt-not-found`） |
 | `POST …/attempts/:attempt/verify/stop` | 停止正在跑的那次验证；取消后收成 `interrupted`（不是 `failed`） |
 
 刻意**没有**新增 `/api/workflow/*` / `/api/task-links/*` 这类平行概念 ——

@@ -136,11 +136,55 @@ verificationResult     Pi GUI 后来真的执行过什么、结果如何（机�
 
 ### 什么时候不让跑
 
-- **计划正在执行**（`plan-active`）：验证命令和 coding agent 会同时改同一个工作区、
-  抢 `index.lock`、把测试结果搅成一团，出了问题说不清是谁的。
-- **同一个 Attempt 已经在验证**（`already-running`）：一次只允许一个。
-- 计划不属于当前项目（`workspace-stale`）、这条 attempt 没有可执行的命令
-  （`no-command`）、工作目录已经不可用（`invalid-cwd`）。
+**同一个 Pi GUI workspace 同一时间只允许一个「会实际执行工作区命令」的主体。**
+
+```
+Scheduler 在跑  →  任何验证都起不来（包括**同一个 workspace 的另一个计划**）
+验证在跑        →  起不了计划、起不了另一条验证、不能 Retry
+                   不能改计划结构（PUT）、不能删计划、不能切项目
+```
+
+理由很直接：验证命令和 coding agent 会同时改同一个工作区、抢 `index.lock`、
+把测试结果搅成一团，出了问题说不清是谁的。
+
+判定是**全局**的，不是「只比当前这个 Plan」—— 只比当前 Plan 的话，
+「Plan A 在跑，去验证 Plan B」就能穿过去（那是同一个工作区）。
+
+拒绝时给的是稳定 `code`，而且**分得开**：
+
+| code | 意思 |
+|---|---|
+| `already-running` | 你点的**就是**正在跑的那一条 |
+| `verification-active` | **另外**一条正在跑（提示里会点名是哪一条） |
+| `plan-active` | 有计划正在执行（任意一个计划） |
+
+**Review 保存与清除不受影响** —— 它和验证之间已经有字段所有权与并发写盘保护。
+纯读取（看计划 / attempt / 审阅 / diff / 会话 / 验证输出）当然也不受影响，
+停止验证更是必须允许。
+
+### 老 attempt 用的是哪个目录：fallback 要如实说
+
+验证在哪跑，优先用**那次 attempt 开始时冻结的**工作目录
+（`workingDirectorySnapshot`，与 `verificationSnapshot` 同时刻冻结）——
+因为 `task.workingDirectory` 是可编辑的：Attempt 1 当初在 `packages/a` 跑，
+你把 task 改成 `packages/b` 之后再验证它，在 `packages/b` 里跑出来的结果
+**不再对应那次执行**。
+
+P9 收口之前产生的 attempt 没有这个字段，只能退到当前值，但结果里会记：
+
+```
+workingDirectory:        packages/legacy
+workingDirectorySource:  current-task-fallback
+```
+
+界面上会**明确写出来**：「这次执行没有记录当时的工作目录，上面显示的是当前任务的
+目录 —— 证据强度低于冻结记录」。冻结来源（`attempt-snapshot`）则不提醒。
+
+**两件不能让的事**：
+
+- 快照**非法**（绝对路径、`../` 逃逸、经 junction 指到项目外）→ 直接 `invalid-cwd`
+  拒绝。**不退到 fallback** —— 那会静默跑到别的地方去。
+- fallback 的目录也要过同一套 `lib/safe-path.js` 校验；不存在同样 `invalid-cwd`。
 
 ### 输出有上限
 

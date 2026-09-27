@@ -30,9 +30,9 @@
 `npm test` 里现在有 25 个套件，全部是**纯自动化**：
 
 ```
-smoke 767 · git 151 · modules 114 · reliability · interactions · port-owner
+smoke 776 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
-verification 86 · attempt-lifecycle 98
+verification 136 · attempt-lifecycle 98
 sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
@@ -122,10 +122,22 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 - 重复验证是**替换**不是追加；老计划（没有该字段）读得出来且照常能验证；
   `schemaVersion` 仍是 1。
 
-`smoke` 里的 **P9 段**（18 条）测验证的**前端行为**：有命令才给「运行验证」、
-只有 description 不给按钮、四种状态文案（都带文字）、命令 / 退出码 / 耗时 /
-输出摘要、长命令有 `title`、**输出按纯文本渲染（XSS 注入节点为 0）**、
-点运行/停止调对接口、被拒绝时显示后端原话、切项目后旧响应不写界面。
+`smoke` 里的 **P9 段**（27 条）测验证的**前端行为**：有命令才给「运行验证」、
+只有 description 不给按钮、四种状态文案（都带文字）、命令 / **执行目录** / 退出码 /
+耗时 / 输出摘要、长命令与长目录有 `title`、**输出与目录都按纯文本渲染
+（XSS 注入节点为 0）**、点运行/停止调对接口、被拒绝时显示后端原话、
+**老 attempt 的 fallback 有明确说明**（不冒充冻结记录）、切项目后旧响应不写界面，
+以及**验证在跑时的动作锁**（开始执行 / 保存修改 / 删除计划 / 重试 被禁用 +
+把原因写出来，锁释放后恢复）。
+
+**验证在跑时的排他（P9 收口）** 在后端由 `verification.cjs` 的 **L 段**（49 条）盯：
+计划在跑时**任何** Plan 的验证都拒绝（含「同一个 workspace 的另一个 Plan」）、
+同一 attempt 连点是 `already-running`、另一条是 `verification-active`、
+反向闸门（Scheduler / Retry / PUT / DELETE / 切项目）、**Review 保存仍允许**、
+以及各种收尾（通过 / 失败 / 起不来 / 超时 / 中断）之后**锁都释放**。
+`M 段`（32 条）盯 **cwd 快照**：attempt 开始时冻结、改 task 不影响旧快照、
+Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记来源**、
+绝对路径 / `../` / 已删除目录一律 `invalid-cwd`（不退到 fallback 静默跑别处）。
 
 最后三个里，`version-consistency` 与 `release-artifacts` 是**发版守卫**：
 前者管 package / lock / tag 一致与「构建链路里有没有写死版本号」，
@@ -272,10 +284,15 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 | `24-verify-never` | 从未验证 ——「尚未独立确认」+「运行验证」 |
 | `25-verify-passed` | 通过 —— 命令 / 退出码 / 耗时 / 输出摘要 |
 | `26-verify-failed` | 失败 —— 失败输出 +「输出已截断」 |
-| `27-verify-interrupted` | 已中断 +「重新运行验证」 |
+| `27-verify-interrupted` | 已中断 +「重新运行验证」+ **老 attempt 的 fallback 说明**（黄色、明说证据强度更低） |
 | `28-verify-running` | 正在验证… +「停止验证」（且**没有**结果行） |
 | `29-verify-long` | 压力：长命令（带满参数）+ 长输出（含超长无空格行） |
 | `30-verify-narrow-700` | 压力：窄窗口 700px 下的验证明细 |
+
+> 夹具里 `live` 任务确实有一条验证在跑，所以 plan-1 的那些场景**同时**显示
+> 「验证在跑」的动作锁（开始 / 编辑 / 删除 / 重试 被禁用 + 原因写在进度行里）——
+> 摆出来界面才是一致的。`29-verify-long` 里那条超长**执行目录**（与长命令、
+> 长输出挤在同一张卡片上）是这一轮新加的排版压力项。
 
 ## 五、发布前验证（F 层）
 
