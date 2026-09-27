@@ -200,11 +200,31 @@ const gitRoutes = createGitRoutes({ runtime });
 const skills = createSkills({ runtime, rpc, env: process.env });
 const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
 
+/* Planner 用 pi 跑任务时的独立会话目录。
+ *
+ * 这个常量要**在三个地方用同一个值**，所以只算一次：
+ *   - 给 pi 适配器当 `--session-dir`（任务的会话落在这里）；
+ *   - 给 sessions 当 extraSessionRoots（P7 的「从任务打开会话」要能定位到它们）；
+ *   - 给测试与诊断引用。
+ * 三处各写一遍 path.join(DATA_DIR, 'planner-sessions') 迟早会漂，而漂掉的症状是
+ * 「会话明明存在却打不开」——极难查。 */
+const PLANNER_SESSION_DIR = path.join(DATA_DIR, 'planner-sessions');
+
 /* 会话列表。pi 的 RPC 里有 switch_session 却没有「列出会话」——
  * 它的 TUI picker 不对外，所以列表得我们自己扫 <agentDir>/sessions/。
  * 归属判定只认每个会话文件 header 里的 cwd，不信目录名。
- * 归档 / 回收站是 Pi GUI 自己的状态，落在 <PI_GUI_DATA>/（不进 pi 的目录）。 */
-const sessions = createSessions({ runtime, rpc, env: process.env, dataDir: DATA_DIR, compat: piCompat });
+ * 归档 / 回收站是 Pi GUI 自己的状态，落在 <PI_GUI_DATA>/（不进 pi 的目录）。
+ *
+ * P7：extraSessionRoots 把 Planner 的会话目录也交给它 —— 只用于「按会话 id
+ * 精确定位」（从任务跳到会话），**不进侧栏的会话列表**。 */
+const sessions = createSessions({
+  runtime,
+  rpc,
+  env: process.env,
+  dataDir: DATA_DIR,
+  compat: piCompat,
+  extraSessionRoots: [PLANNER_SESSION_DIR],
+});
 
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
  * import，而搜索必须复用同一处归属判定（见 server/session-search.js 的文件头）。
@@ -231,7 +251,7 @@ const sessionSearch = createSessionSearch({ runtime, sessions });
  * 差集就是「执行期间观察到的工作区变化」（不声称是 Agent 改的）。 */
 const agentRegistry = createAgentRegistry({
   env: process.env,
-  sessionDir: path.join(DATA_DIR, 'planner-sessions'),
+  sessionDir: PLANNER_SESSION_DIR,
 });
 const planStore = createPlanStore({ dataDir: DATA_DIR });
 /* 崩溃恢复**只在进程启动时做一次**（§31）。早先写成「每次读计划都恢复」，
@@ -246,13 +266,18 @@ const scheduler = createScheduler({
   gitStatus,
 });
 /* projects 在 planner 之前建好了，所以用上面那个可变引用回填 —— 避免为了
- * 一个闸门把装配顺序搅乱（projects 需要 planner，planner 又需要 runtime）。 */
+ * 一个闸门把装配顺序搅乱（projects 需要 planner，planner 又需要 runtime）。
+ *
+ * P7：planner 额外拿到 sessions —— 「从任务打开会话」要复用现有的会话切换
+ * （switch_session + 前端 afterSessionSwitch 的重建链路），不能另起一套。
+ * 这里同样是**注入**而不是让 planner import sessions（模块之间不互相 import）。 */
 const planner = createPlanner({
   runtime,
   registry: agentRegistry,
   store: planStore,
   scheduler,
   env: process.env,
+  sessions,
 });
 plannerRef = planner;
 

@@ -34,16 +34,59 @@ import {
   buildTaskPrompt,
   computeReadyStates,
   isPlanSettled,
+  isSafeSessionId,
+  normalizeFilesChanged,
   summarizePlan,
+  taskSessionId,
 } from './model.js';
 
 /** 任务超时默认 30 分钟（与 cli.js 一致，这里可被 plan 覆盖）。 */
 const DEFAULT_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
+/**
+ * 从适配器的返回里取「这次运行关联到了哪个会话」。
+ *
+ * 两处都可能给：适配器可以在顶层直接回 `sessionId`（P7 新增的契约），
+ * 老适配器则是把观察到的值放在 `rawResult.sessionId` 里（pi / claude 一直如此）。
+ * **只接受合法 id，路径一律当没有** —— 元数据里不许出现会话文件路径（规格 §4/§32）。
+ */
+function outcomeSessionId(outcome) {
+  if (!outcome) return null;
+  if (isSafeSessionId(outcome.sessionId)) return outcome.sessionId;
+  const raw = outcome.rawResult && outcome.rawResult.sessionId;
+  return isSafeSessionId(raw) ? raw : null;
+}
+
 export function createScheduler({ store, registry, runtime, publish = () => {}, gitStatus = null, now = () => Date.now(), taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS }) {
   /** 当前正在跑的 plan（全局唯一，规格 §32）。 */
-  let active = null; // { planId, plan, controllers: Map<taskId, AbortController>, stopping: boolean, pumpRunning: boolean }
+  let active = null; // { planId, plan, controllers: Map<taskId, AbortController>, sessionIds: Map<taskId, string>, stopping: boolean, pumpRunning: boolean }
   const emitter = new EventEmitter();
+
+  /**
+   * 「这条 attempt 已经记过账了」。
+   *
+   * 存在的理由是 shutdown 与正常收尾**会撞车**：`shutdown()` 在 SIGINT 里同步地把
+   * running 的 task 标成 interrupted 并补一条 attempt，而那一刻正在跑的 `runTask`
+   * 还会在事件循环上再走一步（`server.close()` 的回调给了一次机会），于是
+   * `finishTask` 可能对**同一条** attempt 再 push 一次 —— 历史里出现两条第 N 次尝试，
+   * 一条 interrupted 一条 cancelled，谁也说不清哪条是真的。
+   * 键里带 planId / taskId / attempt，所以它天然不会误伤重试产生的新 attempt。 */
+  const recordedAttempts = new Set();
+  const attemptKey = (planId, taskId, attempt) => `${planId}:${taskId}:${attempt}`;
+
+  /**
+   * 应用是否正在退出（由 shutdown() 置位，此后不再复位）。
+   *
+   * 存在的理由：`shutdown()` 是**同步**收尾（SIGINT 里必须立刻做完），而那一刻
+   * 正在跑的 `runTask` 还会在事件循环上再走一步 —— abort 让适配器返回，
+   * 于是 `finishTask` 拿到一个 `cancelled` 的结果，把 shutdown 刚定好的
+   * `interrupted` **又翻成 cancelled**。两个状态在语义上完全不同：
+   *   interrupted = 应用关了，不是你的错，重启后重试；
+   *   cancelled   = 你按了停止。
+   * 让退出中的收尾把状态改写成「用户主动取消」，是在给用户一个错误的结论。
+   * 所以退出之后 `finishTask` 只落盘、不再改状态。
+   */
+  let shuttingDown = false;
 
   /* ---------- 事件（规格 §21 / §39） ---------- */
 
@@ -114,6 +157,19 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     return { available: true, files: files.slice(0, 200), note: '执行期间观察到的工作区变化（可能也包含其它来源的改动）' };
   }
 
+  /**
+   * 从快照差集里取出**只含项目相对路径**的文件名列表（规格 §33）。
+   *
+   * 完整 diff 仍然走现有的 Git Changes 模块，这里只落一个文件名集合 ——
+   * 元数据里放 diff 正文既没用（它马上就会过期）又占体积。
+   * 注意 `gitStatus` 给的 `path` 本来就是项目相对 + 正斜杠；normalizeFilesChanged
+   * 是第二道保险，防止上游哪天改了形状而这里静默存进绝对路径。
+   */
+  function changedPathsOf(changes) {
+    if (!changes || !changes.available || !Array.isArray(changes.files)) return [];
+    return normalizeFilesChanged(changes.files.map((f) => f && f.path));
+  }
+
   /* ---------- 状态推进 ---------- */
 
   function refreshStatuses(plan) {
@@ -154,9 +210,10 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
 
   /* ---------- 跑一个 task ---------- */
 
-  async function runTask(plan, task, controller) {
+  async function runTask(plan, task, controller, session) {
     const agentId = agentFor(task);
     const adapter = agentId ? registry.get(agentId) : null;
+    const info = adapter ? adapter.detect() : null;
 
     task.attempt = (task.attempt || 0) + 1;
     const attemptNo = task.attempt;
@@ -166,18 +223,37 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     task.error = '';
     persist(plan);
 
-    emit(plan.id, task.id, agentId, 'task_start', { attempt: attemptNo, title: task.title, workingDirectory: task.workingDirectory });
+    /* ---------- P7：这次尝试关联哪个会话 ----------
+     *
+     * **能力驱动，不写 `if (agent === 'codex')`**（规格 §17）：适配器自报
+     * `capabilities.sessionLinking`，能关联的才给它拼 id。
+     *
+     * id 由 `taskSessionId(planId, taskId, attempt)` **确定性地**拼出来，不依赖
+     * 解析 Agent 输出。attempt 进 id 是刻意的 —— 每次重试拿到不同的会话，
+     * 于是 Attempt 1 / Attempt 2 各自的关系不会被后来的覆盖掉（规格 §29）。
+     *
+     * 记在 `session.sessionIds` 里而不是 task 上：task 会被整份写进 plan 文件，
+     * 挂一个「正在进行中的临时字段」上去会污染持久化格式。 */
+    const canLink = Boolean(info && info.available && info.capabilities && info.capabilities.sessionLinking);
+    const plannedSessionId = canLink ? taskSessionId(plan.id, task.id, attemptNo) : null;
+    if (plannedSessionId) session.sessionIds.set(task.id, plannedSessionId);
+
+    emit(plan.id, task.id, agentId, 'task_start', {
+      attempt: attemptNo,
+      title: task.title,
+      workingDirectory: task.workingDirectory,
+      sessionId: plannedSessionId,
+    });
 
     if (!adapter) {
       const error = agentId ? `找不到 agent：${agentId}` : '本机没有可用的 Agent（pi / codex / claude / gemini 都没检测到）';
-      return finishTask(plan, task, { success: false, error, exitCode: null, summary: '', rawResult: null, toolCalls: 0 });
+      return finishTask(plan, task, { success: false, error, exitCode: null, summary: '', rawResult: null, toolCalls: 0 }, null, { sessionId: plannedSessionId });
     }
-    const info = adapter.detect();
     if (!info.available) {
       // 规格 §34：运行前就该拦住。这里是最后一道，不启动到一半才报 command not found
       const error = `${info.name} 不可用：${info.detail || info.reason}`;
       emit(plan.id, task.id, agentId, 'agent_output', { text: error, level: 'error' });
-      return finishTask(plan, task, { success: false, error, exitCode: null, summary: '', rawResult: null, toolCalls: 0 });
+      return finishTask(plan, task, { success: false, error, exitCode: null, summary: '', rawResult: null, toolCalls: 0 }, null, { sessionId: plannedSessionId });
     }
 
     const projectRoot = plan.projectRoot || runtime.getCurrentCwd();
@@ -194,6 +270,9 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
         cwd,
         signal: controller.signal,
         timeoutMs: taskTimeoutMs,
+        /* 只有声明了能关联的适配器才收到这个值；不支持的适配器拿到 null，
+         * 它的 start() 会忽略这个参数（多余的属性不会有害）。 */
+        sessionId: plannedSessionId,
         onEvent: (e) => emit(plan.id, task.id, agentId, e.type, e.data || {}),
       });
     } catch (err) {
@@ -206,12 +285,25 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
       emit(plan.id, task.id, agentId, 'task_change', { files: changes.files, note: changes.note });
     }
 
-    return finishTask(plan, task, outcome, changes);
+    /* 关联会话取「适配器真的报回来的那个」优先 —— 我们拼的 id 是**期望值**，
+     * Agent 实际用的才是事实（例如 pi 没收到 --session-id 时会自己生成一个）。
+     * 两个都没有就如实记 null，不伪造（规格 §16 的 C 情形）。 */
+    const sessionId = outcomeSessionId(outcome) || plannedSessionId || null;
+
+    return finishTask(plan, task, outcome, changes, {
+      sessionId,
+      /* before 快照拿不到（不是 git 仓库 / git 不可用）时，after 的差异说明不了
+       * 「执行期间变了什么」。这时候不许猜，只记「没采集全」（规格 §31）。 */
+      changeCaptureIncomplete: !changes.available,
+    });
   }
 
-  function finishTask(plan, task, outcome, changes = null) {
+  function finishTask(plan, task, outcome, changes = null, relation = {}) {
     task.endedAt = now();
     const agentId = agentFor(task);
+    const sessionId = isSafeSessionId(relation.sessionId) ? relation.sessionId : null;
+    const filesChanged = changedPathsOf(changes);
+    const changeCaptureIncomplete = Boolean(relation.changeCaptureIncomplete);
     task.result = {
       success: Boolean(outcome.success),
       exitCode: outcome.exitCode ?? null,
@@ -220,31 +312,56 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
       changes: changes || { available: false, files: [], note: '' },
       raw: outcome.rawResult || null,
       durationMs: task.startedAt ? task.endedAt - task.startedAt : null,
+      sessionId,
     };
     task.attempts = Array.isArray(task.attempts) ? task.attempts : [];
-    // 保留历史 attempt，绝不覆盖失败证据（规格 §27）
-    task.attempts.push({
-      attempt: task.attempt,
-      startedAt: task.startedAt,
-      endedAt: task.endedAt,
-      success: Boolean(outcome.success),
-      error: String(outcome.error || '').slice(0, 2000),
-      summary: String(outcome.summary || '').slice(0, 1000),
-      exitCode: outcome.exitCode ?? null,
-    });
+    /* 保留历史 attempt，绝不覆盖失败证据（规格 §27）。
+     *
+     * P7 在这里多存两样东西，**都必须挂在 attempt 上而不是 task 顶层**：
+     *   - sessionId    这次尝试用的是哪个会话
+     *   - filesChanged 这次尝试执行期间观察到变化的文件
+     * 早先 filesChanged 只存在 `task.result.changes` 上，而 retryTask 会
+     * `task.result = null` —— 于是**重试一次就把上一次的文件变化证据抹掉了**。
+     * 那是 P7 之前就存在的缺陷，这里一并修掉。
+     *
+     * 写之前先查 `recordedAttempts`：shutdown 可能已经替这条 attempt 记过账了
+     * （见该集合的说明），重复 push 会让历史里出现两条同号的尝试。 */
+    const key = attemptKey(plan.id, task.id, task.attempt);
+    if (!recordedAttempts.has(key)) {
+      recordedAttempts.add(key);
+      task.attempts.push({
+        attempt: task.attempt,
+        startedAt: task.startedAt,
+        endedAt: task.endedAt,
+        success: Boolean(outcome.success),
+        error: String(outcome.error || '').slice(0, 2000),
+        summary: String(outcome.summary || '').slice(0, 1000),
+        exitCode: outcome.exitCode ?? null,
+        sessionId,
+        filesChanged,
+        changeCaptureIncomplete,
+      });
+    }
+
+    /* 退出中：状态已经由 shutdown() 定成 interrupted，这里只落盘收尾。
+     * （见 shuttingDown 的说明 —— 否则会把 interrupted 翻成 cancelled。） */
+    if (shuttingDown) {
+      persist(plan);
+      return task.status;
+    }
 
     if (outcome.cancelled) {
       task.status = TASK_STATUS.CANCELLED; // 用户取消 ≠ 失败
       task.error = '已取消';
-      emit(plan.id, task.id, agentId, 'task_cancelled', { attempt: task.attempt });
+      emit(plan.id, task.id, agentId, 'task_cancelled', { attempt: task.attempt, sessionId, filesChanged });
     } else if (outcome.success) {
       task.status = TASK_STATUS.SUCCESS;
       task.error = '';
-      emit(plan.id, task.id, agentId, 'task_success', { attempt: task.attempt, durationMs: task.result.durationMs, summary: task.result.summary });
+      emit(plan.id, task.id, agentId, 'task_success', { attempt: task.attempt, durationMs: task.result.durationMs, summary: task.result.summary, sessionId, filesChanged });
     } else {
       task.status = TASK_STATUS.FAILED;
       task.error = String(outcome.error || '执行失败').slice(0, 2000);
-      emit(plan.id, task.id, agentId, 'task_error', { attempt: task.attempt, error: task.error });
+      emit(plan.id, task.id, agentId, 'task_error', { attempt: task.attempt, error: task.error, sessionId, filesChanged });
     }
     persist(plan);
     return task.status;
@@ -283,8 +400,11 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
         const controllers = batch.map(() => new AbortController());
         batch.forEach((t, i) => session.controllers.set(t.id, controllers[i]));
 
-        const results = await Promise.all(batch.map((t, i) => runTask(plan, t, controllers[i])));
+        const results = await Promise.all(batch.map((t, i) => runTask(plan, t, controllers[i], session)));
         batch.forEach((t) => session.controllers.delete(t.id));
+        /* 关系映射也要跟着收掉 —— 留着会让 shutdown 把上一次尝试的会话 id
+         * 记到下一次尝试上（并行时尤其明显，规格 §13）。 */
+        batch.forEach((t) => session.sessionIds.delete(t.id));
 
         if (session.stopping) break;
 
@@ -311,7 +431,11 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
             t.error = '计划已停止';
           }
         }
-        session.plan.status = store.statusFromTasks(session.plan);
+        /* ⚠️ **退出中不要重算 plan 状态。**
+         * `statusFromTasks` 把 interrupted 算进 failed，于是「应用被关掉」
+         * 会被写成「计划失败」。而 shutdown() 已经把它定成 paused（那才是对的：
+         * 还没跑完、可以重试）。这里保留 shutdown 的判断，不覆盖。 */
+        if (!shuttingDown) session.plan.status = store.statusFromTasks(session.plan);
         session.plan.endedAt = session.plan.endedAt || now();
         persist(session.plan);
         emit(session.plan.id, null, null, 'plan_cancelled', {});
@@ -348,9 +472,16 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     plan.status = PLAN_STATUS.RUNNING;
     plan.startedAt = plan.startedAt || now();
     plan.endedAt = null;
+    /* 新的一轮执行 → 上一轮的 attempt 记账可以丢了（键里带 planId，
+     * 清空只影响当前 plan，不会让别的 plan 重复记账）。
+     * 同时清掉「正在退出」：能走到 start() 就说明进程还在正常服务，
+     * 上一轮的 shutdown 已经过去了（生产里 shutdown 之后就是 exit，
+     * 这里清掉是为了让调度器不会因为一次退出而永久失效）。 */
+    recordedAttempts.clear();
+    shuttingDown = false;
     persist(plan);
 
-    const session = { planId: plan.id, plan, controllers: new Map(), stopping: false, pumpRunning: false };
+    const session = { planId: plan.id, plan, controllers: new Map(), sessionIds: new Map(), stopping: false, pumpRunning: false };
     active = session;
     emit(plan.id, null, null, 'plan_start', { title: plan.title, tasks: plan.tasks.length });
     // 主循环不 await（HTTP 请求要立刻返回）；但必须接住异常，否则会变成
@@ -437,6 +568,7 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
   function shutdown() {
     if (!active) return;
     const session = active;
+    shuttingDown = true;
     session.stopping = true;
     for (const [, c] of session.controllers) {
       try {
@@ -450,6 +582,27 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
         t.status = TASK_STATUS.INTERRUPTED;
         t.error = '应用关闭时被中断';
         t.endedAt = t.endedAt || now();
+        /* 补一条 attempt，但**不许猜执行期间发生了什么**：进程正在退出，
+         * 拿不到 after 快照，所以 filesChanged 留空并标 changeCaptureIncomplete
+         * （规格 §31）。sessionId 是执行前就确定的值，可以照记 —— 那条会话
+         * 确实存在过，用户重启后仍然能找到它。 */
+        const key = attemptKey(session.plan.id, t.id, t.attempt);
+        if (!recordedAttempts.has(key)) {
+          recordedAttempts.add(key);
+          t.attempts = Array.isArray(t.attempts) ? t.attempts : [];
+          t.attempts.push({
+            attempt: t.attempt,
+            startedAt: t.startedAt,
+            endedAt: t.endedAt,
+            success: false,
+            error: '应用关闭时被中断',
+            summary: '',
+            exitCode: null,
+            sessionId: session.sessionIds.get(t.id) || null,
+            filesChanged: [],
+            changeCaptureIncomplete: true,
+          });
+        }
       }
     }
     session.plan.status = PLAN_STATUS.PAUSED;

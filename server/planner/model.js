@@ -20,6 +20,12 @@
  */
 import path from 'node:path';
 import { resolveProjectPath } from '../../lib/safe-path.js';
+import { MAX_SESSION_ID, SESSION_ID_RE, isSafeSessionId, toSafeSessionId } from '../../lib/session-id.js';
+
+/* 会话 id 的校验规则来自 `lib/session-id.js` —— 那是全项目唯一一处定义，
+ * sessions.js 也用同一份（同一约束两个消费者，各写一份迟早会漂）。
+ * 这里原样再导出，方便调用方从 model 拿齐「模型相关的一切」。 */
+export { MAX_SESSION_ID, SESSION_ID_RE, isSafeSessionId };
 
 export const PLAN_STATUS = Object.freeze({
   DRAFT: 'draft',
@@ -72,6 +78,85 @@ export function newPlanId(now = Date.now()) {
 
 const isPlainObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const clampStr = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+
+/* ==================== P7：任务 ↔ 会话 / 任务 ↔ 文件 的关系字段 ====================
+ *
+ * 两条规矩，都是**不能破**的：
+ *
+ * 1. **会话 id 只允许「稳定 id」，绝不允许路径。** 前端与持久化里出现的 sessionId
+ *    永远是 pi 的会话 id（或我们自己拼的那个），不是 `C:\...\xxx.jsonl`。
+ *    路径只活在后端解析的那一刻（见 server/sessions.js 的 resolveByUuid）。
+ *
+ * 2. **filesChanged 只允许项目相对路径。** 绝对路径会随项目被搬到别的机器上而失真，
+ *    而且它属于「不该进 Planner 元数据」的东西（规格 §33 / §32）。
+ *
+ * 字符集这条**不是洁癖**：pi 对 `--session-id` 做同一个校验
+ * （`assertValidSessionId`），不合法时 `validateSessionIdFlags` 直接 `process.exit(1)`。
+ * 所以拼 id 的时候就要保证合法 —— 否则一个带非法字符的 task id 会让任务
+ * 在**启动阶段**就死掉，报错还跟 session 毫无关系，极难查。
+ */
+/** 一次 attempt 最多记多少个变更文件（超出只截断展示，不影响执行）。 */
+export const MAX_FILES_CHANGED = 200;
+const MAX_CHANGED_PATH = 400;
+
+/**
+ * 给一次 attempt 拼一个**确定性**的会话 id。
+ *
+ * 确定性是有意的：这样「这个 task 的这次尝试用了哪个会话」在执行前就已经确定，
+ * 不依赖解析 Agent 的输出。而 attempt 编号进 id，保证**每次重试拿到不同的会话**
+ * —— 否则重试会续进上一次那个会话，Attempt 1 / Attempt 2 的关系就分不开了
+ * （规格 §29 要求两次尝试各自保留自己的会话）。
+ */
+export function taskSessionId(planId, taskId, attempt) {
+  const safe = toSafeSessionId(`pi-gui-${planId}-${taskId}-a${attempt}`);
+  return safe || `pi-gui-task-a${Number(attempt) || 1}`;
+}
+
+/**
+ * 归一化一个「变更文件路径」。不合规的一律丢弃（返回 ''），不抛错 ——
+ * 一个坏路径不该让整个计划读不出来（规格 §38「corrupt relation 不拖垮 Planner」）。
+ */
+export function normalizeChangedPath(p) {
+  if (typeof p !== 'string') return '';
+  let s = p.trim().replace(/\\/g, '/');
+  if (!s || s.length > MAX_CHANGED_PATH) return '';
+  if (s.startsWith('/')) return ''; // 绝对路径（posix）
+  if (/^[A-Za-z]:/.test(s)) return ''; // 绝对路径（Windows 盘符）
+  if (s.startsWith('//')) return ''; // UNC
+  while (s.startsWith('./')) s = s.slice(2);
+  const segs = s.split('/');
+  if (segs.some((x) => x === '..')) return ''; // 逃出项目
+  if (segs.some((x) => x === '')) return ''; // 空段（含结尾斜杠）
+  return s;
+}
+
+/** 归一化 filesChanged：去重、保序、按上限截断、丢掉不合规的。 */
+export function normalizeFilesChanged(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of list) {
+    const p = normalizeChangedPath(raw);
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+    if (out.length >= MAX_FILES_CHANGED) break;
+  }
+  return out;
+}
+
+/**
+ * 归一化一条 attempt 的关系字段。**读盘与写盘都要过这里** ——
+ * 于是「文件里被手工塞了一个绝对路径」这种情形在进入内存时就被挡掉了，
+ * 而不是等到它被回给前端才被发现。
+ */
+export function normalizeAttemptRelation(raw) {
+  const a = isPlainObject(raw) ? { ...raw } : {};
+  a.sessionId = isSafeSessionId(a.sessionId) ? a.sessionId : null;
+  a.filesChanged = normalizeFilesChanged(a.filesChanged);
+  a.changeCaptureIncomplete = Boolean(a.changeCaptureIncomplete);
+  return a;
+}
 
 /**
  * 校验依赖图。**这是执行前的最后一道闸**（规格 §5）。

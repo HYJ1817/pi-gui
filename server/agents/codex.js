@@ -49,7 +49,9 @@ export function createCodexAdapter({ env = process.env } = {}) {
   function detect() {
     if (cache) return cache;
     const entry = resolveEntry({ pkgName: PKG, binName: BIN, env });
-    const caps = { streaming: true, cancellation: true, resume: true, toolEvents: true };
+    /* P7：codex 的 `exec --json` 里没有会话概念（我们的调用方式是「一次执行」，
+     * 不复用会话），所以**如实标 false**，不为了界面上好看而编一个 id 出来。 */
+    const caps = { streaming: true, cancellation: true, resume: true, toolEvents: true, sessionLinking: false };
     if (!entry.ok) {
       cache = {
         id: 'codex',

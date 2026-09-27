@@ -40,10 +40,14 @@ export function createFakeAdapter({ behaviors = {}, env = process.env } = {}) {
     return list[Math.min(n - 1, list.length - 1)];
   }
 
-  async function start({ task, cwd, signal = null, onEvent = () => {} }) {
+  async function start({ task, cwd, signal = null, onEvent = () => {}, sessionId = null }) {
     const taskId = task && task.id;
     const outcome = nextOutcome(taskId);
-    seen.push({ taskId, cwd, attempt: attempts.get(taskId) });
+    /* P7：`sessionId` 是调度器传进来的**期望**会话 id；outcome.sessionId 让测试
+     * 可以模拟「适配器自己报了一个 id」（像 claude 那样）。两者都记下来，
+     * 于是「调度器到底有没有把 id 传进来」这件事可以被直接断言。 */
+    const reportedSessionId = outcome.sessionId || sessionId || null;
+    seen.push({ taskId, cwd, attempt: attempts.get(taskId), requestedSessionId: sessionId, sessionId: reportedSessionId });
 
     onEvent({ type: 'agent_output', data: { text: `fake-agent 开始执行 ${taskId}` } });
 
@@ -64,7 +68,7 @@ export function createFakeAdapter({ behaviors = {}, env = process.env } = {}) {
         }
       });
       onEvent({ type: 'agent_tool', data: { phase: 'end', toolName: 'fake', isError: false } });
-      return { success: false, exitCode: null, summary: '', error: '已取消', rawResult: { fake: true }, toolCalls: 0, truncated: false, timedOut: false, cancelled: true };
+      return { success: false, exitCode: null, summary: '', error: '已取消', sessionId: reportedSessionId, rawResult: { fake: true }, toolCalls: 0, truncated: false, timedOut: false, cancelled: true };
     }
 
     if (outcome.slowMs) {
@@ -82,7 +86,7 @@ export function createFakeAdapter({ behaviors = {}, env = process.env } = {}) {
         }
       });
       if (signal && signal.aborted) {
-        return { success: false, exitCode: null, summary: '', error: '已取消', rawResult: { fake: true }, toolCalls: 0, truncated: false, timedOut: false, cancelled: true };
+        return { success: false, exitCode: null, summary: '', error: '已取消', sessionId: reportedSessionId, rawResult: { fake: true }, toolCalls: 0, truncated: false, timedOut: false, cancelled: true };
       }
     }
 
@@ -105,12 +109,12 @@ export function createFakeAdapter({ behaviors = {}, env = process.env } = {}) {
     if (outcome.ok === false) {
       const error = String(outcome.error || 'fake-agent 故意失败');
       onEvent({ type: 'agent_output', data: { text: error, level: 'error' } });
-      return { success: false, exitCode: 1, summary: '', error, rawResult: { fake: true }, toolCalls, truncated: false, timedOut: false, cancelled: false };
+      return { success: false, exitCode: 1, summary: '', error, sessionId: reportedSessionId, rawResult: { fake: true }, toolCalls, truncated: false, timedOut: false, cancelled: false };
     }
 
     const summary = String(outcome.summary || '（fake agent 成功）');
     onEvent({ type: 'agent_output', data: { text: summary } });
-    return { success: true, exitCode: 0, summary, error: '', rawResult: { fake: true }, toolCalls, truncated: false, timedOut: false, cancelled: false };
+    return { success: true, exitCode: 0, summary, error: '', sessionId: reportedSessionId, rawResult: { fake: true }, toolCalls, truncated: false, timedOut: false, cancelled: false };
   }
 
   return {
@@ -127,7 +131,7 @@ export function createFakeAdapter({ behaviors = {}, env = process.env } = {}) {
       reason: '',
       detail: '',
       entry: null,
-      capabilities: { streaming: true, cancellation: true, resume: false, toolEvents: true },
+      capabilities: { streaming: true, cancellation: true, resume: false, toolEvents: true, sessionLinking: true },
       notes: ['这是测试用适配器，不是真实 Agent'],
       testOnly: true,
     }),

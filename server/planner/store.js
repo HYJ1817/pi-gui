@@ -29,9 +29,16 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, summarizePlan } from './model.js';
+import { PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, normalizeAttemptRelation, summarizePlan } from './model.js';
 
-/** plan 文件的格式版本。格式一变就把旧文件当不认识的，避免半读半猜。 */
+/** plan 文件的格式版本。格式一变就把旧文件当不认识的，避免半读半猜。
+ *
+ *  ⚠️ **P7 加了 attempt.sessionId / filesChanged 之后仍然是 1，这是有意的。**
+ *  新增字段全是 additive：老计划没有它们 → 归一化成 null / []，照样正常加载；
+ *  新计划被老版本读到时也只是多两个它不认识的键。bump 到 2 反而有害 ——
+ *  revive 会因此给**每一个**既存计划挂一条「格式版本是 1，当前支持 2」的提示，
+ *  而那句提示是假的（v1 文件完全可读），只会让用户以为数据要坏了。
+ *  真正需要 bump 的时机是「旧文件读进来会被误解」，这次不是。 */
 export const PLAN_SCHEMA_VERSION = 1;
 
 /** 归一化路径用于比较（Windows 大小写不敏感）。 */
@@ -98,7 +105,10 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
     plan.tasks = plan.tasks.map((t) => ({
       ...t,
       dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn : [],
-      attempts: Array.isArray(t.attempts) ? t.attempts : [],
+      /* P7：attempt 里的关系字段（sessionId / filesChanged）在这里统一归一化。
+       * 老计划没有这些字段 → normalizeAttemptRelation 补成 null / []，
+       * 所以**不需要迁移、不需要升 schemaVersion**（规格 §15 的 additive 原则）。 */
+      attempts: (Array.isArray(t.attempts) ? t.attempts : []).map(normalizeAttemptRelation),
       attempt: Number.isFinite(t.attempt) ? t.attempt : 0,
       error: typeof t.error === 'string' ? t.error : '',
       result: t.result ?? null,

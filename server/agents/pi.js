@@ -68,7 +68,7 @@ export function createPiAdapter({ env = process.env, sessionDir = null } = {}) {
         reason: entry.reason,
         detail: entry.detail,
         entry: null,
-        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false },
+        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false },
       };
       return cache;
     }
@@ -88,6 +88,16 @@ export function createPiAdapter({ env = process.env, sessionDir = null } = {}) {
         resume: true,
         // pi 的 --mode json 会给 tool_execution_start/end —— 是唯一能出工具级时间线的
         toolEvents: true,
+        /* P7：这次运行能关联到一个会话 id。
+         * 两件事都已核实（见 pi 的 dist/bundle/chunks/chunk-4DKZACXI.js）：
+         *   - `--session-id` 是真实选项，会直接成为新会话的 id；
+         *   - `--mode json` 的第一行就是 `{"type":"session","id":…}`，
+         *     所以「我们要求的 id」和「pi 实际用的 id」都能拿到。
+         * ⚠️ pi 的 assertValidSessionId 要求 id 形如
+         * `^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$`，不合法时
+         * validateSessionIdFlags 直接 process.exit(1) —— 所以拼 id 的地方
+         * （model.js 的 taskSessionId）必须先把它削合法。 */
+        sessionLinking: true,
       },
     };
     return cache;
@@ -209,6 +219,11 @@ export function createPiAdapter({ env = process.env, sessionDir = null } = {}) {
       exitCode: result.exitCode,
       summary: lastAssistantText || assistantText.slice(-2000),
       error,
+      /* P7：这次运行关联的会话 id。
+       * 优先用**观察到的**（`session` 事件里的真实 id），退到我们请求的那个 ——
+       * 传了 `--session-id` 时两者本来就相等，没传时 pi 会自己生成一个，
+       * 那种情况下只有观察值是对的。两个都没有就回空串（调用方当 null 处理）。 */
+      sessionId: sessionIdSeen || sessionId || '',
       rawResult: {
         events,
         toolCalls,

@@ -28,6 +28,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { isSafeSessionId } from '../lib/session-id.js';
 import { json, readBody } from './http-utils.js';
 import { piState, sessionMessageBody } from './pi-compat.js';
 
@@ -78,10 +79,27 @@ function textOf(content) {
     .trim();
 }
 
-export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null } = {}) {
+export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [] } = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, '.pi', 'agent');
   const ROOT = path.join(AGENT_DIR, 'sessions');
+
+  /* ---------- P7：额外的会话根目录 ----------
+   *
+   * Planner 用 pi 跑任务时会话落在 `<PI_GUI_DATA>/planner-sessions`（见 server.js
+   * 的说明）—— 那是**刻意**跟主聊天的会话目录分开的，否则主聊天的 `--continue`
+   * 会接上某个任务的上下文。
+   *
+   * 代价是：那些会话不在本模块的扫描范围里，于是「从任务打开会话」够不着它们。
+   * 这里给它们留一个入口 —— 注入的根目录列表，**只用于「按会话 id 精确定位」**，
+   * 不进 `ownedSessions()`（那是「当前项目的会话列表」，把任务会话混进去会让
+   * 侧栏被几十条任务会话淹没）。
+   *
+   * 注意这不是「第二套会话加载」：解析出来之后走的还是同一个 switchToTarget /
+   * switch_session，归属判定也复用同一个 cwd 规则。 */
+  const EXTRA_ROOTS = (Array.isArray(extraSessionRoots) ? extraSessionRoots : [])
+    .filter((d) => typeof d === 'string' && d.trim())
+    .map((d) => path.resolve(d));
 
   /* 兼容层（P4，可选注入）。它只**观察**，不参与任何判断 ——
    * 会话逻辑一行都不因它改变。 */
@@ -360,6 +378,105 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     return null;
   }
 
+  /* ---------- P7：按 pi 的会话 id 精确定位 ----------
+   *
+   * 用途只有一个：从「任务的某次执行」跳到那条会话（见 server/planner/index.js
+   * 的 open-session 路由）。与上面的 resolveId 有三点不同，都是刻意的：
+   *
+   *   1. **输入是 pi 的会话 id（UUID 形态），不是我们那个路径 sha1。**
+   *      任务元数据里存的就是这个 —— 它跟着会话走，文件改名/移动都不会失配。
+   *   2. **扫描范围包含 EXTRA_ROOTS**（Planner 的会话目录）。
+   *   3. **归属判定放宽成「在项目内」而不是「cwd 完全相等」。**
+   *      原因是任务的工作目录可以是子目录（`workingDirectory: 'src'`），
+   *      那种会话的 header.cwd 是 `<项目>/src`，严格相等会把它判成别的项目。
+   *      「在项目内」仍然是「不可能切到别的项目上去」—— 只是把「本项目的子目录」
+   *      也算进来。这条放宽**只作用于本函数**，`ownedSessions()` 的严格规则不动。
+   */
+  function isInsideProject(target, projectRoot) {
+    const t = normCwd(target);
+    const p = normCwd(projectRoot);
+    if (!t || !p) return false;
+    if (t === p) return true;
+    return t.startsWith(p + path.sep);
+  }
+
+  /** 列出一个根目录下的 .jsonl：根目录本身 + 它的一层子目录。
+   *  默认根是 `<agentDir>/sessions/<cwd 编码>/`（一层子目录），
+   *  而 `--session-dir` 指定的目录是**平铺**的（pi 的 SessionManager 直接用这个
+   *  目录，不再按 cwd 分子目录）—— 所以两种形状都要覆盖。 */
+  function filesInRoot(root) {
+    const out = [];
+    const push = (dir) => {
+      let names = [];
+      try {
+        names = fs.readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const n of names) if (n.endsWith('.jsonl')) out.push(path.join(dir, n));
+    };
+    push(root);
+    try {
+      for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+        if (e.isDirectory()) push(path.join(root, e.name));
+      }
+    } catch {
+      /* 根目录不存在很正常（还没有任何会话） */
+    }
+    return out;
+  }
+
+  /**
+   * 按 pi 的会话 id 找会话。
+   *
+   * 先用**文件名后缀**筛（pi 的命名是 `<ISO 时间戳>_<encodeURIComponent(id)>.jsonl`，
+   * 见 `sessionFileName`），再读 header 核对 id 与 cwd —— 文件名只是线索，
+   * 归属仍然只认 header（和 ownedSessions 同一条规矩）。
+   *
+   * @returns {object|null} 与 summarize() 同形状（含 `file`，**绝对路径，不外传**）
+   */
+  /**
+   * 批量版：一次扫描解析多个会话 id。
+   *
+   * 存在的理由是**避免 N+1**（规格 §34）：一个 Plan 详情要显示每个 attempt 的会话，
+   * 逐个调 resolveByUuid 会把会话目录扫 N 遍。这里把目录只走一遍，
+   * 用文件名里那段 id 先筛（pi 的命名是 `<时间戳>_<encodeURIComponent(id)>.jsonl`），
+   * 命中的再读 header 核对 —— 与单条版是同一条判据，只是不再重复扫目录。
+   *
+   * @returns {Map<string, object>} id → summarize() 结果（找不到的 id 不在 Map 里）
+   */
+  function resolveManyByUuid(uuids) {
+    const want = new Set((Array.isArray(uuids) ? uuids : []).filter((u) => isSafeSessionId(u)));
+    const out = new Map();
+    if (!want.size) return out;
+    const cwd = runtime.getCurrentCwd();
+    if (!cwd) return out;
+    for (const root of [ROOT, ...EXTRA_ROOTS]) {
+      for (const f of filesInRoot(root)) {
+        const m = /_([^_/\\]+)\.jsonl$/.exec(path.basename(f));
+        if (!m) continue;
+        let id = '';
+        try {
+          id = decodeURIComponent(m[1]);
+        } catch {
+          continue; // 文件名里的转义坏了，跳过这个文件
+        }
+        if (!want.has(id) || out.has(id)) continue;
+        const s = summarize(f);
+        if (!s || s.sessionId !== id) continue;
+        if (!isInsideProject(s.cwd, cwd)) continue;
+        out.set(id, s);
+      }
+    }
+    return out;
+  }
+
+  /** 按 pi 的会话 id 找会话（单条 = 批量版的封装，保证两者判据永远一致）。 */
+  function resolveByUuid(uuid) {
+    if (!isSafeSessionId(uuid)) return null; // 前端传进来的，先挡住路径类输入
+    return resolveManyByUuid([uuid]).get(uuid) || null;
+  }
+
   /* ---------- 归档 / 删除（Pi GUI 自己的状态，不碰 pi） ---------- */
 
   /** 读 flags。坏文件一律当空的 —— 不能因为一个坏文件就让整个会话列表打不开。 */
@@ -486,15 +603,27 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     return { ok: true, id, title: target.title };
   }
 
-  async function switchTo(id) {
-    const target = resolveId(id);
-    if (!target) return { ok: false, code: 'not-found', error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
+  /**
+   * 真的去切一个**已经解析好的**目标。
+   *
+   * 与 switchTo 分开，是因为调用方有两种：侧栏点一条会话（先按我们自己的 ID 解析），
+   * 以及 Planner 从任务跳到会话（先按 pi 的会话 id 解析）。两者解析方式不同，
+   * **切换这一步必须完全相同** —— 否则「从侧栏切」和「从任务切」会走上两条
+   * 逐渐分叉的代码路径，而分叉出来的那条迟早会漏掉某个收尾动作。
+   */
+  async function switchToTarget(target) {
     if (!rpc || typeof rpc.request !== 'function') return { ok: false, code: 'no-rpc', error: 'pi 未连接，无法切换会话' };
     const res = await rpc.request({ type: 'switch_session', sessionPath: target.file });
     if (!res) return { ok: false, code: 'no-answer', error: 'pi 没有应答（可能正在忙，或子进程未运行）' };
     if (res.__error) return { ok: false, code: 'failed', error: String(res.__error) };
     if (res.cancelled) return { ok: false, code: 'cancelled', error: '切换被扩展取消了' };
-    return { ok: true, id, title: target.title };
+    return { ok: true, id: target.id, title: target.title };
+  }
+
+  async function switchTo(id) {
+    const target = resolveId(id);
+    if (!target) return { ok: false, code: 'not-found', error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
+    return switchToTarget(target);
   }
 
   async function rename(name) {
@@ -574,7 +703,13 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     rename,
     setArchived,
     remove,
-    _internals: { sessionId, dirNameFor, summarize, normCwd, readFlags, writeFlags },
+    /* P7：给 Planner 用的两个原语。**必须是注入而不是 import** ——
+     * 模块之间不许互相 import（`server.js → 模块` 是唯一的依赖方向）。
+     * 由 server.js 把 sessions 实例注入 planner，planner 只调这两个方法。 */
+    resolveByUuid,
+    resolveManyByUuid,
+    switchToTarget,
+    _internals: { sessionId, dirNameFor, summarize, normCwd, readFlags, writeFlags, isInsideProject, filesInRoot },
     /* 会话搜索（server/session-search.js）用的只读原语。
      *
      * 走**依赖注入**而不是 import —— 模块之间不许互相 import（`server.js → 模块`
@@ -583,6 +718,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
      * 两份判定迟早会漂，漂掉的那份就是跨项目读取的口子。 */
     forSearch: { ownedSessions, readCapped, normCwd, maxReadBytes: MAX_READ_BYTES },
     root: ROOT,
+    extraRoots: EXTRA_ROOTS.slice(),
     agentDir: AGENT_DIR,
     dataDir: DATA,
   };

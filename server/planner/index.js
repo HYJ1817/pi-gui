@@ -19,9 +19,13 @@
  * 绝不把没校验过的 plan 交给执行器。
  */
 import { json, readBody } from '../http-utils.js';
+import { isSafeSessionId } from '../../lib/session-id.js';
 import { PLAN_STATUS, TASK_STATUS, DEFAULT_CONCURRENCY, MAX_CONCURRENCY, normalizePlan, summarizePlan } from './model.js';
 
 const MAX_BODY = 512 * 1024;
+/** 一次反向查询最多回多少条命中（一个会话被几十个任务用过是可能的，
+ *  但界面上只需要一个能展开的列表，不需要把整个项目的历史都端上来）。 */
+const MAX_RELATION_MATCHES = 50;
 
 /* ---------- 从模型输出里抽 JSON ---------- */
 
@@ -105,7 +109,7 @@ export function buildPlannerPrompt({ goal, title, agentIds, maxTasks = 8 }) {
   ].join('\n');
 }
 
-export function createPlanner({ runtime, registry, store, scheduler, env = process.env, sessionDir = null, generate = null }) {
+export function createPlanner({ runtime, registry, store, scheduler, env = process.env, sessionDir = null, generate = null, sessions = null }) {
   /* ---------- 生成计划 ---------- */
 
   /** 默认生成器：用 pi 适配器 + 独立会话跑一次，然后严格校验它的输出。 */
@@ -189,10 +193,93 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
     return problems;
   }
 
+  /* ---------- P7：从任务跳到它的会话 ---------- */
+
+  /**
+   * 打开某个 task 某次尝试的会话。
+   *
+   * 复用**现有的**会话切换（`sessions.switchToTarget` → pi 的 `switch_session`），
+   * 不自己加载会话文件 —— 前端的清屏 / 重建历史 / 提问导航全都挂在既有的
+   * `afterSessionSwitch()` 上，另起一条加载路径会漏掉那些收尾。
+   *
+   * 三道闸，都是必须的：
+   *   1. **任务不能在跑。** 那条会话文件此刻正被 Agent 进程追加写，主聊天的 pi
+   *      切过去会变成两个进程写同一个 jsonl。
+   *   2. **会话 id 必须合法**（由 resolveByUuid 挡），且解析出来的会话必须
+   *      **属于当前项目**（归属判定在 sessions 里，这里不重写一份）。
+   *   3. **找不到就如实说找不到**，不猜、不新建 —— 会话可能已被用户删掉。
+   *
+   * @param attemptParam 可选：指定第几次尝试。不传则取最近一次**有会话**的尝试
+   *                     （最新那次可能因为 Agent 不支持而没关联到会话）。
+   */
+  async function openTaskSession(plan, taskId, attemptParam) {
+    if (!sessions || typeof sessions.resolveByUuid !== 'function' || typeof sessions.switchToTarget !== 'function') {
+      return { ok: false, error: '会话模块没有接入，暂时打不开会话' };
+    }
+    const task = plan.tasks.find((t) => t.id === taskId);
+    if (!task) return { ok: false, error: '找不到这个任务' };
+    const attempts = Array.isArray(task.attempts) ? task.attempts : [];
+    const wanted = Number(attemptParam);
+    const attempt =
+      Number.isFinite(wanted) && wanted > 0
+        ? attempts.find((a) => a.attempt === wanted) || null
+        : attempts.slice().reverse().find((a) => a.sessionId) || attempts[attempts.length - 1] || null;
+    if (!attempt) return { ok: false, error: '这个任务还没有执行过，没有可打开的会话' };
+    if (!attempt.sessionId) {
+      return { ok: false, error: '这次执行没有关联会话（所用的 Agent 不提供会话关联）' };
+    }
+    if (task.status === TASK_STATUS.RUNNING) {
+      return { ok: false, error: '这个任务正在执行，它的会话正被写入。等它结束后再打开。' };
+    }
+    const target = sessions.resolveByUuid(attempt.sessionId);
+    if (!target) return { ok: false, error: '关联的会话已经找不到了（可能已被删除或移动）' };
+    const r = await sessions.switchToTarget(target);
+    if (!r.ok) return { ok: false, error: r.error || '切换会话失败', code: r.code };
+    return { ok: true, id: r.id, title: r.title, sessionId: attempt.sessionId, taskId, attempt: attempt.attempt };
+  }
+
   /* ---------- HTTP ---------- */
 
+  /**
+   * 计划详情的**视图对象**。
+   *
+   * 只做一件事：把每个 attempt 的 `sessionId` 注解上「这条会话现在还在不在、
+   * 叫什么名字」。这样界面一次请求就能把「会话：修复 bridgeRun stale response」
+   * 画出来，不用每个 task 各问一次后端（规格 §34 明确要求避免 N+1）。
+   *
+   * ⚠️ **注解是视图字段，绝不写回 plan 文件。** 写回去等于把「某一次读取时的
+   * 结论」当成事实持久化 —— 用户后来把会话恢复了，界面上还会写着「已删除」。
+   * 所以这里返回的是一个浅拷贝结构，原 plan 对象一个字节都不动。
+   *
+   * 没注入 sessions 时（单测）原样返回，行为与 P7 之前一致。
+   */
+  function planView(plan) {
+    if (!sessions || typeof sessions.resolveManyByUuid !== 'function') return plan;
+    const ids = [];
+    for (const t of plan.tasks) {
+      for (const a of Array.isArray(t.attempts) ? t.attempts : []) if (a.sessionId) ids.push(a.sessionId);
+    }
+    let found = new Map();
+    try {
+      found = sessions.resolveManyByUuid(ids);
+    } catch {
+      found = new Map(); // 会话目录读不出来不该让计划详情打不开
+    }
+    return {
+      ...plan,
+      tasks: plan.tasks.map((t) => ({
+        ...t,
+        attempts: (Array.isArray(t.attempts) ? t.attempts : []).map((a) => {
+          if (!a.sessionId) return { ...a, sessionAvailable: false, sessionTitle: '' };
+          const hit = found.get(a.sessionId);
+          return { ...a, sessionAvailable: Boolean(hit), sessionTitle: hit ? hit.title : '' };
+        }),
+      })),
+    };
+  }
+
   function payload(plan, extra = {}) {
-    return { ok: true, plan, counts: summarizePlan(plan), ...extra };
+    return { ok: true, plan: planView(plan), counts: summarizePlan(plan), ...extra };
   }
 
   function loadPlan(id) {
@@ -255,6 +342,57 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
         r.plan.status = PLAN_STATUS.DRAFT;
         store.save(r.plan);
         return json(res, 200, payload(r.plan, { warnings: r.warnings || [], raw: r.raw, agents: checkAgents(r.plan) }));
+      }
+
+      /* GET /api/plans/relations?sessionId=…
+       *
+       * 「这个会话被哪些 task 的哪次尝试用过」—— 反向查询（规格 §5 / §8）。
+       *
+       * **刻意不维护第二份索引。** 答案直接来自 plan 文件里的 `attempt.sessionId`
+       * —— 那是单一真相（规格 §5 明确要求「不要出现 task 说 A、session-index 说 B」
+       * 这种两份可漂移的关系）。所以这里是一次有界扫描：先按 projectRoot 过滤出
+       * 当前项目的计划（计划数有上限），再遍历它们的 attempts。
+       * 会话正文一个字都不读 —— 只读关系字段。
+       *
+       * 位置：必须排在下面的 `:id` 处理之前，和 `generate` 同一类特例。 */
+      if (parts.length === 1 && parts[0] === 'relations') {
+        if (method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed' });
+        const cwd = runtime.getCurrentCwd();
+        if (!cwd) return json(res, 200, { ok: true, hasProject: false, sessionId: null, matches: [] });
+        const sessionId = url.searchParams.get('sessionId') || '';
+        // 来自 HTTP 的不可信输入：先按 pi 的字符集挡一道，再拿去找东西
+        if (!isSafeSessionId(sessionId)) return json(res, 400, { ok: false, error: '缺少合法的 sessionId' });
+        const { plans } = store.list({ projectRoot: cwd });
+        const matches = [];
+        for (const p of plans) {
+          for (const t of p.tasks) {
+            for (const a of Array.isArray(t.attempts) ? t.attempts : []) {
+              if (a.sessionId !== sessionId) continue;
+              matches.push({
+                planId: p.id,
+                planTitle: p.title,
+                planStatus: p.status,
+                taskId: t.id,
+                taskTitle: t.title,
+                taskStatus: t.status,
+                agent: t.agent,
+                attempt: a.attempt,
+                startedAt: a.startedAt,
+                endedAt: a.endedAt,
+                success: Boolean(a.success),
+                filesChanged: Array.isArray(a.filesChanged) ? a.filesChanged : [],
+              });
+            }
+          }
+        }
+        matches.sort((x, y) => (y.startedAt || 0) - (x.startedAt || 0));
+        return json(res, 200, {
+          ok: true,
+          hasProject: true,
+          sessionId,
+          matches: matches.slice(0, MAX_RELATION_MATCHES),
+          truncated: matches.length > MAX_RELATION_MATCHES,
+        });
       }
 
       /* GET /api/plans  |  POST /api/plans */
@@ -405,6 +543,12 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
           const r = scheduler.skipTask(plan, taskId);
           return json(res, 200, r.ok ? { ok: true, taskId, blockedDependents: r.blockedDependents, plan } : { ok: false, error: r.error, code: r.code });
         }
+        /* P7：从任务跳到它的会话（规格 §7）。失败一律 200 + ok:false ——
+         * 「这次执行没有关联会话」是**正常结果**，不是错误状态码。 */
+        if (taskAction === 'open-session') {
+          const r = await openTaskSession(plan, taskId, url.searchParams.get('attempt'));
+          return json(res, 200, r.ok ? r : { ok: false, error: r.error, code: r.code || '' });
+        }
         return json(res, 404, { ok: false, error: `不认识的任务操作：${taskAction}` });
       }
       return json(res, 404, { ok: false, error: '不认识的计划操作' });
@@ -417,6 +561,8 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
     handle,
     generatePlan,
     checkAgents,
+    /** P7：从任务打开它的会话（也直接暴露给测试）。 */
+    openTaskSession,
     /** 供 server.js / projects 判断「现在能不能切项目」（§40）。 */
     activePlanId: () => scheduler.activePlanId(),
     _internals: { extractJsonObject, buildPlannerPrompt },

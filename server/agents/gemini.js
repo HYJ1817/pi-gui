@@ -40,7 +40,7 @@ export function createGeminiAdapter({ env = process.env } = {}) {
         reason: entry.reason,
         detail: entry.detail,
         entry: null,
-        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false },
+        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false },
         notes: [],
       };
       return cache;
@@ -60,8 +60,17 @@ export function createGeminiAdapter({ env = process.env } = {}) {
         resume: true,
         // 没有 --json，拿不到工具级事件 —— 这一条会直接影响 Timeline 的呈现粒度
         toolEvents: false,
+        /* P7：**刻意是 false**。gemini 的文档里有 `--session-id`，`buildArgs` 也已经
+         * 支持传它，但本机没有 gemini 可核对，而且它的输出里没有可回读的会话 id ——
+         * 也就是说「传进去的 id 到底有没有被采用」无法验证。按规格 §16 的 C 情形，
+         * 宁可如实记 null，也不要写一个我们无法证明的值。
+         * 将来真跑通一次、确认 `--session-id` 生效后，把这里改成 true 即可。 */
+        sessionLinking: false,
       },
-      notes: ['该 CLI 没有 JSON 事件流，Timeline 只能显示 stdout 文本摘要（不伪造工具事件）'],
+      notes: [
+        '该 CLI 没有 JSON 事件流，Timeline 只能显示 stdout 文本摘要（不伪造工具事件）',
+        '会话关联未启用：`--session-id` 无法在本机验证是否生效',
+      ],
     };
     return cache;
   }

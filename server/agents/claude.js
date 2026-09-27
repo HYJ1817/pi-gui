@@ -59,7 +59,7 @@ export function createClaudeAdapter({ env = process.env } = {}) {
         reason: entry.reason,
         detail: entry.detail,
         entry: null,
-        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false },
+        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false },
         notes: entry.reason === 'entry-missing' ? ['安装不完整：包在但可执行入口缺失，重装 @anthropic-ai/claude-code 即可恢复'] : [],
       };
       return cache;
@@ -73,7 +73,11 @@ export function createClaudeAdapter({ env = process.env } = {}) {
       reason: '',
       detail: '',
       entry,
-      capabilities: { streaming: true, cancellation: true, resume: false, toolEvents: true },
+      /* P7：claude 的 stream-json 事件里带 `session_id`，所以这次运行**能被关联**
+       * 到一个会话。注意它只是「能报回来」，我们并不能指定一个 id 给它 ——
+       * 所以调度器传进来的期望 id 会被忽略，实际记下的是 claude 自己报的那个。
+       * 事件里没有这个字段时降级成 null，不伪造（规格 §16 的 C 情形）。 */
+      capabilities: { streaming: true, cancellation: true, resume: false, toolEvents: true, sessionLinking: true },
       notes: ['调用方式按官方 cli-reference 实现，但未在本机执行验证过'],
     };
     return cache;
@@ -187,6 +191,8 @@ export function createClaudeAdapter({ env = process.env } = {}) {
       exitCode: result.exitCode,
       summary,
       error,
+      /* P7：把观察到的会话 id 提到顶层，调度器只认这一个字段（不再去翻 rawResult）。 */
+      sessionId,
       rawResult: { events, toolCalls, sessionId, unknownTypes: [...new Set(unknown)].slice(0, 10), stdoutBytes: result.stdoutBytes, stderr: result.stderr.slice(0, 4000) },
       toolCalls,
       truncated: result.truncated,

@@ -44,7 +44,7 @@ export function createOpencodeAdapter({ env = process.env } = {}) {
         reason: entry.reason,
         detail: entry.detail,
         entry: null,
-        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false },
+        capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false },
         notes: ['未适配调用方式：本机没有可核对的 CLI，照印象写参数比报「不可用」更危险'],
       };
       return cache;
@@ -58,7 +58,7 @@ export function createOpencodeAdapter({ env = process.env } = {}) {
       reason: 'not-adapted',
       detail: `检测到 opencode@${entry.version}，但本适配器尚未适配它的非交互调用方式`,
       entry: null,
-      capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false },
+      capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false },
       notes: ['包已安装；补上 args 构造后即可启用'],
     };
     return cache;

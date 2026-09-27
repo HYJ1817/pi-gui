@@ -76,7 +76,7 @@ export function createAgentRegistry({ env = process.env, sessionDir = null, incl
           version: '',
           reason: 'detect-failed',
           detail: `探测出错：${err.message}`,
-          capabilities: { streaming: false, cancellation: false, resume: false, toolEvents: false },
+          capabilities: { streaming: false, cancellation: false, resume: false, toolEvents: false, sessionLinking: false },
           notes: [],
         };
       }
@@ -88,7 +88,7 @@ export function createAgentRegistry({ env = process.env, sessionDir = null, incl
         version: info.version || '',
         reason: info.reason || '',
         detail: info.detail || '',
-        capabilities: info.capabilities || { streaming: false, cancellation: true, resume: false, toolEvents: false },
+        capabilities: info.capabilities || { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false },
         notes: Array.isArray(info.notes) ? info.notes : [],
         testOnly: Boolean(info.testOnly),
       });
@@ -109,7 +109,7 @@ export function createAgentRegistry({ env = process.env, sessionDir = null, incl
         version: info.version || '',
         reason: info.reason || '',
         detail: info.detail || '',
-        capabilities: info.capabilities || { streaming: false, cancellation: true, resume: false, toolEvents: false },
+        capabilities: info.capabilities || { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false },
         notes: Array.isArray(info.notes) ? info.notes : [],
         testOnly: Boolean(info.testOnly),
       };
@@ -121,7 +121,7 @@ export function createAgentRegistry({ env = process.env, sessionDir = null, incl
         version: '',
         reason: 'detect-failed',
         detail: `探测出错：${err.message}`,
-        capabilities: { streaming: false, cancellation: false, resume: false, toolEvents: false },
+        capabilities: { streaming: false, cancellation: false, resume: false, toolEvents: false, sessionLinking: false },
         notes: [],
       };
     }
