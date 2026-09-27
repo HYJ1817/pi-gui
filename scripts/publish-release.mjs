@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { ROOT } from './util.mjs';
 import { expectedAssetNames } from './check-release-artifacts.mjs';
 import { compareReleaseAssets, readLocalAssets, fetchRemoteAssets, makeGhRunner } from './verify-uploaded-release.mjs';
+import { readReleaseSummary, RELEASE_SUMMARY_REL } from './release-summary.mjs';
 
 /** 追加到 Release 页面末尾的固定说明。
  *
@@ -68,6 +69,46 @@ pi --version
 
 否则界面能打开，但发出去的消息会报错。
 `;
+
+const SUMMARY_START = '<!-- pi-gui-release-summary:start -->';
+const SUMMARY_END = '<!-- pi-gui-release-summary:end -->';
+const ASSET_START = '<!-- pi-gui-release-assets:start -->';
+const ASSET_END = '<!-- pi-gui-release-assets:end -->';
+
+function stripManagedBlock(text, start, end) {
+  let out = String(text ?? '');
+  while (true) {
+    const a = out.indexOf(start);
+    if (a < 0) break;
+    const b = out.indexOf(end, a + start.length);
+    if (b < 0) break;
+    out = out.slice(0, a) + out.slice(b + end.length);
+  }
+  return out;
+}
+
+/** 把“本版摘要 + GitHub 自动 notes + 固定交付说明”组合成最终 Release body。
+ * managed block 先剥再写，所以 draft 重跑 / dry-run 后再正式发布不会重复追加。 */
+export function composeReleaseNotes({ generatedNotes = '', summary = '' } = {}) {
+  let base = stripManagedBlock(generatedNotes, SUMMARY_START, SUMMARY_END);
+  base = stripManagedBlock(base, ASSET_START, ASSET_END);
+  /* 兼容旧脚本留下的、没有 marker 的固定说明。 */
+  base = base.replace(ASSET_NOTES.trim(), '').trim();
+
+  const summaryText = String(summary).trim();
+  if (!summaryText) throw new Error('Release 摘要正文为空');
+
+  const summaryBlock = `${SUMMARY_START}
+## 本版摘要
+
+${summaryText}
+${SUMMARY_END}`;
+  const assetBlock = `${ASSET_START}
+${ASSET_NOTES.trim()}
+${ASSET_END}`;
+
+  return [summaryBlock, base, assetBlock].filter(Boolean).join('\n\n') + '\n';
+}
 
 /**
  * 纯函数：根据 tag 上现有 Release 的状态，决定该做什么。
@@ -115,7 +156,14 @@ export function releaseState(gh, tag) {
  * @param dryRun   true 时做到「核对通过 + 追加说明」就停，**不 publish**
  * @returns {{steps:string[], state:string, published:boolean, url:string|null}}
  */
-export function publishRelease({ tag, dir, gh = makeGhRunner(), dryRun = false, log = console.log } = {}) {
+export function publishRelease({
+  tag,
+  dir,
+  gh = makeGhRunner(),
+  dryRun = false,
+  log = console.log,
+  summaryPath = path.join(ROOT, RELEASE_SUMMARY_REL),
+} = {}) {
   if (!tag) throw new Error('必须给 tag');
   const steps = [];
   const version = tag.replace(/^v/, '');
@@ -130,6 +178,10 @@ export function publishRelease({ tag, dir, gh = makeGhRunner(), dryRun = false, 
     .map((e) => e.name)
     .sort();
   if (!files.length) throw new Error(`发布目录是空的：${dir}（先跑 npm run release:collect）`);
+
+  /* 摘要也在碰 GitHub 之前校验。版本标记不匹配时宁可直接停，
+   * 也不能把上一版的人类摘要带进这一版。 */
+  const summary = readReleaseSummary({ expectedVersion: version, filePath: summaryPath });
 
   const state = releaseState(gh, tag);
   const plan = planRelease({ state });
@@ -166,10 +218,15 @@ export function publishRelease({ tag, dir, gh = makeGhRunner(), dryRun = false, 
   steps.push('verify');
   log(`  核对通过：${remote.assets.length} 个附件的大小与 sha256 都与本机一致`);
 
-  /* 追加固定说明（保留 GitHub 自动生成的 notes）。 */
+  /* 在 GitHub 自动 notes 前放一小段人类可读摘要，末尾保留固定交付说明。
+   * composeReleaseNotes 是幂等的：复用 draft 时不会把这两段越叠越多。 */
   const body = gh(['release', 'view', tag, '--json', 'body', '-q', '.body']);
   const tmp = path.join(os.tmpdir(), `pi-gui-release-notes-${process.pid}.md`);
-  fs.writeFileSync(tmp, String(body) + ASSET_NOTES, 'utf8');
+  fs.writeFileSync(
+    tmp,
+    composeReleaseNotes({ generatedNotes: String(body), summary: summary.body }),
+    'utf8'
+  );
   try {
     gh(['release', 'edit', tag, '--notes-file', tmp]);
   } finally {
