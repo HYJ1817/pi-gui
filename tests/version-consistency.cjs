@@ -32,6 +32,7 @@ const ROOT = path.resolve(__dirname, '..');
   const { isValidReleaseVersion, isPrerelease, checkVersionConsistency, findHardcodedVersions, readVersionSources } =
     await import('../scripts/check-version.mjs');
   const { setVersion, unexpectedDiff } = await import('../scripts/set-version.mjs');
+  const { parseReleaseSummary, readReleaseSummary, RELEASE_SUMMARY_REL } = await import('../scripts/release-summary.mjs');
 
   /* ================= 1. SemVer 合法性 ================= */
   console.log('\n--- 1. 版本号合法性 ---');
@@ -211,20 +212,67 @@ const ROOT = path.resolve(__dirname, '..');
 
   check('10b. 不误报：文件里没有那个版本号时返回空', () => findHardcodedVersions('9.9.9', fixture).length === 0);
 
-  /* ================= 5. 真实仓库自检（只读） ================= */
-  console.log('\n--- 5. 当前仓库自检（只读） ---');
+  /* ================= 5. Release 摘要版本 ================= */
+  console.log('\n--- 5. Release 摘要版本 ---');
+
+  fs.mkdirSync(path.join(fixture, '.github'), { recursive: true });
+  const fixtureSummary = path.join(fixture, RELEASE_SUMMARY_REL);
+  fs.writeFileSync(
+    fixtureSummary,
+    '<!-- pi-gui-release-summary: 0.13.0 -->\n\n- 给用户看的短摘要\n',
+    'utf8'
+  );
+
+  check('11. Release 摘要能解析版本标记与正文', () => {
+    const r = parseReleaseSummary(fs.readFileSync(fixtureSummary, 'utf8'));
+    return (r.version === '0.13.0' && r.body.includes('短摘要')) || JSON.stringify(r);
+  });
+
+  check('11b. Release 摘要缺版本标记 → 拒绝', () => {
+    try {
+      parseReleaseSummary('- 只有正文');
+      return '没拒绝';
+    } catch (e) {
+      return /版本标记/.test(e.message) || e.message;
+    }
+  });
+
+  check('11c. Release 摘要版本与目标版本不一致 → 拒绝', () => {
+    try {
+      readReleaseSummary({ expectedVersion: '0.14.0', root: fixture });
+      return '没拒绝';
+    } catch (e) {
+      return /版本.*不一致/.test(e.message) || e.message;
+    }
+  });
+
+  check('11d. Release 摘要版本一致 → 通过', () => {
+    const r = readReleaseSummary({ expectedVersion: '0.13.0', root: fixture });
+    return (r.version === '0.13.0' && r.body.includes('短摘要')) || JSON.stringify(r);
+  });
+
+  /* ================= 6. 真实仓库自检（只读） ================= */
+  console.log('\n--- 6. 当前仓库自检（只读） ---');
 
   {
     const s = readVersionSources(ROOT);
-    check('11. 真实仓库的 package / lock 一致', () => {
+    check('12. 真实仓库的 package / lock 一致', () => {
       const r = checkVersionConsistency(s);
       return r.ok === true || JSON.stringify(r.errors);
     });
-    check('11b. 真实仓库的构建链路里没有写死的版本号', () => {
+    check('12b. 真实仓库的构建链路里没有写死的版本号', () => {
       const hits = findHardcodedVersions(s.pkgVersion, ROOT);
       return hits.length === 0 || '写死在：' + hits.join('、');
     });
-    check('11c. 真实仓库的版本号是合法三段 SemVer', () => isValidReleaseVersion(s.pkgVersion) || String(s.pkgVersion));
+    check('12c. 真实仓库的版本号是合法三段 SemVer', () => isValidReleaseVersion(s.pkgVersion) || String(s.pkgVersion));
+    check('12d. 真实仓库的 Release 摘要版本与 package.json 一致', () => {
+      try {
+        const summary = readReleaseSummary({ expectedVersion: s.pkgVersion, root: ROOT });
+        return summary.body.length > 0 || '摘要正文为空';
+      } catch (e) {
+        return e.message;
+      }
+    });
   }
 
   fs.rmSync(fixture, { recursive: true, force: true });
