@@ -196,9 +196,17 @@ function verificationText(v) {
  * 的任务会同时算作 accepted 和 failed，那个数字就没人能解释了。
  *
  * 「最新」按 `attempt` 号取最大，不按数组顺序 —— 顺序是写入顺序，不是语义。
+ *
+ * ⚠️ **`failed` / `cancelled` / `interrupted` 必须分开统计。**
+ * P8-B 已经把三者区分得很清楚（Scheduler 与 attempt 卡片都分开）：
+ *   interrupted = 应用被关掉，不是你的错，重启后可以重试；
+ *   cancelled   = 你自己按了停止；
+ *   failed      = 真的跑失败了。
+ * 汇总这里如果把 interrupted 并进 failed，就等于在计划顶部说「失败 2」——
+ * 而那两条里有一条根本不是失败。汇总和明细必须说同一件事。
  */
 function reviewSummary(plan) {
-  const exec = { success: 0, failed: 0, cancelled: 0, none: 0 };
+  const exec = { success: 0, failed: 0, cancelled: 0, interrupted: 0, none: 0 };
   const rev = { pending: 0, accepted: 0, needs_changes: 0 };
   for (const t of plan.tasks || []) {
     const arr = Array.isArray(t.attempts) ? t.attempts : [];
@@ -215,6 +223,8 @@ function reviewSummary(plan) {
       rev[reviewOf(last).status]++;
     } else if (outcome === 'cancelled') {
       exec.cancelled++;
+    } else if (outcome === 'interrupted') {
+      exec.interrupted++;
     } else {
       exec.failed++;
     }
@@ -316,6 +326,58 @@ export function openPlanner(focus = null) {
 
   openModal((card) => {
     card.classList.add('wide', 'planner');
+
+    /* ---------- 工作区身份：这个面板还属于当前项目吗 ----------
+     *
+     * 下面三个 helper 必须放在**这个回调里面** —— `renderList` / `renderDetail`
+     * 都是在这个作用域里声明的，放外面根本看不见它们。
+     * `openedGeneration` 在外层捕获，内层闭包照样读得到。
+     */
+
+    /**
+     * **这个 Planner 面板还属于当前工作区吗？**
+     *
+     * `openedGeneration` 在 openPlanner() 打开面板时捕获，所以它就是
+     * 「这个面板实例属于哪个 workspace」的身份。项目一换 `S.workspaceGeneration`
+     * 自增，这里立刻变 false。
+     *
+     * 它要回答的问题只有一个：**旧面板还该不该继续工作**。
+     * 旧面板手上的 plan / attempt / 草稿全属于旧 workspace —— 切走之后它们
+     * 既不该再显示、也不该再发请求。
+     */
+    const plannerAlive = () => ownsWorkspace(openedGeneration);
+
+    /**
+     * 丢弃这个面板实例攒下的全部临时 UI 状态。
+     *
+     * 三样都属于**旧 workspace**，所以项目一换就该全部作废：
+     *   reviewDrafts   未保存的说明（连带 `saving` 标记 —— 不清就会永久停在「正在保存…」）
+     *   clearingReview 「正在清除…」的标记
+     *   filesExpanded  文件列表的展开状态
+     *
+     * **刻意不写 localStorage / sessionStorage / plan 文件**：这不是「保留跨项目草稿」，
+     * 恰恰相反 —— 项目切换就意味着草稿的生命周期结束。
+     */
+    function dropPlannerState() {
+      reviewDrafts.clear();
+      clearingReview.clear();
+      filesExpanded.clear();
+    }
+
+    /**
+     * 把面板收成「项目已切换」的样子：丢掉旧状态 + 只留一句提示。
+     *
+     * ⚠️ **这里绝不调用 `closeModal()`。** modal 只有一个槽位
+     * （`public/ui/modal.js` 的 `closeHook`）且没有实例 token —— 从旧实例关掉它
+     * 会把**后来打开的新 Planner 一起关掉**。所以旧实例只做两件事：清自己的状态、
+     * 把提示写进**自己那份** detailWrap。若 modal 已被新实例重建，旧 detailWrap
+     * 早已从文档里摘掉，这些写入是空操作，一个像素都影响不到新面板。
+     */
+    function renderStalePlanner() {
+      dropPlannerState();
+      renderList();
+      renderDetail();
+    }
 
     const tabs = el('div', 'ext-tabs');
     const tabPlans = el('button', 'ext-tab on', '计划');
@@ -443,6 +505,11 @@ export function openPlanner(focus = null) {
 
     function renderList() {
       listWrap.replaceChildren();
+      /* 项目已经切走 —— 旧项目的计划列表不该继续摆在这儿（§十九）。 */
+      if (!plannerAlive()) {
+        listWrap.append(el('div', 'ext-empty', '项目已切换，请重新打开 Planner'));
+        return;
+      }
       const head = el('div', 'ext-sec-head');
       head.append(el('span', null, `当前项目的计划（${plans.length}）`));
       listWrap.append(head);
@@ -467,8 +534,20 @@ export function openPlanner(focus = null) {
           item.append(el('div', 'ext-item-note', p.recoveryNotes.join('；')));
         }
         item.onclick = async () => {
+          /* 切过项目之后这个列表属于旧 workspace：点它既不该弹确认框、
+           * 更不该去打旧项目的接口。就地收成「项目已切换」。 */
+          if (!plannerAlive()) {
+            renderStalePlanner();
+            return;
+          }
           if (dirty && current && !(await confirmModal({ title: '放弃未保存的修改？', message: '当前计划的改动还没保存。', okText: '放弃并切换' }))) return;
+          /* 确认框是一个 await —— 用户可能就在那会儿切了项目（§十八）。 */
+          if (!plannerAlive()) {
+            renderStalePlanner();
+            return;
+          }
           const r = await fetchPlan(p.id);
+          if (!plannerAlive()) return;
           if (r.ok) {
             current = r.plan;
             dirty = false;
@@ -485,6 +564,14 @@ export function openPlanner(focus = null) {
 
     function renderDetail() {
       detailWrap.replaceChildren();
+      /* 项目已经切走 —— 这个面板属于旧 workspace，明细不该继续可交互。
+       * 收成一句提示就够：把整个 detailWrap 换掉，里面所有按钮（含审阅的）
+       * 也就都不在了，旧面板不可能再对旧项目发出任何写操作。 */
+      if (!plannerAlive()) {
+        dropPlannerState();
+        detailWrap.append(el('div', 'ext-empty', '项目已切换，请重新打开 Planner'));
+        return;
+      }
       if (!current) {
         detailWrap.append(el('div', 'ext-empty', '左侧选一个计划，或先生成一个。'));
         return;
@@ -545,6 +632,9 @@ export function openPlanner(focus = null) {
       row1.append(el('span', 'planner-revsum-k', '执行结果'));
       const parts = [`成功 ${sum.exec.success}`, `失败 ${sum.exec.failed}`];
       if (sum.exec.cancelled) parts.push(`取消 ${sum.exec.cancelled}`);
+      /* 「中断」单列 —— **不并进「失败」**。应用被关掉不是跑失败，
+       * 重启后还能重试；并进去会让计划顶部说一件明细里没发生的事（§四）。 */
+      if (sum.exec.interrupted) parts.push(`中断 ${sum.exec.interrupted}`);
       if (sum.exec.none) parts.push(`尚无结果 ${sum.exec.none}`);
       row1.append(el('span', 'planner-revsum-v', parts.join(' · ')));
       sumBox.append(row1);
@@ -675,6 +765,11 @@ export function openPlanner(focus = null) {
 
     /** 进入编辑态。**点状态按钮不直接保存** —— 用户很可能还要补一句说明（§十一）。 */
     function openEditor(planId, taskId, attempt, status, note) {
+      /* 旧 workspace 的面板不许再开编辑态（§十七）。 */
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
       const cur = reviewOf(attemptOf(taskId, attempt));
       reviewDrafts.set(draftKey(planId, taskId, attempt), {
         status,
@@ -696,13 +791,21 @@ export function openPlanner(focus = null) {
      * 真正发请求 + 处理结果。草稿有无都能走（「清除」就是无草稿那条路）。
      *
      * 三道身份确认，缺一不可：
-     *   1. 项目没换（`ownsWorkspace`）
+     *   1. **项目没换**（`plannerAlive()` —— 这个面板实例还属于当前 workspace）
      *   2. 还是同一个计划（`current.id === planId`）
      *   3. 目标 attempt 仍在当前计划里（按 taskId + attempt 现查）
-     * 任何一条不成立就**直接丢弃响应，不写 DOM** —— 这是「切换后回来不许污染」
-     * 唯一的实现方式，不是可有可无的保险。
+     * 第 1 条不成立时**不清 DOM 就完事**：要先把这个实例的临时状态（草稿 /
+     * 清除中 / 文件展开）整体作废，否则 `saving` 标记会让按钮永久停在
+     * 「正在保存…」；然后只把面板收成提示，**不 closeModal**（那会误关新面板）。
+     * 第 2、3 条不成立时直接丢弃响应、一个字都不写 —— 那是「计划切换 /
+     * attempt 身份不匹配」的污染，界面本来就不该动。
      */
     async function submitReview(planId, taskId, attempt, status, note) {
+      /* 旧 workspace 的面板不许再发写请求（§十七）。 */
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
       const key = draftKey(planId, taskId, attempt);
       const draft = reviewDrafts.get(key);
       const target = attemptOf(taskId, attempt);
@@ -712,7 +815,6 @@ export function openPlanner(focus = null) {
       }
       /* 乐观并发：用**当前渲染这一版的 revision**，永远不是写死的 0（§三十七）。 */
       const revision = reviewOf(target).revision;
-      const gen = S.workspaceGeneration;
 
       if (draft) {
         if (draft.saving) return; // 防双击
@@ -734,7 +836,14 @@ export function openPlanner(focus = null) {
       clearingReview.delete(key);
 
       /* ---- 先确认「还是那个上下文」，再决定要不要碰 DOM ---- */
-      if (!ownsWorkspace(gen)) return; // 切项目了
+      /* ---- 先确认「还是那个上下文」，再决定要不要碰 DOM ---- */
+      /* 项目切走了：**这个实例的临时状态全部作废** —— 包括草稿里的 `saving`
+       * 标记，否则按钮会永久停在「正在保存…」。然后只把面板收成提示。
+       * **绝不 `closeModal()`** —— 那会把后来打开的新 Planner 一起关掉。 */
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
       if (!current || current.id !== planId) return; // 切计划了
       const t2 = attemptOf(taskId, attempt);
       if (!t2) return; // 计划被换成另一份了 —— 宁可不画，也不要画错
@@ -767,6 +876,10 @@ export function openPlanner(focus = null) {
     }
 
     async function doClearReview(planId, taskId, attempt) {
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
       const ok = await confirmModal({
         title: '清除这条审阅？',
         message: '判断与说明会一起清掉，回到「待审阅」。执行结果本身不受影响。',
@@ -774,6 +887,11 @@ export function openPlanner(focus = null) {
         danger: true,
       });
       if (!ok) return;
+      /* 确认框是一个 await —— 那会儿用户可能已经切了项目（§十八）。 */
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
       /* 走**同一个 API**：pending 就是「清除」的语义，没有单独的 DELETE 接口，
        * 也不在前端假装删掉（§十二）。 */
       await submitReview(planId, taskId, attempt, 'pending', '');
@@ -1327,22 +1445,35 @@ export function openPlanner(focus = null) {
     /* ================= 加载 / 刷新 ================= */
 
     async function reload() {
+      /* 旧 workspace 的面板不再拉列表 / 重画（§十九）。 */
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
       try {
         const r = await fetchPlans();
+        if (!plannerAlive()) return; // 请求飞在路上时切了项目
         plans = r.plans || [];
         renderList();
         if (current && !plans.some((p) => p.id === current.id)) current = null;
         renderDetail();
         loadPlannerBadge();
       } catch (err) {
+        if (!plannerAlive()) return;
         listWrap.replaceChildren(el('div', 'ext-empty', '读取计划失败：' + err.message));
       }
     }
 
     async function refreshCurrent() {
       if (!current) return;
+      /* 切过项目之后旧面板点「刷新」，不该又去请求旧项目的计划（§十八）。 */
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
       try {
         const r = await fetchPlan(current.id);
+        if (!plannerAlive()) return; // response 回来时又切走了
         if (r.ok) {
           current = r.plan;
           renderDetail();
