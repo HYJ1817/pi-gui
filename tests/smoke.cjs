@@ -263,6 +263,8 @@ const stubPlanP7 = {
  */
 const XSS_NOTE = '<img src=x onerror=alert(1)> <script>alert(2)</script> <svg/onload=alert(3)>';
 const R_LONG_PATH = 'packages/something/really/really/really/long/path/to/generated/adapter/implementation.js';
+/* P9：一条很长、带满参数的验证命令 —— 用来验「长命令有 title、不撑爆卡片」。 */
+const R_LONG_COMMAND = 'npm run test -- --reporter=spec --grep "reconnect|stale|bridgeRun" --timeout=30000 --reporter-options maxDiffSize=200000';
 const R_MANY_FILES = Array.from({ length: 20 }, (_, i) => (i === 3 ? R_LONG_PATH : `src/gen/mod-${i}.js`));
 
 function mkAtt(n, over) {
@@ -295,13 +297,13 @@ const stubPlanReview = {
     mkTask('okcmd', [mkAtt(1)]),
     mkTask('okdesc', [mkAtt(1, { verificationSnapshot: { description: '确认登录错误提示' }, review: { status: 'accepted', note: '第一次通过', reviewedAt: 1758800000000, revision: 3 } })]),
     mkTask('oknull', [mkAtt(1, { verificationSnapshot: null })], { verification: { command: 'npm run test:unit' } }),
-    mkTask('revneed', [mkAtt(1, { review: { status: 'needs_changes', note: '缺少边界用例', reviewedAt: 1758800100000, revision: 1 } })]),
-    mkTask('xsstask', [mkAtt(1, { review: { status: 'accepted', note: XSS_NOTE, reviewedAt: 1758800200000, revision: 1 } })]),
-    mkTask('manyfiles', [mkAtt(1, { filesChanged: R_MANY_FILES, review: { status: 'accepted', note: '二十个文件', reviewedAt: 1758800300000, revision: 1 } })]),
+    mkTask('revneed', [mkAtt(1, { review: { status: 'needs_changes', note: '缺少边界用例', reviewedAt: 1758800100000, revision: 1 }, verificationResult: { status: 'failed', command: 'npm test', exitCode: 1, startedAt: 1758800110000, finishedAt: 1758800128400, durationMs: 18400, outputSummary: 'not ok 3 - boom\nnpm ERR! Test failed', truncated: true, error: '' } })]),
+    mkTask('xsstask', [mkAtt(1, { review: { status: 'accepted', note: XSS_NOTE, reviewedAt: 1758800200000, revision: 1 }, verificationResult: { status: 'passed', command: 'npm test', exitCode: 0, startedAt: 1758800210000, finishedAt: 1758800215000, durationMs: 5000, outputSummary: XSS_NOTE, truncated: false, error: '' } })]),
+    mkTask('manyfiles', [mkAtt(1, { filesChanged: R_MANY_FILES, review: { status: 'accepted', note: '二十个文件', reviewedAt: 1758800300000, revision: 1 }, verificationResult: { status: 'passed', command: R_LONG_COMMAND, exitCode: 0, startedAt: 1758800310000, finishedAt: 1758800331800, durationMs: 21800, outputSummary: 'all good\n', truncated: false, error: '' } })]),
     mkTask('failed', [mkAtt(1, { success: false, exitCode: 1, error: '模型报 402', outcomeStatus: 'failed' })], { status: 'failed' }),
-    mkTask('cancelled', [mkAtt(1, { success: false, exitCode: null, error: '已取消', outcomeStatus: 'cancelled' })], { status: 'cancelled' }),
+    mkTask('cancelled', [mkAtt(1, { success: false, exitCode: null, error: '已取消', outcomeStatus: 'cancelled', verificationResult: { status: 'interrupted', command: 'npm test', exitCode: null, startedAt: 1758800220000, finishedAt: 1758800225000, durationMs: 5000, outputSummary: '', truncated: false, error: '已停止' } })], { status: 'cancelled' }),
     mkTask('interrupted', [mkAtt(1, { success: false, exitCode: null, error: '应用关闭时被中断', outcomeStatus: 'interrupted', filesChanged: [], changeCaptureIncomplete: true, verificationSnapshot: null })], { status: 'interrupted' }),
-    mkTask('live', [mkAtt(1, { review: { status: 'accepted', note: '第一轮保留', reviewedAt: 1758800400000, revision: 1 } })], { status: 'running', attempt: 2 }),
+    mkTask('live', [mkAtt(1, { review: { status: 'accepted', note: '第一轮保留', reviewedAt: 1758800400000, revision: 1 }, verificationResult: { status: 'running', command: 'npm test', exitCode: null, startedAt: 1758800410000, finishedAt: null, durationMs: null, outputSummary: '', truncated: false, error: '' }, verificationRunning: true })], { status: 'running', attempt: 2 }),
     mkTask('multrev', [mkAtt(1, { review: { status: 'accepted', note: '第一次曾经通过', reviewedAt: 1758800500000, revision: 1 } }), mkAtt(2)]),
     mkTask('noattempt', [], { status: 'pending', attempt: 0 }),
   ],
@@ -337,6 +339,12 @@ const openSessionCalls = [];
 const reviewCalls = [];
 let stubReviewResult = null;
 let reviewDelayMs = 0;
+
+/* P9：独立验证的桩。默认回一条「刚启动」的 running 记录（与真后端一致）。
+ * 冲突 / 拒绝之类的分支用 `stubVerifyResult` 覆写成 `{ok:false, code:…}`。 */
+const verifyCalls = [];
+let stubVerifyResult = null;
+let verifyDelayMs = 0;
 
 const stubPlans = {
   ok: true,
@@ -639,6 +647,26 @@ window.fetch = async (url, opts) => {
     if (u.includes('/open-session')) {
       openSessionCalls.push({ method, url: u, body });
       return { json: async () => stubOpenSession };
+    }
+    /* P9：独立验证的启动 / 停止。同样必须排在 `method !== 'GET'` 的兜底之前 ——
+     * 否则「启动」会落到那个「一律 ok」的桩上，连 code 都测不到。 */
+    if (/\/attempts\/\d+\/verify/.test(u)) {
+      verifyCalls.push({ method, url: u });
+      return {
+        json: async () => {
+          if (verifyDelayMs) await new Promise((r) => setTimeout(r, verifyDelayMs));
+          if (stubVerifyResult) return stubVerifyResult;
+          if (/\/stop$/.test(u)) return { ok: true, planId: 'plan-1', taskId: 'tests', attempt: 1 };
+          const m = /\/attempts\/(\d+)\/verify$/.exec(u);
+          return {
+            ok: true,
+            planId: 'plan-1',
+            taskId: 'tests',
+            attempt: Number(m ? m[1] : 1),
+            verification: { status: 'running', command: 'npm test', exitCode: null, startedAt: 1758800900000, finishedAt: null, durationMs: null, outputSummary: '', truncated: false, error: '' },
+          };
+        },
+      };
     }
     if (method !== 'GET') return { json: async () => ({ ok: true, planId: 'plan-1', taskId: 'backend' }) };
     if (/\/api\/plans\/[^/?]+/.test(u)) return { json: async () => ({ ok: true, plan: stubPlanDetail, counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, agents: [], activePlanId: null }) };
@@ -3273,6 +3301,7 @@ staticCheck();
   await sessionSection();
   await p7Section();
   await reviewSection();
+  await verifySection();
   await convNavSection();
 
   /* ---------- 会话内提问导航（Conversation Minimap） ----------
@@ -4092,6 +4121,161 @@ staticCheck();
     stubPlanDetail = stubPlan;
     stubReviewResult = null;
     reviewDelayMs = 0;
+  }
+
+  /* ================= P9：独立验证（前端） ================= */
+
+  async function verifySection() {
+    console.log('\n--- P9 独立验证：按钮 / 状态 / 输出 / XSS / stale ---');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const T = (e) => (e && e.textContent) || '';
+
+    stubPlanDetail = stubPlanReview;
+    stubVerifyResult = null;
+    verifyDelayMs = 0;
+    verifyCalls.length = 0;
+    window.closeModal();
+    window.openPlanner();
+    await wait(80);
+    let card = $('modalCard');
+    card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+    await wait(90);
+
+    const taskEl = (id) => [...card.querySelectorAll('.planner-task')].find((x) => x.dataset.taskId === id);
+    const vBtn = (id, text) => {
+      const it = taskEl(id);
+      return it ? [...it.querySelectorAll('button')].find((b) => b.textContent.trim() === text) || null : null;
+    };
+    const vBlock = (id) => {
+      const it = taskEl(id);
+      return it ? it.querySelector('.planner-verify-row') : null;
+    };
+    const vDetail = (id) => {
+      const it = taskEl(id);
+      return it ? it.querySelector('.planner-verify-detail') : null;
+    };
+
+    /* ---------- 从未验证：有命令才给按钮 ---------- */
+    check('V1. 有快照命令的 attempt 给「运行验证」', () => Boolean(vBtn('okcmd', '运行验证')) || '没有运行验证按钮');
+    check('V2. 只有 description 的任务**不给**按钮（不许把描述猜成命令）', () => {
+      const it = taskEl('okdesc');
+      return Boolean(it) && !vBtn('okdesc', '运行验证') || 'okdesc 竟然有运行验证按钮';
+    });
+    check('V2b. 但这种 attempt 仍然显示「尚未独立确认」', () => /尚未独立确认/.test(T(vBlock('okdesc'))) || T(vBlock('okdesc')));
+
+    /* ---------- 四种状态的文案 ---------- */
+    check('V3. 通过 → 「通过」+ 命令 + 退出码 + 耗时', () => {
+      const t = T(vBlock('manyfiles')) + T(vDetail('manyfiles'));
+      return (/通过/.test(t) && /退出码 0/.test(t) && /耗时/.test(t)) || t;
+    });
+    check('V4. 失败 → 「失败」+ 输出摘要 + 「输出已截断」', () => {
+      const t = T(vBlock('revneed')) + T(vDetail('revneed'));
+      return (/失败/.test(t) && /not ok 3 - boom/.test(t) && /输出已截断/.test(t)) || t;
+    });
+    check('V5. 已中断 → 「已中断」+「重新运行验证」', () => {
+      const t = T(vBlock('cancelled'));
+      return (/已中断/.test(t) && Boolean(vBtn('cancelled', '重新运行验证'))) || t;
+    });
+    check('V6. 正在验证 → 「正在验证…」+「停止验证」', () => {
+      const t = T(vBlock('live'));
+      return (/正在验证/.test(t) && Boolean(vBtn('live', '停止验证'))) || t;
+    });
+    check('V6b. 状态都带**文字**，不是只画个点', () => {
+      const st = vBlock('manyfiles') && vBlock('manyfiles').querySelector('.planner-verify-state');
+      return Boolean(st && /通过/.test(st.textContent)) || '没有文字状态';
+    });
+
+    /* ---------- 输出与长命令 ---------- */
+    check('V7. 输出摘要是**纯文本**渲染（XSS：注入节点数为 0）', () => {
+      const it = taskEl('xsstask');
+      const bad = it ? it.querySelectorAll('.planner-verify-detail img, .planner-verify-detail script, .planner-verify-detail svg, .planner-verify-detail iframe, .planner-verify-detail object, .planner-verify-detail embed') : [];
+      const shown = /onerror=alert\(1\)/.test(T(vDetail('xsstask')));
+      return (bad.length === 0 && shown) || `注入节点 ${bad.length} 个 / 文本=${shown}`;
+    });
+    check('V7b. 输出框里只有文本节点（不是 innerHTML 塞进去的）', () => {
+      const pre = vDetail('xsstask') && vDetail('xsstask').querySelector('.planner-verify-out');
+      return Boolean(pre && pre.children.length === 0) || (pre ? `子元素 ${pre.children.length}` : '没有输出框');
+    });
+    check('V8. 长命令截断但带 title 全命令（不撑爆卡片）', () => {
+      const chip = vDetail('manyfiles') && vDetail('manyfiles').querySelector('.planner-verify-cmd');
+      return Boolean(chip && chip.textContent === R_LONG_COMMAND && chip.title === R_LONG_COMMAND) || (chip ? 'title 不是全命令' : '没找到命令 chip');
+    });
+
+    /* ---------- 验证与审阅是两件独立的事 ---------- */
+    check('V9. 验证通过**不会**动人工审阅那一行（两者各自独立）', () => {
+      const t = T(taskEl('manyfiles'));
+      return (/通过/.test(t) && /已接受/.test(t)) || t.slice(0, 160);
+    });
+    check('V9b. 「独立验证」与「人工审阅」是**两行不同的东西**（不是一行里的两段字）', () => {
+      const it = taskEl('revneed');
+      if (!it) return '没找到任务';
+      const vRow = it.querySelector('.planner-verify-row');
+      const rvRow = it.querySelector('.planner-rv');
+      return (Boolean(vRow) && Boolean(rvRow) && vRow !== rvRow) || `vRow=${Boolean(vRow)} rvRow=${Boolean(rvRow)}`;
+    });
+
+    /* ---------- 点「运行验证」/「停止验证」 ---------- */
+    {
+      verifyCalls.length = 0;
+      vBtn('okcmd', '运行验证').onclick();
+      await wait(90);
+      check('V10. 点「运行验证」调 verify 接口，URL 带 planId/taskId/attempt', () => {
+        const c = verifyCalls[0];
+        return Boolean(c && c.method === 'POST' && /\/api\/plans\/plan-1\/tasks\/okcmd\/attempts\/1\/verify$/.test(c.url)) || JSON.stringify(verifyCalls);
+      });
+      check('V11. 启动后立刻变成「正在验证…」+「停止验证」', () => {
+        const t = T(vBlock('okcmd'));
+        return (/正在验证/.test(t) && Boolean(vBtn('okcmd', '停止验证'))) || t;
+      });
+      verifyCalls.length = 0;
+      vBtn('okcmd', '停止验证').onclick();
+      await wait(90);
+      check('V12. 点「停止验证」调 .../verify/stop', () => {
+        const c = verifyCalls[0];
+        return Boolean(c && c.method === 'POST' && /\/verify\/stop$/.test(c.url)) || JSON.stringify(verifyCalls);
+      });
+    }
+
+    /* ---------- 被拒绝时显示后端原话 ---------- */
+    {
+      stubVerifyResult = { ok: false, code: 'plan-active', error: '计划正在执行，等它结束或先停止计划，再运行验证' };
+      $('toasts').innerHTML = '';
+      /* 用 manyfiles 的「重新运行验证」：它在夹具里是 passed，按钮标签与 tests
+       * 当前那个「停止验证」不同 —— 避开「点了才发现按钮换了」的坑。 */
+      vBtn('manyfiles', '重新运行验证').onclick();
+      await wait(90);
+      check('V13. 被拒绝时显示**后端原话**（不是 generic 错误）', () => {
+        const t = $('toasts').textContent;
+        return /计划正在执行/.test(t) || t.slice(0, 120);
+      });
+      stubVerifyResult = null;
+    }
+
+    /* ---------- stale 守卫：切项目之后回来的响应不许写界面 ---------- */
+    {
+      window.closeModal();
+      window.openPlanner();
+      await wait(80);
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      verifyCalls.length = 0;
+      verifyDelayMs = 300;
+      vBtn('revneed', '重新运行验证').onclick();
+      await wait(40);
+      window.S.workspaceGeneration++;
+      await wait(500);
+      verifyDelayMs = 0;
+      check('V14. 切项目之后回来的验证响应不写进界面（stale 守卫）', () => {
+        const d = T($('modalCard'));
+        return (/项目已切换，请重新打开 Planner/.test(d) && !/正在验证/.test(d)) || d.slice(0, 160);
+      });
+      window.closeModal();
+      await wait(20);
+    }
+
+    stubPlanDetail = stubPlan;
+    stubVerifyResult = null;
+    verifyDelayMs = 0;
   }
 
   async function sessionSection() {

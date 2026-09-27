@@ -341,9 +341,17 @@ async function main() {
       console.log('  跳过：没找到「接受本次结果」');
     }
 
+    /* ---------- P9：独立验证的几种状态（都在 plan-1 上） ---------- */
+    await shotOf('.planner-task[data-task-id="tests"] .planner-attempt:last-of-type', '24-verify-never', 'P9：从未验证 ——「尚未独立确认」+「运行验证」');
+    await shotOf('.planner-task[data-task-id="analyze"] .planner-attempt:last-of-type', '25-verify-passed', 'P9：验证通过 —— 命令 / 退出码 / 耗时 / 输出摘要');
+    await shotOf('.planner-task[data-task-id="backend"] .planner-attempts > .planner-attempt', '26-verify-failed', 'P9：验证失败 —— 失败输出 +「输出已截断」');
+    await shotOf('.planner-task[data-task-id="hub"] .planner-attempt:last-of-type', '27-verify-interrupted', 'P9：已中断 +「重新运行验证」');
+    await shotOf('.planner-task[data-task-id="live"] .planner-attempts > .planner-attempt', '28-verify-running', 'P9：正在验证… +「停止验证」');
+
     /* 压力项（§五十八）：1000 字说明 / 20 个变更文件 / 超长路径 / 10 次尝试 / 窄窗口 */
     if (await pickPlan(1)) {
       await shotOf('.planner-task[data-task-id="longnote"] .planner-attempt:last-of-type', '20-stress-long-note', '压力：1000 字说明 + 20 个文件 + 超长路径');
+      await shotOf('.planner-task[data-task-id="longnote"] .planner-verify-detail', '29-verify-long', 'P9 压力：长命令 + 长输出（被截断）');
       await shotOf('.planner-task[data-task-id="manyattempts"] .planner-attempts', '21-stress-many-attempts', '压力：10 次尝试');
       await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 950, deviceScaleFactor: 1, mobile: false });
       await sleep(700);
@@ -357,6 +365,7 @@ async function main() {
         const of2 = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
         console.log('      plan-1 @700：scrollWidth=' + of2.sw + ' innerWidth=' + of2.iw + ' → 横向溢出=' + (of2.sw > of2.iw + 1));
         await shotOf('.planner-revsum', '23-summary-narrow-700', '窄窗口 700px：含「中断」的汇总行');
+        await shotOf('.planner-task[data-task-id="backend"] .planner-verify-detail', '30-verify-narrow-700', 'P9 窄窗口 700px：验证明细（命令 + 输出）');
       }
       await send('Emulation.clearDeviceMetricsOverride');
       await sleep(400);

@@ -33,6 +33,10 @@ const MIME = {
 const LONG_NOTE = '这段实现把重连窗口里的过期响应丢掉了，但我对边界条件仍有疑问：高并发下 bridgeRun 的自增与读取之间还有一个窗口，需要补一个针对性的用例。'.repeat(20).slice(0, 1000);
 /* 超长路径（§四十八）—— 必须被截断 + title 提示，不能把卡片撑爆。 */
 const LONG_PATH = 'packages/something/really/really/really/long/path/to/generated/adapter/implementation.js';
+/* P9 压力项（§十二.22「长命令 / 长输出布局」）：
+ * 一条带满参数的长命令 + 一段含超长无空格行的输出 —— 两者都不许把卡片撑破。 */
+const LONG_COMMAND = 'npm run test -- --reporter=spec --grep "reconnect|stale|bridgeRun|sse-backlog" --timeout=30000 --reporter-options maxDiffSize=200000';
+const LONG_OUTPUT = ('not ok 42 - reconnect keeps the newest run\n  AssertionError: expected 2 to equal 1' + 'Z'.repeat(180) + '\n').repeat(6);
 
 /* P7 计划详情夹具：四种「会话」状态各一条，外加两次尝试。
  * 形状照抄后端 `planView()` 的输出（attempt 上带 sessionAvailable / sessionTitle）。
@@ -71,6 +75,8 @@ const PLAN_DETAIL = {
         filesChanged: ['src/auth.js'], changeCaptureIncomplete: false,
         outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
         review: { status: 'accepted', note: '第一次实现已确认', reviewedAt: 1758800000000, revision: 2 },
+        /* P9：Pi GUI 自己跑过一遍的真实证据 → Scene「验证通过」 */
+        verificationResult: { status: 'passed', command: 'npm test', exitCode: 0, startedAt: 1758800001000, finishedAt: 1758800042000, durationMs: 41000, outputSummary: 'ok 740/740 通过\ntests 12 passed, 0 failed\n\n（退出码 0）', truncated: false, error: '' },
       }],
       result: { success: true, exitCode: 0, summary: '重连时 bridgeRun 会自增，但过期响应仍会写回状态', toolCalls: 4, durationMs: 42000, raw: null, sessionId: 'pi-gui-plan-1-analyze-a1', changes: { available: true, files: [], note: '' } },
     },
@@ -79,7 +85,9 @@ const PLAN_DETAIL = {
       workingDirectory: '.', dependsOn: ['analyze'], status: 'failed', startedAt: 3, endedAt: 6, attempt: 2, error: '第一次故意失败：模型报 402',
       verification: null,
       attempts: [
-        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'pi-gui-plan-1-backend-a1', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第一次）', filesChanged: ['server/rpc-bridge.js'], changeCaptureIncomplete: false, outcomeStatus: 'failed', verificationSnapshot: { command: 'npm test' }, review: { status: 'pending', note: '', reviewedAt: null, revision: 0 } },
+        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'pi-gui-plan-1-backend-a1', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第一次）', filesChanged: ['server/rpc-bridge.js'], changeCaptureIncomplete: false, outcomeStatus: 'failed', verificationSnapshot: { command: 'npm test' }, review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+          /* P9：失败 + 输出被截断（要能看出「输出已截断」这句）→ Scene「验证失败」 */
+          verificationResult: { status: 'failed', command: 'npm test', exitCode: 1, startedAt: 1758800050000, finishedAt: 1758800068400, durationMs: 18400, outputSummary: 'not ok 118 - bridge drops stale response\n  AssertionError: expected 2 to equal 1\n    at tests/reliability.cjs:88:7\nnot ok 119 - reconnect keeps the newest run\nnpm ERR! Test failed. See above for more details.', truncated: true, error: '' } },
         { attempt: 2, success: false, error: '第二次也失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6, sessionId: 'pi-gui-plan-1-backend-a2', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第二次）', filesChanged: ['server/rpc-bridge.js', 'server/sse.js'], changeCaptureIncomplete: false, outcomeStatus: 'failed', verificationSnapshot: { command: 'npm test' }, review: { status: 'needs_changes', note: '两次都报 402，先把 provider 配额确认了再重试', reviewedAt: 1758800100000, revision: 1 } },
       ],
       result: { success: false, exitCode: 1, summary: '', toolCalls: 0, durationMs: 3000, raw: null, sessionId: 'pi-gui-plan-1-backend-a2', changes: { available: true, files: [{ path: 'server/rpc-bridge.js', change: 'modified', status: 'M', additions: 12, deletions: 3 }, { path: 'server/sse.js', change: 'modified', status: 'M', additions: 4, deletions: 0 }], note: '执行期间观察到的工作区变化（可能也包含其它来源的改动）' } },
@@ -121,6 +129,10 @@ const PLAN_DETAIL = {
         filesChanged: ['server/sse.js'], changeCaptureIncomplete: false,
         outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
         review: { status: 'accepted', note: '第一轮的实现保留', reviewedAt: 1758800200000, revision: 1 },
+        /* P9：**正在跑**的那一次验证（`verificationRunning` 是后端注入的视图字段，
+         * 表示「本进程正在跑」，夹具里手动置上）→ Scene「正在验证…」+ 停止按钮 */
+        verificationResult: { status: 'running', command: 'npm test', exitCode: null, startedAt: 1758800300000, finishedAt: null, durationMs: null, outputSummary: '', truncated: false, error: '' },
+        verificationRunning: true,
       }],
       result: null,
     },
@@ -135,8 +147,10 @@ const PLAN_DETAIL = {
         attempt: 1, success: false, error: '应用关闭时被中断', summary: '', exitCode: null, startedAt: 13, endedAt: 14,
         sessionId: 'pi-gui-plan-1-hub-a1', sessionAvailable: true, sessionTitle: '被中断的那次',
         filesChanged: [], changeCaptureIncomplete: true,
-        outcomeStatus: 'interrupted', verificationSnapshot: null,
+        outcomeStatus: 'interrupted', verificationSnapshot: { command: 'npm run build' },
         review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+        /* P9：被中断的验证（命令跑着，应用被关掉）→ Scene「已中断」 */
+        verificationResult: { status: 'interrupted', command: 'npm run build', exitCode: null, startedAt: 1758800070000, finishedAt: 1758800075000, durationMs: 5000, outputSummary: '', truncated: false, error: '应用关闭时被中断' },
       }],
       result: null,
     },
@@ -166,8 +180,10 @@ const PLAN_STRESS = {
         sessionId: 'pi-gui-plan-stress-a1', sessionAvailable: true, sessionTitle: '长说明',
         filesChanged: Array.from({ length: 20 }, (_, i) => (i === 3 ? LONG_PATH : `src/generated/module-${i}.js`)),
         changeCaptureIncomplete: false,
-        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        outcomeStatus: 'success', verificationSnapshot: { command: LONG_COMMAND },
         review: { status: 'accepted', note: LONG_NOTE, reviewedAt: 1758800300000, revision: 1 },
+        /* 长命令 + 长输出（且被截断）—— 排版压力项 */
+        verificationResult: { status: 'failed', command: LONG_COMMAND, exitCode: 1, startedAt: 1758800310000, finishedAt: 1758800331800, durationMs: 21800, outputSummary: LONG_OUTPUT, truncated: true, error: '' },
       }],
       result: null,
     },
