@@ -32,7 +32,7 @@
 ```
 smoke 686 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
-attempt-lifecycle 77
+attempt-lifecycle 98
 sessions 77 · session-search 72
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics · update-check 87
@@ -48,6 +48,14 @@ version-consistency 29 · release-artifacts 67 · electron-guard 75
 session/files/snapshot/outcome 各自独立、终态 Plan 重试后能再次执行、
 下游重新评估且历史保留、取消与关闭只形成一条记录、硬崩恢复补的那条「结论明确、
 细节留空」、以及 A→B 的核心 E2E。
+
+它的 **G 段**（`G. Active Plan 的生命周期操作作用于 active.plan`）测的是运行期所有权：
+计划仍 active 时 retry 已完成的任务被拒（`plan-active`）且**不会自动执行**；
+cancel / skip 一个尚未开始的任务时改的是 **Scheduler 的 `active.plan`**，所以在
+Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending`），并且那个任务
+**从未被执行、不产生假 attempt**；非 active 时 cancel / skip 的行为不变。
+这几段的判据都刻意用「Scheduler 收尾之后磁盘上的状态」，而不是「接口返回了什么」
+—— 原来的缺陷正是「接口返回 ok、磁盘随后被覆盖」。
 
 `reviews`（P8-A）测的是人工审阅的数据契约：归一化与旧数据兼容、`verificationSnapshot`
 的冻结时机、审阅资格（成功可接受、失败/取消/中断不可接受、运行中不可审阅）、

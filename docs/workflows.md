@@ -316,6 +316,40 @@ P8-A 的字段全是 additive：老 attempt 缺 `review` → 归一化成
 允许重试的状态：`success` / `failed` / `cancelled` / `interrupted` / `skipped`。
 `running` 拒绝（先停止），`pending` / `ready` / `blocked` 拒绝（还没有可重试的结果）。
 
+### 计划还在跑的时候（运行期所有权）
+
+计划执行期间，同一个 Plan 在内存里有**两份对象图**：
+
+```
+active.plan        Scheduler 持有的执行态 —— pump / runTask / finishTask 改的是它
+HTTP 请求里 load 的  每次请求 store.load() 出来的新副本
+```
+
+于是运行期允许的生命周期操作（`cancel` / `skip` / `stop`）**必须作用于 `active.plan`**，
+而不是外部重新 load 出来的副本。改副本只会把副本写进磁盘，Scheduler 收尾时
+`persist(active.plan)` 会把整个文件**再盖一遍** —— 改动无声消失，界面一刷新任务又
+变回 `pending`；更糟的是 pump 看到内存里它还是 `pending`，会**真的把它启动**。
+
+**`retry` 是例外，不能照抄这一条。** 它会把任务改回 `pending`，而 pump 的下一轮
+立刻把它标成 `ready` 并**自动执行** —— 「Retry 不自动执行」就不成立了。所以：
+
+| 操作 | 计划仍 active 时 |
+|---|---|
+| `cancel` / `skip` | **作用于 `active.plan`**（唯一判定处：Scheduler 的 `planForMutation`） |
+| `retry` | **拒绝**，`code: 'plan-active'` —— 等计划结束，或先停止整个计划 |
+
+这就是「计划里谁拥有哪一部分」在**运行期**的延伸，和 5.7 那条（`attempt.review`
+只归 Review API，Scheduler 不许覆盖更高 revision 的 Review）是同一条规矩的两面：
+
+```
+运行期执行态    →  active.plan
+attempt.review  →  Review API
+Retry           →  只允许计划不再 active 时
+```
+
+⚠️ 判定只在 Scheduler 里做一份，路由**不重复判断** `active` —— 规则有两个来源就
+迟早有两个真相。
+
 ### 重试动什么、不动什么
 
 | | |
