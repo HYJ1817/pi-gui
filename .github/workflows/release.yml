@@ -9,6 +9,12 @@
 # 这个 workflow **不会**根据 tag 去改 package.json。tag 只是证明
 # 「这个 commit 就是 0.13.0」，它必须已经在代码里声明过了。
 #
+# ---------- 这个 workflow 刻意很薄 ----------
+#
+# 它只做三件事：装环境、调 `npm run release:check`、调 `scripts/publish-release.mjs`。
+# **业务逻辑都在 scripts/ 里**，因为：① 本机能跑同一套，所以本机绿 ≈ CI 绿；
+# ② 脚本能被单元测试覆盖，而 YAML 不能。
+#
 # ---------- 失败不留半成品 ----------
 #
 # 顺序刻意是「**全部验证通过之后**才碰 GitHub」：
@@ -22,6 +28,7 @@
 #
 # 重复执行：tag 上已经有**已发布**的 Release → 直接失败，绝不覆盖已发布的二进制。
 # 只剩一个 draft → 复用它（那是上一次失败的残留，draft 对用户不可见）。
+# 这个判断与后面的上传/核对/发布一起在 scripts/publish-release.mjs 里，有单元测试。
 #
 # ---------- 权限 ----------
 #
@@ -90,99 +97,20 @@ jobs:
       - name: Release precheck (version, tests, build, artifact guards)
         run: npm run release:check -- --tag=${{ github.ref_name }} --with-installer
 
-      # ------------------------------------------------- draft：只在这一段用
-      - name: Create or reuse draft release
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          STATE=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || echo missing)
-          case "$STATE" in
-            true)
-              echo "已存在 draft Release $TAG —— 复用它（上一次运行留下的，draft 对用户不可见）"
-              ;;
-            false)
-              echo "::error::Release $TAG 已经发布过了。请人工处理（不要覆盖已发布的二进制）。"
-              exit 1
-              ;;
-            *)
-              echo "创建 draft Release $TAG"
-              gh release create "$TAG" --draft --title "Pi GUI $TAG" --generate-notes
-              ;;
-          esac
-
-      # 只上传 dist-release/ —— 那是 release:check 刚验证过的那几个文件。
-      # 不对整个项目做 glob：发布目录的白名单就是「什么算正式资产」的定义。
-      - name: Upload assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          ls -la dist-release
-          gh release upload "${{ github.ref_name }}" dist-release/* --clobber
-
-      # 上传的退出码是 0 只说明「这条命令跑完了」。这里把 GitHub 报告的
-      # 附件名 / 大小 / sha256 与本地逐项比对 —— 不一致就**停在这里**，
-      # 此时还只是 draft，用户可以完全不知道它存在过。
-      - name: Verify uploaded assets against local
-        run: node scripts/verify-uploaded-release.mjs --tag=${{ github.ref_name }}
-
-      # Release 页面上要说清每个附件是什么 —— 光有文件名，用户得自己猜。
-      # 用 <版本> 占位而不是插真实版本号：这样这段文案永远不需要跟着发版改。
-      - name: Append asset description
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          gh release view "$TAG" --json body -q .body > body.md
-          cat >> body.md << 'EOF'
-
-          ---
-
-          ## 交付物
-
-          | 文件 | 说明 |
-          | --- | --- |
-          | `Pi-GUI-Setup-<版本>.exe` | 安装程序（单用户，不弹 UAC）。装在 `%LOCALAPPDATA%\Programs\Pi GUI` |
-          | `Pi-GUI-<版本>-portable.zip` | 便携版，解压直接跑 `Pi GUI.exe`，不用装 |
-          | `SHA256SUMS.txt` | 上面两个文件的 SHA-256 校验和 |
-
-          下载后建议核一下（把 `<版本>` 换成实际版本号）：
-
-          ```powershell
-          certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
-          ```
-
-          与 `SHA256SUMS.txt` 里的值逐位比对。
-
-          卸载只删程序文件 —— `%APPDATA%\Pi GUI` 下的项目列表与窗口布局会保留。
-
-          ## 前置条件
-
-          界面本身不含 pi。**本机要先装好 pi 并配好模型供应商**：
-
-          ```bash
-          npm i -g @earendil-works/pi-coding-agent   # 需要 Node >= 22.19.0
-          pi --version
-          ```
-
-          否则界面能打开，但发出去的消息会报错。
-          EOF
-          gh release edit "$TAG" --notes-file body.md
-
-      # --------------------------------------------------------- 最后才发布
-      - name: Publish release
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          gh release edit "$TAG" --draft=false
-          # 发布之后再确认一次：draft=false 且附件数没变。
-          # 「publish 命令退出 0」同样不构成完整成功判据。
-          node -e "
-            const { execFileSync } = require('node:child_process');
-            const tag = process.argv[1];
-            const j = JSON.parse(execFileSync('gh', ['release', 'view', tag, '--json', 'isDraft,assets,url'], { encoding: 'utf8' }));
-            if (j.isDraft !== false) { console.error('仍然是 draft'); process.exit(1); }
-            if ((j.assets || []).length !== 3) { console.error('附件数不是 3：' + (j.assets || []).length); process.exit(1); }
-            console.log('已发布：' + j.url + '（' + j.assets.length + ' 个附件）');
-          " "$TAG"
+      # ------------------------------------------------- 创建/上传/核对/发布
+      #
+      # **全部逻辑在 scripts/publish-release.mjs 里**（可被单元测试覆盖），
+      # 这里只留一行调用。为什么挪出去：
+      #   这段真正容易错的是**分支**，不是命令本身 ——
+      #   「已发布必须拒绝 / 只剩 draft 才复用 / 核对不过绝不 publish / publish 排最后」。
+      #   写在 YAML 里就只能靠真的打一个 tag 去试，而那会真的产生一个 Release；
+      #   挪进脚本之后，注入一个假 gh 就能把分支表全测一遍
+      #   （见 tests/release-artifacts.cjs 的「发布编排」一节）。
+      #
+      # 脚本会：判断状态（没有→创建 draft / 只剩 draft→复用 / 已发布→**直接失败**）
+      # → 上传 dist-release/* → 拿 GitHub 自己算的 sha256 与本机逐项核对
+      # → 追加交付物说明 → **最后**才 --draft=false → 再确认一次已发布。
+      #
+      # 核对不过就抛错，此时还只是 draft，用户完全不知道它存在过。
+      - name: Publish release (draft → upload → verify → publish)
+        run: node scripts/publish-release.mjs --tag=${{ github.ref_name }}
