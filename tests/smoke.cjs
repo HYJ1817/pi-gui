@@ -297,13 +297,13 @@ const stubPlanReview = {
     mkTask('okcmd', [mkAtt(1)]),
     mkTask('okdesc', [mkAtt(1, { verificationSnapshot: { description: '确认登录错误提示' }, review: { status: 'accepted', note: '第一次通过', reviewedAt: 1758800000000, revision: 3 } })]),
     mkTask('oknull', [mkAtt(1, { verificationSnapshot: null })], { verification: { command: 'npm run test:unit' } }),
-    mkTask('revneed', [mkAtt(1, { review: { status: 'needs_changes', note: '缺少边界用例', reviewedAt: 1758800100000, revision: 1 }, verificationResult: { status: 'failed', command: 'npm test', exitCode: 1, startedAt: 1758800110000, finishedAt: 1758800128400, durationMs: 18400, outputSummary: 'not ok 3 - boom\nnpm ERR! Test failed', truncated: true, error: '' } })]),
-    mkTask('xsstask', [mkAtt(1, { review: { status: 'accepted', note: XSS_NOTE, reviewedAt: 1758800200000, revision: 1 }, verificationResult: { status: 'passed', command: 'npm test', exitCode: 0, startedAt: 1758800210000, finishedAt: 1758800215000, durationMs: 5000, outputSummary: XSS_NOTE, truncated: false, error: '' } })]),
-    mkTask('manyfiles', [mkAtt(1, { filesChanged: R_MANY_FILES, review: { status: 'accepted', note: '二十个文件', reviewedAt: 1758800300000, revision: 1 }, verificationResult: { status: 'passed', command: R_LONG_COMMAND, exitCode: 0, startedAt: 1758800310000, finishedAt: 1758800331800, durationMs: 21800, outputSummary: 'all good\n', truncated: false, error: '' } })]),
+    mkTask('revneed', [mkAtt(1, { review: { status: 'needs_changes', note: '缺少边界用例', reviewedAt: 1758800100000, revision: 1 }, verificationResult: { status: 'failed', command: 'npm test', workingDirectory: 'packages/core', workingDirectorySource: 'attempt-snapshot', exitCode: 1, startedAt: 1758800110000, finishedAt: 1758800128400, durationMs: 18400, outputSummary: 'not ok 3 - boom\nnpm ERR! Test failed', truncated: true, error: '' } })]),
+    mkTask('xsstask', [mkAtt(1, { review: { status: 'accepted', note: XSS_NOTE, reviewedAt: 1758800200000, revision: 1 }, verificationResult: { status: 'passed', command: 'npm test', workingDirectory: XSS_NOTE, workingDirectorySource: 'attempt-snapshot', exitCode: 0, startedAt: 1758800210000, finishedAt: 1758800215000, durationMs: 5000, outputSummary: XSS_NOTE, truncated: false, error: '' } })]),
+    mkTask('manyfiles', [mkAtt(1, { filesChanged: R_MANY_FILES, review: { status: 'accepted', note: '二十个文件', reviewedAt: 1758800300000, revision: 1 }, verificationResult: { status: 'passed', command: R_LONG_COMMAND, workingDirectory: R_LONG_PATH.replace(/[^/]+$/, ''), workingDirectorySource: 'attempt-snapshot', exitCode: 0, startedAt: 1758800310000, finishedAt: 1758800331800, durationMs: 21800, outputSummary: 'all good\n', truncated: false, error: '' } })]),
     mkTask('failed', [mkAtt(1, { success: false, exitCode: 1, error: '模型报 402', outcomeStatus: 'failed' })], { status: 'failed' }),
-    mkTask('cancelled', [mkAtt(1, { success: false, exitCode: null, error: '已取消', outcomeStatus: 'cancelled', verificationResult: { status: 'interrupted', command: 'npm test', exitCode: null, startedAt: 1758800220000, finishedAt: 1758800225000, durationMs: 5000, outputSummary: '', truncated: false, error: '已停止' } })], { status: 'cancelled' }),
+    mkTask('cancelled', [mkAtt(1, { success: false, exitCode: null, error: '已取消', outcomeStatus: 'cancelled', verificationResult: { status: 'interrupted', command: 'npm test', workingDirectory: 'packages/legacy', workingDirectorySource: 'current-task-fallback', exitCode: null, startedAt: 1758800220000, finishedAt: 1758800225000, durationMs: 5000, outputSummary: '', truncated: false, error: '已停止' } })], { status: 'cancelled' }),
     mkTask('interrupted', [mkAtt(1, { success: false, exitCode: null, error: '应用关闭时被中断', outcomeStatus: 'interrupted', filesChanged: [], changeCaptureIncomplete: true, verificationSnapshot: null })], { status: 'interrupted' }),
-    mkTask('live', [mkAtt(1, { review: { status: 'accepted', note: '第一轮保留', reviewedAt: 1758800400000, revision: 1 }, verificationResult: { status: 'running', command: 'npm test', exitCode: null, startedAt: 1758800410000, finishedAt: null, durationMs: null, outputSummary: '', truncated: false, error: '' }, verificationRunning: true })], { status: 'running', attempt: 2 }),
+    mkTask('live', [mkAtt(1, { review: { status: 'accepted', note: '第一轮保留', reviewedAt: 1758800400000, revision: 1 }, verificationResult: { status: 'running', command: 'npm test', workingDirectory: '.', workingDirectorySource: 'attempt-snapshot', exitCode: null, startedAt: 1758800410000, finishedAt: null, durationMs: null, outputSummary: '', truncated: false, error: '' }, verificationRunning: true })], { status: 'running', attempt: 2 }),
     mkTask('multrev', [mkAtt(1, { review: { status: 'accepted', note: '第一次曾经通过', reviewedAt: 1758800500000, revision: 1 } }), mkAtt(2)]),
     mkTask('noattempt', [], { status: 'pending', attempt: 0 }),
   ],
@@ -345,6 +345,9 @@ let reviewDelayMs = 0;
 const verifyCalls = [];
 let stubVerifyResult = null;
 let verifyDelayMs = 0;
+/* P9 收口：后端把「现在有独立验证在跑」放在 plan view 上（全 workspace 级）。
+ * 桩里也能摆出来，用来测前端的动作锁。 */
+let stubVerificationActive = null;
 
 const stubPlans = {
   ok: true,
@@ -669,7 +672,7 @@ window.fetch = async (url, opts) => {
       };
     }
     if (method !== 'GET') return { json: async () => ({ ok: true, planId: 'plan-1', taskId: 'backend' }) };
-    if (/\/api\/plans\/[^/?]+/.test(u)) return { json: async () => ({ ok: true, plan: stubPlanDetail, counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, agents: [], activePlanId: null }) };
+    if (/\/api\/plans\/[^/?]+/.test(u)) return { json: async () => ({ ok: true, plan: { ...stubPlanDetail, verificationActive: stubVerificationActive }, counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, agents: [], activePlanId: null }) };
     return { json: async () => stubPlans };
   }
   if (u.includes('/api/mcp')) {
@@ -4249,6 +4252,62 @@ staticCheck();
         return /计划正在执行/.test(t) || t.slice(0, 120);
       });
       stubVerifyResult = null;
+    }
+
+    /* ---------- 工作目录（P9 收口） ---------- */
+    check('V9c. 验证明细显示**实际执行目录**', () => {
+      const d = vDetail('revneed');
+      const row = d ? [...d.querySelectorAll('.planner-verify-line')].find((l) => /目录/.test(l.textContent)) : null;
+      return (row && /packages\/core/.test(row.textContent)) || (row ? row.textContent : '没有「目录」那一行');
+    });
+    check('V9d. 来源是冻结快照时**不加** fallback 说明（它就是当时的目录）', () => {
+      const t = T(vDetail('revneed'));
+      return !/没有记录当时的工作目录/.test(t) || t.slice(0, 200);
+    });
+    check('V9e. 老 attempt 的 fallback **有明确说明**（不冒充冻结记录）', () => {
+      const t = T(vDetail('cancelled'));
+      return /没有记录当时的工作目录/.test(t) || t.slice(0, 220);
+    });
+    check('V9f. 长目录截断但带 title 全路径（不撑爆卡片）', () => {
+      const chip = vDetail('manyfiles') && vDetail('manyfiles').querySelector('.planner-verify-cwd');
+      return Boolean(chip && chip.title === chip.textContent && chip.textContent.length > 20) || (chip ? chip.textContent : '没找到目录 chip');
+    });
+    check('V9g. 目录也是**纯文本**渲染（XSS 注入节点为 0）', () => {
+      const d = vDetail('xsstask');
+      const bad = d ? d.querySelectorAll('img, script, svg, iframe, object, embed') : [];
+      return (bad.length === 0 && /onerror=alert\(1\)/.test(T(d))) || `注入节点 ${bad.length} 个`;
+    });
+
+    /* ---------- 验证在跑时的动作锁（后端也会拒；前端先禁掉 + 说明原因） ---------- */
+    {
+      stubVerificationActive = { planId: 'plan-1', taskId: 'okcmd', attempt: 1 };
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      const btnOf = (text) => [...card.querySelectorAll('.ext-acts button')].find((b) => b.textContent.trim() === text) || null;
+
+      check('V15. 验证在跑 →「开始执行 / 保存修改 / 删除计划」被禁用', () => {
+        const a = btnOf('开始执行');
+        const b = btnOf('保存修改');
+        const c = btnOf('删除计划');
+        return (a && a.disabled && b && b.disabled && c && c.disabled) || JSON.stringify({ start: a && a.disabled, save: b && b.disabled, del: c && c.disabled });
+      });
+      check('V16. 并且把原因写出来（点名是**哪一条**在跑）', () => {
+        const t = T(card.querySelector('.planner-progress'));
+        return (/独立验证正在运行/.test(t) && /okcmd/.test(t)) || t.slice(0, 160);
+      });
+      check('V17. 任务级的「重试」也被禁用', () => {
+        const it = taskEl('failed');
+        const rb = it ? [...it.querySelectorAll('button')].find((b) => b.textContent.trim() === '重试') : null;
+        return Boolean(rb && rb.disabled) || (rb ? '重试没被禁用' : '没找到重试按钮');
+      });
+
+      stubVerificationActive = null;
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      check('V18. 验证结束之后按钮恢复可用（锁释放）', () => {
+        const a = btnOf('开始执行');
+        return Boolean(a && !a.disabled) || (a ? '开始执行还是禁用的' : '没找到开始执行');
+      });
     }
 
     /* ---------- stale 守卫：切项目之后回来的响应不许写界面 ---------- */

@@ -528,7 +528,11 @@ function mkRuntime(initial) {
     const raw = fs.readFileSync(path.join(DATA, 'plans', 'plan-sess-1.json'), 'utf8');
     const att = JSON.parse(raw).tasks.find((x) => x.id === 't1').attempts[0];
     const keys = Object.keys(att);
-    check('§32. attempt 的键只有关系字段 + 既有状态字段', () => keys.every((k) => ['attempt', 'startedAt', 'endedAt', 'success', 'error', 'summary', 'exitCode', 'sessionId', 'filesChanged', 'changeCaptureIncomplete', 'outcomeStatus', 'verificationSnapshot', 'review'].includes(k)), keys.join(','));
+    /* 白名单是**刻意的**：attempt 上多一个键，就得在这里显式加一次 ——
+     * 免得有人顺手把 prompt / 绝对路径之类的东西挂上去。
+     * P9 加的两个：`verificationResult`（Pi GUI 自己跑出来的证据）与
+     * `workingDirectorySnapshot`（那次执行开始时冻结的工作目录）。 */
+    check('§32. attempt 的键只有关系字段 + 既有状态字段', () => keys.every((k) => ['attempt', 'startedAt', 'endedAt', 'success', 'error', 'summary', 'exitCode', 'sessionId', 'filesChanged', 'changeCaptureIncomplete', 'outcomeStatus', 'verificationSnapshot', 'verificationResult', 'workingDirectorySnapshot', 'review'].includes(k)), keys.join(','));
     check('§32. filesChanged 里没有绝对路径 / 会话文件路径', () => att.filesChanged.every((p) => !p.includes(':') && !p.startsWith('/')));
     check('§32. sessionId 里没有项目绝对路径', () => !att.sessionId.includes(TMP) && !att.sessionId.includes(path.sep));
     check('§32. 关系字段里没有 prompt 文本（任务描述没有进 attempt）', () => !JSON.stringify(att).includes('做点事'));

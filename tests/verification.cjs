@@ -172,8 +172,19 @@ async function fakeRunShell(opts) {
     isShuttingDown: () => false,
   };
   const store = createPlanStore({ dataDir: DATA });
-  const scheduler = createScheduler({ store, registry, runtime, gitStatus });
+  /* P9 收口：Scheduler 的反向闸门靠**注入**拿「有没有验证在跑」（它不认识 Verifier）。
+   * 这里照 server.js 的装配方式接上 —— 用惰性引用解顺序依赖（verifier 在后面才建）。
+   * ⚠️ 不接的话 L7/L8 那两条闸门测试就是假绿：闸门根本没生效。 */
+  let verifierRef = null;
+  const scheduler = createScheduler({
+    store,
+    registry,
+    runtime,
+    gitStatus,
+    hasActiveVerification: () => Boolean(verifierRef && verifierRef.hasRunning()),
+  });
   const verifier = createVerifier({ store, runtime, scheduler, runShell: fakeRunShell, timeoutMs: 5000, maxOutputBytes: 4096 });
+  verifierRef = verifier;
   const planner = createPlanner({ runtime, registry, store, scheduler, verifier });
 
   /* ---------- 计划构造 ---------- */
@@ -239,15 +250,17 @@ async function fakeRunShell(opts) {
   }
 
   const load = (id) => store.load(id).plan;
-  const vrOf = (id, n = 1) => {
+  /* 默认看任务 id `task`（本套件大多数夹具用的就是它）；L/M 段里有的计划用的是
+   * 真跑起来才会产生 attempt 的任务（如 `okDoc`），所以要能指定任务。 */
+  const vrOf = (id, n = 1, taskId = 'task') => {
     const p = load(id);
-    const t = p.tasks.find((x) => x.id === 'task');
+    const t = p.tasks.find((x) => x.id === taskId);
     const a = t && Array.isArray(t.attempts) ? t.attempts.find((x) => x.attempt === n) : null;
     return a ? a.verificationResult : undefined;
   };
-  const attOf = (id, n = 1) => {
+  const attOf = (id, n = 1, taskId = 'task') => {
     const p = load(id);
-    const t = p.tasks.find((x) => x.id === 'task');
+    const t = p.tasks.find((x) => x.id === taskId);
     return t && Array.isArray(t.attempts) ? t.attempts.find((x) => x.attempt === n) : null;
   };
   /** 起一次验证并等它跑完。**已经在跑就不再起一次** —— 那样会拿到 already-running，
@@ -756,6 +769,355 @@ async function fakeRunShell(opts) {
       const B = after.tasks.find((x) => x.id === 'slowB');
       return (B.status === 'success' && Array.isArray(B.attempts) && B.attempts.length === 1) || JSON.stringify({ s: B.status, n: B.attempts.length });
     });
+  }
+
+  /* ================= L. 全局执行互斥（P9 收口） ================= */
+  section('L. 同一个 workspace 同时只有一个实际执行者');
+
+  /** 可运行的 Plan：两个互不依赖的任务，第二个慢 —— 用来制造「计划在跑」的状态。 */
+  const mkRunnablePlan = (id) => ({
+    id,
+    title: '跑着的 ' + id,
+    goal: '',
+    status: 'ready',
+    createdAt: 1,
+    updatedAt: 1,
+    startedAt: null,
+    endedAt: null,
+    projectRoot: PROJ,
+    concurrency: 1,
+    recoveryNotes: [],
+    source: null,
+    tasks: [
+      { id: 'okDoc', title: 'A', description: '', agent: 'fake', workingDirectory: '.', dependsOn: [], status: 'pending', startedAt: null, endedAt: null, attempt: 0, attempts: [], result: null, error: '', verification: null },
+      { id: 'slowB', title: 'B', description: '', agent: 'fake', workingDirectory: '.', dependsOn: [], status: 'pending', startedAt: null, endedAt: null, attempt: 0, attempts: [], result: null, error: '', verification: null },
+    ],
+  });
+
+  {
+    /* ① 计划在跑 → **任何** Plan 的验证都拒绝。
+     * 这条是「旧实现会放行」的防回归：原来只比 `activePlanId() === plan.id`，
+     * 于是「Plan A 在跑、去验证同一个 workspace 的 Plan B」能穿过去。 */
+    runtime.setCurrentCwd(PROJ);
+    shellScript = [];
+    shellCalls.length = 0;
+    store.save(mkRunnablePlan('v-l1'));
+    store.save(mkPlan({ id: 'v-l2', attempts: [mkAtt(1)] }));
+    const started = await scheduler.start(store.load('v-l1').plan);
+    check('L-prep. Plan A 已启动', () => started.ok === true, JSON.stringify(started));
+    check('L-prep2. 调度器确实认为它在跑', () => scheduler.activePlanId() === 'v-l1', String(scheduler.activePlanId()));
+
+    check('L1. Plan A 在跑 → 验证 Plan A 自己 → plan-active', () => {
+      const r = verifier.start({ planId: 'v-l1', taskId: 'okDoc', attempt: 1 });
+      return (r.ok === false && r.code === 'plan-active') || JSON.stringify(r);
+    });
+    check('L2. **Plan A 在跑 → 验证同一个 workspace 的 Plan B → 也拒绝**（旧实现会放行）', () => {
+      const r = verifier.start({ planId: 'v-l2', taskId: 'task', attempt: 1 });
+      return (r.ok === false && r.code === 'plan-active') || JSON.stringify(r);
+    });
+    check('L2b. 被拒之后没有真的起命令', () => shellCalls.length === 0 || JSON.stringify(shellCalls));
+    await scheduler.waitIdle(20000);
+    check('L3. 计划跑完之后可以正常验证', () => {
+      shellScript = [{ ok: true, exitCode: 0 }];
+      const r = verifier.start({ planId: 'v-l2', taskId: 'task', attempt: 1 });
+      return r.ok === true || JSON.stringify(r);
+    });
+    for (let i = 0; i < 200; i++) {
+      const v = vrOf('v-l2', 1);
+      if (v && v.status !== 'running') break;
+      await sleep(10);
+    }
+  }
+
+  {
+    /* ② 一条验证在跑 → 整条矩阵都锁住。夹具先摆好，再起一条**挂着不放**的验证。 */
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({ id: 'v-l3', attempts: [mkAtt(1)] }));
+    store.save(mkPlan({ id: 'v-l5', attempts: [mkAtt(1)] }));
+    /* v-l6：一个**可重试**的任务（status=success）—— 用来测「验证在跑时 Retry 被拒」。
+     * 注意别用 mkPlan 的 `status` 参数去表达任务状态，它设的是**计划**的状态。 */
+    store.save(mkPlan({ id: 'v-l6', attempts: [mkAtt(1, { success: true, outcomeStatus: 'success' })], status: 'paused', taskOver: { status: 'success' } }));
+    store.save(mkRunnablePlan('v-l4'));
+
+    shellScript = [{ hang: true }];
+    const r0 = verifier.start({ planId: 'v-l3', taskId: 'task', attempt: 1 });
+    check('L4-prep. 一条验证正在跑，且对外的活跃态能读到它', () => {
+      const info = verifier.activeVerification();
+      return (r0.ok === true && verifier.hasRunning() === true && info && info.planId === 'v-l3' && info.taskId === 'task' && info.attempt === 1) || JSON.stringify({ r0, info });
+    }, JSON.stringify(verifier.activeVerification()));
+
+    check('L5. 同一 attempt 再点 → already-running（**不是** verification-active）', () => {
+      const r = verifier.start({ planId: 'v-l3', taskId: 'task', attempt: 1 });
+      return (r.ok === false && r.code === 'already-running') || JSON.stringify(r);
+    });
+    check('L6. 另一个 attempt 的验证 → verification-active（另一条在跑）', () => {
+      const r = verifier.start({ planId: 'v-l5', taskId: 'task', attempt: 1 });
+      return (r.ok === false && r.code === 'verification-active') || JSON.stringify(r);
+    });
+
+    const s1 = await scheduler.start(store.load('v-l3').plan);
+    check('L7. 验证在跑 → 启动**同一个** Plan → 拒绝 verification-active', () => (s1.ok === false && s1.code === 'verification-active') || JSON.stringify(s1));
+    const s2 = await scheduler.start(store.load('v-l4').plan);
+    check('L8. 验证在跑 → 启动**另一个** Plan → 也拒绝', () => (s2.ok === false && s2.code === 'verification-active') || JSON.stringify(s2));
+    check('L8b. 被拒之后磁盘上那块计划**没有被改成执行中**', () => {
+      const p = store.load('v-l4').plan;
+      return (p.status === 'ready' && p.tasks.every((t) => t.status === 'pending')) || JSON.stringify({ s: p.status, t: p.tasks.map((x) => x.status) });
+    });
+
+    check('L9. 验证在跑 → Retry → 拒绝 verification-active', () => {
+      const r = scheduler.retryTask(store.load('v-l6').plan, 'task');
+      return (r.ok === false && r.code === 'verification-active') || JSON.stringify(r);
+    });
+    check('L9b. Retry 被拒之后磁盘上任务状态没变（success 还在）', () => {
+      const t = store.load('v-l6').plan.tasks[0];
+      return (t.status === 'success' && t.attempt === 1) || JSON.stringify({ s: t.status, a: t.attempt });
+    });
+
+    const put = await hit(planner, 'PUT', '/api/plans/v-l5', { title: '被改过的标题' });
+    check('L10. 验证在跑 → PUT Plan → 409 + verification-active', () => (put.status === 409 && put.body.code === 'verification-active') || JSON.stringify({ s: put.status, b: put.body }));
+    check('L10b. 磁盘上标题**没有**被改', () => {
+      const t = store.load('v-l5').plan.title;
+      return t !== '被改过的标题' || `标题变成了「${t}」`;
+    });
+    const del = await hit(planner, 'DELETE', '/api/plans/v-l5');
+    check('L11. 验证在跑 → DELETE Plan → 409 + verification-active', () => (del.status === 409 && del.body.code === 'verification-active') || JSON.stringify({ s: del.status, b: del.body }));
+    check('L11b. 磁盘上计划**还在**', () => Boolean(store.load('v-l5')) || '计划被删掉了');
+
+    check('L12. 验证在跑 → 切项目被拒（`projectSwitchBlockReason()` 给出理由）', () => {
+      const reason = planner.projectSwitchBlockReason();
+      return (typeof reason === 'string' && /独立验证/.test(reason)) || JSON.stringify(reason);
+    });
+
+    /* Review 与验证有字段所有权 + 并发写盘保护，所以**不锁**。 */
+    const rv = await hit(planner, 'PUT', reviewUrl('v-l3', 'task', 1), { status: 'needs_changes', note: '并发写的', expectedRevision: 0 });
+    check('L13. 验证在跑 → **Review 保存仍然允许**', () => rv.body.ok === true, JSON.stringify(rv.body));
+    check('L13b. 盘上审阅与验证证据同时存在（谁也没冲掉谁）', () => {
+      const a = attOf('v-l3', 1);
+      return (
+        (model.normalizeReview(a.review).status === 'needs_changes' && a.verificationResult && a.verificationResult.status === 'running') ||
+        JSON.stringify({ r: a.review, v: a.verificationResult && a.verificationResult.status })
+      );
+    });
+
+    /* 停止 → 所有锁释放。 */
+    verifier.stop({ planId: 'v-l3', taskId: 'task', attempt: 1 });
+    for (let i = 0; i < 300 && verifier.hasRunning(); i++) await sleep(10);
+    await sleep(80);
+    check('L14. 停止之后活跃态清零', () => verifier.hasRunning() === false && verifier.activeVerification() === null);
+    const s3 = await scheduler.start(store.load('v-l4').plan);
+    check('L15. 停止之后可以正常启动计划（锁全释放）', () => s3.ok === true, JSON.stringify(s3));
+    await scheduler.waitIdle(20000);
+    check('L15b. 切项目闸门也放开了', () => planner.projectSwitchBlockReason() === null, JSON.stringify(planner.projectSwitchBlockReason()));
+  }
+
+  {
+    /* ③ 各种收尾方式都必须**释放锁** —— 否则用户会被永久挡住。 */
+    const cases = [
+      ['通过', { ok: true, exitCode: 0 }, 'passed'],
+      ['退出码非 0', { ok: false, exitCode: 1 }, 'failed'],
+      ['起不来', { ok: false, exitCode: null, spawnFailed: true, error: '无法启动' }, 'failed'],
+      ['超时', { ok: false, exitCode: null, timedOut: true, error: '超时（5s）' }, 'failed'],
+    ];
+    for (const [label, spec, expect] of cases) {
+      shellScript = [spec];
+      store.save(mkPlan({ id: 'v-l7', attempts: [mkAtt(1)] }));
+      await runToEnd('v-l7');
+      check(`L16. ${label} 之后收成 ${expect}，且锁已释放`, () => {
+        const v = vrOf('v-l7', 1);
+        return (v.status === expect && verifier.hasRunning() === false) || JSON.stringify({ s: v.status, running: verifier.hasRunning() });
+      }, JSON.stringify(vrOf('v-l7', 1)));
+    }
+    shellScript = [{ hang: true }];
+    store.save(mkPlan({ id: 'v-l8', attempts: [mkAtt(1)] }));
+    verifier.start({ planId: 'v-l8', taskId: 'task', attempt: 1 });
+    verifier.stop({ planId: 'v-l8', taskId: 'task', attempt: 1 });
+    for (let i = 0; i < 300 && verifier.hasRunning(); i++) await sleep(10);
+    await sleep(80);
+    check('L17. 中断（用户停止）之后锁已释放', () => {
+      const v = vrOf('v-l8', 1);
+      return (v.status === 'interrupted' && verifier.hasRunning() === false) || JSON.stringify({ s: v.status, running: verifier.hasRunning() });
+    }, JSON.stringify(vrOf('v-l8', 1)));
+  }
+
+  /* ================= M. 工作目录快照（P9 收口） ================= */
+  section('M. Attempt 冻结自己的工作目录');
+
+  /* 两个**真实存在**的目录 —— resolveProjectPath 要求目录真的存在。 */
+  fs.mkdirSync(path.join(PROJ, 'packages', 'a'), { recursive: true });
+  fs.mkdirSync(path.join(PROJ, 'packages', 'b'), { recursive: true });
+
+  {
+    /* ① 冻结：验证 Attempt 1 用的是**它自己**的目录，不是 task 的当前值。
+     * 这条是「旧实现会跑错地方」的防回归：原来读 task.workingDirectory。 */
+    shellScript = [{ ok: true, exitCode: 0 }];
+    shellCalls.length = 0;
+    store.save(
+      mkPlan({
+        id: 'v-m1',
+        attempts: [mkAtt(1, { workingDirectorySnapshot: 'packages/a' })],
+        workingDirectory: 'packages/b', // task 现在指向别处了
+      })
+    );
+    const r = verifier.start({ planId: 'v-m1', taskId: 'task', attempt: 1 });
+    check('M1. **验证用的是 attempt 冻结的 packages/a，而不是 task 当前的 packages/b**（旧实现会跑错）', () => {
+      const call = shellCalls[shellCalls.length - 1];
+      return (r.ok === true && call && /packages[\\/]a$/.test(call.cwd)) || JSON.stringify({ ok: r.ok, cwd: call && call.cwd });
+    }, JSON.stringify(shellCalls[shellCalls.length - 1]));
+    await runToEnd('v-m1');
+    check('M2. 结果里记着实际使用的目录与来源', () => {
+      const v = vrOf('v-m1', 1);
+      return (v.workingDirectory === 'packages/a' && v.workingDirectorySource === 'attempt-snapshot') || JSON.stringify({ d: v.workingDirectory, s: v.workingDirectorySource });
+    }, JSON.stringify(vrOf('v-m1', 1)));
+    check('M3. 存的是**项目相对路径**（不是绝对路径 —— 项目搬走之后历史仍可读）', () => {
+      const d = vrOf('v-m1', 1).workingDirectory;
+      return (!path.isAbsolute(d) && !/^[A-Za-z]:/.test(d)) || d;
+    });
+    check('M3b. 改 task 的目录**不会**动到已冻结的快照', () => {
+      return attOf('v-m1', 1).workingDirectorySnapshot === 'packages/a' || JSON.stringify(attOf('v-m1', 1).workingDirectorySnapshot);
+    });
+  }
+
+  {
+    /* ② 新 attempt 冻结**当时**的 cwd；两次互不覆盖。 */
+    runtime.setCurrentCwd(PROJ);
+    store.save({
+      id: 'v-m2',
+      title: 't',
+      goal: '',
+      status: 'ready',
+      createdAt: 1,
+      updatedAt: 1,
+      startedAt: null,
+      endedAt: null,
+      projectRoot: PROJ,
+      concurrency: 1,
+      recoveryNotes: [],
+      source: null,
+      tasks: [
+        { id: 'okDoc', title: 'A', description: '', agent: 'fake', workingDirectory: 'packages/a', dependsOn: [], status: 'pending', startedAt: null, endedAt: null, attempt: 0, attempts: [], result: null, error: '', verification: { command: 'npm test' } },
+      ],
+    });
+    const s = await scheduler.start(store.load('v-m2').plan);
+    check('M4-prep. 计划已启动', () => s.ok === true, JSON.stringify(s));
+    await scheduler.waitIdle(20000);
+    check('M5. 执行产生的 attempt 冻结了**当时**的工作目录', () => {
+      const a = attOf('v-m2', 1, 'okDoc');
+      return (a && a.workingDirectorySnapshot === 'packages/a') || JSON.stringify(a && a.workingDirectorySnapshot);
+    }, JSON.stringify(attOf('v-m2', 1, 'okDoc') && attOf('v-m2', 1, 'okDoc').workingDirectorySnapshot));
+
+    /* 改 task 的目录 → Retry → 再跑一次：新 attempt 冻结**新**目录。 */
+    const p = store.load('v-m2').plan;
+    p.tasks[0].workingDirectory = 'packages/b';
+    store.save(p);
+    const rt = scheduler.retryTask(store.load('v-m2').plan, 'okDoc');
+    check('M6-prep. Retry 被接受', () => rt.ok === true, JSON.stringify(rt));
+    const s2 = await scheduler.start(store.load('v-m2').plan);
+    check('M6-prep2. 再次执行', () => s2.ok === true, JSON.stringify(s2));
+    await scheduler.waitIdle(20000);
+    check('M7. 新 attempt 冻结的是**新**目录（packages/b）', () => {
+      const a = attOf('v-m2', 2, 'okDoc');
+      return (a && a.workingDirectorySnapshot === 'packages/b') || JSON.stringify(a && a.workingDirectorySnapshot);
+    }, JSON.stringify(attOf('v-m2', 2, 'okDoc') && attOf('v-m2', 2, 'okDoc').workingDirectorySnapshot));
+    check('M8. 两次 attempt 的快照**互不覆盖**', () => {
+      const a1 = attOf('v-m2', 1, 'okDoc');
+      const a2 = attOf('v-m2', 2, 'okDoc');
+      return (a1 && a2 && a1.workingDirectorySnapshot === 'packages/a' && a2.workingDirectorySnapshot === 'packages/b') || JSON.stringify([a1 && a1.workingDirectorySnapshot, a2 && a2.workingDirectorySnapshot]);
+    });
+  }
+
+  {
+    /* ③ 老 attempt 没有快照 → fallback 到当前 task 值，**并且如实标记**。 */
+    shellScript = [{ ok: true, exitCode: 0 }];
+    shellCalls.length = 0;
+    store.save(mkPlan({ id: 'v-m3', attempts: [mkAtt(1, { workingDirectorySnapshot: null })], workingDirectory: 'packages/a' }));
+    const r = verifier.start({ planId: 'v-m3', taskId: 'task', attempt: 1 });
+    check('M9. 老 attempt（没有快照）→ fallback 到当前 task 目录，仍然能验证', () => r.ok === true || JSON.stringify(r));
+    await runToEnd('v-m3');
+    check('M10. fallback **被明确标记**（不冒充冻结快照）', () => {
+      const v = vrOf('v-m3', 1);
+      return (v.workingDirectorySource === 'current-task-fallback' && v.workingDirectory === 'packages/a') || JSON.stringify({ d: v.workingDirectory, s: v.workingDirectorySource });
+    }, JSON.stringify(vrOf('v-m3', 1)));
+    check('M11. fallback 用的确实是当前 task 的目录', () => /packages[\\/]a$/.test(shellCalls[shellCalls.length - 1].cwd), JSON.stringify(shellCalls[shellCalls.length - 1]));
+  }
+
+  {
+    /* ④ 非法 / 越界 / 不存在 —— 一律**拒绝**，绝不静默退到别处跑。 */
+    check('M12. 快照里的 `../` 逃逸 → invalid-cwd（不退到 fallback，也不跑）', () => {
+      store.save(mkPlan({ id: 'v-m4', attempts: [mkAtt(1, { workingDirectorySnapshot: '../outside' })], workingDirectory: '.' }));
+      const r = verifier.start({ planId: 'v-m4', taskId: 'task', attempt: 1 });
+      return (r.ok === false && r.code === 'invalid-cwd') || JSON.stringify(r);
+    });
+    check('M13. 快照是绝对路径 → invalid-cwd', () => {
+      store.save(mkPlan({ id: 'v-m5', attempts: [mkAtt(1, { workingDirectorySnapshot: 'C:\\Windows' })], workingDirectory: '.' }));
+      const r = verifier.start({ planId: 'v-m5', taskId: 'task', attempt: 1 });
+      return (r.ok === false && r.code === 'invalid-cwd') || JSON.stringify(r);
+    });
+    check('M14. 快照指向已删除的目录 → invalid-cwd（不是「换一个地方跑」）', () => {
+      store.save(mkPlan({ id: 'v-m6', attempts: [mkAtt(1, { workingDirectorySnapshot: 'packages/gone' })], workingDirectory: '.' }));
+      const r = verifier.start({ planId: 'v-m6', taskId: 'task', attempt: 1 });
+      return (r.ok === false && r.code === 'invalid-cwd') || JSON.stringify(r);
+    });
+    check('M15. fallback 的目录不存在 → 同样 invalid-cwd（fallback 也要过 safe-path）', () => {
+      store.save(mkPlan({ id: 'v-m7', attempts: [mkAtt(1, { workingDirectorySnapshot: null })], workingDirectory: 'packages/gone' }));
+      const r = verifier.start({ planId: 'v-m7', taskId: 'task', attempt: 1 });
+      return (r.ok === false && r.code === 'invalid-cwd') || JSON.stringify(r);
+    });
+  }
+
+  {
+    /* ⑤ 老计划兼容：一个字节都不用改就能打开、也能验证。 */
+    const legacyPath = path.join(DATA, 'plans', 'v-m8.json');
+    fs.writeFileSync(
+      legacyPath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          id: 'v-m8',
+          title: '老计划',
+          goal: '',
+          status: 'completed',
+          createdAt: 1,
+          updatedAt: 1,
+          projectRoot: PROJ,
+          concurrency: 1,
+          recoveryNotes: [],
+          tasks: [
+            {
+              id: 'task',
+              title: '任务',
+              agent: 'fake',
+              workingDirectory: 'packages/a',
+              dependsOn: [],
+              status: 'success',
+              attempt: 1,
+              attempts: [{ attempt: 1, success: true, outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' } }],
+              result: null,
+              error: '',
+            },
+          ],
+        },
+        null,
+        2
+      ) + '\n',
+      'utf8'
+    );
+    const p = load('v-m8');
+    check('M16. 老 attempt 读得出来：workingDirectorySnapshot 归一化成 null（**不做 migration**）', () => {
+      const a = p.tasks[0].attempts[0];
+      return a.workingDirectorySnapshot === null || JSON.stringify(a.workingDirectorySnapshot);
+    }, JSON.stringify(p.tasks[0].attempts[0].workingDirectorySnapshot));
+    shellScript = [{ ok: true, exitCode: 0 }];
+    check('M17. 老计划照样能验证（走 fallback）', () => {
+      const r = verifier.start({ planId: 'v-m8', taskId: 'task', attempt: 1 });
+      return r.ok === true || JSON.stringify(r);
+    });
+    for (let i = 0; i < 300; i++) {
+      const v = vrOf('v-m8', 1);
+      if (v && v.status !== 'running') break;
+      await sleep(10);
+    }
+    check('M17b. 跑完之后确实标了 fallback', () => vrOf('v-m8', 1).workingDirectorySource === 'current-task-fallback', JSON.stringify(vrOf('v-m8', 1)));
+    check('M18. schemaVersion 仍是 1（additive，不需要 migration）', () => PLAN_SCHEMA_VERSION === 1, String(PLAN_SCHEMA_VERSION));
   }
 
   /* ================= J. 真实 shell（这条路真的通） ================= */
