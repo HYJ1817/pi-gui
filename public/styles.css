@@ -1816,3 +1816,13 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .planner-verify-msg { font-size: 10.5px; color: var(--t3); }
 .planner-verify-msg.err { color: var(--err); }
+/* fallback（老 attempt 没有冻结目录）的如实说明：用警示色 ——
+   它和「冻结记录」不是同一种证据强度，不该长得一样。 */
+.planner-verify-msg.warn { color: var(--warn); }
+
+/* 实际执行目录。与命令同一个规格：等宽小片、超长截断、title 给全路径。 */
+.planner-verify-cwd {
+  font-family: var(--mono); font-size: 11px; color: #bdbdbd;
+  background: var(--hover); border-radius: 4px; padding: 1px 5px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

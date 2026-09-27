@@ -598,15 +598,28 @@ export function openPlanner(focus = null) {
 
       if (current.goal) detailWrap.append(el('div', 'planner-goal-view', current.goal));
 
+      /* P9 收口：**独立验证在跑时**，开始 / 编辑 / 删除 都会被后端拒（全局互斥）。
+       * 前端先禁掉 + 说明原因，免得用户点了才发现「为什么不行」。
+       * 后端仍然是最终权威 —— 这只是 UX。 */
+      const vActive = current.verificationActive || null;
+      const vTip = vActive ? `有独立验证正在运行（${vActive.taskId} 第 ${vActive.attempt} 次），先停止它` : '';
+      const lockBtn = (b) => {
+        if (vActive) {
+          b.disabled = true;
+          b.title = vTip;
+        }
+        return b;
+      };
+
       const acts = el('div', 'ext-acts');
       if (running) {
         acts.append(btn('停止计划', 'danger', () => doStop()));
       } else {
-        acts.append(btn('开始执行', 'primary', () => doStart()));
+        acts.append(lockBtn(btn('开始执行', 'primary', () => doStart())));
       }
       if (!running) {
-        acts.append(btn('保存修改', dirty ? 'primary' : '', () => doSave()));
-        acts.append(btn('删除计划', 'danger', () => doDelete()));
+        acts.append(lockBtn(btn('保存修改', dirty ? 'primary' : '', () => doSave())));
+        acts.append(lockBtn(btn('删除计划', 'danger', () => doDelete())));
       }
       acts.append(btn('刷新', '', () => refreshCurrent()));
       detailWrap.append(acts);
@@ -616,6 +629,10 @@ export function openPlanner(focus = null) {
       prog.append(el('span', null, `进度 ${c.success + c.failed + c.cancelled + c.skipped}/${c.total}`));
       if (current.status === 'paused') {
         prog.append(el('span', 'planner-warn', '已暂停：有任务失败，请选择重试 / 跳过 / 停止'));
+      }
+      /* 验证在跑时把话说明白（禁用的按钮只靠 title 是发现不了的）。 */
+      if (vActive) {
+        prog.append(el('span', 'planner-warn', `有独立验证正在运行（${vActive.taskId} 第 ${vActive.attempt} 次）—— 先停止它，再开始执行 / 编辑 / 删除 / 重试`));
       }
       detailWrap.append(prog);
 
@@ -1033,6 +1050,10 @@ export function openPlanner(focus = null) {
       return {
         status: v.status,
         command: typeof v.command === 'string' ? v.command : '',
+        /* 实际在哪个目录跑的、以及那个目录是**冻结的**还是**退而求其次的**。
+         * 后者必须如实说明 —— 它和冻结记录不是同一种证据强度。 */
+        workingDirectory: typeof v.workingDirectory === 'string' ? v.workingDirectory : '',
+        workingDirectorySource: typeof v.workingDirectorySource === 'string' ? v.workingDirectorySource : '',
         exitCode: Number.isInteger(v.exitCode) ? v.exitCode : null,
         durationMs: Number.isFinite(v.durationMs) ? v.durationMs : null,
         outputSummary: typeof v.outputSummary === 'string' ? v.outputSummary : '',
@@ -1057,6 +1078,9 @@ export function openPlanner(focus = null) {
       a.verificationResult = record || null;
       /* 刚由**本进程**起的这一次：`running` 是活的（决定给不给「停止验证」）。 */
       a.verificationRunning = Boolean(record && record.status === 'running');
+      /* 全局互斥的 UX 那一半：起手就把锁置上，结束时松开。
+       * 后端才是权威 —— 这里只是让界面与它一致（别让用户点一个必然被拒的按钮）。 */
+      current.verificationActive = record && record.status === 'running' ? { planId, taskId, attempt } : null;
       renderDetail();
     }
 
@@ -1150,6 +1174,19 @@ export function openPlanner(focus = null) {
         chip.title = vr.command; // 长命令截断后悬停看全（与文件路径同一条规矩）
         line.append(chip);
         box.append(line);
+      }
+      if (vr.workingDirectory) {
+        const line = el('div', 'planner-verify-line');
+        line.append(el('span', 'planner-lbl', '目录'));
+        const chip = el('span', 'planner-verify-cwd', vr.workingDirectory);
+        chip.title = vr.workingDirectory;
+        line.append(chip);
+        box.append(line);
+        /* fallback **必须如实说**。它是「我现在猜它当初在哪儿跑的」，
+         * 不是「我当时在哪儿跑的」—— 两者证据强度不一样，不能装成一样。 */
+        if (vr.workingDirectorySource === 'current-task-fallback') {
+          box.append(el('div', 'planner-verify-msg warn', '这次执行没有记录当时的工作目录，上面显示的是当前任务的目录 —— 证据强度低于冻结记录。'));
+        }
       }
       if (vr.status !== 'running') {
         const facts = [];
@@ -1500,8 +1537,18 @@ export function openPlanner(focus = null) {
       /* 单任务操作 */
       const tacts = el('div', 'ext-acts');
       const settled = ['success', 'failed', 'cancelled', 'skipped', 'interrupted'].includes(t.status);
+      /* P9 收口：验证在跑时 Retry 会被后端拒（全局互斥）。跳过 / 取消不受影响 ——
+       * 它们只改计划里的状态，不在工作区里跑命令，后端也没锁它们。 */
+      const taskLocked = Boolean(current && current.verificationActive);
+      const lockTaskBtn = (b) => {
+        if (taskLocked) {
+          b.disabled = true;
+          b.title = '有独立验证正在运行，先停止它再重试';
+        }
+        return b;
+      };
       if (t.status === 'failed' || t.status === 'interrupted') {
-        tacts.append(btn('重试', 'primary', () => doTaskAction('retry', t.id)));
+        tacts.append(lockTaskBtn(btn('重试', 'primary', () => doTaskAction('retry', t.id))));
         tacts.append(btn('跳过', '', () => doTaskAction('skip', t.id)));
       }
       if (t.status === 'blocked' || t.status === 'pending' || t.status === 'ready') {
@@ -1788,8 +1835,15 @@ export function openPlanner(focus = null) {
           ? (Array.isArray(task.attempts) ? task.attempts : []).find((x) => x.attempt === attNo)
           : null;
         if (att && evt.kind === 'verification_start') {
-          att.verificationResult = { status: 'running', command: evt.data.command || '', startedAt: evt.timestamp || null };
+          att.verificationResult = {
+            status: 'running',
+            command: evt.data.command || '',
+            workingDirectory: evt.data.workingDirectory || '',
+            workingDirectorySource: evt.data.workingDirectorySource || '',
+            startedAt: evt.timestamp || null,
+          };
           att.verificationRunning = true;
+          current.verificationActive = { planId: evt.planId, taskId: evt.taskId, attempt: attNo };
         }
         renderDetail();
         if (evt.kind === 'verification_end') setTimeout(() => refreshCurrent(), 150);

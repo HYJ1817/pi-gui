@@ -172,6 +172,10 @@ const rpc = createRpcBridge({
 /* Planner 的引用占位。projects 的闸门要用到它，但 planner 依赖 runtime / sse，
  * 只能排在 projects 之后 —— 所以先声明、后回填（闸门只在请求时被调用）。 */
 let plannerRef = null;
+/* P9 收口：Verifier 的引用占位，同一个理由 —— Scheduler 的闸门要问
+ * 「现在有没有独立验证在跑」，而 verifier 自己又要拿 scheduler（问「有没有计划在跑」）。
+ * 两边都不 import 对方，只在这里互相拿到一个**只读**的轻量函数。 */
+let verifierRef = null;
 
 const projects = createProjects({
   projectsFile: PROJECTS_FILE,
@@ -182,11 +186,11 @@ const projects = createProjects({
   },
   isWin: IS_WIN,
   /* §40：有计划正在执行时拒绝切项目。plannerRef 稍后才赋值，所以这里用
-   * 惰性读取 —— 闸门只在用户真的点「切换」时才会被调用，那时它已经就位。 */
-  beforeActivate: () =>
-    plannerRef && plannerRef.activePlanId()
-      ? '当前有任务正在执行。请先停止计划再切换项目 —— 否则任务的输出会归属到说不清的项目上。'
-      : null,
+   * 惰性读取 —— 闸门只在用户真的点「切换」时才会被调用，那时它已经就位。
+   * P9 收口：**独立验证也算「正在这个工作区里干活」**，规则与两条文案都在
+   * planner 那边（`projectSwitchBlockReason`）—— 放那边才测得到，
+   * 这里只做一行透传，规则只有一份。 */
+  beforeActivate: () => (plannerRef ? plannerRef.projectSwitchBlockReason() : null),
 });
 
 const providers = createProviders({ modelsJson: MODELS_JSON });
@@ -269,6 +273,9 @@ const scheduler = createScheduler({
   runtime,
   publish: sse.publish,
   gitStatus,
+  /* 「现在有没有独立验证在跑」—— 只注入这一个**只读**函数，Scheduler 不认识
+   * Verifier。verifierRef 稍后才回填，闸门只在请求时被调用，那时它已经就位。 */
+  hasActiveVerification: () => Boolean(verifierRef && verifierRef.hasRunning()),
 });
 /* P9 独立验证执行器。放在 scheduler 之后建 —— 它要问「这个计划现在是不是
  * 正在执行」（`scheduler.activePlanId()`），那条规则只写在 Verifier 里，
@@ -280,6 +287,8 @@ const verifier = createVerifier({
   runShell: runShellCommand,
   publish: sse.publish,
 });
+/* 回填上面那个占位 —— Scheduler 的闸门从这一刻起能问到「有没有验证在跑」。 */
+verifierRef = verifier;
 /* projects 在 planner 之前建好了，所以用上面那个可变引用回填 —— 避免为了
  * 一个闸门把装配顺序搅乱（projects 需要 planner，planner 又需要 runtime）。
  *

@@ -155,6 +155,10 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
               changeCaptureIncomplete: true,
               outcomeStatus: ATTEMPT_OUTCOME.INTERRUPTED,
               verificationSnapshot: null,
+              /* P9 收口：工作目录快照也**只在内存里**（session.workingDirs），
+               * 进程崩了就没了 —— 与 verificationSnapshot 同理，事后无从得知，
+               * 一律留空，**绝不猜**。界面据此在验证时走 fallback 并如实标记。 */
+              workingDirectorySnapshot: null,
               review: normalizeReview(null),
             });
           }

@@ -162,6 +162,11 @@ export function normalizeAttempt(raw) {
   /* P9：Pi GUI 自己独立跑过的验证证据。同样是 additive —— 老 attempt 没有它，
    * 归一化成 null（界面显示「尚未独立确认」），**不需要 migration**。 */
   a.verificationResult = normalizeVerificationResult(a.verificationResult);
+  /* P9 收口：这次 attempt 开始时**冻结的工作目录**。
+   * 与 verificationSnapshot 同一个理由 —— task.workingDirectory 是可编辑的，
+   * 等验证时再读当前值，就等于「用现在的目录去验证过去那次执行」。
+   * 老 attempt 没有它 → null，验证时 fallback 到当前 task 值并**如实标记**。 */
+  a.workingDirectorySnapshot = normalizeWorkingDirectorySnapshot(a.workingDirectorySnapshot);
   a.review = normalizeReview(a.review);
   return a;
 }
@@ -297,6 +302,47 @@ export const MAX_VERIFICATION_OUTPUT = 2000;
 const MAX_VERIFICATION_ERROR = 500;
 
 /**
+ * 工作目录快照的长度上限 —— 与 filesChanged 里的路径同量级。
+ * 只存**项目相对路径**：绝对路径随项目搬走就失真，而且不该进元数据。
+ */
+const MAX_WORKDIR = 400;
+
+/**
+ * 这次验证用的是**哪个**工作目录 —— 两种来源的证据强度不一样，必须分开记。
+ *
+ *   attempt-snapshot          那次 attempt 开始时冻结的目录（P9 收口后的正常路径）
+ *   current-task-fallback     老 attempt 没有快照，退而用**当前** task.workingDirectory
+ *
+ * 前者是「我当时在哪儿跑的」，后者是「我现在猜它当初在哪儿跑的」。
+ * 界面上必须把这两种说成两件事 —— 不要让 fallback 看起来和冻结快照一样可靠。
+ */
+export const WORKDIR_SOURCE = Object.freeze({
+  SNAPSHOT: 'attempt-snapshot',
+  FALLBACK: 'current-task-fallback',
+});
+
+const WORKDIR_SOURCES = Object.values(WORKDIR_SOURCE);
+
+/**
+ * 归一化「这次 attempt 开始时冻结的工作目录」。
+ *
+ * **只做形状归一，不做安全判定** —— 绝对路径、`../` 逃逸这类值**原样留着**，
+ * 交给 Verifier 用 `lib/safe-path.js` 去拒绝。
+ *
+ * 为什么不在这里「顺手清洗」成 null：那会让一个被改坏的值**静默退化成 fallback**，
+ * 于是验证跑到「当前」目录里去，而界面还显示一切正常。
+ * 宁可让下游明确报 `invalid-cwd`（宁可吵，不可静默跑到别处）。
+ *
+ * 正常路径不会产生这种值：`task.workingDirectory` 在 normalizeTask 里已经被
+ * 校验成「项目相对 + 存在」了。会出现脏值的只有手工改过的计划文件。
+ */
+export function normalizeWorkingDirectorySnapshot(raw) {
+  if (typeof raw !== 'string') return null;
+  const s = clampStr(raw, MAX_WORKDIR).trim();
+  return s || null;
+}
+
+/**
  * 归一化一条独立验证记录。
  *
  * **宽容**（读盘路径）：认不出的 `status` 一律当「没有这条记录」（null），
@@ -315,6 +361,10 @@ export function normalizeVerificationResult(raw) {
   return {
     status,
     command: clampStr(raw.command, MAX_VERIFICATION_COMMAND),
+    /* 实际执行所在的目录（项目相对路径）与它的来源。
+     * 这两个是**开始时就知道**的设定事实，不是结论 —— 所以 running 也保留。 */
+    workingDirectory: clampStr(raw.workingDirectory, MAX_WORKDIR),
+    workingDirectorySource: WORKDIR_SOURCES.includes(raw.workingDirectorySource) ? raw.workingDirectorySource : null,
     /* 运行中的记录**不该带结论字段**（退出码 / 完成时间 / 耗时 / 输出 / 错误）——
      * 归一化时一律清掉，否则会出现「状态是运行中、却挂着上一次的退出码与输出」
      * 这种自相矛盾的展示（与 normalizeReview 对 pending 的处理同一条思路）。 */

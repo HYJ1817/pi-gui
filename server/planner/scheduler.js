@@ -66,6 +66,7 @@ import {
   normalizeFilesChanged,
   normalizeReview,
   normalizeVerificationSnapshot,
+  normalizeWorkingDirectorySnapshot,
   summarizePlan,
   taskSessionId,
 } from './model.js';
@@ -87,7 +88,20 @@ function outcomeSessionId(outcome) {
   return isSafeSessionId(raw) ? raw : null;
 }
 
-export function createScheduler({ store, registry, runtime, publish = () => {}, gitStatus = null, now = () => Date.now(), taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS }) {
+export function createScheduler({
+  store,
+  registry,
+  runtime,
+  publish = () => {},
+  gitStatus = null,
+  now = () => Date.now(),
+  taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
+  /* P9 收口：「现在有没有独立验证在跑」。由 server.js 注入一个**轻量函数**
+   * （就是 `verifier.hasRunning`），而不是让 Scheduler 认识 Verifier ——
+   * `server/` 下的模块不互相 import，跨子系统协作一律走装配 + 依赖注入。
+   * 默认 false：没注入时行为与 P9 之前完全一样，老的单测不用改。 */
+  hasActiveVerification = () => false,
+}) {
   /** 当前正在跑的 plan（全局唯一，规格 §32）。 */
   let active = null; // { planId, plan, controllers: Map<taskId, AbortController>, sessionIds: Map<taskId, string>, stopping: boolean, pumpRunning: boolean }
   const emitter = new EventEmitter();
@@ -367,6 +381,12 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
      * plan 文件，挂一个「进行中的临时字段」上去会污染持久化格式。 */
     const verificationSnapshot = normalizeVerificationSnapshot(task.verification);
     session.verifications.set(task.id, verificationSnapshot);
+    /* P9 收口：**工作目录也在这里冻结**，与上面同一个理由 —— `task.workingDirectory`
+     * 同样是可编辑的。等验证时再读当前值，就等于「用现在的目录去验证过去那次执行」，
+     * 那条证据不再对应那次尝试。
+     * 只存**项目相对路径**（normalizeTask 已经保证 `task.workingDirectory` 是这个形状），
+     * 绝对路径随项目搬走就失真，而且不该进元数据。 */
+    session.workingDirs.set(task.id, task.workingDirectory || '.');
 
     const before = await snapshot(projectRoot);
 
@@ -404,6 +424,8 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
        * 「执行期间变了什么」。这时候不许猜，只记「没采集全」（规格 §31）。 */
       changeCaptureIncomplete: !changes.available,
       verificationSnapshot,
+      /* P9 收口：这条 attempt 开始时的工作目录（冻结值）。 */
+      workingDirectorySnapshot: session.workingDirs.get(task.id) || null,
     });
   }
 
@@ -414,6 +436,10 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     const filesChanged = changedPathsOf(changes);
     const changeCaptureIncomplete = Boolean(relation.changeCaptureIncomplete);
     const verificationSnapshot = normalizeVerificationSnapshot(relation.verificationSnapshot);
+    /* P9 收口：这条 attempt 开始时冻结的工作目录。shutdown 那条合成路径也会走到
+     * 这里（那时从 session.workingDirs 取），所以它和 verificationSnapshot 一样，
+     * 是「执行前就确定的值」—— 可以照记，不是猜。 */
+    const workingDirectorySnapshot = normalizeWorkingDirectorySnapshot(relation.workingDirectorySnapshot);
     /* P8-A：稳定的执行结论。
      * 判定信号与下面改 task.status 用的是**同一个**（`outcome.cancelled` /
      * `outcome.success`），所以两者永远一致 —— 不会出现「状态说已取消、
@@ -464,6 +490,7 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
          * 人工判断（上一次 accepted 是人对**那一次**结果的判断）。 */
         outcomeStatus,
         verificationSnapshot,
+        workingDirectorySnapshot,
         review: normalizeReview(null),
       });
     }
@@ -531,6 +558,9 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
          * 或验证快照记到下一次尝试上（并行时尤其明显，规格 §13）。 */
         batch.forEach((t) => session.sessionIds.delete(t.id));
         batch.forEach((t) => session.verifications.delete(t.id));
+        /* P9 收口：工作目录快照与上面两个同一条规矩 —— 留着会把上一次尝试的目录
+         * 记到下一次尝试上（并行时尤其明显）。 */
+        batch.forEach((t) => session.workingDirs.delete(t.id));
 
         if (session.stopping) break;
 
@@ -586,6 +616,13 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     if (active) {
       return { ok: false, code: 'busy', error: `已经有一个计划正在执行（${active.planId}），请先停止它` };
     }
+    /* P9 收口：独立验证在跑时不许启动计划 —— 那一头（`verifier.start`）已经会拒绝
+     * 「计划在跑时开验证」，这是对称的另一半。两个主体同时在同一个工作区里跑命令
+     *（验证在跑测试、agent 在改文件）是这一轮要彻底关掉的情况。
+     * 后端是最终权威：前端也会禁用按钮，但那只是 UX。 */
+    if (hasActiveVerification()) {
+      return { ok: false, code: 'verification-active', error: '当前有独立验证正在运行，请先停止验证再开始执行计划' };
+    }
     if (isPlanSettled(plan) && plan.status === PLAN_STATUS.COMPLETED) {
       return { ok: false, code: 'settled', error: '这个计划已经全部完成了' };
     }
@@ -607,7 +644,7 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     shuttingDown = false;
     persist(plan);
 
-    const session = { planId: plan.id, plan, controllers: new Map(), sessionIds: new Map(), verifications: new Map(), stopping: false, pumpRunning: false };
+    const session = { planId: plan.id, plan, controllers: new Map(), sessionIds: new Map(), verifications: new Map(), workingDirs: new Map(), stopping: false, pumpRunning: false };
     active = session;
     emit(plan.id, null, null, 'plan_start', { title: plan.title, tasks: plan.tasks.length });
     // 主循环不 await（HTTP 请求要立刻返回）；但必须接住异常，否则会变成
@@ -786,7 +823,13 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
      *
      * 所以「计划 active 且下游正在跑」答 `busy`（那是真实的、更危险的危害），
      * 「计划 active、目标任务没跑、下游也没跑」才答 `plan-active`。
-     * 四条全是 `ok:false` —— **计划仍在跑时，Retry 一次也不会真的发生**。 */
+     * 四条全是 `ok:false` —— **计划仍在跑时，Retry 一次也不会真的发生**。
+     *
+     * P9 收口往这一层又加了一条：`verification-active`（独立验证在跑）。
+     * 它和 `plan-active` 同层 —— 都是「别的东西正在这个工作区里干活」。 */
+    if (hasActiveVerification()) {
+      return { ok: false, code: 'verification-active', error: '有独立验证正在运行，请先停止验证再重试任务' };
+    }
     if (active && active.planId === plan.id) {
       return { ok: false, code: 'plan-active', error: '计划仍在执行，请等待当前执行结束或先停止计划，再重试任务' };
     }
@@ -879,6 +922,8 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
              * 验证快照在 attempt 开始时已经冻结过，所以这里能原样保留。 */
             outcomeStatus: ATTEMPT_OUTCOME.INTERRUPTED,
             verificationSnapshot: session.verifications.get(t.id) || null,
+            /* 同上：工作目录快照也是执行前就确定的值，原样保留。 */
+            workingDirectorySnapshot: session.workingDirs.get(t.id) || null,
             review: normalizeReview(null),
           });
         }

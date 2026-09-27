@@ -37,9 +37,11 @@
  * 所以这里通过 `runShell` 注入拿执行能力，由 server.js 装配。
  */
 
+import path from 'node:path';
 import {
   MAX_VERIFICATION_OUTPUT,
   VERIFICATION_STATUS,
+  WORKDIR_SOURCE,
   normalizeVerificationResult,
 } from './model.js';
 import { resolveProjectPath } from '../../lib/safe-path.js';
@@ -116,6 +118,28 @@ export function createVerifier({
     return running.has(keyOf(planId, taskId, attempt));
   }
 
+  /**
+   * 当前有没有正在跑的独立验证 —— **跨所有计划**（P9 收口）。
+   *
+   * 这是「同一个工作区同一时间只有一个实际执行者」那条规则在 Verifier 这一侧的
+   * 权威答案，Scheduler / 路由 / 切项目闸门都读它（由 server.js 注入过去，
+   * 谁也不 import 谁）。
+   */
+  const hasRunning = () => running.size > 0;
+
+  /**
+   * 正在跑的那次验证的身份；没有则 null。
+   *
+   * 给闸门做提示用：「有独立验证正在运行」比「操作被拒绝」有用得多 ——
+   * 用户需要知道该去停哪一条。第一阶段只允许一个，所以取第一个就是全部。
+   */
+  function activeVerification() {
+    const first = running.values().next();
+    if (first.done) return null;
+    const e = first.value;
+    return { planId: e.planId, taskId: e.taskId, attempt: e.attempt, command: e.command || '', startedAt: e.startedAt || null };
+  }
+
   /** 正在跑的验证的键列表（诊断 / 测试用）。 */
   const runningKeys = () => [...running.keys()];
 
@@ -161,11 +185,11 @@ export function createVerifier({
       return { ok: false, code: 'workspace-stale', error: '这个计划属于另一个项目，切回那个项目才能运行验证' };
     }
 
-    /* 计划正在执行时拒绝（§四.9）：验证命令和 coding agent 会同时改同一个工作区、
-     * 抢 index.lock、把测试结果搅在一起 —— 出了问题根本说不清是谁的。
-     * 判定只看 Scheduler 一处，route 不重复判。 */
-    if (scheduler && typeof scheduler.activePlanId === 'function' && scheduler.activePlanId() === plan.id) {
-      return { ok: false, code: 'plan-active', error: '计划正在执行，等它结束或先停止计划，再运行验证' };
+    /* 计划正在执行时拒绝 —— **任何一个计划**，不只是这一个（P9 收口）。
+     * 原来只比 `=== plan.id`，于是「Plan A 在跑，去验证同一个 workspace 的 Plan B」
+     * 能穿过去：两个主体同时在同一个工作区里跑命令。 */
+    if (scheduler && typeof scheduler.activePlanId === 'function' && scheduler.activePlanId() !== null) {
+      return { ok: false, code: 'plan-active', error: `计划 ${scheduler.activePlanId()} 正在执行，等它结束或先停止计划，再运行验证` };
     }
 
     const task = (plan.tasks || []).find((x) => x.id === taskId);
@@ -174,7 +198,20 @@ export function createVerifier({
     if (!att) return { ok: false, code: 'attempt-not-found', error: '找不到这次尝试' };
 
     const key = keyOf(planId, taskId, attempt);
+    /* 「你点的就是正在跑的那一条」与「**另外**一条正在跑」是两件事，不能糊成一种
+     * 提示 —— 前者该让你去停它，后者该告诉你去停那次。 */
     if (running.has(key)) return { ok: false, code: 'already-running', error: '这次尝试正在验证中' };
+    /* P9 收口：第一阶段**不支持多 Verification 并行**。同一个工作区同一时间只允许
+     * 一个实际执行者，所以只要还有别的验证在跑就直接拒绝，**不排队**
+     *（排队意味着「点一下、等一会儿、自己开始跑」，那更吓人也更难解释）。 */
+    if (running.size > 0) {
+      const other = activeVerification();
+      return {
+        ok: false,
+        code: 'verification-active',
+        error: `另一次独立验证正在运行（${other.planId} / ${other.taskId} 第 ${other.attempt} 次），请先停止它`,
+      };
+    }
 
     /* 命令**只**从冻结的快照来。没有快照 → 不跑：拿当前 task.verification 顶上
      * 就是在伪造「当时的要求」，而 description 解析成命令更是在猜。 */
@@ -191,20 +228,49 @@ export function createVerifier({
       };
     }
 
-    /* cwd 用**与计划任务同一套**校验：复用 lib/safe-path.js（它已经处理了 `../`、
-     * 绝对路径、junction 逃逸、大小写、前缀伪装）。missing=true 也不行 ——
-     * 目录被删了就拿它当 cwd，命令会在一个不存在的地方跑。 */
-    const resolved = resolveProjectPath(plan.projectRoot, task.workingDirectory || '.');
+    /* ---------- 用哪个目录：优先那次 attempt **冻结**的那个（P9 收口） ----------
+     *
+     * 拿**当前** `task.workingDirectory` 去验证一条历史 attempt 是错的：
+     * 用户改过 task 之后，那条证据就不再对应那次执行了 ——
+     * Attempt 1 当初在 `packages/a` 里跑，改成 `packages/b` 之后再验证，
+     * 会在 `packages/b` 里跑 `npm test`，却把结果记在「Attempt 1」名下。
+     *
+     * 老 attempt（P9 收口之前产生的）没有这个字段，只能退到当前值 ——
+     * 但**必须如实标记**：`current-task-fallback` 是「我现在猜它当初在哪儿跑的」，
+     * 不是「我当时在哪儿跑的」。两者证据强度不一样，界面上也要分开说。 */
+    const snapshotDir = att.workingDirectorySnapshot;
+    const usingSnapshot = typeof snapshotDir === 'string' && snapshotDir.trim() !== '';
+    const wantedDir = usingSnapshot ? snapshotDir : task.workingDirectory || '.';
+    const dirSource = usingSnapshot ? WORKDIR_SOURCE.SNAPSHOT : WORKDIR_SOURCE.FALLBACK;
+
+    /* **两条路都要过 safe-path** —— fallback 不等于可以不校验。
+     * 冻结值同样可能被人手工改坏（绝对路径、`../`、junction），
+     * 所以这里不区分来源，一律按同一把尺子量。 */
+    const resolved = resolveProjectPath(plan.projectRoot, wantedDir);
     if (!resolved.ok) {
-      return { ok: false, code: 'invalid-cwd', error: `任务的工作目录不可用：${resolved.error}` };
+      return {
+        ok: false,
+        code: 'invalid-cwd',
+        error: usingSnapshot
+          ? `这次执行冻结的工作目录不可用（${resolved.error}）`
+          : `任务的工作目录不可用：${resolved.error}`,
+      };
     }
     if (resolved.missing) {
-      return { ok: false, code: 'invalid-cwd', error: '任务的工作目录已经不存在了' };
+      return { ok: false, code: 'invalid-cwd', error: '执行时的工作目录已经不存在了' };
     }
+    /* 存**项目相对路径**（绝对路径随项目搬走就失真）。与 normalizeTask 同一套换算。 */
+    const relDir = resolved.rel ? resolved.rel.split(path.sep).join('/') : '.';
 
     const controller = new AbortController();
     const startedAt = now();
-    const result = normalizeVerificationResult({ status: VERIFICATION_STATUS.RUNNING, command, startedAt });
+    const result = normalizeVerificationResult({
+      status: VERIFICATION_STATUS.RUNNING,
+      command,
+      workingDirectory: relDir,
+      workingDirectorySource: dirSource,
+      startedAt,
+    });
 
     /* 能走到 start() 就说明进程还在正常服务 —— 上一轮的 shutdown 已经过去了。
      * 不复位的话调度器会**因为一次退出而永久失效**：`shuttingDown` 一直为真，
@@ -214,16 +280,16 @@ export function createVerifier({
      * 的场景 —— 测试、以及将来可能的「重启服务而不退出进程」。 */
     shuttingDown = false;
 
-    running.set(key, { planId, taskId, attempt, controller });
+    running.set(key, { planId, taskId, attempt, controller, command, startedAt });
     /* 先落盘 running 再跑命令：界面刷新一次就能看到「正在验证…」，
      * 而不是等命令结束才出现一行结果。 */
     mutateAttempt(planId, taskId, attempt, (a) => {
       a.verificationResult = result;
     });
-    emit(planId, taskId, attempt, 'verification_start', { command, startedAt });
+    emit(planId, taskId, attempt, 'verification_start', { command, workingDirectory: relDir, workingDirectorySource: dirSource, startedAt });
 
     /* 不 await：HTTP 立刻回「已启动」，结果走 SSE + 下一次读取。 */
-    runOnce({ planId, taskId, attempt, command, cwd: resolved.abs, controller, startedAt }).catch(() => {
+    runOnce({ planId, taskId, attempt, command, cwd: resolved.abs, relDir, dirSource, controller, startedAt }).catch(() => {
       /* runOnce 内部已经尽力落盘；这里只保证不会变成 unhandledRejection */
     });
 
@@ -231,7 +297,7 @@ export function createVerifier({
   }
 
   /** 真正跑一次。所有异常都收在这里，绝不让它冒成 unhandledRejection。 */
-  async function runOnce({ planId, taskId, attempt, command, cwd, controller, startedAt }) {
+  async function runOnce({ planId, taskId, attempt, command, cwd, relDir, dirSource, controller, startedAt }) {
     const key = keyOf(planId, taskId, attempt);
     let out;
     try {
@@ -274,6 +340,9 @@ export function createVerifier({
       a.verificationResult = normalizeVerificationResult({
         status,
         command,
+        /* 实际在哪个目录跑的、以及这个目录是怎么来的 —— 证据的一部分。 */
+        workingDirectory: relDir,
+        workingDirectorySource: dirSource,
         exitCode: out.exitCode,
         startedAt,
         finishedAt,
@@ -336,5 +405,5 @@ export function createVerifier({
     running.clear();
   }
 
-  return { start, stop, shutdown, isRunning, runningKeys, _summarize: summarize };
+  return { start, stop, shutdown, isRunning, hasRunning, activeVerification, runningKeys, _summarize: summarize };
 }

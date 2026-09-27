@@ -407,6 +407,12 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
     }
     return {
       ...plan,
+      /* P9 收口：**全 workspace 级**的「现在有独立验证在跑」。放在 plan view 上
+       * 而不是响应的顶层，是因为前端只存 `r.plan` —— 放顶层会被丢掉，
+       * 于是「验证在跑时禁用开始/编辑/删除/重试」就永远不生效。
+       * 带身份（planId / taskId / attempt）是刻意的：用户要知道该去停哪一条。
+       * 与上面那些一样是**视图字段，绝不写回文件**。 */
+      verificationActive: verifier && typeof verifier.activeVerification === 'function' ? verifier.activeVerification() : null,
       tasks: plan.tasks.map((t) => ({
         ...t,
         attempts: (Array.isArray(t.attempts) ? t.attempts : []).map((a) => {
@@ -562,6 +568,9 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
             plans: plans.map((p) => store.summary(p)),
             broken,
             activePlanId: scheduler.activePlanId(),
+            /* P9 收口：列表页也要知道「有验证在跑」，否则刷新那一侧会把
+             * 禁用态丢掉（`reload()` 走的是这个接口）。 */
+            verificationActive: verifier && typeof verifier.activeVerification === 'function' ? verifier.activeVerification() : null,
           });
         }
         if (method === 'POST') {
@@ -611,6 +620,13 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
            * 否则 scheduler 要在执行中途重算拓扑，复杂度立刻失控。 */
           if (scheduler.activePlanId() === plan.id) {
             return json(res, 409, { ok: false, error: '计划正在执行，结构已锁定。请先停止再修改。' });
+          }
+          /* P9 收口：独立验证在跑时也不许改结构。
+           * 最危险的一条是「验证跑着 → 删/改掉它正在验证的那个计划」：
+           * 子进程还在跑，结束后 `mutateAttempt` 找不到计划，结果无处落盘，
+           * 而界面上又已经没法通过 Plan API 停掉它了。 */
+          if (verifier && typeof verifier.hasRunning === 'function' && verifier.hasRunning()) {
+            return json(res, 409, { ok: false, code: 'verification-active', error: '有独立验证正在运行，请先停止验证再修改计划' });
           }
           const raw = await readBody(req, MAX_BODY).catch((err) => ({ __err: String(err.message || err) }));
           if (raw && raw.__err) return json(res, 413, { ok: false, error: raw.__err });
@@ -684,6 +700,11 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
         if (method === 'DELETE') {
           if (scheduler.activePlanId() === plan.id) {
             return json(res, 409, { ok: false, error: '计划正在执行，先停止再删除' });
+          }
+          /* P9 收口：同 PUT —— 删掉一个正在被验证的计划，会让验证结果无处落盘，
+           * 而且界面上再也点不到「停止验证」（那条路要经过这个计划）。 */
+          if (verifier && typeof verifier.hasRunning === 'function' && verifier.hasRunning()) {
+            return json(res, 409, { ok: false, code: 'verification-active', error: '有独立验证正在运行，请先停止验证再删除计划' });
           }
           store.remove(plan.id);
           return json(res, 200, { ok: true });
@@ -805,6 +826,26 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
     openTaskSession,
     /** 供 server.js / projects 判断「现在能不能切项目」（§40）。 */
     activePlanId: () => scheduler.activePlanId(),
+
+    /**
+     * 切项目前的闸门：**返回拒绝原因（字符串），可以切就返回 null**。
+     *
+     * 规则放在这里、而不是写在 server.js 的 `beforeActivate` 里，是为了**可测**：
+     * server.js 一 import 就会起服务，测不了；而 `createProjects` 的
+     * beforeActivate 机制本身已经有守卫（tests/planner.cjs 的 §40）。
+     * server.js 那边只剩一行透传 —— 规则只有这一份。
+     *
+     * 两条理由、两条文案，分开说：用户需要知道该去停哪一个（停计划还是停验证）。
+     */
+    projectSwitchBlockReason: () => {
+      if (scheduler.activePlanId()) {
+        return '当前有任务正在执行。请先停止计划再切换项目 —— 否则任务的输出会归属到说不清的项目上。';
+      }
+      if (verifier && typeof verifier.hasRunning === 'function' && verifier.hasRunning()) {
+        return '当前有独立验证正在运行，请先停止验证再切换项目。';
+      }
+      return null;
+    },
     _internals: { extractJsonObject, buildPlannerPrompt },
     TASK_STATUS,
   };
