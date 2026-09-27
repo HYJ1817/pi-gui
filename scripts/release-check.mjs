@@ -33,6 +33,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ROOT, readVersionSources, checkVersionConsistency, findHardcodedVersions } from './check-version.mjs';
+import { readReleaseSummary } from './release-summary.mjs';
 import { collectReleaseArtifacts, RELEASE_DIR } from './collect-release-artifacts.mjs';
 import { checkReleaseDir } from './check-release-artifacts.mjs';
 import { verifyChecksums } from './make-checksums.mjs';
@@ -95,8 +96,19 @@ console.log('  ═════════════════════�
   const hard = res.ok ? findHardcodedVersions(res.version) : [];
   const errors = [...res.errors];
   if (hard.length) errors.push(`构建 / 发布链路里写死了版本号 ${res.version}：${hard.join('、')}`);
+
+  let summary = null;
+  if (!errors.length) {
+    try {
+      summary = readReleaseSummary({ expectedVersion: res.version });
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+
   if (errors.length) fail('版本一致性校验没过', errors);
   console.log('     ✓ 一致');
+  console.log(`     ✓ Release 摘要 ${path.relative(ROOT, summary.path).split(path.sep).join('/')}`);
 }
 
 /* ---------- 2. 全量测试 ---------- */
