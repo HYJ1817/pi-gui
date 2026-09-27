@@ -436,6 +436,201 @@ const SUMS = 'SHA256SUMS.txt';
     return r.ok === false && r.errors.length >= 2 || JSON.stringify(r.errors);
   });
 
+  /* ================= 11. 发布编排（§「release.yml 没被端到端跑过」） =================
+   *
+   * `release.yml` 里那段「创建/复用 draft → 上传 → 核对 → 发布」以前写在 YAML 里，
+   * 而 YAML **没法单元测试** —— 只能靠真的打一个 tag 去试，那会真的产生一个 Release。
+   * 现在逻辑在 scripts/publish-release.mjs 里，注入一个假的 gh 就能把分支表全测一遍。
+   *
+   * 这里守的是几条**代价最高**的规矩：
+   *   - 已发布的 Release 绝不覆盖
+   *   - 核对不过绝不 publish
+   *   - publish 必须排在最后
+   */
+  console.log('\n--- 11. 发布编排（注入假 gh） ---');
+
+  const { planRelease, releaseState, publishRelease } = await import('../scripts/publish-release.mjs');
+
+  check('25. 三种状态的决策表', () => {
+    const a = planRelease({ state: 'missing' });
+    const b = planRelease({ state: 'draft' });
+    const c = planRelease({ state: 'published' });
+    return (
+      (a.action === 'create' && b.action === 'reuse' && c.action === 'refuse') ||
+      JSON.stringify([a.action, b.action, c.action])
+    );
+  });
+  check('25a. 不认识的状态 → 抛错（不猜）', () => {
+    try {
+      planRelease({ state: 'weird' });
+      return '没抛错';
+    } catch {
+      return true;
+    }
+  });
+
+  /** 假 gh：记录调用序列，并模拟 Release 的状态变化。 */
+  function makeMockGh({ state = 'missing', breakAssets = false, body = '自动生成的 notes' } = {}) {
+    const calls = [];
+    let draft = state !== 'published';
+
+    const gh = (args) => {
+      calls.push(args);
+      const sub = args[1];
+      const has = (f) => args.includes(f);
+
+      if (args[0] === 'release' && sub === 'view') {
+        /* ⚠️ 顺序要紧：取 body 的调用是 `--json body -q .body`，**也带 -q**。
+         * 先判 -q 会把它误当成状态查询，于是 state='missing' 时整个流程在
+         * 「追加说明」那一步炸掉。 */
+        if (has('body')) return body;
+        if (has('-q')) {
+          /* 只有一次 `-q` 状态查询（在 create 之前）；state='missing' 时它必须抛。 */
+          if (state === 'missing') {
+            const e = new Error('gh: release not found');
+            e.stderr = 'release not found';
+            throw e;
+          }
+          return draft ? 'true' : 'false';
+        }
+        /* --json assets,isDraft,url
+         * **照真实 GitHub 的形状造**：报的是**上传的三个**（含 SHA256SUMS.txt 自己），
+         * 不是 SUMS 里列的那两个。造错了会把「真实世界必然失败」的路径测成绿的 ——
+         * 这里就是这么发现 readLocalAssets 的 bug 的。 */
+        const assets = fs
+          .readdirSync(dir, { withFileTypes: true })
+          .filter((e) => e.isFile())
+          .map((e) => e.name)
+          .sort()
+          .map((name) => ({
+            name,
+            size: fs.statSync(path.join(dir, name)).size,
+            digest: `sha256:${breakAssets && name === PORTABLE ? 'f'.repeat(64) : sha256File(path.join(dir, name))}`,
+          }));
+        return JSON.stringify({ isDraft: draft, url: `https://example.invalid/${V}`, assets });
+      }
+      if (args[0] === 'release' && sub === 'create') {
+        draft = true;
+        return '';
+      }
+      if (args[0] === 'release' && sub === 'upload') return '';
+      if (args[0] === 'release' && sub === 'edit') {
+        if (has('--draft=false')) draft = false;
+        return '';
+      }
+      throw new Error('未预期的 gh 调用：' + JSON.stringify(args));
+    };
+
+    return { gh, calls, isDraft: () => draft };
+  }
+
+  const noop = () => {};
+
+  check('26. 没有 Release 时：创建 draft → 上传 → 核对 → 追加说明 → 发布 → 再确认', () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing' });
+    const r = publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    return (
+      (r.published === true &&
+        JSON.stringify(r.steps) ===
+          JSON.stringify(['create-draft', 'upload', 'verify', 'append-notes', 'publish', 'confirm-published']) &&
+        m.isDraft() === false) ||
+      JSON.stringify([r.steps, m.isDraft()])
+    );
+  });
+
+  check('26a. 只剩 draft 时：**不**重新创建，复用它', () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'draft' });
+    const r = publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    const created = m.calls.some((c) => c[1] === 'create');
+    return (!created && r.steps.includes('reuse-draft') && r.steps.includes('publish')) || JSON.stringify(r.steps);
+  });
+
+  check('27. 已经有**已发布**的 Release → 抛错，且**绝不**上传或发布（不覆盖已发布二进制）', () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'published' });
+    let msg = '';
+    try {
+      publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      return '没有抛错';
+    } catch (e) {
+      msg = e.message;
+    }
+    const touched = m.calls.some((c) => c[1] === 'upload' || c[1] === 'create' || c[1] === 'edit');
+    return (/已经.*发布/.test(msg) && !touched) || `msg=${msg} calls=${JSON.stringify(m.calls)}`;
+  });
+
+  check('28. 上传后核对不过 → 抛错，且**绝不** publish（此时还只是 draft）', () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing', breakAssets: true });
+    let msg = '';
+    try {
+      publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      return '没有抛错';
+    } catch (e) {
+      msg = e.message;
+    }
+    const published = m.calls.some((c) => c[1] === 'edit' && c.includes('--draft=false'));
+    return (/核对没通过/.test(msg) && !published) || `msg=${msg} published=${published}`;
+  });
+
+  check('28a. publish 必须排在 verify 之后（顺序断言，不只看有没有调用）', () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing' });
+    publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    const seq = m.calls.map((c) => `${c[1]}${c.includes('--draft=false') ? ':publish' : ''}`);
+    const upload = seq.findIndex((x) => x === 'upload');
+    const verifyView = seq.findIndex((x, i) => x === 'view' && i > upload);
+    const publish = seq.findIndex((x) => x === 'edit:publish');
+    return (upload >= 0 && verifyView > upload && publish > verifyView) || JSON.stringify(seq);
+  });
+
+  check('29. --dry-run：做到核对通过就停，**不**发布（远端留下 draft）', () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing' });
+    const r = publishRelease({ tag: `v${V}`, dir, gh: m.gh, dryRun: true, log: noop });
+    return (
+      (r.published === false && !r.steps.includes('publish') && m.isDraft() === true) ||
+      JSON.stringify([r.steps, m.isDraft()])
+    );
+  });
+
+  check('30. 发布目录为空 → 抛错（不会去 create 一个没有附件的 Release）', () => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const m = makeMockGh({ state: 'missing' });
+    try {
+      publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      return '没有抛错';
+    } catch (e) {
+      return /发布目录是空的/.test(e.message) || e.message;
+    }
+  });
+
+  check('31. releaseState：只有「确实不存在」才算 missing，别的错误要抛出去', () => {
+    const notFound = () => {
+      const e = new Error('x');
+      e.stderr = 'release not found';
+      throw e;
+    };
+    const network = () => {
+      const e = new Error('dial tcp: i/o timeout');
+      e.stderr = 'dial tcp: i/o timeout';
+      throw e;
+    };
+    if (releaseState(notFound, `v${V}`) !== 'missing') return 'not found 没被当成 missing';
+    try {
+      releaseState(network, `v${V}`);
+      return '网络错误被当成了 missing（会去 create 一个不该建的 Release）';
+    } catch {
+      /* 正确 */
+    }
+    return releaseState(() => 'true', `v${V}`) === 'draft' && releaseState(() => 'false', `v${V}`) === 'published'
+      ? true
+      : 'draft/published 判反了';
+  });
+
   fs.rmSync(root, { recursive: true, force: true });
   console.log(`\n${pass}/${pass + fail} 通过`);
   process.exitCode = fail ? 1 : 0;
