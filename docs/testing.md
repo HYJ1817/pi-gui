@@ -36,7 +36,7 @@ verification 86 · attempt-lifecycle 98
 sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
-version-consistency 29 · release-artifacts 67 · electron-guard 75
+version-consistency 34 · release-artifacts 70 · electron-guard 75
 ```
 
 > `reliability` / `interactions` / `port-owner` 是早期套件，只打印

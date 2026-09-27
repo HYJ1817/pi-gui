@@ -137,7 +137,7 @@ dist-release/       ← 只放要上传的那三个文件
 一条命令，顺序钉在代码里（`scripts/release-check.mjs`）：
 
 1. **版本一致性** —— package / lock /（可选）tag，外加「构建链路里有没有写死版本号」
-2. **`npm test`** —— 全部 24 个套件
+2. **`npm test`** —— 全部 25 个套件
 3. **`build:app --rebuild`** → `fixtures` → `test:app` → `test:exe`
 4. **`build:installer --zip`** → `test:portable` →（`--with-installer` 时）`test:installer`
 5. **`release:collect`** —— 集中到 `dist-release/` 并重算校验和
