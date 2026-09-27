@@ -29,6 +29,53 @@ const MIME = {
 
 /* ---------------- 脚本数据 ---------------- */
 
+/* P7 计划详情夹具：四种「会话」状态各一条，外加两次尝试。
+ * 形状照抄后端 `planView()` 的输出（attempt 上带 sessionAvailable / sessionTitle）。 */
+const PLAN_DETAIL = {
+  id: 'plan-1',
+  title: '修复 SSE 重连问题',
+  goal: '让 bridgeRun 的过期响应不再覆盖新状态',
+  status: 'paused',
+  createdAt: 1,
+  updatedAt: 2,
+  startedAt: 1,
+  endedAt: null,
+  projectRoot: 'C:/pi-GUI',
+  concurrency: 1,
+  recoveryNotes: [],
+  tasks: [
+    {
+      id: 'analyze', title: '分析原因', description: '读 rpc-bridge 的重连路径', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '', verification: null,
+      attempts: [{ attempt: 1, success: true, error: '', summary: '读完了', exitCode: 0, startedAt: 1, endedAt: 2, sessionId: 'pi-gui-plan-1-analyze-a1', sessionAvailable: true, sessionTitle: 'SSE race analysis', filesChanged: [], changeCaptureIncomplete: false }],
+      result: { success: true, exitCode: 0, summary: '重连时 bridgeRun 会自增，但过期响应仍会写回状态', toolCalls: 4, durationMs: 42000, raw: null, sessionId: 'pi-gui-plan-1-analyze-a1', changes: { available: true, files: [], note: '' } },
+    },
+    {
+      id: 'backend', title: '修复后端', description: '丢掉过期响应', agent: 'pi',
+      workingDirectory: '.', dependsOn: ['analyze'], status: 'failed', startedAt: 3, endedAt: 6, attempt: 2, error: '第一次故意失败：模型报 402',
+      verification: null,
+      attempts: [
+        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'pi-gui-plan-1-backend-a1', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第一次）', filesChanged: ['server/rpc-bridge.js'], changeCaptureIncomplete: false },
+        { attempt: 2, success: false, error: '第二次也失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6, sessionId: 'pi-gui-plan-1-backend-a2', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第二次）', filesChanged: ['server/rpc-bridge.js', 'server/sse.js'], changeCaptureIncomplete: false },
+      ],
+      result: { success: false, exitCode: 1, summary: '', toolCalls: 0, durationMs: 3000, raw: null, sessionId: 'pi-gui-plan-1-backend-a2', changes: { available: true, files: [{ path: 'server/rpc-bridge.js', change: 'modified', status: 'M', additions: 12, deletions: 3 }, { path: 'server/sse.js', change: 'modified', status: 'M', additions: 4, deletions: 0 }], note: '执行期间观察到的工作区变化（可能也包含其它来源的改动）' } },
+    },
+    {
+      id: 'tests', title: '补测试', description: '加可靠性用例', agent: 'codex',
+      workingDirectory: '.', dependsOn: ['backend'], status: 'blocked', startedAt: 7, endedAt: 8, attempt: 1, error: '', verification: null,
+      attempts: [{ attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 7, endedAt: 8, sessionId: null, sessionAvailable: false, sessionTitle: '', filesChanged: ['tests/reliability.cjs'], changeCaptureIncomplete: false }],
+      result: null,
+    },
+    {
+      id: 'docs', title: '更新文档', description: '把语义写清楚', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 9, endedAt: 10, attempt: 1, error: '', verification: null,
+      attempts: [{ attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 9, endedAt: 10, sessionId: 'pi-gui-plan-1-docs-a1', sessionAvailable: false, sessionTitle: '', filesChanged: [], changeCaptureIncomplete: true }],
+      result: null,
+    },
+  ],
+};
+
+
 const MODELS = [
   { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek' },
   { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', reasoning: true },
@@ -298,6 +345,64 @@ const server = http.createServer(async (req, res) => {
         { id: 'cccccccccccccccc', title: '上周的排查记录', sessionId: 'sid-c', createdAt: '2026-09-20T07:00:00.000Z', lastMessageAt: '2026-09-20T08:00:00.000Z', updatedAt: Date.now() - 400000000, messageCount: 5, current: false, pending: false, archived: true, truncated: false },
       ],
     });
+  }
+
+  /* ---------- P7：Planner 与任务工作流 ----------
+   *
+   * 夹具服务原本没有桩这两个接口，于是「任务面板」与「会话头部的关联任务」
+   * 在截图里都是空的 —— 那等于没验。这里补上，让 P7 的排版能被真看到。
+   *
+   * ⚠️ 顺序要紧：`/api/plans/relations` 必须排在 `/api/plans/` 前缀之前，
+   * 否则会被当成「查一个 id 叫 relations 的计划」（与 router.js 同一类坑）。 */
+  if (p === '/api/agents') {
+    return json(res, 200, {
+      ok: true,
+      auto: 'pi',
+      available: ['pi', 'codex'],
+      activePlanId: null,
+      hasProject: true,
+      agents: [
+        { id: 'pi', name: 'Pi', description: 'pi coding agent（本机主 Agent）', available: true, version: '0.87.0', reason: '', detail: '', capabilities: { streaming: true, cancellation: true, resume: true, toolEvents: true, sessionLinking: true }, notes: [], testOnly: false },
+        { id: 'codex', name: 'Codex', description: 'OpenAI Codex CLI', available: true, version: '0.30.0', reason: '', detail: '', capabilities: { streaming: true, cancellation: true, resume: true, toolEvents: true, sessionLinking: false }, notes: [], testOnly: false },
+        { id: 'claude', name: 'Claude Code', description: 'Anthropic Claude Code CLI', available: false, version: '', reason: 'not-installed', detail: '找不到 npm 包 @anthropic-ai/claude-code', capabilities: { streaming: false, cancellation: true, resume: false, toolEvents: false, sessionLinking: false }, notes: [], testOnly: false },
+      ],
+    });
+  }
+
+  if (p === '/api/plans/relations') {
+    const sid = url.searchParams.get('sessionId') || '';
+    return json(res, 200, {
+      ok: true,
+      hasProject: true,
+      sessionId: sid,
+      truncated: false,
+      matches: sid === 'sid-cur'
+        ? [
+            { planId: 'plan-1', planTitle: '修复 SSE 重连问题', planStatus: 'running', taskId: 'backend', taskTitle: '修改后端', taskStatus: 'running', agent: 'pi', attempt: 2, startedAt: Date.now() - 60000, endedAt: null, success: false, filesChanged: ['server/rpc-bridge.js'] },
+            { planId: 'plan-1', planTitle: '修复 SSE 重连问题', planStatus: 'running', taskId: 'tests', taskTitle: '补测试', taskStatus: 'pending', agent: 'pi', attempt: 1, startedAt: null, endedAt: null, success: false, filesChanged: [] },
+          ]
+        : [],
+    });
+  }
+
+  if (p === '/api/plans') {
+    return json(res, 200, {
+      ok: true,
+      hasProject: true,
+      activePlanId: null,
+      broken: [],
+      plans: [
+        { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 4, success: 2, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+      ],
+    });
+  }
+
+  if (p === '/api/plans/plan-1') {
+    if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-1' });
+    return json(res, 200, { ok: true, plan: PLAN_DETAIL, counts: { total: 4, success: 2, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+  }
+  if (p.startsWith('/api/plans/')) {
+    return json(res, 200, { ok: true, planId: 'plan-1', taskId: 'backend', title: '修复 bridgeRun stale response' });
   }
 
   if (p === '/api/providers') {

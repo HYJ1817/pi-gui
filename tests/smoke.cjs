@@ -200,18 +200,71 @@ const stubPlan = {
   recoveryNotes: [],
   tasks: [
     { id: 'inspect', title: '分析认证架构', description: '读现有代码', agent: 'pi', workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '', verification: null,
-      attempts: [{ attempt: 1, success: true, error: '', summary: '读完了', exitCode: 0, startedAt: 1, endedAt: 2 }],
-      result: { success: true, exitCode: 0, summary: '已分析完现有认证架构', toolCalls: 2, durationMs: 12000, raw: null, changes: { available: true, files: [{ path: 'src/auth.js', change: 'modified', status: 'M', additions: 31, deletions: 12 }], note: '执行期间观察到的工作区变化（可能也包含其它来源的改动）' } } },
+      attempts: [{ attempt: 1, success: true, error: '', summary: '读完了', exitCode: 0, startedAt: 1, endedAt: 2, sessionId: 'sess-inspect-1', sessionAvailable: true, sessionTitle: '分析认证架构', filesChanged: ['src/auth.js'], changeCaptureIncomplete: false }],
+      result: { success: true, exitCode: 0, summary: '已分析完现有认证架构', toolCalls: 2, durationMs: 12000, raw: null, sessionId: 'sess-inspect-1', changes: { available: true, files: [{ path: 'src/auth.js', change: 'modified', status: 'M', additions: 31, deletions: 12 }], note: '执行期间观察到的工作区变化（可能也包含其它来源的改动）' } } },
     { id: 'backend', title: '实现后端接口', description: '写接口', agent: 'codex', workingDirectory: '.', dependsOn: ['inspect'], status: 'failed', startedAt: 3, endedAt: 4, attempt: 2, error: '第一次故意失败：模型报 402', verification: null,
       attempts: [
-        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4 },
-        { attempt: 2, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6 },
+        { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'sess-back-1', sessionAvailable: true, sessionTitle: '后端接口（第一次）', filesChanged: ['server/api.js'], changeCaptureIncomplete: false },
+        { attempt: 2, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6, sessionId: 'sess-back-2', sessionAvailable: true, sessionTitle: '后端接口（第二次）', filesChanged: ['server/api.js', 'tests/api.cjs'], changeCaptureIncomplete: false },
       ],
-      result: { success: false, exitCode: 1, summary: '', toolCalls: 0, durationMs: 3000, raw: null, changes: { available: true, files: [], note: '' } } },
-    { id: 'frontend', title: '实现前端界面', description: '写页面', agent: 'claude', workingDirectory: '.', dependsOn: ['inspect'], status: 'cancelled', startedAt: 7, endedAt: 8, attempt: 1, error: '已取消', verification: null, attempts: [{ attempt: 1, success: false, error: '已取消', summary: '', exitCode: null, startedAt: 7, endedAt: 8 }], result: { success: false, exitCode: null, summary: '', toolCalls: 0, durationMs: 500, raw: null, changes: { available: false, files: [], note: '' } } },
+      result: { success: false, exitCode: 1, summary: '', toolCalls: 0, durationMs: 3000, raw: null, sessionId: 'sess-back-2', changes: { available: true, files: [], note: '' } } },
+    { id: 'frontend', title: '实现前端界面', description: '写页面', agent: 'claude', workingDirectory: '.', dependsOn: ['inspect'], status: 'cancelled', startedAt: 7, endedAt: 8, attempt: 1, error: '已取消', verification: null, attempts: [{ attempt: 1, success: false, error: '已取消', summary: '', exitCode: null, startedAt: 7, endedAt: 8, sessionId: null, sessionAvailable: false, sessionTitle: '', filesChanged: [], changeCaptureIncomplete: false }], result: { success: false, exitCode: null, summary: '', toolCalls: 0, durationMs: 500, raw: null, sessionId: null, changes: { available: false, files: [], note: '' } } },
     { id: 'verify', title: '运行测试验证', description: '跑 npm test', agent: 'pi', workingDirectory: '.', dependsOn: ['backend', 'frontend'], status: 'blocked', startedAt: null, endedAt: null, attempt: 0, error: '', verification: { command: 'npm test' }, attempts: [], result: null },
   ],
 };
+
+/* P7 专用夹具：四种会话状态各来一条，外加一次「关联会话已删除」。
+ * 用独立的 fixture 而不是往 stubPlan 上堆，是为了让既有断言（53 / §19）的
+ * 前提保持稳定 —— 那些断言关心的是「历史与 Changes 还在不在」。 */
+const stubPlanP7 = {
+  id: 'plan-1',
+  title: '给这个项目补登录功能',
+  goal: 'g',
+  status: 'paused',
+  createdAt: 1,
+  updatedAt: 2,
+  startedAt: 1,
+  endedAt: null,
+  projectRoot: 'C:/demo',
+  concurrency: 1,
+  recoveryNotes: [],
+  tasks: [
+    { id: 'linked', title: '改后端', description: '', agent: 'pi', workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '', verification: null,
+      attempts: [{ attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 1, endedAt: 2, sessionId: 'sess-a', sessionAvailable: true, sessionTitle: '修复 bridgeRun stale response', filesChanged: ['server/rpc-bridge.js'], changeCaptureIncomplete: false }],
+      result: null },
+    { id: 'retried', title: '补测试', description: '', agent: 'pi', workingDirectory: '.', dependsOn: [], status: 'failed', startedAt: 3, endedAt: 6, attempt: 2, error: '', verification: null,
+      attempts: [
+        { attempt: 1, success: false, error: '第一次失败', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'sess-r1', sessionAvailable: true, sessionTitle: '补测试（第一次）', filesChanged: ['tests/reliability.cjs'], changeCaptureIncomplete: false },
+        { attempt: 2, success: false, error: '第二次也失败', summary: '', exitCode: 1, startedAt: 5, endedAt: 6, sessionId: 'sess-r2', sessionAvailable: true, sessionTitle: '补测试（第二次）', filesChanged: ['tests/reliability.cjs'], changeCaptureIncomplete: false },
+      ],
+      result: null },
+    { id: 'nosess', title: '没有会话的任务', description: '', agent: 'codex', workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 7, endedAt: 8, attempt: 1, error: '', verification: null,
+      attempts: [{ attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 7, endedAt: 8, sessionId: null, sessionAvailable: false, sessionTitle: '', filesChanged: ['src/demo.js'], changeCaptureIncomplete: false }],
+      result: null },
+    { id: 'gone', title: '会话被删的任务', description: '', agent: 'pi', workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 9, endedAt: 10, attempt: 1, error: '', verification: null,
+      attempts: [{ attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 9, endedAt: 10, sessionId: 'sess-gone', sessionAvailable: false, sessionTitle: '', filesChanged: [], changeCaptureIncomplete: true }],
+      result: null },
+  ],
+};
+
+/* 计划详情接口回什么 —— 默认 stubPlan，P7 段临时换成 stubPlanP7。 */
+let stubPlanDetail = stubPlan;
+
+/* P7 §8：会话 → 任务 的反向关联。两条命中，用来验「关联 N 个任务」与展开。 */
+const stubRelations = {
+  ok: true,
+  hasProject: true,
+  sessionId: '01a0d999-1111-2222-3333',
+  truncated: false,
+  matches: [
+    { planId: 'plan-1', planTitle: '修复 SSE 重连问题', planStatus: 'paused', taskId: 'backend', taskTitle: '修改后端', taskStatus: 'failed', agent: 'pi', attempt: 2, startedAt: 5, endedAt: 6, success: false, filesChanged: ['server/rpc-bridge.js'] },
+    { planId: 'plan-1', planTitle: '修复 SSE 重连问题', planStatus: 'paused', taskId: 'tests', taskTitle: '补测试', taskStatus: 'success', agent: 'pi', attempt: 1, startedAt: 7, endedAt: 8, success: true, filesChanged: ['tests/reliability.cjs'] },
+  ],
+};
+
+/* 打开会话的响应 —— 可被测试临时改成失败，验证「正常结果不当错误」 */
+let stubOpenSession = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '修复 bridgeRun stale response', sessionId: 'sess-a', taskId: 'linked', attempt: 1 };
+const openSessionCalls = [];
 
 const stubPlans = {
   ok: true,
@@ -493,8 +546,16 @@ window.fetch = async (url, opts) => {
     }
     plannerCalls.push({ method, url: u, body });
     if (u.includes('/generate')) return { json: async () => stubGenerate };
+    /* ⚠️ 顺序要紧：`relations` 与 `open-session` 都必须排在下面那条「:id」之前，
+     * 否则会被当成「查一个 id 叫 relations 的计划」。这和 router.js 里
+     * 「顺序即语义」是同一类坑。 */
+    if (u.includes('/relations')) return { json: async () => stubRelations };
+    if (u.includes('/open-session')) {
+      openSessionCalls.push({ method, url: u, body });
+      return { json: async () => stubOpenSession };
+    }
     if (method !== 'GET') return { json: async () => ({ ok: true, planId: 'plan-1', taskId: 'backend' }) };
-    if (/\/api\/plans\/[^/?]+/.test(u)) return { json: async () => ({ ok: true, plan: stubPlan, counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, agents: [], activePlanId: null }) };
+    if (/\/api\/plans\/[^/?]+/.test(u)) return { json: async () => ({ ok: true, plan: stubPlanDetail, counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, agents: [], activePlanId: null }) };
     return { json: async () => stubPlans };
   }
   if (u.includes('/api/mcp')) {
@@ -3124,6 +3185,7 @@ staticCheck();
   await extSection();
   await plannerSection();
   await sessionSection();
+  await p7Section();
   await convNavSection();
 
   /* ---------- 会话内提问导航（Conversation Minimap） ----------
@@ -3390,6 +3452,145 @@ staticCheck();
 
 
   /* ---------- 侧栏的会话列表（参考 Codex，不单开窗口） ---------- */
+  /* ---------- P7：项目级任务工作流（任务 ↔ 会话 / 任务 ↔ 文件） ---------- */
+  async function p7Section() {
+    /* 1) 会话标题旁的「关联任务」窄条（§8）。
+     * 它由 sessions.js 在会话列表刷新时驱动，所以先重渲染项目列表。 */
+    window.renderProjects();
+    await new Promise((r) => setTimeout(r, 90));
+    const hint = $('sessionPlans');
+
+    check('P7. 会话头部有关联容器（没有关联时整块 hidden，不占位）', () => Boolean(hint));
+    check('P7. 有关联时显示「关联 N 个任务」', () => {
+      if (!hint || hint.hidden) return '窄条没显形';
+      return /关联 2 个任务/.test(hint.textContent) || hint.textContent.slice(0, 120);
+    });
+    check('P7. 窄条显示计划名与任务名（看得出属于哪个计划的哪个任务）', () => {
+      const t = hint.textContent;
+      return (/修复 SSE 重连问题/.test(t) && /修改后端/.test(t)) || t.slice(0, 160);
+    });
+    check('P7. 窄条里没有绝对路径 / 会话 id', () =>
+      (!/[A-Za-z]:\\|[A-Za-z]:\//.test(hint.textContent) && !/sess-/.test(hint.textContent)) || hint.textContent.slice(0, 160));
+
+    const toggle = hint.querySelector('.sp-toggle');
+    check('P7. 多条关联时给「展开全部」', () => Boolean(toggle) || hint.textContent.slice(0, 120));
+    if (toggle) {
+      toggle.onclick();
+      check('P7. 展开后两条都列出来', () => hint.querySelectorAll('.sp-row').length === 2 || String(hint.querySelectorAll('.sp-row').length));
+    }
+
+    /* 2) 点「查看任务」→ 直接打开 Planner（不新开一层弹层） */
+    {
+      hint.querySelector('.sp-open').onclick();
+      await new Promise((r) => setTimeout(r, 90));
+      check('P7. 点「查看任务」打开 Planner 面板', () => Boolean($('modalCard').querySelector('.planner-detail')));
+    }
+
+    /* 3) Planner 里的会话关联（用 P7 专用夹具，四种会话状态各一条） */
+    stubPlanDetail = stubPlanP7;
+    window.closeModal();
+    window.openPlanner();
+    await new Promise((r) => setTimeout(r, 70));
+    let card = $('modalCard');
+    card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+    await new Promise((r) => setTimeout(r, 70));
+    const taskEl = (id) => [...card.querySelectorAll('.planner-task')].find((x) => x.dataset.taskId === id);
+
+    check('P7. 任务显示关联会话的**标题**（不是一串 id）', () => {
+      const it = taskEl('linked');
+      return Boolean(it && /修复 bridgeRun stale response/.test(it.textContent)) || (it ? it.textContent.slice(0, 200) : '没找到任务');
+    });
+    check('P7. 有会话的任务上有「打开会话」按钮', () => {
+      const it = taskEl('linked');
+      return Boolean(it && [...it.querySelectorAll('button')].some((b) => b.textContent === '打开会话'));
+    });
+    check('P7. 每次 attempt 各显示自己的会话（retry 不覆盖旧的那条）', () => {
+      const it = taskEl('retried');
+      const t = it ? it.textContent : '';
+      return (/补测试（第一次）/.test(t) && /补测试（第二次）/.test(t)) || t.slice(0, 220);
+    });
+    check('P7. 没有关联会话时说「无可关联会话」（不报错、不显示 id）', () => {
+      const it = taskEl('nosess');
+      return Boolean(it && /无可关联会话/.test(it.textContent));
+    });
+    check('P7. 关联会话已被删除时明确说明（不静默消失）', () => {
+      const it = taskEl('gone');
+      return Boolean(it && /关联会话已删除/.test(it.textContent));
+    });
+    check('P7. 执行期间变更以**文本节点**渲染（路径不会被当 HTML 解析）', () => {
+      const files = [...card.querySelectorAll('.planner-file')].map((f) => f.textContent);
+      return (files.includes('server/rpc-bridge.js') && files.includes('tests/reliability.cjs')) || JSON.stringify(files);
+    });
+    check('P7. 措辞是「执行期间变更」，不写成「该 Agent 修改」', () => {
+      const t = card.querySelector('.planner-detail').textContent;
+      return (/执行期间变更/.test(t) && !/该 Agent 修改/.test(t)) || t.slice(0, 200);
+    });
+    check('P7. 采集不到变化时如实说明（不是假装「没有变化」）', () => {
+      const it = taskEl('gone');
+      return Boolean(it && /采集不到/.test(it.textContent)) || (it ? it.textContent.slice(0, 200) : '没找到');
+    });
+    check('P7. Plan 级汇总：关联会话去重后的条数', () => {
+      const box = card.querySelector('.planner-relations');
+      return Boolean(box && /关联会话 4/.test(box.textContent)) || (box ? box.textContent : '没有汇总');
+    });
+    check('P7. Plan 级汇总：执行期间涉及的文件数（去重）', () => {
+      const box = card.querySelector('.planner-relations');
+      return Boolean(box && /涉及 3 个文件/.test(box.textContent)) || (box ? box.textContent : '没有汇总');
+    });
+    check('P7. 汇总里的会话可展开并直接打开', () => {
+      const btns = [...card.querySelectorAll('.planner-relations .planner-rel-btn')];
+      const sess = btns.find((b) => /关联会话/.test(b.textContent));
+      if (!sess) return '没有关联会话按钮';
+      sess.onclick();
+      const rows = card.querySelectorAll('.planner-rel-list .planner-rel-row');
+      return rows.length === 4 || `展开了 ${rows.length} 行`;
+    });
+
+    /* 4) 点「打开会话」：只传 plan/task/attempt，不传任何路径 */
+    {
+      openSessionCalls.length = 0;
+      stubOpenSession = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '修复 bridgeRun stale response', sessionId: 'sess-a', taskId: 'linked', attempt: 1 };
+      const it = taskEl('linked');
+      [...it.querySelectorAll('button')].find((b) => b.textContent === '打开会话').onclick();
+      await new Promise((r) => setTimeout(r, 90));
+      const hit = openSessionCalls[0];
+      check('P7. 点「打开会话」调 open-session，且 URL 里没有任何路径 / 会话 id', () =>
+        Boolean(hit && /\/tasks\/linked\/open-session/.test(hit.url) && !/jsonl|\.\.|%3A|sess-/.test(hit.url)) || JSON.stringify(openSessionCalls.map((c) => c.url)));
+      check('P7. 打开成功后收起弹层（要能看到对话区）', () => $('modalCard').childElementCount === 0 || '弹层还开着');
+    }
+
+    /* 5) 后端说「没有可关联的会话」是**正常结果**，不是崩溃 */
+    {
+      window.openPlanner();
+      await new Promise((r) => setTimeout(r, 70));
+      card = $('modalCard');
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await new Promise((r) => setTimeout(r, 70));
+      openSessionCalls.length = 0;
+      stubOpenSession = { ok: false, error: '这次执行没有关联会话（所用的 Agent 不提供会话关联）' };
+      const it = taskEl('linked');
+      [...it.querySelectorAll('button')].find((b) => b.textContent === '打开会话').onclick();
+      await new Promise((r) => setTimeout(r, 70));
+      check('P7. 「没有可关联会话」只提示、界面照常（不当成错误状态）', () =>
+        Boolean($('modalCard').querySelector('.planner-detail')) || '面板被关掉了');
+      check('P7. 提示里说的是原因，不是「未知错误」', () => {
+        const t = $('toasts').textContent;
+        return /没有关联会话/.test(t) || t.slice(0, 120);
+      });
+    }
+
+    window.closeModal();
+    stubPlanDetail = stubPlan;
+
+    /* §21：换项目 / 没有会话时窄条必须被清空。
+     * 关联数据在后端是按项目过滤的，但**已经画出来的 DOM 不会自己消失** ——
+     * 所以清空这一步是显式动作（sessions.js 换项目时调它）。 */
+    window.clearSessionPlans();
+    check('P7. 换项目/无会话时窄条被清空并隐藏（不残留上一个项目的关联）', () =>
+      ($('sessionPlans').hidden === true && $('sessionPlans').childElementCount === 0) ||
+      `hidden=${$('sessionPlans').hidden} children=${$('sessionPlans').childElementCount}`);
+  }
+
   async function sessionSection() {
     sessionCalls.length = 0;
     $('toasts').innerHTML = '';
