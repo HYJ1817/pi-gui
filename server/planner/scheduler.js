@@ -22,6 +22,32 @@
  *
  * 5. **一个 workspace 同时只跑一个 Plan。** 两个 Plan 并行 = 两个 agent 抢同一个
  *    工作区，正是第 1 条要避免的事，而且状态归属会更乱。
+ *
+ * 6. **运行期的生命周期操作作用于 `active.plan`，不是外部 load 出来的副本。**
+ *
+ *    计划在跑的时候，同一个 Plan 在内存里天然有**两份对象图**：
+ *
+ *        active.plan         Scheduler 持有的执行态 —— pump / runTask / finishTask
+ *                            改的一直是它，收尾时也是它整份写盘
+ *        HTTP 请求里 load 的   每次请求 `store.load()` 出来的**新副本**
+ *
+ *    cancel / skip 如果改副本，结果只是把副本写进磁盘；而 Scheduler 随后收尾
+ *    `persist(active.plan)` 会把整个文件**再盖一遍** —— 副本上的改动无声消失
+ *    （界面一刷新，任务又变回 pending），甚至 pump 会因为内存里它还是 pending
+ *    而**真的把它启动起来**。所以运行期的 cancel / skip 必须落到 active.plan 上
+ *    （唯一判定处：下面的 planForMutation）。
+ *
+ *    Retry 是**例外，不能照抄 cancel/skip**：它会把任务改回 pending，而 pump 的
+ *    下一轮 refreshStatuses 立刻把它标成 ready 并**自动执行** —— 「Retry 不自动执行」
+ *    就不成立了；改副本则会被 Scheduler 收尾覆盖回 success。两条路都不通，
+ *    所以 **Plan 仍 active 时 Retry 一律拒绝**（code `plan-active`）。
+ *
+ *    这是「计划里谁拥有哪一部分」在**运行期**的延伸，与 mergeExternalAttemptState
+ *    那条（attempt.review 归 Review API）是同一条规矩的两面：
+ *
+ *        运行期执行态  →  active.plan
+ *        attempt.review →  Review API
+ *        Retry         →  只允许 Plan 不再 active 时
  */
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
@@ -600,27 +626,45 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     return { ok: true, planId: session.planId };
   }
 
+  /**
+   * 运行期变更该落到哪个 plan 对象上 —— **这是唯一判定处**（文件头第 6 条）。
+   *
+   * 计划仍在跑时，HTTP 路由手上那份 plan 是**每次请求重新 load 出来的副本**，
+   * 与 Scheduler 内存里的 `active.plan` 是两个对象图。改副本没有意义：
+   * pump / finishTask 之后 `persist(active.plan)` 会把整份文件盖回去。
+   * 所以同一个 plan 正在跑 → 改 active.plan；别的 plan 原样返回。
+   *
+   * Route 层**不要再判断一次** active —— 规则只在这里一份，避免两处漂移。
+   */
+  function planForMutation(plan) {
+    if (active && plan && active.planId === plan.id) return active.plan;
+    return plan;
+  }
+
   /** 取消单个 task：在跑就 abort，没跑就标 cancelled。 */
   function cancelTask(plan, taskId) {
-    const task = plan.tasks.find((t) => t.id === taskId);
+    /* 运行期改 active.plan —— 否则 Scheduler 收尾时整份写盘会把这次取消冲掉，
+     * 而且 pump 会因为内存里它还是 pending 而真的把它启动（见 planForMutation）。 */
+    const target = planForMutation(plan);
+    const task = target.tasks.find((t) => t.id === taskId);
     if (!task) return { ok: false, code: 'not-found', error: '找不到这个任务' };
     if (TERMINAL_TASK_STATUS.includes(task.status)) {
       return { ok: false, code: 'settled', error: `任务已经结束（${task.status}），不能取消` };
     }
-    const c = active && active.planId === plan.id ? active.controllers.get(taskId) : null;
+    const c = active && active.planId === target.id ? active.controllers.get(taskId) : null;
     if (c) {
       try {
         c.abort();
       } catch {
         /* noop */
       }
-      return { ok: true, taskId, cancelledRunning: true };
+      return { ok: true, taskId, cancelledRunning: true, plan: target };
     }
     task.status = TASK_STATUS.CANCELLED;
     task.error = '已取消';
-    persist(plan);
-    emit(plan.id, taskId, null, 'task_cancelled', { attempt: task.attempt });
-    return { ok: true, taskId, cancelledRunning: false };
+    persist(target);
+    emit(target.id, taskId, null, 'task_cancelled', { attempt: task.attempt });
+    return { ok: true, taskId, cancelledRunning: false, plan: target };
   }
 
   /**
@@ -669,6 +713,13 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
   /**
    * 重试：给这个 Task **排一次新的尝试**。
    *
+   * ---------- 前置条件：这个 Plan 必须**不在执行中** ----------
+   *
+   * 计划仍 active 时一律拒绝（`code: 'plan-active'`），无论目标任务自己是
+   * success / failed / cancelled / skipped。要重试就**等计划结束，或先停止整个计划**。
+   * 理由见下面函数体里的注释与文件头第 6 条 —— 简单说：让 Retry 在运行期生效
+   * 要么被覆盖、要么被 pump 自动执行，两条都不是「重试」应有的行为。
+   *
    * ---------- 一条不能破的语义 ----------
    *
    *     Retry = 新的 Attempt，**不是重写历史**。
@@ -692,6 +743,7 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     const task = plan.tasks.find((t) => t.id === taskId);
     if (!task) return { ok: false, code: 'not-found', error: '找不到这个任务' };
     if (task.status === TASK_STATUS.RUNNING) return { ok: false, code: 'running', error: '任务正在执行，先停止它' };
+
     if (!RETRYABLE_TASK_STATUS.includes(task.status)) {
       return { ok: false, code: 'nothing-to-retry', error: `任务当前是「${task.status}」，还没有可重试的结果` };
     }
@@ -700,6 +752,32 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     const busy = downs.find((d) => d.status === TASK_STATUS.RUNNING);
     if (busy) {
       return { ok: false, code: 'busy', error: `下游任务「${busy.id}」正在执行，先停止再重试上游` };
+    }
+
+    /* ---------- Plan 仍在执行 → 一律拒绝（文件头第 6 条） ----------
+     *
+     * 为什么不能像 cancel / skip 那样直接改 `active.plan`：Retry 会把任务改回
+     * `pending`，而 pump 的下一轮 refreshStatuses 立刻把它标成 ready **自动跑掉**
+     * ——「Retry 不自动执行」就不成立了。改外部副本则会被 Scheduler 收尾的
+     * `persist(active.plan)` 覆盖回 success。两条路都不通，只能拒绝。
+     *
+     * **判据是「整个 Plan 还 active」，与目标任务自己的状态无关** —— 即使它已经是
+     * success / failed / cancelled / skipped，只要计划还在跑就不许重试。
+     *
+     * ---------- 为什么排在这三关之后 ----------
+     *
+     * 拒绝理由是**具体 → 一般**逐层退让的，先把最具体的那条说清楚：
+     *
+     *     running          目标任务自己在跑        —— 最具体
+     *     nothing-to-retry 目标任务还没有可重试的结果
+     *     busy             重试会抽掉正在跑的下游的输入
+     *     plan-active      上面都不是，但整个计划还在跑   —— 最一般
+     *
+     * 所以「计划 active 且下游正在跑」答 `busy`（那是真实的、更危险的危害），
+     * 「计划 active、目标任务没跑、下游也没跑」才答 `plan-active`。
+     * 四条全是 `ok:false` —— **计划仍在跑时，Retry 一次也不会真的发生**。 */
+    if (active && active.planId === plan.id) {
+      return { ok: false, code: 'plan-active', error: '计划仍在执行，请等待当前执行结束或先停止计划，再重试任务' };
     }
 
     /* 只重置**当前态**。`attempts` 不动 —— 这就是「不重写历史」。 */
@@ -735,15 +813,18 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
 
   /** 跳过：**依赖它的任务仍然 blocked**，不自动放行（规格 §26）。 */
   function skipTask(plan, taskId) {
-    const task = plan.tasks.find((t) => t.id === taskId);
+    /* 与 cancelTask 同理：运行期必须改 active.plan，否则这次跳过会被 Scheduler
+     * 收尾的整份写盘冲回 pending（见 planForMutation / 文件头第 6 条）。 */
+    const target = planForMutation(plan);
+    const task = target.tasks.find((t) => t.id === taskId);
     if (!task) return { ok: false, code: 'not-found', error: '找不到这个任务' };
     if (task.status === TASK_STATUS.RUNNING) return { ok: false, code: 'running', error: '任务正在执行，先停止它' };
     task.status = TASK_STATUS.SKIPPED;
     task.error = task.error || '已跳过';
-    persist(plan);
-    emit(plan.id, taskId, null, 'task_skipped', {});
-    const dependents = plan.tasks.filter((t) => t.dependsOn.includes(taskId) && !TERMINAL_TASK_STATUS.includes(t.status));
-    return { ok: true, taskId, blockedDependents: dependents.map((t) => t.id) };
+    persist(target);
+    emit(target.id, taskId, null, 'task_skipped', {});
+    const dependents = target.tasks.filter((t) => t.dependsOn.includes(taskId) && !TERMINAL_TASK_STATUS.includes(t.status));
+    return { ok: true, taskId, blockedDependents: dependents.map((t) => t.id), plan: target };
   }
 
   /** 应用退出时收尾：把在跑的标成 interrupted（规格 §31）。 */

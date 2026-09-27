@@ -725,11 +725,15 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
         }
         if (taskAction === 'cancel') {
           const r = scheduler.cancelTask(plan, taskId);
-          return json(res, 200, r.ok ? { ok: true, taskId, cancelledRunning: r.cancelledRunning, plan } : { ok: false, error: r.error, code: r.code });
+          /* 计划在跑时 Scheduler 改的是 **active.plan**，不是这里这份 load 出来的
+           * 副本 —— 所以要回它改过的那一份（r.plan），否则响应的 plan 字段里
+           * 任务还停在 pending，与 ok:true 自相矛盾。规则只在 Scheduler 里判断，
+           * 路由不做第二次 active 判定。 */
+          return json(res, 200, r.ok ? { ok: true, taskId, cancelledRunning: r.cancelledRunning, plan: r.plan || plan } : { ok: false, error: r.error, code: r.code });
         }
         if (taskAction === 'skip') {
           const r = scheduler.skipTask(plan, taskId);
-          return json(res, 200, r.ok ? { ok: true, taskId, blockedDependents: r.blockedDependents, plan } : { ok: false, error: r.error, code: r.code });
+          return json(res, 200, r.ok ? { ok: true, taskId, blockedDependents: r.blockedDependents, plan: r.plan || plan } : { ok: false, error: r.error, code: r.code });
         }
         /* P7：从任务跳到它的会话（规格 §7）。失败一律 200 + ok:false ——
          * 「这次执行没有关联会话」是**正常结果**，不是错误状态码。 */
