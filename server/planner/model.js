@@ -159,6 +159,9 @@ export function normalizeAttempt(raw) {
    * 所以**不需要数据迁移**，P7 及更早的 Plan 照常读取。 */
   a.outcomeStatus = normalizeAttemptOutcome(a.outcomeStatus);
   a.verificationSnapshot = normalizeVerificationSnapshot(a.verificationSnapshot);
+  /* P9：Pi GUI 自己独立跑过的验证证据。同样是 additive —— 老 attempt 没有它，
+   * 归一化成 null（界面显示「尚未独立确认」），**不需要 migration**。 */
+  a.verificationResult = normalizeVerificationResult(a.verificationResult);
   a.review = normalizeReview(a.review);
   return a;
 }
@@ -248,6 +251,81 @@ export function normalizeVerificationSnapshot(raw) {
   const description = clampStr(raw.description, 500).trim();
   if (description) return { description };
   return null;
+}
+
+/* ==================== P9：独立验证 ====================
+ *
+ * 一条与 P8 同级、但**绝不能混**的语义：
+ *
+ *     要求   verificationSnapshot   这次 Attempt 开始时**要求**验证什么（已冻结）
+ *     证据   verificationResult     Pi GUI **后来真的执行过什么**、结果如何
+ *
+ * 前者是「要求」，后者是「证据」。所以「验证结果」这一行不再固定显示
+ * 「尚未独立确认」—— **没跑过**才是那句，**跑过之后**显示机器实际跑出来的东西。
+ *
+ * 两件事仍然不变：
+ *   - 验证通过 **不等于** 人工 accepted —— 人还得自己判断
+ *   - 验证失败 **不会** 自动 Retry —— 重试是人的决定
+ */
+
+/** 一次独立验证的状态。 */
+export const VERIFICATION_STATUS = Object.freeze({
+  RUNNING: 'running',
+  PASSED: 'passed',
+  FAILED: 'failed',
+  INTERRUPTED: 'interrupted',
+});
+
+const VERIFICATION_STATUSES = Object.values(VERIFICATION_STATUS);
+
+/** 实际执行的那条命令的上限 —— 与 verificationSnapshot.command 的 500 对齐：
+ *  它本来就是从那儿来的（执行时读的就是那个冻结值）。 */
+const MAX_VERIFICATION_COMMAND = 500;
+
+/**
+ * 保存下来的输出摘要上限（字符）。
+ *
+ * ⚠️ **必须小。** 计划是**整份读写**的 JSON 文件，这个字段会进文件 ——
+ * 一次 `npm test` 的输出轻松几百 KB，不设上限就是把用户的计划文件撑爆，
+ * 而且此后每次 GET 计划详情都要拖着它走。
+ * 量级与 attempt.summary(1000) / attempt.error(2000) 一致。
+ * 超出时**保留末尾**（失败原因几乎总在最后几行），并置 `truncated`。
+ */
+export const MAX_VERIFICATION_OUTPUT = 2000;
+
+/** 验证自身的错误信息（启动失败 / 超时 / 被取消）上限。 */
+const MAX_VERIFICATION_ERROR = 500;
+
+/**
+ * 归一化一条独立验证记录。
+ *
+ * **宽容**（读盘路径）：认不出的 `status` 一律当「没有这条记录」（null），
+ * **不猜** —— 与 `normalizeAttemptOutcome` 的「未知就是 null」同一条规矩。
+ * 严格校验（能不能跑、跑哪条命令）在 API 与 Verifier 那一侧。
+ *
+ * `running` 是**会落盘**的：硬崩时它会留在文件里，由进程启动时的 `recoverAll()`
+ * 翻成 `interrupted`（与 `task.status` 的 running 同一套处理，理由见 store.js
+ * 里「每次 load 都恢复」那个坑的注释）。
+ */
+export function normalizeVerificationResult(raw) {
+  if (!isPlainObject(raw)) return null;
+  const status = VERIFICATION_STATUSES.includes(raw.status) ? raw.status : null;
+  if (!status) return null;
+  const running = status === VERIFICATION_STATUS.RUNNING;
+  return {
+    status,
+    command: clampStr(raw.command, MAX_VERIFICATION_COMMAND),
+    /* 运行中的记录**不该带结论字段**（退出码 / 完成时间 / 耗时 / 输出 / 错误）——
+     * 归一化时一律清掉，否则会出现「状态是运行中、却挂着上一次的退出码与输出」
+     * 这种自相矛盾的展示（与 normalizeReview 对 pending 的处理同一条思路）。 */
+    exitCode: running ? null : Number.isInteger(raw.exitCode) ? raw.exitCode : null,
+    startedAt: Number.isFinite(raw.startedAt) ? raw.startedAt : null,
+    finishedAt: running ? null : Number.isFinite(raw.finishedAt) ? raw.finishedAt : null,
+    durationMs: running ? null : Number.isFinite(raw.durationMs) ? raw.durationMs : null,
+    outputSummary: running ? '' : clampStr(raw.outputSummary, MAX_VERIFICATION_OUTPUT),
+    truncated: running ? false : Boolean(raw.truncated),
+    error: running ? '' : clampStr(raw.error, MAX_VERIFICATION_ERROR),
+  };
 }
 
 /**

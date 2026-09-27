@@ -32,6 +32,8 @@ import {
   skipPlanTask,
   openPlanTaskSession,
   updateAttemptReview,
+  verifyPlanAttempt,
+  stopPlanAttemptVerification,
 } from './api.js';
 import { openModal, closeModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
@@ -1004,6 +1006,175 @@ export function openPlanner(focus = null) {
       return wrap;
     }
 
+    /* ================= P9：独立验证 =================
+     *
+     * 与 P8 的「人工审阅」是**两件事**，界面上也分开显示：
+     *
+     *     独立验证   Pi GUI 真的跑了一遍那条命令 —— 这是**机器证据**
+     *     人工审阅   我认不认这个结果 —— 这是**人的判断**
+     *
+     * 所以「验证通过 + 待审阅」和「验证失败 + 已接受」都是合法组合。
+     * 验证通过**不会**自动 accepted（要人来点），验证失败也**不会**自动重试。
+     */
+
+    const VERIFY_STATE = {
+      running: { cls: 'run', label: '正在验证…' },
+      passed: { cls: 'ok', label: '通过' },
+      failed: { cls: 'err', label: '失败' },
+      interrupted: { cls: 'warn', label: '已中断' },
+    };
+
+    /** 归一化一条验证记录 —— 与后端 `normalizeVerificationResult` 同一套语义。
+     *  后端已经保证形状，这里再挡一道是给「夹具 / P9 之前的老数据」：
+     *  它们根本没有 `verificationResult` 字段，必须照常显示「尚未独立确认」。 */
+    function verificationOf(a) {
+      const v = a && a.verificationResult && typeof a.verificationResult === 'object' ? a.verificationResult : null;
+      if (!v || !Object.prototype.hasOwnProperty.call(VERIFY_STATE, v.status)) return null;
+      return {
+        status: v.status,
+        command: typeof v.command === 'string' ? v.command : '',
+        exitCode: Number.isInteger(v.exitCode) ? v.exitCode : null,
+        durationMs: Number.isFinite(v.durationMs) ? v.durationMs : null,
+        outputSummary: typeof v.outputSummary === 'string' ? v.outputSummary : '',
+        truncated: Boolean(v.truncated),
+        error: typeof v.error === 'string' ? v.error : '',
+      };
+    }
+
+    /** 这条 attempt 当初冻结的验证要求里有没有**可执行命令**。
+     *  只有 description 时不给「运行验证」—— 由一句描述猜一条命令是在编造要求。 */
+    function hasVerificationCommand(a) {
+      const s = a && a.verificationSnapshot;
+      return Boolean(s && typeof s.command === 'string' && s.command.trim());
+    }
+
+    /** 把一份验证记录按**身份**写回内存里的计划，然后重画。 */
+    function applyVerification(planId, taskId, attempt, record) {
+      if (!current || current.id !== planId) return;
+      const t = (current.tasks || []).find((x) => x.id === taskId);
+      const a = t && (Array.isArray(t.attempts) ? t.attempts : []).find((x) => x.attempt === attempt);
+      if (!a) return;
+      a.verificationResult = record || null;
+      /* 刚由**本进程**起的这一次：`running` 是活的（决定给不给「停止验证」）。 */
+      a.verificationRunning = Boolean(record && record.status === 'running');
+      renderDetail();
+    }
+
+    async function doRunVerification(planId, taskId, attempt) {
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
+      try {
+        const r = await verifyPlanAttempt(planId, taskId, attempt);
+        /* 响应回来先确认上下文没变 —— 切了项目就一个字都不写。 */
+        if (!plannerAlive()) {
+          renderStalePlanner();
+          return;
+        }
+        if (!r.ok) {
+          /* 显示后端原话：`no-command` / `plan-active` / `already-running` 都能读懂。
+           * 状态可能已经被别处改了（例如同一次正在跑），所以拉一次权威数据。 */
+          toast(r.error || '无法运行验证', 'warn');
+          await refreshCurrent();
+          return;
+        }
+        applyVerification(planId, taskId, attempt, r.verification);
+        toast('已开始独立验证', 'ok');
+      } catch (err) {
+        toast('运行验证失败：' + err.message, 'error');
+      }
+    }
+
+    async function doStopVerification(planId, taskId, attempt) {
+      if (!plannerAlive()) {
+        renderStalePlanner();
+        return;
+      }
+      try {
+        const r = await stopPlanAttemptVerification(planId, taskId, attempt);
+        if (!plannerAlive()) {
+          renderStalePlanner();
+          return;
+        }
+        if (!r.ok) {
+          toast(r.error || '停止失败', 'warn');
+          return;
+        }
+        toast('已请求停止验证，稍等一下会收成「已中断」', 'info');
+      } catch (err) {
+        toast('停止验证失败：' + err.message, 'error');
+      }
+    }
+
+    /**
+     * 验证区。「尚未独立确认」只在**从来没跑过**时出现 —— 跑过之后显示的是
+     * 机器实际跑出来的东西。但**验证通过仍然不等于人工验收**，那是下一行的事。
+     */
+    function renderVerification(planId, task, a) {
+      const vr = verificationOf(a);
+      const live = Boolean(a.verificationRunning);
+      /* 两个类：`.planner-attempt-verify` 是**行布局**（与「验证要求」那行共用），
+       * `.planner-verify-row` 标明「这是验证结果那一行」—— 两行长得一样但语义不同，
+       * 只靠共用的布局类去 querySelector 只会拿到第一行（测试里就踩到过）。 */
+      const row = el('div', 'planner-attempt-verify planner-verify-row');
+      row.append(el('span', 'planner-lbl', '验证结果'));
+      if (!vr) {
+        row.append(el('span', 'planner-rv-hint', '尚未独立确认'));
+      } else {
+        row.append(el('span', 'planner-verify-state ' + VERIFY_STATE[vr.status].cls, VERIFY_STATE[vr.status].label));
+      }
+      /* 按钮只看两件事：**有没有可跑的命令**、**跑没跑完**。
+       * `running` 但本进程没在跑（磁盘上留着的陈旧记录 —— 正常只出现在崩溃后，
+       * 下次启动会被恢复成「已中断」）→ 不给「停止验证」，因为没有东西可停。 */
+      if (hasVerificationCommand(a)) {
+        if (vr && vr.status === 'running') {
+          if (live) row.append(miniBtn('停止验证', '', () => doStopVerification(planId, task.id, a.attempt)));
+        } else {
+          row.append(miniBtn(vr ? '重新运行验证' : '运行验证', 'primary', () => doRunVerification(planId, task.id, a.attempt)));
+        }
+      }
+      return row;
+    }
+
+    /** 验证明细（命令 / 退出码 / 耗时 / 输出 / 错误）。单起一行，免得把状态行撑爆。 */
+    function renderVerificationDetail(a) {
+      const vr = verificationOf(a);
+      if (!vr) return null;
+      const box = el('div', 'planner-verify-detail');
+
+      if (vr.command) {
+        const line = el('div', 'planner-verify-line');
+        line.append(el('span', 'planner-lbl', '命令'));
+        const chip = el('span', 'planner-verify-cmd', vr.command);
+        chip.title = vr.command; // 长命令截断后悬停看全（与文件路径同一条规矩）
+        line.append(chip);
+        box.append(line);
+      }
+      if (vr.status !== 'running') {
+        const facts = [];
+        if (vr.exitCode !== null) facts.push(`退出码 ${vr.exitCode}`);
+        if (Number.isFinite(vr.durationMs)) facts.push(`耗时 ${fmtDuration(vr.durationMs)}`);
+        if (facts.length) {
+          const line = el('div', 'planner-verify-line');
+          line.append(el('span', 'planner-lbl', '结果'));
+          line.append(el('span', 'planner-verify-facts', facts.join(' · ')));
+          box.append(line);
+        }
+      }
+      if (vr.error) box.append(el('div', 'planner-verify-msg err', vr.error));
+      if (vr.outputSummary) {
+        const pre = el('pre', 'planner-verify-out');
+        /* 纯文本 —— 命令输出是**完全不可信**的输入（里面有仓库内容、可能有人
+         * 故意打出来的标签）。与 Agent stdout 同一条规矩。 */
+        pre.textContent = vr.outputSummary;
+        box.append(pre);
+        /* 截断必须说出来：悄悄只给末尾会让人以为「输出就这么点」。 */
+        if (vr.truncated) box.append(el('div', 'planner-verify-msg', '输出已截断，只保留末尾'));
+      }
+      return box.childElementCount ? box : null;
+    }
+
     /**
      * 一条 attempt：状态 + 关联会话 + 执行期间变更 + 验证要求 + 人工审阅。
      *
@@ -1127,13 +1298,17 @@ export function openPlanner(focus = null) {
           row.append(crow);
         }
       }
-      const rrow = el('div', 'planner-attempt-verify');
-      rrow.append(el('span', 'planner-lbl', '验证结果'));
-      /* **默认就是这句，永远是这句。** Agent 报 success、exitCode 0、
-       * summary 里写着 tests passed —— 都不构成独立验证证据，所以这里不做任何
-       * 自动判断，也不提供「标记为已验证」这种入口（§十七）。 */
-      rrow.append(el('span', 'planner-rv-hint', '尚未独立确认'));
-      row.append(rrow);
+      /* ---------- 独立验证（P9） ----------
+       *
+       * 「尚未独立确认」只在**从没跑过**时出现。跑过之后这一行显示的是 Pi GUI
+       * 自己跑出来的结果 —— 但**验证通过仍然不等于人工验收**：那是下面
+       * 「人工审阅」那一行的判断，两者永远是两行。
+       *
+       * ⚠️ 仍然**不提供**「标记为已验证」这种入口：Pi GUI 只报它真的跑出来的东西，
+       * 不替人下结论。 */
+      row.append(renderVerification(planId, task, a));
+      const vdetail = renderVerificationDetail(a);
+      if (vdetail) row.append(vdetail);
 
       /* ---------- P8-C：人工审阅 ---------- */
       row.append(renderReview(planId, task, a, false));
@@ -1600,6 +1775,27 @@ export function openPlanner(focus = null) {
 
     setExecutionHandler((evt) => {
       if (!current || evt.planId !== current.id) return;
+
+      /* P9：独立验证的开始 / 结束。
+       *
+       * 开始 → 就地标成 running，按钮立刻变成「停止验证」，不用等下一次拉取。
+       * 结束 → **拉一次权威数据**：退出码、耗时、输出摘要都在后端的记录里，
+       *        前端不自己再拼一遍（拼一遍就是第二个真相，迟早与后端漂开）。 */
+      if (evt.kind === 'verification_start' || evt.kind === 'verification_end') {
+        const attNo = evt.data && Number.isInteger(evt.data.attempt) ? evt.data.attempt : null;
+        const task = evt.taskId ? current.tasks.find((x) => x.id === evt.taskId) : null;
+        const att = attNo !== null && task
+          ? (Array.isArray(task.attempts) ? task.attempts : []).find((x) => x.attempt === attNo)
+          : null;
+        if (att && evt.kind === 'verification_start') {
+          att.verificationResult = { status: 'running', command: evt.data.command || '', startedAt: evt.timestamp || null };
+          att.verificationRunning = true;
+        }
+        renderDetail();
+        if (evt.kind === 'verification_end') setTimeout(() => refreshCurrent(), 150);
+        return;
+      }
+
       if (evt.taskId) {
         if (!liveEvents.has(evt.taskId)) liveEvents.set(evt.taskId, []);
         const arr = liveEvents.get(evt.taskId);

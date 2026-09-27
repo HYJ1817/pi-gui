@@ -233,11 +233,13 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
    *     Scheduler 拥有：执行状态 / attempt 创建 / result / sessionId /
    *                     filesChanged / verificationSnapshot / outcomeStatus
    *     Review API 拥有：attempt.review
+   *     Verifier 拥有：  attempt.verificationResult（P9）
    *
    * Scheduler 保存自己的执行变化时，**不该覆盖一个它不拥有的字段**。
    *
-   * ⚠️ 刻意**只合并 attempt.review 这一个字段**，不做通用 merge engine ——
-   * 通用的那种要么写不对，要么把「谁拥有什么」这件事变得不可读。
+   * ⚠️ 刻意**只合并 attempt.review 与 attempt.verificationResult 这两个字段**，
+   * 不做通用 merge engine —— 通用的那种要么写不对，要么把「谁拥有什么」
+   * 这件事变得不可读。
    * 而且只采纳**磁盘上 revision 更大**的值：方向永远是「不降级」，
    * 所以即使将来有别的写者，也不会被这份内存副本倒推回去。
    *
@@ -263,6 +265,15 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
         if (normalizeReview(la.review).revision > normalizeReview(a.review).revision) {
           a.review = la.review;
         }
+        /* P9：`verificationResult` 归 Verifier 所有，**Scheduler 从不写它** ——
+         * 所以只要磁盘上有记录就以磁盘为准，不需要比「谁更新」：
+         * 这份内存副本里的值永远是计划开始时从磁盘读来的那一份，只会更旧。
+         *
+         * 不合并的后果很具体：用户点「运行验证」→ 验证跑完写进磁盘 →
+         * 紧接着 Scheduler 收尾整份写盘 → 刚拿到的验证证据被内存里那份 null
+         * 冲掉，界面回到「尚未独立确认」。
+         * （P8-A 的 review 踩过同一个坑，这是同一类修复。） */
+        if (la.verificationResult) a.verificationResult = la.verificationResult;
       }
     }
   }

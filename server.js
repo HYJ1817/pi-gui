@@ -56,7 +56,12 @@ import { createUpdateCheck } from './server/update-check.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
 import { createScheduler } from './server/planner/scheduler.js';
+import { createVerifier } from './server/planner/verifier.js';
 import { createPlanner } from './server/planner/index.js';
+/* P9：独立验证要真的跑一条命令，而全项目唯一的 spawn 出口在 cli.js。
+ * planner/ 下的模块不许跨目录 import（tests/modules.cjs 的守卫），
+ * 所以执行能力**在这里注入**过去 —— 与 scheduler 拿 gitStatus 是同一种装配。 */
+import { runShellCommand } from './server/agents/cli.js';
 import { gitStatus } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
@@ -265,17 +270,31 @@ const scheduler = createScheduler({
   publish: sse.publish,
   gitStatus,
 });
+/* P9 独立验证执行器。放在 scheduler 之后建 —— 它要问「这个计划现在是不是
+ * 正在执行」（`scheduler.activePlanId()`），那条规则只写在 Verifier 里，
+ * route 不重复判一次。 */
+const verifier = createVerifier({
+  store: planStore,
+  runtime,
+  scheduler,
+  runShell: runShellCommand,
+  publish: sse.publish,
+});
 /* projects 在 planner 之前建好了，所以用上面那个可变引用回填 —— 避免为了
  * 一个闸门把装配顺序搅乱（projects 需要 planner，planner 又需要 runtime）。
  *
  * P7：planner 额外拿到 sessions —— 「从任务打开会话」要复用现有的会话切换
  * （switch_session + 前端 afterSessionSwitch 的重建链路），不能另起一套。
- * 这里同样是**注入**而不是让 planner import sessions（模块之间不互相 import）。 */
+ * 这里同样是**注入**而不是让 planner import sessions（模块之间不互相 import）。
+ *
+ * P9：planner 再拿到 verifier —— 验证的路由挂在 Planner 的接口下，
+ * 但「能不能跑、跑什么」的判断全在 Verifier 里。 */
 const planner = createPlanner({
   runtime,
   registry: agentRegistry,
   store: planStore,
   scheduler,
+  verifier,
   env: process.env,
   sessions,
 });
@@ -337,6 +356,14 @@ function shutdown() {
     scheduler.shutdown();
   } catch {
     /* 收尾失败不能挡住退出 */
+  }
+  /* P9：正在跑的独立验证也要收口。它和上面那条是同一个理由 ——
+   * 进程一走，那条「正在验证…」就永远不会有下文了，留在盘上就是撒谎。
+   * 这里是**同步**做法（SIGINT 里没有第二次机会），能顺带记下真实耗时。 */
+  try {
+    verifier.shutdown();
+  } catch {
+    /* 同上：收尾失败不能挡住退出 */
   }
   sse.closeAll();
   rpc.stop();

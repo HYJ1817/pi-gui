@@ -325,3 +325,47 @@ export function runCli({
     });
   });
 }
+
+/* ---------- 跑一条**命令字符串**（P9 独立验证） ---------- */
+
+/**
+ * 平台 shell 的入口。
+ *
+ * 这是全项目**唯一**一处「故意让一整条字符串被 shell 解释」的地方 ——
+ * 独立验证要跑的是 `verification.command`，它本身就是用户写的一条命令
+ * （`npm test`，可能带 `&&`、管道），只能过 shell，没有别的选择。
+ *
+ * 所以边界必须说清楚，它和「拼命令字符串」的区别在哪：
+ *   - **仍然 `shell: false` + args 数组**，命令字符串作为**单个参数**传进去，
+ *     本函数不做任何拼接 —— 与上面 `.cmd`/`.bat` 分支是同一套手法；
+ *   - 除这条命令本身之外**不拼任何东西**：cwd 走 spawn 的 `cwd` 选项，
+ *     不写成 `cd X && …`；任务标题、planId、路径都不进这条字符串。
+ * 注入面因此只剩「用户自己的那条命令」—— 而那本来就是要执行的东西。
+ *
+ * Windows 用 `cmd.exe /d /s /c`：`/s` 的作用正是「剥掉外层引号后按原样执行」，
+ * 这是 cmd 上跑一整条命令的标准写法。POSIX 走 `/bin/sh -c`。
+ */
+export function shellCommandEntry(env = process.env) {
+  if (process.platform === 'win32') {
+    return { ok: true, kind: 'exe', cmd: env.ComSpec || 'cmd.exe', baseArgs: ['/d', '/s', '/c'], packageDir: '', version: '', entryPath: null };
+  }
+  return { ok: true, kind: 'exe', cmd: '/bin/sh', baseArgs: ['-c'], packageDir: '', version: '', entryPath: null };
+}
+
+/**
+ * 跑一条命令字符串（经平台 shell）。参数与返回值与 `runCli` **完全一致** ——
+ * 超时、取消、进程树 kill、stdout 尾部截断、stderr 上限都由那一层负责，
+ * 这里只是换了个「入口」。
+ */
+export function runShellCommand({ command, cwd, env = {}, timeoutMs, maxStdoutBytes, signal = null, onStderr = null }) {
+  return runCli({
+    entry: shellCommandEntry(env),
+    args: [String(command ?? '')],
+    cwd,
+    env,
+    timeoutMs,
+    maxStdoutBytes,
+    signal,
+    onStderr,
+  });
+}

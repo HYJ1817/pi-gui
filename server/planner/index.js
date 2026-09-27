@@ -121,7 +121,7 @@ export function buildPlannerPrompt({ goal, title, agentIds, maxTasks = 8 }) {
   ].join('\n');
 }
 
-export function createPlanner({ runtime, registry, store, scheduler, env = process.env, sessionDir = null, generate = null, sessions = null }) {
+export function createPlanner({ runtime, registry, store, scheduler, env = process.env, sessionDir = null, generate = null, sessions = null, verifier = null }) {
   /* ---------- 生成计划 ---------- */
 
   /** 默认生成器：用 pi 适配器 + 独立会话跑一次，然后严格校验它的输出。 */
@@ -392,25 +392,43 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
    * 没注入 sessions 时（单测）原样返回，行为与 P7 之前一致。
    */
   function planView(plan) {
-    if (!sessions || typeof sessions.resolveManyByUuid !== 'function') return plan;
-    const ids = [];
-    for (const t of plan.tasks) {
-      for (const a of Array.isArray(t.attempts) ? t.attempts : []) if (a.sessionId) ids.push(a.sessionId);
-    }
+    const hasSessions = sessions && typeof sessions.resolveManyByUuid === 'function';
     let found = new Map();
-    try {
-      found = sessions.resolveManyByUuid(ids);
-    } catch {
-      found = new Map(); // 会话目录读不出来不该让计划详情打不开
+    if (hasSessions) {
+      const ids = [];
+      for (const t of plan.tasks) {
+        for (const a of Array.isArray(t.attempts) ? t.attempts : []) if (a.sessionId) ids.push(a.sessionId);
+      }
+      try {
+        found = sessions.resolveManyByUuid(ids);
+      } catch {
+        found = new Map(); // 会话目录读不出来不该让计划详情打不开
+      }
     }
     return {
       ...plan,
       tasks: plan.tasks.map((t) => ({
         ...t,
         attempts: (Array.isArray(t.attempts) ? t.attempts : []).map((a) => {
-          if (!a.sessionId) return { ...a, sessionAvailable: false, sessionTitle: '' };
-          const hit = found.get(a.sessionId);
-          return { ...a, sessionAvailable: Boolean(hit), sessionTitle: hit ? hit.title : '' };
+          const out = { ...a };
+          if (hasSessions) {
+            if (!a.sessionId) {
+              out.sessionAvailable = false;
+              out.sessionTitle = '';
+            } else {
+              const hit = found.get(a.sessionId);
+              out.sessionAvailable = Boolean(hit);
+              out.sessionTitle = hit ? hit.title : '';
+            }
+          }
+          /* P9：这次验证**此刻是不是由本进程在跑**。
+           *
+           * 光看落盘的 `status === 'running'` 不够诚实：进程崩过之后磁盘上会
+           * 留着一条 running（要等下次启动的 recoverAll 才翻正）。liveness 的
+           * 权威是 Verifier 内存里的那张表，所以这里把它注进来 ——
+           * 界面据此决定给不给「停止验证」。同样是**视图字段，绝不写回文件**。 */
+          if (verifier) out.verificationRunning = verifier.isRunning(plan.id, t.id, a.attempt);
+          return out;
         }),
       })),
     };
@@ -696,6 +714,36 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
         }
         const r = writeAttemptReview(plan.id, parts[2], Number(parts[4]), body);
         return json(res, r.status, r.body);
+      }
+
+      /* P9：独立验证。
+       *   `/api/plans/:planId/tasks/:taskId/attempts/:attempt/verify`      （6 段）启动
+       *   `/api/plans/:planId/tasks/:taskId/attempts/:attempt/verify/stop` （7 段）停止
+       *
+       * 与上面 review 那条同一条理由排在这里：路径尾段是字面量，谁先谁后**就是语义**，
+       * 排错会让请求拿到一个「看起来正常但完全不对」的响应。
+       *
+       * 失败一律 `ok:false` + 稳定 `code` —— 前端 HTTP 层只消费 JSON body
+       * （见 public/api.js 的说明），所以「为什么没跑成」必须写在 body 里。
+       * 业务规则（能不能跑、跑什么）**只在 Verifier 里判一次**，这里不重复判。 */
+      if (action === 'tasks' && parts.length >= 6 && parts[3] === 'attempts' && parts[5] === 'verify') {
+        if (method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
+        if (!verifier || typeof verifier.start !== 'function') {
+          return json(res, 200, { ok: false, code: 'unavailable', error: '验证执行器没有接入' });
+        }
+        const taskId = parts[2];
+        const attempt = Number(parts[4]);
+        const base = { planId: plan.id, taskId, attempt };
+
+        if (parts.length === 7) {
+          if (parts[6] !== 'stop') return json(res, 404, { ok: false, error: '不认识的验证操作' });
+          const r = verifier.stop(base);
+          return json(res, 200, r.ok ? { ok: true, ...base } : { ok: false, code: r.code, error: r.error });
+        }
+        if (parts.length !== 6) return json(res, 404, { ok: false, error: '不认识的验证操作' });
+
+        const r = verifier.start(base);
+        return json(res, 200, r.ok ? { ok: true, ...base, verification: r.verification } : { ok: false, code: r.code, error: r.error });
       }
 
       if (method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });

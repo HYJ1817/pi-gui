@@ -1786,3 +1786,33 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 /* attempt 历史与任务操作之间留一点间距 —— 否则「跳过」紧贴在审阅块下面，
    看着像是审阅的一个动作（它其实是任务级操作）。 */
 .planner-attempts + .ext-acts { margin-top: 8px; }
+
+/* ============ P9：独立验证 ============
+ *
+ * 「验证结果」这一行的状态。与审阅那行同一个规矩：
+ * **必须带文字**（正在验证… / 通过 / 失败 / 已中断），颜色只是辅助。 */
+.planner-verify-state { flex: 0 0 auto; font-size: 11.5px; }
+.planner-verify-state.run { color: var(--run); }
+.planner-verify-state.ok { color: var(--ok); }
+.planner-verify-state.err { color: var(--err); }
+.planner-verify-state.warn { color: var(--warn); }
+
+/* 明细：命令 / 退出码 / 耗时 / 输出摘要 —— 单起一块，别把状态行撑爆 */
+.planner-verify-detail { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.planner-verify-line {
+  display: flex; align-items: baseline; gap: 7px; font-size: 11.5px;
+  min-width: 0; flex-wrap: wrap;
+}
+.planner-verify-facts { color: var(--t2); }
+
+/* 输出摘要：**有界高度 + 可滚**。一次 npm test 的输出再长也不许把卡片撑开，
+   也不该让长行把布局挤破（overflow-wrap: anywhere）。
+   内容是**不可信文本**（仓库内容、命令回显都可能在里头），按纯文本渲染。 */
+.planner-verify-out {
+  margin: 0; max-height: 150px; overflow: auto;
+  background: #141414; border: 1px solid var(--line-soft); border-radius: 6px;
+  padding: 6px 8px; color: #b8b8b8; font-family: var(--mono); font-size: 11px;
+  line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.planner-verify-msg { font-size: 10.5px; color: var(--t3); }
+.planner-verify-msg.err { color: var(--err); }

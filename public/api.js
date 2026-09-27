@@ -209,6 +209,35 @@ export const updateAttemptReview = (planId, taskId, attempt, body) =>
     { method: 'PUT', body }
   );
 
+/* ---------- 独立验证（P9） ---------- */
+
+/** 对某一次已经结束的尝试**启动**一次由 Pi GUI 自己执行的验证。
+ *
+ *  跑的是那次尝试开始时冻结的 `verificationSnapshot.command` —— 不是当前
+ *  `task.verification`，也不会由 description 猜一条命令出来。后端才是这些
+ *  规则的权威；前端不复制一份判断。
+ *
+ *  返回体一律带稳定 `code`（前端 HTTP 层只消费 JSON body，拿不到状态码语义）：
+ *    `already-running` / `no-command` / `plan-active` / `workspace-stale` /
+ *    `attempt-not-found` / `invalid-cwd` / `no-project`
+ *  `ok:true` 时带 `verification`（一条 `status:'running'` 的记录）——
+ *  真正的结果走 SSE 的 `verification_end`，或下一次读取计划详情。 */
+const verifyUrl = (planId, taskId, attempt) =>
+  '/api/plans/' +
+  encodeURIComponent(planId) +
+  '/tasks/' +
+  encodeURIComponent(taskId) +
+  '/attempts/' +
+  encodeURIComponent(attempt) +
+  '/verify';
+
+export const verifyPlanAttempt = (planId, taskId, attempt) => sendJSON(verifyUrl(planId, taskId, attempt), {});
+
+/** 停止正在跑的那一次验证。
+ *  取消之后后端会把它收成 `interrupted`（不是 failed —— 你没跑完，不是它错了）。 */
+export const stopPlanAttemptVerification = (planId, taskId, attempt) =>
+  sendJSON(verifyUrl(planId, taskId, attempt) + '/stop', {});
+
 /* ---------- 任务 ↔ 会话 / 任务 ↔ 文件（P7） ---------- */
 
 /** 打开某个任务某次尝试对应的会话。

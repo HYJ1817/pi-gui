@@ -29,7 +29,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ATTEMPT_OUTCOME, PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, normalizeAttempt, normalizeReview, summarizePlan } from './model.js';
+import { ATTEMPT_OUTCOME, PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, VERIFICATION_STATUS, normalizeAttempt, normalizeReview, summarizePlan } from './model.js';
 
 /** plan 文件的格式版本。格式一变就把旧文件当不认识的，避免半读半猜。
  *
@@ -97,6 +97,9 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
     const plan = { ...raw };
     const notes = [];
     let recovered = false;
+    /* P9：只中断了独立验证（任务本身没有 running）时也要落盘，但**不该**加
+     * 「N 个任务需要重试」那条说明 —— 没有任务需要重试。所以分开记。 */
+    let verifRecovered = false;
 
     if (raw.schemaVersion !== PLAN_SCHEMA_VERSION) {
       notes.push(`计划文件格式版本是 ${raw.schemaVersion}，当前支持 ${PLAN_SCHEMA_VERSION}`);
@@ -158,6 +161,33 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
           recovered = true;
         }
       }
+      /* P9：独立验证同样可能停在 running。原进程已经不存在了，继续显示
+       * 「正在验证…」是撒谎 —— 与 task 的 running 是同一条理由。
+       *
+       * ⚠️ 只在 `recover`（进程启动时的一次性动作）里做，**绝不能进普通 load()**：
+       * 前端一轮询计划详情，就会把**本进程正在跑的那一次**翻成 interrupted ——
+       * 这正是上面 task 那段注释里记着的坑。 */
+      for (const t of plan.tasks) {
+        for (const a of Array.isArray(t.attempts) ? t.attempts : []) {
+          const vr = a.verificationResult;
+          if (!vr || vr.status !== VERIFICATION_STATUS.RUNNING) continue;
+          a.verificationResult = {
+            ...vr,
+            status: VERIFICATION_STATUS.INTERRUPTED,
+            finishedAt: Date.now(),
+            error: '应用关闭时被中断',
+            /* 退出码与输出**不猜**：进程崩了，我们什么都没拿到。
+             * durationMs 也只能留空 —— 拿「现在 − startedAt」冒充执行时长
+             * 是在给历史编证据（它包含了应用关闭到重启之间的全部时间）。 */
+            exitCode: null,
+            durationMs: null,
+            outputSummary: '',
+            truncated: false,
+          };
+          verifRecovered = true;
+        }
+      }
+      if (verifRecovered) notes.push('有一次独立验证被中断（应用重启，原进程不存在了）');
       if (plan.status === PLAN_STATUS.RUNNING) {
         // 还有活可干 → 暂停等用户决定；全跑完了 → 直接落终态
         const settled = plan.tasks.every((t) => TERMINAL_TASK_STATUS.includes(t.status));
@@ -175,7 +205,7 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
      * 这条信息在重启后的第一次读取就消失了。 */
     const persisted = Array.isArray(raw.recoveryNotes) ? raw.recoveryNotes : [];
     plan.recoveryNotes = [...new Set([...persisted, ...notes])];
-    return { plan, recovered, notes };
+    return { plan, recovered: recovered || verifRecovered, notes };
   }
 
   /** 全部终态时该给 plan 什么状态。
