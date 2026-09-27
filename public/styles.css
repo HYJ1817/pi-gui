@@ -1740,6 +1740,14 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* ⚠️ 「执行期间变更」这个标签必须 `flex:0 0 auto` + `nowrap`。
+ * 行是 `width:100%` 的，如果标签还能被压缩，它会被挤到最小内容宽度 ——
+ * 一个汉字宽 —— 于是「执行期间变更」渲染成一列竖排单字（实测踩到过）。 */
+.planner-attempt-files .planner-lbl { flex: 0 0 auto; white-space: nowrap; }
+.planner-attempt-files .planner-file-list { flex: 1 1 auto; min-width: 0; }
+/* 同理：验证要求 / 验证结果的标签也不许被值挤扁（值可能是很长的命令）。 */
+.planner-attempt-verify .planner-lbl { flex: 0 0 auto; white-space: nowrap; }
+
 /* 验证要求 / 验证结果（照抄后端 normalizeVerificationSnapshot 的两个键） */
 .planner-attempt-verify {
   display: flex; align-items: baseline; gap: 7px; font-size: 11.5px; min-width: 0; flex-wrap: wrap;
