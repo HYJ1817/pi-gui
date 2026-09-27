@@ -129,6 +129,16 @@ Agent、状态、耗时、退出码、结果摘要、attempt 历史、
 **每条 attempt 各自带 `sessionId` 与 `filesChanged`**，追加不覆盖 —— 于是重试之后
 两次尝试的会话与文件都还在（详见 [workflows.md](workflows.md)）。
 
+从 P8-A 起，每条 attempt 还带三样东西（数据契约见
+[workflows.md](workflows.md)）：
+
+- `verificationSnapshot` —— **这次执行开始时**任务要求的 verification 是什么。
+  在 attempt 开始时冻结，所以之后改 `task.verification` 不会篡改历史。
+- `outcomeStatus` —— 稳定的执行结论（`success` / `failed` / `cancelled` /
+  `interrupted`）。有它之后，「这是失败还是被取消」不再需要从 `error` 文案里猜。
+- `review` —— 人工审阅（`pending` / `accepted` / `needs_changes` + 说明 + `revision`）。
+  **审阅不改执行状态**：`success` + `needs_changes` 是合法组合，`failed` + `accepted` 会被拒。
+
 ## 七之二、任务 ↔ 会话 / 任务 ↔ 文件
 
 从 P7 起，每次 Agent 执行都能关联到它产生的会话，并记录执行期间变化的文件；

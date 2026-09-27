@@ -157,18 +157,138 @@ jsonl**，会把它写坏。所以后端硬拦，并说明原因 —— 比让�
 「这个任务做了什么」）。P7 **没有新增**任何模型正文 —— 新增字段只有 id / 相对路径 /
 时间戳 / 状态。要不要把既存那几处也收掉，是一个独立的决定，不该混在 P7 里偷偷改。
 
-## 五、接口
+## 五、人工审阅的数据契约（P8-A）
+
+> P8-A 只做**后端数据契约**：没有界面、没有按钮、没有汇总 UI（那些在 P8-C）。
+> 这一节记的是字段与规则，界面部分等做出来再补。
+
+### 5.1 一条不能破的语义
+
+```
+执行状态  ≠  人工审阅状态
+```
+
+| | 谁写 | 取值 | 回答的问题 |
+|---|---|---|---|
+| **执行状态** | Scheduler | `success` / `failed` / `cancelled` / `interrupted` | 机器跑出来什么 |
+| **人工审阅** | 人 | `pending` / `accepted` / `needs_changes` | 我认不认这个结果 |
+
+两者同时存在、各答一个问题：
+
+```
+execution = success  +  review = needs_changes   ← 合法（跑通了，但我不满意）
+execution = failed   +  review = accepted        ← **必须拒绝**
+```
+
+**审阅永远不改执行状态。** 保存 `needs_changes` 不会触发重试、不会暂停计划、
+不动 DAG、不改 `task.status`、不调 Agent、不碰 Git。
+
+审阅状态只有三个，刻意不含 `approved` / `rejected` / `done` / `verified` ——
+语义一扩散，界面就没法用一句话说清「现在是什么状态」。
+
+### 5.2 审阅属于**某一次尝试**，不属于任务
+
+```
+Plan
+└─ Task
+   └─ Attempt        ← review 挂在这里
+```
+
+`planId + taskId + attempt` 唯一定位。**不新增** `task.review` / `plan.review` /
+`reviews.json` / 任何索引文件 —— 一份数据只有一个位置。
+
+为什么必须挂在 attempt 上：重试之后「第一次的结果我接受了」和「第二次的结果还要改」
+是两个独立判断。放在 task 顶层，重试一次就把它冲掉了。
+
+### 5.3 字段
+
+```json
+{
+  "attempt": 2,
+  "success": true,
+  "outcomeStatus": "success",          // P8-A：稳定执行结论
+  "verificationSnapshot": { "command": "npm test" },
+  "review": {
+    "status": "accepted",
+    "note": "测试已人工确认",
+    "reviewedAt": 1234567890,
+    "revision": 1
+  }
+}
+```
+
+- **`outcomeStatus`**：`success` / `failed` / `cancelled` / `interrupted`，认不出的值记 `null`。
+  为什么要它：`success: false` 分不出「失败」「被取消」「被中断」，而**从 `error` 文案里
+  猜**（`error.includes('取消')`）是把业务语义建在给人看的字符串上，改一次文案就静默失效。
+  老 attempt 没有这个字段时退到 `success` 布尔 —— 它足以回答「成功还是不是」，
+  而另外三种的审阅资格完全相同（都不可接受），所以不需要区分就能正确判定。
+- **`verificationSnapshot`**：这次尝试**开始时**任务要求的 verification 是什么。
+  只保留 `command` / `description` 两个键，**绝不**把 `task.description`、完整 prompt、
+  `plan.goal`、模型输出、cwd、model/provider、env 一起复制进来。
+- **`review`**：永远存在（归一化后）。`note` 上限 **1000 字**，由后端校验；
+  `reviewedAt` 由**后端**生成（不信客户端传的时间）；`revision` 从 0 开始。
+
+### 5.4 `pending` 就是「清除」
+
+用**同一个接口**把状态写回 `pending`，不新增 `DELETE /review`：
+`reviewedAt` 清成 `null`、`note` 清空，`revision` 继续递增（不归零）。
+
+### 5.5 资格
+
+| 这次尝试的结论 | `accepted` | `needs_changes` | `pending` |
+|---|---|---|---|
+| `success` | ✅ | ✅ | ✅ |
+| `failed` | ❌ | ✅ | ✅ |
+| `cancelled` | ❌ | ✅ | ✅ |
+| `interrupted` | ❌ | ✅ | ✅ |
+| 还在跑 | ❌ | ❌ | ❌ |
+
+判定**只看这条 attempt 自己的历史结论**，不看 task 当前状态 ——
+「Attempt 1 failed、Attempt 2 success」时 task 是 success，但这不能推出
+「Attempt 1 可以接受」。判定逻辑是 `model.js` 里的纯函数，route 只调用不判断。
+
+### 5.6 `revision`：防止两个窗口互相覆盖
+
+每次成功写入 +1（改状态、只改说明、改回 pending 都算）。
+
+```
+窗口 A 读到 revision = 2
+窗口 B 读到 revision = 2
+B 保存 needs_changes  → 磁盘变成 3
+A 还拿着 2，保存 accepted → **409 review-conflict**（不是 last-write-wins）
+```
+
+冲突响应带 `currentRevision`，界面据此提示重新加载。**不自动合并说明** ——
+两条人工判断没有「合并」这回事，猜一个结果等于替用户做决定。
+
+⚠️ 这里有一条**容易写错**的实现要求：`读 → 校验 → 写` 必须在**同一个同步块**里完成。
+请求路径上只要夹着一个 `await`（比如 `await readBody(...)`），两个并发请求就会
+都拿着同一个旧 revision 通过检查，后写的把先写的无声覆盖。所以保存前会**重新读一次**
+计划，而且从重读到 `store.save()` 之间没有任何 await。
+
+### 5.7 老数据
+
+P8-A 的字段全是 additive：老 attempt 缺 `review` → 归一化成
+`{status:'pending', note:'', reviewedAt:null, revision:0}`；缺 `verificationSnapshot` → `null`；
+缺 `outcomeStatus` → `null`。
+
+`PLAN_SCHEMA_VERSION` **仍然是 1**。理由和 P7 那次一样：bump 会给每一个既存计划
+挂一条「格式版本是 1，当前支持 2」的提示，而那句提示是假的（v1 文件完全可读）。
+只有「旧 reader 会错误解释新结构」时才需要 bump，这次不是。
+
+## 六、接口
 
 | 接口 | 用途 |
 |---|---|
 | `GET /api/plans/:id` | 计划详情。每个 attempt 附带 `sessionAvailable` / `sessionTitle`（视图字段，**不写回文件**） |
 | `GET /api/plans/relations?sessionId=` | 会话 → 任务 的反查。**没有第二份索引**，直接扫当前项目的 plan 文件 |
 | `POST /api/plans/:id/tasks/:taskId/open-session?attempt=` | 打开某次尝试的会话。校验计划归属 + 任务非运行中 + 会话可解析 |
+| `PUT /api/plans/:id/tasks/:taskId/attempts/:attempt/review` | 写/清除某次尝试的人工审阅（P8-A）。body：`{status, note, expectedRevision}`；冲突返回 **409 + `code:review-conflict`** |
 
 刻意**没有**新增 `/api/workflow/*` / `/api/task-links/*` 这类平行概念 ——
 关系是 Planner 数据的一部分，就挂在 Planner 的接口上。
 
-## 六、本轮没做的增强（明确记下，不含糊过去）
+## 七、本轮没做的增强（明确记下，不含糊过去）
 
 规格里列为「增强项、可暂缓」的三条，P7 第一版**都没做**：
 
@@ -178,7 +298,7 @@ jsonl**，会把它写坏。所以后端硬拦，并说明原因 —— 比让�
 - **侧栏会话标题下显示「Plan · 修复 SSE」**。侧栏本来就窄，
   而且会话标题已经要跟时间戳抢位置 —— 优先保住了两条跳转本身。
 
-## 七、刻意不做
+## 八、刻意不做
 
 看板、拖拽排序、标签、优先级矩阵、截止日期、评论、成员、云同步、通知中心、
 Git commit 自动归属、AI 自动总结会话、embedding / RAG / SQLite、新的 Agent runtime。

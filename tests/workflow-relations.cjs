@@ -276,7 +276,7 @@ function mkRuntime(initial) {
   check('§38.7 sessionId 不接受任意路径（posix 绝对路径被拒）', () => sessionIdLib.isSafeSessionId('/etc/passwd') === false);
   check('§38.7 sessionId 不接受任意路径（Windows 绝对路径被拒）', () => sessionIdLib.isSafeSessionId('C:\\x\\y.jsonl') === false);
   check('§38.7 sessionId 不接受 ../ 逃逸', () => sessionIdLib.isSafeSessionId('../x') === false);
-  check('§38.7 落盘归一化会把非法 sessionId 抹成 null', () => model.normalizeAttemptRelation({ sessionId: 'C:\\evil\\path.jsonl' }).sessionId === null);
+  check('§38.7 落盘归一化会把非法 sessionId 抹成 null', () => model.normalizeAttempt({ sessionId: 'C:\\evil\\path.jsonl' }).sessionId === null);
 
   /* ================= B. Task ↔ Files ================= */
   section('B. Task ↔ Files（执行期间观察到的变化）');
@@ -528,7 +528,7 @@ function mkRuntime(initial) {
     const raw = fs.readFileSync(path.join(DATA, 'plans', 'plan-sess-1.json'), 'utf8');
     const att = JSON.parse(raw).tasks.find((x) => x.id === 't1').attempts[0];
     const keys = Object.keys(att);
-    check('§32. attempt 的键只有关系字段 + 既有状态字段', () => keys.every((k) => ['attempt', 'startedAt', 'endedAt', 'success', 'error', 'summary', 'exitCode', 'sessionId', 'filesChanged', 'changeCaptureIncomplete'].includes(k)), keys.join(','));
+    check('§32. attempt 的键只有关系字段 + 既有状态字段', () => keys.every((k) => ['attempt', 'startedAt', 'endedAt', 'success', 'error', 'summary', 'exitCode', 'sessionId', 'filesChanged', 'changeCaptureIncomplete', 'outcomeStatus', 'verificationSnapshot', 'review'].includes(k)), keys.join(','));
     check('§32. filesChanged 里没有绝对路径 / 会话文件路径', () => att.filesChanged.every((p) => !p.includes(':') && !p.startsWith('/')));
     check('§32. sessionId 里没有项目绝对路径', () => !att.sessionId.includes(TMP) && !att.sessionId.includes(path.sep));
     check('§32. 关系字段里没有 prompt 文本（任务描述没有进 attempt）', () => !JSON.stringify(att).includes('做点事'));

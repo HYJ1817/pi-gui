@@ -146,16 +146,161 @@ export function normalizeFilesChanged(list) {
 }
 
 /**
- * 归一化一条 attempt 的关系字段。**读盘与写盘都要过这里** ——
+ * 归一化一条 attempt 的关系字段 + P8-A 的审阅字段。**读盘与写盘都要过这里** ——
  * 于是「文件里被手工塞了一个绝对路径」这种情形在进入内存时就被挡掉了，
  * 而不是等到它被回给前端才被发现。
  */
-export function normalizeAttemptRelation(raw) {
+export function normalizeAttempt(raw) {
   const a = isPlainObject(raw) ? { ...raw } : {};
   a.sessionId = isSafeSessionId(a.sessionId) ? a.sessionId : null;
   a.filesChanged = normalizeFilesChanged(a.filesChanged);
   a.changeCaptureIncomplete = Boolean(a.changeCaptureIncomplete);
+  /* P8-A：三个新字段，全部 additive —— 老 attempt 缺它们时补成 null / 默认 review，
+   * 所以**不需要数据迁移**，P7 及更早的 Plan 照常读取。 */
+  a.outcomeStatus = normalizeAttemptOutcome(a.outcomeStatus);
+  a.verificationSnapshot = normalizeVerificationSnapshot(a.verificationSnapshot);
+  a.review = normalizeReview(a.review);
   return a;
+}
+
+/* ==================== P8-A：人工审阅 ====================
+ *
+ * 一条**不能破**的语义：
+ *
+ *     执行状态  ≠  人工审阅状态
+ *
+ * 执行状态（success / failed / cancelled / interrupted）由 Scheduler 写，
+ * 是「机器跑出来什么」。审阅状态（pending / accepted / needs_changes）由人写，
+ * 是「我认不认这个结果」。两者同时存在、各答一个问题：
+ *
+ *     execution = success        + review = needs_changes   ← 合法
+ *     execution = failed         + review = accepted        ← 必须拒绝
+ *
+ * 审阅**永远不能**改执行状态：保存 needs_changes 不会触发重试、不会暂停计划、
+ * 不会碰 DAG、不会改 task.status、不会调 Agent、不会动 Git。
+ */
+
+/** 人工审阅状态。只有这三个 —— 刻意不含 approved / rejected / done / verified。 */
+export const REVIEW_STATUS = Object.freeze({
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  NEEDS_CHANGES: 'needs_changes',
+});
+
+/** 审阅说明的长度上限。后端必须自己校验，不能只依赖前端限制。 */
+export const MAX_REVIEW_NOTE = 1000;
+
+/** 一次 attempt 的**稳定**执行结论。P8-A 起写入。 */
+export const ATTEMPT_OUTCOME = Object.freeze({
+  SUCCESS: 'success',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  INTERRUPTED: 'interrupted',
+});
+
+const REVIEW_STATUSES = Object.values(REVIEW_STATUS);
+const ATTEMPT_OUTCOMES = Object.values(ATTEMPT_OUTCOME);
+
+/**
+ * 归一化审阅记录。
+ *
+ * **宽容**（读盘路径）：非法状态退成 pending、超长说明截断、非法 revision 归 0。
+ * 一个坏字段不该让整个计划读不出来。**严格校验在 API 那一侧**（超长直接拒绝），
+ * 两者分工不同，别把宽容当成「API 可以不校验」。
+ *
+ * `pending` 是「清除」的语义，所以归一化时强制把 note / reviewedAt 清掉 ——
+ * 否则一条「pending 但带着旧说明」的记录会让人以为还留着什么。
+ */
+export function normalizeReview(raw) {
+  const r = isPlainObject(raw) ? raw : {};
+  const status = REVIEW_STATUSES.includes(r.status) ? r.status : REVIEW_STATUS.PENDING;
+  if (status === REVIEW_STATUS.PENDING) {
+    return { status, note: '', reviewedAt: null, revision: Number.isInteger(r.revision) && r.revision >= 0 ? r.revision : 0 };
+  }
+  return {
+    status,
+    note: clampStr(r.note, MAX_REVIEW_NOTE),
+    reviewedAt: Number.isFinite(r.reviewedAt) ? r.reviewedAt : null,
+    revision: Number.isInteger(r.revision) && r.revision >= 0 ? r.revision : 0,
+  };
+}
+
+/** 归一化 attempt 的稳定执行结论。认不出的值一律当「未知」（null），不猜。 */
+export function normalizeAttemptOutcome(raw) {
+  return ATTEMPT_OUTCOMES.includes(raw) ? raw : null;
+}
+
+/**
+ * 归一化「这次执行开始时，任务要求的 verification 是什么」。
+ *
+ * ⚠️ **只保留 command / description 两个键。** 绝不把 task.description、完整
+ * prompt、plan.goal、模型输出、cwd、model/provider、env 一起复制进来 ——
+ * 这个快照会进 plan 文件，可能被贴进 issue（和 diagnostics 同一条隐私规矩）。
+ */
+export function normalizeVerificationSnapshot(raw) {
+  if (typeof raw === 'string') {
+    const s = clampStr(raw, 500).trim();
+    return s ? { command: s } : null;
+  }
+  if (!isPlainObject(raw)) return null;
+  const command = clampStr(raw.command, 500).trim();
+  if (command) return { command };
+  const description = clampStr(raw.description, 500).trim();
+  if (description) return { description };
+  return null;
+}
+
+/**
+ * 这条 attempt 能不能被人工审阅（写入 pending / accepted / needs_changes）。
+ *
+ * **纯函数，只看 attempt 自己的持久化字段**：
+ *   - `outcomeStatus`（P8-A 起写入，稳定）
+ *   - `success`（P7 及更早就有的布尔）
+ *
+ * 两条禁令（都是规格点名的）：
+ *   1. **绝不看 task 的当前状态。** 「Attempt 1 failed、Attempt 2 success」时
+ *      task 当前是 success，但这不能推出「Attempt 1 可以接受」——
+ *      资格必须来自目标 attempt 自己的历史结论。
+ *   2. **绝不从 error 文案猜。** `if (error.includes('取消'))` 那种写法把业务语义
+ *      建在了给人看的字符串上，改一次文案就静默失效。
+ *
+ * 老 attempt 没有 outcomeStatus 时退到 `success` 布尔：它足以回答「成功还是不是」，
+ * 而 failed / cancelled / interrupted 三种的审阅资格本来就完全相同（都不可接受），
+ * 所以不需要区分它们就能正确判定。
+ */
+export function canReviewAttempt(attempt) {
+  if (!isPlainObject(attempt)) return { ok: false, error: '找不到这次尝试' };
+  return { ok: true };
+}
+
+/** 只有**执行成功**的尝试才允许标记「已接受」。 */
+export function canAcceptAttempt(attempt) {
+  if (!isPlainObject(attempt)) return false;
+  if (attempt.outcomeStatus) return attempt.outcomeStatus === ATTEMPT_OUTCOME.SUCCESS;
+  return attempt.success === true;
+}
+
+/** 任何已结束的尝试都可以标记「需修改」——包括失败、取消、被中断的。 */
+export function canMarkNeedsChanges(attempt) {
+  return isPlainObject(attempt);
+}
+
+/**
+ * 写审阅前的总闸：目标状态在这一刻合不合法。
+ * @returns {{ok:true}|{ok:false, error:string}}
+ */
+export function reviewWriteAllowed(attempt, status) {
+  if (!isPlainObject(attempt)) return { ok: false, error: '找不到这次尝试' };
+  if (status === REVIEW_STATUS.PENDING) return { ok: true }; // 清除判断永远允许
+  if (status === REVIEW_STATUS.ACCEPTED) {
+    return canAcceptAttempt(attempt)
+      ? { ok: true }
+      : { ok: false, error: '这次执行没有成功，不能标记为「已接受」（可以标记「需修改」）' };
+  }
+  if (status === REVIEW_STATUS.NEEDS_CHANGES) {
+    return canMarkNeedsChanges(attempt) ? { ok: true } : { ok: false, error: '这次尝试不能标记「需修改」' };
+  }
+  return { ok: false, error: '审阅状态只能是 pending / accepted / needs_changes' };
 }
 
 /**

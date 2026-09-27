@@ -26,6 +26,7 @@
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import {
+  ATTEMPT_OUTCOME,
   DEFAULT_CONCURRENCY,
   MAX_CONCURRENCY,
   PLAN_STATUS,
@@ -36,6 +37,8 @@ import {
   isPlanSettled,
   isSafeSessionId,
   normalizeFilesChanged,
+  normalizeReview,
+  normalizeVerificationSnapshot,
   summarizePlan,
   taskSessionId,
 } from './model.js';
@@ -260,6 +263,19 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     const cwd = task.workingDirectory === '.' ? projectRoot : path.resolve(projectRoot, task.workingDirectory);
     const prompt = buildTaskPrompt(plan, task);
 
+    /* ---------- P8-A：在 attempt **开始时**冻结验证要求 ----------
+     *
+     * 为什么必须在开始处、而不是结束处读：`task.verification` 是**可编辑**的。
+     * 如果等跑完再读，用户在执行期间把 verification 从 `npm test` 改成
+     * `npm run test:unit`，这次尝试的历史里就会记着「要求是 test:unit」——
+     * 而它实际执行的是 npm test。那是在给历史伪造证据。
+     * 冻结下来之后，Task 之后怎么改都不影响这条 attempt 的记录。
+     *
+     * 和 sessionId 一样只放在 session 上（不写进 task）：task 会被整份写进
+     * plan 文件，挂一个「进行中的临时字段」上去会污染持久化格式。 */
+    const verificationSnapshot = normalizeVerificationSnapshot(task.verification);
+    session.verifications.set(task.id, verificationSnapshot);
+
     const before = await snapshot(projectRoot);
 
     let outcome;
@@ -295,6 +311,7 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
       /* before 快照拿不到（不是 git 仓库 / git 不可用）时，after 的差异说明不了
        * 「执行期间变了什么」。这时候不许猜，只记「没采集全」（规格 §31）。 */
       changeCaptureIncomplete: !changes.available,
+      verificationSnapshot,
     });
   }
 
@@ -304,6 +321,16 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     const sessionId = isSafeSessionId(relation.sessionId) ? relation.sessionId : null;
     const filesChanged = changedPathsOf(changes);
     const changeCaptureIncomplete = Boolean(relation.changeCaptureIncomplete);
+    const verificationSnapshot = normalizeVerificationSnapshot(relation.verificationSnapshot);
+    /* P8-A：稳定的执行结论。
+     * 判定信号与下面改 task.status 用的是**同一个**（`outcome.cancelled` /
+     * `outcome.success`），所以两者永远一致 —— 不会出现「状态说已取消、
+     * outcomeStatus 说失败」这种自相矛盾。 */
+    const outcomeStatus = outcome.cancelled
+      ? ATTEMPT_OUTCOME.CANCELLED
+      : outcome.success
+        ? ATTEMPT_OUTCOME.SUCCESS
+        : ATTEMPT_OUTCOME.FAILED;
     task.result = {
       success: Boolean(outcome.success),
       exitCode: outcome.exitCode ?? null,
@@ -313,6 +340,7 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
       raw: outcome.rawResult || null,
       durationMs: task.startedAt ? task.endedAt - task.startedAt : null,
       sessionId,
+      outcomeStatus,
     };
     task.attempts = Array.isArray(task.attempts) ? task.attempts : [];
     /* 保留历史 attempt，绝不覆盖失败证据（规格 §27）。
@@ -340,6 +368,11 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
         sessionId,
         filesChanged,
         changeCaptureIncomplete,
+        /* P8-A：新 attempt 一律从「待审阅」开始 —— 重试不会继承上一次的
+         * 人工判断（上一次 accepted 是人对**那一次**结果的判断）。 */
+        outcomeStatus,
+        verificationSnapshot,
+        review: normalizeReview(null),
       });
     }
 
@@ -403,8 +436,9 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
         const results = await Promise.all(batch.map((t, i) => runTask(plan, t, controllers[i], session)));
         batch.forEach((t) => session.controllers.delete(t.id));
         /* 关系映射也要跟着收掉 —— 留着会让 shutdown 把上一次尝试的会话 id
-         * 记到下一次尝试上（并行时尤其明显，规格 §13）。 */
+         * 或验证快照记到下一次尝试上（并行时尤其明显，规格 §13）。 */
         batch.forEach((t) => session.sessionIds.delete(t.id));
+        batch.forEach((t) => session.verifications.delete(t.id));
 
         if (session.stopping) break;
 
@@ -481,7 +515,7 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     shuttingDown = false;
     persist(plan);
 
-    const session = { planId: plan.id, plan, controllers: new Map(), sessionIds: new Map(), stopping: false, pumpRunning: false };
+    const session = { planId: plan.id, plan, controllers: new Map(), sessionIds: new Map(), verifications: new Map(), stopping: false, pumpRunning: false };
     active = session;
     emit(plan.id, null, null, 'plan_start', { title: plan.title, tasks: plan.tasks.length });
     // 主循环不 await（HTTP 请求要立刻返回）；但必须接住异常，否则会变成
@@ -601,6 +635,11 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
             sessionId: session.sessionIds.get(t.id) || null,
             filesChanged: [],
             changeCaptureIncomplete: true,
+            /* P8-A：被中断也是一条明确的执行结论，不是「未知」；
+             * 验证快照在 attempt 开始时已经冻结过，所以这里能原样保留。 */
+            outcomeStatus: ATTEMPT_OUTCOME.INTERRUPTED,
+            verificationSnapshot: session.verifications.get(t.id) || null,
+            review: normalizeReview(null),
           });
         }
       }

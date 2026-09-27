@@ -29,7 +29,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, normalizeAttemptRelation, summarizePlan } from './model.js';
+import { PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, normalizeAttempt, summarizePlan } from './model.js';
 
 /** plan 文件的格式版本。格式一变就把旧文件当不认识的，避免半读半猜。
  *
@@ -105,10 +105,12 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
     plan.tasks = plan.tasks.map((t) => ({
       ...t,
       dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn : [],
-      /* P7：attempt 里的关系字段（sessionId / filesChanged）在这里统一归一化。
-       * 老计划没有这些字段 → normalizeAttemptRelation 补成 null / []，
-       * 所以**不需要迁移、不需要升 schemaVersion**（规格 §15 的 additive 原则）。 */
-      attempts: (Array.isArray(t.attempts) ? t.attempts : []).map(normalizeAttemptRelation),
+      /* attempt 里的全部扩展字段（P7 的 sessionId / filesChanged，
+       * P8-A 的 outcomeStatus / verificationSnapshot / review）在这里统一归一化。
+       * 老计划没有这些字段 → 补成 null / [] / 默认 review（pending, revision 0），
+       * 所以**不需要迁移、不需要升 schemaVersion**（additive 原则）。
+       * 归一化是**宽容**的（坏字段退成默认值），严格校验在 API 那一侧。 */
+      attempts: (Array.isArray(t.attempts) ? t.attempts : []).map(normalizeAttempt),
       attempt: Number.isFinite(t.attempt) ? t.attempt : 0,
       error: typeof t.error === 'string' ? t.error : '',
       result: t.result ?? null,

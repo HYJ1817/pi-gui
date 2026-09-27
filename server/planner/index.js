@@ -20,7 +20,19 @@
  */
 import { json, readBody } from '../http-utils.js';
 import { isSafeSessionId } from '../../lib/session-id.js';
-import { PLAN_STATUS, TASK_STATUS, DEFAULT_CONCURRENCY, MAX_CONCURRENCY, normalizePlan, summarizePlan } from './model.js';
+import {
+  DEFAULT_CONCURRENCY,
+  MAX_CONCURRENCY,
+  MAX_REVIEW_NOTE,
+  PLAN_STATUS,
+  REVIEW_STATUS,
+  TASK_STATUS,
+  TERMINAL_TASK_STATUS,
+  normalizePlan,
+  normalizeReview,
+  reviewWriteAllowed,
+  summarizePlan,
+} from './model.js';
 
 const MAX_BODY = 512 * 1024;
 /** 一次反向查询最多回多少条命中（一个会话被几十个任务用过是可能的，
@@ -236,6 +248,132 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
     const r = await sessions.switchToTarget(target);
     if (!r.ok) return { ok: false, error: r.error || '切换会话失败', code: r.code };
     return { ok: true, id: r.id, title: r.title, sessionId: attempt.sessionId, taskId, attempt: attempt.attempt };
+  }
+
+  /* ---------- P8-A：写一条 attempt 的人工审阅 ---------- */
+
+  /**
+   * 保存 / 清除一次尝试的人工审阅。
+   *
+   * ---------- 两条最关键的约束 ----------
+   *
+   * 1. **只用刚 load 出来的 plan，绝不接受请求体里的 tasks。**
+   *    前端可能拿着几分钟前的计划副本 —— 那时候这次 attempt 还不存在。
+   *    拿它当保存依据，就会把新产生的执行记录整片擦掉。
+   *    所以这里只把**那一条 review** patch 进最新 plan，然后整份落盘。
+   *
+   * 2. **按 attempt 号精确定位，不碰「最后一次尝试」。**
+   *    `latestAttempt.review = …` 在「Attempt 1 已完成、Attempt 2 正在跑」时
+   *    会改错对象，而且重试之后历史判断会被后来的覆盖。
+   *
+   * 审阅**只改审阅**：不触发重试、不暂停计划、不动 DAG、不改 task.status、
+   * 不调 Agent、不碰 Git（规格 §33）。
+   *
+   * @returns {{status:number, body:object}} 直接可 json() 的结果
+   */
+  function writeAttemptReview(planId, taskId, attemptNo, body) {
+    /* 输入校验。全部稳定返回 —— 不让任何一种坏输入走到 500。 */
+    if (typeof planId !== 'string' || !planId) {
+      return { status: 400, body: { ok: false, error: '缺少 planId' } };
+    }
+    if (!Number.isInteger(attemptNo) || attemptNo < 1) {
+      return { status: 200, body: { ok: false, error: 'attempt 必须是正整数' } };
+    }
+    const status = body && typeof body.status === 'string' ? body.status : '';
+    if (!Object.values(REVIEW_STATUS).includes(status)) {
+      return { status: 200, body: { ok: false, error: '审阅状态只能是 pending / accepted / needs_changes' } };
+    }
+    if (body.note != null && typeof body.note !== 'string') {
+      return { status: 200, body: { ok: false, error: '审阅说明必须是纯文本' } };
+    }
+    const note = typeof body.note === 'string' ? body.note : '';
+    /* 后端必须自己校验长度，不能只靠前端限制 —— 前端可以绕过，而且以后
+     * 会有别的客户端（脚本 / 别的窗口）直接打这个接口。 */
+    if (note.length > MAX_REVIEW_NOTE) {
+      return { status: 200, body: { ok: false, error: `审阅说明最多 ${MAX_REVIEW_NOTE} 字` } };
+    }
+    const expected = body.expectedRevision;
+    if (!Number.isInteger(expected) || expected < 0) {
+      return { status: 200, body: { ok: false, error: '缺少合法的 expectedRevision（必须是非负整数）' } };
+    }
+
+    /* ⚠️ **重新读一次计划，而且从这里到 store.save() 之间不许有 await。**
+     *
+     * 这不是多余的保险，是并发正确性的关键。请求进入时虽然已经 load 过一次，
+     * 但那条路径上夹着一个 `await readBody(...)` —— 于是两个并发请求可以：
+     *
+     *     A: load(rev=0) → await  ┐
+     *     B: load(rev=0) → await  ┘  两个都拿着 rev=0
+     *     A: 检查 0===0 ✓ → save(rev=1)
+     *     B: 检查 0===0 ✓ → save(rev=1)   ← A 的写入被无声覆盖
+     *
+     * 「读—改—写」必须在**同一个同步块**里完成，靠 Node 单线程 + 同步的
+     * store.save 来保证原子性。中间只要插入一个 await，这个保证就没了。
+     *
+     * 归属也在这一块里重查一次（§30）：切了项目之后打过来的请求不能靠
+     * 「进入时检查过」蒙混过去。 */
+    const fresh = store.load(planId);
+    const plan = fresh ? fresh.plan : null;
+    if (!plan) return { status: 404, body: { ok: false, error: '找不到这个计划' } };
+    if (!ownedByCurrentProject(plan)) {
+      return { status: 403, body: { ok: false, error: '这个计划属于另一个项目，切回那个项目才能操作' } };
+    }
+
+    const task = plan.tasks.find((t) => t.id === taskId);
+    if (!task) return { status: 200, body: { ok: false, error: '找不到这个任务' } };
+    const attempts = Array.isArray(task.attempts) ? task.attempts : [];
+    const attempt = attempts.find((a) => a.attempt === attemptNo);
+    if (!attempt) {
+      /* 正在跑的那次尝试**还没有记录**（attempt 号在开始时就已经涨上去，
+       * 而记录是结束时才写的）。这两种情况要分开说，否则用户会以为记录丢了。 */
+      if (task.status === TASK_STATUS.RUNNING && task.attempt === attemptNo) {
+        return { status: 200, body: { ok: false, error: '这次尝试还在执行，等它结束后再审阅' } };
+      }
+      return { status: 200, body: { ok: false, error: '找不到这次尝试' } };
+    }
+
+    /* 资格判定全在 model.js 的纯函数里（规格 §15），route 只调用不判断。
+     * 它只看这条 attempt 自己的历史结论，不看 task 当前状态。 */
+    const allowed = reviewWriteAllowed(attempt, status);
+    if (!allowed.ok) return { status: 200, body: { ok: false, error: allowed.error } };
+
+    /* 乐观并发：前端带回它读到时的 revision，对不上就是别的窗口改过了。
+     * **不做 last-write-wins，也不自动合并 note** —— 两条人工判断没有「合并」
+     * 这回事，猜一个结果等于替用户做决定。 */
+    const cur = normalizeReview(attempt.review);
+    if (cur.revision !== expected) {
+      return {
+        status: 409,
+        body: {
+          ok: false,
+          code: 'review-conflict',
+          error: '这条审阅记录已经在其他窗口被修改，请重新加载。',
+          currentRevision: cur.revision,
+        },
+      };
+    }
+
+    /* 每次成功写入都 +1（包括只改 note、包括把状态改回 pending）。
+     * 时间戳由**后端**生成，不信客户端传的值。 */
+    const next = {
+      status,
+      note: status === REVIEW_STATUS.PENDING ? '' : note,
+      reviewedAt: status === REVIEW_STATUS.PENDING ? null : Date.now(),
+      revision: cur.revision + 1,
+    };
+
+    attempt.review = next;
+    try {
+      store.save(plan);
+    } catch (err) {
+      /* 写盘失败必须如实报错。不能出现「内存里改了、盘上没改、却回 ok:true」——
+       * 那会让界面显示一个重启后就消失的审阅状态。此刻 plan 是刚从磁盘读出来的
+       * 局部对象，所以失败时磁盘内容原样可读。 */
+      return { status: 200, body: { ok: false, error: '审阅保存失败：' + String(err.message || err) } };
+    }
+    /* 只回这一条 review，不回整份 plan —— 审阅是高频操作，
+     * 每次回几百 KB 的计划没有意义（规格 §32）。 */
+    return { status: 200, body: { ok: true, planId: plan.id, taskId, attempt: attemptNo, review: next } };
   }
 
   /* ---------- HTTP ---------- */
@@ -476,13 +614,27 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
             { agentIds: registry.ids(), projectRoot: cwd }
           );
           if (!normalized.ok) return json(res, 200, { ok: false, error: '计划不合法', errors: normalized.errors });
-          // 保留原计划的历史信息（createdAt / 已有 attempt）
           const next = normalized.plan;
           next.createdAt = plan.createdAt;
           next.status = plan.status === PLAN_STATUS.DRAFT ? PLAN_STATUS.DRAFT : next.status;
+
+          /* 保留原计划的历史信息（createdAt / 已有 attempt）。
+           *
+           * ⚠️ **这里的判据是「这个任务有没有历史」，不是「它跑过没有」。**
+           * 原先写的是 `old.attempt > 0`，于是**被跳过的任务**（skipTask 不涨
+           * attempt 号）在用户改一下计划标题再保存后，状态会从 skipped 退回
+           * pending —— 一条明确的结论就这么没了。
+           * 放宽成「跑过 / 有 attempt 记录 / 已是终态」三个条件任一成立。
+           * 放宽的方向是**更保守**（宁可多保留，不可多丢），所以不会引入新的丢失。
+           *
+           * 注意 `plan` 是刚从磁盘读出来的，而 `next.tasks` 来自请求体 ——
+           * 也就是说 **attempts / review / 执行结论一律以磁盘为准**，
+           * 前端手里的旧副本覆盖不了它们（规格 §25）。 */
           for (const t of next.tasks) {
             const old = plan.tasks.find((x) => x.id === t.id);
-            if (old && old.attempt > 0) {
+            const hasHistory =
+              old && (old.attempt > 0 || (Array.isArray(old.attempts) && old.attempts.length > 0) || TERMINAL_TASK_STATUS.includes(old.status));
+            if (hasHistory) {
               t.attempt = old.attempt;
               t.attempts = old.attempts;
               t.status = old.status;
@@ -510,6 +662,29 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
 
       /* /api/plans/:id/<action> */
       const action = parts[1];
+
+      /* P8-A：attempt 的人工审阅。
+       * 路径 `/api/plans/:planId/tasks/:taskId/attempts/:attempt/review`（6 段）。
+       * **必须排在上面那条 `method !== 'POST' → 405` 之前** —— 它用的是 PUT。
+       * 这与 router.js 里几处「顺序即语义」是同一类坑：漏掉的代价是静默的
+       * （请求拿到一个看起来正常但完全不对的响应）。
+       *
+       * 走到这里时 `plan` 已经是**刚从磁盘读出来的**，并且归属已经校验过
+       * （404 / 403 都在上面）。 */
+      if (action === 'tasks' && parts.length === 6 && parts[3] === 'attempts' && parts[5] === 'review') {
+        if (method !== 'PUT' && method !== 'PATCH') return json(res, 405, { ok: false, error: 'Method not allowed' });
+        const raw = await readBody(req, MAX_BODY).catch((err) => ({ __err: String(err.message || err) }));
+        if (raw && raw.__err) return json(res, 413, { ok: false, error: raw.__err });
+        let body;
+        try {
+          body = JSON.parse(raw || '{}');
+        } catch {
+          return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
+        }
+        const r = writeAttemptReview(plan.id, parts[2], Number(parts[4]), body);
+        return json(res, r.status, r.body);
+      }
+
       if (method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
 
       if (action === 'start') {
