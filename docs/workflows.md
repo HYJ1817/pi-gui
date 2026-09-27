@@ -309,7 +309,52 @@ P8-A 的字段全是 additive：老 attempt 缺 `review` → 归一化成
 挂一条「格式版本是 1，当前支持 2」的提示，而那句提示是假的（v1 文件完全可读）。
 只有「旧 reader 会错误解释新结构」时才需要 bump，这次不是。
 
-## 六、接口
+## 六、重试与历史（P8-B）
+
+> **Retry = 新的 Attempt，不是重写历史。** 这是整条工作流里最容易写错的一步。
+
+允许重试的状态：`success` / `failed` / `cancelled` / `interrupted` / `skipped`。
+`running` 拒绝（先停止），`pending` / `ready` / `blocked` 拒绝（还没有可重试的结果）。
+
+### 重试动什么、不动什么
+
+| | |
+|---|---|
+| **只重置当前态** | `task.status` / `result` / `error` / `startedAt` / `endedAt` |
+| **一个字节都不动** | `attempts[]` —— 里面的 `outcomeStatus` / `verificationSnapshot` / `sessionId` / `filesChanged` / `review` 全部原样 |
+
+新的 Attempt 要等它**真的开始执行**时才产生，`verificationSnapshot` 也还是那时候冻结。
+
+### 旧 `accepted` 的含义不变
+
+它始终只表示「用户曾接受那次尝试的结果」，**不表示它仍是当前最新结果**。
+当前/最新由 Attempt 顺序表达 —— 所以 P8 刻意**没有** `superseded` / `stale` /
+`obsolete` 这类状态。新 Attempt 出现不会把旧的 `accepted` 改成别的。
+
+### 下游要重新评估
+
+`A → B` 都成功、计划 completed，用户重试 A：
+
+- B 的**历史 Attempt 与它的 Review 全部保留**；
+- B 的**当前状态**回到 `pending` —— 不能再宣称「基于旧 A 的成功结果」，
+  因为新的 A 结果可能完全不同；
+- `retryTask()` 把被重置的 id 放在返回值的 `invalidated` 里，界面据此刷新；
+- **下游正在跑就拒绝重试上游**（不能在飞行中把它的输入抽掉）。
+
+### Plan 状态要回到可执行
+
+终态的计划（completed / failed / cancelled）在重试后回到 `ready`。
+不这么做就会出现「Plan completed + Task pending」这种自相矛盾的状态，
+而且 `start()` 会直接拒绝。
+
+**重试不会自动执行** —— 用户仍然要自己点开始。
+
+### 重试不碰的东西
+
+不清 Git 工作区（第二次执行面对的是**当前真实工作区**）、不删除旧会话、
+不删除旧审阅说明、不改写旧 `outcomeStatus`、不复用旧 `sessionId`。
+
+## 七、接口
 
 | 接口 | 用途 |
 |---|---|
@@ -321,7 +366,7 @@ P8-A 的字段全是 additive：老 attempt 缺 `review` → 归一化成
 刻意**没有**新增 `/api/workflow/*` / `/api/task-links/*` 这类平行概念 ——
 关系是 Planner 数据的一部分，就挂在 Planner 的接口上。
 
-## 七、本轮没做的增强（明确记下，不含糊过去）
+## 八、本轮没做的增强（明确记下，不含糊过去）
 
 规格里列为「增强项、可暂缓」的三条，P7 第一版**都没做**：
 
@@ -331,7 +376,7 @@ P8-A 的字段全是 additive：老 attempt 缺 `review` → 归一化成
 - **侧栏会话标题下显示「Plan · 修复 SSE」**。侧栏本来就窄，
   而且会话标题已经要跟时间戳抢位置 —— 优先保住了两条跳转本身。
 
-## 八、刻意不做
+## 九、刻意不做
 
 看板、拖拽排序、标签、优先级矩阵、截止日期、评论、成员、云同步、通知中心、
 Git commit 自动归属、AI 自动总结会话、embedding / RAG / SQLite、新的 Agent runtime。

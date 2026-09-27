@@ -227,7 +227,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 23 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 24 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -242,7 +242,8 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 通过后做一次 Electron 打包并验产物（25 项 + 47 项）。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
-`test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:sessions` / `test:search` /
+`test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:lifecycle` /
+`test:sessions` / `test:search` /
 `test:security` / `test:diagnostics` / `test:update` / `test:version` /
 `test:release` / `test:guard`。
 

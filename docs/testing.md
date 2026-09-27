@@ -27,11 +27,12 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 23 个套件，全部是**纯自动化**：
+`npm test` 里现在有 24 个套件，全部是**纯自动化**：
 
 ```
 smoke 686 · git 151 · modules 114 · reliability · interactions · port-owner
-project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 117
+project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
+attempt-lifecycle 77
 sessions 77 · session-search 72
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics · update-check 87
@@ -41,6 +42,12 @@ version-consistency 29 · release-artifacts 67 · electron-guard 75
 `workflow-relations`（P7）测的是任务 ↔ 会话 / 任务 ↔ 文件的全部关系语义，
 见 [workflows.md](workflows.md)。它和 `planner` 一样全程 `os.tmpdir()` + fake adapter，
 **不 spawn 真 Agent、不联网、不消耗额度** —— 所以能进默认 CI。
+
+`attempt-lifecycle`（P8-B）测的是 retry / cancel / stop / shutdown / restart 对**历史**的影响：
+允许重试的状态表、Retry = 新 attempt 而不是重写历史、每次 attempt 的
+session/files/snapshot/outcome 各自独立、终态 Plan 重试后能再次执行、
+下游重新评估且历史保留、取消与关闭只形成一条记录、硬崩恢复补的那条「结论明确、
+细节留空」、以及 A→B 的核心 E2E。
 
 `reviews`（P8-A）测的是人工审阅的数据契约：归一化与旧数据兼容、`verificationSnapshot`
 的冻结时机、审阅资格（成功可接受、失败/取消/中断不可接受、运行中不可审阅）、

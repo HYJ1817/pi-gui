@@ -31,6 +31,7 @@ import {
   MAX_CONCURRENCY,
   PLAN_STATUS,
   TASK_STATUS,
+  TERMINAL_PLAN_STATUS,
   TERMINAL_TASK_STATUS,
   buildTaskPrompt,
   computeReadyStates,
@@ -622,21 +623,114 @@ export function createScheduler({ store, registry, runtime, publish = () => {}, 
     return { ok: true, taskId, cancelledRunning: false };
   }
 
-  /** 重试：attempt++ 并清掉本次错误，历史 attempt 保留（规格 §27）。 */
+  /**
+   * 允许「重试」的状态：**已经有明确结论的那些**。
+   *
+   * 为什么 `success` 也在内（P8-B 的改动）：产品语义里「再跑一次这个任务」是
+   * 一个正当操作 —— 用户可能对结果不满意、想换个思路、或者只是想再看看。
+   * 早先直接拒绝已成功的任务（`code:'settled'`），于是
+   *
+   *     Attempt 1 success → 用户 accepted → 想再跑一次
+   *
+   * 这条路径根本走不通。而它恰恰是「人工审阅」最自然的后续动作。
+   *
+   * `skipped` 也保留（既有行为）：被跳过的任务重新跑一次是合理的。
+   *
+   * `pending / ready / blocked` 拒绝 —— 那些**还没有可重试的结果**，
+   * 重试它们没有意义（排队中就是排队中）。
+   * `running` 单独拒绝（要先停止）。
+   */
+  const RETRYABLE_TASK_STATUS = Object.freeze([
+    TASK_STATUS.SUCCESS,
+    TASK_STATUS.FAILED,
+    TASK_STATUS.CANCELLED,
+    TASK_STATUS.INTERRUPTED,
+    TASK_STATUS.SKIPPED,
+  ]);
+
+  /** 传递依赖 taskId 的所有任务（下游闭包，不含自己）。 */
+  function downstreamOf(plan, taskId) {
+    const out = [];
+    const seen = new Set([taskId]);
+    const queue = [taskId];
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const t of plan.tasks) {
+        if (seen.has(t.id)) continue;
+        if (!Array.isArray(t.dependsOn) || !t.dependsOn.includes(cur)) continue;
+        seen.add(t.id);
+        out.push(t);
+        queue.push(t.id);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 重试：给这个 Task **排一次新的尝试**。
+   *
+   * ---------- 一条不能破的语义 ----------
+   *
+   *     Retry = 新的 Attempt，**不是重写历史**。
+   *
+   * 所以这个函数只动**当前态**（status / result / error / startedAt / endedAt），
+   * 一个字节都不碰 `attempts[]` —— 历史里的 outcomeStatus / verificationSnapshot /
+   * sessionId / filesChanged / review 全部原样留着。
+   * 新的 Attempt 要等它**真的开始执行**时才产生（冻结快照也还是那时候做）。
+   *
+   * ---------- 三件容易被忽略的事 ----------
+   *
+   * 1. **下游必须重新评估。** A→B 都成功、计划 completed，用户重试 A：
+   *    B 的历史保留，但 B 的**当前状态**不能再宣称「基于旧 A 的成功结果」——
+   *    新的 A 结果可能完全不同。所以下游的终态任务回到 PENDING，等 A 跑完
+   *    再按依赖重新推进。**只动当前态，不删任何历史**。
+   * 2. **Plan 状态必须回到可执行。** 否则会出现「Plan completed + Task pending」
+   *    这种自相矛盾的状态，而且 `start()` 会直接拒绝。
+   * 3. **下游正在跑就不能重试上游** —— 那等于在飞行中把它的输入抽掉。
+   */
   function retryTask(plan, taskId) {
     const task = plan.tasks.find((t) => t.id === taskId);
     if (!task) return { ok: false, code: 'not-found', error: '找不到这个任务' };
     if (task.status === TASK_STATUS.RUNNING) return { ok: false, code: 'running', error: '任务正在执行，先停止它' };
-    if (task.status === TASK_STATUS.SUCCESS) return { ok: false, code: 'settled', error: '任务已经成功，不需要重试' };
+    if (!RETRYABLE_TASK_STATUS.includes(task.status)) {
+      return { ok: false, code: 'nothing-to-retry', error: `任务当前是「${task.status}」，还没有可重试的结果` };
+    }
 
+    const downs = downstreamOf(plan, taskId);
+    const busy = downs.find((d) => d.status === TASK_STATUS.RUNNING);
+    if (busy) {
+      return { ok: false, code: 'busy', error: `下游任务「${busy.id}」正在执行，先停止再重试上游` };
+    }
+
+    /* 只重置**当前态**。`attempts` 不动 —— 这就是「不重写历史」。 */
     task.status = TASK_STATUS.PENDING;
     task.error = '';
     task.result = null;
     task.startedAt = null;
     task.endedAt = null;
+
+    const invalidated = [];
+    for (const d of downs) {
+      if (!TERMINAL_TASK_STATUS.includes(d.status)) continue; // blocked / pending 的本来就会重算
+      d.status = TASK_STATUS.PENDING;
+      d.error = '';
+      d.result = null;
+      d.startedAt = null;
+      d.endedAt = null;
+      invalidated.push(d.id);
+    }
+
+    /* 终态的计划回到「可再次执行」。**不自动跑** —— 用户还要自己点开始。 */
+    if (TERMINAL_PLAN_STATUS.includes(plan.status)) {
+      plan.status = PLAN_STATUS.READY;
+      plan.endedAt = null;
+    }
     persist(plan);
-    emit(plan.id, taskId, null, 'task_retry_queued', { nextAttempt: (task.attempt || 0) + 1 });
-    return { ok: true, taskId, nextAttempt: (task.attempt || 0) + 1 };
+    emit(plan.id, taskId, null, 'task_retry_queued', {
+      nextAttempt: (task.attempt || 0) + 1,
+      invalidated,
+    });
+    return { ok: true, taskId, nextAttempt: (task.attempt || 0) + 1, invalidated };
   }
 
   /** 跳过：**依赖它的任务仍然 blocked**，不自动放行（规格 §26）。 */

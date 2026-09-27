@@ -129,8 +129,9 @@ const reviewUrl = (planId, taskId, attempt) =>
     fail1: [{ ok: false, error: '故意失败' }],
     hang1: [{ hang: true }],
     okDoc: [{ ok: true, summary: 'ok' }],
-    /* 「先失败、再成功」——这是**唯一**能产生两条 attempt 的路径：
-     * retryTask 拒绝重试已成功的任务（既有策略），所以 attempt 1 必须先失败。 */
+    /* 「先失败、再成功」——用这条路径造两条 attempt。
+     * （P8-B 起「成功后再重试」也能造第二条，但那属于 attempt-lifecycle 套件；
+     * 这里保持原来的造法，不因为新能力改动既有用例的前提。） */
     two: [{ ok: false, error: '第一次故意失败' }, { ok: true, summary: '第二次成功' }],
     /* 慢任务：用来制造「同一个计划里 A 已完成、B 还在跑」的窗口 ——
      * 那正是「审阅写入」与「Scheduler 持久化」两个写者重叠的时刻。 */
@@ -209,6 +210,10 @@ const reviewUrl = (planId, taskId, attempt) =>
   const attemptOf = (plan, taskId, n) => {
     const t = taskOf(plan, taskId);
     return t && (t.attempts || []).find((a) => a.attempt === n);
+  };
+  const attemptsOf = (plan, taskId) => {
+    const t = plan.tasks.find((x) => x.id === taskId);
+    return t && Array.isArray(t.attempts) ? t.attempts : [];
   };
   const readReview = (planId, taskId, n) => {
     const p = store.load(planId).plan;
@@ -548,12 +553,19 @@ const reviewUrl = (planId, taskId, attempt) =>
     check('G42c. 两条 attempt 的 snapshot 不同（各自反映当时的要求）', () => JSON.stringify(a1.verificationSnapshot) !== JSON.stringify(a2.verificationSnapshot));
     check('G42d. 两条 attempt 的历史都在（没被覆盖）', () => (taskOf(p, 'two').attempts || []).length === 2);
 
-    /* 钉住一条**既有策略**（P8-A 不改它，但要让它可见）：
-     * retryTask 拒绝重试已经成功的任务 —— 所以「先成功并接受、再重试」这条路径
-     * 在当前调度策略下不可达。上面用「先失败再重试」验的是同一组不变量。 */
+    /* P8-B 起，**已成功的任务也允许显式重试**（「先成功并接受、再重试」这条路径
+     * 现在是可达的）。这里只确认「允许」；完整的生命周期语义（历史保留、
+     * 新 attempt 从 pending 起、下游与 Plan 状态）在 `tests/attempt-lifecycle.cjs` 里验。
+     *
+     * ⚠️ 用一条**独立的小计划**验，不要拿 plan-d1 试 —— 重试会把它重置成
+     * pending，而 H 段的断言建立在那条计划的状态之上。 */
     runtime.setCurrentCwd(PROJ);
-    const retryOk = scheduler.retryTask(store.load('plan-d1').plan, 'two');
-    check('G-policy. 已成功的任务拒绝重试（既有策略；P8-A 不改变它）', () => retryOk.ok === false && retryOk.code === 'settled', JSON.stringify(retryOk));
+    store.save(mkPlan({ id: 'plan-g-policy', tasks: [{ id: 'okDoc' }] }));
+    await scheduler.start(store.load('plan-g-policy').plan);
+    await scheduler.waitIdle(20000);
+    const retryOk = scheduler.retryTask(store.load('plan-g-policy').plan, 'okDoc');
+    check('G-policy. 已成功的任务允许显式重试（P8-B 起；不再返回 settled）', () => retryOk.ok === true, JSON.stringify(retryOk));
+    check('G-policy2. 重试没有动历史 attempts（还是 1 条）', () => (attemptsOf(store.load('plan-g-policy').plan, 'okDoc') || []).length === 1, JSON.stringify(attemptsOf(store.load('plan-g-policy').plan, 'okDoc')));
   }
 
   /* ================= H. 计划编辑 ================= */

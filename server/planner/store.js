@@ -29,7 +29,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, normalizeAttempt, summarizePlan } from './model.js';
+import { ATTEMPT_OUTCOME, PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, normalizeAttempt, normalizeReview, summarizePlan } from './model.js';
 
 /** plan 文件的格式版本。格式一变就把旧文件当不认识的，避免半读半猜。
  *
@@ -123,6 +123,38 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
           t.status = TASK_STATUS.INTERRUPTED;
           t.endedAt = t.endedAt || Date.now();
           t.error = t.error || '上一次运行被中断（应用已重启，原进程不存在了）';
+          /* ---------- P8-B：补一条 attempt 记录 ----------
+           *
+           * 不补的话会出现一种说不通的状态：任务显示「被中断」，但历史里
+           * **完全找不到这次执行** —— 界面上的 attempt 列表是空的，用户会以为
+           * 记录丢了。
+           *
+           * **只写我们真的知道的东西**：`attempt` 号与 `startedAt` 在任务开始时
+           * 就已经落盘了，所以可靠。其余一律留空/默认，**绝不猜**：
+           * `verificationSnapshot` 与 `sessionId` 只在内存里（进程崩了就没了），
+           * 事后无从得知。
+           *
+           * 去重：优雅退出（SIGINT → scheduler.shutdown()）已经补过一条并把它标成
+           * interrupted，那种情况下任务状态不是 running，本来就走不到这里；
+           * 这里再挡一道，保证同一个 attempt 号不会被记两次。 */
+          t.attempts = Array.isArray(t.attempts) ? t.attempts : [];
+          if (t.attempt > 0 && !t.attempts.some((a) => a.attempt === t.attempt)) {
+            t.attempts.push({
+              attempt: t.attempt,
+              startedAt: Number.isFinite(t.startedAt) ? t.startedAt : null,
+              endedAt: t.endedAt,
+              success: false,
+              error: '上一次运行被中断',
+              summary: '',
+              exitCode: null,
+              sessionId: null,
+              filesChanged: [],
+              changeCaptureIncomplete: true,
+              outcomeStatus: ATTEMPT_OUTCOME.INTERRUPTED,
+              verificationSnapshot: null,
+              review: normalizeReview(null),
+            });
+          }
           recovered = true;
         }
       }

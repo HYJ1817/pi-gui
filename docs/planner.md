@@ -112,6 +112,38 @@ DAG 结构上支持并行，但默认不用。
   界面给你三个选择：重试 / 跳过 / 停止。
 - **跳过不会自动放行依赖者** —— 依赖它的任务仍然「被阻塞」，要跑就得先改依赖。
 - **重试是 `attempt++`，历史 attempt 全部保留**，失败证据不会被覆盖。
+
+### 重试的准确语义（P8-B 起）
+
+> **Retry = 新的 Attempt，不是重写历史。**
+
+它**不是**「删掉旧结果」：旧 Attempt 的 `outcomeStatus` / `verificationSnapshot` /
+`sessionId` / `filesChanged` / 人工审阅**一个字节都不动**。重试只重置任务的**当前态**
+（`status` / `result` / `error` / 起止时间），新的 Attempt 要等它**真的开始执行**时才产生。
+
+**允许重试的状态**：`success` / `failed` / `cancelled` / `interrupted` / `skipped`。
+
+- `success` 也在内 —— 「跑通了但我想再跑一次」是正当操作（不满意结果、换个思路），
+  而且它正是「人工审阅」最自然的后续动作。
+- `running` 拒绝（先停止）；`pending` / `ready` / `blocked` 拒绝 ——
+  那些**还没有可重试的结果**。
+
+**三件容易被忽略的事**：
+
+1. **下游要重新评估。** `A → B` 都成功、计划 completed，你重试 A：B 的**历史**保留，
+   但 B 的**当前状态**不能再宣称「基于旧 A 的成功结果」（新的 A 结果可能完全不同）。
+   所以下游的终态任务回到 `pending`，等 A 跑完再按依赖推进。
+   `retryTask()` 会把被重置的 id 放在返回值里（`invalidated`），界面据此刷新。
+2. **Plan 状态要回到可执行。** 否则会出现「Plan completed + Task pending」这种自相矛盾
+   的状态，而且 `start()` 会直接拒绝。
+3. **下游正在跑就不能重试上游** —— 那等于在飞行中把它的输入抽掉。
+
+**重试不会**：自动执行（还要你点开始）、清 Git 工作区（第二次执行面对的是当前真实工作区）、
+删除旧会话、删除旧审阅说明。
+
+**旧 `accepted` 的含义不变**：它始终只表示「你曾接受那次尝试的结果」，
+**不表示它仍是当前最新结果** —— 当前/最新由 Attempt 顺序表达。
+（所以 P8 刻意没有 `superseded` / `stale` 这类状态。）
 - **取消不是失败**：`cancelled` 用灰色，`failed` 才用红色。你自己按的停止，
   标红会让你以为出错了，然后去重试一个刚放弃的任务。
 - ⚠️ **失败暂停前要再 `refreshStatuses` 一次**，否则下游任务停在 `pending`
@@ -161,6 +193,19 @@ Agent、状态、耗时、退出码、结果摘要、attempt 历史、
 
 App 重开时如果看到某个任务还是 `running`，**不会假装它还在跑** ——
 原进程已经不存在了，它会恢复成 `interrupted` 并允许重试。
+
+**两条收尾路径不一样，别混**：
+
+| 路径 | 谁做 | 历史里会留下什么 |
+|---|---|---|
+| **优雅退出**（SIGINT → `scheduler.shutdown()`） | 同步收尾 | 补一条 `outcomeStatus=interrupted` 的 attempt，**带**已冻结的 `verificationSnapshot` 与 `sessionId`（它们还在内存里） |
+| **硬崩**（进程被杀，没来得及收尾） | 下次启动 `store.recoverAll()` | 也补一条 `interrupted` 的 attempt，但**只写真的知道的**：attempt 号与 `startedAt`（开始时已落盘）。`verificationSnapshot` / `sessionId` 只在内存里，崩了就没了 ⇒ 一律 `null`，`filesChanged=[]` + `changeCaptureIncomplete=true`。**不猜。** |
+
+> ⚠️ **为什么硬崩也要补这条**：不补的话会出现「任务显示被中断，但历史里
+> **完全找不到这次执行**」—— 界面的 attempt 列表是空的，用户会以为记录丢了。
+> 补一条「结论明确、细节留空」的记录，比留一个说不通的空档诚实。
+> 去重靠 attempt 号：同一个号不会记两次（优雅退出已经记过的那种，任务状态不是
+> `running`，本来就走不到这条路径）。
 
 > ⚠️ **崩溃恢复只在进程启动时做**（`store.recoverAll()`）。曾经写成「每次 load
 > 都恢复」，结果前端一轮询详情就把**正在跑**的任务翻成 interrupted ——
