@@ -27,15 +27,20 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 21 个套件，全部是**纯自动化**：
+`npm test` 里现在有 22 个套件，全部是**纯自动化**：
 
 ```
-smoke 663 · git 151 · modules 114 · reliability · interactions · port-owner
-project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 72
+smoke 686 · git 151 · modules 114 · reliability · interactions · port-owner
+project-config 115 · skills 182 · planner 115 · workflow-relations 71
+sessions 77 · session-search 72
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics · update-check 87
 version-consistency 29 · release-artifacts 67 · electron-guard 75
 ```
+
+`workflow-relations`（P7）测的是任务 ↔ 会话 / 任务 ↔ 文件的全部关系语义，
+见 [workflows.md](workflows.md)。它和 `planner` 一样全程 `os.tmpdir()` + fake adapter，
+**不 spawn 真 Agent、不联网、不消耗额度** —— 所以能进默认 CI。
 
 最后三个里，`version-consistency` 与 `release-artifacts` 是**发版守卫**：
 前者管 package / lock / tag 一致与「构建链路里有没有写死版本号」，

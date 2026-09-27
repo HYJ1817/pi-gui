@@ -250,8 +250,10 @@ get_messages ─┘
     见 [planner.md](planner.md)
     - `model.js` — Plan / Task 模型、DAG 校验、cwd 安全（复用 `lib/safe-path.js`）
     - `store.js` — 计划持久化（`<DATA_DIR>/plans/`，原子写，崩溃恢复只在启动时做）
-    - `scheduler.js` — 只负责执行已确认的计划：依赖推进、串行、失败暂停、取消、重试
-    - `index.js` — HTTP 路由 + 计划生成（用 pi 适配器 + 独立会话，不污染主聊天）
+    - `scheduler.js` — 只负责执行已确认的计划：依赖推进、串行、失败暂停、取消、重试；
+      每次尝试记下关联会话与执行期间变化的文件（P7，见 [workflows.md](workflows.md)）
+    - `index.js` — HTTP 路由 + 计划生成（用 pi 适配器 + 独立会话，不污染主聊天）；
+      另含「从任务打开会话」与「会话 → 任务」反查两条 P7 接口
   - `uploads.js` — 附件上传与落盘（`safeName`）
   - `git-routes.js` — Git 接口的 **HTTP 适配层**，业务逻辑全在 `lib/git.js`
   - `router.js` — 路由表与静态资源。**顺序即语义**
@@ -265,6 +267,9 @@ get_messages ─┘
 - `lib/git.js` — Git 状态 / diff / 撤销。默认只读；写操作只有「撤销单个文件」
   与「撤销全部」，且两条权限闸门（删未跟踪文件、取消暂存）默认关闭
 - `lib/safe-path.js` — 项目内路径校验，被 diff / 打开 / 撤销三条链路共用
+- `lib/session-id.js` — 会话 id 的**唯一**校验处（字符集抄自 pi 的
+  `assertValidSessionId`）。planner 拼 id 与 sessions 收前端输入都用它 ——
+  同一约束两个消费者，各写一份迟早会漂
 - `lib/models-api.js` — 从供应商 `/models` 拉模型列表（路径回退、按 API 类型适配）
 - `lib/extract.js` — docx / pdf / 图片的文本抽取（pdfjs）
 
@@ -278,7 +283,7 @@ get_messages ─┘
 - `tools.js` + `tool-model.js` + `tool-view.js` + `tool-history.js` 工具时间线
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
-  `tree.js` 分支树
+  `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
 - `extensions.js` 扩展面板 / `planner.js` 任务面板 / `project-config.js` 项目设置
 - `providers.js` 模型供应商 / `usage.js` 用量与状态 / `ui/` 通用组件
   （`modal.js` / `popover.js` / `toast.js`）

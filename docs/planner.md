@@ -32,13 +32,18 @@
 每个任务指定一个 Agent，必须来自内置 registry（`server/agents/`）——
 **那是唯一认识各 CLI 的地方**，Planner 不直接 spawn 任何东西。
 
-| Agent | 非交互调用方式 | 流式 | 可取消 | 可续会话 | 工具级事件 |
-|---|---|---|---|---|---|
-| `pi` | `--print --mode json --approve` + 独立 `--session-dir` | ✅ | ✅ | ✅ | ✅ |
-| `codex` | `exec --json` | ✅ | ✅ | ✅ | ✅（item 级） |
-| `gemini` | `-p --approval-mode auto_edit` | ✅ | ✅ | ✅ | ❌ 只有文本 |
-| `claude` | `-p --output-format stream-json` | ✅ | ✅ | ❌ | ✅ |
-| `opencode` | **未适配调用方式** | — | — | — | — |
+| Agent | 非交互调用方式 | 流式 | 可取消 | 可续会话 | 工具级事件 | 可关联会话 |
+|---|---|---|---|---|---|---|
+| `pi` | `--print --mode json --approve` + 独立 `--session-dir` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `codex` | `exec --json` | ✅ | ✅ | ✅ | ✅（item 级） | ❌ |
+| `gemini` | `-p --approval-mode auto_edit` | ✅ | ✅ | ✅ | ❌ 只有文本 | ❌ 未验证 |
+| `claude` | `-p --output-format stream-json` | ✅ | ✅ | ❌ | ✅ | ✅ |
+| `opencode` | **未适配调用方式** | — | — | — | — | ❌ |
+
+最后一列是 `capabilities.sessionLinking`（P7）：这次执行能不能关联到一条会话。
+**不支持就记 `null`、界面显示「无可关联会话」，绝不伪造一个 id** ——
+一个假的关联比没有关联更糟，它会把人引到错误的会话上。
+各 Agent 的具体差异（谁能被指定 id、谁只能回读）见 [workflows.md](workflows.md)。
 
 **可用性在运行时探测**，不写死在文档里：本机有没有装、装得完不完整
 （「装了但入口文件缺失」和「压根没装」是两种不同的原因），界面上会给出
@@ -58,6 +63,10 @@
 - **pi 的 `--session-dir` 真的能隔离**：会话文件落在指定目录，
   `~/.pi/agent/sessions/` 无新增。这点很重要 —— 主聊天用 `--continue` 取该 cwd
   下最近的会话，混进去会让用户下次聊天接上某个任务的上下文。
+  ⚠️ 代价是这些会话**不在主会话目录里**，所以「从任务打开会话」需要知道它们在哪：
+  那个目录同时作为 `extraSessionRoots` 注入给 sessions 模块（见
+  [sessions.md](sessions.md#十四任务会话的额外根目录)）。两处用的是
+  `server.js` 里同一个常量 —— 各写一遍迟早会漂，而症状是「会话明明存在却打不开」。
 
 ### `auto` 的规则
 
@@ -111,11 +120,23 @@ DAG 结构上支持并行，但默认不用。
 ## 七、每个任务都能看到
 
 Agent、状态、耗时、退出码、结果摘要、attempt 历史、
-**执行期间观察到的工作区变化**。
+**执行期间观察到的工作区变化**，以及每次尝试**关联的会话**。
 
 最后一条的措辞是刻意的：**不写「Agent 修改了这些文件」**。
 用户自己、编辑器、其它工具都可能在同一时间段改文件，
 把 git diff 全记在 Agent 头上是在编造因果。
+
+**每条 attempt 各自带 `sessionId` 与 `filesChanged`**，追加不覆盖 —— 于是重试之后
+两次尝试的会话与文件都还在（详见 [workflows.md](workflows.md)）。
+
+## 七之二、任务 ↔ 会话 / 任务 ↔ 文件
+
+从 P7 起，每次 Agent 执行都能关联到它产生的会话，并记录执行期间变化的文件；
+会话那一侧也能反查到「这个会话属于哪个计划的哪个任务」。整条链路（数据形状、
+打开会话、项目隔离、元数据里不存什么）见 **[workflows.md](workflows.md)**。
+
+一句话版：关系挂在 `attempts[]` 上，`sessionId` 是稳定 id 而不是路径，
+`filesChanged` 只有项目相对路径，**没有第二份索引**（反查是运行时扫 plan 文件）。
 
 ## 八、崩溃恢复
 
@@ -165,6 +186,14 @@ App 重开时如果看到某个任务还是 `running`，**不会假装它还在�
 进程层（真子进程打 ENOENT / 超时 / 取消 / 进程树 kill / stdout 截断 /
 args 不被 shell 解释）、持久化与隔离、SSE 事件字段，外加 fake-agent 的完整
 Scheduler E2E。全程 `os.tmpdir()`，不联网、不消耗模型额度。
+
+`npm run test:workflow`（71 条，P7）：任务 ↔ 会话与任务 ↔ 文件的全部关系语义 ——
+sessionId 的确定性与合法性、不支持的 Agent 记 null、retry 保留旧会话且产生新会话、
+cancelled / failed 保留关系、filesChanged 的新增 / 修改 / 删除 / rename、
+相对路径与 `..` 逃逸、并行不串、串行不重叠、项目归属（403 / 跨项目拒绝）、
+持久化与重启、老计划与坏关系的兼容、元数据隐私（不夹带 prompt / 绝对路径）、
+从任务打开会话（含「任务运行中拒绝」「会话已删除」「无关联会话」三种降级）、
+反向查询、以及中断恢复（不猜最终变化）。见 [workflows.md](workflows.md)。
 
 > Agent 探测那几条是**用 fixture 驱动**的（造一个假的全局 npm 目录，
 > 把 `env.APPDATA` 指过去），不依赖「跑测试这台机器装了什么」。

@@ -27,6 +27,8 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 - **撤销** —— 逐文件撤销，或先看一遍完整计划再全部撤销
 - **Skills 管理** —— 发现、查看、启用/停用你已装的 Skills
 - **任务编排** —— 把大目标拆成带依赖的任务，交给不同 CLI 依次执行
+- **任务工作流** —— Planner 的每次 Agent 执行可关联对应会话与执行期间文件变化，
+  任务、会话和 Git Changes 可以互相追踪
 - **模型供应商** —— 不用手写 JSON 就能加自定义供应商，还能直接拉模型列表
 - **诊断** —— 查看版本、bridge、Agent 与目录健康状态，复制脱敏 JSON 用于排障
 - **版本检查** —— 在应用内检查 GitHub Release，新版本可直接查看发布说明和下载
@@ -225,7 +227,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 19 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 22 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -240,8 +242,9 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 通过后做一次 Electron 打包并验产物（25 项 + 47 项）。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
-`test:skills` / `test:planner` / `test:sessions` / `test:security` /
-`test:diagnostics` / `test:update` / `test:version` / `test:release` / `test:guard`。
+`test:skills` / `test:planner` / `test:workflow` / `test:sessions` / `test:search` /
+`test:security` / `test:diagnostics` / `test:update` / `test:version` /
+`test:release` / `test:guard`。
 
 准备发版时有一条命令跑完的入口（版本一致性 + 全部测试 + 两条打包链路 +
 产物验证 + 校验和）：
@@ -266,6 +269,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [sessions.md](docs/sessions.md) | 会话：文件机制、列表与归属、当前/pending、切换、归档、软删除、分支、提问导航 |
 | [git-changes.md](docs/git-changes.md) | 文件变更：diff 渲染、撤销规则、权限闸门、设计取舍 |
 | [planner.md](docs/planner.md) | 任务编排：Planner/Executor、Agent registry、DAG、失败与恢复、限制 |
+| [workflows.md](docs/workflows.md) | 任务工作流：任务 ↔ 会话、任务 ↔ 文件、打开会话、项目隔离、元数据边界 |
 | [extensions.md](docs/extensions.md) | Skills 发现与启停、项目信任、MCP 能力报告与为什么不虚构 Server |
 | [project-config.md](docs/project-config.md) | 项目配置：位置、字段、优先级、指令注入、坏配置行为 |
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
