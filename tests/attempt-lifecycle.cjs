@@ -145,6 +145,14 @@ const reviewUrl = (planId, taskId, attempt) =>
     hangA: [{ hang: true }],
     /* 慢任务：用来制造「上游已完成、下游正在跑」的窗口 */
     slowB: [{ slowMs: 700, ok: true, summary: 'B 完成' }],
+    /* G 段（active Plan 的生命周期操作）专用，**刻意不复用 okA / okB**：
+     * okA 的行为表是**按调用次数取档**的（多元素列表），多跑几次会取到最后一档、
+     * 写出的行数与现状相同 ⇒ 快照差集为空 ⇒ F7 / B7 的 filesChanged 断言假红。
+     * 单独两个 id 让 G 段的执行完全不碰 okA / okB 的计数。
+     * 慢任务的时长是为了撑出一个**足够宽**的「A 在跑」窗口（下面要在窗口里
+     * 连续调两次接口），1000ms 级对 ms 级的接口调用是安全的。 */
+    gQuick: [{ ok: true, summary: 'G 快任务完成' }],
+    gSlow: [{ slowMs: 1200, ok: true, summary: 'G 慢任务完成' }],
   };
   const registry = createAgentRegistry({ env: process.env, includeFake: true, fakeBehaviors: BEHAVIORS });
 
@@ -567,6 +575,110 @@ const reviewUrl = (planId, taskId, attempt) =>
       return ids.every((x) => Boolean(x)) && new Set(ids).size === ids.length || JSON.stringify(ids);
     });
     check('F7. 三次 attempt 的 filesChanged 各自独立保留', () => attemptsOf(fin, 'okA').every((x) => Array.isArray(x.filesChanged) && x.filesChanged.length > 0), JSON.stringify(attemptsOf(fin, 'okA').map((x) => x.filesChanged)));
+  }
+
+  /* ================= G. Active Plan 的生命周期操作（P8-B 所有权补丁） ================= */
+  section('G. Active Plan 的生命周期操作作用于 active.plan');
+
+  /* 计划在跑的时候，同一个 Plan 在内存里有**两份对象图**：
+   *
+   *     active.plan        Scheduler 持有的执行态 —— pump / runTask / finishTask
+   *                        改的是它，收尾时也是它整份写盘
+   *     路由里 load 的      每次请求 `store.load()` 出来的**新副本**
+   *
+   * 下面每一段都刻意用 `load(id)` 取那份**副本**去调接口，模拟真实 HTTP 请求
+   * —— 那正是原来出问题的那条路径。断言的重点不是「接口返回了什么」，而是
+   * **Scheduler 收尾整份写盘之后，改动还在不在**。 */
+
+  {
+    /* G1 / G2：active Plan 里 retry 一个已完成的 Task → 拒绝，且绝不自动执行。 */
+    resetFake();
+    await startNoWait({ id: 'lc-g1', concurrency: 2, tasks: [{ id: 'gQuick' }, { id: 'gSlow' }] });
+    const win = await waitUntil('lc-g1', (p) => taskOf(p, 'gQuick').status === 'success' && taskOf(p, 'gSlow').status === 'running');
+    check(
+      'G-prep. 拿到「快任务已完成、慢任务仍在跑」且计划仍 active 的窗口',
+      () => Boolean(win) && scheduler.activePlanId() === 'lc-g1',
+      win ? JSON.stringify({ active: scheduler.activePlanId() }) : 'win=null（没等到窗口）'
+    );
+
+    runtime.setCurrentCwd(PROJ);
+    const r = scheduler.retryTask(load('lc-g1'), 'gQuick');
+    check('G1. active Plan 里 retry 已完成的 Task → 拒绝，code=plan-active', () => r.ok === false && r.code === 'plan-active', JSON.stringify(r));
+
+    /* 同一条规则经 HTTP 路由也必须一致 —— 规则只写在 Scheduler 里，路由不重复判定 */
+    const h = await hit(planner, 'POST', '/api/plans/lc-g1/tasks/gQuick/retry');
+    check('G1b. HTTP 路由下同一条规则（route 不自己判断 active）', () => h.body.ok === false && h.body.code === 'plan-active', JSON.stringify(h.body));
+
+    await scheduler.waitIdle(20000);
+    const fin = load('lc-g1');
+    check(
+      'G2. retry 没有被自动执行：A 仍是 success、attempt 仍是 1、只有一条历史',
+      () => {
+        const t = taskOf(fin, 'gQuick');
+        return t.status === 'success' && t.attempt === 1 && attemptsOf(fin, 'gQuick').length === 1;
+      },
+      JSON.stringify({ s: taskOf(fin, 'gQuick').status, attempt: taskOf(fin, 'gQuick').attempt, hist: attemptsOf(fin, 'gQuick').map((x) => x.attempt) })
+    );
+    check('G2b. 慢任务跑完后计划正常收成 completed（A 没被翻回 pending）', () => fin.status === 'completed', fin.status);
+  }
+
+  {
+    /* G3–G5：active Plan 里 cancel 一个尚未开始的 Task。 */
+    resetFake();
+    await startNoWait({ id: 'lc-g2', concurrency: 1, tasks: [{ id: 'gSlow' }, { id: 'gQuick' }] });
+    const win = await waitUntil('lc-g2', (p) => taskOf(p, 'gSlow').status === 'running' && !['running'].includes(taskOf(p, 'gQuick').status));
+    check(
+      'G-prep2. 并发 1：慢任务在跑、快任务尚未开始',
+      () => Boolean(win) && ['ready', 'pending'].includes(taskOf(win, 'gQuick').status),
+      win ? JSON.stringify({ a: taskOf(win, 'gSlow').status, b: taskOf(win, 'gQuick').status }) : 'win=null（没等到窗口）'
+    );
+
+    runtime.setCurrentCwd(PROJ);
+    const h = await hit(planner, 'POST', '/api/plans/lc-g2/tasks/gQuick/cancel');
+    check('G3. active Plan 里 cancel 未开始的 Task → ok（且不是「取消了正在跑的」）', () => h.body.ok === true && h.body.cancelledRunning === false, JSON.stringify(h.body));
+    check('G3b. 响应里的 plan 就是被改的那一份（不是陈旧副本）', () => taskOf(h.body.plan, 'gQuick').status === 'cancelled', taskOf(h.body.plan, 'gQuick').status);
+    check('G3c. 取消已经落盘', () => taskOf(load('lc-g2'), 'gQuick').status === 'cancelled', taskOf(load('lc-g2'), 'gQuick').status);
+
+    await scheduler.waitIdle(20000);
+    const fin = load('lc-g2');
+    check('G4. Scheduler 收尾整份写盘之后，B 仍然是 cancelled（没被冲回 pending）', () => taskOf(fin, 'gQuick').status === 'cancelled', taskOf(fin, 'gQuick').status);
+    check('G5. 被取消的 Task 从未执行 → 0 条 attempt、attempt 号仍是 0', () => attemptsOf(fin, 'gQuick').length === 0 && taskOf(fin, 'gQuick').attempt === 0, JSON.stringify({ n: attemptsOf(fin, 'gQuick').length, attempt: taskOf(fin, 'gQuick').attempt }));
+    check('G5b. 慢任务本身正常成功（取消 B 不影响正在跑的 A）', () => taskOf(fin, 'gSlow').status === 'success', taskOf(fin, 'gSlow').status);
+  }
+
+  {
+    /* G6–G8：active Plan 里 skip 一个尚未开始的 Task。 */
+    resetFake();
+    await startNoWait({ id: 'lc-g3', concurrency: 1, tasks: [{ id: 'gSlow' }, { id: 'gQuick' }] });
+    const win = await waitUntil('lc-g3', (p) => taskOf(p, 'gSlow').status === 'running' && !['running'].includes(taskOf(p, 'gQuick').status));
+    check('G-prep3. 并发 1：慢任务在跑、快任务尚未开始', () => Boolean(win), win ? '' : 'win=null（没等到窗口）');
+
+    runtime.setCurrentCwd(PROJ);
+    const h = await hit(planner, 'POST', '/api/plans/lc-g3/tasks/gQuick/skip');
+    check('G6. active Plan 里 skip 未开始的 Task → ok', () => h.body.ok === true, JSON.stringify(h.body));
+    check('G6b. 响应里的 plan 反映了 skipped', () => taskOf(h.body.plan, 'gQuick').status === 'skipped', taskOf(h.body.plan, 'gQuick').status);
+
+    await scheduler.waitIdle(20000);
+    const fin = load('lc-g3');
+    check('G7. Scheduler 收尾整份写盘之后，B 仍然是 skipped（没被冲回 pending）', () => taskOf(fin, 'gQuick').status === 'skipped', taskOf(fin, 'gQuick').status);
+    check('G8. 被跳过的 Task 从未执行 → 0 条 attempt', () => attemptsOf(fin, 'gQuick').length === 0 && taskOf(fin, 'gQuick').attempt === 0, JSON.stringify({ n: attemptsOf(fin, 'gQuick').length, attempt: taskOf(fin, 'gQuick').attempt }));
+  }
+
+  {
+    /* G9 / G10：**非 active** Plan 的行为没有被这次修改动到（inactive 回归）。 */
+    runtime.setCurrentCwd(PROJ);
+    check('G-prep4. 此时没有正在执行的计划', () => scheduler.activePlanId() === null, JSON.stringify(scheduler.activePlanId()));
+
+    store.save(mkPlan({ id: 'lc-g4', tasks: [{ id: 'gQuick' }] }));
+    const rc = scheduler.cancelTask(load('lc-g4'), 'gQuick');
+    check('G9. 非 active Plan：cancel 仍然作用于传入的那份 plan 并落盘', () => rc.ok === true && taskOf(load('lc-g4'), 'gQuick').status === 'cancelled', JSON.stringify(rc));
+
+    store.save(mkPlan({ id: 'lc-g5', tasks: [{ id: 'gQuick' }] }));
+    const rs = scheduler.skipTask(load('lc-g5'), 'gQuick');
+    check('G10. 非 active Plan：skip 仍然作用于传入的那份 plan 并落盘', () => rs.ok === true && taskOf(load('lc-g5'), 'gQuick').status === 'skipped', JSON.stringify(rs));
+
+    /* 顺带确认：inactive 时 cancel 的返回值也带 plan（路由统一用 r.plan || plan） */
+    check('G10b. inactive 时 cancel/skip 的返回值同样带 plan', () => Boolean(rc.plan && rs.plan && rc.plan.id === 'lc-g4' && rs.plan.id === 'lc-g5'), JSON.stringify([rc.plan && rc.plan.id, rs.plan && rs.plan.id]));
   }
 
   cleanup();
