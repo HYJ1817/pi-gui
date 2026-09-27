@@ -44,6 +44,7 @@ import { toast } from './ui/toast.js';
 import { confirmModal } from './ui/modal.js';
 import { setAfterHistoryRendered } from './messages.js';
 import { scrollToUserTurn } from './conversation-nav.js';
+import { clearSessionPlans, refreshSessionPlans } from './session-plans.js';
 import {
   createSearchBar,
   renderSearchResults,
@@ -155,6 +156,10 @@ export async function renderSidebarSessions(projectEl) {
    * 校验丢掉，但那只是「刚好没出错」）。 */
   pendingLocate = null;
   resetSearch();
+  /* 换了项目就丢掉上一个项目的「关联任务」窄条（P7）。不清的话会短暂显示
+   * A 项目的关联 —— 那条数据在后端是按项目过滤的，但**已经画出来的 DOM**
+   * 不会自己消失。 */
+  clearSessionPlans();
   await fill(box, ++loadToken);
 }
 
@@ -183,9 +188,16 @@ async function fill(box, token) {
   if (token !== loadToken || !box.isConnected) return;
 
   if (!data.hasProject || !(data.sessions || []).length) {
+    clearSessionPlans(); // 没有会话就没有关联可显示
     box.remove();
     return;
   }
+  /* P7 §8：会话标题旁的「关联任务」。这里只把**当前会话的 pi 会话 id** 递过去 ——
+   * 拉取与显隐由 session-plans.js 负责（它自己带 stale 保护）。
+   * 注意用 `s.sessionId`（pi 的 UUID）而不是 `s.id`（我们那个路径 sha1）：
+   * 任务元数据里存的是前者，两者不是一回事。 */
+  const cur = (data.sessions || []).find((s) => s.current);
+  refreshSessionPlans(cur ? cur.sessionId : '');
   paint(box, data);
 }
 

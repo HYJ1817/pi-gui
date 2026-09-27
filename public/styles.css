@@ -1583,3 +1583,92 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 @media (max-width:900px){
   .convo-nav{display:none}
 }
+
+/* ============ P7：项目级任务工作流（任务 ↔ 会话 / 任务 ↔ 文件） ============
+ *
+ * 两条与规格直接相关的样式决定：
+ *   1. 「关联任务」窄条默认靠 [hidden] 隐藏（见文件顶部那条 !important 的说明），
+ *      只有真的有关联时才显形 —— 绝大多数会话不属于任何任务，常驻一行是噪声。
+ *   2. 窄窗口下直接隐藏窄条：正文才是主体，不该为了一个系统信息把标题挤没。
+ */
+
+.sess-plans {
+  display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0;
+  height: 24px; margin-right: 6px; padding: 0 8px; border-radius: 7px;
+  background: var(--accent-soft); border: 1px solid rgba(232, 163, 61, .22);
+  font-size: 11.5px; color: var(--t2); overflow: hidden;
+}
+.sess-plans .sp-label { color: var(--accent); white-space: nowrap; flex: 0 0 auto; }
+.sess-plans .sp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sess-plans .sp-plan {
+  color: #d8d8d8; max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sess-plans .sp-task {
+  color: var(--t3); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sess-plans .sp-open,
+.sess-plans .sp-toggle {
+  flex: 0 0 auto; height: 19px; padding: 0 7px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: #c5c5c5;
+  font-size: 11px; font-family: inherit; white-space: nowrap;
+}
+.sess-plans .sp-open:hover,
+.sess-plans .sp-toggle:hover { background: var(--hover); }
+@media (max-width: 1100px) { .sess-plans { display: none; } }
+
+/* 一次尝试：状态行 → 会话行 → 执行期间变更行。
+   覆盖早先的「一行 flex」（那时 attempt 里只有状态与错误两段文字）。 */
+.planner-attempt {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px 0; border-top: 1px dashed var(--line-soft);
+}
+.planner-attempt:first-of-type { border-top: 0; }
+.planner-attempt-head { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--t2); }
+.planner-attempt-no { color: #d0d0d0; }
+.planner-attempt-dur { color: var(--t3); }
+.planner-attempt-err {
+  color: var(--err); max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.planner-attempt-sess { display: flex; align-items: center; gap: 7px; font-size: 11.5px; min-width: 0; }
+.planner-attempt-files { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; }
+.planner-attempt-note { font-size: 11.5px; color: var(--t3); }
+
+.planner-sess-name {
+  color: #cfe9d4; min-width: 0; max-width: 380px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.planner-sess-none { color: var(--t3); }
+/* 关联过、但现在找不到了 —— 用警示色，因为这是用户需要知道的状态变化（会话被删了） */
+.planner-sess-gone { color: var(--warn); }
+.planner-open-sess {
+  flex: 0 0 auto; height: 19px; padding: 0 7px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: #c5c5c5;
+  font-size: 11px; font-family: inherit;
+}
+.planner-open-sess:hover { background: var(--hover); }
+
+.planner-file-list { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.planner-file {
+  font-family: var(--mono); font-size: 11px; color: #bdbdbd;
+  background: var(--hover); border-radius: 4px; padding: 1px 5px;
+}
+.planner-file-more { color: var(--t3); font-size: 11px; }
+
+/* Plan 级汇总（§18/§19）。默认收起，点一下才展开 —— 详情页本身已经很长。 */
+.planner-relations { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.planner-rel-btn {
+  height: 22px; padding: 0 9px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: #c5c5c5;
+  font-size: 11.5px; font-family: inherit;
+}
+.planner-rel-btn:hover { background: var(--hover); }
+.planner-rel-list {
+  display: flex; flex-direction: column; gap: 5px;
+  border: 1px solid var(--line-soft); border-radius: 7px;
+  padding: 8px 10px; background: var(--card);
+}
+.planner-rel-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.planner-rel-meta { color: var(--t3); }
+
+/* 从会话跳进来时高亮目标任务，否则用户要自己在长计划里找 */
+.planner-task.focus { border-left: 2px solid var(--accent); padding-left: 8px; }

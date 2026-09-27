@@ -179,6 +179,25 @@ export const retryPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'retry
 export const cancelPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'cancel'), {});
 export const skipPlanTask = (id, taskId) => sendJSON(taskUrl(id, taskId, 'skip'), {});
 
+/* ---------- 任务 ↔ 会话 / 任务 ↔ 文件（P7） ---------- */
+
+/** 打开某个任务某次尝试对应的会话。
+ *
+ *  **只传 planId / taskId / attempt，不传会话路径** —— 后端自己去解析那条会话
+ *  到底在哪个文件，并核对它确实属于当前项目。真正的切换复用现有的
+ *  `switch_session` 链路，前端不需要（也不应该）另写一套加载。
+ *  失败一律是 200 + ok:false（「这次执行没有关联会话」是正常结果，不是错误）。 */
+export const openPlanTaskSession = (planId, taskId, attempt) =>
+  sendJSON(
+    taskUrl(planId, taskId, 'open-session') + (attempt ? '?attempt=' + encodeURIComponent(attempt) : ''),
+    {}
+  );
+
+/** 反向查询：这个会话被哪些计划的哪些任务用过（会话头部那条「关联任务」用）。
+ *  `sessionId` 是 pi 的会话 id（列表接口已经给了），不是路径。 */
+export const fetchSessionPlans = (sessionId) =>
+  getJSON('/api/plans/relations?sessionId=' + encodeURIComponent(sessionId));
+
 /* ---------- 会话列表与切换 ---------- */
 
 /** 当前项目的会话列表。pi 的 RPC 没有「列出会话」，这是后端扫 sessions 目录得到的。

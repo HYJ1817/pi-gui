@@ -129,6 +129,9 @@
         <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h4a3 3 0 0 1 3 3v.5"/></svg>
       </button>
       <h1 id="title">新会话</h1>
+      <!-- P7：当前会话关联了哪些任务（没有关联时整块 hidden，不占位）。
+           内容由 session-plans.js 填，只在真的命中时才显形。 -->
+      <div class="sess-plans" id="sessionPlans" hidden></div>
       <div class="head-right">
         <button type="button" class="icon-btn" id="btnMore" title="更多" aria-label="更多操作">
           <svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>

@@ -30,9 +30,13 @@ import {
   retryPlanTask,
   cancelPlanTask,
   skipPlanTask,
+  openPlanTaskSession,
 } from './api.js';
-import { openModal, confirmModal } from './ui/modal.js';
+import { openModal, closeModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
+import { S } from './state.js';
+import { afterSessionSwitch } from './rpc.js';
+import { openChangesPanel } from './git.js';
 
 /* ---------- 状态与文案表 ---------- */
 
@@ -81,6 +85,37 @@ function fmtDuration(ms) {
   return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
 }
 
+/**
+ * 从 tasks/attempts 现算 Plan 级汇总（P7 §18/§19）。
+ *
+ * **不请求新接口、也不缓存**：plan 详情已经带了每条 attempt 的关系字段，
+ * 汇总只是去重。这样「汇总」和「明细」永远对得上 —— 如果另开一个接口去算，
+ * 两边迟早会出现「上面说 4 个会话、下面只列出 3 个」这种没人能解释的差异。
+ *
+ * 会话按 id 去重（同一个会话可能被多条 attempt 指向），保留首次出现的那条
+ * 上下文（哪个任务、第几次），因为界面上要显示「它属于哪个任务」。
+ */
+function planRelations(plan) {
+  const sessions = new Map();
+  const files = new Set();
+  for (const t of plan.tasks || []) {
+    for (const a of t.attempts || []) {
+      if (a.sessionId && !sessions.has(a.sessionId)) {
+        sessions.set(a.sessionId, {
+          sessionId: a.sessionId,
+          title: a.sessionTitle || '',
+          available: a.sessionAvailable !== false,
+          taskId: t.id,
+          taskTitle: t.title,
+          attempt: a.attempt,
+        });
+      }
+      for (const p of a.filesChanged || []) files.add(p);
+    }
+  }
+  return { sessions: [...sessions.values()], files: [...files] };
+}
+
 /* ---------- SSE 联动 ---------- */
 
 let executionHandler = null;
@@ -109,12 +144,21 @@ export async function loadPlannerBadge() {
 
 /* ---------- 主面板 ---------- */
 
-export function openPlanner() {
+/**
+ * 打开 Planner 面板。
+ *
+ * @param focus 可选 `{ planId, taskId }` —— 从「会话头部的关联任务」跳进来时用，
+ *              会直接把那个计划选中并滚到对应任务（P7 §8 的「查看任务」）。
+ */
+export function openPlanner(focus = null) {
   let plans = [];
   let agents = [];
   let current = null; // 当前选中的 plan（完整对象）
   let dirty = false; // 未保存的编辑
   let liveEvents = new Map(); // taskId → [{kind, data, timestamp}]
+  /* P7 §18/§19：Plan 级汇总的两个展开开关（默认收起，别把详情页撑长）。 */
+  let relOpen = false;
+  let filesOpen = false;
 
   openModal((card) => {
     card.classList.add('wide', 'planner');
@@ -326,6 +370,64 @@ export function openPlanner() {
       }
       detailWrap.append(prog);
 
+      /* ---------- P7 §18/§19：这个目标一共关联了什么 ----------
+       *
+       * 全部**从 tasks/attempts 现算**，不请求新接口：plan 详情已经带了
+       * 每条 attempt 的 sessionId / filesChanged（后端一次性给的，见 planView），
+       * 所以这里只是去重汇总 —— 既没有 N+1，也不会出现「汇总和明细对不上」。 */
+      const rel = planRelations(current);
+      if (rel.sessions.length || rel.files.length) {
+        const line = el('div', 'planner-relations');
+        if (rel.sessions.length) {
+          const b = el('button', 'planner-rel-btn', `关联会话 ${rel.sessions.length}`);
+          b.type = 'button';
+          b.onclick = () => {
+            relOpen = !relOpen;
+            renderDetail();
+          };
+          line.append(b);
+        }
+        if (rel.files.length) {
+          const b = el('button', 'planner-rel-btn', `执行期间涉及 ${rel.files.length} 个文件`);
+          b.type = 'button';
+          b.onclick = () => {
+            filesOpen = !filesOpen;
+            renderDetail();
+          };
+          line.append(b);
+        }
+        detailWrap.append(line);
+
+        if (relOpen) {
+          const box = el('div', 'planner-rel-list');
+          for (const s of rel.sessions) {
+            const r = el('div', 'planner-rel-row');
+            r.append(el('span', 'planner-sess-name', s.title || '（无标题）'));
+            r.append(el('span', 'planner-rel-meta', `${s.taskTitle} · 第 ${s.attempt} 次`));
+            if (s.available) r.append(btn('打开会话', 'planner-open-sess', () => doOpenSession(current.id, s.taskId, s.attempt)));
+            else r.append(el('span', 'planner-sess-gone', '已删除'));
+            box.append(r);
+          }
+          detailWrap.append(box);
+        }
+
+        if (filesOpen) {
+          const box = el('div', 'planner-rel-list');
+          const fl = el('div', 'planner-file-list');
+          for (const p of rel.files) fl.append(el('span', 'planner-file', p));
+          box.append(fl);
+          /* 措辞与 task 级一致：这是「执行期间观察到」的集合，不是归属声明。
+           * 完整 diff 仍然走「文件变更」面板 —— 这里**不复制 diff**（规格 §19）。 */
+          box.append(el('div', 'ext-item-note', '这些文件在执行期间被观察到有变化（可能也包含其它来源的改动）。diff 请在侧栏「文件变更」里看。'));
+          const b = btn('打开文件变更', 'planner-rel-btn', () => {
+            closeModal();
+            openChangesPanel();
+          });
+          box.append(b);
+          detailWrap.append(box);
+        }
+      }
+
       /* 任务列表 */
       const tl = el('div', 'planner-tasks');
       for (const t of current.tasks) tl.append(renderTask(t, running));
@@ -350,8 +452,93 @@ export function openPlanner() {
       if (b && !b.classList.contains('primary')) b.classList.add('primary');
     }
 
+    /**
+     * 一条 attempt：状态 + 关联会话 + 执行期间变更（P7 §6 / §10）。
+     *
+     * 三种「没有会话」的情形分开说，因为用户该做的事完全不同：
+     *   - 这次执行没关联到会话（Agent 不支持）→ 「无可关联会话」
+     *   - 关联过，但会话文件已经找不到了 → 「关联会话已删除」
+     *   - 有会话且能找到 → 显示标题 + 「打开会话」
+     * 全都不是错误，所以都不用红色 —— 这只是信息缺失，不是失败。
+     */
+    function renderAttempt(planId, task, a) {
+      const row = el('div', 'planner-attempt');
+      const head = el('div', 'planner-attempt-head');
+      const meta = a.success ? TASK_STATE.success : /取消/.test(String(a.error || '')) ? TASK_STATE.cancelled : TASK_STATE.failed;
+      head.append(el('span', dotClass(meta), ''));
+      head.append(el('span', 'planner-attempt-no', `第 ${a.attempt} 次`));
+      if (Number.isFinite(a.startedAt) && Number.isFinite(a.endedAt)) {
+        head.append(el('span', 'planner-attempt-dur', fmtDuration(a.endedAt - a.startedAt)));
+      }
+      if (a.error) head.append(el('span', 'planner-attempt-err', String(a.error).slice(0, 160)));
+      row.append(head);
+
+      const srow = el('div', 'planner-attempt-sess');
+      srow.append(el('span', 'planner-lbl', '会话'));
+      if (!a.sessionId) {
+        srow.append(el('span', 'planner-sess-none', '无可关联会话'));
+      } else if (a.sessionAvailable === false) {
+        srow.append(el('span', 'planner-sess-gone', '关联会话已删除'));
+      } else {
+        srow.append(el('span', 'planner-sess-name', a.sessionTitle || '（无标题）'));
+        srow.append(btn('打开会话', 'planner-open-sess', () => doOpenSession(planId, task.id, a.attempt)));
+      }
+      row.append(srow);
+
+      const files = Array.isArray(a.filesChanged) ? a.filesChanged : [];
+      if (files.length) {
+        const frow = el('div', 'planner-attempt-files');
+        /* 措辞刻意是「执行期间变更」，**不是**「该 Agent 修改」（规格 §11）：
+         * 用户自己、编辑器、另一个并行任务都可能在同一时间段动过这些文件。
+         * 这个字符串同时也是 planner.cjs / workflow-relations.cjs 的断言对象。 */
+        frow.append(el('span', 'planner-lbl', '执行期间变更'));
+        const list = el('div', 'planner-file-list');
+        for (const p of files.slice(0, 20)) list.append(el('span', 'planner-file', p));
+        frow.append(list);
+        if (files.length > 20) frow.append(el('span', 'planner-file-more', `等 ${files.length} 个文件`));
+        row.append(frow);
+      } else if (a.changeCaptureIncomplete) {
+        row.append(el('div', 'planner-attempt-note', '执行期间变更：采集不到（这个项目不是 git 仓库，或这次执行被中断）'));
+      } else {
+        row.append(el('div', 'planner-attempt-note', '执行期间未观察到文件变化'));
+      }
+      return row;
+    }
+
+    /**
+     * 从任务跳到它的会话（P7 §7）。
+     *
+     * **切换动作全在后端**：前端只发 planId / taskId / attempt，后端解析真实路径、
+     * 核对归属、拒绝正在执行的任务，然后复用现有的 `switch_session`。
+     * 前端这一侧只负责**切完之后把界面收尾** —— 走的是和侧栏切换完全同一个
+     * `afterSessionSwitch()`（清对话区、清变更账本、重画会话列表、boot 重建历史）。
+     * 不这么做就会出现「会话切了但界面还挂着上一个会话的消息」。
+     */
+    async function doOpenSession(planId, taskId, attempt) {
+      if (S.streaming) {
+        toast('正在生成回答，等这一轮结束再切会话（或先点停止）', 'warn');
+        return;
+      }
+      try {
+        const r = await openPlanTaskSession(planId, taskId, attempt);
+        if (!r.ok) {
+          // 「没有可关联的会话」「会话已删除」都是正常结果，用 warn 不用 error
+          toast(r.error || '打开会话失败', 'warn');
+          return;
+        }
+        closeModal();
+        afterSessionSwitch();
+        toast('已切到任务会话：' + (r.title || '（无标题）'), 'info');
+      } catch (err) {
+        toast('打开会话失败：' + err.message, 'error');
+      }
+    }
+
     function renderTask(t, planRunning) {
       const wrap = el('div', 'planner-task');
+      // P7：从会话头部的「查看任务」跳进来时要能定位到这一条
+      wrap.dataset.taskId = t.id;
+      if (focus && focus.taskId === t.id) wrap.classList.add('focus');
       const meta = TASK_STATE[t.status] || { dot: 'dim', label: t.status };
       const top = el('div', 'planner-task-top');
       top.append(el('span', dotClass(meta), meta.label));
@@ -439,17 +626,17 @@ export function openPlanner() {
         wrap.append(ch);
       }
 
-      /* attempt 历史（规格 §27：不覆盖失败证据） */
-      if (Array.isArray(t.attempts) && t.attempts.length > 1) {
+      /* ---------- P7：尝试历史 + 会话关联 + 执行期间变更 ----------
+       *
+       * 从「只在多次尝试时才显示」改成「有尝试就显示」：单次尝试同样需要
+       * 看到「用了哪个会话、执行期间动了哪些文件」—— 那正是 P7 要串起来的关系。
+       *
+       * ⚠️ 关系必须挂在**每条 attempt** 上，不能只在 task 顶层放一份：
+       * 重试之后顶层那份会被覆盖，两次尝试的会话与文件就分不开了（规格 §6/§29）。 */
+      if (Array.isArray(t.attempts) && t.attempts.length) {
         const hist = el('div', 'planner-attempts');
-        hist.append(el('div', 'ext-sec-head', '尝试历史'));
-        for (const a of t.attempts) {
-          const line = el('div', 'planner-attempt');
-          line.append(el('span', dotClass(a.success ? TASK_STATE.success : TASK_STATE.failed), a.success ? '成功' : '失败'));
-          line.append(el('span', null, `第 ${a.attempt} 次`));
-          if (a.error) line.append(el('span', 'planner-attempt-err', a.error.slice(0, 160)));
-          hist.append(line);
-        }
+        hist.append(el('div', 'ext-sec-head', t.attempts.length > 1 ? '尝试历史' : '本次执行'));
+        for (const a of t.attempts) hist.append(renderAttempt(current.id, t, a));
         wrap.append(hist);
       }
 
@@ -646,6 +833,9 @@ export function openPlanner() {
       ['cancellation', '可取消', '不可取消'],
       ['resume', '可续会话', '不续会话'],
       ['toolEvents', '工具级事件', '仅文本摘要'],
+      /* P7：能不能把「这次执行」关联到一条会话。不支持就是「不关联会话」——
+       * 界面据此显示「无可关联会话」，而不是假装有。 */
+      ['sessionLinking', '可关联会话', '不关联会话'],
     ];
 
     /** 后端给的 note 有时会以原因标签开头（「安装不完整：…」），
@@ -768,7 +958,23 @@ export function openPlanner() {
     /* ================= 初始化 ================= */
 
     loadAgents();
-    reload();
+    reload().then(async () => {
+      if (!focus || !focus.planId) return;
+      const r = await fetchPlan(focus.planId);
+      if (!r.ok) return;
+      current = r.plan;
+      dirty = false;
+      liveEvents = new Map();
+      renderList();
+      renderDetail();
+      /* 从会话跳进来时把对应任务滚进视野 —— 否则用户要在一个长计划里自己找
+       * 「我刚才点的是哪个任务」。用 dataset 比对而不是拼属性选择器：
+       * task id 来自模型输出，拼进选择器会踩到转义问题。 */
+      if (focus.taskId) {
+        const node = [...detailWrap.querySelectorAll('.planner-task')].find((n) => n.dataset.taskId === focus.taskId);
+        if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' });
+      }
+    });
   }, () => {
     // 关闭面板时摘掉 SSE 回调，避免它继续往已经销毁的 DOM 上写
     setExecutionHandler(null);

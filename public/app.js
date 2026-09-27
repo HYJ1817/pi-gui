@@ -58,6 +58,7 @@ import { applyProjectPreferences, openProjectSettings } from './project-config.j
 import { loadGitStatus, openChangesPanel } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
+import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics } from './diagnostics.js';
@@ -81,6 +82,10 @@ setSessionListRefresh(refreshSidebarSessions);
 /* 会话内提问导航：只装配一次（挂 scroll / resize / ResizeObserver）。
  * 标记本身由 messages.js 在渲染消息时注册。 */
 initConversationNav();
+
+/* P7：会话标题旁的「关联任务」窄条。这里只把容器交给它 —— 拉数据与显隐
+ * 由 session-plans.js 自己决定（没有关联时整块 hidden，不占位）。 */
+mountSessionPlans($('sessionPlans'));
 
 /* ---------- SSE ---------- */
 
