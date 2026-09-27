@@ -48,6 +48,12 @@ const SUMS = 'SHA256SUMS.txt';
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-rel-'));
   const dir = path.join(root, 'dist-release');
   const appDir = path.join(root, 'dist-app', 'Pi GUI-win32-x64');
+  const summaryPath = path.join(root, 'release-summary.md');
+  fs.writeFileSync(
+    summaryPath,
+    `<!-- pi-gui-release-summary: ${V} -->\n\n- 测试版摘要\n- 第二条变化\n`,
+    'utf8'
+  );
 
   /* 魔数：fixture 必须造得像真的，否则守卫的魔数检查会把它们全判红。
    * （这正是本项目那条「fixture 要照真实形状造」的规矩 —— 两个方向都会出事：
@@ -449,7 +455,7 @@ const SUMS = 'SHA256SUMS.txt';
    */
   console.log('\n--- 11. 发布编排（注入假 gh） ---');
 
-  const { planRelease, releaseState, publishRelease } = await import('../scripts/publish-release.mjs');
+  const { planRelease, releaseState, publishRelease, composeReleaseNotes, ASSET_NOTES } = await import('../scripts/publish-release.mjs');
 
   check('25. 三种状态的决策表', () => {
     const a = planRelease({ state: 'missing' });
@@ -525,11 +531,50 @@ const SUMS = 'SHA256SUMS.txt';
   }
 
   const noop = () => {};
+  const publish = (options) => publishRelease({ ...options, summaryPath });
+
+  check('25b. Release Notes 顺序是“本版摘要 → 自动 notes → 交付物”', () => {
+    const notes = composeReleaseNotes({ generatedNotes: '自动生成的 notes', summary: '- 新能力 A' });
+    const a = notes.indexOf('## 本版摘要');
+    const b = notes.indexOf('自动生成的 notes');
+    const c = notes.indexOf('## 交付物');
+    return (a >= 0 && b > a && c > b) || notes.slice(0, 300);
+  });
+
+  check('25c. Release Notes 组合是幂等的，重复跑 draft 不会叠加摘要或交付物', () => {
+    const once = composeReleaseNotes({ generatedNotes: '自动生成的 notes', summary: '- 新能力 A' });
+    const twice = composeReleaseNotes({ generatedNotes: once, summary: '- 新能力 A' });
+    const summaryCount = (twice.match(/## 本版摘要/g) || []).length;
+    const assetCount = (twice.match(/## 交付物/g) || []).length;
+    return (summaryCount === 1 && assetCount === 1 && twice.includes(ASSET_NOTES.trim())) ||
+      JSON.stringify([summaryCount, assetCount]);
+  });
+
+  check('25d. 摘要版本过期 → 在碰 GitHub 之前拒绝发布', () => {
+    makeRelease();
+    fs.writeFileSync(summaryPath, '<!-- pi-gui-release-summary: 0.12.0 -->\n\n- 旧摘要\n', 'utf8');
+    const m = makeMockGh({ state: 'missing' });
+    let msg = '';
+    try {
+      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop, summaryPath });
+      return '没有抛错';
+    } catch (e) {
+      msg = e.message;
+    } finally {
+      fs.writeFileSync(
+        summaryPath,
+        `<!-- pi-gui-release-summary: ${V} -->\n\n- 测试版摘要\n- 第二条变化\n`,
+        'utf8'
+      );
+    }
+    return (/摘要版本.*不一致/.test(msg) && m.calls.length === 0) ||
+      `msg=${msg} calls=${JSON.stringify(m.calls)}`;
+  });
 
   check('26. 没有 Release 时：创建 draft → 上传 → 核对 → 追加说明 → 发布 → 再确认', () => {
     makeRelease();
     const m = makeMockGh({ state: 'missing' });
-    const r = publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    const r = publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
     return (
       (r.published === true &&
         JSON.stringify(r.steps) ===
@@ -542,7 +587,7 @@ const SUMS = 'SHA256SUMS.txt';
   check('26a. 只剩 draft 时：**不**重新创建，复用它', () => {
     makeRelease();
     const m = makeMockGh({ state: 'draft' });
-    const r = publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    const r = publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
     const created = m.calls.some((c) => c[1] === 'create');
     return (!created && r.steps.includes('reuse-draft') && r.steps.includes('publish')) || JSON.stringify(r.steps);
   });
@@ -552,7 +597,7 @@ const SUMS = 'SHA256SUMS.txt';
     const m = makeMockGh({ state: 'published' });
     let msg = '';
     try {
-      publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
       return '没有抛错';
     } catch (e) {
       msg = e.message;
@@ -566,7 +611,7 @@ const SUMS = 'SHA256SUMS.txt';
     const m = makeMockGh({ state: 'missing', breakAssets: true });
     let msg = '';
     try {
-      publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
       return '没有抛错';
     } catch (e) {
       msg = e.message;
@@ -578,7 +623,7 @@ const SUMS = 'SHA256SUMS.txt';
   check('28a. publish 必须排在 verify 之后（顺序断言，不只看有没有调用）', () => {
     makeRelease();
     const m = makeMockGh({ state: 'missing' });
-    publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
     const seq = m.calls.map((c) => `${c[1]}${c.includes('--draft=false') ? ':publish' : ''}`);
     const upload = seq.findIndex((x) => x === 'upload');
     const verifyView = seq.findIndex((x, i) => x === 'view' && i > upload);
@@ -589,7 +634,7 @@ const SUMS = 'SHA256SUMS.txt';
   check('29. --dry-run：做到核对通过就停，**不**发布（远端留下 draft）', () => {
     makeRelease();
     const m = makeMockGh({ state: 'missing' });
-    const r = publishRelease({ tag: `v${V}`, dir, gh: m.gh, dryRun: true, log: noop });
+    const r = publish({ tag: `v${V}`, dir, gh: m.gh, dryRun: true, log: noop });
     return (
       (r.published === false && !r.steps.includes('publish') && m.isDraft() === true) ||
       JSON.stringify([r.steps, m.isDraft()])
@@ -601,7 +646,7 @@ const SUMS = 'SHA256SUMS.txt';
     fs.mkdirSync(dir, { recursive: true });
     const m = makeMockGh({ state: 'missing' });
     try {
-      publishRelease({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
       return '没有抛错';
     } catch (e) {
       return /发布目录是空的/.test(e.message) || e.message;
