@@ -59,7 +59,8 @@
     "release:verify": "node scripts/check-release-artifacts.mjs",
     "release:checksums": "node scripts/make-checksums.mjs",
     "release:prepare": "node scripts/release-check.mjs --skip-tests",
-    "release:check": "node scripts/release-check.mjs"
+    "release:check": "node scripts/release-check.mjs",
+    "release:publish": "node scripts/publish-release.mjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

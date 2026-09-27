@@ -61,23 +61,45 @@ export function compareReleaseAssets({ local, remote } = {}) {
   return { ok: errors.length === 0, errors };
 }
 
-/** 把本地 dist-release 的资产读成 [{name,size,hash}]。 */
+/** 把本地 dist-release 的资产读成 [{name,size,hash}]。
+ *
+ * ⚠️ **目录里的每个文件，不只是 SHA256SUMS.txt 里列的那几个。**
+ *
+ * 这一点踩过：早先只读 SUMS 里列的两个二进制，而 GitHub 报的是上传的三个
+ * （含 `SHA256SUMS.txt` 自己）—— 于是比对必然报「GitHub 上多了一个不该有的附件」，
+ * 也就是**这个脚本在每一次真实发布上都会失败**。
+ *
+ * 发现它的是单元测试：把假 gh 造得跟真实 GitHub 一样（返回三个）就立刻红了。
+ * 又一次印证那条规矩 —— **fixture 要照真实形状造**，造得太随意会把
+ * 「真实世界必然失败」的路径测成绿的。
+ *
+ * 「SUMS 是否覆盖了所有正式资产」是另一个问题，由 check-release-artifacts.mjs
+ * 的 verifyChecksums() 负责（那里有反向覆盖断言）。这里只做「本地有什么 / 远端有什么」。 */
 export function readLocalAssets(dir) {
-  const sums = parseChecksums(fs.readFileSync(path.join(dir, 'SHA256SUMS.txt'), 'utf8'));
-  return sums.map(({ name, hash }) => {
-    const full = path.join(dir, name);
-    if (!fs.existsSync(full)) throw new Error(`本地缺少 ${name}（SHA256SUMS.txt 里列了它）`);
-    return { name, size: fs.statSync(full).size, hash };
-  });
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isFile())
+    .map((e) => e.name)
+    .sort()
+    .map((name) => ({
+      name,
+      size: fs.statSync(path.join(dir, name)).size,
+      hash: sha256File(path.join(dir, name)),
+    }));
+}
+
+/** 默认的 gh 调用器：把 gh 的 stdout 当字符串返回，失败时抛错。
+ *
+ * 抽成可注入的一层，是为了让 `scripts/publish-release.mjs` 的分支逻辑
+ * （已发布必须拒绝 / 只剩 draft 才复用 / 核对不过绝不 publish）能**被单元测试**——
+ * 那些分支写在 YAML 里就只能靠真的打一个 tag 去试，而试就会真的产生 Release。 */
+export function makeGhRunner() {
+  return (args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 /** 用 gh 取远端 Release 的资产。 */
-export function fetchRemoteAssets(tag) {
-  const out = execFileSync('gh', ['release', 'view', tag, '--json', 'assets,isDraft,url'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const json = JSON.parse(out);
+export function fetchRemoteAssets(tag, gh = makeGhRunner()) {
+  const json = JSON.parse(gh(['release', 'view', tag, '--json', 'assets,isDraft,url']));
   return {
     isDraft: Boolean(json.isDraft),
     url: json.url || null,

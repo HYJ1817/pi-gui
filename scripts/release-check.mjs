@@ -197,7 +197,27 @@ for (const [label, secs] of timings) console.log(`   ${secs.toFixed(0).padStart(
 console.log(`   ${total.toFixed(0).padStart(4)}s  合计`);
 console.log('  ──────────────────────────────────────────────────');
 console.log('');
-console.log('  READY TO RELEASE');
+if (withInstaller) {
+  console.log('  READY TO RELEASE');
+} else {
+  /* 「可以发」有两种，必须区分开 —— 混成一句话就会有人按这句话发版，
+   * 而实际上安装程序**从来没有被执行过**。
+   *
+   * 为什么不用静态检查去兜（比如按 app 目录大小设一个比例下限）：
+   * 那是凭猜的魔法数字，一旦误判就会挡住一次本来正常的发布，
+   * 而它想抓的那个场景（被中断的构建留下的半截 Setup.exe，
+   * 名字/大小/校验和/魔数全都正常）在 CI 上本来就会被「步骤非零退出」拦住。
+   * 所以这里选择**把话说清楚**，而不是加一个会误伤的判据。 */
+  console.log('  READY TO RELEASE —— 但**安装程序没有被真正执行过**');
+  console.log('');
+  console.log('  ⚠️ 半截的 Setup.exe 在名字、大小、校验和、魔数上全都「正常」，');
+  console.log('     只有真去装一遍才会暴露。要真装验证请重跑：');
+  console.log('');
+  console.log('       npm run release:check -- --with-installer');
+  console.log('');
+  console.log('     （CI 的 release.yml 强制带这个开关；本机默认不带，');
+  console.log('      因为开发机上可能装着一份你在用的 Pi GUI。）');
+}
 console.log('');
 console.log(`  正式资产在 ${RELEASE_DIR}/，下一步见 docs/releasing.md：`);
 console.log(`    git commit -m "v${readVersionSources().pkgVersion}" && git push`);
