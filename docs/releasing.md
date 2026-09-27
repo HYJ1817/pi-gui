@@ -181,13 +181,21 @@ permissions:
 
 ```
 checkout → setup-node → npm ci → 装 NSIS
-  → npm run release:check -- --tag=<tag> --with-installer     ← 任何一步失败：还没有 Release
-  → 创建 draft Release（或复用上次失败留下的 draft）
-  → 上传 dist-release/*
-  → 核对 GitHub 报告的 sha256 与本地是否一致
-  → 追加「交付物 / 前置条件」说明
-  → gh release edit --draft=false                            ← 最后才发布
+  → npm run release:check -- --tag=<tag> --with-installer   ← 任何一步失败：还没有 Release
+  → node scripts/publish-release.mjs --tag=<tag>            ← 下面这些全在这个脚本里
+      · 判断 tag 上 Release 的状态（没有→create draft / 只剩 draft→复用 / 已发布→**失败**）
+      · 上传 dist-release/*
+      · 核对 GitHub 报告的 sha256 / 大小 / 附件数与本地是否一致
+      · 追加「交付物 / 前置条件」说明
+      · 最后才 --draft=false，然后再确认一次已发布且附件数正确
 ```
+
+**业务逻辑在 `scripts/` 里，YAML 只做编排** —— 因为 YAML **没法单元测试**，
+而「已发布必须拒绝 / 只剩 draft 才复用 / 核对不过绝不 publish / publish 排最后」
+这几条正是最容易错的分支。挪进脚本之后，注入一个假 gh 就能把分支表全测一遍
+（见 `tests/release-artifacts.cjs` 的「发布编排」一节）。
+`.probe/validate-workflows.cjs` 还有一条断言守着：**release.yml 里不许出现裸的
+`gh release` 命令** —— 防止有人图省事把逻辑搬回 YAML。
 
 ### 为什么用 draft 兜上传
 
@@ -206,13 +214,22 @@ checkout → setup-node → npm ci → 装 NSIS
 ### 上传之后的核对
 
 `gh release upload` 的退出码是 0 只说明「这条命令跑完了」，
-不说明「Release 上现在有三个正确的文件」。所以上传后跑
-`scripts/verify-uploaded-release.mjs`：把 GitHub 报告的附件名 / 大小 /
-`sha256` 摘要与本地逐项比对。GitHub 的摘要值是**它自己**对收到的字节算的 ——
-一致才说明「用户下载到的就是本地验证过的那份」。
+不说明「Release 上现在有三个正确的文件」。所以上传后比对 GitHub 报告的
+附件名 / 大小 / `sha256` 摘要与本地是否逐项一致（逻辑在
+`scripts/verify-uploaded-release.mjs`）。GitHub 的摘要值是**它自己**对收到的
+字节算的 —— 一致才说明「用户下载到的就是本地验证过的那份」。
 
 发布之后再确认一次 `isDraft === false` 且附件数为 3。
 **不把「publish 命令退出 0」当成完整成功判据。**
+
+想只彩排到「核对通过」而不发布，可以手动跑：
+
+```bash
+node scripts/publish-release.mjs --tag=v0.13.0 --dry-run
+```
+
+⚠️ 它不是零副作用 —— `gh release create` 会按需在远端创建 tag，
+所以它仍会留下一个 **draft**（draft 对用户不可见，后续真发布会复用它）。
 
 ## 八、Release Notes
 

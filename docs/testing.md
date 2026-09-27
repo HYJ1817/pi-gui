@@ -34,13 +34,14 @@ smoke 663 · git 151 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · sessions 77 · session-search 72
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics · update-check 87
-version-consistency 29 · release-artifacts 54 · electron-guard 75
+version-consistency 29 · release-artifacts 67 · electron-guard 75
 ```
 
 最后三个里，`version-consistency` 与 `release-artifacts` 是**发版守卫**：
 前者管 package / lock / tag 一致与「构建链路里有没有写死版本号」，
-后者管发布目录的资产命名、校验和与 P5 兼容性。两者都在 `os.tmpdir()` 上跑
-fixture，不需要先构建 —— 所以放在默认 CI 里是便宜的。
+后者管发布目录的资产命名、校验和与 P5 兼容性，**外加发布编排的分支表**
+（用注入的假 gh 测：已发布必须拒绝、只剩 draft 才复用、核对不过绝不 publish）。
+两者都在 `os.tmpdir()` 上跑 fixture，不需要先构建 —— 所以放在默认 CI 里是便宜的。
 
 它们的共同约束（新加测试时要守住）：
 
