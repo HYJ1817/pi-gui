@@ -3721,16 +3721,42 @@ staticCheck();
     /* ---------- 汇总（必须在任何写操作之前断言 —— 后面的保存会改状态） ----------
      *
      * 夹具的设计值：成功 8（okcmd/okdesc/oknull/revneed/xsstask/manyfiles/live/
-     * multrev）、失败 2（failed + interrupted）、取消 1、尚无结果 1（noattempt）。
+     * multrev）、**失败 1（只有 failed）**、取消 1、**中断 1（interrupted）**、
+     * 尚无结果 1（noattempt）。
      * 审阅分母**只有「最新一次成功」的 8 个**：已接受 4（okdesc/xsstask/manyfiles/live）、
      * 需修改 1（revneed）、待审阅 3（okcmd/oknull/multrev）。 */
-    check('R24. Plan 汇总：执行结果按最新一次 attempt 归类', () => {
+    check('R24. Plan 汇总：执行结果按最新一次 attempt 归类，interrupted 单列', () => {
       const s = T(card.querySelector('.planner-revsum'));
-      return (/成功 8/.test(s) && /失败 2/.test(s) && /取消 1/.test(s) && /尚无结果 1/.test(s)) || s;
+      return (/成功 8/.test(s) && /失败 1/.test(s) && /取消 1/.test(s) && /中断 1/.test(s) && /尚无结果 1/.test(s)) || s;
+    });
+    check('R24b. interrupted **不并进** failed（防回归：这里只允许有 1 条失败）', () => {
+      const s = T(card.querySelector('.planner-revsum'));
+      /* 把 interrupted 并进 failed 的话这里会变成「失败 2」 */
+      return (!/失败 2/.test(s) && /失败 1/.test(s)) || s;
     });
     check('R25. Plan 汇总：审阅分母只含「最新一次成功」的任务', () => {
       const s = T(card.querySelector('.planner-revsum'));
       return (/已接受 4/.test(s) && /需修改 1/.test(s) && /待审阅 3/.test(s)) || s;
+    });
+    /* 「中断 0」不该出现 —— 常态不给噪声。换一个**没有 interrupted** 的夹具
+     * （深拷贝后去掉那个任务），重画一次真的看一眼。 */
+    {
+      const noInt = JSON.parse(JSON.stringify(stubPlanReview));
+      noInt.tasks = noInt.tasks.filter((t) => t.id !== 'interrupted');
+      stubPlanDetail = noInt;
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      check('R24c. 中断为 0 时**不显示**「中断 0」（常态不加噪声）', () => {
+        const s = T(card.querySelector('.planner-revsum'));
+        return (!/中断/.test(s) && /失败 1/.test(s) && /取消 1/.test(s)) || s;
+      });
+      stubPlanDetail = stubPlanReview;
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+    }
+    check('R24d. attempt 明细里 interrupted 仍然显示「被中断」（只改汇总，不动明细）', () => {
+      const it = taskEl('interrupted');
+      return Boolean(it) && /被中断/.test(T(it)) || (it ? T(it).slice(0, 120) : '没找到任务');
     });
     check('R25b. 失败 / 取消 / 被中断的最新结果**不进**「待审阅」分母', () => {
       const s = T(card.querySelector('.planner-revsum'));
@@ -3978,7 +4004,7 @@ staticCheck();
         plannerCalls.some((c) => c.method === 'GET' && /\/api\/plans\/plan-1$/.test(c.url)) || JSON.stringify(plannerCalls.map((c) => c.method + ' ' + c.url).slice(-4)));
     }
 
-    /* ---------- stale 守卫：切项目之后回来的响应不许写界面 ---------- */
+    /* ---------- stale 守卫：切项目之后回来的响应不许写界面，也不许留下「正在保存…」 ---------- */
     {
       window.closeModal();
       window.openPlanner();
@@ -3993,6 +4019,8 @@ staticCheck();
       rvBtn('oknull', '接受本次结果', 1).onclick();
       rvBtn('oknull', '保存', 1).onclick();
       await wait(40);
+      check('R32-prep. 保存已发出，按钮进入「正在保存…」', () =>
+        /正在保存/.test(T(rvEl('oknull', 1))) || T(rvEl('oknull', 1)));
       /* 保存还在飞的时候切项目 */
       window.S.workspaceGeneration++;
       await wait(500);
@@ -4001,10 +4029,60 @@ staticCheck();
         const t = T(rvEl('oknull', 1));
         return !/已接受/.test(t) || `被写进去了：${t.slice(0, 120)}`;
       });
-      check('R32b. 响应只会落到它自己那条 attempt（别的 attempt 不受影响）', () => {
-        const t = T(rvEl('okcmd', 1));
-        return (/人工确认过了/.test(t) && !/已接受/.test(t)) || `okcmd 被改了：${t.slice(0, 120)}`;
+      check('R32b. 那次响应没有写进别的 attempt（okcmd 的判断还是上一步存下的）', () => {
+        /* 面板这时已经被收成提示，读不到 okcmd 的 DOM 了 —— 所以直接看数据：
+         * 桩返回的就是夹具对象本身，如果响应被错误地应用了，这里会变。 */
+        const t = stubPlanReview.tasks.find((x) => x.id === 'okcmd');
+        const rv = t && t.attempts[0] && t.attempts[0].review;
+        return (rv && rv.status === 'needs_changes' && rv.note === '人工确认过了' && rv.revision >= 1) || JSON.stringify(rv);
       });
+      check('R32c. 旧面板被收成提示，**不留下永久「正在保存…」**（草稿里的 saving 标记一起清掉）', () => {
+        const d = T($('modalCard'));
+        return (/项目已切换，请重新打开 Planner/.test(d) && !/正在保存/.test(d)) || d.slice(0, 200);
+      });
+      check('R32d. 收成提示后旧面板没有可点的审阅操作（没有说明框、没有保存按钮）', () => {
+        const c = $('modalCard');
+        return (!c.querySelector('.planner-rv-note-in') && ![...c.querySelectorAll('button')].some((b) => b.textContent.trim() === '保存')) || '还有审阅控件';
+      });
+      window.closeModal();
+      await wait(20);
+    }
+
+    /* ---------- 实例隔离：旧面板的响应不许关掉 / 弄脏后来打开的新 Planner ----------
+     *
+     * 这是「项目切换后旧 Planner 收尾」最关键的边界：modal 只有一个槽位、
+     * 没有实例 token，所以旧实例**绝不能**在 stale 分支里调 closeModal() ——
+     * 那会把用户刚打开的新 Planner 一起关掉。 */
+    {
+      window.closeModal();
+      window.openPlanner(); // 「Planner A」
+      await wait(80);
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      stubReviewResult = null;
+      reviewDelayMs = 300;
+      rvBtn('oknull', '接受本次结果', 1).onclick();
+      rvBtn('oknull', '保存', 1).onclick(); // A 的保存飞在路上
+      await wait(40);
+
+      window.S.workspaceGeneration++; // 切到 Project B
+      window.closeModal();
+      window.openPlanner(); // 「Planner B」：新实例、新世代
+      await wait(140);
+      const bHasList = Boolean($('modalCard').querySelector('.planner-list'));
+
+      await wait(450); // A 的响应现在回来
+      reviewDelayMs = 0;
+      const now = T($('modalCard'));
+
+      check('R33. 旧面板的响应**不会关掉**后来打开的新 Planner', () => {
+        return ($('modal').hidden === false && $('modalCard').childElementCount > 0) || `modal.hidden=${$('modal').hidden} kids=${$('modalCard').childElementCount}`;
+      });
+      check('R33b. 新 Planner 的 DOM 不被旧响应污染（没有 stale 提示、没有旧 saving 态）', () => {
+        return (bHasList && !/项目已切换/.test(now) && !/正在保存/.test(now)) || now.slice(0, 180);
+      });
+      check('R33c. 新 Planner 仍然是自己的计划列表（没有被旧响应重画）', () =>
+        Boolean($('modalCard').querySelector('.planner-list')) || '新面板的列表没了');
       window.closeModal();
       await wait(20);
     }

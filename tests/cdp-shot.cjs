@@ -350,6 +350,14 @@ async function main() {
       const of = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
       console.log('      窄窗口 700：scrollWidth=' + of.sw + ' innerWidth=' + of.iw + ' → 横向溢出=' + (of.sw > of.iw + 1));
       await shotOf('.planner-task[data-task-id="longnote"] .planner-attempt:last-of-type', '22-stress-narrow-700', '压力：窄窗口 700px');
+
+      /* 回到 plan-1 再截一次汇总 —— 「中断」是这一轮新增的 token，
+       * 它让那一行更长，所以窄窗口下要单独确认没有挤坏 / 溢出。 */
+      if (await pickPlan(0)) {
+        const of2 = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
+        console.log('      plan-1 @700：scrollWidth=' + of2.sw + ' innerWidth=' + of2.iw + ' → 横向溢出=' + (of2.sw > of2.iw + 1));
+        await shotOf('.planner-revsum', '23-summary-narrow-700', '窄窗口 700px：含「中断」的汇总行');
+      }
       await send('Emulation.clearDeviceMetricsOverride');
       await sleep(400);
     }

@@ -43,6 +43,7 @@ const LONG_PATH = 'packages/something/really/really/really/long/path/to/generate
  *   tests    成功 + 待审阅 + snapshot(description)                 → Scene 1
  *   docs     成功 + 待审阅 + 没有快照 + changeCaptureIncomplete     → 「没有历史验证要求」
  *   live     Attempt1 已接受、Attempt2 执行中（运行期不给审阅操作）  → Scene 4 / §九
+ *   hub      被中断 → 汇总必须单列「中断」，**不并进「失败」**       → P8 收口 blocker
  *
  * 【审阅状态字段名】`review.status` 只有 pending / accepted / needs_changes 三态，
  * 与后端 REVIEW_STATUS 一致 —— 夹具不能自己发明 `verified` / `stale`。
@@ -120,6 +121,22 @@ const PLAN_DETAIL = {
         filesChanged: ['server/sse.js'], changeCaptureIncomplete: false,
         outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
         review: { status: 'accepted', note: '第一轮的实现保留', reviewedAt: 1758800200000, revision: 1 },
+      }],
+      result: null,
+    },
+    {
+      /* 被中断的任务：用来核对 Plan 汇总把 interrupted **单列**成「中断」，
+       * 而不是并进「失败」（P8 最终收口的两个 blocker 之一）。
+       * 没有它，汇总里那个新 token 在截图里根本不会出现。 */
+      id: 'hub', title: '被中断的任务', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'interrupted', startedAt: 13, endedAt: 14, attempt: 1,
+      error: '应用关闭时被中断', verification: null,
+      attempts: [{
+        attempt: 1, success: false, error: '应用关闭时被中断', summary: '', exitCode: null, startedAt: 13, endedAt: 14,
+        sessionId: 'pi-gui-plan-1-hub-a1', sessionAvailable: true, sessionTitle: '被中断的那次',
+        filesChanged: [], changeCaptureIncomplete: true,
+        outcomeStatus: 'interrupted', verificationSnapshot: null,
+        review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
       }],
       result: null,
     },
@@ -492,7 +509,7 @@ const server = http.createServer(async (req, res) => {
       activePlanId: null,
       broken: [],
       plans: [
-        { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 5, success: 3, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+        { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 6, success: 4, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
         { id: 'plan-stress', title: '压力场景：长说明 / 多文件 / 多次尝试', goal: '验证极端内容不破布局', status: 'completed', createdAt: 0, updatedAt: 9, startedAt: 1, endedAt: 9, projectRoot: 'C:/pi-GUI', counts: { total: 2, success: 1, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
       ],
     });
@@ -539,7 +556,7 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/api/plans/plan-1') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-1' });
-    return json(res, 200, { ok: true, plan: PLAN_DETAIL, counts: { total: 5, success: 3, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+    return json(res, 200, { ok: true, plan: PLAN_DETAIL, counts: { total: 6, success: 4, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
   }
   if (p === '/api/plans/plan-stress') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-stress' });
