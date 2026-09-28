@@ -150,9 +150,17 @@ export function derivePlanAttention(plan) {
   }
   if (plan.status === 'cancelled') return { kind: 'cancelled', text: '计划已取消', action: null };
 
-  /* 7. 普通待执行（draft/ready，或还没排上队的）。 */
-  const runnable = tasks.filter((t) => (t.status === 'ready' || t.status === 'pending') && !t.blockedReason).length;
+  /* 7. 普通待执行（draft/ready，或还没排上队的）。
+   *
+   * ⚠️ **只数 `status === 'ready'`。** pending 是「依赖还没完成、当前不能启动」——
+   * 后端已经把两者分开了，展示层再把 pending 算进「可以执行」就是自己重新解释 DAG：
+   * 界面说有 2 个能跑、一点「开始执行」只跑起来 1 个，用户没法解释这个差。
+   * （blockedReason 也不排除：那种任务早在第 4 步就被拦下来了。） */
+  const runnable = tasks.filter((t) => t.status === 'ready').length;
   if (runnable > 0) return { kind: 'ready', text: `有 ${runnable} 个任务可以执行`, action: 'start' };
+  /* ready 计划却数不出一条 ready 任务（上游没跑完 / 数据异常）：按事实说，
+   * **不拿 pending 凑数** —— 「有 N 个可以执行」这个数字必须是数出来的。 */
+  if (plan.status === 'ready') return { kind: 'ready', text: '计划待执行', action: 'start' };
   if (plan.status === 'paused') return { kind: 'paused', text: '计划已暂停', action: null };
   return { kind: 'idle', text: '没有待执行的任务', action: null };
 }
@@ -266,6 +274,26 @@ function reviewOf(a) {
 /** 只有**执行成功**的尝试才允许标「已接受」—— 与后端 `canAcceptAttempt` 同一条规则。
  *  前端只是不让用户点了白点一次；**即使被绕过，后端也会拒绝**。 */
 const canAccept = (a) => attemptOutcome(a) === 'success';
+
+/**
+ * **折叠头**上那一格「人工验收」—— 纯展示，**只给 renderAttempt 用**。
+ * `renderReview` / `reviewSummary` / 审阅资格一概不碰它。
+ *
+ * 语义与 `reviewSummary` 的审阅分母**同源**（收起时那行摘要必须和展开区说同一件事）：
+ *
+ *   - `accepted` / `needs_changes` 是**人为做过的标记**，无论执行成败都照实显示
+ *     —— 失败那次标「需修改」是合法操作，抹掉它等于丢掉用户刚做的决定；
+ *   - `pending` 只对**成功的产出**成立：只有它进人工验收分母。失败 / 取消 / 被中断
+ *     没有可验收的产物，写「待审阅」会凭空造出一个待办，还和展开区里
+ *     「这次执行没有成功、只能标需修改」自相矛盾。
+ *
+ * 返回 `null` = 这一格不渲染（执行 / 验证 / 证据三格照常）。
+ */
+function compactReviewState(a) {
+  const st = reviewOf(a).status;
+  if (st !== 'pending') return REVIEW_STATE[st];
+  return attemptOutcome(a) === 'success' ? REVIEW_STATE.pending : null;
+}
 
 /** 验证要求 / 当前任务验证要求 → 一行可读文本。只认 command 与 description 两个键
  *  （与后端 `normalizeVerificationSnapshot` 同一个形状）。 */
@@ -1667,8 +1695,10 @@ export function openPlanner(focus = null) {
       }
       const vr = verificationOf(a);
       head.append(el('span', 'planner-att-verify ' + (vr ? VERIFY_STATE[vr.status].cls : 'none'), vr ? VERIFY_STATE[vr.status].label : '尚未独立确认'));
-      const rvState = REVIEW_STATE[reviewOf(a).status];
-      head.append(el('span', 'planner-att-review ' + rvState.cls, rvState.label));
+      /* 人工验收这一格只在**有可验收产物**时出现（见 compactReviewState）：
+       * 失败 / 取消 / 被中断的未审阅尝试不挂「待审阅」。 */
+      const rvState = compactReviewState(a);
+      if (rvState) head.append(el('span', 'planner-att-review ' + rvState.cls, rvState.label));
       const evSum = evidenceOf(a);
       head.append(el('span', 'planner-att-ev', evSum && evSum.status !== 'unavailable' ? `证据 ${evSum.files.length} 个文件` : '无证据'));
       if (a.error) head.append(el('span', 'planner-attempt-err', String(a.error).slice(0, 160)));
