@@ -99,7 +99,7 @@ const reviewUrl = (planId, taskId, attempt) =>
 (async () => {
   const model = await import('../server/planner/model.js');
   const { createPlanStore } = await import('../server/planner/store.js');
-  const { createScheduler } = await import('../server/planner/scheduler.js');
+  const { createScheduler, gateCheckpointsFor } = await import('../server/planner/scheduler.js');
   const { createAgentRegistry } = await import('../server/agents/index.js');
   const { createPlanner } = await import('../server/planner/index.js');
   const { gitStatus } = await import('../lib/git.js');
@@ -1013,6 +1013,333 @@ const reviewUrl = (planId, taskId, attempt) =>
     });
     check('J30. barrier 不碰 terminal 任务（A / X 历史原样）', () => attemptsOf(p, 'gateA').length === 1 && attemptsOf(p, 'slowX').length === 1);
     check('J31. B 一次都没跑', () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
+  }
+
+  /* ================= K. Retry × Active Session Barrier =================
+   *
+   * 本轮（P12 收口）的 blocker：A 已经 success+accepted，用户 **Retry A** ——
+   * A 变回 pending，但 attempt1 的 accepted 留在历史里，于是
+   * `reviewGateState(A)` 是 `required=false, satisfied=true`。
+   * 老判据 `enabled && !satisfied` 在 session 开始时**看不见**这道门：
+   * checkpoint 一个都不记，等 A 的 attempt2 成功、被 accept，DAG 说下游 ready
+   * → 当前这一轮 session 就把它跑掉了。checkpoint 的语义是
+   * 「开始时还没通过的门」，而「这一轮还没跑过的门」= 没通过。 */
+  section('K. Retry 后的 pending 也是一道 checkpoint（旧 accepted 不放行）');
+
+  /** 造「A success+accepted（已验收）、B ready 但一次没跑、无关慢任务 X」。 */
+  async function mkRetryGatePlan(id) {
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({
+      id,
+      concurrency: 2,
+      tasks: [
+        { id: 'gateA', reviewGate: true },
+        { id: 'downB', dependsOn: ['gateA'] },
+        { id: 'slowX' },
+      ],
+    }));
+    const p = load(id);
+    const a = taskOf(p, 'gateA');
+    a.status = 'success';
+    a.attempt = 1;
+    a.startedAt = 1;
+    a.endedAt = 2;
+    a.result = { summary: 'A 完成' };
+    a.attempts = [{
+      attempt: 1, success: true, summary: 'A 完成', error: '', exitCode: 0,
+      startedAt: 1, endedAt: 2, filesChanged: [], changeCaptureIncomplete: false,
+      outcomeStatus: 'success',
+      review: { status: 'accepted', note: '第一次通过了', reviewedAt: 3, revision: 1 },
+    }];
+    taskOf(p, 'downB').status = 'ready';
+    store.save(p);
+    return load(id);
+  }
+
+  {
+    let p = await mkRetryGatePlan('k1');
+    const g0 = model.reviewGateState(taskOf(p, 'gateA'));
+    check('K1. 起点：Attempt1 success + accepted → required=true、satisfied=true（正常已验收）',
+      () => (g0.required === true && g0.satisfied === true && g0.reason === 'accepted') || JSON.stringify(g0));
+    check('K2. 起点：downB 是 ready，且一次都没跑过',
+      () => (taskOf(p, 'downB').status === 'ready' && attemptsOf(p, 'downB').length === 0) || JSON.stringify({ s: taskOf(p, 'downB').status, n: attemptsOf(p, 'downB').length }));
+
+    const rt = scheduler.retryTask(load('k1'), 'gateA');
+    check('K3. Retry 被接受（计划没在跑）', () => rt.ok === true || JSON.stringify(rt));
+    p = load('k1');
+    check('K4. Retry 只动当前态：Attempt1 的 accepted 原样留在历史里', () => {
+      const a = attemptsOf(p, 'gateA')[0];
+      const r = model.normalizeReview(a && a.review);
+      return (attemptsOf(p, 'gateA').length === 1 && r.status === 'accepted' && r.revision === 1) || JSON.stringify(r);
+    });
+    check('K5. Retry 后门控 = pending + 旧 accepted → required=false（这次还没成功）', () => {
+      const g = model.reviewGateState(taskOf(p, 'gateA'));
+      return (g.required === false && g.satisfied === true && g.reason === 'accepted' && g.attempt === 1) || JSON.stringify(g);
+    });
+    check('K6. Retry 不自动执行任何东西（downB 仍 attempts=0，gateA 仍 pending）',
+      () => (attemptsOf(p, 'downB').length === 0 && stOf(p, 'gateA') === 'pending') || JSON.stringify({ s: stOf(p, 'gateA'), n: attemptsOf(p, 'downB').length }));
+
+    const r0 = await scheduler.start(load('k1'));
+    check('K7. 计划启动', () => r0.ok === true || JSON.stringify(r0));
+    check('K8. session 建立', () => scheduler.activePlanId() === 'k1', String(scheduler.activePlanId()));
+    const win = await waitUntilJ('k1', (q) => stOf(q, 'gateA') === 'success'
+      && attemptsOf(q, 'gateA').length === 2 && stOf(q, 'slowX') === 'running');
+    check('K9. 拿到「attempt2 成功、X 还在跑」的窗口', () => Boolean(win), win ? 'ok' : '没等到窗口');
+    p = load('k1');
+    check('K10. 窗口里 downB 一次都没跑', () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
+    check('K11. attempt2 是新的那一次（attempt++，历史没被重写）', () => {
+      const at = attemptsOf(p, 'gateA');
+      return (at.length === 2 && at[1].attempt === 2 && at[0].attempt === 1) || JSON.stringify(at.map((x) => x.attempt));
+    });
+
+    const rv = await review('k1', 'gateA', 2, 'accepted');
+    check('K12. attempt2 被 accepted（session 进行中写入成功）', () => rv.body.ok === true || JSON.stringify(rv.body));
+    check('K13. 验收确实发生在 session 进行中（barrier 才有意义）',
+      () => scheduler.activePlanId() === 'k1', String(scheduler.activePlanId()));
+
+    await scheduler.waitIdle(20000);
+    p = load('k1');
+    check('K14. ★Blocker：downB 在**这一轮 session**里没被自动执行（attempts=0）',
+      () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
+    check('K15. 无关的 X 正常跑完（barrier 只挡未启动的）', () => stOf(p, 'slowX') === 'success' || stOf(p, 'slowX'));
+    check('K16. 两次 attempt 的 review 互不污染（都还是 accepted）', () => {
+      const at = attemptsOf(p, 'gateA');
+      const s = at.map((x) => model.normalizeReview(x.review).status);
+      return (at.length === 2 && s[0] === 'accepted' && s[1] === 'accepted') || JSON.stringify(s);
+    });
+    check('K17. downB 是 ready（acceptance 已发生，DAG 权威）', () => stOf(p, 'downB') === 'ready' || stOf(p, 'downB'));
+    check('K18. Plan 落到 ready（不是 completed / paused）', () => p.status === 'ready' || p.status);
+    check('K19. 调度器空闲（session 自然结束）', () => scheduler.activePlanId() === null, String(scheduler.activePlanId()));
+
+    const r2 = await scheduler.start(load('k1'));
+    check('K20. 用户手动再点「开始执行」→ 被接受', () => r2.ok === true || JSON.stringify(r2));
+    if (r2.ok) await scheduler.waitIdle(20000);
+    p = load('k1');
+    check('K21. 新 session 才执行 downB：success + attempts=1',
+      () => (stOf(p, 'downB') === 'success' && attemptsOf(p, 'downB').length === 1)
+        || JSON.stringify({ s: stOf(p, 'downB'), n: attemptsOf(p, 'downB').length }));
+    check('K22. 最终 Plan = completed', () => p.status === 'completed' || p.status);
+  }
+
+  /* ================= L. Plan 级门控汇总 =================
+   *
+   * `satisfied` 数的是「**已经放行下游**」的那些门；`waiting` 数的是「真在等验收」
+   * （`required && !satisfied`）。当前态没成功（failed / 取消 / 重试排队中）时
+   * `required=false` —— 即使历史上有过 accepted，也既不算 satisfied 也不算 waiting。 */
+  section('L. Plan 级门控汇总：satisfied 只数「已放行」的');
+
+  {
+    const att = (n, success, review) => ({ attempt: n, success, review: { status: review, note: '', reviewedAt: 1, revision: 1 } });
+    const gtask = (id, { status = 'success', attempts = [], reviewGate = true } = {}) => ({ id, status, reviewGate, attempts });
+    const sum = (...tasks) => model.reviewGateSummary({ id: 'l', tasks });
+
+    const failedOld = gtask('a', { status: 'failed', attempts: [att(1, true, 'accepted'), att(2, false, 'pending')] });
+    const pendingNow = gtask('b', { attempts: [att(1, true, 'pending')] });
+    const acceptedNow = gtask('c', { attempts: [att(1, true, 'accepted')] });
+    const neverRan = gtask('d', { status: 'pending', attempts: [] });
+    const legacySuccessNoAttempt = gtask('d2', { status: 'success', attempts: [] });
+    const noGate = gtask('e', { reviewGate: false });
+
+    check('L1. 当前失败 + 旧 accepted → gated=1 / **satisfied=0** / waiting=0（没有放行的东西）', () => {
+      const s = sum(failedOld);
+      return (s.gated === 1 && s.satisfied === 0 && s.waiting === 0) || JSON.stringify(s);
+    });
+    check('L2. 成功 + pending → waiting=1', () => {
+      const s = sum(pendingNow);
+      return (s.gated === 1 && s.satisfied === 0 && s.waiting === 1) || JSON.stringify(s);
+    });
+    check('L3. 成功 + accepted → satisfied=1', () => {
+      const s = sum(acceptedNow);
+      return (s.gated === 1 && s.satisfied === 1 && s.waiting === 0) || JSON.stringify(s);
+    });
+    check('L4. 从没跑过的 gated 任务（pending）→ 既不 satisfied 也不 waiting（没有可验收的产出）', () => {
+      const s = sum(neverRan);
+      return (s.gated === 1 && s.satisfied === 0 && s.waiting === 0) || JSON.stringify(s);
+    });
+    check('L4b. 老数据 status=success 却没有成功 attempt → 仍算 waiting（宁可多问一句，§七）', () => {
+      const s = sum(legacySuccessNoAttempt);
+      return (s.gated === 1 && s.satisfied === 0 && s.waiting === 1) || JSON.stringify(s);
+    });
+    check('L5. 没开门控 → 不进分母', () => {
+      const s = sum(noGate);
+      return (s.gated === 0 && s.satisfied === 0 && s.waiting === 0) || JSON.stringify(s);
+    });
+    check('L6. 混在一起：3 个门控（1 个放行、1 个在等、1 个没成功）', () => {
+      const s = sum(failedOld, pendingNow, acceptedNow, noGate);
+      return (s.gated === 3 && s.satisfied === 1 && s.waiting === 1) || JSON.stringify(s);
+    });
+  }
+
+  /* ================= M/N. barrier 的两条边界（§二十三 / §二十二） ================= */
+  section('M. 多级门控：中间那道门是在 session 里通过的，最后一级也不自动跑');
+
+  {
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({
+      id: 'm1',
+      concurrency: 2,
+      tasks: [
+        { id: 'gateA', reviewGate: true },
+        { id: 'gateB', reviewGate: true, dependsOn: ['gateA'] },
+        { id: 'downC', dependsOn: ['gateB'] },
+        { id: 'slowX' },
+      ],
+    }));
+    const p0 = load('m1');
+    const a = taskOf(p0, 'gateA');
+    a.status = 'success';
+    a.attempt = 1;
+    a.startedAt = 1;
+    a.endedAt = 2;
+    a.attempts = [{
+      attempt: 1, success: true, summary: 'A 完成', error: '', exitCode: 0,
+      startedAt: 1, endedAt: 2, filesChanged: [], changeCaptureIncomplete: false,
+      outcomeStatus: 'success',
+      review: { status: 'accepted', note: '', reviewedAt: 3, revision: 1 },
+    }];
+    store.save(p0);
+
+    const r0 = await scheduler.start(load('m1'));
+    check('M1. 计划启动（本轮要跑 gateB + slowX，gateA 已经终态）', () => r0.ok === true || JSON.stringify(r0));
+    const win = await waitUntilJ('m1', (q) => stOf(q, 'gateB') === 'success' && stOf(q, 'slowX') === 'running');
+    check('M2. 拿到「gateB 成功、X 还在跑」的窗口', () => Boolean(win), win ? 'ok' : '没等到窗口');
+    const rv = await review('m1', 'gateB', 1, 'accepted');
+    check('M3. 中间那道门被 accepted', () => rv.body.ok === true || JSON.stringify(rv.body));
+    await scheduler.waitIdle(20000);
+    const p = load('m1');
+    check('M4. 最后一级 downC 没被这一轮自动执行（attempts=0）',
+      () => attemptsOf(p, 'downC').length === 0 || String(attemptsOf(p, 'downC').length));
+    check('M5. downC 是 ready、Plan 是 ready（等用户再点开始）',
+      () => (stOf(p, 'downC') === 'ready' && p.status === 'ready') || JSON.stringify({ d: stOf(p, 'downC'), p: p.status }));
+    const r2 = await scheduler.start(load('m1'));
+    if (r2.ok) await scheduler.waitIdle(20000);
+    const p2 = load('m1');
+    check('M6. 新 session 才跑 downC → completed',
+      () => (r2.ok === true && stOf(p2, 'downC') === 'success' && p2.status === 'completed')
+        || JSON.stringify({ ok: r2.ok, d: stOf(p2, 'downC'), p: p2.status }));
+  }
+
+  section('N. 多上游：只有**没通过**的那个进了 checkpoint');
+
+  {
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({
+      id: 'n1',
+      concurrency: 2,
+      tasks: [
+        { id: 'gateA', reviewGate: true },
+        { id: 'gateC', reviewGate: true },
+        { id: 'downB', dependsOn: ['gateA', 'gateC'] },
+        { id: 'slowX' },
+      ],
+    }));
+    const p0 = load('n1');
+    const a = taskOf(p0, 'gateA');
+    a.status = 'success';
+    a.attempt = 1;
+    a.startedAt = 1;
+    a.endedAt = 2;
+    a.attempts = [{
+      attempt: 1, success: true, summary: 'A 完成', error: '', exitCode: 0,
+      startedAt: 1, endedAt: 2, filesChanged: [], changeCaptureIncomplete: false,
+      outcomeStatus: 'success',
+      review: { status: 'accepted', note: '', reviewedAt: 3, revision: 1 },
+    }];
+    store.save(p0);
+
+    const r0 = await scheduler.start(load('n1'));
+    check('N1. 计划启动（gateA 已终态，本轮跑 gateC + slowX）', () => r0.ok === true || JSON.stringify(r0));
+    const win = await waitUntilJ('n1', (q) => stOf(q, 'gateC') === 'success' && stOf(q, 'slowX') === 'running');
+    check('N2. 拿到「gateC 成功、X 还在跑」的窗口', () => Boolean(win), win ? 'ok' : '没等到窗口');
+    const rv = await review('n1', 'gateC', 1, 'accepted');
+    check('N3. 第二个上游被 accepted', () => rv.body.ok === true || JSON.stringify(rv.body));
+    await scheduler.waitIdle(20000);
+    const p = load('n1');
+    check('N4. 已验收的那个上游不挡人 —— downB 这一轮不跑（attempts=0）',
+      () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
+    check('N5. downB 是 ready、Plan 是 ready',
+      () => (stOf(p, 'downB') === 'ready' && p.status === 'ready') || JSON.stringify({ d: stOf(p, 'downB'), p: p.status }));
+    const r2 = await scheduler.start(load('n1'));
+    if (r2.ok) await scheduler.waitIdle(20000);
+    const p2 = load('n1');
+    check('N6. 新 session 才跑 downB → completed',
+      () => (r2.ok === true && stOf(p2, 'downB') === 'success' && p2.status === 'completed')
+        || JSON.stringify({ ok: r2.ok, d: stOf(p2, 'downB'), p: p2.status }));
+  }
+
+  /* ================= O. 判据矩阵（§三十一回归表） =================
+   *
+   * 上面的 K/M/N 是端到端反推（下游跑没跑），这里把判据本身钉死：
+   * `shouldCheckpointGate()` 与 checkpoint 的内容。两者的语义是一句话 ——
+   * 「**当前这一轮**这道门过没过」。 */
+  section('O. shouldCheckpointGate + checkpoint 内容：判据矩阵');
+
+  {
+    const att = (n, success, review) => ({ attempt: n, success, review: { status: review, note: '', reviewedAt: 1, revision: 1 } });
+    const T_ = (id, { status = 'success', attempts = [], reviewGate = true, dependsOn = [] } = {}) => ({ id, status, reviewGate, attempts, dependsOn });
+    const acceptedAt1 = att(1, true, 'accepted');
+    const ck = (t) => model.shouldCheckpointGate(t);
+
+    check('O1. 没开门控 → 不是门（false）', () => ck(T_('a', { reviewGate: false })) === false);
+    check('O2. 成功 + accepted → 已放行（false，正常流程一个字节都不受影响）', () => ck(T_('a', { attempts: [acceptedAt1] })) === false);
+    check('O3. 成功 + pending → 没通过（true）', () => ck(T_('a', { attempts: [att(1, true, 'pending')] })) === true);
+    check('O4. 成功 + needs_changes → 没通过（true）', () => ck(T_('a', { attempts: [att(1, true, 'needs_changes')] })) === true);
+    check('O5. ★Retry 之后的 pending + 旧 accepted → 没通过（true，这是本轮的 blocker）', () => ck(T_('a', { status: 'pending', attempts: [acceptedAt1] })) === true);
+    check('O6. ready + 旧 accepted → 没通过（true）', () => ck(T_('a', { status: 'ready', attempts: [acceptedAt1] })) === true);
+    check('O7. failed + 旧 accepted → 没通过（true）', () => ck(T_('a', { status: 'failed', attempts: [acceptedAt1] })) === true);
+    check('O8. cancelled + 旧 accepted → 没通过（true）', () => ck(T_('a', { status: 'cancelled', attempts: [acceptedAt1] })) === true);
+    check('O9. interrupted + 旧 accepted → 没通过（true）', () => ck(T_('a', { status: 'interrupted', attempts: [acceptedAt1] })) === true);
+    check('O10. skipped + 旧 accepted → 没通过（true）', () => ck(T_('a', { status: 'skipped', attempts: [acceptedAt1] })) === true);
+    check('O11. running + 旧 accepted → 没通过（true，retry 后这一轮还没跑完）', () => ck(T_('a', { status: 'running', attempts: [acceptedAt1] })) === true);
+    check('O12. 从没跑过（pending 无 attempt）→ 没通过（true）', () => ck(T_('a', { status: 'pending', attempts: [] })) === true);
+    check('O13. 老数据 status=success 却无成功 attempt → 没通过（true，宁可多问一句）', () => ck(T_('a', { attempts: [] })) === true);
+    check('O14. 历史语义没被改：Retry 后仍报 satisfied=true / required=false（§八，我们没动 reviewGateState）', () => {
+      const g = model.reviewGateState(T_('a', { status: 'pending', attempts: [acceptedAt1] }));
+      return (g.satisfied === true && g.required === false && g.reason === 'accepted' && g.attempt === 1) || JSON.stringify(g);
+    });
+
+    const mkCp = (tasks) => Object.fromEntries(gateCheckpointsFor({ id: 'cp', tasks }));
+    check('O15. checkpoint：session 开始时没通过的门才进去（pending 的 gateA → [gateA]）', () => {
+      const m = mkCp([T_('gateA', { status: 'pending', attempts: [] }), T_('downB', { status: 'pending', dependsOn: ['gateA'] })]);
+      return (JSON.stringify(m) === JSON.stringify({ downB: ['gateA'] })) || JSON.stringify(m);
+    });
+    check('O16. ★checkpoint：已验收的不进去（成功+accepted → {}，§二十）', () => {
+      const m = mkCp([T_('gateA', { attempts: [acceptedAt1] }), T_('downB', { status: 'pending', dependsOn: ['gateA'] })]);
+      return Object.keys(m).length === 0 || JSON.stringify(m);
+    });
+    check('O17. ★checkpoint：Retry 后的 pending+旧 accepted **要进去**（blocker 的直接断言）', () => {
+      const m = mkCp([T_('gateA', { status: 'pending', attempts: [acceptedAt1] }), T_('downB', { status: 'pending', dependsOn: ['gateA'] })]);
+      return (JSON.stringify(m) === JSON.stringify({ downB: ['gateA'] })) || JSON.stringify(m);
+    });
+    check('O18. ★多上游：只记没通过的那个（[gateC]，不记 gateA）', () => {
+      const m = mkCp([
+        T_('gateA', { attempts: [acceptedAt1] }),
+        T_('gateC', { status: 'pending', attempts: [] }),
+        T_('downB', { status: 'pending', dependsOn: ['gateA', 'gateC'] }),
+      ]);
+      return (JSON.stringify(m) === JSON.stringify({ downB: ['gateC'] })) || JSON.stringify(m);
+    });
+    check('O19. 多上游里两个都没通过 → 两个都记（barrier 不挑）', () => {
+      const m = mkCp([
+        T_('gateA', { attempts: [att(1, true, 'pending')] }),
+        T_('gateC', { status: 'pending', attempts: [] }),
+        T_('downB', { status: 'pending', dependsOn: ['gateA', 'gateC'] }),
+      ]);
+      return (JSON.stringify(m) === JSON.stringify({ downB: ['gateA', 'gateC'] })) || JSON.stringify(m);
+    });
+    check('O20. 没有依赖 / 依赖不存在 → 不记（id 缺失不炸）', () => {
+      const m = mkCp([T_('solo', { status: 'pending' }), T_('orphan', { status: 'pending', dependsOn: ['ghost'] })]);
+      return Object.keys(m).length === 0 || JSON.stringify(m);
+    });
+    check('O21. 两道门 → 各记各的（Map 按 task 分开）', () => {
+      const m = mkCp([
+        T_('gateA', { status: 'pending', attempts: [] }),
+        T_('gateC', { status: 'pending', attempts: [] }),
+        T_('downB', { status: 'pending', dependsOn: ['gateA'] }),
+        T_('downD', { status: 'pending', dependsOn: ['gateC'] }),
+      ]);
+      return (JSON.stringify(m) === JSON.stringify({ downB: ['gateA'], downD: ['gateC'] })) || JSON.stringify(m);
+    });
   }
 
   cleanup();

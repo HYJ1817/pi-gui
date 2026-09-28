@@ -1574,21 +1574,28 @@ export function openPlanner(focus = null) {
       row.append(el('span', 'planner-gate-badge', '人工门控'));
       let text = '等待人工验收';
       let cls = 'planner-gate-wait';
-      if (g.satisfied) {
+      /* 分支顺序本身就是判据，**`required` 必须排在 `satisfied` 前面**：
+       *
+       *   `satisfied` 说的是历史（最新一次**成功**尝试被接受过），
+       *   `required`  说的是当前这次执行有没有可验收的产出。
+       *   Retry 之后的 pending / 执行失败 → `required=false, satisfied=true`，
+       *   这时候写「门控已通过」是拿历史骗人（P12 blocker 的前端那一半）。
+       *
+       *   老夹具 / 老响应里没有 `required` → 当 true 处理，走原来的判据。 */
+      const required = g.required !== false;
+      if (required && g.satisfied) {
         text = '门控已通过';
         cls = 'planner-gate-ok';
       } else if (g.reason === 'no-successful-attempt') {
         text = '还没有成功执行 · 门控未开始';
-      } else if (g.required === false) {
-        /* P12：`required=false` = 这次执行**没成功**（失败 / 取消 / 中断 / 跳过），
-         * 根本没有可验收的产出 —— 这时候写「等待人工验收」是在把人往死路上引
-         * （后端此时的 workflowReason 也已经不是 waiting-review 了，两边要对得上）。 */
+      } else if (!required) {
+        /* P12：`required=false` = 这次执行**没成功**（失败 / 取消 / 中断 / 跳过 /
+         * 重试排队中），根本没有可验收的产出 —— 这时候写「等待人工验收」是在把人往
+         * 死路上引（后端此时的 workflowReason 也已经不是 waiting-review 了）。 */
         text = '执行未成功 · 门控未开始';
       } else if (g.reason === 'needs_changes') {
         text = '需要修改 · 门控未通过';
         cls = 'planner-gate-bad';
-      } else if (g.reason === 'no-successful-attempt') {
-        text = '还没有成功执行 · 门控未开始';
       }
       row.append(el('span', cls, text));
       if (g.attempt) row.append(el('span', 'planner-gate-hint', `第 ${g.attempt} 次尝试`));

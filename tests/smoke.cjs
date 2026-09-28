@@ -362,6 +362,10 @@ const stubPlanGate = {
     /* P12：`required=false` 的门控 —— 这次执行**没成功**，没有可验收的产出。
      * `reason` 仍可能是 pending（更早那次成功还没被验收过），但文案不能写「等待人工验收」。 */
     mkTask('gfailed', [mkAtt(1)], { status: 'failed', attempt: 1, reviewGate: true, gateState: { enabled: true, required: false, satisfied: false, reason: 'pending', attempt: 1 } }),
+    /* Retry 之后的 pending —— attempt1 曾被接受是**历史**（satisfied=true），
+     * 但当前这次还没成功（required=false）：没有「已通过」这回事。
+     * 回归对应 P12 blocker：pending + 旧 accepted 曾被判成「放行」。 */
+    mkTask('gfailedold', [mkAtt(1, { review: { status: 'accepted', note: '第一次通过了', reviewedAt: 1, revision: 1 } })], { status: 'failed', attempt: 1, reviewGate: true, gateState: { enabled: true, required: false, satisfied: true, reason: 'accepted', attempt: 1 } }),
     mkTask('nogate', [mkAtt(1)]),
     mkTask('downstream', [], { status: 'blocked', attempt: 0, dependsOn: ['gpending'], blockedReason: 'waiting-review', waitingOn: ['gpending'] }),
     mkTask('downfail', [], { status: 'blocked', attempt: 0, dependsOn: ['bad'], blockedReason: 'dependency-failed', waitingOn: ['bad'] }),
@@ -3453,6 +3457,11 @@ staticCheck();
     check('G16. **执行失败**的门控任务不说「等待人工验收」——没有可验收的产出', () => {
       const t = T(gateRow('gfailed'));
       return (/执行未成功/.test(t) && !/等待人工验收/.test(t)) || t;
+    });
+
+    check('G17. **旧 accepted 不算已通过**：当前没成功、只有历史 accepted → 不显示「门控已通过」', () => {
+      const t = T(gateRow('gfailedold'));
+      return (/执行未成功/.test(t) && !/门控已通过/.test(t) && !/等待人工验收/.test(t)) || t;
     });
 
     // 收尾：后面的段落要回到默认桩

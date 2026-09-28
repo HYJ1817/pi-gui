@@ -69,7 +69,7 @@ import {
   normalizeWorkingDirectorySnapshot,
   planWorkflowState,
   refreshTaskStatuses,
-  reviewGateState,
+  shouldCheckpointGate,
   summarizePlan,
   taskSessionId,
 } from './model.js';
@@ -111,10 +111,18 @@ function outcomeSessionId(outcome) {
  *     也不改任何执行状态（那是 Scheduler 的所有权，规格 §十二）。
  *  3. **只记「当时没通过」** —— 开始时就已经 accepted 的门不进 checkpoint，
  *     所以正常流程（验收完再点开始）一个字节都不受影响。
+ *
+ * 「没通过」的判据是 `shouldCheckpointGate()`（model.js，唯一一份）：看的是
+ * **当前这一轮**过没过。历史上有过 accepted、但这次还没成功（Retry 之后的
+ * pending、失败、取消…）→ 也算没通过：用户点「开始」时它并没有被放行。
+ * 早期这里写的是 `enabled && !satisfied`，正好漏掉这一类。
  */
 
-/** session 开始那一刻，每个 task 有哪些依赖**门还没通过**。`Map<taskId, string[]>`。 */
-function gateCheckpointsFor(plan) {
+/** session 开始那一刻，每个 task 有哪些依赖**门还没通过**。`Map<taskId, string[]>`。
+ *
+ * 导出只为测试：checkpoint 的**内容**就是 barrier 的核心断言（哪些门被记下来、
+ * 哪些没记），只从「下游有没有跑」间接反推太绕。纯函数，不碰 scheduler 状态。 */
+export function gateCheckpointsFor(plan) {
   const byId = new Map(plan.tasks.map((t) => [t.id, t]));
   const out = new Map();
   for (const t of plan.tasks) {
@@ -122,8 +130,7 @@ function gateCheckpointsFor(plan) {
     for (const d of t.dependsOn || []) {
       const dep = byId.get(d);
       if (!dep) continue;
-      const g = reviewGateState(dep);
-      if (g.enabled && !g.satisfied) held.push(d);
+      if (shouldCheckpointGate(dep)) held.push(d);
     }
     if (held.length) out.set(t.id, held);
   }
@@ -145,7 +152,7 @@ function deferredGateTasks(session, plan) {
   for (const [taskId, deps] of held) {
     if (deps.some((d) => {
       const dep = byId.get(d);
-      return dep && reviewGateState(dep).satisfied;
+      return dep && !shouldCheckpointGate(dep);
     })) out.add(taskId);
   }
   return out;

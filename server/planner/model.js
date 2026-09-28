@@ -800,6 +800,38 @@ export function reviewGateState(task) {
   return { enabled: true, required, satisfied: status === REVIEW_STATUS.ACCEPTED, reason: status, attempt: a.attempt };
 }
 
+/**
+ * 这个任务**当前**是不是一道「还没通过」的门 —— 下游必须等它。
+ *
+ * ---------- 为什么不能写成 `g.enabled && !g.satisfied`（P12 blocker） ----------
+ *
+ * `satisfied` 是**历史**：它只说「最新一次**成功**尝试被接受过」。而
+ * `required` 才是「当前这次执行有没有可验收的产出」。两者在 Retry 之后会分开：
+ *
+ *     A 成功 + 被接受 → Retry A → A = pending（attempt1 的 accepted 还在历史里）
+ *     → required=false、satisfied=true
+ *
+ * 老判据这时算「门已经通过」，于是 Active Session Barrier 一个 checkpoint 都不记，
+ * 等 A 重新跑完、被接受，DAG 说下游 ready —— 当前这一轮 session 就把用户
+ * 「跑到这里停下来等我」的门给跳过了。
+ *
+ * 门过没过的正确问法是：
+ *
+ *     开着门，**而且**（这次还没成功 或者 成功了但还没被接受）
+ *
+ * 即 `enabled && !(required && satisfied)`。判断是否放行下游时取反即可。
+ *
+ * 与 `reviewGateState` 的分工不变：那个回答「在等什么、为什么」（历史语义，
+ * 失败/重试排队时仍是 `satisfied=true, reason=accepted`），这个只回答一句
+ * 「下游能不能走」。**不要**为了让某个调用方好写，去改那个的历史语义。
+ *
+ * @returns {boolean} true = 没通过（下游等它 / session 要记 checkpoint）
+ */
+export function shouldCheckpointGate(task) {
+  const g = reviewGateState(task);
+  return Boolean(g.enabled) && !(g.required && g.satisfied);
+}
+
 /** 依赖没满足的原因。 */
 export const DEP_REASON = Object.freeze({
   MISSING: 'dependency-missing',
@@ -944,9 +976,18 @@ export function planStatusFromTasks(plan) {
 
 /** Plan 级的门控汇总（**运行时推导，不持久化** —— 规格 §三十三）。
  *
- *  P12：`waiting` 数的是「**真在等验收**」的那些 —— `required && !satisfied`。
- *  失败 / 取消的 gated 任务算进 `gated`，但既不进 `satisfied` 也不进 `waiting`
- *  （它没有可验收的产出，把它的失败显示成「1 个待验收」是骗人）。 */
+ *  三个数各数一件事，而且**都不看历史**：
+ *   - `gated`   开着门的（分母）
+ *   - `satisfied` **已经放行下游**的 —— `required && satisfied`
+ *   - `waiting` **真在等验收**的 —— `required && !satisfied`
+ *
+ *  P12：`required` 是这里的唯一开关。当前态没成功（失败 / 取消 / 重试排队中）
+ *  的 gated 任务算进 `gated`，但既不进 `satisfied` 也不进 `waiting`
+ *  （它没有可验收的产出，把它的失败显示成「1 个待验收」是骗人）。
+ *
+ *  这与 `shouldCheckpointGate()` 是同一个判据的两面 —— 那个数「还没通过的」，
+ *  这个数「已通过的」。早期这里写的是 `if (g.satisfied)`，于是
+ *  「当前失败 + 历史 accepted」被算成已放行。 */
 export function reviewGateSummary(plan) {
   let gated = 0;
   let satisfied = 0;
@@ -955,8 +996,10 @@ export function reviewGateSummary(plan) {
     const g = reviewGateState(t);
     if (!g.enabled) continue;
     gated++;
-    if (g.satisfied) satisfied++;
-    else if (g.required) waiting++;
+    if (g.required) {
+      if (g.satisfied) satisfied++;
+      else waiting++;
+    }
   }
   return { gated, satisfied, waiting };
 }
