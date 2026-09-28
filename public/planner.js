@@ -67,6 +67,97 @@ const PLAN_STATE = {
 
 const dotClass = (meta) => 'ext-dot ' + (meta && meta.dot ? meta.dot : 'dim');
 
+/**
+ * Plan 顶部的「下一步」—— 从**后端已有的视图字段**推出现在最该做的一件事（P13）。
+ *
+ * 返回 `{ kind, text, taskId, action, sub }`；`kind` 只给样式用，`text` 是给
+ * 人看的那句话，`action`（`start` / `focus-task` / null）决定右侧给不给按钮。
+ *
+ * ⚠️ **这是纯展示的判定，一行状态都不改**：不发请求、不重算后端已经算好的东西
+ * （`workflowReason` / `gateState` / `blockedReason` / `verificationActive` 全部
+ * 直接读）。它做的事等价于「把散在进度行、门控行、任务行里的事实挑一条排最前」。
+ *
+ * 优先级固定一条，**一次只给一个主焦点**（P13 §六）：
+ *
+ *   正在验证 > 正在执行 > 失败/被上游卡住 > 等待验收 > 可以执行 > 已完成/已取消 > 普通待执行
+ *
+ * 次级问题写进 `sub`（「另有 N 个任务等待验收」）—— 把所有问题并列，「下一步」
+ * 就又变回一面没有重点的墙。stale / 无效面板不走这里（那是 renderStalePlanner）。
+ */
+export function derivePlanAttention(plan) {
+  if (!plan || !Array.isArray(plan.tasks)) return null;
+  const tasks = plan.tasks;
+  const n = (status) => tasks.filter((t) => t.status === status).length;
+
+  /* 1. 有独立验证在跑 —— 它连「开始执行」都会拒绝，先说它。 */
+  const va = plan.verificationActive;
+  if (va && va.taskId) {
+    return {
+      kind: 'verification-active',
+      text: `正在独立验证 ${va.taskId} · 第 ${va.attempt} 次尝试`,
+      taskId: String(va.taskId),
+      action: 'focus-task',
+    };
+  }
+
+  /* 2. 计划正在跑。**不给任何 CTA** —— running 时「开始执行」是误导。 */
+  if (plan.status === 'running') {
+    const running = n('running');
+    return {
+      kind: 'running',
+      text: running ? `正在执行 ${running} 个任务` : '计划执行中',
+      action: null,
+    };
+  }
+
+  /* 3. 失败优先于「在等验收」：同时存在时，唯一该做的第一件事是处理失败，
+   *     把它说成「等待验收」会把人引去点一个根本动不了的按钮。 */
+  const bad = tasks.find((t) => t.status === 'failed' || t.status === 'interrupted');
+  const waiting = tasks.filter((t) => t.blockedReason === 'waiting-review').length;
+  if (bad || plan.status === 'failed') {
+    const sub = waiting ? `另有 ${waiting} 个任务等待验收` : '';
+    return bad
+      ? { kind: 'failed', text: `处理失败任务 ${bad.id}`, taskId: String(bad.id), action: 'focus-task', sub }
+      : { kind: 'failed', text: '计划执行失败', action: null, sub };
+  }
+
+  /* 4. 被上游卡住（上游没失败，只是没完成）。 */
+  const stuck = tasks.find((t) => t.blockedReason && t.blockedReason !== 'waiting-review');
+  if (stuck) {
+    return { kind: 'blocked', text: `处理被阻塞的任务 ${stuck.id}`, taskId: String(stuck.id), action: 'focus-task' };
+  }
+
+  /* 5. 等人工验收。目标任务是**被门控卡住的那条上游**（成功但还没被接受），
+   *     不是下游那条 blocked —— 说「验收 downstream」没人知道去点哪儿。 */
+  const gs = plan.reviewGateSummary;
+  if ((gs && gs.waiting > 0) || plan.workflowReason === 'waiting-review') {
+    const target =
+      tasks.find((t) => t.reviewGate && t.gateState && t.gateState.required !== false && !t.gateState.satisfied && t.status === 'success') ||
+      tasks.find((t) => t.reviewGate && t.gateState && !t.gateState.satisfied);
+    return target
+      ? { kind: 'waiting-review', text: `验收 ${target.id} 的最新成功结果`, taskId: String(target.id), action: 'focus-task' }
+      : { kind: 'waiting-review', text: '有任务等待人工验收', action: null };
+  }
+
+  /* 6. 收尾态。**门控数为 0 时不写第二行**（一行「所有门控已通过」比没提示更吵）。 */
+  if (plan.status === 'completed') {
+    return {
+      kind: 'completed',
+      text: '计划已完成',
+      action: null,
+      sub: gs && gs.gated > 0 && gs.satisfied >= gs.gated ? '所有人工门控已通过' : '',
+    };
+  }
+  if (plan.status === 'cancelled') return { kind: 'cancelled', text: '计划已取消', action: null };
+
+  /* 7. 普通待执行（draft/ready，或还没排上队的）。 */
+  const runnable = tasks.filter((t) => (t.status === 'ready' || t.status === 'pending') && !t.blockedReason).length;
+  if (runnable > 0) return { kind: 'ready', text: `有 ${runnable} 个任务可以执行`, action: 'start' };
+  if (plan.status === 'paused') return { kind: 'paused', text: '计划已暂停', action: null };
+  return { kind: 'idle', text: '没有待执行的任务', action: null };
+}
+
+
 /* ---------- 小工具 ---------- */
 
 function el(tag, cls, text) {
@@ -323,6 +414,12 @@ export function openPlanner(focus = null) {
   const clearingReview = new Set();
   /** 文件列表展开过的 attempt（默认只列前几个，避免 20 个文件糊成一面墙）。 */
   const filesExpanded = new Set();
+  /** P13-A：Attempt 的展开 / 收起，**只记用户显式点过的那些**。
+   *
+   * key = `planId:taskId:attempt`（与 reviewDrafts 同一把身份），value = true / false。
+   * 没记录的走默认：每条任务只展开**最新一次**（十次尝试的历史不该每次重绘都摊开一面墙）。
+   * 用户点过的**不许被重绘改掉** —— 这是 P13 的 Blocker 2。 */
+  const attemptOpen = new Map();
   /** 打开这个面板时的工作区代号。切过项目之后回来的响应一律丢弃（§三十九）。 */
   const openedGeneration = S.workspaceGeneration;
 
@@ -352,10 +449,11 @@ export function openPlanner(focus = null) {
     /**
      * 丢弃这个面板实例攒下的全部临时 UI 状态。
      *
-     * 三样都属于**旧 workspace**，所以项目一换就该全部作废：
+     * 四样都属于**旧 workspace**，所以项目一换就该全部作废：
      *   reviewDrafts   未保存的说明（连带 `saving` 标记 —— 不清就会永久停在「正在保存…」）
      *   clearingReview 「正在清除…」的标记
      *   filesExpanded  文件列表的展开状态
+     *   attemptOpen    attempt 的展开/收起（P13）—— 展开的是旧项目的卡片，没有保留价值
      *
      * **刻意不写 localStorage / sessionStorage / plan 文件**：这不是「保留跨项目草稿」，
      * 恰恰相反 —— 项目切换就意味着草稿的生命周期结束。
@@ -364,6 +462,7 @@ export function openPlanner(focus = null) {
       reviewDrafts.clear();
       clearingReview.clear();
       filesExpanded.clear();
+      attemptOpen.clear();
     }
 
     /**
@@ -647,6 +746,32 @@ export function openPlanner(focus = null) {
         prog.append(el('span', 'planner-warn', `有独立验证正在运行（${vActive.taskId} 第 ${vActive.attempt} 次）—— 先停止它，再开始执行 / 编辑 / 删除 / 重试`));
       }
       detailWrap.append(prog);
+
+      /* ---------- P13：下一步 ----------
+       *
+       * 界面要能一眼回答「现在该干什么」。文案来自 `derivePlanAttention`（纯函数、
+       * 只读、只展示），这里只负责画 + 给一个恰当的按钮 —— **不在这里补第二套判定**。
+       * running / 已完成这类状态不给 CTA：`开始执行` 会把人往一个必然被拒的按钮上引。 */
+      const attention = derivePlanAttention(current);
+      if (attention && attention.text) {
+        const next = el('div', 'planner-next');
+        next.append(el('span', 'planner-next-lbl', '下一步'));
+        next.append(el('span', 'planner-next-text ' + attention.kind, attention.text));
+        if (attention.sub) next.append(el('span', 'planner-next-sub', attention.sub));
+        if (attention.action === 'start') {
+          next.append(btn('开始执行', 'primary', () => doStart()));
+        } else if (attention.action === 'focus-task' && attention.taskId) {
+          const tid = attention.taskId;
+          next.append(
+            btn('查看任务', '', () => {
+              /* 用 dataset 比对，不把 id 拼进选择器 —— 任务 id 来自模型输出（§G15）。 */
+              const node = [...detailWrap.querySelectorAll('.planner-task')].find((n) => n.dataset.taskId === tid);
+              if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' });
+            })
+          );
+        }
+        detailWrap.append(next);
+      }
 
       /* ---------- P8-C：执行结果 + 人工审阅汇总 ----------
        *
@@ -1351,21 +1476,37 @@ export function openPlanner(focus = null) {
      *   - 有会话且能找到 → 显示标题 + 「打开会话」
      * 全都不是错误，所以都不用红色 —— 这只是信息缺失，不是失败。
      */
+    /**
+     * 这条 attempt 现在该展开吗（P13-A）。
+     *
+     * 优先级（§三十六）—— **用户显式选择 > 交互必需 > 默认**：
+     *   1. `attemptOpen` 里有记录 → 照用户点的办。重绘、切计划、SSE 事件都不许
+     *      偷偷改它（Blocker 2）；哪怕用户收起的是「正在验证」的那条，也认。
+     *   2. 交互必需：审阅草稿在写、正在清除、正在独立验证 —— 这些必须看得见，
+     *      否则「正在保存…」那张卡片会在眼皮底下消失（Blocker 3）。
+     *   3. 默认：每条任务只展开**最新一次**。
+     */
+    function attemptIsOpen(planId, task, a) {
+      const picked = attemptOpen.get(draftKey(planId, task.id, a.attempt));
+      if (picked !== undefined) return picked;
+      const key = draftKey(planId, task.id, a.attempt);
+      if (reviewDrafts.has(key) || clearingReview.has(key)) return true;
+      if (a.verificationRunning) return true;
+      const arr = Array.isArray(task.attempts) ? task.attempts : [];
+      const latestNo = arr.reduce((m, x) => Math.max(m, Number(x.attempt) || 0), 0);
+      return (Number(a.attempt) || 0) >= latestNo;
+    }
+
     function renderAttempt(planId, task, a) {
       const row = el('div', 'planner-attempt');
-      const head = el('div', 'planner-attempt-head');
-      /* 执行结论用**稳定字段**（`outcomeStatus`），不再从 error 文案猜 ——
-       * 文案是给人看的，改一次就静默失效（见 attemptOutcome 的说明）。 */
-      const outcome = attemptOutcome(a);
-      const meta = TASK_STATE[outcome] || { dot: 'dim', label: outcome };
-      head.append(el('span', dotClass(meta), ''));
-      head.append(el('span', 'planner-attempt-no', `第 ${a.attempt} 次`));
-      head.append(el('span', 'planner-attempt-state', meta.label));
-      if (Number.isFinite(a.startedAt) && Number.isFinite(a.endedAt)) {
-        head.append(el('span', 'planner-attempt-dur', fmtDuration(a.endedAt - a.startedAt)));
-      }
-      if (a.error) head.append(el('span', 'planner-attempt-err', String(a.error).slice(0, 160)));
-      row.append(head);
+      /* 身份写在 dataset 上：测试与定位都用 dataset 比对，不把 id 拼进选择器
+       * （任务 id 来自模型输出，拼选择器会踩转义/注入，见 §G15）。 */
+      row.dataset.taskId = task.id;
+      row.dataset.attempt = a.attempt;
+      const openKey = draftKey(planId, task.id, a.attempt);
+      const open = attemptIsOpen(planId, task, a);
+      /* 详情收在 body 里：收起时 body.hidden = true —— **内容仍留在 DOM**，
+       * 历史一条不少，只是不摊开。下面照旧往 row 上挂，最后统一收进 body。 */
 
       const srow = el('div', 'planner-attempt-sess');
       srow.append(el('span', 'planner-lbl', '会话'));
@@ -1500,6 +1641,54 @@ export function openPlanner(focus = null) {
 
       /* ---------- P8-C：人工审阅 ---------- */
       row.append(renderReview(planId, task, a, false));
+
+      /* ---------- P13-B：折叠头 ----------
+       *
+       * 头一行就是这次执行的**摘要**：执行结论 / 时长 / 独立验证 / 人工验收 / 证据
+       * **各说各的，不合并**（P13 Blocker 5）—— 收起之后更要能一眼分清楚，
+       * 否则十次尝试看起来只剩「成功/失败」，验收与验证状态全被吞掉。
+       *
+       * 控件是**真 button** + `aria-expanded`：Enter/Space 原生可用，
+       * 展开态不只靠颜色/图标（`aria-controls` 指向详情本体）。 */
+      const outcome = attemptOutcome(a);
+      const meta = TASK_STATE[outcome] || { dot: 'dim', label: outcome };
+      const body = el('div', 'planner-attempt-body');
+      body.id = 'pab-' + encodeURIComponent(openKey);
+      while (row.firstChild) body.append(row.firstChild);
+      if (!open) body.hidden = true;
+
+      const head = el('button', 'planner-attempt-head planner-attempt-toggle');
+      head.type = 'button';
+      head.append(el('span', dotClass(meta), ''));
+      head.append(el('span', 'planner-attempt-no', `第 ${a.attempt} 次`));
+      head.append(el('span', 'planner-attempt-state', meta.label));
+      if (Number.isFinite(a.startedAt) && Number.isFinite(a.endedAt)) {
+        head.append(el('span', 'planner-attempt-dur', fmtDuration(a.endedAt - a.startedAt)));
+      }
+      const vr = verificationOf(a);
+      head.append(el('span', 'planner-att-verify ' + (vr ? VERIFY_STATE[vr.status].cls : 'none'), vr ? VERIFY_STATE[vr.status].label : '尚未独立确认'));
+      const rvState = REVIEW_STATE[reviewOf(a).status];
+      head.append(el('span', 'planner-att-review ' + rvState.cls, rvState.label));
+      const evSum = evidenceOf(a);
+      head.append(el('span', 'planner-att-ev', evSum && evSum.status !== 'unavailable' ? `证据 ${evSum.files.length} 个文件` : '无证据'));
+      if (a.error) head.append(el('span', 'planner-attempt-err', String(a.error).slice(0, 160)));
+      const caret = el('span', 'planner-attempt-caret', open ? '▾' : '▸');
+      caret.setAttribute('aria-hidden', 'true');
+      head.append(caret);
+      head.setAttribute('aria-expanded', String(open));
+      head.setAttribute('aria-controls', body.id);
+      head.title = open ? '收起这次尝试的详情' : '展开这次尝试的详情';
+      head.onclick = () => {
+        /* 切走项目之后旧面板不该再改自己的 UI 状态（与其它入口同一条规矩）。 */
+        if (!plannerAlive()) {
+          renderStalePlanner();
+          return;
+        }
+        /* 记下的是**用户刚做的选择** —— 下一次重绘按它来，不按默认规则。 */
+        attemptOpen.set(openKey, !open);
+        renderDetail();
+      };
+      row.append(head, body);
       return row;
     }
 
@@ -1591,8 +1780,15 @@ export function openPlanner(focus = null) {
       } else if (!required) {
         /* P12：`required=false` = 这次执行**没成功**（失败 / 取消 / 中断 / 跳过 /
          * 重试排队中），根本没有可验收的产出 —— 这时候写「等待人工验收」是在把人往
-         * 死路上引（后端此时的 workflowReason 也已经不是 waiting-review 了）。 */
-        text = '执行未成功 · 门控未开始';
+         * 死路上引（后端此时的 workflowReason 也已经不是 waiting-review 了）。
+         *
+         * P13 §二十九：两种「没成功」还要分开：
+         *   重试排队中 / 还没跑（pending·ready·blocked·running）→ **还没有结果**，
+         *     写「执行未成功」是在指控一次还没发生的执行；
+         *   真的失败了 / 取消 / 中断 / 跳过 → 保留 P12 那句「执行未成功」。 */
+        text = ['pending', 'ready', 'blocked', 'running'].includes(t.status)
+          ? '尚未产生新结果 · 门控未开始'
+          : '执行未成功 · 门控未开始';
       } else if (g.reason === 'needs_changes') {
         text = '需要修改 · 门控未通过';
         cls = 'planner-gate-bad';
@@ -1611,6 +1807,26 @@ export function openPlanner(focus = null) {
         row.append(el('span', 'planner-blocked-on', '：' + t.waitingOn.join('、')));
       }
       return row;
+    }
+
+    /**
+     * 「验收结果」= 打开**最新一次成功尝试**的审阅编辑器（P13-D）。
+     *
+     * 折叠着的那条必须先站开 —— 编辑器开在看不见的地方等于没开；然后滚到它，
+     * 让「点顶部按钮 → 出现可编辑的地方」在同一次视线里完成。
+     * 资格（能不能接受）仍由 `canAccept` 与后端把关，这里只负责把它请出来。 */
+    function acceptLatestAttempt(task) {
+      const arr = Array.isArray(task.attempts) ? task.attempts : [];
+      if (!arr.length) return;
+      const last = arr.reduce((m, x) => ((Number(x.attempt) || 0) > (Number(m.attempt) || 0) ? x : m), arr[0]);
+      attemptOpen.set(draftKey(current.id, task.id, last.attempt), true);
+      openEditor(current.id, task.id, last.attempt, 'accepted');
+      setTimeout(() => {
+        const node = [...document.querySelectorAll('.planner-attempt')].find(
+          (n) => n.dataset.taskId === task.id && n.dataset.attempt === String(last.attempt)
+        );
+        if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' });
+      }, 0);
     }
 
     function renderTask(t, planRunning) {
@@ -1634,6 +1850,46 @@ export function openPlanner(focus = null) {
       if (gateLine) wrap.append(gateLine);
       const blockedLine = renderBlockedReason(t);
       if (blockedLine) wrap.append(blockedLine);
+
+      /* ---------- P13-D：动作层级 ----------
+       *
+       * 把「现在能做的事」提到**尝试历史之前** —— 重试 / 验收不该排在十次尝试
+       * 后面让人滚（P13 之前它们在卡片最底部，甚至在实时输出之后）。
+       *
+       * ⚠️ **资格判断一个字没动**：哪些状态能重试 / 跳过 / 取消仍然由下面这些
+       * 原有分支 + 后端决定，这里只动**顺序与主次**（primary 归最该做的那件）。 */
+      const tacts = el('div', 'ext-acts');
+      const settled = ['success', 'failed', 'cancelled', 'skipped', 'interrupted'].includes(t.status);
+      /* P9 收口：验证在跑时 Retry 会被后端拒（全局互斥）。跳过 / 取消不受影响 ——
+       * 它们只改计划里的状态，不在工作区里跑命令，后端也没锁它们。 */
+      const taskLocked = Boolean(current && current.verificationActive);
+      const lockTaskBtn = (b) => {
+        if (taskLocked) {
+          b.disabled = true;
+          b.title = '有独立验证正在运行，先停止它再重试';
+        }
+        return b;
+      };
+      /* 「验收结果」：这个任务**成功了但还没被人接受**，现在最该做的是验收。
+       * `required === false`（这次执行没成功）时没有可验收的产出，不给这个按钮 ——
+       * 与门控行同一份判据，都来自后端 `gateState`，前端不另算。 */
+      const gateWaiting = Boolean(
+        t.reviewGate && t.gateState && t.gateState.required !== false && !t.gateState.satisfied && t.status === 'success'
+      );
+      if (gateWaiting) {
+        tacts.append(btn('验收结果', 'primary', () => acceptLatestAttempt(t)));
+      }
+      if (t.status === 'failed' || t.status === 'interrupted') {
+        tacts.append(lockTaskBtn(btn('重试', 'primary', () => doTaskAction('retry', t.id))));
+        tacts.append(btn('跳过', '', () => doTaskAction('skip', t.id)));
+      }
+      if (t.status === 'blocked' || t.status === 'pending' || t.status === 'ready') {
+        tacts.append(btn('跳过', '', () => doTaskAction('skip', t.id)));
+      }
+      if (!settled && t.status !== 'blocked' && t.status !== 'pending') {
+        tacts.append(btn('取消这个任务', 'danger', () => doTaskAction('cancel', t.id)));
+      }
+      if (tacts.childElementCount) wrap.append(tacts);
 
       /* 标题 / 描述 / agent / 依赖 的编辑（运行中锁定结构，规格 §46） */
       const title = el('input', 'planner-task-title');
@@ -1768,30 +2024,6 @@ export function openPlanner(focus = null) {
         wrap.append(log);
       }
 
-      /* 单任务操作 */
-      const tacts = el('div', 'ext-acts');
-      const settled = ['success', 'failed', 'cancelled', 'skipped', 'interrupted'].includes(t.status);
-      /* P9 收口：验证在跑时 Retry 会被后端拒（全局互斥）。跳过 / 取消不受影响 ——
-       * 它们只改计划里的状态，不在工作区里跑命令，后端也没锁它们。 */
-      const taskLocked = Boolean(current && current.verificationActive);
-      const lockTaskBtn = (b) => {
-        if (taskLocked) {
-          b.disabled = true;
-          b.title = '有独立验证正在运行，先停止它再重试';
-        }
-        return b;
-      };
-      if (t.status === 'failed' || t.status === 'interrupted') {
-        tacts.append(lockTaskBtn(btn('重试', 'primary', () => doTaskAction('retry', t.id))));
-        tacts.append(btn('跳过', '', () => doTaskAction('skip', t.id)));
-      }
-      if (t.status === 'blocked' || t.status === 'pending' || t.status === 'ready') {
-        tacts.append(btn('跳过', '', () => doTaskAction('skip', t.id)));
-      }
-      if (!settled && t.status !== 'blocked' && t.status !== 'pending') {
-        tacts.append(btn('取消这个任务', 'danger', () => doTaskAction('cancel', t.id)));
-      }
-      if (tacts.childElementCount) wrap.append(tacts);
       return wrap;
     }
 
@@ -2123,6 +2355,12 @@ export function openPlanner(focus = null) {
       current = r.plan;
       dirty = false;
       liveEvents = new Map();
+      /* P13 §八：focus 带 attempt 时**先站住那条再渲染** —— 否则「跳回上次那一次」
+       * 会被「默认只展开最新一条」的规则重新收起（Blocker 4）。记的是显式选择，
+       * 用户之后照样能手动收起。 */
+      if (focus.taskId && focus.attempt != null && focus.attempt !== '') {
+        attemptOpen.set(draftKey(current.id, focus.taskId, focus.attempt), true);
+      }
       renderList();
       renderDetail();
       /* 从会话跳进来时把对应任务滚进视野 —— 否则用户要在一个长计划里自己找
@@ -2130,7 +2368,12 @@ export function openPlanner(focus = null) {
        * task id 来自模型输出，拼进选择器会踩到转义问题。 */
       if (focus.taskId) {
         const node = [...detailWrap.querySelectorAll('.planner-task')].find((n) => n.dataset.taskId === focus.taskId);
-        if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' });
+        const att =
+          node && focus.attempt != null && focus.attempt !== ''
+            ? [...node.querySelectorAll('.planner-attempt')].find((n) => n.dataset.attempt === String(focus.attempt))
+            : null;
+        const target = att || node;
+        if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'center' });
       }
     });
   }, () => {

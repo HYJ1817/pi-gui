@@ -1898,3 +1898,70 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 @media (max-width: 700px) {
   .planner-gate, .planner-blocked { font-size: 11px; }
 }
+
+
+/* ---------- P13：下一步 / Attempt 折叠头 ----------
+ *
+ * 「下一步」是详情里**第一个**能回答「现在该干什么」的区块：标签 + 一句话 +
+ * 一个按钮。刻意不做卡片、不做图标 —— 它要读起来像一句话，不像一块面板。
+ * 颜色按语义走（失败红 / 等待黄 / 可执行强调色 / 收尾灰），但**文字本身已经
+ * 说清楚了**，去掉颜色也读得懂（§五十二：状态不能只靠颜色）。 */
+.planner-next {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0 0; padding: 7px 9px;
+  border: 1px solid var(--line); border-left: 3px solid var(--accent, #7aa2f7);
+  border-radius: 7px; background: var(--bg-soft, #1a1a1a);
+  font-size: 12.5px;
+}
+.planner-next-lbl { font-size: 10.5px; color: var(--fg-dim); white-space: nowrap; }
+.planner-next-text { font-weight: 600; }
+.planner-next-text.failed { color: var(--err, #f87171); }
+.planner-next-text.verification-active,
+.planner-next-text.running { color: var(--accent, #7aa2f7); }
+.planner-next-text.waiting-review,
+.planner-next-text.blocked { color: var(--warn, #d9a441); }
+.planner-next-text.completed { color: var(--ok, #4ade80); }
+.planner-next-text.cancelled,
+.planner-next-text.paused,
+.planner-next-text.idle { color: var(--fg-dim); font-weight: 500; }
+.planner-next-sub { color: var(--fg-dim); font-size: 11.5px; }
+.planner-next .btn { margin-left: auto; }
+
+/* 折叠头：整行可点的**真 button**。UA 默认样式在深色主题里是一块刺眼的白板，
+ * 所以背景 / 边框 / 字体全部显式接管；焦点环留着（键盘用户要看得见自己在哪儿）。 */
+.planner-attempt-toggle {
+  width: 100%;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  padding: 2px 0; margin: 0;
+  background: none; border: 0; border-radius: 5px;
+  color: inherit; font: inherit; font-size: 11.5px; text-align: left;
+  cursor: pointer;
+}
+.planner-attempt-toggle:hover { background: var(--hover, #242424); }
+.planner-attempt-toggle:focus-visible { outline: 1px solid var(--accent, #7aa2f7); outline-offset: 1px; }
+.planner-attempt-caret { margin-left: auto; color: var(--fg-dim); }
+
+/* 详情：左侧一道细线，收起时整块消失（hidden 属性，不是 display:none 的类 ——
+ * 断言直接看 hidden，不依赖样式表加载）。 */
+.planner-attempt-body {
+  display: flex; flex-direction: column; gap: 4px;
+  padding-left: 8px; border-left: 2px solid var(--line-soft);
+}
+.planner-attempt-body[hidden] { display: none; }
+
+/* 摘要行里的三个维度各自一格，**不合并**（P13 Blocker 5）。 */
+.planner-att-verify,
+.planner-att-review,
+.planner-att-ev { color: var(--fg-dim); }
+.planner-att-verify.run { color: var(--accent, #7aa2f7); }
+.planner-att-verify.ok,
+.planner-att-review.ok { color: var(--ok, #4ade80); }
+.planner-att-verify.err { color: var(--err, #f87171); }
+.planner-att-verify.warn,
+.planner-att-review.warn { color: var(--warn, #d9a441); }
+
+@media (max-width: 700px) {
+  .planner-next { font-size: 12px; }
+  .planner-next .btn { margin-left: 0; }
+  .planner-attempt-err { max-width: 100%; }
+}
