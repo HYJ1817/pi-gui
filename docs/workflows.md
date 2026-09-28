@@ -540,7 +540,7 @@ paused**（`completed` 不是不可逆的），但**历史执行结果一个字�
 | | 什么时候 |
 |---|---|
 | `enabled=false` | 没开门控 → `satisfied: true`，对下游完全透明 |
-| `required=false` | 门开着，但这次**执行没成功**（failed / cancelled / interrupted / skipped）或**还没跑** → 没有可验收的产出 |
+| `required=false` | 门开着，但这次**执行没成功**（failed / cancelled / interrupted / skipped）或**还没跑 / 重试排队中** → 没有可验收的产出 |
 | `required=true` 且 `satisfied=false` | 执行成功了，真的在等人 → 这才是「等验收」 |
 
 于是**执行失败不会被报成等验收**：一个 gated 任务跑失败时 Plan 走原来的路
@@ -551,6 +551,26 @@ paused**（`completed` 不是不可逆的），但**历史执行结果一个字�
 
 **例外（故意的）**：`status = success` 却没有成功 attempt 的老数据仍按 `required=true`
 （`satisfied=false`）处理 —— 宁可多问一句，也不静默放行下游。
+
+**`satisfied` 是历史，`required` 是当前**，而两者在 **Retry** 之后会分开：
+
+```
+A 成功 + 被接受 → Retry A → A 回到 pending，attempt1 的 accepted 还在历史里
+                 → required=false、satisfied=true
+```
+
+`reviewGateState()` 的语义**不变**（历史是什么就是什么，见 §六「旧 `accepted` 的含义不变」）。
+但凡是回答「**下游能不能走** / **这一轮过没过**」的地方，判据只能是：
+
+```js
+shouldCheckpointGate(task) = g.enabled && !(g.required && g.satisfied)
+```
+
+`reviewGateSummary()` 同理：`satisfied` 只数 `required && satisfied` 的，
+`waiting` 只数 `required && !satisfied` 的。拿 `satisfied` 单独当判据，
+会把「当前失败 / 重试排队中 + 历史 accepted」算成**已经放行**，
+界面上于是出现「门控已通过」——拿历史骗人。两个判据都在 `model.js`，
+scheduler 和前端**各不写一份**。
 
 ### P12：Active Session Barrier（这一轮的 checkpoint）
 
@@ -569,8 +589,19 @@ session 自然结束 → Plan 落到 ready，等用户自己再点开始
 1. **只活在 session 内存里** —— 不写 plan / task / attempt，重启不恢复，
    也没有「上次卡住的计划」要清理。
 2. **只挡未启动的** —— 不 abort 任何在跑的任务，不改任何执行状态（那是 Scheduler 的所有权）。
-3. **只记「当时没通过」** —— 开始时就已经 accepted 的门不进检查点，
-   所以「验收完再点开始」这条正常路径一个字节都不受影响。
+3. **只记「当时没通过」** —— 判据是 `shouldCheckpointGate()`（在 `model.js`，
+   与 summary 同一个函数、同一份语义）：问的是**当前这一轮过没过**，
+   不是「历史上过过没有」。开始时就已经 accepted 的门不进检查点，
+   所以「验收完再点开始」这条正常路径一个字节都不受影响；
+   反过来，**Retry 之后的 pending 要进**检查点。
+
+   > 这里曾写成 `enabled && !satisfied`，于是漏掉「当前没成功、历史 accepted」
+   > 那一类：A 刚被 Retry、attempt2 还没跑，下游已经被判「门通过了」，
+   > 等 attempt2 一被接受，**当前这一轮**就把该停下来等用户的下游跑掉了
+   > （checkpoint 的意义就是「跑到这里停下来等我」）。
+
+   `deferredGateTasks()`（「按住不启动」那半）用的是同一个判据取反：
+   某个 checkpoint 里的门**现在不再成立** → 说明它是这一轮里才通过的 → 按住它。
 
 门后来又被打回 `needs_changes` / `pending` → 判据不再成立 → 不按住；
 此时 DAG 权威照旧（下游 `blocked + waiting-review`，Plan `paused`）。
@@ -630,6 +661,10 @@ Retry           →  只允许计划不再 active 时
 它始终只表示「用户曾接受那次尝试的结果」，**不表示它仍是当前最新结果**。
 当前/最新由 Attempt 顺序表达 —— 所以 P8 刻意**没有** `superseded` / `stale` /
 `obsolete` 这类状态。新 Attempt 出现不会把旧的 `accepted` 改成别的。
+
+> P12 踩的坑正是**拿它当「当前」用**：谁用 `satisfied` 单独判「这一轮过没过」，
+> Retry 之后就会把「还没跑」读成「已放行」。判据见 §5.9 的
+> `shouldCheckpointGate()`。
 
 ### 下游要重新评估
 

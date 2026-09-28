@@ -30,9 +30,9 @@
 `npm test` 里现在有 27 个套件，全部是**纯自动化**：
 
 ```
-smoke 807 · git 161 · modules 114 · reliability · interactions · port-owner
+smoke 809 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 133
-review-gate 99 · verification 136 · evidence 100 · attempt-lifecycle 98
+review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
 sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
@@ -67,7 +67,7 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 持久化与清除、重试不覆盖历史、计划编辑不擦审阅、跨项目 403、隐私，
 以及写盘失败必须如实报错。同样全程 fixture。
 
-`review-gate`（P11 / P12，155 条）测**人工验收门控**（可选的工作流策略）：把审阅从「事后记录」
+`review-gate`（P11 / P12，217 条）测**人工验收门控**（可选的工作流策略）：把审阅从「事后记录」
 升级成「下游要不要等」的条件。同样全程 fixture（真 git + fake adapter，不 spawn 真 Agent）：
 
 - **A / B 段**（纯函数）：`reviewGateState` 只看**最新一次成功** attempt 的 review
@@ -96,6 +96,24 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
   无关的 X 照常跑完，Plan 落 `ready`，用户再点开始才执行 B → `completed`；
   反向（accepted → needs_changes / pending）则回到 `blocked + waiting-review`。
   还断言 accepted 没被 Scheduler 的整份写盘冲掉。
+- **K 段（P12 · Retry × Barrier，22 条）**：真并发的**第三条**路 ——
+  A 成功 + 已验收 → **Retry A** → A 回到 pending（attempt1 的 accepted 留在历史里）
+  → session 开始 → A 的 attempt2 成功、在窗口里被 accepted。
+  老判据 `enabled && !satisfied` 在 session 开始时**看不见**这道门，
+  于是这一轮把下游跑掉；修好后下游 **attempts=0**、Plan 落 `ready`，
+  用户再点开始才跑 → `completed`。顺带钉住 Retry 只动当前态、
+  两次 attempt 的 review 互不污染、验收确实发生在 session 进行中。
+- **L 段（7 条）**：`reviewGateSummary` 三个数各数什么 ——
+  `satisfied` 只数 `required && satisfied`（「当前失败 + 历史 accepted」= 0），
+  `waiting` 只数 `required && !satisfied`；老数据 `success` 无成功 attempt 仍算 `waiting`。
+- **M / N 段（12 条）**：barrier 的两条边界 —— 多级门控（中间那道门是在 session 里
+  通过的，最后一级也不自动跑）与多上游（只记没通过的那个，已验收的不挡人）。
+  这两段**修复前后都绿**，是钉住不是反证。
+- **O 段（21 条）**：判据矩阵。`shouldCheckpointGate()` 的 14 种输入（disabled /
+  成功四态 / Retry 后的 pending / ready / failed / cancelled / interrupted / skipped /
+  running / 没跑过 / 老数据），加上 `gateCheckpointsFor()` 直接断言 **checkpoint 的
+  内容**（`{downB: ['gateC']}` 这种），把「下游跑没跑」的端到端反推换成看得见的表；
+  还断言 `reviewGateState` 的历史语义**没被改**（Retry 后仍 `satisfied=true, required=false`）。
 
 > **守卫验证过会红**：把门控判定临时退回旧行为（忽略门控 / 拿**第一次**成功尝试），
 > 本套件 **27 条**失败 —— 包括「下游直接跑掉」与「旧 accepted 被沿用」这两条 blocker。
@@ -103,9 +121,19 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 > **P12 的两条 blocker 同样验证过会红**：拿这份测试跑**改动前**的实现 → **23 条**失败
 > （I 段 19 条 = Blocker A，J 段 4 条 = Blocker B，其中「B 在这一轮被自动执行掉了」
 > 是那条正主）。
+>
+> **Retry × Barrier（本轮）的反证也先跑过一遍**：测试先加在**改动前**的实现上 →
+> `review-gate` **188 passed / 7 failed** —— 4 条是正主（K14「downB 这一轮被自动执行
+> 掉了」+ K17 / K18 / K20，Plan 直接跑成了 `completed`），2 条是 C2 汇总
+> （L1 / L6：把「当前失败 + 历史 accepted」算进 `satisfied`），1 条是我夹具写错
+> （L4 把从没跑过的任务设成 `status=success`，撞上 §5.9 的老数据例外，改回 `pending`
+> 后按设计通过）。同一份测试跑 `smoke` → **808/809**（G17 显示「门控已通过」）。
+> 改判据之后：`review-gate` **217/0**、`smoke` **809/809**。
 
-`smoke` 里的 **P11 / P12 段**（16 条）测门控的**前端行为**：`人工门控` 标记与四种状态文案
-（含 P12 新增的「执行未成功 · 门控未开始」—— 执行失败时**不能**写「等待人工验收」）、
+`smoke` 里的 **P11 / P12 段**（17 条）测门控的**前端行为**：`人工门控` 标记与五种状态文案
+（含 P12 新增的「执行未成功 · 门控未开始」—— 执行失败时**不能**写「等待人工验收」，
+更不能写「门控已通过」：`required=false` 必须排在 `satisfied` **前面**判，
+否则 Retry 之后「当前没成功 + 历史 accepted」会被显示成已通过）、
 下游「等待人工验收：<上游 id>」、上游失败时**不**说成等验收、Plan 顶部那句
 「已暂停：等待人工验收」与门控汇总、任务上的勾选框（默认状态 + 勾选后保持）、
 以及恶意 task id / 上游 id 全部按纯文本渲染。
@@ -392,7 +420,7 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 > 都是收起状态就会截出**同一张图** —— 那样等于有一条没验。
 > `35` 拍的是 attempt 卡片而不是弹层：`unavailable` 时**根本没有**可点的入口。
 
-**P11 人工验收门控的场景**（`shots:harness` 的 38–44，夹具是 `plan-gate`）：
+**P11 / P12 人工验收门控的场景**（`shots:harness` 的 38–45，夹具是 `plan-gate`）：
 
 | 场景 | 验什么 |
 |---|---|
@@ -400,9 +428,17 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 | `39-review-gate-accepted` | 已接受 → 「门控已通过」 |
 | `40-review-gate-needs-changes` | 需修改 → 「需要修改 · 门控未通过」 |
 | `41-review-gate-downstream-blocked` | 下游「等待人工验收：gated-a」（**带上游 id**，不只写「blocked」） |
-| `42-review-gate-plan-paused` | Plan 顶部「已暂停：等待人工验收」+「人工门控 1/4 已通过 · 待验收 3」 |
+| `42-review-gate-plan-paused` | Plan 顶部「已暂停：等待人工验收」+「人工门控 1/5 已通过 · 待验收 3」（`satisfied` 只数**已放行**的，历史 accepted 不算） |
 | `43-review-gate-editor` | 任务上的「需要人工验收后再继续下游」勾选框 |
 | `44-review-gate-narrow-700` | 压力：700px 下**超长标题** + 门控行 + 下游等待原因 |
+| `45-review-gate-retry-pending` | P12：重试排队中 —— attempt1 曾被接受（历史），当前这次没成功 → 「执行未成功 · 门控未开始」，**不是**「门控已通过」 |
+
+> **截图的判据不靠人眼**：`shotOf()` 现在会把「被取景的那个元素」打出来 ——
+> 矩形在不在视口里、归一化后的文本、以及该场景的关键词齐不齐 —— 并把关键词缺失 /
+> 取景中心不在视口内记成失败，`cdp-shot.cjs` 有失败就以退出码 1 结束。
+> 所以上面这张表的每一行都有日志里的机器可查对应物（本轮 38–45 全部 ✓）。
+> 判据用「取景中心落在视口内」而不是「矩形完全在视口内」：1000 字说明、10 次尝试
+> 这类比视口还高的元素，后者按构造就永远失败。
 
 ## 五、发布前验证（F 层）
 
