@@ -114,12 +114,16 @@ const reviewUrl = (planId, taskId, attempt) =>
   await git(PROJ, 'add', '-A');
   await git(PROJ, 'commit', '-qm', 'init');
 
-  /* 每个 taskId 一个行为。门控测试里任务只需要「成功」。 */
+  /* 每个 taskId 一个行为。门控测试里任务只需要「成功」。
+   * P12 的真并发场景要一快一慢：gateA / downB 立刻返回，slowX 拖住当前 session。 */
   const BEHAVIORS = {
     ok: [{ ok: true, summary: 'done' }],
     ok2: [{ ok: true, summary: 'done' }],
     ok3: [{ ok: true, summary: 'done' }],
     fails: [{ ok: false, error: '故意失败' }],
+    gateA: [{ ok: true, summary: 'A 完成' }],
+    downB: [{ ok: true, summary: 'B 完成' }],
+    slowX: [{ slowMs: 1200, ok: true, summary: 'X 完成' }],
   };
   const registry = createAgentRegistry({ env: process.env, includeFake: true, fakeBehaviors: BEHAVIORS });
 
@@ -739,6 +743,276 @@ const reviewUrl = (planId, taskId, attempt) =>
     check('H1. waitingOn 里放的是**任务 id**，不是标题（标题是不可信文本）', () => (b.waitingOn || []).join() === 'a' || JSON.stringify(b.waitingOn));
     check('H2. blockedReason 是稳定的枚举值，不含任何计划内容', () => b.blockedReason === 'waiting-review' || JSON.stringify(b.blockedReason));
     check('H3. 响应里没有被转义/拼接过的 HTML（后端只给数据）', () => !/&lt;img/.test(detail.raw) || detail.raw.slice(0, 200));
+  }
+
+  /* ================= I. Gate required：门控只在**执行成功后**才需要满足 =================
+   *
+   * Blocker A：以前 `reviewGateState().satisfied === false` 就等于「在等验收」，
+   * 于是**一个执行失败的 gated 任务**也会把整份 Plan 顶成 `paused + waiting-review`
+   * —— 明明是失败，界面却让人去等一个永远不会来的验收。
+   *
+   * 规格 §二十八：enabled / required / satisfied 三个概念分开；
+   * 失败 / 取消 / 中断 / 跳过 / 还没跑 → `required=false`，沿用原执行语义。 */
+  section('I. Gate required：失败 / 取消 / 中断 / 跳过都不算「等验收」');
+
+  {
+    const att = (success, status) => ({
+      attempt: 1,
+      success,
+      review: { status, note: '', reviewedAt: status === 'pending' ? null : 1, revision: status === 'pending' ? 0 : 1 },
+    });
+    const g = (over) => model.reviewGateState(Object.assign({ id: 'g', reviewGate: true, status: 'success', attempts: [] }, over));
+
+    check('I1. 没开门控 → enabled=false / required=false / satisfied=true（新增字段是 additive）', () => {
+      const s = model.reviewGateState({ id: 'g', reviewGate: false, status: 'failed', attempts: [] });
+      return (s.enabled === false && s.required === false && s.satisfied === true) || JSON.stringify(s);
+    });
+    check('I2. 成功 + pending → required=true（这才是真的在等人）', () => {
+      const s = g({ attempts: [att(true, 'pending')] });
+      return (s.required === true && s.satisfied === false && s.reason === 'pending' && s.attempt === 1) || JSON.stringify(s);
+    });
+    check('I3. 成功 + accepted → required=true 且 satisfied=true', () => {
+      const s = g({ attempts: [att(true, 'accepted')] });
+      return (s.required === true && s.satisfied === true && s.reason === 'accepted') || JSON.stringify(s);
+    });
+    check('I4. **执行失败 → required=false**（没有可验收的东西）', () => {
+      const s = g({ status: 'failed', attempts: [att(false, 'pending')] });
+      return (s.enabled === true && s.required === false && s.satisfied === false && s.reason === 'no-successful-attempt') || JSON.stringify(s);
+    });
+    for (const st of ['cancelled', 'interrupted', 'skipped']) {
+      check('I5. ' + st + ' → required=false（沿用原执行语义）', () => {
+        const s = g({ status: st, attempts: [att(false, 'pending')] });
+        return (s.enabled === true && s.required === false) || JSON.stringify(s);
+      });
+    }
+    check('I6. 还没跑过（pending）→ required=false', () => {
+      const s = g({ status: 'pending', attempts: [] });
+      return (s.required === false && s.satisfied === false && s.reason === 'no-successful-attempt') || JSON.stringify(s);
+    });
+    check('I7. 老数据：状态是 success 却没有成功 attempt → 仍按「等验收」处理（不静默放行下游）', () => {
+      const s = g({ status: 'success', attempts: [att(false, 'pending')] });
+      return (s.required === true && s.satisfied === false) || JSON.stringify(s);
+    });
+  }
+
+  {
+    /* ★ Blocker A 的正主：单个 gated 任务**执行失败**时 Plan 必须是 failed。 */
+    const p = await runPlan({ id: 'i1', tasks: [{ id: 'fails', reviewGate: true }] });
+    check('I8. ★Blocker A：单个 gated 任务执行失败 → Plan = failed', () => p.status === 'failed' || p.status);
+    check('I9. workflowState = failed + settled（**不是** paused + waiting-review）', () => {
+      const w = model.planWorkflowState(p);
+      return (w.status === 'failed' && w.reason === 'settled') || JSON.stringify(w);
+    });
+    check('I10. isPlanSettled 为真（门控不再把失败的计划卡住）', () => model.isPlanSettled(p) === true);
+    const detail = await hit(planner, 'GET', '/api/plans/i1', undefined);
+    check('I11. 详情接口的 workflowReason 不是 waiting-review', () => {
+      const w = detail.body.plan.workflowReason;
+      return (w && w !== 'waiting-review') || String(w);
+    });
+    check('I12. Plan 级门控汇总**不**把失败任务算成「待验收」', () => {
+      const gs = detail.body.plan.reviewGateSummary;
+      return (gs && gs.gated === 1 && gs.waiting === 0 && gs.satisfied === 0) || JSON.stringify(gs);
+    });
+    check('I13. 上游的 gateState 仍如实报 required=false / no-successful-attempt', () => {
+      const t = (detail.body.plan.tasks || []).find((x) => x.id === 'fails');
+      return (t && t.gateState && t.gateState.enabled === true && t.gateState.required === false && t.gateState.satisfied === false) || JSON.stringify(t && t.gateState);
+    });
+    check('I14. 执行状态没被审阅逻辑改写（还是 failed，attempt 还在）', () => taskOf(p, 'fails').status === 'failed' && attemptsOf(p, 'fails').length === 1 || JSON.stringify({ s: taskOf(p, 'fails').status, n: attemptsOf(p, 'fails').length }));
+  }
+
+  {
+    /* 失败的 gated 上游 → 下游是 dependency-failed，Plan 是 failed。 */
+    const p = await runPlan({ id: 'i2', tasks: [{ id: 'fails', reviewGate: true }, { id: 'down', dependsOn: ['fails'] }] });
+    check('I15. 失败的 gated 上游 → 下游 blocked + dependency-failed（优先级不变）', () => {
+      const byId = new Map(p.tasks.map((t) => [t.id, t]));
+      const st = model.dependencyStateOf(taskOf(p, 'down'), byId);
+      return (taskOf(p, 'down').status === 'blocked' && st.reason === 'dependency-failed') || JSON.stringify({ s: taskOf(p, 'down').status, r: st.reason });
+    });
+    /* 有失败 + 有被阻塞的下游时，计划停在 paused（用户要决定重试哪个），
+     * **和没开门控的同构计划一模一样** —— 门控不改这条语义。 */
+    const twin = await runPlan({ id: 'i2b', tasks: [{ id: 'fails' }, { id: 'down', dependsOn: ['fails'] }] });
+    const sig = (x) => JSON.stringify({ ps: x.status, w: model.planWorkflowState(x), st: x.tasks.map((t) => [t.id, t.status]) });
+    check('I16. 门控不改「失败」的原语义：与无门控的同构计划**完全同态**', () => {
+      const got = sig(p);
+      return (got === sig(twin) && model.planWorkflowState(p).status === 'paused') || `${got} vs ${sig(twin)}`;
+    });
+    check('I16b. workflowReason 是 dependency-blocked，**不是** waiting-review', () => {
+      const w = model.planWorkflowState(p);
+      return (w.status === 'paused' && w.reason === 'dependency-blocked') || JSON.stringify(w);
+    });
+    check('I17. 下游一次都没被执行', () => attemptsOf(p, 'down').length === 0 || String(attemptsOf(p, 'down').length));
+    check('I17b. 无门控的孪生计划也没执行下游（对拍的另一半）', () => attemptsOf(twin, 'down').length === 0 || String(attemptsOf(twin, 'down').length));
+  }
+
+  {
+    /* 取消 / 中断 / 跳过 / 从没跑过：原执行语义，一个字都不改（§三十二 4/5/6/8）。 */
+    const mkOne = (id, status, extra = {}) => {
+      const p = mkPlan({ id, tasks: [{ id: 'a', reviewGate: true }] });
+      const t = taskOf(p, 'a');
+      t.status = status;
+      t.attempt = extra.attempts ? 1 : 0;
+      t.attempts = extra.attempts || [];
+      t.error = extra.error || '';
+      store.save(p);
+      return load(id);
+    };
+    const cancelled = mkOne('i3', 'cancelled', {
+      error: '已取消',
+      attempts: [{ attempt: 1, success: false, error: '已取消', summary: '', exitCode: null, startedAt: 1, endedAt: 2, filesChanged: [], changeCaptureIncomplete: false, outcomeStatus: 'cancelled', review: { status: 'pending', note: '', reviewedAt: null, revision: 0 } }],
+    });
+    check('I18. gated 任务被取消 → Plan = cancelled（不是 waiting-review）', () => {
+      const w = model.planWorkflowState(cancelled);
+      return (w.status === 'cancelled' && w.reason !== 'waiting-review') || JSON.stringify(w);
+    });
+    const interrupted = mkOne('i4', 'interrupted', {
+      error: '应用关闭时被中断',
+      attempts: [{ attempt: 1, success: false, error: '应用关闭时被中断', summary: '', exitCode: null, startedAt: 1, endedAt: 2, filesChanged: [], changeCaptureIncomplete: true, outcomeStatus: 'interrupted', review: { status: 'pending', note: '', reviewedAt: null, revision: 0 } }],
+    });
+    check('I19. gated 任务被中断 → Plan = failed（中断算失败），**不是** waiting-review', () => {
+      const w = model.planWorkflowState(interrupted);
+      return (w.status === 'failed' && w.reason !== 'waiting-review') || JSON.stringify(w);
+    });
+    const skipped = mkOne('i5', 'skipped', { error: '已跳过' });
+    check('I20. gated 任务被跳过 → Plan = completed（沿用原 skipped 语义）', () => {
+      const w = model.planWorkflowState(skipped);
+      return (w.status === 'completed' && w.reason !== 'waiting-review') || JSON.stringify(w);
+    });
+    const neverRan = mkOne('i6', 'pending');
+    check('I21. 从没跑过的 gated 任务 → paused + pending（**没有成功尝试不等于**一律 waiting-review）', () => {
+      const w = model.planWorkflowState(neverRan);
+      return (w.status === 'paused' && w.reason === 'pending') || JSON.stringify(w);
+    });
+  }
+
+  /* ================= J. Active Session Barrier：accepted 也不让当前这一轮自动跑下游 =================
+   *
+   * Blocker B：计划正在跑时把上游的审阅改成 accepted，DAG 立刻说下游 ready ——
+   * 但**当前 execution session 已经把它当成一道 checkpoint**，这一轮不再自动消费它。
+   * 无关任务照常跑完，session 自然结束，Plan 落到 `ready`，等用户自己点开始。
+   *
+   * barrier 只活在 scheduler 的 session 对象里：不写 Plan / Task / Attempt，重启不恢复。 */
+  section('J. Active Session Barrier：运行中 accepted 不自动启动下游');
+
+  /** 轮询到条件成立（等出「A 成功、X 还在跑」那个窗口）。 */
+  async function waitUntilJ(planId, pred, timeoutMs = 15000) {
+    const t0 = Date.now();
+    for (;;) {
+      const p = load(planId);
+      if (pred(p)) return p;
+      if (Date.now() - t0 > timeoutMs) return null;
+      await sleep(25);
+    }
+  }
+  const stOf = (p, id) => {
+    const t = taskOf(p, id);
+    return t ? t.status : '';
+  };
+
+  /** 造一份 A(gate) → B、外加无关慢任务 X 的计划（concurrency=2）。 */
+  function mkBarrierPlan(id) {
+    runtime.setCurrentCwd(PROJ);
+    store.save(mkPlan({
+      id,
+      concurrency: 2,
+      tasks: [
+        { id: 'gateA', reviewGate: true },
+        { id: 'downB', dependsOn: ['gateA'] },
+        { id: 'slowX' },
+      ],
+    }));
+    return load(id);
+  }
+
+  {
+    mkBarrierPlan('j1');
+    const r0 = await scheduler.start(load('j1'));
+    check('J1. 计划启动', () => r0.ok === true || JSON.stringify(r0));
+
+    const win = await waitUntilJ('j1', (p) => stOf(p, 'gateA') === 'success' && stOf(p, 'slowX') === 'running');
+    check('J2. 拿到「A 成功、X 还在跑」的窗口', () => Boolean(win), win ? 'ok' : '没等到窗口');
+    check('J3. 此刻计划仍然 active', () => scheduler.activePlanId() === 'j1', String(scheduler.activePlanId()));
+    let p = load('j1');
+    check('J4. 窗口里 B 一次都没跑（attempts=0）', () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
+    check('J5. 窗口里 DAG 判 B 为 waiting-review（status 是泵下一轮才刷新的，这里判据用纯函数）', () => {
+      const byId = new Map(p.tasks.map((t) => [t.id, t]));
+      const st = model.dependencyStateOf(taskOf(p, 'downB'), byId);
+      return (st.status === 'blocked' && st.reason === 'waiting-review' && st.waitingOn.join() === 'gateA') || JSON.stringify(st);
+    });
+
+    const rv = await review('j1', 'gateA', 1, 'accepted');
+    check('J6. 计划运行中也能把已结束的 attempt 标成 accepted', () => rv.body.ok === true || JSON.stringify(rv.body));
+    check('J7. 运行中的响应不带 gate（§二十：本轮不扩 API）', () => rv.body.gate === null || JSON.stringify(rv.body.gate));
+    check('J8. accepted 没有打断正在跑的 X（barrier 只挡未启动的）', () => stOf(load('j1'), 'slowX') === 'running' || stOf(load('j1'), 'slowX'));
+
+    await scheduler.waitIdle(20000);
+    p = load('j1');
+    check('J9. A 仍是 success（审阅不改执行状态）', () => stOf(p, 'gateA') === 'success' || stOf(p, 'gateA'));
+    check('J10. A 的 accepted **没有**被 Scheduler 的整份写盘冲掉', () => {
+      const a = attemptsOf(p, 'gateA').find((x) => x.attempt === 1);
+      const rv2 = model.normalizeReview(a && a.review);
+      return (rv2.status === 'accepted' && rv2.revision === 1) || JSON.stringify(rv2);
+    });
+    check('J11. 无关的 X 正常跑完（门控不是全局锁）', () => stOf(p, 'slowX') === 'success' || stOf(p, 'slowX'));
+    check('J12. DAG 权威：accepted 之后 B 变成 ready', () => stOf(p, 'downB') === 'ready' || stOf(p, 'downB'));
+    check('J13. ★Blocker B：B 在**这一轮 session**里没被自动执行（attempts=0）', () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
+    check('J14. session 结束后 Plan = ready（不是 completed / paused+waiting-review / running）', () => p.status === 'ready' || p.status);
+    check('J15. 调度器已空闲（session 自然结束）', () => scheduler.activePlanId() === null, String(scheduler.activePlanId()));
+
+    const r2 = await scheduler.start(load('j1'));
+    check('J16. 用户手动再点「开始执行」→ 被接受', () => r2.ok === true || JSON.stringify(r2));
+    if (r2.ok) await scheduler.waitIdle(20000);
+    p = load('j1');
+    check('J17. 新 session 才执行 B：success + attempts=1', () => (stOf(p, 'downB') === 'success' && attemptsOf(p, 'downB').length === 1) || JSON.stringify({ s: stOf(p, 'downB'), n: attemptsOf(p, 'downB').length }));
+    check('J18. 最终 Plan = completed', () => p.status === 'completed' || p.status);
+  }
+
+  {
+    /* 反向：accepted 之后又改回 needs_changes —— 最终状态始终先由 DAG 决定。 */
+    mkBarrierPlan('j2');
+    await scheduler.start(load('j2'));
+    const win = await waitUntilJ('j2', (p) => stOf(p, 'gateA') === 'success' && stOf(p, 'slowX') === 'running');
+    check('J19. j2 也拿到了那个窗口', () => Boolean(win), win ? 'ok' : '没等到窗口');
+    await review('j2', 'gateA', 1, 'accepted');
+    const rv2 = await review('j2', 'gateA', 1, 'needs_changes');
+    check('J20. accepted → needs_changes 写入成功（X 还在跑）', () => rv2.body.ok === true || JSON.stringify(rv2.body));
+    await scheduler.waitIdle(20000);
+    const p = load('j2');
+    check('J21. X 正常完成（barrier 不 abort 任何在跑的东西）', () => stOf(p, 'slowX') === 'success' || stOf(p, 'slowX'));
+    check('J22. B 是 blocked + waiting-review（DAG 权威以最新 Review 为准）', () => {
+      const byId = new Map(p.tasks.map((t) => [t.id, t]));
+      const st = model.dependencyStateOf(taskOf(p, 'downB'), byId);
+      return (stOf(p, 'downB') === 'blocked' && st.reason === 'waiting-review') || JSON.stringify({ s: stOf(p, 'downB'), r: st.reason });
+    });
+    check('J23. B 没被 barrier 错标成 ready，也没被执行', () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
+    check('J24. Plan = paused + waiting-review（不是 ready）', () => {
+      const w = model.planWorkflowState(p);
+      return (p.status === 'paused' && w.status === 'paused' && w.reason === 'waiting-review') || JSON.stringify({ s: p.status, w });
+    });
+    check('J25. 历史执行结果不倒推（A / X 仍是 success）', () => stOf(p, 'gateA') === 'success' && stOf(p, 'slowX') === 'success');
+  }
+
+  {
+    /* 再反向：accepted → pending（§二十三）。 */
+    mkBarrierPlan('j3');
+    await scheduler.start(load('j3'));
+    const win = await waitUntilJ('j3', (p) => stOf(p, 'gateA') === 'success' && stOf(p, 'slowX') === 'running');
+    check('J26. j3 也拿到了那个窗口', () => Boolean(win), win ? 'ok' : '没等到窗口');
+    await review('j3', 'gateA', 1, 'accepted');
+    const rv3 = await review('j3', 'gateA', 1, 'pending');
+    check('J27. accepted → pending 写入成功', () => rv3.body.ok === true || JSON.stringify(rv3.body));
+    await scheduler.waitIdle(20000);
+    const p = load('j3');
+    check('J28. B 是 blocked + waiting-review（不是 ready-but-stopped）', () => {
+      const byId = new Map(p.tasks.map((t) => [t.id, t]));
+      const st = model.dependencyStateOf(taskOf(p, 'downB'), byId);
+      return (stOf(p, 'downB') === 'blocked' && st.reason === 'waiting-review') || JSON.stringify({ s: stOf(p, 'downB'), r: st.reason });
+    });
+    check('J29. Plan = paused + waiting-review', () => {
+      const w = model.planWorkflowState(p);
+      return (w.status === 'paused' && w.reason === 'waiting-review') || JSON.stringify(w);
+    });
+    check('J30. barrier 不碰 terminal 任务（A / X 历史原样）', () => attemptsOf(p, 'gateA').length === 1 && attemptsOf(p, 'slowX').length === 1);
+    check('J31. B 一次都没跑', () => attemptsOf(p, 'downB').length === 0 || String(attemptsOf(p, 'downB').length));
   }
 
   cleanup();

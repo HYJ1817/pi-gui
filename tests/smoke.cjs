@@ -355,14 +355,17 @@ const stubPlanGate = {
   reviewGateSummary: { gated: 3, satisfied: 1, waiting: 2 },
   workflowReason: 'waiting-review',
   tasks: [
-    mkTask('gpending', [mkAtt(1)], { reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 } }),
-    mkTask('gok', [mkAtt(1, { review: { status: 'accepted', note: '', reviewedAt: 1, revision: 1 } })], { reviewGate: true, gateState: { enabled: true, satisfied: true, reason: 'accepted', attempt: 1 } }),
-    mkTask('gneed', [mkAtt(1, { review: { status: 'needs_changes', note: '还差边界用例', reviewedAt: 1, revision: 1 } })], { reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'needs_changes', attempt: 1 } }),
-    mkTask('gnever', [], { status: 'pending', attempt: 0, reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'no-successful-attempt', attempt: null } }),
+    mkTask('gpending', [mkAtt(1)], { reviewGate: true, gateState: { enabled: true, required: true, satisfied: false, reason: 'pending', attempt: 1 } }),
+    mkTask('gok', [mkAtt(1, { review: { status: 'accepted', note: '', reviewedAt: 1, revision: 1 } })], { reviewGate: true, gateState: { enabled: true, required: true, satisfied: true, reason: 'accepted', attempt: 1 } }),
+    mkTask('gneed', [mkAtt(1, { review: { status: 'needs_changes', note: '还差边界用例', reviewedAt: 1, revision: 1 } })], { reviewGate: true, gateState: { enabled: true, required: true, satisfied: false, reason: 'needs_changes', attempt: 1 } }),
+    mkTask('gnever', [], { status: 'pending', attempt: 0, reviewGate: true, gateState: { enabled: true, required: false, satisfied: false, reason: 'no-successful-attempt', attempt: null } }),
+    /* P12：`required=false` 的门控 —— 这次执行**没成功**，没有可验收的产出。
+     * `reason` 仍可能是 pending（更早那次成功还没被验收过），但文案不能写「等待人工验收」。 */
+    mkTask('gfailed', [mkAtt(1)], { status: 'failed', attempt: 1, reviewGate: true, gateState: { enabled: true, required: false, satisfied: false, reason: 'pending', attempt: 1 } }),
     mkTask('nogate', [mkAtt(1)]),
     mkTask('downstream', [], { status: 'blocked', attempt: 0, dependsOn: ['gpending'], blockedReason: 'waiting-review', waitingOn: ['gpending'] }),
     mkTask('downfail', [], { status: 'blocked', attempt: 0, dependsOn: ['bad'], blockedReason: 'dependency-failed', waitingOn: ['bad'] }),
-    mkTask(XSS_NOTE, [], { status: 'blocked', attempt: 0, reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 }, blockedReason: 'waiting-review', waitingOn: [XSS_NOTE] }),
+    mkTask(XSS_NOTE, [], { status: 'blocked', attempt: 0, reviewGate: true, gateState: { enabled: true, required: false, satisfied: false, reason: 'pending', attempt: 1 }, blockedReason: 'waiting-review', waitingOn: [XSS_NOTE] }),
   ],
 };
 
@@ -3445,6 +3448,11 @@ staticCheck();
       const injected = card.querySelectorAll('.planner-task img, .planner-task script, .planner-blocked img').length;
       const row = blockedRow(XSS_NOTE);
       return (injected === 0 && row && T(row).includes('<img')) || JSON.stringify({ injected, txt: row ? T(row).slice(0, 60) : null });
+    });
+
+    check('G16. **执行失败**的门控任务不说「等待人工验收」——没有可验收的产出', () => {
+      const t = T(gateRow('gfailed'));
+      return (/执行未成功/.test(t) && !/等待人工验收/.test(t)) || t;
     });
 
     // 收尾：后面的段落要回到默认桩
