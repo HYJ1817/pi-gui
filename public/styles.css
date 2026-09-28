@@ -1826,3 +1826,46 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   background: var(--hover); border-radius: 4px; padding: 1px 5px;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ============ P10：历史变更证据（Attempt 冻结的 Diff） ============
+ *
+ * 与「当前 Diff」是两个入口，措辞也分开：这个不动，那个会随工作区变。 */
+
+/* attempt 卡片里那一行入口 */
+.planner-attempt-evidence {
+  display: flex; align-items: center; gap: 7px; font-size: 11.5px;
+  min-width: 0; flex-wrap: wrap;
+}
+
+/* 查看器 */
+.ev-head h3 { font-size: 14px; font-weight: 500; color: #e6e6e6; }
+.ev-sub { font-size: 11.5px; color: var(--t3); margin: 4px 0 10px; line-height: 1.5; }
+.ev-sum { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--t2); flex-wrap: wrap; }
+.ev-note { font-size: 11px; color: var(--t3); }
+.ev-warn { font-size: 11px; color: var(--warn); }
+.ev-empty { font-size: 12px; color: var(--t3); padding: 10px 0; }
+
+/* 每个文件：默认**收起**（几十个文件全展开会把几 MB 塞进 DOM） */
+.ev-file { border-top: 1px dashed var(--line-soft); padding: 6px 0; }
+.ev-file-head {
+  display: flex; align-items: center; gap: 7px; font-size: 11.5px;
+  min-width: 0; cursor: pointer; flex-wrap: wrap;
+}
+.ev-file > summary { list-style: none; }
+.ev-file > summary::-webkit-details-marker { display: none; }
+.ev-kind { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; min-width: 12px; text-align: center; }
+.ev-kind.modified { color: var(--accent); }
+.ev-kind.added { color: var(--ok); }
+.ev-kind.deleted { color: var(--err); }
+.ev-kind.renamed { color: var(--run); }
+.ev-path {
+  font-family: var(--mono); font-size: 11.5px; color: #c9c9c9;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ev-old { color: var(--t3); font-size: 11px; }
+.ev-stat { margin-left: auto; color: var(--t3); font-family: var(--mono); font-size: 11px; }
+
+/* patch 块：`.ext-code` 已经是 pre-wrap（长行**折行**而不是横向滚）——
+ * 那条路更稳：整页永远不会因为一条超长 diff 行而横向溢出。
+ * 只把高度上限调大一点（diff 比错误输出长）。 */
+.ev-patch { margin: 6px 0 0; max-height: 320px; }

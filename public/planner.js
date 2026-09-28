@@ -1212,8 +1212,112 @@ export function openPlanner(focus = null) {
       return box.childElementCount ? box : null;
     }
 
+    /* ================= P10：历史变更证据（Attempt 冻结的 Diff） =================
+     *
+     * 与「当前 Diff」是两件事：
+     *
+     *     当前 Diff     工作区**此刻**相对 Git 基线是什么样 —— 会随时间漂移
+     *     本次 Diff     这次 Attempt **执行前 → 执行后**的差 —— 一旦写下就不再变
+     *
+     * 措辞仍然是「执行期间观察到的变化」，**不是**「Agent 改的」：
+     * 用户、编辑器、formatter、watcher、构建脚本都可能在同一时间段动过文件。
+     */
+
+    const EVIDENCE_KIND = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R' };
+    const EVIDENCE_LABEL = { modified: '修改', added: '新增', deleted: '删除', renamed: '改名' };
+
+    /** 归一化一份历史证据 —— 与后端 `normalizeChangeEvidence` 同一套语义。
+     *  老 attempt 根本没有这个字段 → null（界面**不假装**有 Diff）。 */
+    function evidenceOf(a) {
+      const e = a && a.changeEvidence && typeof a.changeEvidence === 'object' ? a.changeEvidence : null;
+      if (!e) return null;
+      const status = ['available', 'partial', 'unavailable'].includes(e.status) ? e.status : 'unavailable';
+      const files = (Array.isArray(e.files) ? e.files : []).map((f) => ({
+        path: typeof f.path === 'string' ? f.path : '',
+        change: EVIDENCE_KIND[f.change] ? f.change : 'modified',
+        oldPath: typeof f.oldPath === 'string' && f.oldPath ? f.oldPath : null,
+        binary: Boolean(f.binary),
+        additions: Number.isInteger(f.additions) ? f.additions : null,
+        deletions: Number.isInteger(f.deletions) ? f.deletions : null,
+        patch: typeof f.patch === 'string' ? f.patch : '',
+        truncated: Boolean(f.truncated),
+      })).filter((f) => f.path);
+      return { status, files, truncated: Boolean(e.truncated), note: typeof e.note === 'string' ? e.note : '' };
+    }
+
     /**
-     * 一条 attempt：状态 + 关联会话 + 执行期间变更 + 验证要求 + 人工审阅。
+     * 历史 Diff 查看器。
+     *
+     * 第一版刻意**只做证据可读**：文件列表 → 展开 → unified diff。
+     * 没有 side-by-side、没有语法高亮、没有 Monaco（§十九）。
+     *
+     * 所有内容都是**不可信文本**（仓库内容里可能有 `<img onerror>`）：路径、patch、
+     * note 一律 textContent 渲染 ✓ 一条 innerHTML 都没有。
+     */
+    function openHistoricalDiff(taskId, attemptNo) {
+      const a = attemptOf(taskId, attemptNo);
+      const ev = a ? evidenceOf(a) : null;
+      if (!ev) return;
+      openModal((card) => {
+        card.classList.add('wide', 'planner', 'evidence');
+        const head = el('div', 'ev-head');
+        head.append(el('h3', null, `历史 Diff · 第 ${attemptNo} 次尝试`));
+        card.append(head);
+        /* 这一句是 P10 的核心语义，必须显眼：它不是「现在的文件」。 */
+        card.append(el('div', 'ev-sub', '这是该 Attempt 执行前后观察到的工作区变化。之后的修改不会改变这里的内容。'));
+
+        const sum = el('div', 'ev-sum');
+        sum.append(el('span', null, ev.files.length ? `${ev.files.length} 个文件` : '没有文件变化'));
+        if (ev.truncated) sum.append(el('span', 'ev-warn', '历史 Diff 已截断'));
+        card.append(sum);
+        if (ev.note) card.append(el('div', 'ev-note', ev.note));
+
+        if (ev.status === 'unavailable') {
+          card.append(el('div', 'ev-empty', '这次执行没有采集到变更证据。'));
+        } else if (!ev.files.length) {
+          card.append(el('div', 'ev-empty', '这次执行期间没有观察到文件变化。'));
+        } else {
+          const all = [];
+          for (const f of ev.files) {
+            const det = el('details', 'ev-file');
+            const sm = el('summary', 'ev-file-head');
+            sm.append(el('span', 'ev-kind ' + f.change, EVIDENCE_KIND[f.change] || 'M'));
+            const p = el('span', 'ev-path', f.path);
+            p.title = f.path; // 长路径截断后悬停看全
+            sm.append(p);
+            if (f.oldPath) sm.append(el('span', 'ev-old', '← ' + f.oldPath));
+            if (f.binary) sm.append(el('span', 'ev-stat', '二进制'));
+            else if (f.additions !== null || f.deletions !== null) sm.append(el('span', 'ev-stat', `+${f.additions ?? '?'} −${f.deletions ?? '?'}`));
+            if (f.truncated) sm.append(el('span', 'ev-warn', '已截断'));
+            det.append(sm);
+
+            if (f.binary) {
+              det.append(el('div', 'ev-note', '二进制文件已变化，不展示文本 Diff'));
+            } else if (f.patch) {
+              const pre = el('pre', 'ext-code ev-patch');
+              pre.textContent = f.patch; // ← 纯文本。patch 里什么都可能有。
+              det.append(pre);
+            } else {
+              det.append(el('div', 'ev-note', '这次执行没有保存这个文件的内容记录'));
+            }
+            card.append(det);
+            all.push(det);
+          }
+          /* 50 个文件一次性展开会把几 MB 塞进 DOM —— 默认全收起（§二十六）。 */
+          const acts = el('div', 'ext-acts');
+          const toggle = btn('全部展开', '', () => {
+            const open = all.some((d) => !d.open);
+            for (const d of all) d.open = open;
+            toggle.textContent = open ? '全部收起' : '全部展开';
+          });
+          acts.append(toggle);
+          card.append(acts);
+        }
+      });
+    }
+
+    /**
+     * 一条 attempt：状态 + 关联会话 + 执行期间变更 + 历史证据 + 验证要求 + 人工审阅。
      *
      * 四种「没有会话」的情形分开说，因为用户该做的事完全不同：
      *   - 这次执行没关联到会话（Agent 不支持）→ 「无可关联会话」
@@ -1302,15 +1406,36 @@ export function openPlanner(focus = null) {
         }
         row.append(frow);
         if (anyChanged) {
-          /* Diff 的语义必须写在 UI 上（§二十一）：它是**当前工作区**的差异，
-           * 不是这次执行当时的快照 —— 两者可能完全不同。 */
-          row.append(el('div', 'planner-attempt-note', '「查看当前 Diff」打开的是**当前工作区**的差异，不是这次执行当时的快照。'));
+          /* 两种 Diff 的语义必须写在 UI 上（§十八）：上面那些按钮给的是
+           * **当前工作区**的差异，P10 那个按钮给的是**这次执行前后**冻结的证据。
+           * 两者可能完全不同，措辞不能混。 */
+          row.append(el('div', 'planner-attempt-note', '「查看当前 Diff」打开的是当前工作区的差异，会随之后的修改变化。'));
         }
       } else if (a.changeCaptureIncomplete) {
         row.append(el('div', 'planner-attempt-note', '执行期间变更：采集不到（这个项目不是 git 仓库，或这次执行被中断）'));
       } else {
         row.append(el('div', 'planner-attempt-note', '执行期间未观察到文件变化'));
       }
+
+      /* ---------- P10：历史变更证据 ----------
+       *
+       * 与上面「查看当前 Diff」**分开**：这个是这次执行前后冻结下来的证据，
+       * 之后无论工作区怎么变、Retry 多少次，它都不动。
+       * 没有证据时**不假装有**（老 attempt / 采集失败都如实说）。 */
+      const ev = evidenceOf(a);
+      const evRow = el('div', 'planner-attempt-evidence');
+      if (ev && ev.status !== 'unavailable') {
+        evRow.append(miniBtn('查看本次 Diff', '', () => openHistoricalDiff(task.id, a.attempt)));
+        evRow.append(el('span', 'planner-rv-hint', `这次执行前后 ${ev.files.length} 个文件的变化（冻结证据，不会随工作区改变）`));
+        if (ev.status === 'partial' || ev.truncated) evRow.append(el('span', 'planner-rv-warn', '⚠ 证据不完整'));
+      } else if (ev) {
+        evRow.append(el('span', 'planner-rv-hint', '这次执行没有采集到变更证据'));
+        if (ev.note) evRow.append(el('span', 'planner-rv-hint', `（${ev.note}）`));
+      } else {
+        /* 老 attempt（P10 之前产生的）根本没有这个字段 —— 如实说，不假装有 Diff。 */
+        evRow.append(el('span', 'planner-rv-hint', '这次执行没有变更证据（更早版本没有采集）'));
+      }
+      row.append(evRow);
 
       /* ---------- 验证要求 / 验证结果（P8-A 的 verificationSnapshot） ----------
        *
