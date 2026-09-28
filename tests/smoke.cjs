@@ -935,6 +935,8 @@ staticCheck();
 
   check('模块加载无异常', () => errors.length === 0 || errors.join(' | '));
   check('静态按钮都声明 type', () => [...window.document.querySelectorAll('button')].every((button) => button.hasAttribute('type')));
+  check('P14-A 三列外壳与全局导航存在', () => Boolean($('globalRail') && $('projectSidebar') && $('workspace') && $('navHome') && $('navPlanner') && $('navChanges') && $('navExtensions') && $('navGlobalMore')));
+  check('P14-A 侧栏有独立折叠按钮', () => Boolean($('btnSidebarCollapse')));
   check('消息输入有可识别名称', () => Boolean($('input').getAttribute('aria-label')));
   check('启动首帧显示恢复中而不闪未选项目', () =>
     $('welcomeRestore') && $('welcomeRestore').hidden === false && $('welcomeNoProj').hidden === true);
@@ -945,21 +947,26 @@ staticCheck();
   check('当前项目高亮', () => window.document.querySelectorAll('#projects .project.active').length === 1);
   check('供应商计数 = 1', () => $('providerCount').textContent === '1');
 
-  // 供应商入口在侧栏下方（rail-spacer 之后），不是顶部导航项
+  // 全局低频入口收进 More，仍保留原 handler。
   check('供应商入口不在顶部导航里', () => window.document.querySelector('.rail-nav #navProviders') === null);
-  check('供应商入口在侧栏下方', () => {
-    const prov = $('navProviders');
-    if (!prov) return '找不到 #navProviders';
-    const kids = [...prov.parentElement.children];
-    return kids.indexOf(prov) > kids.findIndex((x) => x.classList.contains('rail-spacer'));
-  });
-  check('供应商入口在用量卡上方', () => {
-    const rail = window.document.querySelector('.rail');
-    const kids = [...rail.children];
-    const prov = kids.findIndex((x) => x.id === 'navProviders');
-    const quota = kids.findIndex((x) => x.classList.contains('quota'));
-    return prov >= 0 && quota >= 0 && prov < quota;
-  });
+  check('供应商入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navProviders')));
+  check('诊断入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navDiagnostics')));
+  check('Global Rail 入口都是可聚焦的真按钮且有名称', () => [...window.document.querySelectorAll('#globalRail .rail-icon')].every((b) => b.tagName === 'BUTTON' && b.getAttribute('aria-label')));
+  check('Global Rail 初始激活项唯一', () => window.document.querySelectorAll('#globalRail [aria-current="page"]').length === 1 && $('navHome').getAttribute('aria-current') === 'page');
+  $('btnSidebarCollapse').click();
+  check('折叠仅隐藏项目侧栏，保留全局栏与工作区', () => $('projectSidebar').hidden && !$('globalRail').hidden && !$('workspace').hidden && !$('btnSidebarExpand').hidden);
+  $('btnSidebarExpand').click();
+  check('展开项目侧栏仍保留当前项目', () => !$('projectSidebar').hidden && window.document.querySelectorAll('#projects .project.active').length === 1);
+  $('navGlobalMore').click();
+  check('More 展开并提供真实入口', () => !$('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'true' && [...$('globalMoreMenu').querySelectorAll('button')].every((b) => typeof b.onclick === 'function'));
+  $('navGlobalMore').click();
+  check('More 可收起', () => $('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'false');
+  $('btnProjectMenu').click();
+  check('项目低频动作可展开', () => !$('projectActions').hidden && $('btnProjectMenu').getAttribute('aria-expanded') === 'true' && Boolean($('btnAddProject') && $('btnProjectSettings')));
+  $('btnProjectMenu').click();
+  check('项目低频动作可收起', () => $('projectActions').hidden);
+  $('navSearch').click();
+  check('搜索入口聚焦现有会话搜索框', () => $('projectSidebar').classList.contains('search-open') && window.document.activeElement?.classList.contains('pj-search-input'));
   check('右下角没有重复的供应商按钮', () => $('btnCornerProviders') === null);
 
   // --- pi 就绪 → boot() ---
@@ -1638,7 +1645,7 @@ staticCheck();
   const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
   const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
 
-  check('侧栏有「文件变更」入口（在顶部导航里）', () => window.document.querySelector('.rail-nav #navChanges') !== null);
+  check('全局栏有「文件变更」入口', () => window.document.querySelector('#globalRail #navChanges') !== null);
 
   gitStub.status = {
     ok: true,
@@ -2297,7 +2304,7 @@ staticCheck();
   window.clearChanges();
 
   // --- 弹层：分支 ---
-  $('navBranches').click();
+  $('btnTree').click();
   check('分支弹层打开', () => $('modal').hidden === false);
   check('分支树渲染 3 个节点', () => window.document.querySelectorAll('#modalCard .tree-node').length === 3);
   check('分支节点文本不是 [object Object]', () => {
@@ -2707,7 +2714,7 @@ staticCheck();
 
   // --- 项目切换 ---
   const items = [...window.document.querySelectorAll('#projects .project')];
-  items[1].click();
+  items[1].querySelector('.pj-select').click();
   await new Promise((r) => setTimeout(r, 10));
   check('切换项目调用 activate', () => true);
 
@@ -5128,7 +5135,7 @@ staticCheck();
     // 点另一条 → 切过去
     {
       const other = [...proj.querySelectorAll('.pj-sess')].find((r) => !r.classList.contains('on'));
-      other.onclick();
+      other.querySelector('.pj-sess-primary').click();
       await new Promise((r) => setTimeout(r, 80));
       const hit = sessionCalls.find((c) => /\/switch/.test(c.url));
       check('会话：点一条会调 /api/sessions/switch，且传的是 ID 不是路径', () =>
@@ -5379,6 +5386,7 @@ staticCheck();
 
     // 结果渲染
     check('搜索：结果里有会话标题', () => /修复 SSE 重连/.test(area().textContent) || area().textContent.slice(0, 120));
+    check('搜索：标题和命中行用可聚焦按钮', () => [...area().querySelectorAll('.pj-sr-head, .pj-sr-hit')].every((node) => node.tagName === 'BUTTON' && node.type === 'button' && node.getAttribute('aria-label')));
     check('搜索：结果里有相对时间', () =>
       /小时前|天前|分钟前|刚刚|\d\d-\d\d/.test(area().textContent) || area().textContent.slice(0, 120));
     check('搜索：结果里有命中类型标记', () => {
@@ -6091,6 +6099,17 @@ staticCheck();
       sessionCalls.some((c) => c.method === 'GET' && /\/api\/sessions$/.test(c.url)) ||
       JSON.stringify(sessionCalls.map((c) => c.method + ' ' + c.url)));
   }
+
+  $('navPlanner').click();
+  check('Rail 任务入口打开原 Planner 面板', () => !$('modal').hidden && $('navPlanner').getAttribute('aria-current') === 'page');
+  $('navHome').click();
+  check('Rail 对话入口返回工作区', () => $('modal').hidden && $('navHome').getAttribute('aria-current') === 'page');
+  $('navExtensions').click();
+  check('Rail 扩展入口打开原扩展面板', () => !$('modal').hidden && $('navExtensions').getAttribute('aria-current') === 'page');
+  $('navHome').click();
+  $('navChanges').click();
+  check('Rail 文件变更入口打开原面板', () => !$('modal').hidden && $('navChanges').getAttribute('aria-current') === 'page');
+  $('navHome').click();
 
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 

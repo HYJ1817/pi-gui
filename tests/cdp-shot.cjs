@@ -342,6 +342,41 @@ async function main() {
       })()`
     );
 
+  /* P14-A：同一夹具里的项目、会话与现有面板；每张图附结构与宽度判据。 */
+  const shellChecks = [
+    ['三列都在视口', `(() => { const a = ['#globalRail','#projectSidebar','#workspace'].map(s => document.querySelector(s).getBoundingClientRect()); return a.every(r => r.width > 0 && r.left >= 0 && r.right <= innerWidth + 1); })()`],
+    ['激活项唯一', `document.querySelectorAll('#globalRail [aria-current="page"]').length === 1`],
+    ['没有空功能入口', `[...document.querySelectorAll('#globalRail .rail-icon')].every(b => b.tagName === 'BUTTON' && b.getAttribute('aria-label') && typeof b.onclick === 'function')`],
+  ];
+  await shotOf('#projectSidebar', '57-shell-expanded', 'P14-A：Rail + 项目侧栏 + 工作区', ['新对话', '搜索会话', '项目'], shellChecks);
+  await shotOf('.pj-sessions', '58-project-sessions', 'P14-A：项目下有多条会话', ['发酵罐', 'README', 'server.js'], [['会话都属于当前项目', `document.querySelector('.project.active').nextElementSibling?.classList.contains('pj-sessions')`]]);
+  await shotOf('.pj-sess.on', '59-session-selected', 'P14-A：当前会话选中', ['发酵罐'], [['选中项唯一且有语义', `document.querySelectorAll('.pj-sess[aria-current="true"]').length === 1`]]);
+  await evalJs(`document.querySelector('#btnSidebarCollapse').click()`);
+  await shotOf('#globalRail', '60-sidebar-collapsed', 'P14-A：折叠后 Rail 仍在', [], [['侧栏已隐藏且工作区在视口', `document.querySelector('#projectSidebar').hidden && document.querySelector('#workspace').getBoundingClientRect().right <= innerWidth + 1`]]);
+  await evalJs(`document.querySelector('#btnSidebarExpand').click()`);
+  await shotOf('#usageDetails', '61-usage-compact', 'P14-A：用量摘要', ['上下文'], [['详情默认收起', `!document.querySelector('#usageDetails').open`]]);
+  await evalJs(`document.querySelector('#usageDetails summary').click()`);
+  await shotOf('#usageDetails', '62-usage-expanded', 'P14-A：用量明细', ['输入 / 输出', '缓存读取', '累计成本'], [['详情已展开', `document.querySelector('#usageDetails').open`]]);
+  await evalJs(`document.querySelector('#navGlobalMore').click()`);
+  await shotOf('#globalMoreMenu', '63-global-more', 'P14-A：低频入口', ['诊断', '模型供应商'], [['More 展开且入口为真按钮', `!document.querySelector('#globalMoreMenu').hidden && [...document.querySelectorAll('#globalMoreMenu button')].every(b => b.tagName === 'BUTTON' && typeof b.onclick === 'function')`]]);
+  await evalJs(`document.querySelector('#navGlobalMore').click()`);
+  await evalJs(`document.querySelector('#navChanges').click()`);
+  await shotOf('#globalRail', '64-rail-changes', 'P14-A：文件变更激活', [], [['文件变更为唯一激活', `document.querySelector('#navChanges[aria-current="page"]') && document.querySelectorAll('#globalRail [aria-current="page"]').length === 1`]]);
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await evalJs(`document.querySelector('#navPlanner').click()`);
+  await shotOf('#globalRail', '65-rail-planner', 'P14-A：任务激活', [], [['任务为唯一激活', `document.querySelector('#navPlanner[aria-current="page"]') && document.querySelectorAll('#globalRail [aria-current="page"]').length === 1`]]);
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(350);
+  await shotOf('#workspace', '66-shell-narrow-700', 'P14-A：700px 工作区仍在视口', [], [['无水平溢出', `document.documentElement.scrollWidth <= innerWidth + 1`], ['工作区仍有内容宽度', `document.querySelector('#workspace').getBoundingClientRect().width >= 300`], ...shellChecks]);
+  for (const width of [900, 1200, 1536]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await sleep(220);
+    await shotOf('#workspace', `${width}-shell-width`, `P14-A：${width}px 三列布局`, [], [['无水平溢出', `document.documentElement.scrollWidth <= innerWidth + 1`], ...shellChecks]);
+  }
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(300);
+
   await evalJs('document.querySelector("#navPlanner").click()');
   await sleep(900);
   const pickPlan = async (i) => {
