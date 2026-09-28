@@ -346,6 +346,26 @@ const stubPlanReview = {
   ],
 };
 
+/* P11：人工验收门控的夹具。
+ * 视图字段（`gateState` / `blockedReason` / `waitingOn` / `reviewGateSummary` /
+ * `workflowReason`）都是**后端 planView 注进去的**，所以桩里照真实形状给出来。 */
+const stubPlanGate = {
+  id: 'plan-gate', title: '门控夹具', goal: 'g', status: 'paused', createdAt: 1, updatedAt: 2,
+  startedAt: 1, endedAt: null, projectRoot: 'C:/demo', concurrency: 1, recoveryNotes: [],
+  reviewGateSummary: { gated: 3, satisfied: 1, waiting: 2 },
+  workflowReason: 'waiting-review',
+  tasks: [
+    mkTask('gpending', [mkAtt(1)], { reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 } }),
+    mkTask('gok', [mkAtt(1, { review: { status: 'accepted', note: '', reviewedAt: 1, revision: 1 } })], { reviewGate: true, gateState: { enabled: true, satisfied: true, reason: 'accepted', attempt: 1 } }),
+    mkTask('gneed', [mkAtt(1, { review: { status: 'needs_changes', note: '还差边界用例', reviewedAt: 1, revision: 1 } })], { reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'needs_changes', attempt: 1 } }),
+    mkTask('gnever', [], { status: 'pending', attempt: 0, reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'no-successful-attempt', attempt: null } }),
+    mkTask('nogate', [mkAtt(1)]),
+    mkTask('downstream', [], { status: 'blocked', attempt: 0, dependsOn: ['gpending'], blockedReason: 'waiting-review', waitingOn: ['gpending'] }),
+    mkTask('downfail', [], { status: 'blocked', attempt: 0, dependsOn: ['bad'], blockedReason: 'dependency-failed', waitingOn: ['bad'] }),
+    mkTask(XSS_NOTE, [], { status: 'blocked', attempt: 0, reviewGate: true, gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 }, blockedReason: 'waiting-review', waitingOn: [XSS_NOTE] }),
+  ],
+};
+
 /* 计划详情接口回什么 —— 默认 stubPlan，P7 段临时换成 stubPlanP7。 */
 let stubPlanDetail = stubPlan;
 
@@ -3343,6 +3363,7 @@ staticCheck();
   await reviewSection();
   await verifySection();
   await evidenceSection();
+  await gateSection();
   await convNavSection();
 
   /* ---------- 会话内提问导航（Conversation Minimap） ----------
@@ -3351,6 +3372,86 @@ staticCheck();
    * 这类断言必须先把几何量打桩。这里的桩是**忠实的**：把消息的 top 表示成
    * 「内容偏移 - scrollTop」，和真实浏览器里 getBoundingClientRect 的语义一致，
    * 所以模块里那套坐标换算真的被验到了。 */
+  /* ================= P11：人工验收门控（前端） ================= */
+  async function gateSection() {
+    console.log('\n--- P11 人工门控：badge / 等待原因 / 编辑器 / Plan 汇总 ---');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const T = (e) => (e && e.textContent) || '';
+
+    stubPlanDetail = stubPlanGate;
+    window.closeModal();
+    window.openPlanner();
+    await wait(80);
+    const card = $('modalCard');
+    card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+    await wait(90);
+
+    const taskEl = (id) => [...card.querySelectorAll('.planner-task')].find((x) => x.dataset.taskId === id);
+    const gateRow = (id) => {
+      const it = taskEl(id);
+      return it ? it.querySelector('.planner-gate') : null;
+    };
+    const blockedRow = (id) => {
+      const it = taskEl(id);
+      return it ? it.querySelector('.planner-blocked') : null;
+    };
+
+    check('G1. 开了门控的任务有「人工门控」标记', () => /人工门控/.test(T(gateRow('gpending'))) || T(gateRow('gpending')));
+    check('G2. 成功但待验收 → 「等待人工验收」', () => /等待人工验收/.test(T(gateRow('gpending'))) || T(gateRow('gpending')));
+    check('G3. 已接受 → 「门控已通过」', () => /门控已通过/.test(T(gateRow('gok'))) || T(gateRow('gok')));
+    check('G4. 需要修改 → 「需要修改 · 门控未通过」', () => /需要修改 · 门控未通过/.test(T(gateRow('gneed'))) || T(gateRow('gneed')));
+    check('G5. 还没成功过 → 「还没有成功执行 · 门控未开始」', () => /还没有成功执行/.test(T(gateRow('gnever'))) || T(gateRow('gnever')));
+    check('G6. 没开门控的任务**没有**这一行', () => gateRow('nogate') === null || T(gateRow('nogate')));
+
+    check('G7. 下游写明「等待人工验收：上游 id」', () => {
+      const t = T(blockedRow('downstream'));
+      return (/等待人工验收/.test(t) && /gpending/.test(t)) || t;
+    });
+    check('G8. 上游失败的下游说「上游任务失败」——**不能**说成等验收', () => {
+      const t = T(blockedRow('downfail'));
+      return (/上游任务失败/.test(t) && !/等待人工验收/.test(t)) || t;
+    });
+
+    check('G9. Plan 顶部写明「已暂停：等待人工验收」', () => /已暂停：等待人工验收/.test(T(card)) || T(card).slice(0, 240));
+    check('G10. Plan 顶部有门控汇总（1/3 已通过 · 待验收 2）', () => {
+      const s = card.querySelector('.planner-gate-sum');
+      return (/1\/3/.test(T(s)) && /待验收 2/.test(T(s))) || T(s);
+    });
+
+    check('G11. 门控任务上的勾选框是**选中**的', () => {
+      const it = taskEl('gpending');
+      const cb = it && it.querySelector('.planner-gate-toggle input[type=checkbox]');
+      return (cb && cb.checked === true) || (cb ? String(cb.checked) : '没找到');
+    });
+    check('G12. 没开门控的任务勾选框**未选中**', () => {
+      const it = taskEl('nogate');
+      const cb = it && it.querySelector('.planner-gate-toggle input[type=checkbox]');
+      return (cb && cb.checked === false) || (cb ? String(cb.checked) : '没找到');
+    });
+    check('G13. 勾选框旁边写清了它的含义', () => {
+      const it = taskEl('nogate');
+      const lab = it && it.querySelector('.planner-gate-toggle');
+      return /需要人工验收后再继续下游/.test(T(lab)) || T(lab);
+    });
+    check('G14. 勾上之后勾选框保持选中（不会自己弹回去）', () => {
+      const it = taskEl('nogate');
+      const cb = it.querySelector('.planner-gate-toggle input[type=checkbox]');
+      cb.checked = true;
+      cb.onchange();
+      return cb.checked === true;
+    });
+
+    check('G15. 恶意 task id / 上游 id 都是**纯文本**（没有注入节点）', () => {
+      const injected = card.querySelectorAll('.planner-task img, .planner-task script, .planner-blocked img').length;
+      const row = blockedRow(XSS_NOTE);
+      return (injected === 0 && row && T(row).includes('<img')) || JSON.stringify({ injected, txt: row ? T(row).slice(0, 60) : null });
+    });
+
+    // 收尾：后面的段落要回到默认桩
+    stubPlanDetail = stubPlanReview;
+    window.closeModal();
+  }
+
   async function convNavSection() {
     const stream = $('stream');
     const nav = $('convoNav');

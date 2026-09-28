@@ -256,6 +256,108 @@ const PLAN_STRESS = {
 };
 
 
+/* P11：人工验收门控的场景夹具。
+ * 视图字段（`gateState` / `blockedReason` / `waitingOn` / `reviewGateSummary` /
+ * `workflowReason`）真后端由 `planView` 注入，这里照真实形状给出来。 */
+const LONG_GATE_TITLE = '把订单导出接口的分页游标改成稳定排序并补齐并发写入的回归用例（这个标题刻意很长，用来核对门控那一行与等待原因在窄窗口下不会挤坏）';
+const PLAN_GATE = {
+  id: 'plan-gate',
+  title: '人工验收门控：等待 / 通过 / 需修改',
+  goal: '核对门控的四种状态与下游等待原因',
+  status: 'paused',
+  createdAt: 1,
+  updatedAt: 2,
+  startedAt: 1,
+  endedAt: null,
+  projectRoot: 'C:/pi-GUI',
+  concurrency: 1,
+  recoveryNotes: [],
+  reviewGateSummary: { gated: 4, satisfied: 1, waiting: 3 },
+  workflowReason: 'waiting-review',
+  tasks: [
+    {
+      id: 'gated-a', title: '改导出接口', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '',
+      verification: null, reviewGate: true,
+      gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 },
+      blockedReason: null, waitingOn: [],
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 1, endedAt: 2,
+        sessionId: 'pi-gui-plan-gate-a1', sessionAvailable: true, sessionTitle: '改导出接口',
+        filesChanged: ['src/api/export.js'], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+      }],
+      result: null,
+    },
+    {
+      id: 'gated-ok', title: '补回归用例', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 3, endedAt: 4, attempt: 1, error: '',
+      verification: null, reviewGate: true,
+      gateState: { enabled: true, satisfied: true, reason: 'accepted', attempt: 1 },
+      blockedReason: null, waitingOn: [],
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 3, endedAt: 4,
+        sessionId: null, sessionAvailable: false, sessionTitle: '',
+        filesChanged: [], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'accepted', note: '用例覆盖到位', reviewedAt: 1758800600000, revision: 2 },
+      }],
+      result: null,
+    },
+    {
+      id: 'gated-need', title: '重写鉴权中间件', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 5, endedAt: 6, attempt: 2, error: '',
+      verification: null, reviewGate: true,
+      gateState: { enabled: true, satisfied: false, reason: 'needs_changes', attempt: 2 },
+      blockedReason: null, waitingOn: [],
+      attempts: [{
+        attempt: 2, success: true, error: '', summary: '', exitCode: 0, startedAt: 5, endedAt: 6,
+        sessionId: null, sessionAvailable: false, sessionTitle: '',
+        filesChanged: [], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'needs_changes', note: '缺少 token 过期的边界用例', reviewedAt: 1758800700000, revision: 1 },
+      }],
+      result: null,
+    },
+    {
+      id: 'gated-long', title: LONG_GATE_TITLE, description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 7, endedAt: 8, attempt: 1, error: '',
+      verification: null, reviewGate: true,
+      gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 },
+      blockedReason: null, waitingOn: [],
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 7, endedAt: 8,
+        sessionId: null, sessionAvailable: false, sessionTitle: '',
+        filesChanged: [], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+      }],
+      result: null,
+    },
+    {
+      /* 多上游：一个在等验收、一个失败 —— 必须说「上游任务失败」（失败优先） */
+      id: 'gated-down', title: '合并上游结果', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: ['gated-a', 'gated-ok'], status: 'blocked', startedAt: null, endedAt: null, attempt: 0, error: '',
+      verification: null, reviewGate: false,
+      gateState: { enabled: false, satisfied: true, reason: 'disabled', attempt: null },
+      blockedReason: 'waiting-review', waitingOn: ['gated-a'],
+      attempts: [],
+      result: null,
+    },
+    {
+      id: 'gated-faildown', title: '下游被上游失败挡住', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: ['gated-need'], status: 'blocked', startedAt: null, endedAt: null, attempt: 0, error: '',
+      verification: null, reviewGate: false,
+      gateState: { enabled: false, satisfied: true, reason: 'disabled', attempt: null },
+      blockedReason: 'dependency-failed', waitingOn: ['gated-need'],
+      attempts: [],
+      result: null,
+    },
+  ],
+};
+
+
 const MODELS = [
   { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek' },
   { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', reasoning: true },
@@ -574,6 +676,7 @@ const server = http.createServer(async (req, res) => {
       plans: [
         { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 6, success: 4, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
         { id: 'plan-stress', title: '压力场景：长说明 / 多文件 / 多次尝试', goal: '验证极端内容不破布局', status: 'completed', createdAt: 0, updatedAt: 9, startedAt: 1, endedAt: 9, projectRoot: 'C:/pi-GUI', counts: { total: 2, success: 1, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+        { id: 'plan-gate', title: '人工验收门控：等待 / 通过 / 需修改', goal: '核对门控的四种状态与下游等待原因', status: 'paused', createdAt: 3, updatedAt: 4, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 6, success: 4, failed: 0, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
       ],
     });
   }
@@ -614,12 +717,23 @@ const server = http.createServer(async (req, res) => {
         reviewedAt: body.status === 'pending' ? null : Date.now(),
         revision: expected + 1,
       },
+      /* P11：审阅的**工作流后果**（真后端由 planWorkflowState 算）。
+       * 视觉核对要看到「验收已通过，N 个后续任务已可执行」那句反馈。 */
+      gate: {
+        planStatus: body.status === 'accepted' ? 'ready' : 'paused',
+        reason: body.status === 'accepted' ? 'ready' : 'waiting-review',
+        ready: body.status === 'accepted' ? ['gated-down'] : [],
+      },
     });
   }
 
   if (p === '/api/plans/plan-1') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-1' });
     return json(res, 200, { ok: true, plan: PLAN_DETAIL, counts: { total: 6, success: 4, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+  }
+  if (p === '/api/plans/plan-gate') {
+    if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-gate' });
+    return json(res, 200, { ok: true, plan: PLAN_GATE, counts: { total: 6, success: 4, failed: 0, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
   }
   if (p === '/api/plans/plan-stress') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-stress' });

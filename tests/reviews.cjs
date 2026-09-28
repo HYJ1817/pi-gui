@@ -763,10 +763,14 @@ const reviewUrl = (planId, taskId, attempt) =>
   {
     runtime.setCurrentCwd(PROJ);
     const r = await hit(planner, 'PUT', reviewUrl('plan-d1', 'two', 2), { status: 'accepted', note: '最后一次', expectedRevision: 8 });
-    check('M32. 成功响应只回这一条 review，不回整份 plan', () => {
+    check('M32. 成功响应只回这一条 review（+ P11 的工作流后果），不回整份 plan', () => {
       const b = r.body;
       const keys = Object.keys(b).sort();
-      return JSON.stringify(keys) === JSON.stringify(['attempt', 'ok', 'planId', 'review', 'taskId']) || keys.join(',');
+      return JSON.stringify(keys) === JSON.stringify(['attempt', 'gate', 'ok', 'planId', 'review', 'taskId']) || keys.join(',');
+    });
+    check('M32d. gate 只带工作流后果（planStatus / reason / ready），不是计划副本', () => {
+      const g = r.body.gate;
+      return (g && Object.keys(g).sort().join(',') === 'planStatus,ready,reason') || JSON.stringify(g);
     });
     check('M32b. 响应里没有 tasks / plan 大对象', () => !r.body.plan && !r.body.tasks, JSON.stringify(r.body).slice(0, 200));
     check('M32c. 响应的 review 形状正确', () => {

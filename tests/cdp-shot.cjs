@@ -410,6 +410,26 @@ async function main() {
     await sleep(300);
     await reopenPlanner();
 
+    /* ---------- P11：人工验收门控 ----------
+     * plan-gate 是列表里的第 3 个（plan-1 / plan-stress / plan-gate）。 */
+    if (await pickPlan(2)) {
+      await shotOf('.planner-task[data-task-id="gated-a"] .planner-gate', '38-review-gate-pending', 'P11：门控 —— 执行成功，等待人工验收');
+      await shotOf('.planner-task[data-task-id="gated-ok"] .planner-gate', '39-review-gate-accepted', 'P11：门控 —— 已接受（门控已通过）');
+      await shotOf('.planner-task[data-task-id="gated-need"] .planner-gate', '40-review-gate-needs-changes', 'P11：门控 —— 需要修改 · 门控未通过');
+      await shotOf('.planner-task[data-task-id="gated-down"] .planner-blocked', '41-review-gate-downstream-blocked', 'P11：下游 —— 等待人工验收：gated-a');
+      await shotOf('.planner-progress', '42-review-gate-plan-paused', 'P11：Plan 顶部 —— 已暂停·等待人工验收 + 门控汇总');
+      await shotOf('.planner-task[data-task-id="gated-a"] .planner-gate-toggle', '43-review-gate-editor', 'P11：任务上的门控勾选框');
+      const go = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
+      console.log('      门控页：scrollWidth=' + go.sw + ' innerWidth=' + go.iw + ' → 横向溢出=' + (go.sw > go.iw + 1));
+      await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 950, deviceScaleFactor: 1, mobile: false });
+      await sleep(600);
+      const go2 = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
+      console.log('      门控页 @700：scrollWidth=' + go2.sw + ' innerWidth=' + go2.iw + ' → 横向溢出=' + (go2.sw > go2.iw + 1));
+      await shotOf('.planner-task[data-task-id="gated-long"]', '44-review-gate-narrow-700', 'P11：窄窗口 700px —— 超长标题 + 门控行');
+      await send('Emulation.clearDeviceMetricsOverride');
+      await sleep(400);
+    }
+
     /* 压力项（§五十八）：1000 字说明 / 20 个变更文件 / 超长路径 / 10 次尝试 / 窄窗口 */
     if (await pickPlan(1)) {
       await shotOf('.planner-task[data-task-id="longnote"] .planner-attempt:last-of-type', '20-stress-long-note', '压力：1000 字说明 + 20 个文件 + 超长路径');
