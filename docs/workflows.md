@@ -518,6 +518,8 @@ paused**（`completed` 不是不可逆的），但**历史执行结果一个字�
 **它刻意不做什么**（第一版留白，规格 §七/§八/§十二/§十四/§十五）：
 
 - **不自动执行**下游：接受之后下游只是变 `ready`，跑不跑由用户点「开始执行」。
+  P12 把这条**收紧到「运行中」也成立**：计划正在跑时把上游改成 accepted，
+  当前这一轮**也不**顺手把下游带起来（见下面的 Active Session Barrier）。
 - **不自动重试**：`needs_changes` 只让门控不满足，不会去 Retry。
 - **不管 Verification**：门控只看 review。`verificationResult` 是 passed / failed /
   从没跑过都不影响它 —— 认不认这个结果始终是人的判断。
@@ -529,6 +531,49 @@ paused**（`completed` 不是不可逆的），但**历史执行结果一个字�
 `task.reviewGate` 这一个开关 —— 其余一律从 `task` + `attempts` + `review` 现算，
 避免第二份真相。判断全在 `model.js` 的纯函数里（`reviewGateState` / `dependencyStateOf`
 / `planWorkflowState`），scheduler、review route、前端**都不各写一份**。
+
+### P12：`enabled` / `required` / `satisfied` 是三个概念
+
+「门装没装」「**现在需不需要人来看**」「看了之后过没过」不能互相顶替。
+`reviewGateState()` 因此多回一个 `required`：
+
+| | 什么时候 |
+|---|---|
+| `enabled=false` | 没开门控 → `satisfied: true`，对下游完全透明 |
+| `required=false` | 门开着，但这次**执行没成功**（failed / cancelled / interrupted / skipped）或**还没跑** → 没有可验收的产出 |
+| `required=true` 且 `satisfied=false` | 执行成功了，真的在等人 → 这才是「等验收」 |
+
+于是**执行失败不会被报成等验收**：一个 gated 任务跑失败时 Plan 走原来的路
+（全终态 → `failed`；还有被阻塞的下游 → `paused + dependency-blocked`），
+`workflowReason` 不是 `waiting-review`，`reviewGateSummary.waiting` 也不把它算进去。
+以前拿 `satisfied === false` 当「等验收」的判据，于是失败的计划会停在
+`paused + waiting-review` —— 界面让人去等一个永远不会来的验收。
+
+**例外（故意的）**：`status = success` 却没有成功 attempt 的老数据仍按 `required=true`
+（`satisfied=false`）处理 —— 宁可多问一句，也不静默放行下游。
+
+### P12：Active Session Barrier（这一轮的 checkpoint）
+
+用户点「开始执行」的那一刻，还没通过的门就是他划下的一道**检查点**：
+批准的是「跑到这里停下来等我」，不是「我盯不盯得过来都继续往下跑」。
+
+```
+session 开始：记下「哪些依赖的门还没通过」→ 只存在 session 对象里
+运行中：某个门被 accepted，下游变 ready
+        → 这一轮**按住不启动**它；无关任务照常跑完
+session 自然结束 → Plan 落到 ready，等用户自己再点开始
+```
+
+三条边界，缺一条就变新 bug：
+
+1. **只活在 session 内存里** —— 不写 plan / task / attempt，重启不恢复，
+   也没有「上次卡住的计划」要清理。
+2. **只挡未启动的** —— 不 abort 任何在跑的任务，不改任何执行状态（那是 Scheduler 的所有权）。
+3. **只记「当时没通过」** —— 开始时就已经 accepted 的门不进检查点，
+   所以「验收完再点开始」这条正常路径一个字节都不受影响。
+
+门后来又被打回 `needs_changes` / `pending` → 判据不再成立 → 不按住；
+此时 DAG 权威照旧（下游 `blocked + waiting-review`，Plan `paused`）。
 
 ## 六、重试与历史（P8-B）
 

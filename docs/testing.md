@@ -67,7 +67,7 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 持久化与清除、重试不覆盖历史、计划编辑不擦审阅、跨项目 403、隐私，
 以及写盘失败必须如实报错。同样全程 fixture。
 
-`review-gate`（P11，99 条）测**人工验收门控**（可选的工作流策略）：把审阅从「事后记录」
+`review-gate`（P11 / P12，155 条）测**人工验收门控**（可选的工作流策略）：把审阅从「事后记录」
 升级成「下游要不要等」的条件。同样全程 fixture（真 git + fake adapter，不 spawn 真 Agent）：
 
 - **A / B 段**（纯函数）：`reviewGateState` 只看**最新一次成功** attempt 的 review
@@ -85,11 +85,27 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 - **G 段**：revision 冲突与写盘失败都**不改变 DAG**；`PUT Plan` 可开/关门控并**就地重算**
   下游；重启后从持久化 review 重算；跨项目审阅被拒。
 - **H 段**：门控字段里只有任务 id 与稳定枚举，没有可注入的内容（标题是不可信文本）。
+- **I 段（P12 · Blocker A）**：`required` 把「有没有成功产出」和「有没有过」分开 ——
+  失败 / 取消 / 中断 / 跳过 / 还没跑 → `required=false`，于是这些**不进「等验收」**：
+  gated 任务跑失败时 Plan 是 `failed`（或与**无门控的同构计划完全同态**的
+  `paused + dependency-blocked`），`workflowReason` 不是 `waiting-review`，
+  `reviewGateSummary.waiting` 不算它。`status=success` 却没有成功 attempt 的老数据
+  仍按等验收处理（不静默放行下游）。
+- **J 段（P12 · Blocker B）**：真并发窗口（A 立刻成功、X 拖住 session、B 依赖 A）——
+  运行中把 A 标 accepted 后，**这一轮**不启动 B（attempts 仍为 0），
+  无关的 X 照常跑完，Plan 落 `ready`，用户再点开始才执行 B → `completed`；
+  反向（accepted → needs_changes / pending）则回到 `blocked + waiting-review`。
+  还断言 accepted 没被 Scheduler 的整份写盘冲掉。
 
 > **守卫验证过会红**：把门控判定临时退回旧行为（忽略门控 / 拿**第一次**成功尝试），
 > 本套件 **27 条**失败 —— 包括「下游直接跑掉」与「旧 accepted 被沿用」这两条 blocker。
+>
+> **P12 的两条 blocker 同样验证过会红**：拿这份测试跑**改动前**的实现 → **23 条**失败
+> （I 段 19 条 = Blocker A，J 段 4 条 = Blocker B，其中「B 在这一轮被自动执行掉了」
+> 是那条正主）。
 
-`smoke` 里的 **P11 段**（15 条）测门控的**前端行为**：`人工门控` 标记与四种状态文案、
+`smoke` 里的 **P11 / P12 段**（16 条）测门控的**前端行为**：`人工门控` 标记与四种状态文案
+（含 P12 新增的「执行未成功 · 门控未开始」—— 执行失败时**不能**写「等待人工验收」）、
 下游「等待人工验收：<上游 id>」、上游失败时**不**说成等验收、Plan 顶部那句
 「已暂停：等待人工验收」与门控汇总、任务上的勾选框（默认状态 + 勾选后保持）、
 以及恶意 task id / 上游 id 全部按纯文本渲染。
