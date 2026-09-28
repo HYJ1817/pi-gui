@@ -433,14 +433,14 @@ export const MAX_EVIDENCE_FILE_PATCH = 24 * 1024;
 export const MAX_EVIDENCE_TOTAL_PATCH = 64 * 1024;
 export const MAX_EVIDENCE_FILES = 50;
 const MAX_EVIDENCE_NOTE = 500;
-const MAX_EVIDENCE_PATH = 400;
 
 /**
  * 归一化一条历史变更证据。
  *
  * **宽进严出**：读盘时宽容（坏字段退成默认值，一个坏文件不该让整个计划读不出来），
  * 但**同时把上限再压一遍** —— 手改过的计划文件不该能把界面撑爆。
- * 严格的那一套（跑 git、切 patch）在 lib/git.js 与 evidence.js 里。
+ * 路径（`path` / `oldPath`）也过一遍 `normalizeChangedPath`，判据与 `filesChanged`
+ * 完全一致。严格的那一套（跑 git、切 patch）在 lib/git.js 与 evidence.js 里。
  */
 export function normalizeChangeEvidence(raw) {
   if (!isPlainObject(raw)) return null;
@@ -457,7 +457,11 @@ export function normalizeChangeEvidence(raw) {
   let budget = MAX_EVIDENCE_TOTAL_PATCH;
   for (const f of list) {
     if (!isPlainObject(f)) continue;
-    const path = clampStr(f.path, MAX_EVIDENCE_PATH);
+    /* 路径复用 `filesChanged` 那套安全规范化（`normalizeChangedPath`）：绝对路径 /
+     * Windows 盘符 / UNC / `..` / 空路径段 / 超长一律作废。**不复制一份新正则** ——
+     * 证据的路径同样会被回给前端，两处判据必须一致；手改过的计划文件不该能把危险
+     * 路径递出去。作废就是**丢掉这条 evidence file**（比留一条半残的更诚实）。 */
+    const path = normalizeChangedPath(f.path);
     if (!path) continue;
     let patch = typeof f.patch === 'string' ? f.patch : '';
     let cut = Boolean(f.truncated);
@@ -475,7 +479,7 @@ export function normalizeChangeEvidence(raw) {
     out.files.push({
       path,
       change: CHANGE_KINDS.includes(f.change) ? f.change : CHANGE_KIND.MODIFIED,
-      oldPath: clampStr(f.oldPath, MAX_EVIDENCE_PATH) || null,
+      oldPath: normalizeChangedPath(f.oldPath) || null,
       binary: Boolean(f.binary),
       additions: Number.isInteger(f.additions) ? f.additions : null,
       deletions: Number.isInteger(f.deletions) ? f.deletions : null,
