@@ -263,7 +263,7 @@ const LONG_GATE_TITLE = '把订单导出接口的分页游标改成稳定排序�
 const PLAN_GATE = {
   id: 'plan-gate',
   title: '人工验收门控：等待 / 通过 / 需修改',
-  goal: '核对门控的四种状态与下游等待原因',
+  goal: '核对门控的五种状态与下游等待原因',
   status: 'paused',
   createdAt: 1,
   updatedAt: 2,
@@ -272,14 +272,14 @@ const PLAN_GATE = {
   projectRoot: 'C:/pi-GUI',
   concurrency: 1,
   recoveryNotes: [],
-  reviewGateSummary: { gated: 4, satisfied: 1, waiting: 3 },
+  reviewGateSummary: { gated: 5, satisfied: 1, waiting: 3 },
   workflowReason: 'waiting-review',
   tasks: [
     {
       id: 'gated-a', title: '改导出接口', description: '', agent: 'pi',
       workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '',
       verification: null, reviewGate: true,
-      gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 },
+      gateState: { enabled: true, required: true, satisfied: false, reason: 'pending', attempt: 1 },
       blockedReason: null, waitingOn: [],
       attempts: [{
         attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 1, endedAt: 2,
@@ -294,7 +294,7 @@ const PLAN_GATE = {
       id: 'gated-ok', title: '补回归用例', description: '', agent: 'pi',
       workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 3, endedAt: 4, attempt: 1, error: '',
       verification: null, reviewGate: true,
-      gateState: { enabled: true, satisfied: true, reason: 'accepted', attempt: 1 },
+      gateState: { enabled: true, required: true, satisfied: true, reason: 'accepted', attempt: 1 },
       blockedReason: null, waitingOn: [],
       attempts: [{
         attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 3, endedAt: 4,
@@ -309,7 +309,7 @@ const PLAN_GATE = {
       id: 'gated-need', title: '重写鉴权中间件', description: '', agent: 'pi',
       workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 5, endedAt: 6, attempt: 2, error: '',
       verification: null, reviewGate: true,
-      gateState: { enabled: true, satisfied: false, reason: 'needs_changes', attempt: 2 },
+      gateState: { enabled: true, required: true, satisfied: false, reason: 'needs_changes', attempt: 2 },
       blockedReason: null, waitingOn: [],
       attempts: [{
         attempt: 2, success: true, error: '', summary: '', exitCode: 0, startedAt: 5, endedAt: 6,
@@ -324,7 +324,7 @@ const PLAN_GATE = {
       id: 'gated-long', title: LONG_GATE_TITLE, description: '', agent: 'pi',
       workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 7, endedAt: 8, attempt: 1, error: '',
       verification: null, reviewGate: true,
-      gateState: { enabled: true, satisfied: false, reason: 'pending', attempt: 1 },
+      gateState: { enabled: true, required: true, satisfied: false, reason: 'pending', attempt: 1 },
       blockedReason: null, waitingOn: [],
       attempts: [{
         attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 7, endedAt: 8,
@@ -336,11 +336,29 @@ const PLAN_GATE = {
       result: null,
     },
     {
+      /* Retry 之后：attempt1 曾被接受（历史），当前这次还没跑 ——
+       * `required=false, satisfied=true`，文案必须是「执行未成功 · 门控未开始」，
+       * 不能是「门控已通过」（P12 blocker 的前端那一半，smoke G17 钉住）。 */
+      id: 'gated-retry', title: '重跑导出接口（第 2 次尝试排队中）', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'pending', startedAt: null, endedAt: null, attempt: 1, error: '',
+      verification: null, reviewGate: true,
+      gateState: { enabled: true, required: false, satisfied: true, reason: 'accepted', attempt: 1 },
+      blockedReason: null, waitingOn: [],
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 9, endedAt: 10,
+        sessionId: null, sessionAvailable: false, sessionTitle: '',
+        filesChanged: [], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'accepted', note: '第一次通过了', reviewedAt: 1758800800000, revision: 1 },
+      }],
+      result: null,
+    },
+    {
       /* 多上游：一个在等验收、一个失败 —— 必须说「上游任务失败」（失败优先） */
       id: 'gated-down', title: '合并上游结果', description: '', agent: 'pi',
       workingDirectory: '.', dependsOn: ['gated-a', 'gated-ok'], status: 'blocked', startedAt: null, endedAt: null, attempt: 0, error: '',
       verification: null, reviewGate: false,
-      gateState: { enabled: false, satisfied: true, reason: 'disabled', attempt: null },
+      gateState: { enabled: false, required: false, satisfied: true, reason: 'disabled', attempt: null },
       blockedReason: 'waiting-review', waitingOn: ['gated-a'],
       attempts: [],
       result: null,
@@ -349,7 +367,7 @@ const PLAN_GATE = {
       id: 'gated-faildown', title: '下游被上游失败挡住', description: '', agent: 'pi',
       workingDirectory: '.', dependsOn: ['gated-need'], status: 'blocked', startedAt: null, endedAt: null, attempt: 0, error: '',
       verification: null, reviewGate: false,
-      gateState: { enabled: false, satisfied: true, reason: 'disabled', attempt: null },
+      gateState: { enabled: false, required: false, satisfied: true, reason: 'disabled', attempt: null },
       blockedReason: 'dependency-failed', waitingOn: ['gated-need'],
       attempts: [],
       result: null,
@@ -676,7 +694,7 @@ const server = http.createServer(async (req, res) => {
       plans: [
         { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 6, success: 4, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
         { id: 'plan-stress', title: '压力场景：长说明 / 多文件 / 多次尝试', goal: '验证极端内容不破布局', status: 'completed', createdAt: 0, updatedAt: 9, startedAt: 1, endedAt: 9, projectRoot: 'C:/pi-GUI', counts: { total: 2, success: 1, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
-        { id: 'plan-gate', title: '人工验收门控：等待 / 通过 / 需修改', goal: '核对门控的四种状态与下游等待原因', status: 'paused', createdAt: 3, updatedAt: 4, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 6, success: 4, failed: 0, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+        { id: 'plan-gate', title: '人工验收门控：等待 / 通过 / 需修改', goal: '核对门控的五种状态与下游等待原因', status: 'paused', createdAt: 3, updatedAt: 4, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 7, success: 4, failed: 0, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
       ],
     });
   }
@@ -733,7 +751,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/plans/plan-gate') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-gate' });
-    return json(res, 200, { ok: true, plan: PLAN_GATE, counts: { total: 6, success: 4, failed: 0, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+    return json(res, 200, { ok: true, plan: PLAN_GATE, counts: { total: 7, success: 4, failed: 0, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
   }
   if (p === '/api/plans/plan-stress') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-stress' });

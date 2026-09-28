@@ -280,18 +280,45 @@ async function main() {
    * 场景数据全部来自 tests/visual-harness.cjs 的 PLAN_DETAIL / PLAN_STRESS ——
    * **不依赖真实后端、不跑任何 Agent**（§五十九）。判据也刻意不是「文本包含 X」，
    * 而是真实的排版截图：jsdom 不做布局，那种断言全绿也说明不了排版对不对。 */
-  const shotOf = async (sel, n, label) => {
-    const ok = await evalJs(
-      `(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return false; e.scrollIntoView({ block: 'center' }); return true; })()`
+  /* 每张截图都把「框住的那个元素」的取景信息打出来：矩形在不在视口里、文本是什么、
+   * 关键词齐不齐。判据不再靠人眼比对 png —— 日志就是截图内容的机器可查证据。 */
+  const shotFailures = [];
+  const shotOf = async (sel, n, label, must) => {
+    const probe = await evalJs(
+      `(() => {
+        const e = document.querySelector(${JSON.stringify(sel)});
+        if (!e) return null;
+        e.scrollIntoView({ block: 'center' });
+        const r = e.getBoundingClientRect();
+        const text = (e.textContent || '').replace(/\\s+/g, ' ').trim();
+        const must = ${JSON.stringify(must || [])};
+        const center = (r.top + r.bottom) / 2;
+        return {
+          /* 判据是「取景中心落在视口里」：scrollIntoView(block:center) 之后成立。
+           * 不能用 top/bottom 都在视口内 —— 比视口还高的元素（1000 字说明、10 次尝试）
+           * 按构造就不可能满足，那种断言是自己骗自己。 */
+          inView: center >= 0 && center <= innerHeight,
+          top: Math.round(r.top), bottom: Math.round(r.bottom), h: Math.round(r.height),
+          missing: must.filter((k) => !text.includes(k)),
+          text: text.slice(0, 160),
+        };
+      })()`
     );
-    if (!ok) {
+    if (!probe) {
       console.log('  跳过（找不到 ' + sel + '）');
+      shotFailures.push(n + ': 找不到 ' + sel);
       return false;
     }
     await sleep(450);
     await shot(n);
+    const flag = (probe.missing.length ? '✗ 缺 ' + probe.missing.join('/') : '✓') +
+      (probe.inView ? ' 取景中心在视口内' : ' 取景中心不在视口内');
+    console.log('      ' + n + ' [' + flag + '] rect=' + probe.top + '..' + probe.bottom + '/' + probe.h);
+    console.log('        取景元素文本: ' + probe.text);
     if (label) console.log('      ' + label);
-    return true;
+    if (probe.missing.length) shotFailures.push(n + ': 取景元素缺关键词 ' + probe.missing.join('/'));
+    if (!probe.inView) shotFailures.push(n + ': 取景中心不在视口内 (rect=' + probe.top + '..' + probe.bottom + ')');
+    return probe.missing.length === 0 && probe.inView;
   };
   const clickIn = async (sel, text) =>
     evalJs(
@@ -413,19 +440,23 @@ async function main() {
     /* ---------- P11：人工验收门控 ----------
      * plan-gate 是列表里的第 3 个（plan-1 / plan-stress / plan-gate）。 */
     if (await pickPlan(2)) {
-      await shotOf('.planner-task[data-task-id="gated-a"] .planner-gate', '38-review-gate-pending', 'P11：门控 —— 执行成功，等待人工验收');
-      await shotOf('.planner-task[data-task-id="gated-ok"] .planner-gate', '39-review-gate-accepted', 'P11：门控 —— 已接受（门控已通过）');
-      await shotOf('.planner-task[data-task-id="gated-need"] .planner-gate', '40-review-gate-needs-changes', 'P11：门控 —— 需要修改 · 门控未通过');
-      await shotOf('.planner-task[data-task-id="gated-down"] .planner-blocked', '41-review-gate-downstream-blocked', 'P11：下游 —— 等待人工验收：gated-a');
-      await shotOf('.planner-progress', '42-review-gate-plan-paused', 'P11：Plan 顶部 —— 已暂停·等待人工验收 + 门控汇总');
-      await shotOf('.planner-task[data-task-id="gated-a"] .planner-gate-toggle', '43-review-gate-editor', 'P11：任务上的门控勾选框');
+      await shotOf('.planner-task[data-task-id="gated-a"] .planner-gate', '38-review-gate-pending', 'P11：门控 —— 执行成功，等待人工验收', ['等待人工验收']);
+      await shotOf('.planner-task[data-task-id="gated-ok"] .planner-gate', '39-review-gate-accepted', 'P11：门控 —— 已接受（门控已通过）', ['门控已通过']);
+      await shotOf('.planner-task[data-task-id="gated-need"] .planner-gate', '40-review-gate-needs-changes', 'P11：门控 —— 需要修改 · 门控未通过', ['需要修改', '门控未通过']);
+      /* P12 blocker 的前端那一半：Retry 之后当前这次还没成功，但历史 attempt1 被接受过。
+       * `satisfied=true` 是历史、`required=false` 是当前 —— 文案必须说「执行未成功」，
+       * 说「门控已通过」就是拿历史骗人。 */
+      await shotOf('.planner-task[data-task-id="gated-retry"] .planner-gate', '45-review-gate-retry-pending', 'P12：门控 —— 重试排队中（历史 accepted 不算已通过）', ['执行未成功', '门控未开始']);
+      await shotOf('.planner-task[data-task-id="gated-down"] .planner-blocked', '41-review-gate-downstream-blocked', 'P11：下游 —— 等待人工验收：gated-a', ['等待人工验收', 'gated-a']);
+      await shotOf('.planner-progress', '42-review-gate-plan-paused', 'P11：Plan 顶部 —— 已暂停·等待人工验收 + 门控汇总', ['已暂停', '人工门控 1/5']);
+      await shotOf('.planner-task[data-task-id="gated-a"] .planner-gate-toggle', '43-review-gate-editor', 'P11：任务上的门控勾选框', ['需要人工验收后再继续下游']);
       const go = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
       console.log('      门控页：scrollWidth=' + go.sw + ' innerWidth=' + go.iw + ' → 横向溢出=' + (go.sw > go.iw + 1));
       await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 950, deviceScaleFactor: 1, mobile: false });
       await sleep(600);
       const go2 = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
       console.log('      门控页 @700：scrollWidth=' + go2.sw + ' innerWidth=' + go2.iw + ' → 横向溢出=' + (go2.sw > go2.iw + 1));
-      await shotOf('.planner-task[data-task-id="gated-long"]', '44-review-gate-narrow-700', 'P11：窄窗口 700px —— 超长标题 + 门控行');
+      await shotOf('.planner-task[data-task-id="gated-long"]', '44-review-gate-narrow-700', 'P11：窄窗口 700px —— 超长标题 + 门控行', ['gated-long', '门控']);
       await send('Emulation.clearDeviceMetricsOverride');
       await sleep(400);
     }
@@ -460,11 +491,12 @@ async function main() {
   }
 
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
+  console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 
   ws.close();
   chrome.kill();
   console.log('\n完成');
-  process.exit(0);
+  process.exit(shotFailures.length ? 1 : 0);
 }
 
 main().catch((e) => {
