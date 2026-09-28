@@ -29,7 +29,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ATTEMPT_OUTCOME, PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, VERIFICATION_STATUS, normalizeAttempt, normalizeReview, summarizePlan } from './model.js';
+import { ATTEMPT_OUTCOME, PLAN_STATUS, TASK_STATUS, TERMINAL_PLAN_STATUS, TERMINAL_TASK_STATUS, VERIFICATION_STATUS, normalizeAttempt, normalizeReview, planStatusFromTasks, summarizePlan } from './model.js';
 
 /** plan 文件的格式版本。格式一变就把旧文件当不认识的，避免半读半猜。
  *
@@ -117,6 +117,9 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
       attempt: Number.isFinite(t.attempt) ? t.attempt : 0,
       error: typeof t.error === 'string' ? t.error : '',
       result: t.result ?? null,
+      /* P11：人工验收门控是**可编辑的策略**，不是历史事实 —— 老计划缺这个字段
+       * → false，于是行为与 P11 之前**完全一样**（additive，不用升 schemaVersion）。 */
+      reviewGate: Boolean(t.reviewGate),
     }));
 
     if (recover) {
@@ -216,14 +219,9 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
   }
 
   /** 全部终态时该给 plan 什么状态。
-   *  注意：**「有成功也有取消」算 completed，不算 cancelled** ——
-   *  用户中途停掉但已经干完一半，报成「已取消」会让他以为白跑了。 */
-  function statusFromTasks(plan) {
-    const s = summarizePlan(plan);
-    if (s.failed > 0) return PLAN_STATUS.FAILED;
-    if (s.cancelled > 0 && s.success === 0) return PLAN_STATUS.CANCELLED;
-    return PLAN_STATUS.COMPLETED;
-  }
+   *  P11 起判据搬去 `model.planStatusFromTasks`（纯函数，与 `planWorkflowState`
+   *  同在一处）—— 这里只保留 store 的入口名，**不维护第二份规则**。 */
+  const statusFromTasks = planStatusFromTasks;
 
   function readFileSafe(file) {
     try {

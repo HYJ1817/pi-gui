@@ -27,9 +27,15 @@ import {
   PLAN_STATUS,
   REVIEW_STATUS,
   TASK_STATUS,
+  TERMINAL_PLAN_STATUS,
   TERMINAL_TASK_STATUS,
+  blockedReasonOf,
   normalizePlan,
   normalizeReview,
+  planWorkflowState,
+  refreshTaskStatuses,
+  reviewGateState,
+  reviewGateSummary,
   reviewWriteAllowed,
   summarizePlan,
 } from './model.js';
@@ -363,6 +369,32 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
     };
 
     attempt.review = next;
+
+    /* ---------- P11：审阅可能**改变工作流门控** ----------
+     * 把某次尝试标成 accepted，依赖这个任务的下游就可能从 blocked（等待人工验收）
+     * 变成 ready —— 「人看完了，工作流才继续」。
+     *
+     * ⚠️ 计划**正在跑**时一个字都不动 execution status：那是 Scheduler 的所有权，
+     * 它会用**同一个**纯函数在下一轮重算 —— 这里改了不但白改，还制造两个真相。
+     * ⚠️ **绝不自动启动任何东西**：只把 DAG 算对，跑不跑是用户点的事（§十二）。 */
+    let gate = null;
+    if (plan.status !== PLAN_STATUS.RUNNING) {
+      const before = plan.status;
+      refreshTaskStatuses(plan);
+      const w = planWorkflowState(plan);
+      if (w.status !== before) {
+        plan.status = w.status;
+        /* 回到终态才记 endedAt；离开终态（completed → paused）要清掉，
+         * 与 retry 把 plan 拉回 ready 时清 endedAt 是同一条规矩。 */
+        plan.endedAt = TERMINAL_PLAN_STATUS.includes(w.status) ? plan.endedAt || Date.now() : null;
+      }
+      gate = {
+        planStatus: plan.status,
+        reason: w.reason,
+        ready: plan.tasks.filter((t) => t.status === TASK_STATUS.READY).map((t) => t.id),
+      };
+    }
+
     try {
       store.save(plan);
     } catch (err) {
@@ -371,9 +403,10 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
        * 局部对象，所以失败时磁盘内容原样可读。 */
       return { status: 200, body: { ok: false, error: '审阅保存失败：' + String(err.message || err) } };
     }
-    /* 只回这一条 review，不回整份 plan —— 审阅是高频操作，
-     * 每次回几百 KB 的计划没有意义（规格 §32）。 */
-    return { status: 200, body: { ok: true, planId: plan.id, taskId, attempt: attemptNo, review: next } };
+    /* 只回这一条 review + 它的**工作流后果**，不回整份 plan —— 审阅是高频操作，
+     * 每次回几百 KB 的计划没有意义（规格 §32）。前端拿 gate.ready 说
+     * 「验收已通过，N 个后续任务已可执行」。 */
+    return { status: 200, body: { ok: true, planId: plan.id, taskId, attempt: attemptNo, review: next, gate } };
   }
 
   /* ---------- HTTP ---------- */
@@ -405,6 +438,7 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
         found = new Map(); // 会话目录读不出来不该让计划详情打不开
       }
     }
+    const byId = new Map(plan.tasks.map((t) => [t.id, t]));
     return {
       ...plan,
       /* P9 收口：**全 workspace 级**的「现在有独立验证在跑」。放在 plan view 上
@@ -413,30 +447,46 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
        * 带身份（planId / taskId / attempt）是刻意的：用户要知道该去停哪一条。
        * 与上面那些一样是**视图字段，绝不写回文件**。 */
       verificationActive: verifier && typeof verifier.activeVerification === 'function' ? verifier.activeVerification() : null,
-      tasks: plan.tasks.map((t) => ({
-        ...t,
-        attempts: (Array.isArray(t.attempts) ? t.attempts : []).map((a) => {
-          const out = { ...a };
-          if (hasSessions) {
-            if (!a.sessionId) {
-              out.sessionAvailable = false;
-              out.sessionTitle = '';
-            } else {
-              const hit = found.get(a.sessionId);
-              out.sessionAvailable = Boolean(hit);
-              out.sessionTitle = hit ? hit.title : '';
+      /* P11：Plan 级的门控汇总（`{gated, satisfied, waiting}`）—— **运行时推导**，
+       * 与 `plan.status` 一样是视图字段，不落盘，也就不可能有 stale cache（§三十三）。 */
+      reviewGateSummary: reviewGateSummary(plan),
+      /* P11：`paused` 现在是两种意思（有任务失败 / 等人工验收），界面必须能分开说。
+       * 由同一个纯函数给出，前端**不自己重算**（重算就是第二份规则）。 */
+      workflowReason: planWorkflowState(plan).reason,
+      tasks: plan.tasks.map((t) => {
+        /* P11：这个任务的门控状态，以及**为什么停着**。
+         * 与下面的 sessionAvailable / verificationRunning 一样是**视图字段，
+         * 绝不写回文件**：写回去等于把「某一次读取时的结论」当成事实持久化。
+         * 尤其 `blockedReason` 是本轮新加的，落盘就成了第二份真相（§二十一）。 */
+        const blocked = blockedReasonOf(t, byId);
+        return {
+          ...t,
+          gateState: reviewGateState(t),
+          blockedReason: blocked.reason,
+          waitingOn: blocked.waitingOn,
+          attempts: (Array.isArray(t.attempts) ? t.attempts : []).map((a) => {
+            const out = { ...a };
+            if (hasSessions) {
+              if (!a.sessionId) {
+                out.sessionAvailable = false;
+                out.sessionTitle = '';
+              } else {
+                const hit = found.get(a.sessionId);
+                out.sessionAvailable = Boolean(hit);
+                out.sessionTitle = hit ? hit.title : '';
+              }
             }
-          }
-          /* P9：这次验证**此刻是不是由本进程在跑**。
-           *
-           * 光看落盘的 `status === 'running'` 不够诚实：进程崩过之后磁盘上会
-           * 留着一条 running（要等下次启动的 recoverAll 才翻正）。liveness 的
-           * 权威是 Verifier 内存里的那张表，所以这里把它注进来 ——
-           * 界面据此决定给不给「停止验证」。同样是**视图字段，绝不写回文件**。 */
-          if (verifier) out.verificationRunning = verifier.isRunning(plan.id, t.id, a.attempt);
-          return out;
-        }),
-      })),
+            /* P9：这次验证**此刻是不是由本进程在跑**。
+             *
+             * 光看落盘的 `status === 'running'` 不够诚实：进程崩过之后磁盘上会
+             * 留着一条 running（要等下次启动的 recoverAll 才翻正）。liveness 的
+             * 权威是 Verifier 内存里的那张表，所以这里把它注进来 ——
+             * 界面据此决定给不给「停止验证」。同样是**视图字段，绝不写回文件**。 */
+            if (verifier) out.verificationRunning = verifier.isRunning(plan.id, t.id, a.attempt);
+            return out;
+          }),
+        };
+      }),
     };
   }
 
@@ -694,6 +744,12 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
           if (typeof body.concurrency === 'number') {
             next.concurrency = Math.min(Math.max(1, Math.floor(body.concurrency)), MAX_CONCURRENCY);
           }
+          /* P11：开/关门控会直接改变下游能不能跑 —— 保存时就地重算一次，
+           * 免得盘上留下「status=ready 但门控没满足」这种自相矛盾的状态
+           * （UI 会同时显示「可以跑」和「等待人工验收」）。
+           * 只动 task 状态，**不动 plan 状态**：那是 start / settle 的事，
+           * 而且 draft 计划不该因为一次保存就被翻成 ready。 */
+          refreshTaskStatuses(next);
           store.save(next);
           return json(res, 200, payload(next, { agents: checkAgents(next) }));
         }

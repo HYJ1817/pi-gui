@@ -60,7 +60,6 @@ import {
   TERMINAL_PLAN_STATUS,
   TERMINAL_TASK_STATUS,
   buildTaskPrompt,
-  computeReadyStates,
   isPlanSettled,
   isSafeSessionId,
   normalizeFilesChanged,
@@ -68,6 +67,8 @@ import {
   normalizeReview,
   normalizeVerificationSnapshot,
   normalizeWorkingDirectorySnapshot,
+  planWorkflowState,
+  refreshTaskStatuses,
   summarizePlan,
   taskSessionId,
 } from './model.js';
@@ -226,15 +227,9 @@ export function createScheduler({
   /* ---------- 状态推进 ---------- */
 
   function refreshStatuses(plan) {
-    const suggested = computeReadyStates(plan.tasks);
-    for (const t of plan.tasks) {
-      const s = suggested.get(t.id);
-      if (s && s !== t.status) {
-        // blocked / pending / ready 之间可以自由翻转（依赖状态变了就该翻）
-        t.status = s;
-      }
-    }
-    return plan;
+    /* 判据在 `model.refreshTaskStatuses` —— 与 review route 保存之后调的是**同一个**
+     * 纯函数（P11）。门控状态只有一个来源，这里不维护第二份。 */
+    return refreshTaskStatuses(plan);
   }
 
   /**
@@ -310,13 +305,21 @@ export function createScheduler({
     }
   }
 
+  /**
+   * 收尾时算 plan 的最终状态。判据全在 `model.planWorkflowState`（纯函数）。
+   *
+   * ⚠️ **P11 起它会写更多状态**：以前只在「全部终态」时才写，于是「只剩下游在等
+   * 人工验收」那种情况会停在 `running`（界面上像卡住了）。现在只要**没有任务在跑**
+   * 就落定 —— 有任务在跑时一个字都不改（那是 pump 的正常中间态）。
+   */
   function settlePlan(plan) {
-    if (isPlanSettled(plan)) {
-      plan.status = store.statusFromTasks(plan);
-      plan.endedAt = plan.endedAt || now();
+    const w = planWorkflowState(plan);
+    if (w.status !== PLAN_STATUS.RUNNING) {
+      plan.status = w.status;
+      if (TERMINAL_PLAN_STATUS.includes(w.status)) plan.endedAt = plan.endedAt || now();
     }
     persist(plan);
-    return plan.status;
+    return w;
   }
 
   /* ---------- 解析 agent ---------- */
@@ -639,9 +642,11 @@ export function createScheduler({
         persist(session.plan);
         emit(session.plan.id, null, null, 'plan_cancelled', {});
       } else {
-        const status = settlePlan(session.plan);
-        emit(session.plan.id, null, null, status === PLAN_STATUS.COMPLETED ? 'plan_success' : status === PLAN_STATUS.FAILED ? 'plan_failed' : 'plan_paused', {
+        const w = settlePlan(session.plan);
+        emit(session.plan.id, null, null, w.status === PLAN_STATUS.COMPLETED ? 'plan_success' : w.status === PLAN_STATUS.FAILED ? 'plan_failed' : 'plan_paused', {
           counts: summarizePlan(session.plan),
+          /* P11：暂停要**带原因** —— 界面据此区分「等待人工验收」与「有任务失败」。 */
+          reason: w.reason,
         });
       }
       if (active === session) active = null;
@@ -900,6 +905,9 @@ export function createScheduler({
       plan.status = PLAN_STATUS.READY;
       plan.endedAt = null;
     }
+    /* ⚠️ 这里**刻意不** refreshStatuses：重试只是「排队」，任务要保持 pending
+     * 等用户点开始（P8-B 的语义）。下一轮 pump / 用户点 start 时自然会重算 ——
+     * 顺手刷新会把它变成 ready，那是把「排队」偷偷改成「待跑」。 */
     persist(plan);
     emit(plan.id, taskId, null, 'task_retry_queued', {
       nextAttempt: (task.attempt || 0) + 1,

@@ -666,6 +666,9 @@ export function normalizeTask(raw, { index = 0, agentIds = [], projectRoot = nul
     result: null,
     error: '',
     verification,
+    /* P11：可选的工作流门控。默认 false —— 旧 Plan 缺这个字段时行为与以前**完全一样**。
+     * 它是**策略**（可编辑），不是 Attempt 的历史事实，所以不做 snapshot。 */
+    reviewGate: Boolean(raw.reviewGate),
   };
   return { ok: errors.length === 0, task, errors, warnings };
 }
@@ -736,45 +739,240 @@ export function topoOrder(tasks) {
   return out;
 }
 
-/**
- * 按依赖结果算出每个非终态 task 应该是什么状态。
+/* ==================== P11：人工验收门控 ====================
  *
- * 规则（规格 §16 / §26）：
- *   - 依赖全部 success → ready
+ * Human Review 从「事后记录」升级成**可选的工作流门控**：
+ *
+ *     task.reviewGate = true
+ *     → 这个任务执行成功后，依赖它的任务要等最新一次成功尝试被**接受**才能开始
+ *
+ * ⚠️ 两条不能破的语义：
+ *   1. **执行状态 ≠ 审阅状态**（P8）。门控**不新增** task.status，也不把
+ *      `awaiting_review` 塞进执行状态 —— 下游仍然是既有的 `blocked`，
+ *      只是同时给出「为什么 blocked」。
+ *   2. **accepted 不跨 Attempt 继承**。判据永远是「**最新一次成功** attempt 的
+ *      review」：Retry 出一个新的成功尝试，门控就**重新关上**。
+ *
+ * 门控是**工作流策略**（task 上可编辑的字段），不是 Attempt 的历史事实 ——
+ * 所以刻意**不做** `reviewGateSnapshot`：用户事后开启门控时，当前那份 review
+ * 立刻参与判断，这才符合「配置」的语义。
+ *
+ * 判断全是纯函数，**唯一判据**：scheduler / review route / UI 都从这里取，
+ * 不各写一份（写两份迟早对不上）。
+ */
+
+/** 最新一次**成功**的 attempt（按 attempt 号取最大）。没有就 null。
+ *  老记录没有 `outcomeStatus`，退到 `success` 布尔 —— 与 `canAcceptAttempt` 同一条规矩。 */
+export function latestSuccessfulAttempt(task) {
+  const list = Array.isArray(task && task.attempts) ? task.attempts : [];
+  let best = null;
+  for (const a of list) {
+    if (!a || a.success !== true) continue;
+    if (!best || (Number(a.attempt) || 0) > (Number(best.attempt) || 0)) best = a;
+  }
+  return best;
+}
+
+/**
+ * 一个 task 的门控状态。
+ *
+ * @returns `{enabled, satisfied, reason, attempt}`
+ *   - `enabled=false`（没开门控）→ 一律 `satisfied: true`，对下游完全透明
+ *   - `reason` 就是那份 review 的状态（`pending` / `needs_changes`），
+ *     或 `no-successful-attempt`（开了门控但这次还没成功过）
+ *   - `attempt` 是**参与判断的那一次**（UI 要能说清「在等第几次」）
+ */
+export function reviewGateState(task) {
+  if (!task || !task.reviewGate) return { enabled: false, satisfied: true, reason: 'disabled', attempt: null };
+  const a = latestSuccessfulAttempt(task);
+  if (!a) return { enabled: true, satisfied: false, reason: 'no-successful-attempt', attempt: null };
+  const status = normalizeReview(a.review).status;
+  return { enabled: true, satisfied: status === REVIEW_STATUS.ACCEPTED, reason: status, attempt: a.attempt };
+}
+
+/** 依赖没满足的原因。 */
+export const DEP_REASON = Object.freeze({
+  MISSING: 'dependency-missing',
+  FAILED: 'dependency-failed',
+  CANCELLED: 'dependency-cancelled',
+  SKIPPED: 'dependency-skipped',
+  INTERRUPTED: 'dependency-interrupted',
+  WAITING_REVIEW: 'waiting-review',
+  PENDING: 'pending',
+});
+
+/** 终态但**不是**成功的那些依赖 → 各自的原因。 */
+const FAILED_DEP_REASON = {
+  [TASK_STATUS.FAILED]: DEP_REASON.FAILED,
+  [TASK_STATUS.CANCELLED]: DEP_REASON.CANCELLED,
+  [TASK_STATUS.SKIPPED]: DEP_REASON.SKIPPED,
+  [TASK_STATUS.INTERRUPTED]: DEP_REASON.INTERRUPTED,
+};
+
+/**
+ * 一个非终态 task 的依赖态：建议状态 + **为什么** + 卡在哪些上游。
+ *
+ * 规则（规格 §16 / §26 / P11 §十）：
+ *   - 依赖全部 success 且门控都满足 → ready
  *   - 任一依赖 failed / cancelled / interrupted / skipped → blocked
- *     （**跳过不会自动放行依赖者**，用户要自己改依赖 —— 规格 §26 明确要求）
+ *     （**跳过不会自动放行依赖者**，用户要自己改依赖）
+ *   - 任一依赖 success 但门控没满足 → blocked + `waiting-review`
  *   - 依赖还没结论 → pending
  *
- * @returns {Map<string,string>} id → 建议状态（只包含当前处于 pending/blocked/ready 的 task）
+ * ⚠️ **原因优先级：执行失败 > 等人工验收**（规格 §二十六）。上游真的失败了，
+ * 绝不能显示成「在等人工验收」—— 那会把用户引向错误的下一步。
  */
-export function computeReadyStates(tasks) {
+export function dependencyStateOf(task, byId) {
+  let failedReason = null;
+  let anyWaitingReview = false;
+  let anyPending = false;
+  const failedOn = [];
+  const reviewOn = [];
+  const pendingOn = [];
+  for (const d of task.dependsOn || []) {
+    const dep = byId.get(d);
+    if (!dep) {
+      failedReason = failedReason || DEP_REASON.MISSING;
+      failedOn.push(d);
+      continue;
+    }
+    if (dep.status === TASK_STATUS.SUCCESS) {
+      if (!reviewGateState(dep).satisfied) {
+        anyWaitingReview = true;
+        reviewOn.push(d);
+      }
+      continue;
+    }
+    if (TERMINAL_TASK_STATUS.includes(dep.status)) {
+      // 具体原因优先于「依赖不存在」
+      failedReason = FAILED_DEP_REASON[dep.status] || failedReason || DEP_REASON.FAILED;
+      failedOn.push(d);
+      continue;
+    }
+    anyPending = true;
+    pendingOn.push(d);
+  }
+  if (failedReason) return { status: TASK_STATUS.BLOCKED, reason: failedReason, waitingOn: failedOn };
+  if (anyWaitingReview) return { status: TASK_STATUS.BLOCKED, reason: DEP_REASON.WAITING_REVIEW, waitingOn: reviewOn };
+  if (anyPending) return { status: TASK_STATUS.PENDING, reason: DEP_REASON.PENDING, waitingOn: pendingOn };
+  return { status: TASK_STATUS.READY, reason: null, waitingOn: [] };
+}
+
+/** 每个非终态 task 的依赖态。`Map<id, {status, reason, waitingOn}>`。 */
+export function dependencyState(tasks) {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const out = new Map();
   for (const t of tasks) {
     if (TERMINAL_TASK_STATUS.includes(t.status) || t.status === TASK_STATUS.RUNNING) continue;
-    let ready = true;
-    let blocked = false;
-    for (const d of t.dependsOn) {
-      const dep = byId.get(d);
-      if (!dep) {
-        blocked = true;
-        break;
-      }
-      if (dep.status === TASK_STATUS.SUCCESS) continue;
-      if (TERMINAL_TASK_STATUS.includes(dep.status)) {
-        blocked = true;
-        break;
-      }
-      ready = false; // 依赖还没跑完
-    }
-    out.set(t.id, blocked ? TASK_STATUS.BLOCKED : ready ? TASK_STATUS.READY : TASK_STATUS.PENDING);
+    out.set(t.id, dependencyStateOf(t, byId));
   }
   return out;
 }
 
-/** Plan 是否已经跑完（所有 task 都是终态）。 */
+/**
+ * 就地重算 plan 里各 task 的 pending / blocked / ready。
+ *
+ * **共享纯函数**：scheduler 的每一轮推进与 review route 保存之后都调它 ——
+ * 门控状态只有一个来源，route 里绝不手写 `task.status = 'ready'`。
+ */
+export function refreshTaskStatuses(plan) {
+  const suggested = computeReadyStates(plan.tasks);
+  for (const t of plan.tasks) {
+    const s = suggested.get(t.id);
+    // blocked / pending / ready 之间可以自由翻转（依赖状态变了就该翻）
+    if (s && s !== t.status) t.status = s;
+  }
+  return plan;
+}
+
+/** 视图用：一个 task **为什么停着**（终态 / running 时为 null —— 那两种不需要解释）。 */
+export function blockedReasonOf(task, byId) {
+  if (TERMINAL_TASK_STATUS.includes(task.status) || task.status === TASK_STATUS.RUNNING) return { reason: null, waitingOn: [] };
+  const st = dependencyStateOf(task, byId);
+  return { reason: st.status === TASK_STATUS.BLOCKED ? st.reason : null, waitingOn: st.waitingOn };
+}
+
+/**
+ * 按依赖结果算出每个非终态 task 应该是什么状态。
+ * （P11 起是 `dependencyState` 的薄封装，签名不变。）
+ *
+ * @returns {Map<string,string>} id → 建议状态（只包含当前处于 pending/blocked/ready 的 task）
+ */
+export function computeReadyStates(tasks) {
+  const out = new Map();
+  for (const [id, v] of dependencyState(tasks)) out.set(id, v.status);
+  return out;
+}
+
+/** Plan 是否已经跑完：所有 task 都终态**且**开了门控的那些门控都已满足。
+ *
+ *  ⚠️ P11：**终态 ≠ 跑完**。最后一个任务成功但门控还开着（等人验收）时，
+ *  这个计划不该算「结束」—— 工作流策略还没满足（规格 §三十 / §三十一）。
+ *  这也是 `completed ↔ paused` 能来回翻的原因（§三十二）。 */
 export function isPlanSettled(plan) {
-  return plan.tasks.every((t) => TERMINAL_TASK_STATUS.includes(t.status));
+  return plan.tasks.every((t) => TERMINAL_TASK_STATUS.includes(t.status) && reviewGateState(t).satisfied);
+}
+
+/** 全部终态时该给 plan 什么状态。
+ *  注意：**「有成功也有取消」算 completed，不算 cancelled** ——
+ *  用户中途停掉但已经干完一半，报成「已取消」会让他以为白跑了。 */
+export function planStatusFromTasks(plan) {
+  const s = summarizePlan(plan);
+  if (s.failed > 0) return PLAN_STATUS.FAILED;
+  if (s.cancelled > 0 && s.success === 0) return PLAN_STATUS.CANCELLED;
+  return PLAN_STATUS.COMPLETED;
+}
+
+/** Plan 级的门控汇总（**运行时推导，不持久化** —— 规格 §三十三）。 */
+export function reviewGateSummary(plan) {
+  let gated = 0;
+  let satisfied = 0;
+  let waiting = 0;
+  for (const t of plan.tasks || []) {
+    const g = reviewGateState(t);
+    if (!g.enabled) continue;
+    gated++;
+    if (g.satisfied) satisfied++;
+    else waiting++;
+  }
+  return { gated, satisfied, waiting };
+}
+
+/**
+ * Plan 现在该是什么状态 + 为什么（纯函数，**唯一判据**）。
+ *
+ * 与 `statusFromTasks` 的分工：那个只管「全部终态时算哪个终态」；这个还要回答
+ * 「还没跑完，但现在为什么停着」。P11 新增的只有一条：
+ *
+ *     还剩任务没终态、但没有任何在跑的、也**没有能跑的** —— 而且卡住的原因
+ *     全是「等人工验收」⇒ `paused` + reason `waiting-review`
+ *
+ * 以前这种情况会停在 `running`（`settlePlan` 只在全终态时才写状态），
+ * 界面上像是卡住了。
+ */
+export function planWorkflowState(plan) {
+  const tasks = plan.tasks || [];
+  if (tasks.length === 0) return { status: plan.status || PLAN_STATUS.DRAFT, reason: 'empty' };
+  if (tasks.every((t) => TERMINAL_TASK_STATUS.includes(t.status))) {
+    /* 全部终态，但**门控还开着** → 工作流还没结束（§三十一：就算没有 downstream，
+     * 最后一个 gated task 没被接受也不算 completed）。 */
+    if (tasks.some((t) => !reviewGateState(t).satisfied)) return { status: PLAN_STATUS.PAUSED, reason: DEP_REASON.WAITING_REVIEW };
+    return { status: planStatusFromTasks(plan), reason: 'settled' };
+  }
+  if (tasks.some((t) => t.status === TASK_STATUS.RUNNING)) return { status: PLAN_STATUS.RUNNING, reason: 'running' };
+
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const blockedReasons = [];
+  for (const t of tasks) {
+    if (TERMINAL_TASK_STATUS.includes(t.status)) continue;
+    const st = dependencyStateOf(t, byId);
+    if (st.status === TASK_STATUS.BLOCKED) blockedReasons.push(st.reason);
+  }
+  // 执行失败优先于等验收（§二十六）
+  if (blockedReasons.some((r) => r !== DEP_REASON.WAITING_REVIEW)) return { status: PLAN_STATUS.PAUSED, reason: 'dependency-blocked' };
+  if (blockedReasons.includes(DEP_REASON.WAITING_REVIEW)) return { status: PLAN_STATUS.PAUSED, reason: DEP_REASON.WAITING_REVIEW };
+  if (tasks.some((t) => t.status === TASK_STATUS.READY)) return { status: PLAN_STATUS.READY, reason: 'ready' };
+  return { status: PLAN_STATUS.PAUSED, reason: DEP_REASON.PENDING };
 }
 
 /** 汇总：有没有失败 / 有没有被取消。用于决定 plan 的终态。 */
