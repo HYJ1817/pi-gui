@@ -283,7 +283,10 @@ async function main() {
   /* 每张截图都把「框住的那个元素」的取景信息打出来：矩形在不在视口里、文本是什么、
    * 关键词齐不齐。判据不再靠人眼比对 png —— 日志就是截图内容的机器可查证据。 */
   const shotFailures = [];
-  const shotOf = async (sel, n, label, must) => {
+  /* `mustTrue`：结构判据 —— 收起/展开、真 button、aria-*、可见高度这些。
+   * 截图和 textContent **都分不出**收起与展开（收起的节点还在 DOM 里，文本照样
+   * 算进去），所以这类判据必须显式算出来，算不过就进失败清单、最后 exit 1。 */
+  const shotOf = async (sel, n, label, must, mustTrue) => {
     const probe = await evalJs(
       `(() => {
         const e = document.querySelector(${JSON.stringify(sel)});
@@ -311,14 +314,23 @@ async function main() {
     }
     await sleep(450);
     await shot(n);
+    let badTrue = [];
+    if (mustTrue && mustTrue.length) {
+      badTrue =
+        (await evalJs(
+          `(() => { const bad = []; for (const [what, expr] of ${JSON.stringify(mustTrue)}) { let v; try { v = eval(expr); } catch (e) { v = 'eval 抛错：' + e.message; } if (!v) bad.push(what + (typeof v === 'string' && v !== 'false' ? '（' + v + '）' : '')); } return bad; })()`
+        )) || [];
+    }
     const flag = (probe.missing.length ? '✗ 缺 ' + probe.missing.join('/') : '✓') +
-      (probe.inView ? ' 取景中心在视口内' : ' 取景中心不在视口内');
+      (probe.inView ? ' 取景中心在视口内' : ' 取景中心不在视口内') +
+      (badTrue.length ? ' ✗ 结构判据不成立: ' + badTrue.join('；') : (mustTrue && mustTrue.length ? ' 结构判据成立' : ''));
     console.log('      ' + n + ' [' + flag + '] rect=' + probe.top + '..' + probe.bottom + '/' + probe.h);
     console.log('        取景元素文本: ' + probe.text);
     if (label) console.log('      ' + label);
     if (probe.missing.length) shotFailures.push(n + ': 取景元素缺关键词 ' + probe.missing.join('/'));
     if (!probe.inView) shotFailures.push(n + ': 取景中心不在视口内 (rect=' + probe.top + '..' + probe.bottom + ')');
-    return probe.missing.length === 0 && probe.inView;
+    for (const m of badTrue) shotFailures.push(n + ': 结构判据不成立 —— ' + m);
+    return probe.missing.length === 0 && probe.inView && badTrue.length === 0;
   };
   const clickIn = async (sel, text) =>
     evalJs(
@@ -437,6 +449,78 @@ async function main() {
     await sleep(300);
     await reopenPlanner();
 
+    /* ---------- P13：下一步 / Attempt 折叠 / 历史默认收起（都在 plan-1 上） ---------- */
+    /* 下一步命中「独立验证在跑」这一支 —— 它排在最前面，连「开始执行」都会被压掉。
+     * 这一张同时证明两件事：优先级，以及 running 态不给会失败的 CTA。 */
+    await shotOf('.planner-next', '48-next-action-verification', 'P13：下一步 —— 独立验证在跑（优先级最高，且不给「开始执行」）',
+      ['下一步', '正在独立验证 live', '第 1 次尝试'],
+      [
+        ['kind=verification-active', `document.querySelector('.planner-next-text').classList.contains('verification-active')`],
+        ['没有「开始执行」按钮', `![...document.querySelectorAll('.planner-next .btn')].some((b) => b.textContent.trim() === '开始执行')`],
+        ['CTA 是「查看任务」', `(() => { const b = document.querySelector('.planner-next .btn'); return !!b && b.textContent.trim() === '查看任务'; })()`],
+      ]);
+
+    /* 历史默认收起：backend 有两次尝试 —— 只展开最新那条，旧的收起但**内容仍留在
+     * DOM 里**（收起不等于删掉）。
+     * 判据只能是 aria-expanded / hidden：收起节点的文本照样算进 textContent，
+     * 光看文本根本分不出收起还是展开（jsdom 那边同理）。 */
+    const backHeads = `.planner-task[data-task-id="backend"] .planner-attempt-head`;
+    const backBody1 = `.planner-task[data-task-id="backend"] .planner-attempt[data-attempt="1"] .planner-attempt-body`;
+    const backBody2 = `.planner-task[data-task-id="backend"] .planner-attempt[data-attempt="2"] .planner-attempt-body`;
+    await shotOf('.planner-task[data-task-id="backend"]', '49-attempt-history-collapsed', 'P13：历史尝试默认收起（每条任务只展开最新一次）',
+      ['第 1 次', '第 2 次', '需修改'],
+      [
+        ['两条尝试各有一个折叠头', `[...document.querySelectorAll(${JSON.stringify(backHeads)})].length === 2`],
+        ['折叠头是真 button', `(() => { const h = document.querySelector(${JSON.stringify(backHeads)}); return !!h && h.tagName === 'BUTTON'; })()`],
+        ['展开态依次是 false,true', `[...document.querySelectorAll(${JSON.stringify(backHeads)})].map((h) => h.getAttribute('aria-expanded')).join(',') === 'false,true'`],
+        ['旧尝试的详情是 hidden', `(() => { const b = document.querySelector(${JSON.stringify(backBody1)}); return !!b && b.hidden === true; })()`],
+        ['最新尝试的详情展开', `(() => { const b = document.querySelector(${JSON.stringify(backBody2)}); return !!b && b.hidden === false; })()`],
+        ['aria-controls 指向真实节点', `(() => { const h = document.querySelector(${JSON.stringify(backHeads)}); return !!h && !!document.getElementById(h.getAttribute('aria-controls')); })()`],
+      ]);
+
+    /* 用户显式展开旧那一条 —— `attemptOpen` 记下他的选择，下一次重绘照它来。 */
+    const clickedHead = await evalJs(`(() => { const h = document.querySelector(${JSON.stringify(backHeads)}); if (!h || h.tagName !== 'BUTTON') return false; h.click(); return true; })()`);
+    await sleep(500);
+    if (clickedHead) {
+      await shotOf('.planner-task[data-task-id="backend"]', '50-attempt-history-expanded', 'P13：手动展开历史那一次（用户的选择盖过默认规则）',
+        ['第 1 次', '第 2 次'],
+        [
+          ['展开态 true,true', `[...document.querySelectorAll(${JSON.stringify(backHeads)})].map((h) => h.getAttribute('aria-expanded')).join(',') === 'true,true'`],
+          ['旧尝试的详情已展开', `(() => { const b = document.querySelector(${JSON.stringify(backBody1)}); return !!b && b.hidden === false; })()`],
+          ['展开的内容有实际高度', `(() => { const b = document.querySelector(${JSON.stringify(backBody1)}); return !!b && b.getBoundingClientRect().height > 20; })()`],
+        ]);
+    } else {
+      console.log('  跳过：没找到 backend 的折叠头');
+    }
+
+    /* 混态：同一条头部上，执行结论 / 独立验证 / 人工验收三个维度**各说各的**，
+     * 不合并成一个「状态」—— 收起之后更要能一眼分清楚（P13 Blocker 5）。 */
+    await shotOf('.planner-task[data-task-id="live"] .planner-attempt[data-attempt="1"]', '52-attempt-head-summary',
+      'P13：折叠头 —— 执行 / 验证 / 验收 / 证据四个维度分行（验证在跑 → 强制展开）',
+      ['第 1 次', '已接受', '正在验证', '停止验证'],
+      [
+        ['折叠头是真 button', `(() => { const h = document.querySelector('.planner-task[data-task-id="live"] .planner-attempt[data-attempt="1"] .planner-attempt-head'); return !!h && h.tagName === 'BUTTON'; })()`],
+        ['验证在跑 → 必须看得见（交互必需）', `(() => { const h = document.querySelector('.planner-task[data-task-id="live"] .planner-attempt[data-attempt="1"] .planner-attempt-head'); return !!h && h.getAttribute('aria-expanded') === 'true'; })()`],
+        ['三个维度各占一格', `(() => { const h = document.querySelector('.planner-task[data-task-id="live"] .planner-attempt[data-attempt="1"] .planner-attempt-head'); return !!h && !!h.querySelector('.planner-att-verify') && !!h.querySelector('.planner-att-review') && !!h.querySelector('.planner-att-ev'); })()`],
+        ['证据维度有字', `(() => { const e = document.querySelector('.planner-task[data-task-id="live"] .planner-attempt[data-attempt="1"] .planner-att-ev'); return !!e && e.textContent.trim().length > 0; })()`],
+      ]);
+
+    /* focus 到**旧的那一次**：面板是新开的（`attemptOpen` 从空开始），所以老那条
+     * 展开只可能来自 focus 参数 —— 按默认规则它会被收起来（见上面的 49）。 */
+    const focused = await evalJs(`import('/planner.js').then((m) => { m.openPlanner({ planId: 'plan-1', taskId: 'backend', attempt: 1 }); return true; }).catch((e) => 'import 失败: ' + e.message)`);
+    await sleep(1000);
+    if (focused === true) {
+      await shotOf('.planner-task[data-task-id="backend"]', '53-focus-attempt', 'P13：focus 到旧 attempt —— 打开面板就展开它并滚到视口内',
+        ['第 1 次', '第 2 次'],
+        [
+          ['focus 到的那条是展开的', `(() => { const b = document.querySelector(${JSON.stringify(backBody1)}); return !!b && b.hidden === false; })()`],
+          ['新实例默认展开最新那条', `(() => { const b = document.querySelector(${JSON.stringify(backBody2)}); return !!b && b.hidden === false; })()`],
+          ['聚焦的那条落在视口内', `(() => { const e = document.querySelector('.planner-task[data-task-id="backend"] .planner-attempt[data-attempt="1"]'); if (!e) return false; const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()`],
+        ]);
+    } else {
+      console.log('  跳过：' + focused);
+    }
+
     /* ---------- P11：人工验收门控 ----------
      * plan-gate 是列表里的第 3 个（plan-1 / plan-stress / plan-gate）。 */
     if (await pickPlan(2)) {
@@ -445,8 +529,20 @@ async function main() {
       await shotOf('.planner-task[data-task-id="gated-need"] .planner-gate', '40-review-gate-needs-changes', 'P11：门控 —— 需要修改 · 门控未通过', ['需要修改', '门控未通过']);
       /* P12 blocker 的前端那一半：Retry 之后当前这次还没成功，但历史 attempt1 被接受过。
        * `satisfied=true` 是历史、`required=false` 是当前 —— 文案必须说「执行未成功」，
-       * 说「门控已通过」就是拿历史骗人。 */
-      await shotOf('.planner-task[data-task-id="gated-retry"] .planner-gate', '45-review-gate-retry-pending', 'P12：门控 —— 重试排队中（历史 accepted 不算已通过）', ['执行未成功', '门控未开始']);
+       * 说「门控已通过」就是拿历史骗人。
+       * P13 §二十九再细分一步：这条任务的 status 还是 `pending`（重试排队中、**还没跑**），
+       * 说「执行未成功」等于指控一次还没发生的执行 → 改成「尚未产生新结果」。 */
+      await shotOf('.planner-task[data-task-id="gated-retry"] .planner-gate', '45-review-gate-retry-pending', 'P12→P13：门控 —— 重试排队中（历史 accepted 不算已通过；还没跑过 ≠ 执行未成功）', ['尚未产生新结果', '门控未开始']);
+      /* ---------- P13：下一步（被依赖挡住这一支） ----------
+       * plan-gate 里有一条 `blockedReason: 'dependency-failed'` 的下游（P11 夹具），
+       * 而「被阻塞」排在「等验收」前面 —— 所以这个计划的下一步说的是它，不是验收。
+       * 这是对的：验收救不了一条被依赖失败挡住的任务。等验收那一支见 47（plan-wait）。 */
+      await shotOf('.planner-next', '55-next-action-blocked', 'P13：下一步 —— 被上游卡住（点名到具体任务，排在「等验收」之前）',
+        ['下一步', '处理被阻塞的任务 gated-faildown', '查看任务'],
+        [
+          ['kind=blocked', `document.querySelector('.planner-next-text').classList.contains('blocked')`],
+          ['不给「开始执行」', `![...document.querySelectorAll('.planner-next .btn')].some((b) => b.textContent.trim() === '开始执行')`],
+        ]);
       await shotOf('.planner-task[data-task-id="gated-down"] .planner-blocked', '41-review-gate-downstream-blocked', 'P11：下游 —— 等待人工验收：gated-a', ['等待人工验收', 'gated-a']);
       await shotOf('.planner-progress', '42-review-gate-plan-paused', 'P11：Plan 顶部 —— 已暂停·等待人工验收 + 门控汇总', ['已暂停', '人工门控 1/5']);
       await shotOf('.planner-task[data-task-id="gated-a"] .planner-gate-toggle', '43-review-gate-editor', 'P11：任务上的门控勾选框', ['需要人工验收后再继续下游']);
@@ -461,11 +557,57 @@ async function main() {
       await sleep(400);
     }
 
+    /* ---------- P13：下一步的 ready 态（列表第 4 个：plan-ux） ----------
+     * 这是唯一会给出「开始执行」的一支：没有失败、没有门控、没有阻塞、没有验证在跑。 */
+    if (await pickPlan(3)) {
+      await shotOf('.planner-next', '46-next-action-ready', 'P13：下一步 —— 可以执行（唯一给「开始执行」的分支）',
+        ['下一步', '有 1 个任务可以执行', '开始执行'],
+        [
+          ['kind=ready', `document.querySelector('.planner-next-text').classList.contains('ready')`],
+          ['CTA 是「开始执行」', `(() => { const b = document.querySelector('.planner-next .btn'); return !!b && b.textContent.trim() === '开始执行'; })()`],
+          ['状态不是只靠颜色', `(() => { const e = document.querySelector('.planner-next-text'); return !!e && e.textContent.trim().length > 0; })()`],
+        ]);
+      /* 窄窗口：下一步那一行是「文字 + 右侧按钮」，700px 下要确认没把按钮挤出界。 */
+      await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 950, deviceScaleFactor: 1, mobile: false });
+      await sleep(600);
+      const nx = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
+      console.log('      下一步 @700：scrollWidth=' + nx.sw + ' innerWidth=' + nx.iw + ' → 横向溢出=' + (nx.sw > nx.iw + 1));
+      await shotOf('.planner-next', '54-next-action-narrow-700', 'P13：窄窗口 700px —— 下一步与它的按钮不挤成一团',
+        ['下一步', '有 1 个任务可以执行', '开始执行'],
+        [
+          ['按钮还在视口里', `(() => { const b = document.querySelector('.planner-next .btn'); if (!b) return false; const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth; })()`],
+          ['没有横向溢出', `document.documentElement.scrollWidth <= window.innerWidth + 1`],
+        ]);
+      await send('Emulation.clearDeviceMetricsOverride');
+      await sleep(400);
+    }
+
+    /* ---------- P13：下一步的 waiting-review 态（列表第 5 个：plan-wait） ---------- */
+    if (await pickPlan(4)) {
+      await shotOf('.planner-next', '47-next-action-review', 'P13：下一步 —— 等人工验收（点名到具体任务，不写「去验收」）',
+        ['下一步', '验收 gated-main 的最新成功结果', '查看任务'],
+        [
+          ['kind=waiting-review', `document.querySelector('.planner-next-text').classList.contains('waiting-review')`],
+          ['不给「开始执行」', `![...document.querySelectorAll('.planner-next .btn')].some((b) => b.textContent.trim() === '开始执行')`],
+          ['主按钮是「查看任务」', `(() => { const b = document.querySelector('.planner-next .btn'); return !!b && b.textContent.trim() === '查看任务'; })()`],
+        ]);
+    }
+
     /* 压力项（§五十八）：1000 字说明 / 20 个变更文件 / 超长路径 / 10 次尝试 / 窄窗口 */
     if (await pickPlan(1)) {
       await shotOf('.planner-task[data-task-id="longnote"] .planner-attempt:last-of-type', '20-stress-long-note', '压力：1000 字说明 + 20 个文件 + 超长路径');
       await shotOf('.planner-task[data-task-id="longnote"] .planner-verify-detail', '29-verify-long', 'P9 压力：长命令 + 长输出（被截断）');
       await shotOf('.planner-task[data-task-id="manyattempts"] .planner-attempts', '21-stress-many-attempts', '压力：10 次尝试');
+      /* P13：10 次尝试不该摊成一面墙 —— 默认只展开最新那一条，其余 9 条收着。 */
+      const manyHeads = `.planner-task[data-task-id="manyattempts"] .planner-attempt-head`;
+      await shotOf('.planner-task[data-task-id="manyattempts"] .planner-attempts', '51-attempt-history-10', 'P13：10 次尝试 —— 默认只展开第 10 次，9 条历史收起但一条不少',
+        ['第 1 次', '第 10 次', '失败'],
+        [
+          ['10 个折叠头', `[...document.querySelectorAll(${JSON.stringify(manyHeads)})].length === 10`],
+          ['每条头都是真 button', `[...document.querySelectorAll(${JSON.stringify(manyHeads)})].every((h) => h.tagName === 'BUTTON')`],
+          ['只有 1 条展开', `[...document.querySelectorAll(${JSON.stringify(manyHeads)})].filter((h) => h.getAttribute('aria-expanded') === 'true').length === 1`],
+          ['展开的是最新那条', `[...document.querySelectorAll(${JSON.stringify(manyHeads)})].pop().getAttribute('aria-expanded') === 'true'`],
+        ]);
       await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 950, deviceScaleFactor: 1, mobile: false });
       await sleep(700);
       const of = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');

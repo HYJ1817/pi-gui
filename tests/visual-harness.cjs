@@ -256,6 +256,104 @@ const PLAN_STRESS = {
 };
 
 
+/* P13：「下一步」的 **ready 态** 场景夹具。
+ *
+ * 现有三个计划都截不到这一态：plan-1 有失败任务（优先级 3 先命中）、plan-gate 在
+ * 等人工验收（优先级 5）、plan-stress 已完成（优先级 6）。要看到「可以执行」+ 一个
+ * 「开始执行」按钮，必须有一个**没有失败 / 没有门控 / 没有阻塞 / 没有独立验证**
+ * 的计划 —— 而且 `status` 得是 `ready` 或 `paused`（`running` 会先命中「不给 CTA」那支）。
+ *
+ * 任务刻意给两条：上游成功且被接受、下游依赖它并已就绪 —— 这样「有 1 个任务可以执行」
+ * 里的 1 是数出来的，不是写死的。 */
+const PLAN_UX = {
+  id: 'plan-ux',
+  title: 'P13 下一步：可执行',
+  goal: '核对「下一步」在有一条就绪任务时给什么',
+  status: 'ready',
+  createdAt: 1,
+  updatedAt: 2,
+  startedAt: null,
+  endedAt: null,
+  projectRoot: 'C:/pi-GUI',
+  concurrency: 1,
+  recoveryNotes: [],
+  tasks: [
+    {
+      id: 'done', title: '第一阶段：已收尾', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '',
+      verification: null,
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '按计划完成', exitCode: 0, startedAt: 1, endedAt: 2,
+        sessionId: null, sessionAvailable: false, sessionTitle: '',
+        filesChanged: [], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: null,
+        review: { status: 'accepted', note: '第一阶段没问题', reviewedAt: 1758801000000, revision: 2 },
+      }],
+      result: { success: true, exitCode: 0, summary: '按计划完成', toolCalls: 2, durationMs: 1200, raw: null, sessionId: null, changes: { available: false, files: [], note: '' } },
+    },
+    {
+      id: 'todo', title: '第二阶段：还没开跑', description: '上游已完成，依赖已就绪', agent: 'pi',
+      workingDirectory: '.', dependsOn: ['done'], status: 'ready', startedAt: null, endedAt: null, attempt: 1,
+      error: '', verification: null, blockedReason: null, waitingOn: [],
+      attempts: [],
+      result: null,
+    },
+  ],
+};
+
+
+/* P13：「下一步」的 **waiting-review 态** 场景夹具。
+ *
+ * plan-gate 截不到这一支：它里面还有一条 `blockedReason: 'dependency-failed'` 的
+ * 任务（P11 专门用来核对「被依赖失败挡住」那行），而「被阻塞」排在「等验收」前面 ——
+ * 那是设计好的优先级，不该为了让截图好看去改 P11 的夹具。所以单独给一个干干净净、
+ * 只有一条待验收门控的计划。
+ *
+ * 视图字段（`reviewGateSummary` / `workflowReason` / `gateState` / `blockedReason`）
+ * 仍然是真后端 `planView` 会注入的那几个 —— 夹具照真实形状给。 */
+const PLAN_WAIT = {
+  id: 'plan-wait',
+  title: 'P13 下一步：等人工验收',
+  goal: '核对「下一步」在有门控待验收时给什么',
+  status: 'paused',
+  createdAt: 1,
+  updatedAt: 2,
+  startedAt: 1,
+  endedAt: null,
+  projectRoot: 'C:/pi-GUI',
+  concurrency: 1,
+  recoveryNotes: [],
+  reviewGateSummary: { gated: 2, satisfied: 1, waiting: 1 },
+  workflowReason: 'waiting-review',
+  tasks: [
+    {
+      id: 'gated-main', title: '接口改完了，等人验收', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: [], status: 'success', startedAt: 1, endedAt: 2, attempt: 1, error: '',
+      verification: null, reviewGate: true,
+      gateState: { enabled: true, required: true, satisfied: false, reason: 'pending', attempt: 1 },
+      blockedReason: null, waitingOn: [],
+      attempts: [{
+        attempt: 1, success: true, error: '', summary: '', exitCode: 0, startedAt: 1, endedAt: 2,
+        sessionId: null, sessionAvailable: false, sessionTitle: '',
+        filesChanged: ['server/export.js'], changeCaptureIncomplete: false,
+        outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
+        review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
+      }],
+      result: null,
+    },
+    {
+      id: 'gated-sub', title: '下游在等它验收', description: '', agent: 'pi',
+      workingDirectory: '.', dependsOn: ['gated-main'], status: 'blocked', startedAt: null, endedAt: null, attempt: 0, error: '',
+      verification: null, reviewGate: false,
+      gateState: { enabled: false, required: false, satisfied: true, reason: 'disabled', attempt: null },
+      blockedReason: 'waiting-review', waitingOn: ['gated-main'],
+      attempts: [],
+      result: null,
+    },
+  ],
+};
+
+
 /* P11：人工验收门控的场景夹具。
  * 视图字段（`gateState` / `blockedReason` / `waitingOn` / `reviewGateSummary` /
  * `workflowReason`）真后端由 `planView` 注入，这里照真实形状给出来。 */
@@ -695,6 +793,10 @@ const server = http.createServer(async (req, res) => {
         { id: 'plan-1', title: '修复 SSE 重连问题', goal: '让 bridgeRun 的过期响应不再覆盖新状态', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 6, success: 4, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
         { id: 'plan-stress', title: '压力场景：长说明 / 多文件 / 多次尝试', goal: '验证极端内容不破布局', status: 'completed', createdAt: 0, updatedAt: 9, startedAt: 1, endedAt: 9, projectRoot: 'C:/pi-GUI', counts: { total: 2, success: 1, failed: 1, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
         { id: 'plan-gate', title: '人工验收门控：等待 / 通过 / 需修改', goal: '核对门控的五种状态与下游等待原因', status: 'paused', createdAt: 3, updatedAt: 4, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 7, success: 4, failed: 0, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+        /* P13：排第 4 —— cdp-shot 里 pickPlan(3) 就是它。改动顺序会打乱所有场景号。 */
+        { id: 'plan-ux', title: 'P13 下一步：可执行', goal: '核对「下一步」在有一条就绪任务时给什么', status: 'ready', createdAt: 1, updatedAt: 2, startedAt: null, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 2, success: 1, failed: 0, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
+        /* P13：排第 5 —— pickPlan(4)。 */
+        { id: 'plan-wait', title: 'P13 下一步：等人工验收', goal: '核对「下一步」在有门控待验收时给什么', status: 'paused', createdAt: 1, updatedAt: 2, startedAt: 1, endedAt: null, projectRoot: 'C:/pi-GUI', counts: { total: 2, success: 1, failed: 0, cancelled: 0, skipped: 0 }, recoveryNotes: [] },
       ],
     });
   }
@@ -756,6 +858,14 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/plans/plan-stress') {
     if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-stress' });
     return json(res, 200, { ok: true, plan: PLAN_STRESS, counts: { total: 2, success: 1, failed: 1, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+  }
+  if (p === '/api/plans/plan-ux') {
+    if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-ux' });
+    return json(res, 200, { ok: true, plan: PLAN_UX, counts: { total: 2, success: 1, failed: 0, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
+  }
+  if (p === '/api/plans/plan-wait') {
+    if (req.method === 'POST') return json(res, 200, { ok: true, planId: 'plan-wait' });
+    return json(res, 200, { ok: true, plan: PLAN_WAIT, counts: { total: 2, success: 1, failed: 0, cancelled: 0, skipped: 0 }, agents: [], activePlanId: null });
   }
   if (p.startsWith('/api/plans/')) {
     return json(res, 200, { ok: true, planId: 'plan-1', taskId: 'backend', title: '修复 bridgeRun stale response' });

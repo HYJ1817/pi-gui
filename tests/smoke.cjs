@@ -346,6 +346,13 @@ const stubPlanReview = {
   ],
 };
 
+/* P13：审阅草稿那条断言用的**原始副本**。
+ *
+ * ⚠️ P8-C / P9 段会**就地改** stubPlanReview（保存审阅、开验证 —— 那些断言本来就
+ * 该改数据）。所以跑到 P13 时它已经不是原样了：okcmd 的审阅被接受过、验证跑过。
+ * 这份快照在测试进程启动时拍下，谁也碰不到它。 */
+const stubPlanDraft = JSON.parse(JSON.stringify(stubPlanReview));
+
 /* P11：人工验收门控的夹具。
  * 视图字段（`gateState` / `blockedReason` / `waitingOn` / `reviewGateSummary` /
  * `workflowReason`）都是**后端 planView 注进去的**，所以桩里照真实形状给出来。 */
@@ -371,6 +378,77 @@ const stubPlanGate = {
     mkTask('downfail', [], { status: 'blocked', attempt: 0, dependsOn: ['bad'], blockedReason: 'dependency-failed', waitingOn: ['bad'] }),
     mkTask(XSS_NOTE, [], { status: 'blocked', attempt: 0, reviewGate: true, gateState: { enabled: true, required: false, satisfied: false, reason: 'pending', attempt: 1 }, blockedReason: 'waiting-review', waitingOn: [XSS_NOTE] }),
   ],
+};
+
+/* ---------- P13 夹具：Plan 下一步 / Attempt 折叠 ----------
+ *
+ * 只用后端已有的视图字段（status / workflowReason / reviewGateSummary /
+ * verificationActive / blockedReason / gateState），**不给 plan 加任何新字段** ——
+ * 「下一步」必须能从后端真相推导出来，夹具先按这条规矩造。
+ */
+const stubPlanReady = {
+  id: 'plan-ux', title: '还没开始的计划', goal: 'g', status: 'ready', createdAt: 1, updatedAt: 2,
+  startedAt: null, endedAt: null, projectRoot: 'C:/demo', concurrency: 1, recoveryNotes: [],
+  reviewGateSummary: { gated: 0, satisfied: 0, waiting: 0 },
+  tasks: [
+    mkTask('ux-a', [], { status: 'ready', attempt: 0 }),
+    mkTask('ux-b', [], { status: 'pending', attempt: 0, dependsOn: ['ux-a'] }),
+    mkTask('ux-done', [mkAtt(1)]),
+  ],
+};
+
+const stubPlanRunning = {
+  id: 'plan-ux', title: '正在跑的计划', goal: 'g', status: 'running', createdAt: 1, updatedAt: 2,
+  startedAt: 1, endedAt: null, projectRoot: 'C:/demo', concurrency: 1, recoveryNotes: [],
+  reviewGateSummary: { gated: 0, satisfied: 0, waiting: 0 },
+  tasks: [
+    mkTask('ux-run', [mkAtt(1)], { status: 'running', attempt: 2 }),
+    mkTask('ux-wait', [], { status: 'pending', attempt: 0, dependsOn: ['ux-run'] }),
+  ],
+};
+
+/* 十次尝试：默认折叠、手动开合、focus 定位、交互必需展开都用它。 */
+const stubPlanTen = {
+  id: 'plan-ux', title: '折叠夹具', goal: 'g', status: 'paused', createdAt: 1, updatedAt: 2,
+  startedAt: 1, endedAt: null, projectRoot: 'C:/demo', concurrency: 1, recoveryNotes: [],
+  tasks: [
+    mkTask('ten', Array.from({ length: 10 }, (_, i) =>
+      mkAtt(i + 1, {
+        success: i === 9, exitCode: i === 9 ? 1 : 0, outcomeStatus: i === 9 ? 'failed' : 'success',
+        error: i === 9 ? '第十次仍然超时' : '', summary: i === 9 ? '' : `第 ${i + 1} 次做完了`,
+      })), { status: 'failed', attempt: 10 }),
+    mkTask('pair', [
+      mkAtt(1, { review: { status: 'accepted', note: '第一次通过', reviewedAt: 1, revision: 1 }, changeEvidence: mkEv() }),
+      mkAtt(2, { success: false, exitCode: 1, outcomeStatus: 'failed', error: '第二次失败' }),
+    ], { status: 'failed', attempt: 2 }),
+    mkTask('single', [mkAtt(1, {
+      verificationResult: { status: 'passed', command: 'npm test', workingDirectory: '.', workingDirectorySource: 'attempt-snapshot', exitCode: 0, startedAt: 1, finishedAt: 2, durationMs: 5000, outputSummary: 'all good', truncated: false, error: '' },
+      review: { status: 'accepted', note: '一次过', reviewedAt: 3, revision: 1 },
+      changeEvidence: mkEv(),
+    })]),
+    /* 交互必需：**旧**那次正在独立验证 —— 默认该收起，但必须自己展开。 */
+    mkTask('verrun', [
+      mkAtt(1, { verificationRunning: true, verificationResult: { status: 'running', command: 'npm test', workingDirectory: '.', workingDirectorySource: 'attempt-snapshot', exitCode: null, startedAt: 1, finishedAt: null, durationMs: null, outputSummary: '', truncated: false, error: '' } }),
+      mkAtt(2),
+    ], { status: 'success', attempt: 2 }),
+  ],
+};
+
+/* 「下一步」里的任务 id 是**文本**，不是 HTML —— 恶意 id 必须原样显示（G15 同一条规矩）。 */
+const stubPlanBad = {
+  id: 'plan-ux', title: '恶意 id 夹具', goal: 'g', status: 'paused', createdAt: 1, updatedAt: 2,
+  startedAt: 1, endedAt: null, projectRoot: 'C:/demo', concurrency: 1, recoveryNotes: [],
+  tasks: [mkTask(XSS_NOTE, [], { status: 'failed', attempt: 1 })],
+};
+
+/* P13 §二十九：门控夹具**复制一份**加一条「重试排队中」——
+ * 不能直接往 stubPlanGate 上加，那会让其它段的断言跟着变。 */
+const stubPlanGateUx = {
+  ...stubPlanGate,
+  tasks: stubPlanGate.tasks.concat([
+    mkTask('gpend2', [mkAtt(1, { review: { status: 'accepted', note: '第一次通过', reviewedAt: 1, revision: 1 } })],
+      { status: 'pending', attempt: 2, reviewGate: true, gateState: { enabled: true, required: false, satisfied: true, reason: 'accepted', attempt: 1 } }),
+  ]),
 };
 
 /* 计划详情接口回什么 —— 默认 stubPlan，P7 段临时换成 stubPlanP7。 */
@@ -3363,6 +3441,278 @@ staticCheck();
     await new Promise((r) => setTimeout(r, 20));
   }
 
+  /* ================= P13：下一步 / Attempt 折叠 / 动作层级 =================
+   *
+   * 这一段只看**展示层**：状态有没有被算错由后端套件管，这里管的是
+   * 「界面现在说的是什么、哪一条是展开的、按钮排在哪」。
+   * 所有展开/收起的断言都看 `hidden` / `aria-expanded`，**不看 textContent** ——
+   * 收起的节点仍在 DOM 里，textContent 只能证明「渲染过」，证明不了「看得见」。 */
+  async function plannerUxSection() {
+    console.log('\n--- P13 Planner 收敛：下一步 / Attempt 折叠 / 动作层级 / 门控文案 ---');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const T = (e) => (e && e.textContent) || '';
+    const A = window.derivePlanAttention;
+
+    const openFixture = async (plan) => {
+      stubPlanDetail = plan;
+      stubVerificationActive = null;
+      window.closeModal();
+      window.openPlanner();
+      await wait(90);
+      const c = $('modalCard');
+      c.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      return c;
+    };
+    const taskEl = (c, id) => [...c.querySelectorAll('.planner-task')].find((x) => x.dataset.taskId === id);
+    const attsOf = (c, id) => { const t = taskEl(c, id); return t ? [...t.querySelectorAll('.planner-attempt')] : []; };
+    const attOf = (c, id, n) => attsOf(c, id).find((x) => x.dataset.attempt === String(n)) || null;
+    const isOpen = (a) => { const b = a && a.querySelector('.planner-attempt-body'); return Boolean(b) && b.hidden === false; };
+    const togOf = (a) => (a && a.querySelector('.planner-attempt-toggle')) || null;
+    /* 点折叠按钮。实现还没到位时**安静地返回 false**：断言会报「找不到」，
+     * 但整段不能中途炸掉 —— 那会把前面已经失败的断言一起吞掉。 */
+    const clickTog = (c, id, n) => {
+      const b = togOf(attOf(c, id, n));
+      if (!b) return false;
+      b.onclick();
+      return true;
+    };
+    /* 触发一次重绘：关联区开合走的就是 renderDetail —— 与 SSE 事件同一条路径，
+     * 但不会顺手改任务状态，断言的前提更稳。 */
+    const rerender = async (c) => {
+      const b = c.querySelector('.planner-rel-btn');
+      if (!b) return false;
+      b.onclick(); await wait(25);
+      b.onclick(); await wait(25);
+      return true;
+    };
+    const actBtn = (t, text) => (t ? [...t.querySelectorAll('.ext-acts button')].find((b) => b.textContent.trim() === text) || null : null);
+    const gateText = (c, id) => {
+      const t = taskEl(c, id);
+      return T(t && t.querySelector('.planner-gate'));
+    };
+
+    /* ---------- A：Plan 下一步 ---------- */
+    let card = await openFixture(stubPlanReady);
+    check('P13-A1. ready 计划 → 下一步是「有任务可以执行」', () => {
+      const a = A(stubPlanReady);
+      return (a && a.kind === 'ready' && /可以执行/.test(a.text)) || JSON.stringify(a);
+    });
+    check('P13-A2. 页面上真有「下一步」区域，ready 时带「开始执行」', () => {
+      const box = card.querySelector('.planner-next');
+      return (box && /可以执行/.test(T(box)) && [...box.querySelectorAll('button')].some((b) => b.textContent.trim() === '开始执行')) ||
+        (box ? T(box) : '没有 .planner-next');
+    });
+
+    card = await openFixture(stubPlanRunning);
+    check('P13-A3. running 计划 → 下一步是执行状态（不是可执行）', () => {
+      const a = A(stubPlanRunning);
+      return (a && a.kind === 'running') || JSON.stringify(a);
+    });
+    check('P13-A4. running 时「下一步」里没有「开始执行」这种误导 CTA', () => {
+      const box = card.querySelector('.planner-next');
+      return (box && !/开始执行/.test(T(box)) && /执行/.test(T(box))) || (box ? T(box) : '没有 .planner-next');
+    });
+
+    check('P13-A5. waiting-review → 下一步指向「验收 … 的最新成功结果」', () => {
+      /* 门控夹具里带两条**真的失败**的任务 —— 那种情况下失败就该优先（见 A6），
+       * 所以这条断言先把它拿掉，单独验「没有失败时」的 waiting-review 分支。 */
+      const plan = {
+        ...stubPlanGate,
+        tasks: stubPlanGate.tasks.filter((t) => !['failed', 'interrupted'].includes(t.status) && t.blockedReason !== 'dependency-failed'),
+      };
+      const a = A(plan);
+      return (a && a.kind === 'waiting-review' && /验收/.test(a.text) && /gpending/.test(a.text)) || JSON.stringify(a);
+    });
+    check('P13-A6. 同时有失败和待验收 → 失败优先，一次只给一个主焦点', () => {
+      const plan = { ...stubPlanGate, tasks: stubPlanGate.tasks.concat([mkTask('badone', [], { status: 'failed', attempt: 1 })]) };
+      const a = A(plan);
+      return (a && a.kind === 'failed' && !/验收/.test(a.text) && /另有 2 个任务等待验收/.test(a.sub || '')) || JSON.stringify(a);
+    });
+    check('P13-A7. 独立验证在跑 → 验证优先于执行/失败', () => {
+      const a = A({ ...stubPlanRunning, verificationActive: { planId: 'plan-ux', taskId: 'ux-run', attempt: 2 } });
+      return (a && a.kind === 'verification-active' && /正在独立验证/.test(a.text)) || JSON.stringify(a);
+    });
+    check('P13-A8. completed → 已完成；门控全通过才给第二行', () => {
+      const all = A({ ...stubPlanReady, status: 'completed', reviewGateSummary: { gated: 2, satisfied: 2, waiting: 0 } });
+      const none = A({ ...stubPlanReady, status: 'completed' });
+      return (all && all.kind === 'completed' && /计划已完成/.test(all.text) && /所有人工门控已通过/.test(all.sub || '') &&
+        none && !none.sub) || JSON.stringify({ all, none });
+    });
+
+    card = await openFixture(stubPlanBad);
+    check('P13-A9. 恶意 task id 在「下一步」里是纯文本（不是标签）', () => {
+      const box = card.querySelector('.planner-next');
+      if (!box) return '没有 .planner-next';
+      return (T(box).includes('<img') && !box.querySelector('img, script')) || T(box).slice(0, 140);
+    });
+
+    /* ---------- B：Attempt 折叠 ---------- */
+    card = await openFixture(stubPlanTen);
+    check('P13-B1. 十次尝试默认只展开最新一条', () => {
+      const list = attsOf(card, 'ten');
+      const open = list.filter(isOpen);
+      return (list.length === 10 && open.length === 1 && open[0].dataset.attempt === '10') ||
+        JSON.stringify({ total: list.length, open: open.map((x) => x.dataset.attempt) });
+    });
+    check('P13-B2. 收起的那条 body 带 hidden、按钮 aria-expanded=false', () => {
+      const a1 = attOf(card, 'ten', 1);
+      const b = togOf(a1);
+      return (a1 && !isOpen(a1) && b && b.getAttribute('aria-expanded') === 'false') ||
+        JSON.stringify({ open: a1 ? isOpen(a1) : null, aria: b ? b.getAttribute('aria-expanded') : null });
+    });
+    check('P13-B3. 折叠控件是真 button，aria-controls 指向本体', () => {
+      const a1 = attOf(card, 'ten', 1);
+      const b = togOf(a1);
+      const body = a1 && a1.querySelector('.planner-attempt-body');
+      return (b && b.tagName === 'BUTTON' && b.type === 'button' && body && body.id && b.getAttribute('aria-controls') === body.id) ||
+        JSON.stringify({ tag: b && b.tagName, type: b && b.type, ctrls: b && b.getAttribute('aria-controls'), id: body && body.id });
+    });
+
+    clickTog(card, 'ten', 1);
+    await wait(25);
+    const b4Before = isOpen(attOf(card, 'ten', 1));
+    await rerender(card);
+    check('P13-B4. 手动展开旧 attempt → 重绘后仍然展开（Blocker 2）', () =>
+      (b4Before && isOpen(attOf(card, 'ten', 1))) || JSON.stringify({ before: b4Before, after: isOpen(attOf(card, 'ten', 1)) }));
+
+    clickTog(card, 'ten', 10);
+    await wait(25);
+    const b5Before = isOpen(attOf(card, 'ten', 10));
+    await rerender(card);
+    check('P13-B5. 手动收起最新一条 → 重绘不偷偷把它展开', () =>
+      (b5Before === false && isOpen(attOf(card, 'ten', 10)) === false) ||
+      JSON.stringify({ before: b5Before, after: isOpen(attOf(card, 'ten', 10)) }));
+
+    clickTog(card, 'pair', 1);
+    clickTog(card, 'ten', 1);
+    await wait(25);
+    check('P13-B6. 展开状态按 task+attempt 隔离（同为第 1 次互不影响，邻居不受牵连）', () => {
+      const p1 = attOf(card, 'pair', 1);
+      const p2 = attOf(card, 'pair', 2);
+      const t1 = attOf(card, 'ten', 1);
+      const t2 = attOf(card, 'ten', 2);
+      return (p1 && p2 && t1 && t2 && isOpen(p1) && !isOpen(t1) && isOpen(p2) && !isOpen(t2)) ||
+        JSON.stringify({ pair1: p1 ? isOpen(p1) : null, pair2: p2 ? isOpen(p2) : null, ten1: t1 ? isOpen(t1) : null, ten2: t2 ? isOpen(t2) : null });
+    });
+    check('P13-B7. 正在验证的旧 attempt 自动展开（交互必需 > 默认收起）', () => {
+      const v1 = attOf(card, 'verrun', 1);
+      return (v1 && isOpen(v1)) || (v1 ? 'verrun 第 1 次被默认收起了' : '没有 verrun 第 1 次');
+    });
+    check('P13-B8. 摘要行三个维度并存：执行 / 独立验证 / 人工验收', () => {
+      const a = attOf(card, 'single', 1);
+      const g = (sel) => { const e = a && a.querySelector(sel); return e ? e.textContent : ''; };
+      return (g('.planner-attempt-state').includes('成功') && g('.planner-att-verify').includes('通过') &&
+        g('.planner-att-review').includes('已接受') && g('.planner-att-ev').includes('证据')) ||
+        JSON.stringify({ exec: g('.planner-attempt-state'), verify: g('.planner-att-verify'), rev: g('.planner-att-review'), ev: g('.planner-att-ev') });
+    });
+
+    /* focus 带 attempt：跳回来的旧那条不能又被默认规则收起（Blocker 4）。 */
+    stubPlanDetail = stubPlanTen;
+    stubVerificationActive = null;
+    window.closeModal();
+    window.openPlanner({ planId: 'plan-ux', taskId: 'pair', attempt: 1 });
+    await wait(160);
+    card = $('modalCard');
+    check('P13-B9. focus 带 attempt → 那条旧 attempt 被展开并定位（Blocker 4）', () => {
+      const a = attOf(card, 'pair', 1);
+      const t = taskEl(card, 'pair');
+      return (a && isOpen(a) && t && t.classList.contains('focus')) ||
+        JSON.stringify({ has: Boolean(a), open: a ? isOpen(a) : null, focus: t ? t.classList.contains('focus') : null });
+    });
+
+    clickTog(card, 'ten', 1);
+    await wait(25);
+    card = await openFixture(stubPlanTen);
+    check('P13-B10. 重开面板 → 折叠选择清空，回落到默认（只展开最新一条）', () => {
+      const open = attsOf(card, 'ten').filter(isOpen);
+      return (open.length === 1 && open[0].dataset.attempt === '10') ||
+        JSON.stringify(open.map((x) => x.dataset.attempt));
+    });
+
+    /* ---------- C：Review 草稿跨折叠不丢 ---------- */
+    card = await openFixture(stubPlanDraft);
+    const okcmd1 = attOf(card, 'okcmd', 1);
+    clickTog(card, 'okcmd', 1);
+    await wait(25);
+    check('P13-C0. 手动收起单次尝试 → 收起态下草稿入口仍拿得到（预检）', () => {
+      const a = attOf(card, 'okcmd', 1);
+      return (a && !isOpen(a) && Boolean(a.querySelector('.planner-attempt-evidence'))) ||
+        JSON.stringify({ open: a ? isOpen(a) : null });
+    });
+    clickTog(card, 'okcmd', 1);
+    await wait(25);
+    const accBtn = [...(attOf(card, 'okcmd', 1) || { querySelectorAll: () => [] }).querySelectorAll('button')]
+      .find((b) => b.textContent.trim() === '接受本次结果');
+    if (accBtn) accBtn.onclick();
+    await wait(30);
+    let ta = (attOf(card, 'okcmd', 1) || {}).querySelector ? attOf(card, 'okcmd', 1).querySelector('.planner-rv-note-in') : null;
+    if (ta) {
+      ta.value = '这轮的说明要留着';
+      /* 真打字会触发 oninput → 草稿（draft.note）才更新；重绘是从草稿重建输入框的，
+       * 直接改 DOM 值而不改草稿，下一次渲染就会把它冲掉 —— 那不算「草稿在」。 */
+      if (ta.oninput) ta.oninput();
+    }
+    clickTog(card, 'okcmd', 1);
+    await wait(25);
+    const cCollapsed = attOf(card, 'okcmd', 1);
+    check('P13-C1. 收起后草稿仍在 DOM 里（收起 ≠ 丢稿）', () =>
+      (cCollapsed && !isOpen(cCollapsed) && cCollapsed.querySelector('.planner-rv-note-in') &&
+        cCollapsed.querySelector('.planner-rv-note-in').value === '这轮的说明要留着') ||
+      JSON.stringify({ open: cCollapsed ? isOpen(cCollapsed) : null, acc: Boolean(accBtn), ta: Boolean(ta) }));
+    clickTog(card, 'okcmd', 1);
+    await wait(25);
+    await rerender(card);
+    check('P13-C2. 展开 + 重绘后草稿文字还在（Blocker 3）', () => {
+      const a = attOf(card, 'okcmd', 1);
+      const t = a && a.querySelector('.planner-rv-note-in');
+      return (a && isOpen(a) && t && t.value === '这轮的说明要留着') ||
+        JSON.stringify({ open: a ? isOpen(a) : null, val: t ? t.value : null, acc: Boolean(accBtn), ta: Boolean(ta) });
+    });
+
+    /* ---------- D：动作层级 + §二十九门控文案 ---------- */
+    card = await openFixture(stubPlanGateUx);
+    const childIndex = (id, sel) => {
+      const t = taskEl(card, id);
+      return t ? [...t.children].findIndex((n) => n.matches && n.matches(sel)) : -1;
+    };
+    check('P13-D1. 等验收的成功任务顶部有「验收结果」主按钮', () =>
+      Boolean(actBtn(taskEl(card, 'gpending'), '验收结果')) || '没有「验收结果」');
+    check('P13-D2. 当前操作排在尝试历史之前（不必滚过历史才能重试）', () => {
+      const acts = childIndex('gfailed', '.ext-acts');
+      const hist = childIndex('gfailed', '.planner-attempts');
+      return (acts > 0 && hist > acts) || JSON.stringify({ acts, hist });
+    });
+    check('P13-D3. 已验收通过的任务不给「验收结果」', () =>
+      !actBtn(taskEl(card, 'gok'), '验收结果') || '已通过还给了验收按钮');
+
+    const acceptBtn = actBtn(taskEl(card, 'gpending'), '验收结果');
+    if (acceptBtn) acceptBtn.onclick();
+    await wait(40);
+    check('P13-D4. 点「验收结果」→ 最新一次 attempt 展开 + 打开审阅编辑器', () => {
+      const a = attOf(card, 'gpending', 1);
+      return Boolean(a && isOpen(a) && a.querySelector('.planner-rv-note-in')) ||
+        JSON.stringify({ open: a ? isOpen(a) : null, editor: Boolean(a && a.querySelector('.planner-rv-note-in')) });
+    });
+
+    check('P13-E1. §二十九：重试排队中（pending）→ 尚未产生新结果 · 门控未开始', () => {
+      const t = gateText(card, 'gpend2');
+      return (/尚未产生新结果/.test(t) && !/执行未成功/.test(t)) || t;
+    });
+    check('P13-E2. §二十九：真的失败仍写「执行未成功 · 门控未开始」（P12 判据不变）', () => {
+      const t = gateText(card, 'gfailed');
+      return (/执行未成功/.test(t) && !/尚未产生新结果/.test(t)) || t;
+    });
+    check('P13-E3. 旧 accepted + 新 pending 仍不显示「门控已通过」（P12 回归）', () => {
+      const t = gateText(card, 'gfailedold');
+      return !/门控已通过/.test(t) || t;
+    });
+
+    stubPlanDetail = stubPlanReview;
+    window.closeModal();
+    await wait(20);
+  }
+
   await extSection();
   await plannerSection();
   await sessionSection();
@@ -3372,6 +3722,7 @@ staticCheck();
   await evidenceSection();
   await gateSection();
   await convNavSection();
+  await plannerUxSection();
 
   /* ---------- 会话内提问导航（Conversation Minimap） ----------
    *
