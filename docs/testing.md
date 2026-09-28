@@ -27,12 +27,12 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 25 个套件，全部是**纯自动化**：
+`npm test` 里现在有 26 个套件，全部是**纯自动化**：
 
 ```
-smoke 776 · git 151 · modules 114 · reliability · interactions · port-owner
+smoke 792 · git 154 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
-verification 136 · attempt-lifecycle 98
+verification 136 · evidence 69 · attempt-lifecycle 98
 sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
@@ -138,6 +138,34 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 `M 段`（32 条）盯 **cwd 快照**：attempt 开始时冻结、改 task 不影响旧快照、
 Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记来源**、
 绝对路径 / `../` / 已删除目录一律 `invalid-cwd`（不退到 fallback 静默跑别处）。
+
+`evidence`（P10，69 条）测**历史变更证据**（attempt 冻结的 Diff），全程 `os.tmpdir()`
+上的真 git 仓库 + 注入的假执行器：
+
+- **A 段**（纯函数）：unified diff 切块（带空格 / 带 TAB 的路径、`rename from|to`）、
+  numstat 与 diff 文本两条来源合并、上限与截断标记、认不出的值退成默认（不猜）。
+- **B 段**（真 git 端到端）：modified / added（untracked 新文件）/ deleted / rename /
+  binary；路径一律**项目相对**、证据里**没有**绝对路径与临时目录泄露；
+  以及 **dirty 基线**这条 blocker —— 执行前用户已改过时，patch 必须是 `2 → 3`
+  而**不是** `1 → 3`。
+- **C 段**（冻结，P10 的核心）：执行之后继续改工作区 / 变回 clean / 又产生新 diff，
+  旧 attempt 的证据**一个字节都不变**；Retry 后两条 attempt 的证据互相独立。
+- **D 段**：采不到证据**不是任务失败**（非 git 项目、没接采集、采集抛错、任务本身失败
+  时照采）；**中断与硬崩不伪造** post 快照，如实标 `unavailable` + 原因；
+  老 attempt 没有该字段 → 归一化成 `null`（**不假装有 Diff**）。
+- **E 段**：四条写盘路径（Review / PUT Plan / Scheduler 收尾 / **Verifier 收尾**）
+  都**不许**覆盖已落盘的证据。Verifier 那条刻意制造「验证还在跑」的窗口 ——
+  期间把证据写进磁盘，再放行收尾，钉子就是「这几秒里别人写的东西没被盖掉」。
+- **F 段**：文件数 / 单文件 / 总量三处上限、截断有显式标记、计划文件没膨胀到失控、
+  XSS 载荷**原样**存进 patch（当文本，不做任何编码）。
+- **G 段**（防回归）：用同一套组装逻辑喂两种**错误基线**做对照 ——
+  「按当前工作区重算」给出 `1 → 999`、「拿 HEAD 当基线」给出 `1 → 3`，
+  两者都与 B 段 / C 段的断言**不可能同时成立**。所以那两条断言只要被改坏就必红。
+
+`smoke` 里的 **P10 段**测前端：两个入口措辞分开（「查看当前 Diff」/「查看本次 Diff」）、
+面板写明「之后的修改不会改变这里的内容」、文件默认收起 + 可全部展开、
+`unavailable` / 老 attempt **不给按钮也不假装有**、binary / 截断 / 大量文件的说明、
+以及路径与 patch **全部纯文本**（XSS 注入节点为 0）。
 
 最后三个里，`version-consistency` 与 `release-artifacts` 是**发版守卫**：
 前者管 package / lock / tag 一致与「构建链路里有没有写死版本号」，
@@ -294,6 +322,23 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 > 摆出来界面才是一致的。`29-verify-long` 里那条超长**执行目录**（与长命令、
 > 长输出挤在同一张卡片上）是这一轮新加的排版压力项。
 
+**P10 历史变更证据的场景**（`shots:harness` 的 31–37）：
+
+| 场景 | 验什么 |
+|---|---|
+| `31-attempt-diff` | 历史 Diff 面板：标题 +「之后的修改不会改变这里的内容」+ 路径 + `+n −n` |
+| `32-attempt-diff-added-deleted` | 新增（A）/ 删除（D）的类型标记与增删行数 |
+| `33-attempt-diff-binary` | 展开二进制那行：只说「二进制文件已变化，不展示文本 Diff」，**没有** patch 块 |
+| `34-attempt-diff-truncated` | 展开被截断那行：patch + 文件级「已截断」（面板级另有一处「历史 Diff 已截断」） |
+| `35-attempt-diff-unavailable` | 采不到的 attempt：卡片上如实写原因，**不给按钮** |
+| `36-attempt-diff-long` | 压力：超长路径 + 超长单行 patch（脚本会打印是否横向溢出） |
+| `37-attempt-diff-narrow-700` | 压力：窄窗口 700px 下的历史 Diff |
+
+> ⚠️ **33 与 34 要各自展开对应的那一行再取景**：`shot()` 截的是**整个视口**
+> （`Page.captureScreenshot` 不带 `clip`），两行同在一张卡片上、滚动位置又一样时，
+> 都是收起状态就会截出**同一张图** —— 那样等于有一条没验。
+> `35` 拍的是 attempt 卡片而不是弹层：`unavailable` 时**根本没有**可点的入口。
+
 ## 五、发布前验证（F 层）
 
 **一条命令**：
@@ -305,7 +350,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 21 个套件）
+版本一致性（含 tag）  →  npm test（A 层 26 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256

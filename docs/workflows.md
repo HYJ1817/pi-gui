@@ -78,8 +78,8 @@ pi 的 `validateSessionIdFlags` 在 `--session-id` 非法时**直接 `process.ex
 - 界面用词是「**执行期间变更**」，不是「该 Agent 修改」；
 - 两个并行 task 同时运行，**同一个文件可以同时出现在两边的列表里** —— 这是允许的，
   也是正确的（两边的「执行期间」确实重叠了）。串行的 task 则不会互相包含；
-- 完整 diff **不复制进元数据**（它马上就会过期，而且体积大）。元数据里只有文件名，
-  diff 仍然走「文件变更」面板。
+- `filesChanged` 只记**文件名**（很轻）。执行期间的**内容证据**（每个文件的
+  bounded patch）是另一份字段 `changeEvidence`，见 §二之二；
 
 `filesChanged` 一律是**项目相对路径 + 正斜杠**（`gitStatus` 给的就是这个形状，
 `normalizeFilesChanged` 再挡一道）。绝对路径、`..` 逃逸、非字符串一律剔除。
@@ -88,11 +88,91 @@ pi 的 `validateSessionIdFlags` 在 `--session-id` 非法时**直接 `process.ex
 这时 `filesChanged` 记 `[]` 并置 `changeCaptureIncomplete: true`，
 界面说「采集不到」，**不会**伪装成「没有变化」。
 
+## 二之二、历史内容证据：执行前 → 执行后（P10）
+
+`filesChanged` 只回答「**哪些**文件变了」。它答不了「**变成了什么样**」，而且
+它答不了的那个问题会随着工作区继续变动而**越来越答不准**。P10 补的就是这一半。
+
+### 三种 Diff，别混
+
+| 说法 | 说的是什么 | 会不会变 |
+|---|---|---|
+| `filesChanged` | 这次执行期间**哪些文件**被观察到有变化（一列文件名） | 写完不变 |
+| `changeEvidence`（本次 Diff） | 这次执行 **执行前 → 执行后**观察到的工作区变化（每个文件的 bounded patch） | 写完不变 |
+| 当前 Diff | 工作区**此刻**相对 Git 基线是什么样 | 随工作区漂移 |
+
+### 基线是「执行前的工作区」，**不是 HEAD**
+
+这是 P10 最核心的一条。两者在 dirty workspace 下完全不同：
+
+```
+HEAD               const x = 1;
+执行前（用户已改）   const x = 2;
+执行后              const x = 3;
+```
+
+要的历史 diff 是 `2 → 3`；`git diff HEAD` 给的是 `1 → 3` —— 把**用户在执行开始前
+就已经改好**的东西算进了这次尝试。所以采集走的是「把工作区本身写成两棵 tree 再比」，
+而不是 `diff HEAD`。
+
+做法：用一个**独立临时 index**（`GIT_INDEX_FILE` 指到系统临时目录里）对工作区
+`add -A` 再 `write-tree`，执行前后各一次，然后 `diff <pre> <post>`。
+⚠️ **绝不碰用户真实的 `.git/index`** —— 不 add、不 reset、不 checkout、不 commit、
+不 stash。临时索引建在**仓库之外**、用完即删。`tests/git.cjs` 的静态守卫盯着这两点。
+
+### 各类型的处理
+
+- **untracked 新文件**：`add -A` 会把它们写进 tree，所以「执行前不存在、执行后出现」
+  就是一个 `added`，patch 里带内容。`.gitignore` 里的文件**不进**证据（`add -A`
+  尊重 ignore）—— 记的是「这个仓库眼里的工作区」，不是磁盘上的全部文件。
+- **deleted**：`change=deleted`，patch 里是被删掉的内容。
+- **renamed**：`-M` 让 git 自己识别，认得出就记 `change=renamed` + `oldPath`，
+  证据里**只有一条**（不是新旧各一条）。认不出就退化成 `deleted` + `added` —— 准确
+  优先于漂亮。
+- **binary**：**不把内容塞进计划**。记 `binary: true` + 空 patch，界面说
+  「二进制文件已变化，不展示文本 Diff」。判据以 `numstat` 为准（`-` 就是二进制）。
+- **非 git 项目**：`status: 'unavailable'` + 说明原因。
+
+### 上限（计划是整份读写的 JSON，不能让它膨胀）
+
+单文件 patch `24 KB`、单次 attempt 合计 `64 KB`、最多 `50` 个文件。
+超了就**按顺序留前面几个**并置 `truncated: true`（单文件级与 attempt 级都有标记），
+界面显式写「历史 Diff 已截断」。**不悄悄裁掉。**
+
+刻意比「直觉值」小：Scheduler 每次状态变化都整份写盘，一次 attempt 几百 KB
+会让一个 24 任务的计划到十几 MB，而它会被**反复重写** —— 那不是存证据，是拖垮运行期。
+
+### 采不到 ≠ 任务失败
+
+证据是附加物，不是任务的前提。git 不可用、超时、树建不出来、非 git 项目 ——
+一律 `unavailable` + 写明原因，**任务的 outcome 不受影响**（该成功还是成功）。
+
+同样地，**中断与硬崩不伪造**：执行被中断 / 应用崩溃时没有机会采集结束状态，
+就如实记 `unavailable` + 「未完成结束状态采集」，**绝不**在重启后拿「当前工作区」
+补一份 post 快照 —— 那时间边界已经错了。
+
+### 归属
+
+`changeEvidence` 由 **Scheduler** 在 attempt 结束时写入并落盘。Verifier、Review API、
+`PUT /api/plans/:id` 都**不许覆盖**它（见 §5.7 的字段所有权）。Retry 只新增 attempt，
+不动旧的：`Attempt 1 / 2 / 3` 各自的证据互相独立。
+
+更早版本产生的 attempt 没有这个字段 —— 归一化成 `null`，界面如实说「这次执行没有
+变更证据（更早版本没有采集）」，**不假装有 Diff**。`schemaVersion` 仍是 1（纯新增字段）。
+
 ## 三、界面
 
 ### Planner（任务 → 会话）
 
-每条 attempt 一行：状态 → **会话**（标题 + 「打开会话」）→ **执行期间变更**（文件名）。
+每条 attempt 一行：状态 → **会话**（标题 + 「打开会话」）→ **执行期间变更**（文件名）
+→ **本次 Diff** → 验证要求 / 独立验证 → 人工审阅。
+
+- 变更那一栏有两个**分开**的入口，措辞不混：「查看**当前** Diff」（工作区此刻相对
+  基线的差异，每个文件一个）与「查看**本次** Diff」（这次执行前后冻结下来的证据，
+  一条）。没有历史证据的 attempt 不给后者，如实说「没有采集到 / 更早版本没有采集」；
+- 「本次 Diff」面板顶部写明「这是该 Attempt 执行前后观察到的工作区变化。之后的修改
+  不会改变这里的内容。」文件默认**收起**（几十个文件全展开会把几 MB 塞进 DOM），
+  另有「全部展开」；
 
 - 会话标题由后端在计划详情里一次注解好（`planView`），前端不做 N+1 查询；
 - 三种「没有会话」分开说：`无可关联会话` / `关联会话已删除` / 有会话；
@@ -272,7 +352,7 @@ A 还拿着 2，保存 accepted → **409 review-conflict**（不是 last-write-
 
 | 写者 | 拥有 |
 |---|---|
-| **Scheduler** | 执行状态 / attempt 创建 / `result` / `sessionId` / `filesChanged` / `verificationSnapshot` / `workingDirectorySnapshot` / `outcomeStatus` |
+| **Scheduler** | 执行状态 / attempt 创建 / `result` / `sessionId` / `filesChanged` / `changeEvidence`（P10）/ `verificationSnapshot` / `workingDirectorySnapshot` / `outcomeStatus` |
 | **Review API** | `attempt.review` |
 | **Verifier**（P9） | `attempt.verificationResult` |
 | **PUT /api/plans/:id** | 计划结构（标题、目标、任务、依赖、verification、concurrency） |
@@ -316,6 +396,11 @@ P9 之后同一条路径对验证证据也成立（只是方向反过来）：
    改的是刚读出来的那一份，所以这期间别人（Review API / Scheduler）写进去的东西都在。
 
 四者与 Review API 的 `revision` 检查遵循同一条规矩：**读—改—写不能跨异步边界**。
+
+> `changeEvidence`（P10）归 Scheduler，而且只在 attempt 结束时写一次 —— 所以**不需要**
+> 上面那种合并：它没有第二个写者。要守住的是它的**反面**：Review、Verifier、
+> `PUT /api/plans/:id` 这三条路径都**不许**把它覆盖掉（带着一份旧任务副本提交时，
+> 「保留历史」分支必须把它原样留着）。`tests/evidence.cjs` 的 E 段盯着这四条路径。
 
 ### 5.7b 运行期排他：同一时间只有一个「实际执行者」（P9 收口）
 
@@ -454,9 +539,12 @@ Retry           →  只允许计划不再 active 时
 **绝不看 task 的当前状态、也绝不从 `error` 文案猜**。前端挡这一道只是不让人
 点了白点一次；即使绕过，后端也会拒绝。
 
-**③ current Diff 的语义。** attempt 里那个入口给的是**当前工作区**的差异
-（复用「文件变更」面板，不新做 `reviewDiff` / `historicalDiff`）—— P7/P8 从没
-存过历史 diff。所以前端还要处理两种如实说明：
+**③ 变更那一栏的两种 Diff。** attempt 上有**两个分开**的入口，措辞不能混：
+「查看**当前** Diff」给的是**当前工作区**的差异（复用「文件变更」面板，每个文件一个）；
+「查看**本次** Diff」给的是 P10 冻结下来的 `changeEvidence`（一条）。后者**不在打开时
+重算** —— 它随 attempt 一起落盘，之后不再变（数据契约见 §二之二）。没有它
+（采不到 / 更早版本的 attempt）就**不给按钮**，如实写原因。当前 Diff 那边要处理
+这几种如实说明：
 
 | 情形 | 界面 |
 |---|---|

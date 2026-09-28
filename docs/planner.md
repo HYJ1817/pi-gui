@@ -177,6 +177,12 @@ Agent、状态、耗时、退出码、结果摘要、attempt 历史、
 - `review` —— 人工审阅（`pending` / `accepted` / `needs_changes` + 说明 + `revision`）。
   **审阅不改执行状态**：`success` + `needs_changes` 是合法组合，`failed` + `accepted` 会被拒。
 
+从 P10 起还多一样：
+
+- `changeEvidence` —— 这次执行 **执行前 → 执行后**观察到的工作区变化的**冻结证据**
+  （每个文件的 bounded patch）。和 `filesChanged`（只有文件名）不是一回事，
+  也不等于「当前 Diff」—— 见下一节。
+
 ## 七之二、任务 ↔ 会话 / 任务 ↔ 文件
 
 从 P7 起，每次 Agent 执行都能关联到它产生的会话，并记录执行期间变化的文件；
@@ -201,7 +207,8 @@ Agent、状态、耗时、退出码、结果摘要、attempt 历史、
 - **三个状态**：`待审阅` / `已接受` / `需修改`。只有**执行成功**的 attempt
   能被「接受」；失败 / 取消 / 被中断的只能标「需修改」（后端也会独立拒绝）。
 - **每条 attempt 各自带**：验证要求（`verificationSnapshot`，执行开始时冻结的）、
-  验证结果、关联会话、执行期间涉及的文件 + 每个文件的**当前** diff 入口。
+  验证结果、关联会话、执行期间涉及的文件，以及**两个分开的 Diff 入口**
+  （当前 / 本次，见七之四）。
 - **验证结果是 Pi GUI 自己跑出来的**（P9）：点「运行验证」执行那条 attempt
   冻结的命令、在它冻结的工作目录里跑，把退出码 / 耗时 / 输出摘要记回来。
   **没跑过**才显示「尚未独立确认」；跑过之后显示的是机器实际跑出来的东西。
@@ -227,6 +234,29 @@ Agent、状态、耗时、退出码、结果摘要、attempt 历史、
 所以那一行长这样：`成功 8 · 失败 1 · 取消 1 · 中断 1 · 尚无结果 1`
 （取消 / 中断 / 尚无结果 为 0 时不显示，不给常态加噪声）。
 
+## 七之四、两种 Diff：当前 vs 本次（P10）
+
+attempt 卡片上有**两个**「看变更」的入口，措辞刻意分开，因为它们回答的是两个问题：
+
+| 入口 | 回答的问题 | 会不会变 |
+|---|---|---|
+| 查看**当前** Diff | 工作区**此刻**相对 Git 基线是什么样（每个文件一个） | 随工作区漂移 |
+| 查看**本次** Diff | 这次执行**执行前 → 执行后**观察到的工作区变化（一条） | 一旦写下不再变 |
+
+「本次 Diff」就是 `attempt.changeEvidence`：执行前后各把工作区写成一棵 git tree
+（**临时 index，不碰用户真实的 `.git/index`**）再比。所以它**不依赖现在的文件内容** ——
+之后工作区怎么改、Retry 多少次、甚至变回 clean，它一个字节都不动。
+
+基线是**执行前那一刻的工作区**，不是 `HEAD`。两者在 dirty workspace 下不同：
+用户在执行开始前已经改过的东西，不该算进这次尝试。
+
+界面上的几条如实说明：面板顶部写明「之后的修改不会改变这里的内容」；文件默认**收起**
+（几十个文件全展开会把几 MB 塞进 DOM）；`unavailable` / 更早版本的 attempt
+**不给入口也不假装有 Diff**；采不到证据**不影响任务结论**（它是附加物，不是前提）。
+
+完整的数据契约（上限、binary / untracked / rename 怎么处理、中断与硬崩为什么不伪造、
+字段所有权）见 **[workflows.md](workflows.md) §二之二**。
+
 ## 八、崩溃恢复
 
 计划存在 **`<PI_GUI_DATA>/plans/`**：
@@ -246,7 +276,7 @@ App 重开时如果看到某个任务还是 `running`，**不会假装它还在�
 | 路径 | 谁做 | 历史里会留下什么 |
 |---|---|---|
 | **优雅退出**（SIGINT → `scheduler.shutdown()`） | 同步收尾 | 补一条 `outcomeStatus=interrupted` 的 attempt，**带**已冻结的 `verificationSnapshot` 与 `sessionId`（它们还在内存里） |
-| **硬崩**（进程被杀，没来得及收尾） | 下次启动 `store.recoverAll()` | 也补一条 `interrupted` 的 attempt，但**只写真的知道的**：attempt 号与 `startedAt`（开始时已落盘）。`verificationSnapshot` / `sessionId` 只在内存里，崩了就没了 ⇒ 一律 `null`，`filesChanged=[]` + `changeCaptureIncomplete=true`。**不猜。** |
+| **硬崩**（进程被杀，没来得及收尾） | 下次启动 `store.recoverAll()` | 也补一条 `interrupted` 的 attempt，但**只写真的知道的**：attempt 号与 `startedAt`（开始时已落盘）。`verificationSnapshot` / `sessionId` 只在内存里，崩了就没了 ⇒ 一律 `null`，`filesChanged=[]` + `changeCaptureIncomplete=true` + `changeEvidence` 标 `unavailable`（**没有机会采集结束状态，绝不拿「现在的工作区」补一份**）。**不猜。** |
 
 > ⚠️ **为什么硬崩也要补这条**：不补的话会出现「任务显示被中断，但历史里
 > **完全找不到这次执行**」—— 界面的 attempt 列表是空的，用户会以为记录丢了。
@@ -262,8 +292,9 @@ App 重开时如果看到某个任务还是 `running`，**不会假装它还在�
 
 - **不自动创建 git commit / push / reset / clean**。Agent 可以改工作区，
   但提交由你决定。
-- `verification` 字段只保存描述，**由 Agent 执行**，Pi GUI 不自己 shell 执行它 ——
-  「谁执行」这件事必须只有一个答案。
+- `verification` 是**任务侧**的验证要求：Agent 执行时按它自检；Planner 的编排**不会**
+  偷偷替你跑它。Pi GUI 自己那条「独立验证」（P9）是**你点了才跑**的，而且用的是
+  执行开始时冻结的命令与工作目录。
 - 所有 Agent 都经过适配器调用：**`shell:false` + 参数数组**，没有一处拼接
   命令字符串。Agent 的 stdout 是不可信文本，前端渲染路径一次 `innerHTML`
   都不用（见 [security.md](security.md)）。
@@ -309,7 +340,7 @@ cancelled / failed 保留关系、filesChanged 的新增 / 修改 / 删除 / ren
 `npm run test:lifecycle`（98 条，P8-B）：retry / cancel / stop / shutdown /
 restart 对**历史**的影响，以及运行期的状态所有权（active Plan 下 retry 被拒、
 cancel / skip 作用于 `active.plan` 且不被收尾写盘冲掉）。见
-[workflows.md](docs/workflows.md) 第六节。
+[workflows.md](workflows.md) 第六节。
 
 `npm run test:ui` 里的 **P8-C 段**（63 条）：人工审阅的前端行为 —— 三态文案、
 哪些执行结论不能「接受」、编辑态与字数上限、保存 / 清除走的接口与

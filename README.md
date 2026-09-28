@@ -159,8 +159,13 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 - 默认串行（多个 agent 同时改一个工作区会互相覆盖）
 - 失败就暂停整个计划，给你重试 / 跳过 / 停止三个选择
 - 可指定 `pi` / `codex` / `gemini` / `claude` 执行，可用性在运行时探测
-- **每次执行结果可以人工验收**：看那次关联的会话、执行期间涉及的文件与**当前**
-  Git diff，然后记下「已接受 / 需修改」
+- **每次执行结果可以人工验收**：看那次关联的会话、执行期间涉及的文件，以及**两个分开的
+  Diff 入口**（工作区此刻的**当前 Diff** / 那次执行前后冻结的**本次 Diff**），
+  然后记下「已接受 / 需修改」
+- **历史变更证据**：每次执行前后各把工作区写成一棵 git tree（**临时 index，不碰你真实的
+  `.git/index`**）再比 —— 所以「本次 Diff」**不随工作区漂移**：之后又改了文件、Retry 过、
+  甚至工作区变回 clean，那条记录的内容一个字节都不动。它说的是「这段时间里工作区发生了
+  什么」，**不是**「Agent 改的」
 - **独立验证**：对某一次执行点「运行验证」，Pi GUI 自己跑一遍**那次执行当初
   冻结的**验证命令与工作目录，把退出码、耗时和输出摘要记在那条记录上。但
   **验证通过不等于验收通过** —— 认不认这个结果仍然是你的判断
@@ -237,7 +242,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 25 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 26 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -252,7 +257,8 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 通过后做一次 Electron 打包并验产物（25 项 + 47 项）。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
-`test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:lifecycle` /
+`test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:verify` /
+`test:evidence` / `test:lifecycle` /
 `test:sessions` / `test:search` /
 `test:security` / `test:diagnostics` / `test:update` / `test:version` /
 `test:release` / `test:guard`。
