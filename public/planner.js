@@ -1577,6 +1577,13 @@ export function openPlanner(focus = null) {
       if (g.satisfied) {
         text = '门控已通过';
         cls = 'planner-gate-ok';
+      } else if (g.reason === 'no-successful-attempt') {
+        text = '还没有成功执行 · 门控未开始';
+      } else if (g.required === false) {
+        /* P12：`required=false` = 这次执行**没成功**（失败 / 取消 / 中断 / 跳过），
+         * 根本没有可验收的产出 —— 这时候写「等待人工验收」是在把人往死路上引
+         * （后端此时的 workflowReason 也已经不是 waiting-review 了，两边要对得上）。 */
+        text = '执行未成功 · 门控未开始';
       } else if (g.reason === 'needs_changes') {
         text = '需要修改 · 门控未通过';
         cls = 'planner-gate-bad';
