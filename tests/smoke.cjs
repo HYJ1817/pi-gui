@@ -3547,6 +3547,27 @@ staticCheck();
       return (T(box).includes('<img') && !box.querySelector('img, script')) || T(box).slice(0, 140);
     });
 
+    /* ---------- A10–A12：runnable 的口径 ----------
+     *
+     * 「可以执行」这个数字是**数出来的**：只数 `status === 'ready'`。
+     * pending 是「依赖还没完成、当前不能启动」，把它算进来就会出现
+     * 「界面说 2 个能跑、一点开始执行只跑起来 1 个」—— 数字没法解释。
+     * 三行都用**精确文案**断言：`/可以执行/` 对旧实现照样通过，等于没测。 */
+    card = await openFixture(stubPlanReady);
+    check('P13-A10. runnable 只数 status=ready（A ready + B pending + C success → 1）', () => {
+      const a = A(stubPlanReady);
+      return (a && a.kind === 'ready' && a.text === '有 1 个任务可以执行') || JSON.stringify(a);
+    });
+    check('P13-A11. 页面上的「下一步」写的就是这句精确文案（数量是数出来的，不是写死的）', () => {
+      const t = card.querySelector('.planner-next-text');
+      return (t && t.textContent.trim() === '有 1 个任务可以执行') || (t ? t.textContent.trim() : '没有 .planner-next-text');
+    });
+    check('P13-A12. ready 计划却数不出 ready 任务 → 诚实降级「计划待执行」，不拿 pending 凑数', () => {
+      const plan = { ...stubPlanReady, tasks: stubPlanReady.tasks.filter((t) => t.status !== 'ready') };
+      const a = A(plan);
+      return (a && a.kind === 'ready' && a.text === '计划待执行' && !/可以执行/.test(a.text)) || JSON.stringify(a);
+    });
+
     /* ---------- B：Attempt 折叠 ---------- */
     card = await openFixture(stubPlanTen);
     check('P13-B1. 十次尝试默认只展开最新一条', () => {
@@ -3628,6 +3649,71 @@ staticCheck();
       const open = attsOf(card, 'ten').filter(isOpen);
       return (open.length === 1 && open[0].dataset.attempt === '10') ||
         JSON.stringify(open.map((x) => x.dataset.attempt));
+    });
+
+    /* ---------- B11–B17：折叠头上的「人工验收」一格（P13 收尾） ----------
+     *
+     * 收起时只剩这一行摘要，所以它说的每一个字都要站得住：
+     *
+     *   执行状态  ≠  人工审阅状态（贯穿全段的那条语义）
+     *
+     * - `accepted` / `needs_changes` 是**人为做过的标记**，无论执行成败都照实显示
+     *   （失败那次标「需修改」是合法操作，抹掉它等于丢掉用户刚做的决定）；
+     * - `pending` 只对**成功的产出**成立 —— 只有它进 reviewSummary 的审阅分母。
+     *   失败 / 取消 / 被中断没有可验收的产物，写「待审阅」会凭空造一个待办，
+     *   还和展开区里「这次执行没有成功、只能标需修改」自相矛盾。
+     *
+     * 展开后的完整审阅区（状态 / 说明 / 时间 / 重试轮次）一条都不动。 */
+    const headTxt = (c, id, n) => {
+      const a = attOf(c, id, n);
+      const e = a && a.querySelector('.planner-att-review');
+      return e ? e.textContent : null;
+    };
+
+    card = await openFixture(stubPlanDraft);
+    check('P13-B11. 折叠头 R1：成功 + 未审阅 → 「待审阅」', () => {
+      const t = headTxt(card, 'okcmd', 1);
+      return t === '待审阅' || String(t);
+    });
+    check('P13-B12. 折叠头 R2：成功 + 已接受 → 「已接受」', () => {
+      const t = headTxt(card, 'okdesc', 1);
+      return t === '已接受' || String(t);
+    });
+    check('P13-B13. 折叠头 R3：成功 + 需修改 → 「需修改」', () => {
+      const t = headTxt(card, 'revneed', 1);
+      return t === '需修改' || String(t);
+    });
+    check('P13-B14. 折叠头 R4：失败 + 未审阅 → **不渲染**这一格（执行状态仍在）', () => {
+      const a = attOf(card, 'failed', 1);
+      const t = headTxt(card, 'failed', 1);
+      const st = a && a.querySelector('.planner-attempt-state');
+      return (t === null && st && st.textContent.trim() === '失败') ||
+        JSON.stringify({ review: t, state: st ? st.textContent.trim() : null });
+    });
+    check('P13-B15. 折叠头 R5+R6：取消 / 被中断同样不渲染这一格', () => {
+      const c1 = headTxt(card, 'cancelled', 1);
+      const c2 = headTxt(card, 'interrupted', 1);
+      return (c1 === null && c2 === null) || JSON.stringify({ cancelled: c1, interrupted: c2 });
+    });
+
+    /* R7：失败 + 已经被标过「需修改」—— 标记是人给的，照实显示。
+     * 不另造整套 Plan：拿快照改**一条 attempt 的一个字段**，形状保持真实。 */
+    const r7 = JSON.parse(JSON.stringify(stubPlanDraft));
+    r7.tasks.find((t) => t.id === 'failed').attempts[0].review =
+      { status: 'needs_changes', note: '先补边界用例', reviewedAt: 1758800100000, revision: 1 };
+    card = await openFixture(r7);
+    check('P13-B16. 折叠头 R7：失败 + 需修改 → 仍显示「需修改」（人为标记不被抹掉）', () => {
+      const t = headTxt(card, 'failed', 1);
+      return t === '需修改' || String(t);
+    });
+
+    /* §二十五 / Retry：task=failed 只描述**最新**那次，历史那条成功的不能被改写。
+     * stubPlanTen.pair：Attempt 1 成功·已接受、Attempt 2 失败·未审阅、task.status=failed。 */
+    card = await openFixture(stubPlanTen);
+    check('P13-B17. 历史隔离：Attempt 1 成功·已接受不被 task 失败改写，Attempt 2 失败·不写「待审阅」', () => {
+      const a1 = headTxt(card, 'pair', 1);
+      const a2 = headTxt(card, 'pair', 2);
+      return (a1 === '已接受' && a2 === null) || JSON.stringify({ attempt1: a1, attempt2: a2 });
     });
 
     /* ---------- C：Review 草稿跨折叠不丢 ---------- */

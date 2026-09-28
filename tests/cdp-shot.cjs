@@ -362,6 +362,16 @@ async function main() {
     /* Scene 5 用 backend 的**第 1 次**尝试：它失败了且还没审阅，
        所以只该出现「需要修改」，不该有「接受本次结果」。 */
     await shotOf('.planner-task[data-task-id="backend"] .planner-attempts > .planner-attempt', '16-rev-failed', 'Scene 5：失败的 Attempt 只有「需要修改」');
+    /* P13 收尾：**收起的那行**摘要不再给失败的尝试挂「待审阅」——
+     * 那不是一份可验收的产物。展开区里的完整审阅（状态 / 按钮 / 时间）一条不动。 */
+    await shotOf('.planner-task[data-task-id="backend"] .planner-attempts > .planner-attempt', '56-attempt-failed-compact',
+      'P13：失败的 Attempt —— 折叠头不写「待审阅」，展开的审阅区照旧',
+      ['第 1 次', '失败'],
+      [
+        ['折叠头没有「待审阅」', `(() => { const h = document.querySelector('.planner-task[data-task-id="backend"] .planner-attempt[data-attempt="1"] .planner-attempt-head'); return !!h && !h.querySelector('.planner-att-review'); })()`],
+        ['折叠头的验证 / 证据两格还在', `(() => { const h = document.querySelector('.planner-task[data-task-id="backend"] .planner-attempt[data-attempt="1"] .planner-attempt-head'); return !!h && !!h.querySelector('.planner-att-verify') && !!h.querySelector('.planner-att-ev'); })()`],
+        ['展开的审阅区仍写「待审阅」（收起 ≠ 删状态）', `(() => { const a = document.querySelector('.planner-task[data-task-id="backend"] .planner-attempt[data-attempt="1"]'); return !!a && !!a.querySelector('.planner-rv') && /待审阅/.test(a.querySelector('.planner-rv').textContent); })()`],
+      ]);
     await shotOf('.planner-task[data-task-id="docs"] .planner-attempt:last-of-type', '17-rev-null-snapshot', '没有历史验证要求 → 另起一行标「当前任务验证要求」');
 
     /* 编辑态 → 保存。夹具对 `tests` 的保存回冲突，所以这一条正好截到 Scene 6。 */
@@ -564,6 +574,7 @@ async function main() {
         ['下一步', '有 1 个任务可以执行', '开始执行'],
         [
           ['kind=ready', `document.querySelector('.planner-next-text').classList.contains('ready')`],
+          ['文案精确是「有 1 个任务可以执行」（数量是数出来的）', `document.querySelector('.planner-next-text').textContent.trim() === '有 1 个任务可以执行'`],
           ['CTA 是「开始执行」', `(() => { const b = document.querySelector('.planner-next .btn'); return !!b && b.textContent.trim() === '开始执行'; })()`],
           ['状态不是只靠颜色', `(() => { const e = document.querySelector('.planner-next-text'); return !!e && e.textContent.trim().length > 0; })()`],
         ]);
