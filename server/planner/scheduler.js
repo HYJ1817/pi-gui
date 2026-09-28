@@ -64,12 +64,16 @@ import {
   isPlanSettled,
   isSafeSessionId,
   normalizeFilesChanged,
+  normalizeChangeEvidence,
   normalizeReview,
   normalizeVerificationSnapshot,
   normalizeWorkingDirectorySnapshot,
   summarizePlan,
   taskSessionId,
 } from './model.js';
+/* P10：历史变更证据的组装（纯函数）。跑 git 的部分由 server.js 注入的
+ * `gitEvidence` 提供 —— 与 `gitStatus` 同一种装配方式。 */
+import { captureEvidence } from './evidence.js';
 
 /** 任务超时默认 30 分钟（与 cli.js 一致，这里可被 plan 覆盖）。 */
 const DEFAULT_TASK_TIMEOUT_MS = 30 * 60 * 1000;
@@ -101,6 +105,11 @@ export function createScheduler({
    * `server/` 下的模块不互相 import，跨子系统协作一律走装配 + 依赖注入。
    * 默认 false：没注入时行为与 P9 之前完全一样，老的单测不用改。 */
   hasActiveVerification = () => false,
+  /* P10：历史变更证据的采集原语（`lib/git.js` 的 worktreeTree / treeDiff /
+   * treeNumstat）。注入而不是 import —— 与 `gitStatus` 同一种做法，
+   * 于是测试可以塞一份假的进去，不必真的跑 git。不注入时证据一律 unavailable，
+   * 执行本身照常。 */
+  gitEvidence = null,
 }) {
   /** 当前正在跑的 plan（全局唯一，规格 §32）。 */
   let active = null; // { planId, plan, controllers: Map<taskId, AbortController>, sessionIds: Map<taskId, string>, stopping: boolean, pumpRunning: boolean }
@@ -388,6 +397,34 @@ export function createScheduler({
      * 绝对路径随项目搬走就失真，而且不该进元数据。 */
     session.workingDirs.set(task.id, task.workingDirectory || '.');
 
+    /* ---------- P10：执行**前**的工作区快照 ----------
+     *
+     * 为什么不回头问 HEAD：HEAD 是**上一次提交**时的工作区，而我们需要的是
+     * 「这次执行前是什么样」。用户在尝试开始前**已经改过**的东西不能被算进
+     * 这次尝试的证据 —— 两者在 dirty workspace 下完全不同：
+     *
+     *     HEAD            const x = 1;
+     *     执行前           const x = 2;   ← 用户自己改的，不算这次
+     *     执行后           const x = 3;
+     *     要的 diff       2 → 3   （而不是 1 → 3）
+     *
+     * 用临时 index + write-tree 拿「此刻工作区」的树，**不碰用户真实的 .git/index**。
+     * 失败不影响执行 —— 证据是附加物，不是任务的前提（§十三）；原因记下来，
+     * 等下如实写进 changeEvidence。 */
+    let preTree = null;
+    let preReason = '';
+    if (gitEvidence && typeof gitEvidence.worktreeTree === 'function') {
+      try {
+        const pre = await gitEvidence.worktreeTree(projectRoot);
+        if (pre.ok) preTree = pre.tree;
+        else preReason = `无法采集执行前的 Git 状态（${pre.reason}）`;
+      } catch (err) {
+        preReason = `采集执行前状态失败：${(err && err.message) || err}`;
+      }
+    } else {
+      preReason = '没有接入 Git 证据采集';
+    }
+
     const before = await snapshot(projectRoot);
 
     let outcome;
@@ -426,6 +463,8 @@ export function createScheduler({
       verificationSnapshot,
       /* P9 收口：这条 attempt 开始时的工作目录（冻结值）。 */
       workingDirectorySnapshot: session.workingDirs.get(task.id) || null,
+      /* P10：执行前后工作区的**冻结内容证据**。 */
+      changeEvidence: await captureEvidence(gitEvidence, projectRoot, { preTree, preReason }),
     });
   }
 
@@ -440,6 +479,9 @@ export function createScheduler({
      * 这里（那时从 session.workingDirs 取），所以它和 verificationSnapshot 一样，
      * 是「执行前就确定的值」—— 可以照记，不是猜。 */
     const workingDirectorySnapshot = normalizeWorkingDirectorySnapshot(relation.workingDirectorySnapshot);
+    /* P10：这次执行期间工作区的冻结内容证据。**采集失败不影响 outcome** ——
+     * 它只是附加证据，任务该成功还是成功（§十三）。 */
+    const changeEvidence = normalizeChangeEvidence(relation.changeEvidence);
     /* P8-A：稳定的执行结论。
      * 判定信号与下面改 task.status 用的是**同一个**（`outcome.cancelled` /
      * `outcome.success`），所以两者永远一致 —— 不会出现「状态说已取消、
@@ -491,6 +533,7 @@ export function createScheduler({
         outcomeStatus,
         verificationSnapshot,
         workingDirectorySnapshot,
+        changeEvidence,
         review: normalizeReview(null),
       });
     }
@@ -924,6 +967,9 @@ export function createScheduler({
             verificationSnapshot: session.verifications.get(t.id) || null,
             /* 同上：工作目录快照也是执行前就确定的值，原样保留。 */
             workingDirectorySnapshot: session.workingDirs.get(t.id) || null,
+            /* P10：执行被中断，**没有机会采集结束状态** —— 如实说，绝不拿
+             * 「现在的工作区」补一份 post 快照（那时间边界已经错了）。 */
+            changeEvidence: { status: 'unavailable', capturedAt: null, files: [], truncated: false, note: '执行被中断，未完成结束状态采集' },
             review: normalizeReview(null),
           });
         }

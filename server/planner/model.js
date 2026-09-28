@@ -167,6 +167,9 @@ export function normalizeAttempt(raw) {
    * 等验证时再读当前值，就等于「用现在的目录去验证过去那次执行」。
    * 老 attempt 没有它 → null，验证时 fallback 到当前 task 值并**如实标记**。 */
   a.workingDirectorySnapshot = normalizeWorkingDirectorySnapshot(a.workingDirectorySnapshot);
+  /* P10：这次 attempt 执行期间工作区的**冻结内容证据**（每个文件的 patch）。
+   * additive —— 老 attempt 没有它，归一化成 null（界面不假装有 Diff）。 */
+  a.changeEvidence = normalizeChangeEvidence(a.changeEvidence);
   a.review = normalizeReview(a.review);
   return a;
 }
@@ -324,8 +327,7 @@ export const WORKDIR_SOURCE = Object.freeze({
 const WORKDIR_SOURCES = Object.values(WORKDIR_SOURCE);
 
 /**
- * 归一化「这次 attempt 开始时冻结的工作目录」。
- *
+ * 归一化「这次 attempt 开始时冻结的工作目录」。 *
  * **只做形状归一，不做安全判定** —— 绝对路径、`../` 逃逸这类值**原样留着**，
  * 交给 Verifier 用 `lib/safe-path.js` 去拒绝。
  *
@@ -376,6 +378,112 @@ export function normalizeVerificationResult(raw) {
     truncated: running ? false : Boolean(raw.truncated),
     error: running ? '' : clampStr(raw.error, MAX_VERIFICATION_ERROR),
   };
+}
+
+/* ==================== P10：历史变更证据 ====================
+ *
+ * 与 `filesChanged` 的区别（**这两个不要混**）：
+ *
+ *     filesChanged     当时**观察到哪些文件**发生了变化（一份文件名清单，很轻）
+ *     changeEvidence   那次执行前后工作区的**冻结内容证据**（每个文件的 patch）
+ *
+ * 与「当前 Diff」的区别：
+ *
+ *     当前 Diff        工作区**此刻**相对 Git 基线是什么样 —— 会随时间漂移
+ *     changeEvidence   执行**前 → 后**的差 —— 一旦写下就不再变
+ *
+ * 措辞仍然是「执行期间观察到的变化」，**不是**「Agent 改的」：
+ * 用户、编辑器、formatter、watcher、构建脚本都可能在同一时间段动过文件。
+ */
+
+/** 证据的可用性。 */
+export const CHANGE_EVIDENCE_STATUS = Object.freeze({
+  AVAILABLE: 'available',
+  PARTIAL: 'partial',
+  UNAVAILABLE: 'unavailable',
+});
+
+const CHANGE_EVIDENCE_STATUSES = Object.values(CHANGE_EVIDENCE_STATUS);
+
+/** 单个文件变更的类型。rename 认不出来时退化成 deleted + added（见 lib/git.js）。 */
+export const CHANGE_KIND = Object.freeze({
+  MODIFIED: 'modified',
+  ADDED: 'added',
+  DELETED: 'deleted',
+  RENAMED: 'renamed',
+});
+
+const CHANGE_KINDS = Object.values(CHANGE_KIND);
+
+/**
+ * 证据的体积上限。
+ *
+ * ---------- 为什么比「直觉值」小 ----------
+ *
+ * 计划是一个**整份读写**的 JSON 文件，而且 Scheduler 每次状态变化都整份写一遍。
+ * 一次 attempt 的证据如果有几百 KB，一个 24 任务的计划就能到十几 MB，
+ * 而它会被反复重写 —— 那不是在存证据，是在拖垮运行期。
+ *
+ * 所以：单文件 24 KB、单次 attempt 合计 64 KB、最多 50 个文件。
+ * 取这个量级是因为**绝大多数 patch 远小于它**（普通改动几 KB），
+ * 上限只在病态情况（代码生成、导入大文件）才起作用；真到那时按顺序留前面几个，
+ * 并把 `truncated` 标出来、在界面上说清楚 —— **不悄悄裁掉**。
+ */
+export const MAX_EVIDENCE_FILE_PATCH = 24 * 1024;
+export const MAX_EVIDENCE_TOTAL_PATCH = 64 * 1024;
+export const MAX_EVIDENCE_FILES = 50;
+const MAX_EVIDENCE_NOTE = 500;
+const MAX_EVIDENCE_PATH = 400;
+
+/**
+ * 归一化一条历史变更证据。
+ *
+ * **宽进严出**：读盘时宽容（坏字段退成默认值，一个坏文件不该让整个计划读不出来），
+ * 但**同时把上限再压一遍** —— 手改过的计划文件不该能把界面撑爆。
+ * 严格的那一套（跑 git、切 patch）在 lib/git.js 与 evidence.js 里。
+ */
+export function normalizeChangeEvidence(raw) {
+  if (!isPlainObject(raw)) return null;
+  const status = CHANGE_EVIDENCE_STATUSES.includes(raw.status) ? raw.status : CHANGE_EVIDENCE_STATUS.UNAVAILABLE;
+  const out = {
+    status,
+    capturedAt: Number.isFinite(raw.capturedAt) ? raw.capturedAt : null,
+    files: [],
+    truncated: Boolean(raw.truncated),
+    note: clampStr(raw.note, MAX_EVIDENCE_NOTE),
+  };
+  const list = Array.isArray(raw.files) ? raw.files.slice(0, MAX_EVIDENCE_FILES) : [];
+  if (Array.isArray(raw.files) && raw.files.length > MAX_EVIDENCE_FILES) out.truncated = true;
+  let budget = MAX_EVIDENCE_TOTAL_PATCH;
+  for (const f of list) {
+    if (!isPlainObject(f)) continue;
+    const path = clampStr(f.path, MAX_EVIDENCE_PATH);
+    if (!path) continue;
+    let patch = typeof f.patch === 'string' ? f.patch : '';
+    let cut = Boolean(f.truncated);
+    if (patch.length > MAX_EVIDENCE_FILE_PATCH) {
+      patch = patch.slice(0, MAX_EVIDENCE_FILE_PATCH);
+      cut = true;
+    }
+    if (patch.length > budget) {
+      patch = patch.slice(0, Math.max(0, budget));
+      cut = true;
+    }
+    budget -= patch.length;
+    /* 补丁被截断 = 这次证据整体也不再完整 —— 别只在文件级标一下。 */
+    if (cut) out.truncated = true;
+    out.files.push({
+      path,
+      change: CHANGE_KINDS.includes(f.change) ? f.change : CHANGE_KIND.MODIFIED,
+      oldPath: clampStr(f.oldPath, MAX_EVIDENCE_PATH) || null,
+      binary: Boolean(f.binary),
+      additions: Number.isInteger(f.additions) ? f.additions : null,
+      deletions: Number.isInteger(f.deletions) ? f.deletions : null,
+      patch,
+      truncated: cut,
+    });
+  }
+  return out;
 }
 
 /**

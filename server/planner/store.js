@@ -159,6 +159,9 @@ export function createPlanStore({ dataDir, maxPlans = 500 } = {}) {
                * 进程崩了就没了 —— 与 verificationSnapshot 同理，事后无从得知，
                * 一律留空，**绝不猜**。界面据此在验证时走 fallback 并如实标记。 */
               workingDirectorySnapshot: null,
+              /* P10：硬崩时同样**没有**执行后的快照。事后拿「当前工作区」补一份
+               * 是在伪造时间边界 —— 宁可如实说采不到。 */
+              changeEvidence: { status: 'unavailable', capturedAt: null, files: [], truncated: false, note: '应用崩溃，未完成结束状态采集' },
               review: normalizeReview(null),
             });
           }

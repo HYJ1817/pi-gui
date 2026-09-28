@@ -62,7 +62,7 @@ import { createPlanner } from './server/planner/index.js';
  * planner/ 下的模块不许跨目录 import（tests/modules.cjs 的守卫），
  * 所以执行能力**在这里注入**过去 —— 与 scheduler 拿 gitStatus 是同一种装配。 */
 import { runShellCommand } from './server/agents/cli.js';
-import { gitStatus } from './lib/git.js';
+import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
 
@@ -275,7 +275,9 @@ const scheduler = createScheduler({
   gitStatus,
   /* 「现在有没有独立验证在跑」—— 只注入这一个**只读**函数，Scheduler 不认识
    * Verifier。verifierRef 稍后才回填，闸门只在请求时被调用，那时它已经就位。 */
-  hasActiveVerification: () => Boolean(verifierRef && verifierRef.hasRunning()),
+  /* P10：历史变更证据的采集原语（临时 index + 两棵树比 diff）。注入而不是让
+   * Scheduler import —— 与 gitStatus 同一种做法。 */
+  gitEvidence: { worktreeTree, treeDiff, treeNumstat },
 });
 /* P9 独立验证执行器。放在 scheduler 之后建 —— 它要问「这个计划现在是不是
  * 正在执行」（`scheduler.activePlanId()`），那条规则只写在 Verifier 里，
