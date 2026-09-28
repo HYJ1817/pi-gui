@@ -348,6 +348,68 @@ async function main() {
     await shotOf('.planner-task[data-task-id="hub"] .planner-attempt:last-of-type', '27-verify-interrupted', 'P9：已中断 +「重新运行验证」');
     await shotOf('.planner-task[data-task-id="live"] .planner-attempts > .planner-attempt', '28-verify-running', 'P9：正在验证… +「停止验证」');
 
+    /* ---------- P10：历史变更证据 ---------- */
+    /* 打开某条 attempt 的「查看本次 Diff」——它会用 openModal 换掉 Planner 那张卡。 */
+    const openEvidence = async (taskId) => {
+      const ok = await clickIn(`.planner-task[data-task-id="${taskId}"] .planner-attempt-evidence button`, '查看本次 Diff');
+      await sleep(500);
+      return ok;
+    };
+    const reopenPlanner = async () => {
+      await evalJs('document.body.dispatchEvent(new MouseEvent("mousedown", {bubbles:true}))');
+      await sleep(250);
+      await evalJs('document.querySelector("#navPlanner").click()');
+      await sleep(700);
+      await pickPlan(0);
+    };
+
+    if (await openEvidence('analyze')) {
+      await shotOf('.modal-card.evidence', '31-attempt-diff', 'P10：历史 Diff（修改）—— 面板写明这是执行前后的冻结证据');
+    }
+    await reopenPlanner();
+    if (await openEvidence('tests')) {
+      await shotOf('.modal-card.evidence', '32-attempt-diff-added-deleted', 'P10：历史 Diff —— 新增 / 删除');
+    }
+    await reopenPlanner();
+    if (await openEvidence('backend')) {
+      /* 两条都以「展开该文件」来取景 —— 默认收起时这两行在同一张卡片上、滚到
+       * 同一个位置，截出来会是**同一张图**（shot() 截的是整个视口）。展开后
+       * 画面真正不同，而且各自证明各自的点。
+       * 二进制那行**没有** `.ev-patch`（换成一句说明），用结构选中它 ——
+       * 不要用 `.ev-kind.added`：那行的 change 是 modified。 */
+      const openEvRow = (sel) => evalJs(`(() => { const d = document.querySelector(${JSON.stringify(sel)}); if (!d) return false; d.open = true; return true; })()`);
+      const collapseEvRows = () => evalJs(`(() => { for (const d of document.querySelectorAll('.modal-card.evidence .ev-file')) d.open = false; return true; })()`);
+      await openEvRow('.modal-card.evidence .ev-file:not(:has(.ev-patch))');
+      await shotOf('.modal-card.evidence .ev-file:not(:has(.ev-patch))', '33-attempt-diff-binary', 'P10：历史 Diff —— 二进制文件（展开：不展示文本 Diff）');
+      await collapseEvRows();
+      await openEvRow('.modal-card.evidence .ev-file:has(.ev-warn)');
+      await shotOf('.modal-card.evidence .ev-file:has(.ev-warn)', '34-attempt-diff-truncated', 'P10：历史 Diff —— 截断（展开：单文件 patch + 已截断）');
+    }
+    await reopenPlanner();
+    /* ⚠️ `unavailable` 时**没有**「查看本次 Diff」按钮（smoke W3 把这条钉住了）——
+     * 如实说的那句就在 attempt 卡片上，所以拍卡片本身，不是弹层。 */
+    await shotOf('.planner-task[data-task-id="hub"] .planner-attempt:last-of-type', '35-attempt-diff-unavailable', 'P10：历史 Diff —— 采集不到（如实说原因，不给按钮）');
+    await reopenPlanner();
+
+    /* 长内容 + 700px：整页不许横向溢出 */
+    if (await pickPlan(1)) {
+      if (await openEvidence('longnote')) {
+        const of = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
+        console.log('      历史 Diff 长内容：scrollWidth=' + of.sw + ' innerWidth=' + of.iw + ' → 横向溢出=' + (of.sw > of.iw + 1));
+        await shotOf('.modal-card.evidence', '36-attempt-diff-long', 'P10：历史 Diff —— 超长路径 + 超长单行 patch');
+        await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 950, deviceScaleFactor: 1, mobile: false });
+        await sleep(600);
+        const of2 = await evalJs('({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })');
+        console.log('      历史 Diff @700：scrollWidth=' + of2.sw + ' innerWidth=' + of2.iw + ' → 横向溢出=' + (of2.sw > of2.iw + 1));
+        await shotOf('.modal-card.evidence', '37-attempt-diff-narrow-700', 'P10：历史 Diff —— 窄窗口 700px');
+        await send('Emulation.clearDeviceMetricsOverride');
+        await sleep(400);
+      }
+    }
+    await evalJs('document.body.dispatchEvent(new MouseEvent("mousedown", {bubbles:true}))');
+    await sleep(300);
+    await reopenPlanner();
+
     /* 压力项（§五十八）：1000 字说明 / 20 个变更文件 / 超长路径 / 10 次尝试 / 窄窗口 */
     if (await pickPlan(1)) {
       await shotOf('.planner-task[data-task-id="longnote"] .planner-attempt:last-of-type', '20-stress-long-note', '压力：1000 字说明 + 20 个文件 + 超长路径');

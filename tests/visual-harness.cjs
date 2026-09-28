@@ -79,6 +79,16 @@ const PLAN_DETAIL = {
         outcomeStatus: 'success', verificationSnapshot: { command: 'npm test' },
         review: { status: 'accepted', note: '第一次实现已确认', reviewedAt: 1758800000000, revision: 2 },
         /* P9：Pi GUI 自己跑过一遍的真实证据 → Scene「验证通过」 */
+        /* P10：历史变更证据（可用）→ Scene「历史 Diff」 */
+        changeEvidence: {
+          status: 'available',
+          capturedAt: 1758800050000,
+          truncated: false,
+          note: '',
+          files: [
+            { path: 'src/auth.js', change: 'modified', oldPath: null, binary: false, additions: 2, deletions: 1, patch: 'diff --git a/src/auth.js b/src/auth.js\nindex 1111111..2222222 100644\n--- a/src/auth.js\n+++ b/src/auth.js\n@@ -1,3 +1,4 @@\n const token = read();\n-const stale = true;\n+const stale = false;\n+const run = next();\n', truncated: false },
+          ],
+        },
         verificationResult: { status: 'passed', command: 'npm test', workingDirectory: '.', workingDirectorySource: 'attempt-snapshot', exitCode: 0, startedAt: 1758800001000, finishedAt: 1758800042000, durationMs: 41000, outputSummary: 'ok 740/740 通过\ntests 12 passed, 0 failed\n\n（退出码 0）', truncated: false, error: '' },
       }],
       result: { success: true, exitCode: 0, summary: '重连时 bridgeRun 会自增，但过期响应仍会写回状态', toolCalls: 4, durationMs: 42000, raw: null, sessionId: 'pi-gui-plan-1-analyze-a1', changes: { available: true, files: [], note: '' } },
@@ -90,6 +100,17 @@ const PLAN_DETAIL = {
       attempts: [
         { attempt: 1, success: false, error: '第一次故意失败：模型报 402', summary: '', exitCode: 1, startedAt: 3, endedAt: 4, sessionId: 'pi-gui-plan-1-backend-a1', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第一次）', filesChanged: ['server/rpc-bridge.js'], changeCaptureIncomplete: false, outcomeStatus: 'failed', verificationSnapshot: { command: 'npm test' }, review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
           /* P9：失败 + 输出被截断（要能看出「输出已截断」这句）→ Scene「验证失败」 */
+          /* P10：binary + 截断 → Scene「历史 Diff：二进制 / 截断」 */
+          changeEvidence: {
+            status: 'partial',
+            capturedAt: 1758800060000,
+            truncated: true,
+            note: '部分 diff 已截断',
+            files: [
+              { path: 'assets/logo.png', change: 'modified', oldPath: null, binary: true, additions: null, deletions: null, patch: '', truncated: false },
+              { path: 'server/rpc-bridge.js', change: 'modified', oldPath: null, binary: false, additions: 12, deletions: 3, patch: 'diff --git a/server/rpc-bridge.js b/server/rpc-bridge.js\n--- a/server/rpc-bridge.js\n+++ b/server/rpc-bridge.js\n@@ -1,2 +1,2 @@\n-const run = 1;\n+const run = 2;\n', truncated: true },
+            ],
+          },
           verificationResult: { status: 'failed', command: 'npm test', workingDirectory: 'src', workingDirectorySource: 'attempt-snapshot', exitCode: 1, startedAt: 1758800050000, finishedAt: 1758800068400, durationMs: 18400, outputSummary: 'not ok 118 - bridge drops stale response\n  AssertionError: expected 2 to equal 1\n    at tests/reliability.cjs:88:7\nnot ok 119 - reconnect keeps the newest run\nnpm ERR! Test failed. See above for more details.', truncated: true, error: '' } },
         { attempt: 2, success: false, error: '第二次也失败：模型报 402', summary: '', exitCode: 1, startedAt: 5, endedAt: 6, sessionId: 'pi-gui-plan-1-backend-a2', sessionAvailable: true, sessionTitle: 'bridge reconnect fix（第二次）', filesChanged: ['server/rpc-bridge.js', 'server/sse.js'], changeCaptureIncomplete: false, outcomeStatus: 'failed', verificationSnapshot: { command: 'npm test' }, review: { status: 'needs_changes', note: '两次都报 402，先把 provider 配额确认了再重试', reviewedAt: 1758800100000, revision: 1 } },
       ],
@@ -103,6 +124,17 @@ const PLAN_DETAIL = {
         sessionId: null, sessionAvailable: false, sessionTitle: '',
         filesChanged: ['tests/reliability.cjs'], changeCaptureIncomplete: false,
         outcomeStatus: 'success', verificationSnapshot: { description: '确认登录错误提示' },
+        /* P10：added + deleted（Scene「历史 Diff：新增 / 删除」） */
+        changeEvidence: {
+          status: 'available',
+          capturedAt: 1758800080000,
+          truncated: false,
+          note: '',
+          files: [
+            { path: 'tests/login.test.js', change: 'added', oldPath: null, binary: false, additions: 40, deletions: 0, patch: 'diff --git a/tests/login.test.js b/tests/login.test.js\nnew file mode 100644\n--- /dev/null\n+++ b/tests/login.test.js\n@@ -0,0 +1,2 @@\n+test("login", () => {});\n+test("logout", () => {});\n', truncated: false },
+            { path: 'tests/legacy.test.js', change: 'deleted', oldPath: null, binary: false, additions: 0, deletions: 18, patch: 'diff --git a/tests/legacy.test.js b/tests/legacy.test.js\ndeleted file mode 100644\n--- a/tests/legacy.test.js\n+++ /dev/null\n@@ -1 +0,0 @@\n-test("old", () => {});\n', truncated: false },
+          ],
+        },
         review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
       }],
       result: null,
@@ -154,6 +186,8 @@ const PLAN_DETAIL = {
         review: { status: 'pending', note: '', reviewedAt: null, revision: 0 },
         /* P9：被中断的验证（命令跑着，应用被关掉）→ Scene「已中断」 */
         verificationResult: { status: 'interrupted', command: 'npm run build', workingDirectory: 'packages/legacy', workingDirectorySource: 'current-task-fallback', exitCode: null, startedAt: 1758800070000, finishedAt: 1758800075000, durationMs: 5000, outputSummary: '', truncated: false, error: '应用关闭时被中断' },
+        /* P10：中断 → 没有结束状态采集，如实说（Scene「历史 Diff：不可用」） */
+        changeEvidence: { status: 'unavailable', capturedAt: null, files: [], truncated: false, note: '应用关闭时被中断，未完成结束状态采集' },
       }],
       result: null,
     },
@@ -187,6 +221,16 @@ const PLAN_STRESS = {
         review: { status: 'accepted', note: LONG_NOTE, reviewedAt: 1758800300000, revision: 1 },
         /* 长命令 + 长输出（且被截断）—— 排版压力项 */
         verificationResult: { status: 'failed', command: LONG_COMMAND, workingDirectory: 'packages/something/really/really/really/long/path/to/generated/adapter', workingDirectorySource: 'attempt-snapshot', exitCode: 1, startedAt: 1758800310000, finishedAt: 1758800331800, durationMs: 21800, outputSummary: LONG_OUTPUT, truncated: true, error: '' },
+        /* P10：超长路径 + 超长单行 patch（Scene「历史 Diff：长内容」） */
+        changeEvidence: {
+          status: 'available',
+          capturedAt: 1758800330000,
+          truncated: false,
+          note: '',
+          files: [
+            { path: LONG_PATH, change: 'modified', oldPath: null, binary: false, additions: 120, deletions: 8, patch: 'diff --git a/' + LONG_PATH + ' b/' + LONG_PATH + '\n--- a/' + LONG_PATH + '\n+++ b/' + LONG_PATH + '\n@@ -1 +1 @@\n-' + 'a'.repeat(300) + '\n+' + 'b'.repeat(300) + '\n', truncated: false },
+          ],
+        },
       }],
       result: null,
     },

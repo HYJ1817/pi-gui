@@ -765,8 +765,22 @@ const post = (p, payload, extra = {}) => jsonReq(p, authed({ method: 'POST', bod
   check('不做 commit / push / pull / branch / merge / rebase', () =>
     !/['"](commit|push|pull|branch|merge|rebase|stash)['"]/.test(gitCode) || '出现了超出职责的写操作');
   check('git 参数里没有模板字符串拼接', () => !/gitArgs\(`/.test(gitCode) && !/`\s*git\s/.test(gitCode) || 'git 参数是拼出来的');
-  check('本模块不做文件写入（只有删未跟踪文件的 unlink）', () =>
-    !/writeFileSync|appendFileSync|rmSync|rmdirSync|mkdirSync|createWriteStream/.test(gitCode) || '出现了文件写入');
+  /* P10 起本模块会建一个**临时 index** 把工作区写成 tree（历史变更证据的采集原语）。
+   * 于是这条守卫从「完全不写盘」收窄成它本来要护的那个不变量：
+   * **只在系统临时目录里创建 / 删除，绝不往项目里写一个字、也绝不碰真实 .git/index。**
+   * 判据仍是静态正则 —— 所以拆成三条，任何一条都能单独红。 */
+  check('不往项目里写内容（写入类 API 一律不用）', () =>
+    !/writeFileSync|appendFileSync|createWriteStream|mkdirSync|rmdirSync/.test(gitCode) || '出现了文件写入');
+  check('临时目录只建在 os.tmpdir() 下', () => {
+    const calls = gitCode.match(/mkdtempSync\([^)]*\)/g) || [];
+    return (calls.length > 0 && calls.every((c) => /os\.tmpdir\(\)/.test(c))) || `mkdtempSync 的落点不是 os.tmpdir()：${calls.join(' | ')}`;
+  });
+  check('删除只作用于临时目录（rmSync 不拿项目路径去删）', () => {
+    const calls = gitCode.match(/rmSync\([^)]*/g) || [];
+    return calls.every((c) => !/projectRoot|projectReal/.test(c)) || `rmSync 作用在项目路径上：${calls.join(' | ')}`;
+  });
+  check('临时 index 走 GIT_INDEX_FILE（不碰用户真实的 .git/index）', () =>
+    /GIT_INDEX_FILE/.test(gitCode) || '没有用 GIT_INDEX_FILE 隔离');
   check('applyRestore 用项目根解析路径，不信任 entry 里的字符串', () =>
     /path\.resolve\(projectReal,\s*entry\.path\)/.test(gitCode) || '路径没有用项目根解析');
   check('单文件撤销仍走 resolveProjectPath 校验', () =>

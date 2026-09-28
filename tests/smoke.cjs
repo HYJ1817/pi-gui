@@ -265,6 +265,22 @@ const XSS_NOTE = '<img src=x onerror=alert(1)> <script>alert(2)</script> <svg/on
 const R_LONG_PATH = 'packages/something/really/really/really/long/path/to/generated/adapter/implementation.js';
 /* P9：一条很长、带满参数的验证命令 —— 用来验「长命令有 title、不撑爆卡片」。 */
 const R_LONG_COMMAND = 'npm run test -- --reporter=spec --grep "reconnect|stale|bridgeRun" --timeout=30000 --reporter-options maxDiffSize=200000';
+/* P10：历史变更证据的夹具（含 binary / 截断 / 改名 / XSS 各种形状）。 */
+const R_EV_PATCH = 'diff --git a/src/auth.js b/src/auth.js\n--- a/src/auth.js\n+++ b/src/auth.js\n@@ -1 +1 @@\n-const x = 1;\n+const x = 3;\n';
+const R_EV_XSS = '<img src=x onerror=alert(1)>';
+const mkEv = (over = {}) =>
+  Object.assign(
+    {
+      status: 'available',
+      capturedAt: 1758800000000,
+      truncated: false,
+      note: '',
+      files: [
+        { path: 'src/auth.js', change: 'modified', oldPath: null, binary: false, additions: 1, deletions: 1, patch: R_EV_PATCH, truncated: false },
+      ],
+    },
+    over
+  );
 const R_MANY_FILES = Array.from({ length: 20 }, (_, i) => (i === 3 ? R_LONG_PATH : `src/gen/mod-${i}.js`));
 
 function mkAtt(n, over) {
@@ -294,14 +310,35 @@ const stubPlanReview = {
   id: 'plan-1', title: '审阅夹具', goal: 'g', status: 'paused', createdAt: 1, updatedAt: 2,
   startedAt: 1, endedAt: null, projectRoot: 'C:/demo', concurrency: 1, recoveryNotes: [],
   tasks: [
-    mkTask('okcmd', [mkAtt(1)]),
-    mkTask('okdesc', [mkAtt(1, { verificationSnapshot: { description: '确认登录错误提示' }, review: { status: 'accepted', note: '第一次通过', reviewedAt: 1758800000000, revision: 3 } })]),
+    mkTask('okcmd', [mkAtt(1, { changeEvidence: mkEv() })]),
+    mkTask('okdesc', [mkAtt(1, { changeEvidence: mkEv({ status: 'unavailable', files: [], note: '无法采集执行前的 Git 状态（add-failed）' }), verificationSnapshot: { description: '确认登录错误提示' }, review: { status: 'accepted', note: '第一次通过', reviewedAt: 1758800000000, revision: 3 } })]),
     mkTask('oknull', [mkAtt(1, { verificationSnapshot: null })], { verification: { command: 'npm run test:unit' } }),
-    mkTask('revneed', [mkAtt(1, { review: { status: 'needs_changes', note: '缺少边界用例', reviewedAt: 1758800100000, revision: 1 }, verificationResult: { status: 'failed', command: 'npm test', workingDirectory: 'packages/core', workingDirectorySource: 'attempt-snapshot', exitCode: 1, startedAt: 1758800110000, finishedAt: 1758800128400, durationMs: 18400, outputSummary: 'not ok 3 - boom\nnpm ERR! Test failed', truncated: true, error: '' } })]),
+    mkTask('revneed', [mkAtt(1, { changeEvidence: mkEv({
+      status: 'partial',
+      truncated: true,
+      note: '部分 diff 已截断',
+      files: [
+        { path: 'assets/logo.png', change: 'modified', oldPath: null, binary: true, additions: null, deletions: null, patch: '', truncated: false },
+        { path: 'src/big.js', change: 'modified', oldPath: null, binary: false, additions: 900, deletions: 3, patch: R_EV_PATCH, truncated: true },
+      ],
+    }), review: { status: 'needs_changes', note: '缺少边界用例', reviewedAt: 1758800100000, revision: 1 }, verificationResult: { status: 'failed', command: 'npm test', workingDirectory: 'packages/core', workingDirectorySource: 'attempt-snapshot', exitCode: 1, startedAt: 1758800110000, finishedAt: 1758800128400, durationMs: 18400, outputSummary: 'not ok 3 - boom\nnpm ERR! Test failed', truncated: true, error: '' } })]),
     mkTask('xsstask', [mkAtt(1, { review: { status: 'accepted', note: XSS_NOTE, reviewedAt: 1758800200000, revision: 1 }, verificationResult: { status: 'passed', command: 'npm test', workingDirectory: XSS_NOTE, workingDirectorySource: 'attempt-snapshot', exitCode: 0, startedAt: 1758800210000, finishedAt: 1758800215000, durationMs: 5000, outputSummary: XSS_NOTE, truncated: false, error: '' } })]),
-    mkTask('manyfiles', [mkAtt(1, { filesChanged: R_MANY_FILES, review: { status: 'accepted', note: '二十个文件', reviewedAt: 1758800300000, revision: 1 }, verificationResult: { status: 'passed', command: R_LONG_COMMAND, workingDirectory: R_LONG_PATH.replace(/[^/]+$/, ''), workingDirectorySource: 'attempt-snapshot', exitCode: 0, startedAt: 1758800310000, finishedAt: 1758800331800, durationMs: 21800, outputSummary: 'all good\n', truncated: false, error: '' } })]),
+    mkTask('manyfiles', [mkAtt(1, { changeEvidence: mkEv({
+      status: 'partial',
+      truncated: true,
+      note: '变更文件超过 50 个，只保留了前 50 个',
+      files: [
+        { path: 'src/new-name.js', change: 'renamed', oldPath: 'src/old-name.js', binary: false, additions: 0, deletions: 0, patch: '', truncated: false },
+        { path: 'src/gone.js', change: 'deleted', oldPath: null, binary: false, additions: 0, deletions: 18, patch: R_EV_PATCH, truncated: false },
+      ],
+    }), filesChanged: R_MANY_FILES, review: { status: 'accepted', note: '二十个文件', reviewedAt: 1758800300000, revision: 1 }, verificationResult: { status: 'passed', command: R_LONG_COMMAND, workingDirectory: R_LONG_PATH.replace(/[^/]+$/, ''), workingDirectorySource: 'attempt-snapshot', exitCode: 0, startedAt: 1758800310000, finishedAt: 1758800331800, durationMs: 21800, outputSummary: 'all good\n', truncated: false, error: '' } })]),
     mkTask('failed', [mkAtt(1, { success: false, exitCode: 1, error: '模型报 402', outcomeStatus: 'failed' })], { status: 'failed' }),
-    mkTask('cancelled', [mkAtt(1, { success: false, exitCode: null, error: '已取消', outcomeStatus: 'cancelled', verificationResult: { status: 'interrupted', command: 'npm test', workingDirectory: 'packages/legacy', workingDirectorySource: 'current-task-fallback', exitCode: null, startedAt: 1758800220000, finishedAt: 1758800225000, durationMs: 5000, outputSummary: '', truncated: false, error: '已停止' } })], { status: 'cancelled' }),
+    mkTask('cancelled', [mkAtt(1, { changeEvidence: mkEv({
+      note: XSS_NOTE,
+      files: [
+        { path: 'src/' + XSS_NOTE + '.js', change: 'added', oldPath: null, binary: false, additions: 1, deletions: 0, patch: XSS_NOTE, truncated: false },
+      ],
+    }), success: false, exitCode: null, error: '已取消', outcomeStatus: 'cancelled', verificationResult: { status: 'interrupted', command: 'npm test', workingDirectory: 'packages/legacy', workingDirectorySource: 'current-task-fallback', exitCode: null, startedAt: 1758800220000, finishedAt: 1758800225000, durationMs: 5000, outputSummary: '', truncated: false, error: '已停止' } })], { status: 'cancelled' }),
     mkTask('interrupted', [mkAtt(1, { success: false, exitCode: null, error: '应用关闭时被中断', outcomeStatus: 'interrupted', filesChanged: [], changeCaptureIncomplete: true, verificationSnapshot: null })], { status: 'interrupted' }),
     mkTask('live', [mkAtt(1, { review: { status: 'accepted', note: '第一轮保留', reviewedAt: 1758800400000, revision: 1 }, verificationResult: { status: 'running', command: 'npm test', workingDirectory: '.', workingDirectorySource: 'attempt-snapshot', exitCode: null, startedAt: 1758800410000, finishedAt: null, durationMs: null, outputSummary: '', truncated: false, error: '' }, verificationRunning: true })], { status: 'running', attempt: 2 }),
     mkTask('multrev', [mkAtt(1, { review: { status: 'accepted', note: '第一次曾经通过', reviewedAt: 1758800500000, revision: 1 } }), mkAtt(2)]),
@@ -3305,6 +3342,7 @@ staticCheck();
   await p7Section();
   await reviewSection();
   await verifySection();
+  await evidenceSection();
   await convNavSection();
 
   /* ---------- 会话内提问导航（Conversation Minimap） ----------
@@ -4337,8 +4375,166 @@ staticCheck();
     verifyDelayMs = 0;
   }
 
-  async function sessionSection() {
-    sessionCalls.length = 0;
+  /* ================= P10：历史变更证据（前端） ================= */
+
+  async function evidenceSection() {
+    console.log('\n--- P10 历史 Diff：入口 / 面板 / 纯文本 / 不漂移 ---');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const T = (e) => (e && e.textContent) || '';
+
+    stubPlanDetail = stubPlanReview;
+    stubVerificationActive = null;
+    /* 让一个变更文件「当前还有未提交差异」—— 「查看当前 Diff」那个入口才会出现，
+     * W5 要在同一张卡片上同时看到两种入口。 */
+    const savedChanges0 = window.S.changes;
+    window.S.changes = { loaded: true, isRepo: true, files: [{ path: 'src/gen/mod-0.js' }] };
+    window.closeModal();
+    window.openPlanner();
+    await wait(80);
+    let card = $('modalCard');
+    card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+    await wait(90);
+
+    const taskEl = (id) => [...card.querySelectorAll('.planner-task')].find((x) => x.dataset.taskId === id);
+    const evRow = (id) => {
+      const it = taskEl(id);
+      return it ? it.querySelector('.planner-attempt-evidence') : null;
+    };
+    const evBtn = (id) => {
+      const row = evRow(id);
+      return row ? [...row.querySelectorAll('button')].find((b) => b.textContent.trim() === '查看本次 Diff') || null : null;
+    };
+
+    /* ---------- 入口 ---------- */
+    check('W1. 有证据的 attempt 给「查看本次 Diff」', () => Boolean(evBtn('okcmd')) || T(evRow('okcmd')));
+    check('W2. 老 attempt（没有这个字段）**不假装有 Diff**', () => {
+      const it = taskEl('oknull');
+      return Boolean(it) && !evBtn('oknull') && /没有变更证据/.test(T(evRow('oknull'))) || T(evRow('oknull'));
+    });
+    check('W3. 采集失败：说明原因，且不给按钮', () => {
+      const t = T(evRow('okdesc'));
+      return (!evBtn('okdesc') && /没有采集到变更证据/.test(t) && /add-failed/.test(t)) || t;
+    });
+    check('W4. 证据不完整时明确提示', () => /证据不完整/.test(T(evRow('revneed'))) || T(evRow('revneed')));
+    check('W5. **「查看当前 Diff」与「查看本次 Diff」是两个入口**（措辞分开，不混）', () => {
+      /* 用 manyfiles：它既有 filesChanged（每文件一个「查看当前 Diff」）又有历史证据。 */
+      const it = taskEl('manyfiles');
+      const texts = it ? [...it.querySelectorAll('button')].map((b) => b.textContent.trim()) : [];
+      return (texts.includes('查看当前 Diff') && texts.includes('查看本次 Diff')) || JSON.stringify(texts);
+    });
+
+    /* ---------- 面板 ---------- */
+    {
+      evBtn('okcmd').onclick();
+      await wait(80);
+      const vc = $('modalCard');
+      check('W6. 面板标题与说明**写明这是历史证据**（不是现在的文件）', () => {
+        const t = T(vc);
+        return (/历史 Diff/.test(t) && /之后的修改不会改变这里的内容/.test(t)) || t.slice(0, 200);
+      });
+      check('W7. 文件列表：类型标记 + 路径 + 增删行数', () => {
+        const t = T(vc);
+        return (/src\/auth\.js/.test(t) && /\+1/.test(t) && /−1/.test(t)) || t.slice(0, 200);
+      });
+      check('W8. patch 默认**收起**（几十个文件不会一次塞进 DOM）', () => {
+        const det = vc.querySelector('details.ev-file');
+        return Boolean(det && det.open === false) || (det ? `open=${det.open}` : '没有 details');
+      });
+      check('W9. 展开后能看到 unified diff（纯文本）', () => {
+        const det = vc.querySelector('details.ev-file');
+        if (!det) return '没有 details';
+        det.open = true;
+        const pre = det.querySelector('.ev-patch');
+        return Boolean(pre && /-const x = 1;/.test(pre.textContent) && /\+const x = 3;/.test(pre.textContent)) || (pre ? pre.textContent.slice(0, 80) : '没有 patch 块');
+      });
+      window.closeModal();
+      await wait(30);
+    }
+
+    {
+      /* binary + truncated + renamed + deleted */
+      window.openPlanner();
+      await wait(80);
+      card = $('modalCard');
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      evBtn('revneed').onclick();
+      await wait(80);
+      const vc = $('modalCard');
+      check('W10. binary 文件：说明「不展示文本 Diff」，且**没有** patch 块', () => {
+        const t = T(vc);
+        const det = [...vc.querySelectorAll('details.ev-file')].find((d) => /logo\.png/.test(T(d)));
+        return Boolean(det && /二进制文件已变化/.test(T(det)) && !det.querySelector('.ev-patch')) || t.slice(0, 200);
+      });
+      check('W11. 截断被明确标出（文件级 + 整体）', () => (/已截断/.test(T(vc)) && /历史 Diff 已截断/.test(T(vc))) || T(vc).slice(0, 200));
+      window.closeModal();
+      await wait(30);
+
+      window.openPlanner();
+      await wait(80);
+      card = $('modalCard');
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      evBtn('manyfiles').onclick();
+      await wait(80);
+      const vc2 = $('modalCard');
+      check('W12. renamed / deleted 的类型标记与 oldPath 都显示出来', () => {
+        const t = T(vc2);
+        return (/new-name\.js/.test(t) && /old-name\.js/.test(t) && /gone\.js/.test(t)) || t.slice(0, 240);
+      });
+      check('W13. 大量文件的说明（只保留前 N 个）也摆出来了', () => /只保留了前/.test(T(vc2)) || T(vc2).slice(0, 200));
+      window.closeModal();
+      await wait(30);
+    }
+
+    /* ---------- XSS：路径 / patch / note 全是不可信文本 ---------- */
+    {
+      window.openPlanner();
+      await wait(80);
+      card = $('modalCard');
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      evBtn('cancelled').onclick();
+      await wait(80);
+      const vc = $('modalCard');
+      const bad = vc.querySelectorAll('img, script, svg, iframe, object, embed');
+      check('W14. 路径 / patch / note 里的 XSS **一个 DOM 节点都没生成**', () => bad.length === 0 || `注入节点 ${bad.length} 个`);
+      check('W15. 它们都以**文本**显示出来（没有被吃掉）', () => /onerror=alert\(1\)/.test(T(vc)) || T(vc).slice(0, 160));
+      window.closeModal();
+      await wait(30);
+    }
+
+    /* ---------- 漂移证明（§二十二.A） ----------
+     * 把「当前工作区状态」摆成与持久化证据**明显不同**，再打开面板：
+     * 显示的必须仍是**磁盘上那份证据**。
+     * 任何「读取时按当前工作区重算」的实现都会在这里显示成当前状态的路径/内容 → 红。 */
+    {
+      const savedChanges = window.S.changes;
+      /* 当前工作区里根本没有 src/auth.js，只有一个完全不同的文件 */
+      window.S.changes = { loaded: true, isRepo: true, files: [{ path: 'totally/different.js' }] };
+      window.openPlanner();
+      await wait(80);
+      card = $('modalCard');
+      card.querySelectorAll('.planner-list .ext-item')[0].onclick();
+      await wait(90);
+      evBtn('okcmd').onclick();
+      await wait(80);
+      const vc = $('modalCard');
+      check('W16. **当前工作区换了内容，历史面板仍然显示当时那条 patch**（重算实现会红）', () => {
+        const t = T(vc);
+        return (/src\/auth\.js/.test(t) && /-const x = 1;/.test(t) && /\+const x = 3;/.test(t) && !/totally\/different/.test(t)) || t.slice(0, 240);
+      });
+      window.closeModal();
+      await wait(30);
+      window.S.changes = savedChanges;
+    }
+
+    stubPlanDetail = stubPlan;
+    window.S.changes = savedChanges0;
+    await wait(20);
+  }
+
+  async function sessionSection() {    sessionCalls.length = 0;
     $('toasts').innerHTML = '';
 
     // 重渲染项目列表 —— 会话是挂在「当前项目」那一行下面的
