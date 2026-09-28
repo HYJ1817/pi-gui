@@ -261,7 +261,7 @@ const post = (p, payload, extra = {}) => jsonReq(p, authed({ method: 'POST', bod
 /* ---------- 主流程 ---------- */
 
 (async () => {
-  const { gitStatus, gitDiff, gitRestore, resolveOpenTarget, restoreAllGit } = await import(LIB_URL);
+  const { gitStatus, gitDiff, gitRestore, resolveOpenTarget, restoreAllGit, worktreeTree, treeDiff, treeNumstat } = await import(LIB_URL);
 
   console.log('\n=== 1. 临时仓库：状态解析 ===');
   await buildRepo();
@@ -307,6 +307,45 @@ const post = (p, payload, extra = {}) => jsonReq(p, authed({ method: 'POST', bod
     return (ps.length === 1 && ps[0] === 'keep.txt') || ps.join(' | ');
   });
   check('路径是相对**项目**而非仓库根', () => (subSt.files || []).every((f) => !f.path.startsWith('sub/')));
+
+  /* ---------- P10 采集原语：**必须与 gitStatus 用同一套边界** ----------
+   * 仓库此刻是 dirty 的，而且脏在**很多 sub/ 之外**的文件上（a.txt / gone.txt /
+   * bin.dat / renamed.txt / new.txt / with space/…）。项目根是 repo/sub，
+   * 所以那两棵树、那份 numstat、那份 diff 里只该有 keep.txt —— 多一个都是越界。 */
+  {
+    const subRoot = path.join(REPO_REAL, 'sub');
+    const aTxtPath = path.join(REPO, 'a.txt');
+    const keepPath = path.join(subRoot, 'keep.txt');
+    const aTxtBefore = fs.readFileSync(aTxtPath);
+    const keepBefore = fs.readFileSync(keepPath);
+    const probe = path.join(REPO, 'sibling-new.txt');
+
+    const preT = await worktreeTree(subRoot);
+    check('P10 原语：项目是仓库子目录时也能建出树', () => preT.ok === true || JSON.stringify(preT).slice(0, 200));
+
+    fs.appendFileSync(keepPath, 'keep3\n'); // 项目内
+    fs.appendFileSync(aTxtPath, 'line5\n'); // 仓库根（当前项目之外）
+    fs.writeFileSync(probe, 'x\n'); // 仓库根新增（当前项目之外）
+    const postT = await worktreeTree(subRoot);
+    check('P10 原语：执行后也能建出树', () => postT.ok === true || JSON.stringify(postT).slice(0, 200));
+
+    const ns = await treeNumstat(subRoot, preT.tree, postT.tree);
+    const df = await treeDiff(subRoot, preT.tree, postT.tree);
+    const nsPaths = [...ns.stats.keys()];
+    check('numstat 只含项目内的 keep.txt', () => (nsPaths.length === 1 && nsPaths[0] === 'keep.txt') || JSON.stringify(nsPaths));
+    check('numstat 不含仓库其余部分的改动', () => !nsPaths.some((p) => p === 'a.txt' || p.includes('sibling-new')) || JSON.stringify(nsPaths));
+    check('diff 的路径是**相对项目**的（不是 sub/keep.txt）', () => !/sub\/keep\.txt/.test(df.text) || df.text.slice(0, 300));
+    check('diff 里**只有** keep.txt 一个文件、且没有仓库其余部分', () => {
+      const heads = (df.text.match(/^diff --git /gm) || []).length;
+      return (heads === 1 && !/a\.txt|sibling-new/.test(df.text)) || df.text.slice(0, 300);
+    });
+    check('patch 是这一轮的改动（+keep3）', () => /\+keep3/.test(df.text) || df.text.slice(0, 300));
+
+    /* 还原 fixture —— 后面的段落（含 15 的静态守卫用的源码）都还在这份仓库上跑。 */
+    fs.writeFileSync(keepPath, keepBefore);
+    fs.writeFileSync(aTxtPath, aTxtBefore);
+    fs.rmSync(probe, { force: true });
+  }
 
   console.log('\n=== 3. 非 Git 目录 / 没有项目 ===');
   fs.mkdirSync(NONREPO, { recursive: true });

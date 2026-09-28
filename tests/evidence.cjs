@@ -125,6 +125,26 @@ async function hit(planner, method, urlStr, body) {
   await git(['add', '-A']);
   await git(['commit', '-qm', 'init']);
 
+  /* ---------- 第二个仓库：**当前项目只是它的一个子目录** ----------
+   * 这是 P10 closeout 要修的形状：
+   *     repo2/
+   *       project/   ← 当前项目的 projectRoot
+   *       sibling/   ← 同仓库里的另一个项目
+   * ⚠️ 用**独立的仓库**而不是往 PROJ 里塞子目录 —— 后者会让前面所有段落
+   * 的路径基线跟着变，把老断言一起弄红。 */
+  const REPO2 = path.join(TMP, 'repo2');
+  const SUB = path.join(REPO2, 'project');
+  const SIB = path.join(REPO2, 'sibling');
+  fs.mkdirSync(SUB, { recursive: true });
+  fs.mkdirSync(SIB, { recursive: true });
+  await git(['init', '-q'], REPO2);
+  await git(['config', 'user.email', 't@t'], REPO2);
+  await git(['config', 'user.name', 't'], REPO2);
+  fs.writeFileSync(path.join(SUB, 'inside.js'), '1\n');
+  fs.writeFileSync(path.join(SIB, 'outside.js'), '1\n');
+  await git(['add', '-A'], REPO2);
+  await git(['commit', '-qm', 'init'], REPO2);
+
   const BEHAVIORS = {
     /* 写文件 = 这次 attempt 的「执行期间变化」 */
     w1: [{ ok: true, summary: 'done', writes: [{ path: 'src/a.js', content: 'const x = 3;\n' }] }],
@@ -134,6 +154,12 @@ async function hit(planner, method, urlStr, body) {
     wBig: [{ ok: true, summary: 'done', writes: Array.from({ length: 60 }, (_, i) => ({ path: `src/gen/f${i}.js`, content: `// file ${i}\n${'x'.repeat(40)}\n`.repeat(30) })) }],
     okOnly: [{ ok: true, summary: '没动文件' }],
     fail: [{ ok: false, error: '故意失败' }],
+    /* P10 closeout：项目只是仓库的子目录时，sibling 的改动**绝不能**进证据。
+     * fake 的写出路径是相对 cwd 解析的，所以 `../sibling/...` 正好用来模拟
+     * 「attempt 时间窗口里，同一个仓库的另一个项目也在变」。 */
+    subBoth: [{ ok: true, summary: 'done', writes: [{ path: 'inside.js', content: '2\n' }, { path: '../sibling/outside.js', content: '2\n' }] }],
+    subSib: [{ ok: true, summary: 'done', writes: [{ path: '../sibling/outside.js', content: '2\n' }] }],
+    subDirty: [{ ok: true, summary: 'done', writes: [{ path: 'inside.js', content: '3\n' }, { path: '../sibling/outside.js', content: '999\n' }] }],
   };
   const registry = createAgentRegistry({ env: process.env, includeFake: true, fakeBehaviors: BEHAVIORS });
 
@@ -688,6 +714,148 @@ async function hit(planner, method, urlStr, body) {
       return (/-const x = 1;/.test(headPatch) && /\+const x = 3;/.test(headPatch) && !/-const x = 2;/.test(headPatch)) || headPatch;
     }, headPatch);
     w('src/a.js', 'const x = 1;\n');
+  }
+
+  /* ================= H. 项目只是仓库的子目录（P10 closeout 的 blocker）=================
+   *
+   * 真实形状：一个仓库里有两个项目，当前项目的 projectRoot 只是仓库的一个子目录。
+   * 采集原语必须**只同步项目那棵子树**、并且只输出项目范围内的差异 —— 否则 sibling
+   * 的改动会被写进当前 Plan（越界，而且是把别人的内容落进计划文件）。
+   * 全程真 git + 真 scheduler；sibling 的变化由 fake 写出 `../sibling/...` 模拟。 */
+  section('H. 项目只是仓库的子目录 —— sibling 绝不进证据');
+
+  const runSub = async (id, taskId) => {
+    runtime.setCurrentCwd(SUB);
+    const r = await scheduler.start(store.load(id).plan);
+    if (!r.ok) throw new Error('start 失败：' + r.error + ' (' + r.code + ')');
+    await scheduler.waitIdle(30000);
+    return attOf(id, 1, taskId);
+  };
+  const wSub = (rel, content) => fs.writeFileSync(path.join(REPO2, rel), content);
+  /* 每段都从「和 HEAD 一致」的干净起点开始，免得上一段的产物串进来。 */
+  const resetSubRepo = () => {
+    wSub('project/inside.js', '1\n');
+    wSub('sibling/outside.js', '1\n');
+  };
+
+  {
+    /* ① 窗口内 project 与 sibling **同时**变化 */
+    resetSubRepo();
+    store.save(mkPlan({ id: 's-both', taskId: 'subBoth', projectRoot: SUB }));
+    const ev = (await runSub('s-both', 'subBoth')).changeEvidence;
+    const paths = ev.files.map((f) => f.path);
+    check('H1. 只看见项目内的 inside.js', () => (paths.length === 1 && paths[0] === 'inside.js') || JSON.stringify(paths));
+    check('H2. **不带仓库相对前缀**（不是 project/inside.js）', () => !paths.some((p) => p.startsWith('project/')) || JSON.stringify(paths));
+    check('H3. **sibling 完全没进来**', () => !paths.some((p) => p.includes('outside') || p.includes('sibling')) || JSON.stringify(paths));
+    check('H4. 没有 `..`、没有绝对路径、没有反斜杠', () => paths.every((p) => !p.includes('..') && !path.isAbsolute(p) && !/^[A-Za-z]:/.test(p) && !p.includes('\\')) || JSON.stringify(paths));
+    const f = ev.files[0];
+    check('H5. patch 是 inside.js 自己的 1 → 2', () => (f && /^-1$/m.test(f.patch) && /^\+2$/m.test(f.patch)) || (f && f.patch));
+    check('H6. change=modified（没被认成 rename / added / deleted）', () => (f && f.change === 'modified') || (f && f.change));
+    check('H7. **整份证据里一个 sibling 字样都没有**（文件列表 + patch）', () => !JSON.stringify(ev).includes('outside') || '证据里出现了 sibling');
+  }
+
+  {
+    /* ② 只有 sibling 变化 —— 采集本身是**成功**的，只是当前项目没变。
+     * 不能因为 sibling 动了就报 partial / unavailable。 */
+    resetSubRepo();
+    store.save(mkPlan({ id: 's-sib', taskId: 'subSib', projectRoot: SUB }));
+    const ev = (await runSub('s-sib', 'subSib')).changeEvidence;
+    check('H8. 状态是 **available**（不是 partial / unavailable）', () => ev.status === 'available' || ev.status);
+    check('H9. files 为空 —— sibling 没被算进来', () => ev.files.length === 0 || JSON.stringify(ev.files.map((f) => f.path)));
+  }
+
+  {
+    /* ③ dirty 项目基线 + sibling 同时变化 —— P10 最重要的那条语义不能被边界修复破坏 */
+    resetSubRepo();
+    wSub('project/inside.js', '2\n'); // 用户在执行**前**已经改过（HEAD 是 1）
+    store.save(mkPlan({ id: 's-dirty', taskId: 'subDirty', projectRoot: SUB }));
+    const ev = (await runSub('s-dirty', 'subDirty')).changeEvidence;
+    const f = ev.files.find((x) => x.path === 'inside.js');
+    check('H10. **dirty 基线仍是 2 → 3**（不是 1 → 3）', () => (f && /^-2$/m.test(f.patch) && /^\+3$/m.test(f.patch) && !/^-1$/m.test(f.patch)) || (f && f.patch));
+    check('H11. 而且仍然完全没有 sibling', () => (ev.files.length === 1 && !JSON.stringify(ev).includes('outside')) || JSON.stringify(ev.files.map((x) => x.path)));
+    resetSubRepo();
+  }
+
+  {
+    /* ④ sibling 里的未提交改动不该影响项目侧：pathspec 只覆盖项目，
+     * 所以 sibling 既不是变更也不是删除。 */
+    resetSubRepo();
+    wSub('sibling/outside.js', '乱七八糟的未提交内容\n');
+    store.save(mkPlan({ id: 's-clean', taskId: 'okOnly', projectRoot: SUB }));
+    const ev = (await runSub('s-clean', 'okOnly')).changeEvidence;
+    check('H12. sibling 有未提交改动时，项目侧仍然是「没变化」', () => (ev.status === 'available' && ev.files.length === 0) || JSON.stringify({ s: ev.status, p: ev.files.map((f) => f.path) }));
+    resetSubRepo();
+  }
+
+  {
+    /* ⑤ 跨项目边界的 rename 必须**安全降级** —— 不为保住 rename 的外观而把
+     * sibling 路径写进证据。走原语层，直接看 git 给出的形状。 */
+    const take = async (fn) => {
+      const pre = await worktreeTree(SUB);
+      fn();
+      const post = await worktreeTree(SUB);
+      const ns = await treeNumstat(SUB, pre.tree, post.tree);
+      const df = await treeDiff(SUB, pre.tree, post.tree);
+      const built = evidence.buildChangeEvidence({ stats: ns.stats, diffText: df.text, meta: { capturedAt: 1, allowEmpty: true } });
+      return { ns: [...ns.stats.keys()], text: df.text, built };
+    };
+
+    resetSubRepo();
+    {
+      const r = await take(() => fs.renameSync(path.join(SUB, 'inside.js'), path.join(SUB, 'moved.js')));
+      check('H13. 项目内 rename：认得出，两端都是 project-relative', () => (/rename from inside\.js/.test(r.text) && /rename to moved\.js/.test(r.text)) || r.text.slice(0, 300));
+      /* numstat 对 rename 给的是**新旧两条**（统计相同）—— 证据层正是靠这个把
+       * 它们并成一条的（见 `buildChangeEvidence` 的 renameOld）。这里断言的是
+       * **两条都没有仓库相对前缀**。 */
+      check('H13b. numstat 的新旧两条都是 project-relative', () => (r.ns.length === 2 && r.ns.includes('inside.js') && r.ns.includes('moved.js') && !r.ns.some((p) => p.startsWith('project/'))) || JSON.stringify(r.ns));
+      check('H13c. 证据层并成**一条** renamed，两端都是 project-relative', () => {
+        const f = r.built.files[0];
+        return (r.built.files.length === 1 && f.change === 'renamed' && f.oldPath === 'inside.js' && f.path === 'moved.js') || JSON.stringify(r.built.files.map((x) => [x.change, x.oldPath, x.path]));
+      });
+    }
+    {
+      resetSubRepo(); // inside.js 被上一步移走了，先放回来
+      const r = await take(() => fs.renameSync(path.join(SUB, 'inside.js'), path.join(SIB, 'taken.js')));
+      check('H14. 项目内 → 项目外：降级成 deleted，且**不出现 sibling 名字**', () => (/^deleted file mode/m.test(r.text) && !/taken\.js/.test(r.text)) || r.text.slice(0, 300));
+    }
+    {
+      resetSubRepo();
+      const r = await take(() => fs.renameSync(path.join(SIB, 'outside.js'), path.join(SUB, 'incoming.js')));
+      check('H15. 项目外 → 项目内：降级成 added，且**不泄露 sibling 名字**', () => (/^new file mode/m.test(r.text) && /incoming\.js/.test(r.text) && !/outside\.js/.test(r.text)) || r.text.slice(0, 300));
+    }
+
+    /* 收摊：把三个 rename 造出来的文件清掉，并保证基线文件都在。 */
+    resetSubRepo();
+    for (const p of ['project/moved.js', 'project/incoming.js', 'sibling/taken.js']) fs.rmSync(path.join(REPO2, p), { force: true });
+  }
+
+  /* ================= I. 手工篡改的路径进不了证据 ================= */
+  section('I. path / oldPath 复用 filesChanged 那套安全规范化');
+
+  {
+    const mk = (p, oldPath = null) =>
+      model.normalizeChangeEvidence({
+        status: 'available',
+        capturedAt: 1,
+        truncated: false,
+        note: '',
+        files: [{ path: p, change: 'modified', oldPath, binary: false, additions: 1, deletions: 1, patch: 'x\n', truncated: false }],
+      });
+    const bad = ['../../secret.js', '/absolute/file.js', 'C:\\secret\\file.js', '\\\\server\\share\\a.js', 'foo//bar.js', 'a/../../b.js', '', '..'];
+    for (const p of bad) {
+      check('I. 丢掉危险路径 ' + JSON.stringify(p), () => mk(p).files.length === 0 || JSON.stringify(mk(p).files.map((f) => f.path)));
+    }
+    const good = ['src/foo.js', 'with space/a.js', '中文/文件.js'];
+    for (const p of good) {
+      check('I. 保留合法路径 ' + JSON.stringify(p), () => (mk(p).files.length === 1 && mk(p).files[0].path === p) || JSON.stringify(mk(p).files.map((f) => f.path)));
+    }
+    check('I. 危险的 oldPath 退成 null（不是原样留着）', () => mk('src/ok.js', '../../secret.js').files[0].oldPath === null || JSON.stringify(mk('src/ok.js', '../../secret.js').files[0].oldPath));
+    check('I. 合法的 oldPath 保留', () => mk('src/new.js', 'src/old.js').files[0].oldPath === 'src/old.js');
+    check('I. 与 filesChanged 用的是同一个判据（同输入同输出）', () => {
+      const one = model.normalizeChangedPath('a/../../b.js');
+      const two = model.normalizeFilesChanged(['a/../../b.js']).length;
+      return (one === '' && two === 0) || JSON.stringify({ one, two });
+    });
   }
 
   cleanup();
