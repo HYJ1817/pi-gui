@@ -30,9 +30,9 @@
 `npm test` 里现在有 26 个套件，全部是**纯自动化**：
 
 ```
-smoke 792 · git 154 · modules 114 · reliability · interactions · port-owner
+smoke 792 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
-verification 136 · evidence 69 · attempt-lifecycle 98
+verification 136 · evidence 100 · attempt-lifecycle 98
 sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
@@ -139,7 +139,7 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记来源**、
 绝对路径 / `../` / 已删除目录一律 `invalid-cwd`（不退到 fallback 静默跑别处）。
 
-`evidence`（P10，69 条）测**历史变更证据**（attempt 冻结的 Diff），全程 `os.tmpdir()`
+`evidence`（P10，100 条）测**历史变更证据**（attempt 冻结的 Diff），全程 `os.tmpdir()`
 上的真 git 仓库 + 注入的假执行器：
 
 - **A 段**（纯函数）：unified diff 切块（带空格 / 带 TAB 的路径、`rename from|to`）、
@@ -161,6 +161,16 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 - **G 段**（防回归）：用同一套组装逻辑喂两种**错误基线**做对照 ——
   「按当前工作区重算」给出 `1 → 999`、「拿 HEAD 当基线」给出 `1 → 3`，
   两者都与 B 段 / C 段的断言**不可能同时成立**。所以那两条断言只要被改坏就必红。
+- **H 段**（项目只是仓库的子目录）：另建一个**独立的仓库**（`repo2/project` +
+  `repo2/sibling`），当前项目是它的子目录，sibling 的改动由 fake 写出 `../sibling/…`
+  模拟。钉住：只采项目内的变化、路径**不带仓库前缀**、sibling 全程不出现、
+  只有 sibling 变化时是 `available + files=[]`、dirty 基线仍是 `2 → 3`、
+  以及跨边界 rename 的安全降级（项目内 → 外 `deleted`、外 → 内 `added`）。
+  ⚠️ 修这条边界时**最容易被忽略的是「只改 `worktreeTree` 不改 diff」** ——
+  H 段会红。
+- **I 段**（路径契约）：手工篡改的 `path` / `oldPath`（绝对路径 / 盘符 / UNC /
+  `..` / 空段 / 超长）一律丢掉那条 evidence file，合法路径原样保留 ——
+  并且与 `filesChanged` 用的是**同一个**判据（同输入同输出）。
 
 `smoke` 里的 **P10 段**测前端：两个入口措辞分开（「查看当前 Diff」/「查看本次 Diff」）、
 面板写明「之后的修改不会改变这里的内容」、文件默认收起 + 可全部展开、

@@ -133,6 +133,34 @@ HEAD               const x = 1;
   「二进制文件已变化，不展示文本 Diff」。判据以 `numstat` 为准（`-` 就是二进制）。
 - **非 git 项目**：`status: 'unavailable'` + 说明原因。
 
+### 项目是仓库的子目录时：只采项目那一棵子树
+
+`projectRoot` 常常只是某个仓库的子目录：
+
+```
+repo/
+├─ apps/pi-gui/   ← 当前项目的 projectRoot
+└─ apps/other/    ← 同仓库里的另一个项目（sibling）
+```
+
+证据**只属于当前项目**，所以采集有三道收口（都复用 `gitStatus` 那套仓库/项目边界，
+**不另造一份判断** —— 否则会出现「变更面板按 projectRoot 过滤、历史证据按 repoRoot
+过滤」这种分裂，症状就是 sibling 的改动被写进当前项目的 Plan）：
+
+1. **建树时只同步项目子树**：先 `read-tree HEAD` 铺满整棵树、把 sibling 固定在基线，
+   再用 pathspec 只把**项目那部分**从工作区 `add` 进来。于是 sibling 在执行前后的
+   两棵树里一模一样 —— 既不产生「变更」，也不会被误判成「删除」。
+2. **比 diff 时再限定一次**：`--relative` + 显式 pathspec，两道都只认项目范围。
+3. **输出路径是项目相对的**：`apps/pi-gui/src/a.js` → `src/a.js`，**不带仓库前缀**；
+   `rename` 的 `oldPath` 同样。
+
+**跨项目边界的 rename 安全降级**（不为保住 rename 的外观而把 sibling 路径写进证据）：
+项目内 → 项目外记 `deleted`，项目外 → 项目内记 `added`。
+
+> `tests/evidence.cjs` 的 **H 段**与 `tests/git.cjs` 第 2 节一起钉住这条边界 ——
+> 两边对「什么属于当前项目」必须给同一个答案。
+> ⚠️ 光把第 1 道做对还不够：只限定 `worktreeTree` 而不管 diff，仍然会把 sibling 采进来。
+
 ### 上限（计划是整份读写的 JSON，不能让它膨胀）
 
 单文件 patch `24 KB`、单次 attempt 合计 `64 KB`、最多 `50` 个文件。
