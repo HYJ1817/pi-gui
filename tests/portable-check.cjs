@@ -179,11 +179,11 @@ async function until(fn, ms, label) {
       const page = await fetch(`http://127.0.0.1:${PORT}/`);
       const html = await page.text();
       /* 别只断言 200 —— 兜底逻辑接错时也会回 200 加一段 HTML。
-       * 这里认骨架（根容器 + 侧栏）和标题，能挡住「返回了别的页面」。 */
+       * 这里认 P14-A 三列骨架与标题，能挡住「返回了别的页面」。 */
       check('页面能打开且是应用骨架', () => {
         if (!page.ok) return `状态 ${page.status}`;
         if (!/text\/html/.test(page.headers.get('content-type') || '')) return 'Content-Type 不是 HTML';
-        for (const need of ['<div class="app">', 'class="rail"', '<title>Pi GUI</title>']) {
+        for (const need of ['<div class="app">', 'id="globalRail"', 'id="projectSidebar"', 'id="workspace"', '<title>Pi GUI</title>']) {
           if (!html.includes(need)) return `页面里没有 ${need}`;
         }
         return true;
