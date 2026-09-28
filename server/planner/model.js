@@ -776,18 +776,28 @@ export function latestSuccessfulAttempt(task) {
 /**
  * 一个 task 的门控状态。
  *
- * @returns `{enabled, satisfied, reason, attempt}`
+ * @returns `{enabled, required, satisfied, reason, attempt}`
  *   - `enabled=false`（没开门控）→ 一律 `satisfied: true`，对下游完全透明
+ *   - `required`：**这次执行成功、有东西可验收吗**（P12 规格 §二十八）。
+ *     `enabled` / `required` / `satisfied` 是三个概念，不能互相顶替：
+ *     `enabled` 说门装没装，`required` 说现在**需不需要人来看**，
+ *     `satisfied` 说看了之后过没过。失败 / 取消 / 中断 / 跳过 / 还没跑 → `required=false`
+ *     （没有成功产出，也就没有可验收的东西），沿用原执行语义，不进「等验收」。
  *   - `reason` 就是那份 review 的状态（`pending` / `needs_changes`），
  *     或 `no-successful-attempt`（开了门控但这次还没成功过）
  *   - `attempt` 是**参与判断的那一次**（UI 要能说清「在等第几次」）
+ *
+ * ⚠️ `required` 只看**执行状态**，不看 attempt 记录：老数据里 `status=success`
+ * 却没有成功 attempt（迁移前的计划）仍算 `required=true`、`satisfied=false`，
+ * 也就是「等验收」—— 宁可多问一句，也不静默放行下游。
  */
 export function reviewGateState(task) {
-  if (!task || !task.reviewGate) return { enabled: false, satisfied: true, reason: 'disabled', attempt: null };
+  if (!task || !task.reviewGate) return { enabled: false, required: false, satisfied: true, reason: 'disabled', attempt: null };
+  const required = task.status === TASK_STATUS.SUCCESS;
   const a = latestSuccessfulAttempt(task);
-  if (!a) return { enabled: true, satisfied: false, reason: 'no-successful-attempt', attempt: null };
+  if (!a) return { enabled: true, required, satisfied: false, reason: 'no-successful-attempt', attempt: null };
   const status = normalizeReview(a.review).status;
-  return { enabled: true, satisfied: status === REVIEW_STATUS.ACCEPTED, reason: status, attempt: a.attempt };
+  return { enabled: true, required, satisfied: status === REVIEW_STATUS.ACCEPTED, reason: status, attempt: a.attempt };
 }
 
 /** 依赖没满足的原因。 */
@@ -904,13 +914,22 @@ export function computeReadyStates(tasks) {
   return out;
 }
 
-/** Plan 是否已经跑完：所有 task 都终态**且**开了门控的那些门控都已满足。
+/** Plan 是否已经跑完：所有 task 都终态**且**「需要验收的那些」都已满足。
  *
  *  ⚠️ P11：**终态 ≠ 跑完**。最后一个任务成功但门控还开着（等人验收）时，
  *  这个计划不该算「结束」—— 工作流策略还没满足（规格 §三十 / §三十一）。
- *  这也是 `completed ↔ paused` 能来回翻的原因（§三十二）。 */
+ *  这也是 `completed ↔ paused` 能来回翻的原因（§三十二）。
+ *
+ *  ⚠️ P12：判据是 `required && !satisfied`，**不是** `!satisfied`。
+ *  一个 gated 任务**执行失败**时 `satisfied=false`，但它压根没有成功产出、
+ *  永远等不来验收 —— 拿 `!satisfied` 当判据会把这份计划永久卡在「未完成」，
+ *  于是失败的计划既不能算结束、也永远没人验收（Blocker A）。 */
 export function isPlanSettled(plan) {
-  return plan.tasks.every((t) => TERMINAL_TASK_STATUS.includes(t.status) && reviewGateState(t).satisfied);
+  return plan.tasks.every((t) => {
+    if (!TERMINAL_TASK_STATUS.includes(t.status)) return false;
+    const g = reviewGateState(t);
+    return !g.required || g.satisfied;
+  });
 }
 
 /** 全部终态时该给 plan 什么状态。
@@ -923,7 +942,11 @@ export function planStatusFromTasks(plan) {
   return PLAN_STATUS.COMPLETED;
 }
 
-/** Plan 级的门控汇总（**运行时推导，不持久化** —— 规格 §三十三）。 */
+/** Plan 级的门控汇总（**运行时推导，不持久化** —— 规格 §三十三）。
+ *
+ *  P12：`waiting` 数的是「**真在等验收**」的那些 —— `required && !satisfied`。
+ *  失败 / 取消的 gated 任务算进 `gated`，但既不进 `satisfied` 也不进 `waiting`
+ *  （它没有可验收的产出，把它的失败显示成「1 个待验收」是骗人）。 */
 export function reviewGateSummary(plan) {
   let gated = 0;
   let satisfied = 0;
@@ -933,7 +956,7 @@ export function reviewGateSummary(plan) {
     if (!g.enabled) continue;
     gated++;
     if (g.satisfied) satisfied++;
-    else waiting++;
+    else if (g.required) waiting++;
   }
   return { gated, satisfied, waiting };
 }
@@ -955,8 +978,16 @@ export function planWorkflowState(plan) {
   if (tasks.length === 0) return { status: plan.status || PLAN_STATUS.DRAFT, reason: 'empty' };
   if (tasks.every((t) => TERMINAL_TASK_STATUS.includes(t.status))) {
     /* 全部终态，但**门控还开着** → 工作流还没结束（§三十一：就算没有 downstream，
-     * 最后一个 gated task 没被接受也不算 completed）。 */
-    if (tasks.some((t) => !reviewGateState(t).satisfied)) return { status: PLAN_STATUS.PAUSED, reason: DEP_REASON.WAITING_REVIEW };
+     * 最后一个 gated task 没被接受也不算 completed）。
+     *
+     * ⚠️ P12：判据是 `required && !satisfied`。失败 / 取消 / 中断 / 跳过的 gated
+     * 任务 `required=false` —— 它没有可验收的产出，**不能**把已经跑完的计划顶成
+     * `paused + waiting-review`（Blocker A：明明是失败，界面却让人去等一个
+     * 永远不会来的验收）。下面 `planStatusFromTasks` 才是它该走的路。 */
+    if (tasks.some((t) => {
+      const g = reviewGateState(t);
+      return g.required && !g.satisfied;
+    })) return { status: PLAN_STATUS.PAUSED, reason: DEP_REASON.WAITING_REVIEW };
     return { status: planStatusFromTasks(plan), reason: 'settled' };
   }
   if (tasks.some((t) => t.status === TASK_STATUS.RUNNING)) return { status: PLAN_STATUS.RUNNING, reason: 'running' };

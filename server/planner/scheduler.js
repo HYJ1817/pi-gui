@@ -69,6 +69,7 @@ import {
   normalizeWorkingDirectorySnapshot,
   planWorkflowState,
   refreshTaskStatuses,
+  reviewGateState,
   summarizePlan,
   taskSessionId,
 } from './model.js';
@@ -91,6 +92,63 @@ function outcomeSessionId(outcome) {
   if (isSafeSessionId(outcome.sessionId)) return outcome.sessionId;
   const raw = outcome.rawResult && outcome.rawResult.sessionId;
   return isSafeSessionId(raw) ? raw : null;
+}
+
+/* ---------- P12：Active Session Barrier ----------
+ *
+ * Blocker B：计划**正在跑**时把上游的审阅改成 accepted，DAG 立刻说下游 ready，
+ * 于是当前这一轮 session 会把它一起跑掉。但用户点「开始执行」的那一瞬间，
+ * 这个门就是一道 **checkpoint** —— 他批准的是「跑到这里停下来等我」，
+ * 而不是「我盯不盯得过来都继续往下跑」。
+ *
+ * 所以：**session 开始那一刻还没通过的门，本轮就一直当它没通过。**
+ * 无关任务照常跑完，session 自然结束，Plan 落到 `ready`，等用户自己再点开始。
+ *
+ * 三条边界（缺一条就会变成新 bug）：
+ *  1. **只存在 session 对象里** —— 不写 plan / task / attempt，重启不恢复，
+ *     也就没有「上次卡住的计划」这种要清理的东西。
+ *  2. **只挡未启动的** —— 不 abort 任何在跑的任务（barrier ≠ 暂停），
+ *     也不改任何执行状态（那是 Scheduler 的所有权，规格 §十二）。
+ *  3. **只记「当时没通过」** —— 开始时就已经 accepted 的门不进 checkpoint，
+ *     所以正常流程（验收完再点开始）一个字节都不受影响。
+ */
+
+/** session 开始那一刻，每个 task 有哪些依赖**门还没通过**。`Map<taskId, string[]>`。 */
+function gateCheckpointsFor(plan) {
+  const byId = new Map(plan.tasks.map((t) => [t.id, t]));
+  const out = new Map();
+  for (const t of plan.tasks) {
+    const held = [];
+    for (const d of t.dependsOn || []) {
+      const dep = byId.get(d);
+      if (!dep) continue;
+      const g = reviewGateState(dep);
+      if (g.enabled && !g.satisfied) held.push(d);
+    }
+    if (held.length) out.set(t.id, held);
+  }
+  return out;
+}
+
+/**
+ * 本轮该**按住不启动**的 task id。
+ *
+ * 判据是「它依赖的某个门在 session 开始时没通过、**现在**通过了」——
+ * 也就是说它变 ready 完全是这一轮里的验收造成的。门后来又被打回
+ * `needs_changes` / `pending` → 不再满足 → 不按住（DAG 权威仍是最新那份 Review）。
+ */
+function deferredGateTasks(session, plan) {
+  const held = session.gateCheckpoints;
+  if (!held || held.size === 0) return new Set();
+  const byId = new Map(plan.tasks.map((t) => [t.id, t]));
+  const out = new Set();
+  for (const [taskId, deps] of held) {
+    if (deps.some((d) => {
+      const dep = byId.get(d);
+      return dep && reviewGateState(dep).satisfied;
+    })) out.add(taskId);
+  }
+  return out;
 }
 
 export function createScheduler({
@@ -580,7 +638,11 @@ export function createScheduler({
 
         const limit = Math.min(Math.max(1, plan.concurrency || DEFAULT_CONCURRENCY), MAX_CONCURRENCY);
         const running = plan.tasks.filter((t) => t.status === TASK_STATUS.RUNNING);
-        const ready = plan.tasks.filter((t) => t.status === TASK_STATUS.READY);
+        /* P12：本轮的 checkpoint 把「因这一轮验收才变 ready」的任务按住不启动。
+         * 它们仍留在原状态（ready），只是**这一轮**不消费 —— 所以计划落成 `ready`
+         * 等用户自己点开始，而不是被判成 completed / paused。 */
+        const deferred = deferredGateTasks(session, plan);
+        const ready = plan.tasks.filter((t) => t.status === TASK_STATUS.READY && !deferred.has(t.id));
 
         if (running.length === 0 && ready.length === 0) {
           /* 还有任务不是终态，但既没有 running 也没有 ready —— 说明全被 blocked 了。
@@ -692,7 +754,9 @@ export function createScheduler({
     shuttingDown = false;
     persist(plan);
 
-    const session = { planId: plan.id, plan, controllers: new Map(), sessionIds: new Map(), verifications: new Map(), workingDirs: new Map(), stopping: false, pumpRunning: false };
+    /* `gateCheckpoints` 是 P12 的 Active Session Barrier：**此刻**还没通过的门
+     * 记在 session 上（见文件头那段说明），本轮就一直当它没通过。 */
+    const session = { planId: plan.id, plan, controllers: new Map(), sessionIds: new Map(), verifications: new Map(), workingDirs: new Map(), gateCheckpoints: gateCheckpointsFor(plan), stopping: false, pumpRunning: false };
     active = session;
     emit(plan.id, null, null, 'plan_start', { title: plan.title, tasks: plan.tasks.length });
     // 主循环不 await（HTTP 请求要立刻返回）；但必须接住异常，否则会变成
