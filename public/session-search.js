@@ -286,7 +286,10 @@ function makeResult(res, onPick) {
   box.dataset.sessionId = res.id;
   if (res.archived) box.classList.add('archived');
 
-  const head = node('div', 'pj-sr-head');
+  const head = node('button', 'pj-sr-head');
+  head.type = 'button';
+  head.setAttribute('aria-label', `打开会话：${res.title || '（无标题）'}`);
+  head.onclick = () => onPick(res, (res.matches || [])[0] || null);
   const title = node('span', 'pj-sr-title', res.title || '（无标题）');
   head.append(title);
   if (res.archived) head.append(node('span', 'pj-sr-badge', '已归档'));
@@ -297,20 +300,18 @@ function makeResult(res, onPick) {
   box.append(meta);
 
   for (const m of res.matches || []) {
-    const line = node('div', 'pj-sr-hit');
+    const line = node('button', 'pj-sr-hit');
+    line.type = 'button';
+    line.setAttribute('aria-label', `定位会话命中：${m.snippet || ''}`);
     line.dataset.matchType = m.type;
     line.append(node('span', 'pj-sr-type', TYPE_LABEL[m.type] || m.type));
     const snip = node('span', 'pj-sr-snip');
     fillHighlight(snip, m.snippet || '', currentQuery().trim());
     line.append(snip);
-    line.onclick = (e) => {
-      e.stopPropagation();
-      onPick(res, m);
-    };
+    line.onclick = () => onPick(res, m);
     box.append(line);
   }
 
-  box.onclick = () => onPick(res, (res.matches || [])[0] || null);
   return box;
 }
 

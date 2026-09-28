@@ -10,123 +10,52 @@
 
 <div class="app">
 
-  <aside class="rail">
+  <nav class="global-rail" id="globalRail" aria-label="全局导航">
+    <div class="global-rail-brand" aria-label="Pi GUI">π</div>
+    <div class="global-rail-links">
+      <button type="button" class="rail-icon is-active" id="navHome" aria-label="对话" aria-current="page" title="对话"><svg viewBox="0 0 24 24"><path d="M4 10l8-6 8 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M9 20v-7h6v7"/></svg></button>
+      <button type="button" class="rail-icon" id="navPlanner" aria-label="任务" title="任务"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 5.5h2.5v3H4zM4 11.5h2.5v3H4zM4 17.5h2.5v3H4z"/></svg><span class="rail-badge" id="planCount"></span></button>
+      <button type="button" class="rail-icon" id="navChanges" aria-label="文件变更" title="文件变更"><svg viewBox="0 0 24 24"><path d="M7 4.5h10a2 2 0 0 1 2 2v13l-3-2-3 2-3-2-3 2v-13a2 2 0 0 1 2-2z"/><path d="M10 9.5h4M10 13h4"/></svg><span class="rail-badge" id="changesCount" hidden></span></button>
+      <button type="button" class="rail-icon" id="navExtensions" aria-label="扩展" title="Skills 与扩展"><svg viewBox="0 0 24 24"><path d="M10 4.5H6.5A2 2 0 0 0 4.5 6.5V10M14 4.5h3.5a2 2 0 0 1 2 2V10M10 19.5H6.5a2 2 0 0 1-2-2V14M14 19.5h3.5a2 2 0 0 0 2-2V14"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2"/></svg><span class="rail-badge" id="extCount"></span></button>
+    </div>
+    <div class="global-rail-bottom">
+      <button type="button" class="rail-icon" id="navGlobalMore" aria-label="更多全局功能" aria-controls="globalMoreMenu" aria-expanded="false" title="更多"><svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.5" cy="12" r="1.5"/></svg><span class="rp-dot" id="updateDot" hidden></span></button>
+      <button type="button" class="rail-icon" id="btnSidebarExpand" aria-label="展开项目侧栏" aria-controls="projectSidebar" title="展开项目侧栏" hidden><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM10 5v14M13 12h5m-2-2 2 2-2 2"/></svg></button>
+    </div>
+  </nav>
+
+  <aside class="rail project-sidebar" id="projectSidebar" aria-label="项目与会话">
     <header class="rail-head">
-      <div class="brand">
-        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 8h15M9.5 8v11M15.5 8v8"/></svg>
-        <span>Pi</span>
-      </div>
-      <div class="rail-actions">
-        <button type="button" class="icon-btn" id="btnReload" title="重载 pi 配置" aria-label="重载 pi 配置">
-          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5.5V11h-5.5"/></svg>
-        </button>
-        <button type="button" class="icon-btn" id="btnCompact" title="压缩上下文" aria-label="压缩上下文">
-          <svg viewBox="0 0 24 24"><path d="M8 9l4-4 4 4"/><path d="M16 15l-4 4-4-4"/><path d="M12 5v14"/></svg>
-        </button>
-      </div>
+      <div class="brand"><span>Pi</span><span class="brand-sub">项目</span></div>
+      <button type="button" class="icon-btn" id="btnSidebarCollapse" aria-label="折叠项目侧栏" aria-controls="projectSidebar" title="折叠项目侧栏"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM10 5v14M17 12h-5m2-2-2 2 2 2"/></svg></button>
     </header>
-
-    <nav class="rail-nav">
-      <div class="nav-item" id="navNew">
-        <svg class="ni-ic" viewBox="0 0 24 24"><path d="M20 12.5a2.5 2.5 0 0 1-2.5 2.5H8l-4 3.5V5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5z"/></svg>
-        <span class="ni-label">新对话</span>
-        <svg class="ni-end" viewBox="0 0 24 24"><path d="M12 6.5v11M6.5 12h11"/></svg>
-      </div>
-      <div class="nav-item" id="navBranches">
-        <svg class="ni-ic" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h4a3 3 0 0 1 3 3v.5"/></svg>
-        <span class="ni-label">分支</span>
-        <span class="ni-count" id="branchCount"></span>
-      </div>
-      <!-- 文件变更（Git 工作区）。数字来自 git status，不是会话账本 ——
-           两者可能不一致时以 Git 为准，见 public/git.js 顶部的说明。 -->
-      <div class="nav-item" id="navChanges" title="Git 工作区变更">
-        <svg class="ni-ic" viewBox="0 0 24 24"><path d="M7 4.5h10a2 2 0 0 1 2 2v13l-3-2-3 2-3-2-3 2v-13a2 2 0 0 1 2-2z"/><path d="M10 9.5h4M10 13h4"/></svg>
-        <span class="ni-label">文件变更</span>
-        <span class="ni-count" id="changesCount" hidden></span>
-      </div>
+    <nav class="rail-nav" aria-label="会话操作">
+      <button type="button" class="nav-item" id="navNew"><svg class="ni-ic" viewBox="0 0 24 24"><path d="M20 12.5a2.5 2.5 0 0 1-2.5 2.5H8l-4 3.5V5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5z"/></svg><span class="ni-label">新对话</span><span aria-hidden="true">＋</span></button>
+      <button type="button" class="nav-item" id="navSearch" aria-controls="groupBody" aria-expanded="false"><svg class="ni-ic" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg><span class="ni-label">搜索会话</span></button>
     </nav>
-
-    <div class="rail-group">
-      <div class="group-head" id="groupHead">
-        <span>项目</span>
-        <svg class="chev" viewBox="0 0 24 24"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>
+    <div class="rail-group open">
+      <div class="group-bar"><button type="button" class="group-head" id="groupHead" aria-controls="groupBody" aria-expanded="true"><span>项目</span><svg class="chev" viewBox="0 0 24 24"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg></button><button type="button" class="icon-btn project-actions-toggle" id="btnProjectMenu" aria-label="项目操作" aria-controls="projectActions" aria-expanded="false" title="项目操作">···</button></div>
+      <div class="project-actions" id="projectActions" hidden>
+        <button type="button" class="group-add" id="btnAddProject">添加文件夹</button>
+        <button type="button" class="group-add" id="btnProjectSettings">项目设置</button>
       </div>
-      <div class="group-body" id="groupBody">
-        <div class="projects" id="projects">
-          <div class="hint-empty">加载中…</div>
-        </div>
-        <div class="group-add" id="btnAddProject">
-          <svg viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>
-          <span>添加文件夹</span>
-        </div>
-        <!-- 项目设置放在项目分组里，而不是跟「模型供应商」并排 ——
-             前者是**当前这个项目**的偏好，后者是全局的供应商配置，
-             混在一起会让人以为改模型是全局生效的。 -->
-        <div class="group-add" id="btnProjectSettings" title="当前项目的模型 / 思考档位 / 指令 / 忽略 / 常用命令">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.6"/><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4L6 18M18 18l-1.6-1.6M7.6 7.6L6 6"/></svg>
-          <span>项目设置</span>
-        </div>
-      </div>
+      <div class="group-body" id="groupBody"><div class="projects" id="projects"><div class="hint-empty">加载中…</div></div></div>
     </div>
-
     <div class="rail-spacer"></div>
-
-    <!-- 扩展能力（Skills / MCP）。
-         刻意与「模型供应商」并排放在 rail 底部：这两个都是**跨项目的全局能力**
-         （供应商是全局配置，Skills 里有用户级那一半），而上面的「项目设置」只管当前项目。 -->
-    <div class="rail-prov" id="navPlanner" title="Planner / 多 Agent 编排（Pi GUI 自己的编排层）">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 5.5h2.5v3H4zM4 11.5h2.5v3H4zM4 17.5h2.5v3H4z"/></svg>
-      <span class="rp-label">任务</span>
-      <span class="rp-count" id="planCount"></span>
-    </div>
-    <div class="rail-prov" id="navExtensions" title="Skills 与 MCP —— pi 的扩展能力">
-      <svg class="rp-ic" viewBox="0 0 24 24"><path d="M10 4.5H6.5A2 2 0 0 0 4.5 6.5V10M14 4.5h3.5a2 2 0 0 1 2 2V10M10 19.5H6.5a2 2 0 0 1-2-2V14M14 19.5h3.5a2 2 0 0 0 2-2V14"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2"/></svg>
-      <span class="rp-label">扩展</span>
-      <span class="rp-count" id="extCount"></span>
-    </div>
-
-    <!-- 诊断入口上的小点：发现新版本时亮起（由 public/update.js 控制）。
-         刻意不新增侧栏一级入口 —— 版本检查属于诊断，不是一个新导航项。 -->
-    <div class="rail-prov" id="navDiagnostics" title="运行状态与故障诊断">
-      <svg class="rp-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4M12 16h.01"/><path d="M8.5 3.8l1 2M15.5 3.8l-1 2"/></svg>
-      <span class="rp-label">诊断</span>
-      <span class="rp-dot" id="updateDot" hidden></span>
-    </div>
-
-    <div class="rail-prov" id="navProviders" title="添加 / 管理模型供应商">
-      <svg class="rp-ic" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1.8"/><circle cx="16.8" cy="16.8" r="3.7"/></svg>
-      <span class="rp-label">模型供应商</span>
-      <span class="rp-count" id="providerCount"></span>
-    </div>
-
-    <div class="quota">
-      <div class="quota-head">
-        <svg class="quota-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.5-4.5"/></svg>
-        <span>用量</span>
-        <b id="uPct">—</b>
-      </div>
-      <div class="bar"><span id="uCtxBar"></span></div>
-      <div class="quota-note" id="uNote">上下文 —</div>
-      <div class="quota-rows">
-        <div><span>输入 / 输出</span><b id="uTok">—</b></div>
-        <div><span>缓存读取</span><b id="uCache">—</b></div>
-        <div><span>累计成本</span><b id="uCost">—</b></div>
-      </div>
-    </div>
-
-    <footer class="rail-foot">
-      <span class="avatar">π</span>
-      <span class="foot-name" id="footName">—</span>
-      <span class="grow"></span>
-      <span class="conn" id="conn"></span>
-      <span class="foot-state" id="connText">连接中</span>
-    </footer>
+    <details class="quota" id="usageDetails"><summary class="quota-head"><svg class="quota-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.5-4.5"/></svg><span>上下文</span><b id="uPct">—</b></summary><div class="quota-detail"><div class="bar"><span id="uCtxBar"></span></div><div class="quota-note" id="uNote">上下文 —</div><div class="quota-rows"><div><span>输入 / 输出</span><b id="uTok">—</b></div><div><span>缓存读取</span><b id="uCache">—</b></div><div><span>累计成本</span><b id="uCost">—</b></div></div></div></details>
+    <footer class="rail-foot"><span class="avatar">π</span><span class="foot-name" id="footName">—</span><span class="grow"></span><span class="conn" id="conn"></span><span class="foot-state" id="connText">连接中</span></footer>
   </aside>
 
-  <main class="stage">
+  <div class="global-more-menu" id="globalMoreMenu" hidden role="menu" aria-label="更多全局功能">
+    <button type="button" role="menuitem" id="navDiagnostics">诊断<span class="rp-dot" id="menuUpdateDot" hidden></span></button>
+    <button type="button" role="menuitem" id="navProviders">模型供应商<span class="rp-count" id="providerCount"></span></button>
+  </div>
+
+  <main class="stage" id="workspace">
     <header class="stage-head">
       <button type="button" class="icon-btn" id="btnTree" title="分支树" aria-label="分支树">
         <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h4a3 3 0 0 1 3 3v.5"/></svg>
+        <span id="branchCount" class="head-count"></span>
       </button>
       <h1 id="title">新会话</h1>
       <!-- P7：当前会话关联了哪些任务（没有关联时整块 hidden，不占位）。

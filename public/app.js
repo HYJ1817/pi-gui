@@ -19,7 +19,7 @@ import { fmt } from './util.js';
 import { sendCommand } from './api.js';
 import { toast } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popLabel, popTitle, popVisible } from './ui/popover.js';
-import { openModal } from './ui/modal.js';
+import { closeModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setConn, setStatus, setTitleText } from './shell.js';
 import { samePath } from './util.js';
 import { autoGrow, updateSendState } from './composer.js';
@@ -747,22 +747,106 @@ $('btnStats').onclick = openStatsPanel;
 
 // 侧栏导航
 $('navNew').onclick = newSession;
-$('navBranches').onclick = openBranchPanel;
-$('navChanges').onclick = openChangesPanel;
+$('navSearch').onclick = () => {
+  group.classList.add('open');
+  $('groupHead').setAttribute('aria-expanded', 'true');
+  $('projectSidebar').classList.add('search-open');
+  $('navSearch').setAttribute('aria-expanded', 'true');
+  $('projectSidebar').querySelector('.pj-search-input')?.focus();
+};
+$('navHome').onclick = () => {
+  if (!$('modal').hidden) closeModal();
+  $('globalMoreMenu').hidden = true;
+  $('navGlobalMore').setAttribute('aria-expanded', 'false');
+  setRailActive('navHome');
+  el.input.focus();
+};
+$('navChanges').onclick = () => { setRailActive('navChanges'); openChangesPanel(); };
 $('navProviders').onclick = openProvidersPanel;
 $('navDiagnostics').onclick = openDiagnostics;
 
 // 侧栏头部 / 项目
-// 「添加文件夹」在两处：侧栏分组下常年有一个，欢迎块上在未选项目时再补一个
-$('btnReload').onclick = reloadPi;
-$('btnCompact').onclick = compactNow;
+// 「添加文件夹」在项目操作菜单和未选项目的欢迎块里共用目录选择器。
 $('btnAddProject').onclick = openDirPicker;
 $('btnPickProject').onclick = openDirPicker;
 $('btnProjectSettings').onclick = openProjectSettings;
 
-// 扩展能力（Skills / MCP）—— 跨项目的入口，和「模型供应商」同一组
-$('navExtensions').onclick = openExtensions;
-$('navPlanner').onclick = openPlanner;
+// 扩展能力（Skills / MCP）保留全局入口；模型供应商位于 More 菜单。
+$('navExtensions').onclick = () => { setRailActive('navExtensions'); openExtensions(); };
+$('navPlanner').onclick = () => { setRailActive('navPlanner'); openPlanner(); };
+
+function setRailActive(id) {
+  for (const button of $('globalRail').querySelectorAll('.rail-icon')) {
+    const active = button.id === id;
+    button.classList.toggle('is-active', active);
+    if (active) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  }
+}
+
+const globalMenu = $('globalMoreMenu');
+const globalMore = $('navGlobalMore');
+globalMore.onclick = () => {
+  globalMenu.hidden = !globalMenu.hidden;
+  globalMore.setAttribute('aria-expanded', String(!globalMenu.hidden));
+  if (!globalMenu.hidden) globalMenu.querySelector('button')?.focus();
+};
+for (const entry of globalMenu.querySelectorAll('button')) {
+  entry.addEventListener('click', () => {
+    globalMenu.hidden = true;
+    globalMore.setAttribute('aria-expanded', 'false');
+  });
+}
+document.addEventListener('click', (event) => {
+  if (!globalMenu.hidden && !globalMenu.contains(event.target) && !globalMore.contains(event.target)) {
+    globalMenu.hidden = true;
+    globalMore.setAttribute('aria-expanded', 'false');
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !projectMenu.hidden) {
+    projectMenu.hidden = true;
+    projectMenuButton.setAttribute('aria-expanded', 'false');
+    projectMenuButton.focus();
+  }
+  if (event.key === 'Escape' && $('projectSidebar').classList.contains('search-open') && $('projectSidebar').contains(document.activeElement)) {
+    $('projectSidebar').classList.remove('search-open');
+    $('navSearch').setAttribute('aria-expanded', 'false');
+    $('navSearch').focus();
+  }
+  if (event.key === 'Escape' && !globalMenu.hidden) {
+    globalMenu.hidden = true;
+    globalMore.setAttribute('aria-expanded', 'false');
+    globalMore.focus();
+  }
+});
+
+const projectMenu = $('projectActions');
+const projectMenuButton = $('btnProjectMenu');
+projectMenuButton.onclick = () => {
+  projectMenu.hidden = !projectMenu.hidden;
+  projectMenuButton.setAttribute('aria-expanded', String(!projectMenu.hidden));
+};
+for (const action of projectMenu.querySelectorAll('button')) action.addEventListener('click', () => {
+  projectMenu.hidden = true;
+  projectMenuButton.setAttribute('aria-expanded', 'false');
+});
+
+const sidebar = $('projectSidebar');
+const expandSidebar = $('btnSidebarExpand');
+const collapseSidebar = $('btnSidebarCollapse');
+function setSidebarCollapsed(collapsed) {
+  sidebar.hidden = collapsed;
+  expandSidebar.hidden = !collapsed;
+  collapseSidebar.setAttribute('aria-expanded', String(!collapsed));
+  expandSidebar.setAttribute('aria-expanded', String(!collapsed));
+}
+collapseSidebar.onclick = () => setSidebarCollapsed(true);
+expandSidebar.onclick = () => setSidebarCollapsed(false);
+
+new MutationObserver(() => {
+  if ($('modal').hidden && ['navPlanner', 'navChanges', 'navExtensions'].some((id) => $(id).classList.contains('is-active'))) setRailActive('navHome');
+}).observe($('modal'), { attributes: true, attributeFilter: ['hidden'] });
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').parentElement;
@@ -771,8 +855,10 @@ try {
 } catch {
   group.classList.add('open');
 }
+$('groupHead').setAttribute('aria-expanded', String(group.classList.contains('open')));
 $('groupHead').onclick = () => {
   group.classList.toggle('open');
+  $('groupHead').setAttribute('aria-expanded', String(group.classList.contains('open')));
   try {
     localStorage.setItem('pi-group-open', group.classList.contains('open') ? '1' : '0');
   } catch {

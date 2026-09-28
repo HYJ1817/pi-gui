@@ -113,7 +113,8 @@ setSearchChangeHandler(() => {
 });
 
 function moreBtn(text, onclick, cls) {
-  const b = el('div', 'pj-sess-more' + (cls ? ' ' + cls : ''), text);
+  const b = el('button', 'pj-sess-more' + (cls ? ' ' + cls : ''), text);
+  b.type = 'button';
   b.onclick = onclick;
   return b;
 }
@@ -270,9 +271,17 @@ function makeRow(s) {
     ? '新会话：还没有消息，pi 还没把它写到磁盘上'
     : `${s.messageCount} 条消息 · ${fmtTime(s.updatedAt)}${s.createdAt ? ' · 创建于 ' + fmtTime(Date.parse(s.createdAt)) : ''}`;
 
+  const canSwitch = !s.current && !s.pending && !capMissing('switchSession');
+  const primary = el(canSwitch ? 'button' : 'span', 'pj-sess-primary');
+  if (canSwitch) {
+    primary.type = 'button';
+    primary.setAttribute('aria-label', `切换会话：${s.title || '（无标题）'}`);
+    primary.onclick = () => doSwitch(s);
+  }
+  if (s.current) row.setAttribute('aria-current', 'true');
   const title = el('span', 'pj-sess-title', s.title || '（无标题）');
-  row.append(title);
-  row.append(el('span', 'pj-sess-time', fmtTime(s.updatedAt)));
+  primary.append(title, el('span', 'pj-sess-time', fmtTime(s.updatedAt)));
+  row.append(primary);
 
   const acts = el('span', 'pj-sess-acts');
 
@@ -295,8 +304,6 @@ function makeRow(s) {
     if (capMissing('switchSession')) {
       row.classList.add('pj-sess-off');
       row.title = '当前 pi 没有提供「切换会话」能力（详情见侧栏「诊断」）';
-    } else {
-      row.onclick = () => doSwitch(s);
     }
   }
 

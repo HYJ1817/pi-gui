@@ -85,10 +85,11 @@ export function renderProjects() {
     const item = document.createElement('div');
     item.className = 'project' + (isActive ? ' active' : '');
     item.title = p.path;
-    if (!isActive) {
-      item.setAttribute('role', 'button');
-      item.tabIndex = 0;
-    }
+    const select = document.createElement(isActive ? 'span' : 'button');
+    if (!isActive) select.type = 'button';
+    select.className = 'pj-select';
+    select.setAttribute('aria-label', `${isActive ? '当前项目' : '切换到项目'}：${p.name || p.path}`);
+    if (isActive) select.setAttribute('aria-current', 'true');
 
     const icon = document.createElement('span');
     icon.className = 'pj-icon';
@@ -108,21 +109,17 @@ export function renderProjects() {
     del.className = 'pj-del';
     del.type = 'button';
     del.title = '从列表移除（不会删除磁盘文件）';
+    del.setAttribute('aria-label', `从列表移除项目：${p.name || p.path}`);
     del.innerHTML = SVG_X;
     del.onclick = (e) => {
       e.stopPropagation();
       removeProject(p.path);
     };
 
-    item.append(icon, body, del);
+    select.append(icon, body);
+    item.append(select, del);
     if (!isActive) {
-      item.onclick = () => activateProject(p.path, p.name || p.path);
-      item.onkeydown = (e) => {
-        if (e.target !== item) return;
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        activateProject(p.path, p.name || p.path);
-      };
+      select.onclick = () => activateProject(p.path, p.name || p.path);
     }
 
     el.projects.appendChild(item);
