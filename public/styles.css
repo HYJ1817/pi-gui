@@ -1869,3 +1869,32 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 那条路更稳：整页永远不会因为一条超长 diff 行而横向溢出。
  * 只把高度上限调大一点（diff 比错误输出长）。 */
 .ev-patch { margin: 6px 0 0; max-height: 320px; }
+
+/* ============ P11：人工验收门控 ============
+ *
+ * 门控要让人一眼分出三件事：执行成功了吗 / 在等人吗 / 门控过了吗。
+ * 颜色只区分「等待」（中性偏警示）与「已通过」（绿）—— 等验收是**正常状态**，
+ * 不是错误，所以不用红。 */
+
+.planner-gate {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 11.5px; margin: 2px 0 0;
+}
+.planner-gate-badge {
+  font-size: 10.5px; padding: 1px 6px; border-radius: 3px;
+  background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+}
+.planner-gate-wait { color: var(--warn); }
+.planner-gate-ok { color: var(--ok); }
+.planner-gate-bad { color: var(--err); }
+.planner-gate-hint { color: var(--fg-dim); }
+
+.planner-blocked { font-size: 11.5px; color: var(--warn); margin: 2px 0 0; }
+.planner-blocked-on { font-family: var(--mono); }
+
+.planner-gate-sum { color: var(--fg-dim); }
+.planner-gate-toggle { color: var(--fg-dim); }
+
+@media (max-width: 700px) {
+  .planner-gate, .planner-blocked { font-size: 11px; }
+}

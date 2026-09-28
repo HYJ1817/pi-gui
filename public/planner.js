@@ -628,7 +628,19 @@ export function openPlanner(focus = null) {
       const prog = el('div', 'planner-progress');
       prog.append(el('span', null, `进度 ${c.success + c.failed + c.cancelled + c.skipped}/${c.total}`));
       if (current.status === 'paused') {
-        prog.append(el('span', 'planner-warn', '已暂停：有任务失败，请选择重试 / 跳过 / 停止'));
+        /* P11：`paused` 现在有**两种**意思，必须分开说 —— 说成「有任务失败」而其实
+         * 只是在等人验收，会把用户引去重试一个根本没失败的任务。原因来自后端的
+         * `workflowReason`（同一个纯函数算出来的），前端不自己重算。
+         * 认不出原因时（老数据 / 桩）保留原来那句，行为不变。 */
+        const why = current.workflowReason;
+        prog.append(
+          el('span', 'planner-warn', why === 'waiting-review' ? '已暂停：等待人工验收' : '已暂停：有任务失败，请选择重试 / 跳过 / 停止')
+        );
+      }
+      /* P11：门控汇总 —— 一眼看到「还有几个在等我」。刻意不造复杂 dashboard（§十九）。 */
+      const gs = current.reviewGateSummary;
+      if (gs && gs.gated > 0) {
+        prog.append(el('span', 'planner-gate-sum', `人工门控 ${gs.satisfied}/${gs.gated} 已通过` + (gs.waiting ? ` · 待验收 ${gs.waiting}` : '')));
       }
       /* 验证在跑时把话说明白（禁用的按钮只靠 title 是发现不了的）。 */
       if (vActive) {
@@ -872,6 +884,20 @@ export function openPlanner(focus = null) {
         t2.review = r.review || { status, note, reviewedAt: Date.now(), revision: revision + 1 };
         reviewDrafts.delete(key);
         renderDetail();
+        /* ---------- P11：审阅会改变**工作流门控** ----------
+         * 把上游标成接受，下游就可能从 blocked 放行；改回「需要修改」又会重新卡住。
+         * 这是**调度后果**，前端不重算那条规则（重算就是第二份真相）——
+         * 拉一次详情让后端当权威，顺带拿到新的 plan.status 与 blockedReason。
+         * ⚠️ **绝不自动开始执行**：只把状态刷新对，跑不跑是用户点的事（§二十）。 */
+        const g = r.gate || null;
+        if (g) {
+          const n = (g.ready || []).length;
+          if (status === 'accepted') toast(n > 0 ? `验收已通过，${n} 个后续任务已可执行` : '验收已保存', 'ok');
+          else if (status === 'needs_changes') toast('验收已保存，后续任务继续等待', 'ok');
+          else toast('已清除审阅判断', 'ok');
+          await refreshCurrent();
+          return;
+        }
         toast(status === 'pending' ? '已清除审阅判断' : '审阅已保存', 'ok');
         return;
       }
@@ -1524,6 +1550,55 @@ export function openPlanner(focus = null) {
       }
     }
 
+    /* ---------- P11：人工验收门控 ----------
+     *
+     * 门控要回答的是「Agent 已经跑完了，DAG 为什么还在等」——所以文案必须让人
+     * 一眼分出「执行没成功」和「执行成功、在等人」。判断全在后端算好的视图字段里
+     * （`gateState` / `blockedReason` / `waitingOn`），前端**不重算规则**。 */
+
+    /** 上游卡住下游的原因。枚举来自后端，前端只把它翻成人话。 */
+    const BLOCK_REASON_TEXT = {
+      'waiting-review': '等待人工验收',
+      'dependency-failed': '上游任务失败',
+      'dependency-cancelled': '上游任务被取消',
+      'dependency-skipped': '上游任务被跳过',
+      'dependency-interrupted': '上游任务被中断',
+      'dependency-missing': '依赖的任务不存在',
+    };
+
+    /** 开了门控的任务上那一行。 */
+    function renderReviewGate(t) {
+      if (!t.reviewGate) return null;
+      const g = t.gateState || { enabled: true, satisfied: false, reason: 'pending', attempt: null };
+      const row = el('div', 'planner-gate');
+      row.append(el('span', 'planner-gate-badge', '人工门控'));
+      let text = '等待人工验收';
+      let cls = 'planner-gate-wait';
+      if (g.satisfied) {
+        text = '门控已通过';
+        cls = 'planner-gate-ok';
+      } else if (g.reason === 'needs_changes') {
+        text = '需要修改 · 门控未通过';
+        cls = 'planner-gate-bad';
+      } else if (g.reason === 'no-successful-attempt') {
+        text = '还没有成功执行 · 门控未开始';
+      }
+      row.append(el('span', cls, text));
+      if (g.attempt) row.append(el('span', 'planner-gate-hint', `第 ${g.attempt} 次尝试`));
+      return row;
+    }
+
+    /** 下游被卡住时那一行。`waitingOn` 里是**任务 id** —— 同样按纯文本渲染。 */
+    function renderBlockedReason(t) {
+      if (!t.blockedReason) return null;
+      const row = el('div', 'planner-blocked');
+      row.append(el('span', 'planner-blocked-text', BLOCK_REASON_TEXT[t.blockedReason] || '依赖未满足'));
+      if (t.blockedReason === 'waiting-review' && (t.waitingOn || []).length) {
+        row.append(el('span', 'planner-blocked-on', '：' + t.waitingOn.join('、')));
+      }
+      return row;
+    }
+
     function renderTask(t, planRunning) {
       const wrap = el('div', 'planner-task');
       // P7：从会话头部的「查看任务」跳进来时要能定位到这一条
@@ -1539,6 +1614,12 @@ export function openPlanner(focus = null) {
       if (t.attempt > 1) top.append(el('span', 'planner-task-attempt', `第 ${t.attempt} 次`));
       if (t.result && Number.isFinite(t.result.durationMs)) top.append(el('span', 'planner-task-dur', fmtDuration(t.result.durationMs)));
       wrap.append(top);
+
+      /* P11：门控 / 「为什么被卡住」——都紧跟在状态行下面，用户最先看到。 */
+      const gateLine = renderReviewGate(t);
+      if (gateLine) wrap.append(gateLine);
+      const blockedLine = renderBlockedReason(t);
+      if (blockedLine) wrap.append(blockedLine);
 
       /* 标题 / 描述 / agent / 依赖 的编辑（运行中锁定结构，规格 §46） */
       const title = el('input', 'planner-task-title');
@@ -1591,6 +1672,20 @@ export function openPlanner(focus = null) {
         depBox.append(lab);
       }
       row.append(depBox);
+
+      /* P11：人工验收门控（默认关）。开了之后，这个任务成功 ≠ 下游可以开始，
+       * 还要等最新一次成功尝试被人接受。 */
+      const gateLab = el('label', 'planner-dep planner-gate-toggle');
+      const gateCb = el('input');
+      gateCb.type = 'checkbox';
+      gateCb.checked = Boolean(t.reviewGate);
+      gateCb.disabled = planRunning;
+      gateCb.onchange = () => {
+        t.reviewGate = gateCb.checked;
+        dirty = true;
+      };
+      gateLab.append(gateCb, el('span', null, '需要人工验收后再继续下游'));
+      row.append(gateLab);
       wrap.append(row);
 
       /* 结果 / 错误 / 变更 */
