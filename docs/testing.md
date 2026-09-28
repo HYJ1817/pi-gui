@@ -27,12 +27,12 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 26 个套件，全部是**纯自动化**：
+`npm test` 里现在有 27 个套件，全部是**纯自动化**：
 
 ```
-smoke 792 · git 161 · modules 114 · reliability · interactions · port-owner
-project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 132
-verification 136 · evidence 100 · attempt-lifecycle 98
+smoke 807 · git 161 · modules 114 · reliability · interactions · port-owner
+project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 133
+review-gate 99 · verification 136 · evidence 100 · attempt-lifecycle 98
 sessions 77 · session-search 71
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
@@ -66,6 +66,33 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 按 attempt 精确定位、`revision` 冲突（含**真的并发**两个请求只允许一个成功）、
 持久化与清除、重试不覆盖历史、计划编辑不擦审阅、跨项目 403、隐私，
 以及写盘失败必须如实报错。同样全程 fixture。
+
+`review-gate`（P11，99 条）测**人工验收门控**（可选的工作流策略）：把审阅从「事后记录」
+升级成「下游要不要等」的条件。同样全程 fixture（真 git + fake adapter，不 spawn 真 Agent）：
+
+- **A / B 段**（纯函数）：`reviewGateState` 只看**最新一次成功** attempt 的 review
+  （**旧 accepted 不跨 Attempt 继承**）；`dependencyStateOf` 的原因与优先级 ——
+  **执行失败 > 等人工验收**，上游真失败了绝不能说成「在等验收」。
+- **C / D 段**（端到端）：门控真的挡住调度（下游 `blocked` + `waiting-review`，
+  Plan `paused`）；accepted 之后下游变 `ready` 但**不自动执行**；多级门控；
+  无门控时行为与旧实现完全一致；最后一个 gated 任务没被接受时 Plan **不能**
+  `completed`，接受之后 `completed`，再改回 `needs_changes` 又退回 `paused`。
+- **E 段**：Retry 之后门控**重新关上** —— Attempt1 的 accepted 不被沿用，
+  Attempt2 成功 + pending 时下游重新 `blocked`。
+- **F 段**：Verification 结果（跑过 / 通过 / 失败）与 `changeEvidence` 都**不参与**门控；
+  failed / cancelled / skipped / interrupted 的依赖者各说各的原因，**不冒充**「等验收」；
+  老 Plan 缺字段 → false，schemaVersion 不变。
+- **G 段**：revision 冲突与写盘失败都**不改变 DAG**；`PUT Plan` 可开/关门控并**就地重算**
+  下游；重启后从持久化 review 重算；跨项目审阅被拒。
+- **H 段**：门控字段里只有任务 id 与稳定枚举，没有可注入的内容（标题是不可信文本）。
+
+> **守卫验证过会红**：把门控判定临时退回旧行为（忽略门控 / 拿**第一次**成功尝试），
+> 本套件 **27 条**失败 —— 包括「下游直接跑掉」与「旧 accepted 被沿用」这两条 blocker。
+
+`smoke` 里的 **P11 段**（15 条）测门控的**前端行为**：`人工门控` 标记与四种状态文案、
+下游「等待人工验收：<上游 id>」、上游失败时**不**说成等验收、Plan 顶部那句
+「已暂停：等待人工验收」与门控汇总、任务上的勾选框（默认状态 + 勾选后保持）、
+以及恶意 task id / 上游 id 全部按纯文本渲染。
 
 `smoke`（`npm run test:ui`）里的 **P8-C 段**（63 条）测人工审阅的**前端行为** ——
 后端契约已经有 `reviews` 覆盖，所以这一段只测界面怎么解释它：
@@ -348,6 +375,18 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 > （`Page.captureScreenshot` 不带 `clip`），两行同在一张卡片上、滚动位置又一样时，
 > 都是收起状态就会截出**同一张图** —— 那样等于有一条没验。
 > `35` 拍的是 attempt 卡片而不是弹层：`unavailable` 时**根本没有**可点的入口。
+
+**P11 人工验收门控的场景**（`shots:harness` 的 38–44，夹具是 `plan-gate`）：
+
+| 场景 | 验什么 |
+|---|---|
+| `38-review-gate-pending` | 执行成功但**等待人工验收**（badge + 文案 + 第几次尝试） |
+| `39-review-gate-accepted` | 已接受 → 「门控已通过」 |
+| `40-review-gate-needs-changes` | 需修改 → 「需要修改 · 门控未通过」 |
+| `41-review-gate-downstream-blocked` | 下游「等待人工验收：gated-a」（**带上游 id**，不只写「blocked」） |
+| `42-review-gate-plan-paused` | Plan 顶部「已暂停：等待人工验收」+「人工门控 1/4 已通过 · 待验收 3」 |
+| `43-review-gate-editor` | 任务上的「需要人工验收后再继续下游」勾选框 |
+| `44-review-gate-narrow-700` | 压力：700px 下**超长标题** + 门控行 + 下游等待原因 |
 
 ## 五、发布前验证（F 层）
 

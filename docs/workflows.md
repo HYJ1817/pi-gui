@@ -471,6 +471,65 @@ P8-A 的字段全是 additive：老 attempt 缺 `review` → 归一化成
 挂一条「格式版本是 1，当前支持 2」的提示，而那句提示是假的（v1 文件完全可读）。
 只有「旧 reader 会错误解释新结构」时才需要 bump，这次不是。
 
+### 5.9 人工验收门控：可选的工作流策略（P11）
+
+前面几节讲的是「审阅怎么记」。P11 让它**可选地**参与调度：
+
+```
+task.reviewGate = true
+→ 这个任务执行成功后，依赖它的任务要等**最新一次成功尝试被接受**才能开始
+```
+
+默认 `false` —— 不勾它，行为与 P11 之前**完全一样**。旧计划缺这个字段也当 `false`
+（纯新增字段，`PLAN_SCHEMA_VERSION` 不变）。
+
+**它不是执行状态。** P8 建立的那条界线（`execution status ≠ review status`）不许破，
+所以刻意**不新增** `task.status = awaiting_review`：
+
+| | 是什么 | 会不会因为「在等人」而变 |
+|---|---|---|
+| `task.status` | 执行到哪一步了 | **不会** —— 执行成功就是 `success` |
+| 门控 | 下游能不能开始的一个条件 | 会 |
+
+下游仍然是既有的 `blocked`，只是多一个**原因**：
+
+```
+blockedReason = 'waiting-review'      ← 上游跑完了，在等人验收
+blockedReason = 'dependency-failed'   ← 上游真的失败了
+```
+
+⚠️ **原因优先级：执行失败 > 等人工验收**。上游真失败了却显示「等待人工验收」，
+会把用户引去重试一个根本没失败的任务。
+
+**判据永远是「最新一次成功尝试」**：
+
+```
+Attempt 1  success + accepted
+Retry
+Attempt 2  success + pending     → 门控**重新关上**（accepted 不跨 Attempt 继承）
+```
+
+**Plan 状态**：`paused` 现在有两种意思，界面靠 `workflowReason` 分开说。
+只剩「等人工验收」时是 `paused + waiting-review`（以前会停在 `running`，看着像卡住）。
+**最后一个任务**开了门控且没被接受时，Plan **不能** `completed` —— 工作流策略还没满足；
+接受之后才 `completed`。把已接受的改回 `needs_changes`，Plan 会**从 completed 退回
+paused**（`completed` 不是不可逆的），但**历史执行结果一个字节都不改**。
+
+**它刻意不做什么**（第一版留白，规格 §七/§八/§十二/§十四/§十五）：
+
+- **不自动执行**下游：接受之后下游只是变 `ready`，跑不跑由用户点「开始执行」。
+- **不自动重试**：`needs_changes` 只让门控不满足，不会去 Retry。
+- **不管 Verification**：门控只看 review。`verificationResult` 是 passed / failed /
+  从没跑过都不影响它 —— 认不认这个结果始终是人的判断。
+- **不倒推已发生的执行**：已经跑完的下游不会被重写成 blocked；正在跑的下游也不会
+  因为上游改回 `needs_changes` 而被中止（门控只作用于**还没开始**的下游）。
+
+门控状态**不落盘**：`blockedReason` / `gateState` / `waitingOn` / `reviewGateSummary`
+都是 `planView` 的视图字段（与 `sessionAvailable` 同一条规矩）。持久化的只有
+`task.reviewGate` 这一个开关 —— 其余一律从 `task` + `attempts` + `review` 现算，
+避免第二份真相。判断全在 `model.js` 的纯函数里（`reviewGateState` / `dependencyStateOf`
+/ `planWorkflowState`），scheduler、review route、前端**都不各写一份**。
+
 ## 六、重试与历史（P8-B）
 
 > **Retry = 新的 Attempt，不是重写历史。** 这是整条工作流里最容易写错的一步。
