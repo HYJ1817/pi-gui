@@ -606,6 +606,33 @@ session 自然结束 → Plan 落到 ready，等用户自己再点开始
 门后来又被打回 `needs_changes` / `pending` → 判据不再成立 → 不按住；
 此时 DAG 权威照旧（下游 `blocked + waiting-review`，Plan `paused`）。
 
+### P13：界面状态是推导出来的（不进 schema）
+
+「下一步 / 当前状态 / 历史怎么展开」全部是**展示层**问题，这一轮没有给工作流加任何
+状态机分支 —— 判定只读这轮之前就已经存在的字段：
+
+```
+workflowReason · gateState · blockedReason · verificationActive · reviewGateSummary
+```
+
+三条边界（破坏任何一条都算语义变更，本轮一条都没破）：
+
+1. **不新增持久化字段。** `nextAction` / `attentionState` / `uiStatus` /
+   `displayStatus` / `attemptCollapsed` 一律**不写进** plan / task / attempt，
+   plan 文件与 schemaVersion 不动。UI 认为的「下一步」随时可以从同一份数据重算出来。
+2. **不改判定，只改说法。** 唯一的文案变动是 §二十九 的细分：`required=false` 且任务
+   还停在 `pending / ready / blocked / running`（**重试排队中、还没跑过**）时写
+   「尚未产生新结果 · 门控未开始」，而不是「执行未成功」—— 拿一次还没发生的执行
+   当失败说是错的，但门控该不该放行**一个字没变**。`no-successful-attempt` 那支
+   与 P12 的 `required` 排在 `satisfied` 前面的顺序都保持原样。
+3. **折叠状态只活在前端内存里**（`openPlanner()` 的闭包，与审阅草稿同生命周期），
+   换项目时清掉，**不写 localStorage、不写 plan 文件**。用户收起过第 3 次尝试这件事
+   不是工作流事实，没有理由让它跨进程存活。
+
+Plan / Task / Attempt 的状态流转、放行规则、Barrier、验证与审阅的所有权**本轮零改动** ——
+`workflow-relations`(71) / `review-gate`(217) / `verification`(136) /
+`attempt-lifecycle`(98) 都没有改动断言，继续按原样通过。
+
 ## 六、重试与历史（P8-B）
 
 > **Retry = 新的 Attempt，不是重写历史。** 这是整条工作流里最容易写错的一步。

@@ -30,7 +30,7 @@
 `npm test` 里现在有 27 个套件，全部是**纯自动化**：
 
 ```
-smoke 809 · git 161 · modules 114 · reliability · interactions · port-owner
+smoke 838 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 133
 review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
 sessions 77 · session-search 71
@@ -137,6 +137,33 @@ Scheduler 收尾整份写盘之后**改动仍然在**（不会被冲回 `pending
 下游「等待人工验收：<上游 id>」、上游失败时**不**说成等验收、Plan 顶部那句
 「已暂停：等待人工验收」与门控汇总、任务上的勾选框（默认状态 + 勾选后保持）、
 以及恶意 task id / 上游 id 全部按纯文本渲染。
+
+`smoke` 里的 **P13 段**（29 条，`smoke` 从 809 涨到 838）测 Planner 的收敛行为 ——
+界面状态全部是 **runtime 推导 / 前端内存**，一条都不落盘：
+
+- **下一步**（`derivePlanAttention`，纯函数）：七个分支各给一条断言
+  （验证在跑 → 执行中 → 失败 → 被阻塞 → 等验收 → 收尾 → 可执行），一次只有
+  **一个**主焦点，次级信息进第二行（「另有 N 个任务等待验收」）；
+  给 CTA 的只有 `ready` / `focus-task` 两种，`running` 与收尾态**不给**按钮。
+- **Attempt 默认只展开最新一次**：旧的收起但**内容仍在 DOM 里**；折叠头是真
+  `<button>` + `aria-expanded` + `aria-controls`；展开/收起记在 `attemptOpen`，
+  重绘、切计划、SSE 事件都**不许**把它改回去（Blocker 2）。
+- **交互必需优先于默认**：审阅草稿 / 正在清除 / 独立验证在跑的那条**强制展开**
+  （Blocker 3），用户显式收起**也认**（用户选择 > 交互必需 > 默认）。
+- **focus 到 attempt**：`openPlanner({planId, taskId, attempt})` 打开面板就展开
+  那一条老尝试并滚到视口内（Blocker 4）。
+- **Review 草稿跨折叠不丢**：折叠头在 DOM 里、编辑态在 body 里 —— 收起后再展开，
+  输入框与文字原样回来；切换计划 / 关面板才丢（**没保存的不该被持久化**，§四十五）。
+- **§二十九文案**：`required=false` 且任务还是 `pending/ready/blocked/running` 时写
+  「尚未产生新结果 · 门控未开始」（还没跑过 ≠ 执行未成功），真失败/取消/中断/跳过
+  才保留 P12 那句「执行未成功」；`no-successful-attempt` 分支不动。
+- **动作层级**：等待人工验收时任务上的主动作是「验收结果」（不是 Retry），
+  执行结果 / 证据 / 打开会话都排在它后面；点它会跳到该 attempt 的审阅编辑器。
+
+> **夹具共享的坑**（记在这里免得再踩一次）：P13 段一开始直接拿 `stubPlanReview`
+> 测草稿，结果两条断言红 —— 因为**前面的 P8-C 段会就地改这个夹具**（保存审阅、
+> 开验证），跑到 P13 时它已经不是原样了。现在 P13 用的是进程启动时拍下的快照
+> `stubPlanDraft`。**看数据被改过没有，别信「我这个段没改它」。**
 
 `smoke`（`npm run test:ui`）里的 **P8-C 段**（63 条）测人工审阅的**前端行为** ——
 后端契约已经有 `reviews` 覆盖，所以这一段只测界面怎么解释它：
@@ -431,12 +458,37 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 | `42-review-gate-plan-paused` | Plan 顶部「已暂停：等待人工验收」+「人工门控 1/5 已通过 · 待验收 3」（`satisfied` 只数**已放行**的，历史 accepted 不算） |
 | `43-review-gate-editor` | 任务上的「需要人工验收后再继续下游」勾选框 |
 | `44-review-gate-narrow-700` | 压力：700px 下**超长标题** + 门控行 + 下游等待原因 |
-| `45-review-gate-retry-pending` | P12：重试排队中 —— attempt1 曾被接受（历史），当前这次没成功 → 「执行未成功 · 门控未开始」，**不是**「门控已通过」 |
+| `45-review-gate-retry-pending` | P12→P13：重试排队中 —— attempt1 曾被接受（历史），当前这次还没跑 → 「尚未产生新结果 · 门控未开始」，**不是**「门控已通过」，也**不是**「执行未成功」（§二十九：还没发生的执行不算失败） |
+
+**P13 下一步 / Attempt 折叠的场景**（`shots:harness` 的 46–55，夹具见下）：
+
+| 场景 | 夹具 | 验什么 |
+|---|---|---|
+| `46-next-action-ready` | `plan-ux` | 下一步：`有 1 个任务可以执行` + **「开始执行」**（唯一给 CTA 的分支） |
+| `47-next-action-review` | `plan-wait` | 下一步：`验收 gated-main 的最新成功结果` + 「查看任务」（点名到任务，不写「去验收」） |
+| `48-next-action-verification` | `plan-1` | 下一步：`正在独立验证 live · 第 1 次尝试` —— 优先级最高，**压掉**「开始执行」 |
+| `49-attempt-history-collapsed` | `plan-1` | 历史默认收起：两条尝试 → `aria-expanded` 依次 `false,true`，旧那条 `body.hidden=true` |
+| `50-attempt-history-expanded` | `plan-1` | 手动展开后 `true,true`，展开内容**有实际高度**（不是空壳） |
+| `51-attempt-history-10` | `plan-stress` | 10 次尝试只展开 1 条（第 10 次），9 条历史一条不少 |
+| `52-attempt-head-summary` | `plan-1` | 折叠头四个维度各占一格：执行 / 验证 `正在验证…` / 验收 `已接受` / 证据；验证在跑 → 强制展开 |
+| `53-focus-attempt` | `plan-1` | `openPlanner({taskId, attempt:1})` 新开面板就展开**老那一条**并滚进视口（默认规则会收着它） |
+| `54-next-action-narrow-700` | `plan-ux` | 700px：下一步那一行不横向溢出、CTA 仍在视口里 |
+| `55-next-action-blocked` | `plan-gate` | 下一步：`处理被阻塞的任务 gated-faildown` —— 「被阻塞」排在「等验收」**之前**，这一支的优先级看得见 |
+
+> 夹具全是**新计划**（`plan-ux` / `plan-wait`），不是改旧的：`plan-gate` 里有一条
+> `dependency-failed` 的下游（P11 的场景要它），为了截图好看去动它会把 P11/P12 的
+> 断言一起带跑偏。计划列表的顺序就是 `pickPlan(i)` 的下标，**改顺序会打乱所有场景号**。
+
+> **结构判据（P13 新增）**：`shotOf()` 的第 5 个参数 `mustTrue` 是**必须为真的
+> 页面表达式** —— 因为「收起 / 展开」在截图和 `textContent` 里**长得一模一样**
+> （收起的节点还在 DOM 里，文本照样算进去）。折叠头是不是真 `button`、
+> `aria-expanded` 的值、`hidden`、展开后的实际高度，全靠它算出来；任一条不成立
+> 就进失败清单、`cdp-shot.cjs` 以退出码 1 结束。本轮 46–55 全部 ✓。
 
 > **截图的判据不靠人眼**：`shotOf()` 现在会把「被取景的那个元素」打出来 ——
 > 矩形在不在视口里、归一化后的文本、以及该场景的关键词齐不齐 —— 并把关键词缺失 /
 > 取景中心不在视口内记成失败，`cdp-shot.cjs` 有失败就以退出码 1 结束。
-> 所以上面这张表的每一行都有日志里的机器可查对应物（本轮 38–45 全部 ✓）。
+> 所以上面这两张表的每一行都有日志里的机器可查对应物（本轮 38–55 全部 ✓）。
 > 判据用「取景中心落在视口内」而不是「矩形完全在视口内」：1000 字说明、10 次尝试
 > 这类比视口还高的元素，后者按构造就永远失败。
 

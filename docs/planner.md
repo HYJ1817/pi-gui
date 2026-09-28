@@ -285,6 +285,62 @@ attempt 卡片上有**两个**「看变更」的入口，措辞刻意分开，�
 为什么 Verification 不参与、为什么已跑完的下游不被倒推）见
 [workflows.md](workflows.md) §5.9 与 [reviews.md](reviews.md) §七之二。
 
+## 七之六、下一步与尝试折叠（P13）
+
+详情页要能一眼回答五个问题：**当前状态 / 为什么 / 下一步 / 证据在哪 / 历史按需展开**。
+这一节全部是**展示层** —— 不改 Scheduler、不改 DAG、不改门控与验证的语义，
+也没有任何新的持久化字段：状态要么从后端已有的 truth 字段推导，要么只活在前端内存里。
+
+### 下一步（`derivePlanAttention`）
+
+纯函数、只读、不发请求，拿到 plan 就返回**一句话** + 一个可选动作：
+
+| 优先级 | kind | 文案 | 给不给按钮 |
+|---|---|---|---|
+| 1 | `verification-active` | `正在独立验证 <taskId> · 第 N 次尝试` | 「查看任务」 |
+| 2 | `running` | `正在执行 N 个任务` / `计划执行中` | **不给**（running 时「开始执行」是误导） |
+| 3 | `failed` | `处理失败任务 <taskId>` / `计划执行失败` | 「查看任务」/ 不给 |
+| 4 | `blocked` | `处理被阻塞的任务 <taskId>` | 「查看任务」 |
+| 5 | `waiting-review` | `验收 <taskId> 的最新成功结果` | 「查看任务」 |
+| 6 | `completed` / `cancelled` | `计划已完成` / `计划已取消` | 不给 |
+| 7 | `ready` | `有 N 个任务可以执行` | 「开始执行」 |
+| 8 | `paused` / `idle` | `计划已暂停` / `没有待执行的任务` | 不给 |
+
+- **一次只给一个主焦点**，次级信息放第二行（`另有 N 个任务等待验收`）——
+  不排成一队按钮。
+- 优先级不是随手排的：**失败排在等验收前面**（把失败说成「等待验收」会把人引去点
+  一个根本动不了的按钮）；「被阻塞」排在「等验收」前面同理（验收救不了被依赖
+  失败挡住的任务）。
+- 面板顶部的进度行与 stale 提示不在这里：`stale` 走 `renderStalePlanner()`，
+  不进这个函数。
+
+### Attempt 折叠
+
+- **默认每条任务只展开最新一次**；历史收起但**内容仍留在 DOM 里**（收起 ≠ 删掉，
+  十次尝试的历史一条不少）。
+- 折叠头是**真 `<button type="button">`** + `aria-expanded` + `aria-controls`：
+  Enter / Space 原生可用，展开态不只靠颜色或图标。头一行分格说**执行结论 / 时长 /
+  独立验证 / 人工验收 / 证据**，**不合并成一个「状态」** —— 收起之后更要能一眼分清。
+- 展开/收起的优先级是 **用户显式选择 > 交互必需 > 默认**：
+  `attemptOpen` 只记用户点过的那些（key = `planId:taskId:attempt`），重绘、切计划、
+  SSE 事件都不许改它；审阅草稿正在写 / 正在清除 / 独立验证在跑的那条**强制展开**；
+  用户显式收起一条正在验证的尝试，**也认**。
+- `attemptOpen` 只活在 `openPlanner()` 的闭包里，和 `reviewDrafts` 一起在
+  `dropPlannerState()` 里清掉 —— **不写 localStorage、不写 plan 文件**（§四十五）。
+- `openPlanner({ planId, taskId, attempt })` 能直接定位某一次老尝试：打开面板就
+  展开它并滚到视口内（会话里的「关联任务」入口用得上）。
+
+### 语义未变
+
+这一节**没有引入任何新状态**：`nextAction` / `attentionState` / `uiStatus` /
+`displayStatus` / `attemptCollapsed` 这类字段**一律不进持久化**。判断只用后端已有的
+`workflowReason` / `gateState` / `blockedReason` / `verificationActive` /
+`reviewGateSummary`。门控文案只按 §二十九 细分了一步 —— 还没跑过的任务写
+「尚未产生新结果 · 门控未开始」，不再说「执行未成功」——
+**判定条件、放行规则、API 契约一个字没动**，由 `review-gate`(217) /
+`verification`(136) / `attempt-lifecycle`(98) / `workflow-relations`(71)
+这几个**本轮没有改动**的套件继续背书。
+
 ## 八、崩溃恢复
 
 计划存在 **`<PI_GUI_DATA>/plans/`**：
