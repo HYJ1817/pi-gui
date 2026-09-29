@@ -6347,6 +6347,21 @@ staticCheck();
     pop.dispatchEvent(new window.MouseEvent('mouseleave', { bubbles: false }));
     check('P14-C Context 提示关闭时语义同步', () =>
       pop.hidden && $('btnCtx').getAttribute('aria-expanded') === 'false');
+    window.closePop();
+    check('P14-C Context hover 前弹层确实关闭', () => pop.hidden && $('btnCtx').getAttribute('aria-expanded') === 'false');
+    const errorsBeforeCtxHover = errors.length;
+    $('btnCtx').dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: false }));
+    await new Promise((resolve) => setTimeout(resolve, 145));
+    check('P14-C Context hover 无运行时异常', () =>
+      errors.length === errorsBeforeCtxHover || errors.slice(errorsBeforeCtxHover).join(' | '));
+    check('P14-C Context hover 延迟后打开真实 tooltip', () =>
+      !pop.hidden && pop.classList.contains('tip-mode') && window.currentAnchor() === $('btnCtx') &&
+      $('btnCtx').getAttribute('aria-expanded') === 'true' &&
+      ['20%', '200', '1k', '12', '34', '56', '$0.1250'].every((part) => pop.textContent.includes(part)));
+    $('btnCtx').dispatchEvent(new window.MouseEvent('mouseleave', { bubbles: false }));
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    check('P14-C Context hover 离开后延迟关闭', () =>
+      pop.hidden && $('btnCtx').getAttribute('aria-expanded') === 'false');
     check('P14-C Send 与 Stop 有独立可访问名称', () =>
       $('btnSend').getAttribute('aria-label') === '发送消息' && $('btnStop').getAttribute('aria-label') === '停止');
     $('navHome').click();

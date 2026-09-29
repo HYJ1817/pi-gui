@@ -494,6 +494,30 @@ async function main() {
   await evalJs(`document.querySelector('#btnThink').click(); document.querySelector('#btnCtx').click()`);
   await shotOf('.pop', '96-composer-context-popover', 'P14-C：上下文占用提示', ['背景信息窗口'], [['提示真实位置', popFit], ['百分比来自真实夹具', `document.querySelector('#ctxPct').textContent.includes('%')`]]);
   await evalJs(`document.body.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))`);
+  const ctxHoverErrors = pageErrors.length;
+  const ctxPoint = await evalJs(`(() => { const r=document.querySelector('#btnCtx').getBoundingClientRect(); return { x:(r.left+r.right)/2, y:(r.top+r.bottom)/2 }; })()`);
+  await send('Input.dispatchMouseEvent', { type:'mouseMoved', ...ctxPoint });
+  await sleep(170);
+  await shotOf('.pop', '96a-composer-context-hover', 'P14-C：真实鼠标悬停打开 Context 提示', ['背景信息窗口'], [
+    ['hover 后弹层可见且为 tip-mode', `(() => {const p=document.querySelector('.pop');return !p.hidden && p.classList.contains('tip-mode')})()`],
+    ['按钮展开语义同步', `document.querySelector('#btnCtx').getAttribute('aria-expanded')==='true'`],
+    ['提示位置在视口内', popFit],
+    ['hover 无页面运行时异常', String(pageErrors.length === ctxHoverErrors)],
+  ]);
+  const tipPoint = await evalJs(`(() => { const r=document.querySelector('.pop').getBoundingClientRect(); return { x:(r.left+r.right)/2, y:(r.top+r.bottom)/2 }; })()`);
+  await send('Input.dispatchMouseEvent', { type:'mouseMoved', ...tipPoint });
+  await sleep(260);
+  await shotOf('.pop', '96b-composer-context-hover-retained', 'P14-C：鼠标移到提示上方仍保持打开', ['背景信息窗口'], [
+    ['提示仍可见', `(() => {const p=document.querySelector('.pop');return !p.hidden && p.classList.contains('tip-mode')})()`],
+    ['按钮仍标记展开', `document.querySelector('#btnCtx').getAttribute('aria-expanded')==='true'`],
+    ['未产生页面运行时异常', String(pageErrors.length === ctxHoverErrors)],
+  ]);
+  await send('Input.dispatchMouseEvent', { type:'mouseMoved', x:10, y:10 });
+  await sleep(60);
+  await shotOf('#btnCtx', '96c-composer-context-hover-leave', 'P14-C：离开提示后关闭', [], [
+    ['提示已关闭且展开语义恢复', `document.querySelector('.pop').hidden && document.querySelector('#btnCtx').getAttribute('aria-expanded')==='false'`],
+    ['未产生页面运行时异常', String(pageErrors.length === ctxHoverErrors)],
+  ]);
   await evalJs(`fetch('/api/__push?what=running').then(r=>r.ok)`);
   await sleep(160);
   await shotOf('#composerBox', '97-composer-running', 'P14-C：运行时 Stop 为主操作', ['停止'], [['停止可用且发送入口仍在', `!document.querySelector('#btnStop').hidden && document.querySelector('#btnSend').getBoundingClientRect().width>0`], ['控件不越界', controls]]);
