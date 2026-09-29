@@ -919,6 +919,104 @@ async function main() {
     ['新会话历史已重建且可见', `(() => { const e=[...document.querySelectorAll('#chatView .msg')].find(x=>x.textContent.includes('这是 README 会话的历史消息')); return !!e && e.getBoundingClientRect().height>0; })()`],
     ['没有页面运行时异常', pageErrors.length === 0 ? 'true' : 'false'],
   ]);
+
+  /* P14-E: computed colors are checked on rendered controls, including selected state. */
+  const neutralControls = `(() => {
+    const amber = value => { const m=value.match(/rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)/); if(!m)return false; const [r,g,b]=m.slice(1).map(Number); return r>130&&g>90&&r>g*1.06&&g>b*1.3; };
+    return [...document.querySelectorAll('button,[role="button"],.project.active,.pj-sess.on,.ext-item.on,.modal-item.on')]
+      .filter(e => { const r=e.getBoundingClientRect(); return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'; })
+      .every(e => { const s=getComputedStyle(e); return ![s.color,s.backgroundColor,s.borderTopColor,s.borderBottomColor,s.borderLeftColor,s.borderRightColor].some(amber); });
+  })()`;
+  const viewportChecks = (selector) => [
+    ['无整体横向或纵向滚动', `document.documentElement.scrollWidth<=innerWidth+1 && document.documentElement.scrollHeight<=innerHeight+1`],
+    ['工作区有可用高度且位于 Stage 内', `(() => {const a=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),s=document.querySelector('#workspace').getBoundingClientRect();return a.height>180&&a.left>=s.left-1&&a.right<=s.right+1&&a.bottom<=s.bottom+1})()`],
+    ['关键操作在 Stage 水平边界内', `(() => {const s=document.querySelector('#workspace').getBoundingClientRect();return [...document.querySelectorAll('#chatComposer button,#workSurface .chg-head button,#workSurface .ext-bar button,#workSurface .planner-bar button')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).every(e=>{const r=e.getBoundingClientRect();return r.left>=s.left-1&&r.right<=s.right+1})})()`],
+    ['内部滚动容器承担滚动', `getComputedStyle(document.querySelector(${JSON.stringify(selector==='#chatView'?'#stream':'#workSurface')})).overflowY===${JSON.stringify(selector==='#chatView'?'auto':'hidden')}`],
+    ['可见交互控件无琥珀色', neutralControls],
+  ];
+  await shotOf('#workspace', '126-neutral-buttons-chat', 'P14-E：Chat 控件与选中侧栏为灰阶', [], [['计算后的交互色为中性', neutralControls]]);
+  await shotOf('#chatComposer', '127-neutral-composer-controls', 'P14-E：Composer 控件与发送按钮为灰阶', [], [['计算后的交互色为中性', neutralControls]]);
+  await evalJs(`document.querySelector('#btnModel').click()`);
+  await sleep(180);
+  await shotOf('.pop', '128-neutral-popover', 'P14-E：Popover 当前项为灰阶', [], [['计算后的交互色为中性', neutralControls], ['选中项可见', `!!document.querySelector('.pop-item.on')`]]);
+  await closePop();
+  await evalJs(`document.querySelector('#navPlanner').click()`);
+  await sleep(450);
+  await shotOf('#workSurface', '129-neutral-planner', 'P14-E：Planner 主次按钮为灰阶', ['生成计划'], [...viewportChecks('#workSurface')]);
+  await evalJs(`document.querySelector('#workSurface .planner-list .ext-item')?.click()`);
+  await sleep(250);
+  await shotOf('.planner-rv', '130-neutral-planner-review', 'P14-E：Review 操作为灰阶', [], [['计算后的交互色为中性', neutralControls]]);
+  await evalJs(`document.querySelector('#navChanges').click()`);
+  await sleep(350);
+  await shotOf('#workSurface', '131-neutral-changes', 'P14-E：Git 过滤与危险按钮主体中性', ['文件变更'], [...viewportChecks('#workSurface')]);
+  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(350);
+  await evalJs(`document.querySelector('#workSurface .ext-list .ext-item')?.click()`);
+  await shotOf('#workSurface', '132-neutral-extensions', 'P14-E：Skill 选中与 Tabs 为灰阶', ['code-review'], [...viewportChecks('#workSurface')]);
+  await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navProviders').click()`);
+  await sleep(200);
+  await shotOf('#modal', '133-neutral-modal', 'P14-E：供应商 Modal 按钮为灰阶', ['模型供应商'], [['计算后的交互色为中性', neutralControls], ['Modal 位于视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`]]);
+  await evalJs(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+  await evalJs(`document.querySelector('#navChanges').click()`);
+  await sleep(320);
+  await evalJs(`document.querySelector('#chgFilterAll')?.click()`);
+  await sleep(150);
+  await evalJs(`document.querySelector('#workSurface .chg-head .btn.danger')?.click()`);
+  await sleep(200);
+  await shotOf('#confirmLayer', '134-neutral-confirm', 'P14-E：危险确认主操作使用中性底色', ['撤销全部'], [['计算后的交互色为中性', neutralControls], ['危险按钮无大面积红色背景', `(() => {const b=document.querySelector('#confirmLayer .btn.danger');return !!b&&getComputedStyle(b).backgroundColor!=='rgb(248, 113, 113)'})()`], ['确认按钮文字完整且操作区不溢出', `(() => {const a=document.querySelector('#confirmLayer .modal-actions');return a.scrollWidth<=a.clientWidth+1&&[...a.querySelectorAll('button')].every(b=>getComputedStyle(b).whiteSpace==='nowrap'&&b.getBoundingClientRect().height>=30)})()`]]);
+  await evalJs(`document.querySelector('#confirmLayer .btn:not(.danger)')?.click()`);
+
+  const pressKey = async (key, code, windowsVirtualKeyCode) => {
+    await send('Input.dispatchKeyEvent', {type:'keyDown',key,code,windowsVirtualKeyCode});
+    await send('Input.dispatchKeyEvent', {type:'keyUp',key,code,windowsVirtualKeyCode});
+  };
+  await evalJs(`document.querySelector('#navGlobalMore').click()`);
+  await pressKey('Escape','Escape',27);
+  const moreReturned = await evalJs(`document.activeElement?.id==='navGlobalMore' && document.querySelector('#globalMoreMenu').hidden`);
+  await pressKey('Tab','Tab',9);
+  await pressKey('Tab','Tab',9);
+  await shotOf('#workspace', '135-focus-keyboard', 'P14-E：真实键盘 Tab 焦点环', [], [
+    ['More Escape 回触发器', moreReturned ? 'true' : 'false'],
+    ['两次 Tab 后焦点可见', `(() => {const e=document.activeElement,s=getComputedStyle(e);return e!==document.body&&e.matches(':focus-visible')&&s.outlineStyle!=='none'&&s.outlineWidth!=='0px'})()`],
+  ]);
+  await pressKey('Enter','Enter',13);
+  await pressKey('Escape','Escape',27);
+  if (await evalJs(`!document.querySelector('#modal').hidden`)) await evalJs(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+
+  for (const [view, width, height, n] of [
+    ['chat',700,900,'139-responsive-chat-700'],['planner',700,900,'140-responsive-planner-700'],
+    ['changes',700,900,'141-responsive-changes-700'],['extensions',700,900,'142-responsive-extensions-700'],
+    ['chat',900,650,'143-low-height-chat'],['planner',700,600,'144-low-height-planner'],
+    ['extensions',700,600,'145-low-height-extensions'],
+    ['chat',700,600,'147-low-height-chat-700'],['chat',1200,650,'148-low-height-chat-1200'],
+    ['chat',1536,650,'149-low-height-chat-1536'],
+  ]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor:1, mobile:false });
+    await evalJs(`document.querySelector(${JSON.stringify(view==='chat'?'#navHome':'#nav'+view[0].toUpperCase()+view.slice(1))})?.click()`);
+    await sleep(320);
+    const selector = view==='chat'?'#chatView':'#workSurface';
+    await shotOf('#workspace', n, `P14-E：${view} ${width}×${height}`, [], viewportChecks(selector));
+  }
+  await send('Emulation.setDeviceMetricsOverride', { width:700,height:600,deviceScaleFactor:1,mobile:false });
+  await closePop();
+  await evalJs(`document.querySelector('#btnModel').click()`);
+  await sleep(180);
+  await shotOf('.pop', '150-popover-700-low', 'P14-E：700×600 Popover 不裁切', [], [['浮层可见且完全在视口', `(() => {const p=document.querySelector('.pop'),r=p.getBoundingClientRect();return !p.hidden&&r.width>0&&r.height>0&&r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
+  await closePop();
+  await evalJs(`document.querySelector('#navGlobalMore').click()`);
+  await shotOf('#globalMoreMenu', '151-more-700-low', 'P14-E：700×600 More 可访问', [], [['More 在视口内', `(() => {const r=document.querySelector('#globalMoreMenu').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
+  await evalJs(`document.querySelector('#navProviders').click()`);
+  await sleep(160);
+  await shotOf('#modal', '152-modal-700-low', 'P14-E：700×600 Modal 按钮可见', ['模型供应商'], [['Modal 在视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
+  await evalJs(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+  await send('Emulation.setDeviceMetricsOverride', { width:701,height:602,deviceScaleFactor:1,mobile:false });
+  await evalJs(`document.querySelector('#navPlanner').click()`);
+  await sleep(220);
+  await shotOf('#workspace', '153-dpi-rounded-701', 'P14-E：Electron DPI 取整后仍进入窄屏布局', ['生成计划'], [
+    ...viewportChecks('#workSurface'),
+    ['项目侧栏已收窄，计划列表上下排列', `document.querySelector('#projectSidebar').getBoundingClientRect().width<=191 && getComputedStyle(document.querySelector('#workSurface .ext-split')).flexDirection==='column'`],
+  ]);
+  await send('Emulation.clearDeviceMetricsOverride');
   await evalJs(`fetch('/api/__work-surface/session-reset').then(r=>r.ok)`);
 
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));

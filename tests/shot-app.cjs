@@ -15,6 +15,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PORT = Number(process.env.CDP_PORT || 9222);
+const SIZE = (() => { const m = process.argv.find(a => a.startsWith('--size='))?.slice(7).match(/^(\d+)x(\d+)$/); return m ? { width:Number(m[1]), height:Number(m[2]) } : null; })();
+const VIEW = process.argv.find(a => a.startsWith('--view='))?.slice(7);
 const OUT = path.join(__dirname, '..', '.shots');
 const TAG = (() => {
   const eq = process.argv.find((a) => a.startsWith('--tag='));
@@ -70,10 +72,19 @@ function connect(url) {
   await send('Runtime.enable');
   await sleep(2500); // 等前端把历史渲染完
 
+  if (SIZE) {
+    await send('Runtime.evaluate', { expression:`window.resizeTo(${SIZE.width}, ${SIZE.height})` });
+    await sleep(400);
+  }
+
   const evaluate = async (expr) => {
     const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
     return r.result?.value;
   };
+  if (VIEW === 'planner') {
+    await evaluate(`document.querySelector('#navPlanner').click()`);
+    await sleep(450);
+  }
 
   const facts = await evaluate(`(() => {
     const t = document.querySelector('#stream .thread');
@@ -124,6 +135,11 @@ function connect(url) {
       bg: cs.backgroundColor,
       hiddenProbe,
       titlebar,
+      viewport: { scrollWidth:document.documentElement.scrollWidth, scrollHeight:document.documentElement.scrollHeight, view:document.querySelector('#workspace')?.dataset.workspaceView },
+      narrowLayout: {
+        sidebarWidth:document.querySelector('#projectSidebar')?.getBoundingClientRect().width,
+        splitDirection:document.querySelector('#workSurface .ext-split') ? getComputedStyle(document.querySelector('#workSurface .ext-split')).flexDirection : null,
+      },
     };
   })()`);
 
@@ -143,6 +159,8 @@ function connect(url) {
   console.log('  对话容器    ', facts.hasThread ? '已渲染' : '缺失');
   console.log('  消息条数    ', facts.msgs);
   console.log('  页面底色    ', facts.bg);
+  console.log('  页面滚动    ', `${facts.viewport.scrollWidth}x${facts.viewport.scrollHeight}`, '视图', facts.viewport.view);
+  if (SIZE) console.log('  窄屏布局    ', `sidebar=${Math.round(facts.narrowLayout.sidebarWidth || 0)}px`, `split=${facts.narrowLayout.splitDirection}`);
   console.log('');
   console.log('hidden 属性是否真的生效（jsdom 测不到的那类）');
   let hiddenBad = 0;
@@ -199,7 +217,9 @@ function connect(url) {
   console.log('');
   console.log('截图 →', path.relative(path.join(__dirname, '..'), file));
 
-  process.exit(exceptions.length || !isElectron || hiddenBad || titlebarBad ? 1 : 0);
+  const overflowBad = facts.viewport.scrollWidth > facts.inner[0] + 1 || facts.viewport.scrollHeight > facts.inner[1] + 1;
+  const narrowBad = SIZE?.width <= 720 && VIEW === 'planner' && !(facts.narrowLayout.sidebarWidth <= 191 && facts.narrowLayout.splitDirection === 'column');
+  process.exit(exceptions.length || !isElectron || hiddenBad || titlebarBad || overflowBad || narrowBad ? 1 : 0);
 })().catch((e) => {
   console.error('失败：' + e.message);
   process.exit(1);

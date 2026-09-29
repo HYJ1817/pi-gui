@@ -742,6 +742,10 @@ const server = http.createServer(async (req, res) => {
     workSurfaceGitClean = url.searchParams.get('value') === '1';
     return json(res, 200, { ok: true, clean: workSurfaceGitClean });
   }
+  if (p === '/api/git/restore-all' && req.method === 'POST') return json(res, 200, {
+    ok: false, needsPlan: true, total: 3,
+    plan: { total: 3, plain: ['public/app.js'], staged: ['docs/说明.md'], untracked: ['new/fixture.txt'], skipped: [] },
+  });
   if (p === '/api/git/status') return json(res, 200, {
     ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: workSurfaceGitClean ? [] : [
       { path: 'public/app.js', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 12, deletions: 3, binary: false, oldPath: null },

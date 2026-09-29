@@ -27,3 +27,5 @@ SSE 的增量消息与 `get_messages` 历史消息仍走 `messages.js`；Tool �
 `npm run test:ui` 验证 DOM 语义、折叠状态、流式结束、工具状态、附件与 Minimap。`npm run harness` + `npm run shots:harness` 在真实 Chrome 中验证 69–85 场景，包括 700、900、1200、1536px 的阅读列和溢出。P14-A 的 57–68 场景在注入 P14-B 夹具前运行。
 
 本阶段没有改变 P14-A Shell、项目/会话、Composer 内部、附件上传、模型与上下文选择、Planner、Git、后端 API、pi RPC 或 session 存储语义。
+
+P14-E 的阅读区域仍由 `#stream` 独占滚动，切换 Work Surface 后保留位置。Markdown 链接通过浅色文字和下划线辨认，代码与任务勾选使用灰阶；Tool Timeline 的展开按钮保持中性，运行、成功、失败和 Diff 的状态色仍传递实际状态。

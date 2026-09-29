@@ -223,6 +223,10 @@ async function main() {
 
   /* ---------- 6. 结构性断言：GUI 里才发生的事 ---------- */
   const mainSrc = fs.readFileSync(path.join(ROOT, 'electron', 'main.cjs'), 'utf8');
+  check('P14-E 700×600 窗口下限与状态恢复一致', () =>
+    /const MIN_W = 700;/.test(mainSrc) && /const MIN_H = 600;/.test(mainSrc) &&
+    /minWidth: MIN_W/.test(mainSrc) && /minHeight: MIN_H/.test(mainSrc) &&
+    /s\.width < MIN_W \|\| s\.height < MIN_H/.test(mainSrc));
   check('主窗口只 loadURL 一次（启动失败分支不得再加载页面）', () => {
     const n = (mainSrc.match(/\.loadURL\(/g) || []).length;
     return n === 1 || `出现 ${n} 次 —— 端口被占时可能仍会把窗口指过去`;

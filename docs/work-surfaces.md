@@ -11,3 +11,5 @@ Planner、Changes、Extensions 是一级 Stage 页面。危险操作确认继续
 布局使用同一 Stage 背景、轻分隔的列表与详情。桌面列表和详情并排，700px 转为上下排列；窄屏及低高度下滚动发生在 Surface 内部，不让页面整体横向溢出。Plan 和 Skill 列表项使用原生 button，选中项提供 `aria-current`；Tab 提供 `aria-selected`，Rail 继续使用 `aria-current="page"`。颜色之外仍保留状态文字。
 
 验证：`npm run test:ui` 的 P14-D 段检查节点身份、草稿、附件、滚动、后台流式更新、唯一激活态和二级 Modal；`npm run harness` 加 `npm run shots:harness` 的 105–124 场景在真实 Chrome 中检查 Stage bounds、列表与详情、Diff、MCP、700/900/1200/1536px 和低高度窗口。完整回归以 `npm test` 为准。
+
+P14-E 保留这套承载与滚动结构。Planner、Changes、Extensions 的按钮和选中行统一为灰阶，危险操作只用少量红色文字提示；状态文字、Git Diff 和执行结果继续使用语义色。Planner / Extensions Tab 的 `aria-selected` 与可见面板一致，并通过 `aria-controls` 指向对应面板。被替换的 Surface 内若持有焦点，统一生命周期会将焦点送到新视图的入口。

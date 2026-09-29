@@ -942,6 +942,13 @@ staticCheck();
 
   check('模块加载无异常', () => errors.length === 0 || errors.join(' | '));
   check('静态按钮都声明 type', () => [...window.document.querySelectorAll('button')].every((button) => button.hasAttribute('type')));
+  check('P14-E 交互选择器不引用黄色强调', () => {
+    const interactive = /(?:\bbutton\b|\.btn\b|\.icon-btn\b|\.chip\b|\.welcome-cta\b|\.modal-item\b|\.pop-item\b|\.chg-tab\b|\.preset\b|\.ext-tab\b|\.ext-item\b|\.planner-mini\b|\.planner-rv-opt\b|\.pj-sess\b|\.pj-search-scope\b|\.project\.active|\.tl-toggle:hover|\.d-hunkbar:focus|\.planner-goal:focus|\.composer-box:(?:focus|drop)|\.pj-search-row:focus|\.planner-attempt-toggle:focus)/;
+    const amber = /var\(--accent(?:-soft)?\)|#(?:e8a33d|e8c67a|f0cf9a|241d12|4a3a1c|5d4823|66502e|7c5230)\b|rgba?\(\s*(?:232\s*,\s*163\s*,\s*61|240\s*,\s*207\s*,\s*154)/i;
+    const rules = [...styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const offenders = rules.filter(([, selector, body]) => interactive.test(selector.replace(/\/\*[\s\S]*?\*\//g, '')) && amber.test(body));
+    return offenders.length ? offenders.map(([, selector]) => selector.trim()).join(' | ') : true;
+  });
   check('P14-A 三列外壳与全局导航存在', () => Boolean($('globalRail') && $('projectSidebar') && $('workspace') && $('navHome') && $('navPlanner') && $('navChanges') && $('navExtensions') && $('navGlobalMore')));
   check('P14-A 侧栏有独立折叠按钮', () => Boolean($('btnSidebarCollapse')));
   check('侧栏按钮初始语义为展开', () => !$('projectSidebar').hidden && $('btnSidebarCollapse').getAttribute('aria-expanded') === 'true' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'true');
@@ -2365,6 +2372,7 @@ staticCheck();
   $('navProviders').click();
   await new Promise((r) => setTimeout(r, 20));
   check('供应商弹层打开', () => $('modal').hidden === false);
+  check('P14-E 新 Modal 不继承上一弹层的布局类', () => $('modalCard').classList.contains('wide') && !$('modalCard').classList.contains('tree-modal'));
   check('供应商列表渲染', () => window.document.querySelectorAll('#modalCard .prov').length === 1);
   check('未解析的 $ENV_VAR 有告警', () => {
     const w = window.document.querySelector('#modalCard .prov-warn');
@@ -2795,6 +2803,10 @@ staticCheck();
   check('未选项目时发送键禁用', () =>
     window.document.getElementById('btnSend').disabled === true ? true : '发送键还能按'
   );
+  $('navPlanner').click();
+  $('workSurface').querySelector('.planner-goal')?.focus();
+  $('navHome').click();
+  check('P14-E 无项目返回 Chat 时焦点留在可用导航', () => window.document.activeElement === $('navHome'));
   // submit 是 async，等它跑完再看命令列表
   const beforeCmds = commands.length;
   await window.submit();
@@ -6384,15 +6396,19 @@ staticCheck();
     check('P14-D 默认 Chat 且 Home 唯一激活', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
     $('navPlanner').click();
     check('P14-D Planner 在 Stage 且 Chat 节点仅隐藏', () => $('workspace').dataset.workspaceView === 'planner' && !$('workSurface').hidden && $('chatView').hidden && composer.hidden && $('modal').hidden && conversation.isConnected);
+    check('P14-E Planner Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && Boolean(window.document.getElementById(tab.getAttribute('aria-controls')))));
     check('P14-D Planner rail 唯一激活', () => $('navPlanner').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
     window.onMessageStart({ message: { role: 'assistant' } });
     window.onMessageUpdate({ assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '离开 Chat 后继续生成' } });
     await new Promise((resolve) => setTimeout(resolve, 35));
     check('P14-D 非 Chat 时流式正文继续进入原 Conversation', () => $('stream').textContent.includes('离开 Chat 后继续生成') && window.S.streaming);
+    $('workSurface').querySelector('.planner-goal')?.focus();
     $('navChanges').click();
+    check('P14-E Surface 被替换后焦点回到当前一级导航', () => window.document.activeElement === $('navChanges'));
     check('P14-D Changes 替换 Planner 且仅一份 Surface', () => $('workspace').dataset.workspaceView === 'changes' && host.querySelector('.chg-body') && !host.querySelector('.planner-pane') && $('navChanges').getAttribute('aria-current') === 'page');
     $('navExtensions').click();
     check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
+    check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
     $('navGlobalMore').click();
     check('P14-D More 不抢主视图', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
     $('navDiagnostics').click();
@@ -6413,6 +6429,7 @@ staticCheck();
     // P14-D 收口：从 Work Surface 换会话，必须等成功后才回到 Chat。
     $('navPlanner').click();
     check('P14-D 收口：新对话前仍在 Planner', () => $('workspace').dataset.workspaceView === 'planner');
+    $('workSurface').querySelector('.planner-goal')?.focus();
     const beforeNew = commands.length;
     $('navNew').click();
     check('P14-D 收口：新对话确实发出 RPC 且应答前不切视图', () =>
@@ -6423,6 +6440,7 @@ staticCheck();
       !$('navPlanner').classList.contains('is-active') && !$('chatView').hidden && !$('chatComposer').hidden &&
       $('workSurface').hidden && $('workSurface').childElementCount === 0 &&
       $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    check('P14-E 成功换会话后焦点不遗落在已卸载 Surface', () => window.document.activeElement === $('input'));
 
     window.rebuildFromMessages([{ role: 'user', content: '旧会话正文' }]);
     window.renderProjects();

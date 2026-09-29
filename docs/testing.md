@@ -607,3 +607,11 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 ## 十一、P14-D Work Surface 验证
 
 `test:ui` 检查四个一级视图、Rail 唯一激活、Chat 与 Composer 节点身份、草稿/附件/滚动保留、后台流式消息、二级 Modal 关闭后原视图保留和 Surface 容器唯一性。CDP 105–124 场景检查 Planner、Changes、Skills/MCP 的真实 Stage 布局，以及四档宽度和低高度；每张图附 `mustTrue` 结构判据。历史 Diff 仍检查二级 Modal。完整说明见 [work-surfaces.md](work-surfaces.md)。
+
+## 十二、P14-E 中性控件与日用验证
+
+`test:ui` 静态检查交互选择器不再引用旧黄色 token 或已知琥珀色字面量，同时验证成功会话切换、一级视图替换后的焦点及 Tab ARIA 关联。警告色 token 和状态呈现仍保留。`shots:harness` 从 126 起检查真实计算后的按钮文字、背景和边框颜色，覆盖 Chat、Composer、Popover、Planner、Git、Extensions、Modal、Confirm；响应式场景检查 700px、低高度及页面滚动边界。计算颜色只约束交互元素，允许警告、错误、成功、运行和 Diff 的语义色。真实 Electron 窗口仍需单独检查标题栏、拖拽区与原生窗口按钮避让。
+
+Electron 的 `shots:app` 可带 `--size=700x600 --view=planner` 在隔离数据目录启动的打包应用中复核最小窗口、Stage 边界和标题栏；`test:guard` 检查最小窗口与状态恢复使用同一阈值。
+
+CDP 场景 153 使用 701×602 复现 Windows DPI 取整，断言项目侧栏收窄且 Planner 列表与详情上下排列；仅测恰好 700px 会漏掉这一种真实窗口差异。

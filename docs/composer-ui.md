@@ -26,3 +26,5 @@ Model、Thinking 和 Context 共用 `ui/popover.js`，优先放在 Composer 上�
 ## 验证与边界
 
 `npm run test:ui` 检查控件、键盘和高度同步；`npm run shots:harness` 的 86–104 场景用真实 Chrome 检查面板同轴、控件边界、弹层位置、textarea 内滚动、附件、运行/锁定状态、四档宽度和长文本。P14-A/B 的 57–85 场景保持原样。此轮没有改发送协议、上传格式、附件解析器、Agent 生命周期或 Conversation 消息业务语义，也没有新增无真实 handler 的入口。
+
+P14-E 统一了灰阶控件：Send 用较亮的中性背景表达主操作，Stop 用深灰背景与文字标识，Model / Thinking / Context 和 Popover 选中项不使用黄色。焦点环仍保持高对比度；正常 Context 用量为灰色，超过阈值才显示语义色。hover 只轻微改变背景，不缩放发送按钮。
