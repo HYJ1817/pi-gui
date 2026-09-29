@@ -438,6 +438,86 @@ async function main() {
   await evalJs(`fetch('/api/__conversation?what=reset').then(r => r.ok)`);
   await sleep(300);
 
+  /* P14-C：真实 Chrome 的 Composer 几何、滚动留白和键盘弹层。 */
+  const box = `document.querySelector('#composerBox')`;
+  const outer = `document.querySelector('.composer')`;
+  const fit = `(() => { const c=${box}.getBoundingClientRect(); const s=document.querySelector('#stream').getBoundingClientRect(); return c.width > 0 && Math.abs((c.left+c.right-s.left-s.right)/2) <= 2 && c.left >= 0 && c.right <= innerWidth + 1 && c.bottom <= innerHeight && c.bottom >= innerHeight - 26; })()`;
+  const reserve = `(() => { const c=${outer}.getBoundingClientRect(); const v=parseFloat(getComputedStyle(document.querySelector('.stage')).getPropertyValue('--composer-reserved-height')); return Math.abs(v-c.height) <= 2; })()`;
+  const controls = `(() => { const c=${box}.getBoundingClientRect(); return ['btnAttach','btnCtx','btnModel','btnThink','btnSend','btnStop'].every(id => { const e=document.getElementById(id); if(e.hidden) return true; const r=e.getBoundingClientRect(); return r.width>0 && r.left>=c.left-1 && r.right<=c.right+1 && r.top>=c.top-1 && r.bottom<=c.bottom+1; }); })()`;
+  const setText = async (text) => evalJs(`(() => { const t=document.querySelector('#input'); t.value=${JSON.stringify(text)}; t.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`);
+  const setFiles = async (files) => {
+    if (!files.length) return false;
+    await evalJs(`document.querySelector('#fileInput').value=''`);
+    const r = await send('Runtime.evaluate', { expression: 'document.querySelector("#fileInput")' });
+    await send('DOM.setFileInputFiles', { files, objectId: r.result?.result?.objectId });
+    return true;
+  };
+  await evalJs(`(() => { document.querySelectorAll('#attachTray .att-x').forEach(b=>b.click()); const s=document.querySelector('#stream'); s.scrollTop=s.scrollHeight; })()`);
+  await setText('');
+  await sleep(220);
+  await shotOf('#composerBox', '86-composer-idle', 'P14-C：浮动单容器，空输入', [], [['与阅读区同轴且在视口内', fit], ['实测高度同步', reserve], ['控件均在容器内', controls], ['只有一套输入区', `document.querySelectorAll('#composerBox').length===1 && document.querySelectorAll('#input').length===1`], ['空输入禁用发送', `document.querySelector('#btnSend').disabled`], ['末条消息可滚到输入区上方', `(() => { const m=[...document.querySelectorAll('.thread .msg')].at(-1)?.getBoundingClientRect(); const c=${box}.getBoundingClientRect(); return m && m.bottom <= c.top - 10; })()`]]);
+  await setText('单行输入');
+  await sleep(180);
+  const oneHeight = await evalJs(`${outer}.getBoundingClientRect().height`);
+  await shotOf('#composerBox', '87-composer-text', 'P14-C：单行输入可发送', [], [['输入确实有单行内容', `document.querySelector('#input').value==='单行输入'`], ['发送启用', `!document.querySelector('#btnSend').disabled`], ['同轴与留白', fit], ['留白同步', reserve]]);
+  await setText('第一行\n第二行\n第三行');
+  await sleep(180);
+  const threeHeight = await evalJs(`${outer}.getBoundingClientRect().height`);
+  await shotOf('#composerBox', '88-composer-multiline', 'P14-C：三行向上增长', [], [['输入确实三行', `document.querySelector('#input').value.split('\\n').length===3`], ['实际高度大于单行', `${threeHeight} > ${oneHeight} && ${outer}.getBoundingClientRect().height > ${oneHeight}`], ['底部位置稳定', fit], ['留白同步', reserve]]);
+  await setText(Array.from({length:36},(_,i)=>`第${i+1}行：多行输入内容`).join('\n'));
+  await sleep(180);
+  await shotOf('#composerBox', '89-composer-max-height', 'P14-C：长输入在 textarea 内滚动', [], [['输入确实有多行', `document.querySelector('#input').value.split('\\n').length===36`], ['输入确实内部滚动', `(() => { const t=document.querySelector('#input'); return t.scrollHeight > t.clientHeight + 10 && t.clientHeight <= Math.min(184,innerHeight*.24)+1; })()`], ['输入区不越界', fit], ['留白同步', reserve]]);
+  await setText('');
+  if (ATTACH.length) {
+    await setFiles(ATTACH.slice(0,1));
+    await sleep(1650);
+    await shotOf('#composerBox', '90-composer-attachment-single', 'P14-C：单附件在紧凑托盘', [], [['单附件可见且可删', `document.querySelectorAll('#attachTray .att').length===1 && !!document.querySelector('#attachTray .att-x[aria-label]')`], ['附件增高后留白同步', reserve], ['同轴', fit]]);
+    await setFiles(ATTACH.slice(1,3));
+    await sleep(1650);
+    await shotOf('#composerBox', '91-composer-attachment-multiple', 'P14-C：多附件横向换行', [], [['多附件都在托盘', `document.querySelectorAll('#attachTray .att').length>=2`], ['托盘未溢出输入区', `(() => { const a=document.querySelector('#attachTray').getBoundingClientRect(),c=${box}.getBoundingClientRect(); return a.left>=c.left && a.right<=c.right+1; })()`], ['留白同步', reserve]]);
+    await evalJs(`document.querySelectorAll('#attachTray .att-x').forEach(b=>b.click())`);
+    await evalJs(`fetch('/api/__composer?what=hold-upload').then(r=>r.ok)`);
+    await setFiles(ATTACH.slice(0,1));
+    await sleep(120);
+    await shotOf('#composerBox', '92-composer-attachment-parsing', 'P14-C：解析中有文字状态', [], [['解析中附件实际可见', `!!document.querySelector('#attachTray .att.loading .att-meta') && /解析中/.test(document.querySelector('#attachTray .att.loading .att-meta').textContent)`], ['留白同步', reserve]]);
+    await sleep(1650);
+    await evalJs(`document.querySelectorAll('#attachTray .att-x').forEach(b=>b.click())`);
+  }
+  await evalJs(`${box}.dispatchEvent(new DragEvent('dragenter',{bubbles:true,dataTransfer:new DataTransfer()}))`);
+  await shotOf('#composerBox', '93-composer-dragover', 'P14-C：拖入态仅增强边界', [], [['拖入态边框真实变化', `(() => { const b=${box}; return b.classList.contains('drop') && getComputedStyle(b).borderTopColor !== 'rgb(54, 54, 54)'; })()`]]);
+  await evalJs(`${box}.dispatchEvent(new DragEvent('dragleave',{bubbles:true,dataTransfer:new DataTransfer()}))`);
+  const popFit = `(() => { const p=document.querySelector('.pop').getBoundingClientRect(), c=${box}.getBoundingClientRect(); return p.width>0 && p.left>=0 && p.right<=innerWidth && p.top>=0 && p.bottom<=innerHeight && p.bottom<=c.top+2; })()`;
+  await evalJs(`document.querySelector('#btnModel').click()`);
+  await shotOf('.pop', '94-composer-model-picker', 'P14-C：模型选择器向上展开', ['选择模型'], [['弹层真实位置在视口且位于输入区上方', popFit], ['选项是真按钮', `document.querySelectorAll('.pop button.pop-item').length>0`], ['锚点已展开', `document.querySelector('#btnModel').getAttribute('aria-expanded')==='true'`]]);
+  await evalJs(`document.querySelector('#btnModel').click(); document.querySelector('#btnThink').click()`);
+  await shotOf('.pop', '95-composer-thinking-picker', 'P14-C：思考等级选择器向上展开', ['思考等级'], [['弹层真实位置', popFit], ['选项可键盘访问', `document.querySelectorAll('.pop button.pop-item').length>0`]]);
+  await evalJs(`document.querySelector('#btnThink').click(); document.querySelector('#btnCtx').click()`);
+  await shotOf('.pop', '96-composer-context-popover', 'P14-C：上下文占用提示', ['背景信息窗口'], [['提示真实位置', popFit], ['百分比来自真实夹具', `document.querySelector('#ctxPct').textContent.includes('%')`]]);
+  await evalJs(`document.body.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))`);
+  await evalJs(`fetch('/api/__push?what=running').then(r=>r.ok)`);
+  await sleep(160);
+  await shotOf('#composerBox', '97-composer-running', 'P14-C：运行时 Stop 为主操作', ['停止'], [['停止可用且发送入口仍在', `!document.querySelector('#btnStop').hidden && document.querySelector('#btnSend').getBoundingClientRect().width>0`], ['控件不越界', controls]]);
+  await evalJs(`fetch('/api/__push?what=settled').then(r=>r.ok)`);
+  await evalJs(`(() => { const b=${box}; b.classList.add('is-locked'); document.querySelector('#input').disabled=true; document.querySelector('#btnSend').disabled=true; })()`);
+  await shotOf('#composerBox', '98-composer-locked', 'P14-C：无项目时输入区锁定视觉夹具', [], [['输入不可编辑且发送不可用', `document.querySelector('#input').disabled && document.querySelector('#btnSend').disabled && ${box}.classList.contains('is-locked')`]]);
+  await evalJs(`(() => { ${box}.classList.remove('is-locked'); document.querySelector('#input').disabled=false; })()`);
+  for (const [width, scene] of [[700,'99-composer-700'],[900,'100-composer-900'],[1200,'101-composer-1200'],[1536,'102-composer-1536']]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await sleep(230);
+    await shotOf('#composerBox', scene, `P14-C：${width}px 控件全部可达`, [], [['同轴且不越界', fit], ['控件全部在输入区内', controls], ['页面无水平溢出', `document.documentElement.scrollWidth<=innerWidth+1`], ['留白同步', reserve]]);
+  }
+  await send('Emulation.setDeviceMetricsOverride', { width:700, height:600, deviceScaleFactor:1, mobile:false });
+  await setText(Array.from({length:24},(_,i)=>`第${i+1}行`).join('\n'));
+  await sleep(250);
+  await shotOf('#composerBox', '103-composer-low-height', 'P14-C：700×600 仍留有对话空间', [], [['输入区不占半屏', `${outer}.getBoundingClientRect().height < innerHeight*.5`], ['输入内部滚动', `(() => {const t=document.querySelector('#input');return t.scrollHeight>t.clientHeight && t.clientHeight<=innerHeight*.24+1})()`], ['控件可达', controls], ['无水平溢出', `document.documentElement.scrollWidth<=innerWidth+1`], ['留白同步', reserve]]);
+  await send('Emulation.setDeviceMetricsOverride', { width:700, height:900, deviceScaleFactor:1, mobile:false });
+  await setText('https://example.com/'+'very-long-unbroken-segment'.repeat(18)+'\nC:\\work\\'+('very-long-folder\\'.repeat(18))+'\n这是一段用于验证输入区换行的中文内容。'.repeat(18));
+  await sleep(220);
+  await shotOf('#composerBox', '104-composer-long-text', 'P14-C：长 URL、路径和中文不推出页面', [], [['长文本确实在输入框', `document.querySelector('#input').value.length>700`], ['页面没有水平溢出', `document.documentElement.scrollWidth<=innerWidth+1`], ['控件仍在容器里', controls], ['留白同步', reserve]]);
+  await setText('');
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(250);
+
   await evalJs('document.querySelector("#navPlanner").click()');
   await sleep(900);
   const pickPlan = async (i) => {

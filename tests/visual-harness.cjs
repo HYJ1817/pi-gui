@@ -618,6 +618,7 @@ const safeName = (name) =>
 /* ---------------- SSE ---------------- */
 
 const clients = new Set();
+let holdNextComposerUpload = false;
 
 function push(evt) {
   const line = 'data: ' + JSON.stringify(evt) + '\n\n';
@@ -910,6 +911,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (p === '/api/upload' && req.method === 'POST') {
+    if (holdNextComposerUpload) {
+      holdNextComposerUpload = false;
+      await new Promise((resolve) => setTimeout(resolve, 1250));
+    }
     const buf = await readBody(req);
     const name = safeName(url.searchParams.get('name') || 'file');
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -940,6 +945,11 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/api/restart') return json(res, 200, { ok: true });
 
+  if (p === '/api/__composer' && url.searchParams.get('what') === 'hold-upload') {
+    holdNextComposerUpload = true;
+    return json(res, 200, { ok: true });
+  }
+
   // 排查用：手动往事件流里推一条，确认前端到底收没收到
   if (p === '/api/__push') {
     const what = url.searchParams.get('what') || 'user';
@@ -951,6 +961,10 @@ const server = http.createServer(async (req, res) => {
       push(replyFor({ type: 'get_session_stats' }));
     } else if (what === 'models') {
       push(replyFor({ type: 'get_available_models' }));
+    } else if (what === 'running') {
+      push({ type: 'agent_start' });
+    } else if (what === 'settled') {
+      push({ type: 'agent_settled' });
     }
     return json(res, 200, { ok: true, pushed: what, clients: clients.size });
   }

@@ -598,4 +598,8 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 
 启动 `npm run harness` 后运行 `npm run shots:harness`，CDP 在真实 Chrome 中对 69–85 场景截图并运行 `mustTrue` 结构判据：Bubble 的实际右对齐和最大宽度、Assistant 透明背景、Thinking 内容高度、Tool 状态、附件数量与高度、Minimap 定位、长代码的内部滚动，以及 700/900/1200/1536px 的无页面横向溢出。场景 57–68 仍先在原对话夹具上运行。截图保存在被忽略的 `.shots/`。
 
+## 十、P14-C Composer 视觉验证
+
+`shots:harness` 的 86–104 场景覆盖空态、单行、三行、textarea 达到高度上限、单/多/解析中附件、拖入态、Model/Thinking/Context 弹层、运行态 Stop、无项目锁定视觉夹具、700/900/1200/1536px、700×600，以及长 URL/路径/中文。`mustTrue` 检查真实矩形：Composer 与 `#stream` 同轴且在视口内；CSS 留白变量与实测高度相符；末条消息能滚到 Composer 上方；达到上限时 textarea 内滚；弹层在 Composer 上方且不被裁切；窄屏控件都在容器内且页面无横向溢出。锁定场景只在浏览器测试夹具中模拟已有的禁用状态，不修改项目选择逻辑。
+
 修改 `public/` 后须重建可执行产物，避免源码验证与用户打开的打包版不一致。完整回归仍以 `npm test` 为准。

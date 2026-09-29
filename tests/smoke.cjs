@@ -6226,6 +6226,136 @@ staticCheck();
     }
   }
 
+  /* P14-C：Composer 保留原有发送与附件入口，新增几何同步和可访问控件语义。
+   * jsdom 不计算布局，实际位置/高度另由 CDP 场景验证。 */
+  {
+    const composer = $('composerBox');
+    const outer = composer.closest('.composer');
+    check('P14-C 页面只有一套 Composer 与输入控件', () =>
+      window.document.querySelectorAll('#composerBox').length === 1 &&
+      window.document.querySelectorAll('#input').length === 1 && Boolean(outer));
+
+    let height = 112;
+    let observed = null;
+    let notifyResize = null;
+    Object.defineProperty(outer, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ height }),
+    });
+    window.ResizeObserver = class {
+      constructor(callback) { notifyResize = callback; }
+      observe(node) { observed = node; }
+    };
+    window.initComposerLayout?.();
+    const reserved = () => window.document.querySelector('.stage').style.getPropertyValue('--composer-reserved-height');
+    check('P14-C 仅观察 Composer 外层高度', () => observed === outer && typeof notifyResize === 'function');
+    check('P14-C 初始高度写入留白变量', () => reserved() === '112px');
+    height = 196;
+    notifyResize?.([]);
+    check('P14-C 多行或附件增高同步留白变量', () => reserved() === '196px');
+    height = 130;
+    notifyResize?.([]);
+    check('P14-C 附件删除后留白变量缩回', () => reserved() === '130px');
+
+    let inputHeight = 40;
+    Object.defineProperty($('input'), 'scrollHeight', { configurable: true, get: () => inputHeight });
+    for (const [value, scroll, expected] of [['一行', 40, 40], ['一行\n二行\n三行', 90, 90], ['六行\n'.repeat(6), 170, 170], ['很长\n'.repeat(30), 600, 184]]) {
+      $('input').value = value;
+      inputHeight = scroll;
+      window.autoGrow();
+      check(`P14-C 输入增长 ${scroll}px 不超过视口上限`, () => $('input').style.height === expected + 'px');
+    }
+    $('input').value = '';
+    window.updateSendState();
+    check('P14-C 空输入禁用发送', () => $('btnSend').disabled);
+    const commandsBeforeKeys = commands.length;
+    $('input').value = '输入法组词中';
+    const composingEnter = new window.KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true });
+    $('input').dispatchEvent(composingEnter);
+    check('P14-C IME 合成 Enter 不触发发送', () => !composingEnter.defaultPrevented && commands.length === commandsBeforeKeys);
+    const shiftEnter = new window.KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+    $('input').dispatchEvent(shiftEnter);
+    check('P14-C Shift+Enter 保留浏览器换行默认动作', () => !shiftEnter.defaultPrevented && commands.length === commandsBeforeKeys);
+    $('input').value = '';
+    window.updateSendState();
+
+    const fileInput = $('fileInput');
+    const originalClick = fileInput.click;
+    let fileClicks = 0;
+    fileInput.click = () => { fileClicks++; };
+    $('btnAttach').click();
+    fileInput.click = originalClick;
+    check('P14-C Attach 仍调用同一个 file input', () => fileClicks === 1 && $('btnAttach').tagName === 'BUTTON');
+
+    window.S.attachments = [
+      { id: 'p14c-loading', name: '正在解析.pdf', loading: true, kind: 'unknown', size: 12 },
+      { id: 'p14c-error', name: '失败.docx', loading: false, error: '解析失败', kind: 'unknown', size: 12 },
+    ];
+    window.renderAttachments();
+    check('P14-C 附件托盘显示解析中与错误文字', () =>
+      $('attachTray').querySelector('.att.loading .att-meta')?.textContent.includes('解析中') &&
+      $('attachTray').querySelector('.att.err .att-meta')?.textContent.includes('解析失败'));
+    const remove = $('attachTray').querySelector('.att-x');
+    check('P14-C 附件删除按钮有独立可访问名称', () =>
+      remove?.tagName === 'BUTTON' && remove.type === 'button' && /移除.*正在解析/.test(remove.getAttribute('aria-label') || ''));
+    remove?.click();
+    check('P14-C 附件删除仍调用原有状态路径', () =>
+      window.S.attachments.length === 1 && $('attachTray').querySelectorAll('.att').length === 1);
+    window.S.attachments = [];
+    window.renderAttachments();
+
+    const drag = (type) => composer.dispatchEvent(new window.Event(type, { bubbles: true, cancelable: true }));
+    drag('dragenter');
+    drag('dragenter');
+    drag('dragleave');
+    check('P14-C 嵌套拖拽离开不闪烁', () => composer.classList.contains('drop'));
+    drag('dragleave');
+    check('P14-C 拖拽彻底离开恢复外观', () => !composer.classList.contains('drop'));
+    const dropped = new window.Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(dropped, 'dataTransfer', { value: { files: [] } });
+    drag('dragenter');
+    composer.dispatchEvent(dropped);
+    check('P14-C drop 清除拖入视觉状态', () => dropped.defaultPrevented && !composer.classList.contains('drop'));
+
+    const savedComposerModels = window.S.models;
+    const savedComposerState = window.S.state;
+    window.S.models = [{ provider: 'fixture', id: 'composer-model', name: 'Composer Model' }];
+    window.S.state = { ...savedComposerState, model: { provider: 'fixture', id: 'composer-model', name: 'Composer Model' } };
+    $('btnModel').click();
+    const pop = window.document.querySelector('.pop');
+    const selected = pop.querySelector('.pop-item.on');
+    check('P14-C Model picker 控件与选中项可键盘访问', () =>
+      $('btnModel').getAttribute('aria-expanded') === 'true' &&
+      $('btnModel').getAttribute('aria-controls') === pop.id &&
+      selected?.tagName === 'BUTTON' && selected.getAttribute('aria-current') === 'true' &&
+      window.document.activeElement === selected);
+    selected?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    check('P14-C Picker Escape 关闭并回到触发按钮', () =>
+      pop.hidden && $('btnModel').getAttribute('aria-expanded') === 'false' && window.document.activeElement === $('btnModel'));
+    $('btnThink').click();
+    check('P14-C Thinking picker 复用可访问弹层', () =>
+      !pop.hidden && $('btnThink').getAttribute('aria-expanded') === 'true' && pop.querySelectorAll('button.pop-item').length > 0);
+    pop.querySelector('button.pop-item')?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    const savedComposerStats = window.S.stats;
+    window.S.stats = { contextUsage: { tokens: 200, contextWindow: 1000, percent: 20 }, tokens: { input: 12, output: 34, cacheRead: 56 }, cost: 0.125 };
+    $('btnCtx').click();
+    check('P14-C Context 提示有锚点语义', () =>
+      !pop.hidden && pop.getAttribute('role') === 'tooltip' && $('btnCtx').getAttribute('aria-expanded') === 'true');
+    check('P14-C Context 提示只展示已有真实统计字段', () =>
+      ['输入', '12', '输出', '34', '缓存读取', '56', '累计成本', '$0.1250'].every((part) => pop.textContent.includes(part)));
+    pop.dispatchEvent(new window.MouseEvent('mouseleave', { bubbles: false }));
+    check('P14-C Context 提示关闭时语义同步', () =>
+      pop.hidden && $('btnCtx').getAttribute('aria-expanded') === 'false');
+    check('P14-C Send 与 Stop 有独立可访问名称', () =>
+      $('btnSend').getAttribute('aria-label') === '发送消息' && $('btnStop').getAttribute('aria-label') === '停止');
+    $('navHome').click();
+    check('P14-C Home 回到同一个输入框并聚焦', () => window.document.activeElement === $('input'));
+    window.S.models = savedComposerModels;
+    window.S.state = savedComposerState;
+    window.S.stats = savedComposerStats;
+  }
+
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;
