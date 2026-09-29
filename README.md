@@ -289,6 +289,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [app-shell.md](docs/app-shell.md) | P14-A 三列 App Shell、全局导航映射、项目侧栏与验证场景 |
 | [conversation-ui.md](docs/conversation-ui.md) | P14-B 消息、Thinking、工具、附件、Minimap 与阅读列的视觉规则 |
 | [composer-ui.md](docs/composer-ui.md) | P14-C 浮动输入区、控件映射、高度同步与视觉验证 |
+| [work-surfaces.md](docs/work-surfaces.md) | P14-D 四个 Stage 一级视图、生命周期、Chat 保留与二级 Modal 边界 |
 | [security.md](docs/security.md) | 安全边界：回环、令牌、Origin、不可信输入、路径与子进程边界、密钥、以及你仍需负责的部分 |
 | [sessions.md](docs/sessions.md) | 会话：文件机制、列表与归属、当前/pending、切换、归档、软删除、分支、提问导航 |
 | [git-changes.md](docs/git-changes.md) | 文件变更：diff 渲染、撤销规则、权限闸门、设计取舍 |

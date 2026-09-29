@@ -603,3 +603,7 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 `shots:harness` 的 86–104 场景覆盖空态、单行、三行、textarea 达到高度上限、单/多/解析中附件、拖入态、Model/Thinking/Context 弹层、运行态 Stop、无项目锁定视觉夹具、700/900/1200/1536px、700×600，以及长 URL/路径/中文。`mustTrue` 检查真实矩形：Composer 与 `#stream` 同轴且在视口内；CSS 留白变量与实测高度相符；末条消息能滚到 Composer 上方；达到上限时 textarea 内滚；弹层在 Composer 上方且不被裁切；窄屏控件都在容器内且页面无横向溢出。锁定场景只在浏览器测试夹具中模拟已有的禁用状态，不修改项目选择逻辑。
 
 修改 `public/` 后须重建可执行产物，避免源码验证与用户打开的打包版不一致。完整回归仍以 `npm test` 为准。
+
+## 十一、P14-D Work Surface 验证
+
+`test:ui` 检查四个一级视图、Rail 唯一激活、Chat 与 Composer 节点身份、草稿/附件/滚动保留、后台流式消息、二级 Modal 关闭后原视图保留和 Surface 容器唯一性。CDP 105–124 场景检查 Planner、Changes、Skills/MCP 的真实 Stage 布局，以及四档宽度和低高度；每张图附 `mustTrue` 结构判据。历史 Diff 仍检查二级 Modal。完整说明见 [work-surfaces.md](work-surfaces.md)。

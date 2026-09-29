@@ -457,3 +457,5 @@ cancel / skip 作用于 `active.plan` 且不被收尾写盘冲掉）。见
 20 个文件收起、说明的 XSS（注入节点为零）、Plan 汇总的最新 attempt 规则
 与分母、以及切项目之后回来的响应不写界面（stale 守卫）。
 视觉场景见 [testing.md](testing.md)。
+
+P14-D 后 Planner 的唯一 renderer 挂在 Stage Work Surface。`plannerAlive()` 同时校验项目代号和 Surface 实例；切走会丢弃未保存的审阅草稿与 Attempt 临时展开状态。历史 Diff 仍为二级 Modal。DAG、审阅门控与验证判定未改，见 [work-surfaces.md](work-surfaces.md)。

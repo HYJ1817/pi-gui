@@ -118,3 +118,5 @@ Planner 的每个 task 也会记一份**执行期间观察到有变化的文件*
 
 全程在 `os.tmpdir()` 下新建临时仓库，**不会碰你自己的仓库** ——
 这个套件里有真的会删文件的用例，所以这一点是硬要求。
+
+P14-D 后 Changes 是 Stage 一级视图。离开时解绑 `panels.changes`，旧 diff 回应须通过 Surface 实例校验；再次进入绑定新的列表容器。`confirmModal`、dry-run 和授权开关保持原样。布局与导航见 [work-surfaces.md](work-surfaces.md)。

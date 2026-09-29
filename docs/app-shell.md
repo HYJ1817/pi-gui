@@ -8,4 +8,6 @@ Global Rail 只调用已有功能：对话返回主工作区；任务打开 Plan
 
 本阶段没有修改 Planner DAG、Attempt、审阅、Git Changes、会话存储与分支、provider / diagnostics API 或 pi RPC。工作区仅调整外层尺寸和背景，消息流、工具时间线与输入框内部保持原样。
 
+P14-D 将任务、文件变更、扩展改为 Global Rail 的 Stage 一级视图；Chat 与 Composer 切出时仅隐藏，原 DOM 和流式处理继续保留。二级弹窗仍由独立的 Modal 管理。实现与生命周期见 [work-surfaces.md](work-surfaces.md)。
+
 验证入口：`npm test` 覆盖导航 DOM、handler、项目与会话切换、搜索等；`npm run harness` 加 `npm run shots:harness` 用真实 Chrome 验证 57–66 场景，以及 900、1200、1536px 三个宽度场景，包括展开、折叠、项目与会话、Rail 激活、More、用量和 700px 宽度。每张场景都带结构或视口数值判据。
