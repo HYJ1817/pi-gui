@@ -585,7 +585,8 @@ export function rebuildAssistant(bodyEl, msg) {
       const old = liveBlocks?.get(idx);
       const node = old?.kind === 'text' ? old.node : document.createElement('div');
       node.className = 'assistant-text';
-      if (!old || old.text !== text || !node.childElementCount) node.innerHTML = md(text);
+      // b.text 是已收到的流式数据，不代表待执行的 rAF 已把它画进 DOM。
+      node.innerHTML = md(text);
       nodes.push(node);
     } else if (part.type === 'thinking') {
       const old = liveBlocks?.get(idx);

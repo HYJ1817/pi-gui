@@ -6192,6 +6192,20 @@ staticCheck();
       return body?.textContent.includes('最终正文') && !body.textContent.includes('旧草稿');
     });
 
+    window.clearThread();
+    window.onMessageStart({ message: { role: 'assistant' } });
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '前半段' } });
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    const streamedTextNode = $('stream').querySelector('.msg.assistant .assistant-text');
+    check('P14-B 竞态前提：首段已经由 rAF 绘制', () => streamedTextNode?.textContent === '前半段');
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '后半段' } });
+    window.onMessageEnd({ message: { role: 'assistant', content: [{ type: 'text', text: '前半段后半段' }] } });
+    const finalTextNode = $('stream').querySelector('.msg.assistant .assistant-text');
+    check('P14-B message_end 复用流式正文节点', () => finalTextNode === streamedTextNode);
+    check('P14-B message_end 立即写入尚未绘制的尾段', () => finalTextNode?.textContent === '前半段后半段');
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    check('P14-B 下一帧不会把最终正文回退为首段', () => finalTextNode?.textContent === '前半段后半段');
+
     const entry = window.makeEntry({ toolCallId: 'p14b-tool', toolName: 'bash', args: { command: 'npm test' } });
     const tool = window.renderEntry(entry);
     const toolToggle = tool.querySelector('.tl-toggle');
