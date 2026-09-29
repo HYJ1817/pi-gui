@@ -546,7 +546,7 @@ async function main() {
   await sleep(900);
   const pickPlan = async (i) => {
     const ok = await evalJs(
-      `(() => { const r = document.querySelectorAll('#modalCard .planner-list .ext-item')[${i}]; if (!r) return false; r.onclick(); return true; })()`
+      `(() => { const r = document.querySelectorAll('#workSurface .planner-list .ext-item')[${i}]; if (!r) return false; r.onclick(); return true; })()`
     );
     await sleep(800);
     return ok;
@@ -842,6 +842,71 @@ async function main() {
   } else {
     console.log('  跳过：打不开 Planner 面板（夹具服务里没有计划？）');
   }
+
+  /* P14-D: primary Stage surfaces, navigation continuity and real layout bounds. */
+  const surfaceChecks = (view) => [
+    ['一级工作区与唯一 rail active', `document.querySelector('#workspace').dataset.workspaceView===${JSON.stringify(view)} && document.querySelectorAll('#globalRail [aria-current="page"]').length===1`],
+    ['没有一级 Modal 遮罩', `document.querySelector('#modal').hidden`],
+    ['Chat DOM 仍挂载且非 Chat 时 Composer 隐藏', `!!document.querySelector('#stream .thread') && ${view === 'chat' ? `!document.querySelector('#chatComposer').hidden` : `document.querySelector('#chatComposer').hidden && document.querySelector('#chatView').hidden`}`],
+    ['Surface 在 Stage 内且无页面横向溢出', `(() => { const s=document.querySelector(${view === 'chat' ? "'#chatView'" : "'#workSurface'"}).getBoundingClientRect(),w=document.querySelector('#workspace').getBoundingClientRect(); return s.left>=w.left-1 && s.right<=w.right+1 && s.bottom<=w.bottom+1 && document.documentElement.scrollWidth<=innerWidth+1; })()`],
+  ];
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await evalJs(`fetch('/api/__conversation?what=fixture').then(r=>r.ok)`);
+  await sleep(350);
+  await shotOf('#workspace', '105-workspace-chat', 'P14-D：Chat 默认一级视图', [], surfaceChecks('chat'));
+  await setText('未发送草稿');
+  if (ATTACH.length) { await setFiles(ATTACH.slice(0, 1)); await sleep(1650); }
+  await evalJs(`(() => { const stream=document.querySelector('#stream'); stream.scrollTop=Math.floor((stream.scrollHeight-stream.clientHeight)*.5); window.__p14d={node:document.querySelector('#stream .msg'),scroll:stream.scrollTop,atBottom:stream.scrollHeight-stream.clientHeight-stream.scrollTop<=24,attachment:document.querySelector('#attachTray .att')}; })()`);
+  await evalJs(`document.querySelector('#navPlanner').click()`);
+  await sleep(550);
+  await shotOf('#workSurface', '106-workspace-planner', 'P14-D：Planner Stage 工作区', ['生成计划'], [...surfaceChecks('planner'), ['计划列表与详情真实可见', `(() => {const l=document.querySelector('#workSurface .planner-list'),d=document.querySelector('#workSurface .planner-detail');return l?.getBoundingClientRect().width>0&&d?.getBoundingClientRect().width>0})()`]]);
+  await evalJs(`document.querySelector('#workSurface .planner-list .ext-item')?.click()`);
+  await sleep(420);
+  await shotOf('#workSurface .planner-detail', '107-workspace-planner-detail', 'P14-D：Plan detail 与下一步', ['下一步'], [['下一步位于详情前段', `(() => {const d=document.querySelector('.planner-detail'),n=d?.querySelector('.planner-next');return !!n&&n.getBoundingClientRect().top<d.getBoundingClientRect().top+360})()`], ['唯一选中 Plan', `document.querySelectorAll('#workSurface .planner-list .ext-item[aria-current="true"]').length===1`]]);
+  await shotOf('.planner-task[data-task-id="backend"] .planner-attempts', '108-workspace-planner-attempts', 'P14-D：Attempt 历史折叠', [], [['折叠语义有效', `[...document.querySelectorAll('.planner-task[data-task-id="backend"] .planner-attempt-toggle')].every(b=>b.getAttribute('aria-controls')&&document.getElementById(b.getAttribute('aria-controls'))?.hidden===(b.getAttribute('aria-expanded')==='false'))`]]);
+  await shotOf('.planner-task[data-task-id="tests"] .planner-rv', '109-workspace-planner-review', 'P14-D：人工验收', [], [['审阅操作仍在', `!!document.querySelector('.planner-task[data-task-id="tests"] .planner-rv')`]]);
+  await shotOf('.planner-task[data-task-id="live"] .planner-verify-detail', '110-workspace-planner-verification', 'P14-D：验证状态', [], [['验证细节来自原 renderer', `!!document.querySelector('.planner-verify-detail')`]]);
+  await evalJs(`fetch('/api/__conversation?what=work-stream').then(r=>r.ok)`);
+  await sleep(180);
+  await evalJs(`document.querySelector('#navChanges').click()`);
+  await sleep(500);
+  await shotOf('#workSurface', '111-workspace-changes', 'P14-D：Changes Stage 工作区', ['文件变更', 'public/app.js'], [...surfaceChecks('changes'), ['真实文件行', `document.querySelectorAll('#workSurface .chg-row').length>=3`]]);
+  await evalJs(`document.querySelector('#workSurface .chg-main')?.click()`);
+  await sleep(300);
+  await shotOf('#workSurface .chg-row.open', '112-workspace-changes-expanded', 'P14-D：展开的 unified diff', ['public/app.js'], [['diff 有实际高度', `document.querySelector('#workSurface .chg-diff')?.getBoundingClientRect().height>30`], ['页面无横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`]]);
+  await evalJs(`document.querySelector('#chgFilterSession')?.click()`);
+  await shotOf('#workSurface', '113-workspace-changes-filter-session', 'P14-D：仅本次会话', ['仅本次会话'], [['过滤按钮选中', `document.querySelector('#chgFilterSession')?.classList.contains('on')`]]);
+  await evalJs(`fetch('/api/__work-surface/git-clean?value=1').then(r=>r.ok)`);
+  await evalJs(`document.querySelector('#workSurface .chg-head .btn:not(.danger)')?.click()`);
+  await sleep(350);
+  await shotOf('#workSurface', '114-workspace-changes-clean', 'P14-D：干净工作区中性空态', ['没有文件变更'], [['无文件行', `document.querySelectorAll('#workSurface .chg-row').length===0`]]);
+  await evalJs(`fetch('/api/__work-surface/git-clean?value=0').then(r=>r.ok)`);
+  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(550);
+  await shotOf('#workSurface', '115-workspace-extensions', 'P14-D：Skills Stage 工作区', ['Skills', 'code-review'], [...surfaceChecks('extensions'), ['Skill 列表可见', `document.querySelectorAll('#workSurface .ext-list .ext-item').length===3`]]);
+  await evalJs(`document.querySelector('#workSurface .ext-list .ext-item')?.click()`);
+  await sleep(250);
+  await shotOf('#workSurface .ext-detail', '116-workspace-skill-detail', 'P14-D：Skill 详情', ['code-review'], [['唯一选中 Skill', `document.querySelectorAll('#workSurface .ext-list .ext-item[aria-current="true"]').length===1`]]);
+  await evalJs(`[...document.querySelectorAll('#workSurface .ext-list .ext-item')].find(x=>x.textContent.includes('proj-only'))?.click()`);
+  await sleep(220);
+  await shotOf('#workSurface', '117-workspace-skill-untrusted', 'P14-D：未信任 Skill 状态', ['项目未被信任'], [['状态有文字', `document.querySelector('#workSurface .ext-list .ext-item.on')?.textContent.includes('项目未被信任')`]]);
+  await evalJs(`[...document.querySelectorAll('#workSurface .ext-tab')].find(x=>x.textContent==='MCP')?.click()`);
+  await sleep(250);
+  await shotOf('#workSurface', '118-workspace-mcp', 'P14-D：MCP 能力报告', ['没有原生 MCP 支持'], [['不是虚构 Server 列表', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('没有可列出的 MCP Server')`]]);
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await sleep(200);
+  console.log('P14-D 保持诊断: ' + JSON.stringify(await evalJs(`(() => {const p=window.__p14d,s=document.querySelector('#stream');return {node:s.querySelector('.msg')===p.node,draft:document.querySelector('#input').value,attachment:document.querySelector('#attachTray .att')===p.attachment,scroll:s.scrollTop,expected:p.scroll};})()`)));
+  await shotOf('#workspace', '119-workspace-switch-preserves-chat', 'P14-D：切换后保留 Chat、草稿、附件与后台流式内容', ['离开 Chat 时继续生成的正文'], [...surfaceChecks('chat'), ['节点、草稿、附件与滚动保持', `(() => {const p=window.__p14d,s=document.querySelector('#stream');const correctScroll=p.atBottom?s.scrollHeight-s.clientHeight:s.scrollTop-p.scroll;return s.querySelector('.msg')===p.node&&document.querySelector('#input').value==='未发送草稿'&&document.querySelector('#attachTray .att')===p.attachment&&(p.atBottom?Math.abs(s.scrollTop-correctScroll)<=1:Math.abs(correctScroll)<=1)})()`]]);
+  for (const [width, label] of [[700,'120-workspace-700'],[900,'121-workspace-900'],[1200,'122-workspace-1200'],[1536,'123-workspace-1536']]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await evalJs(`document.querySelector('#navPlanner').click()`);
+    await sleep(350);
+    await shotOf('#workSurface', label, `P14-D：${width}px Planner 无整体横向溢出`, ['生成计划'], [...surfaceChecks('planner'), ['页面无横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`]]);
+  }
+  await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 600, deviceScaleFactor: 1, mobile: false });
+  await sleep(350);
+  await shotOf('#workSurface', '124-workspace-low-height', 'P14-D：700×600 工作区内部滚动', ['生成计划'], [...surfaceChecks('planner'), ['工作区底部不越过 Stage', `document.querySelector('#workSurface').getBoundingClientRect().bottom<=document.querySelector('#workspace').getBoundingClientRect().bottom+1`]]);
+  await send('Emulation.clearDeviceMetricsOverride');
 
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));

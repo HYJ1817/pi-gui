@@ -1658,8 +1658,8 @@ staticCheck();
    * 真实的 git 行为（路径逃逸、重命名、中文文件名、restore…）在 tests/git.cjs 里
    * 用临时仓库验，这里全部走桩，不碰开发者的仓库。 */
 
-  const chgRows = () => [...window.document.querySelectorAll('#modalCard .chg-row')];
-  const chgText = () => ($('modalCard') ? $('modalCard').textContent : '');
+  const chgRows = () => [...window.document.querySelectorAll('#workSurface .chg-row')];
+  const chgText = () => ($('workSurface') ? $('workSurface').textContent : '');
   const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
   const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
 
@@ -1681,11 +1681,12 @@ staticCheck();
 
   $('navChanges').click();
   await new Promise((r) => setTimeout(r, 20));
-  check('变更面板打开', () => $('modal').hidden === false);
+  check('变更工作区打开且没有 Modal 遮罩', () => $('workspace').dataset.workspaceView === 'changes' && !$('workSurface').hidden && $('modal').hidden);
   check('列表渲染 5 行', () => chgRows().length === 5);
+  check('Changes 全部过滤器的选中语义与状态一致', () => $('chgFilterAll').classList.contains('on') && $('chgFilterAll').getAttribute('aria-pressed') === 'true' && $('chgFilterSession').getAttribute('aria-pressed') === 'false');
   check('状态字母正确', () => chgRows().map((x) => x.querySelector('.chg-code').textContent).join('') === 'MA??M??');
   check('含空格与中文的路径原样渲染', () => chgRows().some((x) => x.querySelector('.chg-path').textContent === 'docs/中文 说明.md'));
-  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('modalCard')) === 0 || `解析出了 ${liveCount($('modalCard'))} 个危险元素`);
+  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('workSurface')) === 0 || `解析出了 ${liveCount($('workSurface'))} 个危险元素`);
   check('恶意文件名仍以原样文本呈现（没被截断或吃掉）', () =>
     chgRows().some((x) => x.querySelector('.chg-path').textContent === 'tmp/<img onerror=alert(1)>.txt'));
   check('增删行数渲染', () => {
@@ -1803,7 +1804,7 @@ staticCheck();
   chgRows()[0].querySelector('.chg-acts .btn.danger').click();
   await new Promise((r) => setTimeout(r, 10));
   check('撤销先弹二次确认', () => $('confirmLayer').hidden === false && confirmText().includes('尚未提交的改动会丢失'));
-  check('确认层不破坏下层面板', () => $('modal').hidden === false && chgRows().length === 5);
+  check('确认层不破坏下层工作区', () => $('workspace').dataset.workspaceView === 'changes' && chgRows().length === 5);
   confirmBtn('取消').click();
   await new Promise((r) => setTimeout(r, 10));
   check('取消确认则不发起撤销', () => gitCalls.filter((c) => c.kind === 'restore').length === restoreBefore);
@@ -1893,6 +1894,7 @@ staticCheck();
 
   $('chgFilterSession').click();
   check('切到「仅本次会话」后只剩匹配的 2 行', () => chgRows().length === 2 || chgRows().length);
+  check('仅本次会话过滤器的选中语义同步', () => $('chgFilterSession').classList.contains('on') && $('chgFilterSession').getAttribute('aria-pressed') === 'true' && $('chgFilterAll').getAttribute('aria-pressed') === 'false');
   check('过滤后剩下的确实是被改过的那两个文件', () => {
     const paths = chgRows().map((x) => x.querySelector('.chg-path').textContent).sort().join(',');
     return paths === 'big.log,src/app.js' || paths;
@@ -2045,7 +2047,7 @@ staticCheck();
 
   /* --- 全部撤销 --- */
   console.log('\n--- 全部撤销 ---');
-  const allBtnInHead = () => $('modalCard').querySelector('.chg-head .btn.danger');
+  const allBtnInHead = () => $('workSurface').querySelector('.chg-head .btn.danger');
 
   gitStub.status = { ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: FILES5 };
   await window.loadGitStatus();
@@ -3152,7 +3154,7 @@ staticCheck();
 
     window.openExtensions();
     await new Promise((r) => setTimeout(r, 30));
-    const card = $('modalCard');
+    const card = $('workSurface');
 
     check('扩展面板：打开后有 Skills / MCP 两个 Tab', () => {
       const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
@@ -3284,26 +3286,26 @@ staticCheck();
       counts: { ...savedSkills.counts, enabled: 0 },
       skills: savedSkills.skills.map((s) => ({ ...s, loaded: null, state: 'unknown', stateNote: 'pi 未运行，无法确认加载状态' })),
     };
-    $('modalCard').innerHTML = '';
+    $('workSurface').innerHTML = '';
     $('modal').hidden = true;
     window.openExtensions();
     await new Promise((r) => setTimeout(r, 30));
     check('扩展面板：pi 没应答时显示「状态未知」，并说明原因', () =>
-      /无法确认/.test($('modalCard').textContent) || $('modalCard').textContent.slice(0, 200));
+      /无法确认/.test($('workSurface').textContent) || $('workSurface').textContent.slice(0, 200));
     // 点一条看详情：这里必须写「无法确认（pi 未运行）」，
     // 把 loaded=null 显示成「否」会让用户以为 skill 坏了
-    const firstItem = $('modalCard').querySelector('.ext-item');
+    const firstItem = $('workSurface').querySelector('.ext-item');
     if (firstItem) firstItem.onclick();
     await new Promise((r) => setTimeout(r, 30));
     check('扩展面板：pi 没应答时详情里写「无法确认」而不是「否」', () =>
-      /无法确认（pi 未运行）/.test($('modalCard').textContent) || $('modalCard').textContent.slice(-300));
+      /无法确认（pi 未运行）/.test($('workSurface').textContent) || $('workSurface').textContent.slice(-300));
     stubSkills = savedSkills;
 
     // 切到 MCP
-    const mcpTab = [...$('modalCard').querySelectorAll('.ext-tab')].find((b) => b.textContent === 'MCP');
+    const mcpTab = [...$('workSurface').querySelectorAll('.ext-tab')].find((b) => b.textContent === 'MCP');
     mcpTab.onclick();
     await new Promise((r) => setTimeout(r, 40));
-    const mcpCard = $('modalCard');
+    const mcpCard = $('workSurface');
     check('MCP 标签页：明确说 pi 没有原生 MCP 支持', () =>
       /没有原生 MCP 支持/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
     check('MCP 标签页：给出可核对的出处（不是空口断言）', () =>
@@ -3323,7 +3325,7 @@ staticCheck();
       !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(mcpCard.innerHTML) || '出现了疑似密钥');
 
     $('modal').hidden = true;
-    $('modalCard').innerHTML = '';
+    $('workSurface').innerHTML = '';
     $('confirmLayer').hidden = true;
     $('confirmCard').innerHTML = '';
   }
@@ -3335,7 +3337,7 @@ staticCheck();
 
     window.openPlanner();
     await new Promise((r) => setTimeout(r, 40));
-    const card = $('modalCard');
+    const card = $('workSurface');
 
     check('Planner：面板有「计划」与「Agent」两个 Tab', () => {
       const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
@@ -3483,7 +3485,7 @@ staticCheck();
       window.closeModal();
       window.openPlanner();
       await wait(90);
-      const c = $('modalCard');
+      const c = $('workSurface');
       c.querySelectorAll('.planner-list .ext-item')[0].onclick();
       await wait(90);
       return c;
@@ -3658,7 +3660,7 @@ staticCheck();
     window.closeModal();
     window.openPlanner({ planId: 'plan-ux', taskId: 'pair', attempt: 1 });
     await wait(160);
-    card = $('modalCard');
+    card = $('workSurface');
     check('P13-B9. focus 带 attempt → 那条旧 attempt 被展开并定位（Blocker 4）', () => {
       const a = attOf(card, 'pair', 1);
       const t = taskEl(card, 'pair');
@@ -3850,7 +3852,7 @@ staticCheck();
     window.closeModal();
     window.openPlanner();
     await wait(80);
-    const card = $('modalCard');
+    const card = $('workSurface');
     card.querySelectorAll('.planner-list .ext-item')[0].onclick();
     await wait(90);
 
@@ -4220,7 +4222,7 @@ staticCheck();
     {
       hint.querySelector('.sp-open').onclick();
       await new Promise((r) => setTimeout(r, 90));
-      check('P7. 点「查看任务」打开 Planner 面板', () => Boolean($('modalCard').querySelector('.planner-detail')));
+      check('P7. 点「查看任务」打开 Planner 面板', () => Boolean($('workSurface').querySelector('.planner-detail')));
     }
 
     /* 3) Planner 里的会话关联（用 P7 专用夹具，四种会话状态各一条） */
@@ -4228,7 +4230,7 @@ staticCheck();
     window.closeModal();
     window.openPlanner();
     await new Promise((r) => setTimeout(r, 70));
-    let card = $('modalCard');
+    let card = $('workSurface');
     card.querySelectorAll('.planner-list .ext-item')[0].onclick();
     await new Promise((r) => setTimeout(r, 70));
     const taskEl = (id) => [...card.querySelectorAll('.planner-task')].find((x) => x.dataset.taskId === id);
@@ -4293,14 +4295,14 @@ staticCheck();
       const hit = openSessionCalls[0];
       check('P7. 点「打开会话」调 open-session，且 URL 里没有任何路径 / 会话 id', () =>
         Boolean(hit && /\/tasks\/linked\/open-session/.test(hit.url) && !/jsonl|\.\.|%3A|sess-/.test(hit.url)) || JSON.stringify(openSessionCalls.map((c) => c.url)));
-      check('P7. 打开成功后收起弹层（要能看到对话区）', () => $('modalCard').childElementCount === 0 || '弹层还开着');
+      check('P7. 打开成功后收起弹层（要能看到对话区）', () => $('workSurface').childElementCount === 0 || '弹层还开着');
     }
 
     /* 5) 后端说「没有可关联的会话」是**正常结果**，不是崩溃 */
     {
       window.openPlanner();
       await new Promise((r) => setTimeout(r, 70));
-      card = $('modalCard');
+      card = $('workSurface');
       card.querySelectorAll('.planner-list .ext-item')[0].onclick();
       await new Promise((r) => setTimeout(r, 70));
       openSessionCalls.length = 0;
@@ -4309,7 +4311,7 @@ staticCheck();
       [...it.querySelectorAll('button')].find((b) => b.textContent === '打开会话').onclick();
       await new Promise((r) => setTimeout(r, 70));
       check('P7. 「没有可关联会话」只提示、界面照常（不当成错误状态）', () =>
-        Boolean($('modalCard').querySelector('.planner-detail')) || '面板被关掉了');
+        Boolean($('workSurface').querySelector('.planner-detail')) || '面板被关掉了');
       check('P7. 提示里说的是原因，不是「未知错误」', () => {
         const t = $('toasts').textContent;
         return /没有关联会话/.test(t) || t.slice(0, 120);
@@ -4342,7 +4344,7 @@ staticCheck();
     window.closeModal();
     window.openPlanner();
     await wait(80);
-    let card = $('modalCard');
+    let card = $('workSurface');
     card.querySelectorAll('.planner-list .ext-item')[0].onclick();
     await wait(90);
 
@@ -4687,22 +4689,18 @@ staticCheck();
         return (rv && rv.status === 'needs_changes' && rv.note === '人工确认过了' && rv.revision >= 1) || JSON.stringify(rv);
       });
       check('R32c. 旧面板被收成提示，**不留下永久「正在保存…」**（草稿里的 saving 标记一起清掉）', () => {
-        const d = T($('modalCard'));
+        const d = T($('workSurface'));
         return (/项目已切换，请重新打开 Planner/.test(d) && !/正在保存/.test(d)) || d.slice(0, 200);
       });
       check('R32d. 收成提示后旧面板没有可点的审阅操作（没有说明框、没有保存按钮）', () => {
-        const c = $('modalCard');
+        const c = $('workSurface');
         return (!c.querySelector('.planner-rv-note-in') && ![...c.querySelectorAll('button')].some((b) => b.textContent.trim() === '保存')) || '还有审阅控件';
       });
       window.closeModal();
       await wait(20);
     }
 
-    /* ---------- 实例隔离：旧面板的响应不许关掉 / 弄脏后来打开的新 Planner ----------
-     *
-     * 这是「项目切换后旧 Planner 收尾」最关键的边界：modal 只有一个槽位、
-     * 没有实例 token，所以旧实例**绝不能**在 stale 分支里调 closeModal() ——
-     * 那会把用户刚打开的新 Planner 一起关掉。 */
+    /* ---------- 同项目实例隔离：旧 Planner A 的响应不能弄脏 Planner B ---------- */
     {
       window.closeModal();
       window.openPlanner(); // 「Planner A」
@@ -4715,24 +4713,23 @@ staticCheck();
       rvBtn('oknull', '保存', 1).onclick(); // A 的保存飞在路上
       await wait(40);
 
-      window.S.workspaceGeneration++; // 切到 Project B
       window.closeModal();
-      window.openPlanner(); // 「Planner B」：新实例、新世代
+      window.openPlanner(); // 同项目的「Planner B」：新 Surface 实例
       await wait(140);
-      const bHasList = Boolean($('modalCard').querySelector('.planner-list'));
+      const bHasList = Boolean($('workSurface').querySelector('.planner-list'));
 
       await wait(450); // A 的响应现在回来
       reviewDelayMs = 0;
-      const now = T($('modalCard'));
+      const now = T($('workSurface'));
 
       check('R33. 旧面板的响应**不会关掉**后来打开的新 Planner', () => {
-        return ($('modal').hidden === false && $('modalCard').childElementCount > 0) || `modal.hidden=${$('modal').hidden} kids=${$('modalCard').childElementCount}`;
+        return ($('workspace').dataset.workspaceView === 'planner' && $('modal').hidden && $('workSurface').childElementCount > 0) || `view=${$('workspace').dataset.workspaceView} kids=${$('workSurface').childElementCount}`;
       });
       check('R33b. 新 Planner 的 DOM 不被旧响应污染（没有 stale 提示、没有旧 saving 态）', () => {
         return (bHasList && !/项目已切换/.test(now) && !/正在保存/.test(now)) || now.slice(0, 180);
       });
       check('R33c. 新 Planner 仍然是自己的计划列表（没有被旧响应重画）', () =>
-        Boolean($('modalCard').querySelector('.planner-list')) || '新面板的列表没了');
+        Boolean($('workSurface').querySelector('.planner-list')) || '新面板的列表没了');
       window.closeModal();
       await wait(20);
     }
@@ -4758,7 +4755,7 @@ staticCheck();
     window.closeModal();
     window.openPlanner();
     await wait(80);
-    let card = $('modalCard');
+    let card = $('workSurface');
     card.querySelectorAll('.planner-list .ext-item')[0].onclick();
     await wait(90);
 
@@ -4943,7 +4940,7 @@ staticCheck();
       await wait(500);
       verifyDelayMs = 0;
       check('V14. 切项目之后回来的验证响应不写进界面（stale 守卫）', () => {
-        const d = T($('modalCard'));
+        const d = T($('workSurface'));
         return (/项目已切换，请重新打开 Planner/.test(d) && !/正在验证/.test(d)) || d.slice(0, 160);
       });
       window.closeModal();
@@ -4971,7 +4968,7 @@ staticCheck();
     window.closeModal();
     window.openPlanner();
     await wait(80);
-    let card = $('modalCard');
+    let card = $('workSurface');
     card.querySelectorAll('.planner-list .ext-item')[0].onclick();
     await wait(90);
 
@@ -5035,7 +5032,7 @@ staticCheck();
       /* binary + truncated + renamed + deleted */
       window.openPlanner();
       await wait(80);
-      card = $('modalCard');
+      card = $('workSurface');
       card.querySelectorAll('.planner-list .ext-item')[0].onclick();
       await wait(90);
       evBtn('revneed').onclick();
@@ -5052,7 +5049,7 @@ staticCheck();
 
       window.openPlanner();
       await wait(80);
-      card = $('modalCard');
+      card = $('workSurface');
       card.querySelectorAll('.planner-list .ext-item')[0].onclick();
       await wait(90);
       evBtn('manyfiles').onclick();
@@ -5071,7 +5068,7 @@ staticCheck();
     {
       window.openPlanner();
       await wait(80);
-      card = $('modalCard');
+      card = $('workSurface');
       card.querySelectorAll('.planner-list .ext-item')[0].onclick();
       await wait(90);
       evBtn('cancelled').onclick();
@@ -5094,7 +5091,7 @@ staticCheck();
       window.S.changes = { loaded: true, isRepo: true, files: [{ path: 'totally/different.js' }] };
       window.openPlanner();
       await wait(80);
-      card = $('modalCard');
+      card = $('workSurface');
       card.querySelectorAll('.planner-list .ext-item')[0].onclick();
       await wait(90);
       evBtn('okcmd').onclick();
@@ -6119,14 +6116,14 @@ staticCheck();
   }
 
   $('navPlanner').click();
-  check('Rail 任务入口打开原 Planner 面板', () => !$('modal').hidden && $('navPlanner').getAttribute('aria-current') === 'page');
+  check('Rail 任务入口打开 Planner 工作区', () => $('workspace').dataset.workspaceView === 'planner' && $('modal').hidden && $('navPlanner').getAttribute('aria-current') === 'page');
   $('navHome').click();
   check('Rail 对话入口返回工作区', () => $('modal').hidden && $('navHome').getAttribute('aria-current') === 'page');
   $('navExtensions').click();
-  check('Rail 扩展入口打开原扩展面板', () => !$('modal').hidden && $('navExtensions').getAttribute('aria-current') === 'page');
+  check('Rail 扩展入口打开扩展工作区', () => $('workspace').dataset.workspaceView === 'extensions' && $('modal').hidden && $('navExtensions').getAttribute('aria-current') === 'page');
   $('navHome').click();
   $('navChanges').click();
-  check('Rail 文件变更入口打开原面板', () => !$('modal').hidden && $('navChanges').getAttribute('aria-current') === 'page');
+  check('Rail 文件变更入口打开文件工作区', () => $('workspace').dataset.workspaceView === 'changes' && $('modal').hidden && $('navChanges').getAttribute('aria-current') === 'page');
   $('navHome').click();
 
   /* P14-B：独立夹具走现有历史与流式入口，核对真实节点与可操作性。
@@ -6369,6 +6366,55 @@ staticCheck();
     window.S.models = savedComposerModels;
     window.S.state = savedComposerState;
     window.S.stats = savedComposerStats;
+  }
+
+  /* P14-D: primary view switching must preserve the exact Chat and Composer nodes. */
+  {
+    $('navHome').click();
+    window.rebuildFromMessages([{ role: 'user', content: '切换前的对话' }]);
+    const conversation = $('stream').querySelector('.msg.user');
+    const composer = $('chatComposer');
+    const host = $('workSurface');
+    $('input').value = '未发送草稿';
+    window.S.attachments = [{ id: 'p14d-file', name: '待发送.txt', kind: 'text', size: 12, content: 'fixture' }];
+    window.renderAttachments();
+    const attachment = $('attachTray').querySelector('.att');
+    $('stream').scrollTop = 37;
+    window.S.streaming = true;
+    check('P14-D 默认 Chat 且 Home 唯一激活', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    $('navPlanner').click();
+    check('P14-D Planner 在 Stage 且 Chat 节点仅隐藏', () => $('workspace').dataset.workspaceView === 'planner' && !$('workSurface').hidden && $('chatView').hidden && composer.hidden && $('modal').hidden && conversation.isConnected);
+    check('P14-D Planner rail 唯一激活', () => $('navPlanner').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    window.onMessageStart({ message: { role: 'assistant' } });
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '离开 Chat 后继续生成' } });
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    check('P14-D 非 Chat 时流式正文继续进入原 Conversation', () => $('stream').textContent.includes('离开 Chat 后继续生成') && window.S.streaming);
+    $('navChanges').click();
+    check('P14-D Changes 替换 Planner 且仅一份 Surface', () => $('workspace').dataset.workspaceView === 'changes' && host.querySelector('.chg-body') && !host.querySelector('.planner-pane') && $('navChanges').getAttribute('aria-current') === 'page');
+    $('navExtensions').click();
+    check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
+    $('navGlobalMore').click();
+    check('P14-D More 不抢主视图', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    $('navDiagnostics').click();
+    check('P14-D 二级 Modal 覆盖 Extensions', () => !$('modal').hidden && $('workspace').dataset.workspaceView === 'extensions');
+    window.closeModal();
+    check('P14-D 关闭二级 Modal 后仍在 Extensions', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'extensions' && $('navExtensions').getAttribute('aria-current') === 'page');
+    const scrollBeforeReturn = $('stream').scrollTop;
+    $('navHome').click();
+    check('P14-D 返回 Chat 保留 Conversation 节点与滚动', () => $('workspace').dataset.workspaceView === 'chat' && $('stream').querySelector('.msg.user') === conversation && $('stream').scrollTop === scrollBeforeReturn && !$('chatView').hidden);
+    check('P14-D 返回 Chat 保留 Composer、草稿与附件节点', () => $('chatComposer') === composer && !composer.hidden && $('input').value === '未发送草稿' && $('attachTray').querySelector('.att') === attachment);
+    check('P14-D 返回 Chat 立即看到后台流式内容', () => $('stream').textContent.includes('离开 Chat 后继续生成') && window.S.streaming);
+    check('P14-D Surface host 不重复创建', () => window.document.querySelectorAll('#workSurface').length === 1);
+    window.S.streaming = false;
+    window.S.attachments = [];
+    window.renderAttachments();
+    $('input').value = '';
+    $('navPlanner').click();
+    const oldSurface = $('workSurface').querySelector('.planner-pane');
+    const projectSwitch = window.activateProject('C:\\p14d-project-b', 'P14-D B');
+    check('P14-D 切项目立即返回 Chat 并卸载旧 Surface', () => $('workspace').dataset.workspaceView === 'chat' && $('workSurface').childElementCount === 0 && oldSurface && !oldSurface.isConnected);
+    await projectSwitch;
+    check('P14-D 项目切换后一级视图仍为 Chat', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page');
   }
 
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));

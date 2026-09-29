@@ -619,6 +619,7 @@ const safeName = (name) =>
 
 const clients = new Set();
 let holdNextComposerUpload = false;
+let workSurfaceGitClean = false;
 
 function push(evt) {
   const line = 'data: ' + JSON.stringify(evt) + '\n\n';
@@ -729,6 +730,39 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/status') {
     return json(res, 200, { ok: true, piRunning: true, pid: 0, args: ['--mode', 'rpc'], cwd: process.cwd() });
   }
+
+  /* P14-D Stage surfaces use deterministic fixtures, never the developer's repository. */
+  if (p === '/api/__work-surface/git-clean') {
+    workSurfaceGitClean = url.searchParams.get('value') === '1';
+    return json(res, 200, { ok: true, clean: workSurfaceGitClean });
+  }
+  if (p === '/api/git/status') return json(res, 200, {
+    ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: workSurfaceGitClean ? [] : [
+      { path: 'public/app.js', status: 'M', index: ' ', worktree: 'M', staged: false, untracked: false, isDir: false, additions: 12, deletions: 3, binary: false, oldPath: null },
+      { path: 'docs/说明.md', status: 'A', index: 'A', worktree: ' ', staged: true, untracked: false, isDir: false, additions: 4, deletions: 0, binary: false, oldPath: null },
+      { path: 'new/fixture.txt', status: '??', index: '?', worktree: '?', staged: false, untracked: true, isDir: false, additions: 2, deletions: 0, binary: false, oldPath: null },
+    ],
+  });
+  if (p === '/api/git/diff' && req.method === 'POST') return json(res, 200, {
+    ok: true, isRepo: true, path: 'public/app.js', untracked: false, isDir: false, binary: false,
+    working: 'diff --git a/public/app.js b/public/app.js\n@@ -1,2 +1,2 @@\n-old line\n+new line\n',
+    staged: '', truncated: false, limit: 524288, notice: '', context: null,
+  });
+  if (p === '/api/skills') return json(res, 200, {
+    ok: true, hasProject: true, piReachable: true, trust: { trusted: false, requiresTrust: true },
+    roots: [], diagnostics: [], counts: { total: 3, enabled: 1, project: 1, user: 2 },
+    skills: [
+      { id: 'skill-code', name: 'code-review', description: '审查源代码中的问题', scope: 'user', source: 'pi', state: 'enabled', loaded: true, path: 'skills/code-review/SKILL.md', toggleable: false },
+      { id: 'skill-pdf', name: 'pdf-tools', description: '读取与整理 PDF', scope: 'user', source: 'pi', state: 'disabled', loaded: false, path: 'skills/pdf-tools/SKILL.md', toggleable: false, stateNote: '已停用' },
+      { id: 'skill-project', name: 'proj-only', description: '当前项目的技能', scope: 'project', source: 'pi', state: 'untrusted', loaded: false, path: '.pi/skills/proj-only/SKILL.md', toggleable: false, blockedByTrust: true, stateNote: '项目未被信任' },
+    ],
+  });
+  if (p.startsWith('/api/skills/') && req.method === 'GET') return json(res, 200, { ok: true, content: '# Skill\n\n这是可复现的 SKILL.md 详情。', files: [], note: '' });
+  if (p === '/api/mcp') return json(res, 200, {
+    ok: true, supported: false, piVersion: '0.87.0', reason: '这个 pi 没有原生 MCP 支持。',
+    evidence: 'pi 官方能力报告', servers: [], serversNote: '没有可列出的 MCP Server。',
+    extensionRoute: { note: '请通过 pi extension 提供能力。', user: { exists: false, count: 0, entries: [] }, project: { exists: false, count: 0, entries: [] }, fromSettings: [], packages: [] },
+  });
 
   if (p === '/api/projects') {
     return json(res, 200, {
@@ -980,6 +1014,11 @@ const server = http.createServer(async (req, res) => {
     } else if (what === 'tool-failed') {
       push({ type: 'tool_execution_start', toolCallId: 'p14b-failed', toolName: 'bash', args: { command: 'npm test' } });
       push({ type: 'tool_execution_end', toolCallId: 'p14b-failed', result: { content: [{ type: 'text', text: 'Command exited with code 1' }] }, isError: true });
+    } else if (what === 'work-stream') {
+      push({ type: 'message_start', message: { role: 'assistant' } });
+      push({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '离开 Chat 时继续生成的正文' } });
+      push({ type: 'tool_execution_start', toolCallId: 'p14d-write', toolName: 'write', args: { file_path: 'C:\\pi-GUI\\public\\app.js' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p14d-write', result: { content: [{ type: 'text', text: 'fixture' }] }, isError: false });
     }
     return json(res, 200, { ok: true, pushed: what });
   }
