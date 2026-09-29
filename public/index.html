@@ -60,6 +60,7 @@
       <h1 id="title">新会话</h1>
       <!-- P7：当前会话关联了哪些任务（没有关联时整块 hidden，不占位）。
            内容由 session-plans.js 填，只在真的命中时才显形。 -->
+      <h1 id="workViewTitle" hidden></h1>
       <div class="sess-plans" id="sessionPlans" hidden></div>
       <div class="head-right">
         <button type="button" class="icon-btn" id="btnMore" title="更多" aria-label="更多操作">
@@ -77,7 +78,7 @@
 
     <!-- 会话内导航（Conversation Minimap）放在正文左侧的独立列里，
          不叠在滚动条上 —— 叠上去会有点击冲突，而且窄窗口下会挤正文。 -->
-    <div class="convo">
+    <div class="convo" id="chatView">
       <div class="stream" id="stream">
       <div class="welcome" id="welcome">
         <div class="welcome-pane" id="welcomeRestore" hidden>
@@ -120,7 +121,7 @@
       <nav class="convo-nav" id="convoNav" aria-label="会话内提问导航"></nav>
     </div>
 
-    <div class="composer">
+    <div class="composer" id="chatComposer">
       <div class="composer-box" id="composerBox">
         <div class="attach-tray" id="attachTray" role="list" aria-label="待发送附件" hidden></div>
         <textarea id="input" rows="1" placeholder="随心输入" aria-label="输入消息"></textarea>
@@ -159,7 +160,7 @@
       </div>
     </div>
 
-    </div>
+    <section class="work-surface" id="workSurface" aria-label="工作区" hidden></section>
   </main>
 
 </div>

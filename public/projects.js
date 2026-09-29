@@ -5,6 +5,7 @@
  * ~/.pi/agent/sessions/--<转义cwd>--/ 下。 */
 
 import { el, S, beginWorkspaceSwitch, ownsWorkspace } from './state.js';
+import { showChat } from './ui/workspace-surface.js';
 import { samePath } from './util.js';
 import {
   activateProject as apiActivateProject,
@@ -151,6 +152,7 @@ export async function removeProject(target) {
 }
 
 export function activateProject(target, label) {
+  showChat();
   const generation = beginWorkspaceSwitch(target);
   clearThread();
   setStreaming(false);

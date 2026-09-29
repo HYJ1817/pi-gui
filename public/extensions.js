@@ -24,7 +24,8 @@
  */
 import { S, ownsWorkspace } from './state.js';
 import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, restartBackend } from './api.js';
-import { openModal, confirmModal } from './ui/modal.js';
+import { confirmModal } from './ui/modal.js';
+import { openWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
 
 /* 状态 → 展示用的圆点与文案。
@@ -84,7 +85,7 @@ function copyBtn(text, label = '复制路径') {
 
 /* ---------- Skills 标签页 ---------- */
 
-function skillsTab(card) {
+function skillsTab(card, isCurrent) {
   const wrap = el('div', 'ext-skills');
 
   // 工具栏
@@ -194,9 +195,10 @@ function skillsTab(card) {
             : `会往 ${skill.settingsPath} 里加一条规则（${skill.disablePattern}）。不会删除或移动 skill 文件 —— 只是让 pi 不再加载它。`,
           okText: want ? '启用' : '停用',
         });
-        if (!ok) return;
+        if (!ok || !isCurrent()) return;
         btn.disabled = true;
         const r = await setSkillEnabled(skill.id, want);
+        if (!isCurrent()) return;
         btn.disabled = false;
         if (!r.ok) {
           toast(r.error || '操作失败', 'error');
@@ -209,7 +211,7 @@ function skillsTab(card) {
             message: 'pi 只在启动时读 settings.json，所以这个改动要等 pi 重新启动才起作用。现在就重启吗？（当前会话会被恢复）',
             okText: '重启 pi',
           });
-          if (go) {
+          if (go && isCurrent()) {
             await restartBackend();
             toast('已请求重启 pi，稍等一下', 'info');
           }
@@ -240,7 +242,7 @@ function skillsTab(card) {
     detailBox.appendChild(pre);
 
     const d = await fetchSkillDetail(skill.id);
-    if (seq !== detailSeq || !ownsWorkspace(generation)) return; // 用户已经点了别的或切换项目
+    if (seq !== detailSeq || !ownsWorkspace(generation) || !isCurrent()) return; // 用户已经点了别的或切换项目
     if (!d || d.ok === false) {
       pre.textContent = (d && d.error) || '读不到详情';
       return;
@@ -269,7 +271,9 @@ function skillsTab(card) {
     }
     for (const s of items) {
       const meta = stateMeta(s.state);
-      const item = el('div', 'ext-item' + (s.id === selectedId ? ' on' : ''));
+      const item = el('button', 'ext-item' + (s.id === selectedId ? ' on' : ''));
+      item.type = 'button';
+      item.setAttribute('aria-current', s.id === selectedId ? 'true' : 'false');
       const top = el('div', 'ext-item-top');
       top.appendChild(el('span', 'ext-dot ' + meta.dot));
       top.appendChild(el('span', 'ext-name', s.name));
@@ -312,7 +316,7 @@ function skillsTab(card) {
     listBox.innerHTML = '';
     listBox.appendChild(el('div', 'ext-empty', '正在读取 Skills…'));
     const j = await fetchSkills();
-    if (!card.isConnected) return;
+    if (!isCurrent()) return;
     if (!ownsWorkspace(generation)) {
       listBox.innerHTML = '';
       const stale = el('div', 'ext-empty', '项目已切换，刷新后查看当前项目的 Skills。');
@@ -353,12 +357,13 @@ function skillsTab(card) {
 
 /* ---------- MCP 标签页 ---------- */
 
-function mcpTab(card) {
+function mcpTab(card, isCurrent) {
   const wrap = el('div', 'ext-mcp');
   card.appendChild(wrap);
   wrap.appendChild(el('div', 'ext-empty', '读取中…'));
 
   fetchMcp().then((j) => {
+    if (!isCurrent()) return;
     wrap.innerHTML = '';
     if (!j || j.ok === false) {
       wrap.appendChild(note((j && j.error) || '读取 MCP 状态失败', 'warn'));
@@ -459,7 +464,7 @@ export async function loadExtensionsBadge() {
 }
 
 export function openExtensions() {
-  openModal((card) => {
+  openWorkSurface('extensions', (card, instance) => {
     card.classList.add('wide', 'ext');
 
     const h = el('h3', '', '扩展');
@@ -479,14 +484,17 @@ export function openExtensions() {
     let active = 'skills';
 
     const render = () => {
-      for (const btn of tabs.children) btn.classList.toggle('on', btn.dataset.tab === active);
+      for (const btn of tabs.children) {
+        btn.classList.toggle('on', btn.dataset.tab === active);
+        btn.setAttribute('aria-selected', String(btn.dataset.tab === active));
+      }
       body.innerHTML = '';
       if (!panels[active]) {
         const holder = el('div', 'ext-panel');
         panels[active] = holder;
         body.appendChild(holder);
-        if (active === 'skills') skillsTab(holder);
-        else mcpTab(holder);
+        if (active === 'skills') skillsTab(holder, instance.isCurrent);
+        else mcpTab(holder, instance.isCurrent);
       } else {
         // 已经建过的面板：重新挂回去（innerHTML 清空不会销毁 JS 里的引用，
         // 但节点被移出文档了，appendChild 会把它接回来）

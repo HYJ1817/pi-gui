@@ -63,6 +63,7 @@ import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
+import { showChat } from './ui/workspace-surface.js';
 
 /* ---------- 装配 ---------- */
 
@@ -762,10 +763,10 @@ $('navHome').onclick = () => {
   if (!$('modal').hidden) closeModal();
   $('globalMoreMenu').hidden = true;
   $('navGlobalMore').setAttribute('aria-expanded', 'false');
-  setRailActive('navHome');
+  showChat();
   el.input.focus();
 };
-$('navChanges').onclick = () => { setRailActive('navChanges'); openChangesPanel(); };
+$('navChanges').onclick = openChangesPanel;
 $('navProviders').onclick = openProvidersPanel;
 $('navDiagnostics').onclick = openDiagnostics;
 
@@ -776,17 +777,8 @@ $('btnPickProject').onclick = openDirPicker;
 $('btnProjectSettings').onclick = openProjectSettings;
 
 // 扩展能力（Skills / MCP）保留全局入口；模型供应商位于 More 菜单。
-$('navExtensions').onclick = () => { setRailActive('navExtensions'); openExtensions(); };
-$('navPlanner').onclick = () => { setRailActive('navPlanner'); openPlanner(); };
-
-function setRailActive(id) {
-  for (const button of $('globalRail').querySelectorAll('.rail-icon')) {
-    const active = button.id === id;
-    button.classList.toggle('is-active', active);
-    if (active) button.setAttribute('aria-current', 'page');
-    else button.removeAttribute('aria-current');
-  }
-}
+$('navExtensions').onclick = openExtensions;
+$('navPlanner').onclick = () => openPlanner();
 
 const globalMenu = $('globalMoreMenu');
 const globalMore = $('navGlobalMore');
@@ -847,10 +839,6 @@ function setSidebarCollapsed(collapsed) {
 }
 collapseSidebar.onclick = () => setSidebarCollapsed(true);
 expandSidebar.onclick = () => setSidebarCollapsed(false);
-
-new MutationObserver(() => {
-  if ($('modal').hidden && ['navPlanner', 'navChanges', 'navExtensions'].some((id) => $(id).classList.contains('is-active'))) setRailActive('navHome');
-}).observe($('modal'), { attributes: true, attributeFilter: ['hidden'] });
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').closest('.rail-group');

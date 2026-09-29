@@ -56,7 +56,6 @@ export function closeModal() {
   el.modalCard.innerHTML = '';
   panels.tree = null;
   panels.providers = null;
-  panels.changes = null;
   const returnFocus = modalReturnFocus;
   modalReturnFocus = null;
 
@@ -78,7 +77,6 @@ export function openModal(build, onClose) {
   // 弹层里的动态区域在关闭时失效，避免继续往已卸载的节点里写
   panels.tree = null;
   panels.providers = null;
-  panels.changes = null;
 
   build(el.modalCard, closeModal);
   el.modal.hidden = false;

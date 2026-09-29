@@ -54,7 +54,7 @@ export const el = {
   btnPickProject: $('btnPickProject'),
 };
 
-/* 弹层里的动态容器。
+/* 动态容器。tree/providers 属于弹层；changes 属于 Stage Work Surface。
  *
  * 关闭弹层时必须置空 —— 否则异步回来的数据会写进已经被 innerHTML='' 卸掉的
  * 节点上：不报错，但界面上什么都不出现，属于最难查的一类问题。

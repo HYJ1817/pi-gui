@@ -35,11 +35,12 @@ import {
   verifyPlanAttempt,
   stopPlanAttemptVerification,
 } from './api.js';
-import { openModal, closeModal, confirmModal } from './ui/modal.js';
+import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { S, ownsWorkspace } from './state.js';
 import { afterSessionSwitch } from './rpc.js';
 import { openChangesPanel } from './git.js';
+import { openWorkSurface, showChat } from './ui/workspace-surface.js';
 
 /* ---------- 状态与文案表 ---------- */
 
@@ -451,7 +452,7 @@ export function openPlanner(focus = null) {
   /** 打开这个面板时的工作区代号。切过项目之后回来的响应一律丢弃（§三十九）。 */
   const openedGeneration = S.workspaceGeneration;
 
-  openModal((card) => {
+  openWorkSurface('planner', (card, instance) => {
     card.classList.add('wide', 'planner');
 
     /* ---------- 工作区身份：这个面板还属于当前项目吗 ----------
@@ -472,7 +473,7 @@ export function openPlanner(focus = null) {
      * 旧面板手上的 plan / attempt / 草稿全属于旧 workspace —— 切走之后它们
      * 既不该再显示、也不该再发请求。
      */
-    const plannerAlive = () => ownsWorkspace(openedGeneration);
+    const plannerAlive = () => ownsWorkspace(openedGeneration) && instance.isCurrent();
 
     /**
      * 丢弃这个面板实例攒下的全部临时 UI 状态。
@@ -492,6 +493,7 @@ export function openPlanner(focus = null) {
       filesExpanded.clear();
       attemptOpen.clear();
     }
+    instance.onDispose(dropPlannerState);
 
     /**
      * 把面板收成「项目已切换」的样子：丢掉旧状态 + 只留一句提示。
@@ -504,6 +506,7 @@ export function openPlanner(focus = null) {
      */
     function renderStalePlanner() {
       dropPlannerState();
+      if (!instance.isCurrent()) return;
       renderList();
       renderDetail();
     }
@@ -525,6 +528,8 @@ export function openPlanner(focus = null) {
       const isPlans = which === 'plans';
       tabPlans.classList.toggle('on', isPlans);
       tabAgents.classList.toggle('on', !isPlans);
+      tabPlans.setAttribute('aria-selected', String(isPlans));
+      tabAgents.setAttribute('aria-selected', String(!isPlans));
       plansPane.style.display = isPlans ? '' : 'none';
       agentsPane.style.display = isPlans ? 'none' : '';
     };
@@ -647,7 +652,9 @@ export function openPlanner(focus = null) {
         return;
       }
       for (const p of plans) {
-        const item = el('div', 'ext-item' + (current && current.id === p.id ? ' on' : ''));
+        const item = el('button', 'ext-item' + (current && current.id === p.id ? ' on' : ''));
+        item.type = 'button';
+        item.setAttribute('aria-current', current && current.id === p.id ? 'true' : 'false');
         const top = el('div', 'ext-item-top');
         /* ⚠️ 状态文字**不能塞进 `.ext-dot`** —— 那是个 7×7 的圆点：
          * 文字进去会被挤成一个 7px 宽的文字列，渲染成竖排单字（overflow 可见，
@@ -882,7 +889,6 @@ export function openPlanner(focus = null) {
            * 完整 diff 仍然走「文件变更」面板 —— 这里**不复制 diff**（规格 §19）。 */
           box.append(el('div', 'ext-item-note', '这些文件在执行期间被观察到有变化（可能也包含其它来源的改动）。diff 请在侧栏「文件变更」里看。'));
           const b = btn('打开文件变更', 'planner-rel-btn', () => {
-            closeModal();
             openChangesPanel();
           });
           box.append(b);
@@ -1578,7 +1584,6 @@ export function openPlanner(focus = null) {
               miniBtn('查看当前 Diff', '', () => {
                 /* 复用现有的 Git 变更面板，**不新做 reviewDiff / historicalDiff**（§二十）：
                  * P7/P8 从来没有保存过「这次执行当时的 diff」，能给的只有当前工作区。 */
-                closeModal();
                 openChangesPanel();
               })
             );
@@ -1761,7 +1766,7 @@ export function openPlanner(focus = null) {
           toast(r.error || '打开会话失败', 'warn');
           return;
         }
-        closeModal();
+        showChat();
         afterSessionSwitch();
         toast('已切到任务会话：' + (r.title || '（无标题）'), 'info');
       } catch (err) {

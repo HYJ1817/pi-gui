@@ -34,7 +34,8 @@ import {
 } from './api.js';
 import { listChanges, onChanges } from './changes.js';
 import { toast } from './ui/toast.js';
-import { confirmModal, openModal } from './ui/modal.js';
+import { confirmModal } from './ui/modal.js';
+import { openWorkSurface } from './ui/workspace-surface.js';
 import { allHunksOpen, bindDiffToggles, countDiffLines, diffHtml, setAllHunks } from './diff.js';
 
 /* 自动刷新的防抖窗口。
@@ -74,6 +75,7 @@ let lastContext = null;
 /* 「全部撤销」按钮的引用。它长在面板头上（不随列表重绘），
  * 但可用状态要跟着列表走，所以留一个槽位。 */
 let restoreAllBtn = null;
+let activeChangesSurface = null;
 /* 批量撤销进行中标记：连点两次会把同一个仓库撤两遍，第二次结果毫无意义。 */
 let restoringAll = false;
 
@@ -228,8 +230,14 @@ export async function refreshGitNow() {
 /* ---------- 面板 ---------- */
 
 export function openChangesPanel() {
-  openModal((card, close) => {
+  const surface = openWorkSurface('changes', (card, instance) => {
     card.classList.add('changes');
+    activeChangesSurface = instance;
+    instance.onDispose(() => {
+      panels.changes = null;
+      restoreAllBtn = null;
+      if (activeChangesSurface === instance) activeChangesSurface = null;
+    });
 
     const head = document.createElement('div');
     head.className = 'chg-head';
@@ -275,13 +283,15 @@ export function openChangesPanel() {
   });
 
   // 打开就用最新数据重画一次（先用已有状态垫一帧，避免空白等待）
-  loadGitStatus().then(renderChangesBody);
+  loadGitStatus().then(() => {
+    if (surface.isCurrent()) renderChangesBody();
+  });
 }
 
 /** 重画面板内容。`panels.changes` 为空（面板没开 / 已关）时直接返回。 */
 export function renderChangesBody() {
   const box = panels.changes;
-  if (!box) return;
+  if (!box || !box.isConnected) return;
 
   box.innerHTML = '';
   const c = S.changes;
@@ -351,7 +361,8 @@ function filterRow(session) {
     const b = document.createElement('button');
     b.type = 'button';
     b.id = id;
-    b.className = 'chg-tab' + (on ? ' on' : '');
+    b.className = 'chg-tab' + (view.sessionOnly === on ? ' on' : '');
+    b.setAttribute('aria-pressed', String(view.sessionOnly === on));
     const t = document.createElement('span');
     t.textContent = label;
     const c = document.createElement('b');
@@ -458,6 +469,7 @@ function fillStat(span, add, del) {
 }
 
 function changeRow(f, inSession) {
+  const surface = activeChangesSurface;
   const row = document.createElement('div');
   row.className = 'chg-row';
 
@@ -526,6 +538,7 @@ function changeRow(f, inSession) {
     diffBox.appendChild(hint('正在读取差异…'));
 
     const r = await fetchGitDiff(f.path, dstate.context);
+    if (!surface || !surface.isCurrent()) return;
     dstate.busy = false;
     dstate.loaded = true;
 

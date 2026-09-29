@@ -205,6 +205,46 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 
 .stage{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--main);position:relative}
 
+/* P14-D: one Stage host for primary work; Chat stays mounted behind it. */
+:root{--work-surface-padding:24px;--work-sidebar-width:260px;--work-toolbar-height:48px}
+.work-surface{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden;padding:var(--work-surface-padding);background:var(--main)}
+.work-surface.planner,.work-surface.ext,.work-surface.changes{max-width:none;height:auto;border:0;border-radius:0;box-shadow:none}
+.work-surface>.ext-tabs{margin-bottom:14px}
+.work-surface>.ext-body{min-height:0;overflow:hidden}
+.work-surface .ext-split{min-width:0;overflow:hidden;gap:0}
+.work-surface .ext-list{flex:0 0 var(--work-sidebar-width);padding-right:12px;border-right:1px solid var(--line-soft)}
+.work-surface .ext-detail{border-left:0;padding-left:20px}
+.work-surface .ext-item{display:block;width:100%;text-align:left;font:inherit;color:inherit;border:0;border-radius:7px;background:transparent;padding:9px 10px}
+.work-surface .ext-item:hover{background:var(--hover)}
+.work-surface .ext-item.on{background:var(--accent-soft)}
+.work-surface .ext-item.static{display:flex}
+.work-surface .planner-pane{overflow:hidden}
+.work-surface .planner-pane>.ext-split{flex:1}
+.work-surface .planner-bar{background:transparent;border:0;border-bottom:1px solid var(--line-soft);border-radius:0;padding:0 0 16px}
+.work-surface .planner-task{background:transparent;border:0;border-top:1px solid var(--line-soft);border-radius:0;padding:14px 2px}
+.work-surface .planner-tasks{gap:0}
+.work-surface .chg-body{flex:1;overflow:hidden}
+.work-surface .chg-list{max-height:none;min-height:0;flex:1;border:0;border-radius:0;background:transparent}
+.work-surface .chg-row{display:flex;align-items:center;flex-wrap:wrap}
+.work-surface .chg-main{width:auto;flex:1;min-width:0}
+.work-surface .chg-acts{align-items:center;padding-right:10px}
+.work-surface .chg-diff{flex:0 0 100%}
+.work-surface .chg-hint{border:0;background:transparent;padding:16px 0}
+.work-surface .chg-head{min-height:var(--work-toolbar-height);border-bottom:1px solid var(--line-soft);padding-bottom:12px}
+.work-surface .ext-code{max-height:none}
+.stage[data-workspace-view]:not([data-workspace-view="chat"]) #sessionPlans{display:none!important}
+@media (max-width:900px){:root{--work-surface-padding:16px;--work-sidebar-width:210px}}
+@media (max-width:700px){
+  :root{--work-surface-padding:12px}
+  .work-surface .planner-bar-l{width:100%}
+  .work-surface .ext-split{flex-direction:column}
+  .work-surface .ext-list{flex:0 0 34%;border-right:0;border-bottom:1px solid var(--line-soft);padding:0 0 8px}
+  .work-surface .ext-detail{padding:12px 0 0;border:0}
+  .work-surface .chg-head{flex-wrap:wrap}
+  .work-surface .chg-main{min-width:0}
+  .work-surface .chg-acts{flex-wrap:wrap}
+}
+
 .stage-head{
   display:flex;align-items:center;gap:5px;height:46px;flex:0 0 46px;
   /* 右侧留出原生最小化 / 最大化 / 关闭按钮的位置（3 × 46px）。
