@@ -908,6 +908,19 @@ async function main() {
   await shotOf('#workSurface', '124-workspace-low-height', 'P14-D：700×600 工作区内部滚动', ['生成计划'], [...surfaceChecks('planner'), ['工作区底部不越过 Stage', `document.querySelector('#workSurface').getBoundingClientRect().bottom<=document.querySelector('#workspace').getBoundingClientRect().bottom+1`]]);
   await send('Emulation.clearDeviceMetricsOverride');
 
+  /* P14-D 收口：从 Planner 侧栏成功切换历史会话，必须回到 Chat 并重建那条会话。 */
+  const switchedFromPlanner = await evalJs(`(() => { const b=[...document.querySelectorAll('#projects .pj-sess-primary')].find(x=>x.textContent.includes('README')); if (!b) return false; b.click(); return true; })()`);
+  if (!switchedFromPlanner) shotFailures.push('125-workspace-session-switch-to-chat: 找不到 README 历史会话入口');
+  await sleep(750);
+  await shotOf('#workspace', '125-workspace-session-switch-to-chat', 'P14-D 收口：Planner 切历史会话后回 Chat', ['这是 README 会话的历史消息'], [
+    ['Chat 是唯一 primary active', `document.querySelector('#workspace').dataset.workspaceView==='chat' && document.querySelector('#navHome').getAttribute('aria-current')==='page' && document.querySelectorAll('#globalRail [aria-current="page"]').length===1`],
+    ['Chat 与 Composer 实际可见', `(() => { const c=document.querySelector('#chatView'),p=document.querySelector('#chatComposer'); return !c.hidden && !p.hidden && c.getBoundingClientRect().height>0 && p.getBoundingClientRect().height>0; })()`],
+    ['Work Surface 已卸载', `document.querySelector('#workSurface').hidden && document.querySelector('#workSurface').childElementCount===0`],
+    ['新会话历史已重建且可见', `(() => { const e=[...document.querySelectorAll('#chatView .msg')].find(x=>x.textContent.includes('这是 README 会话的历史消息')); return !!e && e.getBoundingClientRect().height>0; })()`],
+    ['没有页面运行时异常', pageErrors.length === 0 ? 'true' : 'false'],
+  ]);
+  await evalJs(`fetch('/api/__work-surface/session-reset').then(r=>r.ok)`);
+
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

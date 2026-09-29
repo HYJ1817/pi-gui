@@ -6409,6 +6409,55 @@ staticCheck();
     window.S.attachments = [];
     window.renderAttachments();
     $('input').value = '';
+
+    // P14-D 收口：从 Work Surface 换会话，必须等成功后才回到 Chat。
+    $('navPlanner').click();
+    check('P14-D 收口：新对话前仍在 Planner', () => $('workspace').dataset.workspaceView === 'planner');
+    const beforeNew = commands.length;
+    $('navNew').click();
+    check('P14-D 收口：新对话确实发出 RPC 且应答前不切视图', () =>
+      commands.slice(beforeNew).some((c) => c.type === 'new_session') && $('workspace').dataset.workspaceView === 'planner');
+    es.emit({ type: 'response', command: 'new_session', success: true, data: {} });
+    check('P14-D 收口：新对话成功后 Chat 唯一激活且 Surface 卸载', () =>
+      $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' &&
+      !$('navPlanner').classList.contains('is-active') && !$('chatView').hidden && !$('chatComposer').hidden &&
+      $('workSurface').hidden && $('workSurface').childElementCount === 0 &&
+      $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+
+    window.rebuildFromMessages([{ role: 'user', content: '旧会话正文' }]);
+    window.renderProjects();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    $('navPlanner').click();
+    const switchSurface = $('workSurface').firstElementChild;
+    const switchButton = $('projects').querySelector('.pj-sess-primary[aria-label^="切换会话"]');
+    stubSwitch = { ok: false, error: '夹具拒绝切换' };
+    switchButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    check('P14-D 收口：切旧会话失败仍留 Planner 且 Surface 未清空', () =>
+      $('workspace').dataset.workspaceView === 'planner' && $('workSurface').firstElementChild === switchSurface &&
+      !$('workSurface').hidden && $('stream').textContent.includes('旧会话正文'));
+
+    $('navChanges').click();
+    stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能' };
+    const beforeSwitch = sessionCalls.length;
+    const beforeBoot = commands.length;
+    switchButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    check('P14-D 收口：侧栏旧会话成功切到 Chat 且只激活 Home', () =>
+      sessionCalls.slice(beforeSwitch).some((c) => /\/switch$/.test(c.url) && c.body?.id === 'bbbbbbbbbbbbbbbb') &&
+      $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' &&
+      $('globalRail').querySelectorAll('[aria-current="page"]').length === 1 &&
+      !$('chatView').hidden && !$('chatComposer').hidden && $('workSurface').hidden &&
+      $('workSurface').childElementCount === 0 && !$('stream').textContent.includes('旧会话正文'));
+    await new Promise((resolve) => setTimeout(resolve, 280));
+    check('P14-D 收口：侧栏成功切换走现有 boot 历史重建链路', () =>
+      commands.slice(beforeBoot).some((c) => c.type === 'get_messages'));
+    es.emit({ type: 'response', command: 'get_messages', success: true,
+      data: { messages: [{ role: 'user', content: '新会话历史正文' }] } });
+    check('P14-D 收口：新会话历史在 Chat 中可见', () =>
+      $('workspace').dataset.workspaceView === 'chat' && $('stream').textContent.includes('新会话历史正文'));
+    stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能' };
+
     $('navPlanner').click();
     const oldSurface = $('workSurface').querySelector('.planner-pane');
     const projectSwitch = window.activateProject('C:\\p14d-project-b', 'P14-D B');

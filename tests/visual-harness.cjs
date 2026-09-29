@@ -620,6 +620,7 @@ const safeName = (name) =>
 const clients = new Set();
 let holdNextComposerUpload = false;
 let workSurfaceGitClean = false;
+let harnessSessionId = 'aaaaaaaaaaaaaaaa';
 
 function push(evt) {
   const line = 'data: ' + JSON.stringify(evt) + '\n\n';
@@ -692,7 +693,12 @@ function replyFor(cmd) {
         },
       };
     case 'get_messages':
-      return { type: 'response', command: 'get_messages', success: true, data: { messages: MESSAGES } };
+      return { type: 'response', command: 'get_messages', success: true, data: { messages:
+        harnessSessionId === 'bbbbbbbbbbbbbbbb'
+          ? [{ role: 'user', content: '请补全 README 的测试说明' },
+            { role: 'assistant', content: [{ type: 'text', text: '这是 README 会话的历史消息：测试说明已整理完成。' }] }]
+          : MESSAGES,
+      } };
     case 'get_available_models':
       return { type: 'response', command: 'get_available_models', success: true, data: { models: MODELS } };
     case 'get_available_thinking_levels':
@@ -778,15 +784,25 @@ const server = http.createServer(async (req, res) => {
   /* 会话列表（侧栏挂在当前项目那一行下面）。
    * 形状照抄后端真实返回 —— **不含任何绝对路径**，否则截图就没法用来看
    * 「界面上会不会漏出路径」。刻意混入一条已归档的，好让折叠组也出现在图里。 */
+  if (p === '/api/sessions/switch' && req.method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (body.id !== 'bbbbbbbbbbbbbbbb') return json(res, 200, { ok: false, error: '夹具中没有该会话' });
+    harnessSessionId = body.id;
+    return json(res, 200, { ok: true, id: body.id, title: '帮我把 README 的测试那节补全' });
+  }
+  if (p === '/api/__work-surface/session-reset') {
+    harnessSessionId = 'aaaaaaaaaaaaaaaa';
+    return json(res, 200, { ok: true });
+  }
   if (p === '/api/sessions') {
     return json(res, 200, {
       ok: true,
       hasProject: true,
-      currentId: 'aaaaaaaaaaaaaaaa',
+      currentId: harnessSessionId,
       diagnostics: [],
       sessions: [
-        { id: 'aaaaaaaaaaaaaaaa', title: '发酵罐空气分布器设计核算', sessionId: 'sid-cur', createdAt: '2026-09-25T10:00:00.000Z', lastMessageAt: '2026-09-25T10:30:00.000Z', updatedAt: Date.now() - 120000, messageCount: 12, current: true, pending: false, archived: false, truncated: false },
-        { id: 'bbbbbbbbbbbbbbbb', title: '帮我把 README 的测试那节补全', sessionId: 'sid-b', createdAt: '2026-09-25T08:00:00.000Z', lastMessageAt: '2026-09-25T09:00:00.000Z', updatedAt: Date.now() - 5400000, messageCount: 8, current: false, pending: false, archived: false, truncated: false },
+        { id: 'aaaaaaaaaaaaaaaa', title: '发酵罐空气分布器设计核算', sessionId: 'sid-cur', createdAt: '2026-09-25T10:00:00.000Z', lastMessageAt: '2026-09-25T10:30:00.000Z', updatedAt: Date.now() - 120000, messageCount: 12, current: harnessSessionId === 'aaaaaaaaaaaaaaaa', pending: false, archived: false, truncated: false },
+        { id: 'bbbbbbbbbbbbbbbb', title: '帮我把 README 的测试那节补全', sessionId: 'sid-b', createdAt: '2026-09-25T08:00:00.000Z', lastMessageAt: '2026-09-25T09:00:00.000Z', updatedAt: Date.now() - 5400000, messageCount: 8, current: harnessSessionId === 'bbbbbbbbbbbbbbbb', pending: false, archived: false, truncated: false },
         { id: 'dddddddddddddddd', title: '检查 server.js 的路由顺序', sessionId: 'sid-d', createdAt: '2026-09-25T07:00:00.000Z', lastMessageAt: '2026-09-25T07:30:00.000Z', updatedAt: Date.now() - 9000000, messageCount: 21, current: false, pending: false, archived: false, truncated: false },
         { id: 'cccccccccccccccc', title: '上周的排查记录', sessionId: 'sid-c', createdAt: '2026-09-20T07:00:00.000Z', lastMessageAt: '2026-09-20T08:00:00.000Z', updatedAt: Date.now() - 400000000, messageCount: 5, current: false, pending: false, archived: true, truncated: false },
       ],
