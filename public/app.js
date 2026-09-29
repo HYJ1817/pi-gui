@@ -849,9 +849,9 @@ new MutationObserver(() => {
 }).observe($('modal'), { attributes: true, attributeFilter: ['hidden'] });
 
 // 项目分组折叠状态记忆
-const group = $('groupHead').parentElement;
+const group = $('groupHead').closest('.rail-group');
 try {
-  if (localStorage.getItem('pi-group-open') !== '0') group.classList.add('open');
+  group.classList.toggle('open', localStorage.getItem('pi-group-open') !== '0');
 } catch {
   group.classList.add('open');
 }

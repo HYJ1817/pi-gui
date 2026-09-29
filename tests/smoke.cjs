@@ -11,6 +11,7 @@ const { bundle } = require('./esm-bundle.cjs');
 
 const PUB = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
+const styles = fs.readFileSync(path.join(PUB, 'styles.css'), 'utf8');
 const bundled = bundle(path.join(PUB, 'app.js'));
 const code = bundled.code;
 /* 静态检查要读**原始**源码（未被链接器改写过），否则 `export ` 前缀被剥掉之后
@@ -158,6 +159,12 @@ const mcpCalls = [];
 
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
 const { window } = dom;
+// jsdom 不加载外部样式表；只注入分组显隐规则，让 computedStyle 验证真实 CSS 选择器。
+const groupDisplayRules = [styles.match(/\.group-body\s*\{[^}]*\}/)?.[0], styles.match(/\.rail-group\.open\s+\.group-body\s*\{[^}]*\}/)?.[0]];
+const groupDisplayStyle = window.document.createElement('style');
+groupDisplayStyle.textContent = groupDisplayRules.filter(Boolean).join('\n');
+window.document.head.append(groupDisplayStyle);
+window.localStorage.setItem('pi-group-open', '0');
 
 window.addEventListener('error', (e) => errors.push('window.error: ' + e.message));
 
@@ -937,6 +944,13 @@ staticCheck();
   check('静态按钮都声明 type', () => [...window.document.querySelectorAll('button')].every((button) => button.hasAttribute('type')));
   check('P14-A 三列外壳与全局导航存在', () => Boolean($('globalRail') && $('projectSidebar') && $('workspace') && $('navHome') && $('navPlanner') && $('navChanges') && $('navExtensions') && $('navGlobalMore')));
   check('P14-A 侧栏有独立折叠按钮', () => Boolean($('btnSidebarCollapse')));
+  check('侧栏按钮初始语义为展开', () => !$('projectSidebar').hidden && $('btnSidebarCollapse').getAttribute('aria-expanded') === 'true' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'true');
+  const railGroup = $('groupHead').closest('.rail-group');
+  const groupBody = $('groupBody');
+  const groupDisplay = () => window.getComputedStyle(groupBody).display;
+  check('存储为 0 时项目分组实际折叠', () => groupDisplayRules.every(Boolean) && !railGroup.classList.contains('open') && $('groupHead').getAttribute('aria-expanded') === 'false' && groupDisplay() === 'none');
+  $('groupHead').click();
+  check('项目分组可从存储折叠态恢复', () => railGroup.classList.contains('open') && $('groupHead').getAttribute('aria-expanded') === 'true' && groupDisplay() !== 'none');
   check('消息输入有可识别名称', () => Boolean($('input').getAttribute('aria-label')));
   check('启动首帧显示恢复中而不闪未选项目', () =>
     $('welcomeRestore') && $('welcomeRestore').hidden === false && $('welcomeNoProj').hidden === true);
@@ -955,8 +969,10 @@ staticCheck();
   check('Global Rail 初始激活项唯一', () => window.document.querySelectorAll('#globalRail [aria-current="page"]').length === 1 && $('navHome').getAttribute('aria-current') === 'page');
   $('btnSidebarCollapse').click();
   check('折叠仅隐藏项目侧栏，保留全局栏与工作区', () => $('projectSidebar').hidden && !$('globalRail').hidden && !$('workspace').hidden && !$('btnSidebarExpand').hidden);
+  check('侧栏折叠按钮语义与侧栏状态一致', () => $('btnSidebarCollapse').getAttribute('aria-expanded') === 'false' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'false');
   $('btnSidebarExpand').click();
   check('展开项目侧栏仍保留当前项目', () => !$('projectSidebar').hidden && window.document.querySelectorAll('#projects .project.active').length === 1);
+  check('侧栏展开按钮语义与侧栏状态一致', () => $('btnSidebarCollapse').getAttribute('aria-expanded') === 'true' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'true');
   $('navGlobalMore').click();
   check('More 展开并提供真实入口', () => !$('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'true' && [...$('globalMoreMenu').querySelectorAll('button')].every((b) => typeof b.onclick === 'function'));
   $('navGlobalMore').click();
@@ -965,8 +981,10 @@ staticCheck();
   check('项目低频动作可展开', () => !$('projectActions').hidden && $('btnProjectMenu').getAttribute('aria-expanded') === 'true' && Boolean($('btnAddProject') && $('btnProjectSettings')));
   $('btnProjectMenu').click();
   check('项目低频动作可收起', () => $('projectActions').hidden);
+  $('groupHead').click();
+  check('搜索前项目区域实际折叠', () => !railGroup.classList.contains('open') && groupDisplay() === 'none');
   $('navSearch').click();
-  check('搜索入口聚焦现有会话搜索框', () => $('projectSidebar').classList.contains('search-open') && window.document.activeElement?.classList.contains('pj-search-input'));
+  check('搜索入口重新展开项目区域并聚焦搜索框', () => railGroup.classList.contains('open') && groupDisplay() !== 'none' && $('groupHead').getAttribute('aria-expanded') === 'true' && $('projectSidebar').classList.contains('search-open') && window.document.activeElement?.classList.contains('pj-search-input'));
   check('右下角没有重复的供应商按钮', () => $('btnCornerProviders') === null);
 
   // --- pi 就绪 → boot() ---
@@ -2706,11 +2724,10 @@ staticCheck();
   });
 
   // --- 项目分组折叠 ---
-  const group = $('groupHead').parentElement;
-  const before = group.classList.contains('open');
   $('groupHead').click();
-  check('分组折叠可切换', () => group.classList.contains('open') !== before);
+  check('项目分组点击后容器与内容实际折叠', () => !railGroup.classList.contains('open') && $('groupHead').getAttribute('aria-expanded') === 'false' && groupDisplay() === 'none');
   $('groupHead').click();
+  check('项目分组再次点击后容器与内容恢复', () => railGroup.classList.contains('open') && $('groupHead').getAttribute('aria-expanded') === 'true' && groupDisplay() !== 'none');
 
   // --- 项目切换 ---
   const items = [...window.document.querySelectorAll('#projects .project')];

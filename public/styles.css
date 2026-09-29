@@ -1967,9 +1967,9 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 
 /* P14-A: global navigation, project tree, and workspace shell. */
-:root{--shell:#171819;--main:#202122;--hover:#292b2d;--line-soft:#303234;--accent-soft:#333639}
+:root{--shell:#171819;--main:#202122;--hover:#292b2d;--line-soft:#303234;--accent-soft:#333639;--global-rail-width:52px}
 .app{min-width:0}
-.global-rail{width:52px;flex:0 0 52px;display:flex;flex-direction:column;align-items:center;background:#151617;border-right:1px solid var(--line-soft);padding:6px 0 10px;z-index:3}
+.global-rail{width:var(--global-rail-width);flex:0 0 var(--global-rail-width);display:flex;flex-direction:column;align-items:center;background:#151617;border-right:1px solid var(--line-soft);padding:6px 0 10px;z-index:3}
 .global-rail-brand{height:40px;display:grid;place-items:center;color:#e7e8e9;font-size:21px;font-weight:600}
 .global-rail-links,.global-rail-bottom{display:flex;flex-direction:column;align-items:center;gap:5px;width:100%}
 .global-rail-bottom{margin-top:auto}
@@ -2022,7 +2022,7 @@ button.pj-sess-primary{cursor:pointer}
 .quota[open]>summary:after{transform:rotate(180deg)}
 .quota-detail{padding:0 10px 10px}
 .project-sidebar .rail-foot{border-top:0;height:35px;flex-basis:35px}
-.global-more-menu{position:fixed;z-index:30;left:48px;bottom:43px;min-width:185px;padding:5px;background:#2a2c2e;border:1px solid #414448;border-radius:9px;box-shadow:0 8px 20px #0006}
+.global-more-menu{position:fixed;z-index:30;left:var(--global-rail-width);bottom:43px;min-width:185px;padding:5px;background:#2a2c2e;border:1px solid #414448;border-radius:9px;box-shadow:0 8px 20px #0006}
 .global-more-menu button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:32px;padding:0 9px;border:0;border-radius:5px;background:transparent;color:var(--t1);font:inherit;font-size:12px;text-align:left;cursor:pointer}
 .global-more-menu button:hover,.global-more-menu button:focus-visible{background:#3a3d40}
 .global-more-menu .rp-dot{position:static}
@@ -2032,4 +2032,4 @@ button.pj-sess-primary{cursor:pointer}
 .head-count{font-size:9px;color:var(--t3);position:absolute;right:-3px;bottom:-4px}
 .global-rail button:focus-visible,.project-sidebar button:focus-visible,.pj-sess:focus-visible{outline:2px solid #c5c9cc;outline-offset:2px}
 @media (max-width:900px){.project-sidebar{width:224px;flex-basis:224px}}
-@media (max-width:700px){.global-rail{width:46px;flex-basis:46px}.project-sidebar{width:190px;flex-basis:190px}.stage-head h1{font-size:12px}.share-btn{padding:0 6px}}
+@media (max-width:700px){:root{--global-rail-width:46px}.project-sidebar{width:190px;flex-basis:190px}.stage-head h1{font-size:12px}.share-btn{padding:0 6px}}

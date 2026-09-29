@@ -351,6 +351,18 @@ async function main() {
   await shotOf('#projectSidebar', '57-shell-expanded', 'P14-A：Rail + 项目侧栏 + 工作区', ['新对话', '搜索会话', '项目'], shellChecks);
   await shotOf('.pj-sessions', '58-project-sessions', 'P14-A：项目下有多条会话', ['发酵罐', 'README', 'server.js'], [['会话都属于当前项目', `document.querySelector('.project.active').nextElementSibling?.classList.contains('pj-sessions')`]]);
   await shotOf('.pj-sess.on', '59-session-selected', 'P14-A：当前会话选中', ['发酵罐'], [['选中项唯一且有语义', `document.querySelectorAll('.pj-sess[aria-current="true"]').length === 1`]]);
+  await evalJs(`document.querySelector('#groupHead').click()`);
+  await shotOf('#groupHead', '67-project-group-collapsed', 'P14-A：项目分组点击后实际折叠', ['项目'], [
+    ['项目容器不含 open', `!document.querySelector('#groupHead').closest('.rail-group').classList.contains('open')`],
+    ['项目内容不可见', `getComputedStyle(document.querySelector('#groupBody')).display === 'none' && document.querySelector('#groupBody').getBoundingClientRect().height === 0`],
+    ['折叠语义一致', `document.querySelector('#groupHead').getAttribute('aria-expanded') === 'false'`],
+  ]);
+  await evalJs(`document.querySelector('#groupHead').click()`);
+  await shotOf('#groupHead', '68-project-group-restored', 'P14-A：项目分组再次点击后恢复', ['项目'], [
+    ['项目容器含 open', `document.querySelector('#groupHead').closest('.rail-group').classList.contains('open')`],
+    ['项目内容可见', `getComputedStyle(document.querySelector('#groupBody')).display !== 'none' && document.querySelector('#groupBody').getBoundingClientRect().height > 0`],
+    ['展开语义一致', `document.querySelector('#groupHead').getAttribute('aria-expanded') === 'true'`],
+  ]);
   await evalJs(`document.querySelector('#btnSidebarCollapse').click()`);
   await shotOf('#globalRail', '60-sidebar-collapsed', 'P14-A：折叠后 Rail 仍在', [], [['侧栏已隐藏且工作区在视口', `document.querySelector('#projectSidebar').hidden && document.querySelector('#workspace').getBoundingClientRect().right <= innerWidth + 1`]]);
   await evalJs(`document.querySelector('#btnSidebarExpand').click()`);
@@ -358,7 +370,7 @@ async function main() {
   await evalJs(`document.querySelector('#usageDetails summary').click()`);
   await shotOf('#usageDetails', '62-usage-expanded', 'P14-A：用量明细', ['输入 / 输出', '缓存读取', '累计成本'], [['详情已展开', `document.querySelector('#usageDetails').open`]]);
   await evalJs(`document.querySelector('#navGlobalMore').click()`);
-  await shotOf('#globalMoreMenu', '63-global-more', 'P14-A：低频入口', ['诊断', '模型供应商'], [['More 展开且入口为真按钮', `!document.querySelector('#globalMoreMenu').hidden && [...document.querySelectorAll('#globalMoreMenu button')].every(b => b.tagName === 'BUTTON' && typeof b.onclick === 'function')`]]);
+  await shotOf('#globalMoreMenu', '63-global-more', 'P14-A：低频入口', ['诊断', '模型供应商'], [['More 展开且入口为真按钮', `!document.querySelector('#globalMoreMenu').hidden && [...document.querySelectorAll('#globalMoreMenu button')].every(b => b.tagName === 'BUTTON' && typeof b.onclick === 'function')`], ['More 左边缘贴齐 Global Rail', `Math.abs(document.querySelector('#globalMoreMenu').getBoundingClientRect().left - document.querySelector('#globalRail').getBoundingClientRect().right) <= 1`]]);
   await evalJs(`document.querySelector('#navGlobalMore').click()`);
   await evalJs(`document.querySelector('#navChanges').click()`);
   await shotOf('#globalRail', '64-rail-changes', 'P14-A：文件变更激活', [], [['文件变更为唯一激活', `document.querySelector('#navChanges[aria-current="page"]') && document.querySelectorAll('#globalRail [aria-current="page"]').length === 1`]]);
