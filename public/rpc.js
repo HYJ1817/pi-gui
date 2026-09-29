@@ -19,6 +19,7 @@ import { applyState, applyStats, onModels, onThinkingLevels } from './usage.js';
 import { autoGrow, updateSendState } from './composer.js';
 import { attachmentImages, buildMessage, renderAttachments } from './attachments.js';
 import { clearChanges } from './changes.js';
+import { showChat } from './ui/workspace-surface.js';
 
 /** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
 export function boot() {
@@ -146,7 +147,8 @@ export function setSessionListRefresh(fn) {
 }
 
 /**
- * 会话换掉之后要做的界面收尾：清空对话区与变更账本，再 boot() 按新会话重建。
+ * 会话换掉之后要做的界面收尾：回到 Chat，清空对话区与变更账本，
+ * 再 boot() 按新会话重建。
  *
  * 抽出来是因为**有三条路径**都会换会话：pi 主动报的 `new_session` / `fork`
  * （走 onResponse）、以及用户在侧栏点某条旧会话（走后端 HTTP，不经过这里）。
@@ -158,6 +160,7 @@ export function setSessionListRefresh(fn) {
  * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
 export function afterSessionSwitch() {
+  showChat();
   clearThread();
   // 换了一条工作线，上一段的文件变更记录不再适用。
   // 注意 fork 也不清：分叉不改磁盘，之前改过的文件依然处于改动状态。

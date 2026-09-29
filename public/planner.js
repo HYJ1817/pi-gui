@@ -40,7 +40,7 @@ import { toast } from './ui/toast.js';
 import { S, ownsWorkspace } from './state.js';
 import { afterSessionSwitch } from './rpc.js';
 import { openChangesPanel } from './git.js';
-import { openWorkSurface, showChat } from './ui/workspace-surface.js';
+import { openWorkSurface } from './ui/workspace-surface.js';
 
 /* ---------- 状态与文案表 ---------- */
 
@@ -1766,7 +1766,6 @@ export function openPlanner(focus = null) {
           toast(r.error || '打开会话失败', 'warn');
           return;
         }
-        showChat();
         afterSessionSwitch();
         toast('已切到任务会话：' + (r.title || '（无标题）'), 'info');
       } catch (err) {
