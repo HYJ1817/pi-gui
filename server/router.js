@@ -66,6 +66,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param projectConfig 当前项目的配置（handle）
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
+ * @param extensions    Extension 只读注册表（handle）
  * @param sessions      会话列表与切换（handle）
  * @param sessionSearch 会话全文搜索（handle）
  * @param planner       Planner / Agent 编排（handle）
@@ -84,6 +85,7 @@ export function createRouter({
   projectConfig,
   skills,
   mcp,
+  extensions,
   sessions,
   sessionSearch,
   planner,
@@ -181,6 +183,9 @@ export function createRouter({
     }
     if (url.pathname === '/api/mcp') {
       return mcp.handle(req, res, url);
+    }
+    if (url.pathname === '/api/extensions') {
+      return extensions.handle(req, res, url);
     }
     /* 会话全文搜索（P3）。
      * **必须排在下面 `/api/sessions/` 前缀匹配之前** —— 否则会被会话模块整个吃掉，

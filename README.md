@@ -134,12 +134,14 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 
 → [architecture.md](docs/architecture.md#六前端渲染管线)
 
-### Skills / 扩展
+### Skills / Extensions / MCP
 
 管的是**你已经装好的**能力，不是商店 —— 没有下载、没有安装。
 
 - **Skills** 是 pi 的原生能力：发现、查看、启停用 pi 官方的 override 机制，
   改完会自动重启 pi（pi 没有文件监听）
+- **Extensions**：只读发现当前磁盘上的候选项，分开显示安装、配置与加载证据。
+  Pi RPC 没有已注册工具清单，所以不会猜某个扩展提供了什么工具；安装与启停仍用 Pi 官方 CLI。
 - **MCP**：pi 目前**没有原生 MCP**，而且是有意为之。所以这个标签页不是
   Server 列表，而是一份能力报告 —— 读你本机的 pi 包给出结论与原文证据，
   并指出官方替代路径是 extension。**不假装有一堆 Server 可以增删改**
@@ -246,7 +248,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 27 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 28 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -296,7 +298,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [planner.md](docs/planner.md) | 任务编排：Planner/Executor、Agent registry、DAG、失败与恢复、限制 |
 | [workflows.md](docs/workflows.md) | 任务工作流：任务 ↔ 会话、任务 ↔ 文件、打开会话、项目隔离、元数据边界 |
 | [reviews.md](docs/reviews.md) | 人工审阅：执行结果 ≠ 验收、三个审阅状态、验证快照、当前 diff、冲突与 revision、限制 |
-| [extensions.md](docs/extensions.md) | Skills 发现与启停、项目信任、MCP 能力报告与为什么不虚构 Server |
+| [extensions.md](docs/extensions.md) | Skills 发现与启停、Extension 只读发现与能力证据、MCP 能力报告 |
 | [project-config.md](docs/project-config.md) | 项目配置：位置、字段、优先级、指令注入、坏配置行为 |
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |

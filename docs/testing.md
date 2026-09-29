@@ -27,13 +27,19 @@
 不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
 就是「本地跑了、CI 没跑」的假绿。
 
-`npm test` 里现在有 27 个套件，全部是**纯自动化**：
+P15 的 `tests/extensions.cjs` 使用 `os.tmpdir()` 中的 Pi 目录和假 RPC，覆盖发现、
+作用域、重复、坏 metadata、缺失 package、路径越界、command 关联、未知工具、
+状态区分、重启与项目隔离、错误脱敏和不支持的写操作。`tests/smoke.cjs` 检查
+Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
+Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
+
+`npm test` 里现在有 28 个套件，全部是**纯自动化**：
 
 ```
-smoke 848 · git 161 · modules 114 · reliability · interactions · port-owner
+smoke 970 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 133
 review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71
+sessions 77 · session-search 71 · extensions 23
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 75
@@ -522,7 +528,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 26 个套件）
+版本一致性（含 tag）  →  npm test（A 层 28 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256

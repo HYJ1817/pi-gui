@@ -139,6 +139,7 @@ export const setSkillEnabled = (id, enabled) =>
 /** MCP 能力报告。pi 0.87.0 没有原生 MCP，所以这里返回的是「为什么没有 + 怎么办」，
  *  不是一份 Server 列表。 */
 export const fetchMcp = () => getJSON('/api/mcp');
+export const fetchExtensions = () => getJSON('/api/extensions');
 
 /* ---------- 附件上传 ---------- */
 

@@ -161,9 +161,17 @@ SVG 图标常量），所有文本走 `textContent`。于是「记得转义」�
 
 **威胁**：扩展文件里可能有密钥。
 
-**做法**：Skills / MCP 面板**只读名字、类型、大小、时间，不读内容、不执行**。
-所以哪怕扩展文件里写着密钥，它也不会出现在接口响应里
+**做法**：Extension discovery 不 import/require 候选代码，只读目录项与受限大小的
+`package.json` 元数据；只输出已知字段，不回显配置中的未知字段或 Pi 原始错误。
+manifest 内的相对路径须留在 package 根内，符号链接逃逸也拒绝。
+Skills 详情会按用户操作读取 `SKILL.md` 正文；MCP 报告只读目录元信息。
+所以扩展源码里写着密钥，也不会因 discovery 出现在接口响应里
 （`tests/skills.cjs` 直接断言 `ghp_LEAK_ME` 不出现）。
+
+Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能读写文件、执行 shell、
+访问网络、驱动浏览器或连接外部服务。Pi GUI 不对它提供 sandbox，也不安装或执行
+候选代码。renderer 不读取 extension secrets、provider key、OAuth token 或 npm token。
+诊断导出继续使用既有脱敏规则；P15 API 仅返回安全的状态与错误阶段。
 
 ## 四、文件系统边界
 

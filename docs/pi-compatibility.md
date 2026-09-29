@@ -42,6 +42,7 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 | `sessionNaming` | `set_session_name`（+ 会话文件里的 `session_info.name`） | 给会话改名 |
 | `toolEvents` | `tool_execution_start` / `_update` / `_end` | Tool Timeline |
 | `extensionUi` | `extension_ui_request` / `extension_ui_response` | pi 扩展向用户提问时的选择框 |
+| Extension commands | `get_commands` 中 `source:"extension"` 及 `sourceInfo.path` | P15 已加载命令的来源证据；拿不到时保持未知 |
 | `sessionJsonl` | 能认出会话文件（header 里的 `id` / `cwd`） | 会话列表、搜索、归档 / 删除 |
 
 ## 三、核心能力 vs 可降级能力
@@ -58,6 +59,7 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 | `sessionNaming` | 藏起改名入口（不做一个按了没反应的按钮） |
 | `toolEvents` | Tool Timeline 缺 `tool_execution_end` 的条目显示成「未完成」（虚线圆），**不会一直停在「运行中」** |
 | `extensionUi` | pi 扩展的提问框不出现；对话本身不受影响 |
+| Extension commands | 扩展列表仍可只读发现候选项，加载与 capability 显示未知；聊天不受影响 |
 | `sessionJsonl` | 会话列表 / 搜索降级（列不出来），当前会话的 RPC 不受影响 |
 
 > `toolEvents` 的降级不是靠兼容层「判死」，而是**结构性**的：pi 崩溃 / 中断时

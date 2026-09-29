@@ -23,7 +23,7 @@
  * 后端在自己的索引里按 ID 查真实路径。所以这里不需要、也不应该做路径校验。
  */
 import { S, ownsWorkspace } from './state.js';
-import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, restartBackend } from './api.js';
+import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchExtensions, restartBackend } from './api.js';
 import { confirmModal } from './ui/modal.js';
 import { openWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
@@ -357,6 +357,85 @@ function skillsTab(card, isCurrent) {
 
 /* ---------- MCP 标签页 ---------- */
 
+/* Pi RPC 只暴露 extension 命令及来源，没有已注册 tool 的清单。
+ * 这里仅展示后端可验证的状态，不从文件名猜能力。 */
+function extensionTab(card, isCurrent) {
+  const wrap = el('div', 'ext-skills');
+  card.appendChild(wrap);
+  const bar = el('div', 'ext-bar');
+  const refresh = el('button', 'btn tiny', '刷新');
+  refresh.type = 'button';
+  bar.appendChild(refresh);
+  const summary = el('div', 'ext-summary');
+  const split = el('div', 'ext-split');
+  const list = el('div', 'ext-list');
+  const detail = el('div', 'ext-detail');
+  split.append(list, detail);
+  wrap.append(bar, summary, split);
+  let selected = null;
+  let data = null;
+
+  function showDetail(item) {
+    detail.replaceChildren();
+    if (!item) { detail.appendChild(el('div', 'ext-empty', '选择一个 Extension 查看详情。')); return; }
+    detail.appendChild(el('h4', '', item.displayName || item.name));
+    const rows = el('div', 'ext-rows');
+    for (const [label, value] of [
+      ['版本', item.version || '未知'], ['来源', item.source?.type || 'unknown'],
+      ['位置', item.source?.location || '未知'], ['作用域', item.scope === 'global' ? '用户' : item.scope === 'project' ? '项目' : '未知'],
+      ['已安装', item.state?.installed === null ? '未知' : item.state?.installed ? '是' : '否'],
+      ['已启用', item.state?.enabled === null ? '未知' : item.state?.enabled ? '是' : '否'],
+      ['已加载', item.state?.loaded === null ? '无法确认' : item.state?.loaded ? '是' : '否'],
+      ['需要重启', item.state?.restartRequired === null ? '未知' : item.state?.restartRequired ? '是' : '否'],
+    ]) rows.appendChild(row(label, value));
+    detail.appendChild(rows);
+    if (item.description) detail.appendChild(note(item.description, 'dim'));
+    detail.appendChild(el('div', 'ext-sec-head', '已确认的能力'));
+    if (item.capabilities?.length) {
+      for (const capability of item.capabilities) detail.appendChild(note(`${capability.type}: ${capability.displayName || capability.id}`, 'dim'));
+    } else detail.appendChild(note('暂无可确认的能力。', 'dim'));
+    detail.appendChild(note('Pi RPC 未提供已注册工具列表；工具来源未知时，聊天时间线仍按原始名称显示。', 'dim'));
+    if (item.state?.error) detail.appendChild(note(`${item.state.error.phase}: ${item.state.error.message}`, 'warn'));
+  }
+
+  function render() {
+    list.replaceChildren();
+    const items = data?.extensions || [];
+    summary.replaceChildren(el('span', 'ext-sum-label', `发现 ${items.length} 个 Extension · 加载状态仅在 Pi 提供证据时确认`));
+    if (!data?.piReachable) summary.appendChild(note('Pi 未应答；无法确认实际加载状态。', 'warn'));
+    if (!items.length) list.appendChild(el('div', 'ext-empty', '没有发现可只读定位的 Extension。'));
+    for (const item of items) {
+      const state = item.state || {};
+      const label = state.error ? (state.error.phase === 'discovery' ? '发现异常' : '加载失败') : state.loaded === true ? '已加载' : state.loaded === false ? '未加载' : '加载未知';
+      const button = el('button', 'ext-item ext-extension-item');
+      button.type = 'button';
+      button.classList.toggle('on', selected === item.id);
+      button.appendChild(el('span', 'ext-name', item.displayName || item.name));
+      button.appendChild(el('span', 'ext-badge', label));
+      button.appendChild(el('div', 'ext-item-desc', `${item.description || '（没有简介）'} · ${item.source?.type === 'local' ? '本地' : item.source?.type || '未知来源'} · ${item.capabilities?.length || 0} 个已确认能力`));
+      button.onclick = () => { selected = item.id; render(); showDetail(item); };
+      list.appendChild(button);
+    }
+    showDetail(items.find((item) => item.id === selected) || null);
+  }
+  async function load() {
+    const generation = S.workspaceGeneration;
+    list.replaceChildren(el('div', 'ext-empty', '正在读取 Extensions…'));
+    const result = await fetchExtensions();
+    if (!isCurrent() || !ownsWorkspace(generation)) return;
+    if (!result || result.ok === false) {
+      list.replaceChildren(el('div', 'ext-empty', 'Extension 发现暂不可用；聊天仍可正常使用。'));
+      return;
+    }
+    data = result;
+    render();
+  }
+  refresh.onclick = load;
+  load();
+}
+
+/* ---------- MCP 标签页 ---------- */
+
 function mcpTab(card, isCurrent) {
   const wrap = el('div', 'ext-mcp');
   card.appendChild(wrap);
@@ -473,8 +552,7 @@ export function openExtensions() {
       el(
         'div',
         'modal-desc',
-        '这里显示的是 pi 自己的扩展能力：Skills 由 pi 从固定目录发现，MCP 则要看你的 pi 版本是否支持。' +
-          'Pi GUI 不另建一套扩展系统 —— 显示的每一项都能在 pi 那边找到出处。',
+        'Skills 与 Extension 分开列出。Extension 只读发现已存在的本地资源；MCP 继续显示 Pi 的能力报告。',
       ),
     );
 
@@ -484,7 +562,7 @@ export function openExtensions() {
     const body = el('div', 'ext-body');
     body.id = 'extensionsTabPanel';
     body.setAttribute('role', 'tabpanel');
-    const panels = { skills: null, mcp: null };
+    const panels = { skills: null, extensions: null, mcp: null };
     let active = 'skills';
 
     const render = () => {
@@ -492,13 +570,14 @@ export function openExtensions() {
         btn.classList.toggle('on', btn.dataset.tab === active);
         btn.setAttribute('aria-selected', String(btn.dataset.tab === active));
       }
-      body.setAttribute('aria-labelledby', active === 'skills' ? 'extensionsTabSkills' : 'extensionsTabMcp');
+      body.setAttribute('aria-labelledby', active === 'skills' ? 'extensionsTabSkills' : active === 'extensions' ? 'extensionsTabExtensions' : 'extensionsTabMcp');
       body.innerHTML = '';
       if (!panels[active]) {
         const holder = el('div', 'ext-panel');
         panels[active] = holder;
         body.appendChild(holder);
         if (active === 'skills') skillsTab(holder, instance.isCurrent);
+        else if (active === 'extensions') extensionTab(holder, instance.isCurrent);
         else mcpTab(holder, instance.isCurrent);
       } else {
         // 已经建过的面板：重新挂回去（innerHTML 清空不会销毁 JS 里的引用，
@@ -509,11 +588,12 @@ export function openExtensions() {
 
     for (const [key, label] of [
       ['skills', 'Skills'],
+      ['extensions', 'Extensions'],
       ['mcp', 'MCP'],
     ]) {
       const b = el('button', 'ext-tab', label);
       b.type = 'button';
-      b.id = key === 'skills' ? 'extensionsTabSkills' : 'extensionsTabMcp';
+      b.id = key === 'skills' ? 'extensionsTabSkills' : key === 'extensions' ? 'extensionsTabExtensions' : 'extensionsTabMcp';
       b.setAttribute('role', 'tab');
       b.setAttribute('aria-controls', body.id);
       b.dataset.tab = key;

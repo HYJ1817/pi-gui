@@ -1047,6 +1047,18 @@ async function main() {
     ['历史已重建', `document.querySelector('#chatView').textContent.includes('这是 README 会话的历史消息')`],
   ]);
 
+  /* P15: 在真浏览器布局中检查 Extension 列表和详情。 */
+  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(260);
+  await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);
+  for (let i=0; i<40 && !await evalJs(`document.querySelector('#workSurface .ext-extension-item')`); i++) await sleep(50);
+  await evalJs(`document.querySelector('#workSurface .ext-extension-item').click()`);
+  await shotOf('#workSurface', '155-extension-registry', 'P15：Extension 发现列表和只读详情', ['example-tools', '1.2.3', 'command: example'], [
+    ...viewportChecks('#workSurface'),
+    ['Extensions 标签选中', `document.querySelector('#extensionsTabExtensions').getAttribute('aria-selected')==='true'`],
+    ['工具来源未知有明确说明', `document.querySelector('#workSurface .ext-detail').textContent.includes('未提供已注册工具列表')`],
+  ]);
+
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

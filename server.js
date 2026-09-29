@@ -45,6 +45,7 @@ import { createProjectConfig } from './server/project-config.js';
 import { createProviders } from './server/providers.js';
 import { createRouter } from './server/router.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
+import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
@@ -154,9 +155,15 @@ const piCompat = createPiCompat({
 /* pi 桥接。projectLaunch 就是 projectConfig 本身 —— rpc-bridge 只认
  * prepareLaunch()（spawn 前，允许写文件）与 launchArgs()（纯读）两个方法，
  * 不知道配置里有什么。见 server/rpc-bridge.js 的参数说明。 */
+let extensionRegistryRef = null;
 const rpc = createRpcBridge({
   runtime,
-  publish: sse.publish,
+  publish: (event) => {
+    extensionRegistryRef?.observe(event);
+    sse.publish(event?.type === 'extension_error'
+      ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
+      : event);
+  },
   piBin: PI_BIN,
   isWin: IS_WIN,
   projectLaunch: projectConfig,
@@ -208,6 +215,11 @@ const gitRoutes = createGitRoutes({ runtime });
  * 「界面说有一堆 skill、pi 一个都没加载」。 */
 const skills = createSkills({ runtime, rpc, env: process.env });
 const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
+const extensions = createExtensionRegistry({
+  runtime, rpc, env: process.env,
+  readTrust: async () => (await skills.readIndex()).trust,
+});
+extensionRegistryRef = extensions;
 
 /* Planner 用 pi 跑任务时的独立会话目录。
  *
@@ -344,6 +356,7 @@ const route = createRouter({
   projectConfig,
   skills,
   mcp,
+  extensions,
   sessions,
   sessionSearch,
   planner,

@@ -2,7 +2,7 @@
 
 界面分为三列：52px 的 Global Rail、项目与会话侧栏、工作区。700px 窗口下 Rail 收至 46px，项目侧栏收至 190px；侧栏也可手动折叠，折叠只改变 DOM 可见性，不写入项目或会话状态。展开后仍定位同一项目和会话。
 
-Global Rail 只调用已有功能：对话返回主工作区；任务打开 Planner；文件变更打开 Git Changes；扩展打开 Skills / MCP；更多菜单提供诊断和模型供应商。版本检查仍在诊断面板里，发现新版本时 Rail 更多入口显示提示点。分支树和会话操作保留在工作区顶部的原有入口。没有 Voice、Automations、Worktree、Cloud Tasks 或 PR Review 入口。
+Global Rail 只调用已有功能：对话返回主工作区；任务打开 Planner；文件变更打开 Git Changes；扩展打开 Skills / Extensions / MCP；更多菜单提供诊断和模型供应商。版本检查仍在诊断面板里，发现新版本时 Rail 更多入口显示提示点。分支树和会话操作保留在工作区顶部的原有入口。没有 Voice、Automations、Worktree、Cloud Tasks 或 PR Review 入口。
 
 项目侧栏顶部是新对话和会话搜索；搜索仍调用既有当前项目搜索模块。项目分组里直接列出当前项目的 Session，切换项目仍按原逻辑重启 pi。添加文件夹与项目设置移入项目操作菜单；删除项目保留在项目行的悬停或键盘聚焦动作里。归档列表和会话操作沿用原来的会话模块。用量常态只显示上下文摘要，展开显示输入、输出、缓存、成本；数据仍由原来的 `get_session_stats` 更新。
 

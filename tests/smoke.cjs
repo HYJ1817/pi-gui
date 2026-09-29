@@ -134,6 +134,20 @@ let stubSkills = {
 /* PUT /api/skills/<id> 的应答桩；置为对象就能模拟失败。 */
 let stubSkillToggle = null;
 const skillsCalls = [];
+const stubExtensions = {
+  ok: true, piReachable: true, actions: { install: false, toggle: false, remove: false, refresh: true, restart: true },
+  diagnostics: [], capabilityRegistry: { commands: [{ name: 'hello', extensionId: 'ext-1' }], tools: [], toolRegistryAvailable: false },
+  extensions: [
+    { id: 'ext-1', name: 'sample-extension', displayName: 'Sample Extension', version: '1.0.0', description: 'Fixture extension',
+      source: { type: 'local', location: 'C:/fixture/extensions/sample.ts' }, scope: 'global',
+      state: { installed: true, enabled: true, loaded: true, restartRequired: null, error: null },
+      capabilities: [{ type: 'command', id: 'hello', displayName: 'hello' }], configurable: false },
+    { id: 'ext-2', name: 'broken-extension', displayName: 'Broken Extension', version: null, description: null,
+      source: { type: 'local', location: 'C:/fixture/extensions/broken.ts' }, scope: 'project',
+      state: { installed: true, enabled: null, loaded: false, restartRequired: null,
+        error: { extensionId: 'ext-2', phase: 'load', message: 'Pi 报告扩展加载错误' } }, capabilities: [], configurable: false },
+  ],
+};
 
 /* /api/mcp 的桩。形状照抄后端真实返回（含 evidence 与 extensionRoute）。 */
 let stubMcp = {
@@ -828,6 +842,7 @@ window.fetch = async (url, opts) => {
     mcpCalls.push(true);
     return { json: async () => stubMcp };
   }
+  if (u.includes('/api/extensions')) return { json: async () => stubExtensions };
   if (u.includes('/api/skills')) {
     const isPut = Boolean(opts && opts.method === 'PUT');
     const body = isPut && opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
@@ -3168,10 +3183,19 @@ staticCheck();
     await new Promise((r) => setTimeout(r, 30));
     const card = $('workSurface');
 
-    check('扩展面板：打开后有 Skills / MCP 两个 Tab', () => {
+    check('扩展面板：Skills / Extensions / MCP 各有独立 Tab', () => {
       const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
-      return (labels.length === 2 && labels[0] === 'Skills' && labels[1] === 'MCP') || JSON.stringify(labels);
+      return (labels.length === 3 && labels[0] === 'Skills' && labels[1] === 'Extensions' && labels[2] === 'MCP') || JSON.stringify(labels);
     });
+    card.querySelector('#extensionsTabExtensions')?.click();
+    await new Promise((r) => setTimeout(r, 30));
+    check('P15 Extension 列表分开显示加载状态与来源', () =>
+      card.textContent.includes('Sample Extension') && card.textContent.includes('Broken Extension') &&
+      card.textContent.includes('已加载') && card.textContent.includes('加载失败') && card.textContent.includes('本地'));
+    card.querySelector('.ext-extension-item')?.click();
+    check('P15 Extension 详情显示命令并说明 tool registry 限制', () =>
+      card.textContent.includes('hello') && card.textContent.includes('Pi RPC 未提供已注册工具列表'));
+    card.querySelector('#extensionsTabSkills')?.click();
     check('扩展面板：Skills 列表渲染出名称与状态', () => {
       const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
       return names.includes('code-review') || JSON.stringify(names);

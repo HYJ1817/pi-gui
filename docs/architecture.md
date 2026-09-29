@@ -233,6 +233,9 @@ get_messages ─┘
   - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。去读本机装的 pi 包、给出
     「支不支持」的结论与原文证据，并列出官方替代路径 extension 下已有哪些东西。
     **只读名字，不读内容、不执行**
+  - `extension-registry.js` — 只读发现 Pi 的本地与 npm Extension 候选项；用
+    `get_commands.sourceInfo.path` 关联可验证命令。已注册工具列表当前不在 Pi RPC 中，
+    所以 capability registry 不猜工具归属。Pi 重启和项目切换清掉上一轮错误证据。
   - `sessions.js` — 会话列表 / 切换 / 改名 / 归档 / 删除。见 [sessions.md](sessions.md)
   - `update-check.js` — **版本检查**：只读公开 GitHub Release 元数据，判断有没有新版。
     自带 SemVer 纯函数、30 分钟内存缓存、single-flight 与错误分类；

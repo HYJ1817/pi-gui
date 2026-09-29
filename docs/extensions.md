@@ -1,10 +1,41 @@
-# 扩展（Skills / MCP）
+# 扩展（Skills / Extensions / MCP）
 
-侧栏的**扩展**是 Skills 与 MCP 两个标签页。它管的是**你已经装好的**能力，
+侧栏的**扩展**是 Skills、Extensions 与 MCP 三个标签页。它管的是**你已经装好的**能力，
 不是商店 —— 没有下载、没有安装、没有远程代码执行。
 
 **Pi GUI = pi 的 GUI，不是第二套扩展系统。** pi 已有的机制就做 GUI 管理，
 pi 没有的（MCP）**不发明兼容层**，而是如实报告 + 指出官方替代路径。
+
+## Extensions（P15 基础设施）
+
+Skill 是给模型阅读的指令，Extension 是在 Pi 进程中执行的第三方代码；两者保持独立。
+本机 Pi 0.87.0 的来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
+`index.ts|index.js`、受信任项目的 `.pi/extensions`、`settings.json` 的
+`extensions` / `packages`，以及 CLI `-e`。项目来源受 Pi 的信任判定约束。
+Pi package 可以由 npm、git 或本地路径提供；Pi 自己的解析器还支持 manifest
+模式和覆盖规则。GUI 只读扫描能安全定位的本地文件与 npm package，不执行
+package 解析器（它可能安装缺失包）。复杂模式及无法只读定位的来源会给出诊断，
+不假装已完整解析。重复路径合并，package manifest 的路径必须留在 package 根内。
+
+`GET /api/extensions` 返回统一的 `extensions[]` 与 `capabilityRegistry`。
+`installed`、`enabled`、`loaded` 分开表达；缺证据用 `null`，不把“没观察到”
+写成“未加载”。版本只读 `package.json`；可验证的 command 来自 Pi RPC
+`get_commands` 的 `sourceInfo.path`。本机 RPC **没有** extension 或已注册 tool
+列表；`get_state` 也没有这些字段。因此当前工具来源保持未知，Capability Registry
+只记录已证实的 command；未来若 Pi 提供带来源的工具清单，
+`mapRegisteredTools()` 可把多个工具映射到同一个 extension。未知工具继续由现有
+Tool Timeline 显示原始名称。
+
+当前页面支持查看、刷新、详情；**不支持**从 GUI 安装、删除或启停 Extension。
+Pi 官方有 `pi install` 和交互式 `pi config`，但没有对应的稳定 RPC 管理接口。
+GUI 不调用安装命令，也不改用户的 Pi settings。用户在 Pi 外部变更配置后可走
+已有的重启 Pi 入口；桥接先停旧进程、再启动新进程，前端在重启期间锁住 Composer，
+workspace generation 防止旧请求污染新项目。Registry 在新 bridge run 清除旧错误，
+重新请求命令证据。没有证据时 `restartRequired` 保持 `null`。
+
+Extension 失败只影响其状态行；发现接口失败会显示重试提示，基础聊天仍可用。
+API 的错误只给 phase 与安全文案，不回显可能包含凭据的原始 Pi 错误。
+CLI `-e` 是临时来源，但当前 GUI 无法从 RPC 列出它，因此不报告为已发现。
 
 ## Skills
 
@@ -131,8 +162,8 @@ pi 包里没有任何 MCP 模块，也没有 `mcpServers` / `.mcp.json` 这类�
 - **不接受客户端传路径**：前端只拿得到 skill 的稳定 ID（路径的哈希前缀），
   真实路径由后端在自己的索引里查。读文件前还会再校验一次「确实落在已知
   发现根之下」
-- **扩展目录只读名字、类型、大小、时间，不读内容、不执行** ——
-  所以哪怕扩展文件里写着密钥，它也不会出现在接口响应里
+- **Extension 发现只读目录项和限长 `package.json` 元数据，不读源码、不执行** ——
+  配置原文和 Pi 原始错误不会进入接口响应；可疑的 description 也不会展示
 - 一条 skill 坏了（缺 `description`、读不出来、frontmatter 不合法）
   只影响它自己，在它那一行就地报错，不会让整页打不开
 

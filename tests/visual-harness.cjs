@@ -768,6 +768,15 @@ const server = http.createServer(async (req, res) => {
     ],
   });
   if (p.startsWith('/api/skills/') && req.method === 'GET') return json(res, 200, { ok: true, content: '# Skill\n\n这是可复现的 SKILL.md 详情。', files: [], note: '' });
+  if (p === '/api/extensions') return json(res, 200, {
+    ok: true, hasProject: true, piReachable: true, diagnostics: [],
+    extensions: [{ id: 'fixture-extension', name: 'example-tools', displayName: 'example-tools',
+      version: '1.2.3', description: '夹具扩展，仅用于展示', source: { type: 'local', location: 'C:\\fixture\\.pi\\extensions\\example-tools.ts' },
+      scope: 'project', state: { installed: true, enabled: true, loaded: true, restartRequired: null, error: null },
+      capabilities: [{ type: 'command', id: 'example', displayName: 'example' }], configurable: false, declarations: 1 }],
+    capabilityRegistry: { commands: [{ name: 'example', extensionId: 'fixture-extension' }], tools: [], toolRegistryAvailable: false },
+    actions: { install: false, toggle: false, remove: false, refresh: true, restart: true },
+  });
   if (p === '/api/mcp') return json(res, 200, {
     ok: true, supported: false, piVersion: '0.87.0', reason: '这个 pi 没有原生 MCP 支持。',
     evidence: 'pi 官方能力报告', servers: [], serversNote: '没有可列出的 MCP Server。',
