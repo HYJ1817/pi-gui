@@ -26,14 +26,14 @@ function fileToDataUrl(file) {
 function attMeta(a) {
   if (a.loading) return '解析中…';
   if (a.error) return a.error;
-  if (a.kind === 'image') return `图片 · ${fmtSize(a.size)}`;
+  if (a.kind === 'image') return `已就绪 · 图片 · ${fmtSize(a.size)}`;
   if (a.kind === 'text') {
     const bits = [];
     if (a.pages) bits.push(a.pages + ' 页');
     bits.push(fmt(a.chars) + ' 字');
     if (a.truncated) bits.push('已截断');
     if (a.note) bits.push(a.note);
-    return bits.join(' · ');
+    return `已就绪 · ${bits.join(' · ')}`;
   }
   return `二进制 · ${fmtSize(a.size)} · pi 读不了`;
 }
@@ -105,6 +105,7 @@ export function renderAttachments() {
   for (const a of S.attachments) {
     const d = document.createElement('div');
     d.className = 'att' + (a.loading ? ' loading' : '') + (a.error ? ' err' : '');
+    d.setAttribute('role', 'listitem');
 
     if (a.kind === 'image' && a.dataUrl) {
       const th = document.createElement('div');
@@ -141,8 +142,10 @@ export function renderAttachments() {
     d.appendChild(body);
 
     const x = document.createElement('button');
+    x.type = 'button';
     x.className = 'att-x';
     x.title = '移除';
+    x.setAttribute('aria-label', `移除附件：${a.name}`);
     x.appendChild(icon(['M7 7l10 10', 'M17 7L7 17']));
     x.onclick = (e) => {
       e.stopPropagation();

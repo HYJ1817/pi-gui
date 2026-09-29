@@ -12,8 +12,17 @@ import { setStreaming } from './messages.js';
 export function applyState(d) {
   S.ready = true;
   S.state = d;
-  if (d.model) el.modelText.textContent = d.model.name || d.model.id || '模型';
-  if (d.thinkingLevel) el.thinkText.textContent = '思考 ' + d.thinkingLevel;
+  if (d.model) {
+    const modelName = d.model.name || d.model.id || '模型';
+    el.modelText.textContent = modelName;
+    el.btnModel.title = `切换模型：${modelName}`;
+    el.btnModel.setAttribute('aria-label', `切换模型：${modelName}`);
+  }
+  if (d.thinkingLevel) {
+    el.thinkText.textContent = '思考 ' + d.thinkingLevel;
+    el.btnThink.title = `思考强度：${d.thinkingLevel}`;
+    el.btnThink.setAttribute('aria-label', `思考强度：${d.thinkingLevel}`);
+  }
   if (d.sessionName) setTitleText(d.sessionName);
   el.footName.textContent = d.sessionName || '本地会话';
   setStreaming(Boolean(d.isStreaming));
@@ -61,6 +70,7 @@ export function renderCtxChip() {
     el.ctxPct.textContent = '—';
     el.ctxRing.style.strokeDashoffset = String(RING_LEN);
     el.btnCtx.className = 'ctx-chip';
+    el.btnCtx.setAttribute('aria-label', '上下文占用：暂无数据');
     return;
   }
 
@@ -68,6 +78,7 @@ export function renderCtxChip() {
   el.ctxPct.textContent = Math.round(clamped) + '%';
   el.ctxRing.style.strokeDashoffset = String(RING_LEN * (1 - clamped / 100));
   el.btnCtx.className = 'ctx-chip' + (clamped > 85 ? ' hot' : clamped > 65 ? ' warn' : '');
+  el.btnCtx.setAttribute('aria-label', `上下文占用：${Math.round(clamped)}%`);
 }
 
 export function openCtxTip() {
@@ -94,6 +105,29 @@ export function openCtxTip() {
     dim.textContent = `已用 ${fmt(ctx.tokens)} 标记, 共 ${fmt(ctx.contextWindow)}`;
 
     box.append(head, big, dim);
+
+    const tokens = S.stats?.tokens || {};
+    const details = [
+      ['输入', tokens.input == null ? null : fmt(tokens.input)],
+      ['输出', tokens.output == null ? null : fmt(tokens.output)],
+      ['缓存读取', tokens.cacheRead == null ? null : fmt(tokens.cacheRead)],
+      ['累计成本', typeof S.stats?.cost === 'number' ? '$' + S.stats.cost.toFixed(4) : null],
+    ].filter(([, value]) => value != null);
+    if (details.length) {
+      const extra = document.createElement('div');
+      extra.className = 'tip-extra';
+      for (const [label, value] of details) {
+        const row = document.createElement('div');
+        row.className = 'tip-row';
+        const name = document.createElement('span');
+        name.textContent = label;
+        const amount = document.createElement('span');
+        amount.textContent = value;
+        row.append(name, amount);
+        extra.appendChild(row);
+      }
+      box.appendChild(extra);
+    }
   }
 
   pop.appendChild(box);

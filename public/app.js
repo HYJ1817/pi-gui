@@ -22,7 +22,7 @@ import { closePop, currentAnchor, openPop, pop, popItem, popLabel, popTitle, pop
 import { closeModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setConn, setStatus, setTitleText } from './shell.js';
 import { samePath } from './util.js';
-import { autoGrow, updateSendState } from './composer.js';
+import { autoGrow, initComposerLayout, updateSendState } from './composer.js';
 import {
   boot,
   compactNow,
@@ -430,10 +430,12 @@ function openModelPicker() {
           sub: m.reasoning ? '推理' : '',
           on: isCur,
           onClick: () => {
-            closePop();
+            closePop({ restoreFocus: true });
             // 实测：pi 的 set_model 需要 provider + modelId 两个字段，
             // 只传 model 会报 "Model not found: <provider>/undefined"
             setModel(m.provider, id, m.name || id);
+            el.btnModel.title = `切换模型：${m.name || id}`;
+            el.btnModel.setAttribute('aria-label', el.btnModel.title);
           },
         })
       );
@@ -479,8 +481,10 @@ function openThinkPicker() {
         sub: DESC[name] || '',
         on: name === current,
         onClick: () => {
-          closePop();
+          closePop({ restoreFocus: true });
           setThinkingLevel(name);
+          el.btnThink.title = `思考强度：${name}`;
+          el.btnThink.setAttribute('aria-label', el.btnThink.title);
         },
       })
     );
@@ -661,7 +665,7 @@ el.input.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     // 浮层开着时 Esc 先关浮层，别把正在跑的对话也停掉
     if (popVisible()) {
-      closePop();
+      closePop({ restoreFocus: true });
       return;
     }
     stop();
@@ -891,6 +895,7 @@ applyProjectState();
 updateSendState();
 renderAttachments();
 renderCtxChip();
+initComposerLayout();
 el.input.focus();
 
 // 先拿到 cwd 再连事件流，保证导出提示里的路径一开始就是绝对的

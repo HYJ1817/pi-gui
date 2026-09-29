@@ -9,7 +9,25 @@ import { el, S } from './state.js';
 
 export function autoGrow() {
   el.input.style.height = 'auto';
-  el.input.style.height = Math.min(el.input.scrollHeight, 220) + 'px';
+  el.input.style.height = Math.min(el.input.scrollHeight, 184, window.innerHeight * 0.24) + 'px';
+}
+
+/* 浮动输入区占据的可视高度由浏览器实测。附件、换行和窗口尺寸变化
+ * 都会改变它；对话底部用同一高度留白，末条消息才不会被覆盖。 */
+export function initComposerLayout() {
+  const composer = el.composerBox.closest('.composer');
+  const stage = composer?.closest('.stage');
+  if (!composer || !stage) return;
+  const sync = () => {
+    const height = Math.ceil(composer.getBoundingClientRect().height);
+    stage.style.setProperty('--composer-reserved-height', `${height}px`);
+  };
+  sync();
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sync).observe(composer);
+  window.addEventListener('resize', () => {
+    autoGrow();
+    sync();
+  });
 }
 
 export function updateSendState() {

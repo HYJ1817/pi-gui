@@ -34,6 +34,7 @@
   --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Roboto,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Cascadia Mono",monospace;
   --conversation-max-width:920px;
+  --composer-max-width:calc(var(--conversation-max-width) - 32px);
   --turn-gap:34px;
   --bubble-bg:#2b2d2f;
   --tool-row-height:30px;
@@ -253,7 +254,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .welcome-cta:hover{background:#2e2515;border-color:#5d4823}
 .welcome-cta svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 
-.thread{width:100%;max-width:calc(var(--conversation-max-width) + 72px);margin:0 auto;padding:26px 36px 104px;display:flex;flex-direction:column;gap:0;min-width:0}
+.thread{width:100%;max-width:calc(var(--conversation-max-width) + 72px);margin:0 auto;padding:26px 36px calc(var(--composer-reserved-height, 112px) + 22px);display:flex;flex-direction:column;gap:0;min-width:0}
 
 .msg{display:flex;flex-direction:column;gap:0;min-width:0}
 .msg-role{font-size:10px;color:#797d80;letter-spacing:.3px;margin-bottom:4px}
@@ -418,12 +419,17 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 
 /* ============ 输入区 ============ */
 
-.composer{padding:0 32px 18px}
-.composer-box{
-  max-width:760px;margin:0 auto;background:var(--input);border:1px solid var(--line);
-  border-radius:16px;padding:13px 13px 9px;transition:border-color .16s;
+.composer{
+  position:absolute;bottom:0;left:0;right:0;z-index:6;
+  padding:0 32px 18px;pointer-events:none;
 }
-.composer-box:focus-within{border-color:#3d3d3d}
+.composer-box{
+  width:100%;max-width:var(--composer-max-width);margin:0 auto;
+  background:var(--input);border:1px solid #363636;
+  border-radius:16px;padding:12px 13px 9px;pointer-events:auto;
+  transition:border-color .16s,background .16s;
+}
+.composer-box:focus-within{border-color:#66502e}
 /* 还没选项目：整块输入区「看起来就不能用」。
    只把 textarea 设 disabled 是不够的 —— 光标、hover 高亮、发送按钮都还在，
    用户会以为能打字。所以整块降透明度 + 禁掉指针事件，把状态说清楚。 */
@@ -433,14 +439,15 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 #input{
   width:100%;background:transparent;border:0;outline:0;resize:none;
   font-family:inherit;font-size:13.5px;line-height:1.7;color:var(--t1);
-  max-height:220px;padding:2px 2px 14px;
+  max-height:min(184px,24vh);min-height:40px;overflow-y:auto;padding:2px 2px 10px;
 }
 #input::placeholder{color:#5f5f5f}
 
-.composer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px}
+.composer-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:30px;min-width:0}
 .cb-left{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
-.cb-right{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.cb-right{display:flex;align-items:center;gap:5px;min-width:0;flex:0 1 auto}
 .status-text{font-size:11.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.status-text:empty{display:none}
 
 .chip{
   display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;border-radius:7px;
@@ -448,6 +455,12 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .13s,color .13s;
 }
 .chip:hover{background:#242424;color:var(--t1)}
+.chip:focus-visible,.ctx-chip:focus-visible,.icon-btn:focus-visible,.att-x:focus-visible,
+.mic-btn:focus-visible,.btn-stop:focus-visible,.pop-item:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+.cb-right .chip{min-width:0;padding-inline:7px}
+.cb-right .chip #modelText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
 .chip-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:0 0 auto}
 
 .mic-btn{
@@ -457,15 +470,17 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 }
 .mic-btn svg{width:15px;height:15px;stroke-width:2}
 .mic-btn:hover:not(:disabled){transform:scale(1.06)}
+.mic-btn:active:not(:disabled){transform:scale(.96);background:#d6d6d6}
 .mic-btn:disabled{background:#2e2e2e;color:#5f5f5f;cursor:default}
 
 .btn-stop{
-  display:flex;align-items:center;gap:6px;height:27px;padding:0 11px;border-radius:7px;
-  border:1px solid var(--line);background:transparent;color:#c0c0c0;font-size:12px;
+  display:flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:8px;
+  border:1px solid #8a6540;background:#6c4525;color:#fff0d7;font-size:12px;
   font-family:inherit;cursor:pointer;
 }
-.btn-stop:hover{background:var(--hover);color:var(--t1)}
+.btn-stop:hover{background:#7c5230;color:#fff}
 .btn-stop svg{width:11px;height:11px}
+.btn-stop:not([hidden]) + .mic-btn{background:#333;color:#d1d1d1}
 
 /* 右下角那组浮动小图标已移除。
  *
@@ -929,7 +944,8 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .pop-label::after{content:"";flex:1;height:1px;background:#2a2a2a}
 .pop-item{
   display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;
-  cursor:pointer;font-size:13px;color:#d8d8d8;min-width:0;
+  cursor:pointer;font-size:13px;color:#d8d8d8;min-width:0;width:100%;
+  background:transparent;border:0;text-align:left;font-family:inherit;
 }
 .pop-item:hover{background:#2b2b2b;color:#fff}
 .pop-item .pi-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -949,18 +965,22 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .tip-head{font-size:12px;color:#9b9b9b;margin-bottom:3px}
 .tip-big{font-size:12.5px;color:#ececec;line-height:1.6}
 .tip-dim{font-size:12px;color:#8a8a8a;line-height:1.6}
+.tip-extra{margin-top:8px;padding-top:7px;border-top:1px solid #333}
+.tip-row{display:flex;justify-content:space-between;gap:18px;font-size:11.5px;line-height:1.7;color:#999}
+.tip-row span:last-child{color:#c8c8c8;font-family:var(--mono)}
 
 /* ============ 附件托盘 ============ */
 
 .attach-tray{
-  display:flex;flex-wrap:wrap;gap:7px;padding:2px 2px 10px;
+  display:flex;flex-wrap:wrap;gap:6px;padding:2px 2px 9px;
+  max-height:min(132px,22vh);overflow-y:auto;
 }
 .attach-tray[hidden]{display:none}
 
 .att{
-  display:flex;align-items:center;gap:9px;padding:6px 7px 6px 6px;
+  display:flex;align-items:center;gap:7px;padding:5px 6px 5px 5px;
   background:#202020;border:1px solid #303030;border-radius:9px;
-  max-width:250px;min-width:0;position:relative;
+  max-width:min(250px,100%);min-width:0;position:relative;
 }
 .att.loading{opacity:.62}
 .att.err{border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.06)}
@@ -1078,7 +1098,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   .rail{width:190px;flex-basis:190px}
   .thread,.composer-box,.welcome{max-width:100%}
   .composer{padding:0 16px 14px}
-  .thread{padding:18px 16px 96px}
+  .thread{padding:18px 16px calc(var(--composer-reserved-height, 112px) + 18px)}
 }
 
 /* ============ 扩展面板（Skills / MCP） ============

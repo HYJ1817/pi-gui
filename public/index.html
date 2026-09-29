@@ -122,7 +122,7 @@
 
     <div class="composer">
       <div class="composer-box" id="composerBox">
-        <div class="attach-tray" id="attachTray" hidden></div>
+        <div class="attach-tray" id="attachTray" role="list" aria-label="待发送附件" hidden></div>
         <textarea id="input" rows="1" placeholder="随心输入" aria-label="输入消息"></textarea>
         <div class="composer-bar">
           <div class="cb-left">
@@ -133,21 +133,21 @@
             <span class="status-text" id="statusText"></span>
           </div>
           <div class="cb-right">
-            <button type="button" class="ctx-chip" id="btnCtx" title="上下文占用">
+            <button type="button" class="ctx-chip" id="btnCtx" title="上下文占用" aria-label="上下文占用" aria-controls="composerPopover" aria-expanded="false">
               <svg class="ctx-ring" viewBox="0 0 36 36" aria-hidden="true">
                 <circle class="ring-bg" cx="18" cy="18" r="15.5"></circle>
                 <circle class="ring-fg" id="ctxRing" cx="18" cy="18" r="15.5"></circle>
               </svg>
               <span id="ctxPct">—</span>
             </button>
-            <button type="button" class="chip" id="btnModel" title="切换模型">
+            <button type="button" class="chip" id="btnModel" title="切换模型" aria-label="切换模型" aria-controls="composerPopover" aria-expanded="false">
               <span class="chip-dot"></span>
               <span id="modelText">模型</span>
             </button>
-            <button type="button" class="chip" id="btnThink" title="思考强度">
+            <button type="button" class="chip" id="btnThink" title="思考强度" aria-label="切换思考强度" aria-controls="composerPopover" aria-expanded="false">
               <span id="thinkText">思考 —</span>
             </button>
-            <button type="button" class="btn-stop" id="btnStop" hidden>
+            <button type="button" class="btn-stop" id="btnStop" title="停止" aria-label="停止" hidden>
               <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
               <span>停止</span>
             </button>
