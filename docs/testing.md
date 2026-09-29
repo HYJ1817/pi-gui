@@ -591,3 +591,11 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 - [pi-compatibility.md](pi-compatibility.md) — 兼容层测什么、升级 pi 后怎么验
 - [updates.md](updates.md) — 版本检查测什么、为什么默认测试不访问 GitHub
 - [releasing.md](releasing.md) — 发版流程（F 层在哪一步跑、产物守卫查什么）
+
+## 九、P14-B Conversation 视觉验证
+
+`npm run test:ui` 在 jsdom 中验证消息节点与控件语义、Thinking 默认折叠及用户选择在流式结束后的保留、工具详情与状态文字、多附件、Minimap 的当前项。jsdom 不计算真实布局，因此它的 class 或 `aria-expanded` 结果不能证明用户看到了什么。
+
+启动 `npm run harness` 后运行 `npm run shots:harness`，CDP 在真实 Chrome 中对 69–85 场景截图并运行 `mustTrue` 结构判据：Bubble 的实际右对齐和最大宽度、Assistant 透明背景、Thinking 内容高度、Tool 状态、附件数量与高度、Minimap 定位、长代码的内部滚动，以及 700/900/1200/1536px 的无页面横向溢出。场景 57–68 仍先在原对话夹具上运行。截图保存在被忽略的 `.shots/`。
+
+修改 `public/` 后须重建可执行产物，避免源码验证与用户打开的打包版不一致。完整回归仍以 `npm test` 为准。
