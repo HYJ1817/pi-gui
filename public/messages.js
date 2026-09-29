@@ -21,7 +21,7 @@
 
 import { el, S } from './state.js';
 import { registerConversationAnchor, rebuildConversationNav, clearConversationNav } from './conversation-nav.js';
-import { esc, icon, iconFor } from './util.js';
+import { icon, iconFor } from './util.js';
 import { md } from './markdown.js';
 import { sendCommand } from './api.js';
 import { updateSendState } from './composer.js';
@@ -152,12 +152,57 @@ export function interruptActive() {
 
 /* ---------- 用户消息 ---------- */
 
+let disclosureId = 0;
+
+function setDisclosure(button, body, open) {
+  button.setAttribute('aria-expanded', String(open));
+  body.hidden = !open;
+}
+
+function thinkingBlock(text = '') {
+  const wrap = document.createElement('div');
+  wrap.className = 'think';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'think-head';
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg><span></span>';
+  const body = document.createElement('div');
+  body.className = 'think-body';
+  body.id = 'thinking-detail-' + ++disclosureId;
+  button.setAttribute('aria-controls', body.id);
+  setDisclosure(button, body, false);
+  button.addEventListener('click', () => setDisclosure(button, body, body.hidden));
+  wrap.append(button, body);
+  updateThinking(wrap, text);
+  return wrap;
+}
+
+function updateThinking(wrap, text) {
+  const body = wrap.querySelector('.think-body');
+  if (body.textContent !== text) body.textContent = text;
+  wrap.querySelector('.think-head span').textContent = `思考过程 · ${text.length} 字`;
+}
+
+function syncMessageChildren(body, nodes) {
+  let next = body.firstChild;
+  for (const node of nodes) {
+    if (node === next) next = next.nextSibling;
+    else body.insertBefore(node, next);
+  }
+  while (next) {
+    const old = next;
+    next = next.nextSibling;
+    old.remove();
+  }
+}
+
 function fileBlockCard(name, meta, content) {
   const d = document.createElement('div');
   d.className = 'msg-file';
 
-  const head = document.createElement('div');
+  const head = document.createElement('button');
   head.className = 'msg-file-head';
+  head.type = 'button';
   head.appendChild(icon(iconFor(name)));
 
   const n = document.createElement('span');
@@ -176,9 +221,17 @@ function fileBlockCard(name, meta, content) {
 
   const inner = document.createElement('div');
   inner.className = 'msg-file-body';
+  inner.id = 'file-detail-' + ++disclosureId;
+  inner.hidden = true;
   inner.textContent = content;
 
-  head.onclick = () => d.classList.toggle('open');
+  head.setAttribute('aria-controls', inner.id);
+  head.setAttribute('aria-expanded', 'false');
+  head.onclick = () => {
+    const open = inner.hidden;
+    d.classList.toggle('open', open);
+    setDisclosure(head, inner, open);
+  };
   d.append(head, inner);
   return d;
 }
@@ -219,7 +272,7 @@ export function userBody(msg) {
     const v = s.trim();
     if (!v) return;
     const seg = document.createElement('div');
-    seg.textContent = v;
+    seg.innerHTML = md(v);
     body.appendChild(seg);
   };
 
@@ -250,7 +303,7 @@ function renderUser(msg) {
    * 放在这里而不是靠时间判断 —— §12 明确禁止「超过几秒算新组」那种猜测。 */
   S.tlGroup = null;
 
-  const wrap = document.createElement('div');
+  const wrap = document.createElement('article');
   wrap.className = 'msg user';
 
   const role = document.createElement('div');
@@ -268,7 +321,7 @@ function renderUser(msg) {
 
 function createAssistant() {
   const t = ensureThread();
-  const wrap = document.createElement('div');
+  const wrap = document.createElement('article');
   wrap.className = 'msg assistant';
 
   const role = document.createElement('div');
@@ -333,15 +386,12 @@ function ensureBlock(idx, kind) {
   const b = { kind, text: '', node: null };
 
   if (kind === 'text') {
-    const p = document.createElement('p');
-    S.current.body.appendChild(p);
-    b.node = p;
+    const textBlock = document.createElement('div');
+    textBlock.className = 'assistant-text';
+    S.current.body.appendChild(textBlock);
+    b.node = textBlock;
   } else {
-    const wrap = document.createElement('div');
-    wrap.className = 'think';
-    wrap.innerHTML =
-      '<div class="think-head"><svg viewBox="0 0 24 24"><path d="M6.5 9.5L12 15l5.5-5.5"/></svg><span>思考中…</span></div><div class="think-body"></div>';
-    wrap.querySelector('.think-head').onclick = () => wrap.classList.toggle('collapsed');
+    const wrap = thinkingBlock();
     S.current.body.appendChild(wrap);
     b.node = wrap;
     b.bodyEl = wrap.querySelector('.think-body');
@@ -389,8 +439,6 @@ export function onMessageUpdate(evt) {
       break;
     case 'thinking_end': {
       if (typeof d.content === 'string') setBlockText(idx, 'think', d.content);
-      const b = S.blocks.get(idx);
-      if (b?.node) b.node.classList.add('collapsed');
       break;
     }
     default:
@@ -401,6 +449,8 @@ export function onMessageUpdate(evt) {
 export function onMessageEnd(evt) {
   const msg = evt.message;
   if (msg?.role === 'assistant' && S.current) {
+    // 最终消息是权威值；丢弃尚未执行的流式绘制，避免下一帧把旧草稿写回复用节点。
+    pendingPaint.clear();
     // message_end.message 是权威，用它校正渲染结果
     const keep = rebuildAssistant(S.current.body, msg);
     /* 只有工具调用、没有正文时整条外壳收掉。
@@ -526,22 +576,31 @@ export function rebuildAssistant(bodyEl, msg) {
   const failed = msg?.stopReason === 'error' || Boolean(msg?.errorMessage);
   const aborted = msg?.stopReason === 'aborted';
 
-  const html = content
-    .map((c) => {
-      if (c.type === 'text') return md(c.text || '');
-      if (c.type === 'thinking') {
-        return `<div class="think collapsed"><div class="think-head"><svg viewBox="0 0 24 24"><path d="M6.5 9.5L12 15l5.5-5.5"/></svg><span>思考过程 · ${(c.thinking || '').length} 字</span></div><div class="think-body">${esc(c.thinking || '')}</div></div>`;
-      }
-      return '';
-    })
-    .join('');
+  const liveBlocks = S.current?.body === bodyEl ? S.blocks : null;
+  const nodes = [];
+  content.forEach((part, idx) => {
+    if (part.type === 'text') {
+      const text = part.text || '';
+      if (!text) return;
+      const old = liveBlocks?.get(idx);
+      const node = old?.kind === 'text' ? old.node : document.createElement('div');
+      node.className = 'assistant-text';
+      if (!old || old.text !== text || !node.childElementCount) node.innerHTML = md(text);
+      nodes.push(node);
+    } else if (part.type === 'thinking') {
+      const old = liveBlocks?.get(idx);
+      const node = old?.kind === 'think' ? old.node : thinkingBlock();
+      updateThinking(node, part.thinking || '');
+      nodes.push(node);
+    }
+  });
+  // pi 报错时可能不给最终 content；保留已经流给用户的正文。
+  if (!content.length && (failed || aborted) && liveBlocks) {
+    for (const block of liveBlocks.values()) if (block.text && block.node) nodes.push(block.node);
+  }
+  syncMessageChildren(bodyEl, nodes);
 
-  if (html) {
-    bodyEl.innerHTML = html;
-    bodyEl.querySelectorAll('.think-head').forEach((h) => {
-      h.onclick = () => h.parentElement.classList.toggle('collapsed');
-    });
-  } else if (!content.length && !failed && !aborted) {
+  if (!nodes.length && !content.length && !failed && !aborted) {
     // 既没内容也不是失败 —— pi 这次什么都没返回，给个提示别留空白
     bodyEl.appendChild(noteBlock('（这次没有返回内容）'));
   }
@@ -565,7 +624,7 @@ export function rebuildFromMessages(data) {
    * 缺 result → 「未完成」；孤儿 result → 就地降级显示，不丢也不崩。 */
   for (const item of planHistory(msgs)) {
     if (item.kind === 'user') {
-      const wrap = document.createElement('div');
+      const wrap = document.createElement('article');
       wrap.className = 'msg user';
       wrap.innerHTML = '<div class="msg-role">你</div>';
       wrap.appendChild(userBody(item.message));
@@ -574,7 +633,7 @@ export function rebuildFromMessages(data) {
     }
 
     if (item.kind === 'assistant') {
-      const wrap = document.createElement('div');
+      const wrap = document.createElement('article');
       wrap.className = 'msg assistant';
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');

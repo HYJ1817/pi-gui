@@ -33,6 +33,10 @@
   --run:#22d3ee;
   --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Roboto,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Cascadia Mono",monospace;
+  --conversation-max-width:920px;
+  --turn-gap:34px;
+  --bubble-bg:#2b2d2f;
+  --tool-row-height:30px;
 }
 
 html,body{height:100%}
@@ -222,7 +226,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 
 /* ============ 对话流 ============ */
 
-.stream{flex:1;overflow-y:auto;min-height:0}
+.stream{flex:1;overflow-y:auto;min-height:0;min-width:0}
 .stream::-webkit-scrollbar{width:9px}
 .stream::-webkit-scrollbar-thumb{background:#2c2c2c;border-radius:5px}
 .stream::-webkit-scrollbar-thumb:hover{background:#3c3c3c}
@@ -249,17 +253,26 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .welcome-cta:hover{background:#2e2515;border-color:#5d4823}
 .welcome-cta svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 
-.thread{max-width:760px;margin:0 auto;padding:24px 32px 56px;display:flex;flex-direction:column;gap:20px}
+.thread{width:100%;max-width:calc(var(--conversation-max-width) + 72px);margin:0 auto;padding:26px 36px 104px;display:flex;flex-direction:column;gap:0;min-width:0}
 
-.msg{display:flex;flex-direction:column;gap:7px}
-.msg-role{font-size:11px;color:var(--t3);letter-spacing:.4px;display:flex;align-items:center;gap:6px}
-.msg-role::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+.msg{display:flex;flex-direction:column;gap:0;min-width:0}
+.msg-role{font-size:10px;color:#797d80;letter-spacing:.3px;margin-bottom:4px}
+.msg-role::after{display:none}
+.msg.user{align-items:flex-end;margin-bottom:18px}
+.thread>.msg.user:not(:first-child){margin-top:var(--turn-gap)}
+.msg.user .msg-role{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .msg.user .msg-body{
-  background:var(--card);border:1px solid var(--line);border-radius:10px;
-  padding:10px 13px;color:#dcdcdc;white-space:pre-wrap;word-break:break-word;
+  width:fit-content;max-width:76%;min-width:0;
+  background:var(--bubble-bg);border:0;border-radius:12px;
+  padding:9px 13px;color:#e1e3e4;overflow-wrap:anywhere;
 }
-.msg.assistant .msg-body{color:#d6d6d6;word-break:break-word}
-.msg.assistant .msg-body>p{margin:0 0 11px}
+.msg.user .msg-body>div+div{margin-top:8px}
+.msg.user .msg-body p{margin:0}
+.msg.assistant{margin-bottom:16px}
+.msg.assistant .msg-body{color:#d9dbdd;overflow-wrap:anywhere;min-width:0}
+.msg.assistant .assistant-text+.assistant-text{margin-top:12px}
+.msg.assistant .assistant-text p{margin:0 0 12px}
+.msg.assistant .assistant-text>*:last-child{margin-bottom:0}
 .msg-body ul,.msg-body ol{margin:0 0 11px;padding-left:19px}
 .msg-body li{margin:0 0 4px}
 .msg-body li::marker{color:var(--t3)}
@@ -273,7 +286,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .msg-body pre.code{
   font-family:var(--mono);font-size:12px;line-height:1.6;background:#141414;
   border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:10px 0;
-  overflow-x:auto;color:#c8c8c8;
+  overflow-x:auto;color:#c8c8c8;max-width:100%;
 }
 .msg-body pre.code code{background:none;border:0;padding:0;color:inherit;font-size:12px}
 /* 语言标签：用 data-lang + ::before 而不是额外包一层 DOM，
@@ -319,12 +332,13 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   border:solid #171717;border-width:0 1.6px 1.6px 0;transform:rotate(45deg);
 }
 
-.think{border-left:2px solid #333;padding:2px 0 2px 12px;margin:0 0 12px;color:#7d7d7d;font-size:12.5px;line-height:1.7}.think-head{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;color:var(--t3);font-size:11.5px;padding:2px 0}
-.think-head:hover{color:var(--t2)}
-.think-head svg{width:11px;height:11px;transition:transform .16s}
-.think.collapsed .think-head svg{transform:rotate(-90deg)}
-.think-body{white-space:pre-wrap;word-break:break-word;padding-top:4px}
-.think.collapsed .think-body{display:none}
+.think{margin:7px 0 14px;color:#85898d;font-size:12px;line-height:1.65;min-width:0}
+.think-head{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:#8d9296;font:inherit;cursor:pointer;padding:2px 4px 2px 0;text-align:left}
+.think-head:hover{color:#c2c5c8}
+.think-head:focus-visible{outline:2px solid #bdc2c6;outline-offset:2px;border-radius:3px}
+.think-head svg{width:11px;height:11px;transition:transform .16s;fill:none;stroke:currentColor;stroke-width:1.8}
+.think-head[aria-expanded=true] svg{transform:rotate(90deg)}
+.think-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid #44494c;color:#a8adb0}
 
 /* ============ Tool Timeline ============
  *
@@ -334,13 +348,13 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
  *
  * 状态靠 data-status 区分，不靠颜色本身 —— 图标形状（对勾 / 叉 / 虚线圈）
  * 在灰度下也能分辨。 */
-.tl-group{display:flex;flex-direction:column;gap:2px;margin:4px 0 12px}
-.tl-group-head{font-size:11px;color:var(--t3);letter-spacing:.3px;padding:0 0 3px 2px}
-.tl-list{display:flex;flex-direction:column;gap:1px}
+.tl-group{display:flex;flex-direction:column;gap:2px;margin:7px 0 17px;padding-left:10px;border-left:1px solid #35393b;min-width:0}
+.tl-group-head{font-size:10.5px;color:#888d90;letter-spacing:.2px;padding:0 0 4px 2px}
+.tl-list{display:flex;flex-direction:column;gap:1px;min-width:0}
 
-.tl-item{display:flex;gap:8px;padding:4px 8px 5px 6px;border-radius:7px}
-.tl-item:hover{background:#181818}
-.tl-item.open{background:#181818}
+.tl-item{display:flex;gap:8px;min-height:var(--tool-row-height);padding:4px 8px 4px 3px;border-radius:5px;min-width:0}
+.tl-item:hover{background:#26282a}
+.tl-item.open{background:#252729}
 
 .tl-dot{flex:0 0 14px;width:14px;height:14px;margin-top:2px;display:flex;align-items:center;justify-content:center;color:var(--t3)}
 .tl-dot svg{width:13px;height:13px;stroke-width:2}
@@ -348,13 +362,17 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .tl-item[data-status=success] .tl-dot{color:var(--ok)}
 .tl-item[data-status=error] .tl-dot{color:var(--err)}
 .tl-item[data-status=incomplete] .tl-dot{color:var(--warn)}
+.tl-item[data-status=interrupted] .tl-dot,.tl-item[data-status=cancelled] .tl-dot,.tl-item[data-status=unknown] .tl-dot{color:#aab0b4}
 /* 运行中只做一个缓慢的明暗呼吸 —— 转圈之类会持续抢注意力 */
 .tl-item[data-status=running] .tl-dot svg{animation:tl-breathe 1.2s ease-in-out infinite}
 @keyframes tl-breathe{0%,100%{opacity:.3}50%{opacity:1}}
 
 .tl-body{flex:1;min-width:0}
-.tl-head{display:flex;align-items:baseline;gap:8px;min-width:0;cursor:pointer;user-select:none}
-.tl-label{font-size:12.5px;color:#cfcfcf;flex:0 0 auto}
+.tl-head{display:flex;align-items:baseline;gap:8px;min-width:0}
+.tl-item.has-more .tl-head{cursor:pointer}
+.tl-label{font-size:12px;color:#d4d6d8;flex:0 0 auto}
+.tl-status{font-size:10px;color:#92989c;white-space:nowrap;flex:0 0 auto}
+.tl-item[data-status=error] .tl-status,.tl-item[data-status=incomplete] .tl-status{color:#d3a8a2}
 .tl-arg{font-family:var(--mono);font-size:11.5px;color:var(--t3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl-stat{flex:0 0 auto;font-family:var(--mono);font-size:11px;display:flex;gap:5px}
 .tl-stat .add{color:#3dd68c}
@@ -365,9 +383,10 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .tl-item[data-status=error] .tl-result{color:#e8a2a2}
 .tl-item[data-status=incomplete] .tl-result{color:var(--warn)}
 
-.tl-acts{margin-top:3px}
-.tl-toggle{background:none;border:0;padding:0;color:var(--t3);font-size:11px;cursor:pointer;font-family:var(--font)}
+.tl-acts{margin-left:auto;flex:0 0 auto}
+.tl-toggle{background:none;border:0;padding:1px 3px;color:#92989c;font-size:11px;cursor:pointer;font-family:var(--font);border-radius:3px}
 .tl-toggle:hover{color:var(--accent)}
+.tl-toggle:focus-visible{outline:2px solid #bdc2c6;outline-offset:2px}
 
 .tl-more{margin-top:6px}
 .tl-sec{font-size:10.5px;color:var(--t3);letter-spacing:.4px;margin:7px 0 3px}
@@ -1000,18 +1019,20 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 
 /* 对话里的附件折叠块 */
 .msg-file{
-  border:1px solid var(--line);border-radius:9px;background:#161616;
-  margin:8px 0;overflow:hidden;
+  border:1px solid #414548;border-radius:9px;background:#252729;
+  margin:7px 0;overflow:hidden;max-width:100%;min-width:0;
 }
 .msg-file-head{
-  display:flex;align-items:center;gap:8px;padding:7px 11px;cursor:pointer;user-select:none;
-  font-size:12px;color:#c0c0c0;
+  display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;cursor:pointer;user-select:none;
+  border:0;background:transparent;text-align:left;font:inherit;font-size:12px;color:#d5d8da;
 }
-.msg-file-head:hover{background:#1e1e1e}
+.msg-file-head:hover{background:#303336}
+.msg-file-head:focus-visible{outline:2px solid #bdc2c6;outline-offset:-2px}
 .msg-file-head svg{width:13px;height:13px;color:#8a8a8a;flex:0 0 auto}
+.msg-file-head>span:first-of-type{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .msg-file-head .mf-chev{transition:transform .16s;margin-left:auto;color:#6a6a6a}
-.msg-file.open .mf-chev{transform:rotate(90deg)}
-.msg-file-meta{font-size:10.5px;color:var(--t3);font-family:var(--mono)}
+.msg-file-head[aria-expanded=true] .mf-chev{transform:rotate(90deg)}
+.msg-file-meta{font-size:10.5px;color:#9ca2a6;font-family:var(--mono);max-width:35%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}
 .msg-file-body{
   display:none;border-top:1px solid var(--line-soft);padding:9px 12px;
   font-family:var(--mono);font-size:11.5px;line-height:1.62;color:#a8a8a8;
@@ -1020,8 +1041,8 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .msg-file.open .msg-file-body{display:block}
 .msg-att-chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0}
 .msg-att-chip{
-  display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#b8b8b8;
-  background:#202020;border:1px solid #303030;border-radius:6px;padding:3px 8px;
+  display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#c8ccce;
+  background:#292c2e;border:1px solid #414548;border-radius:7px;padding:4px 7px;
 }
 .msg-att-chip img{width:18px;height:18px;object-fit:cover;border-radius:4px;display:block}
 
@@ -1057,7 +1078,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   .rail{width:190px;flex-basis:190px}
   .thread,.composer-box,.welcome{max-width:100%}
   .composer{padding:0 16px 14px}
-  .thread{padding:18px 16px 40px}
+  .thread{padding:18px 16px 96px}
 }
 
 /* ============ 扩展面板（Skills / MCP） ============
@@ -1538,31 +1559,30 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 
 /* .stream 原来是 .stage 的直接子元素（flex:1）。这里插一层 .convo 当定位容器，
    让导航和正文并排而不是叠在一起。 */
-.convo{flex:1;min-height:0;display:flex;position:relative}
+.convo{flex:1;min-height:0;min-width:0;display:flex;position:relative}
 
 .convo-nav{
   position:absolute;top:0;bottom:0;z-index:3;
-  /* 正文是 760px 居中，所以左侧空档 = (宽度-760)/2。
-     贴在正文左边 30px 处；窗口窄到没空档时退回 4px，反正那时会被媒体查询隐藏。 */
-  left:max(4px,calc(50% - 380px - 30px));
-  width:22px;
+  /* 跟阅读列左边缘对齐；窄窗口退回边缘，媒体查询再隐藏。 */
+  left:max(4px,calc(50% - var(--conversation-max-width)/2 - 28px));
+  width:20px;
   pointer-events:none; /* 只有 marker 自己可点，不挡正文的选中与点击 */
 }
 
 .cn-marker{
   position:absolute;left:50%;transform:translateX(-50%);
-  width:9px;height:2px;padding:0;border:0;border-radius:1px;
-  background:#3a3a3a;cursor:pointer;pointer-events:auto;
+  width:9px;height:2px;padding:0;border:0;border-radius:2px;
+  background:#54585b;cursor:pointer;pointer-events:auto;
   transition:background .15s,width .15s,height .15s;
   /* 变长时向左长，视觉上贴着正文一侧 */
   transform-origin:center;
 }
 .cn-marker:hover,.cn-marker:focus-visible{
-  background:#7a7a7a;width:14px;outline:none;
+  background:#afb4b7;width:15px;outline:2px solid #bdc2c6;outline-offset:3px;
 }
 /* 当前所在的那次提问：更亮更长 */
-.cn-marker.on{background:var(--accent);width:18px;height:3px}
-.cn-marker.on:hover{background:var(--accent)}
+.cn-marker.on{background:#d5d9db;width:17px;height:3px}
+.cn-marker.on:hover{background:#eef0f1}
 
 /* hover / 键盘聚焦时的摘要提示。刻意不用原生 title —— 需要控制截断与样式。 */
 .cn-tip{

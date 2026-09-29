@@ -103,6 +103,7 @@ function makeMarker(entry) {
 
   b.addEventListener('click', (e) => {
     e.preventDefault();
+    setCurrent(entries.indexOf(entry));
     scrollToEntry(entry);
   });
   return b;

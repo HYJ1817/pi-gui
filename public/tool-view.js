@@ -32,6 +32,9 @@ const STATUS_ICON = {
   error: '<svg viewBox="0 0 24 24"><path d="M7.5 7.5l9 9M16.5 7.5l-9 9"/></svg>',
   /* 未完成：虚线圆圈 —— 既不是对勾也不是叉，一眼能看出「这一轮没跑完」 */
   incomplete: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" stroke-dasharray="2.6 2.6"/></svg>',
+  interrupted: '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>',
+  cancelled: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  unknown: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4M12 17v.4"/></svg>',
 };
 
 const STATUS_TEXT = {
@@ -39,11 +42,15 @@ const STATUS_TEXT = {
   success: '成功',
   error: '失败',
   incomplete: '未完成',
+  interrupted: '已中断',
+  cancelled: '已取消',
+  unknown: '状态未知',
 };
 
 /** 详细参数里最多铺多少字符。原始 JSON 可能有几十 KB（write 的 content 全文），
  *  不截断会把时间线撑成一片墙。 */
 const ARGS_MAX = 4000;
+let detailId = 0;
 
 /* ---------- 建节点 ---------- */
 
@@ -68,19 +75,23 @@ export function renderEntry(entry) {
 
   const head = sub(body, 'tl-head');
   const label = sub(head, 'tl-label', 'span');
+  const statusText = sub(head, 'tl-status', 'span');
   const arg = sub(head, 'tl-arg', 'span');
   const stat = sub(head, 'tl-stat', 'span');
   const time = sub(head, 'tl-time', 'span');
 
   const result = sub(body, 'tl-result');
-  const acts = sub(body, 'tl-acts');
+  const acts = sub(head, 'tl-acts');
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'tl-toggle';
   acts.appendChild(toggle);
 
   const more = sub(body, 'tl-more');
+  more.id = 'tool-detail-' + ++detailId;
   more.hidden = true;
+  toggle.setAttribute('aria-controls', more.id);
+  toggle.setAttribute('aria-expanded', 'false');
   const outHead = sub(more, 'tl-sec', 'div');
   outHead.textContent = '输出';
   const out = sub(more, 'tl-out', 'pre');
@@ -88,13 +99,15 @@ export function renderEntry(entry) {
   argHead.textContent = '详细信息';
   const args = sub(more, 'tl-args', 'pre');
 
-  node._tl = { dot, label, arg, stat, time, result, toggle, more, out, outHead, args, argHead, hasOutput: false, hasMore: false, output: '' };
+  node._tl = { dot, label, statusText, arg, stat, time, result, toggle, more, out, outHead, args, argHead, hasOutput: false, hasMore: false, output: '' };
 
   /* 整行可点 = 展开 / 收起（和原来的工具卡片一致，用户已经习惯了）。
    * 折叠是纯前端状态，不进 entry —— 刷新后没必要记住某一条展开过。 */
   const flip = () => {
+    if (!node._tl.hasMore) return;
     more.hidden = !more.hidden;
     node.classList.toggle('open', !more.hidden);
+    toggle.setAttribute('aria-expanded', String(!more.hidden));
     /* 按钮文案和悬停提示都跟着折叠状态重算。不重算的话，展开之后按钮
      * 还写着「展开输出」，用户会以为点不动。 */
     syncToggle(node._tl);
@@ -120,6 +133,8 @@ function tl(node) {
 function syncToggle(p) {
   p.toggle.hidden = !p.hasMore;
   if (!p.hasMore) {
+    p.more.hidden = true;
+    p.toggle.setAttribute('aria-expanded', 'false');
     setText(p.toggle, '');
     return;
   }
@@ -141,7 +156,7 @@ export function updateEntry(node, entry) {
   node.dataset.status = status;
   node.className = 'tl-item' + (node.classList.contains('open') ? ' open' : '');
 
-  const iconHtml = STATUS_ICON[status] || STATUS_ICON.running;
+  const iconHtml = STATUS_ICON[status] || STATUS_ICON.unknown;
   if (p.dot.dataset.s !== status) {
     p.dot.dataset.s = status;
     p.dot.innerHTML = iconHtml; // 自写常量，不含任何外部文本
@@ -149,6 +164,7 @@ export function updateEntry(node, entry) {
   }
 
   setText(p.label, entry.label + (entry.known ? '' : ' ' + entry.name));
+  setText(p.statusText, STATUS_TEXT[status] || STATUS_TEXT.unknown);
   setText(p.arg, entry.summary);
 
   /* +N −M：Git 的数字优先，退回工具自己给的（见 tool-model.statOf） */
@@ -206,6 +222,7 @@ export function updateEntry(node, entry) {
   p.hasOutput = hasOutput;
   p.output = output;
   p.hasMore = hasOutput || Boolean(argsText);
+  node.classList.toggle('has-more', p.hasMore);
   syncToggle(p);
   syncTitle(node, p);
 
@@ -252,8 +269,9 @@ function argsTextOf(entry) {
  * 这个边界是**真实存在**的（消息本身就是边界），不是「超过几秒算一组」那种猜测。
  * 只有一项时不摆「操作 1 项」这种废话标题。 */
 export function createGroup() {
-  const g = document.createElement('div');
+  const g = document.createElement('section');
   g.className = 'tl-group';
+  g.setAttribute('aria-label', '工具操作');
 
   const head = document.createElement('div');
   head.className = 'tl-group-head';
