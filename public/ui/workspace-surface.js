@@ -31,11 +31,16 @@ export function workspaceView() { return current.view; }
 
 export function showChat() {
   const returning = current.view !== 'chat';
+  const focusWasInSurface = $('workSurface').contains(document.activeElement);
   if (current.dispose) current.dispose();
   current = { view: 'chat', token: current.token + 1, dispose: null };
   $('workSurface').replaceChildren();
   $('workSurface').className = 'work-surface';
   sync('chat');
+  if (focusWasInSurface) {
+    const input = $('input');
+    (input.disabled ? $(rail.chat) : input).focus();
+  }
   if (returning) {
     const stream = $('stream');
     stream.scrollTop = chatScroll.atBottom ? stream.scrollHeight : chatScroll.top;
@@ -54,6 +59,7 @@ export function openWorkSurface(view, mount) {
   if (current.dispose) current.dispose();
   const token = current.token + 1;
   const host = $('workSurface');
+  const focusWasInSurface = host.contains(document.activeElement);
   host.replaceChildren();
   host.className = 'work-surface';
   const instance = {
@@ -64,6 +70,7 @@ export function openWorkSurface(view, mount) {
   current = { view, token, dispose: null };
   sync(view);
   mount(host, instance);
+  if (focusWasInSurface) $(rail[view]).focus();
   return instance;
 }
 

@@ -479,7 +479,11 @@ export function openExtensions() {
     );
 
     const tabs = el('div', 'ext-tabs');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', '扩展类型');
     const body = el('div', 'ext-body');
+    body.id = 'extensionsTabPanel';
+    body.setAttribute('role', 'tabpanel');
     const panels = { skills: null, mcp: null };
     let active = 'skills';
 
@@ -488,6 +492,7 @@ export function openExtensions() {
         btn.classList.toggle('on', btn.dataset.tab === active);
         btn.setAttribute('aria-selected', String(btn.dataset.tab === active));
       }
+      body.setAttribute('aria-labelledby', active === 'skills' ? 'extensionsTabSkills' : 'extensionsTabMcp');
       body.innerHTML = '';
       if (!panels[active]) {
         const holder = el('div', 'ext-panel');
@@ -508,6 +513,9 @@ export function openExtensions() {
     ]) {
       const b = el('button', 'ext-tab', label);
       b.type = 'button';
+      b.id = key === 'skills' ? 'extensionsTabSkills' : 'extensionsTabMcp';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-controls', body.id);
       b.dataset.tab = key;
       b.onclick = () => {
         active = key;

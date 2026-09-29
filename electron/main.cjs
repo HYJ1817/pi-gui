@@ -334,6 +334,8 @@ function killServer() {
  */
 const DEFAULT_W = 1320;
 const DEFAULT_H = 880;
+const MIN_W = 700;
+const MIN_H = 600;
 
 /* 状态文件格式版本。
  *
@@ -363,7 +365,7 @@ function loadWindowState() {
   }
   if (s?.v !== STATE_VERSION) return null; // 旧格式（见 STATE_VERSION 的说明）
   if (!Number.isFinite(s?.width) || !Number.isFinite(s?.height)) return null;
-  if (s.width < 960 || s.height < 620) return null; // 小于最小尺寸就别照搬
+  if (s.width < MIN_W || s.height < MIN_H) return null; // 小于最小尺寸就别照搬
 
   if (Number.isFinite(s.x) && Number.isFinite(s.y)) {
     const onScreen = screen.getAllDisplays().some((d) => {
@@ -541,8 +543,8 @@ function createWindow() {
     height: saved?.height ?? DEFAULT_H,
     useContentSize: true,
     ...(Number.isFinite(saved?.x) && Number.isFinite(saved?.y) ? { x: saved.x, y: saved.y } : {}),
-    minWidth: 960,
-    minHeight: 620,
+    minWidth: MIN_W,
+    minHeight: MIN_H,
     backgroundColor: '#0d0d0d', // 和页面底色一致，避免加载时闪白
     title: 'Pi GUI',
     ...(fs.existsSync(iconFile) ? { icon: iconFile } : {}),

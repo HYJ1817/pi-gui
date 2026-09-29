@@ -74,6 +74,7 @@ export function openModal(build, onClose) {
   modalReturnFocus = document.activeElement;
   closeHook = null;
   el.modalCard.innerHTML = '';
+  el.modalCard.className = 'modal-card';
   // 弹层里的动态区域在关闭时失效，避免继续往已卸载的节点里写
   panels.tree = null;
   panels.providers = null;

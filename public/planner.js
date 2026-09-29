@@ -512,13 +512,27 @@ export function openPlanner(focus = null) {
     }
 
     const tabs = el('div', 'ext-tabs');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', '任务视图');
     const tabPlans = el('button', 'ext-tab on', '计划');
     const tabAgents = el('button', 'ext-tab', 'Agent');
+    tabPlans.id = 'plannerTabPlans';
+    tabAgents.id = 'plannerTabAgents';
+    tabPlans.setAttribute('role', 'tab');
+    tabAgents.setAttribute('role', 'tab');
+    tabPlans.setAttribute('aria-controls', 'plannerPanelPlans');
+    tabAgents.setAttribute('aria-controls', 'plannerPanelAgents');
     tabs.append(tabPlans, tabAgents);
 
     const body = el('div', 'ext-body');
     const plansPane = el('div', 'ext-panel planner-pane');
     const agentsPane = el('div', 'ext-panel');
+    plansPane.id = 'plannerPanelPlans';
+    agentsPane.id = 'plannerPanelAgents';
+    plansPane.setAttribute('role', 'tabpanel');
+    agentsPane.setAttribute('role', 'tabpanel');
+    plansPane.setAttribute('aria-labelledby', tabPlans.id);
+    agentsPane.setAttribute('aria-labelledby', tabAgents.id);
     agentsPane.classList.add('planner-agents');
     agentsPane.style.display = 'none';
     body.append(plansPane, agentsPane);
@@ -535,6 +549,7 @@ export function openPlanner(focus = null) {
     };
     tabPlans.onclick = () => showTab('plans');
     tabAgents.onclick = () => showTab('agents');
+    showTab('plans');
 
     /* ================= 计划列表（左） ================= */
 

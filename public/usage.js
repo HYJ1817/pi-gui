@@ -35,7 +35,7 @@ export function applyStats(d) {
 
   el.uPct.textContent = ctx.tokens ? Math.round(pct) + '%' : '—';
   el.uCtxBar.style.width = Math.min(100, pct) + '%';
-  el.uCtxBar.style.background = pct > 85 ? 'var(--err)' : pct > 65 ? 'var(--warn)' : 'var(--accent)';
+  el.uCtxBar.style.background = pct > 85 ? 'var(--err)' : pct > 65 ? 'var(--warn)' : '#aeb3b6';
   el.uNote.textContent = ctx.tokens ? `上下文 ${fmt(ctx.tokens)} / ${fmt(ctx.contextWindow)}` : '上下文 —';
 
   const t = d.tokens || {};
