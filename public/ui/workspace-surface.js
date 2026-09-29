@@ -29,7 +29,7 @@ function sync(view) {
 
 export function workspaceView() { return current.view; }
 
-export function showChat() {
+export function showChat({ focusComposer = false } = {}) {
   const returning = current.view !== 'chat';
   const focusWasInSurface = $('workSurface').contains(document.activeElement);
   if (current.dispose) current.dispose();
@@ -37,7 +37,7 @@ export function showChat() {
   $('workSurface').replaceChildren();
   $('workSurface').className = 'work-surface';
   sync('chat');
-  if (focusWasInSurface) {
+  if (focusWasInSurface || focusComposer) {
     const input = $('input');
     (input.disabled ? $(rail.chat) : input).focus();
   }

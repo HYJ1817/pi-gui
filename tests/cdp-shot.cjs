@@ -1019,6 +1019,34 @@ async function main() {
   await send('Emulation.clearDeviceMetricsOverride');
   await evalJs(`fetch('/api/__work-surface/session-reset').then(r=>r.ok)`);
 
+  /* P14-E 收口：真鼠标先聚焦 Sidebar 按钮；刷新移除旧按钮后仍需落在 Composer。 */
+  await send('Page.reload');
+  await sleep(1600);
+  await evalJs(`document.querySelector('#navPlanner').click()`);
+  await sleep(350);
+  const sessionPoint = await evalJs(`(() => {
+    const b=[...document.querySelectorAll('#projects .pj-sess-primary')].find(x=>x.tagName==='BUTTON'&&x.textContent.includes('README'));
+    if (!b) return null;
+    window.__p14eOldSessionButton=b;
+    b.scrollIntoView({block:'nearest'});
+    const r=b.getBoundingClientRect();
+    return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};
+  })()`);
+  if (!sessionPoint) throw new Error('154-session-switch-focus: 找不到 README 历史会话按钮');
+  await send('Input.dispatchMouseEvent', {type:'mouseMoved', ...sessionPoint});
+  await send('Input.dispatchMouseEvent', {type:'mousePressed',button:'left',clickCount:1,...sessionPoint});
+  const focusedByMouse = await evalJs(`document.activeElement===window.__p14eOldSessionButton`);
+  await send('Input.dispatchMouseEvent', {type:'mouseReleased',button:'left',clickCount:1,...sessionPoint});
+  for (let i=0; i<40 && await evalJs(`window.__p14eOldSessionButton.isConnected`); i++) await sleep(50);
+  for (let i=0; i<40 && !await evalJs(`document.querySelector('#chatView').textContent.includes('这是 README 会话的历史消息')`); i++) await sleep(50);
+  await shotOf('#workspace', '154-session-switch-focus', 'P14-E：真鼠标切换侧栏历史会话后 Composer 获焦点', ['这是 README 会话的历史消息'], [
+    ['鼠标按下先聚焦旧会话按钮', focusedByMouse ? 'true' : 'false'],
+    ['Sidebar 刷新已移除旧按钮', `!window.__p14eOldSessionButton.isConnected`],
+    ['Chat 与 Composer 可见', `document.querySelector('#workspace').dataset.workspaceView==='chat' && !document.querySelector('#chatView').hidden && !document.querySelector('#chatComposer').hidden`],
+    ['焦点位于 Composer 而非 body', `document.activeElement===document.querySelector('#input') && document.activeElement!==document.body`],
+    ['历史已重建', `document.querySelector('#chatView').textContent.includes('这是 README 会话的历史消息')`],
+  ]);
+
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

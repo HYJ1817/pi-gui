@@ -6429,7 +6429,8 @@ staticCheck();
     // P14-D 收口：从 Work Surface 换会话，必须等成功后才回到 Chat。
     $('navPlanner').click();
     check('P14-D 收口：新对话前仍在 Planner', () => $('workspace').dataset.workspaceView === 'planner');
-    $('workSurface').querySelector('.planner-goal')?.focus();
+    $('navNew').focus();
+    check('P14-E 新对话点击前焦点在侧栏按钮', () => window.document.activeElement === $('navNew'));
     const beforeNew = commands.length;
     $('navNew').click();
     check('P14-D 收口：新对话确实发出 RPC 且应答前不切视图', () =>
@@ -6440,7 +6441,15 @@ staticCheck();
       !$('navPlanner').classList.contains('is-active') && !$('chatView').hidden && !$('chatComposer').hidden &&
       $('workSurface').hidden && $('workSurface').childElementCount === 0 &&
       $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
-    check('P14-E 成功换会话后焦点不遗落在已卸载 Surface', () => window.document.activeElement === $('input'));
+    check('P14-E 侧栏新对话成功后焦点进入 Composer', () => window.document.activeElement === $('input'));
+
+    $('navPlanner').click();
+    $('input').disabled = true;
+    $('navNew').focus();
+    es.emit({ type: 'response', command: 'new_session', success: true, data: {} });
+    check('P14-E 无项目时成功换会话回 Home 而不聚焦禁用输入', () =>
+      $('workspace').dataset.workspaceView === 'chat' && window.document.activeElement === $('navHome'));
+    $('input').disabled = false;
 
     window.rebuildFromMessages([{ role: 'user', content: '旧会话正文' }]);
     window.renderProjects();
@@ -6449,16 +6458,20 @@ staticCheck();
     const switchSurface = $('workSurface').firstElementChild;
     const switchButton = $('projects').querySelector('.pj-sess-primary[aria-label^="切换会话"]');
     stubSwitch = { ok: false, error: '夹具拒绝切换' };
+    switchButton?.focus();
+    check('P14-E 失败切换前焦点在历史会话按钮', () => window.document.activeElement === switchButton);
     switchButton?.click();
     await new Promise((resolve) => setTimeout(resolve, 80));
     check('P14-D 收口：切旧会话失败仍留 Planner 且 Surface 未清空', () =>
       $('workspace').dataset.workspaceView === 'planner' && $('workSurface').firstElementChild === switchSurface &&
       !$('workSurface').hidden && $('stream').textContent.includes('旧会话正文'));
+    check('P14-E 失败切换保持旧会话按钮焦点', () => window.document.activeElement === switchButton && switchButton.isConnected);
 
-    $('navChanges').click();
     stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能' };
     const beforeSwitch = sessionCalls.length;
     const beforeBoot = commands.length;
+    switchButton?.focus();
+    check('P14-E 成功切换前焦点在历史会话按钮', () => window.document.activeElement === switchButton);
     switchButton?.click();
     await new Promise((resolve) => setTimeout(resolve, 80));
     check('P14-D 收口：侧栏旧会话成功切到 Chat 且只激活 Home', () =>
@@ -6467,6 +6480,12 @@ staticCheck();
       $('globalRail').querySelectorAll('[aria-current="page"]').length === 1 &&
       !$('chatView').hidden && !$('chatComposer').hidden && $('workSurface').hidden &&
       $('workSurface').childElementCount === 0 && !$('stream').textContent.includes('旧会话正文'));
+    for (let i = 0; i < 40 && switchButton?.isConnected; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    check('P14-E 历史会话刷新确实移除原焦点按钮', () => switchButton && !switchButton.isConnected);
+    check('P14-E 历史会话刷新后焦点仍在 Composer', () =>
+      window.document.activeElement !== window.document.body && window.document.activeElement === $('input'));
     await new Promise((resolve) => setTimeout(resolve, 280));
     check('P14-D 收口：侧栏成功切换走现有 boot 历史重建链路', () =>
       commands.slice(beforeBoot).some((c) => c.type === 'get_messages'));

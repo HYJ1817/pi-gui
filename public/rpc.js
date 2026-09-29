@@ -160,7 +160,7 @@ export function setSessionListRefresh(fn) {
  * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
 export function afterSessionSwitch() {
-  showChat();
+  showChat({ focusComposer: true });
   clearThread();
   // 换了一条工作线，上一段的文件变更记录不再适用。
   // 注意 fork 也不清：分叉不改磁盘，之前改过的文件依然处于改动状态。
