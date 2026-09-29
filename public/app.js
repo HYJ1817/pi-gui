@@ -688,7 +688,7 @@ el.btnThink.onclick = () => {
 let ctxTimer = null;
 el.btnCtx.addEventListener('mouseenter', () => {
   clearTimeout(ctxTimer);
-  ctxTimer = setTimeout(openCtx, 110);
+  ctxTimer = setTimeout(openCtxTip, 110);
 });
 el.btnCtx.addEventListener('mouseleave', () => {
   clearTimeout(ctxTimer);
