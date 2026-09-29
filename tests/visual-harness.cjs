@@ -584,6 +584,19 @@ const MESSAGES = [
   },
 ];
 
+/* P14-B 的独立对话夹具。由测试端点在 P14-A 场景之后注入，避免改变既有截图。 */
+const P14B_MESSAGES = MESSAGES.concat([
+  { role: 'user', content: '好，继续。' },
+  { role: 'assistant', content: [
+    { type: 'thinking', thinking: '先核对步骤，再用现有工具检查结果。' },
+    { type: 'text', text: '我会沿着现有实现继续检查。\n\n## 当前结论\n\n段落、列表和 `inlineCode` 都保持原有 Markdown 语义。' },
+  ] },
+  { role: 'user', content: '请保留完整路径、换行和长链接。\n' + 'public/very-long-conversation-example/'.repeat(10) + '\nhttps://example.test/' + 'unbroken-segment'.repeat(24) },
+  { role: 'assistant', content: [{ type: 'text', text: '下面是长代码块，仅代码区横向滚动：\n\n```js\nconst veryLongLine = "' + 'Z'.repeat(420) + '";\n```\n\n| 文件 | 状态 |\n| --- | --- |\n| app.js | 已读取 |' }] },
+  { role: 'user', content: '<pi-file name="设备图全套_6张A2.pdf" meta="文档 · PDF">附件一正文</pi-file>\n\n<pi-file name="核对记录.docx" meta="文档 · Word">附件二正文</pi-file>' },
+  { role: 'assistant', content: [{ type: 'text', text: '两份附件已列在上方，仍可展开查看已有文本内容。' }] },
+]);
+
 /* ---------------- 工具 ---------------- */
 
 const readBody = (req) =>
@@ -940,6 +953,21 @@ const server = http.createServer(async (req, res) => {
       push(replyFor({ type: 'get_available_models' }));
     }
     return json(res, 200, { ok: true, pushed: what, clients: clients.size });
+  }
+
+  if (p === '/api/__conversation') {
+    const what = url.searchParams.get('what') || 'fixture';
+    if (what === 'fixture' || what === 'reset') {
+      push({ type: 'response', command: 'get_messages', success: true, data: { messages: what === 'fixture' ? P14B_MESSAGES : MESSAGES } });
+    } else if (what === 'tool-running') {
+      push({ type: 'tool_execution_start', toolCallId: 'p14b-running', toolName: 'read', args: { path: 'public/messages.js' } });
+    } else if (what === 'tool-success') {
+      push({ type: 'tool_execution_end', toolCallId: 'p14b-running', result: { content: [{ type: 'text', text: '已读取 640 行' }] }, isError: false });
+    } else if (what === 'tool-failed') {
+      push({ type: 'tool_execution_start', toolCallId: 'p14b-failed', toolName: 'bash', args: { command: 'npm test' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p14b-failed', result: { content: [{ type: 'text', text: 'Command exited with code 1' }] }, isError: true });
+    }
+    return json(res, 200, { ok: true, pushed: what });
   }
 
   if (p === '/api/fs') return json(res, 200, { ok: true, items: [] });

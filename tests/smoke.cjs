@@ -4094,6 +4094,7 @@ staticCheck();
       check('导航 12. 点 marker → 对应用户消息 scrollIntoView（平滑、block:start）', () =>
         (scrolled && scrolled.el === userEls()[2] && scrolled.opts && scrolled.opts.behavior === 'smooth' && scrolled.opts.block === 'start') ||
         JSON.stringify(scrolled && { same: scrolled.el === userEls()[2], opts: scrolled.opts }));
+      check('P14-B 点击 marker 立即更新当前项', () => window.currentNavIndex() === 2 && nav.querySelectorAll('.cn-marker.on').length === 1 && nav.querySelectorAll('.cn-marker')[2].classList.contains('on'));
       window.Element.prototype.scrollIntoView = origScrollIntoView;
     }
 
@@ -6127,6 +6128,89 @@ staticCheck();
   $('navChanges').click();
   check('Rail 文件变更入口打开原面板', () => !$('modal').hidden && $('navChanges').getAttribute('aria-current') === 'page');
   $('navHome').click();
+
+  /* P14-B：独立夹具走现有历史与流式入口，核对真实节点与可操作性。
+   * 几何位置交给 CDP Harness；jsdom 不提供布局。 */
+  {
+    const file = '<pi-file name="设计说明.pdf" meta="PDF · 2 页">文件正文</pi-file>';
+    window.rebuildFromMessages([
+      { role: 'user', content: '短消息 `id`' },
+      { role: 'assistant', content: [{ type: 'thinking', thinking: '先检查文件' }, { type: 'text', text: '结果：**正常**' }] },
+      { role: 'user', content: [{ type: 'text', text: `请看附件\n\n${file}\n\n${file}` }, { type: 'image', data: 'AA==', mimeType: 'image/png' }] },
+    ]);
+    const user = $('stream').querySelector('.msg.user');
+    const assistant = $('stream').querySelector('.msg.assistant');
+    const think = assistant.querySelector('.think');
+    const thinkButton = think.querySelector('.think-head');
+    const thinkBody = think.querySelector('.think-body');
+    check('P14-B 历史 User 使用消息语义并保留行内代码', () => user.tagName === 'ARTICLE' && Boolean(user.querySelector('.msg-body code')));
+    check('P14-B 历史 Assistant 使用消息语义和开放正文', () => assistant.tagName === 'ARTICLE' && Boolean(assistant.querySelector('.msg-body strong')));
+    check('P14-B Thinking 默认折叠且有可访问控制', () => thinkButton.tagName === 'BUTTON' && thinkButton.getAttribute('aria-expanded') === 'false' && thinkButton.getAttribute('aria-controls') === thinkBody.id && thinkBody.hidden);
+    thinkButton.click();
+    check('P14-B Thinking 展开显示原有内容', () => thinkButton.getAttribute('aria-expanded') === 'true' && !thinkBody.hidden && thinkBody.textContent.includes('先检查文件'));
+    thinkButton.click();
+    check('P14-B Thinking 再次点击收起但保留内容', () => thinkButton.getAttribute('aria-expanded') === 'false' && thinkBody.hidden && thinkBody.textContent.includes('先检查文件'));
+    const files = [...$('stream').querySelectorAll('.msg-file')];
+    check('P14-B 多附件仍为两个独立文件块', () => files.length === 2 && $('stream').querySelectorAll('.msg-att-chip').length === 1);
+    const fileButton = files[0].querySelector('.msg-file-head');
+    check('P14-B 文件详情是可访问按钮', () => fileButton.tagName === 'BUTTON' && fileButton.getAttribute('aria-expanded') === 'false' && fileButton.getAttribute('aria-controls') === files[0].querySelector('.msg-file-body').id);
+    fileButton.click();
+    check('P14-B 文件详情展开后可见', () => fileButton.getAttribute('aria-expanded') === 'true' && !files[0].querySelector('.msg-file-body').hidden);
+
+    window.clearThread();
+    window.onMessageStart({ message: { role: 'assistant' } });
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'thinking_start', contentIndex: 0 } });
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: '核对中' } });
+    await new Promise((r) => setTimeout(r, 30));
+    const liveThink = $('stream').querySelector('.think');
+    const liveToggle = liveThink.querySelector('.think-head');
+    check('P14-B 流式 Thinking 默认折叠', () => liveToggle.tagName === 'BUTTON' && liveToggle.getAttribute('aria-expanded') === 'false' && liveThink.querySelector('.think-body').hidden);
+    liveToggle.click();
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'thinking_end', contentIndex: 0, content: '核对完成' } });
+    check('P14-B 手动展开优先于流式完成默认态', () => liveToggle.getAttribute('aria-expanded') === 'true' && !liveThink.querySelector('.think-body').hidden);
+    window.onMessageEnd({ message: { role: 'assistant', content: [{ type: 'thinking', thinking: '核对完成' }, { type: 'text', text: '已完成' }] } });
+    check('P14-B message_end 保留手动展开和原节点', () => liveThink.isConnected && liveToggle.getAttribute('aria-expanded') === 'true' && liveThink.querySelector('.think-body').textContent === '核对完成');
+
+    window.clearThread();
+    window.onMessageStart({ message: { role: 'assistant' } });
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: '再次检查' } });
+    const foldedThink = $('stream').querySelector('.think');
+    const foldedToggle = foldedThink.querySelector('.think-head');
+    foldedToggle.click();
+    foldedToggle.click();
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'thinking_end', contentIndex: 0, content: '检查结束' } });
+    window.onMessageEnd({ message: { role: 'assistant', content: [{ type: 'thinking', thinking: '检查结束' }, { type: 'text', text: '确认' }] } });
+    check('P14-B 手动收起在流式结束后仍保持收起', () => foldedThink.isConnected && foldedToggle.getAttribute('aria-expanded') === 'false' && foldedThink.querySelector('.think-body').hidden && foldedThink.querySelector('.think-body').textContent === '检查结束');
+
+    window.clearThread();
+    window.onMessageStart({ message: { role: 'assistant' } });
+    window.onMessageUpdate({ assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '旧草稿' } });
+    window.onMessageEnd({ message: { role: 'assistant', content: [{ type: 'text', text: '最终正文' }] } });
+    await new Promise((r) => setTimeout(r, 30));
+    check('P14-B message_end 权威正文不被待执行流式绘制覆盖', () => {
+      const body = $('stream').querySelector('.msg.assistant .msg-body');
+      return body?.textContent.includes('最终正文') && !body.textContent.includes('旧草稿');
+    });
+
+    const entry = window.makeEntry({ toolCallId: 'p14b-tool', toolName: 'bash', args: { command: 'npm test' } });
+    const tool = window.renderEntry(entry);
+    const toolToggle = tool.querySelector('.tl-toggle');
+    const toolDetail = tool.querySelector('.tl-more');
+    check('P14-B running 工具有明确状态文字', () => tool.dataset.status === 'running' && /执行中|运行中/.test(tool.querySelector('.tl-status')?.textContent || ''));
+    check('P14-B 工具详情按钮有展开语义', () => toolToggle.getAttribute('aria-expanded') === 'false' && toolToggle.getAttribute('aria-controls') === toolDetail.id && toolDetail.hidden);
+    toolToggle.click();
+    check('P14-B 工具详情在当前行下方展开', () => toolToggle.getAttribute('aria-expanded') === 'true' && !toolDetail.hidden && toolDetail.querySelector('.tl-args').textContent.includes('npm test'));
+    toolToggle.click();
+    tool.querySelector('.tl-head').click();
+    check('P14-B 原有工具行点击仍可展开详情', () => toolToggle.getAttribute('aria-expanded') === 'true' && !toolDetail.hidden);
+    tool.querySelector('.tl-head').click();
+    for (const [status, expected] of [['success', '成功'], ['error', '失败'], ['incomplete', '未完成'], ['interrupted', '已中断'], ['cancelled', '已取消'], ['unknown', '状态未知']]) {
+      entry.status = status;
+      entry.resultLine = status === 'error' ? 'exit code 1' : '';
+      window.updateEntry(tool, entry);
+      check(`P14-B ${status} 工具状态有图标和文字`, () => tool.dataset.status === status && tool.querySelector('.tl-dot svg') && tool.querySelector('.tl-status')?.textContent.includes(expected));
+    }
+  }
 
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 

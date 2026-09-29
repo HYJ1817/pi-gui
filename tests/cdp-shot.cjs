@@ -389,6 +389,55 @@ async function main() {
   await send('Emulation.clearDeviceMetricsOverride');
   await sleep(300);
 
+  /* P14-B：P14-A 场景全部结束后才切换对话夹具，保持 57–68 的原始语义。 */
+  await evalJs(`fetch('/api/__conversation?what=fixture').then(r => r.ok)`);
+  await sleep(500);
+  await evalJs(`(() => {
+    const mark = (selector, phrase, id) => {
+      const node = [...document.querySelectorAll(selector)].find(el => el.textContent.includes(phrase));
+      if (node) node.id = id;
+    };
+    mark('.msg.user', '好，继续。', 'p14b-short');
+    mark('.msg.user', '请保留完整路径', 'p14b-long');
+    mark('.msg.user', '设备图全套_6张A2.pdf', 'p14b-multiple');
+    mark('.msg.user', '发酵罐空气分布器设计.pdf', 'p14b-single');
+    mark('.msg.assistant', '当前结论', 'p14b-assistant');
+    mark('.msg.assistant', '下面是长代码块', 'p14b-code');
+  })()`);
+  const bubbleBounds = `(() => { const b=document.querySelector('#p14b-short .msg-body').getBoundingClientRect(); const c=document.querySelector('.thread').getBoundingClientRect(); return b.width > 0 && b.width < c.width * .5 && Math.abs(b.right - (c.right - parseFloat(getComputedStyle(document.querySelector('.thread')).paddingRight))) <= 2; })()`;
+  await shotOf('#p14b-short', '69-conversation-user-short', 'P14-B：短 User Bubble 靠右且按内容收缩', ['好，继续'], [['短 Bubble 真实位置与宽度', bubbleBounds]]);
+  await shotOf('#p14b-long', '70-conversation-user-long', 'P14-B：长 User Bubble 有宽度上限且换行', ['请保留完整路径'], [['长 Bubble 不超过阅读列 78%', `(() => { const b=document.querySelector('#p14b-long .msg-body').getBoundingClientRect(); const c=document.querySelector('.thread').getBoundingClientRect(); return b.width <= (c.width - 2*parseFloat(getComputedStyle(document.querySelector('.thread')).paddingLeft)) * .78 + 2 && document.documentElement.scrollWidth <= innerWidth + 1; })()`]]);
+  await shotOf('#p14b-assistant', '71-assistant-open-text', 'P14-B：Assistant 开放正文与 Markdown', ['当前结论'], [['Assistant 无大卡背景且 Markdown 在', `(() => { const b=document.querySelector('#p14b-assistant .msg-body'); const s=getComputedStyle(b); return s.backgroundColor === 'rgba(0, 0, 0, 0)' && parseFloat(s.borderTopWidth) === 0 && !!b.querySelector('h4, strong, code'); })()`]]);
+  await shotOf('#p14b-assistant .think-head', '72-thinking-collapsed', 'P14-B：Thinking 默认折叠', ['思考过程'], [['Thinking 控件与内容真实折叠', `(() => { const h=document.querySelector('#p14b-assistant .think-head'); const b=document.querySelector('#p14b-assistant .think-body'); return h.tagName === 'BUTTON' && h.getAttribute('aria-expanded') === 'false' && b.hidden && b.getBoundingClientRect().height === 0; })()`]]);
+  await evalJs(`document.querySelector('#p14b-assistant .think-head').click()`);
+  await shotOf('#p14b-assistant .think', '73-thinking-expanded', 'P14-B：Thinking 展开后显示真实内容', ['先核对步骤'], [['Thinking 展开且内容可见', `(() => { const h=document.querySelector('#p14b-assistant .think-head'); const b=document.querySelector('#p14b-assistant .think-body'); return h.getAttribute('aria-expanded') === 'true' && !b.hidden && b.getBoundingClientRect().height > 0; })()`]]);
+  await evalJs(`document.querySelector('#p14b-assistant .think-head').click()`);
+  await evalJs(`fetch('/api/__conversation?what=tool-running').then(r => r.ok)`);
+  await sleep(280);
+  await shotOf('.tl-item[data-id="p14b-running"]', '74-tool-running', 'P14-B：工具运行状态', ['读取文件'], [['运行态图标与文字', `(() => { const e=document.querySelector('.tl-item[data-id="p14b-running"]'); return e?.dataset.status === 'running' && !!e.querySelector('.tl-dot svg') && /运行中/.test(e.querySelector('.tl-status')?.textContent || ''); })()`]]);
+  await evalJs(`fetch('/api/__conversation?what=tool-success').then(r => r.ok)`);
+  await sleep(200);
+  await shotOf('.tl-item[data-id="p14b-running"]', '75-tool-success', 'P14-B：工具成功状态', ['读取文件'], [['成功态图标与文字', `(() => { const e=document.querySelector('.tl-item[data-id="p14b-running"]'); return e?.dataset.status === 'success' && !!e.querySelector('.tl-dot svg') && /成功/.test(e.querySelector('.tl-status')?.textContent || ''); })()`]]);
+  await evalJs(`fetch('/api/__conversation?what=tool-failed').then(r => r.ok)`);
+  await sleep(200);
+  await shotOf('.tl-item[data-id="p14b-failed"]', '76-tool-failed', 'P14-B：工具失败状态与退出码', ['执行命令'], [['失败态有文字和结果', `(() => { const e=document.querySelector('.tl-item[data-id="p14b-failed"]'); return e?.dataset.status === 'error' && /失败/.test(e.querySelector('.tl-status')?.textContent || '') && /exit code 1/.test(e.querySelector('.tl-result')?.textContent || ''); })()`]]);
+  await shotOf('.tl-group', '77-tool-group-mixed', 'P14-B：连续工具组有成功与失败', ['操作 3 项'], [['历史工具同组且状态混合', `(() => { const g=document.querySelector('.tl-group'); return g?.querySelectorAll('.tl-item').length === 3 && !!g.querySelector('[data-status=success]') && !!g.querySelector('[data-status=error]'); })()`]]);
+  await shotOf('#p14b-single .msg-file', '78-attachment-single', 'P14-B：单附件紧凑文件块', ['发酵罐空气分布器设计.pdf'], [['文件块有按钮且高度紧凑', `(() => { const f=document.querySelector('#p14b-single .msg-file'); return f.getBoundingClientRect().height < 80 && f.querySelector('button.msg-file-head[aria-expanded="false"]') && f.querySelector('.msg-file-body').hidden; })()`]]);
+  await shotOf('#p14b-multiple', '79-attachment-multiple', 'P14-B：多附件自然堆叠', ['设备图全套', '核对记录'], [['两文件块均在 Bubble 内', `document.querySelectorAll('#p14b-multiple .msg-file').length === 2 && document.querySelectorAll('#p14b-multiple button.msg-file-head').length === 2`]]);
+  await evalJs(`document.querySelectorAll('#convoNav .cn-marker')[2].click()`);
+  await sleep(700);
+  await shotOf('#convoNav', '80-minimap', 'P14-B：Minimap 当前点与点击定位', [], [['四个用户 Turn、当前项与定位', `(() => { const marks=[...document.querySelectorAll('#convoNav .cn-marker')]; const users=[...document.querySelectorAll('.thread .msg.user')]; const target=document.querySelector('#p14b-long'); const stream=document.querySelector('#stream').getBoundingClientRect(); const r=target.getBoundingClientRect(); const band=stream.top+stream.height*.1; let expected=0; users.forEach((user,i)=>{ if(user.getBoundingClientRect().top<=band) expected=i; }); return marks.length === 4 && users.length === 4 && marks.filter(m=>m.classList.contains('on')).length === 1 && marks[expected].classList.contains('on') && r.top >= stream.top-2 && r.top < stream.bottom; })()`]]);
+  await shotOf('#p14b-code pre.code', '81-long-code', 'P14-B：长代码只在代码块内横向滚动', [], [['代码内部溢出、页面无横向溢出', `(() => { const c=document.querySelector('#p14b-code pre.code'); return c.scrollWidth > c.clientWidth && c.getBoundingClientRect().right <= innerWidth + 1 && document.documentElement.scrollWidth <= innerWidth + 1; })()`]]);
+  for (const [width, scene] of [[700,'82-narrow-700'],[900,'83-conversation-900'],[1200,'84-conversation-1200'],[1536,'85-conversation-1536']]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await sleep(260);
+    await shotOf('#p14b-long', scene, `P14-B：${width}px 阅读列与长 URL`, ['请保留完整路径'], [['页面与消息都无横向溢出', `document.documentElement.scrollWidth <= innerWidth + 1 && document.querySelector('#p14b-long').getBoundingClientRect().right <= innerWidth + 1`], ['阅读列在视口内且居中', `(() => { const c=document.querySelector('.thread').getBoundingClientRect(); const s=document.querySelector('#stream').getBoundingClientRect(); return c.width > 0 && c.width <= s.width + 1 && Math.abs((c.left+c.right)/2-(s.left+s.right)/2) <= 2; })()`], ['代码块内部滚动', `(() => { const c=document.querySelector('#p14b-code pre.code'); return c.scrollWidth > c.clientWidth && document.documentElement.scrollWidth <= innerWidth + 1; })()`]]);
+  }
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(250);
+  await evalJs(`fetch('/api/__conversation?what=reset').then(r => r.ok)`);
+  await sleep(300);
+
   await evalJs('document.querySelector("#navPlanner").click()');
   await sleep(900);
   const pickPlan = async (i) => {
