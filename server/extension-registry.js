@@ -6,42 +6,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { json } from './http-utils.js';
+import { readExtensionJson as readJson, resolveExtensionPaths, resolvePackageExtensionPaths,
+  applyExtensionPatterns, containedExtensionPath } from '../lib/extension-paths.js';
 
 const MAX_ENTRIES = 300;
-const MAX_JSON_BYTES = 256 * 1024;
 const cmp = (p) => process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p);
 const key = (p) => cmp(p);
 const idOf = (p) => createHash('sha256').update(key(p)).digest('hex').slice(0, 20);
-const inside = (root, candidate) => {
-  const relative = path.relative(root, candidate);
-  return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
-};
 const fileExists = (p) => {
   try { return fs.lstatSync(p).isFile(); } catch { return false; }
 };
-const dirExists = (p) => {
-  try { return fs.lstatSync(p).isDirectory(); } catch { return false; }
-};
-function readJson(file) {
-  try {
-    const stat = fs.lstatSync(file);
-    if (!stat.isFile() || stat.size > MAX_JSON_BYTES) return { data: null, error: 'metadata-invalid' };
-    const data = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return { data: null, error: 'metadata-invalid' };
-    return { data, error: null };
-  } catch (err) {
-    return { data: null, error: err?.code === 'ENOENT' ? 'missing' : 'metadata-invalid' };
-  }
-}
-function safePackagePath(root, relative) {
-  if (typeof relative !== 'string' || !relative || path.isAbsolute(relative)) return null;
-  const candidate = path.resolve(root, relative);
-  if (!inside(root, candidate)) return null;
-  try {
-    if (!inside(fs.realpathSync(root), fs.realpathSync(candidate))) return null;
-  } catch { /* Missing entries are shown as missing, never followed. */ }
-  return candidate;
-}
 function packageName(source) {
   if (typeof source !== 'string' || !source.startsWith('npm:')) return null;
   const spec = source.slice(4);
@@ -107,13 +81,15 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
     const diagnostics = [];
     const extensions = [];
     const seen = new Map();
+    const packageScopes = new Map();
+    const inheritedPaths = new Set();
     const roots = [{ scope: 'global', base: agentDir, settings: path.join(agentDir, 'settings.json') }];
     if (cwd) roots.unshift({ scope: 'project', base: path.join(cwd, '.pi'), settings: path.join(cwd, '.pi', 'settings.json') });
     let trusted = null;
     if (cwd && readTrust) {
       try { trusted = (await readTrust())?.trusted ?? null; } catch { /* unknown */ }
     }
-    function add(file, { scope, type = 'local', packageRoot = null, packageMeta = null, settingsError = null }) {
+    function add(file, { scope, type = 'local', packageRoot = null, packageMeta = null, settingsError = null, enabled = null }) {
       if (extensions.length >= MAX_ENTRIES || typeof file !== 'string') return;
       const resolved = path.resolve(file);
       const existing = seen.get(key(resolved));
@@ -123,10 +99,10 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
       }
       const installed = fileExists(resolved);
       const basename = path.basename(path.dirname(resolved)) === 'extensions' ? path.basename(resolved, path.extname(resolved)) : path.basename(path.dirname(resolved));
-      const name = typeof packageMeta?.name === 'string' && packageMeta.name ? packageMeta.name : basename;
+      const name = safeDescription(packageMeta?.name) || basename;
       const metadataRead = packageRoot ? { data: packageMeta, error: null } : readJson(path.join(path.dirname(resolved), 'package.json'));
       const metadata = metadataRead.data;
-      const version = typeof metadata?.version === 'string' ? metadata.version : null;
+      const version = safeDescription(metadata?.version);
       const error = settingsError || (!installed ? 'extension-missing' : null) ||
         (metadataRead.error === 'metadata-invalid' ? 'metadata-invalid' : null) ||
         (packageRoot && !packageMeta ? 'metadata-invalid' : null);
@@ -134,55 +110,46 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
         id: idOf(resolved), name, displayName: name, version,
         description: safeDescription(metadata?.description),
         source: { type, location: resolved }, scope,
-        state: { installed, enabled: scope === 'project' && trusted === false ? false : null,
+        state: { installed, enabled: scope === 'project' && trusted === false ? false : enabled,
           loaded: null, restartRequired: null, error: error ? { extensionId: idOf(resolved), phase: 'discovery', message: error } : null },
         capabilities: [], configurable: false, declarations: 1,
       };
       extensions.push(record);
       seen.set(key(resolved), record);
     }
-    function scanAuto(root) {
-      const dir = path.join(root.base, 'extensions');
-      if (!dirExists(dir)) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
-      catch { diagnostics.push({ phase: 'discovery', code: 'directory-unreadable', message: '扩展目录无法读取' }); return; }
-      for (const entry of entries.slice(0, MAX_ENTRIES)) {
-        if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.isSymbolicLink()) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isFile() && /\.[jt]s$/.test(entry.name)) add(full, root);
-        else if (entry.isDirectory()) {
-          const index = ['index.ts', 'index.js'].map((n) => path.join(full, n)).find(fileExists);
-          if (index) add(index, root);
-          else diagnostics.push({ phase: 'discovery', code: 'entry-missing', message: '扩展目录没有 index.ts 或 index.js' });
-        }
+    function addRows(rows, root, states, confirmed = true) {
+      for (const row of rows) {
+        const state = states.get(row.file);
+        add(row.file, { ...root, packageRoot: row.metadata ? row.ownerRoot : root.packageRoot,
+          packageMeta: root.packageMeta || row.metadata, settingsError: root.settingsError || row.error,
+          enabled: state === false ? false : row.uncertain || !confirmed ? null : state });
       }
     }
     for (const root of roots) {
-      scanAuto(root);
       const settings = readJson(root.settings);
       if (settings.error && settings.error !== 'missing') diagnostics.push({ phase: 'config', code: settings.error, message: 'Pi settings.json 无法解析' });
-      if (!settings.data) continue;
-      const entries = Array.isArray(settings.data.extensions) ? settings.data.extensions : [];
+      const entries = Array.isArray(settings.data?.extensions) ? settings.data.extensions : [];
+      const validEntries = entries.every(entry => typeof entry === 'string');
+      if (!validEntries) diagnostics.push({ phase: 'config', code: 'metadata-invalid', message: 'Extension 配置数组含无效条目，启用状态无法完整确认' });
+      const plain = [];
       for (const entry of entries.slice(0, MAX_ENTRIES)) {
         if (typeof entry !== 'string') continue;
-        if (entry.startsWith('-') || entry.startsWith('!')) {
-          if (entry.startsWith('-')) {
-            const disabled = path.resolve(root.base, entry.slice(1));
-            const record = seen.get(key(disabled));
-            if (record) { record.state.enabled = false; record.state.loaded = false; }
-          }
-          continue;
-        }
-        const declared = entry.startsWith('+') ? entry.slice(1) : entry;
-        if (/^(npm:|git:|https?:|ssh:)/.test(declared)) {
+        if (/^[!+-]/.test(entry) || /[*?]/.test(entry)) continue;
+        if (/^(npm:|git:|https?:|ssh:)/.test(entry)) {
           diagnostics.push({ phase: 'discovery', code: 'source-unsupported', message: '远程扩展来源需由 Pi 自行解析；GUI 未执行安装' });
           continue;
         }
-        let target = path.isAbsolute(declared) ? declared : path.resolve(root.base, declared);
-        if (dirExists(target)) target = ['index.ts', 'index.js'].map((n) => path.join(target, n)).find(fileExists) || path.join(target, 'index.ts');
-        add(target, { ...root, type: 'local' });
+        const target = entry.startsWith('~/') || entry.startsWith('~\\') ? path.resolve(home, entry.slice(2)) : path.resolve(root.base, entry);
+        plain.push(...resolveExtensionPaths(target, { diagnostics, missing: true }));
       }
+      const patterns = entries.filter(p => typeof p === 'string' && (/^[!+-]/.test(p) || /[*?]/.test(p)));
+      addRows(plain, root, applyExtensionPatterns(plain.map(row => row.file), patterns, root.base), validEntries);
+      const auto = resolveExtensionPaths(path.join(root.base, 'extensions'), { diagnostics });
+      const autoStates = applyExtensionPatterns(auto.map(row => row.file), entries, root.base, { overridesOnly: true });
+      // Absent runtime evidence still leaves default load eligibility conservative;
+      // overrides that can prove a state are reported independently of loading.
+      addRows(auto, root, autoStates, validEntries && entries.some(p => typeof p === 'string' && /^[!+-]/.test(p)));
+      if (!settings.data) continue;
       const packages = Array.isArray(settings.data.packages) ? settings.data.packages : [];
       for (const entry of packages.slice(0, MAX_ENTRIES)) {
         const source = typeof entry === 'string' ? entry : entry?.source;
@@ -200,26 +167,36 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
         const manifest = readJson(path.join(packageRoot, 'package.json'));
         if (manifest.error === 'missing') diagnostics.push({ phase: 'discovery', code: 'package-missing', message: '已配置的 package 未安装或缺少 package.json' });
         if (manifest.error === 'metadata-invalid') diagnostics.push({ phase: 'discovery', code: 'metadata-invalid', message: 'package.json 无法解析' });
-        const declared = manifest.data?.pi?.extensions;
-        let candidates = Array.isArray(declared) ? declared : [];
-        if (!Array.isArray(declared) && dirExists(path.join(packageRoot, 'extensions'))) {
-          try {
-            candidates = fs.readdirSync(path.join(packageRoot, 'extensions'), { withFileTypes: true })
-              .filter((e) => !e.name.startsWith('.') && !e.isSymbolicLink())
-              .flatMap((e) => e.isFile() && /\.[jt]s$/.test(e.name) ? [path.join('extensions', e.name)]
-                : e.isDirectory() ? ['index.ts', 'index.js'].map((name) => path.join('extensions', e.name, name)) : []);
-          } catch { /* unreadable package remains unknown */ }
+        const filtered = typeof entry === 'object' && entry !== null;
+        const candidates = resolvePackageExtensionPaths(packageRoot, manifest.data, { diagnostics,
+          objectForm: filtered, filtered: filtered && (entry.extensions !== undefined || entry.autoload === false) });
+        const identity = npmName ? `npm:${npmName}` : key(packageRoot);
+        const prior = packageScopes.get(identity);
+        const current = { scope: root.scope, files: candidates.map(row => row.file) };
+        if (prior && prior.scope !== root.scope) {
+          for (const file of [...prior.files, ...current.files]) inheritedPaths.add(key(file));
+          diagnostics.push({ phase: 'config', code: 'package-inheritance-unresolved', message: '同一 package 跨作用域声明，配置继承状态无法完整确认' });
         }
-        for (const rel of candidates.slice(0, MAX_ENTRIES)) {
-          if (typeof rel !== 'string' || /[*?{}!]/.test(rel)) {
-            diagnostics.push({ phase: 'discovery', code: 'pattern-unresolved', message: 'package 扩展模式无法只读确认' });
-            continue;
-          }
-          const target = safePackagePath(packageRoot, rel);
-          if (!target) { diagnostics.push({ phase: 'discovery', code: 'outside-root', message: 'package 扩展路径越过根目录' }); continue; }
-          if (!fileExists(target) && !Array.isArray(declared)) continue;
-          add(target, { ...root, type, packageRoot, packageMeta: manifest.data });
+        packageScopes.set(identity, current);
+        let states = new Map(candidates.map(row => [row.file, null]));
+        if (filtered && entry.extensions !== undefined) {
+          const filter = Array.isArray(entry.extensions) ? entry.extensions : null;
+          if (!filter || !filter.every(pattern => typeof pattern === 'string')) diagnostics.push({ phase: 'config', code: 'metadata-invalid', message: 'package Extension filter 无法解析' });
+          const safeFilter = filter?.every(pattern => typeof pattern === 'string') ? filter.filter(pattern => {
+            if (typeof pattern !== 'string') return false;
+            const target = pattern.replace(/^[!+-]/, '');
+            if (containedExtensionPath(packageRoot, target)) return true;
+            diagnostics.push({ phase: 'config', code: 'outside-root', message: 'package filter 路径越过根目录或经过符号链接' });
+            return false;
+          }) : null;
+          states = applyExtensionPatterns(candidates.map(row => row.file), safeFilter, packageRoot, { emptyDisables: true });
         }
+        if (filtered && entry.autoload === false) {
+          diagnostics.push({ phase: 'config', code: 'autoload-unsupported', message: 'package autoload delta 需要继承解析；启用状态无法确认' });
+          states = new Map(candidates.map(row => [row.file, null]));
+        }
+        addRows(candidates, { ...root, type, packageRoot, packageMeta: manifest.data,
+          settingsError: manifest.error === 'metadata-invalid' ? manifest.error : null }, states);
       }
     }
     let commands = null;
@@ -235,18 +212,18 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
       const owner = source && seen.get(source);
       if (!owner) continue;
       owner.state.loaded = true;
-      owner.state.enabled = true;
       const capability = { type: 'command', id: command.name, displayName: command.name };
       owner.capabilities.push(capability);
       capabilityCommands.push({ name: command.name, extensionId: owner.id });
     }
     for (const item of extensions) {
+      if (inheritedPaths.has(key(item.source.location)) && !(item.scope === 'project' && trusted === false)) item.state.enabled = null;
       const failure = runtimeErrors.get(key(item.source.location));
       if (failure && (!observedCwd || (cwd && cmp(cwd) === cmp(observedCwd)))) {
         item.state.loaded = false;
         item.state.error = { extensionId: item.id, ...failure };
       }
-      if (item.state.installed === false || item.state.enabled === false) item.state.loaded = false;
+      if (item.state.installed === false || (item.scope === 'project' && trusted === false)) item.state.loaded = false;
     }
     return { ok: true, hasProject: Boolean(cwd), piReachable: commands !== null,
       extensions, diagnostics,

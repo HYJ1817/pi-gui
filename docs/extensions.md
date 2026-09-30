@@ -4,23 +4,39 @@
 不是商店 —— 没有下载、没有安装、没有远程代码执行。
 
 **Pi GUI = pi 的 GUI，不是第二套扩展系统。** pi 已有的机制就做 GUI 管理，
-pi 没有的（MCP）**不发明兼容层**，而是如实报告 + 指出官方替代路径。
+当前兼容基线 Pi 0.87.0 未提供的 MCP 能力按版本检测结果如实报告。
 
 ## Extensions（P15 基础设施）
 
 Skill 是给模型阅读的指令，Extension 是在 Pi 进程中执行的第三方代码；两者保持独立。
 本机 Pi 0.87.0 的来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
-`index.ts|index.js`、受信任项目的 `.pi/extensions`、`settings.json` 的
+`package.json.pi.extensions` 或 `index.ts|index.js`、受信任项目的 `.pi/extensions`、`settings.json` 的
 `extensions` / `packages`，以及 CLI `-e`。项目来源受 Pi 的信任判定约束。
 Pi package 可以由 npm、git 或本地路径提供；Pi 自己的解析器还支持 manifest
 模式和覆盖规则。GUI 只读扫描能安全定位的本地文件与 npm package，不执行
-package 解析器（它可能安装缺失包）。复杂模式及无法只读定位的来源会给出诊断，
-不假装已完整解析。重复路径合并，package manifest 的路径必须留在 package 根内。
+package 解析器（它可能安装缺失包）。共享只读 resolver 先检查目录 manifest，
+再取 `index.ts` / `index.js`；无入口的根目录仅扫描直属 JS/TS 文件和子目录入口。
+settings 的普通目录条目使用同一规则。重复路径合并，manifest 路径必须留在所属根内。
+
+自动发现项应用 settings 的 `!pattern` → `+exact-path` → `-exact-path`，
+精确模式比较相对路径或绝对路径，不匹配 basename 或 glob；`-` 最终优先。
+settings 普通 glob 只筛选已发现的本地条目，不作为额外发现来源。
+package manifest 的正向 glob 使用 Node 内置 glob 展开（跳过隐藏路径并按词法排序），
+再应用 manifest override；普通目录 manifest 按 Pi loader 的字面路径规则解析，不展开 glob。
+package 对象的 `extensions` filter 支持 include / exclude / 精确 override，`[]` 明确禁用，
+省略属性使用默认结果；filter 只能筛选 package resolver 已得出的集合，不新增路径。
+Pi 0.87.0 有一个细节：显式 package filter 在 manifest extensions 为空或缺失时
+回退到约定目录；未带 filter 的空 manifest 不加载资源。fixture 按真实源码固定这一区别。
+
+仍有限制：GUI 拒绝符号链接（Pi 允许部分链接）；git/临时 CLI 来源、旧版全局 npm
+回退位置、跨作用域 package 继承与 `autoload:false` delta 尚未完整解析。
+`.gitignore` / `.ignore` / `.fdignore` 规则也未完整移植，候选项保留未知启用状态并给出诊断。
+无法安全确认的模式或来源不会宣称启用/加载成功。
 
 `GET /api/extensions` 返回统一的 `extensions[]` 与 `capabilityRegistry`。
 `installed`、`enabled`、`loaded` 分开表达；缺证据用 `null`，不把“没观察到”
 写成“未加载”。版本只读 `package.json`；可验证的 command 来自 Pi RPC
-`get_commands` 的 `sourceInfo.path`。本机 RPC **没有** extension 或已注册 tool
+`get_commands` 的 `sourceInfo.path`。兼容基线 Pi 0.87.0 RPC **没有** extension 或已注册 tool
 列表；`get_state` 也没有这些字段。因此当前工具来源保持未知，Capability Registry
 只记录已证实的 command；未来若 Pi 提供带来源的工具清单，
 `mapRegisteredTools()` 可把多个工具映射到同一个 extension。未知工具继续由现有
@@ -32,6 +48,8 @@ GUI 不调用安装命令，也不改用户的 Pi settings。用户在 Pi 外部
 已有的重启 Pi 入口；桥接先停旧进程、再启动新进程，前端在重启期间锁住 Composer，
 workspace generation 防止旧请求污染新项目。Registry 在新 bridge run 清除旧错误，
 重新请求命令证据。没有证据时 `restartRequired` 保持 `null`。
+配置禁用与当前加载证据独立：修改配置但尚未重启时，可以同时出现
+`enabled=false` 与 RPC 证实的 `loaded=true`；无 runtime 证据时仍保持 `loaded=null`。
 
 Extension 失败只影响其状态行；发现接口失败会显示重试提示，基础聊天仍可用。
 API 的错误只给 phase 与安全文案，不回显可能包含凭据的原始 Pi 错误。
@@ -126,15 +144,16 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
 
 ## MCP
 
-### pi 当前没有原生 MCP，而且是有意为之
+### 当前兼容基线 Pi 0.87.0 未提供原生 MCP
 
-`docs/usage.md` 原文：
+Pi 0.87.0 的 `docs/usage.md` 原文：
 
 > It intentionally does not include built-in MCP, sub-agents, permission popups,
 > plan mode, to-dos, or background bash. You can build or install those workflows
 > as extensions or packages, or use external tools such as containers and tmux.
 
-pi 包里没有任何 MCP 模块，也没有 `mcpServers` / `.mcp.json` 这类配置约定。
+该版本的 Pi 包里没有 MCP 模块，也没有 `mcpServers` / `.mcp.json` 这类配置约定；
+后续上游版本可能变化，页面继续检测实际安装版本。
 
 ### 所以 MCP 标签页不是 Server 列表，是一份能力报告
 

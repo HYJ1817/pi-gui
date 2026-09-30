@@ -163,7 +163,9 @@ SVG 图标常量），所有文本走 `textContent`。于是「记得转义」�
 
 **做法**：Extension discovery 不 import/require 候选代码，只读目录项与受限大小的
 `package.json` 元数据；只输出已知字段，不回显配置中的未知字段或 Pi 原始错误。
-manifest 内的相对路径须留在 package 根内，符号链接逃逸也拒绝。
+目录 manifest、package manifest 和 package filter 都做所属根路径校验。
+glob 只在 package 根内展开；每个结果再次校验，包含中间目录的符号链接也拒绝。
+该策略比 Pi 0.87.0 允许部分链接的规则更严格；不通过执行 Extension 来补齐未知信息。
 Skills 详情会按用户操作读取 `SKILL.md` 正文；MCP 报告只读目录元信息。
 所以扩展源码里写着密钥，也不会因 discovery 出现在接口响应里
 （`tests/skills.cjs` 直接断言 `ghp_LEAK_ME` 不出现）。

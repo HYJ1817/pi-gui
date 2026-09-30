@@ -142,8 +142,8 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   改完会自动重启 pi（pi 没有文件监听）
 - **Extensions**：只读发现当前磁盘上的候选项，分开显示安装、配置与加载证据。
   Pi RPC 没有已注册工具清单，所以不会猜某个扩展提供了什么工具；安装与启停仍用 Pi 官方 CLI。
-- **MCP**：pi 目前**没有原生 MCP**，而且是有意为之。所以这个标签页不是
-  Server 列表，而是一份能力报告 —— 读你本机的 pi 包给出结论与原文证据，
+- **MCP**：当前兼容基线 **Pi 0.87.0 未提供原生 MCP 或对应 RPC 能力**。这个标签页是
+  一份能力报告 —— 读你本机的 pi 包给出结论与原文证据，
   并指出官方替代路径是 extension。**不假装有一堆 Server 可以增删改**
 
 → [extensions.md](docs/extensions.md)

@@ -88,6 +88,125 @@ const path = require('node:path');
       assert.equal(stale.capabilityRegistry.commands.length, 0);
       assert.equal(stale.extensions.find(x => x.source.location === local).state.loaded, null);
     });
+    // Parity cases follow Pi 0.87.0 package-manager/loader path semantics.
+    const parityAgent = path.join(root, 'parity/agent');
+    const parityProject = path.join(root, 'parity/project');
+    put('parity/agent/extensions/manifest/package.json', JSON.stringify({ pi: { extensions: ['src/tool.ts'] } }));
+    const autoTool = put('parity/agent/extensions/manifest/src/tool.ts', 'throw new Error("NEVER_EXECUTE")');
+    const experimental = put('parity/agent/extensions/experimental/index.ts', 'throw new Error("NEVER_EXECUTE")');
+    const localDir = path.join(root, 'parity/local');
+    put('parity/local/package.json', JSON.stringify({ pi: { extensions: ['src/a.ts', 'src/b.js'] } }));
+    const localA = put('parity/local/src/a.ts', 'throw new Error("NEVER_EXECUTE")');
+    const localB = put('parity/local/src/b.js', 'throw new Error("NEVER_EXECUTE")');
+    const looseDir = path.join(root, 'parity/loose');
+    const looseA = put('parity/loose/a.ts', '');
+    const looseB = put('parity/loose/sub/index.js', '');
+    const pkg = path.join(root, 'parity/package');
+    put('parity/package/package.json', JSON.stringify({ name: 'parity-package', pi: { extensions: ['extensions/*.ts', 'src/**/*.ts', '!extensions/manifest-disabled.ts'] } }));
+    const pkgMain = put('parity/package/extensions/main.ts', 'throw new Error("NEVER_EXECUTE")');
+    const pkgLegacy = put('parity/package/extensions/legacy.ts', '');
+    const pkgDisabled = put('parity/package/extensions/manifest-disabled.ts', '');
+    const pkgNested = put('parity/package/src/nested/tool.ts', '');
+    put('parity/package/src/.hidden/tool.ts', '');
+    const outside = put('parity/outside.ts', '');
+    const undeclared = put('parity/package/private.ts', '');
+    const parityRegistry = createExtensionRegistry({ runtime: { getCurrentCwd: () => parityProject }, rpc: null,
+      env: { HOME: root, PI_CODING_AGENT_DIR: parityAgent }, readTrust: async () => ({ trusted: true }) });
+    const configure = async (settings) => {
+      put('parity/agent/settings.json', JSON.stringify({ credential: 'SECRET123', ...settings }));
+      return parityRegistry.readIndex();
+    };
+    const byFile = (report, file) => report.extensions.find(x => x.source.location === file);
+    let parity = await configure({ extensions: [localDir, looseDir] });
+    check('A auto directory manifest discovers entry without index', () => assert.ok(byFile(parity, autoTool)));
+    check('B settings directory resolves all manifest entries', () => assert.ok(byFile(parity, localA) && byFile(parity, localB)));
+    check('B settings directory without entry points uses one-level collection', () => assert.ok(byFile(parity, looseA) && byFile(parity, looseB)));
+    parity = await configure({ extensions: ['!extensions/experimental/*'] });
+    check('C auto discovery respects exclusion glob', () => assert.equal(byFile(parity, experimental).state.enabled, false));
+    parity = await configure({ extensions: ['!extensions/experimental/*', '+extensions/experimental/index.ts'] });
+    check('D exact force include overrides exclusion', () => assert.equal(byFile(parity, experimental).state.enabled, true));
+    parity = await configure({ extensions: ['-extensions/experimental/index.ts', '+extensions/experimental/index.ts', path.dirname(experimental)] });
+    check('E force exclude beats force include and plain directory include regardless of order', () => assert.equal(byFile(parity, experimental).state.enabled, false));
+    parity = await configure({ packages: [{ source: pkg, extensions: ['extensions/*.ts', '!extensions/legacy.ts', '+src/nested/tool.ts', '-extensions/main.ts'] }] });
+    check('F package filter handles include exclude and exact overrides', () => {
+      assert.equal(byFile(parity, pkgMain).state.enabled, false);
+      assert.equal(byFile(parity, pkgLegacy).state.enabled, false);
+      assert.equal(byFile(parity, pkgNested).state.enabled, true);
+    });
+    check('F package filter cannot revive manifest-excluded resources', () => assert.ok(!byFile(parity, pkgDisabled)));
+    parity = await configure({ packages: [{ source: pkg }] });
+    check('F omitted package object filter keeps default manifest resource set', () => assert.ok(byFile(parity, pkgMain) && byFile(parity, pkgLegacy) && byFile(parity, pkgNested) && !byFile(parity, pkgDisabled)));
+    parity = await configure({ packages: [{ source: pkg, extensions: ['extensions/*.ts', 42] }] });
+    check('malformed filter cannot claim enabled=true', () => assert.ok(parity.extensions.filter(x => x.name === 'parity-package').every(x => x.state.enabled === null)));
+    parity = await configure({ packages: [{ source: pkg, extensions: [] }] });
+    check('G empty package filter explicitly disables all declared extensions', () => assert.ok(parity.extensions.filter(x => x.name === 'parity-package').length === 3 && parity.extensions.filter(x => x.name === 'parity-package').every(x => x.state.enabled === false)));
+    parity = await configure({ packages: [pkg] });
+    check('H package manifest expands flat and nested glob without hidden paths', () => { assert.ok(byFile(parity, pkgMain) && byFile(parity, pkgLegacy) && byFile(parity, pkgNested)); assert.ok(parity.extensions.every(x => !x.source.location.includes('.hidden'))); });
+    parity = await configure({ packages: [{ source: pkg, extensions: ['+../outside.ts', '+private.ts'] }] });
+    check('I filter cannot introduce undeclared or outside-root files', () => assert.ok(!byFile(parity, outside) && !byFile(parity, undeclared)));
+    put('parity/package/package.json', JSON.stringify({ pi: { extensions: ['../outside.ts', '../*.ts', 'extensions/*.ts'] } }));
+    parity = await configure({ packages: [pkg] });
+    check('I literal and glob manifest traversal are rejected', () => { assert.ok(!byFile(parity, outside)); assert.ok(parity.diagnostics.some(x => x.code === 'outside-root')); });
+    put('parity/agent/extensions/bad/package.json', '{bad');
+    const badIndex = put('parity/agent/extensions/bad/index.ts', '');
+    parity = await configure({});
+    check('J malformed directory metadata falls back to index and isolates discovery error', () => assert.ok(byFile(parity, badIndex)?.state.error && byFile(parity, autoTool)));
+    check('K disk discovery never invents loaded runtime evidence', () => assert.ok(parity.extensions.every(x => x.state.loaded === null)));
+    check('M settings secrets and extension source never reach renderer report', () => assert.ok(!JSON.stringify(parity).includes('SECRET123') && !JSON.stringify(parity).includes('NEVER_EXECUTE')));
+    const { applyExtensionPatterns, resolveExtensionPaths, resolvePackageExtensionPaths, containedExtensionPath } = await import('../lib/extension-paths.js');
+    check('helper patterns match relative path basename and absolute path', () => {
+      for (const pattern of ['extensions/*.ts', 'main.ts', pkgMain]) assert.equal(applyExtensionPatterns([pkgMain], [pattern], pkg).get(pkgMain), true);
+    });
+    check('helper exact overrides do not match basename or glob', () => {
+      assert.equal(applyExtensionPatterns([pkgMain], ['!**/*.ts', '+main.ts', '+extensions/*.ts'], pkg).get(pkgMain), false);
+      assert.equal(applyExtensionPatterns([pkgMain], ['!**/*.ts', '+./extensions/main.ts'], pkg).get(pkgMain), true);
+    });
+    check('helper invalid pattern list keeps eligibility unknown', () => assert.equal(applyExtensionPatterns([pkgMain], [42], pkg).get(pkgMain), null));
+    const priorityRoot = path.join(root, 'parity/priority');
+    const priorityIndex = put('parity/priority/index.ts', '');
+    put('parity/priority/index.js', '');
+    put('parity/priority/sibling.ts', '');
+    check('directory root index.ts takes precedence over index.js and sibling discovery', () => assert.deepEqual(resolveExtensionPaths(priorityRoot).map(x => x.file), [priorityIndex]));
+    put('parity/priority/package.json', JSON.stringify({ pi: { extensions: ['sibling.ts'] } }));
+    check('directory root manifest takes precedence over index', () => assert.deepEqual(resolveExtensionPaths(priorityRoot).map(x => x.file), [path.join(priorityRoot, 'sibling.ts')]));
+    put('parity/priority/package.json', JSON.stringify({ pi: { extensions: ['*.ts'] } }));
+    check('ordinary directory manifest treats glob literally and falls back to index', () => assert.deepEqual(resolveExtensionPaths(priorityRoot).map(x => x.file), [priorityIndex]));
+    put('parity/no-recursion/child/deep/tool.ts', '');
+    check('directory conventional discovery does not recurse beyond child entry points', () => assert.deepEqual(resolveExtensionPaths(path.join(root, 'parity/no-recursion')), []));
+    const conventional = path.join(root, 'parity/conventional');
+    const conventionalFile = put('parity/conventional/extensions/tool.ts', '');
+    check('package without pi manifest uses conventional discovery', () => assert.deepEqual(resolvePackageExtensionPaths(conventional, {}).map(x => x.file), [conventionalFile]));
+    check('empty manifest differs from object resource-filter fallback exactly as Pi 0.87', () => {
+      assert.deepEqual(resolvePackageExtensionPaths(conventional, { pi: { extensions: [] } }), []);
+      assert.deepEqual(resolvePackageExtensionPaths(conventional, { pi: { extensions: [] } }, { objectForm: true }), []);
+      assert.deepEqual(resolvePackageExtensionPaths(conventional, { pi: { extensions: [] } }, { objectForm: true, filtered: true }).map(x => x.file), [conventionalFile]);
+    });
+    put('parity/ignore/.gitignore', '*.ts\n');
+    put('parity/ignore/tool.ts', '');
+    const ignoreDiagnostics = [];
+    check('unimplemented ignore-file rules carry unknown evidence and diagnostic', () => {
+      assert.ok(resolveExtensionPaths(path.join(root, 'parity/ignore'), { diagnostics: ignoreDiagnostics }).every(x => x.uncertain));
+      assert.ok(ignoreDiagnostics.some(x => x.code === 'ignore-unresolved'));
+    });
+    const symlink = path.join(root, 'parity/package/link');
+    let linkCreated = false;
+    try { fs.symlinkSync(path.join(root, 'parity/local'), symlink, process.platform === 'win32' ? 'junction' : 'dir'); linkCreated = true; }
+    catch (error) { if (!['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) throw error; console.log('  skip symlink fixture: unavailable'); }
+    if (linkCreated) check('symlink escape and symlink-root metadata cannot be discovered', () => {
+      assert.equal(containedExtensionPath(pkg, 'link/src/a.ts'), null);
+      assert.deepEqual(resolveExtensionPaths(symlink), []);
+      assert.deepEqual(resolvePackageExtensionPaths(pkg, { pi: { extensions: ['link/src/*.ts', 'link/src/a.ts'] } }), []);
+    });
+    put('parity/agent/settings.json', JSON.stringify({ extensions: ['-extensions/experimental/index.ts'] }));
+    const runtimeRegistry = createExtensionRegistry({ runtime: { getCurrentCwd: () => parityProject },
+      rpc: { request: async () => ({ commands: [{ name: 'experimental-command', source: 'extension', sourceInfo: { path: experimental } }] }) },
+      env: { HOME: root, PI_CODING_AGENT_DIR: parityAgent }, readTrust: async () => ({ trusted: true }) });
+    const stillLoaded = await runtimeRegistry.readIndex();
+    check('disabled configuration and current RPC load evidence remain independent until restart', () => {
+      assert.equal(byFile(stillLoaded, experimental).state.enabled, false);
+      assert.equal(byFile(stillLoaded, experimental).state.loaded, true);
+      assert.equal(stillLoaded.capabilityRegistry.commands[0].extensionId, byFile(stillLoaded, experimental).id);
+    });
     console.log(`\n${passed}/${passed} 通过`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

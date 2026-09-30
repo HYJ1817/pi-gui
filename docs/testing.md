@@ -29,7 +29,10 @@
 
 P15 的 `tests/extensions.cjs` 使用 `os.tmpdir()` 中的 Pi 目录和假 RPC，覆盖发现、
 作用域、重复、坏 metadata、缺失 package、路径越界、command 关联、未知工具、
-状态区分、重启与项目隔离、错误脱敏和不支持的写操作。`tests/smoke.cjs` 检查
+状态区分、重启与项目隔离、错误脱敏和不支持的写操作。P15-Fix 增加目录 manifest、
+settings 目录解析、override 优先级、package filter、空 filter、manifest glob 与路径保护
+的 parity fixture，以及纯 helper 直接测试（包括空 manifest 与 filter 回退的源码差异）。
+符号链接 fixture 若无系统权限会跳过并单独报告，不计入通过数量。`tests/smoke.cjs` 检查
 Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
 Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
 
@@ -39,7 +42,7 @@ Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验�
 smoke 970 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 133
 review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · extensions 23
+sessions 77 · session-search 71 · extensions 52
 pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
 server-security 36 · diagnostics 10 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 75
