@@ -1034,7 +1034,15 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/api/__conversation') {
     const what = url.searchParams.get('what') || 'fixture';
-    if (what === 'subagent-activity') {
+    if (what === 'supervisor-activity') {
+      for (const action of ['status', 'pending', 'list', 'reply', 'something-new']) {
+        const details = action === 'status' ? { active: true, pending: 2, root: 'PRIVATE_ROOT' }
+          : action === 'pending' || action === 'list' ? { pending: [{ id: 'req-1', runId: 'run-1', agent: 'worker', childIndex: 0, reason: 'need_decision', expectsReply: true, message: 'PRIVATE_QUESTION', requestFile: 'PRIVATE_REQUEST' }] }
+          : { replyTo: 'req-1', runId: 'run-1', agent: 'worker', channelDir: 'PRIVATE_CHANNEL' };
+        push({ type: 'tool_execution_start', toolCallId: 'supervisor-' + action, toolName: 'subagent_supervisor', args: { action, replyTo: 'req-1', message: 'PRIVATE_ANSWER' } });
+        push({ type: 'tool_execution_end', toolCallId: 'supervisor-' + action, result: { content: [{ type: 'text', text: 'PRIVATE_RAW_OUTPUT' }], details }, isError: false });
+      }
+    } else if (what === 'subagent-activity') {
       push({ type: 'tool_execution_start', toolCallId: 'p17-enable', toolName: 'subagents_enable', args: {} });
       push({ type: 'tool_execution_end', toolCallId: 'p17-enable', result: { content: [], details: { enabled: ['subagent'] } }, isError: false });
       push({ type: 'tool_execution_start', toolCallId: 'p17-single', toolName: 'subagent', args: { agent: 'custom-reviewer', task: 'Review the module safely', async: false } });

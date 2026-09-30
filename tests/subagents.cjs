@@ -116,5 +116,71 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   const source = fs.readFileSync(path.join(__dirname, '../public/subagent-activity.js'), 'utf8');
   check('no Planner task creation', () => assert.doesNotMatch(source, /fetch\(|planner|createTask|execution_event/));
   check('no Planner mutation', () => assert.doesNotMatch(source, /\bS\.|planId|taskId/));
+  /* Parent producer: native-supervisor-channel.ts, 0.73.1 / 8a403ef.
+   * Hostile extra fields intentionally exceed its public projection. */
+  const supervisor = (action, args = {}) => entry({ action, ...args }, 'supervisor', 'subagent_supervisor');
+  const doneSupervisor = (action, d, args = {}, error = false) => finish(supervisor(action, args), d, error);
+  const statusDetails = { active: true, pending: 2, root: 'PRIVATE_ROOT' };
+  const pendingDetails = { pending: [{ id: 'req-1', runId: 'run-1', agent: 'worker', childIndex: 0, reason: 'need_decision', expectsReply: true, message: 'PRIVATE_QUESTION', requestBody: 'PRIVATE_BODY' }] };
+  const replyDetails = { replyTo: 'req-1', runId: 'run-1', agent: 'worker' };
+  check('supervisor recognized', () => assert.notEqual(activity(supervisor('status')), null));
+  const observed = createSubagentObservation();
+  check('supervisor initially unobserved', () => assert.equal(observed.snapshot(0, 1).subagent_supervisor, false));
+  observed.observe({ type: 'tool_execution_start', toolName: 'subagent_supervisor', bridgeRun: 1 }, 0, 1);
+  check('supervisor observed after start', () => assert.equal(observed.snapshot(0, 1).subagent_supervisor, true));
+  check('fresh supervisor does not imply subagent observed', () => assert.equal(observed.snapshot(0, 1).subagent, false));
+  observed.observe({ type: 'bridge_status', state: 'restarting', bridgeRun: 1 }, 0, 1);
+  check('supervisor restart clears observation', () => assert.equal(observed.snapshot(0, 1).subagent_supervisor, false));
+  observed.observe({ type: 'tool_execution_start', toolName: 'subagent_supervisor', bridgeRun: 1 }, 0, 1);
+  check('supervisor generation clears observation', () => assert.equal(observed.snapshot(1, 1).subagent_supervisor, false));
+  observed.observe({ type: 'tool_execution_start', toolName: 'subagent_supervisor', bridgeRun: 1 }, 1, 2);
+  check('supervisor stale bridge rejected', () => assert.equal(observed.snapshot(1, 2).subagent_supervisor, false));
+  check('supervisor status start', () => assert.equal(activity(supervisor('status')).label, 'Checking supervisor channel…'));
+  check('supervisor status success', () => assert.equal(activity(doneSupervisor('status', statusDetails)).label, 'Checked supervisor channel'));
+  check('supervisor pending replies count', () => assert.match(activity(doneSupervisor('status', statusDetails)).facts, /Pending replies: 2/));
+  check('supervisor status root excluded', () => assert.ok(!view.renderEntry(doneSupervisor('status', statusDetails)).textContent.includes('PRIVATE_ROOT')));
+  check('supervisor pending start', () => assert.equal(activity(supervisor('pending')).label, 'Checking supervisor requests…'));
+  check('supervisor pending success', () => assert.equal(activity(doneSupervisor('pending', pendingDetails)).label, 'Checked supervisor requests'));
+  check('supervisor pending request count', () => assert.match(activity(doneSupervisor('pending', pendingDetails)).facts, /Pending requests: 1/));
+  for (const expected of ['Request: req-1', 'Run: run-1', 'Agent: worker', 'Child index: 0', 'Reason: need_decision', 'Expects reply: true']) {
+    check('supervisor safe ' + expected, () => assert.ok(activity(doneSupervisor('pending', pendingDetails)).facts.includes(expected)));
+  }
+  check('supervisor pending question excluded', () => assert.ok(!view.renderEntry(doneSupervisor('pending', pendingDetails)).textContent.includes('PRIVATE_QUESTION')));
+  check('supervisor pending requestBody excluded', () => assert.ok(!view.renderEntry(doneSupervisor('pending', pendingDetails)).textContent.includes('PRIVATE_BODY')));
+  check('supervisor list success', () => assert.equal(activity(doneSupervisor('list', pendingDetails)).label, 'Listed supervisor requests'));
+  check('supervisor reply start', () => assert.equal(activity(supervisor('reply')).label, 'Replying to subagent…'));
+  check('supervisor reply success', () => assert.equal(activity(doneSupervisor('reply', replyDetails)).label, 'Replied to subagent'));
+  for (const expected of ['Request: req-1', 'Run: run-1', 'Agent: worker']) {
+    check('supervisor reply ' + expected, () => assert.ok(activity(doneSupervisor('reply', replyDetails)).facts.includes(expected)));
+  }
+  check('supervisor reply input message excluded', () => assert.ok(!view.renderEntry(doneSupervisor('reply', replyDetails, { message: 'PRIVATE_ANSWER', to: 'PRIVATE_TARGET' })).textContent.includes('PRIVATE_')));
+  for (const key of ['message', 'root', 'channelDir', 'requestFile', 'replyFile', 'env', 'auth', 'token', 'apiKey', 'credential', 'transcript', 'unknownField']) {
+    check('supervisor details field excluded: ' + key, () => { const n = view.renderEntry(doneSupervisor('reply', { ...replyDetails, [key]: 'PRIVATE_VALUE' }, { message: 'PRIVATE_ARGS' })); assert.ok(!n.textContent.includes('PRIVATE_')); assert.equal(n.querySelector('.tl-args').textContent, ''); assert.ok(!n.outerHTML.includes('PRIVATE_')); });
+  }
+  const unknown = doneSupervisor('something-new', { ...pendingDetails, root: 'PRIVATE_ROOT' }, { message: 'PRIVATE_ANSWER' });
+  check('supervisor unknown action safe fallback', () => assert.equal(activity(unknown).label, 'Subagent supervisor action'));
+  check('supervisor unknown action bounded', () => assert.ok(activity(supervisor('x'.repeat(10000))).summary.length < 200));
+  check('supervisor unknown action named', () => assert.match(activity(unknown).summary, /something-new/));
+  check('supervisor unknown action raw input excluded', () => assert.ok(!view.renderEntry(unknown).textContent.includes('PRIVATE_')));
+  check('supervisor error label', () => assert.equal(activity(doneSupervisor('reply', { root: 'PRIVATE_ROOT' }, { message: 'PRIVATE_ANSWER' }, true)).label, 'Supervisor action failed'));
+  check('supervisor error action and safe output', () => { const n = view.renderEntry(doneSupervisor('reply', { root: 'PRIVATE_ROOT' }, { message: 'PRIVATE_ANSWER' }, true)); assert.ok(n.textContent.includes('Action: reply')); assert.ok(!n.textContent.includes('PRIVATE_') && !n.textContent.includes('RAW_CHILD_SECRET')); });
+  for (const [action, d] of [['status', statusDetails], ['pending', pendingDetails], ['list', pendingDetails], ['reply', replyDetails]]) {
+    const live = doneSupervisor(action, d, { message: 'PRIVATE_HISTORY' });
+    const h = model.entryFromHistory({ id: 'supervisor', name: 'subagent_supervisor', arguments: live.args }, { details: d, content: [{ type: 'text', text: 'PRIVATE_RAW_HISTORY' }] }, {});
+    check('supervisor history ' + action, () => { assert.equal(view.renderEntry(h).querySelector('.tl-label').textContent, view.renderEntry(live).querySelector('.tl-label').textContent); assert.equal(activity(h).facts, activity(live).facts); assert.ok(!view.renderEntry(h).textContent.includes('PRIVATE_')); });
+  }
+  check('supervisor child payload cannot cross adapter', () => { const e = doneSupervisor('status', { ...statusDetails, results: [result({ agent: 'PRIVATE_AGENT' })], progress: [{ currentTool: 'PRIVATE_TOOL' }], workflowChildren: children }); assert.ok(!view.renderEntry(e).textContent.includes('PRIVATE_')); assert.doesNotMatch(activity(e).facts, /left|right/); });
+  check('supervisor no completion Git refresh', () => assert.equal(subagentNeedsGitRefresh(doneSupervisor('reply', { ...replyDetails, results: [result()] })), false));
+  check('supervisor invalid pending count ignored', () => assert.doesNotMatch(activity(doneSupervisor('status', { pending: -1 })).facts, /Pending replies:/));
+  check('supervisor missing pending metadata stays unknown', () => assert.doesNotMatch(activity(doneSupervisor('pending', {})).facts, /Pending requests: 0/));
+  check('supervisor missing action safe', () => assert.equal(activity(supervisor(undefined)).label, 'Subagent supervisor action'));
+  check('supervisor incomplete does not claim replied', () => { const e = supervisor('reply'); e.status = 'incomplete'; assert.equal(activity(e).label, 'Subagent supervisor action'); assert.equal(activity(e).status, 'incomplete'); });
+  check('supervisor prototype action safe', () => assert.equal(activity(supervisor('__proto__')).label, 'Subagent supervisor action'));
+  check('supervisor hostile HTML inert', () => assert.equal(view.renderEntry(doneSupervisor('reply', { replyTo: '<img onerror="evil()">' })).querySelector('img'), null));
+  check('supervisor row values bounded', () => assert.ok(activity(doneSupervisor('pending', { pending: [{ id: 'a'.repeat(10000), agent: 'b'.repeat(10000), runId: 'c'.repeat(10000), reason: 'd'.repeat(10000) }] })).facts.length < 1500));
+  check('supervisor rows bounded', () => assert.ok(activity(doneSupervisor('pending', { pending: Array.from({ length: 1000 }, (_, i) => ({ id: 'req-' + i })) })).facts.length < 8001));
+  check('supervisor generic unknown fallback intact', () => assert.match(view.renderEntry(entry({}, 'unknown', 'something_else')).textContent, /执行工具 something_else/));
+  const files = fs.readdirSync(path.join(__dirname, '../public')).filter(n => n.startsWith('planner') && n.endsWith('.js'));
+  check('Planner source has no supervisor feature', () => { for (const file of files) assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../public', file), 'utf8'), /subagent_supervisor/); });
   dom.window.close(); console.log(`\n${count}/${count} 通过`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

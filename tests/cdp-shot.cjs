@@ -1084,6 +1084,15 @@ async function main() {
     ['background 明确未知完成状态', `document.querySelector('[data-id="p17-bg"]').textContent.includes('completion unknown')`],
     ['并发调用只有一个节点', `document.querySelectorAll('[data-id="p17-bg"]').length===1 && document.querySelectorAll('[data-id="p17-single"]').length===1`],
   ]);
+  await evalJs(`fetch('/api/__conversation?what=supervisor-activity').then(r=>r.ok)`);
+  await sleep(300);
+  await evalJs(`for(const action of ['status','pending','reply']) document.querySelector('[data-id="supervisor-'+action+'"] .tl-toggle').click(); document.querySelector('[data-id="supervisor-pending"]').scrollIntoView({block:'center'})`);
+  await shotOf('#workspace', '159-subagent-supervisor', 'P17 收口：Supervisor 安全 metadata，消息与路径不展示', ['Checked supervisor channel', 'Pending replies: 2', 'Pending requests: 1', 'Replied to subagent'], [
+    ...viewportChecks('#chatView'),
+    ['raw payload 不进入 DOM', `![...document.querySelectorAll('[data-id^="supervisor-"]')].some(n=>n.outerHTML.includes('PRIVATE_'))`],
+    ['reply 只用实际 result metadata', `document.querySelector('[data-id="supervisor-reply"] .tl-out').textContent.includes('Request: req-1') && document.querySelector('[data-id="supervisor-reply"] .tl-out').textContent.includes('Agent: worker')`],
+    ['未知 action 仍走安全语义路径', `document.querySelector('[data-id="supervisor-something-new"] .tl-label').textContent==='Subagent supervisor action' && document.querySelector('[data-id="supervisor-something-new"] .tl-args').textContent===''`],
+  ]);
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 
