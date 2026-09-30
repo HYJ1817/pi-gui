@@ -198,6 +198,11 @@ override 语义，需要同步更新 `server/skills.js` ——
 
 ## 相关测试
 
+P17 增加 Conversation Subagent Activity 与手动安装提示，见 [subagents.md](subagents.md)。
+终端执行固定命令 pi install npm:pi-subagents 后确认重启 Pi。
+installed/configured/loaded/runtimeObserved 分开；loader 不启动 child。
+不读取 Agent 定义，不修改 Registry 的 tools/unknown 语义。
+
 `npm run test:skills`（182 条）：发现规则（两种 collect 模式）、同名冲突、
 信任判定、状态判定（`enabled` / `disabled` / `untrusted` / `invalid` /
 `shadowed` / `not-loaded` / `unknown`）、详情与路径逃逸、启停写盘（保留未知字段 /

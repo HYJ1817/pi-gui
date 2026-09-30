@@ -91,20 +91,21 @@ renderer 与 Electron main 分别校验 http/https、credentials、控制字符�
 - 项目的绝对路径（除了用户自己选的那个，那是必要信息）
 
 Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
-只暴露两个转发动作 —— 「用系统默认程序打开项目内的一个文件」和
-「用系统浏览器打开一个 Release / 下载链接」—— 不暴露整个 `ipcRenderer`。
-两个动作的**判定都不在页面里**：前者在后端（`lib/git.js` 的路径校验），
-后者在主进程（`electron/net-probe.cjs` 的 `isSafeReleaseUrl`）。
+只暴露三个转发动作：`openPath` 打开项目内文件、`openExternal` 打开 Release / 下载链接、
+`openWebUrl` 打开 Web Activity 的 HTTP(S) 来源。不暴露整个 `ipcRenderer`。
+判定在后端（`lib/git.js` 的路径校验）或主进程
+（`electron/net-probe.cjs` 的 `isSafeReleaseUrl` / `isSafeWebUrl`）。
 `tests/electron-guard.cjs` 钉住了这个形状。
 
 ### 外链白名单
 
-「交给系统浏览器打开」分两条路，判据**刻意不同**：
+「交给系统浏览器打开」有以下路径：
 
 | 用途 | 判据 | 为什么 |
 |---|---|---|
 | 通用导航（对话里的链接、`target=_blank`） | `isSafeExternal`：只放行 `http` / `https` | 这是既有行为，收窄它会让正常链接打不开 |
 | 版本检查的 Release / 下载 | `isSafeReleaseUrl`：**必须 `https` + GitHub 官方 host** | URL 来自外部响应，仓库被投毒时会变成「官方安装包」 |
+| Web Activity 来源 | `isSafeWebUrl`：HTTP(S)，拒绝 URL 凭据与控制字符 | 用户明确点击，frontend / main 分别校验 |
 
 第二条在**三个位置**各做一遍，**语义完全相同**：后端过滤 API 响应
 （不让站外 URL 进 DOM）；前端在渲染 Release Notes 时按 host 收口
@@ -298,3 +299,7 @@ Agent 必须来自内置 registry。
 - **你让 Agent 做什么**。后端能驱动任意命令，这是设计目的；它不判断
   「这条命令该不该跑」。撤销与 diff 是给你的后悔药，不是防火墙。
 - **项目目录的权限**。Pi GUI 只做「项目内路径」校验，不改变操作系统的权限模型。
+
+## P17 Subagent 边界
+
+Context/session 隔离不是 OS sandbox；第三方 Extension 可读写文件、执行 shell、访问网络，后台 runner 可 detached。GUI 不安装、不扫描 Agent 定义、不控制 child，只投影有限白名单元数据；env/auth/token/messages/transcript 不进入 Subagent DOM。原始 Pi 会话仍由 Pi 管理。详见 [subagents.md](subagents.md)。

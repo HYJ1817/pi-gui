@@ -633,3 +633,7 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 Electron 的 `shots:app` 可带 `--size=700x600 --view=planner` 在隔离数据目录启动的打包应用中复核最小窗口、Stage 边界和标题栏；`test:guard` 检查最小窗口与状态恢复使用同一阈值。
 
 CDP 场景 153 使用 701×602 复现 Windows DPI 取整，断言项目侧栏收窄且 Planner 列表与详情上下排列；仅测恰好 700px 会漏掉这一种真实窗口差异。
+
+## P17 Subagent 验证
+
+npm test 串行包含 tests/subagents.cjs（也可 npm run test:subagents）。fixtures 对照 0.73.1 的 SingleResult/WorkflowChildSummary/WaitCompletion，默认完全离线；不安装、不读真实 Agent、不启动真实 child 或 detached runner。UI smoke 验证实际 SSE stale/并发/Stop/Git 防抖/重启确认；真实 Chrome 场景 157/158 检查 workflow 与 background launch。live 人工流程见 [subagents.md](subagents.md)。

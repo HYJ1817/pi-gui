@@ -20,6 +20,7 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 
 - **对话** —— 流式渲染，工具调用以时间线形式嵌在对话流里
 - **Web Activity** —— 可通过 Pi Web Extension 使用联网搜索与 URL Fetch，并提供原生 GUI Activity 展示；安装与安全边界见 [Web Access](docs/web-access.md)
+- **Subagent Activity** —— 第三方 Extension 在当前对话内委派工作；展示结构化 child 状态与历史，与 Planner 独立。手动安装与限制见 [Subagents](docs/subagents.md)
 - **会话** —— 一次对话一条记录，挂在它所属的项目下面，随时切回旧的
 - **分支** —— 从会话里任意一次对话分叉出一条新支线
 - **提问导航** —— 聊天区左边一列短线，对应当前会话里的每次提问

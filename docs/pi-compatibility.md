@@ -1,5 +1,10 @@
 # 与 pi 的兼容性
 
+P17 按 pi-subagents 0.73.1 的真实工具契约接入，实际名字为 subagent/subagents_enable/bg_wait。
+不增加 Pi 核心能力假设；dynamic loader 与实际 child 调用分别记录。
+当前顶层 tasks/parallel/chain 已移除，workflow 使用 workflowScript；缺失 model/child relation 降级 unknown。
+历史仍复用 toolCall/toolResult，不扫描 child transcripts，见 [Subagents](subagents.md)。
+
 P16 的 Web tool adapter 按 Pi 0.87.0 的 tool_execution_start/update/end 与
 历史 toolCall/toolResult 对接；partialResult 是累积输出，identity 为 toolCallId。
 当前公开 pi-web-access 0.33.0 schema 已核对，但 GUI 不加载其代码或依赖。
