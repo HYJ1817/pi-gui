@@ -1034,6 +1034,13 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/api/__conversation') {
     const what = url.searchParams.get('what') || 'fixture';
+    if (what === 'web-activity') {
+      push({ type: 'tool_execution_start', toolCallId: 'p16-search', toolName: 'web_search', args: { queries: ['Pi coding agent official documentation'] } });
+      push({ type: 'tool_execution_end', toolCallId: 'p16-search', isError: false, result: { content: [{ type: 'text', text: 'Offline fixture search result' }], details: { queries: ['Pi coding agent official documentation'], totalResults: 1, queryProviders: [{ query: 'Pi coding agent official documentation', providers: ['exa'] }], curatedQueries: [{ sources: [{ title: 'Pi documentation', url: 'https://pi.dev/' }] }] } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p16-fetch', toolName: 'fetch_content', args: { url: 'https://pi.dev/' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p16-fetch', isError: false, result: { content: [{ type: 'text', text: 'Offline page body '.repeat(1000) }], details: { urls: ['https://pi.dev/'], title: 'Pi documentation', mimeType: 'text/html', status: 200, successful: 1 } } });
+      return json(res, 200, { ok: true });
+    }
     if (what === 'fixture' || what === 'reset') {
       push({ type: 'response', command: 'get_messages', success: true, data: { messages: what === 'fixture' ? P14B_MESSAGES : MESSAGES } });
     } else if (what === 'tool-running') {

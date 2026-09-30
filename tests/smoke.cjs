@@ -6527,6 +6527,57 @@ staticCheck();
     check('P14-D 项目切换后一级视图仍为 Chat', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page');
   }
 
+  /* P16：通过真实 SSE 接线检查并发、能力证据和官方安装后的 Pi 生命周期。 */
+  {
+    const run = Number.isInteger(window.S.bridgeRun) ? window.S.bridgeRun : 1;
+    window.S.bridgeRun = run;
+    window.S.hasProject = true;
+    window.S.switching = false;
+    window.clearThread();
+    for (const [id, query] of [['p16-a', 'A'], ['p16-b', 'B']]) es.emit({ type: 'tool_execution_start', bridgeRun: run, toolCallId: id, toolName: 'web_search', args: { query } });
+    const first = window.document.querySelector('[data-id="p16-a"]');
+    es.emit({ type: 'tool_execution_update', bridgeRun: run, toolCallId: 'p16-a', partialResult: { content: [{ type: 'text', text: 'untrusted output' }] } });
+    es.emit({ type: 'tool_execution_end', bridgeRun: run, toolCallId: 'p16-b', result: { content: [], details: { totalResults: 1 } }, isError: false });
+    check('P16 SSE 并发调用按 id 隔离', () => window.document.querySelector('[data-id="p16-a"]').dataset.status === 'running' && window.document.querySelector('[data-id="p16-b"]').dataset.status === 'success');
+    es.emit({ type: 'tool_execution_end', bridgeRun: run, toolCallId: 'p16-a', result: { content: [], details: { error: 'Search failed' } }, isError: false });
+    check('P16 Extension details.error 不伪装成功', () => first.dataset.status === 'error' && first.textContent.includes('Web search failed'));
+    check('P16 start/update/end 仍是原节点', () => first === window.document.querySelector('[data-id="p16-a"]') && window.document.querySelectorAll('[data-id="p16-a"]').length === 1);
+    const box = window.document.createElement('section'); window.document.body.appendChild(box);
+    window.renderWebSetup(box, { ok: true, extensions: [] });
+    check('P16 设置区显示实际调用证据', () => box.textContent.includes('web_search: 当前 Pi 已观察到调用'));
+    check('P16 固定官方安装命令', () => box.querySelector('code').textContent === 'pi install npm:pi-web-access');
+    check('P16 第三方权限说明', () => box.textContent.includes('同等系统权限'));
+    es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: run });
+    window.renderWebSetup(box, { ok: true, extensions: [] });
+    check('P16 重启清空调用证据', () => box.textContent.includes('web_search: 尚未观察到调用'));
+    check('P16 重启期间 Composer 不可用', () => $('input').disabled);
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: run });
+    const baseFetch = window.fetch;
+    let restartCalls = 0;
+    window.fetch = async (url, opts) => String(url) === '/api/restart' ? (restartCalls++, { json: async () => ({ ok: false }) }) : baseFetch(url, opts);
+    const restart = [...box.querySelectorAll('button')].find(b => b.textContent === '安装后重启 Pi');
+    const pendingRestart = restart.onclick();
+    check('P16 重启先确认', () => !$('confirmLayer').hidden && restartCalls === 0);
+    $('confirmCard').querySelector('.btn.primary').onclick();
+    await pendingRestart;
+    check('P16 确认后复用现有 restart API', () => restartCalls === 1);
+    check('P16 重启失败可重试', () => !restart.disabled);
+    window.fetch = baseFetch;
+    const pendingStale = restart.onclick();
+    window.S.workspaceGeneration++;
+    $('confirmCard').querySelector('.btn.primary').onclick();
+    await pendingStale;
+    check('P16 切项目后旧确认不重启', () => restartCalls === 1);
+    window.renderWebSetup(box, { ok: true, extensions: [] });
+    check('P16 切项目后观察为空', () => box.textContent.includes('web_search: 尚未观察到调用'));
+    window.S.switching = true;
+    es.emit({ type: 'tool_execution_start', bridgeRun: run, toolCallId: 'p16-stale', toolName: 'web_search', args: { query: 'Old workspace' } });
+    window.renderWebSetup(box, { ok: true, extensions: [] });
+    check('P16 切项目同步期间旧 run 不能污染证据', () => box.textContent.includes('web_search: 尚未观察到调用'));
+    window.S.switching = false;
+    box.remove();
+  }
+
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;

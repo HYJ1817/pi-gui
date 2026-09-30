@@ -1059,6 +1059,16 @@ async function main() {
     ['工具来源未知有明确说明', `document.querySelector('#workSurface .ext-detail').textContent.includes('未提供已注册工具列表')`],
   ]);
 
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await evalJs(`fetch('/api/__conversation?what=web-activity').then(r=>r.ok)`);
+  await sleep(300);
+  await evalJs(`document.querySelector('[data-id="p16-search"] .tl-toggle').click()`);
+  await shotOf('#workspace', '156-web-activity', 'P16：离线 Web Search 与 URL Fetch Activity', ['Searched the web', 'Read Pi documentation', 'pi.dev'], [
+    ...viewportChecks('#chatView'),
+    ['来源只允许 HTTPS 且明确用户点击', `document.querySelector('[data-id="p16-search"] .web-source').href==='https://pi.dev/'`],
+    ['网页全文未铺开', `!document.querySelector('[data-id="p16-fetch"]').textContent.includes('Offline page body')`],
+  ]);
+
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

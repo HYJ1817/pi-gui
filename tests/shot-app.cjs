@@ -85,6 +85,12 @@ function connect(url) {
     await evaluate(`document.querySelector('#navPlanner').click()`);
     await sleep(450);
   }
+  if (VIEW === 'extensions') {
+    await evaluate(`document.querySelector('#navExtensions').click()`);
+    await sleep(250);
+    await evaluate(`document.querySelector('#extensionsTabExtensions').click()`);
+    await sleep(450);
+  }
 
   const facts = await evaluate(`(() => {
     const t = document.querySelector('#stream .thread');
