@@ -303,3 +303,8 @@ Agent 必须来自内置 registry。
 ## P17 Subagent 边界
 
 Context/session 隔离不是 OS sandbox；第三方 Extension 可读写文件、执行 shell、访问网络，后台 runner 可 detached。GUI 不安装、不扫描 Agent 定义、不控制 child，只投影有限白名单元数据；env/auth/token/messages/transcript 不进入 Subagent DOM。原始 Pi 会话仍由 Pi 管理。详见 [subagents.md](subagents.md)。
+
+subagent_supervisor 的四个已知 action 与所有未知 action 都经过专用白名单投影。
+message、filesystem root、channelDir、requestFile、replyFile、raw request body/question、env/auth/token/apiKey/credential/transcript
+及未知 details 字段不进入 Activity DOM（包括隐藏详情、title 与历史）。status 只取 active/pending，pending/list 只取有限请求 metadata，reply 只取 replyTo/runId/agent。
+不回显原始错误输出，不扫描 channel filesystem，不读取 request files，不自动执行 supervisor action 或建立 GUI 回复/权限系统。

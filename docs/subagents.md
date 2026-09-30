@@ -19,9 +19,12 @@ installed/configured/loaded/runtimeObserved 分别显示；磁盘发现不证明
 - [Types](https://github.com/nicobailon/pi-subagents/blob/8a403efba6975988cc0488ec8bb941db5ef1a19e/src/shared/types.ts)：SingleResult、Details、WorkflowChildSummary、WaitCompletion。
 - [Activation](https://github.com/nicobailon/pi-subagents/blob/8a403efba6975988cc0488ec8bb941db5ef1a19e/src/extension/tool-activation.ts) 与 [wait](https://github.com/nicobailon/pi-subagents/blob/8a403efba6975988cc0488ec8bb941db5ef1a19e/src/runs/background/wait-tool.ts)：注册工具名。
 
-实际工具：`subagent`、`subagents_enable`、`bg_wait`，wait 行为可由上游配置关闭，但工具仍注册并立即返回。
-Pi 0.87.0 满足 dynamic selection 最低版本 0.86.1，loaded 仍需运行证据。
-loader 只激活后续模型请求的工具，不启动 child；部分 provider 要等下一次用户 prompt，GUI 不重试或强制激活。
+pi-subagents v0.73.1 的 parent-side 相关工具包括：`subagents_enable`、`bg_wait`、`subagent_supervisor`、`subagent`。
+wait 行为可由上游配置关闭，但工具仍注册并立即返回。
+Pi 0.86.1+ 的 fresh unrestricted parent 初始 active tools 是 subagents_enable、bg_wait、subagent_supervisor；
+subagent registered but initially inactive，调用 subagents_enable 后在后续模型请求中激活。
+Supervisor 无需等待 loader；观察到 Supervisor 而未观察到 subagent 完全正常，不表示安装/加载失败。
+Pi 0.87.0 满足最低版本，loaded 仍需运行证据；loader 不启动 child，部分 provider 要等下一次用户 prompt，GUI 不重试或强制激活。
 
 | 路径 | 输入 | 展示依据 |
 |---|---|---|
@@ -30,10 +33,30 @@ loader 只激活后续模型请求的工具，不启动 child；部分 provider 
 | background | async:true，默认由 asyncByDefault 决定 | asyncId/runId 表示启动，完成未知 |
 | management | subagent action/id，例如 status/stop/steer | 调用和可用结构化证据；纯文本 status 不解析为权威状态 |
 | wait | bg_wait 的 id/all/nonBlocking/timeoutMs 等 | completions 的 runId/state/success；wait window 结束不证明 child 结束 |
+| supervisor | subagent_supervisor 的 status/pending/list/reply，输入 action/to/message/replyTo | 只展示 action 与 producer 明确的安全 metadata；message 和内部路径不展示 |
 
 **顶层 chain/tasks/parallel 已移除。** 不解析脚本猜数量、Agent、model 或关系。
 workflow summary 的 version、parentToolCallId、workflowRunId 必须对应当前 entry。
 foreground index 仅在实际 runId 内作为身份展示，UI 行号不是 ID。
+
+### Parent-child coordination
+
+当前 Supervisor producer 与生命周期已对照同一发布 revision 的
+[native-supervisor-channel.ts](https://github.com/nicobailon/pi-subagents/blob/8a403efba6975988cc0488ec8bb941db5ef1a19e/src/intercom/native-supervisor-channel.ts)、
+[configuration](https://github.com/nicobailon/pi-subagents/blob/8a403efba6975988cc0488ec8bb941db5ef1a19e/docs/configuration.md)、
+[workflows](https://github.com/nicobailon/pi-subagents/blob/8a403efba6975988cc0488ec8bb941db5ef1a19e/docs/workflows.md) 与
+[activation smoke](https://github.com/nicobailon/pi-subagents/blob/8a403efba6975988cc0488ec8bb941db5ef1a19e/test/smoke/tool-activation.test.ts) 核对。
+
+- status：Checking / Checked supervisor channel；仅布尔 active 与非负整数 pending（Pending replies）。
+- pending/list：Checking supervisor requests / Checked 或 Listed supervisor requests；数组长度表示 Pending requests。
+  最多 24 条，白名单为 id、runId、agent、childIndex、reason、expectsReply；字符串最多 180 字符（reason 80），总事实最多 8000 字符。
+- reply：Replying / Replied to subagent；只取 details 的 replyTo、runId、agent，不从 input 推断已回复。
+- error：Supervisor action failed，只展示 action；不回显 raw error content 或 request payload。
+- 未来未知 action：Subagent supervisor action 与 bounded action 名，仍走专用安全投影，绝不回到 raw JSON renderer。
+
+这是当前 Pi session 的 child-parent coordination，不是 Planner approval/review、GUI confirmation、Automation 或权限系统。
+GUI 不创建 Planner task，不弹窗问答，不提供 inbox/reply 按钮，不主动调用/回复、不扫描 channel 或读取 request files。
+真正回复仍由 Pi/model 调用工具完成。历史复用同一投影，落盘内容不放宽限制；child-facing contact_supervisor 不在本轮范围。
 
 ## 数据流与历史
 

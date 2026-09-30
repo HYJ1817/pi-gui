@@ -637,3 +637,7 @@ CDP 场景 153 使用 701×602 复现 Windows DPI 取整，断言项目侧栏收
 ## P17 Subagent 验证
 
 npm test 串行包含 tests/subagents.cjs（也可 npm run test:subagents）。fixtures 对照 0.73.1 的 SingleResult/WorkflowChildSummary/WaitCompletion，默认完全离线；不安装、不读真实 Agent、不启动真实 child 或 detached runner。UI smoke 验证实际 SSE stale/并发/Stop/Git 防抖/重启确认；真实 Chrome 场景 157/158 检查 workflow 与 background launch。live 人工流程见 [subagents.md](subagents.md)。
+
+Supervisor fixtures 对照同一 revision 的 native-supervisor-channel.ts：status 的 pending 是数字，pending/list 是 public metadata 数组，reply 返回 replyTo/runId/agent。
+hostile extra fields 验证 message/root/path/凭据及 raw output 不进入 DOM，包含未知 action、历史、安全降级和 runtime observation reset/stale。
+现有 Subagent/Web/Planner 断言保留；真实 Chrome 场景 159 检查 Supervisor 标签、安全 metadata 与 raw payload 排除。

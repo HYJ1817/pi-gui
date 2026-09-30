@@ -1,6 +1,7 @@
 # 与 pi 的兼容性
 
-P17 按 pi-subagents 0.73.1 的真实工具契约接入，实际名字为 subagent/subagents_enable/bg_wait。
+P17 按 pi-subagents 0.73.1 的真实工具契约接入，parent-side 名字为 subagents_enable/bg_wait/subagent_supervisor/subagent。
+Pi 0.86.1+ fresh unrestricted parent 初始前三项 active；subagent registered but inactive，loader 后在后续模型请求激活。Supervisor 不依赖 loader。
 不增加 Pi 核心能力假设；dynamic loader 与实际 child 调用分别记录。
 当前顶层 tasks/parallel/chain 已移除，workflow 使用 workflowScript；缺失 model/child relation 降级 unknown。
 历史仍复用 toolCall/toolResult，不扫描 child transcripts，见 [Subagents](subagents.md)。
