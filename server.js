@@ -49,6 +49,7 @@ import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
+import { createApprovalProbe } from './server/approval-probe.js';
 import { createSessions } from './server/sessions.js';
 import { createSessionSearch } from './server/session-search.js';
 import { createPiCompat } from './server/pi-compat.js';
@@ -215,6 +216,8 @@ const gitRoutes = createGitRoutes({ runtime });
  * 「界面说有一堆 skill、pi 一个都没加载」。 */
 const skills = createSkills({ runtime, rpc, env: process.env });
 const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
+/* P19：approval 能力报告（只读本机 pi 包，不执行它的代码）。 */
+const approvalProbe = createApprovalProbe({ env: process.env, piBin: PI_BIN });
 const extensions = createExtensionRegistry({
   runtime, rpc, env: process.env,
   readTrust: async () => (await skills.readIndex()).trust,
@@ -356,6 +359,7 @@ const route = createRouter({
   projectConfig,
   skills,
   mcp,
+  approvalProbe,
   extensions,
   sessions,
   sessionSearch,

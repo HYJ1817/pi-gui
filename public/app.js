@@ -20,6 +20,7 @@ import { sendCommand } from './api.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
 import { observeMemoryEvent } from './memory.js';
+import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popLabel, popTitle, popVisible } from './ui/popover.js';
@@ -34,7 +35,6 @@ import {
   forkFrom,
   newSession,
   onResponse,
-  respond,
   setModel,
   setSessionName,
   setSessionListRefresh,
@@ -120,7 +120,7 @@ function handle(evt) {
   if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
-  if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); }
+  if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeApprovalEvent(evt); }
   switch (evt.type) {
     case 'bridge_status':
       return onBridge(evt);
@@ -154,6 +154,9 @@ function handle(evt) {
     case 'agent_end':
       return;
     case 'agent_settled':
+      /* Pi 已经收尾：还挂在 pending 的 approval 对话框不可能再被应答（Pi 侧
+       * 在 abort/timeout 时已自行 resolve），本地作废，别留一张永远等的卡。 */
+      expireAll('agent-settled');
       return onSettled();
     case 'message_start':
       return onMessageStart(evt);
@@ -195,6 +198,7 @@ function onBridge(evt) {
   observeWebEvent(evt);
   observeSubagentEvent(evt);
   observeMemoryEvent(evt);
+  observeApprovalEvent(evt);
   switch (evt.state) {
     case 'starting':
       return setBridgeState('starting');
@@ -264,18 +268,12 @@ function onStderr(evt) {
   }
 }
 
-/* ---------- 扩展 UI（权限确认等） ---------- */
-
-function onUiRequest(evt) {
-  switch (evt.method) {
-    case 'select':
-      return uiSelect(evt);
-    case 'confirm':
-      return uiConfirm(evt);
-    case 'input':
-      return uiInput(evt, false);
-    case 'editor':
-      return uiInput(evt, true);
+/* ---------- 扩展 UI ---------- */
+/* 对话框方法（select / confirm / input / editor）**不在这里**处理：
+ * 它们是「阻塞等待用户决定」的 approval，统一走 approval.js
+ *（handle() 已把每条事件分发过去）。这里只处理 fire-and-forget 方法 ——
+ * 它们没有应答，也就没有可追踪的生命周期。 */
+function onUiRequest(evt) {  switch (evt.method) {
     case 'notify':
       return toast(evt.message, evt.notifyType === 'error' ? 'error' : evt.notifyType === 'warning' ? 'warn' : 'info');
     case 'setStatus':
@@ -285,126 +283,6 @@ function onUiRequest(evt) {
     default:
       return;
   }
-}
-
-function uiSelect(evt) {
-  openModal((card, close) => {
-    const h = document.createElement('h3');
-    h.textContent = evt.title || '请选择';
-    card.appendChild(h);
-
-    const list = document.createElement('div');
-    list.className = 'modal-list';
-    for (const opt of evt.options || []) {
-      const item = document.createElement('div');
-      item.className = 'modal-item';
-      item.textContent = opt;
-      item.onclick = () => {
-        close();
-        respond(evt.id, { value: opt });
-      };
-      list.appendChild(item);
-    }
-    card.appendChild(list);
-
-    const actions = document.createElement('div');
-    actions.className = 'modal-actions';
-    const cancel = document.createElement('button');
-    cancel.className = 'btn';
-    cancel.textContent = '取消';
-    cancel.onclick = () => {
-      close();
-      respond(evt.id, { cancelled: true });
-    };
-    actions.appendChild(cancel);
-    card.appendChild(actions);
-  });
-}
-
-function uiConfirm(evt) {
-  openModal((card, close) => {
-    const h = document.createElement('h3');
-    h.textContent = evt.title || '确认';
-    card.appendChild(h);
-
-    if (evt.message) {
-      const p = document.createElement('div');
-      p.className = 'modal-desc';
-      p.textContent = evt.message;
-      card.appendChild(p);
-    }
-
-    const actions = document.createElement('div');
-    actions.className = 'modal-actions';
-
-    const no = document.createElement('button');
-    no.className = 'btn';
-    no.textContent = '取消';
-    no.onclick = () => {
-      close();
-      respond(evt.id, { confirmed: false });
-    };
-
-    const yes = document.createElement('button');
-    yes.className = 'btn primary';
-    yes.textContent = '确认';
-    yes.onclick = () => {
-      close();
-      respond(evt.id, { confirmed: true });
-    };
-
-    actions.append(no, yes);
-    card.appendChild(actions);
-  });
-}
-
-function uiInput(evt, multiline) {
-  openModal((card, close) => {
-    const h = document.createElement('h3');
-    h.textContent = evt.title || '输入';
-    card.appendChild(h);
-
-    if (evt.message) {
-      const p = document.createElement('div');
-      p.className = 'modal-desc';
-      p.textContent = evt.message;
-      card.appendChild(p);
-    }
-
-    const input = document.createElement(multiline ? 'textarea' : 'input');
-    input.className = 'modal-input';
-    if (multiline) input.rows = 6;
-    if (evt.placeholder) input.placeholder = evt.placeholder;
-    card.appendChild(input);
-    setTimeout(() => input.focus(), 30);
-
-    const actions = document.createElement('div');
-    actions.className = 'modal-actions';
-
-    const cancel = document.createElement('button');
-    cancel.className = 'btn';
-    cancel.textContent = '取消';
-    cancel.onclick = () => {
-      close();
-      respond(evt.id, { cancelled: true });
-    };
-
-    const ok = document.createElement('button');
-    ok.className = 'btn primary';
-    ok.textContent = '确定';
-    ok.onclick = () => {
-      const value = input.value;
-      close();
-      respond(evt.id, { value });
-    };
-
-    actions.append(cancel, ok);
-    card.appendChild(actions);
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !multiline) ok.click();
-    });
-  });
 }
 
 /* ---------- 选择器 ---------- */
@@ -684,7 +562,13 @@ el.input.addEventListener('keydown', (e) => {
 
 // 输入区
 el.btnSend.onclick = submit;
-el.btnStop.onclick = stop;
+/* Stop 之前先把还挂着的 approval 对话框按 fail-closed 取消掉：
+ * 用户按了「停止」就不该留一张永远等的卡片，Pi 侧也要收到明确的取消
+ *（confirm 的取消被 rpc-mode 解析成 false，也就是拒绝）。 */
+el.btnStop.onclick = () => {
+  cancelPendingApprovals();
+  stop();
+};
 el.btnModel.onclick = () => {
   if (popVisible() && currentAnchor() === el.btnModel) return closePop();
   openModelPicker();

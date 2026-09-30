@@ -63,8 +63,9 @@ function readTextSafe(file, maxBytes = MAX_DOC_BYTES) {
   }
 }
 
-/** 从 PI_BIN 与几个 npm 全局位置里找出 pi 包目录。找不到回 null。 */
-function locatePiPackage({ piBin, env }) {
+/** 从 PI_BIN 与几个 npm 全局位置里找出 pi 包目录。找不到回 null。
+ *  导出是给 P19 的 approval 能力探测复用同一处定位逻辑（别写第二份）。 */
+export function locatePiPackage({ piBin, env }) {
   const candidates = [];
   const add = (p) => {
     if (p) candidates.push(p);

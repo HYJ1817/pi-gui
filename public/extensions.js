@@ -23,13 +23,14 @@
  * 后端在自己的索引里按 ID 查真实路径。所以这里不需要、也不应该做路径校验。
  */
 import { S, ownsWorkspace } from './state.js';
-import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchExtensions, restartBackend } from './api.js';
+import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchExtensions, fetchApprovalCapability, restartBackend } from './api.js';
 import { confirmModal } from './ui/modal.js';
 import { openWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
 import { renderWebSetup } from './web-access.js';
 import { renderSubagentSetup } from './subagents.js';
 import { renderMemorySetup } from './memory.js';
+import { renderApprovalSetup } from './approval.js';
 
 /* 状态 → 展示用的圆点与文案。
  * 键必须与 server/skills.js 里 state 的取值一一对应，多一个少一个都会显示成原始英文。 */
@@ -374,6 +375,10 @@ function extensionTab(card, isCurrent) {
   const memoryBox = el('section', 'web-setup');
   wrap.appendChild(memoryBox);
   renderMemorySetup(memoryBox, null);
+  /* P19：approval 能力报告。supported / unsupported 都要说清 —— 不许把没拦住的画成拦住了。 */
+  const approvalBox = el('section', 'web-setup');
+  wrap.appendChild(approvalBox);
+  renderApprovalSetup(approvalBox, null);
   const bar = el('div', 'ext-bar');
   const refresh = el('button', 'btn tiny', '刷新');
   refresh.type = 'button';
@@ -444,6 +449,12 @@ function extensionTab(card, isCurrent) {
     renderSubagentSetup(subagentBox, result);
     renderMemorySetup(memoryBox, result);
     render();
+    /* approval 能力报告是只读的本地探测，和 Extension 发现分开取：
+     * 它失败不该把整页 Extension 列表带塌。 */
+    fetchApprovalCapability().then((cap) => {
+      if (!isCurrent() || !ownsWorkspace(generation)) return;
+      renderApprovalSetup(approvalBox, cap && cap.ok !== false ? cap : null);
+    }).catch(() => {});
   }
   refresh.onclick = load;
   load();

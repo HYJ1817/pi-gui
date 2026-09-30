@@ -128,6 +128,15 @@ function closeConfirm(value) {
   restoreFocus(returnFocus);
 }
 
+/* 由生命周期方主动撤掉当前确认框（approval 超时 / 桥接重启等）。
+ * 语义与用户点「取消」完全一致：Promise 解析成 false。
+ * 同时只可能有一个确认框，所以调用方必须先确认那个框是自己的
+ * —— approval 的 pending 表保证了这一点：自己那条一旦被别的框顶掉，
+ * 它的 Promise 会立刻以 false 结算并从 pending 移除。 */
+export function dismissConfirm() {
+  if (confirmResolve) closeConfirm(false);
+}
+
 export function confirmModal({ title, message, okText = '确认', cancelText = '取消', altText = '', danger = false }) {
   if (confirmResolve) closeConfirm(false);
 

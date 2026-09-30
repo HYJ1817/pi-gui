@@ -85,6 +85,7 @@ export function createRouter({
   projectConfig,
   skills,
   mcp,
+  approvalProbe,
   extensions,
   sessions,
   sessionSearch,
@@ -183,6 +184,11 @@ export function createRouter({
     }
     if (url.pathname === '/api/mcp') {
       return mcp.handle(req, res, url);
+    }
+    /* P19：approval 能力报告（只读本机 pi 包）。GET，必须排在 405 兜底之前。 */
+    if (url.pathname === '/api/approvals/capability') {
+      if (approvalProbe) return approvalProbe.handle(req, res, url);
+      return json(res, 200, { ok: false, piVersion: null, checks: {}, dialogMethods: null });
     }
     if (url.pathname === '/api/extensions') {
       return extensions.handle(req, res, url);
