@@ -1034,7 +1034,16 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/api/__conversation') {
     const what = url.searchParams.get('what') || 'fixture';
-    if (what === 'web-activity') {
+    if (what === 'subagent-activity') {
+      push({ type: 'tool_execution_start', toolCallId: 'p17-enable', toolName: 'subagents_enable', args: {} });
+      push({ type: 'tool_execution_end', toolCallId: 'p17-enable', result: { content: [], details: { enabled: ['subagent'] } }, isError: false });
+      push({ type: 'tool_execution_start', toolCallId: 'p17-single', toolName: 'subagent', args: { agent: 'custom-reviewer', task: 'Review the module safely', async: false } });
+      push({ type: 'tool_execution_end', toolCallId: 'p17-single', result: { content: [{ type: 'text', text: 'RAW_CHILD_SECRET' }], details: { mode: 'single', runId: 'fg-run', results: [{ index: 0, agent: 'custom-reviewer', task: 'Review the module safely', model: 'actual/model', exitCode: 0 }] } }, isError: false });
+      push({ type: 'tool_execution_start', toolCallId: 'p17-workflow', toolName: 'subagent', args: { workflowScript: 'return runs.all(...)', async: false } });
+      push({ type: 'tool_execution_update', toolCallId: 'p17-workflow', partialResult: { content: [], details: { mode: 'workflow', runId: 'workflow-run', results: [], workflowChildren: { version: 1, parentToolCallId: 'p17-workflow', workflowRunId: 'workflow-run', inventoryComplete: true, workflowState: 'running', children: [{ childId: 'review-ui', agent: 'custom-ui', runId: 'child-ui', state: 'completed', model: 'actual/ui' }, { childId: 'review-api', agent: 'custom-api', runId: 'child-api', state: 'running', activity: { currentTool: 'read', toolCount: 2 } }] } } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p17-bg', toolName: 'subagent', args: { agent: 'worker', task: 'Independent background work', async: true } });
+      push({ type: 'tool_execution_end', toolCallId: 'p17-bg', result: { content: [], details: { mode: 'single', runId: 'bg-run', asyncId: 'bg-run', results: [] } }, isError: false });
+    } else if (what === 'web-activity') {
       push({ type: 'tool_execution_start', toolCallId: 'p16-search', toolName: 'web_search', args: { queries: ['Pi coding agent official documentation'] } });
       push({ type: 'tool_execution_end', toolCallId: 'p16-search', isError: false, result: { content: [{ type: 'text', text: 'Offline fixture search result' }], details: { queries: ['Pi coding agent official documentation'], totalResults: 1, queryProviders: [{ query: 'Pi coding agent official documentation', providers: ['exa'] }], curatedQueries: [{ sources: [{ title: 'Pi documentation', url: 'https://pi.dev/' }] }] } } });
       push({ type: 'tool_execution_start', toolCallId: 'p16-fetch', toolName: 'fetch_content', args: { url: 'https://pi.dev/' } });

@@ -1069,6 +1069,21 @@ async function main() {
     ['网页全文未铺开', `!document.querySelector('[data-id="p16-fetch"]').textContent.includes('Offline page body')`],
   ]);
 
+  await evalJs(`fetch('/api/__conversation?what=subagent-activity').then(r=>r.ok)`);
+  await sleep(350);
+  await evalJs(`document.querySelector('[data-id="p17-workflow"] .tl-toggle').click(); document.querySelector('[data-id="p17-workflow"]').scrollIntoView({block:'center'})`);
+  await shotOf('#workspace', '157-subagent-workflow', 'P17：真实结构化 child 状态与显式关系', ['Children: 2', 'review-ui', 'review-api'], [
+    ...viewportChecks('#chatView'),
+    ['child 状态互不覆盖', `document.querySelector('[data-id="p17-workflow"] .tl-out').textContent.includes('review-ui · custom-ui · completed') && document.querySelector('[data-id="p17-workflow"] .tl-out').textContent.includes('review-api · custom-api · running')`],
+    ['父关系来自实际字段', `document.querySelector('[data-id="p17-workflow"] .tl-out').textContent.includes('Parent tool: p17-workflow')`],
+    ['raw transcript 不展示', `!document.querySelector('#stream').textContent.includes('RAW_CHILD_SECRET')`],
+  ]);
+  await evalJs(`document.querySelector('[data-id="p17-bg"] .tl-toggle').click(); document.querySelector('[data-id="p17-bg"]').scrollIntoView({block:'center'})`);
+  await shotOf('#workspace', '158-subagent-background', 'P17：后台启动与完成分开、loader 不启动 child', ['Background launched', 'bg-run', 'Subagent tools enabled'], [
+    ...viewportChecks('#chatView'),
+    ['background 明确未知完成状态', `document.querySelector('[data-id="p17-bg"]').textContent.includes('completion unknown')`],
+    ['并发调用只有一个节点', `document.querySelectorAll('[data-id="p17-bg"]').length===1 && document.querySelectorAll('[data-id="p17-single"]').length===1`],
+  ]);
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

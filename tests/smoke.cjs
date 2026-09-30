@@ -6578,6 +6578,60 @@ staticCheck();
     box.remove();
   }
 
+  /* P17: real SSE routing, independent identities, debounce and workspace guards. */
+  {
+    const run = window.S.bridgeRun;
+    window.S.hasProject = true; window.S.switching = false;
+    window.clearThread();
+    await new Promise(r => setTimeout(r, 600));
+    const beforeGit = gitCalls.filter(c => c.kind === 'status').length;
+    const beforeCommands = commands.length;
+    const beforeLedger = JSON.stringify(window.listChanges());
+    const child = agent => ({ index: 0, agent, task: 'Review', exitCode: 0, model: 'actual/model' });
+    for (const id of ['p17-a', 'p17-b']) es.emit({ type: 'tool_execution_start', bridgeRun: run, toolCallId: id, toolName: 'subagent', args: { agent: id, task: 'Review', async: false } });
+    const first = window.document.querySelector('[data-id="p17-a"]');
+    es.emit({ type: 'tool_execution_update', bridgeRun: run, toolCallId: 'p17-a', partialResult: { content: [{ type: 'text', text: 'RAW_SECRET' }], details: { mode: 'single', results: [{ ...child('p17-a'), progress: { currentTool: 'read', toolCount: 2, tokens: 90 } }] } } });
+    await new Promise(r => setTimeout(r, 180));
+    check('P17 SSE partial details 进入原节点', () => first.textContent.includes('Tool: read') && !first.textContent.includes('RAW_SECRET'));
+    for (const id of ['p17-b', 'p17-a']) es.emit({ type: 'tool_execution_end', bridgeRun: run, toolCallId: id, result: { content: [], details: { mode: 'single', runId: id, results: [child(id)] } }, isError: false });
+    check('P17 SSE 逆序完成保持两个独立节点', () => first === window.document.querySelector('[data-id="p17-a"]') && window.document.querySelectorAll('[data-id^="p17-"]').length === 2 && first.dataset.status === 'success');
+    await new Promise(r => setTimeout(r, 600));
+    check('P17 两次完成只刷新一次 Git', () => gitCalls.filter(c => c.kind === 'status').length === beforeGit + 1);
+    check('P17 不把 child 输出加入 Changes 账本', () => JSON.stringify(window.listChanges()) === beforeLedger);
+    check('P17 不创建 Planner 任务或调用 RPC', () => commands.length === beforeCommands);
+    const box = window.document.createElement('section'); window.document.body.appendChild(box);
+    window.renderSubagentSetup(box, { ok: true, extensions: [] });
+    check('P17 Runtime evidence 独立显示', () => box.textContent.includes('subagent: 当前 Pi 已观察到调用'));
+    const sameRun = window.S.bridgeRun;
+    window.S.switching = true;
+    es.emit({ type: 'tool_execution_start', bridgeRun: sameRun, toolCallId: 'p17-old', toolName: 'subagent', args: { agent: 'old' } });
+    es.emit({ type: 'tool_execution_update', bridgeRun: sameRun, toolCallId: 'p17-a', partialResult: { details: { results: [child('OLD_AGENT')] } } });
+    es.emit({ type: 'tool_execution_end', bridgeRun: sameRun, toolCallId: 'p17-a', result: { details: { results: [child('OLD_AGENT')] } }, isError: true });
+    check('P17 激活期间丢弃旧 start/update/end', () => !window.document.querySelector('[data-id="p17-old"]') && first.dataset.status === 'success' && !first.textContent.includes('OLD_AGENT'));
+    window.S.switching = false;
+    window.S.bridgeRun = sameRun + 1;
+    es.emit({ type: 'tool_execution_end', bridgeRun: sameRun, toolCallId: 'p17-a', result: {}, isError: true });
+    check('P17 新 run 拒绝旧 run end', () => first.dataset.status === 'success');
+    window.S.bridgeRun = sameRun;
+    es.emit({ type: 'tool_execution_start', bridgeRun: sameRun, toolCallId: 'p17-stop', toolName: 'subagent', args: {} });
+    window.interruptActive();
+    check('P17 Stop 后无运行 spinner', () => window.document.querySelector('[data-id="p17-stop"]').dataset.status === 'incomplete');
+    window.observeSubagentEvent({ type: 'bridge_status', state: 'restarting', bridgeRun: sameRun });
+    window.renderSubagentSetup(box, { ok: true, extensions: [] });
+    check('P17 重启清空 observation', () => box.textContent.includes('subagent: 尚未观察到调用'));
+    check('P17 安装仅固定命令', () => box.querySelector('code').textContent === 'pi install npm:pi-subagents');
+    const baseFetch = window.fetch; let restarts = 0;
+    window.fetch = async (url, opts) => String(url) === '/api/restart' ? (restarts++, { json: async () => ({ ok: false }) }) : baseFetch(url, opts);
+    const restart = [...box.querySelectorAll('button')].find(b => b.textContent === '安装后重启 Pi');
+    const pending = restart.onclick();
+    check('P17 重启先确认', () => !$('confirmLayer').hidden && restarts === 0);
+    $('confirmCard').querySelector('.btn.primary').onclick(); await pending;
+    check('P17 重启 API 失败后可重试', () => restarts === 1 && !restart.disabled);
+    const stale = restart.onclick(); window.S.workspaceGeneration++;
+    $('confirmCard').querySelector('.btn.primary').onclick(); await stale;
+    check('P17 旧 workspace 确认不重启', () => restarts === 1);
+    window.fetch = baseFetch; box.remove(); window.clearThread();
+  }
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;
