@@ -1,5 +1,32 @@
 # 安全
 
+## P18 Pi Memory 边界
+
+长期记忆可能保存**用户偏好、项目决策、历史事实与自定义内容**，比普通 Tool 更敏感。
+记忆由用户安装的 Pi Extension 提供并落盘（`pi-memory` 默认 `~/.pi/agent/memory/`），
+Pi GUI 只做观察层：
+
+- **不上传、不 telemetry、不做云同步**；不建立第二份数据库，不索引、不缓存 Memory
+- **不复制 Memory 到 localStorage**，不把它拼进会话历史或导出
+- **不读取整个 Memory 目录**，不扫描 `recovery/`，不读 qmd DB 或 index
+- **不向 renderer 暴露绝对路径**：`details.path` / `recoveryPath` / `dir` 都不投影
+- **不把 raw tool args / details / result 文本铺进 DOM**：识别为 Memory 语义工具后
+  `argsText` 置空、`output` 换成白名单 facts，`memory_read` 的整份 MEMORY.md
+  与 `memory_search` 的命中正文都不会出现在界面上
+- **不猜**：`count` / `removed` / `restored` / `target` 缺失就说「结果不可用」，
+  不写成 0；`mode` 只信 result，不因为装了 qmd 就说是语义检索；
+  scope 只有 global（源码里没有 project scope），不发明「项目记忆」
+- **不做**自动 remember / forget / summarize，不把会话或 Git history 写进 Memory，
+  也不提供恢复或删除 recovery 的入口（可恢复这件事只说事实，不动手）
+
+注意 pi 0.87.0 的一个协议事实：Extension 在 result 里返回的 `isError: true`
+**不会**到达 `tool_execution_end`（agent loop 正常 return 一律 `isError: false`）。
+所以界面上的失败状态只代表「工具抛异常」，Extension 自报的失败会以
+「结果不可用」这种中性降级出现，而不是被 GUI 猜成失败。见 [Pi Memory](memory.md)。
+
+第三方 Extension 与 Pi 进程拥有同等文件、shell 与网络权限，Memory 的内容也由
+Extension 决定如何保存；只安装可信代码。
+
 ## P16 Web Extension 边界
 
 GUI 自身不联网搜索；搜索与 URL Fetch 来自用户安装的 Pi Extension。

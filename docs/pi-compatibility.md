@@ -1,5 +1,15 @@
 # 与 pi 的兼容性
 
+P18 按 pi-memory 0.4.2 的发布 tarball 接入 prompt-side 工具：
+memory_write / memory_read / memory_search / memory_forget / memory_restore /
+memory_status / scratchpad（名字不加前缀，来自 `pi.registerTool`）。
+长期记忆是 **global-only**（`PI_MEMORY_DIR` 或 `~/.pi/agent/memory`），
+源码里没有 project/cwd scope；qmd 是可选外部依赖，只有 memory_search 需要。
+GUI 不读 memory 目录、不管理 qmd、不实现检索，只投影 allowlist 字段。
+⚠️ pi 0.87.0 只把 execute 抛异常标成 `isError`，Extension 在 result 里返回的
+`isError: true` 不会到达 tool_execution_end；因此缺结构化字段时降级为
+「结果不可用」，不猜失败。见 [Pi Memory](memory.md)。
+
 P17 按 pi-subagents 0.73.1 的真实工具契约接入，parent-side 名字为 subagents_enable/bg_wait/subagent_supervisor/subagent。
 Pi 0.86.1+ fresh unrestricted parent 初始前三项 active；subagent registered but inactive，loader 后在后续模型请求激活。Supervisor 不依赖 loader。
 不增加 Pi 核心能力假设；dynamic loader 与实际 child 调用分别记录。

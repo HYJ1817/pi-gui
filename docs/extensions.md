@@ -11,6 +11,11 @@
 P16 在 Extensions 页增加独立 Web Access 设置区：固定官方安装命令复制、
 安装后重启 Pi、当前 bridge 的工具调用观察。没有 GUI 自动安装或任意包名入口。
 通用 Registry 不含 Web 专用条件，工具清单仍未知。详情见 [Web Access](web-access.md)。
+P17 增加 Subagents 设置区（见 [subagents.md](subagents.md)），P18 增加 Pi Memory 设置区
+（见 [memory.md](memory.md)）。三者都是**独立的 feature adapter**，共用同一套
+installed / configured / loaded / runtimeObserved 语义，但**不往通用 Registry 里塞
+任何专用条件**：`capabilityRegistry.tools` 仍为空、`toolRegistryAvailable` 仍为 false，
+Memory 也不改变发现、启用或加载的判定——它只是多了一个固定命令与一份运行观察。
 
 Skill 是给模型阅读的指令，Extension 是在 Pi 进程中执行的第三方代码；两者保持独立。
 本机 Pi 0.87.0 的来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
@@ -202,6 +207,11 @@ P17 增加 Conversation Subagent Activity 与手动安装提示，见 [subagents
 终端执行固定命令 pi install npm:pi-subagents 后确认重启 Pi。
 installed/configured/loaded/runtimeObserved 分开；loader 不启动 child。
 不读取 Agent 定义，不修改 Registry 的 tools/unknown 语义。
+
+P18 增加 Pi Memory Activity 与手动安装提示，见 [memory.md](memory.md)。
+终端执行 pi install npm:pi-memory 后确认重启 Pi；GUI 不安装 qmd、不建索引、
+不读 `~/.pi/agent/memory`、不建立第二份数据库。长期记忆与会话搜索保持独立，
+Registry 的 tools/unknown 语义同样不变。`npm run test:memory`（201 条，离线）。
 
 `npm run test:skills`（182 条）：发现规则（两种 collect 模式）、同名冲突、
 信任判定、状态判定（`enabled` / `disabled` / `untrusted` / `invalid` /

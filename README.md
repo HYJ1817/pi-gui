@@ -21,6 +21,7 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 - **对话** —— 流式渲染，工具调用以时间线形式嵌在对话流里
 - **Web Activity** —— 可通过 Pi Web Extension 使用联网搜索与 URL Fetch，并提供原生 GUI Activity 展示；安装与安全边界见 [Web Access](docs/web-access.md)
 - **Subagent Activity** —— 第三方 Extension 在当前对话内委派工作；展示结构化 child 状态与历史，与 Planner 独立。手动安装与限制见 [Subagents](docs/subagents.md)
+- **Pi Memory（长期记忆）** —— 可通过 Pi Memory Extension 使用跨会话长期记忆，Pi GUI 对相关工具提供原生 Activity 展示。它与「会话搜索」是两套东西；安装、边界与安全投影见 [Pi Memory](docs/memory.md)
 - **会话** —— 一次对话一条记录，挂在它所属的项目下面，随时切回旧的
 - **分支** —— 从会话里任意一次对话分叉出一条新支线
 - **提问导航** —— 聊天区左边一列短线，对应当前会话里的每次提问
@@ -144,6 +145,8 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   改完会自动重启 pi（pi 没有文件监听）
 - **Extensions**：只读发现当前磁盘上的候选项，分开显示安装、配置与加载证据。
   Pi RPC 没有已注册工具清单，所以不会猜某个扩展提供了什么工具；安装与启停仍用 Pi 官方 CLI。
+  Web / Subagent / Memory 各有一个独立设置区：固定官方安装命令 + 安装后重启 Pi + 当前
+  bridge 的真实工具调用观察。**长期记忆由 Extension 提供，不是 Pi GUI 内置的**
 - **MCP**：当前兼容基线 **Pi 0.87.0 未提供原生 MCP 或对应 RPC 能力**。这个标签页是
   一份能力报告 —— 读你本机的 pi 包给出结论与原文证据，
   并指出官方替代路径是 extension。**不假装有一堆 Server 可以增删改**
@@ -250,7 +253,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 28 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 31 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。

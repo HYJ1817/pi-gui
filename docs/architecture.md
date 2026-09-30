@@ -379,3 +379,16 @@ Electron 版由主进程指到 `%APPDATA%\Pi GUI`（装在 Program Files 下时�
 ## P17 Subagent adapter
 
 subagent-activity.js 仅投影白名单，subagent-capabilities.js 管 workspace/run 观察与 stale guard，subagents.js 提供手动设置。Timeline 保存 partial details，实时和历史复用 tool-view；completion 复用 Git 防抖。Planner / execution_event、Registry 与后端不改。见 [subagents.md](subagents.md)。
+
+## P18 Memory adapter
+
+`public/memory-activity.js` 把 **pi-memory 0.4.2** 的 7 个真实工具
+（memory_write / memory_read / memory_search / memory_forget / memory_restore /
+memory_status / scratchpad）投影成白名单事实：只给操作、query、数量、scope 与
+allowlist 元数据，`path` / `recoveryPath` / `dir` / 预览与记忆正文一律不投影。
+`memory-capabilities.js` 独立维护 installed / configured / loaded 三值与
+generation+bridgeRun 范围内的真实调用观察，`memory.js` 连接 SSE 观察与
+Extensions 设置区，`tool-view.js` 把语义结果接到既有 Timeline（实时与历史同一投影，
+identity 仍是 toolCallId）。后端、通用 Registry、会话搜索与 Planner 均不参与。
+Memory 工具不是写文件的工具：不进 Changes 账本、不触发 Git 刷新。
+见 [memory.md](memory.md)。

@@ -45,16 +45,16 @@ settings 目录解析、override 优先级、package filter、空 filter、manif
 Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
 Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
 
-`npm test` 里现在有 28 个套件，全部是**纯自动化**：
+`npm test` 里现在有 31 个套件，全部是**纯自动化**：
 
 ```
-smoke 970 · git 161 · modules 114 · reliability · interactions · port-owner
-project-config 115 · skills 182 · planner 115 · workflow-relations 71 · reviews 133
+smoke 1013 · git 161 · modules 114 · reliability · interactions · port-owner
+project-config 115 · skills 182 · extensions 52 · web-access 66 · subagents 141
+memory 201 · planner 115 · workflow-relations 71 · reviews 133
 review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · extensions 52
-pi-compat 57 · body-integrity 5 · dev-server 20 · models-api 50
-server-security 36 · diagnostics 10 · update-check 87
-version-consistency 34 · release-artifacts 70 · electron-guard 75
+sessions 77 · session-search 71 · pi-compat 57 · body-integrity 5 · dev-server 20
+models-api 50 · server-security 36 · diagnostics 10 · update-check 87
+version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
 
 > `reliability` / `interactions` / `port-owner` 是早期套件，只打印
@@ -540,7 +540,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 28 个套件）
+版本一致性（含 tag）  →  npm test（A 层 31 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
@@ -641,3 +641,35 @@ npm test 串行包含 tests/subagents.cjs（也可 npm run test:subagents）。f
 Supervisor fixtures 对照同一 revision 的 native-supervisor-channel.ts：status 的 pending 是数字，pending/list 是 public metadata 数组，reply 返回 replyTo/runId/agent。
 hostile extra fields 验证 message/root/path/凭据及 raw output 不进入 DOM，包含未知 action、历史、安全降级和 runtime observation reset/stale。
 现有 Subagent/Web/Planner 断言保留；真实 Chrome 场景 159 检查 Supervisor 标签、安全 metadata 与 raw payload 排除。
+
+## P18 Pi Memory 验证
+
+npm test 串行包含 tests/memory.cjs（也可 npm run test:memory，201 条）。
+fixtures 对照 **pi-memory 0.4.2 发布 tarball 的真实 tool schema 与 details 形状**，
+默认完全离线：不安装 Extension、不装 / 不跑 qmd、不读 `~/.pi/agent/memory`、
+不改真实记忆、不联网、不调用模型。
+
+覆盖：7 个真实工具（memory_write / memory_read / memory_search / memory_forget /
+memory_restore / memory_status / scratchpad）的识别与生命周期文案；query / match
+的边界；`count` / `removed` / `restored` 的真实性（缺字段不写成 0）；
+`mode` 只信 result；`needsEmbed` / `embedStarted`；forget 的可恢复语义但
+**不显示 recovery ID 与 recoveryPath**；status 的 qmd / collection / embeddings；
+敏感字段（path/recoveryPath/dir/preview/content/env/token/apiKey/embedding/vector…）
+在投影与 DOM 中都不出现；raw args/details/result 文本不进 DOM；hostile HTML 惰性；
+runtime observation 的 generation / bridge run 隔离与 restart 清空；
+installed / configured / loaded 三值；历史与实时同一投影、缺 details 降级。
+回归：Session Search / Planner / Web / Subagent / Extension Registry / Changes 账本
+与 git 刷新都不受影响。
+
+UI smoke 的 P18 段落走真实 SSE：并发 id 隔离、逆序完成、`.tl-args` 为空、
+不额外刷新 Git、不进 Changes 账本、不发 RPC、Runtime evidence 显示、
+切项目期间丢弃旧事件、Stop 收尾、重启清空观察、旧 workspace 的确认框不重启。
+
+真实 Chrome 场景 160/161/162 检查：写入与检索的文案、记忆正文与绝对路径不在 DOM、
+recovery ID 与路径不展示、Extensions 页 Pi Memory 设置区的固定命令与真实运行观察。
+这一轮同时修了 harness 的失真：真实 SSE 事件带 `bridgeRun`，harness 以前不带，
+导致 Extensions 页的 runtimeObserved 在真实浏览器里永远显示「尚未观察到调用」
+（fixture 不照真实形状造，把观察链路整条藏住了）。
+
+live 是人工流程（不属于默认 CI，本阶段未执行），步骤见 [memory.md](memory.md)。
+没有现场安装与真实模型时不能声称 live 通过。默认测试**不需要** qmd 或任何网络。
