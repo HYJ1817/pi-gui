@@ -1069,6 +1069,20 @@ async function main() {
     ['网页全文未铺开', `!document.querySelector('[data-id="p16-fetch"]').textContent.includes('Offline page body')`],
   ]);
 
+  await evalJs(`fetch('/api/__conversation?what=browser-activity').then(r=>r.ok)`);
+  await sleep(340);
+  await evalJs(`document.querySelector('[data-id="p20-nav"] .tl-toggle').click()`);
+  await shotOf('#workspace', '165-browser-activity', 'P20：真实浏览器 Activity，输入内容与页面正文不投影', ['Opened example.com', 'Clicked [e12]', 'Entered text', 'Read example.com', 'Captured page screenshot', 'Waiting for page failed'], [
+    ...viewportChecks('#chatView'),
+    ['只给安全的可点击来源', `document.querySelector('[data-id="p20-nav"] .web-source').href==='https://example.com/'`],
+    ['输入内容不进 DOM', `!document.querySelector('[data-id="p20-fill"]').outerHTML.includes('PRIVATE_TYPED_SECRET')`],
+    ['页面正文与标题不进 DOM', `!document.querySelector('[data-id="p20-read"]').outerHTML.includes('PRIVATE_PAGE_BODY') && !document.querySelector('[data-id="p20-read"]').outerHTML.includes('PRIVATE_PAGE_TITLE')`],
+    ['点击的页面文本不进 DOM', `!document.querySelector('[data-id="p20-click"]').outerHTML.includes('PRIVATE_ELEMENT_TEXT')`],
+    ['本机路径不进 DOM', `!document.querySelector('[data-id="p20-shot"]').outerHTML.includes('PRIVATE')`],
+    ['上游错误原文不进 DOM', `!document.querySelector('[data-id="p20-timeout"]').outerHTML.includes('PRIVATE_UPSTREAM_MESSAGE')`],
+    ['整体没有浏览器 PRIVATE_ 残留', `!['PRIVATE_TYPED_SECRET','PRIVATE_PAGE_BODY','PRIVATE_PAGE_TITLE','PRIVATE_ELEMENT_TEXT','PRIVATE_UPSTREAM_MESSAGE'].some(m=>document.querySelector('#stream').outerHTML.includes(m))`],
+  ]);
+
   await evalJs(`fetch('/api/__conversation?what=subagent-activity').then(r=>r.ok)`);
   await sleep(350);
   await evalJs(`document.querySelector('[data-id="p17-workflow"] .tl-toggle').click(); document.querySelector('[data-id="p17-workflow"]').scrollIntoView({block:'center'})`);

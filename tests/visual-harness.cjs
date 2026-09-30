@@ -1098,6 +1098,23 @@ const server = http.createServer(async (req, res) => {
       push({ type: 'tool_execution_start', toolCallId: 'p16-fetch', toolName: 'fetch_content', args: { url: 'https://pi.dev/' } });
       push({ type: 'tool_execution_end', toolCallId: 'p16-fetch', isError: false, result: { content: [{ type: 'text', text: 'Offline page body '.repeat(1000) }], details: { urls: ['https://pi.dev/'], title: 'Pi documentation', mimeType: 'text/html', status: 200, successful: 1 } } });
       return json(res, 200, { ok: true });
+    } else if (what === 'browser-activity') {
+      /* P20：details 形状照抄 pi-browser-harness 0.11.0 的真实返回。
+       * PRIVATE_* 用来证明：输入内容、页面正文、页面标题、本机路径、上游错误原文
+       * 一个都不进 DOM。 */
+      push({ type: 'tool_execution_start', toolCallId: 'p20-nav', toolName: 'browser_navigate', args: { url: 'https://example.com/' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p20-nav', isError: false, result: { content: [{ type: 'text', text: 'Navigated to: https://example.com/\nTitle: PRIVATE_PAGE_TITLE' }], details: { ok: true, outcome: { kind: 'new_tab_created', targetId: 'A1B2C3' }, page: { url: 'https://example.com/', title: 'PRIVATE_PAGE_TITLE', width: 1280, height: 720 } } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p20-click', toolName: 'browser_click', args: { ref: 'e12' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p20-click', isError: false, result: { content: [{ type: 'text', text: 'Clicked at a[href="https://iana.org"] PRIVATE_ELEMENT_TEXT' }], details: { ok: true, x: 320, y: 240, ref: 'e12' } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p20-fill', toolName: 'browser_fill', args: { ref: 'e7', value: 'PRIVATE_TYPED_SECRET' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p20-fill', isError: false, result: { content: [{ type: 'text', text: 'Filled e7 = "PRIVATE_TYPED_SECRET"' }], details: { ok: true, ref: 'e7', value: 'PRIVATE_TYPED_SECRET', verified: 'PRIVATE_TYPED_SECRET', tag: 'INPUT' } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p20-read', toolName: 'browser_read_page', args: { url: 'https://example.com/' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p20-read', isError: false, result: { content: [{ type: 'text', text: 'PRIVATE_PAGE_BODY' }], details: { ok: true, title: 'PRIVATE_PAGE_TITLE', url: 'https://example.com/', wordCount: 42, render: { body: 'PRIVATE_PAGE_BODY' } } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p20-shot', toolName: 'browser_screenshot', args: { format: 'jpeg' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p20-shot', isError: false, result: { content: [{ type: 'text', text: 'Screenshot saved: C:\\PRIVATE\\shot.jpeg' }], details: { ok: true, path: 'C:\\PRIVATE\\shot.jpeg', format: 'jpeg', attached: false } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p20-timeout', toolName: 'browser_wait_for_load', args: { timeout: 15 } });
+      push({ type: 'tool_execution_end', toolCallId: 'p20-timeout', isError: true, result: { content: [{ type: 'text', text: 'browser_wait_for_load failed (timeout): PRIVATE_UPSTREAM_MESSAGE' }], details: { ok: false, kind: 'timeout', message: 'PRIVATE_UPSTREAM_MESSAGE' } } });
+      return json(res, 200, { ok: true });
     }
     if (what === 'fixture' || what === 'reset') {
       push({ type: 'response', command: 'get_messages', success: true, data: { messages: what === 'fixture' ? P14B_MESSAGES : MESSAGES } });

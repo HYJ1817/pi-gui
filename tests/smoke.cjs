@@ -6728,6 +6728,54 @@ staticCheck();
     es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: run });
     window.fetch = baseFetch; window.clearThread();
   }
+  /* P20: real SSE routing for browser tools — identity, out-of-order completion,
+   * secret / raw page content redaction, safe source link, Stop, observation reset. */
+  {
+    const run = Number.isInteger(window.S.bridgeRun) ? window.S.bridgeRun : 1;
+    window.S.bridgeRun = run; window.S.hasProject = true; window.S.switching = false;
+    window.clearThread();
+    await new Promise(r => setTimeout(r, 600));
+    const beforeGit = gitCalls.filter(c => c.kind === 'status').length;
+    const beforeCommands = commands.length;
+    const SECRET = 'PRIVATE_TYPED_SECRET';
+    for (const id of ['p20-a', 'p20-b']) es.emit({ type: 'tool_execution_start', bridgeRun: run, toolCallId: id, toolName: 'browser_fill', args: { ref: id, value: SECRET } });
+    const first = window.document.querySelector('[data-id="p20-a"]');
+    es.emit({ type: 'tool_execution_update', bridgeRun: run, toolCallId: 'p20-a', partialResult: { content: [{ type: 'text', text: SECRET }], details: { ok: true } } });
+    await new Promise(r => setTimeout(r, 180));
+    check('P20 SSE 输入内容不进 DOM', () => first.textContent.includes('Entering text') && !first.outerHTML.includes(SECRET));
+    for (const id of ['p20-b', 'p20-a']) es.emit({ type: 'tool_execution_end', bridgeRun: run, toolCallId: id, result: { content: [{ type: 'text', text: SECRET }], details: { ok: true, ref: id, value: SECRET, verified: SECRET, tag: 'INPUT' } }, isError: false });
+    check('P20 SSE 逆序完成保持两个独立节点', () => first === window.document.querySelector('[data-id="p20-a"]') && window.document.querySelectorAll('[data-id^="p20-"]').length === 2 && first.dataset.status === 'success');
+    check('P20 时间线不显示 raw args/details', () => first.querySelector('.tl-args').textContent === '' && !first.outerHTML.includes(SECRET));
+    check('P20 输入动作只说「已输入文本」', () => first.querySelector('.tl-label').textContent === 'Entered text');
+    es.emit({ type: 'tool_execution_start', bridgeRun: run, toolCallId: 'p20-nav', toolName: 'browser_navigate', args: { url: 'https://example.com/' } });
+    es.emit({ type: 'tool_execution_end', bridgeRun: run, toolCallId: 'p20-nav', result: { content: [{ type: 'text', text: 'Navigated to: https://example.com/' }], details: { ok: true, page: { url: 'https://example.com/', title: 'PRIVATE_PAGE_TITLE', width: 1280, height: 720 } } }, isError: false });
+    const nav = window.document.querySelector('[data-id="p20-nav"]');
+    check('P20 打开页面只说主机名', () => nav.querySelector('.tl-label').textContent === 'Opened example.com');
+    check('P20 页面标题不进入 DOM', () => !nav.outerHTML.includes('PRIVATE_PAGE_TITLE'));
+    check('P20 只给安全的可点击来源', () => nav.querySelector('.web-source') && nav.querySelector('.web-source').href === 'https://example.com/');
+    await new Promise(r => setTimeout(r, 600));
+    check('P20 不额外刷新 Git', () => gitCalls.filter(c => c.kind === 'status').length === beforeGit);
+    check('P20 不创建 Planner 任务或调用 RPC', () => commands.length === beforeCommands);
+    const box = window.document.createElement('section'); window.document.body.appendChild(box);
+    window.renderBrowserSetup(box, { ok: true, extensions: [] });
+    check('P20 设置区显示实际调用证据', () => box.textContent.includes('已观察到 2 个浏览器工具被调用'));
+    check('P20 安装仅固定命令', () => box.querySelector('code').textContent === 'pi install npm:pi-browser-harness');
+    check('P20 明说与 Web Search 是两件事', () => box.textContent.includes('Browser Use 与 Web Search 是两件事'));
+    check('P20 不假装有审批', () => box.textContent.includes('没有审批协议') && ![...box.querySelectorAll('button')].some(b => /允许|拒绝/.test(b.textContent)));
+    const sameRun = window.S.bridgeRun;
+    window.S.switching = true;
+    es.emit({ type: 'tool_execution_start', bridgeRun: sameRun, toolCallId: 'p20-old', toolName: 'browser_click', args: { ref: 'e1' } });
+    check('P20 激活期间丢弃旧 start', () => !window.document.querySelector('[data-id="p20-old"]'));
+    window.S.switching = false;
+    es.emit({ type: 'tool_execution_start', bridgeRun: sameRun, toolCallId: 'p20-stop', toolName: 'browser_wait', args: { seconds: 30 } });
+    window.interruptActive();
+    check('P20 Stop 后无运行 spinner', () => window.document.querySelector('[data-id="p20-stop"]').dataset.status === 'incomplete');
+    es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: sameRun });
+    window.renderBrowserSetup(box, { ok: true, extensions: [] });
+    check('P20 重启清空 observation', () => box.textContent.includes('尚未观察到浏览器工具调用'));
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: sameRun });
+    box.remove(); window.clearThread();
+  }
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;
