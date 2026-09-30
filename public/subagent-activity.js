@@ -1,6 +1,6 @@
 /* pi-subagents 0.73.1: allowlist projection, never child transcripts or raw args.
  * No script parsing, agent registry, tool execution or orchestration here. */
-export const SUBAGENT_TOOLS = Object.freeze(['subagent', 'subagents_enable', 'bg_wait']);
+export const SUBAGENT_TOOLS = Object.freeze(['subagent', 'subagents_enable', 'bg_wait', 'subagent_supervisor']);
 const object = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const list = value => Array.isArray(value) ? value.slice(0, 24) : [];
 const text = (value, max = 180) => typeof value === 'string' ? value.replace(/[\s\u0000-\u001f]+/g, ' ').trim().slice(0, max) : '';
@@ -29,9 +29,46 @@ function progressFacts(value) {
   }
   return bits.join(' · ');
 }
+/** Parent coordination metadata only. Never inspect raw output, message or paths. */
+function supervisorActivity(entry, a, d) {
+  const action = text(a.action, 80);
+  const status = entry.status || 'unknown';
+  const running = status === 'running';
+  const labels = {
+    status: ['Checking supervisor channel…', 'Checked supervisor channel'],
+    pending: ['Checking supervisor requests…', 'Checked supervisor requests'],
+    list: ['Checking supervisor requests…', 'Listed supervisor requests'],
+    reply: ['Replying to subagent…', 'Replied to subagent'],
+  };
+  const label = status === 'error' ? 'Supervisor action failed' : Object.hasOwn(labels, action) && (running || status === 'success') ? labels[action][running ? 0 : 1] : 'Subagent supervisor action';
+  const facts = ['Action: ' + (action || 'unknown')];
+  if (action === 'status') {
+    if (typeof d.active === 'boolean') facts.push('Channel active: ' + d.active);
+    if (Number.isSafeInteger(d.pending) && d.pending >= 0) facts.push('Pending replies: ' + d.pending);
+  } else if ((action === 'pending' || action === 'list') && Array.isArray(d.pending)) {
+    facts.push('Pending requests: ' + d.pending.length);
+    for (const item of list(d.pending).map(object)) {
+      const row = [];
+      for (const [field, label] of [['id', 'Request'], ['runId', 'Run'], ['agent', 'Agent'], ['reason', 'Reason']]) {
+        const value = text(item[field], field === 'reason' ? 80 : 180);
+        if (value) row.push(label + ': ' + value);
+      }
+      if (Number.isSafeInteger(item.childIndex) && item.childIndex >= 0) row.push('Child index: ' + item.childIndex);
+      if (typeof item.expectsReply === 'boolean') row.push('Expects reply: ' + item.expectsReply);
+      if (row.length) facts.push(row.join(' · '));
+    }
+    if (d.pending.length > 24) facts.push('… request display capped at 24');
+  } else if (action === 'reply') {
+    for (const [field, label] of [['replyTo', 'Request'], ['runId', 'Run'], ['agent', 'Agent']]) {
+      const value = text(d[field]); if (value) facts.push(label + ': ' + value);
+    }
+  }
+  return { label, status, known: true, summary: 'Action: ' + (action || 'unknown'), facts: facts.join('\n').slice(0, 8000), sources: [], diffStat: null, gitStat: null };
+}
 export function subagentActivity(entry) {
   if (!SUBAGENT_TOOLS.includes(entry?.name)) return null;
   const a = object(entry.args), d = object(entry.details);
+  if (entry.name === 'subagent_supervisor') return supervisorActivity(entry, a, d);
   const results = list(d.results).map(object);
   const status = lifecycle(entry, d, results);
   const running = status === 'running';
