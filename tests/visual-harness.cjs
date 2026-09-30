@@ -1075,6 +1075,18 @@ const server = http.createServer(async (req, res) => {
       push({ type: 'tool_execution_start', toolCallId: 'p18-scratchpad', toolName: 'scratchpad', args: { action: 'add', text: 'PRIVATE_SCRATCHPAD_ITEM' } });
       push({ type: 'tool_execution_end', toolCallId: 'p18-scratchpad', isError: false, result: { content: [{ type: 'text', text: 'Added: - [ ] PRIVATE_SCRATCHPAD_ITEM' }], details: { action: 'add', sessionId: 'p18sess', timestamp: '2026-09-30 12:00:00', qmdUpdateMode: 'background', preview: { preview: 'PRIVATE_SCRATCHPAD_ITEM' } } } });
       return json(res, 200, { ok: true });
+    } else if (what === 'memory-soft-failure') {
+      /* P18-Fix: soft-failure 的真实形状 —— details 是 {}，而 raw result 文本里
+       * 既有文案也有路径。GUI 必须降级，且不得把这些文本当证据或铺进 DOM。 */
+      push({ type: 'tool_execution_start', toolCallId: 'p18sf-read', toolName: 'memory_read', args: { target: 'daily', date: '2026-09-29' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p18sf-read', isError: false, result: { content: [{ type: 'text', text: 'No daily log for 2026-09-29. C:\\Users\\p18user\\.pi\\agent\\memory\\daily' }], details: {} } });
+      push({ type: 'tool_execution_start', toolCallId: 'p18sf-sp', toolName: 'scratchpad', args: { action: 'done', text: 'fix later' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p18sf-sp', isError: false, result: { content: [{ type: 'text', text: 'No matching open item found for: "fix later" PRIVATE_SCRATCHPAD_ITEM' }], details: {} } });
+      push({ type: 'tool_execution_start', toolCallId: 'p18sf-write', toolName: 'memory_write', args: { target: 'long_term', content: 'PRIVATE_MEMORY_TEXT' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p18sf-write', isError: false, result: { content: [{ type: 'text', text: 'PRIVATE_MEMORY_TEXT' }], details: {} } });
+      push({ type: 'tool_execution_start', toolCallId: 'p18sf-status', toolName: 'memory_status', args: {} });
+      push({ type: 'tool_execution_end', toolCallId: 'p18sf-status', isError: false, result: { content: [{ type: 'text', text: 'PRIVATE_MEMORY_TEXT' }], details: { longTermChars: 1200, snapshotMode: 'refresh' } } });
+      return json(res, 200, { ok: true });
     } else if (what === 'web-activity') {
       push({ type: 'tool_execution_start', toolCallId: 'p16-search', toolName: 'web_search', args: { queries: ['Pi coding agent official documentation'] } });
       push({ type: 'tool_execution_end', toolCallId: 'p16-search', isError: false, result: { content: [{ type: 'text', text: 'Offline fixture search result' }], details: { queries: ['Pi coding agent official documentation'], totalResults: 1, queryProviders: [{ query: 'Pi coding agent official documentation', providers: ['exa'] }], curatedQueries: [{ sources: [{ title: 'Pi documentation', url: 'https://pi.dev/' }] }] } } });

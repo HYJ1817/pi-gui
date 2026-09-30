@@ -55,21 +55,48 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   check('write error label', () => assert.equal(memoryActivity(finish(entry('memory_write', { target: 'long_term' }), {}, true)).label, 'Memory write failed'));
   check('write incomplete label', () => { const e = entry('memory_write', { target: 'long_term' }); e.status = 'incomplete'; assert.equal(memoryActivity(e).label, 'Memory write stopped'); });
   check('write missing target does not claim success', () => assert.equal(memoryActivity(finish(entry('memory_write', {}), {})).label, 'Memory write result unavailable'));
+  /* §三：args.target 只是请求，不能顶成成功。 */
+  check('write args.target is not success evidence', () => {
+    const a = memoryActivity(finish(entry('memory_write', { target: 'long_term', content: 'x' }), {}));
+    assert.equal(a.label, 'Memory write result unavailable');
+    assert.match(a.facts, /Requested target: Long-term memory/);
+    assert.doesNotMatch(a.label, /Saved to memory/);
+  });
 
-  /* ---------- memory_read ---------- */
-  for (const [target, label] of [['long_term', 'Read long-term memory'], ['scratchpad', 'Read scratchpad'], ['daily', 'Read daily log'], ['list', 'Listed daily logs']]) {
-    check('read ' + target, () => assert.equal(memoryActivity(finish(entry('memory_read', { target }), {})).label, label));
-  }
+  /* ---------- memory_read：成功必须有 result 证据 ---------- *
+   * 0.4.2 的四个成功分支：long_term/scratchpad → { path }，daily → { path, date }，
+   * list → { files }；soft-failure（文件不存在 / 没有那天 / 没有日志）是 {}。 */
+  const read = (target, details, extra = {}) => memoryActivity(finish(entry('memory_read', { target, ...extra }), details));
   check('read running label', () => assert.equal(memoryActivity(entry('memory_read', { target: 'long_term' })).label, 'Reading memory…'));
-  check('read never prints file content', () => assert.match(facts(finish(entry('memory_read', { target: 'long_term' }), { path: `${MEM}\\MEMORY.md` })), /Content not shown/));
-  const readDaily = finish(entry('memory_read', { target: 'daily', date: '2026-09-29' }), { path: `${MEM}\\daily\\2026-09-29.md`, date: '2026-09-29' });
-  check('read daily date shown', () => assert.match(facts(readDaily), /Date: 2026-09-29/));
-  check('read daily path excluded', () => assert.ok(!json(readDaily).includes(USER)));
-  check('read malformed date not shown', () => assert.doesNotMatch(facts(finish(entry('memory_read', { target: 'daily', date: '2026-9-9' }), { date: '2026-9-9' })), /Date:/));
-  const listed = finish(entry('memory_read', { target: 'list' }), { files: ['2026-09-30.md', '2026-09-29.md'] });
-  check('read list count only', () => assert.match(facts(listed), /Daily logs: 2/));
-  check('read list filenames excluded', () => assert.doesNotMatch(facts(listed), /\.md/));
-  check('read missing list metadata unknown', () => assert.match(facts(finish(entry('memory_read', { target: 'list' }), {})), /Daily log count unavailable/));
+  check('read long_term + path', () => assert.equal(read('long_term', { path: `${MEM}\\MEMORY.md` }).label, 'Read long-term memory'));
+  check('read long_term + {} is not success', () => assert.equal(read('long_term', {}).label, 'Memory read result unavailable'));
+  check('read scratchpad + path', () => assert.equal(read('scratchpad', { path: `${MEM}\\SCRATCHPAD.md` }).label, 'Read scratchpad'));
+  check('read scratchpad + {} is not success', () => assert.equal(read('scratchpad', {}).label, 'Memory read result unavailable'));
+  check('read daily + path + valid date', () => assert.equal(read('daily', { path: `${MEM}\\daily\\2026-09-29.md`, date: '2026-09-29' }).label, 'Read daily log'));
+  check('read daily + path only is not success', () => assert.equal(read('daily', { path: `${MEM}\\daily\\2026-09-29.md` }).label, 'Memory read result unavailable'));
+  check('read daily + {} is not success', () => assert.equal(read('daily', {}).label, 'Memory read result unavailable'));
+  check('read daily malformed result date is not success', () => assert.equal(read('daily', { path: `${MEM}\\daily\\2026-9-9.md`, date: '2026-9-9' }).label, 'Memory read result unavailable'));
+  check('read list + files[]', () => assert.equal(read('list', { files: ['2026-09-30.md', '2026-09-29.md'] }).label, 'Listed daily logs'));
+  check('read list + {} is not success', () => assert.equal(read('list', {}).label, 'Memory read result unavailable'));
+  check('read requested date is not success evidence', () => {
+    const a = read('daily', {}, { date: '2026-09-29' });
+    assert.equal(a.label, 'Memory read result unavailable');
+    assert.match(a.facts, /Requested date: 2026-09-29/);
+    assert.doesNotMatch(a.facts, /^Date:/m);
+  });
+  check('read soft-failure keeps target as request info', () => assert.match(read('daily', {}).facts, /Target: Daily log/));
+  check('read result date comes from details', () => assert.match(read('daily', { path: 'x', date: '2026-09-29' }).facts, /Date: 2026-09-29/));
+  check('read path excluded', () => assert.ok(!json(read('long_term', { path: `${MEM}\\MEMORY.md` })).includes(USER)));
+  check('read list count only', () => assert.match(read('list', { files: ['a.md', 'b.md'] }).facts, /Daily logs: 2/));
+  check('read list filenames excluded', () => assert.doesNotMatch(read('list', { files: ['2026-09-30.md'] }).facts, /\.md/));
+  check('read missing list metadata unknown', () => assert.match(read('list', {}).facts, /Daily log count unavailable/));
+  check('read success hides content', () => assert.match(read('long_term', { path: 'x' }).facts, /Content not shown in Activity/));
+  check('read soft-failure claims no content', () => assert.doesNotMatch(read('long_term', {}).facts, /Content not shown/));
+  /* §五：不解析 raw result 文本 —— 文案不是 API，而且是正文/路径泄露面。 */
+  check('read raw result text never becomes success', () => {
+    const a = memoryActivity(finish(entry('memory_read', { target: 'daily' }), {}, false, 'No daily log for 2026-09-29.'));
+    assert.equal(a.label, 'Memory read result unavailable');
+  });
   const readHuge = finish(entry('memory_read', { target: 'long_term' }), { path: `${MEM}\\MEMORY.md` }, false, RAW);
   check('read raw result text excluded', () => assert.ok(!json(readHuge).includes('RAW_MEMORY_FULLTEXT')));
   check('read raw result text absent from DOM', () => assert.ok(!view.renderEntry(readHuge).textContent.includes('RAW_MEMORY_FULLTEXT')));
@@ -140,28 +167,45 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   }
   check('status dir excluded', () => assert.ok(!json(status).includes(USER)));
   check('status qmd unavailable', () => { const a = memoryActivity(finish(entry('memory_status', {}), { qmd: false })); assert.match(a.facts, /qmd: unavailable/); assert.match(a.facts, /memory_search requires qmd/); });
-  check('status unknown enums stay unknown', () => { const a = memoryActivity(finish(entry('memory_status', {}), { embeddings: 'vector', snapshotMode: 'refresh', qmdUpdateMode: 'eager' })); assert.doesNotMatch(a.facts, /Embeddings:|Snapshot:|Update mode:/); });
+  /* v0.4.2 tag（= npm 发布包，同一 commit 39e6b998）的 getSnapshotMode 只返回
+   * stable | per-turn；refresh 是仓库 main 上尚未发布的第三种模式。
+   * 契约按发布版钉住，不为未发布字段提前适配。 */
+  check('status snapshot stable displayed', () => assert.match(facts(finish(entry('memory_status', {}), { snapshotMode: 'stable', longTermChars: 1 })), /Snapshot: stable/));
+  check('status snapshot per-turn displayed', () => assert.match(facts(finish(entry('memory_status', {}), { snapshotMode: 'per-turn', longTermChars: 1 })), /Snapshot: per-turn/));
+  check('status snapshot refresh stays unknown (not in v0.4.2)', () => assert.doesNotMatch(facts(finish(entry('memory_status', {}), { snapshotMode: 'refresh', longTermChars: 1 })), /Snapshot:/));
+  check('status unknown enums stay unknown', () => { const a = memoryActivity(finish(entry('memory_status', {}), { embeddings: 'vector', snapshotMode: 'eager', qmdUpdateMode: 'eager' })); assert.doesNotMatch(a.facts, /Embeddings:|Snapshot:|Update mode:/); });
   check('status missing metadata degrades', () => assert.match(facts(finish(entry('memory_status', {}), {})), /Memory status metadata unavailable/));
+  check('status missing metadata is not success', () => assert.equal(memoryActivity(finish(entry('memory_status', {}), {})).label, 'Memory status result unavailable'));
   check('status bad latest daily ignored', () => assert.doesNotMatch(facts(finish(entry('memory_status', {}), { dailyCount: 1, latestDaily: `${MEM}\\2026-09-30.md` })), /Latest daily log/));
   check('status error label', () => assert.equal(memoryActivity(finish(entry('memory_status', {}), {}, true)).label, 'Memory status failed'));
 
-  /* ---------- scratchpad ---------- */
-  for (const [action, label] of [['add', 'Added to scratchpad'], ['done', 'Checked off scratchpad item'], ['undo', 'Reopened scratchpad item'], ['clear_done', 'Cleared done scratchpad items'], ['list', 'Read scratchpad']]) {
-    /* clear_done 的真实 details 只有 { action, removed, qmdUpdateMode, preview }。 */
-    const details = action === 'clear_done' ? { action, removed: 1, qmdUpdateMode: 'background' } : { action, count: 1, open: 1, qmdUpdateMode: 'background' };
-    check('scratchpad ' + action, () => assert.equal(memoryActivity(finish(entry('scratchpad', { action }), details)).label, label));
-  }
+  /* ---------- scratchpad：成功必须有 details 证据 ---------- *
+   * 0.4.2：add/done/undo 回写 details.action；clear_done 另带 removed；
+   * list 带 count/open；soft-failure（空清单、没有匹配项、缺 text）是 {}。 */
+  const sp = (action, details, extra = {}) => memoryActivity(finish(entry('scratchpad', { action, ...extra }), details));
   check('scratchpad running label', () => assert.equal(memoryActivity(entry('scratchpad', { action: 'add', text: 'x' })).label, 'Updating scratchpad…'));
   check('scratchpad list running label', () => assert.equal(memoryActivity(entry('scratchpad', { action: 'list' })).label, 'Reading scratchpad…'));
-  check('scratchpad action fact', () => assert.match(facts(finish(entry('scratchpad', { action: 'list' }), { count: 3, open: 1 })), /Action: list/));
-  check('scratchpad counts', () => assert.match(facts(finish(entry('scratchpad', { action: 'list' }), { count: 3, open: 1 })), /Items: 3/));
-  check('scratchpad cleared count', () => assert.match(facts(finish(entry('scratchpad', { action: 'clear_done' }), { action: 'clear_done', removed: 4 })), /Removed: 4/));
-  check('scratchpad clear without count degrades', () => assert.equal(memoryActivity(finish(entry('scratchpad', { action: 'clear_done' }), {})).label, 'Scratchpad result unavailable'));
+  for (const [action, label] of [['add', 'Added to scratchpad'], ['done', 'Checked off scratchpad item'], ['undo', 'Reopened scratchpad item']]) {
+    check('scratchpad ' + action + ' + details.action', () => assert.equal(sp(action, { action, sessionId: 's', timestamp: 't', qmdUpdateMode: 'background', preview: { preview: 'x' } }).label, label));
+    check('scratchpad ' + action + ' + {} is not success', () => assert.equal(sp(action, {}).label, 'Scratchpad result unavailable'));
+  }
+  check('scratchpad clear_done + action + removed', () => assert.equal(sp('clear_done', { action: 'clear_done', removed: 4, qmdUpdateMode: 'background' }).label, 'Cleared done scratchpad items'));
+  check('scratchpad clear_done removed count', () => assert.match(sp('clear_done', { action: 'clear_done', removed: 4 }).facts, /Removed: 4/));
+  check('scratchpad clear_done + {} is not success', () => assert.equal(sp('clear_done', {}).label, 'Scratchpad result unavailable'));
+  check('scratchpad clear_done without removed is not success', () => assert.equal(sp('clear_done', { action: 'clear_done' }).label, 'Scratchpad result unavailable'));
+  check('scratchpad list + count/open', () => { const a = sp('list', { count: 3, open: 1, preview: { preview: 'x' } }); assert.equal(a.label, 'Read scratchpad'); assert.match(a.facts, /Items: 3/); });
+  check('scratchpad list + open only', () => assert.equal(sp('list', { open: 0 }).label, 'Read scratchpad'));
+  check('scratchpad list + {} is not success', () => assert.equal(sp('list', {}).label, 'Scratchpad result unavailable'));
+  check('scratchpad action fact from details', () => assert.match(sp('done', { action: 'done' }).facts, /Action: done/));
+  check('scratchpad counts', () => assert.match(sp('list', { count: 3, open: 1 }).facts, /Items: 3/));
   check('scratchpad item text excluded', () => assert.ok(!json(entry('scratchpad', { action: 'add', text: PRIVATE })).includes(PRIVATE)));
-  check('scratchpad unknown action still semantic', () => { const a = memoryActivity(finish(entry('scratchpad', { action: 'archive' }), {})); assert.equal(a.label, 'Scratchpad action'); assert.match(a.facts, /Action: unknown/); });
-  check('scratchpad prototype action safe', () => { const a = memoryActivity(finish(entry('scratchpad', { action: '__proto__' }), {})); assert.equal(a.label, 'Scratchpad action'); assert.match(a.facts, /Action: unknown/); });
+  check('scratchpad preview excluded', () => assert.ok(!json(sp('add', { action: 'add', preview: { preview: PRIVATE } })).includes(PRIVATE)));
+  check('scratchpad detail action wins over request', () => assert.equal(sp('add', { action: 'done' }).label, 'Checked off scratchpad item'));
+  check('scratchpad unknown action still semantic', () => { const a = sp('archive', {}); assert.equal(a.label, 'Scratchpad action'); assert.match(a.facts, /Action: unknown/); });
+  check('scratchpad prototype action safe', () => { const a = sp('__proto__', {}); assert.equal(a.label, 'Scratchpad action'); assert.match(a.facts, /Action: unknown/); });
   check('scratchpad bounded hostile action', () => assert.ok(memoryActivity(entry('scratchpad', { action: 'a'.repeat(10000) })).summary.length < 200));
-  check('scratchpad empty details list is not zero', () => assert.doesNotMatch(facts(finish(entry('scratchpad', { action: 'list' }), {})), /Items: 0/));
+  check('scratchpad empty details list is not zero', () => assert.doesNotMatch(sp('list', {}).facts, /Items: 0/));
+  check('scratchpad error label', () => assert.equal(memoryActivity(finish(entry('scratchpad', { action: 'add' }), {}, true)).label, 'Scratchpad action failed'));
 
   /* ---------- 敏感字段 ---------- */
   const HOSTILE_FIELDS = ['path', 'recoveryPath', 'dir', 'file', 'files', 'env', 'token', 'apiKey', 'credential', 'embedding', 'vector', 'content', 'markdown', 'raw', 'fullText', 'memory', 'sessionId', 'timestamp', 'existingPreview', 'removedPreview', 'preview', 'removedContent'];
@@ -291,6 +335,46 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   check('history missing details degrades', () => assert.equal(memoryActivity(model.entryFromHistory({ id: 'h2', name: 'memory_write' }, { details: {}, content: [] }, {})).label, 'Memory write result unavailable'));
   check('history without result is incomplete', () => assert.equal(memoryActivity(model.entryFromHistory({ id: 'h3', name: 'memory_search', arguments: { query: 'x' } }, null, {})).label, 'Memory search stopped'));
   check('history no fabricated duration', () => assert.equal(view.renderEntry(model.entryFromHistory({ id: 'h4', name: 'memory_search', arguments: { query: 'x' } }, null, {})).querySelector('.tl-time').textContent, ''));
+
+  /* ---------- 历史 soft-failure：实时与 history 必须同一条规则 ---------- */
+  const historyRead = model.entryFromHistory(
+    { id: 'h-read', name: 'memory_read', arguments: { target: 'daily', date: '2026-09-29' } },
+    { details: {}, content: [{ type: 'text', text: `No daily log for 2026-09-29. C:\\Users\\${USER}\\.pi\\agent\\memory` }] },
+    {},
+  );
+  check('history read soft-failure degrades', () => assert.equal(memoryActivity(historyRead).label, 'Memory read result unavailable'));
+  check('history read soft-failure raw text excluded', () => assert.ok(!json(historyRead).includes('No daily log') && !json(historyRead).includes(USER)));
+  check('history read soft-failure raw text absent DOM', () => assert.ok(!view.renderEntry(historyRead).textContent.includes('No daily log')));
+
+  const historyScratchpad = model.entryFromHistory(
+    { id: 'h-sp', name: 'scratchpad', arguments: { action: 'done', text: 'fix later' } },
+    { details: {}, content: [{ type: 'text', text: 'No matching open item found for: "fix later"' }] },
+    {},
+  );
+  check('history scratchpad soft-failure degrades', () => assert.equal(memoryActivity(historyScratchpad).label, 'Scratchpad result unavailable'));
+  check('history scratchpad soft-failure raw text excluded', () => assert.ok(!json(historyScratchpad).includes('No matching open item')));
+  check('history scratchpad soft-failure raw text absent DOM', () => assert.ok(!view.renderEntry(historyScratchpad).textContent.includes('No matching open item')));
+
+  /* §十四：soft-failure 的 raw result 里塞恶意内容，仍然只是中性结果。 */
+  const HOSTILE_RAW = `C:\\Users\\${USER}\\MEMORY.md SECRET <img onerror="evil()"><script>bad()</script>`;
+  for (const [name, args] of [['memory_read', { target: 'daily' }], ['scratchpad', { action: 'done' }]]) {
+    const soft = finish(entry(name, args, 'sf-' + name), {}, false, HOSTILE_RAW);
+    check('soft-failure hostile raw inert: ' + name, () => {
+      const n = view.renderEntry(soft);
+      assert.ok(!n.textContent.includes('SECRET'));
+      assert.ok(!n.outerHTML.includes(USER));
+      assert.equal(n.querySelector('img'), null);
+      assert.equal(n.querySelector('script'), null);
+      assert.equal(n.querySelector('.tl-args').textContent, '');
+    });
+  }
+  check('soft-failure is not forced into error', () => {
+    for (const [name, args] of [['memory_read', { target: 'daily' }], ['scratchpad', { action: 'done' }], ['memory_write', { target: 'long_term' }], ['memory_status', {}]]) {
+      const a = memoryActivity(finish(entry(name, args, 'nf-' + name), {}));
+      assert.equal(a.status, 'success');
+      assert.match(a.label, /result unavailable/);
+    }
+  });
 
   dom.window.close();
   console.log(`\n${count}/${count} 通过`);

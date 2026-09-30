@@ -1109,6 +1109,16 @@ async function main() {
     ['scratchpad 条目文本不展示', `!document.querySelector('#stream').textContent.includes('PRIVATE_SCRATCHPAD_ITEM')`],
     ['qmd 状态只来自 result', `document.querySelector('[data-id="p18-status"] .tl-out').textContent.includes('qmd: available') && document.querySelector('[data-id="p18-status"] .tl-out').textContent.includes('Embeddings: ready')`],
   ]);
+  await evalJs(`fetch('/api/__conversation?what=memory-soft-failure').then(r=>r.ok)`);
+  await sleep(350);
+  await evalJs(`for(const id of ['p18sf-read','p18sf-sp','p18sf-write','p18sf-status']) document.querySelector('[data-id="'+id+'"] .tl-toggle').click(); document.querySelector('[data-id="p18sf-sp"]').scrollIntoView({block:'center'})`);
+  await shotOf('#workspace', '163-memory-soft-failure', 'P18-Fix：details={} 的 soft-failure 降级为「结果不可用」，不按请求参数猜成功', ['Memory read result unavailable', 'Scratchpad result unavailable', 'Memory write result unavailable'], [
+    ...viewportChecks('#chatView'),
+    ['请求参数不顶成成功', `!document.querySelector('[data-id="p18sf-read"]').textContent.includes('Read daily log') && !document.querySelector('[data-id="p18sf-sp"]').textContent.includes('Checked off scratchpad item')`],
+    ['soft-failure raw 文本与路径不进 DOM', `!document.querySelector('#stream').textContent.includes('No daily log') && !document.querySelector('#stream').textContent.includes('No matching open item') && !document.querySelector('#stream').textContent.includes('p18user')`],
+    ['soft-failure 不被改判成失败', `document.querySelector('[data-id="p18sf-read"]').dataset.status==='success' && document.querySelector('[data-id="p18sf-sp"]').dataset.status==='success'`],
+    ['未发布的 refresh snapshot 不展示', `document.querySelector('[data-id="p18sf-status"] .tl-out').textContent.includes('Long-term memory: 1200 chars') && !document.querySelector('[data-id="p18sf-status"] .tl-out').textContent.includes('Snapshot:')`],
+  ]);
   await evalJs(`document.querySelector('#navExtensions').click()`);
   await sleep(260);
   await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);
