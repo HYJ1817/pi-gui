@@ -1093,6 +1093,32 @@ async function main() {
     ['reply 只用实际 result metadata', `document.querySelector('[data-id="supervisor-reply"] .tl-out').textContent.includes('Request: req-1') && document.querySelector('[data-id="supervisor-reply"] .tl-out').textContent.includes('Agent: worker')`],
     ['未知 action 仍走安全语义路径', `document.querySelector('[data-id="supervisor-something-new"] .tl-label').textContent==='Subagent supervisor action' && document.querySelector('[data-id="supervisor-something-new"] .tl-args').textContent===''`],
   ]);
+  await evalJs(`fetch('/api/__conversation?what=memory-activity').then(r=>r.ok)`);
+  await sleep(350);
+  await evalJs(`for(const id of ['p18-write','p18-search']) document.querySelector('[data-id="'+id+'"] .tl-toggle').click(); document.querySelector('[data-id="p18-search"]').scrollIntoView({block:'center'})`);
+  await shotOf('#workspace', '160-memory-activity', 'P18：Pi Memory 写入与检索 Activity，正文与绝对路径不铺开', ['Saved to memory', 'Searched memory', 'Matches: 4'], [
+    ...viewportChecks('#chatView'),
+    ['记忆正文不进入 DOM', `!document.querySelector('#stream').textContent.includes('PRIVATE_MEMORY_TEXT')`],
+    ['绝对路径不进入 DOM', `!document.querySelector('#stream').textContent.includes('p18user')`],
+    ['raw args/details 为空', `document.querySelector('[data-id="p18-search"] .tl-args').textContent===''`],
+  ]);
+  await evalJs(`for(const id of ['p18-forget','p18-status','p18-scratchpad']) document.querySelector('[data-id="'+id+'"] .tl-toggle').click(); document.querySelector('[data-id="p18-status"]').scrollIntoView({block:'center'})`);
+  await shotOf('#workspace', '161-memory-status', 'P18：忘记 / 状态 / Scratchpad 的语义与安全投影', ['Removed from memory', 'Recovery available', 'Checked memory status', 'Added to scratchpad'], [
+    ...viewportChecks('#chatView'),
+    ['recovery ID 与路径不展示', `!document.querySelector('#stream').textContent.includes('0f0e6b3c') && !document.querySelector('#stream').textContent.includes('.json')`],
+    ['scratchpad 条目文本不展示', `!document.querySelector('#stream').textContent.includes('PRIVATE_SCRATCHPAD_ITEM')`],
+    ['qmd 状态只来自 result', `document.querySelector('[data-id="p18-status"] .tl-out').textContent.includes('qmd: available') && document.querySelector('[data-id="p18-status"] .tl-out').textContent.includes('Embeddings: ready')`],
+  ]);
+  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(260);
+  await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);
+  await sleep(320);
+  await evalJs(`[...document.querySelectorAll('#workSurface .web-setup')].find(n=>n.textContent.includes('Pi Memory'))?.scrollIntoView({block:'center'})`);
+  await shotOf('#workSurface', '162-memory-setup', 'P18：Extensions 页 Pi Memory 设置区（固定命令 + 真实运行观察）', ['Pi Memory（长期记忆）', 'pi install npm:pi-memory', '这不是「会话搜索」'], [
+    ...viewportChecks('#workSurface'),
+    ['Runtime evidence 来自真实事件', `[...document.querySelectorAll('#workSurface .web-setup')].find(n=>n.textContent.includes('Pi Memory')).textContent.includes('memory_search: 已观察')`],
+    ['不提供自动安装入口', `[...[...document.querySelectorAll('#workSurface .web-setup')].find(n=>n.textContent.includes('Pi Memory')).querySelectorAll('button')].every(b=>b.textContent==='复制安装命令'||b.textContent==='安装后重启 Pi')`],
+  ]);
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

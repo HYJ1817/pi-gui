@@ -6632,6 +6632,60 @@ staticCheck();
     check('P17 旧 workspace 确认不重启', () => restarts === 1);
     window.fetch = baseFetch; box.remove(); window.clearThread();
   }
+
+  /* P18: real SSE routing for Pi Memory tools — identity, workspace guard, Stop,
+   * no Git refresh / ledger / RPC, observation reset, manual install only. */
+  {
+    const run = window.S.bridgeRun;
+    window.S.hasProject = true; window.S.switching = false;
+    window.clearThread();
+    await new Promise(r => setTimeout(r, 600));
+    const beforeGit = gitCalls.filter(c => c.kind === 'status').length;
+    const beforeCommands = commands.length;
+    const beforeLedger = JSON.stringify(window.listChanges());
+    const PRIVATE_MEMORY = 'PRIVATE_MEMORY_TEXT';
+    for (const id of ['p18-a', 'p18-b']) es.emit({ type: 'tool_execution_start', bridgeRun: run, toolCallId: id, toolName: 'memory_search', args: { query: id } });
+    const first = window.document.querySelector('[data-id="p18-a"]');
+    es.emit({ type: 'tool_execution_update', bridgeRun: run, toolCallId: 'p18-a', partialResult: { content: [{ type: 'text', text: PRIVATE_MEMORY }], details: { mode: 'keyword', query: 'p18-a', count: 2, needsEmbed: false } } });
+    await new Promise(r => setTimeout(r, 180));
+    check('P18 SSE 检索按 id 独立且不铺全文', () => first.textContent.includes('Matches: 2') && !first.textContent.includes(PRIVATE_MEMORY));
+    for (const id of ['p18-b', 'p18-a']) es.emit({ type: 'tool_execution_end', bridgeRun: run, toolCallId: id, result: { content: [{ type: 'text', text: PRIVATE_MEMORY }], details: { mode: 'keyword', query: id, count: 1, path: 'C:\\Users\\p18user\\.pi\\agent\\memory\\MEMORY.md' } }, isError: false });
+    check('P18 SSE 逆序完成保持两个独立节点', () => first === window.document.querySelector('[data-id="p18-a"]') && window.document.querySelectorAll('[data-id^="p18-"]').length === 2 && first.dataset.status === 'success');
+    check('P18 时间线不显示 raw args/details', () => first.querySelector('.tl-args').textContent === '' && !first.outerHTML.includes('p18user') && !first.outerHTML.includes(PRIVATE_MEMORY));
+    await new Promise(r => setTimeout(r, 600));
+    check('P18 不额外刷新 Git', () => gitCalls.filter(c => c.kind === 'status').length === beforeGit);
+    check('P18 不进入 Changes 账本', () => JSON.stringify(window.listChanges()) === beforeLedger);
+    check('P18 不创建 Planner 任务或调用 RPC', () => commands.length === beforeCommands);
+    const box = window.document.createElement('section'); window.document.body.appendChild(box);
+    window.renderMemorySetup(box, { ok: true, extensions: [] });
+    check('P18 Runtime evidence 独立显示', () => box.textContent.includes('memory_search: 已观察') && box.textContent.includes('memory_write: 尚未观察'));
+    check('P18 安装仅固定命令', () => box.querySelector('code').textContent === 'pi install npm:pi-memory');
+    check('P18 长期记忆与会话搜索分开说明', () => box.textContent.includes('这不是「会话搜索」'));
+    const sameRun = window.S.bridgeRun;
+    window.S.switching = true;
+    es.emit({ type: 'tool_execution_start', bridgeRun: sameRun, toolCallId: 'p18-old', toolName: 'memory_search', args: { query: 'old' } });
+    es.emit({ type: 'tool_execution_end', bridgeRun: sameRun, toolCallId: 'p18-a', result: { content: [], details: { count: 99 } }, isError: true });
+    check('P18 激活期间丢弃旧 start/end', () => !window.document.querySelector('[data-id="p18-old"]') && first.dataset.status === 'success');
+    window.S.switching = false;
+    es.emit({ type: 'tool_execution_start', bridgeRun: sameRun, toolCallId: 'p18-stop', toolName: 'memory_write', args: { target: 'long_term' } });
+    window.interruptActive();
+    check('P18 Stop 后无运行 spinner', () => window.document.querySelector('[data-id="p18-stop"]').dataset.status === 'incomplete');
+    es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: sameRun });
+    window.renderMemorySetup(box, { ok: true, extensions: [] });
+    check('P18 重启清空 observation', () => box.textContent.includes('memory_search: 尚未观察'));
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: sameRun });
+    const baseFetch = window.fetch; let restarts = 0;
+    window.fetch = async (url, opts) => String(url) === '/api/restart' ? (restarts++, { json: async () => ({ ok: false }) }) : baseFetch(url, opts);
+    const restart = [...box.querySelectorAll('button')].find(b => b.textContent === '安装后重启 Pi');
+    const pending = restart.onclick();
+    check('P18 重启先确认', () => !$('confirmLayer').hidden && restarts === 0);
+    $('confirmCard').querySelector('.btn.primary').onclick(); await pending;
+    check('P18 重启 API 失败后可重试', () => restarts === 1 && !restart.disabled);
+    const stale = restart.onclick(); window.S.workspaceGeneration++;
+    $('confirmCard').querySelector('.btn.primary').onclick(); await stale;
+    check('P18 旧 workspace 确认不重启', () => restarts === 1);
+    window.fetch = baseFetch; box.remove(); window.clearThread();
+  }
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;

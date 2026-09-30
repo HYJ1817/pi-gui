@@ -622,8 +622,17 @@ let holdNextComposerUpload = false;
 let workSurfaceGitClean = false;
 let harnessSessionId = 'aaaaaaaaaaaaaaaa';
 
+/* 真实 SSE 会给事件带上 bridgeRun：前端靠它丢弃旧 bridge run 的事件，
+ * 也靠它认定「这次调用真的发生在当前 workspace / run」。
+ * harness 以前不带这个字段，于是 Extensions 页的 runtimeObserved 在
+ * 真实浏览器里**永远**显示「尚未观察到调用」—— 那是 fixture 不照真实形状造
+ * 造成的假绿。这里按真实形状补上（只补这两个前缀，不动 response/message）。 */
+const BRIDGE_RUN = 1;
+
 function push(evt) {
-  const line = 'data: ' + JSON.stringify(evt) + '\n\n';
+  const needsRun = /^tool_execution_/.test(evt?.type || '') || evt?.type === 'bridge_status';
+  const stamped = needsRun && !Number.isInteger(evt.bridgeRun) ? { ...evt, bridgeRun: BRIDGE_RUN } : evt;
+  const line = 'data: ' + JSON.stringify(stamped) + '\n\n';
   for (const c of clients) {
     try {
       c.write(line);
@@ -1051,6 +1060,21 @@ const server = http.createServer(async (req, res) => {
       push({ type: 'tool_execution_update', toolCallId: 'p17-workflow', partialResult: { content: [], details: { mode: 'workflow', runId: 'workflow-run', results: [], workflowChildren: { version: 1, parentToolCallId: 'p17-workflow', workflowRunId: 'workflow-run', inventoryComplete: true, workflowState: 'running', children: [{ childId: 'review-ui', agent: 'custom-ui', runId: 'child-ui', state: 'completed', model: 'actual/ui' }, { childId: 'review-api', agent: 'custom-api', runId: 'child-api', state: 'running', activity: { currentTool: 'read', toolCount: 2 } }] } } } });
       push({ type: 'tool_execution_start', toolCallId: 'p17-bg', toolName: 'subagent', args: { agent: 'worker', task: 'Independent background work', async: true } });
       push({ type: 'tool_execution_end', toolCallId: 'p17-bg', result: { content: [], details: { mode: 'single', runId: 'bg-run', asyncId: 'bg-run', results: [] } }, isError: false });
+    } else if (what === 'memory-activity') {
+      /* P18: fixtures 照 pi-memory 0.4.2 的真实 details 形状；
+       * PRIVATE_* 用来证明正文 / 路径 / recovery ID 都不进 DOM。 */
+      const MEM = 'C:\\Users\\p18user\\.pi\\agent\\memory\\MEMORY.md';
+      push({ type: 'tool_execution_start', toolCallId: 'p18-write', toolName: 'memory_write', args: { target: 'long_term', content: 'This project uses pnpm, not npm.' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p18-write', isError: false, result: { content: [{ type: 'text', text: 'Appended to MEMORY.md\n\nExisting MEMORY.md preview\n\nPRIVATE_MEMORY_TEXT' }], details: { path: MEM, target: 'long_term', mode: 'append', sessionId: 'p18sess', timestamp: '2026-09-30 12:00:00', qmdUpdateMode: 'background', existingPreview: { preview: 'PRIVATE_MEMORY_TEXT', truncated: false, totalLines: 3, totalChars: 120, previewLines: 3, previewChars: 120 } } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p18-search', toolName: 'memory_search', args: { query: 'package manager decision', mode: 'semantic', limit: 5 } });
+      push({ type: 'tool_execution_end', toolCallId: 'p18-search', isError: false, result: { content: [{ type: 'text', text: '### Result 1\n**File:** ' + MEM + '\n**Score:** 0.82\nPRIVATE_MEMORY_TEXT' }], details: { mode: 'semantic', query: 'package manager decision', count: 4, needsEmbed: false } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p18-forget', toolName: 'memory_forget', args: { match: 'uses npm' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p18-forget', isError: false, result: { content: [{ type: 'text', text: 'Removed 1 entry from ' + MEM + '. Recovery ID: 0f0e6b3c-1a2b-4c3d-8e4f-5a6b7c8d9e0f.' }], details: { path: MEM, target: 'long_term', removed: 1, recoveryId: '0f0e6b3c-1a2b-4c3d-8e4f-5a6b7c8d9e0f', recoveryPath: 'C:\\Users\\p18user\\.pi\\agent\\memory\\recovery\\0f0e6b3c-1a2b-4c3d-8e4f-5a6b7c8d9e0f.json', removedPreview: { preview: 'PRIVATE_MEMORY_TEXT' } } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p18-status', toolName: 'memory_status', args: {} });
+      push({ type: 'tool_execution_end', toolCallId: 'p18-status', isError: false, result: { content: [{ type: 'text', text: '# Memory status\n- Memory dir: C:\\Users\\p18user\\.pi\\agent\\memory' }], details: { dir: 'C:\\Users\\p18user\\.pi\\agent\\memory', longTermChars: 1200, scratchpadOpen: 2, scratchpadTotal: 5, dailyCount: 12, latestDaily: '2026-09-30', qmd: true, collection: true, embeddings: 'ready', snapshotMode: 'stable', qmdUpdateMode: 'background' } } });
+      push({ type: 'tool_execution_start', toolCallId: 'p18-scratchpad', toolName: 'scratchpad', args: { action: 'add', text: 'PRIVATE_SCRATCHPAD_ITEM' } });
+      push({ type: 'tool_execution_end', toolCallId: 'p18-scratchpad', isError: false, result: { content: [{ type: 'text', text: 'Added: - [ ] PRIVATE_SCRATCHPAD_ITEM' }], details: { action: 'add', sessionId: 'p18sess', timestamp: '2026-09-30 12:00:00', qmdUpdateMode: 'background', preview: { preview: 'PRIVATE_SCRATCHPAD_ITEM' } } } });
+      return json(res, 200, { ok: true });
     } else if (what === 'web-activity') {
       push({ type: 'tool_execution_start', toolCallId: 'p16-search', toolName: 'web_search', args: { queries: ['Pi coding agent official documentation'] } });
       push({ type: 'tool_execution_end', toolCallId: 'p16-search', isError: false, result: { content: [{ type: 'text', text: 'Offline fixture search result' }], details: { queries: ['Pi coding agent official documentation'], totalResults: 1, queryProviders: [{ query: 'Pi coding agent official documentation', providers: ['exa'] }], curatedQueries: [{ sources: [{ title: 'Pi documentation', url: 'https://pi.dev/' }] }] } } });
