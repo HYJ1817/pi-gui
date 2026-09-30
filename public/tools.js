@@ -43,6 +43,7 @@ import {
   setEntryDirtyHandler,
 } from './tool-model.js';
 import { addToGroup, createGroup, renderEntry, updateEntry } from './tool-view.js';
+import { subagentNeedsGitRefresh } from './subagent-activity.js';
 
 /* 会改动磁盘、因而值得重读 Git 状态的工具。
  *
@@ -164,7 +165,7 @@ export function onToolEnd(evt) {
     /* 顺带安排一次 Git 状态刷新（防抖 450ms）。一次 Agent 回合里连改 5 个文件
      * 只会产生 1 次 git status —— 见 git.js 的 scheduleGitRefresh。
      * 刷新完成后 applyGitStats 会把 +N −M 回填到这条 entry 上。 */
-    if (REFRESH_TOOLS.has(rec.entry.name)) scheduleGitRefresh();
+    if (REFRESH_TOOLS.has(rec.entry.name) || subagentNeedsGitRefresh(rec.entry)) scheduleGitRefresh();
   }
 
   if (!hasRunning()) stopTicker();

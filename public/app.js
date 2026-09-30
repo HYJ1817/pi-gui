@@ -18,6 +18,8 @@ import { $, el, S } from './state.js';
 import { fmt } from './util.js';
 import { sendCommand } from './api.js';
 import { observeWebEvent } from './web-access.js';
+import { observeSubagentEvent } from './subagents.js';
+import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popLabel, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, openModal } from './ui/modal.js';
@@ -112,11 +114,12 @@ function connect() {
 }
 
 function handle(evt) {
+  if (!acceptSubagentEvent(evt, S)) return;
   if (Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun < S.bridgeRun) return;
   if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
-  if (evt.type !== 'bridge_status') observeWebEvent(evt);
+  if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); }
   switch (evt.type) {
     case 'bridge_status':
       return onBridge(evt);
@@ -189,6 +192,7 @@ function onBridge(evt) {
   if (S.switching && evt.cwd && !samePath(evt.cwd, S.desiredCwd)) return;
   if (S.switching && evt.state === 'ready' && Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun <= S.bridgeRun) return;
   observeWebEvent(evt);
+  observeSubagentEvent(evt);
   switch (evt.state) {
     case 'starting':
       return setBridgeState('starting');

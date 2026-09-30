@@ -347,6 +347,7 @@ export function makeEntry(evt, now = Date.now()) {
  * `{content: [], details: undefined}`，用它把已显示的内容清掉是错的。
  */
 export function applyUpdate(entry, evt, now = Date.now()) {
+  if (evt?.partialResult?.details && typeof evt.partialResult.details === 'object') entry.details = evt.partialResult.details;
   const text = resultText(evt?.partialResult);
   if (text) {
     const bounded = boundedOutput(text);

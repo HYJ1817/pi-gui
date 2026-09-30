@@ -22,6 +22,7 @@
 
 import { formatDuration, previewOf, statOf } from './tool-model.js';
 import { webActivity, webSourceLink } from './web-activity.js';
+import { subagentActivity } from './subagent-activity.js';
 
 /* 状态图标。
  *
@@ -151,7 +152,8 @@ function syncTitle(node, p) {
 /** 更新一条已经渲染出来的 entry。只改真正变了的字段。 */
 export function updateEntry(node, entry) {
   const web = webActivity(entry);
-  if (web) entry = { ...entry, ...web, resultLine: '', output: web.facts };
+  const semantic = web || subagentActivity(entry);
+  if (semantic) entry = { ...entry, ...semantic, resultLine: '', output: semantic.facts };
   const p = tl(node);
   if (!p) return;
 
@@ -198,7 +200,7 @@ export function updateEntry(node, entry) {
   const output = String(entry.output || '');
   const hasOutput = Boolean(output.trim());
 
-  if (p.out.dataset.len !== String(output.length) || (web && p.out.textContent !== output)) {
+  if (p.out.dataset.len !== String(output.length) || (semantic && p.out.textContent !== output)) {
     p.out.dataset.len = String(output.length);
     p.out.textContent = output;
   }
@@ -210,7 +212,7 @@ export function updateEntry(node, entry) {
    * 参数全文是模型可控的任意字符串，塞进属性就多了一条「被序列化进 HTML」的
    * 路径（属性值里的 `<` 不会被转义，虽然浏览器解析时无害，但等于把安全
    * 建立在「没人会去 outerHTML 它」之上）。文本一律只走 textContent。 */
-  const argsText = web ? '' : argsTextOf(entry);
+  const argsText = semantic ? '' : argsTextOf(entry);
   if (p.argsText !== argsText) {
     p.argsText = argsText;
     p.args.textContent = argsText;
