@@ -271,9 +271,11 @@ Release 的 GitHub 白名单保持独立、不放宽。
 
 这是本文最要紧的一条。
 
-`pi-browser-harness` **没有任何审批协议**：源码里没有 `pi.on("tool_call")` 拦截、
-没有 `ctx.ui.confirm`（`ctx.ui.select` 只出现在交互式 TUI 命令 `/browser-profile` 里，
-RPC 模式下返回 `undefined`）。
+`pi-browser-harness` **没有针对 `browser_*` 工具执行的审批协议**：源码里没有
+`pi.on("tool_call")` 拦截，也没有在这些工具执行前调用 `ctx.ui.confirm`。
+`/browser-profile` 确实使用 `ctx.ui.select` 做 Profile 选择；Pi 0.87.0 的 RPC 会把这类
+`select` 作为 `extension_ui_request` 交给 GUI，并等待 `extension_ui_response`。
+这属于**配置交互**，不是浏览器工具执行的权限闸门。
 
 因此按 P19 定下的规矩（见 [approvals.md](approvals.md)）：
 
