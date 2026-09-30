@@ -1117,8 +1117,18 @@ async function main() {
     ['请求参数不顶成成功', `!document.querySelector('[data-id="p18sf-read"]').textContent.includes('Read daily log') && !document.querySelector('[data-id="p18sf-sp"]').textContent.includes('Checked off scratchpad item')`],
     ['soft-failure raw 文本与路径不进 DOM', `!document.querySelector('#stream').textContent.includes('No daily log') && !document.querySelector('#stream').textContent.includes('No matching open item') && !document.querySelector('#stream').textContent.includes('p18user')`],
     ['soft-failure 不被改判成失败', `document.querySelector('[data-id="p18sf-read"]').dataset.status==='success' && document.querySelector('[data-id="p18sf-sp"]').dataset.status==='success'`],
-    ['未发布的 refresh snapshot 不展示', `document.querySelector('[data-id="p18sf-status"] .tl-out').textContent.includes('Long-term memory: 1200 chars') && !document.querySelector('[data-id="p18sf-status"] .tl-out').textContent.includes('Snapshot:')`],
+    ['未发布的 refresh snapshot 不冒充已知模式', `document.querySelector('[data-id="p18sf-status"] .tl-out').textContent.includes('Snapshot: unrecognized') && !document.querySelector('[data-id="p18sf-status"] .tl-out').textContent.includes('refresh')`],
   ]);
+  await evalJs(`fetch('/api/__conversation?what=approval-request').then(r=>r.ok)`);
+  await sleep(300);
+  await shotOf('#confirmLayer', '164-approval-request', 'P19：Extension 审批请求走统一确认层，只给一次性的允许 / 拒绝', ['Allow rm -rf build/?', '允许一次', '拒绝'], [
+    ['确认层在视口内且有高度', `(() => {const r=document.querySelector('#confirmLayer .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.height>0})()`],
+    ['只给一次性的两个决定', `[...document.querySelectorAll('#confirmLayer button')].map(b=>b.textContent).join(',')==='拒绝,允许一次'`],
+    ['按钮文字完整且操作区不溢出', `(() => {const a=document.querySelector('#confirmLayer .modal-actions');return a.scrollWidth<=a.clientWidth+1&&[...a.querySelectorAll('button')].every(b=>getComputedStyle(b).whiteSpace==='nowrap'&&b.getBoundingClientRect().height>=30)})()`],
+    ['额外字段与原始 payload 不进 DOM', `!document.querySelector('#confirmLayer').outerHTML.includes('PRIVATE_')`],
+  ]);
+  await evalJs(`[...document.querySelectorAll('#confirmLayer button')].find(b=>b.textContent==='拒绝')?.click()`);
+  await sleep(120);
   await evalJs(`document.querySelector('#navExtensions').click()`);
   await sleep(260);
   await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);

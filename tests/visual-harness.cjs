@@ -1087,6 +1087,11 @@ const server = http.createServer(async (req, res) => {
       push({ type: 'tool_execution_start', toolCallId: 'p18sf-status', toolName: 'memory_status', args: {} });
       push({ type: 'tool_execution_end', toolCallId: 'p18sf-status', isError: false, result: { content: [{ type: 'text', text: 'PRIVATE_MEMORY_TEXT' }], details: { longTermChars: 1200, snapshotMode: 'refresh' } } });
       return json(res, 200, { ok: true });
+    } else if (what === 'approval-request') {
+      /* P19: 权限扩展经 extension_ui_request 发来的对话框。
+       * PRIVATE_* 用来证明额外字段（token / 原始 payload）不进 DOM。 */
+      push({ type: 'extension_ui_request', id: 'p19-shot', method: 'confirm', title: 'Allow rm -rf build/?', message: 'A permission extension wants to run a destructive command.', timeout: 30000, token: 'PRIVATE_TOKEN', rawArgs: 'PRIVATE_RAW' });
+      return json(res, 200, { ok: true });
     } else if (what === 'web-activity') {
       push({ type: 'tool_execution_start', toolCallId: 'p16-search', toolName: 'web_search', args: { queries: ['Pi coding agent official documentation'] } });
       push({ type: 'tool_execution_end', toolCallId: 'p16-search', isError: false, result: { content: [{ type: 'text', text: 'Offline fixture search result' }], details: { queries: ['Pi coding agent official documentation'], totalResults: 1, queryProviders: [{ query: 'Pi coding agent official documentation', providers: ['exa'] }], curatedQueries: [{ sources: [{ title: 'Pi documentation', url: 'https://pi.dev/' }] }] } } });

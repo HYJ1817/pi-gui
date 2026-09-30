@@ -2720,15 +2720,17 @@ staticCheck();
   es.emit({ type: 'agent_settled' });
   check('结束后停止按钮隐藏', () => $('btnStop').hidden === true);
 
-  // --- 权限确认子协议 ---
+  // --- 权限确认子协议（P19：对话框统一走 #confirmLayer 这一套确认 foundation） ---
+  window.S.switching = false;
   es.emit({ type: 'extension_ui_request', id: 'ui1', method: 'confirm', title: '允许执行 rm 吗？', message: 'rm -rf /tmp/x' });
-  check('权限弹层打开', () => $('modal').hidden === false);
-  check('权限文案', () => $('modalCard').textContent.includes('允许执行 rm 吗？'));
-  const btns = [...window.document.querySelectorAll('#modalCard .btn')];
-  btns.find((b) => b.textContent === '确认').click();
+  check('权限确认用统一确认层', () => $('confirmLayer').hidden === false);
+  check('权限文案', () => $('confirmCard').textContent.includes('允许执行 rm 吗？'));
+  check('只给一次性的允许 / 拒绝', () => [...$('confirmCard').querySelectorAll('button')].map((b) => b.textContent).join(',') === '拒绝,允许一次');
+  [...$('confirmCard').querySelectorAll('button')].find((b) => b.textContent === '允许一次').click();
   await new Promise((r) => setTimeout(r, 10));
   const resp = commands.filter((c) => c.type === 'extension_ui_response').pop();
   check('extension_ui_response 已回传', () => resp && resp.id === 'ui1' && resp.confirmed === true);
+  check('确认层已收起', () => $('confirmLayer').hidden === true);
 
   // 粘贴图片：剪贴板里是文件才拦，纯文本照常交给 textarea
   check('拖拽进入高亮输入框', () => {
@@ -6685,6 +6687,46 @@ staticCheck();
     $('confirmCard').querySelector('.btn.primary').onclick(); await stale;
     check('P18 旧 workspace 确认不重启', () => restarts === 1);
     window.fetch = baseFetch; box.remove(); window.clearThread();
+  }
+  /* P19: real SSE approval flow — one shared confirm surface, explicit protocol
+   * response, replay dedupe, Stop/restart lifecycle. */
+  {
+    const run = Number.isInteger(window.S.bridgeRun) ? window.S.bridgeRun : 1;
+    window.S.bridgeRun = run; window.S.hasProject = true; window.S.switching = false;
+    window.S.bridgeState = 'ready';
+    const sent = [];
+    const baseFetch = window.fetch;
+    window.fetch = async (url, opts) => {
+      if (String(url).endsWith('/api/command')) { try { sent.push(JSON.parse(opts.body)); } catch { /* 忽略 */ } return { json: async () => ({ ok: true }) }; }
+      return baseFetch(url, opts);
+    };
+    const p19Layer = window.document.getElementById('confirmLayer');
+    const p19Card = window.document.getElementById('confirmCard');
+    const clickText = (scope, t) => [...scope.querySelectorAll('button')].find((b) => b.textContent === t).click();
+    window.clearThread();
+    es.emit({ type: 'extension_ui_request', bridgeRun: run, id: 'p19-a', method: 'confirm', title: 'Allow rm -rf?', message: '危险命令' });
+    check('P19 真实 SSE 用统一确认框弹审批', () => p19Layer.hidden === false && p19Card.textContent.includes('Allow rm -rf?'));
+    check('P19 只有一次性的允许 / 拒绝', () => [...p19Card.querySelectorAll('button')].map((b) => b.textContent).join(',') === '拒绝,允许一次');
+    es.emit({ type: 'extension_ui_request', bridgeRun: run, id: 'p19-a', method: 'confirm', title: 'Allow rm -rf?', message: '危险命令' });
+    check('P19 SSE 重放不重复弹窗', () => window.approvalSnapshot().pending.length === 1);
+    clickText(p19Card, '允许一次');
+    await new Promise((r) => setTimeout(r, 30));
+    check('P19 允许走 extension_ui_response', () => sent.some((c) => c.type === 'extension_ui_response' && c.id === 'p19-a' && c.confirmed === true));
+    es.emit({ type: 'extension_ui_request', bridgeRun: run, id: 'p19-a', method: 'confirm', title: 'x' });
+    check('P19 已结算的请求不再弹出', () => p19Layer.hidden === true);
+    es.emit({ type: 'extension_ui_request', bridgeRun: run, id: 'p19-b', method: 'confirm', title: 'second' });
+    window.cancelPendingApprovals();
+    await new Promise((r) => setTimeout(r, 30));
+    check('P19 Stop 取消 pending 并收掉卡片', () => p19Layer.hidden === true && sent.some((c) => c.type === 'extension_ui_response' && c.id === 'p19-b' && c.cancelled === true));
+    es.emit({ type: 'extension_ui_request', bridgeRun: run, id: 'p19-c', method: 'confirm', title: 'third' });
+    window.S.switching = true;
+    es.emit({ type: 'extension_ui_request', bridgeRun: run, id: 'p19-d', method: 'confirm', title: 'stale' });
+    check('P19 切项目同步期间不弹新请求', () => window.approvalSnapshot().pending.length === 1 && !p19Card.textContent.includes('stale'));
+    window.S.switching = false;
+    es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: run });
+    check('P19 重启清空 pending 并收卡', () => p19Layer.hidden === true && window.approvalSnapshot().pending.length === 0);
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: run });
+    window.fetch = baseFetch; window.clearThread();
   }
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
