@@ -198,9 +198,23 @@ Activity 里 `Mode:` 只在 result 明确给出 `details.mode` 时显示 ——
 
   | 取值 | v0.4.2 的真实行为 |
   |---|---|
-  | `stable`（**默认**） | 复用上一次算好的快照；只有 `memorySnapshot === null`（首次）、`snapshotDirty`（长期写入 / forget / restore 置位）、或本地日期翻转（`snapshotTakenOnDate !== today`）时才重算。目的是让注入块字节稳定，不打掉 prompt prefix cache |
+  | `stable`（**默认**） | 复用上一次算好的快照；只有 `memorySnapshot === null`（首次）、`snapshotDirty`、或本地日期翻转（`snapshotTakenOnDate !== today`）时才重算。目的是让注入块字节稳定，不打掉 prompt prefix cache |
   | `per-turn` | 每轮重新 `buildMemoryContext()`，并按 `PI_MEMORY_NO_SEARCH` 决定是否先做一次关键词检索（`searchRelevantMemories`，取前 3 条、3 秒超时） |
   | 其它取值（含 `refresh`） | **回落到 `stable`** —— `getSnapshotMode()` 的实现是 `mode === "per-turn" ? "per-turn" : "stable"` |
+
+  谁是「authority-changing」、谁会让 `stable` 快照在下一轮变新，按 v0.4.2 源码是：
+
+  | 操作 | 是否立刻反映到注入块 |
+  |---|---|
+  | `memory_write` `target=long_term` | 是 —— 置 `snapshotDirty`，下一轮重算 |
+  | `memory_write` `target=daily` | **否** —— 源码注释明确说 daily 写入高频、已由工具调用回显，**故意不置位**；要等日期翻转或一次 compaction |
+  | `memory_forget` | 是 —— 置 `snapshotDirty`（「被忘掉的事实也必须离开注入快照」）|
+  | `memory_restore` | 是 —— 置 `snapshotDirty` |
+  | `session_before_compact` | 是 —— 无条件 `refreshMemorySnapshot("session_before_compact")`：compaction 会丢掉工具历史，快照必须追上磁盘 |
+  | `session_start` | 是 —— 每次都重算 |
+
+  所以 `stable` 不等于「永远不变」，也不等于「写入必刷」：长期记忆写入、forget、
+  restore 会在**下一轮**生效，daily 写入不会。
 
   > `refresh` 是仓库 `main` 上**尚未发布**的第三种模式，v0.4.2 的 tag 与 npm 发布包
   > （同一 commit `39e6b998`，`index.ts` 逐字节相同）里都没有它。
