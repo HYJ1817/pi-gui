@@ -29,6 +29,7 @@ import { openWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
 import { renderWebSetup } from './web-access.js';
 import { renderSubagentSetup } from './subagents.js';
+import { renderMemorySetup } from './memory.js';
 
 /* 状态 → 展示用的圆点与文案。
  * 键必须与 server/skills.js 里 state 的取值一一对应，多一个少一个都会显示成原始英文。 */
@@ -370,6 +371,9 @@ function extensionTab(card, isCurrent) {
   const subagentBox = el('section', 'web-setup');
   wrap.appendChild(subagentBox);
   renderSubagentSetup(subagentBox, null);
+  const memoryBox = el('section', 'web-setup');
+  wrap.appendChild(memoryBox);
+  renderMemorySetup(memoryBox, null);
   const bar = el('div', 'ext-bar');
   const refresh = el('button', 'btn tiny', '刷新');
   refresh.type = 'button';
@@ -438,6 +442,7 @@ function extensionTab(card, isCurrent) {
     data = result;
     renderWebSetup(webBox, result);
     renderSubagentSetup(subagentBox, result);
+    renderMemorySetup(memoryBox, result);
     render();
   }
   refresh.onclick = load;

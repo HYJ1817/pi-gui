@@ -23,6 +23,7 @@
 import { formatDuration, previewOf, statOf } from './tool-model.js';
 import { webActivity, webSourceLink } from './web-activity.js';
 import { subagentActivity } from './subagent-activity.js';
+import { memoryActivity } from './memory-activity.js';
 
 /* 状态图标。
  *
@@ -152,7 +153,9 @@ function syncTitle(node, p) {
 /** 更新一条已经渲染出来的 entry。只改真正变了的字段。 */
 export function updateEntry(node, entry) {
   const web = webActivity(entry);
-  const semantic = web || subagentActivity(entry);
+  /* 语义适配器按工具名匹配，互不依赖包名：命中一个就接管，raw args/details
+   * 一律不进 DOM（见下面的 argsText 分支）。 */
+  const semantic = web || subagentActivity(entry) || memoryActivity(entry);
   if (semantic) entry = { ...entry, ...semantic, resultLine: '', output: semantic.facts };
   const p = tl(node);
   if (!p) return;
