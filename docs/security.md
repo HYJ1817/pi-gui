@@ -23,6 +23,43 @@ Pi 核心也没有自带审批弹窗；这种情况下界面不画假的允许/�
 
 详见 [Approvals](approvals.md)。
 
+## P20 Browser Use 边界
+
+**Browser Use 是这个项目里权限最大的可选能力**：它驱动的是**你自己正在用的那个浏览器**
+（真 Profile、真登录、真 Cookie），点击、输入、提交都是真的。
+而且它**没有审批协议** —— `pi-browser-harness` 源码里没有 `pi.on("tool_call")` 拦截，
+也没有 `ctx.ui.confirm`。所以按上面的规矩：
+
+- GUI **不提供**浏览器动作的允许 / 拒绝按钮，**不画假 modal**，不宣称「已保护」；
+- Extensions 页的 Browser 区块**明说**「这些动作会直接发生，Pi GUI 拦不住它们」；
+- 高风险动作（提交表单、购买、删除、发布、发送消息）**没有闸门**。
+
+GUI 侧能做的是「少投影」，这一轮做得比前几轮更严：
+
+- **输入内容默认完全不投影**：`browser_fill.value` / `browser_type.text` /
+  `browser_fill_form` 的字段值 / `browser_handle_dialog.promptText` 一律不进 DOM；
+  连长度都不显示。`press_key` 只有**具名键**才显示（单字符可能是密码的一位）。
+  `<select>` 的选项文案要过保守 allowlist（短、无 `@ : ; / \ < > " '`、
+  无连续 5 位以上数字、无 `pass|token|otp|cvv|card|auth|cookie|bearer` 之类的词），
+  过不了就只显示「Selected option」。
+- **原始页面内容不进 DOM**：`execute_js` 的求值结果、`read_page` 的正文与页面标题、
+  `network_requests` 的记录、`console` 的消息、`snapshot` 的落盘路径。
+- **本机绝对路径不进 DOM**：截图 / PDF / 上传 / 下载的 `path`。
+- **请求头不进 DOM**：`browser_http_get` 的 `Authorization` / `Cookie`。
+- **不解析 result 正文**（正文里就是页面内容），只认 `details` 里的闭集字段。
+- **不从 DOM 文本猜「这是密码」**：只对结构化字段做标记，默认策略仍是不显示。
+
+URL 走两级过滤：`browserHost()` 只认 http/https、拒凭据与控制字符（用于纯文本主机名）；
+`safeBrowserUrl()` **再拒掉带 query / fragment 的地址** —— 令牌、一次性链接、OTP 回调
+都挂在 query 上，「token 永远不进 DOM」必须落到 URL 层面。
+被拒不影响主机名照常以纯文本显示。
+
+截图：0.11.0 把图片存到**本机文件**，result 里只有 `{path, format, attached:false}`，
+**没有 image content block**。所以 GUI 只显示「Captured page screenshot」+ 格式，
+**不读那个文件、不投影路径、不渲染图片、不写 localStorage、不自动上传**。
+
+详见 [Browser Use](browser.md)。
+
 ## P18 Pi Memory 边界
 
 长期记忆可能保存**用户偏好、项目决策、历史事实与自定义内容**，比普通 Tool 更敏感。
@@ -161,6 +198,7 @@ Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
 | 通用导航（对话里的链接、`target=_blank`） | `isSafeExternal`：只放行 `http` / `https` | 这是既有行为，收窄它会让正常链接打不开 |
 | 版本检查的 Release / 下载 | `isSafeReleaseUrl`：**必须 `https` + GitHub 官方 host** | URL 来自外部响应，仓库被投毒时会变成「官方安装包」 |
 | Web Activity 来源 | `isSafeWebUrl`：HTTP(S)，拒绝 URL 凭据与控制字符 | 用户明确点击，frontend / main 分别校验 |
+| Browser Activity 来源 | `safeBrowserUrl`：HTTP(S)，拒绝凭据、控制字符，**并拒掉带 query / fragment 的地址** | 页面地址由被驱动的浏览器给出，令牌通常挂在 query 上 |
 
 第二条在**三个位置**各做一遍，**语义完全相同**：后端过滤 API 响应
 （不让站外 URL 进 DOM）；前端在渲染 Release Notes 时按 host 收口

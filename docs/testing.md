@@ -45,13 +45,13 @@ settings 目录解析、override 优先级、package filter、空 filter、manif
 Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
 Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
 
-`npm test` 里现在有 32 个套件，全部是**纯自动化**：
+`npm test` 里现在有 33 个套件，全部是**纯自动化**：
 
 ```
 smoke 1023 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · extensions 52 · web-access 66 · subagents 141
-memory 236 · approvals 79 · planner 115 · workflow-relations 71 · reviews 133
-review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
+memory 236 · browser 215 · approvals 79 · planner 115 · workflow-relations 71
+reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
 sessions 77 · session-search 71 · pi-compat 57 · body-integrity 5 · dev-server 20
 models-api 50 · server-security 36 · diagnostics 10 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
@@ -540,7 +540,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 31 个套件）
+版本一致性（含 tag）  →  npm test（A 层 32 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
@@ -716,3 +716,30 @@ UI smoke 的 P19 段落走真实 SSE：统一确认层弹出、只有一次性�
 
 live（人工，本阶段未执行）：装一个真实的 permission Extension，确认「拒绝」真的让
 这次工具调用没有执行 —— 这是唯一能证明端到端拦截的步骤，见 [approvals.md](approvals.md)。
+
+## P20 Browser Use 验证
+
+npm test 串行包含 tests/browser.cjs（也可 npm run test:browser，215 条）。
+**完全离线**：不启动 Chrome / Playwright、不联网、不登录任何站点、不安装任何包。
+fixtures 对照 pi-browser-harness **0.11.0** 发布 tarball 的 `src/util/tool.ts` 与
+`src/domains/*`（tag v0.11.0 与发布包逐字节相同）。
+
+覆盖：全部 **40 个**动作的 start/success/error；`details.ok` 成功证据与闭集 `kind`
+（`ok:false` 优先于 pi 的 `isError`；缺证据只显示「结果不可用」，不拿请求参数顶成成功）；
+navigate / open_urls 的真实字段；**输入内容与凭据的脱敏**（type / fill / fill_form 的 value、
+select 的原始值、`press_key` 的单字符、`handle_dialog` 的 promptText、`http_get` 的请求头）；
+**原始页面内容不投影**（execute_js 的求值结果、read_page 的正文与标题、snapshot 的落盘路径、
+network/console 的记录、upload/download/pdf/screenshot 的本机路径）；URL scheme 与
+query/fragment 拒绝；并发与逆序完成；取消 / 中断不残留 spinner；历史重建与实时一致且不铺
+raw JSON；运行观察（发现 ≠ 观察到、重启/切项目/旧 run 清空、最近列表有界）；
+Web / Subagent / Memory / Planner 回归；DOM 渲染（含 `outerHTML` 级别的脱敏断言）与
+未知工具 fallback；设置区纪律（复用 `restartBackend`、**不假装有审批**）。
+
+`shots:harness` 的场景 **165-browser-activity** 用 `PRIVATE_*` marker 证明输入内容、
+页面正文、页面标题、点击到的页面文本、本机路径、上游错误原文都不进 DOM。
+
+真实浏览器验收（opt-in，**不在 CI 里**）：`PI_GUI_BROWSER_LIVE=1 npm run test:browser-live`。
+它拉起真的 `pi --mode rpc`（`--no-session` + 临时工作目录），让模型真的调浏览器工具，
+把真实事件喂给同一个 `browserActivity`；不带那个环境变量时只打印手工清单并退出 0
+（既不会在 CI 误跑，也不会让手滑的人花掉额度）。
+**本阶段没有执行真实浏览器验收** —— 见 [browser.md](browser.md#十一验证)。

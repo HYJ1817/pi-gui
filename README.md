@@ -20,6 +20,7 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 
 - **对话** —— 流式渲染，工具调用以时间线形式嵌在对话流里
 - **Web Activity** —— 可通过 Pi Web Extension 使用联网搜索与 URL Fetch，并提供原生 GUI Activity 展示；安装与安全边界见 [Web Access](docs/web-access.md)
+- **Browser Use** —— 可通过 Browser Extension 让 Pi 驱动你**正在用的那个浏览器**（打开页面、点击、输入、截图、读正文），Pi GUI 提供原生 Activity 展示。它和 Web Search 是两件独立的事；这个 Extension **没有审批协议**，所以 GUI 不提供任何允许 / 拒绝按钮，也不宣称已保护 —— 边界见 [Browser Use](docs/browser.md)
 - **Subagent Activity** —— 第三方 Extension 在当前对话内委派工作；展示结构化 child 状态与历史，与 Planner 独立。手动安装与限制见 [Subagents](docs/subagents.md)
 - **Pi Memory（长期记忆）** —— 可通过 Pi Memory Extension 使用跨会话长期记忆，Pi GUI 对相关工具提供原生 Activity 展示。它与「会话搜索」是两套东西；安装、边界与安全投影见 [Pi Memory](docs/memory.md)
 - **Approval / Permission** —— 装了会「先问一句」的 permission Extension 时，Pi GUI 用统一的确认层呈现它的请求，并把允许 / 拒绝作为**明确的协议应答**回给 Pi（拒绝真的会让这次工具调用不执行）。Pi 核心**没有**自带审批闸门，GUI 也不伪造全局权限开关；能力边界见 [Approvals](docs/approvals.md)
@@ -146,8 +147,8 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   改完会自动重启 pi（pi 没有文件监听）
 - **Extensions**：只读发现当前磁盘上的候选项，分开显示安装、配置与加载证据。
   Pi RPC 没有已注册工具清单，所以不会猜某个扩展提供了什么工具；安装与启停仍用 Pi 官方 CLI。
-  Web / Subagent / Memory 各有一个独立设置区：固定官方安装命令 + 安装后重启 Pi + 当前
-  bridge 的真实工具调用观察。**长期记忆由 Extension 提供，不是 Pi GUI 内置的**
+  Web / Subagent / Memory / Browser 各有一个独立设置区：固定官方安装命令 + 安装后重启 Pi +
+  当前 bridge 的真实工具调用观察。**长期记忆由 Extension 提供，不是 Pi GUI 内置的**
 - **MCP**：当前兼容基线 **Pi 0.87.0 未提供原生 MCP 或对应 RPC 能力**。这个标签页是
   一份能力报告 —— 读你本机的 pi 包给出结论与原文证据，
   并指出官方替代路径是 extension。**不假装有一堆 Server 可以增删改**
@@ -254,7 +255,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 32 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 33 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -270,10 +271,12 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
 `test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:verify` /
-`test:evidence` / `test:lifecycle` /
+`test:evidence` / `test:lifecycle` / `test:web` / `test:browser` /
 `test:sessions` / `test:search` /
 `test:security` / `test:diagnostics` / `test:update` / `test:version` /
 `test:release` / `test:guard`。
+
+需要真浏览器的一条（opt-in，**不在 CI 里**）：`PI_GUI_BROWSER_LIVE=1 npm run test:browser-live`。
 
 准备发版时有一条命令跑完的入口（版本一致性 + 全部测试 + 两条打包链路 +
 产物验证 + 校验和）：
@@ -312,6 +315,8 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、升级 pi 后怎么验 |
 | [updates.md](docs/updates.md) | 版本检查：数据源、SemVer、缓存与 single-flight、外链白名单、隐私、为什么不自动安装 |
 | [releasing.md](docs/releasing.md) | 发版：一条命令的发布预检、版本一致性守卫、资产命名契约、tag → 自动发布、失败不留半成品 |
+| [web-access.md](docs/web-access.md) | Web Search / URL Fetch：适配的 Extension、状态模型、来源安全、外链边界 |
+| [browser.md](docs/browser.md) | Browser Use：适配的 Extension 与工具清单、成功证据规则、输入内容与页面正文的安全投影、URL 过滤、为什么没有审批流 |
 
 ## 许可证
 

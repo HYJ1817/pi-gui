@@ -296,6 +296,8 @@ get_messages ─┘
 - `markdown.js` Markdown 渲染（安全设计见 [security.md](security.md)）
 - `messages.js` 对话流 / `composer.js` 输入框 / `attachments.js` 附件
 - `tools.js` + `tool-model.js` + `tool-view.js` + `tool-history.js` 工具时间线
+- 语义适配器（按工具名匹配，互不依赖包名）：`web-activity.js` / `subagent-activity.js` /
+  `memory-activity.js` / `browser-activity.js`；各自的 `*-capabilities.js` 管状态证据与运行观察
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
@@ -406,3 +408,31 @@ Memory 工具不是写文件的工具：不进 Changes 账本、不触发 Git �
 `server/approval-probe.js` 只读本机 pi 包，报告 `tool_call` 阻断、
 对话框子协议、核心无内置审批、RPC 下 `custom()` 退化这四件事（三值 + 出处）。
 后端不下发任何策略，也不实现权限系统。见 [approvals.md](approvals.md)。
+
+## P20 Browser adapter
+
+`public/browser-activity.js` 把 **pi-browser-harness 0.11.0** 的 40 个 `browser_*` 工具
+投影成白名单事实。它是纯函数（无 DOM、无 IO、无包名依赖），实时与历史复用同一条路径，
+identity 仍是 `toolCallId`。
+
+成功证据只有一条：`details.ok === true`（该 Extension 的 `registerBrowserTool` 统一加上），
+失败走闭集 `details.kind`。拿不到 `ok:true` 就说「结果不可用」，**不拿请求参数顶成成功**；
+不解析 result 正文（正文里就是页面内容）。
+
+投影纪律比前几轮更严：输入内容（`fill.value` / `type.text` / `fill_form` 的字段值 /
+`press_key` 的单字符 / `handle_dialog.promptText`）**默认完全不显示**；
+页面正文、页面标题、控制台与网络记录、`execute_js` 的求值结果、
+本机绝对路径（截图 / PDF / 上传 / 下载）与 `http_get` 的请求头**一律不投影**。
+`browserHost()` / `safeBrowserUrl()` 做两级 URL 过滤，后者**再拒掉带 query/fragment 的地址**
+（令牌通常挂在 query 上）。截图只显示「Captured page screenshot」+ 格式 ——
+0.11.0 把图片存到文件，result 里没有 image block，GUI 不去读那个文件。
+
+`browser-capabilities.js` 独立维护 installed / configured / loaded 三值与
+generation+bridgeRun 范围内的真实调用观察（只记「观察到几个 / 最近哪几个」，不逐工具列），
+`browser.js` 连接 SSE 观察与 Extensions 设置区，`tool-view.js` 的语义链加一项
+（并把「结构化来源」的渲染从 Web 专用改成通用）。通用 Registry、Web adapter、
+Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)。
+
+> **没有审批流。** pi-browser-harness 没有 `pi.on("tool_call")` 拦截，也没有
+> `ctx.ui.confirm`，所以按 [approvals.md](approvals.md) 的规矩，
+> GUI 不为浏览器动作提供任何允许 / 拒绝按钮，也不画假 modal。

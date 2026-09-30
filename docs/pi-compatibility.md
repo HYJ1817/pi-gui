@@ -72,7 +72,7 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 | `newSession` | `new_session` | 「新对话」 |
 | `switchSession` | `switch_session` | 切换会话、搜索结果跳转 |
 | `sessionNaming` | `set_session_name`（+ 会话文件里的 `session_info.name`） | 给会话改名 |
-| `toolEvents` | `tool_execution_start` / `_update` / `_end` | Tool Timeline |
+| `toolEvents` | `tool_execution_start` / `_update` / `_end` | Tool Timeline；P16/P17/P18/P20 四个语义适配器都只依赖它 |
 | `extensionUi` | `extension_ui_request` / `extension_ui_response` | pi 扩展向用户提问时的选择框 |
 | Extension commands | `get_commands` 中 `source:"extension"` 及 `sourceInfo.path` | P15 已加载命令的来源证据；拿不到时保持未知 |
 | `sessionJsonl` | 能认出会话文件（header 里的 `id` / `cwd`） | 会话列表、搜索、归档 / 删除 |
@@ -298,6 +298,23 @@ npm run test:compat    # tests/pi-compat.cjs（55 条，纯 fixture）
 
 前端侧（`npm run test:ui`）另有一组：未知事件不崩、未知 response command 不崩、
 按能力局部降级（隐藏改名 / 禁用切换 / 一次性的核心不可用提示 / 历史说明）。
+
+### 语义适配器都只站在 `toolEvents` 上
+
+P16 Web / P17 Subagent / P18 Memory / P20 Browser 四层都不引入新的 pi 能力：
+它们只消费 `tool_execution_*` 里的 `toolName` / `args` / `partialResult` / `result`，
+按**工具名**匹配语义。所以：
+
+- pi 新增或改名工具 → 对不上的走 generic fallback，**不会崩、也不会假装懂**；
+- pi 的 `result.details` 形状变了 → 结构化证据拿不到时降级成「结果不可用」，
+  而不是拿请求参数顶成成功（P18-Fix / P20 同一条规则）；
+- `toolEvents` 整体缺失 → 四个适配器一起退回 generic fallback 文案，
+  聊天与其它功能不受影响。
+
+P20 另有一条上游侧的依赖：**默认适配的 Extension 自己**（`pi-browser-harness` 0.11.0）
+决定了 `details.ok` / `details.kind` 的存在。它若改了这两个字段，
+GUI 侧的表现是**保守地降级**（只说结果不可用），不会误报成功。
+契约与升级后的复核方式见 [browser.md](browser.md)。
 
 ## 十二、不做的事
 

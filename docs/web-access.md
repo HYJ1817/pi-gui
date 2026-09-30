@@ -81,5 +81,7 @@ http/https，拒绝 credentials、控制字符、空白、超长值及 javascrip
 5. 重新打开历史会话，确认相同 Activity；重启后观察状态归零。
 
 没有现场安装/供应商凭据时不能声称真实联网验收通过。
-Web Search 与 Browser Use 是独立能力；本轮不实现 browser automation、登录、
-Cookie、截图、PDF/video 专用 UI、MCP 搜索、搜索历史或自动多轮研究。
+Web Search 与 Browser Use 是独立能力：**P20 已单独适配浏览器自动化**（见
+[browser.md](browser.md)），两者各有自己的工具、设置区与运行观察，互不代劳。
+本文（Web Search）不实现登录、Cookie、截图、PDF/video 专用 UI、MCP 搜索、
+搜索历史或自动多轮研究。

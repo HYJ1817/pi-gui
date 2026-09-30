@@ -213,6 +213,13 @@ P17 增加 Conversation Subagent Activity 与手动安装提示，见 [subagents
 installed/configured/loaded/runtimeObserved 分开；loader 不启动 child。
 不读取 Agent 定义，不修改 Registry 的 tools/unknown 语义。
 
+P20 在 Extensions 页增加 **Browser Use** 设置区（固定命令 `pi install npm:pi-browser-harness`
++ 复制 + 安装后重启 Pi + 当前 bridge 的真实工具调用观察），见 [browser.md](browser.md)。
+它和 Web Search 是**两件独立的事**，两个设置区互不代劳、观察互不合并。
+这个 Extension **没有审批协议**，所以该区块明确写出「这些动作会直接发生，Pi GUI 拦不住它们」，
+不提供任何允许 / 拒绝按钮，也不画假 modal。
+Registry 仍只按包名做只读发现；**工具语义匹配与 Registry 无关**（按工具名，不按包名）。
+
 P18 增加 Pi Memory Activity 与手动安装提示，见 [memory.md](memory.md)。
 终端执行 pi install npm:pi-memory 后确认重启 Pi；GUI 不安装 qmd、不建索引、
 不读 `~/.pi/agent/memory`、不建立第二份数据库。长期记忆与会话搜索保持独立，
