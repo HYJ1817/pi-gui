@@ -30,6 +30,7 @@ import { toast } from './ui/toast.js';
 import { renderWebSetup } from './web-access.js';
 import { renderSubagentSetup } from './subagents.js';
 import { renderMemorySetup } from './memory.js';
+import { renderBrowserSetup } from './browser.js';
 import { renderApprovalSetup } from './approval.js';
 
 /* 状态 → 展示用的圆点与文案。
@@ -375,6 +376,10 @@ function extensionTab(card, isCurrent) {
   const memoryBox = el('section', 'web-setup');
   wrap.appendChild(memoryBox);
   renderMemorySetup(memoryBox, null);
+  /* P20：Browser Use 设置区。与 Web Search 分开 —— 两者是独立能力。 */
+  const browserBox = el('section', 'web-setup');
+  wrap.appendChild(browserBox);
+  renderBrowserSetup(browserBox, null);
   /* P19：approval 能力报告。supported / unsupported 都要说清 —— 不许把没拦住的画成拦住了。 */
   const approvalBox = el('section', 'web-setup');
   wrap.appendChild(approvalBox);
@@ -448,6 +453,7 @@ function extensionTab(card, isCurrent) {
     renderWebSetup(webBox, result);
     renderSubagentSetup(subagentBox, result);
     renderMemorySetup(memoryBox, result);
+    renderBrowserSetup(browserBox, result);
     render();
     /* approval 能力报告是只读的本地探测，和 Extension 发现分开取：
      * 它失败不该把整页 Extension 列表带塌。 */

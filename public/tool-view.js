@@ -24,6 +24,7 @@ import { formatDuration, previewOf, statOf } from './tool-model.js';
 import { webActivity, webSourceLink } from './web-activity.js';
 import { subagentActivity } from './subagent-activity.js';
 import { memoryActivity } from './memory-activity.js';
+import { browserActivity } from './browser-activity.js';
 
 /* 状态图标。
  *
@@ -155,7 +156,7 @@ export function updateEntry(node, entry) {
   const web = webActivity(entry);
   /* 语义适配器按工具名匹配，互不依赖包名：命中一个就接管，raw args/details
    * 一律不进 DOM（见下面的 argsText 分支）。 */
-  const semantic = web || subagentActivity(entry) || memoryActivity(entry);
+  const semantic = web || subagentActivity(entry) || memoryActivity(entry) || browserActivity(entry);
   if (semantic) entry = { ...entry, ...semantic, resultLine: '', output: semantic.facts };
   const p = tl(node);
   if (!p) return;
@@ -227,26 +228,34 @@ export function updateEntry(node, entry) {
   p.argHead.hidden = !argsText;
   p.args.hidden = !argsText;
 
-  if (web) {
-    if (!p.webSources) {
-      p.webSources = document.createElement('div');
-      p.webSources.className = 'web-sources';
-      p.more.appendChild(p.webSources);
+  /* 结构化来源（Web 的搜索结果、Browser 打开的页面）共用一条渲染路径：
+   * 每个来源都先过各自的 URL 白名单，过不了就根本不会生成 <a>。 */
+  const sources = Array.isArray(semantic?.sources) ? semantic.sources : [];
+  const sourceKey = JSON.stringify(sources);
+  if (sourceKey !== '[]') {
+    if (!p.sources) {
+      p.sources = document.createElement('div');
+      p.sources.className = 'web-sources';
+      p.more.appendChild(p.sources);
     }
-    const sourceKey = JSON.stringify(web.sources);
-    if (p.webSourceKey !== sourceKey) {
-      p.webSourceKey = sourceKey;
-      p.webSources.replaceChildren();
-      for (const source of web.sources) {
+    if (p.sourcesKey !== sourceKey) {
+      p.sourcesKey = sourceKey;
+      p.sources.replaceChildren();
+      for (const source of sources) {
         const link = webSourceLink(source);
-        if (link) p.webSources.appendChild(link);
+        if (link) p.sources.appendChild(link);
       }
     }
+  } else if (p.sources && p.sourcesKey !== '[]') {
+    /* 状态推进后来源可能被撤下（例如从 running 落到无证据的结束态），
+     * 不清就会留下上一轮的链接。 */
+    p.sourcesKey = '[]';
+    p.sources.replaceChildren();
   }
 
   p.hasOutput = hasOutput;
   p.output = output;
-  p.hasMore = hasOutput || Boolean(argsText) || Boolean(web?.sources.length);
+  p.hasMore = hasOutput || Boolean(argsText) || sources.length > 0;
   node.classList.toggle('has-more', p.hasMore);
   syncToggle(p);
   syncTitle(node, p);

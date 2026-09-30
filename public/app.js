@@ -20,6 +20,7 @@ import { sendCommand } from './api.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
 import { observeMemoryEvent } from './memory.js';
+import { observeBrowserEvent } from './browser.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast } from './ui/toast.js';
@@ -120,7 +121,7 @@ function handle(evt) {
   if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
-  if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeApprovalEvent(evt); }
+  if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeApprovalEvent(evt); }
   switch (evt.type) {
     case 'bridge_status':
       return onBridge(evt);
@@ -198,6 +199,7 @@ function onBridge(evt) {
   observeWebEvent(evt);
   observeSubagentEvent(evt);
   observeMemoryEvent(evt);
+  observeBrowserEvent(evt);
   observeApprovalEvent(evt);
   switch (evt.state) {
     case 'starting':
