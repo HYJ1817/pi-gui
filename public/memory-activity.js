@@ -261,7 +261,12 @@ function statusActivity(status, d) {
   const collection = bool(d.collection);
   if (collection !== null) facts.push('Collection pi-memory: ' + (collection ? 'present' : 'missing'));
   if (EMBEDDING_STATES.has(d.embeddings)) facts.push('Embeddings: ' + d.embeddings);
+  /* snapshotMode 是三态：认识的取值直接展示；**给了值但不在白名单**（例如仓库 main 上
+   * 尚未发布的 refresh）说明我们确实收到了一个不认识的模式 —— 说「unrecognized」，
+   * **绝不回显原始值**，也不假装它是已知模式；字段缺失则完全不显示这一行。
+   * 这样上游一旦发布新模式，界面会明说「有个我不认识的模式」，而不是静默少一格。 */
   if (SNAPSHOT_MODES.has(d.snapshotMode)) facts.push('Snapshot: ' + d.snapshotMode);
+  else if (typeof d.snapshotMode === 'string' && d.snapshotMode) facts.push('Snapshot: unrecognized');
   if (UPDATE_MODES.has(d.qmdUpdateMode)) facts.push('Update mode: ' + d.qmdUpdateMode);
   /* details.dir 是绝对路径 —— 永远不投影。 */
   const hasEvidence = facts.length > 0;

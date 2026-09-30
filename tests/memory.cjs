@@ -172,8 +172,20 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
    * 契约按发布版钉住，不为未发布字段提前适配。 */
   check('status snapshot stable displayed', () => assert.match(facts(finish(entry('memory_status', {}), { snapshotMode: 'stable', longTermChars: 1 })), /Snapshot: stable/));
   check('status snapshot per-turn displayed', () => assert.match(facts(finish(entry('memory_status', {}), { snapshotMode: 'per-turn', longTermChars: 1 })), /Snapshot: per-turn/));
-  check('status snapshot refresh stays unknown (not in v0.4.2)', () => assert.doesNotMatch(facts(finish(entry('memory_status', {}), { snapshotMode: 'refresh', longTermChars: 1 })), /Snapshot:/));
-  check('status unknown enums stay unknown', () => { const a = memoryActivity(finish(entry('memory_status', {}), { embeddings: 'vector', snapshotMode: 'eager', qmdUpdateMode: 'eager' })); assert.doesNotMatch(a.facts, /Embeddings:|Snapshot:|Update mode:/); });
+  /* 三态：认识 → 显示取值；给了值但不认识 → unrecognized（不回显原值）；缺失 → 不说话。 */
+  check('status snapshot unrecognized value is not silently dropped', () => {
+    const a = memoryActivity(finish(entry('memory_status', {}), { snapshotMode: 'refresh', longTermChars: 1 }));
+    assert.match(a.facts, /Snapshot: unrecognized/);
+    assert.ok(!json(a).includes('refresh'));
+  });
+  check('status snapshot unrecognized value never echoed', () => {
+    const a = memoryActivity(finish(entry('memory_status', {}), { snapshotMode: PRIVATE }));
+    assert.match(a.facts, /Snapshot: unrecognized/);
+    assert.ok(!json(a).includes(PRIVATE));
+  });
+  check('status snapshot missing stays silent', () => assert.doesNotMatch(facts(finish(entry('memory_status', {}), { longTermChars: 1 })), /Snapshot:/));
+  check('status snapshot non-string ignored', () => assert.doesNotMatch(facts(finish(entry('memory_status', {}), { snapshotMode: 42, longTermChars: 1 })), /Snapshot:/));
+  check('status other unknown enums stay unknown', () => { const a = memoryActivity(finish(entry('memory_status', {}), { embeddings: 'vector', qmdUpdateMode: 'eager' })); assert.doesNotMatch(a.facts, /Embeddings:|Update mode:/); });
   check('status missing metadata degrades', () => assert.match(facts(finish(entry('memory_status', {}), {})), /Memory status metadata unavailable/));
   check('status missing metadata is not success', () => assert.equal(memoryActivity(finish(entry('memory_status', {}), {})).label, 'Memory status result unavailable'));
   check('status bad latest daily ignored', () => assert.doesNotMatch(facts(finish(entry('memory_status', {}), { dailyCount: 1, latestDaily: `${MEM}\\2026-09-30.md` })), /Latest daily log/));
