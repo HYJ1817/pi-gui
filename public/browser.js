@@ -3,10 +3,11 @@
  * 立场与 P16/P18 一致：**Pi GUI 不发明 pi 没有的能力，也不假装保护用户。**
  *
  * 默认兼容 pi-browser-harness（原生 Pi Extension，经 CDP 驱动真实 Chrome）。
- * 它**没有**任何审批协议：源码里没有 `pi.on("tool_call")` 拦截，也没有
- * `ctx.ui.confirm`；`ctx.ui.select` 只出现在交互式 TUI 命令里，RPC 模式下
- * 返回 undefined。所以 GUI 侧**不提供**允许 / 拒绝按钮，也不宣称「已保护」——
- * 只如实说明「这些动作会直接发生」。 */
+ * 它没有针对 `browser_*` 工具执行的审批协议：源码里没有 `pi.on("tool_call")`
+ * 拦截，也没有在这些工具执行前调用 `ctx.ui.confirm`。`/browser-profile` 会使用
+ * `ctx.ui.select` 做 Profile 配置；Pi 0.87.0 的 RPC 会把这类选择交给 GUI 处理，
+ * 但这属于配置交互，不是浏览器动作的权限闸门。所以 GUI 侧**不提供**浏览器
+ * 动作的允许 / 拒绝按钮，也不宣称「已保护」——只如实说明「这些动作会直接发生」。 */
 import { S, ownsWorkspace } from './state.js';
 import { restartBackend } from './api.js';
 import { confirmModal } from './ui/modal.js';
