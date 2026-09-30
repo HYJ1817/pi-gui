@@ -1,5 +1,12 @@
 # 与 pi 的兼容性
 
+P16 的 Web tool adapter 按 Pi 0.87.0 的 tool_execution_start/update/end 与
+历史 toolCall/toolResult 对接；partialResult 是累积输出，identity 为 toolCallId。
+当前公开 pi-web-access 0.33.0 schema 已核对，但 GUI 不加载其代码或依赖。
+RPC 不提供 registered tool list，P15 capabilityRegistry.tools 继续为空/未知。
+独立 runtimeObserved 仅记录当前 bridge run 的真实调用，重启或切项目后归零。
+工具来源不从工具名反推；未知名字继续 generic fallback。见 [Web Access](web-access.md)。
+
 Pi GUI 是 pi 的界面，**不是 pi 的一部分**。这份文档讲清两者的边界、
 Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi 升级后怎么验。
 

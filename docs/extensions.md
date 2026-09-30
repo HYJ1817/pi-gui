@@ -8,6 +8,10 @@
 
 ## Extensions（P15 基础设施）
 
+P16 在 Extensions 页增加独立 Web Access 设置区：固定官方安装命令复制、
+安装后重启 Pi、当前 bridge 的工具调用观察。没有 GUI 自动安装或任意包名入口。
+通用 Registry 不含 Web 专用条件，工具清单仍未知。详情见 [Web Access](web-access.md)。
+
 Skill 是给模型阅读的指令，Extension 是在 Pi 进程中执行的第三方代码；两者保持独立。
 本机 Pi 0.87.0 的来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
 `package.json.pi.extensions` 或 `index.ts|index.js`、受信任项目的 `.pi/extensions`、`settings.json` 的

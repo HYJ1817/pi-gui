@@ -1,5 +1,18 @@
 # 安全
 
+## P16 Web Extension 边界
+
+GUI 自身不联网搜索；搜索与 URL Fetch 来自用户安装的 Pi Extension。
+第三方 Extension 与 Pi 进程拥有同等系统权限，可访问网络与本地文件，
+不受 GUI sandbox 限制。当前只提供固定官方 CLI 命令复制，安装由用户
+在终端明确执行；GUI 不提供自动安装、不接受任意 package、不写 cache/settings。
+安装后重启复用现有确认框与 rpc.restart。
+GUI 不收集搜索 telemetry、不上传会话、不保存搜索 key、不复制 OAuth，
+配置由 Extension 管理。Web Activity 只投影 allowlist 字段，不展示 auth/proxy 原始参数。
+来源只取明确结构化 URL，不解析正文链接，不执行 HTML，不自动打开地址。
+renderer 与 Electron main 分别校验 http/https、credentials、控制字符及长度；
+独立 `openWebUrl` IPC 不放宽 Release 白名单。详见 [Web Access](web-access.md)。
+
 **后端能驱动 pi 执行任意命令，所以它的边界是唯一防线。**
 这份文档逐条说明：威胁是什么、边界划在哪、Pi GUI 做了什么、**哪些事仍然由你负责**。
 

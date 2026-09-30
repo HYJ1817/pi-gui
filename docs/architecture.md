@@ -1,5 +1,15 @@
 # 架构
 
+## P16 Web adapter
+
+`public/web-activity.js` 在现有 ToolEntry → tool-view 边界做纯语义投影，
+实时与历史共用，实例 identity/并发/取消仍由现有 Timeline 管理。
+`web-capabilities.js` 独立维护 generation/bridge run 范围的实际调用证据，
+`web-access.js` 将事件观察、只读 discovery 与 Extensions 设置区连接。
+不修改通用 Registry，不发搜索请求，不接触供应商 credential。
+Electron 的 `openWebUrl` 是独立 http/https IPC；Release 外链白名单不变。
+参见 [Web Access 数据流与限制](web-access.md)。
+
 面向维护者。这份文档回答「系统是怎么组成的、状态放在哪、为什么这么切」。
 用户视角的功能说明在 [README](../README.md)，安全边界在 [security.md](security.md)。
 

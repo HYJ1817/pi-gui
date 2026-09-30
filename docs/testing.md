@@ -1,5 +1,14 @@
 # 测试分层与 CI
 
+## P16 Web Activity
+
+`npm run test:web`（纳入唯一入口 `npm test`）使用 0.33.0 真实 schema 的
+离线 result fixtures 与 DOM。覆盖三种 renderer、并发/identity、取消与错误、
+历史一致性、缺字段、结构化来源与危险 URL、Electron 校验、能力证据重置、
+手工安装降级与重启复用。默认不联网、不装包、不调用模型或消耗 quota。
+`shots:harness` 的 156 场景验证紧凑 Web Activity 与全文不铺开。
+真实联网验收仅按 [Web Access](web-access.md) 手工步骤显式执行。
+
 这份文档回答一个问题：**改了代码之后，该跑哪些测试、在哪里跑。**
 这份文档讲**分层与边界**：哪些测试进 CI、哪些要真 pi、哪些只在发布前跑。
 每条套件具体覆盖什么，README 里只留一句话索引，细节不重复维护。
