@@ -1,29 +1,44 @@
-/* pi-memory 0.4.2（jayzeng/pi-memory，0.4.2 gitHead 39e6b998）的语义投影。
+/* pi-memory 0.4.2 的语义投影。
+ *
+ * 契约核对方式：**v0.4.2 tag** 与 npm 发布包指向同一个 commit
+ * （`39e6b998a2279c8fad4a2c6c64e26828c1d6023e`），tag 上的 `index.ts` 与发布
+ * tarball 逐字节相同。下面每条规则都来自那份源码，不来自 README，也不来自
+ * 仓库 main（main 已领先，含未发布字段）。
  *
  * 只做一件事：把一条 memory 工具的 ToolEntry 投影成**白名单事实**。
  * 不读 memory 目录、不碰 qmd、不建索引、不做第二份数据库，
  * 也没有任何「记住 / 忘记 / 搜索 / 恢复」的动作。
  *
- * ---------- 四条来自真实源码的约束 ----------
+ * ---------- 五条来自真实源码的约束 ----------
  *
- * 1. **返回值里没有结构化命中列表。** memory_search 的 details 只有
+ * 1. **请求参数不是成功证据。** args 只说「在做什么」（running 文案、请求的
+ *    target / action / date），details 才说「发生了什么」。0.4.2 的 soft-failure
+ *    一律返回 `details: {}`：
+ *      memory_read    MEMORY.md / SCRATCHPAD.md 不存在、daily 没有那天、list 没有日志
+ *      memory_write   （成功分支总带 target；缺字段只可能是异常结果）
+ *      scratchpad     空 scratchpad、没有匹配项、缺 text、未知 action
+ *    这些情况下「没有结构化证据」就只能说结果不可用 —— 既不拿 args 顶成成功，
+ *    也不改判成失败。
+ *
+ * 2. **pi 0.87.0 不传播 Extension 自己返回的 isError。**
+ *    agent-core 的 execute 包一层：正常 return 就是 `isError: false`
+ *    （见 pi-agent-core/dist/agent-loop.js 的 `return { result, isError: false }`），
+ *    Extension 在 result 里写的 `isError: true` 不会到达 tool_execution_end。
+ *    所以 status 只认 entry.status；「没有成功证据」不等于「失败」。
+ *
+ * 3. **返回值里没有结构化命中列表。** memory_search 的 details 只有
  *    `{ mode, query, count, needsEmbed }`；命中正文（含 `**File:** <绝对路径>`）
  *    全在 result 文本里。所以这里**不投影任何正文或预览** —— 语义适配后
  *    entry.output 会被替换成这些事实，原始文本没有进 DOM 的机会。
+ *    同样**不解析 raw result 文本**去区分「No daily log」这类文案：那是正文/路径
+ *    泄露面，而且文案不是稳定 API。
  *
- * 2. **绝对路径与记忆原文是 details 的一等字段。** memory_write / memory_read /
+ * 4. **绝对路径与记忆原文是 details 的一等字段。** memory_write / memory_read /
  *    memory_forget / memory_restore 的 details.path、memory_forget 的
  *    details.recoveryPath、memory_status 的 details.dir 都是绝对路径（含用户名）；
  *    existingPreview / removedPreview / preview 是记忆原文。一律不投影。
  *
- * 3. **pi 0.87.0 不传播 Extension 自己返回的 isError。**
- *    agent-core 的 execute 包一层：正常 return 就是 `isError: false`
- *    （见 pi-agent-core/dist/agent-loop.js 的 `return { result, isError: false }`），
- *    Extension 在 result 里写的 `isError: true` 不会到达 tool_execution_end。
- *    因此 status 只认 entry.status；结构化字段缺失时降级成
- *    「…结果不可用」，**不猜成失败、也不猜成 0 条**。
- *
- * 4. **没有 project scope。** resolveMemoryDir 只认 PI_MEMORY_DIR 与
+ * 5. **没有 project scope。** resolveMemoryDir 只认 PI_MEMORY_DIR 与
  *    HOME/USERPROFILE/HOMEDRIVE+HOMEPATH，落点是 `~/.pi/agent/memory`；
  *    global 之外的 scope 在源码里不存在，所以这里也不会出现「项目记忆」。
  *
@@ -49,25 +64,35 @@ const int = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : null);
 const bool = (v) => (typeof v === 'boolean' ? v : null);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const dateStr = (v) => (typeof v === 'string' && DATE_RE.test(v) ? v : '');
+const pick = (table, v) => (typeof v === 'string' && Object.hasOwn(table, v) ? v : '');
 
-/* ---------- 真实枚举（都来自 0.4.2 的 TypeBox schema / details） ---------- */
+/* ---------- 真实枚举（都来自 v0.4.2 的 TypeBox schema / details） ---------- */
 
 const WRITE_TARGETS = { long_term: 'Long-term memory', daily: 'Daily log' };
 const READ_TARGETS = { long_term: 'Long-term memory', scratchpad: 'Scratchpad', daily: 'Daily log', list: 'Daily log list' };
 const WRITE_MODES = new Set(['append', 'overwrite']);
 const SEARCH_MODES = new Set(['keyword', 'semantic', 'deep']);
 const EMBEDDING_STATES = new Set(['ready', 'missing', 'unknown', 'n/a']);
+/* v0.4.2 的 getSnapshotMode()：`mode === "per-turn" ? "per-turn" : "stable"`，
+ * 即 PI_MEMORY_SNAPSHOT 只认这两个值，其它（包括 "refresh"）一律回落到 stable。
+ * "refresh" 是仓库 main 上尚未发布的第三种模式 —— 没有发布就不写进适配器。 */
 const SNAPSHOT_MODES = new Set(['stable', 'per-turn']);
 const UPDATE_MODES = new Set(['background', 'manual', 'off']);
 /* memory_forget 的 recovery 文件名就是 v4 UUID；只有格式成立才说得出「可恢复」。 */
 const RECOVERY_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const SCRATCHPAD_LABELS = {
-  add: ['Updating scratchpad…', 'Added to scratchpad'],
-  done: ['Updating scratchpad…', 'Checked off scratchpad item'],
-  undo: ['Updating scratchpad…', 'Reopened scratchpad item'],
-  clear_done: ['Updating scratchpad…', 'Cleared done scratchpad items'],
-  list: ['Reading scratchpad…', 'Read scratchpad'],
+/* 每个 action 的 running 文案；success 文案由 details 证据决定，不在这里。 */
+const SCRATCHPAD_RUNNING = {
+  add: 'Updating scratchpad…',
+  done: 'Updating scratchpad…',
+  undo: 'Updating scratchpad…',
+  clear_done: 'Updating scratchpad…',
+  list: 'Reading scratchpad…',
+};
+const SCRATCHPAD_SUCCESS = {
+  add: 'Added to scratchpad',
+  done: 'Checked off scratchpad item',
+  undo: 'Reopened scratchpad item',
 };
 
 const SETTLED = new Set(['incomplete', 'interrupted', 'cancelled']);
@@ -97,48 +122,55 @@ function result(status, label, summary, facts) {
 /* ---------- 各工具 ---------- */
 
 function writeActivity(status, a, d) {
-  const target = WRITE_TARGETS[d.target] ? d.target : WRITE_TARGETS[a.target] ? a.target : '';
-  /* mode 是结果事实，不拿请求参数顶上；只有 details 明确给了才展示。 */
+  /* 成功证据只有 details.target（成功分支必带）；args.target 只是请求。 */
+  const reported = pick(WRITE_TARGETS, d.target);
+  const requested = pick(WRITE_TARGETS, a.target);
   const mode = WRITE_MODES.has(d.mode) ? d.mode : '';
-  /* 没有 target 就没有「写成功」的证据 —— 不拿一句 “Saved to memory” 顶上。 */
-  const success = target === 'daily' ? 'Added to daily log' : target ? 'Saved to memory' : 'Memory write result unavailable';
+  const success = reported === 'daily' ? 'Added to daily log'
+    : reported ? 'Saved to memory'
+      : 'Memory write result unavailable';
   const facts = [];
-  if (target) facts.push('Target: ' + WRITE_TARGETS[target]);
+  if (reported) facts.push('Target: ' + WRITE_TARGETS[reported]);
+  else {
+    facts.push('Target metadata unavailable');
+    if (requested) facts.push('Requested target: ' + WRITE_TARGETS[requested]);
+  }
   if (mode) facts.push('Mode: ' + mode);
-  if (!target) facts.push('Target metadata unavailable');
   facts.push('Content not shown in Activity');
   return result(status, labelOf(status, {
     running: 'Saving memory…',
     success,
     error: 'Memory write failed',
     stopped: 'Memory write stopped',
-  }), target ? WRITE_TARGETS[target] : 'Memory write', facts);
+  }), WRITE_TARGETS[reported] || WRITE_TARGETS[requested] || 'Memory write', facts);
 }
 
 function readActivity(status, a, d) {
-  const target = READ_TARGETS[a.target] ? a.target : '';
-  const success = target === 'long_term' ? 'Read long-term memory'
-    : target === 'scratchpad' ? 'Read scratchpad'
-      : target === 'daily' ? 'Read daily log'
-        : target === 'list' ? 'Listed daily logs'
+  const requested = pick(READ_TARGETS, a.target);
+  /* v0.4.2 的四个成功分支：long_term/scratchpad → { path }，daily → { path, date }，
+   * list → { files }。soft-failure 是 {}（含 daily 的空日期分支）。 */
+  const path = typeof d.path === 'string' && d.path ? d.path : '';
+  const date = dateStr(d.date);
+  const files = Array.isArray(d.files) ? d.files : null;
+  const success = requested === 'long_term' && path ? 'Read long-term memory'
+    : requested === 'scratchpad' && path ? 'Read scratchpad'
+      : requested === 'daily' && path && date ? 'Read daily log'
+        : requested === 'list' && files ? 'Listed daily logs'
           : 'Memory read result unavailable';
   const facts = [];
-  if (target) facts.push('Target: ' + READ_TARGETS[target]);
-  const date = dateStr(d.date) || dateStr(a.date);
+  if (requested) facts.push('Target: ' + READ_TARGETS[requested]);
   if (date) facts.push('Date: ' + date);
-  if (target === 'list') {
-    /* 只给条数：details.files 是日志文件名数组，不需要进 DOM。 */
-    facts.push(Array.isArray(d.files) ? 'Daily logs: ' + d.files.length : 'Daily log count unavailable');
-  } else if (target) {
-    facts.push('Content not shown in Activity');
-  }
-  if (!target) facts.push('Target metadata unavailable');
+  /* args.date 只是请求日期，不能证明「读到了那天」—— 所以它单独成一条。 */
+  else if (dateStr(a.date)) facts.push('Requested date: ' + dateStr(a.date));
+  if (requested === 'list') facts.push(files ? 'Daily logs: ' + files.length : 'Daily log count unavailable');
+  else if (success !== 'Memory read result unavailable') facts.push('Content not shown in Activity');
+  if (!requested) facts.push('Target metadata unavailable');
   return result(status, labelOf(status, {
     running: 'Reading memory…',
     success,
     error: 'Memory read failed',
     stopped: 'Memory read stopped',
-  }), target ? READ_TARGETS[target] : 'Memory read', facts);
+  }), requested ? READ_TARGETS[requested] : 'Memory read', facts);
 }
 
 function searchActivity(status, a, d) {
@@ -165,14 +197,17 @@ function searchActivity(status, a, d) {
 
 function forgetActivity(status, a, d) {
   const match = oneLine(a.match, 200);
-  const target = WRITE_TARGETS[d.target] ? d.target : WRITE_TARGETS[a.target] ? a.target : '';
+  /* 成功证据是 details.removed（无匹配时是 0，也是真实结果）。 */
+  const reported = pick(WRITE_TARGETS, d.target);
+  const requested = pick(WRITE_TARGETS, a.target);
   const removed = int(d.removed);
   const success = removed == null ? 'Memory forget result unavailable'
     : removed === 0 ? 'No matching memory'
       : 'Removed from memory';
   const facts = [];
   if (match) facts.push('Match: ' + match);
-  if (target) facts.push('Target: ' + WRITE_TARGETS[target]);
+  if (reported) facts.push('Target: ' + WRITE_TARGETS[reported]);
+  else if (requested) facts.push('Requested target: ' + WRITE_TARGETS[requested]);
   if (removed != null) facts.push('Removed: ' + removed);
   else facts.push('Removal count unavailable');
   /* 删除在 0.4.2 里是可恢复的：先写 recovery/<uuid>.json 再改源文件。
@@ -187,6 +222,7 @@ function forgetActivity(status, a, d) {
 }
 
 function restoreActivity(status, a, d) {
+  /* 成功证据是 details.restored 或「已恢复过」的 restoredAt。 */
   const restored = int(d.restored);
   const alreadyRestored = typeof d.restoredAt === 'string';
   const success = restored == null ? (alreadyRestored ? 'Memory already restored' : 'Memory restore result unavailable')
@@ -228,36 +264,44 @@ function statusActivity(status, d) {
   if (SNAPSHOT_MODES.has(d.snapshotMode)) facts.push('Snapshot: ' + d.snapshotMode);
   if (UPDATE_MODES.has(d.qmdUpdateMode)) facts.push('Update mode: ' + d.qmdUpdateMode);
   /* details.dir 是绝对路径 —— 永远不投影。 */
-  if (!facts.length) facts.push('Memory status metadata unavailable');
+  const hasEvidence = facts.length > 0;
+  if (!hasEvidence) facts.push('Memory status metadata unavailable');
   return result(status, labelOf(status, {
     running: 'Checking memory status…',
-    success: 'Checked memory status',
+    success: hasEvidence ? 'Checked memory status' : 'Memory status result unavailable',
     error: 'Memory status failed',
     stopped: 'Memory status stopped',
   }), 'Local memory files and optional qmd search', facts);
 }
 
 function scratchpadActivity(status, a, d) {
-  const action = typeof a.action === 'string' && Object.hasOwn(SCRATCHPAD_LABELS, a.action) ? a.action : '';
-  const facts = ['Action: ' + (action || 'unknown')];
+  const requested = pick(SCRATCHPAD_RUNNING, a.action);
+  const reported = pick(SCRATCHPAD_RUNNING, d.action);
   const count = int(d.count);
   const open = int(d.open);
+  const removed = int(d.removed);
+  /* list 的 details 没有 action 字段，证据是 count / open。 */
+  const listEvidence = count != null || open != null;
+  /* success 只由 details 决定：add/done/undo 回写 action，clear_done 另带 removed，
+   * list 带 count/open；soft-failure 一律 {}。 */
+  let success;
+  if (reported === 'add' || reported === 'done' || reported === 'undo') success = SCRATCHPAD_SUCCESS[reported];
+  else if (reported === 'clear_done') success = removed != null ? 'Cleared done scratchpad items' : 'Scratchpad result unavailable';
+  else if (listEvidence) success = 'Read scratchpad';
+  else if (requested || reported) success = 'Scratchpad result unavailable';
+  /* 未适配的 action 仍走专用投影：中性文案，不回退到 raw JSON。 */
+  else success = 'Scratchpad action';
+  const facts = ['Action: ' + (reported || requested || 'unknown')];
   if (count != null) facts.push('Items: ' + count);
   if (open != null) facts.push('Open: ' + open);
-  const removed = int(d.removed);
   if (removed != null) facts.push('Removed: ' + removed);
-  /* 未适配的 action 仍走专用投影：只给一个 bounded 的 action 名，不回退到 raw JSON。 */
-  const labels = action ? SCRATCHPAD_LABELS[action] : null;
-  const success = action === 'list' ? 'Read scratchpad'
-    : action === 'clear_done' ? (removed == null ? 'Scratchpad result unavailable' : 'Cleared done scratchpad items')
-      : labels ? labels[1]
-        : 'Scratchpad action';
+  const named = requested || reported;
   return result(status, labelOf(status, {
-    running: labels ? labels[0] : 'Updating scratchpad…',
+    running: requested === 'list' ? SCRATCHPAD_RUNNING.list : 'Updating scratchpad…',
     success,
     error: 'Scratchpad action failed',
     stopped: 'Scratchpad action stopped',
-  }), action ? 'Action: ' + action : 'Scratchpad', facts);
+  }), named ? 'Action: ' + named : 'Scratchpad', facts);
 }
 
 /* ---------- 入口 ---------- */
