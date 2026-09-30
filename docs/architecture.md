@@ -392,3 +392,17 @@ Extensions 设置区，`tool-view.js` 把语义结果接到既有 Timeline（实
 identity 仍是 toolCallId）。后端、通用 Registry、会话搜索与 Planner 均不参与。
 Memory 工具不是写文件的工具：不进 Changes 账本、不触发 Git 刷新。
 见 [memory.md](memory.md)。
+
+## P19 Approval adapter
+
+`public/approval-model.js` 把 Pi 的扩展对话框（`extension_ui_request` 的
+`select`/`confirm`/`input`/`editor`）规范化成只含真实字段的请求对象；
+`public/approval.js` 是它的存储、生命周期与 UI：按 `requestId`（=Pi 给的 `id`）
+去重防重放，按 workspaceGeneration / bridgeRun 做陈旧守卫，桥接重启与 Stop
+分别「本地作废」与「fail-closed 取消 + 收卡」，决定经 `extension_ui_response`
+走明确协议命令。`confirm` 类请求复用 `ui/modal.js` 的 `confirmModal`
+（与撤销文件、删除会话同一层），因此不再存在两套并行确认 UI ——
+`app.js` 里原先自绘的三种对话框已删除，只留 fire-and-forget 方法。
+`server/approval-probe.js` 只读本机 pi 包，报告 `tool_call` 阻断、
+对话框子协议、核心无内置审批、RPC 下 `custom()` 退化这四件事（三值 + 出处）。
+后端不下发任何策略，也不实现权限系统。见 [approvals.md](approvals.md)。

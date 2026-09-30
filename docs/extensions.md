@@ -203,6 +203,11 @@ override 语义，需要同步更新 `server/skills.js` ——
 
 ## 相关测试
 
+P19 在 Extensions 页增加 **Approval / Permission** 能力块（只读报告，不是新标签页）：
+报告 `tool_call` 能否阻断、对话框子协议是否可用、核心有没有自带审批、
+RPC 下 `ctx.ui.custom()` 是否退化，每项带出处；见 [approvals.md](approvals.md)。
+它不改 Registry 的发现/启用/加载判定，也不往 Registry 里塞 permission 专用逻辑。
+
 P17 增加 Conversation Subagent Activity 与手动安装提示，见 [subagents.md](subagents.md)。
 终端执行固定命令 pi install npm:pi-subagents 后确认重启 Pi。
 installed/configured/loaded/runtimeObserved 分开；loader 不启动 child。

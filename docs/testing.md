@@ -45,12 +45,12 @@ settings 目录解析、override 优先级、package filter、空 filter、manif
 Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
 Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
 
-`npm test` 里现在有 31 个套件，全部是**纯自动化**：
+`npm test` 里现在有 32 个套件，全部是**纯自动化**：
 
 ```
-smoke 1013 · git 161 · modules 114 · reliability · interactions · port-owner
+smoke 1023 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · extensions 52 · web-access 66 · subagents 141
-memory 236 · planner 115 · workflow-relations 71 · reviews 133
+memory 236 · approvals 79 · planner 115 · workflow-relations 71 · reviews 133
 review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
 sessions 77 · session-search 71 · pi-compat 57 · body-integrity 5 · dev-server 20
 models-api 50 · server-security 36 · diagnostics 10 · update-check 87
@@ -691,3 +691,28 @@ recovery ID 与路径不展示、Extensions 页 Pi Memory 设置区的固定命�
 
 live 是人工流程（不属于默认 CI，本阶段未执行），步骤见 [memory.md](memory.md)。
 没有现场安装与真实模型时不能声称 live 通过。默认测试**不需要** qmd 或任何网络。
+
+## P19 Approval 验证
+
+npm test 串行包含 tests/approvals.cjs（也可 npm run test:approvals，79 条）。
+完全离线：不装 permission Extension、不 spawn pi、不读真实 `~/.pi`、不执行 pi 代码；
+能力探测跑在 `os.tmpdir()` 造的假 pi 包上。
+
+覆盖：模型的真实字段与边界（缺失 `id` 拒弹、未知 method 拒绝、title/message/option 上限、
+`scope`/`action` 恒为 null、`risk` 恒为 unknown、没有持久化决定）；
+四种对话框的展示与应答（`confirm` 走统一确认层、`select`/`input`/`editor` 走输入弹层）；
+`allowed`/`denied`/`answered`/`cancelled`/`expired` 五种终态；
+重放去重（pending 与已结算都不重弹）；陈旧守卫（generation / bridgeRun / switching）；
+桥接重启本地作废且**不发应答**；Stop fail-closed 取消并收卡；`timeout` 只收卡不发应答；
+恶意 HTML 惰性、额外字段（env/token/apiKey/authorization/cookie/command/rawArgs）不投影；
+**不存在「总是允许」按钮**；能力块在 unsupported 时明确说清且没有假按钮；
+后端探测三值 + 缺包未知 + 不泄露 pi 包路径；
+统一确认 foundation 回归（`confirmModal` / `dismissConfirm` / danger 无 Enter 捷径）。
+回归：Session Search / Planner / Web / Subagent / Memory 都不受影响。
+
+UI smoke 的 P19 段落走真实 SSE：统一确认层弹出、只有一次性的允许/拒绝、
+重放不重复弹窗、允许走 `extension_ui_response`、已结算不再弹、Stop 取消并收卡、
+切项目同步期间不弹新请求、重启清空并收卡。
+
+live（人工，本阶段未执行）：装一个真实的 permission Extension，确认「拒绝」真的让
+这次工具调用没有执行 —— 这是唯一能证明端到端拦截的步骤，见 [approvals.md](approvals.md)。

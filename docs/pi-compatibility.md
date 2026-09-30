@@ -1,5 +1,14 @@
 # 与 pi 的兼容性
 
+P19 的 approval 只依赖 Pi 已有的两个真实机制：`tool_call` hook 可返回
+`{ block: true }`（`dist/core/extensions/types.d.ts` 的 `ToolCallEventResult`、
+`docs/extensions.md` 的「Can block」），以及 RPC 模式下对话框方法发出的
+`extension_ui_request` 会**阻塞等待** `extension_ui_response`（`docs/rpc.md`）。
+Pi 0.87.0 **没有**自带审批弹窗（`docs/usage.md` 明确说不含 permission popups），
+`ctx.ui.custom()` 在 RPC 下返回 `undefined` —— 用 `custom()` 画审批框的扩展
+在 Pi GUI 里不会弹窗。GUI 不实现权限策略，只如实呈现与本机能力报告。
+见 [Approvals](approvals.md)。
+
 P18 按 pi-memory 0.4.2 的发布 tarball 接入 prompt-side 工具：
 memory_write / memory_read / memory_search / memory_forget / memory_restore /
 memory_status / scratchpad（名字不加前缀，来自 `pi.registerTool`）。

@@ -1,5 +1,28 @@
 # 安全
 
+## P19 Approval 边界
+
+**审批不是 OS sandbox。** Pi GUI 能拦的只有「有 Extension 来问」的调用：
+Pi 0.87.0 里 `pi.on("tool_call", …)` 可以 `{ block: true }`，而 RPC 模式下
+`ctx.ui.confirm/select/input/editor` 会**阻塞**到客户端回应答 —— 所以拒绝
+（`{confirmed:false}` / `{cancelled:true}`，两者在 `rpc-mode.js` 里都解析成 `false`）
+是真的会让这次工具调用不执行。**没有** Extension 来问时，GUI 没有任何拦截通道，
+Pi 核心也没有自带审批弹窗；这种情况下界面不画假的允许/拒绝按钮，
+也不提供全局权限开关。
+
+- 决定只经 `extension_ui_response` 这一条明确协议命令，**不靠发聊天文本**。
+- 一次性：协议没有持久化能力 → 不做「总是允许 / 按作用域允许」。
+- 不从自然语言猜风险：无结构化风险字段 → `risk` 恒为 `unknown`。
+- 对话框内容是不可信输入：只投影协议字段（含长度上限）、一律 `textContent`；
+  事件里多出的 `env`/`token`/`apiKey`/`authorization`/`cookie`/`command`/`rawArgs` 等
+  **不投影**；原始 payload 不进日志、诊断与 renderer。
+- 能力报告只回「文件名:行号 + 原文片段」，不回 pi 包绝对路径。
+- 生命周期不留悬挂：桥接重启/退出 → 本地作废且**不给已消失的进程发应答**；
+  Stop → fail-closed 取消并收卡；`timeout` 到点只收卡（Pi 已按默认值 resolve）。
+- 复用同一套确认层（`confirmModal`），危险操作仍是 `.btn.danger` + Enter 不误确认。
+
+详见 [Approvals](approvals.md)。
+
 ## P18 Pi Memory 边界
 
 长期记忆可能保存**用户偏好、项目决策、历史事实与自定义内容**，比普通 Tool 更敏感。
