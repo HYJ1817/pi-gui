@@ -211,7 +211,7 @@ installed/configured/loaded/runtimeObserved 分开；loader 不启动 child。
 P18 增加 Pi Memory Activity 与手动安装提示，见 [memory.md](memory.md)。
 终端执行 pi install npm:pi-memory 后确认重启 Pi；GUI 不安装 qmd、不建索引、
 不读 `~/.pi/agent/memory`、不建立第二份数据库。长期记忆与会话搜索保持独立，
-Registry 的 tools/unknown 语义同样不变。`npm run test:memory`（233 条，离线）。
+Registry 的 tools/unknown 语义同样不变。`npm run test:memory`（236 条，离线）。
 
 `npm run test:skills`（182 条）：发现规则（两种 collect 模式）、同名冲突、
 信任判定、状态判定（`enabled` / `disabled` / `untrusted` / `invalid` /

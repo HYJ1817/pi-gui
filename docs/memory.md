@@ -219,7 +219,10 @@ Activity 里 `Mode:` 只在 result 明确给出 `details.mode` 时显示 ——
   > `refresh` 是仓库 `main` 上**尚未发布**的第三种模式，v0.4.2 的 tag 与 npm 发布包
   > （同一 commit `39e6b998`，`index.ts` 逐字节相同）里都没有它。
   > `memory_status` 的 `details.snapshotMode` 因此只可能是 `stable` / `per-turn`；
-  > GUI 的 `Snapshot:` 也只认这两个值，别的取值保持未知（不为未发布字段提前适配）。
+  > GUI 对它是三态：认识的取值直接显示（`Snapshot: stable` / `Snapshot: per-turn`）；
+  > **给了值但不在白名单**（例如有人真的把 `refresh` 发出来）显示
+  > `Snapshot: unrecognized`，**不回显原始值** —— 这样上游一旦发布新模式，界面会
+  > 明说「有个我不认识的模式」，而不是静默少一格；字段缺失则完全不显示这一行。
 
   注入优先级：scratchpad > 今天的 daily > 检索结果 > MEMORY.md > 昨天的 daily，
   各部分与整体都有字符/行数上限，整体上限 16000 字符。
@@ -269,6 +272,7 @@ Pi RPC/SSE → workspace/run guard（acceptMemoryEvent）
 - `memory_restore`：`restored`、`target`、「有 restoredAt」
 - `memory_status`：`longTermChars`、`scratchpadOpen/Total`、`dailyCount`、
   合法 `latestDaily`、`qmd`、`collection`、`embeddings`、`snapshotMode`、`qmdUpdateMode`
+  （`snapshotMode` 只对**认识的取值**回显；非空但不认识的值只说 `unrecognized`）
 - `scratchpad`：`action`（枚举内的才写具体动作）、`count`、`open`、`removed`
 
 **明确排除**（即使出现在 args / details / result 文本里也不进 DOM）：
@@ -389,7 +393,7 @@ qmd 可选：装了才可能有 `semantic` / `deep`，没装时 `memory_search` 
 - `public/memory-capabilities.js` —— installed/configured/loaded 三值与运行观察
 - `public/memory.js` —— SSE 观察入口 + Extensions 页设置区
 - `public/tool-view.js` —— 语义适配器分发（`memoryActivity`）
-- `tests/memory.cjs` —— 离线契约（233 条）
+- `tests/memory.cjs` —— 离线契约（236 条）
 - [extensions.md](extensions.md) / [architecture.md](architecture.md) /
   [security.md](security.md) / [testing.md](testing.md) /
   [pi-compatibility.md](pi-compatibility.md)
