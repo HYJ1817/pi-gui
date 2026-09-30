@@ -2126,3 +2126,10 @@ button.pj-sess-primary{cursor:pointer}
   .work-surface.ext .ext-list{flex-basis:30%}
   .work-surface.ext .ext-bar,.work-surface.ext .ext-summary{margin-bottom:6px}
 }
+/* P16: bounded Web Activity details, existing grayscale buttons. */
+.web-sources { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+.web-source { color: var(--t1); text-decoration: underline; overflow-wrap: anywhere; }
+.web-setup { border-bottom: 1px solid var(--line); padding: 12px 0; font-size: 12px; }
+.web-setup p { margin: 6px 0; overflow-wrap: anywhere; }
+.web-setup code { display: block; margin: 8px 0; user-select: text; }
+.web-setup .btn { margin: 0 6px 6px 0; }

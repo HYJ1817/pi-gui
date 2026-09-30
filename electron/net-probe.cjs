@@ -113,6 +113,14 @@ function isSelfUrl(url, origin) {
  * ⚠️ 这是**通用导航**的判据（对话里的链接、target=_blank 等），
  * 所以只卡 scheme、不卡 host。给「版本检查」用的更严的判据是下面的
  * isSafeReleaseUrl —— 别把两者合并：收窄这个会改变既有导航行为。 */
+function isSafeWebUrl(url) {
+  if (typeof url !== 'string' || url.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(url)) return false;
+  try {
+    const u = new URL(url);
+    return ['http:', 'https:'].includes(u.protocol) && Boolean(u.hostname) && !u.username && !u.password;
+  } catch { return false; }
+}
+
 function isSafeExternal(url) {
   try {
     const p = new URL(url).protocol;
@@ -168,6 +176,7 @@ module.exports = {
   probe,
   isSelfUrl,
   isSafeExternal,
+  isSafeWebUrl,
   isSafeReleaseUrl,
   RELEASE_HOSTS,
 };

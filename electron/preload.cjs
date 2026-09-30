@@ -8,10 +8,11 @@
  *
  *   1. 用系统默认程序打开一个文件（openPath）
  *   2. 用系统浏览器打开一个 Release / 下载链接（openExternal）
+ *   3. 用户点开 Web Activity 的 http/https 来源（openWebUrl，独立校验）
  *
  * 替代方案是打开 nodeIntegration，那等于把整个 Node 交给页面：
  * 为了两个转发函数把 XSS 的后果从「读接口」放大到「执行任意命令」，
- * 明显不划算。所以挂 preload，但只暴露**两个**转发函数。
+ * 明显不划算。所以挂 preload，只暴露这些转发函数。
  *
  * ---------- 这个文件里没有任何校验，这是故意的 ----------
  *
@@ -25,7 +26,7 @@
  * 所以它必须在主进程，不能放页面里。这里只做转发。
  *
  * 安全上的收益：即使页面被注入脚本，它能做到的也只是「请求打开一个后端认可的
- * 项目内文件」和「请求打开一个 https + GitHub 官方 host 的地址」，
+ * 项目内文件」和「请求打开一个通过相应 URL 校验的地址」，
  * 拿不到任意的 shell 能力。
  */
 
@@ -60,6 +61,8 @@ try {
      * @returns {Promise<{ok:boolean, error?:string}>}
      */
     openExternal: (url) => ipcRenderer.invoke('pi-gui:open-external', String(url ?? '')),
+    /** Web Activity sources: independent http/https gate in the main process. */
+    openWebUrl: (url) => ipcRenderer.invoke('pi-gui:open-web-url', String(url ?? '')),
   });
 } catch {
   /* 桥没装上 —— 界面照常可用，只是「打开文件」会提示手动打开。 */

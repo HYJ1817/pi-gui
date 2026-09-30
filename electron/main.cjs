@@ -49,6 +49,7 @@ const {
   isSelfUrl: isSelfUrlOf,
   isSafeExternal,
   isSafeReleaseUrl,
+  isSafeWebUrl,
 } = require('./net-probe.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
@@ -280,6 +281,11 @@ function installOpenPathHandler() {
  * 另外刻意不做「先 GET 一下看看」这类预检 —— 那会给用户点开的链接
  * 平白多出一次请求，而且和浏览器实际发的请求并不是同一个。 */
 function installOpenExternalHandler() {
+  ipcMain.handle('pi-gui:open-web-url', async (_event, url) => {
+    if (!isSafeWebUrl(url)) return { ok: false, error: '已拒绝不安全的 Web 链接' };
+    try { await shell.openExternal(url); return { ok: true }; }
+    catch { return { ok: false, error: '打开 Web 链接失败' }; }
+  });
   ipcMain.handle('pi-gui:open-external', async (_e, url) => {
     const target = typeof url === 'string' ? url.trim() : '';
     if (!target) return { ok: false, error: '缺少链接' };

@@ -21,6 +21,7 @@
  * 会让长时间命令（npm test 能吐几千行）把主线程堵死。 */
 
 import { formatDuration, previewOf, statOf } from './tool-model.js';
+import { webActivity, webSourceLink } from './web-activity.js';
 
 /* 状态图标。
  *
@@ -149,6 +150,8 @@ function syncTitle(node, p) {
 
 /** 更新一条已经渲染出来的 entry。只改真正变了的字段。 */
 export function updateEntry(node, entry) {
+  const web = webActivity(entry);
+  if (web) entry = { ...entry, ...web, resultLine: '', output: web.facts };
   const p = tl(node);
   if (!p) return;
 
@@ -195,7 +198,7 @@ export function updateEntry(node, entry) {
   const output = String(entry.output || '');
   const hasOutput = Boolean(output.trim());
 
-  if (p.out.dataset.len !== String(output.length)) {
+  if (p.out.dataset.len !== String(output.length) || (web && p.out.textContent !== output)) {
     p.out.dataset.len = String(output.length);
     p.out.textContent = output;
   }
@@ -207,7 +210,7 @@ export function updateEntry(node, entry) {
    * 参数全文是模型可控的任意字符串，塞进属性就多了一条「被序列化进 HTML」的
    * 路径（属性值里的 `<` 不会被转义，虽然浏览器解析时无害，但等于把安全
    * 建立在「没人会去 outerHTML 它」之上）。文本一律只走 textContent。 */
-  const argsText = argsTextOf(entry);
+  const argsText = web ? '' : argsTextOf(entry);
   if (p.argsText !== argsText) {
     p.argsText = argsText;
     p.args.textContent = argsText;
@@ -219,9 +222,26 @@ export function updateEntry(node, entry) {
   p.argHead.hidden = !argsText;
   p.args.hidden = !argsText;
 
+  if (web) {
+    if (!p.webSources) {
+      p.webSources = document.createElement('div');
+      p.webSources.className = 'web-sources';
+      p.more.appendChild(p.webSources);
+    }
+    const sourceKey = JSON.stringify(web.sources);
+    if (p.webSourceKey !== sourceKey) {
+      p.webSourceKey = sourceKey;
+      p.webSources.replaceChildren();
+      for (const source of web.sources) {
+        const link = webSourceLink(source);
+        if (link) p.webSources.appendChild(link);
+      }
+    }
+  }
+
   p.hasOutput = hasOutput;
   p.output = output;
-  p.hasMore = hasOutput || Boolean(argsText);
+  p.hasMore = hasOutput || Boolean(argsText) || Boolean(web?.sources.length);
   node.classList.toggle('has-more', p.hasMore);
   syncToggle(p);
   syncTitle(node, p);
