@@ -16,6 +16,11 @@ Pi GUI 只做观察层：
 - **不猜**：`count` / `removed` / `restored` / `target` 缺失就说「结果不可用」，
   不写成 0；`mode` 只信 result，不因为装了 qmd 就说是语义检索；
   scope 只有 global（源码里没有 project scope），不发明「项目记忆」
+- **请求参数不是成功证据**：`memory_read` 的 `args.target`、`scratchpad` 的
+  `args.action`、`args.date` 都只用于「在做什么」的 running 文案；
+  成功文案必须由 result `details` 证明（`path` / `path`+`date` / `files` /
+  `details.action` / `count`|`open` / `removed`）。这也避免为了判断 soft-failure
+  去解析 raw result 文本 —— 那条路会重新打开正文与绝对路径的泄露面
 - **不做**自动 remember / forget / summarize，不把会话或 Git history 写进 Memory，
   也不提供恢复或删除 recovery 的入口（可恢复这件事只说事实，不动手）
 

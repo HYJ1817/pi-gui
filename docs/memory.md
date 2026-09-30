@@ -35,7 +35,10 @@ Pi GUI 也不做「统一搜索全部」：三者权限不同、生命周期不�
 > `pi install npm:pi-memory` 装的是 jayzeng 那个。
 > 本文所有 tool schema / details 形状都来自 **0.4.2 的发布 tarball**
 > （`index.ts`，`npm pack pi-memory` 取的 6 个文件之一），不是 README 摘要，
-> 也不是仓库 `main`（`main` 已领先发布版约 6 周，多了 `refresh` snapshot 模式等）。
+> 也不是仓库 `main`（`main` 已领先发布版约 6 周，多了**未发布的** `refresh`
+> snapshot 模式等）。契约只按 v0.4.2 钉：`v0.4.2` tag 与 npm 发布包指向同一个
+> commit `39e6b998a2279c8fad4a2c6c64e26828c1d6023e`，tag 上的 `index.ts` 与
+> 发布 tarball **逐字节相同**。
 > 核对方式与文件清单见本文末「复现核对」。
 >
 > 契约核对版本**不是** GUI 的安装要求：GUI 不检查版本号，只按工具名投影。
@@ -80,16 +83,51 @@ GUI 按**工具名**匹配（不绑定包名），并且只投影 allowlist 字�
 | 工具 | 参数（TypeBox，无声明默认值） | result `details` | Activity |
 |---|---|---|---|
 | `memory_write` | `target` enum `long_term`/`daily`；`content`；可选 `mode` enum `append`/`overwrite`（默认 append，daily 恒 append） | `path`、`target`、`mode`、`sessionId`、`timestamp`、`qmdUpdateMode`、`existingPreview` | Saving memory… → Saved to memory / Added to daily log |
-| `memory_read` | `target` enum `long_term`/`scratchpad`/`daily`/`list`；可选 `date` (`YYYY-MM-DD`) | `list`→`files[]`；`daily`→`path`+`date`；`scratchpad`/`long_term`→`path` | Reading memory… → Read long-term memory / Read scratchpad / Read daily log / Listed daily logs |
+| `memory_read` | `target` enum `long_term`/`scratchpad`/`daily`/`list`；可选 `date` (`YYYY-MM-DD`) | `list`→`files[]`；`daily`→`path`+`date`；`scratchpad`/`long_term`→`path`；**soft-failure 是 `{}`** | Reading memory… → Read long-term memory / Read scratchpad / Read daily log / Listed daily logs（缺证据时 → Memory read result unavailable）|
 | `memory_search` | `query`；可选 `mode` enum `keyword`/`semantic`/`deep`（默认 keyword）；可选 `limit`（代码 clamp 到 1–25，默认 5） | `mode`、`query`、`count`、`needsEmbed`（零结果 + semantic/deep 时另有 `embedStarted`） | Searching memory… → Searched memory |
 | `memory_forget` | `match`；可选 `target` enum `long_term`/`daily`（默认 long_term）；可选 `date` | `path`、`target`、`removed`、`recoveryId`、`recoveryPath`、`removedPreview`；无匹配时只有 `path` + `removed: 0` | Forgetting memory… → Removed from memory / No matching memory |
 | `memory_restore` | `recoveryId` | `recoveryId`、`target`、`path`、`restored`；已恢复过则是 `recoveryId` + `restoredAt` | Restoring memory… → Restored memory entries / Memory already restored |
-| `memory_status` | 无参数 | `dir`、`longTermChars`、`scratchpadOpen`、`scratchpadTotal`、`dailyCount`、`latestDaily`、`qmd`、`collection`、`embeddings`、`snapshotMode`、`qmdUpdateMode` | Checking memory status… → Checked memory status |
-| `scratchpad` | `action` enum `add`/`done`/`undo`/`clear_done`/`list`；可选 `text` | `list`→`count`+`open`+`preview`；`add`/`done`/`undo`→`action`+`sessionId`+`timestamp`+`qmdUpdateMode`+`preview`；`clear_done`→`action`+`removed`+`qmdUpdateMode`+`preview` | Updating scratchpad… → Added to scratchpad / Checked off scratchpad item / … |
+| `memory_status` | 无参数 | `dir`、`longTermChars`、`scratchpadOpen`、`scratchpadTotal`、`dailyCount`、`latestDaily`、`qmd`、`collection`、`embeddings`、`snapshotMode`、`qmdUpdateMode` | Checking memory status… → Checked memory status（一条白名单字段都没有时 → Memory status result unavailable）|
+| `scratchpad` | `action` enum `add`/`done`/`undo`/`clear_done`/`list`；可选 `text` | `list`→`count`+`open`+`preview`；`add`/`done`/`undo`→`action`+`sessionId`+`timestamp`+`qmdUpdateMode`+`preview`；`clear_done`→`action`+`removed`+`qmdUpdateMode`+`preview`；**soft-failure 是 `{}`** | Updating scratchpad… → Added to scratchpad / Checked off scratchpad item / Reopened scratchpad item / Cleared done scratchpad items / Read scratchpad（缺证据时 → Scratchpad result unavailable）|
 
 未适配的工具（例如别的 Extension 也叫 `memory_*`，或 `memory_export`）继续走
 `tool-view.js` 的 **generic fallback**（显示「执行工具 <原始名>」）。
 不为「通用化」提前发明不存在的工具名。
+
+### 请求参数不是成功证据
+
+Activity 的 running 文案描述**在做什么**（`Saving memory…` / `Reading memory…`），
+用 args 就够了。但 success 文案只说**发生了什么**，所以必须有真实的 result `details`：
+
+| 工具 | success 需要的证据 | 没有证据时 |
+|---|---|---|
+| `memory_write` | `details.target` ∈ {`long_term`,`daily`} | Memory write result unavailable |
+| `memory_read` `long_term` | `details.path` | Memory read result unavailable |
+| `memory_read` `scratchpad` | `details.path` | Memory read result unavailable |
+| `memory_read` `daily` | `details.path` **且** `details.date` 合法 `YYYY-MM-DD` | Memory read result unavailable |
+| `memory_read` `list` | `Array.isArray(details.files)` | Memory read result unavailable |
+| `scratchpad` `add`/`done`/`undo` | `details.action` 等于该 action | Scratchpad result unavailable |
+| `scratchpad` `clear_done` | `details.action === "clear_done"` 且 `removed` 是非负整数 | Scratchpad result unavailable |
+| `scratchpad` `list` | `count` 或 `open` 是非负整数 | Scratchpad result unavailable |
+| `memory_search` | `details.count` 是非负整数 | Memory search result unavailable |
+| `memory_forget` | `details.removed` 是非负整数 | Memory forget result unavailable |
+| `memory_restore` | `details.restored` 是非负整数，或 `restoredAt` 存在 | Memory restore result unavailable |
+
+`memory_read` 的 soft-failure 是**真实存在**的分支：`MEMORY.md` / `SCRATCHPAD.md`
+不存在、那天没有 daily log、`list` 没有任何日志，0.4.2 都返回 `details: {}`。
+所以「`args.target = daily`」只说明模型请求读 daily，**不能**推出
+「Read daily log」；`args.date` 同理（它只作为 `Requested date:` 展示，
+真正的 `Date:` 只来自 result）。scratchpad 的 `{}` 出现在空清单、
+没有匹配项、缺 `text`、以及未知 action 这些分支。
+
+**不解析 raw result 文本**去区分 `No daily log for …` 这类文案：那既是正文/路径
+的泄露面，文案本身也不是稳定 API。details 不够就是「结果不可用」。
+`args.text`、`details.preview`、`existingPreview`、`removedPreview` 一律不进 DOM。
+
+> 对于 pi-memory 0.4.2 的某些 soft-failure，Pi 0.87.0 可能仍把
+> `tool_execution_end` 表现为非 error。Pi GUI 因此**要求结构化 details 证明成功**；
+> 缺证据时显示「结果不可用」，而不是根据请求参数猜成功。这也意味着 GUI 不会
+> 把「没有成功证据」强行改判成失败 —— 它只能断言证据不足。
 
 ### pi 0.87.0 的一个事实：Extension 自己返回的 `isError` 到不了 GUI
 
@@ -156,9 +194,19 @@ Activity 里 `Mode:` 只在 result 明确给出 `details.mode` 时显示 ——
 这些**不是** GUI 行为，也不需要 GUI 展示：
 
 - **每轮注入**：`before_agent_start` 把 memory 快照拼进 `systemPrompt`
-  （`# Memory` 段落；默认 `stable` 模式：只在 `session_start`、
-  长期写入、日期翻转时重算，保持字节稳定以免打掉 prefix cache；
-  `PI_MEMORY_SNAPSHOT=per-turn` 可改成每轮现算 + 关键词检索）。
+  （`# Memory` 段落 + 一段固定说明）。`PI_MEMORY_SNAPSHOT` 在 **v0.4.2 只认两个值**：
+
+  | 取值 | v0.4.2 的真实行为 |
+  |---|---|
+  | `stable`（**默认**） | 复用上一次算好的快照；只有 `memorySnapshot === null`（首次）、`snapshotDirty`（长期写入 / forget / restore 置位）、或本地日期翻转（`snapshotTakenOnDate !== today`）时才重算。目的是让注入块字节稳定，不打掉 prompt prefix cache |
+  | `per-turn` | 每轮重新 `buildMemoryContext()`，并按 `PI_MEMORY_NO_SEARCH` 决定是否先做一次关键词检索（`searchRelevantMemories`，取前 3 条、3 秒超时） |
+  | 其它取值（含 `refresh`） | **回落到 `stable`** —— `getSnapshotMode()` 的实现是 `mode === "per-turn" ? "per-turn" : "stable"` |
+
+  > `refresh` 是仓库 `main` 上**尚未发布**的第三种模式，v0.4.2 的 tag 与 npm 发布包
+  > （同一 commit `39e6b998`，`index.ts` 逐字节相同）里都没有它。
+  > `memory_status` 的 `details.snapshotMode` 因此只可能是 `stable` / `per-turn`；
+  > GUI 的 `Snapshot:` 也只认这两个值，别的取值保持未知（不为未发布字段提前适配）。
+
   注入优先级：scratchpad > 今天的 daily > 检索结果 > MEMORY.md > 昨天的 daily，
   各部分与整体都有字符/行数上限，整体上限 16000 字符。
 - **退出摘要**：`session_shutdown` 用 LLM 生成摘要写进**今天的 daily log**
@@ -253,17 +301,25 @@ Pi 仍然保存原始 tool result 并交给模型使用 —— GUI 只是不显�
 `npm run test:memory`（已并入 `npm test`，完全离线）：
 
 - 7 个真实工具的识别与 start/success/error/settled/unknown 文案
+- **请求意图 ≠ 成功证据**：`memory_read` 四个 target 与 `scratchpad` 五个 action
+  各自「有证据 → 成功文案 / 只有 `{}` → …result unavailable」成对断言；
+  `memory_write` 也不拿 `args.target` 顶成功
+- **soft-failure 形状**（`details: {}`）不被误报成 success，也不被强行改成 error
 - memory_search：query 的边界与单行、`count` 的真实性（缺字段不写成 0）、
   `mode` 只信 result、`needsEmbed` / `embedStarted`
 - memory_write / read / forget / restore / status / scratchpad 各分支，
   含 `removed: 0`（不是删除）、recovery「可恢复」但 ID 与路径都不出现
+- `snapshotMode` 的 `stable` / `per-turn` 会展示；`refresh` 不是 v0.4.2 的值，
+  仍按未知处理（不为未发布字段提前适配）
 - 敏感字段（`path`/`recoveryPath`/`dir`/`preview`/`env`/`token`/`apiKey`/
   `embedding`/`vector`/`content`…）在投影与 DOM 里都不出现
-- raw args / details / result 文本不进 DOM；hostile HTML 惰性
+- raw args / details / result 文本不进 DOM；hostile HTML 惰性；
+  soft-failure 的 raw 文本（含路径、SECRET、`<img onerror>`、`<script>`）同样不进 DOM
 - runtime observation：初始未观察、按工具独立、generation / bridge run 隔离、
   restart 与 no-project 清空、其它 Extension 不能污染
 - installed / configured / loaded 三值，Registry 失败保持未知，无自动安装
-- 历史与实时同一投影、缺 details 降级、无伪造 duration
+- 历史与实时同一投影、缺 details 降级、无伪造 duration；
+  history 的 read / scratchpad soft-failure 与实时同一结论
 - 回归：Session Search / Planner / Web / Subagent / Extension Registry /
   Changes 账本 / git 刷新都不受影响
 
@@ -294,8 +350,9 @@ npm pack pi-memory            # 6 个文件：package.json / index.ts / README.m
 ```
 
 然后读解压出来的 `index.ts`：7 个 `registerTool` 的 `parameters` 与每个分支的
-`details` 就是本文第四节的来源（发布版与仓库 `main` 在这些 schema 上一致，
-但 `main` 多了 `refresh` snapshot 模式等，**不要**拿 `main` 当依据）。
+`details` 就是本文第四节的来源。**不要**拿仓库 `main` 当依据 —— 它多了未发布的
+`refresh` snapshot 模式等。要按 tag 核对就取 `v0.4.2` 指向的那个 commit
+（=`gitHead`），再比对 tag 上的 `index.ts` 与发布 tarball 是否一致。
 
 ### 手工 live 验收（不属于默认 CI，本阶段未执行）
 
@@ -318,7 +375,7 @@ qmd 可选：装了才可能有 `semantic` / `deep`，没装时 `memory_search` 
 - `public/memory-capabilities.js` —— installed/configured/loaded 三值与运行观察
 - `public/memory.js` —— SSE 观察入口 + Extensions 页设置区
 - `public/tool-view.js` —— 语义适配器分发（`memoryActivity`）
-- `tests/memory.cjs` —— 离线契约（201 条）
+- `tests/memory.cjs` —— 离线契约（233 条）
 - [extensions.md](extensions.md) / [architecture.md](architecture.md) /
   [security.md](security.md) / [testing.md](testing.md) /
   [pi-compatibility.md](pi-compatibility.md)

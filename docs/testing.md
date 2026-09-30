@@ -50,7 +50,7 @@ Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验�
 ```
 smoke 1013 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 182 · extensions 52 · web-access 66 · subagents 141
-memory 201 · planner 115 · workflow-relations 71 · reviews 133
+memory 233 · planner 115 · workflow-relations 71 · reviews 133
 review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
 sessions 77 · session-search 71 · pi-compat 57 · body-integrity 5 · dev-server 20
 models-api 50 · server-security 36 · diagnostics 10 · update-check 87
@@ -644,8 +644,9 @@ hostile extra fields 验证 message/root/path/凭据及 raw output 不进入 DOM
 
 ## P18 Pi Memory 验证
 
-npm test 串行包含 tests/memory.cjs（也可 npm run test:memory，201 条）。
-fixtures 对照 **pi-memory 0.4.2 发布 tarball 的真实 tool schema 与 details 形状**，
+npm test 串行包含 tests/memory.cjs（也可 npm run test:memory，233 条）。
+fixtures 对照 **pi-memory 0.4.2 的真实 tool schema 与 details 形状**（v0.4.2 tag 与
+npm 发布包指向同一 commit `39e6b998`，`index.ts` 逐字节相同），
 默认完全离线：不安装 Extension、不装 / 不跑 qmd、不读 `~/.pi/agent/memory`、
 不改真实记忆、不联网、不调用模型。
 
@@ -660,6 +661,22 @@ runtime observation 的 generation / bridge run 隔离与 restart 清空；
 installed / configured / loaded 三值；历史与实时同一投影、缺 details 降级。
 回归：Session Search / Planner / Web / Subagent / Extension Registry / Changes 账本
 与 git 刷新都不受影响。
+
+P18-Fix 之后，契约测试还明确覆盖四件事：
+
+- **请求意图 ≠ 成功证据**：`args.target` / `args.action` / `args.date` 只用于
+  running 与请求信息；success 文案必须由 result `details` 证明。
+  `memory_read` 四个 target、`scratchpad` 五个 action 各有「有证据 → 成功文案」与
+  「只有 `{}` → …result unavailable」两条成对断言，`memory_write` 同理。
+- **soft-failure（`details: {}`）**：既不误报 success，也不被强行改成 error
+  （Pi 0.87.0 不传播 Extension 的 `isError`，GUI 只能断言「没有成功证据」）。
+- **`refresh` snapshot mode**：v0.4.2 的 `getSnapshotMode()` 只返回
+  `stable` / `per-turn`（`refresh` 是仓库 main 上未发布的第三种）；
+  测试钉住 `stable` / `per-turn` 会展示、`refresh` 仍按未知处理。
+- **history soft-failure 一致**：`memory_read`（`args.target=daily` + `{}` +
+  raw `No daily log…`）与 `scratchpad`（`args.action=done` + `{}` +
+  raw `No matching open item…`）在历史重建里同样降级为 result unavailable，
+  raw 文本（含路径、SECRET、`<img onerror>`、`<script>`）不进 DOM。
 
 UI smoke 的 P18 段落走真实 SSE：并发 id 隔离、逆序完成、`.tl-args` 为空、
 不额外刷新 Git、不进 Changes 账本、不发 RPC、Runtime evidence 显示、
