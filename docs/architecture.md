@@ -548,3 +548,15 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 |---|---|
 | **覆盖关系受 trust 约束** | `readConfigs()` **只产出文件事实**（有哪些 server / scope / 配置结构），不再在那里决定 `overridden` —— 那时还不知道 trust。`summary()` 拿到 `tr` 后才用 `projectTrusted(tr)` 算出 `loadableProjectNames`，用户级条目的 `overridden` 由它决定。未信任 / 未知时该集合为空 ⇒ 不可能出现「用户级被一个不会被加载的项目项覆盖掉、两条都不生效」。判定用 `parseMcpServers` 认可的 `projectServers`（= Pi 会接受并加载的条目），不用原始 JSON key 是否存在 |
 | **两层命名不共用规则** | **A. CLI raw MCP tool name**（`list --json` 的 `tools[]`，server 原始名字）走 `sanitizeMcpRawToolName()`：只做安全文本边界（去控制字符 / 单行化 / trim / 限长截断），**没有字符集白名单**。**B. 注册后的 Pi tool identifier**（`mcp__<server>__<tool>`）仍由 `public/mcp-activity.js` 的 `MCP_TOOL_RE` 解析。`toolCount` 是上游合法字符串项的数量，**不因字符集或展示边界缩水** |
+
+### P20.6-Fix-3：把「Pi 会加载的条目」变成真的
+
+Fix-2 让覆盖依赖「Pi 会接受并加载的 project entry」，但当时的 `parseMcpServers()`
+只做结构解析 —— 上游会拒绝、GUI 认为合法的条目（如 `args: [123]`）仍会被算进
+覆盖集合，于是同一个覆盖 bug 以更隐蔽的形式复活。
+
+| 面 | 做法 |
+|---|---|
+| **配置校验** | `parseMcpServers()` **逐条复刻** `validateMcpServerConfig()`（`src/core/mcp-servers.ts`）：名字 / `exposure` / `toolExposure`（非法**整条拒**）/ `enabled` / `description` / `timeout` / `type`（含 `sse` 拒绝）/ `url`（可解析 + http(s)）/ `headers`（string→string）/ `oauth`（`validateOAuth` 全字段）/ `auth`（`{provider}` + https 或 loopback）/ `args`（string[]）/ `env`（string→string）/ `cwd`（string）/ 两条分支的优先级。另复刻 `readConfigFile()` 的 **namespace 冲突**（`mcpNamespace` 相等且名字不同 → 后者被拒，判据跨文件累积）与 **`auth` 不得出现在项目文件** |
+| **覆盖集合** | 仍是 `parseMcpServers` 认可的 `projectServers` —— 但现在它真的等于「Pi 会加载的条目」。`readConfigs()` 按上游顺序（先 global 后 project）传 `takenNames`，namespace 冲突判据与上游一致 |
+| **server 名长度** | 配置解析用上游规则（**不限长度**）；GUI 只在 `add` / `remove` **动作入参**上加 64 字符上限（输入侧防御，不影响配置判定） |

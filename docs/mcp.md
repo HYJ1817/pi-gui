@@ -184,21 +184,54 @@ truth，和「项目条目能不能生效」受同一个 trust 约束。实现�
 - 未信任 / 未知时这个集合是**空的**，所以不可能出现「用户级被一个不会被加载的
   项目项覆盖掉」这种两个都不生效的状态。
 
-### 非法 project entry 不参与覆盖
+### 只有「Pi 会接受并加载的 entry」才参与覆盖（P20.6-Fix-3）
 
 上游 `readConfigFile` 对 `validateMcpServerConfig` 返回错误的条目 `errors.push` 后
-**`continue`** —— 该条目被跳过，从不进入那个 `Map`。所以：
+**`continue`** —— 该条目被跳过，**从不进入那个 `Map`**，因此不会 `set`、也就不会
+覆盖全局同名项。所以：
 
-> **非法（Pi 会拒绝加载的）project entry 不覆盖全局同名项**，全局那条保留并继续生效。
+> **被 Pi 拒绝的 project entry 不覆盖全局同名项**，全局那条保留并继续生效。
 
-GUI 的判定因此不用「原始 JSON key 是否存在」，而用 `parseMcpServers` 认可的
-`projectServers`（= Pi 会接受并加载的条目）。整个项目文件读不出来（坏 JSON）时
-同理：一个都不覆盖。
+关键点：`parseMcpServers()` **完整复刻了上游 `validateMcpServerConfig()` 的接受/拒绝
+判定**（不是「结构看起来像」）。只要 GUI 的 parser 比上游**宽**，一个上游会拒绝、
+而 GUI 认为合法的项目条目就会被算进覆盖集合 —— 用户级被标 `overridden`、项目那条
+又被上游跳过，**两条都不生效**。这是覆盖 bug 最隐蔽的变体，所以这里逐条对齐：
 
-> 上游另有一条**命名空间冲突**规则：`mcpNamespace(other) === mcpNamespace(name)`
-> （即名字只在 `-` 与 `_` 上不同，如 `my-server` 与 `my_server`）时后一条被
-> `errors.push` 拒绝。本模块**不建模**这条（属于同一文件内的解析细节，
-> 不在本轮范围）—— 这里明确记录，避免被误认为「GUI 认为它合法」。
+| 上游规则（`src/core/mcp-servers.ts`） | GUI 是否复刻 |
+|---|---|
+| 名字 `/^[A-Za-z0-9_-]+$/`（**不限长度**） | ✅ |
+| 条目必须是对象 | ✅ |
+| `exposure` 必须在闭集（别名先归一） | ✅ |
+| `toolExposure` 必须是 record 且**每个值**都在闭集 → 否则**整条拒绝** | ✅ |
+| `enabled` 必须是 boolean | ✅ |
+| `description` 必须是 string | ✅ |
+| `timeout` 必须是正数 | ✅ |
+| `type === "sse"` 明确拒绝（legacy SSE 不支持） | ✅ |
+| `url` 必须是可解析的 http/https | ✅ |
+| `headers` 必须 string→string | ✅ |
+| `oauth` 走 `validateOAuth`（`clientId` / `clientSecret` 是 string；`callbackPort` 是 1–65535 整数；`callbackUrl` 必须是 loopback http 且无 query/fragment，端口要与 `callbackPort` 一致；`scope` 是 string；`clientName` 是非空 string） | ✅ |
+| `auth` 必须是 `{provider: 非空 string}`，且 URL 为 https（或 loopback http） | ✅ |
+| `args` 必须是 string[] | ✅ |
+| `env` 必须 string→string | ✅ |
+| `cwd` 必须是 string | ✅ |
+| 两条分支都不成立 → 拒绝 | ✅ |
+| **namespace 冲突**：`mcpNamespace(other) === mcpNamespace(name)` 且 `other !== name` → 后者被拒 | ✅ |
+| **`auth` 不允许出现在项目文件**（`scope === "project"` 且 HTTP 且带 `auth`） | ✅ |
+
+两个**与直觉相反**但上游确实如此的细节（已用测试钉住）：
+
+- `{command, url}` **同时存在**时上游按 **HTTP 接受**（HTTP 分支优先），不是「只能二选一」。
+- `type` 是未知值时两条分支的 guard 都不成立 → 落到最后的「needs either command or url」拒绝。
+
+**namespace 冲突的判据是累积的**，与上游读取顺序一致：先读 global 并接受，
+再读 project，此时 project 里的条目要同时避开 **global 已接受的名字**与
+**同文件内已接受的名字**。同名（`github` vs `github`）**不是**冲突 —— 那正是覆盖。
+
+GUI 侧的判定因此不用「原始 JSON key 是否存在」，而用 `parseMcpServers` 认可的
+`projectServers`。整个项目文件读不出来（坏 JSON）时同理：一个都不覆盖。
+
+> 唯一的**有意偏严**之处：GUI 的 `add` / `remove` **动作入参**额外限制 64 字符
+> （输入侧防御）。配置解析用的是上游规则、**不限长度** —— 配置判定不会因此误拒。
 
 ### 项目信任（P20.6-Fix）
 
@@ -344,10 +377,11 @@ CLI 实际只产两个」）。
 ## 相关测试
 
 ```bash
-npm run test:mcp    # tests/mcp-native.cjs（130 条，纯 fixture，完全离线）
+npm run test:mcp    # tests/mcp-native.cjs（187 条，纯 fixture，完全离线）
 ```
 
-覆盖：cache/workspace 隔离、**project trust 覆盖语义**（trusted / untrusted /
+覆盖：**上游 validateMcpServerConfig 逐条对拍**（接受集合 ⊆ Pi 接受集合）、
+cache/workspace 隔离、**project trust 覆盖语义**（trusted / untrusted /
 unknown 三态 + 非法条目 + 坏文件）、**raw MCP tool name 安全投影**（连字符 /
 空格 / Unicode / emoji / 控制字符 / 超长 / 非字符串 / toolCount 语义）、
 **两层命名边界**（CLI raw vs Timeline registered）、secret API contract、

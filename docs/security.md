@@ -105,6 +105,11 @@ MCP server 是**用户自己配置的可执行命令与远端 URL**（stdio 跑�
   空格 + 单行化 + trim + 限长截断」。前端用 `textContent` 渲染，不进 `innerHTML`
 - **覆盖关系不越过信任闸门**（P20.6-Fix-2）：未信任 / 信任未知时，项目同名项
   **不覆盖**用户级 —— 否则会出现「两条都不生效」的错状态
+- **被 Pi 拒绝的条目也不参与覆盖**（P20.6-Fix-3）：GUI 的配置解析**完整复刻**
+  上游 `validateMcpServerConfig()`（含 `toolExposure` 非法整条拒、`args`/`env`/`cwd`
+  类型、`timeout` 正数、URL http(s)、`oauth` / `auth` 规则）与 `readConfigFile()`
+  的 namespace 冲突规则。只要 GUI 比上游**宽**，就会把上游跳过的条目算进覆盖集合，
+  重新制造「两条都不生效」
 - OAuth 全程 pi 负责（开浏览器、存 token、自动刷新）；in-session 的 select /
   input 经 P19 管道承接，不新增凭据经手的代码
 - Tool Timeline 的 MCP 语义行**不展示完整 args / result**，不猜 annotations；

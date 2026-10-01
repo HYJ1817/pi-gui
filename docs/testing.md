@@ -55,7 +55,7 @@ smoke 1062 · git 161 · modules 117 · reliability · interactions · port-owne
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 130 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
@@ -793,7 +793,7 @@ RPC 事实、配置只报存在性）—— 1023 → 1043。
 
 ## P20.6 Native MCP 集成验证
 
-`npm run test:mcp`（已纳入 `npm test`，**130 条**）—— 完全离线：
+`npm run test:mcp`（已纳入 `npm test`，**187 条**）—— 完全离线：
 不启动 pi、不起真实 MCP server、不联网、不 OAuth、不读用户真实目录。
 `pi mcp list --json` 与各动作的执行一律注入假 runCli；配置文件全在
 `os.tmpdir()`。契约基线 **pi 0.99.2**。`npm run test:ui`（smoke，1051 → **1062**）
@@ -813,6 +813,8 @@ trust 提示、workspace 隔离文案、unsupported 声明、无凭据字段）�
 | **G. 覆盖受 trust 约束**（Fix-2 A） | trusted 同名 → 用户级 `overridden`；untrusted / unknown 同名 → 用户级继续 active、项目项 untrusted / trust-unknown；trusted 但项目项 invalid → 用户级不被覆盖；不同名互不覆盖；项目文件坏 JSON 不误标；`readConfigs` 本身不产出 `overridden` |
 | **H. raw MCP tool name**（Fix-2 B） | `get-user` / `tool name` / `a/b` / `x:y` / `工具搜索` / `emoji-🔎` 不被过滤；控制字符（NUL/CR/LF/C0/C1）被替换、不产生换行注入；纯控制字符名从列表丢但仍计入 `toolCount`；超长安全截断；非字符串丢弃且不 `String()`；`tools` 非数组 → `null`；展示列表 ≤200 而 `toolCount` 是上游数量；`toolExposure` 键同样是 raw name |
 | **I. 两层命名边界**（Fix-2 B） | CLI 侧不做 `-`→`_` 归一；Timeline 侧仍按注册后标识符解析；raw 名（无 `mcp__` 前缀）不匹配 → generic fallback；CLI 侧不再导出 tool 名字符集正则；`mcp-activity` 资源工具与 `mcp__` 解析无回归 |
+| **J. 上游校验逐条对拍**（Fix-3） | 33 条「上游会拒绝」用例（`args` 非 string[]、`env` 非 string→string、`cwd` 非 string、`timeout` ≤ 0、`description` 非 string、URL 非 http/https、`headers` 非 string→string、`oauth` 各字段非法、`auth` 非法/项目文件禁用、`toolExposure` 非法整条拒、未知 `type`、`sse`、缺 command/url）+ 12 条「上游会接受」用例（防误拒）；namespace 冲突（同文件 / 跨文件 / 同名不算冲突 / 不同名）；超长 server 名上游接受而动作入参拒绝 |
+| **J2. 端到端覆盖**（Fix-3） | 截图场景（trusted 项目同名项 `args:[123]` 非法 → 用户级继续生效）；namespace 冲突不覆盖；合法同名项**照常覆盖**（反向证明）；项目文件带 `auth` 不覆盖；用户级自己非法时两侧都如实报 invalid |
 
 **live MCP 测试本轮未执行**（不进 CI）。真机流程（手工）：配一个本地 stdio
 fixture server → 打开 MCP 页 → 刷新状态见 connected + 工具数 → 调一次工具见

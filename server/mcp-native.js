@@ -89,7 +89,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { json, readBody } from './http-utils.js';
 
-const SERVER_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/* server 名的判定有**两套**，别混（见 `isServerName` / `isActionName`）：
+ *   - 配置解析用上游规则（`/^[A-Za-z0-9_-]+$/`，不限长度）—— 决定「Pi 会不会加载它」；
+ *   - GUI 动作入参额外加 64 字符上限 —— 那是输入侧防御，不是配置判定。 */
 /* 0.99.2 的闭集是 `codemode | deferred | direct | hidden`（`core/mcp-servers.js`
  * 的 `MCP_EXPOSURES`）；`codemode-deferred` 是**输入别名**，`validateMcpServerConfig`
  * 会把它解析成 `codemode`，所以 `list --json` 报出来的永远是 `codemode`。
@@ -192,6 +194,84 @@ function sanitizeMcpRawToolName(v) {
   return oneLine(v, MAX_TOOL_NAME);
 }
 
+/* ---------- 上游校验原语的复刻（0.99.2 `src/core/mcp-servers.ts`） ----------
+ *
+ * 这些是**判定「Pi 会不会接受并加载这条配置」**用的，不是 GUI 自己的口味。
+ * 逐条对应上游同名/同义函数，注释里标明出处，改动前先回去读源码。 */
+
+/** 上游 `SERVER_NAME`：**只限字符集，不限长度**（`/^[A-Za-z0-9_-]+$/`）。 */
+const UPSTREAM_SERVER_NAME_RE = /^[A-Za-z0-9_-]+$/;
+/** GUI 侧的**动作入参**长度上限（上游没有；这是输入侧防御，不是配置判定规则）。 */
+const ACTION_NAME_MAX = 64;
+/** 上游 `LOOPBACK_HOSTS`。 */
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+/** 报错文案里用的 exposure 枚举串（与上游 `${exposures}` 同形）。 */
+const EXPOSURE_LIST = [...EXPOSURES].map((e) => `"${e}"`).join(', ');
+
+/** 上游 `isRecord`。 */
+function isRecord(v) {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** 上游 `isStringRecord`（空对象通过 —— 与上游 `[].every()` 一致）。 */
+function isStringRecord(v) {
+  return isRecord(v) && Object.values(v).every((e) => typeof e === 'string');
+}
+
+/** 上游 `mcpNamespace`：`mcp__<server>`，`-` 折成 `_`。 */
+function mcpNamespace(server) {
+  return `mcp__${String(server).replace(/-/g, '_')}`;
+}
+
+/** 上游 `isLoopbackRedirectUri`。 */
+function isLoopbackRedirectUri(value) {
+  if (typeof value !== 'string' || !URL.canParse(value)) return false;
+  const url = new URL(value);
+  return url.protocol === 'http:' && LOOPBACK_HOSTS.includes(url.hostname) && url.search === '' && url.hash === '';
+}
+
+/** 上游 `validateOAuth`：返回错误文案或 undefined。 */
+function validateOAuthConfig(value) {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return 'oauth must be an object';
+  if (value.clientId !== undefined && typeof value.clientId !== 'string') return 'oauth.clientId must be a string';
+  if (value.clientSecret !== undefined && typeof value.clientSecret !== 'string') return 'oauth.clientSecret must be a string';
+  const port = value.callbackPort;
+  if (port !== undefined && (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535)) {
+    return 'oauth.callbackPort must be a port number';
+  }
+  if (value.callbackUrl !== undefined) {
+    if (!isLoopbackRedirectUri(value.callbackUrl)) {
+      return 'oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment';
+    }
+    const urlPort = new URL(value.callbackUrl).port;
+    if (urlPort && port !== undefined && Number(urlPort) !== port) {
+      return 'oauth.callbackUrl and oauth.callbackPort name different ports';
+    }
+  }
+  if (value.scope !== undefined && typeof value.scope !== 'string') return 'oauth.scope must be a string';
+  if (value.clientName !== undefined && (typeof value.clientName !== 'string' || !value.clientName.trim())) {
+    return 'oauth.clientName must be a non-empty string';
+  }
+  return undefined;
+}
+
+/** 上游 HTTP 分支的 URL 判定：`URL.canParse` 且协议是 http/https。 */
+function isHttpUrl(value) {
+  if (typeof value !== 'string' || !URL.canParse(value)) return false;
+  return /^https?:$/.test(new URL(value).protocol);
+}
+
+/** 配置里的 server 名判定（**用上游规则**，不限长度）。 */
+function isServerName(name) {
+  return typeof name === 'string' && UPSTREAM_SERVER_NAME_RE.test(name);
+}
+
+/** 动作入参的名字判定：上游规则 + GUI 侧长度上限。 */
+function isActionName(name) {
+  return isServerName(name) && name.length <= ACTION_NAME_MAX;
+}
+
 /** exposure 别名解析：只认 0.99.2 的规范闭集，别名折成规范值，其余回 null。 */
 function normalizeExposure(v) {
   if (typeof v !== 'string') return null;
@@ -209,15 +289,58 @@ function redactPaths(text, { cwd = null, agentDir = null, homeDir = null } = {})
 }
 
 /**
- * 安全解析一份 mcp.json：只取结构，不取 secret 值。
- * @returns {{servers: Array, invalid: string[], error: string}}
- *   server = {name, enabled, exposure, description, transportType, hasSecrets, toolExposure, toolExposureNote}
+ * 安全解析一份 mcp.json：**完整复刻上游 `validateMcpServerConfig()` 的接受/拒绝判定**
+ * （P20.6-Fix-3），再叠加 GUI 侧的安全投影（不取 secret 值）。
  *
- * `exposure` 一律折成 0.99.2 的规范值（`codemode-deferred` → `codemode`）。
- * `hasSecrets` 覆盖 `env` / `headers` / `oauth` / `auth`（0.99.2 新增的
- * provider token 引用）—— 只记「有没有」，值一个字节都不留。
+ * ---------- 为什么必须复刻校验，而不是只做结构解析 ----------
+ *
+ * 「项目同名项覆盖用户级」的判定必须用**「Pi 会接受并加载的 project entry」**。
+ * 只要 GUI 的 parser 比上游**宽**，一个上游会拒绝、而 GUI 认为合法的项目条目
+ * 就会被算进覆盖集合 —— 于是用户级被标成 `overridden`、项目那条又被上游跳过，
+ * **两条都不生效**。这正是 P20.6-Fix-2 修掉的那个 bug 的隐蔽变体。
+ * 所以这里逐条对齐 0.99.2 `src/core/mcp-servers.ts` 的 `validateMcpServerConfig`。
+ *
+ * 上游判定顺序（照抄，含分支优先级）：
+ *   1. `SERVER_NAME.test(name)`（`/^[A-Za-z0-9_-]+$/`，**不限长度**）
+ *   2. `isRecord(raw)`
+ *   3. `exposure` 必须是闭集（别名先归一）
+ *   4. `toolExposure` 必须是 record 且**每个值**都是闭集 → 否则**整条拒绝**
+ *   5. `enabled` 必须是 boolean
+ *   6. `description` 必须是 string
+ *   7. `timeout` 必须是正数
+ *   8. `type === "sse"` 明确拒绝（legacy SSE 不支持）
+ *   9. `typeof url === "string" && (type 缺省 | "http" | "streamable-http")` → HTTP 分支：
+ *      `URL.canParse` + 协议 http/https、`headers` 必须 string→string、
+ *      `oauth` 走 `validateOAuth`、`auth` 必须 `{provider: 非空 string}` 且 URL 为
+ *      https（或 loopback http）
+ *  10. 否则 `typeof command === "string" && (type 缺省 | "stdio")` → stdio 分支：
+ *      `args` 必须 string[]、`env` 必须 string→string、`cwd` 必须 string
+ *  11. 都不满足 → 拒绝（"needs either command or url"）
+ *
+ * ⚠️ 两个**与直觉相反**但上游确实如此的细节：
+ *   - `{command, url}` **同时存在**时，第 9 条先命中 → 上游把它当 **HTTP** 接受，
+ *     不是拒绝（旧的 GUI 实现按「只能二选一」拒绝了它，那是错的）。
+ *   - `type` 是未知值时两条分支的 guard 都不成立 → 落到第 11 条拒绝。
+ *
+ * ---------- 另外两条来自 `readConfigFile()` 的规则 ----------
+ *
+ *  12. **namespace 冲突**：`mcpNamespace(other) === mcpNamespace(name)` 且
+ *      `other !== name`（即名字只在 `-` / `_` 上不同，如 `my-server` vs `my_server`）
+ *      → 后者被拒绝。判据是**累积的**：同文件内已接受的名字 + 通过 `takenNames`
+ *      传入的、前一个文件（global）已接受的名字。
+ *  13. `scope === "project"` 且是 HTTP 且带 `auth` → 拒绝（`auth` 只允许在 global）。
+ *
+ * ---------- GUI 侧的安全投影（在上游校验通过之后） ----------
+ *
+ * `hasSecrets` 只记「有没有」（`env` / `headers` / `oauth` / `auth`），值一个字节不留；
+ * `exposure` 折成规范值；`description` 单行化 + 限长；`toolExposure` 只留键与枚举值。
+ *
+ * @param data       解析后的 mcp.json 对象
+ * @param scope      `'global' | 'project' | null`（null = 不做 scope 专属规则，独立调用时用）
+ * @param takenNames 前一个配置文件里**已被接受**的名字（跨文件 namespace 冲突判定）
+ * @returns {{servers: Array, invalid: string[], error: string}}
  */
-export function parseMcpServers(data) {
+export function parseMcpServers(data, { scope = null, takenNames = null } = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { servers: [], invalid: [], error: 'not-an-object' };
   }
@@ -226,76 +349,160 @@ export function parseMcpServers(data) {
   if (!table || typeof table !== 'object' || Array.isArray(table)) {
     return { servers: [], invalid: [], error: 'mcpServers-not-an-object' };
   }
+  const prior = Array.isArray(takenNames) ? takenNames : [];
+  const accepted = []; // 本文件内已接受的名字（供同文件冲突判定）
   const servers = [];
   const invalid = [];
-  for (const [name, cfg] of Object.entries(table)) {
-    if (!SERVER_NAME_RE.test(name)) {
+
+  /** 上游 `readConfigFile` 的冲突判据：别的名字映射到同一个 namespace。 */
+  const clashes = (name) => {
+    const ns = mcpNamespace(name);
+    return prior.some((o) => o !== name && mcpNamespace(o) === ns)
+      || accepted.some((o) => o !== name && mcpNamespace(o) === ns);
+  };
+
+  for (const [name, raw] of Object.entries(table)) {
+    // 1. 名字
+    if (!isServerName(name)) {
       invalid.push(`invalid server name "${String(name).slice(0, 80)}" (use letters, digits, "_" and "-")`);
       continue;
     }
-    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
-      invalid.push(`invalid server "${name}": not an object`);
+    // 2. 必须是对象
+    if (!isRecord(raw)) {
+      invalid.push(`invalid server "${name}": must be an object`);
       continue;
     }
-    const enabled = cfg.enabled === undefined ? true : cfg.enabled;
-    if (typeof enabled !== 'boolean') {
-      invalid.push(`invalid server "${name}": enabled must be boolean`);
+    // 3. exposure（别名先归一；缺省即 codemode）
+    const exposure = raw.exposure === undefined ? DEFAULT_EXPOSURE : normalizeExposure(raw.exposure);
+    if (exposure === null) {
+      invalid.push(`invalid server "${name}": exposure must be one of ${EXPOSURE_LIST}`);
       continue;
     }
-    const rawExposure = cfg.exposure === undefined ? DEFAULT_EXPOSURE : cfg.exposure;
-    const exposure = normalizeExposure(rawExposure);
-    if (!exposure) {
-      invalid.push(`invalid server "${name}": unknown exposure`);
-      continue;
-    }
-    const hasCommand = typeof cfg.command === 'string' && cfg.command.length > 0;
-    const hasUrl = typeof cfg.url === 'string' && cfg.url.length > 0;
-    if ((hasCommand && hasUrl) || (!hasCommand && !hasUrl)) {
-      invalid.push(`invalid server "${name}": need exactly one of command/url`);
-      continue;
-    }
-    if (cfg.type !== undefined && cfg.type !== 'stdio' && cfg.type !== 'http' && cfg.type !== 'streamable-http') {
-      invalid.push(`invalid server "${name}": unknown type`);
-      continue;
-    }
-    // secret 面：只记「有没有」，值一个字节都不留。
-    // `auth`（0.99.2 新增，provider token 引用）同样是凭据面。
-    const hasSecrets = Boolean(
-      (cfg.env && typeof cfg.env === 'object') ||
-      (cfg.headers && typeof cfg.headers === 'object') ||
-      (cfg.oauth && typeof cfg.oauth === 'object') ||
-      (cfg.auth && typeof cfg.auth === 'object'),
-    );
-    // description：0.99.2 新增的自由文本，设计上就是给用户看的 → 单行化 + 限长。
-    const description = typeof cfg.description === 'string' ? oneLine(cfg.description) : '';
+    // 4. toolExposure：整条校验，任一不合法就**拒绝整条**（上游行为）
     let toolExposure = null;
-    let toolExposureNote = '';
-    if (cfg.toolExposure !== undefined) {
-      if (!cfg.toolExposure || typeof cfg.toolExposure !== 'object' || Array.isArray(cfg.toolExposure)) {
-        toolExposureNote = 'toolExposure ignored: not an object';
-      } else {
-        toolExposure = {};
-        for (const [k, v] of Object.entries(cfg.toolExposure)) {
-          // 键是工具名/ pattern（标识符面，可展示）；值必须是 exposure 枚举。
-          if (typeof k !== 'string' || !k || k.length > MAX_TOOL_NAME) continue;
-          const exp = normalizeExposure(v);
-          if (!exp) {
-            toolExposureNote = 'some toolExposure entries ignored: unknown exposure';
-            continue;
-          }
-          toolExposure[k] = exp;
+    if (raw.toolExposure !== undefined) {
+      if (!isRecord(raw.toolExposure)) {
+        invalid.push(`invalid server "${name}": toolExposure must map tool names to exposures`);
+        continue;
+      }
+      const out = {};
+      let bad = false;
+      for (const [tool, v] of Object.entries(raw.toolExposure)) {
+        const exp = normalizeExposure(v);
+        if (!exp) {
+          invalid.push(`invalid server "${name}": toolExposure "${String(tool).slice(0, 80)}" must be one of ${EXPOSURE_LIST}`);
+          bad = true;
+          break;
+        }
+        out[tool] = exp;
+      }
+      if (bad) continue;
+      toolExposure = Object.keys(out).length ? out : null;
+    }
+    // 5. enabled
+    if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') {
+      invalid.push(`invalid server "${name}": enabled must be a boolean`);
+      continue;
+    }
+    // 6. description
+    if (raw.description !== undefined && typeof raw.description !== 'string') {
+      invalid.push(`invalid server "${name}": description must be a string`);
+      continue;
+    }
+    // 7. timeout
+    if (raw.timeout !== undefined && (typeof raw.timeout !== 'number' || !(raw.timeout > 0))) {
+      invalid.push(`invalid server "${name}": timeout must be a positive number of seconds`);
+      continue;
+    }
+    // 8. legacy SSE
+    if (raw.type === 'sse') {
+      invalid.push(`invalid server "${name}": legacy SSE transport is not supported; use the streamable HTTP URL`);
+      continue;
+    }
+
+    const isHttpType = raw.type === undefined || raw.type === 'http' || raw.type === 'streamable-http';
+    const isStdioType = raw.type === undefined || raw.type === 'stdio';
+    let transportType = null;
+
+    // 9. HTTP 分支（注意：url 是 string 且 type 允许 http 时**优先于** command）
+    if (typeof raw.url === 'string' && isHttpType) {
+      if (!isHttpUrl(raw.url)) {
+        invalid.push(`invalid server "${name}": url must be an http or https URL`);
+        continue;
+      }
+      if (raw.headers !== undefined && !isStringRecord(raw.headers)) {
+        invalid.push(`invalid server "${name}": headers must map names to strings`);
+        continue;
+      }
+      const oauthError = validateOAuthConfig(raw.oauth);
+      if (oauthError) {
+        invalid.push(`invalid server "${name}": ${oauthError}`);
+        continue;
+      }
+      if (raw.auth !== undefined) {
+        if (!isRecord(raw.auth) || typeof raw.auth.provider !== 'string' || !raw.auth.provider) {
+          invalid.push(`invalid server "${name}": auth.provider must be a provider name`);
+          continue;
+        }
+        // 13. auth 只允许 https（或 loopback http），且**不允许出现在项目文件里**
+        const u = new URL(raw.url);
+        if (u.protocol !== 'https:' && !LOOPBACK_HOSTS.includes(u.hostname)) {
+          invalid.push(`invalid server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`);
+          continue;
+        }
+        if (scope === 'project') {
+          invalid.push(`invalid server "${name}": auth is only allowed in the global mcp.json`);
+          continue;
         }
       }
+      transportType = 'http';
+    } else if (typeof raw.command === 'string' && isStdioType) {
+      // 10. stdio 分支
+      if (raw.args !== undefined && !(Array.isArray(raw.args) && raw.args.every((a) => typeof a === 'string'))) {
+        invalid.push(`invalid server "${name}": args must be an array of strings`);
+        continue;
+      }
+      if (raw.env !== undefined && !isStringRecord(raw.env)) {
+        invalid.push(`invalid server "${name}": env must map names to strings`);
+        continue;
+      }
+      if (raw.cwd !== undefined && typeof raw.cwd !== 'string') {
+        invalid.push(`invalid server "${name}": cwd must be a string`);
+        continue;
+      }
+      transportType = 'stdio';
+    } else {
+      // 11. 两条分支都不成立
+      invalid.push(`invalid server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`);
+      continue;
     }
+
+    // 12. namespace 冲突（同文件 + 跨文件）
+    if (clashes(name)) {
+      invalid.push(`invalid server "${name}": conflicts with another server of the same namespace`);
+      continue;
+    }
+
+    // ---- 上游校验通过：做 GUI 侧的安全投影 ----
+    accepted.push(name);
+    const description = typeof raw.description === 'string' ? oneLine(raw.description) : '';
     servers.push({
       name,
-      enabled,
+      enabled: raw.enabled === undefined ? true : raw.enabled,
       exposure,
       description,
-      transportType: hasCommand ? 'stdio' : 'http',
-      hasSecrets,
+      transportType,
+      // secret 面：只记「有没有」，值一个字节都不留。
+      hasSecrets: Boolean(
+        (raw.env && typeof raw.env === 'object') ||
+        (raw.headers && typeof raw.headers === 'object') ||
+        (raw.oauth && typeof raw.oauth === 'object') ||
+        (raw.auth && typeof raw.auth === 'object'),
+      ),
       toolExposure,
-      toolExposureNote,
+      /* 保留字段（前端结构约定）。上游对非法 toolExposure 是**整条拒绝**，
+       * 所以这里不会再出现「部分丢弃」的说明，恒为 ''。 */
+      toolExposureNote: '',
     });
   }
   return { servers, invalid, error: '' };
@@ -417,7 +624,7 @@ export function createMcpNative({
   }
 
   /**
-   * 两处 mcp.json 的安全解析（结构 only）。读不到/坏了就按空处理，不抛。
+   * 两处 mcp.json 的安全解析。读不到/坏了就按空处理，不抛。
    *
    * **这里只产出「文件里写了什么」这个事实，不产出任何 effective 结论。**
    * 尤其是 `overridden` —— 「项目同名项覆盖用户级」这条上游语义**只在项目
@@ -425,16 +632,26 @@ export function createMcpNative({
    * 见 §Blocker A）。trust 在这里还不知道，所以不能在这里决定覆盖关系；
    * 覆盖在 `summary()` 拿到 `tr` 之后算。
    *
-   * `parseMcpServers` 已经丢掉非法条目（与上游 `readConfigFile` 的
-   * `continue` 一致），所以 `projectServers` 天然就是「Pi 会接受并加载的
-   * project entry」—— 非法条目不会参与覆盖，全局同名项保留。
+   * `projectServers` 之所以能当「**Pi 会接受并加载的 project entry**」用，
+   * 靠的是 `parseMcpServers` **完整复刻了上游的校验**（含 `validateMcpServerConfig`
+   * 的每一条，以及 `readConfigFile` 的 namespace 冲突规则）—— 不是「结构看起来像」。
+   * 上游对每条非法条目是 `errors.push` + `continue`（跳过、从不进那个 Map），
+   * 所以被拒的条目**不参与覆盖**，全局同名项保留。
+   *
+   * 两份文件的读取顺序与上游一致（先 global 后 project），namespace 冲突判据
+   * 也是**累积的**：project 里的条目要同时避开 global 已接受的名字与同文件内
+   * 已接受的名字。所以这里把 global 的结果作为 `takenNames` 传给 project。
    */
   function readConfigs() {
     const f = files();
     const u = readJsonSafe(f.user);
     const p = f.project ? readJsonSafe(f.project) : { exists: null, data: null, error: '' };
-    const up = u.data ? parseMcpServers(u.data) : { servers: [], invalid: [], error: u.error || '' };
-    const pp = p.data ? parseMcpServers(p.data) : { servers: [], invalid: [], error: p.error || '' };
+    const up = u.data
+      ? parseMcpServers(u.data, { scope: 'global' })
+      : { servers: [], invalid: [], error: u.error || '' };
+    const pp = p.data
+      ? parseMcpServers(p.data, { scope: 'project', takenNames: up.servers.map((s) => s.name) })
+      : { servers: [], invalid: [], error: p.error || '' };
     const userServers = up.servers.map((s) => ({ ...s, scope: 'user' }));
     const projectServers = pp.servers.map((s) => ({ ...s, scope: 'project' }));
     return {
@@ -602,7 +819,8 @@ export function createMcpNative({
    */
   function projectRuntimeServer(s, f) {
     if (!s || typeof s !== 'object') return null;
-    if (typeof s.name !== 'string' || !SERVER_NAME_RE.test(s.name)) return null;
+    // 运行时报告里的 server 名同样按上游规则判定（不限长度；payload 已被 stdout 上限约束）。
+    if (!isServerName(s.name)) return null;
     /* ---------- tools：raw MCP tool name（Blocker B） ----------
      *
      * `toolCount` 是**上游事实**：server 报了几个工具（合法字符串项的数量）。
@@ -818,8 +1036,9 @@ export function createMcpNative({
   }
 
   function checkName(name) {
-    if (typeof name !== 'string' || !SERVER_NAME_RE.test(name)) {
-      return { ok: false, code: 'bad-name', error: 'server 名只允许字母、数字、_ 和 -（1–64 字符）' };
+    // 动作入参：上游字符集 + GUI 侧 64 字符上限（输入侧防御，不是配置判定规则）。
+    if (!isActionName(name)) {
+      return { ok: false, code: 'bad-name', error: `server 名只允许字母、数字、_ 和 -（1–${ACTION_NAME_MAX} 字符）` };
     }
     return null;
   }
@@ -1167,7 +1386,12 @@ export function createMcpNative({
       normalizeExposure,
       sanitizeMcpRawToolName,
       scanSecrets,
-      SERVER_NAME_RE,
+      // 上游校验原语（单测直接对拍用）
+      isServerName,
+      isActionName,
+      mcpNamespace,
+      validateOAuthConfig,
+      isHttpUrl,
       EXPOSURES,
       RUNTIME_STATES,
       RUNTIME_SCOPES,

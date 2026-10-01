@@ -759,12 +759,12 @@ function mkNative(over = {}) {
     });
 
     await checkAsync('G4. trusted=true 但项目同名项 invalid → 用户级继续生效（与上游 skip 一致）', async () => {
-      // `bad name!` 不合法（上游 SERVER_NAME 校验）；`both` 同时给 command+url；
-      // 两者都会被上游 readConfigFile `continue` 掉 ⇒ 不覆盖全局 github。
-      writeProject({ github: { command: 'proj-gh' }, 'bad name!': { command: 'x' }, both: { command: 'a', url: 'https://e.com/m' } });
+      // 上游会拒绝的形态（`bad name!` 名字非法；`args: [123]` 不是 string[]）
+      // 都会被 `readConfigFile` 的 `continue` 跳过 ⇒ 不覆盖全局 github。
+      writeProject({ github: { command: 'proj-gh' }, 'bad name!': { command: 'x' }, badargs: { command: 'a', args: [123] } });
       const s = await mkOv(trusted).summary();
       assert.equal(find(s, 'github', 'user').overridden, true, '合法同名项仍覆盖');
-      assert.ok(s.configInvalid.length >= 2, '非法条目要进 invalid');
+      assert.ok(s.configInvalid.length >= 2, `非法条目要进 invalid，实际 ${s.configInvalid.length}`);
       // 真正决定覆盖的是「Pi 会接受并加载的 project entry」：
       writeProject({ 'bad name!': { command: 'x' } });
       const s2 = await mkOv(trusted).summary();
@@ -953,6 +953,176 @@ function mkNative(over = {}) {
   /* ===================================================================
    * F. 回归：解析 / 入口 / 状态机 / refresh / 动作 / 前端语义
    * =================================================================== */
+  /* ===================================================================
+   * J. 与上游 validateMcpServerConfig 逐条对拍（P20.6-Fix-3）
+   *
+   * 依据：v0.99.2 `packages/coding-agent/src/core/mcp-servers.ts`。
+   * 这一组是**判定「Pi 会不会接受并加载这条配置」**的依据 ——
+   * override 计算直接建立在它之上，宽一条就会重新触发覆盖 bug。
+   * =================================================================== */
+  section('J. 上游校验对拍：GUI 接受的集合必须 ⊆ Pi 接受的集合');
+  {
+    /** 单条：返回 {ok, invalid} —— ok 表示上游会加载它。 */
+    const one = (cfg, name = 's', opts = {}) => {
+      const r = parseMcpServers({ mcpServers: { [name]: cfg } }, opts);
+      return { ok: r.servers.length === 1, invalid: r.invalid };
+    };
+    const rejects = (label, cfg, opts) => check(`J·拒绝 ${label}`, () => {
+      const r = one(cfg, 's', opts);
+      assert.equal(r.ok, false, `本该被上游拒绝，却被接受了：${JSON.stringify(cfg)}`);
+      assert.ok(r.invalid.length > 0);
+    });
+    const accepts = (label, cfg, opts) => check(`J·接受 ${label}`, () => {
+      const r = one(cfg, 's', opts);
+      assert.equal(r.ok, true, `本该被上游接受，却被拒了：${JSON.stringify(cfg)} → ${r.invalid[0]}`);
+    });
+
+    // ---- 用户列出的那批 ----
+    rejects('args 不是 string[]', { command: 'x', args: [123] });
+    rejects('args 不是数组', { command: 'x', args: 'a b' });
+    rejects('env 不是 string→string', { command: 'x', env: { K: 1 } });
+    rejects('env 不是对象', { command: 'x', env: ['K=1'] });
+    rejects('cwd 不是 string', { command: 'x', cwd: 42 });
+    rejects('timeout <= 0', { command: 'x', timeout: 0 });
+    rejects('timeout 是负数', { command: 'x', timeout: -5 });
+    rejects('timeout 不是数字', { command: 'x', timeout: '30' });
+    rejects('description 不是 string', { command: 'x', description: 42 });
+    rejects('URL 不是 http/https', { url: 'ftp://e.com/m' });
+    rejects('URL 不可解析', { url: 'not a url' });
+    rejects('URL 是空串', { url: '' });
+    rejects('headers 不是 string→string', { url: 'https://e.com/m', headers: { A: 1 } });
+    rejects('headers 是数组', { url: 'https://e.com/m', headers: ['A=1'] });
+    rejects('oauth 不是对象', { url: 'https://e.com/m', oauth: 'x' });
+    rejects('oauth.clientId 不是 string', { url: 'https://e.com/m', oauth: { clientId: 1 } });
+    rejects('oauth.callbackPort 越界', { url: 'https://e.com/m', oauth: { callbackPort: 70000 } });
+    rejects('oauth.callbackPort 非整数', { url: 'https://e.com/m', oauth: { callbackPort: 1.5 } });
+    rejects('oauth.callbackUrl 非 loopback', { url: 'https://e.com/m', oauth: { callbackUrl: 'http://evil.com/cb' } });
+    rejects('oauth.callbackUrl 带 query', { url: 'https://e.com/m', oauth: { callbackUrl: 'http://localhost:8080/cb?x=1' } });
+    rejects('oauth.callbackUrl 与 callbackPort 端口不一致', { url: 'https://e.com/m', oauth: { callbackUrl: 'http://localhost:8080/cb', callbackPort: 9090 } });
+    rejects('oauth.clientName 空白', { url: 'https://e.com/m', oauth: { clientName: '   ' } });
+    rejects('auth.provider 缺失', { url: 'https://e.com/m', auth: {} });
+    rejects('auth.provider 空串', { url: 'https://e.com/m', auth: { provider: '' } });
+    rejects('auth 在非 https 且非 loopback 的 URL 上', { url: 'http://example.com/m', auth: { provider: 'anthropic' } });
+    rejects('auth 出现在项目文件里（scope=project）', { url: 'https://e.com/m', auth: { provider: 'anthropic' } }, { scope: 'project' });
+    rejects('toolExposure 不是对象', { command: 'x', toolExposure: ['a'] });
+    rejects('toolExposure 有非法值 → 整条拒绝', { command: 'x', toolExposure: { ok: 'direct', no: 'super' } });
+    rejects('type 是未知值', { command: 'x', type: 'websocket' });
+    rejects('type=sse（legacy）', { command: 'x', type: 'sse' });
+    rejects('既无 command 也无 url', {});
+    rejects('type=http 但只给 command', { command: 'x', type: 'http' });
+    rejects('type=stdio 但只给 url', { url: 'https://e.com/m', type: 'stdio' });
+
+    // ---- 合法形态不能被误拒（否则会漏掉真实的覆盖） ----
+    accepts('stdio 最小形态', { command: 'npx' });
+    accepts('stdio 完整形态', { command: 'npx', args: ['-y', 'pkg'], env: { K: 'v' }, cwd: 'sub', timeout: 30, description: 'd', enabled: false, exposure: 'direct', toolExposure: { a: 'hidden' } });
+    accepts('空 env / 空 headers / 空 oauth（上游 [].every() 通过）', { url: 'https://e.com/m', headers: {}, oauth: {} });
+    accepts('空 args 数组', { command: 'x', args: [] });
+    accepts('http + oauth 完整合法', { url: 'https://e.com/m', oauth: { clientId: 'c', clientSecret: '${S}', callbackPort: 8080, callbackUrl: 'http://localhost:8080/cb', scope: 'a b', clientName: 'pi' } });
+    accepts('auth + https', { url: 'https://e.com/m', auth: { provider: 'anthropic' } });
+    accepts('auth + http loopback', { url: 'http://127.0.0.1:3000/m', auth: { provider: 'anthropic' } });
+    accepts('auth + https（scope=project 以外的 scope）', { url: 'https://e.com/m', auth: { provider: 'p' } }, { scope: 'global' });
+    accepts('exposure 别名 codemode-deferred', { command: 'x', exposure: 'codemode-deferred' });
+    accepts('command + url 并存（上游按 HTTP 收）', { command: 'x', url: 'https://e.com/m' });
+    accepts('type=streamable-http', { url: 'https://e.com/m', type: 'streamable-http' });
+    accepts('type=stdio 显式', { command: 'x', type: 'stdio' });
+
+    // ---- namespace 冲突（上游 readConfigFile 的规则） ----
+    check('J·同文件 namespace 冲突：后者被拒，前者保留', () => {
+      const r = parseMcpServers({ mcpServers: { 'my-server': { command: 'a' }, my_server: { command: 'b' } } });
+      assert.deepEqual(r.servers.map((s) => s.name), ['my-server']);
+      assert.ok(r.invalid.some((m) => m.includes('my_server')));
+    });
+    check('J·跨文件 namespace 冲突：project 那条被拒（global 已占位）', () => {
+      const r = parseMcpServers({ mcpServers: { 'my-server': { command: 'b' } } }, { scope: 'project', takenNames: ['my_server'] });
+      assert.equal(r.servers.length, 0);
+      assert.ok(r.invalid.some((m) => m.includes('namespace')));
+    });
+    check('J·同名（非 namespace 冲突）不算冲突 —— 那是覆盖', () => {
+      const r = parseMcpServers({ mcpServers: { github: { command: 'b' } } }, { scope: 'project', takenNames: ['github'] });
+      assert.deepEqual(r.servers.map((s) => s.name), ['github']);
+    });
+    check('J·不同名不冲突', () => {
+      const r = parseMcpServers({ mcpServers: { alpha: { command: 'b' } } }, { scope: 'project', takenNames: ['beta'] });
+      assert.deepEqual(r.servers.map((s) => s.name), ['alpha']);
+    });
+
+    // ---- server 名：上游不限长度；GUI 只在**动作入参**上加 64 上限 ----
+    check('J·配置里的超长 server 名上游会接受（不限长度）', () => {
+      const long = 'a'.repeat(200);
+      const r = parseMcpServers({ mcpServers: { [long]: { command: 'x' } } });
+      assert.equal(r.servers.length, 1, '上游 SERVER_NAME 不限长度，不该误判为 invalid');
+      assert.equal(r.servers[0].name, long);
+    });
+    check('J·动作入参（add/remove）仍限制 64 字符（输入侧防御）', () => {
+      const { isActionName, isServerName } = withCreate({ cwd: PROJ }).mod._internals;
+      const long = 'a'.repeat(200);
+      assert.equal(isServerName(long), true);
+      assert.equal(isActionName(long), false);
+      assert.equal(isActionName('ok-name_1'), true);
+      assert.equal(isActionName('bad name'), false);
+    });
+  }
+
+  section('J2. 端到端：非法/冲突的 project 同名项不得覆盖用户级');
+  {
+    const OV2 = path.join(TMP, 'ov2');
+    fs.mkdirSync(path.join(OV2, '.pi'), { recursive: true });
+    const mkOv2 = (trustFn) => withCreate({
+      cwd: OV2,
+      resolvePackageDir: () => mkPkg('ov2-pkg'),
+      piBuiltins: () => ({ builtins: [{ id: 'mcp' }] }),
+      rpc: { request: async () => ({ commands: [] }) },
+      readTrust: trustFn,
+    }).mod;
+    const find2 = (s, name, scope) => s.servers.find((x) => x.name === name && x.scope === scope);
+
+    await checkAsync('J2-1. 截图场景：trusted 项目同名项 args 非法 → 用户级继续生效（不覆盖）', async () => {
+      writeJson(path.join(AGENT, 'mcp.json'), { mcpServers: { github: { command: 'valid-command' } } });
+      writeJson(path.join(OV2, '.pi', 'mcp.json'), { mcpServers: { github: { command: 'bad-command', args: [123] } } });
+      const s = await mkOv2(trusted).summary();
+      assert.equal(find2(s, 'github', 'user').overridden, false, '非法项目项不该覆盖用户级');
+      assert.equal(find2(s, 'github', 'user').effective.active, true);
+      assert.equal(find2(s, 'github', 'project'), undefined, '被上游拒绝的条目不该出现在列表里');
+      assert.ok(s.configInvalid.some((m) => m.includes('args')), '要如实报出 invalid 原因');
+    });
+
+    await checkAsync('J2-2. trusted 项目同名项 namespace 冲突 → 用户级继续生效', async () => {
+      writeJson(path.join(AGENT, 'mcp.json'), { mcpServers: { 'my-server': { command: 'user-cmd' } } });
+      writeJson(path.join(OV2, '.pi', 'mcp.json'), { mcpServers: { my_server: { command: 'proj-cmd' } } });
+      const s = await mkOv2(trusted).summary();
+      assert.equal(find2(s, 'my-server', 'user').overridden, false);
+      assert.equal(find2(s, 'my-server', 'user').effective.active, true);
+    });
+
+    await checkAsync('J2-3. trusted 项目同名项合法 → 照常覆盖（证明上面两条不是恒真）', async () => {
+      writeJson(path.join(AGENT, 'mcp.json'), { mcpServers: { github: { command: 'valid-command' } } });
+      writeJson(path.join(OV2, '.pi', 'mcp.json'), { mcpServers: { github: { command: 'proj-command', args: ['-y'] } } });
+      const s = await mkOv2(trusted).summary();
+      assert.equal(find2(s, 'github', 'user').overridden, true);
+      assert.equal(find2(s, 'github', 'project').effective.active, true);
+    });
+
+    await checkAsync('J2-4. trusted 项目同名项带 auth → 项目文件不允许 auth，故不覆盖', async () => {
+      writeJson(path.join(AGENT, 'mcp.json'), { mcpServers: { gh: { url: 'https://user.example/m' } } });
+      writeJson(path.join(OV2, '.pi', 'mcp.json'), { mcpServers: { gh: { url: 'https://proj.example/m', auth: { provider: 'anthropic' } } } });
+      const s = await mkOv2(trusted).summary();
+      assert.equal(find2(s, 'gh', 'user').overridden, false);
+      assert.equal(find2(s, 'gh', 'user').effective.active, true);
+      assert.ok(s.configInvalid.some((m) => m.includes('auth is only allowed')), 'scope=project 的 auth 要被拒');
+    });
+
+    await checkAsync('J2-5. 用户级自己非法 → 也不会被当成可覆盖对象（两侧都如实报 invalid）', async () => {
+      writeJson(path.join(AGENT, 'mcp.json'), { mcpServers: { gh: { command: 'x', env: { K: 1 } } } });
+      writeJson(path.join(OV2, '.pi', 'mcp.json'), { mcpServers: { gh: { command: 'y' } } });
+      const s = await mkOv2(trusted).summary();
+      assert.equal(find2(s, 'gh', 'user'), undefined);
+      assert.equal(find2(s, 'gh', 'project').effective.active, true);
+    });
+
+    rmFile(path.join(OV2, '.pi', 'mcp.json'));
+    rmFile(path.join(AGENT, 'mcp.json'));
+  }
+
   section('F1. parseMcpServers（只取结构）');
   {
     const r = parseMcpServers({ mcpServers: {
@@ -973,6 +1143,7 @@ function mkNative(over = {}) {
   {
     const r = parseMcpServers({ mcpServers: {
       'bad name!': { command: 'x' },
+      // ⚠️ 上游**接受** `{command, url}` 并存（HTTP 分支优先），不再算非法。
       both: { command: 'x', url: 'https://e.com' },
       neither: {},
       badexp: { command: 'x', exposure: 'super' },
@@ -981,12 +1152,17 @@ function mkNative(over = {}) {
       badtool: { command: 'x', toolExposure: { ok: 'direct', no: 'super' } },
       notobj: 'x',
     } });
-    check('非法条目进 invalid（7 条里 6 条坏 + 1 条好）', () => {
-      assert.equal(r.servers.length, 1);
-      assert.equal(r.servers[0].name, 'badtool');
+    check('非法条目进 invalid（8 条里 7 条坏 + 1 条好）', () => {
+      assert.deepEqual(r.servers.map((s) => s.name), ['both']);
       assert.equal(r.invalid.length, 7);
     });
-    check('toolExposure 坏值只丢键、条目保留', () => assert.deepEqual(r.servers[0].toolExposure, { ok: 'direct' }));
+    check('`{command,url}` 并存按 HTTP 接受（上游分支优先级，不是「只能二选一」）', () => {
+      assert.equal(r.servers.find((s) => s.name === 'both').transportType, 'http');
+    });
+    check('toolExposure 有坏值 → 整条拒绝（上游行为，不是只丢键）', () => {
+      assert.ok(!r.servers.some((s) => s.name === 'badtool'));
+      assert.ok(r.invalid.some((m) => m.includes('badtool')));
+    });
   }
   check('mcpServers 缺失 → 空（不是错）', () => assert.deepEqual(parseMcpServers({}).servers, []));
   check('非对象 → error（不抛）', () => assert.equal(parseMcpServers(null).error, 'not-an-object'));

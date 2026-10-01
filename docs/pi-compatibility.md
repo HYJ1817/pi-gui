@@ -142,6 +142,24 @@ GUI 归一化与兼容解析，后者要求 GUI 把它们纳入「拒绝接收�
 `packages/coding-agent/src/extensions/mcp/{cli,config,tools}.ts` 与
 `src/core/mcp-servers.ts`（不是读 pi-GUI 自己的文档）。
 
+### P20.6-Fix-3：修完覆盖 bug 后**同一 bug 的隐蔽变体**
+
+Fix-2 把「覆盖」建立在「Pi 会接受并加载的 project entry」上，但当时的
+`parseMcpServers()` 只做**结构**解析，没有复刻上游 `validateMcpServerConfig()`。
+于是上游会拒绝、GUI 却认为合法的项目条目（例如 `args: [123]`）仍会被算进覆盖
+集合 —— 用户级被标 `overridden`、项目那条被上游跳过，**两条都不生效**。
+同一个 bug，只是触发条件更隐蔽。
+
+| 面 | 修法 |
+|---|---|
+| 接受/拒绝判定 | `parseMcpServers()` **逐条复刻** `validateMcpServerConfig()`（名字 / `exposure` / `toolExposure` / `enabled` / `description` / `timeout` / `type` / `url` / `headers` / `oauth` / `auth` / `args` / `env` / `cwd` / 分支优先级），并复刻 `readConfigFile()` 的 **namespace 冲突**与 **`auth` 不得出现在项目文件** 两条 |
+| 覆盖集合 | 仍然是 `parseMcpServers` 认可的 `projectServers`，但现在它真的等于「Pi 会加载的条目」 |
+| server 名长度 | 配置解析改用上游规则（**不限长度**）；GUI 只在 `add`/`remove` **动作入参**上加 64 字符上限（输入侧防御） |
+
+顺带纠正了两处旧的错误理解（都已有测试钉住）：
+- `{command, url}` 并存**不是**非法 —— 上游 HTTP 分支优先，按 HTTP 接受。
+- `toolExposure` 有非法值**不是**「只丢那个键」—— 上游**拒绝整条**。
+
 ### ⚠️ 唯一一条真实的行为变化：工具返回值里的 `isError`
 
 | | 代码 | 效果 |
