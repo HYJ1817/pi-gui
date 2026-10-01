@@ -159,9 +159,21 @@ export function beginWorkspaceSwitch(cwd) {
 
 export const ownsWorkspace = (generation) => generation === S.workspaceGeneration;
 
+/* 用量 DOM 的渲染钩子。
+ *
+ * state.js 不能 import usage.js（usage.js 已经 import state.js，会成环），
+ * 所以由 usage.js 在模块初始化时注册；`resetUsageState()` 负责调用它。
+ * 这样「JS state 清零」与「界面立刻归零」永远是同一个动作，
+ * 不会出现「切了项目但侧栏还挂着上一个项目的数字」。 */
+let usageRenderHook = null;
+export function setUsageRenderHook(fn) {
+  usageRenderHook = typeof fn === 'function' ? fn : null;
+}
+
 export function resetUsageState() {
   S.stats = null;
   S.remoteQuota = null;
+  S.quotaLoading = false;
   S.quotaEpoch++;
   S.currentProviderId = null;
   Object.assign(S.localUsage, {
@@ -181,4 +193,7 @@ export function resetUsageState() {
     source: 'none',
     updatedAt: null,
   });
+  /* 只清 JS 不够：旧项目的数字必须立刻从 DOM 上消失，
+   * 而不是等下一次 RPC 应答回来才被覆盖。 */
+  if (usageRenderHook) usageRenderHook();
 }

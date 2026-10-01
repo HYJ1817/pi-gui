@@ -7,7 +7,7 @@
  * 字段没有证据就 null；0 只能表示真实 0。
  */
 
-import { el, S, resetUsageState } from './state.js';
+import { el, S, setUsageRenderHook } from './state.js';
 import { fmt } from './util.js';
 import { setTitleText } from './shell.js';
 import { openPop, pop } from './ui/popover.js';
@@ -27,6 +27,17 @@ export function fmtBalanceShort(amount, currency = 'USD') {
   if (typeof amount !== 'number' || !Number.isFinite(amount)) return '—';
   const prefix = currency === 'CNY' ? '¥' : '$';
   return prefix + amount.toFixed(2);
+}
+
+/** 数值缺省语义：只有真的有限数字才显示数字，null/undefined 一律「—」。
+ *  这跟 `|| 0` 的区别就是 0 与「没有数据」的分界：0 是真实 0，必须显示 0。 */
+export function fmtMaybeNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? fmt(v) : '—';
+}
+
+/** 金额缺省语义（同上，美元或人民币前缀）。 */
+export function fmtMaybeMoney(v, currency = 'USD') {
+  return typeof v === 'number' && Number.isFinite(v) ? fmtCurrency(v, currency) : '—';
 }
 
 /** 从模型名称或 ID 反推 providerId */
@@ -130,15 +141,21 @@ export function renderRemoteQuota() {
   }
 
   if (q.status === 'ok') {
-    if (q.balances && q.balances.length > 0) {
-      val.textContent = q.balances.map(b => fmtBalanceShort(b.amount, b.currency)).join(' | ');
-      tip = 'ʣ���ȣ�\n' + q.balances.map(b => `- ${fmtCurrency(b.amount, b.currency)}`).join('\n');
+    /* 多币种（DeepSeek 的 balance_infos 可能同时有 CNY 与 USD）：
+     * 只做并排摘要，**绝不相加**，也不在这里引入任何临时变量。 */
+    const balances = Array.isArray(q.balances)
+      ? q.balances.filter((b) => b && typeof b.amount === 'number')
+      : [];
+    if (balances.length > 0) {
+      el.uQuota.textContent = balances.map((b) => fmtBalanceShort(b.amount, b.currency)).join(' | ');
     } else if (q.balance && typeof q.balance.amount === 'number') {
       el.uQuota.textContent = fmtBalanceShort(q.balance.amount, q.balance.currency || 'USD');
-    } else if (q.windows && typeof q.windows.limit === 'number' && typeof q.windows.used === 'number') {
-      el.uQuota.textContent = `${fmt(q.windows.used)} / ${fmt(q.windows.limit)}`;
+    } else if (typeof q.windows?.limit === 'number' || typeof q.windows?.used === 'number') {
+      el.uQuota.textContent = `${fmtMaybeNumber(q.windows?.used)} / ${fmtMaybeNumber(q.windows?.limit)}`;
     } else {
-      el.uQuota.textContent = '可用';
+      /* ok 但没有任何可用数值（amount/limit/used 全是 null）：如实显示「—」，
+       * 不写「可用」—— 那会让人以为已经查到了额度。 */
+      el.uQuota.textContent = '—';
     }
     return;
   }
@@ -165,12 +182,42 @@ export function renderRemoteQuota() {
 
 /* ---------- Local Usage 更新 ---------- */
 
+/** 会话身份变了（new / switch / fork）→ 会话级用量必须**立刻**清掉。
+ *  远端额度不在这里清：它归 Provider identity 管，换会话不等于换供应商。 */
+export function clearSessionUsage() {
+  S.stats = null;
+  Object.assign(S.localUsage, {
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
+    totalTokens: null,
+    contextUsed: null,
+    contextLimit: null,
+    contextPercent: null,
+    estimatedCost: null,
+    lastTurn: null,
+    source: 'none',
+    updatedAt: null,
+  });
+  renderUsageState();
+}
+
 export function applyState(d) {
   S.ready = true;
+
+  /* 覆盖旧 state **之前**先比 sessionId：Session A 的统计绝不能留到 Session B。
+   * 不等随后的 get_session_stats —— 那一刻界面就该已经干净了。 */
+  const previousSessionId = S.localUsage.sessionId || S.state?.sessionId || null;
+  const nextSessionId = typeof d?.sessionId === 'string' && d.sessionId ? d.sessionId : null;
+  if (previousSessionId && nextSessionId && previousSessionId !== nextSessionId) {
+    clearSessionUsage();
+  }
+
   S.state = d;
 
-  if (d.sessionId) {
-    S.localUsage.sessionId = d.sessionId;
+  if (nextSessionId) {
+    S.localUsage.sessionId = nextSessionId;
   }
 
   if (d.model) {
@@ -186,6 +233,14 @@ export function applyState(d) {
       if (providerId !== S.currentProviderId) {
         syncRemoteQuota(providerId);
       }
+    } else {
+      /* 新模型解析不出 Provider：旧供应商的额度不能继续挂在界面上，
+       * 同时 ++epoch 让在途的旧应答回来也写不进来。 */
+      S.quotaEpoch++;
+      S.currentProviderId = null;
+      S.remoteQuota = null;
+      S.quotaLoading = false;
+      renderRemoteQuota();
     }
   }
 
@@ -200,25 +255,51 @@ export function applyState(d) {
   setStreaming(Boolean(d.isStreaming));
 }
 
+/**
+ * 把用量相关的 DOM **一次画完**（侧栏 + 上下文 chip）。
+ *
+ * 所有入口都走这里：applyStats / workspace reset / 会话切换 / Provider 变化。
+ * 这样「state → DOM」只有一份实现 —— 不会出现两套各自漏一格的 reset 逻辑。
+ * 缺失一律显示「—」，**0 只可能来自真实数字 0**。
+ */
+export function renderUsageState() {
+  const ctx = S.stats?.contextUsage || null;
+  const t = S.stats?.tokens || null;
+
+  let pct = null;
+  if (ctx && typeof ctx.percent === 'number' && Number.isFinite(ctx.percent)) pct = ctx.percent;
+  else if (ctx && ctx.tokens != null && ctx.contextWindow) pct = (ctx.tokens / ctx.contextWindow) * 100;
+
+  if (el.uPct) el.uPct.textContent = pct == null ? '—' : Math.round(pct) + '%';
+  if (el.uCtxBar) {
+    const clamped = pct == null ? 0 : Math.max(0, Math.min(100, pct));
+    el.uCtxBar.style.width = clamped + '%';
+    el.uCtxBar.style.background = pct == null ? '#aeb3b6' : pct > 85 ? 'var(--err)' : pct > 65 ? 'var(--warn)' : '#aeb3b6';
+  }
+  if (el.uNote) {
+    el.uNote.textContent = ctx && ctx.tokens != null && ctx.contextWindow
+      ? `上下文 ${fmt(ctx.tokens)} / ${fmt(ctx.contextWindow)}`
+      : '上下文 —';
+  }
+
+  if (el.uTok) {
+    el.uTok.textContent = t && (t.input != null || t.output != null)
+      ? `${fmtMaybeNumber(t.input)} / ${fmtMaybeNumber(t.output)}`
+      : '—';
+  }
+  if (el.uCache) el.uCache.textContent = t ? fmtMaybeNumber(t.cacheRead) : '—';
+  if (el.uCost) el.uCost.textContent = S.stats && typeof S.stats.cost === 'number' ? '$' + S.stats.cost.toFixed(4) : '—';
+
+  renderCtxChip();
+  renderRemoteQuota();
+}
+
 export function applyStats(d) {
   S.stats = d;
   const ctx = d.contextUsage || {};
-  const pct = typeof ctx.percent === 'number' ? ctx.percent : 0;
-
-  // 严格区别 null 和 0：只有有 tokens 时才显示数字
-  el.uPct.textContent = ctx.tokens != null ? Math.round(pct) + '%' : '—';
-  el.uCtxBar.style.width = ctx.tokens != null ? Math.min(100, pct) + '%' : '0%';
-  el.uCtxBar.style.background = pct > 85 ? 'var(--err)' : pct > 65 ? 'var(--warn)' : '#aeb3b6';
-  el.uNote.textContent = ctx.tokens != null && ctx.contextWindow
-    ? `上下文 ${fmt(ctx.tokens)} / ${fmt(ctx.contextWindow)}`
-    : '上下文 —';
-
   const t = d.tokens || {};
-  el.uTok.textContent = t.input != null || t.output != null ? `${fmt(t.input || 0)} / ${fmt(t.output || 0)}` : '—';
-  el.uCache.textContent = t.cacheRead != null ? fmt(t.cacheRead) : '—';
-  el.uCost.textContent = typeof d.cost === 'number' ? '$' + d.cost.toFixed(4) : '—';
 
-  // 同步更新 LocalUsage
+  // 同步更新 LocalUsage（0 是真实 0；缺失保持 null）
   S.localUsage.sessionId = d.sessionId || S.state?.sessionId || S.localUsage.sessionId || null;
   S.localUsage.inputTokens = t.input != null ? t.input : null;
   S.localUsage.outputTokens = t.output != null ? t.output : null;
@@ -232,8 +313,7 @@ export function applyStats(d) {
   S.localUsage.source = 'session_stats';
   S.localUsage.updatedAt = new Date().toISOString();
 
-  renderCtxChip();
-  renderRemoteQuota();
+  renderUsageState();
 
   // 统计面板是一次性拉取，拿到数据后回调渲染
   if (S.onStats) {
@@ -309,21 +389,33 @@ export function openCtxTip() {
     dim.textContent = '暂无上下文数据';
     box.append(head, dim);
   } else {
-    const pct = Math.round(ctxPct() ?? 0);
-    const left = Math.max(0, 100 - pct);
-    const head = document.createElement('div');
-    head.className = 'tip-head';
-    head.textContent = '背景信息窗口:';
+    const pctValue = ctxPct();
+    if (pctValue == null) {
+      /* 有上下文数据但算不出百分比（例如缺 contextWindow）：如实说没有，不按 0 显示。 */
+      const head = document.createElement('div');
+      head.className = 'tip-head';
+      head.textContent = '背景信息窗口:';
+      const dim = document.createElement('div');
+      dim.className = 'tip-dim';
+      dim.textContent = '暂无上下文数据';
+      box.append(head, dim);
+    } else {
+      const pct = Math.round(pctValue);
+      const left = Math.max(0, 100 - pct);
+      const head = document.createElement('div');
+      head.className = 'tip-head';
+      head.textContent = '背景信息窗口:';
 
-    const big = document.createElement('div');
-    big.className = 'tip-big';
-    big.textContent = `${pct}% 已用 (剩余 ${left}%)`;
+      const big = document.createElement('div');
+      big.className = 'tip-big';
+      big.textContent = `${pct}% 已用 (剩余 ${left}%)`;
 
-    const dim = document.createElement('div');
-    dim.className = 'tip-dim';
-    dim.textContent = `已用 ${fmt(ctx.tokens)} 标记, 共 ${fmt(ctx.contextWindow)}`;
+      const dim = document.createElement('div');
+      dim.className = 'tip-dim';
+      dim.textContent = `已用 ${fmt(ctx.tokens)} 标记, 共 ${fmt(ctx.contextWindow)}`;
 
-    box.append(head, big, dim);
+      box.append(head, big, dim);
+    }
   }
 
   // 2. 会话累计用量 (Session Usage)
@@ -429,38 +521,39 @@ export function openCtxTip() {
     r.textContent = '暂无远端额度信息';
     quotaSec.appendChild(r);
   } else if (q.status === 'ok') {
-    if (q.balance && typeof q.balance.amount === 'number') {
+    /* 行一律用 DOM 构建：这里出现过 innerHTML 插值，动态值（币种/金额/限额）
+     * 都来自远端响应，绝不能拼进 HTML。 */
+    const addRow = (label, value) => {
       const row = document.createElement('div');
       row.className = 'tip-row';
       const name = document.createElement('span');
-      name.textContent = '剩余额度';
-      const val = document.createElement('span');
-      val.textContent = fmtCurrency(q.balance.amount, q.balance.currency || 'USD');
-      row.append(name, val);
+      name.textContent = label;
+      const amount = document.createElement('span');
+      amount.textContent = value;
+      row.append(name, amount);
       quotaSec.appendChild(row);
+    };
 
-      if (q.balance.granted != null) {
-        const rGrant = document.createElement('div');
-        rGrant.className = 'tip-row';
-        rGrant.innerHTML = `<span>赠送额度</span><span>${fmtCurrency(q.balance.granted, q.balance.currency)}</span>`;
-        quotaSec.appendChild(rGrant);
+    /* 多币种逐条展示（DeepSeek 可能同时有 CNY 与 USD），**不相加**。 */
+    const balances = Array.isArray(q.balances)
+      ? q.balances.filter((b) => b && typeof b.amount === 'number')
+      : [];
+    if (balances.length > 0) {
+      for (const b of balances) {
+        const currency = b.currency || 'USD';
+        addRow(`剩余额度 (${currency})`, fmtCurrency(b.amount, currency));
+        if (b.granted != null) addRow(`赠送额度 (${currency})`, fmtCurrency(b.granted, currency));
+        if (b.toppedUp != null) addRow(`充值额度 (${currency})`, fmtCurrency(b.toppedUp, currency));
       }
-      if (q.balance.toppedUp != null) {
-        const rTop = document.createElement('div');
-        rTop.className = 'tip-row';
-        rTop.innerHTML = `<span>充值额度</span><span>${fmtCurrency(q.balance.toppedUp, q.balance.currency)}</span>`;
-        quotaSec.appendChild(rTop);
-      }
+    } else if (q.balance && typeof q.balance.amount === 'number') {
+      const currency = q.balance.currency || 'USD';
+      addRow('剩余额度', fmtCurrency(q.balance.amount, currency));
+      if (q.balance.granted != null) addRow('赠送额度', fmtCurrency(q.balance.granted, currency));
+      if (q.balance.toppedUp != null) addRow('充值额度', fmtCurrency(q.balance.toppedUp, currency));
     }
-    if (q.windows && q.windows.limit != null) {
-      const row = document.createElement('div');
-      row.className = 'tip-row';
-      const name = document.createElement('span');
-      name.textContent = '限额窗口';
-      const val = document.createElement('span');
-      val.textContent = `${q.windows.used != null ? fmt(q.windows.used) : '��'} / ${q.windows.limit != null ? fmt(q.windows.limit) : '��'} ${q.windows.unit || ''}`;
-      row.append(name, val);
-      quotaSec.appendChild(row);
+
+    if (q.windows && (q.windows.limit != null || q.windows.used != null)) {
+      addRow('限额窗口', `${fmtMaybeNumber(q.windows.used)} / ${fmtMaybeNumber(q.windows.limit)} ${q.windows.unit || ''}`.trim());
     }
     if (q.rateLimit && q.rateLimit.requests != null) {
       const row = document.createElement('div');
@@ -537,3 +630,7 @@ export function whenModels(timeoutMs = 4000) {
 export function onThinkingLevels(d) {
   S.thinkingLevels = Array.isArray(d) ? d : d?.levels || [];
 }
+
+/* 注册用量 DOM 渲染钩子：workspace reset（state.js 的 resetUsageState）
+ * 与正常更新走**同一条**渲染路径，不存在第二份 reset 逻辑。 */
+setUsageRenderHook(() => renderUsageState());
