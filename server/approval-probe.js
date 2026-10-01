@@ -33,18 +33,6 @@ function readTextSafe(file, maxBytes = MAX_DOC_BYTES) {
   }
 }
 
-/** 在文本里找一行命中任意 pattern 的原文，作为证据（截断后返回）。 */
-function findLine(text, patterns) {
-  if (!text) return '';
-  for (const raw of text.split(/\r?\n/)) {
-    const lineNo = 0;
-    for (const re of patterns) {
-      if (re.test(raw)) return raw.trim().slice(0, MAX_EVIDENCE_CHARS);
-    }
-  }
-  return '';
-}
-
 /** 找到第一行命中的行号+原文，用于给出可核对的出处。 */
 function findLineWithNumber(text, patterns) {
   if (!text) return null;
@@ -55,6 +43,47 @@ function findLineWithNumber(text, patterns) {
     }
   }
   return null;
+}
+
+/* ---------- 契约措辞与文档位置**随版本漂移**（P23 实测发现）----------
+ *
+ * 0.87.0 / 0.99.1：
+ *   - 对话框阻塞契约写在 `docs/rpc.md`（「block until the client sends back …」）；
+ *   - tool_call 可否阻断写在 `docs/extensions.md`（「**Can block.**」/「before the tool executes」）。
+ *
+ * 0.99.2（本机实测）：
+ *   - 对话框那一段**搬到了** `docs/rpc-extension-ui.md`，rpc.md 里不再有；
+ *   - tool_call 的措辞改成「`tool_call` can mutate input or block execution.」，
+ *     配一段 `return { block: true, reason: … }` 的示例 —— 旧措辞一个字都不剩。
+ *
+ * 所以这里**同时接受两版措辞与两处位置**，并且证据里带上真正命中的那个文件。
+ * 只认一处 = 升级之后能力报告会凭空说「不支持」（这正是 P23 的 live probe 抓到的
+ * 那个 bug：类型里明明有 `block?: boolean`，报告却说没有阻断契约）。 */
+const DIALOG_DOC_FILES = ['docs/rpc.md', 'docs/rpc-extension-ui.md'];
+const DIALOG_BLOCK_PATTERNS = [/blocks? until the client sends back/i, /blocks? until the client/i];
+const HOOK_DOC_PATTERNS = [
+  /Can block/i,
+  /before the tool executes/i,
+  /can mutate input or block execution/i,
+  /block:\s*true/,
+];
+
+/** 在多个候选文档里找第一条命中，返回带文件名的出处。 */
+function findInDocs(packageDir, files, patterns) {
+  for (const rel of files) {
+    const text = readTextSafe(locate(packageDir, rel));
+    const hit = findLineWithNumber(text, patterns);
+    if (hit) return { file: rel, ...hit };
+    if (text === null) continue;
+  }
+  return null;
+}
+
+/** 这些文件里**读到了几个**（用来区分「文件没有这句话」与「文件都读不到」）。 */
+function countReadable(packageDir, files) {
+  let n = 0;
+  for (const rel of files) if (readTextSafe(locate(packageDir, rel)) !== null) n++;
+  return n;
 }
 
 function locate(packageDir, rel) {
@@ -108,13 +137,14 @@ export function probeApprovalSupport({ piBin, env = process.env, resolvePackageD
 
   const types = readTextSafe(locate(packageDir, 'dist/core/extensions/types.d.ts'));
   const extDocs = readTextSafe(locate(packageDir, 'docs/extensions.md'));
-  const rpcDocs = readTextSafe(locate(packageDir, 'docs/rpc.md'));
   const usageDocs = readTextSafe(locate(packageDir, 'docs/usage.md'));
   const rpcMode = readTextSafe(locate(packageDir, 'dist/modes/rpc/rpc-mode.js'));
+  /* 对话框契约的候选文档由 `findInDocs` 自己读（两处位置，见上面的说明）。 */
 
-  /* 1) tool_call 可阻断：类型里要有 block 字段，文档里要说能 block。 */
+  /* 1) tool_call 可阻断：类型里要有 block 字段，文档里要说能 block。
+   *    两版措辞都认（见上面的 DIALOG/HOOK 说明）。 */
   const typeBlock = findLineWithNumber(types, [/block\?:\s*boolean/]);
-  const docBlock = findLineWithNumber(extDocs, [/Can block/i, /before the tool executes/i, /block:\s*true/]);
+  const docBlock = findLineWithNumber(extDocs, HOOK_DOC_PATTERNS);
   const toolCallHook = typeBlock && docBlock
     ? {
       supported: true,
@@ -125,14 +155,17 @@ export function probeApprovalSupport({ piBin, env = process.env, resolvePackageD
       evidence: types || extDocs ? '本机 pi 包的文档/类型里没有找到 tool_call 阻断契约' : '读不到本机 pi 包的文档与类型',
     };
 
-  /* 2) 对话框子协议：rpc.md 明确「阻塞到客户端用匹配 id 回 extension_ui_response」。 */
-  const dialogLine = findLineWithNumber(rpcDocs, [/block until the client sends back/i, /extension_ui_request/]);
-  const blockingLine = findLineWithNumber(rpcDocs, [/block until the client sends back/i]);
-  const uiPromptDialog = rpcDocs && blockingLine
-    ? { supported: true, evidence: `docs/rpc.md:${blockingLine.line} 「${blockingLine.text}」` }
+  /* 2) 对话框子协议：文档明确「阻塞到客户端用匹配 id 回 extension_ui_response」。
+   *    **两处位置都看** —— 0.99.2 起这一段搬到了 docs/rpc-extension-ui.md。 */
+  const dialogBlock = findInDocs(packageDir, DIALOG_DOC_FILES, DIALOG_BLOCK_PATTERNS);
+  const dialogDocsReadable = countReadable(packageDir, DIALOG_DOC_FILES);
+  const uiPromptDialog = dialogBlock
+    ? { supported: true, evidence: `${dialogBlock.file}:${dialogBlock.line} 「${dialogBlock.text}」` }
     : {
-      supported: rpcDocs ? false : null,
-      evidence: rpcDocs ? 'docs/rpc.md 里没有找到对话框阻塞等待契约' : '读不到本机 pi 包的 docs/rpc.md',
+      supported: dialogDocsReadable > 0 ? false : null,
+      evidence: dialogDocsReadable > 0
+        ? 'pi 的 rpc / rpc-extension-ui 文档里都没有找到对话框阻塞等待契约'
+        : '读不到本机 pi 包的 docs/rpc.md 与 docs/rpc-extension-ui.md',
     };
 
   /* 3) 核心自带审批：usage.md 里那句「intentionally does not include … permission popups」。
@@ -152,10 +185,12 @@ export function probeApprovalSupport({ piBin, env = process.env, resolvePackageD
       : { supported: null, evidence: '读不到 rpc-mode.js 里 custom() 的实现' })
     : { supported: null, evidence: '读不到本机 pi 包的 dist/modes/rpc/rpc-mode.js' };
 
-  /* 对话框方法名也来自 rpc.md 原文，拿不到就不给（不写死）。 */
-  const methods = rpcDocs
-    ? (findLine(rpcDocs, [/Dialog methods/]) ? ['select', 'confirm', 'input', 'editor'] : null)
-    : null;
+  /* 对话框方法名也来自文档原文，拿不到就不给（不写死）。
+   * 两处位置都看 —— rpc.md 里有 "Dialog methods" 小节是 0.99.1 之前的写法。 */
+  const methods = DIALOG_DOC_FILES.some((rel) => {
+    const text = readTextSafe(locate(packageDir, rel));
+    return text ? /Dialog methods/i.test(text) : false;
+  }) ? ['select', 'confirm', 'input', 'editor'] : null;
 
   return {
     ok: true,
