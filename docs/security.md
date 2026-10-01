@@ -20,6 +20,9 @@
   `{ ok:false, error:"额度查询失败" }` —— 内部 exception message、stack、路径、
   `ECONNREFUSED`、主机端口都不出后端。
 - **0 与 null 分离**：缺失显示 `—`，`0` 只表示真实 0；不用 `x || 0` 顶替。
+- **单位不猜**：只有供应商**明确给出**单位才显示 `$` / `¥`；单位未知（例如 NewAPI，
+  数值单位由站点 `quota_display_type` 决定）时显示**纯数值**，不标 USD/CNY，
+  也不做跨单位转换或相加。
 - **重置语义**：`resetAt` 只表示额度/限额的重置时间戳；API Key 自身的 `expires_at`
   不映射进来（不猜、不代替）。
 

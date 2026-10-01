@@ -55,7 +55,7 @@ smoke 1062 · git 161 · modules 117 · reliability · interactions · port-owne
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 204 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 229 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
@@ -828,9 +828,10 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 - **严格 URL 的 mock**：mock fetch 只认识白名单 URL，其它一律 `throw new Error("unexpected URL")`
   —— 杜绝「mock 不区分 URL」导致的假绿。OpenRouter 只允许 `https://openrouter.ai/api/v1/key`；
   DeepSeek 只允许 `https://api.deepseek.com/user/balance`。
-- **NewAPI 两个 endpoint 各返回不同 fixture**，断言调用次数正好两次、两个 URL 都出现过、
-  `Authorization` 与 `New-Api-User` 都带上；`hard_limit_usd=100` + `total_usage=2500`
-  → `used=25` / `remaining=75`。
+- **NewAPI 两个 endpoint 各返回不同 fixture**，断言两个 URL **各调用正好一次**、
+  只带 `Authorization: Bearer`（`New-Api-User` 只在配了 `quotaUserId` 时才带）；
+  `hard_limit_usd=100` + `total_usage=2500` → `used=25` / `remaining=75`
+  （这两个数是**站点展示数值**，单位未知，见下）。
 - **`resetAt` 语义**：`limit_reset="monthly"` + `expires_at=2027-12-31T23:59:59Z` → `resetAt === null`，
   且 `expires_at` 绝不成为 `resetAt`；只有能解析成日期的 `limit_reset` 才保留。
 - **DeepSeek 多币种**：CNY 110 + USD 15 → `balances.length === 2`、**不相加**、primary 优先 CNY。
@@ -865,10 +866,34 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   `https://example.com/api-b/` 与 `/api-b` 是**同一**身份（命中缓存）。
   OpenRouter / DeepSeek 用固定 canonical endpoint，baseUrl 带路径不影响身份。
 
-⚠️ **上游核对边界（如实记录）**：Pi 这一侧是本机 `@earendil-works/pi-coding-agent@0.99.2`
-与其依赖 `@earendil-works/pi-ai@0.99.2` 的类型定义**逐条读出来**的（wire `Usage`、
-`get_session_stats` 的 `tokens`/`cost`/`contextUsage`、`contextWindow` 而非 `limit`、
-compaction 后 `tokens`/`percent` 可为 null）。**QuantumNous/new-api 与 OpenRouter 的
-upstream 源码/文档本轮取不到**（本机 `web_fetch` 被环境阻断、`web_search` 端点不可用），
-所以那两条契约按本轮任务给出的 upstream 说明实现，代码方向是「Bearer 优先 + 可选兼容」，
-不会因为缺少某个非必要字段而失败。
+## P21-Fix-4 Usage / Quota 单位语义收口验证
+
+`npm run test:quota` 现在 **229 条**（+25）。本轮只动 NewAPI 的单位语义与前端货币符号：
+
+- **后端不再把 NewAPI 数值标成 USD**：`balance.currency === null`、`windows.unit === null`，
+  且整个 quota 对象里**不出现** `USD` / `CNY` 字符串；`used = total_usage/100 = 25`、
+  `limit = 100`、`remaining = 75` 的数值不变（变量名也从 `usedUsd`/`remainingUsd`
+  改成 `used`/`remaining`）。
+- **前端 unknown currency**：`currencySymbol()` 只认 `USD → $`、`CNY → ¥`，
+  其它/null/undefined/TOKENS 一律**空**；`fmtCurrency` / `fmtBalanceShort` / `fmtMaybeMoney`
+  默认单位改为 `null`，不再把未知单位默认成美元。
+- **DOM**：NewAPI 的 `{amount:75, currency:null}` + `{used:25, limit:100, remaining:75, unit:null}`
+  → 侧栏 `75.00`（不含 `$`/`¥`/`USD`/`CNY`）；Popover 出现「剩余额度 / 已使用 / 总额度」三行
+  且带「单位未知」标注，正文里**没有** `$`/`¥`/`USD`/`CNY`。
+- **回归**：OpenRouter 仍是 `$8.00`（Popover 有 `USD`、且 remaining 与余额同值时不出现重复行、
+  没有「单位未知」标注）；DeepSeek 仍是 `¥110.00 | $15.00` 与 `(CNY)`/`(USD)` 逐条；
+  恶意币种字符串现在**根本不进 DOM**（未知单位不加币种标注）。
+
+⚠️ **上游核对边界（如实记录）**：
+- **能核实的**：Pi 侧是本机 `@earendil-works/pi-coding-agent@0.99.2` 与其依赖
+  `@earendil-works/pi-ai@0.99.2` 的类型定义**逐条读出来**的（wire `Usage`、
+  `get_session_stats` 的 `tokens`/`cost`/`contextUsage`、`contextWindow` 而非 `limit`、
+  compaction 后 `tokens`/`percent` 可为 null）。
+- **取不到的**：`web_fetch` 对本机是阻断的（`raw.githubusercontent.com`、`github.com`、
+  `doc.newapi.pro`、`deepwiki.com` 全部解析到非公网 IP），所以 **QuantumNous/new-api 与
+  OpenRouter 的 upstream 源码/文档无法直接阅读**。NewAPI 的 `quota_display_type`
+  语义（USD/CNY/TOKENS/CUSTOM、`TotalUsage = amount * 100`、CNY 按
+  `quota / QuotaPerUnit * USDExchangeRate` 折算）来自本轮任务给出的 upstream 说明，
+  检索仅能佐证 new-api 有独立的额度显示单位与货币换算模块。
+  **代码方向取安全侧**：拿不到权威单位就不标单位、不猜、不转换 —— 这一侧的结论
+  不依赖于该说明的具体细节是否逐字准确。

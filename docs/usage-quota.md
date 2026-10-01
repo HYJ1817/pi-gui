@@ -78,7 +78,7 @@ interface RemoteQuota {
   status: 'ok' | 'unsupported' | 'unavailable' | 'auth_error' | 'error';
   balance: {                     // 默认展示的那一条（多币种时见 balances）
     amount: number | null;       // 剩余金额（真实 0 或 null）
-    currency: string | null;     // 货币单位，如 'USD'、'CNY'
+    currency: string | null;     // 货币单位，如 'USD'、'CNY'；**null = 单位未知**（不猜）
     granted?: number | null;     // 赠送额度（若支持）
     toppedUp?: number | null;    // 充值额度（若支持）
   } | null;
@@ -92,7 +92,7 @@ interface RemoteQuota {
     used: number | null;         // 已用额度
     limit: number | null;        // 限额上限
     remaining?: number | null;   // 剩余额度
-    unit: string | null;         // 单位
+    unit: string | null;         // 单位；**null = 单位未知**（例如 NewAPI）
   } | null;
   rateLimit: {
     requests: number | null;     // 请求上限
@@ -113,7 +113,7 @@ interface RemoteQuota {
 |---|---|---|---|
 | **OpenRouter** (`openrouter`) | ✅ **支持** (`ok`) | `GET https://openrouter.ai/api/v1/key` | 普通 **当前 API Key** 的 per-key 限额：读 `limit` / `limit_remaining` / `usage` / `rate_limit`。**不调用** Management-only 的 `/api/v1/credits`，也不用已失效的 `/api/v1/auth/key`（这两个是 P21 之前的实现，已废弃）。`limit_reset` 是 `daily/weekly/monthly` 这类周期标签，`expires_at` 是 key 自身的失效时间 —— **两者都不映射到 `resetAt`** |
 | **DeepSeek** (`deepseek`) | ✅ **支持** (`ok`) | `GET https://api.deepseek.com/user/balance` | 官方接口返回 `balance_infos`，**可能同时有 CNY 与 USD**：逐条展示、**绝不相加**；`primary` 优先 CNY（否则第一条）。赠送/充值金额逐币种保留 |
-| **NewAPI**（需显式配置） | ✅ **支持**（专有） | `GET {baseUrl}/dashboard/billing/subscription`<br>`GET {baseUrl}/dashboard/billing/usage` | 仅当 provider 配置里显式写 `quotaAdapter: "newapi"` 时启用（**不**按 provider 名 / baseUrl 名 / OpenAI 兼容性去猜）。鉴权用 `Authorization: Bearer <API key>`：当前 NewAPI 的 dashboard 接口走 `middleware.TokenAuth()`，Bearer 就能解析出 user context，**不要求 `quotaUserId`**。两个 endpoint 都要调，`used = total_usage / 100`（美分），`remaining = hard_limit_usd - used`。`quotaUserId` 只是**旧部署的可选兼容**：配了才额外带 `New-Api-User` 头，没配照常查询 |
+| **NewAPI**（需显式配置） | ✅ **支持**（专有，**单位未知**） | `GET {baseUrl}/dashboard/billing/subscription`<br>`GET {baseUrl}/dashboard/billing/usage` | 仅当 provider 配置里显式写 `quotaAdapter: "newapi"` 时启用（**不**按 provider 名 / baseUrl 名 / OpenAI 兼容性去猜）。鉴权用 `Authorization: Bearer <API key>`：当前 NewAPI 的 dashboard 接口走 `middleware.TokenAuth()`，Bearer 就能解析出 user context，**不要求 `quotaUserId`**；`quotaUserId` 只是**旧部署的可选兼容**（配了才带 `New-Api-User` 头）。两个 endpoint 都要调：`used = total_usage / 100`、`remaining = hard_limit_usd - used`。⚠️ **`total_usage` / `hard_limit_usd` 是历史字段名，数值不保证是美元** —— 见下面的「单位语义」一节：Pi GUI 在拿不到权威单位元数据时**保留数值、不标单位**（`balance.currency = null`、`windows.unit = null`），界面显示纯数值 |
 | **Sub2API** | ⛔ **unsupported** | 当前没有经过核实的稳定契约 | 不猜、不试；只有等上游有公开稳定接口后才可能适配 |
 | **OpenAI** (`openai`) | ⚠️ **仅本地 Usage** (`unsupported`) | 无官方 API Key 级公开端点 | 官方已废弃 legacy 额度接口；组织账单需管理 Key，不向普通项目 Key 开放 |
 | **Anthropic** (`anthropic`) | ⚠️ **仅本地 Usage** (`unsupported`) | 无官方公开额度接口 | 官方仅在响应 Header 返回短周期限流；严禁抓取网页 Cookie |
@@ -122,6 +122,27 @@ interface RemoteQuota {
 | **Ollama / 本地模型** | ⚠️ **仅本地 Usage** (`unsupported`) | 无（本地离线运行） | 本地推理无账户额度概念 |
 
 > `unsupported` 的供应商**一次网络请求都不会发**（测试里有断言）。
+
+### 单位语义：NewAPI 的数值不保证是美元
+
+- 历史字段名是 `hard_limit_usd` / `total_usage`，**但数值不保证以美元计**。当前 NewAPI 的
+  `GetSubscription()` / `GetUsage()` 会按站点的 **`quota_display_type`**（至少
+  `USD` / `CNY` / `TOKENS` / `CUSTOM`）把数值换算成**站点展示单位**（例如 CN 站点按
+  `quota / QuotaPerUnit * USDExchangeRate` 折算成 CNY；TOKENS 模式则直接保留 token/quota 数值）。
+- `total_usage / 100` 这个换算仍然保留：`GetUsage` 最后统一 `TotalUsage = amount * 100`，
+  所以除法还原的是 **NewAPI 当前站点的 display amount**，
+  **其单位由站点 `quota_display_type` 决定**。
+- 这两个 billing endpoint **自身不带可靠的单位元数据**。没有证据就不标单位：
+  Pi GUI 的 NewAPI 适配器返回 `balance.currency = null`、`windows.unit = null`
+  （generic numeric quota），界面按**纯数值**展示 —— 不印 `$` / `¥`、不写 `USD` / `CNY`，
+  也不做跨单位转换或相加。
+- 侧栏只显示数值（例如 `75.00`）；Popover 里拆成「剩余额度 / 已使用 / 总额度」三行，
+  并在单位未知时明确标注「单位未知：由供应商站点的展示单位设置决定，Pi GUI 不猜货币」。
+- **本轮不引入第三个请求**去读 `/api/status` 的 `quota_display_type` / `custom_currency_symbol`：
+  那会扩大收口范围，且自托管站点还有 reverse-proxy base path、CUSTOM 符号与汇率等边界。
+  宁可显示「无单位数值」，也不猜。
+- OpenRouter 仍然明确是 USD（`/api/v1/key` 的语义就是美元额度）；DeepSeek 仍然用它
+  **真实返回的** `currency`（`balance_infos` 的 CNY/USD 逐条展示、不相加）。
 
 ---
 

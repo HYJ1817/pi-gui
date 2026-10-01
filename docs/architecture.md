@@ -359,9 +359,13 @@ get_messages ─┘
   （CNY/USD），逐条展示、**不相加**。
 - **NewAPI**：仅在用户显式配置 `quotaAdapter: "newapi"` 时启用；用
   `Authorization: Bearer <API key>` 调 `/dashboard/billing/subscription` 与
-  `/dashboard/billing/usage`（`total_usage / 100`，`remaining = hard_limit_usd - used`）。
+  `/dashboard/billing/usage`（`used = total_usage / 100`，`remaining = hard_limit_usd - used`）。
   不冒充通用 OpenAI 标准；`quotaUserId` 只是**旧部署的可选兼容**（配了才带 `New-Api-User` 头，
   没配照常查询）—— 历史文档把它写成必填是错的。
+  ⚠️ **`hard_limit_usd` / `total_usage` 是历史字段名，数值不保证是美元**：NewAPI 会按站点的
+  `quota_display_type`（USD / CNY / TOKENS / CUSTOM）换算成**站点展示单位**，而这两个 endpoint
+  不带可靠单位元数据 → Pi GUI 保留数值、`currency`/`unit` 返回 `null`，界面显示**纯数值**
+  （不印 `$`/`¥`，不猜 CNY/TOKENS/CUSTOM，不做跨单位转换或相加）。
 - **Sub2API**：`unsupported` —— 当前没有经过核实的稳定契约，Pi GUI 不猜、不试。
   （历史文档曾把 Sub2API 与 NewAPI 并列写成支持 `/api/v1/user/dashboard`，那是错的。）
 - **仅本地用量（无远端配额）**：OpenAI、Anthropic、Google、Groq、Mistral、Ollama 等因无官方公开/稳定配额 endpoint，状态一律返回 `unsupported`。用户可在界面清晰看到其本地消耗（`LocalUsage`：输入/输出/缓存/上下文），不会将其混淆为额度错误。详见 [usage-quota.md](usage-quota.md)。
