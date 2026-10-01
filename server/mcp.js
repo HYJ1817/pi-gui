@@ -178,6 +178,8 @@ function listExtensionDir(dir) {
  *                  保证 `/api/mcp` 读到的包 = bridge 实际启动的那个包（P20.5）。
  * @param piVersion 规范版本状态（server/pi-version.js 的 read()）。缺省则只回 detected.version。
  * @param piBuiltins 共用的 built-in 探测：`(cwd) => 探测结果`。缺省则自己建一个。
+ * @param nativeSummary P20.6 原生摘要的同步视图（`() => 上次算出的摘要或 null`）。
+ *                      只读缓存、不触发 spawn；Server 明细走 `/api/mcp/servers`。
  */
 export function createMcp({
   runtime,
@@ -186,6 +188,7 @@ export function createMcp({
   resolvePackageDir = null,
   piVersion = null,
   piBuiltins = null,
+  nativeSummary = null,
 }) {
   const HOME = env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, CONFIG_DIR, 'agent');
@@ -259,10 +262,22 @@ export function createMcp({
      * 老调用方不用改；新代码读 `version` 能拿到出处与状态。 */
     const canonical = typeof piVersion === 'function' ? safeRead(piVersion) : null;
 
+    /* P20.6 原生摘要：只读上次算出的缓存（同步、不 spawn）。
+     * 没打开过 MCP 页（没算过）就是 null —— 「没算过」≠「没有 server」。 */
+    let native = null;
+    try {
+      native = typeof nativeSummary === 'function' ? nativeSummary() : null;
+    } catch {
+      native = null;
+    }
+
     return {
       ok: true,
       // 「有没有原生 MCP」是这份报告唯一的结论，null = 检测不出来（不许猜成 false）
       supported: detected.supported,
+      // P20.6：原生状态与配置 scope（轻量缓存视图）；运行时明细与动作走
+      // `/api/mcp/servers`（GET）与 `/api/mcp/status`（POST 显式刷新）。
+      native: native || { fresh: false },
       reason: detected.reason,
       evidence: detected.evidence,
       piVersion: canonical && canonical.value ? canonical.value : detected.version,
@@ -276,11 +291,13 @@ export function createMcp({
       },
       // 只报「找到了没有」，不回绝对路径（renderer 不需要它）
       piPackageFound: detected.packageFound,
-      // 永远是空的 —— Server 的读取与管理留给后续阶段。留着这个字段是为了
-      // 前端结构稳定，也为了 P20.6 真做的时候不用改前端。
+      // Server 明细不在这份同步报告里 —— 运行时状态要跑 `pi mcp list --json`
+      // （会启动用户的 stdio servers），只在 `/api/mcp/servers`（GET）里给，
+      // 状态刷新走 `/api/mcp/status`（POST，需用户手势）。这里留空数组是
+      // 为了前端结构稳定（P20.5 的约定保持）。
       servers: [],
       serversNote: detected.supported === true
-        ? '这个 pi 带 MCP 能力，但本页只报告能力：Server 的读取与管理留给后续阶段。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove）。'
+        ? '这个 pi 带 MCP 能力：Server 明细与运行时状态在 MCP 页（读 /api/mcp/servers，刷新走显式手势）。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove，或页内受控动作）。'
         : detected.supported === false
           ? '这个 pi 不带 MCP，所以没有 Server 可以列出。'
           : '无法判定这个 pi 是否支持 MCP，所以不列 Server。',

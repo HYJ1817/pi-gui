@@ -66,6 +66,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param projectConfig 当前项目的配置（handle）
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
+ * @param mcpNative     P20.6 原生 MCP 状态与受控动作（handleServers / handleStatus）
  * @param extensions    Extension 只读注册表（handle）
  * @param sessions      会话列表与切换（handle）
  * @param sessionSearch 会话全文搜索（handle）
@@ -85,6 +86,7 @@ export function createRouter({
   projectConfig,
   skills,
   mcp,
+  mcpNative = null,
   approvalProbe,
   extensions,
   sessions,
@@ -184,6 +186,17 @@ export function createRouter({
     }
     if (url.pathname === '/api/mcp') {
       return mcp.handle(req, res, url);
+    }
+    /* P20.6 原生 MCP：Server 明细（GET）与受控动作（POST add/remove/login/logout）。
+     * 独立顶层路径，不挂在 /api/mcp 下面（与 skills 同一条理由：省掉顺序约束）。
+     * 状态刷新（POST，会启动用户的 stdio servers）只在用户手势时调用。 */
+    if (url.pathname === '/api/mcp/servers') {
+      if (mcpNative) return mcpNative.handleServers(req, res);
+      return json(res, 503, { ok: false, code: 'not-wired', error: 'MCP 原生模块未装配' });
+    }
+    if (url.pathname === '/api/mcp/status') {
+      if (mcpNative) return mcpNative.handleStatus(req, res);
+      return json(res, 503, { ok: false, code: 'not-wired', error: 'MCP 原生模块未装配' });
     }
     /* P19：approval 能力报告（只读本机 pi 包）。GET，必须排在 405 兜底之前。 */
     if (url.pathname === '/api/approvals/capability') {

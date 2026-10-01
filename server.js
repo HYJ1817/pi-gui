@@ -52,6 +52,7 @@ import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
+import { createMcpNative } from './server/mcp-native.js';
 import { createPiBuiltins } from './server/pi-builtins.js';
 import { createPiLaunch } from './server/pi-launch.js';
 import { createPiVersion, createPiVersionProbe } from './server/pi-version.js';
@@ -69,7 +70,7 @@ import { createPlanner } from './server/planner/index.js';
 /* P9：独立验证要真的跑一条命令，而全项目唯一的 spawn 出口在 cli.js。
  * planner/ 下的模块不许跨目录 import（tests/modules.cjs 的守卫），
  * 所以执行能力**在这里注入**过去 —— 与 scheduler 拿 gitStatus 是同一种装配。 */
-import { runShellCommand } from './server/agents/cli.js';
+import { runShellCommand, runCli } from './server/agents/cli.js';
 import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
@@ -287,6 +288,29 @@ const gitRoutes = createGitRoutes({ runtime });
  * （HOME）决定了去哪找 skill，必须和 spawn pi 时用的是同一份环境，否则会出现
  * 「界面说有一堆 skill、pi 一个都没加载」。 */
 const skills = createSkills({ runtime, rpc, env: process.env });
+/* P20.6 Native MCP 状态与受控动作。
+ *
+ * 状态真相只有两条官方路：`pi mcp list --json`（显式刷新才跑，会启动用户
+ * 的 stdio servers，所以绝不轮询）与两处 mcp.json 的安全结构解析。
+ * 跑的入口从 launch identity 派生（与 bridge 同一份包），经 agents/cli.js
+ * 的 runCli（shell:false + args 数组）—— 与 planner 注入 runShellCommand
+ * 同一种装配，不新增 spawn 出口。 */
+const mcpNative = createMcpNative({
+  runtime,
+  env: process.env,
+  resolvePackageDir: piLaunch.packageDir,
+  readTrust: async () => (await skills.readIndex()).trust,
+  rpc,
+  runCli: (entry, args, opts) => runCli({
+    entry,
+    args,
+    cwd: opts && opts.cwd,
+    env: {},
+    timeoutMs: opts && opts.timeoutMs,
+    maxStdoutBytes: 64 * 1024,
+  }),
+  piBuiltins: (cwd) => piBuiltins.read({ cwd }),
+});
 const mcp = createMcp({
   runtime,
   env: process.env,
@@ -297,6 +321,8 @@ const mcp = createMcp({
   piVersion: () => piVersion.read(),
   // 与 /api/mcp 共用同一份 built-in 探测（它自己带 cwd 维度的缓存）
   piBuiltins: (cwd) => piBuiltins.read({ cwd }),
+  // 原生摘要（上次算出的，不触发 spawn；没算过就是 null）
+  nativeSummary: () => mcpNative.peekSummary(),
 });
 /* P19：approval 能力报告（只读本机 pi 包，不执行它的代码）。 */
 const approvalProbe = createApprovalProbe({ env: process.env, piBin: PI_BIN, resolvePackageDir: piLaunch.packageDir });
@@ -445,6 +471,7 @@ const route = createRouter({
   projectConfig,
   skills,
   mcp,
+  mcpNative,
   approvalProbe,
   extensions,
   sessions,

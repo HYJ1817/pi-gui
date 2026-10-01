@@ -7,10 +7,10 @@
  *   - 「有哪些 skill」= 后端按 pi 的发现规则扫文件系统（4 个根 + settings 条目）；
  *   - 「哪些真的生效」= 问 pi 自己（RPC get_commands）—— 这一条**不由 Pi GUI 判断**，
  *     因为只有 pi 知道它到底加载了什么（信任闸门、同名冲突、package 里的 skill…）；
- *   - 「MCP」= 能力由**检测本机装着的那个 pi 包**决定（历史基线 0.87.0 没有原生 MCP，
- *     当前基线 0.99.1 自带 builtin:mcp）。这里给的是「带出处的结论 + built-in 清单 +
- *     RPC 事实 + 怎么配置 + 官方替代路径」，**不是**一份 Server 列表 ——
- *     Server 的读取与管理留给 P20.6。
+ *   - 「MCP」= pi 原生集成的管理面（P20.6）：原生状态（active / replaced /
+ *     disabled / unknown，只认证据）+ 两处 mcp.json 的安全结构解析 +
+ *     `pi mcp list --json` 的运行时状态（显式刷新才跑）+ 受控动作
+ *     （add / remove / login / logout 经 pi 官方 CLI；enable 等走 /mcp TUI）。
  *
  * 界面上因此有三件事必须说清楚，不能省：
  *   1. `loaded` 与 `state` 是两回事。磁盘上有 ≠ pi 加载了。pi 没运行时 loaded 是 null，
@@ -25,7 +25,7 @@
  * 后端在自己的索引里按 ID 查真实路径。所以这里不需要、也不应该做路径校验。
  */
 import { S, ownsWorkspace } from './state.js';
-import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchExtensions, fetchApprovalCapability, restartBackend } from './api.js';
+import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchMcpServers, refreshMcpStatus, mcpServerAction, fetchExtensions, fetchApprovalCapability, restartBackend } from './api.js';
 import { confirmModal } from './ui/modal.js';
 import { openWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
@@ -34,6 +34,7 @@ import { renderSubagentSetup } from './subagents.js';
 import { renderMemorySetup } from './memory.js';
 import { renderBrowserSetup } from './browser.js';
 import { renderApprovalSetup } from './approval.js';
+import { snapshotMcpObservation } from './mcp-observer.js';
 
 /* 状态 → 展示用的圆点与文案。
  * 键必须与 server/skills.js 里 state 的取值一一对应，多一个少一个都会显示成原始英文。 */
@@ -362,10 +363,443 @@ function skillsTab(card, isCurrent) {
   load(false);
 }
 
-/* ---------- MCP 标签页 ---------- */
+/* ---------- MCP 标签页（P20.6 原生集成） ---------- */
 
-/* Pi RPC 只暴露 extension 命令及来源，没有已注册 tool 的清单。
- * 这里仅展示后端可验证的状态，不从文件名猜能力。 */
+const MCP_STATE_META = {
+  active: { dot: 'on', label: '原生 MCP 生效中' },
+  replaced: { dot: 'warn', label: '内置 MCP 被扩展接管' },
+  disabled: { dot: 'off', label: '内置 MCP 已禁用' },
+  unsupported: { dot: 'dim', label: '这个 pi 不带原生 MCP' },
+  unknown: { dot: 'dim', label: '原生状态未知' },
+};
+
+const MCP_RUNTIME_META = {
+  connected: '已连接',
+  connecting: '连接中…',
+  'needs-auth': '需要登录',
+  disconnected: '已断开',
+  disabled: '已停用',
+  failed: '连接失败',
+};
+
+function mcpStateMeta(state) {
+  return MCP_STATE_META[state] || { dot: 'dim', label: state || '未知' };
+}
+
+function runtimeStateLabel(state) {
+  if (!state) return '未知';
+  return MCP_RUNTIME_META[state] || state;
+}
+
+/** 生效徽标：effective 是后端按 enabled / 覆盖 / 信任 / 原生状态算好的结论。 */
+function effectiveBadge(eff) {
+  if (!eff || typeof eff !== 'object') return el('span', 'ext-badge', '未知');
+  if (eff.active) return el('span', 'ext-badge', '生效中');
+  const reason = { untrusted: '未生效（项目未信任）', overridden: '被项目同名覆盖', disabled: '已停用', replaced: '被扩展接管', unsupported: 'pi 不支持' }[eff.reason];
+  return el('span', 'ext-badge', reason || '未生效');
+}
+
+function scopeLabel(scope) {
+  return scope === 'project' ? '项目' : scope === 'user' ? '用户' : '未知';
+}
+
+function mcpTab(card, isCurrent) {
+  const wrap = el('div', 'ext-mcp');
+  card.appendChild(wrap);
+  wrap.appendChild(el('div', 'ext-empty', '读取中…'));
+
+  const reload = () => {
+    if (!isCurrent()) return;
+    wrap.innerHTML = '';
+    mcpTabBody(wrap, isCurrent, reload);
+  };
+
+  mcpTabBody(wrap, isCurrent, reload);
+}
+
+async function mcpTabBody(wrap, isCurrent, reload) {
+  wrap.innerHTML = '';
+  wrap.appendChild(el('div', 'ext-empty', '读取中…'));
+
+  const [j, n] = await Promise.all([fetchMcp(), fetchMcpServers()]);
+  if (!isCurrent()) return;
+  wrap.innerHTML = '';
+  if (!j || j.ok === false) {
+    wrap.appendChild(note((j && j.error) || '读取 MCP 状态失败', 'warn'));
+    return;
+  }
+
+  /* 结论先摆出来。supported 可能是 null（检测不出来）—— 那种情况下不许说成 false。 */
+  const head = el('div', 'ext-mcp-head');
+  if (j.supported === false) {
+    head.appendChild(el('span', 'ext-dot dim'));
+    head.appendChild(el('h4', '', '这个 pi 不带原生 MCP'));
+  } else if (j.supported === true) {
+    head.appendChild(el('span', 'ext-dot on'));
+    head.appendChild(el('h4', '', '这个 pi 带 MCP 能力'));
+  } else {
+    head.appendChild(el('span', 'ext-dot dim'));
+    head.appendChild(el('h4', '', '无法确定这个 pi 是否支持 MCP'));
+  }
+  wrap.appendChild(head);
+
+  /* 版本与出处分开摆。「文档里的验证基线」是历史事实，而这里显示的是
+   * 你机器上跑的那个 —— 两件事混成一句「pi 版本」正是旧文案的根源。 */
+  const ver = j.version || null;
+  if (ver && ver.value) {
+    wrap.appendChild(note(`检测到的 pi 版本：${ver.value}（来源 ${ver.source}${ver.updatedAt ? ' · ' + ver.updatedAt : ''}）`, 'dim'));
+  } else if (ver && ver.status === 'malformed') {
+    wrap.appendChild(note('读到了 pi 包，但它的 version 字段不是一个版本号 —— 按「版本未知」处理。', 'warn'));
+  } else {
+    wrap.appendChild(note('读不到本机 pi 包的版本 —— 按「版本未知」处理。', 'warn'));
+  }
+  wrap.appendChild(note(j.reason, 'dim'));
+  if (j.evidence) {
+    wrap.appendChild(el('div', 'ext-sec-head', '出处'));
+    wrap.appendChild(el('pre', 'ext-code quote', j.evidence));
+  }
+
+  /* built-in 能力。编译在 pi 包里的扩展，不出现在用户扩展列表里。 */
+  const bi = j.builtins || {};
+  wrap.appendChild(el('div', 'ext-sec-head', 'built-in 能力（pi 自带）'));
+  if (bi.known && Array.isArray(bi.entries)) {
+    if (bi.entries.length) {
+      const chips = el('div', 'ext-files');
+      for (const b of bi.entries) {
+        const chip = el('span', 'ext-file', `builtin:${b.id}`);
+        chip.title = b.evidence || '';
+        if (b.replaceable) chip.appendChild(el('span', 'ext-badge', '可被替换'));
+        chips.appendChild(chip);
+      }
+      wrap.appendChild(chips);
+    } else {
+      wrap.appendChild(note('这个 pi 包里没有列出任何 built-in 扩展。', 'dim'));
+    }
+    if (bi.evidence) wrap.appendChild(el('pre', 'ext-code quote', bi.evidence));
+    wrap.appendChild(note(bi.note || '', 'dim'));
+  } else {
+    wrap.appendChild(note('读不到这个 pi 包的 built-in 扩展清单 —— 按「未知」处理，不硬编码结论。', 'dim'));
+  }
+
+  /* P20.6 原生状态与 Servers。 */
+  wrap.appendChild(el('div', 'ext-sec-head', 'MCP Servers（pi 原生）'));
+  if (!n || n.ok === false) {
+    wrap.appendChild(note((n && n.error) || '读不到原生 MCP 摘要', 'warn'));
+  } else {
+    const st = (n.native && n.native.state) || 'unknown';
+    const meta = mcpStateMeta(st);
+    const stHead = el('div', 'ext-mcp-head');
+    stHead.appendChild(el('span', 'ext-dot ' + meta.dot));
+    stHead.appendChild(el('h4', '', meta.label));
+    wrap.appendChild(stHead);
+    if (n.native && n.native.reason) wrap.appendChild(note(n.native.reason, 'dim'));
+
+    const servers = Array.isArray(n.servers) ? n.servers : [];
+    if (!servers.length) {
+      wrap.appendChild(note('没有配置任何 MCP server。用下面的表单添加（无凭据的），或在终端跑 pi mcp add。', 'dim'));
+    }
+    for (const s of servers) {
+      const box = el('div', 'ext-item');
+      const top = el('div', 'ext-item-top');
+      top.appendChild(el('span', 'ext-name', s.name || '?'));
+      top.appendChild(el('span', 'ext-badge', scopeLabel(s.scope)));
+      box.appendChild(top);
+      const bits = [];
+      bits.push(`启用：${s.enabled === true ? '是' : s.enabled === false ? '否' : '未知'}`);
+      bits.push(`exposure：${s.exposure || '未知'}`);
+      bits.push(`传输：${s.transportType === 'http' ? '远端' : s.transportType === 'stdio' ? '本地命令' : '未知'}`);
+      if (s.hasSecrets) bits.push('含凭据引用（值不显示）');
+      if (s.toolExposure && Object.keys(s.toolExposure).length) bits.push(`单工具 exposure ${Object.keys(s.toolExposure).length} 条`);
+      box.appendChild(el('div', 'ext-item-sub', bits.join(' · ')));
+      const acts = el('div', 'ext-acts');
+      acts.appendChild(effectiveBadge(s.effective));
+      if (s.overridden) acts.appendChild(el('span', 'ext-badge', '用户级被覆盖'));
+      // 运行时状态（上次刷新的，不承诺实时）。
+      const rt = (n.runtime && Array.isArray(n.runtime.servers) ? n.runtime.servers : []).find((r) => r.name === s.name);
+      if (rt) {
+        acts.appendChild(el('span', 'ext-badge', '运行：' + runtimeStateLabel(rt.state)));
+        if (typeof rt.toolCount === 'number') acts.appendChild(el('span', 'ext-badge', `${rt.toolCount} 个工具`));
+        if (rt.error) box.appendChild(el('pre', 'ext-code quote', String(rt.error).slice(0, 300)));
+      }
+      // 动作：login / logout / remove（add 在列表下方表单）。enable 等走 /mcp TUI。
+      const loginBtn = el('button', 'btn tiny', '登录');
+      loginBtn.type = 'button';
+      loginBtn.title = '跑 pi mcp login（OAuth 由 pi 接管浏览器与 token，Pi GUI 不经手凭据）';
+      loginBtn.onclick = async () => {
+        const ok = await confirmModal({
+          title: `登录 ${s.name}？`,
+          message: '会跑 pi 的官方登录（OAuth 由 pi 接管：开浏览器、等你授权、自己存 token）。Pi GUI 看不到任何凭据。最多等 2 分钟，超时请改用终端。',
+          okText: '登录',
+        });
+        if (!ok || !isCurrent()) return;
+        loginBtn.disabled = true;
+        const r = await mcpServerAction({ action: 'login', name: s.name });
+        if (!isCurrent()) return;
+        loginBtn.disabled = false;
+        if (!r || r.ok !== true) {
+          toast((r && (r.code === 'workspace-stale' ? '项目已切换，操作作废' : r.error)) || '登录失败', 'error');
+          return;
+        }
+        toast('登录成功，已刷新状态', 'info');
+        reload();
+      };
+      const logoutBtn = el('button', 'btn tiny', '退出登录');
+      logoutBtn.type = 'button';
+      logoutBtn.title = '跑 pi mcp logout（删掉 pi 存的 OAuth 凭据）';
+      logoutBtn.onclick = async () => {
+        const ok = await confirmModal({
+          title: `退出 ${s.name} 的登录？`,
+          message: '会删掉 pi 存的 OAuth 凭据。remove 只删配置不删凭据，凭据要走这一步。',
+          okText: '退出登录',
+          danger: true,
+        });
+        if (!ok || !isCurrent()) return;
+        logoutBtn.disabled = true;
+        const r = await mcpServerAction({ action: 'logout', name: s.name });
+        if (!isCurrent()) return;
+        logoutBtn.disabled = false;
+        if (!r || r.ok !== true) {
+          toast((r && (r.code === 'workspace-stale' ? '项目已切换，操作作废' : r.error)) || '退出失败', 'error');
+          return;
+        }
+        toast('已退出登录', 'info');
+        reload();
+      };
+      const rmBtn = el('button', 'btn tiny', '移除');
+      rmBtn.type = 'button';
+      rmBtn.onclick = async () => {
+        const ok = await confirmModal({
+          title: `移除 ${s.name}？`,
+          message: `会从${s.scope === 'project' ? '项目' : '用户'}级 mcp.json 里删掉这条。注意：OAuth 凭据不会一起删（要清凭据再点退出登录）。`,
+          okText: '移除',
+          danger: true,
+        });
+        if (!ok || !isCurrent()) return;
+        rmBtn.disabled = true;
+        const r = await mcpServerAction({ action: 'remove', name: s.name, scope: s.scope });
+        if (!isCurrent()) return;
+        rmBtn.disabled = false;
+        if (!r || r.ok !== true) {
+          toast((r && (r.code === 'workspace-stale' ? '项目已切换，操作作废' : r.error)) || '移除失败', 'error');
+          return;
+        }
+        toast('已移除' + ((r && r.note) ? '（' + r.note + '）' : ''), 'info');
+        reload();
+      };
+      acts.appendChild(loginBtn);
+      acts.appendChild(logoutBtn);
+      acts.appendChild(rmBtn);
+      box.appendChild(acts);
+      wrap.appendChild(box);
+    }
+    for (const inv of n.configInvalid || []) wrap.appendChild(note(inv, 'warn'));
+    if (n.configError && (n.configError.user || n.configError.project)) {
+      wrap.appendChild(note('配置文件读不出来（按空处理，不猜）：' + [n.configError.user, n.configError.project].filter(Boolean).join(' / '), 'warn'));
+    }
+
+    /* 运行时状态：只在手势时刷新（会启动用户的 stdio servers，不轮询）。 */
+    const rt = n.runtime;
+    const bar = el('div', 'ext-acts');
+    const refBtn = el('button', 'btn tiny primary', rt ? '刷新状态' : '获取运行时状态');
+    refBtn.type = 'button';
+    refBtn.title = '跑 pi mcp list --json（官方结构化输出）。会连接已启用的 servers，用户级命令会被执行一次。';
+    const rtNote = el('span', 'ext-item-sub', rt && rt.at ? `上次刷新：${rt.at}${rt.cached ? '（缓存）' : ''}` : '尚未获取运行时状态（未知≠没有）');
+    refBtn.onclick = async () => {
+      refBtn.disabled = true;
+      const r = await refreshMcpStatus();
+      if (!isCurrent()) return;
+      refBtn.disabled = false;
+      if (!r || r.ok !== true) {
+        toast((r && (r.code === 'workspace-stale' ? '项目已切换，操作作废' : r.error)) || '刷新失败', 'error');
+        return;
+      }
+      reload();
+    };
+    bar.appendChild(refBtn);
+    bar.appendChild(rtNote);
+    wrap.appendChild(bar);
+    if (rt && !rt.ok) wrap.appendChild(note(rt.error || '状态刷新失败', 'warn'));
+    for (const e of (rt && rt.errors) || []) wrap.appendChild(note(e, 'warn'));
+
+    mcpAddForm(wrap, isCurrent, reload);
+    try {
+      const ob = snapshotMcpObservation();
+      wrap.appendChild(
+        note(
+          ob.any
+            ? `这次运行观察到 ${ob.count} 个 MCP 来源被调用（最近：${ob.names.join(' · ')}）。观察到只说明调用过，不构成「已配置」的证据。`
+            : '这次运行尚未观察到 MCP 工具调用（没调用过≠不支持）。',
+          'dim',
+        ),
+      );
+    } catch {
+      /* 观察快照失败不挡住整个标签页 */
+    }
+    wrap.appendChild(note('启用 / 停用 / 重连 / 改 exposure 没有官方自动化接口 —— 请用 pi 的 /mcp 管理器（TUI）或直接编辑 mcp.json。这里不伪造这些开关。', 'dim'));
+  }
+
+  /* RPC 事实：有没有「已注册工具清单」这条命令。 */
+  const rpc = j.rpc || null;
+  if (rpc) {
+    wrap.appendChild(el('div', 'ext-sec-head', 'RPC 事实'));
+    wrap.appendChild(
+      note(
+        rpc.commandCount === null
+          ? '读不到 RPC 命令表，无法确认它有没有工具清单命令。'
+          : `RpcCommand 联合共 ${rpc.commandCount} 条命令，其中没有一条返回已注册工具清单。`,
+        rpc.toolListCommand === false ? 'dim' : 'warn',
+      ),
+    );
+    wrap.appendChild(note(rpc.note || '', 'dim'));
+    const api = j.extensionApi;
+    if (api && api.available) {
+      wrap.appendChild(
+        note(
+          `ExtensionAPI：registerMcpServer ${api.registerMcpServer ? '有' : '没有'} · ` +
+            `getMcpServers ${api.getMcpServers ? '有' : '没有'} · getAllTools ${api.getAllTools ? '有' : '没有'}` +
+            '（这些是扩展进程内的 API，RPC 客户端拿不到）',
+          'dim',
+        ),
+      );
+    }
+  }
+
+  /* 替代路径。 */
+  const route = j.extensionRoute || {};
+  wrap.appendChild(el('div', 'ext-sec-head', 'pi 的做法：扩展（extension）'));
+  wrap.appendChild(note(route.note || '', 'dim'));
+  const rowsBox = el('div', 'ext-rows');
+  if (route.userDir) rowsBox.appendChild(row('用户级扩展目录', route.userDir));
+  if (route.projectDir) rowsBox.appendChild(row('项目级扩展目录', route.projectDir));
+  wrap.appendChild(rowsBox);
+
+  for (const [label, side] of [
+    ['用户级', route.user],
+    ['项目级', route.project],
+  ]) {
+    if (!side) continue;
+    const box = el('div', 'ext-list-static');
+    box.appendChild(el('div', 'ext-sec-head', `${label}（${side.exists ? side.count + ' 项' : '目录不存在'}）`));
+    if (side.error) box.appendChild(note(side.error, 'warn'));
+    for (const e of side.entries || []) {
+      const line = el('div', 'ext-item static');
+      line.appendChild(el('span', 'ext-name', e.name));
+      if (e.kind === 'dir') line.appendChild(el('span', 'ext-badge', '目录'));
+      if (typeof e.size === 'number') line.appendChild(el('span', 'ext-badge', `${e.size} B`));
+      box.appendChild(line);
+    }
+    wrap.appendChild(box);
+  }
+
+  const fromSettings = route.fromSettings || [];
+  const packages = route.packages || [];
+  if (fromSettings.length || packages.length) {
+    wrap.appendChild(el('div', 'ext-sec-head', '来自 settings 的声明'));
+    const rows2 = el('div', 'ext-rows');
+    for (const x of fromSettings) rows2.appendChild(row(`extensions（${x.scope}）`, x.value));
+    for (const x of packages) rows2.appendChild(row(`packages（${x.scope}）`, x.value));
+    wrap.appendChild(rows2);
+  }
+
+  wrap.appendChild(
+    note(
+      'Pi GUI 只列出这些扩展，不安装、不启用、也不执行它们 —— 扩展是能执行代码的，装什么由你在 pi 那边决定。',
+      'dim',
+    ),
+  );
+}
+
+/* 添加表单：只做无凭据字段。含 env / headers / OAuth 的请走终端
+ * `pi mcp add` 或直接编辑文件 —— 凭据值不进浏览器、不进 HTTP。 */
+function mcpAddForm(wrap, isCurrent, reload) {
+  wrap.appendChild(el('div', 'ext-sec-head', '添加 Server（无凭据）'));
+  const form = el('div', 'ext-form');
+  const nameInput = el('input', 'ext-input');
+  nameInput.placeholder = '名字（字母/数字/_/-）';
+  nameInput.maxLength = 64;
+  const scopeSel = el('select', 'ext-sel');
+  for (const [v, t] of [['user', '用户级'], ['project', '项目级']]) {
+    const o = el('option', '', t);
+    o.value = v;
+    scopeSel.appendChild(o);
+  }
+  const transSel = el('select', 'ext-sel');
+  for (const [v, t] of [['stdio', '本地命令'], ['http', '远端 URL']]) {
+    const o = el('option', '', t);
+    o.value = v;
+    transSel.appendChild(o);
+  }
+  const cmdInput = el('input', 'ext-input');
+  cmdInput.placeholder = '命令（单个可执行文件） + 参数空格分隔，如：npx -y server';
+  const urlInput = el('input', 'ext-input');
+  urlInput.placeholder = 'https://…/mcp';
+  urlInput.style.display = 'none';
+  const expSel = el('select', 'ext-sel');
+  for (const [v, t] of [['codemode', 'codemode（默认）'], ['codemode-deferred', 'codemode-deferred'], ['deferred', 'deferred'], ['direct', 'direct'], ['hidden', 'hidden']]) {
+    const o = el('option', '', t);
+    o.value = v;
+    expSel.appendChild(o);
+  }
+  transSel.onchange = () => {
+    const isHttp = transSel.value === 'http';
+    cmdInput.style.display = isHttp ? 'none' : '';
+    urlInput.style.display = isHttp ? '' : 'none';
+  };
+  const addBtn = el('button', 'btn tiny primary', '添加');
+  addBtn.type = 'button';
+  addBtn.onclick = async () => {
+    const name = nameInput.value.trim();
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) {
+      toast('名字只允许字母、数字、_ 和 -', 'error');
+      return;
+    }
+    const isHttp = transSel.value === 'http';
+    const payload = { action: 'add', name, scope: scopeSel.value, transport: transSel.value, exposure: expSel.value };
+    if (isHttp) {
+      const url = urlInput.value.trim();
+      if (!/^https?:\/\//.test(url)) {
+        toast('远端需要合法的 http(s) URL', 'error');
+        return;
+      }
+      payload.url = url;
+    } else {
+      const parts = cmdInput.value.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) {
+        toast('本地命令不能为空', 'error');
+        return;
+      }
+      payload.command = parts[0];
+      payload.args = parts.slice(1);
+    }
+    const ok = await confirmModal({
+      title: `添加 ${name}？`,
+      message: `会写进${payload.scope === 'project' ? '项目' : '用户'}级 mcp.json（pi 官方 add，存在同名则替换）。项目级文件只在项目被信任后才被 pi 读取。`,
+      okText: '添加',
+    });
+    if (!ok || !isCurrent()) return;
+    addBtn.disabled = true;
+    const r = await mcpServerAction(payload);
+    if (!isCurrent()) return;
+    addBtn.disabled = false;
+    if (!r || r.ok !== true) {
+      toast((r && (r.code === 'workspace-stale' ? '项目已切换，操作作废' : r.error)) || '添加失败', 'error');
+      return;
+    }
+    toast('已添加', 'info');
+    reload();
+  };
+  form.appendChild(nameInput);
+  form.appendChild(scopeSel);
+  form.appendChild(transSel);
+  form.appendChild(cmdInput);
+  form.appendChild(urlInput);
+  form.appendChild(expSel);
+  form.appendChild(addBtn);
+  wrap.appendChild(form);
+  wrap.appendChild(note('含凭据（env / headers / OAuth）的 server 请走终端 pi mcp add（支持 ${VAR} 与 !command 引用）或直接编辑 mcp.json —— 凭据值不进 Pi GUI。', 'dim'));
+}
+
+
 function extensionTab(card, isCurrent) {
   const wrap = el('div', 'ext-skills');
   card.appendChild(wrap);
@@ -468,173 +902,6 @@ function extensionTab(card, isCurrent) {
   load();
 }
 
-/* ---------- MCP 标签页 ---------- */
-
-function mcpTab(card, isCurrent) {
-  const wrap = el('div', 'ext-mcp');
-  card.appendChild(wrap);
-  wrap.appendChild(el('div', 'ext-empty', '读取中…'));
-
-  fetchMcp().then((j) => {
-    if (!isCurrent()) return;
-    wrap.innerHTML = '';
-    if (!j || j.ok === false) {
-      wrap.appendChild(note((j && j.error) || '读取 MCP 状态失败', 'warn'));
-      return;
-    }
-
-    /* 结论先摆出来。supported 可能是 null（检测不出来）—— 那种情况下不许说成 false。 */
-    const head = el('div', 'ext-mcp-head');
-    if (j.supported === false) {
-      head.appendChild(el('span', 'ext-dot dim'));
-      head.appendChild(el('h4', '', '这个 pi 不带原生 MCP'));
-    } else if (j.supported === true) {
-      head.appendChild(el('span', 'ext-dot on'));
-      head.appendChild(el('h4', '', '这个 pi 带 MCP 能力'));
-    } else {
-      head.appendChild(el('span', 'ext-dot dim'));
-      head.appendChild(el('h4', '', '无法确定这个 pi 是否支持 MCP'));
-    }
-    wrap.appendChild(head);
-
-    /* P20.5：版本与出处分开摆。
-     * 「文档里的验证基线」是 0.87.0，而这里显示的是**你机器上跑的那个**——
-     * 两件事混成一句「pi 版本」正是上一轮那些失效文案的根源。 */
-    const ver = j.version || null;
-    if (ver && ver.value) {
-      wrap.appendChild(note(`检测到的 pi 版本：${ver.value}（来源 ${ver.source}${ver.updatedAt ? ' · ' + ver.updatedAt : ''}）`, 'dim'));
-    } else if (ver && ver.status === 'malformed') {
-      wrap.appendChild(note('读到了 pi 包，但它的 version 字段不是一个版本号 —— 按「版本未知」处理。', 'warn'));
-    } else {
-      wrap.appendChild(note('读不到本机 pi 包的版本 —— 按「版本未知」处理。', 'warn'));
-    }
-    wrap.appendChild(note(j.reason, 'dim'));
-    if (j.evidence) {
-      wrap.appendChild(el('div', 'ext-sec-head', '出处'));
-      wrap.appendChild(el('pre', 'ext-code quote', j.evidence));
-    }
-
-    /* built-in 能力。
-     * 它们是编译在 pi 包里的扩展，**不**出现在下面那个用户扩展列表里 ——
-     * 不说清楚的话，用户会以为「扫不到就是没装」。 */
-    const bi = j.builtins || {};
-    wrap.appendChild(el('div', 'ext-sec-head', 'built-in 能力（pi 自带）'));
-    if (bi.known && Array.isArray(bi.entries)) {
-      if (bi.entries.length) {
-        const chips = el('div', 'ext-files');
-        for (const b of bi.entries) {
-          const chip = el('span', 'ext-file', `builtin:${b.id}`);
-          chip.title = b.evidence || '';
-          if (b.replaceable) chip.appendChild(el('span', 'ext-badge', '可被替换'));
-          chips.appendChild(chip);
-        }
-        wrap.appendChild(chips);
-      } else {
-        wrap.appendChild(note('这个 pi 包里没有列出任何 built-in 扩展。', 'dim'));
-      }
-      if (bi.evidence) wrap.appendChild(el('pre', 'ext-code quote', bi.evidence));
-      wrap.appendChild(note(bi.note || '', 'dim'));
-    } else {
-      wrap.appendChild(note('读不到这个 pi 包的 built-in 扩展清单 —— 按「未知」处理，不硬编码结论。', 'dim'));
-    }
-
-    /* RPC 事实：有没有「已注册工具清单」这条命令。
-     * 这是「不伪造工具注册表」的依据，所以要给用户看得见的证据。 */
-    const rpc = j.rpc || null;
-    if (rpc) {
-      wrap.appendChild(el('div', 'ext-sec-head', 'RPC 事实'));
-      wrap.appendChild(
-        note(
-          rpc.commandCount === null
-            ? '读不到 RPC 命令表，无法确认它有没有工具清单命令。'
-            : `RpcCommand 联合共 ${rpc.commandCount} 条命令，其中没有一条返回已注册工具清单。`,
-          rpc.toolListCommand === false ? 'dim' : 'warn',
-        ),
-      );
-      wrap.appendChild(note(rpc.note || '', 'dim'));
-      const api = j.extensionApi;
-      if (api && api.available) {
-        wrap.appendChild(
-          note(
-            `ExtensionAPI：registerMcpServer ${api.registerMcpServer ? '有' : '没有'} · ` +
-              `getMcpServers ${api.getMcpServers ? '有' : '没有'} · getAllTools ${api.getAllTools ? '有' : '没有'}` +
-              '（这些是扩展进程内的 API，RPC 客户端拿不到）',
-            'dim',
-          ),
-        );
-      }
-    }
-
-    /* MCP 配置：只报文件在不在。里面可能有 Authorization 头与 env 密钥，
-     * Pi GUI 一个字节都不读。 */
-    const cfg = j.mcpConfig;
-    if (cfg) {
-      wrap.appendChild(el('div', 'ext-sec-head', 'MCP 配置'));
-      const rows3 = el('div', 'ext-rows');
-      const yn = (v) => (v === null ? '未知' : v ? '存在' : '不存在');
-      rows3.appendChild(row('用户级 mcp.json', yn(cfg.user && cfg.user.exists)));
-      rows3.appendChild(row('项目级 mcp.json', yn(cfg.project && cfg.project.exists)));
-      wrap.appendChild(rows3);
-      wrap.appendChild(note('只检查文件是否存在 —— 里面可能有 Authorization 头与 env 密钥，Pi GUI 不读取它的内容。', 'dim'));
-      if (j.mcpCli && j.mcpCli.available) {
-        wrap.appendChild(el('pre', 'ext-code quote', j.mcpCli.evidence || ''));
-        wrap.appendChild(note('配置走 pi 自己的命令行（pi mcp add / remove），Pi GUI 不代劳。', 'dim'));
-      }
-    }
-
-    wrap.appendChild(el('div', 'ext-sec-head', 'MCP Servers'));
-    if (!(j.servers || []).length) {
-      wrap.appendChild(note(j.serversNote || '没有可列出的 MCP Server。', 'dim'));
-    } else {
-      for (const s of j.servers) wrap.appendChild(el('div', 'ext-item', `${s.name} · ${s.transport || '?'}`));
-    }
-
-    /* 替代路径。这是这个标签页真正有用的部分：告诉用户 pi 认可的做法是什么。 */
-    const route = j.extensionRoute || {};
-    wrap.appendChild(el('div', 'ext-sec-head', 'pi 的做法：扩展（extension）'));
-    wrap.appendChild(note(route.note || '', 'dim'));
-    const rowsBox = el('div', 'ext-rows');
-    if (route.userDir) rowsBox.appendChild(row('用户级扩展目录', route.userDir));
-    if (route.projectDir) rowsBox.appendChild(row('项目级扩展目录', route.projectDir));
-    wrap.appendChild(rowsBox);
-
-    for (const [label, side] of [
-      ['用户级', route.user],
-      ['项目级', route.project],
-    ]) {
-      if (!side) continue;
-      const box = el('div', 'ext-list-static');
-      box.appendChild(el('div', 'ext-sec-head', `${label}（${side.exists ? side.count + ' 项' : '目录不存在'}）`));
-      if (side.error) box.appendChild(note(side.error, 'warn'));
-      for (const e of side.entries || []) {
-        const line = el('div', 'ext-item static');
-        line.appendChild(el('span', 'ext-name', e.name));
-        if (e.kind === 'dir') line.appendChild(el('span', 'ext-badge', '目录'));
-        if (typeof e.size === 'number') line.appendChild(el('span', 'ext-badge', `${e.size} B`));
-        box.appendChild(line);
-      }
-      wrap.appendChild(box);
-    }
-
-    const fromSettings = route.fromSettings || [];
-    const packages = route.packages || [];
-    if (fromSettings.length || packages.length) {
-      wrap.appendChild(el('div', 'ext-sec-head', '来自 settings 的声明'));
-      const rows2 = el('div', 'ext-rows');
-      for (const x of fromSettings) rows2.appendChild(row(`extensions（${x.scope}）`, x.value));
-      for (const x of packages) rows2.appendChild(row(`packages（${x.scope}）`, x.value));
-      wrap.appendChild(rows2);
-    }
-
-    wrap.appendChild(
-      note(
-        'Pi GUI 只列出这些扩展，不安装、不启用、也不执行它们 —— 扩展是能执行代码的，装什么由你在 pi 那边决定。',
-        'dim',
-      ),
-    );
-  });
-}
-
 /* ---------- 入口 ---------- */
 
 /** 侧栏那个数字。只显示「发现了几个」，不显示「几个生效」——
@@ -664,7 +931,7 @@ export function openExtensions() {
       el(
         'div',
         'modal-desc',
-        'Skills 与 Extension 分开列出。Extension 只读发现已存在的本地资源；MCP 继续显示 Pi 的能力报告。',
+        'Skills 与 Extension 分开列出。Extension 只读发现已存在的本地资源；MCP 是 pi 原生集成的管理面。',
       ),
     );
 

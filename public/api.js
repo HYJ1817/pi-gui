@@ -138,8 +138,15 @@ export const setSkillEnabled = (id, enabled) =>
 
 /** MCP 能力报告。能力由**检测本机装着的那个 pi 包**决定（历史基线 0.87.0 没有原生 MCP，
  *  当前基线 0.99.1 自带 builtin:mcp），所以这里返回的是「带出处的结论 + 怎么配置 +
- *  替代路径」，不是一份 Server 列表 —— Server 的读取与管理留给 P20.6。 */
+ *  替代路径」。Server 明细与动作走下面的 P20.6 接口。 */
 export const fetchMcp = () => getJSON('/api/mcp');
+/* P20.6 原生 MCP：Server 明细（GET，轻量摘要 + 上次运行时状态）与
+ * 显式状态刷新（POST，会启动用户的 stdio servers，只在用户手势时调用）。 */
+export const fetchMcpServers = () => getJSON('/api/mcp/servers');
+export const refreshMcpStatus = () => sendJSON('/api/mcp/status', { body: { __expectedCwd: S.cwd } });
+/** 受控动作：add / remove / login / logout（enable 等走 /mcp TUI，不在此）。 */
+export const mcpServerAction = (payload) =>
+  sendJSON('/api/mcp/servers', { body: { ...payload, __expectedCwd: S.cwd } });
 /* P19：approval 能力报告（后端只读本机 pi 包，renderer 拿不到路径）。 */
 export const fetchApprovalCapability = () => getJSON('/api/approvals/capability');
 export const fetchExtensions = () => getJSON('/api/extensions');
