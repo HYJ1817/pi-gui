@@ -52,10 +52,10 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 ```
 smoke 1043 · git 161 · modules 114 · reliability · interactions · port-owner
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
-memory 236 · browser 215 · approvals 79 · planner 115 · workflow-relations 71
+memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 102 · body-integrity 5
-dev-server 20 · models-api 50 · server-security 36 · diagnostics 10 · update-check 87
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 119 · body-integrity 5
+dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
 
@@ -697,7 +697,7 @@ live 是人工流程（不属于默认 CI，本阶段未执行），步骤见 [m
 
 ## P19 Approval 验证
 
-npm test 串行包含 tests/approvals.cjs（也可 npm run test:approvals，79 条）。
+npm test 串行包含 tests/approvals.cjs（也可 npm run test:approvals，80 条）。
 完全离线：不装 permission Extension、不 spawn pi、不读真实 `~/.pi`、不执行 pi 代码；
 能力探测跑在 `os.tmpdir()` 造的假 pi 包上。
 
@@ -749,7 +749,7 @@ Web / Subagent / Memory / Planner 回归；DOM 渲染（含 `outerHTML` 级别�
 
 ## P20.5 Pi 0.99 兼容迁移验证
 
-`npm run test:pi-version`（已纳入 `npm test`，**102 条**）—— 完全离线：
+`npm run test:pi-version`（已纳入 `npm test`，**119 条**）—— 完全离线：
 不启动 pi、不联网、不读用户的真实 `~/.pi`、不执行任何 Extension。
 所有 pi 包都在 `os.tmpdir()` 里现造（**一个「断言这台机器装了什么」的测试都不许有**）。
 
@@ -759,7 +759,16 @@ Web / Subagent / Memory / Planner 回归；DOM 渲染（含 `outerHTML` 级别�
   （`package.json` 优先、`pi --version` 兜底、都没有 → `none`）；畸形版本**不退回**兜底
   （它是有信息的结果）；探测抛错 / 非零退出 / 空输出都降级成 unknown；
   TTL 缓存与 `force` 刷新；`updatedAt` 是 ISO。
-- **兜底探测的形状**：`shell: false` + args 数组（不拼命令字符串）、有超时、有输出上限。
+- **兜底探测的形状**：命令成形走 `launcher()`（= 与 `rpc-bridge` 同一份
+  `formatLaunch()`；POSIX 是 `shell: false` + args 数组，Windows 是命令串 + `shell: true`）、
+  有超时、有输出上限。注入的 `run` 能原样收到那份 spec，钉住「两边不是各拼各的」。
+- **launch identity（Blocker A）**：明确路径的入口 → 绑到它自己那份包；
+  入口不存在 → `packageDir = null`（**旁边躺着真包也不去捡**）；
+  裸命令按 PATH / PATHEXT（Windows 先 cwd）解析；没有 PATH → `null`；
+  **★ 分叉回归**：`PATH` 指向 A、"常见全局位置"里藏着 B 时绑 A，且版本 / built-in
+  探测跟着一起读 A；显式指向 B 时才绑 B；`summary()` 只有枚举与 basename；
+  Windows 下切 cwd 会重新解析（缓存按 cwd 分键）。
+- **`formatLaunch` 契约**：POSIX 走数组不拼串；Windows 拼串、空 args、`shell: true`。
 - **built-in 解析**：用 **0.87.0 与 0.99.1 的真实原文**当 fixture
   （0.87 只有 `llama.cpp` 且 `hidden: true`；0.99 四个且后三个 `replaceable: true`）；
   形状不认识 → `null`，**不返回空数组冒充「没有」**。

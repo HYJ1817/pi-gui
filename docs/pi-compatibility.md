@@ -5,7 +5,9 @@ P19 的 approval 只依赖 Pi 已有的两个真实机制：`tool_call` hook 可
 `docs/extensions.md` 的「Can block」），以及 RPC 模式下对话框方法发出的
 `extension_ui_request` 会**阻塞等待** `extension_ui_response`（`docs/rpc.md`）。
 > **基线说明**：这段的原始核对对象是 **0.87.0**；P20.5 在 **0.99.1** 上重新核对过 ——
-> `block` 语义不变（还多了个 `terminate` 字段），9 个 `extension_ui_request` 方法一字不差。
+> `ToolCallEventResult` 的字段集合与语义两个版本**完全一致**（`block?` / `reason?` /
+> `terminate?`；`terminate` **0.87.0 就有，不是 0.99 新增的**），
+> 9 个 `extension_ui_request` 方法一字不差。
 > 「核心没有自带审批弹窗」在 0.99.1 上同样成立（0.99.1 的 `docs/usage.md` 里
 > 那句「不含 permission popups」虽然被删了，但代码里依旧没有任何审批闸门）。
 > `ctx.ui.custom()` 在 RPC 下返回 `undefined` —— 0.99.1 的 `docs/rpc-extension-ui.md`
@@ -64,8 +66,13 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 { value: '0.99.1', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' }
 ```
 
-- `source`：`'package.json'`（读本机 pi 包，**首选**）· `'pi --version'`（兜底，
-  只在包读不到时才跑）· `'none'`。
+- `source`：`'package.json'`（读**与 bridge 实际启动的那个入口绑定**的 pi 包，
+  **首选**）· `'pi --version'`（兜底：包目录证明不了时，对**同一个 launch spec**
+  跑一次探测）· `'none'`。
+  包目录由 `server/pi-launch.js` 给：按 `PI_BIN` / PATH 解析出入口文件，再向上找
+  属于它的包。**证明不了就留空** —— 不退回「常见全局安装位置」清单，那条旁路正是
+  「探测读到的是另一份 pi」的来源（P20.5 Blocker A）。见
+  [architecture.md](architecture.md) 的 launch identity。
 - `status`：`'known'` · `'malformed'`（读到了、但它不是一个版本号）· `'unknown'`。
 - **版本号只作线索，不作判据。** 能力判定一律走 probe 或真实事件 ——
   `server/pi-builtins.js` 读的是 pi 包的源码文本，`server/pi-compat.js` 看的是
@@ -83,9 +90,9 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 | **`dist/modes/json-event.d.ts`** | — | — | **逐字节相同** |
 | **`get_commands` 实现** | 扩展命令 + prompt 模板 + `skill:<name>` | 同左 | **完全一致** |
 | **built-in extensions** | 只有 `llama.cpp`（`hidden: true`） | `llama.cpp` + `codemode` + `tool-search` + `mcp`（都 `builtin: true`，后三个 `replaceable: true`） | **新增三个** |
-| **ExtensionAPI `register*`/`get*`** | — | 新增 `registerMcpServer` / `getMcpServers` / `getExposure` / `getNamespace` / `getSettings` | **新增五个** |
+| **ExtensionAPI 方法** | — | 新增 `getSettings` / `registerMcpServer` / `unregisterMcpServer` / `getMcpServers` / `registerVirtualModel` / `unregisterVirtualModel` | **新增六个**（`getExposure` / `getNamespace` 属 `ToolLoadout`，**不是** ExtensionAPI） |
 | **ExtensionAPI 事件** | — | 新增 `mcp_servers_change` / `provider_stream_event` | **新增两个**（其余 39 个一致） |
-| **`ToolCallEventResult`** | `block` / `reason` | 多一个 `terminate?: boolean` | **新增一个字段**（`block` 语义不变） |
+| **`ToolCallEventResult`** | `block?` / `reason?` / `terminate?` | **同左** | **无变化**（`terminate` **不是** 0.99 新增） |
 | **工具返回值里的 `isError`** | **被硬编码丢弃**（`return { result, isError: false }`） | **会传播**（`return { result, isError: result.isError === true }`） | ⚠️ **行为变化**，见下 |
 | **`getAllTools()`** | **已有** | 已有 | ⚠️ **不是新能力**（任务描述里把它列为新增，这条要修正） |
 | **`docs/usage.md` 的「不内置 MCP」** | 有 | **已删除** | 旧文案的出处已经不存在了 |
@@ -379,7 +386,7 @@ Pi 兼容性
 ## 十一、相关测试
 
 ```bash
-npm run test:compat    # tests/pi-compat.cjs（55 条，纯 fixture）
+npm run test:compat    # tests/pi-compat.cjs（57 条，纯 fixture）
 ```
 
 覆盖：完全兼容 / 缺可选能力 → partial / 缺核心能力 → incompatible /

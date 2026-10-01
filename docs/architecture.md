@@ -218,10 +218,16 @@ get_messages ─┘
 
 - `server.js` — **装配层**。只做：读环境变量、建共享运行态、按依赖顺序组装各模块、
   创建 HTTP server、启动 pi 桥接、listen、管生命周期。具体业务在 `server/` 下。
-- `server/` — 各职责模块。全部由 `server.js` 装配，**模块之间不互相 import**
-  （唯一例外是 `git-routes` 调 `lib/git.js`），依赖方向永远是 `server.js → 模块`：
+- `server/` — 各职责模块。全部由 `server.js` 装配，**业务模块之间不互相 import**
+  （依赖方向永远是 `server.js → 模块`）。可以被 import 的只有**叶子原语**：
+  `http-utils.js`、`lib/`，以及同目录的 `pi-launch.js`；`tests/modules.cjs` 把这条
+  边界钉死（含 `rpc-bridge.js` 的白名单）：
   - `auth.js` — 访问控制（令牌 + Origin）与身份探测端点。令牌定长比较，
     错误信息不回显收到的值
+  - `pi-launch.js` — **launch identity**：`PI_BIN` / PATH 解析出入口、向上绑包、
+    `formatLaunch()` 成形启动命令。`rpc-bridge` 的 spawn、`pi --version` 探测、
+    built-in / MCP / approval 能力探测**共用这一处**，所以「启动的那份 pi」和
+    「探测读的那份 pi」不可能分叉（P20.5 Blocker A）。纯 fs，不执行 shell。
   - `rpc-bridge.js` — pi 子进程：spawn / stdout JSONL 解析（**只按 LF 切分**）/
     stdin 写入 / 崩溃重启 / `request()` 配对。**令牌在这里从 pi 的环境里摘掉**
   - `pi-compat.js` — **pi 兼容层**：能力探测、response 形状规范化、协议异常记录。
@@ -240,9 +246,9 @@ get_messages ─┘
   - `skills.js` — Skill 的发现 / 详情 / 启停。**移植 pi 自己的规则**（发现位置、
     两种 collect 模式、同名优先级、信任闸门、override 语法），每条都注明源码出处。
     见 [extensions.md](extensions.md)
-  - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。去读本机装的 pi 包、给出
-    「支不支持」的结论与原文证据，并列出官方替代路径 extension 下已有哪些东西。
-    **只读名字，不读内容、不执行**
+  - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。去读**与 launch identity
+    绑定的**那份 pi 包、给出「支不支持」的结论与原文证据，并列出官方替代路径
+    extension 下已有哪些东西。**只读名字，不读内容、不执行**
   - `extension-registry.js` — 只读发现 Pi 的本地与 npm Extension 候选项；用
     `get_commands.sourceInfo.path` 关联可验证命令。已注册工具列表当前不在 Pi RPC 中，
     所以 capability registry 不猜工具归属。Pi 重启和项目切换清掉上一轮错误证据。
@@ -441,11 +447,40 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 
 这一层不引入任何新 UI 面，只把两个之前**隐式**的事实变成有出处的状态。
 
+### launch identity：`server/pi-launch.js`
+
+**「现在启动主聊天 Pi，实际会执行哪个入口、那个入口属于哪个包」——整个后端只有
+一个答案**，在 `server.js` 里建一次，注入给所有要问它的模块。
+
+- `identity()` → `{ bin, source, entryKnown, packageDir, packageDirKnown }`。
+  `source: 'env'`（`PI_BIN` 是明确路径）/ `'path'`（裸命令，按 PATH + PATHEXT 解析，
+  Windows 先看 cwd —— 镜像 cmd 的规则）。**纯文件系统 stat，不为找包执行任何 shell**。
+- **`packageDir` 只在能证明时才非 null**：从实际入口文件（含 `realpath`）向上找
+  `node_modules/@earendil-works/pi-coding-agent`，且那份 `package.json` 的 `name`
+  必须就是它。找不到就 null。
+- `formatLaunch(bin, args, isWin)` → `{ command, spawnArgs, shell }`，
+  **`rpc-bridge` 的 spawn 与 `--version` 探测共用这一个函数**（POSIX 走数组、永不拼串；
+  Windows 沿用桥接一直的做法自己拼命令串以绕开 DEP0190）。`launcher()` 就是它的
+  `--version` 形态，直接交给 `createPiVersionProbe({ launcher })`。
+- `summary()` → `{ source, binName, entryKnown, packageDirKnown }` ——
+  **只有枚举与 basename**，renderer / Diagnostics 只拿这个。
+
+**为什么必须收成一处**：旧实现有两条互不相干的路径 —— `rpc-bridge` 用
+`PI_BIN || 'pi'`（看 PATH），而版本 / built-in / MCP 探测用「agent registry 的 npm 扫描
++ 常见全局安装位置清单」（**不看 PATH**）。机器上装着两份 pi 时，RPC 起的是 A、
+探测读的是 B，于是「运行中 Pi 的版本」报的是别的安装。这就是 P20.5 的 Blocker A。
+
+消费方：`rpc-bridge`（`launch` 参数）· `pi-version`（`packageDir` + `launcher`）·
+`pi-builtins`（`packageDir`）· `mcp` / `approval-probe`（`resolvePackageDir`）·
+`diagnostics`（`summary`）。
+
 `server/pi-version.js` —— **运行中版本**的规范状态 `{ value, source, status, updatedAt }`：
 
-- 取值顺序：本机 pi 包的 `package.json`（纯文件读，首选）→ 受控的 `pi --version`
-  （只在包读不到时兜底；入口复用 agent registry 已解析好的那个，`shell: false` + args 数组）
+- 取值顺序：**与 launch identity 绑定的那个** pi 包的 `package.json`（纯文件读，
+  首选；证明不了就回 null，此时才轮到下一步）→ 受控的 `pi --version`
+  （与 bridge **同一个 launch spec**，只多一个 `--version`）
   → 都拿不到就是 `unknown`。
+- **绝不退回「常见全局安装位置」清单** —— 那是身份分叉的来源。
 - `status` 三态：`known` / `malformed`（读到了但不是版本号）/ `unknown`。
   畸形**不退回**兜底探测 —— 那本身是有信息的结果。
 - 带 TTL 缓存；`read()` 才求值，所以启动路径不付代价。

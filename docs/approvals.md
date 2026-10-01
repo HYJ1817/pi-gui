@@ -6,8 +6,9 @@
 所以下面每一句都标了真实出处的证据（原始核对对象是本机装的 **pi 0.87.0** 包，
 路径相对于 pi 包根）。
 
-> **P20.5 复核对（0.99.1）**：这套机制**没有变**。`ToolCallEventResult` 仍有
-> `block?: boolean`（还多了个 `terminate?: boolean`）；`extension_ui_request` 的
+> **P20.5 复核对（0.99.1）**：这套机制**没有变**。`ToolCallEventResult` 仍是
+> `block?` / `reason?` / `terminate?`（`terminate` **0.87.0 就有，不是 0.99 新增**）；
+> `extension_ui_request` 的
 > 9 个方法一字不差；`ctx.ui.custom()` 在 RPC 下依旧返回 `undefined`
 > （0.99.1 的 `docs/rpc-extension-ui.md` 明确列出）。核心依然没有自带审批闸门。
 > 所以 P19 的结论与实现**不需要迁移**。见

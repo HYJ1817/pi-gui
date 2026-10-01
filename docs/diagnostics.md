@@ -13,7 +13,11 @@ Pi GUI 的“诊断”面板用于把故障排查需要的运行状态收敛成�
 - 当前是否选择项目，以及项目目录的 basename
 - 项目目录与 Pi GUI 数据目录是否可读 / 可写
 - pi bridge 是否运行、bridgeRun、启动参数
-- pi 是否可用及版本
+- pi 是否可用及版本（**优先取规范版本状态** `pi.version.source`：`package.json` /
+  `pi --version` / `none`）
+- **启动中的 pi 是哪一个**（`pi.launch`：解析来源 `env`（显式 `PI_BIN`）/ `path`（按
+  PATH 解析）、入口 basename、包目录是否已绑定。**只有枚举与 basename，
+  没有绝对路径**）—— 用来一眼看出「版本和实际启动的不是同一份」
 - 已适配 Agent 的可用性、版本、不可用原因与 capability
 - MCP 能力检测的摘要
 - **Pi 兼容性报告**：pi 版本、兼容状态、九个能力的支持情况（支持 / 不支持 / 未验证）、

@@ -3,8 +3,9 @@
 ## P19 Approval 边界
 
 **审批不是 OS sandbox。** Pi GUI 能拦的只有「有 Extension 来问」的调用：
-`pi.on("tool_call", …)` 可以 `{ block: true }`（0.87.0 与 0.99.1 都有，0.99.1 还多了个
-`terminate` 字段），而 RPC 模式下
+`pi.on("tool_call", …)` 可以 `{ block: true }`（`ToolCallEventResult` 的
+`block?` / `reason?` / `terminate?` 在 0.87.0 与 0.99.1 上**完全一致**，
+`terminate` 不是 0.99 新增的），而 RPC 模式下
 `ctx.ui.confirm/select/input/editor` 会**阻塞**到客户端回应答 —— 所以拒绝
 （`{confirmed:false}` / `{cancelled:true}`，两者在 `rpc-mode.js` 里都解析成 `false`）
 是真的会让这次工具调用不执行。**没有** Extension 来问时，GUI 没有任何拦截通道，
