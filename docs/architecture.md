@@ -381,8 +381,10 @@ Electron 版由主进程指到 `%APPDATA%\Pi GUI`（装在 Program Files 下时�
 4. **不可信输入一律当不可信**：模型输出、被执行的程序输出、Markdown、
    Agent 的 stdout、客户端传的一切。
 5. **退化情况不许静默消失**：缺数据、未知类型、坏文件都要有明确归宿。
-6. **不伪造能力**：pi 核心没有的（原生 MCP、sub-agent、plan mode）就说没有，
-   不发明一套看起来像的东西。
+6. **不伪造能力**：能力以当前运行 Pi 的真实 probe、协议证据或真实 runtime event
+   为准；拿不到证据就保持 unknown，不根据历史版本、包名或工具名猜测。
+   例如当前 Pi 已原生支持 MCP，但 sub-agent / plan mode 是否原生存在仍应按
+   当前版本事实判断。不发明一套看起来像的东西。
 
 ## P17 Subagent adapter
 
