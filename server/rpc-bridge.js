@@ -13,6 +13,8 @@
  *   1. **只按 LF 切分**，不用 readline，不碰 U+2028 / U+2029。
  *   2. **Windows 上经 shell 启动**（pi 是 npm 的 .cmd 包装脚本），且自己拼命令串，
  *      不用 spawn(..., {shell:true}) —— 后者会触发 DEP0190 刷弃用警告。
+ *      命令串的成形在 `server/pi-launch.js` 的 `formatLaunch()` —— **与 `--version`
+ *      探测共用同一份**，所以「启动命令」和「版本探测命令」不可能各拼各的。
  *   3. **令牌不能进 pi 的环境**（见 spawnPi 的说明）。
  *
  * 除了 fire-and-forget 的 send()，这里还提供 request()：把命令发出去并等它那条
@@ -22,6 +24,8 @@
  * 注意 request() 不影响 SSE：同一条应答仍然照常 publish 给前端。
  */
 import { spawn } from 'node:child_process';
+import { basename } from 'node:path';
+import { formatLaunch } from './pi-launch.js';
 
 /** 崩溃后自动重启的延迟。 */
 const RESTART_DELAY_MS = 1200;
@@ -34,6 +38,10 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
  * @param runtime       共享运行态（要 cwd）。只读，不改。
  * @param publish       事件出口（SSE 总线的 publish）。
  * @param piBin         pi 可执行文件（默认 'pi'，可用 PI_BIN 覆盖）。
+ * @param launch        **launch identity**（`server/pi-launch.js` 的 `identity()`）。
+ *                      传了就以它的 `bin` 为准 —— 这样「bridge 真正 spawn 的那个命令」
+ *                      与「version / built-in / MCP 探测用的那份 identity」是**同一个对象**，
+ *                      不可能各走各的解析路径（P20.5 Blocker A）。缺省退回 `piBin`。
  * @param isWin         是否 Windows。显式传入而不是自己判断平台 —— 便于单测。
  * @param env           环境变量来源，默认 process.env。单测可以注入。
  * @param projectLaunch 项目配置贡献的启动参数（可选）。**刻意只认两个方法**，
@@ -52,6 +60,7 @@ export function createRpcBridge({
   runtime,
   publish,
   piBin,
+  launch = null,
   isWin,
   env = process.env,
   projectLaunch = null,
@@ -59,6 +68,17 @@ export function createRpcBridge({
   spawnProcess = spawn,
   restartDelayMs = RESTART_DELAY_MS,
 }) {
+  /* 实际启动命令：launch identity 优先，`piBin` 只是缺省（老调用方 / 单测）。
+   * 这是「bridge spawn 的那个东西」的唯一取值处 —— 下面不再出现第二个来源。 */
+  const launchBin = (launch && typeof launch.bin === 'string' && launch.bin) ? launch.bin : piBin;
+  /* 事件里能露出去的只有 basename（见 start() 里的说明）。 */
+  const binLabel = (() => {
+    try {
+      return basename(launchBin) || launchBin;
+    } catch {
+      return launchBin;
+    }
+  })();
   /* 兼容层（P4，可选注入）。
    *
    * 它只**观察**，不参与任何判断 —— 桥接的行为一行都不因它改变。
@@ -136,7 +156,7 @@ export function createRpcBridge({
    * Windows 上 pi 是 npm 的 .cmd 包装脚本，必须经 shell 启动；
    * 但 spawn(bin, argsArray, {shell:true}) 会触发 DEP0190
    * （args 只拼接不转义），每次启动刷两行弃用警告，双击启动时看着像报错。
-   * 改成按 Node 文档认可的方式自己拼一条命令字符串 —— 实测不再报警告。 */
+   * 所以成形交给 `formatLaunch()`（Node 文档认可的方式），见文件头第 2 条。 */
   function spawnPi(bin, args) {
     /* 把访问令牌从 pi 的环境里摘掉。
      *
@@ -153,11 +173,8 @@ export function createRpcBridge({
       windowsHide: true,
     };
 
-    if (!isWin) return spawnProcess(bin, args, opts);
-
-    // 参数都是命令行开关和模型名，不含引号；万一有就剔掉，避免把命令拼坏
-    const q = (s) => `"${String(s).replace(/"/g, '')}"`;
-    return spawnProcess([bin, ...args].map(q).join(' '), { ...opts, shell: true });
+    const spec = formatLaunch(bin, args, isWin);
+    return spawnProcess(spec.command, spec.spawnArgs, { ...opts, shell: spec.shell });
   }
 
   function start() {
@@ -206,11 +223,13 @@ export function createRpcBridge({
     }
 
     const args = buildArgs(extra);
-    publish({ type: 'bridge_status', state: 'starting', bin: piBin, args, cwd, bridgeRun: run });
+    /* `bin` 只给 basename —— 完整绝对路径（`PI_BIN=C:\...\pi.cmd`）不出后端，
+     * renderer 与诊断里都只该看到「哪个入口」，不该看到它装在哪。 */
+    publish({ type: 'bridge_status', state: 'starting', bin: binLabel, args, cwd, bridgeRun: run });
 
     let child;
     try {
-      child = spawnPi(piBin, args);
+      child = spawnPi(launchBin, args);
       pi = child;
     } catch (err) {
       restartRequested = false;

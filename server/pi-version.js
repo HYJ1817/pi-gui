@@ -17,12 +17,18 @@
  *
  * ---------- 取值的优先级（越靠前越权威、越无副作用）----------
  *
- * 1. **本机已安装的 pi 包的 `package.json`。** 纯文件读：不执行任何代码、
- *    不启动进程、不碰用户状态。这是「装的是什么版本」的权威来源。
- * 2. **受控的 `pi --version`。** 只在第 1 步拿不到时兜底（例如 pi 装在
- *    读不到包目录的地方）。它执行的是**第一方二进制**，不带任何参数以外的输入，
- *    不加载 Extension、不开会话、不改配置；有超时，失败就是失败。
- * 3. 都拿不到 → `unknown`。**不猜**，也不从别处（文档、CHANGELOG）推。
+ * 1. **属于**这次 launch target **的那个 pi 包的 `package.json`。** 纯文件读：
+ *    不执行任何代码、不启动进程、不碰用户状态。它是权威来源 —— **但前提是
+ *    `resolvePackageDir()` 能证明这个包目录就是 bridge 实际启动的那份 pi**
+ *    （见 `server/pi-launch.js`）。证明不了它就回 null，这里也就不会读到
+ *    另一份安装的 `package.json`。
+ * 2. **受控的 `pi --version`。** 只在第 1 步拿不到时兜底（包目录证明不了，
+ *    例如 `PI_BIN` 指向一个独立安装 / fork）。它执行的是**与 bridge 同一个
+ *    launch spec**（`server/pi-launch.js` 的 `formatLaunch`），只多一个
+ *    `--version`：不加载 Extension、不开会话、不改配置；有超时、有输出上限，
+ *    失败就是失败。
+ * 3. 都拿不到 → `unknown`。**不猜**，也不从别处（另一份全局安装、文档、
+ *    CHANGELOG）推 —— 「另一份 Pi 的版本」不是「运行中 Pi 的版本」。
  *
  * ---------- 三条纪律 ----------
  *
@@ -164,11 +170,19 @@ export function createPiVersion({
  *     Windows 上的 `.cmd` shim 由那一层负责转发，这里不自己拼 shell；
  *   - 有超时、有输出上限；任何失败都回 null（= unknown），不抛。
  *
+ * **`launcher` 是与 bridge 同源的那条路（P20.5）**：给它就优先用它 ——
+ * 它返回 `{command, spawnArgs, shell}`，与 `server/rpc-bridge.js` spawn
+ * 主聊天 Pi 用的是同一个 `formatLaunch()`。所以「跑 `--version` 的那个进程」
+ * 与「跑 `--mode rpc` 的那个进程」出自同一个 launch spec，
+ * 不会再出现「版本读的是另一份安装」。
+ *
+ * @param launcher  `(args) => {command, spawnArgs, shell}`。注入是为了单测。
  * @param resolveEntry 返回 `{cmd, baseArgs}` 或 null。注入是为了单测与复用
- *                     agent registry 已经解析好的入口。
+ *                     agent registry 已经解析好的入口（老路径，保留给调用方）。
  * @param run          真正执行的那一步，默认 spawnSync。注入是为了单测。
  */
 export function createPiVersionProbe({
+  launcher = null,
   resolveEntry = null,
   run = spawnSync,
   env = process.env,
@@ -176,23 +190,37 @@ export function createPiVersionProbe({
   maxOutputChars = 4096,
 } = {}) {
   return () => {
-    if (typeof resolveEntry !== 'function') return null;
-    let entry = null;
-    try {
-      entry = resolveEntry();
-    } catch {
-      return null;
+    let spec = null;
+    if (typeof launcher === 'function') {
+      try {
+        spec = launcher(['--version']) || null;
+      } catch {
+        return null;
+      }
+      if (!spec || typeof spec.command !== 'string' || !spec.command) return null;
+      if (!Array.isArray(spec.spawnArgs)) return null;
+    } else {
+      if (typeof resolveEntry !== 'function') return null;
+      let entry = null;
+      try {
+        entry = resolveEntry();
+      } catch {
+        return null;
+      }
+      if (!entry || typeof entry.cmd !== 'string' || !entry.cmd) return null;
+      const baseArgs = Array.isArray(entry.baseArgs) ? entry.baseArgs : [];
+      spec = { command: entry.cmd, spawnArgs: [...baseArgs, '--version'], shell: false };
     }
-    if (!entry || typeof entry.cmd !== 'string' || !entry.cmd) return null;
-    const baseArgs = Array.isArray(entry.baseArgs) ? entry.baseArgs : [];
     try {
-      const res = run(entry.cmd, [...baseArgs, '--version'], {
+      const opts = {
         env,
         encoding: 'utf8',
         timeout: timeoutMs,
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
-      });
+      };
+      if (spec.shell) opts.shell = true;
+      const res = run(spec.command, spec.spawnArgs, opts);
       if (!res || res.error) return null;
       const out = `${res.stdout || ''}`.trim() || `${res.stderr || ''}`.trim();
       return out ? out.slice(0, maxOutputChars) : null;

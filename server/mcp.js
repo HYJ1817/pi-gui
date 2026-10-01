@@ -42,20 +42,23 @@
  * ---------- 检测方式 ----------
  *
  * 不硬编码任何版本的结论，而是**去读本机真正装着的那个 pi 包**：
- *   1. 定位 pi 包目录（`locatePiPackage`，与 P19 的能力探测共用一处）；
+ *   1. **包目录只能来自 launch identity**（`server/pi-launch.js`）—— 也就是
+ *      「bridge 真正 spawn 的那个命令」所属的包。P20.5 之前这里有一份自己的
+ *      `locatePiPackage()`（`PI_BIN` 旁边 + 常见全局安装位置），**它不看 PATH，
+ *      而 spawn 看**：机器上装着两份 pi 时，版本 / 能力探测读的可能是另一份。
+ *      现在那条旁路整个删掉了，与 `server/rpc-bridge.js` 共用同一个解析。
  *   2. 解析 `dist/extensions/index.js` 的 `builtInExtensions`（只读文本、不执行）；
  *   3. 看 `dist/core/extensions/types.d.ts` 有没有 `registerMcpServer` / `getMcpServers`；
  *   4. 从 `docs/mcp.md` 里截出 `pi mcp add` 那一行当配置路径的证据。
- * 读不到包就如实回 unknown —— 不猜。
+ * 读不到包就如实回 unknown —— 不猜，也**不去别处补一个包目录**。
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { json } from './http-utils.js';
 import { createPiBuiltins } from './pi-builtins.js';
+import { createPiLaunch } from './pi-launch.js';
 
-/** pi 包的 npm 名（从 dist/config.js 的 PACKAGE_NAME 默认值抄来）。 */
-const PI_PACKAGE = path.join('@earendil-works', 'pi-coding-agent');
 const CONFIG_DIR = '.pi';
 const EXTENSIONS_SUBDIR = 'extensions';
 const MAX_LIST = 200;
@@ -69,49 +72,6 @@ function readJsonSafe(file) {
   }
 }
 
-/** 从 PI_BIN 与几个 npm 全局位置里找出 pi 包目录。找不到回 null。
- *  导出是给 P19 的 approval 能力探测复用同一处定位逻辑（别写第二份）。 */
-export function locatePiPackage({ piBin, env }) {
-  const candidates = [];
-  const add = (p) => {
-    if (p) candidates.push(p);
-  };
-
-  // 1) PI_BIN 若是路径，包就在它旁边的 node_modules 里
-  const bin = piBin || env.PI_BIN || '';
-  if (bin && (bin.includes('/') || bin.includes('\\'))) {
-    let dir = path.dirname(path.resolve(bin));
-    // npm 的 bin 目录可能是 <prefix> 或 <prefix>/bin
-    for (let i = 0; i < 3; i++) {
-      add(path.join(dir, 'node_modules', PI_PACKAGE));
-      add(path.join(dir, 'lib', 'node_modules', PI_PACKAGE));
-      const parent = path.dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
-  }
-
-  // 2) 常见的全局安装位置
-  if (env.APPDATA) add(path.join(env.APPDATA, 'npm', 'node_modules', PI_PACKAGE));
-  if (env.LOCALAPPDATA) {
-    add(path.join(env.LOCALAPPDATA, 'Programs', 'pi', 'node_modules', PI_PACKAGE));
-    add(path.join(env.LOCALAPPDATA, 'npm', 'node_modules', PI_PACKAGE));
-  }
-  const home = env.HOME || os.homedir();
-  add(path.join(home, '.local', 'lib', 'node_modules', PI_PACKAGE));
-  add(path.join(home, 'node_modules', PI_PACKAGE));
-  add(path.join('/usr', 'local', 'lib', 'node_modules', PI_PACKAGE));
-  add(path.join('/opt', 'homebrew', 'lib', 'node_modules', PI_PACKAGE));
-
-  for (const dir of candidates) {
-    try {
-      if (fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, 'package.json'))) return dir;
-    } catch {
-      /* 下一个 */
-    }
-  }
-  return null;
-}
 
 /** 检测这个 pi 包有没有原生 MCP。
  *
@@ -122,11 +82,15 @@ export function locatePiPackage({ piBin, env }) {
  * （0.87.0 就是这一档：只有 `llama.cpp`，且没有 `registerMcpServer`）。
  * 包读不到 → `null`，不猜。
  *
+ * **`packageDir` 必须由调用方从 launch identity 取**（见文件头）。拿不到就传
+ * null —— 这里不接受任何「按 piBin / 全局位置自己再找一遍」的入参，
+ * 那正是身份分叉的老路。
+ *
+ * @param packageDir  `piLaunch.packageDir()` 的结果（null = 证明不了，如实报告）。
  * @returns {{supported:boolean|null, packageDir:string|null, packageFound:boolean,
  *            version:string|null, evidence:string, reason:string, builtin:object|null}}
  */
-function detectMcpSupport({ piBin, env, cwd = null, builtins = null }) {
-  const packageDir = locatePiPackage({ piBin, env });
+function detectMcpSupport({ packageDir, env = process.env, cwd = null, builtins = null }) {
   /* 探测先建出来：即使包定位不到，「本机有没有 mcp.json」照样能回答。
    * （built-ins / ExtensionAPI / RPC 那几条会保持 unknown。） */
   const probe = builtins
@@ -207,13 +171,38 @@ function listExtensionDir(dir) {
 /**
  * @param runtime   共享运行态（要 cwd）。只读。
  * @param env       环境变量来源，默认 process.env。
- * @param piBin     pi 可执行文件（用来推包目录），默认 env.PI_BIN。
+ * @param piBin     pi 可执行文件。**只在没注入 `resolvePackageDir` 时**用来建一份
+ *                  launch identity（与 bridge 同一套 `server/pi-launch.js` 解析）。
+ * @param resolvePackageDir **规范来源**：`server.js` 装配好的
+ *                  `() => piLaunch.packageDir()`。注入了它就以它为准 ——
+ *                  保证 `/api/mcp` 读到的包 = bridge 实际启动的那个包（P20.5）。
  * @param piVersion 规范版本状态（server/pi-version.js 的 read()）。缺省则只回 detected.version。
  * @param piBuiltins 共用的 built-in 探测：`(cwd) => 探测结果`。缺省则自己建一个。
  */
-export function createMcp({ runtime, env = process.env, piBin = null, piVersion = null, piBuiltins = null }) {
+export function createMcp({
+  runtime,
+  env = process.env,
+  piBin = null,
+  resolvePackageDir = null,
+  piVersion = null,
+  piBuiltins = null,
+}) {
   const HOME = env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, CONFIG_DIR, 'agent');
+
+  /* 包目录的唯一取值处。注入了就用注入的（生产路径）；没注入（单测直接调模块）
+   * 就从 `piBin` + `env` 建一份 —— 注意仍然走 `pi-launch`，**不是**另写一套。
+   * launch 建一次（它自己带 TTL 缓存），别每次 readReport 都重新扫 PATH。 */
+  const resolveDir = typeof resolvePackageDir === 'function'
+    ? resolvePackageDir
+    : (() => {
+      const launch = createPiLaunch({
+        piBin: piBin || env.PI_BIN || 'pi',
+        env,
+        getCwd: () => runtime.getCurrentCwd(),
+      });
+      return () => launch.packageDir();
+    })();
 
   /** 版本状态读取失败不该把整份 MCP 报告带塌 —— 失败就是「版本未知」。 */
   function safeRead(read) {
@@ -228,7 +217,7 @@ export function createMcp({ runtime, env = process.env, piBin = null, piVersion 
   function readReport() {
     const cwd = runtime.getCurrentCwd();
     const detected = detectMcpSupport({
-      piBin: piBin || env.PI_BIN,
+      packageDir: resolveDir(),
       env,
       cwd,
       builtins: typeof piBuiltins === 'function' ? safeRead(() => piBuiltins(cwd)) : null,
@@ -347,5 +336,5 @@ export function createMcp({ runtime, env = process.env, piBin = null, piVersion 
     }
   }
 
-  return { handle, readReport, _internals: { locatePiPackage, detectMcpSupport, listExtensionDir } };
+  return { handle, readReport, _internals: { detectMcpSupport, listExtensionDir } };
 }

@@ -13,12 +13,15 @@
  * 业务实现按职责分在 server/ 下：
  *   server/auth.js        访问控制（令牌 + Origin）与身份探测
  *   server/rpc-bridge.js  pi 子进程：spawn / JSONL 解析 / stdin / 重启
+ *   server/pi-launch.js   **launch identity**：spawn 的命令、`--version` 与能力
+ *                         探测读的那个包，全部同源于这一处（P20.5）
  *   server/sse.js         事件总线：clients / backlog / seq
  *   server/projects.js    项目列表、目录浏览、切换项目
  *   server/providers.js   ~/.pi/agent/models.json 的读写与模型拉取
  *   server/project-config.js  <project>/.pi-gui/config.json 的读写与 pi 启动参数
  *   server/skills.js      Skills 的发现 / 详情 / 启停（只读 pi 的官方机制，不自造一套）
- *   server/mcp.js         MCP 能力报告（pi 0.87.0 无原生 MCP，如实说明 + 扩展清单）
+ *   server/mcp.js         MCP 能力报告（**读本机那份 pi 包**给证据：0.87.0 没有
+ *                         built-in `mcp`、0.99.1 有；不列 Server，如实回三值）
  *   server/sessions.js    会话列表与切换（pi 有 switch_session 但没有「列出会话」的 RPC）
  *   server/update-check.js 版本检查：只读 GitHub Release 元数据（不下载、不安装、不联网以外无副作用）
  *   server/uploads.js     附件上传与落盘
@@ -48,8 +51,9 @@ import { createRpcBridge } from './server/rpc-bridge.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
-import { createMcp, locatePiPackage } from './server/mcp.js';
+import { createMcp } from './server/mcp.js';
 import { createPiBuiltins } from './server/pi-builtins.js';
+import { createPiLaunch } from './server/pi-launch.js';
 import { createPiVersion, createPiVersionProbe } from './server/pi-version.js';
 import { createApprovalProbe } from './server/approval-probe.js';
 import { createSessions } from './server/sessions.js';
@@ -121,6 +125,30 @@ const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json');
 /* 共享运行态。currentCwd 的唯一权威 —— 见 server/runtime.js 的说明。 */
 const runtime = createRuntime({ initialCwd: resolveInitialCwd(PROJECTS_FILE) });
 
+/* ---------- launch identity（P20.5 Blocker A）----------
+ *
+ * 「现在启动主聊天 Pi，实际会执行哪个入口、那个入口属于哪个包」——
+ * **整个后端只有这一个答案**，由 `server/pi-launch.js` 算，这里建一次、
+ * 注入给所有要问它的模块：
+ *
+ *   rpc-bridge      → 真正 spawn（`launch` 参数直接吃它的 `bin`）
+ *   pi-version      → `packageDir()` 当版本真值；`launcher()` 出 `--version` 命令
+ *   pi-builtins     → `packageDir()` 当 built-in / ExtensionAPI 检视的包
+ *   mcp / approval  → `packageDir()` 当能力探测的包
+ *   diagnostics     → `summary()`（脱敏）当「启动的到底是哪个 pi」
+ *
+ * 为什么必须这么收：**spawn 看 PATH，而两份旧的包目录清单都不看 PATH。**
+ * 机器上同时装着全局 0.99.1 与 `PI_BIN` 指向的另一份时，RPC 起的是 A、
+ * 版本探测读的是 B —— 于是「运行中 Pi 的版本」报的是别的安装。
+ * 现在两件事出自同一个对象，不可能各走各的。
+ *
+ * `packageDir()` 拿不到就回 null —— 不回退到「常见全局安装位置」清单，
+ * 那正是这个 bug 的来源。少知道一点也比说错强（见该模块文件头）。
+ *
+ * 放在 runtime 之后建，是因为 `getCwd` 要读 runtime（惰性求值，但顺序上
+ * 紧跟着它更好懂）。 */
+const piLaunch = createPiLaunch({ piBin: PI_BIN, env: process.env, getCwd: () => runtime.getCurrentCwd() });
+
 const sse = createEventBus();
 
 const auth = createAuth({
@@ -147,45 +175,30 @@ const projectConfig = createProjectConfig({
  * `{ value, source, status, updatedAt }`。
  *
  * 取值顺序（越靠前越无副作用）：
- *   1. 本机 pi 包的 `package.json`（纯文件读）；
- *   2. 受控的 `pi --version`（只在第 1 步拿不到时兜底；入口复用 agent registry
- *      已经解析好的那个，避免自己拼 shell）；
+ *   1. **属于 launch identity 的那个** pi 包的 `package.json`（纯文件读）；
+ *      `resolvePackageDir` 就是 `piLaunch.packageDir()` —— 与 bridge 实际
+ *      spawn 的入口**绑定**（P20.5 Blocker A）。证明不了它回 null，
+ *      于是第 1 步不成立，**绝不会退回去读另一份全局安装的 package.json**；
+ *   2. 受控的 `pi --version`（`piLaunch.launcher()`）：与 bridge **同一个
+ *      launch spec**，只多一个 `--version`；
  *   3. 都拿不到 → unknown。
  *
- * 惰性求值 + TTL 缓存：`read()` 才会真的去读文件。 */
-
-/** pi 包目录：优先用 agent registry 自己解析出来的那个（与真正 spawn pi 用的是同一处），
- *  拿不到再退回通用的 npm 全局位置扫描。**只读**，不执行 pi。 */
-function resolvePiDir() {
-  try {
-    const adapter = agentRegistry.get('pi');
-    const info = adapter ? adapter.detect() : null;
-    const dir = info && info.entry && info.entry.packageDir;
-    if (typeof dir === 'string' && dir) return dir;
-  } catch {
-    /* 探测崩了就走通用定位，别让版本状态因此变成 unknown */
-  }
-  return locatePiPackage({ piBin: PI_BIN, env: process.env });
-}
+ * 惰性求值 + TTL 缓存：`read()` 才会真的去读文件。
+ *
+ * （旧版这里有两条路径：先问 agent registry 的 npm 扫描，再退回
+ * `locatePiPackage()` 的「常见全局位置」清单 —— 两份都**不看 PATH，而 spawn 看**。
+ * 那就是身份分叉的根源，现在整条删掉。） */
 
 const piVersion = createPiVersion({
-  resolvePackageDir: resolvePiDir,
-  probeVersion: createPiVersionProbe({
-    resolveEntry: () => {
-      // 惰性：piCompat / mcp 都是「被调用时才求值」，那时 agentRegistry 已经建好了
-      const adapter = agentRegistry.get('pi');
-      const info = adapter ? adapter.detect() : null;
-      const entry = info && info.entry;
-      return entry && entry.ok && entry.cmd ? { cmd: entry.cmd, baseArgs: entry.baseArgs || [] } : null;
-    },
-  }),
+  resolvePackageDir: piLaunch.packageDir,
+  probeVersion: createPiVersionProbe({ launcher: piLaunch.launcher }),
 });
 
 /* Pi built-in 能力探测（P20.5）。
  * built-ins（`llama.cpp` / `codemode` / `tool-search` / `mcp`）编译在 pi 包里，
  * **不是**用户装的 npm extension —— 所以它们既不该被 Registry 的目录扫描发现，
  * 也不该被硬编码成「当前一定启用」。这里只读 pi 包的源码文本给证据。 */
-const piBuiltins = createPiBuiltins({ resolvePackageDir: resolvePiDir, env: process.env });
+const piBuiltins = createPiBuiltins({ resolvePackageDir: piLaunch.packageDir, env: process.env });
 
 /* Pi 兼容层（P4）。
  *
@@ -220,6 +233,7 @@ const rpc = createRpcBridge({
       : event);
   },
   piBin: PI_BIN,
+  launch: piLaunch,
   isWin: IS_WIN,
   projectLaunch: projectConfig,
   compat: piCompat,
@@ -273,12 +287,15 @@ const mcp = createMcp({
   runtime,
   env: process.env,
   piBin: PI_BIN,
+  /* 包目录与版本都来自同一个 launch identity —— `/api/mcp` 说的「这个 pi」
+   * 必须是 bridge 正在跑的那个，而不是另一份安装（P20.5 Blocker A）。 */
+  resolvePackageDir: piLaunch.packageDir,
   piVersion: () => piVersion.read(),
   // 与 /api/mcp 共用同一份 built-in 探测（它自己带 cwd 维度的缓存）
   piBuiltins: (cwd) => piBuiltins.read({ cwd }),
 });
 /* P19：approval 能力报告（只读本机 pi 包，不执行它的代码）。 */
-const approvalProbe = createApprovalProbe({ env: process.env, piBin: PI_BIN });
+const approvalProbe = createApprovalProbe({ env: process.env, piBin: PI_BIN, resolvePackageDir: piLaunch.packageDir });
 const extensions = createExtensionRegistry({
   runtime, rpc, env: process.env,
   readTrust: async () => (await skills.readIndex()).trust,
@@ -395,6 +412,10 @@ const diagnostics = createDiagnostics({
   agentRegistry,
   mcp,
   compat: piCompat,
+  /* P20.5：诊断里的「pi 是哪个」要和真正跑起来的那个同源。
+   * `launch` 给脱敏摘要（source / basename / known），`piVersion` 给规范版本状态。 */
+  launch: piLaunch.summary,
+  piVersion: () => piVersion.read(),
   dataDir: DATA_DIR,
   version: VERSION,
   env: process.env,

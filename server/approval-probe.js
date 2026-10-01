@@ -1,8 +1,10 @@
 /* P19 Approval 能力探测：只读本机安装的 pi 包，报告「能不能真的拦」。
  *
  * 为什么必须由后端做：renderer 拿不到 pi 包路径，也不该为了一个能力报告去读文件系统。
- * 与 `server/mcp.js` 同一套路：定位 pi 包 → 在文档/类型/运行时代码里找**可核对的原文**
- * → 三值回答（true / false / null）。找不到证据就 unknown，**不猜**。
+ * 与 `server/mcp.js` 同一套路：**包目录只从 launch identity 取**
+ * （`server/pi-launch.js` —— 也就是 bridge 实际 spawn 的那份 pi）→
+ * 在文档/类型/运行时代码里找**可核对的原文** → 三值回答（true / false / null）。
+ * 找不到证据就 unknown，**不猜**。
  *
  * 每一项都要给用户看得懂的出处，因为它决定了「Pi GUI 现在到底能拦什么」这件事的说法：
  *
@@ -16,7 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { json } from './http-utils.js';
-import { locatePiPackage } from './mcp.js';
+import { createPiLaunch } from './pi-launch.js';
 
 const MAX_DOC_BYTES = 256 * 1024;
 const MAX_EVIDENCE_CHARS = 220;
@@ -60,6 +62,12 @@ function locate(packageDir, rel) {
 }
 
 /**
+ * @param piBin   pi 启动命令（只在没注入 `resolvePackageDir` 时用来建 identity）。
+ * @param env     环境变量来源（PATH / PATHEXT / PI_BIN）。
+ * @param resolvePackageDir **规范来源**：`server.js` 注入的
+ *                `() => piLaunch.packageDir()` —— 保证这份能力报告读的包
+ *                与 bridge 正在跑的那个包是同一份（P20.5）。
+ *                拿不到就 null（= 全部 unknown），**不去别处碰运气**。
  * @returns {{
  *   ok: boolean,
  *   piVersion: string|null,
@@ -67,8 +75,15 @@ function locate(packageDir, rel) {
  *   dialogMethods: string[]|null,
  * }}
  */
-export function probeApprovalSupport({ piBin, env } = {}) {
-  const packageDir = locatePiPackage({ piBin, env });
+export function probeApprovalSupport({ piBin, env = process.env, resolvePackageDir = null } = {}) {
+  let packageDir = null;
+  try {
+    packageDir = typeof resolvePackageDir === 'function'
+      ? resolvePackageDir()
+      : createPiLaunch({ piBin: piBin || env.PI_BIN || 'pi', env }).packageDir();
+  } catch {
+    packageDir = null;
+  }
   if (!packageDir) {
     return {
       ok: true,
@@ -150,10 +165,10 @@ export function probeApprovalSupport({ piBin, env } = {}) {
   };
 }
 
-export function createApprovalProbe({ env = process.env, piBin = '' } = {}) {
+export function createApprovalProbe({ env = process.env, piBin = '', resolvePackageDir = null } = {}) {
   function readReport() {
     try {
-      return probeApprovalSupport({ piBin, env });
+      return probeApprovalSupport({ piBin, env, resolvePackageDir });
     } catch (e) {
       return { ok: false, piVersion: null, checks: {}, dialogMethods: null, error: String(e?.message || e).slice(0, 200) };
     }

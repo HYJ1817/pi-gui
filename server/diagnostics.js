@@ -78,6 +78,11 @@ export function createDiagnostics({
   agentRegistry,
   mcp,
   compat = null,
+  /* P20.5 Blocker A：launch identity 的脱敏摘要与规范版本状态。
+   * 两者都是**函数**（惰性求值）—— 诊断只在被打开时才去算。
+   * 都不注入时（老调用方 / 单测）给 null，既有断言不受影响。 */
+  launch = null,
+  piVersion = null,
   dataDir,
   version,
   env = process.env,
@@ -142,6 +147,38 @@ export function createDiagnostics({
     const projectWritable = cwd ? canAccess(fsApi, cwd, fs.constants.W_OK) : null;
     const piAgent = agents.find((a) => a.id === 'pi') || null;
 
+    /* 版本优先级：**规范版本状态** → adapter 探测 → mcp 报告兜底。
+     * 第一条是 P20.5 的真值（它证明过包目录与 bridge 入口绑定），
+     * 后两条只是历史来源，保留是为了「规范状态还没算出来」时不至于空白。 */
+    let canon = null;
+    if (typeof piVersion === 'function') {
+      try {
+        const s = piVersion();
+        canon = s && typeof s === 'object' ? s : null;
+      } catch {
+        canon = null;
+      }
+    }
+    /* launch identity 的脱敏摘要：`{source, binName, entryKnown, packageDirKnown}`。
+     * 只有枚举、basename 与布尔 —— 绝对路径进不了这里（模块本身就不给），
+     * 再叠一层 redactDiagnosticValue 双保险。 */
+    let launchInfo = null;
+    if (typeof launch === 'function') {
+      try {
+        const s = launch();
+        if (s && typeof s === 'object') {
+          launchInfo = {
+            source: s.source || null,
+            binName: s.binName || null,
+            entryKnown: Boolean(s.entryKnown),
+            packageDirKnown: Boolean(s.packageDirKnown),
+          };
+        }
+      } catch {
+        launchInfo = null;
+      }
+    }
+
     const raw = {
       schemaVersion: 1,
       generatedAt: now().toISOString(),
@@ -175,7 +212,14 @@ export function createDiagnostics({
       pi: {
         configuredBin: safeBasename(env.PI_BIN || 'pi'),
         available: piAgent ? piAgent.available : null,
-        version: piAgent?.version || mcpReport.piVersion || null,
+        version: canon?.value || piAgent?.version || mcpReport.piVersion || null,
+        /* 版本值的出处（`package.json` / `pi --version` / `unknown`）。
+         * 让故障报告能区分「读到的版本」和「哪一步读到的」。 */
+        versionSource: canon ? canon.source : null,
+        /* **bridge 实际会启动的那个入口**（脱敏）：source 与 basename，
+         * 加两个布尔（入口解析到没有 / 包目录证明到没有）。
+         * 有了它，诊断里就能一眼看出「版本和启动的不是同一份」这种情况。 */
+        launch: launchInfo,
       },
       agents,
       mcp: {
