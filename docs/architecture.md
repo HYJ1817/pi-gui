@@ -1,5 +1,18 @@
 # 架构
 
+## P22 Capability 投影层
+
+`public/capability-model.js` 是**纯函数**投影层：把三条已经带出处的证据
+（Extension Registry、各 feature 的 generation/bridgeRun 范围运行观察、
+P20.5 built-in 与 P20.6 原生状态）折成一张统一状态表。
+它不 import `state.js`、不碰 DOM、不缓存任何东西 —— 缓存就是会过期的第二份真相。
+`public/ui/capability-setup.js` 是唯一一套 setup 布局，也是全仓库唯一的
+「安装后重启 Pi」实现（`confirmModal` → `ownsWorkspace(generation)` → `restartBackend()`）。
+`public/capability-view.js` 只负责取数、落地前过实例身份与 workspace generation、
+以及渲染；`extensions.js` 的标签行就是 All / Capabilities / Extensions / Skills / MCP 五个过滤器。
+`server/extension-registry.js` **一个字节都没为 P22 改**：它继续 generic。
+详见 [Capability UX](capability-ux.md)。
+
 ## P16 Web adapter
 
 `public/web-activity.js` 在现有 ToolEntry → tool-view 边界做纯语义投影，
@@ -320,7 +333,11 @@ get_messages ─┘
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
-- `extensions.js` 扩展面板 / `planner.js` 任务面板 / `project-config.js` 项目设置
+- `extensions.js` 扩展面板（五个过滤器 + 通用 Registry）/ `planner.js` 任务面板 /
+  `project-config.js` 项目设置
+- `capability-model.js` 纯投影（四值状态、结论行、过滤器、setup 视图模型）/
+  `capability-view.js` All 与 Capabilities 两个过滤器 / `ui/capability-setup.js`
+  唯一一套 setup 布局与唯一的「安装后重启 Pi」（P22）
 - `providers.js` 模型供应商 / `usage.js` 用量与状态 / `ui/` 通用组件
   （`modal.js` / `popover.js` / `toast.js`）
 

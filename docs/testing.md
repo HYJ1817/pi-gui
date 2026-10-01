@@ -897,3 +897,47 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   检索仅能佐证 new-api 有独立的额度显示单位与货币换算模块。
   **代码方向取安全侧**：拿不到权威单位就不标单位、不猜、不转换 —— 这一侧的结论
   不依赖于该说明的具体细节是否逐字准确。
+
+## P22 Capability UX 验证
+
+三层，各管一段（**不要把 DOM 断言当排版证明**）：
+
+| 层 | 命令 | 条数 | 量什么 |
+|---|---|---|---|
+| 纯投影 | `npm run test:capability`（进 `npm test`） | 62 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、搜索与过滤、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
+| DOM（jsdom） | `npm run test:ui` 的 P22 段 | 21 | 五个过滤器、六个状态字段、统一文案、未知不写成否、restartRequired、stale 不落地、Usage 入口只读 |
+| 真实 Chrome | `npm run harness` + `npm run shots:harness` | 场景 171–180 | 布局宽度、列表项高度、横向溢出、四档宽度 |
+
+关键判定（写错任何一条，界面就开始撒谎）：
+
+- **`null` 只显示「未知（无法确认）」**：`tests/capability.cjs` 用「发现失败」的
+  Registry 报告钉住 `installed` / `configured` / `loaded` 全是 `null`；
+  smoke 那一段临时把 `/api/extensions` 换成 `{ok:false}`，断言详情里是
+  「未知（无法确认）」而**不是**「未安装」。
+- **Native MCP 不显示 npm 安装命令**：纯测断言 `installCommand === null` 且
+  说明里含「没有安装命令」；截图 173 断言详情里**没有** `<code>` 元素、
+  也没有任何按钮（一个伪造开关都不给）。
+- **built-in 不伪装成普通 Extension**：`builtin:` 前缀 + `pi 内置扩展` 来源徽标 +
+  「不由 Extension Registry 的目录扫描发现」；「启用 / 加载」显示**不适用**而不是「否」。
+- **unknown Extension 不丢**：registry fixture 里放一个完全不认识的包，
+  断言它在 All 与 Extensions 里都在、状态是未知、坏掉的那条带自己的诊断。
+- **运行观察随 bridge run 重置**：观察实例在 `bridge_status` 的
+  starting / restarting / exited / error / no-project 上清空；换 workspace
+  generation 也不沿用（纯测直接对 `createWebObservation()` 断言）。
+- **stale workspace**：smoke 在 `openExtensions()` 之后**同步**把
+  `S.workspaceGeneration` 加一，断言结果回来时列表为空并显示「项目已切换」。
+- **无自动安装**：四个 `*Setup()` 都声明 `automaticInstall === false`；
+  投影层与视图层都不出现 `child_process` / `execFile` / `spawn(` / `node:fs`；
+  Capability 视图里没有任何按钮以「安装」开头。
+- **Registry 无特化**：直接读 `server/extension-registry.js` 与
+  `lib/extension-paths.js` 的源码，断言里面**不出现**任何 feature 包名
+  （`pi-web-access` / `pi-subagents` / `pi-memory` / `pi-browser-harness`）、
+  工具名（`web_search` / `memory_search` / `browser_navigate`）或 `nativeState`。
+
+⚠️ **测试占用的固定端口别去蹲**：`visual-harness` 默认 7789、`dev-server` 7791、
+`git.cjs` 7799；CDP 9222–9225。跑截图 harness 用表外端口
+（本次用 `HARNESS_PORT=7800` + `CDP_PORT=9233`）。
+
+⚠️ **同一个 harness 进程不要连着跑两次 `cdp-shot`**：harness 的内存夹具是有状态的
+（会话、Git 干净开关、对话推送），第二轮会看到第一轮留下的世界，
+表现为 59 / 125 这类**与本次改动无关**的取景失败。每轮截图前重启 harness。

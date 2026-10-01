@@ -13,3 +13,5 @@ Planner、Changes、Extensions 是一级 Stage 页面。危险操作确认继续
 验证：`npm run test:ui` 的 P14-D 段检查节点身份、草稿、附件、滚动、后台流式更新、唯一激活态和二级 Modal；`npm run harness` 加 `npm run shots:harness` 的 105–124 场景在真实 Chrome 中检查 Stage bounds、列表与详情、Diff、MCP、700/900/1200/1536px 和低高度窗口。完整回归以 `npm test` 为准。
 
 P14-E 保留这套承载与滚动结构。Planner、Changes、Extensions 的按钮和选中行统一为灰阶，危险操作只用少量红色文字提示；状态文字、Git Diff 和执行结果继续使用语义色。Planner / Extensions Tab 的 `aria-selected` 与可见面板一致，并通过 `aria-controls` 指向对应面板。被替换的 Surface 内若持有焦点，统一生命周期会将焦点送到新视图的入口。
+
+P22 把 Extensions 的标签行扩成 **All / Capabilities / Extensions / Skills / MCP** 五个过滤器：**没有新增导航**，复用的还是这一套 tab 机制 —— 同样的 `role="tablist"` / `aria-selected` / `aria-controls="extensionsTabPanel"`，同样的懒建面板与实例身份守卫；All 与 Capabilities 两个过滤器由 `capability-view.js` 渲染（它自己再守一次 workspace generation）。详见 [capability-ux.md](capability-ux.md)。

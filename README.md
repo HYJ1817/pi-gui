@@ -139,6 +139,25 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 
 → [architecture.md](docs/architecture.md#六前端渲染管线)
 
+### 能力视图（Capability）
+
+一个界面回答「这个能力现在能不能用」，而且**不建第二套事实源** ——
+它只是把 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测**投影**成
+一张统一状态表。
+
+- 五个过滤器：**All / Capabilities / Extensions / Skills / MCP**（标签行就是过滤器，
+  没新增导航）。已知能力、pi 内置能力、通用 Extension、MCP server 各归其位
+- 每一条都报同一组字段：**安装状态 / 启用配置 / 已加载 / 运行观察 / 需要重启 / 诊断**，
+  外加名称、用途、固定官方命令（若有）、复制、安装后重启与限制说明
+- **`null` 显示「未知（无法确认）」，绝不显示成「否」**：没观察到调用不等于没有这个能力
+- **Native MCP 进入统一体验但不丢边界**：它来自 Pi 的 builtin capability，
+  所以**不显示 npm 安装命令**；原生状态（生效 / 被接管 / 被停用 / 不支持）原样搬运
+  P20.6 的结论，不重新判断。内置扩展标成 `builtin:`，不伪装成你装的 Extension
+- 不认识的 Extension **照常出现**、状态是未知、错误就地显示 —— 一个都不丢
+- 只读：没有 Marketplace、没有自动更新、没有评分、没有远端 catalog、没有安装按钮
+
+→ [capability-ux.md](docs/capability-ux.md)
+
 ### Skills / Extensions / MCP
 
 管的是**你已经装好的**能力，不是商店 —— 没有下载、没有安装。
@@ -147,8 +166,9 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   改完会自动重启 pi（pi 没有文件监听）
 - **Extensions**：只读发现当前磁盘上的候选项，分开显示安装、配置与加载证据。
   Pi RPC 没有已注册工具清单，所以不会猜某个扩展提供了什么工具；安装与启停仍用 Pi 官方 CLI。
-  Web / Subagent / Memory / Browser 各有一个独立设置区：固定官方安装命令 + 安装后重启 Pi +
-  当前 bridge 的真实工具调用观察。**长期记忆由 Extension 提供，不是 Pi GUI 内置的**
+  Web / Subagent / Memory / Browser 的设置区（固定官方安装命令 + 安装后重启 Pi +
+  当前 bridge 的真实工具调用观察）现在统一在 Capability 视图里。
+  **长期记忆由 Extension 提供，不是 Pi GUI 内置的**
 - **MCP**：用 pi **原生** MCP，Pi GUI 不自建 runtime —— 历史验证基线 **0.87.0**
   没有原生 MCP，当前验证基线 **0.99.2** 自带 `builtin:mcp`。标签页显示原生状态
   （active / replaced / disabled / unknown，只认证据）、两处 `mcp.json` 的
@@ -319,7 +339,8 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [planner.md](docs/planner.md) | 任务编排：Planner/Executor、Agent registry、DAG、失败与恢复、限制 |
 | [workflows.md](docs/workflows.md) | 任务工作流：任务 ↔ 会话、任务 ↔ 文件、打开会话、项目隔离、元数据边界 |
 | [reviews.md](docs/reviews.md) | 人工审阅：执行结果 ≠ 验收、三个审阅状态、验证快照、当前 diff、冲突与 revision、限制 |
-| [extensions.md](docs/extensions.md) | Skills 发现与启停、Extension 只读发现与能力证据、MCP 原生集成 |
+| [extensions.md](docs/extensions.md) | 五个能力过滤器、Skills 发现与启停、Extension 只读发现与能力证据、MCP 原生集成 |
+| [capability-ux.md](docs/capability-ux.md) | P22 能力视图：投影层边界、统一状态六字段与四值、统一 setup 布局、证据来源、Registry 边界、重启与 stale |
 | [mcp.md](docs/mcp.md) | P20.6 MCP：用 pi 原生 MCP（不自建 runtime）、状态来源、受控动作、OAuth/工具/资源/权限边界 |
 | [project-config.md](docs/project-config.md) | 项目配置：位置、字段、优先级、指令注入、坏配置行为 |
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |

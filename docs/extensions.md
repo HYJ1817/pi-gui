@@ -1,16 +1,45 @@
-# 扩展（Skills / Extensions / MCP）
+# 扩展（Skills / Extensions / MCP / Capability）
 
-侧栏的**扩展**是 Skills、Extensions 与 MCP 三个标签页。它管的是**你已经装好的**能力，
-不是商店 —— 没有下载、没有安装、没有远程代码执行。
+侧栏的**扩展**是 Skills、Extensions 与 MCP 三个标签页，外加 P22 的
+**All / Capabilities** 两个能力过滤器（它们同时是「这个能力现在能不能用」的统一视图）。
+它管的是**你已经装好的**能力，不是商店 —— 没有下载、没有安装、没有远程代码执行。
 
 **Pi GUI = pi 的 GUI，不是第二套扩展系统。** pi 已有的机制就做 GUI 管理，
 MCP 这类能力按**本机实际装着的那个 pi 包**检测后如实报告（历史验证基线 0.87.0 没有原生 MCP，当前验证基线 0.99.2 自带 builtin:mcp —— 见下面 MCP 一节）。
 
+> **P22：Capability 是投影层，不是事实数据库。** 完整的规则见
+> [Capability UX](capability-ux.md)：五个过滤器、六个统一状态字段、
+> `null` 一律显示「未知（无法确认）」、Native MCP 原样搬运 P20.6 的原生状态、
+> 唯一一套 setup 布局与唯一的「安装后重启 Pi」实现。
+
+## 五个过滤器（P22）
+
+标签行**就是过滤器**，没有新增导航：
+
+| 过滤器 | 内容 |
+|---|---|
+| All（默认） | 已知能力 + pi 内置 + 通用 Extension + MCP server |
+| Capabilities | 只留已知能力与 Native MCP |
+| Extensions | 通用 Registry（**包括完全不认识的**） |
+| Skills | pi 原生 Skills 的清单、详情与启停（原有实现） |
+| MCP | pi 原生 MCP 管理面（原有实现） |
+
+每个 feature（Web / Subagents / Pi Memory / Browser / Native MCP / Approval / Usage）
+用**同一套 setup 布局**：名称、用途、六个统一状态字段、来源说明、固定官方命令（若有）、
+复制、安装后重启、运行观察、限制、出处。Native MCP 与 built-in **没有安装命令** ——
+它们来自 Pi 自己的 built-in capability，不是 npm 包。
+
 ## Extensions（P15 基础设施）
 
-P16 在 Extensions 页增加独立 Web Access 设置区：固定官方安装命令复制、
-安装后重启 Pi、当前 bridge 的工具调用观察。没有 GUI 自动安装或任意包名入口。
-通用 Registry 不含 Web 专用条件，工具清单仍未知。详情见 [Web Access](web-access.md)。
+P16 的 Web Access、P17 的 Subagents、P18 的 Pi Memory、P20 的 Browser Use 原来各自
+在 Extensions 页占一段设置区；**P22 起它们统一进入 Capability 视图**（All /
+Capabilities 过滤器），共用 `public/ui/capability-setup.js` 那一套布局与同一套措辞。
+通用 Registry 页只留**发现**这一件事：磁盘上有什么、各自什么状态、能不能诊断。
+详情见 [Web Access](web-access.md)、[Subagents](subagents.md)、
+[Pi Memory](memory.md)、[Browser Use](browser.md)、[Capability UX](capability-ux.md)。
+
+P16 的原意没变：固定官方安装命令复制、安装后重启 Pi、当前 bridge 的工具调用观察。
+没有 GUI 自动安装或任意包名入口。通用 Registry 不含 Web 专用条件，工具清单仍未知。
 P17 增加 Subagents 设置区（见 [subagents.md](subagents.md)），P18 增加 Pi Memory 设置区
 （见 [memory.md](memory.md)）。三者都是**独立的 feature adapter**，共用同一套
 installed / configured / loaded / runtimeObserved 语义，但**不往通用 Registry 里塞
@@ -203,6 +232,9 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
   `global` / `project`。用 `pi.registerMcpServer()` 注册的 server 只活在
   session 里、只在 `/mcp` 管理器里出现 —— 在 GUI 里属于 unknown / 不可枚举。
   详见 [mcp.md](mcp.md) 的「`scope`：类型上有三值，CLI 实际只产两个」。
+- **P22：这几条原生状态也被 Capability 视图投影**（`active` / `replaced` /
+  `disabled` / `unsupported` / `unknown` 原样搬运，不重新判断）。`replaced`
+  计入概览的**未知**一档 —— 被扩展接管不等于 MCP 不可用。
 
 `server/mcp.js` **不硬编码「某个版本没有 MCP」**：它去读本机装的 pi 包
 （定版本、扫 `dist/core` 找 mcp 模块、从 docs 截原文当证据）。`supported`
@@ -227,10 +259,19 @@ override 语义，需要同步更新 `server/skills.js` ——
 
 ## 相关测试
 
+P22 增加统一 Capability 视图（见 [capability-ux.md](capability-ux.md)）：
+`npm run test:capability`（62 条，纯投影、离线：四值状态、`null` 不冒充 `false`、
+built-in / Native MCP 与 unknown Extension、搜索与过滤、运行观察重置、
+`restartRequired`、stale、无自动安装、**`server/extension-registry.js` 无特化**）；
+`npm run test:ui` 的 P22 段（21 条 jsdom）与截图场景 171–180（真实 Chrome，
+含 700 / 900 / 1200 / 1536px）。
+
 P19 在 Extensions 页增加 **Approval / Permission** 能力块（只读报告，不是新标签页）：
 报告 `tool_call` 能否阻断、对话框子协议是否可用、核心有没有自带审批、
 RPC 下 `ctx.ui.custom()` 是否退化，每项带出处；见 [approvals.md](approvals.md)。
 它不改 Registry 的发现/启用/加载判定，也不往 Registry 里塞 permission 专用逻辑。
+P22 起这份报告同样以一条能力行的形式进入 Capability 视图（同一份探测结果，
+不重新探测、不重新判断）。
 
 P17 增加 Conversation Subagent Activity 与手动安装提示，见 [subagents.md](subagents.md)。
 终端执行固定命令 pi install npm:pi-subagents 后确认重启 Pi。

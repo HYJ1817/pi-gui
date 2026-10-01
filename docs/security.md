@@ -1,5 +1,32 @@
 # 安全
 
+## P22 Capability 投影层边界
+
+Capability 视图是**只读投影**：它把已有的证据重新排版，**不新增任何事实、不新增任何动作**。
+
+- **不联网、不安装、不执行**：`capability-model.js` / `capability-view.js` /
+  `ui/capability-setup.js` 里没有 `child_process` / `execFile` / `spawn(` / `node:fs`；
+  四个 feature 的 `*Setup()` 全部声明 `automaticInstall === false`。
+  唯一的写动作是「安装后重启 Pi」—— 它走既有的 `POST /api/restart`，
+  并且**先确认、再校验 workspace generation**，切换了项目就不重启。
+- **没有安装入口**：界面上没有「安装」按钮、没有任意包名输入框；
+  固定官方命令只以 `<code>` 文本 + 复制按钮出现，命令由用户在终端自己执行。
+- **不伪造能力**：`null` 只显示「未知（无法确认）」。这一条是安全属性而不是文案问题 ——
+  把「没探测到」说成「没有」，用户就会去做多余的安装或卸载。
+  探测失败时 `installed` / `configured` / `loaded` 全部保持未知。
+- **不伪造开关**：MCP 的 enable / disable / reconnect / 改 exposure 没有官方自动化接口，
+  界面只写「请用 pi 的 /mcp 管理器」，不画按钮。
+- **不新增数据面**：MCP 凭据值依旧不进浏览器也不进 HTTP；Capability 行上的 server
+  字段来自后端已脱敏的摘要（`enabled` / `exposure` / `transportType` / `hasSecrets` 布尔），
+  不包含 `env` / `headers` / token 原文。
+- **不新增持久化**：Capability 层不写 localStorage / sessionStorage / 项目文件，
+  也不缓存观察 —— 观察属于「当前 workspaceGeneration + bridgeRun」，缓存它就会在
+  切项目后显示上一个项目的结论。
+- **内置能力与用户扩展分得清**：pi 包里的 built-in capability 用 `builtin:` 前缀标注，
+  不让用户以为它来自 `~/.pi/agent/extensions` 的扫描。
+
+详见 [capability-ux.md](capability-ux.md)。
+
 ## P21 Usage / Quota 边界
 
 远端额度是**只读探测**，不是账户管理，也不做任何扣费/充值/预算切断。
