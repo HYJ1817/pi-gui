@@ -750,6 +750,25 @@ const server = http.createServer(async (req, res) => {
    * 造的是 DeepSeek 真实形状（balance_infos 多币种）。 */
   if (p.startsWith('/api/quota/')) {
     const id = decodeURIComponent(p.slice('/api/quota/'.length));
+    /* P21-Fix-4：单位未知的夹具（NewAPI 样式）——数值齐全，但没有单位证据。 */
+    if (id === 'unknown-unit') {
+      return json(res, 200, {
+        ok: true,
+        cached: false,
+        quota: {
+          providerId: 'unknown-unit',
+          status: 'ok',
+          balance: { amount: 75, currency: null, granted: null, toppedUp: null },
+          balances: null,
+          windows: { used: 25, limit: 100, remaining: 75, unit: null },
+          rateLimit: null,
+          resetAt: null,
+          source: 'https://newapi.example.com/dashboard/billing/subscription',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          message: null,
+        },
+      });
+    }
     if (id !== 'deepseek') return json(res, 200, { ok: false, error: 'unknown provider' });
     return json(res, 200, {
       ok: true,
@@ -1160,6 +1179,16 @@ const server = http.createServer(async (req, res) => {
       push({ type: 'tool_execution_end', toolCallId: 'p18sf-write', isError: false, result: { content: [{ type: 'text', text: 'PRIVATE_MEMORY_TEXT' }], details: {} } });
       push({ type: 'tool_execution_start', toolCallId: 'p18sf-status', toolName: 'memory_status', args: {} });
       push({ type: 'tool_execution_end', toolCallId: 'p18sf-status', isError: false, result: { content: [{ type: 'text', text: 'PRIVATE_MEMORY_TEXT' }], details: { longTermChars: 1200, snapshotMode: 'refresh' } } });
+      return json(res, 200, { ok: true });
+    } else if (what === 'quota-unknown-unit') {
+      /* P21-Fix-4：把当前模型切到一个「单位未知」的 provider（NewAPI 样式：
+       * quota 数值有、currency/unit 都是 null）。 */
+      const reply = replyFor({ type: 'get_state' });
+      reply.data.model = { id: 'newapi-custom', name: 'NewAPI（单位未知）', provider: 'unknown-unit' };
+      push(reply);
+      return json(res, 200, { ok: true });
+    } else if (what === 'quota-restore-model') {
+      push(replyFor({ type: 'get_state' }));
       return json(res, 200, { ok: true });
     } else if (what === 'approval-request') {
       /* P19: 权限扩展经 extension_ui_request 发来的对话框。

@@ -1168,6 +1168,28 @@ async function main() {
   ]);
   await evalJs(`document.querySelector('#btnCtx').click()`);
   await sleep(120);
+  await evalJs(`fetch('/api/__conversation?what=quota-unknown-unit').then(r=>r.ok)`);
+  await sleep(420);
+  await evalJs(`document.querySelector('#usageDetails').open = true`);
+  await sleep(180);
+  await shotOf('#usageDetails', '169-usage-unknown-unit', 'P21-Fix-4：单位未知时只显示数值（不加 $ / ¥）', ['远端额度', '75.00'], [
+    ['侧栏是纯数值 75.00', `document.querySelector('#uQuota').textContent === '75.00'`],
+    ['没有货币符号或币种名', `!/[$¥]|USD|CNY/.test(document.querySelector('#uQuota').textContent)`],
+    ['行高正常、没有溢出', `(() => {const d=document.querySelector('#usageDetails .quota-detail');return d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().height>0})()`],
+  ]);
+  await evalJs(`document.querySelector('#btnCtx').click()`);
+  await sleep(220);
+  await shotOf('#composerPopover', '170-usage-unknown-unit-popover', 'P21-Fix-4：单位未知时 Popover 拆成数值行并标注「单位未知」', ['剩余额度', '已使用', '总额度', '单位未知'], [
+    ['三行数值都在', `(() => {const t=document.querySelector('.tip-quota-section').textContent;return t.includes('剩余额度')&&t.includes('已使用')&&t.includes('总额度')})()`],
+    /* 只看额度区：会话累计成本那行本来就是 $（本地用量，单位明确），不该被这条判据扫到。 */
+    ['额度区正文里没有 $ / ¥ / USD / CNY', `!/[$¥]|USD|CNY/.test(document.querySelector('.tip-quota-section').textContent)`],
+    ['额度区明确标注单位未知', `document.querySelector('.tip-quota-section').textContent.includes('单位未知')`],
+    ['没有 HTML 元素被动态注入', `document.querySelector('#composerPopover').querySelectorAll('img,script').length===0`],
+  ]);
+  await evalJs(`document.querySelector('#btnCtx').click()`);
+  await sleep(120);
+  await evalJs(`fetch('/api/__conversation?what=quota-restore-model').then(r=>r.ok)`);
+  await sleep(160);
   await evalJs(`document.querySelector('#navExtensions').click()`);
   await sleep(260);
   await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);

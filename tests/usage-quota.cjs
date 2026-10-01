@@ -226,6 +226,9 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   check('NewAPI: limit = hard_limit_usd = 100', newApiRes.quota.windows.limit === 100);
   check('NewAPI: remaining = 100 - 25 = 75', newApiRes.quota.windows.remaining === 75);
   check('NewAPI: balance.amount = remaining = 75', newApiRes.quota.balance.amount === 75);
+  check('NewAPI: balance.currency 为 null（字段名带 _usd，但数值不保证是美元）', newApiRes.quota.balance.currency === null);
+  check('NewAPI: windows.unit 为 null（generic numeric quota）', newApiRes.quota.windows.unit === null);
+  check('NewAPI: 结果里没有把单位标成 USD/CNY', !/USD|CNY/.test(JSON.stringify(newApiRes.quota)));
   check('NewAPI: 结果里不含 API key 原文', !JSON.stringify(newApiRes).includes(NEWAPI_KEY));
 
   /* 没有 quotaUserId：当前 NewAPI 用 Bearer TokenAuth，这**不该**是必要条件。 */
@@ -644,6 +647,73 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   check('Popover 显示赠送/充值（DOM 构建，无 innerHTML 插值）', quotaSection.textContent.includes('赠送额度 (CNY)') && quotaSection.textContent.includes('充值额度 (CNY)'));
   check('Popover 里没有 HTML 元素被动态注入', quotaSection.querySelectorAll('img,script').length === 0);
 
+  // 11.6b NewAPI：单位未知（currency/unit 都是 null）→ 纯数值，绝不加 $ / ¥ / USD / CNY
+  S.currentProviderId = 'my-oneapi';
+  S.quotaLoading = false;
+  S.remoteQuota = {
+    providerId: 'my-oneapi', status: 'ok',
+    balance: { amount: 75, currency: null, granted: null, toppedUp: null },
+    balances: null,
+    windows: { used: 25, limit: 100, remaining: 75, unit: null },
+    rateLimit: null, resetAt: null, source: 'https://newapi.example.com/dashboard/billing/subscription',
+    updatedAt: null, message: null,
+  };
+  let naErr = null;
+  try { usage.renderRemoteQuota(); } catch (e) { naErr = e; }
+  check('NewAPI 未知单位渲染不抛错', naErr === null);
+  check('NewAPI 侧栏显示纯数值 75.00', $('uQuota').textContent === '75.00');
+  check('NewAPI 侧栏不含货币符号或币种名', !/[$¥]|USD|CNY/.test($('uQuota').textContent));
+
+  let naTipErr = null;
+  try { usage.openCtxTip(); } catch (e) { naTipErr = e; }
+  check('NewAPI Popover 渲染不抛错', naTipErr === null);
+  const naSection = document.querySelector('.tip-quota-section');
+  const naText = naSection ? naSection.textContent : '';
+  check('NewAPI Popover 显示数值 75 / 25 / 100', naText.includes('75.0000') && naText.includes('25') && naText.includes('100'));
+  check('NewAPI Popover 出现「剩余额度 / 已使用 / 总额度」三行', naText.includes('剩余额度') && naText.includes('已使用') && naText.includes('总额度'));
+  check('NewAPI Popover 不含 $ 或 ¥', !/[$¥]/.test(naText));
+  check('NewAPI Popover 不含 USD / CNY', !/USD|CNY/.test(naText));
+  check('NewAPI Popover 明确标注单位未知', naText.includes('单位未知'));
+  check('NewAPI Popover 里没有 HTML 元素被动态注入', naSection.querySelectorAll('img,script').length === 0);
+
+  // 11.6c OpenRouter（USD）与 DeepSeek（CNY/USD）不能被打坏
+  S.currentProviderId = 'openrouter';
+  S.remoteQuota = {
+    providerId: 'openrouter', status: 'ok',
+    balance: { amount: 8, currency: 'USD', granted: null, toppedUp: null },
+    balances: null,
+    windows: { used: 2.5, limit: 50, remaining: 8, unit: 'USD' },
+    rateLimit: null, resetAt: null, source: 'https://openrouter.ai/api/v1/key', updatedAt: null, message: null,
+  };
+  usage.renderRemoteQuota();
+  check('OpenRouter: 侧栏仍然是 $8.00（货币符号保留）', $('uQuota').textContent === '$8.00');
+  usage.openCtxTip();
+  const orSection = document.querySelector('.tip-quota-section');
+  check('OpenRouter: Popover 仍然是 $ 且有 USD 标注', /[$]/.test(orSection.textContent) && orSection.textContent.includes('USD'));
+  check('OpenRouter: remaining 与余额同值时不出现重复的「额度剩余」行', !orSection.textContent.includes('额度剩余'));
+  check('OpenRouter: 没有「单位未知」标注', !orSection.textContent.includes('单位未知'));
+
+  S.currentProviderId = 'deepseek';
+  S.remoteQuota = {
+    providerId: 'deepseek', status: 'ok',
+    balance: { amount: 110, currency: 'CNY', granted: null, toppedUp: null },
+    balances: [
+      { amount: 110, currency: 'CNY', granted: null, toppedUp: null },
+      { amount: 15, currency: 'USD', granted: null, toppedUp: null },
+    ],
+    windows: null, rateLimit: null, resetAt: null, source: 'x', updatedAt: null, message: null,
+  };
+  usage.renderRemoteQuota();
+  check('DeepSeek: 侧栏仍然是 ¥110.00 | $15.00', $('uQuota').textContent === '¥110.00 | $15.00');
+  usage.openCtxTip();
+  check('DeepSeek: Popover 仍然是 (CNY)/(USD) 逐条', document.querySelector('.tip-quota-section').textContent.includes('剩余额度 (CNY)'));
+  check('currencySymbol: USD → $', usage.currencySymbol('USD') === '$');
+  check('currencySymbol: CNY → ¥', usage.currencySymbol('CNY') === '¥');
+  check('currencySymbol: null/未知 → 空（不加符号）', usage.currencySymbol(null) === '' && usage.currencySymbol(undefined) === '' && usage.currencySymbol('TOKENS') === '');
+  check('fmtBalanceShort(null 单位) 只输出数值', usage.fmtBalanceShort(75, null) === '75.00');
+  check('fmtCurrency(null 单位) 只输出数值', usage.fmtCurrency(75, null) === '75.0000');
+  check('fmtMaybeMoney(null 单位) 只输出数值', usage.fmtMaybeMoney(75, null) === '75.0000');
+
   // 11.7 恶意币种/金额字符串：只当文本
   S.remoteQuota = {
     ...S.remoteQuota,
@@ -652,7 +722,9 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   usage.renderRemoteQuota();
   usage.openCtxTip();
   check('恶意 currency 只当文本（无 img 元素）', document.querySelector('.tip-quota-section').querySelector('img') === null);
-  check('恶意 currency 被转义为文本（不是 HTML）', document.querySelector('.tip-quota-section').outerHTML.includes('&lt;img'));
+  check('恶意 currency 既不成元素、也不进 DOM（未知单位直接不加币种标注）',
+    !document.querySelector('.tip-quota-section').outerHTML.includes('onerror')
+    && !document.querySelector('.tip-quota-section').outerHTML.includes('&lt;img'));
 
   // 11.8 null 余额：显示 —，不崩
   S.remoteQuota = { ...S.remoteQuota, balance: { amount: null, currency: 'CNY' }, balances: [{ amount: null, currency: 'CNY' }] };
