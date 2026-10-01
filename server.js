@@ -48,7 +48,9 @@ import { createRpcBridge } from './server/rpc-bridge.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
-import { createMcp } from './server/mcp.js';
+import { createMcp, locatePiPackage } from './server/mcp.js';
+import { createPiBuiltins } from './server/pi-builtins.js';
+import { createPiVersion, createPiVersionProbe } from './server/pi-version.js';
 import { createApprovalProbe } from './server/approval-probe.js';
 import { createSessions } from './server/sessions.js';
 import { createSessionSearch } from './server/session-search.js';
@@ -137,6 +139,54 @@ const projectConfig = createProjectConfig({
   restartPi: () => rpc.restart(),
 });
 
+/* Pi 版本真值（P20.5）。
+ *
+ * 在这之前「当前跑的是哪个 pi」是隐式的：文档写着「兼容基线 0.87.0」，
+ * 用户机器上却可能装着 0.99.1 —— 于是「文档说没有原生 MCP」被当成了
+ * 「你的 pi 没有原生 MCP」。这个模块把它变成一个有出处的状态：
+ * `{ value, source, status, updatedAt }`。
+ *
+ * 取值顺序（越靠前越无副作用）：
+ *   1. 本机 pi 包的 `package.json`（纯文件读）；
+ *   2. 受控的 `pi --version`（只在第 1 步拿不到时兜底；入口复用 agent registry
+ *      已经解析好的那个，避免自己拼 shell）；
+ *   3. 都拿不到 → unknown。
+ *
+ * 惰性求值 + TTL 缓存：`read()` 才会真的去读文件。 */
+
+/** pi 包目录：优先用 agent registry 自己解析出来的那个（与真正 spawn pi 用的是同一处），
+ *  拿不到再退回通用的 npm 全局位置扫描。**只读**，不执行 pi。 */
+function resolvePiDir() {
+  try {
+    const adapter = agentRegistry.get('pi');
+    const info = adapter ? adapter.detect() : null;
+    const dir = info && info.entry && info.entry.packageDir;
+    if (typeof dir === 'string' && dir) return dir;
+  } catch {
+    /* 探测崩了就走通用定位，别让版本状态因此变成 unknown */
+  }
+  return locatePiPackage({ piBin: PI_BIN, env: process.env });
+}
+
+const piVersion = createPiVersion({
+  resolvePackageDir: resolvePiDir,
+  probeVersion: createPiVersionProbe({
+    resolveEntry: () => {
+      // 惰性：piCompat / mcp 都是「被调用时才求值」，那时 agentRegistry 已经建好了
+      const adapter = agentRegistry.get('pi');
+      const info = adapter ? adapter.detect() : null;
+      const entry = info && info.entry;
+      return entry && entry.ok && entry.cmd ? { cmd: entry.cmd, baseArgs: entry.baseArgs || [] } : null;
+    },
+  }),
+});
+
+/* Pi built-in 能力探测（P20.5）。
+ * built-ins（`llama.cpp` / `codemode` / `tool-search` / `mcp`）编译在 pi 包里，
+ * **不是**用户装的 npm extension —— 所以它们既不该被 Registry 的目录扫描发现，
+ * 也不该被硬编码成「当前一定启用」。这里只读 pi 包的源码文本给证据。 */
+const piBuiltins = createPiBuiltins({ resolvePackageDir: resolvePiDir, env: process.env });
+
 /* Pi 兼容层（P4）。
  *
  * 它在**最前面**建，因为 rpc-bridge 与 sessions 都要把它当观察者注入进去。
@@ -147,9 +197,13 @@ const projectConfig = createProjectConfig({
  * 而那**不是**判不兼容的理由（见该模块头部的规矩 1）。 */
 const piCompat = createPiCompat({
   piVersionProbe: () => {
-    // 版本来自「本机已装的 pi 包」（读 package.json）—— 不跑 pi、不联网
-    const pi = agentRegistry.list().find((a) => a.id === 'pi');
-    return pi && pi.version ? pi.version : null;
+    // 走规范版本状态，拿不到就回 null（pi-compat 会显示「版本未知」）
+    const state = piVersion.read();
+    return state && state.value ? state.value : null;
+  },
+  versionSourceProbe: () => {
+    const state = piVersion.read();
+    return state ? { source: state.source, status: state.status, updatedAt: state.updatedAt } : null;
   },
 });
 
@@ -215,7 +269,14 @@ const gitRoutes = createGitRoutes({ runtime });
  * （HOME）决定了去哪找 skill，必须和 spawn pi 时用的是同一份环境，否则会出现
  * 「界面说有一堆 skill、pi 一个都没加载」。 */
 const skills = createSkills({ runtime, rpc, env: process.env });
-const mcp = createMcp({ runtime, env: process.env, piBin: PI_BIN });
+const mcp = createMcp({
+  runtime,
+  env: process.env,
+  piBin: PI_BIN,
+  piVersion: () => piVersion.read(),
+  // 与 /api/mcp 共用同一份 built-in 探测（它自己带 cwd 维度的缓存）
+  piBuiltins: (cwd) => piBuiltins.read({ cwd }),
+});
 /* P19：approval 能力报告（只读本机 pi 包，不执行它的代码）。 */
 const approvalProbe = createApprovalProbe({ env: process.env, piBin: PI_BIN });
 const extensions = createExtensionRegistry({

@@ -102,6 +102,10 @@ export function createDiagnostics({
         detected: r.detected,
         piVersion: r.version,
         versionKnown: r.versionKnown,
+        /* P20.5：版本值的**出处**（source / status / updatedAt）。
+         * 它只有枚举与时间戳，没有 payload —— 让 Diagnostics 能区分
+         * 「文档里的历史基线」与「这台机器上跑的那个」。 */
+        versionSource: r.versionSource || null,
         capabilities: r.capabilities,
         missing: r.missing,
         unverified: r.unverified,

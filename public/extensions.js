@@ -7,8 +7,10 @@
  *   - 「有哪些 skill」= 后端按 pi 的发现规则扫文件系统（4 个根 + settings 条目）；
  *   - 「哪些真的生效」= 问 pi 自己（RPC get_commands）—— 这一条**不由 Pi GUI 判断**，
  *     因为只有 pi 知道它到底加载了什么（信任闸门、同名冲突、package 里的 skill…）；
- *   - 「MCP」= pi 0.87.0 没有原生 MCP（官方文档明说），所以没有 Server 可管。
- *     这里给的是「为什么没有 + 官方给的替代路径（extension）」，不是一份假列表。
+ *   - 「MCP」= 能力由**检测本机装着的那个 pi 包**决定（历史基线 0.87.0 没有原生 MCP，
+ *     当前基线 0.99.1 自带 builtin:mcp）。这里给的是「带出处的结论 + built-in 清单 +
+ *     RPC 事实 + 怎么配置 + 官方替代路径」，**不是**一份 Server 列表 ——
+ *     Server 的读取与管理留给 P20.6。
  *
  * 界面上因此有三件事必须说清楚，不能省：
  *   1. `loaded` 与 `state` 是两回事。磁盘上有 ≠ pi 加载了。pi 没运行时 loaded 是 null，
@@ -484,22 +486,100 @@ function mcpTab(card, isCurrent) {
     /* 结论先摆出来。supported 可能是 null（检测不出来）—— 那种情况下不许说成 false。 */
     const head = el('div', 'ext-mcp-head');
     if (j.supported === false) {
-      head.appendChild(el('span', 'ext-dot err'));
-      head.appendChild(el('h4', '', '这个 pi 没有原生 MCP 支持'));
+      head.appendChild(el('span', 'ext-dot dim'));
+      head.appendChild(el('h4', '', '这个 pi 不带原生 MCP'));
     } else if (j.supported === true) {
-      head.appendChild(el('span', 'ext-dot warn'));
-      head.appendChild(el('h4', '', '检测到 MCP 相关模块，但 Pi GUI 还没适配'));
+      head.appendChild(el('span', 'ext-dot on'));
+      head.appendChild(el('h4', '', '这个 pi 带 MCP 能力'));
     } else {
       head.appendChild(el('span', 'ext-dot dim'));
       head.appendChild(el('h4', '', '无法确定这个 pi 是否支持 MCP'));
     }
     wrap.appendChild(head);
 
-    if (j.piVersion) wrap.appendChild(note(`检测到的 pi 版本：${j.piVersion}`, 'dim'));
+    /* P20.5：版本与出处分开摆。
+     * 「文档里的验证基线」是 0.87.0，而这里显示的是**你机器上跑的那个**——
+     * 两件事混成一句「pi 版本」正是上一轮那些失效文案的根源。 */
+    const ver = j.version || null;
+    if (ver && ver.value) {
+      wrap.appendChild(note(`检测到的 pi 版本：${ver.value}（来源 ${ver.source}${ver.updatedAt ? ' · ' + ver.updatedAt : ''}）`, 'dim'));
+    } else if (ver && ver.status === 'malformed') {
+      wrap.appendChild(note('读到了 pi 包，但它的 version 字段不是一个版本号 —— 按「版本未知」处理。', 'warn'));
+    } else {
+      wrap.appendChild(note('读不到本机 pi 包的版本 —— 按「版本未知」处理。', 'warn'));
+    }
     wrap.appendChild(note(j.reason, 'dim'));
     if (j.evidence) {
       wrap.appendChild(el('div', 'ext-sec-head', '出处'));
       wrap.appendChild(el('pre', 'ext-code quote', j.evidence));
+    }
+
+    /* built-in 能力。
+     * 它们是编译在 pi 包里的扩展，**不**出现在下面那个用户扩展列表里 ——
+     * 不说清楚的话，用户会以为「扫不到就是没装」。 */
+    const bi = j.builtins || {};
+    wrap.appendChild(el('div', 'ext-sec-head', 'built-in 能力（pi 自带）'));
+    if (bi.known && Array.isArray(bi.entries)) {
+      if (bi.entries.length) {
+        const chips = el('div', 'ext-files');
+        for (const b of bi.entries) {
+          const chip = el('span', 'ext-file', `builtin:${b.id}`);
+          chip.title = b.evidence || '';
+          if (b.replaceable) chip.appendChild(el('span', 'ext-badge', '可被替换'));
+          chips.appendChild(chip);
+        }
+        wrap.appendChild(chips);
+      } else {
+        wrap.appendChild(note('这个 pi 包里没有列出任何 built-in 扩展。', 'dim'));
+      }
+      if (bi.evidence) wrap.appendChild(el('pre', 'ext-code quote', bi.evidence));
+      wrap.appendChild(note(bi.note || '', 'dim'));
+    } else {
+      wrap.appendChild(note('读不到这个 pi 包的 built-in 扩展清单 —— 按「未知」处理，不硬编码结论。', 'dim'));
+    }
+
+    /* RPC 事实：有没有「已注册工具清单」这条命令。
+     * 这是「不伪造工具注册表」的依据，所以要给用户看得见的证据。 */
+    const rpc = j.rpc || null;
+    if (rpc) {
+      wrap.appendChild(el('div', 'ext-sec-head', 'RPC 事实'));
+      wrap.appendChild(
+        note(
+          rpc.commandCount === null
+            ? '读不到 RPC 命令表，无法确认它有没有工具清单命令。'
+            : `RpcCommand 联合共 ${rpc.commandCount} 条命令，其中没有一条返回已注册工具清单。`,
+          rpc.toolListCommand === false ? 'dim' : 'warn',
+        ),
+      );
+      wrap.appendChild(note(rpc.note || '', 'dim'));
+      const api = j.extensionApi;
+      if (api && api.available) {
+        wrap.appendChild(
+          note(
+            `ExtensionAPI：registerMcpServer ${api.registerMcpServer ? '有' : '没有'} · ` +
+              `getMcpServers ${api.getMcpServers ? '有' : '没有'} · getAllTools ${api.getAllTools ? '有' : '没有'}` +
+              '（这些是扩展进程内的 API，RPC 客户端拿不到）',
+            'dim',
+          ),
+        );
+      }
+    }
+
+    /* MCP 配置：只报文件在不在。里面可能有 Authorization 头与 env 密钥，
+     * Pi GUI 一个字节都不读。 */
+    const cfg = j.mcpConfig;
+    if (cfg) {
+      wrap.appendChild(el('div', 'ext-sec-head', 'MCP 配置'));
+      const rows3 = el('div', 'ext-rows');
+      const yn = (v) => (v === null ? '未知' : v ? '存在' : '不存在');
+      rows3.appendChild(row('用户级 mcp.json', yn(cfg.user && cfg.user.exists)));
+      rows3.appendChild(row('项目级 mcp.json', yn(cfg.project && cfg.project.exists)));
+      wrap.appendChild(rows3);
+      wrap.appendChild(note('只检查文件是否存在 —— 里面可能有 Authorization 头与 env 密钥，Pi GUI 不读取它的内容。', 'dim'));
+      if (j.mcpCli && j.mcpCli.available) {
+        wrap.appendChild(el('pre', 'ext-code quote', j.mcpCli.evidence || ''));
+        wrap.appendChild(note('配置走 pi 自己的命令行（pi mcp add / remove），Pi GUI 不代劳。', 'dim'));
+      }
     }
 
     wrap.appendChild(el('div', 'ext-sec-head', 'MCP Servers'));

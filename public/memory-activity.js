@@ -20,11 +20,13 @@
  *    这些情况下「没有结构化证据」就只能说结果不可用 —— 既不拿 args 顶成成功，
  *    也不改判成失败。
  *
- * 2. **pi 0.87.0 不传播 Extension 自己返回的 isError。**
- *    agent-core 的 execute 包一层：正常 return 就是 `isError: false`
- *    （见 pi-agent-core/dist/agent-loop.js 的 `return { result, isError: false }`），
- *    Extension 在 result 里写的 `isError: true` 不会到达 tool_execution_end。
- *    所以 status 只认 entry.status；「没有成功证据」不等于「失败」。
+ * 2. **Extension 自己返回的 isError 在 0.87.0 上到不了 GUI，在 0.99.1 上会到。**
+ *    0.87.0 的 agent-core 把 `execute` 正常 return 一律写成 `isError: false`
+ *    （`pi-agent-core/dist/agent-loop.js`：`return { result, isError: false }`），
+ *    Extension 在 result 里写的 `isError: true` 不会到达 tool_execution_end；
+ *    0.99.1 改成了 `isError: result.isError === true`（会传播）。
+ *    **所以这里不能依赖 isError 当成功/失败证据** —— status 只认 entry.status 与
+ *    result 里的结构化 details；「没有成功证据」永远不等于「失败」。
  *
  * 3. **返回值里没有结构化命中列表。** memory_search 的 details 只有
  *    `{ mode, query, count, needsEmbed }`；命中正文（含 `**File:** <绝对路径>`）

@@ -136,8 +136,9 @@ export const fetchSkillDetail = (id) => getJSON('/api/skills/' + encodeURICompon
 export const setSkillEnabled = (id, enabled) =>
   sendJSON('/api/skills/' + encodeURIComponent(id), { method: 'PUT', body: { enabled } });
 
-/** MCP 能力报告。pi 0.87.0 没有原生 MCP，所以这里返回的是「为什么没有 + 怎么办」，
- *  不是一份 Server 列表。 */
+/** MCP 能力报告。能力由**检测本机装着的那个 pi 包**决定（历史基线 0.87.0 没有原生 MCP，
+ *  当前基线 0.99.1 自带 builtin:mcp），所以这里返回的是「带出处的结论 + 怎么配置 +
+ *  替代路径」，不是一份 Server 列表 —— Server 的读取与管理留给 P20.6。 */
 export const fetchMcp = () => getJSON('/api/mcp');
 /* P19：approval 能力报告（后端只读本机 pi 包，renderer 拿不到路径）。 */
 export const fetchApprovalCapability = () => getJSON('/api/approvals/capability');

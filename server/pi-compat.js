@@ -187,7 +187,7 @@ export function piState(data) {
 
 /* ---------- 主体 ---------- */
 
-export function createPiCompat({ piVersionProbe = null, now = () => Date.now() } = {}) {
+export function createPiCompat({ piVersionProbe = null, versionSourceProbe = null, now = () => Date.now() } = {}) {
   /** 能力 → true / false / null（未观察到）。 */
   const caps = {};
   for (const k of CAPABILITIES) caps[k] = null;
@@ -380,6 +380,22 @@ export function createPiCompat({ piVersionProbe = null, now = () => Date.now() }
     }
   }
 
+  /** 版本状态的出处（P20.5）：这个版本号是从哪读来的、什么状态、什么时候读的。
+   *  **同样只当证据** —— 报告里把「值」和「出处」分开摆，避免再出现
+   *  「文档里的基线版本」被当成「你机器上的版本」。 */
+  function versionSource() {
+    if (typeof versionSourceProbe !== 'function') return null;
+    try {
+      const s = versionSourceProbe();
+      if (!s || typeof s !== 'object') return null;
+      const source = typeof s.source === 'string' ? s.source : 'none';
+      const status = ['known', 'malformed', 'unknown'].includes(s.status) ? s.status : 'unknown';
+      return { source, status, updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : null };
+    } catch {
+      return null;
+    }
+  }
+
   /** 三值能力 → 报告里用的对象。 */
   function capabilityReport() {
     const out = {};
@@ -414,11 +430,15 @@ export function createPiCompat({ piVersionProbe = null, now = () => Date.now() }
     const unknownCaps = CAPABILITIES.filter((k) => capabilities[k] === null);
     const v = piVersion();
     const st = status();
+    const vs = versionSource();
     return {
       detected: sawAnyEvidence,
       version: v,
       // 版本读不到**不是**不兼容的理由 —— 单独给个标记，界面据此显示「版本未知」
       versionKnown: v !== null,
+      /* 版本状态的出处（P20.5）。null = 没注入探测源（老调用方 / 单测）。
+       * 界面用它在「历史验证基线」与「运行中版本」之间做区分。 */
+      versionSource: vs,
       status: st,
       capabilities,
       missing,
