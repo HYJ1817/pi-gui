@@ -192,6 +192,10 @@ const projectConfig = createProjectConfig({
 const piVersion = createPiVersion({
   resolvePackageDir: piLaunch.packageDir,
   probeVersion: createPiVersionProbe({ launcher: piLaunch.launcher }),
+  /* P20.5 收口：version cache 以 launch identity 为 key 的一部分。
+   * 同一 target 内走 TTL；切项目导致实际入口变化时不等 TTL 立即重算。
+   * key 是内部不透明串，永不进 API / Diagnostics / renderer。 */
+  identityKey: piLaunch.identityKey,
 });
 
 /* Pi built-in 能力探测（P20.5）。

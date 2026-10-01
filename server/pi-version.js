@@ -78,14 +78,30 @@ export function parseVersionOutput(raw) {
  * @param probeVersion      兜底探测，返回原始输出字符串或 null。注入是为了单测。
  * @param now               时间源（单测固定时间用）。
  * @param ttlMs             缓存时长；探测有成本，不要在每次请求里重来一遍。
+ * @param identityKey       launch identity 的内部 key（`() => string`，如
+ *                          `piLaunch.identityKey`）。同一个 key 内走 TTL；
+ *                          key 一变就立即重算，不等 TTL —— 切项目后不会再把
+ *                          上一个 Pi 的版本带过来。它只认识「identity 变没变」，
+ *                          不认识 project / runtime / cwd。
  */
 export function createPiVersion({
   resolvePackageDir = null,
   probeVersion = null,
   now = () => Date.now(),
   ttlMs = 30_000,
+  identityKey = null,
 } = {}) {
-  let cache = null; // { value, source, status, at }
+  let cache = null; // { key, value, source, status, at }
+
+  function currentKey() {
+    if (typeof identityKey !== 'function') return '';
+    try {
+      const k = identityKey();
+      return typeof k === 'string' ? k : String(k ?? '');
+    } catch {
+      return '';
+    }
+  }
 
   function fromPackage() {
     if (typeof resolvePackageDir !== 'function') return null;
@@ -137,18 +153,22 @@ export function createPiVersion({
     return { value: null, source: 'none', status: 'unknown', at: now() };
   }
 
-  /** 取规范状态。带 TTL 缓存；`force` 用于显式刷新。 */
+  /** 取规范状态。同一 identity 内带 TTL 缓存；identity 一变就立即重算。`force` 用于显式刷新。 */
   function read({ force = false } = {}) {
     const t = now();
-    if (force || !cache || t - cache.at >= ttlMs) cache = compute();
+    const key = currentKey();
+    if (force || !cache || cache.key !== key || t - cache.at >= ttlMs) {
+      cache = { key, ...compute() };
+    }
     const { at, ...rest } = cache;
-    return { ...rest, updatedAt: new Date(at).toISOString() };
+    const { key: _k, ...out } = rest;
+    return { ...out, updatedAt: new Date(at).toISOString() };
   }
 
-  /** 不触发探测，只看当前缓存（给「顺手带上」的路径用）。 */
+  /** 不触发探测，只看当前缓存（给「顺手带上」的路径用）。内部 key 不出去。 */
   function peek() {
     if (!cache) return null;
-    const { at, ...rest } = cache;
+    const { at, key: _k, ...rest } = cache;
     return { ...rest, updatedAt: new Date(at).toISOString() };
   }
 

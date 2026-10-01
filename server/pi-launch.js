@@ -155,6 +155,57 @@ function packageDirFromEntry(entryFile) {
   return null;
 }
 
+/** 不透明 identity key 的哈希（cyrb53，53 位）。
+ *
+ * key 本身是**内部比较用**的，不含任何路径原文 —— 就算它被意外记进日志，
+ * 也反解不出 PI_BIN / entry / packageDir / HOME / PATH。
+ * 诊断与 renderer 仍然只拿 `summary()`，这个函数的结果**永不**进 API 响应。 */
+function hash53(str, seed = 0) {
+  let h1 = 0xdeadbeef ^ seed;
+  let h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+}
+
+function canonPath(p, isWin) {
+  if (typeof p !== 'string' || !p) return '';
+  try {
+    const n = path.normalize(p);
+    return isWin ? n.toLowerCase() : n;
+  } catch {
+    return isWin ? String(p).toLowerCase() : String(p);
+  }
+}
+
+/**
+ * 从解析**之后**的 launch identity 算一个仅供比较的 key。
+ *
+ * 判据是「实际入口 / 所属包」，不是 cwd：
+ *   - entry 能解析 → key 只看 entry + packageDir。不同 cwd 解析到同一个
+ *     pi.cmd 时 key 不变（version cache 可复用）；切到另一份 pi 时 key 变。
+ *   - `PI_BIN` 是明确路径但文件不存在 → 按尝试解析的那个绝对路径区分
+ *    （`C:\customA\pi.exe` vs `C:\customB\pi.exe` 即使都绑不出包也不共用缓存）。
+ *   - 裸命令且解析不到 → 退化成 `source + bin + cwd`（Windows 上 cwd 本来就参与
+ *     cmd 的搜索）。这时不同 cwd 不复用 —— 宁可多探一次，也不把旧结论带过去。
+ */
+function buildIdentityKey({ bin, source, entryFile, packageDir, cwd, attempt, isWin }) {
+  let material;
+  if (entryFile) {
+    material = `e|${source}|${canonPath(entryFile, isWin)}|${canonPath(packageDir || '', isWin)}`;
+  } else if (source === 'env') {
+    material = `x|${source}|${String(bin || '')}|${canonPath(attempt || '', isWin)}`;
+  } else {
+    material = `u|${source}|${String(bin || '')}|${canonPath(cwd || '', isWin)}`;
+  }
+  return `v1-${hash53(material)}`;
+}
+
 /** env 里的 PATH（Windows 的键名大小写不统一，这里显式兼容）。 */
 function pathEntries(env) {
   const raw = env.PATH ?? env.Path ?? env.path;
@@ -205,10 +256,15 @@ function commandFileFromPath(bin, { env, cwd, isWin }) {
  */
 function compute({ bin, env, cwd, isWin }) {
   const explicit = isPathLike(bin);
+  const source = explicit ? 'env' : 'path';
   let entryFile = null;
+  /* 明确路径但文件不存在时，这个「尝试过的位置」仍是区分
+   * `customA/pi.exe` vs `customB/pi.exe` 的唯一依据 —— 留给 key 用。 */
+  let attempt = null;
 
   if (explicit) {
     const file = path.isAbsolute(bin) ? bin : path.resolve(cwd || process.cwd(), bin);
+    attempt = file;
     entryFile = isFile(file) ? file : null;
   } else {
     entryFile = commandFileFromPath(bin, { env, cwd, isWin });
@@ -216,10 +272,10 @@ function compute({ bin, env, cwd, isWin }) {
 
   const packageDir = entryFile ? packageDirFromEntry(entryFile) : null;
 
-  return {
+  const data = {
     bin,
     /** `env` = 用户显式给了 `PI_BIN`；`path` = 裸命令，靠 PATH / shell 解析。 */
-    source: explicit ? 'env' : 'path',
+    source,
     /** 入口文件有没有被解析出来（它是 `packageDir` 绑定的前提）。 */
     entryKnown: Boolean(entryFile),
     /**
@@ -229,6 +285,8 @@ function compute({ bin, env, cwd, isWin }) {
     packageDir,
     packageDirKnown: Boolean(packageDir),
   };
+  const identityKey = buildIdentityKey({ bin, source, entryFile, packageDir, cwd, attempt, isWin });
+  return { data, identityKey };
 }
 
 /**
@@ -257,9 +315,23 @@ export function createPiLaunch({
     const cwd = getCwd() || null;
     const t = now();
     if (force || !cache || cache.key !== cwd || t - cache.at >= ttlMs) {
-      cache = { key: cwd, at: t, data: compute({ bin, env, cwd, isWin }) };
+      const { data, identityKey } = compute({ bin, env, cwd, isWin });
+      cache = { key: cwd, at: t, data, identityKey };
     }
     return cache.data;
+  }
+
+  /**
+   * 内部 identity key（仅供后端比较缓存用）。
+   *
+   * 同一 launch target → 稳定；切到不同 launch target → 改变；不同 cwd 解析到
+   * 同一个入口 → 不变（调用方可复用 TTL 缓存）。返回的是 `v1-<hex>` 不透明串，
+   * **永不**进 summary / Diagnostics / renderer / 日志 —— 绝对路径反解不出来。
+   * 给 `createPiVersion({ identityKey })` 用的就是它。
+   */
+  function identityKey() {
+    identity();
+    return cache ? cache.identityKey : 'v1-missing';
   }
 
   /** 只要包目录（拿不到就是 null）。pi-version / pi-builtins / mcp / approval 都读它。 */
@@ -295,5 +367,5 @@ export function createPiLaunch({
   /** 给 `createPiVersionProbe({ launcher })` 用：**同一个 launch spec** 的 `--version`。 */
   const launcher = (args) => formatLaunch(bin, args, isWin);
 
-  return { identity, packageDir, summary, reset, launcher, formatLaunch: launcher };
+  return { identity, identityKey, packageDir, summary, reset, launcher, formatLaunch: launcher };
 }
