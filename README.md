@@ -267,7 +267,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 33 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 36 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -284,7 +284,7 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
 `test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:verify` /
 `test:evidence` / `test:lifecycle` / `test:web` / `test:browser` /
-`test:sessions` / `test:search` /
+`test:sessions` / `test:search` / `test:mcp` / `test:quota` /
 `test:security` / `test:diagnostics` / `test:update` / `test:version` /
 `test:release` / `test:guard`。
 
@@ -330,6 +330,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [releasing.md](docs/releasing.md) | 发版：一条命令的发布预检、版本一致性守卫、资产命名契约、tag → 自动发布、失败不留半成品 |
 | [web-access.md](docs/web-access.md) | Web Search / URL Fetch：适配的 Extension、状态模型、来源安全、外链边界 |
 | [browser.md](docs/browser.md) | Browser Use：适配的 Extension 与工具清单、成功证据规则、输入内容与页面正文的安全投影、URL 过滤、为什么没有审批流 |
+| [usage-quota.md](docs/usage-quota.md) | P21 用量与配额：本地模型用量（真实 token/cost/context）与 Provider 远端配额（官方 adapter/TTL 缓存/防重入/凭据隔离） |
 
 ## 许可证
 

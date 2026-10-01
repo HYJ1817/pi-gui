@@ -137,6 +137,7 @@ Pi GUI **不 import pi 的任何代码**，只把 pi 当子进程按官方 RPC �
 | Tool Timeline | pi 崩溃后 running 留在界面 | bridge exit 时收成未完成；历史重建覆盖旧 DOM |
 | Git status | 旧请求和新请求乱序 | generation 加单模块请求序号，保留 Git 作为权威 |
 | CLI 端口占用 | 任意服务被当成 Pi GUI 打开 | 健康检查核对 app 与 protocol |
+| Remote Quota | 快速切 Provider 时旧请求晚于新请求返回 | S.quotaEpoch 与 Provider 校验，丢弃迟到响应 |
 | 应用关闭 | `closeAll()` 没显式清除 SSE ping | 逐连接清 timer 后结束流 |
 
 覆盖情况：`test:reliability-live` 用隔离的真实 pi 目录覆盖 A→B→A、配置保存、
@@ -243,6 +244,7 @@ get_messages ─┘
     `runtime.getCurrentCwd()` —— 接口不接受客户端传路径。
     见 [project-config.md](project-config.md)
   - `providers.js` — `~/.pi/agent/models.json` 的读写、供应商 CRUD、模型拉取
+  - `quota.js` — 供应商远端额度 (`RemoteQuota`) 与官方适配器 (OpenRouter / DeepSeek / NewAPI)，TTL 缓存，密钥脱敏，按需刷新。无官方公开端点一律 unsupported。见 [usage-quota.md](usage-quota.md)
   - `skills.js` — Skill 的发现 / 详情 / 启停。**移植 pi 自己的规则**（发现位置、
     两种 collect 模式、同名优先级、信任闸门、override 语法），每条都注明源码出处。
     见 [extensions.md](extensions.md)
@@ -345,6 +347,14 @@ get_messages ─┘
   （比如 `https://api.deepseek.com/anthropic`）也能找到真正的模型列表。
 - **能带回多少取决于供应商的接口**：OpenRouter 和 Google 回得比较全；
   OpenAI / DeepSeek / Anthropic 的 `/models` 基本只有一个 id，那就只填 id。
+
+### 远端配额（Remote Quota）支持矩阵
+
+各供应商在远端配额接口上的支持情况不同，严禁抓取网页、伪造接口或冒充标准：
+- **OpenRouter**：支持官方 `/api/v1/credits` 与 `/api/v1/auth/key`，返回总额度、已使用额度与剩余 balance。
+- **DeepSeek**：支持官方 `/user/balance`，返回 CNY/USD balance 与可用状态。
+- **NewAPI / Sub2API**：仅在用户显式配置 `quotaAdapter: 'newapi'` 时支持 `/api/v1/user/dashboard`，不冒充通用 OpenAI 标准。
+- **仅本地用量（无远端配额）**：OpenAI、Anthropic、Google、Groq、Mistral、Ollama 等因无官方公开/稳定配额 endpoint，状态一律返回 `unsupported`。用户可在界面清晰看到其本地消耗（`LocalUsage`：输入/输出/缓存/上下文），不会将其混淆为额度错误。详见 [usage-quota.md](usage-quota.md)。
 
 模型列表每行一个，`id` 之后是显示名，再往后都是 `key=value` 参数
 （`ctx` / `max` 是 `contextWindow` / `maxTokens` 的简写）：

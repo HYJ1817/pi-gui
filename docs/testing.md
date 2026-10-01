@@ -48,14 +48,14 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 33 条 RPC 命令里没有一条返回已注册工具清单，`rpc-types.d.ts` 两版 diff 为空。
 `tests/pi-version.cjs` 把这条钉住了。）
 
-`npm test` 里现在有 35 个套件，全部是**纯自动化**：
+`npm test` 里现在有 36 个套件，全部是**纯自动化**：
 
 ```
 smoke 1062 · git 161 · modules 117 · reliability · interactions · port-owner
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 83 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```

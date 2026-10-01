@@ -62,6 +62,20 @@ URL 走两级过滤：`browserHost()` 只认 http/https、拒凭据与控制字�
 
 详见 [Browser Use](browser.md)。
 
+## P21 Usage & Quota 边界
+
+模型用量与远端额度涉及外部供应商的 API Key 与账户资产，安全防线明确：
+
+- **凭据单向封闭在后端**：`/api/quota/:providerId` 由服务端代发外部请求，API Key、OAuth 令牌、以及外部请求的 `Authorization` 请求头**绝不回传给前端渲染进程**。
+- **错误信息严格脱敏 (`scrubSecret`)**：如果外部 Provider 或代理服务在报错详情中回显了 API Key，后端无条件用 `***` 替换后再返回，杜绝凭据反射泄露。
+- **命令注入防御**：API Key 解析继承 `lib/models-api.js`，支持 `$ENV_VAR` 与 `$$` 字面量，**严格拒绝对 `!command` 形式进行执行**，不给任何网页界面提供任意命令执行的途径。
+- **六不原则与外部攻击面收敛**：
+  - 严禁抓取 ChatGPT / Claude 网页端、读浏览器 Cookie、复制开发者工具 Token；
+  - 严禁对通用 OpenAI 兼容代理站点伪造或妄猜非标准额度端点；
+  - 严禁自动充值、扣费或根据未来预算自动掐断会话。
+- **缓存与防重发**：默认 60s TTL 缓存，避免请求洪峰；前端带 epoch 与 Provider 校验，丢弃迟到响应，防止污染新会话状态。
+详见 [Usage & Quota](usage-quota.md)。
+
 ## P20.6 MCP 边界
 
 MCP server 是**用户自己配置的可执行命令与远端 URL**（stdio 跑命令、HTTP 联网），

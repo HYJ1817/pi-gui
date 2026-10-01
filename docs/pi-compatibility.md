@@ -482,3 +482,17 @@ telemetry、崩溃上传、新数据库、新第三方依赖。
 > 详见 [mcp.md](mcp.md)。本页只保留一句话作边界：**RPC 至今没有 MCP 管理 /
 > 状态命令**（33 条，0.99.1 与 0.99.2 上各确认一次，`rpc-types.d.ts` 两版 diff
 > 为空），所以兼容层不判 MCP 兼容，只判上面那九个能力。
+
+## 十三、P21 Usage 与 Quota 契约（0.99.2 核对）
+
+Pi 对用量的支持完全停留在**本地运行指标**层：
+1. **`get_session_stats` RPC 命令**：
+   - 返回 `{ tokens: { input, output, cacheRead, cacheWrite, total }, cost, contextUsage: { tokens, limit, percent } }`。
+   - 上游模型不提供时字段可能为 `null` 或未定义；0 严格代表真实 0，缺失降级为 `null`。
+2. **`message_update` / `message_end` 事件**：
+   - 事件 payload 内的 `message.usage` 包含单 turn 用量：`inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `totalTokens`, `cost`。部分提供商（如 DeepSeek/OpenAI o-series）提供 `reasoningTokens`。
+   - 前端据此派发 `onTurnUsage` 并合并至 `LocalUsage`。
+3. **远端配额（Quota）**：
+   - **Pi 核心完全不提供任何远端 Quota / Balance 查询接口**（33 条 RPC 命令中无任何配额相关指令）。
+   - 配额完全由 Pi-GUI 独立 adapter（`server/quota.js`）按官方规范接口异步采集，与 Pi 核心运行时零耦合。详见 [usage-quota.md](usage-quota.md)。
+
