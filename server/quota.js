@@ -38,15 +38,35 @@ function trimSlash(url) {
   return String(url || '').trim().replace(/\/+$/, '');
 }
 
-/** 规范化 endpoint 身份：只取 origin（scheme + host + port），不掺路径与查询串。 */
-function normalizedOrigin(baseUrl) {
+/** 规范化 endpoint：保留 origin + pathname，去掉 query / fragment 与尾部斜杠。
+ *  `https://example.com/api-a/` 与 `https://example.com/api-a` 是同一个 endpoint。 */
+function normalizeEndpoint(baseUrl) {
   const raw = String(baseUrl || '').trim();
   if (!raw) return '';
   try {
-    return new URL(raw).origin.toLowerCase();
+    const u = new URL(raw);
+    const path = u.pathname.replace(/\/+$/, '');
+    return `${u.origin.toLowerCase()}${path}`;
   } catch {
-    return raw.toLowerCase();
+    return raw.replace(/\/+$/, '').toLowerCase();
   }
+}
+
+/**
+ * adapter 维度的 **endpoint identity**。
+ *
+ *  - OpenRouter / DeepSeek：请求打的是固定 canonical endpoint（自定义 host 时压根不会
+ *    选中这两个 adapter），所以用常量 —— baseUrl 带不带路径都不影响身份。
+ *  - NewAPI：请求 URL 是 `{baseUrl}/dashboard/billing/...`，**path 必须进身份**：
+ *    `https://example.com/api-a` 与 `https://example.com/api-b` 是两个不同的部署，
+ *    各自的 /dashboard/billing/* 不同，绝不能共享缓存。
+ *  - 其它：没有 endpoint（unsupported 不发任何请求）。
+ */
+function endpointIdentity(adapter, config) {
+  if (adapter === 'openrouter') return 'https://openrouter.ai/api/v1/key';
+  if (adapter === 'deepseek') return 'https://api.deepseek.com/user/balance';
+  if (adapter === 'newapi') return normalizeEndpoint(config?.baseUrl);
+  return '';
 }
 
 /** 时间戳：只有真的能解析成日期才认（"monthly" 这类周期标签不是时间戳）。 */
@@ -299,32 +319,24 @@ async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
 
 /* ---------- NewAPI ---------- */
 
-/** NewAPI：仅当显式 quotaAdapter="newapi" 时启用；需要 quotaUserId。
+/** NewAPI：仅当显式 quotaAdapter="newapi" 时启用。
  *  两个 endpoint：/dashboard/billing/subscription（hard_limit_usd）与
- *  /dashboard/billing/usage（total_usage，单位是美分）。 */
+ *  /dashboard/billing/usage（total_usage，单位是美分）。
+ *
+ *  鉴权：当前 NewAPI 的 dashboard 接口走 `middleware.TokenAuth()` ——
+ *  `Authorization: Bearer <API key>` 就能解析出 user context，
+ *  **不要求** `New-Api-User`，也**不要求**配置 quotaUserId。
+ *  `quotaUserId` 只为旧部署兼容：配了才额外带上这个头，没配照常查询。 */
 async function fetchNewApiQuota({ baseUrl, apiKey, config, fetchFn, now }) {
-  if (!config || !config.quotaUserId) {
-    return {
-      status: 'unsupported',
-      balance: null,
-      balances: null,
-      windows: null,
-      rateLimit: null,
-      resetAt: null,
-      source: 'none',
-      updatedAt: new Date(now()).toISOString(),
-      message: 'NewAPI 需要在模型供应商配置里填写 quotaUserId 才能查询额度',
-    };
-  }
-
   const base = trimSlash(baseUrl);
   const subUrl = `${base}/dashboard/billing/subscription`;
   const usageUrl = `${base}/dashboard/billing/usage`;
   const headers = {
     Authorization: `Bearer ${apiKey}`,
-    'New-Api-User': String(config.quotaUserId),
     Accept: 'application/json',
   };
+  /* 可选兼容头：只在配置里确实给了 quotaUserId 时才发。 */
+  if (config && config.quotaUserId) headers['New-Api-User'] = String(config.quotaUserId);
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
 
@@ -574,8 +586,11 @@ export function createQuotaManager({
    * 配置身份：缓存与去重都按它隔离。
    *
    * 必须包含（少一个就会出现「配置变了还命中旧缓存」）：
-   *   providerId、**解析后的 adapter**、规范化 endpoint origin、quotaUserId、
+   *   providerId、**解析后的 adapter**、**adapter 维度的 endpoint identity**、
    *   以及**已解析凭据的 SHA-256 指纹**。
+   *
+   *   `quotaUserId` 只在**真的会改变请求**时才进身份（newapi 且配置了它 → 会发
+   *   New-Api-User 头）；一个完全不参与请求的字段不该让缓存无意义地 miss。
    *
    * ⚠️ 指纹只进这个哈希的输入，哈希只当 Map key：
    *     API key 原文不进 Map key、不进日志、不进 HTTP 响应、不进诊断。
@@ -585,12 +600,13 @@ export function createQuotaManager({
     const adapter = resolveQuotaAdapter(providerId, config) || 'unsupported';
     const keyRes = resolveApiKey(config?.apiKey);
     const credential = keyRes.value ? hashOf(keyRes.value) : '';
+    const compatUser = adapter === 'newapi' && config?.quotaUserId ? String(config.quotaUserId) : '';
     return hashOf([
       String(providerId || ''),
       adapter,
-      normalizedOrigin(config?.baseUrl),
-      String(config?.quotaUserId ?? ''),
+      endpointIdentity(adapter, config),
       credential,
+      compatUser,
     ].join('|'));
   }
 
