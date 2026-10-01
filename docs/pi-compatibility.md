@@ -418,3 +418,9 @@ GUI 侧的表现是**保守地降级**（只说结果不可用），不会误报
 明确不做（见 P4 规格的禁止项）：自动更新 / 安装 / 降级 pi、查 npm registry、
 查 GitHub Release、改用户全局 npm、改 pi 的 session schema、fork 或 monkey patch pi、
 telemetry、崩溃上传、新数据库、新第三方依赖。
+
+> P20.6 起 MCP 不再是「兼容层观察的对象」，而是原生集成的管理面：
+> 状态走 `pi mcp list --json`、动作走官方 CLI（add / remove / login / logout），
+> 详见 [mcp.md](mcp.md)。本页只保留一句话作边界：**RPC 至今没有 MCP 管理 /
+> 状态命令**（33 条已在 0.99.1 上再次确认），所以兼容层不判 MCP 兼容，
+> 只判上面那九个能力。

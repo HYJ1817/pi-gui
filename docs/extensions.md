@@ -182,33 +182,26 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
   `llama.cpp` 在 0.87.0 里甚至是 `hidden: true`。
   所以页面只报「**包里带了它**」，不报「当前启用了它」。
 
-### MCP 标签页仍然是一份能力报告，不是 Server 列表
+### MCP 标签页是 pi 原生集成的管理面（P20.6）
 
-- 报出**运行中版本**（`value` + `source` + `status` + `updatedAt`）与 built-in 清单，
-  每一条都带可核对的原文出处
-- 报 **RPC 事实**：33 条命令里没有一条返回已注册工具清单 —— 所以这页不列「已注册工具」
-- 报 **MCP 配置文件在不在**（`~/.pi/agent/mcp.json`、`<项目>/.pi/mcp.json`）——
-  **只 stat，不读内容**（里面可能有 `Authorization` 头与 `env` 密钥）
-- 报**怎么配置**：`pi mcp add` / `pi mcp remove`（原文出自 pi 自己的 `docs/mcp.md`）
-- 检测不出来时如实说「无法确定」，**不猜成不支持**
-- 列出 pi 官方给的替代路径：`~/.pi/agent/extensions` 与 `<项目>/.pi/extensions`
-  下已有哪些扩展，以及 `settings.json` 里声明的 `extensions` / `packages`
+完整说明见 [mcp.md](mcp.md)，这里只留与本页相关的三句：
 
-> **Server 的读取与管理留给 P20.6。** 这一轮只做「事实修正」：
-> 把错的文案改对、把 built-in 与 RPC 事实摆出来、把配置文件的存在性报出来。
-> `servers` 字段继续是空数组，前端结构不动。
-
-### 刻意不做的三件事
-
-做了就是撒谎：
-
-1. 不假装有 Server 可以增删改（没有配置文件可读，就没有 Server）
-2. 不在 `.pi-gui/` 里自己存一份 MCP 配置 —— pi 不会读它，那是个假开关
-3. 不显示「已配置 / 已连接」这种没有数据支撑的状态
+- 能力报告部分不变：**运行中版本**（`value` + `source` + `status` + `updatedAt`）
+  与 built-in 清单（带原文出处）+ **RPC 事实**（33 条命令里没有已注册工具清单）
+  + pi 官方替代路径（两处 extensions 目录与 settings 声明）。检测不出来时
+  如实说「无法确定」，**不猜成不支持**。
+- Server 部分是真实集成：原生状态（active / replaced / disabled / unknown）+
+  两处 `mcp.json` 的安全结构解析 + `pi mcp list --json` 的运行时状态
+  （点刷新才跑）+ 受控动作（add / remove / login / logout）。
+  `server/mcp.js` 的同步报告里 `servers` 继续是空数组（运行时要 spawn，
+  明细走 `/api/mcp/servers`，前端结构约定保持）。
+- 仍然不做的三件事（做了就是撒谎）：不在 `.pi-gui/` 里自己存一份 MCP 配置；
+  不显示没有数据支撑的状态（「运行：」前缀只出现在有 `list --json` 证据时）；
+  enable / disable / reconnect / 改 exposure 没有官方自动化接口，不伪造开关。
 
 `server/mcp.js` **不硬编码「某个版本没有 MCP」**：它去读本机装的 pi 包
 （定版本、扫 `dist/core` 找 mcp 模块、从 docs 截原文当证据）。`supported`
-可能是 `null`（检测不出来不猜）。将来 pi 真加了支持，报告会自动翻成 true。
+可能是 `null`（检测不出来不猜）。
 
 ## 安全边界
 
@@ -251,11 +244,16 @@ P18 增加 Pi Memory Activity 与手动安装提示，见 [memory.md](memory.md)
 不读 `~/.pi/agent/memory`、不建立第二份数据库。长期记忆与会话搜索保持独立，
 Registry 的 tools/unknown 语义同样不变。`npm run test:memory`（236 条，离线）。
 
-`npm run test:skills`（182 条）：发现规则（两种 collect 模式）、同名冲突、
+`npm run test:skills`（196 条）：发现规则（两种 collect 模式）、同名冲突、
 信任判定、状态判定（`enabled` / `disabled` / `untrusted` / `invalid` /
 `shadowed` / `not-loaded` / `unknown`）、详情与路径逃逸、启停写盘（保留未知字段 /
 原子写 / 409 不动坏文件）、真实 router 的令牌与 Origin、MCP 能力报告与密钥不外泄。
 全程在 `os.tmpdir()` 里造世界，不 spawn 进程、不联网。
+
+P20.6 增加 MCP 原生集成（见 [mcp.md](mcp.md)）：`npm run test:mcp`（52 条，
+安全解析、入口派生、scope/信任/状态机、list 合并与脱敏、动作 argv 与校验、
+stale、unsupported、secret 不回显、语义投影与运行观察），`npm run test:ui`
+另有 MCP 标签页的界面行为。全程离线；真机流程手工走，不进 CI。
 
 `npm run test:skills-live`（32 条，**要真 pi**，约 2-3 分钟，不在 `npm test` 里）：
 拉起真的 pi 子进程，用真的 `get_commands` 对拍 —— 项目级默认不加载 /

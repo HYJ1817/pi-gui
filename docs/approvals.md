@@ -138,7 +138,23 @@ live（不属于默认 CI）：装一个真实的 permission Extension（例如
 「拒绝」真的让这次工具调用没有执行 —— 这是唯一能证明端到端拦截的人工步骤。
 本阶段**没有执行** live。
 
-## 八、相关文件
+## 八、MCP 调用也走这条管道（P20.6）
+
+pi 原文（`docs/mcp.md` Permissions）：**Every MCP call goes through pi's tool
+pipeline**，`tool_call` / `tool_result` 扩展处理器（含 permission gate）对
+`mcp__<server>__<tool>` 自动生效 —— 所以 P19 的确认层对 MCP 工具**天然起作用**，
+不需要新代码，也不需要在 MCP 侧另起一套审批。
+
+GUI 侧的三条边界（见 [mcp.md](mcp.md)）：
+
+- **不按工具名猜危险程度**：没有真实 `extension_ui_request` 就不画 Allow / Deny；
+- **annotations 未经 RPC 暴露**（`pi.getAllTools()` 是扩展进程内 API），
+  所以不显示 `readOnlyHint` / `destructiveHint`，只在文档记录；
+- **OAuth 不经过审批管道**：MCP 的 in-session 交互只有 `ctx.ui.notify/select/input`
+  （无 `confirm`），经同一 extension_ui 链路承接；浏览器授权由 pi 自己开，
+  Pi GUI 不读、不缓存、不复制任何 token / clientSecret。
+
+## 九、相关文件
 
 - `public/approval-model.js` —— 规范化模型（纯函数）
 - `public/approval.js` —— 存储 / 生命周期 / 统一确认层渲染 / 能力块

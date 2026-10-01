@@ -149,13 +149,15 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   Pi RPC 没有已注册工具清单，所以不会猜某个扩展提供了什么工具；安装与启停仍用 Pi 官方 CLI。
   Web / Subagent / Memory / Browser 各有一个独立设置区：固定官方安装命令 + 安装后重启 Pi +
   当前 bridge 的真实工具调用观察。**长期记忆由 Extension 提供，不是 Pi GUI 内置的**
-- **MCP**：能力由**检测本机实际装着的那个 pi 包**决定，不写死版本号 —— 历史验证基线 **0.87.0**
-  没有原生 MCP，当前验证基线 **0.99.1** 自带 `builtin:mcp`（`llama.cpp` / `codemode` /
-  `tool-search` 也是 built-in）。**RPC 至今没有已注册工具清单命令**，所以标签页不伪造工具注册表。这个标签页是
-  一份能力报告 —— 读你本机的 pi 包给出结论与原文证据，
-  并指出官方替代路径是 extension。**不假装有一堆 Server 可以增删改**
+- **MCP**：用 pi **原生** MCP，Pi GUI 不自建 runtime —— 历史验证基线 **0.87.0**
+  没有原生 MCP，当前验证基线 **0.99.1** 自带 `builtin:mcp`。标签页显示原生状态
+  （active / replaced / disabled / unknown，只认证据）、两处 `mcp.json` 的
+  安全结构解析、`pi mcp list --json` 的运行时状态（点刷新才跑），以及受控动作
+  （add / remove / login / logout 走 pi 官方 CLI；enable 等走 `/mcp` TUI）。
+  `mcp__` 工具调用走 Tool Timeline 语义行。**RPC 至今没有已注册工具清单命令**，
+  所以不伪造工具注册表；凭据值一个字节都不进界面
 
-→ [extensions.md](docs/extensions.md)
+→ [mcp.md](docs/mcp.md) · [extensions.md](docs/extensions.md)
 
 ### 任务 / 多 Agent 编排
 
@@ -309,7 +311,8 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [planner.md](docs/planner.md) | 任务编排：Planner/Executor、Agent registry、DAG、失败与恢复、限制 |
 | [workflows.md](docs/workflows.md) | 任务工作流：任务 ↔ 会话、任务 ↔ 文件、打开会话、项目隔离、元数据边界 |
 | [reviews.md](docs/reviews.md) | 人工审阅：执行结果 ≠ 验收、三个审阅状态、验证快照、当前 diff、冲突与 revision、限制 |
-| [extensions.md](docs/extensions.md) | Skills 发现与启停、Extension 只读发现与能力证据、MCP 能力报告 |
+| [extensions.md](docs/extensions.md) | Skills 发现与启停、Extension 只读发现与能力证据、MCP 原生集成 |
+| [mcp.md](docs/mcp.md) | P20.6 MCP：用 pi 原生 MCP（不自建 runtime）、状态来源、受控动作、OAuth/工具/资源/权限边界 |
 | [project-config.md](docs/project-config.md) | 项目配置：位置、字段、优先级、指令注入、坏配置行为 |
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |

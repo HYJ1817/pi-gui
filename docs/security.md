@@ -62,6 +62,30 @@ URL 走两级过滤：`browserHost()` 只认 http/https、拒凭据与控制字�
 
 详见 [Browser Use](browser.md)。
 
+## P20.6 MCP 边界
+
+MCP server 是**用户自己配置的可执行命令与远端 URL**（stdio 跑命令、HTTP 联网），
+`pi mcp list --json` 会真的去连接它们。所以：
+
+- **状态只在用户手势时刷新**（MCP 页「刷新状态」按钮），60s TTL 缓存，
+  **绝不后台轮询**；自动返回的永远是轻量摘要（配置结构 + 内置 probe）
+- **凭据值一个字节都不进 Pi GUI**：`env` / `headers` / `oauth` 的值只记「有没有」；
+  transport 原文（命令路径 / URL）与配置文件绝对路径不进 renderer；
+  `mcp-auth.json` 的 token **绝不读**；错误文本截断并脱敏已知路径
+- **页内添加表单只有无凭据字段**；含凭据的配置走终端 `pi mcp add`
+ （`${VAR}` / `!command` 引用）或直接编辑文件
+- **动作只代理官方 CLI**（add / remove / login / logout），`shell:false` + args
+  数组，server 名严格校验，workspace stale 守卫（409 作废）；enable / disable /
+  reconnect / 改 exposure 没有 shell 接口，不伪造开关
+- **跑的必须是 bridge 正在跑的那份 pi**：入口从 launch identity 派生；
+  证明不了就不代执行（unknown / unsupported），不退回裸 `pi`
+- OAuth 全程 pi 负责（开浏览器、存 token、自动刷新）；in-session 的 select /
+  input 经 P19 管道承接，不新增凭据经手的代码
+- Tool Timeline 的 MCP 语义行**不展示完整 args / result**，不猜 annotations；
+  annotations 未经 RPC 暴露，只在文档记录
+
+详见 [MCP](mcp.md)。
+
 ## P18 Pi Memory 边界
 
 长期记忆可能保存**用户偏好、项目决策、历史事实与自定义内容**，比普通 Tool 更敏感。

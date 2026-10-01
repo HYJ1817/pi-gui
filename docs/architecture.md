@@ -246,9 +246,15 @@ get_messages ─┘
   - `skills.js` — Skill 的发现 / 详情 / 启停。**移植 pi 自己的规则**（发现位置、
     两种 collect 模式、同名优先级、信任闸门、override 语法），每条都注明源码出处。
     见 [extensions.md](extensions.md)
-  - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。去读**与 launch identity
-    绑定的**那份 pi 包、给出「支不支持」的结论与原文证据，并列出官方替代路径
-    extension 下已有哪些东西。**只读名字，不读内容、不执行**
+   - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。去读**与 launch identity
+     绑定的**那份 pi 包、给出「支不支持」的结论与原文证据，并列出官方替代路径
+     extension 下已有哪些东西。**只读名字，不读内容、不执行**。
+     原生摘要只读 `mcp-native` 的缓存视图（同步、不 spawn）
+   - `mcp-native.js` — P20.6 **原生 MCP 状态与受控动作**。状态真相只有两条官方路：
+     `pi mcp list --json`（显式刷新才跑，60s 缓存，不轮询）与两处 `mcp.json`
+     的安全结构解析（secret 值不进报告）；动作只代理官方 CLI
+     （add / remove / login / logout，`shell:false` + args 数组 + stale 守卫）。
+     入口从 launch identity 派生，证明不了就不代执行。见 [mcp.md](mcp.md)
   - `extension-registry.js` — 只读发现 Pi 的本地与 npm Extension 候选项；用
     `get_commands.sourceInfo.path` 关联可验证命令。已注册工具列表当前不在 Pi RPC 中，
     所以 capability registry 不猜工具归属。Pi 重启和项目切换清掉上一轮错误证据。
@@ -303,7 +309,8 @@ get_messages ─┘
 - `messages.js` 对话流 / `composer.js` 输入框 / `attachments.js` 附件
 - `tools.js` + `tool-model.js` + `tool-view.js` + `tool-history.js` 工具时间线
 - 语义适配器（按工具名匹配，互不依赖包名）：`web-activity.js` / `subagent-activity.js` /
-  `memory-activity.js` / `browser-activity.js`；各自的 `*-capabilities.js` 管状态证据与运行观察
+  `memory-activity.js` / `browser-activity.js` / `mcp-activity.js`（`mcp__` 与资源工具，
+  只投影 server / tool / 状态）；各自的 `*-capabilities.js` 管状态证据与运行观察
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
@@ -505,3 +512,19 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 **Registry 继续 generic**：built-ins 编译在 pi 包里，不是用户装的 extension，
 所以既不进 Registry 的目录扫描，也不在 Registry 里特化 `builtin:mcp`。
 见 [pi-compatibility.md](pi-compatibility.md) §〇 与 [extensions.md](extensions.md#mcp)。
+
+## P20.6 Native MCP 集成
+
+用 pi 原生的 MCP，不自建 client runtime（`server/mcp-native.js` + MCP 标签页
+管理面 + `mcp-activity.js` 语义行，见 [mcp.md](mcp.md)）：
+
+- 状态真相只有两条官方路 —— `pi mcp list --json`（显式刷新才跑，会启动用户的
+  stdio servers，所以 60s 缓存、不轮询）与两处 `mcp.json` 的安全结构解析；
+  人类文本与 TUI 不解析，RPC 里没有 MCP 接口（33 条已确认）
+- 跑的入口从 launch identity 派生（`packageDir` + 包内真 js +
+  `process.execPath`，经 `agents/cli.js` 的 `runCli`），证明不了就不代执行
+- 动作只代理官方 CLI（add / remove / login / logout）；enable / disable /
+  reconnect / 改 exposure 没有 shell 接口，不伪造开关
+- OAuth 全程 pi 负责；in-session 的 select / input 经 P19 管道自动承接
+- `mcp__` 调用走 Tool Timeline 语义行（只投影 server / tool / 状态）；
+  annotations 未经 RPC 暴露，不猜；`ui://` 与 MCP Apps 不渲染

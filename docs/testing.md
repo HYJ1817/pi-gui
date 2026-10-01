@@ -47,14 +47,14 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 （P20.5 在 **0.99.1** 上再次确认：33 条 RPC 命令里没有一条返回已注册工具清单。
 `tests/pi-version.cjs` 把这条钉住了。）
 
-`npm test` 里现在有 34 个套件，全部是**纯自动化**：
+`npm test` 里现在有 35 个套件，全部是**纯自动化**：
 
 ```
-smoke 1043 · git 161 · modules 114 · reliability · interactions · port-owner
+smoke 1051 · git 161 · modules 117 · reliability · interactions · port-owner
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 119 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 52 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
@@ -749,7 +749,7 @@ Web / Subagent / Memory / Planner 回归；DOM 渲染（含 `outerHTML` 级别�
 
 ## P20.5 Pi 0.99 兼容迁移验证
 
-`npm run test:pi-version`（已纳入 `npm test`，**119 条**）—— 完全离线：
+`npm run test:pi-version`（已纳入 `npm test`，**136 条**）—— 完全离线：
 不启动 pi、不联网、不读用户的真实 `~/.pi`、不执行任何 Extension。
 所有 pi 包都在 `os.tmpdir()` 里现造（**一个「断言这台机器装了什么」的测试都不许有**）。
 
@@ -789,3 +789,20 @@ Web / Subagent / Memory / Planner 回归；DOM 渲染（含 `outerHTML` 级别�
 「0.87 形态 / 0.99 形态 / 形状不认识 / 配置脱敏 / 无项目」五个 fixture；
 `tests/smoke.cjs` 的 MCP 标签页断言改成检查新的事实（版本与来源、built-in 清单、
 RPC 事实、配置只报存在性）—— 1023 → 1043。
+
+## P20.6 Native MCP 集成验证
+
+`npm run test:mcp`（已纳入 `npm test`，**52 条**）—— 完全离线：
+不启动 pi、不起真实 MCP server、不联网、不 OAuth、不读用户真实目录。
+`pi mcp list --json` 与各动作的执行一律注入假 runCli；配置文件全在
+`os.tmpdir()`。`npm run test:ui`（smoke，1043 → **1051**）另有 MCP 标签页的
+界面行为（状态横幅、server 行、刷新/移除/添加 wiring、unsupported 声明、
+无凭据字段）与 P15 Extension 页回归。
+
+覆盖（详见 [mcp.md](mcp.md) 末节）：安全解析、入口派生、scope/信任/状态机、
+list 合并与脱敏、动作 argv 与校验、stale、unsupported、secret 不回显、
+语义投影与运行观察。
+
+真机流程（手工，不进 CI）：配一个本地 stdio fixture server → 打开 MCP 页 →
+刷新状态见 connected + 工具数 → 调一次工具见 Timeline 语义行 → logout 清理。
+不要用真实远端 server，不要做真 OAuth 登录。
