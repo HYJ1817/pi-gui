@@ -3,7 +3,8 @@
 ## P19 Approval 边界
 
 **审批不是 OS sandbox。** Pi GUI 能拦的只有「有 Extension 来问」的调用：
-Pi 0.87.0 里 `pi.on("tool_call", …)` 可以 `{ block: true }`，而 RPC 模式下
+`pi.on("tool_call", …)` 可以 `{ block: true }`（0.87.0 与 0.99.1 都有，0.99.1 还多了个
+`terminate` 字段），而 RPC 模式下
 `ctx.ui.confirm/select/input/editor` 会**阻塞**到客户端回应答 —— 所以拒绝
 （`{confirmed:false}` / `{cancelled:true}`，两者在 `rpc-mode.js` 里都解析成 `false`）
 是真的会让这次工具调用不执行。**没有** Extension 来问时，GUI 没有任何拦截通道，
@@ -84,10 +85,14 @@ Pi GUI 只做观察层：
 - **不做**自动 remember / forget / summarize，不把会话或 Git history 写进 Memory，
   也不提供恢复或删除 recovery 的入口（可恢复这件事只说事实，不动手）
 
-注意 pi 0.87.0 的一个协议事实：Extension 在 result 里返回的 `isError: true`
+注意一个**只在 0.87.0 上成立**的协议事实：Extension 在 result 里返回的 `isError: true`
 **不会**到达 `tool_execution_end`（agent loop 正常 return 一律 `isError: false`）。
-所以界面上的失败状态只代表「工具抛异常」，Extension 自报的失败会以
-「结果不可用」这种中性降级出现，而不是被 GUI 猜成失败。见 [Pi Memory](memory.md)。
+所以那个版本上界面里的失败状态只代表「工具抛异常」，Extension 自报的失败会以
+「结果不可用」这种中性降级出现，而不是被 GUI 猜成失败。
+⚠️ **0.99.1 改了**：`agent-loop.js` 现在写 `isError: result.isError === true`，
+Extension 自报的失败**会**如实显示成失败。GUI 的策略（只认结构化证据）在两个版本下
+都成立，所以不需要改代码。见 [pi-compatibility.md](pi-compatibility.md) §〇 与
+[Pi Memory](memory.md)。
 
 第三方 Extension 与 Pi 进程拥有同等文件、shell 与网络权限，Memory 的内容也由
 Extension 决定如何保存；只安装可信代码。

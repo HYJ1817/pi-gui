@@ -124,24 +124,31 @@ Activity 的 running 文案描述**在做什么**（`Saving memory…` / `Readin
 的泄露面，文案本身也不是稳定 API。details 不够就是「结果不可用」。
 `args.text`、`details.preview`、`existingPreview`、`removedPreview` 一律不进 DOM。
 
-> 对于 pi-memory 0.4.2 的某些 soft-failure，Pi 0.87.0 可能仍把
-> `tool_execution_end` 表现为非 error。Pi GUI 因此**要求结构化 details 证明成功**；
-> 缺证据时显示「结果不可用」，而不是根据请求参数猜成功。这也意味着 GUI 不会
-> 把「没有成功证据」强行改判成失败 —— 它只能断言证据不足。
+> **基线说明（P20.5）**：下面这段的原始核对对象是 **0.87.0**。0.99.1 上
+> **Extension 自己返回的 `isError` 会传播**（`agent-loop.js` 从
+> `return { result, isError: false }` 改成了 `isError: result.isError === true`），
+> 所以「soft-failure 表现为非 error」这条**在 0.99.1 上不再成立**。
+> Pi GUI 的策略不变、也不需要改：**要求结构化 details 证明成功**，
+> 缺证据时显示「结果不可用」，而不是根据请求参数猜成功。
+> 这也意味着 GUI 不会把「没有成功证据」强行改判成失败 —— 它只能断言证据不足。
 
-### pi 0.87.0 的一个事实：Extension 自己返回的 `isError` 到不了 GUI
+### 历史事实（0.87.0）：Extension 自己返回的 `isError` 到不了 GUI
 
 `pi-memory` 在若干分支里 `return { content, isError: true, details: {} }`
 （空 `match`、非法日期、qmd 缺失、collection 建不起来、search 抛错……）。
-但 pi 的 agent loop 只要 `execute` **正常 return** 就写 `isError: false`
+在 **0.87.0** 上，pi 的 agent loop 只要 `execute` **正常 return** 就写 `isError: false`
 （`@earendil-works/pi-agent-core/dist/agent-loop.js`：`return { result, isError: false }`），
 只有 `execute` **抛异常**才走 `createErrorToolResult` 并置 `isError: true`。
 `pi-coding-agent` 的 `afterToolCall` 也只从 `tool_result` hook 里取 `isError`
 （`pi-memory` 没有注册这个 hook）。
 
-**结论**：GUI 的 status 权威只有 `tool_execution_end.isError`，
-它反映的是「工具抛异常」，不是「Extension 在 result 里说自己失败」。
-所以当已知工具**成功返回但没有该 schema 必有的结构化字段**时
+> ⚠️ **0.99.1 上这一行改了**：`return { result, isError: result.isError === true }`，
+> 所以 `pi-memory` 自报的 `isError: true` 现在**会**到达 `tool_execution_end`。
+> 见 [pi-compatibility.md](pi-compatibility.md) §〇。
+
+**结论（两个版本都成立）**：GUI 的 status 权威是 `tool_execution_end.isError` 与
+result 里的**结构化 details**，不是「Extension 在 result 里说了什么就信什么」。
+当已知工具**成功返回但没有该 schema 必有的结构化字段**时
 （memory_search 的 `count`、memory_forget 的 `removed`、memory_write 的 `target`……），
 Activity 降级成「…结果不可用 / Result metadata unavailable」，
 **不猜成失败，也不猜成 0 条**。历史与实时同一条规矩。

@@ -149,7 +149,9 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   Pi RPC 没有已注册工具清单，所以不会猜某个扩展提供了什么工具；安装与启停仍用 Pi 官方 CLI。
   Web / Subagent / Memory / Browser 各有一个独立设置区：固定官方安装命令 + 安装后重启 Pi +
   当前 bridge 的真实工具调用观察。**长期记忆由 Extension 提供，不是 Pi GUI 内置的**
-- **MCP**：当前兼容基线 **Pi 0.87.0 未提供原生 MCP 或对应 RPC 能力**。这个标签页是
+- **MCP**：能力由**检测本机实际装着的那个 pi 包**决定，不写死版本号 —— 历史验证基线 **0.87.0**
+  没有原生 MCP，当前验证基线 **0.99.1** 自带 `builtin:mcp`（`llama.cpp` / `codemode` /
+  `tool-search` 也是 built-in）。**RPC 至今没有已注册工具清单命令**，所以标签页不伪造工具注册表。这个标签页是
   一份能力报告 —— 读你本机的 pi 包给出结论与原文证据，
   并指出官方替代路径是 extension。**不假装有一堆 Server 可以增删改**
 

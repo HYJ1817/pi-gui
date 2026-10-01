@@ -43,17 +43,19 @@ settings 目录解析、override 优先级、package filter、空 filter、manif
 的 parity fixture，以及纯 helper 直接测试（包括空 manifest 与 filter 回退的源码差异）。
 符号链接 fixture 若无系统权限会跳过并单独报告，不计入通过数量。`tests/smoke.cjs` 检查
 Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
-Pi 0.87.0 没有 RPC tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
+Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
+（P20.5 在 **0.99.1** 上再次确认：33 条 RPC 命令里没有一条返回已注册工具清单。
+`tests/pi-version.cjs` 把这条钉住了。）
 
-`npm test` 里现在有 33 个套件，全部是**纯自动化**：
+`npm test` 里现在有 34 个套件，全部是**纯自动化**：
 
 ```
-smoke 1023 · git 161 · modules 114 · reliability · interactions · port-owner
-project-config 115 · skills 182 · extensions 52 · web-access 66 · subagents 141
+smoke 1043 · git 161 · modules 114 · reliability · interactions · port-owner
+project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 79 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · body-integrity 5 · dev-server 20
-models-api 50 · server-security 36 · diagnostics 10 · update-check 87
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 102 · body-integrity 5
+dev-server 20 · models-api 50 · server-security 36 · diagnostics 10 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
 
@@ -540,7 +542,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 32 个套件）
+版本一致性（含 tag）  →  npm test（A 层 33 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
@@ -669,7 +671,8 @@ P18-Fix 之后，契约测试还明确覆盖四件事：
   `memory_read` 四个 target、`scratchpad` 五个 action 各有「有证据 → 成功文案」与
   「只有 `{}` → …result unavailable」两条成对断言，`memory_write` 同理。
 - **soft-failure（`details: {}`）**：既不误报 success，也不被强行改成 error
-  （Pi 0.87.0 不传播 Extension 的 `isError`，GUI 只能断言「没有成功证据」）。
+  （0.87.0 不传播 Extension 的 `isError`，GUI 只能断言「没有成功证据」；
+  **0.99.1 会传播**，但「只认结构化证据」的策略在两个版本下都成立）。
 - **`refresh` snapshot mode**：v0.4.2 的 `getSnapshotMode()` 只返回
   `stable` / `per-turn`（`refresh` 是仓库 main 上未发布的第三种）；
   测试钉住 `stable` / `per-turn` 会展示，`refresh` 这类不在白名单的**非空字符串**
@@ -743,3 +746,37 @@ Web / Subagent / Memory / Planner 回归；DOM 渲染（含 `outerHTML` 级别�
 把真实事件喂给同一个 `browserActivity`；不带那个环境变量时只打印手工清单并退出 0
 （既不会在 CI 误跑，也不会让手滑的人花掉额度）。
 **本阶段没有执行真实浏览器验收** —— 见 [browser.md](browser.md#十一验证)。
+
+## P20.5 Pi 0.99 兼容迁移验证
+
+`npm run test:pi-version`（已纳入 `npm test`，**102 条**）—— 完全离线：
+不启动 pi、不联网、不读用户的真实 `~/.pi`、不执行任何 Extension。
+所有 pi 包都在 `os.tmpdir()` 里现造（**一个「断言这台机器装了什么」的测试都不许有**）。
+
+覆盖：
+
+- **版本真值**：`known` / `unknown` / `malformed` 三态；两种来源
+  （`package.json` 优先、`pi --version` 兜底、都没有 → `none`）；畸形版本**不退回**兜底
+  （它是有信息的结果）；探测抛错 / 非零退出 / 空输出都降级成 unknown；
+  TTL 缓存与 `force` 刷新；`updatedAt` 是 ISO。
+- **兜底探测的形状**：`shell: false` + args 数组（不拼命令字符串）、有超时、有输出上限。
+- **built-in 解析**：用 **0.87.0 与 0.99.1 的真实原文**当 fixture
+  （0.87 只有 `llama.cpp` 且 `hidden: true`；0.99 四个且后三个 `replaceable: true`）；
+  形状不认识 → `null`，**不返回空数组冒充「没有」**。
+- **built-in 能力**：0.99 形态 / 0.87 形态 / 包找不到 三种；`getAllTools` 两版都有
+  （**不是新能力**）；RPC 命令表读出来且确认没有工具清单命令；
+  **缓存按 cwd 分键**（切项目不会拿到上一个项目的结论）。
+- **MCP 三态**：`true` / `false`（0.87 legacy）/ `null`（形状不认识或包找不到）；
+  `servers` 永远是空数组（不编造 Server）。
+- **`get_commands` ≠ tool registry**：它返回 slash command / prompt 模板 / skill，
+  命令表里确实有 `get_commands`，但 `toolListCommand === false`。
+- **脱敏**：`mcp.json` 里的 `Authorization` / `env` 密钥 / Server 名 / 配置内容
+  一个字节都不进报告；报告里没有 pi 包绝对路径（`piPackageDir` 已移除，
+  换成布尔 `piPackageFound`）。
+- **schema drift**：缺 `sessionFile` → 记 `missing-field`；未知事件 → 记
+  `unknown-event` 但 payload 不进记录；版本源的未知枚举被归一（不回显原值）。
+
+配套更新的既有套件：`tests/skills.cjs` 的 MCP 段（L1–L36，182 → 196）重写成
+「0.87 形态 / 0.99 形态 / 形状不认识 / 配置脱敏 / 无项目」五个 fixture；
+`tests/smoke.cjs` 的 MCP 标签页断言改成检查新的事实（版本与来源、built-in 清单、
+RPC 事实、配置只报存在性）—— 1023 → 1043。

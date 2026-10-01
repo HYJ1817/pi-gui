@@ -436,3 +436,35 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 > **没有审批流。** pi-browser-harness 没有 `pi.on("tool_call")` 拦截，也没有
 > `ctx.ui.confirm`，所以按 [approvals.md](approvals.md) 的规矩，
 > GUI 不为浏览器动作提供任何允许 / 拒绝按钮，也不画假 modal。
+
+## P20.5 Pi 版本真值与 built-in 能力探测
+
+这一层不引入任何新 UI 面，只把两个之前**隐式**的事实变成有出处的状态。
+
+`server/pi-version.js` —— **运行中版本**的规范状态 `{ value, source, status, updatedAt }`：
+
+- 取值顺序：本机 pi 包的 `package.json`（纯文件读，首选）→ 受控的 `pi --version`
+  （只在包读不到时兜底；入口复用 agent registry 已解析好的那个，`shell: false` + args 数组）
+  → 都拿不到就是 `unknown`。
+- `status` 三态：`known` / `malformed`（读到了但不是版本号）/ `unknown`。
+  畸形**不退回**兜底探测 —— 那本身是有信息的结果。
+- 带 TTL 缓存；`read()` 才求值，所以启动路径不付代价。
+
+`server/pi-builtins.js` —— **built-in 扩展与相关能力**的只读探测：
+
+- 解析 pi 包 `dist/extensions/index.js` 的 `builtInExtensions` 字面量
+  （`parseBuiltInExtensions()` 是纯函数，用两个真实版本的原文当 fixture）。
+- 读 `dist/core/extensions/types.d.ts` 找 `registerMcpServer` / `getMcpServers` /
+  `getAllTools`；读 `dist/modes/rpc/rpc-types.d.ts` 拿 RPC 命令名集合
+  （用来证明**没有**工具清单命令）。
+- MCP 配置文件**只 stat 不读内容**；缓存按 **cwd** 分键，切项目不会返回上一个项目的结论。
+- **不 import pi 的任何模块、不 spawn、不 require** —— 只有几个限长的 `readFileSync`。
+
+两者的结论都汇进 `server/mcp.js` 的 `/api/mcp` 报告（`version` / `builtins` /
+`extensionApi` / `rpc` / `mcpConfig` / `mcpCli`），前端在 Extensions 页的 MCP 标签页渲染。
+`server/pi-compat.js` 的报告多一个 `versionSource`（版本值的出处），
+让 Diagnostics 能区分「文档里的基线」与「你机器上跑的那个」。
+
+**Registry 继续 generic**：built-ins 编译在 pi 包里，不是用户装的 extension，
+所以既不进 Registry 的目录扫描，也不在 Registry 里特化 `builtin:mcp`。
+见 [pi-compatibility.md](pi-compatibility.md) §〇 与 [extensions.md](extensions.md#mcp)。

@@ -24,7 +24,8 @@ wait 行为可由上游配置关闭，但工具仍注册并立即返回。
 Pi 0.86.1+ 的 fresh unrestricted parent 初始 active tools 是 subagents_enable、bg_wait、subagent_supervisor；
 subagent registered but initially inactive，调用 subagents_enable 后在后续模型请求中激活。
 Supervisor 无需等待 loader；观察到 Supervisor 而未观察到 subagent 完全正常，不表示安装/加载失败。
-Pi 0.87.0 满足最低版本，loaded 仍需运行证据；loader 不启动 child，部分 provider 要等下一次用户 prompt，GUI 不重试或强制激活。
+pi 满足最低版本（核对基线 0.87.0；0.99.1 的 RPC 事件面与之一致），loaded 仍需运行证据；
+loader 不启动 child，部分 provider 要等下一次用户 prompt，GUI 不重试或强制激活。
 
 | 路径 | 输入 | 展示依据 |
 |---|---|---|

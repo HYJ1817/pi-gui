@@ -4,7 +4,7 @@
 不是商店 —— 没有下载、没有安装、没有远程代码执行。
 
 **Pi GUI = pi 的 GUI，不是第二套扩展系统。** pi 已有的机制就做 GUI 管理，
-当前兼容基线 Pi 0.87.0 未提供的 MCP 能力按版本检测结果如实报告。
+MCP 这类能力按**本机实际装着的那个 pi 包**检测后如实报告（历史验证基线 0.87.0 没有原生 MCP，当前验证基线 0.99.1 自带 builtin:mcp —— 见下面 MCP 一节）。
 
 ## Extensions（P15 基础设施）
 
@@ -18,7 +18,7 @@ installed / configured / loaded / runtimeObserved 语义，但**不往通用 Reg
 Memory 也不改变发现、启用或加载的判定——它只是多了一个固定命令与一份运行观察。
 
 Skill 是给模型阅读的指令，Extension 是在 Pi 进程中执行的第三方代码；两者保持独立。
-本机 Pi 0.87.0 的来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
+发现规则在 0.87.0 与 0.99.1 上一致。本机 pi 的 extension 来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
 `package.json.pi.extensions` 或 `index.ts|index.js`、受信任项目的 `.pi/extensions`、`settings.json` 的
 `extensions` / `packages`，以及 CLI `-e`。项目来源受 Pi 的信任判定约束。
 Pi package 可以由 npm、git 或本地路径提供；Pi 自己的解析器还支持 manifest
@@ -34,7 +34,7 @@ package manifest 的正向 glob 使用 Node 内置 glob 展开（跳过隐藏路
 再应用 manifest override；普通目录 manifest 按 Pi loader 的字面路径规则解析，不展开 glob。
 package 对象的 `extensions` filter 支持 include / exclude / 精确 override，`[]` 明确禁用，
 省略属性使用默认结果；filter 只能筛选 package resolver 已得出的集合，不新增路径。
-Pi 0.87.0 有一个细节：显式 package filter 在 manifest extensions 为空或缺失时
+pi 有一个细节（0.87.0 与 0.99.1 同）：显式 package filter 在 manifest extensions 为空或缺失时
 回退到约定目录；未带 filter 的空 manifest 不加载资源。fixture 按真实源码固定这一区别。
 
 仍有限制：GUI 拒绝符号链接（Pi 允许部分链接）；git/临时 CLI 来源、旧版全局 npm
@@ -45,8 +45,10 @@ Pi 0.87.0 有一个细节：显式 package filter 在 manifest extensions 为空
 `GET /api/extensions` 返回统一的 `extensions[]` 与 `capabilityRegistry`。
 `installed`、`enabled`、`loaded` 分开表达；缺证据用 `null`，不把“没观察到”
 写成“未加载”。版本只读 `package.json`；可验证的 command 来自 Pi RPC
-`get_commands` 的 `sourceInfo.path`。兼容基线 Pi 0.87.0 RPC **没有** extension 或已注册 tool
-列表；`get_state` 也没有这些字段。因此当前工具来源保持未知，Capability Registry
+`get_commands` 的 `sourceInfo.path`。**RPC 没有已注册工具清单**：0.87.0 没有，
+0.99.1 也没有（33 条命令里一条都没有）；`get_state` 同样没有这些字段。
+（ExtensionAPI 有 `getAllTools()`，但那是**扩展进程内**的 API，RPC 客户端拿不到 ——
+两者不能混为一谈。）因此当前工具来源保持未知，Capability Registry
 只记录已证实的 command；未来若 Pi 提供带来源的工具清单，
 `mapRegisteredTools()` 可把多个工具映射到同一个 extension。未知工具继续由现有
 Tool Timeline 显示原始名称。
@@ -153,24 +155,48 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
 
 ## MCP
 
-### 当前兼容基线 Pi 0.87.0 未提供原生 MCP
+> **P20.5 更正**：本节原来写的是「当前兼容基线 Pi 0.87.0 未提供原生 MCP」。
+> 那句话描述的是 **0.87.0**，不是 pi 的现状 —— **0.99.1 自带 `builtin:mcp`**，
+> 而且 0.99.1 的 `docs/usage.md` 里那句「不内置 MCP」**已经被删掉了**。
+> 现在这页改成读**你本机装着的那个 pi 包**，让证据自己说话。
 
-Pi 0.87.0 的 `docs/usage.md` 原文：
+### 能力由检测决定，不由版本号决定
 
-> It intentionally does not include built-in MCP, sub-agents, permission popups,
-> plan mode, to-dos, or background bash. You can build or install those workflows
-> as extensions or packages, or use external tools such as containers and tmux.
+| 判据 | 出处 |
+|---|---|
+| pi 包的 `dist/extensions/index.js` 里 `builtInExtensions` 有没有 `mcp` | 0.99.1 有：`{ name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }`；0.87.0 没有 |
+| `dist/core/extensions/types.d.ts` 有没有 `registerMcpServer` / `getMcpServers` | 0.99.1 有；0.87.0 没有 |
 
-该版本的 Pi 包里没有 MCP 模块，也没有 `mcpServers` / `.mcp.json` 这类配置约定；
-后续上游版本可能变化，页面继续检测实际安装版本。
+两者任一为真 → `supported: true`；两者都**读到了**且都为假 → `false`（0.87.0 就是这档，
+旧版本的安全降级保留）；包读不到 → `null`，不猜。
 
-### 所以 MCP 标签页不是 Server 列表，是一份能力报告
+### built-in 扩展**不是**用户装的 extension
 
-- 读你本机真正装着的那个 pi 包，报出版本号、**它到底支不支持 MCP**，
-  以及支撑这个结论的**原文出处**（可自己核对）
+`llama.cpp` / `codemode` / `tool-search` / `mcp` 编译在 pi 包里（`dist/extensions/`），
+所以：
+
+- **不拿 Extension Registry 的目录扫描去找它们** —— 那边扫的是
+  `~/.pi/agent/extensions` 与 `<项目>/.pi/extensions`，扫不到也不该扫到；
+- 也不硬编码「当前一定启用」：`mcp` / `codemode` / `tool-search` 标着
+  `replaceable: true`（第三方 extension 注册同名能力时**会接管**），
+  `llama.cpp` 在 0.87.0 里甚至是 `hidden: true`。
+  所以页面只报「**包里带了它**」，不报「当前启用了它」。
+
+### MCP 标签页仍然是一份能力报告，不是 Server 列表
+
+- 报出**运行中版本**（`value` + `source` + `status` + `updatedAt`）与 built-in 清单，
+  每一条都带可核对的原文出处
+- 报 **RPC 事实**：33 条命令里没有一条返回已注册工具清单 —— 所以这页不列「已注册工具」
+- 报 **MCP 配置文件在不在**（`~/.pi/agent/mcp.json`、`<项目>/.pi/mcp.json`）——
+  **只 stat，不读内容**（里面可能有 `Authorization` 头与 `env` 密钥）
+- 报**怎么配置**：`pi mcp add` / `pi mcp remove`（原文出自 pi 自己的 `docs/mcp.md`）
 - 检测不出来时如实说「无法确定」，**不猜成不支持**
 - 列出 pi 官方给的替代路径：`~/.pi/agent/extensions` 与 `<项目>/.pi/extensions`
   下已有哪些扩展，以及 `settings.json` 里声明的 `extensions` / `packages`
+
+> **Server 的读取与管理留给 P20.6。** 这一轮只做「事实修正」：
+> 把错的文案改对、把 built-in 与 RPC 事实摆出来、把配置文件的存在性报出来。
+> `servers` 字段继续是空数组，前端结构不动。
 
 ### 刻意不做的三件事
 

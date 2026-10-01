@@ -4,10 +4,13 @@ P19 的 approval 只依赖 Pi 已有的两个真实机制：`tool_call` hook 可
 `{ block: true }`（`dist/core/extensions/types.d.ts` 的 `ToolCallEventResult`、
 `docs/extensions.md` 的「Can block」），以及 RPC 模式下对话框方法发出的
 `extension_ui_request` 会**阻塞等待** `extension_ui_response`（`docs/rpc.md`）。
-Pi 0.87.0 **没有**自带审批弹窗（`docs/usage.md` 明确说不含 permission popups），
-`ctx.ui.custom()` 在 RPC 下返回 `undefined` —— 用 `custom()` 画审批框的扩展
-在 Pi GUI 里不会弹窗。GUI 不实现权限策略，只如实呈现与本机能力报告。
-见 [Approvals](approvals.md)。
+> **基线说明**：这段的原始核对对象是 **0.87.0**；P20.5 在 **0.99.1** 上重新核对过 ——
+> `block` 语义不变（还多了个 `terminate` 字段），9 个 `extension_ui_request` 方法一字不差。
+> 「核心没有自带审批弹窗」在 0.99.1 上同样成立（0.99.1 的 `docs/usage.md` 里
+> 那句「不含 permission popups」虽然被删了，但代码里依旧没有任何审批闸门）。
+> `ctx.ui.custom()` 在 RPC 下返回 `undefined` —— 0.99.1 的 `docs/rpc-extension-ui.md`
+> 明确列出这一条。GUI 不实现权限策略，只如实呈现与本机能力报告。
+> 见 [Approvals](approvals.md)。
 
 P18 按 pi-memory 0.4.2 的发布 tarball 接入 prompt-side 工具：
 memory_write / memory_read / memory_search / memory_forget / memory_restore /
@@ -15,9 +18,11 @@ memory_status / scratchpad（名字不加前缀，来自 `pi.registerTool`）。
 长期记忆是 **global-only**（`PI_MEMORY_DIR` 或 `~/.pi/agent/memory`），
 源码里没有 project/cwd scope；qmd 是可选外部依赖，只有 memory_search 需要。
 GUI 不读 memory 目录、不管理 qmd、不实现检索，只投影 allowlist 字段。
-⚠️ pi 0.87.0 只把 execute 抛异常标成 `isError`，Extension 在 result 里返回的
-`isError: true` 不会到达 tool_execution_end；因此缺结构化字段时降级为
-「结果不可用」，不猜失败。见 [Pi Memory](memory.md)。
+⚠️ **（0.87.0 的历史事实，0.99.1 已变）** pi 0.87.0 只把 execute 抛异常标成
+`isError`，Extension 在 result 里返回的 `isError: true` 到不了 `tool_execution_end`；
+因此缺结构化字段时降级为「结果不可用」，不猜失败。**这条在 0.99.1 上不再成立**
+（见本页 §〇 的 `isError` 行为变化），但「只认结构化证据」的策略不变 ——
+它本来就不依赖 `isError`。见 [Pi Memory](memory.md)。
 
 P17 按 pi-subagents 0.73.1 的真实工具契约接入，parent-side 名字为 subagents_enable/bg_wait/subagent_supervisor/subagent。
 Pi 0.86.1+ fresh unrestricted parent 初始前三项 active；subagent registered but inactive，loader 后在后续模型请求激活。Supervisor 不依赖 loader。
@@ -27,8 +32,11 @@ Pi 0.86.1+ fresh unrestricted parent 初始前三项 active；subagent registere
 
 P16 的 Web tool adapter 按 Pi 0.87.0 的 tool_execution_start/update/end 与
 历史 toolCall/toolResult 对接；partialResult 是累积输出，identity 为 toolCallId。
+> 0.99.1 的 `dist/modes/json-event.d.ts` 与 0.87.0 **逐字节相同**，所以这套对接
+> 在新版本上不需要改。见本页 §〇。
 当前公开 pi-web-access 0.33.0 schema 已核对，但 GUI 不加载其代码或依赖。
-RPC 不提供 registered tool list，P15 capabilityRegistry.tools 继续为空/未知。
+RPC 不提供 registered tool list，P15 capabilityRegistry.tools 继续为空/未知
+（0.99.1 已再次确认：33 条 RPC 命令里没有工具清单命令）。
 独立 runtimeObserved 仅记录当前 bridge run 的真实调用，重启或切项目后归零。
 工具来源不从工具名反推；未知名字继续 generic fallback。见 [Web Access](web-access.md)。
 
@@ -36,6 +44,88 @@ Pi GUI 是 pi 的界面，**不是 pi 的一部分**。这份文档讲清两者�
 Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi 升级后怎么验。
 
 代码在 [`server/pi-compat.js`](../server/pi-compat.js)。
+
+## 〇、四个「版本」不是一回事（P20.5）
+
+上一轮出过一个具体的错：文档里写着「pi 0.87.0 没有原生 MCP，而且是有意为之」，
+用户机器上却装着 0.99.1（**它自带 `builtin:mcp`**）。一句话把四件事混成了一件。
+现在把它们分开，**每一处都说清自己在讲哪一个**：
+
+| | 是什么 | 谁决定 | 在哪看 |
+|---|---|---|---|
+| **历史验证基线** | P15–P19 当时的验收对象：**0.87.0** | 已固定的历史事实，不会变 | 各 feature 文档的「当时基线」句 |
+| **当前验证基线** | P20.5 实测并写进测试的对象：**0.99.1** | 本轮的核对结果 | 本节 + `tests/pi-version.cjs` |
+| **运行中版本** | 你这台机器上**实际跑的那个 pi** | 由 `server/pi-version.js` 探测 | Extensions 页 MCP 标签页 / Diagnostics |
+| **未知能力** | 探测拿不到证据的能力 | 一律 `unknown`，**不猜** | 同左 |
+
+**运行中版本**是一个规范状态，不是一个字符串：
+
+```js
+{ value: '0.99.1', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' }
+```
+
+- `source`：`'package.json'`（读本机 pi 包，**首选**）· `'pi --version'`（兜底，
+  只在包读不到时才跑）· `'none'`。
+- `status`：`'known'` · `'malformed'`（读到了、但它不是一个版本号）· `'unknown'`。
+- **版本号只作线索，不作判据。** 能力判定一律走 probe 或真实事件 ——
+  `server/pi-builtins.js` 读的是 pi 包的源码文本，`server/pi-compat.js` 看的是
+  实际收到的 response / event 形状。
+
+### 0.87.0 → 0.99.1 的实际差异（逐项核对过）
+
+对照物：npm 上 `@earendil-works/pi-coding-agent` 的 **0.87.0** 与 **0.99.1**
+发布 tarball（`gitHead` 分别是 `16787ad5…` / `d86654ab…`），逐文件比对。
+
+| 面 | 0.87.0 | 0.99.1 | 结论 |
+|---|---|---|---|
+| **RPC 命令集** | 33 条 | 33 条 | **完全一致**，一条没加 |
+| **`extension_ui_request` 方法集** | 9 个 | 9 个 | **完全一致** |
+| **`dist/modes/json-event.d.ts`** | — | — | **逐字节相同** |
+| **`get_commands` 实现** | 扩展命令 + prompt 模板 + `skill:<name>` | 同左 | **完全一致** |
+| **built-in extensions** | 只有 `llama.cpp`（`hidden: true`） | `llama.cpp` + `codemode` + `tool-search` + `mcp`（都 `builtin: true`，后三个 `replaceable: true`） | **新增三个** |
+| **ExtensionAPI `register*`/`get*`** | — | 新增 `registerMcpServer` / `getMcpServers` / `getExposure` / `getNamespace` / `getSettings` | **新增五个** |
+| **ExtensionAPI 事件** | — | 新增 `mcp_servers_change` / `provider_stream_event` | **新增两个**（其余 39 个一致） |
+| **`ToolCallEventResult`** | `block` / `reason` | 多一个 `terminate?: boolean` | **新增一个字段**（`block` 语义不变） |
+| **工具返回值里的 `isError`** | **被硬编码丢弃**（`return { result, isError: false }`） | **会传播**（`return { result, isError: result.isError === true }`） | ⚠️ **行为变化**，见下 |
+| **`getAllTools()`** | **已有** | 已有 | ⚠️ **不是新能力**（任务描述里把它列为新增，这条要修正） |
+| **`docs/usage.md` 的「不内置 MCP」** | 有 | **已删除** | 旧文案的出处已经不存在了 |
+| **`docs/mcp.md`** | 无 | 有（配置格式 + `pi mcp add/remove`） | 新增 |
+
+**最重要的结论：RPC 面（命令 / 事件 / UI 方法）在 0.87 → 0.99 之间没有任何漂移。**
+所以 Pi GUI 现有的 RPC 集成不需要迁移；需要改的是**说法**（哪些是历史事实、
+哪些是当前事实）与**新增能力的表示**（built-ins）。
+
+### ⚠️ 唯一一条真实的行为变化：工具返回值里的 `isError`
+
+| | 代码 | 效果 |
+|---|---|---|
+| **0.87.0** | `executePreparedToolCall` 返回 `{ result, isError: false }`（硬编码） | Extension 在工具结果里放的 `isError: true` **被丢弃**；`tool_execution_end.isError` 只反映「抛异常 / 被阻断 / 参数校验失败」 |
+| **0.99.1** | 返回 `{ result, isError: result.isError === true }` | Extension 自己返回的 `isError: true` **会传播到** `tool_execution_end.isError` |
+
+对照物：`@earendil-works/pi-agent-core` 的 `dist/agent-loop.js`（0.87.0 第 556 行 vs
+0.99.1 第 579 行），两个版本都从 npm 发布包取。
+
+**对 Pi GUI 的影响：** P18 与 P20 定的策略是「**只认结构化证据**」——
+success 必须由 result 的 `details` 证明，不靠 `isError` 推断。这条策略在两个版本下
+都成立，所以**不需要改代码**；但：
+
+- P18 文档里那句「pi 0.87.0 不传播 Extension 的 isError」是**历史事实**，
+  在 0.99.1 上**已经不成立**（已就地标注）；
+- 在 0.99.1 上，Extension 明确返回 `isError: true` 时，时间线会如实显示为失败 ——
+  这是**上游自己的判断**，不是 GUI 猜的；
+- 结构化证据与 `isError` 冲突时，仍然以 `details` 为准（P20 的
+  `details.ok === false` 优先于 `isError`）。
+
+### 仍然没有的东西（明确记录，不从新功能反推）
+
+- **RPC 没有「已注册工具清单」命令。** 33 条命令里没有一条返回它。
+  `ExtensionAPI.getAllTools()` 是**扩展进程内**的 API，RPC 客户端拿不到 ——
+  两者不能混为一谈。所以 `capabilityRegistry.tools` 继续是空 / 未知，
+  **GUI 不伪造工具注册表**（`/api/mcp` 的 `rpc.toolListCommand === false` 就是这条判据）。
+- **RPC 没有 MCP 管理命令。** 增删改走 pi 自己的 CLI（`pi mcp add` / `pi mcp remove`）
+  与 `mcp.json`，不走 RPC。P20.6 之前 Pi GUI 不碰它们。
+- **built-in 扩展不是「用户装的 extension」。** 它们编译在 pi 包里
+  （`dist/extensions/`），Extension Registry 的目录扫描**扫不到也不该扫**。
 
 ## 一、边界在哪
 
