@@ -1151,6 +1151,23 @@ async function main() {
   ]);
   await evalJs(`[...document.querySelectorAll('#confirmLayer button')].find(b=>b.textContent==='拒绝')?.click()`);
   await sleep(120);
+  await evalJs(`document.querySelector('#usageDetails').open = true`);
+  await sleep(180);
+  await shotOf('#usageDetails', '167-usage-multicurrency', 'P21-Fix-2：DeepSeek 多币种额度只做并排摘要（不相加）', ['远端额度', '¥110.00 | $15.00'], [
+    ['侧栏摘要是两币种并排且不相加', `document.querySelector('#uQuota').textContent === '¥110.00 | $15.00'`],
+    ['没有把缺失当 0', `!document.querySelector('#uQuota').textContent.includes('$0.00')`],
+    ['行高正常、没有溢出', `(() => {const d=document.querySelector('#usageDetails .quota-detail');return d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().height>0})()`],
+  ]);
+  await evalJs(`document.querySelector('#btnCtx').click()`);
+  await sleep(220);
+  await shotOf('#composerPopover', '168-usage-quota-popover', 'P21-Fix-2：额度 Popover 逐币种展示（DOM 构建，无 innerHTML 插值）', ['剩余额度 (CNY)', '剩余额度 (USD)'], [
+    ['逐币种各一行', `(() => {const t=document.querySelector('#composerPopover').textContent;return t.includes('剩余额度 (CNY)')&&t.includes('剩余额度 (USD)')})()`],
+    ['赠送/充值行存在', `document.querySelector('#composerPopover').textContent.includes('赠送额度 (CNY)')&&document.querySelector('#composerPopover').textContent.includes('充值额度 (CNY)')`],
+    ['没有 HTML 元素被动态注入', `document.querySelector('#composerPopover').querySelectorAll('img,script').length===0`],
+    ['Popover 在视口内', `(() => {const r=document.querySelector('#composerPopover').getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1})()`],
+  ]);
+  await evalJs(`document.querySelector('#btnCtx').click()`);
+  await sleep(120);
   await evalJs(`document.querySelector('#navExtensions').click()`);
   await sleep(260);
   await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);

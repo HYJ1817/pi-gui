@@ -746,6 +746,32 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, piRunning: true, pid: 0, args: ['--mode', 'rpc'], cwd: process.cwd() });
   }
 
+  /* P21: 远端额度夹具。get_state 里的 provider 是 deepseek，所以启动后前端会拉这个端点。
+   * 造的是 DeepSeek 真实形状（balance_infos 多币种）。 */
+  if (p.startsWith('/api/quota/')) {
+    const id = decodeURIComponent(p.slice('/api/quota/'.length));
+    if (id !== 'deepseek') return json(res, 200, { ok: false, error: 'unknown provider' });
+    return json(res, 200, {
+      ok: true,
+      cached: false,
+      quota: {
+        providerId: 'deepseek',
+        status: 'ok',
+        balance: { amount: 110, currency: 'CNY', granted: 10, toppedUp: 100 },
+        balances: [
+          { amount: 110, currency: 'CNY', granted: 10, toppedUp: 100 },
+          { amount: 15, currency: 'USD', granted: null, toppedUp: null },
+        ],
+        windows: null,
+        rateLimit: null,
+        resetAt: null,
+        source: 'https://api.deepseek.com/user/balance',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+        message: null,
+      },
+    });
+  }
+
   /* P14-D Stage surfaces use deterministic fixtures, never the developer's repository. */
   if (p === '/api/__work-surface/git-clean') {
     workSurfaceGitClean = url.searchParams.get('value') === '1';
