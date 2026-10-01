@@ -80,6 +80,7 @@ const { createPiBuiltins, parseBuiltInExtensions } = await import('../server/pi-
 const { createMcp } = await import('../server/mcp.js');
 const { createPiCompat } = await import('../server/pi-compat.js');
 const { createPiLaunch, formatLaunch } = await import('../server/pi-launch.js');
+const { createDiagnostics } = await import('../server/diagnostics.js');
 
   /* ================= A. 版本号解析（纯函数） ================= */
   section('A. 版本号解析');
@@ -546,6 +547,230 @@ const { createPiLaunch, formatLaunch } = await import('../server/pi-launch.js');
       });
       assert.equal(probe(), '0.99.1');
       assert.deepEqual(seen, [{ cmd: '"pi" "--version"', args: [], shell: true }]);
+    });
+  }
+
+  /* ================= I. version cache 绑定 launch identity（不等 TTL） ================= */
+  section('I. version cache 以 launch identity 为 key');
+  {
+    const wA = mkPiPackage('i-A', { version: '0.87.0', builtins: BUILTINS_087, apiTypes: API_087 });
+    const wB = mkPiPackage('i-B', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099 });
+    let t = 1000;
+    let key = 'A';
+    let reads = 0;
+    const pv = createPiVersion({
+      resolvePackageDir: () => { reads++; return key === 'A' ? wA.dir : wB.dir; },
+      identityKey: () => key,
+      now: () => t,
+      ttlMs: 5000,
+    });
+    check('I1 同一 identity、TTL 未过 → 不重复 probe', () => {
+      assert.equal(pv.read().value, '0.87.0');
+      t = 2000;
+      assert.equal(pv.read().value, '0.87.0');
+      assert.equal(reads, 1);
+    });
+    check('I2 同一 identity、TTL 过期 → 重新 probe', () => {
+      t = 9000;
+      assert.equal(pv.read().value, '0.87.0');
+      assert.equal(reads, 2);
+    });
+    check('I3 identity 改变、TTL 未过 → 立即重新 probe（不等 TTL）', () => {
+      t = 9100; // 距上次仅 100ms，TTL 内
+      key = 'B';
+      const r = pv.read();
+      assert.equal(r.value, '0.99.1');
+      assert.equal(r.source, 'package.json');
+      assert.equal(reads, 3);
+    });
+    check('I4 A→B：0.87→0.99 立即更新', () => assert.equal(pv.read().value, '0.99.1'));
+    check('I5 B→A：切回去立即更新（不残留 B 的值）', () => {
+      key = 'A';
+      assert.equal(pv.read().value, '0.87.0');
+      assert.equal(reads, 4);
+    });
+    check('I10 malformed 不跨 identity 泄漏（A 畸形→B 正常）', () => {
+      const wM = mkPiPackage('i-M', { version: 'not-a-version' });
+      let k2 = 'M';
+      const pv2 = createPiVersion({
+        resolvePackageDir: () => (k2 === 'M' ? wM.dir : wB.dir),
+        identityKey: () => k2,
+        now: () => 50000,
+        ttlMs: 60000,
+      });
+      const m = pv2.read();
+      assert.equal(m.status, 'malformed');
+      assert.equal(m.value, null);
+      k2 = 'B';
+      const b = pv2.read();
+      assert.equal(b.status, 'known');
+      assert.equal(b.value, '0.99.1');
+      k2 = 'M';
+      assert.equal(pv2.read().status, 'malformed');
+    });
+    check('I0 没注入 identityKey 时保持纯 TTL 行为（老调用方不受影响）', () => {
+      let tt = 0;
+      let rr = 0;
+      const legacy = createPiVersion({ resolvePackageDir: () => { rr++; return wA.dir; }, now: () => tt, ttlMs: 5000 });
+      legacy.read();
+      tt = 1000;
+      legacy.read();
+      assert.equal(rr, 1);
+      assert.equal(legacy.read().value, '0.87.0');
+    });
+    check('I0b peek 不把内部 key 泄漏出去', () => {
+      const p = pv.peek();
+      assert.ok(p && typeof p === 'object');
+      assert.ok(!('key' in p), 'peek 把内部 cache key 带出来了');
+    });
+  }
+  {
+    /* identityKey 本身的稳定性：cwd 变 ≠ Pi 变；target 变才变。 */
+    check('I6 cwd 变化但解析到同一个 Pi → key 不变（可复用 cache）', () => {
+      const w = mkPiPackage('i-same', { version: '0.99.1' });
+      let cur = path.join(TMP, 'i-cwd-a');
+      fs.mkdirSync(cur, { recursive: true });
+      const other = path.join(TMP, 'i-cwd-b');
+      fs.mkdirSync(other, { recursive: true });
+      const L = createPiLaunch({
+        piBin: 'pi',
+        env: { PATH: path.dirname(w.binPath), PATHEXT: '' },
+        isWin: false,
+        getCwd: () => cur,
+      });
+      const k1 = L.identityKey();
+      cur = other; // POSIX 下 cwd 不参与搜索，结论应相同
+      const k2 = L.identityKey();
+      assert.equal(k1, k2);
+      assert.equal(L.packageDir(), w.dir);
+    });
+    check('I6b 同一 Pi、cwd 变了 → version 不重探（复用 TTL）', () => {
+      const w = mkPiPackage('i-reuse', { version: '0.99.1' });
+      let cur = path.join(TMP, 'i-reuse-a');
+      fs.mkdirSync(cur, { recursive: true });
+      const other = path.join(TMP, 'i-reuse-b');
+      fs.mkdirSync(other, { recursive: true });
+      const L = createPiLaunch({
+        piBin: 'pi',
+        env: { PATH: path.dirname(w.binPath), PATHEXT: '' },
+        isWin: false,
+        getCwd: () => cur,
+      });
+      let reads = 0;
+      const orig = L.packageDir.bind(L);
+      const pv = createPiVersion({
+        resolvePackageDir: () => { reads++; return orig(); },
+        identityKey: L.identityKey,
+        now: () => 1000,
+        ttlMs: 60000,
+      });
+      assert.equal(pv.read().value, '0.99.1');
+      cur = other;
+      assert.equal(pv.read().value, '0.99.1');
+      assert.equal(reads, 1);
+    });
+    check('I7 cwd 变化且解析成不同 Pi → key 改变', () => {
+      const A = mkPiPackage('i-diff-A', { version: '0.87.0' });
+      const B = mkPiPackage('i-diff-B', { version: '0.99.1' });
+      // Windows 规则：cwd 优先。每个包的 bin 目录本身就是一个「项目目录」，
+      // 上面恰好躺着可执行的 `pi`，向上正好绑到它自己的包。
+      let cur = path.dirname(A.binPath);
+      const L = createPiLaunch({ piBin: 'pi', env: { PATH: '', PATHEXT: '' }, isWin: true, getCwd: () => cur });
+      const kA = L.identityKey();
+      assert.equal(L.packageDir(), A.dir);
+      cur = path.dirname(B.binPath);
+      const kB = L.identityKey();
+      assert.equal(L.packageDir(), B.dir);
+      assert.ok(kA !== kB, '不同 launch target 的 key 必须不同');
+    });
+    check('I8 packageDir unknown、但 target 路径变了 → key 仍改变', () => {
+      const fA = path.join(TMP, 'i-unk-a', 'pi.exe');
+      const fB = path.join(TMP, 'i-unk-b', 'pi.exe');
+      for (const f of [fA, fB]) { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, 'x', 'utf8'); }
+      // 这两个文件都不在任何 pi 包里 → packageDir 都是 null，但 target 不同
+      const LA = createPiLaunch({ piBin: fA, env: {}, isWin: false });
+      const LB = createPiLaunch({ piBin: fB, env: {}, isWin: false });
+      assert.equal(LA.packageDir(), null);
+      assert.equal(LB.packageDir(), null);
+      assert.ok(LA.identityKey() !== LB.identityKey(), 'target 不同就不能共用 version 缓存');
+    });
+    check('I9 packageDir unknown、同一 target → 可复用（key 稳定）', () => {
+      const f = path.join(TMP, 'i-unk-same', 'pi.exe');
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, 'x', 'utf8');
+      const L = createPiLaunch({ piBin: f, env: {}, isWin: false });
+      assert.equal(L.packageDir(), null);
+      assert.equal(L.identityKey(), L.identityKey());
+    });
+    check('I9b identityKey 是不透明串（不含绝对路径，可进不了 Diagnostics）', () => {
+      const w = mkPiPackage('i-opaque', { version: '0.99.1' });
+      const L = createPiLaunch({ piBin: w.binPath, env: w.env });
+      const k = L.identityKey();
+      assert.match(k, /^v1-[0-9a-f]+$/);
+      assert.ok(!k.includes(w.base) && !k.includes(TMP));
+      assert.deepEqual(Object.keys(L.summary()).sort(), ['binName', 'entryKnown', 'packageDirKnown', 'source']);
+    });
+  }
+  {
+    /* 集成：Project A（0.87 / llama.cpp only）→ Project B（0.99 / 四 built-in + mcp）。
+     * Windows-like 解析（PI_BIN='pi'，cwd 优先），不推进 fake clock，
+     * 切项目后立即读 —— version 与 capability 必须是同一 identity 的证据。 */
+    section('I-int. 切项目集成：version / builtins / MCP 同源立即一致');
+    const A = mkPiPackage('int-A', { version: '0.87.0', builtins: BUILTINS_087, apiTypes: API_087, rpcTypes: RPC_TYPES });
+    const B = mkPiPackage('int-B', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099, rpcTypes: RPC_TYPES, mcpDoc: MCP_DOC });
+    let cur = path.dirname(A.binPath);
+    const t0 = 7770000000000;
+    const launch = createPiLaunch({ piBin: 'pi', env: { PATH: '', PATHEXT: '' }, isWin: true, getCwd: () => cur, now: () => t0 });
+    const pv = createPiVersion({
+      resolvePackageDir: launch.packageDir,
+      probeVersion: () => null, // 包能证明，不走 --version
+      identityKey: launch.identityKey,
+      now: () => t0, // 切项目时**不**推进时钟 —— 断言靠 key 失效，不是靠 TTL
+      ttlMs: 30000,
+    });
+    const { createPiBuiltins: mkBuiltins } = await import('../server/pi-builtins.js');
+    const bi = mkBuiltins({ resolvePackageDir: launch.packageDir, env: { HOME: TMP, PI_CODING_AGENT_DIR: path.join(TMP, 'int-agent') }, now: () => t0, ttlMs: 30000 });
+    const runtime = { getCurrentCwd: () => cur };
+    const mcp = createMcp({
+      runtime,
+      env: { HOME: TMP, PI_CODING_AGENT_DIR: path.join(TMP, 'int-agent') },
+      resolvePackageDir: launch.packageDir,
+      piVersion: () => pv.read(),
+      piBuiltins: (cwd) => bi.read({ cwd }),
+    });
+    check('集成 A：version=0.87.0、builtin:mcp 缺席', () => {
+      const v = pv.read();
+      assert.equal(v.value, '0.87.0');
+      assert.equal(v.source, 'package.json');
+      const rep = mcp.readReport();
+      assert.equal(rep.piVersion, '0.87.0');
+      assert.equal(rep.supported, false);
+      assert.deepEqual(rep.builtins.entries.map((e) => e.id), ['llama.cpp']);
+    });
+    cur = path.dirname(B.binPath); // ← 切项目：runtime cwd 已是 B，clock 不动
+    check('集成 B：不等 TTL，version 立即 0.99.1、builtin:mcp=true', () => {
+      const v = pv.read();
+      assert.equal(v.value, '0.99.1');
+      const rep = mcp.readReport();
+      assert.equal(rep.piVersion, '0.99.1');
+      assert.equal(rep.version.value, '0.99.1');
+      assert.equal(rep.supported, true);
+      assert.ok(rep.builtins.entries.some((e) => e.id === 'mcp'));
+    });
+    check('集成 Diagnostics 侧：同一 pv 读到的就是诊断用的版本（切项目立即同步）', () => {
+      const d = createDiagnostics({
+        runtime,
+        rpc: { getState: () => ({ piRunning: true, bridgeRun: 1, hasProject: true, args: [] }) },
+        agentRegistry: { list: () => [] },
+        mcp,
+        piVersion: () => pv.read(),
+        launch: launch.summary,
+        dataDir: TMP,
+        version: '0.0.0-test',
+        env: {},
+      }).readSnapshot();
+      assert.equal(d.pi.version, '0.99.1');
+      assert.equal(d.mcp.piVersion, '0.99.1');
     });
   }
 
