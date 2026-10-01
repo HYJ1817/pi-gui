@@ -892,12 +892,14 @@ async function main() {
   await shotOf('#workSurface', '117-workspace-skill-untrusted', 'P14-D：未信任 Skill 状态', ['项目未被信任'], [['状态有文字', `document.querySelector('#workSurface .ext-list .ext-item.on')?.textContent.includes('项目未被信任')`]]);
   await evalJs(`[...document.querySelectorAll('#workSurface .ext-tab')].find(x=>x.textContent==='MCP')?.click()`);
   await sleep(250);
-  await shotOf('#workSurface', '118-workspace-mcp', 'P14-D / P20.5：MCP 能力报告（版本真值 + built-in + RPC 事实）', ['这个 pi 带 MCP 能力', 'builtin:mcp', '0.99.1'], [
-    ['不是虚构 Server 列表', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('Server 的读取与管理留给后续阶段')`],
+  await shotOf('#workSurface', '118-workspace-mcp', 'P14-D / P20.6：MCP 原生集成（版本真值 + built-in + Server 管理面）', ['这个 pi 带 MCP 能力', 'builtin:mcp', '0.99.1'], [
+    ['Server 明细走原生摘要', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('MCP Servers（pi 原生）')`],
+    ['原生状态横幅有证据', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('原生 MCP 生效中')`],
     ['built-in 不被当成普通 Extension', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('不由 Extension Registry 的目录扫描发现')`],
     ['不伪造工具注册表', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('没有一条返回已注册工具清单')`],
     ['版本带出处', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('来源 package.json')`],
     ['不再写死「没有原生 MCP」', `!document.querySelector('#workSurface .ext-mcp')?.textContent.includes('没有原生 MCP 支持')`],
+    ['enable 等如实说走 /mcp', `document.querySelector('#workSurface .ext-mcp')?.textContent.includes('没有官方自动化接口')`],
   ]);
   await evalJs(`document.querySelector('#navHome').click()`);
   await sleep(200);

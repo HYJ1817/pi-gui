@@ -797,7 +797,7 @@ const server = http.createServer(async (req, res) => {
     evidence: 'dist/extensions/index.js: { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }',
     piPackageFound: true,
     servers: [],
-    serversNote: '这个 pi 带 MCP 能力，但本页只报告能力：Server 的读取与管理留给后续阶段。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove）。',
+    serversNote: '这个 pi 带 MCP 能力：Server 明细与运行时状态在 MCP 页（读 /api/mcp/servers，刷新走显式手势）。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove，或页内受控动作）。',
     builtins: {
       known: true,
       source: 'dist/extensions/index.js',
@@ -816,6 +816,29 @@ const server = http.createServer(async (req, res) => {
     mcpCli: { available: true, evidence: '`pi mcp add` and `pi mcp remove` edit the file from a shell' },
     extensionRoute: { note: '请通过 pi extension 提供能力。', user: { exists: false, count: 0, entries: [] }, project: { exists: false, count: 0, entries: [] }, fromSettings: [], packages: [] },
   });
+  /* P20.6 原生 MCP 的截图夹具：给一幅有代表性的摘要（active + 两个 server +
+     一次运行时状态），形状照抄后端真实返回。 */
+  if (p === '/api/mcp/servers') return json(res, 200, {
+    ok: true,
+    fresh: true,
+    at: '2026-10-01T06:00:00.000Z',
+    native: { state: 'active', replaced: false, disabled: false, builtinPresent: true, reason: 'builtin:mcp 在包里、未被禁用、未被接管' },
+    trust: { trusted: true, requiresTrust: true },
+    servers: [
+      { name: 'filesystem', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+      { name: 'sentry', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', hasSecrets: false, toolExposure: { search_issues: 'direct' }, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+    ],
+    configInvalid: [],
+    configError: { user: '', project: '' },
+    runtime: {
+      at: '2026-10-01T06:00:00.000Z', cached: false, ok: true, code: '', error: '', errors: [], exitCode: 0,
+      servers: [
+        { name: 'filesystem', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', state: 'connected', toolCount: 12, tools: [], error: '', hasSecrets: false, toolExposure: null, configured: true },
+        { name: 'sentry', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', state: 'needs-auth', toolCount: 0, tools: [], error: '', hasSecrets: false, toolExposure: { search_issues: 'direct' }, configured: true },
+      ],
+    },
+  });
+  if (p === '/api/mcp/status') return json(res, 200, { ok: true, at: '2026-10-01T06:00:00.000Z', cached: false, servers: [], errors: [] });
 
   if (p === '/api/projects') {
     return json(res, 200, {

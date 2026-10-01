@@ -461,6 +461,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     projectConfig: { handle: stub('projectConfig') },
     skills: { handle: stub('skills') },
     mcp: { handle: stub('mcp') },
+    mcpNative: { handleServers: stub('mcp.servers'), handleStatus: stub('mcp.status') },
     planner: { handle: stub('planner') },
     gitRoutes: { handle: stub('git') },
     uploads: { handle: stub('uploads') },
@@ -587,6 +588,22 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     calls.length = 0;
     hit('GET', '/api/mcp', authHeaders);
     return calls[0] === 'mcp' || calls.join(',');
+  });
+  /* P20.6：原生 MCP 独立顶层路径（不挂 /api/mcp 前缀，不被 405 兜底吃掉）。 */
+  check('GET /api/mcp/servers 命中 mcpNative（不被 405 兜底吃掉）', () => {
+    calls.length = 0;
+    const res = hit('GET', '/api/mcp/servers', authHeaders);
+    return (calls[0] === 'mcp.servers' && res.code !== 405) || calls.join(',') + '/' + res.code;
+  });
+  check('POST /api/mcp/servers 命中 mcpNative（动作不被 405 兜底吃掉）', () => {
+    calls.length = 0;
+    const res = hit('POST', '/api/mcp/servers', authHeaders);
+    return (calls[0] === 'mcp.servers' && res.code !== 405) || calls.join(',') + '/' + res.code;
+  });
+  check('POST /api/mcp/status 命中 mcpNative', () => {
+    calls.length = 0;
+    hit('POST', '/api/mcp/status', authHeaders);
+    return calls[0] === 'mcp.status' || calls.join(',');
   });
   check('/api/skills 不带令牌 → 401（和其余 /api/* 一样过访问控制）', () => {
     const res = hit('GET', '/api/skills');

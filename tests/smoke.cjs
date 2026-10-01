@@ -160,7 +160,7 @@ let stubMcp = {
   version: { value: '0.99.1', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' },
   piPackageFound: true,
   servers: [],
-  serversNote: '这个 pi 带 MCP 能力，但本页只报告能力：Server 的读取与管理留给后续阶段。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove）。',
+  serversNote: '这个 pi 带 MCP 能力：Server 明细与运行时状态在 MCP 页（读 /api/mcp/servers，刷新走显式手势）。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove，或页内受控动作）。',
   builtins: {
     known: true,
     source: 'dist/extensions/index.js',
@@ -188,6 +188,37 @@ let stubMcp = {
   },
 };
 const mcpCalls = [];
+/* P20.6 原生 MCP 的桩：GET /api/mcp/servers 的摘要形状照抄后端真实返回；
+ * POST 同一路径是受控动作（add/remove/login/logout），POST /api/mcp/status
+ * 是显式状态刷新。动作只记录、不执行。 */
+let stubMcpServers = {
+  ok: true,
+  fresh: true,
+  at: '2026-10-01T06:00:00.000Z',
+  native: { state: 'active', replaced: false, disabled: false, builtinPresent: true, reason: 'builtin:mcp 在包里、未被禁用、未被接管' },
+  trust: { trusted: true, requiresTrust: true },
+  servers: [
+    { name: 'fs', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+    { name: 'docs', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', hasSecrets: true, toolExposure: { search_code: 'direct' }, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+  ],
+  configInvalid: [],
+  configError: { user: '', project: '' },
+  runtime: {
+    at: '2026-10-01T06:00:00.000Z',
+    cached: false,
+    ok: true,
+    code: '',
+    error: '',
+    errors: [],
+    exitCode: 0,
+    servers: [
+      { name: 'fs', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', state: 'connected', toolCount: 2, tools: ['read', 'write'], error: '', hasSecrets: false, toolExposure: null, configured: true },
+      { name: 'docs', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', state: 'needs-auth', toolCount: 0, tools: [], error: '', hasSecrets: true, toolExposure: { search_code: 'direct' }, configured: true },
+    ],
+  },
+};
+const mcpServerCalls = [];
+const mcpStatusCalls = [];
 
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
 const { window } = dom;
@@ -855,6 +886,17 @@ window.fetch = async (url, opts) => {
     if (method !== 'GET') return { json: async () => ({ ok: true, planId: 'plan-1', taskId: 'backend' }) };
     if (/\/api\/plans\/[^/?]+/.test(u)) return { json: async () => ({ ok: true, plan: { ...stubPlanDetail, verificationActive: stubVerificationActive }, counts: { total: 4, success: 1, failed: 1, cancelled: 1, skipped: 0 }, agents: [], activePlanId: null }) };
     return { json: async () => stubPlans };
+  }
+  if (u.includes('/api/mcp/servers')) {
+    const isPost = Boolean(opts && opts.method === 'POST');
+    const body = isPost && opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
+    mcpServerCalls.push({ method: isPost ? 'POST' : 'GET', body, url: u });
+    if (isPost) return { json: async () => ({ ok: true, name: body && body.name, scope: body && body.scope }) };
+    return { json: async () => stubMcpServers };
+  }
+  if (u.includes('/api/mcp/status')) {
+    mcpStatusCalls.push(true);
+    return { json: async () => ({ ok: true, ...(stubMcpServers.runtime || {}), cached: false }) };
   }
   if (u.includes('/api/mcp')) {
     mcpCalls.push(true);
@@ -3377,20 +3419,78 @@ staticCheck();
       /没有一条返回已注册工具清单/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 300));
     check('MCP 标签页：区分 ExtensionAPI 与 RPC（getAllTools 拿不到）', () =>
       /getAllTools 有/.test(mcpCard.textContent) && /RPC 客户端拿不到/.test(mcpCard.textContent) || '没区分');
-    check('MCP 标签页：servers 为空时说明原因，不是一页空白', () =>
-      /Server 的读取与管理留给后续阶段/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
-    check('MCP 标签页：MCP 配置只报存在与否，并声明不读内容', () =>
-      /用户级 mcp\.json/.test(mcpCard.textContent) && /不读取它的内容/.test(mcpCard.textContent) || '没说明');
+    check('MCP 标签页：Server 明细走原生摘要（不是空页也不是假列表）', () =>
+      /MCP Servers（pi 原生）/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
+    check('MCP 标签页：MCP 配置只取结构，凭据值不进页面', () =>
+      /含凭据引用/.test(mcpCard.textContent) && !/Bearer/.test(mcpCard.textContent) || '没说明');
     check('MCP 标签页：指出官方替代路径是 extension 并列出本机已有的', () => {
       const names = [...mcpCard.querySelectorAll('.ext-name')].map((n) => n.textContent);
       return (/extension/.test(mcpCard.textContent) && names.includes('my-ext')) || JSON.stringify(names);
     });
     check('MCP 标签页：声明不安装 / 不执行扩展（边界说清楚）', () =>
       /不安装、不启用、也不执行/.test(mcpCard.textContent) || '没写边界');
-    check('MCP 标签页：没有假装出「已配置 / 已连接」的状态', () =>
-      !/已连接|已配置/.test(mcpCard.textContent) || '出现了没有数据支撑的状态');
+    check('MCP 标签页：连接状态只以「运行：」为前缀出现（有运行时证据才说）', () =>
+      /运行：/.test(mcpCard.textContent) && !/(^|[^行])已连接/.test(mcpCard.textContent.replace(/运行：已连接/g, '')) || mcpCard.textContent.slice(-300));
     check('MCP 标签页：DOM 里没有密钥样式的字符串', () =>
       !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(mcpCard.innerHTML) || '出现了疑似密钥');
+    /* P20.6 原生集成：状态横幅、server 行、运行时、动作 wiring。 */
+    check('MCP 标签页：原生状态横幅（active + 原因）', () =>
+      /原生 MCP 生效中/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
+    check('MCP 标签页：server 行带 exposure / 传输面 / 生效徽标', () => {
+      const text = mcpCard.textContent;
+      return (/fs/.test(text) && /exposure：direct/.test(text) && /生效中/.test(text)
+        && /单工具 exposure 1 条/.test(text)) || text.slice(0, 300);
+    });
+    check('MCP 标签页：运行时状态（connected / needs-auth + 工具数）', () =>
+      /运行：已连接/.test(mcpCard.textContent) && /运行：需要登录/.test(mcpCard.textContent)
+      && /2 个工具/.test(mcpCard.textContent) || mcpCard.textContent.slice(-400));
+    check('MCP 标签页：声明 enable 等走 /mcp（不伪造开关）', () =>
+      /启用 \/ 停用 \/ 重连 \/ 改 exposure 没有官方自动化接口/.test(mcpCard.textContent) || '没声明');
+    check('MCP 标签页：运行观察行（没调用过≠不支持）', () =>
+      /尚未观察到 MCP 工具调用/.test(mcpCard.textContent) || '没观察行');
+    mcpStatusCalls.length = 0;
+    {
+      const btn = [...mcpCard.querySelectorAll('.btn')].find((b) => b.textContent === '刷新状态');
+      if (btn) {
+        btn.onclick();
+        await new Promise((r) => setTimeout(r, 30));
+      }
+    }
+    check('MCP 标签页：刷新按钮发出 POST /api/mcp/status', () => mcpStatusCalls.length === 1 || '没发出刷新请求');
+    mcpServerCalls.length = 0;
+    {
+      const btn = [...mcpCard.querySelectorAll('.btn')].find((b) => b.textContent === '移除');
+      if (btn) {
+        btn.onclick();
+        await new Promise((r) => setTimeout(r, 30));
+        const ok = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '移除');
+        if (ok) {
+          ok.onclick();
+          await new Promise((r) => setTimeout(r, 40));
+        }
+      }
+    }
+    check('MCP 标签页：移除走确认框，确认后发 remove（带 scope）', () => {
+      const posts = mcpServerCalls.filter((c) => c.method === 'POST');
+      const last = posts[posts.length - 1];
+      return (last && last.body && last.body.action === 'remove' && typeof last.body.name === 'string'
+        && typeof last.body.scope === 'string') || JSON.stringify(last);
+    });
+    {
+      const nameInput = mcpCard.querySelector('input[placeholder*="名字"]');
+      if (nameInput) {
+        nameInput.value = 'bad name!';
+        const add = [...mcpCard.querySelectorAll('.btn')].find((b) => b.textContent === '添加');
+        if (add) {
+          add.onclick();
+          await new Promise((r) => setTimeout(r, 30));
+        }
+      }
+    }
+    check('MCP 标签页：添加表单拒绝坏名字，且没有凭据字段', () => {
+      if (/Authorization|clientSecret|password/i.test(mcpCard.innerHTML)) return '表单里出现了凭据字段';
+      return /只允许字母/.test($('toasts').textContent) || $('toasts').textContent.slice(-200);
+    });
 
     $('modal').hidden = true;
     $('workSurface').innerHTML = '';

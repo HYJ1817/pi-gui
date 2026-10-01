@@ -1002,7 +1002,7 @@ const listTmp = (dir) => {
     check('L16. 出处是可核对的原文（builtin 那一行）', () => /name: "mcp"/.test(b.evidence) && /builtin: true/.test(b.evidence) || b.evidence);
     check('L17. ExtensionAPI 三值：registerMcpServer / getMcpServers / getAllTools', () =>
       (b.extensionApi.registerMcpServer === true && b.extensionApi.getMcpServers === true && b.extensionApi.getAllTools === true) || JSON.stringify(b.extensionApi));
-    check('L18. supported=true 时 serversNote 说清「Server 留给后续阶段」', () => /留给后续阶段/.test(b.serversNote) || b.serversNote);
+    check('L18. supported=true 时 serversNote 指向原生明细（/api/mcp/servers）', () => /api\/mcp\/servers/.test(b.serversNote) || b.serversNote);
     check('L19. supported=true 时 servers 仍然是空（不编造 Server）', () => b.servers.length === 0 || JSON.stringify(b.servers));
     check('L20. MCP 命令行出处来自 pi 自己的 docs/mcp.md', () => b.mcpCli.available === true && /pi mcp add/.test(b.mcpCli.evidence) || JSON.stringify(b.mcpCli));
     check('L21. built-in 说明写清「不是扫目录扫到的」', () => /不由 Extension Registry 的目录扫描发现/.test(b.builtins.note) || b.builtins.note);

@@ -287,7 +287,7 @@ const { createDiagnostics } = await import('../server/diagnostics.js');
     check('reason 指出 built-in:mcp 这条判据', () => assert.match(b.reason, /built-in 扩展 `mcp`/));
     check('evidence 是可核对的原文', () => assert.match(b.evidence, /dist\/extensions\/index\.js/));
     check('servers 仍是空（不编造 Server）', () => assert.deepEqual(b.servers, []));
-    check('serversNote 说清「Server 留给后续阶段」', () => assert.match(b.serversNote, /留给后续阶段/));
+    check('serversNote 指向原生明细（/api/mcp/servers）', () => assert.match(b.serversNote, /api\/mcp\/servers/));
     check('builtins 如实列出四个', () => assert.deepEqual(b.builtins.entries.map((x) => x.id), ['llama.cpp', 'codemode', 'tool-search', 'mcp']));
     check('built-in 说明写清「不是扫目录扫到的」', () => assert.match(b.builtins.note, /不由 Extension Registry 的目录扫描发现/));
     check('RPC：没有工具清单命令', () => assert.equal(b.rpc.toolListCommand, false));
