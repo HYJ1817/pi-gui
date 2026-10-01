@@ -1,5 +1,29 @@
 # 安全
 
+## P21 Usage / Quota 边界
+
+远端额度是**只读探测**，不是账户管理，也不做任何扣费/充值/预算切断。
+
+- **只走经过核实的官方接口**：OpenRouter `GET https://openrouter.ai/api/v1/key`（当前
+  API Key 自己）、DeepSeek `GET https://api.deepseek.com/user/balance`、
+  NewAPI 仅在显式 `quotaAdapter="newapi"` + `quotaUserId` 时调
+  `/dashboard/billing/subscription` 与 `/dashboard/billing/usage`。
+  其它供应商（含 Sub2API）一律 `unsupported`，**一次网络请求都不发**。
+- **不做**：浏览器抓网页额度、读 Cookie、模拟登录、OAuth、万能 quota endpoint。
+- **凭据只在后端解析**：前端拿到的是额度结果，**不含** API Key 原文、Authorization 头、
+  请求头、响应体或本地文件路径。
+- **凭据指纹**：缓存身份里用**已解析凭据的 SHA-256 指纹**（`$ENV_VAR` 指向的值变了，
+  身份就变，不会命中旧缓存）。指纹只作为内部哈希的输入：不进 Map key 原文、不进日志、
+  不进 HTTP 响应、不进 renderer、不进诊断。
+- **错误一律白名单**：适配器返回的 `message` 是固定文案；HTTP handler 兜底为
+  `{ ok:false, error:"额度查询失败" }` —— 内部 exception message、stack、路径、
+  `ECONNREFUSED`、主机端口都不出后端。
+- **0 与 null 分离**：缺失显示 `—`，`0` 只表示真实 0；不用 `x || 0` 顶替。
+- **重置语义**：`resetAt` 只表示额度/限额的重置时间戳；API Key 自身的 `expires_at`
+  不映射进来（不猜、不代替）。
+
+详见 [usage-quota.md](usage-quota.md)。
+
 ## P19 Approval 边界
 
 **审批不是 OS sandbox。** Pi GUI 能拦的只有「有 Extension 来问」的调用：

@@ -55,7 +55,7 @@ smoke 1062 · git 161 · modules 117 · reliability · interactions · port-owne
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 83 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 190 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
@@ -543,7 +543,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 33 个套件）
+版本一致性（含 tag）  →  npm test（A 层 36 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
@@ -819,3 +819,35 @@ trust 提示、workspace 隔离文案、unsupported 声明、无凭据字段）�
 **live MCP 测试本轮未执行**（不进 CI）。真机流程（手工）：配一个本地 stdio
 fixture server → 打开 MCP 页 → 刷新状态见 connected + 工具数 → 调一次工具见
 Timeline 语义行 → logout 清理。不要用真实远端 server，不要做真 OAuth 登录。
+
+## P21-Fix-2 Usage / Quota 验证
+
+`npm run test:quota`（**190 条**，已并入 `npm test`，完全离线）。P21-Fix-2 把这一套从
+「有假断言的 83 条」重写成真实契约测试：
+
+- **严格 URL 的 mock**：mock fetch 只认识白名单 URL，其它一律 `throw new Error("unexpected URL")`
+  —— 杜绝「mock 不区分 URL」导致的假绿。OpenRouter 只允许 `https://openrouter.ai/api/v1/key`；
+  DeepSeek 只允许 `https://api.deepseek.com/user/balance`。
+- **NewAPI 两个 endpoint 各返回不同 fixture**，断言调用次数正好两次、两个 URL 都出现过、
+  `Authorization` 与 `New-Api-User` 都带上；`hard_limit_usd=100` + `total_usage=2500`
+  → `used=25` / `remaining=75`。
+- **`resetAt` 语义**：`limit_reset="monthly"` + `expires_at=2027-12-31T23:59:59Z` → `resetAt === null`，
+  且 `expires_at` 绝不成为 `resetAt`；只有能解析成日期的 `limit_reset` 才保留。
+- **DeepSeek 多币种**：CNY 110 + USD 15 → `balances.length === 2`、**不相加**、primary 优先 CNY。
+- **缓存身份**：环境变量改值（`$ENV_VAR` 字符串没变）必须重新 fetch；`quotaAdapter` 去掉后
+  不再命中 newapi 缓存；in-flight 按身份隔离（A 的慢请求 resolve 不污染 B）；
+  `clearCache(providerId)` 真能清掉。
+- **错误与脱敏**：401 / 网络错误 / 畸形响应 / 未配置 Key 的文案都是白名单，
+  不含 `ECONNREFUSED`、主机端口、路径或响应体；HTTP handler 内部抛异常时只回
+  `{ ok:false, error:"额度查询失败" }`。
+- **前端 DOM（jsdom）**：`resetUsageState()` 同时清 JS 与 DOM（`uTok/uCache/uCost/uQuota/uPct`
+  全部 `—`、进度条 0%、ctx chip `—`）；`beginWorkspaceSwitch` 后旧数字立刻消失；
+  session A→B 时会话用量立刻清（`stats`/totals/`lastTurn` 全空）；
+  新模型解析不出 Provider 时清旧 quota 且 epoch 失效；多币种渲染不再 `ReferenceError`
+  并显示 `¥110.00 | $15.00`；`null → —` 与真实 `0 → 0`；恶意币种字符串只当文本。
+- **静态守卫**：P21 相关源码不含 U+FFFD / GBK 乱码标记，也不再有 `fmt(x || 0)` 这类兜底。
+
+删掉的假断言：`check(..., true)` × 3、`check('fixed_malformedRes', true)`、
+`/* removed check */`、两处 `console.log(JSON.stringify(...))` 调试输出。
+
+**live 未执行**：只有 `LIVE_PROVIDER_TEST=1` 才可能连真机；默认不计入 CI。

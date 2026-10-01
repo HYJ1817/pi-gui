@@ -1,5 +1,12 @@
 # 与 pi 的兼容性
 
+P21 的 usage/quota 与 pi 本体解耦：本地用量只吃 pi 的 RPC 事件
+（`get_session_stats` / `message_update` / `message_end` 的真实 usage 字段），
+远端额度则直接对上**各家供应商自己的官方接口**，与 pi 版本无关。
+当前基线 pi **0.99.2**；适配器清单与重置语义见 [usage-quota.md](usage-quota.md)。
+pi 的 provider 配置（`~/.pi/agent/models.json`）只用来读 `baseUrl` / `apiKey` /
+`quotaAdapter` / `quotaUserId` 这几个字段，Pi GUI 不写回、不改 schema。
+
 P19 的 approval 只依赖 Pi 已有的两个真实机制：`tool_call` hook 可返回
 `{ block: true }`（`dist/core/extensions/types.d.ts` 的 `ToolCallEventResult`、
 `docs/extensions.md` 的「Can block」），以及 RPC 模式下对话框方法发出的
