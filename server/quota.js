@@ -381,7 +381,7 @@ async function fetchNewApiQuota({ baseUrl, apiKey, config, fetchFn, now }) {
       resetAt: null,
       source: subUrl,
       updatedAt: new Date(now()).toISOString(),
-      message: 'API Key 或 quotaUserId 无效或未授权',
+      message: 'API Key 无效或未授权',
     };
   }
 
@@ -421,29 +421,39 @@ async function fetchNewApiQuota({ baseUrl, apiKey, config, fetchFn, now }) {
     totalUsageCents = cleanNumber(usageRes.json.total_usage);
   }
 
-  /* NewAPI 的 total_usage 单位是美分。 */
-  const usedUsd = totalUsageCents !== null ? totalUsageCents / 100 : null;
-  let remainingUsd = null;
-  if (hardLimit !== null && usedUsd !== null) {
-    remainingUsd = Math.max(0, hardLimit - usedUsd);
+  /* ⚠️ 单位语义：这里的字段名是历史命名（`hard_limit_usd` / `total_usage`），
+   * **但数值不保证是美元**。NewAPI 的 GetSubscription / GetUsage 会按站点的
+   * `quota_display_type`（至少 USD / CNY / TOKENS / CUSTOM）把数值换算成**站点展示单位**；
+   * GetUsage 最后统一 `TotalUsage = amount * 100`，所以 `total_usage / 100` 还原的是
+   * 「站点展示数值」，**不是「美元」**。
+   *
+   * 这两个 billing endpoint 自身不带可靠的单位元数据 —— 没有证据就不标 USD/CNY。
+   * 因此 balance.currency 与 windows.unit 都返回 null（generic numeric quota），
+   * 由界面按「无单位纯数值」展示；不猜、不做跨单位转换或相加。
+   * （本轮刻意**不**引入第三个请求去读 /api/status 的 quota_display_type：
+   *  那会扩大收口范围，且自托管站点的 base path / CUSTOM 符号/汇率各有边界。） */
+  const used = totalUsageCents !== null ? totalUsageCents / 100 : null;
+  let remaining = null;
+  if (hardLimit !== null && used !== null) {
+    remaining = Math.max(0, hardLimit - used);
   }
 
-  const amount = remainingUsd !== null ? remainingUsd : null;
+  const amount = remaining !== null ? remaining : null;
 
   return {
     status: 'ok',
     balance: amount !== null ? {
       amount,
-      currency: 'USD',
+      currency: null,
       granted: null,
       toppedUp: null,
     } : null,
     balances: null,
     windows: {
-      used: usedUsd,
+      used,
       limit: hardLimit,
-      remaining: remainingUsd,
-      unit: 'USD',
+      remaining,
+      unit: null,
     },
     rateLimit: null,
     resetAt: null,

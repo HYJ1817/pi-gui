@@ -15,18 +15,25 @@ import { setStreaming } from './messages.js';
 
 /* ---------- 辅助工具 ---------- */
 
-/** 格式化金额或额度数值 */
-export function fmtCurrency(amount, currency = 'USD') {
-  if (typeof amount !== 'number' || !Number.isFinite(amount)) return '—';
-  const prefix = currency === 'CNY' ? '¥' : '$';
-  return prefix + amount.toFixed(4);
+/** 货币符号：只有**有证据**的单位才有符号。
+ *  USD → $、CNY → ¥，其它（含 null / undefined / TOKENS / CUSTOM）一律**不加符号**。
+ *  没有证据时把数值标成 $ 就是编造单位 —— 尤其不能默认成美元。 */
+export function currencySymbol(currency) {
+  if (currency === 'USD') return '$';
+  if (currency === 'CNY') return '¥';
+  return '';
 }
 
-/** 格式化简短金额（保留 2 位小数） */
-export function fmtBalanceShort(amount, currency = 'USD') {
+/** 格式化金额或额度数值（无单位时只输出数值） */
+export function fmtCurrency(amount, currency = null) {
   if (typeof amount !== 'number' || !Number.isFinite(amount)) return '—';
-  const prefix = currency === 'CNY' ? '¥' : '$';
-  return prefix + amount.toFixed(2);
+  return currencySymbol(currency) + amount.toFixed(4);
+}
+
+/** 格式化简短金额（保留 2 位小数，无单位时只输出数值） */
+export function fmtBalanceShort(amount, currency = null) {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return '—';
+  return currencySymbol(currency) + amount.toFixed(2);
 }
 
 /** 数值缺省语义：只有真的有限数字才显示数字，null/undefined 一律「—」。
@@ -35,8 +42,8 @@ export function fmtMaybeNumber(v) {
   return typeof v === 'number' && Number.isFinite(v) ? fmt(v) : '—';
 }
 
-/** 金额缺省语义（同上，美元或人民币前缀）。 */
-export function fmtMaybeMoney(v, currency = 'USD') {
+/** 金额缺省语义（同上；无单位时只输出数值）。 */
+export function fmtMaybeMoney(v, currency = null) {
   return typeof v === 'number' && Number.isFinite(v) ? fmtCurrency(v, currency) : '—';
 }
 
@@ -149,7 +156,8 @@ export function renderRemoteQuota() {
     if (balances.length > 0) {
       el.uQuota.textContent = balances.map((b) => fmtBalanceShort(b.amount, b.currency)).join(' | ');
     } else if (q.balance && typeof q.balance.amount === 'number') {
-      el.uQuota.textContent = fmtBalanceShort(q.balance.amount, q.balance.currency || 'USD');
+      /* 不写 `currency || 'USD'`：单位未知就是未知，不能默认成美元。 */
+      el.uQuota.textContent = fmtBalanceShort(q.balance.amount, q.balance.currency);
     } else if (typeof q.windows?.limit === 'number' || typeof q.windows?.used === 'number') {
       el.uQuota.textContent = `${fmtMaybeNumber(q.windows?.used)} / ${fmtMaybeNumber(q.windows?.limit)}`;
     } else {
@@ -534,26 +542,45 @@ export function openCtxTip() {
       quotaSec.appendChild(row);
     };
 
-    /* 多币种逐条展示（DeepSeek 可能同时有 CNY 与 USD），**不相加**。 */
+    /* 多币种逐条展示（DeepSeek 可能同时有 CNY 与 USD），**不相加**。
+     * 单位未知（currency 为 null，例如 NewAPI）时不加货币符号、也不编一个币种名。 */
+    const label = (base, currency) => (currencySymbol(currency) ? `${base} (${currency})` : base);
     const balances = Array.isArray(q.balances)
       ? q.balances.filter((b) => b && typeof b.amount === 'number')
       : [];
     if (balances.length > 0) {
       for (const b of balances) {
-        const currency = b.currency || 'USD';
-        addRow(`剩余额度 (${currency})`, fmtCurrency(b.amount, currency));
-        if (b.granted != null) addRow(`赠送额度 (${currency})`, fmtCurrency(b.granted, currency));
-        if (b.toppedUp != null) addRow(`充值额度 (${currency})`, fmtCurrency(b.toppedUp, currency));
+        addRow(label('剩余额度', b.currency), fmtCurrency(b.amount, b.currency));
+        if (b.granted != null) addRow(label('赠送额度', b.currency), fmtCurrency(b.granted, b.currency));
+        if (b.toppedUp != null) addRow(label('充值额度', b.currency), fmtCurrency(b.toppedUp, b.currency));
       }
     } else if (q.balance && typeof q.balance.amount === 'number') {
-      const currency = q.balance.currency || 'USD';
-      addRow('剩余额度', fmtCurrency(q.balance.amount, currency));
-      if (q.balance.granted != null) addRow('赠送额度', fmtCurrency(q.balance.granted, currency));
-      if (q.balance.toppedUp != null) addRow('充值额度', fmtCurrency(q.balance.toppedUp, currency));
+      addRow(label('剩余额度', q.balance.currency), fmtCurrency(q.balance.amount, q.balance.currency));
+      if (q.balance.granted != null) addRow(label('赠送额度', q.balance.currency), fmtCurrency(q.balance.granted, q.balance.currency));
+      if (q.balance.toppedUp != null) addRow(label('充值额度', q.balance.currency), fmtCurrency(q.balance.toppedUp, q.balance.currency));
     }
 
+    /* 限额窗口拆成独立行（不再挤成一行 "used / limit"）：
+     * 「已使用」「总额度」照实显示；「额度剩余」只在它和上面的余额**不是同一个数**时才加，
+     * 免得 OpenRouter（limit_remaining 就是 remaining）出现两行重复。 */
     if (q.windows && (q.windows.limit != null || q.windows.used != null)) {
-      addRow('限额窗口', `${fmtMaybeNumber(q.windows.used)} / ${fmtMaybeNumber(q.windows.limit)} ${q.windows.unit || ''}`.trim());
+      addRow('已使用', fmtMaybeNumber(q.windows.used));
+      addRow('总额度', fmtMaybeNumber(q.windows.limit));
+      const shownBalance = q.balance && typeof q.balance.amount === 'number' ? q.balance.amount : null;
+      const duplicate = shownBalance != null && typeof q.windows.remaining === 'number'
+        && Math.abs(q.windows.remaining - shownBalance) < 1e-9;
+      if (q.windows.remaining != null && !duplicate) addRow('额度剩余', fmtMaybeNumber(q.windows.remaining));
+    }
+
+    /* 数值没有任何单位证据时，明确说清是「无单位数值」，并说明由谁决定单位。 */
+    const hasSymbol = Boolean(currencySymbol(q.balance?.currency))
+      || (Array.isArray(q.balances) && q.balances.some((b) => currencySymbol(b?.currency)));
+    const hasUnit = Boolean(q.windows?.unit) || hasSymbol;
+    if ((q.balance || q.windows || q.balances) && !hasUnit) {
+      const note = document.createElement('div');
+      note.className = 'tip-dim';
+      note.textContent = '单位未知：由供应商站点的展示单位设置决定，Pi GUI 不猜货币';
+      quotaSec.appendChild(note);
     }
     if (q.rateLimit && q.rateLimit.requests != null) {
       const row = document.createElement('div');
