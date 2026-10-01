@@ -55,7 +55,7 @@ smoke 1062 · git 161 · modules 117 · reliability · interactions · port-owne
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 190 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 204 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
@@ -851,3 +851,24 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 `/* removed check */`、两处 `console.log(JSON.stringify(...))` 调试输出。
 
 **live 未执行**：只有 `LIVE_PROVIDER_TEST=1` 才可能连真机；默认不计入 CI。
+
+## P21-Fix-3 Usage / Quota 事实收口验证
+
+`npm run test:quota` 现在 **204 条**（+14）。本轮只动两处逻辑与事实文档：
+
+- **NewAPI 不再强制 `quotaUserId`**：没有它也会正常调两个 endpoint（断言 status 为 `ok`、
+  两个 URL 各一次、`used = 25` / `remaining = 75`）；默认**不发** `New-Api-User`，
+  配了才发（旧部署兼容）。没配 `quotaAdapter` → `unsupported` 且**零请求**；
+  没配 `apiKey` → `auth_error` 且**零请求**。
+- **NewAPI cache endpoint identity 含 base path**：`https://example.com/api-a` → `api-b`
+  必须换身份并重新 fetch（两套 fixture 返回不同数值，证明没有串缓存）；
+  `https://example.com/api-b/` 与 `/api-b` 是**同一**身份（命中缓存）。
+  OpenRouter / DeepSeek 用固定 canonical endpoint，baseUrl 带路径不影响身份。
+
+⚠️ **上游核对边界（如实记录）**：Pi 这一侧是本机 `@earendil-works/pi-coding-agent@0.99.2`
+与其依赖 `@earendil-works/pi-ai@0.99.2` 的类型定义**逐条读出来**的（wire `Usage`、
+`get_session_stats` 的 `tokens`/`cost`/`contextUsage`、`contextWindow` 而非 `limit`、
+compaction 后 `tokens`/`percent` 可为 null）。**QuantumNous/new-api 与 OpenRouter 的
+upstream 源码/文档本轮取不到**（本机 `web_fetch` 被环境阻断、`web_search` 端点不可用），
+所以那两条契约按本轮任务给出的 upstream 说明实现，代码方向是「Bearer 优先 + 可选兼容」，
+不会因为缺少某个非必要字段而失败。

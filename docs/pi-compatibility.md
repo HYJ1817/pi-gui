@@ -5,7 +5,7 @@ P21 的 usage/quota 与 pi 本体解耦：本地用量只吃 pi 的 RPC 事件
 远端额度则直接对上**各家供应商自己的官方接口**，与 pi 版本无关。
 当前基线 pi **0.99.2**；适配器清单与重置语义见 [usage-quota.md](usage-quota.md)。
 pi 的 provider 配置（`~/.pi/agent/models.json`）只用来读 `baseUrl` / `apiKey` /
-`quotaAdapter` / `quotaUserId` 这几个字段，Pi GUI 不写回、不改 schema。
+`quotaAdapter`（以及旧部署可选的 `quotaUserId`）这几个字段，Pi GUI 不写回、不改 schema。
 
 P19 的 approval 只依赖 Pi 已有的两个真实机制：`tool_call` hook 可返回
 `{ block: true }`（`dist/core/extensions/types.d.ts` 的 `ToolCallEventResult`、
@@ -490,16 +490,46 @@ telemetry、崩溃上传、新数据库、新第三方依赖。
 > 状态命令**（33 条，0.99.1 与 0.99.2 上各确认一次，`rpc-types.d.ts` 两版 diff
 > 为空），所以兼容层不判 MCP 兼容，只判上面那九个能力。
 
-## 十三、P21 Usage 与 Quota 契约（0.99.2 核对）
+## 十三、P21 Usage 与 Quota 契约（本机 pi 0.99.2 类型定义核对）
 
-Pi 对用量的支持完全停留在**本地运行指标**层：
-1. **`get_session_stats` RPC 命令**：
-   - 返回 `{ tokens: { input, output, cacheRead, cacheWrite, total }, cost, contextUsage: { tokens, limit, percent } }`。
-   - 上游模型不提供时字段可能为 `null` 或未定义；0 严格代表真实 0，缺失降级为 `null`。
-2. **`message_update` / `message_end` 事件**：
-   - 事件 payload 内的 `message.usage` 包含单 turn 用量：`inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `totalTokens`, `cost`。部分提供商（如 DeepSeek/OpenAI o-series）提供 `reasoningTokens`。
-   - 前端据此派发 `onTurnUsage` 并合并至 `LocalUsage`。
-3. **远端配额（Quota）**：
+Pi 对用量的支持完全停留在**本地运行指标**层。这里必须严格区分三层，名字不能混：
+**Pi wire Usage → adapter（`public/usage.js`）→ Pi GUI LocalUsage**。
+
+1. **Pi wire `Usage`**（`@earendil-works/pi-ai@0.99.2` 的 `Usage` 接口，对应上游
+   `packages/ai/src/types.ts`）：
+   ```ts
+   interface Usage {
+     input: number;
+     output: number;
+     cacheRead: number;
+     cacheWrite: number;
+     cacheWrite1h?: number;   // cacheWrite 的子集，只有 Anthropic 报这个拆分
+     reasoning?: number;      // output 的子集；不报的供应商保持 undefined（可能是 0）
+     totalTokens: number;
+     cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+   }
+   ```
+2. **`get_session_stats` RPC 命令**（0.99.2 的 session stats 载荷）：
+   ```ts
+   {
+     userMessages, assistantMessages, toolCalls, toolResults, totalMessages,
+     tokens: { input, output, cacheRead, cacheWrite, total },
+     cost: number,
+     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null }
+   }
+   ```
+   - 字段是 **`contextWindow`**，**不是** `limit`。
+   - `contextUsage` 本身可选；`tokens` 与 `percent` 可以是 `null`。上游注释写明：
+     刚做完 compaction、下一次 LLM 响应之前**无法确认**当前上下文用量，
+     此时 `tokens = null` / `percent = null`，而 `contextWindow` 仍然存在。
+     **null 不是 0** —— 界面显示 `—`，不显示 `0%`。
+3. **`message_update` / `message_end`**：payload 里的 `message.usage` 就是上面的 wire `Usage`；
+   adapter 把它映射成 LocalUsage 的 `lastTurn`（`input` → `inputTokens`、`cacheRead` →
+   `cacheReadTokens`、`cacheWrite1h` → `cacheWrite1hTokens`、`reasoning` → `reasoningTokens`、
+   `cost.total` → `estimatedCost`）。
+   ⚠️ **`inputTokens` / `outputTokens` / `cacheReadTokens` / `reasoningTokens` 是 Pi GUI
+   `LocalUsage` 的字段名，不是 Pi wire 字段** —— 本文件早先版本把它们写成 wire schema，是错的。
+4. **远端配额（Quota）**：
    - **Pi 核心完全不提供任何远端 Quota / Balance 查询接口**（33 条 RPC 命令中无任何配额相关指令）。
    - 配额完全由 Pi-GUI 独立 adapter（`server/quota.js`）按官方规范接口异步采集，与 Pi 核心运行时零耦合。详见 [usage-quota.md](usage-quota.md)。
 

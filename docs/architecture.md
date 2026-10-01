@@ -351,9 +351,19 @@ get_messages ─┘
 ### 远端配额（Remote Quota）支持矩阵
 
 各供应商在远端配额接口上的支持情况不同，严禁抓取网页、伪造接口或冒充标准：
-- **OpenRouter**：支持官方 `/api/v1/credits` 与 `/api/v1/auth/key`，返回总额度、已使用额度与剩余 balance。
-- **DeepSeek**：支持官方 `/user/balance`，返回 CNY/USD balance 与可用状态。
-- **NewAPI / Sub2API**：仅在用户显式配置 `quotaAdapter: 'newapi'` 时支持 `/api/v1/user/dashboard`，不冒充通用 OpenAI 标准。
+- **OpenRouter**：`GET https://openrouter.ai/api/v1/key` —— 用**普通当前 API Key** 读它自己的
+  per-key 限额（`limit` / `limit_remaining` / `usage` / `rate_limit`）。
+  **不调用** Management-only 的 `/api/v1/credits`，**不使用**已废弃的 `/api/v1/auth/key`
+  （这两个是更早版本的实现，已不在代码里）。
+- **DeepSeek**：`GET https://api.deepseek.com/user/balance`；`balance_infos` 可含多币种
+  （CNY/USD），逐条展示、**不相加**。
+- **NewAPI**：仅在用户显式配置 `quotaAdapter: "newapi"` 时启用；用
+  `Authorization: Bearer <API key>` 调 `/dashboard/billing/subscription` 与
+  `/dashboard/billing/usage`（`total_usage / 100`，`remaining = hard_limit_usd - used`）。
+  不冒充通用 OpenAI 标准；`quotaUserId` 只是**旧部署的可选兼容**（配了才带 `New-Api-User` 头，
+  没配照常查询）—— 历史文档把它写成必填是错的。
+- **Sub2API**：`unsupported` —— 当前没有经过核实的稳定契约，Pi GUI 不猜、不试。
+  （历史文档曾把 Sub2API 与 NewAPI 并列写成支持 `/api/v1/user/dashboard`，那是错的。）
 - **仅本地用量（无远端配额）**：OpenAI、Anthropic、Google、Groq、Mistral、Ollama 等因无官方公开/稳定配额 endpoint，状态一律返回 `unsupported`。用户可在界面清晰看到其本地消耗（`LocalUsage`：输入/输出/缓存/上下文），不会将其混淆为额度错误。详见 [usage-quota.md](usage-quota.md)。
 
 模型列表每行一个，`id` 之后是显示名，再往后都是 `key=value` 参数

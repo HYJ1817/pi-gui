@@ -111,9 +111,9 @@ interface RemoteQuota {
 
 | 供应商 (Provider) | 远端 Quota 状态 | 官方 API 端点 / 机制 | 说明 |
 |---|---|---|---|
-| **OpenRouter** (`openrouter`) | ✅ **支持** (`ok`) | `GET https://openrouter.ai/api/v1/key` | 普通 **当前 API Key** 的 per-key 限额：读 `limit` / `limit_remaining` / `usage` / `rate_limit`。**不调用** Management-only 的 `/api/v1/credits`，也不用已失效的 `/api/v1/auth/key`。`limit_reset` 是 `daily/weekly/monthly` 这类周期标签，`expires_at` 是 key 自身的失效时间 —— **两者都不映射到 `resetAt`** |
+| **OpenRouter** (`openrouter`) | ✅ **支持** (`ok`) | `GET https://openrouter.ai/api/v1/key` | 普通 **当前 API Key** 的 per-key 限额：读 `limit` / `limit_remaining` / `usage` / `rate_limit`。**不调用** Management-only 的 `/api/v1/credits`，也不用已失效的 `/api/v1/auth/key`（这两个是 P21 之前的实现，已废弃）。`limit_reset` 是 `daily/weekly/monthly` 这类周期标签，`expires_at` 是 key 自身的失效时间 —— **两者都不映射到 `resetAt`** |
 | **DeepSeek** (`deepseek`) | ✅ **支持** (`ok`) | `GET https://api.deepseek.com/user/balance` | 官方接口返回 `balance_infos`，**可能同时有 CNY 与 USD**：逐条展示、**绝不相加**；`primary` 优先 CNY（否则第一条）。赠送/充值金额逐币种保留 |
-| **NewAPI**（需显式配置） | ✅ **支持**（专有） | `GET {baseUrl}/dashboard/billing/subscription`<br>`GET {baseUrl}/dashboard/billing/usage` | 仅当 provider 配置里显式写 `quotaAdapter: "newapi"` 且提供 `quotaUserId` 时启用；两个 endpoint 都要调，`used = total_usage / 100`（美分），`remaining = hard_limit_usd - used`。请求带 `Authorization` 与 `New-Api-User` |
+| **NewAPI**（需显式配置） | ✅ **支持**（专有） | `GET {baseUrl}/dashboard/billing/subscription`<br>`GET {baseUrl}/dashboard/billing/usage` | 仅当 provider 配置里显式写 `quotaAdapter: "newapi"` 时启用（**不**按 provider 名 / baseUrl 名 / OpenAI 兼容性去猜）。鉴权用 `Authorization: Bearer <API key>`：当前 NewAPI 的 dashboard 接口走 `middleware.TokenAuth()`，Bearer 就能解析出 user context，**不要求 `quotaUserId`**。两个 endpoint 都要调，`used = total_usage / 100`（美分），`remaining = hard_limit_usd - used`。`quotaUserId` 只是**旧部署的可选兼容**：配了才额外带 `New-Api-User` 头，没配照常查询 |
 | **Sub2API** | ⛔ **unsupported** | 当前没有经过核实的稳定契约 | 不猜、不试；只有等上游有公开稳定接口后才可能适配 |
 | **OpenAI** (`openai`) | ⚠️ **仅本地 Usage** (`unsupported`) | 无官方 API Key 级公开端点 | 官方已废弃 legacy 额度接口；组织账单需管理 Key，不向普通项目 Key 开放 |
 | **Anthropic** (`anthropic`) | ⚠️ **仅本地 Usage** (`unsupported`) | 无官方公开额度接口 | 官方仅在响应 Header 返回短周期限流；严禁抓取网页 Cookie |
@@ -145,16 +145,25 @@ interface RemoteQuota {
 ## 四、缓存身份与 Stale Request 防护
 
 1. **缓存身份（不只是 providerId）**：
-   后端按一个**配置身份**建缓存，身份至少包含：
+   后端按一个**配置身份**建缓存，身份包含：
 
    ```
-   providerId | 解析后的 adapter | 规范化 endpoint origin | quotaUserId | 凭据指纹
+   providerId | 解析后的 adapter | adapter 维度的 endpoint identity | 凭据指纹 | （可选）New-Api-User 值
    ```
 
    少任何一项都会出现「配置变了还命中旧缓存」：
    - `apiKey: "$OPENROUTER_KEY"` 字符串没变、但环境变量值变了 → 身份必须变（否则会拿旧结果）；
    - `quotaAdapter: "newapi"` 被去掉 → adapter 从 `newapi` 变成 `unsupported`，身份必须变；
-   - 自定义 `baseUrl` 换了 origin → 身份必须变（路径与查询串不参与，避免抖动）。
+   - **endpoint 变了必须变**。endpoint identity 是 adapter 维度的：
+     - OpenRouter / DeepSeek 打的是**固定 canonical endpoint**（`https://openrouter.ai/api/v1/key`、
+       `https://api.deepseek.com/user/balance`），baseUrl 带不带路径都不影响身份；
+     - NewAPI 打的是 `{baseUrl}/dashboard/billing/...`，所以用**规范化后的 origin + pathname**：
+       `https://example.com/api-a` 与 `https://example.com/api-b` 是**两个不同部署**，
+       绝不能共享缓存；`https://example.com/api-a/` 与 `https://example.com/api-a`
+       视为**同一个** endpoint（去尾部斜杠，去 query / fragment）。
+
+   只有**真的会改变请求**的字段才进身份：`quotaUserId` 仅在 newapi 且配置了它时进入
+   （那时会发 `New-Api-User` 头）；没配就不会让它无意义地 miss 缓存。
 
    默认 TTL 60s；`force=true` / POST `.../refresh` 穿透缓存；同一身份的并发请求合并成一个
    in-flight Promise。`clearCache(providerId)` 按 providerId 清（缓存按身份哈希存，
@@ -187,7 +196,11 @@ interface RemoteQuota {
 - **默认 100% 离线测试**（`npm run test:quota`，并入 `npm test`）：
   - Provider 契约用**严格 URL 的 mock**：不认识的 URL 直接抛 `unexpected URL`，杜绝
     「mock 不区分 URL」造成的假绿；NewAPI 的两个 endpoint 各返回**不同** fixture，
-    并断言调用次数正好两次 + `Authorization` / `New-Api-User`；
+    并断言两个 URL **各调用正好一次**、只带 `Authorization: Bearer`
+    （**默认不发** `New-Api-User`）；没有 `quotaUserId` 也照常工作，
+    没有 `quotaAdapter` → `unsupported` 零请求，没有 `apiKey` → `auth_error` 零请求；
+  - NewAPI 的 base path `A → B` 必须换身份（重新 fetch），
+    `https://example.com/api-a/` 与 `https://example.com/api-a` 是**同一**身份；
   - 断言 `limit_reset="monthly"` + `expires_at=<ISO>` 时 `resetAt === null`，
     且 `expires_at` 绝不变成 `resetAt`；
   - 断言 DeepSeek 多币种**不相加**、`balances.length === 2`；

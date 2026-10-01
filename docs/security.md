@@ -6,8 +6,9 @@
 
 - **只走经过核实的官方接口**：OpenRouter `GET https://openrouter.ai/api/v1/key`（当前
   API Key 自己）、DeepSeek `GET https://api.deepseek.com/user/balance`、
-  NewAPI 仅在显式 `quotaAdapter="newapi"` + `quotaUserId` 时调
-  `/dashboard/billing/subscription` 与 `/dashboard/billing/usage`。
+  NewAPI 仅在显式 `quotaAdapter="newapi"` 时用 `Authorization: Bearer <API key>`
+  调 `/dashboard/billing/subscription` 与 `/dashboard/billing/usage`
+  （`quotaUserId` 只是旧部署的可选兼容头，不是查询的必要条件）。
   其它供应商（含 Sub2API）一律 `unsupported`，**一次网络请求都不发**。
 - **不做**：浏览器抓网页额度、读 Cookie、模拟登录、OAuth、万能 quota endpoint。
 - **凭据只在后端解析**：前端拿到的是额度结果，**不含** API Key 原文、Authorization 头、
