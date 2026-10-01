@@ -1,3 +1,6 @@
+/* P23：schema 漂移的观察出口（只记来源 + 字段名 + 类型，不记值）。 */
+import { noteUnknownEnum } from './schema-drift.js';
+
 /* Browser tool semantics only —— 不含 CDP / Chrome / 包名 / 安装实现。
  *
  * 契约来源：pi-browser-harness **0.11.0** 的 `src/util/tool.ts` + `src/domains/*`。
@@ -148,9 +151,7 @@ function safeMime(value) {
   return m ? m[0] : '';
 }
 
-const ERROR_KINDS = ['not_connected', 'cdp_error', 'timeout', 'invalid_state', 'io_error', 'internal'];
-
-/* ---------- 动作表 ---------- */
+const ERROR_KINDS = ['not_connected', 'cdp_error', 'timeout', 'invalid_state', 'io_error', 'internal'];/* ---------- 动作表 ---------- */
 
 /* [running, done, failed]。done 为 null 表示「由证据决定」，
  * 没有证据时退回 T[2] 之外的通用说法（见 labelOf）。 */
@@ -568,6 +569,8 @@ export function browserActivity(entry) {
   let summary = '';
   if (status === 'error') {
     const kind = oneOf(d.kind, ERROR_KINDS);
+    /* P23：闭集外的失败种类不是错误，但**要看得见** —— 只记字段名与类型，不记值。 */
+    if (!kind && typeof d.kind === 'string' && d.kind) noteUnknownEnum('browser', 'details.kind', d.kind);
     facts.push(kind ? `Error: ${kind}` : 'Result details unavailable');
     // 失败时允许显示「请求的目标」（主机名 / 元素句柄）—— 这不是成功声明。
     summary = summaryOf(name, a, d, false);

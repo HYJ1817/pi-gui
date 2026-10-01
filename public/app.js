@@ -63,6 +63,7 @@ import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
+import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
@@ -213,6 +214,9 @@ function onBridge(evt) {
   observeApprovalEvent(evt);
   switch (evt.state) {
     case 'starting':
+      /* P23：bridge 生命周期一变，前端看到的 schema 漂移也不再属于当前运行 ——
+       * 与各 feature 的运行观察同一条纪律（旧 run 的结论不许留在表里）。 */
+      resetDrift();
       return setBridgeState('starting');
     case 'ready':
       if (Number.isInteger(evt.bridgeRun) && evt.bridgeRun === S.bridgeRun && S.bridgeState === 'ready' && !S.switching) return;

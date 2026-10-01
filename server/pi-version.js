@@ -8,12 +8,18 @@
  *
  * 这里把它拆成一个**规范状态**：
  *
- *   { value, source, status, updatedAt }
+ *   { value, source, status, updatedAt, verifiedAgainst, verification }
  *
  *   value      '0.99.1' 或 null
  *   source     'package.json' | 'pi --version' | 'none'   —— 这个值是从哪来的
  *   status     'known' | 'malformed' | 'unknown'
  *   updatedAt  ISO 时间戳（这个状态是什么时候求出来的）
+ *   verifiedAgainst  兼容矩阵里**逐项核对过**的那条基线（P23）；没核过就是 null
+ *   verification     'verified' | 'unverified' | 'unknown' | 'unchecked'
+ *
+ * ⚠️ `verifiedAgainst` **不参与任何能力判定** —— 它回答的是「这个版本我们核过没有」，
+ * 不是「所以它支持什么」。能力一律走 `server/pi-probes.js` 的 probe。
+ * 矩阵由调用方注入（`server/pi-compat-matrix.js`），这个模块不认识它。
  *
  * ---------- 取值的优先级（越靠前越权威、越无副作用）----------
  *
@@ -83,6 +89,9 @@ export function parseVersionOutput(raw) {
  *                          key 一变就立即重算，不等 TTL —— 切项目后不会再把
  *                          上一个 Pi 的版本带过来。它只认识「identity 变没变」，
  *                          不认识 project / runtime / cwd。
+ * @param matrix            兼容矩阵（P23），只要有 `lookupPiVersion(value)` 就行。
+ *                          注入 `server/pi-compat-matrix.js`；不注入时
+ *                          `verification` 保持 'unchecked'（老调用方 / 单测不受影响）。
  */
 export function createPiVersion({
   resolvePackageDir = null,
@@ -90,6 +99,7 @@ export function createPiVersion({
   now = () => Date.now(),
   ttlMs = 30_000,
   identityKey = null,
+  matrix = null,
 } = {}) {
   let cache = null; // { key, value, source, status, at }
 
@@ -153,6 +163,38 @@ export function createPiVersion({
     return { value: null, source: 'none', status: 'unknown', at: now() };
   }
 
+  /**
+   * 这个版本在兼容矩阵里核过没有（P23）。
+   *
+   * **纯粹是「我们声称验证过什么」的对照**，不参与能力判定，也不影响 status：
+   * 没核对过的版本照样能跑，只是诊断里会标成 `unverified`。
+   */
+  function verificationOf(value) {
+    if (!matrix || typeof matrix.lookupPiVersion !== 'function') {
+      return { verification: 'unchecked', verifiedAgainst: null, relative: 'unknown' };
+    }
+    try {
+      const hit = matrix.lookupPiVersion(value);
+      if (!hit || typeof hit !== 'object') return { verification: 'unchecked', verifiedAgainst: null, relative: 'unknown' };
+      const allowed = ['verified', 'unverified', 'unknown'];
+      const status = allowed.includes(hit.status) ? hit.status : 'unknown';
+      // `unknown` 是「版本本身没读到」，与「读到了但没核过」是两件事 —— 分开说。
+      return {
+        verification: value ? status : 'unknown',
+        verifiedAgainst: hit.verifiedAgainst && typeof hit.verifiedAgainst === 'object'
+          ? {
+            version: typeof hit.verifiedAgainst.version === 'string' ? hit.verifiedAgainst.version : null,
+            verifiedAt: typeof hit.verifiedAgainst.verifiedAt === 'string' ? hit.verifiedAgainst.verifiedAt : null,
+            scope: typeof hit.verifiedAgainst.scope === 'string' ? hit.verifiedAgainst.scope : null,
+          }
+          : null,
+        relative: typeof hit.relative === 'string' ? hit.relative : 'unknown',
+      };
+    } catch {
+      return { verification: 'unchecked', verifiedAgainst: null, relative: 'unknown' };
+    }
+  }
+
   /** 取规范状态。同一 identity 内带 TTL 缓存；identity 一变就立即重算。`force` 用于显式刷新。 */
   function read({ force = false } = {}) {
     const t = now();
@@ -162,14 +204,14 @@ export function createPiVersion({
     }
     const { at, ...rest } = cache;
     const { key: _k, ...out } = rest;
-    return { ...out, updatedAt: new Date(at).toISOString() };
+    return { ...out, ...verificationOf(out.value), updatedAt: new Date(at).toISOString() };
   }
 
   /** 不触发探测，只看当前缓存（给「顺手带上」的路径用）。内部 key 不出去。 */
   function peek() {
     if (!cache) return null;
     const { at, key: _k, ...rest } = cache;
-    return { ...rest, updatedAt: new Date(at).toISOString() };
+    return { ...rest, ...verificationOf(rest.value), updatedAt: new Date(at).toISOString() };
   }
 
   /** 给测试用：清缓存。 */

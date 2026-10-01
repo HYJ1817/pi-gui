@@ -83,6 +83,12 @@ export function createDiagnostics({
    * 都不注入时（老调用方 / 单测）给 null，既有断言不受影响。 */
   launch = null,
   piVersion = null,
+  /* P23：能力 probe 表 / 兼容矩阵摘要 / 原生 MCP 摘要 / Extension 发现报告。
+   * 同样是**惰性函数**，同样全部可选 —— 不注入时这些块是 null。 */
+  probes = null,
+  compatMatrix = null,
+  mcpNative = null,
+  extensions = null,
   dataDir,
   version,
   env = process.env,
@@ -111,10 +117,15 @@ export function createDiagnostics({
          * 它只有枚举与时间戳，没有 payload —— 让 Diagnostics 能区分
          * 「文档里的历史基线」与「这台机器上跑的那个」。 */
         versionSource: r.versionSource || null,
+        /* P23：版本是否在兼容矩阵里核对过（与 versionSource 分开：
+         * 一个是「值从哪来」，一个是「这个值我们认不认识」）。 */
+        versionVerification: r.versionVerification || null,
         capabilities: r.capabilities,
         missing: r.missing,
         unverified: r.unverified,
         protocol: r.protocol,
+        /* P23：schema 漂移（来源 + 字段名，没有值）。 */
+        schema: r.schema || { unknownFields: [], unknownEnums: [] },
         issues: r.issues,
       };
     } catch (err) {
@@ -122,8 +133,7 @@ export function createDiagnostics({
     }
   }
 
-  function readSnapshot() {
-    const cwd = runtime?.getCurrentCwd?.() || null;
+  function readSnapshot() {    const cwd = runtime?.getCurrentCwd?.() || null;
     const bridge = rpc?.getState?.() || {};
     const agentsRaw = agentRegistry?.list?.() || [];
     const agents = agentsRaw.map((a) => ({
@@ -179,6 +189,97 @@ export function createDiagnostics({
       }
     }
 
+    /* ---------- P23：能力 probe + 兼容矩阵 + 原生 MCP + Extension 版本 ----------
+     *
+     * 全部**惰性**（函数注入），全部**可选**（不注入就是 null）。
+     * probe 表里有证据行（来自 pi 包源码的原文，限长）；矩阵只有版本号与日期；
+     * 原生 MCP 只给状态与计数（**不给 server 名字** —— 诊断不需要它）；
+     * Extension 只给「有可靠 metadata 的那些」的名字与版本，不带路径。 */
+    let probeReport = null;
+    if (typeof probes === 'function') {
+      try {
+        const p = probes();
+        if (p && Array.isArray(p.probes)) {
+          probeReport = {
+            at: p.at || null,
+            packageKnown: Boolean(p.packageKnown),
+            summary: p.summary || null,
+            items: p.probes.map((item) => ({
+              id: item.id,
+              kind: item.kind,
+              label: item.label,
+              state: item.state === true ? true : item.state === false ? false : null,
+              evidence: item.evidence || '',
+            })),
+          };
+        }
+      } catch (err) {
+        probeReport = { error: String(err?.message || err).slice(0, 200) };
+      }
+    } else if (typeof probes === 'object' && probes && Array.isArray(probes.probes)) {
+      probeReport = probes;
+    }
+
+    let matrixInfo = null;
+    if (typeof compatMatrix === 'function') {
+      try {
+        const m = compatMatrix();
+        if (m && typeof m === 'object') matrixInfo = m;
+      } catch {
+        matrixInfo = null;
+      }
+    }
+
+    let nativeInfo = null;
+    if (typeof mcpNative === 'function') {
+      try {
+        const s = mcpNative();
+        if (s && typeof s === 'object') {
+          const nat = s.native && typeof s.native === 'object' ? s.native : null;
+          nativeInfo = {
+            fresh: Boolean(s.fresh),
+            state: nat && typeof nat.state === 'string' ? nat.state : null,
+            reason: nat && typeof nat.reason === 'string' ? nat.reason : '',
+            replaced: nat ? Boolean(nat.replaced) : null,
+            disabled: nat && typeof nat.disabled === 'boolean' ? nat.disabled : null,
+            builtinPresent: nat && typeof nat.builtinPresent === 'boolean' ? nat.builtinPresent : null,
+            serverCount: Array.isArray(s.servers) ? s.servers.length : null,
+            trust: s.trust === null || s.trust === undefined ? null : Boolean(s.trust.trusted),
+          };
+        }
+      } catch {
+        nativeInfo = null;
+      }
+    }
+
+    /* 关键 Extension 的版本：**只在有可靠 metadata（package.json 读到 version）时**
+     * 才列，并对着兼容矩阵标出「核对过 / 没核对过」。名字与版本不是秘密，路径不进。
+     * 上限 20 条 —— 诊断不是扩展清单。 */
+    let extensionInfo = null;
+    if (typeof extensions === 'function') {
+      try {
+        const r = extensions();
+        const list = r && r.ok !== false && Array.isArray(r.extensions) ? r.extensions : null;
+        if (list) {
+          extensionInfo = {
+            discovered: list.length,
+            items: list
+              .filter((e) => e && typeof e.version === 'string' && e.version)
+              .slice(0, 20)
+              .map((e) => ({
+                name: typeof e.name === 'string' ? e.name : null,
+                version: e.version,
+                scope: e.scope === 'project' ? 'project' : e.scope === 'global' ? 'global' : null,
+                installed: e.state ? e.state.installed === true : null,
+                loaded: e.state ? e.state.loaded : null,
+              })),
+          };
+        }
+      } catch {
+        extensionInfo = null;
+      }
+    }
+
     const raw = {
       schemaVersion: 1,
       generatedAt: now().toISOString(),
@@ -216,6 +317,15 @@ export function createDiagnostics({
         /* 版本值的出处（`package.json` / `pi --version` / `unknown`）。
          * 让故障报告能区分「读到的版本」和「哪一步读到的」。 */
         versionSource: canon ? canon.source : null,
+        /* P23：这个版本在兼容矩阵里核过没有。`verified` / `unverified` /
+         * `unknown`（版本本身没读到）/ `unchecked`（没注入矩阵）。 */
+        verification: canon
+          ? {
+            status: canon.verification || 'unchecked',
+            verifiedAgainst: canon.verifiedAgainst || null,
+            relative: canon.relative || 'unknown',
+          }
+          : null,
         /* **bridge 实际会启动的那个入口**（脱敏）：source 与 basename，
          * 加两个布尔（入口解析到没有 / 包目录证明到没有）。
          * 有了它，诊断里就能一眼看出「版本和启动的不是同一份」这种情况。 */
@@ -226,7 +336,16 @@ export function createDiagnostics({
         supported: typeof mcpReport.supported === 'boolean' ? mcpReport.supported : null,
         piVersion: mcpReport.piVersion || null,
         error: mcpReport.error || null,
+        /* P23：Native MCP 的**状态**（没有 server 名字、没有路径）。
+         * 只有打开过 MCP 页 / 切过项目之后才有摘要 —— 「没算过」≠「没有」。 */
+        native: nativeInfo,
       },
+      /* P23：能力 probe 表（每条带出处）。`unverified` 列出「还没法下结论」的核心 probe。 */
+      probes: probeReport,
+      /* P23：兼容矩阵摘要（我们**声称**验证过什么）。只有版本号与日期。 */
+      matrix: matrixInfo,
+      /* P23：关键 Extension 的版本（有可靠 metadata 时）。 */
+      extensions: extensionInfo,
       checks: [
         { id: 'data-readable', ok: dataReadable },
         { id: 'data-writable', ok: dataWritable },
@@ -243,6 +362,9 @@ export function createDiagnostics({
         /* 兼容层的异常只记「字段名 + 期望形状 + 实际类型」，不记 payload ——
          * 这条是那个模块的硬规矩（见 server/pi-compat.js 头部规矩 3）。 */
         protocolPayloadsIncluded: false,
+        /* P23：schema 漂移记录更严 —— 只有来源、我们自己代码里的字段名、
+         * 以及 `typeof`。**连对象键名都不记**，更不记值。 */
+        schemaDriftValuesIncluded: false,
         redactionApplied: true,
       },
     };

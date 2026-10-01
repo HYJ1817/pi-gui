@@ -31,6 +31,7 @@ import { openWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
 import { capabilityTab } from './capability-view.js';
 import { snapshotMcpObservation } from './mcp-observer.js';
+import { noteUnknownEnum } from './schema-drift.js';
 
 /* 状态 → 展示用的圆点与文案。
  * 键必须与 server/skills.js 里 state 的取值一一对应，多一个少一个都会显示成原始英文。 */
@@ -388,10 +389,15 @@ function mcpStateMeta(state) {
   return MCP_STATE_META[state] || { dot: 'dim', label: state || '未知' };
 }
 
-/** 运行时状态文案。**只认闭集**；不认识的显示「无法识别」，不回显上游原文。 */
+/** 运行时状态文案。**只认闭集**；不认识的显示「无法识别」，不回显上游原文。
+ *
+ * P23：闭集外的取值同时记一条 schema 漂移（来源 + 字段名 + 类型，**不记值**）——
+ * 上游加了新状态时诊断里看得见，而不是静默变成「无法识别」。 */
 function runtimeStateLabel(state) {
   if (!state) return '未知';
-  return MCP_RUNTIME_META[state] || '无法识别';
+  if (MCP_RUNTIME_META[state]) return MCP_RUNTIME_META[state];
+  noteUnknownEnum('mcp-runtime', 'server.state', state);
+  return '无法识别';
 }
 
 /** 生效徽标：effective 是后端按 enabled / 覆盖 / 信任 / 原生状态算好的结论。 */

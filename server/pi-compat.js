@@ -22,6 +22,13 @@
  *    这个对象会原样进 Diagnostics，而 Diagnostics 可能被贴进 issue ——
  *    用户正文、prompt、模型回复、密钥一个字节都不能进来。
  *
+ * 4. **schema 漂移要看得见，但不能带值（P23）。** 上游多了一个字段 / 给了一个
+ *    闭集之外的枚举值时，记一条 `category: 'schema'` 的记录：来源 + **我们自己
+ *    代码里的字段路径** + `typeof`。**连对象键名都不记**（`driftType()`）——
+ *    漂移记录是「上游变了」的提示，不是数据样本。
+ *    语义适配器遇到不认识的字段一律忽略、关键字段缺失显示「结果不可用」、
+ *    新枚举值折成 unknown —— **绝不因为形状不认识就回退成打印原始 JSON**。
+ *
  * ---------- 为什么没有正式的 handshake ----------
  *
  * pi 的 RPC 没有版本协商，也**不该为此造一个协议**。兼容证据来自现有链路里
@@ -130,6 +137,17 @@ function describe(value) {
   return typeof value;
 }
 
+/* schema 漂移记录用的**更严**的类型描述（P23）：
+ * 只给 typeof / 数组长度 / null —— **连键名都不给**。
+ * 键名虽然通常无害，但它来自上游任意对象；drift 记录只说「哪个字段、
+ * 什么类型、哪一层看到的」，这三样就够定位问题了。 */
+function driftType(value) {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (Array.isArray(value)) return `array(${value.length})`;
+  return typeof value;
+}
+
 function safeKey(k) {
   const s = String(k).replace(/[^\w.\-[\]]/g, '');
   return s.length > MAX_KEY_LEN ? s.slice(0, MAX_KEY_LEN) + '…' : s;
@@ -187,7 +205,7 @@ export function piState(data) {
 
 /* ---------- 主体 ---------- */
 
-export function createPiCompat({ piVersionProbe = null, versionSourceProbe = null, now = () => Date.now() } = {}) {
+export function createPiCompat({ piVersionProbe = null, versionSourceProbe = null, versionVerifiedProbe = null, now = () => Date.now() } = {}) {
   /** 能力 → true / false / null（未观察到）。 */
   const caps = {};
   for (const k of CAPABILITIES) caps[k] = null;
@@ -369,6 +387,31 @@ export function createPiCompat({ piVersionProbe = null, versionSourceProbe = nul
     record('session-file', 'parse', issue, extra);
   }
 
+  /* ---------- Schema 漂移（P23）----------
+   *
+   * 「上游多了一个我们不认识的字段 / 枚举值」不是错误，但**必须可见**：
+   * 不然表现就是「某个功能静默失效」，而用户分不清是 GUI 的 bug 还是上游变了。
+   *
+   * 记录**只有三样**：来源（哪个适配器 / 哪条链路）、字段名（我们代码里的字面量，
+   * 不是从数据里取的名字）、以及值的 `typeof`。
+   * **原始值一个字节都不记** —— 这三样足够定位，而值可能是用户数据。
+   *
+   * `field` 由调用方给**我们自己的**字段路径（例如 `details.kind`），
+   * 不是动态键名 —— 动态键名等于把一段任意数据带进诊断报告。
+   */
+
+  /** 上游多了一个我们没处理的字段。 */
+  function observeUnknownField(source, field, value) {
+    if (typeof source !== 'string' || typeof field !== 'string') return;
+    record('schema', source, 'unknown-field', { field, actual: driftType(value) });
+  }
+
+  /** 上游给了一个闭集之外的枚举值（**不回显那个值**）。 */
+  function observeUnknownEnum(source, field, value) {
+    if (typeof source !== 'string' || typeof field !== 'string') return;
+    record('schema', source, 'unknown-enum-value', { field, actual: driftType(value) });
+  }
+
   /** 版本探测：**只当证据，不参与判定**。 */
   function piVersion() {
     if (typeof piVersionProbe !== 'function') return null;
@@ -391,6 +434,33 @@ export function createPiCompat({ piVersionProbe = null, versionSourceProbe = nul
       const source = typeof s.source === 'string' ? s.source : 'none';
       const status = ['known', 'malformed', 'unknown'].includes(s.status) ? s.status : 'unknown';
       return { source, status, updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : null };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 版本验证状态（P23）：「运行中这个版本，我们在兼容矩阵里核过没有」。
+   *
+   * **单独一个字段**，不混进 `versionSource`：前者是「值从哪来」，
+   * 这里是「这个值我们认不认识」。老调用方（没注入）拿到 null，不受影响。
+   */
+  function versionVerification() {
+    if (typeof versionVerifiedProbe !== 'function') return null;
+    try {
+      const v = versionVerifiedProbe();
+      if (!v || typeof v !== 'object') return null;
+      const verification = ['verified', 'unverified', 'unknown', 'unchecked'].includes(v.verification)
+        ? v.verification : 'unknown';
+      const against = v.verifiedAgainst && typeof v.verifiedAgainst === 'object'
+        ? {
+          version: typeof v.verifiedAgainst.version === 'string' ? v.verifiedAgainst.version : null,
+          verifiedAt: typeof v.verifiedAgainst.verifiedAt === 'string' ? v.verifiedAgainst.verifiedAt : null,
+          scope: typeof v.verifiedAgainst.scope === 'string' ? v.verifiedAgainst.scope : null,
+        }
+        : null;
+      const relative = ['same', 'newer', 'older', 'unknown'].includes(v.relative) ? v.relative : 'unknown';
+      return { verification, verifiedAgainst: against, relative };
     } catch {
       return null;
     }
@@ -431,6 +501,8 @@ export function createPiCompat({ piVersionProbe = null, versionSourceProbe = nul
     const v = piVersion();
     const st = status();
     const vs = versionSource();
+    const vv = versionVerification();
+    const issues = anomalies.map((a) => ({ ...a }));
     return {
       detected: sawAnyEvidence,
       version: v,
@@ -439,6 +511,8 @@ export function createPiCompat({ piVersionProbe = null, versionSourceProbe = nul
       /* 版本状态的出处（P20.5）。null = 没注入探测源（老调用方 / 单测）。
        * 界面用它在「历史验证基线」与「运行中版本」之间做区分。 */
       versionSource: vs,
+      /* 版本有没有被兼容矩阵核对过（P23）。null = 没注入矩阵。 */
+      versionVerification: vv,
       status: st,
       capabilities,
       missing,
@@ -447,7 +521,15 @@ export function createPiCompat({ piVersionProbe = null, versionSourceProbe = nul
         expected: ENVELOPE_PROTOCOL,
         observed: envelopeSeen ? ENVELOPE_PROTOCOL : null,
       },
-      issues: anomalies.map((a) => ({ ...a })),
+      /* schema 漂移单独归一类：**不是错误**，是「上游变了但没坏」的可见记录。
+       * 只从 issues 里按 category 挑出来，不额外存一份。 */
+      schema: {
+        unknownFields: issues.filter((i) => i.category === 'schema' && i.issue === 'unknown-field')
+          .map((i) => ({ source: i.operation, field: i.field, at: i.at })),
+        unknownEnums: issues.filter((i) => i.category === 'schema' && i.issue === 'unknown-enum-value')
+          .map((i) => ({ source: i.operation, field: i.field, at: i.at })),
+      },
+      issues,
     };
   }
 
@@ -472,9 +554,11 @@ export function createPiCompat({ piVersionProbe = null, versionSourceProbe = nul
     observeUpstream,
     observeSessionScan,
     observeSessionAnomaly,
+    observeUnknownField,
+    observeUnknownEnum,
     report,
     summary,
     reset,
-    _internals: { describe, safeKey, MAX_ANOMALIES, ESSENTIAL },
+    _internals: { describe, driftType, safeKey, MAX_ANOMALIES, ESSENTIAL },
   };
 }

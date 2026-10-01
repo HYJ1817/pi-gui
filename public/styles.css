@@ -903,11 +903,16 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 就把底部的「复制 / 导出 / 刷新 / 关闭」推出了可视区，想关掉得先滚到底。 */
 .modal-card:has(> .diag-body){
   display:flex;flex-direction:column;overflow:hidden;
+  /* P23：诊断面板的内容从「几行状态」长成了六个小节（版本真值 / 能力 probe /
+   * 兼容矩阵 / Native MCP / Extension 版本 / JSON）。440px 的默认宽度会把底部
+   * 五个按钮挤成「复制诊断\n摘要」这种两行字 —— 加宽，并让按钮**整块**换行。 */
+  max-width:min(720px,94vw);height:min(760px,86vh);
 }
 .modal-card:has(> .diag-body) h3,
 .modal-card:has(> .diag-body) .modal-desc,
 .modal-card:has(> .diag-body) .modal-actions{flex:0 0 auto}
-.modal-card:has(> .diag-body) .modal-actions{margin-top:12px}
+.modal-card:has(> .diag-body) .modal-actions{margin-top:12px;flex-wrap:wrap}
+.modal-card:has(> .diag-body) .modal-actions .btn{height:auto;min-height:30px;white-space:nowrap}
 .modal-card:has(> .diag-body) > .diag-body{flex:1 1 auto;min-height:0;overflow:auto}
 
 /* 选 :has(> .diag-body) 而不是给卡片加一个类，是因为 openModal() 只清 innerHTML、

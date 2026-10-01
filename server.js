@@ -61,6 +61,8 @@ import { createApprovalProbe } from './server/approval-probe.js';
 import { createSessions } from './server/sessions.js';
 import { createSessionSearch } from './server/session-search.js';
 import { createPiCompat } from './server/pi-compat.js';
+import { createPiProbes } from './server/pi-probes.js';
+import * as piCompatMatrix from './server/pi-compat-matrix.js';
 import { createSkills } from './server/skills.js';
 import { createUpdateCheck } from './server/update-check.js';
 import { createAgentRegistry } from './server/agents/index.js';
@@ -198,6 +200,9 @@ const piVersion = createPiVersion({
    * 同一 target 内走 TTL；切项目导致实际入口变化时不等 TTL 立即重算。
    * key 是内部不透明串，永不进 API / Diagnostics / renderer。 */
   identityKey: piLaunch.identityKey,
+  /* P23：兼容矩阵只用来回答「这个版本我们核过没有」（verifiedAgainst）。
+   * **不参与能力判定** —— 能力走 pi-probes。 */
+  matrix: piCompatMatrix,
 });
 
 /* Pi built-in 能力探测（P20.5）。
@@ -224,16 +229,33 @@ const piCompat = createPiCompat({
     const state = piVersion.read();
     return state ? { source: state.source, status: state.status, updatedAt: state.updatedAt } : null;
   },
+  /* P23：版本有没有被兼容矩阵核对过。与「值从哪来」分开摆 ——
+   * 升级之后最常见的状态就是「读到了新版本，但矩阵里还没有它」。 */
+  versionVerifiedProbe: () => {
+    const state = piVersion.read();
+    return state
+      ? { verification: state.verification, verifiedAgainst: state.verifiedAgainst, relative: state.relative }
+      : null;
+  },
 });
 
 /* pi 桥接。projectLaunch 就是 projectConfig 本身 —— rpc-bridge 只认
  * prepareLaunch()（spawn 前，允许写文件）与 launchArgs()（纯读）两个方法，
  * 不知道配置里有什么。见 server/rpc-bridge.js 的参数说明。 */
 let extensionRegistryRef = null;
+/* P23：probe 表在 mcpNative 之后才建（它要读原生摘要），但 bridge 的 publish
+ * 回调在那之前就装好了 —— 所以同样用「先声明、运行期回填」的引用占位。 */
+let probesRef = null;
 const rpc = createRpcBridge({
   runtime,
   publish: (event) => {
     extensionRegistryRef?.observe(event);
+    /* bridge 生命周期一变，runtime probe（RPC / 工具事件 / 原生 MCP）就没有意义了 ——
+     * 旧 run 的结论不许留在表里。 */
+    if (event?.type === 'bridge_status'
+      && ['starting', 'restarting', 'exited', 'error', 'no-project'].includes(event.state)) {
+      probesRef?.reset();
+    }
     sse.publish(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
       : event);
@@ -317,6 +339,9 @@ const mcpNative = createMcpNative({
     maxStdoutBytes: 64 * 1024,
   }),
   piBuiltins: (cwd) => piBuiltins.read({ cwd }),
+  /* P23：schema 漂移的观察出口 —— 上游给了闭集之外的运行时状态 / exposure 时，
+   * 记一条「来源 + 字段名 + 类型」（没有值）。 */
+  onDrift: (source, field, value) => piCompat.observeUnknownEnum(source, field, value),
 });
 const mcp = createMcp({
   runtime,
@@ -338,6 +363,17 @@ const extensions = createExtensionRegistry({
   readTrust: async () => (await skills.readIndex()).trust,
 });
 extensionRegistryRef = extensions;
+
+/* P23：能力 probe 表。**汇总，不是新事实源** —— built-in 清单复用
+ * `pi-builtins` 的解析，MCP 原生结论取 `mcpNative` 的摘要，RPC / 工具事件取
+ * `piCompat` 的能力三值。只读、限长、不执行 pi 的代码、不联网。 */
+const probes = createPiProbes({
+  resolvePackageDir: piLaunch.packageDir,
+  identityKey: piLaunch.identityKey,
+  compat: piCompat,
+  mcpNative,
+});
+probesRef = probes;
 
 /* Planner 用 pi 跑任务时的独立会话目录。
  *
@@ -453,6 +489,12 @@ const diagnostics = createDiagnostics({
    * `launch` 给脱敏摘要（source / basename / known），`piVersion` 给规范版本状态。 */
   launch: piLaunch.summary,
   piVersion: () => piVersion.read(),
+  /* P23：能力 probe 表 / 兼容矩阵摘要 / Native MCP 状态 / 关键 Extension 版本。
+   * 全部惰性求值 —— 诊断面板打开时才去算，且只读。 */
+  probes: () => probes.report(),
+  compatMatrix: () => piCompatMatrix.matrixSummary(),
+  mcpNative: () => mcpNative.peekSummary(),
+  extensions: () => extensions.peek(),
   dataDir: DATA_DIR,
   version: VERSION,
   env: process.env,

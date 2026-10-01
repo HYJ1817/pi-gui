@@ -1,3 +1,6 @@
+/* P23：schema 漂移的观察出口（只记来源 + 字段名 + 类型，不记值）。 */
+import { noteUnknownEnum } from './schema-drift.js';
+
 /* pi-memory 0.4.2 的语义投影。
  *
  * 契约核对方式：**v0.4.2 tag** 与 npm 发布包指向同一个 commit
@@ -268,7 +271,11 @@ function statusActivity(status, d) {
    * **绝不回显原始值**，也不假装它是已知模式；字段缺失则完全不显示这一行。
    * 这样上游一旦发布新模式，界面会明说「有个我不认识的模式」，而不是静默少一格。 */
   if (SNAPSHOT_MODES.has(d.snapshotMode)) facts.push('Snapshot: ' + d.snapshotMode);
-  else if (typeof d.snapshotMode === 'string' && d.snapshotMode) facts.push('Snapshot: unrecognized');
+  else if (typeof d.snapshotMode === 'string' && d.snapshotMode) {
+    /* P23：新模式不是错误，但**要看得见**。只记来源 + 字段名 + 类型，不记那个值。 */
+    noteUnknownEnum('memory', 'details.snapshotMode', d.snapshotMode);
+    facts.push('Snapshot: unrecognized');
+  }
   if (UPDATE_MODES.has(d.qmdUpdateMode)) facts.push('Update mode: ' + d.qmdUpdateMode);
   /* details.dir 是绝对路径 —— 永远不投影。 */
   const hasEvidence = facts.length > 0;

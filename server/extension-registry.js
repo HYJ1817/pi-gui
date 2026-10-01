@@ -59,6 +59,12 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
   let runtimeErrors = new Map();
   let observedCwd = null;
   let observedRun = null;
+  /* P23：上一次算出的索引（同步只读视图）。
+   * Diagnostics 是同步快照，不能 await 一次发现；而「诊断里显示扩展版本」
+   * 只在**已经算过、且属于当前 workspace + 当前 bridge run** 时才有意义。
+   * 所以这里只缓存自己的输出，并按 (cwd, bridgeRun) 判归属 ——
+   * 换项目 / 重启 pi 之后旧索引直接不可见（返回 null = 「还没算过」）。 */
+  let lastIndex = null;
 
   function observe(event) {
     if (event?.type === 'bridge_status') {
@@ -225,15 +231,32 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
       }
       if (item.state.installed === false || (item.scope === 'project' && trusted === false)) item.state.loaded = false;
     }
-    return { ok: true, hasProject: Boolean(cwd), piReachable: commands !== null,
+    const report = { ok: true, hasProject: Boolean(cwd), piReachable: commands !== null,
       extensions, diagnostics,
       capabilityRegistry: { commands: capabilityCommands, tools: [], toolRegistryAvailable: false },
       actions: { install: false, toggle: false, remove: false, refresh: true, restart: true } };
+    lastIndex = { cwd: cwd || null, bridgeRun: bridgeRun ?? null, data: report };
+    return report;
+  }
+
+  /**
+   * 同步看一眼上次算出的索引（给 Diagnostics 这种同步报告用）。
+   *
+   * **必须绑定 workspace 与 bridge run**：换项目 / 重启 pi 之后旧索引里的
+   * enabled / loaded 都不再成立。没算过（没打开过扩展页）就回 null ——
+   * 「还没算过」不等于「没有扩展」。这里不触发任何新的发现、不碰 Pi。
+   */
+  function peek() {
+    if (!lastIndex) return null;
+    const cwd = runtime.getCurrentCwd();
+    if ((lastIndex.cwd || null) !== (cwd || null)) return null;
+    if ((lastIndex.bridgeRun ?? null) !== (rpc?.getState?.()?.bridgeRun ?? null)) return null;
+    return lastIndex.data;
   }
   async function handle(req, res) {
     if (req.method !== 'GET') return json(res, 405, { ok: false, error: '扩展管理动作尚未集成；请使用 Pi 官方 CLI' });
     try { return json(res, 200, await readIndex()); }
     catch { return json(res, 200, { ok: false, error: '扩展发现失败', extensions: [], diagnostics: [] }); }
   }
-  return { readIndex, observe, handle };
+  return { readIndex, observe, peek, handle };
 }

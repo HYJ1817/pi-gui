@@ -538,6 +538,10 @@ export function buildPiEntry(packageDir) {
  * @param runCli             (entry, args, {cwd, timeoutMs}) => Promise<{ok, exitCode, stdout, stderr, timedOut, spawnFailed, error}>
  * @param piBuiltins         (cwd) => built-in 探测结果
  * @param readSettingsExt    () => {disabled: boolean|null}（-builtin:mcp 判定，可注入；缺省自己读）
+ * @param onDrift            (source, field, value) => void，可选。**schema 漂移的
+ *                           观察出口**（P23）：上游给了一个闭集之外的运行时状态时
+ *                           通知一次，由 `pi-compat` 记下「来源 + 字段名 + 类型」。
+ *                           默认 null（老调用方 / 单测不受影响）。
  */
 export function createMcpNative({
   runtime,
@@ -549,6 +553,7 @@ export function createMcpNative({
   runCli = null,
   piBuiltins = null,
   readSettingsExt = null,
+  onDrift = null,
   now = () => Date.now(),
   ttlMs = STATUS_TTL_MS,
 } = {}) {
@@ -846,17 +851,38 @@ export function createMcpNative({
       toolExposure = Object.keys(out).length ? out : null;
     }
     const count = (v) => (Number.isInteger(v) && v >= 0 && v <= 100000 ? v : null);
+    /* 运行时状态不在闭集里 → 折成 unknown（**绝不把上游任意字符串放进 DOM**），
+     * 同时让 schema 漂移可见。只报字段名与类型，不报那个值。 */
+    const rawState = typeof s.state === 'string' ? s.state : null;
+    const stateKnown = rawState !== null && RUNTIME_STATES.has(rawState);
+    if (rawState !== null && !stateKnown && typeof onDrift === 'function') {
+      try {
+        onDrift('mcp-runtime', 'server.state', rawState);
+      } catch {
+        /* 漂移记录不该影响投影本身 */
+      }
+    }
+    /* exposure 同理：认不出来的值折成 null（界面显示「未知」），
+     * 但让「上游多了一个 exposure 取值」这件事可见。 */
+    const exposure = normalizeExposure(s.exposure);
+    if (typeof s.exposure === 'string' && exposure === null && typeof onDrift === 'function') {
+      try {
+        onDrift('mcp-runtime', 'server.exposure', s.exposure);
+      } catch {
+        /* 同上 */
+      }
+    }
     return {
       name: s.name,
       scope: typeof s.scope === 'string' && RUNTIME_SCOPES.has(s.scope)
         ? (s.scope === 'global' ? 'user' : s.scope)
         : null,
       enabled: typeof s.enabled === 'boolean' ? s.enabled : null,
-      exposure: normalizeExposure(s.exposure),
+      exposure,
       // transport 原文含命令路径/URL，只留类型面。
       transportType: typeof s.transport === 'string' && /^https?:\/\//.test(s.transport) ? 'http'
         : typeof s.transport === 'string' && s.transport ? 'stdio' : null,
-      state: typeof s.state === 'string' && RUNTIME_STATES.has(s.state) ? s.state : 'unknown',
+      state: stateKnown ? rawState : 'unknown',
       // 数量说事实（上游合法字符串项），列表说有界的安全展示面。
       toolCount: stringTools ? stringTools.length : null,
       tools,
