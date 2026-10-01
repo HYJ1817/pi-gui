@@ -702,9 +702,47 @@ const stubDiagnostics = {
   project: { selected: true, name: 'pi-GUI', readable: true, writable: true },
   data: { readable: true, writable: true },
   bridge: { piRunning: true, bridgeRun: 1, hasProject: true, args: ['--mode', 'rpc'] },
-  pi: { configuredBin: 'pi', available: true, version: '0.87.0' },
+  pi: {
+    configuredBin: 'pi', available: true, version: '0.87.0',
+    versionSource: 'package.json',
+    /* P23：版本核对状态（`unverified` = 矩阵里没有这个版本）。 */
+    verification: { status: 'unverified', verifiedAgainst: null, relative: 'newer' },
+    launch: { source: 'path', binName: 'pi.cmd', entryKnown: true, packageDirKnown: true },
+  },
   agents: [{ id: 'pi', available: true, version: '0.87.0', reason: null, capabilities: null }],
-  mcp: { supported: false, piVersion: '0.87.0', error: null },
+  mcp: {
+    supported: false, piVersion: '0.87.0', error: null,
+    /* P23：原生摘要（**不含 server 名字** —— 诊断只给状态与计数）。 */
+    native: { fresh: true, state: 'active', reason: 'builtin:mcp 在包里、未被禁用、未被接管', replaced: false, disabled: null, builtinPresent: true, serverCount: 2, trust: true },
+  },
+  /* P23：能力 probe 表（形状照抄 GET /api/diagnostics 的真实返回）。 */
+  probes: {
+    at: '2026-09-26T00:00:00.000Z',
+    packageKnown: true,
+    summary: { total: 4, supported: 2, unsupported: 1, unknown: 1, unverified: ['rpc'] },
+    items: [
+      { id: 'rpc-commands', kind: 'source', label: 'RPC 命令集', state: true, evidence: 'dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条' },
+      { id: 'builtin-mcp', kind: 'source', label: 'builtin:mcp', state: false, evidence: 'builtInExtensions 里没有 mcp：llama.cpp' },
+      { id: 'approval-hook', kind: 'source', label: 'tool_call 可阻断', state: null, evidence: '类型与文档里没有同时找到 tool_call 阻断契约' },
+      { id: 'rpc', kind: 'runtime', label: 'RPC 通道真的通了', state: true, evidence: '来自 pi-compat 的能力三值' },
+    ],
+  },
+  /* P23：兼容矩阵摘要（只有版本号与日期）。 */
+  matrix: {
+    piBaselines: [
+      { version: '0.87.0', verifiedAt: '2026-09-30', scope: 'historical' },
+      { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' },
+    ],
+    currentBaseline: '0.99.2',
+    extensionBaselines: [{ name: 'pi-memory', version: '0.4.2', verifiedAt: '2026-09-30' }],
+    nativeMcp: { builtinId: 'mcp', replaceable: true, serverStates: ['connected'], exposures: ['codemode'], cliSubcommands: ['add'] },
+    knownDifferences: [{ id: 'iserror-propagation', between: '0.87.0 → 0.99.1', affects: 'P18 / P20 成功证据' }],
+  },
+  /* P23：关键 Extension 版本（有可靠 metadata 的）。 */
+  extensions: {
+    discovered: 2,
+    items: [{ name: 'pi-memory', version: '0.4.2', scope: 'global', installed: true, loaded: null }],
+  },
   checks: [
     { id: 'data-readable', ok: true },
     { id: 'data-writable', ok: true },
@@ -712,13 +750,32 @@ const stubDiagnostics = {
     { id: 'project-writable', ok: true },
     { id: 'pi-running', ok: true },
   ],
-  compatibility: null,
+  compatibility: {
+    status: 'partial',
+    detected: true,
+    piVersion: '0.87.0',
+    versionKnown: true,
+    versionSource: { source: 'package.json', status: 'known', updatedAt: '2026-10-01T00:00:00.000Z' },
+    versionVerification: { verification: 'unverified', verifiedAgainst: null, relative: 'newer' },
+    capabilities: { rpc: true, getState: true, getMessages: null, newSession: null, switchSession: null, sessionNaming: false, toolEvents: null, extensionUi: null, sessionJsonl: null },
+    missing: ['sessionNaming'],
+    unverified: ['getMessages'],
+    protocol: { expected: 1, observed: 1 },
+    /* P23：schema 漂移（只有来源 + 字段名，**没有值**）。 */
+    schema: {
+      unknownFields: [{ source: 'usage', field: 'contextUsage.tokens', at: 1758800000000 }],
+      unknownEnums: [{ source: 'mcp-runtime', field: 'server.state', at: 1758800000000 }],
+    },
+    issues: [{ at: 1758800000000, category: 'response', operation: 'set_session_name', issue: 'command-failed' }],
+  },
   privacy: {
     absolutePathsIncluded: false,
     conversationContentIncluded: false,
     configFileContentIncluded: false,
     environmentIncluded: false,
     protocolPayloadsIncluded: false,
+    /* P23：schema 漂移只记来源 / 字段名 / 类型，不记值。 */
+    schemaDriftValuesIncluded: false,
     redactionApplied: true,
   },
 };
@@ -7193,6 +7250,120 @@ staticCheck();
       (card.querySelector('.cap-view .ext-empty')?.textContent || '').includes('项目已切换')
       && card.querySelectorAll('.cap-view .ext-item').length === 0);
     window.clearThread();
+  }
+
+  /* P23: 诊断面板的升级安全面 —— 版本核对 / 能力 probe / 兼容矩阵 / Native MCP /
+   * Extension 版本 / schema 漂移，以及一份**脱敏的**「复制诊断摘要」。
+   * 这里量的是 DOM 语义（显示了什么、有没有把不该显示的东西显示出来）；
+   * 后端判定在 tests/pi-probes.cjs。 */
+  {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.S.hasProject = true; window.S.switching = false;
+    window.resetDrift();
+    const diagCard = () => $('modalCard');
+    $('modal').hidden = true;
+    $('modalCard').innerHTML = '';
+    window.openDiagnostics();
+    await sleep(60);
+    const text = () => diagCard().textContent || '';
+
+    check('P23 诊断：五个新小节都在', () => {
+      const heads = [...diagCard().querySelectorAll('.ext-sec-head')].map((n) => n.textContent);
+      const want = ['版本真值', '能力 probe', '兼容矩阵（我们核对过什么）', 'Native MCP', '关键 Extension 版本'];
+      return want.every((w) => heads.includes(w)) || JSON.stringify(heads);
+    });
+    check('P23 诊断：版本来源与核对状态分开摆', () =>
+      text().includes('package.json')
+      && text().includes('版本核对')
+      && text().includes('未核对（矩阵里没有这个版本）'));
+    check('P23 诊断：probe 三值文案（支持 / 不支持 / 未知）与出处都在', () => {
+      const t = text();
+      if (!t.includes('能力 probe')) return '没有 probe 小节';
+      if (!t.includes('dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条')) return '缺少出处';
+      if (!t.includes('builtInExtensions 里没有 mcp')) return '缺少 false 的 probe';
+      if (!t.includes('还没法下结论的核心 probe：rpc')) return '没有列出未下结论的核心 probe';
+      return true;
+    });
+    check('P23 诊断：兼容矩阵显示当前基线与已验证版本', () =>
+      text().includes('0.99.2') && text().includes('当前验证基线') && text().includes('pi-memory'));
+    check('P23 诊断：Native MCP 只给状态与计数（**没有 server 名字**）', () => {
+      const t = text();
+      return t.includes('生效中') && t.includes('server 条目') && !t.includes('filesystem');
+    });
+    check('P23 诊断：Extension 版本按 name@version 显示', () => text().includes('pi-memory@0.4.2'));
+
+    /* 「复制诊断摘要」：一段给人读的纯文本，与面板同一份已脱敏快照 */
+    const copyBtn = [...diagCard().querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === '复制诊断摘要');
+    check('P23 诊断：有「复制诊断摘要」按钮（在 JSON 复制之前）', () => {
+      const labels = [...diagCard().querySelectorAll('.modal-actions .btn')].map((b) => b.textContent);
+      return labels[0] === '复制诊断摘要' && labels.includes('复制诊断 JSON') || JSON.stringify(labels);
+    });
+    const summary = window.buildDiagnosticSummary(stubDiagnostics, []);
+    check('P23 摘要：含版本 / 来源 / 核对 / 兼容 / probe / MCP / Extension', () => {
+      for (const want of ['Pi GUI 诊断摘要', 'pi: 0.87.0', 'pi 版本来源: package.json',
+        '版本核对: 未核对（矩阵里没有这个版本）', '兼容状态: 部分兼容', '能力 probe: 共 4',
+        'Native MCP: 生效中', 'pi-memory@0.4.2', '隐私:']) {
+        if (!summary.includes(want)) return `缺「${want}」`;
+      }
+      return true;
+    });
+    check('P23 摘要：不含会话正文 / 凭据 / 绝对路径 / 原始 payload', () => {
+      const bad = [/sk-[A-Za-z0-9]{8,}/, /Bearer\s/, /api[_-]?key/i, /[A-Za-z]:\\/, /content/i];
+      return !bad.some((re) => re.test(summary)) || summary.slice(0, 200);
+    });
+    check('P23 摘要：口径与面板一致（同一份快照，不另取数据）', () => {
+      const fresh = window.buildDiagnosticSummary(stubDiagnostics, []);
+      return fresh === summary && summary.includes('bridgeRun 1');
+    });
+
+    let copied = null;
+    const savedClipboard = window.navigator.clipboard;
+    Object.defineProperty(window.navigator, 'clipboard', { value: { writeText: async (t) => { copied = t; } }, configurable: true });
+    copyBtn.onclick();
+    await sleep(30);
+    check('P23 摘要：点「复制诊断摘要」写进剪贴板的就是那段文本', () => copied === summary || String(copied).slice(0, 120));
+    Object.defineProperty(window.navigator, 'clipboard', { value: savedClipboard, configurable: true });
+
+    /* schema 漂移：前端观察到的未知工具名要能在诊断里看见（只有字段名与类型） */
+    window.resetDrift();
+    check('P23 漂移：不认识的工具名被记下（不记名字本身）', () => {
+      const node = window.document.createElement('div');
+      window.document.body.appendChild(node);
+      window.updateEntry(node, { id: 'drift-1', name: 'future_tool', status: 'success', args: { secret: 'sk-should-not-appear' } });
+      node.remove();
+      const drift = window.driftSnapshot();
+      return drift.length === 1 && drift[0].source === 'tool' && drift[0].field === 'name'
+        && drift[0].kind === 'unknown-tool' && !JSON.stringify(drift).includes('sk-should-not-appear') || JSON.stringify(drift);
+    });
+    check('P23 漂移：同一条只记一次（updateEntry 每个阶段都会跑）', () => {
+      const node = window.document.createElement('div');
+      window.document.body.appendChild(node);
+      for (let i = 0; i < 5; i++) window.updateEntry(node, { id: 'drift-2', name: 'future_tool', status: 'running' });
+      node.remove();
+      return window.driftSnapshot().length === 1 || JSON.stringify(window.driftSnapshot());
+    });
+    check('P23 漂移：闭集外的 MCP 运行状态也记（字段名 + 类型）', () => {
+      window.noteUnknownEnum('mcp-runtime', 'server.state', 'half-open');
+      const drift = window.driftSnapshot();
+      const hit = drift.find((d) => d.field === 'server.state');
+      return Boolean(hit) && hit.source === 'mcp-runtime' && hit.type === 'string' || JSON.stringify(drift);
+    });
+    check('P23 漂移：诊断摘要里带上前端漂移（来源 · 字段 · 类型）', () => {
+      const withDrift = window.buildDiagnosticSummary(stubDiagnostics, window.driftSnapshot());
+      return withDrift.includes('前端 schema 漂移: 2 条') && withDrift.includes('tool.name · unknown-tool · string') || withDrift.slice(-300);
+    });
+
+    /* 漂移随 bridge 重启清空（与各 feature 的运行观察同一条纪律）。
+     * bridgeRun 必须 ≥ 当前值 —— 小于当前值的旧事件本来就被 SSE 入口丢掉。 */
+    const driftRun = window.S.bridgeRun;
+    es.emit({ type: 'bridge_status', state: 'starting', bridgeRun: driftRun + 1 });
+    check('P23 漂移：bridge 重启后清空（旧 run 的观察不留）', () => window.driftSnapshot().length === 0 || JSON.stringify(window.driftSnapshot()));
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: driftRun + 1 });
+    await sleep(20);
+
+    $('modal').hidden = true;
+    $('modalCard').innerHTML = '';
+    window.resetDrift();
   }
 
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));

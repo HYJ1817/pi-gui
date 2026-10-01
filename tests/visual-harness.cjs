@@ -926,6 +926,97 @@ const server = http.createServer(async (req, res) => {
   });
   if (p === '/api/mcp/status') return json(res, 200, { ok: true, at: '2026-10-01T06:00:00.000Z', cached: false, servers: [], errors: [] });
 
+  /* P23：诊断面板的夹具（形状照抄 GET /api/diagnostics 的真实返回）。
+   * 这里刻意让**三种核对状态**同时出现：已核对的 pi、未核对的 Extension、
+   * 以及一条 false 的 probe —— 截图要能看出三值分得开。 */
+  if (p === '/api/diagnostics') return json(res, 200, {
+    ok: true,
+    diagnostics: {
+      schemaVersion: 1,
+      generatedAt: '2026-10-02T00:00:00.000Z',
+      app: { id: 'pi-gui', version: '0.15.0' },
+      system: { platform: 'win32', arch: 'x64', node: 'v24.14.0', os: 'Windows_NT', release: '10.0.26100' },
+      project: { selected: true, name: 'pi-GUI', readable: true, writable: true },
+      data: { readable: true, writable: true },
+      bridge: { piRunning: true, bridgeRun: 12, hasProject: true, args: ['--mode', 'rpc'] },
+      pi: {
+        configuredBin: 'pi', available: true, version: '0.99.2',
+        versionSource: 'package.json',
+        verification: { status: 'verified', verifiedAgainst: { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' }, relative: 'same' },
+        launch: { source: 'path', binName: 'pi.cmd', entryKnown: true, packageDirKnown: true },
+      },
+      agents: [{ id: 'pi', available: true, version: '0.99.2', reason: null, capabilities: null }],
+      mcp: {
+        supported: true, piVersion: '0.99.2', error: null,
+        native: { fresh: true, state: 'active', reason: 'builtin:mcp 在包里、未被禁用、未被接管', replaced: false, disabled: null, builtinPresent: true, serverCount: 2, trust: true },
+      },
+      probes: {
+        at: '2026-10-02T00:00:00.000Z',
+        packageKnown: true,
+        summary: { total: 14, supported: 8, unsupported: 0, unknown: 6, unverified: ['rpc'] },
+        items: [
+          { id: 'rpc-commands', kind: 'source', label: 'RPC 命令集', state: true, evidence: 'dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条' },
+          { id: 'rpc-no-tool-list', kind: 'source', label: 'RPC 无工具清单命令', state: true, evidence: '33 条里没有 *tool*' },
+          { id: 'extension-ui', kind: 'source', label: '扩展 UI 对话框子协议', state: true, evidence: 'docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response' },
+          { id: 'approval-hook', kind: 'source', label: 'tool_call 可阻断', state: true, evidence: 'block?: boolean;；tool_call can mutate input or block execution.' },
+          { id: 'core-approval', kind: 'source', label: '核心自带审批闸门', state: null, evidence: 'docs/usage.md 里没有明确说法，不能据此断言核心有没有审批' },
+          { id: 'builtin-mcp', kind: 'source', label: 'builtin:mcp', state: true, evidence: 'builtInExtensions: llama.cpp / codemode / tool-search / mcp' },
+          { id: 'mcp-runtime-states', kind: 'source', label: 'MCP 运行时状态闭集', state: true, evidence: 'closed / connected / connecting / disconnected / failed / needs-auth' },
+          { id: 'rpc', kind: 'runtime', label: 'RPC 通道真的通了', state: true, evidence: '来自 pi-compat 的能力三值' },
+          { id: 'mcp-native', kind: 'runtime', label: 'Native MCP 生效', state: true, evidence: '原生状态：active' },
+        ],
+      },
+      matrix: {
+        piBaselines: [
+          { version: '0.87.0', verifiedAt: '2026-09-30', scope: 'historical' },
+          { version: '0.99.1', verifiedAt: '2026-10-01', scope: 'historical' },
+          { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' },
+        ],
+        currentBaseline: '0.99.2',
+        extensionBaselines: [
+          { name: 'pi-web-access', version: '0.33.0', verifiedAt: '2026-09-30' },
+          { name: 'pi-subagents', version: '0.73.1', verifiedAt: '2026-09-30' },
+          { name: 'pi-memory', version: '0.4.2', verifiedAt: '2026-09-30' },
+          { name: 'pi-browser-harness', version: '0.11.0', verifiedAt: '2026-10-01' },
+        ],
+        nativeMcp: { builtinId: 'mcp', replaceable: true, serverStates: [], exposures: [], cliSubcommands: [] },
+        knownDifferences: [
+          { id: 'approval-doc-wording', between: '0.87.0 / 0.99.1 → 0.99.2', affects: 'P19 Approval 能力报告' },
+          { id: 'dialog-doc-moved', between: '0.87.0 / 0.99.1 → 0.99.2', affects: 'P19 / P23 契约 probe' },
+          { id: 'iserror-propagation', between: '0.87.0 → 0.99.1', affects: 'P18 / P20 成功证据' },
+        ],
+      },
+      extensions: {
+        discovered: 5,
+        items: [
+          { name: 'pi-web-access', version: '1.4.0', scope: 'global', installed: true, loaded: true },
+          { name: 'pi-memory', version: '0.4.2', scope: 'global', installed: true, loaded: null },
+        ],
+      },
+      checks: [
+        { id: 'data-readable', ok: true },
+        { id: 'data-writable', ok: true },
+        { id: 'project-readable', ok: true },
+        { id: 'project-writable', ok: true },
+        { id: 'pi-running', ok: true },
+      ],
+      compatibility: {
+        status: 'compatible', detected: true, piVersion: '0.99.2', versionKnown: true,
+        versionSource: { source: 'package.json', status: 'known', updatedAt: '2026-10-02T00:00:00.000Z' },
+        versionVerification: { verification: 'verified', verifiedAgainst: { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' }, relative: 'same' },
+        capabilities: { rpc: true, getState: true, getMessages: true, newSession: true, switchSession: true, sessionNaming: true, toolEvents: true, extensionUi: true, sessionJsonl: true },
+        missing: [], unverified: [],
+        protocol: { expected: 1, observed: 1 },
+        schema: { unknownFields: [], unknownEnums: [] },
+        issues: [],
+      },
+      privacy: {
+        absolutePathsIncluded: false, conversationContentIncluded: false, configFileContentIncluded: false,
+        environmentIncluded: false, protocolPayloadsIncluded: false, schemaDriftValuesIncluded: false, redactionApplied: true,
+      },
+    },
+  });
+
   if (p === '/api/projects') {
     return json(res, 200, {
       ok: true,

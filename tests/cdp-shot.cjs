@@ -1294,6 +1294,31 @@ async function main() {
     ['汇总行显示当前筛选数', `document.querySelector('#workSurface .cap-view .ext-sum-label').textContent.includes('当前筛选')`],
     ['搜索框是 type=search（不是任意输入口）', `document.querySelector('#workSurface .cap-view .ext-search').type==='search'`],
   ]);
+  /* ---------- P23：诊断面板（升级安全面） ---------- */
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navDiagnostics').click()`);
+  await sleep(500);
+  await evalJs(`(() => { const p = document.querySelector('#globalMoreMenu'); if (p) p.hidden = true; })()`);
+  await shotOf('#modalCard', '181-diagnostics-upgrade', 'P23：诊断面板 —— 版本核对 / 能力 probe / 兼容矩阵 / Native MCP / Extension 版本 + 复制诊断摘要', ['版本真值', '能力 probe', '兼容矩阵', 'Native MCP', '关键 Extension 版本', '复制诊断摘要'], [
+    ['版本核对显示「已核对」与基线', `(() => {const t=document.querySelector('#modalCard').textContent;return t.includes('已核对')&&t.includes('0.99.2')})()`],
+    ['probe 三值文案分得开', `(() => {const t=document.querySelector('#modalCard').textContent;return t.includes('支持')&&t.includes('未知')})()`],
+    ['probe 带出处（相对路径）', `document.querySelector('#modalCard').textContent.includes('dist/modes/rpc/rpc-types.d.ts')`],
+    ['Native MCP 显示状态与计数', `(() => {const t=document.querySelector('#modalCard').textContent;return t.includes('生效中')&&t.includes('server 条目')})()`],
+    ['Extension 版本按 name@version 显示', `document.querySelector('#modalCard').textContent.includes('pi-memory@0.4.2')`],
+    ['按钮区不溢出（复制诊断摘要在最前）', `(() => {const a=document.querySelector('#modalCard .modal-actions');return a.scrollWidth<=a.clientWidth+1&&[...a.querySelectorAll('button')].every(b=>b.getBoundingClientRect().height>=30)})()`],
+    ['内容区自己滚动、底部按钮可见', `(() => {const b=document.querySelector('#modalCard .diag-body'),a=document.querySelector('#modalCard .modal-actions');return b.scrollHeight>b.clientHeight&&a.getBoundingClientRect().bottom<=innerHeight+1})()`],
+  ]);
+  /* 窄窗口：底部有六个按钮，必须换行而不是横向溢出 */
+  await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(420);
+  await shotOf('#modalCard', '182-diagnostics-700', 'P23：700px —— 诊断面板按钮换行、内容区滚动、无横向溢出', ['版本真值', '能力 probe'], [
+    ['没有横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`],
+    ['卡片在视口内', `(() => {const r=document.querySelector('#modalCard').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1})()`],
+    ['按钮区换行而不是溢出', `(() => {const a=document.querySelector('#modalCard .modal-actions');return a.scrollWidth<=a.clientWidth+1})()`],
+  ]);
+  await send('Emulation.clearDeviceMetricsOverride');
+  await evalJs(`document.querySelector('#modal').hidden = true; document.querySelector('#modalCard').innerHTML = ''`);
+  await sleep(200);
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 
