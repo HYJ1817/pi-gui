@@ -137,7 +137,7 @@ export const setSkillEnabled = (id, enabled) =>
   sendJSON('/api/skills/' + encodeURIComponent(id), { method: 'PUT', body: { enabled } });
 
 /** MCP 能力报告。能力由**检测本机装着的那个 pi 包**决定（历史基线 0.87.0 没有原生 MCP，
- *  当前基线 0.99.1 自带 builtin:mcp），所以这里返回的是「带出处的结论 + 怎么配置 +
+ *  当前基线 0.99.2 自带 builtin:mcp），所以这里返回的是「带出处的结论 + 怎么配置 +
  *  替代路径」。Server 明细与动作走下面的 P20.6 接口。 */
 export const fetchMcp = () => getJSON('/api/mcp');
 /* P20.6 原生 MCP：Server 明细（GET，轻量摘要 + 上次运行时状态）与

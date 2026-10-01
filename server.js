@@ -21,7 +21,7 @@
  *   server/project-config.js  <project>/.pi-gui/config.json 的读写与 pi 启动参数
  *   server/skills.js      Skills 的发现 / 详情 / 启停（只读 pi 的官方机制，不自造一套）
  *   server/mcp.js         MCP 能力报告（**读本机那份 pi 包**给证据：0.87.0 没有
- *                         built-in `mcp`、0.99.1 有；不列 Server，如实回三值）
+ *                         built-in `mcp`、0.99.x 有；不列 Server，如实回三值）
  *   server/sessions.js    会话列表与切换（pi 有 switch_session 但没有「列出会话」的 RPC）
  *   server/update-check.js 版本检查：只读 GitHub Release 元数据（不下载、不安装、不联网以外无副作用）
  *   server/uploads.js     附件上传与落盘
@@ -299,6 +299,11 @@ const mcpNative = createMcpNative({
   runtime,
   env: process.env,
   resolvePackageDir: piLaunch.packageDir,
+  /* P20.6-Fix：runtime / replaced 缓存的第二个分键维度。
+   * 「A 项目里 MCP 全连上」与「这个 pi 包里 builtin:mcp 被扩展接管」都是
+   * **当前 workspace + 当前这份 pi** 的事实 —— 换项目或换 pi 实例后必须失效。
+   * identityKey 是不透明哈希（不含路径原文），只参与内部比较，永不进响应。 */
+  resolveLaunchIdentity: piLaunch.identityKey,
   readTrust: async () => (await skills.readIndex()).trust,
   rpc,
   runCli: (entry, args, opts) => runCli({

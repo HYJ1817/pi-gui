@@ -150,14 +150,15 @@ const stubExtensions = {
 };
 
 /* /api/mcp 的桩。形状照抄后端真实返回（P20.5 起带 version / builtins / rpc / mcpConfig）。
- * 这里用 **0.99.1** 的真实形状：它确实带 builtin:mcp，旧版本（0.87.0）只有 llama.cpp。 */
+ * 这里用 **0.99.2**（当前契约基线）的真实形状：它确实带 builtin:mcp，
+ * 旧版本（0.87.0）只有 llama.cpp。 */
 let stubMcp = {
   ok: true,
   supported: true,
   reason: '这个 pi 包自带 built-in 扩展 `mcp`（配置走 pi 自己的 mcp.json，命令行是 pi mcp add / remove）',
   evidence: 'dist/extensions/index.js: { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }',
-  piVersion: '0.99.1',
-  version: { value: '0.99.1', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' },
+  piVersion: '0.99.2',
+  version: { value: '0.99.2', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' },
   piPackageFound: true,
   servers: [],
   serversNote: '这个 pi 带 MCP 能力：Server 明细与运行时状态在 MCP 页（读 /api/mcp/servers，刷新走显式手势）。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove，或页内受控动作）。',
@@ -188,18 +189,19 @@ let stubMcp = {
   },
 };
 const mcpCalls = [];
-/* P20.6 原生 MCP 的桩：GET /api/mcp/servers 的摘要形状照抄后端真实返回；
+/* P20.6 原生 MCP 的桩：GET /api/mcp/servers 的摘要形状照抄后端真实返回
+ * （契约基线 pi 0.99.2：带 description、runtime 带 resources / resourceTemplates）；
  * POST 同一路径是受控动作（add/remove/login/logout），POST /api/mcp/status
  * 是显式状态刷新。动作只记录、不执行。 */
 let stubMcpServers = {
   ok: true,
   fresh: true,
   at: '2026-10-01T06:00:00.000Z',
-  native: { state: 'active', replaced: false, disabled: false, builtinPresent: true, reason: 'builtin:mcp 在包里、未被禁用、未被接管' },
+  native: { state: 'active', replaced: false, disabled: null, builtinPresent: true, reason: 'builtin:mcp 在包里、未被禁用、未被接管' },
   trust: { trusted: true, requiresTrust: true },
   servers: [
-    { name: 'fs', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
-    { name: 'docs', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', hasSecrets: true, toolExposure: { search_code: 'direct' }, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+    { name: 'fs', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', description: 'Local filesystem access', hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+    { name: 'docs', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', description: '', hasSecrets: true, toolExposure: { search_code: 'direct' }, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
   ],
   configInvalid: [],
   configError: { user: '', project: '' },
@@ -210,10 +212,11 @@ let stubMcpServers = {
     code: '',
     error: '',
     errors: [],
+    note: '',
     exitCode: 0,
     servers: [
-      { name: 'fs', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', state: 'connected', toolCount: 2, tools: ['read', 'write'], error: '', hasSecrets: false, toolExposure: null, configured: true },
-      { name: 'docs', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', state: 'needs-auth', toolCount: 0, tools: [], error: '', hasSecrets: true, toolExposure: { search_code: 'direct' }, configured: true },
+      { name: 'fs', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', state: 'connected', toolCount: 2, tools: ['read', 'write'], toolExposure: null, resources: 3, resourceTemplates: 1, error: '', hasSecrets: false, configured: true },
+      { name: 'docs', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', state: 'needs-auth', toolCount: 0, tools: [], toolExposure: { search_code: 'direct' }, resources: null, resourceTemplates: null, error: '', hasSecrets: true, configured: true },
     ],
   },
 };
@@ -3409,7 +3412,7 @@ staticCheck();
     check('MCP 标签页：给出可核对的出处（不是空口断言）', () =>
       /dist\/extensions\/index\.js/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
     check('MCP 标签页：显示运行中的 pi 版本与来源', () =>
-      /检测到的 pi 版本：0\.99\.1/.test(mcpCard.textContent) && /来源 package\.json/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
+      /检测到的 pi 版本：0\.99\.2/.test(mcpCard.textContent) && /来源 package\.json/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
     check('MCP 标签页：列出 built-in 能力并说明它不是扫目录扫到的', () => {
       const text = mcpCard.textContent;
       return (['builtin:llama.cpp', 'builtin:codemode', 'builtin:tool-search', 'builtin:mcp'].every((x) => text.includes(x))
@@ -3491,6 +3494,74 @@ staticCheck();
       if (/Authorization|clientSecret|password/i.test(mcpCard.innerHTML)) return '表单里出现了凭据字段';
       return /只允许字母/.test($('toasts').textContent) || $('toasts').textContent.slice(-200);
     });
+
+    /* ---- P20.6-Fix：0.99.2 新字段 / 信任闸门 / workspace 隔离 / secret contract ---- */
+
+    check('MCP 标签页：显示 0.99.2 的 description 与资源数（有才显示）', () => {
+      const t = mcpCard.textContent;
+      return (/Local filesystem access/.test(t) && /3 个资源/.test(t) && /1 个资源模板/.test(t)) || t.slice(0, 400);
+    });
+    check('MCP 标签页：说清运行时状态属于当前项目（切项目不沿用）', () =>
+      /运行时状态属于当前项目/.test(mcpCard.textContent) || mcpCard.textContent.slice(-500));
+    check('MCP 标签页：声明 GUI 不接收任何凭据值 + OAuth 归 pi', () => {
+      const t = mcpCard.textContent;
+      return (/不接收任何凭据值/.test(t) && /OAuth/.test(t) && /pi 自己管理/.test(t)) || t.slice(-500);
+    });
+
+    /** 换一套桩重新开一次 MCP 页（openWorkSurface 每次都是新的挂载）。 */
+    const reopenMcp = async () => {
+      $('workSurface').innerHTML = '';
+      window.openExtensions();
+      await new Promise((r) => setTimeout(r, 40));
+      const tab = [...$('workSurface').querySelectorAll('.ext-tab')].find((b) => b.textContent === 'MCP');
+      if (tab) tab.onclick();
+      await new Promise((r) => setTimeout(r, 50));
+      return $('workSurface');
+    };
+    {
+      const saved = stubMcpServers;
+      // 未信任项目：读被忽略 + 写被拒绝
+      stubMcpServers = {
+        ...saved,
+        trust: { trusted: false, requiresTrust: true },
+        servers: saved.servers.map((s) => (s.scope === 'project' ? { ...s, effective: { active: false, reason: 'untrusted' } } : s)),
+      };
+      const c = await reopenMcp();
+      check('MCP 标签页：项目未信任时明确说明「读被忽略 + 写被拒绝」', () =>
+        /当前项目未被信任/.test(c.textContent) && /项目级的新增\/移除也会被拒绝/.test(c.textContent) || c.textContent.slice(0, 500));
+      check('MCP 标签页：未信任的项目条目显示「未生效（项目未信任）」', () =>
+        /未生效（项目未信任）/.test(c.textContent) || c.textContent.slice(0, 500));
+
+      // 信任状态未知：fail closed
+      stubMcpServers = {
+        ...saved,
+        trust: null,
+        servers: saved.servers.map((s) => (s.scope === 'project' ? { ...s, effective: { active: false, reason: 'trust-unknown' } } : s)),
+      };
+      const c2 = await reopenMcp();
+      check('MCP 标签页：信任未知时 fail closed（提示 + 条目未生效）', () =>
+        /读不到这个项目的信任状态/.test(c2.textContent) && /未生效（信任状态未知）/.test(c2.textContent) || c2.textContent.slice(0, 500));
+
+      // 运行时未刷新
+      stubMcpServers = { ...saved, runtime: null };
+      const c3 = await reopenMcp();
+      check('MCP 标签页：没有运行时证据时说「尚未获取」（未知≠没有）', () =>
+        /尚未获取运行时状态/.test(c3.textContent) || c3.textContent.slice(0, 400));
+
+      // 闭集外的 state 不原样进 DOM
+      stubMcpServers = { ...saved, runtime: { ...saved.runtime, servers: [{ ...saved.runtime.servers[0], state: 'unknown' }] } };
+      const c4 = await reopenMcp();
+      check('MCP 标签页：闭集外的 state 显示「无法识别」，不打印上游原文', () =>
+        /运行：无法识别/.test(c4.textContent) || c4.textContent.slice(0, 400));
+
+      // pi 给的 note（项目未信任导致 mcp.json 被忽略）如实显示
+      stubMcpServers = { ...saved, runtime: { ...saved.runtime, note: '<project> is ignored because the project is not trusted.' } };
+      const c5 = await reopenMcp();
+      check('MCP 标签页：把 pi 关于「项目 mcp.json 被忽略」的说明显示出来', () =>
+        /is ignored because the project is not trusted/.test(c5.textContent) || c5.textContent.slice(0, 400));
+
+      stubMcpServers = saved;
+    }
 
     $('modal').hidden = true;
     $('workSurface').innerHTML = '';

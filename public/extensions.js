@@ -373,6 +373,11 @@ const MCP_STATE_META = {
   unknown: { dot: 'dim', label: '原生状态未知' },
 };
 
+/* 运行时状态词汇表 —— **与 pi 0.99.2 的闭集一一对应**：
+ * `ServerState = connecting | connected | disconnected | needs-auth | failed | closed`
+ * （`dist/extensions/mcp/runtime.d.ts`），外加 `list()` 给 `enabled:false` 条目
+ * 合成的 `disabled`。后端已经把闭集外的值折成 `unknown`，这里再做一次兜底 ——
+ * 任何不认识的字符串都不会被原样打印进界面。 */
 const MCP_RUNTIME_META = {
   connected: '已连接',
   connecting: '连接中…',
@@ -380,27 +385,39 @@ const MCP_RUNTIME_META = {
   disconnected: '已断开',
   disabled: '已停用',
   failed: '连接失败',
+  closed: '已关闭',
 };
 
 function mcpStateMeta(state) {
   return MCP_STATE_META[state] || { dot: 'dim', label: state || '未知' };
 }
 
+/** 运行时状态文案。**只认闭集**；不认识的显示「无法识别」，不回显上游原文。 */
 function runtimeStateLabel(state) {
   if (!state) return '未知';
-  return MCP_RUNTIME_META[state] || state;
+  return MCP_RUNTIME_META[state] || '无法识别';
 }
 
 /** 生效徽标：effective 是后端按 enabled / 覆盖 / 信任 / 原生状态算好的结论。 */
 function effectiveBadge(eff) {
   if (!eff || typeof eff !== 'object') return el('span', 'ext-badge', '未知');
   if (eff.active) return el('span', 'ext-badge', '生效中');
-  const reason = { untrusted: '未生效（项目未信任）', overridden: '被项目同名覆盖', disabled: '已停用', replaced: '被扩展接管', unsupported: 'pi 不支持' }[eff.reason];
+  const reason = {
+    untrusted: '未生效（项目未信任）',
+    'trust-unknown': '未生效（信任状态未知）',
+    overridden: '被项目同名覆盖',
+    disabled: '已停用',
+    replaced: '被扩展接管',
+    unsupported: 'pi 不支持',
+  }[eff.reason];
   return el('span', 'ext-badge', reason || '未生效');
 }
 
 function scopeLabel(scope) {
-  return scope === 'project' ? '项目' : scope === 'user' ? '用户' : '未知';
+  if (scope === 'project') return '项目';
+  if (scope === 'user') return '用户';
+  if (scope === 'extension') return '扩展注册';
+  return '未知';
 }
 
 function mcpTab(card, isCurrent) {
@@ -504,6 +521,9 @@ async function mcpTabBody(wrap, isCurrent, reload) {
       top.appendChild(el('span', 'ext-name', s.name || '?'));
       top.appendChild(el('span', 'ext-badge', scopeLabel(s.scope)));
       box.appendChild(top);
+      /* description 是 0.99.2 新增的**面向用户**字段（单行、非凭据，后端已限长），
+       * 有就显示；没有就整行不出现，不写「未知」。 */
+      if (s.description) box.appendChild(el('div', 'ext-item-desc', s.description));
       const bits = [];
       bits.push(`启用：${s.enabled === true ? '是' : s.enabled === false ? '否' : '未知'}`);
       bits.push(`exposure：${s.exposure || '未知'}`);
@@ -514,11 +534,15 @@ async function mcpTabBody(wrap, isCurrent, reload) {
       const acts = el('div', 'ext-acts');
       acts.appendChild(effectiveBadge(s.effective));
       if (s.overridden) acts.appendChild(el('span', 'ext-badge', '用户级被覆盖'));
-      // 运行时状态（上次刷新的，不承诺实时）。
+      // 运行时状态（上次刷新的，不承诺实时；只属于当前项目 —— 换项目后后端不给旧缓存）。
       const rt = (n.runtime && Array.isArray(n.runtime.servers) ? n.runtime.servers : []).find((r) => r.name === s.name);
       if (rt) {
         acts.appendChild(el('span', 'ext-badge', '运行：' + runtimeStateLabel(rt.state)));
         if (typeof rt.toolCount === 'number') acts.appendChild(el('span', 'ext-badge', `${rt.toolCount} 个工具`));
+        // resources / resourceTemplates 是 0.99.2 才出现在 list --json 里的数字，
+        // 只在 server 真的提供资源时才有值 —— 没有就不显示，不写 0。
+        if (typeof rt.resources === 'number') acts.appendChild(el('span', 'ext-badge', `${rt.resources} 个资源`));
+        if (typeof rt.resourceTemplates === 'number') acts.appendChild(el('span', 'ext-badge', `${rt.resourceTemplates} 个资源模板`));
         if (rt.error) box.appendChild(el('pre', 'ext-code quote', String(rt.error).slice(0, 300)));
       }
       // 动作：login / logout / remove（add 在列表下方表单）。enable 等走 /mcp TUI。
@@ -597,7 +621,27 @@ async function mcpTabBody(wrap, isCurrent, reload) {
       wrap.appendChild(note('配置文件读不出来（按空处理，不猜）：' + [n.configError.user, n.configError.project].filter(Boolean).join(' / '), 'warn'));
     }
 
-    /* 运行时状态：只在手势时刷新（会启动用户的 stdio servers，不轮询）。 */
+    /* 项目信任：MCP 的读写都受它约束，必须在这里说清楚 ——
+     * 读：未信任项目的 .pi/mcp.json 被 pi 忽略（项目条目显示「未生效」）
+     * 写：project scope 的 add / remove 被 GUI 直接拒绝（fail closed） */
+    if (n.trust && n.trust.trusted === false) {
+      wrap.appendChild(
+        note(
+          '当前项目未被信任：pi 在非交互模式下不会读它的 .pi/mcp.json，所以项目级 server 不会生效，项目级的新增/移除也会被拒绝（请在 pi 里信任这个项目）。用户级配置不受影响。',
+          'warn',
+        ),
+      );
+    } else if (n.trust === null) {
+      wrap.appendChild(
+        note(
+          '读不到这个项目的信任状态，所以按「未确证」处理：项目级 server 不标记为生效，项目级的新增/移除一律拒绝（fail closed）。用户级配置不受影响。',
+          'warn',
+        ),
+      );
+    }
+
+    /* 运行时状态：只在手势时刷新（会启动用户的 stdio servers，不轮询）。
+     * 缓存按项目与 pi 实例分键 —— 切项目后这里会回到「尚未获取」。 */
     const rt = n.runtime;
     const bar = el('div', 'ext-acts');
     const refBtn = el('button', 'btn tiny primary', rt ? '刷新状态' : '获取运行时状态');
@@ -618,8 +662,11 @@ async function mcpTabBody(wrap, isCurrent, reload) {
     bar.appendChild(refBtn);
     bar.appendChild(rtNote);
     wrap.appendChild(bar);
+    wrap.appendChild(note('运行时状态属于当前项目：切换项目后会回到「尚未获取」，不会沿用上一个项目的结果。', 'dim'));
     if (rt && !rt.ok) wrap.appendChild(note(rt.error || '状态刷新失败', 'warn'));
     for (const e of (rt && rt.errors) || []) wrap.appendChild(note(e, 'warn'));
+    // pi 在「项目未信任 → 项目 mcp.json 被忽略」时给的一句说明（后端已脱敏截断）。
+    if (rt && rt.note) wrap.appendChild(note(rt.note, 'warn'));
 
     mcpAddForm(wrap, isCurrent, reload);
     try {
@@ -636,6 +683,7 @@ async function mcpTabBody(wrap, isCurrent, reload) {
       /* 观察快照失败不挡住整个标签页 */
     }
     wrap.appendChild(note('启用 / 停用 / 重连 / 改 exposure 没有官方自动化接口 —— 请用 pi 的 /mcp 管理器（TUI）或直接编辑 mcp.json。这里不伪造这些开关。', 'dim'));
+    wrap.appendChild(note('Pi GUI 的 MCP 接口**不接收任何凭据值**（env / headers / OAuth / auth 一律在接口边界拒绝）。含凭据的 server 请走终端 pi mcp add 或直接编辑 pi 的 mcp.json；OAuth 的 token 全程由 pi 自己管理（Pi GUI 不读、不存、不转发）。', 'dim'));
   }
 
   /* RPC 事实：有没有「已注册工具清单」这条命令。 */

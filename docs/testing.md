@@ -44,17 +44,18 @@ settings 目录解析、override 优先级、package filter、空 filter、manif
 符号链接 fixture 若无系统权限会跳过并单独报告，不计入通过数量。`tests/smoke.cjs` 检查
 Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
 Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
-（P20.5 在 **0.99.1** 上再次确认：33 条 RPC 命令里没有一条返回已注册工具清单。
+（P20.5 在 **0.99.1** 上再次确认、P20.6-Fix 在 **0.99.2** 上第三次确认：
+33 条 RPC 命令里没有一条返回已注册工具清单，`rpc-types.d.ts` 两版 diff 为空。
 `tests/pi-version.cjs` 把这条钉住了。）
 
 `npm test` 里现在有 35 个套件，全部是**纯自动化**：
 
 ```
-smoke 1051 · git 161 · modules 117 · reliability · interactions · port-owner
+smoke 1060 · git 161 · modules 117 · reliability · interactions · port-owner
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 52 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 106 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
@@ -792,17 +793,24 @@ RPC 事实、配置只报存在性）—— 1023 → 1043。
 
 ## P20.6 Native MCP 集成验证
 
-`npm run test:mcp`（已纳入 `npm test`，**52 条**）—— 完全离线：
+`npm run test:mcp`（已纳入 `npm test`，**106 条**）—— 完全离线：
 不启动 pi、不起真实 MCP server、不联网、不 OAuth、不读用户真实目录。
 `pi mcp list --json` 与各动作的执行一律注入假 runCli；配置文件全在
-`os.tmpdir()`。`npm run test:ui`（smoke，1043 → **1051**）另有 MCP 标签页的
-界面行为（状态横幅、server 行、刷新/移除/添加 wiring、unsupported 声明、
-无凭据字段）与 P15 Extension 页回归。
+`os.tmpdir()`。契约基线 **pi 0.99.2**。`npm run test:ui`（smoke，1051 → **1060**）
+另有 MCP 标签页的界面行为（状态横幅、server 行、刷新/移除/添加 wiring、
+trust 提示、workspace 隔离文案、unsupported 声明、无凭据字段）与 P15 Extension 页回归。
 
-覆盖（详见 [mcp.md](mcp.md) 末节）：安全解析、入口派生、scope/信任/状态机、
-list 合并与脱敏、动作 argv 与校验、stale、unsupported、secret 不回显、
-语义投影与运行观察。
+分组（详见 [mcp.md](mcp.md) 末节）：
 
-真机流程（手工，不进 CI）：配一个本地 stdio fixture server → 打开 MCP 页 →
-刷新状态见 connected + 工具数 → 调一次工具见 Timeline 语义行 → logout 清理。
-不要用真实远端 server，不要做真 OAuth 登录。
+| 组 | 内容 |
+|---|---|
+| **A. cache / workspace isolation** | A 刷新 → 切 B → B 看不到 A 的 runtime；A `replaced=true` → 切 B → B 重新 probe；同 cwd+identity 的 TTL 复用与过期重跑；launch identity 变化不复用；`reset()` 清 runtime + command probe；无 identity 注入时仍按 cwd 隔离 |
+| **B. project trust** | 未信任 + project add/remove → 拒绝且 `runCli` 0 次；已信任 → 正常；未信任下 user scope 仍可用；trust 未知 / 抛异常 → fail closed；未信任项目 `.pi/settings.json` 的 `-builtin:mcp` 不影响 native；已信任时正确变 disabled；用户级与项目级覆盖关系 |
+| **C. secret API contract** | header value / env value / `oauth` / `auth` / 常见 token 字段 → `secret-input-unsupported` 且不调 `runCli`、不回显值；`bearerTokenEnvVar` 只传名字被允许；success 响应不含配置原文；`mcp-auth.json` 含 token 也一个字节都不进报告 |
+| **D. 0.99.2 fixture / schema** | `codemode-deferred` 归一为 `codemode`（含 `toolExposure` 值）；`description` 单行化 + 限长；`auth` 计入 `hasSecrets`；`resources` / `resourceTemplates` / `toolExposure` / `note` 接收与脱敏；`--description` argv |
+| **E. unknown enum / schema fallback** | 闭集外的 `state` → `unknown`（不回显原文）；未知 `scope` / `exposure` → `null`；tools 只留标识符面；`resources` 只收非负整数；`source` / `command` / `url` / `headers` / `env` / 未知字段一律不取 |
+| **F. 回归** | 配置安全解析、入口派生、scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsupported、前端语义投影与运行观察 |
+
+**live MCP 测试本轮未执行**（不进 CI）。真机流程（手工）：配一个本地 stdio
+fixture server → 打开 MCP 页 → 刷新状态见 connected + 工具数 → 调一次工具见
+Timeline 语义行 → logout 清理。不要用真实远端 server，不要做真 OAuth 登录。

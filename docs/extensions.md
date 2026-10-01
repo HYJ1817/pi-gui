@@ -4,7 +4,7 @@
 不是商店 —— 没有下载、没有安装、没有远程代码执行。
 
 **Pi GUI = pi 的 GUI，不是第二套扩展系统。** pi 已有的机制就做 GUI 管理，
-MCP 这类能力按**本机实际装着的那个 pi 包**检测后如实报告（历史验证基线 0.87.0 没有原生 MCP，当前验证基线 0.99.1 自带 builtin:mcp —— 见下面 MCP 一节）。
+MCP 这类能力按**本机实际装着的那个 pi 包**检测后如实报告（历史验证基线 0.87.0 没有原生 MCP，当前验证基线 0.99.2 自带 builtin:mcp —— 见下面 MCP 一节）。
 
 ## Extensions（P15 基础设施）
 
@@ -18,7 +18,7 @@ installed / configured / loaded / runtimeObserved 语义，但**不往通用 Reg
 Memory 也不改变发现、启用或加载的判定——它只是多了一个固定命令与一份运行观察。
 
 Skill 是给模型阅读的指令，Extension 是在 Pi 进程中执行的第三方代码；两者保持独立。
-发现规则在 0.87.0 与 0.99.1 上一致。本机 pi 的 extension 来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
+发现规则在 0.87.0、0.99.1 与 0.99.2 上一致。本机 pi 的 extension 来源是 `~/.pi/agent/extensions/*.ts|*.js`、其中子目录的
 `package.json.pi.extensions` 或 `index.ts|index.js`、受信任项目的 `.pi/extensions`、`settings.json` 的
 `extensions` / `packages`，以及 CLI `-e`。项目来源受 Pi 的信任判定约束。
 Pi package 可以由 npm、git 或本地路径提供；Pi 自己的解析器还支持 manifest
@@ -34,7 +34,7 @@ package manifest 的正向 glob 使用 Node 内置 glob 展开（跳过隐藏路
 再应用 manifest override；普通目录 manifest 按 Pi loader 的字面路径规则解析，不展开 glob。
 package 对象的 `extensions` filter 支持 include / exclude / 精确 override，`[]` 明确禁用，
 省略属性使用默认结果；filter 只能筛选 package resolver 已得出的集合，不新增路径。
-pi 有一个细节（0.87.0 与 0.99.1 同）：显式 package filter 在 manifest extensions 为空或缺失时
+pi 有一个细节（0.87.0 / 0.99.1 / 0.99.2 同）：显式 package filter 在 manifest extensions 为空或缺失时
 回退到约定目录；未带 filter 的空 manifest 不加载资源。fixture 按真实源码固定这一区别。
 
 仍有限制：GUI 拒绝符号链接（Pi 允许部分链接）；git/临时 CLI 来源、旧版全局 npm
@@ -46,7 +46,7 @@ pi 有一个细节（0.87.0 与 0.99.1 同）：显式 package filter 在 manife
 `installed`、`enabled`、`loaded` 分开表达；缺证据用 `null`，不把“没观察到”
 写成“未加载”。版本只读 `package.json`；可验证的 command 来自 Pi RPC
 `get_commands` 的 `sourceInfo.path`。**RPC 没有已注册工具清单**：0.87.0 没有，
-0.99.1 也没有（33 条命令里一条都没有）；`get_state` 同样没有这些字段。
+0.99.1 / 0.99.2 也没有（33 条命令里一条都没有）；`get_state` 同样没有这些字段。
 （ExtensionAPI 有 `getAllTools()`，但那是**扩展进程内**的 API，RPC 客户端拿不到 ——
 两者不能混为一谈。）因此当前工具来源保持未知，Capability Registry
 只记录已证实的 command；未来若 Pi 提供带来源的工具清单，
@@ -155,8 +155,8 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
 
 ## MCP
 
-> **P20.5 更正**：本节原来写的是「当前兼容基线 Pi 0.87.0 未提供原生 MCP」。
-> 那句话描述的是 **0.87.0**，不是 pi 的现状 —— **0.99.1 自带 `builtin:mcp`**，
+> **P20.5 更正（P20.6-Fix 在 0.99.2 上复核）**：本节原来写的是「当前兼容基线 Pi 0.87.0 未提供原生 MCP」。
+> 那句话描述的是 **0.87.0**，不是 pi 的现状 —— **0.99.2 自带 `builtin:mcp`**，
 > 而且 0.99.1 的 `docs/usage.md` 里那句「不内置 MCP」**已经被删掉了**。
 > 现在这页改成读**你本机装着的那个 pi 包**，让证据自己说话。
 
@@ -164,8 +164,8 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
 
 | 判据 | 出处 |
 |---|---|
-| pi 包的 `dist/extensions/index.js` 里 `builtInExtensions` 有没有 `mcp` | 0.99.1 有：`{ name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }`；0.87.0 没有 |
-| `dist/core/extensions/types.d.ts` 有没有 `registerMcpServer` / `getMcpServers` | 0.99.1 有；0.87.0 没有 |
+| pi 包的 `dist/extensions/index.js` 里 `builtInExtensions` 有没有 `mcp` | 0.99.2 有（与 0.99.1 逐字节相同）：`{ name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }`；0.87.0 没有 |
+| `dist/core/extensions/types.d.ts` 有没有 `registerMcpServer` / `getMcpServers` | 0.99.1 与 0.99.2 都有；0.87.0 没有 |
 
 两者任一为真 → `supported: true`；两者都**读到了**且都为假 → `false`（0.87.0 就是这档，
 旧版本的安全降级保留）；包读不到 → `null`，不猜。

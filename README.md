@@ -150,12 +150,17 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   Web / Subagent / Memory / Browser 各有一个独立设置区：固定官方安装命令 + 安装后重启 Pi +
   当前 bridge 的真实工具调用观察。**长期记忆由 Extension 提供，不是 Pi GUI 内置的**
 - **MCP**：用 pi **原生** MCP，Pi GUI 不自建 runtime —— 历史验证基线 **0.87.0**
-  没有原生 MCP，当前验证基线 **0.99.1** 自带 `builtin:mcp`。标签页显示原生状态
+  没有原生 MCP，当前验证基线 **0.99.2** 自带 `builtin:mcp`。标签页显示原生状态
   （active / replaced / disabled / unknown，只认证据）、两处 `mcp.json` 的
-  安全结构解析、`pi mcp list --json` 的运行时状态（点刷新才跑），以及受控动作
+  安全结构解析、`pi mcp list --json` 的运行时状态（点刷新才跑，**缓存按项目与
+  pi 实例分键**，切项目不会沿用上一个项目的结果），以及受控动作
   （add / remove / login / logout 走 pi 官方 CLI；enable 等走 `/mcp` TUI）。
   `mcp__` 工具调用走 Tool Timeline 语义行。**RPC 至今没有已注册工具清单命令**，
-  所以不伪造工具注册表；凭据值一个字节都不进界面
+  所以不伪造工具注册表。
+  安全边界：添加接口**只接受不含凭据值的配置**（`env` / `headers` / `oauth` /
+  `auth` 在 HTTP 边界即拒绝）；项目级写操作**受 project trust 闸门保护**
+  （未信任或信任未知一律 fail closed）；`mcp-auth.json` 从不读取，OAuth token
+  全程由 pi 自己管理
 
 → [mcp.md](docs/mcp.md) · [extensions.md](docs/extensions.md)
 

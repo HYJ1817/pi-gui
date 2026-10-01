@@ -56,14 +56,14 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 | | 是什么 | 谁决定 | 在哪看 |
 |---|---|---|---|
 | **历史验证基线** | P15–P19 当时的验收对象：**0.87.0** | 已固定的历史事实，不会变 | 各 feature 文档的「当时基线」句 |
-| **当前验证基线** | P20.5 实测并写进测试的对象：**0.99.1** | 本轮的核对结果 | 本节 + `tests/pi-version.cjs` |
+| **当前验证基线** | P20.6-Fix 实测并写进测试的对象：**0.99.2** | 本轮的核对结果 | 本节 + `tests/pi-version.cjs` |
 | **运行中版本** | 你这台机器上**实际跑的那个 pi** | 由 `server/pi-version.js` 探测 | Extensions 页 MCP 标签页 / Diagnostics |
 | **未知能力** | 探测拿不到证据的能力 | 一律 `unknown`，**不猜** | 同左 |
 
 **运行中版本**是一个规范状态，不是一个字符串：
 
 ```js
-{ value: '0.99.1', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' }
+{ value: '0.99.2', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' }
 ```
 
 - `source`：`'package.json'`（读**与 bridge 实际启动的那个入口绑定**的 pi 包，
@@ -101,6 +101,32 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 **最重要的结论：RPC 面（命令 / 事件 / UI 方法）在 0.87 → 0.99 之间没有任何漂移。**
 所以 Pi GUI 现有的 RPC 集成不需要迁移；需要改的是**说法**（哪些是历史事实、
 哪些是当前事实）与**新增能力的表示**（built-ins）。
+
+### 0.99.1 → 0.99.2 的实际差异（P20.6-Fix 逐项核对过）
+
+对照物：npm 上 `@earendil-works/pi-coding-agent` 的 **0.99.1** 与 **0.99.2**
+发布 tarball，逐文件比对。**这一节只讲 MCP 相关面**，因为本轮核对范围就是它。
+
+| 面 | 0.99.1 | 0.99.2 | 对 Pi GUI 的影响 |
+|---|---|---|---|
+| **RPC 命令集**（`dist/modes/rpc/rpc-types.d.ts`） | 33 条 | **33 条，diff 为空** | 无变化；**仍然没有 MCP 管理/状态接口** |
+| **`pi mcp list --json` 实现**（`mcp/cli.js` 的 `list()`） | — | **逐字节相同** | 输出形状未变 |
+| **CLI 子命令** | add / remove / list / login / logout | **同左** | 无变化（enable / disable / reconnect 仍无 shell 接口） |
+| **`ServerState`**（`mcp/runtime.d.ts`） | `connecting / connected / disconnected / needs-auth / failed / closed` | **同左** | 无变化（GUI 的 allowlist 加 `list()` 合成的 `disabled`） |
+| **`McpExposure`** | `codemode \| codemode-deferred \| deferred \| direct \| hidden` | **`codemode \| deferred \| direct \| hidden`**；`codemode-deferred` 降为**输入别名** | GUI 两版都认，但一律归一成 `codemode`（运行时报告里只会是规范值） |
+| **工具命名** | `mcp__<server>__<tool>`，保留 `-`（`[^A-Za-z0-9_-]` → `_`） | **`[^A-Za-z0-9_]` → `_`**，重名再挂 8 位 sha256 后缀 | ⚠️ **名字会变**（`my-server` → `my_server`）；GUI 解析接受两版并集 |
+| **server `description`** | 无 | 新增（`pi mcp add --description`） | 只读展示（单行、限长）；**API 可接收**，界面不新增输入框 |
+| **`oauth.clientName`** | 无 | 新增（`pi mcp add --oauth-client-name`） | GUI 一律拒收 `oauth`（凭据面） |
+| **`auth: { provider }`** | 无 | 新增（HTTP server 用 provider 的 `/login` token；**不允许出现在项目 mcp.json**） | GUI 一律拒收；`hasSecrets` 把它算进凭据面 |
+| **`list --json` 新字段** | — | `resources` / `resourceTemplates`（数字）、`toolExposure`（覆盖项）、`note`（项目未信任时） | allowlist 接收；`note` 脱敏后显示 |
+| **built-in extensions** | `llama.cpp` + `codemode` + `tool-search` + `mcp` | **同左**（`mcp` 仍 `replaceable: true`） | 无变化 |
+| **`pi mcp add` / `remove` 的 trust 行为** | **不查 project trust**（直接写文件） | **同左**（未变） | ⚠️ GUI 必须自己立 project trust 闸门（P20.6-Fix） |
+| **`pi mcp login` 默认超时** | 300s | 300s | 无变化（GUI 总是显式传 `--timeout`，用自己的更短上限） |
+
+**结论：0.99.1 → 0.99.2 没有改变 Pi GUI 依赖的任何「协议形状」**（RPC 面、
+`list --json` 形状、CLI 子命令、状态闭集、built-in 清单都一致）。变的是
+**MCP 配置层的词汇表与命名规则**，以及**两个新的凭据面字段**——前者要求
+GUI 归一化与兼容解析，后者要求 GUI 把它们纳入「拒绝接收」的清单。
 
 ### ⚠️ 唯一一条真实的行为变化：工具返回值里的 `isError`
 
@@ -422,5 +448,5 @@ telemetry、崩溃上传、新数据库、新第三方依赖。
 > P20.6 起 MCP 不再是「兼容层观察的对象」，而是原生集成的管理面：
 > 状态走 `pi mcp list --json`、动作走官方 CLI（add / remove / login / logout），
 > 详见 [mcp.md](mcp.md)。本页只保留一句话作边界：**RPC 至今没有 MCP 管理 /
-> 状态命令**（33 条已在 0.99.1 上再次确认），所以兼容层不判 MCP 兼容，
-> 只判上面那九个能力。
+> 状态命令**（33 条，0.99.1 与 0.99.2 上各确认一次，`rpc-types.d.ts` 两版 diff
+> 为空），所以兼容层不判 MCP 兼容，只判上面那九个能力。

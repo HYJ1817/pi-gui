@@ -254,7 +254,11 @@ get_messages ─┘
      `pi mcp list --json`（显式刷新才跑，60s 缓存，不轮询）与两处 `mcp.json`
      的安全结构解析（secret 值不进报告）；动作只代理官方 CLI
      （add / remove / login / logout，`shell:false` + args 数组 + stale 守卫）。
-     入口从 launch identity 派生，证明不了就不代执行。见 [mcp.md](mcp.md)
+     入口从 launch identity 派生，证明不了就不代执行。
+     **派生结论（runtime 状态 / `replaced`）的缓存按 `(cwd, launch identity)`
+     复合键存** —— 换项目或换 pi 实例后立即失效，不会把上一个 workspace 的
+     结论带过去；`project` scope 的写操作另有 project trust 闸门（fail closed）；
+     add 接口在 HTTP 边界拒收一切凭据值。见 [mcp.md](mcp.md)
   - `extension-registry.js` — 只读发现 Pi 的本地与 npm Extension 候选项；用
     `get_commands.sourceInfo.path` 关联可验证命令。已注册工具列表当前不在 Pi RPC 中，
     所以 capability registry 不猜工具归属。Pi 重启和项目切换清掉上一轮错误证据。
@@ -520,7 +524,7 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 
 - 状态真相只有两条官方路 —— `pi mcp list --json`（显式刷新才跑，会启动用户的
   stdio servers，所以 60s 缓存、不轮询）与两处 `mcp.json` 的安全结构解析；
-  人类文本与 TUI 不解析，RPC 里没有 MCP 接口（33 条已确认）
+  人类文本与 TUI 不解析，RPC 里没有 MCP 接口（33 条，0.99.1 / 0.99.2 各确认一次）
 - 跑的入口从 launch identity 派生（`packageDir` + 包内真 js +
   `process.execPath`，经 `agents/cli.js` 的 `runCli`），证明不了就不代执行
 - 动作只代理官方 CLI（add / remove / login / logout）；enable / disable /
@@ -528,3 +532,12 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 - OAuth 全程 pi 负责；in-session 的 select / input 经 P19 管道自动承接
 - `mcp__` 调用走 Tool Timeline 语义行（只投影 server / tool / 状态）；
   annotations 未经 RPC 暴露，不猜；`ui://` 与 MCP Apps 不渲染
+
+### P20.6-Fix 的四条收口
+
+| 面 | 做法 |
+|---|---|
+| **缓存跨 workspace 串状态** | runtime 状态与 `replaced` probe 的缓存改成 **keyed cache**：`key = canon(cwd) + launchIdentityKey`。读写前算一次 key，不符即当没有缓存；`peekStatus` / `peekSummary` 同样带 workspace 守卫。TTL 仍在，仍无轮询，`reset()` 一次清空三者 |
+| **project trust 边界** | 上游 `pi mcp add/remove -l` 不查 trust → GUI 自己立闸：`scope=project` 的写操作只有 `trusted === true` 才执行，`false` / `null` / 抛异常一律 fail closed。项目 `.pi/settings.json` 也只在 `trusted === true` 时参与 `builtin:mcp` 判定。trust 真值仍只有注入的 `readTrust` 一处 |
+| **secret contract** | add 接口只收「无 secret value」的配置：`headers[].value` / `env[].value` / `oauth` / `auth` / 常见 token 字段在 HTTP 边界拒绝，不调 `runCli`、不回显值。唯一保留的引用字段是 `bearerTokenEnvVar`（只传变量名） |
+| **runtime parser** | `state` / `scope` / `exposure` / `tools` / `toolExposure` / `resources` 全部 allowlist；闭集外折成 `unknown` / `null`；`source` / `command` / `url` / `headers` / `env` 与未知字段一律不取 |

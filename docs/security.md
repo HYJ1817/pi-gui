@@ -69,16 +69,36 @@ MCP server 是**用户自己配置的可执行命令与远端 URL**（stdio 跑�
 
 - **状态只在用户手势时刷新**（MCP 页「刷新状态」按钮），60s TTL 缓存，
   **绝不后台轮询**；自动返回的永远是轻量摘要（配置结构 + 内置 probe）
-- **凭据值一个字节都不进 Pi GUI**：`env` / `headers` / `oauth` 的值只记「有没有」；
-  transport 原文（命令路径 / URL）与配置文件绝对路径不进 renderer；
-  `mcp-auth.json` 的 token **绝不读**；错误文本截断并脱敏已知路径
+- **缓存绑定 workspace 与 launch identity**（P20.6-Fix）：runtime 状态与
+  `replaced` 结论按 `(cwd, launch identity)` 分键，换项目 / 换 pi 实例后立即失效。
+  上一个项目的 server 状态绝不会出现在新项目上（identity 是不透明哈希，不进响应）
+- **凭据值一个字节都不进 Pi GUI**：`env` / `headers` / `oauth` / `auth` 的值
+  只记「有没有」；transport 原文（命令路径 / URL）与配置文件绝对路径不进
+  renderer；`mcp-auth.json` 的 token **绝不读**；错误文本截断并脱敏已知路径
+- **MCP 添加接口只接受不含 secret value 的配置**（P20.6-Fix）：`headers[].value` /
+  `env[].value` / `oauth`（整块）/ `auth` / `token` / `accessToken` /
+  `refreshToken` / `apiKey` / `secret` / `password` / `authorization` 在
+  **HTTP 边界即拒绝**（`secret-input-unsupported`），**不调用 `runCli`**，
+  错误文案只带字段名、不回显值。这样即使 pi 把敏感 argv 回显到 stderr 也没有
+  东西可泄 —— 风险在源头消失，而不是靠「响应里不打印」
+- **唯一保留的引用字段**是 `bearerTokenEnvVar`：只传变量名，
+  argv 里是 `--bearer-token-env-var NAME`，值由 pi 运行时从环境里取
 - **页内添加表单只有无凭据字段**；含凭据的配置走终端 `pi mcp add`
  （`${VAR}` / `!command` 引用）或直接编辑文件
+- **项目级 MCP 写操作受 project trust 闸门保护**（P20.6-Fix）：上游
+  `pi mcp add/remove -l` **不查 trust**（会照写未信任项目的 `.pi/mcp.json`），
+  所以 GUI 自己立这道闸 —— `scope=project` 的 add / remove 只有
+  `trusted === true` 才落到 pi CLI；`false` 与「拿不到」一律 fail closed
+  （不执行、返回 `project-untrusted`）。user scope 不受影响。
+  未信任项目的 `.pi/settings.json` 也不参与 `builtin:mcp` 判定
 - **动作只代理官方 CLI**（add / remove / login / logout），`shell:false` + args
   数组，server 名严格校验，workspace stale 守卫（409 作废）；enable / disable /
   reconnect / 改 exposure 没有 shell 接口，不伪造开关
 - **跑的必须是 bridge 正在跑的那份 pi**：入口从 launch identity 派生；
   证明不了就不代执行（unknown / unsupported），不退回裸 `pi`
+- **运行时状态逐项 allowlist**：闭集外的 `state` 折成 `unknown`（不把任意上游
+  字符串投影进 DOM）；`source` / `command` / `url` / `headers` / `env` 与其它
+  未知字段一律不取
 - OAuth 全程 pi 负责（开浏览器、存 token、自动刷新）；in-session 的 select /
   input 经 P19 管道承接，不新增凭据经手的代码
 - Tool Timeline 的 MCP 语义行**不展示完整 args / result**，不猜 annotations；

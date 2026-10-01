@@ -4,59 +4,157 @@ Pi GUI **使用 pi 原生的 MCP，不内置独立 MCP runtime**：不自己实�
 不管理连接、不存 token。所有状态与动作都走 pi 官方的路，拿不到证据就保持
 unknown，不猜。
 
-核对对象：pi **0.99.1** 发布包（`docs/mcp.md`、`docs/cli.md` 的 MCP commands、
-`dist/core/mcp-servers.d.ts`、`dist/extensions/mcp/`）。历史验证基线 0.87.0
-没有原生 MCP（见 [pi-compatibility](pi-compatibility.md) §〇）。
+核对对象：pi **0.99.2** 发布包（`docs/mcp.md`、`docs/cli.md` 的 MCP commands、
+`dist/core/mcp-servers.d.ts`、`dist/extensions/mcp/{cli,config,runtime,tools}.d.ts`）。
+历史验证基线 0.87.0 没有原生 MCP；上一轮基线 0.99.1 的差异见
+[pi-compatibility](pi-compatibility.md) §0.99.1 → 0.99.2。
 
 ## 状态从哪来（三条官方路，不解析人类文本）
 
 | 来源 | 内容 | 什么时候跑 |
 |---|---|---|
-| `pi mcp list --json` | 每台 server 的 state / tools / error（官方结构化输出） | 只在 MCP 页点「刷新状态」时跑一次，60s TTL 缓存，**绝不轮询** |
-| 两处 `mcp.json` 的安全结构解析 | 名 / scope / enabled / exposure / transport 类型 / toolExposure 键 | 随摘要自动读（只取结构） |
+| `pi mcp list --json` | 每台 server 的 state / tools / resources / error（官方结构化输出） | 只在 MCP 页点「刷新状态」时跑一次，60s TTL 缓存，**绝不轮询** |
+| 两处 `mcp.json` 的安全结构解析 | 名 / scope / enabled / exposure / description / transport 类型 / toolExposure 键 | 随摘要自动读（只取结构） |
 | 内置 probe + `get_commands` + settings | `builtin:mcp` 在不在包里、有没有扩展注册 `/mcp`、有没有 `-builtin:mcp` | 随摘要自动读 |
 
 `pi mcp list` 的裸人类输出与 `/mcp` TUI 文本**绝不解析** —— 文案不是 API。
-RPC 33 条命令里没有 MCP 管理/状态接口（0.99.1 已再次确认），所以也没有
-RPC 路可走。
+RPC 命令面在 0.99.1 与 0.99.2 上**逐字节相同**（`dist/modes/rpc/rpc-types.d.ts`
+两版 diff 为空），仍然没有任何 MCP 管理/状态接口，所以也没有 RPC 路可走。
 
 注意：`list --json` **会启动你配置的 stdio servers**（远端还会联网）——
 这正是它只在用户手势时跑的原因。自动返回的永远是轻量摘要。
+
+### `list --json` 的实测形状（0.99.2）
+
+```jsonc
+{
+  "servers": [{
+    "name": "docs", "scope": "global" | "project" | "extension",
+    "source": "<配置文件或扩展的绝对路径>",
+    "enabled": true, "exposure": "codemode",
+    "transport": "<命令串或 URL>", "state": "connected",
+    "tools": ["read_file"],
+    "toolExposure": { "read_file": "direct" },   // 仅在确有覆盖时出现
+    "resources": 3, "resourceTemplates": 1,      // 仅在该 server 提供资源时出现
+    "error": "…"                                  // 仅在未 connected 且确实有错时出现
+  }],
+  "errors": ["…"],
+  "note": "…"   // 仅当项目未信任且存在 <项目>/.pi/mcp.json 时出现
+}
+```
+
+`source` / `transport` 都是**原文**（绝对路径 / 命令 / URL），Pi GUI 一个字节
+都不投影 —— 只留 `transportType: 'stdio' | 'http'` 这个类型面。
+
+## 运行时投影：逐项 allowlist（不猜、不原样透传）
+
+上游新增字段默认**丢弃**，未知枚举值折成中性值：
+
+| 字段 | 规则 |
+|---|---|
+| `state` | 闭集 `connecting / connected / needs-auth / disconnected / disabled / failed / closed`（`runtime.d.ts` 的 `ServerState` + `list()` 合成的 `disabled`）。**闭集外 → `"unknown"`**，绝不把上游字符串原样放进 DOM |
+| `scope` | 只认 `global`（映射为 `user`）/ `project` / `extension`，其余 → `null` |
+| `exposure` | 只认 0.99.2 闭集 `codemode / deferred / direct / hidden`；别名 `codemode-deferred` → `codemode`；其余 → `null` |
+| `transport` | 只留 `stdio` / `http` 类型面，**原文不进报告** |
+| `tools` | 标识符面 `[A-Za-z0-9_.]`，单项 ≤128 字符，最多 200 条 |
+| `toolExposure` | 键 ≤128 字符，值必须是 exposure 枚举 |
+| `resources` / `resourceTemplates` | 只接受非负整数，否则 `null` |
+| `error` / `errors` / `note` | 截断 500 字符 + 已知路径脱敏 |
+| `source` / `command` / `url` / `headers` / `env` / 其它未知键 | **一律不取** |
+
+界面上不认识的 `state` 显示为「无法识别」，而不是打印上游原文。
 
 ## 原生状态机（只认证据）
 
 - `active`：包里有 `builtin:mcp`、没被禁用、没被接管
 - `replaced`：有扩展在 `get_commands` 里注册了 `/mcp`（`source:"extension"`，
   RPC 可见的唯一接管证据）—— session 内 pi 不再读 `mcp.json`
-- `disabled`：settings 的 `extensions` 关了 `builtin:mcp`（项目覆盖用户）
+- `disabled`：settings 的 `extensions` 关了 `builtin:mcp`
 - `unsupported`：包里就没有 `builtin:mcp`（0.87.0 就是这档）
 - `unknown`：证据不足（包读不到或 pi 未应答），不断言
 
 `packageDir` 证明不了时（launch identity 未知），状态 unknown、动作
 unsupported —— 不退回裸 `pi`，那会命中另一份安装。
 
+## 缓存与 workspace 隔离（P20.6-Fix）
+
+`pi mcp list --json` 的结果与 `replaced` 结论都是**「当前 cwd + 当前这份 pi」**
+的事实，不是进程级事实。所以两处缓存（runtime 状态、`get_commands` probe）
+**都按 `(cwd, launch identity)` 复合键存**，读写前先算 key，key 不符即当没有缓存：
+
+- **换项目** → cwd 变 → 上一个项目的 runtime 状态与 `replaced` 结论立即不可见，
+  界面回到「尚未获取运行时状态」；再点刷新会真的重新跑一次 `pi mcp list --json`。
+- **换 pi 实例**（改了 `PI_BIN` / 换了包）→ launch identity 变 → 旧结论同样作废，
+  不会把「A 那份 pi 里 builtin:mcp 被接管」带到 B 上。
+- **同一个 key 内**仍然保留 60s TTL —— 连点刷新不会重复启动用户的 stdio servers。
+- **绝不后台轮询**；`reset()`（任何动作成功后）会同时清掉 runtime 与 command probe。
+
+launch identity 用的是 `piLaunch.identityKey()` 返回的不透明哈希（`v1-<hex>`），
+只参与内部比较，**永不进 API 响应 / Diagnostics / 日志**。
+
 ## 配置 scope（pi 原语，照搬）
 
 - `~/.pi/agent/mcp.json`（用户级）与 `<项目>/.pi/mcp.json`（项目级）
-- 项目同名覆盖用户级；项目文件只在项目被信任后才被 pi 读取
-- 未信任项目的条目标 `未生效（项目未信任）`（与 Skills 的信任闸门同一判定）
+- 项目同名覆盖用户级；**项目文件只在项目被信任后才被 pi 读取**
+- 未信任项目的条目标 `未生效（项目未信任）`；信任状态拿不到时标
+  `未生效（信任状态未知）`（fail closed，与 Skills 的信任闸门同一判定来源）
 - `enabled: false` 保留条目不断连；非法条目 pi 跳过，界面列出 invalid 原因
 
-## 安全：凭据值不进 Pi GUI
+### 项目信任（P20.6-Fix）
 
-- `env` / `headers` / `oauth` 的**值一个字节都不进报告**，只记「有没有」
+上游实测（0.99.2 `dist/extensions/mcp/cli.js`）：`runMcpCommand` 在 `add` / `remove`
+两条分支上**直接返回，不查 project trust**；只有 `list` / `login` / `logout`
+才读 `ProjectTrustStore`。也就是说 `pi mcp add -l` 会照写未信任项目的
+`.pi/mcp.json` —— 这条产品安全边界得由 GUI 自己立。
+
+| 规则 | 行为 |
+|---|---|
+| project scope 的 `add` / `remove` | 只有 `trusted === true` 才落到 pi CLI |
+| `trusted === false` | 不执行，返回 `project-untrusted`，`runCli` 调用 **0 次** |
+| 信任状态拿不到（`null`）或 `readTrust` 抛异常 | 同样 fail closed，`project-untrusted` |
+| user scope 的 `add` / `remove` | **不受影响** |
+| 项目 `.pi/settings.json` 的 `-builtin:mcp` | 只在 `trusted === true` 时参与判定；未信任 / 未知时忽略，不据此下结论 |
+
+信任真值来源仍然只有一处：注入的 `readTrust`（`server/skills.js` 的
+`readTrustState`，与 Skills / extension-registry 同一个），本模块不复制第二套。
+
+## 安全：凭据值不进 Pi GUI（P20.6-Fix）
+
+- `env` / `headers` / `oauth` / `auth` 的**值一个字节都不进报告**，只记「有没有」
 - transport 原文（命令路径 / URL）、配置文件的绝对路径不进 renderer
 - `mcp-auth.json` 的 token **绝不读**；错误文本截断 500 字符并脱敏已知路径
-- 页内「添加」表单**只有无凭据字段**；含 `env` / `headers` / OAuth 的配置
-  请走终端 `pi mcp add`（支持 `${VAR}` 与 `!command` 引用）或直接编辑文件
+- **MCP 添加接口只接受「不含 secret value」的配置**，后端防御式校验：
+
+| 被拒字段 | 结果 |
+|---|---|
+| `headers[].value` / `headers[].key` | `secret-input-unsupported`（`field: "headers[].value"`） |
+| `env[].value` / `env[].key`、裸 `env` 对象 | `secret-input-unsupported` |
+| `oauth`（整块：`clientSecret` / `clientId` / `callbackPort` / …） | `secret-input-unsupported` |
+| `auth`（0.99.2 的 provider token 引用） | `secret-input-unsupported` |
+| `token` / `accessToken` / `refreshToken` / `bearerToken` / `apiKey` / `secret` / `password` / `authorization` | `secret-input-unsupported` |
+
+被拒时：**不调用 `runCli`**，错误文案只带**字段名**、绝不回显值，并指引用户
+改用官方 `pi mcp add` 或手工编辑 pi 的 `mcp.json`。
+
+为什么必须堵在源头：`runCli` 的 `pi-error` 分支会把 pi 的 stderr 尾巴回显进
+错误文案。我们无法假设 pi 永远不会回显敏感 argv —— 既然 GUI 不再传 secret
+argv，这条风险就不存在了，而不是靠「响应里不打印」。
+
+**唯一保留的引用字段**是 `bearerTokenEnvVar`：只传**变量名**，
+argv 里是 `--bearer-token-env-var GITHUB_TOKEN`，pi 把它写成
+`Authorization: Bearer ${GITHUB_TOKEN}`，值由 pi 在运行时从环境里取，
+从不经过 renderer / HTTP / GUI 进程。
+
+页内「添加」表单**只有无凭据字段**；含凭据的配置请走终端 `pi mcp add`
+（支持 `${VAR}` 与 `!command` 引用）或直接编辑文件。
 
 ## 动作（只代理官方 CLI）
 
 | 动作 | 路径 | 说明 |
 |---|---|---|
-| 刷新状态 | `pi mcp list --json` | 显式手势，60s 缓存 |
-| 添加 | `pi mcp add`（stdio / http，`--exposure` 可选） | 显式确认 + workspace stale 守卫；同名替换（pi 原语） |
-| 移除 | `pi mcp remove` | 显式确认；**OAuth 凭据保留**（pi 原语），清凭据走 logout |
+| 刷新状态 | `pi mcp list --json` | 显式手势，60s 缓存（按 workspace 分键） |
+| 添加 | `pi mcp add`（stdio / http，`--exposure` / `--description` 可选） | 显式确认 + workspace stale 守卫 + **project trust 闸门**；同名替换（pi 原语） |
+| 移除 | `pi mcp remove` | 显式确认 + **project trust 闸门**；**OAuth 凭据保留**（pi 原语），清凭据走 logout |
 | 登录 | `pi mcp login --timeout`（默认 120s，上限 180s） | OAuth 全程 pi 负责；超时给终端指引 |
 | 退出登录 | `pi mcp logout` | 删掉 pi 存的 OAuth 凭据 |
 
@@ -76,12 +174,18 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
 
 ## Tool exposure（只显示，不实现）
 
-`codemode`（默认） / `codemode-deferred` / `deferred` / `direct` / `hidden`，
-外加 per-tool `toolExposure`（精确名优先于 pattern）。显示的是**配置值**，
+0.99.2 的闭集是 `codemode`（默认） / `deferred` / `direct` / `hidden`，
+外加 per-tool `toolExposure`（精确名优先于 pattern）。
+`codemode-deferred` **只是 `codemode` 的输入别名**，pi 解析时会归一 ——
+所以运行时报告里看到的永远是 `codemode`。显示的是**配置值**，
 不猜当前 session 实际暴露 —— 实际走 `tool_search` / `codemode` 加载。
 
+0.99.2 起 `codemode` 的工具不再列进 codemode 描述、也不再阻塞首次提示词；
+server 改为出现在系统提示词的 `mcp_servers` 段，脚本用 `searchTools()` /
+`describeNamespace()` 找工具。GUI 不重新实现这些机制。
+
 关系：`codemode` 脚本可调所有非 hidden 工具；`tool_search` 可加载任何
-deferred 工具；`hidden` 不可调。GUI 不重新实现 tool search。
+deferred 工具；`hidden` 不可调。
 
 ## MCP Tool Activity
 
@@ -90,6 +194,12 @@ deferred 工具；`hidden` 不可调。GUI 不重新实现 tool search。
 只显示 server、tool、运行状态；**不展示完整 args / result**；
 annotations（`readOnlyHint` 等）未经 RPC 暴露，**不猜**；
 未知 MCP tool 走安全 generic fallback，server 加 tool 不会让 UI 崩。
+
+**命名规则在 0.99.2 变了**：pi 把名字里除 `[A-Za-z0-9_]` 之外的字符全部换成 `_`
+（0.99.1 还保留 `-`），重名再挂 8 位 sha256 后缀。所以 `my-server` 的工具名是
+`mcp__my_server__x` —— 名字里的 server 段不再等于配置里的 server 名，界面按
+工具名如实显示、不反推。GUI 的解析接受两版并集（`[A-Za-z0-9_-]`），
+连哪个版本都不会把行显示成「未知工具」。
 
 资源工具（`list_mcp_resources` / `list_mcp_resource_templates` /
 `read_mcp_resource`）同样走 Timeline（server / uri 安全摘要）。
@@ -111,19 +221,22 @@ P19 的审批卡片照常弹出。GUI **不按工具名猜危险程度**，没�
 扩展可用 `registerMcpServer` 注册 server（与 session 同寿，`mcp.json` 同名优先）。
 `pi mcp` shell 命令不加载扩展所以看不见它们；RPC 也没有已注册 server 清单。
 因此扩展来源的 servers 在 GUI 里是 unknown（文档记录，不伪造）——
-唯一的例外是接管 `/mcp` 的扩展（见上面的 replaced）。
+唯一的例外是接管 `/mcp` 的扩展（见上面的 replaced）。0.99.2 的
+`list --json` 会给这类条目 `scope: "extension"`，GUI 如实映射成「扩展注册」。
 
 ## 相关测试
 
 ```bash
-npm run test:mcp    # tests/mcp-native.cjs（52 条，纯 fixture，完全离线）
+npm run test:mcp    # tests/mcp-native.cjs（106 条，纯 fixture，完全离线）
 ```
 
-覆盖：安全解析、入口派生、scope/信任/状态机、list 合并与脱敏、动作 argv 与
-校验、stale、unsupported、secret 不回显、语义投影与运行观察。
+覆盖：cache/workspace 隔离、project trust 写闸门、secret API contract、
+0.99.2 fixture/schema、unknown enum fallback，以及安全解析、入口派生、
+scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsupported、
+语义投影与运行观察。
 `test:ui`（smoke）另有 MCP 标签页的界面行为（状态横幅、server 行、刷新/移除/
-添加 wiring、unsupported 声明、无凭据字段）。
+添加 wiring、trust 提示、workspace 隔离文案、unsupported 声明、无凭据字段）。
 
-真机流程（手工，不进 CI）：配一个本地 stdio fixture server → 打开 MCP 页 →
-刷新状态见 connected + 工具数 → 调一次工具见 Timeline 语义行 → logout 清理。
-不要用真实远端 server，不要 OAuth 真登录。
+**live MCP 测试本轮未执行**（不进 CI）。真机流程（手工）：配一个本地 stdio
+fixture server → 打开 MCP 页 → 刷新状态见 connected + 工具数 → 调一次工具见
+Timeline 语义行 → logout 清理。不要用真实远端 server，不要 OAuth 真登录。

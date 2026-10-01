@@ -1,7 +1,13 @@
 /* Pi 原生 MCP 的语义投影（P20.6）。
  *
- * 契约核对方式：pi 0.99.1 发布包原文。
- *   - 工具名 `mcp__<server>__<tool>`（`docs/mcp.md` Exposure 一节）。
+ * 契约核对方式：pi 0.99.2 发布包原文。
+ *   - 工具名 `mcp__<server>__<tool>`（`docs/mcp.md` Control tool exposure 一节）。
+ *     **0.99.2 起** pi 把名字里除 `[A-Za-z0-9_]` 之外的字符全部换成 `_`
+ *     （`tools.js` 的 `createMcpToolName`；0.99.1 还保留 `-`），重名再挂
+ *     8 位 sha256 后缀。所以 `-` 只在 0.99.1 上可能出现 —— 这里**两边都认**，
+ *     不因为连的是哪个版本就把行显示成「未知工具」。
+ *     注意：`-` 被折成 `_` 之后，工具名里的 server 段不再等于配置里的 server 名
+ *     （`my-server` → `my_server`），界面按工具名如实显示，不反推。
  *   - 资源工具 `list_mcp_resources` / `list_mcp_resource_templates` /
  *     `read_mcp_resource`（同页 Resources 一节；`ui://` 与 MCP Apps pi 不渲染）。
  *   - 每次 MCP 调用都过 pi 的 tool pipeline（同页 Permissions 一节），所以
@@ -15,6 +21,8 @@
  * （返回 null）。server 新增 tool 不会让 UI 崩 —— 名字只是文本。
  */
 
+/* server 段接受 `[A-Za-z0-9_-]`：0.99.2 只会产出 `[A-Za-z0-9_]`，
+ * 但连 0.99.1 时仍可能出现 `-`。这是两版并集的**安全超集**。 */
 export const MCP_TOOL_RE = /^mcp__([A-Za-z0-9_-]{1,64}?)__(.+)$/;
 
 /** pi 原生的资源工具（不是 mcp__ 前缀，但同样是 MCP 面）。 */
