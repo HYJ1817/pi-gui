@@ -561,7 +561,7 @@ export function openCtxTip() {
       const name = document.createElement('span');
       name.textContent = '速率限制';
       const val = document.createElement('span');
-      val.textContent = `${q.rateLimit.requests} req / ${q.rateLimit.interval || ''}`;
+      val.textContent = `${fmtMaybeNumber(q.rateLimit.requests)} req / ${q.rateLimit.interval || ''}`;
       row.append(name, val);
       quotaSec.appendChild(row);
     }
