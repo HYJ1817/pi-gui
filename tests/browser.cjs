@@ -412,15 +412,19 @@ const src = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
   /* ---------- setup 源码纪律 ---------- */
   console.log('\n--- M. 设置区纪律 ---');
   const setupSource = src('public/browser.js');
-  check('安装后重启复用现有 API', () => assert.match(setupSource, /await restartBackend\(\)/));
-  check('重启失败可重试', () => assert.match(setupSource, /finally \{ restart.disabled = false/));
+  const browserCapSource = src('public/browser-capabilities.js');
+  check('安装后重启委托给唯一共享实现', () => {
+    assert.match(setupSource, /from '\.\/ui\/capability-setup\.js'/);
+    assert.doesNotMatch(setupSource, /restartBackend/);
+  });
+  check('共享重启流程保留失败可重试', () => assert.match(src('public/ui/capability-setup.js'), /finally \{\s*button\.disabled = false/));
   check('不假装有审批', () => {
     assert.doesNotMatch(setupSource, /from '\.\/approval\.js'/);
-    assert.doesNotMatch(setupSource, /extension_ui_request/);
-    assert.match(setupSource, /没有审批协议/);
+    assert.doesNotMatch(browserCapSource, /extension_ui_request/);
+    assert.match(browserCapSource, /没有审批协议/);
   });
-  check('说明与 Web Search 的区别', () => assert.match(setupSource, /Browser Use 与 Web Search 是两件事/));
-  check('上游只给只读链接', () => assert.match(setupSource, /pi-browser-harness#readme/));
+  check('说明与 Web Search 的区别', () => assert.match(browserCapSource, /Browser Use 与 Web Search 是两件事/));
+  check('上游只给只读链接', () => assert.match(browserCapSource, /pi-browser-harness#readme/));
 
   dom.window.close();
   console.log(`\n${count}/${count} 通过`);

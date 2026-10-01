@@ -620,6 +620,8 @@ const safeName = (name) =>
 const clients = new Set();
 let holdNextComposerUpload = false;
 let workSurfaceGitClean = false;
+/* P22：让 /api/extensions 返回「发现失败」，用来截「未知（无法确认）」而不是「未安装」。 */
+let capabilityRegistryFail = false;
 let harnessSessionId = 'aaaaaaaaaaaaaaaa';
 
 /* 真实 SSE 会给事件带上 bridgeRun：前端靠它丢弃旧 bridge run 的事件，
@@ -822,14 +824,53 @@ const server = http.createServer(async (req, res) => {
     ],
   });
   if (p.startsWith('/api/skills/') && req.method === 'GET') return json(res, 200, { ok: true, content: '# Skill\n\n这是可复现的 SKILL.md 详情。', files: [], note: '' });
+  /* P22：Capability 视图的夹具。三种证据同时存在才有意义：
+   * 装好且已加载的 Web、装了但被停用的 Memory、以及一个**完全不认识**的 Extension
+   * —— 最后这条是「unknown Extension 不能丢」的视觉证据。 */
+  if (p === '/api/__capability/registry-fail') {
+    capabilityRegistryFail = url.searchParams.get('value') === '1';
+    return json(res, 200, { ok: true, registryFail: capabilityRegistryFail });
+  }
+  if (p === '/api/extensions' && capabilityRegistryFail) return json(res, 200, {
+    ok: false, error: '扩展发现失败', extensions: [], diagnostics: [],
+  });
   if (p === '/api/extensions') return json(res, 200, {
     ok: true, hasProject: true, piReachable: true, diagnostics: [],
-    extensions: [{ id: 'fixture-extension', name: 'example-tools', displayName: 'example-tools',
-      version: '1.2.3', description: '夹具扩展，仅用于展示', source: { type: 'local', location: 'C:\\fixture\\.pi\\extensions\\example-tools.ts' },
-      scope: 'project', state: { installed: true, enabled: true, loaded: true, restartRequired: null, error: null },
-      capabilities: [{ type: 'command', id: 'example', displayName: 'example' }], configurable: false, declarations: 1 }],
+    extensions: [
+      { id: 'ext-web', name: 'pi-web-access', displayName: 'pi-web-access', version: '1.4.0',
+        description: '联网搜索与抓取网页正文', source: { type: 'npm', location: 'C:\\Users\\me\\.pi\\agent\\npm\\node_modules\\pi-web-access' },
+        scope: 'global', state: { installed: true, enabled: true, loaded: true, restartRequired: null, error: null },
+        capabilities: [{ type: 'command', id: 'web' }], configurable: false, declarations: 1 },
+      { id: 'ext-memory', name: 'pi-memory', displayName: 'pi-memory', version: '0.4.2',
+        description: '跨会话长期记忆', source: { type: 'npm', location: 'C:\\Users\\me\\.pi\\agent\\npm\\node_modules\\pi-memory' },
+        scope: 'global', state: { installed: true, enabled: false, loaded: null, restartRequired: true, error: null },
+        capabilities: [], configurable: false, declarations: 1 },
+      { id: 'fixture-extension', name: 'example-tools', displayName: 'example-tools',
+        version: '1.2.3', description: '夹具扩展，仅用于展示', source: { type: 'local', location: 'C:\\fixture\\.pi\\extensions\\example-tools.ts' },
+        scope: 'project', state: { installed: true, enabled: true, loaded: true, restartRequired: null, error: null },
+        capabilities: [{ type: 'command', id: 'example', displayName: 'example' }], configurable: false, declarations: 1 },
+      { id: 'ext-unknown', name: 'acme-toolkit', displayName: 'acme-toolkit', version: null,
+        description: null, source: { type: 'local', location: 'C:\\fixture\\.pi\\extensions\\acme.ts' },
+        scope: 'project', state: { installed: true, enabled: null, loaded: null, restartRequired: null, error: null },
+        capabilities: [], configurable: false, declarations: 1 },
+      { id: 'ext-broken', name: 'broken-extension', displayName: 'broken-extension', version: null,
+        description: null, source: { type: 'local', location: 'C:\\fixture\\.pi\\extensions\\broken.ts' },
+        scope: 'global', state: { installed: true, enabled: null, loaded: false, restartRequired: null,
+          error: { extensionId: 'ext-broken', phase: 'load', message: 'Pi 报告扩展执行或加载错误' } },
+        capabilities: [], configurable: false, declarations: 1 },
+    ],
     capabilityRegistry: { commands: [{ name: 'example', extensionId: 'fixture-extension' }], tools: [], toolRegistryAvailable: false },
     actions: { install: false, toggle: false, remove: false, refresh: true, restart: true },
+  });
+  /* P19 能力报告：形状照抄 server/approval-probe.js 的输出。 */
+  if (p === '/api/approvals/capability') return json(res, 200, {
+    ok: true, piVersion: '0.99.2',
+    checks: {
+      toolCallHook: { supported: true, evidence: 'dist/core/extensions/types.d.ts: block?: boolean' },
+      uiPromptDialog: { supported: true, evidence: 'docs/rpc.md: block until the client sends back an extension_ui_response' },
+      coreApproval: { supported: false, evidence: 'docs/usage.md: no permission popups' },
+      customUiOverRpc: { supported: false, evidence: 'dist/modes/rpc/rpc-mode.js: Custom UI not supported in RPC mode' },
+    },
   });
   if (p === '/api/mcp') return json(res, 200, {
     /* P20.5：形状照抄 0.99.1 的真实报告 —— 它确实带 builtin:mcp。

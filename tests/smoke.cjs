@@ -134,7 +134,8 @@ let stubSkills = {
 /* PUT /api/skills/<id> 的应答桩；置为对象就能模拟失败。 */
 let stubSkillToggle = null;
 const skillsCalls = [];
-const stubExtensions = {
+/* 可变：P22 段落要临时换成「发现失败」与「restartRequired」两种形状。 */
+let stubExtensions = {
   ok: true, piReachable: true, actions: { install: false, toggle: false, remove: false, refresh: true, restart: true },
   diagnostics: [], capabilityRegistry: { commands: [{ name: 'hello', extensionId: 'ext-1' }], tools: [], toolRegistryAvailable: false },
   extensions: [
@@ -3248,10 +3249,15 @@ staticCheck();
     await new Promise((r) => setTimeout(r, 30));
     const card = $('workSurface');
 
-    check('扩展面板：Skills / Extensions / MCP 各有独立 Tab', () => {
+    check('扩展面板：All / Capabilities / Extensions / Skills / MCP 五个过滤器各有独立 Tab', () => {
       const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
-      return (labels.length === 3 && labels[0] === 'Skills' && labels[1] === 'Extensions' && labels[2] === 'MCP') || JSON.stringify(labels);
+      return (labels.length === 5 && labels.join(',') === 'All,Capabilities,Extensions,Skills,MCP') || JSON.stringify(labels);
     });
+    /* P22：默认落在 All（统一能力视图），它必须先给出结论行。 */
+    check('扩展面板：默认打开 All 能力视图并显示统一状态', () =>
+      card.querySelector('#extensionsTabAll')?.getAttribute('aria-selected') === 'true'
+      && card.querySelectorAll('.cap-view .ext-item').length > 0
+      && /状态/.test(card.querySelector('.cap-view')?.textContent || ''));
     card.querySelector('#extensionsTabExtensions')?.click();
     await new Promise((r) => setTimeout(r, 30));
     check('P15 Extension 列表分开显示加载状态与来源', () =>
@@ -3261,6 +3267,7 @@ staticCheck();
     check('P15 Extension 详情显示命令并说明 tool registry 限制', () =>
       card.textContent.includes('hello') && card.textContent.includes('Pi RPC 未提供已注册工具列表'));
     card.querySelector('#extensionsTabSkills')?.click();
+    await new Promise((r) => setTimeout(r, 30));
     check('扩展面板：Skills 列表渲染出名称与状态', () => {
       const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
       return names.includes('code-review') || JSON.stringify(names);
@@ -3391,11 +3398,14 @@ staticCheck();
     $('modal').hidden = true;
     window.openExtensions();
     await new Promise((r) => setTimeout(r, 30));
+    // 先切回 Skills 页 —— 这两个断言问的是 Skills 列表，不是 All 能力视图。
+    $('workSurface').querySelector('#extensionsTabSkills')?.click();
+    await new Promise((r) => setTimeout(r, 30));
     check('扩展面板：pi 没应答时显示「状态未知」，并说明原因', () =>
       /无法确认/.test($('workSurface').textContent) || $('workSurface').textContent.slice(0, 200));
     // 点一条看详情：这里必须写「无法确认（pi 未运行）」，
     // 把 loaded=null 显示成「否」会让用户以为 skill 坏了
-    const firstItem = $('workSurface').querySelector('.ext-item');
+    const firstItem = $('workSurface').querySelector('.ext-list .ext-item');
     if (firstItem) firstItem.onclick();
     await new Promise((r) => setTimeout(r, 30));
     check('扩展面板：pi 没应答时详情里写「无法确认」而不是「否」', () =>
@@ -6771,12 +6781,14 @@ staticCheck();
     check('P16 start/update/end 仍是原节点', () => first === window.document.querySelector('[data-id="p16-a"]') && window.document.querySelectorAll('[data-id="p16-a"]').length === 1);
     const box = window.document.createElement('section'); window.document.body.appendChild(box);
     window.renderWebSetup(box, { ok: true, extensions: [] });
-    check('P16 设置区显示实际调用证据', () => box.textContent.includes('web_search: 当前 Pi 已观察到调用'));
+    /* P22：运行观察文案统一成一句话（原来每个 feature 自己一套措辞）。 */
+    const webObs = () => box.querySelector('.cap-rows [data-k="运行观察"] .ext-row-v')?.textContent || '';
+    check('P16 设置区显示实际调用证据', () => webObs() === '本次 Pi 运行观察到调用：web_search');
     check('P16 固定官方安装命令', () => box.querySelector('code').textContent === 'pi install npm:pi-web-access');
     check('P16 第三方权限说明', () => box.textContent.includes('同等系统权限'));
     es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: run });
     window.renderWebSetup(box, { ok: true, extensions: [] });
-    check('P16 重启清空调用证据', () => box.textContent.includes('web_search: 尚未观察到调用'));
+    check('P16 重启清空调用证据', () => webObs() === '本次 Pi 运行尚未观察到调用');
     check('P16 重启期间 Composer 不可用', () => $('input').disabled);
     es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: run });
     const baseFetch = window.fetch;
@@ -6796,11 +6808,11 @@ staticCheck();
     await pendingStale;
     check('P16 切项目后旧确认不重启', () => restartCalls === 1);
     window.renderWebSetup(box, { ok: true, extensions: [] });
-    check('P16 切项目后观察为空', () => box.textContent.includes('web_search: 尚未观察到调用'));
+    check('P16 切项目后观察为空', () => webObs() === '本次 Pi 运行尚未观察到调用');
     window.S.switching = true;
     es.emit({ type: 'tool_execution_start', bridgeRun: run, toolCallId: 'p16-stale', toolName: 'web_search', args: { query: 'Old workspace' } });
     window.renderWebSetup(box, { ok: true, extensions: [] });
-    check('P16 切项目同步期间旧 run 不能污染证据', () => box.textContent.includes('web_search: 尚未观察到调用'));
+    check('P16 切项目同步期间旧 run 不能污染证据', () => webObs() === '本次 Pi 运行尚未观察到调用');
     window.S.switching = false;
     box.remove();
   }
@@ -6828,7 +6840,8 @@ staticCheck();
     check('P17 不创建 Planner 任务或调用 RPC', () => commands.length === beforeCommands);
     const box = window.document.createElement('section'); window.document.body.appendChild(box);
     window.renderSubagentSetup(box, { ok: true, extensions: [] });
-    check('P17 Runtime evidence 独立显示', () => box.textContent.includes('subagent: 当前 Pi 已观察到调用'));
+    const subObs = () => box.querySelector('.cap-rows [data-k="运行观察"] .ext-row-v')?.textContent || '';
+    check('P17 Runtime evidence 独立显示', () => subObs() === '本次 Pi 运行观察到调用：subagent');
     const sameRun = window.S.bridgeRun;
     window.S.switching = true;
     es.emit({ type: 'tool_execution_start', bridgeRun: sameRun, toolCallId: 'p17-old', toolName: 'subagent', args: { agent: 'old' } });
@@ -6845,7 +6858,7 @@ staticCheck();
     check('P17 Stop 后无运行 spinner', () => window.document.querySelector('[data-id="p17-stop"]').dataset.status === 'incomplete');
     window.observeSubagentEvent({ type: 'bridge_status', state: 'restarting', bridgeRun: sameRun });
     window.renderSubagentSetup(box, { ok: true, extensions: [] });
-    check('P17 重启清空 observation', () => box.textContent.includes('subagent: 尚未观察到调用'));
+    check('P17 重启清空 observation', () => subObs() === '本次 Pi 运行尚未观察到调用');
     check('P17 安装仅固定命令', () => box.querySelector('code').textContent === 'pi install npm:pi-subagents');
     const baseFetch = window.fetch; let restarts = 0;
     window.fetch = async (url, opts) => String(url) === '/api/restart' ? (restarts++, { json: async () => ({ ok: false }) }) : baseFetch(url, opts);
@@ -6885,7 +6898,9 @@ staticCheck();
     check('P18 不创建 Planner 任务或调用 RPC', () => commands.length === beforeCommands);
     const box = window.document.createElement('section'); window.document.body.appendChild(box);
     window.renderMemorySetup(box, { ok: true, extensions: [] });
-    check('P18 Runtime evidence 独立显示', () => box.textContent.includes('memory_search: 已观察') && box.textContent.includes('memory_write: 尚未观察'));
+    const memObs = () => box.querySelector('.cap-rows [data-k="运行观察"] .ext-row-v')?.textContent || '';
+    check('P18 Runtime evidence 独立显示', () => memObs() === '本次 Pi 运行观察到调用：memory_search'
+      && !memObs().includes('memory_write'));
     check('P18 安装仅固定命令', () => box.querySelector('code').textContent === 'pi install npm:pi-memory');
     check('P18 长期记忆与会话搜索分开说明', () => box.textContent.includes('这不是「会话搜索」'));
     const sameRun = window.S.bridgeRun;
@@ -6899,7 +6914,7 @@ staticCheck();
     check('P18 Stop 后无运行 spinner', () => window.document.querySelector('[data-id="p18-stop"]').dataset.status === 'incomplete');
     es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: sameRun });
     window.renderMemorySetup(box, { ok: true, extensions: [] });
-    check('P18 重启清空 observation', () => box.textContent.includes('memory_search: 尚未观察'));
+    check('P18 重启清空 observation', () => memObs() === '本次 Pi 运行尚未观察到调用');
     es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: sameRun });
     const baseFetch = window.fetch; let restarts = 0;
     window.fetch = async (url, opts) => String(url) === '/api/restart' ? (restarts++, { json: async () => ({ ok: false }) }) : baseFetch(url, opts);
@@ -6983,7 +6998,8 @@ staticCheck();
     check('P20 不创建 Planner 任务或调用 RPC', () => commands.length === beforeCommands);
     const box = window.document.createElement('section'); window.document.body.appendChild(box);
     window.renderBrowserSetup(box, { ok: true, extensions: [] });
-    check('P20 设置区显示实际调用证据', () => box.textContent.includes('已观察到 2 个浏览器工具被调用'));
+    const brObs = () => box.querySelector('.cap-rows [data-k="运行观察"] .ext-row-v')?.textContent || '';
+    check('P20 设置区显示实际调用证据', () => brObs().includes('本次 Pi 运行观察到调用') && brObs().includes('browser_fill') && brObs().includes('（共 2 个）'));
     check('P20 安装仅固定命令', () => box.querySelector('code').textContent === 'pi install npm:pi-browser-harness');
     check('P20 明说与 Web Search 是两件事', () => box.textContent.includes('Browser Use 与 Web Search 是两件事'));
     check('P20 不假装有审批', () => box.textContent.includes('没有审批协议') && ![...box.querySelectorAll('button')].some(b => /允许|拒绝/.test(b.textContent)));
@@ -6997,10 +7013,188 @@ staticCheck();
     check('P20 Stop 后无运行 spinner', () => window.document.querySelector('[data-id="p20-stop"]').dataset.status === 'incomplete');
     es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: sameRun });
     window.renderBrowserSetup(box, { ok: true, extensions: [] });
-    check('P20 重启清空 observation', () => box.textContent.includes('尚未观察到浏览器工具调用'));
+    check('P20 重启清空 observation', () => brObs() === '本次 Pi 运行尚未观察到调用');
     es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: sameRun });
     box.remove(); window.clearThread();
   }
+
+  /* P22: Capability 视图 —— 一条统一的界面回答「这个能力现在能不能用」。
+   * 这里量的是 DOM 语义（状态文案、六个字段、有没有假按钮）；
+   * 排版与横向溢出在 cdp-shot.cjs 的真实 Chrome 场景里量。 */
+  {
+    window.S.hasProject = true; window.S.switching = false;
+    window.S.bridgeState = 'ready';
+    window.clearThread();
+    const host = $('workSurface');
+    host.innerHTML = '';
+    window.openExtensions();
+    await new Promise(r => setTimeout(r, 60));
+    const card = host;
+    const capRows = () => [...card.querySelectorAll('.cap-view .ext-item')];
+    const capNames = () => capRows().map(r => r.querySelector('.ext-name')?.textContent || '');
+    const capStatuses = () => capRows().map(r => r.querySelector('.cap-status-line')?.textContent || '');
+    const pick = (name) => capRows().find(r => (r.querySelector('.ext-name')?.textContent || '').includes(name));
+    const detailKeys = () => [...card.querySelectorAll('.cap-view .cap-rows .ext-row')].map(r => r.dataset.k);
+    const detailValue = (k) => card.querySelector(`.cap-view .cap-rows [data-k="${k}"] .ext-row-v`)?.textContent || '';
+
+    check('P22 All 是默认过滤器，且每行都有统一状态行', () =>
+      card.querySelector('#extensionsTabAll')?.getAttribute('aria-selected') === 'true'
+      && capRows().length >= 8 && capRows().every(r => r.querySelector('.cap-status-line')));
+
+    check('P22 已知能力都在：Web / Subagents / Memory / Browser / Native MCP / Approval / Usage / Skills', () => {
+      const names = capNames().join(' | ');
+      const want = ['Web Access', 'Subagents', 'Pi Memory', 'Browser Use', 'Native MCP', 'Approval', 'Usage / Quota', 'Skills'];
+      return want.every(w => names.includes(w)) || names;
+    });
+
+    check('P22 All 里同时保留通用 Extension（含不认识 / 坏掉的那些）', () => {
+      const names = capNames();
+      return names.includes('Sample Extension') && names.includes('Broken Extension');
+    });
+
+    check('P22 built-in 用 builtin: 前缀，且详情说清它不来自目录扫描', () => {
+      const row = pick('builtin:mcp');
+      if (!row) return 'no builtin row: ' + capNames().join(' | ');
+      row.onclick();
+      const text = card.querySelector('.cap-view')?.textContent || '';
+      return text.includes('pi 内置扩展') && text.includes('不由 Extension Registry 的目录扫描发现') || text.slice(0, 160);
+    });
+
+    // 详情：统一布局的六个字段 + 固定官方命令
+    pick('Web Access')?.onclick();
+    await new Promise(r => setTimeout(r, 20));
+    check('P22 详情就是统一 setup 布局的六个状态字段', () => {
+      const keys = detailKeys();
+      return JSON.stringify(keys) === JSON.stringify(['安装状态', '启用配置', '已加载', '运行观察', '需要重启', '诊断']) || JSON.stringify(keys);
+    });
+    check('P22 第三方 Extension 给出固定官方命令与复制 / 安装后重启', () => {
+      const code = card.querySelector('.cap-view code');
+      const buttons = [...card.querySelectorAll('.cap-view .ext-acts .btn')].map(b => b.textContent);
+      return code?.textContent === 'pi install npm:pi-web-access'
+        && buttons.includes('复制安装命令') && buttons.includes('安装后重启 Pi') || JSON.stringify(buttons);
+    });
+
+    /* 发现失败时 installed 只能是 null —— 这一格最容易糊弄成「未安装」。
+     * 换一个 ok:false 的 registry 桩，刷新后必须显示「未知（无法确认）」。 */
+    const savedForNull = stubExtensions;
+    stubExtensions = { ok: false };
+    [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
+    await new Promise(r => setTimeout(r, 40));
+    pick('Web Access')?.onclick();
+    await new Promise(r => setTimeout(r, 20));
+    check('P22 null 显示「未知（无法确认）」，不显示成「否」', () => {
+      const text = card.querySelector('.cap-view')?.textContent || '';
+      return detailValue('安装状态') === '未知（无法确认）'
+        && detailValue('已加载') === '未知（无法确认）'
+        && !text.includes('未安装') || `${detailValue('安装状态')} / ${detailValue('已加载')}`;
+    });
+    stubExtensions = savedForNull;
+    [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
+    await new Promise(r => setTimeout(r, 40));
+
+    // Native MCP：进入统一体验，但不假装有 npm 安装命令
+    pick('Native MCP')?.onclick();
+    await new Promise(r => setTimeout(r, 20));
+    check('P22 Native MCP 不显示 npm 安装命令', () =>
+      card.querySelector('.cap-view code') === null
+      && (card.querySelector('.cap-view')?.textContent || '').includes('没有安装命令'));
+    check('P22 Native MCP 复用 P20.6 的原生状态词汇', () => {
+      const text = card.querySelector('.cap-view')?.textContent || '';
+      return text.includes('原生 MCP 生效中') && text.includes('built-in');
+    });
+    check('P22 Native MCP 明说「包里有」不等于「已启用」', () =>
+      (card.querySelector('.cap-view')?.textContent || '').includes('不等于'));
+
+    // 搜索
+    const capSearch = card.querySelector('.cap-view .ext-search');
+    capSearch.value = 'subagents';
+    capSearch.dispatchEvent(new window.Event('input'));
+    await new Promise(r => setTimeout(r, 10));
+    check('P22 搜索按名称过滤', () => {
+      const names = capNames();
+      return names.length === 1 && names[0] === 'Subagents' || JSON.stringify(names);
+    });
+    capSearch.value = '长期记忆';
+    capSearch.dispatchEvent(new window.Event('input'));
+    await new Promise(r => setTimeout(r, 10));
+    check('P22 搜索覆盖用途 / 描述', () => {
+      const names = capNames();
+      return names.length === 1 && names[0].includes('Pi Memory') || JSON.stringify(names);
+    });
+    capSearch.value = '未安装';
+    capSearch.dispatchEvent(new window.Event('input'));
+    await new Promise(r => setTimeout(r, 10));
+    check('P22 搜索覆盖状态文案', () => capRows().length > 0 && capStatuses().some(s => s.includes('未安装')));
+    capSearch.value = 'zzzz-no-match';
+    capSearch.dispatchEvent(new window.Event('input'));
+    await new Promise(r => setTimeout(r, 10));
+    check('P22 搜不到时给中性空态，不是空白页', () =>
+      (card.querySelector('.cap-view .ext-empty')?.textContent || '').includes('没有符合筛选条件'));
+    capSearch.value = '';
+    capSearch.dispatchEvent(new window.Event('input'));
+    await new Promise(r => setTimeout(r, 10));
+
+    // Capabilities 过滤器：只剩已知能力，扩展与 server 明细不在这里
+    card.querySelector('#extensionsTabCapabilities')?.click();
+    await new Promise(r => setTimeout(r, 40));
+    check('P22 Capabilities 过滤器只留已知能力', () => {
+      const names = capNames().join(' | ');
+      return names.includes('Web Access') && names.includes('Native MCP')
+        && !names.includes('Sample Extension') && !names.includes('builtin:') || names;
+    });
+
+    // Usage 入口：只读，点了打开既有上下文 Tip，不新建一套用量数据
+    pick('Usage / Quota')?.onclick();
+    await new Promise(r => setTimeout(r, 20));
+    check('P22 Usage 只给一个只读入口', () => {
+      const buttons = [...card.querySelectorAll('.cap-view .ext-acts .btn')].map(b => b.textContent);
+      return JSON.stringify(buttons) === JSON.stringify(['打开上下文与额度']) || JSON.stringify(buttons);
+    });
+    [...card.querySelectorAll('.cap-view .ext-acts .btn')].find(b => b.textContent === '打开上下文与额度')?.onclick();
+    await new Promise(r => setTimeout(r, 20));
+    check('P22 Usage 入口复用既有上下文 Tip，不复制数据', () =>
+      $('composerPopover').hidden === false && $('composerPopover').textContent.includes('背景信息窗口'));
+    window.closePop();
+    await new Promise(r => setTimeout(r, 10));
+
+    // restartRequired：配置改了没重启 → 结论行与状态行都要说
+    const savedExt = stubExtensions;
+    stubExtensions = { ok: true, piReachable: true, diagnostics: [],
+      extensions: [{ id: 'ext-web', name: 'pi-web-access', displayName: 'pi-web-access', version: '1.2.3',
+        description: 'web tools', source: { type: 'npm', location: 'C:/npm/pi-web-access' }, scope: 'global',
+        state: { installed: true, enabled: false, loaded: true, restartRequired: true, error: null },
+        capabilities: [], configurable: false }] };
+    card.querySelector('#extensionsTabAll')?.click();
+    await new Promise(r => setTimeout(r, 10));
+    // 面板是缓存的 —— 必须显式刷新才会重新取证据（这正是产品行为）。
+    [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
+    await new Promise(r => setTimeout(r, 40));
+    check('P22 restartRequired 进入统一状态（结论行 + 需要重启一行）', () => {
+      const row = capRows().find(r => (r.querySelector('.ext-name')?.textContent || '').includes('Web Access'));
+      if (!row) return 'no Web row: ' + capNames().join(' | ');
+      row.onclick();
+      const status = row.querySelector('.cap-status-line')?.textContent || '';
+      return (status.includes('需重启 Pi') && detailValue('需要重启') === '是'
+        && detailValue('启用配置') === '已停用' && detailValue('已加载') === '已确认加载') || `${status} / ${detailValue('需要重启')}`;
+    });
+    stubExtensions = savedExt;
+
+    // 无自动安装
+    check('P22 Capability 视图没有任何安装动作', () =>
+      ![...card.querySelectorAll('.cap-view button')].some(b => /^安装(?!后重启)/.test(b.textContent.trim()))
+      && !card.querySelector('.cap-view input:not([type="search"])'));
+
+    // stale workspace：结果回来时项目已经切了 → 不许落地
+    host.innerHTML = '';
+    window.openExtensions();
+    window.S.workspaceGeneration++;
+    await new Promise(r => setTimeout(r, 60));
+    check('P22 切项目后旧能力结果不落地', () =>
+      (card.querySelector('.cap-view .ext-empty')?.textContent || '').includes('项目已切换')
+      && card.querySelectorAll('.cap-view .ext-item').length === 0);
+    window.clearThread();
+  }
+
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;

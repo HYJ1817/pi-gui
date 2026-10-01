@@ -883,7 +883,11 @@ async function main() {
   await evalJs(`fetch('/api/__work-surface/git-clean?value=0').then(r=>r.ok)`);
   await evalJs(`document.querySelector('#navExtensions').click()`);
   await sleep(550);
-  await shotOf('#workSurface', '115-workspace-extensions', 'P14-D：Skills Stage 工作区', ['Skills', 'code-review'], [...surfaceChecks('extensions'), ['Skill 列表可见', `document.querySelectorAll('#workSurface .ext-list .ext-item').length===3`]]);
+  /* P22：Extensions 工作区默认落在 All（统一能力视图），Skills 是它的第四个过滤器。 */
+  await shotOf('#workSurface', '115-workspace-extensions', 'P14-D / P22：扩展工作区默认落在 All 能力视图', ['Web Access', 'Native MCP', '已加载'], [...surfaceChecks('extensions'), ['能力行与统一状态行都在', `document.querySelectorAll('#workSurface .cap-view .ext-item').length>=8 && [...document.querySelectorAll('#workSurface .cap-view .cap-status-line')].every(e=>e.textContent.trim().length>0)`], ['项目级 Extension 没丢', `[...document.querySelectorAll('#workSurface .cap-view .ext-name')].some(e=>e.textContent==='acme-toolkit')`]]);
+  await evalJs(`document.querySelector('#extensionsTabSkills').click()`);
+  await sleep(400);
+  await shotOf('#workSurface', '115b-workspace-skills', 'P14-D：Skills Stage 工作区', ['Skills', 'code-review'], [['Skill 列表可见', `document.querySelectorAll('#workSurface .ext-list .ext-item').length===3`]]);
   await evalJs(`document.querySelector('#workSurface .ext-list .ext-item')?.click()`);
   await sleep(250);
   await shotOf('#workSurface .ext-detail', '116-workspace-skill-detail', 'P14-D：Skill 详情', ['code-review'], [['唯一选中 Skill', `document.querySelectorAll('#workSurface .ext-list .ext-item[aria-current="true"]').length===1`]]);
@@ -958,6 +962,9 @@ async function main() {
   await sleep(350);
   await shotOf('#workSurface', '131-neutral-changes', 'P14-E：Git 过滤与危险按钮主体中性', ['文件变更'], [...viewportChecks('#workSurface')]);
   await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(350);
+  /* P22：默认落在 All 能力视图；这一张量的是 Skill 选中行的中性色，所以先切到 Skills。 */
+  await evalJs(`document.querySelector('#extensionsTabSkills')?.click()`);
   await sleep(350);
   await evalJs(`document.querySelector('#workSurface .ext-list .ext-item')?.click()`);
   await shotOf('#workSurface', '132-neutral-extensions', 'P14-E：Skill 选中与 Tabs 为灰阶', ['code-review'], [...viewportChecks('#workSurface')]);
@@ -1060,7 +1067,10 @@ async function main() {
   await sleep(260);
   await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);
   for (let i=0; i<40 && !await evalJs(`document.querySelector('#workSurface .ext-extension-item')`); i++) await sleep(50);
-  await evalJs(`document.querySelector('#workSurface .ext-extension-item').click()`);
+  /* P22 夹具里 registry 有多条（Web / Memory / example-tools / 两条未知），
+   * 所以按名字点，不按位置点 —— 位置会随夹具顺序漂。 */
+  await evalJs(`[...document.querySelectorAll('#workSurface .ext-extension-item')].find(n=>n.textContent.includes('example-tools'))?.click()`);
+  for (let i=0; i<40 && !(await evalJs(`document.querySelector('#workSurface .ext-detail')?.textContent.includes('command: example')`)); i++) await sleep(50);
   await shotOf('#workSurface', '155-extension-registry', 'P15：Extension 发现列表和只读详情', ['example-tools', '1.2.3', 'command: example'], [
     ...viewportChecks('#workSurface'),
     ['Extensions 标签选中', `document.querySelector('#extensionsTabExtensions').getAttribute('aria-selected')==='true'`],
@@ -1191,14 +1201,98 @@ async function main() {
   await evalJs(`fetch('/api/__conversation?what=quota-restore-model').then(r=>r.ok)`);
   await sleep(160);
   await evalJs(`document.querySelector('#navExtensions').click()`);
-  await sleep(260);
-  await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);
+  await sleep(300);
+  /* P22：Pi Memory 的 setup 已并入统一的 Capability 详情（不再是 Extensions 页里的一段）。 */
+  await evalJs(`document.querySelector('#extensionsTabCapabilities')?.click()`);
+  await sleep(400);
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>n.textContent.includes('Pi Memory'))?.click()`);
+  await sleep(300);
+  await shotOf('#workSurface .cap-view .ext-detail', '162-memory-setup', 'P22：Pi Memory 设置区（统一布局：固定命令 + 真实运行观察 + 限制）', ['Pi Memory（长期记忆）', 'pi install npm:pi-memory', '这不是「会话搜索」'], [
+    ['固定官方安装命令只出现一次', `document.querySelectorAll('#workSurface .cap-view .ext-detail code').length===1`],
+    ['运行观察来自真实事件', `document.querySelector('#workSurface .cap-rows [data-k="运行观察"] .ext-row-v').textContent.includes('memory_search')`],
+    ['动作只有复制 / 安装后重启', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].every(b=>b.textContent==='复制安装命令'||b.textContent==='安装后重启 Pi')`],
+  ]);
+  /* ---------- P22：Capability 视图（统一状态 / Native MCP / built-in / 未知 / 响应式） ----------
+   *
+   * 这里量的是 jsdom 量不到的那几样：真实布局宽度、列表项高度、横向溢出、
+   * 700/900/1200/1536 四档宽度。断言只描述**结构事实**（有几个字段、有没有
+   * 那个元素），不描述像素值 —— 像素值随字体变，钉它只会得到假红。 */
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(500);
+  await evalJs(`document.querySelector('#extensionsTabAll')?.click()`);
+  await sleep(400);
+  await shotOf('#workSurface', '171-capability-all', 'P22：All —— 一条统一界面回答「这个能力现在能不能用」', ['Web Access', 'Native MCP', 'builtin:mcp', 'acme-toolkit', '未知'], [
+    ...surfaceChecks('extensions'),
+    ['每行都有统一状态行', `(() => {const rows=[...document.querySelectorAll('#workSurface .cap-view .ext-item')];return rows.length>=8&&rows.every(r=>(r.querySelector('.cap-status-line')?.textContent||'').trim().length>0)})()`],
+    ['unknown Extension 仍在列表里', `[...document.querySelectorAll('#workSurface .cap-view .ext-name')].some(e=>e.textContent==='acme-toolkit')`],
+    ['built-in 不伪装成普通 Extension', `[...document.querySelectorAll('#workSurface .cap-view .ext-name')].some(e=>e.textContent==='builtin:mcp')`],
+    ['没有巨型卡片（每项高度受控）', `[...document.querySelectorAll('#workSurface .cap-view .ext-item')].every(e=>e.getBoundingClientRect().height<120)`],
+    ['列表与详情都是真实宽度', `(() => {const l=document.querySelector('#workSurface .cap-view .ext-list'),d=document.querySelector('#workSurface .cap-view .ext-detail');return l.getBoundingClientRect().width>0&&d.getBoundingClientRect().width>0})()`],
+  ]);
+
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>(n.querySelector('.ext-name')||{}).textContent==='Web Access')?.click()`);
   await sleep(320);
-  await evalJs(`[...document.querySelectorAll('#workSurface .web-setup')].find(n=>n.textContent.includes('Pi Memory'))?.scrollIntoView({block:'center'})`);
-  await shotOf('#workSurface', '162-memory-setup', 'P18：Extensions 页 Pi Memory 设置区（固定命令 + 真实运行观察）', ['Pi Memory（长期记忆）', 'pi install npm:pi-memory', '这不是「会话搜索」'], [
-    ...viewportChecks('#workSurface'),
-    ['Runtime evidence 来自真实事件', `[...document.querySelectorAll('#workSurface .web-setup')].find(n=>n.textContent.includes('Pi Memory')).textContent.includes('memory_search: 已观察')`],
-    ['不提供自动安装入口', `[...[...document.querySelectorAll('#workSurface .web-setup')].find(n=>n.textContent.includes('Pi Memory')).querySelectorAll('button')].every(b=>b.textContent==='复制安装命令'||b.textContent==='安装后重启 Pi')`],
+  await shotOf('#workSurface .cap-view .ext-detail', '172-capability-web-setup', 'P22：统一 setup 布局 —— 名称 / 用途 / 六个状态字段 / 固定官方命令 / 复制 / 重启 / 限制', ['Web Access', 'pi install npm:pi-web-access', '运行观察', '限制'], [
+    ['六个统一状态字段都在', `(() => {const keys=[...document.querySelectorAll('#workSurface .cap-rows .ext-row')].map(r=>r.dataset.k);return JSON.stringify(keys)===JSON.stringify(['安装状态','启用配置','已加载','运行观察','需要重启','诊断'])})()`],
+    ['固定官方命令只出现一次', `document.querySelectorAll('#workSurface .cap-view .ext-detail code').length===1`],
+    ['动作只有复制 / 安装后重启', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].map(b=>b.textContent).join(',')==='复制安装命令,安装后重启 Pi'`],
+    ['没有安装表单（不提供任意包名入口）', `document.querySelectorAll('#workSurface .cap-view .ext-detail input').length===0`],
+  ]);
+
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>n.textContent.includes('Native MCP'))?.click()`);
+  await sleep(320);
+  await shotOf('#workSurface .cap-view .ext-detail', '173-capability-native-mcp', 'P22：Native MCP 进入统一体验，但**不显示** npm 安装命令', ['Native MCP（pi 内置）', '没有安装命令', '原生 MCP 生效中', '不构成'], [
+    ['没有安装命令元素', `document.querySelector('#workSurface .cap-view .ext-detail code')===null`],
+    ['说明来自 Pi built-in capability', `document.querySelector('#workSurface .cap-view .ext-detail').textContent.includes('built-in capability')`],
+    ['原生状态原文来自 P20.6', `document.querySelector('#workSurface .cap-view .ext-detail').textContent.includes('未被接管')`],
+    ['一个伪造开关都没有', `document.querySelectorAll('#workSurface .cap-view .ext-acts button').length===0`],
+  ]);
+
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>n.textContent.includes('builtin:mcp'))?.click()`);
+  await sleep(300);
+  await shotOf('#workSurface .cap-view .ext-detail', '174-capability-builtin', 'P22：built-in 能力 —— 「包里带了它」≠「当前启用了它」', ['builtin:mcp', 'pi 内置扩展', '出处'], [
+    ['「启用 / 加载」显示不适用而不是否', `(() => {const v=k=>document.querySelector('#workSurface .cap-rows [data-k="'+k+'"] .ext-row-v').textContent;return v('启用配置')==='不适用'&&v('已加载')==='不适用'})()`],
+    ['带原文出处', `document.querySelector('#workSurface .cap-view .ext-detail .ext-code.quote').textContent.includes('builtin: true')`],
+    ['说明不由目录扫描发现', `document.querySelector('#workSurface .cap-view .ext-detail').textContent.includes('不由 Extension Registry 的目录扫描发现')`],
+  ]);
+
+  /* 发现失败 → 只能显示「未知（无法确认）」。这一条是整页纪律的核心。 */
+  await evalJs(`fetch('/api/__capability/registry-fail?value=1').then(r=>r.ok)`);
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-bar .btn')].find(b=>b.textContent==='刷新')?.click()`);
+  await sleep(520);
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>n.textContent.includes('Web Access'))?.click()`);
+  await sleep(300);
+  await shotOf('#workSurface .cap-view .ext-detail', '175-capability-unknown', 'P22：发现失败时是「未知（无法确认）」，绝不是「未安装」', ['未知（无法确认）'], [
+    ['安装状态是未知而不是否', `document.querySelector('#workSurface .cap-rows [data-k="安装状态"] .ext-row-v').textContent==='未知（无法确认）'`],
+    ['已加载同样是未知', `document.querySelector('#workSurface .cap-rows [data-k="已加载"] .ext-row-v').textContent==='未知（无法确认）'`],
+    ['没有把未知写成「未安装」', `!document.querySelector('#workSurface .cap-rows [data-k="安装状态"] .ext-row-v').textContent.includes('未安装')`],
+    ['结论行也是未知', `document.querySelector('#workSurface .cap-verdict-text').textContent.includes('未知')`],
+  ]);
+  await evalJs(`fetch('/api/__capability/registry-fail?value=0').then(r=>r.ok)`);
+
+  for (const [width, label] of [[700, '176-capability-700'], [900, '177-capability-900'], [1200, '178-capability-1200'], [1536, '179-capability-1536']]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await evalJs(`document.querySelector('#navExtensions').click()`);
+    await sleep(460);
+    await shotOf('#workSurface', label, `P22：${width}px 能力视图 —— 无横向溢出、无巨型卡片`, ['Web Access'], [
+      ...surfaceChecks('extensions'),
+      ['页面无横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`],
+      ['能力行高度受控', `[...document.querySelectorAll('#workSurface .cap-view .ext-item')].every(e=>e.getBoundingClientRect().height<140)`],
+      ['每行文字不横向溢出', `[...document.querySelectorAll('#workSurface .cap-view .ext-item')].every(e=>e.scrollWidth<=e.clientWidth+1)`],
+    ]);
+  }
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(300);
+
+  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(460);
+  await evalJs(`(() => {const s=document.querySelector('#workSurface .cap-view .ext-search');s.value='memory';s.dispatchEvent(new Event('input'))})()`);
+  await sleep(260);
+  await shotOf('#workSurface', '180-capability-search', 'P22：按名称 / 用途 / 状态搜索（搜索与过滤器叠加）', ['Pi Memory'], [
+    ['搜索结果收窄且仍是完整行', `(() => {const rows=[...document.querySelectorAll('#workSurface .cap-view .ext-item')];return rows.length>=1&&rows.length<10&&rows.every(r=>r.querySelector('.cap-status-line'))})()`],
+    ['汇总行显示当前筛选数', `document.querySelector('#workSurface .cap-view .ext-sum-label').textContent.includes('当前筛选')`],
+    ['搜索框是 type=search（不是任意输入口）', `document.querySelector('#workSurface .cap-view .ext-search').type==='search'`],
   ]);
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));

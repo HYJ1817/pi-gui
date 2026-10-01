@@ -298,9 +298,12 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   check('no Planner coupling', () => assert.doesNotMatch(activitySource, /planner|planId|taskId|execution_event/));
   check('no app state mutation', () => assert.doesNotMatch(activitySource, /\bS\.|ownsWorkspace/));
   check('capabilities contain no install or execution', () => assert.doesNotMatch(pub('memory-capabilities.js'), /\bexecFile\(|\bspawn\(|fetch\(|node:fs|child_process/));
-  check('setup wiring uses real restart API', () => assert.match(pub('memory.js'), /await restartBackend\(\)/));
-  check('restart failure retry available', () => assert.match(pub('memory.js'), /finally \{ restart.disabled = false/));
-  check('extensions page renders memory setup', () => assert.match(pub('extensions.js'), /renderMemorySetup\(/));
+  check('setup wiring delegates to the single shared restart flow', () => {
+    assert.match(pub('memory.js'), /from '\.\/ui\/capability-setup\.js'/);
+    assert.doesNotMatch(pub('memory.js'), /restartBackend/);
+  });
+  check('restart failure retry available in shared component', () => assert.match(pub('ui/capability-setup.js'), /finally \{\s*button\.disabled = false/));
+  check('capability view renders memory capability', () => assert.match(pub('capability-view.js'), /memoryCapability\(/));
   check('app observes memory events', () => assert.match(pub('app.js'), /observeMemoryEvent\(evt\)/));
   check('timeline dispatches memory adapter', () => assert.match(pub('tool-view.js'), /memoryActivity\(entry\)/));
   check('memory tools are not mutating file tools', () => { for (const name of MEMORY_TOOLS) assert.equal(model.MUTATING_TOOLS.has(name), false); });
