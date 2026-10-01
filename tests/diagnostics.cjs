@@ -59,7 +59,8 @@ const path = require('node:path');
       {
         id: 'pi',
         available: true,
-        version: '0.87.0',
+        /* 故意与规范来源不一致：规范来源必须赢（否则诊断又显示「另一份 pi」）。 */
+        version: '0.99.9',
         reason: null,
         detail: 'Bearer ultra-secret',
         capabilities: { toolEvents: true },
@@ -76,7 +77,7 @@ const path = require('node:path');
   const mcp = {
     readReport: () => ({
       supported: false,
-      piVersion: '0.87.0',
+      piVersion: '0.99.8',
       evidence: path.join(os.homedir(), '.pi', 'agent', 'package.json'),
     }),
   };
@@ -106,6 +107,11 @@ const path = require('node:path');
     agentRegistry,
     mcp,
     compat,
+    /* P20.5 Blocker A：规范版本状态 + launch identity 的脱敏摘要。
+     * 这里**故意让两者与 agentRegistry / mcp 报告不一致** ——
+     * 规范来源必须赢，否则诊断又会显示「另一份 pi」。 */
+    piVersion: () => ({ value: '0.87.0', source: 'package.json', status: 'known', updatedAt: '2026-10-01T00:00:00.000Z' }),
+    launch: () => ({ source: 'env', binName: 'pi.cmd', entryKnown: true, packageDirKnown: true }),
     dataDir,
     version: '0.10.0',
     env: {
@@ -205,6 +211,29 @@ const path = require('node:path');
   ok('PI_BIN 只暴露 basename', () => {
     assert.equal(snapshot.pi.configuredBin, 'pi.cmd');
     assert.ok(!serialized.includes(path.join(root, 'bin')));
+  });
+
+  ok('launch identity 进诊断（只有枚举与 basename，无绝对路径）', () => {
+    assert.deepEqual(snapshot.pi.launch, {
+      source: 'env',
+      binName: 'pi.cmd',
+      entryKnown: true,
+      packageDirKnown: true,
+    });
+    assert.ok(!serialized.includes(root), 'launch 摘要把绝对路径带出来了');
+  });
+
+  ok('规范版本状态优先于 agent 与 MCP 报告，且带出处', () => {
+    /* agent 给 0.99.9、mcp 给 0.99.8 —— 规范来源给 0.87.0，必须是它赢。 */
+    assert.equal(snapshot.pi.version, '0.87.0');
+    assert.equal(snapshot.pi.versionSource, 'package.json');
+  });
+
+  ok('没注入 launch / 版本源时字段为 null（老调用方不受影响）', () => {
+    const bare = createDiagnostics({ runtime, rpc, agentRegistry, mcp, dataDir, version: '0.10.0', env: {} }).readSnapshot();
+    assert.equal(bare.pi.launch, null);
+    assert.equal(bare.pi.versionSource, null);
+    assert.equal(bare.pi.version, '0.99.9'); // 退回 agent 报告
   });
 
   const noProject = createDiagnostics({

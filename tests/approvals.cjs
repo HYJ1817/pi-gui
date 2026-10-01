@@ -276,7 +276,10 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
     assert.deepEqual([...box.querySelectorAll('button')].map((b) => b.textContent), []);
   });
 
-  /* ---------- 后端能力探测（fixture 世界） ---------- */
+  /* ---------- 后端能力探测（fixture 世界） ----------
+   * 包目录**只从 launch identity 取**（P20.5）：给的 `piBin` 是一个真实入口文件，
+   * 探测从它向上找到属于它的包。旧版靠 `env.APPDATA` 那种「常见全局安装位置」
+   * 猜包在哪 —— 那条路会让探测读到**另一份** pi 的包，这里连带一起钉住。 */
   const { probeApprovalSupport } = await import('../server/approval-probe.js');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-approval-'));
   const pkgDir = path.join(root, 'npm', 'node_modules', '@earendil-works', 'pi-coding-agent');
@@ -287,15 +290,28 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   write('docs/usage.md', 'It intentionally does not include built-in MCP, sub-agents, permission popups, plan mode.\n');
   write('dist/modes/rpc/rpc-mode.js', 'async custom() {\n // Custom UI not supported in RPC mode\n return undefined;\n}\n');
   write('dist/core/extensions/types.d.ts', 'export interface ToolCallEventResult {\n  block?: boolean;\n}\n');
-  const report = probeApprovalSupport({ env: { APPDATA: root }, piBin: '' });
+  /* 真正的入口文件 —— 与 npm 装出来的形状一致（`<prefix>/bin/pi`）。 */
+  const binFile = path.join(root, 'npm', 'bin', 'pi');
+  fs.mkdirSync(path.dirname(binFile), { recursive: true });
+  fs.writeFileSync(binFile, '#!/usr/bin/env node\n', 'utf8');
+  const report = probeApprovalSupport({ env: { PATH: '' }, piBin: binFile });
   check('probe finds the tool_call block contract', () => { assert.equal(report.checks.toolCallHook.supported, true); assert.ok(report.checks.toolCallHook.evidence.includes('types.d.ts')); });
   check('probe finds the blocking dialog contract', () => { assert.equal(report.checks.uiPromptDialog.supported, true); assert.ok(report.checks.uiPromptDialog.evidence.includes('rpc.md')); });
   check('probe reports core has no built-in approval', () => { assert.equal(report.checks.coreApproval.supported, false); assert.ok(report.checks.coreApproval.evidence.includes('usage.md')); });
   check('probe reports custom() degraded over RPC', () => assert.equal(report.checks.customUiOverRpc.supported, false));
   check('probe reports the pi version it read', () => assert.equal(report.piVersion, '0.87.0'));
   check('probe never leaks the package path', () => assert.ok(!JSON.stringify(report).includes(root)));
-  const empty = probeApprovalSupport({ env: { APPDATA: path.join(root, 'nowhere') }, piBin: '' });
-  check('missing pi package stays unknown', () => { for (const c of Object.values(empty.checks)) assert.equal(c.supported, null); });
+  /* Blocker A 的反面：入口指向一个**不隶属于任何 pi 包**的地方时，
+   * 不能去「常见全局位置」随便挑一份来读 —— 那就等于把另一份 Pi 的能力
+   * 说成运行中 Pi 的能力。三值一律 unknown。 */
+  const orphan = probeApprovalSupport({ env: { PATH: '' }, piBin: path.join(root, 'nowhere', 'pi') });
+  check('missing pi package stays unknown', () => { for (const c of Object.values(orphan.checks)) assert.equal(c.supported, null); });
+  /* 裸命令（`pi`）+ 没有 PATH → 解析不到入口 → unknown（不是「按清单猜一个」）。 */
+  const bare = probeApprovalSupport({ env: {}, piBin: 'pi' });
+  check('bare command without PATH stays unknown (no global-package guessing)', () => {
+    for (const c of Object.values(bare.checks)) assert.equal(c.supported, null);
+    assert.equal(bare.piVersion, null);
+  });
   fs.rmSync(root, { recursive: true, force: true });
 
   /* ---------- 回归：其它 feature 不受影响 ---------- */

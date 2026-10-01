@@ -423,7 +423,13 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     });
     check('rpc-bridge 不 import 任何业务模块（只靠注入认识项目配置）', () => {
       const imports = [...src.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
-      return imports.every((i) => i.startsWith('node:')) || imports.join(',');
+      /* 白名单只有 `./pi-launch.js` 一个 —— 它是**启动命令怎么成形**的叶子原语
+       * （只依赖 node:fs / node:path，零业务依赖、零循环）。
+       * rpc-bridge 必须与 `--version` 探测用同一份 `formatLaunch()`，否则
+       * 「启动的命令」和「版本探测的命令」又会各拼各的（P20.5 Blocker A）。
+       * 白名单外的模块（projects / providers / sessions / mcp …）一律不许进。 */
+      const ALLOWED = new Set(['./pi-launch.js']);
+      return imports.every((i) => i.startsWith('node:') || ALLOWED.has(i)) || imports.join(',');
     });
   }
   {

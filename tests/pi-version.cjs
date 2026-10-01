@@ -13,6 +13,9 @@
  *   - schema drift：pi-compat 的异常记录只留结构
  *   - stale：缓存按 cwd 分键，切项目不会返回上一个项目的结论
  *   - 脱敏：mcp.json 的内容与绝对路径都不进报告
+ *   - **launch identity（Blocker A）**：spawn 的命令、`--version` 与能力探测
+ *     读的包必须同源；PATH vs「常见全局位置」两份清单分叉时绑 PATH 那份；
+ *     证明不了就 null、绝不回退去捡另一份；`formatLaunch` 两侧共用。
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -72,10 +75,11 @@ const RPC_TYPES = 'export type RpcCommand = {\n    type: "prompt";\n} | {\n    t
 const MCP_DOC = '# MCP Servers\n\n```bash\npi mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem .\n```\n';
 
 (async () => {
-  const { createPiVersion, createPiVersionProbe, parsePiVersion, parseVersionOutput } = await import('../server/pi-version.js');
-  const { createPiBuiltins, parseBuiltInExtensions } = await import('../server/pi-builtins.js');
-  const { createMcp } = await import('../server/mcp.js');
-  const { createPiCompat } = await import('../server/pi-compat.js');
+const { createPiVersion, createPiVersionProbe, parsePiVersion, parseVersionOutput } = await import('../server/pi-version.js');
+const { createPiBuiltins, parseBuiltInExtensions } = await import('../server/pi-builtins.js');
+const { createMcp } = await import('../server/mcp.js');
+const { createPiCompat } = await import('../server/pi-compat.js');
+const { createPiLaunch, formatLaunch } = await import('../server/pi-launch.js');
 
   /* ================= A. 版本号解析（纯函数） ================= */
   section('A. 版本号解析');
@@ -392,6 +396,157 @@ const MCP_DOC = '# MCP Servers\n\n```bash\npi mcp add filesystem -- npx -y @mode
   {
     const c = createPiCompat({ versionSourceProbe: () => { throw new Error('boom'); } });
     check('版本源抛错 → null，不影响报告', () => assert.equal(c.report().versionSource, null));
+  }
+
+  /* ================= H. launch identity（P20.5 Blocker A） ================= */
+  section('H. launch identity：spawn 的命令与探测读的包同源');
+  {
+    /* 明确路径的入口：包就在它上面几层，必须绑到**它自己**的包。 */
+    const w = mkPiPackage('h-path', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099 });
+    const L = createPiLaunch({ piBin: w.binPath, env: w.env });
+    const id = L.identity();
+    check('明确路径的入口 → source=env、包目录绑到它自己那份', () => {
+      assert.equal(id.source, 'env');
+      assert.equal(id.entryKnown, true);
+      assert.equal(id.packageDir, w.dir);
+      assert.equal(id.packageDirKnown, true);
+    });
+    check('summary 只给脱敏字段，绝对路径一个字节都不出', () => {
+      const s = L.summary();
+      assert.deepEqual(Object.keys(s).sort(), ['binName', 'entryKnown', 'packageDirKnown', 'source']);
+      assert.equal(s.binName, path.basename(w.binPath));
+      const text = JSON.stringify(s);
+      assert.ok(!text.includes(w.base));
+      assert.ok(!text.includes(TMP));
+    });
+
+    /* 入口不存在 → 证明不了，宁可 null；**旁边躺着一个真包也不许去捡。** */
+    const other = mkPiPackage('h-other', { version: '0.87.0', builtins: BUILTINS_087, apiTypes: API_087 });
+    const miss = createPiLaunch({
+      piBin: path.join(TMP, 'h-missing', 'pi'),
+      env: { ...other.env, APPDATA: other.base, PATH: '' },
+    }).identity();
+    check('入口不存在 → packageDir=null（不退到「常见全局位置」去捡一份）', () => {
+      assert.equal(miss.source, 'env');
+      assert.equal(miss.entryKnown, false);
+      assert.equal(miss.packageDir, null);
+      assert.equal(miss.packageDirKnown, false);
+    });
+
+    /* 裸命令：真正解析靠 PATH / PATHEXT，不靠清单。 */
+    const p = mkPiPackage('h-pathenv', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099 });
+    const found = createPiLaunch({
+      piBin: 'pi',
+      env: { PATH: path.dirname(p.binPath), PATHEXT: '' },
+      isWin: false,
+    }).identity();
+    check('POSIX：裸命令按 PATH 解析并绑上包', () => {
+      assert.equal(found.source, 'path');
+      assert.equal(found.entryKnown, true);
+      assert.equal(found.packageDir, p.dir);
+    });
+    const winFound = createPiLaunch({
+      piBin: 'pi',
+      env: { PATH: path.dirname(p.binPath), PATHEXT: '' },
+      isWin: true,
+    }).identity();
+    check('Windows：先试精确名（cmd 的规则），同样绑上包', () => assert.equal(winFound.packageDir, p.dir));
+
+    const c = mkPiPackage('h-cmd', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099 });
+    fs.writeFileSync(c.binPath + '.cmd', '@echo off\r\n', 'utf8');
+    fs.rmSync(c.binPath); // 只留 .cmd —— 逼出 PATHEXT 补后缀这条路
+    const byExt = createPiLaunch({
+      piBin: 'pi',
+      env: { PATH: path.dirname(c.binPath), PATHEXT: '.COM;.EXE;.BAT;.CMD' },
+      isWin: true,
+    }).identity();
+    check('PATHEXT 补后缀也能找到 pi.cmd 并绑上包', () => assert.equal(byExt.packageDir, c.dir));
+
+    const noPath = createPiLaunch({ piBin: 'pi', env: {}, isWin: false }).identity();
+    check('没有 PATH → packageDir=null（不猜）', () => {
+      assert.equal(noPath.source, 'path');
+      assert.equal(noPath.entryKnown, false);
+      assert.equal(noPath.packageDir, null);
+    });
+
+    /* ★ 核心回归：PATH 指向 A，「常见全局位置」里躺着一份 B。
+     * 旧的 `locatePiPackage()` 只认 APPDATA / LOCALAPPDATA / HOME 那几张清单、
+     * **不看 PATH**，而 bridge spawn 看 PATH —— 于是探测会读 B、启动的是 A。
+     * 现在两件事只能是同一个答案。 */
+    const A = mkPiPackage('h-A', { version: '0.87.0', builtins: BUILTINS_087, apiTypes: API_087 });
+    const bDir = path.join(TMP, 'h-B', 'npm', 'node_modules', '@earendil-works', 'pi-coding-agent');
+    const bBin = path.join(TMP, 'h-B', 'npm', 'pi');
+    fs.mkdirSync(bDir, { recursive: true });
+    fs.mkdirSync(path.dirname(bBin), { recursive: true });
+    fs.writeFileSync(path.join(bDir, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '0.99.1' }), 'utf8');
+    fs.writeFileSync(bBin, '#!/usr/bin/env node\n', 'utf8');
+    const diverged = createPiLaunch({
+      piBin: 'pi',
+      env: { PATH: path.dirname(A.binPath), APPDATA: path.join(TMP, 'h-B'), HOME: path.join(TMP, 'h-B'), PATHEXT: '' },
+      isWin: false,
+    });
+    const d = diverged.identity();
+    check('★ PATH 指向 A、B 藏在「常见全局位置」→ 绑的是 A，不是 B', () => {
+      assert.equal(d.packageDir, A.dir);
+      assert.ok(d.packageDir !== bDir, '绑到了另一份 pi 的包（这正是 Blocker A）');
+    });
+    check('版本真值跟着 launch identity 走（读 A 的 package.json，不是 B 的）', () => {
+      const pv = createPiVersion({ resolvePackageDir: diverged.packageDir });
+      assert.equal(pv.read().value, '0.87.0');
+      assert.equal(pv.read().source, 'package.json');
+    });
+    check('能力探测读的也是 A（不是 B 那份 0.99 built-ins）', () => {
+      const bi = createPiBuiltins({ resolvePackageDir: diverged.packageDir, env: A.env }).read({ cwd: null });
+      assert.deepEqual(bi.builtins.map((x) => x.id), ['llama.cpp']);
+    });
+    check('summary 只暴露 basename，不暴露 A 的路径', () => {
+      const s = diverged.summary();
+      assert.equal(s.binName, 'pi');
+      assert.ok(!JSON.stringify(s).includes(A.base));
+    });
+    check('显式指向 B 时就绑 B（身份跟 PI_BIN 走，不跟 PATH 走）', () => {
+      const lb = createPiLaunch({ piBin: bBin, env: { PATH: path.dirname(A.binPath) } });
+      assert.equal(lb.identity().packageDir, bDir);
+    });
+
+    /* Windows 下 cwd 参与命令搜索（cmd 的规则）—— 缓存按 cwd 分键，
+     * 所以「切项目」会重新解析，不会把上一个项目的结论带过来。 */
+    const rel = mkPiPackage('h-cwd', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099 });
+    check('Windows 下先按 cwd 找，切 cwd 后结论跟着变', () => {
+      let cur = path.dirname(rel.binPath);
+      const Lr = createPiLaunch({ piBin: 'pi', env: { PATH: '' }, isWin: true, getCwd: () => cur });
+      assert.equal(Lr.packageDir(), rel.dir);
+      cur = TMP; // 这里没有 pi
+      assert.equal(Lr.packageDir(), null);
+    });
+  }
+
+  section('H2. formatLaunch：bridge 与 --version 用同一份成形规则');
+  {
+    const posix = formatLaunch('/usr/local/bin/pi', ['--mode', 'rpc', '--continue'], false);
+    check('POSIX：参数走数组、不拼串、不加 shell', () => {
+      assert.deepEqual(posix, { command: '/usr/local/bin/pi', spawnArgs: ['--mode', 'rpc', '--continue'], shell: false });
+    });
+    const win = formatLaunch('C:\\x\\pi.cmd', ['--mode', 'rpc'], true);
+    check('Windows：拼成一条命令串、空 args、shell:true（绕开 DEP0190）', () => {
+      assert.equal(win.command, '"C:\\x\\pi.cmd" "--mode" "rpc"');
+      assert.deepEqual(win.spawnArgs, []);
+      assert.equal(win.shell, true);
+    });
+    const L = createPiLaunch({ piBin: 'pi', env: {}, isWin: true });
+    check('launcher("--version") 走的就是 formatLaunch（同一份代码）', () => {
+      assert.deepEqual(L.launcher(['--version']), formatLaunch('pi', ['--version'], true));
+      assert.equal(L.launcher(['--version']).command, '"pi" "--version"');
+    });
+    check('version probe 按 launcher 拼出来的命令执行（注入的 run 收到同一份 spec）', () => {
+      const seen = [];
+      const probe = createPiVersionProbe({
+        launcher: L.launcher,
+        run: (cmd, args, opts) => { seen.push({ cmd, args, shell: opts.shell }); return { stdout: '0.99.1\n', stderr: '' }; },
+      });
+      assert.equal(probe(), '0.99.1');
+      assert.deepEqual(seen, [{ cmd: '"pi" "--version"', args: [], shell: true }]);
+    });
   }
 
   fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 3 });
