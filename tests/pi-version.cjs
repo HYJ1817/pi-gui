@@ -1,0 +1,399 @@
+/* P20.5：Pi 版本真值与 built-in 能力探测的离线契约。
+ *
+ * 完全离线：不启动 pi、不联网、不读用户的真实 `~/.pi`、不执行任何 Extension。
+ * 所有 pi 包都用 `os.tmpdir()` 里现造的假包 —— 断言「跑测试这台机器装了什么」
+ * 的测试在 CI 上必红，所以一个都不许有。
+ *
+ * 覆盖（对着 P20.5 规格逐条）：
+ *   - version：known / unknown / malformed，两种来源（package.json / pi --version）
+ *   - probe：supported / unsupported / 抛错
+ *   - 0.87 legacy 与 0.99 built-in capability 两种真实形状
+ *   - MCP：unavailable / disabled(false) / unknown(null)
+ *   - get_commands ≠ tool registry
+ *   - schema drift：pi-compat 的异常记录只留结构
+ *   - stale：缓存按 cwd 分键，切项目不会返回上一个项目的结论
+ *   - 脱敏：mcp.json 的内容与绝对路径都不进报告
+ */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+let count = 0;
+const check = (name, fn) => { fn(); count++; console.log('  ok  ' + name); };
+const section = (t) => console.log('\n--- ' + t + ' ---');
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-p205-'));
+
+/** 造一个「像 pi 包」的目录。返回 { dir, binPath, env }。 */
+function mkPiPackage(name, { version = '0.99.1', builtins = null, apiTypes = null, rpcTypes = null, mcpDoc = null, files = {} } = {}) {
+  const base = path.join(TMP, name);
+  const dir = path.join(base, 'prefix', 'node_modules', '@earendil-works', 'pi-coding-agent');
+  fs.mkdirSync(path.join(dir, 'dist', 'extensions'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'dist', 'core', 'extensions'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'dist', 'modes', 'rpc'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version }), 'utf8');
+  if (builtins !== null) fs.writeFileSync(path.join(dir, 'dist', 'extensions', 'index.js'), builtins, 'utf8');
+  if (apiTypes !== null) fs.writeFileSync(path.join(dir, 'dist', 'core', 'extensions', 'types.d.ts'), apiTypes, 'utf8');
+  if (rpcTypes !== null) fs.writeFileSync(path.join(dir, 'dist', 'modes', 'rpc', 'rpc-types.d.ts'), rpcTypes, 'utf8');
+  if (mcpDoc !== null) fs.writeFileSync(path.join(dir, 'docs', 'mcp.md'), mcpDoc, 'utf8');
+  for (const [rel, content] of Object.entries(files)) {
+    const full = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content, 'utf8');
+  }
+  const binPath = path.join(base, 'prefix', 'bin', 'pi');
+  fs.mkdirSync(path.dirname(binPath), { recursive: true });
+  fs.writeFileSync(binPath, '#!/usr/bin/env node\n', 'utf8');
+  const home = path.join(base, 'home');
+  const agent = path.join(base, 'agent');
+  const proj = path.join(base, 'proj');
+  for (const d of [home, agent, proj]) fs.mkdirSync(d, { recursive: true });
+  return { base, dir, binPath, home, agent, proj, env: { HOME: home, PI_CODING_AGENT_DIR: agent, PI_BIN: binPath } };
+}
+
+/* 两个**真实版本**的原文（取自 npm 发布包，逐字节）。 */
+const BUILTINS_087 = 'export const builtInExtensions = [{ name: "llama.cpp", factory: llamaExtension, hidden: true }];\n';
+const BUILTINS_099 = [
+  'export const builtInExtensions = [',
+  '    { name: "llama.cpp", factory: llamaExtension, builtin: true },',
+  '    // Replaceable: an extension that registers `codemode`, `tool_search`, or `/mcp` (such as a third-party',
+  '    // MCP extension) takes over instead of running alongside the built-in one.',
+  '    { name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true },',
+  '    { name: "tool-search", factory: toolSearchExtension, replaceable: true, builtin: true },',
+  '    { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true },',
+  '];',
+  '',
+].join('\n');
+const API_087 = 'export interface ExtensionAPI {\n    getActiveTools(): string[];\n    getAllTools(): ToolInfo[];\n}\n';
+const API_099 = 'export interface ExtensionAPI {\n    getAllTools(): ToolInfo[];\n    registerMcpServer(name: string, config: McpServerConfig): void;\n    getMcpServers(): RegisteredMcpServer[];\n}\n';
+const RPC_TYPES = 'export type RpcCommand = {\n    type: "prompt";\n} | {\n    type: "get_commands";\n};\n\nexport type RpcResponse = {\n    type: "response";\n};\n';
+const MCP_DOC = '# MCP Servers\n\n```bash\npi mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem .\n```\n';
+
+(async () => {
+  const { createPiVersion, createPiVersionProbe, parsePiVersion, parseVersionOutput } = await import('../server/pi-version.js');
+  const { createPiBuiltins, parseBuiltInExtensions } = await import('../server/pi-builtins.js');
+  const { createMcp } = await import('../server/mcp.js');
+  const { createPiCompat } = await import('../server/pi-compat.js');
+
+  /* ================= A. 版本号解析（纯函数） ================= */
+  section('A. 版本号解析');
+  for (const v of ['0.99.1', '0.87.0', '1.0.0', '0.99.1-beta.2', '10.20.30+build.7']) {
+    check('known: ' + v, () => assert.deepEqual(parsePiVersion(v), { value: v, status: 'known' }));
+  }
+  for (const v of ['not-a-version', 'v0.99.1', '0.99', '0.99.1.2', '>=0.90', '0.99.1 x', 'x'.repeat(80)]) {
+    check('malformed: ' + v.slice(0, 20), () => assert.equal(parsePiVersion(v).status, 'malformed'));
+  }
+  for (const v of [null, undefined, '', '   ', 123, {}, []]) {
+    check('unknown: ' + JSON.stringify(v), () => assert.deepEqual(parsePiVersion(v), { value: null, status: 'unknown' }));
+  }
+  check('probe 输出带噪声也能抠出版本', () => assert.equal(parseVersionOutput('pi 0.99.1\n').value, '0.99.1'));
+  check('probe 输出纯版本号', () => assert.equal(parseVersionOutput('0.99.1').value, '0.99.1'));
+  check('probe 输出是垃圾 → malformed（不是 known）', () => assert.equal(parseVersionOutput('command not found').status, 'malformed'));
+  check('probe 输出为空 → unknown', () => assert.equal(parseVersionOutput('  ').status, 'unknown'));
+
+  /* ================= B. 版本真值 ================= */
+  section('B. 版本真值（value / source / status / updatedAt）');
+  {
+    const w = mkPiPackage('v-known', { version: '0.99.1' });
+    let probes = 0;
+    const pv = createPiVersion({
+      resolvePackageDir: () => w.dir,
+      probeVersion: () => { probes++; return 'pi 9.9.9'; },
+      now: () => 1700000000000,
+    });
+    const r = pv.read();
+    check('package.json 是首选来源', () => assert.equal(r.source, 'package.json'));
+    check('值就是包里的版本号', () => assert.equal(r.value, '0.99.1'));
+    check('状态 known', () => assert.equal(r.status, 'known'));
+    check('updatedAt 是 ISO 时间戳', () => assert.equal(r.updatedAt, '2023-11-14T22:13:20.000Z'));
+    check('首选来源命中时不跑兜底探测', () => assert.equal(probes, 0));
+    check('TTL 内第二次读走缓存（不重复读文件）', () => { pv.read(); assert.equal(probes, 0); });
+  }
+  {
+    const w = mkPiPackage('v-malformed', { version: 'not-a-version' });
+    let probes = 0;
+    const pv = createPiVersion({ resolvePackageDir: () => w.dir, probeVersion: () => { probes++; return '0.99.1'; } });
+    const r = pv.read();
+    check('包里的 version 畸形 → status=malformed', () => assert.equal(r.status, 'malformed'));
+    check('畸形时 value 保持 null（不把垃圾当版本号）', () => assert.equal(r.value, null));
+    check('畸形是**有信息**的结果：不退回兜底探测', () => assert.equal(probes, 0));
+    check('畸形时仍记来源', () => assert.equal(r.source, 'package.json'));
+  }
+  {
+    const w = mkPiPackage('v-no-pkg', { version: '0.99.1' });
+    let probes = 0;
+    const pv = createPiVersion({
+      resolvePackageDir: () => path.join(w.base, 'does-not-exist'),
+      probeVersion: () => { probes++; return 'pi 0.99.1'; },
+      now: () => 1700000000000,
+    });
+    const r = pv.read();
+    check('包读不到 → 落到 pi --version', () => assert.equal(r.source, 'pi --version'));
+    check('兜底探测的值被解析出来', () => assert.equal(r.value, '0.99.1'));
+    check('兜底探测确实跑了', () => assert.equal(probes, 1));
+  }
+  {
+    const pv = createPiVersion({ resolvePackageDir: () => null, probeVersion: () => null });
+    const r = pv.read();
+    check('两个来源都拿不到 → unknown / source=none', () => {
+      assert.equal(r.status, 'unknown');
+      assert.equal(r.value, null);
+      assert.equal(r.source, 'none');
+    });
+  }
+  {
+    const pv = createPiVersion({ resolvePackageDir: () => { throw new Error('boom'); }, probeVersion: () => { throw new Error('boom'); } });
+    check('探测抛错不传播，降级成 unknown', () => assert.equal(pv.read().status, 'unknown'));
+  }
+  {
+    const pv = createPiVersion({ resolvePackageDir: () => null, probeVersion: null });
+    check('没注入任何来源 → unknown（不猜）', () => assert.equal(pv.read().status, 'unknown'));
+  }
+  {
+    const w = mkPiPackage('v-ttl', { version: '0.99.1' });
+    let t = 1000;
+    let reads = 0;
+    const pv = createPiVersion({
+      resolvePackageDir: () => { reads++; return w.dir; },
+      now: () => t,
+      ttlMs: 5000,
+    });
+    pv.read();
+    t = 3000;
+    pv.read();
+    check('TTL 内不重读', () => assert.equal(reads, 1));
+    t = 9000;
+    pv.read();
+    check('过了 TTL 会重读', () => assert.equal(reads, 2));
+    pv.read({ force: true });
+    check('force 强制重读', () => assert.equal(reads, 3));
+  }
+  {
+    /* 兜底探测：入口解析与 spawn 都注入，验证 shell:false + args 数组的形状 */
+    const calls = [];
+    const probe = createPiVersionProbe({
+      resolveEntry: () => ({ cmd: 'C:/fake/node.exe', baseArgs: ['C:/fake/pi.js'] }),
+      run: (cmd, args, opts) => { calls.push({ cmd, args, opts }); return { stdout: 'pi 0.99.1\n', stderr: '' }; },
+    });
+    check('probe 用 args 数组调 --version（不拼 shell）', () => {
+      const out = probe();
+      assert.equal(out.trim(), 'pi 0.99.1');
+      assert.deepEqual(calls[0].args, ['C:/fake/pi.js', '--version']);
+      assert.equal(calls[0].cmd, 'C:/fake/node.exe');
+    });
+    check('probe 有超时与输出上限', () => assert.ok(calls[0].opts.timeout > 0));
+    check('probe 无入口 → null（不猜）', () => assert.equal(createPiVersionProbe({ resolveEntry: () => null })(), null));
+    check('probe 抛错 → null', () => assert.equal(createPiVersionProbe({ resolveEntry: () => { throw new Error('x'); } })(), null));
+    check('probe 报 error → null', () => assert.equal(createPiVersionProbe({ resolveEntry: () => ({ cmd: 'x' }), run: () => ({ error: new Error('nope') }) })(), null));
+    check('probe 空输出 → null', () => assert.equal(createPiVersionProbe({ resolveEntry: () => ({ cmd: 'x' }), run: () => ({ stdout: '   ' }) })(), null));
+  }
+
+  /* ================= C. builtInExtensions 解析（真实原文） ================= */
+  section('C. builtInExtensions 解析');
+  {
+    const p87 = parseBuiltInExtensions(BUILTINS_087);
+    check('0.87 原文 → 只有 llama.cpp', () => assert.deepEqual(p87.entries.map((e) => e.id), ['llama.cpp']));
+    check('0.87 原文 → hidden:true、不可替换', () => {
+      assert.equal(p87.entries[0].hidden, true);
+      assert.equal(p87.entries[0].replaceable, false);
+    });
+    const p99 = parseBuiltInExtensions(BUILTINS_099);
+    check('0.99 原文 → 四个 built-in', () => assert.deepEqual(p99.entries.map((e) => e.id), ['llama.cpp', 'codemode', 'tool-search', 'mcp']));
+    check('0.99 原文 → 后三个可被替换', () => assert.deepEqual(p99.entries.filter((e) => e.replaceable).map((e) => e.id), ['codemode', 'tool-search', 'mcp']));
+    check('证据是那一行的原文（可核对）', () => assert.match(p99.entries[3].evidence, /name: "mcp".*builtin: true/));
+    check('形状不认识 → null（不返回空数组冒充「没有」）', () => {
+      assert.equal(parseBuiltInExtensions('export const other = [];'), null);
+      assert.equal(parseBuiltInExtensions(''), null);
+      assert.equal(parseBuiltInExtensions(null), null);
+    });
+  }
+
+  /* ================= D. built-in 探测 ================= */
+  section('D. built-in 能力探测');
+  {
+    const w = mkPiPackage('b-099', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099, rpcTypes: RPC_TYPES, mcpDoc: MCP_DOC });
+    const b = createPiBuiltins({ resolvePackageDir: () => w.dir, env: w.env }).read({ cwd: w.proj });
+    check('known=true 且给出出处文件', () => {
+      assert.equal(b.known, true);
+      assert.equal(b.source, 'dist/extensions/index.js');
+    });
+    check('四个 built-in 都在', () => assert.deepEqual(b.builtins.map((x) => x.id), ['llama.cpp', 'codemode', 'tool-search', 'mcp']));
+    check('ExtensionAPI：registerMcpServer / getMcpServers / getAllTools 都读到', () => {
+      assert.equal(b.extensionApi.registerMcpServer, true);
+      assert.equal(b.extensionApi.getMcpServers, true);
+      assert.equal(b.extensionApi.getAllTools, true);
+    });
+    check('RPC 命令表读出来，且没有工具清单命令', () => {
+      assert.deepEqual(b.rpc.commands, ['get_commands', 'prompt']);
+      assert.equal(b.rpc.toolListCommand, false);
+    });
+    check('MCP 命令行出处来自 docs/mcp.md', () => {
+      assert.equal(b.mcpCli.available, true);
+      assert.match(b.mcpCli.evidence, /pi mcp add/);
+    });
+    check('updatedAt 是 ISO', () => assert.match(b.updatedAt, /^\d{4}-\d{2}-\d{2}T/));
+  }
+  {
+    const w = mkPiPackage('b-087', { version: '0.87.0', builtins: BUILTINS_087, apiTypes: API_087, rpcTypes: RPC_TYPES });
+    const b = createPiBuiltins({ resolvePackageDir: () => w.dir, env: w.env }).read({ cwd: w.proj });
+    check('0.87：只有 llama.cpp', () => assert.deepEqual(b.builtins.map((x) => x.id), ['llama.cpp']));
+    check('0.87：没有 registerMcpServer / getMcpServers', () => {
+      assert.equal(b.extensionApi.registerMcpServer, false);
+      assert.equal(b.extensionApi.getMcpServers, false);
+    });
+    check('0.87：getAllTools **早就有**（不是新能力）', () => assert.equal(b.extensionApi.getAllTools, true));
+    check('0.87：没有 docs/mcp.md → mcpCli 未知（不是 false）', () => assert.equal(b.mcpCli.available, null));
+  }
+  {
+    const b = createPiBuiltins({ resolvePackageDir: () => null, env: { HOME: TMP, PI_CODING_AGENT_DIR: path.join(TMP, 'nope') } }).read({ cwd: null });
+    check('包找不到 → known=false、builtins=null（不写成空数组）', () => {
+      assert.equal(b.known, false);
+      assert.equal(b.builtins, null);
+    });
+    check('包找不到时 ExtensionAPI / RPC 都是未知', () => {
+      assert.equal(b.extensionApi.registerMcpServer, null);
+      assert.equal(b.rpc.toolListCommand, null);
+    });
+    check('包找不到**不影响** mcp.json 的存在性探测', () => assert.equal(b.mcpConfig.user.exists, false));
+  }
+  {
+    /* stale：缓存按 cwd 分键 —— 切项目不能拿到上一个项目的结论 */
+    const w = mkPiPackage('b-stale', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099 });
+    const projA = path.join(w.base, 'projA');
+    const projB = path.join(w.base, 'projB');
+    fs.mkdirSync(path.join(projA, '.pi'), { recursive: true });
+    fs.writeFileSync(path.join(projA, '.pi', 'mcp.json'), '{"mcpServers":{}}', 'utf8');
+    fs.mkdirSync(projB, { recursive: true });
+    const bi = createPiBuiltins({ resolvePackageDir: () => w.dir, env: w.env, ttlMs: 60000 });
+    check('项目 A 有 mcp.json → exists=true', () => assert.equal(bi.read({ cwd: projA }).mcpConfig.project.exists, true));
+    check('切到项目 B 立刻变 false（缓存不串项目）', () => assert.equal(bi.read({ cwd: projB }).mcpConfig.project.exists, false));
+    check('切回 A 又对了', () => assert.equal(bi.read({ cwd: projA }).mcpConfig.project.exists, true));
+  }
+
+  /* ================= E. /api/mcp 报告 ================= */
+  section('E. MCP 报告三态');
+  const mkRuntime = (cwd) => ({ getCurrentCwd: () => cwd });
+  {
+    const w = mkPiPackage('r-099', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099, rpcTypes: RPC_TYPES, mcpDoc: MCP_DOC });
+    const b = createMcp({ runtime: mkRuntime(w.proj), env: w.env, piBin: w.binPath }).readReport();
+    check('0.99 形态 → supported=true', () => assert.equal(b.supported, true));
+    check('reason 指出 built-in:mcp 这条判据', () => assert.match(b.reason, /built-in 扩展 `mcp`/));
+    check('evidence 是可核对的原文', () => assert.match(b.evidence, /dist\/extensions\/index\.js/));
+    check('servers 仍是空（不编造 Server）', () => assert.deepEqual(b.servers, []));
+    check('serversNote 说清「Server 留给后续阶段」', () => assert.match(b.serversNote, /留给后续阶段/));
+    check('builtins 如实列出四个', () => assert.deepEqual(b.builtins.entries.map((x) => x.id), ['llama.cpp', 'codemode', 'tool-search', 'mcp']));
+    check('built-in 说明写清「不是扫目录扫到的」', () => assert.match(b.builtins.note, /不由 Extension Registry 的目录扫描发现/));
+    check('RPC：没有工具清单命令', () => assert.equal(b.rpc.toolListCommand, false));
+    check('RPC：note 明说「不伪造工具注册表」', () => assert.match(b.rpc.note, /不伪造工具注册表/));
+    check('get_commands 存在 ≠ 它是工具注册表', () => {
+      // get_commands 在命令表里，但它返回的是 slash command / skill，不是 tool
+      assert.ok(b.rpc.commands.includes('get_commands'));
+      assert.equal(b.rpc.toolListCommand, false);
+    });
+  }
+  {
+    const w = mkPiPackage('r-087', { version: '0.87.0', builtins: BUILTINS_087, apiTypes: API_087, rpcTypes: RPC_TYPES });
+    const b = createMcp({ runtime: mkRuntime(w.proj), env: w.env, piBin: w.binPath }).readReport();
+    check('0.87 legacy → supported=false（旧版本安全降级保留）', () => assert.equal(b.supported, false));
+    check('0.87 legacy → 仍然不列 Server', () => assert.deepEqual(b.servers, []));
+  }
+  {
+    const w = mkPiPackage('r-unknown', { version: '9.9.9', builtins: 'export const nope = [];\n' });
+    const b = createMcp({ runtime: mkRuntime(w.proj), env: w.env, piBin: w.binPath }).readReport();
+    check('built-ins 形状不认识 → supported=null（不猜成 false）', () => assert.equal(b.supported, null));
+    check('形状不认识时 builtins.entries=null', () => assert.equal(b.builtins.entries, null));
+  }
+  {
+    const b = createMcp({ runtime: mkRuntime(null), env: { HOME: TMP, PI_CODING_AGENT_DIR: path.join(TMP, 'nope') }, piBin: null }).readReport();
+    check('找不到 pi 包 → supported=null（unavailable）', () => assert.equal(b.supported, null));
+    check('找不到包时 piPackageFound=false', () => assert.equal(b.piPackageFound, false));
+  }
+  {
+    /* 版本真值注入与兜底 */
+    const w = mkPiPackage('r-ver', { version: '0.99.1', builtins: BUILTINS_099, apiTypes: API_099 });
+    const pv = createPiVersion({ resolvePackageDir: () => w.dir });
+    const b = createMcp({ runtime: mkRuntime(w.proj), env: w.env, piBin: w.binPath, piVersion: () => pv.read() }).readReport();
+    check('报告带规范版本状态（value/source/status/updatedAt）', () => {
+      assert.equal(b.version.value, '0.99.1');
+      assert.equal(b.version.source, 'package.json');
+      assert.equal(b.version.status, 'known');
+      assert.match(b.version.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+    });
+    check('piVersion 字符串字段保持向后兼容', () => assert.equal(b.piVersion, '0.99.1'));
+    const b2 = createMcp({ runtime: mkRuntime(w.proj), env: w.env, piBin: w.binPath }).readReport();
+    check('没注入时兜底也给完整状态（updatedAt 不为 null）', () => assert.match(b2.version.updatedAt, /^\d{4}-\d{2}-\d{2}T/));
+  }
+
+  /* ================= F. 脱敏 ================= */
+  section('F. 脱敏');
+  {
+    const w = mkPiPackage('redact', {
+      version: '0.99.1',
+      builtins: BUILTINS_099,
+      apiTypes: API_099,
+      rpcTypes: RPC_TYPES,
+      mcpDoc: MCP_DOC,
+      files: {},
+    });
+    fs.writeFileSync(
+      path.join(w.agent, 'mcp.json'),
+      JSON.stringify({ mcpServers: { 'work-jira': { url: 'https://mcp.example.com', headers: { Authorization: 'Bearer ghp_MCP_SECRET_777' }, env: { API_KEY: 'sk-live-SECRET-888' } } } }),
+      'utf8'
+    );
+    const b = createMcp({ runtime: mkRuntime(w.proj), env: w.env, piBin: w.binPath }).readReport();
+    const body = JSON.stringify(b);
+    check('mcp.json 的密钥不进报告', () => assert.ok(!/ghp_MCP_SECRET|sk-live-SECRET/.test(body)));
+    check('mcp.json 的 Server 名与内容不进报告', () => assert.ok(!/work-jira|mcpServers|Authorization/.test(body)));
+    check('只报存在与否', () => assert.equal(b.mcpConfig.user.exists, true));
+    check('报告里没有 pi 包绝对路径', () => assert.ok(!body.includes(w.dir.replace(/\\/g, '\\\\')) && !body.includes(w.dir)));
+    check('诊断级的字段不含 payload（evidence 只有一行原文）', () => assert.ok(String(b.evidence).length < 400));
+  }
+
+  /* ================= G. schema drift（pi-compat） ================= */
+  section('G. schema drift 与异常记录');
+  {
+    const c = createPiCompat({
+      piVersionProbe: () => '0.99.1',
+      versionSourceProbe: () => ({ source: 'package.json', status: 'known', updatedAt: '2026-10-01T00:00:00.000Z' }),
+      now: () => 1700000000000,
+    });
+    c.observeUpstream({ type: 'response', command: 'get_state', success: true, data: { sessionId: 's1' } });
+    const rep = c.report();
+    check('缺 sessionFile → 记一条 missing-field（形状漂移可见）', () =>
+      rep.issues.some((i) => i.category === 'response' && i.issue === 'missing-field' && i.field === 'sessionFile'));
+    check('版本状态出处进了报告', () => {
+      assert.equal(rep.version, '0.99.1');
+      assert.equal(rep.versionSource.source, 'package.json');
+      assert.equal(rep.versionSource.status, 'known');
+    });
+    check('异常里不含任何值（只有字段名与类型）', () => {
+      const s = JSON.stringify(rep.issues);
+      assert.ok(!s.includes('s1'));
+    });
+  }
+  {
+    const c = createPiCompat({ now: () => 1700000000000 });
+    c.observeUpstream({ type: 'some_brand_new_event', payload: 'PRIVATE_PAYLOAD' });
+    const rep = c.report();
+    check('未知事件被安全忽略但留痕', () => rep.issues.some((i) => i.issue === 'unknown-event'));
+    check('未知事件的 payload 不进异常记录', () => assert.ok(!JSON.stringify(rep.issues).includes('PRIVATE_PAYLOAD')));
+    check('没注入版本源时 versionSource 为 null（不编造）', () => assert.equal(rep.versionSource, null));
+  }
+  {
+    const c = createPiCompat({ versionSourceProbe: () => ({ source: 'weird', status: 'nonsense', updatedAt: 42 }) });
+    check('版本源的未知枚举被归一（不回显原值）', () => {
+      const vs = c.report().versionSource;
+      assert.equal(vs.status, 'unknown');
+      assert.equal(vs.updatedAt, null);
+    });
+  }
+  {
+    const c = createPiCompat({ versionSourceProbe: () => { throw new Error('boom'); } });
+    check('版本源抛错 → null，不影响报告', () => assert.equal(c.report().versionSource, null));
+  }
+
+  fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 3 });
+  console.log(`\n${count}/${count} 通过`);
+})().catch((e) => { console.error(e); process.exitCode = 1; });

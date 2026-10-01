@@ -906,15 +906,28 @@ const listTmp = (dir) => {
   }
 
   {
-    // 造一个「没有 MCP」的假 pi 包 —— 结构和真 pi 一样
-    const w = mkWorld('mcp-nosupport');
+    /* 造一个「像 0.87.0」的假 pi 包：built-in 只有 llama.cpp，ExtensionAPI 没有
+     * registerMcpServer —— 这就是「旧版本安全降级」要保住的那一档。 */
+    const w = mkWorld('mcp-legacy087');
     const pkg = path.join(w.base, 'prefix', 'node_modules', '@earendil-works', 'pi-coding-agent');
-    fs.mkdirSync(path.join(pkg, 'dist', 'core'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'dist', 'extensions', 'llama'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'dist', 'core', 'extensions'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'dist', 'modes', 'rpc'), { recursive: true });
     fs.mkdirSync(path.join(pkg, 'docs'), { recursive: true });
     writeJson(path.join(pkg, 'package.json'), { name: '@earendil-works/pi-coding-agent', version: '0.87.0', bin: { pi: 'dist/cli.js' } });
     fs.writeFileSync(
-      path.join(pkg, 'docs', 'usage.md'),
-      '# Usage\n\nIt intentionally does not include built-in MCP, sub-agents, or plan mode.\n',
+      path.join(pkg, 'dist', 'extensions', 'index.js'),
+      'export const builtInExtensions = [{ name: "llama.cpp", factory: llamaExtension, hidden: true }];\n',
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(pkg, 'dist', 'core', 'extensions', 'types.d.ts'),
+      'export interface ExtensionAPI {\n    getActiveTools(): string[];\n    getAllTools(): ToolInfo[];\n}\n',
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(pkg, 'dist', 'modes', 'rpc', 'rpc-types.d.ts'),
+      'export type RpcCommand = {\n    type: "prompt";\n} | {\n    type: "get_state";\n};\n\nexport type RpcResponse = {\n    type: "response";\n};\n',
       'utf8'
     );
     const binPath = path.join(w.base, 'prefix', 'bin', 'pi');
@@ -926,29 +939,117 @@ const listTmp = (dir) => {
     const b = mcp.readReport();
 
     check('L6. 定位到 pi 包并读出真实版本号', () => b.piVersion === '0.87.0' || b.piVersion);
-    check('L7. 包里没有 MCP 模块 → supported=false', () => b.supported === false || JSON.stringify(b.supported));
-    check('L8. 从 docs 里截出提到 MCP 的原文当证据', () => /docs[\\/]usage\.md/.test(b.evidence) && /MCP/.test(b.evidence) || b.evidence);
-    check('L9. reason 说明「官方明确不内置」', () => /没有内置|没有任何 MCP/.test(b.reason) || b.reason);
-    check('L10. serversNote 说明为什么列不出 Server', () => /没有 MCP 配置|没有 Server/.test(b.serversNote) || b.serversNote);
-    check('L11. piPackageDir 指向我们造的包', () => b.piPackageDir === pkg || b.piPackageDir);
+    check('L7. 0.87 形态：既没有 builtin:mcp 也没有 registerMcpServer → supported=false', () =>
+      b.supported === false || JSON.stringify(b.supported));
+    check('L8. 0.87 形态：built-in 清单里只有 llama.cpp', () =>
+      JSON.stringify(b.builtins.entries.map((x) => x.id)) === '["llama.cpp"]' || JSON.stringify(b.builtins));
+    check('L9. reason 说清「两个判据都没有」，不是笼统的「官方不内置」', () =>
+      /既没有 built-in 扩展/.test(b.reason) && /不带原生 MCP/.test(b.reason) || b.reason);
+    check('L10. serversNote 说明为什么列不出 Server', () => /没有 Server 可以列出/.test(b.serversNote) || b.serversNote);
+    check('L11. 不再回 piPackageDir（绝对路径不进 renderer）', () => !('piPackageDir' in b) || '还在回 piPackageDir');
+    check('L12. 版本状态带出处与状态', () =>
+      (b.version && b.version.value === '0.87.0' && b.version.source === 'package.json' && b.version.status === 'known' && Boolean(b.version.updatedAt)) || JSON.stringify(b.version));
+    check('L13. RPC 命令表被读出来，且确认没有工具清单命令', () =>
+      (Array.isArray(b.rpc.commands) && b.rpc.commands.length === 2 && b.rpc.toolListCommand === false) || JSON.stringify(b.rpc));
   }
 
   {
-    // 假如将来的 pi 真带了 MCP 模块 —— 检测要能翻过去（不硬编码结论）
-    const w = mkWorld('mcp-support');
+    /* 造一个「像 0.99.x」的假 pi 包：四个 built-in，ExtensionAPI 有 registerMcpServer。 */
+    const w = mkWorld('mcp-native099');
     const pkg = path.join(w.base, 'prefix', 'node_modules', '@earendil-works', 'pi-coding-agent');
-    fs.mkdirSync(path.join(pkg, 'dist', 'core'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'dist', 'extensions'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'dist', 'core', 'extensions'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'dist', 'modes', 'rpc'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'docs'), { recursive: true });
+    writeJson(path.join(pkg, 'package.json'), { name: '@earendil-works/pi-coding-agent', version: '0.99.1' });
+    fs.writeFileSync(
+      path.join(pkg, 'dist', 'extensions', 'index.js'),
+      [
+        'export const builtInExtensions = [',
+        '    { name: "llama.cpp", factory: llamaExtension, builtin: true },',
+        '    { name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true },',
+        '    { name: "tool-search", factory: toolSearchExtension, replaceable: true, builtin: true },',
+        '    { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true },',
+        '];',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(pkg, 'dist', 'core', 'extensions', 'types.d.ts'),
+      'export interface ExtensionAPI {\n    getAllTools(): ToolInfo[];\n    registerMcpServer(name: string, config: McpServerConfig): void;\n    getMcpServers(): RegisteredMcpServer[];\n}\n',
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(pkg, 'dist', 'modes', 'rpc', 'rpc-types.d.ts'),
+      'export type RpcCommand = {\n    type: "prompt";\n} | {\n    type: "get_commands";\n};\n\nexport type RpcResponse = {\n    type: "response";\n};\n',
+      'utf8'
+    );
+    fs.writeFileSync(path.join(pkg, 'docs', 'mcp.md'), '# MCP Servers\n\n```bash\npi mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem .\n```\n', 'utf8');
+    const binPath = path.join(w.base, 'prefix', 'bin', 'pi');
+    fs.mkdirSync(path.dirname(binPath), { recursive: true });
+    fs.writeFileSync(binPath, '#!/usr/bin/env node\n', 'utf8');
+
+    const env = { HOME: w.home, PI_CODING_AGENT_DIR: w.agent, PI_BIN: binPath };
+    const b = createMcp({ runtime: mkRuntime(w.proj), env, piBin: binPath }).readReport();
+
+    check('L14. 0.99 形态：builtin:mcp → supported=true（不硬编码版本号）', () => b.supported === true || JSON.stringify(b.supported));
+    check('L15. built-in 四个都在，且标出可被替换的', () => {
+      const ids = b.builtins.entries.map((x) => x.id);
+      const repl = b.builtins.entries.filter((x) => x.replaceable).map((x) => x.id);
+      return (ids.join(',') === 'llama.cpp,codemode,tool-search,mcp' && repl.join(',') === 'codemode,tool-search,mcp') || JSON.stringify({ ids, repl });
+    });
+    check('L16. 出处是可核对的原文（builtin 那一行）', () => /name: "mcp"/.test(b.evidence) && /builtin: true/.test(b.evidence) || b.evidence);
+    check('L17. ExtensionAPI 三值：registerMcpServer / getMcpServers / getAllTools', () =>
+      (b.extensionApi.registerMcpServer === true && b.extensionApi.getMcpServers === true && b.extensionApi.getAllTools === true) || JSON.stringify(b.extensionApi));
+    check('L18. supported=true 时 serversNote 说清「Server 留给后续阶段」', () => /留给后续阶段/.test(b.serversNote) || b.serversNote);
+    check('L19. supported=true 时 servers 仍然是空（不编造 Server）', () => b.servers.length === 0 || JSON.stringify(b.servers));
+    check('L20. MCP 命令行出处来自 pi 自己的 docs/mcp.md', () => b.mcpCli.available === true && /pi mcp add/.test(b.mcpCli.evidence) || JSON.stringify(b.mcpCli));
+    check('L21. built-in 说明写清「不是扫目录扫到的」', () => /不由 Extension Registry 的目录扫描发现/.test(b.builtins.note) || b.builtins.note);
+  }
+
+  {
+    /* 形状不认识 → supported=null（不许猜成 false），builtins=null。 */
+    const w = mkWorld('mcp-unknown-shape');
+    const pkg = path.join(w.base, 'prefix', 'node_modules', '@earendil-works', 'pi-coding-agent');
+    fs.mkdirSync(path.join(pkg, 'dist', 'extensions'), { recursive: true });
+    fs.mkdirSync(path.join(pkg, 'dist', 'modes', 'rpc'), { recursive: true });
     writeJson(path.join(pkg, 'package.json'), { name: '@earendil-works/pi-coding-agent', version: '9.9.9' });
-    fs.writeFileSync(path.join(pkg, 'dist', 'core', 'mcp-manager.js'), 'export const x = 1;\n', 'utf8');
+    fs.writeFileSync(path.join(pkg, 'dist', 'extensions', 'index.js'), 'export const somethingElse = [];\n', 'utf8');
     const binPath = path.join(w.base, 'prefix', 'bin', 'pi');
     fs.mkdirSync(path.dirname(binPath), { recursive: true });
     fs.writeFileSync(binPath, 'x', 'utf8');
+    const b = createMcp({ runtime: mkRuntime(w.proj), env: { HOME: w.home, PI_CODING_AGENT_DIR: w.agent, PI_BIN: binPath }, piBin: binPath }).readReport();
+    check('L22. built-in 清单形状不认识 → builtins 未知，不硬说没有', () => b.builtins.known === true && b.builtins.entries === null || JSON.stringify(b.builtins));
+    check('L23. 两个判据都缺证据 → supported 保持 null（不猜成 false）', () => b.supported === null || JSON.stringify(b.supported));
+  }
 
-    const mcp = createMcp({ runtime: mkRuntime(w.proj), env: { HOME: w.home, PI_CODING_AGENT_DIR: w.agent, PI_BIN: binPath }, piBin: binPath });
-    const b = mcp.readReport();
-    check('L12. 包里有 mcp 模块 → supported=true（检测不硬编码版本）', () => b.supported === true || JSON.stringify(b.supported));
-    check('L13. supported=true 时 serversNote 说「检测到但 Pi GUI 还没适配」', () => /还没有适配/.test(b.serversNote) || b.serversNote);
-    check('L14. supported=true 时 servers 仍然是空（不编造 Server）', () => b.servers.length === 0 || JSON.stringify(b.servers));
+  {
+    /* MCP 配置文件：只报存在与否，**内容一个字节都不进报告**。 */
+    const w = mkWorld('mcp-config-redact');
+    const agentDir = w.agent;
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(agentDir, 'mcp.json'),
+      JSON.stringify({ mcpServers: { filesystem: { command: 'npx', env: { SECRET_TOKEN: 'ghp_MCP_LEAK_9999' } } } }),
+      'utf8'
+    );
+    fs.mkdirSync(path.join(w.proj, '.pi'), { recursive: true });
+    fs.writeFileSync(path.join(w.proj, '.pi', 'mcp.json'), '{"mcpServers":{}}', 'utf8');
+    const b = createMcp({ runtime: mkRuntime(w.proj), env: { HOME: w.home, PI_CODING_AGENT_DIR: agentDir }, piBin: null }).readReport();
+    const body = JSON.stringify(b);
+    check('L24. 用户级 mcp.json 存在 → exists=true', () => b.mcpConfig.user.exists === true || JSON.stringify(b.mcpConfig));
+    check('L25. 项目级 mcp.json 存在 → exists=true', () => b.mcpConfig.project.exists === true || JSON.stringify(b.mcpConfig));
+    check('L26. 关键：mcp.json 里的密钥绝不出现在响应里', () => !/ghp_MCP_LEAK/.test(body) || '泄露了！');
+    check('L27. 只报存在与否，不回配置内容与 Server 名', () =>
+      (!/filesystem/.test(body) && !/SECRET_TOKEN/.test(body) && !/mcpServers/.test(body)) || '回显了配置内容');
+  }
+
+  {
+    /* 没有项目时项目级 mcp.json 是「未知」，不是「不存在」。 */
+    const w = mkWorld('mcp-no-project');
+    const b = createMcp({ runtime: mkRuntime(null), env: { HOME: w.home, PI_CODING_AGENT_DIR: w.agent }, piBin: null }).readReport();
+    check('L28. 没有项目 → 项目级 mcp.json 是未知（不是 false）', () => b.mcpConfig.project.exists === null || JSON.stringify(b.mcpConfig));
   }
 
   {
@@ -967,29 +1068,29 @@ const listTmp = (dir) => {
     const mcp = createMcp({ runtime: mkRuntime(w.proj), env: { HOME: w.home, PI_CODING_AGENT_DIR: w.agent }, piBin: null });
     const b = mcp.readReport();
     const body = JSON.stringify(b);
-    check('L15. 列出用户级扩展目录里的条目', () => {
+    check('L29. 列出用户级扩展目录里的条目', () => {
       const names = b.extensionRoute.user.entries.map((e) => e.name).sort().join(',');
       return names === 'a-dir,my-ext.js' || names;
     });
-    check('L16. 跳过点开头文件', () => !b.extensionRoute.user.entries.some((e) => e.name.startsWith('.')) || '列出了隐藏文件');
-    check('L17. 列出项目级扩展目录（与用户级分开）', () =>
+    check('L30. 跳过点开头文件', () => !b.extensionRoute.user.entries.some((e) => e.name.startsWith('.')) || '列出了隐藏文件');
+    check('L31. 列出项目级扩展目录（与用户级分开）', () =>
       (b.extensionRoute.project.entries.length === 1 && b.extensionRoute.project.entries[0].name === 'proj-ext.js') || JSON.stringify(b.extensionRoute.project.entries));
-    check('L18. 目录不存在 → exists=false 而不是报错', () => {
+    check('L32. 目录不存在 → exists=false 而不是报错', () => {
       const w2 = mkWorld('mcp-ext-missing');
       const m2 = createMcp({ runtime: mkRuntime(w2.proj), env: { HOME: w2.home, PI_CODING_AGENT_DIR: w2.agent }, piBin: null });
       const r2 = m2.readReport();
       return (r2.extensionRoute.user.exists === false && r2.extensionRoute.user.error === '') || JSON.stringify(r2.extensionRoute.user);
     });
-    check('L19. 关键：扩展文件里的 secret **绝不出现在响应里**（只读名字，不读内容）', () =>
+    check('L33. 关键：扩展文件里的 secret **绝不出现在响应里**（只读名字，不读内容）', () =>
       !/ghp_LEAK_ME/.test(body) || '泄露了！');
-    check('L20. 条目只带名字/类型/大小/时间，没有内容字段', () => {
+    check('L34. 条目只带名字/类型/大小/时间，没有内容字段', () => {
       const e = b.extensionRoute.user.entries.find((x) => x.name === 'my-ext.js');
       return (e && !('content' in e) && 'size' in e && 'kind' in e) || JSON.stringify(e);
     });
-    check('L21. settings 里的 extensions / packages 被如实列出（不解析、不执行）', () =>
+    check('L35. settings 里的 extensions / packages 被如实列出（不解析、不执行）', () =>
       (b.extensionRoute.fromSettings.length === 1 && b.extensionRoute.fromSettings[0].value === './my-ext.js' && b.extensionRoute.packages[0].value === 'some-pkg@1.0.0') ||
       JSON.stringify({ s: b.extensionRoute.fromSettings, p: b.extensionRoute.packages }));
-    check('L22. 报告里没有任何「已配置 / 已连接」这类没数据支撑的状态', () =>
+    check('L36. 报告里没有任何「已配置 / 已连接」这类没数据支撑的状态', () =>
       !/已连接|connected|已配置的 Server/i.test(body) || '出现了不该有的状态词');
   }
 

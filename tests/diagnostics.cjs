@@ -85,7 +85,10 @@ const path = require('node:path');
    * 里面**故意塞一个 secret 和一条绝对路径** —— 兼容报告绝不能带出它们
    * （它本来就不存 payload；这条断言是防止以后有人往异常里塞原始值）。 */
   const SECRET_VALUE = 'sk-live-should-never-appear-1234567890';
-  const compat = createPiCompat({ piVersionProbe: () => '0.87.0' });
+  const compat = createPiCompat({
+    piVersionProbe: () => '0.87.0',
+    versionSourceProbe: () => ({ source: 'package.json', status: 'known', updatedAt: '2026-10-01T00:00:00.000Z' }),
+  });
   compat.observeBridge({ state: 'ready' });
   compat.observeUpstream({
     type: 'response',
@@ -152,6 +155,8 @@ const path = require('node:path');
     assert.equal(c.status, 'partial');
     assert.equal(c.piVersion, '0.87.0');
     assert.equal(c.versionKnown, true);
+    // P20.5：版本值的出处也要进诊断（只有枚举与时间戳，没有 payload）
+    assert.deepEqual(c.versionSource, { source: 'package.json', status: 'known', updatedAt: '2026-10-01T00:00:00.000Z' });
     assert.equal(c.detected, true);
     assert.equal(c.capabilities.rpc, true);
     assert.equal(c.capabilities.getState, true);

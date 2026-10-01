@@ -149,16 +149,34 @@ const stubExtensions = {
   ],
 };
 
-/* /api/mcp 的桩。形状照抄后端真实返回（含 evidence 与 extensionRoute）。 */
+/* /api/mcp 的桩。形状照抄后端真实返回（P20.5 起带 version / builtins / rpc / mcpConfig）。
+ * 这里用 **0.99.1** 的真实形状：它确实带 builtin:mcp，旧版本（0.87.0）只有 llama.cpp。 */
 let stubMcp = {
   ok: true,
-  supported: false,
-  reason: '这个 pi 包里没有任何 MCP 模块或配置约定（pi 官方明确表示不内置 MCP）',
-  evidence: 'docs/usage.md: It intentionally does not include built-in MCP, sub-agents, permission popups, plan mode, to-dos, or background bash.',
-  piVersion: '0.87.0',
-  piPackageDir: 'C:\\Users\\21022\\AppData\\Roaming\\npm\\node_modules\\@earendil-works\\pi-coding-agent',
+  supported: true,
+  reason: '这个 pi 包自带 built-in 扩展 `mcp`（配置走 pi 自己的 mcp.json，命令行是 pi mcp add / remove）',
+  evidence: 'dist/extensions/index.js: { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }',
+  piVersion: '0.99.1',
+  version: { value: '0.99.1', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' },
+  piPackageFound: true,
   servers: [],
-  serversNote: 'pi 没有 MCP 配置文件约定，所以没有 Server 可以列出。',
+  serversNote: '这个 pi 带 MCP 能力，但本页只报告能力：Server 的读取与管理留给后续阶段。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove）。',
+  builtins: {
+    known: true,
+    source: 'dist/extensions/index.js',
+    entries: [
+      { id: 'llama.cpp', replaceable: false, hidden: false, evidence: '{ name: "llama.cpp", factory: llamaExtension, builtin: true }' },
+      { id: 'codemode', replaceable: true, hidden: false, evidence: '{ name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true }' },
+      { id: 'tool-search', replaceable: true, hidden: false, evidence: '{ name: "tool-search", factory: toolSearchExtension, replaceable: true, builtin: true }' },
+      { id: 'mcp', replaceable: true, hidden: false, evidence: '{ name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }' },
+    ],
+    evidence: 'export const builtInExtensions = [ … ]',
+    note: 'built-in 扩展编译在 pi 包里，不由 Extension Registry 的目录扫描发现；「包里带了它」不等于「当前会话启用了它」。',
+  },
+  extensionApi: { available: true, registerMcpServer: true, getMcpServers: true, getAllTools: true, evidence: 'registerMcpServer(name: string, config: McpServerConfig): void;' },
+  rpc: { commandCount: 33, commands: ['abort', 'prompt', 'get_state'], toolListCommand: false, note: 'Pi RPC 没有已注册工具清单命令：ExtensionAPI 有 getAllTools()，但那是扩展进程内的 API，RPC 不暴露它。所以 GUI 不伪造工具注册表。' },
+  mcpConfig: { user: { exists: false }, project: { exists: true } },
+  mcpCli: { available: true, evidence: '`pi mcp add` and `pi mcp remove` edit the file from a shell' },
   extensionRoute: {
     note: 'pi 官方建议把 MCP 这类能力做成 extension 或 package。',
     userDir: 'C:\\Users\\21022\\.pi\\agent\\extensions',
@@ -3344,13 +3362,25 @@ staticCheck();
     mcpTab.onclick();
     await new Promise((r) => setTimeout(r, 40));
     const mcpCard = $('workSurface');
-    check('MCP 标签页：明确说 pi 没有原生 MCP 支持', () =>
-      /没有原生 MCP 支持/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
+    check('MCP 标签页：如实说这个 pi 带 MCP 能力（不再写死「没有原生 MCP」）', () =>
+      /带 MCP 能力/.test(mcpCard.textContent) && !/没有原生 MCP 支持/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
     check('MCP 标签页：给出可核对的出处（不是空口断言）', () =>
-      /docs\/usage\.md/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
-    check('MCP 标签页：显示检测到的 pi 版本', () => /0\.87\.0/.test(mcpCard.textContent) || '没显示版本');
+      /dist\/extensions\/index\.js/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
+    check('MCP 标签页：显示运行中的 pi 版本与来源', () =>
+      /检测到的 pi 版本：0\.99\.1/.test(mcpCard.textContent) && /来源 package\.json/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
+    check('MCP 标签页：列出 built-in 能力并说明它不是扫目录扫到的', () => {
+      const text = mcpCard.textContent;
+      return (['builtin:llama.cpp', 'builtin:codemode', 'builtin:tool-search', 'builtin:mcp'].every((x) => text.includes(x))
+        && /不由 Extension Registry 的目录扫描发现/.test(text)) || text.slice(0, 300);
+    });
+    check('MCP 标签页：说清 RPC 没有工具清单命令（不伪造工具注册表）', () =>
+      /没有一条返回已注册工具清单/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 300));
+    check('MCP 标签页：区分 ExtensionAPI 与 RPC（getAllTools 拿不到）', () =>
+      /getAllTools 有/.test(mcpCard.textContent) && /RPC 客户端拿不到/.test(mcpCard.textContent) || '没区分');
     check('MCP 标签页：servers 为空时说明原因，不是一页空白', () =>
-      /没有 MCP 配置文件约定/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
+      /Server 的读取与管理留给后续阶段/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
+    check('MCP 标签页：MCP 配置只报存在与否，并声明不读内容', () =>
+      /用户级 mcp\.json/.test(mcpCard.textContent) && /不读取它的内容/.test(mcpCard.textContent) || '没说明');
     check('MCP 标签页：指出官方替代路径是 extension 并列出本机已有的', () => {
       const names = [...mcpCard.querySelectorAll('.ext-name')].map((n) => n.textContent);
       return (/extension/.test(mcpCard.textContent) && names.includes('my-ext')) || JSON.stringify(names);

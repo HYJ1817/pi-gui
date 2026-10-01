@@ -787,8 +787,33 @@ const server = http.createServer(async (req, res) => {
     actions: { install: false, toggle: false, remove: false, refresh: true, restart: true },
   });
   if (p === '/api/mcp') return json(res, 200, {
-    ok: true, supported: false, piVersion: '0.87.0', reason: '这个 pi 没有原生 MCP 支持。',
-    evidence: 'pi 官方能力报告', servers: [], serversNote: '没有可列出的 MCP Server。',
+    /* P20.5：形状照抄 0.99.1 的真实报告 —— 它确实带 builtin:mcp。
+     * （0.87.0 的形态见 tests/pi-version.cjs 的 fixture。） */
+    ok: true,
+    supported: true,
+    piVersion: '0.99.1',
+    version: { value: '0.99.1', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' },
+    reason: '这个 pi 包自带 built-in 扩展 `mcp`（配置走 pi 自己的 mcp.json，命令行是 pi mcp add / remove）',
+    evidence: 'dist/extensions/index.js: { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }',
+    piPackageFound: true,
+    servers: [],
+    serversNote: '这个 pi 带 MCP 能力，但本页只报告能力：Server 的读取与管理留给后续阶段。配置走 pi 自己的 mcp.json（命令行 pi mcp add / remove）。',
+    builtins: {
+      known: true,
+      source: 'dist/extensions/index.js',
+      entries: [
+        { id: 'llama.cpp', replaceable: false, hidden: false, evidence: '{ name: "llama.cpp", factory: llamaExtension, builtin: true }' },
+        { id: 'codemode', replaceable: true, hidden: false, evidence: '{ name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true }' },
+        { id: 'tool-search', replaceable: true, hidden: false, evidence: '{ name: "tool-search", factory: toolSearchExtension, replaceable: true, builtin: true }' },
+        { id: 'mcp', replaceable: true, hidden: false, evidence: '{ name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }' },
+      ],
+      evidence: 'export const builtInExtensions = [ … ]',
+      note: 'built-in 扩展编译在 pi 包里，不由 Extension Registry 的目录扫描发现；「包里带了它」不等于「当前会话启用了它」。',
+    },
+    extensionApi: { available: true, registerMcpServer: true, getMcpServers: true, getAllTools: true, evidence: 'registerMcpServer(name: string, config: McpServerConfig): void;' },
+    rpc: { commandCount: 33, commands: ['abort', 'get_commands', 'prompt'], toolListCommand: false, note: 'Pi RPC 没有已注册工具清单命令：ExtensionAPI 有 getAllTools()，但那是扩展进程内的 API，RPC 不暴露它。所以 GUI 不伪造工具注册表。' },
+    mcpConfig: { user: { exists: false }, project: { exists: false } },
+    mcpCli: { available: true, evidence: '`pi mcp add` and `pi mcp remove` edit the file from a shell' },
     extensionRoute: { note: '请通过 pi extension 提供能力。', user: { exists: false, count: 0, entries: [] }, project: { exists: false, count: 0, entries: [] }, fromSettings: [], packages: [] },
   });
 
