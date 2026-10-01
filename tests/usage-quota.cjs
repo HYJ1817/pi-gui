@@ -217,9 +217,10 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   check('NewAPI: 正好调用两个 endpoint', newApiCalls.length === 2);
   check('NewAPI: 调用了 subscription', newApiCalls.some((c) => c.url.endsWith('/dashboard/billing/subscription')));
   check('NewAPI: 调用了 usage', newApiCalls.some((c) => c.url.endsWith('/dashboard/billing/usage')));
-  check('NewAPI: 两个 endpoint 各一次（没有重复或互相顶替）', new Set(newApiCalls.map((c) => c.url)).size === 2);
+  check('NewAPI: 两个 endpoint 各调用正好一次（没有重复或互相顶替）',
+    newApiCalls.length === 2 && new Set(newApiCalls.map((c) => c.url)).size === 2);
   check('NewAPI: Authorization 为 Bearer <key>', newApiCalls.every((c) => c.auth === `Bearer ${NEWAPI_KEY}`));
-  check('NewAPI: 带 New-Api-User', newApiCalls.every((c) => c.user === 'user_123'));
+  check('NewAPI: 配了 quotaUserId 时才带 New-Api-User（旧部署兼容）', newApiCalls.every((c) => c.user === 'user_123'));
   check('NewAPI: status 为 ok', newApiRes.quota.status === 'ok');
   check('NewAPI: used = total_usage/100 = 25', newApiRes.quota.windows.used === 25);
   check('NewAPI: limit = hard_limit_usd = 100', newApiRes.quota.windows.limit === 100);
@@ -227,15 +228,74 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   check('NewAPI: balance.amount = remaining = 75', newApiRes.quota.balance.amount === 75);
   check('NewAPI: 结果里不含 API key 原文', !JSON.stringify(newApiRes).includes(NEWAPI_KEY));
 
-  // 缺 quotaUserId → unsupported（不发请求）
-  let newApiNoUserFetches = 0;
+  /* 没有 quotaUserId：当前 NewAPI 用 Bearer TokenAuth，这**不该**是必要条件。 */
+  const newApiNoUserCalls = [];
   const newApiNoUser = createQuotaManager({
-    readModelsConfig: () => ({ providers: { 'my-oneapi': { baseUrl: 'https://oneapi.example.com', apiKey: NEWAPI_KEY, quotaAdapter: 'newapi' } } }),
-    fetchFn: async () => { newApiNoUserFetches++; throw new Error('不应发起请求'); },
+    readModelsConfig: () => ({ providers: { 'my-oneapi': { baseUrl: 'https://newapi.example.com', apiKey: NEWAPI_KEY, quotaAdapter: 'newapi' } } }),
+    fetchFn: strictFetch({
+      'https://newapi.example.com/dashboard/billing/subscription': () => ({ status: 200, ok: true, json: async () => ({ hard_limit_usd: 100 }) }),
+      'https://newapi.example.com/dashboard/billing/usage': () => ({ status: 200, ok: true, json: async () => ({ total_usage: 2500 }) }),
+    }, (url, opts) => newApiNoUserCalls.push({ url: String(url), auth: opts?.headers?.Authorization, user: opts?.headers?.['New-Api-User'] })),
   });
   const newApiNoUserRes = await newApiNoUser.getQuota('my-oneapi');
-  check('NewAPI 缺 quotaUserId: status 为 unsupported', newApiNoUserRes.quota.status === 'unsupported');
-  check('NewAPI 缺 quotaUserId: 不发起任何请求', newApiNoUserFetches === 0);
+  check('NewAPI 无 quotaUserId: **不是** unsupported（正常执行）', newApiNoUserRes.quota.status === 'ok');
+  check('NewAPI 无 quotaUserId: 两个 endpoint 各一次', newApiNoUserCalls.length === 2 && new Set(newApiNoUserCalls.map((c) => c.url)).size === 2);
+  check('NewAPI 无 quotaUserId: 用 subscription + usage 两个 URL',
+    newApiNoUserCalls.some((c) => c.url === 'https://newapi.example.com/dashboard/billing/subscription')
+    && newApiNoUserCalls.some((c) => c.url === 'https://newapi.example.com/dashboard/billing/usage'));
+  check('NewAPI 无 quotaUserId: Authorization 仍是 Bearer <key>', newApiNoUserCalls.every((c) => c.auth === `Bearer ${NEWAPI_KEY}`));
+  check('NewAPI 无 quotaUserId: 默认**不发** New-Api-User', newApiNoUserCalls.every((c) => c.user === undefined));
+  check('NewAPI 无 quotaUserId: used=25 / remaining=75 照常算出',
+    newApiNoUserRes.quota.windows.used === 25 && newApiNoUserRes.quota.windows.remaining === 75);
+
+  /* 没有 quotaAdapter：不猜 NewAPI，unsupported 且零请求。 */
+  let newApiNoAdapterFetches = 0;
+  const newApiNoAdapter = createQuotaManager({
+    readModelsConfig: () => ({ providers: { 'my-proxy': { baseUrl: 'https://newapi.example.com', apiKey: NEWAPI_KEY } } }),
+    fetchFn: async () => { newApiNoAdapterFetches++; throw new Error('不应发起请求'); },
+  });
+  const newApiNoAdapterRes = await newApiNoAdapter.getQuota('my-proxy');
+  check('NewAPI 没配 quotaAdapter: status 为 unsupported（不按名字猜）', newApiNoAdapterRes.quota.status === 'unsupported');
+  check('NewAPI 没配 quotaAdapter: 零网络请求', newApiNoAdapterFetches === 0);
+
+  /* 没有 apiKey：auth_error，零请求。 */
+  let newApiNoKeyFetches = 0;
+  const newApiNoKey = createQuotaManager({
+    readModelsConfig: () => ({ providers: { 'my-oneapi': { baseUrl: 'https://newapi.example.com', apiKey: '', quotaAdapter: 'newapi' } } }),
+    fetchFn: async () => { newApiNoKeyFetches++; throw new Error('不应发起请求'); },
+  });
+  const newApiNoKeyRes = await newApiNoKey.getQuota('my-oneapi');
+  check('NewAPI 没配 apiKey: status 为 auth_error', newApiNoKeyRes.quota.status === 'auth_error');
+  check('NewAPI 没配 apiKey: 零网络请求', newApiNoKeyFetches === 0);
+  check('NewAPI 没配 apiKey: 文案是白名单', newApiNoKeyRes.quota.message === '未配置 API Key');
+
+  /* Fix B：NewAPI 的 endpoint identity 必须包含 base path。 */
+  let pathAFetches = 0;
+  let basePath = 'https://example.com/api-a';
+  const pathManager = createQuotaManager({
+    readModelsConfig: () => ({ providers: { 'my-oneapi': { baseUrl: basePath, apiKey: NEWAPI_KEY, quotaAdapter: 'newapi' } } }),
+    fetchFn: async (url) => {
+      pathAFetches++;
+      const u = String(url);
+      /* 两套 path 各自返回不同的数，用来证明没有串缓存。 */
+      const isA = u.includes('/api-a/');
+      if (u.endsWith('/dashboard/billing/subscription')) return { status: 200, ok: true, json: async () => ({ hard_limit_usd: isA ? 100 : 200 }) };
+      return { status: 200, ok: true, json: async () => ({ total_usage: isA ? 2500 : 5000 }) };
+    },
+    now: () => 1700000000000,
+    ttlMs: 60000,
+  });
+  const pathA = await pathManager.getQuota('my-oneapi');
+  check('NewAPI base path A: remaining = 100 - 25 = 75', pathA.quota.windows.remaining === 75);
+  const fetchesAfterA = pathAFetches;
+  basePath = 'https://example.com/api-b';
+  const pathB = await pathManager.getQuota('my-oneapi');
+  check('NewAPI base path A → B: 必须重新 fetch（不吃 A 的缓存）', pathAFetches === fetchesAfterA + 2);
+  check('NewAPI base path A → B: 拿到的是 B 的结果', pathB.quota.windows.limit === 200 && pathB.quota.windows.remaining === 150);
+  basePath = 'https://example.com/api-b/';
+  const pathB2 = await pathManager.getQuota('my-oneapi');
+  check('NewAPI 尾部斜杠: /api-b/ 与 /api-b 是同一 identity（命中缓存）', pathAFetches === fetchesAfterA + 2 && pathB2.cached === true);
+  check('NewAPI 尾部斜杠: 结果与 /api-b 一致', pathB2.quota.windows.remaining === 150);
 
   console.log('=== 6. unsupported 供应商：绝不发请求 ===');
   let unsuppFetches = 0;
