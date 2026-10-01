@@ -15,6 +15,18 @@ Pi GUI 的“诊断”面板用于把故障排查需要的运行状态收敛成�
 - pi bridge 是否运行、bridgeRun、启动参数
 - pi 是否可用及版本（**优先取规范版本状态** `pi.version.source`：`package.json` /
   `pi --version` / `none`）
+- **版本核对状态**（P23）：`pi.verification` —— 这个版本在不在兼容矩阵里
+  （`verified` / `unverified` / `unknown` / `unchecked`）与核对基线。
+  与「版本从哪来」分开摆：一个是值的来源，一个是「这个值我们认不认识」
+- **能力 probe 表**（P23）：每条 probe 的 id / 类型（source / runtime）/ 名称 /
+  三值 / **出处**（读了哪个文件的哪一行，相对路径），以及概览计数与
+  「还没法下结论的核心 probe」清单
+- **兼容矩阵摘要**（P23）：已验证的 Pi 版本（含核对日期与范围）、关键 Extension release、
+  已知上游差异。**只有版本号与日期**
+- **Native MCP 状态**（P23）：原生状态 / server 条目数 / 项目信任。
+  **只有状态与计数，没有 server 名字**（诊断不需要它）
+- **关键 Extension 版本**（P23）：只列 `package.json` 里读到版本号的那些，带作用域。
+  上限 20 条 —— 诊断不是扩展清单
 - **启动中的 pi 是哪一个**（`pi.launch`：解析来源 `env`（显式 `PI_BIN`）/ `path`（按
   PATH 解析）、入口 basename、包目录是否已绑定。**只有枚举与 basename，
   没有绝对路径**）—— 用来一眼看出「版本和实际启动的不是同一份」
@@ -57,6 +69,11 @@ GET /api/diagnostics
 **从不记录原始 payload**，所以 prompt、模型回复、工具输出、密钥都不会进来。
 （那条规矩钉在 [pi-compatibility.md](pi-compatibility.md) 第六节。）
 
+**schema 漂移记录（P23）更严**：只有来源、**我们自己代码里的字段路径**、以及 `typeof`
+（对象连键名都不给）。`privacy.schemaDriftValuesIncluded` 永远是 `false`。
+前端观察到的漂移（`public/schema-drift.js`）同样只有这三样，且在
+**浏览器里就地生成**、随 bridge 重启清空 —— 它不上传，也不进后端。
+
 Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含本机安装路径，而故障定位通常只需要 `available / version / reason / capabilities`。
 
 ## 脱敏
@@ -80,10 +97,17 @@ Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含
   五种状态：`idle` / `checking` / `latest` / `available` / `error` ——
   **「已是最新版」与「检查失败」永远是两句不同的话**。见 [updates.md](updates.md)
 - 基础版本与运行状态
+- **版本真值**（P23）：pi 版本 / 版本来源 / 核对状态 / 核对基线
+- **能力 probe 表**（P23）：每条带出处；三值分得开（支持 / 不支持 / 未知）
+- **兼容矩阵**（P23）：当前基线、已验证版本、已登记 Extension release、已知差异
+- **Native MCP**（P23）与**关键 Extension 版本**（P23）
 - 目录 / bridge 健康检查
 - Agent 状态
 - 脱敏后的完整 JSON
 - 刷新
+- **「复制诊断摘要」**（P23）：一段给人读的纯文本（版本 / 核对 / 兼容 / probe /
+  MCP / Extension / 健康检查 / 漂移 / 隐私声明）。它**只由白名单字段拼出来**，
+  与面板显示的是同一份已脱敏快照 —— 比整份 JSON 更适合贴进 issue
 - 复制诊断 JSON
 - 导出 `pi-gui-diagnostics.json`
 
@@ -98,6 +122,7 @@ Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含
 
 ```bash
 npm run test:diagnostics
+npm run test:probes        # P23：probe / 矩阵 / 漂移 / 诊断集成的离线契约
 npm run test:update        # 版本检查（含「诊断里的版本来自快照」那类断言在前端 smoke 里）
 ```
 
@@ -106,11 +131,22 @@ npm run test:update        # 版本检查（含「诊断里的版本来自快照
 - secret key 递归脱敏
 - 兼容性块：状态、三值能力、缺失清单（未验证的不进 missing）
 - 协议异常**不含 secret、不含绝对路径**，且异常对象的字段在白名单内
+- **P23**：probe 表 / 矩阵摘要 / Native MCP / Extension 版本进诊断，各自只有白名单字段
+  （probe 只给 `id/kind/label/state/evidence`、Native MCP 只给状态与计数、
+  Extension 只给有版本号的、上限 20 条）
+- **P23**：schema 漂移只记来源 + 字段名 + 类型，**不含值也不含对象键名**
+- **P23**：不注入新块时它们是 `null`（老调用方 / 老后端不受影响）
 - Bearer / sk token / 环境变量式 secret 脱敏
 - 项目和数据目录绝对路径不外泄
 - PID 不外泄
 - 环境变量值不进入快照
 - 有项目 / 无项目两种状态
 - 目录可读写健康检查
+
+前端侧（`npm run test:ui` 的 P23 段）另有 16 条：五个新小节都渲染、
+版本来源与核对状态分开摆、probe 三值与出处、矩阵基线、Native MCP 不含 server 名字、
+Extension `name@version`、「复制诊断摘要」按钮存在且内容脱敏、
+摘要与面板口径一致、剪贴板内容正确、漂移记录（未知工具名 / 闭集外状态 / 去重 /
+只记字段名与类型）与 bridge 重启清空。
 
 该套件已进入默认 `npm test`，因此每次 CI 都会执行。

@@ -941,3 +941,37 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 ⚠️ **同一个 harness 进程不要连着跑两次 `cdp-shot`**：harness 的内存夹具是有状态的
 （会话、Git 干净开关、对话推送），第二轮会看到第一轮留下的世界，
 表现为 59 / 125 这类**与本次改动无关**的取景失败。每轮截图前重启 harness。
+
+## P23 Long-term Compatibility / Upgrade Safety 验证
+
+四层，各管一段：
+
+| 层 | 命令 | 条数 | 量什么 |
+|---|---|---|---|
+| 离线契约 | `npm run test:probes`（进 `npm test`） | 62 | 兼容矩阵、probe 三值与**抛错**、缓存 / stale / restart invalidation、版本 `verifiedAgainst` 四态、schema 漂移只记字段名与类型、诊断五块集成与脱敏 |
+| P20.5 既有 | `npm run test:pi-version` | 136 | 版本真值（known / malformed / unknown）、built-in 探测、launch identity 同源 |
+| DOM（jsdom） | `npm run test:ui` 的 P23 段 | 16 | 诊断五个新小节、三值文案、摘要脱敏与剪贴板、漂移记录与清空 |
+| **真实 pi** | `npm run test:probes-live [-- --strict]` | opt-in | 对着本机真装着的 pi 打一张 probe 表；`--strict` 在「版本不在矩阵里」时退出码 1 |
+
+关键判定：
+
+- **未知版本是安全的**：`verification` 有四个值，`unverified`（矩阵里没有这个版本）
+  **不影响功能**，只是不能声称「核对过」。没注入矩阵 → `unchecked`；版本读不到 → `unknown`。
+- **probe 拿不到就是未知**：读不到包 / 文件是目录 / 形状不认识，三种情形分开断言
+  （分别是 `null` / `null` / `false`）；一条 probe 抛错不影响其它 probe。
+- **缓存与失效**：TTL 内不重读、`force` 立即重读、launch identity 一变立即重算、
+  `reset()` 后 runtime probe 立刻回未知。
+- **漂移不带值**：往漂移记录里塞 secret 与对象，断言序列化结果里既没有值、
+  也没有对象键名；前端环同一条断言，另有「同一条只记一次」与「bridge 重启清空」。
+- **诊断脱敏**：整份快照（含 probe 证据 / 矩阵 / Native MCP / Extension 版本）
+  不含注入的 secret 与绝对路径；`privacy` 五个标记恒为 `false`。
+- **两处判定不许各说各话**：`tests/pi-probes.cjs` 用同一份假包同时跑
+  `server/approval-probe.js`（P19）与 `server/pi-probes.js`（P23），断言结论一致 ——
+  这条正是为了挡住「文档措辞变了，一处改了另一处没改」。
+- **契约措辞与位置漂移**：0.87 的「Can block」与 0.99.2 的
+  「can mutate input or block execution」两侧各一条 fixture；对话框契约在
+  `docs/rpc.md`（旧）与 `docs/rpc-extension-ui.md`（0.99.2）两侧各一条，并断言
+  证据指认真正命中的文件。
+
+⚠️ **`npm run test:probes-live` 不进 CI**：它断言的是「这台机器上装的 pi 现在长什么样」，
+在 CI 上必红。它属于升级流程第 5 步（见 [upgrade-playbook.md](upgrade-playbook.md)）。

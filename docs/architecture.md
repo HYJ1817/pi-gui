@@ -1,5 +1,25 @@
 # 架构
 
+## P23 长期兼容与升级安全
+
+四个模块，都不新增事实源：
+
+- `server/pi-compat-matrix.js` —— **小型、明确、可核对**的 metadata：已验证的 Pi 版本、
+  关键 Extension release、Native MCP 契约、已知上游差异。纯数据 + 纯查询，
+  不联网、不读文件、不 spawn。它只回答「这个版本我们核过没有」，**不作能力判据**。
+- `server/pi-probes.js` —— probe registry（14 条）。source probe 只 `readFileSync`
+  pi 包的已知相对路径并限长；runtime probe 只读 `pi-compat` 的能力三值与
+  `mcp-native` 的摘要。缓存绑定 `(launch identity, 包目录)`，bridge 生命周期一变就 reset。
+- `server/pi-version.js` 多了一个维度：`verifiedAgainst` / `verification`
+  （矩阵由调用方注入，模块本身不认识矩阵）。
+- `public/schema-drift.js` —— 渲染进程侧的漂移环：只记来源 + 字段名（我们代码里的字面量）
+  + `typeof`，随 bridge 重启清空，进诊断面板。
+
+`server/pi-compat.js` 新增 `observeUnknownField/Enum`（`category: 'schema'`，
+**连对象键名都不记**），`server/mcp-native.js` 多一个可选的 `onDrift` 出口。
+`server/diagnostics.js` 多了 probe / 矩阵 / Native MCP / Extension 版本四块
+（全部惰性、全部可选注入）。流程见 [upgrade-playbook.md](upgrade-playbook.md)。
+
 ## P22 Capability 投影层
 
 `public/capability-model.js` 是**纯函数**投影层：把三条已经带出处的证据
@@ -318,6 +338,8 @@ get_messages ─┘
   同一约束两个消费者，各写一份迟早会漂
 - `lib/models-api.js` — 从供应商 `/models` 拉模型列表（路径回退、按 API 类型适配）
 - `lib/extract.js` — docx / pdf / 图片的文本抽取（pdfjs）
+- `server/pi-compat-matrix.js` / `server/pi-probes.js` — P23 兼容矩阵与 probe registry
+  （纯 metadata + 只读探测；不联网、不 spawn、不执行第三方代码）
 
 ### 前端
 
@@ -340,6 +362,8 @@ get_messages ─┘
   唯一一套 setup 布局与唯一的「安装后重启 Pi」（P22）
 - `providers.js` 模型供应商 / `usage.js` 用量与状态 / `ui/` 通用组件
   （`modal.js` / `popover.js` / `toast.js`）
+- `schema-drift.js` — P23 渲染进程侧的 schema 漂移环（来源 + 字段名 + 类型，**不记值**），
+  由四个语义适配器与 tool-view 上报，进诊断面板
 
 ### 桌面与构建
 

@@ -1,5 +1,33 @@
 # 安全
 
+## P23 升级安全与 schema 漂移边界
+
+兼容体系是**只读探测 + 投影**，不新增任何写路径、网络出口或执行面。
+
+- **不自动升级任何东西**：不升级 / 安装 / 降级 pi 或 Extension、不查 npm registry 与
+  GitHub Release、不改用户全局 npm。`server/pi-probes.js` 与 `server/pi-compat-matrix.js`
+  里没有 `child_process` / `spawn(` / `execFile`，也没有 URL。
+- **不执行第三方代码做 probe**：源码 probe 只 `readFileSync` pi 包的已知相对路径
+  （限长 512KB），**不 import pi 的模块、不 require 扩展**。runtime probe 只读已有观察。
+- **不绕 compatibility warning**：`verification: 'unverified'` 会如实显示在诊断面板，
+  面板不会因为「功能看起来能用」就把它标成已核对。CI 绿同样不构成认证 ——
+  升级流程的第 5 步（`npm run test:probes-live`）才是。
+- **不只凭 semver 决定 tool 可用性**：能力一律走 probe / 真实事件；版本号只用于
+  「这个版本我们核过没有」。`relative`（新/旧）明确标注为**不作判据**。
+- **漂移记录只记结构**：后端 `category: 'schema'` 记录只有
+  `{来源, 我们自己代码里的字段路径, typeof}` —— **对象连键名都不记**；
+  前端 `schema-drift.js` 同样三样，且只活在浏览器内存里（随 bridge 重启清空）。
+  `privacy.schemaDriftValuesIncluded` 恒为 `false`。
+- **禁止因 schema drift 回退成打印原始 JSON**：语义适配器按工具名接管，
+  命中之后 raw args/details 不进 DOM。只有**一个适配器都不认识**的工具才走 generic
+  fallback（P15 既有行为），而「有个不认识的工具名」这件事只以**类型**入诊断，不带名字。
+- **诊断仍然只收集适合贴出去的东西**：probe 证据是 pi 包里的源码行（相对路径 + 限长），
+  矩阵只有版本号与日期，Native MCP 只有状态与计数（**没有 server 名字**），
+  Extension 只有「读了 package.json 的版本号」的那些（上限 20 条，无路径）。
+  绝对路径、会话正文、配置内容、环境变量、凭据一律不进。
+
+详见 [upgrade-playbook.md](upgrade-playbook.md) 与 [pi-compatibility.md](pi-compatibility.md)。
+
 ## P22 Capability 投影层边界
 
 Capability 视图是**只读投影**：它把已有的证据重新排版，**不新增任何事实、不新增任何动作**。

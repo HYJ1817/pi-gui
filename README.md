@@ -139,6 +139,30 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 
 → [architecture.md](docs/architecture.md#六前端渲染管线)
 
+## 兼容与升级安全（P23）
+
+Pi GUI 是 pi 的界面，不是 pi 的一部分。所以「pi 换版本了怎么办」必须是一个
+**可回答、可诊断、可复现**的问题，而不是每次靠人回忆。
+
+- **四个「版本」分得开**：历史验证基线 / 当前验证基线 / 运行中版本 /
+  **版本核对状态**（`verified` / `unverified` / `unknown` / `unchecked`）。
+  版本号只用来回答「这个版本我们核过没有」，**永远不用来判断能力**。
+- **能力靠 probe，不靠 `version >= X`**：14 条 probe 覆盖 RPC 命令集、
+  扩展 UI 对话框、tool_call 阻断、built-in MCP、MCP 替换与闭集、`list --json` 资源字段等。
+  每条都给**出处**（读了哪个文件的哪一行）与**降级策略**。只读、无副作用、不执行第三方代码。
+- **升级流程写进文档**：[upgrade-playbook.md](docs/upgrade-playbook.md) ——
+  取 release → diff contract → 更新 fixture → 跑契约测试 → **显式 live test** →
+  更新矩阵与文档 → 人工验收。`npm run test:probes-live -- --strict` 会在
+  「这个版本没被核对过」时明确说不。
+  **CI 绿不能认证一个从未验证的新版本。**
+- **schema 漂移看得见、但不带值**：上游多一个字段 / 多一个枚举值时，
+  诊断里记下「来源 + 字段名 + 类型」—— **不记值、不记对象键名**；
+  绝不因为形状不认识就回退成打印原始 JSON。
+- **诊断面板**多了版本核对、能力 probe 表、兼容矩阵、Native MCP 状态、关键 Extension 版本，
+  以及一个**脱敏的「复制诊断摘要」**（适合直接贴进 issue）。
+
+→ [upgrade-playbook.md](docs/upgrade-playbook.md) · [pi-compatibility.md](docs/pi-compatibility.md)
+
 ### 能力视图（Capability）
 
 一个界面回答「这个能力现在能不能用」，而且**不建第二套事实源** ——
@@ -346,7 +370,8 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
-| [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、升级 pi 后怎么验 |
+| [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、P23 的版本真值 / probe registry / 兼容矩阵 / schema 漂移 |
+| [upgrade-playbook.md](docs/upgrade-playbook.md) | P23 升级流程：取 release、diff contract、更新 fixture、契约测试、显式 live test、更新矩阵与文档、人工验收 |
 | [updates.md](docs/updates.md) | 版本检查：数据源、SemVer、缓存与 single-flight、外链白名单、隐私、为什么不自动安装 |
 | [releasing.md](docs/releasing.md) | 发版：一条命令的发布预检、版本一致性守卫、资产命名契约、tag → 自动发布、失败不留半成品 |
 | [web-access.md](docs/web-access.md) | Web Search / URL Fetch：适配的 Extension、状态模型、来源安全、外链边界 |

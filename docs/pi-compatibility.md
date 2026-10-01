@@ -54,6 +54,81 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 
 代码在 [`server/pi-compat.js`](../server/pi-compat.js)。
 
+## P23：长期兼容与升级安全
+
+P20.5 把「文档里的基线版本」和「你机器上跑的版本」拆开了。P23 把那次**一次性迁移**
+变成长期机制 —— 四块，都不新增事实源：
+
+| 块 | 在哪 | 回答什么 |
+|---|---|---|
+| **版本真值** | `server/pi-version.js` | 跑的是哪个 pi（`value` / `source` / `status` / `updatedAt`）**以及这个版本我们核过没有**（`verifiedAgainst` / `verification`） |
+| **probe registry** | `server/pi-probes.js` | 14 条能力 probe 的三值 + 出处 + 降级策略。**优先 probe feature，不写 `if version >= X`** |
+| **兼容矩阵** | `server/pi-compat-matrix.js` | 小型、明确、可核对的 metadata：已验证的 Pi 版本、关键 Extension release、Native MCP 契约、已知差异 |
+| **升级 playbook** | [upgrade-playbook.md](upgrade-playbook.md) | 拿到新版本之后按什么顺序做，以及「**CI 绿不能认证一个新版本**」 |
+
+### 版本真值多了一个维度
+
+```js
+{
+  value: '0.99.2', source: 'package.json', status: 'known',
+  updatedAt: '2026-10-02T00:00:00.000Z',
+  verification: 'verified',                      // verified / unverified / unknown / unchecked
+  verifiedAgainst: { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' },
+  relative: 'same',                              // 只作提示，不作判据
+}
+```
+
+- `verification: 'verified'` = 这个版本在 `PI_BASELINES` 里，逐项核对过。
+- `'unverified'` = 读到了版本，但矩阵里没有它 —— **不是「不支持」，功能照常**。
+- `'unknown'` = 版本本身没读到（与「没核过」是两件事）。
+- `'unchecked'` = 没注入矩阵（老调用方 / 单测）。
+- `relative`（比基线新/旧）**明确标注为不作判据**：fork / 自定义实现的版本号可能完全不同。
+
+### probe registry
+
+每条 probe 只回答是 / 否 / 未知，带**出处**（读了哪个文件的哪一行，相对路径）与
+**降级策略**（拿不到时 GUI 会怎样）。source probe 只 `readFileSync` 已知相对路径并限长；
+runtime probe 只读已有观察（`pi-compat` 的能力三值、`mcp-native` 的摘要）。
+**不 import pi 的模块、不 spawn、绝不执行第三方 Extension 代码。**
+
+缓存绑定 `(launch identity, 包目录)`，带 30s TTL；bridge 生命周期一变
+（starting / restarting / exited / error / no-project）由 `server.js` 调 `reset()` ——
+旧 run 的 runtime probe 不许留在表里。
+
+### 实测发现的两处**文档漂移**（P23 的 live probe 抓到的）
+
+`npm run test:probes-live` 对着本机真实 pi 跑，第一次就把 P19 的能力报告打脸了：
+
+| 面 | 0.87.0 / 0.99.1 | 0.99.2（本机实测） | 后果（修之前） |
+|---|---|---|---|
+| tool_call 阻断的**措辞** | `docs/extensions.md` 里「**Can block.**」/「before the tool executes」 | 改成「`tool_call` can mutate input or block execution.」+ `block: true` 示例 | 类型里明明有 `block?: boolean`，报告却说「没有阻断契约」→ **伪 false** |
+| 对话框阻塞契约的**位置** | `docs/rpc.md` | 搬到 `docs/rpc-extension-ui.md` | 「扩展可向本界面要确认并阻塞」被判成不支持 → **伪 false** |
+
+修法是 **probe 同时接受两版措辞与两处位置**，证据里带上真正命中的文件；
+`tests/pi-probes.cjs` 还会交叉核对 `approval-probe.js`(P19) 与 `pi-probes.js`(P23)
+对同一份包给出一致结论 —— 两处判定不能各说各话。两条漂移都登记在
+`KNOWN_DIFFERENCES` 里（`approval-doc-wording` / `dialog-doc-moved`）。
+
+> 教训写进 playbook 第二步：**文档措辞会变、文档会搬家，而语义没变。**
+> 只认一处措辞的 probe 不是「保守」，是**会撒谎**。
+
+### schema 漂移：看得见，但不带值
+
+语义适配器对未知字段的策略不变（忽略 / 关键字段缺失 → 「结果不可用」/ 新枚举 → unknown），
+但**降级不再静默**：
+
+- 后端：`server/pi-compat.js` 的 `observeUnknownField()` / `observeUnknownEnum()`，
+  记 `{category: 'schema', operation: 来源, field: 我们自己代码里的字段路径, actual: typeof}`。
+  **对象键名都不记**（用 `driftType()`），更不记值。
+- 前端：`public/schema-drift.js` 的小环（上限 20，同一条去重），
+  由 `browser-activity` / `memory-activity` / `tool-view` / `extensions.js` 上报
+  「闭集外的 `details.kind`」「不认识的 `snapshotMode`」「一个适配器都不认识的工具名」
+  「闭集外的 MCP 运行状态」。进诊断面板与「复制诊断摘要」。
+
+**硬规矩：绝不因为形状不认识就回退成打印原始 JSON。** 语义适配器按工具名接管，
+命中之后 raw args/details 一律不进 DOM；只有**一个适配器都不认识**的工具才走
+generic fallback（那是 P15 的既有行为，且内容是折叠区里的、不是摘要行）。
+
 ## 〇、四个「版本」不是一回事（P20.5）
 
 上一轮出过一个具体的错：文档里写着「pi 0.87.0 没有原生 MCP，而且是有意为之」，
@@ -451,15 +526,27 @@ Pi 兼容性
 ## 十一、相关测试
 
 ```bash
-npm run test:compat    # tests/pi-compat.cjs（57 条，纯 fixture）
+npm run test:compat       # tests/pi-compat.cjs（57 条，纯 fixture）
+npm run test:probes       # tests/pi-probes.cjs（62 条，纯 fixture，P23）
+npm run test:pi-version   # tests/pi-version.cjs（136 条，版本真值 + built-in 探测）
+npm run test:probes-live  # 对着**本机真装着的 pi** 打一张 probe 表（opt-in，不进 CI）
 ```
 
 覆盖：完全兼容 / 缺可选能力 → partial / 缺核心能力 → incompatible /
 版本未知仍兼容 / 上游新增未知字段 / 未知事件安全忽略 / 畸形数据记异常不崩 /
-会话两种消息形状 / 异常缓冲上限 / 报告不含任何原始值 / 三值语义。
+会话两种消息形状 / 异常缓冲上限 / 报告不含任何原始值 / 三值语义；
+P23 另加：兼容矩阵（已验证 / 未核对 / 未知）、probe 的 supported / unsupported / **抛错**、
+缓存 TTL 与 identity 失效、版本 `verifiedAgainst` 四态、schema 漂移只记字段名与类型、
+诊断五块集成与脱敏、MCP 闭集外状态的漂移出口。
+
+`npm run test:probes-live [-- --strict]` 是**升级流程第 5 步**：
+它不假设本机版本，只断言结构事实（每条 probe 都有结论、证据里没有绝对路径），
+并把整张表打出来。`--strict` 在「版本不在矩阵里」时以退出码 1 结束 ——
+这条就是「CI 绿不能认证一个新版本」的机器可执行落点。
 
 前端侧（`npm run test:ui`）另有一组：未知事件不崩、未知 response command 不崩、
-按能力局部降级（隐藏改名 / 禁用切换 / 一次性的核心不可用提示 / 历史说明）。
+按能力局部降级（隐藏改名 / 禁用切换 / 一次性的核心不可用提示 / 历史说明）、
+以及 P23 的诊断面板（五个新小节 / 三值文案 / 摘要脱敏 / 漂移记录与清空）。
 
 ### 语义适配器都只站在 `toolEvents` 上
 
