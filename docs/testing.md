@@ -51,11 +51,11 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 `npm test` 里现在有 35 个套件，全部是**纯自动化**：
 
 ```
-smoke 1060 · git 161 · modules 117 · reliability · interactions · port-owner
+smoke 1062 · git 161 · modules 117 · reliability · interactions · port-owner
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 106 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 130 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
@@ -793,10 +793,10 @@ RPC 事实、配置只报存在性）—— 1023 → 1043。
 
 ## P20.6 Native MCP 集成验证
 
-`npm run test:mcp`（已纳入 `npm test`，**106 条**）—— 完全离线：
+`npm run test:mcp`（已纳入 `npm test`，**130 条**）—— 完全离线：
 不启动 pi、不起真实 MCP server、不联网、不 OAuth、不读用户真实目录。
 `pi mcp list --json` 与各动作的执行一律注入假 runCli；配置文件全在
-`os.tmpdir()`。契约基线 **pi 0.99.2**。`npm run test:ui`（smoke，1051 → **1060**）
+`os.tmpdir()`。契约基线 **pi 0.99.2**。`npm run test:ui`（smoke，1051 → **1062**）
 另有 MCP 标签页的界面行为（状态横幅、server 行、刷新/移除/添加 wiring、
 trust 提示、workspace 隔离文案、unsupported 声明、无凭据字段）与 P15 Extension 页回归。
 
@@ -808,8 +808,11 @@ trust 提示、workspace 隔离文案、unsupported 声明、无凭据字段）�
 | **B. project trust** | 未信任 + project add/remove → 拒绝且 `runCli` 0 次；已信任 → 正常；未信任下 user scope 仍可用；trust 未知 / 抛异常 → fail closed；未信任项目 `.pi/settings.json` 的 `-builtin:mcp` 不影响 native；已信任时正确变 disabled；用户级与项目级覆盖关系 |
 | **C. secret API contract** | header value / env value / `oauth` / `auth` / 常见 token 字段 → `secret-input-unsupported` 且不调 `runCli`、不回显值；`bearerTokenEnvVar` 只传名字被允许；success 响应不含配置原文；`mcp-auth.json` 含 token 也一个字节都不进报告 |
 | **D. 0.99.2 fixture / schema** | `codemode-deferred` 归一为 `codemode`（含 `toolExposure` 值）；`description` 单行化 + 限长；`auth` 计入 `hasSecrets`；`resources` / `resourceTemplates` / `toolExposure` / `note` 接收与脱敏；`--description` argv |
-| **E. unknown enum / schema fallback** | 闭集外的 `state` → `unknown`（不回显原文）；未知 `scope` / `exposure` → `null`；tools 只留标识符面；`resources` 只收非负整数；`source` / `command` / `url` / `headers` / `env` / 未知字段一律不取 |
+| **E. unknown enum / schema fallback** | 闭集外的 `state` → `unknown`（不回显原文）；未知 `scope` / `exposure` → `null`；`resources` 只收非负整数；`source` / `command` / `url` / `headers` / `env` / 未知字段一律不取 |
 | **F. 回归** | 配置安全解析、入口派生、scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsupported、前端语义投影与运行观察 |
+| **G. 覆盖受 trust 约束**（Fix-2 A） | trusted 同名 → 用户级 `overridden`；untrusted / unknown 同名 → 用户级继续 active、项目项 untrusted / trust-unknown；trusted 但项目项 invalid → 用户级不被覆盖；不同名互不覆盖；项目文件坏 JSON 不误标；`readConfigs` 本身不产出 `overridden` |
+| **H. raw MCP tool name**（Fix-2 B） | `get-user` / `tool name` / `a/b` / `x:y` / `工具搜索` / `emoji-🔎` 不被过滤；控制字符（NUL/CR/LF/C0/C1）被替换、不产生换行注入；纯控制字符名从列表丢但仍计入 `toolCount`；超长安全截断；非字符串丢弃且不 `String()`；`tools` 非数组 → `null`；展示列表 ≤200 而 `toolCount` 是上游数量；`toolExposure` 键同样是 raw name |
+| **I. 两层命名边界**（Fix-2 B） | CLI 侧不做 `-`→`_` 归一；Timeline 侧仍按注册后标识符解析；raw 名（无 `mcp__` 前缀）不匹配 → generic fallback；CLI 侧不再导出 tool 名字符集正则；`mcp-activity` 资源工具与 `mcp__` 解析无回归 |
 
 **live MCP 测试本轮未执行**（不进 CI）。真机流程（手工）：配一个本地 stdio
 fixture server → 打开 MCP 页 → 刷新状态见 connected + 工具数 → 调一次工具见

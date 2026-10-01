@@ -101,15 +101,19 @@ const DEFAULT_EXPOSURE = 'codemode';
  * 加上 `list()` 给 `enabled:false` 条目合成的 `disabled`）。上游若加新值，
  * 这里**不跟着放行** —— 折成 `unknown` 并让界面说「无法识别」。 */
 const RUNTIME_STATES = new Set(['connecting', 'connected', 'needs-auth', 'disconnected', 'disabled', 'failed', 'closed']);
-/** `list --json` 的 `scope` 闭集（`config.d.ts` 的 `McpServerEntry.scope`）。 */
+/** `list --json` 的 `scope` 闭集（`config.d.ts` 的 `McpServerEntry.scope`）。
+ *
+ * ⚠️ 这是**类型**上的三值，不是 CLI 实际会产出的三值：`scope:"extension"` 由
+ * session 内的 MCP 扩展赋值（`mcp/index.js` 的 `registeredServers()` 走
+ * `pi.getMcpServers()`），而 `pi mcp list --json` 是 shell 命令、**不加载扩展**
+ * （0.99.2 `docs/mcp.md`：「Shell commands do not load extensions.」），
+ * 它只能产出 `global` / `project`。这里保留 `extension` 只是**防御性前向兼容**
+ * —— 上游若哪天从 CLI 侧也报这个值，我们不会把它折成 `null`。 */
 const RUNTIME_SCOPES = new Set(['global', 'project', 'extension']);
-/* 工具名面：0.99.2 起 pi 把 `mcp__<server>__<tool>` 里除 `[A-Za-z0-9_]` 之外的
- * 字符全部换成 `_`（0.99.1 还保留 `-`）。这里按新规则收窄 —— 名字是标识符面，
- * 不认识的字符没有理由进 DOM。 */
-const TOOL_NAME_RE = /^[A-Za-z0-9_.]{1,128}$/;
 const MAX_FILE_BYTES = 256 * 1024;
 const MAX_ERROR_CHARS = 500;
 const MAX_TOOLS = 200;
+/** raw MCP tool name 的展示长度上限（见 `sanitizeMcpRawToolName`）。 */
 const MAX_TOOL_NAME = 128;
 /** server 的 `description`（0.99.2 新增）：纯文本、单行化、限长。 */
 const MAX_DESCRIPTION = 200;
@@ -147,10 +151,45 @@ function clip(s, max = MAX_ERROR_CHARS) {
   return t.length > max ? t.slice(0, max) + '…' : t;
 }
 
+/* 控制字符（C0 + DEL + C1）。任何外部文本进 DOM 之前都要先过这一关 ——
+ * 换行 / 回车 / NUL 是「一行文本」这个前提的破坏者，C1 区间（0x80–0x9f）在
+ * 部分终端与渲染器里同样有控制语义。 */
+const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f-\u009f]+/g;
+
 /** 单行化 + 截断（`description` 这类外部自由文本进界面前统一走这里）。 */
 function oneLine(s, max = MAX_DESCRIPTION) {
-  const t = String(s ?? '').replace(/[\s\u0000-\u001f\u007f]+/g, ' ').trim();
+  const t = String(s ?? '').replace(CONTROL_CHARS_RE, ' ').replace(/\s+/g, ' ').trim();
   return t.length > max ? t.slice(0, max) + '…' : t;
+}
+
+/**
+ * **raw MCP tool name 的安全投影**（P20.6-Fix-2 Blocker B）。
+ *
+ * ⚠️ 这一层和 `mcp__<server>__<tool>` 的**注册期标识符**是两回事，别混：
+ *
+ *   - `pi mcp list --json` 的 `tools[]` 是 `connection.tools.map(t => t.name)`
+ *     （0.99.2 `mcp/cli.ts` 第 460 行）—— **MCP server 自己报的原始 tool name**，
+ *     pi 一个字符都没改。它可以含 `-`、空格、`/`、`:`、Unicode、emoji…
+ *   - `createMcpToolName()`（`mcp/tools.ts`）才负责把 `mcp__<server>__<tool>`
+ *     里除 `[A-Za-z0-9_]` 之外的字符换成 `_`（重名再挂 8 位 sha256 后缀）。
+ *     那是**注册为 Pi tool 时**的另一层逻辑，只在 Tool Timeline 那一侧出现。
+ *
+ * 所以这里**绝不能**套用标识符正则 —— 用 `^[A-Za-z0-9_.]+$` 过滤会把
+ * `get-user`、`工具搜索`、`emoji-🔎` 这些完全合法的 raw tool name 静默删掉，
+ * 于是 `toolCount` 也跟着失真。
+ *
+ * 这里做的是**安全文本边界**，不是字符集白名单：
+ *   1. 只接受 `string`（对象 / 数字 / 数组 / null 一律丢）
+ *   2. 控制字符 → 空格（NUL / CR / LF / C0 / C1 都挡掉，防注入与多行破坏）
+ *   3. 折叠空白 + trim
+ *   4. 空串丢弃（清一色控制字符的名字没有可展示形态）
+ *   5. 超长**安全截断**（保留「server 确实报了这个工具」这个事实）
+ *
+ * @returns {string} 可安全放进 DOM 文本节点的单行串；不可用时回 `''`
+ */
+function sanitizeMcpRawToolName(v) {
+  if (typeof v !== 'string') return '';
+  return oneLine(v, MAX_TOOL_NAME);
 }
 
 /** exposure 别名解析：只认 0.99.2 的规范闭集，别名折成规范值，其余回 null。 */
@@ -377,25 +416,34 @@ export function createMcpNative({
     };
   }
 
-  /** 两处 mcp.json 的安全解析（结构 only）。读不到/坏了就按空处理，不抛。 */
+  /**
+   * 两处 mcp.json 的安全解析（结构 only）。读不到/坏了就按空处理，不抛。
+   *
+   * **这里只产出「文件里写了什么」这个事实，不产出任何 effective 结论。**
+   * 尤其是 `overridden` —— 「项目同名项覆盖用户级」这条上游语义**只在项目
+   * 被信任时才成立**（`loadMcpConfig` 只在 `projectTrusted` 时读项目文件，
+   * 见 §Blocker A）。trust 在这里还不知道，所以不能在这里决定覆盖关系；
+   * 覆盖在 `summary()` 拿到 `tr` 之后算。
+   *
+   * `parseMcpServers` 已经丢掉非法条目（与上游 `readConfigFile` 的
+   * `continue` 一致），所以 `projectServers` 天然就是「Pi 会接受并加载的
+   * project entry」—— 非法条目不会参与覆盖，全局同名项保留。
+   */
   function readConfigs() {
     const f = files();
     const u = readJsonSafe(f.user);
     const p = f.project ? readJsonSafe(f.project) : { exists: null, data: null, error: '' };
     const up = u.data ? parseMcpServers(u.data) : { servers: [], invalid: [], error: u.error || '' };
     const pp = p.data ? parseMcpServers(p.data) : { servers: [], invalid: [], error: p.error || '' };
-    const projectNames = new Set(pp.servers.map((s) => s.name));
-    const user = up.servers.map((s) => ({
-      ...s,
-      scope: 'user',
-      // 项目同名覆盖用户级（pi 原语，docs/mcp.md）—— 被覆盖的那条标出来，不报两条都生效。
-      overridden: projectNames.has(s.name),
-    }));
-    const project = pp.servers.map((s) => ({ ...s, scope: 'project', overridden: false }));
+    const userServers = up.servers.map((s) => ({ ...s, scope: 'user' }));
+    const projectServers = pp.servers.map((s) => ({ ...s, scope: 'project' }));
     return {
       user: { exists: u.exists, error: u.error, invalid: up.invalid, parseError: up.error },
       project: { exists: p.exists, error: p.error, invalid: pp.invalid, parseError: pp.error },
-      servers: [...user, ...project],
+      userServers,
+      projectServers,
+      // 仍给 refresh() 按 `scope:name` 查配置结构（exposure / hasSecrets / toolExposure）用。
+      servers: [...userServers, ...projectServers],
     };
   }
 
@@ -545,8 +593,9 @@ export function createMcpNative({
    *   - `scope`：只认 global / project / extension，其余 → null
    *   - `exposure`：只认 0.99.2 闭集（含别名归一），其余 → null
    *   - `transport`：只留类型面，**原文（命令 / URL）永不进报告**
-   *   - `tools`：标识符面（`[A-Za-z0-9_.]`）+ 长度 + 数量上限
-   *   - `toolExposure`：键限长、值限枚举
+   *   - `tools`：**raw MCP tool name**，走 `sanitizeMcpRawToolName`（安全文本边界，
+   *     不是字符集白名单）+ 数量上限；`toolCount` 是上游合法字符串项的数量
+   *   - `toolExposure`：键是 raw tool name（同样只做单行化 + 限长）、值限枚举
    *   - `resources` / `resourceTemplates`：非负整数，否则 null
    *   - `error`：截断 + 路径脱敏
    *   - `source`（绝对路径）/ `command` / `url` / `headers` / `env`：**一律不取**
@@ -554,16 +603,27 @@ export function createMcpNative({
   function projectRuntimeServer(s, f) {
     if (!s || typeof s !== 'object') return null;
     if (typeof s.name !== 'string' || !SERVER_NAME_RE.test(s.name)) return null;
-    const tools = Array.isArray(s.tools)
-      ? s.tools.filter((x) => typeof x === 'string' && TOOL_NAME_RE.test(x)).slice(0, MAX_TOOLS)
+    /* ---------- tools：raw MCP tool name（Blocker B） ----------
+     *
+     * `toolCount` 是**上游事实**：server 报了几个工具（合法字符串项的数量）。
+     * 它**不因字符集**减少 —— 名字里带 `-` / 空格 / Unicode 不是「少一个工具」。
+     * `tools` 是**有界的安全展示列表**：单行化 + 限长 + 截断到 MAX_TOOLS。
+     * 两者在极端情况下可以不等（例如一个纯控制字符的名字没有可展示形态），
+     * 这是有意的：数量说事实，列表说能安全显示的部分。 */
+    const rawTools = Array.isArray(s.tools) ? s.tools : null;
+    const stringTools = rawTools ? rawTools.filter((x) => typeof x === 'string') : null;
+    const tools = stringTools
+      ? stringTools.map(sanitizeMcpRawToolName).filter(Boolean).slice(0, MAX_TOOLS)
       : null;
     let toolExposure = null;
     if (s.toolExposure && typeof s.toolExposure === 'object' && !Array.isArray(s.toolExposure)) {
       const out = {};
       for (const [k, v] of Object.entries(s.toolExposure)) {
-        if (typeof k !== 'string' || !k || k.length > MAX_TOOL_NAME) continue;
+        // 键也是 raw tool name —— 同样只做安全文本边界，不套标识符正则。
+        const key = sanitizeMcpRawToolName(k);
+        if (!key) continue;
         const exp = normalizeExposure(v);
-        if (exp) out[k] = exp;
+        if (exp) out[key] = exp;
       }
       toolExposure = Object.keys(out).length ? out : null;
     }
@@ -579,7 +639,8 @@ export function createMcpNative({
       transportType: typeof s.transport === 'string' && /^https?:\/\//.test(s.transport) ? 'http'
         : typeof s.transport === 'string' && s.transport ? 'stdio' : null,
       state: typeof s.state === 'string' && RUNTIME_STATES.has(s.state) ? s.state : 'unknown',
-      toolCount: tools ? tools.length : null,
+      // 数量说事实（上游合法字符串项），列表说有界的安全展示面。
+      toolCount: stringTools ? stringTools.length : null,
       tools,
       toolExposure,
       resources: count(s.resources),
@@ -634,14 +695,36 @@ export function createMcpNative({
     const cfg = readConfigs();
     const tr = await trust();
     const nat = await nativeState(tr);
+    /* ---------- 覆盖关系（effective truth，受 trust 约束） ----------
+     *
+     * 上游 `loadMcpConfig`（0.99.2 `mcp/config.ts`）：
+     *   readConfigFile(global)            // 总是读
+     *   if (projectTrusted) readConfigFile(project)   // 只在信任时读
+     * 两份都往同一个 `Map<name, entry>` 里 `set`，所以「项目同名覆盖用户级」
+     * **只在项目被信任时才发生**。
+     *
+     * 因此「项目文件里有没有这个 key」≠「用户级那条被覆盖了」：
+     *   - trusted === true  → 项目同名项参与覆盖
+     *   - trusted === false → 项目文件被 pi 整个忽略，用户级照旧生效
+     *   - trusted === null  → 同上，fail closed（不能拿未知当已加载）
+     *
+     * 只有 `projectServers`（= `parseMcpServers` 认可的条目）才进这个集合 ——
+     * 非法 project entry 被上游 `readConfigFile` 的 `continue` 跳过，不覆盖全局项。
+     */
+    const loadableProjectNames = projectTrusted(tr)
+      ? new Set(cfg.projectServers.map((s) => s.name))
+      : new Set();
+
     const servers = cfg.servers.map((s) => {
       /* 项目条目只有**确证信任**时才按「生效」算。`false` 与「拿不到」（null）
        * 都 fail closed —— 与写操作的闸门同一条规则，理由也一样：pi 在非交互
        * 模式下不读未信任项目的 mcp.json，界面不该替它说「生效中」。 */
       const projectBlocked = s.scope === 'project' && !projectTrusted(tr);
+      // 用户级被覆盖，只在项目**确实会被加载**时才成立。
+      const overridden = s.scope === 'user' && loadableProjectNames.has(s.name);
       const effective = projectBlocked
         ? { active: false, reason: untrustedReason(tr) }
-        : { active: Boolean(s.enabled) && !s.overridden, reason: s.overridden ? 'overridden' : (s.enabled ? '' : 'disabled') };
+        : { active: Boolean(s.enabled) && !overridden, reason: overridden ? 'overridden' : (s.enabled ? '' : 'disabled') };
       if (nat.state === 'replaced') {
         effective.active = false;
         effective.reason = 'replaced';
@@ -649,7 +732,7 @@ export function createMcpNative({
         effective.active = false;
         effective.reason = nat.state;
       }
-      return { ...s, effective };
+      return { ...s, overridden, effective };
     });
     summaryCache = {
       key,
@@ -1076,12 +1159,13 @@ export function createMcpNative({
     peekStatus,
     peekSummary,
     reset,
-    /** 内部件：单测用。`workspaceKey` / `scanSecrets` 不对外暴露状态，只暴露纯函数。 */
+    /** 内部件：单测用。只暴露纯函数，不暴露任何状态。 */
     _internals: {
       parseMcpServers,
       buildPiEntry,
       projectRuntimeServer,
       normalizeExposure,
+      sanitizeMcpRawToolName,
       scanSecrets,
       SERVER_NAME_RE,
       EXPOSURES,

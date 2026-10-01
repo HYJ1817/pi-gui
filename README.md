@@ -159,8 +159,11 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
   所以不伪造工具注册表。
   安全边界：添加接口**只接受不含凭据值的配置**（`env` / `headers` / `oauth` /
   `auth` 在 HTTP 边界即拒绝）；项目级写操作**受 project trust 闸门保护**
-  （未信任或信任未知一律 fail closed）；`mcp-auth.json` 从不读取，OAuth token
-  全程由 pi 自己管理
+  （未信任或信任未知一律 fail closed）；**未信任项目的同名 server 不覆盖用户级**；
+  `mcp-auth.json` 从不读取，OAuth token 全程由 pi 自己管理。
+  诚实边界：`pi mcp list --json` 是 shell 命令、**不加载 extensions**，所以它只
+  看得到 `global` / `project` 两处 `mcp.json`；用 `pi.registerMcpServer()` 注册的
+  session server 在 GUI 里属于 unknown / 不可枚举
 
 → [mcp.md](docs/mcp.md) · [extensions.md](docs/extensions.md)
 

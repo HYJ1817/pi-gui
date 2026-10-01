@@ -198,6 +198,11 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
 - 仍然不做的三件事（做了就是撒谎）：不在 `.pi-gui/` 里自己存一份 MCP 配置；
   不显示没有数据支撑的状态（「运行：」前缀只出现在有 `list --json` 证据时）；
   enable / disable / reconnect / 改 exposure 没有官方自动化接口，不伪造开关。
+- **`pi mcp list --json` 看不见 extension 注册的 server**：shell 命令不加载
+  extensions（0.99.2 `docs/mcp.md` 原文），所以 CLI 状态源只可能产出
+  `global` / `project`。用 `pi.registerMcpServer()` 注册的 server 只活在
+  session 里、只在 `/mcp` 管理器里出现 —— 在 GUI 里属于 unknown / 不可枚举。
+  详见 [mcp.md](mcp.md) 的「`scope`：类型上有三值，CLI 实际只产两个」。
 
 `server/mcp.js` **不硬编码「某个版本没有 MCP」**：它去读本机装的 pi 包
 （定版本、扫 `dist/core` 找 mcp 模块、从 docs 截原文当证据）。`supported`

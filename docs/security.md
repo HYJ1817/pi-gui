@@ -99,6 +99,12 @@ MCP server 是**用户自己配置的可执行命令与远端 URL**（stdio 跑�
 - **运行时状态逐项 allowlist**：闭集外的 `state` 折成 `unknown`（不把任意上游
   字符串投影进 DOM）；`source` / `command` / `url` / `headers` / `env` 与其它
   未知字段一律不取
+- **raw MCP tool name 走安全文本边界**（P20.6-Fix-2）：`list --json` 的 `tools[]`
+  是 MCP server 自己报的原始名字（可含空格 / Unicode / emoji），GUI **不套用**
+  注册期标识符正则，只做「非字符串丢弃 + 控制字符（NUL/CR/LF/C0/C1/DEL）替换为
+  空格 + 单行化 + trim + 限长截断」。前端用 `textContent` 渲染，不进 `innerHTML`
+- **覆盖关系不越过信任闸门**（P20.6-Fix-2）：未信任 / 信任未知时，项目同名项
+  **不覆盖**用户级 —— 否则会出现「两条都不生效」的错状态
 - OAuth 全程 pi 负责（开浏览器、存 token、自动刷新）；in-session 的 select /
   input 经 P19 管道承接，不新增凭据经手的代码
 - Tool Timeline 的 MCP 语义行**不展示完整 args / result**，不猜 annotations；

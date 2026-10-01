@@ -128,6 +128,20 @@ Pi GUI 依赖 pi 的哪些能力、哪些能力缺失时可以降级、以及 pi
 **MCP 配置层的词汇表与命名规则**，以及**两个新的凭据面字段**——前者要求
 GUI 归一化与兼容解析，后者要求 GUI 把它们纳入「拒绝接收」的清单。
 
+### P20.6-Fix-2：两处**我们自己读错**的 0.99.2 契约
+
+下面两条**不是**上游版本变化，是 pi-GUI 早先对同一份 0.99.2 源码的误读。
+记录在这里，避免下次又按文档反证自己。
+
+| 误读 | 上游事实（v0.99.2 源码） | 影响 |
+|---|---|---|
+| 「项目同名 server 覆盖用户级」是无条件的 | `loadMcpConfig` **只在 `projectTrusted` 时**才 `readConfigFile(project)`；两份写进同一个 `Map<name, entry>` ⇒ 覆盖**只在信任时成立** | 未信任项目里出现同名项时，GUI 曾把用户级也标成 `overridden`，导致**两条都不生效** |
+| `pi mcp list --json` 的 `tools[]` 是注册后的 Pi tool identifier | 它是 `connection.tools.map((t) => t.name)` —— **MCP server 原始 tool.name**；`createMcpToolName()` 的 `[^A-Za-z0-9_]` → `_` 是**注册期**的另一层 | GUI 曾用标识符正则过滤 raw name，把 `get-user`、`工具搜索` 这类合法名字静默删掉，`toolCount` 跟着失真 |
+
+核对方式：直接读 GitHub tag `v0.99.2` 的
+`packages/coding-agent/src/extensions/mcp/{cli,config,tools}.ts` 与
+`src/core/mcp-servers.ts`（不是读 pi-GUI 自己的文档）。
+
 ### ⚠️ 唯一一条真实的行为变化：工具返回值里的 `isError`
 
 | | 代码 | 效果 |

@@ -29,14 +29,14 @@ RPC 命令面在 0.99.1 与 0.99.2 上**逐字节相同**（`dist/modes/rpc/rpc-
 ```jsonc
 {
   "servers": [{
-    "name": "docs", "scope": "global" | "project" | "extension",
-    "source": "<配置文件或扩展的绝对路径>",
+    "name": "docs", "scope": "global" | "project",   // CLI 只能产出这两个（见下）
+    "source": "<配置文件绝对路径>",
     "enabled": true, "exposure": "codemode",
     "transport": "<命令串或 URL>", "state": "connected",
-    "tools": ["read_file"],
-    "toolExposure": { "read_file": "direct" },   // 仅在确有覆盖时出现
-    "resources": 3, "resourceTemplates": 1,      // 仅在该 server 提供资源时出现
-    "error": "…"                                  // 仅在未 connected 且确实有错时出现
+    "tools": ["read_file"],                       // MCP server 原始 tool.name
+    "toolExposure": { "read_file": "direct" },    // 仅在确有覆盖时出现
+    "resources": 3, "resourceTemplates": 1,       // 仅在该 server 提供资源时出现
+    "error": "…"                                   // 仅在未 connected 且确实有错时出现
   }],
   "errors": ["…"],
   "note": "…"   // 仅当项目未信任且存在 <项目>/.pi/mcp.json 时出现
@@ -46,6 +46,32 @@ RPC 命令面在 0.99.1 与 0.99.2 上**逐字节相同**（`dist/modes/rpc/rpc-
 `source` / `transport` 都是**原文**（绝对路径 / 命令 / URL），Pi GUI 一个字节
 都不投影 —— 只留 `transportType: 'stdio' | 'http'` 这个类型面。
 
+### `scope`：类型上有三值，CLI 实际只产两个
+
+`McpServerEntry.scope`（0.99.2 `src/extensions/mcp/config.ts`）的类型是
+`"global" | "project" | "extension"`，但**只有前两个会出现在 `pi mcp list --json` 里**：
+
+| 值 | 谁产生 | CLI 看得到吗 |
+|---|---|---|
+| `global` | `~/.pi/agent/mcp.json` | ✅ |
+| `project` | `<项目>/.pi/mcp.json`（仅项目被信任时） | ✅ |
+| `extension` | session 内的 MCP 扩展（`mcp/index.ts` 的 `registeredServers()` 走 `pi.getMcpServers()`，`pi.registerMcpServer()` 注册） | ❌ |
+
+原因是上游明文：**Shell commands do not load extensions.**（0.99.2
+`docs/mcp.md`；同页另有「`pi mcp` shell commands do not load extensions and
+only see file-configured servers.」）。`pi mcp list --json` 走的是
+`runMcpCommand` → `loadMcpConfig`，只读文件；扩展注册的 server 只活在
+session/runtime 里，出现在 `/mcp` 管理器中，**不出现在 shell 输出里**。
+
+所以：GUI 的 CLI 状态源**无法枚举 extension-registered servers**，RPC 也没有
+已注册 MCP server 清单 —— 这一类 server 属于 **unknown / 不可枚举**边界
+（GUI 不伪造它们）。
+
+> 实现注记：`server/mcp-native.js` 的 `RUNTIME_SCOPES` 仍接受 `"extension"`，
+> 那是**防御性前向兼容**（上游若哪天从 CLI 侧也报这个值，我们不会把它折成
+> `null`），**不代表当前 CLI source 实际会产生它**。界面上的「扩展注册」标签
+> 同理只在真的收到该值时才出现。
+
 ## 运行时投影：逐项 allowlist（不猜、不原样透传）
 
 上游新增字段默认**丢弃**，未知枚举值折成中性值：
@@ -53,16 +79,46 @@ RPC 命令面在 0.99.1 与 0.99.2 上**逐字节相同**（`dist/modes/rpc/rpc-
 | 字段 | 规则 |
 |---|---|
 | `state` | 闭集 `connecting / connected / needs-auth / disconnected / disabled / failed / closed`（`runtime.d.ts` 的 `ServerState` + `list()` 合成的 `disabled`）。**闭集外 → `"unknown"`**，绝不把上游字符串原样放进 DOM |
-| `scope` | 只认 `global`（映射为 `user`）/ `project` / `extension`，其余 → `null` |
+| `scope` | 只认 `global`（映射为 `user`）/ `project` / `extension`（防御性前向兼容，见上），其余 → `null` |
 | `exposure` | 只认 0.99.2 闭集 `codemode / deferred / direct / hidden`；别名 `codemode-deferred` → `codemode`；其余 → `null` |
 | `transport` | 只留 `stdio` / `http` 类型面，**原文不进报告** |
-| `tools` | 标识符面 `[A-Za-z0-9_.]`，单项 ≤128 字符，最多 200 条 |
-| `toolExposure` | 键 ≤128 字符，值必须是 exposure 枚举 |
+| `tools` | **raw MCP tool name**（不是注册后的标识符）—— 见下节；单行化 + 限长 128 + 最多 200 条 |
+| `toolExposure` | 键也是 raw tool name（单行化 + 限长），值必须是 exposure 枚举 |
 | `resources` / `resourceTemplates` | 只接受非负整数，否则 `null` |
 | `error` / `errors` / `note` | 截断 500 字符 + 已知路径脱敏 |
 | `source` / `command` / `url` / `headers` / `env` / 其它未知键 | **一律不取** |
 
 界面上不认识的 `state` 显示为「无法识别」，而不是打印上游原文。
+
+### `tools`：raw MCP tool name ≠ 注册后的 Pi tool identifier
+
+这是**两层完全不同的命名**，不能共用一条字符规则：
+
+| | A. CLI 状态里的 `tools[]` | B. Tool Timeline 里的工具名 |
+|---|---|---|
+| 来源 | `connection.tools.map((t) => t.name)`（`mcp/cli.ts`） | `createMcpToolName(server, tool)`（`mcp/tools.ts`） |
+| 是什么 | **MCP server 自己报的原始 tool name** | **注册为 Pi tool 后的标识符** |
+| 形态 | 任意：`get-user`、`tool name`、`a/b`、`x:y`、`工具搜索`、`emoji-🔎` | `mcp__<server>__<tool>`，其中非 `[A-Za-z0-9_]` 全被换成 `_`（0.99.1 还保留 `-`），重名再挂 8 位 sha256 后缀 |
+| GUI 处理 | 安全文本边界（见下） | `public/mcp-activity.js` 的前缀解析（**另一条路径，不共用正则**） |
+
+**绝不能**拿 B 的标识符正则去过滤 A —— 那会把 `get-user`、`工具搜索` 这类完全
+合法的 raw name 静默删掉，`toolCount` 也跟着失真。
+
+raw tool name 的**安全文本边界**（`sanitizeMcpRawToolName`）：
+
+1. 只接受 `string`（对象 / 数字 / 数组 / `null` 一律丢，不做 `String()` 转换）
+2. 控制字符 → 空格（NUL / CR / LF / C0 / C1 / DEL 都挡掉，防多行与注入）
+3. 折叠空白 + trim
+4. 空串丢弃（清一色控制字符的名字没有可展示形态）
+5. 超长**安全截断**（128 + `…`），不丢弃 —— 保留「server 确实报了这个工具」这个事实
+
+**`toolCount` 的语义**：它是**上游事实** —— `tools` 里合法字符串项的**数量**，
+**不因字符集或展示边界缩水**。`tools` 是有界的安全展示列表（≤200 条）。
+极端情况下两者可以不等（例如一个纯控制字符的名字没有可展示形态），
+这是有意的：**数量说事实，列表说能安全显示的部分**。
+`tools` 不是数组时两者都是 `null`（不猜成空数组）。
+
+界面上 `tools` 目前只用来算 `toolCount` 徽标，不逐条渲染。
 
 ## 原生状态机（只认证据）
 
@@ -95,10 +151,54 @@ launch identity 用的是 `piLaunch.identityKey()` 返回的不透明哈希（`v
 ## 配置 scope（pi 原语，照搬）
 
 - `~/.pi/agent/mcp.json`（用户级）与 `<项目>/.pi/mcp.json`（项目级）
-- 项目同名覆盖用户级；**项目文件只在项目被信任后才被 pi 读取**
+- **项目同名覆盖用户级 —— 但只在项目被信任时**（见下节）
 - 未信任项目的条目标 `未生效（项目未信任）`；信任状态拿不到时标
   `未生效（信任状态未知）`（fail closed，与 Skills 的信任闸门同一判定来源）
 - `enabled: false` 保留条目不断连；非法条目 pi 跳过，界面列出 invalid 原因
+
+### 覆盖关系受 trust 约束（P20.6-Fix-2 Blocker A）
+
+上游依据（v0.99.2 `src/extensions/mcp/config.ts` 的 `loadMcpConfig`）：
+
+```ts
+readConfigFile(join(agentDir, "mcp.json"), "global", state);          // 总是读
+if (projectTrusted) readConfigFile(join(cwd, CONFIG_DIR_NAME, "mcp.json"), "project", state);
+```
+
+两份都往**同一个 `Map<name, entry>`** 里 `set`，所以「项目同名覆盖用户级」
+**只在项目被信任时才发生**。未信任时项目文件被整个忽略，用户级那条**照旧生效**。
+
+| trust | 用户级 `github` | 项目级 `github` |
+|---|---|---|
+| `true` | `overridden`（不生效） | 生效 |
+| `false` | **照常生效**（不被覆盖） | `未生效（项目未信任）` |
+| `null`（拿不到） | **照常生效**（不被覆盖） | `未生效（信任状态未知）` |
+
+**「项目文件里有没有这个 key」≠「用户级那条被覆盖了」。** 覆盖也是 effective
+truth，和「项目条目能不能生效」受同一个 trust 约束。实现上：
+
+- `readConfigs()` **只产出文件事实**（有哪些 server、scope、配置结构），
+  **不产出 `overridden`** —— 那时还不知道 trust；
+- `summary()` 拿到 `tr` 之后才用 `projectTrusted(tr)` 算出
+  `loadableProjectNames`，用户级条目的 `overridden` 由它决定；
+- 未信任 / 未知时这个集合是**空的**，所以不可能出现「用户级被一个不会被加载的
+  项目项覆盖掉」这种两个都不生效的状态。
+
+### 非法 project entry 不参与覆盖
+
+上游 `readConfigFile` 对 `validateMcpServerConfig` 返回错误的条目 `errors.push` 后
+**`continue`** —— 该条目被跳过，从不进入那个 `Map`。所以：
+
+> **非法（Pi 会拒绝加载的）project entry 不覆盖全局同名项**，全局那条保留并继续生效。
+
+GUI 的判定因此不用「原始 JSON key 是否存在」，而用 `parseMcpServers` 认可的
+`projectServers`（= Pi 会接受并加载的条目）。整个项目文件读不出来（坏 JSON）时
+同理：一个都不覆盖。
+
+> 上游另有一条**命名空间冲突**规则：`mcpNamespace(other) === mcpNamespace(name)`
+> （即名字只在 `-` 与 `_` 上不同，如 `my-server` 与 `my_server`）时后一条被
+> `errors.push` 拒绝。本模块**不建模**这条（属于同一文件内的解析细节，
+> 不在本轮范围）—— 这里明确记录，避免被误认为「GUI 认为它合法」。
 
 ### 项目信任（P20.6-Fix）
 
@@ -218,19 +318,39 @@ P19 的审批卡片照常弹出。GUI **不按工具名猜危险程度**，没�
 
 ## Extension 注册的 servers（诚实边界）
 
-扩展可用 `registerMcpServer` 注册 server（与 session 同寿，`mcp.json` 同名优先）。
-`pi mcp` shell 命令不加载扩展所以看不见它们；RPC 也没有已注册 server 清单。
-因此扩展来源的 servers 在 GUI 里是 unknown（文档记录，不伪造）——
-唯一的例外是接管 `/mcp` 的扩展（见上面的 replaced）。0.99.2 的
-`list --json` 会给这类条目 `scope: "extension"`，GUI 如实映射成「扩展注册」。
+扩展可用 `pi.registerMcpServer(name, config)` 注册 server：与 session 同寿，
+`mcp.json` 里的同名项优先（被覆盖的注册项会在 `/mcp` 里列出来）。
+
+**`pi mcp list --json` 看不到这些 server。** 上游明文：
+
+> Shell commands do not load extensions.（0.99.2 `docs/mcp.md`）
+> `pi mcp` shell commands do not load extensions and only see file-configured servers.
+
+`pi mcp list --json` 走 `runMcpCommand` → `loadMcpConfig`，只读
+`mcp.json`；而 `scope: "extension"` 是**session 内**的 MCP 扩展在
+`registeredServers()` 里赋的（走 `pi.getMcpServers()`），只在 `/mcp` 管理器里出现。
+
+因此扩展来源的 servers 在 GUI 里是 **unknown / 不可枚举**（文档记录，不伪造）：
+
+- CLI 状态源只可能产出 `global` / `project`；
+- RPC 也没有已注册 MCP server 清单（33 条命令，0.99.1 / 0.99.2 各确认一次）；
+- 唯一的例外是**接管 `/mcp` 的扩展** —— 那条有证据（`get_commands` 里
+  `source:"extension"` 的 `/mcp`），对应 native 状态机的 `replaced`。
+
+`server/mcp-native.js` 的 `RUNTIME_SCOPES` 保留 `"extension"` 只是**防御性
+前向兼容**，不表示当前 CLI source 会产出它（详见上文「`scope`：类型上有三值，
+CLI 实际只产两个」）。
 
 ## 相关测试
 
 ```bash
-npm run test:mcp    # tests/mcp-native.cjs（106 条，纯 fixture，完全离线）
+npm run test:mcp    # tests/mcp-native.cjs（130 条，纯 fixture，完全离线）
 ```
 
-覆盖：cache/workspace 隔离、project trust 写闸门、secret API contract、
+覆盖：cache/workspace 隔离、**project trust 覆盖语义**（trusted / untrusted /
+unknown 三态 + 非法条目 + 坏文件）、**raw MCP tool name 安全投影**（连字符 /
+空格 / Unicode / emoji / 控制字符 / 超长 / 非字符串 / toolCount 语义）、
+**两层命名边界**（CLI raw vs Timeline registered）、secret API contract、
 0.99.2 fixture/schema、unknown enum fallback，以及安全解析、入口派生、
 scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsupported、
 语义投影与运行观察。

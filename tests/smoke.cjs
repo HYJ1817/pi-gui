@@ -3560,6 +3560,30 @@ staticCheck();
       check('MCP 标签页：把 pi 关于「项目 mcp.json 被忽略」的说明显示出来', () =>
         /is ignored because the project is not trusted/.test(c5.textContent) || c5.textContent.slice(0, 400));
 
+      /* P20.6-Fix-2 Blocker A：未信任时同名项不覆盖用户级 ——
+       * 用户级那条必须显示「生效中」，且**不能**出现「被项目同名覆盖」。 */
+      const dup = (overridden, projectEffective) => ({
+        ...saved,
+        trust: { trusted: false, requiresTrust: true },
+        servers: [
+          { name: 'github', scope: 'user', enabled: true, exposure: 'codemode', transportType: 'stdio', description: '', hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden, effective: { active: !overridden, reason: overridden ? 'overridden' : '' } },
+          { name: 'github', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'stdio', description: '', hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden: false, effective: projectEffective },
+        ],
+      });
+      stubMcpServers = dup(false, { active: false, reason: 'untrusted' });
+      const c6 = await reopenMcp();
+      check('MCP 标签页：未信任项目里同名 server 不覆盖用户级（用户级仍「生效中」）', () => {
+        const t = c6.textContent;
+        if (!/生效中/.test(t)) return '用户级没显示生效中：' + t.slice(0, 400);
+        if (/被项目同名覆盖/.test(t)) return '错误地标成了被覆盖';
+        return /未生效（项目未信任）/.test(t) || '项目条目没标未生效';
+      });
+      // 反向：已信任时同一份数据必须显示「被项目同名覆盖」（证明上面那条不是恒真）
+      stubMcpServers = { ...dup(true, { active: true, reason: '' }), trust: { trusted: true, requiresTrust: true } };
+      const c7 = await reopenMcp();
+      check('MCP 标签页：已信任时同名项正确显示「被项目同名覆盖」', () =>
+        /被项目同名覆盖/.test(c7.textContent) || c7.textContent.slice(0, 400));
+
       stubMcpServers = saved;
     }
 

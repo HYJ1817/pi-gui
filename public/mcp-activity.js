@@ -1,15 +1,31 @@
 /* Pi 原生 MCP 的语义投影（P20.6）。
  *
- * 契约核对方式：pi 0.99.2 发布包原文。
- *   - 工具名 `mcp__<server>__<tool>`（`docs/mcp.md` Control tool exposure 一节）。
- *     **0.99.2 起** pi 把名字里除 `[A-Za-z0-9_]` 之外的字符全部换成 `_`
- *     （`tools.js` 的 `createMcpToolName`；0.99.1 还保留 `-`），重名再挂
- *     8 位 sha256 后缀。所以 `-` 只在 0.99.1 上可能出现 —— 这里**两边都认**，
- *     不因为连的是哪个版本就把行显示成「未知工具」。
+ * ---------- 先分清两层命名（P20.6-Fix-2 Blocker B） ----------
+ *
+ * 这个文件处理的是 **B. 注册后的 Pi tool identifier**，即
+ * `mcp__<server>__<tool>`。它**不是** `pi mcp list --json` 里的 `tools[]`
+ * （那是 **A. raw MCP tool name**，MCP server 自己报的原始名字，
+ * 可以含 `-` / 空格 / `/` / `:` / Unicode / emoji）。
+ *
+ *   A 由 `server/mcp-native.js` 的 `sanitizeMcpRawToolName()` 处理
+ *     —— 安全文本边界，**没有字符集白名单**。
+ *   B 由本文件的 `MCP_TOOL_RE` 处理 —— 有 `mcp__<server>__` 前缀这个结构约束。
+ *
+ * **两层不共用正则，也不要互相套用。** 拿 B 的规则去过滤 A 会把合法的 raw name
+ * 静默删掉；拿 A 的宽松去解析 B 会让非 MCP 的工具名误判成 MCP 行。
+ *
+ * ---------- 契约核对方式 ----------
+ *
+ * pi 0.99.2 发布包原文（`src/extensions/mcp/tools.ts`）：
+ *   - 注册期 `createMcpToolName()` 把 `mcp__<server>__<tool>` 里除
+ *     `[A-Za-z0-9_]` 之外的字符全部换成 `_`（0.99.1 还保留 `-`），重名再挂
+ *     8 位 sha256 后缀。所以 `-` 只在 0.99.1 上可能出现 —— server 段这里
+ *     **两边都认**，不因为连的是哪个版本就把行显示成「未知工具」。
  *     注意：`-` 被折成 `_` 之后，工具名里的 server 段不再等于配置里的 server 名
  *     （`my-server` → `my_server`），界面按工具名如实显示，不反推。
  *   - 资源工具 `list_mcp_resources` / `list_mcp_resource_templates` /
- *     `read_mcp_resource`（同页 Resources 一节；`ui://` 与 MCP Apps pi 不渲染）。
+ *     `read_mcp_resource`（`docs/mcp.md` 的 Resources 一节；`ui://` 与
+ *     MCP Apps pi 不渲染）。
  *   - 每次 MCP 调用都过 pi 的 tool pipeline（同页 Permissions 一节），所以
  *     P19 的审批管道自动生效 —— 这里不画任何 Allow / Deny。
  *
@@ -22,7 +38,12 @@
  */
 
 /* server 段接受 `[A-Za-z0-9_-]`：0.99.2 只会产出 `[A-Za-z0-9_]`，
- * 但连 0.99.1 时仍可能出现 `-`。这是两版并集的**安全超集**。 */
+ * 但连 0.99.1 时仍可能出现 `-`。这是两版并集的**安全超集**。
+ *
+ * tool 段用 `(.+)` 是**有意的宽松**：它是展示面，真正的边界是
+ * `mcp__<server>__` 这个前缀。投影时统一过 `oneLine()`（单行化 + 限长），
+ * 所以宽松不会带来注入面。反过来，没有前缀的 raw tool name（`get-user`、
+ * `工具搜索`）一律不匹配 → 交给通用渲染器。 */
 export const MCP_TOOL_RE = /^mcp__([A-Za-z0-9_-]{1,64}?)__(.+)$/;
 
 /** pi 原生的资源工具（不是 mcp__ 前缀，但同样是 MCP 面）。 */

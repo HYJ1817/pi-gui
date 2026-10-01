@@ -654,12 +654,15 @@ function mkNative(over = {}) {
       assert.equal(p.transportType, 'stdio');
       assert.ok(!JSON.stringify(p).includes('secret'));
     });
-    check('E5. tools 只留标识符面（非法字符 / 非字符串 / 超长被丢）', () => {
-      assert.deepEqual(p.tools, ['ok_tool', 'fine']);
-      assert.equal(p.toolCount, 2);
+    check('E5. tools 走安全文本边界：raw tool name 不因字符集被删（Blocker B）', () => {
+      // 'bad tool' / 'a-b' 是**合法**的 raw MCP tool name（pi 的 CLI 原样输出），
+      // 只有非字符串（42）被丢；超长项安全截断而不是丢弃。
+      assert.deepEqual(p.tools, ['ok_tool', 'bad tool', 'a-b', 'x'.repeat(128) + '…', 'fine']);
+      // toolCount 是上游合法字符串项的数量，不因字符集减少。
+      assert.equal(p.toolCount, 5);
     });
-    check('E6. toolExposure 只留合法枚举与合法键', () => {
-      assert.deepEqual(p.toolExposure, { good: 'direct' });
+    check('E6. toolExposure 的键也是 raw tool name（单行化 + 限长），值限枚举', () => {
+      assert.deepEqual(p.toolExposure, { good: 'direct', [('y'.repeat(128) + '…')]: 'hidden' });
     });
     check('E7. resources / resourceTemplates 只接受非负整数', () => {
       assert.equal(p.resources, null);
@@ -701,6 +704,251 @@ function mkNative(over = {}) {
     assert.equal(r.servers[0].state, 'unknown');
     assert.ok(!JSON.stringify(r).includes('NEEDS-REAUTH-NOW'));
   });
+
+  /* ===================================================================
+   * G. override 受 project trust 约束（P20.6-Fix-2 Blocker A）
+   *
+   * 上游依据（v0.99.2 `packages/coding-agent/src/extensions/mcp/config.ts`）：
+   *   loadMcpConfig: readConfigFile(global) 总是读；
+   *                  readConfigFile(project) 只在 projectTrusted 时读。
+   *   两份都往同一个 Map<name, entry> set ⇒ 项目同名覆盖用户级**只在信任时成立**。
+   *   readConfigFile 对 validateMcpServerConfig 失败的条目 `continue`（跳过），
+   *   所以**非法 project entry 不覆盖全局同名项**。
+   * =================================================================== */
+  section('G. project 同名覆盖：受 trust 约束');
+  {
+    const OV = path.join(TMP, 'ov');
+    const OV_SETTINGS = path.join(OV, '.pi');
+    fs.mkdirSync(OV_SETTINGS, { recursive: true });
+    const writeUser = (servers) => writeJson(path.join(AGENT, 'mcp.json'), { mcpServers: servers });
+    const writeProject = (servers) => writeJson(path.join(OV, '.pi', 'mcp.json'), { mcpServers: servers });
+    const mkOv = (trustFn) => withCreate({
+      cwd: OV,
+      resolvePackageDir: () => mkPkg('ov-pkg'),
+      piBuiltins: () => ({ builtins: [{ id: 'mcp' }] }),
+      rpc: { request: async () => ({ commands: [] }) },
+      readTrust: trustFn,
+    }).mod;
+    const find = (s, name, scope) => s.servers.find((x) => x.name === name && x.scope === scope);
+
+    await checkAsync('G1. trusted=true：项目同名项覆盖用户级', async () => {
+      writeUser({ github: { command: 'user-gh' } });
+      writeProject({ github: { command: 'proj-gh' } });
+      const s = await mkOv(trusted).summary();
+      assert.equal(find(s, 'github', 'user').overridden, true);
+      assert.equal(find(s, 'github', 'user').effective.active, false);
+      assert.equal(find(s, 'github', 'user').effective.reason, 'overridden');
+      assert.equal(find(s, 'github', 'project').overridden, false);
+      assert.equal(find(s, 'github', 'project').effective.active, true);
+    });
+
+    await checkAsync('G2. trusted=false：项目不覆盖，用户级继续生效', async () => {
+      const s = await mkOv(untrusted).summary();
+      assert.equal(find(s, 'github', 'user').overridden, false);
+      assert.equal(find(s, 'github', 'user').effective.active, true);
+      assert.equal(find(s, 'github', 'user').effective.reason, '');
+      assert.equal(find(s, 'github', 'project').effective.active, false);
+      assert.equal(find(s, 'github', 'project').effective.reason, 'untrusted');
+    });
+
+    await checkAsync('G3. trust=null：同样不覆盖（fail closed）', async () => {
+      const s = await mkOv(unknownTrust).summary();
+      assert.equal(find(s, 'github', 'user').overridden, false);
+      assert.equal(find(s, 'github', 'user').effective.active, true);
+      assert.equal(find(s, 'github', 'project').effective.reason, 'trust-unknown');
+    });
+
+    await checkAsync('G4. trusted=true 但项目同名项 invalid → 用户级继续生效（与上游 skip 一致）', async () => {
+      // `bad name!` 不合法（上游 SERVER_NAME 校验）；`both` 同时给 command+url；
+      // 两者都会被上游 readConfigFile `continue` 掉 ⇒ 不覆盖全局 github。
+      writeProject({ github: { command: 'proj-gh' }, 'bad name!': { command: 'x' }, both: { command: 'a', url: 'https://e.com/m' } });
+      const s = await mkOv(trusted).summary();
+      assert.equal(find(s, 'github', 'user').overridden, true, '合法同名项仍覆盖');
+      assert.ok(s.configInvalid.length >= 2, '非法条目要进 invalid');
+      // 真正决定覆盖的是「Pi 会接受并加载的 project entry」：
+      writeProject({ 'bad name!': { command: 'x' } });
+      const s2 = await mkOv(trusted).summary();
+      assert.equal(find(s2, 'github', 'user').overridden, false, '项目里没有可加载的同名项 → 用户级不被覆盖');
+      assert.equal(find(s2, 'github', 'user').effective.active, true);
+    });
+
+    await checkAsync('G5. 项目没有同名 server → 用户级照常 active', async () => {
+      writeProject({ other: { command: 'p-other' } });
+      const s = await mkOv(trusted).summary();
+      assert.equal(find(s, 'github', 'user').overridden, false);
+      assert.equal(find(s, 'github', 'user').effective.active, true);
+      assert.equal(find(s, 'other', 'project').effective.active, true);
+    });
+
+    await checkAsync('G6. 不同名互不覆盖（三种 trust 下都成立）', async () => {
+      writeUser({ alpha: { command: 'a' } });
+      writeProject({ beta: { command: 'b' } });
+      for (const [label, fn] of [['trusted', trusted], ['untrusted', untrusted], ['unknown', unknownTrust]]) {
+        const s = await mkOv(fn).summary();
+        assert.equal(find(s, 'alpha', 'user').overridden, false, `${label}: alpha 不该被覆盖`);
+        assert.equal(find(s, 'beta', 'project').overridden, false, `${label}: beta 不是用户级`);
+      }
+    });
+
+    await checkAsync('G7. 未信任时项目文件坏了 → 用户级照样生效（不炸、不误标）', async () => {
+      writeUser({ github: { command: 'user-gh' } });
+      fs.writeFileSync(path.join(OV, '.pi', 'mcp.json'), '{broken', 'utf8');
+      for (const [label, fn] of [['trusted', trusted], ['untrusted', untrusted], ['unknown', unknownTrust]]) {
+        const s = await mkOv(fn).summary();
+        assert.equal(find(s, 'github', 'user').overridden, false, `${label}`);
+        assert.equal(find(s, 'github', 'user').effective.active, true, `${label}`);
+      }
+    });
+
+    await checkAsync('G8. readConfigs 本身不产出 overridden（覆盖只在拿到 trust 后算）', async () => {
+      writeUser({ github: { command: 'user-gh' } });
+      writeProject({ github: { command: 'proj-gh' } });
+      const s = await mkOv(trusted).summary();
+      // 未信任时同一份文件不得出现 overridden=true —— 这是本轮修的那个 bug。
+      const su = await mkOv(untrusted).summary();
+      assert.equal(su.servers.some((x) => x.overridden === true), false);
+      assert.equal(s.servers.filter((x) => x.overridden === true).length, 1);
+    });
+
+    rmFile(path.join(OV, '.pi', 'mcp.json'));
+    rmFile(path.join(AGENT, 'mcp.json'));
+  }
+
+  /* ===================================================================
+   * H. raw MCP tool name 的安全投影（P20.6-Fix-2 Blocker B）
+   *
+   * `pi mcp list --json` 的 tools 是 `connection.tools.map(t => t.name)`
+   * —— MCP server 原始 tool name，**不是**注册后的 Pi tool identifier。
+   * =================================================================== */
+  section('H. raw MCP tool name：安全文本边界，不是字符集白名单');
+  {
+    const { projectRuntimeServer, sanitizeMcpRawToolName } = withCreate({ cwd: PROJ }).mod._internals;
+    const f = { cwd: PROJ, agentDir: AGENT, homeDir: TMP };
+    const toolsOf = (tools) => projectRuntimeServer({ name: 's', tools }, f);
+
+    check('H1. 合法 raw tool name 不因字符集被删（含连字符 / 空格 / 点 / Unicode / emoji）', () => {
+      const raw = ['read_file', 'get-user', 'search.docs', 'tool name', '工具搜索', 'a/b', 'x:y', 'emoji-🔎'];
+      const p = toolsOf(raw);
+      assert.deepEqual(p.tools, raw);
+      assert.equal(p.toolCount, raw.length);
+    });
+    check('H2. 控制字符被替换（不产生换行注入）', () => {
+      const p = toolsOf(['hello\nSECRET', 'hello\rworld', '\u0000bad', 'tab\there', 'c1\u0085next']);
+      assert.equal(p.tools.length, 5);
+      for (const t of p.tools) {
+        assert.ok(!/[\u0000-\u001f\u007f-\u009f]/.test(t), JSON.stringify(t));
+        assert.equal(t.split('\n').length, 1);
+      }
+      assert.deepEqual(p.tools, ['hello SECRET', 'hello world', 'bad', 'tab here', 'c1 next']);
+    });
+    check('H3. 纯控制字符的名字没有可展示形态 → 从列表丢，但仍计入 toolCount', () => {
+      const p = toolsOf(['\u0000\u0001', 'ok']);
+      assert.deepEqual(p.tools, ['ok']);
+      assert.equal(p.toolCount, 2, 'toolCount 说上游事实，不因展示边界缩水');
+    });
+    check('H4. 超长 raw tool name 安全截断（不丢）', () => {
+      const long = 'z'.repeat(400);
+      const p = toolsOf([long]);
+      assert.equal(p.tools.length, 1);
+      assert.equal(p.tools[0].length, 129); // 128 + 省略号
+      assert.equal(p.toolCount, 1);
+    });
+    check('H5. 非字符串一律丢弃，且不做 String() 转换', () => {
+      const p = toolsOf([42, {}, [], null, undefined, true, ['nested'], 'keep']);
+      assert.deepEqual(p.tools, ['keep']);
+      assert.equal(p.toolCount, 1);
+    });
+    check('H6. tools 不是数组 → null（不猜成空数组）', () => {
+      assert.equal(projectRuntimeServer({ name: 's', tools: 'read,write' }, f).tools, null);
+      assert.equal(projectRuntimeServer({ name: 's', tools: 'read,write' }, f).toolCount, null);
+      assert.equal(projectRuntimeServer({ name: 's' }, f).tools, null);
+    });
+    check('H7. 展示列表有界（≤200），toolCount 仍是上游数量', () => {
+      const many = Array.from({ length: 250 }, (_, i) => `tool_${i}`);
+      const p = toolsOf(many);
+      assert.equal(p.tools.length, 200);
+      assert.equal(p.toolCount, 250);
+    });
+    check('H8. toolExposure 的键是 raw tool name（含连字符/空格也保留）', () => {
+      const p = projectRuntimeServer({ name: 's', tools: [], toolExposure: { 'get-user': 'direct', 'tool name': 'hidden' } }, f);
+      assert.deepEqual(p.toolExposure, { 'get-user': 'direct', 'tool name': 'hidden' });
+    });
+    check('H9. sanitizeMcpRawToolName 是纯函数，非字符串回空串', () => {
+      assert.equal(sanitizeMcpRawToolName(42), '');
+      assert.equal(sanitizeMcpRawToolName(null), '');
+      assert.equal(sanitizeMcpRawToolName({}), '');
+      assert.equal(sanitizeMcpRawToolName('  '), '');
+      assert.equal(sanitizeMcpRawToolName('  a  b  '), 'a b');
+    });
+
+    await checkAsync('H10. refresh 端到端：get-user / Unicode / emoji 不被过滤', async () => {
+      const { mod } = withCreate({
+        cwd: PROJ,
+        resolvePackageDir: () => mkPkg('h10'),
+        runCli: async () => ({
+          ok: true, exitCode: 0,
+          stdout: JSON.stringify({
+            servers: [{ name: 's', scope: 'global', enabled: true, transport: '/bin/s', state: 'connected', tools: ['get-user', '工具搜索', 'emoji-🔎', 'a/b'] }],
+            errors: [],
+          }),
+          stderr: '', timedOut: false, spawnFailed: false,
+        }),
+      });
+      const r = await mod.refresh();
+      assert.deepEqual(r.servers[0].tools, ['get-user', '工具搜索', 'emoji-🔎', 'a/b']);
+      assert.equal(r.servers[0].toolCount, 4);
+    });
+  }
+
+  /* ===================================================================
+   * I. 两层命名不共用规则（CLI raw vs Timeline registered）
+   * =================================================================== */
+  section('I. 两层命名边界：CLI raw tool name ≠ 注册后的 Pi tool identifier');
+  {
+    const { projectRuntimeServer } = withCreate({ cwd: PROJ }).mod._internals;
+    const f = { cwd: PROJ, agentDir: AGENT, homeDir: TMP };
+    const act = await import('../public/mcp-activity.js');
+
+    check('I1. CLI 侧保留 raw 形态，不做 `-`→`_` 归一', () => {
+      const p = projectRuntimeServer({ name: 'my-server', tools: ['get-user', 'read file'] }, f);
+      assert.deepEqual(p.tools, ['get-user', 'read file']);
+    });
+    check('I2. Timeline 侧仍按注册后的标识符解析（0.99.2 归一后的形态）', () => {
+      // pi 注册时把 [^A-Za-z0-9_] 全换 _：`my-server` + `get-user` → mcp__my_server__get_user
+      assert.deepEqual(act.parseMcpToolName('mcp__my_server__get_user'), { server: 'my_server', tool: 'get_user' });
+    });
+    check('I3. Timeline 侧的边界是 `mcp__<server>__` 前缀；raw 名本身不匹配', () => {
+      // 没有 mcp__ 前缀的 raw tool name 一律走 generic fallback（不是 MCP 行）。
+      assert.equal(act.parseMcpToolName('get-user'), null);
+      assert.equal(act.parseMcpToolName('工具搜索'), null);
+      assert.equal(act.parseMcpToolName('a/b'), null);
+      assert.equal(act.parseMcpToolName('emoji-🔎'), null);
+      // 有前缀时 tool 段是**展示面**（宽松 + 单行化 + 限长），不是字符集白名单。
+      // 这条与 CLI 侧同源：两层都不该因为字符集把事实删掉。
+      assert.deepEqual(act.parseMcpToolName('mcp__s__tool name'), { server: 's', tool: 'tool name' });
+    });
+    check('I6. 带控制字符的“标识符”不匹配 → 回 generic fallback（不产生多行注入）', () => {
+      // 注册后的名字不可能含换行（pi 注册期已把 [^A-Za-z0-9_] 换成 _），
+      // 所以这里不匹配是**安全**结果：那一行交给通用渲染器，不进 MCP 语义行。
+      assert.equal(act.parseMcpToolName('mcp__s__evil\nSECRET'), null);
+      assert.equal(act.mcpActivity({ name: 'mcp__s__evil\nSECRET', status: 'success' }), null);
+    });
+    check('I4. 两个 parser 各自独立：CLI 侧不再有 tool 名字符集正则', () => {
+      const internals = withCreate({ cwd: PROJ }).mod._internals;
+      assert.equal(internals.TOOL_NAME_RE, undefined, 'CLI 侧不该再有一个 tool 名字符集正则');
+      assert.equal(typeof internals.sanitizeMcpRawToolName, 'function');
+      // Timeline 侧的标识符正则仍然存在，且是它自己的一份。
+      assert.ok(act.MCP_TOOL_RE instanceof RegExp);
+      // 反向证明两层确实不同：同一份输入在两侧结论不同。
+      assert.deepEqual(projectRuntimeServer({ name: 's', tools: ['get-user'] }, f).tools, ['get-user']);
+      assert.equal(act.parseMcpToolName('get-user'), null);
+    });
+    check('I5. mcp-activity 的资源工具与 mcp__ 解析无回归', () => {
+      assert.deepEqual(act.parseMcpToolName('mcp__fs__read'), { server: 'fs', tool: 'read' });
+      assert.equal(act.mcpActivity({ name: 'read_mcp_resource', status: 'success', args: { server: 'd', uri: 'file:///x.md' } }).label, '读取 MCP 资源');
+      assert.equal(act.mcpActivity({ name: 'bash', status: 'success' }), null);
+    });
+  }
 
   /* ===================================================================
    * F. 回归：解析 / 入口 / 状态机 / refresh / 动作 / 前端语义
