@@ -42,24 +42,19 @@ async function fetchOpenRouterQuota({ apiKey, fetchFn, now }) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
 
-  let creditsRes = null;
   let keyRes = null;
+  const endpoint = 'https://openrouter.ai/api/v1/key';
   try {
-    const pCredits = fetchFn('https://openrouter.ai/api/v1/credits', { headers, signal: ctl.signal })
-      .then(async (r) => ({ status: r.status, ok: r.ok, json: await r.json().catch(() => null) }))
-      .catch((e) => ({ error: e }));
-
-    const pKey = fetchFn('https://openrouter.ai/api/v1/auth/key', { headers, signal: ctl.signal })
-      .then(async (r) => ({ status: r.status, ok: r.ok, json: await r.json().catch(() => null) }))
-      .catch(() => null);
-
-    [creditsRes, keyRes] = await Promise.all([pCredits, pKey]);
+    const pKey = await fetchFn(endpoint, { headers, signal: ctl.signal });
+    keyRes = { status: pKey.status, ok: pKey.ok, json: await pKey.json().catch(() => null) };
+  } catch (e) {
+    keyRes = { error: e };
   } finally {
     clearTimeout(timer);
   }
 
-  if (creditsRes?.error) {
-    const err = creditsRes.error;
+  if (keyRes?.error) {
+    const err = keyRes.error;
     const isTimeout = err.name === 'AbortError';
     return {
       status: 'unavailable',
@@ -67,39 +62,39 @@ async function fetchOpenRouterQuota({ apiKey, fetchFn, now }) {
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: 'https://openrouter.ai/api/v1/credits',
+      source: endpoint,
       updatedAt: new Date(now()).toISOString(),
-      message: isTimeout ? 'OpenRouter 额度查询超时' : '无法连接到 OpenRouter 额度服务',
+      message: isTimeout ? 'OpenRouter ��Ȳ�ѯ��ʱ' : '�޷����ӵ� OpenRouter ����',
     };
   }
 
-  if (creditsRes.status === 401 || creditsRes.status === 403) {
+  if (keyRes.status === 401 || keyRes.status === 403) {
     return {
       status: 'auth_error',
       balance: null,
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: 'https://openrouter.ai/api/v1/credits',
+      source: endpoint,
       updatedAt: new Date(now()).toISOString(),
-      message: 'API Key 无效或未授权',
+      message: 'API Key ��Ч��δ��Ȩ',
     };
   }
 
-  if (!creditsRes.ok) {
+  if (!keyRes.ok) {
     return {
       status: 'unavailable',
       balance: null,
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: 'https://openrouter.ai/api/v1/credits',
+      source: endpoint,
       updatedAt: new Date(now()).toISOString(),
-      message: `OpenRouter 服务返回 HTTP ${creditsRes.status}`,
+      message: `OpenRouter ���񷵻� HTTP ${keyRes.status}`,
     };
   }
 
-  const d = creditsRes.json?.data;
+  const d = keyRes.json?.data;
   if (!d || typeof d !== 'object') {
     return {
       status: 'error',
@@ -107,54 +102,58 @@ async function fetchOpenRouterQuota({ apiKey, fetchFn, now }) {
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: 'https://openrouter.ai/api/v1/credits',
+      source: endpoint,
       updatedAt: new Date(now()).toISOString(),
-      message: 'OpenRouter 返回的数据格式不符合预期',
+      message: 'OpenRouter ���ص����ݸ�ʽ������Ԥ��',
     };
   }
 
-  const totalCredits = cleanNumber(d.total_credits);
-  const totalUsage = cleanNumber(d.total_usage);
+  const limitRemaining = cleanNumber(d.limit_remaining);
+  const limit = cleanNumber(d.limit);
+  const usage = cleanNumber(d.usage);
+  
   let balanceAmount = null;
-  if (totalCredits !== null && totalUsage !== null) {
-    balanceAmount = Math.max(0, totalCredits - totalUsage);
-  } else if (totalCredits !== null) {
-    balanceAmount = totalCredits;
+  if (limitRemaining !== null) {
+    balanceAmount = limitRemaining;
   }
 
   let windows = null;
+  if (limit !== null || usage !== null) {
+    windows = {
+      used: usage,
+      limit,
+      remaining: limitRemaining,
+      unit: 'USD',
+    };
+  }
+
   let rateLimit = null;
-  if (keyRes?.ok && keyRes.json?.data) {
-    const kd = keyRes.json.data;
-    const limit = cleanNumber(kd.limit);
-    const usage = cleanNumber(kd.usage);
-    if (limit !== null || usage !== null) {
-      windows = {
-        used: usage,
-        limit,
-        unit: 'USD',
-      };
-    }
-    if (kd.rate_limit && typeof kd.rate_limit === 'object') {
-      rateLimit = {
-        requests: cleanNumber(kd.rate_limit.requests),
-        interval: typeof kd.rate_limit.interval === 'string' ? kd.rate_limit.interval : null,
-      };
-    }
+  if (d.rate_limit && typeof d.rate_limit === 'object') {
+    rateLimit = {
+      requests: cleanNumber(d.rate_limit.requests),
+      interval: typeof d.rate_limit.interval === 'string' ? d.rate_limit.interval : null,
+    };
+  }
+  
+  let resetAt = null;
+  if (d.limit_reset && !Number.isNaN(Date.parse(d.limit_reset))) {
+    resetAt = d.limit_reset;
+  } else if (d.expires_at && !Number.isNaN(Date.parse(d.expires_at))) {
+    resetAt = d.expires_at;
   }
 
   return {
     status: 'ok',
-    balance: {
+    balance: balanceAmount !== null ? {
       amount: balanceAmount,
       currency: 'USD',
       granted: null,
       toppedUp: null,
-    },
+    } : null,
     windows,
     rateLimit,
-    resetAt: null,
-    source: 'https://openrouter.ai/api/v1/credits',
+    resetAt,
+    source: endpoint,
     updatedAt: new Date(now()).toISOString(),
     message: null,
   };
@@ -183,7 +182,7 @@ async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
       resetAt: null,
       source: 'https://api.deepseek.com/user/balance',
       updatedAt: new Date(now()).toISOString(),
-      message: isTimeout ? 'DeepSeek 额度查询超时' : '无法连接到 DeepSeek 额度服务',
+      message: isTimeout ? 'DeepSeek ��Ȳ�ѯ��ʱ' : '�޷����ӵ� DeepSeek ��ȷ���',
     };
   } finally {
     clearTimeout(timer);
@@ -198,7 +197,7 @@ async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
       resetAt: null,
       source: 'https://api.deepseek.com/user/balance',
       updatedAt: new Date(now()).toISOString(),
-      message: 'API Key 无效或未授权',
+      message: 'API Key ��Ч��δ��Ȩ',
     };
   }
 
@@ -211,7 +210,7 @@ async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
       resetAt: null,
       source: 'https://api.deepseek.com/user/balance',
       updatedAt: new Date(now()).toISOString(),
-      message: `DeepSeek 返回 HTTP ${res.status}`,
+      message: `DeepSeek ���� HTTP ${res.status}`,
     };
   }
 
@@ -225,7 +224,7 @@ async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
       resetAt: null,
       source: 'https://api.deepseek.com/user/balance',
       updatedAt: new Date(now()).toISOString(),
-      message: 'DeepSeek 返回的数据格式不符合预期',
+      message: 'DeepSeek ���ص����ݸ�ʽ������Ԥ��',
     };
   }
 
@@ -238,91 +237,126 @@ async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
       resetAt: null,
       source: 'https://api.deepseek.com/user/balance',
       updatedAt: new Date(now()).toISOString(),
-      message: 'DeepSeek 账户额度不可用',
+      message: 'DeepSeek �˻���Ȳ�����',
     };
   }
 
-  const info = Array.isArray(jsonVal.balance_infos) && jsonVal.balance_infos[0] ? jsonVal.balance_infos[0] : null;
-  const total = cleanNumber(info?.total_balance);
-  const granted = cleanNumber(info?.granted_balance);
-  const toppedUp = cleanNumber(info?.topped_up_balance);
-  const currency = typeof info?.currency === 'string' && info.currency ? info.currency : 'CNY';
+  const balances = [];
+  if (Array.isArray(jsonVal.balance_infos)) {
+    for (const info of jsonVal.balance_infos) {
+      balances.push({
+        amount: cleanNumber(info.total_balance),
+        currency: typeof info.currency === 'string' && info.currency ? info.currency : 'CNY',
+        granted: cleanNumber(info.granted_balance),
+        toppedUp: cleanNumber(info.topped_up_balance),
+      });
+    }
+  }
+
+  let primary = balances[0] || null;
+  // DeepSeek ����չʾ CNY
+  const cny = balances.find(b => b.currency === 'CNY');
+  if (cny) primary = cny;
 
   return {
     status: jsonVal.is_available === false ? 'unavailable' : 'ok',
-    balance: {
-      amount: total,
-      currency,
-      granted,
-      toppedUp,
-    },
+    balance: primary,
+    balances: balances.length > 0 ? balances : null,
     windows: null,
     rateLimit: null,
     resetAt: null,
     source: 'https://api.deepseek.com/user/balance',
     updatedAt: new Date(now()).toISOString(),
-    message: jsonVal.is_available === false ? 'DeepSeek 账户处于不可用状态' : null,
+    message: jsonVal.is_available === false ? 'DeepSeek �˻����ڲ�����״̬' : null,
   };
 }
 
+
+
 /** NewAPI / Sub2API 专有适配器（必须显式配置 quotaAdapter 或命中 provider 标识） */
-async function fetchNewApiQuota({ baseUrl, apiKey, fetchFn, now }) {
+async function fetchNewApiQuota({ baseUrl, apiKey, config, fetchFn, now }) {
+  if (!config || !config.quotaUserId) {
+    return {
+      status: 'unsupported',
+      balance: null,
+      windows: null,
+      rateLimit: null,
+      resetAt: null,
+      source: 'none',
+      updatedAt: new Date(now()).toISOString(),
+      message: 'NewAPI ��Ҫ��ģ�͹�Ӧ����������д quotaUserId ���ܲ�ѯ���',
+    };
+  }
+
   const base = trimSlash(baseUrl);
-  const targetUrl = `${base}/dashboard/billing/subscription`;
+  const subUrl = `${base}/dashboard/billing/subscription`;
+  const usageUrl = `${base}/dashboard/billing/usage`;
   const headers = {
     Authorization: `Bearer ${apiKey}`,
+    'New-Api-User': String(config.quotaUserId),
     Accept: 'application/json',
   };
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
 
-  let res = null;
+  let subRes = null;
+  let usageRes = null;
   try {
-    const r = await fetchFn(targetUrl, { headers, signal: ctl.signal });
-    res = { status: r.status, ok: r.ok, json: await r.json().catch(() => null) };
-  } catch (err) {
-    const isTimeout = err?.name === 'AbortError';
+    const pSub = fetchFn(subUrl, { headers, signal: ctl.signal })
+      .then(async (r) => ({ status: r.status, ok: r.ok, json: await r.json().catch(() => null) }))
+      .catch((e) => ({ error: e }));
+
+    const pUsage = fetchFn(usageUrl, { headers, signal: ctl.signal })
+      .then(async (r) => ({ status: r.status, ok: r.ok, json: await r.json().catch(() => null) }))
+      .catch(() => null);
+
+    [subRes, usageRes] = await Promise.all([pSub, pUsage]);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (subRes?.error) {
+    const err = subRes.error;
+    const isTimeout = err.name === 'AbortError';
     return {
       status: 'unavailable',
       balance: null,
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: targetUrl,
+      source: subUrl,
       updatedAt: new Date(now()).toISOString(),
-      message: isTimeout ? 'NewAPI 额度查询超时' : '无法连接到 NewAPI 额度服务',
+      message: isTimeout ? 'NewAPI ��Ȳ�ѯ��ʱ' : '�޷����ӵ� NewAPI ��ȷ���',
     };
-  } finally {
-    clearTimeout(timer);
   }
 
-  if (res.status === 401 || res.status === 403) {
+  if (subRes.status === 401 || subRes.status === 403) {
     return {
       status: 'auth_error',
       balance: null,
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: targetUrl,
+      source: subUrl,
       updatedAt: new Date(now()).toISOString(),
-      message: 'API Key 无效或未授权',
+      message: 'API Key �� quotaUserId ��Ч��δ��Ȩ',
     };
   }
 
-  if (!res.ok) {
+  if (!subRes.ok) {
     return {
       status: 'unavailable',
       balance: null,
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: targetUrl,
+      source: subUrl,
       updatedAt: new Date(now()).toISOString(),
-      message: `NewAPI 服务返回 HTTP ${res.status}`,
+      message: `NewAPI ���񷵻� HTTP ${subRes.status}`,
     };
   }
 
-  const jsonVal = res.json;
+  const jsonVal = subRes.json;
   if (!jsonVal || typeof jsonVal !== 'object') {
     return {
       status: 'error',
@@ -330,56 +364,83 @@ async function fetchNewApiQuota({ baseUrl, apiKey, fetchFn, now }) {
       windows: null,
       rateLimit: null,
       resetAt: null,
-      source: targetUrl,
+      source: subUrl,
       updatedAt: new Date(now()).toISOString(),
-      message: 'NewAPI 返回的数据格式不符合预期',
+      message: 'NewAPI ���ص����ݸ�ʽ������Ԥ��',
     };
   }
 
   const hardLimit = cleanNumber(jsonVal.hard_limit_usd);
-  const totalUsage = cleanNumber(jsonVal.total_usage);
-  let amount = null;
-  if (hardLimit !== null && totalUsage !== null) {
-    amount = Math.max(0, hardLimit - totalUsage);
-  } else if (hardLimit !== null) {
-    amount = hardLimit;
+  
+  let totalUsageCents = null;
+  if (usageRes?.ok && usageRes.json && typeof usageRes.json.total_usage !== 'undefined') {
+    totalUsageCents = cleanNumber(usageRes.json.total_usage);
   }
+
+  const usedUsd = totalUsageCents !== null ? totalUsageCents / 100 : null;
+  let remainingUsd = null;
+  if (hardLimit !== null && usedUsd !== null) {
+    remainingUsd = Math.max(0, hardLimit - usedUsd);
+  }
+
+  let amount = remainingUsd !== null ? remainingUsd : null;
 
   return {
     status: 'ok',
-    balance: {
+    balance: amount !== null ? {
       amount,
       currency: 'USD',
       granted: null,
       toppedUp: null,
-    },
+    } : null,
     windows: {
-      used: totalUsage,
+      used: usedUsd,
       limit: hardLimit,
+      remaining: remainingUsd,
       unit: 'USD',
     },
     rateLimit: null,
     resetAt: null,
-    source: targetUrl,
+    source: subUrl,
     updatedAt: new Date(now()).toISOString(),
     message: null,
   };
 }
+
+
 
 /** 探测该 provider 是否有对应的远端额度 adapter */
 export function resolveQuotaAdapter(providerId, config) {
   const pid = String(providerId || '').toLowerCase();
   const base = String(config?.baseUrl || '').toLowerCase();
 
-  if (pid === 'openrouter' || base.includes('openrouter.ai')) {
+  let urlObj = null;
+  if (base) {
+    try {
+      urlObj = new URL(base);
+    } catch (e) {
+      // url 解析失败则保留为 null
+    }
+  }
+
+  const isOfficialHost = (host) => {
+    return urlObj && urlObj.hostname === host && (urlObj.port === '' || urlObj.port === '443' || urlObj.port === '80');
+  };
+
+  if (pid === 'openrouter') {
+    if (base && !isOfficialHost('openrouter.ai')) return null;
     return 'openrouter';
   }
-  if (pid === 'deepseek' || base.includes('deepseek.com')) {
+  if (isOfficialHost('openrouter.ai')) return 'openrouter';
+
+  if (pid === 'deepseek') {
+    if (base && !isOfficialHost('api.deepseek.com')) return null;
     return 'deepseek';
   }
-  if (config?.quotaAdapter === 'newapi' || config?.quotaAdapter === 'sub2api' || pid === 'newapi' || pid === 'sub2api') {
-    return 'newapi';
-  }
+  if (isOfficialHost('api.deepseek.com')) return 'deepseek';
+
+  if (config?.quotaAdapter === 'newapi') return 'newapi';
+  
   return null;
 }
 
@@ -451,7 +512,7 @@ export function createQuotaManager({
     } else if (adapter === 'deepseek') {
       res = await fetchDeepSeekQuota({ apiKey, fetchFn, now });
     } else if (adapter === 'newapi') {
-      res = await fetchNewApiQuota({ baseUrl: config.baseUrl, apiKey, fetchFn, now });
+      res = await fetchNewApiQuota({ baseUrl: config.baseUrl, apiKey, config, fetchFn, now });
     } else {
       res = {
         status: 'unsupported',
@@ -477,35 +538,49 @@ export function createQuotaManager({
     if (!config) {
       return {
         ok: false,
-        error: `供应商 ${providerId} 不存在`,
+        error: `��Ӧ�� ${providerId} ������`,
         quota: null,
       };
     }
 
+    const crypto = await import('node:crypto');
+    const hash = crypto.createHash('sha256');
+    hash.update(providerId || '');
+    hash.update('|');
+    hash.update(config.baseUrl || '');
+    hash.update('|');
+    hash.update(config.apiKey || '');
+    hash.update('|');
+    hash.update(config.quotaUserId || '');
+    const configKey = hash.digest('hex');
+
     const t = now();
-    const hit = cache.get(providerId);
+    const hit = cache.get(configKey);
     if (!force && hit && t - hit.cachedAt < ttlMs) {
       return { ok: true, quota: hit.quota, cached: true };
     }
 
-    if (inFlight.has(providerId)) {
-      const q = await inFlight.get(providerId);
+    if (inFlight.has(configKey)) {
+      const q = await inFlight.get(configKey);
       return { ok: true, quota: q, cached: false };
     }
 
     const p = fetchQuotaDirect(providerId, config)
       .then((q) => {
-        cache.set(providerId, { quota: q, cachedAt: now() });
+        cache.set(configKey, { quota: q, cachedAt: now() });
         return q;
       })
       .finally(() => {
-        inFlight.delete(providerId);
+        inFlight.delete(configKey);
       });
 
-    inFlight.set(providerId, p);
+    inFlight.set(configKey, p);
     const quota = await p;
     return { ok: true, quota, cached: false };
   }
+
+  function clearCache() { cache.clear(); }
+
 
   function handle(req, res, url) {
     const pathname = url.pathname;

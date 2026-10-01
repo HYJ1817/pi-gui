@@ -150,6 +150,7 @@ export const S = {
 export function beginWorkspaceSwitch(cwd) {
   S.workspaceGeneration++;
   S.switching = true;
+  resetUsageState();
   S.desiredCwd = cwd;
   S.syncPending = { state: true, messages: true };
   S.bridgeState = 'restarting';
@@ -157,3 +158,27 @@ export function beginWorkspaceSwitch(cwd) {
 }
 
 export const ownsWorkspace = (generation) => generation === S.workspaceGeneration;
+
+export function resetUsageState() {
+  S.stats = null;
+  S.remoteQuota = null;
+  S.quotaEpoch++;
+  S.currentProviderId = null;
+  Object.assign(S.localUsage, {
+    providerId: null,
+    modelId: null,
+    sessionId: null,
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
+    totalTokens: null,
+    contextUsed: null,
+    contextLimit: null,
+    contextPercent: null,
+    estimatedCost: null,
+    lastTurn: null,
+    source: 'none',
+    updatedAt: null,
+  });
+}

@@ -7,7 +7,7 @@
  * 字段没有证据就 null；0 只能表示真实 0。
  */
 
-import { el, S } from './state.js';
+import { el, S, resetUsageState } from './state.js';
 import { fmt } from './util.js';
 import { setTitleText } from './shell.js';
 import { openPop, pop } from './ui/popover.js';
@@ -130,7 +130,10 @@ export function renderRemoteQuota() {
   }
 
   if (q.status === 'ok') {
-    if (q.balance && typeof q.balance.amount === 'number') {
+    if (q.balances && q.balances.length > 0) {
+      val.textContent = q.balances.map(b => fmtBalanceShort(b.amount, b.currency)).join(' | ');
+      tip = 'ʣ���ȣ�\n' + q.balances.map(b => `- ${fmtCurrency(b.amount, b.currency)}`).join('\n');
+    } else if (q.balance && typeof q.balance.amount === 'number') {
       el.uQuota.textContent = fmtBalanceShort(q.balance.amount, q.balance.currency || 'USD');
     } else if (q.windows && typeof q.windows.limit === 'number' && typeof q.windows.used === 'number') {
       el.uQuota.textContent = `${fmt(q.windows.used)} / ${fmt(q.windows.limit)}`;
@@ -455,7 +458,7 @@ export function openCtxTip() {
       const name = document.createElement('span');
       name.textContent = '限额窗口';
       const val = document.createElement('span');
-      val.textContent = `${fmt(q.windows.used || 0)} / ${fmt(q.windows.limit)} ${q.windows.unit || ''}`;
+      val.textContent = `${q.windows.used != null ? fmt(q.windows.used) : '��'} / ${q.windows.limit != null ? fmt(q.windows.limit) : '��'} ${q.windows.unit || ''}`;
       row.append(name, val);
       quotaSec.appendChild(row);
     }
