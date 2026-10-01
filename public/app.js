@@ -56,7 +56,7 @@ import {
 } from './messages.js';
 import { onToolEnd, onToolStart, onToolUpdate } from './tools.js';
 import { openBranchPanel, setForkHandler } from './tree.js';
-import { openCtxTip, renderCtxChip } from './usage.js';
+import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
 import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker, setSessionsSlot } from './projects.js';
 import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
@@ -163,8 +163,16 @@ function handle(evt) {
     case 'message_start':
       return onMessageStart(evt);
     case 'message_update':
+      if (evt.usage) onTurnUsage(evt.usage, { source: 'message_update' });
       return onMessageUpdate(evt);
     case 'message_end':
+      if (evt.message?.usage) {
+        onTurnUsage(evt.message.usage, {
+          provider: evt.message.provider,
+          model: evt.message.model,
+          source: 'message_end',
+        });
+      }
       return onMessageEnd(evt);
     case 'tool_execution_start':
       return onToolStart(evt);
@@ -401,6 +409,29 @@ function renderStatsPanel(card, s) {
     ['上下文占用', ctx.tokens == null ? '—' : `${fmt(ctx.tokens)} / ${fmt(ctx.contextWindow)}`],
     ['累计成本', typeof s.cost === 'number' ? '$' + s.cost.toFixed(4) : '—'],
   ];
+
+  if (S.localUsage?.lastTurn?.reasoningTokens != null) {
+    rows.push(['思考 token', S.localUsage.lastTurn.reasoningTokens]);
+  }
+
+  if (S.remoteQuota) {
+    const q = S.remoteQuota;
+    rows.push(['模型供应商', q.providerId || '—']);
+    if (q.status === 'ok') {
+      if (q.balance && typeof q.balance.amount === 'number') {
+        const cur = q.balance.currency === 'CNY' ? '¥' : '$';
+        rows.push(['远端额度', `${cur}${q.balance.amount.toFixed(2)}`]);
+      }
+    } else if (q.status === 'unsupported') {
+      rows.push(['远端额度', '不支持']);
+    } else if (q.status === 'auth_error') {
+      rows.push(['远端额度', '未认证']);
+    } else if (q.status === 'unavailable') {
+      rows.push(['远端额度', '不可用']);
+    } else {
+      rows.push(['远端额度', '查询失败']);
+    }
+  }
 
   const box = document.createElement('div');
   box.className = 'stat-rows';

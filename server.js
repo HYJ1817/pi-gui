@@ -46,6 +46,7 @@ import { createGitRoutes } from './server/git-routes.js';
 import { createProjects, resolveInitialCwd } from './server/projects.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createProviders } from './server/providers.js';
+import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
@@ -275,6 +276,7 @@ const projects = createProjects({
 });
 
 const providers = createProviders({ modelsJson: MODELS_JSON });
+const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig });
 const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({ runtime });
 
@@ -486,6 +488,7 @@ const route = createRouter({
   uploads,
   diagnostics,
   updateCheck,
+  quota,
   compat: piCompat,
 });
 

@@ -96,6 +96,7 @@ export function createRouter({
   uploads,
   diagnostics,
   updateCheck,
+  quota = null,
   compat = null,
 }) {
   function handleCommand(req, res) {
@@ -165,6 +166,11 @@ export function createRouter({
     }
     if (url.pathname === '/api/providers' || url.pathname.startsWith('/api/providers/')) {
       return providers.handle(req, res, url);
+    }
+    /* 远端额度（P21）。独立顶层路径，必须排在 405 兜底之前。 */
+    if (url.pathname === '/api/quota' || url.pathname.startsWith('/api/quota/')) {
+      if (quota) return quota.handle(req, res, url);
+      return json(res, 503, { ok: false, error: 'Quota 模块未装配' });
     }
     /* 项目配置单独一条顶层路径，**刻意不挂在 /api/projects/ 下面**。
      *
