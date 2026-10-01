@@ -275,13 +275,10 @@ export function approvalSnapshot() {
   };
 }
 
-/* ---------- Extensions 页：能力报告（supported / unsupported 都必须说清） ---------- */
+/* ---------- Extensions / Capabilities 页：能力报告（supported / unsupported 都必须说清） ---------- */
 
-function element(tag, content) {
-  const n = document.createElement(tag);
-  n.textContent = content;
-  return n;
-}
+import { renderSetupSection } from './ui/capability-setup.js';
+import { setupViewModel, NA, TRI_UNKNOWN, statusOf } from './capability-model.js';
 
 const CHECK_LABELS = {
   toolCallHook: 'Extension 可在工具执行前阻断（tool_call hook）',
@@ -290,16 +287,63 @@ const CHECK_LABELS = {
   customUiOverRpc: 'RPC 模式下 ctx.ui.custom() 可用',
 };
 
-export function renderApprovalSetup(box, report) {
+/**
+ * Approval 能力 → 统一 setup 布局的 descriptor（P22）。
+ *
+ * 它**不是 Extension 包**：没有安装命令、没有 npm 名字。这里只把四项探测结果
+ * （每项都带出处）投影成统一的一行，不宣称任何没探到的拦截能力。
+ */
+export function approvalCapability(report) {
   const checks = report?.checks || {};
-  box.replaceChildren(element('h4', 'Approval / Permission'));
-  for (const [key, label] of Object.entries(CHECK_LABELS)) {
+  const verdict = (key) => {
     const check = checks[key];
-    const verdict = check?.supported === true ? '是' : check?.supported === false ? '否' : '未知';
-    box.appendChild(element('p', `${label}：${verdict}${check?.evidence ? ' —— ' + check.evidence : ''}`));
-  }
-  box.appendChild(element('p', report?.piVersion ? `检测到 pi ${report.piVersion}` : '无法确认本机 pi 版本'));
-  box.appendChild(element('p', 'Pi GUI 只能阻断「走 extension_ui_request 来问」的请求 —— 也就是装了这类 permission Extension 之后才存在的闸门。它无法拦下没人来问的工具调用，也不是 OS sandbox。'));
-  box.appendChild(element('p', '决定是一次性的：协议没有持久化能力，所以界面不提供「总是允许 / 按作用域允许」，也不做风险分级（协议没有结构化风险字段，风险显示 unknown）。'));
-  if (!Object.keys(checks).length) box.appendChild(element('p', '能力报告暂不可用；此处不宣称任何已具备的拦截能力。'));
+    if (check?.supported === true) return '是';
+    if (check?.supported === false) return '否';
+    return TRI_UNKNOWN;
+  };
+  const hook = checks.toolCallHook?.supported;
+  return {
+    id: 'approval',
+    kind: 'capability',
+    name: 'Approval / Permission',
+    purpose: '装了会「先问一句」的 permission Extension 时，用本界面的一次性确认把请求接住，并把允许 / 拒绝作为明确的协议应答回给 Pi。',
+    origin: 'pi',
+    packageName: null,
+    installCommand: null,
+    installNote: '这是 Pi 的协议能力（extension_ui_request），不是 Extension 包 —— 没有安装命令。真正的闸门来自你装的 permission Extension。',
+    state: {
+      installed: NA,
+      configured: NA,
+      loaded: typeof hook === 'boolean' ? hook : null,
+      runtimeObserved: NA,
+      restartRequired: NA,
+      diagnostic: report && report.ok === false ? { phase: 'probe', message: '能力报告暂不可用；此处不宣称任何已具备的拦截能力' } : null,
+    },
+    statusOverride: typeof hook === 'boolean'
+      ? (hook
+        ? { dot: 'on', key: 'loaded', label: 'Extension 可以在工具执行前阻断' }
+        : { dot: 'warn', key: 'not-loaded', label: '这个 pi 不支持 tool_call 阻断' })
+      : statusOf({ installed: NA }),
+    notes: Object.entries(CHECK_LABELS).map(([key, label]) => {
+      const check = checks[key];
+      return `${label}：${verdict(key)}${check?.evidence ? ' —— ' + check.evidence : ''}`;
+    }).concat(
+      Object.keys(checks).length ? [] : ['能力报告暂不可用；此处不宣称任何已具备的拦截能力。'],
+      [
+        report?.piVersion ? `检测到 pi ${report.piVersion}` : '无法确认本机 pi 版本',
+        'Pi GUI 只能阻断「走 extension_ui_request 来问」的请求 —— 也就是装了这类 permission Extension 之后才存在的闸门。它无法拦下没人来问的工具调用，也不是 OS sandbox。',
+      ],
+    ),
+    limits: [
+      '决定是一次性的：协议没有持久化能力，所以界面不提供「总是允许 / 按作用域允许」，也不做风险分级（协议没有结构化风险字段，风险显示 unknown）。',
+    ],
+    source: 'GET /api/approvals/capability（只读本机 pi 包探测，不联网、不执行扩展）',
+  };
 }
+
+export function renderApprovalSetup(box, report) {
+  const model = setupViewModel(approvalCapability(report && report.ok !== false ? report : null));
+  box.replaceChildren(renderSetupSection(model));
+  return box;
+}
+

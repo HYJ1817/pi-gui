@@ -15,6 +15,7 @@
  * 驱动下载或包管理动作。 */
 
 import { BROWSER_TOOLS } from './browser-activity.js';
+import { registryEvidence } from './capability-model.js';
 
 export const BROWSER_INSTALL_COMMAND = 'pi install npm:pi-browser-harness';
 
@@ -55,14 +56,44 @@ export function createBrowserObservation() {
 
 /** Registry 证据 → 三值（true / false / null）。缺证据不写成 false。 */
 export function browserSetup(registry) {
-  const items = (registry?.extensions || []).filter((e) => e.name === BROWSER_EXTENSION_NAME);
-  const known = registry && registry.ok !== false && Array.isArray(registry.extensions);
+  const evidence = registryEvidence(registry, BROWSER_EXTENSION_NAME);
   return {
-    installed: items.some((e) => e.state?.installed === true) ? true : known && !registry.diagnostics?.length ? false : null,
+    installed: evidence.installed,
     // Registry 的 enabled 证据与「存在」是两件事。
-    configured: items.some((e) => e.state?.enabled === true) ? true : items.length && items.every((e) => e.state?.enabled === false) ? false : null,
-    discovered: items.some((e) => e.state?.installed === true),
-    loaded: items.some((e) => e.state?.loaded === true) ? true : null,
+    configured: evidence.configured,
+    discovered: evidence.discovered,
+    loaded: evidence.loaded,
+    restartRequired: evidence.restartRequired,
+    diagnostic: evidence.diagnostic,
     automaticInstall: false,
+  };
+}
+
+/** 统一 setup 布局用的 descriptor。 */
+export function browserCapability(registry, observed = null) {
+  const state = { ...browserSetup(registry), runtimeObserved: observed };
+  return {
+    id: 'browser',
+    kind: 'capability',
+    name: 'Browser Use（真实浏览器自动化）',
+    purpose: `通过 CDP 驱动你正在用的浏览器：打开页面、点击、输入、截图、读正文（${BROWSER_TOOLS.size} 个 browser_* 工具）。`,
+    origin: 'extension',
+    packageName: BROWSER_EXTENSION_NAME,
+    installCommand: BROWSER_INSTALL_COMMAND,
+    installNote: '这是第三方 Extension，需要在终端用 pi 官方命令安装。Pi GUI 不安装浏览器、不下载驱动、不改动 Extension 配置。',
+    state,
+    notes: [
+      'Browser Use 与 Web Search 是两件事：Web Search 只做搜索与取正文，不驱动浏览器；Browser Use 会真的打开页面、点击、输入、截图。两者互相独立，各自的工具各自渲染。',
+      '这些动作会直接发生，Pi GUI 拦不住它们：这个 Extension 没有审批协议，所以这里不提供允许 / 拒绝按钮，也不声称已保护。高风险动作（提交表单、购买、删除、发布、发送消息）请自己盯住页面。',
+      'Activity 只显示结构化字段（动作、主机名、计数）。输入框内容默认不显示，截图不自动上传，页面正文、控制台与网络记录不进 Activity。',
+      '观察到工具名只说明「当前这次运行真的调用过它」，不构成「这个包已加载」的证据 —— 同名工具也可能来自别的 Extension。Pi RPC 没有权威的已注册工具清单。',
+    ],
+    limits: [
+      '第三方 Extension 与 Pi 进程拥有同等系统权限，可访问网络、本地文件，并能控制你已登录的浏览器。只安装可信代码。',
+      '在终端安装后重启 Pi，再刷新本页。浏览器连接、Profile 与页面状态都由 Extension 自己管理：Pi GUI 不做浏览器 UI、不导入 Cookie、不管密码、不建下载中心，也不自动登录。',
+    ],
+    source: 'GET /api/extensions（Extension Registry 只读发现）+ 本次 bridge run 的 tool_execution_* 事件',
+    link: { url: 'https://github.com/amankumarsingh77/pi-browser-harness#readme', hostname: 'github.com', title: '查看 Extension 说明' },
+    restart: { message: '请先在终端完成官方安装。重启会结束当前 Pi 运行并重新加载 Extension；Pi GUI 不安装浏览器、不下载驱动、不改动 Extension 配置。' },
   };
 }

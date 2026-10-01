@@ -1,4 +1,4 @@
-/* Browser Use（真实浏览器自动化）的 Extensions 页设置区 + 运行观察。
+/* Browser Use（真实浏览器自动化）的设置区 + 运行观察。
  *
  * 立场与 P16/P18 一致：**Pi GUI 不发明 pi 没有的能力，也不假装保护用户。**
  *
@@ -7,19 +7,14 @@
  * 拦截，也没有在这些工具执行前调用 `ctx.ui.confirm`。`/browser-profile` 会使用
  * `ctx.ui.select` 做 Profile 配置；Pi 0.87.0 的 RPC 会把这类选择交给 GUI 处理，
  * 但这属于配置交互，不是浏览器动作的权限闸门。所以 GUI 侧**不提供**浏览器
- * 动作的允许 / 拒绝按钮，也不宣称「已保护」——只如实说明「这些动作会直接发生」。 */
-import { S, ownsWorkspace } from './state.js';
-import { restartBackend } from './api.js';
-import { confirmModal } from './ui/modal.js';
-import { toast } from './ui/toast.js';
-import {
-  createBrowserObservation,
-  browserSetup,
-  BROWSER_INSTALL_COMMAND,
-  BROWSER_EXTENSION_NAME,
-  acceptBrowserEvent,
-} from './browser-capabilities.js';
+ * 动作的允许 / 拒绝按钮，也不宣称「已保护」——只如实说明「这些动作会直接发生」。
+ *
+ * P22 起布局统一到 `ui/capability-setup.js`；这里只提供事实与措辞。 */
+import { S } from './state.js';
+import { createBrowserObservation, browserCapability, acceptBrowserEvent } from './browser-capabilities.js';
 import { webSourceLink } from './web-activity.js';
+import { renderSetupSection } from './ui/capability-setup.js';
+import { setupViewModel } from './capability-model.js';
 
 const observation = createBrowserObservation();
 
@@ -29,38 +24,13 @@ export function observeBrowserEvent(event) {
   observation.observe(event, S.workspaceGeneration, S.bridgeRun);
 }
 
-function element(tag, content) { const n = document.createElement(tag); n.textContent = content; return n; }
+/** 统一的运行观察形状，供 Capability 视图复用同一个观察实例。 */
+export function browserObservation() {
+  return observation.snapshot(S.workspaceGeneration, S.bridgeRun);
+}
 
 export function renderBrowserSetup(box, registry) {
-  const state = browserSetup(registry);
-  const observed = observation.snapshot(S.workspaceGeneration, S.bridgeRun);
-  box.replaceChildren(element('h4', 'Browser Use（真实浏览器自动化）'));
-  box.appendChild(element('p', state.installed === true
-    ? `已发现 ${BROWSER_EXTENSION_NAME} · 加载状态` + (state.loaded ? '已确认' : '未知')
-    : state.installed === false ? `尚未发现 ${BROWSER_EXTENSION_NAME}` : 'Browser Extension 安装状态未知'));
-  box.appendChild(element('p', '启用配置：' + (state.configured === true ? '已启用' : state.configured === false ? '已停用' : '未知')));
-  box.appendChild(element('p', observed.any
-    ? `当前 Pi 已观察到 ${observed.count} 个浏览器工具被调用（最近：${observed.names.join(' · ')}）`
-    : '尚未观察到浏览器工具调用'));
-  box.appendChild(element('p', '观察到工具名只说明「当前这次运行真的调用过它」，不构成「这个包已加载」的证据 —— 同名工具也可能来自别的 Extension。Pi RPC 没有权威的已注册工具清单。'));
-  box.appendChild(element('p', 'Browser Use 与 Web Search 是两件事：Web Search 只做搜索与取正文，不驱动浏览器；Browser Use 会真的打开页面、点击、输入、截图。两者互相独立，各自的工具各自渲染。'));
-  box.appendChild(element('p', '这些动作会直接发生，Pi GUI 拦不住它们：这个 Extension 没有审批协议，所以这里不提供允许 / 拒绝按钮，也不声称已保护。高风险动作（提交表单、购买、删除、发布、发送消息）请自己盯住页面。'));
-  box.appendChild(element('p', 'Activity 只显示结构化字段（动作、主机名、计数）。输入框内容默认不显示，截图不自动上传，页面正文、控制台与网络记录不进 Activity。'));
-  box.appendChild(element('p', '第三方 Extension 与 Pi 进程拥有同等系统权限，可访问网络、本地文件，并能控制你已登录的浏览器。只安装可信代码。'));
-  box.appendChild(element('code', BROWSER_INSTALL_COMMAND));
-  const copy = element('button', '复制安装命令'); copy.className = 'btn tiny'; copy.type = 'button';
-  copy.onclick = async () => { try { await navigator.clipboard.writeText(BROWSER_INSTALL_COMMAND); toast('已复制安装命令', 'info'); } catch { toast('复制失败，请手工复制上方命令', 'warn'); } };
-  const restart = element('button', '安装后重启 Pi'); restart.className = 'btn tiny'; restart.type = 'button';
-  restart.onclick = async () => {
-    const generation = S.workspaceGeneration;
-    const ok = await confirmModal({ title: '重启 Pi？', message: '请先在终端完成官方安装。重启会结束当前 Pi 运行并重新加载 Extension；Pi GUI 不安装浏览器、不下载驱动、不改动 Extension 配置。', okText: '重启 Pi' });
-    if (!ok || !ownsWorkspace(generation)) return;
-    restart.disabled = true;
-    try { const result = await restartBackend(); if (ownsWorkspace(generation)) toast(result?.ok ? '正在重启 Pi' : '重启失败，可重试', result?.ok ? 'info' : 'warn'); }
-    catch { if (ownsWorkspace(generation)) toast('重启失败，可重试', 'warn'); }
-    finally { restart.disabled = false; }
-  };
-  box.append(copy, restart);
-  box.appendChild(element('p', '在终端安装后重启 Pi，再刷新本页。浏览器连接、Profile 与页面状态都由 Extension 自己管理：Pi GUI 不做浏览器 UI、不导入 Cookie、不管密码、不建下载中心，也不自动登录。'));
-  box.appendChild(webSourceLink({ url: 'https://github.com/amankumarsingh77/pi-browser-harness#readme', hostname: 'github.com', title: '查看 Extension 说明' }));
+  const model = setupViewModel(browserCapability(registry, browserObservation()));
+  box.replaceChildren(renderSetupSection(model, { linkFactory: webSourceLink }));
+  return box;
 }

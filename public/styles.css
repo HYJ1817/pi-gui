@@ -1261,6 +1261,39 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:5px;padding:1px 6px;
 }
 
+/* ---- P22 Capability 视图 ----
+ *
+ * 目标是「紧凑、中性、不砌卡片墙」：一列状态行 + 一行说明，不放大卡片。
+ * 列表沿用 .ext-list / .ext-item（和 Skills / Planner 同一套密度），
+ * 这里只补状态行与统一 setup 区块的排版。 */
+.cap-status-line{
+  color:var(--t3);font-family:var(--mono);font-size:10.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cap-view .ext-item-desc{-webkit-line-clamp:1}
+.cap-view .ext-summary .cfg-note{margin-top:4px}
+
+/* 统一 setup 布局（`ui/capability-setup.js`）。**同一套排版**同时服务
+ * Capability 详情、以及原来的 Web / Subagents / Memory / Browser 设置区。 */
+.cap-setup{font-size:12px;min-width:0}
+.cap-setup h4{font-size:13px;font-weight:500;color:#e6e6e6;margin-bottom:6px;word-break:break-word}
+.cap-purpose{color:var(--t2);line-height:1.6;margin:0 0 8px;overflow-wrap:anywhere}
+.cap-verdict{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
+.cap-verdict-text{font-size:12.5px;color:var(--t1);overflow-wrap:anywhere}
+.cap-rows .ext-row-k{flex:0 0 66px}
+.cap-setup p{margin:6px 0;overflow-wrap:anywhere}
+.cap-note{color:var(--t2);line-height:1.6}
+.cap-limit{color:var(--t3)}
+.cap-source{color:var(--t3);font-family:var(--mono);font-size:10.5px;line-height:1.6;margin-top:10px}
+.cap-setup code{
+  display:block;margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+  background:#141414;color:#b8b8b8;font-family:var(--mono);font-size:11px;
+  user-select:text;overflow-wrap:anywhere;
+}
+.cap-setup .ext-acts{margin-bottom:6px}
+.cap-setup .ext-acts .btn{margin:0 6px 6px 0}
+.cap-setup .web-source{display:inline-block;margin-top:8px}
+
 /* ---- MCP ---- */
 .ext-mcp{flex:1;min-height:0;overflow:auto}
 .ext-mcp-head{display:flex;align-items:center;gap:8px;margin-bottom:9px}

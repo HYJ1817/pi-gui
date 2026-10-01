@@ -25,15 +25,11 @@
  * 后端在自己的索引里按 ID 查真实路径。所以这里不需要、也不应该做路径校验。
  */
 import { S, ownsWorkspace } from './state.js';
-import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchMcpServers, refreshMcpStatus, mcpServerAction, fetchExtensions, fetchApprovalCapability, restartBackend } from './api.js';
+import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchMcpServers, refreshMcpStatus, mcpServerAction, fetchExtensions, restartBackend } from './api.js';
 import { confirmModal } from './ui/modal.js';
 import { openWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
-import { renderWebSetup } from './web-access.js';
-import { renderSubagentSetup } from './subagents.js';
-import { renderMemorySetup } from './memory.js';
-import { renderBrowserSetup } from './browser.js';
-import { renderApprovalSetup } from './approval.js';
+import { capabilityTab } from './capability-view.js';
 import { snapshotMcpObservation } from './mcp-observer.js';
 
 /* 状态 → 展示用的圆点与文案。
@@ -683,7 +679,7 @@ async function mcpTabBody(wrap, isCurrent, reload) {
       /* 观察快照失败不挡住整个标签页 */
     }
     wrap.appendChild(note('启用 / 停用 / 重连 / 改 exposure 没有官方自动化接口 —— 请用 pi 的 /mcp 管理器（TUI）或直接编辑 mcp.json。这里不伪造这些开关。', 'dim'));
-    wrap.appendChild(note('Pi GUI 的 MCP 接口**不接收任何凭据值**（env / headers / OAuth / auth 一律在接口边界拒绝）。含凭据的 server 请走终端 pi mcp add 或直接编辑 pi 的 mcp.json；OAuth 的 token 全程由 pi 自己管理（Pi GUI 不读、不存、不转发）。', 'dim'));
+    wrap.appendChild(note('Pi GUI 的 MCP 接口不接收任何凭据值（env / headers / OAuth / auth 一律在接口边界拒绝）。含凭据的 server 请走终端 pi mcp add 或直接编辑 pi 的 mcp.json；OAuth 的 token 全程由 pi 自己管理（Pi GUI 不读、不存、不转发）。', 'dim'));
   }
 
   /* RPC 事实：有没有「已注册工具清单」这条命令。 */
@@ -848,30 +844,22 @@ function mcpAddForm(wrap, isCurrent, reload) {
 }
 
 
+/* ---------- Extensions 标签页（P15 通用 Registry） ---------- */
+
+/* 这一页只做**通用 Registry**：磁盘上发现了哪些 Extension、各自什么状态，包括
+ * 完全不认识的那些。它**没有**任何按包名分支的逻辑 —— Web / Subagents / Memory /
+ * Browser 的设置区与 Native MCP 的结论都在 Capabilities / All 视图里，
+ * 那些是 capability 投影，不是 Registry 的一部分。 */
 function extensionTab(card, isCurrent) {
   const wrap = el('div', 'ext-skills');
   card.appendChild(wrap);
-  const webBox = el('section', 'web-setup');
-  wrap.appendChild(webBox);
-  renderWebSetup(webBox, null);
-  const subagentBox = el('section', 'web-setup');
-  wrap.appendChild(subagentBox);
-  renderSubagentSetup(subagentBox, null);
-  const memoryBox = el('section', 'web-setup');
-  wrap.appendChild(memoryBox);
-  renderMemorySetup(memoryBox, null);
-  /* P20：Browser Use 设置区。与 Web Search 分开 —— 两者是独立能力。 */
-  const browserBox = el('section', 'web-setup');
-  wrap.appendChild(browserBox);
-  renderBrowserSetup(browserBox, null);
-  /* P19：approval 能力报告。supported / unsupported 都要说清 —— 不许把没拦住的画成拦住了。 */
-  const approvalBox = el('section', 'web-setup');
-  wrap.appendChild(approvalBox);
-  renderApprovalSetup(approvalBox, null);
   const bar = el('div', 'ext-bar');
+  const search = el('input', 'ext-search');
+  search.type = 'search';
+  search.placeholder = '搜索名称 / 简介 / 状态…';
   const refresh = el('button', 'btn tiny', '刷新');
   refresh.type = 'button';
-  bar.appendChild(refresh);
+  bar.append(search, refresh);
   const summary = el('div', 'ext-summary');
   const split = el('div', 'ext-split');
   const list = el('div', 'ext-list');
@@ -904,25 +892,46 @@ function extensionTab(card, isCurrent) {
     if (item.state?.error) detail.appendChild(note(`${item.state.error.phase}: ${item.state.error.message}`, 'warn'));
   }
 
+  /** 状态文案与列表项用的是同一套（名称 / 简介 / 状态都可搜）。 */
+  function stateLabel(item) {
+    const state = item.state || {};
+    if (state.error) return state.error.phase === 'discovery' ? '发现异常' : '加载失败';
+    if (state.loaded === true) return '已加载';
+    if (state.loaded === false) return '未加载';
+    return '加载未知';
+  }
+
+  function filtered() {
+    const items = data?.extensions || [];
+    const q = search.value.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => [
+      item.displayName, item.name, item.description, stateLabel(item),
+      item.source?.type, item.scope,
+    ].some((part) => String(part || '').toLowerCase().includes(q)));
+  }
+
   function render() {
     list.replaceChildren();
-    const items = data?.extensions || [];
-    summary.replaceChildren(el('span', 'ext-sum-label', `发现 ${items.length} 个 Extension · 加载状态仅在 Pi 提供证据时确认`));
+    const all = data?.extensions || [];
+    const items = filtered();
+    summary.replaceChildren(el('span', 'ext-sum-label',
+      `发现 ${all.length} 个 Extension${items.length !== all.length ? ` · 当前筛选 ${items.length}` : ''} · 加载状态仅在 Pi 提供证据时确认`));
     if (!data?.piReachable) summary.appendChild(note('Pi 未应答；无法确认实际加载状态。', 'warn'));
-    if (!items.length) list.appendChild(el('div', 'ext-empty', '没有发现可只读定位的 Extension。'));
+    if (!items.length) {
+      list.appendChild(el('div', 'ext-empty', all.length ? '没有符合筛选条件的 Extension' : '没有发现可只读定位的 Extension。'));
+    }
     for (const item of items) {
-      const state = item.state || {};
-      const label = state.error ? (state.error.phase === 'discovery' ? '发现异常' : '加载失败') : state.loaded === true ? '已加载' : state.loaded === false ? '未加载' : '加载未知';
       const button = el('button', 'ext-item ext-extension-item');
       button.type = 'button';
       button.classList.toggle('on', selected === item.id);
       button.appendChild(el('span', 'ext-name', item.displayName || item.name));
-      button.appendChild(el('span', 'ext-badge', label));
+      button.appendChild(el('span', 'ext-badge', stateLabel(item)));
       button.appendChild(el('div', 'ext-item-desc', `${item.description || '（没有简介）'} · ${item.source?.type === 'local' ? '本地' : item.source?.type || '未知来源'} · ${item.capabilities?.length || 0} 个已确认能力`));
       button.onclick = () => { selected = item.id; render(); showDetail(item); };
       list.appendChild(button);
     }
-    showDetail(items.find((item) => item.id === selected) || null);
+    showDetail(items.find((item) => item.id === selected) || all.find((item) => item.id === selected) || null);
   }
   async function load() {
     const generation = S.workspaceGeneration;
@@ -934,18 +943,9 @@ function extensionTab(card, isCurrent) {
       return;
     }
     data = result;
-    renderWebSetup(webBox, result);
-    renderSubagentSetup(subagentBox, result);
-    renderMemorySetup(memoryBox, result);
-    renderBrowserSetup(browserBox, result);
     render();
-    /* approval 能力报告是只读的本地探测，和 Extension 发现分开取：
-     * 它失败不该把整页 Extension 列表带塌。 */
-    fetchApprovalCapability().then((cap) => {
-      if (!isCurrent() || !ownsWorkspace(generation)) return;
-      renderApprovalSetup(approvalBox, cap && cap.ok !== false ? cap : null);
-    }).catch(() => {});
   }
+  search.addEventListener('input', render);
   refresh.onclick = load;
   load();
 }
@@ -969,42 +969,61 @@ export async function loadExtensionsBadge() {
   node.title = `发现 ${total} 个 Skill（其中已加载 ${j.counts.enabled || 0} 个）`;
 }
 
+/* 五个标签页 = 五个过滤器（P22）。**一行都不新增导航** —— 复用已有的 tab 机制，
+ * 这样 Work Surface 的承载、aria 语义、实例生命周期都不用改。
+ *
+ *   All            —— 能力总览：已知 feature + pi 内置 + 通用 Extension + MCP server
+ *   Capabilities   —— 只留已知 feature 与 Native MCP（「能不能用」这一问的答案）
+ *   Extensions     —— 通用 Registry（**包括完全不认识的**，保持可浏览可诊断）
+ *   Skills         —— pi 原生 Skills 的清单与启停（原有实现，未改语义）
+ *   MCP            —— pi 原生 MCP 管理面（原有实现，未改语义） */
+const TABS = [
+  { id: 'all', label: 'All', domId: 'extensionsTabAll' },
+  { id: 'capabilities', label: 'Capabilities', domId: 'extensionsTabCapabilities' },
+  { id: 'extensions', label: 'Extensions', domId: 'extensionsTabExtensions' },
+  { id: 'skills', label: 'Skills', domId: 'extensionsTabSkills' },
+  { id: 'mcp', label: 'MCP', domId: 'extensionsTabMcp' },
+];
+
 export function openExtensions() {
   openWorkSurface('extensions', (card, instance) => {
     card.classList.add('wide', 'ext');
 
-    const h = el('h3', '', '扩展');
+    const h = el('h3', '', '扩展与能力');
     card.appendChild(h);
     card.appendChild(
       el(
         'div',
         'modal-desc',
-        'Skills 与 Extension 分开列出。Extension 只读发现已存在的本地资源；MCP 是 pi 原生集成的管理面。',
+        '能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。',
       ),
     );
 
     const tabs = el('div', 'ext-tabs');
     tabs.setAttribute('role', 'tablist');
-    tabs.setAttribute('aria-label', '扩展类型');
+    tabs.setAttribute('aria-label', '能力与扩展过滤器');
     const body = el('div', 'ext-body');
     body.id = 'extensionsTabPanel';
     body.setAttribute('role', 'tabpanel');
-    const panels = { skills: null, extensions: null, mcp: null };
-    let active = 'skills';
+    const panels = {};
+    let active = 'all';
 
     const render = () => {
       for (const btn of tabs.children) {
         btn.classList.toggle('on', btn.dataset.tab === active);
         btn.setAttribute('aria-selected', String(btn.dataset.tab === active));
       }
-      body.setAttribute('aria-labelledby', active === 'skills' ? 'extensionsTabSkills' : active === 'extensions' ? 'extensionsTabExtensions' : 'extensionsTabMcp');
+      const current = TABS.find((tab) => tab.id === active) || TABS[0];
+      body.setAttribute('aria-labelledby', current.domId);
       body.innerHTML = '';
       if (!panels[active]) {
         const holder = el('div', 'ext-panel');
         panels[active] = holder;
         body.appendChild(holder);
-        if (active === 'skills') skillsTab(holder, instance.isCurrent);
+        if (active === 'all') capabilityTab(holder, instance.isCurrent, { filterId: 'all' });
+        else if (active === 'capabilities') capabilityTab(holder, instance.isCurrent, { filterId: 'capabilities' });
         else if (active === 'extensions') extensionTab(holder, instance.isCurrent);
+        else if (active === 'skills') skillsTab(holder, instance.isCurrent);
         else mcpTab(holder, instance.isCurrent);
       } else {
         // 已经建过的面板：重新挂回去（innerHTML 清空不会销毁 JS 里的引用，
@@ -1013,22 +1032,18 @@ export function openExtensions() {
       }
     };
 
-    for (const [key, label] of [
-      ['skills', 'Skills'],
-      ['extensions', 'Extensions'],
-      ['mcp', 'MCP'],
-    ]) {
-      const b = el('button', 'ext-tab', label);
-      b.type = 'button';
-      b.id = key === 'skills' ? 'extensionsTabSkills' : key === 'extensions' ? 'extensionsTabExtensions' : 'extensionsTabMcp';
-      b.setAttribute('role', 'tab');
-      b.setAttribute('aria-controls', body.id);
-      b.dataset.tab = key;
-      b.onclick = () => {
-        active = key;
+    for (const tab of TABS) {
+      const button = el('button', 'ext-tab', tab.label);
+      button.type = 'button';
+      button.id = tab.domId;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-controls', body.id);
+      button.dataset.tab = tab.id;
+      button.onclick = () => {
+        active = tab.id;
         render();
       };
-      tabs.appendChild(b);
+      tabs.appendChild(button);
     }
 
     card.append(tabs, body);
@@ -1036,7 +1051,7 @@ export function openExtensions() {
 
     // 没有项目时提示一下：用户级 skill 仍然能看，但项目级一栏会是空的
     if (!S.hasProject) {
-      card.appendChild(note('还没有选择项目 —— 现在只能看到用户级的 Skills。选一个文件夹后项目级的才会出现。', 'dim'));
+      card.appendChild(note('还没有选择项目 —— 现在只能看到用户级的 Skills 与 pi 自带的能力。选一个文件夹后项目级的才会出现。', 'dim'));
     }
   });
 }
