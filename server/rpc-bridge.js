@@ -27,8 +27,17 @@ import { spawn } from 'node:child_process';
 import { basename } from 'node:path';
 import { formatLaunch } from './pi-launch.js';
 
+/* ⚠️ 这一层刻意**只**依赖 node 内建 + pi-launch（有架构守卫测试钉着）：
+ * rpc-bridge 不该认识业务模块。所以下面那个「收整棵进程树」的原语是**注入**的
+ * —— 生产由组合根 server.js 传进 `agents/cli.js` 里验证过的 `killTree`
+ * （Windows 走 `taskkill /pid <pid> /T /F`，POSIX 走进程组），测试传替身。
+ * 这里不 import 它，也不另写一套未经 Windows 验证的 kill 逻辑。 */
+
 /** 崩溃后自动重启的延迟。 */
 const RESTART_DELAY_MS = 1200;
+
+/** pauseForMaintenance 等进程退出的上限。**超时 = 失败**，不是「当它停了」。 */
+const PAUSE_TIMEOUT_MS = 10000;
 
 /** request() 的默认超时。pi 冷启动约 20 秒，但 request() 只在 pi 已经起来之后才用，
  *  所以这里给 10 秒足够；超时返回 null 而不是抛错，让调用方自己降级。 */
@@ -66,6 +75,13 @@ export function createRpcBridge({
   projectLaunch = null,
   compat = null,
   spawnProcess = spawn,
+  /* 进程树终止原语（**注入**，见文件头的说明）。Windows 上 `child.kill()`
+   * 只杀得掉外层 cmd/npm 包装，pi 本体（以及它拉起的 shell 工具）会活下来，
+   * 所以生产必须由 server.js 注入 `agents/cli.js` 的 `killTree`。
+   * 没注入时退回直接 kill（等于旧行为，不会更糟）。 */
+  killProcessTree = null,
+  /* pauseForMaintenance 的等待上限（测试注入短值）。 */
+  pauseTimeoutMs = PAUSE_TIMEOUT_MS,
   restartDelayMs = RESTART_DELAY_MS,
 }) {
   /* 实际启动命令：launch identity 优先，`piBin` 只是缺省（老调用方 / 单测）。
@@ -257,6 +273,15 @@ export function createRpcBridge({
       return;
     }
 
+    /* stdin 上的写错误（EPIPE / write-after-end）必须有人接：没人接的话
+     * Node 会把它当成 uncaught exception，**整个后端一起崩**。
+     * 真正要报告的问题走 child 的 'error'/'exit' 分支，这里只做兜底。 */
+    if (child.stdin && typeof child.stdin.on === 'function') {
+      child.stdin.on('error', () => {
+        /* noop：写失败由 exit 分支收口 */
+      });
+    }
+
     child.on('error', (err) => {
       restartRequested = false;
       publish({
@@ -357,6 +382,16 @@ export function createRpcBridge({
     child.on('close', onStopped);
   }
 
+  /* ---------- 子进程可用性 ----------
+   *
+   * 不能只看 `!pi`：维护暂停会先把 stdin `end()` 掉，如果进程因为别的原因没有
+   * 立刻退出（`pause-timeout` 那条路），此时再 write 会在已结束的流上写 ——
+   * Node 会给 stdin 发一个 'error' 事件，而没人监听它就会把整个后端带崩。
+   * 所以「可用」= 进程在 + stdin 还能写。 */
+  function childUsable() {
+    return Boolean(pi && pi.stdin && !pi.stdin.destroyed && pi.stdin.writable !== false && !pi.stdin.writableEnded);
+  }
+
   /** 把一条命令写进 pi 的 stdin。 */
   function send(cmd) {
     // 没项目时给出可执行的指引，别只说「子进程未运行」—— 用户会以为是崩溃
@@ -366,7 +401,7 @@ export function createRpcBridge({
     /* 维护中不接受新命令 —— 否则命令会写进一个正在被替换的 runtime。 */
     if (maintenance) throw new Error('Pi 正在更新，完成后会自动恢复；稍后再试。');
     if (restartRequested) throw new Error('pi 正在重启，请稍后重试');
-    if (!pi || !pi.stdin || pi.stdin.destroyed) {
+    if (!childUsable()) {
       throw new Error('pi 子进程未运行');
     }
     if (cmd.__bridgeRun != null && cmd.__bridgeRun !== bridgeRun) {
@@ -386,7 +421,7 @@ export function createRpcBridge({
    * 注意这里**不**校验 cmd.id —— 由本模块发号，调用方传的 id 会被覆盖。 */
   function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
     return new Promise((resolve) => {
-      if (!runtime.getCurrentCwd() || restartRequested || maintenance || !pi || !pi.stdin || pi.stdin.destroyed) {
+      if (!runtime.getCurrentCwd() || restartRequested || maintenance || !childUsable()) {
         resolve(null);
         return;
       }
@@ -479,7 +514,12 @@ export function createRpcBridge({
    * **防重复/嵌套**：已经在维护中就直接回 `{ok:false, code:'already-in-maintenance'}`。
    * 调用方（`server/pi-update.js`）也有一把自己的锁，两层都不允许并发的维护。
    *
-   * @returns {Promise<{ok:boolean, code?:string, stopped?:boolean}>} 进程已退出才 resolve
+   * ⚠️ **超时不算已停止。** 这个函数的契约是「等当前 Pi 子进程**真的**退出」——
+   * 替换 runtime 文件前必须确定它不在了。所以 `pauseTimeoutMs` 到点仍是
+   * `{ok:false, code:'pause-timeout'}`，并**回滚维护态**（进程还活着，bridge
+   * 应该继续可用，而不是卡在维护里）。updater 收到这个码就不许启动。
+   *
+   * @returns {Promise<{ok:boolean, code?:string, stopped?:boolean}>} 只有确认退出才 ok:true
    */
   function pauseForMaintenance(reason = 'pi-update') {
     if (maintenance) return Promise.resolve({ ok: false, code: 'already-in-maintenance' });
@@ -508,28 +548,42 @@ export function createRpcBridge({
     const child = pi;
     return new Promise((resolve) => {
       let done = false;
-      const finish = (stopped) => {
+      const finish = (result) => {
         if (done) return;
         done = true;
-        resolve({ ok: true, stopped });
-      };
-      /* 以 exit 为准。给一个兜底定时器：万一 exit 事件丢了（子进程已经被
-       * 别的东西收走），也不能把更新流程永久卡死。 */
-      const timer = setTimeout(() => finish(true), 10000);
-      if (typeof timer.unref === 'function') timer.unref();
-      child.once('exit', () => {
         clearTimeout(timer);
-        finish(true);
-      });
+        resolve(result);
+      };
+      /* 超时兜底：**不是「当它死了」**。进程还活着，所以撤销维护态、
+       * 如实宣告「pi 还在跑」，并把失败原因带回去让 updater 放弃。 */
+      const timer = setTimeout(() => {
+        maintenance = null;
+        resumeRequested = false;
+        publish({ type: 'bridge_status', state: 'ready', pid: child.pid ?? null, cwd, bridgeRun });
+        finish({ ok: false, code: 'pause-timeout' });
+      }, pauseTimeoutMs);
+      /* ⚠️ **不要 unref 这个 timer。** 它现在承担的是「给出一个确定的结论」，
+       * unref 之后如果事件循环没别的活，进程会直接退出、pause 永远不 resolve
+       * （调用方以为还在等）。宁可让 shutdown 最多多等这一个超时。 */
+      /* exit 与 close 都要听：spawn 失败（ENOENT）只有 close，没有 exit。 */
+      child.once('exit', () => finish({ ok: true, stopped: true }));
+      child.once('close', () => finish({ ok: true, stopped: true }));
       try {
         child.stdin.end();
       } catch {
         /* noop */
       }
+      /* 结束**整棵进程树**：Windows 上经 npm .cmd 启动时，只 kill 外层
+       * 包装定义不了「pi 本体已经退出」这个前提。原语由组合根注入。 */
       try {
-        child.kill();
+        if (typeof killProcessTree === 'function') killProcessTree(child);
+        else child.kill();
       } catch {
-        /* noop */
+        try {
+          child.kill();
+        } catch {
+          /* noop */
+        }
       }
     });
   }

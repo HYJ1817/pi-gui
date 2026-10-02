@@ -118,6 +118,35 @@ function displayPhase() {
   return phase;
 }
 
+/**
+ * 清掉相位、在飞标记与轮询。
+ *
+ * 两个用途：
+ *   1. **测试**要能在一个干净状态上驱动真实轮询（否则上一段的 pollTimer
+ *      会继续吃下一段的桩，断言就变成「碰巧成立」）；
+ *   2. 同一页面里重新装配面板时不要把上一次的相位带过来。
+ * 不碰 `notifiedVersion`（那是「同一个版本只提醒一次」的会话级记忆）与
+ * `mounted`（那是指向当前 DOM 的引用）。
+ */
+export function resetPiUpdate() {
+  cancelPoll();
+  seq += 1; // 让在飞的请求作废
+  checking = false;
+  running = false;
+  pollTicks = 0;
+  failedKind = '';
+  phase = 'idle';
+  currentVersion = '';
+  latestVersion = '';
+  updateAvailable = false;
+  verification = 'unchecked';
+  canUpdate = false;
+  reason = null;
+  errorCode = '';
+  errorText = '';
+  applyPiUpdateDot();
+}
+
 function isBusy() {
   return checking || running || BUSY_PHASES.includes(phase);
 }
@@ -312,13 +341,24 @@ async function pollOnce() {
   }
   const j = await fetchPiUpdate(false);
   if (!running) return;
-  if (j && j.ok === true) {
+  if (j && typeof j === 'object') {
     const serverPhase = str(j.phase);
     const stillRunning = j.running === true || BUSY_PHASES.includes(serverPhase);
-    /* 相邻相位（verifying / restarting）只有轮询这里拿得到，采纳它们；
-     * 但还在跑的时候不把忙态降级，理由见 displayPhase 的说明。 */
-    absorbStatus(stillRunning && !BUSY_PHASES.includes(serverPhase) ? { ...j, phase } : j);
-    if (!running) return;
+    /* ⚠️ **`ok:false` 也可能是有效的轮询结果**：更新失败时后端按契约回
+     * `ok:false + phase:'failed' + running:false + errorCode/error`。
+     * 早先这里只认 `ok === true`，于是失败终态被丢掉、轮询继续跑，
+     * 下一轮拿到的是「检查缓存/默认桩」的 available —— 真正的失败被覆盖成
+     * 「有新版本可更新」，用户会看到一个假的可更新按钮。 */
+    if (j.ok === true) {
+      /* 相邻相位（verifying / restarting）只有轮询这里拿得到，采纳它们；
+       * 但还在跑的时候不把忙态降级，理由见 displayPhase 的说明。 */
+      absorbStatus(stillRunning && !BUSY_PHASES.includes(serverPhase) ? { ...j, phase } : j);
+      if (!running) return;
+    } else if (j.running === false || serverPhase === 'failed' || serverPhase === 'latest') {
+      /* 终态：吸收它（absorbStatus 会把 running 置 false 并停掉轮询）。 */
+      absorbStatus(j);
+      return;
+    }
   }
   schedulePoll();
 }

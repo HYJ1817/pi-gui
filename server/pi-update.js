@@ -135,12 +135,23 @@ export function createPiUpdate({
 } = {}) {
   const doFetch = fetchImpl || (typeof fetch === 'function' ? fetch : null);
 
-  let cache = null; // { at, payload } —— **只缓存成功的检查结果**
+  /* ---------- 两个**互不兼任**的状态 ----------
+   *
+   * 1. `checkCache` —— 公网版本检查的结果（可 TTL 复用）。
+   * 2. `updateState` —— 更新执行本身的状态：跑的时候是相位，
+   *    跑完是**终态**（latest / failed），带 installedVersion / errorCode。
+   *
+   * 以前只有一个 `cache`，GET 在更新期间会命中它：明明在 updating，却回
+   * `phase:'available', running:false`，前端据此停掉轮询、重新点亮「更新到
+   * 1.0.0」按钮 —— 后台还在替换文件。更新失败更糟：失败结果被下一次检查
+   * 直接覆盖成 available。所以现在**检查缓存不许兼任更新运行状态**：
+   * 只要有 updateState，GET 一律回它，既不回旧缓存也不打公网。 */
+  let checkCache = null; // { at, payload }
   let checkInflight = null;
   let updateInflight = null;
-  let phase = 'idle';
-  let lastError = null; // { code, error }
-  let lastResult = null; // 最近一次更新的结构化结果（给诊断 / 状态用）
+  let updateState = null; // { phase, ctx, startedAt, result|null }
+  let checkPhase = 'idle'; // 仅用于「检查」这条线（idle/checking/available/latest/failed）
+  let lastError = null; // { code, error } —— 检查或更新的最近一次失败
 
   function currentVersionInfo(force = false) {
     if (typeof readVersion !== 'function') return { value: null, verification: 'unchecked' };
@@ -156,7 +167,7 @@ export function createPiUpdate({
   function payload(extra = {}) {
     const base = {
       ok: true,
-      phase,
+      phase: checkPhase,
       currentVersion: null,
       latestVersion: null,
       packageName: null,
@@ -173,23 +184,77 @@ export function createPiUpdate({
   }
 
   /**
+   * 更新自身的状态负载。**GET 在更新期间与更新终态都必须走这里。**
+   *
+   * - 运行中：`running:true` + 真实相位（updating / verifying / restarting），
+   *   版本沿用本次 update 的 context —— 让轮询能一直跟到结束。
+   * - 终态：成功回 `latest` + `installedVersion`；失败回 `failed` + errorCode，
+   *   两者都 `updateAvailable:false`（当前状态已经没有待更新的东西，
+   *   或者已经失败 —— 都不能再显示「更新到 x」）。
+   */
+  function updateStatusPayload() {
+    const st = updateState;
+    const ctx = st ? st.ctx : null;
+    const res = st ? st.result : null;
+    if (updateInflight) {
+      return payload({
+        phase: (st && st.phase) || 'updating',
+        currentVersion: ctx ? ctx.currentVersion : null,
+        latestVersion: ctx ? ctx.latestVersion : null,
+        packageName: PI_PACKAGE,
+        updateAvailable: true,
+        canUpdate: false,
+        verification: (ctx && ctx.verification) || 'unchecked',
+        reason: null,
+        cached: false,
+        running: true,
+      });
+    }
+    const failed = Boolean(res && res.ok === false);
+    return payload({
+      ok: !failed,
+      phase: failed ? 'failed' : 'latest',
+      currentVersion: (res && (failed ? res.currentVersion : res.installedVersion)) || null,
+      latestVersion: res ? res.latestVersion : null,
+      packageName: PI_PACKAGE,
+      updateAvailable: false,
+      canUpdate: false,
+      verification: (res && res.verification) || 'unchecked',
+      reason: null,
+      // 这不是「检查缓存」，是刚刚真的跑完的更新结果
+      cached: false,
+      running: false,
+      ...(res && res.installedVersion ? { installedVersion: res.installedVersion } : {}),
+      ...(failed ? { errorCode: res.code, error: res.error } : {}),
+    });
+  }
+
+  /**
    * 检查有没有新版本。**单飞 + TTL 缓存**：并发调用只会打一次公网，
    * 失败一律不缓存（下次仍可重试），且永不抛。
+   *
+   * ⚠️ 只有「没有任何更新状态」或调用方**显式 force**（用户点「检查 Pi 更新」）
+   * 时才会走公网检查。更新中 / 更新终态一律回 updateStatusPayload()。
    */
   function readStatus({ force = false } = {}) {
+    if (updateInflight || (updateState && !force)) {
+      return Promise.resolve(updateStatusPayload());
+    }
+    /* 显式 force = 用户主动要一次新检查：这时才允许把终态覆盖掉。 */
+    if (force) updateState = null;
     if (isOffline(env)) {
-      phase = phase === 'failed' ? 'failed' : phase;
+      checkPhase = checkPhase === 'failed' ? 'failed' : checkPhase;
       return Promise.resolve(payload({ ok: false, code: 'offline', error: '离线模式：已跳过 Pi 版本检查', errorCode: 'offline' }));
     }
     if (!doFetch) {
       return Promise.resolve(payload({ ok: false, error: '当前环境没有可用的 fetch', errorCode: 'no-fetch' }));
     }
-    if (cache && !force && now() - cache.at < ttlMs) {
-      return Promise.resolve({ ...cache.payload, cached: true });
+    if (checkCache && !force && now() - checkCache.at < ttlMs) {
+      return Promise.resolve({ ...checkCache.payload, cached: true });
     }
     if (checkInflight) return checkInflight;
 
-    phase = 'checking';
+    checkPhase = 'checking';
     checkInflight = (async () => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -208,13 +273,13 @@ export function createPiUpdate({
       } catch (err) {
         clearTimeout(timer);
         const code = err && err.name === 'AbortError' ? 'timeout' : 'network';
-        phase = 'failed';
+        checkPhase = 'failed';
         lastError = { code, error: code === 'timeout' ? '检查超时' : '网络不可用' };
         return payload({ ok: false, errorCode: code, error: lastError.error, phase: 'failed' });
       }
       clearTimeout(timer);
       if (!res || !res.ok) {
-        phase = 'failed';
+        checkPhase = 'failed';
         const code = 'http-error';
         lastError = { code, error: `检查失败（HTTP ${res ? res.status : '?'}）` };
         return payload({ ok: false, errorCode: code, error: lastError.error, phase: 'failed' });
@@ -223,21 +288,21 @@ export function createPiUpdate({
       try {
         body = await res.json();
       } catch {
-        phase = 'failed';
+        checkPhase = 'failed';
         lastError = { code: 'invalid-response', error: '检查响应不是合法 JSON' };
         return payload({ ok: false, errorCode: 'invalid-response', error: lastError.error, phase: 'failed' });
       }
       /* 形状校验：ok / version / packageName 三者都要对。
        * packageName 陌生 → 直接判失败，**绝不**据此执行更新。 */
       if (!body || body.ok !== true || !isVersionText(body.version) || typeof body.packageName !== 'string') {
-        phase = 'failed';
+        checkPhase = 'failed';
         lastError = { code: 'invalid-response', error: '检查响应形状不认识' };
         return payload({ ok: false, errorCode: 'invalid-response', error: lastError.error, phase: 'failed' });
       }
       const packageName = body.packageName;
       const latestVersion = body.version.trim();
       if (packageName !== PI_PACKAGE) {
-        phase = 'failed';
+        checkPhase = 'failed';
         lastError = { code: 'foreign-package', error: '官方 endpoint 报的是另一个包，已忽略' };
         return payload({ ok: false, errorCode: 'foreign-package', error: lastError.error, phase: 'failed' });
       }
@@ -255,8 +320,8 @@ export function createPiUpdate({
         reason: !cur.value ? 'version-unknown' : (!updateAvailable ? 'latest' : (target.ok ? null : target.code)),
         checkedAt: new Date(now()).toISOString(),
       });
-      phase = ok.phase;
-      cache = { at: now(), payload: ok };
+      checkPhase = ok.phase;
+      checkCache = { at: now(), payload: ok };
       return { ...ok, cached: false };
     })().finally(() => {
       checkInflight = null;
@@ -306,8 +371,14 @@ export function createPiUpdate({
     }
     if (isOffline(env)) return fail('offline', '离线模式：不会执行 Pi 更新');
 
-    /* latest 必须重新确认，或用仍有效的可信缓存 —— 不采信前端传来的目标版本。 */
-    const status = await readStatus({});
+    /* latest 必须重新确认，或用仍有效的可信缓存 —— 不采信前端传来的目标版本。
+     *
+     * 特例：上一次更新**失败**了（终态 failed）时，用户再点一次「更新」是明确的
+     * 主动动作 —— 这时允许做一次新检查（同时把失败的终态替换掉）。**轮询的 GET
+     * 不会这么做**（见 readStatus 的 force 语义），所以失败不会在轮询中被悄悄
+     * 覆盖成 available。成功终态则照常走 no-update：已经是最新了。 */
+    const failedTerminal = Boolean(updateState && updateState.result && updateState.result.ok === false);
+    const status = await readStatus({ force: failedTerminal });
     if (!status || status.ok !== true) {
       return fail((status && status.errorCode) || 'check-failed', (status && status.error) || '无法确认最新版本');
     }
@@ -337,24 +408,44 @@ export function createPiUpdate({
     if (!target.ok) {
       return fail('unsupported', '当前这份 Pi 无法通过官方 self-update 更新（没有证明到它的官方安装入口）');
     }
-    return { ok: true, ctx: { currentVersion, latestVersion, entry: target.entry } };
+    return {
+      ok: true,
+      ctx: {
+        currentVersion,
+        latestVersion,
+        entry: target.entry,
+        /* 目标版本在兼容矩阵里核过没有 —— 一路带到终态，界面据此显示未验收警告。 */
+        verification: status.verification || 'unchecked',
+      },
+    };
   }
 
   /** 真正执行更新（会被 prepare 已通过的 ctx 调用；也直接给测试用）。 */
   async function execute(ctx) {
     /* 固定参数，只此一份。**没有** --all / --extensions / --models。 */
     const args = ['update', '--self'];
+    const setPhase = (p) => {
+      if (updateState) updateState.phase = p;
+    };
+    /* 暂停 bridge。**超时不算已停止**：`pause-timeout` 意味着旧 Pi 进程还活着，
+     * 这时绝不能去替换它的运行时文件，所以直接放弃，一次 updater 都不跑。 */
     const pause = typeof pauseBridge === 'function' ? pauseBridge('pi-update') : { ok: true };
     const paused = await Promise.resolve(pause).catch(() => ({ ok: false, code: 'pause-failed' }));
     if (paused && paused.ok === false) {
-      phase = 'failed';
-      const code = paused.code === 'already-in-maintenance' ? 'update-running' : 'pause-failed';
-      lastError = { code, error: '无法暂停 Pi 进程，已放弃更新' };
-      return fail(code, lastError.error);
+      const code = paused.code === 'already-in-maintenance' ? 'update-running'
+        : paused.code === 'pause-timeout' ? 'pause-timeout'
+          : 'pause-failed';
+      lastError = {
+        code,
+        error: code === 'pause-timeout'
+          ? '旧 Pi 进程在超时前没有退出，已放弃更新（不会在它还活着时替换运行时）'
+          : '无法暂停 Pi 进程，已放弃更新',
+      };
+      return fail(code, lastError.error, { currentVersion: ctx.currentVersion, latestVersion: ctx.latestVersion });
     }
     let result;
     try {
-      phase = 'updating';
+      setPhase('updating');
       let raw;
       try {
         /* entry 一路带过来：**只解析一次**，保证「闸门检查的那份 pi」与
@@ -368,11 +459,10 @@ export function createPiUpdate({
           : raw && raw.spawnFailed ? 'update-spawn-failed'
             : 'update-failed';
         lastError = { code, error: sanitizeLine((raw && (raw.error || raw.stderr)) || '官方 updater 没有成功结束') };
-        phase = 'failed';
         result = fail(code, lastError.error, { currentVersion: ctx.currentVersion, latestVersion: ctx.latestVersion });
       } else {
         /* 退出码 0 ≠ 完成：清缓存 → 用**同一个 launch identity** 重新读版本。 */
-        phase = 'verifying';
+        setPhase('verifying');
         if (typeof invalidateCaches === 'function') {
           try {
             invalidateCaches();
@@ -387,14 +477,13 @@ export function createPiUpdate({
             code: 'verify-failed',
             error: `更新后读到的仍是 ${installedVersion || '未知版本'}，没有变成 ${ctx.latestVersion}`,
           };
-          phase = 'failed';
           result = fail('verify-failed', lastError.error, {
             currentVersion: ctx.currentVersion,
             latestVersion: ctx.latestVersion,
             installedVersion,
           });
         } else {
-          phase = 'restarting';
+          setPhase('restarting');
           result = {
             ok: true,
             phase: 'latest',
@@ -415,10 +504,25 @@ export function createPiUpdate({
         }
       }
     }
-    cache = null; // 版本变了，检查缓存作废
-    phase = result.ok ? 'latest' : 'failed';
-    lastResult = result;
+    checkCache = null; // 版本可能变了，检查缓存作废
+    /* 终态写进 updateState（**不是**检查缓存）：GET 会一直回它，直到用户显式
+     * 点「检查 Pi 更新」（force）为止 —— 轮询不会把失败/成功覆盖成 available。 */
+    if (updateState) {
+      updateState.phase = result.ok ? 'latest' : 'failed';
+      updateState.result = result;
+    }
+    if (result.ok !== true) lastError = { code: result.code, error: result.error };
     return result;
+  }
+
+  /** 起一次更新：把检查缓存让位给执行状态，然后后台跑。 */
+  function beginUpdate(ctx) {
+    checkCache = null;
+    updateState = { phase: 'updating', ctx, startedAt: now(), result: null };
+    updateInflight = execute(ctx).finally(() => {
+      updateInflight = null;
+    });
+    return updateInflight;
   }
 
   /** 给 handle/测试用：prepare + execute，全程可 await。 */
@@ -426,10 +530,7 @@ export function createPiUpdate({
     const pre = await prepare(body);
     if (!pre.ok) return pre;
     if (updateInflight) return fail('update-running', 'Pi 更新已经在进行中');
-    updateInflight = execute(pre.ctx).finally(() => {
-      updateInflight = null;
-    });
-    return updateInflight;
+    return beginUpdate(pre.ctx);
   }
 
   /** 给 HTTP 用：确认/闸门都过了就**后台**跑，立刻回 202 语义的响应，前端轮询相位。 */
@@ -437,10 +538,7 @@ export function createPiUpdate({
     const pre = await prepare(body);
     if (!pre.ok) return pre;
     if (updateInflight) return fail('update-running', 'Pi 更新已经在进行中');
-    updateInflight = execute(pre.ctx).finally(() => {
-      updateInflight = null;
-    });
-    phase = 'updating';
+    beginUpdate(pre.ctx);
     return { ok: true, accepted: true, phase: 'updating', latestVersion: pre.ctx.latestVersion, currentVersion: pre.ctx.currentVersion };
   }
 
@@ -472,25 +570,46 @@ export function createPiUpdate({
     startUpdate,
     isRunning: () => Boolean(updateInflight),
     reset: () => {
-      cache = null;
+      checkCache = null;
+      checkInflight = null;
+      updateState = null;
       lastError = null;
-      lastResult = null;
-      if (!updateInflight) phase = 'idle';
+      if (!updateInflight) checkPhase = 'idle';
     },
-    /** 诊断/状态条用：**不发请求**，只看缓存与最近一次结果。 */
-    snapshot: () => ({
-      phase,
-      currentVersion: (cache && cache.payload.currentVersion) || (lastResult && lastResult.installedVersion) || null,
-      latestVersion: (cache && cache.payload.latestVersion) || (lastResult && lastResult.latestVersion) || null,
-      updateAvailable: Boolean(cache && cache.payload.updateAvailable),
-      verification: (cache && cache.payload.verification) || 'unchecked',
-      canUpdate: Boolean(cache && cache.payload.canUpdate),
-      reason: (cache && cache.payload.reason) || null,
-      running: Boolean(updateInflight),
-      cached: Boolean(cache),
-      errorCode: lastError ? lastError.code : null,
-    }),
-    _internals: { payload, prepare, execute, resolveTarget, isOffline: () => isOffline(env) },
+    /**
+     * 诊断/状态条用：**不发请求、不触发检查**，只看当前状态。
+     * 更新中/终态优先（那才是「Pi 现在到底怎么样」），否则回最近一次检查缓存。
+     */
+    snapshot: () => {
+      if (updateInflight || updateState) {
+        const s = updateStatusPayload();
+        return {
+          phase: s.phase,
+          currentVersion: s.currentVersion || null,
+          latestVersion: s.latestVersion || null,
+          updateAvailable: Boolean(s.updateAvailable),
+          verification: s.verification || 'unchecked',
+          canUpdate: Boolean(s.canUpdate),
+          reason: s.reason || null,
+          running: Boolean(s.running),
+          cached: false,
+          errorCode: s.errorCode || null,
+        };
+      }
+      return {
+        phase: checkPhase,
+        currentVersion: (checkCache && checkCache.payload.currentVersion) || null,
+        latestVersion: (checkCache && checkCache.payload.latestVersion) || null,
+        updateAvailable: Boolean(checkCache && checkCache.payload.updateAvailable),
+        verification: (checkCache && checkCache.payload.verification) || 'unchecked',
+        canUpdate: Boolean(checkCache && checkCache.payload.canUpdate),
+        reason: (checkCache && checkCache.payload.reason) || null,
+        running: false,
+        cached: Boolean(checkCache),
+        errorCode: lastError ? lastError.code : null,
+      };
+    },
+    _internals: { payload, updateStatusPayload, prepare, execute, resolveTarget, isOffline: () => isOffline(env) },
   };
 }
 

@@ -66,6 +66,7 @@ import * as piCompatMatrix from './server/pi-compat-matrix.js';
 import { createSkills } from './server/skills.js';
 import { createUpdateCheck } from './server/update-check.js';
 import { createPiUpdate } from './server/pi-update.js';
+import { createPiActivity } from './server/pi-activity.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
 import { createScheduler } from './server/planner/scheduler.js';
@@ -74,7 +75,7 @@ import { createPlanner } from './server/planner/index.js';
 /* P9：独立验证要真的跑一条命令，而全项目唯一的 spawn 出口在 cli.js。
  * planner/ 下的模块不许跨目录 import（tests/modules.cjs 的守卫），
  * 所以执行能力**在这里注入**过去 —— 与 scheduler 拿 gitStatus 是同一种装配。 */
-import { runShellCommand, runCli } from './server/agents/cli.js';
+import { runShellCommand, runCli, killTree } from './server/agents/cli.js';
 import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
@@ -248,13 +249,19 @@ let extensionRegistryRef = null;
  * 回调在那之前就装好了 —— 所以同样用「先声明、运行期回填」的引用占位。 */
 let probesRef = null;
 /* Pi 更新的后端闸门要用的两个「后端自己的」忙信号（不信前端的 disabled）：
- *   - turnActive：从 pi 自己流出来的事件推出来的「有没有正在生成的回合」
+ *   - piActivity：主会话有没有在干活（规则在 server/pi-activity.js —— 按 Pi 1.0.0
+ *     的真实事件语义：agent_start → agent_settled，agent_end **不算结束**；
+ *     以及「prompt 已提交、agent_start 还没到」的竞态）
  *   - cliInFlight：正在跑的 Pi CLI 动作（MCP add/remove/login/logout 等）
  * 两者都只增删计数，不读任何用户数据。 */
-let turnActive = false;
+const piActivity = createPiActivity();
 let cliInFlight = 0;
 const rpc = createRpcBridge({
   runtime,
+  /* Pi 更新前的暂停要确认**整棵进程树**都退出了（Windows 上经 npm .cmd 启动时，
+   * 只 kill 外层包装不足以说明 pi 本体已停）。原语在这里注入：rpc-bridge 自己
+   * 不认识业务模块（有架构守卫钉着），复用的是 agents/cli.js 里验证过的 killTree。 */
+  killProcessTree: killTree,
   publish: (event) => {
     extensionRegistryRef?.observe(event);
     /* bridge 生命周期一变，runtime probe（RPC / 工具事件 / 原生 MCP）就没有意义了 ——
@@ -262,13 +269,10 @@ const rpc = createRpcBridge({
     if (event?.type === 'bridge_status'
       && ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(event.state)) {
       probesRef?.reset();
-      if (event.state === 'maintenance') turnActive = false;
     }
-    /* 回合是否还在生成：以 pi 自己的事件为准（assistant 的 message_start 开始，
-     * agent_end / agent_settled 结束）。保守取到 agent_end —— 中间夹着工具调用。 */
-    if (event?.type === 'message_start' && event.message?.role === 'assistant') turnActive = true;
-    else if (event?.type === 'agent_end' || event?.type === 'agent_settled') turnActive = false;
-    else if (event?.type === 'bridge_status' && ['exited', 'error', 'no-project'].includes(event.state)) turnActive = false;
+    /* 主会话活动状态：真实事件语义见 server/pi-activity.js 的文件头。
+     * 这里只转发，规则只有一份（可测）。 */
+    piActivity.observe(event);
     sse.publish(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
       : event);
@@ -607,7 +611,9 @@ const piUpdate = createPiUpdate({
     probesRef?.reset();
   },
   busyReason: () => {
-    if (turnActive) return { code: 'busy-turn', error: '当前回答仍在生成，请先停止' };
+    /* 主会话活动（真实事件语义）—— 规则在 pi-activity.js。 */
+    const turn = piActivity.busy();
+    if (turn) return turn;
     if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
     if (plannerRef) {
       /* 规则只有一份（planner 的 projectSwitchBlockReason：计划在跑 / 独立验证在跑） */
@@ -621,7 +627,17 @@ const piUpdate = createPiUpdate({
 const route = createRouter({
   auth,
   sse,
-  rpc,
+  /* 给 router 的 rpc 包一层：**命令被 bridge 接受之后**通知活动状态。
+   * 这是「prompt 已经发出去、agent_start 还没到」那个窗口的唯一来源 ——
+   * 只靠 pi 的事件会在这段窗口里误判成空闲，从而允许更新。
+   * send 抛错（桥没接受）时不标记：没发出去的命令不该让人以为在跑。 */
+  rpc: {
+    ...rpc,
+    send: (cmd) => {
+      rpc.send(cmd);
+      piActivity.noteCommandAccepted(cmd);
+    },
+  },
   providers,
   projects,
   projectConfig,
