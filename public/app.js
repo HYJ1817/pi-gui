@@ -248,8 +248,12 @@ function syncNotice() {
     hasProject: S.hasProject,
     compat: S.compat,
   });
-  if (!model) return hideNotice();
-  return showNotice({ ...model, actions: noticeActions(model.actions) });
+  if (!model) {
+    hideNotice();
+    return false;
+  }
+  showNotice({ ...model, actions: noticeActions(model.actions) });
+  return true;
 }
 
 function onBridge(evt) {
@@ -327,9 +331,12 @@ function onBridge(evt) {
       bridgeHintText = evt.hint || '';
       const message = [evt.error, evt.hint].filter(Boolean).join('\n');
       setStatus(message);
-      if (message !== lastBridgeError) toast(message, 'error');
+      /* P24：这一条现在有**常驻**状态条了（底部连接指示 + 输入区也各有一份说明）。
+       * 再弹一个一次性 toast 就是同一件事说三遍 —— 只在没有常驻条时兜底提醒。 */
+      const permanent = syncNotice();
+      if (!permanent && message !== lastBridgeError) toast(message, 'error');
       lastBridgeError = message;
-      return syncNotice();
+      return;
     }
     default:
       return;

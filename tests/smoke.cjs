@@ -7599,8 +7599,11 @@ staticCheck();
 
     /* ---------- 状态条 ---------- */
     window.hideNotice();
+    $('toasts').innerHTML = '';
     es.emit({ type: 'bridge_status', state: 'error', bridgeRun: (window.S.bridgeRun || 1) + 1, error: '无法启动 pi：spawn pi ENOENT', hint: '确认 pi 已安装并在 PATH 中，或用环境变量 PI_BIN 指定完整路径。' });
     await sleep(30);
+    check('P24 状态条：同一条失败不再同时弹 toast（同一件事不说三遍）', () =>
+      $('toasts').textContent.includes('ENOENT') === false);
     check('P24 状态条：pi 启动失败时常驻显示 error + 后可执行的下一步', () => {
       const box = $('stageNotice');
       return !box.hidden && box.textContent.includes('pi 启动失败')
