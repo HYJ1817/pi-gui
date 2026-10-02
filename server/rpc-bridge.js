@@ -108,6 +108,24 @@ export function createRpcBridge({
   let bridgeRun = 0;
   let crashStreak = 0;
 
+  /* ---------- 维护暂停（Pi 自更新用） ----------
+   *
+   * 「更新 Pi」要替换正在运行的 runtime 文件，所以必须先把 bridge 停下来，
+   * 而且**停下来的这段时间不能被自动重启逻辑拉起来**。不能借用
+   * `runtime.shuttingDown` —— 那个语义是「Pi GUI 正在退出」，而这里是
+   * 短时维护，进程还活着、还要 resume。
+   *
+   * `maintenance` 非 null 时：
+   *   - start() 直接返回（不会拉起新 child）
+   *   - send() 抛「维护中」、request() 直接回 null（不再接受新命令）
+   *   - restart() 变成空操作（用户点重启不该插进维护流程）
+   *   - child exit **不进** 自动重启分支，也不动 crashStreak（维护不是崩溃）
+   * resume 之后一切回到原样，start() 只被调用一次。 */
+  let maintenance = null; // { reason, at } | null
+  /* kill 是异步的：resume 可能早于 exit 回调到达。这时标记一下，
+   * 由 onStopped 的维护分支负责真正启动 —— 保证「只启动一次」。 */
+  let resumeRequested = false;
+
   /* 挂起的请求：id → { resolve, timer }。
    *
    * id 由本模块自己发号（从 1 递增），与前端发命令用的 id 空间**不重叠**
@@ -179,6 +197,8 @@ export function createRpcBridge({
 
   function start() {
     if (runtime.isShuttingDown() || pi) return;
+    /* 维护中不拉起新 child —— resumeFromMaintenance() 才会。 */
+    if (maintenance) return;
     if (restartTimer) {
       clearTimeout(restartTimer);
       restartTimer = null;
@@ -304,6 +324,23 @@ export function createRpcBridge({
       // 进程没了，挂起的请求不可能再有应答 —— 立刻放掉，别让调用方干等到超时
       settleAllPending(null);
       publish({ type: 'bridge_status', state: 'exited', code, signal, cwd, bridgeRun: run });
+      /* 维护分支：**不自动重启，也不动 crashStreak**。
+       * 维护是刻意停机，不是崩溃 —— 走得越少，越不会把 backoff 状态搞脏。 */
+      if (maintenance) {
+        publish({
+          type: 'bridge_status',
+          state: 'maintenance',
+          phase: 'stopped',
+          reason: maintenance.reason,
+          cwd,
+          bridgeRun: run,
+        });
+        if (resumeRequested) {
+          resumeRequested = false;
+          start();
+        }
+        return;
+      }
       if (!runtime.isShuttingDown()) {
         const deliberate = restartRequested;
         crashStreak = deliberate || Date.now() - startedAt >= 5000 ? 0 : crashStreak + 1;
@@ -326,6 +363,8 @@ export function createRpcBridge({
     if (!runtime.getCurrentCwd()) {
       throw new Error('还没有选择项目：先在左侧「添加文件夹」选一个目录，再发送消息。');
     }
+    /* 维护中不接受新命令 —— 否则命令会写进一个正在被替换的 runtime。 */
+    if (maintenance) throw new Error('Pi 正在更新，完成后会自动恢复；稍后再试。');
     if (restartRequested) throw new Error('pi 正在重启，请稍后重试');
     if (!pi || !pi.stdin || pi.stdin.destroyed) {
       throw new Error('pi 子进程未运行');
@@ -347,7 +386,7 @@ export function createRpcBridge({
    * 注意这里**不**校验 cmd.id —— 由本模块发号，调用方传的 id 会被覆盖。 */
   function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
     return new Promise((resolve) => {
-      if (!runtime.getCurrentCwd() || restartRequested || !pi || !pi.stdin || pi.stdin.destroyed) {
+      if (!runtime.getCurrentCwd() || restartRequested || maintenance || !pi || !pi.stdin || pi.stdin.destroyed) {
         resolve(null);
         return;
       }
@@ -376,6 +415,8 @@ export function createRpcBridge({
 
   /** 重启 pi 子进程 —— 用于让它重新读取 ~/.pi/agent/models.json */
   function restart() {
+    /* 维护期间用户点「重启 Pi」不该插进维护流程：更新完成后会自己 resume。 */
+    if (maintenance) return;
     // 重启等于把挂起请求的应答机会掐掉，先放掉再动进程
     settleAllPending(null);
     if (pi) {
@@ -423,6 +464,104 @@ export function createRpcBridge({
     }
   }
 
+  /* ---------- 维护暂停 / 恢复（Pi 自更新专用） ---------- */
+
+  /**
+   * 暂停 bridge，等当前 pi 子进程真的退出。
+   *
+   * 语义（Pi 更新流程依赖这几条，改动前先读文件头那段说明）：
+   *   - 不再接受新命令（send 抛、request 回 null）
+   *   - 挂起请求立刻安全 settle（不会有人干等到超时）
+   *   - 当前 child 退出，**且 exit 回调不自动重启**
+   *   - 发布 `bridge_status{state:'maintenance', phase:'pausing'|'stopped'}`
+   *   - crashStreak 原样保留（维护不是崩溃）
+   *
+   * **防重复/嵌套**：已经在维护中就直接回 `{ok:false, code:'already-in-maintenance'}`。
+   * 调用方（`server/pi-update.js`）也有一把自己的锁，两层都不允许并发的维护。
+   *
+   * @returns {Promise<{ok:boolean, code?:string, stopped?:boolean}>} 进程已退出才 resolve
+   */
+  function pauseForMaintenance(reason = 'pi-update') {
+    if (maintenance) return Promise.resolve({ ok: false, code: 'already-in-maintenance' });
+    const cwd = runtime.getCurrentCwd();
+    maintenance = { reason: String(reason).slice(0, 80), at: Date.now() };
+    resumeRequested = false;
+    // 挂起请求先放掉：维护期间不可能再有应答
+    settleAllPending(null);
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
+    publish({
+      type: 'bridge_status',
+      state: 'maintenance',
+      phase: 'pausing',
+      reason: maintenance.reason,
+      cwd,
+      bridgeRun,
+    });
+
+    /* 没有 child（本来就没起来 / 没有项目）→ 已经处于「停着」的状态。
+     * 这时 start() 已经被 maintenance 挡住，直接算停好了。 */
+    if (!pi) return Promise.resolve({ ok: true, stopped: false });
+
+    const child = pi;
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (stopped) => {
+        if (done) return;
+        done = true;
+        resolve({ ok: true, stopped });
+      };
+      /* 以 exit 为准。给一个兜底定时器：万一 exit 事件丢了（子进程已经被
+       * 别的东西收走），也不能把更新流程永久卡死。 */
+      const timer = setTimeout(() => finish(true), 10000);
+      if (typeof timer.unref === 'function') timer.unref();
+      child.once('exit', () => {
+        clearTimeout(timer);
+        finish(true);
+      });
+      try {
+        child.stdin.end();
+      } catch {
+        /* noop */
+      }
+      try {
+        child.kill();
+      } catch {
+        /* noop */
+      }
+    });
+  }
+
+  /**
+   * 维护结束，恢复正常启动。**只启动一次**：
+   *   - 不在维护中 → `{ok:false, code:'not-paused'}`（不会顺手把 pi 拉起来）
+   *   - kill 是异步的、exit 还没到 → 交给 onStopped 的维护分支去 start
+   * 失败路径也必须调它（见 pi-update 的 finally），否则 GUI 会永久停在维护态。
+   */
+  function resumeFromMaintenance() {
+    if (!maintenance) return { ok: false, code: 'not-paused' };
+    maintenance = null;
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
+    if (pi) {
+      // 进程还在：等它退出的那个回调来启动（onStopped 里看 resumeRequested）
+      resumeRequested = true;
+      return { ok: true, deferred: true };
+    }
+    resumeRequested = false;
+    start();
+    return { ok: true, deferred: false };
+  }
+
+  /** 维护中？给 /api/status、诊断与前端状态条用。 */
+  function maintenanceState() {
+    return maintenance ? { reason: maintenance.reason, at: maintenance.at } : null;
+  }
+
   /** /api/status 要的那几个字段。
    * args 每次现算（含项目配置贡献的那部分），与启动时一致 —— 除非两次之间
    * 用户改了项目配置，那种情况下这里给的是「按当前配置启动会是哪些参数」，
@@ -438,8 +577,11 @@ export function createRpcBridge({
       // 前端用它决定「显示引导还是显示输入框」。cwd 为空就等价于没有项目，
       // 但显式给一个字段更不容易被将来的改动弄丢。
       hasProject: Boolean(cwd),
+      /* 维护态必须能从轮询里看出来：SSE 不重放，刷新页面之后前端就只剩
+       * 这一个来源了（否则界面会显示成「pi 未运行」）。 */
+      maintenance: maintenanceState(),
     };
   }
 
-  return { start, send, request, restart, stop, getState, buildArgs };
+  return { start, send, request, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState };
 }

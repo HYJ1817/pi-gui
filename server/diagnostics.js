@@ -89,6 +89,8 @@ export function createDiagnostics({
   compatMatrix = null,
   mcpNative = null,
   extensions = null,
+  /* Pi 运行时更新：**只读快照**（不发请求）。不注入时这一块是 null。 */
+  piUpdate = null,
   dataDir,
   version,
   env = process.env,
@@ -280,6 +282,31 @@ export function createDiagnostics({
       }
     }
 
+    /* Pi 运行时更新的可得性：**只读快照**，一个字节的 command / args / 路径 / 
+     * updater 原始输出都不进来（版本号与状态是公开信息，其余不是）。 */
+    let piUpdateInfo = null;
+    if (typeof piUpdate === 'function') {
+      try {
+        const s = piUpdate();
+        if (s && typeof s === 'object') {
+          piUpdateInfo = {
+            phase: typeof s.phase === 'string' ? s.phase : null,
+            currentVersion: typeof s.currentVersion === 'string' ? s.currentVersion : null,
+            latestVersion: typeof s.latestVersion === 'string' ? s.latestVersion : null,
+            updateAvailable: Boolean(s.updateAvailable),
+            canUpdate: Boolean(s.canUpdate),
+            verification: typeof s.verification === 'string' ? s.verification : null,
+            reason: typeof s.reason === 'string' ? s.reason : null,
+            running: Boolean(s.running),
+            cached: Boolean(s.cached),
+            errorCode: typeof s.errorCode === 'string' ? s.errorCode : null,
+          };
+        }
+      } catch {
+        piUpdateInfo = null;
+      }
+    }
+
     const raw = {
       schemaVersion: 1,
       generatedAt: now().toISOString(),
@@ -309,6 +336,12 @@ export function createDiagnostics({
         bridgeRun: Number.isFinite(bridge.bridgeRun) ? bridge.bridgeRun : 0,
         hasProject: Boolean(bridge.hasProject ?? cwd),
         args: Array.isArray(bridge.args) ? bridge.args : [],
+        /* Pi 自更新的短时维护态（只给「是不是在维护 + 原因」，没有时间戳之外的细节）。 */
+        maintenance: bridge.maintenance && typeof bridge.maintenance === 'object'
+          ? {
+            reason: typeof bridge.maintenance.reason === 'string' ? bridge.maintenance.reason : null,
+          }
+          : null,
       },
       pi: {
         configuredBin: safeBasename(env.PI_BIN || 'pi'),
@@ -346,6 +379,7 @@ export function createDiagnostics({
       matrix: matrixInfo,
       /* P23：关键 Extension 的版本（有可靠 metadata 时）。 */
       extensions: extensionInfo,
+      piUpdate: piUpdateInfo,
       checks: [
         { id: 'data-readable', ok: dataReadable },
         { id: 'data-writable', ok: dataWritable },

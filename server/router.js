@@ -96,6 +96,7 @@ export function createRouter({
   uploads,
   diagnostics,
   updateCheck,
+  piUpdate = null,
   quota = null,
   compat = null,
 }) {
@@ -158,6 +159,13 @@ export function createRouter({
     if (url.pathname === '/api/update') {
       if (!updateCheck) return json(res, 503, { ok: false, error: '更新检查未启用' });
       return updateCheck.handle(req, res, url);
+    }
+    /* Pi 运行时更新（Built-in Pi Updater）。**与上面那条完全分离**：
+     * 那个是「Pi GUI 自己要不要升级」，这个是「它驱动的 pi 要不要升级」。
+     * 同样必须排在下面 405 兜底之前 —— 真正的更新是 POST。 */
+    if (url.pathname === '/api/pi-update') {
+      if (!piUpdate) return json(res, 503, { ok: false, code: 'not-wired', error: 'Pi 更新模块未装配' });
+      return piUpdate.handle(req, res, url, json);
     }
     // 必须排在下面那条前缀匹配之前 —— 否则 /api/providers/models 会被
     // 当成「保存一个叫 models 的供应商」，而且前端拿不到任何报错。

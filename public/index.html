@@ -51,7 +51,10 @@
          不能只写在文档里。它们是**既有动作**的另一个入口，不是新功能。 -->
     <button type="button" role="menuitem" id="navPalette" title="打开命令面板">命令面板…</button>
     <button type="button" role="menuitem" id="navShortcutHelp" title="查看键盘快捷键">键盘快捷键…</button>
-    <button type="button" role="menuitem" id="navDiagnostics">诊断<span class="rp-dot" id="menuUpdateDot" hidden></span></button>
+    <!-- 两个小点并排：一个是 Pi GUI 自己（update.js），一个是 Pi 运行时（pi-update.js）。
+         放在菜单项里而不是侧栏那颗 More 按钮上，是因为 `.global-rail .rp-dot` 是绝对定位的
+         （top/right 都固定），两颗点会完全重叠、谁也看不见；菜单里的点按文档流排。 -->
+    <button type="button" role="menuitem" id="navDiagnostics">诊断<span class="rp-dot" id="menuUpdateDot" hidden></span><span class="rp-dot" id="piUpdateDot" hidden></span></button>
     <button type="button" role="menuitem" id="navProviders">模型供应商<span class="rp-count" id="providerCount"></span></button>
   </div>
 

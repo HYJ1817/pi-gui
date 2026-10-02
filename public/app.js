@@ -70,6 +70,7 @@ import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions } 
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
+import { initPiUpdateAuto } from './pi-update.js';
 import { showChat } from './ui/workspace-surface.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
@@ -310,6 +311,16 @@ function onBridge(evt) {
     case 'exited':
       if (!lastBridgeError) setBridgeState('exited', `pi 已退出 (${evt.code ?? evt.signal ?? '?'})`);
       interruptActive();
+      return syncNotice();
+    case 'maintenance':
+      /* Pi 正在被官方 self-update 替换（`server/pi-update.js` 调了
+       * `rpc.pauseForMaintenance()`）。**这不是崩溃**：进程是我们自己停的，
+       * 停之前后端已经拒绝了新命令。
+       *
+       * 所以这里刻意**不**做「exited」那三件事：不清当前会话、不弹
+       * 「pi 已退出」、不把这一轮说成失败。只把状态条换成一句「正在更新」，
+       * 让用户知道为什么这会儿发不出消息。更新结束后端会推 ready。 */
+      setBridgeState('maintenance');
       return syncNotice();
     case 'restarting':
       setBridgeState('restarting');
@@ -1020,3 +1031,8 @@ loadStatus().then(() => {
  * 失败与无更新都完全静默，只有真的发现新版才给一次轻提示 ——
  * 不弹 Modal、不重复打扰。详见 public/update.js。 */
 initUpdateAuto();
+
+/* Pi 运行时（外部程序 pi）的版本检查：同样延迟、同样静默、同样只检查。
+ * **它只是检查** —— 真正的更新必须由用户在诊断面板里点、并再确认一次，
+ * 见 public/pi-update.js 的文件头。 */
+initPiUpdateAuto();

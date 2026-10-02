@@ -43,8 +43,9 @@ export function createBrowserObservation() {
   }
   function observe(event, generation, run) {
     snapshot(generation, run);
-    /* bridge 生命周期一变，旧 run 的观察就没有意义了。 */
-    if (event?.type === 'bridge_status' && ['starting', 'restarting', 'exited', 'error', 'no-project'].includes(event.state)) reset();
+    /* bridge 生命周期一变，旧 run 的观察就没有意义了。maintenance（Pi 正在被
+     * self-update 替换）同样是「那个 runtime 已经不在了」—— 只是它是计划内的。 */
+    if (event?.type === 'bridge_status' && ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(event.state)) reset();
     if (!/^tool_execution_(start|update|end)$/.test(event?.type || '') || event.bridgeRun !== run) return;
     const name = event.toolName;
     if (typeof name !== 'string' || !BROWSER_TOOLS.has(name)) return;

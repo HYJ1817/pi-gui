@@ -65,6 +65,29 @@ export const fetchProjects = () => getJSON('/api/projects');
  *  后端对并发请求做了 single-flight，所以连点也不会打出一串请求。 */
 export const fetchUpdate = (force = false) => getJSON('/api/update' + (force ? '?force=1' : ''));
 
+/** Pi 运行时更新（Built-in Pi Updater）。
+ *
+ *  与上面的 `fetchUpdate` 是**两件事**：那个问「Pi GUI 自己要不要升级」，
+ *  这个问「本机装着的那个 pi（外部程序）要不要升级」。后端也是两个模块、
+ *  两份缓存，互不复用 —— `pi-update` 与 `update` 在代码里必须分得清。
+ *
+ *  检查失败会带 `errorCode`（offline / network / timeout / invalid-response /
+ *  foreign-package），它**只影响这一块 UI**，不影响启动 / 聊天 / 其它面板。
+ *  `force` 只有用户主动点「检查 Pi 更新」时才用，绕过后端 30 分钟缓存。 */
+export const fetchPiUpdate = (force = false) => getJSON('/api/pi-update' + (force ? '?force=1' : ''));
+
+/** 启动 Pi 更新（写操作）。
+ *
+ *  body 只认这四个键（后端忽略其余一切，所以这里也**只发**这四个）：
+ *  `action:'update'` / `confirm:true` / 两个 expected 版本号。`__expectedCwd`
+ *  是「工作区没在切」的守卫（与 mcp-native 的 staleGuard 同一套）——
+ *  点按钮那一刻的 cwd 带上去，切了项目就让后端拒掉，而不是去替换正在换的 runtime。
+ *
+ *  **不接受任何执行参数**：没有 command、没有 args、没有 URL。后端跑什么
+ *  由它自己证明（官方包 + 官方入口），前端说什么都不算。 */
+export const postPiUpdate = (body) =>
+  sendJSON('/api/pi-update', { body: { ...body, __expectedCwd: S.cwd } });
+
 export const createProject = (path, name) => sendJSON('/api/projects', { body: { path, name } });
 export const deleteProject = (path) => sendJSON('/api/projects?path=' + encodeURIComponent(path), { method: 'DELETE' });
 export const activateProject = (path) => sendJSON('/api/projects/activate', { body: { path } });

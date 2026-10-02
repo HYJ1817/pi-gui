@@ -12,6 +12,7 @@
  */
 import { fetchDiagnostics } from './api.js';
 import { renderUpdateSection } from './update.js';
+import { renderPiUpdateSection } from './pi-update.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { driftSnapshot } from './schema-drift.js';
@@ -132,6 +133,23 @@ export function buildDiagnosticSummary(d, drift = []) {
   if (pi.launch) {
     push('启动入口', `${pi.launch.source || '未知'} · ${pi.launch.binName || '未知'}`
       + ` · 入口解析=${pi.launch.entryKnown ? '是' : '否'} · 包目录绑定=${pi.launch.packageDirKnown ? '是' : '否'}`);
+  }
+  /* Pi 运行时的更新状态（Built-in Pi Updater）。
+   * 与面板里那块说的是同一份快照 —— 摘要与面板**不许各说各的**，否则用户
+   * 贴出来的报告和技术支持看到的界面就是两回事。只有相位、版本号与状态码，
+   * 没有路径、没有 updater 输出（那些本来也不进快照）。 */
+  const pu = d.piUpdate;
+  if (pu) {
+    const bits = [pu.phase || '未知'];
+    if (pu.currentVersion || pu.latestVersion) {
+      bits.push(`${pu.currentVersion || '未知'} → ${pu.latestVersion || '未知'}`);
+    }
+    if (pu.updateAvailable) bits.push(pu.canUpdate ? '可自动更新' : `不可自动更新${pu.reason ? '（' + pu.reason + '）' : ''}`);
+    if (pu.running) bits.push('正在更新');
+    else if (pu.cached) bits.push('来自缓存');
+    if (pu.verification && pu.verification !== 'verified') bits.push(`未验收（${pu.verification}）`);
+    if (pu.errorCode) bits.push(`错误码 ${pu.errorCode}`);
+    push('Pi 更新', bits.join(' · '));
   }
 
   const c = d.compatibility;
@@ -379,6 +397,13 @@ function render(card, close, payload) {
    * 版本号由这里传进去（来自诊断快照的 app.version，后端 VERSION 是唯一真相），
    * 前端不硬编码。状态由 update.js 持有，所以关掉再打开面板状态不会丢。 */
   renderUpdateSection(body, d.app?.version);
+
+  /* ---------- Pi 运行时更新（Built-in Pi Updater） ----------
+   *
+   * 紧跟在 Pi GUI 自己的版本块后面，两块挨着看才不会混：
+   * 上面那个是「Pi GUI 要不要升级」，这个是「它驱动的 pi 要不要升级」。
+   * 当前版本用诊断快照里的 `pi.version` 兜底（同一个东西，后端是唯一真相）。 */
+  renderPiUpdateSection(body, d.pi?.version);
 
   const rows = node('div', 'stat-rows');
   rows.append(

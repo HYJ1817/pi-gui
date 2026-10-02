@@ -42,6 +42,16 @@ export const CONNECTION_STATES = Object.freeze({
     detail: '项目或配置变化后重新加载 pi；正在跑的那一轮会结束。',
     actions: ['diagnostics'],
   },
+  /* Pi 自更新的短时维护态（Built-in Pi Updater）。
+   * **不是崩溃**：进程是 GUI 自己停的，为的是让官方 updater 换掉 runtime 文件，
+   * 完成后会自动重启。所以 tone 是 busy 而不是 bad、只给诊断入口 ——
+   * 给「重启 Pi」会让人手动去打断一次正在进行的更新。 */
+  maintenance: {
+    tone: 'busy',
+    label: 'Pi 正在更新（短暂停机）',
+    detail: '官方 self-update 正在替换本机的 pi；更新期间发不出消息，完成后会自动重新启动。',
+    actions: ['diagnostics'],
+  },
   exited: {
     tone: 'bad',
     label: 'pi 已退出',
@@ -94,6 +104,18 @@ export function startupNotice(ctx = {}) {
         .filter(Boolean)
         .join('\n'),
       actions: ['restart', 'diagnostics'],
+    };
+  }
+  /* Pi 正在更新：常驻一句「在等什么」，但**语气是信息不是故障**
+   * （tone: info），也**不给「重启 Pi」** —— 那会打断正在进行的更新。
+   * 用户在这一刻最需要知道的是「不用管它，等一会儿就好」。 */
+  if (bridgeState === 'maintenance') {
+    return {
+      id: 'bridge-maintenance',
+      tone: 'info',
+      title: 'Pi 正在更新（短暂停机）',
+      detail: '官方 self-update 正在替换本机的 pi；更新期间发不出消息，完成后会自动重新启动。会话与草稿都还在。',
+      actions: ['diagnostics'],
     };
   }
   /* 兼容性问题只提示一次性的 toast 太轻：能力缺失是**持续**的，

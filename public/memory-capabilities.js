@@ -37,8 +37,9 @@ export function createMemoryObservation() {
   }
   function observe(event, generation, run) {
     snapshot(generation, run);
-    /* bridge 生命周期一变，旧 run 的观察就没有意义了。 */
-    if (event?.type === 'bridge_status' && ['starting', 'restarting', 'exited', 'error', 'no-project'].includes(event.state)) observed = {};
+    /* bridge 生命周期一变，旧 run 的观察就没有意义了。maintenance（Pi 正在被
+     * self-update 替换）同样是「那个 runtime 已经不在了」—— 只是它是计划内的。 */
+    if (event?.type === 'bridge_status' && ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(event.state)) observed = {};
     if (/^tool_execution_(start|update|end)$/.test(event?.type || '') && event.bridgeRun === run && MEMORY_TOOLS.includes(event.toolName)) {
       observed[event.toolName] = true;
     }

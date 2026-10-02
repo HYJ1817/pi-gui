@@ -27,6 +27,10 @@ export function setBridgeState(state, detail = '') {
     restarting: ['busy', '正在重启 pi…'],
     exited: ['bad', detail || 'pi 已退出'],
     error: ['bad', 'pi 启动失败'],
+    /* Pi 自更新的短时维护态（Built-in Pi Updater）。用 busy 而不是 bad：
+     * 这是**计划内**的停机，进程是 GUI 自己停的，完成后会自动重启 ——
+     * 标成红色会让人以为 pi 崩了，进而去点「重启 Pi」，反而打断更新。 */
+    maintenance: ['busy', 'Pi 正在更新（短暂停机）'],
   };
   const [kind, label] = labels[state] || ['', detail];
   setConn(kind, label);
@@ -47,13 +51,26 @@ export function setTitleText(t) {
  * 幂等：loadStatus / 增删项目后都会调，重复调用无副作用。 */
 export function applyProjectState() {
   const ready = S.hasProject;
-  const canUse = ready && !S.switching && S.bridgeState === 'ready';
+  /* 维护态（Pi 正在被 self-update 替换）**不是错误态**：进程是 GUI 自己停的，
+   * 完成后会自动重启，会话与草稿都还在。所以输入区不锁死 —— 让人能继续打字、
+   * 看得见自己写的内容，只是发送键按住（见 composer.js：它看 bridgeState），
+   * 并用 placeholder 说明在等什么。锁成灰色 +「等待 pi 就绪…」会让人以为 pi 崩了。 */
+  const maintenance = S.bridgeState === 'maintenance';
+  const canUse = ready && !S.switching && (S.bridgeState === 'ready' || maintenance);
   el.welcomeRestore.hidden = !S.restoring;
   el.welcomeReady.hidden = S.restoring || !ready;
   el.welcomeNoProj.hidden = S.restoring || ready;
   el.composerBox.classList.toggle('is-locked', !canUse);
   el.input.disabled = !canUse;
-  el.input.placeholder = !ready ? '先添加一个文件夹' : S.switching ? '正在切换项目…' : canUse ? '随心输入' : '等待 pi 就绪…';
+  el.input.placeholder = !ready
+    ? '先添加一个文件夹'
+    : S.switching
+      ? '正在切换项目…'
+      : maintenance
+        ? 'Pi 正在更新，完成后可继续…'
+        : canUse
+          ? '随心输入'
+          : '等待 pi 就绪…';
   el.btnAttach.disabled = !canUse;
   el.btnModel.disabled = !canUse;
   el.btnThink.disabled = !canUse;
@@ -88,6 +105,11 @@ export async function loadStatus(generation = S.workspaceGeneration) {
     /* 兼容摘要（P4）。老后端 / 单测没有这个字段 → 保持 null（= 全部按可用处理）。 */
     S.compat = j.compat || null;
     warnIfIncompatible();
+    /* Pi 正在被 self-update 替换时的维护态。**必须从 /api/status 读一次**：
+     * SSE 不重放，刷新页面之后就只剩这一个来源了 —— 否则界面会显示成
+     * 「pi 未运行」，一个计划内的停机被读成故障。切项目期间不动它：
+     * 那时正在走的是 restarting，别把两个状态混起来。 */
+    if (j.maintenance && !S.switching) setBridgeState('maintenance');
   } else {
     S.cwd = '';
     S.hasProject = false;

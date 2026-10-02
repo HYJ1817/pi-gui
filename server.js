@@ -53,7 +53,7 @@ import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
-import { createMcpNative } from './server/mcp-native.js';
+import { createMcpNative, buildPiEntry } from './server/mcp-native.js';
 import { createPiBuiltins } from './server/pi-builtins.js';
 import { createPiLaunch } from './server/pi-launch.js';
 import { createPiVersion, createPiVersionProbe } from './server/pi-version.js';
@@ -65,6 +65,7 @@ import { createPiProbes } from './server/pi-probes.js';
 import * as piCompatMatrix from './server/pi-compat-matrix.js';
 import { createSkills } from './server/skills.js';
 import { createUpdateCheck } from './server/update-check.js';
+import { createPiUpdate } from './server/pi-update.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
 import { createScheduler } from './server/planner/scheduler.js';
@@ -246,16 +247,28 @@ let extensionRegistryRef = null;
 /* P23：probe 表在 mcpNative 之后才建（它要读原生摘要），但 bridge 的 publish
  * 回调在那之前就装好了 —— 所以同样用「先声明、运行期回填」的引用占位。 */
 let probesRef = null;
+/* Pi 更新的后端闸门要用的两个「后端自己的」忙信号（不信前端的 disabled）：
+ *   - turnActive：从 pi 自己流出来的事件推出来的「有没有正在生成的回合」
+ *   - cliInFlight：正在跑的 Pi CLI 动作（MCP add/remove/login/logout 等）
+ * 两者都只增删计数，不读任何用户数据。 */
+let turnActive = false;
+let cliInFlight = 0;
 const rpc = createRpcBridge({
   runtime,
   publish: (event) => {
     extensionRegistryRef?.observe(event);
     /* bridge 生命周期一变，runtime probe（RPC / 工具事件 / 原生 MCP）就没有意义了 ——
-     * 旧 run 的结论不许留在表里。 */
+     * 旧 run 的结论不许留在表里。维护态也算：那一刻 runtime 正要被换掉。 */
     if (event?.type === 'bridge_status'
-      && ['starting', 'restarting', 'exited', 'error', 'no-project'].includes(event.state)) {
+      && ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(event.state)) {
       probesRef?.reset();
+      if (event.state === 'maintenance') turnActive = false;
     }
+    /* 回合是否还在生成：以 pi 自己的事件为准（assistant 的 message_start 开始，
+     * agent_end / agent_settled 结束）。保守取到 agent_end —— 中间夹着工具调用。 */
+    if (event?.type === 'message_start' && event.message?.role === 'assistant') turnActive = true;
+    else if (event?.type === 'agent_end' || event?.type === 'agent_settled') turnActive = false;
+    else if (event?.type === 'bridge_status' && ['exited', 'error', 'no-project'].includes(event.state)) turnActive = false;
     sse.publish(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
       : event);
@@ -330,14 +343,23 @@ const mcpNative = createMcpNative({
   resolveLaunchIdentity: piLaunch.identityKey,
   readTrust: async () => (await skills.readIndex()).trust,
   rpc,
-  runCli: (entry, args, opts) => runCli({
-    entry,
-    args,
-    cwd: opts && opts.cwd,
-    env: {},
-    timeoutMs: opts && opts.timeoutMs,
-    maxStdoutBytes: 64 * 1024,
-  }),
+  runCli: async (entry, args, opts) => {
+    /* 记在飞的 CLI 动作数：Pi 更新前要确认没有别的 pi 进程正在跑
+     * （MCP login/logout 这类动作与替换 runtime 文件互斥）。 */
+    cliInFlight += 1;
+    try {
+      return await runCli({
+        entry,
+        args,
+        cwd: opts && opts.cwd,
+        env: {},
+        timeoutMs: opts && opts.timeoutMs,
+        maxStdoutBytes: 64 * 1024,
+      });
+    } finally {
+      cliInFlight -= 1;
+    }
+  },
   piBuiltins: (cwd) => piBuiltins.read({ cwd }),
   /* P23：schema 漂移的观察出口 —— 上游给了闭集之外的运行时状态 / exposure 时，
    * 记一条「来源 + 字段名 + 类型」（没有值）。 */
@@ -495,6 +517,8 @@ const diagnostics = createDiagnostics({
   compatMatrix: () => piCompatMatrix.matrixSummary(),
   mcpNative: () => mcpNative.peekSummary(),
   extensions: () => extensions.peek(),
+  /* Pi 运行时更新：只读缓存/最近一次结果，**不发请求**（诊断不该打公网）。 */
+  piUpdate: () => piUpdate.snapshot(),
   dataDir: DATA_DIR,
   version: VERSION,
   env: process.env,
@@ -510,6 +534,89 @@ const diagnostics = createDiagnostics({
  * fetch 用全局的（Node ≥ 22 自带），不注入就代表走真实网络；
  * 测试一律显式注入假 fetch，所以**默认测试不访问公网**。 */
 const updateCheck = createUpdateCheck({ version: VERSION });
+
+/* Pi 运行时更新（Built-in Pi Updater）。
+ *
+ * 与上面那个 `updateCheck` **完全分离**：那个管 Pi GUI 自己的 Release，
+ * 这个管本机装着的 pi。两者各有自己的状态、端点（`/api/update` vs
+ * `/api/pi-update`）与文案，绝不互相复用缓存。
+ *
+ * 三条装配要点，每一条都是这一轮的安全边界：
+ *   1. **目标从 launch identity 派生**：`piLaunch.packageDir()` → `buildPiEntry()`
+ *      给出「这份 pi 自己的官方 CLI 入口」。解析不出来就拒绝更新（`unsupported`），
+ *      **不退回 PATH 上的 `pi`** —— 那会重新制造「两份 pi identity」。
+ *   2. **闸门在后端**：前端按钮 disable 只是体验，这里再查一遍
+ *      （生成中 / Planner 任务 / 独立验证 / 在飞的 CLI 动作 / 工作区切换）。
+ *   3. **成功后清掉所有与 Pi 包 identity 绑定的缓存**再重新读版本；
+ *      读到旧版本就判失败（exit 0 ≠ 更新完成）。 */
+const piUpdate = createPiUpdate({
+  env: process.env,
+  guiVersion: VERSION,
+  readVersion: (opts) => piVersion.read(opts),
+  currentCwd: () => runtime.getCurrentCwd(),
+  resolveUpdaterTarget: () => {
+    /* 只认证明过的包目录。buildPiEntry 要求 package.json 的 bin.pi 指向
+     * 真实存在的入口文件 —— 自定义 fork / source checkout 拿不到就是拿不到。 */
+    let entry = null;
+    try {
+      entry = buildPiEntry(piLaunch.packageDir());
+    } catch {
+      entry = null;
+    }
+    return entry && entry.ok ? { ok: true, entry } : { ok: false, code: 'no-proven-entry' };
+  },
+  runUpdater: (args, opts) => {
+    /* 参数由 pi-update 固定为 ['update','--self']；entry 也由它一路带过来
+     * （闸门检查过的那一份）。这里只负责接到与 MCP 动作同一条 runCli 上
+     * （shell:false + args 数组 + 超时 + 有界输出）。缺 entry 才现解析一次 ——
+     * 正常路径不会走到那里。 */
+    const entry = (opts && opts.entry) || (() => {
+      try {
+        return buildPiEntry(piLaunch.packageDir());
+      } catch {
+        return null;
+      }
+    })();
+    if (!entry || !entry.ok) {
+      return Promise.resolve({ ok: false, spawnFailed: true, error: '没有证明到这份 Pi 的官方入口' });
+    }
+    cliInFlight += 1;
+    return Promise.resolve(runCli({
+      entry,
+      args,
+      cwd: runtime.getCurrentCwd() || undefined,
+      env: {},
+      timeoutMs: (opts && opts.timeoutMs) || 5 * 60 * 1000,
+      maxStdoutBytes: (opts && opts.maxStdoutBytes) || 4000,
+    })).finally(() => {
+      cliInFlight -= 1;
+    });
+  },
+  pauseBridge: (reason) => rpc.pauseForMaintenance(reason),
+  resumeBridge: () => rpc.resumeFromMaintenance(),
+  invalidateCaches: () => {
+    /* 顺序即语义：identity 先失效，再让各层重新解析。
+     * piBuiltins / mcpNative / probes 都按 identity 或 cwd 分键，不清就会
+     * 拿着旧 pi 的结论继续显示。 */
+    piLaunch.reset();
+    piVersion.reset();
+    piBuiltins.reset();
+    probes.reset();
+    mcpNative.reset();
+    piCompat.reset();
+    probesRef?.reset();
+  },
+  busyReason: () => {
+    if (turnActive) return { code: 'busy-turn', error: '当前回答仍在生成，请先停止' };
+    if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
+    if (plannerRef) {
+      /* 规则只有一份（planner 的 projectSwitchBlockReason：计划在跑 / 独立验证在跑） */
+      const reason = plannerRef.projectSwitchBlockReason();
+      if (reason) return { code: 'busy-plan', error: reason };
+    }
+    return null;
+  },
+});
 
 const route = createRouter({
   auth,
@@ -530,6 +637,7 @@ const route = createRouter({
   uploads,
   diagnostics,
   updateCheck,
+  piUpdate,
   quota,
   compat: piCompat,
 });

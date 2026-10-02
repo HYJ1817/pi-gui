@@ -35,8 +35,11 @@ const pending = new Map();
 /** 已结算的 requestId。**防重放**：同一 id 再来（SSE backlog / 重连补发）不再弹窗。 */
 const settled = new Map();
 const SETTLED_MAX = 200;
-/** 桥接生命周期里这些状态意味着「那个 Pi 已经不在了」。 */
-const BRIDGE_GONE = new Set(['starting', 'restarting', 'exited', 'error', 'no-project']);
+/** 桥接生命周期里这些状态意味着「那个 Pi 已经不在了」。
+ *  `maintenance`（Pi 正在被 self-update 替换）也算：进程正在退出，
+ *  挂着的审批不可能再被应答 —— 但它是**计划内**的停机，所以调用方
+ *  只当「expire」，不要顺手把它说成崩溃。 */
+const BRIDGE_GONE = new Set(['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance']);
 
 function rememberSettled(requestId, status) {
   settled.set(requestId, status);
