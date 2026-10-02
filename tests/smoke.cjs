@@ -2886,6 +2886,28 @@ staticCheck();
   // --- 项目删除按钮 ---
   check('项目有删除按钮', () => window.document.querySelectorAll('#projects .pj-del').length === 2);
 
+  /* --- 项目行紧凑（这一轮 UX 修复）---
+   * 以前项目行是「名字 + 绝对路径」两行，比下面的会话行高出将近一倍，
+   * 看起来像「项目是大卡片、会话是小卡片」。现在路径不再常驻第二行。 */
+  {
+    const rows = [...window.document.querySelectorAll('#projects .project')];
+    check('项目行：没有常驻的绝对路径副标题（不再占第二行）', () =>
+      window.document.querySelectorAll('#projects .pj-path').length === 0 ||
+      `还有 ${window.document.querySelectorAll('#projects .pj-path').length} 个 .pj-path`);
+    check('项目行：每行只有一个名字节点', () => {
+      const counts = rows.map((r) => r.querySelectorAll('.pj-name').length);
+      return counts.every((n) => n === 1) || JSON.stringify(counts);
+    });
+    check('项目行：完整路径仍在 title 上（hover / 读屏拿得到）', () => {
+      const bad = rows.filter((r) => !r.title || !/[\\/]/.test(r.title));
+      return bad.length === 0 || JSON.stringify(rows.map((r) => r.title));
+    });
+    check('项目行：路径也进了无障碍名字（视觉副标题去掉后仍可读）', () => {
+      const labels = rows.map((r) => (r.querySelector('.pj-select') || {}).getAttribute?.('aria-label') || '');
+      return labels.every((l) => /[\\/]/.test(l)) || JSON.stringify(labels);
+    });
+  }
+
   // --- 折叠态：think ---
   /* --- 空会话的欢迎块 ---
    *
@@ -4278,6 +4300,16 @@ staticCheck();
     define(stream, 'scrollHeight', () => Math.max(1, userEls().length * msgStep));
     define(nav, 'clientHeight', () => navHeight);
 
+    /* 跳转只写 #stream 的滚动位置（scrollTo），jsdom 没有这个方法 ——
+     * 补一个最小实现：记录调用参数，并把 scrollTop 真的落下去，
+     * 和真实浏览器一致。**不再有 scrollIntoView 的角色**。 */
+    let scrollToCalls = [];
+    stream.scrollTo = (opts) => {
+      const top = typeof opts === 'number' ? opts : opts && opts.top;
+      scrollToCalls.push({ top, behavior: opts && opts.behavior });
+      scrollTopVal = top;
+    };
+
     const userEls = () => [...$('stream').querySelector('.thread').querySelectorAll('.msg.user')];
     const origRect = window.Element.prototype.getBoundingClientRect;
     window.Element.prototype.getBoundingClientRect = function () {
@@ -4356,18 +4388,39 @@ staticCheck();
         nav.querySelectorAll('.cn-marker').length === before + 1 || `${before} → ${nav.querySelectorAll('.cn-marker').length}`);
     }
 
-    // 19. 位置按「消息在整段内容里的相对位置」映射，不是按序号均分
+    // 19. marker 是**紧凑聚簇**，不再是「按内容比例铺满整个容器高度」
     await rebuild(mkMsgs(3));
     {
       const e = window.navEntries();
-      check('导航 19. marker 位置按内容偏移映射（第 2 条恰在中点附近）', () => {
+      check('导航 19. marker 聚成紧凑一组（不再按内容比例铺满容器）', () => {
         if (e.length !== 3) return `entries=${e.length}`;
-        // 3 条、每条 300px、scrollHeight=900 → 期望 0 / 200 / 400
-        const expect = [0, 200, 400];
-        const ok = e.every((x, i) => Math.abs(x.top - expect[i]) <= 2);
-        return ok || JSON.stringify(e.map((x) => x.top));
+        const span = e[2].top - e[0].top;
+        const gaps = [e[1].top - e[0].top, e[2].top - e[1].top];
+        // 紧凑：整组跨度远小于容器高度，且相邻间距一致
+        return (span < navHeight / 4 && Math.abs(gaps[0] - gaps[1]) < 0.001) ||
+          JSON.stringify({ span, gaps, navH: navHeight });
       });
+      check('导航 19b. 整组在容器里垂直居中', () => {
+        const mid = (e[0].top + e[2].top) / 2;
+        return Math.abs(mid - navHeight / 2) <= 2 || `mid=${mid} navH=${navHeight}`;
+      });
+      check('导航 19c. 顺序不变：第 1 次提问 → 第 1 条 marker', () =>
+        (e[0].top < e[1].top && e[1].top < e[2].top) || JSON.stringify(e.map((x) => x.top)));
+      check('导航 19d. 紧凑聚簇仍然保留内容偏移（点击跳转靠它）', () =>
+        e.every((x, i) => x.topInContent === i * msgStep) || JSON.stringify(e.map((x) => x.topInContent)));
+    }
 
+    // 19e/19f. 10～40 条时仍是一组紧凑短线（长会话不能散开）
+    await rebuild(mkMsgs(40));
+    {
+      const e = window.navEntries();
+      const span = e[e.length - 1].top - e[0].top;
+      check('导航 19e. 40 条时整组仍紧凑（跨度小于容器的一半）', () =>
+        (e.length === 40 && span < navHeight / 2) || `span=${span} navH=${navHeight}`);
+      check('导航 19f. 40 条时相邻间距一致（等距短线组）', () => {
+        const gaps = e.slice(1).map((x, i) => x.top - e[i].top);
+        return (gaps.every((g) => Math.abs(g - gaps[0]) < 0.001) && gaps[0] > 0) || JSON.stringify(gaps.slice(0, 6));
+      });
     }
 
     // 18 / 22. 长会话：marker 不重叠、不超出容器
@@ -4414,18 +4467,31 @@ staticCheck();
       });
     }
 
-    // 12. 点击 marker 滚动目标
+    // 12. 点击 marker 跳转：**只写 #stream 的滚动位置**
     {
-      let scrolled = null;
+      scrollToCalls = [];
+      /* 这一轮最关键的回归：**不许再用 scrollIntoView**。
+       * 它会连带滚动所有「可编程滚动」的祖先 —— .stage 是 overflow:hidden，
+       * scrollTop 照样能被脚本改，真实浏览器里量到的是 stage-head 的 top
+       * 从 0 变成 -46（顶栏被推出视口，看起来就是「标题栏消失」）。
+       * 这里装一个探针：只要被调用就判红。 */
+      let scrollIntoViewCalls = 0;
       const origScrollIntoView = window.Element.prototype.scrollIntoView;
-      window.Element.prototype.scrollIntoView = function (opts) {
-        scrolled = { el: this, opts };
-      };
+      window.Element.prototype.scrollIntoView = function () { scrollIntoViewCalls++; };
+      scrollTopVal = 999;
       nav.querySelectorAll('.cn-marker')[2].click();
       await new Promise((r) => setTimeout(r, 20));
-      check('导航 12. 点 marker → 对应用户消息 scrollIntoView（平滑、block:start）', () =>
-        (scrolled && scrolled.el === userEls()[2] && scrolled.opts && scrolled.opts.behavior === 'smooth' && scrolled.opts.block === 'start') ||
-        JSON.stringify(scrolled && { same: scrolled.el === userEls()[2], opts: scrolled.opts }));
+      check('导航 12. 点 marker 只写 #stream 的滚动位置（不再用 scrollIntoView）', () => {
+        if (scrollIntoViewCalls) return `scrollIntoView 被调用了 ${scrollIntoViewCalls} 次`;
+        const call = scrollToCalls[scrollToCalls.length - 1];
+        if (!call || typeof call.top !== 'number') return JSON.stringify(scrollToCalls);
+        if (call.behavior !== 'smooth') return `behavior=${call.behavior}`;
+        // 第 3 条的内容偏移 = 2 × 300；减去顶部余量 20；clamp 到 [0, scrollHeight - clientHeight]
+        const expect = Math.min(4 * 300 - 600, 2 * 300 - 20);
+        return call.top === expect || `top=${call.top} expect=${expect}`;
+      });
+      check('导航 12b. 滚动真的落在 #stream 上（不是只调了个空函数）', () =>
+        scrollTopVal === Math.min(4 * 300 - 600, 2 * 300 - 20) || scrollTopVal);
       check('P14-B 点击 marker 立即更新当前项', () => window.currentNavIndex() === 2 && nav.querySelectorAll('.cn-marker.on').length === 1 && nav.querySelectorAll('.cn-marker')[2].classList.contains('on'));
       window.Element.prototype.scrollIntoView = origScrollIntoView;
     }
@@ -5829,14 +5895,16 @@ staticCheck();
     /* 点结果 → 切会话 → **定位到命中那次提问**。
      * 放在最后：这一步会 clearThread()。 */
     {
-      /* jsdom 没有 scrollIntoView，打个桩记录被滚到的是哪个元素 ——
-       * 这样能验证整条链路：点击 → switch → get_messages → 历史重建 →
-       * 「渲染完成」生命周期回调 → 滚到第 userIndex 次提问。 */
-      const scrolled = [];
+      /* 跳转这一轮从 scrollIntoView 改成了「只写 #stream 的滚动位置」
+       * （原因见 convNavSection 的说明）。所以这里看两件事：
+       *   ① 整条链路把定位落到了「第 userIndex 次提问」上（导航当前项）；
+       *   ② 全程没有碰 scrollIntoView —— 它才是把顶栏滚出视口的那个调用。
+       * 这里不再桩 scrollIntoView，改成装上计数器：被调用即判红。 */
+      let sivCalls = 0;
       const proto = window.Element.prototype;
       const origScroll = proto.scrollIntoView;
       proto.scrollIntoView = function () {
-        scrolled.push(this);
+        sivCalls++;
       };
 
       searchPlan = [];
@@ -5853,14 +5921,16 @@ staticCheck();
         Boolean(hit && hit.body && /^[0-9a-f]{16}$/.test(hit.body.id)) ||
         JSON.stringify(sessionCalls.map((c) => c.url)));
 
-      // 历史回来了 → 应当滚到第 2 条用户消息（userIndex = 1）
+      // 历史回来了 → 应当定位到第 2 条用户消息（userIndex = 1）
       const msgs = [1, 2, 3].map((i) => ({ role: 'user', content: [{ type: 'text', text: `第 ${i} 次提问` }] }));
       es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: window.S.bridgeRun, _seq: 20001, data: { messages: msgs } });
       await new Promise((r) => setTimeout(r, 140));
       const users = [...$('stream').querySelectorAll('.msg.user')];
       check('搜索：历史渲染完成后定位到命中那次提问（第 2 条，不是最底）', () =>
-        (users.length === 3 && scrolled.includes(users[1])) ||
-        JSON.stringify({ users: users.length, scrolled: scrolled.map((e) => users.indexOf(e)) }));
+        (users.length === 3 && window.currentNavIndex() === 1) ||
+        JSON.stringify({ users: users.length, current: window.currentNavIndex() }));
+      check('搜索：这次定位同样只写 #stream（全程没有 scrollIntoView）', () =>
+        sivCalls === 0 || `scrollIntoView 被调用了 ${sivCalls} 次`);
 
       proto.scrollIntoView = origScroll;
     }
@@ -6013,6 +6083,147 @@ staticCheck();
       const cur = proj().querySelector('.pj-sess.on');
       return Boolean(cur && cur.querySelector('.pj-sess-act')) || '改名入口没回来';
     });
+  }
+
+  /* ================= 侧栏：项目行紧凑 + 会话列表可折叠（本轮 UX 修复） =================
+   *
+   * 用户要的是「项目 / 会话是一套紧凑层级」：项目行不再是「名字 + 绝对路径」
+   * 两行的大卡片（那让项目行比会话行高出近一倍），当前项目下面的会话列表
+   * 可以折叠 —— 箭头在项目行**内**、可键盘操作、不误触项目切换与删除
+   * （折叠箭头不能是 .pj-sessions 之前的新兄弟，那会破坏「会话块紧跟在
+   * 当前项目行下面」这条被两处测试盯着的结构）。
+   *
+   * ⚠️ jsdom **不做布局**，所以「项目行与会话行高度接近」「滚动条宽度」
+   * 这类断言只能在真实浏览器里量 —— 见 tests/cdp-shot.cjs 的 UX-01～UX-04。
+   * 这里验的是结构、状态与交互。 */
+  async function sidebarCollapseSection() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    $('toasts').innerHTML = '';
+    window.renderProjects();
+    await wait(80);
+
+    const proj = () => $('projects');
+    const row = () => proj().querySelector('.project.active');
+    const chev = () => row() && row().querySelector('.pj-chev');
+    const box = () => proj().querySelector('.pj-sessions');
+    const rowCount = () => (box() ? box().querySelectorAll('.pj-sess').length : 0);
+
+    check('折叠：只有当前项目那一行有折叠箭头', () => {
+      const rows = [...proj().querySelectorAll('.project')];
+      const withChev = rows.filter((r) => r.querySelector('.pj-chev'));
+      return (withChev.length === 1 && withChev[0].classList.contains('active')) || `有箭头的行数=${withChev.length}`;
+    });
+    check('折叠：默认展开（列表可见、aria-expanded=true）', () =>
+      Boolean(box() && box().hidden === false && chev() && chev().getAttribute('aria-expanded') === 'true') ||
+      JSON.stringify({ box: Boolean(box()), hidden: box() && box().hidden, aria: chev() && chev().getAttribute('aria-expanded') }));
+    check('折叠：箭头在项目行内、且是行内第一个元素（不新增兄弟节点）', () =>
+      Boolean(chev() && chev().parentElement === row() && row().firstElementChild === chev()) || '箭头不在行首');
+    check('折叠：aria-controls 指向会话块本身', () =>
+      Boolean(box() && box().id && chev() && chev().getAttribute('aria-controls') === box().id) ||
+      JSON.stringify({ controls: chev() && chev().getAttribute('aria-controls'), boxId: box() && box().id }));
+    check('折叠：箭头是可键盘操作的 button，带「展开 / 收起」标签', () => {
+      const c = chev();
+      return Boolean(c && c.tagName === 'BUTTON' && c.type === 'button' && /展开|收起/.test(c.getAttribute('aria-label') || '')) ||
+        (c ? c.outerHTML.slice(0, 120) : '没有箭头');
+    });
+    check('折叠：箭头没有破坏「会话块紧跟当前项目行」这条既有结构', () =>
+      box().previousElementSibling === row() || '会话块不在当前项目下面');
+
+    const before = rowCount();
+    check('折叠：折叠前列表里有会话', () => before > 0 || `rows=${before}`);
+
+    // 折叠
+    chev().click();
+    await wait(20);
+    check('折叠：点箭头 → 会话块隐藏、aria-expanded=false、标签变「展开」', () =>
+      (box().hidden === true && chev().getAttribute('aria-expanded') === 'false' && /^展开/.test(chev().getAttribute('aria-label'))) ||
+      JSON.stringify({ hidden: box().hidden, aria: chev().getAttribute('aria-expanded'), label: chev().getAttribute('aria-label') }));
+    check('折叠：只是隐藏，会话行没有从 DOM 里消失（搜索 / 改名 / 归档还要用）', () =>
+      rowCount() === before || `${before} → ${rowCount()}`);
+    check('折叠：项目行本身没被折掉（折的只是这个项目的会话）', () =>
+      Boolean(row() && row().isConnected) || '项目行不见了');
+
+    // 展开
+    chev().click();
+    await wait(20);
+    check('折叠：再点一次恢复展开', () =>
+      (box().hidden === false && chev().getAttribute('aria-expanded') === 'true') ||
+      JSON.stringify({ hidden: box().hidden, aria: chev().getAttribute('aria-expanded') }));
+
+    // 点箭头不误触项目切换（真事件、会冒泡 → 走的正是 stopPropagation 那条路）
+    check('折叠：点箭头不会误触项目切换', () => {
+      const select = row().querySelector('.pj-select');
+      let switched = 0;
+      const orig = select.onclick;
+      select.onclick = () => { switched++; };
+      chev().click();
+      chev().click();
+      select.onclick = orig;
+      return switched === 0 || `顺带切了 ${switched} 次项目`;
+    });
+    await wait(20);
+    check('折叠：上面那两次点击之后状态仍然是展开（没被切换带乱）', () =>
+      box().hidden === false || '折叠状态被带乱了');
+
+    // 点删除按钮不误触折叠
+    check('折叠：点删除按钮不会误触折叠', () => {
+      const del = row().querySelector('.pj-del');
+      if (!del) return '没有删除按钮';
+      const beforeAria = chev().getAttribute('aria-expanded');
+      const orig = del.onclick;
+      let ran = false;
+      del.onclick = (e) => {
+        ran = true;
+        if (e && e.stopPropagation) e.stopPropagation();
+      };
+      del.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+      del.onclick = orig;
+      const afterAria = chev() && chev().getAttribute('aria-expanded');
+      // 行本身没有点击处理器 → 删除按钮的点击不可能走到折叠逻辑
+      return (ran && beforeAria === afterAria && !row().onclick) ||
+        JSON.stringify({ ran, beforeAria, afterAria, rowOnclick: Boolean(row().onclick) });
+    });
+
+    // 切项目（= 重新渲染侧栏）之后必须回到展开态
+    chev().click();
+    await wait(20);
+    const folded = box().hidden === true;
+    window.renderProjects();
+    await wait(80);
+    check('折叠：换项目重新渲染后，新激活项目默认展开', () =>
+      (folded && box().hidden === false && chev().getAttribute('aria-expanded') === 'true') ||
+      JSON.stringify({ folded, hidden: box().hidden, aria: chev().getAttribute('aria-expanded') }));
+
+    // 搜索入口：折叠着点「搜索会话」必须先把列表展开，否则输入框被藏住
+    chev().click();
+    await wait(20);
+    $('navSearch').click();
+    await wait(40);
+    check('折叠：折叠状态下点「搜索会话」会自动展开（输入框不能被藏住）', () =>
+      (box().hidden === false && chev().getAttribute('aria-expanded') === 'true' &&
+        $('projectSidebar').classList.contains('search-open') &&
+        Boolean(proj().querySelector('.pj-search-input'))) ||
+      JSON.stringify({ hidden: box().hidden, aria: chev().getAttribute('aria-expanded'), open: $('projectSidebar').classList.contains('search-open') }));
+
+    // search-open 状态下搜索照旧工作
+    {
+      const input = proj().querySelector('.pj-search-input');
+      if (input) {
+        input.value = 'bridge';
+        input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      }
+      await wait(420);
+      const area = proj().querySelector('.pj-sess-list');
+      check('折叠：展开后搜索仍然照常出结果（search-open 状态没被折叠破坏）', () =>
+        Boolean(area && /修复 SSE 重连|找到|正在搜索/.test(area.textContent)) ||
+        (area ? area.textContent.slice(0, 80) : '没有列表区'));
+      if (input) {
+        input.value = '';
+        input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      }
+      await wait(180);
+    }
+    $('projectSidebar').classList.remove('search-open');
   }
 
   /* --- 版本检查与更新体验（P5） ---
@@ -6424,6 +6635,7 @@ staticCheck();
   }
 
   await searchSection();
+  await sidebarCollapseSection();
   await updateSection();
 
   /* --- 会话一变就要重画侧栏列表 ---

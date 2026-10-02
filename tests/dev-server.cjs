@@ -136,10 +136,68 @@ async function waitReady(ms = 20000) {
       const confirm = z('.modal.confirm');
       return (Number.isFinite(base) && Number.isFinite(confirm) && confirm > base) || `.modal=${base} .modal.confirm=${confirm}`;
     });
-    /* 弹层滚动条：不写 ::-webkit-scrollbar 就落回浏览器默认那条浅色宽条，
-     * 压在深色卡片上比内容本身还显眼。jsdom 不套用外部样式表，测不出来，所以在这盯着。 */
-    check('styles.css 给弹层滚动条上了样式', () =>
-      /\.modal-card::-webkit-scrollbar\s*[,{]/.test(css.body) || '缺少 .modal-card::-webkit-scrollbar');
+    /* 深色滚动条：这一轮把它收成了一条**全局**规则（以前是「一个容器一个补丁」，
+     * 命令面板 / 诊断 / 扩展与能力那几栏全都漏掉了，深色界面里冒出亮白滚动条）。
+     * jsdom 不套用外部样式表、也不画滚动条，所以只能在这里盯样式表本身。
+     *
+     * 先去掉注释再解析规则 —— 注释里写着「不要用 scrollbar-width:none」，
+     * 不剥注释的话这条守卫会被自己的说明文字判红。 */
+    const cssClean = css.body.replace(/\/\*[\s\S]*?\*\//g, '');
+    const cssRules = [...cssClean.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+    const rulesFor = (re) => cssRules.filter((r) => re.test(r.sel));
+
+    check('styles.css 有全局深色滚动条规则（不再只给个别容器打补丁）', () => {
+      const globalBar = rulesFor(/^::-webkit-scrollbar$/);
+      if (!globalBar.length) return '缺少不带选择器前缀的全局 ::-webkit-scrollbar';
+      const thumb = rulesFor(/^::-webkit-scrollbar-thumb$/);
+      if (!thumb.length) return '缺少全局 ::-webkit-scrollbar-thumb';
+      if (!/background-color\s*:\s*#2c2c2c/i.test(thumb[0].body)) return thumb[0].body.trim();
+      return (/width\s*:\s*10px/.test(globalBar[0].body) && /height\s*:\s*10px/.test(globalBar[0].body)) ||
+        globalBar[0].body.trim();
+    });
+    /* 横向滚动条也要深色（只有 width 没有 height 时横向那条仍是默认亮条）。 */
+    check('styles.css 的滚动条规则同时覆盖横向', () => {
+      const bar = rulesFor(/^::-webkit-scrollbar$/)[0];
+      return Boolean(bar && /height\s*:\s*10px/.test(bar.body)) || '横向滚动条没覆盖';
+    });
+    /* 不许用「干脆不显示滚动条」来糊弄：用户得看得出这块能滚。 */
+    check('styles.css 没有把滚动条整体隐藏', () =>
+      !/scrollbar-width\s*:\s*none/.test(cssClean) || '出现了 scrollbar-width:none');
+    check('styles.css 为不支持 webkit 伪元素的内核留了兜底', () =>
+      /@supports\s+not\s+selector\(::-webkit-scrollbar\)/.test(cssClean) || '缺少 @supports 兜底');
+    /* 删掉重复补丁之后，弹层里那条仍然由全局规则覆盖（不能出现「补丁删了、
+     * 全局规则又没覆盖到」的空档）。 */
+    check('styles.css 弹层滚动条仍被全局规则覆盖（且没有留下重复补丁）', () =>
+      (!/\.modal-card::-webkit-scrollbar\s*[,{]/.test(cssClean) && rulesFor(/^::-webkit-scrollbar-thumb$/).length > 0) ||
+      '要么还留着旧的重复补丁，要么全局规则不见了');
+
+    /* 标题栏颜色是**跨进程常量**：主进程的 titleBarOverlay 画右侧原生按钮带，
+     * 页面用 --titlebar 画 .stage-head。两边漂移时右上角会露出一块异色，
+     * 看起来就是「顶部断开」。这里把两个文件钉在一起。 */
+    check('styles.css 的 --titlebar 与 electron 的 titleBarOverlay.color 一致', () => {
+      const token = cssClean.match(/--titlebar\s*:\s*(#[0-9a-fA-F]{3,8})/);
+      if (!token) return 'styles.css 里没有 --titlebar';
+      const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+      const overlay = main.match(/titleBarOverlay\s*:\s*\{[^}]*color\s*:\s*'(#[0-9a-fA-F]{3,8})'/);
+      if (!overlay) return 'electron/main.cjs 里没找到 titleBarOverlay.color';
+      return token[1].toLowerCase() === overlay[1].toLowerCase() || `css=${token[1]} electron=${overlay[1]}`;
+    });
+    check('stage-head 有明确背景（不靠 .stage 透上来）且抬在正文之上', () => {
+      const hit = rulesFor(/(^|,)\s*\.stage-head\s*$/).find((r) => /background\s*:/.test(r.body));
+      if (!hit) return '没有任何一条 .stage-head 规则声明 background';
+      if (!/background\s*:\s*var\(--titlebar\)/.test(hit.body)) return '背景不是 --titlebar：' + hit.body.trim().slice(0, 80);
+      return (/position\s*:\s*relative/.test(hit.body) && /z-index\s*:\s*\d+/.test(hit.body)) || hit.body.trim().slice(0, 80);
+    });
+    /* .stage 必须是 overflow:clip —— hidden 会让它变成「可被脚本滚动的滚动容器」，
+     * scrollIntoView 就能把整个 workspace 推上去（顶栏被推出视口）。
+     * 这条是那一轮「标题栏偶发消失」的真正根因，写死在样式表上。 */
+    check('styles.css 里 .stage 用 overflow:clip（不是可被脚本滚动的 hidden）', () => {
+      const hits = rulesFor(/(^|,)\s*\.stage\s*$/);
+      if (!hits.length) return '缺少 .stage';
+      const hidden = hits.find((r) => /overflow\s*:\s*hidden/.test(r.body));
+      if (hidden) return '.stage 被覆盖回 overflow:hidden';
+      return hits.some((r) => /overflow\s*:\s*clip/.test(r.body)) || hits.map((r) => r.body.trim().slice(0, 60)).join(' | ');
+    });
     /* 分支弹层的「标题/说明/按钮固定 + 只有树体滚动」。
      * 少了它整张卡片滚，节点一多底部按钮就被滚出可视区。 */
     check('styles.css 有分支弹层的固定头尾布局', () => {

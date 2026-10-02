@@ -1450,6 +1450,337 @@ async function main() {
   ]);
   await send('Emulation.clearDeviceMetricsOverride');
   await sleep(200);
+  /* ================= UX：本轮真实使用里发现的四个问题 =================
+   *
+   *   1. 深色界面里出现 Windows / Chromium 默认的**亮白滚动条**（命令面板、
+   *      诊断、扩展与能力两栏都漏了）。
+   *   2. 项目行是「名字 + 绝对路径」两行的大卡片，比会话行高出一大截；
+   *      当前项目下面的会话列表不能折叠。
+   *   3. Conversation Minimap 把 marker 按内容比例铺满整个纵向区域，
+   *      又散又远、很难连续点。
+   *   4. 点 marker 时 element.scrollIntoView() 连带把 .stage 滚了 46px，
+   *      .stage-head 被推出视口 —— 看起来就是「标题栏消失 / 顶部断开」。
+   *
+   * 这里的判据一律是**结构事实**（computed style / aria / 矩形关系 / 计数），
+   * 不是像素值。滚动条宽度用 computed style 量：Chrome 里
+   * getComputedStyle(el, '::-webkit-scrollbar') 会回样式表里写的宽度，
+   * 这样即使跑在 --hide-scrollbars 下也验得到（截图里看不到滚动条本身）。
+   * https://chromium.googlesource.com/chromium/src/+/main/docs/ */
+  const uxCheck = (name, ok, detail) => {
+    console.log('      ' + name + ' [' + (ok ? '✓' : '✗ ' + (detail || '')) + ']');
+    if (!ok) shotFailures.push(name + (detail ? ': ' + detail : ''));
+  };
+  const barStyleOk = (sel) => `(() => {
+    const e = document.querySelector(${JSON.stringify(sel)});
+    if (!e) return 'no-element';
+    const bar = getComputedStyle(e, '::-webkit-scrollbar');
+    const th = getComputedStyle(e, '::-webkit-scrollbar-thumb');
+    const tr = getComputedStyle(e, '::-webkit-scrollbar-track');
+    if (bar.getPropertyValue('width') !== '10px') return '宽度不是 10px：' + bar.getPropertyValue('width');
+    if (bar.getPropertyValue('height') !== '10px') return '横向不是 10px：' + bar.getPropertyValue('height');
+    if (!/rgb\\(44, 44, 44\\)/.test(th.getPropertyValue('background-color'))) return '滑块不是深灰：' + th.getPropertyValue('background-color');
+    if (!/rgba\\(0, 0, 0, 0\\)/.test(tr.getPropertyValue('background-color'))) return '轨道不是透明：' + tr.getPropertyValue('background-color');
+    return true;
+  })()`;
+  const scrollableOk = (sel) => `(() => {
+    const e = document.querySelector(${JSON.stringify(sel)});
+    if (!e) return 'no-element';
+    return e.scrollHeight > e.clientHeight + 1 || '内容没超出一屏，这条判据测不到滚动条';
+  })()`;
+  const noOverflowX = `document.documentElement.scrollWidth <= innerWidth + 1`;
+
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await sleep(300);
+
+  /* --- UX-01 命令面板：滚动条 --- */
+  await pressCombo('k');
+  await sleep(360);
+  await shotOf('.palette-card', 'UX-01-scrollbars-palette', 'UX-01：命令面板 —— 深色细滚动条（不是 Windows 默认亮白条）', ['命令'], [
+    ['面板完整在视口内', `(() => {const c=document.querySelector('.palette-card').getBoundingClientRect();return c.top>=0&&c.left>=0&&c.right<=innerWidth+1&&c.bottom<=innerHeight+1})()`],
+    ['列表可滚动（否则测不到滚动条）', scrollableOk('.palette-list')],
+    ['滚动条全局规则命中：细 10px / 深灰 / 轨道透明', barStyleOk('.palette-list')],
+    ['没有整体横向溢出', noOverflowX],
+  ]);
+  await evalJs(`document.querySelector('.palette-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
+  await sleep(240);
+
+  /* --- UX-02 诊断：滚动条 --- */
+  await evalJs(`document.querySelector('#navGlobalMore').click()`);
+  await sleep(220);
+  await evalJs(`document.querySelector('#navDiagnostics').click()`);
+  await sleep(760);
+  await shotOf('.diag-body', 'UX-02-scrollbars-diagnostics', 'UX-02：诊断弹层 —— 中间滚动区同样是深色细滚动条', ['版本'], [
+    ['诊断内容区可滚动', scrollableOk('.diag-body')],
+    ['滚动条全局规则命中', barStyleOk('.diag-body')],
+    ['弹层卡片本身也没有亮白条', barStyleOk('.modal-card')],
+    ['弹层完整在视口内', `(() => {const c=document.querySelector('.modal-card').getBoundingClientRect();return c.top>=0&&c.left>=0&&c.right<=innerWidth+1&&c.bottom<=innerHeight+1})()`],
+    ['没有整体横向溢出', noOverflowX],
+  ]);
+  await evalJs(`document.querySelector('#modalClose') ? document.querySelector('#modalClose').click() : document.querySelector('#modal').setAttribute('hidden','')`);
+  await sleep(260);
+  /* 兜底：不管关没关掉，都把它藏起来，别影响后面的取景 */
+  await evalJs(`document.querySelector('#modal').hidden = true`);
+  await sleep(160);
+
+  /* --- UX-03 侧栏：项目行紧凑 + 会话展开 --- */
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await sleep(200);
+  await evalJs(`window.dispatchEvent(new Event('resize'))`);
+  await sleep(320);
+  await shotOf('#projects', 'UX-03-sidebar-project-expanded', 'UX-03：项目行与会话行是同一套紧凑层级（路径不再占第二行），当前项目默认展开', ['pi-GUI'], [
+    ['项目行与会话行高度接近（差 ≤ 2px）', `(() => {const p=document.querySelector('.project.active'),s=document.querySelector('.pj-sess');if(!p||!s)return 'no-row';return Math.abs(p.offsetHeight-s.offsetHeight)<=2 || ('project='+p.offsetHeight+' session='+s.offsetHeight)})()`],
+    ['项目行是紧凑的一行（≤ 36px，不再是两行卡片）', `(() => {const p=document.querySelector('.project.active');return (p&&p.offsetHeight<=36)||('h='+(p&&p.offsetHeight))})()`],
+    ['没有常驻的绝对路径副标题', `document.querySelectorAll('#projects .pj-path').length === 0`],
+    ['完整路径仍在 title 上（hover 看得到）', `(() => {const p=document.querySelector('.project.active');return Boolean(p&&p.title&&/[\\\\/]/.test(p.title))})()`],
+    ['折叠箭头 aria-expanded=true 且 aria-controls 指向会话块', `(() => {const c=document.querySelector('.project.active .pj-chev'),b=document.querySelector('.pj-sessions');return Boolean(c&&b&&b.id&&c.getAttribute('aria-expanded')==='true'&&c.getAttribute('aria-controls')===b.id)})()`],
+    ['会话块紧跟当前项目行（结构没被箭头破坏）', `(() => {const p=document.querySelector('.project.active');return Boolean(p&&p.nextElementSibling&&p.nextElementSibling.classList.contains('pj-sessions'))})()`],
+    ['会话列表默认可见且有会话', `(() => {const b=document.querySelector('.pj-sessions');return Boolean(b&&b.hidden===false&&b.querySelectorAll('.pj-sess').length>0)})()`],
+  ]);
+
+  /* --- UX-04 侧栏：折叠 --- */
+  await evalJs(`document.querySelector('.project.active .pj-chev').click()`);
+  await sleep(320);
+  await shotOf('.project.active', 'UX-04-sidebar-project-collapsed', 'UX-04：点箭头折叠该项目的会话（只剩项目行，且箭头语义同步）', ['pi-GUI'], [
+    ['会话块已隐藏', `document.querySelector('.pj-sessions').hidden === true`],
+    ['aria-expanded=false 且标签变成「展开」', `(() => {const c=document.querySelector('.project.active .pj-chev');return Boolean(c&&c.getAttribute('aria-expanded')==='false'&&/^展开/.test(c.getAttribute('aria-label')||''))})()`],
+    ['会话行仍在 DOM 里（只是隐藏，搜索/改名还要用）', `document.querySelectorAll('.pj-sessions .pj-sess').length > 0`],
+    ['项目行本身没被折掉（折的只是会话）', `(() => {const p=document.querySelector('.project.active');return Boolean(p&&p.isConnected&&p.offsetHeight>=28)})()`],
+    ['折叠没有让侧栏整体位移（项目行顶部不变）', `(() => {const p=document.querySelector('.project.active').getBoundingClientRect();return p.top>0&&p.top<innerHeight})()`],
+  ]);
+  /* 展开回去，别把折叠态留给后面的场景 */
+  await evalJs(`document.querySelector('.project.active .pj-chev').click()`);
+  await sleep(240);
+
+  /* --- UX-05 会话导航：紧凑聚簇 --- */
+  await evalJs(`fetch('/api/__conversation?what=long-thread&turns=24').then(r=>r.ok)`);
+  await sleep(900);
+  await shotOf('#convoNav', 'UX-05-conversation-nav-compact', 'UX-05：24 次提问的 marker 聚成一组紧凑短线（不再按内容比例铺满整屏）', [], [
+    ['marker 数 = 24（一次提问一条）', `document.querySelectorAll('#convoNav .cn-marker').length === 24`],
+    ['整组跨度 < 导航容器高度的 1/3（紧凑）', `(() => {
+      const m=[...document.querySelectorAll('#convoNav .cn-marker')];
+      if(m.length<2) return 'marker 不够';
+      const t=m.map((x)=>x.getBoundingClientRect().top);
+      const nav=document.querySelector('#convoNav');
+      const span=Math.max(...t)-Math.min(...t);
+      return span < nav.clientHeight/3 || ('span='+Math.round(span)+' navH='+nav.clientHeight);
+    })()`],
+    ['整组纵向居中（不贴顶、不贴底）', `(() => {
+      const nav=document.querySelector('#convoNav');
+      const base=nav.getBoundingClientRect().top;
+      const t=[...document.querySelectorAll('#convoNav .cn-marker')].map((x)=>x.getBoundingClientRect().top-base);
+      const mid=(Math.min(...t)+Math.max(...t))/2;
+      return Math.abs(mid-nav.clientHeight/2)<=4 || ('mid='+mid.toFixed(1)+' navH='+nav.clientHeight);
+    })()`],
+    ['相邻 marker 等距（一组规则的短线）', `(() => {
+      const t=[...document.querySelectorAll('#convoNav .cn-marker')].map((x)=>x.getBoundingClientRect().top);
+      const g=t.slice(1).map((v,i)=>v-t[i]);
+      return (g[0]>0.5 && g.every((x)=>Math.abs(x-g[0])<0.6)) || ('gaps='+g.slice(0,4).map((x)=>x.toFixed(1)).join(','));
+    })()`],
+    ['当前提问只有一条，且更亮更长', `(() => {
+      const on=[...document.querySelectorAll('#convoNav .cn-marker.on')];
+      if(on.length!==1) return '高亮条数='+on.length;
+      const other=document.querySelector('#convoNav .cn-marker:not(.on)');
+      return (on[0].getBoundingClientRect().width > other.getBoundingClientRect().width) || '当前条没有更长';
+    })()`],
+    ['导航列自己没有冒出独立滚动条', `(() => {const n=document.querySelector('#convoNav');return n.offsetWidth-n.clientWidth<=2})()`],
+    ['hover 摘要仍然在（可读的截断 prompt）', `(() => {const t=document.querySelector('#convoNav .cn-tip');return Boolean(t&&t.textContent.trim().length>0)})()`],
+    ['不遮输入区 / 不遮顶栏（判的是 marker 簇，不是整列容器）', `(() => {
+      /* .convo-nav 这一列本身贯穿整个会话区（输入区浮在它上面），
+       * 所以判据必须落在**簇**的实际矩形上，不是容器的。 */
+      const rs=[...document.querySelectorAll('#convoNav .cn-marker')].map((x)=>x.getBoundingClientRect());
+      if(!rs.length) return 'no-marker';
+      const top=Math.min(...rs.map((r)=>r.top));
+      const bottom=Math.max(...rs.map((r)=>r.bottom));
+      const head=document.querySelector('.stage-head').getBoundingClientRect();
+      const box=document.querySelector('#composerBox').getBoundingClientRect();
+      return (top>=head.bottom-1 && bottom<=box.top+1) ||
+        ('cluster='+Math.round(top)+'..'+Math.round(bottom)+' head='+Math.round(head.bottom)+' composer='+Math.round(box.top));
+    })()`],
+    ['没有整体横向溢出', noOverflowX],
+  ]);
+
+  /* --- UX-06 点击 marker：只让 #stream 滚，外层布局一个像素都不动 --- */
+  const outerRects = `(() => {
+    const r=(s)=>{const e=document.querySelector(s);const b=e.getBoundingClientRect();return [b.top,b.bottom,b.height,b.left]};
+    const stream=document.querySelector('#stream');
+    return JSON.stringify({
+      stageHead: r('.stage-head'), chatView: r('#chatView'), composer: r('#chatComposer'),
+      stageScroll: document.querySelector('#workspace').scrollTop,
+      docScroll: document.scrollingElement.scrollTop,
+      streamScroll: stream.scrollTop,
+      streamTop: stream.getBoundingClientRect().top,
+    });
+  })()`;
+  const jumpAndCheck = async (idx, name) => {
+    await evalJs(`document.querySelector('#stream').scrollTop = 0`);
+    await sleep(260);
+    const before = JSON.parse(await evalJs(outerRects));
+    await evalJs(`document.querySelectorAll('#convoNav .cn-marker')[${idx}].click()`);
+    await sleep(1000);
+    const after = JSON.parse(await evalJs(outerRects));
+    const near = (x, y) => Math.abs(x - y) <= 0.5;
+    uxCheck(name + '：.stage-head 位置不变', near(before.stageHead[0], after.stageHead[0]) && near(before.stageHead[2], after.stageHead[2]),
+      JSON.stringify({ before: before.stageHead, after: after.stageHead }));
+    uxCheck(name + '：#chatView 的 top/bottom 不变', near(before.chatView[0], after.chatView[0]) && near(before.chatView[1], after.chatView[1]),
+      JSON.stringify({ before: before.chatView, after: after.chatView }));
+    uxCheck(name + '：输入区位置不变', near(before.composer[0], after.composer[0]) && near(before.composer[2], after.composer[2]),
+      JSON.stringify({ before: before.composer, after: after.composer }));
+    uxCheck(name + '：只有 #stream.scrollTop 变了', after.streamScroll !== before.streamScroll,
+      JSON.stringify({ before: before.streamScroll, after: after.streamScroll }));
+    uxCheck(name + '：.stage 没有被滚动（恒为 0）', before.stageScroll === 0 && after.stageScroll === 0,
+      JSON.stringify({ before: before.stageScroll, after: after.stageScroll }));
+    uxCheck(name + '：文档没有被滚动', before.docScroll === 0 && after.docScroll === 0,
+      JSON.stringify({ before: before.docScroll, after: after.docScroll }));
+    const landed = await evalJs(`(() => {
+      const stream=document.querySelector('#stream');
+      const users=[...document.querySelectorAll('#stream .msg.user')];
+      const t=users[${idx}];
+      if(!t) return 'no-target';
+      const r=t.getBoundingClientRect();
+      const s=stream.getBoundingClientRect();
+      /* 目标已经到底了就必须 clamp —— 最后一条提问后面还跟着一大段回答，
+       * 那种情况下它不可能停在离顶部 20px 的地方。这不是失败，是 clamp 生效。 */
+      const atMax = Math.abs(stream.scrollTop - (stream.scrollHeight - stream.clientHeight)) <= 2;
+      return JSON.stringify({ delta: Math.round(r.top-s.top), visible: r.top >= s.top - 2 && r.top < s.bottom - 8, atMax });
+    })()`);
+    const info = JSON.parse(landed === 'no-target' ? '{"delta":-1,"visible":false,"atMax":false}' : landed);
+    uxCheck(name + '：目标消息落在滚动区里、且留了顶部余量（或已到底 clamp）',
+      info.visible && info.delta >= 0 && (info.delta <= 40 || info.atMax),
+      JSON.stringify(info));
+    return after;
+  };
+  await jumpAndCheck(0, 'UX-06 第一条');
+  await jumpAndCheck(11, 'UX-06 中间一条');
+  await jumpAndCheck(23, 'UX-06 最后一条');
+  await jumpAndCheck(8, 'UX-06 很长回答之后的那一条');
+  /* 历史恢复（重新灌一次会话历史）之后，跳转仍然只动 #stream */
+  await evalJs(`fetch('/api/__conversation?what=long-thread&turns=24').then(r=>r.ok)`);
+  await sleep(900);
+  await jumpAndCheck(5, 'UX-06 历史恢复之后');
+  await shotOf('#chatView', 'UX-06-conversation-nav-after-jump', 'UX-06：点 marker 之后 —— 顶栏 / 正文 / 输入区都没动，只有正文自己滚了', [], [
+    ['顶栏仍在窗口顶部', `Math.abs(document.querySelector('.stage-head').getBoundingClientRect().top)<=0.5`],
+    ['#chatView 顶边紧贴顶栏底边', `(() => {
+      const h=document.querySelector('.stage-head').getBoundingClientRect();
+      const c=document.querySelector('#chatView').getBoundingClientRect();
+      return Math.abs(c.top-h.bottom)<=0.5;
+    })()`],
+    ['.stage 没有被脚本滚动', `document.querySelector('#workspace').scrollTop === 0`],
+    ['文档没有被滚动', `document.scrollingElement.scrollTop === 0`],
+    ['正文确实滚到了第 6 条附近', `(() => {
+      const s=document.querySelector('#stream');
+      const u=document.querySelectorAll('#stream .msg.user')[5];
+      const r=u.getBoundingClientRect(), sr=s.getBoundingClientRect();
+      return r.top>=sr.top-2 && r.top<sr.bottom-8;
+    })()`],
+  ]);
+
+  /* --- UX-07 标题栏：一条连续、稳定的顶栏 --- */
+  const headStable = `(() => {
+    const h=document.querySelector('.stage-head');
+    const cs=getComputedStyle(h);
+    const r=h.getBoundingClientRect();
+    const token=getComputedStyle(document.documentElement).getPropertyValue('--titlebar').trim();
+    if (Math.abs(r.top)>0.5) return '顶栏不在窗口顶部：top='+r.top;
+    if (Math.abs(r.height-46)>0.5) return '高度不是 46：'+r.height;
+    if (r.right < innerWidth-1) return '顶栏没有铺到右侧原生按钮区：right='+r.right+' innerWidth='+innerWidth;
+    if (!/rgb\\(13, 13, 13\\)/.test(cs.backgroundColor)) return '背景色不对：'+cs.backgroundColor;
+    if (token.toLowerCase() !== '#0d0d0d') return '--titlebar 不是 electron overlay 的颜色：'+token;
+    if (cs.borderBottomWidth !== '1px') return '底部分隔线不见了：'+cs.borderBottomWidth;
+    if (getComputedStyle(document.querySelector('#workspace')).overflowY !== 'clip') return '.stage 不是 overflow:clip';
+    return true;
+  })()`;
+  const dragRegions = `(() => {
+    const h=document.querySelector('.stage-head');
+    const rail=document.querySelector('.rail-head');
+    const btn=document.querySelector('.stage-head button');
+    const out=[];
+    if (getComputedStyle(h).getPropertyValue('-webkit-app-region')!=='drag') out.push('.stage-head 拖拽区丢了');
+    if (getComputedStyle(rail).getPropertyValue('-webkit-app-region')!=='drag') out.push('.rail-head 拖拽区丢了');
+    if (getComputedStyle(btn).getPropertyValue('-webkit-app-region')!=='no-drag') out.push('顶栏按钮没有 no-drag');
+    return out.length ? out.join('；') : true;
+  })()`;
+
+  await shotOf('.stage-head', 'UX-07-titlebar-chat', 'UX-07：Chat 顶栏 —— 明确背景、和原生按钮同色、贴着窗口顶部的一条', [], [
+    ['顶栏几何与颜色稳定（top 0 / 46px / 同色 / 有分隔线 / .stage 不可被滚）', headStable],
+    ['拖拽区与 no-drag 没被破坏（窗口能拖、按钮能点）', dragRegions],
+    ['没有整体横向或纵向滚动', `document.documentElement.scrollWidth<=innerWidth+1 && document.documentElement.scrollHeight<=innerHeight+1`],
+    ['正文没有被顶栏盖住（首条可见内容在顶栏下方）', `(() => {
+      const h=document.querySelector('.stage-head').getBoundingClientRect();
+      const c=document.querySelector('#chatView').getBoundingClientRect();
+      return c.top >= h.bottom - 1;
+    })()`],
+  ]);
+
+  /* --- UX-08 视图切换（Chat / 任务 / 文件变更 / 扩展）之后顶栏必须还在 --- */
+  for (const [id, view] of [['navPlanner', '任务'], ['navChanges', '文件变更'], ['navExtensions', '扩展'], ['navHome', '对话']]) {
+    await evalJs(`document.querySelector('#${id}').click()`);
+    await sleep(560);
+    const ok = await evalJs(headStable);
+    uxCheck('UX-08 切到「' + view + '」后顶栏仍然稳定', ok === true, typeof ok === 'string' ? ok : '');
+  }
+  /* 长对话滚动 + 开关弹层之后再确认一次 */
+  await evalJs(`fetch('/api/__conversation?what=long-thread&turns=24').then(r=>r.ok)`);
+  await sleep(800);
+  await evalJs(`document.querySelector('#stream').scrollTop = 400`);
+  await sleep(360);
+  const afterScroll = await evalJs(headStable);
+  uxCheck('UX-08 长对话滚动后顶栏仍然稳定', afterScroll === true, typeof afterScroll === 'string' ? afterScroll : '');
+  await pressCombo('k');
+  await sleep(300);
+  await evalJs(`document.querySelector('.palette-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
+  await sleep(260);
+  const afterPalette = await evalJs(headStable);
+  uxCheck('UX-08 开关命令面板后顶栏仍然稳定', afterPalette === true, typeof afterPalette === 'string' ? afterPalette : '');
+  await shotOf('#chatView', 'UX-08-titlebar-after-view-switch', 'UX-08：Chat / 任务 / 文件变更 / 扩展来回切换、滚动、开关面板之后，顶栏位置与颜色不变', [], [
+    ['顶栏几何与颜色稳定', headStable],
+    ['正文顶边仍紧贴顶栏', `(() => {
+      const h=document.querySelector('.stage-head').getBoundingClientRect();
+      const c=document.querySelector('#chatView').getBoundingClientRect();
+      return Math.abs(c.top-h.bottom)<=0.5;
+    })()`],
+    ['.stage 没有被任何一次切换滚动过', `document.querySelector('#workspace').scrollTop === 0`],
+  ]);
+
+  /* --- UX-09 关键布局在 700 / 900 / 1200 / 1536 下抽查 ---
+   * 窄窗口下 .convo-nav 会被隐藏（既有策略），所以 marker 那条只在 ≥900 时判。 */
+  for (const [w, h] of [[700, 600], [900, 700], [1200, 800], [1536, 900]]) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    await sleep(420);
+    const ok = await evalJs(headStable);
+    uxCheck('UX-09 ' + w + '×' + h + '：顶栏稳定', ok === true, typeof ok === 'string' ? ok : '');
+    const projectRow = await evalJs(`(() => {
+      const p=document.querySelector('.project.active');
+      const s=document.querySelector('.pj-sess');
+      if(!p) return 'no-project';
+      if(!s) return 'project='+p.offsetHeight+'（没有会话行可比）';
+      return Math.abs(p.offsetHeight-s.offsetHeight)<=2 || ('project='+p.offsetHeight+' session='+s.offsetHeight);
+    })()`);
+    uxCheck('UX-09 ' + w + '×' + h + '：项目行与会话行高度接近', projectRow === true, typeof projectRow === 'string' ? projectRow : '');
+    const navHiddenOrCompact = await evalJs(`(() => {
+      const nav=document.querySelector('#convoNav');
+      if (getComputedStyle(nav).display === 'none') return true;   // 窄窗口按既有策略隐藏
+      const t=[...nav.querySelectorAll('.cn-marker')].map((x)=>x.getBoundingClientRect().top);
+      if (t.length < 2) return 'marker 不够';
+      return Math.max(...t)-Math.min(...t) < nav.clientHeight/3 || 'span 过大';
+    })()`);
+    uxCheck('UX-09 ' + w + '×' + h + '：导航聚簇或按策略隐藏', navHiddenOrCompact === true, typeof navHiddenOrCompact === 'string' ? navHiddenOrCompact : '');
+    const noOverflow = await evalJs(noOverflowX);
+    uxCheck('UX-09 ' + w + '×' + h + '：没有整体横向溢出', noOverflow === true, 'scrollWidth 超出');
+  }
+  await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 600, deviceScaleFactor: 1, mobile: false });
+  await sleep(360);
+  await shotOf('.stage-head', 'UX-09-titlebar-narrow-700x600', 'UX-09：700×600 关键布局抽查 —— 顶栏仍是同一色、同一条', [], [
+    ['顶栏几何与颜色稳定', headStable],
+    ['窄窗口下导航按既有策略隐藏', `(() => {
+      const nav=document.querySelector('#convoNav');
+      return getComputedStyle(nav).display==='none' || nav.clientHeight>0;
+    })()`],
+    ['没有整体横向溢出', noOverflowX],
+  ]);
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(240);
+
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

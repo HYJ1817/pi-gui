@@ -1366,6 +1366,23 @@ const server = http.createServer(async (req, res) => {
     }
     if (what === 'fixture' || what === 'reset') {
       push({ type: 'response', command: 'get_messages', success: true, data: { messages: what === 'fixture' ? P14B_MESSAGES : MESSAGES } });
+    } else if (what === 'long-thread') {
+      /* 长会话夹具（UX 场景用）：N 次「提问 + 回答」，每次回答长度差异很大，
+       * 专门用来验 conversation minimap 的**紧凑聚簇**与跳转落点。
+       *
+       * 为什么单独一个 what= 而不是改 P14B_MESSAGES：场景 80-minimap 钉死了
+       * 「4 个用户 Turn」；夹具是有状态的，动它会把别的场景一起带偏。
+       * 用完记得 ?what=fixture / ?what=reset 还原。 */
+      const turns = Math.max(1, Math.min(200, Number(url.searchParams.get('turns') || 24)));
+      const messages = [];
+      for (let i = 1; i <= turns; i++) {
+        messages.push({ role: 'user', content: [{ type: 'text', text: `第 ${i} 个问题：请检查模块 #${i} 的实现` }] });
+        // 第 7 条之后放一段特别长的回答 —— 老实现会因此把后面的 marker 推得很远
+        const body = i === 7 ? `第 ${i} 个回答（很长）。`.repeat(90) : `第 ${i} 个回答。`;
+        messages.push({ role: 'assistant', content: [{ type: 'text', text: body }] });
+      }
+      push({ type: 'response', command: 'get_messages', success: true, data: { messages } });
+      return json(res, 200, { ok: true, pushed: what, turns });
     } else if (what === 'tool-running') {
       push({ type: 'tool_execution_start', toolCallId: 'p14b-running', toolName: 'read', args: { path: 'public/messages.js' } });
     } else if (what === 'tool-success') {
