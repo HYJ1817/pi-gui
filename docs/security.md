@@ -83,6 +83,14 @@ Pi GUI 会**执行一次官方 self-update** 去升级本机装着的那份 pi�
   由组合根注入（`rpc-bridge` 不认识业务模块，有架构守卫钉着）。
   `resumeFromMaintenance()` 只启动一次；**已经暂停之后的任何失败路径都会 resume**
   （`finally` 里做），GUI 不会永久停在维护态；旧的那份 pi 还能起来就继续能用。
+- **暂停失败也是失败，不能报成功。** `pause-timeout` / `pause-failed` /
+  `already-in-maintenance` 三条路径都必须落 `phase:'failed'` + `errorCode`
+  （分别是 `pause-timeout` / `pause-failed` / `update-running`），
+  **绝不出现 `phase:'latest'`**：那种情况下 updater 一次都没跑，
+  报 latest 等于对用户谎称「已是最新版本」。这类失败**不 resume**
+  （维护态不是我们建的）、**不动任何缓存**（一个字节都没改）。
+  执行结构上只有一个终态出口（`finishUpdate`），并且对「终态却没有结果」
+  这种自相矛盾状态 **fail closed**（报失败，不报成功）。
 - **更新结果不会被下一次检查悄悄改写。** 检查缓存与更新执行状态是两份状态：
   更新中 / 更新终态（`latest` / `failed`）的 `GET` 一律回真实执行状态，不回旧缓存、
   不打公网；**只有用户显式点「检查 Pi 更新」（`force=1`）** 才允许用新检查覆盖终态。

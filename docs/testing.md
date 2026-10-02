@@ -51,11 +51,11 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 `npm test` 里现在有 40 个套件，全部是**纯自动化**：
 
 ```
-smoke 1192 · daily-use 28 · git 161 · modules 117 · reliability · interactions · port-owner
+smoke 1198 · daily-use 28 · git 161 · modules 117 · reliability · interactions · port-owner
 project-config 115 · skills 196 · extensions 52 · capability 62 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-probes 62 · pi-update 126 · pi-version 136 · mcp-native 187
+sessions 77 · session-search 71 · pi-compat 57 · pi-probes 62 · pi-update 173 · pi-version 136 · mcp-native 187
 usage-quota 229 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 15 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
@@ -1033,7 +1033,7 @@ Chrome 里 `getComputedStyle(el, '::-webkit-scrollbar')` 仍然会回样式表�
 
 ## Pi 运行时更新（Built-in Pi Updater）验证
 
-`npm run test:pi-update`（**126 条**，已纳入 `npm test`，完全离线）——
+`npm run test:pi-update`（**173 条**，已纳入 `npm test`，完全离线）——
 `tests/pi-update.cjs`。守卫的是「Pi 更新」这条路径的边界：**自动检查可以，
 自动安装禁止**（见 [updates.md](updates.md) 第二部分、
 [security.md](security.md) 的「Pi 运行时更新边界」）。
@@ -1042,7 +1042,7 @@ Chrome 里 `getComputedStyle(el, '::-webkit-scrollbar')` 仍然会回样式表�
 更新用的 runner、bridge 用的子进程全部是注入的替身（假子进程带
 `stdin/stdout/stderr`，与 `reliability` 同一套）。不碰全局 npm、不读用户真实数据。
 
-段与覆盖（A–I 九段；「静态边界扫描」那 4 条在 D 段里，不在单独一段）：
+段与覆盖（A–J 十段；「静态边界扫描」那 4 条在 D 段里，不在单独一段）：
 
 | 段 | 量什么 |
 |---|---|
@@ -1055,12 +1055,15 @@ Chrome 里 `getComputedStyle(el, '::-webkit-scrollbar')` 仍然会回样式表�
 | **G. 更新状态与检查缓存分开** | 更新**期间**的 GET 不许回更新前那份 TTL 缓存（必须是真实相位 `updating` + `running:true` + `canUpdate:false`，且**不打公网**）；成功终态 `latest` + `installedVersion`；**失败终态 `failed` + `errorCode` + 脱敏 error**，连续轮询都保持 failed、**不新打公网、不会变回 available**；只有用户显式 `force=1` 才允许用新检查覆盖终态；`verifying` / `restarting` 两个中间相位在钩子上如实出现；诊断 `snapshot()` 同步反映终态 |
 | **H. 暂停超时** | 子进程**永远不退出**时 `pauseForMaintenance` 必须回 `{ok:false, code:'pause-timeout'}`（**不是** `ok:true/stopped:true`）：维护态被撤销、如实发一个 `ready`、不产生第二个 child、之后的退出仍走正常重启路径；updater 侧收到 `pause-timeout` 时**一次都不跑**（`runArgs.length === 0`）、不 resume、不碰缓存 |
 | **I. 活动生命周期与闸门** | 按 Pi 1.0.0 的真实语义：`prompt` 已被桥接受但 `agent_start` 未到 → 忙；`agent_start` → 忙；**`agent_end(willRetry=true)` 之后仍忙**；第二轮 run 的 `agent_end` 也仍忙；**只有 `agent_settled` 放行**；`disposition=handled` 撤回 pending、`queued`/`started` 继续保持；六种 bridge 终止态（含 `maintenance`）与 `new_session` 都确定收口；把 activity 接到真实 `busyReason` 上验证「忙 → 拒绝且 updater 一次不跑」 |
+| **J. 暂停失败也必须落 failed 终态** | 三条暂停失败路径（`pause-timeout` / `pause-failed` / `already-in-maintenance` → `update-running`）逐条断言：POST 被接受之后 **GET 必须是 `ok:false` + `phase:'failed'` + `running:false`**（**绝不能是 `latest`**）、`errorCode` 正确、error 已脱敏、版本上下文（0.99.2 → 1.0.0）保留、`updateAvailable:false`、**updater 一次都没跑**、**不 resume**（维护态不是我们的）、**不 invalidateCaches**、连续 GET 保持 failed、诊断快照同步、`force` 才允许离开终态；外加两条不变量：终态存在就必须有 `result`，以及「自相矛盾状态（终态 + `result:null`）**fail closed**、绝不报 latest」；再把成功 / updater 失败 / 复验失败三条执行层路径的 `ok` 与相位一致性钉住 |
 
 前端侧（`npm run test:ui` / `tests/smoke.cjs`）走的是**真实轮询路径** ——
 `checkPiUpdate` → 真 POST → `runPiUpdate` → `pollOnce` 每 2s 一次：
 逐相位观察到 `updating → verifying → restarting → latest`、**忙态期间按钮全程
 disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界面且不会被下一轮
-检查变回 available」。（不能用手工 `force` 一次检查来假装轮询结束：那条路径
-绕开 `pollOnce`，而这次修的正是轮询 —— 正是这条测试抓出了 `pollOnce` 丢掉
-`ok:false` 失败终态的真实缺陷。）
+检查变回 available」。暂停失败（`pause-timeout`）另有一条：轮询到达后必须是
+`failed` + 真实暂停原因、**绝不出现「已是最新版本」**、不继续轮询、按钮不卡死。
+（不能用手工 `force` 一次检查来假装轮询结束：那条路径绕开 `pollOnce`，
+而这次修的正是轮询 —— 正是这条测试抓出了 `pollOnce` 丢掉 `ok:false`
+失败终态的真实缺陷。）
 

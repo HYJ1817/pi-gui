@@ -451,6 +451,19 @@ idle → checking → available → updating → verifying → restarting → la
    （有证据时带上 current/latest）。**轮询里的普通 GET 不会**用一次新的公网检查
    把它覆盖掉 —— 连续轮询都保持 `failed`。
 4. **只有用户显式点「检查 Pi 更新」（`?force=1`）** 才允许用新的检查覆盖终态。
+5. **「一个字节都没改」的失败也是失败**：暂停失败（`pause-timeout` /
+   `pause-failed` / `already-in-maintenance` → `update-running`）同样必须落
+   `phase:'failed'` + `errorCode` + 脱敏 error，`updateAvailable:false`，
+   版本上下文（当前 0.99.2 → 目标 1.0.0）保留。
+   ⚠️ 这条是**假成功**的入口：`execute()` 里曾经在暂停失败时**提前 return**，
+   绕过了终态写入，留下 `updateState != null && updateInflight == null &&
+   result == null` —— 读不出失败就报 `latest`，于是「updater 一次都没跑，
+   界面却说已是最新版本」。现在 `execute()` 只有**一个出口** `finishUpdate()`，
+   所有分支只给 `result` 赋值；并且 `updateStatusPayload()` 对「终态没有 result」
+   这个自相矛盾状态 **fail closed**（报 `state-inconsistent` 失败），
+   而不是当成成功。
+   这类失败**不 resume**（`pause-timeout` 自己回滚了维护态、
+   `already-in-maintenance` 是别人的维护态）、**不 invalidateCaches**。
 
 前端侧还有一条对应的坑：`pollOnce` **只认 `ok === true`** 是不够的 ——
 失败终态按契约就是 `ok:false`，丢掉它就会继续轮询、下一轮拿到默认值又变回
