@@ -47,6 +47,10 @@
   </aside>
 
   <div class="global-more-menu" id="globalMoreMenu" hidden role="menu" aria-label="更多全局功能">
+    <!-- P24：命令面板与快捷键帮助也在这里给一个可见入口 —— 快捷键要能被发现，
+         不能只写在文档里。它们是**既有动作**的另一个入口，不是新功能。 -->
+    <button type="button" role="menuitem" id="navPalette" title="打开命令面板">命令面板…</button>
+    <button type="button" role="menuitem" id="navShortcutHelp" title="查看键盘快捷键">键盘快捷键…</button>
     <button type="button" role="menuitem" id="navDiagnostics">诊断<span class="rp-dot" id="menuUpdateDot" hidden></span></button>
     <button type="button" role="menuitem" id="navProviders">模型供应商<span class="rp-count" id="providerCount"></span></button>
   </div>
@@ -75,6 +79,11 @@
         </button>
       </div>
     </header>
+
+    <!-- P24：状态条。只在「有持续问题、且有可执行下一步」时显形
+         （pi 启动失败 / 已退出 / 关键能力不可用）。正常状态与「没选项目」
+         都不占用这里 —— 后者由下面的欢迎区负责。 -->
+    <div class="stage-notice" id="stageNotice" role="status" hidden></div>
 
     <!-- 会话内导航（Conversation Minimap）放在正文左侧的独立列里，
          不叠在滚动条上 —— 叠上去会有点击冲突，而且窄窗口下会挤正文。 -->
@@ -177,6 +186,12 @@
 <div class="modal confirm" id="confirmLayer" hidden>
   <div class="modal-card" id="confirmCard"></div>
 </div>
+
+<!-- 命令面板层（P24）。
+     同样**不复用** #modal：面板可能在任何一个视图里被叫出来，也可能在关掉之后
+     立刻打开一个真正的弹层（例如「打开诊断」）。共用一层会让「先关面板再开弹层」
+     变成「弹层被自己清掉」。它只做一件事：一个输入框 + 一个命令列表。 -->
+<div class="modal palette-layer" id="paletteLayer" hidden></div>
 
 <div class="toasts" id="toasts"></div>
 

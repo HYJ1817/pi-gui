@@ -107,6 +107,30 @@ setAfterHistoryRendered(() => {
   return scrollToUserTurn(p.userIndex);
 });
 
+/* ---------- 供命令面板复用（P24）----------
+ *
+ * 面板要能「切到某个会话」，但它**不自己拉一遍会话列表** —— 那是第二份数据。
+ * 这里把已经渲染出来的那份数据（`dataRef`）只读地暴露出去，面板拿到的就是
+ * 用户此刻在侧栏看到的那几条。 */
+export function knownSessions() {
+  const data = dataRef;
+  if (!data || !Array.isArray(data.items)) return [];
+  return data.items.map((s) => ({
+    id: s.id,
+    title: s.title || '（无标题）',
+    archived: Boolean(s.archived),
+    current: Boolean(s.current),
+  }));
+}
+
+/** 面板里「切换会话」走的也是侧栏那一条路径（含流式守卫与 afterSessionSwitch）。 */
+export async function switchToSessionById(id) {
+  const item = (dataRef && Array.isArray(dataRef.items) ? dataRef.items : []).find((s) => s.id === id);
+  if (item) return doSwitch(item);
+  toast('这条会话已经不在列表里了，刷新后重试', 'warn');
+  return false;
+}
+
 /* 搜索结果变化 → 重画列表区（不碰输入框）。 */
 setSearchChangeHandler(() => {
   paintList();

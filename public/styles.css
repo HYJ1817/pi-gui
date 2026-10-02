@@ -541,6 +541,63 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .modal[hidden]{display:none}
 /* 二次确认层永远压在其他弹层之上（它经常盖在「文件变更」面板上）。 */
 .modal.confirm{z-index:70}
+
+/* ---------- P24 命令面板 ----------
+ *
+ * 自己一层（z-index 比确认层低、比普通弹层高）：面板可能在任何一个视图里被叫出来，
+ * 也可能关掉之后立刻打开一个真正的弹层。
+ * 位置照 Codex / VS Code：**靠上**而不是居中 —— 视线不用来回跳，列表往下长。 */
+.modal.palette-layer{z-index:65;align-items:flex-start;padding:12vh 24px 24px}
+.palette-card{
+  width:100%;max-width:560px;display:flex;flex-direction:column;overflow:hidden;
+  background:#1c1c1c;border:1px solid #333;border-radius:14px;
+  box-shadow:0 18px 48px rgba(0,0,0,.6);
+}
+.palette-input{
+  height:44px;padding:0 16px;border:0;border-bottom:1px solid var(--line);
+  background:transparent;color:var(--t1);font-size:13.5px;font-family:inherit;outline:none;
+}
+.palette-input::placeholder{color:var(--t3)}
+.palette-list{max-height:min(52vh,420px);overflow:auto;padding:6px}
+.palette-group{
+  font-size:10px;color:var(--t3);padding:8px 10px 4px;text-transform:none;
+}
+.palette-item{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  border:0;background:transparent;color:var(--t1);font-family:inherit;font-size:12.5px;
+  padding:8px 10px;border-radius:8px;cursor:pointer;
+}
+.palette-item.on{background:var(--control-active)}
+.palette-item:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+.palette-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.palette-hint{flex:0 0 auto;font-size:10.5px;color:var(--t3);font-family:var(--mono)}
+.palette-empty{font-size:12px;color:var(--t3);padding:16px 12px;text-align:center}
+.palette-empty[hidden]{display:none}
+
+/* 快捷键帮助里的键位表：右列是键位，用等宽字体，绝不换行。 */
+.kb-rows b.kb-keys{white-space:nowrap;color:#d0d0d0}
+
+/* ---------- P24 状态条 ----------
+ *
+ * 「有持续问题 + 有可执行下一步」时才出现。刻意做成**一条**：
+ * 高不过两行，紧贴 header 下沿，不与消息区抢注意力，也不遮输入区。 */
+.stage-notice{
+  display:flex;align-items:flex-start;gap:9px;flex:0 0 auto;
+  margin:8px 14px 0;padding:9px 11px;border-radius:10px;
+  border:1px solid var(--line);background:#191919;
+  font-size:12px;line-height:1.55;color:var(--t2);
+}
+.stage-notice[hidden]{display:none}
+.stage-notice.bad{border-color:#5a3030;background:#1d1717}
+.stage-notice.warn{border-color:#4d4433;background:#1c1a15}
+.notice-dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;margin-top:6px;background:var(--t3)}
+.stage-notice.bad .notice-dot{background:var(--err)}
+.stage-notice.warn .notice-dot{background:var(--warn)}
+.notice-body{flex:1;min-width:0}
+.notice-title{color:var(--t1);font-size:12.5px;margin-bottom:2px}
+.notice-detail{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--t2)}
+.notice-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto}
+.notice-close{margin-left:2px}
 /* 「撤销全部」的计划正文可能很长（列出一批将被删除的路径），
  * 给它自己的滚动区，别把按钮顶出可视区。
  * overflow-wrap:anywhere 是为了长路径 —— 一个没有空格的 60 字符路径

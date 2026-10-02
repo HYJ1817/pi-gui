@@ -20,6 +20,7 @@ import { autoGrow, updateSendState } from './composer.js';
 import { attachmentImages, buildMessage, renderAttachments } from './attachments.js';
 import { clearChanges } from './changes.js';
 import { showChat } from './ui/workspace-surface.js';
+import { clearDraft, draftSync } from './draft.js';
 
 /** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
 export function boot() {
@@ -122,6 +123,9 @@ export async function submit() {
     S.attachments = S.attachments.filter((item) => !atts.includes(item));
     renderAttachments();
     autoGrow();
+    /* P24：这一条真的发出去了 → 当前身份的草稿作废（不然刷新之后
+     * 会把已经发出去的内容再填回输入框，看起来像「发重了」）。 */
+    if (!el.input.value.trim()) clearDraft();
   } finally {
     S.submitting = false;
     updateSendState();
@@ -166,6 +170,10 @@ export function afterSessionSwitch() {
   // 注意 fork 也不清：分叉不改磁盘，之前改过的文件依然处于改动状态。
   clearChanges();
   refreshSessionList();
+  /* P24：换会话 = 换草稿身份。**立刻对齐一次**（把上一条会话里没发出去的字
+   * 归到上一条会话的 key，并把新会话的草稿填回来），而不是等 get_state
+   * 回来才动 —— 那中间用户可能已经开始打字了。 */
+  draftSync();
   setTimeout(boot, 250);
 }
 

@@ -12,6 +12,7 @@ import { fmt } from './util.js';
 import { setTitleText } from './shell.js';
 import { openPop, pop } from './ui/popover.js';
 import { setStreaming } from './messages.js';
+import { draftSync } from './draft.js';
 
 /* ---------- 辅助工具 ---------- */
 
@@ -220,6 +221,9 @@ export function applyState(d) {
   const nextSessionId = typeof d?.sessionId === 'string' && d.sessionId ? d.sessionId : null;
   if (previousSessionId && nextSessionId && previousSessionId !== nextSessionId) {
     clearSessionUsage();
+    /* P24：会话身份变了 = 草稿身份也变了 —— 未发送草稿按会话隔离，
+     * 换会话要立刻对齐（旧会话的留在旧 key，新会话的有就恢复）。 */
+    draftSync();
   }
 
   S.state = d;

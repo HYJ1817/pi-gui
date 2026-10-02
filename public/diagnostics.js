@@ -503,3 +503,28 @@ export function openDiagnostics() {
     loadInto(card, close);
   });
 }
+
+/**
+ * P24：直接复制诊断摘要（命令面板用）。
+ *
+ * **复用同一条链路**：`/api/diagnostics` → `buildDiagnosticSummary` → 剪贴板。
+ * 不重新拼一遍文本，也不新增数据源 —— 面板里那个按钮与这里拿到的是同一份东西。
+ * 取不到快照时如实说失败，不静默。
+ */
+export async function copyDiagnosticsSummary() {
+  const payload = await fetchDiagnostics();
+  const d = payload && payload.ok !== false ? payload.diagnostics : null;
+  if (!d) {
+    toast(payload?.error || '无法读取诊断信息', 'error');
+    return { ok: false };
+  }
+  const text = buildDiagnosticSummary(d, driftSnapshot());
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('诊断摘要已复制（不含正文与凭据）', 'info');
+    return { ok: true, text };
+  } catch {
+    toast('复制失败，请到诊断面板手工选中', 'warn');
+    return { ok: false, text };
+  }
+}

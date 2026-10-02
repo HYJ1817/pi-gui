@@ -32,6 +32,7 @@ import { toast } from './ui/toast.js';
 import { capabilityTab } from './capability-view.js';
 import { snapshotMcpObservation } from './mcp-observer.js';
 import { noteUnknownEnum } from './schema-drift.js';
+import { SURFACE_COPY } from './status-copy.js';
 
 /* 状态 → 展示用的圆点与文案。
  * 键必须与 server/skills.js 里 state 的取值一一对应，多一个少一个都会显示成原始英文。 */
@@ -425,7 +426,7 @@ function scopeLabel(scope) {
 function mcpTab(card, isCurrent) {
   const wrap = el('div', 'ext-mcp');
   card.appendChild(wrap);
-  wrap.appendChild(el('div', 'ext-empty', '读取中…'));
+  wrap.appendChild(el('div', 'ext-empty', SURFACE_COPY.loading('MCP 状态')));
 
   const reload = () => {
     if (!isCurrent()) return;
@@ -438,7 +439,7 @@ function mcpTab(card, isCurrent) {
 
 async function mcpTabBody(wrap, isCurrent, reload) {
   wrap.innerHTML = '';
-  wrap.appendChild(el('div', 'ext-empty', '读取中…'));
+  wrap.appendChild(el('div', 'ext-empty', SURFACE_COPY.loading('MCP 状态')));
 
   const [j, n] = await Promise.all([fetchMcp(), fetchMcpServers()]);
   if (!isCurrent()) return;
@@ -941,11 +942,20 @@ function extensionTab(card, isCurrent) {
   }
   async function load() {
     const generation = S.workspaceGeneration;
-    list.replaceChildren(el('div', 'ext-empty', '正在读取 Extensions…'));
+    list.replaceChildren(el('div', 'ext-empty', SURFACE_COPY.loading('Extensions')));
     const result = await fetchExtensions();
     if (!isCurrent() || !ownsWorkspace(generation)) return;
     if (!result || result.ok === false) {
-      list.replaceChildren(el('div', 'ext-empty', 'Extension 发现暂不可用；聊天仍可正常使用。'));
+      /* P24：失败态给**真实存在**的重试路径（就是本函数），不给假按钮。
+       * 措辞统一走 SURFACE_COPY，与其它六个页面同一套话。 */
+      const box = el('div', 'ext-empty');
+      box.appendChild(el('div', '', SURFACE_COPY.failed('Extensions')));
+      box.appendChild(el('div', 'cfg-note dim', '聊天与其它功能不受影响。'));
+      const retry = el('button', 'btn tiny', SURFACE_COPY.retry);
+      retry.type = 'button';
+      retry.onclick = () => load();
+      box.appendChild(retry);
+      list.replaceChildren(box);
       return;
     }
     data = result;
@@ -991,7 +1001,15 @@ const TABS = [
   { id: 'mcp', label: 'MCP', domId: 'extensionsTabMcp' },
 ];
 
-export function openExtensions() {
+/**
+ * 打开扩展工作区。
+ *
+ * @param options.tab 打开后停在哪个过滤器（P24：命令面板要能直接跳到
+ *        Capabilities / MCP / Skills / Extensions）。**同一个 openExtensions**，
+ *        不新增入口、不复制初始化逻辑；面板仍然是懒建的。
+ */
+export function openExtensions(options = {}) {
+  const wanted = TABS.some((tab) => tab.id === options.tab) ? options.tab : 'all';
   openWorkSurface('extensions', (card, instance) => {
     card.classList.add('wide', 'ext');
 
@@ -1012,7 +1030,7 @@ export function openExtensions() {
     body.id = 'extensionsTabPanel';
     body.setAttribute('role', 'tabpanel');
     const panels = {};
-    let active = 'all';
+    let active = wanted;
 
     const render = () => {
       for (const btn of tabs.children) {

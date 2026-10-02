@@ -26,7 +26,7 @@ import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './appro
 import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popLabel, popTitle, popVisible } from './ui/popover.js';
-import { closeModal, openModal } from './ui/modal.js';
+import { closeModal, confirmModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setConn, setStatus, setTitleText } from './shell.js';
 import { samePath } from './util.js';
 import { autoGrow, initComposerLayout, updateSendState } from './composer.js';
@@ -68,9 +68,20 @@ import { loadPlannerBadge, openPlanner } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
-import { openDiagnostics } from './diagnostics.js';
+import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
 import { showChat } from './ui/workspace-surface.js';
+/* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
+ * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
+ * 「谁提供动作」与「谁需要动作」的地方。 */
+import { registerShortcut, installShortcuts, assertNoConflicts } from './shortcuts.js';
+import { openShortcutHelp } from './ui/shortcut-help.js';
+import { openPalette, paletteOpen } from './palette.js';
+import { defineCommands, setDynamicCommands } from './palette-model.js';
+import { initDraft, draftSync, clearDraft } from './draft.js';
+import { startupNotice, NOTICE_ACTIONS } from './status-copy.js';
+import { showNotice, hideNotice } from './ui/notice.js';
+import { knownSessions, switchToSessionById } from './sessions.js';
 
 /* ---------- 装配 ---------- */
 
@@ -203,6 +214,44 @@ function handle(evt) {
 }
 
 let lastBridgeError = '';
+/* 最近一次启动失败的原因与下一步（后端 bridge_status.error 与 .hint）。
+ * 只活在内存里：它是「当前这个进程为什么没起来」的说明，不属于任何持久状态。 */
+let bridgeErrorText = '';
+let bridgeHintText = '';
+
+/* ---------- P24：状态条（启动 / 连接 / 兼容）----------
+ *
+ * toast 是一次性的，状态是持续的：pi 起不来时用户随时回来都该看到同一句说明
+ * 与同一个下一步。这里只做「把状态翻译成一条 notice」，具体文案在 status-copy.js。
+ * 动作一律指向既有入口（重启走 restartPi、诊断走 openDiagnostics），
+ * **不自动修复任何东西**（不装、不改 PATH、不删配置）。 */
+const NOTICE_HANDLERS = {
+  restart: () => restartPi(),
+  diagnostics: () => openDiagnostics(),
+};
+
+function noticeActions(ids) {
+  return (ids || [])
+    .map((id) => {
+      const meta = NOTICE_ACTIONS[id];
+      const run = NOTICE_HANDLERS[id];
+      return meta && run ? { label: meta.label, title: meta.title, run } : null;
+    })
+    .filter(Boolean);
+}
+
+function syncNotice() {
+  const model = startupNotice({
+    bridgeState: S.bridgeState,
+    bridgeError: bridgeErrorText,
+    bridgeHint: bridgeHintText,
+    hasProject: S.hasProject,
+    compat: S.compat,
+  });
+  if (!model) return hideNotice();
+  return showNotice({ ...model, actions: noticeActions(model.actions) });
+}
+
 function onBridge(evt) {
   if (S.switching && evt.cwd && !samePath(evt.cwd, S.desiredCwd)) return;
   if (S.switching && evt.state === 'ready' && Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun <= S.bridgeRun) return;
@@ -217,7 +266,8 @@ function onBridge(evt) {
       /* P23：bridge 生命周期一变，前端看到的 schema 漂移也不再属于当前运行 ——
        * 与各 feature 的运行观察同一条纪律（旧 run 的结论不许留在表里）。 */
       resetDrift();
-      return setBridgeState('starting');
+      setBridgeState('starting');
+      return syncNotice();
     case 'ready':
       if (Number.isInteger(evt.bridgeRun) && evt.bridgeRun === S.bridgeRun && S.bridgeState === 'ready' && !S.switching) return;
       if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
@@ -225,8 +275,14 @@ function onBridge(evt) {
       S.hasProject = Boolean(S.cwd);
       S.models = [];
       lastBridgeError = '';
+      bridgeErrorText = '';
+      bridgeHintText = '';
       setStatus('');
       setBridgeState('ready');
+      hideNotice();
+      /* pi 起来了 → 会话身份可能刚变（新 cwd / 新会话），草稿要对齐。
+       * 这个调用与「会话 id 变化时」那一条是同一个函数，重复调用无副作用。 */
+      draftSync();
       loadExtensionsBadge();
       loadPlannerBadge();
       boot();
@@ -250,27 +306,31 @@ function onBridge(evt) {
     case 'exited':
       if (!lastBridgeError) setBridgeState('exited', `pi 已退出 (${evt.code ?? evt.signal ?? '?'})`);
       interruptActive();
-      return;
+      return syncNotice();
     case 'restarting':
-      return setBridgeState('restarting');
+      setBridgeState('restarting');
+      return syncNotice();
     case 'no-project':
       /* 后端明确告知「没有项目所以没启动 pi」。
        * 这不是错误状态 —— 底部连接指示不能说「连接断开」，那会让用户以为网络坏了。
        * 传空 kind 用 .conn 的默认灰点：中性、不刺眼。 */
       setBridgeState('no-project');
-      return;
-    case 'error':
+      return hideNotice();
+    case 'error': {
       setBridgeState('error');
       if (S.switching) {
         S.switching = false;
         S.syncPending = null;
         applyProjectState();
       }
+      bridgeErrorText = evt.error || '';
+      bridgeHintText = evt.hint || '';
       const message = [evt.error, evt.hint].filter(Boolean).join('\n');
       setStatus(message);
       if (message !== lastBridgeError) toast(message, 'error');
       lastBridgeError = message;
-      return;
+      return syncNotice();
+    }
     default:
       return;
   }
@@ -549,9 +609,9 @@ function openMoreMenu() {
         close();
         openStatsPanel();
       }],
-      ['重载 pi 配置', () => {
+      ['重启 pi', () => {
         close();
-        reloadPi();
+        restartPi();
       }],
     ];
 
@@ -684,23 +744,33 @@ $('btnStats').onclick = openStatsPanel;
 
 // 侧栏导航
 $('navNew').onclick = newSession;
-$('navSearch').onclick = () => {
-  group.classList.add('open');
-  $('groupHead').setAttribute('aria-expanded', 'true');
-  $('projectSidebar').classList.add('search-open');
-  $('navSearch').setAttribute('aria-expanded', 'true');
-  $('projectSidebar').querySelector('.pj-search-input')?.focus();
-};
-$('navHome').onclick = () => {
+$('navSearch').onclick = openSessionSearch;
+/* 「回到对话」的既有语义：关掉二级弹层与 More 菜单、切回 Chat、把焦点给输入框。
+ * P24 起它被三处复用（侧栏 Home、命令面板、快捷键），所以抽成一个函数 ——
+ * 各写一份迟早会出现「从某条路回去焦点不对」。 */
+function goChat() {
   if (!$('modal').hidden) closeModal();
   $('globalMoreMenu').hidden = true;
   $('navGlobalMore').setAttribute('aria-expanded', 'false');
   showChat();
   el.input.focus();
-};
+}
+
+$('navHome').onclick = goChat;
 $('navChanges').onclick = openChangesPanel;
 $('navProviders').onclick = openProvidersPanel;
 $('navDiagnostics').onclick = openDiagnostics;
+/* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
+$('navPalette').onclick = () => {
+  $('globalMoreMenu').hidden = true;
+  $('navGlobalMore').setAttribute('aria-expanded', 'false');
+  openPalette();
+};
+$('navShortcutHelp').onclick = () => {
+  $('globalMoreMenu').hidden = true;
+  $('navGlobalMore').setAttribute('aria-expanded', 'false');
+  openShortcutHelp();
+};
 
 // 侧栏头部 / 项目
 // 「添加文件夹」在项目操作菜单和未选项目的欢迎块里共用目录选择器。
@@ -790,6 +860,115 @@ $('groupHead').onclick = () => {
   }
 };
 
+/* ---------- P24：命令面板 / 快捷键 / 草稿 ----------
+ *
+ * **全部复用既有 handler**：这里不实现任何「切视图」「重启」「复制」的细节，
+ * 只把「动作 → 名字 → 键位 / 面板条目」接起来。加一个动作 = 加一行，不是加一套逻辑。 */
+
+/* ---------- P24：重启 pi 的唯一入口（含确认）----------
+ *
+ * 为什么要有这个包装：P24 给「重启 pi」加了两个新入口（命令面板、状态条），
+ * 而它原本在 More 菜单里是**直接执行**的。三个入口各写一遍确认，迟早会有一个漏掉
+ * —— 那就等于「有确认」是假的。所以收敛成一个函数，谁都从这里走。
+ *
+ * 危险动作不能被绕过：命令面板只调这个函数，不提供任何跳过确认的参数。
+ * 提示语按「会不会真的中断什么」分开写 —— 正在生成时要说清会中断这一轮。 */
+export async function restartPi() {
+  const busy = Boolean(S.streaming);
+  const ok = await confirmModal({
+    title: '重启 pi？',
+    message: busy
+      ? '正在生成回答，重启会中断这一轮。\n\n磁盘上的会话与文件不受影响，重启后仍在。'
+      : '重启会重新加载配置并重建会话视图。\n\n磁盘上的会话与文件不受影响。',
+    okText: '重启 pi',
+  });
+  if (ok !== true) return false;
+  reloadPi();
+  return true;
+}
+
+/** 弹层开着时不要抢键位（弹层有自己的 Esc / Tab 处理）。 */
+const noOverlay = () => el.modal.hidden && el.confirmLayer.hidden && !paletteOpen();
+const canRun = () => noOverlay();
+const canPrompt = () => S.hasProject && !S.switching && S.bridgeState === 'ready';
+
+/* 侧栏的「搜索会话」那一条路径（展开分组 + 聚焦搜索框）也在这里复用。 */
+function openSessionSearch() {
+  group.classList.add('open');
+  $('groupHead').setAttribute('aria-expanded', 'true');
+  $('projectSidebar').classList.add('search-open');
+  $('navSearch').setAttribute('aria-expanded', 'true');
+  $('projectSidebar').querySelector('.pj-search-input')?.focus();
+}
+
+const openView = (view) => () => {
+  if (view === 'chat') return goChat();
+  if (view === 'planner') return openPlanner();
+  if (view === 'changes') return openChangesPanel();
+  return openExtensions();
+};
+
+registerShortcut({ id: 'palette', combo: 'primary+k', label: '打开命令面板', group: '通用', when: canRun, run: () => openPalette() });
+/* 第二个绑定：浏览器里 Ctrl+K 常被地址栏吃掉，Ctrl+Shift+P 是各编辑器通用的备选。
+ * 两条绑同一个动作 —— 不是两个功能。 */
+registerShortcut({ id: 'palette-alt', combo: 'primary+shift+p', label: '打开命令面板（备用键）', group: '通用', when: canRun, run: () => openPalette() });
+registerShortcut({ id: 'shortcut-help', combo: 'primary+/', label: '键盘快捷键帮助', group: '通用', when: canRun, run: () => openShortcutHelp() });
+registerShortcut({ id: 'view-chat', combo: 'alt+1', label: '切到对话', group: '视图', when: canRun, run: openView('chat') });
+registerShortcut({ id: 'view-planner', combo: 'alt+2', label: '切到任务', group: '视图', when: canRun, run: openView('planner') });
+registerShortcut({ id: 'view-changes', combo: 'alt+3', label: '切到文件变更', group: '视图', when: canRun, run: openView('changes') });
+registerShortcut({ id: 'view-extensions', combo: 'alt+4', label: '切到扩展与能力', group: '视图', when: canRun, run: openView('extensions') });
+/* 冲突检查放在装配末尾：注册完立刻验，重复键位在启动时就炸出来，
+ * 而不是等用户按下那个键才发现有两个功能抢。 */
+assertNoConflicts();
+installShortcuts({});
+
+defineCommands([
+  { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', run: goChat },
+  { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', run: () => openPlanner() },
+  { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', run: () => openChangesPanel() },
+  { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表', run: () => openExtensions() },
+  { id: 'view.capabilities', title: '能力视图（Capabilities）', group: '视图', keywords: 'capability 能力 状态 可用', run: () => openExtensions({ tab: 'capabilities' }) },
+  { id: 'view.skills', title: 'Skills', group: '视图', keywords: 'skill 技能', run: () => openExtensions({ tab: 'skills' }) },
+  { id: 'view.mcp', title: 'MCP', group: '视图', keywords: 'mcp server 原生', run: () => openExtensions({ tab: 'mcp' }) },
+  { id: 'view.usage', title: '用量与额度', group: '视图', keywords: 'usage quota 用量 额度 token 上下文', run: () => openCtxTip() },
+  { id: 'session.new', title: '新对话', group: '会话', keywords: 'new session 新会话', when: canPrompt, run: () => newSession() },
+  { id: 'session.search', title: '搜索会话', group: '会话', keywords: 'search session 查找 历史', run: openSessionSearch },
+  { id: 'session.stats', title: '会话统计', group: '会话', keywords: 'stats 统计 token 成本', when: () => S.hasProject, run: () => openStatsPanel() },
+  { id: 'session.rename', title: '重命名会话', group: '会话', keywords: 'rename 改名 标题', when: () => S.hasProject, run: () => renameSession() },
+  { id: 'session.export', title: '导出会话为 HTML', group: '会话', keywords: 'export share 导出 分享', when: canPrompt, run: () => exportHtml() },
+  { id: 'run.stop', title: '停止生成', group: '执行', keywords: 'stop abort 中断 取消', when: () => S.streaming, run: () => stop() },
+  { id: 'run.compact', title: '压缩上下文', group: '执行', keywords: 'compact 压缩 context', when: canPrompt, run: () => compactNow() },
+  /* 重启仍然走 restartPi()（唯一入口 + 确认）—— 面板不提供跳过确认的路径。 */
+  { id: 'run.restart', title: '重启 Pi', group: '执行', keywords: 'restart 重载 reload pi', when: () => S.hasProject, run: () => restartPi() },
+  { id: 'app.settings', title: '项目设置', group: '全局', keywords: 'settings 设置 配置', when: () => S.hasProject, run: () => openProjectSettings() },
+  { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => openProvidersPanel() },
+  { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => openDiagnostics() },
+  { id: 'app.copy-diagnostics', title: '复制诊断摘要', group: '全局', keywords: 'copy diagnostics 复制 摘要 issue', run: () => copyDiagnosticsSummary() },
+  { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', run: () => openShortcutHelp() },
+]);
+
+/* 动态条目：已加载的会话列表（复用侧栏那一份数据，不重新拉）。
+ * **只在有查询时才出现** —— 否则一打开面板就被十几条会话刷屏，
+ * 常用动作反而要往下找。 */
+setDynamicCommands((ctx = {}) => {
+  const q = String(ctx.query || '').trim();
+  if (!q) return [];
+  return knownSessions()
+    .filter((s) => !s.current)
+    .slice(0, 12)
+    .map((s) => ({
+      id: `session.switch.${s.id}`,
+      title: `切换到会话：${s.title}`,
+      group: '会话',
+      hint: s.archived ? '已归档' : '',
+      keywords: 'switch session 会话 切换',
+      run: () => switchToSessionById(s.id),
+    }));
+});
+
+/* 草稿：绑定输入监听 + 首次恢复。身份（项目/会话）变化时由 draftSync 对齐。 */
+initDraft();
+
 /* ---------- 启动 ---------- */
 
 /* 欢迎块自动显隐。挂在整个对话区上（subtree），这样无论消息是从哪条路径
@@ -819,7 +998,12 @@ initComposerLayout();
 el.input.focus();
 
 // 先拿到 cwd 再连事件流，保证导出提示里的路径一开始就是绝对的
-loadStatus().then(connect);
+loadStatus().then(() => {
+  /* 草稿与状态条都依赖 cwd / hasProject / compat，等状态回来再对齐一次。 */
+  draftSync();
+  syncNotice();
+  connect();
+});
 
 /* 版本检查：启动后**延迟**跑一次，不阻塞启动、不在启动瞬间请求
  * （那时 pi 桥接正在拉起，任何并发都只会互相干扰）。
