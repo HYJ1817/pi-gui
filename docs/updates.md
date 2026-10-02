@@ -3,7 +3,21 @@
 Pi GUI 能告诉你「有没有新版本」，并把发布说明摆出来，再让你自己点开 GitHub 的
 Release 页面或安装包。
 
-**它不会替你下载、不会替你安装、不会静默升级。** 这一节的最后一段解释为什么。
+**它不会替你下载、不会替你安装、不会静默升级。** 第一部分第十一节解释为什么。
+
+这里其实是**两件不同的事**，本文分成两部分写，因为把它们混在一句话里迟早会出事
+（「Pi 更新」和「Pi GUI 更新」说的不是同一个对象）：
+
+| | 管什么 | 端点 | 会不会执行命令 | 官方来源 |
+|---|---|---|---|---|
+| **第一部分：Pi GUI 更新** | 这个界面要不要升级 | `/api/update` | **不会** —— 只把用户带到 GitHub | GitHub Release |
+| **第二部分：Pi 运行时更新** | 它驱动的那个 `pi` 要不要升级 | `/api/pi-update` | 只会在用户确认后跑 `pi update --self` | `https://pi.dev/api/latest-version` |
+
+两者的**状态、相位、缓存、文案、代码模块**（`server/update-check.js` 对
+`server/pi-update.js`、`public/update.js` 对 `public/pi-update.js`）各有一套，
+**绝不互相复用**。命名也刻意分开：`update` 只指 Pi GUI 自己，`pi-update` 只指运行时。
+
+# 第一部分：Pi GUI 更新（`/api/update`）
 
 ## 一、数据源
 
@@ -362,10 +376,202 @@ npm run test:update        # 版本检查（87 项）
 前端白名单与主进程实现的对拍、自动检查的静默与轻提示。
 主进程外链判定在 `tests/electron-guard.cjs`。
 
-## 十三、相关文档
+# 第二部分：Pi 运行时更新（`/api/pi-update`）
+
+**这一部分管的是「本机装着的那个 pi」** —— Pi GUI 驱动的外部 runtime ——
+不是 Pi GUI 自己。上面那部分的 GitHub Release、`/api/update`、`public/update.js`
+与它**不共用任何状态、任何缓存、任何一条文案**：它的模块是
+`server/pi-update.js` + `public/pi-update.js`，端点是 `/api/pi-update`。
+
+**为什么原则恰好相反。** 上游 pi 是外部程序，升级它会改变 RPC / MCP / Extension
+契约（P23 那套 probe 矩阵的前提）。所以这里：**检查可以自动，安装必须由人点** ——
+`自动检查 yes / 自动安装 never`。
+
+## 十三、检查（`GET /api/pi-update`）
+
+```
+GET /api/pi-update              走缓存（30 分钟内直接复用）
+GET /api/pi-update?force=1      绕过缓存（用户点「检查 Pi 更新」时用）
+```
+
+固定的一个公开接口：
+
+```
+GET https://pi.dev/api/latest-version
+```
+
+- **超时 8 秒**，**TTL 30 分钟**，**single-flight**（并发调用只打一次公网），
+  **只缓存成功结果**（失败不写缓存，点「重试」立刻可以重来）。
+- 请求里**只有** `User-Agent: pi-gui/<GUI 版本>` 与 `Accept: application/json`；
+  `redirect: 'error'`（`packageName` 这类判据不能被一次跳转绕过去）。
+  没有 cookie / token / cwd / 项目名 / 会话 / 模型 / provider。
+- 响应只取白名单字段。其中 **`packageName` 必须严格等于
+  `@earendil-works/pi-coding-agent`**，否则整条判失败（`foreign-package`）——
+  版本接口换个包名就等于「这批信息不是给这份 pi 的」，绝不能据此去执行更新。
+- **永不抛**：失败一律收成结构化结果，HTTP 层仍然回 200（业务失败不用 5xx）。
+  `errorCode` 是内部类型：`offline` / `no-fetch` / `timeout` / `network` /
+  `http-error` / `invalid-response` / `foreign-package`。
+- `reason` 说明「为什么现在不能更新」，给人看的一句话由前端按码选文案：
+  `latest`（已是最新）、`version-unknown`（读不到本机版本号）、
+  `no-proven-entry`（证明不到官方安装入口）。**「读不到」不等于「不支持」**。
+- `canUpdate` 只有同时满足「真的有新版」**且**「官方入口证明得出来」才为 true。
+
+### 相位（只有这几个字符串）
+
+```
+idle → checking → available → updating → verifying → restarting → latest
+                     └──────────── failed ────────────┘
+```
+
+前端**只认这几个值**，不自己拼 `loading && hasUpdate && !error` 那种状态 ——
+拼装的取值空间里必然长出「按钮说可以更新、其实正在更新」这类自相矛盾的界面。
+
+### 自动检查
+
+启动后**延迟 12 秒只检查一次**（比 Pi GUI 自己的 8 秒再晚一点：pi 的版本探测要走一次
+pi 包的读盘）。它**不阻塞启动、不轮询、绝不安装**，吃 TTL 缓存；自动那一次失败
+**完全静默**（连状态都不留），同一个 `latestVersion` 在整个应用生命周期里**只轻提示一次**
+（`Pi <版本> 可用 —— 在侧栏「诊断」里可以更新`），并点亮诊断入口上的小点。
+
+### 离线
+
+`PI_OFFLINE=1`（或 `PI_GUI_OFFLINE=1`）时**完全不发请求**，直接回
+`{ok:false, code:'offline'}`。这个变量是本轮为「公网检查」新加的 ——
+仓库里以前没有离线开关，旧的 GUI 版本检查只是「失败了也不抛」。
+
+## 十四、执行更新（`POST /api/pi-update`）
+
+```json
+{
+  "action": "update",
+  "confirm": true,
+  "expectedCurrentVersion": "0.99.2",
+  "expectedLatestVersion": "1.0.0",
+  "__expectedCwd": "C:\\项目"
+}
+```
+
+**`confirm: true` 是硬要求**，缺了就是 `confirm-required`，一个字都不执行。
+`__expectedCwd` 是既有的工作区过期守卫（切换项目会让 pi 以新 cwd 重启，
+在那次重启里替换 runtime 文件正是要避免的）：对不上是 `workspace-stale`。
+
+**renderer 不能传执行参数。** 只认上面这五个字段；`command` / `args` /
+`packageName` / `version` / `url` / `env` **一律忽略** ——
+所以这个端点不可能是「任意命令执行器」。
+
+**目标版本不采信前端口述。** 服务端重新确认一次最新版本，并把前端带上来的
+`currentVersion` / `latestVersion` 各自再校一遍：对不上就是 `stale-current` /
+`stale-target`（不更新，请刷新再来）。
+
+**闸门在后端，前端的 disabled 按钮不算数。** 服务端自己再查一遍，命中任何一条都拒绝：
+
+| 闸门 | code | 判据来自 |
+|---|---|---|
+| 正在生成的回合 | `busy-turn` | pi 自己的事件（`turnActive`） |
+| 在飞的 Pi CLI 动作（例如 MCP 登录） | `busy-cli` | CLI 动作计数 |
+| 跑着的 Planner 任务 / 独立验证 | `busy-plan` | planner 的 `projectSwitchBlockReason()`（规则只有一份） |
+| 另一条更新正在跑 | `update-running` | 模块自己的单飞锁 |
+| 工作区正在切 | `workspace-stale` | `__expectedCwd` |
+| 判不出忙不忙 | `busy-unknown` | 上面那条查询抛错 → **fail closed** |
+
+**只跑官方 self-update，而且只跑证明过的那一份 pi。** 唯一会被执行的命令是：
+
+```
+<当前 launch identity 的官方入口> update --self
+```
+
+入口由 `piLaunch.packageDir()` → `buildPiEntry()` 派生，并且**在闸门那一步解析一次之后
+一路带下去**（执行时用的就是闸门解析出来的那个 entry 对象，不是重新找的一份）——
+身份同源，不存在「检查的是 A、更新的是 B」。证明不了就是 `unsupported`：
+「当前这份 Pi 无法通过官方 self-update 更新」—— **绝不退回 PATH 上的另一份 `pi`**
+（P20.5「两份 identity」的老坑），不 `npm install -g`、不 pnpm / bun / curl、
+不下载执行安装包、不更新 Extension / Node / `models.json`。
+
+**异步执行。** 确认与闸门都过了之后立刻回 **202 accepted + `phase: 'updating'`**，
+前端按 2 秒一次轮询相位（上限 150 次 ≈ 5 分钟，与后端 `updateTimeoutMs` 同量级）。
+非 GET / POST 是 **405**；请求体不是合法 JSON 是 **400 `bad-body`**。
+
+更新这条路上的失败码分两层，**两层都不是「已更新」**：
+
+- **闸门层**（还没有暂停 bridge，一个字节都没改）：`confirm-required` / `bad-action` /
+  `update-running` / `workspace-stale` / `offline` / `stale-current` / `stale-target` /
+  `no-update` / `check-failed` / `busy-*`（`busy-turn`、`busy-cli`、`busy-plan`、
+  `busy-unknown`）/ `unsupported`。
+- **执行层**（bridge 已经被暂停）：`pause-failed`（**没停成，所以不 resume** ——
+  那不是我们停的 bridge，掀掉别人的维护态只会更糟）/ `update-timeout` /
+  `update-spawn-failed` / `update-failed` / `verify-failed`（这几个都在 `finally` 里
+  恢复 bridge）。
+
+失败时界面说的是「Pi 更新没有成功」并给出原因，**不会把状态清成「已是最新」**
+（那正是「失败与无更新必须说成两句话」这条既有原则）。
+
+## 十五、维护暂停（bridge maintenance）
+
+更新期间 pi 子进程必须先停下来（正在被替换的文件不能同时是「正在跑的那个程序」），
+所以 `server/rpc-bridge.js` 提供了两个动作：
+
+```
+rpc.pauseForMaintenance(reason)     // 停掉当前 child，等它真的退出
+rpc.resumeFromMaintenance()         // 恢复正常启动 —— 只启动一次
+```
+
+暂停期间的语义（这几条是更新流程的地基，改动前先读 `rpc-bridge.js` 的文件头）：
+
+- `send()` 抛、`request()` 回 `null`（挂起请求立刻安全 settle，没人干等到超时）
+- `restart()` 是 no-op；child 退出**不触发自动重启**
+- **`crashStreak` / backoff 一个都不动** —— 维护不是崩溃
+- 广播 `bridge_status {state:'maintenance', phase:'pausing'|'stopped', reason}`
+- 已经在维护中再调一次 → `{ok:false, code:'already-in-maintenance'}`（不嵌套）
+- `getState().maintenance` 暴露 `{reason, at}`，所以**刷新页面之后仍能渲染维护态**
+
+它**刻意不复用** `runtime.shuttingDown`：那个的意思是「Pi GUI 要退出了」，
+两种状态的原因、持续时间和恢复路径都不一样，混用会让界面说出错误的原因。
+
+**已经暂停之后的任何失败路径都会 `resumeFromMaintenance()`**（`finally` 里做）：
+更新失败、超时、updater 起不来、复验不通过 —— 一律恢复，GUI 不会永久停在维护态；
+旧的那份 pi 还能起来就继续能用。`resume` 自己抛错也不会盖掉真正的失败原因。
+
+## 十六、成功判定：退出码 0 ≠ 更新完成
+
+官方 updater 正常结束**不构成成功证据**。顺序是固定的：
+
+1. 清掉**所有与 pi 包 identity 绑定的缓存**（顺序即语义：`piLaunch` → `piVersion` →
+   `piBuiltins` → `probes` → `mcpNative` → `piCompat`）—— 不清就会拿着旧 pi 的结论
+   继续显示；
+2. 用**同一个 launch identity** `force: true` 重新读一次版本；
+3. 读到的版本**等于**目标版本才报「Pi 已更新至 x」；否则 `verify-failed`
+   （`installedVersion` 如实带出来，不写成功）。
+
+这样「UI 说更新成功、实际还是旧版本」在结构上不成立。
+
+## 十七、诊断里的它
+
+诊断快照里的 `piUpdate` 块与 `bridge.maintenance` 都是**只读投影**，
+**一个网络请求都不发**（只看缓存与最近一次结果）。字段与含义见
+[diagnostics.md](diagnostics.md)。
+
+## 十八、测试
+
+```bash
+npm run test:pi-update        # 81 项（已纳入 npm test）
+```
+
+覆盖：检查的 TTL / single-flight / `force` / 超时 / 网络失败 / 离线 / 响应形状 /
+包名不符 / 请求隐私；更新动作的确认、过期、no-op、**固定参数
+`['update','--self']`**、任意参数被忽略、闸门与并发；维护态不自动重启、只 resume 一次、
+`crashStreak` 不动；identity 的解析次数有界、**执行用的是闸门解析出的那个入口对象**、
+没有 PATH fallback；缓存失效与版本复验；静态边界扫描（这个模块里不可能出现第二种
+安装方式）；HTTP 层的 405 / bad-body / 202 / 离线。细节见 [testing.md](testing.md)。
+
+**默认测试绝不访问 `pi.dev`，也绝不跑真 pi 的 updater** —— 检查用的 `fetch` 与
+执行用的 runner 全部是注入的替身，请求没走到替身上 A 段直接就红。
+
+## 相关文档
 
 - [architecture.md](architecture.md) — 模块地图
-- [security.md](security.md) — 安全边界（含外链与渲染进程权限）
-- [diagnostics.md](diagnostics.md) — 诊断面板里的「版本」小节
-- [testing.md](testing.md) — 测试分层
+- [security.md](security.md) — 安全边界（含外链、渲染进程权限与「Pi 运行时更新边界」）
+- [diagnostics.md](diagnostics.md) — 诊断面板里的「版本」小节与 `piUpdate` 快照
+- [testing.md](testing.md) — 测试分层（`test:update` 与 `test:pi-update`）
+- [upgrade-playbook.md](upgrade-playbook.md) — 升级 pi 的完整流程（内置更新器只是它的便利层）
+- [pi-compatibility.md](pi-compatibility.md) — 更新之后「这个版本我们核过没有」
 - [development.md](development.md) — 发版流程（发完版更新检查就能看到）

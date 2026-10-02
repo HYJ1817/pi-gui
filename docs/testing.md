@@ -48,18 +48,21 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 33 条 RPC 命令里没有一条返回已注册工具清单，`rpc-types.d.ts` 两版 diff 为空。
 `tests/pi-version.cjs` 把这条钉住了。）
 
-`npm test` 里现在有 37 个套件，全部是**纯自动化**：
+`npm test` 里现在有 40 个套件，全部是**纯自动化**：
 
 ```
 smoke 1135 · daily-use 28 · git 161 · modules 117 · reliability · interactions · port-owner
-project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
+project-config 115 · skills 196 · extensions 52 · capability 62 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-probes 62 · pi-version 136 · mcp-native 187
+sessions 77 · session-search 71 · pi-compat 57 · pi-probes 62 · pi-update 81 · pi-version 136 · mcp-native 187
 usage-quota 229 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
+
+> 这张表是**手写维护**的量级参考（见第七节第 2 条）：数字只说明「这些套件确实在断言
+> 东西」，不参与任何判断，真实数字以 `npm test` 的输出为准。不要为同步它引入脚本生成。
 
 > `daily-use`（P24）是**纯逻辑**套件：快捷键注册表、命令面板模型、状态文案。
 > 它不碰 DOM、不碰网络、不碰真 pi —— 所以这些规则在任何机器上结论都一样。
@@ -549,7 +552,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 37 个套件）
+版本一致性（含 tag）  →  npm test（A 层 40 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
@@ -1027,3 +1030,30 @@ Chrome 里 `getComputedStyle(el, '::-webkit-scrollbar')` 仍然会回样式表�
 （`tests/visual-harness.cjs`）。它**故意不改 `P14B_MESSAGES`** ——
 场景 80-minimap 钉死了「4 个用户 Turn」。用完在后续场景里用
 `?what=fixture` / `?what=reset` 换回去。
+
+## Pi 运行时更新（Built-in Pi Updater）验证
+
+`npm run test:pi-update`（**81 条**，已纳入 `npm test`，完全离线）——
+`tests/pi-update.cjs`。守卫的是「Pi 更新」这条路径的边界：**自动检查可以，
+自动安装禁止**（见 [updates.md](updates.md) 第二部分、
+[security.md](security.md) 的「Pi 运行时更新边界」）。
+
+**一条真实网络请求都不发，也绝不跑真 pi 的 updater**：检查用的 `fetch`、
+更新用的 runner、bridge 用的子进程全部是注入的替身（假子进程带
+`stdin/stdout/stderr`，与 `reliability` 同一套）。不碰全局 npm、不读用户真实数据。
+
+段与覆盖（A–F 六段；「静态边界扫描」那 4 条在 D 段里，不在单独一段）：
+
+| 段 | 量什么 |
+|---|---|
+| **A. 检查** | TTL 命中与 `force` 绕缓存、并发 single-flight（只打一次公网）、超时（`AbortError`）→ `timeout`、网络失败 → `network`、非 2xx → `http-error`、失败不进缓存、`PI_OFFLINE` 的取值判定、响应形状不认识、**`packageName` 不是官方包名 → `foreign-package` 且拒绝更新**、**响应字段严格落在白名单里**、请求隐私（固定 URL、无 query；header 只有 `User-Agent` 与 `Accept`；GET、无 body、带超时信号） |
+| **B. 更新动作** | `confirm` 缺失 → 拒绝；`expectedCurrentVersion` / `expectedLatestVersion` 对不上 → `stale-current` / `stale-target`；已是最新 → `no-update`（**不起子进程**）；**执行的参数精确等于 `['update','--self']`**；renderer 传的 `command` / `args` / `packageName` / `version` / `url` / `installCommand` / `env` 全部无效；后端闸门（注入的 `busyReason`，如「回答仍在生成」）→ 拒绝并带上可执行原因；工作区过期守卫 → `workspace-stale`；暂停失败 → `pause-failed`；并发只允许一条（`update-running`） |
+| **C. 维护暂停**（真 bridge） | 暂停立刻发 `maintenance/pausing`、挂起请求安全 settle、child 被要求退出且**等它真的退出才 resolve**；退出后发 `maintenance/stopped` 且**不自动重启**（等过一个 backoff 窗口也不拉新 child）；维护期间 `send()` 拒绝、`request()` 回 `null`；重复暂停 → `already-in-maintenance`；`getState().maintenance` 读得出来（刷新页面才显示得对）；`resume` **只启动一个新 child、只发一次 starting**、再 resume → `not-paused`；**维护之后的意外退出仍走正常重启**（`crashStreak` 没被维护搞脏） |
+| **D. 身份** | 官方入口的解析次数有界（检查阶段为算 `canUpdate` 一次、闸门一次），**执行时用的是闸门解析出的那个 entry 对象**（`===` 同一个，不是重新找的一份）；解析不出来 → 拒绝且**不 fallback 到 PATH 上的 `pi`**；外加**静态边界扫描**：模块里没有 `child_process` / `spawn(` / `execFile`，没有 `npm install` / `pnpm` / `bun` / `curl` / `--all` / `--extensions` / `--models`，`server.js` 的 updater 目标确实来自 `buildPiEntry(piLaunch.packageDir())` |
+| **E. 缓存失效与版本复验** | **退出码 0 ≠ 完成**：先清 identity 绑定缓存、再 `force` 重读版本（两次调用的**顺序**也被断言）；版本没变 → `verify-failed`（不报成功）；updater 非 0 / 起不来 / 超时 → 对应错误码；**复验失败与每一条执行层失败都必须恢复 bridge**（否则永久停在维护态）；成功后检查缓存作废 |
+| **F. HTTP 层** | 非 GET/POST → **405**；请求体不是 JSON → **400 `bad-body`**；合法 POST → **202 accepted + `phase:'updating'`**（前端据此轮询）；后台跑完相位变 `latest`；离线 GET → **200 + `ok:false`/`offline`**（业务结果不用 5xx） |
+
+⚠️ **这一套不覆盖「诊断里的 projection」**：`piUpdate` 白名单字段与
+`bridge.maintenance` 的投影目前没有断言（`tests/diagnostics.cjs` 不注入 `piUpdate`）。
+如实记在 [diagnostics.md](diagnostics.md) 的测试一节，别以为那边测过了。
+

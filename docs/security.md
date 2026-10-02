@@ -4,9 +4,12 @@
 
 兼容体系是**只读探测 + 投影**，不新增任何写路径、网络出口或执行面。
 
-- **不自动升级任何东西**：不升级 / 安装 / 降级 pi 或 Extension、不查 npm registry 与
-  GitHub Release、不改用户全局 npm。`server/pi-probes.js` 与 `server/pi-compat-matrix.js`
+- **这套兼容体系自己不升级任何东西**：不升级 / 安装 / 降级 pi 或 Extension、不查
+  npm registry 与 GitHub Release、不改用户全局 npm。
+  `server/pi-probes.js` 与 `server/pi-compat-matrix.js`
   里没有 `child_process` / `spawn(` / `execFile`，也没有 URL。
+  （**Pi 运行时更新是另一条独立路径**，它确实会执行一条命令 —— 见下面
+  「Pi 运行时更新边界」一节；那一节与这一节的边界互不替代。）
 - **不执行第三方代码做 probe**：源码 probe 只 `readFileSync` pi 包的已知相对路径
   （限长 512KB），**不 import pi 的模块、不 require 扩展**。runtime probe 只读已有观察。
 - **不绕 compatibility warning**：`verification: 'unverified'` 会如实显示在诊断面板，
@@ -27,6 +30,74 @@
   绝对路径、会话正文、配置内容、环境变量、凭据一律不进。
 
 详见 [upgrade-playbook.md](upgrade-playbook.md) 与 [pi-compatibility.md](pi-compatibility.md)。
+
+## Pi 运行时更新（Built-in Pi Updater）边界
+
+上面那节说的是**兼容体系**（probe / 矩阵 / 诊断）不升级任何东西。这一节是另一条路径：
+Pi GUI 会**执行一次官方 self-update** 去升级本机装着的那份 pi。
+**这是整个项目里唯一一处「Pi GUI 会改动 pi 本体」的地方**，所以边界写在这里。
+
+它为什么存在：pi 是外部程序，升级它会改变 RPC / MCP / Extension 契约 ——
+而 P23 那套矩阵的前提正是「我们知道自己核的是哪一版」。没有这个入口时，用户只能自己去
+终端敲命令，界面显示的版本与基线会一直漂移。它**不是**「自动升级」：见下面的第一条。
+
+它与 Pi GUI 自己的更新（`/api/update`、GitHub Release）**是两件不同的事**，
+端点、相位、缓存、文案各有一套，绝不互相复用（见 [updates.md](updates.md)）：
+
+| | 管什么 | 端点 | 会执行什么命令 |
+|---|---|---|---|
+| Pi GUI 更新 | 这个界面要不要升级 | `/api/update` | 一条都不执行（只把用户带到 GitHub） |
+| Pi 运行时更新 | 它驱动的那个 pi 要不要升级 | `/api/pi-update` | 唯一一条：官方 `pi update --self` |
+
+- **自动检查可以，自动安装禁止。** 启动后延迟 **12 秒**只检查一次，不轮询、不安装；
+  真正更新必须用户显式确认（`confirm === true`），且确认框里先说明「更新期间会暂时
+  停止当前 Pi 进程」与「不会更新 Extension、模型目录或 Node」。
+- **只跑官方 self-update，只跑一份证明过的 pi。** 命令永远是 `['update', '--self']`；
+  入口由**当前 launch identity** 派生（`piLaunch.packageDir()` → `buildPiEntry()`）。
+  证明不了就拒绝（`unsupported`：「当前这份 Pi 无法通过官方 self-update 更新」），
+  **绝不退回 PATH 上的另一份 `pi`** —— 那正是 P20.5「两份 identity」的老坑。
+  不 `npm install -g`、不 pnpm / bun / curl、不下载执行安装包、不更新 Extension /
+  Node / `models.json`。
+- **renderer 不能传执行参数。** 只认 `action` / `confirm` / `expectedCurrentVersion` /
+  `expectedLatestVersion`（外加工作区过期守卫 `__expectedCwd`）；
+  `command` / `args` / `packageName` / `version` / `url` / `env` **一律忽略** ⇒
+  它在结构上不可能是「任意命令执行器」。
+- **目标版本不采信前端口述。** 更新前服务端重新确认一次，当前版本与目标版本各自再校一遍；
+  对不上是 `stale-current` / `stale-target`，不更新。
+- **闸门在后端，前端的 disabled 按钮不算数。** 服务端自己再查一遍：没有正在生成的回合、
+  没有跑着的 Planner 任务、没有在跑的独立验证、没有在飞的 Pi CLI 动作（例如 MCP 登录）、
+  没有另一次更新、工作区没在切。命中任何一条都拒绝（`busy-*` / `update-running`）。
+- **维护态语义**（`rpc.pauseForMaintenance()`）：更新期间 bridge 停掉当前 pi 子进程，
+  不接新命令、**不自动重启**、不污染 `crashStreak` / backoff，并如实广播
+  `bridge_status{state:'maintenance', phase:'pausing'|'stopped', reason}`。
+  它**刻意不复用** `runtime.shuttingDown` —— 那个的意思是「Pi GUI 要退出了」。
+  `resumeFromMaintenance()` 只启动一次；**已经暂停之后的任何失败路径都会 resume**
+  （`finally` 里做），GUI 不会永久停在维护态；旧的那份 pi 还能起来就继续能用。
+- **退出码 0 不是成功。** 官方 updater 正常结束之后，先清掉所有与 pi 包 identity 绑定的
+  缓存（launch → version → builtins → probes → native MCP → compat，顺序即语义），
+  再用**同一个 launch identity** 强制重读版本；装上的版本不等于目标版本就是
+  `verify-failed`，绝不显示「已更新至 x」。
+- **不自动宣布兼容。** 更新之后 `verification` 照旧只回答「这个版本我们核过没有」，
+  没核过的如实显示 `unverified`；能力重新探测，拿不到证据就保持未知 ——
+  不因为「刚刚更新成功」就标成已核对。**能力判定永远不看版本号大小。**
+- **检查请求的隐私边界。** 固定 URL（`https://pi.dev/api/latest-version`）、GET、
+  8 秒超时、`redirect: 'error'`；请求里**只有** `User-Agent: pi-gui/<GUI 版本>` 与
+  `Accept: application/json` —— 没有 cookie、没有 token、没有 cwd / 项目名 / 会话 /
+  模型 / provider。响应只取白名单字段，且 `packageName` 必须严格等于
+  `@earendil-works/pi-coding-agent`，否则整条拒绝（`foreign-package`）。
+  updater 的 stdout / stderr **原样不出后端**，只留一句摘要（截断 + 脱敏路径与
+  token 形态）。
+- **离线开关。** `PI_OFFLINE=1`（或 `PI_GUI_OFFLINE=1`）时**完全不发请求**，检查直接回
+  `offline`。这个变量是本轮为「公网检查」新加的：仓库里以前没有离线开关，
+  旧的 GUI 版本检查只是「失败了也不抛」。检查失败只影响这一块 UI，
+  不影响启动 / Bridge / Chat / Planner / MCP / Git / 诊断。
+- **OAuth 凭据始终由 pi 自己管。** Pi GUI **不读、不迁移、不复制 `mcp-auth.json`**，
+  也从不实现 OAuth。更新 pi 之后凭据键的迁移（legacy「URL 键」→ `mcp__<name>|URL` 键）
+  是**在 pi 内部惰性发生**的：第一个 `load()` 的 server 接管 legacy 条目，
+  Pi GUI 既不参与也不知道。它只把 server **名字**原样交给官方
+  `pi mcp login/logout`（见 [mcp.md](mcp.md)）—— 所以更新本身不让 Pi GUI 经手任何 token。
+
+详见 [updates.md](updates.md) 与 [upgrade-playbook.md](upgrade-playbook.md)。
 
 ## P22 Capability 投影层边界
 

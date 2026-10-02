@@ -3,7 +3,8 @@
 P21 的 usage/quota 与 pi 本体解耦：本地用量只吃 pi 的 RPC 事件
 （`get_session_stats` / `message_update` / `message_end` 的真实 usage 字段），
 远端额度则直接对上**各家供应商自己的官方接口**，与 pi 版本无关。
-当前基线 pi **0.99.2**；适配器清单与重置语义见 [usage-quota.md](usage-quota.md)。
+当前基线 pi **1.0.0**（2026-10-02 逐项核对 + 本机 live 复核）；
+适配器清单与重置语义见 [usage-quota.md](usage-quota.md)。
 pi 的 provider 配置（`~/.pi/agent/models.json`）只用来读 `baseUrl` / `apiKey` /
 `quotaAdapter`（以及旧部署可选的 `quotaUserId`）这几个字段，Pi GUI 不写回、不改 schema。
 
@@ -137,8 +138,8 @@ generic fallback（那是 P15 的既有行为，且内容是折叠区里的、�
 
 | | 是什么 | 谁决定 | 在哪看 |
 |---|---|---|---|
-| **历史验证基线** | P15–P19 当时的验收对象：**0.87.0** | 已固定的历史事实，不会变 | 各 feature 文档的「当时基线」句 |
-| **当前验证基线** | P20.6-Fix 实测并写进测试的对象：**0.99.2** | 本轮的核对结果 | 本节 + `tests/pi-version.cjs` |
+| **历史验证基线** | P15–P19 当时的验收对象：**0.87.0**；P20.5 的对照物 0.99.1；P20.6-Fix 与 P22/P23 的对照物 0.99.2 | 已固定的历史事实，不会变 | 各 feature 文档的「当时基线」句 |
+| **当前验证基线** | 本轮逐项核对并 live 复核的对象：**1.0.0**（2026-10-02） | 本轮的核对结果 | 本节 + `server/pi-compat-matrix.js` + `tests/pi-probes.cjs` |
 | **运行中版本** | 你这台机器上**实际跑的那个 pi** | 由 `server/pi-version.js` 探测 | Extensions 页 MCP 标签页 / Diagnostics |
 | **未知能力** | 探测拿不到证据的能力 | 一律 `unknown`，**不猜** | 同左 |
 
@@ -209,6 +210,86 @@ generic fallback（那是 P15 的既有行为，且内容是折叠区里的、�
 `list --json` 形状、CLI 子命令、状态闭集、built-in 清单都一致）。变的是
 **MCP 配置层的词汇表与命名规则**，以及**两个新的凭据面字段**——前者要求
 GUI 归一化与兼容解析，后者要求 GUI 把它们纳入「拒绝接收」的清单。
+
+### 0.99.2 → 1.0.0 的实际差异（逐项核对过）
+
+对照物：GitHub tag **v0.99.2** 与 **v1.0.0** 的源码树。两个 tag 的 commit
+正好等于 npm 上两个发布包的 `gitHead`：
+
+| 版本 | tag commit = npm `gitHead` |
+|---|---|
+| 0.99.2 | `005af57d88ee23b33778f343a9595b32e67ff788` |
+| 1.0.0 | `a13d35a742c6ef8462812a28fbe1d8c8b7431c32` |
+
+**tag 与发布包是同一份东西**，所以这次可以逐文件比对源码而不必再解 tarball。
+
+| 面 | 读哪个文件 | 0.99.2 → 1.0.0 | 对 Pi GUI 的影响 |
+|---|---|---|---|
+| **RPC 命令集 / 应答 / 扩展 UI** | `packages/coding-agent/src/modes/rpc/rpc-types.ts` | **逐字节相同**（SHA256 `BE06A1D53916…`）：`RpcCommand` **33 条**、顺序一致、零增删；`extension_ui_request` 9 个方法、`extension_ui_response` 3 个形状不变 | **无。不需要任何 RPC migration** |
+| **事件流** | `packages/agent/src/types.ts` + `core/agent-session.ts` | `AgentEvent` **逐字节相同**（`tool_execution_start/_update/_end` 在那一份里）；`AgentSessionEvent` 的相关区间也相同 | 无。**没有叫 `RpcEvent` 的类型** —— 事件是 `AgentSessionEvent`，别在文档里再造一个名字 |
+| **Extension API** | `packages/coding-agent/src/core/extensions/types.ts` | **逐字节相同**（SHA256 `C22E4DDD89F0…`，82,143 字节）：`ToolCallEventResult.block/reason/terminate`、`getAllTools(): ToolInfo[]`、`mcp_servers_change`、四个 provider 事件都没变 | 无。Approval / Extensions / Tool Timeline **不按版本号重写** |
+| **MCP 配置校验** | `packages/coding-agent/src/core/mcp-servers.ts` | **变了**（整个文件只有这一处差异）：新增 `oauth.authServerMetadataUrl` 字段 + 一段校验 | ⚠️ **必须复刻**（见下） |
+| **MCP 配置文件读取** | `packages/coding-agent/src/extensions/mcp/config.ts` | **逐字节相同** | 覆盖 / 信任 / namespace 规则不变 |
+| **MCP CLI** | `packages/coding-agent/src/extensions/mcp/cli.ts` | 改了两处调用签名：`credentials.remove(name, url)` / `credentials.forServer(name, url)` | GUI 只代理官方 CLI，**不自己实现 OAuth** |
+| **OAuth 凭据存储** | `packages/coding-agent/src/extensions/mcp/oauth.ts` | 键从「URL」改成「server name + URL」 | 见下（Pi 自己迁移，GUI 不碰） |
+| **deferred MCP 工具** | `core/agent-session.ts` | 上游**修了一个 bug**：`tool_search` 动态加载的 deferred MCP 工具在 resume / `/reload` 后不再被丢掉 | GUI **不重写**工具恢复；无证据就 `unknown` |
+| **codemode** | `packages/codemode/src/runtime/prelude-source.ts` 等 | 沙箱改成 Proxy：读不存在的成员会**抛错**，`typeof tools.x` 不再是合法探测（要用 `"x" in tools`）；新增 `models.generateImages()` | 仓库里 `typeof tools.` 用法为 **0**，也不生成 codemode 脚本 ⇒ **不迁移**，只记录 |
+| **版本串** | `src/main.ts` / `src/config.ts` | `pi --version` 两个版本都打印**裸版本号**（没有 `pi ` 前缀） | 探测本来就两版都认，无需改 |
+
+#### 唯一需要改代码的一处：`oauth.authServerMetadataUrl`
+
+上游 v1.0.0 的完整校验（手写校验器，不是 zod；报错统一带 `server "<name>": ` 前缀）：
+
+```ts
+const metadataUrl = value.authServerMetadataUrl;
+if (metadataUrl !== undefined) {
+  const url = typeof metadataUrl === "string" && URL.canParse(metadataUrl) ? new URL(metadataUrl) : undefined;
+  if (!url || !(url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname)))) {
+    return "oauth.authServerMetadataUrl must be an https URL, or http on localhost, 127.0.0.1, or [::1]";
+  }
+}
+```
+
+| 输入 | 上游 | Pi GUI（`server/mcp-native.js` 的 `validateOAuthConfig`） |
+|---|---|---|
+| `https://…`（任意主机，**允许** query / fragment，**不校验端口**） | 接受 | 接受 |
+| `http://localhost` / `http://127.0.0.1` / `http://[::1]` | 接受 | 接受 |
+| `http://example.com`、`ftp://…`、`file://…` | 拒绝 | 拒绝 |
+| 畸形串 / 空串 / number / object / array | 拒绝 | 拒绝 |
+| 未给这个键 | 接受（跳过） | 接受（跳过） |
+| `oauth` 里其它未知键 | **静默忽略** | 同样不拒 |
+
+**为什么这条必须复刻**：`parseMcpServers()` 是「Pi 会不会加载这条配置」的复刻，
+而它同时决定**项目条目算不算覆盖同名用户级条目**。少了这条规则就会出现
+P20.6-Fix-3 的变体：GUI 认为项目里那条合法 → 把用户级标成 `overridden` →
+上游把整条拒掉 → **两条都不生效**。所以上游拒的，GUI 也必须拒。
+
+#### OAuth 凭据身份：`forServer(url)` → `forServer(name, url)`
+
+- 新键：`` `${mcpNamespace(name)}|${String(new URL(serverUrl))}` ``（`mcpNamespace` = `mcp__` + 名字里的 `-` 折成 `_`）；旧键是**规范化后的 URL 单独作键**。
+- **迁移由 Pi 自己做，而且是懒迁移**：第一个 `load()` 的 server 会接手旧键、把 `mcp-auth.json` 重写成新键形式；`tokens()` 只回退读取、不迁移；`remove()` 删掉实际存在的那个键。
+- 副作用：**同一个 URL、不同 name 的两个 server 不再共用一个账号** —— 先加载的那个接手旧凭据，其余需要重新登录。
+- Pi GUI 的立场不变：**不读 `mcp-auth.json`、不解析 token、不迁移、不复制凭据存储、不自己实现 OAuth**，只把 server **名**原样交给官方 `pi mcp login` / `pi mcp logout`。
+
+#### 上游修复：deferred MCP 工具不再丢
+
+`tool_search` 动态加载的 deferred MCP 工具，过去在 session resume / `/reload`
+之后如果 MCP 已经重新连上，仍会被丢掉（会话恢复工具时那些 server 还没注册）。
+1.0.0 用 `_pendingToolNames` 解决了它。**这是上游的修复**，Pi GUI 不需要重写
+工具恢复逻辑；GUI 只按真实事件观察，拿不到证据一律 `unknown`，
+**不按 changelog 硬编码 `true`**。
+
+#### codemode：一条要记住的用法变化（与 Pi GUI 无关）
+
+1.0.0 的 codemode 沙箱把 `tools` / `models` 包成了 Proxy，读不存在的成员会
+**抛错**（错误信息里会提示用 `in`），所以：
+
+- `typeof tools.name` 不再是合法的存在性探测 → 用 `"name" in tools`；
+- 新增 `models.generateImages()`（图片生成）。
+
+Pi GUI **既不生成也不执行** codemode 脚本（仓库里 `typeof tools.` 用法为 0），
+所以本轮**不做迁移**；`models.generateImages()` 也**不新增消费入口**
+（没有图片生成页面 / 按钮 / 假的 Capability action），只在本文档注明。
 
 ### P20.6-Fix-2：两处**我们自己读错**的 0.99.2 契约
 
@@ -504,6 +585,12 @@ Pi 兼容性
 
 ## 十、升级 pi 之后怎么验
 
+> 这一轮起，Pi GUI 自带一个 **built-in Pi updater**（诊断面板 → Pi → 「更新到 x.y.z」）：
+> 它自动检查新版本、**用户确认后**只跑官方 `pi update --self`，更新期间把 bridge
+> 切到维护态、更新完清掉所有与 Pi 包 identity 绑定的缓存并**重新读版本**，
+> 读到旧版本就判失败。**它不替代下面这份人工清单** —— 更新完仍然要跑 live probe
+> 与第 6 步的矩阵收口。安全边界见 [security.md](security.md)、流程见 [updates.md](updates.md)。
+
 自动化测试**不依赖真 pi**（全部 fixture 驱动），所以升级后要人工过一遍：
 
 1. `npm test` —— 基础测试全绿
@@ -529,6 +616,8 @@ Pi 兼容性
 npm run test:compat       # tests/pi-compat.cjs（57 条，纯 fixture）
 npm run test:probes       # tests/pi-probes.cjs（62 条，纯 fixture，P23）
 npm run test:pi-version   # tests/pi-version.cjs（136 条，版本真值 + built-in 探测）
+npm run test:mcp          # tests/mcp-native.cjs（含 1.0.0 的 oauth.authServerMetadataUrl 对拍）
+npm run test:pi-update    # tests/pi-update.cjs（Pi 运行时更新：检查 / 闸门 / 维护 / 复验）
 npm run test:probes-live  # 对着**本机真装着的 pi** 打一张 probe 表（opt-in，不进 CI）
 ```
 
@@ -577,7 +666,7 @@ telemetry、崩溃上传、新数据库、新第三方依赖。
 > 状态命令**（33 条，0.99.1 与 0.99.2 上各确认一次，`rpc-types.d.ts` 两版 diff
 > 为空），所以兼容层不判 MCP 兼容，只判上面那九个能力。
 
-## 十三、P21 Usage 与 Quota 契约（本机 pi 0.99.2 类型定义核对）
+## 十三、P21 Usage 与 Quota 契约（核对时的类型定义来自 0.99.2；1.0.0 未变）
 
 Pi 对用量的支持完全停留在**本地运行指标**层。这里必须严格区分三层，名字不能混：
 **Pi wire Usage → adapter（`public/usage.js`）→ Pi GUI LocalUsage**。

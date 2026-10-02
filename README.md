@@ -9,8 +9,9 @@
 后端是个纯 Node 的 HTTP 服务，前端是原生 JS（没有构建步骤、没有框架），
 Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 
-**唯一的对外请求是「版本检查」**：读 GitHub 上的公开 Release 信息，看有没有新版。
-它可以在诊断里手动触发，也可以在启动后自动跑一次（延迟、可静默失败），
+**对外的网络请求只有两处固定的版本检查**：读 GitHub 上的公开 Release 信息看 Pi GUI
+有没有新版，读 `pi.dev` 的公开版本信息看本机装着的 `pi` 有没有新版。
+两者都可以在诊断里手动触发，也都会在启动后各自动跑一次（延迟、可静默失败），
 **不上传任何使用数据**，无网时主功能完全不受影响。用户安装的 Pi Extension 可以自行访问网络。
 
 窗口大致是这样：左侧窄全局导航栏连接项目 / 会话侧栏，中间是连续的对话流
@@ -39,6 +40,9 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 - **模型供应商** —— 不用手写 JSON 就能加自定义供应商，还能直接拉模型列表
 - **诊断** —— 查看版本、bridge、Agent 与目录健康状态，复制脱敏 JSON 用于排障
 - **版本检查** —— 在应用内检查 GitHub Release，新版本可直接查看发布说明和下载
+- **Pi 运行时更新** —— 在应用内检查本机装着的 `pi` 有没有新版本；**用户确认后**由官方
+  `pi update --self` 更新（更新期间暂停 Pi 进程，完成后自动重新启动并重新探测版本与能力）。
+  它与上面的「版本检查」是两件事：端点、缓存、文案各有一套
 
 ## 安装
 
@@ -277,6 +281,23 @@ OpenAI / DeepSeek / Anthropic 基本只有一个 id，那就只填 id。
 
 → [updates.md](docs/updates.md)
 
+### Pi 运行时更新
+
+同一块「诊断」里、紧挨着「版本」还有一节 **`Pi`**：显示本机装着的 pi 的版本和一个
+`[检查 Pi 更新]` 按钮（启动后 12 秒也会静默检查一次，**只检查、不安装**）。
+发现新版时给 `[更新到 x.y.z]`，点了先弹确认框，确认后由**官方**
+`pi update --self` 更新：
+
+- 更新期间暂停当前的 Pi 进程（bridge 进入维护态）、完成后自动恢复；
+- **不会**更新 Extension、模型目录或 Node，也不会 `npm install -g` 或下载安装包；
+- 官方 updater 退出码为 0 **不算成功** —— 之后会清掉与 pi 包身份绑定的缓存、
+  用同一份启动身份重新读版本，版本真的变了才算更新成功；
+- 更新后重新做能力探测：**没核对过的版本照旧显示「未验收」**，能力判定只看实际探测，
+  不因为「刚更新过」就当作支持。
+
+入口：全局导航栏「更多 → 诊断」→ `Pi`。端点与边界见
+[updates.md](docs/updates.md) 第二部分与 [security.md](docs/security.md)。
+
 ## 安全
 
 后端能驱动 pi 执行任意命令，所以**它的边界是唯一防线**。三条主要约束：
@@ -311,7 +332,7 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 36 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 40 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
 ```
 
 `npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
@@ -329,7 +350,7 @@ CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
 `test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:verify` /
 `test:evidence` / `test:lifecycle` / `test:web` / `test:browser` /
 `test:sessions` / `test:search` / `test:mcp` / `test:quota` /
-`test:security` / `test:diagnostics` / `test:update` / `test:version` /
+`test:security` / `test:diagnostics` / `test:update` / `test:pi-update` / `test:version` /
 `test:release` / `test:guard`。
 
 需要真浏览器的一条（opt-in，**不在 CI 里**）：`PI_GUI_BROWSER_LIVE=1 npm run test:browser-live`。
@@ -357,7 +378,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [conversation-ui.md](docs/conversation-ui.md) | P14-B 消息、Thinking、工具、附件、Minimap 与阅读列的视觉规则 |
 | [composer-ui.md](docs/composer-ui.md) | P14-C 浮动输入区、控件映射、高度同步与视觉验证 |
 | [work-surfaces.md](docs/work-surfaces.md) | P14-D 四个 Stage 一级视图、生命周期、Chat 保留与二级 Modal 边界 |
-| [security.md](docs/security.md) | 安全边界：回环、令牌、Origin、不可信输入、路径与子进程边界、密钥、以及你仍需负责的部分 |
+| [security.md](docs/security.md) | 安全边界：回环、令牌、Origin、不可信输入、路径与子进程边界、密钥、Pi 运行时更新边界、以及你仍需负责的部分 |
 | [sessions.md](docs/sessions.md) | 会话：文件机制、列表与归属、当前/pending、切换、归档、软删除、分支、提问导航 |
 | [git-changes.md](docs/git-changes.md) | 文件变更：diff 渲染、撤销规则、权限闸门、设计取舍 |
 | [planner.md](docs/planner.md) | 任务编排：Planner/Executor、Agent registry、DAG、失败与恢复、限制 |
@@ -371,8 +392,8 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
 | [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、P23 的版本真值 / probe registry / 兼容矩阵 / schema 漂移 |
-| [upgrade-playbook.md](docs/upgrade-playbook.md) | P23 升级流程：取 release、diff contract、更新 fixture、契约测试、显式 live test、更新矩阵与文档、人工验收 |
-| [updates.md](docs/updates.md) | 版本检查：数据源、SemVer、缓存与 single-flight、外链白名单、隐私、为什么不自动安装 |
+| [upgrade-playbook.md](docs/upgrade-playbook.md) | P23 升级流程：取 release、diff contract、更新 fixture、契约测试、显式 live test、更新矩阵与文档、人工验收；内置更新器只是其中第 1–6 步的便利层 |
+| [updates.md](docs/updates.md) | 两部分：Pi GUI 更新（数据源、SemVer、缓存与 single-flight、外链白名单、隐私、为什么不自动安装）与 Pi 运行时更新（检查、官方 `pi update --self`、维护暂停、版本复验） |
 | [releasing.md](docs/releasing.md) | 发版：一条命令的发布预检、版本一致性守卫、资产命名契约、tag → 自动发布、失败不留半成品 |
 | [web-access.md](docs/web-access.md) | Web Search / URL Fetch：适配的 Extension、状态模型、来源安全、外链边界 |
 | [browser.md](docs/browser.md) | Browser Use：适配的 Extension 与工具清单、成功证据规则、输入内容与页面正文的安全投影、URL 过滤、为什么没有审批流 |

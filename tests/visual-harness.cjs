@@ -748,6 +748,20 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, piRunning: true, pid: 0, args: ['--mode', 'rpc'], cwd: process.cwd() });
   }
 
+  /* Pi 运行时更新（Built-in Pi Updater）的夹具。**与 /api/update 分开**：
+   * 那个是 Pi GUI 自己的更新。这里造「有新版本、但目标版本还没进兼容矩阵」——
+   * 正是界面要显示未验收警告的那种真实状态。 */
+  if (p === '/api/pi-update') {
+    return json(res, 200, {
+      ok: true, phase: 'available',
+      currentVersion: '0.99.2', latestVersion: '1.0.0',
+      packageName: '@earendil-works/pi-coding-agent',
+      updateAvailable: true, verification: 'unverified',
+      canUpdate: true, reason: null, cached: false, running: false,
+      checkedAt: '2026-10-02T00:00:00.000Z',
+    });
+  }
+
   /* P21: 远端额度夹具。get_state 里的 provider 是 deepseek，所以启动后前端会拉这个端点。
    * 造的是 DeepSeek 真实形状（balance_infos 多币种）。 */
   if (p.startsWith('/api/quota/')) {
@@ -942,7 +956,7 @@ const server = http.createServer(async (req, res) => {
       pi: {
         configuredBin: 'pi', available: true, version: '0.99.2',
         versionSource: 'package.json',
-        verification: { status: 'verified', verifiedAgainst: { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' }, relative: 'same' },
+        verification: { status: 'verified', verifiedAgainst: { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'historical' }, relative: 'same' },
         launch: { source: 'path', binName: 'pi.cmd', entryKnown: true, packageDirKnown: true },
       },
       agents: [{ id: 'pi', available: true, version: '0.99.2', reason: null, capabilities: null }],
@@ -970,9 +984,10 @@ const server = http.createServer(async (req, res) => {
         piBaselines: [
           { version: '0.87.0', verifiedAt: '2026-09-30', scope: 'historical' },
           { version: '0.99.1', verifiedAt: '2026-10-01', scope: 'historical' },
-          { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' },
+          { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'historical' },
+          { version: '1.0.0', verifiedAt: '2026-10-02', scope: 'current' },
         ],
-        currentBaseline: '0.99.2',
+        currentBaseline: '1.0.0',
         extensionBaselines: [
           { name: 'pi-web-access', version: '0.33.0', verifiedAt: '2026-09-30' },
           { name: 'pi-subagents', version: '0.73.1', verifiedAt: '2026-09-30' },
@@ -1003,7 +1018,7 @@ const server = http.createServer(async (req, res) => {
       compatibility: {
         status: 'compatible', detected: true, piVersion: '0.99.2', versionKnown: true,
         versionSource: { source: 'package.json', status: 'known', updatedAt: '2026-10-02T00:00:00.000Z' },
-        versionVerification: { verification: 'verified', verifiedAgainst: { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' }, relative: 'same' },
+        versionVerification: { verification: 'verified', verifiedAgainst: { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'historical' }, relative: 'same' },
         capabilities: { rpc: true, getState: true, getMessages: true, newSession: true, switchSession: true, sessionNaming: true, toolEvents: true, extensionUi: true, sessionJsonl: true },
         missing: [], unverified: [],
         protocol: { expected: 1, observed: 1 },

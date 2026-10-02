@@ -30,6 +30,15 @@ Pi GUI 的“诊断”面板用于把故障排查需要的运行状态收敛成�
 - **启动中的 pi 是哪一个**（`pi.launch`：解析来源 `env`（显式 `PI_BIN`）/ `path`（按
   PATH 解析）、入口 basename、包目录是否已绑定。**只有枚举与 basename，
   没有绝对路径**）—— 用来一眼看出「版本和实际启动的不是同一份」
+- **Pi 运行时更新快照**（`piUpdate`）：`phase` / `currentVersion` / `latestVersion` /
+  `updateAvailable` / `canUpdate` / `verification` / `reason` / `running` /
+  `cached` / `errorCode`。它说的是「本机装着的那个 pi 有没有新版、能不能更新」，
+  与 Pi GUI 自己的版本块（`app.version`）是两件事，**别读串**。
+  **这一块是只读投影：`piUpdate()` 只看检查缓存的最近一次结果，
+  一个网络请求都不发**（快照里也没有 command / args / 绝对路径 / updater 原始输出）
+- **bridge 维护态**（`bridge.maintenance`）：Pi 正在被官方 self-update 替换时，
+  这一段是 `{reason}`（不在维护中是 `null`）。它只投影 `reason` ——
+  bridge 内部那份 `{reason, at}` 里的时间戳不进快照
 - 已适配 Agent 的可用性、版本、不可用原因与 capability
 - MCP 能力检测的摘要
 - **Pi 兼容性报告**：pi 版本、兼容状态、九个能力的支持情况（支持 / 不支持 / 未验证）、
@@ -96,6 +105,10 @@ Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含
   版本号来自上面的诊断快照（后端 `VERSION` 是唯一真相），前端不硬编码。
   五种状态：`idle` / `checking` / `latest` / `available` / `error` ——
   **「已是最新版」与「检查失败」永远是两句不同的话**。见 [updates.md](updates.md)
+- **「Pi」区块**（紧跟「版本」之后）：本机装着的 pi 的版本 + `[检查 Pi 更新]`，
+  发现新版时给 `[更新到 x.y.z]`（只在真能更新时出现，禁用按钮不发灰按钮骗人点）。
+  它读的是 `piUpdate` 快照 + 当前 `/api/pi-update` 的相位，**当前版本用 `pi.version`
+  兜底** —— 与下面「版本真值」说的是同一个东西，两处不会各说各话
 - 基础版本与运行状态
 - **版本真值**（P23）：pi 版本 / 版本来源 / 核对状态 / 核对基线
 - **能力 probe 表**（P23）：每条带出处；三值分得开（支持 / 不支持 / 未知）
@@ -107,7 +120,10 @@ Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含
 - 刷新
 - **「复制诊断摘要」**（P23）：一段给人读的纯文本（版本 / 核对 / 兼容 / probe /
   MCP / Extension / 健康检查 / 漂移 / 隐私声明）。它**只由白名单字段拼出来**，
-  与面板显示的是同一份已脱敏快照 —— 比整份 JSON 更适合贴进 issue
+  与面板显示的是同一份已脱敏快照 —— 比整份 JSON 更适合贴进 issue。
+  摘要里有一行 `Pi 更新`（相位 / 当前版本 → 目标版本 / 能不能自动更新 /
+  是不是在跑 / 是否来自缓存 / 未验收状态 / 错误码），与面板里那块**说的是同一份快照**，
+  不许各说各的
 - 复制诊断 JSON
 - 导出 `pi-gui-diagnostics.json`
 
@@ -117,6 +133,13 @@ Agent 的底层探测 detail 也不进入诊断快照，因为其中可能包含
 
 > 更新检查**不读也不写**诊断内容：它只发一个带 `User-Agent` 与 `Accept`
 > 的 GitHub 请求，请求里没有 cwd、没有诊断快照、没有任何凭据。
+>
+> 反过来同样成立：**诊断只是读快照，不会触发任何网络请求** ——
+> `piUpdate` 块是 `GET /api/pi-update` 那次检查留在内存里的结果，
+> 打开诊断面板（或导出 JSON）**不会**顺手去打 `pi.dev`，也不会执行更新。
+> 面板打开时若这一块还什么结论都没有，**前端**会自己静默补一次检查
+> （`force:false`，失败不留状态）—— 那是前端的一次独立动作，
+> 不是「诊断在联网」。见 [updates.md](updates.md)。
 
 ## 测试
 
@@ -142,6 +165,14 @@ npm run test:update        # 版本检查（含「诊断里的版本来自快照
 - 环境变量值不进入快照
 - 有项目 / 无项目两种状态
 - 目录可读写健康检查
+
+> ⚠️ **`piUpdate` 投影与 `bridge.maintenance` 目前没有被断言钉住**（如实记下来，
+> 免得下次以为这块测过了）：`tests/diagnostics.cjs` 不注入 `piUpdate` ——
+> 它走的是 `null` 分支（「不注入就是 `null`」那条断言仍然有效）；
+> `tests/pi-update.cjs` 断言的是**模块自己的** `snapshot()`（相位、`running`、
+> 清除缓存后的复验），不经过 `server/diagnostics.js` 那一层字段白名单。
+> 所以「诊断里只出现那十个字段 / 维护态只出现 `reason`」这件事目前靠读代码保证，
+> 不靠测试；前端那两处（面板里的「Pi」区块、摘要里的 `Pi 更新` 行）同理。
 
 前端侧（`npm run test:ui` 的 P23 段）另有 16 条：五个新小节都渲染、
 版本来源与核对状态分开摆、probe 三值与出处、矩阵基线、Native MCP 不含 server 名字、

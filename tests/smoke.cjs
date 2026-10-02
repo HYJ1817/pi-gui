@@ -688,6 +688,25 @@ const UPDATE_AVAILABLE = {
 };
 let stubUpdate = { ...UPDATE_LATEST };
 let updatePlan = [];
+
+/* ---------- Pi 运行时更新（Built-in Pi Updater）的桩 ----------
+ *
+ * 与上面 Pi GUI 自己的更新**分成两套桩**（`stubPiUpdate` vs `stubUpdate`）——
+ * 两件事一旦共用状态，测试就再也说不出「界面上这行字是哪个更新」。
+ * 版本号同样是桩值：断言的是「界面如实显示后端给的版本」，不是具体数字。 */
+const PI_UPDATE_LATEST = {
+  ok: true, phase: 'latest', currentVersion: '0.99.2', latestVersion: '0.99.2',
+  packageName: '@earendil-works/pi-coding-agent', updateAvailable: false,
+  verification: 'unverified', canUpdate: false, reason: 'latest', cached: false, running: false,
+};
+const PI_UPDATE_AVAILABLE = {
+  ok: true, phase: 'available', currentVersion: '0.99.2', latestVersion: '1.0.0',
+  packageName: '@earendil-works/pi-coding-agent', updateAvailable: true,
+  verification: 'unverified', canUpdate: true, reason: null, cached: false, running: false,
+};
+let stubPiUpdate = { ...PI_UPDATE_LATEST };
+let stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating', currentVersion: '0.99.2', latestVersion: '1.0.0' };
+const piUpdateCalls = [];
 const planUpdate = (...items) => {
   updatePlan = items.slice();
 };
@@ -727,13 +746,14 @@ const stubDiagnostics = {
       { id: 'rpc', kind: 'runtime', label: 'RPC 通道真的通了', state: true, evidence: '来自 pi-compat 的能力三值' },
     ],
   },
-  /* P23：兼容矩阵摘要（只有版本号与日期）。 */
+  /* P23：兼容矩阵摘要（只有版本号与日期）。1.0.0 起 current 是 1.0.0。 */
   matrix: {
     piBaselines: [
       { version: '0.87.0', verifiedAt: '2026-09-30', scope: 'historical' },
-      { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' },
+      { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'historical' },
+      { version: '1.0.0', verifiedAt: '2026-10-02', scope: 'current' },
     ],
-    currentBaseline: '0.99.2',
+    currentBaseline: '1.0.0',
     extensionBaselines: [{ name: 'pi-memory', version: '0.4.2', verifiedAt: '2026-09-30' }],
     nativeMcp: { builtinId: 'mcp', replaceable: true, serverStates: ['connected'], exposures: ['codemode'], cliSubcommands: ['add'] },
     knownDifferences: [{ id: 'iserror-propagation', between: '0.87.0 → 0.99.1', affects: 'P18 / P20 成功证据' }],
@@ -814,6 +834,15 @@ window.fetch = async (url, opts) => {
         ...(stubCompat ? { compat: stubCompat } : {}),
       }),
     };
+  }
+  if (u.includes('/api/pi-update')) {
+    const isPost = Boolean(opts && opts.method === 'POST');
+    piUpdateCalls.push({
+      method: isPost ? 'POST' : 'GET',
+      force: u.includes('force=1'),
+      body: isPost && opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null,
+    });
+    return { json: async () => (isPost ? { ...stubPiUpdateStart } : { ...stubPiUpdate }) };
   }
   if (u.includes('/api/update')) {
     updateCalls.push({ url: u, force: u.includes('force=1') });
@@ -6634,9 +6663,156 @@ staticCheck();
     await sleep(10);
   }
 
+  /* ================= Pi 运行时更新（Built-in Pi Updater）前端 =================
+   *
+   * 与 Pi GUI 自己的更新是两件事：两个模块、两个端点、两套桩。
+   * jsdom 不做布局，所以这里验的是**状态机与语义**（相位文案、按钮可用性、
+   * 确认框内容、失败后恢复），排版由 `npm run shots:harness` 的真实浏览器兜。 */
+  async function piUpdateUiSection() {
+    const waitPi = (ms) => new Promise((r) => setTimeout(r, ms));
+    const state = () => window.getPiUpdateState();
+
+    stubPiUpdate = { ...PI_UPDATE_AVAILABLE };
+    piUpdateCalls.length = 0;
+    const host = window.document.createElement('div');
+    window.document.body.appendChild(host);
+    window.renderPiUpdateSection(host, '0.99.2');
+    check('Pi 更新：诊断里能渲染出 Pi 区块（与 Pi GUI 更新分开）', () =>
+      Boolean(host.textContent) && /Pi/.test(host.textContent) || host.textContent.slice(0, 80));
+
+    await window.checkPiUpdate({ force: true });
+    await waitPi(20);
+    check('Pi 更新：检查走 GET /api/pi-update，且与 /api/update 的流水分开', () => {
+      const hit = piUpdateCalls.find((c) => c.method === 'GET');
+      return (Boolean(hit) && piUpdateCalls.every((c) => c.method === 'GET' || c.method === 'POST')) ||
+        JSON.stringify(piUpdateCalls);
+    });
+    check('Pi 更新：有新版时状态是 available，且能显示目标版本', () => {
+      const s = state();
+      return (s.phase === 'available' && s.latestVersion === '1.0.0' && s.updateAvailable === true) || JSON.stringify(s);
+    });
+    check('Pi 更新：未验收（unverified）时界面给出警告文案', () =>
+      /尚未经过 Pi GUI 的完整兼容验收|未经过.*验收/.test(host.textContent) || host.textContent.slice(0, 120));
+
+    /* 确认框：文案必须说清「停谁、不动什么」，且必须由用户显式确认 */
+    stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating', currentVersion: '0.99.2', latestVersion: '1.0.0' };
+    stubPiUpdate = { ...PI_UPDATE_AVAILABLE };
+    await window.checkPiUpdate({ force: true });
+    await waitPi(20);
+    piUpdateCalls.length = 0;
+    const pending = window.confirmAndRunPiUpdate();
+    await waitPi(20);
+    const confirmCard = $('confirmCard');
+    const clickConfirm = (sel) => {
+      const b = confirmCard.querySelector(sel);
+      if (b && typeof b.onclick === 'function') b.onclick();
+      return Boolean(b);
+    };
+    check('Pi 更新：点更新会先弹确认框（不是直接发请求）', () => {
+      const open = !$('confirmLayer').hidden;
+      return (open && /更新 Pi 到 1\.0\.0/.test(confirmCard.textContent) && piUpdateCalls.length === 0) ||
+        JSON.stringify({ open, text: confirmCard.textContent.slice(0, 80), calls: piUpdateCalls.length });
+    });
+    check('Pi 更新：确认框正文说清停机+自动重启、不动 Extension/模型/Node、当前与目标版本', () => {
+      const t = $('confirmCard').textContent;
+      return (/暂时停止当前 Pi 进程/.test(t) && /不会更新 Extension/.test(t) &&
+        /0\.99\.2/.test(t) && /1\.0\.0/.test(t)) || t.slice(0, 160);
+    });
+    check('Pi 更新：未验收警告在确认框里也出现（不隐藏、也不拦更新）', () => {
+      const t = $('confirmCard').textContent;
+      return /尚未经过 Pi GUI 的完整兼容验收/.test(t) || t.slice(0, 160);
+    });
+    /* 取消 → 不发请求 */
+    clickConfirm('.btn:not(.primary)');
+    await pending;
+    await waitPi(20);
+    check('Pi 更新：确认框点取消 → 一个请求都不发', () => piUpdateCalls.length === 0 || JSON.stringify(piUpdateCalls));
+
+    /* 确认 → POST 恰好带这四个字段 */
+    stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating', currentVersion: '0.99.2', latestVersion: '1.0.0' };
+    const p2 = window.confirmAndRunPiUpdate();
+    await waitPi(20);
+    clickConfirm('.btn.primary');
+    await p2;
+    await waitPi(30);
+    check('Pi 更新：确认后 POST body 恰好是 action/confirm/两个 expected（不接受任意命令）', () => {
+      const post = piUpdateCalls.find((c) => c.method === 'POST');
+      if (!post) return '没有发出 POST';
+      const keys = Object.keys(post.body || {}).filter((k) => k !== '__expectedCwd').sort();
+      return (JSON.stringify(keys) === JSON.stringify(['action', 'confirm', 'expectedCurrentVersion', 'expectedLatestVersion']) &&
+        post.body.confirm === true && post.body.action === 'update') || JSON.stringify(post.body);
+    });
+    check('Pi 更新：跑起来之后相位是 updating（按钮进入禁用）', () => {
+      const s = state();
+      return (s.phase === 'updating' || s.busy === true) || JSON.stringify(s);
+    });
+
+    /* 更新完成 → latest */
+    stubPiUpdate = { ...PI_UPDATE_LATEST, phase: 'latest', currentVersion: '1.0.0', latestVersion: '1.0.0' };
+    await window.checkPiUpdate({ force: true });
+    await waitPi(20);
+    check('Pi 更新：更新完再检查 → phase=latest，界面说「已是最新版本」', () => {
+      const s = state();
+      return (s.phase === 'latest' && s.updateAvailable === false) || JSON.stringify(s);
+    });
+
+    /* 失败 → 明确原因 + 按钮回到可用（不能永久卡住） */
+    stubPiUpdate = { ok: false, phase: 'failed', currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: true, verification: 'unverified', canUpdate: true, reason: null, cached: false, running: false, errorCode: 'update-failed', error: '官方 updater 没有成功结束' };
+    await window.checkPiUpdate({ force: true });
+    await waitPi(20);
+    check('Pi 更新：失败时显示后端给的原因，且相位是 failed', () => {
+      const s = state();
+      return (s.phase === 'failed' && /没有成功结束/.test(s.error || '')) || JSON.stringify(s);
+    });
+    stubPiUpdate = { ok: false, phase: 'failed', errorCode: 'offline', error: '离线模式：已跳过 Pi 版本检查', updateAvailable: false, canUpdate: false, currentVersion: '0.99.2', latestVersion: null, verification: 'unchecked', reason: null, cached: false, running: false };
+    await window.checkPiUpdate({ force: true });
+    await waitPi(20);
+    check('Pi 更新：离线（PI_OFFLINE）只影响这一块，不抛错、不弹崩溃', () => {
+      const s = state();
+      return (s.phase === 'failed' || s.phase === 'idle') || JSON.stringify(s);
+    });
+
+    /* busy 闸门：后端拒绝必须原样显示，且按钮回到可用 */
+    stubPiUpdate = { ...PI_UPDATE_AVAILABLE };
+    await window.checkPiUpdate({ force: true });
+    await waitPi(20);
+    stubPiUpdateStart = { ok: false, code: 'busy-turn', error: '当前回答仍在生成，请先停止', currentVersion: '0.99.2', latestVersion: '1.0.0' };
+    piUpdateCalls.length = 0;
+    const p3 = window.confirmAndRunPiUpdate();
+    await waitPi(20);
+    clickConfirm('.btn.primary');
+    await p3;
+    await waitPi(30);
+    check('Pi 更新：后端闸门说忙 → 原样显示原因（不假装已开始）', () =>
+      /仍在生成|先停止/.test(host.textContent) || /仍在生成|先停止/.test(state().error || '') || JSON.stringify(state()));
+    check('Pi 更新：被拒之后按钮回到可用（不是永久禁用）', () =>
+      state().busy !== true || JSON.stringify(state()));
+
+    /* 自动检查：到点才发、且只检查不安装 */
+    window.cancelPiUpdateAuto();
+    piUpdateCalls.length = 0;
+    stubPiUpdate = { ...PI_UPDATE_AVAILABLE };
+    window.initPiUpdateAuto({ delayMs: 60 });
+    check('Pi 更新：自动检查到点之前不发请求', () => piUpdateCalls.length === 0 || JSON.stringify(piUpdateCalls));
+    await waitPi(120);
+    check('Pi 更新：自动检查只发 GET（检查），绝不自动安装', () => {
+      const posts = piUpdateCalls.filter((c) => c.method === 'POST');
+      return (piUpdateCalls.some((c) => c.method === 'GET') && posts.length === 0) || JSON.stringify(piUpdateCalls);
+    });
+    window.cancelPiUpdateAuto();
+
+    /* 收尾：恢复常态 */
+    stubPiUpdate = { ...PI_UPDATE_LATEST };
+    stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating' };
+    piUpdateCalls.length = 0;
+    host.remove();
+    await waitPi(10);
+  }
+
   await searchSection();
   await sidebarCollapseSection();
   await updateSection();
+  await piUpdateUiSection();
 
   /* --- 会话一变就要重画侧栏列表 ---
    *
@@ -7497,7 +7673,7 @@ staticCheck();
       return true;
     });
     check('P23 诊断：兼容矩阵显示当前基线与已验证版本', () =>
-      text().includes('0.99.2') && text().includes('当前验证基线') && text().includes('pi-memory'));
+      text().includes('1.0.0') && text().includes('当前验证基线') && text().includes('pi-memory'));
     check('P23 诊断：Native MCP 只给状态与计数（**没有 server 名字**）', () => {
       const t = text();
       return t.includes('生效中') && t.includes('server 条目') && !t.includes('filesystem');
