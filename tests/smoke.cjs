@@ -707,6 +707,11 @@ const PI_UPDATE_AVAILABLE = {
 let stubPiUpdate = { ...PI_UPDATE_LATEST };
 let stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating', currentVersion: '0.99.2', latestVersion: '1.0.0' };
 const piUpdateCalls = [];
+/** GET /api/pi-update 的顺序桩：驱动真实轮询的相位序列。 */
+let piUpdatePlan = [];
+const planPiUpdate = (...items) => {
+  piUpdatePlan = items.slice();
+};
 const planUpdate = (...items) => {
   updatePlan = items.slice();
 };
@@ -842,7 +847,11 @@ window.fetch = async (url, opts) => {
       force: u.includes('force=1'),
       body: isPost && opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null,
     });
-    return { json: async () => (isPost ? { ...stubPiUpdateStart } : { ...stubPiUpdate }) };
+    if (isPost) return { json: async () => ({ ...stubPiUpdateStart }) };
+    /* GET 可以按顺序给不同相位（用来驱动**真实轮询**：updating → verifying →
+     * restarting → latest）。队列空了就回默认桩。 */
+    const next = piUpdatePlan.length ? piUpdatePlan.shift() : { ...stubPiUpdate };
+    return { json: async () => next };
   }
   if (u.includes('/api/update')) {
     updateCalls.push({ url: u, force: u.includes('force=1') });
@@ -6747,17 +6756,106 @@ staticCheck();
       return (s.phase === 'updating' || s.busy === true) || JSON.stringify(s);
     });
 
-    /* 更新完成 → latest */
-    stubPiUpdate = { ...PI_UPDATE_LATEST, phase: 'latest', currentVersion: '1.0.0', latestVersion: '1.0.0' };
-    await window.checkPiUpdate({ force: true });
-    await waitPi(20);
-    check('Pi 更新：更新完再检查 → phase=latest，界面说「已是最新版本」', () => {
-      const s = state();
-      return (s.phase === 'latest' && s.updateAvailable === false) || JSON.stringify(s);
-    });
+    /* ---------- 真实轮询路径（blocker 1 的前端侧） ----------
+     *
+     * 不能用「手工 force 一次检查」来假装更新结束 —— 那条路径绕开了 pollOnce，
+     * 而这次要修的正是轮询：后端在更新期间回了旧缓存（running:false）时，
+     * 前端会 cancelPoll 并重新点亮「更新到 x」。所以这里让**真的 POST + 真的
+     * 轮询**跑完整条相位序列：updating → verifying → restarting → latest。 */
+    const busyPhases = ['updating', 'verifying', 'restarting'];
+    const pollBtn = () => [...host.querySelectorAll('button')].find((b) => /更新到|更新中|验证中|重启中|检查 Pi 更新/.test(b.textContent));
+    {
+      piUpdatePlan = [];
+      piUpdateCalls.length = 0;
+      /* 干净起点：上一段（POST body 那条）会留下一个轮询定时器，
+       * 不清掉它就会来吃这一段的相位桩，断言就变成碰巧成立。 */
+      window.resetPiUpdate();
+      await waitPi(20);
+      stubPiUpdate = { ...PI_UPDATE_AVAILABLE };
+      stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating', currentVersion: '0.99.2', latestVersion: '1.0.0' };
+      await window.checkPiUpdate({ force: true });
+      /* 检查用默认桩（available）；相位序列**只**留给轮询来吃。 */
+      planPiUpdate(
+        { ok: true, phase: 'updating', running: true, currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: true, canUpdate: false, verification: 'unverified', reason: null, cached: false },
+        { ok: true, phase: 'verifying', running: true, currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: true, canUpdate: false, verification: 'unverified', reason: null, cached: false },
+        { ok: true, phase: 'restarting', running: true, currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: true, canUpdate: false, verification: 'unverified', reason: null, cached: false },
+        { ok: true, phase: 'latest', running: false, currentVersion: '1.0.0', installedVersion: '1.0.0', latestVersion: '1.0.0', updateAvailable: false, canUpdate: false, verification: 'unverified', reason: null, cached: false },
+      );
+      const started = await window.runPiUpdate(); // 真 POST → 真 startPoll()
+      check('Pi 轮询：POST 被接受后进入 updating，按钮禁用', () => {
+        const s = state();
+        return ((s.phase === 'updating' || s.busy === true) && started && started.phase === 'updating') || JSON.stringify({ s, started });
+      });
+      /* 每一轮轮询间隔 2s（模块常量）。逐相位观察：只要还是忙态，就**不能**
+       * 停止轮询，也不能把按钮放回可用。 */
+      const seen = [];
+      const busyButtonStates = [];
+      const deadline = Date.now() + 14000;
+      while (Date.now() < deadline) {
+        await waitPi(400);
+        const s = state();
+        if (s.phase && !seen.includes(s.phase)) seen.push(s.phase);
+        if (busyPhases.includes(s.phase)) {
+          const b = pollBtn();
+          busyButtonStates.push(Boolean(b && b.disabled));
+        }
+        if (!busyPhases.includes(s.phase) && s.phase !== 'updating') break;
+        if (s.running === false && s.phase === 'latest') break;
+      }
+      const getCalls = () => piUpdateCalls.filter((c) => c.method === 'GET').length;
+      check('Pi 轮询：轮询真的发生过（不是一次检查就收工）', () => getCalls() >= 3 || JSON.stringify(piUpdateCalls.map((c) => c.method)));
+      check('Pi 轮询：逐相位观察到 updating → verifying → restarting', () =>
+        (seen.includes('updating') && seen.includes('verifying') && seen.includes('restarting')) || JSON.stringify(seen));
+      check('Pi 轮询：忙态期间按钮全程禁用（没有一刻被放回可用）', () =>
+        (busyButtonStates.length > 0 && busyButtonStates.every(Boolean)) || JSON.stringify(busyButtonStates));
+      const finalState = state();
+      check('Pi 轮询：终态 latest，running=false，消息说已是最新', () =>
+        (finalState.phase === 'latest' && finalState.running !== true && /已是最新版本/.test(host.textContent)) ||
+        JSON.stringify({ finalState, text: host.textContent.slice(0, 120) }));
+      const getsAtEnd = getCalls();
+      await waitPi(2600);
+      check('Pi 轮询：到终态后**停止**轮询（不再继续打接口）', () =>
+        getCalls() === getsAtEnd || `${getsAtEnd} → ${getCalls()}`);
+      check('Pi 轮询：终态后按钮不再是「更新中…」（不会永久禁用）', () => {
+        const b = pollBtn();
+        return (!b || !/更新中|验证中|重启中/.test(b.textContent)) || (b && b.textContent);
+      });
+    }
+
+    /* ---------- 真实轮询路径：更新失败不被新检查覆盖 ---------- */
+    {
+      piUpdatePlan = [];
+      piUpdateCalls.length = 0;
+      window.resetPiUpdate();
+      await waitPi(20);
+      stubPiUpdate = { ...PI_UPDATE_AVAILABLE };
+      stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating', currentVersion: '0.99.2', latestVersion: '1.0.0' };
+      await window.checkPiUpdate({ force: true });
+      planPiUpdate(
+        { ok: true, phase: 'updating', running: true, currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: true, canUpdate: false, verification: 'unverified', reason: null, cached: false },
+        { ok: false, phase: 'failed', running: false, currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: false, canUpdate: false, verification: 'unverified', reason: null, cached: false, errorCode: 'update-failed', error: '官方 updater 没有成功结束' },
+      );
+      await window.runPiUpdate();
+      const deadline = Date.now() + 9000;
+      while (Date.now() < deadline && state().phase !== 'failed') await waitPi(300);
+      check('Pi 轮询：失败终态经轮询到达界面（phase=failed + 原因）', () => {
+        const s = state();
+        return (s.phase === 'failed' && /没有成功结束/.test(s.error || '')) || JSON.stringify(s);
+      });
+      const callsAtFail = piUpdateCalls.filter((c) => c.method === 'GET').length;
+      await waitPi(2600);
+      check('Pi 轮询：失败后不再继续轮询，也不会自己变回 available', () => {
+        const s = state();
+        const now = piUpdateCalls.filter((c) => c.method === 'GET').length;
+        return (s.phase === 'failed' && s.updateAvailable !== true && now === callsAtFail) ||
+          JSON.stringify({ s, calls: `${callsAtFail} → ${now}` });
+      });
+    }
 
     /* 失败 → 明确原因 + 按钮回到可用（不能永久卡住） */
-    stubPiUpdate = { ok: false, phase: 'failed', currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: true, verification: 'unverified', canUpdate: true, reason: null, cached: false, running: false, errorCode: 'update-failed', error: '官方 updater 没有成功结束' };
+    window.resetPiUpdate();
+    await waitPi(20);
+    stubPiUpdate = { ok: false, phase: 'failed', currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: false, verification: 'unverified', canUpdate: false, reason: null, cached: false, running: false, errorCode: 'update-failed', error: '官方 updater 没有成功结束' };
     await window.checkPiUpdate({ force: true });
     await waitPi(20);
     check('Pi 更新：失败时显示后端给的原因，且相位是 failed', () => {

@@ -81,6 +81,8 @@ function fakeChild() {
     pause = { ok: true },
     currentCwd = null,
     ttlMs = 30 * 60 * 1000,
+    /* 让 updater 卡住不返回：用来在「更新中」采样 GET 的真实相位。 */
+    runGate = null,
   } = {}) {
     let clock = 1_700_000_000_000;
     const state = {
@@ -93,6 +95,8 @@ function fakeChild() {
       invalidated: 0,
       resolved: 0,
       sequence: [],
+      /* 在关键钩子上顺手记下「那一刻的相位」——比事后猜可靠。 */
+      phaseAt: {},
       advance: (ms) => {
         clock += ms;
       },
@@ -114,6 +118,7 @@ function fakeChild() {
       runUpdater: async (args, opts) => {
         state.runArgs.push(args);
         state.runOpts.push(opts);
+        if (runGate) await runGate;
         if (afterUpgrade !== null) state.current = afterUpgrade;
         if (runResult instanceof Error) throw runResult;
         return runResult;
@@ -124,13 +129,15 @@ function fakeChild() {
       },
       resumeBridge: () => {
         state.resumed += 1;
+        state.phaseAt.resume = update.snapshot().phase;
         return { ok: true };
       },
       invalidateCaches: () => {
         state.invalidated += 1;
+        state.phaseAt.invalidate = update.snapshot().phase;
         state.sequence.push('invalidate');
       },
-      busyReason: () => busy,
+      busyReason: typeof busy === 'function' ? busy : () => busy,
       currentCwd: currentCwd ? () => currentCwd() : null,
       fetchImpl: async (url, init) => {
         state.calls.push({ url, init });
@@ -388,6 +395,9 @@ function fakeChild() {
         children.push(c);
         return c;
       },
+      /* 进程树终止原语是注入点（生产用 agents/cli.js 的 killTree，Windows 走
+       * taskkill /T）；假 child 没有 pid/exitCode，所以这里接到它自己的 kill 上。 */
+      killProcessTree: (c) => c.kill(),
       restartDelayMs: 0,
     });
     bridge.start();
@@ -593,6 +603,249 @@ function fakeChild() {
     await update.handle({ method: 'GET', headers: {} }, {}, new URL('http://x/api/pi-update'), json);
     check('F5. GET 离线 → 200 + ok:false/offline（业务结果不用 5xx）', () =>
       (res.code === 200 && /"errorCode":"offline"/.test(res.body)) || JSON.stringify(res));
+  }
+
+  /* ================= G. 更新期间 / 终态的 GET 语义（blocker 1） =================
+   *
+   * 这一组就是这次要修的三个真实缺陷里的第一个：
+   * 「更新中 GET 回旧 TTL cache（phase=available / running=false）」会让前端
+   * 停掉轮询并重新点亮「更新到 1.0.0」按钮；「失败终态被下一次检查覆盖」
+   * 则会把真正的失败原因抹掉。 */
+  section('G. 更新状态与检查缓存必须分开（GET 语义）');
+
+  {
+    /* 让 updater 卡住：在 updating 相位采样 GET */
+    let releaseGate;
+    const gate = new Promise((r) => {
+      releaseGate = r;
+    });
+    const { update, state } = harness({ afterUpgrade: '1.0.0', runGate: gate });
+    const before = await update.readStatus({});
+    check('G1. 前置：更新前检查给出 available（这才是可以点的状态）', () =>
+      (before.phase === 'available' && before.updateAvailable === true) || JSON.stringify(before));
+    const fetchCallsBefore = state.calls.length;
+
+    const started = await update.startUpdate({
+      action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0',
+    });
+    check('G2. POST 被接受（202 语义：accepted + phase=updating）', () =>
+      (started.ok === true && started.accepted === true && started.phase === 'updating') || JSON.stringify(started));
+
+    const during = await update.readStatus({});
+    check('G3. **更新中 GET 不能回旧缓存**：phase=updating / running=true / canUpdate=false', () =>
+      (during.phase === 'updating' && during.running === true && during.canUpdate === false && during.updateAvailable === true) ||
+      JSON.stringify(during));
+    check('G4. 更新中 GET 不打公网（不重新检查）', () =>
+      state.calls.length === fetchCallsBefore || `${fetchCallsBefore} → ${state.calls.length}`);
+    check('G5. 更新中 GET 保留本次 update 的 context（当前 0.99.2 → 目标 1.0.0）', () =>
+      (during.currentVersion === '0.99.2' && during.latestVersion === '1.0.0') || JSON.stringify(during));
+
+    releaseGate();
+    /* 等后台更新跑完 */
+    for (let i = 0; i < 100 && update.isRunning(); i++) await new Promise((r) => setTimeout(r, 5));
+    const after = await update.readStatus({});
+    check('G6. 更新成功后 GET：phase=latest / running=false / installedVersion 是新版本', () =>
+      (after.phase === 'latest' && after.running === false && after.installedVersion === '1.0.0' && after.currentVersion === '1.0.0') ||
+      JSON.stringify(after));
+    check('G7. 成功后 updateAvailable=false（不能再显示「更新到 x」）', () =>
+      after.updateAvailable === false || JSON.stringify(after));
+    const fetchCallsAfterSuccess = state.calls.length;
+    const again = await update.readStatus({});
+    check('G8. 成功终态不会被下一次普通 GET 用新检查覆盖', () =>
+      (again.phase === 'latest' && state.calls.length === fetchCallsAfterSuccess) || JSON.stringify({ again, calls: state.calls.length }));
+    const forced = await update.readStatus({ force: true });
+    check('G9. 用户显式 force 检查才允许覆盖终态（并真的打一次公网）', () =>
+      (state.calls.length === fetchCallsAfterSuccess + 1 && forced.phase === 'latest') ||
+      JSON.stringify({ calls: state.calls.length, forced }));
+    check('G10. 相位序列属实：verifying / restarting 都出现过', () =>
+      (state.phaseAt.invalidate === 'verifying' && state.phaseAt.resume === 'restarting') || JSON.stringify(state.phaseAt));
+  }
+
+  {
+    /* 失败终态：绝不能被轮询里的新检查覆盖成 available */
+    const { update, state } = harness({
+      runResult: { ok: false, exitCode: 1, stderr: 'npm ERR! code EACCES\nC:\\Users\\someone\\.npmrc' },
+    });
+    await update.readStatus({});
+    const r = await update.runUpdate({
+      action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0',
+    });
+    check('G11. updater 失败 → 结果 ok:false / code=update-failed', () =>
+      (r.ok === false && r.code === 'update-failed') || JSON.stringify(r));
+    const callsAfterFail = state.calls.length;
+    const g1 = await update.readStatus({});
+    check('G12. 失败后 GET：phase=failed / running=false / 带 errorCode 与脱敏 error', () =>
+      (g1.phase === 'failed' && g1.running === false && g1.errorCode === 'update-failed' &&
+        typeof g1.error === 'string' && !/[A-Za-z]:\\/.test(g1.error)) || JSON.stringify(g1));
+    check('G13. 失败后 GET 不打公网（不会被新检查覆盖成 available）', () =>
+      (state.calls.length === callsAfterFail && g1.updateAvailable === false) ||
+      JSON.stringify({ calls: state.calls.length, was: callsAfterFail, g1 }));
+    const g2 = await update.readStatus({});
+    check('G14. 连续轮询都还是 failed（不是「一次之后又变回 available」）', () =>
+      (g2.phase === 'failed' && g2.errorCode === 'update-failed' && state.calls.length === callsAfterFail) || JSON.stringify(g2));
+    check('G15. 失败终态仍带版本信息（有证据时给出 current/latest）', () =>
+      (g1.currentVersion === '0.99.2' && g1.latestVersion === '1.0.0') || JSON.stringify(g1));
+    const forced = await update.readStatus({ force: true });
+    check('G16. force 检查允许离开失败终态（用户主动要新检查）', () =>
+      (forced.phase === 'available' && forced.updateAvailable === true && state.calls.length === callsAfterFail + 1) ||
+      JSON.stringify({ forced, calls: state.calls.length }));
+  }
+
+  {
+    /* 诊断快照也不许在更新中/终态时说「可以更新」 */
+    const { update } = harness({ afterUpgrade: '1.0.0' });
+    await update.readStatus({});
+    await update.runUpdate({ action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0' });
+    const snap = update.snapshot();
+    check('G17. 终态下诊断快照同样反映 latest（不是缓存的 available）', () =>
+      (snap.phase === 'latest' && snap.updateAvailable === false && snap.running === false) || JSON.stringify(snap));
+  }
+
+  /* ================= H. maintenance 超时（blocker 2） ================= */
+  section('H. pauseForMaintenance：超时不算「已停止」');
+
+  {
+    const neverExit = () => {
+      const child = fakeChild();
+      child.kill = () => {
+        child.kills++;
+        /* **故意不 emit exit**：模拟 taskkill 没杀干净 / 包装进程还在 */
+      };
+      return child;
+    };
+    const children = [];
+    const events = [];
+    const runtime = createRuntime({ initialCwd: process.cwd() });
+    const bridge = createRpcBridge({
+      runtime,
+      publish: (e) => events.push(e),
+      piBin: 'fake-pi',
+      isWin: true,
+      env: {},
+      spawnProcess: () => {
+        const c = neverExit();
+        children.push(c);
+        return c;
+      },
+      killProcessTree: (c) => c.kill(),
+      pauseTimeoutMs: 60,
+      restartDelayMs: 0,
+    });
+    bridge.start();
+    children[0].emit('spawn');
+    const paused = await bridge.pauseForMaintenance('pi-update');
+    check('H1. 进程没退出 → pause 失败（不是 ok:true/stopped:true）', () =>
+      (paused.ok === false && paused.code === 'pause-timeout') || JSON.stringify(paused));
+    check('H2. 超时后维护态被撤销（进程还活着，bridge 继续可用）', () =>
+      bridge.getState().maintenance === null || JSON.stringify(bridge.getState().maintenance));
+    check('H3. 超时后如实宣告 pi 仍在运行（发 ready，而不是假装停过）', () =>
+      events.some((e) => e.type === 'bridge_status' && e.state === 'ready') ||
+      JSON.stringify(events.filter((e) => e.type === 'bridge_status').map((e) => e.state)));
+    check('H4. 超时不会产生第二个 Pi child', () => children.length === 1 || children.length);
+    check('H5. 超时后 bridge 不卡维护：命令被干净拒绝，不会写到已关闭的 stdin', () => {
+      try {
+        bridge.send({ type: 'get_state' });
+        return true;
+      } catch (err) {
+        return /子进程未运行|维护|重启/.test(err.message) || err.message;
+      }
+    });
+    const againPause = await bridge.pauseForMaintenance('pi-update');
+    check('H6. 超时后可以再试一次 pause（状态没卡死，仍然给出确定结论）', () =>
+      (againPause.ok === false && againPause.code === 'pause-timeout') || JSON.stringify(againPause));
+    /* 迟到的退出仍然按正常崩溃路径收口：重启一次，且不再有维护残留 */
+    children[0].emit('exit', 1, null);
+    await sleep(40);
+    check('H7. 迟到的退出仍走正常重启（crash backoff 没被维护搞脏）', () =>
+      (children.length === 2 && bridge.getState().maintenance === null) || JSON.stringify({ n: children.length, m: bridge.getState().maintenance }));
+    runtime.setShuttingDown(true);
+    bridge.stop();
+  }
+
+  {
+    /* updater 侧：pause 超时必须让它一次都不跑 */
+    const { update, state } = harness({ pause: { ok: false, code: 'pause-timeout' } });
+    await update.readStatus({});
+    const r = await update.runUpdate({ action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0' });
+    check('H8. pause 超时 → updater 调用次数为 0，结果码是 pause-timeout', () =>
+      (state.runArgs.length === 0 && r.ok === false && r.code === 'pause-timeout') || JSON.stringify({ calls: state.runArgs.length, r }));
+    check('H9. pause 超时的提示说清「不会在它还活着时替换运行时」', () =>
+      /没有退出|还活着/.test(r.error) || r.error);
+    check('H10. pause 超时不 resume（不是我们停的），也不碰缓存失效', () =>
+      (state.resumed === 0 && state.invalidated === 0) || JSON.stringify(state));
+  }
+
+  /* ================= I. 主会话活动与更新闸门（blocker 3） ================= */
+  section('I. 活动生命周期（agent_start → agent_settled）与闸门');
+
+  {
+    const { createPiActivity } = await import('../server/pi-activity.js');
+    const act = createPiActivity();
+    act.noteCommandAccepted({ type: 'prompt' });
+    check('I1. prompt 已被桥接受、agent_start 还没到 → 仍算忙（竞态窗口）', () =>
+      Boolean(act.busy()) || JSON.stringify(act.state()));
+    act.observe({ type: 'agent_start' });
+    check('I2. agent_start → 忙', () => Boolean(act.busy()) || JSON.stringify(act.state()));
+    act.observe({ type: 'agent_end', willRetry: true });
+    check('I3. agent_end(willRetry=true) **不算结束**：仍忙（自动重试还没跑）', () =>
+      Boolean(act.busy()) || JSON.stringify(act.state()));
+    act.observe({ type: 'agent_start' });
+    act.observe({ type: 'agent_end', willRetry: false });
+    check('I4. 第二轮 run 的 agent_end（即使不重试）也仍算忙 —— 只有 settled 才算完', () =>
+      Boolean(act.busy()) || JSON.stringify(act.state()));
+    act.observe({ type: 'agent_settled' });
+    check('I5. agent_settled → 空闲（这时才允许更新）', () => act.busy() === null || JSON.stringify(act.state()));
+  }
+  {
+    const { createPiActivity } = await import('../server/pi-activity.js');
+    const act = createPiActivity();
+    act.noteCommandAccepted({ type: 'prompt' });
+    act.observe({ type: 'response', command: 'prompt', success: true, data: { disposition: 'handled' } });
+    check('I6. prompt 应答 disposition=handled（不会开 run）→ 撤回 pending', () =>
+      act.busy() === null || JSON.stringify(act.state()));
+    const act2 = createPiActivity();
+    act2.noteCommandAccepted({ type: 'prompt' });
+    act2.observe({ type: 'response', command: 'prompt', success: true, data: { disposition: 'queued' } });
+    check('I7. disposition=queued（排队等着跑）→ 仍然忙', () => Boolean(act2.busy()) || JSON.stringify(act2.state()));
+    const act3 = createPiActivity();
+    act3.noteCommandAccepted({ type: 'prompt' });
+    act3.observe({ type: 'response', command: 'prompt', success: true, data: { disposition: 'started' } });
+    check('I8. disposition=started → 仍然忙（等 agent_settled）', () => Boolean(act3.busy()) || JSON.stringify(act3.state()));
+  }
+  {
+    const { createPiActivity } = await import('../server/pi-activity.js');
+    for (const state of ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance']) {
+      const act = createPiActivity();
+      act.observe({ type: 'agent_start' });
+      act.observe({ type: 'bridge_status', state });
+      check(`I9. bridge ${state} → 确定收口（不允许 busy 永久挂住）`, () =>
+        act.busy() === null || JSON.stringify(act.state()));
+    }
+    const act = createPiActivity();
+    act.observe({ type: 'agent_start' });
+    act.noteCommandAccepted({ type: 'new_session' });
+    check('I10. new_session → 换时间线，清账', () => act.busy() === null || JSON.stringify(act.state()));
+  }
+  {
+    /* 闸门与真实 activity 串起来：activity 说忙 → prepare 就拒绝，一次 updater 都不跑 */
+    const { createPiActivity } = await import('../server/pi-activity.js');
+    const act = createPiActivity();
+    const { update, state } = harness({ busy: () => act.busy(), afterUpgrade: '1.0.0' });
+    await update.readStatus({});
+    act.noteCommandAccepted({ type: 'prompt' });
+    const r = await update.runUpdate({ action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0' });
+    check('I11. prompt 已提交但 agent_start 未到 → 更新被拒（busy-turn），updater 一次没跑', () =>
+      (r.ok === false && r.code === 'busy-turn' && state.runArgs.length === 0 && state.paused === 0) ||
+      JSON.stringify({ r, calls: state.runArgs.length }));
+    act.observe({ type: 'agent_start' });
+    act.observe({ type: 'agent_end', willRetry: true });
+    const r2 = await update.runUpdate({ action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0' });
+    check('I12. agent_end(willRetry=true) 之后更新仍被拒（自动重试还没跑完）', () =>
+      (r2.ok === false && r2.code === 'busy-turn' && state.runArgs.length === 0) || JSON.stringify(r2));
+    act.observe({ type: 'agent_settled' });
+    const r3 = await update.runUpdate({ action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0' });
+    check('I13. agent_settled 之后才放行（真的走到 updater）', () =>
+      (r3.ok === true && state.runArgs.length === 1) || JSON.stringify({ r3, calls: state.runArgs.length }));
   }
 
   console.log('');

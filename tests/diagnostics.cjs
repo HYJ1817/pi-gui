@@ -52,6 +52,8 @@ const path = require('node:path');
       cwd: project,
       hasProject: true,
       args: ['--mode', 'rpc', '--append-system-prompt', path.join(project, '.pi-gui', 'instructions.generated.md')],
+      /* 维护态投影：只允许 reason 出去（`at` 这种时间戳不进快照）。 */
+      maintenance: { reason: 'pi-update', at: 1759000000000 },
     }),
   };
   const agentRegistry = {
@@ -112,6 +114,26 @@ const path = require('node:path');
      * 规范来源必须赢，否则诊断又会显示「另一份 pi」。 */
     piVersion: () => ({ value: '0.87.0', source: 'package.json', status: 'known', updatedAt: '2026-10-01T00:00:00.000Z' }),
     launch: () => ({ source: 'env', binName: 'pi.cmd', entryKnown: true, packageDirKnown: true }),
+    /* Pi 运行时更新：投影必须只带白名单字段（版本/相位/错误码），
+     * 路径、命令、updater 原始输出都不许进来。这里故意塞入敌意字段。 */
+    piUpdate: () => ({
+      phase: 'failed',
+      currentVersion: '0.99.2',
+      latestVersion: '1.0.0',
+      updateAvailable: false,
+      canUpdate: false,
+      verification: 'unverified',
+      reason: null,
+      running: false,
+      cached: false,
+      errorCode: 'update-failed',
+      /* 下面这些都不该出现在快照里 */
+      command: `npm install -g evil ${root}`,
+      args: ['--all'],
+      rawStderr: `Bearer ${SECRET_VALUE}`,
+      entryPath: path.join(root, 'secret', 'cli.js'),
+      token: 'must-not-leak',
+    }),
     dataDir,
     version: '0.10.0',
     env: {
@@ -133,6 +155,31 @@ const path = require('node:path');
     assert.equal(snapshot.bridge.piRunning, true);
     assert.equal(snapshot.bridge.bridgeRun, 7);
     assert.equal(snapshot.pi.version, '0.87.0');
+  });
+
+  /* Pi 运行时更新（Built-in Pi Updater）的投影：这一层以前没有断言。
+   * 它决定了诊断面板与「复制诊断摘要」会显示什么，所以必须钉住白名单。 */
+  ok('Pi 更新投影只带白名单字段（没有命令 / 参数 / 路径 / 原始输出）', () => {
+    const p = snapshot.piUpdate;
+    assert.equal(p.phase, 'failed');
+    assert.equal(p.errorCode, 'update-failed');
+    assert.equal(p.currentVersion, '0.99.2');
+    assert.equal(p.latestVersion, '1.0.0');
+    assert.deepEqual(
+      Object.keys(p).sort(),
+      ['cached', 'canUpdate', 'currentVersion', 'errorCode', 'latestVersion', 'phase', 'reason', 'running', 'updateAvailable', 'verification']
+    );
+    const json = JSON.stringify(p);
+    assert.ok(!json.includes('npm install -g evil'), '命令行不能进快照');
+    assert.ok(!json.includes('--all'), '参数不能进快照');
+    assert.ok(!json.includes('Bearer'), '原始输出不能进快照');
+    assert.ok(!json.includes(root), '绝对路径不能进快照');
+    assert.ok(!json.includes('must-not-leak'), 'token 不能进快照');
+  });
+
+  ok('维护态只投影 reason（时间戳不进快照）', () => {
+    assert.deepEqual(snapshot.bridge.maintenance, { reason: 'pi-update' });
+    assert.ok(!serialized.includes('1759000000000'), '维护开始时间不该出现在快照里');
   });
 
   ok('项目只暴露目录名，不暴露绝对路径或 PID', () => {
