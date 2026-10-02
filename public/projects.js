@@ -135,10 +135,18 @@ export function renderProjects() {
       e.stopPropagation();
       /* 菜单只放**真实已有**的功能：项目设置（既有 openProjectSettings）
        * 与移除项目（既有 removeProject，前面加一次确认）。
-       * 不发明置顶 / 分区 / 分支 / 打开资源管理器这些 Pi GUI 没有的东西。 */
+       * 不发明置顶 / 分区 / 分支 / 打开资源管理器这些 Pi GUI 没有的东西。
+       *
+       * ⚠️「项目设置」**只对当前项目**出现：`openProjectSettings()` 读的是
+       * 当前**激活**项目的配置，对一个非当前项目开放这个入口，等于「点 B 的
+       * 菜单、实际改的是 A 的设置」。要改 B 就先切到 B —— 但切换会重启 Pi、
+       * 清聊天，那是一个菜单动作不该顺手制造的副作用。
+       * 「移除项目」按**这一行的 path** 操作，与是不是当前项目无关。 */
       openActionMenu(menuTrigger, [
-        { label: '项目设置', icon: MENU_ICONS.pencil, onClick: () => openProjectSettings() },
-        { separator: true },
+        ...(isActive ? [
+          { label: '项目设置', icon: MENU_ICONS.pencil, onClick: () => openProjectSettings() },
+          { separator: true },
+        ] : []),
         { label: '移除项目', icon: MENU_ICONS.trash, danger: true, onClick: () => confirmRemoveProject(p.path, label) },
       ]);
     };

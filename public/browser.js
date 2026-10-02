@@ -13,8 +13,7 @@
 import { S } from './state.js';
 import { createBrowserObservation, browserCapability, acceptBrowserEvent } from './browser-capabilities.js';
 import { webSourceLink } from './web-activity.js';
-import { renderSetupSection } from './ui/capability-setup.js';
-import { setupViewModel } from './capability-model.js';
+import { renderFeatureSetup } from './ui/capability-setup.js';
 
 const observation = createBrowserObservation();
 
@@ -30,7 +29,6 @@ export function browserObservation() {
 }
 
 export function renderBrowserSetup(box, registry) {
-  const model = setupViewModel(browserCapability(registry, browserObservation()));
-  box.replaceChildren(renderSetupSection(model, { linkFactory: webSourceLink }));
-  return box;
+  /* 一键安装成功后重新读 Registry，按新证据重画（命令完成 ≠ 装上）。 */
+  return renderFeatureSetup(box, (reg) => browserCapability(reg, browserObservation()), registry, { linkFactory: webSourceLink });
 }
