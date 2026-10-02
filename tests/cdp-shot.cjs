@@ -1210,7 +1210,8 @@ async function main() {
   await shotOf('#workSurface .cap-view .ext-detail', '162-memory-setup', 'P22：Pi Memory 设置区（统一布局：固定命令 + 真实运行观察 + 限制）', ['Pi Memory（长期记忆）', 'pi install npm:pi-memory', '这不是「会话搜索」'], [
     ['固定官方安装命令只出现一次', `document.querySelectorAll('#workSurface .cap-view .ext-detail code').length===1`],
     ['运行观察来自真实事件', `document.querySelector('#workSurface .cap-rows [data-k="运行观察"] .ext-row-v').textContent.includes('memory_search')`],
-    ['动作是安装 / 复制 / 安装后重启', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].every(b=>b.textContent==='安装'||b.textContent==='复制安装命令'||b.textContent==='安装后重启 Pi'||b.textContent==='已安装'||b.textContent==='重新检查')`],
+    ['动作是安装 / 复制 / 安装后重启', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].every(b=>b.textContent==='安装'||b.textContent==='复制安装命令'||b.textContent==='安装后重启 Pi'||b.textContent==='重新检查')`],
+    ['已安装（Registry 确认过）的能力不摆动作按钮', `document.querySelector('#workSurface .cap-view .cap-install')===null`],
   ]);
   /* ---------- P22：Capability 视图（统一状态 / Native MCP / built-in / 未知 / 响应式） ----------
    *
@@ -1236,7 +1237,7 @@ async function main() {
   await shotOf('#workSurface .cap-view .ext-detail', '172-capability-web-setup', 'P22：统一 setup 布局 —— 名称 / 用途 / **只画适用的字段** / 固定官方命令 / 一键安装 / 限制', ['Web Access', 'pi install npm:pi-web-access', '运行观察', '限制'], [
     ['只画适用的状态字段（第三方 Extension 五个，没有空诊断行）', `(() => {const keys=[...document.querySelectorAll('#workSurface .cap-rows .ext-row')].map(r=>r.dataset.k);return JSON.stringify(keys)===JSON.stringify(['安装状态','启用配置','已加载','运行观察','需要重启'])})()`],
     ['固定官方命令只出现一次', `document.querySelectorAll('#workSurface .cap-view .ext-detail code').length===1`],
-    ['动作是安装状态 / 复制 / 安装后重启（顺序固定）', `(() => {const t=[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].map(b=>b.textContent);return t.length===3&&['安装','已安装','重新检查'].includes(t[0])&&t[1]==='复制安装命令'&&t[2]==='安装后重启 Pi'})()`],
+    ['已安装的能力不摆动作按钮：只剩复制命令与安装后重启（顺序固定）', `(() => {const t=[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].map(b=>b.textContent);return t.length===2&&t[0]==='复制安装命令'&&t[1]==='安装后重启 Pi'})()`],
     ['没有安装表单（不提供任意包名入口）', `document.querySelectorAll('#workSurface .cap-view .ext-detail input').length===0`],
   ]);
 

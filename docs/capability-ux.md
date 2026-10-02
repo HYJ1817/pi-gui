@@ -150,13 +150,21 @@ Capability 层只把它们翻成界面文案，并且把 `replaced`（被扩展�
 - **退出码 0 ≠ 已安装 ≠ 已加载**。后端只回 `commandCompleted: true` 且 `loaded: null`；
   是否真的装上由**重新发现的 Extension Registry**回答。刷新后：
   - `installed === true` → 显示「已安装：Extension Registry 已经发现它」；
-  - 仍然没有这个 package → 如实说「安装命令已完成，但 Pi GUI 尚未确认到 Extension，
-    请刷新或查看诊断」，**绝不伪造绿色 loaded**。
+  - 仍然没有这个 package → 如实说「安装命令已完成，但尚未确认到 Extension：
+    Extension Registry 里还没有它，请刷新或查看诊断」，**绝不伪造绿色 loaded**。
   `installed` / `configured` / `loaded` / `runtimeObserved` 四个状态继续独立。
-- 按钮状态：`安装 → 安装中… → 正在重启… → 已安装 / 安装失败`，期间 disabled
-  （后端另有单飞锁，前端 disabled 只是体验）。
+- 按钮状态：`安装 → 安装中… → 正在重启… → 按 Registry 的证据重画 / 安装失败`，
+  期间 disabled（后端另有单飞锁，前端 disabled 只是体验）。
   `installed === null` 时**不显示「安装」**（那不是「确认未安装」，是「无法确认」），
-  只给「重新检查」；`installed === true` 不提供安装动作。
+  只给「重新检查」；`installed === true` **不画安装按钮** —— 已安装不是动作，
+  状态行已经写着「已安装」，动作区不再重复一个按不动的同名词按钮。
+- **四个 feature 设置区（Web / Subagents / Memory / Browser）与 Capability 视图
+  走同一条 recheck 路径**（`ui/capability-setup.js` 的 `renderFeatureSetup()`）：
+  安装成功后重新 `fetchExtensions()`、用新 registry 重算 descriptor、原地重画，
+  并把新 descriptor 交回给 `runInstall()` 判断 `state.installed`。
+  **没有 `onRecheck` 的调用点是防线而不是主路径**：那种情况下命令成功也只停在
+  「命令已完成，待确认」（disabled），界面**不出现「已安装」**；同样地，
+  `installed === null` 又没有 recheck 入口时连按钮都不画（不给点了没反应的入口）。
 - **复制安装命令保留**，作为高级 / 故障恢复入口。
 
 ## 五、Registry 边界

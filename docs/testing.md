@@ -1076,8 +1076,25 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
 | `npm run test:capability` | `tests/capability.cjs` | **75** | 适用性收口（NA 不画 / 未声明不画 / **`null` 仍显示「未知（无法确认）」** / 诊断无错误不画）、一键安装的按钮形态与确认文案、四值投影与既有回归 |
 | `npm run test:capability-install` | `tests/capability-install.cjs` | **38** | 受控安装的全部边界（见下） |
 | `npm run test:sidebar-menu` | `tests/sidebar-menu.cjs` | **35** | 动作菜单的 DOM 行为 + 两个调用点的静态边界 |
-| `npm run test:ui` | `tests/smoke.cjs` | **1227** | 真实点击链路（jsdom 里的整个应用） |
+| `npm run test:ui` | `tests/smoke.cjs` | **1256** | 真实点击链路（jsdom 里的整个应用），含**项目菜单作用域**与**安装真实性**两组回归 |
 | `npm run shots:harness` | `tests/cdp-shot.cjs` | 场景 +8 | 真 Chrome 的排版与运行状态 |
+
+### 两个 correctness blocker 的回归（`tests/smoke.cjs`）
+
+- **项目菜单作用域**：只有当前项目那一行有「项目设置」——非当前项目的菜单
+  只剩「移除项目」；点它的三点只开菜单，**不切项目、不重启 Pi**
+  （断言 `workspaceGeneration` 不变、`/api/projects/activate` 与 `/api/restart`
+  一次都没发）；非当前项目的「移除项目」确认框对着**这一行**，
+  `DELETE /api/projects?path=…` 的目标也是这一行的 path；当前项目点「项目设置」
+  仍走既有 `openProjectSettings()`（同一个弹层）。
+- **安装真实性**：四个 feature 设置区（Web / Subagents / Memory / Browser）
+  各跑一遍「命令成功 → Registry 重读」——Registry 没有它时**绝不出现「已安装」**
+  （状态行仍是「未安装」）；Registry 确认 `installed=true` 但 `loaded` 无证据时，
+  只说「已安装」+「未知（无法确认）」，**不写「已确认加载」**，且动作区不再有
+  安装按钮；`installed=true` 初始状态下动作区没有那个 disabled 的「已安装」。
+  防线另测：直接 `renderSetupSection(model, { onRecheck: null })` 时，命令成功
+  也只停在「命令已完成，待确认」（disabled）；`installed=null` 且没有
+  recheck 入口时连按钮都不画。
 
 ### 一键安装（`tests/capability-install.cjs`，用 fake runner）
 
@@ -1122,7 +1139,8 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
   （注意 `.pj-sess-acts` 容器仍然在），字符图标 ✎ / ⤓ / ✕ / ↩ 不再出现，
   每行只有一个三点；菜单项复用既有的 `openProjectSettings` / `removeProject` /
   `startRename` / `doArchive` / `doDelete`（不复制实现）；移除前必须确认；
-  两个 trigger 都拦掉冒泡；菜单里没有置顶 / 分区 / 分支 / 资源管理器这些 Pi GUI
+  **「项目设置」只在当前项目那一行出现**（`openProjectSettings()` 读的是当前
+  激活项目的配置，非当前项目给这个入口等于改错项目）；两个 trigger 都拦掉冒泡；菜单里没有置顶 / 分区 / 分支 / 资源管理器这些 Pi GUI
   不存在的功能；CSS 里 trigger 默认透明、hover / focus-within / `aria-expanded=true`
   时可见，菜单 `position:fixed` + `z-index:30`（弹层之下）、danger 只在 hover 变红。
 - **真实链路**在 `npm run test:ui`：点 `…` → 菜单 → 项目设置（走既有弹层）/

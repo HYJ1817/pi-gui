@@ -6328,6 +6328,84 @@ staticCheck();
       await wait(20);
     }
 
+    /* 项目菜单的**作用域**（本轮修复）：只有当前项目才给「项目设置」。
+     * `openProjectSettings()` 读的是**当前激活项目**的配置 —— 对非当前项目开这个
+     * 入口，就是「点 B 的菜单、实际改的是 A 的设置」。 */
+    {
+      const baseFetchForScope = window.fetch;
+      const scopeCalls = { activate: 0, restart: 0, deletes: [] };
+      /* 前面几段把 projects 夹具换成了单个项目；这里给一个 A(当前) / B(非当前)
+       * 的两项目夹具，专门测作用域 —— 测完再换回去。 */
+      const twoProjects = { ok: true, active: 'C:\\scope-a', items: [
+        { path: 'C:\\scope-a', name: 'A' }, { path: 'C:\\scope-b', name: 'B' }] };
+      window.fetch = async (url, opts) => {
+        const u = String(url);
+        if (u.includes('/api/projects/activate')) scopeCalls.activate++;
+        if (u.includes('/api/restart')) scopeCalls.restart++;
+        if (u.includes('/api/projects') && !u.includes('/activate') && opts && opts.method === 'DELETE') scopeCalls.deletes.push(u);
+        if (u.includes('/api/projects')) return { json: async () => twoProjects };
+        return baseFetchForScope(url, opts);
+      };
+      await window.loadProjects();
+      await wait(40);
+
+      const menuLabels = (menu) => [...menu.querySelectorAll('[role="menuitem"]')]
+        .map((b) => b.querySelector('.action-menu-label').textContent);
+      const activeRow = proj().querySelector('.project.active');
+      const inactiveRow = [...proj().querySelectorAll('.project')].find((r) => !r.classList.contains('active'));
+
+      const activeMenu = await openRowMenu(activeRow.querySelector('.pj-row-menu-trigger'));
+      check('项目菜单作用域：当前项目有「项目设置」与「移除项目」', () =>
+        menuLabels(activeMenu).join(',') === '项目设置,移除项目' || JSON.stringify(menuLabels(activeMenu)));
+      window.closeActionMenu?.();
+      await wait(10);
+
+      const inactiveMenu = await openRowMenu(inactiveRow.querySelector('.pj-row-menu-trigger'));
+      const labels = menuLabels(inactiveMenu);
+      check('项目菜单作用域：非当前项目**没有**「项目设置」', () =>
+        !labels.includes('项目设置') || JSON.stringify(labels));
+      check('项目菜单作用域：非当前项目只剩「移除项目」', () =>
+        labels.join(',') === '移除项目' || JSON.stringify(labels));
+
+      // 点非当前项目的三点：只开菜单，不切项目、不重启 Pi
+      const genBefore = window.S.workspaceGeneration;
+      window.closeActionMenu?.();
+      await wait(10);
+      inactiveRow.querySelector('.pj-row-menu-trigger')
+        .dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+      await wait(20);
+      check('项目菜单作用域：点非当前项目的三点只开菜单，不切项目、不重启 Pi', () =>
+        (Boolean(window.document.getElementById('actionMenu'))
+          && scopeCalls.activate === 0 && scopeCalls.restart === 0
+          && window.S.workspaceGeneration === genBefore && !window.S.switching)
+        || JSON.stringify({ activate: scopeCalls.activate, restart: scopeCalls.restart, gen: [genBefore, window.S.workspaceGeneration] }));
+      window.closeActionMenu?.();
+      await wait(10);
+
+      // 非当前项目 → 移除项目：确认框对着**这一行**，最终删除的也是这一行的 path
+      inactiveRow.querySelector('.pj-row-menu-trigger').onclick({ preventDefault() {}, stopPropagation() {} });
+      await wait(20);
+      [...rowMenuEl().querySelectorAll('[role="menuitem"]')]
+        .find((b) => b.querySelector('.action-menu-label').textContent === '移除项目').click();
+      await wait(20);
+      check('项目菜单作用域：非当前项目的移除确认框说的是这一行（不是当前项目）', () =>
+        ($('confirmLayer').hidden === false && /「B」/.test($('confirmCard').textContent))
+        || $('confirmCard').textContent.slice(0, 80));
+      $('confirmCard').querySelector('.btn.danger').click();
+      await wait(80);
+      check('项目菜单作用域：最终移除的目标是这一行的 path', () =>
+        (scopeCalls.deletes.length === 1
+          && decodeURIComponent(scopeCalls.deletes[0]).includes('C:\\scope-b')
+          && !decodeURIComponent(scopeCalls.deletes[0]).includes('scope-a'))
+        || JSON.stringify(scopeCalls.deletes));
+
+      // 换回原来的夹具，别影响后面的折叠 / 搜索断言
+      window.closeActionMenu?.();
+      window.fetch = baseFetchForScope;
+      await window.loadProjects();
+      await wait(40);
+    }
+
     // Escape 关闭菜单并把焦点还给 trigger
     {
       const trigger = row().querySelector('.pj-row-menu-trigger');
@@ -7974,8 +8052,9 @@ staticCheck();
           && installCalls[0].body.confirm === true
           && !('source' in installCalls[0].body) && !('command' in installCalls[0].body)
           && !('args' in installCalls[0].body)) || JSON.stringify(installCalls));
-      check('P24 安装后按重新发现的证据重画：按钮变「已安装」状态', () =>
-        (afterState === 'installed' && afterLabel === '已安装') || JSON.stringify({ afterState, afterLabel }));
+      check('P24 安装后按重新发现的证据重画：状态行写「已安装」，动作区不再摆一个按不动的按钮', () =>
+        (afterEl === null && detailValue('安装状态') === '已安装')
+        || JSON.stringify({ afterState, afterLabel, 安装状态: detailValue('安装状态') }));
       check('P24 没有加载证据时如实说未知（已安装 / 已加载未知，不伪造已加载）', () =>
         (detailValue('安装状态') === '已安装' && detailValue('已加载') === '未知（无法确认）')
         || `${detailValue('安装状态')} / ${detailValue('已加载')}`);
@@ -8006,6 +8085,133 @@ staticCheck();
       (card.querySelector('.cap-view .ext-empty')?.textContent || '').includes('项目已切换')
       && card.querySelectorAll('.cap-view .ext-item').length === 0);
     window.clearThread();
+  }
+
+  /* P24 收口（本轮修复）：**安装真实性** —— 四个 feature 设置区
+   * （Web / Subagents / Memory / Browser）与 Capability 页走同一条 recheck 路径。
+   *
+   * 全项目坚持：`commandCompleted ≠ installed ≠ loaded`。断言全部落在
+   * 「界面敢不敢写『已安装』」上 —— 命令退出码 0 从来不是证据。 */
+  {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const savedRegistry = stubExtensions;
+    const savedFetch = window.fetch;
+    window.S.hasProject = true; window.S.switching = false;
+    window.S.bridgeState = 'ready';
+
+    const FEATURES = [
+      { name: 'Web', render: window.renderWebSetup, pkg: 'pi-web-access' },
+      { name: 'Subagents', render: window.renderSubagentSetup, pkg: 'pi-subagents' },
+      { name: 'Memory', render: window.renderMemorySetup, pkg: 'pi-memory' },
+      { name: 'Browser', render: window.renderBrowserSetup, pkg: 'pi-browser-harness' },
+    ];
+    const emptyRegistry = { ok: true, piReachable: true, diagnostics: [], extensions: [] };
+    const foundRegistry = (pkg) => ({
+      ok: true, piReachable: true, diagnostics: [],
+      extensions: [{
+        id: 'ext-' + pkg, name: pkg, displayName: pkg, version: '1.0.0',
+        source: { type: 'npm', location: 'C:/npm/' + pkg }, scope: 'global',
+        state: { installed: true, enabled: null, loaded: null, restartRequired: null, error: null },
+        capabilities: [], configurable: false,
+      }],
+    });
+    const makeBox = () => { const b = window.document.createElement('section'); window.document.body.appendChild(b); return b; };
+    const rowText = (box, k) => box.querySelector(`.cap-rows [data-k="${k}"] .ext-row-v`)?.textContent || '';
+    /* 一次「命令成功」的安装：Registry 重新读回来的是 afterRegistry。 */
+    const installThrough = async (box, afterRegistry) => {
+      stubExtensions = afterRegistry;
+      box.querySelector('.cap-install')?.click();
+      await sleep(20);
+      $('confirmCard').querySelector('.btn.primary')?.click();
+      await sleep(150);
+    };
+    const stubInstall = (payload) => {
+      window.fetch = async (url, opts) => String(url).includes('/api/capabilities/install')
+        ? { json: async () => payload }
+        : savedFetch(url, opts);
+    };
+
+    /* ① 命令成功，但 Registry 里没有它 → 一个字都不许写「已安装」。 */
+    for (const feature of FEATURES) {
+      stubInstall({ ok: true, capabilityId: 'x', commandCompleted: true, loaded: null });
+      const box = makeBox();
+      feature.render(box, emptyRegistry);
+      const before = box.querySelector('.cap-install')?.dataset.installState;
+      await installThrough(box, emptyRegistry);
+      const btn = box.querySelector('.cap-install');
+      check(`P24 安装真实性（${feature.name}）：未安装时主按钮是「安装」`, () => before === 'install' || before);
+      check(`P24 安装真实性（${feature.name}）：命令成功但 Registry 没有它 → 绝不写「已安装」`, () =>
+        (btn?.dataset.installState === 'install' && btn?.textContent === '安装'
+          && rowText(box, '安装状态') === '未安装' && !box.textContent.includes('已确认加载'))
+        || JSON.stringify({ state: btn?.dataset.installState, text: btn?.textContent, 安装状态: rowText(box, '安装状态') }));
+      window.fetch = savedFetch;
+      box.remove();
+    }
+
+    /* ② Registry 确认 installed=true、但没有 loaded 证据 →
+     *    「已安装」+「未知（无法确认）」，并且动作区不再有安装按钮。 */
+    for (const feature of FEATURES) {
+      stubInstall({ ok: true, capabilityId: 'x', commandCompleted: true, loaded: null });
+      const box = makeBox();
+      feature.render(box, emptyRegistry);
+      await installThrough(box, foundRegistry(feature.pkg));
+      check(`P24 安装真实性（${feature.name}）：Registry 确认后写「已安装」，加载状态仍如实说未知`, () =>
+        (rowText(box, '安装状态') === '已安装' && rowText(box, '已加载') === '未知（无法确认）'
+          && !box.textContent.includes('已确认加载'))
+        || JSON.stringify({ 安装状态: rowText(box, '安装状态'), 已加载: rowText(box, '已加载') }));
+      check(`P24 安装真实性（${feature.name}）：已安装后动作区不再摆一个按不动的「已安装」按钮`, () =>
+        (box.querySelector('.cap-install') === null
+          && ![...box.querySelectorAll('.ext-acts .btn')].some((b) => b.textContent === '已安装')
+          && [...box.querySelectorAll('.ext-acts .btn')].some((b) => b.textContent === '复制安装命令'))
+        || JSON.stringify([...box.querySelectorAll('.ext-acts .btn')].map((b) => b.textContent)));
+      window.fetch = savedFetch;
+      box.remove();
+    }
+
+    /* ③ 一开始就 installed=true → 动作区没有那个 disabled 的「已安装」。 */
+    for (const feature of FEATURES) {
+      const box = makeBox();
+      feature.render(box, foundRegistry(feature.pkg));
+      check(`P24 安装真实性（${feature.name}）：已安装状态下动作区不出现「已安装」按钮`, () =>
+        box.querySelector('.cap-install') === null
+        && ![...box.querySelectorAll('.ext-acts .btn')].some((b) => b.textContent === '已安装')
+        || JSON.stringify([...box.querySelectorAll('.ext-acts .btn')].map((b) => b.textContent)));
+      box.remove();
+    }
+
+    /* ④ 防线：调用点忘了传 onRecheck 时，命令成功也**绝不**写「已安装」。 */
+    {
+      stubInstall({ ok: true, capabilityId: 'web', commandCompleted: true, loaded: null });
+      const model = window.setupViewModel(window.webCapability(emptyRegistry, null));
+      const box = makeBox();
+      box.appendChild(window.renderSetupSection(model, { onRecheck: null }));
+      const btn = box.querySelector('.cap-install');
+      btn.click();
+      await sleep(20);
+      $('confirmCard').querySelector('.btn.primary').click();
+      await sleep(120);
+      check('P24 安装真实性（防线）：没有 onRecheck → 命令成功也不写「已安装」', () =>
+        (btn.dataset.installState !== 'installed' && btn.textContent !== '已安装')
+        || JSON.stringify({ state: btn.dataset.installState, text: btn.textContent }));
+      check('P24 安装真实性（防线）：如实说「命令已完成，待确认」，并且停用（不是点了没反应）', () =>
+        (btn.textContent === '命令已完成，待确认' && btn.disabled === true) || btn.textContent);
+      window.fetch = savedFetch;
+      box.remove();
+    }
+
+    /* ⑤ installed=null（无法确认）且没有 recheck 入口 → 连按钮都不画。 */
+    {
+      const model = window.setupViewModel(window.webCapability({ ok: false }, null));
+      const box = makeBox();
+      box.appendChild(window.renderSetupSection(model, {}));
+      check('P24 安装真实性：installed=null 且没有 recheck 入口 → 不画按钮（不给点了没反应的入口）', () =>
+        box.querySelector('.cap-install') === null
+        || JSON.stringify([...box.querySelectorAll('.ext-acts .btn')].map((b) => b.textContent)));
+      box.remove();
+    }
+
+    stubExtensions = savedRegistry;
+    window.fetch = savedFetch;
   }
 
   /* P23: 诊断面板的升级安全面 —— 版本核对 / 能力 probe / 兼容矩阵 / Native MCP /
