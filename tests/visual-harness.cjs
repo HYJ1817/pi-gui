@@ -1262,6 +1262,19 @@ const server = http.createServer(async (req, res) => {
       push({ type: 'agent_start' });
     } else if (what === 'settled') {
       push({ type: 'agent_settled' });
+    } else if (what === 'offline') {
+      /* P24：连接断开的两种形态。exited = 子进程没了；startup-error = 起不来。
+       * 两者都要能给出**可执行的下一步**（重启 / 诊断），而不是一句「失败了」。 */
+      push({ type: 'bridge_status', state: 'exited', code: 1 });
+    } else if (what === 'startup-error') {
+      push({
+        type: 'bridge_status',
+        state: 'error',
+        error: '无法启动 pi：spawn pi ENOENT',
+        hint: '确认 pi 已安装并在 PATH 中，或用环境变量 PI_BIN 指定完整路径。',
+      });
+    } else if (what === 'online') {
+      push({ type: 'bridge_status', state: 'ready' });
     }
     return json(res, 200, { ok: true, pushed: what, clients: clients.size });
   }

@@ -1319,6 +1319,137 @@ async function main() {
   await send('Emulation.clearDeviceMetricsOverride');
   await evalJs(`document.querySelector('#modal').hidden = true; document.querySelector('#modalCard').innerHTML = ''`);
   await sleep(200);
+  /* ---------- P24：日常使用面（命令面板 / 快捷键帮助 / 草稿恢复 / 状态条）----------
+   *
+   * ⚠️ 这里**只能走真实用户路径**：浏览器里 `app.js` 是 `<script type="module">`，
+   * 模块导出**不在 window 上**（jsdom 那套 `window.openPalette()` 在这里用不了）。
+   * 所以下面一律用「真按键 / 真点击 / 真刷新」。 */
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await sleep(260);
+  const isMac = await evalJs(`/Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent)`);
+  const mod = isMac ? { metaKey: true } : { ctrlKey: true };
+  const pressCombo = (key, extra = {}) => evalJs(`(() => {
+    const o = ${JSON.stringify({ ...mod, ...extra })};
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true, ...o }));
+    return true;
+  })()`);
+
+  await evalJs(`document.querySelector('#input').value = '写了一半的想法'`);
+  await pressCombo('k');
+  await sleep(320);
+  await shotOf('#paletteLayer', '183-command-palette', 'P24：命令面板（默认列表就是常用动作，不含不可执行项）', ['对话', '能力视图（Capabilities）', '诊断'], [
+    ['面板在视口内且不裁切', `(() => {const c=document.querySelector('.palette-card').getBoundingClientRect();return c.top>=0&&c.left>=0&&c.right<=innerWidth+1&&c.bottom<=innerHeight+1})()`],
+    ['焦点在搜索框里', `document.activeElement === document.querySelector('.palette-input')`],
+    ['容器上沿对齐（靠上而不是居中）', `(() => {const c=document.querySelector('.palette-card').getBoundingClientRect();return c.top < innerHeight*0.35})()`],
+    ['没有横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`],
+    ['列出的是已有动作（没有「停止生成」这类当前不可执行的项）', `![...document.querySelectorAll('.palette-item .palette-title')].some(t=>t.textContent==='停止生成')`],
+  ]);
+
+  await evalJs(`(() => { const i=document.querySelector('.palette-input'); i.value='会话'; i.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  await sleep(260);
+  await shotOf('#paletteLayer', '184-palette-search', 'P24：搜索（中文名 / 关键词 / 组名都能命中，会话条目按需出现）', ['搜索会话'], [
+    ['搜索收窄了列表', `document.querySelectorAll('.palette-item').length < 30`],
+    ['选中项始终只有一个', `document.querySelectorAll('.palette-item.on').length===1`],
+  ]);
+  await evalJs(`document.querySelector('.palette-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
+  await sleep(220);
+  await shotOf('#composerBox', '184b-palette-focus-restored', 'P24：Esc 关面板后焦点回到输入框（不是丢在 body 上）', [], [
+    ['焦点回到输入框', `document.activeElement === document.querySelector('#input')`],
+    ['草稿没被动过', `document.querySelector('#input').value === '写了一半的想法'`],
+  ]);
+
+  /* 快捷键帮助：用**真实快捷键**打开（Ctrl+/），验证「注册表 → 界面」这条链路 */
+  await pressCombo('/');
+  await sleep(360);
+  await shotOf('#modalCard', '185-shortcut-help', 'P24：快捷键帮助（注册表渲染 + 当前平台映射 + 既有输入键位）', ['键盘快捷键', '输入与弹层'], [
+    ['键位列不换行且不溢出', `(() => {const k=[...document.querySelectorAll('.kb-keys')];return k.length>0&&k.every(n=>getComputedStyle(n).whiteSpace==='nowrap')})()`],
+    ['帮助面板不越过视口', `(() => {const r=document.querySelector('#modalCard').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1})()`],
+    ['按平台显示修饰键', `document.querySelector('#modalCard').textContent.includes(${JSON.stringify(isMac ? '⌘' : 'Ctrl+')})`],
+  ]);
+  await evalJs(`document.querySelector('#modalCard .btn.primary').click()`);
+  await sleep(200);
+
+  /* 草稿恢复：**真的刷新页面**再回来看输入框 —— 这是 localStorage 唯一有意义的验法 */
+  await evalJs(`(() => { const i=document.querySelector('#input'); i.value='刷新之后我还在'; i.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  await sleep(700); // 过防抖窗口，验的是「真的落盘」而不是内存里
+  await send('Page.reload');
+  await sleep(2800);
+  await shotOf('#composerBox', '186-draft-restore', 'P24：未发送草稿在刷新后恢复（只存纯文本，按项目 + 会话隔离）', [], [
+    ['输入框里是刷新前那句话', `document.querySelector('#input').value === '刷新之后我还在'`],
+    ['localStorage 里只有 v/text/at 三个字段', `(() => {const k=Object.keys(localStorage).find(x=>x.startsWith('pi-gui.draft.'));if(!k)return 'no-key';const o=JSON.parse(localStorage.getItem(k));return JSON.stringify(Object.keys(o).sort())==='["at","text","v"]'})()`],
+    ['key 里没有项目路径原文', `(() => {const k=Object.keys(localStorage).find(x=>x.startsWith('pi-gui.draft.'))||'';return !k.includes('pi-GUI')&&!k.includes('/')&&!k.includes('\\\\')})()`],
+  ]);
+  await evalJs(`(() => { const i=document.querySelector('#input'); i.value=''; i.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  await sleep(700);
+  await shotOf('#composerBox', '186b-draft-cleared', 'P24：清空输入框后本地草稿被删除（不留幽灵草稿）', [], [
+    ['localStorage 里已经没有草稿键', `!Object.keys(localStorage).some(x=>x.startsWith('pi-gui.draft.'))`],
+  ]);
+
+  /* 连接断开 / 启动失败：状态条 + 可执行下一步 */
+  await evalJs(`fetch('/api/__push?what=startup-error').then(r=>r.ok)`);
+  await sleep(420);
+  await shotOf('#stageNotice', '187-startup-error', 'P24：pi 启动失败 —— 常驻说明 + 后端给的下一步 + 两个已有入口', ['pi 启动失败', 'ENOENT', '重启 Pi', '打开诊断'], [
+    ['不遮住输入区', `(() => {const n=document.querySelector('#stageNotice').getBoundingClientRect(),c=document.querySelector('#composerBox').getBoundingClientRect();return n.bottom<=c.top+1})()`],
+    ['按钮整块换行、不溢出', `(() => {const a=document.querySelector('#stageNotice .notice-actions');return a.scrollWidth<=a.clientWidth+1})()`],
+    ['没有横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`],
+  ]);
+  /* 连接断开：先回到在线状态，再断开 —— 否则会沿用上一条更具体的启动错误
+   * （那是刻意的：更具体的错误不该被一句「已退出」盖掉）。 */
+  await evalJs(`fetch('/api/__push?what=online').then(r=>r.ok)`);
+  await sleep(320);
+  await evalJs(`fetch('/api/__push?what=offline').then(r=>r.ok)`);
+  await sleep(360);
+  await shotOf('#stageNotice', '188-connection-lost', 'P24：pi 已退出 —— 同一套文案与同一个下一步', ['pi 已退出', '重启 Pi'], [
+    ['说明里说清当前无法继续发消息', `document.querySelector('#stageNotice').textContent.includes('重启')`],
+  ]);
+  await evalJs(`fetch('/api/__push?what=online').then(r=>r.ok)`);
+  await sleep(360);
+  await shotOf('#stageNotice', '189-connection-restored', 'P24：恢复连接后状态条自动收起（不留残影）', [], [
+    ['状态条已隐藏', `document.querySelector('#stageNotice').hidden===true`],
+  ]);
+
+  /* 700×600 与 701×602：窄 + 低高度 + DPI 取整（701 是 700 的相邻像素） */
+  for (const [w, h, label] of [[700, 600, '190-daily-700x600'], [701, 602, '191-daily-701x602']]) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    await pressCombo('k');
+    await sleep(360);
+    await shotOf('#paletteLayer', label, `P24：${w}×${h} 命令面板 —— 不裁切、不横向溢出`, [], [
+      ['面板完整在视口内', `(() => {const c=document.querySelector('.palette-card').getBoundingClientRect();return c.top>=0&&c.left>=0&&c.right<=innerWidth+1&&c.bottom<=innerHeight+1})()`],
+      ['面板有实际高度', `document.querySelector('.palette-card').getBoundingClientRect().height>60`],
+      ['没有横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`],
+      ['列表可滚动（内容多时不撑破）', `(() => {const l=document.querySelector('.palette-list');return l.scrollHeight<=l.clientHeight+1||l.clientHeight>40})()`],
+    ]);
+    await evalJs(`document.querySelector('.palette-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
+    await sleep(180);
+  }
+
+  /* 低高度对话：Composer 不能盖住最后一条消息 */
+  await send('Emulation.setDeviceMetricsOverride', { width: 900, height: 560, deviceScaleFactor: 1, mobile: false });
+  await sleep(420);
+  await shotOf('#chatView', '192-composer-not-covering', 'P24：低高度（900×560）输入区不遮消息、不横向溢出', [], [
+    /* 消息区的**元素**本来就延伸到输入区下面（底部留白靠 padding 顶住），
+     * 所以判据不能拿元素矩形比，要比「最后一条消息的底边」与输入区的顶边。 */
+    ['最后一条消息不被输入区遮住', `(() => {
+      const msgs=[...document.querySelectorAll('#stream .msg')];
+      const last=msgs[msgs.length-1];
+      if(!last) return true;
+      const c=document.querySelector('#composerBox').getBoundingClientRect();
+      return last.getBoundingClientRect().bottom <= c.top + 1;
+    })()`],
+    ['消息区留白 ≥ 输入区高度（机制上就不该遮）', `(() => {
+      /* 留白做在 .thread 的 padding-bottom 上（--composer-reserved-height + 余量），
+       * 不是 #stream 上 —— 判据要跟着机制走，不要跟着猜。 */
+      const t=document.querySelector('#stream .thread');
+      if(!t) return true;
+      const pad=parseFloat(getComputedStyle(t).paddingBottom)||0;
+      return pad >= document.querySelector('#composerBox').getBoundingClientRect().height - 2;
+    })()`],
+    ['页面无横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`],
+    ['消息区自己滚动', `(() => {const s=document.querySelector('#stream');return s.scrollHeight<=s.clientHeight+1||s.clientHeight>0})()`],
+  ]);
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(200);
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

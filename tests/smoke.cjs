@@ -7366,6 +7366,266 @@ staticCheck();
     window.resetDrift();
   }
 
+  /* P24: 日常使用面 —— 命令面板、快捷键、草稿恢复、状态条。
+   * 纯逻辑（注册表 / 搜索排序 / 文案映射）在 tests/daily-use.cjs；
+   * 这里量的是 DOM 真的长出来了、点了真的会动、焦点真的回来了。 */
+  {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const layer = () => $('paletteLayer');
+    const items = () => [...layer().querySelectorAll('.palette-item')];
+    const paletteTitles = () => items().map((b) => b.querySelector('.palette-title').textContent);
+    const press = (key, opts = {}) => {
+      const e = new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts });
+      (opts.target || window.document.body).dispatchEvent(e);
+      return e;
+    };
+
+    window.S.hasProject = true; window.S.switching = false; window.S.bridgeState = 'ready';
+    window.S.streaming = false;
+    window.document.getElementById('paletteLayer').hidden = true;
+    $('modal').hidden = true;
+    $('modalCard').innerHTML = '';
+
+    /* ---------- 快捷键注册表 ---------- */
+    check('P24 快捷键：注册表无冲突（重复键位在装配时就炸）', () => window.assertNoConflicts() === true);
+    const paletteKey = window.IS_MAC ? { metaKey: true } : { ctrlKey: true };
+    check('P24 快捷键：面板 / 帮助 / 四个视图都在表里，且都带人看的 label', () => {
+      const list = window.listShortcuts();
+      const ids = list.map((s) => s.id);
+      const want = ['palette', 'shortcut-help', 'view-chat', 'view-planner', 'view-changes', 'view-extensions'];
+      return (want.every((id) => ids.includes(id)) && list.every((s) => s.label && s.display)) || JSON.stringify(ids);
+    });
+    check('P24 快捷键：在输入框里按 Ctrl+K 也能打开面板（边写边叫出来）', () => {
+      $('input').value = '正在写的半句话';
+      press('k', { ...paletteKey, target: $('input') });
+      const opened = !layer().hidden;
+      window.closePalette();
+      return opened || 'ctrl+k 在输入框里没打开面板';
+    });
+    check('P24 快捷键：不带修饰键的普通按键不会在输入框里被抢', () => {
+      const before = $('input').value;
+      const e = press('k', { target: $('input') });
+      return !e.defaultPrevented && layer().hidden && $('input').value === before;
+    });
+
+    /* ---------- 命令面板：打开 / 搜索 / 键盘 / 执行 / 焦点 ---------- */
+    $('input').focus();
+    press('k', { ...paletteKey, target: window.document.body });
+    await sleep(30);
+    check('P24 面板：快捷键能打开，且焦点在搜索框里', () =>
+      !layer().hidden && window.document.activeElement === layer().querySelector('.palette-input'));
+    check('P24 面板：常用动作默认就在列表里（不用先搜索）', () => {
+      const titles = paletteTitles().join(' | ');
+      const want = ['对话', '任务（Planner）', '文件变更', '扩展（Extensions）', '能力视图（Capabilities）', 'MCP', '用量与额度', '诊断'];
+      return want.every((w) => titles.includes(w)) || titles;
+    });
+    check('P24 面板：不可执行的动作**不出现**（没在流式就不给「停止生成」）', () =>
+      !paletteTitles().includes('停止生成'));
+    check('P24 面板：会话条目只在有查询时出现（不刷屏）', () => paletteTitles().filter((t) => t.startsWith('切换到会话：')).length === 0);
+
+    const input = layer().querySelector('.palette-input');
+    input.value = '能力';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await sleep(20);
+    check('P24 面板：搜索按名称过滤', () => {
+      const titles = paletteTitles();
+      return titles.length >= 1 && titles[0].includes('能力') || JSON.stringify(titles);
+    });
+    input.value = '';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await sleep(20);
+    const firstText = paletteTitles()[0];
+    press('ArrowDown', { target: input });
+    await sleep(20);
+    check('P24 面板：↓ 移动选中项（aria-selected 跟着走）', () => {
+      const on = items().findIndex((b) => b.classList.contains('on'));
+      return on === 1 && items()[1].getAttribute('aria-selected') === 'true' || `on=${on}`;
+    });
+    press('ArrowUp', { target: input });
+    await sleep(20);
+    check('P24 面板：↑ 回到第一项', () => items().findIndex((b) => b.classList.contains('on')) === 0);
+    check('P24 面板：第一项就是默认视图（顺序稳定）', () => paletteTitles()[0] === firstText);
+
+    /* 执行：MCP 命令 → 打开扩展工作区并停在 MCP 过滤器 */
+    input.value = 'MCP';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await sleep(20);
+    const mcpItem = items().find((b) => b.dataset.commandId === 'view.mcp');
+    mcpItem.onclick();
+    await sleep(60);
+    check('P24 面板：执行后立刻关闭（不留面板挡结果）', () => layer().hidden);
+    check('P24 面板：MCP 命令打开扩展页并停在 MCP 过滤器', () =>
+      $('workspace').dataset.workspaceView === 'extensions'
+      && $('workSurface').querySelector('#extensionsTabMcp')?.getAttribute('aria-selected') === 'true');
+
+    /* Esc 关闭 + 焦点恢复 */
+    window.S.hasProject = true;
+    $('input').focus();
+    press('k', { ...paletteKey, target: window.document.body });
+    await sleep(30);
+    press('Escape', { target: layer().querySelector('.palette-input') });
+    await sleep(20);
+    check('P24 面板：Esc 关闭并把焦点还给打开它的元素', () =>
+      layer().hidden && window.document.activeElement === $('input'));
+
+    /* 面板不吃 Tab / 不在输入框里打字时抢键 */
+    press('k', { ...paletteKey, target: window.document.body });
+    await sleep(30);
+    const tabEvent = press('Tab', { target: layer().querySelector('.palette-input') });
+    check('P24 面板：Tab 留在搜索框上（aria-modal 语义）', () => tabEvent.defaultPrevented);
+    window.closePalette();
+    await sleep(10);
+
+    /* ---------- 可发现性：快捷键不能只写在文档里 ---------- */
+    check('P24 可发现：More 菜单里有「命令面板 / 键盘快捷键」两个可见入口', () => {
+      const p = $('navPalette');
+      const h = $('navShortcutHelp');
+      return Boolean(p && h) && p.getAttribute('role') === 'menuitem' && Boolean(p.title) && Boolean(h.title);
+    });
+    check('P24 可发现：点菜单里的「命令面板…」真的能打开面板', () => {
+      $('navPalette').onclick();
+      return !layer().hidden;
+    });
+    window.closePalette();
+    check('P24 可发现：点菜单里的「键盘快捷键…」真的能打开帮助', () => {
+      $('navShortcutHelp').onclick();
+      const open = !$('modal').hidden && $('modalCard').textContent.includes('键盘快捷键');
+      window.closeModal();
+      return open;
+    });
+    await sleep(20);
+
+    /* ---------- 危险动作不能被绕过确认 ---------- */
+    window.S.hasProject = true;
+    $('input').focus();
+    press('k', { ...paletteKey, target: window.document.body });
+    await sleep(40);
+    const restartItem = items().find((b) => b.dataset.commandId === 'run.restart');
+    check('P24 危险动作：面板里有「重启 Pi」', () => Boolean(restartItem));
+    restartItem.onclick();
+    await sleep(40);
+    check('P24 危险动作：从面板重启**必须先确认**（隐藏快捷键 / 面板都不是旁路）', () =>
+      $('confirmLayer').hidden === false && $('confirmCard').textContent.includes('重启'));
+    $('confirmCard').querySelector('.btn').click(); // 第一个按钮 = 取消
+    await sleep(40);
+    check('P24 危险动作：取消之后什么都没发生（确认框收起、桥接状态不变）', () =>
+      $('confirmLayer').hidden === true && window.S.bridgeState === 'ready');
+
+    /* ---------- 快捷键帮助 ---------- */
+    window.openShortcutHelp();
+    await sleep(30);
+    check('P24 帮助：从注册表渲染，含分组与键位写法', () => {
+      const card = $('modalCard');
+      const text = card.textContent;
+      return text.includes('键盘快捷键') && text.includes('命令面板') && text.includes('视图')
+        && text.includes(window.IS_MAC ? '⌘' : 'Ctrl+') && Boolean(card.querySelector('.kb-keys'));
+    });
+    check('P24 帮助：也列出输入 / 弹层那几条既有键位', () => {
+      const text = $('modalCard').textContent;
+      return text.includes('Enter') && text.includes('Shift+Enter') && text.includes('Esc');
+    });
+    window.closeModal();
+    await sleep(20);
+
+    /* ---------- 草稿恢复（存储边界是重点）---------- */
+    const store = window.localStorage;
+    for (const k of Object.keys(store)) if (String(k).startsWith('pi-gui.draft.')) store.removeItem(k);
+    window.resetDraftState();
+    window.S.cwd = 'C:\\work\\alpha';
+    window.S.state = { sessionId: 'sess-alpha' };
+    $('input').value = '半句话';
+    window.flushDraft();
+    const alphaKey = window.draftKey();
+    check('P24 草稿：按 workspace + session 分键，且 key 里没有路径原文', () =>
+      alphaKey.includes('pi-gui.draft.v1:') && !alphaKey.includes('alpha') && !alphaKey.includes('C:') || alphaKey);
+    check('P24 草稿：写进去的 JSON 只有 v / text / at 三个字段', () => {
+      const raw = JSON.parse(store.getItem(alphaKey));
+      return JSON.stringify(Object.keys(raw).sort()) === JSON.stringify(['at', 'text', 'v']) || JSON.stringify(Object.keys(raw));
+    });
+    check('P24 草稿：附件二进制 / 抽取正文 / 本机路径都不进 localStorage', () => {
+      window.S.attachments = [{ id: 'a1', name: 'x.png', kind: 'image', dataUrl: 'data:image/png;base64,PRIVATE_IMAGE', path: 'C:\\secret\\x.png', text: 'PRIVATE_DOC_TEXT' }];
+      $('input').value = '带附件的草稿';
+      window.flushDraft();
+      const raw = store.getItem(alphaKey);
+      window.S.attachments = [];
+      return !raw.includes('PRIVATE_IMAGE') && !raw.includes('PRIVATE_DOC_TEXT') && !raw.includes('secret') || raw.slice(0, 120);
+    });
+    check('P24 草稿：发送成功后清掉', () => {
+      $('input').value = '要发出去的内容';
+      window.flushDraft();
+      const hadBefore = Boolean(store.getItem(alphaKey));
+      $('input').value = '';
+      window.clearDraft();
+      return hadBefore && store.getItem(alphaKey) === null;
+    });
+    check('P24 草稿：空文本不落盘（不留幽灵草稿）', () => {
+      $('input').value = '临时';
+      window.flushDraft();
+      const had = Boolean(store.getItem(alphaKey));
+      $('input').value = '   ';
+      window.flushDraft();
+      return had && store.getItem(alphaKey) === null;
+    });
+    /* 换会话：草稿按身份隔离，互不串 */
+    $('input').value = 'alpha 的草稿';
+    window.flushDraft();
+    window.S.state = { sessionId: 'sess-beta' };
+    window.draftSync();
+    check('P24 草稿：换会话后输入框换成新会话的草稿（互不串）', () =>
+      $('input').value === '' || `value=${$('input').value}`);
+    $('input').value = 'beta 的草稿';
+    window.flushDraft();
+    const betaKey = window.draftKey();
+    check('P24 草稿：两条会话是两个 key', () => betaKey !== alphaKey && store.getItem(betaKey) !== null);
+    $('input').value = '';
+    window.S.state = { sessionId: 'sess-alpha' };
+    window.draftSync();
+    check('P24 草稿：切回原会话 → 原文恢复', () => $('input').value === 'alpha 的草稿' || $('input').value);
+    /* 换项目：workspace 维度同样隔离 */
+    window.S.cwd = 'C:\\work\\beta';
+    window.draftSync();
+    check('P24 草稿：换项目不会串到上一个项目的草稿', () => $('input').value !== 'alpha 的草稿' || $('input').value);
+    check('P24 草稿：草稿长度有上限（不会把 localStorage 撑爆）', () => {
+      $('input').value = 'x'.repeat(window.DRAFT_MAX_CHARS + 500);
+      window.flushDraft();
+      const raw = JSON.parse(store.getItem(window.draftKey()));
+      $('input').value = '';
+      return raw.text.length === window.DRAFT_MAX_CHARS;
+    });
+    for (const k of Object.keys(store)) if (String(k).startsWith('pi-gui.draft.')) store.removeItem(k);
+    window.resetDraftState();
+    window.S.cwd = 'C:\\pi-GUI';
+    window.S.state = null;
+
+    /* ---------- 状态条 ---------- */
+    window.hideNotice();
+    es.emit({ type: 'bridge_status', state: 'error', bridgeRun: (window.S.bridgeRun || 1) + 1, error: '无法启动 pi：spawn pi ENOENT', hint: '确认 pi 已安装并在 PATH 中，或用环境变量 PI_BIN 指定完整路径。' });
+    await sleep(30);
+    check('P24 状态条：pi 启动失败时常驻显示 error + 后可执行的下一步', () => {
+      const box = $('stageNotice');
+      return !box.hidden && box.textContent.includes('pi 启动失败')
+        && box.textContent.includes('ENOENT') && box.textContent.includes('PATH') || box.textContent.slice(0, 120);
+    });
+    check('P24 状态条：给的是已有入口（重启 / 诊断），不是自动修复', () => {
+      const labels = [...$('stageNotice').querySelectorAll('.btn')].map((b) => b.textContent);
+      return JSON.stringify(labels) === JSON.stringify(['重启 Pi', '打开诊断']) || JSON.stringify(labels);
+    });
+    [...$('stageNotice').querySelectorAll('.btn')].find((b) => b.textContent === '打开诊断').onclick();
+    await sleep(40);
+    check('P24 状态条：「打开诊断」走的就是既有诊断面板', () =>
+      $('modal').hidden === false && $('modalCard').textContent.includes('诊断'));
+    $('modal').hidden = true; $('modalCard').innerHTML = '';
+    check('P24 状态条：可关闭，且不会被同一条重复重建', () => {
+      $('stageNotice').querySelector('.notice-close').onclick();
+      return $('stageNotice').hidden;
+    });
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: (window.S.bridgeRun || 1) + 1 });
+    await sleep(30);
+    check('P24 状态条：pi 起来之后自动收起', () => $('stageNotice').hidden);
+    window.document.getElementById('paletteLayer').hidden = true;
+    window.S.bridgeState = 'ready';
+  }
+
   check('无残留 el 引用错误', () => errors.length === 0 || errors.join(' | '));
 
   let pass = 0;
