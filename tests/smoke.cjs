@@ -6852,8 +6852,50 @@ staticCheck();
       });
     }
 
-    /* 失败 → 明确原因 + 按钮回到可用（不能永久卡住） */
-    window.resetPiUpdate();
+    /* ---------- 真实轮询路径：暂停失败（pause-timeout）不是「已是最新」 ----------
+     *
+     * 这是「暂停失败没落终态」那个缺陷的前端侧：后端曾经回 `phase:'latest'`，
+     * 界面于是显示「已是最新版本」—— 一次都没更新却报成功。现在必须显示
+     * 真实的暂停失败原因，并且不能出现任何成功文案。 */
+    {
+      piUpdatePlan = [];
+      piUpdateCalls.length = 0;
+      window.resetPiUpdate();
+      await waitPi(20);
+      const pauseReason = '旧 Pi 进程在超时前没有退出，已放弃更新（不会在它还活着时替换运行时）';
+      stubPiUpdate = { ...PI_UPDATE_AVAILABLE };
+      stubPiUpdateStart = { ok: true, accepted: true, phase: 'updating', currentVersion: '0.99.2', latestVersion: '1.0.0' };
+      await window.checkPiUpdate({ force: true });
+      planPiUpdate(
+        { ok: true, phase: 'updating', running: true, currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: true, canUpdate: false, verification: 'unverified', reason: null, cached: false },
+        { ok: false, phase: 'failed', running: false, currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: false, canUpdate: false, verification: 'unverified', reason: null, cached: false, errorCode: 'pause-timeout', error: pauseReason },
+      );
+      await window.runPiUpdate();
+      const deadline = Date.now() + 9000;
+      while (Date.now() < deadline && state().phase !== 'failed') await waitPi(300);
+      check('Pi 轮询：暂停失败经轮询到达界面（phase=failed + errorCode）', () => {
+        const s = state();
+        return (s.phase === 'failed' && s.errorCode === 'pause-timeout' && s.running !== true) || JSON.stringify(s);
+      });
+      check('Pi 轮询：显示真实的暂停失败原因', () =>
+        host.textContent.includes(pauseReason) || host.textContent.slice(0, 160));
+      check('Pi 轮询：暂停失败**绝不显示成功**（没有「已是最新版本」）', () =>
+        !/已是最新版本/.test(host.textContent) || host.textContent.slice(0, 160));
+      check('Pi 轮询：暂停失败不显示成「没有新版本」（updateAvailable 保持 false 且相位是 failed）', () => {
+        const s = state();
+        return (s.updateAvailable !== true && s.phase === 'failed') || JSON.stringify(s);
+      });
+      const callsAtFail = piUpdateCalls.filter((c) => c.method === 'GET').length;
+      await waitPi(2600);
+      check('Pi 轮询：暂停失败后停止轮询（不会继续到「变回 available」）', () => {
+        const now = piUpdateCalls.filter((c) => c.method === 'GET').length;
+        return (state().phase === 'failed' && now === callsAtFail) || JSON.stringify({ calls: `${callsAtFail} → ${now}`, s: state() });
+      });
+      check('Pi 轮询：按钮不卡死（可点，且不是忙态文案）', () => {
+        const b = pollBtn();
+        return (!b || (!b.disabled && !/更新中|验证中|重启中/.test(b.textContent))) || JSON.stringify({ text: b && b.textContent, disabled: b && b.disabled });
+      });
+    }
     await waitPi(20);
     stubPiUpdate = { ok: false, phase: 'failed', currentVersion: '0.99.2', latestVersion: '1.0.0', updateAvailable: false, verification: 'unverified', canUpdate: false, reason: null, cached: false, running: false, errorCode: 'update-failed', error: '官方 updater 没有成功结束' };
     await window.checkPiUpdate({ force: true });

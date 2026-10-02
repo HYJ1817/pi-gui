@@ -848,6 +848,103 @@ function fakeChild() {
       (r3.ok === true && state.runArgs.length === 1) || JSON.stringify({ r3, calls: state.runArgs.length }));
   }
 
+  /* ================= J. 暂停失败也必须落 failed 终态 =================
+   *
+   * 真实缺陷的形态：`execute()` 在暂停失败时**提前 return**，绕过了终态写入，
+   * 于是留下 `updateState != null && updateInflight == null && result == null`。
+   * `updateStatusPayload()` 读不出「失败」，就报 `phase:'latest'` ——
+   * updater 一次都没跑，界面却说「已是最新版本」。这是**假成功**，比报错危险。
+   * 这一组把每条暂停失败路径的终态都钉住。 */
+  section('J. 暂停失败 → failed 终态（不能报 latest）');
+
+  const waitDone = async (update) => {
+    for (let i = 0; i < 100 && update.isRunning(); i++) await sleep(5);
+  };
+  const updateBody = { action: 'update', confirm: true, expectedCurrentVersion: '0.99.2', expectedLatestVersion: '1.0.0' };
+
+  /* 三条暂停失败路径共用一套断言（只换 code 与期望的 errorCode）。 */
+  const pauseFailureCases = [
+    { pauseCode: 'pause-timeout', expect: 'pause-timeout' },
+    { pauseCode: 'pause-failed', expect: 'pause-failed' },
+    { pauseCode: 'already-in-maintenance', expect: 'update-running' },
+  ];
+  for (const c of pauseFailureCases) {
+    const { update, state } = harness({ pause: { ok: false, code: c.pauseCode } });
+    const before = await update.readStatus({});
+    check(`J.${c.pauseCode} 前置：更新前是 available`, () =>
+      (before.phase === 'available' && before.updateAvailable === true) || JSON.stringify(before));
+    const started = await update.startUpdate(updateBody);
+    check(`J.${c.pauseCode} POST 被接受（accepted + phase=updating）`, () =>
+      (started.ok === true && started.accepted === true && started.phase === 'updating') || JSON.stringify(started));
+    await waitDone(update);
+    const after = await update.readStatus({ force: false });
+    check(`J.${c.pauseCode} **GET 是 failed，不是 latest**（ok:false / running:false）`, () =>
+      (after.ok === false && after.phase === 'failed' && after.running === false) || JSON.stringify(after));
+    check(`J.${c.pauseCode} errorCode=${c.expect} + 脱敏 error`, () =>
+      (after.errorCode === c.expect && typeof after.error === 'string' && after.error.length > 0 &&
+        !/[A-Za-z]:\\/.test(after.error)) || JSON.stringify(after));
+    check(`J.${c.pauseCode} 保留版本上下文（0.99.2 → 1.0.0）`, () =>
+      (after.currentVersion === '0.99.2' && after.latestVersion === '1.0.0') || JSON.stringify(after));
+    check(`J.${c.pauseCode} updateAvailable=false（不再显示「更新到 x」）`, () =>
+      (after.updateAvailable === false && after.canUpdate === false) || JSON.stringify(after));
+    check(`J.${c.pauseCode} updater 一次都没跑`, () =>
+      (state.paused === 1 && state.runArgs.length === 0) || JSON.stringify({ paused: state.paused, runs: state.runArgs.length }));
+    check(`J.${c.pauseCode} 没暂停成功就**不 resume**（维护态不是我们的）`, () =>
+      state.resumed === 0 || state.resumed);
+    check(`J.${c.pauseCode} 不 invalidateCaches（一个字节都没改）`, () =>
+      state.invalidated === 0 || state.invalidated);
+    const st = update._internals.state();
+    check(`J.${c.pauseCode} 不变量：终态存在就一定有 result`, () =>
+      (!st.running && st.hasUpdateState ? st.hasResult : true) || JSON.stringify(st));
+    const again = await update.readStatus({ force: false });
+    check(`J.${c.pauseCode} 连续 GET 保持 failed（不会被新检查覆盖）`, () =>
+      (again.phase === 'failed' && again.errorCode === c.expect) || JSON.stringify(again));
+    const snap = update.snapshot();
+    check(`J.${c.pauseCode} 诊断快照同样是 failed`, () =>
+      (snap.phase === 'failed' && snap.running === false && snap.errorCode === c.expect) || JSON.stringify(snap));
+    const forced = await update.readStatus({ force: true });
+    check(`J.${c.pauseCode} force 检查才允许离开终态`, () =>
+      (forced.phase === 'available' && forced.updateAvailable === true) || JSON.stringify(forced));
+  }
+
+  {
+    /* 不变量本身：终态 + 没有 result（自相矛盾）必须 **fail closed**。
+     * 正常路径现在产生不出这个状态（出口只有一个 finishUpdate），
+     * 所以直接喂给那个纯函数，钉住「绝不报 latest」。 */
+    const { update } = harness();
+    const inconsistent = update._internals.updateStatusPayload({
+      phase: 'failed',
+      ctx: { currentVersion: '0.99.2', latestVersion: '1.0.0', verification: 'unverified' },
+      result: null,
+    });
+    check('J11. 自相矛盾的终态（result=null）fail closed：不报 latest', () =>
+      (inconsistent.phase === 'failed' && inconsistent.ok === false &&
+        inconsistent.errorCode === 'state-inconsistent' && inconsistent.running === false) || JSON.stringify(inconsistent));
+    check('J12. 自相矛盾时仍然给出可读的脱敏原因', () =>
+      /没有留下终态结果/.test(inconsistent.error || '') || inconsistent.error);
+  }
+
+  {
+    /* 每条**执行层**路径的终态都必须带 result —— 成功 / updater 失败 / 复验失败。 */
+    const paths = [
+      { name: '成功', opts: { afterUpgrade: '1.0.0' }, expectPhase: 'latest', expectOk: true },
+      { name: 'updater 失败', opts: { runResult: { ok: false, exitCode: 1, stderr: 'boom' } }, expectPhase: 'failed', expectOk: false },
+      { name: '复验失败', opts: {}, expectPhase: 'failed', expectOk: false },
+    ];
+    for (const p of paths) {
+      const { update } = harness(p.opts);
+      await update.readStatus({});
+      await update.runUpdate(updateBody);
+      const st = update._internals.state();
+      check(`J13.${p.name}：终态有 result、phase 与 ok 一致`, () =>
+        (!st.running && st.hasUpdateState && st.hasResult && st.phase === p.expectPhase &&
+          update.snapshot().phase === p.expectPhase) || JSON.stringify({ st, snap: update.snapshot() }));
+      const got = await update.readStatus({});
+      check(`J14.${p.name}：GET 的 ok 与结果一致（不会把失败说成成功）`, () =>
+        (got.ok === p.expectOk && got.phase === p.expectPhase) || JSON.stringify(got));
+    }
+  }
+
   console.log('');
   console.log(`${pass}/${pass + fail} 通过`);
   process.exitCode = fail ? 1 : 0;
