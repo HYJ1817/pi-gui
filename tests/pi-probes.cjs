@@ -154,10 +154,14 @@ function mkNativeSummary(native) {
     assert.equal(matrix.lookupPiVersion('').status, 'unknown');
     assert.equal(matrix.lookupPiVersion('not-a-version').status, 'unverified');
   });
-  check('当前基线是 0.99.2，且只有一条 current', () => {
-    assert.equal(matrix.currentBaseline().version, '0.99.2');
+  check('当前基线是 1.0.0，且只有一条 current', () => {
+    assert.equal(matrix.currentBaseline().version, '1.0.0');
     assert.equal(matrix.PI_BASELINES.filter((b) => b.scope === 'current').length, 1);
-    assert.ok(matrix.baselineSentence().includes('0.99.2'));
+    assert.ok(matrix.baselineSentence().includes('1.0.0'));
+    /* 0.99.2 降为 historical：它仍然在表里（旧机器 / 旧包照样「核对过」），
+     * 但不再是「当前对照物」。 */
+    const old = matrix.PI_BASELINES.find((b) => b.version === '0.99.2');
+    assert.equal(old.scope, 'historical');
   });
   check('关键 Extension：同一版本 verified，别的版本 unverified，没版本 unknown', () => {
     for (const base of matrix.EXTENSION_BASELINES) {
@@ -416,14 +420,16 @@ function mkNativeSummary(native) {
   const vDir = mkPiPackage('pkg-version', { version: '0.99.2' });
   const vDirNew = mkPiPackage('pkg-version-new', { version: '1.2.3' });
   const vDirBad = mkPiPackage('pkg-version-bad', { version: 'not-a-version' });
-  check('核对过的版本带 verifiedAgainst（当前基线 + 核对日期）', () => {
+  check('核对过的版本带 verifiedAgainst（含核对日期与范围）', () => {
     const pv = createPiVersion({ resolvePackageDir: () => vDir, matrix });
     const s = pv.read();
     assert.equal(s.value, '0.99.2');
     assert.equal(s.source, 'package.json');
     assert.equal(s.status, 'known');
     assert.equal(s.verification, 'verified');
-    assert.deepEqual(s.verifiedAgainst, { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'current' });
+    /* 1.0.0 起 0.99.2 是 historical：仍然「核对过」（在矩阵里），
+     * 但 scope 如实反映它不再是当前对照物。 */
+    assert.deepEqual(s.verifiedAgainst, { version: '0.99.2', verifiedAt: '2026-10-01', scope: 'historical' });
     assert.equal(s.relative, 'same');
   });
   check('没核对过的版本：unverified + verifiedAgainst=null，但**功能照常**', () => {
@@ -566,8 +572,9 @@ function mkNativeSummary(native) {
     assert.deepEqual(Object.keys(snap.probes.items[0]).sort(), ['evidence', 'id', 'kind', 'label', 'state']);
   });
   check('兼容矩阵摘要进诊断（基线版本 + Extension release）', () => {
-    assert.equal(snap.matrix.currentBaseline, '0.99.2');
+    assert.equal(snap.matrix.currentBaseline, '1.0.0');
     assert.ok(snap.matrix.piBaselines.some((b) => b.version === '0.87.0'));
+    assert.ok(snap.matrix.piBaselines.some((b) => b.version === '0.99.2' && b.scope === 'historical'));
     assert.ok(snap.matrix.extensionBaselines.some((b) => b.name === 'pi-browser-harness'));
     assert.ok(Array.isArray(snap.matrix.knownDifferences) && snap.matrix.knownDifferences.length > 0);
   });

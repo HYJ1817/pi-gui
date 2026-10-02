@@ -69,8 +69,14 @@ export const PI_BASELINES = Object.freeze([
   Object.freeze({
     version: '0.99.2',
     verifiedAt: '2026-10-01',
+    scope: 'historical',
+    note: 'P20.6-Fix 与 P22/P23 的对照物。自带 builtin:mcp；MCP 配置层词汇表变化（见 KNOWN_DIFFERENCES）。**证书 / 运行复核 2026-10-02**：包管理器方式安装的 pi 已由官方 `pi update --self` 升到 1.0.0，它不再是本机现状。',
+  }),
+  Object.freeze({
+    version: '1.0.0',
+    verifiedAt: '2026-10-02',
     scope: 'current',
-    note: 'P20.6-Fix 与本轮（P22/P23）的对照物。自带 builtin:mcp；MCP 配置层词汇表变化（见 KNOWN_DIFFERENCES）。',
+    note: '逐项核对过上游 v0.99.2 → v1.0.0 的源码（tag commit 与 npm gitHead 一致）并做了本机 live 复核：RPC 命令集 / 应答 / extension_ui_request 与 Extension API（core/extensions/types.ts）**逐字节相同**，所以不需要任何 RPC 或扩展契约迁移；MCP 只多一个 oauth.authServerMetadataUrl 的受理规则（GUI 已复刻），OAuth 凭据键改成 server name + URL（Pi 自己懒迁移，GUI 不碰）；deferred MCP 工具不再丢是上游修复。Codemode 的 typeof tools.x 改抛错、以及 models.generateImages() 都是上游新面，GUI 不消费、不迁移。本机 live probe：14 条里 8 支持 / **0 不支持** / 6 未知（运行观察类，需要真实会话才有结论）。',
   }),
 ]);
 
@@ -122,7 +128,13 @@ export const NATIVE_MCP_CONTRACT = Object.freeze({
   exposures: Object.freeze(['codemode', 'deferred', 'direct', 'hidden']),
   cliSubcommands: Object.freeze(['add', 'remove', 'list', 'login', 'logout']),
   toolNamePattern: 'mcp__<server>__<tool>',
-  note: 'enable / disable / reconnect 没有官方 shell 接口；RPC 也没有 MCP 管理命令。GUI 只代理官方 CLI。',
+  /** `validateOAuth()` 接受的字段（1.0.0 起含 authServerMetadataUrl）。
+   *  GUI 逐条复刻：`server/mcp-native.js` 的 validateOAuthConfig。 */
+  oauthFields: Object.freeze(['clientId', 'clientSecret', 'callbackPort', 'callbackUrl', 'scope', 'clientName', 'authServerMetadataUrl']),
+  /** `authServerMetadataUrl` 的受理规则（1.0.0 新增）：https 任意主机，
+   *  或 http + loopback（localhost / 127.0.0.1 / [::1]）；不校验端口，允许 query/fragment。 */
+  oauthMetadataUrlRule: 'https:// 任意主机；http:// 仅 localhost / 127.0.0.1 / [::1]',
+  note: 'enable / disable / reconnect 没有官方 shell 接口；RPC 也没有 MCP 管理命令。GUI 只代理官方 CLI。凭据由 pi 自己管理（mcp-auth.json 整块不出后端）。',
 });
 
 /* ---------- 已知差异：**我们主动记下来的上游行为差异** ----------
@@ -179,6 +191,35 @@ export const KNOWN_DIFFERENCES = Object.freeze([
     affects: 'MCP 运行时状态投影',
     handling: '逐项 allowlist：新字段默认丢弃；resources / resourceTemplates 只在真有值时显示。',
     probe: 'mcp-cli-resources',
+  }),
+  /* ---------- 0.99.2 → 1.0.0（Pi 1.0.0，本轮逐项核对） ---------- */
+  Object.freeze({
+    id: 'mcp-oauth-auth-server-metadata-url',
+    between: '0.99.2 → 1.0.0',
+    affects: 'Native MCP 配置解析（`server/mcp-native.js` 的 validateOAuthConfig）',
+    handling: '1.0.0 新增 `oauth.authServerMetadataUrl`：必须 https（任意主机），或 http + loopback（localhost / 127.0.0.1 / [::1]）；不看端口、允许 query/fragment。GUI 逐条复刻 —— 少了它就会出现 P20.6-Fix-3 那类漂移：GUI 认为项目里那条合法、把同名用户级标成 overridden，而上游把整条拒掉，最终两条都不生效。',
+    probe: 'mcp-runtime-states',
+  }),
+  Object.freeze({
+    id: 'mcp-oauth-credential-identity',
+    between: '0.99.2 → 1.0.0',
+    affects: '无（凭据整块由 pi 自己管理）',
+    handling: '凭据键从「URL」改成「server name + URL」（`mcp__<name>|<规范化 URL>`），旧键在第一次 load 时懒迁移；**同 URL 不同 name 的 server 不再共用一个账号**（先加载的那个接手旧凭据，其余要重新登录）。Pi GUI 不读 mcp-auth.json、不迁移、不复制 token，只把 server **名**原样交给官方 `pi mcp login/logout`。',
+    probe: 'mcp-runtime-states',
+  }),
+  Object.freeze({
+    id: 'deferred-mcp-tools-restore',
+    between: '0.99.2 → 1.0.0',
+    affects: 'tool-search 动态加载的 deferred MCP 工具在 resume / reload 之后的可见性',
+    handling: '上游修复（agent-session 的 `_pendingToolNames`）：MCP 重新连上之后，之前 tool_search 加载的工具不再被丢掉。GUI **不重写**工具恢复逻辑，只按真实事件观察；拿不到证据一律 unknown，不按 changelog 硬编码。',
+    probe: 'tool-events',
+  }),
+  Object.freeze({
+    id: 'codemode-tool-probe-syntax',
+    between: '0.99.2 → 1.0.0',
+    affects: '无（Pi GUI 既不生成也不执行 codemode 脚本）',
+    handling: 'codemode 沙箱改成 Proxy：`typeof tools.x` 现在会**抛错**，探测工具存在性要用 `"x" in tools`。仓库里没有任何 `typeof tools.` 用法，所以不需要迁移。`models.generateImages()` 是上游新能力，GUI 当前没有消费入口 —— 不新增图片生成 UI / 假 Capability action，只在文档里注明。',
+    probe: 'builtin-codemode-tool-search',
   }),
 ]);
 

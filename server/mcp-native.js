@@ -230,7 +230,20 @@ function isLoopbackRedirectUri(value) {
   return url.protocol === 'http:' && LOOPBACK_HOSTS.includes(url.hostname) && url.search === '' && url.hash === '';
 }
 
-/** 上游 `validateOAuth`：返回错误文案或 undefined。 */
+/** 上游 `validateOAuth`：返回错误文案或 undefined。
+ *
+ * ⚠️ 逐条对应 `src/core/mcp-servers.ts` 的 `validateOAuth`。**1.0.0 起多了一条**
+ * `authServerMetadataUrl`：必须是 https，或者 http + loopback 主机
+ * （`localhost` / `127.0.0.1` / `[::1]`）。
+ *
+ * 这条**不能少**：GUI 的 `parseMcpServers()` 是「Pi 会不会接受这条配置」的复刻，
+ * 少了它就会出现 P20.6-Fix-3 那类语义漂移 —— GUI 认为项目里那条合法、于是把
+ * 同名用户级条目标成 `overridden`，而上游真的去加载时把它整条拒掉，
+ * 结果**两条都不生效**。
+ *
+ * 与 `callbackUrl` 的差别（照抄上游，不要"顺手统一"）：
+ *   - metadata URL **允许** query 与 fragment（上游只用协议 + 主机判）；
+ *   - 不校验端口。 */
 function validateOAuthConfig(value) {
   if (value === undefined) return undefined;
   if (!isRecord(value)) return 'oauth must be an object';
@@ -252,6 +265,18 @@ function validateOAuthConfig(value) {
   if (value.scope !== undefined && typeof value.scope !== 'string') return 'oauth.scope must be a string';
   if (value.clientName !== undefined && (typeof value.clientName !== 'string' || !value.clientName.trim())) {
     return 'oauth.clientName must be a non-empty string';
+  }
+  /* 1.0.0 新增：认证服务器 metadata 文档地址（RFC 8414 / OIDC discovery）。
+   * 上游原文：
+   *   const url = typeof metadataUrl === "string" && URL.canParse(metadataUrl) ? new URL(metadataUrl) : undefined;
+   *   if (!url || !(url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname)))) → 拒绝 */
+  const metadataUrl = value.authServerMetadataUrl;
+  if (metadataUrl !== undefined) {
+    const url = typeof metadataUrl === 'string' && URL.canParse(metadataUrl) ? new URL(metadataUrl) : undefined;
+    const ok = url && (url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.includes(url.hostname)));
+    if (!ok) {
+      return 'oauth.authServerMetadataUrl must be an https URL, or http on localhost, 127.0.0.1, or [::1]';
+    }
   }
   return undefined;
 }

@@ -24,8 +24,10 @@ const check = (name, fn) => { fn(); count++; console.log('  ok  ' + name); };
 const checkAsync = async (name, fn) => { await fn(); count++; console.log('  ok  ' + name); };
 const section = (t) => console.log('\n--- ' + t + ' ---');
 
-/** 契约基线：本轮核对的 pi 正式版。fixture 的包版本与它保持一致。 */
-const PI_BASELINE = '0.99.2';
+/** 契约基线：本轮核对的 pi 正式版。fixture 的包版本与它保持一致。
+ *  （1.0.0 的 MCP 面已随本轮 live 复核收口：oauth.authServerMetadataUrl 与
+ *  list --json / 状态闭集 / 命名规则都与 0.99.2 同形。） */
+const PI_BASELINE = '1.0.0';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-mcpnat-'));
 const AGENT = path.join(TMP, 'agent');
@@ -1000,6 +1002,40 @@ function mkNative(over = {}) {
     rejects('oauth.callbackUrl 带 query', { url: 'https://e.com/m', oauth: { callbackUrl: 'http://localhost:8080/cb?x=1' } });
     rejects('oauth.callbackUrl 与 callbackPort 端口不一致', { url: 'https://e.com/m', oauth: { callbackUrl: 'http://localhost:8080/cb', callbackPort: 9090 } });
     rejects('oauth.clientName 空白', { url: 'https://e.com/m', oauth: { clientName: '   ' } });
+    /* ---- Pi 1.0.0 新增的 authServerMetadataUrl（逐条对拍上游 validateOAuth） ----
+     * 上游规则（`core/mcp-servers.ts` v1.0.0）：
+     *   必须 https（任意主机），或 http + loopback（localhost / 127.0.0.1 / [::1]）；
+     *   不校验端口、**允许** query 与 fragment、不拒绝未知键。
+     * 少复刻这一条就会重新踩 P20.6-Fix-3：GUI 认为项目里那条合法 → 把同名用户级
+     * 标成 overridden → 上游把整条拒掉 → 两条都不生效。 */
+    rejects('oauth.authServerMetadataUrl 是 number', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 42 } });
+    rejects('oauth.authServerMetadataUrl 是 object', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: { href: 'https://x' } } });
+    rejects('oauth.authServerMetadataUrl 是数组', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: [] } });
+    rejects('oauth.authServerMetadataUrl 是空串', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: '' } });
+    rejects('oauth.authServerMetadataUrl 畸形', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'not a url' } });
+    rejects('oauth.authServerMetadataUrl 用 ftp', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'ftp://example.com/x' } });
+    rejects('oauth.authServerMetadataUrl 远端 http', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'http://example.com/x' } });
+    rejects('oauth.authServerMetadataUrl 是 file:', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'file:///etc/passwd' } });
+    accepts('oauth.authServerMetadataUrl 用 https（well-known）', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'https://idp.example.com/.well-known/openid-configuration' } });
+    accepts('oauth.authServerMetadataUrl 是 http + localhost', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'http://localhost:8080/.well-known/openid-configuration' } });
+    accepts('oauth.authServerMetadataUrl 是 http + 127.0.0.1', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'http://127.0.0.1:8080/x' } });
+    accepts('oauth.authServerMetadataUrl 是 http + [::1]', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'http://[::1]:8080/x' } });
+    accepts('oauth.authServerMetadataUrl 允许 query 与 fragment（与 callbackUrl 不同）', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'https://idp.example.com/x?y=1#z' } });
+    accepts('oauth.authServerMetadataUrl 不校验端口', { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'https://idp.example.com:8443/x' } });
+
+    /* oauth 整块不出后端：新字段也一样（它不是严格意义上的 secret，
+     * 但当前边界就是「oauth 的值一个字节都不进投影/报告」）。 */
+    check('J·oauth.authServerMetadataUrl 的值不进投影（oauth 整块不出后端）', () => {
+      const r = parseMcpServers({
+        mcpServers: { s: { url: 'https://e.com/m', oauth: { authServerMetadataUrl: 'https://idp.example.com/.well-known/openid-configuration' } } },
+      });
+      assert.equal(r.servers.length, 1);
+      const projected = r.servers[0];
+      assert.equal(projected.hasSecrets, true, '有 oauth 就必须标成有凭据面');
+      const text = JSON.stringify(projected);
+      assert.ok(!text.includes('idp.example.com'), text);
+      assert.ok(!text.includes('authServerMetadataUrl'), text);
+    });
     rejects('auth.provider 缺失', { url: 'https://e.com/m', auth: {} });
     rejects('auth.provider 空串', { url: 'https://e.com/m', auth: { provider: '' } });
     rejects('auth 在非 https 且非 loopback 的 URL 上', { url: 'http://example.com/m', auth: { provider: 'anthropic' } });
