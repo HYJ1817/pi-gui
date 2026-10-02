@@ -158,8 +158,21 @@ pi 的会话是一棵 **append-only 的条目树**，每个节点都能「从此
 hover 看摘要、点击平滑跳过去、滚动时当前那条自动高亮。
 
 - **只画用户消息**：assistant / tool / thinking 都不画点（否则变成刻度尺）
-- **位置按内容比例映射**：`top = 消息在内容里的偏移 / scrollHeight × 容器高`，
-  不是按序号均分
+- **marker 聚成一组紧凑短线**（UX 修复）：整组纵向居中，条数与可用高度决定
+  短线高度与间距（10～40 条时是一组连续的短线，长会话按可用高度压缩间距，
+  绝不越出容器）。顺序仍然是「第 1 次提问 → 第 1 条」。
+  早先是 `top = 消息在内容里的偏移 / scrollHeight × 容器高` —— 一条很长的
+  assistant 回答会把后面的点推到很远，marker 散满整个左栏、很难连续点。
+- **点击跳转只写 `#stream.scrollTop`**（`scrollTo({top, behavior:'smooth'})`），
+  **不用 `element.scrollIntoView()`**：后者会连带滚动所有「可编程滚动」的祖先，
+  而 `.stage` 是 `overflow:hidden`（hidden 只是不给用户滚动条，`scrollTop` 照样
+  能被脚本改），于是点一下 marker 整个 workspace 会被推上去 46px、顶栏被推出
+  视口。落点 = `topInContent - 20`，clamp 到 `[0, scrollHeight - clientHeight]`。
+  回归测试在 `tests/smoke.cjs`（不许调用 scrollIntoView）与
+  `tests/cdp-shot.cjs` 的 UX-06（跳转前后 `.stage-head` / `#chatView` / 输入区
+  的矩形必须一个像素都不动）。
+- **内容偏移仍然缓存**（`topInContent`）：跳转与「当前是第几条」都用它，
+  只是不再决定 marker 的纵向位置
 - **DOM 是唯一权威**：导航只持有 `{id, element, marker, preview}`，
   历史重建 / 分叉 / 重试 / 切项目后一律重新扫 DOM，不存消息副本
 - **滚动路径无布局读取**：位置缓存 + 二分；IntersectionObserver 只当

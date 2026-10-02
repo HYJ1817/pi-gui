@@ -981,3 +981,49 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 
 ⚠️ **`npm run test:probes-live` 不进 CI**：它断言的是「这台机器上装的 pi 现在长什么样」，
 在 CI 上必红。它属于升级流程第 5 步（见 [upgrade-playbook.md](upgrade-playbook.md)）。
+
+## UX Bugfix（v0.17.0 之后）验证
+
+这一轮修的是四个真实使用中暴露的界面问题（不是新功能）：
+
+| 层 | 命令 | 量什么 |
+|---|---|---|
+| DOM（jsdom） | `npm run test:ui` | 项目行没有常驻 `.pj-path`、路径进了 `title` / aria-label；折叠箭头的结构、`aria-expanded` / `aria-controls`、折叠-展开-换项目-搜索的交互与「点箭头 / 点删除不误触」；minimap 紧凑聚簇（跨度、等距、居中、顺序）、`scrollTo` 落点、**不许调用 `scrollIntoView`** |
+| 样式表文本 | `npm run test:server` | 全局 `::-webkit-scrollbar`（10px / 深灰 `#2c2c2c` / 轨道透明 / 同时覆盖横向 / 有 `@supports` 兜底 / 没有 `scrollbar-width:none`）、删掉了旧的重复补丁、`.stage-head` 有显式背景且抬在正文之上、`.stage` 是 `overflow:clip`、**`--titlebar` 与 `electron/main.cjs` 的 `titleBarOverlay.color` 同值** |
+| 真实 Chrome | `npm run harness` + `npm run shots:harness` | 场景 UX-01 ～ UX-09（见下） |
+
+`mustTrue` 判据（一律是结构事实，不是像素值）：
+
+- **UX-01 / UX-02**：命令面板列表、诊断内容区 `getComputedStyle(el, '::-webkit-scrollbar')`
+  是 10px、滑块 `rgb(44,44,44)`、轨道透明，且这两个容器**真的能滚**
+  （判滚动条不能只看样式：不可滚的容器上有没有滚动条都无所谓）。
+- **UX-03 / UX-04**：`.project.active` 与 `.pj-sess` 的 `offsetHeight` 差 ≤ 2px、
+  项目行 ≤ 36px、没有 `.pj-path`、路径在 `title` 上、箭头 `aria-expanded` /
+  `aria-controls` 正确、会话块仍是项目行的 `nextElementSibling`；
+  折叠后会话块 `hidden`、`aria-expanded=false`、**会话行仍在 DOM 里**、项目行还在。
+- **UX-05**：24 次提问 → 24 条 marker；整组跨度 < 导航容器高的 1/3、
+  纵向居中（±4px）、相邻等距；当前项只有一条且更宽；导航列自己不出现滚动条；
+  整组不越过顶栏与输入区。
+- **UX-06**（这一轮最重要的回归）：跳转前后记录 `.stage-head` / `#chatView` /
+  `#chatComposer` 的矩形与 `.stage` / 文档的 `scrollTop`，断言三个外层的
+  top / bottom / height **一个像素都不动**、`.stage` 与文档恒为 0，
+  只有 `#stream.scrollTop` 变了；目标消息落在滚动区里且顶部余量 0～40px。
+  覆盖第一条、中间一条、最后一条、**很长回答之后的那一条**、历史恢复之后。
+- **UX-07 / UX-08**：`.stage-head` 的 top=0、height=46、右边缘铺满、
+  背景 = `rgb(13,13,13)` 且 `--titlebar === '#0d0d0d'`、底部分隔线 1px；
+  拖拽区 `-webkit-app-region` 仍是 drag、顶栏按钮仍是 no-drag；
+  Chat / 任务 / 文件变更 / 扩展来回切换、长对话滚动、开关命令面板之后都重测一遍。
+- **UX-09**：700×600、900×700、1200×800、1536×900 四档抽查顶栏稳定性、
+  项目行与会话行高度接近、导航聚簇（窄窗口按既有策略隐藏则不判）、无横向溢出；
+  另存一张 700×600 的顶栏截图。
+
+⚠️ **滚动条在截图里看不到**：`cdp-shot.cjs` 用 `--hide-scrollbars` 启动 Chrome
+（既有的全量截图都依赖它，不动）。所以滚动条的判据走 computed style ——
+Chrome 里 `getComputedStyle(el, '::-webkit-scrollbar')` 仍然会回样式表里写的宽度，
+`offsetWidth - clientWidth` 则为 0。想看真实滚动条外观要用 `npm run shots:app`
+（Electron，无此开关）。
+
+⚠️ 长会话夹具是 `GET /api/__conversation?what=long-thread&turns=N`
+（`tests/visual-harness.cjs`）。它**故意不改 `P14B_MESSAGES`** ——
+场景 80-minimap 钉死了「4 个用户 Turn」。用完在后续场景里用
+`?what=fixture` / `?what=reset` 换回去。

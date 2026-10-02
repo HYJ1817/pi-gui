@@ -20,6 +20,8 @@ Tool Timeline 仍以一条 Assistant 消息中的连续 tool calls 为组。实�
 
 Minimap 仍按每条 User 消息建一条短线，沿用 DOM 锚点、位置缓存与点击跳转。当前项更亮，hover / focus 可见；点击后立即同步高亮，窄窗口沿用隐藏策略。它不索引 Assistant、Thinking 或 Tool，也不另存消息副本。
 
+这一轮 UX 修复改了它的两处行为：marker **聚成一组紧凑短线**（整组纵向居中、条数与可用高度决定间距，不再按消息在内容里的比例铺满整个左栏 —— 那样一条长回答就会把后面的点推到很远）；点击跳转**只写 `#stream.scrollTop`**，不再用 `element.scrollIntoView()` —— 后者连带滚动 `overflow:hidden` 的 `.stage`，会把顶栏推出视口（详见 [sessions.md](sessions.md) 第十节）。`.stage` 同时改成 `overflow:clip`（不是可被脚本滚动的 `hidden`），`.stage-head` 有了显式背景并与 `electron/main.cjs` 的 `titleBarOverlay.color` 共用同一个 `--titlebar` 值。
+
 ## 渲染边界与验证
 
 SSE 的增量消息与 `get_messages` 历史消息仍走 `messages.js`；Tool 的两个数据来源仍共用 `ToolEntry → tool-view.js`。流式绘制保留原限流与近底部自动滚动规则；最终内容只更新变化的块并复用现存 Thinking 节点。长代码只在 `<pre>` 内横向滚动。

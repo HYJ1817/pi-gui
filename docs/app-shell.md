@@ -6,6 +6,8 @@ Global Rail 只调用已有功能：对话返回主工作区；任务打开 Plan
 
 项目侧栏顶部是新对话和会话搜索；搜索仍调用既有当前项目搜索模块。项目分组里直接列出当前项目的 Session，切换项目仍按原逻辑重启 pi。添加文件夹与项目设置移入项目操作菜单；删除项目保留在项目行的悬停或键盘聚焦动作里。归档列表和会话操作沿用原来的会话模块。用量常态只显示上下文摘要，展开显示输入、输出、缓存、成本；数据仍由原来的 `get_session_stats` 更新。
 
+侧栏层级在这一轮 UX 修复里收紧了：**项目行与会话行同高**（34px），绝对路径不再常驻第二行（改挂在行的 `title` 与 `.pj-select` 的 aria-label 上），当前项目行内多了一个折叠箭头 —— 点它只折叠**这个项目下面的会话列表**（`aria-expanded` / `aria-controls` 同步、键盘可用，不影响项目切换与删除）。换项目（列表整体重渲染）后回到展开；折叠状态下点「搜索会话」会自动展开，否则输入框会被藏住。跨进程的标题栏颜色统一到 `--titlebar`：它必须与 `electron/main.cjs` 的 `titleBarOverlay.color` 同值，`tests/dev-server.cjs` 有一条断言盯着这两个值。
+
 本阶段没有修改 Planner DAG、Attempt、审阅、Git Changes、会话存储与分支、provider / diagnostics API 或 pi RPC。工作区仅调整外层尺寸和背景，消息流、工具时间线与输入框内部保持原样。
 
 P14-D 将任务、文件变更、扩展改为 Global Rail 的 Stage 一级视图；Chat 与 Composer 切出时仅隐藏，原 DOM 和流式处理继续保留。二级弹窗仍由独立的 Modal 管理。实现与生命周期见 [work-surfaces.md](work-surfaces.md)。
