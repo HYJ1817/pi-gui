@@ -191,9 +191,11 @@ export function createPiUpdate({
    * - 终态：成功回 `latest` + `installedVersion`；失败回 `failed` + errorCode，
    *   两者都 `updateAvailable:false`（当前状态已经没有待更新的东西，
    *   或者已经失败 —— 都不能再显示「更新到 x」）。
+   *
+   * 参数 `st` 只给测试用（默认就是当前 `updateState`），方便直接验证
+   * 「终态必须带 result」这条不变量而不必去改模块内部状态。
    */
-  function updateStatusPayload() {
-    const st = updateState;
+  function updateStatusPayload(st = updateState) {
     const ctx = st ? st.ctx : null;
     const res = st ? st.result : null;
     if (updateInflight) {
@@ -210,7 +212,27 @@ export function createPiUpdate({
         running: true,
       });
     }
-    const failed = Boolean(res && res.ok === false);
+    /* 终态却没有 result = 状态机自相矛盾（正常路径走完 execute 后不可能出现，
+     * 因为出口只有一个 `finishUpdate`）。**fail closed**：绝不能把「没有失败」
+     * 当成成功报 `latest` —— 那正是「updater 一次都没跑却显示已是最新版本」。 */
+    if (!res) {
+      return payload({
+        ok: false,
+        phase: 'failed',
+        currentVersion: ctx ? ctx.currentVersion : null,
+        latestVersion: ctx ? ctx.latestVersion : null,
+        packageName: PI_PACKAGE,
+        updateAvailable: false,
+        canUpdate: false,
+        verification: (ctx && ctx.verification) || 'unchecked',
+        reason: null,
+        cached: false,
+        running: false,
+        errorCode: 'state-inconsistent',
+        error: '这次更新没有留下终态结果，已按失败处理',
+      });
+    }
+    const failed = res.ok === false;
     return payload({
       ok: !failed,
       phase: failed ? 'failed' : 'latest',
@@ -219,7 +241,7 @@ export function createPiUpdate({
       packageName: PI_PACKAGE,
       updateAvailable: false,
       canUpdate: false,
-      verification: (res && res.verification) || 'unchecked',
+      verification: (res && res.verification) || (ctx && ctx.verification) || 'unchecked',
       reason: null,
       // 这不是「检查缓存」，是刚刚真的跑完的更新结果
       cached: false,
@@ -420,83 +442,126 @@ export function createPiUpdate({
     };
   }
 
-  /** 真正执行更新（会被 prepare 已通过的 ctx 调用；也直接给测试用）。 */
+  /**
+   * 更新执行的**唯一终态出口**。
+   *
+   * 契约：任何走过 `beginUpdate()` 的执行都必须在返回前经过这里落一个 result。
+   * 否则会留下 `updateState != null && updateInflight == null && result == null`
+   * 这个自相矛盾的状态，而 `updateStatusPayload()` 只能把它读成「没有失败」→
+   * 报 `phase:'latest'`。那正是「updater 一次都没跑、界面却说已是最新版本」的
+   * 形态：一个**假成功**，比报错危险得多。
+   */
+  function finishUpdate(result) {
+    /* 这次结论已经产生，检查缓存到此为止（下次普通 GET 只回终态）。 */
+    checkCache = null;
+    if (updateState) {
+      updateState.phase = result && result.ok === false ? 'failed' : 'latest';
+      updateState.result = result;
+    }
+    if (!result || result.ok !== true) {
+      lastError = {
+        code: (result && result.code) || 'update-failed',
+        error: (result && result.error) || '更新失败',
+      };
+    }
+    return result;
+  }
+
+  /**
+   * 真正执行更新（会被 prepare 已通过的 ctx 调用；也直接给测试用）。
+   *
+   * 结构上**只有一个出口**：所有分支都只给 `result` 赋值，最后由 `finishUpdate`
+   * 统一落终态。暂停失败这类「一个字节都没改」的路径也必须落一个 failed 终态。
+   */
   async function execute(ctx) {
     /* 固定参数，只此一份。**没有** --all / --extensions / --models。 */
     const args = ['update', '--self'];
     const setPhase = (p) => {
       if (updateState) updateState.phase = p;
     };
-    /* 暂停 bridge。**超时不算已停止**：`pause-timeout` 意味着旧 Pi 进程还活着，
-     * 这时绝不能去替换它的运行时文件，所以直接放弃，一次 updater 都不跑。 */
-    const pause = typeof pauseBridge === 'function' ? pauseBridge('pi-update') : { ok: true };
-    const paused = await Promise.resolve(pause).catch(() => ({ ok: false, code: 'pause-failed' }));
-    if (paused && paused.ok === false) {
-      const code = paused.code === 'already-in-maintenance' ? 'update-running'
-        : paused.code === 'pause-timeout' ? 'pause-timeout'
-          : 'pause-failed';
-      lastError = {
-        code,
-        error: code === 'pause-timeout'
-          ? '旧 Pi 进程在超时前没有退出，已放弃更新（不会在它还活着时替换运行时）'
-          : '无法暂停 Pi 进程，已放弃更新',
-      };
-      return fail(code, lastError.error, { currentVersion: ctx.currentVersion, latestVersion: ctx.latestVersion });
-    }
-    let result;
+    let result = null;
+    /* **只有我们真的暂停成功过**才由我们 resume：`pause-timeout` 自己已经回滚
+     * 维护态，`already-in-maintenance` 是别人（另一次更新）的维护态 ——
+     * 这两种情况再 resume 会掀掉不属于我们的状态。 */
+    let ownsMaintenance = false;
     try {
-      setPhase('updating');
-      let raw;
-      try {
-        /* entry 一路带过来：**只解析一次**，保证「闸门检查的那份 pi」与
-         * 「真正被更新的那份 pi」是同一个对象（identity 同源）。 */
-        raw = await runUpdater(args, { timeoutMs: updateTimeoutMs, maxStdoutBytes: MAX_OUTPUT_CHARS, entry: ctx.entry });
-      } catch (err) {
-        raw = { ok: false, spawnFailed: true, error: (err && err.message) || 'updater 启动失败' };
-      }
-      if (!raw || raw.ok !== true) {
-        const code = raw && raw.timedOut ? 'update-timeout'
-          : raw && raw.spawnFailed ? 'update-spawn-failed'
-            : 'update-failed';
-        lastError = { code, error: sanitizeLine((raw && (raw.error || raw.stderr)) || '官方 updater 没有成功结束') };
-        result = fail(code, lastError.error, { currentVersion: ctx.currentVersion, latestVersion: ctx.latestVersion });
+      /* 暂停 bridge。**超时不算已停止**：`pause-timeout` 意味着旧 Pi 进程还活着，
+       * 这时绝不能去替换它的运行时文件，所以直接放弃，一次 updater 都不跑。 */
+      const pause = typeof pauseBridge === 'function' ? pauseBridge('pi-update') : { ok: true };
+      const paused = await Promise.resolve(pause).catch(() => ({ ok: false, code: 'pause-failed' }));
+      if (paused && paused.ok === false) {
+        /* ⚠️ 这里**绝不能 return** —— 早先就是这里提前返回，绕过了终态写入，
+         * GET 于是把「一次都没跑」报成 `phase:'latest'`。只赋值，出口留到最后。 */
+        const code = paused.code === 'already-in-maintenance' ? 'update-running'
+          : paused.code === 'pause-timeout' ? 'pause-timeout'
+            : 'pause-failed';
+        result = fail(code, code === 'pause-timeout'
+          ? '旧 Pi 进程在超时前没有退出，已放弃更新（不会在它还活着时替换运行时）'
+          : code === 'update-running'
+            ? 'Pi 已经在维护中（可能是另一次更新），本次更新已放弃'
+            : '无法暂停 Pi 进程，已放弃更新', {
+          currentVersion: ctx.currentVersion,
+          latestVersion: ctx.latestVersion,
+        });
       } else {
-        /* 退出码 0 ≠ 完成：清缓存 → 用**同一个 launch identity** 重新读版本。 */
-        setPhase('verifying');
-        if (typeof invalidateCaches === 'function') {
-          try {
-            invalidateCaches();
-          } catch {
-            /* 清缓存失败不该把已经成功的更新说成失败；下面的强制重读仍然会验 */
-          }
+        ownsMaintenance = true;
+        setPhase('updating');
+        let raw;
+        try {
+          /* entry 一路带过来：**只解析一次**，保证「闸门检查的那份 pi」与
+           * 「真正被更新的那份 pi」是同一个对象（identity 同源）。 */
+          raw = await runUpdater(args, { timeoutMs: updateTimeoutMs, maxStdoutBytes: MAX_OUTPUT_CHARS, entry: ctx.entry });
+        } catch (err) {
+          raw = { ok: false, spawnFailed: true, error: (err && err.message) || 'updater 启动失败' };
         }
-        const after = currentVersionInfo(true);
-        const installedVersion = after.value;
-        if (installedVersion !== ctx.latestVersion) {
-          lastError = {
-            code: 'verify-failed',
-            error: `更新后读到的仍是 ${installedVersion || '未知版本'}，没有变成 ${ctx.latestVersion}`,
-          };
-          result = fail('verify-failed', lastError.error, {
+        if (!raw || raw.ok !== true) {
+          const code = raw && raw.timedOut ? 'update-timeout'
+            : raw && raw.spawnFailed ? 'update-spawn-failed'
+              : 'update-failed';
+          result = fail(code, sanitizeLine((raw && (raw.error || raw.stderr)) || '官方 updater 没有成功结束'), {
             currentVersion: ctx.currentVersion,
             latestVersion: ctx.latestVersion,
-            installedVersion,
           });
         } else {
-          setPhase('restarting');
-          result = {
-            ok: true,
-            phase: 'latest',
-            currentVersion: installedVersion,
-            installedVersion,
-            latestVersion: ctx.latestVersion,
-            verification: after.verification,
-          };
+          /* 退出码 0 ≠ 完成：清缓存 → 用**同一个 launch identity** 重新读版本。 */
+          setPhase('verifying');
+          if (typeof invalidateCaches === 'function') {
+            try {
+              invalidateCaches();
+            } catch {
+              /* 清缓存失败不该把已经成功的更新说成失败；下面的强制重读仍然会验 */
+            }
+          }
+          const after = currentVersionInfo(true);
+          const installedVersion = after.value;
+          if (installedVersion !== ctx.latestVersion) {
+            result = fail('verify-failed', `更新后读到的仍是 ${installedVersion || '未知版本'}，没有变成 ${ctx.latestVersion}`, {
+              currentVersion: ctx.currentVersion,
+              latestVersion: ctx.latestVersion,
+              installedVersion,
+            });
+          } else {
+            setPhase('restarting');
+            result = {
+              ok: true,
+              phase: 'latest',
+              currentVersion: installedVersion,
+              installedVersion,
+              latestVersion: ctx.latestVersion,
+              verification: after.verification,
+            };
+          }
         }
       }
+    } catch (err) {
+      /* 兜底：任何意外都必须变成**明确失败**，不能把 result 留空。 */
+      result = fail('update-failed', sanitizeLine((err && err.message) || '更新过程中出错'), {
+        currentVersion: ctx.currentVersion,
+        latestVersion: ctx.latestVersion,
+      });
     } finally {
-      /* **任何**路径都要恢复 bridge：失败也必须让人继续用旧的那份 pi。 */
-      if (typeof resumeBridge === 'function') {
+      /* 落地失败与失败都得恢复 bridge —— 但只恢复**我们自己**暂停的那次。 */
+      if (ownsMaintenance && typeof resumeBridge === 'function') {
         try {
           resumeBridge();
         } catch {
@@ -504,15 +569,7 @@ export function createPiUpdate({
         }
       }
     }
-    checkCache = null; // 版本可能变了，检查缓存作废
-    /* 终态写进 updateState（**不是**检查缓存）：GET 会一直回它，直到用户显式
-     * 点「检查 Pi 更新」（force）为止 —— 轮询不会把失败/成功覆盖成 available。 */
-    if (updateState) {
-      updateState.phase = result.ok ? 'latest' : 'failed';
-      updateState.result = result;
-    }
-    if (result.ok !== true) lastError = { code: result.code, error: result.error };
-    return result;
+    return finishUpdate(result);
   }
 
   /** 起一次更新：把检查缓存让位给执行状态，然后后台跑。 */
@@ -609,7 +666,24 @@ export function createPiUpdate({
         errorCode: lastError ? lastError.code : null,
       };
     },
-    _internals: { payload, updateStatusPayload, prepare, execute, resolveTarget, isOffline: () => isOffline(env) },
+    _internals: {
+      payload,
+      updateStatusPayload,
+      finishUpdate,
+      prepare,
+      execute,
+      resolveTarget,
+      isOffline: () => isOffline(env),
+      /* 只读状态探针：给「终态必须带 result」这条不变量用（不改任何状态）。 */
+      state: () => ({
+        hasUpdateState: Boolean(updateState),
+        phase: updateState ? updateState.phase : null,
+        hasResult: Boolean(updateState && updateState.result),
+        running: Boolean(updateInflight),
+        checkPhase,
+        hasCheckCache: Boolean(checkCache),
+      }),
+    },
   };
 }
 
