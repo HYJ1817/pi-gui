@@ -483,9 +483,16 @@ function fakeChild() {
   }
   {
     const serverSrc = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-    check('D5. server 装配里 updater 目标来自 launch identity（buildPiEntry(piLaunch.packageDir())）', () =>
-      /resolveUpdaterTarget[\s\S]{0,400}buildPiEntry\(piLaunch\.packageDir\(\)\)/.test(serverSrc) ||
-      '没有从 launch identity 派生 updater 目标');
+    check('D5. server 装配里 CLI 入口来自 launch identity（buildPiEntry(piLaunch.packageDir())）', () => {
+      /* P24 起「这份 Pi 的官方 CLI 入口」抽成了一个共享原语
+       * （`resolvePiCliEntry()`）—— Pi 自更新与 Capability 安装共用它，
+       * 免得两条路各解析一次、又各解析出不同的 pi。所以这里同时钉两件事：
+       * 原语本身来自 launch identity，且 updater 接的就是它。 */
+      const helper = /function resolvePiCliEntry\(\)[\s\S]{0,400}buildPiEntry\(piLaunch\.packageDir\(\)\)/.test(serverSrc);
+      const wired = /resolveUpdaterTarget:\s*\(\)\s*=>\s*resolvePiCliEntry\(\)/.test(serverSrc);
+      if (!helper) return '没有从 launch identity 派生 CLI 入口';
+      return wired || 'updater 目标没有接到共享的 launch identity 原语上';
+    });
     check('D6. 没有「PATH 再找一份 pi」的 fallback 分支（modify 里没有 bin="pi"）', () =>
       !/resolveUpdaterTarget[\s\S]{0,600}['"]pi['"]/.test(serverSrc) || '看起来有 fallback 到裸 pi 的路径');
   }

@@ -2921,8 +2921,14 @@ staticCheck();
   await new Promise((r) => setTimeout(r, 10));
   check('切换项目调用 activate', () => true);
 
-  // --- 项目删除按钮 ---
-  check('项目有删除按钮', () => window.document.querySelectorAll('#projects .pj-del').length === 2);
+  // --- 项目行尾的动作入口 ---
+  check('项目行有一个三点入口（旧的常驻 ✕ 已移除）', () => {
+    const triggers = window.document.querySelectorAll('#projects .pj-row-menu-trigger');
+    const rows = window.document.querySelectorAll('#projects .project');
+    return (triggers.length === rows.length && rows.length === 2
+      && window.document.querySelectorAll('#projects .pj-del').length === 0) ||
+      `triggers=${triggers.length} rows=${rows.length}`;
+  });
 
   /* --- 项目行紧凑（这一轮 UX 修复）---
    * 以前项目行是「名字 + 绝对路径」两行，比下面的会话行高出将近一倍，
@@ -5545,6 +5551,32 @@ staticCheck();
     await wait(20);
   }
 
+  /* ---------- 侧栏行动作菜单（P24 收口）的共用小工具 ----------
+   *
+   * 项目和会话现在都只有**一个** `…` 入口，菜单挂在 document.body 上（浮层），
+   * 所以断言要在 document 上查，而不是在 #projects 里面。
+   * 一律写成**函数声明**：它们在这个 IIFE 里被多处提前调用，而 `const` 箭头函数
+   * 在那之前还处于 TDZ。 */
+  function rowMenuEl() {
+    return window.document.getElementById('actionMenu');
+  }
+  function rowMenuItems() {
+    const el = rowMenuEl();
+    return el ? [...el.querySelectorAll('[role="menuitem"]')] : [];
+  }
+  function rowMenuLabels() {
+    return rowMenuItems().map((b) => b.querySelector('.action-menu-label').textContent);
+  }
+  function rowMenuItem(label) {
+    return rowMenuItems().find((b) => b.querySelector('.action-menu-label').textContent === label);
+  }
+  /** 点开某一行三点（走真实 onclick，含 preventDefault / stopPropagation 那条路）。 */
+  async function openRowMenu(trigger) {
+    trigger.onclick({ preventDefault() {}, stopPropagation() {} });
+    await new Promise((r) => setTimeout(r, 20));
+    return rowMenuEl();
+  }
+
   async function sessionSection() {    sessionCalls.length = 0;
     $('toasts').innerHTML = '';
 
@@ -5591,21 +5623,34 @@ staticCheck();
         Boolean(hit && hit.body && hit.body.id === 'bbbbbbbbbbbbbbbb') || JSON.stringify(sessionCalls.map((c) => c.url)));
     }
 
-    // 改名：铅笔只出现在当前会话那一条上
+    // 改名：三点菜单只出现在当前会话那一条上，且菜单里只有「重命名」
     {
       sessionCalls.length = 0;
       window.renderProjects();
       await new Promise((r) => setTimeout(r, 60));
       const proj2 = $('projects');
       const cur = proj2.querySelector('.pj-sess.on');
-      check('会话：改名动作**只**出现在当前会话那一条上', () => {
-        const pens = [...proj2.querySelectorAll('.pj-sess-act')].filter((b) => b.title.includes('名字'));
-        return (pens.length === 1 && cur.contains(pens[0])) || `有 ${pens.length} 个改名动作`;
+      check('会话：每条会话行只有一个三点入口（旧的 ✎ / ⤓ / ✕ 都收进去了）', () => {
+        const triggers = [...proj2.querySelectorAll('.pj-sess-menu-trigger')];
+        const rows = [...proj2.querySelectorAll('.pj-sess')];
+        return (triggers.length === rows.length && !proj2.querySelector('.pj-sess-act:not(.pj-sess-acts)')) ||
+          `triggers=${triggers.length} rows=${rows.length}`;
       });
-      cur.querySelector('.pj-sess-act').onclick({ stopPropagation() {} });
+      await openRowMenu(cur.querySelector('.pj-sess-menu-trigger'));
+      check('会话：当前会话的菜单只有「重命名」（不给归档 / 删除）', () => {
+        const labels = rowMenuLabels();
+        return labels.join(',') === '重命名' || JSON.stringify(labels);
+      });
+      check('会话：菜单是可访问的浮层（role=menu / menuitem / aria-expanded）', () =>
+        Boolean(rowMenuEl() && rowMenuEl().getAttribute('role') === 'menu'
+          && rowMenuItems().every((b) => b.getAttribute('role') === 'menuitem')
+          && cur.querySelector('.pj-sess-menu-trigger').getAttribute('aria-expanded') === 'true')
+        || '菜单语义不完整');
+      rowMenuItem('重命名').click();
       await new Promise((r) => setTimeout(r, 20));
       const input = cur.querySelector('.pj-sess-input');
-      check('会话：点铅笔变成行内输入框（不是弹窗）', () => Boolean(input) || '没出现输入框');
+      check('会话：点重命名 → 仍然是行内输入框（不是第二套改名弹窗），菜单已收起', () =>
+        (Boolean(input) && rowMenuEl() === null) || '没出现输入框 / 菜单没收起');
       if (input) {
         input.value = '我的登录功能开发';
         input.onkeydown({ key: 'Enter' });
@@ -5617,24 +5662,30 @@ staticCheck();
       }
     }
 
-    // 归档 / 删除
+    // 归档 / 删除：从同一个三点菜单进去
     {
       window.renderProjects();
       await new Promise((r) => setTimeout(r, 60));
       let proj3 = $('projects');
       const row = [...proj3.querySelectorAll('.pj-sess')].find((x) => !x.classList.contains('on'));
-      const acts = row.querySelectorAll('.pj-sess-act');
-      check('会话：非当前会话有「归档」「删除」两个动作', () => acts.length === 2 || `有 ${acts.length} 个`);
-      check('会话：删除按钮是危险色', () => Boolean(row.querySelector('.pj-sess-act.danger')) || '删除按钮不是 danger');
-      check('会话：当前会话只给改名，不给归档/删除', () => {
-        const cur = proj3.querySelector('.pj-sess.on');
-        const a = cur.querySelectorAll('.pj-sess-act');
-        return (a.length === 1 && !cur.querySelector('.pj-sess-act.danger')) || `当前项有 ${a.length} 个动作`;
+      await openRowMenu(row.querySelector('.pj-sess-menu-trigger'));
+      check('会话：非当前会话的菜单是「归档 + 删除会话」', () => {
+        const labels = rowMenuLabels();
+        return labels.join(',') === '归档,删除会话' || JSON.stringify(labels);
       });
+      check('会话：删除项是 danger 层级（不是整行常驻鲜红）', () =>
+        Boolean(rowMenuItem('删除会话') && rowMenuItem('删除会话').classList.contains('danger'))
+        || '删除项不是 danger');
+      check('会话：菜单项带分隔线（危险动作与安全动作分开）', () =>
+        Boolean(rowMenuEl() && rowMenuEl().querySelector('[role="separator"]')) || '没有分隔线');
+
+      // 点三点绝不能顺带切换会话
+      check('会话：点三点不触发切换（没有 /switch 请求）', () =>
+        !sessionCalls.some((c) => /\/switch/.test(c.url)) || JSON.stringify(sessionCalls.map((c) => c.url)));
 
       // 归档
       sessionCalls.length = 0;
-      acts[0].onclick({ stopPropagation() {} });
+      rowMenuItem('归档').click();
       await new Promise((r) => setTimeout(r, 80));
       const arch = sessionCalls.find((c) => /\/archive/.test(c.url));
       check('会话：点归档 → POST /api/sessions/archive（带 id 与 archived:true）', () =>
@@ -5652,22 +5703,30 @@ staticCheck();
       });
       check('会话：折叠组的标题里没有绝对路径', () =>
         !/[A-Za-z]:\\|[A-Za-z]:\//.test(toggle ? toggle.textContent : '') || '出现了疑似路径');
+      check('会话：折叠组那行仍然用 .pj-sess-more（新三点没有抢它的类名）', () =>
+        Boolean(toggle && toggle.classList.contains('pj-sess-more')) || '折叠组类名被改了');
       toggle.onclick();
       await new Promise((r) => setTimeout(r, 20));
       check('会话：展开折叠组后能看到已归档那条', () => {
         const titles = [...proj3.querySelectorAll('.pj-sess-title')].map((t) => t.textContent);
         return titles.includes('上周的排查记录') || JSON.stringify(titles);
       });
-      check('会话：已归档那条的动作是「取消归档」', () => {
-        const r = [...proj3.querySelectorAll('.pj-sess')].find((x) => x.textContent.includes('上周的排查记录'));
-        const t = r && r.querySelector('.pj-sess-act');
-        return Boolean(t && t.title === '取消归档') || (t ? t.title : '找不到那一行');
-      });
+      {
+        const archivedRow = [...proj3.querySelectorAll('.pj-sess')].find((x) => x.textContent.includes('上周的排查记录'));
+        await openRowMenu(archivedRow.querySelector('.pj-sess-menu-trigger'));
+        check('会话：已归档那条的菜单是「取消归档 + 删除会话」', () => {
+          const labels = rowMenuLabels();
+          return labels.join(',') === '取消归档,删除会话' || JSON.stringify(labels);
+        });
+        window.closeActionMenu?.();
+        await new Promise((r) => setTimeout(r, 10));
+      }
 
       // 删除：必须先二次确认
       sessionCalls.length = 0;
       const delRow = [...proj3.querySelectorAll('.pj-sess')].find((x) => x.textContent.includes('帮我写个登录功能'));
-      delRow.querySelector('.pj-sess-act.danger').onclick({ stopPropagation() {} });
+      await openRowMenu(delRow.querySelector('.pj-sess-menu-trigger'));
+      rowMenuItem('删除会话').click();
       await new Promise((r) => setTimeout(r, 20));
       check('会话：删除先弹二次确认（不是点一下就删）', () =>
         $('confirmLayer').hidden === false || '没有弹确认框');
@@ -6049,17 +6108,21 @@ staticCheck();
     await new Promise((r) => setTimeout(r, 80));
     check('降级：没有兼容摘要时改名入口照常出现（未验证 ≠ 不支持）', () => {
       const cur = proj().querySelector('.pj-sess.on');
-      return Boolean(cur && cur.querySelector('.pj-sess-act')) || '改名入口不见了';
+      return Boolean(cur && cur.querySelector('.pj-sess-menu-trigger')) || '改名入口不见了';
     });
 
-    // ② sessionNaming 被证实不可用 → 藏起改名铅笔
+    // ② sessionNaming 被证实不可用 → 当前会话连三点都不画（没有动作就不留入口）
     stubCompat = { status: 'partial', missing: ['sessionNaming'] };
     await window.loadStatus();
     window.renderProjects();
     await new Promise((r) => setTimeout(r, 80));
-    check('降级：sessionNaming 不可用 → 隐藏改名入口', () => {
+    check('降级：sessionNaming 不可用 → 当前会话不显示三点（不留空菜单）', () => {
       const cur = proj().querySelector('.pj-sess.on');
-      return !(cur && cur.querySelector('.pj-sess-act[title*="名字"]')) || '改名入口还在';
+      if (!cur) return '没有当前会话行';
+      if (cur.querySelector('.pj-sess-menu-trigger')) return '改名入口还在';
+      /* 非当前会话不受影响：它还有归档 / 删除，所以三点照常。 */
+      const otherRow = proj().querySelector('.pj-sess:not(.on):not(.pending)');
+      return Boolean(otherRow && otherRow.querySelector('.pj-sess-menu-trigger')) || '别的会话行也丢了入口';
     });
 
     // ③ switchSession 被证实不可用 → 不给点，并说明原因
@@ -6119,7 +6182,7 @@ staticCheck();
     await new Promise((r) => setTimeout(r, 80));
     check('降级：恢复后改名入口回来了', () => {
       const cur = proj().querySelector('.pj-sess.on');
-      return Boolean(cur && cur.querySelector('.pj-sess-act')) || '改名入口没回来';
+      return Boolean(cur && cur.querySelector('.pj-sess-menu-trigger')) || '改名入口没回来';
     });
   }
 
@@ -6203,24 +6266,90 @@ staticCheck();
     check('折叠：上面那两次点击之后状态仍然是展开（没被切换带乱）', () =>
       box().hidden === false || '折叠状态被带乱了');
 
-    // 点删除按钮不误触折叠
-    check('折叠：点删除按钮不会误触折叠', () => {
-      const del = row().querySelector('.pj-del');
-      if (!del) return '没有删除按钮';
+    /* 点行尾三点：只开菜单，既不折叠也不切项目。
+     * 这条原来是拿删除按钮测的（那时行尾是一个常驻的 ✕），现在行尾是 `…`，
+     * 语义没变：**入口换了，三条路仍然互不影响**。 */
+    check('折叠：点三点只开菜单，不误触折叠、也不切项目', () => {
+      const trigger = row().querySelector('.pj-row-menu-trigger');
+      if (!trigger) return '没有三点入口';
       const beforeAria = chev().getAttribute('aria-expanded');
-      const orig = del.onclick;
-      let ran = false;
-      del.onclick = (e) => {
-        ran = true;
-        if (e && e.stopPropagation) e.stopPropagation();
-      };
-      del.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
-      del.onclick = orig;
+      const select = row().querySelector('.pj-select');
+      let switched = 0;
+      const origSelect = select.onclick;
+      select.onclick = () => { switched++; };
+      trigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+      select.onclick = origSelect;
       const afterAria = chev() && chev().getAttribute('aria-expanded');
-      // 行本身没有点击处理器 → 删除按钮的点击不可能走到折叠逻辑
-      return (ran && beforeAria === afterAria && !row().onclick) ||
-        JSON.stringify({ ran, beforeAria, afterAria, rowOnclick: Boolean(row().onclick) });
+      const opened = Boolean(window.document.getElementById('actionMenu'));
+      window.closeActionMenu?.();
+      return (opened && switched === 0 && beforeAria === afterAria) ||
+        JSON.stringify({ opened, switched, beforeAria, afterAria });
     });
+
+    /* 项目菜单只放**真实已有**的两个功能，且移除前必须确认。 */
+    {
+      const trigger = row().querySelector('.pj-row-menu-trigger');
+      trigger.onclick({ preventDefault() {}, stopPropagation() {} });
+      await wait(20);
+      const menu = window.document.getElementById('actionMenu');
+      const labels = menu ? [...menu.querySelectorAll('[role="menuitem"]')].map((b) => b.querySelector('.action-menu-label').textContent) : [];
+      check('项目菜单：只有「项目设置」与「移除项目」', () =>
+        labels.join(',') === '项目设置,移除项目' || JSON.stringify(labels));
+      check('项目菜单：移除项是 danger 层级，且有分隔线', () =>
+        Boolean(menu && menu.querySelector('.action-menu-item.danger') && menu.querySelector('[role="separator"]'))
+        || '层级 / 分隔线不对');
+      check('项目菜单：挂在 body 上（不会被侧栏 overflow 裁掉）', () =>
+        Boolean(menu && menu.parentElement === window.document.body) || '菜单不在 body 上');
+      check('项目菜单：打开时 trigger 的 aria-expanded=true', () =>
+        trigger.getAttribute('aria-expanded') === 'true' || 'aria 没打上');
+
+      // 移除：必须先确认，且确认文案说明不动磁盘文件
+      const items = [...menu.querySelectorAll('[role="menuitem"]')];
+      items[1].click();
+      await wait(20);
+      check('项目菜单：点「移除项目」先弹确认（不是点一下就移除）', () =>
+        $('confirmLayer').hidden === false || '没有弹确认框');
+      check('项目菜单：确认文案说明只移除列表、不删磁盘文件', () =>
+        /不会删除磁盘上的项目文件/.test($('confirmCard').textContent) || $('confirmCard').textContent);
+      $('confirmCard').querySelector('.btn').click();
+      await wait(20);
+      check('项目菜单：取消之后确认框关掉（且没有真的移除）', () =>
+        $('confirmLayer').hidden === true || '确认框还开着');
+
+      // 项目设置：复用既有 openProjectSettings（打开的是那个弹层）
+      const settingsMenu = await openRowMenu(row().querySelector('.pj-row-menu-trigger'));
+      const settingsItem = [...settingsMenu.querySelectorAll('[role="menuitem"]')]
+        .find((b) => b.querySelector('.action-menu-label').textContent === '项目设置');
+      settingsItem.click();
+      await wait(60);
+      check('项目菜单：点「项目设置」走既有 openProjectSettings（同一个弹层）', () =>
+        ($('modal').hidden === false && /项目设置/.test($('modalCard').textContent)) || $('modalCard').textContent.slice(0, 80));
+      window.closeModal();
+      await wait(20);
+    }
+
+    // Escape 关闭菜单并把焦点还给 trigger
+    {
+      const trigger = row().querySelector('.pj-row-menu-trigger');
+      trigger.focus();
+      await openRowMenu(trigger);
+      const menu = window.document.getElementById('actionMenu');
+      menu.querySelector('[role="menuitem"]').focus();
+      menu.querySelector('[role="menuitem"]').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await wait(10);
+      check('项目菜单：Escape 关闭并把焦点还给三点', () =>
+        (!window.document.getElementById('actionMenu') && window.document.activeElement === trigger)
+        || '没关 / 焦点没回来');
+    }
+
+    // 点菜单外关闭
+    {
+      await openRowMenu(row().querySelector('.pj-row-menu-trigger'));
+      window.document.body.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      await wait(10);
+      check('项目菜单：点菜单外关闭', () =>
+        !window.document.getElementById('actionMenu') || '没有关闭');
+    }
 
     // 切项目（= 重新渲染侧栏）之后必须回到展开态
     chev().click();
@@ -7645,19 +7774,47 @@ staticCheck();
       return text.includes('pi 内置扩展') && text.includes('不由 Extension Registry 的目录扫描发现') || text.slice(0, 160);
     });
 
-    // 详情：统一布局的六个字段 + 固定官方命令
+    // 详情：只画**对这个能力适用**的字段（不再是六个格子 + 一串「不适用」）
     pick('Web Access')?.onclick();
     await new Promise(r => setTimeout(r, 20));
-    check('P22 详情就是统一 setup 布局的六个状态字段', () => {
+    check('P22 详情只画适用的状态字段（第三方 Extension：五个）', () => {
       const keys = detailKeys();
-      return JSON.stringify(keys) === JSON.stringify(['安装状态', '启用配置', '已加载', '运行观察', '需要重启', '诊断']) || JSON.stringify(keys);
+      return JSON.stringify(keys) === JSON.stringify(['安装状态', '启用配置', '已加载', '运行观察', '需要重启']) || JSON.stringify(keys);
     });
-    check('P22 第三方 Extension 给出固定官方命令与复制 / 安装后重启', () => {
+    check('P22 diagnostic=null 时连「诊断」这一行都不画（不再写「诊断 无」）', () =>
+      !detailKeys().includes('诊断') || JSON.stringify(detailKeys()));
+    check('P22 第三方 Extension 给出固定官方命令与一键安装 / 复制 / 安装后重启', () => {
       const code = card.querySelector('.cap-view code');
       const buttons = [...card.querySelectorAll('.cap-view .ext-acts .btn')].map(b => b.textContent);
+      const install = card.querySelector('.cap-view .cap-install');
       return code?.textContent === 'pi install npm:pi-web-access'
+        && install?.dataset.installState === 'install' && install?.textContent === '安装'
         && buttons.includes('复制安装命令') && buttons.includes('安装后重启 Pi') || JSON.stringify(buttons);
     });
+    // 一键安装：先确认，取消则一个请求都不发
+    {
+      const installCalls = [];
+      const baseFetchForInstall = window.fetch;
+      window.fetch = async (url, opts) => {
+        if (String(url).includes('/api/capabilities/install')) {
+          installCalls.push({ url: String(url), body: opts && opts.body });
+          return { json: async () => ({ ok: true, capabilityId: 'web', commandCompleted: true, loaded: null }) };
+        }
+        return baseFetchForInstall(url, opts);
+      };
+      card.querySelector('.cap-view .cap-install').click();
+      await new Promise(r => setTimeout(r, 20));
+      const confirmText = $('confirmCard').textContent;
+      const confirmed = $('confirmLayer').hidden === false;
+      $('confirmCard').querySelector('.btn').click(); // 取消
+      await new Promise(r => setTimeout(r, 20));
+      window.fetch = baseFetchForInstall;
+      check('P22 点「安装」先弹确认：命令 / 权限 / 用户级都写清楚', () =>
+        (confirmed && confirmText.includes('pi install npm:pi-web-access')
+          && confirmText.includes('用户级') && confirmText.includes('Pi 进程的权限')) || confirmText.slice(0, 120));
+      check('P22 确认框点「取消」→ 一个安装请求都不发', () =>
+        installCalls.length === 0 || JSON.stringify(installCalls));
+    }
 
     /* 发现失败时 installed 只能是 null —— 这一格最容易糊弄成「未安装」。
      * 换一个 ok:false 的 registry 桩，刷新后必须显示「未知（无法确认）」。 */
@@ -7672,6 +7829,12 @@ staticCheck();
       return detailValue('安装状态') === '未知（无法确认）'
         && detailValue('已加载') === '未知（无法确认）'
         && !text.includes('未安装') || `${detailValue('安装状态')} / ${detailValue('已加载')}`;
+    });
+    check('P22/P24 installed=null 时给的是「重新检查」，不是「安装」', () => {
+      const btn = card.querySelector('.cap-view .cap-install');
+      return (btn && btn.dataset.installState === 'recheck' && btn.textContent === '重新检查'
+        && ![...card.querySelectorAll('.cap-view .ext-acts .btn')].some(b => b.textContent === '安装'))
+        || (btn ? `${btn.dataset.installState}/${btn.textContent}` : '没有按钮');
     });
     stubExtensions = savedForNull;
     [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
@@ -7689,6 +7852,9 @@ staticCheck();
     });
     check('P22 Native MCP 明说「包里有」不等于「已启用」', () =>
       (card.querySelector('.cap-view')?.textContent || '').includes('不等于'));
+    check('P22 Native MCP 详情不再是一串「不适用」', () =>
+      !(card.querySelector('.cap-view .cap-rows')?.textContent || '').includes('不适用') ||
+      (card.querySelector('.cap-view .cap-rows')?.textContent || '').slice(0, 120));
 
     // 搜索
     const capSearch = card.querySelector('.cap-view .ext-search');
@@ -7764,10 +7930,72 @@ staticCheck();
     });
     stubExtensions = savedExt;
 
-    // 无自动安装
-    check('P22 Capability 视图没有任何安装动作', () =>
-      ![...card.querySelectorAll('.cap-view button')].some(b => /^安装(?!后重启)/.test(b.textContent.trim()))
-      && !card.querySelector('.cap-view input:not([type="search"])'));
+    /* 一键安装的完整链路（P24 收口）：
+     *   未安装 → 确认 → 发请求（body 只带 capabilityId）→ 重新取证据 →
+     *   按钮与状态行都按**重新发现的结果**重画。
+     * ⚠️ 安装命令跑完 ≠ 装上了 ≠ 已加载：这里刻意让 Registry 只给 installed=true、
+     * 不给 loaded 证据，界面就必须分开说「已安装」与「加载状态未知」。 */
+    {
+      const savedForInstall = stubExtensions;
+      const installCalls = [];
+      const baseFetchForFlow = window.fetch;
+      window.fetch = async (url, opts) => {
+        if (String(url).includes('/api/capabilities/install')) {
+          installCalls.push({ url: String(url), body: JSON.parse((opts && opts.body) || '{}') });
+          /* 官方命令跑完之后：Extension 出现在磁盘上，但**没有**加载证据。 */
+          stubExtensions = { ok: true, piReachable: true, diagnostics: [], extensions: [
+            { id: 'ext-web', name: 'pi-web-access', displayName: 'pi-web-access', version: '1.2.3',
+              description: 'web tools', source: { type: 'npm', location: 'C:/npm/pi-web-access' }, scope: 'global',
+              state: { installed: true, enabled: null, loaded: null, restartRequired: null, error: null },
+              capabilities: [], configurable: false }] };
+          return { json: async () => ({ ok: true, capabilityId: 'web', commandCompleted: true, loaded: null }) };
+        }
+        return baseFetchForFlow(url, opts);
+      };
+      stubExtensions = { ok: true, piReachable: true, diagnostics: [], extensions: [] };
+      card.querySelector('#extensionsTabAll')?.click();
+      await new Promise(r => setTimeout(r, 10));
+      [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
+      await new Promise(r => setTimeout(r, 40));
+      pick('Web Access')?.onclick();
+      await new Promise(r => setTimeout(r, 20));
+      const beforeState = card.querySelector('.cap-view .cap-install')?.dataset.installState || '';
+      card.querySelector('.cap-view .cap-install')?.click();
+      await new Promise(r => setTimeout(r, 20));
+      $('confirmCard').querySelector('.btn.primary')?.click();
+      await new Promise(r => setTimeout(r, 150));
+      window.fetch = baseFetchForFlow;
+      const afterEl = card.querySelector('.cap-view .cap-install');
+      const afterState = afterEl ? afterEl.dataset.installState : '';
+      const afterLabel = afterEl ? afterEl.textContent : '';
+      check('P24 一键安装：未安装时按钮是「安装」', () => beforeState === 'install' || beforeState);
+      check('P24 一键安装：请求体只带 capabilityId（+ 确认与工作区守卫），没有包名 / 命令', () =>
+        (installCalls.length === 1 && installCalls[0].body.capabilityId === 'web'
+          && installCalls[0].body.confirm === true
+          && !('source' in installCalls[0].body) && !('command' in installCalls[0].body)
+          && !('args' in installCalls[0].body)) || JSON.stringify(installCalls));
+      check('P24 安装后按重新发现的证据重画：按钮变「已安装」状态', () =>
+        (afterState === 'installed' && afterLabel === '已安装') || JSON.stringify({ afterState, afterLabel }));
+      check('P24 没有加载证据时如实说未知（已安装 / 已加载未知，不伪造已加载）', () =>
+        (detailValue('安装状态') === '已安装' && detailValue('已加载') === '未知（无法确认）')
+        || `${detailValue('安装状态')} / ${detailValue('已加载')}`);
+      stubExtensions = savedForInstall;
+    }
+
+    // 一键安装只出现在已知第三方 capability 上
+    check('P24 安装按钮只出现在第三方 Extension 上（Native MCP / built-in / Skills / Usage 都没有）', () => {
+      const withInstall = [];
+      for (const row of capRows()) {
+        const name = row.querySelector('.ext-name')?.textContent || '';
+        row.onclick();
+        if (card.querySelector('.cap-view .cap-install')) withInstall.push(name);
+      }
+      const allowed = ['Web Access', 'Subagents', 'Pi Memory', 'Browser Use'];
+      return (withInstall.length >= 1 && withInstall.every(n => allowed.some(a => n.startsWith(a))))
+        || JSON.stringify(withInstall);
+    });
+    check('P22/P24 Capability 视图没有任何自由输入（不提供任意包名入口）', () =>
+      !card.querySelector('.cap-view input:not([type="search"])'));
 
     // stale workspace：结果回来时项目已经切了 → 不许落地
     host.innerHTML = '';
@@ -8153,6 +8381,30 @@ staticCheck();
     es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: (window.S.bridgeRun || 1) + 1 });
     await sleep(30);
     check('P24 状态条：pi 起来之后自动收起', () => $('stageNotice').hidden);
+
+    /* ---------- 维护态：装扩展不能说成「正在更新 Pi」 ---------- */
+    window.S.hasProject = true;
+    es.emit({ type: 'bridge_status', state: 'maintenance', phase: 'pausing', reason: 'capability-install', bridgeRun: window.S.bridgeRun });
+    await sleep(30);
+    check('P24 维护态：安装扩展时的连接文案说的是安装，不是更新', () =>
+      $('connText').textContent.includes('安装扩展') && !$('connText').textContent.includes('更新')
+      || $('connText').textContent);
+    check('P24 维护态：常驻条同样按 reason 说清在做什么（语气是信息不是故障）', () => {
+      const box = $('stageNotice');
+      return (!box.hidden && box.textContent.includes('安装扩展') && !box.textContent.includes('更新'))
+        || box.textContent.slice(0, 120);
+    });
+    check('P24 维护态：输入区不锁死，但 placeholder 说明在等什么', () =>
+      ($('input').disabled === false && $('input').placeholder.includes('安装扩展'))
+      || JSON.stringify({ disabled: $('input').disabled, ph: $('input').placeholder }));
+    es.emit({ type: 'bridge_status', state: 'maintenance', phase: 'pausing', reason: 'pi-update', bridgeRun: window.S.bridgeRun });
+    await sleep(30);
+    check('P24 维护态：Pi 自更新仍说「更新」', () => $('connText').textContent.includes('更新') || $('connText').textContent);
+    es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: (window.S.bridgeRun || 1) + 1 });
+    await sleep(30);
+    check('P24 维护态：回到 ready 之后 reason 被清掉（不留上一条的措辞）', () =>
+      (window.S.maintenanceReason === null && $('connText').textContent === '已连接')
+      || JSON.stringify({ reason: window.S.maintenanceReason, conn: $('connText').textContent }));
     window.document.getElementById('paletteLayer').hidden = true;
     window.S.bridgeState = 'ready';
   }

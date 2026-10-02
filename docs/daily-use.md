@@ -138,8 +138,26 @@ SURFACE_COPY            // 七个页面共用的 loading / empty / failed / retr
 | pi 已退出 | ✅ 同上 | 同上，而且要说清「当前无法继续发消息」 |
 | 关键能力不可用（`incompatible`） | ✅ 只给「打开诊断」 | 能力缺失是**持续**的，不是一次事件 |
 | 正在启动 / 正在重启 | ❌ | 输入区已经锁住并给了解释，再挂一条是噪声 |
+| 维护中（Pi 自更新 / 安装扩展） | ✅ tone 是 `info` 而不是故障，只给「打开诊断」 | 计划内停机，**不给「重启 Pi」**（那会打断维护） |
 | 已连接 | ❌ | 正常状态不该占用界面 |
 | 没选项目 | ❌ | 欢迎区已经在说这件事，两处说是重复 |
+
+### 维护态按原因说话（`maintenanceCopy(reason)`）
+
+维护态有两条来源：Pi 自更新（`reason: 'pi-update'`）与 Capability 一键安装
+（`reason: 'capability-install'`）。两者都「短暂停机」，但**装扩展被说成
+「Pi 正在更新」就是在骗人**（用户还可能去点「重启 Pi」打断安装）。所以：
+
+| reason | 连接指示 | 输入框 placeholder |
+|---|---|---|
+| `pi-update` | Pi 正在更新（短暂停机） | Pi 正在更新，完成后可继续… |
+| `capability-install` | Pi 正在安装扩展（短暂停机） | Pi 正在安装扩展，完成后可继续… |
+| 其它 / 缺失 | Pi 正在维护（短暂停机） | Pi 正在维护，完成后可继续… |
+
+原因来自后端的 `bridge_status.reason`（SSE）与 `/api/status` 的
+`maintenance.reason`（刷新页面之后的唯一来源）；回到 `ready` 时清掉，
+不会把上一条的措辞留在界面上。这四种情形由 `tests/smoke.cjs` 的
+「P24 维护态」那四条覆盖，纯函数部分在 `tests/daily-use.cjs`。
 
 ### 边界：给下一步，但不自动修
 

@@ -1067,3 +1067,85 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
 而这次修的正是轮询 —— 正是这条测试抓出了 `pollOnce` 丢掉 `ok:false`
 失败终态的真实缺陷。）
 
+## P24 收口：侧栏动作菜单 + Capability 一键安装验证
+
+这一轮有三块，各自有独立入口，**默认全部离线**：
+
+| 命令 | 套件 | 条数 | 量什么 |
+|---|---|---|---|
+| `npm run test:capability` | `tests/capability.cjs` | **75** | 适用性收口（NA 不画 / 未声明不画 / **`null` 仍显示「未知（无法确认）」** / 诊断无错误不画）、一键安装的按钮形态与确认文案、四值投影与既有回归 |
+| `npm run test:capability-install` | `tests/capability-install.cjs` | **38** | 受控安装的全部边界（见下） |
+| `npm run test:sidebar-menu` | `tests/sidebar-menu.cjs` | **35** | 动作菜单的 DOM 行为 + 两个调用点的静态边界 |
+| `npm run test:ui` | `tests/smoke.cjs` | **1227** | 真实点击链路（jsdom 里的整个应用） |
+| `npm run shots:harness` | `tests/cdp-shot.cjs` | 场景 +8 | 真 Chrome 的排版与运行状态 |
+
+### 一键安装（`tests/capability-install.cjs`，用 fake runner）
+
+**一次真实的 `npm install` / `pi install` 都不会发生**：`runInstall` 是替身，
+断言的是「这条命令会被怎么拼、什么时候被允许跑、跑完之后说什么」。
+
+- **allowlist**：`web` / `subagents` / `memory` / `browser` → 四个固定 source；
+  未知 id、空值、非字符串、`__proto__` / `constructor` / `toString` 这类原型键
+  **一律 fail closed**。另有**交叉核对**：把 `public/*-capabilities.js` 里的 `installId`
+  与 `server/capability-install.js` 的 allowlist 对表，两边漂了就红。
+- **固定 argv**：逐条断言恰好是 `['install', <source>, '--no-approve']`，
+  且没有 `-l` / `--local` / `--approve` / `-a` / `--all` / `--self` / `--extensions`
+  / `--models` / `--force` / `--extension`。
+- **renderer 不能指定任何执行参数**：body 里塞 `source` / `packageName` / `command`
+  / `args` / `url` / `npmCommand` / `registry` 之后，argv 一个字节都不变。
+- **闸门**：`confirm !== true` → `confirm-required`；忙（`busy-turn` / `busy-plan` /
+  `busy-cli` / `busy-pi-update` / `busy-install`）→ 拒绝且**不动 Pi**；
+  忙判据自己抛错 → `busy-unknown`（fail closed）；工作区过期（`__expectedCwd`
+  与 `expectedCwd` 都认）→ `workspace-stale`；证明不到官方入口 → `unsupported`。
+- **单飞**：并发第二次 → `install-running`，runner 只被调一次；跑完锁释放。
+- **维护语义**：`pause-failed` / `pause-timeout` → 失败且**一次都不跑**、**不 resume**；
+  `already-in-maintenance` → `install-running` 且**不掀别人的维护态**；
+  成功路径的顺序断言是 `pause > run > invalidate > resume`，reason 是
+  `capability-install`；runner 失败 / 超时 / 抛错**都要 resume**；
+  resume 自己抛错不会盖掉真正的失败原因。
+- **事实边界**：成功只回 `commandCompleted:true` + `loaded:null`；
+  响应里没有 stdout / stderr / 绝对 Pi 路径 / 入口 / 环境变量。
+- **脱敏**：`C:\Users\...` 路径、`Bearer <值>`、`token=`、`npm_...` 全部变占位符。
+- **装配**：`server.js` 的 `piBusyReason()` 覆盖五个来源，且**更新与安装共用同一份**
+  （`busyReason: piBusyReason` 出现两次）；两个模块共用 `resolvePiCliEntry()` /
+  `invalidatePiCaches()`；`runPiCliCommand` 只传 `env: {}`；
+  router 的 `/api/capabilities/install` 排在 405 兜底之前。
+
+### 侧栏动作菜单（`tests/sidebar-menu.cjs`，jsdom）
+
+- **行为**：单例、挂在 `body` 上、`role=menu` / `menuitem` / `separator`、
+  锚定下方右对齐 / 下方放不下时向上翻转 / 右边缘夹紧 / 上方也放不下时不出负坐标、
+  打开后焦点在第一项、ArrowUp/Down 循环、Home/End、Enter/Space 执行、
+  Escape 关闭并还焦点、点外部（mousedown）关闭、点菜单内部不关闭、resize 关闭、
+  页面滚动关闭而菜单自己滚动不关、点项**先关闭再执行**、关闭后没有残留监听器。
+- **调用点静态边界**：项目行不再有 `.pj-del`、会话行不再有 `.pj-sess-act`
+  （注意 `.pj-sess-acts` 容器仍然在），字符图标 ✎ / ⤓ / ✕ / ↩ 不再出现，
+  每行只有一个三点；菜单项复用既有的 `openProjectSettings` / `removeProject` /
+  `startRename` / `doArchive` / `doDelete`（不复制实现）；移除前必须确认；
+  两个 trigger 都拦掉冒泡；菜单里没有置顶 / 分区 / 分支 / 资源管理器这些 Pi GUI
+  不存在的功能；CSS 里 trigger 默认透明、hover / focus-within / `aria-expanded=true`
+  时可见，菜单 `position:fixed` + `z-index:30`（弹层之下）、danger 只在 hover 变红。
+- **真实链路**在 `npm run test:ui`：点 `…` → 菜单 → 项目设置（走既有弹层）/
+  移除前的确认（文案说明不删磁盘文件）/ 重命名（仍是行内输入框）/ 归档 →
+  `POST /api/sessions/archive` / 删除前二次确认 → `POST /api/sessions/delete`；
+  以及「点三点不切项目、不折叠、不切会话」和 `sessionNaming` 不可用时
+  当前会话连三点都不画。
+
+### 真 Chrome（`npm run shots:harness`）
+
+新增 8 个场景（`UX-MENU-01…05b` / `UX-CAP-01…03c`），每个都带结构判据：
+
+- 菜单挂在 `body` 上、**完全在视口内**、**不盖住对话区**、宽度 180–240px、
+  item 高 30–38px、每项都有 SVG 图标、单实例；
+- danger 项**静止时没有红底**、hover 时才上色，且文字不是纯红；
+- 项目行 ≤ 36px、会话行与项目行差 ≤ 2px（trigger 不撑高行）；
+- Native MCP 详情里没有「不适用」、没有「安装状态」那一行、没有安装按钮、
+  字段行数 ≤ 4；
+- 未安装能力的按钮是「安装」、`installed` 如实说「未安装」、复制命令仍在；
+- 安装确认框（命令 / 权限 / 用户级 / 会自动重启）、安装中（按钮 disabled）、
+  以及「命令跑完但 Registry 没确认到」时如实提示、不伪造已加载。
+
+⚠️ 夹具侧新增 `POST /api/capabilities/install`（**不执行任何命令**，
+只回形状正确的响应）与 `/api/__capability/install-hold|install-release`
+（把请求挂住，用来截「安装中…」那一帧）。harness 有状态，**每轮截图前重启**。
+

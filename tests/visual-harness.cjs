@@ -622,6 +622,15 @@ let holdNextComposerUpload = false;
 let workSurfaceGitClean = false;
 /* P22：让 /api/extensions 返回「发现失败」，用来截「未知（无法确认）」而不是「未安装」。 */
 let capabilityRegistryFail = false;
+/* P24：一键安装的夹具状态。
+ *   - `capabilityInstallHold` 打开时 POST 会挂住，直到 release / 15s 兜底 ——
+ *     用来截「安装中…」那一帧（真实安装可能要几分钟，截图不能真等）。
+ *   - `capabilityInstallCalls` 只记 capabilityId（**不记包名**：包名由服务端
+ *     allowlist 决定，夹具也不该出现第二个映射表）。
+ * 这里**不执行任何命令**，只回一个形状正确的响应。 */
+let capabilityInstallHold = false;
+let capabilityInstallRelease = null;
+const capabilityInstallCalls = [];
 let harnessSessionId = 'aaaaaaaaaaaaaaaa';
 
 /* 真实 SSE 会给事件带上 bridgeRun：前端靠它丢弃旧 bridge run 的事件，
@@ -844,6 +853,45 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/__capability/registry-fail') {
     capabilityRegistryFail = url.searchParams.get('value') === '1';
     return json(res, 200, { ok: true, registryFail: capabilityRegistryFail });
+  }
+  /* P24：一键安装的控制面。夹具**不执行任何命令**，只模拟官方命令的两种结局：
+   * 立刻完成、或挂住（截图期间用）。响应形状照抄后端契约：
+   * `commandCompleted` 表示「命令跑完了」，`loaded` 恒为 null（装没装由 Registry 回答）。 */
+  if (p === '/api/__capability/install-hold') {
+    capabilityInstallHold = url.searchParams.get('value') === '1';
+    if (!capabilityInstallHold && capabilityInstallRelease) {
+      capabilityInstallRelease();
+      capabilityInstallRelease = null;
+    }
+    return json(res, 200, { ok: true, hold: capabilityInstallHold });
+  }
+  if (p === '/api/__capability/install-release') {
+    if (capabilityInstallRelease) {
+      capabilityInstallRelease();
+      capabilityInstallRelease = null;
+    }
+    return json(res, 200, { ok: true });
+  }
+  if (p === '/api/capabilities/install' && req.method === 'POST') {
+    let body = {};
+    try {
+      body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    } catch {
+      body = {};
+    }
+    capabilityInstallCalls.push({ capabilityId: typeof body.capabilityId === 'string' ? body.capabilityId : null });
+    if (capabilityInstallHold) {
+      await new Promise((resolve) => {
+        capabilityInstallRelease = resolve;
+        setTimeout(resolve, 15000);
+      });
+      capabilityInstallRelease = null;
+    }
+    return json(res, 200, {
+      ok: true, code: 'installed', phase: 'installed',
+      capabilityId: typeof body.capabilityId === 'string' ? body.capabilityId : null,
+      commandCompleted: true, exitCode: 0, restarted: true, loaded: null,
+    });
   }
   if (p === '/api/extensions' && capabilityRegistryFail) return json(res, 200, {
     ok: false, error: '扩展发现失败', extensions: [], diagnostics: [],

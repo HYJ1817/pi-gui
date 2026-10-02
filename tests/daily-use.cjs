@@ -238,6 +238,32 @@ const BUTTON = { tagName: 'BUTTON', isContentEditable: false };
     assert.equal(copy.connectionCopy('exited', 'pi 已退出 (1)').label, 'pi 已退出 (1)');
     assert.equal(copy.connectionCopy('exited').label, 'pi 已退出');
   });
+  /* 维护态的文案按 reason 分开：**装扩展绝不能被说成「正在更新 Pi」**。 */
+  check('maintenance 文案按 reason 分开：更新 pi / 安装扩展 / 未知原因', () => {
+    const upd = copy.maintenanceCopy('pi-update');
+    const inst = copy.maintenanceCopy('capability-install');
+    const other = copy.maintenanceCopy(null);
+    assert.ok(upd.label.includes('更新'));
+    assert.ok(inst.label.includes('安装扩展'), inst.label);
+    assert.ok(!inst.label.includes('更新'), '装扩展不能说成更新');
+    assert.ok(inst.detail.includes('官方安装命令'));
+    assert.ok(other.label.includes('维护'));
+    assert.ok(!other.label.includes('更新') && !other.label.includes('安装'), '不认识的原因回落到中性文案');
+  });
+  check('维护态常驻条按 reason 说清在做什么（语气仍是信息，不是故障）', () => {
+    const inst = copy.startupNotice({ bridgeState: 'maintenance', hasProject: true, maintenanceReason: 'capability-install' });
+    assert.equal(inst.id, 'bridge-maintenance');
+    assert.equal(inst.tone, 'info');
+    assert.ok(inst.title.includes('安装扩展'));
+    assert.deepEqual(inst.actions, ['diagnostics'], '维护态不给「重启 Pi」（会打断维护）');
+    const upd = copy.startupNotice({ bridgeState: 'maintenance', hasProject: true, maintenanceReason: 'pi-update' });
+    assert.ok(upd.title.includes('更新'));
+  });
+  check('connectionCopy 也认 reason（两条链路不能各说一套）', () => {
+    assert.ok(copy.connectionCopy('maintenance', '', { reason: 'capability-install' }).label.includes('安装扩展'));
+    assert.ok(copy.connectionCopy('maintenance', '', { reason: 'pi-update' }).label.includes('更新'));
+    assert.ok(copy.connectionCopy('maintenance').label.includes('维护'));
+  });
   check('启动失败 → 常驻说明带后端 error + hint，并给两个下一步', () => {
     const model = copy.startupNotice({
       bridgeState: 'error',

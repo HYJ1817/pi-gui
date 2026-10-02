@@ -299,6 +299,15 @@ get_messages ─┘
     所以 capability registry 不猜工具归属。Pi 重启和项目切换清掉上一轮错误证据。
     共享 `lib/extension-paths.js` 解析目录入口、package manifest glob 与资源 filter，
     不执行候选代码，也不调用 Pi package resolver。
+    **它保持 generic，`actions.install === false`**：一键安装不在这个模块里
+    （见下面的 `capability-install.js`），因为那会让只读发现变成插件商店。
+  - `capability-install.js` — **Known Capability Installer**（P24）：受控的一键安装。
+    固定 allowlist（`capabilityId` → `npm:pi-*`）、固定 argv
+    `['install', <source>, '--no-approve']`（不带 `-l`：用户级）、同步闸门 + 单飞锁、
+    维护暂停 / 恢复（与 Pi 更新同一套安全规则）、脱敏错误；
+    **退出码 0 只回 `commandCompleted`，装没装由 Registry 重新发现回答**。
+    入口与执行分别复用 `server.js` 的 `resolvePiCliEntry()` / `runPiCliCommand()`
+    —— 与 Pi 更新同源，不可能各解析出不同的 pi。见 [security.md](security.md)
   - `sessions.js` — 会话列表 / 切换 / 改名 / 归档 / 删除。见 [sessions.md](sessions.md)
   - `update-check.js` — **版本检查**：只读公开 GitHub Release 元数据，判断有没有新版。
     自带 SemVer 纯函数、30 分钟内存缓存、single-flight 与错误分类；
@@ -338,6 +347,9 @@ get_messages ─┘
   同一约束两个消费者，各写一份迟早会漂
 - `lib/models-api.js` — 从供应商 `/models` 拉模型列表（路径回退、按 API 类型适配）
 - `lib/extract.js` — docx / pdf / 图片的文本抽取（pdfjs）
+- `lib/redact.js` — **脱敏唯一实现**（第一行 + 路径 / `Bearer <值>` / `token=` /
+  `npm_` 形态 → 占位符）。Pi 运行时更新与 Capability 安装共用它：
+  这条边界各写一份正则迟早会分叉，而分叉的那份就是泄露面
 - `server/pi-compat-matrix.js` / `server/pi-probes.js` — P23 兼容矩阵与 probe registry
   （纯 metadata + 只读探测；不联网、不 spawn、不执行第三方代码）
 
@@ -357,9 +369,14 @@ get_messages ─┘
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
 - `extensions.js` 扩展面板（五个过滤器 + 通用 Registry）/ `planner.js` 任务面板 /
   `project-config.js` 项目设置
-- `capability-model.js` 纯投影（四值状态、结论行、过滤器、setup 视图模型）/
-  `capability-view.js` All 与 Capabilities 两个过滤器 / `ui/capability-setup.js`
-  唯一一套 setup 布局与唯一的「安装后重启 Pi」（P22）
+- `capability-model.js` 纯投影（四值状态、**适用性收口**、结论行、过滤器、
+  setup 视图模型）/ `capability-view.js` All 与 Capabilities 两个过滤器 /
+  `ui/capability-setup.js` 唯一一套 setup 布局 + 唯一的一键安装 +
+  唯一的「安装后重启 Pi」（P22 / P24）
+- `ui/action-menu.js` 侧栏行动作菜单（项目行与会话行**共用一套**）：单例、
+  锚定 trigger、视口内翻转与夹紧、`role=menu` 语义、键盘导航、Escape 还焦点、
+  点外部 / resize / 滚动关闭。与 composer 的 `ui/popover.js` 刻意分开
+  （那个是「输入框上方的单例选择器」，语义与定位方向都不同）
 - `providers.js` 模型供应商 / `usage.js` 用量与状态 / `ui/` 通用组件
   （`modal.js` / `popover.js` / `toast.js`）
 - `schema-drift.js` — P23 渲染进程侧的 schema 漂移环（来源 + 字段名 + 类型，**不记值**），

@@ -121,6 +121,65 @@ Pi GUI 会**执行一次官方 self-update** 去升级本机装着的那份 pi�
 
 详见 [updates.md](updates.md) 与 [upgrade-playbook.md](upgrade-playbook.md)。
 
+## Known Capability Installer 边界
+
+上面那节是「升级 pi 本体」。这一节是 P24 新增的**唯一另一条执行官方 CLI 的写路径**：
+Pi GUI 会用官方 `pi install` 装**四个已明确维护的第三方 Capability**
+（Web Access / Subagents / Pi Memory / Browser Use）。它存在，是因为「复制命令 →
+自己开终端 → 回 GUI → 重启」这条链路对日用来说太长；但它必须**窄到不像商店**。
+
+- **renderer 只能送 `capabilityId`。** 端点 `POST /api/capabilities/install` 的 body
+  只认 `capabilityId` / `confirm` / 工作区过期守卫（`__expectedCwd`，兼容 `expectedCwd`）。
+  `source` / `packageName` / `command` / `args` / `url` / `registry` / `npmCommand`
+  **一律忽略** —— 包名由服务端固定 allowlist 决定
+  （`web` → `npm:pi-web-access`、`subagents` → `npm:pi-subagents`、
+  `memory` → `npm:pi-memory`、`browser` → `npm:pi-browser-harness`）。
+  未知 / 空 / 非字符串 id **fail closed**（`unknown-capability`），
+  所以它在结构上不可能是「任意包安装 / 命令执行」入口。
+- **固定 argv：`['install', <allowlisted source>, '--no-approve']`。**
+  没有 `-l` / `--local`（不做 project-local 安装 —— 统一装到用户级，跨项目可用）、
+  没有 `--approve`、没有 `--all` / `--self` / `--extensions` / `--force`。
+  依据 Pi 1.0.0 实测契约（`docs/cli.md` 的 package 命令 + 包里
+  `parsePackageCommand()`）：`--no-approve` 只关掉「受信任闸门对项目级资源的自动采信」，
+  不改变写哪个 scope；`install` 的成功路径是 `installAndPersist(source, {local:false})`
+  写 `~/.pi/agent/settings.json` 并退出 0。
+- **执行的永远是「当前那一份 Pi」。** 入口由 launch identity 派生
+  （`piLaunch.packageDir()` → `buildPiEntry()`），经 `agents/cli.js` 的 `runCli`
+  （`shell:false` + args 数组 + 超时 + 有界输出）。证明不了就拒绝（`unsupported`），
+  **绝不** PATH 上另找一份 `pi`、绝不自己 `npm install`。
+  与 Pi 更新共用同一个 `resolvePiCliEntry()` / `runPiCliCommand()`，
+  所以「闸门检查的那份 pi」与「真正被装的那份 pi」不可能分叉。
+- **必须显式确认。** `confirm !== true` → `confirm-required`。界面上先弹确认框，
+  里面写清**完整命令**、**该 Extension 以 Pi 进程的权限运行**
+  （可读写文件 / 执行命令 / 访问网络）、**安装范围：用户级**、**装完会自动重启 Pi**。
+  安全警告不为了「一键」而删。
+- **闸门全在后端**（前端 disabled 只是体验），而且与 Pi 更新**共用同一份**
+  `piBusyReason()`：主会话在生成（`pi-activity.js` 的真实事件语义）、
+  有在飞的 Pi CLI 动作（MCP 登录之类）、Pi 更新正在跑、另一次安装正在跑、
+  Planner 任务或独立验证在跑 —— 命中任一条都拒绝。另有单飞锁
+  （`inflight`，且 `prepare()` 是同步的：判闸门与上锁在同一个 tick 里完成）。
+- **维护期间才动 Pi，规则与自更新完全一致**：`pauseForMaintenance('capability-install')`
+  → **暂停超时 = 失败**（旧 Pi 还活着就一次都不装）→ 执行 → 成功后先清与 Pi 包
+  identity 绑定的缓存再 `resumeFromMaintenance()`（= 把 Pi 重新拉起来）。
+  只 resume **自己拥有**的那次维护态；失败路径也 resume（GUI 不会永久停在维护态）；
+  `pause-timeout` 由 rpc-bridge 自己回滚，不由我们 resume。
+- **退出码 0 ≠ 已安装 ≠ 已加载。** 后端只回 `commandCompleted: true` 与 `loaded: null`，
+  绝不宣布加载状态；是否真的装上由**重新发现的 Extension Registry**回答
+  （前端刷新后按 `state.installed === true` 判定）。若 Registry 没有这个 package，
+  界面如实说「安装命令已完成，但 Pi GUI 尚未确认到 Extension，请刷新或查看诊断」，
+  **绝不伪造绿色 loaded**。`installed` / `configured` / `loaded` / `runtimeObserved`
+  四个状态继续独立。
+- **原始输出不出后端。** `pi install` 的 stdout / stderr 只做截断 + 脱敏
+  （`lib/redact.js`：盘符路径、`/home|/Users|/root` 路径、`Bearer <值>`、
+  `token=`/`api_key=` 形态、`npm_` token），响应里只有一句摘要与稳定 `code`，
+  没有 stdout / stderr / 绝对路径 / 入口 / 环境变量。
+  测试直接断言这几点（`tests/capability-install.cjs` E/F 段）。
+- **不碰 Extension Registry 的形状。** Registry 仍是通用、只读发现
+  （`actions.install === false`），安装逻辑在独立的 `server/capability-install.js`。
+  Registry 不会被改成「接受任意 npm 包 / 搜索 npm / 执行远端 metadata」的商店。
+- **不做的事**：npm 搜索、任意包安装、自动发现并安装陌生 Extension、
+  uninstall、extension update、project-local install、静默安装、静默信任第三方代码。
+
 ## P22 Capability 投影层边界
 
 Capability 视图是**只读投影**：它把已有的证据重新排版，**不新增任何事实、不新增任何动作**。

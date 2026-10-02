@@ -147,10 +147,50 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
     assert.ok(!label.includes('未安装'));
     assert.ok(!label.includes('未加载'));
   });
-  check('统一的六个状态行顺序与名字固定', () => {
+  /* ---------------- 1b. 呈现收口：只画适用的字段 ---------------- */
+  console.log('\n--- 1b. 状态行的适用性收口 ---');
+  check('NA（不适用）的字段不进入 stateRows', () => {
+    const na = model.setupViewModel(model.normalizeRow({ id: 'y', name: 'Y', state: {
+      installed: model.NA, configured: model.NA, loaded: model.NA,
+      runtimeObserved: model.NA, restartRequired: model.NA, diagnostic: null } }));
+    assert.deepEqual(na.stateRows, [], '全是「不适用」的详情不该画出一串「不适用」');
+    /* 四值模型本身**没有被改**：'n/a' 仍然是第四种值，只是不再进详情层。 */
+    assert.equal(model.triText(model.NA), '不适用');
+  });
+  check('descriptor 没声明的字段也不画（不替它编一句「未知」）', () => {
     const view = model.setupViewModel(model.normalizeRow({ id: 'x', name: 'X', state: {} }));
+    assert.deepEqual(view.stateRows, []);
+    const partial = model.setupViewModel(model.normalizeRow({ id: 'x2', name: 'X2', state: { loaded: true } }));
+    assert.deepEqual(partial.stateRows, [['已加载', '已确认加载']]);
+  });
+  check('null 仍然显示「未知（无法确认）」—— 不许被一起藏掉', () => {
+    const view = model.setupViewModel(model.normalizeRow({ id: 'z', name: 'Z', state: {
+      installed: null, configured: null, loaded: null, runtimeObserved: null, restartRequired: null } }));
     assert.deepEqual(view.stateRows.map(([k]) => k),
-      ['安装状态', '启用配置', '已加载', '运行观察', '需要重启', '诊断']);
+      ['安装状态', '启用配置', '已加载', '运行观察', '需要重启']);
+    for (const [label, value] of view.stateRows) assert.equal(value, model.TRI_UNKNOWN, label);
+  });
+  check('null ≠ 不适用：一个显示未知，一个整格不画', () => {
+    const unknown = model.setupViewModel(model.normalizeRow({ id: 'u', name: 'U', state: { installed: null } }));
+    const na = model.setupViewModel(model.normalizeRow({ id: 'n', name: 'N', state: { installed: model.NA } }));
+    assert.deepEqual(unknown.stateRows, [['安装状态', model.TRI_UNKNOWN]]);
+    assert.deepEqual(na.stateRows, []);
+  });
+  check('诊断：没有错误就不画「诊断 无」，有错误才画', () => {
+    const none = model.setupViewModel(model.normalizeRow({ id: 'a', name: 'A', state: { installed: true, diagnostic: null } }));
+    assert.ok(!none.stateRows.some(([k]) => k === '诊断'));
+    const bad = model.setupViewModel(model.normalizeRow({ id: 'b', name: 'B',
+      state: { installed: true, diagnostic: { phase: 'load', message: '加载失败' } } }));
+    assert.deepEqual(bad.stateRows.find(([k]) => k === '诊断'), ['诊断', '加载失败']);
+  });
+  check('第三方 Extension 的真实安装状态仍照常显示（收口没有削弱事实）', () => {
+    const view = model.setupViewModel(model.normalizeRow(web.webCapability(registry, null)));
+    const value = (name) => view.stateRows.find(([k]) => k === name)[1];
+    assert.equal(value('安装状态'), '已安装');
+    assert.equal(value('启用配置'), '已启用');
+    assert.equal(value('已加载'), '已确认加载');
+    assert.deepEqual(view.stateRows.map(([k]) => k),
+      ['安装状态', '启用配置', '已加载', '运行观察', '需要重启']);
   });
 
   /* ---------------- 2. null / false 不互相冒充 ---------------- */
@@ -221,12 +261,34 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
     assert.ok(report.rows.filter((row) => row.kind === 'extension').every((row) => row.id.startsWith('extension:')));
     assert.ok(report.rows.filter((row) => row.kind === 'builtin').every((row) => row.id.startsWith('builtin:')));
   });
-  check('built-in 的「启用 / 加载」是不适用，不是「否」', () => {
+  check('built-in 的「启用 / 加载」是不适用 —— 那两格直接不画', () => {
     const row = rowById(catalog(), 'builtin:mcp');
     const view = model.setupViewModel(row);
-    const value = (name) => view.stateRows.find(([k]) => k === name)[1];
-    assert.equal(value('启用配置'), '不适用');
-    assert.equal(value('已加载'), '不适用');
+    const keys = view.stateRows.map(([k]) => k);
+    assert.deepEqual(keys, ['安装状态'], 'built-in 只该留「包里带了它」这一条');
+    assert.ok(!keys.includes('启用配置'));
+    assert.ok(!keys.includes('已加载'));
+    /* 四值模型没变：'n/a' 仍然是「不适用」，只是不再进详情层。 */
+    assert.equal(model.triText(row.state.configured), '不适用');
+  });
+  check('Native MCP 详情不再是一串「不适用」', () => {
+    const rows = model.setupViewModel(model.normalizeRow(mcp.mcpCapability(mcpReport, mcpNative, null))).stateRows;
+    assert.ok(!rows.some(([, v]) => v === '不适用'), JSON.stringify(rows));
+    assert.ok(rows.some(([k]) => k === '已加载'));
+    const keys = rows.map(([k]) => k);
+    assert.ok(!keys.includes('安装状态'), 'MCP 不是 npm 包，不该有安装状态那一行');
+  });
+  check('Usage 详情不出现安装 / 加载这类无意义字段', () => {
+    const rows = model.setupViewModel(model.normalizeRow(model.usageEntry())).stateRows;
+    assert.deepEqual(rows, [], 'Usage 是入口，不是可安装能力：状态行一条都不该有');
+  });
+  check('Skills 只画它真的有的字段（运行观察是 NA → 不画）', () => {
+    const rows = model.setupViewModel(model.normalizeRow(model.skillsCapability(skillsReport))).stateRows;
+    const keys = rows.map(([k]) => k);
+    assert.ok(keys.includes('已加载'));
+    assert.ok(keys.includes('需要重启'));
+    assert.ok(!keys.includes('运行观察'));
+    assert.ok(!keys.includes('诊断'));
   });
   check('读不到 built-in 清单时给诊断，不硬编码结论', () => {
     const report = model.buildCapabilityCatalog({ mcp: { builtins: { known: false } }, features: [] });
@@ -478,10 +540,54 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
       assert.doesNotMatch(read(file), /child_process|execFile|\bspawn\(|node:fs/, file);
     }
   });
-  check('视图模型只有「复制 / 重启 / 打开」三类动作，没有安装动作', () => {
+  check('一键安装：installed=false → install，命令仍是固定官方命令', () => {
+    const view = model.setupViewModel(model.normalizeRow(subagent.subagentCapability(registry, null)));
+    assert.equal(view.installId, 'subagents');
+    assert.equal(view.installState, 'install');
+    assert.equal(view.installCommand, 'pi install npm:pi-subagents');
+    assert.equal(typeof view.onInstall, 'undefined', '模型层不执行安装，只给 id 与状态');
+  });
+  check('一键安装：installed=true → installed（不再提供安装动作）', () => {
     const view = model.setupViewModel(model.normalizeRow(web.webCapability(registry, null)));
-    assert.equal(typeof view.onInstall, 'undefined');
-    assert.equal(view.installCommand.startsWith('pi install'), true);
+    assert.equal(view.installState, 'installed');
+    assert.equal(view.installConfirm, null);
+  });
+  check('一键安装：installed=null → recheck（「无法确认」不当作「确认未安装」）', () => {
+    const view = model.setupViewModel(model.normalizeRow(web.webCapability({ ok: false }, null)));
+    assert.equal(view.stateRows.find(([k]) => k === '安装状态')[1], model.TRI_UNKNOWN);
+    assert.equal(view.installState, 'recheck');
+    assert.equal(view.installConfirm, null);
+  });
+  check('一键安装：Native MCP / built-in / Skills / Usage / Approval 一律没有', () => {
+    const report = catalog();
+    for (const id of ['mcp', 'builtin:mcp', 'skills', 'usage', 'approval']) {
+      const view = model.setupViewModel(rowById(report, id));
+      assert.equal(view.installState, null, id);
+      assert.equal(view.installId, null, id);
+      assert.equal(view.installConfirm, null, id);
+      assert.equal(view.installCommand, null, id);
+    }
+  });
+  check('确认文案把命令、权限与「用户级」都说清楚（不静默信任第三方代码）', () => {
+    const view = model.setupViewModel(model.normalizeRow(browser.browserCapability(registry, null)));
+    const text = view.installConfirm.message;
+    assert.equal(view.installState, 'install');
+    assert.ok(view.installConfirm.title.includes('Browser Use'));
+    assert.equal(view.installConfirm.okText, '安装');
+    assert.ok(text.includes('pi install npm:pi-browser-harness'));
+    assert.ok(text.includes('用户级'));
+    assert.ok(text.includes('Pi 进程的权限'));
+    assert.ok(text.includes('自动重新启动 Pi'));
+    assert.ok(!/-l|--local/.test(text), '文案不该把 project-local 安装说成选项');
+  });
+  check('一键安装只由 HTTP 发起：模型与视图层不含任何进程 / 文件动作', () => {
+    for (const file of ['public/capability-model.js']) {
+      assert.doesNotMatch(read(file), /child_process|execFile|\bspawn\(|node:fs/, file);
+    }
+    /* 视图层允许发起一次 HTTP（走 api.js），但**不许**自己拼 argv。 */
+    const setup = read('public/ui/capability-setup.js');
+    assert.match(setup, /installCapability\(model\.installId\)/);
+    assert.doesNotMatch(setup, /--no-approve|npm:pi-/, 'argv 与包名只能来自服务端 allowlist');
   });
   check('Native MCP / built-in / Skills 都没有安装命令', () => {
     const report = catalog();

@@ -2,13 +2,17 @@
 
 侧栏的**扩展**是 Skills、Extensions 与 MCP 三个标签页，外加 P22 的
 **All / Capabilities** 两个能力过滤器（它们同时是「这个能力现在能不能用」的统一视图）。
-它管的是**你已经装好的**能力，不是商店 —— 没有下载、没有安装、没有远程代码执行。
+它管的是**你已经装好的**能力 + **Pi GUI 自己维护的那四个第三方 Capability**
+（Web Access / Subagents / Pi Memory / Browser Use）的受控一键安装。
+**它不是商店**：没有 npm 搜索、没有任意包名入口、不发现陌生 Extension、
+没有 uninstall / update、没有 project-local 安装。
+边界见 [Capability UX §四之二](capability-ux.md) 与 [安全](security.md)。
 
 **Pi GUI = pi 的 GUI，不是第二套扩展系统。** pi 已有的机制就做 GUI 管理，
 MCP 这类能力按**本机实际装着的那个 pi 包**检测后如实报告（历史验证基线 0.87.0 没有原生 MCP，当前验证基线 0.99.2 自带 builtin:mcp —— 见下面 MCP 一节）。
 
 > **P22：Capability 是投影层，不是事实数据库。** 完整的规则见
-> [Capability UX](capability-ux.md)：五个过滤器、六个统一状态字段、
+> [Capability UX](capability-ux.md)：五个过滤器、统一状态字段（**只画适用的那些**）、
 > `null` 一律显示「未知（无法确认）」、Native MCP 原样搬运 P20.6 的原生状态、
 > 唯一一套 setup 布局与唯一的「安装后重启 Pi」实现。
 
@@ -25,9 +29,29 @@ MCP 这类能力按**本机实际装着的那个 pi 包**检测后如实报告�
 | MCP | pi 原生 MCP 管理面（原有实现） |
 
 每个 feature（Web / Subagents / Pi Memory / Browser / Native MCP / Approval / Usage）
-用**同一套 setup 布局**：名称、用途、六个统一状态字段、来源说明、固定官方命令（若有）、
-复制、安装后重启、运行观察、限制、出处。Native MCP 与 built-in **没有安装命令** ——
-它们来自 Pi 自己的 built-in capability，不是 npm 包。
+用**同一套 setup 布局**：名称、用途、**只对该能力适用的状态字段**、来源说明、
+固定官方命令（若有）、一键安装（若有）/ 复制、安装后重启、运行观察、限制、出处。
+Native MCP 与 built-in **没有安装命令** —— 它们来自 Pi 自己的 built-in capability，
+不是 npm 包，所以既没有安装也没有安装按钮。
+
+## 受控一键安装（P24 收口）
+
+四个已知第三方 Capability 从「复制命令 → 自己开终端 → 回 GUI → 重启」变成
+**未安装 → 点「安装」→ 确认 → 后端跑官方 `pi install` → 自动重启 Pi → 重新确认**：
+
+- renderer **只送 capabilityId**；包名由服务端固定 allowlist 决定
+  （`web` → `npm:pi-web-access`、`subagents` → `npm:pi-subagents`、
+  `memory` → `npm:pi-memory`、`browser` → `npm:pi-browser-harness`），未知 id fail closed；
+- argv 固定 `['install', <allowlisted source>, '--no-approve']`：
+  **不带** `-l` / `--local`（用户级安装，跨项目可用），也不带 `--approve`；
+- 安装前必须确认（命令、权限、用户级、会自动重启 Pi 都写在确认框里）；
+- **退出码 0 ≠ 已安装 ≠ 已加载**：装没装由重新发现的 Extension Registry 回答，
+  拿不到加载证据就一直显示未知；
+- 「复制安装命令」保留为高级 / 故障恢复入口。
+
+安装逻辑**不在** `server/extension-registry.js` 里：Registry 保持通用、只读
+（`actions.install === false`），一键安装是独立的 `server/capability-install.js`。
+
 
 ## Extensions（P15 基础设施）
 
@@ -38,8 +62,10 @@ Capabilities 过滤器），共用 `public/ui/capability-setup.js` 那一套布�
 详情见 [Web Access](web-access.md)、[Subagents](subagents.md)、
 [Pi Memory](memory.md)、[Browser Use](browser.md)、[Capability UX](capability-ux.md)。
 
-P16 的原意没变：固定官方安装命令复制、安装后重启 Pi、当前 bridge 的工具调用观察。
-没有 GUI 自动安装或任意包名入口。通用 Registry 不含 Web 专用条件，工具清单仍未知。
+P16 的原意没变：固定官方安装命令、安装后重启 Pi、当前 bridge 的工具调用观察。
+P24 起这四个已知 capability 多了一条**受控**的页内一键安装（见上一节），
+但**没有任意包名入口**：包名只可能来自服务端 allowlist。通用 Registry 不含 Web 专用条件，
+工具清单仍未知。
 P17 增加 Subagents 设置区（见 [subagents.md](subagents.md)），P18 增加 Pi Memory 设置区
 （见 [memory.md](memory.md)）。三者都是**独立的 feature adapter**，共用同一套
 installed / configured / loaded / runtimeObserved 语义，但**不往通用 Registry 里塞
@@ -82,12 +108,15 @@ pi 有一个细节（0.87.0 / 0.99.1 / 0.99.2 同）：显式 package filter 在
 `mapRegisteredTools()` 可把多个工具映射到同一个 extension。未知工具继续由现有
 Tool Timeline 显示原始名称。
 
-当前页面支持查看、刷新、详情；**不支持**从 GUI 安装、删除或启停 Extension。
-Pi 官方有 `pi install` 和交互式 `pi config`，但没有对应的稳定 RPC 管理接口。
-GUI 不调用安装命令，也不改用户的 Pi settings。用户在 Pi 外部变更配置后可走
-已有的重启 Pi 入口；桥接先停旧进程、再启动新进程，前端在重启期间锁住 Composer，
-workspace generation 防止旧请求污染新项目。Registry 在新 bridge run 清除旧错误，
-重新请求命令证据。没有证据时 `restartRequired` 保持 `null`。
+当前页面支持查看、刷新、详情，以及对**四个已知 capability** 的受控一键安装。
+**不支持**任意包安装、删除或启停 Extension、npm 搜索、uninstall、extension update，
+也不做 project-local 安装。Pi 官方有 `pi install` 和交互式 `pi config`，
+但没有对应的稳定 RPC 管理接口；GUI 走的仍然是官方 CLI（`pi install <固定 source>
+--no-approve`），只是把它收敛到一个固定 allowlist 上。
+用户在 Pi 外部变更配置后可走已有的重启 Pi 入口；桥接先停旧进程、再启动新进程，
+前端在重启期间锁住 Composer，workspace generation 防止旧请求污染新项目。
+Registry 在新 bridge run 清除旧错误，重新请求命令证据。没有证据时 `restartRequired`
+保持 `null`。
 配置禁用与当前加载证据独立：修改配置但尚未重启时，可以同时出现
 `enabled=false` 与 RPC 证实的 `loaded=true`；无 runtime 证据时仍保持 `loaded=null`。
 
@@ -260,10 +289,14 @@ override 语义，需要同步更新 `server/skills.js` ——
 ## 相关测试
 
 P22 增加统一 Capability 视图（见 [capability-ux.md](capability-ux.md)）：
-`npm run test:capability`（62 条，纯投影、离线：四值状态、`null` 不冒充 `false`、
-built-in / Native MCP 与 unknown Extension、搜索与过滤、运行观察重置、
-`restartRequired`、stale、无自动安装、**`server/extension-registry.js` 无特化**）；
-`npm run test:ui` 的 P22 段（21 条 jsdom）与截图场景 171–180（真实 Chrome，
+`npm run test:capability`（75 条，纯投影、离线：四值状态、适用性收口、
+`null` 不冒充 `false`、built-in / Native MCP 与 unknown Extension、搜索与过滤、
+运行观察重置、`restartRequired`、stale、一键安装的按钮形态与确认文案、
+**`server/extension-registry.js` 无特化**）；
+`npm run test:capability-install`（38 条，离线、fake runner：allowlist、固定 argv、
+闸门、维护暂停 / 恢复、退出码 0 ≠ 已加载、脱敏与隐私）；
+`npm run test:ui` 的 P22 / P24 段与 `npm run test:sidebar-menu`（35 条 jsdom）；
+截图场景 171–180 与 UX-MENU-01…05 / UX-CAP-01…03（真实 Chrome，
 含 700 / 900 / 1200 / 1536px）。
 
 P19 在 Extensions 页增加 **Approval / Permission** 能力块（只读报告，不是新标签页）：

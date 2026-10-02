@@ -1210,7 +1210,7 @@ async function main() {
   await shotOf('#workSurface .cap-view .ext-detail', '162-memory-setup', 'P22：Pi Memory 设置区（统一布局：固定命令 + 真实运行观察 + 限制）', ['Pi Memory（长期记忆）', 'pi install npm:pi-memory', '这不是「会话搜索」'], [
     ['固定官方安装命令只出现一次', `document.querySelectorAll('#workSurface .cap-view .ext-detail code').length===1`],
     ['运行观察来自真实事件', `document.querySelector('#workSurface .cap-rows [data-k="运行观察"] .ext-row-v').textContent.includes('memory_search')`],
-    ['动作只有复制 / 安装后重启', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].every(b=>b.textContent==='复制安装命令'||b.textContent==='安装后重启 Pi')`],
+    ['动作是安装 / 复制 / 安装后重启', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].every(b=>b.textContent==='安装'||b.textContent==='复制安装命令'||b.textContent==='安装后重启 Pi'||b.textContent==='已安装'||b.textContent==='重新检查')`],
   ]);
   /* ---------- P22：Capability 视图（统一状态 / Native MCP / built-in / 未知 / 响应式） ----------
    *
@@ -1233,10 +1233,10 @@ async function main() {
 
   await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>(n.querySelector('.ext-name')||{}).textContent==='Web Access')?.click()`);
   await sleep(320);
-  await shotOf('#workSurface .cap-view .ext-detail', '172-capability-web-setup', 'P22：统一 setup 布局 —— 名称 / 用途 / 六个状态字段 / 固定官方命令 / 复制 / 重启 / 限制', ['Web Access', 'pi install npm:pi-web-access', '运行观察', '限制'], [
-    ['六个统一状态字段都在', `(() => {const keys=[...document.querySelectorAll('#workSurface .cap-rows .ext-row')].map(r=>r.dataset.k);return JSON.stringify(keys)===JSON.stringify(['安装状态','启用配置','已加载','运行观察','需要重启','诊断'])})()`],
+  await shotOf('#workSurface .cap-view .ext-detail', '172-capability-web-setup', 'P22：统一 setup 布局 —— 名称 / 用途 / **只画适用的字段** / 固定官方命令 / 一键安装 / 限制', ['Web Access', 'pi install npm:pi-web-access', '运行观察', '限制'], [
+    ['只画适用的状态字段（第三方 Extension 五个，没有空诊断行）', `(() => {const keys=[...document.querySelectorAll('#workSurface .cap-rows .ext-row')].map(r=>r.dataset.k);return JSON.stringify(keys)===JSON.stringify(['安装状态','启用配置','已加载','运行观察','需要重启'])})()`],
     ['固定官方命令只出现一次', `document.querySelectorAll('#workSurface .cap-view .ext-detail code').length===1`],
-    ['动作只有复制 / 安装后重启', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].map(b=>b.textContent).join(',')==='复制安装命令,安装后重启 Pi'`],
+    ['动作是安装状态 / 复制 / 安装后重启（顺序固定）', `(() => {const t=[...document.querySelectorAll('#workSurface .cap-view .ext-acts button')].map(b=>b.textContent);return t.length===3&&['安装','已安装','重新检查'].includes(t[0])&&t[1]==='复制安装命令'&&t[2]==='安装后重启 Pi'})()`],
     ['没有安装表单（不提供任意包名入口）', `document.querySelectorAll('#workSurface .cap-view .ext-detail input').length===0`],
   ]);
 
@@ -1294,6 +1294,192 @@ async function main() {
     ['汇总行显示当前筛选数', `document.querySelector('#workSurface .cap-view .ext-sum-label').textContent.includes('当前筛选')`],
     ['搜索框是 type=search（不是任意输入口）', `document.querySelector('#workSurface .cap-view .ext-search').type==='search'`],
   ]);
+  /* ---------- P24 收口：侧栏三点菜单 + Capability 一键安装 ----------
+   *
+   * 参考用户给的 Codex 侧栏截图，只取四件事：**紧凑、三点入口、单色线性图标、
+   * danger 的层级**。这些场景量的是排版事实，不是「文本里有没有某个词」：
+   *   - 菜单挂在 body 上 → 不会被侧栏的 overflow 裁掉，也不会跑出窗口；
+   *   - trigger 不把项目行 / 会话行撑高（UX-03 / UX-09 的几何仍然成立）；
+   *   - danger 项静止时**不是**鲜红，hover 才有轻微红色；
+   *   - 详情只画适用的字段（不再有一串「不适用」）；
+   *   - 一键安装的确认、安装中、结束后按重新发现的结果显示。
+   *
+   * ⚠️ 前面那些场景会折叠侧栏、开搜索，所以这里先 reload 回到干净的首屏。 */
+  await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
+  await send('Page.reload');
+  await sleep(1700);
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await sleep(320);
+
+  const projectHoverPoint = await evalJs(`(() => {
+    const row = document.querySelector('#projects .project');
+    if (!row) return null;
+    const r = row.getBoundingClientRect();
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+  })()`);
+  if (projectHoverPoint) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...projectHoverPoint });
+    await sleep(280);
+  }
+  await shotOf('#projects', 'UX-MENU-01-project-row-hover', 'P24 侧栏：项目行 hover —— 行尾三点显形，行仍然是紧凑的一行', ['pi-GUI'], [
+    ['三点在 hover 时可见', `getComputedStyle(document.querySelector('#projects .project .pj-row-menu-trigger')).opacity==='1'`],
+    ['项目行仍然 ≤36px（没有被 trigger 撑高）', `document.querySelector('#projects .project').offsetHeight<=36`],
+    ['旧的行尾 ✕ 已经不存在', `document.querySelectorAll('#projects .pj-del').length===0`],
+    ['每行只有一个三点入口', `document.querySelectorAll('#projects .project .pj-row-menu-trigger').length===document.querySelectorAll('#projects .project').length`],
+    ['trigger 本身很小（≤22px 高）', `(() => {const t=document.querySelector('#projects .project .pj-row-menu-trigger');return t.getBoundingClientRect().height<=22})()`],
+    ['完整路径仍在 title 上（没有多出第二行）', `(() => {const p=document.querySelector('#projects .project');return !p.querySelector('.pj-path')&&/[\\\\/]/.test(p.title)})()`],
+  ]);
+
+  const projectTriggerPoint = await evalJs(`(() => {
+    const t = document.querySelector('#projects .project .pj-row-menu-trigger');
+    if (!t) return null;
+    const r = t.getBoundingClientRect();
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+  })()`);
+  if (projectTriggerPoint) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...projectTriggerPoint });
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...projectTriggerPoint });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...projectTriggerPoint });
+    await sleep(300);
+  }
+  await shotOf('#actionMenu', 'UX-MENU-02-project-menu-open', 'P24 侧栏：项目菜单 —— 项目设置 / 分隔线 / 移除项目（danger）', ['项目设置', '移除项目'], [
+    ['菜单挂在 body 上（不被侧栏 overflow 裁掉）', `document.querySelector('#actionMenu').parentElement===document.body`],
+    ['菜单完全在视口内（不跑出窗口）', `(() => {const r=document.querySelector('#actionMenu').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})()`],
+    ['没有盖住对话区', `(() => {const m=document.querySelector('#actionMenu').getBoundingClientRect();const c=document.querySelector('#chatView');if(!c)return true;return m.right<=c.getBoundingClientRect().left+1})()`],
+    ['role=menu + 两个 menuitem', `document.querySelector('#actionMenu').getAttribute('role')==='menu'&&document.querySelectorAll('#actionMenu [role="menuitem"]').length===2`],
+    ['有低对比分隔线', `Boolean(document.querySelector('#actionMenu [role="separator"]'))`],
+    ['宽度 180–240px', `(() => {const w=document.querySelector('#actionMenu').getBoundingClientRect().width;return w>=180&&w<=240})()`],
+    ['每项高 30–38px', `[...document.querySelectorAll('#actionMenu .action-menu-item')].every(b=>{const h=b.getBoundingClientRect().height;return h>=30&&h<=38})`],
+    ['每项都有单色线性图标', `[...document.querySelectorAll('#actionMenu .action-menu-item')].every(b=>Boolean(b.querySelector('.action-menu-ic svg')))`],
+    ['trigger 的 aria-expanded=true', `document.querySelector('#projects .project .pj-row-menu-trigger').getAttribute('aria-expanded')==='true'`],
+    ['菜单只有一个浮层实例', `document.querySelectorAll('#actionMenu').length===1`],
+  ]);
+
+  /* danger 的层级：静止时**不是**鲜红（也不整行常驻红底）。 */
+  await shotOf('#actionMenu', 'UX-MENU-05a-danger-at-rest', 'P24 侧栏：危险项的静止态 —— 不常驻鲜红，只比普通项略暗一档', ['移除项目'], [
+    ['危险项静止时没有红底', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('移除项目'));return getComputedStyle(b).backgroundColor==='rgba(0, 0, 0, 0)'})()`],
+    ['危险项有 danger 类（层级由 CSS 决定）', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('移除项目'));return b.classList.contains('danger')})()`],
+  ]);
+  const dangerPoint = await evalJs(`(() => {
+    const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('移除项目'));
+    if (!b) return null;
+    const r=b.getBoundingClientRect();
+    return { x: Math.round(r.left+r.width/2), y: Math.round(r.top+r.height/2) };
+  })()`);
+  if (dangerPoint) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...dangerPoint });
+    await sleep(260);
+  }
+  await shotOf('#actionMenu', 'UX-MENU-05-danger-item-hover', 'P24 侧栏：危险项 hover —— 这时才有轻微红色', ['移除项目'], [
+    ['hover 时才有底色', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('移除项目'));return getComputedStyle(b).backgroundColor!=='rgba(0, 0, 0, 0)'})()`],
+    ['文字色是柔和的暖色，不是纯红 #f00', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('移除项目'));const c=getComputedStyle(b).color.replace('rgb(','').replace(')','').split(',').map(Number);return c[0]>150&&c[1]<c[0]&&c[2]<c[0]})()`],
+  ]);
+  await pressKey('Escape', 'Escape', 27);
+  await sleep(200);
+  await shotOf('#projects', 'UX-MENU-05b-menu-escaped', 'P24 侧栏：Escape 关闭菜单并把焦点还给三点', ['pi-GUI'], [
+    ['Escape 关闭了菜单', `!document.querySelector('#actionMenu')`],
+    ['焦点回到三点 trigger', `document.activeElement===document.querySelector('#projects .project .pj-row-menu-trigger')`],
+  ]);
+  await evalJs(`document.querySelector('#projects .project .pj-row-menu-trigger')?.click()`);
+  await sleep(240);
+  await evalJs(`(() => { const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('移除项目')); if (b) b.click(); })()`);
+  await sleep(240);
+  await shotOf('#confirmCard', 'UX-MENU-02b-remove-confirm', 'P24 侧栏：移除项目前确认 —— 只移除列表，不删磁盘文件', ['移除这个项目', '不会删除磁盘上的项目文件'], [
+    ['确认文案说清不动磁盘文件', `document.querySelector('#confirmCard').textContent.includes('不会删除磁盘上的项目文件')`],
+    ['按钮是「取消 / 移除项目」', `[...document.querySelectorAll('#confirmCard .modal-actions .btn')].map(b=>b.textContent).join(',')==='取消,移除项目'`],
+  ]);
+  await evalJs(`[...document.querySelectorAll('#confirmCard .modal-actions .btn')].find(b=>b.textContent==='取消')?.click()`);
+  await sleep(200);
+
+  /* 会话行：同样只有一个三点，行高不变。 */
+  const sessionHoverPoint = await evalJs(`(() => {
+    const row=[...document.querySelectorAll('#projects .pj-sess')].find(x=>!x.classList.contains('on'));
+    if (!row) return null;
+    row.scrollIntoView({block:'nearest'});
+    const r=row.getBoundingClientRect();
+    return { x:Math.round(r.left+r.width/2), y:Math.round(r.top+r.height/2) };
+  })()`);
+  if (sessionHoverPoint) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...sessionHoverPoint });
+    await sleep(280);
+  }
+  await shotOf('#projects', 'UX-MENU-03-session-row-hover', 'P24 侧栏：会话行 hover —— 行尾三点显形，标题与时间仍在同一行', [], [
+    ['三点在 hover 时可见', `getComputedStyle(document.querySelector('#projects .pj-sess:not(.on) .pj-sess-menu-trigger')).opacity==='1'`],
+    ['会话行没有变高（与项目行差 ≤ 2px）', `(() => {const p=document.querySelector('#projects .project').offsetHeight;const s=document.querySelector('#projects .pj-sess').offsetHeight;return Math.abs(p-s)<=2})()`],
+    ['行尾只有这一个动作入口（旧的 ✎ / ⤓ / ✕ 都不在）', `(() => {const row=document.querySelector('#projects .pj-sess:not(.on)');return row.querySelectorAll('.pj-sess-menu-trigger').length===1&&!row.querySelector('.pj-sess-act:not(.pj-sess-acts)')})()`],
+    ['三点是 SVG，不是字符图标', `Boolean(document.querySelector('#projects .pj-sess-menu-trigger svg'))`],
+  ]);
+
+  await evalJs(`(() => {
+    const row=[...document.querySelectorAll('#projects .pj-sess')].find(x=>!x.classList.contains('on'));
+    row?.querySelector('.pj-sess-menu-trigger')?.click();
+  })()`);
+  await sleep(300);
+  await shotOf('#actionMenu', 'UX-MENU-04-session-menu-open', 'P24 侧栏：会话菜单 —— 归档 / 分隔线 / 删除会话（danger）', ['归档', '删除会话'], [
+    ['菜单挂在 body 上且在视口内', `(() => {const m=document.querySelector('#actionMenu');const r=m.getBoundingClientRect();return m.parentElement===document.body&&r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})()`],
+    ['两个 menuitem + 一条分隔线', `document.querySelectorAll('#actionMenu [role="menuitem"]').length===2&&Boolean(document.querySelector('#actionMenu [role="separator"]'))`],
+    ['删除项是 danger 层级', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('删除会话'));return b.classList.contains('danger')})()`],
+    ['危险项静止时没有红底', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('删除会话'));return getComputedStyle(b).backgroundColor==='rgba(0, 0, 0, 0)'})()`],
+    ['菜单属于被点的那一行（当前会话那行没有被标记展开）', `document.querySelector('#projects .pj-sess.on .pj-sess-menu-trigger').getAttribute('aria-expanded')==='false'`],
+  ]);
+  await pressKey('Escape', 'Escape', 27);
+  await sleep(200);
+
+  /* UX-CAP-01：Native MCP 的详情 —— 只留适用的字段。 */
+  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await sleep(520);
+  await evalJs(`document.querySelector('#extensionsTabAll')?.click()`);
+  await sleep(320);
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>n.textContent.includes('Native MCP'))?.click()`);
+  await sleep(300);
+  await shotOf('#workSurface .cap-view .ext-detail', 'UX-CAP-01-native-clean-detail', 'P24 Capability：Native MCP 详情只留适用的字段（不再是一串「不适用」）', ['已加载'], [
+    ['详情里没有「不适用」', `!document.querySelector('#workSurface .cap-rows').textContent.includes('不适用')`],
+    ['不再有「安装状态」那一行（MCP 不是 npm 包）', `!document.querySelector('#workSurface .cap-rows [data-k="安装状态"]')`],
+    ['仍然显示真正适用的字段', `Boolean(document.querySelector('#workSurface .cap-rows [data-k="已加载"]'))`],
+    ['没有 npm 安装命令', `document.querySelector('#workSurface .cap-view code')===null`],
+    ['没有安装按钮', `document.querySelector('#workSurface .cap-view .cap-install')===null`],
+    ['字段行数受控（≤4）', `document.querySelectorAll('#workSurface .cap-rows .ext-row').length<=4`],
+    ['诊断行只在真的有错误时才出现', `!document.querySelector('#workSurface .cap-rows [data-k="诊断"]')`],
+  ]);
+
+  /* UX-CAP-02：未安装的第三方能力 —— 主按钮「安装」，复制命令作为恢复入口。 */
+  await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>n.textContent.includes('Subagents'))?.click()`);
+  await sleep(300);
+  await shotOf('#workSurface .cap-view .ext-detail', 'UX-CAP-02-install-available', 'P24 Capability：未安装的第三方能力 —— 一键安装 + 复制命令', ['pi install npm:pi-subagents'], [
+    ['主按钮是「安装」', `document.querySelector('#workSurface .cap-install')?.dataset.installState==='install'`],
+    ['安装状态如实说「未安装」（有证据才敢这么说）', `document.querySelector('#workSurface .cap-rows [data-k="安装状态"] .ext-row-v').textContent==='未安装'`],
+    ['复制安装命令仍在（高级 / 故障恢复入口）', `[...document.querySelectorAll('#workSurface .cap-view .ext-acts .btn')].some(b=>b.textContent==='复制安装命令')`],
+    ['没有自由输入口（不接受任意包名）', `document.querySelector('#workSurface .cap-view input:not([type="search"])')===null`],
+    ['按钮不溢出操作区', `(() => {const a=document.querySelector('#workSurface .cap-view .ext-acts');return a.scrollWidth<=a.clientWidth+1})()`],
+  ]);
+
+  /* UX-CAP-03：确认 → 安装中… → 按重新发现的结果显示。 */
+  await evalJs(`fetch('/api/__capability/install-hold?value=1').then(r=>r.ok)`);
+  await evalJs(`document.querySelector('#workSurface .cap-install')?.click()`);
+  await sleep(300);
+  await shotOf('#confirmCard', 'UX-CAP-03a-install-confirm', 'P24 Capability：安装前确认 —— 命令 / 权限 / 用户级 / 会自动重启 Pi', ['pi install npm:pi-subagents', '用户级'], [
+    ['确认框说明了权限边界', `document.querySelector('#confirmCard').textContent.includes('Pi 进程的权限')`],
+    ['确认框说明会自动重启 Pi', `document.querySelector('#confirmCard').textContent.includes('自动重新启动 Pi')`],
+    ['确认框说明是用户级安装', `document.querySelector('#confirmCard').textContent.includes('安装范围：用户级')`],
+    ['按钮是「取消 / 安装」', `[...document.querySelectorAll('#confirmCard .modal-actions .btn')].map(b=>b.textContent).join(',')==='取消,安装'`],
+  ]);
+  await evalJs(`[...document.querySelectorAll('#confirmCard .modal-actions .btn')].find(b=>b.textContent==='安装')?.click()`);
+  await sleep(420);
+  await shotOf('#workSurface .cap-setup', 'UX-CAP-03b-install-progress', 'P24 Capability：安装中… —— 按钮禁用、禁止重复提交', ['安装中'], [
+    ['按钮进入安装中状态且被禁用', `(() => {const b=document.querySelector('#workSurface .cap-install');return b.dataset.installState==='installing'&&b.disabled===true})()`],
+    ['文案是「安装中…」', `document.querySelector('#workSurface .cap-install').textContent==='安装中…'`],
+    ['只有一个安装按钮（不能重复提交）', `document.querySelectorAll('#workSurface .cap-install').length===1`],
+  ]);
+  await evalJs(`fetch('/api/__capability/install-release').then(r=>r.ok)`);
+  await evalJs(`fetch('/api/__capability/install-hold?value=0').then(r=>r.ok)`);
+  await sleep(700);
+  await shotOf('#workSurface .cap-setup', 'UX-CAP-03c-install-unconfirmed', 'P24 Capability：命令跑完但 Registry 还没确认到它 —— 如实显示「尚未确认」，不伪造已加载', ['安装'], [
+    ['按钮不再是「安装中…」', `document.querySelector('#workSurface .cap-install')?.textContent!=='安装中…'`],
+    ['没有伪造「已确认加载」', `!document.querySelector('#workSurface .cap-rows').textContent.includes('已确认加载')`],
+    ['提示说明了「尚未确认到 Extension」', `(() => {const t=document.querySelector('#toasts').textContent;return t.includes('尚未确认到 Extension')||t.includes('安装完成')})()`],
+  ]);
+  await evalJs(`document.querySelector('#toasts').innerHTML=''`);
+
   /* ---------- P23：诊断面板（升级安全面） ---------- */
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navDiagnostics').click()`);
