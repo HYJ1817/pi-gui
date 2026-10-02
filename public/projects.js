@@ -14,7 +14,9 @@ import {
   fetchProjects,
   listDirectory,
 } from './api.js';
-import { openModal } from './ui/modal.js';
+import { openModal, confirmModal } from './ui/modal.js';
+import { openActionMenu, MENU_ICONS } from './ui/action-menu.js';
+import { openProjectSettings } from './project-config.js';
 import { toast } from './ui/toast.js';
 import { applyProjectState, loadStatus, setBridgeState } from './shell.js';
 import { refreshGitNow, resetChanges } from './git.js';
@@ -29,8 +31,9 @@ const SVG_FOLDER =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 const SVG_UP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>';
-const SVG_X =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>';
+/* 行尾的动作入口：三点（…）。**不是** Codex 的图标资产，就是三个自己画的圆。 */
+const SVG_MORE =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.55"/><circle cx="12" cy="12" r="1.55"/><circle cx="18.5" cy="12" r="1.55"/></svg>';
 
 /* 会话列表要挂在**当前项目那一行下面**（参考 Codex：会话属于项目，
  * 不该单开一个窗口）。projects.js 不 import sessions.js —— 由 app.js 把
@@ -111,19 +114,37 @@ export function renderProjects() {
     n.textContent = label;
     body.append(n);
 
-    const del = document.createElement('button');
-    del.className = 'pj-del';
-    del.type = 'button';
-    del.title = '从列表移除（不会删除磁盘文件）';
-    del.setAttribute('aria-label', `从列表移除项目：${label}`);
-    del.innerHTML = SVG_X;
-    del.onclick = (e) => {
+    /* 行尾是**一个**三点入口，不再是常驻的 ✕。
+     *
+     * 三个行为必须完全隔离（点是点、折是折、切是切）：
+     *   点 name / folder（`.pj-select`）→ 原有项目切换
+     *   点 chevron（`.pj-chev`，由 sessions.js 插在行首）→ 原有会话折叠
+     *   点 …（`.pj-row-menu-trigger`）→ **只**打开动作菜单
+     * 所以这里自己 preventDefault + stopPropagation：事件不冒泡到行上，
+     * 也就不会顺带触发切换或折叠。 */
+    const menuTrigger = document.createElement('button');
+    menuTrigger.className = 'pj-row-menu-trigger row-action-trigger';
+    menuTrigger.type = 'button';
+    menuTrigger.title = '更多操作';
+    menuTrigger.setAttribute('aria-label', `项目操作：${label}`);
+    menuTrigger.setAttribute('aria-haspopup', 'menu');
+    menuTrigger.setAttribute('aria-expanded', 'false');
+    menuTrigger.innerHTML = SVG_MORE;
+    menuTrigger.onclick = (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      removeProject(p.path);
+      /* 菜单只放**真实已有**的功能：项目设置（既有 openProjectSettings）
+       * 与移除项目（既有 removeProject，前面加一次确认）。
+       * 不发明置顶 / 分区 / 分支 / 打开资源管理器这些 Pi GUI 没有的东西。 */
+      openActionMenu(menuTrigger, [
+        { label: '项目设置', icon: MENU_ICONS.pencil, onClick: () => openProjectSettings() },
+        { separator: true },
+        { label: '移除项目', icon: MENU_ICONS.trash, danger: true, onClick: () => confirmRemoveProject(p.path, label) },
+      ]);
     };
 
     select.append(icon, body);
-    item.append(select, del);
+    item.append(select, menuTrigger);
     if (!isActive) {
       select.onclick = () => activateProject(p.path, label);
     }
@@ -144,6 +165,25 @@ export async function addProject(target, name) {
   if (!j.ok) return toast(j.error || '添加失败', 'error');
   await loadProjects();
   await activateProject(j.path, name || '');
+}
+
+/**
+ * 移除项目前的确认。
+ *
+ * 三点菜单把「移除」藏进了二级入口，比原来那个常驻的 ✕ 更不容易被误点，
+ * 但反过来说也更容易「点下去才发现是移除」。所以**必须**先说清楚：
+ * 这是从 Pi GUI 的项目列表里移除，**不删除磁盘上的任何文件**。
+ * 真正的动作仍然是既有的 `removeProject()`，这里不复制它的实现。
+ */
+async function confirmRemoveProject(target, label) {
+  const ok = await confirmModal({
+    title: '移除这个项目？',
+    message: `「${label}」只会从 Pi GUI 的项目列表里移除，不会删除磁盘上的项目文件。`,
+    okText: '移除项目',
+    danger: true,
+  });
+  if (ok !== true) return;
+  await removeProject(target);
 }
 
 export async function removeProject(target) {

@@ -200,14 +200,21 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 /* 展开（aria-expanded=true）→ 箭头朝下；折叠 → 朝右。 */
 .pj-chev[aria-expanded="true"] svg{transform:rotate(90deg)}
 
-.pj-del{
-  width:26px;height:26px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  background:transparent;border:0;border-radius:4px;color:var(--t3);cursor:pointer;
+/* 项目行尾的三点入口（原来是常驻的 ✕）。
+ * 参考 Codex 的做法：无边框、圆角、单色、**hover / focus-within 才显形**，
+ * 菜单打开期间（aria-expanded=true）也保持可见 —— 否则菜单浮在外面而锚点消失了。 */
+.pj-row-menu-trigger{
+  /* 命中区 22px：项目行的高度由 min-height 决定，所以它对行高没有任何影响。 */
+  width:22px;height:22px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  padding:0;background:transparent;border:0;border-radius:5px;color:var(--t3);cursor:pointer;
   opacity:0;transition:opacity .12s,background .12s,color .12s;
 }
-.project:hover .pj-del{opacity:1}
-.pj-del:hover{background:#3a1d1d;color:#f0a0a0}
-.pj-del svg{width:10px;height:10px}
+.pj-row-menu-trigger svg{width:15px;height:15px}
+.project:hover .pj-row-menu-trigger,
+.project:focus-within .pj-row-menu-trigger,
+.pj-row-menu-trigger[aria-expanded="true"]{opacity:1}
+.pj-row-menu-trigger:hover{background:var(--hover);color:var(--t1)}
+.pj-row-menu-trigger:focus-visible{outline:2px solid var(--focus-ring);outline-offset:1px}
 
 .group-add{
   display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
@@ -1676,20 +1683,25 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .pj-sess-time{flex:0 0 auto;font-size:10.5px;color:var(--t3)}
 .pj-sess.on .pj-sess-time{color:var(--t2)}
 
-/* 行内动作（改名 / 归档 / 删除）：默认透明、悬停才显形。
- * 每行常驻三个图标会把标题挤没 —— 和最初那支铅笔是同一个思路。 */
+/* 行内动作入口：**只有一个三点**（改名 / 归档 / 删除都收进它的菜单）。
+ * 默认透明、悬停或 focus-within 才显形；菜单打开期间保持可见。 */
 .pj-sess-acts{
   flex:0 0 auto;display:flex;align-items:center;gap:1px;
   opacity:0;transition:opacity .12s;
 }
 .pj-sess:hover .pj-sess-acts{opacity:1}
-.pj-sess-act{
+.pj-sess:focus-within .pj-sess-acts{opacity:1}
+.pj-sess-menu-trigger{
   border:0;background:transparent;color:var(--t3);
-  width:26px;height:26px;display:grid;place-items:center;
-  font-size:11px;line-height:1;padding:0;border-radius:5px;cursor:pointer;
+  /* 命中区与它替换掉的旧行内按钮**一样是 26px** —— 行高因此与上一版逐像素相同
+   * （UX-03 / UX-09 盯住「项目行与会话行高度接近」）；可见的粒子只有 15px。 */
+  width:26px;height:26px;display:grid;place-items:center;padding:0;border-radius:5px;cursor:pointer;
+  transition:background .12s,color .12s;
 }
-.pj-sess-act:hover{color:var(--t1);background:var(--hover)}
-.pj-sess-act.danger:hover{color:var(--err);background:rgba(248,113,113,.12)}
+.pj-sess-menu-trigger svg{width:15px;height:15px}
+.pj-sess-menu-trigger:hover{color:var(--t1);background:var(--hover)}
+.pj-sess-menu-trigger:focus-visible{outline:2px solid var(--focus-ring);outline-offset:1px}
+.pj-sess-menu-trigger[aria-expanded="true"]{opacity:1;color:var(--t1);background:var(--hover)}
 
 /* 新会话：pi 在会话有内容之前不落盘，所以磁盘上还查不到它。
  * 淡化处理，并且不给它「切换 / 归档 / 删除」——那些动作现在都做不到。 */
@@ -2256,7 +2268,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .project-sidebar .project{min-height:34px;padding:3px 6px}
 .pj-select{display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
 .project.active,.project.active .pj-select{cursor:default}
-.project:focus-within .pj-del{opacity:1}
+.project:focus-within .pj-row-menu-trigger{opacity:1}
 .project-sidebar .project.active{background:#303235}
 .project-sidebar .project.active .pj-name{color:#e5e6e7}
 .project-sidebar .pj-sessions{border-left:0;margin:2px 0 6px 11px;padding-left:8px}
@@ -2284,6 +2296,34 @@ button.pj-sess-primary{cursor:pointer}
 .global-more-menu button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:32px;padding:0 9px;border:0;border-radius:5px;background:transparent;color:var(--t1);font:inherit;font-size:12px;text-align:left;cursor:pointer}
 .global-more-menu button:hover,.global-more-menu button:focus-visible{background:#3a3d40}
 .global-more-menu .rp-dot{position:static}
+
+/* ---------- 侧栏行动作菜单（P24 收口：项目行与会话行共用一套） ----------
+ * 深灰底、1px 柔和边框、9px 圆角、轻阴影；宽 190–240px、项高 32px。
+ * `position:fixed` 且挂在 body 上 —— **不会被侧栏的 overflow 裁掉**，
+ * 也不会被会话区盖住。z-index 30：在正文与顶栏之上，弹层（60+）与确认层（70）之下。 */
+.action-menu{
+  position:fixed;z-index:30;min-width:190px;max-width:240px;padding:5px;
+  background:#2a2c2e;border:1px solid #414448;border-radius:9px;
+  box-shadow:0 8px 20px #0006;
+}
+.action-menu-item{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:0 9px;
+  border:0;border-radius:6px;background:transparent;color:var(--t1);
+  font:inherit;font-size:12px;text-align:left;cursor:pointer;
+}
+.action-menu-item:hover,.action-menu-item:focus-visible{background:#3a3d40;outline:none}
+/* 图标：细线、单色、比文字略暗；hover 时和文字一起提亮。 */
+.action-menu-ic{flex:0 0 auto;display:flex;color:#8f9296}
+.action-menu-ic svg{width:15px;height:15px}
+.action-menu-item:hover .action-menu-ic,.action-menu-item:focus-visible .action-menu-ic{color:var(--t1)}
+.action-menu-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* danger **只在 hover / focus 时轻微红色**，不整行常驻鲜红。 */
+.action-menu-item.danger{color:#c8a5a5}
+.action-menu-item.danger:hover,.action-menu-item.danger:focus-visible{background:rgba(248,113,113,.1);color:#ffc4c4}
+.action-menu-item.danger:hover .action-menu-ic,.action-menu-item.danger:focus-visible .action-menu-ic{color:#ffc4c4}
+.action-menu-item:disabled{opacity:.45;cursor:not-allowed}
+/* 低对比分隔线 */
+.action-menu-sep{height:1px;margin:5px 4px;background:var(--line-soft)}
 /* .stage 的 overflow 在前面的基础规则里是 overflow:clip（带原因说明），
    这里不再用 overflow:hidden 覆盖 —— hidden 会让它重新变成「可被脚本滚动的
    滚动容器」，那正是顶栏被 scrollIntoView 推出视口的原因。 */

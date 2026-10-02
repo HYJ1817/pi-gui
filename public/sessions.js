@@ -42,6 +42,7 @@ import { S } from './state.js';
 import { fmtTime } from './util.js';
 import { toast } from './ui/toast.js';
 import { confirmModal } from './ui/modal.js';
+import { openActionMenu, MENU_ICONS } from './ui/action-menu.js';
 import { setAfterHistoryRendered } from './messages.js';
 import { scrollToUserTurn } from './conversation-nav.js';
 import { clearSessionPlans, refreshSessionPlans } from './session-plans.js';
@@ -102,14 +103,18 @@ let archivedOpen = false;
  *      行工作，把行删掉会让它们的状态全丢；[hidden] 有 display:none !important
  *      兜底（见 styles.css 顶部），不会像别处那样被 display:flex 盖掉。
  *   2. **点击不得误触。** 箭头自己 stopPropagation + preventDefault；
- *      项目行本身不可点（可点的是 .pj-select），删除按钮本来就有
- *      stopPropagation —— 三条路互不影响。
+ *      项目行本身不可点（可点的是 .pj-select），行尾的三点入口
+ *      （`.pj-sess-menu-trigger`）同样自己拦掉冒泡 —— 三条路互不影响。
  *   3. **换项目 / 重新进搜索一律回到展开。** renderSidebarSessions() 是换项目
  *      的唯一入口，在那里复位；openSessionSearch()（app.js）会显式调用
  *      expandSidebarSessions()，否则用户点了「搜索会话」却看不到输入框。
  */
 const SVG_CHEV =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>';
+/* 行尾的动作入口：三点（…）。**没有用 ✎ / ⤓ / ✕ / ↩ 这些字符当图标** ——
+ * 字符图标在不同字体下大小与基线都不可控，换成自己画的三个圆。 */
+const SVG_MORE =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.55"/><circle cx="12" cy="12" r="1.55"/><circle cx="18.5" cy="12" r="1.55"/></svg>';
 
 let collapsed = false;
 let chevRef = null;
@@ -226,17 +231,57 @@ function moreBtn(text, onclick, cls) {
   return b;
 }
 
-function actBtn(label, glyph, onclick, danger) {
-  const b = el('button', 'pj-sess-act' + (danger ? ' danger' : ''), glyph);
-  b.type = 'button';
-  b.title = label;
-  b.setAttribute('aria-label', label);
-  b.onclick = (e) => {
-    // 别让点动作顺带触发「切换会话」
+/**
+ * 行尾动作菜单的内容。**按现有真实能力动态生成**，不为了让菜单看起来丰富
+ * 就突破既有边界：
+ *
+ *   当前会话        → 只有「重命名」（pi 的 set_session_name 只作用当前会话；
+ *                     Pi 正开着这个文件，归档 / 删除本来就会被后端拒）。
+ *                     `sessionNaming` 被兼容层证实不可用时**一项都没有**。
+ *   非当前、非 pending → 「归档 / 取消归档」＋分隔线＋「删除会话」（danger）。
+ *   pending         → 没有有效动作（文件还没落盘）→ 不显示三点。
+ */
+function sessionMenuItems(s, row, titleEl) {
+  if (s.pending) return [];
+  if (s.current) {
+    if (capMissing('sessionNaming')) return [];
+    return [{ label: '重命名', icon: MENU_ICONS.pencil, onClick: () => startRename(row, titleEl, s) }];
+  }
+  return [
+    s.archived
+      ? { label: '取消归档', icon: MENU_ICONS.restore, onClick: () => doArchive(s, false) }
+      : { label: '归档', icon: MENU_ICONS.archive, onClick: () => doArchive(s, true) },
+    { separator: true },
+    { label: '删除会话', icon: MENU_ICONS.trash, danger: true, onClick: () => doDelete(s) },
+  ];
+}
+
+/**
+ * 行尾的**唯一**入口：三点（…）。原来散落的 ✎ / ⤓ / ↩ / ✕ 四个字符按钮
+ * 全部收进这一个菜单；菜单项调用的仍然是既有的 `startRename` / `doArchive` /
+ * `doDelete`，**没有第二套实现**。
+ */
+function makeRowMenu(s, row, titleEl) {
+  const items = sessionMenuItems(s, row, titleEl);
+  if (!items.length) return null; // 没有动作 → 连三点都不画（不留一个点了没反应的入口）
+  const acts = el('span', 'pj-sess-acts');
+  const trigger = el('button', 'pj-sess-menu-trigger row-action-trigger');
+  trigger.type = 'button';
+  trigger.title = '更多操作';
+  trigger.setAttribute('aria-label', `会话操作：${s.title || '（无标题）'}`);
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-expanded', 'false');
+  /* 常量 SVG 模板，不含用户数据。 */
+  trigger.innerHTML = SVG_MORE;
+  trigger.onclick = (e) => {
+    /* 点三点**绝不能**触发 doSwitch：`.pj-sess-primary` 才是切换入口，
+     * 这里拦住冒泡，两个行为完全隔离。 */
+    e.preventDefault();
     e.stopPropagation();
-    onclick();
+    openActionMenu(trigger, items);
   };
-  return b;
+  acts.append(trigger);
+  return acts;
 }
 
 /**
@@ -405,20 +450,8 @@ function makeRow(s) {
   primary.append(title, el('span', 'pj-sess-time', fmtTime(s.updatedAt)));
   row.append(primary);
 
-  const acts = el('span', 'pj-sess-acts');
-
-  if (s.current) {
-    // 改名只对当前会话有效（pi 的 set_session_name 就是只作用当前会话），
-    // 所以铅笔只出现在这一条上 —— 不做一个做不到的按钮。
-    // 兼容层证实这个能力不可用时，连按钮都不给（见 capMissing 的说明）。
-    if (!capMissing('sessionNaming')) acts.append(actBtn('给当前会话起个名字', '✎', () => startRename(row, title, s)));
-  } else if (!s.pending) {
-    acts.append(
-      actBtn(s.archived ? '取消归档' : '归档', s.archived ? '↩' : '⤓', () => doArchive(s, !s.archived))
-    );
-    acts.append(actBtn('删除这个会话', '✕', () => doDelete(s), true));
-  }
-  if (acts.childElementCount) row.append(acts);
+  const acts = makeRowMenu(s, row, title);
+  if (acts) row.append(acts);
 
   /* 切换会话要 pi 的 `switch_session`。它被证实不可用时不给点，并在 title 里
    * 说明原因 —— 留一个点了毫无反应的入口比藏起来更让人困惑。 */
