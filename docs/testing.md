@@ -48,17 +48,23 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 33 条 RPC 命令里没有一条返回已注册工具清单，`rpc-types.d.ts` 两版 diff 为空。
 `tests/pi-version.cjs` 把这条钉住了。）
 
-`npm test` 里现在有 36 个套件，全部是**纯自动化**：
+`npm test` 里现在有 37 个套件，全部是**纯自动化**：
 
 ```
-smoke 1062 · git 161 · modules 117 · reliability · interactions · port-owner
+smoke 1135 · daily-use 28 · git 161 · modules 117 · reliability · interactions · port-owner
 project-config 115 · skills 196 · extensions 52 · web-access 66 · subagents 141
 memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
 reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-version 136 · mcp-native 187 · usage-quota 229 · body-integrity 5
+sessions 77 · session-search 71 · pi-compat 57 · pi-probes 62 · pi-version 136 · mcp-native 187
+usage-quota 229 · body-integrity 5
 dev-server 20 · models-api 50 · server-security 36 · diagnostics 13 · update-check 87
 version-consistency 34 · release-artifacts 70 · electron-guard 76
 ```
+
+> `daily-use`（P24）是**纯逻辑**套件：快捷键注册表、命令面板模型、状态文案。
+> 它不碰 DOM、不碰网络、不碰真 pi —— 所以这些规则在任何机器上结论都一样。
+> DOM 行为（面板真的能开、草稿真的落盘、状态条真的渲染）在 `smoke` 的 P24 段，
+> 真实排版在 `cdp-shot` 的 183–192 场景。
 
 > `reliability` / `interactions` / `port-owner` 是早期套件，只打印
 > `X: passed`、不报条数（断言失败就直接抛）。**没有数字不等于没有断言**，
@@ -543,7 +549,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 36 个套件）
+版本一致性（含 tag）  →  npm test（A 层 37 个套件）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
@@ -906,7 +912,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 |---|---|---|---|
 | 纯投影 | `npm run test:capability`（进 `npm test`） | 62 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、搜索与过滤、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
 | DOM（jsdom） | `npm run test:ui` 的 P22 段 | 21 | 五个过滤器、六个状态字段、统一文案、未知不写成否、restartRequired、stale 不落地、Usage 入口只读 |
-| 真实 Chrome | `npm run harness` + `npm run shots:harness` | 场景 171–180 | 布局宽度、列表项高度、横向溢出、四档宽度 |
+| 真实 Chrome | `npm run harness` + `npm run shots:harness` | 场景 171–192 | 布局宽度、列表项高度、横向溢出、四档宽度；P24 的命令面板 / 快捷键帮助 / 草稿刷新恢复 / 启动失败与断线 / 700×600 与 701×602 取整 |
 
 关键判定（写错任何一条，界面就开始撒谎）：
 

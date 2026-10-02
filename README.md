@@ -377,6 +377,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [web-access.md](docs/web-access.md) | Web Search / URL Fetch：适配的 Extension、状态模型、来源安全、外链边界 |
 | [browser.md](docs/browser.md) | Browser Use：适配的 Extension 与工具清单、成功证据规则、输入内容与页面正文的安全投影、URL 过滤、为什么没有审批流 |
 | [usage-quota.md](docs/usage-quota.md) | P21 用量与配额：本地模型用量（真实 token/cost/context）与 Provider 远端配额（官方 adapter/TTL 缓存/防重入/凭据隔离） |
+| [daily-use.md](docs/daily-use.md) | P24 日常使用：命令面板（只暴露已有动作）、快捷键注册表（单一入口、不抢文本输入）、未发送草稿的存储边界与身份隔离、启动/连接状态说明、加载/空/失败措辞统一、无障碍 |
 
 ## 许可证
 

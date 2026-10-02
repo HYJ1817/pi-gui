@@ -364,6 +364,16 @@ get_messages ─┘
   （`modal.js` / `popover.js` / `toast.js`）
 - `schema-drift.js` — P23 渲染进程侧的 schema 漂移环（来源 + 字段名 + 类型，**不记值**），
   由四个语义适配器与 tool-view 上报，进诊断面板
+- P24 日常使用面（理由见 [daily-use.md](daily-use.md)）：
+  - `shortcuts.js` —— **唯一的键盘入口**：注册表 + 冲突检测 + 平台显示；
+    零 DOM 依赖（帮助面板在 `ui/shortcut-help.js`），所以能离线单测
+  - `palette-model.js` 命令注册与搜索排序（纯逻辑）/
+    `palette.js` 面板 DOM（输入框、列表、↑↓/Enter/Esc、焦点还原）
+  - `draft.js` —— 未发送草稿：key = workspace 哈希 + 会话哈希，**只存纯文本**
+    （附件二进制 / 抽取正文 / 本机路径一律不进 `localStorage`）
+  - `status-copy.js` 启动 / 连接 / 兼容状态的**唯一文案来源**（每条带可执行的下一步）/
+    `ui/notice.js` 常驻状态条（Stage 顶部，最多一层）
+  - `ui/shortcut-help.js` 快捷键帮助：内容直接从注册表渲染
 
 ### 桌面与构建
 
