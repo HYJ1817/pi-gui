@@ -66,7 +66,7 @@ import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
@@ -905,6 +905,9 @@ function openSessionSearch() {
   $('groupHead').setAttribute('aria-expanded', 'true');
   $('projectSidebar').classList.add('search-open');
   $('navSearch').setAttribute('aria-expanded', 'true');
+  /* 会话列表可能被用户折叠着 —— 输入框就在那块列表里，不先展开的话
+   * 「搜索会话」点下去什么都不会发生（focus 一个隐藏元素是空操作）。 */
+  expandSidebarSessions();
   $('projectSidebar').querySelector('.pj-search-input')?.focus();
 }
 

@@ -37,6 +37,14 @@ const LAYOUT_DEBOUNCE_MS = 160;
 /** 提示文字最长多少字（§7：不要把完整 prompt 塞进 tooltip）。 */
 const PREVIEW_MAX = 40;
 
+/** 紧凑聚簇在容器上下各留的边距：整组不贴到两端。 */
+const CLUSTER_PAD = 8;
+
+/** 跳转后目标消息上方留出的余量（px）。
+ *  以前靠 .msg.user 的 scroll-margin-top:56px + scrollIntoView 留空间，
+ *  现在只写 #stream.scrollTop，余量在这里显式减掉。 */
+const JUMP_PAD = 20;
+
 let entries = []; // [{ id, element, marker, preview, topInContent, top }]
 let navEl = null;
 let io = null;
@@ -167,47 +175,52 @@ export function scheduleLayout() {
 }
 
 function layout() {
-  const nav = ensureNav();
   const stream = el.stream;
-  if (!nav || !stream) return;
+  if (!stream) return;
   if (!entries.length) return;
 
-  const navH = nav.clientHeight;
   const scrollHeight = stream.scrollHeight;
-  if (!navH || !scrollHeight) return;
+  if (!scrollHeight) return;
 
-  /* 先把所有 rect 读完再写样式 —— 读一次写一次会反复触发布局计算。
-   * 这里算的是「相对滚动内容顶部的位置」，与当前滚动位置无关。 */
+  /* 第一步：消息在**滚动内容里**的偏移。
+   *
+   * 这一步与导航容器多高无关，所以放在最前面、无条件算 —— 跳转
+   * （scrollToEntry）和「当前是第几条」都只依赖它。窄窗口下导航列被
+   * display:none（clientHeight = 0）时也必须是最新的，否则跳转会跳错地方。
+   * 读 rect 只在重排时发生（debounce 160ms），滚动路径上一次都不读。 */
   const streamTop = stream.getBoundingClientRect().top;
   const scrollTop = stream.scrollTop;
-  const tops = entries.map((e) => {
+  entries.forEach((e) => {
     const r = e.element.getBoundingClientRect();
-    return Math.max(0, r.top - streamTop + scrollTop);
+    e.topInContent = Math.max(0, r.top - streamTop + scrollTop);
   });
 
-  /* §19：按「这条消息在整段会话内容里的相对位置」映射，而不是「第几个问题」。
-   * 这样一条很长的 assistant 回答会在 minimap 上占据相应的一段距离。 */
-  let positions = tops.map((t) => (t / scrollHeight) * navH);
+  /* 第二步：marker 的位置 —— **紧凑聚簇**，不按内容比例铺满整个高度。
+   *
+   * 原来的做法是 `top = 消息偏移 / scrollHeight × 容器高`：一条很长的
+   * assistant 回答会把后面的点推到很远的地方，10～40 条的会话看起来像
+   * 撒了满屏的散点，离得远、很难连续点。用户要的是 Codex 那种「聚成一组
+   * 连续的短线」。所以改成：
+   *   - 顺序不变（第 1 次提问 → 第 1 条）；
+   *   - 条数与可用高度决定短线高度和间距，整组垂直居中；
+   *   - 放不下时压缩间距（甚至轻微重叠），但**绝不越出容器**；
+   *   - 内容偏移仍然算（topInContent），只是不再决定纵向位置。 */
+  const nav = ensureNav();
+  const navH = nav ? nav.clientHeight : 0;
+  if (!navH) return; // 导航列不可见（窄窗口隐藏）—— 内容偏移已经更新过了
 
-  /* §18：条数多的时候防止重叠。
-   * 先按最小间距往下推；推不下就整体改成均匀分布 —— 那种情况下「精确位置」
-   * 已经没有意义了，可点、可分辨更重要。 */
-  const h = entries.length > 150 ? 1 : 2;
-  const gap = h + 1;
-  for (let i = 1; i < positions.length; i++) {
-    if (positions[i] < positions[i - 1] + gap) positions[i] = positions[i - 1] + gap;
-  }
-  const overflow = positions[positions.length - 1] + h > navH;
-  if (overflow) {
-    const n = positions.length;
-    const step = n > 1 ? (navH - h) / (n - 1) : 0;
-    positions = positions.map((_, i) => Math.round(i * step));
-  }
+  const n = entries.length;
+  const h = n <= 12 ? 3 : n <= 40 ? 2 : 1;
+  const avail = Math.max(0, navH - CLUSTER_PAD * 2);
+  let step = h + 2; // 目标间距：看着是一组连续短线，但仍分辨得出条数
+  const need = (n - 1) * step + h;
+  if (n > 1 && need > avail) step = (avail - h) / (n - 1); // 可能 < 1：宁可轻微重叠也不越界
+  const span = n > 1 ? (n - 1) * step + h : h;
+  const start = CLUSTER_PAD + Math.max(0, (avail - span) / 2);
 
   entries.forEach((e, i) => {
-    e.topInContent = tops[i];
-    e.top = positions[i];
-    e.marker.style.top = positions[i] + 'px';
+    e.top = start + i * step;
+    e.marker.style.top = e.top + 'px';
     e.marker.style.height = h + 'px';
   });
 
@@ -304,11 +317,30 @@ function ensureResizeObserver() {
 
 /* ---------- 跳转 ---------- */
 
+/**
+ * 跳到某条用户消息。**只改 #stream 自己的 scrollTop。**
+ *
+ * 这里刻意**不用 element.scrollIntoView()**：浏览器会连带滚动所有
+ * 「可编程滚动」的祖先。`.stage` 是 `overflow:hidden`（hidden 只是不给用户
+ * 滚动条，scrollTop 照样能被脚本改），而它会话区里的可滚动子容器又把溢出
+ * 传了上来 —— 于是点一下 marker，整个 workspace 往上跳 46px，顶栏被推出
+ * 视口（左侧栏不动，右边原生窗口按钮还在，看起来就是「标题栏消失 / 顶部断开」）。
+ * styles.css 里 `.stage` 改成 `overflow:clip` 是第二道保险，但真正的修法是
+ * 这里不再请求祖先滚动。
+ *
+ * 目标位置用 `entry.topInContent`（layout() 里算的内容偏移），clamp 到
+ * [0, maxScroll]，再减一个 JUMP_PAD —— 目标消息不贴死在滚动区顶部。
+ * 不用 setTimeout / scrollBy 之类的猜测。 */
 function scrollToEntry(entry) {
   if (!entry || !entry.element.isConnected) return;
-  /* 顶部固定区域会盖住消息 —— 用 scroll-margin-top 让浏览器自己留出空间，
-   * 不要用「先 scrollIntoView 再 scrollBy(-N)」那种靠 timeout 猜的修法（§6）。 */
-  entry.element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const stream = el.stream;
+  if (!stream) return;
+  const max = Math.max(0, stream.scrollHeight - stream.clientHeight);
+  const top = Math.min(max, Math.max(0, Math.round(entry.topInContent - JUMP_PAD)));
+  /* jsdom（smoke）与很老的环境没有 scrollTo —— 退回直接写 scrollTop，
+   * 只影响平滑动画，不影响落点。 */
+  if (typeof stream.scrollTo === 'function') stream.scrollTo({ top, behavior: 'smooth' });
+  else stream.scrollTop = top;
 }
 
 /**

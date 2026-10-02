@@ -17,6 +17,12 @@
 :root{
   --shell:#171717;
   --main:#0d0d0d;
+  /* 标题栏底色。**必须和 electron/main.cjs 的 titleBarOverlay.color 一致**：
+     主进程用 titleBarStyle:'hidden' 自绘标题栏，右侧原生最小化 / 最大化 /
+     关闭按钮背后的那一条是主进程画的，而 .stage-head 是页面画的。
+     两个值一旦漂移，顶栏右上角就会露出一块异色（用户看到的就是「顶部断开」）。
+     改这里就要改那边 —— tests/dev-server.cjs 有一条断言盯着这两个值。 */
+  --titlebar:#0d0d0d;
   --card:#1c1c1c;
   --input:#191919;
   --hover:#232323;
@@ -53,6 +59,43 @@ body{
   -webkit-font-smoothing:antialiased;
   overflow:hidden;
 }
+
+/* ============ 统一深色滚动条 ============
+ *
+ * 之前是「一个容器一个补丁」：.stream / .pop / 弹层子容器各写一份，
+ * 剩下的滚动区（命令面板、诊断、扩展与能力的两栏、Planner、dir-list、
+ * diff、textarea…）全都落回 Chromium 默认样式 —— 深色界面里一条**亮白**
+ * 的滚动条，比内容本身还显眼。
+ *
+ * 现在收成一条**全局**规则：
+ *
+ *   - `::-webkit-scrollbar` 不带选择器前缀时等价于 `*::-webkit-scrollbar`，
+ *     所以所有可滚动元素一次性覆盖，新加的容器不用再补丁。
+ *   - 细（10px 里靠 2px 透明边框让可见部分约 6px）、深灰、轨道透明、
+ *     hover 稍亮；横向滚动条同宽同色（height 与 width 一起给）。
+ *   - **不用 `scrollbar-width:none`**：用户得看得出这块能滚。轨道保持透明
+ *     而不是隐藏滚动条本身。
+ *   - 隐藏两端箭头与右下角方块：Windows 默认样式里那两个按钮在深色下最扎眼。
+ *
+ * 注意：`scrollbar-color` / `scrollbar-width` 一旦设了非 auto 值，Chromium 会
+ * **忽略** `::-webkit-scrollbar` 那套，就没有 hover 状态了。所以标准属性只在
+ * 不支持 webkit 伪元素的内核里兜底（见下面的 @supports）。 */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{
+  background-color:#2c2c2c;border:2px solid transparent;background-clip:padding-box;border-radius:6px;
+}
+::-webkit-scrollbar-thumb:hover{background-color:#3e3e3e}
+::-webkit-scrollbar-thumb:active{background-color:#4a4a4a}
+::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-button{display:none}
+
+/* 非 Chromium 内核（没有 ::-webkit-scrollbar 的场景）退回标准属性。
+   没有 hover 状态，但至少是深色的细条，不会突然冒出一条亮白。 */
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:#2c2c2c transparent}
+}
+
 svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .grow{flex:1}
 
@@ -124,8 +167,15 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .projects{display:flex;flex-direction:column;gap:1px}
 .hint-empty{font-size:11.5px;color:var(--t3);padding:6px 8px;line-height:1.6}
 
+/* 项目行 = 会话行的同一套紧凑层级（Codex 侧栏那种）：
+ * folder icon + 项目名 + 折叠箭头，**只有一行**。
+ *
+ * 绝对路径不再常驻第二行 —— 它以前让项目行比下面的会话高出将近一倍，
+ * 看起来像「项目是大卡片、会话是小卡片」。路径改挂在行 title 与
+ * aria-label 上（projects.js），需要时 hover 就能看到，不占行高。
+ * 行高由 .project-sidebar .project 定成 34px，与会话行一致。 */
 .project{
-  display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
+  display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;
   cursor:pointer;transition:background .12s;min-width:0;
 }
 .project:hover{background:var(--hover)}
@@ -133,10 +183,23 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .project .pj-icon{flex:0 0 auto;color:#7a7a7a;display:flex}
 .project .pj-icon svg{width:13px;height:13px}
 .project.active .pj-icon{color:var(--t1)}
-.pj-body{flex:1;min-width:0}
+.pj-body{flex:1;min-width:0;display:flex;align-items:center}
 .pj-name{display:block;font-size:12.5px;color:#c2c2c2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .project.active .pj-name{color:var(--t1)}
-.pj-path{display:block;font-size:10.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 折叠箭头：只出现在「有会话可折叠」的那一行（当前项目）上。
+ * aria-expanded 同时驱动图标方向和 aria 语义 —— 不给折叠态另起一个类，
+ * 免得两者漂移。 */
+.pj-chev{
+  width:16px;height:16px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  padding:0;border:0;background:transparent;color:var(--t3);cursor:pointer;border-radius:4px;
+  transition:color .12s;
+}
+.pj-chev:hover{color:var(--t1)}
+.pj-chev svg{width:12px;height:12px;transition:transform .16s}
+/* 展开（aria-expanded=true）→ 箭头朝下；折叠 → 朝右。 */
+.pj-chev[aria-expanded="true"] svg{transform:rotate(90deg)}
+
 .pj-del{
   width:26px;height:26px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
   background:transparent;border:0;border-radius:4px;color:var(--t3);cursor:pointer;
@@ -206,7 +269,21 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 
 /* ============ 主区 ============ */
 
-.stage{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--main);position:relative}
+/* ⚠️ `overflow:clip` 而不是 `hidden`，这里是有原因的，别改回去。
+ *
+ * `.stage` 里的内容（顶栏 + 会话区 + 输入区）在 flex 布局下并不会超出它的
+ * 高度，但**会话区里那个可滚动子容器会把它的可滚动溢出传给 .stage**
+ * （实测 .stage.scrollHeight 比 clientHeight 大 1000px 上下）。
+ * `overflow:hidden` 只是「不给用户滚动条」，scrollTop 依然**能被脚本改**：
+ * 以前 conversation-nav 的跳转用 element.scrollIntoView()，浏览器会连带
+ * 滚动所有「可编程滚动」的祖先 —— 于是点一下 minimap，整个 workspace 往上
+ * 跳 46px，.stage-head 被推出视口（左侧栏不动，右边原生窗口按钮还在，
+ * 看起来就是「顶部断开 / 标题栏消失」）。
+ *
+ * `overflow:clip` 让这个盒子**根本不是滚动容器**：内容照样裁掉、布局完全不变，
+ * 但任何 scrollIntoView / scrollTop 都动不了它。跳转改成只写 #stream.scrollTop
+ * 之后这里是第二道保险。 */
+.stage{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--main);position:relative;overflow:clip}
 
 /* P14-D: one Stage host for primary work; Chat stays mounted behind it. */
 :root{--work-surface-padding:24px;--work-sidebar-width:260px;--work-toolbar-height:48px}
@@ -253,6 +330,14 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   /* 右侧留出原生最小化 / 最大化 / 关闭按钮的位置（3 × 46px）。
      不留的话顶栏最右那几个图标会被系统按钮压住，点不到。 */
   padding:0 150px 0 12px;border-bottom:1px solid var(--line-soft);
+  /* 背景必须**显式**写出来，不能靠 .stage 透上来。
+     顶栏和右侧原生窗口按钮属于同一条标题栏：主进程的 titleBarOverlay 用
+     --titlebar 画那条，页面这边就用同一个值 —— 两边不一致时右上角会露出
+     一块异色（看起来就是「顶部断开」）。
+     同时抬到正文之上：会话区再怎么滚动、弹层再怎么写 z-index，
+     都不该把这一条盖掉（要求：长对话滚动 / 开关弹层时顶栏不变）。 */
+  background:var(--titlebar);
+  position:relative;z-index:5;
 }
 .stage-head h1{
   font-size:13.5px;font-weight:500;color:#e2e2e2;flex:1;min-width:0;
@@ -271,10 +356,6 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 /* ============ 对话流 ============ */
 
 .stream{flex:1;overflow-y:auto;min-height:0;min-width:0}
-.stream::-webkit-scrollbar{width:9px}
-.stream::-webkit-scrollbar-thumb{background:#2c2c2c;border-radius:5px}
-.stream::-webkit-scrollbar-thumb:hover{background:#3c3c3c}
-.stream::-webkit-scrollbar-track{background:transparent}
 
 .welcome{max-width:760px;margin:0 auto;padding:92px 32px 40px;text-align:center;color:var(--t2)}
 .welcome-mark{width:32px;height:32px;margin:0 auto 18px;color:var(--t2);stroke-width:1.5;opacity:.9}
@@ -442,8 +523,6 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   padding:7px 9px;white-space:pre;overflow:auto;max-height:260px;
 }
 .tl-args{color:var(--t2);max-height:180px}
-.tl-out::-webkit-scrollbar,.tl-args::-webkit-scrollbar{width:8px;height:8px}
-.tl-out::-webkit-scrollbar-thumb,.tl-args::-webkit-scrollbar-thumb{background:#303030;border-radius:4px}
 
 .note{
   display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3);
@@ -611,23 +690,9 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   box-shadow:0 18px 48px rgba(0,0,0,.6);
 }
 .modal-card.wide{max-width:540px}
-/* 弹层里的滚动条。
- *
- * 不写这段就落回浏览器默认样式 —— 一条浅色的宽条压在深色卡片上，
- * 比内容本身还显眼。外观对齐 .stream / .pop：细、深、圆角、轨道透明。
- * ::-webkit-scrollbar 不会继承，所以每个滚动容器都要点名。 */
-.modal-card::-webkit-scrollbar,
-.modal-card .modal-list::-webkit-scrollbar,
-.modal-card .tree::-webkit-scrollbar{width:9px}
-.modal-card::-webkit-scrollbar-thumb,
-.modal-card .modal-list::-webkit-scrollbar-thumb,
-.modal-card .tree::-webkit-scrollbar-thumb{background:#2c2c2c;border-radius:5px}
-.modal-card::-webkit-scrollbar-thumb:hover,
-.modal-card .modal-list::-webkit-scrollbar-thumb:hover,
-.modal-card .tree::-webkit-scrollbar-thumb:hover{background:#3c3c3c}
-.modal-card::-webkit-scrollbar-track,
-.modal-card .modal-list::-webkit-scrollbar-track,
-.modal-card .tree::-webkit-scrollbar-track{background:transparent}
+/* 弹层里的滚动条不再单独点名 —— 文件顶部那条全局 `::-webkit-scrollbar`
+ * 已经覆盖了 .modal-card 以及它内部所有可滚动子容器（modal-list / tree /
+ * diff / diag-body…）。这里曾经每个容器写一份，正是「覆盖不完整」的来源。 */
 .modal-card h3{font-size:14px;font-weight:500;color:#e6e6e6;margin-bottom:6px}
 .modal-desc{font-size:12.5px;color:var(--t2);line-height:1.65;margin-bottom:14px;white-space:pre-wrap}
 .modal-list{display:flex;flex-direction:column;gap:3px;margin-bottom:14px;max-height:46vh;overflow:auto}
@@ -1040,8 +1105,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   border-radius:12px;padding:5px;box-shadow:0 14px 38px rgba(0,0,0,.58);
   min-width:232px;max-width:min(420px,92vw);max-height:min(62vh,520px);overflow:auto;
 }
-.pop::-webkit-scrollbar{width:8px}
-.pop::-webkit-scrollbar-thumb{background:#383838;border-radius:4px}
 .pop[hidden]{display:none}
 .pop-title{padding:8px 10px 7px;font-size:12.5px;color:#e2e2e2}
 .pop-label{
@@ -1727,6 +1790,10 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
    让导航和正文并排而不是叠在一起。 */
 .convo{flex:1;min-height:0;min-width:0;display:flex;position:relative}
 
+/* marker 排成**紧凑的一组短线**（Codex 那种），不再按「消息在整段内容里的
+   比例位置」铺满整个纵向区域 —— 后者在长会话里会把点撒得满屏都是，离得很远
+   且很难连续点。位置由 conversation-nav.js 的 layout() 算：
+   整组垂直居中、条数与可用高度决定间距，容器两端留 CLUSTER_PAD。 */
 .convo-nav{
   position:absolute;top:0;bottom:0;z-index:3;
   /* 跟阅读列左边缘对齐；窄窗口退回边缘，媒体查询再隐藏。 */
@@ -1761,9 +1828,11 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .cn-marker:hover .cn-tip,.cn-marker:focus-visible .cn-tip{opacity:1}
 
-/* 顶部固定区（.stage-head，46px）会盖住跳过去的消息 —— 交给浏览器留空间，
-   不要用「先 scrollIntoView 再 scrollBy(-N)」那种靠 timeout 猜的修法。 */
-.msg.user{scroll-margin-top:56px}
+/* 跳转不再用 scrollIntoView（它会连带滚动 .stage，把顶栏推出视口），
+   改成只写 #stream.scrollTop，并在目标上方留 JUMP_PAD 的余量
+   （见 conversation-nav.js 的 scrollToEntry）。所以这里不需要
+   scroll-margin-top —— 它只对 scrollIntoView 生效。 */
+.msg.user{scroll-margin-top:20px}
 
 /* 窄窗口下直接隐藏：与其把正文挤窄，不如不要这一列（正文才是主体） */
 @media (max-width:900px){
@@ -2181,13 +2250,15 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .project-actions-toggle{font-size:18px;line-height:1}
 .project-actions{margin:0 0 8px;padding:3px;background:#252729;border:1px solid var(--line-soft);border-radius:7px}
 .project-actions .group-add{display:block;width:100%;height:29px;text-align:left;border:0;background:transparent;font:inherit;font-size:12px}
-.project-sidebar .project{min-height:33px;padding:5px 8px}
-.pj-select{display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
+/* 项目行对齐会话行的高度：会话行是 34px（标题 + 悬停才显形的那组 26px 动作
+   按钮撑起来的），项目行就用同一个 34px。以前项目行是「名字 + 绝对路径」
+   两行（约 44px），比会话行高出一大截 —— 那正是「项目像大卡片」的来源。 */
+.project-sidebar .project{min-height:34px;padding:3px 6px}
+.pj-select{display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
 .project.active,.project.active .pj-select{cursor:default}
 .project:focus-within .pj-del{opacity:1}
 .project-sidebar .project.active{background:#303235}
 .project-sidebar .project.active .pj-name{color:#e5e6e7}
-.project-sidebar .pj-path{font-size:10px;line-height:1.2}
 .project-sidebar .pj-sessions{border-left:0;margin:2px 0 6px 11px;padding-left:8px}
 .project-sidebar:not(.search-open) .pj-search{display:none}
 .project-sidebar .pj-sess{min-height:29px;padding:4px 8px}
@@ -2213,8 +2284,11 @@ button.pj-sess-primary{cursor:pointer}
 .global-more-menu button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:32px;padding:0 9px;border:0;border-radius:5px;background:transparent;color:var(--t1);font:inherit;font-size:12px;text-align:left;cursor:pointer}
 .global-more-menu button:hover,.global-more-menu button:focus-visible{background:#3a3d40}
 .global-more-menu .rp-dot{position:static}
-.stage{overflow:hidden}
+/* .stage 的 overflow 在前面的基础规则里是 overflow:clip（带原因说明），
+   这里不再用 overflow:hidden 覆盖 —— hidden 会让它重新变成「可被脚本滚动的
+   滚动容器」，那正是顶栏被 scrollIntoView 推出视口的原因。 */
 .stage-head{border-color:var(--line-soft)}
+
 .stage-head h1{font-weight:550}
 .head-count{font-size:9px;color:var(--t3);position:absolute;right:-3px;bottom:-4px}
 .global-rail button:focus-visible,.project-sidebar button:focus-visible,.pj-sess:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}

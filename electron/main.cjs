@@ -565,8 +565,14 @@ function createWindow() {
      * 代价：顶部那 46px 得自己划拖拽区（见 styles.css 的 -webkit-app-region），
      * 右侧还要给原生按钮让位，否则会盖住顶栏最右的几个图标。
      * 高度取 46 是为了和 .rail-head / .stage-head 的行高对齐。
-     * 颜色直接抄样式表里的值：底色 #0d0d0d 是会话区背景（--main，按钮正压在这上面），
-     * 符号 #9b9b9b 是顶栏图标的颜色（--t2）。用别的值会在顶栏右上角露出色块。 */
+     *
+     * ⚠️ 颜色是**跨进程常量**，两处必须同一个值：
+     *   - 这里 `color`：#0d0d0d
+     *   - public/styles.css 的 `--titlebar`（.stage-head 的背景就是它）
+     * 主进程画右边那条原生按钮带、页面画左边那一段，值一漂移右上角就会露出
+     * 一块异色，看起来就是「顶部断开」。改一处就要改另一处 ——
+     * tests/dev-server.cjs 有一条断言盯着这两个值是否一致。
+     * symbolColor #9b9b9b 对应 --t2（顶栏图标的颜色）。 */
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#0d0d0d', symbolColor: '#9b9b9b', height: 46 },
     show: false,

@@ -91,6 +91,89 @@ let loadToken = 0;
 let expanded = false;
 let archivedOpen = false;
 
+/* ---------- 折叠（只折当前项目下面那块会话列表）----------
+ *
+ * 用户要的是「项目 / 会话是一套紧凑层级」，而不是把「项目」分组整个折起来 ——
+ * 所以这里只控制 `.pj-sessions` 这一块：箭头在**项目行内**，点了把列表隐藏，
+ * 再点回来。位置状态就一个布尔值，默认展开（false）。
+ *
+ * 三件必须守住的事：
+ *   1. **折叠用 [hidden]，不删 DOM。** 搜索、重命名、归档、删除都靠查询现有
+ *      行工作，把行删掉会让它们的状态全丢；[hidden] 有 display:none !important
+ *      兜底（见 styles.css 顶部），不会像别处那样被 display:flex 盖掉。
+ *   2. **点击不得误触。** 箭头自己 stopPropagation + preventDefault；
+ *      项目行本身不可点（可点的是 .pj-select），删除按钮本来就有
+ *      stopPropagation —— 三条路互不影响。
+ *   3. **换项目 / 重新进搜索一律回到展开。** renderSidebarSessions() 是换项目
+ *      的唯一入口，在那里复位；openSessionSearch()（app.js）会显式调用
+ *      expandSidebarSessions()，否则用户点了「搜索会话」却看不到输入框。
+ */
+const SVG_CHEV =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>';
+
+let collapsed = false;
+let chevRef = null;
+let chevName = '';
+/** 折叠/展开：只碰 box.hidden 与箭头的 aria 状态，不动列表内容。 */
+function toggleSessions() {
+  if (!boxRef || !boxRef.isConnected) return;
+  collapsed = !collapsed;
+  applyCollapsed();
+}
+
+function applyCollapsed() {
+  const box = boxRef;
+  if (!box || !box.isConnected) return;
+  box.hidden = collapsed;
+  const chev = chevRef;
+  if (chev && chev.isConnected) {
+    chev.setAttribute('aria-expanded', String(!collapsed));
+    chev.setAttribute('aria-label', `${collapsed ? '展开' : '收起'}「${chevName}」的会话`);
+  }
+}
+
+/** 展开当前项目的会话列表（搜索入口要用它）。已经是展开态就什么都不做。 */
+export function expandSidebarSessions() {
+  if (!collapsed) return false;
+  collapsed = false;
+  applyCollapsed();
+  return true;
+}
+
+/** 供测试用：当前是不是折叠着。 */
+export function sessionsCollapsed() {
+  return collapsed;
+}
+
+/** 这块列表没了（没有会话 / 读不到）→ 折叠箭头也一起撤掉。
+ *  只撤属于**这一块**的箭头：迟到的响应不能把新项目那一行的箭头删掉。 */
+function dropChevron(box) {
+  if (boxRef !== box) return;
+  if (chevRef && chevRef.isConnected) chevRef.remove();
+  chevRef = null;
+}
+
+/** 建折叠箭头并插进当前项目那一行（行内第一个元素，图标之前）。 */
+function makeChevron(projectEl, label) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'pj-chev';
+  /* 只有固定图标，没有用户数据 —— 这里 innerHTML 是常量模板。 */
+  b.innerHTML = SVG_CHEV;
+  b.setAttribute('aria-controls', 'pjSessionsBox');
+  b.setAttribute('aria-expanded', String(!collapsed));
+  b.onclick = (e) => {
+    /* 别让点箭头顺带触发项目切换（行内的 .pj-select 才是切换入口）。 */
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSessions();
+  };
+  chevName = label;
+  b.setAttribute('aria-label', `${collapsed ? '展开' : '收起'}「${label}」的会话`);
+  projectEl.insertBefore(b, projectEl.firstChild);
+  return b;
+}
+
 /* 点了搜索结果之后要跳到的那次提问。切会话是异步的（afterSessionSwitch 只是
  * setTimeout(boot,250)，还要等 get_messages 一个来回），所以**不能在点击处
  * 直接滚** —— 那时新历史还没渲染出来。存下来，等「历史渲染完成」的生命周期
@@ -168,6 +251,7 @@ export async function renderSidebarSessions(projectEl) {
   if (!parent) return;
 
   const box = el('div', 'pj-sessions');
+  box.id = 'pjSessionsBox';
   parent.insertBefore(box, projectEl.nextSibling);
   box.append(el('div', 'pj-sess-hint', '读取会话…'));
 
@@ -176,6 +260,11 @@ export async function renderSidebarSessions(projectEl) {
   dataRef = null;
   expanded = false;
   archivedOpen = false;
+  /* 换项目 → 回到展开态，并换上新的折叠箭头。
+   * 新激活的项目要马上让用户看到它的会话，不能继承上一个项目的折叠状态。 */
+  collapsed = false;
+  if (chevRef && chevRef.isConnected) chevRef.remove();
+  chevRef = makeChevron(projectEl, projectEl.querySelector('.pj-name')?.textContent || '');
   /* 换了项目就丢掉上一个项目的搜索状态。searchViewMode() 是模块级的，
    * 不清的话会拿着 A 的结果去画 B 的侧栏（迟到的响应虽然会被 generation
    * 校验丢掉，但那只是「刚好没出错」）。 */
@@ -206,7 +295,10 @@ async function fill(box, token) {
     data = await fetchSessions();
   } catch {
     // 读不到就整块不显示 —— 侧栏里挂一条红色报错只会碍事
-    if (token === loadToken && box.isConnected) box.remove();
+    if (token === loadToken && box.isConnected) {
+      box.remove();
+      dropChevron(box);
+    }
     return;
   }
   // 旧请求回来晚了，或者这块已经被项目列表重渲染带走了
@@ -215,6 +307,9 @@ async function fill(box, token) {
   if (!data.hasProject || !(data.sessions || []).length) {
     clearSessionPlans(); // 没有会话就没有关联可显示
     box.remove();
+    /* 一个会话都没有 → 没有可折叠的东西，箭头必须跟着消失，
+     * 否则会留下一个点了没反应的控件。 */
+    dropChevron(box);
     return;
   }
   /* P7 §8：会话标题旁的「关联任务」。这里只把**当前会话的 pi 会话 id** 递过去 ——
@@ -238,6 +333,9 @@ function paint(box, data) {
   box.append(listArea);
   listRef = listArea;
   paintList();
+  /* 重画不是展开 —— 折叠状态在 box 自己身上，这里只是把它重新贴回去
+   * （box 元素没换，但 applyCollapsed 顺带校正箭头的 aria 状态）。 */
+  applyCollapsed();
 }
 
 /** 只重画列表区：搜索态画结果，否则画普通会话列表。 */

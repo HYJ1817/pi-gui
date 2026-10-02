@@ -82,14 +82,22 @@ export function renderProjects() {
 
   for (const p of projectData.items) {
     const isActive = samePath(p.path, projectData.active);
+    const label = p.name || p.path;
 
     const item = document.createElement('div');
     item.className = 'project' + (isActive ? ' active' : '');
+    /* 绝对路径挂在这里（以及下面 select 的 aria-label 上）。
+     * 以前它还常驻一行 .pj-path 副标题，把项目行撑成会话行的近两倍高；
+     * 现在行内只留 folder icon + 项目名（+ 当前项目的折叠箭头）。 */
     item.title = p.path;
+
     const select = document.createElement(isActive ? 'span' : 'button');
     if (!isActive) select.type = 'button';
     select.className = 'pj-select';
-    select.setAttribute('aria-label', `${isActive ? '当前项目' : '切换到项目'}：${p.name || p.path}`);
+    /* 图标与名称都不含路径，所以把路径补进无障碍名字里 ——
+     * 视觉上的副标题去掉之后，读屏仍能拿到完整路径。 */
+    const ariaPath = p.name && p.path && p.path !== p.name ? `（${p.path}）` : '';
+    select.setAttribute('aria-label', `${isActive ? '当前项目' : '切换到项目'}：${label}${ariaPath}`);
     if (isActive) select.setAttribute('aria-current', 'true');
 
     const icon = document.createElement('span');
@@ -100,17 +108,14 @@ export function renderProjects() {
     body.className = 'pj-body';
     const n = document.createElement('span');
     n.className = 'pj-name';
-    n.textContent = p.name || p.path;
-    const pa = document.createElement('span');
-    pa.className = 'pj-path';
-    pa.textContent = p.path;
-    body.append(n, pa);
+    n.textContent = label;
+    body.append(n);
 
     const del = document.createElement('button');
     del.className = 'pj-del';
     del.type = 'button';
     del.title = '从列表移除（不会删除磁盘文件）';
-    del.setAttribute('aria-label', `从列表移除项目：${p.name || p.path}`);
+    del.setAttribute('aria-label', `从列表移除项目：${label}`);
     del.innerHTML = SVG_X;
     del.onclick = (e) => {
       e.stopPropagation();
@@ -120,13 +125,16 @@ export function renderProjects() {
     select.append(icon, body);
     item.append(select, del);
     if (!isActive) {
-      select.onclick = () => activateProject(p.path, p.name || p.path);
+      select.onclick = () => activateProject(p.path, label);
     }
 
     el.projects.appendChild(item);
 
     /* 会话挂在当前项目下面。放在 append 之后、且只在 active 那条上 ——
-     * 别的项目不展开（切过去才看得到它的会话）。 */
+     * 别的项目不展开（切过去才看得到它的会话）。
+     * 折叠箭头由 sessions.js 插进这一行（它才知道有没有会话可折叠）：
+     * 箭头必须在 .project **行内**，否则会破坏「.pj-sessions 是当前项目行的
+     * 紧邻兄弟」这条被测试盯着的结构（smoke / cdp-shot 都有断言）。 */
     if (isActive && sessionsSlot) sessionsSlot(item, p);
   }
 }
