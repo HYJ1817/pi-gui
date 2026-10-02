@@ -124,8 +124,14 @@ export function capabilityTab(holder, isCurrent, { filterId = 'all' } = {}) {
       return;
     }
     /* 外链统一走既有的 `webSourceLink`（它自己做 http/https 与凭据校验）：
-     * 这一层自己判断 URL 就是第二套边界。没有 link 时它返回 null，不画。 */
-    detailBox.appendChild(renderSetupSection(setupViewModel(row), { linkFactory: webSourceLink }));
+     * 这一层自己判断 URL 就是第二套边界。没有 link 时它返回 null，不画。
+     *
+     * `onRecheck` 是「一键安装成功之后重新读一遍证据」的入口：**安装命令跑完
+     * ≠ 装上了**，所以这一页必须真的重新 fetch，按钮与状态行都按新证据重画。 */
+    detailBox.appendChild(renderSetupSection(setupViewModel(row), {
+      linkFactory: webSourceLink,
+      onRecheck: () => load(true),
+    }));
   }
 
   function renderList() {
@@ -209,6 +215,9 @@ export function capabilityTab(holder, isCurrent, { filterId = 'all' } = {}) {
     diagnostics = catalog.diagnostics;
     renderSummary();
     renderList();
+    /* 返回**刚拿到的**那一行（一键安装用它判断「Registry 到底确认了没有」）。
+     * 注意这是重新发现之后的数据，不是缓存 —— 所以它回答的是当下的事实。 */
+    return rows.find((row) => row.id === selectedId) || null;
   }
 
   search.addEventListener('input', () => { renderList(); renderSummary(); });

@@ -22,9 +22,21 @@
  * 「安装后重启 Pi」全仓库只有**一处**实现（就是下面这个 `restartPiButton()`）：
  * 先 `confirmModal`，再校验 `ownsWorkspace(generation)`，最后调既有的
  * `restartBackend()`。切了项目就什么都不做 —— **绝不对着新项目重启**。
+ *
+ * ---------- 一键安装（P24 收口）----------
+ *
+ * 「安装」按钮也全仓库只有**这一处**实现。它做四件事，顺序固定：
+ *   1. `confirmModal` —— 先把命令、权限、安装范围（用户级）说清楚，再动手；
+ *   2. `POST /api/capabilities/install`，body **只送 capabilityId** ——
+ *      包名由后端固定 allowlist 决定，这一层不送也不认识 source；
+ *   3. 按钮状态机 `安装 → 安装中… → 正在重启… → 已安装 / 安装失败`，
+ *      期间 disabled（后端另有一把单飞锁，前端 disabled 只是体验）；
+ *   4. 成功后**不宣布「已加载」** —— 只重新读一遍 Extension Registry，
+ *      界面按重新拿到的证据重画。
+ * 「复制安装命令」继续保留，作为高级 / 故障恢复入口。
  */
 import { S, ownsWorkspace } from '../state.js';
-import { restartBackend } from '../api.js';
+import { restartBackend, installCapability } from '../api.js';
 import { confirmModal } from './modal.js';
 import { toast } from './toast.js';
 
@@ -91,6 +103,92 @@ function row(label, value) {
   return line;
 }
 
+/* ---------- 一键安装 ---------- */
+
+/** 按钮的静止文案。`data-install-state` 才是判据（文案会变，状态名不会）。 */
+const INSTALL_IDLE_LABEL = { install: '安装', recheck: '重新检查', installed: '已安装' };
+
+/**
+ * 跑一次受控安装。**任何一步失败都不伪造成功**：按钮进「安装失败」，
+ * 提示用后端给的**脱敏**文案（原始 stdout/stderr 从不进 DOM）。
+ */
+async function runInstall(model, button, options) {
+  const generation = S.workspaceGeneration;
+  const confirm = model.installConfirm || {};
+  const ok = await confirmModal({ title: confirm.title, message: confirm.message, okText: confirm.okText || '安装' });
+  if (ok !== true || !ownsWorkspace(generation)) return;
+  const setState = (state, label) => {
+    button.dataset.installState = state;
+    button.textContent = label;
+  };
+  button.disabled = true;
+  setState('installing', '安装中…');
+  try {
+    const result = await installCapability(model.installId);
+    if (!ownsWorkspace(generation)) return;
+    if (!result || result.ok !== true) {
+      setState('failed', '安装失败');
+      button.disabled = false;
+      toast((result && result.error) || '安装失败，可重试或复制命令自己执行', 'warn');
+      return;
+    }
+    setState('restarting', '正在重启…');
+    /* ⚠️ 官方命令跑完 ≠ 装上了。**真实状态只由重新发现的 Registry 回答**：
+     * 有 onRecheck（Capability 视图）就刷新一遍，按钮与状态行都按新证据重画，
+     * 并且**只有在真的看到了 installed === true 时**才说「已安装」；否则如实说
+     * 「尚未确认到 Extension」。没有 onRecheck 的入口（各 feature 设置区）
+     * 连确认都不假装，只说明「命令已完成，刷新后按 Registry 的结果确认」。 */
+    if (typeof options.onRecheck === 'function') {
+      const refreshed = await options.onRecheck();
+      if (!ownsWorkspace(generation)) return;
+      const confirmed = Boolean(refreshed && refreshed.state && refreshed.state.installed === true);
+      toast(
+        confirmed
+          ? '安装完成：Extension Registry 已经发现它；加载状态仍以 Pi 的实际证据为准'
+          : '安装命令已完成，但 Pi GUI 尚未确认到 Extension，请刷新或查看诊断',
+        confirmed ? 'info' : 'warn',
+      );
+      return;
+    }
+    setState('installed', '已安装');
+    toast('安装命令已完成，Pi 正在重启；刷新后按 Extension Registry 的结果确认', 'info');
+  } catch (err) {
+    if (!ownsWorkspace(generation)) return;
+    setState('failed', '安装失败');
+    button.disabled = false;
+    toast('安装失败：' + err.message, 'error');
+  }
+}
+
+/**
+ * 安装动作按钮。**只对「Pi GUI 明确维护的已知 capability」出现**
+ * （模型层给出 `installState`，没有 installId 的能力它一定是 null）。
+ */
+function installAction(model, options) {
+  if (!model.installState) return null;
+  const button = el('button', 'btn tiny cap-install', INSTALL_IDLE_LABEL[model.installState] || '安装');
+  button.type = 'button';
+  button.dataset.installState = model.installState;
+  if (model.installState === 'installed') {
+    /* 已安装：不是一个「可以再点一次」的动作，所以 disabled。 */
+    button.disabled = true;
+    button.title = 'Extension Registry 已经发现了这个 Extension';
+    return button;
+  }
+  if (model.installState === 'recheck') {
+    /* installed === null 是「无法确认」，**不是「确认未安装」** —— 所以这里
+     * 不提供安装，只给一次重新读取。 */
+    button.title = '当前无法确认是否已安装；重新读一次 Extension Registry';
+    button.onclick = () => {
+      if (typeof options.onRecheck === 'function') options.onRecheck();
+    };
+    return button;
+  }
+  button.title = '用当前 Pi 的官方安装命令安装（用户级）';
+  button.onclick = () => runInstall(model, button, options);
+  return button;
+}
+
 /**
  * 统一 setup 区块。顺序固定，每一项都存在，但**只在有证据时才显示对应内容**：
  *
@@ -101,8 +199,12 @@ function row(label, value) {
  * @param model `capability-model.js` 的 `setupViewModel(row)`
  * @param options.linkFactory 可选：把 `model.link` 变成节点的工厂
  *                （feature 模块用它复用既有的安全外链实现，避免重复一套 URL 校验）
+ * @param options.onRecheck   可选：安装成功后重新读取证据的回调（Capability 视图传
+ *                「重新加载这一页」）。**没有它就不假装已确认** —— 按钮只到
+ *                「已安装（命令完成）」，状态行仍按原证据显示。
  */
-export function renderSetupSection(model, { linkFactory = null } = {}) {
+export function renderSetupSection(model, { linkFactory = null, onRecheck = null } = {}) {
+  const options = { linkFactory, onRecheck };
   const box = el('section', 'cap-setup');
 
   box.appendChild(el('h4', '', model.name));
@@ -114,7 +216,8 @@ export function renderSetupSection(model, { linkFactory = null } = {}) {
   verdict.appendChild(el('span', 'ext-badge', model.originLabel));
   box.appendChild(verdict);
 
-  /* 六个统一字段。**null 由模型翻成「未知（无法确认）」**，这一层不做第二套判断。 */
+  /* 状态行**只含对这个能力适用的字段**（`'n/a'` 与未声明的字段不画；
+   * `null` 照旧画成「未知（无法确认）」）。判断全在模型层。 */
   const rows = el('div', 'ext-rows cap-rows');
   for (const [label, value] of model.stateRows) rows.appendChild(row(label, value));
   box.appendChild(rows);
@@ -130,6 +233,10 @@ export function renderSetupSection(model, { linkFactory = null } = {}) {
   }
 
   const actions = el('div', 'ext-acts');
+  /* 主按钮：一键安装（只在有 installId 的已知 capability 上出现）。 */
+  const install = installAction(model, options);
+  if (install) actions.appendChild(install);
+  /* 高级 / 故障恢复入口：复制固定官方命令，用户仍可在终端自己执行。 */
   if (model.installCommand) actions.appendChild(copyButton(model.installCommand, model.copyLabel));
   if (model.restart) actions.appendChild(restartPiButton(model.restart.message));
   /* 「查看上下文与额度」这类只读入口：模型给出 handler，这一层不发明动作。 */

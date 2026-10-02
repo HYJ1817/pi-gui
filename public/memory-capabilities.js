@@ -77,7 +77,9 @@ export function memoryCapability(registry, observed = null) {
     origin: 'extension',
     packageName: MEMORY_EXTENSION_NAME,
     installCommand: MEMORY_INSTALL_COMMAND,
-    installNote: '这是第三方 Extension，需要在终端用 pi 官方命令安装。Pi GUI 不安装 qmd、不建索引、不读 Pi 的 memory 目录、不建立第二份数据库。',
+    /* 一键安装的 capability id（服务端固定 allowlist 的键）。 */
+    installId: 'memory',
+    installNote: '这是第三方 Extension。页内「安装」会调用当前 Pi 的官方安装命令（用户级，不加 -l）；也可以复制命令在终端自己执行。Pi GUI 不安装 qmd、不建索引、不读 Pi 的 memory 目录、不建立第二份数据库。',
     state,
     notes: [
       '长期记忆由 Pi Extension 提供并落在 Pi 自己的目录里；Pi GUI 不读取、不索引、不复制它。绝对路径与记忆全文不进入 Activity。',

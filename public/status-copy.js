@@ -16,6 +16,37 @@
  * `reloadPi()`。这里只负责「什么状态该说什么话、该给哪个入口」。
  */
 
+/**
+ * 维护态的原因 → 文案。**reason 来自 `bridge_status` / `/api/status` 的
+ * `maintenance.reason`**（后端在 `pauseForMaintenance(reason)` 里给）。
+ *
+ * 为什么必须按原因分开说：维护态现在有两条来源 —— Pi 自更新与
+ * Capability 一键安装。两者都「短暂停机」，但用户看到「Pi 正在更新」而实际
+ * 在装扩展，就会以为界面在骗他（更糟：他可能去点「重启 Pi」打断安装）。
+ * 不认识的原因一律回落到中性的「Pi 正在维护」。
+ */
+export function maintenanceCopy(reason) {
+  if (reason === 'capability-install') {
+    return {
+      label: 'Pi 正在安装扩展（短暂停机）',
+      detail: 'Pi GUI 正在用官方安装命令装扩展；安装期间发不出消息，完成后会自动重新启动。会话与草稿都还在。',
+      busy: 'Pi 正在安装扩展，完成后可继续…',
+    };
+  }
+  if (reason === 'pi-update') {
+    return {
+      label: 'Pi 正在更新（短暂停机）',
+      detail: '官方 self-update 正在替换本机的 pi；更新期间发不出消息，完成后会自动重新启动。会话与草稿都还在。',
+      busy: 'Pi 正在更新，完成后可继续…',
+    };
+  }
+  return {
+    label: 'Pi 正在维护（短暂停机）',
+    detail: 'Pi 正在进行一次计划内的维护；维护期间发不出消息，完成后会自动重新启动。会话与草稿都还在。',
+    busy: 'Pi 正在维护，完成后可继续…',
+  };
+}
+
 /** 连接状态的统一文案。`tone` 与 `.conn` 的类名共用（ok / busy / bad / ''）。 */
 export const CONNECTION_STATES = Object.freeze({
   'no-project': {
@@ -42,14 +73,13 @@ export const CONNECTION_STATES = Object.freeze({
     detail: '项目或配置变化后重新加载 pi；正在跑的那一轮会结束。',
     actions: ['diagnostics'],
   },
-  /* Pi 自更新的短时维护态（Built-in Pi Updater）。
-   * **不是崩溃**：进程是 GUI 自己停的，为的是让官方 updater 换掉 runtime 文件，
+  /* 维护态（Pi 自更新 / Capability 安装）。**不是崩溃**：进程是 GUI 自己停的，
    * 完成后会自动重启。所以 tone 是 busy 而不是 bad、只给诊断入口 ——
-   * 给「重启 Pi」会让人手动去打断一次正在进行的更新。 */
+   * 给「重启 Pi」会让人手动去打断一次正在进行的维护。
+   * 文案按原因展开（见 `maintenanceCopy()`），这里放的是中性回落。 */
   maintenance: {
     tone: 'busy',
-    label: 'Pi 正在更新（短暂停机）',
-    detail: '官方 self-update 正在替换本机的 pi；更新期间发不出消息，完成后会自动重新启动。',
+    ...maintenanceCopy(null),
     actions: ['diagnostics'],
   },
   exited: {
@@ -66,11 +96,14 @@ export const CONNECTION_STATES = Object.freeze({
   },
 });
 
-export function connectionCopy(state, detail = '') {
+export function connectionCopy(state, detail = '', extra = {}) {
   const base = CONNECTION_STATES[state] || { tone: '', label: detail || state || '未知', detail: '', actions: [] };
+  /* 维护态按 `maintenance.reason` 展开：装扩展与更新 pi 是两件事，
+   * 说成同一句会让用户以为界面在骗他。 */
+  const resolved = state === 'maintenance' ? { ...base, ...maintenanceCopy(extra.reason) } : base;
   return {
-    ...base,
-    label: state === 'exited' && detail ? detail : base.label,
+    ...resolved,
+    label: state === 'exited' && detail ? detail : resolved.label,
   };
 }
 
@@ -80,7 +113,7 @@ export function connectionCopy(state, detail = '') {
  * 返回 null 表示「没有需要常驻提示的问题」—— 正常状态与「没选项目」都不在这里
  * （后者由欢迎区负责，重复提示只会是噪声）。
  *
- * @param ctx {{bridgeState, bridgeError, bridgeHint, hasProject, compat}}
+ * @param ctx {{bridgeState, bridgeError, bridgeHint, hasProject, compat, maintenanceReason}}
  */
 export function startupNotice(ctx = {}) {
   const { bridgeState, bridgeError, bridgeHint, hasProject, compat } = ctx;
@@ -106,15 +139,17 @@ export function startupNotice(ctx = {}) {
       actions: ['restart', 'diagnostics'],
     };
   }
-  /* Pi 正在更新：常驻一句「在等什么」，但**语气是信息不是故障**
-   * （tone: info），也**不给「重启 Pi」** —— 那会打断正在进行的更新。
-   * 用户在这一刻最需要知道的是「不用管它，等一会儿就好」。 */
+  /* 维护态：常驻一句「在等什么」，但**语气是信息不是故障**（tone: info），
+   * 也**不给「重启 Pi」** —— 那会打断正在进行的维护。
+   * 用户在这一刻最需要知道的是「不用管它，等一会儿就好」。
+   * 具体在更新 pi 还是在装扩展，按 reason 说清楚（见 maintenanceCopy）。 */
   if (bridgeState === 'maintenance') {
+    const copy = maintenanceCopy(ctx.maintenanceReason);
     return {
       id: 'bridge-maintenance',
       tone: 'info',
-      title: 'Pi 正在更新（短暂停机）',
-      detail: '官方 self-update 正在替换本机的 pi；更新期间发不出消息，完成后会自动重新启动。会话与草稿都还在。',
+      title: copy.label,
+      detail: copy.detail,
       actions: ['diagnostics'],
     };
   }

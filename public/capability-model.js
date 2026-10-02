@@ -460,12 +460,79 @@ export function filterRows(rows = [], filterId = 'all', query = '') {
 }
 
 /**
+ * 状态行 → **只保留对这个能力适用的那些**。
+ *
+ * 内部四值模型一个都不改（true / false / null / `'n/a'`），这里只决定「画不画」：
+ *
+ *   - `'n/a'`（NA）→ 这格对这类能力不适用，**不画**。Native MCP 没有 npm 安装概念、
+ *     built-in 的「启用配置 / 已加载」由 pi 自己决定、Usage 整条不是可安装能力 ——
+ *     以前它们各自画出一行「不适用」，语义没错，但一张详情里七八行「不适用」
+ *     等于什么都没说。
+ *   - `undefined` → descriptor 根本没声明这个字段 → 同样不画。
+ *     凭空画一个「未知」是在替 descriptor 编一句它没说过的话。
+ *   - `null` → **适用、只是当前拿不到证据** → 照常画「未知（无法确认）」。
+ *     ⚠️ `null` 绝不允许因为「想少画几行」被藏掉 —— 那正好把「未知」伪装成「不适用」，
+ *     比多画几行危险得多。
+ *   - `diagnostic` 不是三值：**有真实错误才画一行**；没有错误时不画「诊断　无」。
+ *
+ * 这是纯呈现收口：不改 catalog 计数、不改过滤与搜索、不改任何事实源。
+ */
+function applicableStateRows(state) {
+  const rows = [];
+  const push = (value, label, yes, no) => {
+    if (value === undefined || value === NA) return;
+    rows.push([label, triText(value, yes, no)]);
+  };
+  push(state.installed, '安装状态', '已安装', '未安装');
+  push(state.configured, '启用配置', '已启用', '已停用');
+  push(state.loaded, '已加载', '已确认加载', '未加载');
+  const observed = state.runtimeObserved;
+  if (observed !== undefined && observed !== NA) rows.push(['运行观察', observationText(observed)]);
+  push(state.restartRequired, '需要重启', '是', '否');
+  if (state.diagnostic) rows.push(['诊断', String(state.diagnostic.message)]);
+  return rows;
+}
+
+/** 第三方 Extension 的一键安装确认文案（**唯一一处**，测试按纯函数断言）。 */
+function installConfirmFor(row) {
+  return {
+    title: `安装 ${row.name}？`,
+    message: [
+      '将使用当前 Pi 的官方安装命令安装：',
+      '',
+      row.installCommand,
+      '',
+      '该 Extension 会以 Pi 进程的权限运行，可能访问本地文件、执行命令或访问网络。只应安装你信任的第三方代码。',
+      '',
+      '安装范围：用户级',
+      '',
+      '安装完成后 Pi GUI 会自动重新启动 Pi，使 Extension 生效。',
+    ].join('\n'),
+    okText: '安装',
+  };
+}
+
+/**
  * 行 → 统一 setup 布局的视图模型（需求「三、统一 setup pattern」）。
  * 渲染器只做 DOM，不做判断：这里算不出来的东西，界面就不该显示。
  */
 export function setupViewModel(row) {
   const state = row.state || {};
-  const observed = state.runtimeObserved;
+  /* 一键安装只对 Pi GUI **明确维护的已知 capability** 出现：`installId` 由
+   * descriptor 给出（Native MCP / built-in / Skill / Usage / Approval 一律没有）。
+   *
+   *   installed === false → 主按钮「安装」；
+   *   installed === null  → **不画「安装」**（那不是「确认未安装」，是「无法确认」），
+   *                         只给「重新检查」；
+   *   installed === true  → 不画安装动作，只显示已安装状态。
+   *
+   * 没有 installCommand / 没有 installId 的能力**绝不**伪造一个安装按钮。 */
+  const installCommand = typeof row.installCommand === 'string' && row.installCommand ? row.installCommand : null;
+  const installId = typeof row.installId === 'string' && row.installId ? row.installId : null;
+  const installState = !installId || !installCommand ? null
+    : state.installed === false ? 'install'
+      : state.installed === true ? 'installed'
+        : 'recheck';
   return {
     id: row.id,
     kind: row.kind,
@@ -475,17 +542,14 @@ export function setupViewModel(row) {
     originLabel: row.originLabel,
     packageName: row.packageName || null,
     // 固定官方命令：只有第三方 Extension 才有；Native MCP / built-in 一律 null。
-    installCommand: typeof row.installCommand === 'string' && row.installCommand ? row.installCommand : null,
+    installCommand,
     installNote: row.installNote || '',
-    // 「安装 / 内置状态」——原生与内置能力在这一行说清它从哪来，而不是给一条 npm 命令。
-    stateRows: [
-      ['安装状态', triText(state.installed, '已安装', '未安装')],
-      ['启用配置', triText(state.configured, '已启用', '已停用')],
-      ['已加载', triText(state.loaded, '已确认加载', '未加载')],
-      ['运行观察', observationText(observed)],
-      ['需要重启', triText(state.restartRequired, '是', '否')],
-      ['诊断', state.diagnostic ? String(state.diagnostic.message) : '无'],
-    ],
+    // 状态行**只含对这个能力适用的字段**（见 applicableStateRows）。
+    stateRows: applicableStateRows(state),
+    // 一键安装（受控 allowlist 的 id + 按钮形态 + 确认文案）。
+    installId,
+    installState,
+    installConfirm: installState === 'install' ? installConfirmFor({ ...row, installCommand }) : null,
     notes: Array.isArray(row.notes) ? row.notes.filter(Boolean) : [],
     limits: Array.isArray(row.limits) ? row.limits.filter(Boolean) : [],
     source: row.source || '',

@@ -59,7 +59,9 @@ export function subagentCapability(registry, observed = null) {
     origin: 'extension',
     packageName: SUBAGENT_EXTENSION_NAME,
     installCommand: SUBAGENT_INSTALL_COMMAND,
-    installNote: '这是第三方 Extension，需要在终端用 pi 官方命令安装。Pi GUI 不安装、不扫描 Agent 定义、不控制子进程。',
+    /* 一键安装的 capability id（服务端固定 allowlist 的键）。 */
+    installId: 'subagents',
+    installNote: '这是第三方 Extension。页内「安装」会调用当前 Pi 的官方安装命令（用户级，不加 -l）；也可以复制命令在终端自己执行。Pi GUI 不扫描 Agent 定义、不控制子进程。',
     state,
     notes: [
       '仅观察到 subagents_enable 时不代表安装失败；它只激活后续模型请求的工具，不启动 child。其他 Extension 也可提供同名工具。',

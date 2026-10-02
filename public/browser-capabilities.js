@@ -81,7 +81,9 @@ export function browserCapability(registry, observed = null) {
     origin: 'extension',
     packageName: BROWSER_EXTENSION_NAME,
     installCommand: BROWSER_INSTALL_COMMAND,
-    installNote: '这是第三方 Extension，需要在终端用 pi 官方命令安装。Pi GUI 不安装浏览器、不下载驱动、不改动 Extension 配置。',
+    /* 一键安装的 capability id（服务端固定 allowlist 的键）。 */
+    installId: 'browser',
+    installNote: '这是第三方 Extension。页内「安装」会调用当前 Pi 的官方安装命令（用户级，不加 -l）；也可以复制命令在终端自己执行。Pi GUI 不安装浏览器、不下载驱动、不改动 Extension 配置。',
     state,
     notes: [
       'Browser Use 与 Web Search 是两件事：Web Search 只做搜索与取正文，不驱动浏览器；Browser Use 会真的打开页面、点击、输入、截图。两者互相独立，各自的工具各自渲染。',

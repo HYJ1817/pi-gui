@@ -248,6 +248,8 @@ function syncNotice() {
     bridgeHint: bridgeHintText,
     hasProject: S.hasProject,
     compat: S.compat,
+    /* 维护态说哪一句话由 reason 决定（Pi 自更新 vs 正在安装扩展）。 */
+    maintenanceReason: S.maintenanceReason,
   });
   if (!model) {
     hideNotice();
@@ -313,14 +315,15 @@ function onBridge(evt) {
       interruptActive();
       return syncNotice();
     case 'maintenance':
-      /* Pi 正在被官方 self-update 替换（`server/pi-update.js` 调了
-       * `rpc.pauseForMaintenance()`）。**这不是崩溃**：进程是我们自己停的，
-       * 停之前后端已经拒绝了新命令。
+      /* 短时维护态：Pi 正在被官方 self-update 替换（`server/pi-update.js`），
+       * 或者正在跑一次 Capability 一键安装（`server/capability-install.js`）。
+       * **这不是崩溃**：进程是我们自己停的，停之前后端已经拒绝了新命令。
        *
        * 所以这里刻意**不**做「exited」那三件事：不清当前会话、不弹
-       * 「pi 已退出」、不把这一轮说成失败。只把状态条换成一句「正在更新」，
-       * 让用户知道为什么这会儿发不出消息。更新结束后端会推 ready。 */
-      setBridgeState('maintenance');
+       * 「pi 已退出」、不把这一轮说成失败。只把状态条换成一句维护说明，
+       * 让用户知道为什么这会儿发不出消息。维护结束后端会推 ready。
+       * `evt.reason` 决定说哪一句 —— 装扩展被说成「正在更新 Pi」是在骗人。 */
+      setBridgeState('maintenance', '', typeof evt.reason === 'string' ? evt.reason : null);
       return syncNotice();
     case 'restarting':
       setBridgeState('restarting');

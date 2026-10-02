@@ -75,6 +75,8 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param uploads       附件上传（handle）
  * @param diagnostics   诊断信息（handle）
  * @param updateCheck   版本检查（handle）
+ * @param piUpdate      Pi 运行时更新（handle）
+ * @param capabilityInstall Known Capability 一键安装（handle；POST）
  * @returns {import('node:http').RequestListener}
  */
 export function createRouter({
@@ -97,6 +99,7 @@ export function createRouter({
   diagnostics,
   updateCheck,
   piUpdate = null,
+  capabilityInstall = null,
   quota = null,
   compat = null,
 }) {
@@ -166,6 +169,14 @@ export function createRouter({
     if (url.pathname === '/api/pi-update') {
       if (!piUpdate) return json(res, 503, { ok: false, code: 'not-wired', error: 'Pi 更新模块未装配' });
       return piUpdate.handle(req, res, url, json);
+    }
+    /* Known Capability 一键安装（POST）。**独立顶层路径**，与 /api/extensions
+     * （通用只读发现）刻意分开：这个端点只认 capabilityId，自己从固定 allowlist
+     * 取 source，所以它不可能是「任意包安装 / 命令执行」入口。
+     * 同样必须排在下面 405 兜底之前 —— 它本身是 POST。 */
+    if (url.pathname === '/api/capabilities/install') {
+      if (!capabilityInstall) return json(res, 503, { ok: false, code: 'not-wired', error: 'Capability 安装模块未装配' });
+      return capabilityInstall.handle(req, res, url, json);
     }
     // 必须排在下面那条前缀匹配之前 —— 否则 /api/providers/models 会被
     // 当成「保存一个叫 models 的供应商」，而且前端拿不到任何报错。

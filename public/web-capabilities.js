@@ -59,7 +59,10 @@ export function webCapability(registry, observed = null) {
     origin: 'extension',
     packageName: WEB_EXTENSION_NAME,
     installCommand: WEB_INSTALL_COMMAND,
-    installNote: '这是第三方 Extension，需要在终端用 pi 官方命令安装。Pi GUI 不安装、不下载、不代管配置与凭据。',
+    /* 一键安装的 capability id。**只服务服务端固定 allowlist 里的 source**：
+     * renderer 只送这个 id，source 由后端自己查（见 server/capability-install.js）。 */
+    installId: 'web',
+    installNote: '这是第三方 Extension。页内「安装」会调用当前 Pi 的官方安装命令（用户级，不加 -l）；也可以复制命令在终端自己执行。Pi GUI 不下载、不代管配置与凭据。',
     state,
     notes: [
       '其他 Extension 也可提供这些工具。磁盘发现不代表工具已注册。配置与凭据由 Extension 管理。',

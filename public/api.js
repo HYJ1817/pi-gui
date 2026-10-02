@@ -174,6 +174,18 @@ export const mcpServerAction = (payload) =>
 export const fetchApprovalCapability = () => getJSON('/api/approvals/capability');
 export const fetchExtensions = () => getJSON('/api/extensions');
 
+/** 已知第三方 Capability 的一键安装（`POST /api/capabilities/install`）。
+ *
+ *  body **只送 `capabilityId`**（外加仓库惯例的工作区过期守卫 `__expectedCwd`）
+ *  —— 包名由后端的固定 allowlist 决定，前端传什么都不算，所以这个接口在结构上
+ *  不可能是「任意包安装 / 命令执行」入口。未知 id 后端 fail closed。
+ *
+ *  安装期间后端会暂停并重启 Pi，一次请求可能持续几分钟；`ok:true` 只代表
+ *  **官方安装命令跑完了**，装没装由随后的 `fetchExtensions()` 重新发现回答
+ *  （`loaded` 在拿到 Pi 的加载证据之前一律是未知）。 */
+export const installCapability = (capabilityId) =>
+  sendJSON('/api/capabilities/install', { body: { capabilityId, confirm: true, __expectedCwd: S.cwd } });
+
 /* ---------- 附件上传 ---------- */
 
 /** 上传走裸二进制（文件名放 query），省掉 multipart 解析。 */

@@ -50,6 +50,11 @@
  * 绝不影响启动 / Bridge / Chat / Planner / MCP / Git / 诊断。
  */
 import { compareVersions } from './pi-compat-matrix.js';
+/* 脱敏是**共享**的：Capability 安装走同一条边界，所以规则只有一份（lib/redact.js）。
+ * 这里继续 re-export，保持 `server/pi-update.js` 的公开名字不变。 */
+import { sanitizeLine, MAX_ERROR_CHARS } from '../lib/redact.js';
+
+export { sanitizeLine };
 
 /** 官方包名。响应里的 packageName 与它不一致就拒绝执行更新。 */
 export const PI_PACKAGE = '@earendil-works/pi-coding-agent';
@@ -64,7 +69,6 @@ export const PHASES = Object.freeze([
 /** 允许出现在安装包名位置的值：pi 的 bin 入口文件名。 */
 export const VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const MAX_VERSION_CHARS = 64;
-const MAX_ERROR_CHARS = 240;
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_UPDATE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -89,19 +93,6 @@ export function isOffline(env = process.env) {
 /** 版本字符串是否可用（与 pi-version.js 的判定同一套：三段数字 + 可选后缀）。 */
 export function isVersionText(value) {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_VERSION_CHARS && VERSION_RE.test(value.trim());
-}
-
-/** 把任意一句话摘要脱敏 + 截断：绝对路径、Bearer、token 形态都不出后端。 */
-export function sanitizeLine(text, max = MAX_ERROR_CHARS) {
-  let out = typeof text === 'string' ? text : '';
-  // 只取第一行：updater 的输出可能很长，多行摘要没有意义
-  out = out.split(/\r?\n/).find((l) => l.trim()) || '';
-  out = out
-    .replace(/[A-Za-z]:\\[^\s"'`]+/g, '<path>')
-    .replace(/\/(?:home|Users|root)\/[^\s"'`]+/g, '<path>')
-    .replace(/(Bearer|token|password|_authToken|api[_-]?key)\s*[=:]\s*\S+/gi, '$1=<redacted>')
-    .replace(/npm_[A-Za-z0-9]{8,}/g, '<redacted>');
-  return out.length > max ? out.slice(0, max) + '…' : out;
 }
 
 function fail(code, error, extra = {}) {

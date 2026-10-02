@@ -66,6 +66,7 @@ import * as piCompatMatrix from './server/pi-compat-matrix.js';
 import { createSkills } from './server/skills.js';
 import { createUpdateCheck } from './server/update-check.js';
 import { createPiUpdate } from './server/pi-update.js';
+import { createCapabilityInstall } from './server/capability-install.js';
 import { createPiActivity } from './server/pi-activity.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
@@ -553,75 +554,129 @@ const updateCheck = createUpdateCheck({ version: VERSION });
  *      （生成中 / Planner 任务 / 独立验证 / 在飞的 CLI 动作 / 工作区切换）。
  *   3. **成功后清掉所有与 Pi 包 identity 绑定的缓存**再重新读版本；
  *      读到旧版本就判失败（exit 0 ≠ 更新完成）。 */
+
+/* ---------- 三个「当前这份 Pi」的共享原语 ----------
+ *
+ * Pi 自更新与 Capability 安装是**两条独立的写路径**（一个换 pi 本体、一个装
+ * Extension），但它们对「当前这份 Pi」的认定必须完全一致，否则又会绕回 P20.5
+ * 的「两份 identity」。所以下面三件事各只写一遍，两个模块都从这里取：
+ *
+ *   1. `resolvePiCliEntry()` —— 官方 CLI 入口（`packageDir` → `buildPiEntry()`）；
+ *   2. `runPiCliCommand()`  —— 跑一条官方 CLI 命令（`agents/cli.js` 的 runCli，
+ *      shell:false + args 数组 + 超时 + 有界输出 + 记在飞的 CLI 动作数）；
+ *   3. `piBusyReason()`     —— 「现在忙不忙」的**唯一服务端判据**（Pi Updater 与
+ *      Capability 安装共用；前端 disabled 只是体验，闸门是这一个）。
+ *
+ * `invalidatePiCaches()` 同理：identity 一失效，所有按 identity / cwd 分键的
+ * 结论（版本 / built-in / probe / 原生 MCP / compat）都必须重新解析。 */
+
+function resolvePiCliEntry() {
+  let entry = null;
+  try {
+    entry = buildPiEntry(piLaunch.packageDir());
+  } catch {
+    entry = null;
+  }
+  return entry && entry.ok ? { ok: true, entry } : { ok: false, code: 'no-proven-entry' };
+}
+
+function runPiCliCommand(args, opts = {}) {
+  const entry = (opts && opts.entry) || (() => {
+    const r = resolvePiCliEntry();
+    return r.ok ? r.entry : null;
+  })();
+  if (!entry || !entry.ok) {
+    return Promise.resolve({ ok: false, spawnFailed: true, error: '没有证明到这份 Pi 的官方入口' });
+  }
+  cliInFlight += 1;
+  return Promise.resolve(runCli({
+    entry,
+    args,
+    cwd: runtime.getCurrentCwd() || undefined,
+    env: {},
+    timeoutMs: (opts && opts.timeoutMs) || 5 * 60 * 1000,
+    maxStdoutBytes: (opts && opts.maxStdoutBytes) || 4000,
+  })).finally(() => {
+    cliInFlight -= 1;
+  });
+}
+
+/** 清掉所有与 Pi 包 identity 绑定的缓存。**顺序即语义**：identity 先失效。 */
+function invalidatePiCaches() {
+  piLaunch.reset();
+  piVersion.reset();
+  piBuiltins.reset();
+  probes.reset();
+  mcpNative.reset();
+  piCompat.reset();
+  probesRef?.reset();
+}
+
+/**
+ * 「Pi 现在忙不忙」—— Pi 更新与 Capability 安装**共用这一份**判据。
+ * 顺序无所谓，但每一条都是「现在改 Pi 的运行时 / 跑一条会动 Pi 的命令」时
+ * 必须先确认没有的事：
+ *   - 主会话在生成（规则在 server/pi-activity.js，按 Pi 1.0.0 的真实事件语义）
+ *   - 有在飞的 Pi CLI 动作（MCP add/remove/login/logout，见 cliInFlight）
+ *   - Pi 自更新正在跑
+ *   - 另一次 Capability 安装正在跑
+ *   - Planner 任务或独立验证在跑（规则只有一份：projectSwitchBlockReason）
+ * `piUpdate` / `capabilityInstall` 在下面才建 —— 这里是**惰性**读取，
+ * 闸门只在请求时被调用，那时它们已经就位。
+ */
+function piBusyReason() {
+  const turn = piActivity.busy();
+  if (turn) return turn;
+  if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
+  if (piUpdate && piUpdate.isRunning()) return { code: 'busy-pi-update', error: 'Pi 更新正在进行中，请稍后再试' };
+  if (capabilityInstall && capabilityInstall.isRunning()) return { code: 'busy-install', error: '另一个扩展安装正在进行中，请稍后再试' };
+  if (plannerRef) {
+    /* 规则只有一份（planner 的 projectSwitchBlockReason：计划在跑 / 独立验证在跑） */
+    const reason = plannerRef.projectSwitchBlockReason();
+    if (reason) return { code: 'busy-plan', error: reason };
+  }
+  return null;
+}
+
 const piUpdate = createPiUpdate({
   env: process.env,
   guiVersion: VERSION,
   readVersion: (opts) => piVersion.read(opts),
   currentCwd: () => runtime.getCurrentCwd(),
-  resolveUpdaterTarget: () => {
-    /* 只认证明过的包目录。buildPiEntry 要求 package.json 的 bin.pi 指向
-     * 真实存在的入口文件 —— 自定义 fork / source checkout 拿不到就是拿不到。 */
-    let entry = null;
-    try {
-      entry = buildPiEntry(piLaunch.packageDir());
-    } catch {
-      entry = null;
-    }
-    return entry && entry.ok ? { ok: true, entry } : { ok: false, code: 'no-proven-entry' };
-  },
+  resolveUpdaterTarget: () => resolvePiCliEntry(),
   runUpdater: (args, opts) => {
     /* 参数由 pi-update 固定为 ['update','--self']；entry 也由它一路带过来
      * （闸门检查过的那一份）。这里只负责接到与 MCP 动作同一条 runCli 上
-     * （shell:false + args 数组 + 超时 + 有界输出）。缺 entry 才现解析一次 ——
-     * 正常路径不会走到那里。 */
-    const entry = (opts && opts.entry) || (() => {
-      try {
-        return buildPiEntry(piLaunch.packageDir());
-      } catch {
-        return null;
-      }
-    })();
-    if (!entry || !entry.ok) {
-      return Promise.resolve({ ok: false, spawnFailed: true, error: '没有证明到这份 Pi 的官方入口' });
-    }
-    cliInFlight += 1;
-    return Promise.resolve(runCli({
-      entry,
-      args,
-      cwd: runtime.getCurrentCwd() || undefined,
-      env: {},
-      timeoutMs: (opts && opts.timeoutMs) || 5 * 60 * 1000,
-      maxStdoutBytes: (opts && opts.maxStdoutBytes) || 4000,
-    })).finally(() => {
-      cliInFlight -= 1;
-    });
+     * （shell:false + args 数组 + 超时 + 有界输出）。 */
+    return runPiCliCommand(args, opts);
   },
   pauseBridge: (reason) => rpc.pauseForMaintenance(reason),
   resumeBridge: () => rpc.resumeFromMaintenance(),
-  invalidateCaches: () => {
-    /* 顺序即语义：identity 先失效，再让各层重新解析。
-     * piBuiltins / mcpNative / probes 都按 identity 或 cwd 分键，不清就会
-     * 拿着旧 pi 的结论继续显示。 */
-    piLaunch.reset();
-    piVersion.reset();
-    piBuiltins.reset();
-    probes.reset();
-    mcpNative.reset();
-    piCompat.reset();
-    probesRef?.reset();
-  },
-  busyReason: () => {
-    /* 主会话活动（真实事件语义）—— 规则在 pi-activity.js。 */
-    const turn = piActivity.busy();
-    if (turn) return turn;
-    if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
-    if (plannerRef) {
-      /* 规则只有一份（planner 的 projectSwitchBlockReason：计划在跑 / 独立验证在跑） */
-      const reason = plannerRef.projectSwitchBlockReason();
-      if (reason) return { code: 'busy-plan', error: reason };
-    }
-    return null;
-  },
+  invalidateCaches: invalidatePiCaches,
+  busyReason: piBusyReason,
+});
+
+/* Known Capability 一键安装（P24 收口）。
+ *
+ * 与上面那个 piUpdate **完全分离**：那个换 pi 本体，这个装 Extension；
+ * 端点、allowlist、文案、状态各有一套。共用的只有三件事，且都来自上面那三个
+ * 共享原语：**当前这份 Pi 的入口**、**同一条 runCli 出口**、**同一份忙判据**。
+ *
+ * 三条装配要点：
+ *   1. **renderer 只能送 capabilityId**：source 由 `server/capability-install.js`
+ *      的固定 allowlist 决定，未知 id fail closed ⇒ 它不是任意包安装入口。
+ *   2. **固定 argv**：`['install', <allowlisted source>, '--no-approve']` ——
+ *      不带 `-l` / `--local`（用户级安装，跨项目可用），不带 `--approve`。
+ *   3. **维护期间才动 Pi**：与自更新同一套 pause / resume 与失败语义；
+ *      退出码 0 只说明命令跑完，**装没装由 Registry 重新发现回答**。 */
+const capabilityInstall = createCapabilityInstall({
+  currentCwd: () => runtime.getCurrentCwd(),
+  busyReason: piBusyReason,
+  resolveInstallTarget: () => resolvePiCliEntry(),
+  runInstall: (args, opts) => runPiCliCommand(args, opts),
+  pauseBridge: (reason) => rpc.pauseForMaintenance(reason),
+  resumeBridge: () => rpc.resumeFromMaintenance(),
+  invalidateCaches: invalidatePiCaches,
 });
 
 const route = createRouter({
@@ -654,6 +709,7 @@ const route = createRouter({
   diagnostics,
   updateCheck,
   piUpdate,
+  capabilityInstall,
   quota,
   compat: piCompat,
 });

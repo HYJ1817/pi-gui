@@ -6,6 +6,7 @@
 
 import { el, S, ownsWorkspace } from './state.js';
 import { fetchStatus } from './api.js';
+import { maintenanceCopy } from './status-copy.js';
 import { updateSendState } from './composer.js';
 import { toast } from './ui/toast.js';
 
@@ -18,8 +19,14 @@ export function setStatus(text) {
   el.statusText.textContent = text || '';
 }
 
-export function setBridgeState(state, detail = '') {
+/** 设置 bridge 状态。
+ *
+ * `maintenanceReason` 只在维护态有意义（后端 `pauseForMaintenance(reason)` 给的）：
+ * 「正在更新 pi」与「正在安装扩展」都说成同一句，用户会以为界面在骗他。
+ * 不传就沿用当前记住的那个原因 —— ready / starting 等状态会把它清掉。 */
+export function setBridgeState(state, detail = '', maintenanceReason = null) {
   S.bridgeState = state;
+  S.maintenanceReason = state === 'maintenance' ? (maintenanceReason || S.maintenanceReason) : null;
   const labels = {
     'no-project': ['', '未选择项目'],
     starting: ['busy', '正在启动 pi…'],
@@ -27,10 +34,10 @@ export function setBridgeState(state, detail = '') {
     restarting: ['busy', '正在重启 pi…'],
     exited: ['bad', detail || 'pi 已退出'],
     error: ['bad', 'pi 启动失败'],
-    /* Pi 自更新的短时维护态（Built-in Pi Updater）。用 busy 而不是 bad：
+    /* 短时维护态（Pi 自更新 / Capability 安装）。用 busy 而不是 bad：
      * 这是**计划内**的停机，进程是 GUI 自己停的，完成后会自动重启 ——
-     * 标成红色会让人以为 pi 崩了，进而去点「重启 Pi」，反而打断更新。 */
-    maintenance: ['busy', 'Pi 正在更新（短暂停机）'],
+     * 标成红色会让人以为 pi 崩了，进而去点「重启 Pi」，反而打断维护。 */
+    maintenance: ['busy', maintenanceCopy(S.maintenanceReason).label],
   };
   const [kind, label] = labels[state] || ['', detail];
   setConn(kind, label);
@@ -51,10 +58,11 @@ export function setTitleText(t) {
  * 幂等：loadStatus / 增删项目后都会调，重复调用无副作用。 */
 export function applyProjectState() {
   const ready = S.hasProject;
-  /* 维护态（Pi 正在被 self-update 替换）**不是错误态**：进程是 GUI 自己停的，
-   * 完成后会自动重启，会话与草稿都还在。所以输入区不锁死 —— 让人能继续打字、
-   * 看得见自己写的内容，只是发送键按住（见 composer.js：它看 bridgeState），
-   * 并用 placeholder 说明在等什么。锁成灰色 +「等待 pi 就绪…」会让人以为 pi 崩了。 */
+  /* 维护态（Pi 正在被 self-update 替换，或在装扩展）**不是错误态**：进程是
+   * GUI 自己停的，完成后会自动重启，会话与草稿都还在。所以输入区不锁死 ——
+   * 让人能继续打字、看得见自己写的内容，只是发送键按住（见 composer.js：它看
+   * bridgeState），并用 placeholder 说明在等什么。锁成灰色 +「等待 pi 就绪…」
+   * 会让人以为 pi 崩了。文案按 `maintenance.reason` 说清是哪一种维护。 */
   const maintenance = S.bridgeState === 'maintenance';
   const canUse = ready && !S.switching && (S.bridgeState === 'ready' || maintenance);
   el.welcomeRestore.hidden = !S.restoring;
@@ -67,7 +75,7 @@ export function applyProjectState() {
     : S.switching
       ? '正在切换项目…'
       : maintenance
-        ? 'Pi 正在更新，完成后可继续…'
+        ? maintenanceCopy(S.maintenanceReason).busy
         : canUse
           ? '随心输入'
           : '等待 pi 就绪…';
@@ -105,11 +113,14 @@ export async function loadStatus(generation = S.workspaceGeneration) {
     /* 兼容摘要（P4）。老后端 / 单测没有这个字段 → 保持 null（= 全部按可用处理）。 */
     S.compat = j.compat || null;
     warnIfIncompatible();
-    /* Pi 正在被 self-update 替换时的维护态。**必须从 /api/status 读一次**：
+    /* 维护态（Pi 自更新 / Capability 安装）。**必须从 /api/status 读一次**：
      * SSE 不重放，刷新页面之后就只剩这一个来源了 —— 否则界面会显示成
      * 「pi 未运行」，一个计划内的停机被读成故障。切项目期间不动它：
-     * 那时正在走的是 restarting，别把两个状态混起来。 */
-    if (j.maintenance && !S.switching) setBridgeState('maintenance');
+     * 那时正在走的是 restarting，别把两个状态混起来。
+     * reason 一并带过来：「正在更新 pi」和「正在安装扩展」是两句不同的话。 */
+    if (j.maintenance && !S.switching) {
+      setBridgeState('maintenance', '', typeof j.maintenance.reason === 'string' ? j.maintenance.reason : null);
+    }
   } else {
     S.cwd = '';
     S.hasProject = false;
