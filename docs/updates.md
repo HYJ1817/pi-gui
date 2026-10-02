@@ -426,6 +426,36 @@ idle → checking → available → updating → verifying → restarting → la
 前端**只认这几个值**，不自己拼 `loading && hasUpdate && !error` 那种状态 ——
 拼装的取值空间里必然长出「按钮说可以更新、其实正在更新」这类自相矛盾的界面。
 
+### ⚠️ 「检查缓存」不兼任「更新运行状态」（GET 的读数语义）
+
+这一点值得单独说，因为它出过一个真实缺陷：更新**运行期间**的 `GET /api/pi-update`
+如果命中了更新前那次检查的 TTL 缓存，就会回一个 `phase:'available'` /
+`running:false` —— 前端据此认为「更新已经结束」，**停掉轮询**、并把按钮重新
+点亮成「更新到 1.0.0」，而后台其实还在替换文件。更新失败时更糟：失败结果会被
+下一次检查直接覆盖成 available。
+
+所以现在内部是**两份状态，互不兼任**：
+
+| | 内容 | 谁写 | 谁读 |
+|---|---|---|---|
+| 检查状态 | 公网检查结果 + TTL（`{at, payload}`） | `readStatus()` 走公网那一次 | 只有「没有更新状态」或**用户显式 `force=1`** 时 |
+| 更新执行状态 | 相位（`updating`/`verifying`/`restarting`）+ 终态（`latest`/`failed`）+ `installedVersion` / `errorCode` / 脱敏 `error` | `POST` 起的那次执行 | 只要存在，`GET` 一律回它 |
+
+规则：
+
+1. **更新中**：不返回旧缓存、**不访问 pi.dev**，回真实相位 + `running:true`
+   + `canUpdate:false`，版本沿用本次 update 的 context → 轮询能一直跟到结束。
+2. **成功后**：`phase:'latest'`、`running:false`、`installedVersion` 与实际版本、
+   `currentVersion` 等于新版本、`updateAvailable:false`。
+3. **失败后**：`phase:'failed'`、`running:false`、`errorCode` + 脱敏 `error`
+   （有证据时带上 current/latest）。**轮询里的普通 GET 不会**用一次新的公网检查
+   把它覆盖掉 —— 连续轮询都保持 `failed`。
+4. **只有用户显式点「检查 Pi 更新」（`?force=1`）** 才允许用新的检查覆盖终态。
+
+前端侧还有一条对应的坑：`pollOnce` **只认 `ok === true`** 是不够的 ——
+失败终态按契约就是 `ok:false`，丢掉它就会继续轮询、下一轮拿到默认值又变回
+available。所以 `ok:false` 且 `running === false` 时同样要吸收并停轮询。
+
 ### 自动检查
 
 启动后**延迟 12 秒只检查一次**（比 Pi GUI 自己的 8 秒再晚一点：pi 的版本探测要走一次
@@ -467,12 +497,34 @@ pi 包的读盘）。它**不阻塞启动、不轮询、绝不安装**，吃 TTL
 
 | 闸门 | code | 判据来自 |
 |---|---|---|
-| 正在生成的回合 | `busy-turn` | pi 自己的事件（`turnActive`） |
+| 主会话在干活（见下） | `busy-turn` | `server/pi-activity.js`（真实事件语义） |
 | 在飞的 Pi CLI 动作（例如 MCP 登录） | `busy-cli` | CLI 动作计数 |
 | 跑着的 Planner 任务 / 独立验证 | `busy-plan` | planner 的 `projectSwitchBlockReason()`（规则只有一份） |
 | 另一条更新正在跑 | `update-running` | 模块自己的单飞锁 |
 | 工作区正在切 | `workspace-stale` | `__expectedCwd` |
 | 判不出忙不忙 | `busy-unknown` | 上面那条查询抛错 → **fail closed** |
+
+#### 「主会话在干活」按 Pi 1.0.0 的真实语义判定
+
+规则集中在 `server/pi-activity.js`（纯函数式，可单测；`server.js` 只转发事件）。
+官方 `core/agent-session.ts` 的定义是：
+
+- `agent_start` —— **一次 low-level run** 开始
+- `agent_end` —— 只结束这一次 run，**之后还可能继续**：automatic retry
+  （`willRetry`）、overflow recovery、compaction retry、steering、follow-up
+- `agent_settled` —— session 级的自动工作**彻底结束**（在所有重试与压缩之后才发）
+
+所以：**active 从 `agent_start` 起，只在 `agent_settled` 落；`agent_end` 不清**。
+早先的实现拿 `agent_end` 当结束 —— 那会在「失败自动重试」的间隙里把闸门打开，
+而那正是最不该替换 runtime 的时刻。
+
+还处理了一个竞态：用户刚点发送、Pi 还没来得及发 `agent_start` 时点更新。
+只看 `agent_start` 会误判成空闲，所以**命令被 bridge 接受**（RPC `prompt` 已写出）
+就置 pending；`prompt` 应答 `disposition === 'handled'`（明确不会有 run）才撤回，
+`'queued'` / `'started'` 继续等 `agent_settled`。都是确定性信号，**没有一处靠固定延迟**。
+
+不允许 busy 永久挂住：`bridge_status` 的 starting / restarting / exited / error /
+no-project / maintenance 六种状态，以及 `new_session`（换时间线），都会清账。
 
 **只跑官方 self-update，而且只跑证明过的那一份 pi。** 唯一会被执行的命令是：
 
@@ -524,6 +576,29 @@ rpc.resumeFromMaintenance()         // 恢复正常启动 —— 只启动一次
 - 已经在维护中再调一次 → `{ok:false, code:'already-in-maintenance'}`（不嵌套）
 - `getState().maintenance` 暴露 `{reason, at}`，所以**刷新页面之后仍能渲染维护态**
 
+### ⚠️ 暂停的契约是「确认它真的退出」，超时算失败
+
+`pauseForMaintenance()` **只有在确认旧 child（整棵进程树）已经退出之后**才回
+`{ok:true}`。这里的判据只能是**进程真的没了**，不能是「等够时间了就当它死了」——
+文件替换的前提是「那个程序不再运行」，用超时替代这个前提等于在旧进程还活着时
+替换它的运行时。
+
+- 检查进程退出用 `exit` **与** `close`（spawn 失败只有 `close`）。
+- 杀的是**整棵进程树**：Windows 上经 npm `.cmd` 启动时 `child.kill()` 只收得掉
+  外层包装，所以复用 `agents/cli.js` 里验证过的 `killTree`（`taskkill /T /F`）。
+  该原语是**注入**的 —— `rpc-bridge` 自己只依赖 node 内建与 `pi-launch`
+  （有架构守卫测试钉着），生产由组合根 `server.js` 注入，测试传替身。
+- 到 `pauseTimeoutMs`（默认 10 秒）进程仍在 → **`{ok:false, code:'pause-timeout'}`**，
+  并**回滚维护态**：撤销 `maintenance`、如实广播一个 `ready`（它确实还在跑），
+  bridge 继续可用、**不产生第二个 child**、`crashStreak` 不受影响。
+- updater 收到 `pause-timeout` **一次都不跑**（`runArgs.length === 0`）、不 resume、
+  不碰缓存 —— 于是绝不会出现「旧进程还在、新版本已经换上去」。
+- 这个超时定时器**故意不 `unref`**：它承担的是「给出确定结论」，unref 之后事件循环
+  一空进程就退出、pause 永远不 resolve，调用方会以为还在等。
+- 顺带一条防线：暂停会先把 child 的 `stdin` `end()` 掉，所以「还能不能写」不能
+  只看 `!pi`，要看 stdin 是否可写 —— 否则维护超时后再 `send()` 会在已结束的流上
+  写，Node 会抛出无人接管的 stream error，**整个后端一起崩**。
+
 它**刻意不复用** `runtime.shuttingDown`：那个的意思是「Pi GUI 要退出了」，
 两种状态的原因、持续时间和恢复路径都不一样，混用会让界面说出错误的原因。
 
@@ -553,15 +628,21 @@ rpc.resumeFromMaintenance()         // 恢复正常启动 —— 只启动一次
 ## 十八、测试
 
 ```bash
-npm run test:pi-update        # 81 项（已纳入 npm test）
+npm run test:pi-update        # 126 项（已纳入 npm test）
 ```
 
 覆盖：检查的 TTL / single-flight / `force` / 超时 / 网络失败 / 离线 / 响应形状 /
 包名不符 / 请求隐私；更新动作的确认、过期、no-op、**固定参数
-`['update','--self']`**、任意参数被忽略、闸门与并发；维护态不自动重启、只 resume 一次、
+`['update','--self']`**、任意参数被忽略、闸门与并发；**更新中/终态的 GET 语义**
+（不回旧缓存、不打公网、失败不被覆盖、只有 `force` 才覆盖）；**暂停超时
+（`pause-timeout` → updater 一次都不跑）**；**活动生命周期**（`agent_end` 之后仍忙、
+只有 `agent_settled` 放行、`handled`/`queued`/`started` 三种 disposition、
+六种 bridge 终止态收口）；维护态不自动重启、只 resume 一次、
 `crashStreak` 不动；identity 的解析次数有界、**执行用的是闸门解析出的那个入口对象**、
 没有 PATH fallback；缓存失效与版本复验；静态边界扫描（这个模块里不可能出现第二种
-安装方式）；HTTP 层的 405 / bad-body / 202 / 离线。细节见 [testing.md](testing.md)。
+安装方式）；HTTP 层的 405 / bad-body / 202 / 离线。前端侧另有一条**真实轮询**用例
+（`updating → verifying → restarting → latest`，忙态全程禁用按钮、终态停止轮询）。
+细节见 [testing.md](testing.md)。
 
 **默认测试绝不访问 `pi.dev`，也绝不跑真 pi 的 updater** —— 检查用的 `fetch` 与
 执行用的 runner 全部是注入的替身，请求没走到替身上 A 段直接就红。

@@ -64,15 +64,29 @@ Pi GUI 会**执行一次官方 self-update** 去升级本机装着的那份 pi�
   它在结构上不可能是「任意命令执行器」。
 - **目标版本不采信前端口述。** 更新前服务端重新确认一次，当前版本与目标版本各自再校一遍；
   对不上是 `stale-current` / `stale-target`，不更新。
-- **闸门在后端，前端的 disabled 按钮不算数。** 服务端自己再查一遍：没有正在生成的回合、
+- **闸门在后端，前端的 disabled 按钮不算数。** 服务端自己再查一遍：主会话没有在干活、
   没有跑着的 Planner 任务、没有在跑的独立验证、没有在飞的 Pi CLI 动作（例如 MCP 登录）、
   没有另一次更新、工作区没在切。命中任何一条都拒绝（`busy-*` / `update-running`）。
+  「主会话在干活」按 Pi 1.0.0 的真实事件语义判定（`server/pi-activity.js`）：
+  **`agent_start` 起、只在 `agent_settled` 落** —— `agent_end` 只结束一次 low-level
+  run，后面还可能有自动重试 / 压缩 / steering；拿 `agent_end` 当结束会在重试间隙
+  误放行。另外「命令已被 bridge 接受、`agent_start` 还没到」的窗口也算忙
+  （否则刚发出去的消息会被更新打断），不看固定延迟。
 - **维护态语义**（`rpc.pauseForMaintenance()`）：更新期间 bridge 停掉当前 pi 子进程，
   不接新命令、**不自动重启**、不污染 `crashStreak` / backoff，并如实广播
   `bridge_status{state:'maintenance', phase:'pausing'|'stopped', reason}`。
   它**刻意不复用** `runtime.shuttingDown` —— 那个的意思是「Pi GUI 要退出了」。
+  **暂停只有在确认进程（整棵进程树）真的退出之后才算成功**：超时仍存活一律
+  `{ok:false, code:'pause-timeout'}` 并回滚维护态，**updater 一次都不执行** ——
+  绝不允许「等够时间就当它死了」然后去替换一个仍在运行的程序的运行时。
+  杀进程树复用 `agents/cli.js` 里验证过的 `killTree`（Windows `taskkill /T /F`），
+  由组合根注入（`rpc-bridge` 不认识业务模块，有架构守卫钉着）。
   `resumeFromMaintenance()` 只启动一次；**已经暂停之后的任何失败路径都会 resume**
   （`finally` 里做），GUI 不会永久停在维护态；旧的那份 pi 还能起来就继续能用。
+- **更新结果不会被下一次检查悄悄改写。** 检查缓存与更新执行状态是两份状态：
+  更新中 / 更新终态（`latest` / `failed`）的 `GET` 一律回真实执行状态，不回旧缓存、
+  不打公网；**只有用户显式点「检查 Pi 更新」（`force=1`）** 才允许用新检查覆盖终态。
+  失败原因（`errorCode` + 脱敏 `error`）因此不会被覆盖成「有新版本可用」。
 - **退出码 0 不是成功。** 官方 updater 正常结束之后，先清掉所有与 pi 包 identity 绑定的
   缓存（launch → version → builtins → probes → native MCP → compat，顺序即语义），
   再用**同一个 launch identity** 强制重读版本；装上的版本不等于目标版本就是

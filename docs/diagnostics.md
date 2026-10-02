@@ -34,8 +34,10 @@ Pi GUI 的“诊断”面板用于把故障排查需要的运行状态收敛成�
   `updateAvailable` / `canUpdate` / `verification` / `reason` / `running` /
   `cached` / `errorCode`。它说的是「本机装着的那个 pi 有没有新版、能不能更新」，
   与 Pi GUI 自己的版本块（`app.version`）是两件事，**别读串**。
-  **这一块是只读投影：`piUpdate()` 只看检查缓存的最近一次结果，
-  一个网络请求都不发**（快照里也没有 command / args / 绝对路径 / updater 原始输出）
+  **这一块是只读投影：`piUpdate()` 只看当前状态（更新中/终态优先，否则是检查缓存），
+  一个网络请求都不发**（快照里也没有 command / args / 绝对路径 / updater 原始输出）。
+  更新正在跑或刚跑完时，这里跟的是**更新自己的**相位与终态（`latest` + `installedVersion`、
+  或 `failed` + `errorCode`），而不是更新前那次检查的 `available`
 - **bridge 维护态**（`bridge.maintenance`）：Pi 正在被官方 self-update 替换时，
   这一段是 `{reason}`（不在维护中是 `null`）。它只投影 `reason` ——
   bridge 内部那份 `{reason, at}` 里的时间戳不进快照
@@ -166,13 +168,13 @@ npm run test:update        # 版本检查（含「诊断里的版本来自快照
 - 有项目 / 无项目两种状态
 - 目录可读写健康检查
 
-> ⚠️ **`piUpdate` 投影与 `bridge.maintenance` 目前没有被断言钉住**（如实记下来，
-> 免得下次以为这块测过了）：`tests/diagnostics.cjs` 不注入 `piUpdate` ——
-> 它走的是 `null` 分支（「不注入就是 `null`」那条断言仍然有效）；
-> `tests/pi-update.cjs` 断言的是**模块自己的** `snapshot()`（相位、`running`、
-> 清除缓存后的复验），不经过 `server/diagnostics.js` 那一层字段白名单。
-> 所以「诊断里只出现那十个字段 / 维护态只出现 `reason`」这件事目前靠读代码保证，
-> 不靠测试；前端那两处（面板里的「Pi」区块、摘要里的 `Pi 更新` 行）同理。
+> ✅ **`piUpdate` 投影与 `bridge.maintenance` 已经钉住了**（`tests/diagnostics.cjs`
+> 的「Pi 更新投影只带白名单字段」与「维护态只投影 reason」两条）：注入的替身里
+> 故意塞了 `command` / `args` / `rawStderr` / `entryPath` / `token`，
+> 断言快照里只出现那十个字段、而且不含命令行、参数、`Bearer`、绝对路径与
+> `must-not-leak`；维护态只出现 `{reason}`，内部时间戳不进快照。
+> 前端那两处（面板里的「Pi」区块、摘要里的 `Pi 更新` 行）由 `smoke` 与
+> 真实浏览器截图覆盖。
 
 前端侧（`npm run test:ui` 的 P23 段）另有 16 条：五个新小节都渲染、
 版本来源与核对状态分开摆、probe 三值与出处、矩阵基线、Native MCP 不含 server 名字、
