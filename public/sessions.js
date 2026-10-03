@@ -31,7 +31,7 @@
  *    回不到那条对话。这正是「开个新对话，旧对话就消失了」的真正原因。
  *    现在由 rpc.js 的 afterSessionSwitch() 通过 setSessionListRefresh() 回调触发。
  * 5. **归档 / 删除不能碰当前会话**：pi 正开着那个文件往里追加。后端也会拒，
- *    界面这一层先不给按钮，避免用户点出一个必然失败的确认框。
+ *    界面保留统一菜单，但禁用受限动作并说明原因。
  * 6. **搜索框只建一次，重画只画列表区。** 输入框挂在列表区上面；跟着列表区
  *    一起重建的话，每敲一个字都会丢焦点与光标位置。搜索状态本体在
  *    `session-search.js` 里，本模块只负责「按状态决定列表区画什么」。
@@ -232,27 +232,23 @@ function moreBtn(text, onclick, cls) {
 }
 
 /**
- * 行尾动作菜单的内容。**按现有真实能力动态生成**，不为了让菜单看起来丰富
- * 就突破既有边界：
- *
- *   当前会话        → 只有「重命名」（pi 的 set_session_name 只作用当前会话；
- *                     Pi 正开着这个文件，归档 / 删除本来就会被后端拒）。
- *                     `sessionNaming` 被兼容层证实不可用时**一项都没有**。
- *   非当前、非 pending → 「归档 / 取消归档」＋分隔线＋「删除会话」（danger）。
- *   pending         → 没有有效动作（文件还没落盘）→ 不显示三点。
+ * 已落盘会话统一显示三个动作，受限项禁用并解释原因。
+ * 重命名只作用于当前会话；当前会话不可归档 / 删除。
+ * pending 没有有效动作（文件还没落盘），不显示三点。
  */
 function sessionMenuItems(s, row, titleEl) {
   if (s.pending) return [];
-  if (s.current) {
-    if (capMissing('sessionNaming')) return [];
-    return [{ label: '重命名', icon: MENU_ICONS.pencil, onClick: () => startRename(row, titleEl, s) }];
-  }
+  const namingUnavailable = capMissing('sessionNaming');
+  const currentReason = '当前会话正在使用，请先切换到其它会话再归档或删除。';
   return [
+    { label: '重命名', icon: MENU_ICONS.pencil, disabled: !s.current || namingUnavailable,
+      disabledReason: namingUnavailable ? '当前 Pi 不支持会话重命名。' : '重命名：请先打开这条会话。',
+      onClick: () => startRename(row, titleEl, s) },
     s.archived
-      ? { label: '取消归档', icon: MENU_ICONS.restore, onClick: () => doArchive(s, false) }
-      : { label: '归档', icon: MENU_ICONS.archive, onClick: () => doArchive(s, true) },
+      ? { label: '取消归档', icon: MENU_ICONS.restore, disabled: s.current, disabledReason: currentReason, onClick: () => doArchive(s, false) }
+      : { label: '归档', icon: MENU_ICONS.archive, disabled: s.current, disabledReason: currentReason, onClick: () => doArchive(s, true) },
     { separator: true },
-    { label: '删除会话', icon: MENU_ICONS.trash, danger: true, onClick: () => doDelete(s) },
+    { label: '删除会话', icon: MENU_ICONS.trash, danger: true, disabled: s.current, disabledReason: currentReason, onClick: () => doDelete(s) },
   ];
 }
 

@@ -21,7 +21,7 @@
  *
  * ---------- items 的形态 ----------
  *
- *   { label, icon, danger, disabled, onClick }
+ *   { label, icon, danger, disabled, disabledReason, onClick }
  *   { separator: true }
  *
  * `icon` 是**常量 SVG 字符串**（见 `MENU_ICONS`）；这里不做任何 URL / 用户数据
@@ -164,6 +164,9 @@ export function openActionMenu(anchor, items = []) {
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', anchor.getAttribute('aria-label') || '操作');
   menu.hidden = false;
+  const reasons = [...new Set(list.filter((item) => item.disabled && typeof item.disabledReason === 'string' && item.disabledReason)
+    .map((item) => item.disabledReason))];
+  const noteId = MENU_ID + 'Note';
 
   for (const item of list) {
     if (item.separator === true) {
@@ -175,7 +178,14 @@ export function openActionMenu(anchor, items = []) {
     const button = el('button', 'action-menu-item' + (item.danger ? ' danger' : ''));
     button.type = 'button';
     button.setAttribute('role', 'menuitem');
-    if (item.disabled) button.disabled = true;
+    if (item.disabled) {
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      if (typeof item.disabledReason === 'string' && item.disabledReason) {
+        button.title = item.disabledReason;
+        button.setAttribute('aria-describedby', noteId);
+      }
+    }
     if (typeof item.icon === 'string' && item.icon) {
       const icon = el('span', 'action-menu-ic');
       /* 常量 SVG 模板，不含任何用户数据。 */
@@ -184,10 +194,17 @@ export function openActionMenu(anchor, items = []) {
     }
     button.appendChild(el('span', 'action-menu-label', item.label));
     button.onclick = () => {
+      if (button.disabled) return;
       closeActionMenu({ restoreFocus: false });
       if (typeof item.onClick === 'function') item.onClick();
     };
     menu.appendChild(button);
+  }
+  if (reasons.length) {
+    const note = el('div', 'action-menu-note', reasons.join(' '));
+    note.id = noteId;
+    note.setAttribute('role', 'note');
+    menu.appendChild(note);
   }
 
   /* 先挂上去再量尺寸（`visibility:hidden` 下仍然可以量到真实宽高）。 */

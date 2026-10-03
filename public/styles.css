@@ -2330,6 +2330,9 @@ button.pj-sess-primary{cursor:pointer}
 .action-menu-item.danger:hover,.action-menu-item.danger:focus-visible{background:rgba(248,113,113,.1);color:#ffc4c4}
 .action-menu-item.danger:hover .action-menu-ic,.action-menu-item.danger:focus-visible .action-menu-ic{color:#ffc4c4}
 .action-menu-item:disabled{opacity:.45;cursor:not-allowed}
+.action-menu-item:disabled:hover{background:transparent;color:inherit}
+.action-menu-item:disabled:hover .action-menu-ic{color:#8f9296}
+.action-menu-note{padding:7px 8px 4px;border-top:1px solid var(--line-soft);font-size:11px;line-height:1.5;color:var(--t3);overflow-wrap:anywhere}
 /* 低对比分隔线 */
 .action-menu-sep{height:1px;margin:5px 4px;background:var(--line-soft)}
 /* .stage 的 overflow 在前面的基础规则里是 overflow:clip（带原因说明），
