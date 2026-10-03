@@ -306,7 +306,7 @@ const BUTTON = { tagName: 'BUTTON', isContentEditable: false };
     for (const [id, meta] of Object.entries(copy.NOTICE_ACTIONS)) {
       assert.ok(meta.label && meta.title, id);
     }
-    assert.deepEqual(Object.keys(copy.NOTICE_ACTIONS).sort(), ['diagnostics', 'restart']);
+    assert.deepEqual(Object.keys(copy.NOTICE_ACTIONS).sort(), ['diagnostics', 'restart', 'resync']);
   });
   check('面板 loading / empty / failed 文案统一，且重试是独立的一句', () => {
     assert.equal(copy.SURFACE_COPY.loading('文件变更'), '正在读取文件变更…');

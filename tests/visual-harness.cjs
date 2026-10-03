@@ -16,6 +16,17 @@ const PUB = path.join(__dirname, '..', 'public');
 const UPLOAD_DIR = path.join(__dirname, '..', '.uploads');
 const PORT = Number(process.env.HARNESS_PORT || 7789);
 let hotfixNoProject = false;
+const recoveryMode = process.env.P25_2_HARNESS === '1';
+let recoveryState = 'ready', recoveryRevision = 1;
+const recoverySnapshot = () => ({ bridgeState: recoveryState, bridgeInstance: 'offline-recovery-harness', bridgeRun: 1,
+  bridgeRevision: recoveryRevision, cwd: process.cwd(), hasProject: true,
+  piRunning: true, bridgeError: '', bridgeHint: '', maintenance: null });
+const recoveryBus = recoveryMode ? import('../server/sse.js').then(({ createEventBus }) => {
+  const bus = createEventBus({ getBridgeSnapshot: recoverySnapshot });
+  bus.publish({ type: 'bridge_status', state: 'ready', bridgeRun: 1 });
+  for (let i = 0; i < 805; i++) bus.publish({ type: 'fixture_event', bridgeRun: 1, i });
+  return bus;
+}) : null;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -646,6 +657,7 @@ const BRIDGE_RUN = 1;
 function push(evt) {
   const needsRun = /^tool_execution_/.test(evt?.type || '') || evt?.type === 'bridge_status';
   const stamped = needsRun && !Number.isInteger(evt.bridgeRun) ? { ...evt, bridgeRun: BRIDGE_RUN } : evt;
+  if (recoveryMode) { void recoveryBus.then(bus => bus.publish(stamped)); return; }
   const line = 'data: ' + JSON.stringify(stamped) + '\n\n';
   for (const c of clients) {
     try {
@@ -772,6 +784,13 @@ function providerAuthSnapshot() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = url.pathname;
+  if (recoveryMode && p === '/api/__recovery') {
+    if (url.searchParams.has('state')) { recoveryState = url.searchParams.get('state'); recoveryRevision++; }
+    const bus = await recoveryBus;
+    if (url.searchParams.get('disconnect') === '1') bus.closeAll();
+    return json(res, 200, { ...recoverySnapshot(), backlog: bus.backlog().length,
+      historicalReady: bus.backlog().some(e => e.state === 'ready') });
+  }
   if (p === '/api/__hotfix/no-project' && req.method === 'POST') {
     hotfixNoProject = url.searchParams.get('value') === '1';
     return json(res, 200, { ok: true });
@@ -812,6 +831,7 @@ const server = http.createServer(async (req, res) => {
   if (process.env.HARNESS_VERBOSE && p.startsWith('/api/')) console.log(`${req.method} ${p}`);
 
   if (p === '/api/events') {
+    if (recoveryMode) return (await recoveryBus).subscribe(req, res);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -829,6 +849,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (p === '/api/status') {
+    if (recoveryMode) return json(res, 200, { ok: true, ...recoverySnapshot() });
     if (hotfixNoProject) return json(res, 200, { ok: true, piRunning: false, cwd: null, hasProject: false });
     return json(res, 200, { ok: true, piRunning: true, pid: 0, args: ['--mode', 'rpc'], cwd: process.cwd() });
   }

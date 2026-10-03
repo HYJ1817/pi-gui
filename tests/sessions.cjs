@@ -148,9 +148,9 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
     files.a1 = mkSession(dirA, { id: 'a1', cwd: PROJ_A, ts: '2026-09-25T10:00:00.000Z', messages: 4, firstUser: 'A 的第一次对话' });
     files.a2 = mkSession(dirA, { id: 'a2', cwd: PROJ_A, ts: '2026-09-25T12:00:00.000Z', messages: 2, firstUser: 'A 的第二次对话' });
     files.b1 = mkSession(dirB, { id: 'b1', cwd: PROJ_B, ts: '2026-09-25T11:00:00.000Z', messages: 6, firstUser: 'B 项目的对话' });
-    // 把 a2 的 mtime 改新一点，验证按更新时间倒序
+    // 把旧 a1 的 mtime 改新一点，验证更新时间不影响创建顺序
     const future = Date.now() + 5000;
-    fs.utimesSync(files.a2, future / 1000, future / 1000);
+    fs.utimesSync(files.a1, future / 1000, future / 1000);
   }
 
   const mk = (cwd, rpc) =>
@@ -192,7 +192,7 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
       const ids = r.sessions.map((s) => s.sessionId);
       return (r.sessions.length === 2 && ids.includes('a1') && ids.includes('a2') && !ids.includes('b1')) || JSON.stringify(ids);
     });
-    check('3b. 按更新时间倒序（最近的在最前）', () => (r.sessions[0].sessionId === 'a2') || r.sessions.map((s) => s.sessionId).join(','));
+    check('3b. 按创建时间倒序（旧会话更新也不置顶）', () => (r.sessions[0].sessionId === 'a2') || r.sessions.map((s) => s.sessionId).join(','));
     check('3c. 标题是第一条用户消息', () => r.sessions.some((s) => s.title === 'A 的第二次对话') || JSON.stringify(r.sessions.map((s) => s.title)));
     check('3d. 从 pi 的 get_state 拿到当前会话并标出来', () => {
       const cur = r.sessions.find((s) => s.current);
@@ -502,7 +502,7 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
      * new_session 之后 get_state 已经给了新的 sessionFile，但磁盘上还没有它。
      * 不补这一条的话，刚开的空会话不在列表里，界面上「当前项」仍然是旧会话，
      * 而当前项不给点 ⇒ 用户再也回不到旧对话（「开新对话后旧对话消失」）。 */
-    const ghost = path.join(ROOT, I.dirNameFor(PROJ_A), 'not-written-yet.jsonl');
+    const ghost = path.join(ROOT, I.dirNameFor(PROJ_A), '2026-09-26T00-00-00-000Z_ghost-1.jsonl');
     const mod = mk(PROJ_A, {
       request: async () => ({ sessionFile: ghost, sessionId: 'ghost-1', sessionName: '', messageCount: 0 }),
     });
@@ -519,7 +519,7 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
       const g = r.sessions.find((s) => s.pending);
       return (g && g.title && g.title.length > 0) || JSON.stringify(g);
     });
-    check('8d. 补位那条排在最前面（它就是当前会话）', () => r.sessions[0].pending === true || JSON.stringify(r.sessions.map((s) => s.pending)));
+    check('8d. 新建补位按文件名创建时间排在最前面', () => r.sessions[0].pending === true || JSON.stringify(r.sessions.map((s) => s.pending)));
     check('8e. 磁盘上的会话仍然都在（补位不是替换）', () => {
       const ids = r.sessions.filter((s) => !s.pending).map((s) => s.sessionId);
       return ids.includes('a1') || JSON.stringify(ids);
