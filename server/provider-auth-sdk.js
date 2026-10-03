@@ -125,7 +125,7 @@ async function quota(providerId, options, signal) {
   // Storage type is not the request credential. Pi owns OAuth toAuth conversion.
   let key;
   try{const resolved=await snapshot.getAuth(providerId,{signal});key=resolved?.auth?.apiKey;}catch{return emptyQuota(providerId,'auth_error','Pi 无法解析额度查询认证',null,true);}
-  if(typeof key!=='string'||!key)return emptyQuota(providerId,'unsupported','当前认证类型不适用于此额度接口',false,true);
+  if(typeof key!=='string'||!key)return emptyQuota(providerId,'unsupported','当前认证类型不适用于此额度接口',available,true);
   signal.throwIfAborted();
   const identity=createHash('sha256').update(providerId+'|'+adapter+'|'+key).digest('hex');
   const hit=quotaCache.get(identity);

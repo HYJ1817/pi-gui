@@ -89,6 +89,26 @@ export class ModelRuntime{
     const noKeyCount = fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length;
     const unsuitableRouter = await manager.getQuota('openrouter', { force: true });
     check('OAuth final AuthResult without API Key is unsupported without HTTP', () => { assert.equal(unsuitableRouter.quota.status, 'unsupported'); assert.equal(unsuitableRouter.providerExists, true); assert.equal(unsuitableRouter.quotaQuerySucceeded, false); assert.equal(fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length, noKeyCount); assert.ok(!JSON.stringify(unsuitableRouter).includes(SECRET)); });
+    check('unsuitable OAuth preserves credential existence in worker and public facts', () => {
+      const expected = { providerExists: true, quotaSupported: true, credentialAvailable: true, quotaQuerySucceeded: false };
+      const workerResult = wires.findLast(m => m.result?.quota?.providerId === 'openrouter' && m.result.quota.status === 'unsupported')?.result;
+      assert.ok(workerResult);
+      for (const result of [workerResult, unsuitableRouter]) for (const facts of [result, result.quota]) {
+        for (const [name, value] of Object.entries(expected)) assert.equal(facts[name], value, name);
+      }
+    });
+    await manager.handle({ method: 'GET' }, response, new URL('http://fixture/api/quota/openrouter?force=1'));
+    check('unsuitable OAuth HTTP facts retain credential without querying endpoint', () => {
+      assert.equal(response.code, 200);
+      const result = JSON.parse(response.body);
+      assert.equal(result.quota.status, 'unsupported');
+      for (const facts of [result, result.quota]) {
+        assert.equal(facts.providerExists, true); assert.equal(facts.quotaSupported, true);
+        assert.equal(facts.credentialAvailable, true); assert.equal(facts.quotaQuerySucceeded, false);
+      }
+      assert.equal(fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length, noKeyCount);
+      assert.ok(!response.body.includes(SECRET));
+    });
     state({ other: true });
     const future = await manager.getQuota('deepseek', { force: true });
     check('future credential with Pi-resolved API Key is supported', () => { assert.equal(future.quota.status, 'ok'); assert.equal(future.credentialAvailable, true); });
