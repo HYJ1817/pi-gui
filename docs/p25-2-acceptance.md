@@ -27,7 +27,8 @@
 10. **OpenRouter**：真实私有 worker 查询返回 ok、kind=key-quota。
     UI 为 Key 剩余额度/Key 已用额度/Key 限额，不宣称账户 Credits。
     无 models 条目在 fixture 覆盖（本机已有自定义 openrouter 条目）。
-    OAuth 和未知 credential 类型不猜，返回 unsupported。
+    后续 OAuth 收口：存储类型不再提前拒绝。Pi getAuth() 最终解析出 apiKey
+    即支持，无 apiKey 才 unsupported；转换始终在 Pi 私有 worker 内完成。
 11. **接口支持表**：
 
     | Provider | 当前 quota |

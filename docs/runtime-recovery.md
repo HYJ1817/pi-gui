@@ -22,7 +22,9 @@
 worker 内解析凭据并调用已有 DeepSeek / OpenRouter adapter，仅规范化结果跨边界。
 缓存身份为 SHA-256，不包含明文 key；额度超时/取消不终止并行 OAuth worker。
 自定义 models.json 配置沿用后端解析；NewAPI 必须显式选择 adapter。
-OpenRouter 展示的是当前 Key 额度，不是账户 Credits；OAuth 或未知认证类型不猜。
+OpenRouter 展示的是当前 Key 额度，不是账户 Credits。存储类型不决定额度接口
+能力：DeepSeek/OpenRouter 由私有 worker 调用 Pi ModelRuntime.getAuth()，最终
+AuthResult 含 apiKey 才请求接口；OAuth 转换仍由 Pi 完成，无 apiKey 才 unsupported。
 已存在但没有验证过 adapter 的供应商返回 unsupported。SiliconFlow 保持 unsupported。
 
 普通会话列表按有效 header.createdAt、Pi header.timestamp、严格文件名创建时间

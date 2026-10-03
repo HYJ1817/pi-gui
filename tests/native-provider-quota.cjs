@@ -38,7 +38,7 @@ export class ModelRuntime{
  getProviders(){return [{id:'deepseek',name:'DeepSeek',baseUrl:'https://api.deepseek.com',auth:{apiKey:{name:'Key'}}},{id:'openrouter',name:'OpenRouter',baseUrl:'https://openrouter.ai/api/v1',auth:{apiKey:{name:'Key'}}},...${JSON.stringify(unsupported)}.map(id=>({id,name:id,auth:{apiKey:{name:'Key'}}}))];}
  async listCredentials(){return [];}
  async checkAuth(id,{signal}={}){const s=state();if(s.checkHang)await new Promise((r,j)=>{signal.addEventListener('abort',()=>j(Error(secret)),{once:true});});if(s.checkError)throw Error(secret);return s.missing?undefined:{type:s.other?'other':s.oauth?'oauth':'api_key'};}
- async getAuth(){const s=state();if(s.authError)throw Error(secret);return {auth:{apiKey:s.key||secret},env:{SECRET:secret},source:secret};}
+ async getAuth(){const s=state();if(s.authError)throw Error(secret);return {auth:s.noApiKey?{headers:{Authorization:secret}}:{apiKey:s.key||secret},env:{SECRET:secret},source:secret};}
  async login(id,type,{notify}){notify({type:'progress'});await new Promise(r=>setTimeout(r,150));} async logout(){}
 }
 `);
@@ -69,11 +69,33 @@ export class ModelRuntime{
       ['500', { status: 500 }, 'unavailable'], ['timeout', { error: 'AbortError' }, 'unavailable'],
       ['network', { error: 'TypeError' }, 'unavailable'], ['invalid JSON', { invalidJson: true }, 'error'],
       ['malformed object', { payload: {} }, 'error'], ['missing credential', { missing: true }, 'auth_error'],
-      ['OAuth unsuitable', { oauth: true }, 'unsupported'], ['auth failure', { authError: true }, 'auth_error'],
-      ['unknown auth type unsuitable', { other: true }, 'unsupported'],
+      ['OAuth without resolved API Key', { oauth: true, noApiKey: true }, 'unsupported'], ['auth failure', { authError: true }, 'auth_error'],
+      ['future credential without resolved API Key', { other: true, noApiKey: true }, 'unsupported'],
     ]) { state(s); const result = await manager.getQuota('deepseek', { force: true }); check(name + ' native state is safe', () => { assert.equal(result.quota.status, expected); assert.equal(result.quotaQuerySucceeded, false); assert.ok(!JSON.stringify(result).includes(SECRET)); }); }
     state({ payload: { data: { limit: null, limit_remaining: null, usage: 0 } } });
     const router = await manager.getQuota('openrouter', { force: true }); check('OpenRouter key usage with no limit is not account balance', () => { assert.equal(router.quota.status, 'ok'); assert.equal(router.quota.balance, null); assert.equal(router.quota.windows.limit, null); assert.equal(router.quota.windows.used, 0); assert.equal(router.quota.kind, 'key-quota'); });
+    state({ oauth: true, payload: { data: { limit: 10, limit_remaining: 8, usage: 2 } } });
+    const oauthRouter = await manager.getQuota('openrouter', { force: true });
+    check('OpenRouter OAuth uses Pi final AuthResult API Key', () => {
+      assert.equal(oauthRouter.quota.status, 'ok'); assert.equal(oauthRouter.quota.kind, 'key-quota');
+      for (const fact of ['providerExists','quotaSupported','credentialAvailable','quotaQuerySucceeded']) assert.equal(oauthRouter[fact], true);
+      assert.equal(oauthRouter.quota.balance.amount, 8); assert.ok(!JSON.stringify(oauthRouter).includes(SECRET));
+    });
+    const response = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } };
+    await manager.handle({ method: 'GET' }, response, new URL('http://fixture/api/quota/openrouter?force=1'));
+    check('OAuth HTTP/Renderer projection contains no credential', () => { assert.equal(response.code, 200); assert.equal(JSON.parse(response.body).quota.status, 'ok'); assert.ok(!response.body.includes(SECRET)); });
+    check('OAuth worker wire and parent diagnostics/logs contain no credential', () => { assert.ok(!JSON.stringify(wires).includes(SECRET)); assert.ok(!parentLogs.join('').includes(SECRET)); });
+    state({ oauth: true, noApiKey: true });
+    const noKeyCount = fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length;
+    const unsuitableRouter = await manager.getQuota('openrouter', { force: true });
+    check('OAuth final AuthResult without API Key is unsupported without HTTP', () => { assert.equal(unsuitableRouter.quota.status, 'unsupported'); assert.equal(unsuitableRouter.providerExists, true); assert.equal(unsuitableRouter.quotaQuerySucceeded, false); assert.equal(fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length, noKeyCount); assert.ok(!JSON.stringify(unsuitableRouter).includes(SECRET)); });
+    state({ other: true });
+    const future = await manager.getQuota('deepseek', { force: true });
+    check('future credential with Pi-resolved API Key is supported', () => { assert.equal(future.quota.status, 'ok'); assert.equal(future.credentialAvailable, true); });
+    state({ oauth: true });
+    const unsupportedCount = fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length;
+    const chatgpt = await manager.getQuota('openai', { force: true });
+    check('OpenAI OAuth stays unsupported and does not query quota HTTP', () => { assert.equal(chatgpt.quota.status, 'unsupported'); assert.equal(chatgpt.providerExists, true); assert.equal(fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length, unsupportedCount); });
     state({ payload: { is_available: true, balance_infos: [{ currency: SECRET, total_balance: '1' }] } });
     const reflected = await manager.getQuota('deepseek', { force: true }); check('provider response cannot reflect native key across boundary', () => assert.ok(!JSON.stringify(reflected).includes(SECRET)));
     state({ key: SECRET + '"\\quoted', payload: { is_available: true, balance_infos: [{ currency: SECRET + '"\\quoted', total_balance: '1' }] } });
