@@ -160,7 +160,30 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
       env: { HOME: TMP, PI_CODING_AGENT_DIR: AGENT },
       // 归档 / 回收站落在自己的数据目录里，测试全程隔离在 TMP 下
       dataDir: path.join(TMP, 'data'),
+      getProjects: () => [{ path: PROJ_A }, { path: PROJ_B }],
     });
+
+  {
+    let rpcCalls = 0;
+    const preview = createSessions({
+      runtime: { getCurrentCwd: () => PROJ_A },
+      rpc: { request: async () => { rpcCalls++; return { sessionFile: files.a1 }; } },
+      env: { HOME: TMP, PI_CODING_AGENT_DIR: AGENT },
+      dataDir: path.join(TMP, 'preview-data'),
+      getProjects: () => [{ path: PROJ_A }, { path: PROJ_B }],
+    });
+    const before = fs.readFileSync(files.b1, 'utf8');
+    const result = await preview.list(PROJ_B);
+    check('项目预览：只列注册项目 B 的会话', () => result.ok && result.sessions.length === 1 && result.sessions[0].sessionId === 'b1');
+    check('项目预览：不会调用 Pi 或伪造当前会话', () => rpcCalls === 0 && result.currentId === null && result.sessions.every(s => !s.current && !s.pending));
+    check('项目预览：文件内容不变且不返回路径', () => before === fs.readFileSync(files.b1, 'utf8') && !JSON.stringify(result).includes(PROJ_B) && !result.sessions[0].file);
+    const denied = await preview.list(path.join(TMP, 'unregistered'));
+    const traversal = await preview.list(path.join(PROJ_B, '..'));
+    check('项目预览：未知目录拒绝', () => !denied.ok && denied.sessions.length === 0);
+    check('项目预览：上级目录拒绝', () => !traversal.ok && traversal.sessions.length === 0);
+    const active = await preview.list(PROJ_A);
+    check('项目预览：当前项目仍可读取当前会话', () => active.currentId === I.sessionId(files.a1) && rpcCalls === 1);
+  }
 
   {
     const mod = mk(PROJ_A, { request: async () => ({ sessionFile: files.a1 }) });
@@ -358,6 +381,11 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
       (list.code === 200 && Array.isArray(list.json().sessions)) || list.body().slice(0, 200));
     const noTok = await hit('GET', '/api/sessions');
     check('6b. 不带令牌 → 401', () => noTok.code === 401 || noTok.code);
+    const previewRoute = '/api/sessions?project=' + encodeURIComponent(PROJ_B);
+    const previewList = await hit('GET', previewRoute, { 'x-pi-gui-token': 'T' });
+    check('项目预览 HTTP：query 正确传入独立项目列表', () => previewList.json().sessions.length === 1 && previewList.json().sessions[0].sessionId === 'b1' && previewList.json().currentId === null);
+    const unauthPreview = await hit('GET', previewRoute);
+    check('项目预览 HTTP：仍需认证', () => unauthPreview.code === 401);
     const sw = await hit('POST', '/api/sessions/switch', { 'x-pi-gui-token': 'T' }, { id: '0'.repeat(16) });
     check('6c. POST /api/sessions/switch 不被 405 兜底吃掉（路由顺序正确）', () =>
       (sw.code === 200 && sw.json().ok === false) || JSON.stringify({ code: sw.code, body: sw.json() }));

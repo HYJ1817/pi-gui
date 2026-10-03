@@ -2040,6 +2040,33 @@ async function main() {
   await closePop();
   await send('Emulation.clearDeviceMetricsOverride');
 
+  await evalJs(`document.querySelector('#projectSidebar').classList.remove('search-open')`);
+  for (const [width,height] of [[700,600],[900,700],[1200,800],[1536,900]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+    await sleep(300);
+    const point = await evalJs(`(() => {
+      const row=document.querySelector('.project:not(.active)');
+      row.scrollIntoView({block:'nearest'});
+      const box=row.nextElementSibling,c=row.querySelector('.pj-chev');
+      window.__sidebarBefore={title:document.querySelector('#title').textContent,composer:document.querySelector('#composerBox').getBoundingClientRect().toJSON()};
+      if(!box.hidden)return null;
+      const r=c.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};
+    })()`);
+    if(point) {
+      await send('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+      await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+      await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+    }
+    await sleep(350);
+    await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:width-12,y:height-12});
+    await shotOf('#projects','UX-SIDEBAR-project-sessions-'+width+'x'+height,'项目标题、圆点会话和独立展开；预览不切聊天',['简单问候','你好'],[
+      ['预览展开且没有当前会话标记',`(() => {const row=document.querySelector('.project:not(.active)'),box=row.nextElementSibling;return row.querySelector('.pj-chev').getAttribute('aria-expanded')==='true'&&!box.hidden&&box.querySelectorAll('.pj-sess').length===3&&!box.querySelector('[aria-current]')})()`],
+      ['展开不切换聊天，Composer 不移动',`document.querySelector('#title').textContent===window.__sidebarBefore.title && ['x','y','width','height'].every(k=>Math.abs(document.querySelector('#composerBox').getBoundingClientRect()[k]-window.__sidebarBefore.composer[k])<.5)`],
+      ['圆点、项目标题和单行文本无水平溢出',`[...document.querySelectorAll('.pj-sess')].every(r=>r.querySelector('.pj-sess-dot')&&r.scrollWidth<=r.clientWidth) && getComputedStyle(document.querySelector('.project .pj-icon')).display==='none' && getComputedStyle(document.querySelector('.pj-sess-time')).display==='none' && document.documentElement.scrollWidth<=innerWidth`],
+    ]);
+  }
+  await send('Emulation.clearDeviceMetricsOverride');
+
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

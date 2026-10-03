@@ -1125,6 +1125,13 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
   if (p === '/api/sessions') {
+    if (url.searchParams.get('project') === 'C:\\work\\fermenter-notes') return json(res, 200, {
+      ok: true, hasProject: true, currentId: null, diagnostics: [], sessions: [
+        { id: 'eeeeeeeeeeeeeeee', title: '简单问候', current: false, archived: false, messageCount: 2, updatedAt: Date.now() },
+        { id: 'ffffffffffffffff', title: '完全访问权限设置', current: false, archived: false, messageCount: 4, updatedAt: Date.now() },
+        { id: '9999999999999999', title: '你好', current: false, archived: false, messageCount: 2, updatedAt: Date.now() },
+      ],
+    });
     return json(res, 200, {
       ok: true,
       hasProject: true,

@@ -5702,8 +5702,8 @@ staticCheck();
       if (!box || !active) return `box=${Boolean(box)} active=${Boolean(active)}`;
       return box.previousElementSibling === active || '会话块不在当前项目下面';
     });
-    check('会话：只挂在当前项目上，别的项目下面没有', () => {
-      const all = proj.querySelectorAll('.pj-sessions');
+    check('会话：当前项目只有一份可操作列表，其它项目是独立预览', () => {
+      const all = proj.querySelectorAll('.pj-sessions:not(.pj-preview)');
       return all.length === 1 || `渲染了 ${all.length} 块`;
     });
     check('会话：标题是第一条用户消息（不是文件名/时间戳）', () => {
@@ -6334,10 +6334,13 @@ staticCheck();
     const box = () => proj().querySelector('.pj-sessions');
     const rowCount = () => (box() ? box().querySelectorAll('.pj-sess').length : 0);
 
-    check('折叠：只有当前项目那一行有折叠箭头', () => {
+    check('会话样式：每行都有装饰圆点，不进入读屏名称', () =>
+      [...box().querySelectorAll('.pj-sess')].every(r => r.querySelector('.pj-sess-primary > .pj-sess-dot')?.getAttribute('aria-hidden') === 'true'));
+
+    check('折叠：每个项目都有独立展开箭头', () => {
       const rows = [...proj().querySelectorAll('.project')];
       const withChev = rows.filter((r) => r.querySelector('.pj-chev'));
-      return (withChev.length === 1 && withChev[0].classList.contains('active')) || `有箭头的行数=${withChev.length}`;
+      return withChev.length === rows.length || `有箭头的行数=${withChev.length}`;
     });
     check('折叠：默认展开（列表可见、aria-expanded=true）', () =>
       Boolean(box() && box().hidden === false && chev() && chev().getAttribute('aria-expanded') === 'true') ||
@@ -6469,6 +6472,9 @@ staticCheck();
         if (u.includes('/api/restart')) scopeCalls.restart++;
         if (u.includes('/api/projects') && !u.includes('/activate') && opts && opts.method === 'DELETE') scopeCalls.deletes.push(u);
         if (u.includes('/api/projects')) return { json: async () => twoProjects };
+        if (u.includes('/api/sessions?project=')) return { json: async () => ({ ok: true, sessions: [
+          { id: 'eeeeeeeeeeeeeeee', title: 'B 的会话', current: false, archived: false, messageCount: 2, updatedAt: Date.now() },
+        ] }) };
         return baseFetchForScope(url, opts);
       };
       await window.loadProjects();
@@ -6476,8 +6482,26 @@ staticCheck();
 
       const menuLabels = (menu) => [...menu.querySelectorAll('[role="menuitem"]')]
         .map((b) => b.querySelector('.action-menu-label').textContent);
-      const activeRow = proj().querySelector('.project.active');
-      const inactiveRow = [...proj().querySelectorAll('.project')].find((r) => !r.classList.contains('active'));
+      let activeRow = proj().querySelector('.project.active');
+      let inactiveRow = [...proj().querySelectorAll('.project')].find((r) => !r.classList.contains('active'));
+
+      const preview = inactiveRow.nextElementSibling;
+      check('项目展开：其它项目默认收起，controls 指向独立列表', () => preview.hidden && inactiveRow.querySelector('.pj-chev').getAttribute('aria-controls') === preview.id);
+      const previewGen = window.S.workspaceGeneration;
+      inactiveRow.querySelector('.pj-chev').click();
+      await wait(40);
+      check('项目展开：显示自己的会话，当前聊天不切换', () => !preview.hidden && preview.textContent.includes('B 的会话') && scopeCalls.activate === 0 && window.S.workspaceGeneration === previewGen);
+      check('项目展开：多个项目可同时展开，当前标记不串项目', () => !activeRow.nextElementSibling.hidden && preview.querySelectorAll('[aria-current]').length === 0);
+      window.renderProjects();
+      await wait(40);
+      const restored = [...proj().querySelectorAll('.project')].find(r => !r.classList.contains('active'));
+      check('项目展开：重画保留用户的展开状态', () => !restored.nextElementSibling.hidden && restored.querySelector('.pj-chev').getAttribute('aria-expanded') === 'true');
+      restored.querySelector('.pj-chev').click();
+      check('项目展开：再次点击只收起该项目', () => restored.nextElementSibling.hidden && !proj().querySelector('.project.active').nextElementSibling.hidden);
+      await window.loadProjects();
+      await wait(40);
+      activeRow = proj().querySelector('.project.active');
+      inactiveRow = [...proj().querySelectorAll('.project')].find(r => !r.classList.contains('active'));
 
       const activeMenu = await openRowMenu(activeRow.querySelector('.pj-row-menu-trigger'));
       check('项目菜单作用域：当前项目有「项目设置」与「移除项目」', () =>
@@ -6560,8 +6584,8 @@ staticCheck();
     const folded = box().hidden === true;
     window.renderProjects();
     await wait(80);
-    check('折叠：换项目重新渲染后，新激活项目默认展开', () =>
-      (folded && box().hidden === false && chev().getAttribute('aria-expanded') === 'true') ||
+    check('折叠：同一项目重新渲染后保留收起状态', () =>
+      (folded && box().hidden === true && chev().getAttribute('aria-expanded') === 'false') ||
       JSON.stringify({ folded, hidden: box().hidden, aria: chev().getAttribute('aria-expanded') }));
 
     // 搜索入口：折叠着点「搜索会话」必须先把列表展开，否则输入框被藏住
@@ -7283,6 +7307,59 @@ staticCheck();
 
   await searchSection();
   await sidebarCollapseSection();
+  {
+    console.log('\n--- 跨项目会话：等待 Pi 就绪与过期动作防护 ---');
+    const originalFetch = window.fetch;
+    const saved = { cwd: window.S.cwd, desiredCwd: window.S.desiredCwd, switching: window.S.switching, syncPending: window.S.syncPending, bridgeState: window.S.bridgeState, state: window.S.state, models: window.S.models, stats: window.S.stats };
+    let active = 'C:\\preview-a';
+    let activations = 0;
+    window.fetch = async (url, opts) => {
+      const u = String(url);
+      if (u.includes('/api/projects/activate')) {
+        active = JSON.parse(opts.body).path;
+        activations++;
+        return { json: async () => ({ ok: true, cwd: active }) };
+      }
+      if (u.includes('/api/projects')) return { json: async () => ({ ok: true, active, items: [{ path: 'C:\\preview-a', name: 'A' }, { path: 'C:\\preview-b', name: 'B' }] }) };
+      if (u.includes('/api/status')) return { json: async () => ({ ok: true, cwd: active, hasProject: true }) };
+      if (u.includes('/api/sessions?project=')) return { json: async () => ({ ok: true, sessions: [{ id: 'eeeeeeeeeeeeeeee', title: '预览会话', current: false, archived: false, messageCount: 2, updatedAt: Date.now() }] }) };
+      return originalFetch(url, opts);
+    };
+    window.S.streaming = false;
+    await window.loadProjects();
+    let inactive = $('projects').querySelector('.project:not(.active)');
+    inactive.querySelector('.pj-chev').click();
+    await settle(40);
+    const switchCount = () => sessionCalls.filter(c => c.url.includes('/switch')).length;
+    const before = switchCount();
+    inactive.nextElementSibling.querySelector('.pj-sess-primary').click();
+    await settle(80);
+    check('跨项目会话：先激活项目，Pi 尚未就绪时不发送 switch_session', () => activations === 1 && window.S.switching && switchCount() === before);
+    window.S.switching = false;
+    window.S.syncPending = null;
+    window.S.bridgeState = 'ready';
+    window.flushProjectSessionAction();
+    await settle(40);
+    check('跨项目会话：就绪后只打开所选稳定 ID', () => switchCount() === before + 1 && sessionCalls.filter(c => c.url.includes('/switch')).at(-1).body.id === 'eeeeeeeeeeeeeeee');
+    window.flushProjectSessionAction();
+    check('跨项目会话：同一就绪动作只执行一次', () => switchCount() === before + 1);
+    await settle(300);
+    inactive = $('projects').querySelector('.project:not(.active)');
+    const newCount = commands.filter(c => c.type === 'new_session').length;
+    inactive.querySelector('.pj-header-action').click();
+    await settle(80);
+    check('跨项目新对话：等待 Pi 就绪，不在重启期间发送', () => commands.filter(c => c.type === 'new_session').length === newCount);
+    window.beginWorkspaceSwitch('C:\\preview-c');
+    window.S.switching = false;
+    window.S.bridgeState = 'ready';
+    window.flushProjectSessionAction();
+    check('跨项目动作：后续切换取消旧项目待办', () => commands.filter(c => c.type === 'new_session').length === newCount);
+    window.fetch = originalFetch;
+    Object.assign(window.S, saved);
+    window.applyProjectState();
+    await window.loadProjects();
+    await settle(80);
+  }
   await updateSection();
   await piUpdateUiSection();
 
