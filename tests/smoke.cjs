@@ -1984,14 +1984,14 @@ staticCheck();
     const m = chgRows()[4].querySelector('.chg-meta').textContent;
     return m === '未跟踪 · 目录' || m;
   });
-  check('每行都有「打开」与撤销按钮', () => {
+  check('网页行只提供可执行的撤销按钮', () => {
     const r = chgRows()[0];
     const b = [...r.querySelectorAll('.chg-acts .btn')].map((x) => x.textContent);
-    return b.join(',') === '打开,撤销' || b.join(',');
+    return b.join(',') === '撤销' || b.join(',');
   });
   check('未跟踪文件的按钮写「删除」而非「撤销」', () => {
     const b = [...chgRows()[2].querySelectorAll('.chg-acts .btn')].map((x) => x.textContent);
-    return b.join(',') === '打开,删除' || b.join(',');
+    return b.join(',') === '删除' || b.join(',');
   });
 
   /* --- diff 就地展开 --- */
@@ -2697,10 +2697,10 @@ staticCheck();
   // --- 导出：相对路径补成绝对 ---
   es.emit({ type: 'response', command: 'export_html', success: true, data: { path: 'pi-session-abc.html' } });
   es.emit({ type: 'response', command: 'export_html', success: true, data: { path: 'D:\\abs\\x.html' } });
-  check('导出提示补成绝对路径', () => {
+  check('旧导出响应不再向界面投影服务器路径', () => {
     const t = [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | ');
-    if (!t.includes('C:\\pi-GUI\\pi-session-abc.html')) return '相对路径未补全：' + t;
-    if (!t.includes('D:\\abs\\x.html')) return '绝对路径被改写：' + t;
+    if (t.includes('pi-session-abc.html')) return '旧导出路径泄露：' + t;
+    if (t.includes('D:\\abs\\x.html')) return '绝对路径泄露：' + t;
     return true;
   });
 

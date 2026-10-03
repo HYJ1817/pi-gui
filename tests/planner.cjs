@@ -241,7 +241,11 @@ async function mkProject(name) {
     makeGlobalPkg(appdata, '@earendil-works/pi-coding-agent', { version: '9.9.9', binName: 'pi', binRel: 'dist/bundle/cli.js' });
     makeGlobalPkg(appdata, '@openai/codex', { version: '8.8.8', binName: 'codex', binRel: 'bin/codex.js' });
 
-    const reg = createAgentRegistry({ env: { ...emptyEnv, APPDATA: appdata }, sessionDir: path.join(TMP, 'sess') });
+    const { createPiLaunch } = await import('../server/pi-launch.js');
+    const shim = path.join(appdata, 'npm', 'pi.cmd');
+    fs.writeFileSync(shim, '@rem fixture');
+    const piLaunch = createPiLaunch({ piBin: shim, env: emptyEnv });
+    const reg = createAgentRegistry({ env: { ...emptyEnv, APPDATA: appdata }, piLaunch, sessionDir: path.join(TMP, 'sess') });
     const list = reg.list();
     check('19. pi 能被探测到，且能力里有 toolEvents（唯一有工具级事件的）', () => {
       const pi = list.find((a) => a.id === 'pi');
@@ -254,7 +258,9 @@ async function mkProject(name) {
     check('19d. 「包在、入口不在」报 entry-missing（与 not-installed 区分开）', () => {
       const broken = fs.mkdtempSync(path.join(TMP, 'appdata-broken-'));
       makeGlobalPkg(broken, '@earendil-works/pi-coding-agent', { version: '9.9.9', binName: 'pi', binRel: 'dist/bundle/cli.js', withEntry: false });
-      const pi = createAgentRegistry({ env: { ...emptyEnv, APPDATA: broken } }).list().find((a) => a.id === 'pi');
+      const brokenShim = path.join(broken, 'npm', 'pi.cmd');
+      fs.writeFileSync(brokenShim, '@rem fixture');
+      const pi = createAgentRegistry({ env: { ...emptyEnv, APPDATA: broken }, piLaunch: createPiLaunch({ piBin: brokenShim, env: emptyEnv }) }).list().find((a) => a.id === 'pi');
       return (pi && !pi.available && pi.reason === 'entry-missing' && pi.version === '9.9.9') || JSON.stringify(pi);
     });
 
@@ -339,7 +345,7 @@ async function mkProject(name) {
      * 后者依赖时序，跑在负载下会偶发（第一版就吃过一次假失败）。 */
     const marker = path.join(TMP, 'tree-kill-marker.txt');
     const grandchild =
-      'setTimeout(()=>{try{require("fs").writeFileSync(process.argv[1],"survived")}catch{}},2500)';
+      'const fs=require("fs");setInterval(()=>{if(fs.existsSync(process.argv[1]+".release")){fs.writeFileSync(process.argv[1],"survived");process.exit(0)}},25)';
     const parentScript =
       'const c=require("child_process").spawn(process.execPath,["-e",' +
       JSON.stringify(grandchild) +
@@ -349,10 +355,13 @@ async function mkProject(name) {
     const treeAc = new AbortController();
     const gcLines = [];
     const treePromise = runCli({ entry: nodeEntry(parentScript), cwd: projA, signal: treeAc.signal, onLine: (l) => gcLines.push(l) });
-    await sleep(1400);
+    // Wait for identity, not an assumed process startup duration.
+    for (let n = 0; n < 200 && !gcLines.some(l => /GC_PID=\d+/.test(l)); n++) await sleep(25);
     const gcPid = (gcLines.join('').match(/GC_PID=(\d+)/) || [])[1] || null;
     treeAc.abort();
     await treePromise;
+    // A surviving grandchild can now write. Writes before cancellation are irrelevant.
+    fs.writeFileSync(marker + '.release', 'release');
     await sleep(3200);
     /* ⚠️ 判「孙子还活着」不能只看 PID。
      *

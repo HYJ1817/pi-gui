@@ -98,8 +98,8 @@ async function bridgeCases(createAuthRuntimeSync) {
   const { createRpcBridge } = await load('server/rpc-bridge.js');
   const { createRuntime } = await load('server/runtime.js');
   const runtime = createRuntime({ initialCwd: 'fixture-A' });
-  const children = [], launches = [], listeners = new Set();
-  const bridge = createRpcBridge({ runtime, isWin: false, piBin: 'fixture-pi', env: { PI_NO_CONTINUE: '1' }, publish: event => { for (const fn of [...listeners]) fn(event); },
+  const children = [], launches = [], listeners = new Set(), responses = [];
+  const bridge = createRpcBridge({ runtime, isWin: false, piBin: 'fixture-pi', env: { PI_NO_CONTINUE: '1' }, publish: event => { if (event.type === 'response') responses.push(event); for (const fn of [...listeners]) fn(event); },
     spawnProcess: (_bin, args) => {
       launches.push(args);
       const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
@@ -114,10 +114,15 @@ async function bridgeCases(createAuthRuntimeSync) {
     const sync = createAuthRuntimeSync({ rpc: bridge, getCwd: runtime.getCurrentCwd, busyReason: () => null, subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, timeoutMs: 1000 });
     const result = await sync();
     check('actual bridge fake RPC session reload succeeds', () => assert.equal(result.ok, true));
+    check('auth readback uses Promise results without broadcasting SSE responses', () => assert.equal(responses.length, 0));
     check('actual bridge passes exact current session launch argv', () => assert.deepEqual(launches[1], ['--mode', 'rpc', '--session', 'fixture-current-session.jsonl']));
     runtime.setCurrentCwd('fixture-B'); bridge.restart(); await new Promise(resolve => setTimeout(resolve, 15));
     check('session override consumed once and never leaks to next cwd', () => assert.deepEqual(launches[2], ['--mode', 'rpc']));
     check('fake bridge spawned exactly three runs', () => assert.equal(children.length, 3));
+    runtime.setCurrentCwd(null); bridge.restart(); await new Promise(resolve => setTimeout(resolve, 15));
+    check('no-project auth synchronization succeeds without restarting a workspace', () => assert.equal(children.length, 3));
+    const empty = await sync();
+    check('no-project needs no chat readback for user-level auth', () => assert.equal(empty.ok, true));
   } finally { runtime.setShuttingDown(true); bridge.stop(); }
 }
 
