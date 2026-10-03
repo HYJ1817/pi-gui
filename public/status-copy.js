@@ -118,6 +118,10 @@ export function connectionCopy(state, detail = '', extra = {}) {
 export function startupNotice(ctx = {}) {
   const { bridgeState, bridgeError, bridgeHint, hasProject, compat } = ctx;
   if (!hasProject) return null;
+  if (ctx.recoveryOverdue && ['starting', 'restarting'].includes(bridgeState)) {
+    return { id: 'bridge-sync-delayed', tone: 'warn', title: 'Pi 状态同步时间过长',
+      detail: '可以重新读取后端状态；重新同步不会重启 Pi。', actions: ['resync', 'restart', 'diagnostics'] };
+  }
 
   if (bridgeState === 'error') {
     return {
@@ -182,6 +186,7 @@ export const SURFACE_COPY = Object.freeze({
 
 /** 动作 → 统一文案（按钮文字与可访问名共用一份）。 */
 export const NOTICE_ACTIONS = Object.freeze({
+  resync: { label: '重新同步状态', title: '重新读取 Pi 状态，不重启进程' },
   restart: { label: '重启 Pi', title: '重启 pi 子进程（会结束当前这一轮）' },
   diagnostics: { label: '打开诊断', title: '查看版本、能力与最近的协议异常' },
 });

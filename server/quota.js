@@ -26,6 +26,13 @@ export function scrubSecret(text, secret) {
   return s.split(secret).join('***');
 }
 
+export function scrubQuotaSecret(value, secret) {
+  if (typeof value === 'string') return secret ? value.split(secret).join('***') : value;
+  if (Array.isArray(value)) return value.map(item => scrubQuotaSecret(item, secret));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrubQuotaSecret(item, secret)]));
+  return value;
+}
+
 /** 规范化数值：只有有限数字才返回，否则 null。**0 是真实 0，不是缺失。** */
 export function cleanNumber(v) {
   if (v === null || v === undefined || v === '') return null;
@@ -78,11 +85,11 @@ function timestampOrNull(value) {
 /* ---------- OpenRouter ---------- */
 
 /** OpenRouter 额度：GET https://openrouter.ai/api/v1/key（当前 key 自己的 limit/usage）。 */
-async function fetchOpenRouterQuota({ apiKey, fetchFn, now }) {
+async function fetchOpenRouterQuota({ apiKey, fetchFn, now, timeoutMs = 10_000 }) {
   const endpoint = 'https://openrouter.ai/api/v1/key';
   const headers = { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' };
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
 
   let keyRes = null;
   try {
@@ -182,6 +189,7 @@ async function fetchOpenRouterQuota({ apiKey, fetchFn, now }) {
 
   return {
     status: 'ok',
+    kind: 'key-quota',
     balance: balanceAmount !== null ? {
       amount: balanceAmount,
       currency: 'USD',
@@ -201,11 +209,11 @@ async function fetchOpenRouterQuota({ apiKey, fetchFn, now }) {
 /* ---------- DeepSeek ---------- */
 
 /** DeepSeek 额度：GET https://api.deepseek.com/user/balance，balance_infos 可含多币种。 */
-async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
+async function fetchDeepSeekQuota({ apiKey, fetchFn, now, timeoutMs = 10_000 }) {
   const endpoint = 'https://api.deepseek.com/user/balance';
   const headers = { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' };
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
 
   let res = null;
   try {
@@ -257,7 +265,7 @@ async function fetchDeepSeekQuota({ apiKey, fetchFn, now }) {
   }
 
   const jsonVal = res.json;
-  if (!jsonVal || typeof jsonVal !== 'object') {
+  if (!jsonVal || typeof jsonVal !== 'object' || (jsonVal.is_available !== false && !Array.isArray(jsonVal.balance_infos))) {
     return {
       status: 'error',
       balance: null,
@@ -503,6 +511,23 @@ export function resolveQuotaAdapter(providerId, config) {
   return null;
 }
 
+/* Fixed worker code, serialized from the SAME adapters used for custom config.
+ * A bundled/SEA backend has no source-file URL to import inside an eval worker. */
+export function nativeQuotaWorkerSource() {
+  // Explicit aliases survive esbuild renaming top-level function bindings.
+  return [cleanNumber, timestampOrNull, scrubQuotaSecret, fetchOpenRouterQuota, fetchDeepSeekQuota, resolveQuotaAdapter].map(fn => fn.toString()).join('\n')
+    + `\nconst nativeAdapters={openrouter:${fetchOpenRouterQuota.name},deepseek:${fetchDeepSeekQuota.name},resolve:${resolveQuotaAdapter.name},scrub:${scrubQuotaSecret.name}};`;
+}
+
+export function quotaFacts(quota, credentialAvailable = null) {
+  return {
+    providerExists: true,
+    quotaSupported: quota.status !== 'unsupported',
+    credentialAvailable,
+    quotaQuerySucceeded: quota.status === 'ok',
+  };
+}
+
 /**
  * 组装 Quota 管理器。
  *
@@ -516,6 +541,7 @@ export function createQuotaManager({
   fetchFn = fetch,
   now = () => Date.now(),
   ttlMs = DEFAULT_TTL_MS,
+  nativeAdapter = null,
 }) {
   const cache = new Map();
   const inFlight = new Map();
@@ -533,7 +559,7 @@ export function createQuotaManager({
         resetAt: null,
         source: 'none',
         updatedAt: new Date(now()).toISOString(),
-        message: '该供应商未提供公开的官方额度接口',
+        message: '该供应商当前没有已验证的远端额度接口',
       };
     }
 
@@ -585,11 +611,11 @@ export function createQuotaManager({
         resetAt: null,
         source: 'none',
         updatedAt: new Date(now()).toISOString(),
-        message: '该供应商未提供公开的官方额度接口',
+        message: '该供应商当前没有已验证的远端额度接口',
       };
     }
 
-    return { providerId, ...res };
+    return { providerId, ...scrubQuotaSecret(res, apiKey) };
   }
 
   /**
@@ -624,7 +650,8 @@ export function createQuotaManager({
     const cfgAll = readModelsConfig() || {};
     const config = cfgAll.providers?.[providerId];
     if (!config) {
-      return { ok: false, error: `供应商 ${providerId} 不存在`, quota: null };
+      if (nativeAdapter?.quota) return nativeAdapter.quota(providerId, { force, ttlMs });
+      return { ok: false, error: `供应商 ${providerId} 不存在`, quota: null, providerExists: false, quotaSupported: false, credentialAvailable: null, quotaQuerySucceeded: false };
     }
 
     const configKey = identityOf(providerId, config);
@@ -632,16 +659,18 @@ export function createQuotaManager({
     const t = now();
     const hit = cache.get(configKey);
     if (!force && hit && t - hit.cachedAt < ttlMs) {
-      return { ok: true, quota: hit.quota, cached: true };
+      return { ok: true, quota: hit.quota, cached: true, ...quotaFacts(hit.quota, hit.quota.credentialAvailable) };
     }
 
     if (inFlight.has(configKey)) {
       const q = await inFlight.get(configKey);
-      return { ok: true, quota: q, cached: false };
+      return { ok: true, quota: q, cached: false, ...quotaFacts(q, q.credentialAvailable) };
     }
 
     const p = fetchQuotaDirect(providerId, config)
       .then((q) => {
+        const key = resolveApiKey(config?.apiKey);
+        Object.assign(q, quotaFacts(q, Boolean(!key.error && key.value)));
         cache.set(configKey, { providerId, quota: q, cachedAt: now() });
         return q;
       })
@@ -651,18 +680,20 @@ export function createQuotaManager({
 
     inFlight.set(configKey, p);
     const quota = await p;
-    return { ok: true, quota, cached: false };
+    return { ok: true, quota, cached: false, ...quotaFacts(quota, quota.credentialAvailable) };
   }
 
   /** 清缓存：给了 providerId 就只清它的（缓存按身份哈希存，所以按 providerId 过滤）。 */
   function clearCache(providerId = null) {
     if (!providerId) {
       cache.clear();
+      nativeAdapter?.clearQuotaCache?.();
       return;
     }
     for (const [key, entry] of [...cache]) {
       if (entry?.providerId === providerId) cache.delete(key);
     }
+    nativeAdapter?.clearQuotaCache?.(providerId);
   }
 
   function handle(req, res, url) {
@@ -703,10 +734,11 @@ export function createQuotaManager({
       }
       const force = url.searchParams.get('force') === '1';
       const cfgAll = readModelsConfig() || {};
-      const providers = Object.keys(cfgAll.providers || {});
-
-      return Promise.all(providers.map((p) => getQuota(p, { force })))
-        .then((list) => {
+      return Promise.resolve(nativeAdapter?.list?.()).then(native => {
+        const providers = [...new Set([...Object.keys(cfgAll.providers || {}), ...(native?.providers || []).map(p => p.providerId)])];
+        return Promise.all(providers.map((p) => getQuota(p, { force }))).then(list => ({ providers, list }));
+      })
+        .then(({ providers, list }) => {
           const quotas = {};
           for (let i = 0; i < providers.length; i++) {
             const r = list[i];

@@ -27,7 +27,8 @@ import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
-import { applyProjectState, loadStatus, setBridgeState, setConn, setStatus, setTitleText } from './shell.js';
+import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText } from './shell.js';
+import { createBridgeRecovery } from './bridge-recovery.js';
 import { samePath } from './util.js';
 import { autoGrow, initComposerLayout, updateSendState } from './composer.js';
 import {
@@ -113,8 +114,8 @@ mountSessionPlans($('sessionPlans'));
 
 function connect() {
   const es = new EventSource('/api/events');
-  es.onopen = () => setConn('ok', '已连接');
-  es.onerror = () => setConn('bad', '连接断开');
+  es.onopen = () => setTransportOnline(true);
+  es.onerror = () => setTransportOnline(false);
   es.onmessage = (e) => {
     let evt;
     try {
@@ -132,6 +133,10 @@ function connect() {
 }
 
 function handle(evt) {
+  if (evt.type === 'bridge_status' || evt.type === 'bridge_snapshot') {
+    if (evt._replay) return;
+    return reconcileBridgeSnapshot(evt);
+  }
   if (!S.hasProject && evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) return;
   if (!acceptSubagentEvent(evt, S)) return;
   if (Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun < S.bridgeRun) return;
@@ -231,6 +236,7 @@ let bridgeHintText = '';
  * 动作一律指向既有入口（重启走 restartPi、诊断走 openDiagnostics），
  * **不自动修复任何东西**（不装、不改 PATH、不删配置）。 */
 const NOTICE_HANDLERS = {
+  resync: () => loadStatus(),
   restart: () => restartPi(),
   diagnostics: () => openDiagnostics(),
 };
@@ -254,6 +260,7 @@ function syncNotice() {
     compat: S.compat,
     /* 维护态说哪一句话由 reason 决定（Pi 自更新 vs 正在安装扩展）。 */
     maintenanceReason: S.maintenanceReason,
+    recoveryOverdue,
   });
   if (!model) {
     hideNotice();
@@ -263,10 +270,38 @@ function syncNotice() {
   return true;
 }
 
-function onBridge(evt) {
+let recoveryOverdue = false;
+let lastReadyRun;
+const bridgeRecovery = createBridgeRecovery({
+  readStatus: () => loadStatus(),
+  reconcile: snapshot => reconcileBridgeSnapshot(snapshot),
+  overdue: value => { recoveryOverdue = value; syncNotice(); },
+});
+setBridgeReconciler(reconcileBridgeSnapshot);
+
+export function reconcileBridgeSnapshot(snapshot) {
+  const evt = { ...snapshot, type: 'bridge_status', state: snapshot.bridgeState || snapshot.state,
+    error: snapshot.bridgeError ?? snapshot.error, hint: snapshot.bridgeHint ?? snapshot.hint,
+    reason: snapshot.maintenance?.reason ?? snapshot.reason };
+  if (!['no-project', 'starting', 'ready', 'restarting', 'maintenance', 'exited', 'error'].includes(evt.state)) return;
+  if (typeof snapshot.bridgeInstance === 'string' && snapshot.bridgeInstance !== S.bridgeInstance) {
+    // Only a current snapshot may establish a new backend epoch. Counters are
+    // monotonic inside that epoch, not across GUI server process restarts.
+    const authoritative = snapshot.type === 'bridge_snapshot' || (!snapshot.type && snapshot.bridgeState);
+    if (S.bridgeInstance && !authoritative) return;
+    S.bridgeInstance = snapshot.bridgeInstance;
+    S.bridgeRun = null; S.bridgeRevision = null; S.seq = 0;
+    lastReadyRun = undefined;
+  }
+  if (Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun < S.bridgeRun) return;
+  if (Number.isInteger(evt.bridgeRevision) && Number.isInteger(S.bridgeRevision) && evt.bridgeRevision < S.bridgeRevision) return;
   if (!S.hasProject && S.desiredCwd === null && evt.cwd) return;
   if (S.switching && evt.cwd && !samePath(evt.cwd, S.desiredCwd)) return;
-  if (S.switching && evt.state === 'ready' && Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun <= S.bridgeRun) return;
+  if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
+  if (Number.isInteger(evt.bridgeRevision)) S.bridgeRevision = evt.bridgeRevision;
+  if (typeof evt.cwd === 'string') S.cwd = evt.cwd;
+  S.hasProject = evt.hasProject ?? Boolean(S.cwd);
+  bridgeRecovery.observe({ ...evt, hasProject: S.hasProject });
   observeWebEvent(evt);
   observeSubagentEvent(evt);
   observeMemoryEvent(evt);
@@ -281,7 +316,11 @@ function onBridge(evt) {
       setBridgeState('starting');
       return syncNotice();
     case 'ready':
-      if (Number.isInteger(evt.bridgeRun) && evt.bridgeRun === S.bridgeRun && S.bridgeState === 'ready' && !S.switching) return;
+      if (lastReadyRun === S.bridgeRun && (Number.isInteger(S.bridgeRun) || S.bridgeState === 'ready')) {
+        setBridgeState('ready');
+        return syncNotice();
+      }
+      lastReadyRun = S.bridgeRun;
       if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
       S.cwd = evt.cwd || S.cwd;
       S.hasProject = Boolean(S.cwd);
@@ -316,7 +355,7 @@ function onBridge(evt) {
       }
       return;
     case 'exited':
-      if (!lastBridgeError) setBridgeState('exited', `pi 已退出 (${evt.code ?? evt.signal ?? '?'})`);
+      setBridgeState('exited', `pi 已退出 (${evt.code ?? evt.signal ?? '?'})`);
       interruptActive();
       return syncNotice();
     case 'maintenance':

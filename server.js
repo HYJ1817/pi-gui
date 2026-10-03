@@ -161,7 +161,7 @@ const runtime = createRuntime({ initialCwd: resolveInitialCwd(PROJECTS_FILE) });
  * 紧跟着它更好懂）。 */
 const piLaunch = createPiLaunch({ piBin: PI_BIN, env: process.env, getCwd: () => runtime.getCurrentCwd() });
 
-const sse = createEventBus();
+const sse = createEventBus({ getBridgeSnapshot: () => rpc.getState() });
 
 const auth = createAuth({
   token: process.env.PI_GUI_TOKEN,
@@ -325,7 +325,8 @@ const projects = createProjects({
 });
 
 const providers = createProviders({ modelsJson: MODELS_JSON });
-const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig });
+const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
+const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({ runtime });
 
@@ -691,7 +692,6 @@ const capabilityInstall = createCapabilityInstall({
   invalidateCaches: invalidatePiCaches,
 });
 
-const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
 const providerAuth = providerAuthRef = createProviderAuth({
   adapter: authSdk,
   startBlocked: () => cliInFlight > 0 || piUpdate.isRunning() || capabilityInstall.isRunning(),

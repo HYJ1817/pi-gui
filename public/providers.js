@@ -26,7 +26,7 @@ const PRESETS = {
   openrouter: { label: 'OpenRouter', name: 'openrouter', api: 'openai-completions', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '$OPENROUTER_API_KEY', models: '' },
   ollama: { label: 'Ollama 本地', name: 'ollama', api: 'openai-completions', baseUrl: 'http://localhost:11434/v1', apiKey: '', models: 'llama3.1:8b\nqwen2.5-coder:7b' },
   deepseek: { label: 'DeepSeek', name: 'deepseek', api: 'openai-completions', baseUrl: 'https://api.deepseek.com', apiKey: '$DEEPSEEK_API_KEY', models: 'deepseek-chat|DeepSeek Chat\ndeepseek-reasoner|DeepSeek Reasoner' },
-  moonshot: { label: 'Moonshot', name: 'moonshot', api: 'openai-completions', baseUrl: 'https://api.moonshot.cn/v1', apiKey: '$MOONSHOT_API_KEY', models: 'kimi-k2-0905-preview|Kimi K2' },
+  'moonshotai-cn': { label: 'Moonshot 中国', name: 'moonshotai-cn', api: 'openai-completions', baseUrl: 'https://api.moonshot.cn/v1', apiKey: '$MOONSHOT_API_KEY', models: 'kimi-k2-0905-preview|Kimi K2' },
   siliconflow: { label: '硅基流动', name: 'siliconflow', api: 'openai-completions', baseUrl: 'https://api.siliconflow.cn/v1', apiKey: '$SILICONFLOW_API_KEY', models: 'deepseek-ai/DeepSeek-V3|DeepSeek V3' },
   zhipu: { label: '智谱 GLM', name: 'zhipu', api: 'openai-completions', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKey: '$ZHIPU_API_KEY', models: 'glm-4.6|GLM-4.6' },
   dashscope: { label: '阿里百炼', name: 'dashscope', api: 'openai-completions', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKey: '$DASHSCOPE_API_KEY', models: 'qwen3-max|Qwen3 Max' },

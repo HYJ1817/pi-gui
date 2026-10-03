@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { nativeQuotaWorkerSource } from './quota.js';
 
 export function safeAuthUrl(value) {
   if (typeof value !== 'string' || value.length > 8192 || /[\u0000-\u0020\u007f]/.test(value)) return null;
@@ -53,6 +54,34 @@ export function authDescriptor(meta = {}) {
   };
 }
 
+/* Re-project the worker result: only normalized quota data and four facts.
+ * No native SDK result, env, source hint, headers or cache identity escapes. */
+export function publicNativeQuota(result, providerId) {
+  const tri = value => typeof value === 'boolean' ? value : null;
+  const facts = { providerExists: tri(result?.providerExists), quotaSupported: tri(result?.quotaSupported), credentialAvailable: tri(result?.credentialAvailable), quotaQuerySucceeded: result?.quotaQuerySucceeded === true };
+  if (result?.ok !== true) return { ok: false, error: '供应商不存在', quota: null, ...facts };
+  const q = result.quota || {};
+  const num = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const currency = value => typeof value === 'string' && /^[A-Z]{3}$/.test(value) ? value : null;
+  const balance = b => b && typeof b === 'object' ? { amount: num(b.amount), currency: currency(b.currency), granted: num(b.granted), toppedUp: num(b.toppedUp) } : null;
+  const status = ['ok', 'unsupported', 'auth_error', 'unavailable', 'error'].includes(q.status) ? q.status : 'error';
+  const messages = {
+    unsupported: '该供应商当前没有已验证的远端额度接口',
+    auth_error: facts.credentialAvailable === false ? '未认证：Pi 未发现可用的 API Key' : 'API Key 无效或未授权查询额度',
+    unavailable: '额度服务暂时不可用', error: '额度查询失败',
+  };
+  const source = providerId === 'deepseek' ? 'https://api.deepseek.com/user/balance' : providerId === 'openrouter' ? 'https://openrouter.ai/api/v1/key' : 'none';
+  return { ok: true, ...facts, cached: result.cached === true, quota: {
+    providerId, status, ...(providerId === 'openrouter' ? { kind: 'key-quota' } : {}),
+    balance: balance(q.balance), balances: Array.isArray(q.balances) ? q.balances.slice(0, 50).map(balance).filter(Boolean) : null,
+    windows: q.windows && typeof q.windows === 'object' ? { used: num(q.windows.used), limit: num(q.windows.limit), remaining: num(q.windows.remaining), unit: currency(q.windows.unit) } : null,
+    rateLimit: q.rateLimit && typeof q.rateLimit === 'object' ? { requests: num(q.rateLimit.requests), interval: typeof q.rateLimit.interval === 'string' && /^\d+\s*(seconds?|minutes?|hours?|days?)$/.test(q.rateLimit.interval) ? q.rateLimit.interval : null } : null,
+    resetAt: typeof q.resetAt === 'string' && q.resetAt.length <= 40 && !Number.isNaN(Date.parse(q.resetAt)) ? q.resetAt : null,
+    source, updatedAt: typeof q.updatedAt === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(q.updatedAt) ? q.updatedAt : new Date().toISOString(),
+    message: status === 'ok' ? null : messages[status], ...facts,
+  } };
+}
+
 /* No arbitrary module paths from HTTP. Resolve only the root public export. */
 export function resolveAuthSdk(packageDir) {
   try {
@@ -73,8 +102,47 @@ export function resolveAuthSdk(packageDir) {
 // are deliberately discarded BEFORE crossing the worker message boundary.
 const WORKER_SOURCE = String.raw`
 const { parentPort, workerData } = require('node:worker_threads');
+const { createHash } = require('node:crypto');
+` + nativeQuotaWorkerSource() + String.raw`
 let sdk, runtime, initialization;
 const operations = new Map(); const answers = new Map(); let promptSequence = 0;
+const quotaCache = new Map(), quotaInFlight = new Map();
+function emptyQuota(providerId,status,message,credentialAvailable=null,quotaSupported=false) {
+  const facts={providerExists:true,quotaSupported,credentialAvailable,quotaQuerySucceeded:false};
+  return {ok:true,...facts,cached:false,quota:{providerId,status,balance:null,balances:null,windows:null,rateLimit:null,resetAt:null,source:'none',updatedAt:new Date().toISOString(),message,...facts}};
+}
+async function quota(providerId, options, signal) {
+  const snapshot=await sdk.ModelRuntime.create({allowModelNetwork:false,refreshOnCreate:false});
+  const p=snapshot.getProviders().find(p=>p.id===providerId);
+  if(!p)return {ok:false,error:'供应商不存在',quota:null,providerExists:false,quotaSupported:false,credentialAvailable:null,quotaQuerySucceeded:false};
+  const adapter=nativeAdapters.resolve(providerId,{baseUrl:p.baseUrl});
+  let check;
+  try{check=await snapshot.checkAuth(providerId,{signal});}catch{return emptyQuota(providerId,adapter?'auth_error':'unsupported',adapter?'Pi 无法解析额度查询认证':'该供应商当前没有已验证的远端额度接口',null,Boolean(adapter));}
+  const available=Boolean(check);
+  if(!['deepseek','openrouter'].includes(adapter))return emptyQuota(providerId,'unsupported','该供应商当前没有已验证的远端额度接口',available,false);
+  if(check?.type==='oauth')return emptyQuota(providerId,'unsupported','当前 OAuth 认证不适用于此额度接口',true,false);
+  if(!check)return emptyQuota(providerId,'auth_error','未认证：Pi 未发现可用的 API Key',false,true);
+  if(check.type!=='api_key')return emptyQuota(providerId,'unsupported','当前认证类型不适用于此额度接口',null,false);
+  if(typeof snapshot.getAuth!=='function')return emptyQuota(providerId,'unsupported','当前 Pi 不支持私有额度凭据解析',available,false);
+  let key;
+  try{const resolved=await snapshot.getAuth(providerId,{signal});key=resolved?.auth?.apiKey;}catch{return emptyQuota(providerId,'auth_error','Pi 无法解析额度查询认证',null,true);}
+  if(typeof key!=='string'||!key)return emptyQuota(providerId,'auth_error','未认证：Pi 未发现可用的 API Key',false,true);
+  signal.throwIfAborted();
+  const identity=createHash('sha256').update(providerId+'|'+adapter+'|'+key).digest('hex');
+  const hit=quotaCache.get(identity);
+  if(!options.force&&hit&&Date.now()-hit.time<options.ttlMs)return {...hit.result,cached:true};
+  if(quotaInFlight.has(identity))return quotaInFlight.get(identity);
+  const task=(async()=>{
+    const result=await nativeAdapters[adapter]({apiKey:key,fetchFn:fetch,now:Date.now});
+    signal.throwIfAborted();
+    // Response-controlled strings can reflect secrets; scrub before crossing.
+    const safe=nativeAdapters.scrub(result,key);
+    const facts={providerExists:true,quotaSupported:true,credentialAvailable:true,quotaQuerySucceeded:safe.status==='ok'};
+    const out={ok:true,...facts,cached:false,quota:{providerId,...safe,...facts}};
+    quotaCache.set(identity,{providerId,time:Date.now(),result:out});return out;
+  })().finally(()=>quotaInFlight.delete(identity));
+  quotaInFlight.set(identity,task);return task;
+}
 async function initialize() {
   sdk = await import(workerData.entry);
   const M = sdk.ModelRuntime;
@@ -121,7 +189,12 @@ parentPort.on('message', async m => {
   const signal=controller.signal;
   try {
     await ready(); signal.throwIfAborted();
-    if (m.type==='list') {
+    if (m.type==='quota') {
+      parentPort.postMessage({id:m.id,type:'result',ok:true,result:await quota(m.providerId,m.options,signal)});
+    } else if(m.type==='clear-quota') {
+      for(const [key,entry] of quotaCache)if(!m.providerId||entry.providerId===m.providerId)quotaCache.delete(key);
+      parentPort.postMessage({id:m.id,type:'result',ok:true});
+    } else if (m.type==='list') {
       parentPort.postMessage({id:m.id,type:'result',ok:true,providers:await list(signal)});
     } else if (m.type==='login') {
       await runtime.login(m.providerId,'oauth',{
@@ -161,7 +234,7 @@ parentPort.on('message', async m => {
 });
 `;
 
-export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env = process.env, workerFactory = null } = {}) {
+export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env = process.env, workerFactory = null, quotaTimeoutMs = 15_000 } = {}) {
   let worker = null, workerKey = null, sequence = 0, capability = { sdkAvailable: false, reason: '当前 Pi 不支持 GUI 登录；请在 Pi 交互终端使用 /login、/logout', piVersion: null };
   const pending = new Map();
   function dispose() {
@@ -206,17 +279,26 @@ export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env =
       const abort = () => {
         worker?.postMessage({ type: 'abort', id });
         clearTimeout(timer);
+        if(type==='quota'){finish({ok:false,code:'unavailable'});return;}
         timer = setTimeout(() => dispose(), 2000); timer.unref?.();
       };
       const finish = result => { clearTimeout(timer); signal?.removeEventListener('abort', abort); pending.delete(id); resolve(result); };
       pending.set(id, { finish, abortedPrompts: new Set(), ...callbacks });
-      if (type === 'list') { timer = setTimeout(() => { worker?.postMessage({ type: 'abort', id }); finish({ ok: false, code: 'unavailable' }); }, 15_000); timer.unref?.(); }
+      if (type === 'list' || type === 'quota') { timer = setTimeout(() => { worker?.postMessage({ type: 'abort', id }); finish({ ok: false, code: 'unavailable' }); }, type === 'quota' ? quotaTimeoutMs : 15_000); timer.unref?.(); }
       worker.postMessage({ id, type, ...args });
       if (signal) { signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort(); }
     });
   }
   return {
     identityKey,
+    async quota(providerId, { force = false, ttlMs = 60_000, signal } = {}) {
+      const result = await call('quota', { providerId, options: { force: force === true, ttlMs: Number.isFinite(ttlMs) ? Math.max(0, ttlMs) : 60_000 } }, { signal });
+      if (result.ok && result.result) return publicNativeQuota(result.result, providerId);
+      // SDK capability failure does not establish nonexistence.
+      const facts = { providerExists: null, quotaSupported: null, credentialAvailable: null, quotaQuerySucceeded: false };
+      return { ok: true, ...facts, cached: false, quota: { providerId, status: 'unavailable', balance: null, balances: null, windows: null, rateLimit: null, resetAt: null, source: 'none', updatedAt: new Date().toISOString(), message: '无法读取 Pi 原生额度能力（未知）', ...facts } };
+    },
+    clearQuotaCache(providerId = null) { void call('clear-quota', { providerId }); },
     async list() {
       const result = await call('list');
       capability = { ...capability, sdkAvailable: result.ok === true, reason: result.ok ? null : result.code === 'unsupported' ? '当前 Pi 不支持 GUI 登录；请在 Pi 交互终端使用 /login、/logout' : '无法读取 Pi 认证状态（未知）' };
