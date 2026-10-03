@@ -572,7 +572,7 @@ export function openCtxTip() {
         if (b.toppedUp != null) addRow(label('充值额度', b.currency), fmtCurrency(b.toppedUp, b.currency));
       }
     } else if (q.balance && typeof q.balance.amount === 'number') {
-      addRow(label('剩余额度', q.balance.currency), fmtCurrency(q.balance.amount, q.balance.currency));
+      addRow(label(q.kind === 'key-quota' ? 'Key 剩余额度' : '剩余额度', q.balance.currency), fmtCurrency(q.balance.amount, q.balance.currency));
       if (q.balance.granted != null) addRow(label('赠送额度', q.balance.currency), fmtCurrency(q.balance.granted, q.balance.currency));
       if (q.balance.toppedUp != null) addRow(label('充值额度', q.balance.currency), fmtCurrency(q.balance.toppedUp, q.balance.currency));
     }
@@ -581,8 +581,8 @@ export function openCtxTip() {
      * 「已使用」「总额度」照实显示；「额度剩余」只在它和上面的余额**不是同一个数**时才加，
      * 免得 OpenRouter（limit_remaining 就是 remaining）出现两行重复。 */
     if (q.windows && (q.windows.limit != null || q.windows.used != null)) {
-      addRow('已使用', fmtMaybeNumber(q.windows.used));
-      addRow('总额度', fmtMaybeNumber(q.windows.limit));
+      addRow(q.kind === 'key-quota' ? 'Key 已用额度' : '已使用', fmtMaybeNumber(q.windows.used));
+      addRow(q.kind === 'key-quota' ? 'Key 限额' : '总额度', fmtMaybeNumber(q.windows.limit));
       const shownBalance = q.balance && typeof q.balance.amount === 'number' ? q.balance.amount : null;
       const duplicate = shownBalance != null && typeof q.windows.remaining === 'number'
         && Math.abs(q.windows.remaining - shownBalance) < 1e-9;
@@ -612,7 +612,7 @@ export function openCtxTip() {
   } else if (q.status === 'unsupported') {
     const dim = document.createElement('div');
     dim.className = 'tip-dim';
-    dim.textContent = '该供应商未提供公开的官方额度接口';
+    dim.textContent = q.message || '该供应商当前没有已验证的远端额度接口';
     quotaSec.appendChild(dim);
   } else if (q.status === 'auth_error') {
     const dim = document.createElement('div');

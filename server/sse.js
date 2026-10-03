@@ -14,7 +14,7 @@
 /** 事件总线的默认 backlog 上限。 */
 export const DEFAULT_BACKLOG_MAX = 800;
 
-export function createEventBus({ backlogMax = DEFAULT_BACKLOG_MAX } = {}) {
+export function createEventBus({ backlogMax = DEFAULT_BACKLOG_MAX, getBridgeSnapshot = null } = {}) {
   const clients = new Set();
   const pings = new Map();
   const backlog = [];
@@ -50,11 +50,14 @@ export function createEventBus({ backlogMax = DEFAULT_BACKLOG_MAX } = {}) {
     res.write(': pi-gui event stream\n\n');
     for (const evt of backlog) {
       try {
-        res.write(frame(evt));
+        res.write(frame({ ...evt, _replay: true }));
       } catch {
         break;
       }
     }
+    // Synchronous replay + snapshot + subscription cannot interleave with live
+    // event callbacks. The current fact is not inserted into history or numbered.
+    if (getBridgeSnapshot) res.write(frame({ ...getBridgeSnapshot(), type: 'bridge_snapshot' }));
     clients.add(res);
 
     const ping = setInterval(() => {

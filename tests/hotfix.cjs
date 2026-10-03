@@ -29,7 +29,7 @@ async function main() {
       for (const type of ['get_state', 'get_available_models', 'get_available_thinking_levels']) assert.deepEqual(await bridge.request({ type }), { readback: type });
       assert.equal(events.filter(e => e.type === 'response').length, 0);
     });
-    await check('H1 compatibility observes internal responses', () => assert.equal(observed.filter(e => e.type === 'response').length, 3));
+    await check('H1 compatibility observes internal responses including readiness handshake', () => assert.equal(observed.filter(e => e.type === 'response').length, 4));
     await check('H1 renderer string response remains an event', async () => { bridge.send({ type: 'get_state', id: 'composer-state-1' }); await tick(); assert.equal(events.at(-1).id, 'composer-state-1'); });
     await check('H1 late internal responses remain private after timeout', async () => { const saved = child.stdin.write; let command; child.stdin.write = line => { command = JSON.parse(line); }; const waiting = bridge.request({ type: 'get_state' }, { timeoutMs: 5 }); await tick(); assert.equal(await waiting, null); const count = events.length; child.stdout.emit('data', JSON.stringify({ type: 'response', id: command.id, command: command.type, success: true, data: {} }) + '\n'); assert.equal(events.length, count); child.stdin.write = saved; });
     await check('H4 GUI token stripped, provider environment retained', () => { assert.equal(launches[0].env.PI_GUI_TOKEN, undefined); assert.equal(launches[0].env.OPENAI_API_KEY, 'provider-secret'); assert.ok(!JSON.stringify(events).includes('provider-secret')); });

@@ -73,6 +73,12 @@ Pi 更新、扩展安装或受控 CLI 已在进行时不启动新认证；认证
 退出只移除保存的凭据，环境变量或自定义配置仍可能提供认证。
 测试与离线视觉入口见 [testing.md](testing.md)。
 
+P25.2 的原生额度查询使用同一个私有 Auth worker。ModelRuntime 确认 Provider
+存在，worker 内获取凭据并调用已有 DeepSeek/OpenRouter adapter，仅规范化额度
+与存在/支持/认证/查询成功四个事实返回主线程。额度超时与取消不结束正在进行的
+OAuth。OpenRouter 显示 Key 限额；没有可靠 adapter 或凭据类型不适用时返回
+unsupported。详见 [状态恢复与稳定元数据](runtime-recovery.md)。
+
 ## 实现文件
 
 | 范围 | 文件 |

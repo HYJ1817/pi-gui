@@ -48,6 +48,8 @@ fs.writeFileSync(
   FAKE_PI_SCRIPT,
   [
     'const parentPid = process.ppid;',
+    'let input = ""; process.stdin.setEncoding("utf8");',
+    'process.stdin.on("data", chunk => { input += chunk; let i; while ((i = input.indexOf("\\n")) >= 0) { const line = input.slice(0, i); input = input.slice(i + 1); try { const cmd = JSON.parse(line); process.stdout.write(JSON.stringify({ type: "response", command: cmd.type, id: cmd.id, success: true, data: { sessionId: "packaged-fixture" } }) + "\\n"); } catch {} } });',
     'setInterval(() => {',
     '  try { process.kill(parentPid, 0); } catch { process.exit(0); }',
     '}, 400);',
@@ -168,6 +170,9 @@ async function main() {
 
     const st = await (await fetch(BASE + '/api/status')).json();
     check('pi 子进程已拉起', () => st.piRunning === true || 'piRunning=' + st.piRunning);
+    let readyState = st;
+    for (let i = 0; i < 40 && readyState.bridgeState === 'starting'; i++) { await sleep(50); readyState = await (await fetch(BASE + '/api/status')).json(); }
+    check('私有 RPC 确认单文件 EXE bridge ready', () => readyState.bridgeState === 'ready' || readyState.bridgeState);
 
     /* 内嵌资源必须和磁盘上的原文逐字节一致 */
     for (const f of ['index.html', 'styles.css', 'app.js']) {

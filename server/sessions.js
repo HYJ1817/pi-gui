@@ -79,6 +79,34 @@ function textOf(content) {
     .trim();
 }
 
+/** 创建时间只认创建时的证据；mtime 与消息/改名条目都不是创建时间。 */
+function creationTime(file, header = null) {
+  const validTime = (value) => {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+  };
+  const fromHeader = validTime(header?.createdAt) || validTime(header?.timestamp);
+  if (fromHeader) return fromHeader;
+  /* Pi newSession() 用同一个 header.timestamp 生成文件名，只把冒号与点换成 -。
+   * 空会话尚未落盘也有这个文件名，所以补位与落盘使用完全相同的创建时间。
+   * 严格匹配并往返核对，不能把任意文件名或 2 月 30 日当成时间证据。 */
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z_[^/\\]+\.jsonl$/.exec(path.basename(file));
+  if (!match) return null;
+  const iso = `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`;
+  return validTime(iso) === iso ? iso : null;
+}
+
+/** 同时刻/未知时间按稳定身份打破平局，不依赖扫描顺序、当前项或文件更新时间。 */
+function compareCreation(a, b) {
+  const at = a.createdAt ? Date.parse(a.createdAt) : -Infinity;
+  const bt = b.createdAt ? Date.parse(b.createdAt) : -Infinity;
+  if (at !== bt) return at > bt ? -1 : 1;
+  const ak = `${a.sessionId || ''}\0${a.id}`;
+  const bk = `${b.sessionId || ''}\0${b.id}`;
+  return ak < bk ? -1 : ak > bk ? 1 : 0;
+}
+
 export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [], getProjects = () => [] } = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, '.pi', 'agent');
@@ -192,7 +220,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       file,
       sessionId: String(header.id),
       cwd: String(header.cwd || ''),
-      createdAt: header.timestamp || null,
+      createdAt: creationTime(file, header),
       lastMessageAt: lastTs,
       updatedAt: mtime,
       messageCount,
@@ -302,8 +330,6 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     const sessions = items;
     if (skipped) diagnostics.push({ level: 'warn', message: `有 ${skipped} 个会话文件读不出来，已跳过` });
 
-    sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
     /* 当前会话从 pi 那里问（get_state 给 sessionFile），而不是靠猜 ——
      * 「界面显示的是哪个会话」只有 pi 自己说了算。
      * 判据（sessionFile 在不在）收敛在 pi-compat 的 piState() 里，
@@ -323,14 +349,14 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
      * 症状就是「开个新对话，旧对话就消失了」。
      * 所以把 pi 报的当前会话补进来，标成 pending（磁盘上还没有这个文件）。 */
     if (currentId && !sessions.some((s) => s.id === currentId)) {
-      sessions.unshift({
+      sessions.push({
         id: currentId,
         file: currentFile,
         sessionId: curState.sessionId ? String(curState.sessionId) : '',
         cwd,
-        createdAt: null,
+        createdAt: creationTime(currentFile),
         lastMessageAt: null,
-        updatedAt: Date.now(),
+        updatedAt: null,
         messageCount: typeof curState.messageCount === 'number' ? curState.messageCount : 0,
         title: String(curState.sessionName || '').trim() || '新会话（还没有消息）',
         truncated: false,
@@ -338,6 +364,8 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
         pending: true,
       });
     }
+
+    sessions.sort(compareCreation);
 
     /* 只回 currentId，**不回 currentFile / cwd**。
      * 会话文件的绝对路径没有必要给前端 —— 切换只认我们自己发的 ID，

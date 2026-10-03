@@ -15,6 +15,14 @@ export function setConn(kind, text) {
   el.connText.textContent = text;
 }
 
+export function setTransportOnline(online) {
+  S.transportOnline = online;
+  setBridgeState(S.bridgeState);
+}
+
+let bridgeReconciler = null;
+export function setBridgeReconciler(fn) { bridgeReconciler = fn; }
+
 export function setStatus(text) {
   el.statusText.textContent = text || '';
 }
@@ -40,7 +48,8 @@ export function setBridgeState(state, detail = '', maintenanceReason = null) {
     maintenance: ['busy', maintenanceCopy(S.maintenanceReason).label],
   };
   const [kind, label] = labels[state] || ['', detail];
-  setConn(kind, label);
+  if (S.transportOnline === false) setConn('bad', '与 Pi GUI 后端连接断开');
+  else setConn(kind, label);
   applyProjectState();
 }
 
@@ -102,10 +111,18 @@ function warnIfIncompatible() {
 /** 回读 /api/status。
  *  S.cwd 用于把相对路径补成绝对路径；hasProject 决定输入框解不解锁。 */
 export async function loadStatus(generation = S.workspaceGeneration) {
+  const instanceAtRead = S.bridgeInstance;
   const j = await fetchStatus();
   if (!ownsWorkspace(generation)) return;
+  if (instanceAtRead !== S.bridgeInstance && j?.bridgeInstance !== S.bridgeInstance) return;
   S.restoring = false;
   if (j && j.ok !== false) {
+    if (bridgeReconciler && j.bridgeState) {
+      S.compat = j.compat || null;
+      warnIfIncompatible();
+      bridgeReconciler(j);
+      return j;
+    }
     S.cwd = j.cwd || '';
     // hasProject 由后端显式给出；老后端没有这个字段时退回「cwd 非空」的判断
     S.hasProject = j.hasProject ?? Boolean(S.cwd);
@@ -121,9 +138,7 @@ export async function loadStatus(generation = S.workspaceGeneration) {
     if (j.maintenance && !S.switching) {
       setBridgeState('maintenance', '', typeof j.maintenance.reason === 'string' ? j.maintenance.reason : null);
     }
-  } else {
-    S.cwd = '';
-    S.hasProject = false;
   }
   applyProjectState();
+  return j;
 }

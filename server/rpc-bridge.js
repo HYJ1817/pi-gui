@@ -21,10 +21,11 @@
  * 应答。pi 的应答信封是 `{ id, type:"response", command, success, data }` ——
  * **id 会原样回显**，所以按 id 配对是可靠的。需要它的场景是后端自己要读 pi 的
  * 权威状态（例如 server/skills.js 用 `get_commands` 拿「pi 实际加载了哪些 skill」）。
- * 注意 request() 不影响 SSE：同一条应答仍然照常 publish 给前端。
+ * request() 的数字 ID 应答只供后端消费，不广播给 Renderer。
  */
 import { spawn } from 'node:child_process';
 import { basename } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { formatLaunch } from './pi-launch.js';
 
 /* ⚠️ 这一层刻意**只**依赖 node 内建 + pi-launch（有架构守卫测试钉着）：
@@ -115,7 +116,15 @@ export function createRpcBridge({
    * 这样不必在十来个 publish 调用点各加一行（那种改法以后新加一处就会漏）。 */
   const rawPublish = publish;
   publish = (evt) => {
-    if (evt && evt.type === 'bridge_status') observeCompat((c) => c.observeBridge(evt));
+    if (evt && evt.type === 'bridge_status') {
+      const cwd = evt.cwd ?? runtime.getCurrentCwd() ?? '';
+      snapshot = { state: evt.state, bridgeInstance, bridgeRun: evt.bridgeRun ?? bridgeRun,
+        bridgeRevision: ++bridgeRevision, cwd, hasProject: Boolean(cwd),
+        error: evt.error || '', hint: evt.hint || '',
+        maintenance: maintenanceState() };
+      evt = { ...evt, ...snapshot, pid: pi?.pid ?? null, piRunning: Boolean(pi) };
+      observeCompat((c) => c.observeBridge(evt));
+    }
     rawPublish(evt);
   };
 
@@ -124,6 +133,11 @@ export function createRpcBridge({
   let restartRequested = false;
   let retiringChild = null;
   let bridgeRun = 0;
+  let bridgeRevision = 0;
+  const bridgeInstance = randomUUID();
+  let snapshot = { state: runtime.getCurrentCwd() ? 'starting' : 'no-project',
+    bridgeInstance, bridgeRun: 0, bridgeRevision: 0, cwd: runtime.getCurrentCwd() || '',
+    hasProject: Boolean(runtime.getCurrentCwd()), error: '', hint: '', maintenance: null };
   let crashStreak = 0;
 
   /* ---------- 维护暂停（Pi 自更新用） ----------
@@ -238,6 +252,7 @@ export function createRpcBridge({
       return;
     }
     const run = ++bridgeRun;
+    retiringChild = null;
 
     /* 项目配置要先「准备」再取参数。
      *
@@ -273,7 +288,7 @@ export function createRpcBridge({
       pi = child;
     } catch (err) {
       restartRequested = false;
-      publish({ type: 'bridge_status', state: 'error', error: String(err.message), cwd, bridgeRun: run });
+      publish({ type: 'bridge_status', state: 'error', error: '无法启动 pi。', hint: '确认 pi 已安装并在 PATH 中，或检查 PI_BIN 配置。', cwd, bridgeRun: run });
       return;
     }
 
@@ -287,11 +302,12 @@ export function createRpcBridge({
     }
 
     child.on('error', (err) => {
+      if (pi !== child || child === retiringChild) return;
       restartRequested = false;
       publish({
         type: 'bridge_status',
         state: 'error',
-        error: `无法启动 pi：${err.message}`,
+        error: '无法启动 pi。',
         hint: '确认 pi 已安装并在 PATH 中，或用环境变量 PI_BIN 指定完整路径。',
         cwd,
         bridgeRun: run,
@@ -299,6 +315,7 @@ export function createRpcBridge({
     });
 
     let stdoutBuf = '';
+    let readinessId = null;
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       if (pi !== child) return;
@@ -322,6 +339,10 @@ export function createRpcBridge({
         /* 兼容层先看一眼上游发了什么 —— 应答与事件都看。
          * **放在配对之前**：后端自己发起的 request 的应答也要被观察到。 */
         observeCompat((c) => c.observeUpstream(msg));
+        if (msg?.type === 'response' && msg.id === readinessId && msg.command === 'get_state' && msg.success === true && !maintenance) {
+          readinessId = null;
+          publish({ type: 'bridge_status', state: 'ready', pid: child.pid ?? null, cwd, bridgeRun: run });
+        }
         /* 先看是不是某条挂起请求的应答。
          * 只认 type:"response" 且 id 在 pending 里 —— 事件（type 不是 response）
          * 和别人的应答都直接落到下面的 publish。 */
@@ -345,12 +366,17 @@ export function createRpcBridge({
       publish({ type: 'bridge_stderr', text, bridgeRun: run, cwd });
     });
 
-    child.on('spawn', () => {
+    child.on('spawn', async () => {
       if (pi !== child) return;
       if (child === retiringChild || runtime.getCurrentCwd() !== cwd) return;
+      // A shell spawning is not evidence that the external Pi runtime is ready.
       restartRequested = false;
-      retiringChild = null;
-      publish({ type: 'bridge_status', state: 'ready', pid: child.pid ?? null, cwd, bridgeRun: run });
+      readinessId = nextRequestId;
+      const state = await request({ type: 'get_state' }, { timeoutMs: 30000 });
+      if (pi !== child || child === retiringChild || maintenance || runtime.getCurrentCwd() !== cwd) return;
+      if (snapshot.state !== 'ready' && (!state || state.__error || readinessId !== null)) {
+        publish({ type: 'bridge_status', state: 'error', error: 'Pi 未能完成 RPC 就绪确认。', hint: '重新同步状态，或在诊断中检查 Pi 启动情况。', cwd, bridgeRun: run });
+      }
     });
 
     const startedAt = Date.now();
@@ -359,7 +385,9 @@ export function createRpcBridge({
       pi = null;
       // 进程没了，挂起的请求不可能再有应答 —— 立刻放掉，别让调用方干等到超时
       settleAllPending(null);
-      publish({ type: 'bridge_status', state: 'exited', code, signal, cwd, bridgeRun: run });
+      const failed = snapshot.state === 'error';
+      publish({ type: 'bridge_status', state: failed ? 'error' : 'exited',
+        error: failed ? snapshot.error : '', hint: failed ? snapshot.hint : '', code, signal, cwd, bridgeRun: run });
       /* 维护分支：**不自动重启，也不动 crashStreak**。
        * 维护是刻意停机，不是崩溃 —— 走得越少，越不会把 backoff 状态搞脏。 */
       if (maintenance) {
@@ -539,6 +567,7 @@ export function createRpcBridge({
   function pauseForMaintenance(reason = 'pi-update') {
     if (maintenance) return Promise.resolve({ ok: false, code: 'already-in-maintenance' });
     const cwd = runtime.getCurrentCwd();
+    const previousState = snapshot.state;
     maintenance = { reason: String(reason).slice(0, 80), at: Date.now() };
     resumeRequested = false;
     // 挂起请求先放掉：维护期间不可能再有应答
@@ -574,7 +603,9 @@ export function createRpcBridge({
       const timer = setTimeout(() => {
         maintenance = null;
         resumeRequested = false;
-        publish({ type: 'bridge_status', state: 'ready', pid: child.pid ?? null, cwd, bridgeRun });
+        publish({ type: 'bridge_status', state: childUsable() ? previousState : 'error',
+          error: childUsable() ? '' : 'Pi 维护停止超时，命令通道已关闭。',
+          hint: childUsable() ? '' : '请重启 Pi 以恢复命令通道。', cwd, bridgeRun });
         finish({ ok: false, code: 'pause-timeout' });
       }, pauseTimeoutMs);
       /* ⚠️ **不要 unref 这个 timer。** 它现在承担的是「给出一个确定的结论」，
@@ -619,6 +650,8 @@ export function createRpcBridge({
     if (pi) {
       // 进程还在：等它退出的那个回调来启动（onStopped 里看 resumeRequested）
       resumeRequested = true;
+      restartRequested = true;
+      publish({ type: 'bridge_status', state: 'restarting', cwd: runtime.getCurrentCwd(), bridgeRun });
       return { ok: true, deferred: true };
     }
     resumeRequested = false;
@@ -636,19 +669,19 @@ export function createRpcBridge({
    * 用户改了项目配置，那种情况下这里给的是「按当前配置启动会是哪些参数」，
    * 也正是界面该显示的。 */
   function getState() {
-    const cwd = runtime.getCurrentCwd();
     return {
+      ...snapshot,
+      bridgeState: snapshot.state,
+      bridgeError: snapshot.error,
+      bridgeHint: snapshot.hint,
       piRunning: Boolean(pi),
       pid: pi?.pid ?? null,
       bridgeRun,
       args: buildArgs(),
-      cwd,
       // 前端用它决定「显示引导还是显示输入框」。cwd 为空就等价于没有项目，
       // 但显式给一个字段更不容易被将来的改动弄丢。
-      hasProject: Boolean(cwd),
       /* 维护态必须能从轮询里看出来：SSE 不重放，刷新页面之后前端就只剩
        * 这一个来源了（否则界面会显示成「pi 未运行」）。 */
-      maintenance: maintenanceState(),
     };
   }
 

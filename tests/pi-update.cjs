@@ -745,8 +745,8 @@ function fakeChild() {
       (paused.ok === false && paused.code === 'pause-timeout') || JSON.stringify(paused));
     check('H2. 超时后维护态被撤销（进程还活着，bridge 继续可用）', () =>
       bridge.getState().maintenance === null || JSON.stringify(bridge.getState().maintenance));
-    check('H3. 超时后如实宣告 pi 仍在运行（发 ready，而不是假装停过）', () =>
-      events.some((e) => e.type === 'bridge_status' && e.state === 'ready') ||
+    check('H3. 超时后关闭的命令通道如实显示 error，不凭 PID 猜 ready', () =>
+      bridge.getState().bridgeState === 'error' && !events.some((e) => e.type === 'bridge_status' && e.state === 'ready') ||
       JSON.stringify(events.filter((e) => e.type === 'bridge_status').map((e) => e.state)));
     check('H4. 超时不会产生第二个 Pi child', () => children.length === 1 || children.length);
     check('H5. 超时后 bridge 不卡维护：命令被干净拒绝，不会写到已关闭的 stdin', () => {

@@ -316,7 +316,7 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   check('OpenAI: status 严格为 unsupported', openaiRes.quota.status === 'unsupported');
   check('OpenAI: balance 为 null', openaiRes.quota.balance === null);
   check('OpenAI: source 为 none', openaiRes.quota.source === 'none');
-  check('OpenAI: message 说明未提供官方接口', openaiRes.quota.message.includes('未提供公开的官方额度接口'));
+  check('OpenAI: message 说明当前没有已验证额度接口', openaiRes.quota.message === '该供应商当前没有已验证的远端额度接口');
   check('Anthropic: status 严格为 unsupported', (await unsuppManager.getQuota('anthropic')).quota.status === 'unsupported');
   check('Sub2API: status 严格为 unsupported', (await unsuppManager.getQuota('sub2api')).quota.status === 'unsupported');
   check('unsupported 全部零请求', unsuppFetches === 0);
