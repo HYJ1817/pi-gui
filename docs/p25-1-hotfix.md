@@ -53,11 +53,10 @@
 
 ## 失败记录与限制
 
-单文件 EXE 实跑为 **27/40**。13 条失败由本机 SEA 程序对临时目录写入的
+初轮单文件 EXE 实跑为 **27/40**（保留失败样本）。13 条失败由本机 SEA 程序对临时目录写入的
 `EPERM` 引起，涉及项目配置与上传目录。Electron 应用与打包 Auth 检查通过；
-没有删除断言、放宽阈值或将该 gate 标为通过。Windows SEA 完整验收仍阻塞，
-需要在允许该可执行文件写 fixture 的环境重新验证。未执行 Installer 发布 gate，
-本轮不发版。
+当时没有删除断言、放宽阈值或将该 gate 标为通过。后续可写环境复验见下文。
+未执行 Installer 发布 gate，本轮不发版。
 
 首轮 Planner 取消 fixture 两次失败：孙进程已退出，但原固定 2.5 秒写入发生在
 取消完成前。修正 fixture 为等待 PID 身份，取消完成后才释放写入信号；
@@ -67,3 +66,78 @@
 
 完整测试还捕获并修正了新 child 重复重启防护回归，保留现有 reliability 检查。
 所有失败日志保留在本地 `.workbuddy-ai/p25-1-*.log`，不纳入公开提交。
+
+## P25.1 最终验收收口
+
+收口 before HEAD：`dc12ff658b37131aa5b7c8b38fc5c13079aaddaf`。
+只修正文档与补充验收证据，没有修改产品代码、测试断言、阈值或版本。
+Provider/Auth 的安全投影不保证任意工具输出不含秘密；两篇文档同步明确
+环境继承、工具输出可进入会话/模型/SSE/DOM，以及没有通用 secret redaction 承诺。
+
+### EPERM 路径与操作
+
+历史失败根目录（以下 W / D 为缩写）：
+
+- W = `C:\Users\21022\AppData\Local\Temp\pi-gui-execheck-work`
+- D = `C:\Users\21022\AppData\Local\Temp\pi-gui-execheck-data`
+
+13 条失败并非 13 次独立文件系统异常。配置路由只返回 `EPERM`，没有保留
+syscall；上传 PDF 响应明确报告 `mkdir`。其余为这些失败造成的连带断言，
+不能给它们虚构独立错误码。
+
+| 失败断言 | 实际目标目录 / 文件 | 操作与错误 |
+|---|---|---|
+| PUT 项目配置成功 | W\\.pi-gui\\config.json | 原子保存：mkdir → 临时文件 write → rename；返回 EPERM，历史响应未区分 syscall |
+| 只改 ignore / commands 不重启 | 同上 | 保存失败连带，restartRequired 缺失；无独立 FS 错误 |
+| 配置落盘 | 同上 | exists 检查失败；上游保存 EPERM |
+| 保存项目指令 | W\\.pi-gui\\config.json | 同一原子保存失败 EPERM，未进入生成指令步骤 |
+| 指令文件存在 | W\\.pi-gui\\instructions.generated.md | exists/read 内容检查失败；上游保存 EPERM |
+| 指令要求重启 | W\\.pi-gui | 保存失败连带，restartRequired 缺失 |
+| 回读保存内容 | W\\.pi-gui\\config.json | read 回退默认配置；上游保存 EPERM |
+| PDF 抽取成功 | D\\.uploads | mkdir，EPERM（响应含完整路径） |
+| PDF 正文包含内容 | D\\.uploads | mkdir 失败后未进入 extract；无独立 FS 错误 |
+| PDF 页数正确 | D\\.uploads | 同上，pages 缺失 |
+| DOCX 抽取成功 | D\\.uploads | 同一上传 mkdir 路径；历史断言只记录 kind 缺失，未保留单独错误响应 |
+| 图片识别 | D\\.uploads | 同上 |
+| PI_GUI_DATA 目录存在 | D | exists 检查失败，上传 mkdir 未成功 |
+
+使用同一未重建 SEA 的隔离探针对照（没有真实 Pi/真实凭据写操作）：
+`C:\Users\21022\AppData\Local\Temp\p25-1-permission-YJCOWc`。
+SEA 在 `work\\.pi-gui` 创建目录返回 EPERM，目录确实不存在；普通 Node
+预建后，SEA 配置保存仍返回 EPERM。SEA 在 `data\\.uploads` 的 mkdir 返回 EPERM；
+普通 Node 预建后，SEA 对
+`data\\.uploads\\2026-10-03T10-03-14-424Z_probe.txt` 的 open 仍返回 EPERM。
+普通 Node 在同一 fixture 完成 mkdir/write/rename/unlink。
+因此是本机按程序/目录限制文件系统写入，非 PI_GUI_DATA 指向错误或 SEA 资源路径缺陷；
+没有证据将限制进一步归因于某个具体安全软件或 Windows ACL 设置。
+探针退出时同步 rm 遇到 EPERM；后续系统 TEMP 递归清理被自动审批策略拒绝，
+该 fixture 暂留。原始响应在 `.workbuddy-ai/p25-1-closeout-permission-probe.log`。
+
+换用全新临时根目录
+`C:\pi-GUI\.p25-1-gate-6f27e073b501436bb42c0808b1fa9cbe`，
+仅为 EXE gate 设置 TEMP/TMP/TMPDIR，CHECK_PORT=7807，fixture 从原临时目录复制。
+普通 Node 预检 mkdir/write/rename/unlink 成功；同一 SEA 现有测试 **47/47**，exit=0。
+验收后仓库内临时根目录的递归清理也被自动审批策略拒绝（blocked by policy）；
+目录仍为未跟踪 fixture，不纳入提交，最终 git status 如实列出。
+47 相对旧样本 40 多出 7 条：配置成为合法 JSON、version、未知字段丢弃、
+错误类型丢弃、ignore/commands 内容、apiKey 字段不落盘、密钥值不落盘。
+这些是原有 `if (fs.existsSync(cfgFile))` 内断言，现在有文件后全部执行。
+无删断言、降阈值、EPERM 忽略或 Electron 替代 SEA gate。
+
+最终串行矩阵（全部 exit=0）：
+
+| 命令 | 实际结果 | 耗时 |
+|---|---|---|
+| npm test | 46 套件完成；hotfix 后端 22/22、UI 10/10；Auth 105/105、runtime 36/36；Planner 115 passed, 0 failed | 297.58 秒 |
+| npm run test:ui | 1324/1324，数量保持不变 | 70.76 秒 |
+| npm run build:app -- --rebuild | 离线缓存重建；SEA 94.1 MB、Electron 整包 327.3 MB | 13.14 秒 |
+| npm run test:app | 25/25 | 12.09 秒 |
+| npm run test:exe | 重建后的 SEA 47/47，无 EPERM、无跳过 | 11.96 秒 |
+
+本轮验收 SEA SHA256：
+`c422192fd66516d603d966a97b2e05890e59613ce7f6a80a0931f2d61e2e2709`。
+原始日志与耗时在 `.workbuddy-ai/p25-1-closeout-*.log`、
+`p25-1-closeout-timing.jsonl`，保留初轮失败，不覆盖。
+**P25.1 完整验收通过**：上述五项全部实跑通过，EXE gate 不再阻塞。
+完整发版 gate 还包括 Installer/Portable、发布资产与 CI，本次未执行，
+不能宣称所有 release gate 均通过。版本仍为 0.18.1，没有 tag 或 release。

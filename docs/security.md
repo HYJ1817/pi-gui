@@ -666,8 +666,11 @@ Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能�
 Provider 认证所需的能力；Pi GUI 不对 Pi 或它的工具提供凭据隔离 sandbox。
 建议使用最小权限、受限额度的 Provider key，只在可信工作区运行工具。
 GUI 控制令牌 `PI_GUI_TOKEN` 继续在子进程启动前剥离。
-GUI 不将 Provider key 投影到 Diagnostics、SSE、DOM 或日志；配置摘要只表达
-是否配置以及来源。工具若主动输出环境变量，其文本仍可能进入 Pi 的会话与模型上下文。
+Pi GUI 不从 Provider/Auth 配置、认证状态或 Diagnostics 主动投影 key 原文；
+配置摘要只表达是否配置以及来源。工具若主动读取并输出这些变量，Pi 的
+`tool_execution_end` / tool result 可将其作为普通工具输出返回，继而可能进入
+Pi 会话、模型上下文、SSE 和 GUI 工具结果（DOM）。当前没有承诺对任意工具输出
+做通用 secret redaction。
 
 ### Agent 一律过适配器
 
