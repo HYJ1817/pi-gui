@@ -2605,6 +2605,7 @@ staticCheck();
       { id: 'deepseek-chat', name: 'DeepSeek Chat', provider: 'deepseek', reasoning: false },
       { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', provider: 'deepseek', reasoning: true },
       { id: 'glm-4.6', name: 'GLM-4.6', provider: 'zhipu', reasoning: true },
+      ...Array.from({ length: 100 }, (_, i) => ({ id: i ? `model-${i}` : 'deepseek-reasoner', name: `Router ${i}`, provider: 'openrouter' })),
     ],
   });
   es.emit({ type: 'response', command: 'get_available_thinking_levels', success: true, data: ['off', 'low', 'high'] });
@@ -2614,7 +2615,7 @@ staticCheck();
   // 让当前模型落在可用列表里，才能验证对勾
   es.emit({
     type: 'response', command: 'get_state', success: true,
-    data: { model: { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }, thinkingLevel: 'high', isStreaming: false, sessionName: 'pi-gui-work' },
+    data: { model: { provider: 'deepseek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }, thinkingLevel: 'high', isStreaming: false, sessionName: 'pi-gui-work' },
   });
 
   const gsBefore = commands.filter((c) => c.type === 'get_state').length;
@@ -2622,20 +2623,46 @@ staticCheck();
   $('btnModel').click();
   check('模型浮层已打开', () => pop() && pop().hidden === false);
   check('浮层标题为「选择模型」', () => pop().querySelector('.pop-title')?.textContent === '选择模型');
-  check('模型按供应商分组', () => [...pop().querySelectorAll('.pop-label')].map((x) => x.textContent).join(',') === 'deepseek,zhipu');
-  check('模型项 3 个', () => pop().querySelectorAll('.pop-item').length === 3);
+  const headers = () => [...pop().querySelectorAll('.pop-provider')];
+  const group = (provider) => [...pop().querySelectorAll('.pop-model-group')].find((g) => g.dataset.provider === provider);
+  check('模型按供应商分组', () => headers().map((x) => x.querySelector('.pop-provider-name').textContent).join(',') === 'deepseek,zhipu,openrouter');
+  check('模型项 103 个', () => pop().querySelectorAll('.pop-item').length === 103);
+  check('Provider 数量准确', () => headers().map((h) => h.querySelector('.pop-provider-count').textContent).join(',') === '2,1,100');
+  check('Provider 是原生按钮且 controls 对应容器', () => headers().every((h) => h.tagName === 'BUTTON' && window.document.getElementById(h.getAttribute('aria-controls')) === h.nextElementSibling));
+  check('当前 Provider 默认展开，其余默认收起', () => headers().map((h) => h.getAttribute('aria-expanded')).join(',') === 'true,false,false');
+  check('收起模型容器 hidden', () => group('zhipu').lastElementChild.hidden && group('openrouter').lastElementChild.hidden);
+  group('openrouter').firstElementChild.click();
+  check('点击整行展开 Provider', () => !group('openrouter').lastElementChild.hidden && group('openrouter').firstElementChild.getAttribute('aria-expanded') === 'true');
+  group('openrouter').firstElementChild.click();
+  check('再点击整行收起 Provider', () => group('openrouter').lastElementChild.hidden && group('openrouter').firstElementChild.getAttribute('aria-expanded') === 'false');
+  group('zhipu').firstElementChild.click();
+  $('btnModel').click(); $('btnModel').click();
+  check('重新打开保留用户展开状态', () => !group('zhipu').lastElementChild.hidden && group('openrouter').lastElementChild.hidden);
+  group('deepseek').firstElementChild.click();
+  $('btnModel').click(); $('btnModel').click();
+  check('当前模型 Provider 重新打开时必定可见', () => !group('deepseek').lastElementChild.hidden);
   check('当前模型带对勾', () => pop().querySelectorAll('.pop-item.on').length === 1);
+  check('相同 id 不同 Provider 只有真正当前项', () => pop().querySelectorAll('[aria-current="true"]').length === 1 && !!group('deepseek').querySelector('[aria-current="true"]'));
 
   pop().querySelectorAll('.pop-item')[1].click();
   check('点选后浮层关闭', () => pop().hidden === true);
   const setModel = commands.filter((c) => c.type === 'set_model').pop();
   check('set_model 带 provider+modelId', () => setModel && setModel.provider === 'deepseek' && setModel.modelId === 'deepseek-reasoner');
-  check('切模型后回读状态', () => commands.filter((c) => c.type === 'get_state').length === gsBefore + 1);
+  check('Pi 确认前不回读状态', () => commands.filter((c) => c.type === 'get_state').length === gsBefore);
+  check('切模型立即清理档位并阻止旧选择器', () => window.S.thinkingLevels.length === 0 && window.S.modelSwitchPending);
+  $('btnThink').click();
+  check('切模型期间不会打开旧档位', () => pop().hidden);
 
   // 成功提示只在 pi 确认后才出现（之前是点完就弹，失败时会撒谎）
   check('点选时不抢先弹提示', () => ![...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已切换到')));
-  es.emit({ type: 'response', command: 'set_model', success: true, data: { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' } });
+  es.emit({ type: 'response', command: 'set_model', id: setModel.id, success: true, data: { provider: 'deepseek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' } });
   check('pi 确认后才提示已切换', () => [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已切换到 DeepSeek Reasoner')));
+  const replyLatest = (type, data) => es.emit({ type: 'response', command: type, id: commands.filter((c) => c.type === type).at(-1).id, success: true, data });
+  check('Pi 确认后回读状态和档位', () => commands.filter((c) => c.type === 'get_state').length === gsBefore + 1 && commands.at(-1).type === 'get_available_thinking_levels');
+  replyLatest('get_available_thinking_levels', { levels: ['off', 'low', 'high'] });
+  check('只回来档位时仍等待 state', () => window.S.modelSwitchPending && window.S.thinkingLevels.length === 0);
+  replyLatest('get_state', { model: { provider: 'deepseek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }, thinkingLevel: 'high' });
+  check('两份结果回来后结束等待', () => !window.S.modelSwitchPending);
 
   $('btnThink').click();
   check('思考浮层 3 项', () => pop().querySelectorAll('.pop-item').length === 3);
@@ -2649,6 +2676,80 @@ staticCheck();
   check('设置失败后再次回读状态', () => commands.filter((c) => c.type === 'get_state').length === gsBefore + 3);
   es.emit({ type: 'response', command: 'get_state', success: true, data: { model: { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }, thinkingLevel: 'off', sessionName: 'pi-gui-work' } });
   check('回读后档位被纠正', () => $('thinkText').textContent === '思考 off');
+  const oldThinkingState = commands.filter((c) => c.type === 'get_state').at(-1);
+
+  // 当前模型候选来自 Pi，包含失败恢复、反序回包与快速连续切换。
+  const chooseModel = (provider, index = 0) => {
+    $('btnModel').click();
+    const g = group(provider);
+    if (g.lastElementChild.hidden) g.firstElementChild.click();
+    g.querySelectorAll('.pop-item')[index].click();
+  };
+  const modelReply = (success, data, error) => {
+    const cmd = commands.filter((c) => c.type === 'set_model').at(-1);
+    es.emit({ type: 'response', command: 'set_model', id: cmd.id, success, data, error });
+  };
+  const bState = { model: { provider: 'zhipu', id: 'glm-4.6', name: 'GLM-4.6' }, thinkingLevel: 'medium' };
+  window.S.thinkingLevels = ['off', 'low', 'medium', 'high', 'max'];
+  chooseModel('zhipu');
+  modelReply(true, bState.model);
+  const oldBState = commands.filter((c) => c.type === 'get_state').at(-1);
+  const oldBLevels = commands.filter((c) => c.type === 'get_available_thinking_levels').at(-1);
+  replyLatest('get_state', bState);
+  check('新档位到达前不使用 A 的 max', () => window.S.modelSwitchPending && window.S.thinkingLevels.length === 0);
+  replyLatest('get_available_thinking_levels', { levels: ['off', 'low', 'medium', 'high'] });
+  check('B 的真实 state 与候选一起显示', () => $('modelText').textContent === 'GLM-4.6' && $('thinkText').textContent === '思考 medium' && window.S.thinkingLevels.join(',') === 'off,low,medium,high');
+  $('btnThink').click();
+  check('B 的 Thinking picker 仅四项，没有 max', () => [...pop().querySelectorAll('.pi-text')].map((n) => n.textContent).join(',') === 'off,low,medium,high');
+  $('btnThink').click();
+  chooseModel('openrouter');
+  modelReply(false, null, '模型不可用');
+  replyLatest('get_available_thinking_levels', { levels: ['off', 'low', 'medium', 'high'] });
+  replyLatest('get_state', bState);
+  check('set_model 失败回读模型与候选恢复 Pi 实际状态', () => !window.S.modelSwitchPending && window.S.state.model.provider === 'zhipu' && $('modelText').textContent === 'GLM-4.6' && window.S.thinkingLevels.length === 4);
+  chooseModel('deepseek', 0); // reasoning=false，但不猜 off。
+  modelReply(true, { provider: 'deepseek', id: 'deepseek-chat' });
+  const cState = { model: { provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' }, thinkingLevel: 'low' };
+  replyLatest('get_available_thinking_levels', { levels: ['off', 'low'] });
+  replyLatest('get_state', cState);
+  check('reasoning=false 仍按 Pi 返回两档', () => window.S.thinkingLevels.join(',') === 'off,low');
+  es.emit({ type: 'response', command: 'get_state', id: oldBState.id, success: true, data: bState });
+  es.emit({ type: 'response', command: 'get_available_thinking_levels', id: oldBLevels.id, success: true, data: { levels: ['off', 'max'] } });
+  check('B 延迟的 state 和 levels 不覆盖 C', () => window.S.state.model.id === 'deepseek-chat' && window.S.thinkingLevels.join(',') === 'off,low');
+  es.emit({ type: 'response', command: 'get_state', id: oldThinkingState.id, success: true, data: bState });
+  check('旧思考设置回读也不能覆盖新模型', () => window.S.state.model.id === 'deepseek-chat' && $('thinkText').textContent === '思考 low');
+  chooseModel('zhipu');
+  const inflightB = commands.filter((c) => c.type === 'set_model').at(-1);
+  chooseModel('openrouter');
+  check('连续切换等前一 set_model 确认后再发送', () => commands.filter((c) => c.type === 'set_model').at(-1) === inflightB);
+  modelReply(true, bState.model);
+  const inflightC = commands.filter((c) => c.type === 'set_model').at(-1);
+  check('前一确认后发送最后选择的 Provider + id', () => inflightC.provider === 'openrouter' && inflightC.modelId === 'deepseek-reasoner');
+  modelReply(true, { provider: 'openrouter', id: 'deepseek-reasoner' });
+  replyLatest('get_state', { model: { provider: 'openrouter', id: 'deepseek-reasoner', name: 'Router 0' }, thinkingLevel: 'medium' });
+  replyLatest('get_available_thinking_levels', { levels: ['off', 'medium'] });
+  $('btnModel').click();
+  check('跨 Provider 切换后当前组展开且当前项唯一可见', () => !group('openrouter').lastElementChild.hidden && !!group('openrouter').querySelector('[aria-current="true"]') && pop().querySelectorAll('[aria-current="true"]').length === 1);
+  $('btnModel').click();
+  check('关闭清除 model-mode', () => !pop().classList.contains('model-mode'));
+  // Provider 名含标点和 HTML 仍是文本；列表刷新后清理运行期展开记忆。
+  const pickerModels = window.S.models;
+  const pickerState = window.S.state;
+  const strangeProvider = 'test / : . <img src=x onerror=alert(1)>';
+  window.S.models = [{ provider: strangeProvider, id: 'safe', name: 'Safe' }, { provider: 'keep', id: 'keep' }];
+  window.S.state = { model: { provider: 'keep', id: 'keep' } };
+  $('btnModel').click();
+  check('特殊 Provider 使用 textContent 与安全序号 ID', () => group(strangeProvider).querySelector('.pop-provider-name').textContent === strangeProvider && !group(strangeProvider).querySelector('img') && /^model-provider-\d+$/.test(group(strangeProvider).lastElementChild.id));
+  group(strangeProvider).firstElementChild.click();
+  $('btnModel').click();
+  window.S.models = [{ provider: 'keep', id: 'keep' }];
+  $('btnModel').click(); $('btnModel').click();
+  window.S.models = [{ provider: strangeProvider, id: 'safe' }, { provider: 'keep', id: 'keep' }];
+  $('btnModel').click();
+  check('消失后重新出现的非当前 Provider 恢复默认收起', () => group(strangeProvider).lastElementChild.hidden);
+  $('btnModel').click();
+  window.S.models = pickerModels;
+  window.S.state = pickerState;
 
   // --- 上下文占用指示器 + 悬停提示 ---
   es.emit({
@@ -3123,6 +3224,9 @@ staticCheck();
     const savedSeq = commands.length;
 
     const reset = (cfg, { models, state, env, cwd } = {}) => {
+      // 夹具模拟重启：结束上一个 Pi 的在途命令，不能只覆盖 state。
+      window.S.workspaceGeneration++;
+      window.boot();
       commands.length = 0;
       window.S.models = models || [{ provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' }];
       window.S.state = state || { model: { provider: 'anthropic', id: 'claude-sonnet-4-5' }, thinkingLevel: 'high' };
@@ -3168,6 +3272,8 @@ staticCheck();
       return (m.length === 1 && m[0].modelId === 'deepseek-chat') || JSON.stringify(m);
     });
 
+    window.S.workspaceGeneration++;
+    window.boot();
     commands.length = 0;
     window.S.models = [
       { provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' },
@@ -3229,6 +3335,8 @@ staticCheck();
       (!threw && commands.length === 0) || JSON.stringify({ threw, commands }));
 
     window.S.models = savedModels;
+    window.boot();
+    window.onThinkingLevels({ levels: ['off', 'low', 'high'] });
     window.S.state = savedState;
     window.S.cwd = savedCwd;
     commands.length = savedSeq;
@@ -7381,6 +7489,8 @@ staticCheck();
 
     const savedComposerModels = window.S.models;
     const savedComposerState = window.S.state;
+    window.boot();
+    window.onThinkingLevels({ levels: ['off', 'low', 'high'] });
     window.S.models = [{ provider: 'fixture', id: 'composer-model', name: 'Composer Model' }];
     window.S.state = { ...savedComposerState, model: { provider: 'fixture', id: 'composer-model', name: 'Composer Model' } };
     $('btnModel').click();

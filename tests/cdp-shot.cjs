@@ -21,7 +21,7 @@ const PORT = Number(process.env.CDP_PORT || 9223);
 const OUT = path.join(__dirname, '..', '.shots');
 
 const arg = (k, d) => {
-  const hit = process.argv.find((a) => a.startsWith('--' + k + '='));
+  const hit = process.argv.findLast((a) => a.startsWith('--' + k + '='));
   return hit ? hit.slice(k.length + 3) : d;
 };
 const APP = arg('url', 'http://127.0.0.1:7788/');
@@ -172,7 +172,7 @@ async function main() {
       anchorRight: Math.round(a.right), anchorTop: Math.round(a.top),
       inViewport: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight,
       items: p.querySelectorAll('.pop-item').length,
-      groups: [...p.querySelectorAll('.pop-label')].map(x => x.textContent),
+      groups: [...p.querySelectorAll('.pop-provider-name')].map(x => x.textContent),
     });
   })()`);
   console.log('模型浮层: ' + popInfo);
@@ -1967,6 +1967,62 @@ async function main() {
   ]);
   await send('Emulation.clearDeviceMetricsOverride');
   await sleep(240);
+
+  /* Composer 小修：四档视口，实际 Provider 交互和真实 RPC 回读。 */
+  const modelLayout = `(() => {
+    const p=document.querySelector('.pop'), r=p.getBoundingClientRect();
+    const c=document.querySelector('#composerBox').getBoundingClientRect();
+    const before=window.__composerBefore;
+    return !p.hidden && r.top>=8 && r.left>=8 && r.right<=innerWidth-8 && r.bottom<=innerHeight-8
+      && ['x','y','width','height'].every(k=>Math.abs(c[k]-before[k])<0.5)
+      && document.documentElement.scrollHeight<=innerHeight && document.documentElement.scrollWidth<=innerWidth
+      && p.scrollWidth<=p.clientWidth;
+  })()`;
+  for (const [width,height] of [[700,600],[900,700],[1200,800],[1536,900]]) {
+    await closePop();
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+    await evalJs(`fetch('/api/__composer-models',{method:'POST'}).then(r=>r.json())`);
+    await sleep(350);
+    await evalJs(`window.__composerBefore=document.querySelector('#composerBox').getBoundingClientRect().toJSON(); document.querySelector('#btnModel').click();`);
+    // 运行期状态会保留：每档先手动收起上一档已展开的非当前组。
+    await evalJs(`document.querySelectorAll('.pop-model-group').forEach(g=>{if(g.dataset.provider!=='deepseek' && g.firstElementChild.getAttribute('aria-expanded')==='true')g.firstElementChild.click()})`);
+    const suffix=width+'x'+height;
+    await shotOf('.pop','UX-MODEL-01-provider-collapsed-'+suffix,'Provider 默认折叠，当前组可见',['deepseek','openrouter','100'],[
+      ['弹层有界、Composer 不位移、页面不滚动',modelLayout],
+      ['当前展开、其它收起且百模型不占高度',`(() => { const g=[...document.querySelectorAll('.pop-model-group')]; return g.length===3 && g.every(x=>x.firstElementChild.getAttribute('aria-expanded')===String(x.dataset.provider==='deepseek')) && g.filter(x=>x.dataset.provider!=='deepseek').every(x=>x.lastElementChild.getBoundingClientRect().height===0 && x.getBoundingClientRect().height===32); })()`],
+      ['标题层级、数量与安全 controls',`[...document.querySelectorAll('.pop-provider')].every(h=>h.tagName==='BUTTON' && h.offsetHeight===32 && document.getElementById(h.getAttribute('aria-controls'))===h.nextElementSibling && getComputedStyle(h.querySelector('.pop-provider-count')).fontFamily.includes('mono'))`],
+    ]);
+    await evalJs(`document.querySelector('[data-provider="zhipu"] .pop-provider').focus()`);
+    await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+    await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+    await shotOf('.pop','UX-MODEL-02-provider-expanded-'+suffix,'小 Provider 整行展开，无需滚过百模型',['GLM'],[
+      ['布局稳定',modelLayout],
+      ['展开状态、箭头朝下，GLM 可见',`(() => { const g=document.querySelector('[data-provider="zhipu"]');const r=g.querySelector('.pop-item').getBoundingClientRect();const p=document.querySelector('.pop').getBoundingClientRect();return g.firstElementChild.getAttribute('aria-expanded')==='true' && g.querySelector('.pop-provider-chev').textContent==='⌄' && r.top>=p.top && r.bottom<=p.bottom; })()`],
+    ]);
+    await evalJs(`document.querySelector('[data-provider="openrouter"] .pop-provider').focus()`);
+    await send('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32});
+    await send('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32});
+    await shotOf('.pop','UX-MODEL-03-many-models-'+suffix,'100 模型展开，仅 picker 内滚动、长 id 截断',[],[
+      ['布局稳定',modelLayout],
+      ['picker 可以内部滚动',`(() => {const p=document.querySelector('.pop');p.scrollTop=120;const ok=p.scrollTop>0 && p.scrollHeight>p.clientHeight && getComputedStyle(p).overflowY==='auto';p.scrollTop=0;return ok})()`],
+      ['长 id 使用 ellipsis，没有横向溢出',`(() => { const e=document.querySelector('[data-provider="openrouter"] .pi-text'); return getComputedStyle(e).textOverflow==='ellipsis' && e.scrollWidth>e.clientWidth; })()`],
+    ]);
+    await evalJs(`document.querySelector('[data-provider="zhipu"] .pop-item').click()`);
+    await sleep(350);
+    await evalJs(`document.querySelector('#btnModel').click()`);
+    await shotOf('.pop','UX-MODEL-04-current-provider-after-switch-'+suffix,'Pi 确认跨 Provider 切换后，当前组展开且对勾唯一',['GLM'],[
+      ['布局稳定',modelLayout],
+      ['当前模型可见，旧展开状态保留',`(() => { const cur=document.querySelector('.pop [aria-current="true"]');const g=cur.closest('.pop-model-group');const r=cur.getBoundingClientRect(),p=document.querySelector('.pop').getBoundingClientRect();return document.querySelectorAll('.pop [aria-current="true"]').length===1 && g.dataset.provider==='zhipu' && !g.lastElementChild.hidden && r.top>=p.top && r.bottom<=p.bottom && document.querySelector('[data-provider="deepseek"] .pop-provider').getAttribute('aria-expanded')==='true'; })()`],
+    ]);
+    await closePop();
+    await evalJs(`document.querySelector('#btnThink').click()`);
+    await shotOf('.pop','UX-MODEL-05-thinking-after-model-switch-'+suffix,'模型切换后 medium 生效，候选四档没有 max',['medium'],[
+      ['布局稳定',modelLayout],
+      ['Pi 实际 thinkingLevel 与 candidates',`document.querySelector('#thinkText').textContent==='思考 medium' && [...document.querySelectorAll('.pop .pi-text')].map(e=>e.textContent).join(',')==='off,low,medium,high' && !document.querySelector('.pop').classList.contains('model-mode')`],
+    ]);
+  }
+  await closePop();
+  await send('Emulation.clearDeviceMetricsOverride');
 
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));

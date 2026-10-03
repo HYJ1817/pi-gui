@@ -478,6 +478,8 @@ const MODELS = [
   { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek' },
   { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', reasoning: true },
 ];
+let composerModel = MODELS[0];
+let composerThinking = 'high';
 
 // 实测 pi 只返回这三档（medium 会被静默映射成 high，所以不要放进夹具）
 const LEVELS = ['off', 'high', 'max'];
@@ -663,8 +665,8 @@ function replyFor(cmd) {
         command: 'get_state',
         success: true,
         data: {
-          model: { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek' },
-          thinkingLevel: 'high',
+          model: composerModel,
+          thinkingLevel: composerThinking,
           sessionName: 'pi-GUI',
           isStreaming: false,
         },
@@ -722,7 +724,14 @@ function replyFor(cmd) {
     case 'get_available_models':
       return { type: 'response', command: 'get_available_models', success: true, data: { models: MODELS } };
     case 'get_available_thinking_levels':
-      return { type: 'response', command: 'get_available_thinking_levels', success: true, data: { levels: LEVELS } };
+      return { type: 'response', command: 'get_available_thinking_levels', success: true, data: { levels: composerModel.provider === 'zhipu' ? ['off', 'low', 'medium', 'high'] : LEVELS } };
+    case 'set_model': {
+      const model = MODELS.find((m) => m.provider === cmd.provider && m.id === cmd.modelId);
+      if (!model) return { type: 'response', command: cmd.type, success: false, error: 'Model not found' };
+      composerModel = model;
+      composerThinking = model.provider === 'zhipu' ? 'medium' : 'high';
+      return { type: 'response', command: cmd.type, success: true, data: model };
+    }
     default:
       return { type: 'response', command: cmd.type, success: true, data: {} };
   }
@@ -733,6 +742,17 @@ function replyFor(cmd) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = url.pathname;
+
+  // Composer 视觉夹具：仅内存，不访问 Pi 或用户模型配置。
+  if (p === '/api/__composer-models' && req.method === 'POST') {
+    MODELS.splice(2, MODELS.length,
+      { provider: 'zhipu', id: 'glm', name: 'GLM', reasoning: true },
+      ...Array.from({ length: 100 }, (_, i) => ({ provider: 'openrouter', id: `router-${i}-` + 'long-model-id-'.repeat(12) })));
+    composerModel = MODELS[0];
+    composerThinking = 'high';
+    for (const type of ['get_available_models', 'get_state', 'get_available_thinking_levels']) push(replyFor({ type }));
+    return json(res, 200, { ok: true });
+  }
 
   if (process.env.HARNESS_VERBOSE && p.startsWith('/api/')) console.log(`${req.method} ${p}`);
 
@@ -1266,7 +1286,7 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 200, { ok: true });
     // 稍等一下再回，模拟真实往返，让加载态有机会被截到
-    setTimeout(() => push(replyFor(cmd)), 30);
+    setTimeout(() => push({ ...replyFor(cmd), id: cmd.id }), 30);
     return;
   }
 
