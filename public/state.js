@@ -86,6 +86,7 @@ export const S = {
   working: null,
   models: [],
   thinkingLevels: [],
+  modelSwitchPending: false,
   state: null,
   stats: null,
   /* 本地用量（LocalUsage）与远端额度（RemoteQuota）（P21）。

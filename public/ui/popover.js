@@ -21,15 +21,17 @@ export function closePop({ restoreFocus = false } = {}) {
   const previous = anchor;
   pop.hidden = true;
   pop.innerHTML = '';
-  pop.classList.remove('tip-mode');
+  pop.classList.remove('tip-mode', 'model-mode');
+  pop.style.maxHeight = '';
   if (previous) previous.setAttribute('aria-expanded', 'false');
   anchor = null;
   if (restoreFocus) previous?.focus();
 }
 
-export function openPop(target, { tip = false, align = 'right' } = {}) {
+export function openPop(target, { tip = false, model = false, align = 'right' } = {}) {
   if (anchor && anchor !== target) anchor.setAttribute('aria-expanded', 'false');
   pop.classList.toggle('tip-mode', tip);
+  pop.classList.toggle('model-mode', model);
   pop.setAttribute('role', tip ? 'tooltip' : 'dialog');
   pop.setAttribute('aria-label', tip ? '上下文占用' : '选择选项');
   pop.hidden = false;
@@ -41,14 +43,23 @@ export function openPop(target, { tip = false, align = 'right' } = {}) {
   left = Math.max(8, Math.min(left, window.innerWidth - r.width - 8));
 
   const composer = target.closest('.composer');
-  let top = (composer ? composer.getBoundingClientRect().top : a.top) - r.height - 8;
-  if (top < 8) top = Math.max(8, Math.min(a.bottom + 8, window.innerHeight - r.height - 8));
+  if (model) {
+    const available = (composer ? composer.getBoundingClientRect().top : a.top) - 16;
+    pop.style.maxHeight = Math.max(32, Math.min(window.innerHeight - 16, available)) + 'px';
+  } else {
+    pop.style.maxHeight = '';
+  }
+  const height = pop.getBoundingClientRect().height;
+  let top = (composer ? composer.getBoundingClientRect().top : a.top) - height - 8;
+  if (top < 8) top = Math.max(8, Math.min(a.bottom + 8, window.innerHeight - height - 8));
 
   pop.style.left = Math.round(left) + 'px';
   pop.style.top = Math.round(top) + 'px';
   anchor = target;
   target.setAttribute('aria-expanded', 'true');
-  if (!tip) (pop.querySelector('.pop-item.on') || pop.querySelector('.pop-item'))?.focus();
+  if (!tip) (model
+    ? pop.querySelector('.pop-provider-models:not([hidden]) .pop-item.on') || pop.querySelector('.pop-provider')
+    : pop.querySelector('.pop-item.on') || pop.querySelector('.pop-item'))?.focus();
 }
 
 pop.addEventListener('keydown', (e) => {

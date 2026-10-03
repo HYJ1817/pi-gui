@@ -21,19 +21,113 @@ import { attachmentImages, buildMessage, renderAttachments } from './attachments
 import { clearChanges } from './changes.js';
 import { showChat } from './ui/workspace-surface.js';
 import { clearDraft, draftSync } from './draft.js';
+import { closePop, currentAnchor } from './ui/popover.js';
 
 /** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
 export function boot() {
-  sendCommand({ type: 'get_state' });
+  activeModelSwitch = null;
+  queuedModelSwitch = null;
+  refreshModelState({ pending: false });
   sendCommand({ type: 'get_session_stats' });
   sendCommand({ type: 'get_tree' });
   // 切换项目 / 重载配置后 pi 会恢复该目录的历史会话，用 get_messages 重建对话区
   sendCommand({ type: 'get_messages' });
   sendCommand({ type: 'get_available_models' });
-  sendCommand({ type: 'get_available_thinking_levels' });
+}
+
+// Pi 原生回传 request id。仅在前端关联，不改变 RPC 或后端发现来源。
+let modelGeneration = 0;
+let activeModelSwitch = null;
+let queuedModelSwitch = null;
+let modelRefresh = null;
+const modelRequestPrefix = 'composer-model-';
+const stateReads = new Map();
+let stateReadSequence = 0;
+
+function readState() {
+  const id = 'composer-state-' + (++stateReadSequence);
+  stateReads.set(id, { generation: modelGeneration, workspace: S.workspaceGeneration });
+  sendCommand({ type: 'get_state', id }).then((result) => {
+    if (!result?.ok) stateReads.delete(id);
+  });
+}
+
+function pendingModel() {
+  S.thinkingLevels = [];
+  S.modelSwitchPending = true;
+  if (currentAnchor() === el.btnThink) closePop();
+}
+
+export function refreshModelState({ pending = true } = {}) {
+  S.thinkingLevels = [];
+  S.modelSwitchPending = pending;
+  const generation = ++modelGeneration;
+  stateReads.clear();
+  const prefix = modelRequestPrefix + generation;
+  const refresh = modelRefresh = { generation, workspace: S.workspaceGeneration, stateId: prefix + '-state', levelsId: prefix + '-levels' };
+  for (const [type, id] of [['get_state', refresh.stateId], ['get_available_thinking_levels', refresh.levelsId]]) {
+    sendCommand({ type, id }).then((result) => {
+      if (!result?.ok && modelRefresh === refresh) {
+        onResponse({ command: type, id, success: false });
+      }
+    });
+  }
+}
+
+function sendModelSwitch(request) {
+  activeModelSwitch = request;
+  sendCommand({ type: 'set_model', id: request.id, provider: request.provider, modelId: request.modelId }).then((result) => {
+    if (!result?.ok && activeModelSwitch === request) onResponse({ command: 'set_model', id: request.id, success: false });
+  });
+}
+
+function acceptModelResponse(evt) {
+  if (evt.id?.startsWith('composer-state-')) {
+    const read = stateReads.get(evt.id);
+    stateReads.delete(evt.id);
+    if (read && read.generation === modelGeneration && read.workspace === S.workspaceGeneration && !S.modelSwitchPending && evt.success) applyState(evt.data || {});
+    return true;
+  }
+  if (evt.command === 'set_model' && activeModelSwitch) {
+    const request = activeModelSwitch;
+    if (evt.id !== request.id) return true;
+    activeModelSwitch = null;
+    if (request.workspace !== S.workspaceGeneration) {
+      queuedModelSwitch = null;
+      return true;
+    }
+    if (queuedModelSwitch) {
+      const next = queuedModelSwitch;
+      queuedModelSwitch = null;
+      sendModelSwitch(next);
+      return true;
+    }
+    if (evt.success) toast('已切换到 ' + (evt.data?.name || evt.data?.id || request.modelId), 'info');
+    else if (evt.error) toast(evt.error, 'error');
+    // 失败也读取 Pi 的实际模型，绝不保留乐观选择。
+    refreshModelState();
+    return true;
+  }
+  if (evt.id?.startsWith(modelRequestPrefix)) {
+    const refresh = modelRefresh;
+    if (!refresh || refresh.generation !== modelGeneration || refresh.workspace !== S.workspaceGeneration) return true;
+    if (evt.id === refresh.stateId && evt.command === 'get_state') refresh.stateResult = evt;
+    else if (evt.id === refresh.levelsId && evt.command === 'get_available_thinking_levels') refresh.levelsResult = evt;
+    else return true;
+    if (refresh.stateResult && refresh.levelsResult) {
+      if (refresh.stateResult.success) applyState(refresh.stateResult.data || {});
+      if (refresh.stateResult.success && refresh.levelsResult.success) onThinkingLevels(refresh.levelsResult.data || {});
+      modelRefresh = null;
+      S.modelSwitchPending = false;
+    }
+    return true;
+  }
+  // 未关联的旧 state/levels 不能插进正在同步的模型。
+  return S.modelSwitchPending && (evt.command === 'get_state' || evt.command === 'get_available_thinking_levels');
 }
 
 export function onResponse(evt) {
+  if (acceptModelResponse(evt)) return;
   if (!evt.success) {
     if (evt.command !== 'get_available_thinking_levels') {
       toast(evt.error || `命令 ${evt.command} 执行失败`, 'error');
@@ -45,7 +139,8 @@ export function onResponse(evt) {
       noteLoadFailure(`无法读取历史消息：${evt.error || '上游没有说明原因'}`);
     }
     // 设置类命令失败后，之前乐观更新的显示会与 pi 不一致，回读一次纠正
-    if (evt.command === 'set_model' || evt.command === 'set_thinking_level') sendCommand({ type: 'get_state' });
+    if (evt.command === 'set_model') refreshModelState();
+    if (evt.command === 'set_thinking_level') readState();
     return;
   }
   const d = evt.data || {};
@@ -63,8 +158,8 @@ export function onResponse(evt) {
     case 'get_available_thinking_levels':
       return onThinkingLevels(d);
     case 'set_model':
-      if (d.name || d.id) el.modelText.textContent = d.name || d.id;
       toast('已切换到 ' + (d.name || d.id), 'info');
+      refreshModelState();
       return;
     case 'new_session':
       afterSessionSwitch();
@@ -188,16 +283,22 @@ export function compactNow() {
   toast('已请求压缩上下文', 'info');
 }
 
-/* 设置类命令：先乐观更新显示，再回读状态让 pi 说了算。
- * 成功提示放在 onResponse 的 set_model 分支里 —— 点选时不抢先弹。 */
-export function setModel(provider, modelId, label) {
-  sendCommand({ type: 'set_model', provider, modelId });
-  if (label) el.modelText.textContent = label;
-  sendCommand({ type: 'get_state' });
+/* 模型完全由 Pi 确认后回读。思考设置保留即时显示，再回读有效档位。 */
+export function setModel(provider, modelId) {
+  pendingModel();
+  modelRefresh = null;
+  const generation = ++modelGeneration;
+  stateReads.clear();
+  const request = { id: modelRequestPrefix + generation + '-set', provider, modelId, workspace: S.workspaceGeneration };
+  if (activeModelSwitch && activeModelSwitch.workspace === S.workspaceGeneration) queuedModelSwitch = request;
+  else {
+    queuedModelSwitch = null;
+    sendModelSwitch(request);
+  }
 }
 
 export function setThinkingLevel(level) {
   sendCommand({ type: 'set_thinking_level', level });
   el.thinkText.textContent = '思考 ' + level;
-  sendCommand({ type: 'get_state' });
+  readState();
 }

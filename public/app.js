@@ -25,7 +25,7 @@ import { observeMcpEvent } from './mcp-observer.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast } from './ui/toast.js';
-import { closePop, currentAnchor, openPop, pop, popItem, popLabel, popTitle, popVisible } from './ui/popover.js';
+import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setConn, setStatus, setTitleText } from './shell.js';
 import { samePath } from './util.js';
@@ -41,6 +41,7 @@ import {
   setSessionName,
   setSessionListRefresh,
   setThinkingLevel,
+  refreshModelState,
   stop,
   submit,
 } from './rpc.js';
@@ -384,6 +385,9 @@ function onUiRequest(evt) {  switch (evt.method) {
 
 /* ---------- 选择器 ---------- */
 
+const expandedModelProviders = new Set();
+const knownModelProviders = new Set();
+
 function openModelPicker() {
   if (!S.models.length) {
     sendCommand({ type: 'get_available_models' });
@@ -392,6 +396,7 @@ function openModelPicker() {
   }
 
   const currentId = S.state?.model?.id || null;
+  const currentProvider = S.state?.model?.provider || null;
 
   pop.innerHTML = '';
   pop.appendChild(popTitle('选择模型'));
@@ -404,12 +409,59 @@ function openModelPicker() {
     groups.get(key).push(m);
   }
 
+  for (const provider of knownModelProviders) {
+    if (!groups.has(provider)) {
+      knownModelProviders.delete(provider);
+      expandedModelProviders.delete(provider);
+    }
+  }
+  let groupIndex = 0;
   for (const [provider, list] of groups) {
-    pop.appendChild(popLabel(provider));
+    const isCurrent = currentProvider ? provider === currentProvider
+      : list.some((m) => currentId ? (m.id || m.name) === currentId : m.name === el.modelText.textContent);
+    knownModelProviders.add(provider);
+    if (isCurrent) expandedModelProviders.add(provider);
+    const group = document.createElement('div');
+    group.className = 'pop-model-group';
+    group.dataset.provider = provider;
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'pop-provider';
+    const models = document.createElement('div');
+    models.className = 'pop-provider-models';
+    models.id = 'model-provider-' + (++groupIndex);
+    header.setAttribute('aria-controls', models.id);
+    const chev = document.createElement('span');
+    chev.className = 'pop-provider-chev';
+    chev.setAttribute('aria-hidden', 'true');
+    const name = document.createElement('span');
+    name.className = 'pop-provider-name';
+    name.textContent = provider;
+    const count = document.createElement('span');
+    count.className = 'pop-provider-count';
+    count.textContent = String(list.length);
+    const syncExpanded = () => {
+      const expanded = expandedModelProviders.has(provider);
+      header.setAttribute('aria-expanded', String(expanded));
+      models.hidden = !expanded;
+      chev.textContent = expanded ? '⌄' : '›';
+    };
+    syncExpanded();
+    header.append(chev, name, count);
+    header.addEventListener('click', () => {
+      if (expandedModelProviders.has(provider)) expandedModelProviders.delete(provider);
+      else expandedModelProviders.add(provider);
+      syncExpanded();
+      openPop(el.btnModel, { model: true });
+      header.focus();
+    });
+    group.append(header, models);
+    pop.appendChild(group);
     for (const m of list) {
       const id = m.id || m.name;
-      const isCur = currentId ? id === currentId : m.name === el.modelText.textContent;
-      pop.appendChild(
+      const isCur = currentProvider ? m.provider === currentProvider && id === currentId
+        : currentId ? id === currentId : m.name === el.modelText.textContent;
+      models.appendChild(
         popItem({
           label: m.name || id,
           sub: m.reasoning ? '推理' : '',
@@ -418,9 +470,7 @@ function openModelPicker() {
             closePop({ restoreFocus: true });
             // 实测：pi 的 set_model 需要 provider + modelId 两个字段，
             // 只传 model 会报 "Model not found: <provider>/undefined"
-            setModel(m.provider, id, m.name || id);
-            el.btnModel.title = `切换模型：${m.name || id}`;
-            el.btnModel.setAttribute('aria-label', el.btnModel.title);
+            setModel(m.provider, id);
           },
         })
       );
@@ -434,12 +484,16 @@ function openModelPicker() {
   foot.appendChild(t);
   pop.appendChild(foot);
 
-  openPop(el.btnModel);
+  openPop(el.btnModel, { model: true });
 }
 
 function openThinkPicker() {
+  if (S.modelSwitchPending) {
+    toast('正在读取当前模型支持的思考等级…', 'info');
+    return;
+  }
   if (!S.thinkingLevels.length) {
-    sendCommand({ type: 'get_available_thinking_levels' });
+    refreshModelState();
     toast('正在获取思考等级…', 'info');
     return;
   }
