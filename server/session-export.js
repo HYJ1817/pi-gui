@@ -49,7 +49,13 @@ export function createSessionExport({ rpc, runtime, resolvePackageDir }) {
     } catch {
       return json(res, 502, { ok: false, error: '会话导出失败或项目已切换；未在项目目录创建导出文件。' });
     } finally {
-      if (dir) await fs.rm(dir, { recursive: true, force: true });
+      if (dir) {
+        try { await fs.rm(dir, { recursive: true, force: true }); }
+        catch {
+          // The response may already be sent. Do not terminate the server or log session paths.
+          console.warn('会话导出临时文件清理失败，请检查系统临时目录权限。');
+        }
+      }
     }
   }
   return { handle };

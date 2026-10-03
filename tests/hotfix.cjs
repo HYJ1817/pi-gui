@@ -87,6 +87,28 @@ async function main() {
     } } });
     const response = res(); await fx.handle({ method: 'POST' }, response); assert.equal(response.code, 502); assert.equal(fs.existsSync(path.dirname(output)), false); assert.ok(!response.body.includes(tmp));
   });
+  for (const code of ['EPERM', 'EBUSY']) for (const exportFails of [false, true]) await check('H5 cleanup failure remains contained: ' + code + '/' + exportFails, async () => {
+    const { createSessionExport } = await import('../server/session-export.js');
+    const promises = require('node:fs/promises');
+    const originalRm = promises.rm, originalWarn = console.warn;
+    let output; const warnings = [];
+    const fx = createSessionExport({ runtime: { getCurrentCwd: () => B }, resolvePackageDir: () => pkg, rpc: { getState: () => ({ bridgeRun: 1 }), request: async cmd => {
+      output = cmd.outputPath; fs.writeFileSync(output, 'fixture');
+      return exportFails ? { __error: 'fixture-secret' } : { path: output };
+    } } });
+    promises.rm = async target => { assert.equal(target, path.dirname(output)); throw Object.assign(new Error('fixture-secret ' + target), { code }); };
+    console.warn = message => warnings.push(message);
+    try {
+      const response = res(); await assert.doesNotReject(fx.handle({ method: 'POST' }, response));
+      assert.equal(response.code, exportFails ? 502 : 200);
+      assert.equal(warnings.length, 1); assert.ok(!warnings[0].includes(tmp)); assert.ok(!warnings[0].includes('fixture-secret'));
+      assert.ok(!response.body.toString().includes('fixture-secret'));
+      assert.equal(fs.existsSync(output), true);
+    } finally {
+      promises.rm = originalRm; console.warn = originalWarn;
+      if (output) await originalRm(path.dirname(output), { recursive: true, force: true });
+    }
+  });
   await check('H5 old Pi rejects before issuing export command', async () => { const { createSessionExport } = await import('../server/session-export.js'); let called = false; const fx = createSessionExport({ runtime: { getCurrentCwd: () => B }, resolvePackageDir: () => null, rpc: { getState: () => ({}), request: () => { called = true; } } }); const response = res(); await fx.handle({ method: 'POST', body: { outputPath: B } }, response); assert.equal(response.code, 409); assert.equal(called, false); });
   await check('H5 router rejects raw exports and reserved numeric client IDs', async () => {
     const { createRouter } = await import('../server/router.js'); const { Readable } = require('node:stream'); const sent = [];
