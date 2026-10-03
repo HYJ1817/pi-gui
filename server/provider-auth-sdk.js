@@ -66,7 +66,7 @@ export function publicNativeQuota(result, providerId) {
   const balance = b => b && typeof b === 'object' ? { amount: num(b.amount), currency: currency(b.currency), granted: num(b.granted), toppedUp: num(b.toppedUp) } : null;
   const status = ['ok', 'unsupported', 'auth_error', 'unavailable', 'error'].includes(q.status) ? q.status : 'error';
   const messages = {
-    unsupported: '该供应商当前没有已验证的远端额度接口',
+    unsupported: facts.quotaSupported === true ? '当前认证类型不适用于此额度接口' : '该供应商当前没有已验证的远端额度接口',
     auth_error: facts.credentialAvailable === false ? '未认证：Pi 未发现可用的 API Key' : 'API Key 无效或未授权查询额度',
     unavailable: '额度服务暂时不可用', error: '额度查询失败',
   };
@@ -120,13 +120,12 @@ async function quota(providerId, options, signal) {
   try{check=await snapshot.checkAuth(providerId,{signal});}catch{return emptyQuota(providerId,adapter?'auth_error':'unsupported',adapter?'Pi 无法解析额度查询认证':'该供应商当前没有已验证的远端额度接口',null,Boolean(adapter));}
   const available=Boolean(check);
   if(!['deepseek','openrouter'].includes(adapter))return emptyQuota(providerId,'unsupported','该供应商当前没有已验证的远端额度接口',available,false);
-  if(check?.type==='oauth')return emptyQuota(providerId,'unsupported','当前 OAuth 认证不适用于此额度接口',true,false);
   if(!check)return emptyQuota(providerId,'auth_error','未认证：Pi 未发现可用的 API Key',false,true);
-  if(check.type!=='api_key')return emptyQuota(providerId,'unsupported','当前认证类型不适用于此额度接口',null,false);
   if(typeof snapshot.getAuth!=='function')return emptyQuota(providerId,'unsupported','当前 Pi 不支持私有额度凭据解析',available,false);
+  // Storage type is not the request credential. Pi owns OAuth toAuth conversion.
   let key;
   try{const resolved=await snapshot.getAuth(providerId,{signal});key=resolved?.auth?.apiKey;}catch{return emptyQuota(providerId,'auth_error','Pi 无法解析额度查询认证',null,true);}
-  if(typeof key!=='string'||!key)return emptyQuota(providerId,'auth_error','未认证：Pi 未发现可用的 API Key',false,true);
+  if(typeof key!=='string'||!key)return emptyQuota(providerId,'unsupported','当前认证类型不适用于此额度接口',false,true);
   signal.throwIfAborted();
   const identity=createHash('sha256').update(providerId+'|'+adapter+'|'+key).digest('hex');
   const hit=quotaCache.get(identity);
