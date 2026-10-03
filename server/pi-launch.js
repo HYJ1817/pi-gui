@@ -52,6 +52,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { buildPiEntry } from './mcp-native.js';
 
 /** pi 包的 npm 名（与 `server/agents/pi.js`、`server/mcp.js` 同一个常量语义）。 */
 const PI_PACKAGE = '@earendil-works/pi-coding-agent';
@@ -340,6 +341,21 @@ export function createPiLaunch({
     return id.packageDir || null;
   }
 
+  /** Backend-only Agent/CLI entry, derived from this exact launch target. */
+  function cliEntry() {
+    const dir = packageDir();
+    let version = '';
+    try {
+      const file = path.join(dir, 'package.json');
+      if (fs.statSync(file).size <= MAX_PKG_BYTES) {
+        const value = JSON.parse(fs.readFileSync(file, 'utf8')).version;
+        if (typeof value === 'string' && /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(value)) version = value;
+      }
+    } catch { /* unknown */ }
+    const entry = buildPiEntry(dir);
+    return entry ? { ...entry, version } : { ok: false, version, reason: dir ? 'entry-missing' : 'not-installed', detail: '当前 Pi 启动目标的 CLI 入口无法确认，请检查 PI_BIN 或 PATH。' };
+  }
+
   /**
    * 脱敏摘要 —— **renderer / Diagnostics 只拿这个**。
    * 只有 source、basename、known/unknown；绝对路径与 HOME 一个字节都不出去。
@@ -367,5 +383,5 @@ export function createPiLaunch({
   /** 给 `createPiVersionProbe({ launcher })` 用：**同一个 launch spec** 的 `--version`。 */
   const launcher = (args) => formatLaunch(bin, args, isWin);
 
-  return { identity, identityKey, packageDir, summary, reset, launcher, formatLaunch: launcher };
+  return { identity, identityKey, packageDir, cliEntry, summary, reset, launcher, formatLaunch: launcher };
 }

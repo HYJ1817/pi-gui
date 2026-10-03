@@ -62,9 +62,7 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
     try {
       const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
       if (data && Array.isArray(data.items)) {
-        // active 兜底用「正在跑的那个目录」：用户可能刚把 active 那条从列表里移掉，
-        // 但当前会话还在那个目录里跑着，界面上的高亮要跟着实际状态走。
-        return { active: data.active || runtime.getCurrentCwd() || '', items: data.items };
+        return { active: runtime.getCurrentCwd() || '', items: data.items };
       }
     } catch {
       /* 首次运行 —— 空列表，等用户自己添加 */
@@ -197,19 +195,23 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
 
     if (req.method === 'DELETE') {
       const raw = url.searchParams.get('path') || '';
+      if (!raw.trim()) return json(res, 400, { ok: false, error: '路径必填' });
       const resolved = path.resolve(raw);
+      const removingCurrent = samePath(resolved, runtime.getCurrentCwd());
+      if (removingCurrent && beforeActivate) {
+        const reason = beforeActivate();
+        if (reason) return json(res, 409, { ok: false, code: 'workspace-busy', error: reason });
+      }
       const cfg = read();
       const before = cfg.items.length;
       cfg.items = cfg.items.filter((p) => !samePath(p.path, resolved));
-      /* 移掉的正好是「上次激活的那个」时，把 active 也清掉。
-       *
-       * 不清的话会出现这种怪事：从列表里移除了，重启之后它又回来了
-       * （resolveInitialCwd 读的就是 active）。用户会觉得「移除没生效」。
-       * 注意这里**不**动 currentCwd —— 当前会话还在那个目录里跑着，
-       * 立刻把 pi 掐掉比留着更让人困惑。 */
-      if (samePath(cfg.active, resolved)) cfg.active = '';
+      if (removingCurrent || samePath(cfg.active, resolved)) cfg.active = '';
       write(cfg);
-      return json(res, 200, { ok: true, removed: resolved, count: before - cfg.items.length });
+      if (removingCurrent) {
+        runtime.setCurrentCwd(null);
+        restartPi();
+      }
+      return json(res, 200, { ok: true, removed: resolved, closedWorkspace: removingCurrent, count: before - cfg.items.length });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/projects/activate') {

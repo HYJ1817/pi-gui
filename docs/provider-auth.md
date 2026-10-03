@@ -42,6 +42,17 @@ GUI 清除过期输入并等待 Pi 回调。
 
 ## 凭据边界与聊天同步
 
+环境变量凭据会进入 Pi 进程及它启动的 bash/其它命令，包括
+`OPENAI_API_KEY`、`OPENROUTER_API_KEY`、`ANTHROPIC_API_KEY`。
+这支持环境变量 Provider 认证，不意味着 API Key 对工具不可见。
+建议使用最小权限、受限额度的 key，并信任执行工具的工作区。
+`PI_GUI_TOKEN` 继续必须从 Pi 子进程环境剥离。Pi GUI 不从 Provider/Auth 配置、
+认证状态或 Diagnostics 主动投影 key 原文。工具若主动读取并输出这些变量，
+Pi 的 `tool_execution_end` / tool result 可将其作为普通工具输出返回，继而可能
+进入 Pi 会话、模型上下文、SSE 和 GUI 工具结果（DOM）。当前没有承诺对任意工具
+输出做通用 secret redaction。
+SDK worker 的秘密隔离不改变 Pi 工具对继承环境的访问权限。
+
 token 与 SDK 返回凭据只存在私有 worker，worker stdout/stderr 丢弃，
 不进入 HTTP、SSE、DOM、诊断、日志或草稿。授权链接必须通过安全 URL 检查。
 秘密输入不进入 renderer；API Key 原文应在官方 Pi `/login` 配置，

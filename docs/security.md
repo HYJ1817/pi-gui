@@ -621,7 +621,17 @@ Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能�
 
 **做法**：唯一对外暴露的项目来源是 `runtime.getCurrentCwd()`。
 `/api/project-config` 等接口**不接受**客户端传 `projectPath` / `absolutePath` /
-`../`。`activate` 是 cwd 的唯一写路径。
+`../`。激活项目与关闭当前项目通过 runtime 修改 cwd；移除当前项目时先经过
+聊天、Planner、Verifier 与维护动作的后端忙碌闸门，然后 cwd 置空并停止旧 bridge。
+移除非当前项目只改变列表。
+
+### 会话 HTML 导出
+
+分享与导出菜单共用 `/api/session-export`。后端先确认当前 Pi 支持 `outputPath`，
+再在项目外系统临时目录生成随机目录，直接传明确输出路径，返回 HTML 下载后清理。
+客户端不能指定服务器路径；原始 `export_html` 命令入口被拒绝。
+返回路径不匹配、项目/bridge 变化、导出失败均拒绝下载并清理，不回显临时路径。
+无法确认旧 Pi 支持此能力时拒绝导出，不退回项目 cwd。
 
 ### ID 不暴露路径
 
@@ -648,6 +658,19 @@ Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能�
 所以不存在「静默改了 index」这种状态。
 
 ## 五、子进程边界
+
+### Provider 环境凭据的信任边界
+
+`OPENAI_API_KEY`、`OPENROUTER_API_KEY`、`ANTHROPIC_API_KEY` 等环境变量
+会由 Pi 进程继承，也能被 Pi 启动的 bash 与其它命令读取。这是环境变量
+Provider 认证所需的能力；Pi GUI 不对 Pi 或它的工具提供凭据隔离 sandbox。
+建议使用最小权限、受限额度的 Provider key，只在可信工作区运行工具。
+GUI 控制令牌 `PI_GUI_TOKEN` 继续在子进程启动前剥离。
+Pi GUI 不从 Provider/Auth 配置、认证状态或 Diagnostics 主动投影 key 原文；
+配置摘要只表达是否配置以及来源。工具若主动读取并输出这些变量，Pi 的
+`tool_execution_end` / tool result 可将其作为普通工具输出返回，继而可能进入
+Pi 会话、模型上下文、SSE 和 GUI 工具结果（DOM）。当前没有承诺对任意工具输出
+做通用 secret redaction。
 
 ### Agent 一律过适配器
 

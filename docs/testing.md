@@ -1,5 +1,21 @@
 # 测试分层与 CI
 
+## P25.1 真机问题回归
+
+`npm test` 增加 `tests/hotfix.cjs`（22 条）和 `tests/hotfix-ui.cjs`（10 条）。
+fixture 覆盖内部数字 RPC response、超时晚响应、canonical PI_BIN 与 Planner、
+Diagnostics、当前项目关闭/重启/显式重新激活、忙碌闸门、用户级 Auth、
+HTML 项目外导出与失败清理，以及空项目 CTA、Web/Electron 文件能力。
+所有写盘均在 `os.tmpdir()` 的假项目中；不执行真实 OAuth、不写真实 Pi 凭据。
+现有 runtime Auth fixture 增至 36 条，确认私有 Promise 回读不依赖 SSE。
+smoke 仍为 1324 条，更新三个旧行为断言，没有删除断言。
+
+真实截图：启动 `HARNESS_PORT=18797` 的独立 visual harness，执行
+`node tests/hotfix-shot.cjs`，生成 `.shots/p25-1/` 的六张截图。
+覆盖 700/900/1200px、Web 差异与说明、Electron openPath 能力、
+当前项目关闭后的欢迎区、可见侧栏 CTA 及既有目录选择器。
+使用独立端口，避免与现有服务/单文件 EXE 测试的默认端口冲突。
+
 ## P25 供应商与认证
 
 认证测试使用 `os.tmpdir()` 内的假 Pi 包、公开 SDK 与 provider fixture，

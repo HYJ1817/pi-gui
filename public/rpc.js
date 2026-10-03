@@ -9,8 +9,7 @@
  *     所以设置类命令一律**回读 get_state**，不然界面会显示一个 pi 根本没接受的值。 */
 
 import { el, S } from './state.js';
-import { absPath } from './util.js';
-import { sendCommand } from './api.js';
+import { sendCommand, downloadSessionHtml } from './api.js';
 import { toast } from './ui/toast.js';
 import { setStatus } from './shell.js';
 import { clearThread, rebuildFromMessages, noteLoadFailure } from './messages.js';
@@ -82,7 +81,7 @@ function sendModelSwitch(request) {
 }
 
 function acceptModelResponse(evt) {
-  if (evt.id?.startsWith('composer-state-')) {
+  if (typeof evt.id === 'string' && evt.id.startsWith('composer-state-')) {
     const read = stateReads.get(evt.id);
     stateReads.delete(evt.id);
     if (read && read.generation === modelGeneration && read.workspace === S.workspaceGeneration && !S.modelSwitchPending && evt.success) applyState(evt.data || {});
@@ -108,7 +107,7 @@ function acceptModelResponse(evt) {
     refreshModelState();
     return true;
   }
-  if (evt.id?.startsWith(modelRequestPrefix)) {
+  if (typeof evt.id === 'string' && evt.id.startsWith(modelRequestPrefix)) {
     const refresh = modelRefresh;
     if (!refresh || refresh.generation !== modelGeneration || refresh.workspace !== S.workspaceGeneration) return true;
     if (evt.id === refresh.stateId && evt.command === 'get_state') refresh.stateResult = evt;
@@ -173,7 +172,6 @@ export function onResponse(evt) {
       toast('上下文压缩完成', 'info');
       return;
     case 'export_html':
-      toast('已导出会话：' + absPath(d.path || ''), 'info');
       return;
     default:
       return;
@@ -274,7 +272,11 @@ export function afterSessionSwitch() {
 
 export const forkFrom = (entryId) => sendCommand({ type: 'fork', entryId });
 
-export const exportHtml = () => sendCommand({ type: 'export_html' });
+export async function exportHtml() {
+  const result = await downloadSessionHtml();
+  toast(result.ok ? '会话 HTML 已下载' : result.error || '导出失败', result.ok ? 'info' : 'error');
+  return result;
+}
 
 export const setSessionName = (name) => sendCommand({ type: 'set_session_name', name });
 

@@ -122,6 +122,7 @@ export function createRpcBridge({
   let pi = null;
   let restartTimer = null;
   let restartRequested = false;
+  let retiringChild = null;
   let bridgeRun = 0;
   let crashStreak = 0;
 
@@ -301,6 +302,7 @@ export function createRpcBridge({
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       if (pi !== child) return;
+      if (child === retiringChild || runtime.getCurrentCwd() !== cwd) return;
       stdoutBuf += chunk;
       let nl;
       // 只按 LF 切分 —— pi 协议明确要求
@@ -328,7 +330,10 @@ export function createRpcBridge({
           pending.delete(msg.id);
           clearTimeout(entry.timer);
           entry.resolve(msg.success === false ? { __error: msg.error || '命令失败' } : (msg.data ?? {}));
+          continue; // Backend requests close here; compatibility already observed them.
         }
+        // Timed-out internal replies belong to the same private numeric ID space.
+        if (msg?.type === 'response' && Number.isInteger(msg.id) && msg.id > 0 && msg.id < nextRequestId) continue;
         publish({ ...msg, bridgeRun: run, cwd });
       }
     });
@@ -336,12 +341,15 @@ export function createRpcBridge({
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (text) => {
       if (pi !== child) return;
+      if (child === retiringChild || runtime.getCurrentCwd() !== cwd) return;
       publish({ type: 'bridge_stderr', text, bridgeRun: run, cwd });
     });
 
     child.on('spawn', () => {
       if (pi !== child) return;
+      if (child === retiringChild || runtime.getCurrentCwd() !== cwd) return;
       restartRequested = false;
+      retiringChild = null;
       publish({ type: 'bridge_status', state: 'ready', pid: child.pid ?? null, cwd, bridgeRun: run });
     });
 
@@ -462,6 +470,7 @@ export function createRpcBridge({
     if (pi) {
       if (restartRequested) return;
       restartRequested = true;
+      retiringChild = pi;
       publish({ type: 'bridge_status', state: 'restarting', reason: 'reload-config', bridgeRun, cwd: runtime.getCurrentCwd() });
       try {
         pi.stdin.end();
@@ -469,7 +478,8 @@ export function createRpcBridge({
         /* noop */
       }
       try {
-        pi.kill();
+        if (typeof killProcessTree === 'function') killProcessTree(pi);
+        else pi.kill();
       } catch {
         /* noop */
       }

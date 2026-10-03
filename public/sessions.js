@@ -38,7 +38,7 @@
  */
 import { fetchSessions, switchSession, renameSession, archiveSession, deleteSession } from './api.js';
 import { afterSessionSwitch } from './rpc.js';
-import { S } from './state.js';
+import { S, ownsWorkspace } from './state.js';
 import { fmtTime } from './util.js';
 import { toast } from './ui/toast.js';
 import { confirmModal } from './ui/modal.js';
@@ -337,6 +337,7 @@ export async function refreshSidebarSessions() {
 }
 
 async function fill(box, token) {
+  const generation = S.workspaceGeneration;
   let data;
   try {
     data = await fetchSessions();
@@ -349,7 +350,7 @@ async function fill(box, token) {
     return;
   }
   // 旧请求回来晚了，或者这块已经被项目列表重渲染带走了
-  if (token !== loadToken || !box.isConnected) return;
+  if (token !== loadToken || !box.isConnected || !ownsWorkspace(generation) || !S.hasProject) return;
 
   if (!data.hasProject || !(data.sessions || []).length) {
     clearSessionPlans(); // 没有会话就没有关联可显示

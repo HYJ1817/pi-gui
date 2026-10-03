@@ -36,11 +36,7 @@
  *   agent_settled         → 收尾信号
  *   message_end/…         → 记下 stopReason / errorMessage 用于判成败
  */
-import path from 'node:path';
-import { DEFAULT_MAX_STDOUT, DEFAULT_TIMEOUT_MS, resolveEntry, runCli } from './cli.js';
-
-const PKG = '@earendil-works/pi-coding-agent';
-const BIN = 'pi';
+import { DEFAULT_MAX_STDOUT, DEFAULT_TIMEOUT_MS, runCli } from './cli.js';
 
 /** pi 的正文在 message.content 里；不同版本可能是字符串或 [{type,text}]。 */
 function textOf(content) {
@@ -52,12 +48,16 @@ function textOf(content) {
     .join('');
 }
 
-export function createPiAdapter({ env = process.env, sessionDir = null } = {}) {
+export function createPiAdapter({ env = process.env, sessionDir = null, piLaunch = null } = {}) {
+  const launch = piLaunch;
   let cache = null;
+  let cacheKey = null;
 
   function detect() {
-    if (cache) return cache;
-    const entry = resolveEntry({ pkgName: PKG, binName: BIN, env });
+    const key = launch?.identityKey() || 'unknown';
+    if (cache && cacheKey === key) return cache;
+    cacheKey = key;
+    const entry = launch?.cliEntry() || { ok: false, reason: 'not-installed', detail: '当前 Pi 启动目标未知，请检查 PI_BIN 或 PATH。' };
     if (!entry.ok) {
       cache = {
         id: 'pi',

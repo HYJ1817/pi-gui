@@ -15,6 +15,7 @@ const { pathToFileURL } = require('node:url');
 const PUB = path.join(__dirname, '..', 'public');
 const UPLOAD_DIR = path.join(__dirname, '..', '.uploads');
 const PORT = Number(process.env.HARNESS_PORT || 7789);
+let hotfixNoProject = false;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -771,6 +772,10 @@ function providerAuthSnapshot() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = url.pathname;
+  if (p === '/api/__hotfix/no-project' && req.method === 'POST') {
+    hotfixNoProject = url.searchParams.get('value') === '1';
+    return json(res, 200, { ok: true });
+  }
 
   if (p.startsWith('/api/__provider-auth/') && req.method === 'POST') {
     const phase = p.slice('/api/__provider-auth/'.length);
@@ -824,6 +829,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (p === '/api/status') {
+    if (hotfixNoProject) return json(res, 200, { ok: true, piRunning: false, cwd: null, hasProject: false });
     return json(res, 200, { ok: true, piRunning: true, pid: 0, args: ['--mode', 'rpc'], cwd: process.cwd() });
   }
 
@@ -1151,6 +1157,11 @@ const server = http.createServer(async (req, res) => {
   });
 
   if (p === '/api/projects') {
+    if (req.method === 'DELETE') {
+      hotfixNoProject = true;
+      return json(res, 200, { ok: true, closedWorkspace: true });
+    }
+    if (hotfixNoProject) return json(res, 200, { ok: true, active: '', items: [] });
     return json(res, 200, {
       ok: true,
       active: 'C:\\pi-GUI',

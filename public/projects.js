@@ -23,6 +23,9 @@ import { toast } from './ui/toast.js';
 import { applyProjectState, loadStatus, setBridgeState } from './shell.js';
 import { refreshGitNow, resetChanges } from './git.js';
 import { clearThread, setStreaming } from './messages.js';
+import { clearSessionPlans } from './session-plans.js';
+import { renderAttachments } from './attachments.js';
+import { draftSync } from './draft.js';
 
 let projectData = { active: '', items: [] };
 let activationQueue = Promise.resolve();
@@ -183,6 +186,13 @@ export function renderProjects() {
 
   if (!projectData.items.length) {
     if (projectLoadState !== 'error') el.projects.innerHTML = '<div class="hint-empty">还没有项目，点下面的「添加文件夹」。</div>';
+    const add = document.createElement('button');
+    add.id = 'projectEmptyAdd';
+    add.type = 'button';
+    add.className = 'btn';
+    add.textContent = '+ 添加文件夹';
+    add.onclick = openDirPicker;
+    el.projects.appendChild(add);
     return;
   }
 
@@ -295,7 +305,7 @@ export async function addProject(target, name) {
 async function confirmRemoveProject(target, label) {
   const ok = await confirmModal({
     title: '移除这个项目？',
-    message: `「${label}」只会从 Pi GUI 的项目列表里移除，不会删除磁盘上的项目文件。`,
+    message: `「${label}」会从 Pi GUI 的项目列表里移除，不会删除磁盘上的项目文件。${samePath(target, S.cwd) ? '当前工作区将关闭，请先停止正在运行的工作。' : ''}`,
     okText: '移除项目',
     danger: true,
   });
@@ -304,16 +314,48 @@ async function confirmRemoveProject(target, label) {
 }
 
 export async function removeProject(target) {
-  const j = await deleteProject(target);
-  if (!j.ok) return toast(j.error || '移除失败', 'error');
-  await loadProjects();
-  /* 移掉的可能是当前正在用的那个项目。后端会把「上次激活」清掉但让会话继续跑，
-   * 所以这里回读一次状态，让界面高亮和底部连接指示跟着走，别停在旧状态上。 */
-  await loadStatus();
-  /* 变更列表是按项目算的，换了项目就必须整体重来 ——
-   * 留着上一个项目的文件列表比空着更糟。 */
-  resetChanges();
-  refreshGitNow();
+  const requestedGeneration = S.workspaceGeneration;
+  const task = activationQueue.catch(() => {}).then(async () => {
+    const j = await deleteProject(target);
+    if (!j.ok) return toast(j.error || '移除失败', 'error');
+    if (!ownsWorkspace(requestedGeneration)) return;
+    let generation = requestedGeneration;
+    if (j.closedWorkspace) {
+      pendingProjectAction = null;
+      generation = beginWorkspaceSwitch(null);
+      showChat();
+      clearThread();
+      setStreaming(false);
+      S.models = [];
+      S.state = null;
+      S.stats = null;
+      S.treeData = [];
+      S.thinkingLevels = [];
+      S.modelSwitchPending = false;
+      S.attachments = [];
+      renderAttachments();
+      S.cwd = '';
+      S.hasProject = false;
+      projectData.active = '';
+      S.switching = false;
+      S.syncPending = null;
+      clearSessionPlans();
+      draftSync();
+      el.title.textContent = '未选择项目';
+      el.footName.textContent = '未选择项目';
+      el.modelText.textContent = '模型不可用';
+      el.btnModel.title = '切换模型';
+      el.btnModel.setAttribute('aria-label', '切换模型');
+      el.thinkText.textContent = '思考';
+      el.btnThink.title = '思考强度';
+      el.btnThink.setAttribute('aria-label', '思考强度');
+      resetChanges();
+      setBridgeState('no-project');
+    }
+    await Promise.all([loadProjects(generation), loadStatus(generation)]);
+  });
+  activationQueue = task;
+  return task;
 }
 
 export function activateProject(target, label) {
