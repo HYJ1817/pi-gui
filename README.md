@@ -143,6 +143,16 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 
 → [architecture.md](docs/architecture.md#六前端渲染管线)
 
+## 供应商与认证（P25）
+
+「模型供应商」设置可展示 Pi 原生 OAuth、API Key 和环境变量认证。
+ChatGPT 订阅登录走本机 Pi 的公开 SDK；凭据保存、浏览器回调和刷新由 Pi 负责。
+GUI 不接收 API Key 原文，自定义供应商使用环境变量引用，既有磁盘凭据不会回显。
+登录或退出后回读 Pi 状态，模型与思考档位仍由 Pi 决定。
+旧 Pi 缺少公开认证入口时显示未知，并提供官方 `/login`、`/logout` 操作说明。
+
+→ [provider-auth.md](docs/provider-auth.md)
+
 ## 兼容与升级安全（P23）
 
 Pi GUI 是 pi 的界面，不是 pi 的一部分。所以「pi 换版本了怎么办」必须是一个

@@ -10,6 +10,14 @@
 import { toast } from './ui/toast.js';
 import { S } from './state.js';
 
+/* 用户级认证不携带 workspace/model generation。 */
+export const fetchProviderAuth = () => getJSON('/api/provider-auth');
+export const loginProviderAuth = (providerId) => sendJSON('/api/provider-auth/login', { body: { providerId, authType: 'oauth' } });
+export const logoutProviderAuth = (providerId) => sendJSON('/api/provider-auth/logout', { body: { providerId } });
+export const respondProviderAuth = (flowId, promptId, value) => sendJSON('/api/provider-auth/respond', { body: { flowId, promptId, value } });
+export const cancelProviderAuth = (flowId) => sendJSON('/api/provider-auth/cancel', { body: { flowId } });
+export const syncProviderAuth = () => sendJSON('/api/provider-auth/sync', { body: {} });
+
 /** GET 一个 JSON 接口。网络层失败返回 {ok:false, network:true}。 */
 export async function getJSON(url) {
   try {

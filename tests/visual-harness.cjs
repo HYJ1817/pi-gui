@@ -739,9 +739,59 @@ function replyFor(cmd) {
 
 /* ---------------- 服务 ---------------- */
 
+/* P25: public backend snapshot only. These phases never load an SDK, open an
+ * authorization URL, persist credentials, or alter the Composer model. */
+let authPhase = 'native-list', authRevision = 0;
+function providerAuthSnapshot() {
+  const unknown = authPhase === 'unknown', connected = authPhase === 'connected';
+  const descriptor = (providerId, displayName, methods) => ({
+    providerId, displayName, authType: unknown ? 'unknown' : connected ? 'oauth' : 'unknown',
+    source: unknown ? 'unknown' : 'pi', authenticated: unknown ? null : connected ? true : null,
+    credentialStored: unknown ? null : connected, authConfigured: unknown ? null : connected,
+    modelAvailable: null, canLogin: !unknown && methods.some(m => m.canLogin), canLogout: !unknown && connected,
+    canConfigureKey: false, accountLabel: null, status: unknown ? 'unknown' : connected ? 'connected' : 'unknown',
+    statusReason: unknown ? '未知（无法确认）' : connected ? 'Pi 确认已保存 OAuth 登录；远端有效性未确认' : 'Pi 未确认认证状态',
+    methods, models: [],
+  });
+  const oauth = { type: 'oauth', label: 'ChatGPT 订阅', canLogin: true, isSubscription: true };
+  const providers = [descriptor('openai', 'OpenAI', [oauth, { type: 'api-key', label: 'API Key', canLogin: false, isSubscription: false }]),
+    descriptor('openai-codex', 'OpenAI Codex（legacy）', [oauth])];
+  let flow = null;
+  if (['browser', 'device', 'select'].includes(authPhase)) {
+    flow = { id: 'offline-auth-flow', generation: 1, revision: authRevision, providerId: 'openai', operation: 'login',
+      state: authPhase === 'browser' ? 'waiting-browser' : authPhase === 'device' ? 'waiting-device-code' : 'waiting-input',
+      url: authPhase === 'select' ? null : 'https://auth.example.test/authorize?state=offline-fixture',
+      userCode: authPhase === 'device' ? 'DEMO-2048' : null,
+      prompt: authPhase === 'select' ? { id: 'offline-auth-prompt', type: 'select', options: [{ id: 'browser', label: '浏览器授权' }, { id: 'device', label: '设备码授权' }] } : null,
+      errorCode: null, notice: authPhase === 'select' ? '请选择 Pi 提供的登录方式' : '离线视觉夹具：仅展示安全认证状态' };
+  }
+  return { ok: true, capability: { sdkAvailable: !unknown, reason: unknown ? '无法读取 Pi 认证状态（未知）' : null, piVersion: '1.0.0' }, providers, flow, sync: { state: 'idle', reason: null } };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = url.pathname;
+
+  if (p.startsWith('/api/__provider-auth/') && req.method === 'POST') {
+    const phase = p.slice('/api/__provider-auth/'.length);
+    if (!['native-list', 'browser', 'device', 'select', 'unknown', 'connected'].includes(phase)) return json(res, 400, { ok: false });
+    authPhase = phase; authRevision++;
+    return json(res, 200, providerAuthSnapshot());
+  }
+  if (p === '/api/provider-auth' && req.method === 'GET') return json(res, 200, providerAuthSnapshot());
+  if (p.startsWith('/api/provider-auth/') && req.method === 'POST') {
+    let payload; try { payload = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { return json(res, 400, { ok: false, code: 'input', error: '请输入当前 Pi 登录步骤要求的内容' }); }
+    const action = p.slice('/api/provider-auth/'.length);
+    if (['login', 'logout'].includes(action) && !['openai', 'openai-codex'].includes(payload.providerId)) return json(res, 400, { ok: false, code: 'unsupported', error: '离线夹具不支持此供应商' });
+    if (action === 'login') authPhase = 'browser';
+    else if (action === 'logout' || action === 'cancel') authPhase = 'native-list';
+    else if (action === 'respond') {
+      if (payload.flowId !== 'offline-auth-flow' || payload.promptId !== 'offline-auth-prompt' || !['browser', 'device'].includes(payload.value)) return json(res, 409, { ok: false, code: 'stale', error: '这条认证交互已失效，请读取当前状态' });
+      authPhase = payload.value;
+    } else if (action !== 'sync') return json(res, 400, { ok: false, code: 'unsupported', error: '离线夹具不支持此操作' });
+    authRevision++;
+    return json(res, 200, providerAuthSnapshot());
+  }
 
   // Composer 视觉夹具：仅内存，不访问 Pi 或用户模型配置。
   if (p === '/api/__composer-models' && req.method === 'POST') {

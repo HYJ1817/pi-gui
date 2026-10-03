@@ -20,10 +20,11 @@ import {
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { clearThread } from './messages.js';
+import { mountProviderAuth } from './provider-auth.js';
 
 const PRESETS = {
   openrouter: { label: 'OpenRouter', name: 'openrouter', api: 'openai-completions', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '$OPENROUTER_API_KEY', models: '' },
-  ollama: { label: 'Ollama 本地', name: 'ollama', api: 'openai-completions', baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama', models: 'llama3.1:8b\nqwen2.5-coder:7b' },
+  ollama: { label: 'Ollama 本地', name: 'ollama', api: 'openai-completions', baseUrl: 'http://localhost:11434/v1', apiKey: '', models: 'llama3.1:8b\nqwen2.5-coder:7b' },
   deepseek: { label: 'DeepSeek', name: 'deepseek', api: 'openai-completions', baseUrl: 'https://api.deepseek.com', apiKey: '$DEEPSEEK_API_KEY', models: 'deepseek-chat|DeepSeek Chat\ndeepseek-reasoner|DeepSeek Reasoner' },
   moonshot: { label: 'Moonshot', name: 'moonshot', api: 'openai-completions', baseUrl: 'https://api.moonshot.cn/v1', apiKey: '$MOONSHOT_API_KEY', models: 'kimi-k2-0905-preview|Kimi K2' },
   siliconflow: { label: '硅基流动', name: 'siliconflow', api: 'openai-completions', baseUrl: 'https://api.siliconflow.cn/v1', apiKey: '$SILICONFLOW_API_KEY', models: 'deepseek-ai/DeepSeek-V3|DeepSeek V3' },
@@ -183,12 +184,22 @@ export function renderProviders(box) {
 }
 
 export function openProvidersPanel() {
+  let disposeAuth = () => {};
   openModal((card, close) => {
     card.classList.add('wide');
 
     const h = document.createElement('h3');
-    h.textContent = '模型供应商';
+    h.textContent = '供应商与认证';
     card.appendChild(h);
+
+    const auth = document.createElement('div');
+    auth.className = 'provider-auth';
+    card.appendChild(auth);
+    disposeAuth = mountProviderAuth(auth, () => loadProviders());
+
+    const custom = document.createElement('h4');
+    custom.textContent = '自定义模型配置';
+    card.appendChild(custom);
 
     const desc = document.createElement('div');
     desc.className = 'modal-desc';
@@ -228,7 +239,7 @@ export function openProvidersPanel() {
 
     actions.append(add, reload, done);
     card.appendChild(actions);
-  });
+  }, () => disposeAuth());
 
   loadProviders();
 }
@@ -285,13 +296,13 @@ export function openAddProvider() {
     row.append(fApi, fBase);
 
     const fKey = mk('div', 'field');
-    fKey.innerHTML = '<label>API Key</label>';
-    const iKey = mk('input', '', { placeholder: '$MY_API_KEY 或 sk-...' });
+    fKey.innerHTML = '<label>认证环境变量引用（可选）</label>';
+    const iKey = mk('input', '', { placeholder: '$MY_API_KEY 或 ${MY_API_KEY}' });
     fKey.append(
       iKey,
       mk('div', 'hint', {
         textContent:
-          '可填 $ENV_VAR 引用环境变量、!command 执行命令取值，或直接填字面量。注意：$ENV_VAR 没设置时 pi 会直接忽略整个供应商，且不报错。',
+          '仅接受 $NAME 或 ${NAME}。API Key 请先运行官方交互式 pi，再使用 /login <provider> 配置。环境变量未设置时 pi 可能忽略该供应商。',
       })
     );
 
@@ -426,11 +437,13 @@ export function openAddProvider() {
     btnFetch.onclick = async () => {
       const baseUrl = iBase.value.trim();
       if (!baseUrl) return toast('请先填写 Base URL', 'warn');
+      const keyRef = iKey.value.trim();
+      if (keyRef && !/^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$/.test(keyRef)) return toast('仅接受环境变量引用，请用官方 Pi /login 配置密钥', 'warn');
 
       btnFetch.disabled = true;
       btnFetch.textContent = '拉取中…';
       try {
-        const j = await fetchProviderModels({ baseUrl, api: sApi.value, apiKey: iKey.value.trim() });
+        const j = await fetchProviderModels({ baseUrl, api: sApi.value, ...(keyRef ? { apiKey: keyRef } : {}) });
         if (!j.ok) {
           toast(j.network ? '拉取失败：' + j.error : j.error || '拉取失败', 'error');
           return;
@@ -481,6 +494,8 @@ export function openAddProvider() {
       const baseUrl = iBase.value.trim();
       if (!name) return toast('请填写供应商 ID', 'warn');
       if (!baseUrl) return toast('请填写 Base URL', 'warn');
+      const keyRef = iKey.value.trim();
+      if (keyRef && !/^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$/.test(keyRef)) return toast('仅接受环境变量引用，请用官方 Pi /login 配置密钥', 'warn');
 
       const models = iModels.value
         .split('\n')
@@ -489,7 +504,7 @@ export function openAddProvider() {
         .map(parseModelLine)
         .filter(Boolean);
 
-      const j = await saveProvider(name, { baseUrl, api: sApi.value, apiKey: iKey.value.trim(), models });
+      const j = await saveProvider(name, { baseUrl, api: sApi.value, ...(keyRef ? { apiKey: keyRef } : {}), models });
       if (!j.ok) return toast(j.error || '保存失败', 'error');
       close();
       if (j.warning) toast(j.warning, 'warn');

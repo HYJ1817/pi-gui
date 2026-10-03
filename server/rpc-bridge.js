@@ -87,6 +87,7 @@ export function createRpcBridge({
   /* 实际启动命令：launch identity 优先，`piBin` 只是缺省（老调用方 / 单测）。
    * 这是「bridge spawn 的那个东西」的唯一取值处 —— 下面不再出现第二个来源。 */
   const launchBin = (launch && typeof launch.bin === 'string' && launch.bin) ? launch.bin : piBin;
+  let restartSession = null;
   /* 事件里能露出去的只有 basename（见 start() 里的说明）。 */
   const binLabel = (() => {
     try {
@@ -174,7 +175,8 @@ export function createRpcBridge({
   function buildArgs(extra = null) {
     const args = ['--mode', 'rpc'];
     // --continue 恢复该 cwd 下最近的会话；实测在没有历史的目录下也不会报错，会正常新建
-    if (env.PI_NO_CONTINUE !== '1') args.push('--continue');
+    if (restartSession?.cwd === runtime.getCurrentCwd()) args.push('--session', restartSession.path);
+    else if (env.PI_NO_CONTINUE !== '1') args.push('--continue');
     if (env.PI_PROVIDER) args.push('--provider', env.PI_PROVIDER);
     if (env.PI_MODEL) args.push('--model', env.PI_MODEL);
     if (env.PI_THINKING) args.push('--thinking', env.PI_THINKING);
@@ -259,6 +261,7 @@ export function createRpcBridge({
     }
 
     const args = buildArgs(extra);
+    restartSession = null;
     /* `bin` 只给 basename —— 完整绝对路径（`PI_BIN=C:\...\pi.cmd`）不出后端，
      * renderer 与诊断里都只该看到「哪个入口」，不该看到它装在哪。 */
     publish({ type: 'bridge_status', state: 'starting', bin: binLabel, args, cwd, bridgeRun: run });
@@ -449,9 +452,11 @@ export function createRpcBridge({
   }
 
   /** 重启 pi 子进程 —— 用于让它重新读取 ~/.pi/agent/models.json */
-  function restart() {
+  function restart({ sessionPath = null } = {}) {
     /* 维护期间用户点「重启 Pi」不该插进维护流程：更新完成后会自己 resume。 */
     if (maintenance) return;
+    // Backend-only Pi readback; scoped to this workspace and consumed once.
+    if (sessionPath && typeof sessionPath === 'string') restartSession = { cwd: runtime.getCurrentCwd(), path: sessionPath };
     // 重启等于把挂起请求的应答机会掐掉，先放掉再动进程
     settleAllPending(null);
     if (pi) {

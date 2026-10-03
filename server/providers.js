@@ -54,6 +54,27 @@ function cleanModelEntry(m) {
   return out;
 }
 
+// Never serialize the configuration object: users may store credentials in
+// provider/model headers or extension fields, not only in apiKey.
+export function publicProviderConfig(config) {
+  let baseUrl = '';
+  try {
+    const url = new URL(config?.baseUrl);
+    if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) {
+      url.search = ''; url.hash = ''; baseUrl = url.href.replace(/\/$/, '');
+    }
+  } catch { /* invalid URL is not exposed */ }
+  return {
+    baseUrl,
+    api: API_TYPES.has(config?.api) ? config.api : 'openai-completions',
+    models: Array.isArray(config?.models) ? config.models.map(cleanModelEntry).filter(Boolean) : [],
+  };
+}
+
+export function isEnvKeyReference(value) {
+  return typeof value === 'string' && /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$/.test(value.trim());
+}
+
 /* pi 的 apiKey 支持三种写法：$ENV_VAR 引用环境变量、!command 执行命令取值、字面量。
  * 实测：$VAR 未设置时 pi 会**静默丢掉整个供应商**——get_available_models 里完全查不到，
  * 也不报错。所以这里主动检查并提示，否则用户根本不知道为什么加完没反应。 */
@@ -71,6 +92,7 @@ function apiKeyState(apiKey) {
     // 于是一个明明设置好的变量被误报成「没有设置」。
     const body = raw.slice(1);
     const name = body.startsWith('{') && body.endsWith('}') ? body.slice(1, -1) : body;
+    if (!isEnvKeyReference(raw)) return { kind: 'env', ok: false, note: '环境变量引用格式无效' };
     if (process.env[name]) return { kind: 'env', ok: true, note: `已从环境变量 ${name} 取值` };
     return {
       kind: 'env',
@@ -122,7 +144,7 @@ export function createProviders({ modelsJson }) {
         ok: true,
         path: modelsJson,
         exists: fs.existsSync(modelsJson),
-        providers: cfg.providers,
+        providers: Object.fromEntries(Object.entries(cfg.providers).map(([id, c]) => [id, publicProviderConfig(c)])),
         keyStates,
       });
     }
@@ -156,6 +178,13 @@ export function createProviders({ modelsJson }) {
           if (!Array.isArray(config.models)) {
             return json(res, 400, { ok: false, error: 'models 必须是数组' });
           }
+          if (config.apiKey && !isEnvKeyReference(config.apiKey)) {
+            return json(res, 400, { ok: false, error: 'GUI 只接受环境变量引用；API Key 原文请通过 Pi 的 /login 配置' });
+          }
+          try {
+            const u = new URL(config.baseUrl);
+            if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error();
+          } catch { return json(res, 400, { ok: false, error: 'Base URL 必须是无凭据、无查询参数的 HTTP(S) 地址' }); }
 
           const clean = {
             baseUrl: String(config.baseUrl).trim(),
@@ -167,6 +196,17 @@ export function createProviders({ modelsJson }) {
           clean.models = config.models.map(cleanModelEntry).filter(Boolean);
 
           const cfg = readModelsConfig();
+          // A safe GET cannot echo the old key back. Empty/absent means preserve,
+          // rather than inadvertently deleting a credential while editing models.
+          const previous = cfg.providers[name];
+          if (!clean.apiKey && previous?.apiKey) clean.apiKey = previous.apiKey;
+          // Hidden credential-bearing headers remain backend-only when a user
+          // edits safe model metadata. A removed model stays removed.
+          if (previous?.headers) clean.headers = previous.headers;
+          for (const model of clean.models) {
+            const old = previous?.models?.find(m => m.id === model.id);
+            if (old?.headers) model.headers = old.headers;
+          }
           cfg.providers[name] = clean;
           writeModelsConfig(cfg);
 
@@ -179,7 +219,7 @@ export function createProviders({ modelsJson }) {
             keyState: key,
           });
         })
-        .catch((err) => json(res, 500, { ok: false, error: String(err.message) }));
+        .catch(() => json(res, 500, { ok: false, error: '保存供应商配置失败' }));
       return;
     }
 
@@ -215,6 +255,13 @@ export function createProviders({ modelsJson }) {
 
         const baseUrl = String(payload.baseUrl || '').trim();
         if (!baseUrl) return json(res, 200, { ok: false, error: '请先填写 Base URL' });
+        try {
+          const u = new URL(baseUrl);
+          if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error();
+        } catch { return json(res, 200, { ok: false, error: 'Base URL 必须是无凭据、无查询参数的 HTTP(S) 地址' }); }
+        if (payload.apiKey && !isEnvKeyReference(payload.apiKey)) {
+          return json(res, 200, { ok: false, error: 'GUI 只接受环境变量引用；API Key 原文请通过 Pi 的 /login 配置' });
+        }
 
         const api = API_TYPES.has(payload.api) ? payload.api : 'openai-completions';
 
@@ -222,10 +269,12 @@ export function createProviders({ modelsJson }) {
           baseUrl,
           api,
           apiKey: payload.apiKey,
-          headers: payload.headers && typeof payload.headers === 'object' ? payload.headers : {},
+          headers: {},
         });
 
-        if (!out.ok) return json(res, 200, { ok: false, error: out.error, tried: out.tried });
+        // An upstream response body may contain credentials other than the key
+        // we sent. Never relay arbitrary provider error text to the renderer.
+        if (!out.ok) return json(res, 200, { ok: false, error: '未能读取模型列表；请检查供应商地址、环境变量和网络', tried: out.tried });
         return json(res, 200, {
           ok: true,
           source: out.source,
@@ -234,7 +283,7 @@ export function createProviders({ modelsJson }) {
           models: out.models,
         });
       })
-      .catch((err) => json(res, 500, { ok: false, error: String(err.message) }));
+      .catch(() => json(res, 500, { ok: false, error: '读取供应商模型失败' }));
   }
 
   return { handle, handleModels, readModelsConfig, writeModelsConfig, apiKeyState, cleanModelEntry };

@@ -256,6 +256,19 @@ export function applyState(d) {
     }
   }
 
+  if (!d.model) {
+    el.modelText.textContent = '模型不可用';
+    el.btnModel.title = '切换模型';
+    el.btnModel.setAttribute('aria-label', '切换模型');
+    S.localUsage.modelId = null;
+    S.localUsage.providerId = null;
+    S.quotaEpoch++;
+    S.currentProviderId = null;
+    S.remoteQuota = null;
+    S.quotaLoading = false;
+    renderRemoteQuota();
+  }
+
   if (d.thinkingLevel) {
     el.thinkText.textContent = '思考 ' + d.thinkingLevel;
     el.btnThink.title = `思考强度：${d.thinkingLevel}`;

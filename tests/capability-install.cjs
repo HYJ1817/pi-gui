@@ -369,7 +369,7 @@ const jsonRecorder = (res) => (r, code, payload) => {
   section('G. server.js 装配');
 
   await check('G1. 忙判据覆盖五个来源（会话 / CLI / 更新 / 安装 / Planner+验证）', () => {
-    const body = /function piBusyReason\(\)\s*\{([\s\S]*?)\n\}/.exec(read('server.js'));
+    const body = /function piBusyReason\([^)]*\)\s*\{([\s\S]*?)\n\}/.exec(read('server.js'));
     if (!body) return '找不到 piBusyReason';
     const src = body[1];
     const want = ['piActivity.busy()', 'cliInFlight > 0', 'piUpdate.isRunning()',

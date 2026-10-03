@@ -84,6 +84,7 @@ export function createRouter({
   sse,
   rpc,
   providers,
+  providerAuth = null,
   projects,
   projectConfig,
   skills,
@@ -182,6 +183,10 @@ export function createRouter({
     // 当成「保存一个叫 models 的供应商」，而且前端拿不到任何报错。
     if (url.pathname === '/api/providers/models' && req.method === 'POST') {
       return providers.handleModels(req, res);
+    }
+    if (url.pathname === '/api/provider-auth' || url.pathname.startsWith('/api/provider-auth/')) {
+      if (!providerAuth) return json(res, 503, { ok: false, error: '认证模块未启用' });
+      return providerAuth.handle(req, res, url);
     }
     if (url.pathname === '/api/providers' || url.pathname.startsWith('/api/providers/')) {
       return providers.handle(req, res, url);

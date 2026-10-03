@@ -2368,3 +2368,16 @@ button.pj-sess-primary{cursor:pointer}
 .web-setup p { margin: 6px 0; overflow-wrap: anywhere; }
 .web-setup code { display: block; margin: 8px 0; user-select: text; }
 .web-setup .btn { margin: 0 6px 6px 0; }
+/* Provider authentication follows the existing gray modal controls. */
+.provider-auth { margin-bottom: 24px; }
+.auth-provider, .auth-flow { border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 12px 0; overflow-wrap: anywhere; }
+.auth-status { display: block; margin: 5px 0; color: var(--t2); font-size: 12px; }
+.auth-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.auth-method { font-size: 12px; color: var(--t2); }
+.auth-help { display: grid; gap: 5px; margin-top: 10px; font-size: 12px; color: var(--t2); }
+.auth-help code, .auth-device-code { user-select: all; }
+.auth-link { display: block; margin: 12px 0; color: var(--t1); text-decoration: underline; }
+.auth-device-code { display: block; font-size: 20px; padding: 12px 0; }
+.auth-prompt { display: grid; gap: 8px; margin: 12px 0; }
+.auth-prompt input, .auth-prompt select { width: 100%; min-width: 0; }
+.auth-notice, .auth-message { margin-top: 12px; color: var(--t2); font-size: 12px; }

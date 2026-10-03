@@ -22,6 +22,12 @@ const errors = [];
 const commands = [];
 /* /api/git/* 的调用流水（按顺序记 kind + body），用来断言「什么时候真的去问了后端」。 */
 const gitCalls = [];
+const authCalls = [];
+const providerConfigCalls = [];
+let authStub = { ok: true, capability: { sdkAvailable: true, reason: null, piVersion: 'fixture' }, providers: [
+  { providerId: 'openai', displayName: 'OpenAI', status: 'unknown', authenticated: null, source: 'pi', canLogin: true, canLogout: false, models: [{ id: 'test', name: 'Test' }], methods: [{ type: 'oauth', label: 'ChatGPT 订阅', canLogin: true, isSubscription: true }, { type: 'api-key', label: 'API Key', canLogin: false }] },
+  { providerId: 'key-only', displayName: 'Key Only', status: 'disconnected', source: 'pi', canLogin: false, canLogout: false, methods: [{ type: 'api-key', label: 'API Key', canLogin: false }], models: [] },
+], flow: null, sync: { state: 'idle', reason: null } };
 /* /api/git/* 的可变桩。测试里改 gitStub 就能模拟后端的各种状态
  * （干净工作区 / 不是仓库 / 没装 git / 没有项目 / 二进制 / 截断 …）。 */
 const gitStub = {
@@ -1039,7 +1045,12 @@ window.fetch = async (url, opts) => {
       }),
     };
   }
+  if (u.includes('/api/provider-auth')) {
+    authCalls.push({ url: u, body: opts?.body ? JSON.parse(opts.body) : null });
+    return { json: async () => typeof authStub === 'function' ? authStub(u, opts) : authStub };
+  }
   if (u.includes('/api/providers')) {
+    providerConfigCalls.push({ url: u, method: opts?.method || 'GET', body: opts?.body ? JSON.parse(opts.body) : null });
     if (opts && opts.method === 'POST') {
       return {
         json: async () => ({
@@ -1141,6 +1152,81 @@ staticCheck();
   check('项目列表已渲染 2 项', () => window.document.querySelectorAll('#projects .project').length === 2);
   check('当前项目高亮', () => window.document.querySelectorAll('#projects .project.active').length === 1);
   check('供应商计数 = 1', () => $('providerCount').textContent === '1');
+  window.openProvidersPanel();
+  await new Promise((r) => setTimeout(r, 20));
+  check('P25 发现 OAuth 时 OpenAI 显示 ChatGPT', () => $('modalCard').textContent.includes('ChatGPT'));
+  check('P25 发现模型不推断登录状态', () => Boolean($('modalCard').querySelector('[data-provider-id="openai"]')?.textContent.includes('未知')));
+  check('P25 API Key 方法提供官方交互说明，不提供原文输入', () => $('modalCard').textContent.includes('/login key-only') && !$('modalCard').querySelector('input[type="password"]'));
+  check('P25 OAuth 登录按钮仅按发现方法显示', () => $('modalCard').querySelectorAll('[data-auth-login]').length === 1);
+  window.closeModal();
+  {
+    const saved = authStub;
+    const flush = () => new Promise((r) => setTimeout(r, 10));
+    const host = window.document.createElement('div');
+    window.document.body.appendChild(host);
+    let readbacks = 0;
+    const dispose = window.mountProviderAuth(host, () => { readbacks++; });
+    const click = (label) => [...host.querySelectorAll('button')].find((b) => b.textContent === label)?.click();
+    await flush();
+    check('P25 安全链接拒绝非 HTTPS、userinfo、token、fragment', () => ['http://example.com', 'https://u:p@example.com', 'https://example.com?access_token=secret', 'https://example.com/#token'].every((u) => window.safeAuthUrl(u) === null));
+    check('P25 正常 PKCE 授权链接保留', () => Boolean(window.safeAuthUrl('https://example.com/oauth?state=fixture&code_challenge=fixture')));
+    const flow = { id: 'auth-fixture', revision: 1, providerId: 'openai', operation: 'login', state: 'waiting-device-code', url: 'https://example.com/activate', userCode: 'ABCD-EFGH', prompt: null, notice: 'fixture', errorCode: null };
+    authStub = { ...saved, flow };
+    click('登录'); await flush();
+    check('P25 登录只发送 OAuth 方法和 providerId', () => { const c = authCalls.find((c) => c.url.endsWith('/login')); return c?.body.providerId === 'openai' && c.body.authType === 'oauth' && Object.keys(c.body).length === 2; });
+    check('P25 设备码与取消动作实际呈现', () => host.querySelector('.auth-device-code')?.textContent === 'ABCD-EFGH' && host.textContent.includes('取消认证'));
+    const desktop = window.piGuiDesktop;
+    window.piGuiDesktop = { isDesktop: true, openWebUrl: async () => ({ ok: false }) };
+    host.querySelector('.auth-link').click(); await flush();
+    check('P25 浏览器 bridge 失败不声称已打开', () => host.querySelector('.auth-message').textContent.includes('打开失败') && !host.querySelector('.auth-message').textContent.includes('已请求'));
+    window.piGuiDesktop = { isDesktop: true, openWebUrl: async () => ({ ok: true }) };
+    host.querySelector('.auth-link').click(); await flush();
+    check('P25 浏览器 bridge 成功后才显示打开提示', () => host.querySelector('.auth-message').textContent.includes('已请求系统浏览器'));
+    window.piGuiDesktop = desktop;
+    authStub = { ...saved, flow: { ...flow, revision: 2, state: 'waiting-input', userCode: null, prompt: { id: 'prompt-text', type: 'manual_code', options: [] } } };
+    click('刷新认证状态'); await flush();
+    const reply = host.querySelector('[data-auth-prompt]'); reply.value = 'draft-code'; reply.focus();
+    click('刷新认证状态'); await flush();
+    check('P25 相同 revision 保留授权回复草稿和焦点', () => reply === host.querySelector('[data-auth-prompt]') && reply.value === 'draft-code' && window.document.activeElement === reply);
+    click('提交授权回复'); await flush();
+    check('P25 手动授权码只提交 flow 和 prompt 对应回复', () => { const c = authCalls.filter((c) => c.url.endsWith('/respond')).at(-1); return c?.body.value === 'draft-code' && c.body.promptId === 'prompt-text' && Object.keys(c.body).length === 3; });
+    authStub = { ...saved, flow: { ...flow, revision: 1 } };
+    click('刷新认证状态'); await flush();
+    check('P25 较低 flow revision 不覆盖当前回复', () => host.querySelector('[data-auth-prompt]') === reply);
+    authStub = { ...saved, flow: { ...flow, revision: 3, state: 'waiting-input', prompt: { id: 'prompt-select', type: 'select', options: [{ id: 'subscription', label: '订阅' }, { id: 'account', label: '账户' }] } } };
+    click('刷新认证状态'); await flush();
+    const select = host.querySelector('select'); select.value = 'account';
+    click('提交授权回复'); await flush();
+    check('P25 方法选择提交稳定 option ID 和 prompt ID', () => { const c = authCalls.filter((c) => c.url.endsWith('/respond')).at(-1); return c?.body.value === 'account' && c.body.promptId === 'prompt-select' && c.body.flowId === flow.id; });
+    authStub = { ...saved, flow: { ...flow, revision: 4, state: 'cancelled' } };
+    click('取消认证'); await flush();
+    check('P25 取消发送 flow ID 并回读真实状态', () => authCalls.some((c) => c.url.endsWith('/cancel') && c.body.flowId === flow.id) && host.textContent.includes('认证已取消') && readbacks === 1);
+    authStub = { ...saved, flow: { ...flow, id: 'success-fixture', revision: 5, state: 'success' }, sync: { state: 'pending', reason: 'busy' } };
+    const beforeGet = authCalls.filter((c) => !c.body).length;
+    const modelsBeforeAuth = window.S.models;
+    click('刷新认证状态'); await flush();
+    check('P25 成功后重新 GET，不乐观指派模型', () => readbacks === 2 && authCalls.filter((c) => !c.body).length >= beforeGet + 2 && host.textContent.includes('模型同步待完成') && window.S.models === modelsBeforeAuth);
+    click('重试模型同步'); await flush();
+    check('P25 pending 同步提供实际 retry API', () => authCalls.some((c) => c.url.endsWith('/sync') && Object.keys(c.body).length === 0));
+    let resolveOld;
+    authStub = () => new Promise((r) => { resolveOld = r; });
+    click('刷新认证状态'); await flush();
+    authStub = { ...saved, flow: { ...flow, id: 'new-flow', revision: 1, state: 'verifying' } };
+    click('刷新认证状态'); await flush();
+    resolveOld({ ...saved, flow: { ...flow, id: 'stale-flow', revision: 100, state: 'failed' } }); await flush();
+    check('P25 过期 HTTP 响应不替换新 flow', () => host.textContent.includes('正在确认认证状态') && !host.textContent.includes('认证失败或超时'));
+    const beforeDispose = authCalls.length;
+    dispose(); host.remove();
+    await new Promise((r) => setTimeout(r, 1050));
+    check('P25 最后消费者卸载后停止轮询且不取消登录', () => authCalls.length === beforeDispose);
+    authStub = { ...saved, flow: { ...flow, id: 'resume-flow', revision: 3, state: 'waiting-input', prompt: { id: 'resume-prompt', type: 'text', options: [] } } };
+    window.openProvidersPanel(); await flush();
+    check('P25 重新打开恢复服务端 flow', () => Boolean($('modalCard').querySelector('[data-auth-prompt="resume-flow:resume-prompt"]')));
+    const beforeClose = authCalls.filter((c) => c.url.endsWith('/cancel')).length;
+    window.closeModal(); await flush();
+    check('P25 关闭面板不取消认证', () => authCalls.filter((c) => c.url.endsWith('/cancel')).length === beforeClose);
+    authStub = saved;
+  }
 
   // 全局低频入口收进 More，仍保留原 handler。
   check('供应商入口不在顶部导航里', () => window.document.querySelector('.rail-nav #navProviders') === null);
@@ -1193,6 +1279,19 @@ staticCheck();
   check('上下文百分比', () => $('uPct').textContent === '30%');
   check('上下文进度条宽度', () => $('uCtxBar').style.width === '30%');
   check('成本显示', () => $('uCost').textContent === '$0.4512');
+  {
+    const originalState = structuredClone(window.S.state);
+    window.S.remoteQuota = { providerId: 'deepseek', status: 'ok', balance: { amount: 99, currency: 'USD' } };
+    window.S.currentProviderId = 'deepseek';
+    window.S.localUsage.modelId = 'deepseek-chat';
+    window.S.localUsage.providerId = 'deepseek';
+    es.emit({ type: 'response', command: 'get_state', success: true, data: { ...originalState, model: null } });
+    check('P25 logout 回读 model=null 清除旧模型名', () => $('modelText').textContent === '模型不可用' && window.S.state.model === null);
+    check('P25 logout 回读 model=null 清除 usage 模型和供应商身份', () => window.S.localUsage.modelId === null && window.S.localUsage.providerId === null);
+    check('P25 logout 回读 model=null 清除远端额度及供应商身份', () => window.S.remoteQuota === null && window.S.currentProviderId === null);
+    es.emit({ type: 'response', command: 'get_state', success: true, data: originalState });
+    check('P25 恢复 get_state fixture 后模型和供应商来自 Pi 回读', () => $('modelText').textContent === originalState.model.name && window.S.localUsage.modelId === originalState.model.id);
+  }
 
   // --- get_tree ---
   /* ⚠️ fixture 必须照 pi 的**真实形状**造。
@@ -2564,6 +2663,13 @@ staticCheck();
   fields[1].value = 'https://api.example.com/v1';
   fields[2].value = '$NEW_KEY';
   fields[3].value = 'model-a|Model A';
+  const beforeRawKey = providerConfigCalls.length;
+  fields[2].value = 'raw-fixture-key';
+  [...$('modalCard').querySelectorAll('button')].find((b) => b.textContent === '保存').click();
+  await new Promise((r) => setTimeout(r, 10));
+  check('P25 原文密钥被表单拦截，不发送配置写请求', () => providerConfigCalls.length === beforeRawKey);
+  check('P25 表单只提示环境变量引用与官方登录', () => fields[2].placeholder === '$MY_API_KEY 或 ${MY_API_KEY}' && $('modalCard').textContent.includes('/login <provider>'));
+  fields[2].value = '$NEW_KEY';
   [...window.document.querySelectorAll('#modalCard .btn')].find((b) => b.textContent === '保存').click();
   await new Promise((r) => setTimeout(r, 30));
   check('保存后弹出 key 告警', () => {

@@ -1,5 +1,19 @@
 # 安全
 
+## P25 原生认证边界
+
+认证仅加载主聊天 Pi 已证明安装包的根公开 SDK export；HTTP 不能指定模块路径。
+worker 不继承 `PI_GUI_TOKEN`，stdout/stderr 丢弃。Pi 返回 token、API Key、
+checkAuth 结果原值在 worker 内投影为本地状态与方法摘要，不能进入日志、诊断或 SSE。
+原始错误与进度字符串也不传出，失败采用闭合错误码与固定文案。
+
+GUI 仅接受 OAuth 的非秘密授权回复和方法选择；需要秘密输入时停止并提供官方
+`/login` 降级。自定义配置不接收新的原文 API Key，仅允许环境变量引用；原有磁盘
+密钥保留但不回显。模型 RPC 和供应商配置通过白名单投影，避免扩展凭据字段泄露。
+授权 URL 在后端与 renderer 双重检查；系统浏览器入口仍受 Electron 的 URL 校验。
+flow/prompt ID 与 revision 防止旧交互覆盖当前阶段，取消与超时传到 Pi 原生流程。
+「本机凭据已确认」不等于远端有效性。详见 [provider-auth.md](provider-auth.md)。
+
 ## P23 升级安全与 schema 漂移边界
 
 兼容体系是**只读探测 + 投影**，不新增任何写路径、网络出口或执行面。

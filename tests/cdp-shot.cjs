@@ -26,6 +26,7 @@ const arg = (k, d) => {
 };
 const APP = arg('url', 'http://127.0.0.1:7788/');
 const TAG = arg('tag', '');
+const AUTH_ONLY = arg('auth-only', 'false') === 'true';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const name = (n) => (TAG ? TAG + '-' + n : n);
@@ -157,6 +158,7 @@ async function main() {
   })()`);
   console.log('左下供应商入口: ' + railInfo);
 
+  if (!AUTH_ONLY) {
   await shot('01-default');
 
   /* --- 模型浮层 --- */
@@ -275,6 +277,8 @@ async function main() {
     await shot('10-file-expanded');
   }
 
+  }
+
   /* ================= P8-C：Attempt 人工审阅（视觉核对场景） =================
    *
    * 场景数据全部来自 tests/visual-harness.cjs 的 PLAN_DETAIL / PLAN_STRESS ——
@@ -341,6 +345,41 @@ async function main() {
         return true;
       })()`
     );
+  const authShots = async () => {
+    // Phase changes are local fixture routes; no browser authorization is opened.
+    for (const [width, height] of [[700, 600], [900, 700], [1200, 800], [1536, 900]]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      for (const phase of ['native-list', 'browser', 'device', 'select', 'unknown', 'connected']) {
+        await evalJs(`if(!document.querySelector('#modal').hidden) document.querySelector('#modal').click()`);
+        await evalJs(`fetch('/api/__provider-auth/${phase}',{method:'POST'}).then(r=>r.json())`);
+        await evalJs(`window.__authComposerBefore=document.querySelector('#composerBox').getBoundingClientRect().toJSON();document.querySelector('#navProviders').click()`);
+        await sleep(450);
+        const flowPhase = ['browser', 'device', 'select'].includes(phase);
+        const must = flowPhase ? [] : ['供应商与认证', 'ChatGPT'];
+        if (phase === 'browser') must.push('等待浏览器授权', '打开授权页面');
+        if (phase === 'device') must.push('DEMO-2048', '在浏览器中输入设备码');
+        if (phase === 'select') must.push('选择认证方法', '设备码授权');
+        if (phase === 'unknown') must.push('未知（无法确认）', '/login');
+        if (phase === 'connected') must.push('已连接（本机凭据）');
+        await shotOf(flowPhase ? '.auth-flow' : '.modal-card', `P25-auth-${phase}-${width}x${height}`, 'P25：离线认证状态、灰阶有界弹层与稳定 Composer', must, [
+          ['弹层完全在视口内，仅内部滚动', `(() => {const e=document.querySelector('.modal-card'),r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1&&e.scrollWidth<=e.clientWidth+1&&document.documentElement.scrollWidth<=innerWidth})()`],
+          ['Composer 不位移', `['x','y','width','height'].every(k=>Math.abs(document.querySelector('#composerBox').getBoundingClientRect()[k]-window.__authComposerBefore[k])<.5)`],
+          ['认证视图不含密钥输入或凭据值', `(() => {const e=document.querySelector('.provider-auth');return !e.querySelector('input[type="password"],input[name="apiKey"]')&&!/(access_token|refresh_token|client_secret|Bearer |sk-[a-z0-9]{12})/i.test(e.textContent)})()`],
+          ['原生登录方法来自安全描述', `document.querySelectorAll('.auth-provider').length===2&&document.querySelector('[data-provider-id="openai"] .auth-method').textContent==='ChatGPT 订阅'`],
+          ['认证状态和流程符合相位', phase === 'unknown' ? `document.querySelectorAll('[data-auth-login]').length===0` : phase === 'select' ? `document.querySelector('[data-auth-prompt]').tagName==='SELECT'&&document.querySelector('[data-auth-prompt]').options.length===2` : phase === 'device' ? `document.querySelector('.auth-device-code').textContent==='DEMO-2048'` : phase === 'connected' ? `document.querySelector('.auth-status').textContent==='已连接（本机凭据）'` : `!!document.querySelector('[data-auth-login="openai"]')`],
+        ]);
+        await clickIn('.modal-card button', '关闭');
+      }
+    }
+    await send('Emulation.clearDeviceMetricsOverride');
+  };
+  if (AUTH_ONLY) {
+    await authShots();
+    console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
+    console.log('P25 取景判据: ' + (shotFailures.length ? shotFailures.join('；') : '全部成立'));
+    ws.close(); chrome.kill();
+    process.exit(shotFailures.length || pageErrors.length ? 1 : 0);
+  }
 
   /* P14-A：同一夹具里的项目、会话与现有面板；每张图附结构与宽度判据。 */
   const shellChecks = [
@@ -970,7 +1009,7 @@ async function main() {
   await shotOf('#workSurface', '132-neutral-extensions', 'P14-E：Skill 选中与 Tabs 为灰阶', ['code-review'], [...viewportChecks('#workSurface')]);
   await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navProviders').click()`);
   await sleep(200);
-  await shotOf('#modal', '133-neutral-modal', 'P14-E：供应商 Modal 按钮为灰阶', ['模型供应商'], [['计算后的交互色为中性', neutralControls], ['Modal 位于视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`]]);
+  await shotOf('#modal', '133-neutral-modal', 'P14-E：供应商 Modal 按钮为灰阶', ['供应商与认证'], [['计算后的交互色为中性', neutralControls], ['Modal 位于视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`]]);
   await evalJs(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
   await evalJs(`document.querySelector('#navChanges').click()`);
   await sleep(320);
@@ -1022,7 +1061,7 @@ async function main() {
   await shotOf('#globalMoreMenu', '151-more-700-low', 'P14-E：700×600 More 可访问', [], [['More 在视口内', `(() => {const r=document.querySelector('#globalMoreMenu').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
   await evalJs(`document.querySelector('#navProviders').click()`);
   await sleep(160);
-  await shotOf('#modal', '152-modal-700-low', 'P14-E：700×600 Modal 按钮可见', ['模型供应商'], [['Modal 在视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
+  await shotOf('#modal', '152-modal-700-low', 'P14-E：700×600 Modal 按钮可见', ['供应商与认证'], [['Modal 在视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
   await evalJs(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
   await send('Emulation.setDeviceMetricsOverride', { width:701,height:602,deviceScaleFactor:1,mobile:false });
   await evalJs(`document.querySelector('#navPlanner').click()`);
@@ -2067,6 +2106,7 @@ async function main() {
   }
   await send('Emulation.clearDeviceMetricsOverride');
 
+  await authShots();
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
 

@@ -46,6 +46,9 @@ import { createGitRoutes } from './server/git-routes.js';
 import { createProjects, resolveInitialCwd } from './server/projects.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createProviders } from './server/providers.js';
+import { createAuthSdk, sanitizeModelEvent } from './server/provider-auth-sdk.js';
+import { createProviderAuth } from './server/provider-auth.js';
+import { createAuthRuntimeSync } from './server/provider-auth-runtime.js';
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
@@ -122,7 +125,8 @@ function readOwnVersion() {
 
 // pi 的用户级自定义供应商配置。
 // 注意：这是「用户配置」，与 pi 自身的 models-store.json（模型目录缓存）不是一回事。
-const MODELS_JSON = path.join(os.homedir(), '.pi', 'agent', 'models.json');
+const agentDirOverride = process.env.PI_CODING_AGENT_DIR;
+const MODELS_JSON = path.join(agentDirOverride ? path.resolve(agentDirOverride.replace(/^~(?=[\\/]|$)/, os.homedir())) : path.join(os.homedir(), '.pi', 'agent'), 'models.json');
 
 // 本应用自己的项目列表
 const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json');
@@ -249,6 +253,8 @@ let extensionRegistryRef = null;
 /* P23：probe 表在 mcpNative 之后才建（它要读原生摘要），但 bridge 的 publish
  * 回调在那之前就装好了 —— 所以同样用「先声明、运行期回填」的引用占位。 */
 let probesRef = null;
+let providerAuthRef = null;
+const authRuntimeListeners = new Set();
 /* Pi 更新的后端闸门要用的两个「后端自己的」忙信号（不信前端的 disabled）：
  *   - piActivity：主会话有没有在干活（规则在 server/pi-activity.js —— 按 Pi 1.0.0
  *     的真实事件语义：agent_start → agent_settled，agent_end **不算结束**；
@@ -274,9 +280,11 @@ const rpc = createRpcBridge({
     /* 主会话活动状态：真实事件语义见 server/pi-activity.js 的文件头。
      * 这里只转发，规则只有一份（可测）。 */
     piActivity.observe(event);
+    for (const listener of authRuntimeListeners) listener(event);
+    providerAuthRef?.observeRuntime(event);
     sse.publish(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
-      : event);
+      : sanitizeModelEvent(event));
   },
   piBin: PI_BIN,
   launch: piLaunch,
@@ -625,7 +633,8 @@ function invalidatePiCaches() {
  * `piUpdate` / `capabilityInstall` 在下面才建 —— 这里是**惰性**读取，
  * 闸门只在请求时被调用，那时它们已经就位。
  */
-function piBusyReason() {
+function piBusyReason(includeAuth = true) {
+  if (includeAuth && providerAuthRef?.inFlight()) return { code: 'busy-auth', error: '供应商认证或模型同步正在进行，请稍后再试' };
   const turn = piActivity.busy();
   if (turn) return turn;
   if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
@@ -680,6 +689,23 @@ const capabilityInstall = createCapabilityInstall({
   invalidateCaches: invalidatePiCaches,
 });
 
+const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
+const providerAuth = providerAuthRef = createProviderAuth({
+  adapter: authSdk,
+  startBlocked: () => cliInFlight > 0 || piUpdate.isRunning() || capabilityInstall.isRunning(),
+  busyReason: () => piBusyReason(false),
+  customProviders: () => Object.keys(providers.readModelsConfig().providers || {}),
+  readModels: async () => {
+    if (!runtime.getCurrentCwd() || !rpc.getState().piRunning) return null;
+    const result = await rpc.request({ type: 'get_available_models' });
+    return Array.isArray(result?.models) ? result.models : null;
+  },
+  synchronize: createAuthRuntimeSync({
+    rpc, getCwd: () => runtime.getCurrentCwd(), busyReason: () => piBusyReason(false),
+    subscribe: listener => { authRuntimeListeners.add(listener); return () => authRuntimeListeners.delete(listener); },
+  }),
+});
+
 const route = createRouter({
   auth,
   sse,
@@ -690,11 +716,13 @@ const route = createRouter({
   rpc: {
     ...rpc,
     send: (cmd) => {
+      if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
       rpc.send(cmd);
       piActivity.noteCommandAccepted(cmd);
     },
   },
   providers,
+  providerAuth,
   projects,
   projectConfig,
   skills,
@@ -720,6 +748,7 @@ const server = http.createServer(route);
 // ---------- 生命周期 ----------
 
 function shutdown() {
+  providerAuth.dispose();
   runtime.setShuttingDown(true);
   /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted
    * 再落盘。不这么做的话它们会以 running 留在盘上，下次启动才被恢复 ——

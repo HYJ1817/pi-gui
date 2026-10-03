@@ -289,6 +289,8 @@ async function waitReady(ms = 20000) {
       PORT: String(PORT),
       PI_GUI_OPEN: '0',
       PI_GUI_DATA: DATA,
+      PI_GUI_AUTH_FIXTURE_KEY: FAKE_KEY,
+      PI_CODING_AGENT_DIR: path.join(FAKE_HOME, '.pi', 'agent'),
       // 隔离 homedir，别碰用户真实的 ~/.pi/agent/models.json
       USERPROFILE: FAKE_HOME,
       HOME: FAKE_HOME,
@@ -339,7 +341,7 @@ async function waitReady(ms = 20000) {
     const failCase = await post('/api/providers/models', {
       baseUrl: `http://127.0.0.1:${stub401http.address().port}`,
       api: 'openai-completions',
-      apiKey: FAKE_KEY,
+      apiKey: '$PI_GUI_AUTH_FIXTURE_KEY',
     });
     stub401http.close();
     check('失败也回 200，前端只需看 ok 字段', () => failCase.status === 200 || '状态 ' + failCase.status);
@@ -352,7 +354,7 @@ async function waitReady(ms = 20000) {
       config: {
         baseUrl: 'https://example.com/v1',
         api: 'openai-completions',
-        apiKey: 'sk-ok',
+        apiKey: '$PI_GUI_AUTH_FIXTURE_KEY',
         models: [
           { id: 'a', name: 'A', contextWindow: 200000, maxTokens: 64000, reasoning: true, input: ['text', 'image'] },
           { id: 'b', contextWindow: -5, maxTokens: 'nope', bogus: 'should be dropped', apiKey: 'leak?' },

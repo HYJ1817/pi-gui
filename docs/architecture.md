@@ -1,5 +1,14 @@
 # 架构
 
+## P25 供应商与认证
+
+聊天仍由 `rpc-bridge` 通过 stdio 驱动；认证另走同一 launch identity 的 Pi
+**公开 ModelRuntime SDK**。`provider-auth-sdk` 在私有 worker 中读取认证元数据并
+调用原生 OAuth，`provider-auth` 管理用户级单航班流程与聊天同步；
+`public/provider-auth.js` 仅渲染安全快照。凭据不出 worker，模型仍由聊天 RPC 回读。
+认证生命周期独立于项目与 Composer，身份改变会取消旧流程。详见
+[provider-auth.md](provider-auth.md)。
+
 ## P23 长期兼容与升级安全
 
 四个模块，都不新增事实源：
@@ -83,8 +92,9 @@ Electron 的 `openWebUrl` 是独立 http/https IPC；Release 外链白名单不�
 
 ## 二、pi RPC bridge（`server/rpc-bridge.js`）
 
-Pi GUI **不 import pi 的任何代码**，只把 pi 当子进程按官方 RPC 协议对话
-（`pi --mode rpc`）。这样 pi 升级、换版本、甚至换成别的实现，界面都不用跟着动。
+聊天桥接只把 pi 当子进程按官方 RPC 协议对话（`pi --mode rpc`）。
+P25 的认证 adapter 是独立例外：它只在私有 worker 内 import 同一 Pi 安装包的
+公开 SDK；不 import 私有内部模块、不修改 Pi。缺 SDK 时认证降级，聊天桥接仍可用。
 
 几个必须守住的点：
 

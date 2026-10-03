@@ -1,5 +1,38 @@
 # 测试分层与 CI
 
+## P25 供应商与认证
+
+认证测试使用 `os.tmpdir()` 内的假 Pi 包、公开 SDK 与 provider fixture，
+不依赖真 Pi，不访问认证服务器，不写用户真实凭据。覆盖 descriptor 三值、
+浏览器/设备码/授权回复/方法选择、取消与超时、错误投影、秘密隔离、
+缺公开 API 降级、身份变化、项目切换、模型回读及忙时延迟同步。
+本机 Pi 1.0.0 的公开 ModelRuntime 与 RPC 入口核对是只读事实核验，
+不作为 CI 必需条件，也不以真实登录验证远端账号。
+
+`npm test` 包含 `tests/provider-auth.cjs`（105 条）与
+`tests/provider-auth-runtime.cjs`（33 条）；smoke 为 1324 条，较本轮基线增加 27 条。
+打包后设置 `PI_GUI_AUTH_PACKAGED_SERVER` 为 `resources/app/server.cjs` 的绝对路径、
+`PI_GUI_AUTH_PACKAGED_EXE` 为桌面 `Pi GUI.exe` 的绝对路径，再运行
+`node tests/provider-auth.cjs`，可增加 10 条真实 Electron 后端 HTTP/worker 夹具验证。
+默认未设置时不执行这些断言，不计入测试分子或分母。
+
+`tests/visual-harness.cjs` 提供安全 `{ok, capability, providers, flow, sync}`
+快照，POST `/api/__provider-auth/<phase>` 手动切相位：`native-list`、`browser`、
+`device`、`select`、`unknown`、`connected`。这些 fixture 不启动 OAuth、
+不打开授权地址、不保存凭据，也不修改 Composer 模型。
+GET `/api/provider-auth` 与 POST `login/logout/respond/cancel/sync` 使用产品端点形状。
+
+启动独立 harness 后运行：
+
+```text
+node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
+```
+
+真实 Chrome 生成 24 张 `P25-auth-<phase>-<width>x<height>` 截图，覆盖
+700×600、900×700、1200×800、1536×900。结构判据检查 modal 视口边界、
+内部滚动与横向溢出、Composer 不位移、方法选择与安全凭据视图；
+完整截图入口也包含这组场景。每轮应重新启动有状态 harness。
+
 ## P16 Web Activity
 
 `npm run test:web`（纳入唯一入口 `npm test`）使用 0.33.0 真实 schema 的
