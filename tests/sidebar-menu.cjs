@@ -181,6 +181,29 @@ function section(title) {
     return moved || '焦点落到了 disabled 项上';
   });
 
+  check('A10. 禁用原因可见、去重、仅文本，并由 aria-describedby 关联', () => {
+    const reason = '请先切换 <img src=x onerror=alert(1)>';
+    openActionMenu(anchor, [
+      { label: 'A', disabled: true, disabledReason: reason },
+      { label: 'B', disabled: true, disabledReason: reason },
+      { label: 'C', disabledReason: '不应出现', onClick() {} },
+    ]);
+    const note = menuEl().querySelector('.action-menu-note');
+    const ok = note?.textContent === reason && !note.querySelector('img')
+      && items()[0].getAttribute('aria-describedby') === note.id
+      && items()[0].getAttribute('aria-disabled') === 'true';
+    closeActionMenu();
+    return ok || '禁用原因丢失、重复或不是安全文本';
+  });
+  check('A11. 禁用项即使直接调用 onclick 也不执行，不关闭菜单', () => {
+    let calls = 0;
+    openActionMenu(anchor, [{ label: 'Disabled', disabled: true, onClick() { calls++; } }]);
+    items()[0].onclick();
+    const ok = calls === 0 && actionMenuOpen();
+    closeActionMenu();
+    return ok || '禁用操作被执行';
+  });
+
   /* ================= B. 定位 ================= */
   section('B. 定位（锚定 / 翻转 / 夹紧）');
 
@@ -367,9 +390,10 @@ function section(title) {
     const inputs = [...sessionsCode.matchAll(/pj-sess-input/g)].length;
     return (ok && inputs === 1) || `复用=${ok} inputs=${inputs}`;
   });
-  check('D7. 当前会话只给重命名；pending 没有菜单；sessionNaming 缺失时整项消失', () => {
+  check('D7. 会话菜单统一三个动作，受限动作禁用；pending 没有菜单', () => {
     const ok = /if \(s\.pending\) return \[\];/.test(sessionsCode)
-      && /if \(s\.current\) \{[\s\S]{0,200}capMissing\('sessionNaming'\)\) return \[\];/.test(sessionsCode)
+      && /disabledReason/.test(sessionsCode)
+      && /disabled:.*s\.current/.test(sessionsCode)
       && /if \(!items\.length\) return null;/.test(sessionsCode);
     return ok || '会话菜单的能力边界被改了';
   });

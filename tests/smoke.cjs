@@ -5731,7 +5731,7 @@ staticCheck();
         Boolean(hit && hit.body && hit.body.id === 'bbbbbbbbbbbbbbbb') || JSON.stringify(sessionCalls.map((c) => c.url)));
     }
 
-    // 改名：三点菜单只出现在当前会话那一条上，且菜单里只有「重命名」
+    // 所有会话使用相同菜单；受限操作禁用并解释原因。
     {
       sessionCalls.length = 0;
       window.renderProjects();
@@ -5745,10 +5745,17 @@ staticCheck();
           `triggers=${triggers.length} rows=${rows.length}`;
       });
       await openRowMenu(cur.querySelector('.pj-sess-menu-trigger'));
-      check('会话：当前会话的菜单只有「重命名」（不给归档 / 删除）', () => {
+      check('会话：当前会话也显示完整三个菜单项', () => {
         const labels = rowMenuLabels();
-        return labels.join(',') === '重命名' || JSON.stringify(labels);
+        return labels.join(',') === '重命名,归档,删除会话' || JSON.stringify(labels);
       });
+      check('会话：当前会话的归档与删除禁用，说明需先切换', () =>
+        rowMenuItem('归档').disabled && rowMenuItem('删除会话').disabled && /先切换/.test(rowMenuEl().textContent));
+      const beforeDisabledCalls = sessionCalls.length;
+      const beforeDisabledConfirm = $('confirmLayer').hidden;
+      rowMenuItem('归档')?.click();
+      rowMenuItem('删除会话')?.click();
+      check('会话：点击禁用操作不会写盘或弹删除确认', () => sessionCalls.length === beforeDisabledCalls && $('confirmLayer').hidden === beforeDisabledConfirm);
       check('会话：菜单是可访问的浮层（role=menu / menuitem / aria-expanded）', () =>
         Boolean(rowMenuEl() && rowMenuEl().getAttribute('role') === 'menu'
           && rowMenuItems().every((b) => b.getAttribute('role') === 'menuitem')
@@ -5777,10 +5784,15 @@ staticCheck();
       let proj3 = $('projects');
       const row = [...proj3.querySelectorAll('.pj-sess')].find((x) => !x.classList.contains('on'));
       await openRowMenu(row.querySelector('.pj-sess-menu-trigger'));
-      check('会话：非当前会话的菜单是「归档 + 删除会话」', () => {
+      check('会话：非当前会话也显示完整三个菜单项', () => {
         const labels = rowMenuLabels();
-        return labels.join(',') === '归档,删除会话' || JSON.stringify(labels);
+        return labels.join(',') === '重命名,归档,删除会话' || JSON.stringify(labels);
       });
+      const beforeDisabledRename = sessionCalls.length;
+      rowMenuItem('重命名').click();
+      check('会话：历史会话重命名禁用且解释需先打开，不误改当前会话', () =>
+        rowMenuItem('重命名').disabled && /请先打开这条会话/.test(rowMenuEl().textContent)
+        && sessionCalls.length === beforeDisabledRename && !row.querySelector('.pj-sess-input'));
       check('会话：删除项是 danger 层级（不是整行常驻鲜红）', () =>
         Boolean(rowMenuItem('删除会话') && rowMenuItem('删除会话').classList.contains('danger'))
         || '删除项不是 danger');
@@ -5822,9 +5834,9 @@ staticCheck();
       {
         const archivedRow = [...proj3.querySelectorAll('.pj-sess')].find((x) => x.textContent.includes('上周的排查记录'));
         await openRowMenu(archivedRow.querySelector('.pj-sess-menu-trigger'));
-        check('会话：已归档那条的菜单是「取消归档 + 删除会话」', () => {
+      check('会话：已归档那条的统一菜单显示「取消归档」', () => {
           const labels = rowMenuLabels();
-          return labels.join(',') === '取消归档,删除会话' || JSON.stringify(labels);
+        return labels.join(',') === '重命名,取消归档,删除会话' || JSON.stringify(labels);
         });
         window.closeActionMenu?.();
         await new Promise((r) => setTimeout(r, 10));
@@ -6219,18 +6231,23 @@ staticCheck();
       return Boolean(cur && cur.querySelector('.pj-sess-menu-trigger')) || '改名入口不见了';
     });
 
-    // ② sessionNaming 被证实不可用 → 当前会话连三点都不画（没有动作就不留入口）
+    // ② sessionNaming 被证实不可用 → 保留统一菜单，禁用并解释。
     stubCompat = { status: 'partial', missing: ['sessionNaming'] };
     await window.loadStatus();
     window.renderProjects();
     await new Promise((r) => setTimeout(r, 80));
-    check('降级：sessionNaming 不可用 → 当前会话不显示三点（不留空菜单）', () => {
+    check('降级：sessionNaming 不可用 → 保留完整菜单且所有项禁用', () => {
       const cur = proj().querySelector('.pj-sess.on');
       if (!cur) return '没有当前会话行';
-      if (cur.querySelector('.pj-sess-menu-trigger')) return '改名入口还在';
+      cur.querySelector('.pj-sess-menu-trigger')?.click();
+      const menu = window.document.querySelector('#actionMenu');
+      const disabled = menu && [...menu.querySelectorAll('[role="menuitem"]')].length === 3
+        && [...menu.querySelectorAll('[role="menuitem"]')].every((b) => b.disabled)
+        && /Pi 不支持会话重命名/.test(menu.textContent);
+      window.closeActionMenu();
       /* 非当前会话不受影响：它还有归档 / 删除，所以三点照常。 */
       const otherRow = proj().querySelector('.pj-sess:not(.on):not(.pending)');
-      return Boolean(otherRow && otherRow.querySelector('.pj-sess-menu-trigger')) || '别的会话行也丢了入口';
+      return Boolean(disabled && otherRow && otherRow.querySelector('.pj-sess-menu-trigger')) || '禁用说明或菜单入口缺失';
     });
 
     // ③ switchSession 被证实不可用 → 不给点，并说明原因
