@@ -40,7 +40,7 @@ function assertAdapter(a) {
  * @param sessionDir   pi 的独立会话目录（Planner 任务不污染主聊天会话）
  * @param includeFake  是否注册测试用 fake adapter（默认不注册，避免出现在生产界面）
  */
-export function createAgentRegistry({ env = process.env, sessionDir = null, includeFake = false, fakeBehaviors = {} } = {}) {
+export function createAgentRegistry({ env = process.env, sessionDir = null, piLaunch = null, includeFake = false, fakeBehaviors = {} } = {}) {
   const adapters = new Map();
 
   function register(adapter) {
@@ -49,7 +49,7 @@ export function createAgentRegistry({ env = process.env, sessionDir = null, incl
     return adapter;
   }
 
-  register(createPiAdapter({ env, sessionDir }));
+  register(createPiAdapter({ env, sessionDir, piLaunch }));
   register(createCodexAdapter({ env }));
   register(createClaudeAdapter({ env }));
   register(createOpencodeAdapter({ env }));

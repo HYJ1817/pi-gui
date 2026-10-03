@@ -132,6 +132,7 @@ function connect() {
 }
 
 function handle(evt) {
+  if (!S.hasProject && evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) return;
   if (!acceptSubagentEvent(evt, S)) return;
   if (Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun < S.bridgeRun) return;
   if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
@@ -263,6 +264,7 @@ function syncNotice() {
 }
 
 function onBridge(evt) {
+  if (!S.hasProject && S.desiredCwd === null && evt.cwd) return;
   if (S.switching && evt.cwd && !samePath(evt.cwd, S.desiredCwd)) return;
   if (S.switching && evt.state === 'ready' && Number.isInteger(evt.bridgeRun) && Number.isInteger(S.bridgeRun) && evt.bridgeRun <= S.bridgeRun) return;
   observeWebEvent(evt);
@@ -335,6 +337,10 @@ function onBridge(evt) {
       /* 后端明确告知「没有项目所以没启动 pi」。
        * 这不是错误状态 —— 底部连接指示不能说「连接断开」，那会让用户以为网络坏了。
        * 传空 kind 用 .conn 的默认灰点：中性、不刺眼。 */
+      S.cwd = '';
+      S.hasProject = false;
+      S.switching = false;
+      S.syncPending = null;
       setBridgeState('no-project');
       return hideNotice();
     case 'error': {

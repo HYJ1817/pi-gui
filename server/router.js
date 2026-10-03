@@ -85,6 +85,7 @@ export function createRouter({
   rpc,
   providers,
   providerAuth = null,
+  sessionExport = null,
   projects,
   projectConfig,
   skills,
@@ -116,6 +117,8 @@ export function createRouter({
           return json(res, 400, { ok: false, error: '命令不是合法 JSON' });
         }
         try {
+          if (cmd.type === 'export_html') return json(res, 400, { ok: false, error: '请使用安全会话导出入口' });
+          if (typeof cmd.id === 'number') return json(res, 400, { ok: false, error: '客户端请求 ID 必须为字符串' });
           rpc.send(cmd);
           return json(res, 200, { ok: true });
         } catch (err) {
@@ -141,6 +144,10 @@ export function createRouter({
 
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
     if (url.pathname === '/api/command' && req.method === 'POST') return handleCommand(req, res);
+    if (url.pathname === '/api/session-export') {
+      if (!sessionExport) return json(res, 503, { ok: false, error: '导出模块未启用' });
+      return sessionExport.handle(req, res);
+    }
     if (url.pathname === '/api/status' && req.method === 'GET') {
       const st = rpc.getState();
       /* Pi 兼容摘要（P4）：前端据此**局部降级**（隐藏改名、禁用切换…）。

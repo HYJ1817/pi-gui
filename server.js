@@ -51,6 +51,7 @@ import { createProviderAuth } from './server/provider-auth.js';
 import { createAuthRuntimeSync } from './server/provider-auth-runtime.js';
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
+import { createSessionExport } from './server/session-export.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
@@ -320,7 +321,7 @@ const projects = createProjects({
    * P9 收口：**独立验证也算「正在这个工作区里干活」**，规则与两条文案都在
    * planner 那边（`projectSwitchBlockReason`）—— 放那边才测得到，
    * 这里只做一行透传，规则只有一份。 */
-  beforeActivate: () => (plannerRef ? plannerRef.projectSwitchBlockReason() : null),
+  beforeActivate: () => piBusyReason(false)?.error || null,
 });
 
 const providers = createProviders({ modelsJson: MODELS_JSON });
@@ -462,6 +463,7 @@ const sessionSearch = createSessionSearch({ runtime, sessions });
  * 差集就是「执行期间观察到的工作区变化」（不声称是 Agent 改的）。 */
 const agentRegistry = createAgentRegistry({
   env: process.env,
+  piLaunch,
   sessionDir: PLANNER_SESSION_DIR,
 });
 const planStore = createPlanStore({ dataDir: DATA_DIR });
@@ -723,6 +725,7 @@ const route = createRouter({
   },
   providers,
   providerAuth,
+  sessionExport: createSessionExport({ rpc, runtime, resolvePackageDir: piLaunch.packageDir }),
   projects,
   projectConfig,
   skills,

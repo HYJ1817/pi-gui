@@ -379,12 +379,12 @@ function filterRow(session) {
 
   row.append(
     mk('chgFilterAll', '全部', S.changes.files.length, false),
-    mk('chgFilterSession', '仅本次会话', session.size, true)
+    mk('chgFilterSession', '本会话编辑', session.size, true)
   );
 
   const note = document.createElement('span');
   note.className = 'chg-filter-note';
-  note.textContent = '本次会话 = write / edit 碰过的文件';
+  note.textContent = '记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。';
   row.appendChild(note);
 
   return row;
@@ -515,10 +515,8 @@ function changeRow(f, inSession) {
 
   const acts = document.createElement('span');
   acts.className = 'chg-acts';
-  acts.append(
-    tinyBtn('打开', () => openFile(f)),
-    tinyBtn(f.untracked ? '删除' : '撤销', () => restoreFile(f), 'danger')
-  );
+  if (canOpenFile()) acts.append(tinyBtn('打开', () => openFile(f)));
+  acts.append(tinyBtn(f.untracked ? '删除' : '撤销', () => restoreFile(f), 'danger'));
 
   row.append(main, acts);
 
@@ -623,7 +621,7 @@ function renderDiffInto(box, r, f, dstate, reload) {
   /* 二进制：git 给的就是一行 `Binary files … differ`，把它当文本逐行着色没有意义，
    * 直接说明「看不了」并建议用系统编辑器打开。 */
   if (r.binary) {
-    wrap.appendChild(hint('二进制文件，没有可显示的文本差异。用「打开」交给系统程序查看。'));
+    wrap.appendChild(hint(canOpenFile() ? '二进制文件，没有可显示的文本差异。用「打开」交给系统程序查看。' : '二进制文件，没有可显示的文本差异。网页模式不能调用系统编辑器。'));
     if (r.truncated) wrap.appendChild(truncatedHint(r));
     return;
   }
@@ -724,7 +722,7 @@ function diffTools(scope, dstate, reload) {
 
 function truncatedHint(r) {
   const kb = Math.max(1, Math.round((Number(r.limit) || 0) / 1024));
-  return hint(`差异过大，已截断（上限 ${kb} KB）。完整内容请用系统编辑器打开该文件。`, 'warn');
+  return hint(`差异过大，已截断（上限 ${kb} KB）。${canOpenFile() ? '完整内容请用系统编辑器打开该文件。' : '网页模式不能调用系统编辑器；可展开差异查看。'}`, 'warn');
 }
 
 /* ---------- 打开 / 撤销 ---------- */
@@ -734,6 +732,10 @@ function truncatedHint(r) {
  * **不在 Pi GUI 里做编辑器**（需求明确）：这里只负责把「请打开这个项目内文件」
  * 递出去。桌面版走 preload 暴露的桥（主进程 shell.openPath），网页版没有这个
  * 能力，就退化成「把绝对路径告诉用户」。 */
+function canOpenFile() {
+  return typeof globalThis.piGuiDesktop?.openPath === 'function';
+}
+
 async function openFile(f) {
   const bridge = globalThis.piGuiDesktop;
 

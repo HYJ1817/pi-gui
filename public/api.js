@@ -18,6 +18,23 @@ export const respondProviderAuth = (flowId, promptId, value) => sendJSON('/api/p
 export const cancelProviderAuth = (flowId) => sendJSON('/api/provider-auth/cancel', { body: { flowId } });
 export const syncProviderAuth = () => sendJSON('/api/provider-auth/sync', { body: {} });
 
+export async function downloadSessionHtml() {
+  try {
+    const response = await fetch('/api/session-export', { method: 'POST' });
+    if (!response.ok) return await response.json();
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'pi-session.html';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { ok: true };
+  } catch { return { ok: false, error: '无法下载会话 HTML，请重试' }; }
+}
+
 /** GET 一个 JSON 接口。网络层失败返回 {ok:false, network:true}。 */
 export async function getJSON(url) {
   try {
