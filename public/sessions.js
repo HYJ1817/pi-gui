@@ -46,6 +46,7 @@ import { openActionMenu, MENU_ICONS } from './ui/action-menu.js';
 import { setAfterHistoryRendered } from './messages.js';
 import { scrollToUserTurn } from './conversation-nav.js';
 import { clearSessionPlans, refreshSessionPlans } from './session-plans.js';
+import { projectExpanded, setProjectExpanded } from './sidebar-expansion.js';
 import {
   createSearchBar,
   renderSearchResults,
@@ -105,8 +106,8 @@ let archivedOpen = false;
  *   2. **点击不得误触。** 箭头自己 stopPropagation + preventDefault；
  *      项目行本身不可点（可点的是 .pj-select），行尾的三点入口
  *      （`.pj-sess-menu-trigger`）同样自己拦掉冒泡 —— 三条路互不影响。
- *   3. **换项目 / 重新进搜索一律回到展开。** renderSidebarSessions() 是换项目
- *      的唯一入口，在那里复位；openSessionSearch()（app.js）会显式调用
+ *   3. **项目展开状态按路径保留；重新进搜索会展开当前项目。**
+ *      openSessionSearch()（app.js）会显式调用
  *      expandSidebarSessions()，否则用户点了「搜索会话」却看不到输入框。
  */
 const SVG_CHEV =
@@ -119,10 +120,12 @@ const SVG_MORE =
 let collapsed = false;
 let chevRef = null;
 let chevName = '';
+let projectKey = '';
 /** 折叠/展开：只碰 box.hidden 与箭头的 aria 状态，不动列表内容。 */
 function toggleSessions() {
   if (!boxRef || !boxRef.isConnected) return;
   collapsed = !collapsed;
+  setProjectExpanded(projectKey, !collapsed);
   applyCollapsed();
 }
 
@@ -141,6 +144,7 @@ function applyCollapsed() {
 export function expandSidebarSessions() {
   if (!collapsed) return false;
   collapsed = false;
+  setProjectExpanded(projectKey, true);
   applyCollapsed();
   return true;
 }
@@ -257,8 +261,9 @@ function sessionMenuItems(s, row, titleEl) {
  * 全部收进这一个菜单；菜单项调用的仍然是既有的 `startRename` / `doArchive` /
  * `doDelete`，**没有第二套实现**。
  */
-function makeRowMenu(s, row, titleEl) {
-  const items = sessionMenuItems(s, row, titleEl);
+function makeRowMenu(s, row, titleEl, preview = false) {
+  const items = sessionMenuItems(s, row, titleEl).map(item => preview && !item.separator
+    ? { ...item, disabled: true, disabledReason: '请先打开这个项目的会话，再执行操作。' } : item);
   if (!items.length) return null; // 没有动作 → 连三点都不画（不留一个点了没反应的入口）
   const acts = el('span', 'pj-sess-acts');
   const trigger = el('button', 'pj-sess-menu-trigger row-action-trigger');
@@ -287,7 +292,7 @@ function makeRowMenu(s, row, titleEl) {
  *
  * @param projectEl 当前项目那一行的元素（`.project.active`）
  */
-export async function renderSidebarSessions(projectEl) {
+export async function renderSidebarSessions(projectEl, project = {}) {
   const parent = projectEl && projectEl.parentNode;
   if (!parent) return;
 
@@ -301,11 +306,12 @@ export async function renderSidebarSessions(projectEl) {
   dataRef = null;
   expanded = false;
   archivedOpen = false;
-  /* 换项目 → 回到展开态，并换上新的折叠箭头。
-   * 新激活的项目要马上让用户看到它的会话，不能继承上一个项目的折叠状态。 */
-  collapsed = false;
+  /* 每个项目记住自己的展开状态，并换上对应的折叠箭头。 */
+  projectKey = project.path || projectEl.title;
+  collapsed = !projectExpanded(projectKey, true);
   if (chevRef && chevRef.isConnected) chevRef.remove();
   chevRef = makeChevron(projectEl, projectEl.querySelector('.pj-name')?.textContent || '');
+  applyCollapsed();
   /* 换了项目就丢掉上一个项目的搜索状态。searchViewMode() 是模块级的，
    * 不清的话会拿着 A 的结果去画 B 的侧栏（迟到的响应虽然会被 generation
    * 校验丢掉，但那只是「刚好没出错」）。 */
@@ -428,7 +434,15 @@ function paintList() {
   }
 }
 
-function makeRow(s) {
+export function createSidebarPreviewRow(s, onPick) {
+  return makeRow(s, onPick);
+}
+
+export async function openSidebarPreviewSession(s) {
+  return doSwitch(s);
+}
+
+function makeRow(s, onPick = null) {
   const row = el('div', 'pj-sess' + (s.current ? ' on' : '') + (s.pending ? ' pending' : ''));
   row.title = s.pending
     ? '新会话：还没有消息，pi 还没把它写到磁盘上'
@@ -439,14 +453,16 @@ function makeRow(s) {
   if (canSwitch) {
     primary.type = 'button';
     primary.setAttribute('aria-label', `切换会话：${s.title || '（无标题）'}`);
-    primary.onclick = () => doSwitch(s);
+    primary.onclick = () => onPick ? onPick(s) : doSwitch(s);
   }
   if (s.current) row.setAttribute('aria-current', 'true');
+  const dot = el('span', 'pj-sess-dot');
+  dot.setAttribute('aria-hidden', 'true');
   const title = el('span', 'pj-sess-title', s.title || '（无标题）');
-  primary.append(title, el('span', 'pj-sess-time', fmtTime(s.updatedAt)));
+  primary.append(dot, title, el('span', 'pj-sess-time', fmtTime(s.updatedAt)));
   row.append(primary);
 
-  const acts = makeRowMenu(s, row, title);
+  const acts = makeRowMenu(s, row, title, Boolean(onPick));
   if (acts) row.append(acts);
 
   /* 切换会话要 pi 的 `switch_session`。它被证实不可用时不给点，并在 title 里

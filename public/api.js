@@ -307,7 +307,7 @@ export const fetchSessionPlans = (sessionId) =>
 
 /** 当前项目的会话列表。pi 的 RPC 没有「列出会话」，这是后端扫 sessions 目录得到的。
  *  返回里带 currentId（哪个是界面正在显示的）。 */
-export const fetchSessions = () => getJSON('/api/sessions');
+export const fetchSessions = (project = null) => getJSON('/api/sessions' + (project === null ? '' : '?project=' + encodeURIComponent(project)));
 
 /** 切到某个会话。**只传后端给的稳定 ID**，不传路径 —— 后端会在自己的索引里
  *  解析，并核对那条会话确实属于当前项目。 */

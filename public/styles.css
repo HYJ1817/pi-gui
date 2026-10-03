@@ -2273,21 +2273,31 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 /* 项目行对齐会话行的高度：会话行是 34px（标题 + 悬停才显形的那组 26px 动作
    按钮撑起来的），项目行就用同一个 34px。以前项目行是「名字 + 绝对路径」
    两行（约 44px），比会话行高出一大截 —— 那正是「项目像大卡片」的来源。 */
-.project-sidebar .project{min-height:34px;padding:3px 6px}
+.project-sidebar .project{position:relative;min-height:34px;padding:3px 6px;margin-top:12px}
 .pj-select{display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
 .project.active,.project.active .pj-select{cursor:default}
 .project:focus-within .pj-row-menu-trigger{opacity:1}
-.project-sidebar .project.active{background:#303235}
-.project-sidebar .project.active .pj-name{color:#e5e6e7}
-.project-sidebar .pj-sessions{border-left:0;margin:2px 0 6px 11px;padding-left:8px}
+.project-sidebar .project.active{background:transparent}
+.project-sidebar .project .pj-icon{display:none}
+.project-sidebar .project .pj-name{color:var(--t3);font-size:12px;font-weight:400}
+.pj-header-action{display:flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;height:24px;padding:4px;border:0;border-radius:5px;background:transparent;color:var(--t2);cursor:pointer}
+.pj-header-action svg{width:16px;height:16px}
+.pj-header-action:hover{background:var(--hover);color:var(--t1)}
+.project-sidebar .project .pj-chev{position:absolute;left:-7px;width:12px;opacity:.65}
+.project-sidebar .project:hover .pj-chev,.project-sidebar .project:focus-within .pj-chev{opacity:1}
+.project-sidebar .project .pj-chev[aria-expanded="false"]{opacity:1}
+.project-sidebar .pj-sessions{border-left:0;margin:0 0 8px;padding-left:0}
 .project-sidebar:not(.search-open) .pj-search{display:none}
-.project-sidebar .pj-sess{min-height:29px;padding:4px 8px}
+.project-sidebar .pj-sess{min-height:34px;padding:4px 10px;border-radius:7px;font-size:13px;color:var(--t1)}
+.project-sidebar .pj-sess-primary{gap:12px}
+.pj-sess-dot{width:6px;height:6px;flex:0 0 6px;border:1px solid var(--t3);border-radius:50%;opacity:.65}
+.project-sidebar .pj-sess-time{display:none}
 .pj-sess-primary{display:flex;align-items:center;gap:6px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:inherit}
 button.pj-sess-primary{cursor:pointer}
 .pj-sess-more{display:block;width:100%;border:0;background:transparent;text-align:left;font:inherit}
 .pj-sr-head,.pj-sr-hit{width:100%;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
 .pj-sr-head:hover,.pj-sr-hit:hover{color:var(--t1)}
-.project-sidebar .pj-sess.on{background:#35383b;color:#f2f3f4}
+.project-sidebar .pj-sess.on{background:#333;color:#f2f3f4}
 .project-sidebar .pj-sess.on .pj-sess-time{color:var(--t3)}
 .project-sidebar .pj-sess-acts{opacity:0}
 .project-sidebar .pj-sess:hover .pj-sess-acts,.project-sidebar .pj-sess:focus-within .pj-sess-acts{opacity:1}

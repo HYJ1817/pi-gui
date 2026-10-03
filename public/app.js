@@ -59,7 +59,7 @@ import { onToolEnd, onToolStart, onToolUpdate } from './tools.js';
 import { openBranchPanel, setForkHandler } from './tree.js';
 import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
 import { handleFiles, renderAttachments } from './attachments.js';
-import { loadProjects, openDirPicker, setSessionsSlot } from './projects.js';
+import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions, flushProjectSessionAction } from './projects.js';
 import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel } from './git.js';
@@ -67,7 +67,7 @@ import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
@@ -94,6 +94,7 @@ setForkHandler(forkFrom);
 /* 会话列表挂在当前项目那一行下面（参考 Codex，不单开窗口）。
  * projects.js 不 import sessions.js，由这里把渲染函数递进去。 */
 setSessionsSlot(renderSidebarSessions);
+setProjectSessionActions({ newSession, search: openSessionSearch, previewRow: createSidebarPreviewRow, openPreviewSession: openSidebarPreviewSession });
 
 /* 会话一变（新开 / 分叉 / 切换）就要重画侧栏那块列表。
  * rpc.js 不能 import sessions.js（sessions.js 已经 import 了 rpc.js，会成环），
@@ -162,6 +163,7 @@ function handle(evt) {
           S.switching = false;
           S.syncPending = null;
           applyProjectState();
+          flushProjectSessionAction();
         }
       }
       return;

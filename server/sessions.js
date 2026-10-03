@@ -79,7 +79,7 @@ function textOf(content) {
     .trim();
 }
 
-export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [] } = {}) {
+export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [], getProjects = () => [] } = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, '.pi', 'agent');
   const ROOT = path.join(AGENT_DIR, 'sessions');
@@ -290,8 +290,12 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
    * @returns {{ok:boolean, hasProject:boolean, sessions:Array, currentId:string|null, diagnostics:Array}}
    *   **不回绝对路径**（见下面的说明）。
    */
-  async function list() {
-    const { cwd, items, skipped } = ownedSessions();
+  async function list(project = null) {
+    if (project !== null && (typeof project !== 'string' || !project.trim() || !getProjects().some(p => typeof p.path === 'string' && normCwd(p.path) === normCwd(project)))) {
+      return { ok: false, error: '项目不在已添加的列表中', hasProject: false, sessions: [] };
+    }
+    const target = project === null ? runtime.getCurrentCwd() : project;
+    const { cwd, items, skipped } = ownedSessions(target);
     const diagnostics = [];
     if (!cwd) return { ok: true, hasProject: false, sessions: [], currentId: null, diagnostics };
 
@@ -305,7 +309,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
      * 判据（sessionFile 在不在）收敛在 pi-compat 的 piState() 里，
      * 本文件另一处问 get_state 也用它 —— 同一条规则不写两遍。 */
     let curState = { ok: false };
-    if (rpc && typeof rpc.request === 'function') {
+    if (normCwd(target) === normCwd(runtime.getCurrentCwd()) && rpc && typeof rpc.request === 'function') {
       curState = piState(await rpc.request({ type: 'get_state' }));
     }
     const currentFile = curState.ok ? curState.sessionFile : null;
@@ -657,7 +661,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     if (p === '/api/sessions') {
       if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed' });
       try {
-        return json(res, 200, await list());
+        return json(res, 200, await list(url.searchParams.has('project') ? url.searchParams.get('project') : null));
       } catch (err) {
         // 列表打不开是最糟的结果 —— 兜底成 200 + 空列表 + 诊断
         return json(res, 200, { ok: false, error: String(err.message || err), hasProject: false, sessions: [], diagnostics: [{ level: 'error', message: `扫描会话时出错：${err.message}` }] });

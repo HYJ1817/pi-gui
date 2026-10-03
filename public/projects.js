@@ -13,7 +13,9 @@ import {
   deleteProject,
   fetchProjects,
   listDirectory,
+  fetchSessions,
 } from './api.js';
+import { projectExpanded, setProjectExpanded, pruneProjectExpansion } from './sidebar-expansion.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { openActionMenu, MENU_ICONS } from './ui/action-menu.js';
 import { openProjectSettings } from './project-config.js';
@@ -26,6 +28,32 @@ let projectData = { active: '', items: [] };
 let activationQueue = Promise.resolve();
 let projectLoadState = 'loading';
 let projectLoadOrder = 0;
+let pendingProjectAction = null;
+
+export function flushProjectSessionAction() {
+  const pending = pendingProjectAction;
+  if (!pending) return;
+  if (!ownsWorkspace(pending.generation) || !samePath(S.cwd, pending.path)) {
+    pendingProjectAction = null;
+    return;
+  }
+  if (S.switching || S.bridgeState !== 'ready') return;
+  pendingProjectAction = null;
+  pending.run();
+}
+
+async function activateForSessionAction(project, run) {
+  const task = activateProject(project.path, project.name);
+  const generation = S.workspaceGeneration;
+  try {
+    if (await task && ownsWorkspace(generation) && samePath(S.cwd, project.path)) {
+      pendingProjectAction = { path: project.path, generation, run };
+      flushProjectSessionAction();
+    }
+  } catch {
+    if (ownsWorkspace(generation)) toast('切换项目失败，请重试', 'warn');
+  }
+}
 
 const SVG_FOLDER =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
@@ -41,6 +69,80 @@ const SVG_MORE =
 let sessionsSlot = null;
 export function setSessionsSlot(fn) {
   sessionsSlot = fn;
+}
+
+let sessionActions = {};
+export function setProjectSessionActions(actions) {
+  sessionActions = actions;
+}
+
+const HEADER_ICONS = {
+  newSession: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
+};
+const SVG_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>';
+
+function attachPreview(item, p, index) {
+  const box = document.createElement('div');
+  box.className = 'pj-sessions pj-preview';
+  box.id = 'pjPreview-' + index;
+  box.hidden = !projectExpanded(p.path);
+  item.after(box);
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'pj-chev';
+  toggle.innerHTML = SVG_CHEV;
+  toggle.setAttribute('aria-controls', box.id);
+  let request = 0;
+  function sync() {
+    toggle.setAttribute('aria-expanded', String(!box.hidden));
+    toggle.setAttribute('aria-label', `${box.hidden ? '展开' : '收起'}「${p.name || p.path}」的会话`);
+  }
+  async function load() {
+    const token = ++request;
+    box.textContent = '读取会话…';
+    try {
+      const result = await fetchSessions(p.path);
+      if (!box.isConnected || token !== request) return;
+      if (!result.ok) throw new Error();
+      box.replaceChildren();
+      const rows = (result.sessions || []).filter(s => !s.archived);
+      for (const s of rows) box.append(sessionActions.previewRow(s, async selected => {
+        if (S.streaming) return toast('正在生成回答，请先停止再切换会话', 'warn');
+        await activateForSessionAction(p, () => sessionActions.openPreviewSession(selected));
+      }));
+      if (!rows.length) box.textContent = '还没有会话';
+    } catch {
+      if (box.isConnected && token === request) box.textContent = '读取失败，收起后再展开重试';
+    }
+  }
+  toggle.onclick = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    box.hidden = !box.hidden;
+    setProjectExpanded(p.path, !box.hidden);
+    sync();
+    if (!box.hidden) load();
+  };
+  item.prepend(toggle);
+  sync();
+  if (!box.hidden) load();
+}
+
+function headerAction(action, label, onClick = null) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'pj-header-action';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">' + HEADER_ICONS[action] + '</svg>';
+  button.onclick = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onClick) onClick();
+    else sessionActions[action]?.();
+  };
+  return button;
 }
 
 export async function loadProjects(generation = S.workspaceGeneration) {
@@ -60,6 +162,7 @@ export async function loadProjects(generation = S.workspaceGeneration) {
 
 export function renderProjects() {
   el.projects.innerHTML = '';
+  pruneProjectExpansion(projectData.items.map(p => p.path));
 
   if (projectLoadState === 'loading' && !projectData.items.length) {
     el.projects.innerHTML = '<div class="hint-empty">正在加载项目…</div>';
@@ -91,7 +194,7 @@ export function renderProjects() {
     item.className = 'project' + (isActive ? ' active' : '');
     /* 绝对路径挂在这里（以及下面 select 的 aria-label 上）。
      * 以前它还常驻一行 .pj-path 副标题，把项目行撑成会话行的近两倍高；
-     * 现在行内只留 folder icon + 项目名（+ 当前项目的折叠箭头）。 */
+     * 现在行内显示项目名、展开箭头与操作入口。 */
     item.title = p.path;
 
     const select = document.createElement(isActive ? 'span' : 'button');
@@ -152,19 +255,25 @@ export function renderProjects() {
     };
 
     select.append(icon, body);
-    item.append(select, menuTrigger);
+    item.append(select);
+    if (isActive) item.append(headerAction('newSession', '新对话'), headerAction('search', '搜索会话'));
+    else item.append(headerAction('newSession', `在「${label}」中新对话`, async () => {
+      if (S.streaming) return toast('正在生成回答，请先停止再新建其它项目的会话', 'warn');
+      await activateForSessionAction(p, () => sessionActions.newSession?.());
+    }));
+    item.append(menuTrigger);
     if (!isActive) {
       select.onclick = () => activateProject(p.path, label);
     }
 
     el.projects.appendChild(item);
 
-    /* 会话挂在当前项目下面。放在 append 之后、且只在 active 那条上 ——
-     * 别的项目不展开（切过去才看得到它的会话）。
-     * 折叠箭头由 sessions.js 插进这一行（它才知道有没有会话可折叠）：
+    /* 当前项目使用完整会话列表，其它项目按需加载只读预览。
+     * 当前项目的折叠箭头由 sessions.js 插进这一行：
      * 箭头必须在 .project **行内**，否则会破坏「.pj-sessions 是当前项目行的
      * 紧邻兄弟」这条被测试盯着的结构（smoke / cdp-shot 都有断言）。 */
     if (isActive && sessionsSlot) sessionsSlot(item, p);
+    if (!isActive) attachPreview(item, p, el.projects.querySelectorAll('.project').length);
   }
 }
 
@@ -208,6 +317,7 @@ export async function removeProject(target) {
 }
 
 export function activateProject(target, label) {
+  pendingProjectAction = null;
   showChat();
   const generation = beginWorkspaceSwitch(target);
   clearThread();
@@ -238,6 +348,7 @@ export function activateProject(target, label) {
     S.cwd = j.cwd || target;
     S.hasProject = true;
     await Promise.all([loadStatus(generation), loadProjects(generation), refreshGitNow()]);
+    return ownsWorkspace(generation);
   });
   activationQueue = task;
   return task;

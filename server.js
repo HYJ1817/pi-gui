@@ -426,6 +426,7 @@ const sessions = createSessions({
   dataDir: DATA_DIR,
   compat: piCompat,
   extraSessionRoots: [PLANNER_SESSION_DIR],
+  getProjects: () => projects.read().items,
 });
 
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
