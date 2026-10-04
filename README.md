@@ -19,6 +19,11 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 
 ## 核心能力
 
+- **内置浏览器 Agent Control（P29）** —— 桌面右栏的「Agent 控制」默认关闭，开启后 Pi 可通过
+  `gui_browser_*` 验证 localhost 页面：读取、点击、填表、截图、console/network、刷新。
+  随安装包提供，不需额外安装，不开启调试端口，不控制用户 Chrome；与外部 `browser_*` 独立。
+  页面内容会在工具调用时进入模型上下文。边界与用法见 [agent-browser.md](docs/agent-browser.md)。
+
 - **对话** —— 流式渲染，工具调用以时间线形式嵌在对话流里
 - **Web Activity** —— 可通过 Pi Web Extension 使用联网搜索与 URL Fetch，并提供原生 GUI Activity 展示；安装与安全边界见 [Web Access](docs/web-access.md)
 - **Browser Use** —— 可通过 Browser Extension 让 Pi 驱动你**正在用的那个浏览器**（打开页面、点击、输入、截图、读正文），Pi GUI 提供原生 Activity 展示。它和 Web Search 是两件独立的事；这个 Extension **没有审批协议**，所以 GUI 不提供任何允许 / 拒绝按钮，也不宣称已保护 —— 边界见 [Browser Use](docs/browser.md)

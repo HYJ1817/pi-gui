@@ -1,5 +1,19 @@
 # 架构
 
+## P29 内置浏览器 Agent Control
+
+`electron/browser-view.cjs` 保持 WebContentsView / 独立 session / 导航 / bounds 的唯一宿主。
+`browser-agent-policy.cjs` 是闭集纯策略；`browser-agent.cjs` 唯一执行 CDP、维护文档 refs 与有界
+console/network，`browser-agent-bridge.cjs` 提供专用随机端口 capability 和 run/abort 世代。
+`browser-agent-host.cjs` 装配 IPC 与安全状态投影，main 只启动和收尾。
+`server/gui-browser-launch.js` 检视同一 Pi 启动身份的官方入口，通过私有 launch 参数加载
+`extensions/pi-gui-browser/index.js`；Extension 只注册工具与转发请求，不持有 CDP。
+主 GUI token 和桥管理 token 不继承给 Pi，工具 token 不进入 renderer/诊断。
+`public/gui-browser-activity.js` 与 `gui-browser-capabilities.js` 独立于外部 Browser Use。
+Extension Registry 只通过通用 extraReport 注入组合根的补充能力事实，扫描和加载判断不特化。
+所有 actions 默认关闭、loopback-only、串行执行，跨 browser/document/Pi run 的陈旧结果丢弃。
+见 [agent-browser.md](agent-browser.md)。
+
 ## P28 自动模型备用
 
 项目配置 v2 增加默认关闭的有序 fallback，旧 v1 读取不写盘。

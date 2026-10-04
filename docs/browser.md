@@ -1,8 +1,22 @@
-# Browser Use / 真实浏览器自动化（P20）
+# Browser 能力：外部 Browser Use 与内置 Agent Control
+
+| | External Browser Use（P20） | Built-in Browser Agent Control（P29） |
+|---|---|---|
+| 提供方 | pi-browser-harness，用户安装 | pi-GUI bundled Extension，随桌面包提供 |
+| 命名空间 | `browser_*` | `gui_browser_*` |
+| 目标 | 用户外部 Chrome / Chromium | 右栏 Electron WebContentsView |
+| Agent 范围 | 外部 Extension 策略 | 仅 localhost / loopback |
+| 授权 | 外部 Extension 行为 | 本次运行显式开关，默认关闭 |
+| 通信 | 外部 Extension 自己管理 | 随机本机桥 + 当前 webContents.debugger，无调试端口 |
+
+P29 不控制用户 Chrome；内置浏览器继续使用独立非持久化 session，权限与下载全部拒绝。
+用户手动远程 HTTPS 导航仍支持，Agent 对远程页面的读取与操作均拒绝。
+工具调用时页面内容、截图、console 会进入模型上下文，Activity UI 只显示脱敏摘要。
+详见 [内置浏览器 Agent Control](agent-browser.md)。以下章节描述外部 Browser Use，安装与行为保持独立。
 
 Pi → 用户安装的 **Browser Extension** → `browser_*` registered tool → RPC → GUI Activity。
 
-Pi GUI **不重新实现浏览器 Agent 决策层**：不决定点什么、不解析页面、不维护页面状态机、
+对外部 Browser Use，Pi GUI **不重新实现浏览器 Agent 决策层**：不决定点什么、不解析页面、不维护页面状态机、
 不驱动 Chrome。它只做三件事 —— 如实呈现真实工具事件、按语义给紧凑文案、
 把不该进 DOM 的东西挡住。
 
