@@ -409,6 +409,26 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [browser.md](docs/browser.md) | Browser Use：适配的 Extension 与工具清单、成功证据规则、输入内容与页面正文的安全投影、URL 过滤、为什么没有审批流 |
 | [usage-quota.md](docs/usage-quota.md) | P21 用量与配额：本地模型用量（真实 token/cost/context）与 Provider 远端配额（官方 adapter/TTL 缓存/防重入/凭据隔离） |
 | [daily-use.md](docs/daily-use.md) | P24 日常使用：命令面板（只暴露已有动作）、快捷键注册表（单一入口、不抢文本输入）、未发送草稿的存储边界与身份隔离、启动/连接状态说明、加载/空/失败措辞统一、无障碍 |
+| [code-signing.md](docs/code-signing.md) | Windows 代码签名（SignPath Foundation）：签名边界（哪些 PE 属于本项目）、签名流水线、GitHub Actions 接入与审核通过后的发版改动 |
+
+## Code signing policy
+
+Windows 版通过 [SignPath.io](https://signpath.io) 做免费的代码签名，证书由
+[SignPath Foundation](https://signpath.org) 提供：
+
+> **Free code signing provided by SignPath.io, certificate by SignPath Foundation.**
+
+只签**本项目自己构建的**产物 —— 目前就是由 `installer/pi-gui.nsi` 编译出来的
+Windows 安装程序。随包分发的 Electron / Chromium / Node 等**上游开源二进制不签**
+（那不是本项目维护的代码，给它们套本项目的证书是 SignPath 明令禁止的用法），
+所以便携版里那个运行时 exe 依旧没有签名。
+
+- 完整政策（角色分工、审批流程、证书范围）：[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)
+- 隐私声明（联不联网、传什么、什么时候传）：[PRIVACY.md](PRIVACY.md)
+- 签名边界清单与接入方式：[docs/code-signing.md](docs/code-signing.md)
+
+**卸载**：装完走「设置 → 应用 → 已安装的应用 → Pi GUI → 卸载」（开始菜单里也有）。
+卸载只删程序文件和快捷方式，`%APPDATA%\Pi GUI` 里的项目列表与窗口布局会保留。
 
 ## 许可证
 

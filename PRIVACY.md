@@ -1,0 +1,147 @@
+# Privacy Policy
+
+**Pi GUI** is a local desktop application. It is not a service, it has no user accounts, and
+it does not operate any server of its own. This policy describes every network request the
+application can make and what leaves your machine.
+
+Last updated: 2026-10-03.
+
+---
+
+## Summary
+
+- **No telemetry. No analytics. No crash reporting. No advertising. No user accounts.**
+- Pi GUI does not collect, store or transmit any usage data, and it does not have a
+  backend that could receive it.
+- The only automatic network requests are **two version checks** against public
+  endpoints, described below. They send no data about you.
+- Everything else that touches the network is started by **you**, using credentials
+  **you** configured.
+
+## What Pi GUI itself sends
+
+### 1. Update check for Pi GUI (automatic once per launch, and on demand)
+
+Pi GUI asks GitHub for the latest public release metadata of this project:
+
+- Endpoint: `https://api.github.com/repos/HYJ1817/pi-gui/releases/latest`
+- When: once, about 8 seconds after launch, and whenever you press "Check for updates".
+- Sent: only the HTTP headers GitHub's API requires (`User-Agent`, `Accept`). **No
+  identifier, no machine information, no usage data.**
+- Failure is silent and does not affect the application.
+
+This request reveals your IP address to GitHub, as any web request does. GitHub's handling
+of it is governed by GitHub's own privacy statement. Pi GUI never downloads or installs
+anything from it — it only displays a version number and a download link.
+
+### 2. Update check for the `pi` runtime (automatic once per launch, and on demand)
+
+Pi GUI asks the pi project's public endpoint whether the `pi` installed on your machine
+is current:
+
+- Endpoint: `https://pi.dev/api/latest-version`
+- When: once, about 12 seconds after launch, and on demand. **Check only — it never
+  installs anything by itself.** Updating `pi` requires your explicit confirmation and is
+  then performed by pi's own official updater.
+- Sent: the same minimal headers as above. No identifier, no machine information.
+
+### 3. Model provider communication — only from the `pi` process, only with your config
+
+Pi GUI does not talk to model providers directly. It drives a `pi` process **you already
+installed and configured**, over a local stdio pipe. Prompts, files and tool results go to
+that local process; whatever `pi` then sends to a model provider is controlled by your
+`pi` configuration and your API keys, and is sent by `pi`, not by Pi GUI. Pi GUI never
+reads your API keys.
+
+### 4. Provider quota display — only for providers you configure
+
+If you configure a supported provider, the "Usage / Quota" view can query that provider's
+own endpoint to display your remaining quota. It uses the credential **you** stored in your
+pi configuration, and is only attempted for a provider you selected:
+
+- OpenRouter: `https://openrouter.ai/api/v1/key`
+- DeepSeek: `https://api.deepseek.com/user/balance`
+
+The resolved credential is used only as a local cache key (hashed) and is never logged,
+reported, or sent anywhere except the provider's own endpoint.
+
+### 5. Model list fetch — only when you click the button
+
+The "Model providers" settings can fetch the available model list from a provider's
+`/models` endpoint. This runs **only when you press "Fetch"**, and goes to the base URL
+**you** typed, using the authentication scheme you selected.
+
+### 6. Sign-in (OAuth) — performed by `pi`, not by Pi GUI
+
+Logging in to a provider (for example a ChatGPT subscription) is handled by `pi`'s own
+public SDK: the browser callback, credential storage and token refresh are all done by
+`pi`. Pi GUI only displays the resulting state.
+
+## Things Pi GUI does **not** do
+
+- It does not collect telemetry, analytics, or crash reports.
+- It does not upload your prompts, files, repository contents, or usage statistics to the
+  pi-GUI project or anyone else.
+- It does not create or require an account.
+- It does not read, store or transmit your provider API keys.
+- It does not automatically download, install, or silently update anything — including
+  itself.
+- It does not modify your system configuration without warning.
+
+## Extensions you install
+
+Pi GUI can drive pi **Extensions** that you chose to install (for example a web-search
+extension, the browser-harness extension, or a long-term memory extension). Those
+extensions run inside `pi` and may make their own network requests, subject to their own
+policies. Pi GUI displays the activity it can observe but does not control what an
+extension sends. What is installed, and whether it runs, is your choice.
+
+## What is stored on your machine
+
+All state is local:
+
+- `%APPDATA%\Pi GUI` — window layout, your project list, and interface preferences.
+  (When running from source instead of the installed build, this is `%APPDATA%\pi-gui`.)
+- Your own `pi` configuration, sessions and credentials live in pi's own directories and
+  are managed by `pi`, not by Pi GUI.
+
+Nothing in these folders is uploaded anywhere. Uninstalling the application removes the
+program files but leaves `%APPDATA%\Pi GUI` alone (see
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md#uninstallation)); delete that folder
+manually to remove the remaining settings.
+
+## Disabling the automatic checks
+
+The two automatic version checks (sections 1 and 2) are the only requests Pi GUI makes
+without you asking. They send no personal data and can fail silently, and the application
+works fully without them. They are not currently exposed as a toggle; if you want no
+outbound request at all, run the app on a machine or network where those endpoints are
+unreachable — no feature other than the version display is affected.
+
+## Third parties
+
+| Service | Why | Governed by |
+| --- | --- | --- |
+| GitHub (`api.github.com`) | Pi GUI release metadata | GitHub Privacy Statement |
+| pi.dev | `pi` runtime version metadata | The pi project |
+| Your model provider(s) | Model inference, quotas, model lists | That provider's policy |
+| Providers you sign into via `pi` OAuth | Authentication | That provider's policy |
+
+## Changes and contact
+
+If this policy changes, the change will appear in this file in the repository's history.
+Questions: <https://github.com/HYJ1817/pi-gui/issues>.
+
+---
+
+## 中文摘要
+
+Pi GUI 是**纯本地**桌面程序：没有账号、**没有遥测 / 埋点 / 崩溃上报 / 广告**，也不上传
+任何使用数据。只有两类网络请求：① 启动后各**自动检查一次**版本（Pi GUI 官方 Release、
+`pi` 运行时版本），只发 GitHub 要求的必备请求头、不含任何身份信息，失败即静默；
+② **你自己触发**的操作 —— 模型对话与 OAuth 登录由你本机装的 `pi` 完成（Pi GUI 不读你的
+API Key），用量配额与模型列表只针对**你配置的**供应商、用**你存的**凭据访问其官方接口。
+你装的 Pi Extension 可能自行联网，那由该 Extension 自己负责。
+
+本机数据都在 `%APPDATA%\Pi GUI`（窗口布局、项目列表）：不卸载不删除，卸载程序**只删程序
+文件、保留这份数据**。完整说明见 [PRIVACY.md](PRIVACY.md) 英文部分。
