@@ -50,7 +50,17 @@ onto. If a second maintainer joins, the roles will be split and this section upd
 | Reviewer | [@HYJ1817](https://github.com/HYJ1817) | Every non-author change is reviewed before merge |
 | Approver | [@HYJ1817](https://github.com/HYJ1817) | **Every** signing request is approved manually — nothing is auto-approved |
 
-All team members use multi-factor authentication for both GitHub and SignPath.
+**Multi-factor authentication — an open check item, not a claim.**
+
+SignPath requires every team member to use MFA for **both** SignPath and the source code
+repository (GitHub). This repository cannot demonstrate that state, so it is recorded as an
+outstanding item rather than asserted:
+
+- [ ] `@HYJ1817` — MFA enabled on the **GitHub** account
+- [ ] `@HYJ1817` — MFA enabled on the **SignPath** account
+
+Both boxes must be ticked before the application is submitted. Once confirmed, this section
+becomes a plain statement.
 
 Contributions from anyone outside this list arrive as pull requests and are reviewed
 before merge; such contributors are not Authors and never trigger a signing request.

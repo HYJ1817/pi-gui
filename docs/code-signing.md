@@ -135,6 +135,11 @@ GitHub Release
   之前，这个文件待在仓库里也不会打扰任何人。
 * 只用 `windows-latest`（GitHub-hosted）；产物先 `upload-artifact`，再用 artifact-id
   提交签名请求；不下载安装包、不发布 Release。
+* **输入只接受 Release tag**（`vX.Y.Z`）。两道闸：先按正则挡掉分支名 / commit SHA /
+  预发布版本，再在 checkout 之后、完整构建**之前**断言 `tag === "v" + package.json.version`。
+  `checkout` 明确 checkout 该 tag，`concurrency` 按该 tag 分键（不用 `github.ref`，
+  手动触发时那是分支）。用户输入一律经 `env:` 传进脚本，**不直接插进 `run:`**——
+  那是脚本注入面。
 
 ### 用到的 secrets / variables
 
