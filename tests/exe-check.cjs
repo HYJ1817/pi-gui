@@ -212,7 +212,8 @@ async function main() {
     check('exe 内认得出当前项目（hasProject + cwd）', () =>
       (cfg0.hasProject === true && cfg0.cwd === WORK) || `hasProject=${cfg0.hasProject} cwd=${cfg0.cwd}`);
     check('exe 内没有配置文件时给默认值，不报错', () =>
-      (cfg0.exists === false && cfg0.config && cfg0.config.version === 1 && cfg0.config.model === null) ||
+      (cfg0.exists === false && cfg0.config && cfg0.config.version === 2 && cfg0.config.model === null
+        && cfg0.config.fallback?.enabled === false && cfg0.config.fallback.chain.length === 0) ||
       JSON.stringify(cfg0.config));
 
     const put1 = await (
@@ -243,7 +244,7 @@ async function main() {
         saved = null;
       }
       check('exe 内配置是合法 JSON', () => saved !== null || raw.slice(0, 120));
-      check('exe 内配置写上了 version', () => (saved && saved.version === 1) || JSON.stringify(saved));
+      check('exe 内配置写上了 version', () => (saved && saved.version === 2) || JSON.stringify(saved));
       check('exe 内未知字段被丢弃（没落盘）', () =>
         saved && saved.nonsense === undefined || JSON.stringify(saved));
       check('exe 内错误类型被丢弃（thinking 是数字）', () =>
