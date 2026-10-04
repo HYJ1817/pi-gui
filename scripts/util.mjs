@@ -30,6 +30,20 @@ export const sizeOf = (p) => {
 export const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
 export const kb = (bytes) => Math.round(bytes / 1024);
 
+/* 版权串 —— **唯一出处**。
+ *
+ * 它同时进两个产物的 PE 版本资源：
+ *   * Electron 主程序：由 build-app.mjs 作为 appCopyright 交给 @electron/packager
+ *     （packager **不会**替我们推断，不传就保留上游 electron.exe 那行
+ *      "Copyright (C) 2015 GitHub, Inc."）；
+ *   * NSIS 安装程序：由 build-installer.mjs 作为 /DCOPYRIGHT 注入 pi-gui.nsi
+ *     （NSIS 默认不写版本资源，不注入就是一片空白）。
+ *
+ * 而 SignPath 的 File metadata restriction 要求签名产物带上合理的版权项，
+ * 所以这两处必须是同一句话。写两遍迟早会漂，放这里一份。
+ * 与仓库根的 LICENSE 保持一致。 */
+export const COPYRIGHT = 'Copyright (c) 2026 HYJ1817';
+
 /** 转成正斜杠路径，专门给命令行工具用。
  *
  * Windows 的 bsdtar（系统自带的 tar.exe）会把参数里的反斜杠当**转义字符**，

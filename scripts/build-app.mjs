@@ -21,7 +21,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
 // 删目录 / 算体积 / 拷文件这套东西安装程序脚本也要用，统一放 scripts/util.mjs
-import { sizeOf, mb, copyInto, removePaths, clearDir } from './util.mjs';
+import { sizeOf, mb, copyInto, removePaths, clearDir, COPYRIGHT } from './util.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BUILD = path.join(ROOT, 'build');
@@ -182,6 +182,13 @@ const appPaths = await packager({
   icon: ICON,
   appVersion: VERSION,
   ...(electronZipDir ? { electronZipDir } : {}),
+  /* LegalCopyright 必须显式给。
+   *
+   * packager 不传 appCopyright 时会**保留上游 electron.exe 自带的那行**，
+   * 于是一个以「Pi GUI」为 ProductName 的程序，版权行写的是
+   * "Copyright (C) 2015 GitHub, Inc." —— 既误导用户，也是签名侧 metadata
+   * 约束里最不该错的一项。串的唯一出处是 util.mjs 的 COPYRIGHT。 */
+  appCopyright: COPYRIGHT,
   win32metadata: {
     CompanyName: 'Pi GUI',
     FileDescription: 'Pi Coding Agent 桌面客户端',

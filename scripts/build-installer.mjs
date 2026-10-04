@@ -18,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sizeOf, mb, kb, clearDir, slash, requireBsdtar, fileMagicMismatch } from './util.mjs';
+import { sizeOf, mb, kb, clearDir, slash, requireBsdtar, fileMagicMismatch, COPYRIGHT } from './util.mjs';
 import { writeChecksums } from './make-checksums.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -147,6 +147,14 @@ const args = [
   `/DAPP_EXE=${APP_NAME}.exe`,
   `/DVERSION=${VERSION}`,
   '/DPUBLISHER=Pi GUI',
+  /* VIProductVersion 只吃**四段纯数字**（x.x.x.x），三段的 SemVer 会被 NSIS 拒绝，
+   * 所以这里补一段 .0。它只影响 PE 版本资源的显示，不参与任何版本判定。
+   *
+   * 没有这段版本资源的话，安装程序这个 PE 的 ProductName / ProductVersion
+   * 是**空的**（NSIS 默认不写），而 SignPath 的 metadata restriction 要求
+   * 签名产物带 product-name / product-version —— 空值过不了。 */
+  `/DVI_VERSION=${VERSION}.0`,
+  `/DCOPYRIGHT=${COPYRIGHT}`,
   `/DAPP_DIR=${APP_DIR}`,
   `/DICON_FILE=${ICON}`,
   `/DESTIMATED_KB=${kb(sizeOf(APP_DIR))}`,

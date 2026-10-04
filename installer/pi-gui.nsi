@@ -6,7 +6,9 @@
 ;   APP_NAME      应用名（"Pi GUI"）
 ;   APP_EXE       主程序文件名（"Pi GUI.exe"）
 ;   VERSION       版本号
+;   VI_VERSION    版本号 + ".0"（四段纯数字，VIProductVersion 只认这个形状）
 ;   PUBLISHER     发布者
+;   COPYRIGHT     版权串（唯一出处是 scripts/util.mjs 的 COPYRIGHT）
 ;   APP_DIR       待打包的应用目录（dist-app\Pi GUI-win32-x64）
 ;   ICON_FILE     安装程序图标（build/icon.ico）
 ;   ESTIMATED_KB  安装后体积（KB），用于「添加或删除程序」里的显示
@@ -89,6 +91,39 @@ BrandingText "${APP_NAME}"
 !ifndef OUT_FILE
   !error "OUT_FILE 未定义"
 !endif
+!ifndef VI_VERSION
+  !error "VI_VERSION 未定义"
+!endif
+!ifndef COPYRIGHT
+  !error "COPYRIGHT 未定义"
+!endif
+
+; ---------------------------------------------------------------------------
+; PE 版本资源（VERSIONINFO）。
+;
+; ⚠️ 这一段不是装饰，删之前先读：
+;
+; NSIS **默认不写版本资源** —— 不加这一段，编译出来的安装程序 PE 的
+; ProductName / ProductVersion / CompanyName 全是**空的**（实测过：全是空串）。
+; 而代码签名（SignPath 的 File metadata restriction）要求签名产物带上
+; «product-name = 项目名» 和 «product-version = 版本号» 才允许签 —— 空值满足不了
+; 那个约束。Electron 主程序那边的版本资源由 @electron/packager 写好了，
+; 安装程序这个由我们自己写，很容易漏。
+;
+; VIProductVersion 只接受**四段纯数字**（x.x.x.x），所以用构建脚本注入的
+; VI_VERSION（= VERSION + ".0"）。其余各项都从宏来，这里不写死任何版本号 ——
+; check-version.mjs 的静态版本源守卫会扫这个文件。
+;
+; 刻意放在宏检查**之后**：这些指令会真的求值，放前面就变成「先用后查」。
+; ---------------------------------------------------------------------------
+VIProductVersion "${VI_VERSION}"
+VIAddVersionKey "ProductName"      "${APP_NAME}"
+VIAddVersionKey "ProductVersion"   "${VERSION}"
+VIAddVersionKey "FileVersion"      "${VERSION}"
+VIAddVersionKey "FileDescription"  "${APP_NAME} 安装程序"
+VIAddVersionKey "CompanyName"      "${PUBLISHER}"
+VIAddVersionKey "LegalCopyright"   "${COPYRIGHT}"
+VIAddVersionKey "OriginalFilename" "Pi-GUI-Setup-${VERSION}.exe"
 
 ; ---------------------------------------------------------------------------
 ; 安装前：把正在跑的实例关掉。
