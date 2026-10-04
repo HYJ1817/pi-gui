@@ -52,6 +52,12 @@ const {
   isSafeWebUrl,
 } = require('./net-probe.cjs');
 
+/* 右栏内置浏览器的宿主（WebContentsView）。
+ * 它有一套**自己的、更严的**导航策略（远程只准 https、http 只准回环、
+ * 不许去 Pi GUI 自己），所以 hardenWebContents 必须把它排除掉 ——
+ * 否则右栏存在的意义（访问外站）当场就没了。见 browser-view.cjs 文件头。 */
+const { createBrowserController, isBrowserWebContents } = require('./browser-view.cjs');
+
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const ROOT = path.resolve(__dirname, '..');
@@ -67,6 +73,7 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 
 let win = null;
 let server = null;
+let browser = null;
 let quitting = false;
 const log = [];
 
@@ -520,6 +527,15 @@ function scheduleSaveWindowState() {
  *   - window.location / <a href>   → will-navigate 拦下
  *   - 服务端 30x 跳转              → will-redirect 拦下（它不走 will-navigate） */
 function hardenWebContents(wc) {
+  /* 内置浏览器的 webContents **不走这套**。
+   *
+   * 这里的规则是「窗口只能待在自家页面里，站外一律交给系统浏览器」——
+   * 对主窗口是对的，对右栏里的浏览器是致命的：它连 example.com 都去不了。
+   * 那一个 webContents 由 browser-view.cjs 用 isAllowedBrowserUrl 另行把守
+   * （远程只准 https、http 只准回环、不许去 Pi GUI 自己、不许开新窗口、权限全拒）。
+   * 两套规则是**并列**的，不是一严一松 —— 别把这条判断删了当优化。 */
+  if (isBrowserWebContents(wc)) return;
+
   wc.setWindowOpenHandler(({ url }) => {
     if (isSafeExternal(url)) shell.openExternal(url);
     return { action: 'deny' };
@@ -597,6 +613,12 @@ function createWindow() {
   win.loadURL(ORIGIN);
 
   win.on('resize', scheduleSaveWindowState);
+  /* 窗口一变大变小，先把已有矩形按新的客户区再夹一遍。
+   * renderer 那边有 ResizeObserver，但它晚一拍 —— 不补这一下，
+   * 拖动窗口的瞬间右栏的 view 会超出窗口边缘。 */
+  win.on('resize', () => {
+    if (browser) browser.syncBounds();
+  });
   win.on('move', scheduleSaveWindowState);
   win.on('maximize', scheduleSaveWindowState);
   win.on('unmaximize', scheduleSaveWindowState);
@@ -689,6 +711,10 @@ function createWindow() {
   });
 
   win.on('closed', () => {
+    /* 窗口先走，浏览器 view 必须跟着销毁：它是挂在 contentView 上的
+     * 原生子视图，窗口没了它就该没了 —— 但它的 webContents 不随窗口自动收，
+     * 留着会继续联网、继续占内存。 */
+    if (browser) browser.destroy();
     win = null;
   });
 }
@@ -720,6 +746,11 @@ if (!app.requestSingleInstanceLock()) {
     // "No handler registered"。
     installOpenPathHandler();
     installOpenExternalHandler();
+    /* 右栏内置浏览器。与上面两个 handler 同一时机 —— 必须在 createWindow()
+     * 之前注册，否则页面首帧调用会拿到 "No handler registered"。
+     * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */
+    browser = createBrowserController({ origin: ORIGIN, getWindow: () => win, ipcMain });
+    browser.register();
     // 用户数据目录先建出来 —— 后端启动就要往里写 projects.json
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true });
@@ -754,6 +785,8 @@ if (!app.requestSingleInstanceLock()) {
     // 再兜一层：Ctrl+Q、系统关机等直接触发 quit 的情况，窗口可能还活着也可能已经没了
     saveWindowState();
     quitting = true;
+    // 浏览器 view 先于后端收掉：它的 webContents 不随窗口自动销毁
+    if (browser) browser.destroy();
     killServer();
   });
 
