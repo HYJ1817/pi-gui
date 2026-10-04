@@ -550,6 +550,26 @@ const SUMS = 'SHA256SUMS.txt';
       JSON.stringify([summaryCount, assetCount]);
   });
 
+  /* SignPath Foundation 要求「项目主页**与**下载 / Release 页面」都出现
+   * 「Code signing policy」。首页（README）那份已经有了，这里守的是 Release Notes
+   * 这份 —— 它由 ASSET_NOTES 生成，所以改了以后**每个未来的 Release 都自动带上**，
+   * 不需要每次发版手工往发布页贴链接。 */
+  check('25e. Release Notes 带 Code signing policy 与两份政策链接', () => {
+    const missing = [];
+    if (!ASSET_NOTES.includes('Code signing policy')) missing.push('缺「Code signing policy」字样');
+    for (const f of ['CODE_SIGNING_POLICY.md', 'PRIVACY.md']) {
+      if (!ASSET_NOTES.includes(f)) missing.push(`缺链接 ${f}`);
+    }
+    return missing.length === 0 || missing.join('、');
+  });
+
+  check('25f. Code signing policy 小节重复组合后也不叠加', () => {
+    const once = composeReleaseNotes({ generatedNotes: '自动生成的 notes', summary: '- 新能力 A' });
+    const twice = composeReleaseNotes({ generatedNotes: once, summary: '- 新能力 A' });
+    const policyCount = (twice.match(/## Code signing policy/g) || []).length;
+    return (policyCount === 1 && once.includes('## Code signing policy')) || JSON.stringify({ policyCount });
+  });
+
   check('25d. 摘要版本过期 → 在碰 GitHub 之前拒绝发布', () => {
     makeRelease();
     fs.writeFileSync(summaryPath, '<!-- pi-gui-release-summary: 0.12.0 -->\n\n- 旧摘要\n', 'utf8');

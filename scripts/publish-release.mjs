@@ -58,6 +58,15 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 
 卸载只删程序文件 —— \`%APPDATA%\\Pi GUI\` 下的项目列表与窗口布局会保留。
 
+## Code signing policy
+
+Windows 构建由 [SignPath.io](https://signpath.io) 免费提供代码签名，证书由
+[SignPath Foundation](https://signpath.org) 提供。签名覆盖的是**本项目自己构建**的
+Windows 安装程序；随包分发的 Electron / Chromium 等上游开源二进制不由本证书签名。
+
+- **Code signing policy**（签名范围、角色、审批流程）：[CODE_SIGNING_POLICY.md](https://github.com/HYJ1817/pi-gui/blob/main/CODE_SIGNING_POLICY.md)
+- **Privacy policy**（联不联网、传什么数据）：[PRIVACY.md](https://github.com/HYJ1817/pi-gui/blob/main/PRIVACY.md)
+
 ## 前置条件
 
 界面本身不含 pi。**本机要先装好 pi 并配好模型供应商**：
