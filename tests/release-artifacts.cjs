@@ -570,6 +570,18 @@ const SUMS = 'SHA256SUMS.txt';
     return (policyCount === 1 && once.includes('## Code signing policy')) || JSON.stringify({ policyCount });
   });
 
+  /* ⚠️ 这条断言描述的是**当前阶段**，不是永久规矩。
+   *
+   * SignPath 还没批准、release.yml 也还没接入签名 —— 此时在 Release Notes 里说
+   * 「已由 SignPath 签名」就是骗用户（真实产物还是 unsigned）。
+   * 等签名真的上线，请把 ASSET_NOTES 的措辞与这条断言**一起**改成「已启用」状态 ——
+   * 只改文案不改断言，这里会红，正好提醒你上线这件事确实发生了。 */
+  check('25g. Code signing 小节如实说明产物可能未签名（不谎称已签）', () => {
+    const statesUnsigned = /未签名/.test(ASSET_NOTES);
+    const overclaims = /免费提供代码签名/.test(ASSET_NOTES);
+    return (statesUnsigned && !overclaims) || JSON.stringify({ statesUnsigned, overclaims });
+  });
+
   check('25d. 摘要版本过期 → 在碰 GitHub 之前拒绝发布', () => {
     makeRelease();
     fs.writeFileSync(summaryPath, '<!-- pi-gui-release-summary: 0.12.0 -->\n\n- 旧摘要\n', 'utf8');

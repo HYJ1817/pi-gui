@@ -60,9 +60,13 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 
 ## Code signing policy
 
-Windows 构建由 [SignPath.io](https://signpath.io) 免费提供代码签名，证书由
-[SignPath Foundation](https://signpath.org) 提供。签名覆盖的是**本项目自己构建**的
-Windows 安装程序；随包分发的 Electron / Chromium 等上游开源二进制不由本证书签名。
+本项目正在申请 [SignPath Foundation](https://signpath.org) 的免费 OSS 代码签名
+（签名服务由 [SignPath.io](https://signpath.io) 提供）。**申请尚未通过，正式发版流程也还
+没有接入签名 —— 所以当前下载到的产物仍然可能是未签名的**，Windows 可能因此提示
+「未知发布者」。
+
+签名正式启用后，覆盖的会是**本项目自己构建**的 Windows 安装程序；随包分发的
+Electron / Chromium 等上游开源二进制不会用本证书签名。
 
 - **Code signing policy**（签名范围、角色、审批流程）：[CODE_SIGNING_POLICY.md](https://github.com/HYJ1817/pi-gui/blob/main/CODE_SIGNING_POLICY.md)
 - **Privacy policy**（联不联网、传什么数据）：[PRIVACY.md](https://github.com/HYJ1817/pi-gui/blob/main/PRIVACY.md)
