@@ -68,8 +68,8 @@ own quota endpoint directly:
 - OpenRouter: `https://openrouter.ai/api/v1/key`
 - DeepSeek: `https://api.deepseek.com/user/balance`
 
-This is the one place where Pi GUI holds a usable credential, so it is worth stating
-exactly what happens to it:
+Pi GUI holds a usable credential only for the duration of this single request. What happens
+to it:
 
 - The credential is **resolved in memory only**, inside that worker. It is never written to
   disk, never displayed in the interface, and never logged — not in error messages, not in
@@ -88,10 +88,19 @@ exactly what happens to it:
 The "Model providers" settings can fetch the available model list from a provider's
 `/models` endpoint. This runs **only when you press "Fetch"**. Pi GUI makes this request
 itself: it goes to the base URL **you** typed, with the authentication scheme you selected
-and the API key from that provider's entry in your `pi` model configuration. The key is
-resolved in memory for the request only, is never logged, and is sent only to that
-provider's endpoint. (Pi GUI deliberately does **not** execute `!command`-style keys, which
-would run a program to obtain the value.)
+and the API key from that provider's entry in your `pi` model configuration.
+
+This is the **second** path on which Pi GUI briefly holds a provider credential (the first
+is section 4). The handling is the same in the ways that matter:
+
+- resolved in memory for that request only — never written to disk, never displayed in the
+  interface, and never logged;
+- sent **only** to that provider's own endpoint, over HTTPS — never to the pi-GUI project,
+  and never to any other third party.
+
+One difference from section 4: this path keeps **no** cache keyed by the credential, so no
+hash of it is produced at all. (Pi GUI also deliberately does **not** execute
+`!command`-style keys, which would run a program to obtain the value.)
 
 ### 6. Sign-in (OAuth) — performed by `pi`, not by Pi GUI
 
@@ -105,10 +114,9 @@ public SDK: the browser callback, credential storage and token refresh are all d
 - It does not upload your prompts, files, repository contents, or usage statistics to the
   pi-GUI project or anyone else.
 - It does not create or require an account.
-- It does not **persist**, display, log, or forward your provider credentials. The one
-  exception to "never touches a credential at all" is the in-memory resolution described in
-  section 4, which exists solely to display your quota; that value is sent only to the
-  provider it belongs to.
+- It does not **persist**, display, log, or forward your provider credentials. The two
+  in-memory exceptions are described in sections 4 and 5 (quota, and model list); in both,
+  the credential is sent only to the provider it belongs to.
 - It does not automatically download, install, or silently update anything — including
   itself.
 - It does not modify your system configuration without warning.
@@ -165,10 +173,11 @@ Pi GUI 是**纯本地**桌面程序：没有账号、**没有遥测 / 埋点 / �
 任何使用数据。只有两类网络请求：① 启动后各**自动检查一次**版本（Pi GUI 官方 Release、
 `pi` 运行时版本），只发 GitHub 要求的必备请求头、不含任何身份信息，失败即静默；
 ② **你自己触发**的操作 —— 模型对话与 OAuth 登录由你本机装的 `pi` 完成；用量配额与模型
-列表由 Pi GUI 自己发请求，只针对**你配置的**供应商。配额查询需要凭据：Pi GUI 会经 Pi 的
-认证 SDK **在内存里**解析出该供应商的凭据，**只**发给该供应商的官方接口，另取其不可逆的
-SHA-256 哈希做本地缓存键；**不落盘、不显示、不记日志、不发给 pi-GUI 项目**。模型列表用的
-是你在 Pi 模型配置里存的 Key，同样只在内存里用一次。
+列表由 Pi GUI 自己发请求，只针对**你配置的**供应商。**这两条路径都会在内存里短暂取得**该
+供应商的凭据（配额经 Pi 的认证 SDK 解析，模型列表用 Pi 模型配置里存的 Key），一律
+**不落盘、不显示、不记日志、不发给 pi-GUI 项目**，只发给该供应商自己的官方接口。配额那条
+另取其**不可逆 SHA-256 哈希**做本地缓存键；模型列表那条**没有**任何以凭据为键的缓存，
+因此不产生哈希。
 你装的 Pi Extension 可能自行联网，那由该 Extension 自己负责。
 
 本机数据都在 `%APPDATA%\Pi GUI`（窗口布局、项目列表）：不卸载不删除，卸载程序**只删程序
