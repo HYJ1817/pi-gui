@@ -540,7 +540,6 @@ async function doSwitch(s, locateUserIndex = null) {
     // 列表的重画由 afterSessionSwitch 的回调负责（见文件头规矩 4）；
     // 「跳到第 N 次提问」由 messages.js 的「历史渲染完成」回调消费（规矩 6）。
     afterSessionSwitch();
-    toast('已切到：' + (s.title || '（无标题）'), 'info');
   } catch (err) {
     pendingLocate = null;
     toast('切换失败：' + err.message, 'error');

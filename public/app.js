@@ -24,7 +24,7 @@ import { observeBrowserEvent } from './browser.js';
 import { observeMcpEvent } from './mcp-observer.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
-import { toast } from './ui/toast.js';
+import { toast, withNotificationSource } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText } from './shell.js';
@@ -61,7 +61,7 @@ import { openBranchPanel, setForkHandler } from './tree.js';
 import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
 import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions, flushProjectSessionAction } from './projects.js';
-import { loadProviders, openProvidersPanel, reloadPi } from './providers.js';
+import { loadProviders, openProvidersPanel, openProviderAuthPanel, reloadPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
@@ -133,6 +133,10 @@ function connect() {
 }
 
 function handle(evt) {
+  return withNotificationSource(evt._replay ? 'history' : 'live', () => handleEvent(evt));
+}
+
+function handleEvent(evt) {
   if (evt.type === 'bridge_status' || evt.type === 'bridge_snapshot') {
     if (evt._replay) return;
     return reconcileBridgeSnapshot(evt);
@@ -881,6 +885,7 @@ function goChat() {
 $('navHome').onclick = goChat;
 $('navChanges').onclick = openChangesPanel;
 $('navProviders').onclick = openProvidersPanel;
+$('navProviderAuth').onclick = openProviderAuthPanel;
 $('navDiagnostics').onclick = openDiagnostics;
 /* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
 $('navPalette').onclick = () => {
@@ -1067,6 +1072,7 @@ defineCommands([
   { id: 'run.restart', title: '重启 Pi', group: '执行', keywords: 'restart 重载 reload pi', when: () => S.hasProject, run: () => restartPi() },
   { id: 'app.settings', title: '项目设置', group: '全局', keywords: 'settings 设置 配置', when: () => S.hasProject, run: () => openProjectSettings() },
   { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => openProvidersPanel() },
+  { id: 'app.providerAuth', title: '供应商与认证', group: '全局', keywords: 'provider authentication OAuth login 认证', run: () => openProviderAuthPanel() },
   { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => openDiagnostics() },
   { id: 'app.copy-diagnostics', title: '复制诊断摘要', group: '全局', keywords: 'copy diagnostics 复制 摘要 issue', run: () => copyDiagnosticsSummary() },
   { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', run: () => openShortcutHelp() },

@@ -1,5 +1,6 @@
 /* Pi owns credentials and the flow. This view only consumes safe snapshots. */
 import { fetchProviderAuth, loginProviderAuth, logoutProviderAuth, respondProviderAuth, cancelProviderAuth, syncProviderAuth } from './api.js';
+import { S } from './state.js';
 
 const terminal = new Set(['success', 'cancelled', 'failed']);
 const states = { starting: '开始认证…', 'waiting-browser': '等待浏览器授权', 'waiting-device-code': '在浏览器中输入设备码', 'waiting-input': '等待授权回复', verifying: '正在确认认证状态…', success: '认证操作完成', cancelled: '认证已取消', failed: '认证失败或超时' };
@@ -31,6 +32,7 @@ export function mountProviderAuth(box, onReadback = () => {}) {
   let renderKey = '';
   let busy = false;
   let readbackFlow = '';
+  let othersOpen = false;
   const message = node('div', 'auth-message');
   const content = node('div', 'auth-content');
   box.append(content, message);
@@ -102,11 +104,22 @@ export function mountProviderAuth(box, onReadback = () => {}) {
     const oldPrompt = oldInput?.dataset.authPrompt;
     const oldValue = oldInput?.value;
     const hadFocus = oldInput === document.activeElement;
+    const oldOthers = content.querySelector('.auth-other');
+    if (oldOthers) othersOpen = oldOthers.open;
     renderKey = key;
     content.replaceChildren();
     content.appendChild(node('div', 'hint', '状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。'));
     button(content, '刷新认证状态', refresh);
     if (!snapshot.capability?.sdkAvailable) content.appendChild(node('div', 'auth-notice', '当前 Pi 未提供可用认证接口。请使用官方交互式 pi 的 /login 与 /logout。'));
+    const primary = node('section', 'auth-primary');
+    primary.appendChild(node('h4', '', '已配置 / 已认证 / 当前使用'));
+    const others = node('details', 'auth-other');
+    others.open = othersOpen;
+    others.ontoggle = () => { if (others.isConnected) othersOpen = others.open; };
+    const summary = node('summary', '', '其他 Pi 支持的供应商');
+    others.appendChild(summary);
+    content.append(primary, others);
+    let otherCount = 0;
     for (const p of snapshot.providers || []) {
       const row = node('section', 'auth-provider');
       row.dataset.providerId = p.providerId;
@@ -130,8 +143,14 @@ export function mountProviderAuth(box, onReadback = () => {}) {
       }
       row.appendChild(methods);
       if (!snapshot.capability?.sdkAvailable || !(p.methods || []).length || (p.methods || []).some((m) => m.type === 'api-key')) fallback(row, p.providerId);
-      content.appendChild(row);
+      const preferred = p.authConfigured === true || p.authenticated === true || p.status === 'connected'
+        || p.providerId === S.state?.model?.provider || p.models?.length > 0;
+      (preferred ? primary : others).appendChild(row);
+      if (!preferred) otherCount++;
     }
+    primary.hidden = !primary.querySelector('.auth-provider');
+    others.hidden = !otherCount;
+    summary.textContent += `（${otherCount}）`;
     if (!snapshot.providers?.length) fallback(content, '<provider>');
     const flow = snapshot.flow;
     if (flow) {
@@ -173,7 +192,7 @@ export function mountProviderAuth(box, onReadback = () => {}) {
       panel.appendChild(node('div', 'hint', '关闭面板不会取消认证；再次打开可继续。'));
       // Authorization must remain reachable above a potentially large native
       // provider catalog. Restore focus only after inserting the new input.
-      content.insertBefore(panel, content.querySelector('.auth-provider'));
+      content.insertBefore(panel, primary);
       const restoredInput = panel.querySelector('[data-auth-prompt]');
       if (hadFocus && oldPrompt === restoredInput?.dataset.authPrompt) restoredInput.focus();
     }
@@ -181,7 +200,7 @@ export function mountProviderAuth(box, onReadback = () => {}) {
       const syncText = snapshot.sync.state === 'syncing' ? '正在同步聊天 Pi…' : snapshot.sync.state === 'error' ? '模型同步失败，请重试同步。' : '模型同步待完成；当前任务结束后更新。';
       const sync = node('div', 'auth-notice', syncText);
       if (snapshot.sync.state !== 'syncing') button(sync, '重试模型同步', () => act(syncProviderAuth));
-      content.insertBefore(sync, content.querySelector('.auth-provider'));
+      content.insertBefore(sync, primary);
     }
   }
   content.appendChild(node('h4', '', '供应商与认证'));

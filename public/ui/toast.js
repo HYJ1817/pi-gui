@@ -4,8 +4,18 @@ import { el } from '../state.js';
 
 const recent = new Map();
 const DEDUPE_MS = 2500;
+let notificationSource = 'live';
+
+/* Scope only synchronous event dispatch/rendering, never an async operation.
+ * Reuse SSE's replay provenance; restoring state must not notify again. */
+export function withNotificationSource(source, render) {
+  const previous = notificationSource;
+  notificationSource = source;
+  try { return render(); } finally { notificationSource = previous; }
+}
 
 export function toast(msg, kind = 'info') {
+  if (notificationSource !== 'live') return;
   if (!msg) return;
   const now = Date.now();
   const key = `${kind}\u0000${msg}`;

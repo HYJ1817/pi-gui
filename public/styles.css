@@ -2370,6 +2370,7 @@ button.pj-sess-primary{cursor:pointer}
 .web-setup .btn { margin: 0 6px 6px 0; }
 /* Provider authentication follows the existing gray modal controls. */
 .provider-auth { margin-bottom: 24px; }
+.auth-other > summary { cursor: pointer; padding: 12px 0; color: var(--t2); }
 .auth-provider, .auth-flow { border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 12px 0; overflow-wrap: anywhere; }
 .auth-status { display: block; margin: 5px 0; color: var(--t2); font-size: 12px; }
 .auth-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }

@@ -184,22 +184,12 @@ export function renderProviders(box) {
 }
 
 export function openProvidersPanel() {
-  let disposeAuth = () => {};
   openModal((card, close) => {
     card.classList.add('wide');
 
     const h = document.createElement('h3');
-    h.textContent = '供应商与认证';
+    h.textContent = '模型供应商';
     card.appendChild(h);
-
-    const auth = document.createElement('div');
-    auth.className = 'provider-auth';
-    card.appendChild(auth);
-    disposeAuth = mountProviderAuth(auth, () => loadProviders());
-
-    const custom = document.createElement('h4');
-    custom.textContent = '自定义模型配置';
-    card.appendChild(custom);
 
     const desc = document.createElement('div');
     desc.className = 'modal-desc';
@@ -239,9 +229,29 @@ export function openProvidersPanel() {
 
     actions.append(add, reload, done);
     card.appendChild(actions);
-  }, () => disposeAuth());
+  });
 
   loadProviders();
+}
+
+export function openProviderAuthPanel() {
+  let dispose = () => {};
+  openModal((card, close) => {
+    card.classList.add('wide');
+    const heading = document.createElement('h3');
+    heading.textContent = '供应商与认证';
+    const auth = document.createElement('div');
+    auth.className = 'provider-auth';
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    const done = document.createElement('button');
+    done.className = 'btn';
+    done.textContent = '关闭';
+    done.onclick = close;
+    actions.appendChild(done);
+    card.append(heading, auth, actions);
+    dispose = mountProviderAuth(auth, () => loadProviders());
+  }, () => dispose());
 }
 
 export async function removeProvider(name) {

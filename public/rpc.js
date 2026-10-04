@@ -10,7 +10,7 @@
 
 import { el, S } from './state.js';
 import { sendCommand, downloadSessionHtml } from './api.js';
-import { toast } from './ui/toast.js';
+import { toast, withNotificationSource } from './ui/toast.js';
 import { setStatus } from './shell.js';
 import { clearThread, rebuildFromMessages, noteLoadFailure } from './messages.js';
 import { applyTree } from './tree.js';
@@ -126,6 +126,8 @@ function acceptModelResponse(evt) {
 }
 
 export function onResponse(evt) {
+  // Replayed mutation acknowledgements must not initiate another session rebuild.
+  if (evt._replay && ['new_session', 'fork', 'set_model', 'compact'].includes(evt.command)) return;
   if (acceptModelResponse(evt)) return;
   if (!evt.success) {
     if (evt.command !== 'get_available_thinking_levels') {
@@ -151,7 +153,7 @@ export function onResponse(evt) {
     case 'get_tree':
       return applyTree(d);
     case 'get_messages':
-      return rebuildFromMessages(d);
+      return withNotificationSource('history', () => rebuildFromMessages(d));
     case 'get_available_models':
       return onModels(d);
     case 'get_available_thinking_levels':
