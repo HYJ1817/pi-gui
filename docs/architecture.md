@@ -1,5 +1,14 @@
 # 架构
 
+## P28 自动模型备用
+
+项目配置 v2 增加默认关闭的有序 fallback，旧 v1 读取不写盘。
+`public/model-fallback.js` / `lib/model-fallback.js` 提供共享纯分类、策略和安全记录；
+`server/model-generation.js` 在 SSE 前管理普通 prompt 归属与错误安全投影。
+`public/fallback.js` 是单请求协调器，复用 `rpc.js` 串行模型切换与 Pi state/levels 回读，
+不伪造当前模型。未输出且可靠的生成故障才可重放，用户操作及 generation 变化失效。
+Auth、Quota、Planner 与能力目录保持原职责。详见 [model-fallback.md](model-fallback.md)。
+
 ## 统一模型能力与能力感知 UI
 
 模型能力以白名单 `capability` 描述附在既有模型对象上，保留 legacy 字段。

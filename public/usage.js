@@ -16,6 +16,7 @@ import { draftSync } from './draft.js';
 import { withModelCapability, modelIdentity } from './model-capabilities.js';
 import { renderModelControls } from './composer.js';
 import { renderAttachments } from './attachments.js';
+import { observeFallbackState } from './fallback.js';
 
 /* ---------- 辅助工具 ---------- */
 
@@ -218,6 +219,7 @@ export function clearSessionUsage() {
 }
 
 export function applyState(d) {
+  observeFallbackState(d);
   S.ready = true;
   const previousModel = modelIdentity(S.state?.model);
   const nextModel = modelIdentity(d.model);

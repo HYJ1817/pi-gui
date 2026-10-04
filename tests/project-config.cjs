@@ -213,7 +213,7 @@ function cleanup() {
   });
   check('3. 默认配置的字段集合固定', () =>
     JSON.stringify(Object.keys(defaultConfig()).sort()) ===
-      JSON.stringify(['commands', 'ignore', 'instructions', 'model', 'thinking', 'version'].sort()) ||
+      JSON.stringify(['commands', 'fallback', 'ignore', 'instructions', 'model', 'thinking', 'version'].sort()) ||
     Object.keys(defaultConfig()).join(','));
   check('3. 默认 version 等于 CONFIG_VERSION', () => defaultConfig().version === CONFIG_VERSION || defaultConfig().version);
 
@@ -255,7 +255,7 @@ function cleanup() {
 
     check('8. 未知顶层字段被丢弃（apiKey / token / projectPath / foo 都不在结果里）', () => {
       const keys = Object.keys(r.config);
-      return keys.every((k) => ['version', 'model', 'thinking', 'instructions', 'ignore', 'commands'].includes(k)) || keys.join(',');
+      return keys.every((k) => ['version', 'model', 'thinking', 'instructions', 'ignore', 'commands', 'fallback'].includes(k)) || keys.join(',');
     });
     check('8. 模型对象里的多余字段（apiKey）也被丢弃', () =>
       JSON.stringify(Object.keys(r.config.model).sort()) === JSON.stringify(['id', 'provider']) ||
@@ -719,8 +719,8 @@ function cleanup() {
   {
     const src = fs.readFileSync(path.join(ROOT, 'server', 'project-config.js'), 'utf8');
     const imports = [...src.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
-    check('打包：只 import node 内建模块与同目录兄弟（无新增运行时依赖）', () =>
-      imports.every((i) => i.startsWith('node:') || i === './http-utils.js') || imports.join(','));
+    check('打包：只 import node 内建、HTTP 原语与共享纯 fallback（无新增运行时依赖）', () =>
+      imports.every((i) => i.startsWith('node:') || i === './http-utils.js' || i === '../lib/model-fallback.js') || imports.join(','));
     check('打包：不读 package.json、不依赖 __PI_GUI_VERSION__ 之类的构建期注入', () =>
       (!/package\.json/.test(src) && !/__PI_GUI_VERSION__/.test(src)) || '有构建期依赖');
 

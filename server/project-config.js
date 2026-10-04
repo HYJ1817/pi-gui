@@ -29,9 +29,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { json, readBody } from './http-utils.js';
+import { normalizeFallbackConfig } from '../lib/model-fallback.js';
 
 /* 配置格式版本。字段增删改语义时 +1，并在 MIGRATIONS 里补一条升级函数。 */
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2;
 
 /** 项目内的配置目录名。点开头，避免出现在目录列举里。 */
 export const DIR_NAME = '.pi-gui';
@@ -79,10 +80,11 @@ export const DEFAULT_CONFIG = Object.freeze({
   instructions: '',
   ignore: [],
   commands: [],
+  fallback: Object.freeze({ enabled: false, chain: Object.freeze([]) }),
 });
 
 /** 允许出现在配置文件里的键。其余一律丢弃。 */
-const CONFIG_FIELDS = Object.freeze(['version', 'model', 'thinking', 'instructions', 'ignore', 'commands']);
+const CONFIG_FIELDS = Object.freeze(['version', 'model', 'thinking', 'instructions', 'ignore', 'commands', 'fallback']);
 
 /** 默认配置的深拷贝。数组字段必须每次新建，否则调用方一 push 就污染了默认值。 */
 export function defaultConfig() {
@@ -93,15 +95,15 @@ export function defaultConfig() {
     instructions: '',
     ignore: [],
     commands: [],
+    fallback: { enabled: false, chain: [] },
   };
 }
 
 /* 版本迁移表：键 = 源版本，值 = 把该版本的对象升到「键+1」的纯函数。
  *
- * 当前只有 v1，所以这张表是空的、循环体一次都不跑 —— 它是给下一个版本
- * 留的**确定形状的扩展点**，不是占位代码：加 v2 时只需写一条 MIGRATIONS[1]
- * 并把 CONFIG_VERSION 改成 2，migrate 的调用方一行都不用动。 */
+ * v1 → v2 增加默认关闭的 fallback；只在显式保存时写盘，读取不迁移文件。 */
 const MIGRATIONS = Object.create(null);
+MIGRATIONS[1] = raw => ({ ...raw, version: 2, fallback: { enabled: false, chain: [] } });
 
 /* ---------- 归一化（纯函数，不碰磁盘） ---------- */
 
@@ -268,6 +270,9 @@ export function normalizeConfig(raw) {
   config.instructions = normalizeInstructions(migrated.instructions, warn);
   config.ignore = normalizeIgnore(migrated.ignore, warn);
   config.commands = normalizeCommands(migrated.commands, warn);
+  config.fallback = normalizeFallbackConfig(migrated.fallback, config.model);
+  if (migrated.fallback?.enabled === true && !config.fallback.enabled) warn('自动备用至少需要一个不同于默认模型的备用模型，已关闭');
+  if (Array.isArray(migrated.fallback?.chain) && config.fallback.chain.length !== migrated.fallback.chain.length) warn('自动备用中的重复、无效或默认模型条目已忽略');
 
   return { config, warnings, unsupportedVersion: null };
 }

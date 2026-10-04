@@ -30,6 +30,7 @@ import { fetchProjectConfig, saveProjectConfig } from './api.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { setModel } from './rpc.js';
+import { createFallbackSettings } from './ui/fallback-settings.js';
 import { whenModels } from './usage.js';
 
 /** 已经提示过「模型不可用」的那个「项目 + 模型」，避免每次重启都弹一遍。
@@ -247,6 +248,10 @@ export async function openProjectSettings() {
       card.appendChild(note('可用模型列表还没到手，下拉里暂时只有「不指定」—— 稍后重新打开这个窗口就有完整列表了。', 'dim'));
     }
 
+    const fallbackEditor = createFallbackSettings(cfg.fallback, () => choices[Number(selModel.value)]?.value || S.state?.model);
+    card.appendChild(fallbackEditor.element);
+    selModel.addEventListener('change', fallbackEditor.refresh);
+
     /* ---- 思考强度 ---- */
     // 用 pi 的**完整**档位列表，而不是当前模型支持的那几个 ——
     // 这是项目偏好，换个模型还要用；具体落到哪一档由 pi 按当时的模型决定。
@@ -349,6 +354,7 @@ export async function openProjectSettings() {
       // 只改表单，不直接写盘 —— 「恢复默认」误点的代价太大，多一步确认
       const d = j.defaults || { model: null, thinking: null, instructions: '', ignore: [], commands: [] };
       selModel.value = '0';
+      fallbackEditor.reset(d.fallback);
       selThink.value = d.thinking || '';
       taInstr.value = d.instructions || '';
       syncInstrHint();
@@ -369,7 +375,9 @@ export async function openProjectSettings() {
     btnSave.type = 'button';
     btnSave.className = 'btn primary';
     btnSave.textContent = '保存';
+    fallbackEditor.onChange(valid => { btnSave.disabled = !valid; });
     btnSave.onclick = async () => {
+      if (!fallbackEditor.valid()) return toast('请先修正备用模型配置。', 'warn');
       const picked = choices[Number(selModel.value)] || choices[0];
 
       const commands = [];
@@ -380,6 +388,7 @@ export async function openProjectSettings() {
       }
 
       const payload = {
+        fallback: fallbackEditor.value(),
         model: picked.value,
         thinking: selThink.value || null,
         instructions: taInstr.value,

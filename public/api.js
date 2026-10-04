@@ -47,6 +47,8 @@ export async function getJSON(url) {
 
 /** POST / DELETE 一个 JSON 接口。网络层失败同样返回结构化结果，不抛。 */
 export async function sendJSON(url, { method = 'POST', body, contentType } = {}) {
+  if (url === '/api/restart' || url === '/api/sessions/switch' || url.includes('/open-session')
+    || (url === '/api/command' && ['abort', 'new_session', 'fork', 'switch_session', 'steer', 'follow_up'].includes(body?.type))) S.cancelFallback?.('user-operation');
   const opts = { method };
   if (contentType) {
     opts.headers = { 'Content-Type': contentType };

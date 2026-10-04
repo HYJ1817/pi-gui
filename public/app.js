@@ -17,6 +17,7 @@
 import { $, el, S } from './state.js';
 import { fmt } from './util.js';
 import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
+import { observeFallbackEvent, cancelFallback } from './fallback.js';
 import { sendCommand } from './api.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
@@ -174,6 +175,7 @@ function handleEvent(evt) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
   if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeMcpEvent(evt); observeApprovalEvent(evt); }
+  observeFallbackEvent(evt);
   switch (evt.type) {
     case 'bridge_status':
       return onBridge(evt);
@@ -310,6 +312,9 @@ const bridgeRecovery = createBridgeRecovery({
 setBridgeReconciler(reconcileBridgeSnapshot);
 
 export function reconcileBridgeSnapshot(snapshot) {
+  if (snapshot.bridgeInstance && S.bridgeInstance && snapshot.bridgeInstance !== S.bridgeInstance
+    || Number.isInteger(snapshot.bridgeRun) && Number.isInteger(S.bridgeRun) && snapshot.bridgeRun !== S.bridgeRun
+    || ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(snapshot.bridgeState || snapshot.state)) cancelFallback('bridge-lifecycle');
   const evt = { ...snapshot, type: 'bridge_status', state: snapshot.bridgeState || snapshot.state,
     error: snapshot.bridgeError ?? snapshot.error, hint: snapshot.bridgeHint ?? snapshot.hint,
     reason: snapshot.maintenance?.reason ?? snapshot.reason };

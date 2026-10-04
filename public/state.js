@@ -74,6 +74,8 @@ export const S = {
   syncPending: null,
   streaming: false,
   submitting: false,
+  fallbackActive: false,
+  fallbackRuntime: null,
   thread: null,
   current: null,
   blocks: new Map(),
@@ -149,6 +151,7 @@ export const S = {
 };
 
 export function beginWorkspaceSwitch(cwd) {
+  S.cancelFallback?.('workspace-switch');
   S.workspaceGeneration++;
   S.switching = true;
   S.thinkingLevels = [];

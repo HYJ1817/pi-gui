@@ -21,9 +21,11 @@ import { clearChanges } from './changes.js';
 import { showChat } from './ui/workspace-surface.js';
 import { clearDraft, draftSync } from './draft.js';
 import { closePop, currentAnchor } from './ui/popover.js';
+import { startFallbackRequest, cancelFallback, setFallbackModelSwitcher } from './fallback.js';
 
 /** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
 export function boot() {
+  cancelFallback('boot');
   activeModelSwitch = null;
   queuedModelSwitch = null;
   refreshModelState({ pending: false });
@@ -58,14 +60,14 @@ function pendingModel() {
   if (currentAnchor() === el.btnThink) closePop();
 }
 
-export function refreshModelState({ pending = true } = {}) {
+export function refreshModelState({ pending = true, completion = null } = {}) {
   S.thinkingLevels = [];
   S.modelSwitchPending = pending;
   renderModelControls();
   const generation = ++modelGeneration;
   stateReads.clear();
   const prefix = modelRequestPrefix + generation;
-  const refresh = modelRefresh = { generation, workspace: S.workspaceGeneration, stateId: prefix + '-state', levelsId: prefix + '-levels' };
+  const refresh = modelRefresh = { generation, workspace: S.workspaceGeneration, stateId: prefix + '-state', levelsId: prefix + '-levels', completion };
   for (const [type, id] of [['get_state', refresh.stateId], ['get_available_thinking_levels', refresh.levelsId]]) {
     sendCommand({ type, id }).then((result) => {
       if (!result?.ok && modelRefresh === refresh) {
@@ -77,7 +79,7 @@ export function refreshModelState({ pending = true } = {}) {
 
 function sendModelSwitch(request) {
   activeModelSwitch = request;
-  sendCommand({ type: 'set_model', id: request.id, provider: request.provider, modelId: request.modelId }).then((result) => {
+  sendCommand({ type: 'set_model', id: request.id, provider: request.provider, modelId: request.modelId, ...(request.fallbackOwner ? { __fallbackOwner: request.fallbackOwner } : {}) }).then((result) => {
     if (!result?.ok && activeModelSwitch === request) onResponse({ command: 'set_model', id: request.id, success: false });
   });
 }
@@ -94,10 +96,12 @@ function acceptModelResponse(evt) {
     if (evt.id !== request.id) return true;
     activeModelSwitch = null;
     if (request.workspace !== S.workspaceGeneration) {
+      request.resolve?.(false);
       queuedModelSwitch = null;
       return true;
     }
     if (queuedModelSwitch) {
+      request.resolve?.(false);
       const next = queuedModelSwitch;
       queuedModelSwitch = null;
       sendModelSwitch(next);
@@ -106,7 +110,7 @@ function acceptModelResponse(evt) {
     if (evt.success) toast('已切换到 ' + (evt.data?.name || evt.data?.id || request.modelId), 'info');
     else if (evt.error) toast(evt.error, 'error');
     // 失败也读取 Pi 的实际模型，绝不保留乐观选择。
-    refreshModelState();
+    refreshModelState({ completion: { resolve: request.resolve, success: evt.success === true, provider: request.provider, modelId: request.modelId } });
     return true;
   }
   if (typeof evt.id === 'string' && evt.id.startsWith(modelRequestPrefix)) {
@@ -121,6 +125,9 @@ function acceptModelResponse(evt) {
       if (refresh.stateResult.success && refresh.levelsResult.success) onThinkingLevels(refresh.levelsResult.data || {});
       modelRefresh = null;
       renderModelControls();
+      const c = refresh.completion;
+      c?.resolve?.(c.success && refresh.stateResult.success && refresh.levelsResult.success
+        && S.state?.model?.providerId === c.provider && S.state?.model?.modelId === c.modelId);
     }
     return true;
   }
@@ -190,7 +197,7 @@ export function respond(id, payload) {
 }
 
 export async function submit() {
-  if (S.submitting) return;
+  if (S.submitting || S.fallbackActive) return;
   if (!S.hasProject || S.switching || S.bridgeState !== 'ready') {
     toast('还没有选择项目：先在左侧「添加文件夹」选一个目录。', 'info');
     return;
@@ -212,7 +219,14 @@ export async function submit() {
 
   S.submitting = true;
   updateSendState();
+  const cleanup = () => {
+    if (el.input.value.trim() === text) el.input.value = '';
+    S.attachments = S.attachments.filter(item => !atts.includes(item));
+    renderAttachments();autoGrow();
+    if (!el.input.value.trim()) clearDraft();
+  };
   try {
+    if (!S.streaming && await startFallbackRequest({ type: 'prompt', ...cmd }, cleanup)) return;
     let result;
     if (S.streaming) {
       // 运行中发送 → 作为引导消息插话
@@ -222,10 +236,7 @@ export async function submit() {
       result = await sendCommand({ type: 'prompt', ...cmd });
     }
     if (!result?.ok) return; // 失败时保留输入和附件，用户可以重试
-    if (el.input.value.trim() === text) el.input.value = '';
-    S.attachments = S.attachments.filter((item) => !atts.includes(item));
-    renderAttachments();
-    autoGrow();
+    cleanup();
     /* P24：这一条真的发出去了 → 当前身份的草稿作废（不然刷新之后
      * 会把已经发出去的内容再填回输入框，看起来像「发重了」）。 */
     if (!el.input.value.trim()) clearDraft();
@@ -236,7 +247,9 @@ export async function submit() {
 }
 
 export async function stop() {
-  if (!S.streaming) return;
+  const fallbackWasActive = S.fallbackActive;
+  cancelFallback('stop');
+  if (!S.streaming && !fallbackWasActive) return;
   await sendCommand({ type: 'abort' });
   setStatus('已请求停止…');
 }
@@ -267,6 +280,7 @@ export function setSessionListRefresh(fn) {
  * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
 export function afterSessionSwitch() {
+  cancelFallback('session-switch');
   pendingModel();
   modelRefresh = null;
   ++modelGeneration;
@@ -302,18 +316,35 @@ export function compactNow() {
 }
 
 /* 模型与思考档位完全由 Pi 确认后回读。 */
-export function setModel(provider, modelId) {
+export function setModel(provider, modelId, options = null) {
+  const fallbackOwner = options && typeof options === 'object' ? options.fallbackOwner : null;
+  if (!fallbackOwner) cancelFallback('manual-model');
+  modelRefresh?.completion?.resolve?.(false);
+  queuedModelSwitch?.resolve?.(false);
   pendingModel();
   modelRefresh = null;
   const generation = ++modelGeneration;
   stateReads.clear();
-  const request = { id: modelRequestPrefix + generation + '-set', provider, modelId, workspace: S.workspaceGeneration };
+  let resolve, timer;
+  const completed = new Promise(r => { resolve = value => { clearTimeout(timer); r(value); }; });
+  const request = { id: modelRequestPrefix + generation + '-set', provider, modelId, workspace: S.workspaceGeneration, resolve, fallbackOwner };
+  if (fallbackOwner) timer = setTimeout(() => {
+    resolve(false);
+    if (activeModelSwitch === request) {
+      activeModelSwitch = null;
+      if (queuedModelSwitch) { const next = queuedModelSwitch; queuedModelSwitch = null; sendModelSwitch(next); }
+      else refreshModelState();
+    } else if (modelRefresh?.completion?.resolve === resolve) refreshModelState();
+  }, 30000);
   if (activeModelSwitch && activeModelSwitch.workspace === S.workspaceGeneration) queuedModelSwitch = request;
   else {
     queuedModelSwitch = null;
     sendModelSwitch(request);
   }
+  return completed;
 }
+
+setFallbackModelSwitcher((identity, fallbackOwner) => setModel(identity.providerId, identity.modelId, { fallbackOwner }));
 
 export function setThinkingLevel(level) {
   if (S.modelSwitchPending || !S.thinkingLevels.includes(level) || !S.thinkingLevels.some(v => v !== 'off')) return;

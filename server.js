@@ -47,6 +47,7 @@ import { createProjects, resolveInitialCwd } from './server/projects.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createProviders } from './server/providers.js';
 import { createAuthSdk, sanitizeModelEvent } from './server/provider-auth-sdk.js';
+import { createModelGeneration } from './server/model-generation.js';
 import { createProviderAuth } from './server/provider-auth.js';
 import { createAuthRuntimeSync } from './server/provider-auth-runtime.js';
 import { createQuotaManager } from './server/quota.js';
@@ -263,6 +264,7 @@ const authRuntimeListeners = new Set();
  *   - cliInFlight：正在跑的 Pi CLI 动作（MCP add/remove/login/logout 等）
  * 两者都只增删计数，不读任何用户数据。 */
 const piActivity = createPiActivity();
+const modelGeneration = createModelGeneration();
 let cliInFlight = 0;
 const rpc = createRpcBridge({
   runtime,
@@ -283,9 +285,9 @@ const rpc = createRpcBridge({
     piActivity.observe(event);
     for (const listener of authRuntimeListeners) listener(event);
     providerAuthRef?.observeRuntime(event);
-    sse.publish(event?.type === 'extension_error'
+    sse.publish(modelGeneration.observe(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
-      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null));
+      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null)));
   },
   piBin: PI_BIN,
   launch: piLaunch,
@@ -719,7 +721,10 @@ const route = createRouter({
     ...rpc,
     send: (cmd) => {
       if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
-      rpc.send(cmd);
+      modelGeneration.guardCommand(cmd);
+      const { __fallbackOwner, ...wire } = cmd;
+      rpc.send(wire);
+      modelGeneration.noteCommandAccepted(cmd);
       piActivity.noteCommandAccepted(cmd);
     },
   },

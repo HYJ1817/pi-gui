@@ -49,7 +49,7 @@ let stubCompat = null;
 
 /* /api/project-config 的可变桩。改 stubProjectConfig 就能模拟
  * 「有配置 / 没项目 / 模型失效 / 环境变量钉住 / 配置读坏了」各种状态。 */
-const CFG_DEFAULTS = { version: 1, model: null, thinking: null, instructions: '', ignore: [], commands: [] };
+const CFG_DEFAULTS = { version: 2, model: null, thinking: null, instructions: '', ignore: [], commands: [], fallback: { enabled: false, chain: [] } };
 let stubProjectConfig = {
   ok: true,
   hasProject: true,
@@ -3478,11 +3478,11 @@ staticCheck();
 
     await window.openProjectSettings();
     const card = $('modalCard');
-    const sels = [...card.querySelectorAll('select')];
+    const sels = [...card.querySelectorAll('select')].filter(s => !s.closest('.fallback-settings'));
     const tas = [...card.querySelectorAll('textarea')];
 
     check('设置弹层：打开后有模型 / 思考两个下拉与指令 / 忽略两个文本域', () =>
-      (sels.length === 2 && tas.length === 2) || `select=${sels.length} textarea=${tas.length}`);
+      (sels.length === 2 && card.querySelectorAll('.fallback-settings select').length === 1 && tas.length === 2) || `select=${sels.length} textarea=${tas.length}`);
     check('设置弹层：模型下拉按供应商分组（optgroup）', () => {
       const groups = [...sels[0].querySelectorAll('optgroup')].map((g) => g.label);
       return (groups.includes('deepseek') && groups.includes('anthropic')) || groups.join(',');
