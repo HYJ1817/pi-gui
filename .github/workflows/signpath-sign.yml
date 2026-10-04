@@ -32,11 +32,6 @@ on:
         description: '要构建并签名的 Release tag，必须形如 vX.Y.Z 且与 package.json 的 version 一致。只接受 tag —— 不接受分支名、commit SHA 或预发布版本。'
         required: true
         type: string
-      sign-request-note:
-        description: '提交给 Approver 的说明（会出现在 SignPath 请求里）'
-        required: false
-        type: string
-        default: ''
 
 # 只读：构建产物不是靠写仓库权限保护的，签名请求靠 artifact-id + origin 校验。
 permissions:
