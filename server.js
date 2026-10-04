@@ -727,9 +727,10 @@ const route = createRouter({
       if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
       modelGeneration.guardCommand(cmd);
       const { __fallbackOwner, ...wire } = cmd;
-      rpc.send(wire);
+      const result = rpc.send(wire);
       modelGeneration.noteCommandAccepted(cmd);
       piActivity.noteCommandAccepted(cmd);
+      return result;
     },
   },
   providers,

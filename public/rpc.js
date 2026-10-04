@@ -250,8 +250,8 @@ export async function stop() {
   const fallbackWasActive = S.fallbackActive;
   cancelFallback('stop');
   if (!S.streaming && !fallbackWasActive) return;
-  await sendCommand({ type: 'abort' });
-  setStatus('已请求停止…');
+  const result = await sendCommand({ type: 'abort' });
+  if (result?.ok) setStatus('已请求停止…');
 }
 
 export const newSession = () => sendCommand({ type: 'new_session' });
