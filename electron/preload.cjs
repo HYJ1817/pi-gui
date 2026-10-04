@@ -79,6 +79,20 @@ try {
      * 最后变成「两套规则里更松的那套说了算」—— 与 openPath / openExternal
      * 同一个理由（见文件头）。 */
     browser: {
+      setAgentControl: (flag) => ipcRenderer.invoke('pi-gui:browser-agent-enable', flag === true),
+      agentStatus: () => ipcRenderer.invoke('pi-gui:browser-agent-status'),
+      onAgentState: (cb) => {
+        if (typeof cb !== 'function') return () => {};
+        const listener = (_event, state) => cb(state);
+        ipcRenderer.on('pi-gui:browser-agent-state', listener);
+        return () => ipcRenderer.removeListener('pi-gui:browser-agent-state', listener);
+      },
+      onAgentOpen: (cb) => {
+        if (typeof cb !== 'function') return () => {};
+        const listener = () => cb();
+        ipcRenderer.on('pi-gui:browser-agent-open', listener);
+        return () => ipcRenderer.removeListener('pi-gui:browser-agent-open', listener);
+      },
       open: () => ipcRenderer.invoke('pi-gui:browser-open'),
       navigate: (url) => ipcRenderer.invoke('pi-gui:browser-navigate', String(url ?? '')),
       back: () => ipcRenderer.invoke('pi-gui:browser-command', 'back'),

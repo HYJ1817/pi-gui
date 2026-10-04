@@ -57,6 +57,7 @@ const {
  * 不许去 Pi GUI 自己），所以 hardenWebContents 必须把它排除掉 ——
  * 否则右栏存在的意义（访问外站）当场就没了。见 browser-view.cjs 文件头。 */
 const { createBrowserController, isBrowserWebContents } = require('./browser-view.cjs');
+const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -74,6 +75,7 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 let win = null;
 let server = null;
 let browser = null;
+let browserAgent = null;
 let quitting = false;
 const log = [];
 
@@ -177,6 +179,7 @@ async function ensureServer() {
       // 本实例的访问令牌。后端据此要求所有 /api/* 带令牌，
       // 而令牌只经由下面的 installTokenHeader() 注入到请求头里。
       PI_GUI_TOKEN: AUTH_TOKEN,
+      ...browserAgent.environment(),
       // projects.json 和上传缓存要写到可写的地方。默认是应用安装目录，
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
@@ -751,6 +754,10 @@ if (!app.requestSingleInstanceLock()) {
      * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */
     browser = createBrowserController({ origin: ORIGIN, getWindow: () => win, ipcMain });
     browser.register();
+    browserAgent = createBrowserAgentHost({ browser, origin: ORIGIN, getWindow: () => win, ipcMain,
+      extensionPath: path.join(fs.existsSync(path.join(__dirname, 'server.cjs')) ? __dirname : ROOT,
+        'extensions', 'pi-gui-browser', 'index.js') });
+    await browserAgent.start();
     // 用户数据目录先建出来 —— 后端启动就要往里写 projects.json
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true });
@@ -787,6 +794,7 @@ if (!app.requestSingleInstanceLock()) {
     quitting = true;
     // 浏览器 view 先于后端收掉：它的 webContents 不随窗口自动销毁
     if (browser) browser.destroy();
+    browserAgent?.stop();
     killServer();
   });
 

@@ -53,7 +53,7 @@ export function hasCapability(registry, type, id) {
   return rows.some((row) => row.name === id && row.extensionId !== null);
 }
 
-export function createExtensionRegistry({ runtime, rpc, env = process.env, readTrust = null }) {
+export function createExtensionRegistry({ runtime, rpc, env = process.env, readTrust = null, extraReport = () => ({}) }) {
   const home = env.HOME || os.homedir();
   const agentDir = env.PI_CODING_AGENT_DIR || path.join(home, '.pi', 'agent');
   let runtimeErrors = new Map();
@@ -231,7 +231,7 @@ export function createExtensionRegistry({ runtime, rpc, env = process.env, readT
       }
       if (item.state.installed === false || (item.scope === 'project' && trusted === false)) item.state.loaded = false;
     }
-    const report = { ok: true, hasProject: Boolean(cwd), piReachable: commands !== null,
+    const report = { ...extraReport(), ok: true, hasProject: Boolean(cwd), piReachable: commands !== null,
       extensions, diagnostics,
       capabilityRegistry: { commands: capabilityCommands, tools: [], toolRegistryAvailable: false },
       actions: { install: false, toggle: false, remove: false, refresh: true, restart: true } };

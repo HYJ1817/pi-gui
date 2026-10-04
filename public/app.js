@@ -23,6 +23,7 @@ import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
 import { observeMemoryEvent } from './memory.js';
 import { observeBrowserEvent } from './browser.js';
+import { observeGuiBrowserEvent, initGuiBrowserState } from './gui-browser-capabilities.js';
 import { observeMcpEvent } from './mcp-observer.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
@@ -120,6 +121,7 @@ mountSessionPlans($('sessionPlans'));
  * 入口按钮直接不显示，而不是画一个点了没反应的按钮。 */
 const rightPane = initRightPane();
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
+initGuiBrowserState();
 
 const btnBrowser = $('btnBrowser');
 if (btnBrowser) {
@@ -174,7 +176,7 @@ function handleEvent(evt) {
   if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
-  if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeMcpEvent(evt); observeApprovalEvent(evt); }
+  if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeGuiBrowserEvent(evt); observeMcpEvent(evt); observeApprovalEvent(evt); }
   observeFallbackEvent(evt);
   switch (evt.type) {
     case 'bridge_status':
@@ -341,6 +343,7 @@ export function reconcileBridgeSnapshot(snapshot) {
   observeSubagentEvent(evt);
   observeMemoryEvent(evt);
   observeBrowserEvent(evt);
+  observeGuiBrowserEvent(evt);
   observeMcpEvent(evt);
   observeApprovalEvent(evt);
   switch (evt.state) {

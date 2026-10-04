@@ -54,6 +54,7 @@ import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
 import { createSessionExport } from './server/session-export.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
+import { createGuiBrowserLaunch } from './server/gui-browser-launch.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
@@ -266,8 +267,10 @@ const authRuntimeListeners = new Set();
 const piActivity = createPiActivity();
 const modelGeneration = createModelGeneration();
 let cliInFlight = 0;
+const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
 const rpc = createRpcBridge({
   runtime,
+  browserLaunch: guiBrowserLaunch,
   /* Pi 更新前的暂停要确认**整棵进程树**都退出了（Windows 上经 npm .cmd 启动时，
    * 只 kill 外层包装不足以说明 pi 本体已停）。原语在这里注入：rpc-bridge 自己
    * 不认识业务模块（有架构守卫钉着），复用的是 agents/cli.js 里验证过的 killTree。 */
@@ -399,6 +402,7 @@ const mcp = createMcp({
 const approvalProbe = createApprovalProbe({ env: process.env, piBin: PI_BIN, resolvePackageDir: piLaunch.packageDir });
 const extensions = createExtensionRegistry({
   runtime, rpc, env: process.env,
+  extraReport: () => ({ guiBrowser: guiBrowserLaunch.report() }),
   readTrust: async () => (await skills.readIndex()).trust,
 });
 extensionRegistryRef = extensions;

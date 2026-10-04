@@ -25,6 +25,7 @@ import { webActivity, webSourceLink } from './web-activity.js';
 import { subagentActivity } from './subagent-activity.js';
 import { memoryActivity } from './memory-activity.js';
 import { browserActivity } from './browser-activity.js';
+import { guiBrowserActivity } from './gui-browser-activity.js';
 import { mcpActivity } from './mcp-activity.js';
 import { noteUnknownTool } from './schema-drift.js';
 
@@ -158,7 +159,7 @@ export function updateEntry(node, entry) {
   const web = webActivity(entry);
   /* 语义适配器按工具名匹配，互不依赖包名：命中一个就接管，raw args/details
    * 一律不进 DOM（见下面的 argsText 分支）。 */
-  const semantic = web || subagentActivity(entry) || memoryActivity(entry) || browserActivity(entry) || mcpActivity(entry);
+  const semantic = web || subagentActivity(entry) || memoryActivity(entry) || guiBrowserActivity(entry) || browserActivity(entry) || mcpActivity(entry);
   /* P23：一个适配器都不认识的工具名 —— 走 generic fallback。
    * **这正是一条 schema/工具面漂移**（pi 或 Extension 加了新工具），
    * 记下来进诊断；只记「有个不认识的工具名」这件事，不记名字（名字是数据）。 */

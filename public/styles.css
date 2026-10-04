@@ -2458,6 +2458,11 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 }
 .rp-address:focus{outline:none;border-color:var(--control-border);box-shadow:0 0 0 3px rgba(197,201,204,.12)}
 .rp-address::placeholder{color:var(--t3)}
+.browser-agent-bar{display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid var(--line);flex-shrink:0}
+.browser-agent-bar[hidden]{display:none}
+.browser-agent-control{flex-shrink:0;-webkit-app-region:no-drag}
+.browser-agent-control[aria-pressed="true"]{border-color:var(--control-border);background:var(--hover)}
+.browser-agent-status{font-size:11px;color:var(--t2);min-width:0}
 
 /* WebContentsView 会盖在这上面。底色和窗口一致，免得原生 view 还没摆好时闪白。 */
 .rp-viewport{flex:1;min-height:0;min-width:0;background:var(--main)}

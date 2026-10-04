@@ -109,7 +109,7 @@ export function createRouter({
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
     // 把多字节字符切开，中文就会变成乱码。
     readRawBody(req, MAX_COMMAND_BYTES)
-      .then((buf) => {
+      .then(async (buf) => {
         let cmd;
         try {
           cmd = JSON.parse(buf.toString('utf8') || '{}');
@@ -119,7 +119,8 @@ export function createRouter({
         try {
           if (cmd.type === 'export_html') return json(res, 400, { ok: false, error: '请使用安全会话导出入口' });
           if (typeof cmd.id === 'number') return json(res, 400, { ok: false, error: '客户端请求 ID 必须为字符串' });
-          rpc.send(cmd);
+          // Abort waits for browser cancellation acknowledgement.
+          await rpc.send(cmd);
           return json(res, 200, { ok: true });
         } catch (err) {
           return json(res, 503, { ok: false, error: String(err.message) });

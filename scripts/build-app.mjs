@@ -85,6 +85,8 @@ fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset
 /* 前端静态资源。漏了这个的话页面直接 404 —— 而且开发机上不会发现，
  * 因为开发模式读的是项目根的 public/。 */
 copyInto(STAGE, path.join(ROOT, 'public'), 'public');
+// Official Pi --extension path stays within the installed application.
+copyInto(STAGE, path.join(ROOT, 'extensions'), 'extensions');
 
 for (const [key, src] of [
   ['pdfjs/standard_fonts', path.join(PDFJS, 'standard_fonts')],

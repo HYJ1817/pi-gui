@@ -29,6 +29,7 @@ import { webCapability } from './web-capabilities.js';
 import { subagentCapability } from './subagent-capabilities.js';
 import { memoryCapability } from './memory-capabilities.js';
 import { browserCapability } from './browser-capabilities.js';
+import { guiBrowserCapability, guiBrowserObservation } from './gui-browser-capabilities.js';
 import { approvalCapability } from './approval.js';
 import { webObservation } from './web-access.js';
 import { subagentObservation } from './subagents.js';
@@ -65,6 +66,7 @@ export function collectKnownCapabilities({ registry = null, mcp = null, mcpNativ
     subagentCapability(registry, subagentObservation()),
     memoryCapability(registry, memoryObservation()),
     browserCapability(registry, browserObservation()),
+    guiBrowserCapability(registry, guiBrowserObservation()),
     mcpCapability(mcp, mcpNative, mcpSnapshot()),
     approvalCapability(approval),
     usageEntryRow(),

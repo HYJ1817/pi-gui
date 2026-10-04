@@ -40,6 +40,7 @@
 
 const { WebContentsView, session, shell } = require('electron');
 const { normalizeAddressInput, isAllowedBrowserUrl, clampBounds, PARTITION } = require('./browser-policy.cjs');
+const { allowedAgentUrl } = require('./browser-agent-policy.cjs');
 
 /** 这个 webContents 是不是内置浏览器的。
  *
@@ -89,6 +90,11 @@ const ERR_ABORTED = -3;
  */
 function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u) => shell.openExternal(u) }) {
   let view = null; // WebContentsView | null
+  let generation = 0;
+  let ready = Promise.resolve();
+  let agentControlled = false;
+  const lifecycle = new Set();
+  const notify = (type) => { for (const fn of lifecycle) { try { fn({ type, generation }); } catch {} } };
   let occluded = false; // 有 modal / palette 盖在上面时挂起
   let lastRect = { x: 0, y: 0, width: 0, height: 0 };
   let sessionReady = false;
@@ -162,7 +168,8 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     let url = state.url;
     let title = state.title;
     try {
-      url = wc.getURL() || url;
+      const currentUrl = wc.getURL();
+      url = currentUrl && currentUrl !== 'about:blank' ? currentUrl : url;
       title = wc.getTitle() || title;
     } catch {
       /* webContents 已销毁 */
@@ -221,30 +228,40 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       },
     });
     view.setBackgroundColor('#0d0d0d');
+    generation++;
 
     const wc = view.webContents;
+    // A new WebContents has no renderer document. Establish a trusted empty
+    // document before the agent enables Runtime/Accessibility on its debugger.
+    ready = wc.loadURL('about:blank').catch(() => {});
 
     /* 远程页面不许开 Electron 窗口。
      * 安全的地址（按内置浏览器同一套策略判）交给系统浏览器，其余一律丢。 */
     wc.setWindowOpenHandler(({ url }) => {
-      if (isAllowedBrowserUrl(url, { origin })) {
+      if (!agentControlled && isAllowedBrowserUrl(url, { origin })) {
         Promise.resolve(openExternal(url)).catch(() => {});
       }
       return { action: 'deny' };
     });
 
     const guard = (event, url) => {
-      if (!isAllowedBrowserUrl(url, { origin })) {
+      if (!(agentControlled ? allowedAgentUrl(url, origin) : isAllowedBrowserUrl(url, { origin }))) {
         event.preventDefault();
         setError('blocked', '已拒绝导航到该地址（内置浏览器只允许 HTTPS 与本机地址）');
       }
     };
     wc.on('will-navigate', guard);
     wc.on('will-redirect', guard);
+    wc.on('will-frame-navigate', (details) => {
+      if (agentControlled && !allowedAgentUrl(details.url, origin)) details.preventDefault();
+    });
 
     wc.on('did-start-loading', () => {
       state = { ...state, loading: true, error: null };
       emit();
+    });
+    wc.on('did-start-navigation', (_e, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) notify('document');
     });
     wc.on('did-stop-loading', () => {
       /* loading 必须在这里**显式**归位。
@@ -258,6 +275,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       refreshNav();
     });
     wc.on('did-navigate', (_e, url) => {
+      if (url === 'about:blank') return; // trusted renderer initializer has no public address
       state = { ...state, url };
       refreshNav();
     });
@@ -284,6 +302,8 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       setError('load-failed', `无法打开页面（${desc || 'ERR_FAILED'} ${code}）`, adopted);
     });
     wc.on('render-process-gone', () => setError('crashed', '页面进程异常退出'));
+    wc.on('render-process-gone', () => notify('unavailable'));
+    wc.on('destroyed', () => notify('unavailable'));
 
     state = {
       open: true,
@@ -296,11 +316,14 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     };
     attach();
     emit();
+    notify('created');
     return true;
   }
 
   /** 关掉并彻底销毁。反复开 / 关不能留下 webContents 或监听器。 */
   function destroy() {
+    notify('closed');
+    agentControlled = false;
     const dying = view;
     view = null;
     occluded = false;
@@ -335,15 +358,17 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
   }
 
   /** 地址栏回车 / open() 之后带 URL 进来。返回给 renderer 的结果只说明「接不接受」。 */
-  function navigate(input) {
+  function navigate(input, { agent = false } = {}) {
     if (!view) return { ok: false, error: '内置浏览器未打开' };
     const norm = normalizeAddressInput(input);
     if (!norm.ok) return { ok: false, error: norm.reason };
-    if (!isAllowedBrowserUrl(norm.url, { origin })) {
+    if (!(agent ? allowedAgentUrl(norm.url, origin) : isAllowedBrowserUrl(norm.url, { origin }))) {
       /* 不回显被拒的地址 —— 没必要让它再出现在界面或日志里 */
       return { ok: false, error: '已拒绝该地址（只允许 HTTPS 与本机地址）' };
     }
     try {
+      agentControlled = agent;
+      if (!agent) notify('manual');
       /* 把**规范化且已放行**的目标写进 state.url —— 这是「连不上时地址栏还留着
        * 这个地址」的前提。没有这一步，did-fail-load 只能看到空/旧的 URL，
        * 输入框会被清回上一页甚至空白。
@@ -362,11 +387,13 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     }
   }
 
-  function command(name) {
+  function command(name, { agent = false } = {}) {
     if (!view) return { ok: false, error: '内置浏览器未打开' };
     const wc = view.webContents;
     const nav = navApi(wc);
     try {
+      agentControlled = agent;
+      if (!agent) notify('manual');
       switch (name) {
         case 'back':
           if (nav.canGoBack()) nav.goBack();
@@ -452,6 +479,16 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     register,
     isBrowserWebContents,
     getState: () => ({ ...state }),
+    getWebContents: () => view?.webContents || null,
+    ready: () => ready,
+    getGeneration: () => generation,
+    subscribeLifecycle: (fn) => { lifecycle.add(fn); return () => lifecycle.delete(fn); },
+    setAgentControlled: (flag) => { agentControlled = flag === true; },
+    setBounds: (rect) => {
+      lastRect = { x: Number(rect?.x), y: Number(rect?.y), width: Number(rect?.width), height: Number(rect?.height) };
+      applyBounds();
+    },
+    command,
     /* 下面两个就是 IPC 处理器调的那两个函数，在这里一并交出去，供
      * tests/browser-session-check.cjs 在**主进程里**直接驱动。
      *

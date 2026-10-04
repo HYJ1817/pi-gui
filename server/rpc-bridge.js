@@ -74,6 +74,7 @@ export function createRpcBridge({
   isWin,
   env = process.env,
   projectLaunch = null,
+  browserLaunch = null,
   compat = null,
   spawnProcess = spawn,
   /* 进程树终止原语（**注入**，见文件头的说明）。Windows 上 `child.kill()`
@@ -208,7 +209,7 @@ export function createRpcBridge({
    * 但 spawn(bin, argsArray, {shell:true}) 会触发 DEP0190
    * （args 只拼接不转义），每次启动刷两行弃用警告，双击启动时看着像报错。
    * 所以成形交给 `formatLaunch()`（Node 文档认可的方式），见文件头第 2 条。 */
-  function spawnPi(bin, args) {
+  function spawnPi(bin, args, browser = null) {
     /* 把访问令牌从 pi 的环境里摘掉。
      *
      * pi 自带 bash 工具，环境变量对它（以及它跑的任何命令）都是可读的。
@@ -216,6 +217,8 @@ export function createRpcBridge({
      * 没必要存在的暴露面。pi 本身也不需要这个变量。 */
     const childEnv = { ...env };
     delete childEnv.PI_GUI_TOKEN;
+    for (const key of ['PI_GUI_BROWSER_BRIDGE_URL','PI_GUI_BROWSER_BRIDGE_TOKEN','PI_GUI_BROWSER_EXTENSION','PI_GUI_BROWSER_URL','PI_GUI_BROWSER_TOKEN']) delete childEnv[key];
+    if (browser) Object.assign(childEnv, browser.env);
 
     const opts = {
       cwd: runtime.getCurrentCwd(),
@@ -228,8 +231,10 @@ export function createRpcBridge({
     return spawnProcess(spec.command, spec.spawnArgs, { ...opts, shell: spec.shell });
   }
 
-  function start() {
-    if (runtime.isShuttingDown() || pi) return;
+  let starting = false;
+  let launchGeneration = 0;
+  async function start() {
+    if (runtime.isShuttingDown() || pi || starting) return;
     /* 维护中不拉起新 child —— resumeFromMaintenance() 才会。 */
     if (maintenance) return;
     if (restartTimer) {
@@ -252,6 +257,7 @@ export function createRpcBridge({
       return;
     }
     const run = ++bridgeRun;
+    const generation = ++launchGeneration;
     retiringChild = null;
 
     /* 项目配置要先「准备」再取参数。
@@ -284,9 +290,20 @@ export function createRpcBridge({
 
     let child;
     try {
-      child = spawnPi(launchBin, args);
+      let browser = null;
+      if (browserLaunch?.available()) {
+        starting = true;
+        browser = await browserLaunch.prepare();
+        if (generation !== launchGeneration || runtime.isShuttingDown() || maintenance || runtime.getCurrentCwd() !== cwd) {
+          return;
+        }
+        starting = false;
+      }
+      child = spawnPi(launchBin, browser ? [...args,...browser.args] : args, browser);
       pi = child;
     } catch (err) {
+      starting = false;
+      browserLaunch?.invalidate({disable:true,revoke:true});
       restartRequested = false;
       publish({ type: 'bridge_status', state: 'error', error: '无法启动 pi。', hint: '确认 pi 已安装并在 PATH 中，或检查 PI_BIN 配置。', cwd, bridgeRun: run });
       return;
@@ -303,6 +320,7 @@ export function createRpcBridge({
 
     child.on('error', (err) => {
       if (pi !== child || child === retiringChild) return;
+      browserLaunch?.invalidate({disable:true,revoke:true});
       restartRequested = false;
       publish({
         type: 'bridge_status',
@@ -382,6 +400,7 @@ export function createRpcBridge({
     const startedAt = Date.now();
     const onStopped = (code, signal) => {
       if (pi !== child) return;
+      browserLaunch?.invalidate({disable:true,revoke:true});
       pi = null;
       // 进程没了，挂起的请求不可能再有应答 —— 立刻放掉，别让调用方干等到超时
       settleAllPending(null);
@@ -447,6 +466,17 @@ export function createRpcBridge({
       throw new Error('项目已切换，请在当前项目重试此操作');
     }
     const { __bridgeRun, ...wireCommand } = cmd;
+    if (cmd.type === 'abort' && browserLaunch?.available()) {
+      const child=pi, run=bridgeRun;
+      // Acknowledge browser cancellation before acknowledging Stop to the GUI.
+      // Still stop Pi if desktop transport fails, but do not claim browser ack.
+      return browserLaunch.invalidate({strict:true}).then(() => {
+        if (pi === child && bridgeRun === run && childUsable()) child.stdin.write(JSON.stringify(wireCommand) + '\n');
+      }, () => {
+        if (pi === child && bridgeRun === run && childUsable()) child.stdin.write(JSON.stringify(wireCommand) + '\n');
+        throw new Error('Pi 已收到停止请求，但内置浏览器取消确认不可用。');
+      });
+    }
     pi.stdin.write(JSON.stringify(wireCommand) + '\n');
   }
 
@@ -489,6 +519,9 @@ export function createRpcBridge({
 
   /** 重启 pi 子进程 —— 用于让它重新读取 ~/.pi/agent/models.json */
   function restart({ sessionPath = null } = {}) {
+    launchGeneration++;
+    starting = false;
+    browserLaunch?.invalidate({disable:true,revoke:true});
     /* 维护期间用户点「重启 Pi」不该插进维护流程：更新完成后会自己 resume。 */
     if (maintenance) return;
     // Backend-only Pi readback; scoped to this workspace and consumed once.
@@ -524,6 +557,9 @@ export function createRpcBridge({
 
   /** 收尾时关掉子进程。不触发自动重启（shuttingDown 由 runtime 表达）。 */
   function stop() {
+    launchGeneration++;
+    starting = false;
+    browserLaunch?.invalidate({disable:true,revoke:true});
     settleAllPending(null);
     if (restartTimer) {
       clearTimeout(restartTimer);
@@ -565,6 +601,9 @@ export function createRpcBridge({
    * @returns {Promise<{ok:boolean, code?:string, stopped?:boolean}>} 只有确认退出才 ok:true
    */
   function pauseForMaintenance(reason = 'pi-update') {
+    launchGeneration++;
+    starting = false;
+    browserLaunch?.invalidate({disable:true,revoke:true});
     if (maintenance) return Promise.resolve({ ok: false, code: 'already-in-maintenance' });
     const cwd = runtime.getCurrentCwd();
     const previousState = snapshot.state;

@@ -16,6 +16,7 @@
  * 无从谈起 —— 这时入口直接不显示（见 isBrowserAvailable），而不是画一个点了没反应的按钮。 */
 
 import { toast } from './ui/toast.js';
+import { acceptGuiBrowserState } from './gui-browser-capabilities.js';
 
 const byId = (id) => document.getElementById(id);
 
@@ -64,6 +65,15 @@ function buildToolbar(host) {
 
   const external = mk('browserExternal', ICON_EXTERNAL, '在系统浏览器中打开', '在系统浏览器中打开');
   const close = mk('browserClose', ICON_CLOSE, '关闭内置浏览器', '关闭');
+  const agent = mk('browserAgentControl', '', 'Agent 控制', '允许 Agent 控制 localhost 页面', 'btn tiny browser-agent-control');
+  agent.textContent = 'Agent 控制';
+  agent.setAttribute('aria-pressed', 'false');
+  agent.hidden = true;
+  const agentStatus = document.createElement('span');
+  agentStatus.id = 'browserAgentStatus';
+  agentStatus.className = 'browser-agent-status';
+  agentStatus.setAttribute('role', 'status');
+  agentStatus.hidden = true;
 
   bar.append(back, forward, reload, address, external, close);
 
@@ -77,7 +87,12 @@ function buildToolbar(host) {
   error.hidden = true;
 
   host.append(bar, viewport, error);
-  return { bar, back, forward, reload, address, external, close, viewport, error };
+  const agentBar = document.createElement('div');
+  agentBar.className = 'browser-agent-bar';
+  agentBar.hidden = true;
+  agentBar.append(agent, agentStatus);
+  host.insertBefore(agentBar, viewport);
+  return { bar, back, forward, reload, address, external, close, viewport, error, agent, agentStatus, agentBar };
 }
 
 /**
@@ -94,9 +109,21 @@ export function createBrowserSurface({ pane, onRequestClose }) {
   let state = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false, error: null };
   let editing = false;
   let disposed = true;
+  let agentState = { available: false, enabled: false, busy: false };
+  let agentRequest = false;
+  let agentRevision = 0;
   const unsubs = [];
 
   function render() {
+    const hasAgent = typeof bridge.setAgentControl === 'function' && typeof bridge.agentStatus === 'function';
+    ui.agentBar.hidden = !hasAgent;
+    ui.agent.hidden = !hasAgent;
+    ui.agentStatus.hidden = !hasAgent;
+    ui.agent.disabled = agentRequest || (!agentState.available && !agentState.enabled);
+    ui.agent.setAttribute('aria-pressed', String(agentState.enabled === true));
+    ui.agentStatus.textContent = agentState.enabled
+      ? agentState.busy ? 'Agent 正在操作浏览器' : 'Agent 控制中 · 仅 localhost'
+      : agentState.available ? 'Agent 控制已关闭' : 'Agent 控制不可用';
     ui.back.disabled = !state.canGoBack;
     ui.forward.disabled = !state.canGoForward;
     ui.reload.innerHTML = state.loading ? ICON_STOP : ICON_RELOAD;
@@ -128,6 +155,21 @@ export function createBrowserSurface({ pane, onRequestClose }) {
       ui.reload.addEventListener('click', () => (state.loading ? bridge.stop() : bridge.reload()));
       ui.external.addEventListener('click', () => bridge.openExternal(ui.address.value || state.url));
       ui.close.addEventListener('click', () => onRequestClose());
+      ui.agent.addEventListener('click', async () => {
+        if (agentRequest) return;
+        agentRequest = true;
+        render();
+        try {
+          await bridge.setAgentControl(!agentState.enabled);
+          const next = await bridge.agentStatus();
+          if (!disposed && next) { agentState = next; acceptGuiBrowserState(next); }
+        } catch {
+          if (!disposed) toast('无法更改 Agent 控制状态', 'warn');
+        } finally {
+          agentRequest = false;
+          if (!disposed) render();
+        }
+      });
       ui.address.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
@@ -148,6 +190,17 @@ export function createBrowserSurface({ pane, onRequestClose }) {
       unsubs.push(bridge.onNotice((notice) => {
         if (notice?.message) toast(notice.message, 'warn');
       }));
+      if (typeof bridge.onAgentState === 'function') unsubs.push(bridge.onAgentState((next) => {
+        if (disposed || !next) return;
+        agentRevision++;
+        agentState = next;
+        acceptGuiBrowserState(next);
+        render();
+      }));
+      const initialRevision = agentRevision;
+      if (typeof bridge.agentStatus === 'function') Promise.resolve(bridge.agentStatus()).then((next) => {
+        if (!disposed && next && initialRevision === agentRevision) { agentState = next; acceptGuiBrowserState(next); render(); }
+      }).catch(() => {});
       // 量出来的矩形交给主进程，由它 clamp 后再摆 WebContentsView
       unsubs.push(pane.onViewport((rect) => bridge.setBounds(rect)));
       // 有弹层盖上来时把原生 view 摘下去，否则它会压在弹层上面
@@ -196,6 +249,12 @@ export function createBrowserSurface({ pane, onRequestClose }) {
       // 打开后把焦点给地址栏 —— 用户接下来多半就是要输地址
       ui.address.focus();
     },
+    // Agent has already created/navigated the native view. Mounting the chrome
+    // must neither call open() again nor move focus away from that page.
+    openFromAgent() {
+      pane.open('browser');
+      mount();
+    },
     close() {
       unmount();
     },
@@ -228,6 +287,10 @@ function closeBrowserPane() {
 /** @param {object} pane  right-pane.js 的 initRightPane() 返回的面板对象 */
 export function attachBrowserPane(pane) {
   paneRef = pane;
+  window.piGuiDesktop?.browser?.onAgentOpen?.(() => {
+    if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane });
+    surfaceRef.openFromAgent();
+  });
   return {
     open() {
       if (!isBrowserAvailable()) return false;
