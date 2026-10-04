@@ -61,6 +61,7 @@
     "test:inject": "node tests/append-injection.cjs",
     "test:window": "node tests/window-state.cjs",
     "test:browser-pane": "node tests/browser-pane.cjs",
+    "test:browser-session": "electron tests/browser-session-check.cjs",
     "diag:content": "node tests/diag-content.cjs",
     "build:exe": "node scripts/build-exe.mjs",
     "build:app": "node scripts/build-app.mjs",
