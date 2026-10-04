@@ -1,0 +1,213 @@
+# Windows code signing via SignPath Foundation (OSS subscription).
+#
+# ---------------------------------------------------------------------------
+# 这个 workflow **故意不参与发版**。
+#
+# 为什么单独一个文件、而且只手动触发：
+#   * SignPath 的 OSS 申请还没批下来之前，仓库里**没有任何** SignPath 的
+#     secrets / variables。若把签名步骤写进 release.yml，每一个正式发版都会因为
+#     「缺参数」而失败 —— 那会把当前可用的发布路径打断。
+#   * 所以签名链路先在这里跑通、验过，等审核通过、拿到 slug 与 token 之后，
+#     再按 docs/code-signing.md 的「接入发版」一节把它接进 release.yml。
+#
+# 安全性（与 SignPath Trusted Build Systems 的要求一致）：
+#   * 只用 GitHub-hosted runner（windows-latest）—— OSS 订阅要求签名前所有 job
+#     都在 GitHub 托管的 agent 上跑。
+#   * 产物**先上传成 GitHub workflow artifact**，再用它的 artifact-id 提交签名请求，
+#     origin metadata 由 GitHub 提供、构建脚本无法伪造。
+#   * 不下载、不安装、不发布 —— 签完只把签名产物传成 workflow artifact 供人核对。
+#   * 任何 token / slug 都只从 secrets / variables 读，**绝不写进仓库**。
+#
+# 未配置 secrets 时：guard job 输出 ready=false，签名 job 直接跳过（**不会失败**）。
+# ---------------------------------------------------------------------------
+name: SignPath sign (Windows, OSS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '要构建并签名的 git ref（tag 或 commit，例如 vX.Y.Z）'
+        required: true
+        type: string
+      sign-request-note:
+        description: '提交给 Approver 的说明（会出现在 SignPath 请求里）'
+        required: false
+        type: string
+        default: ''
+
+# 只读：构建产物不是靠写仓库权限保护的，签名请求靠 artifact-id + origin 校验。
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: signpath-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------- 前置检查
+  #
+  # job 级 if 里**拿不到** secrets，所以用一个 guard job 把「配没配」变成一个
+  # 普通 output，后面的 job 只依赖这个 output。缺配置时整条链路安静跳过。
+  guard:
+    name: Check SignPath configuration
+    runs-on: windows-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+      missing: ${{ steps.check.outputs.missing }}
+    steps:
+      - name: Check required secrets and variables
+        id: check
+        shell: pwsh
+        env:
+          # secrets 通过 env 传进来再判断，避免把值写进表达式（也不会出现在日志里）
+          SP_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SP_ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SP_PROJECT: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SP_POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SP_ARTIFACT: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:SP_TOKEN))   { $missing += 'secrets.SIGNPATH_API_TOKEN' }
+          if ([string]::IsNullOrWhiteSpace($env:SP_ORG))     { $missing += 'vars.SIGNPATH_ORGANIZATION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:SP_PROJECT)) { $missing += 'vars.SIGNPATH_PROJECT_SLUG' }
+          if ([string]::IsNullOrWhiteSpace($env:SP_POLICY))  { $missing += 'vars.SIGNPATH_SIGNING_POLICY_SLUG' }
+          if ([string]::IsNullOrWhiteSpace($env:SP_ARTIFACT)){ $missing += 'vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG' }
+
+          if ($missing.Count -eq 0) {
+            "ready=true"  >> $env:GITHUB_OUTPUT
+            "missing="    >> $env:GITHUB_OUTPUT
+            Write-Host 'SignPath 配置齐全，继续。'
+          } else {
+            "ready=false" >> $env:GITHUB_OUTPUT
+            "missing=$($missing -join ', ')" >> $env:GITHUB_OUTPUT
+            Write-Warning "尚未配置 SignPath（缺：$($missing -join ', ')）—— 跳过签名，这不是失败。"
+            Write-Warning '拿到 SignPath 审核结果后，按 docs/code-signing.md 填好 secrets/variables，再手动跑本 workflow。'
+          }
+
+  # ------------------------------------------------------- 构建 + 提交签名请求
+  sign:
+    name: Build and sign Windows installer
+    needs: guard
+    if: needs.guard.outputs.ready == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      # 签名请求里的 version 参数要和 PE 的 **ProductVersion** 对齐才过得了 metadata 约束。
+      # PE 里写的是 package.json 的 version（**不含 v**），而 workflow_dispatch 的 ref
+      # 形如 v0.18.3 —— 直接把 ref 传进去会多一个 v，约束就对不上。
+      # 版本号的唯一真相是 package.json，所以从那里读，不从 ref 猜。
+      - name: Read version from package.json
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ([string]::IsNullOrWhiteSpace($v)) { throw 'package.json 里读不到 version' }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "package.json version = $v"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 与 release.yml 同一套：NSIS 不在 windows-latest 预装清单里。
+      - name: Install NSIS
+        run: choco install nsis --no-progress -y
+
+      # 先验证再签名：签一个自己都没验过的产物没有意义。
+      # 这一步同时产出发版的三个资产（Setup / portable / SHA256SUMS）。
+      - name: Release precheck (version, tests, build, artifact guards)
+        run: npm run release:check -- --tag=${{ inputs.ref }} --with-installer
+
+      # ------------------------------------------------------ 上传未签名产物
+      #
+      # 只传**我们要签的那一个** PE：NSIS 安装程序（由 installer/pi-gui.nsi 编译，
+      # 是本项目唯一的一手 PE）。Electron 运行时 / Chromium DLL **不签**（见
+      # docs/code-signing.md 的边界清单）——给不属于本项目的上游二进制套我们的证书
+      # 是 SignPath 明令禁止的用法。
+      #
+      # upload-artifact 默认会把文件打成一个 zip，所以 SignPath 侧的
+      # Artifact Configuration 根元素是 <zip-file>；具体结构在申请通过后用
+      # 「上传样本」自动生成（见 docs/code-signing.md），这里不猜死。
+      - name: Upload unsigned installer
+        id: upload-unsigned
+        uses: actions/upload-artifact@v7
+        with:
+          name: pi-gui-unsigned-installer
+          if-no-files-found: error
+          path: dist-release/Pi-GUI-Setup-*.exe
+
+      # ---------------------------------------------------------- 签名
+      #
+      # 提交之后**要人工批准**：OSS 订阅下每个签名请求都必须由 Approver 手工批准，
+      # 所以这里的 wait-for-completion 会一直等到批准为止 —— 超时给足。
+      - name: Submit signing request
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # 默认 600 秒对「等人手工批准」不够用，给一小时。
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+          parameters: |
+            version: "${{ steps.ver.outputs.version }}"
+
+      # ------------------------------------------------- 验证签名确实生效
+      #
+      # **不打印 token、不打印完整 subject 之外的东西**；只断言状态是 Valid。
+      # 注意：GitHub runner 上不预置 SignPath 的根证书，所以第一次校验需要先信任
+      # 证书链（-TrustedSigner 走的是 Windows 的信任库，SignPath 的 OSS 证书在其
+      # 根里）。若这里报 UntrustedRoot 而不是 Valid，先别改判据 —— 见文档说明。
+      - name: Verify Authenticode signature
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem -Path signed -Filter 'Pi-GUI-Setup-*.exe' -Recurse | Select-Object -First 1
+          if (-not $signed) { throw '签名产物里没有找到 Pi-GUI-Setup-*.exe' }
+          $sig = Get-AuthenticodeSignature $signed.FullName
+          "  文件   $($signed.Name)"
+          "  大小   $([math]::Round($signed.Length/1MB,1)) MB"
+          "  状态   $($sig.Status)"
+          "  签名者 $($sig.SignerCertificate.Subject)"
+          "  时间戳 $($sig.TimeStamperCertificate.Subject)"
+          if ($sig.Status -ne 'Valid') { throw "签名校验未通过：$($sig.Status)" }
+
+      # ------------------------------------------ 把签名产物传出来给人核对
+      #
+      # **不发布 Release、不覆盖任何已发布资产**。等审核通过后，接入 release.yml
+      # 的补丁见 docs/code-signing.md（要点：签名会改变 Setup.exe 的字节，
+      # 所以 SHA256SUMS.txt 必须在签名**之后**重算）。
+      - name: Upload signed installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: pi-gui-signed-installer
+          path: signed/Pi-GUI-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          @"
+          ## SignPath 签名完成
+
+          - 签名请求：${{ steps.signpath.outputs.signing-request-web-url }}
+          - 产物：`pi-gui-signed-installer` workflow artifact
+
+          **本 workflow 不发布 Release。** 要正式发布，请按
+          docs/code-signing.md 的「接入发版」一节改 release.yml。
+          "@ >> $env:GITHUB_STEP_SUMMARY
