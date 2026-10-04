@@ -505,6 +505,29 @@ async function main() {
   check('37a. 前端只用白名单化的 browser 桥，不传任意 channel', () =>
     !/invoke\(\s*[^'"]/.test(newFrontCode) || '出现了含变量的 invoke(...)');
 
+  /* ---------- 10. 两个曾经真实发生过的 bug（别再改回去） ----------
+   *
+   * 它们都属于「界面上看得出来、但代码读起来很顺」的那一类，所以各钉一条。 */
+
+  check('38. did-stop-loading 必须把 loading 归位', () =>
+    /* 症状：页面加载成功之后刷新按钮永远停在「停止」，loading 一直是 true。
+     * 根因：这个处理器原来只调 refreshNav()，而 refreshNav 管的是
+     * URL / 标题 / 前进后退，**不碰 loading**。 */
+    /did-stop-loading'[\s\S]{0,400}?loading:\s*false/.test(browserCode) ||
+    'did-stop-loading 里没有把 loading 置回 false'
+  );
+  check('38a. navigate 接受后把规范化 URL 写进 state', () =>
+    /* 症状：连不上时地址栏被清空，用户想改一个字符都得重打。
+     * 根因：navigate 只设 error/loading，没写 url；did-fail-load 又不带 URL。 */
+    /url:\s*norm\.url/.test(browserCode) || 'navigate 没有把 norm.url 写进 state'
+  );
+  check('38b. did-fail-load 采纳事件里的 URL 前必须先过安全校验', () =>
+    /* 事件里的 URL 来自 Chromium，不能无条件当成「当前地址」；
+     * 只有过了 isAllowedBrowserUrl（它同时会拒掉 Pi GUI 自己的别名）才采纳。 */
+    /isAllowedBrowserUrl\(failedUrl,\s*\{\s*origin\s*\}\)/.test(browserCode) ||
+    'did-fail-load 无条件采纳了事件里的 URL'
+  );
+
   console.log('');
   console.log(`${pass}/${pass + fail} 通过`);
   process.exitCode = fail ? 1 : 0;

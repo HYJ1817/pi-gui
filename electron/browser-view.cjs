@@ -130,7 +130,14 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     }
   }
 
-  function setError(kind, message) {
+  /**
+   * @param {string} kind
+   * @param {string} message
+   * @param {string} [url] 只有**已经过 isAllowedBrowserUrl 校验**的 URL 才允许传。
+   *        地址栏在失败时要停在用户输的那个地址上，但绝不能把一个没校验过的、
+   *        直接来自 Chromium 事件的 URL 写成「当前地址」。
+   */
+  function setError(kind, message, url) {
     if (kind === '下载') {
       /* 下载被拒不是「页面加载失败」，不该顶掉地址栏的 URL 与错误态；
        * 用一次性提示告诉用户，让它自己在 renderer 里淡出。 */
@@ -144,7 +151,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       }
       return;
     }
-    state = { ...state, error: { kind, message }, loading: false };
+    state = { ...state, error: { kind, message }, loading: false, ...(url ? { url } : {}) };
     emit();
   }
 
@@ -239,7 +246,17 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       state = { ...state, loading: true, error: null };
       emit();
     });
-    wc.on('did-stop-loading', () => refreshNav());
+    wc.on('did-stop-loading', () => {
+      /* loading 必须在这里**显式**归位。
+       *
+       * 原来这里只调 refreshNav() —— 它管的是 URL / 标题 / 能不能前进后退，
+       * **不碰 loading**，于是页面加载成功之后 loading 永远停在 true：
+       * 刷新按钮一直显示「停止」，界面状态和 Chromium 的真实状态对不上。
+       *
+       * 归位只信这个事件，不让 renderer 自己猜。 */
+      state = { ...state, loading: false };
+      refreshNav();
+    });
     wc.on('did-navigate', (_e, url) => {
       state = { ...state, url };
       refreshNav();
@@ -252,9 +269,19 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       state = { ...state, title: typeof title === 'string' ? title.slice(0, 300) : '' };
       emit();
     });
-    wc.on('did-fail-load', (_e, code, desc, _url, isMainFrame) => {
+    wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
       if (!isMainFrame || code === ERR_ABORTED) return;
-      setError('load-failed', `无法打开页面（${desc || 'ERR_FAILED'} ${code}）`);
+      /* 地址栏要停在用户输的那个地址上 —— 否则「连不上」之后输入框被清掉，
+       * 用户想改一个字符都得重新打一遍。
+       *
+       * 但事件里这个 URL **来自 Chromium**，不能无条件采纳：只在对它跑一遍
+       * isAllowedBrowserUrl（它同时会拒掉 Pi GUI 自己那些别名）通过时才用，
+       * 否则沿用当前这个已经校验过的目标。
+       * 平时 navigate() 已经先把目标写进 state.url，这里兜的是
+       * 「页面内点击触发的失败」那种我们没经手的情况。 */
+      const adopted =
+        typeof failedUrl === 'string' && isAllowedBrowserUrl(failedUrl, { origin }) ? failedUrl : state.url;
+      setError('load-failed', `无法打开页面（${desc || 'ERR_FAILED'} ${code}）`, adopted);
     });
     wc.on('render-process-gone', () => setError('crashed', '页面进程异常退出'));
 
@@ -317,7 +344,14 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       return { ok: false, error: '已拒绝该地址（只允许 HTTPS 与本机地址）' };
     }
     try {
-      state = { ...state, error: null, loading: true };
+      /* 把**规范化且已放行**的目标写进 state.url —— 这是「连不上时地址栏还留着
+       * 这个地址」的前提。没有这一步，did-fail-load 只能看到空/旧的 URL，
+       * 输入框会被清回上一页甚至空白。
+       *
+       * 写在这里是安全的：上面 normalize + isAllowedBrowserUrl 两道都过了，
+       * 被拒的地址根本走不到这行 —— 所以不会把「拒绝掉的 URL」当成已导航地址。
+       * 标题同时清掉：新页面还没来，留着上一页的标题是错的。 */
+      state = { ...state, url: norm.url, title: '', error: null, loading: true };
       emit();
       view.webContents.loadURL(norm.url).catch(() => {
         /* 失败由 did-fail-load 统一报告，这里吞掉 Promise 拒绝 */
@@ -383,9 +417,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       return { ok: true };
     });
     ipcMain.handle('pi-gui:browser-set-occluded', (_e, flag) => {
-      occluded = flag === true;
-      if (occluded) detach();
-      else attach();
+      setOccluded(flag);
       return { ok: true };
     });
     ipcMain.handle('pi-gui:browser-open-external', async (_e, url) => {
@@ -403,10 +435,33 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     });
   }
 
+  /** 被弹层遮住时把原生 view 从 contentView 摘下去 / 挂回来。
+   *
+   * WebContentsView 是原生子视图，z-index 管不到它 —— 不摘就会盖住弹层。
+   * 放在返回值上（而不是只留在 IPC 处理器里）是为了让
+   * tests/browser-session-check.cjs 能在主进程里**直接**验「真的摘下去了」：
+   * renderer 那边根本观察不到原生视图，只能靠这个口子。
+   * 它**不是**给页面用的接口 —— preload 暴露的仍然是白名单动作。 */
+  function setOccluded(flag) {
+    occluded = flag === true;
+    if (occluded) detach();
+    else attach();
+  }
+
   return {
     register,
     isBrowserWebContents,
     getState: () => ({ ...state }),
+    /* 下面两个就是 IPC 处理器调的那两个函数，在这里一并交出去，供
+     * tests/browser-session-check.cjs 在**主进程里**直接驱动。
+     *
+     * 为什么需要这个口子：内置浏览器这个原生视图，renderer 那边**观察不到**
+     * （它不在 DOM 里），所以「令牌没被继承」「弹层开着时 view 真的被摘下去」
+     * 这两条只能在主进程里验。
+     * 它**不是**给页面用的接口 —— preload 暴露的仍然只是那组白名单动作，
+     * renderer 拿不到这个对象，也拿不到窗口。 */
+    navigate,
+    setOccluded,
     /** 窗口尺寸变了由 main 调一次：先按新的客户区再夹一遍已有的矩形，
      *  这样在 renderer 的 ResizeObserver 追上之前 view 也不会溢出窗口。 */
     syncBounds: applyBounds,
