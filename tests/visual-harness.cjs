@@ -15,6 +15,18 @@ const { pathToFileURL } = require('node:url');
 const PUB = path.join(__dirname, '..', 'public');
 const UPLOAD_DIR = path.join(__dirname, '..', '.uploads');
 const PORT = Number(process.env.HARNESS_PORT || 7789);
+const uxMode = process.env.UX_STATE_HARNESS === '1';
+let uxSwitchCount = 0;
+const uxWarnings = [
+  { type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: 'memory_search requires qmd historical warning', _replay: true },
+  { type: 'extension_error', error: 'historical extension error', _replay: true },
+  { type: 'response', command: 'fixture_failure', success: false, error: 'historical tool error', _replay: true },
+];
+const uxHistory = [
+  { role: 'user', content: '历史警告验收会话 A' },
+  { role: 'assistant', content: [{ type: 'toolCall', id: 'ux-memory', name: 'memory_search', arguments: { query: 'fixture' } }] },
+  { role: 'toolResult', toolCallId: 'ux-memory', toolName: 'memory_search', isError: true, content: [{ type: 'text', text: 'memory_search requires qmd' }] },
+];
 let hotfixNoProject = false;
 const recoveryMode = process.env.P25_2_HARNESS === '1';
 let recoveryState = 'ready', recoveryRevision = 1;
@@ -732,7 +744,7 @@ function replyFor(cmd) {
         harnessSessionId === 'bbbbbbbbbbbbbbbb'
           ? [{ role: 'user', content: '请补全 README 的测试说明' },
             { role: 'assistant', content: [{ type: 'text', text: '这是 README 会话的历史消息：测试说明已整理完成。' }] }]
-          : MESSAGES,
+          : uxMode ? uxHistory : MESSAGES,
       } };
     case 'get_available_models':
       return { type: 'response', command: 'get_available_models', success: true, data: { models: MODELS } };
@@ -769,6 +781,10 @@ function providerAuthSnapshot() {
   const oauth = { type: 'oauth', label: 'ChatGPT 订阅', canLogin: true, isSubscription: true };
   const providers = [descriptor('openai', 'OpenAI', [oauth, { type: 'api-key', label: 'API Key', canLogin: false, isSubscription: false }]),
     descriptor('openai-codex', 'OpenAI Codex（legacy）', [oauth])];
+  if (uxMode) {
+    providers[0] = { ...providers[0], authenticated: true, authConfigured: true, credentialStored: true, authType: 'oauth', status: 'connected' };
+    providers.push(descriptor('amazon-bedrock', 'Amazon Bedrock', []), descriptor('anthropic', 'Anthropic', []));
+  }
   let flow = null;
   if (['browser', 'device', 'select'].includes(authPhase)) {
     flow = { id: 'offline-auth-flow', generation: 1, revision: authRevision, providerId: 'openai', operation: 'login',
@@ -784,6 +800,11 @@ function providerAuthSnapshot() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = url.pathname;
+  if (uxMode && p === '/api/__ux/stats') return json(res, 200, { ok: true, switchCount: uxSwitchCount, sessionId: harnessSessionId });
+  if (uxMode && p === '/api/__ux/live-warning' && req.method === 'POST') {
+    push({ type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: '实时验收警告，仅出现一次' });
+    return json(res, 200, { ok: true });
+  }
   if (recoveryMode && p === '/api/__recovery') {
     if (url.searchParams.has('state')) { recoveryState = url.searchParams.get('state'); recoveryRevision++; }
     const bus = await recoveryBus;
@@ -841,6 +862,7 @@ const server = http.createServer(async (req, res) => {
     res.write(': harness\n\n');
     if (res.flushHeaders) res.flushHeaders();
     clients.add(res);
+    if (uxMode) for (const warning of uxWarnings) res.write('data: ' + JSON.stringify(warning) + '\n\n');
     req.on('close', () => clients.delete(res));
 
     // 等前端把 onopen/onmessage 挂好，再推 bridge_status 触发 boot()
@@ -1198,8 +1220,10 @@ const server = http.createServer(async (req, res) => {
    * 「界面上会不会漏出路径」。刻意混入一条已归档的，好让折叠组也出现在图里。 */
   if (p === '/api/sessions/switch' && req.method === 'POST') {
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
-    if (body.id !== 'bbbbbbbbbbbbbbbb') return json(res, 200, { ok: false, error: '夹具中没有该会话' });
+    if (body.id !== 'bbbbbbbbbbbbbbbb' && !(uxMode && body.id === 'aaaaaaaaaaaaaaaa')) return json(res, 200, { ok: false, error: '夹具中没有该会话' });
     harnessSessionId = body.id;
+    if (uxMode) uxSwitchCount++;
+    if (uxMode) for (const warning of uxWarnings) push(warning);
     return json(res, 200, { ok: true, id: body.id, title: '帮我把 README 的测试那节补全' });
   }
   if (p === '/api/__work-surface/session-reset') {

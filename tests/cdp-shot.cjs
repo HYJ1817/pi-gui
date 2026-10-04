@@ -27,6 +27,7 @@ const arg = (k, d) => {
 const APP = arg('url', 'http://127.0.0.1:7788/');
 const TAG = arg('tag', '');
 const AUTH_ONLY = arg('auth-only', 'false') === 'true';
+const UX_ONLY = arg('ux-only', 'false') === 'true';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const name = (n) => (TAG ? TAG + '-' + n : n);
@@ -158,7 +159,7 @@ async function main() {
   })()`);
   console.log('左下供应商入口: ' + railInfo);
 
-  if (!AUTH_ONLY) {
+  if (!AUTH_ONLY && !UX_ONLY) {
   await shot('01-default');
 
   /* --- 模型浮层 --- */
@@ -352,8 +353,9 @@ async function main() {
       for (const phase of ['native-list', 'browser', 'device', 'select', 'unknown', 'connected']) {
         await evalJs(`if(!document.querySelector('#modal').hidden) document.querySelector('#modal').click()`);
         await evalJs(`fetch('/api/__provider-auth/${phase}',{method:'POST'}).then(r=>r.json())`);
-        await evalJs(`window.__authComposerBefore=document.querySelector('#composerBox').getBoundingClientRect().toJSON();document.querySelector('#navProviders').click()`);
+        await evalJs(`window.__authComposerBefore=document.querySelector('#composerBox').getBoundingClientRect().toJSON();document.querySelector('#navProviderAuth').click()`);
         await sleep(450);
+        await evalJs(`if(document.querySelector('.auth-other')) document.querySelector('.auth-other').open=true`);
         const flowPhase = ['browser', 'device', 'select'].includes(phase);
         const must = flowPhase ? [] : ['供应商与认证', 'ChatGPT'];
         if (phase === 'browser') must.push('等待浏览器授权', '打开授权页面');
@@ -373,6 +375,50 @@ async function main() {
     }
     await send('Emulation.clearDeviceMetricsOverride');
   };
+  if (UX_ONLY) {
+    const assert = require('node:assert/strict');
+    let checks = 0;
+    const verify = async (label, expr) => { assert.ok(await evalJs(expr), label); checks++; console.log('ok ' + label); };
+    const mouse = async (expr) => {
+      const point = await evalJs(`(() => {const e=${expr}; if(!e) throw Error('missing click target');const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+    };
+    try {
+      await evalJs(`window.__uxToasts=[];window.__uxObserver=new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)if(n.classList?.contains('toast'))window.__uxToasts.push(n.textContent)});window.__uxObserver.observe(document.querySelector('#toasts'),{childList:true})`);
+      await verify('startup replay is quiet', `document.querySelectorAll('#toasts .toast').length===0`);
+      for (let i = 0; i < 20; i++) {
+        const title = JSON.stringify(i % 2 ? '发酵罐空气' : 'README');
+        await mouse(`[...document.querySelectorAll('button.pj-sess-primary')].find(e=>e.textContent.includes(${title}))`);
+        await sleep(450);
+      }
+      await verify('10 A/B cycles add zero toasts', `window.__uxToasts.length===0&&document.querySelectorAll('#toasts .toast').length===0`);
+      await verify('all 20 session switches reached backend', `fetch('/api/__ux/stats').then(r=>r.json()).then(j=>j.switchCount===20&&j.sessionId==='aaaaaaaaaaaaaaaa')`);
+      await verify('historical memory activity remains', `document.querySelector('#stream').textContent.includes('Memory search failed')`);
+      await shot('UX-A-history-no-toasts');
+      await evalJs(`fetch('/api/__ux/live-warning',{method:'POST'})`); await sleep(150);
+      await verify('live warning produces one toast', `window.__uxToasts.length===1&&document.querySelectorAll('#toasts .toast').length===1`);
+      await shot('UX-A-live-warning-once');
+      await send('Page.reload'); await sleep(1800);
+      await verify('reload restores A without replayed toasts', `document.querySelectorAll('#toasts .toast').length===0&&document.querySelector('#stream').textContent.includes('Memory search failed')`);
+      await mouse(`document.querySelector('#navGlobalMore')`);
+      await mouse(`document.querySelector('#navProviders')`); await sleep(200);
+      await mouse(`[...document.querySelectorAll('#modalCard button')].find(e=>e.textContent==='添加供应商')`); await sleep(200);
+      await verify('add opens custom form without native auth catalog', `document.querySelector('#modalCard').textContent.includes('供应商 ID')&&!document.querySelector('.auth-provider')&&!document.querySelector('#modalCard').textContent.includes('Amazon Bedrock')`);
+      await shot('UX-B-add-custom-provider');
+      await evalJs(`document.querySelector('#modal').click()`);
+      await mouse(`document.querySelector('#navGlobalMore')`);
+      await mouse(`document.querySelector('#navProviderAuth')`); await sleep(250);
+      await verify('auth entry shows configured provider first and others collapsed', `document.querySelector('.auth-primary [data-provider-id="openai"]')&&document.querySelector('.auth-other').open===false&&document.querySelector('.auth-other [data-provider-id="amazon-bedrock"]')`);
+      await shot('UX-B-auth-collapsed');
+      await mouse(`document.querySelector('.auth-other > summary')`); await sleep(150);
+      await verify('expanded native catalog preserves unknown', `document.querySelector('.auth-other').open&&document.querySelector('[data-provider-id="amazon-bedrock"] .auth-status').textContent==='未知（无法确认）'`);
+      await shot('UX-B-auth-expanded');
+      assert.equal(pageErrors.length, 0, pageErrors.join('\n'));
+      console.log(`UX real Chrome: ${checks}/${checks} passed; page exceptions: 0`);
+    } finally { ws.close(); chrome.kill(); }
+    return;
+  }
   if (AUTH_ONLY) {
     await authShots();
     console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
@@ -1009,7 +1055,7 @@ async function main() {
   await shotOf('#workSurface', '132-neutral-extensions', 'P14-E：Skill 选中与 Tabs 为灰阶', ['code-review'], [...viewportChecks('#workSurface')]);
   await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navProviders').click()`);
   await sleep(200);
-  await shotOf('#modal', '133-neutral-modal', 'P14-E：供应商 Modal 按钮为灰阶', ['供应商与认证'], [['计算后的交互色为中性', neutralControls], ['Modal 位于视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`]]);
+  await shotOf('#modal', '133-neutral-modal', 'P14-E：供应商 Modal 按钮为灰阶', ['模型供应商'], [['计算后的交互色为中性', neutralControls], ['Modal 位于视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`]]);
   await evalJs(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
   await evalJs(`document.querySelector('#navChanges').click()`);
   await sleep(320);
@@ -1061,7 +1107,7 @@ async function main() {
   await shotOf('#globalMoreMenu', '151-more-700-low', 'P14-E：700×600 More 可访问', [], [['More 在视口内', `(() => {const r=document.querySelector('#globalMoreMenu').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
   await evalJs(`document.querySelector('#navProviders').click()`);
   await sleep(160);
-  await shotOf('#modal', '152-modal-700-low', 'P14-E：700×600 Modal 按钮可见', ['供应商与认证'], [['Modal 在视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
+  await shotOf('#modal', '152-modal-700-low', 'P14-E：700×600 Modal 按钮可见', ['模型供应商'], [['Modal 在视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`], ['计算后的交互色为中性', neutralControls]]);
   await evalJs(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
   await send('Emulation.setDeviceMetricsOverride', { width:701,height:602,deviceScaleFactor:1,mobile:false });
   await evalJs(`document.querySelector('#navPlanner').click()`);
