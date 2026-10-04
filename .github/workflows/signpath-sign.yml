@@ -17,6 +17,9 @@
 #     origin metadata 由 GitHub 提供、构建脚本无法伪造。
 #   * 不下载、不安装、不发布 —— 签完只把签名产物传成 workflow artifact 供人核对。
 #   * 任何 token / slug 都只从 secrets / variables 读，**绝不写进仓库**。
+#   * 输入**只接受 Release tag**（`vX.Y.Z`，且必须与 package.json 的 version 一致），
+#     checkout 明确 checkout 该 tag —— 分支名或 commit SHA 不能当正式签名输入。
+#     用户输入一律经 env 传入脚本，不直接插进 run: 里（脚本注入面）。
 #
 # 未配置 secrets 时：guard job 输出 ready=false，签名 job 直接跳过（**不会失败**）。
 # ---------------------------------------------------------------------------
@@ -25,8 +28,8 @@ name: SignPath sign (Windows, OSS)
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: '要构建并签名的 git ref（tag 或 commit，例如 vX.Y.Z）'
+      tag:
+        description: '要构建并签名的 Release tag，必须形如 vX.Y.Z 且与 package.json 的 version 一致。只接受 tag —— 不接受分支名、commit SHA 或预发布版本。'
         required: true
         type: string
       sign-request-note:
@@ -41,7 +44,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: signpath-${{ github.ref }}
+  # 按**待签的 tag** 分键，不用 github.ref —— 手动触发时 github.ref 是分支，
+  # 两次签不同 tag 的运行会被错误地判成同一组而互相阻塞。
+  group: signpath-${{ github.event.inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -56,6 +61,21 @@ jobs:
       ready: ${{ steps.check.outputs.ready }}
       missing: ${{ steps.check.outputs.missing }}
     steps:
+      # 先挡**格式**，再谈配置齐不齐。commit SHA / 分支名 / 预发布版本都不该进构建 ——
+      # release:check 会拿它当 --tag 用，形状不对它会报错，但那时 checkout 与 npm ci
+      # 已经跑完了。不如现在就停。
+      - name: Validate tag input format
+        shell: pwsh
+        env:
+          # ⚠️ 通过 env 传，**不要**把 ${{ inputs.tag }} 直接插进脚本 —— 那是脚本注入面。
+          # 这里的白名单正则只是兜底，不是唯一防线。
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "输入必须是 Release tag，形如 vX.Y.Z（收到：'$env:TAG'）。不接受分支名、commit SHA 或预发布版本。"
+          }
+          Write-Host "tag 输入格式正确：$env:TAG"
+
       - name: Check required secrets and variables
         id: check
         shell: pwsh
@@ -93,23 +113,33 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
-      - name: Checkout
+      # 明确 checkout **这个 tag**，不是 workflow 启动时所在的分支。
+      # 正式签名只接受与仓库版本一致的 Release tag —— 任意分支不能当发版输入。
+      - name: Checkout the tag
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.tag }}
 
-      # 签名请求里的 version 参数要和 PE 的 **ProductVersion** 对齐才过得了 metadata 约束。
-      # PE 里写的是 package.json 的 version（**不含 v**），而 workflow_dispatch 的 ref
-      # 形如 v0.18.3 —— 直接把 ref 传进去会多一个 v，约束就对不上。
-      # 版本号的唯一真相是 package.json，所以从那里读，不从 ref 猜。
-      - name: Read version from package.json
+      # 进入完整构建**之前**的轻量验证：tag 必须等于 v<package.json 里的 version>。
+      # 语义与 release:check 的 --tag 校验一致，但这里先跑 —— 免得白跑 checkout、
+      # npm ci 和几分钟构建才失败。
+      #
+      # 版本号同时在这里读出来，给签名请求的 version 参数用：PE 的 ProductVersion 写的是
+      # package.json 的 version（**不含 v**），直接把 tag 传进去会多一个 v，metadata
+      # 约束就对不上。唯一真相是 package.json。
+      - name: Verify tag matches package.json version
         id: ver
         shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ([string]::IsNullOrWhiteSpace($v)) { throw 'package.json 里读不到 version' }
+          if ($env:TAG -ne "v$v") {
+            throw "tag 与仓库版本不一致：输入 $env:TAG，package.json 是 $v（期望 v$v）。正式签名只接受与仓库版本一致的 Release tag。"
+          }
           "version=$v" >> $env:GITHUB_OUTPUT
-          Write-Host "package.json version = $v"
+          Write-Host "tag $env:TAG 与 package.json $v 一致"
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -127,7 +157,10 @@ jobs:
       # 先验证再签名：签一个自己都没验过的产物没有意义。
       # 这一步同时产出发版的三个资产（Setup / portable / SHA256SUMS）。
       - name: Release precheck (version, tests, build, artifact guards)
-        run: npm run release:check -- --tag=${{ inputs.ref }} --with-installer
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+        run: npm run release:check -- --tag="$env:TAG" --with-installer
 
       # ------------------------------------------------------ 上传未签名产物
       #
