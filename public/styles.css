@@ -1135,6 +1135,10 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .pop-item:hover{background:#2b2b2b;color:#fff}
 .pop-item .pi-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pop-item .pi-sub{font-size:11px;color:#7d7d7d;flex:0 0 auto;font-family:var(--mono)}
+.pop.model-mode .pop-item{display:grid;grid-template-columns:minmax(0,1fr) 16px;gap:3px 8px;text-align:left}
+.pop.model-mode .pi-text{grid-column:1;grid-row:1}
+.pop.model-mode .pi-sub{grid-column:1;grid-row:2;white-space:normal;overflow-wrap:anywhere;font-family:inherit}
+.pop.model-mode .pi-check{grid-column:2;grid-row:1 / span 2;align-self:center}
 .pop-item .pi-check{width:14px;height:14px;color:var(--t1);flex:0 0 auto;opacity:0}
 .pop-item.on .pi-check{opacity:1}
 .pop-item.on{background:var(--control-active);color:var(--t1)}

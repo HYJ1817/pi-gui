@@ -15,7 +15,7 @@ import { setStatus } from './shell.js';
 import { clearThread, rebuildFromMessages, noteLoadFailure } from './messages.js';
 import { applyTree } from './tree.js';
 import { applyState, applyStats, onModels, onThinkingLevels } from './usage.js';
-import { autoGrow, updateSendState } from './composer.js';
+import { autoGrow, updateSendState, renderModelControls, imageInputBlocked } from './composer.js';
 import { attachmentImages, buildMessage, renderAttachments } from './attachments.js';
 import { clearChanges } from './changes.js';
 import { showChat } from './ui/workspace-surface.js';
@@ -54,12 +54,14 @@ function readState() {
 function pendingModel() {
   S.thinkingLevels = [];
   S.modelSwitchPending = true;
+  renderModelControls();
   if (currentAnchor() === el.btnThink) closePop();
 }
 
 export function refreshModelState({ pending = true } = {}) {
   S.thinkingLevels = [];
   S.modelSwitchPending = pending;
+  renderModelControls();
   const generation = ++modelGeneration;
   stateReads.clear();
   const prefix = modelRequestPrefix + generation;
@@ -114,10 +116,11 @@ function acceptModelResponse(evt) {
     else if (evt.id === refresh.levelsId && evt.command === 'get_available_thinking_levels') refresh.levelsResult = evt;
     else return true;
     if (refresh.stateResult && refresh.levelsResult) {
+      S.modelSwitchPending = false;
       if (refresh.stateResult.success) applyState(refresh.stateResult.data || {});
       if (refresh.stateResult.success && refresh.levelsResult.success) onThinkingLevels(refresh.levelsResult.data || {});
       modelRefresh = null;
-      S.modelSwitchPending = false;
+      renderModelControls();
     }
     return true;
   }
@@ -195,6 +198,11 @@ export async function submit() {
   const text = el.input.value.trim();
   const atts = S.attachments.slice();
   if (!text && !atts.length) return;
+  if (S.modelSwitchPending) return toast('正在确认当前模型，请稍后发送。', 'info');
+  if (imageInputBlocked() && atts.some(a => a.kind === 'image')) {
+    toast('当前模型不支持图片，请移除图片或切换模型。', 'info');
+    return;
+  }
 
   const message = buildMessage(text);
   const images = attachmentImages();
@@ -259,6 +267,12 @@ export function setSessionListRefresh(fn) {
  * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
 export function afterSessionSwitch() {
+  pendingModel();
+  modelRefresh = null;
+  ++modelGeneration;
+  stateReads.clear();
+  activeModelSwitch = null;
+  queuedModelSwitch = null;
   showChat({ focusComposer: true });
   clearThread();
   // 换了一条工作线，上一段的文件变更记录不再适用。
@@ -287,7 +301,7 @@ export function compactNow() {
   toast('已请求压缩上下文', 'info');
 }
 
-/* 模型完全由 Pi 确认后回读。思考设置保留即时显示，再回读有效档位。 */
+/* 模型与思考档位完全由 Pi 确认后回读。 */
 export function setModel(provider, modelId) {
   pendingModel();
   modelRefresh = null;
@@ -302,7 +316,7 @@ export function setModel(provider, modelId) {
 }
 
 export function setThinkingLevel(level) {
+  if (S.modelSwitchPending || !S.thinkingLevels.includes(level) || !S.thinkingLevels.some(v => v !== 'off')) return;
   sendCommand({ type: 'set_thinking_level', level });
-  el.thinkText.textContent = '思考 ' + level;
   readState();
 }

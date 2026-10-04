@@ -7,7 +7,7 @@
 import { el, S, ownsWorkspace } from './state.js';
 import { fetchStatus } from './api.js';
 import { maintenanceCopy } from './status-copy.js';
-import { updateSendState } from './composer.js';
+import { updateSendState, renderModelControls } from './composer.js';
 import { toast } from './ui/toast.js';
 
 export function setConn(kind, text) {
@@ -90,7 +90,7 @@ export function applyProjectState() {
           : '等待 pi 就绪…';
   el.btnAttach.disabled = !canUse;
   el.btnModel.disabled = !canUse;
-  el.btnThink.disabled = !canUse;
+  renderModelControls();
   updateSendState();
 }
 

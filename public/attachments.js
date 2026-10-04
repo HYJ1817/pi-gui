@@ -12,7 +12,8 @@
 import { el, S } from './state.js';
 import { fmt, fmtSize, icon, iconFor } from './util.js';
 import { uploadFile } from './api.js';
-import { updateSendState } from './composer.js';
+import { updateSendState, imageInputBlocked } from './composer.js';
+import { toast } from './ui/toast.js';
 
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -26,7 +27,7 @@ function fileToDataUrl(file) {
 function attMeta(a) {
   if (a.loading) return '解析中…';
   if (a.error) return a.error;
-  if (a.kind === 'image') return `已就绪 · 图片 · ${fmtSize(a.size)}`;
+  if (a.kind === 'image') return imageInputBlocked() ? '当前模型不支持图片，请移除或切换模型' : `已就绪 · 图片 · ${fmtSize(a.size)}`;
   if (a.kind === 'text') {
     const bits = [];
     if (a.pages) bits.push(a.pages + ' 页');
@@ -44,6 +45,10 @@ export async function handleFiles(fileList) {
 
   for (const f of files) {
     const isImg = /^image\//.test(f.type || '') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name || '');
+    if (isImg && imageInputBlocked()) {
+      toast('当前模型不支持图片，仍可添加普通文件。', 'info');
+      continue;
+    }
     const att = {
       id: 'tmp-' + Math.random().toString(36).slice(2),
       name: f.name || '粘贴的图片.png',
@@ -60,6 +65,10 @@ export async function handleFiles(fileList) {
       }
     }
 
+    if (isImg && imageInputBlocked()) {
+      toast('当前模型不支持图片，仍可添加普通文件。', 'info');
+      continue;
+    }
     S.attachments.push(att);
     renderAttachments();
     updateSendState();

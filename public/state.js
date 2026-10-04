@@ -151,6 +151,8 @@ export const S = {
 export function beginWorkspaceSwitch(cwd) {
   S.workspaceGeneration++;
   S.switching = true;
+  S.thinkingLevels = [];
+  S.modelSwitchPending = true;
   resetUsageState();
   S.desiredCwd = cwd;
   S.syncPending = { state: true, messages: true };

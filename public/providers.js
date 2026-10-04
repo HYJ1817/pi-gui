@@ -10,6 +10,7 @@
 
 import { el, panels } from './state.js';
 import { fmtTokens } from './util.js';
+import { modelCapabilitySummary } from './model-capabilities.js';
 import {
   deleteProvider as apiDeleteProvider,
   fetchProviderModels,
@@ -70,11 +71,16 @@ export function parseModelLine(line) {
     const value = part.slice(eq + 1).trim();
     const key =
       MODEL_PARAM_ALIAS[rawKey.toLowerCase()] ||
-      ['contextWindow', 'maxTokens', 'reasoning', 'input'].find((k) => k.toLowerCase() === rawKey.toLowerCase());
+      ['contextWindow', 'maxTokens', 'reasoning', 'input', 'toolCalling', 'streaming'].find((k) => k.toLowerCase() === rawKey.toLowerCase());
     if (!key) continue; // 未知键静默忽略，别让一个笔误毁掉整行
 
     if (key === 'reasoning') {
-      model.reasoning = /^(1|true|yes|on)$/i.test(value);
+      if (/^(1|true|yes|on|0|false|no|off)$/i.test(value)) model.reasoning = /^(1|true|yes|on)$/i.test(value);
+    } else if (key === 'toolCalling' || key === 'streaming') {
+      if (/^(1|true|yes|on|0|false|no|off)$/i.test(value)) {
+        if (!model.capabilities) model.capabilities = {};
+        model.capabilities[key] = /^(1|true|yes|on)$/i.test(value);
+      }
     } else if (key === 'input') {
       const kinds = value.split(',').map((s) => s.trim()).filter(Boolean);
       if (kinds.length) model.input = kinds;
@@ -93,8 +99,13 @@ export function modelLine(m) {
   if (m.name) parts.push(String(m.name).replace(/\|/g, '/'));
   if (m.contextWindow) parts.push(`contextWindow=${m.contextWindow}`);
   if (m.maxTokens) parts.push(`maxTokens=${m.maxTokens}`);
-  if (m.reasoning) parts.push('reasoning=true');
-  if (Array.isArray(m.input) && m.input.includes('image')) parts.push(`input=${m.input.join(',')}`);
+  if (typeof m.reasoning === 'boolean') parts.push(`reasoning=${m.reasoning}`);
+  const input = m.input || (m.capability?.capabilities?.imageInput === false && m.capability?.capabilities?.textInput === true ? ['text'] : null);
+  if (Array.isArray(input) && input.length) parts.push(`input=${input.join(',')}`);
+  for (const key of ['toolCalling', 'streaming']) {
+    const value = m.capabilities?.[key] ?? m.capability?.capabilities?.[key];
+    if (typeof value === 'boolean') parts.push(`${key}=${value}`);
+  }
   return parts.join('|');
 }
 
@@ -394,10 +405,9 @@ export function openAddProvider() {
         if (m.name) rowEl.appendChild(mk('span', 'fetch-name', { textContent: m.name }));
 
         const badges = [];
-        if (m.contextWindow) badges.push(`ctx ${fmtTokens(m.contextWindow)}`);
+        const summary = modelCapabilitySummary(m).text;
+        if (summary) badges.push(summary);
         if (m.maxTokens) badges.push(`max ${fmtTokens(m.maxTokens)}`);
-        if (m.reasoning) badges.push('推理');
-        if (Array.isArray(m.input) && m.input.includes('image')) badges.push('图片');
         for (const b of badges) rowEl.appendChild(mk('span', 'fetch-badge', { textContent: b }));
 
         listBox.appendChild(rowEl);

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { nativeQuotaWorkerSource } from './quota.js';
+import { mergeModelCapabilities } from '../lib/model-capabilities.js';
 
 export function safeAuthUrl(value) {
   if (typeof value !== 'string' || value.length > 8192 || /[\u0000-\u0020\u007f]/.test(value)) return null;
@@ -315,7 +316,7 @@ export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env =
   };
 }
 
-export function publicModel(model) {
+export function publicModel(model, userModel = null) {
   if (!model || typeof model !== 'object') return null;
   const out = {};
   for (const key of ['id', 'provider', 'name', 'api', 'reasoning', 'contextWindow', 'maxTokens', 'input', 'cost', 'thinkingLevelMap']) {
@@ -328,24 +329,34 @@ export function publicModel(model) {
       if (value && typeof value === 'object') out[key] = Object.fromEntries(Object.entries(value).filter(([k, v]) => ['off','minimal','low','medium','high','xhigh','max'].includes(k) && (v === null || typeof v === 'string' || Number.isFinite(v))));
     } else if (typeof value === 'boolean' || Number.isFinite(value)) out[key] = value;
   }
+  out.capability = mergeModelCapabilities({ runtime: model, user: userModel });
+  out.providerId = out.capability.providerId;
+  out.modelId = out.capability.modelId;
   return out;
 }
 
-export function sanitizeModelEvent(event) {
+export function sanitizeModelEvent(event, config = null) {
+  const projectModel = model => {
+    const providerId = model?.providerId || model?.provider;
+    const modelId = model?.modelId || model?.id;
+    const configured = config?.providers?.[providerId]?.models;
+    const user = Array.isArray(configured) ? configured.find(m => m && typeof m === 'object' && m.id === modelId) : null;
+    return publicModel(model, user ? { ...user, providerId, modelId } : null);
+  };
   if (event?.type === 'bridge_parse_error') return { type: 'bridge_parse_error', reason: 'Pi 返回了非 JSONL 输出；原文未转发' };
   if (event?.type === 'bridge_stderr') return { type: 'bridge_stderr', text: 'Pi 输出诊断消息；原文未转发以保护凭据。' };
   if (event?.type === 'response' && !event.success && ['get_state','get_available_models','set_model','cycle_model'].includes(event.command)) return { ...event, data: undefined, error: 'Pi 未能完成模型操作；请检查认证与模型配置。' };
   if (event?.type !== 'response' || !event.success) return event;
-  if (event.command === 'get_available_models') return { ...event, data: { models: (event.data?.models || []).map(publicModel).filter(Boolean) } };
+  if (event.command === 'get_available_models') return { ...event, data: { models: (Array.isArray(event.data?.models) ? event.data.models : []).map(projectModel).filter(Boolean) } };
   if (event.command === 'get_state') {
-    const data = { model: publicModel(event.data?.model) };
+    const data = { model: projectModel(event.data?.model) };
     for (const key of ['thinkingLevel','isStreaming','isCompacting','steeringMode','followUpMode','sessionFile','sessionId','sessionName','autoCompactionEnabled','messageCount','pendingMessageCount']) {
       const value = event.data?.[key];
       if (['string','boolean','number'].includes(typeof value)) data[key] = value;
     }
     return { ...event, data };
   }
-  if (event.command === 'set_model') return { ...event, data: publicModel(event.data) };
-  if (event.command === 'cycle_model') return { ...event, data: event.data ? { model: publicModel(event.data.model), thinkingLevel: typeof event.data.thinkingLevel === 'string' ? event.data.thinkingLevel : undefined } : null };
+  if (event.command === 'set_model') return { ...event, data: projectModel(event.data) };
+  if (event.command === 'cycle_model') return { ...event, data: event.data ? { model: projectModel(event.data.model), thinkingLevel: typeof event.data.thinkingLevel === 'string' ? event.data.thinkingLevel : undefined } : null };
   return event;
 }

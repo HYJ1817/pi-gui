@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fetchModels } from '../lib/models-api.js';
+import { normalizeModelCapability } from '../lib/model-capabilities.js';
 import { json, readBody } from './http-utils.js';
 
 const API_TYPES = new Set([
@@ -39,6 +40,12 @@ const MODEL_FIELDS = {
     const kinds = [...new Set(v.filter((x) => x === 'text' || x === 'image'))];
     return kinds.length ? kinds : undefined;
   },
+  capabilities: (v) => {
+    if (!v || typeof v !== 'object') return undefined;
+    const caps = Object.fromEntries(['textInput', 'imageInput', 'toolCalling', 'reasoning', 'streaming']
+      .filter(key => typeof v[key] === 'boolean').map(key => [key, v[key]]));
+    return Object.keys(caps).length ? caps : undefined;
+  },
 };
 
 function cleanModelEntry(m) {
@@ -56,7 +63,7 @@ function cleanModelEntry(m) {
 
 // Never serialize the configuration object: users may store credentials in
 // provider/model headers or extension fields, not only in apiKey.
-export function publicProviderConfig(config) {
+export function publicProviderConfig(config, providerId = null) {
   let baseUrl = '';
   try {
     const url = new URL(config?.baseUrl);
@@ -67,7 +74,9 @@ export function publicProviderConfig(config) {
   return {
     baseUrl,
     api: API_TYPES.has(config?.api) ? config.api : 'openai-completions',
-    models: Array.isArray(config?.models) ? config.models.map(cleanModelEntry).filter(Boolean) : [],
+    models: Array.isArray(config?.models) ? config.models.map(cleanModelEntry).filter(Boolean).map(model => ({ ...model,
+      providerId, modelId: model.id, capability: normalizeModelCapability({ ...model, providerId }, 'user-config'),
+    })) : [],
   };
 }
 
@@ -144,7 +153,7 @@ export function createProviders({ modelsJson }) {
         ok: true,
         path: modelsJson,
         exists: fs.existsSync(modelsJson),
-        providers: Object.fromEntries(Object.entries(cfg.providers).map(([id, c]) => [id, publicProviderConfig(c)])),
+        providers: Object.fromEntries(Object.entries(cfg.providers).map(([id, c]) => [id, publicProviderConfig(c, id)])),
         keyStates,
       });
     }

@@ -285,7 +285,7 @@ const rpc = createRpcBridge({
     providerAuthRef?.observeRuntime(event);
     sse.publish(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
-      : sanitizeModelEvent(event));
+      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null));
   },
   piBin: PI_BIN,
   launch: piLaunch,

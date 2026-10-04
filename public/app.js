@@ -16,6 +16,7 @@
 
 import { $, el, S } from './state.js';
 import { fmt } from './util.js';
+import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
 import { sendCommand } from './api.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
@@ -471,8 +472,7 @@ function openModelPicker() {
     return;
   }
 
-  const currentId = S.state?.model?.id || null;
-  const currentProvider = S.state?.model?.provider || null;
+  const { modelId: currentId, providerId: currentProvider } = modelIdentity(S.state?.model);
 
   pop.innerHTML = '';
   pop.appendChild(popTitle('选择模型'));
@@ -480,7 +480,7 @@ function openModelPicker() {
   // 按供应商分组，和 pi 的模型来源一一对应
   const groups = new Map();
   for (const m of S.models) {
-    const key = m.provider || '默认';
+    const key = m.providerId || m.provider || '默认';
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(m);
   }
@@ -534,22 +534,23 @@ function openModelPicker() {
     group.append(header, models);
     pop.appendChild(group);
     for (const m of list) {
-      const id = m.id || m.name;
-      const isCur = currentProvider ? m.provider === currentProvider && id === currentId
+      const id = m.modelId || m.id || m.name;
+      const isCur = currentProvider ? (m.providerId || m.provider) === currentProvider && id === currentId
         : currentId ? id === currentId : m.name === el.modelText.textContent;
       models.appendChild(
         popItem({
           label: m.name || id,
-          sub: m.reasoning ? '推理' : '',
+          sub: modelCapabilitySummary(m).text,
           on: isCur,
           onClick: () => {
             closePop({ restoreFocus: true });
             // 实测：pi 的 set_model 需要 provider + modelId 两个字段，
             // 只传 model 会报 "Model not found: <provider>/undefined"
-            setModel(m.provider, id);
+            setModel(m.providerId || m.provider, id);
           },
         })
       );
+      models.lastElementChild.title = modelCapabilitySummary(m).title;
     }
   }
 
@@ -569,8 +570,7 @@ function openThinkPicker() {
     return;
   }
   if (!S.thinkingLevels.length) {
-    refreshModelState();
-    toast('正在获取思考等级…', 'info');
+    toast('Pi 未提供可选思考等级。', 'info');
     return;
   }
 
@@ -598,8 +598,6 @@ function openThinkPicker() {
         onClick: () => {
           closePop({ restoreFocus: true });
           setThinkingLevel(name);
-          el.btnThink.title = `思考强度：${name}`;
-          el.btnThink.setAttribute('aria-label', el.btnThink.title);
         },
       })
     );

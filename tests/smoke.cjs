@@ -1269,6 +1269,8 @@ staticCheck();
   check('标题 = 会话名', () => $('title').textContent === 'pi-gui-work');
   check('底部 = 会话名', () => $('footName').textContent === 'pi-gui-work');
   check('模型 chip', () => $('modelText').textContent === 'DeepSeek V4 Pro');
+  // Current thinking choices come from Pi, not get_state/metadata alone.
+  es.emit({ type: 'response', command: 'get_available_thinking_levels', success: true, data: { levels: ['off', 'low', 'high'] } });
   check('思考 chip', () => $('thinkText').textContent === '思考 high');
 
   // --- get_session_stats ---
@@ -7693,6 +7695,7 @@ staticCheck();
     window.onThinkingLevels({ levels: ['off', 'low', 'high'] });
     window.S.models = [{ provider: 'fixture', id: 'composer-model', name: 'Composer Model' }];
     window.S.state = { ...savedComposerState, model: { provider: 'fixture', id: 'composer-model', name: 'Composer Model' } };
+    window.renderModelControls();
     $('btnModel').click();
     const pop = window.document.querySelector('.pop');
     const selected = pop.querySelector('.pop-item.on');

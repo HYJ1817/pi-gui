@@ -13,6 +13,9 @@ import { setTitleText } from './shell.js';
 import { openPop, pop } from './ui/popover.js';
 import { setStreaming } from './messages.js';
 import { draftSync } from './draft.js';
+import { withModelCapability, modelIdentity } from './model-capabilities.js';
+import { renderModelControls } from './composer.js';
+import { renderAttachments } from './attachments.js';
 
 /* ---------- 辅助工具 ---------- */
 
@@ -48,15 +51,17 @@ export function fmtMaybeMoney(v, currency = null) {
   return typeof v === 'number' && Number.isFinite(v) ? fmtCurrency(v, currency) : '—';
 }
 
-/** 从模型名称或 ID 反推 providerId */
+/** Structured identity first; old ID-only state uses a unique legacy match. */
 function resolveProvider(modelObj) {
   if (!modelObj) return null;
+  if (typeof modelObj.providerId === 'string' && modelObj.providerId) return modelObj.providerId;
   if (typeof modelObj.provider === 'string' && modelObj.provider) return modelObj.provider;
   const rawId = modelObj.id || modelObj.name;
   if (typeof rawId === 'string') {
     // 查 S.models 列表
-    const found = (S.models || []).find((m) => m.id === rawId || m.name === rawId);
-    if (found && found.provider) return found.provider;
+    const found = (S.models || []).filter((m) => m.id === rawId || m.name === rawId);
+    if (found.length === 1 && (found[0].providerId || found[0].provider)) return found[0].providerId || found[0].provider;
+    if (found.length > 1) return null;
     // 兼容 provider/model 命名
     if (rawId.includes('/')) {
       return rawId.split('/')[0];
@@ -214,18 +219,33 @@ export function clearSessionUsage() {
 
 export function applyState(d) {
   S.ready = true;
+  const previousModel = modelIdentity(S.state?.model);
+  const nextModel = modelIdentity(d.model);
+  const changedModel = previousModel.modelId !== nextModel.modelId
+    || (previousModel.providerId && nextModel.providerId && previousModel.providerId !== nextModel.providerId);
+  if (changedModel) S.thinkingLevels = [];
 
   /* 覆盖旧 state **之前**先比 sessionId：Session A 的统计绝不能留到 Session B。
    * 不等随后的 get_session_stats —— 那一刻界面就该已经干净了。 */
   const previousSessionId = S.localUsage.sessionId || S.state?.sessionId || null;
   const nextSessionId = typeof d?.sessionId === 'string' && d.sessionId ? d.sessionId : null;
   if (previousSessionId && nextSessionId && previousSessionId !== nextSessionId) {
+    S.thinkingLevels = [];
     clearSessionUsage();
     /* P24：会话身份变了 = 草稿身份也变了 —— 未发送草稿按会话隔离，
      * 换会话要立刻对齐（旧会话的留在旧 key，新会话的有就恢复）。 */
     draftSync();
   }
 
+  if (d.model) {
+    const providerId = resolveProvider(d.model);
+    const identity = modelIdentity({ ...d.model, providerId });
+    const listed = S.models.find(m => m.providerId === identity.providerId && m.modelId === identity.modelId);
+    d = { ...d, model: withModelCapability({ ...listed, ...d.model, providerId,
+      capability: d.model.capability,
+      capabilities: { ...listed?.capability?.capabilities, ...d.model.capabilities },
+    }) };
+  }
   S.state = d;
 
   if (nextSessionId) {
@@ -269,11 +289,8 @@ export function applyState(d) {
     renderRemoteQuota();
   }
 
-  if (d.thinkingLevel) {
-    el.thinkText.textContent = '思考 ' + d.thinkingLevel;
-    el.btnThink.title = `思考强度：${d.thinkingLevel}`;
-    el.btnThink.setAttribute('aria-label', `思考强度：${d.thinkingLevel}`);
-  }
+  renderModelControls();
+  renderAttachments();
 
   if (d.sessionName) setTitleText(d.sessionName);
   el.footName.textContent = d.sessionName || '本地会话';
@@ -642,7 +659,8 @@ export function openCtxTip() {
 let modelWaiters = [];
 
 export function onModels(d) {
-  S.models = Array.isArray(d) ? d : d?.models || [];
+  const list = Array.isArray(d) ? d : d?.models;
+  S.models = (Array.isArray(list) ? list : []).map(withModelCapability).filter(m => m?.modelId);
   if (modelWaiters.length) {
     const ws = modelWaiters;
     modelWaiters = [];
@@ -672,7 +690,10 @@ export function whenModels(timeoutMs = 4000) {
 }
 
 export function onThinkingLevels(d) {
-  S.thinkingLevels = Array.isArray(d) ? d : d?.levels || [];
+  const list = Array.isArray(d) ? d : d?.levels;
+  S.thinkingLevels = [...new Set((Array.isArray(list) ? list : []).map(v => typeof v === 'string' ? v : v?.level || v?.name)
+    .filter(v => typeof v === 'string' && /^[a-z][a-z0-9_-]{0,31}$/.test(v)))];
+  renderModelControls();
 }
 
 /* 注册用量 DOM 渲染钩子：workspace reset（state.js 的 resetUsageState）

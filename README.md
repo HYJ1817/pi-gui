@@ -145,6 +145,12 @@ certutil -hashfile Pi-GUI-Setup-<版本>.exe SHA256
 
 ## 供应商与认证（P25）
 
+模型列表保持按供应商折叠，并按已有证据展示推理、图片、Tools 与 Context。
+模型能力按 Pi 运行态、用户配置、Provider metadata 的顺序合并；缺少证据保持未知。
+思考等级仅取 Pi 回读结果，切模型期间清除旧候选，无可选等级时显示不可用。
+模型明确不支持图片时阻止图片添加和发送，普通文件继续可用；未知图片能力不禁用。
+旧 models.json 无需迁移。详见 [模型能力](docs/model-capabilities.md)。
+
 「模型供应商」设置可展示 Pi 原生 OAuth、API Key 和环境变量认证。
 ChatGPT 订阅登录走本机 Pi 的公开 SDK；凭据保存、浏览器回调和刷新由 Pi 负责。
 GUI 不接收 API Key 原文，自定义供应商使用环境变量引用，既有磁盘凭据不会回显。

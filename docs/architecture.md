@@ -1,5 +1,16 @@
 # 架构
 
+## 统一模型能力与能力感知 UI
+
+模型能力以白名单 `capability` 描述附在既有模型对象上，保留 legacy 字段。
+`public/model-capabilities.js` 为前后端共享纯逻辑，后端通过
+`lib/model-capabilities.js` 使用；现有 `publicModel/sanitizeModelEvent` 是运行时安全出口，
+`server.js` 注入用户配置，不把 capability 放入 RPC 桥接或 Auth/Quota 状态。
+逐字段优先级为 Pi runtime → 用户显式配置 → Provider metadata；缺失保持 null，
+同 providerId + modelId 才能补充。模型选择器展示纯投影，Composer 的思考候选仍
+只来自 Pi RPC，图片入口与发送仅在明确 false 时限制。详见
+[model-capabilities.md](model-capabilities.md)。
+
 ## P25 供应商与认证
 
 聊天仍由 `rpc-bridge` 通过 stdio 驱动；认证另走同一 launch identity 的 Pi

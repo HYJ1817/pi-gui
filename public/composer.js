@@ -6,6 +6,31 @@
  * 真正的发送动作（submit / stop）在 rpc.js —— 那是「和 pi 打交道」的事。 */
 
 import { el, S } from './state.js';
+import { modelCapability } from './model-capabilities.js';
+
+export function imageInputBlocked() {
+  return !S.modelSwitchPending && !S.switching && S.bridgeState === 'ready'
+    && modelCapability(S.state?.model).capabilities.imageInput === false;
+}
+
+export function renderModelControls() {
+  const canUse = S.hasProject && !S.switching && (S.bridgeState === 'ready' || S.bridgeState === 'maintenance');
+  const levels = S.thinkingLevels;
+  const available = !!S.state?.model && levels.some(level => level !== 'off');
+  el.btnThink.disabled = !canUse || S.modelSwitchPending || !available;
+  const level = S.state?.thinkingLevel;
+  const label = S.modelSwitchPending ? '思考同步中…' : !available ? '思考不可用' : levels.includes(level) ? '思考 ' + level : '思考 —';
+  el.thinkText.textContent = label;
+  el.btnThink.title = S.modelSwitchPending ? '正在读取当前模型支持的思考等级' : !available ? 'Pi 未提供可选思考等级' : `思考强度：${level || '—'}`;
+  el.btnThink.setAttribute('aria-label', el.btnThink.title);
+  const imageBlocked = imageInputBlocked();
+  el.btnAttach.title = imageBlocked ? '添加文件：当前模型不支持图片，普通文件仍可用' : '添加文件：图片 / PDF / Word / 文本';
+  el.btnAttach.setAttribute('aria-label', el.btnAttach.title);
+  // Keep the shared picker open to every ordinary file type. Image selection,
+  // drop and paste are rejected together in handleFiles when explicitly false.
+  el.fileInput.accept = '';
+  updateSendState();
+}
 
 export function autoGrow() {
   el.input.style.height = 'auto';
@@ -32,7 +57,8 @@ export function initComposerLayout() {
 
 export function updateSendState() {
   // 没有项目时 pi 没起来，发出去只会 503 —— 直接按住发送键
-  if (!S.hasProject || S.switching || S.bridgeState !== 'ready' || S.submitting) {
+  if (!S.hasProject || S.switching || S.bridgeState !== 'ready' || S.submitting || S.modelSwitchPending
+    || (imageInputBlocked() && S.attachments.some(a => a.kind === 'image'))) {
     el.btnSend.disabled = true;
     return;
   }
