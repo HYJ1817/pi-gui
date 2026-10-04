@@ -39,6 +39,14 @@ async function main(){
     await check('text false filtered but tools false not hard constraint',()=>{const r=next({chain:[B,C],models:[{...B,input:['image']},{...C,capabilities:{toolCalling:false}}],requirements:{textInput:true}});assert.deepEqual(r.candidate,C);});
     await check('missing models skipped',()=>assert.equal(next({chain:[B],models:[]}).candidate,null));
     await check('runtime records each candidate once no loop',()=>{const rt=create({generation:1,originalModel:A});rt.attempt(B,classify({message:'429 x',source:'pi-assistant'}),[],1);assert.equal(rt.attempt(B,{},[],2),false);rt.attempt(C,classify({message:'503 x',source:'pi-assistant'}),[],3);rt.finish('exhausted');const s=rt.snapshot();assert.deepEqual(s.attemptedModels,[A,B,C]);assert.equal(s.exhausted,true);assert.equal(s.active,false);assert.ok(!JSON.stringify(s).includes('message'));});
+    await check('capability transition allowlists reason and discards previous error and private payload',()=>{
+      const rt=create({generation:1,originalModel:B});
+      rt.attempt(C,{transitionType:'capability_mismatch',capability:'imageInput',class:'rate_limited',statusCode:429,reason:'SECRET',message:'SECRET',images:['SECRET'],credential:'SECRET'});
+      const h=rt.snapshot().history[0];assert.equal(h.transitionType,'capability_mismatch');assert.equal(h.capability,'imageInput');
+      assert.equal(h.errorClass,null);assert.equal(h.statusCode,null);assert.equal(h.source,'pi-model-state');
+      assert.ok(!JSON.stringify(h).includes('SECRET'));assert.equal(h.reason,pure.safeFallbackTransition({transitionType:'capability_mismatch',capability:'imageInput'}).reason);
+      assert.equal(pure.safeFallbackTransition({transitionType:'capability_mismatch',capability:'unknown'}).transitionType,'generation_failure');
+    });
   }
   await backendChecks();
   await check('project v1 reads disabled fallback without rewriting disk',async()=>{
@@ -112,7 +120,27 @@ async function uiChecks(){
   await check('settings option retains identity across live catalog reorder',()=>{reset();const ed=w.createFallbackSettings({chain:[]},()=>A);w.el.modalCard.appendChild(ed.element);const select=ed.element.querySelector('select');select.value=select.options[0].value;w.S.models=[A,C,B];ed.element.querySelector('[data-fallback-add]').click();assert.equal(ed.value().chain[0].providerId,'b');});
   await check('attachments survive retries and original images clean only after actual success',async()=>{reset();const att={kind:'image',name:'original.png',dataUrl:'data:image/png;base64,YQ==',data:'YQ==',mimeType:'image/png'};w.S.attachments=[att];w.onModels({models:[A,{...B,input:['text']},C]});await w.submit();const cmd=calls.find(c=>c.type==='prompt');assert.equal(w.S.attachments.length,1);await failed(cmd.id);assert.equal(calls.filter(c=>c.type==='set_model').at(-1).provider,'c');await confirm(C);const replay=calls.filter(c=>c.type==='prompt').at(-1);assert.deepEqual(replay.images,cmd.images);assert.equal(w.S.attachments.length,1);emit({type:'agent_settled',bridgeRun:1,generationResult:{requestId:replay.id,outcome:'success',hasVisibleOutput:true}});await tick();assert.equal(w.S.attachments.length,0);emit({type:'agent_settled',bridgeRun:1,generationResult:{requestId:replay.id,outcome:'success',hasVisibleOutput:true}});await tick();assert.equal(calls.filter(c=>c.type==='prompt').length,2);});
   await check('fallback confirmation timeout stops and preserves draft',async()=>{const timer=w.setTimeout;w.setTimeout=(fn,ms,...args)=>timer(fn,ms===30000?5:ms,...args);const cmd=await begin();await failed(cmd.id);await new Promise(r=>setTimeout(r,20));assert.equal(w.S.fallbackActive,false);assert.equal(w.el.input.value,'original');w.setTimeout=timer;});
-  await check('Pi capability rejection records actual B -> C switch',async()=>{reset();w.S.attachments=[{kind:'image',name:'a.png',dataUrl:'data:image/png;base64,YQ=='}];await w.submit();const cmd=calls.find(c=>c.type==='prompt');await failed(cmd.id);await confirm({...B,input:['text']});assert.equal(w.S.fallbackRuntime.currentModel.providerId,'b');assert.equal(w.S.fallbackRuntime.history[1].from.providerId,'b');assert.equal(calls.filter(c=>c.type==='set_model').at(-1).provider,'c');w.cancelFallback();});
+  for(const capability of ['imageInput','textInput'])await check('Pi confirmed '+capability+' mismatch records real B -> C reason without sending B',async()=>{
+    reset();assert.equal(w.modelCapability(B).capabilities[capability],null);
+    if(capability==='imageInput')w.S.attachments=[{kind:'image',name:'a.png',dataUrl:'data:image/png;base64,YQ=='}];
+    await w.submit();const cmd=calls.find(c=>c.type==='prompt');await failed(cmd.id);
+    await confirm({...B,input:capability==='imageInput'?['text']:['image']});
+    const state=w.S.fallbackRuntime,[ab,bc]=state.history;
+    assert.equal(state.currentModel.providerId,'b');assert.equal(bc.from.providerId,'b');
+    assert.equal(ab.transitionType,'generation_failure');assert.equal(ab.errorClass,'rate_limited');
+    assert.equal(bc.transitionType,'capability_mismatch');assert.equal(bc.capability,capability);
+    assert.equal(bc.errorClass,null);assert.equal(bc.statusCode,null);assert.equal(bc.source,'pi-model-state');
+    assert.notEqual(bc.reason,ab.reason);assert.ok(w.document.getElementById('fallbackStatus').textContent.includes(bc.reason));
+    assert.equal(calls.filter(c=>c.type==='prompt').length,1);
+    assert.deepEqual(calls.filter(c=>c.type==='set_model').map(c=>c.provider),['b','c']);
+    await confirm(C);const replay=calls.filter(c=>c.type==='prompt').at(-1);
+    assert.equal(calls.filter(c=>c.type==='prompt').length,2);assert.equal(replay.__fallbackOwner,cmd.id);
+    await failed(replay.id);await failed(replay.id);
+    assert.equal(w.S.fallbackRuntime.exhausted,true);
+    assert.deepEqual([...w.S.fallbackRuntime.attemptedModels].map(m=>m.providerId),['a','b','c']);
+    assert.equal(calls.filter(c=>c.type==='set_model').length,2);assert.equal(calls.filter(c=>c.type==='prompt').length,2);
+    assert.ok(!JSON.stringify(w.S.fallbackRuntime.history).includes('original'));
+  });
   await check('fallback status participates in composer height and uses readable results',async()=>{const cmd=await begin();await failed(cmd.id);const box=w.document.getElementById('fallbackStatus');assert.ok(w.el.composerBox.contains(box));assert.ok(box.textContent.includes('切换中'));assert.ok(!box.textContent.includes('switching'));w.cancelFallback();});
   dom.window.close();
 }

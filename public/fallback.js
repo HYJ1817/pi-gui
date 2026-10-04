@@ -5,7 +5,7 @@ import { fetchProjectConfig, sendCommand } from './api.js';
 import { toast } from './ui/toast.js';
 import { updateSendState } from './composer.js';
 import { modelIdentity } from './model-capabilities.js';
-import { normalizeFallbackConfig, sameModel, safeFallbackFailure, nextFallbackCandidate, createFallbackRuntime } from './model-fallback.js';
+import { normalizeFallbackConfig, sameModel, safeFallbackFailure, safeFallbackTransition, nextFallbackCandidate, createFallbackRuntime } from './model-fallback.js';
 let active=null,epoch=0,sequence=0,switchModel=null;
 const requestPrefix='composer-generation-'+Math.random().toString(36).slice(2)+'-';
 const sessionIdentity=()=>S.state?.sessionId || S.state?.sessionFile || null;
@@ -70,8 +70,9 @@ async function completeAttempt(s,result) {
   if(!owns(s))return;
   if(result.outcome==='success')return finish(s,'completed',{cleanup:true,
     notice:s.runtime.snapshot().history.length?'已使用备用模型完成请求，当前模型保持不变。':''});
-  const failure=safeFallbackFailure(result.failure);
-  if(result.outcome!=='failed' || result.hasVisibleOutput!==false || !failure.retryable) {
+  const mismatch=result.transitionType==='capability_mismatch' && ['textInput','imageInput'].includes(result.capability);
+  const failure=mismatch?safeFallbackTransition(result):safeFallbackFailure(result.failure);
+  if(!mismatch && (result.outcome!=='failed' || result.hasVisibleOutput!==false || !failure.retryable)) {
     return finish(s,'stopped',{notice:result.hasVisibleOutput?'已有回答或工具活动，自动备用未执行。':failure.reason});
   }
   const chosen=nextFallbackCandidate({...s.config,attemptedModels:s.runtime.snapshot().attemptedModels,models:S.models,requirements:s.requirements});
@@ -85,7 +86,7 @@ async function completeAttempt(s,result) {
   s.runtime.confirmed(S.state.model);publish(s);
   // Recheck actual Pi-reported capabilities, not the older discovery list.
   const check=nextFallbackCandidate({chain:[id],models:[S.state.model],requirements:s.requirements});
-  if(!check.candidate){s.processing=false;return completeAttempt(s,result);}
+  if(!check.candidate){s.processing=false;return completeAttempt(s,{transitionType:'capability_mismatch',capability:check.skipped[0]?.capability});}
   if(S.streaming)return finish(s,'stopped',{notice:'Pi 已开始另一轮工作，自动备用未执行。'});
   const previous=s.requestId;s.requestId=requestPrefix+(++sequence);s.processing=false;
   const response=await sendCommand({...s.command,id:s.requestId,__fallbackOwner:previous});

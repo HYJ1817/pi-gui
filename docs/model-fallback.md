@@ -15,13 +15,18 @@ fallback: { enabled: false, chain: [{ providerId: 'custom', modelId: 'example' }
   source: 'pi-assistant', statusCode: 429 }
 // 运行态与记录，只有内存，不存 message/images 或原始错误
 { generation, originalModel, currentModel, attemptedModels, active, exhausted,
-  phase, history: [{ from, to, reason, errorClass, source, statusCode,
+  phase, history: [{ from, to, transitionType, capability, reason, errorClass, source, statusCode,
     unconfirmed, startedAt, result }] }
 ```
 
 共享纯分类、策略与运行态位于 public/model-fallback.js，lib/model-fallback.js 为后端入口。
 复用现有 Model Capability，不复制目录、不猜模型名称。server/model-generation.js 只负责
 主聊天生成请求归属与安全出口；public/fallback.js 是唯一自动切换协调器。
+
+历史中的 transitionType 区分 generation_failure 与 capability_mismatch。Pi 确认备用模型
+后发现 textInput/imageInput 明确 false 时，以具体 capability 和固定不支持原因继续下一候选；
+该次切换的 errorClass/statusCode 为空、source 为 pi-model-state，不继承上一模型的生成错误。
+unknown 仍允许尝试，不属于能力不匹配。
 server.js 仅装配这些边界，Auth/Quota 仍由原模块负责。
 
 ## 错误证据与允许表

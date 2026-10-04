@@ -63,6 +63,8 @@ async function main() {
     await evaluate(`(async()=>{const modal=await import('/ui/modal.js');modal.closeModal();const policy=await import('/model-fallback.js'),fallback=await import('/fallback.js'),{state}=fallbackFixture;
       const r=policy.createFallbackRuntime({generation:1,originalModel:{providerId:'primary',modelId:'main'}});
       r.attempt({providerId:'unknown',modelId:'other/id'},policy.classifyGenerationError({message:'429 rate limit',source:'pi-assistant'}),['imageInput']);
+      r.confirmed({providerId:'unknown',modelId:'other/id'});
+      r.attempt({providerId:'vision',modelId:'image'}, {transitionType:'capability_mismatch',capability:'imageInput'});
       state.S.fallbackRuntime=r.snapshot();state.S.fallbackActive=true;fallback.renderFallbackStatus();document.querySelector('#fallbackStatus').open=true;})()`);
     assert.equal(await evaluate('document.querySelector("#btnStop").hidden'),false);
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);

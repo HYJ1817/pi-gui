@@ -55,6 +55,14 @@ export function safeFallbackFailure(value) {
     source:['pi-assistant','pi-prompt-preflight'].includes(value?.source)?value.source:'unknown',
     statusCode:Number.isInteger(value?.statusCode) && value.statusCode>=400 && value.statusCode<=599?value.statusCode:null};
 }
+export function safeFallbackTransition(value) {
+  if(value?.transitionType==='capability_mismatch' && ['textInput','imageInput'].includes(value.capability)) {
+    return {transitionType:'capability_mismatch',capability:value.capability,class:null,retryable:true,
+      reason:value.capability==='imageInput'?'备用模型确认后不支持图片输入':'备用模型确认后不支持文本输入',
+      source:'pi-model-state',statusCode:null};
+  }
+  return {...safeFallbackFailure(value),transitionType:'generation_failure',capability:null};
+}
 export function nextFallbackCandidate({chain=[],attemptedModels=[],models=[],requirements={}}={}) {
   const skipped=[];
   for(const id of chain) {
@@ -63,7 +71,7 @@ export function nextFallbackCandidate({chain=[],attemptedModels=[],models=[],req
     if(!found){skipped.push({...modelIdentity(id),reason:'model-unavailable'});continue;}
     const caps=modelCapability(found).capabilities, needed=['textInput','imageInput'].filter(k=>requirements[k]===true);
     const blocked=needed.find(k=>caps[k]===false);
-    if(blocked){skipped.push({...modelIdentity(id),reason:blocked+'-unsupported'});continue;}
+    if(blocked){skipped.push({...modelIdentity(id),reason:blocked+'-unsupported',capability:blocked});continue;}
     return {candidate:modelIdentity(found),unconfirmed:needed.filter(k=>caps[k]===null),skipped};
   }
   return {candidate:null,unconfirmed:[],skipped};
@@ -75,8 +83,9 @@ export function createFallbackRuntime({generation,originalModel}={}) {
     attempt(to,failure,unconfirmed=[],startedAt=Date.now()) {
       if(attemptedModels.some(m=>sameModel(m,to))) return false;
       if(history.length)history.at(-1).result='failed';
-      const id=modelIdentity(to),e=safeFallbackFailure(failure);
-      history.push({from:currentModel,to:id,reason:e.reason,errorClass:e.class,source:e.source,statusCode:e.statusCode,
+      const id=modelIdentity(to),e=safeFallbackTransition(failure);
+      history.push({from:currentModel,to:id,transitionType:e.transitionType,capability:e.capability,
+        reason:e.reason,errorClass:e.class,source:e.source,statusCode:e.statusCode,
         unconfirmed:unconfirmed.filter(k=>['textInput','imageInput'].includes(k)),startedAt,result:'switching'});
       attemptedModels.push(id);phase='switching';return true;
     },
