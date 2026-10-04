@@ -2382,3 +2382,99 @@ button.pj-sess-primary{cursor:pointer}
 .auth-prompt { display: grid; gap: 8px; margin: 12px 0; }
 .auth-prompt input, .auth-prompt select { width: 100%; min-width: 0; }
 .auth-notice, .auth-message { margin-top: 12px; color: var(--t2); font-size: 12px; }
+
+/* ============ 右栏工作区（P26 内置浏览器） ============
+ *
+ * 通用外壳：这一层不认识浏览器，只负责「开着 / 多宽 / viewport 在哪」。
+ * 往后再放文件预览 / Markdown 也只是多一个 surface。
+ *
+ * 两条与主进程强耦合、改之前必须一起看的地方：
+ *   1. `.rp-titlebar` 的 46px —— 它底下是原生窗口按钮（titleBarStyle:'hidden'
+ *      + titleBarOverlay height:46，见 electron/main.cjs）。把控件放进这一带
+ *      会被系统画的按钮盖住点不到，所以留空并声明成拖拽区。
+ *   2. `.rp-viewport` 的矩形就是 WebContentsView 落地的位置
+ *      （right-pane.js 量 getBoundingClientRect，主进程再用 clampBounds 夹一次）。 */
+
+:root{--rp-width:420px}
+
+/* overlay 模式下 .right-pane 要 absolute 定位，得有个已定位的祖先 */
+.app{position:relative}
+
+.right-pane{
+  position:relative;
+  width:var(--rp-width);flex:0 0 var(--rp-width);
+  min-width:0;min-height:0;
+  display:flex;flex-direction:column;
+  background:var(--shell);border-left:1px solid var(--line-soft);
+  overflow:hidden;
+}
+.right-pane[hidden]{display:none}
+
+/* 窄窗口：不再把聊天继续压扁，改成覆盖式抽屉。
+ * 什么时候切由 right-pane.js 按**实测的可用宽度**决定（不是窗口断点猜的）。 */
+.right-pane[data-mode="overlay"]{
+  position:absolute;top:0;right:0;bottom:0;z-index:20;
+  box-shadow:-18px 0 34px rgba(0,0,0,.45);
+}
+
+.rp-titlebar{height:46px;flex:0 0 46px;-webkit-app-region:drag}
+
+.rp-resizer{
+  position:absolute;left:-3px;top:0;bottom:0;width:7px;
+  cursor:col-resize;z-index:3;background:transparent;
+}
+.rp-resizer::after{
+  content:"";position:absolute;left:3px;top:0;bottom:0;width:1px;
+  background:transparent;transition:background .12s;
+}
+.rp-resizer:hover::after,.rp-resizer.is-dragging::after{background:var(--control-border)}
+.rp-resizer:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+body.rp-resizing{cursor:col-resize;user-select:none}
+
+.rp-body{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column}
+.rp-surface{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column}
+
+.rp-toolbar{
+  display:flex;align-items:center;gap:2px;
+  height:46px;flex:0 0 46px;padding:0 6px;
+  background:var(--titlebar);border-bottom:1px solid var(--line-soft);
+  -webkit-app-region:drag;   /* 这一行也在标题栏高度内，空白处仍应能拖窗口 */
+}
+.rp-toolbar button{-webkit-app-region:no-drag}
+.rp-toolbar .icon-btn{width:28px;height:28px;flex:0 0 28px}
+.rp-toolbar .icon-btn svg{width:14px;height:14px}
+.rp-toolbar .icon-btn:disabled{opacity:.35;cursor:default}
+.rp-toolbar .icon-btn:disabled:hover{background:transparent}
+
+.rp-address{
+  flex:1;min-width:0;height:28px;margin:0 4px;
+  padding:0 10px;font:inherit;font-size:12.5px;color:var(--t1);
+  background:var(--input);border:1px solid var(--line);border-radius:8px;
+  -webkit-app-region:no-drag;
+}
+.rp-address:focus{outline:none;border-color:var(--control-border);box-shadow:0 0 0 3px rgba(197,201,204,.12)}
+.rp-address::placeholder{color:var(--t3)}
+
+/* WebContentsView 会盖在这上面。底色和窗口一致，免得原生 view 还没摆好时闪白。 */
+.rp-viewport{flex:1;min-height:0;min-width:0;background:var(--main)}
+
+.rp-error{
+  flex:0 0 auto;padding:8px 12px;
+  font-size:12px;color:#f0a8a8;line-height:1.5;
+  background:rgba(248,113,113,.08);border-top:1px solid rgba(248,113,113,.25);
+  word-break:break-word;
+}
+
+/* 右栏开着时，原生窗口按钮已经不在 .stage-head 右边了 ——
+ * 那条 150px 的让位空隙会变成窗口中间一块莫名其妙的留白，收掉。 */
+.app.rp-open .stage-head{padding-right:12px}
+
+/* Toast 默认贴在窗口右下角（position:fixed;right:18px）。
+ * 右栏一开，那个位置正好被原生 WebContentsView 盖住 —— 而 WebContentsView 是
+ * 原生子视图，z-index 对它无效，Toast 会**真的看不见**。
+ * 所以按右栏宽度整体左移。overlay 模式同理（它也占着右边）。 */
+.app.rp-open ~ .toasts{right:calc(var(--rp-width) + 18px)}
+
+/* 入口按钮的「开着」态。用既有的 control-active 底色，与全局导航栏选中态同一套灰阶。 */
+.head-right .icon-btn.is-active{background:var(--control-active);color:var(--t1)}
+

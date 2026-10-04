@@ -85,6 +85,8 @@ import { initDraft, draftSync, clearDraft } from './draft.js';
 import { startupNotice, NOTICE_ACTIONS } from './status-copy.js';
 import { showNotice, hideNotice } from './ui/notice.js';
 import { knownSessions, switchToSessionById } from './sessions.js';
+import { initRightPane } from './right-pane.js';
+import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 
 /* ---------- 装配 ---------- */
 
@@ -109,6 +111,29 @@ initConversationNav();
 /* P7：会话标题旁的「关联任务」窄条。这里只把容器交给它 —— 拉数据与显隐
  * 由 session-plans.js 自己决定（没有关联时整块 hidden，不占位）。 */
 mountSessionPlans($('sessionPlans'));
+
+/* 右栏工作区（P26）。
+ * 外壳是通用的（right-pane.js），这一版只往里装「内置浏览器」一面。
+ * 网页版（浏览器里跑 npm start）没有 preload 桥 —— 那时 browserPane 为 null，
+ * 入口按钮直接不显示，而不是画一个点了没反应的按钮。 */
+const rightPane = initRightPane();
+const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
+
+const btnBrowser = $('btnBrowser');
+if (btnBrowser) {
+  if (!browserPane) {
+    btnBrowser.hidden = true; // 网页版：没有内置浏览器这回事
+  } else {
+    btnBrowser.addEventListener('click', () => browserPane.toggle());
+    /* 右栏可能从内部（工具栏的 ×）关掉，只有它自己知道 —— 所以入口按钮的
+     * 状态跟着事件走，不去猜。 */
+    document.addEventListener('pi-gui:right-pane', (e) => {
+      const open = e.detail?.open === true;
+      btnBrowser.setAttribute('aria-pressed', open ? 'true' : 'false');
+      btnBrowser.classList.toggle('is-active', open);
+    });
+  }
+}
 
 /* ---------- SSE ---------- */
 
@@ -1057,6 +1082,9 @@ defineCommands([
   { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', run: () => openPlanner() },
   { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', run: () => openChangesPanel() },
   { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表', run: () => openExtensions() },
+  /* 内置浏览器：只是**右栏的一个面板**，不是第四个一级视图 —— 所以它在这里，
+   * 不进左侧全局导航栏。when 为假（网页版）时压根不进列表，不灰着骗人。 */
+  { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => browserPane.open() },
   { id: 'view.capabilities', title: '能力视图（Capabilities）', group: '视图', keywords: 'capability 能力 状态 可用', run: () => openExtensions({ tab: 'capabilities' }) },
   { id: 'view.skills', title: 'Skills', group: '视图', keywords: 'skill 技能', run: () => openExtensions({ tab: 'skills' }) },
   { id: 'view.mcp', title: 'MCP', group: '视图', keywords: 'mcp server 原生', run: () => openExtensions({ tab: 'mcp' }) },

@@ -71,6 +71,11 @@
       <h1 id="workViewTitle" hidden></h1>
       <div class="sess-plans" id="sessionPlans" hidden></div>
       <div class="head-right">
+        <!-- 内置浏览器入口。放在聊天顶部右侧操作区（More / 分享 / 统计 旁边），
+             刻意**不**进左侧全局导航栏 —— 它是一个面板，不是第四个一级视图。 -->
+        <button type="button" class="icon-btn" id="btnBrowser" title="内置浏览器" aria-label="内置浏览器" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.6 9.5h16.8M3.6 14.5h16.8"/><path d="M12 3.5c2.2 2.4 3.3 5.3 3.3 8.5s-1.1 6.1-3.3 8.5c-2.2-2.4-3.3-5.3-3.3-8.5S9.8 5.9 12 3.5z"/></svg>
+        </button>
         <button type="button" class="icon-btn" id="btnMore" title="更多" aria-label="更多操作">
           <svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>
         </button>
@@ -175,6 +180,20 @@
 
     <section class="work-surface" id="workSurface" aria-label="工作区" hidden></section>
   </main>
+
+  <!-- 右栏工作区（P26）。第一版只装「内置浏览器」一面 —— 文件预览 / Markdown /
+       localhost 预览以后复用同一个外壳，到时候不必再动聊天那边的任何代码。
+       网页本身不是 DOM：主进程会把 WebContentsView 摆到 #browserViewport 的矩形上
+       （见 electron/browser-view.cjs），所以这个占位块的内容是空的。 -->
+  <aside class="right-pane" id="rightPane" aria-label="右侧工作区" hidden>
+    <div class="rp-resizer" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="调整右栏宽度" tabindex="0"></div>
+    <!-- 顶部 46px 空档：这一条正好落在原生窗口按钮（最小化/最大化/关闭）下面。
+         主进程用了 titleBarStyle:'hidden'，那三个按钮是**系统画的**，页面上任何
+         控件放在那一带都会被它们盖住点不到 —— 所以这里留空并声明成拖拽区，
+         把浏览器工具栏放到下面一行（与 .stage-head 同一高度，视觉上对齐）。 -->
+    <div class="rp-titlebar" aria-hidden="true"></div>
+    <div class="rp-body"></div>
+  </aside>
 
 </div>
 
