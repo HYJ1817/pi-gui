@@ -16,6 +16,14 @@ const path = require('node:path');
 const fs = require('node:fs');
 
 const { probe, classifyHealth, isSelfUrl, isSafeExternal, isSafeReleaseUrl, APP_ID, PROTOCOL } = require('../electron/net-probe.cjs');
+/* 只 require **纯模块**：browser-view.cjs 顶部就 require('electron')，
+ * 在这份跑在普通 Node 下的测试里拿不到真 API（见 browser-policy.cjs 的 PARTITION 说明）。 */
+const {
+  normalizeAddressInput,
+  isAllowedBrowserUrl,
+  clampBounds,
+  PARTITION: BROWSER_PARTITION,
+} = require('../electron/browser-policy.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.GUARD_PORT || 7796);
@@ -350,6 +358,152 @@ async function main() {
     const bad = requests.filter((m) => /github/i.test(m[2]));
     return bad.length === 0 || '前端里出现了指向 GitHub 的请求：' + bad.map((m) => m[0].slice(0, 70)).join(' | ');
   });
+
+  /* ---------- 9. 右栏内置浏览器（P26） ----------
+   *
+   * 这是这一版**最要紧的一组边界**：右栏加载的是**任意网页**，而主窗口那边
+   * 靠 defaultSession 的 onBeforeSendHeaders 给发往本机后端的请求注令牌。
+   * 只要两者共用一个 session，右栏里的页面就能拿着令牌打本机 API。
+   *
+   * 判定规则抽在 electron/browser-policy.cjs —— 纯函数、不 require electron，
+   * 所以上面可以直接拿真值验。electron/browser-view.cjs 只能在 GUI 里跑，
+   * 这里用结构性断言钉住意图，再由 tests/browser-pane.cjs 在真 Electron 里跑一遍。 */
+  const browserSrc = fs.readFileSync(path.join(ROOT, 'electron', 'browser-view.cjs'), 'utf8');
+  const browserCode = browserSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  const policySrc = fs.readFileSync(path.join(ROOT, 'electron', 'browser-policy.cjs'), 'utf8');
+  /* 结构性断言只看代码、不看注释 —— browser-policy.cjs 的注释里**必须**能写
+   * 「记得不要加 persist: 前缀」这样的解释，不能因此把它判成违规。 */
+  const policyCode = policySrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+
+  check('26. 用 WebContentsView（不是 BrowserView / <webview>）', () =>
+    /new\s+WebContentsView\s*\(/.test(browserCode) || '没有 new WebContentsView');
+  check('26a. 全仓库不出现 BrowserView', () =>
+    !/BrowserView/.test(browserCode) && !/BrowserView/.test(mainSrc) && !/BrowserView/.test(publicCode) ||
+    '有文件用了 BrowserView');
+  check('26b. 全仓库不出现 webview', () =>
+    !/webview/i.test(publicCode) && !/webview/i.test(browserCode) || '出现了 webview');
+
+  check('27. 用独立 partition，且**非持久化**', () =>
+    /partition:\s*PARTITION/.test(browserCode) &&
+    /session\.fromPartition\(PARTITION\)/.test(browserCode) &&
+    BROWSER_PARTITION === 'pi-gui-browser' ||
+    `partition=${BROWSER_PARTITION}`);
+  check('27a. partition 不带 persist: 前缀（退出即清空）', () =>
+    !/persist:/.test(policyCode) && !/persist:/.test(browserCode) || '出现了 persist:');
+  check('27b. 浏览器**不碰** defaultSession（令牌注入那条边界）', () =>
+    !/defaultSession/.test(browserCode) || 'browser-view.cjs 里出现了 defaultSession');
+
+  check('28. 浏览器 webPreferences 的安全开关', () => {
+    const want = [
+      /nodeIntegration:\s*false/,
+      /contextIsolation:\s*true/,
+      /sandbox:\s*true/,
+      /webSecurity:\s*true/,
+      /allowRunningInsecureContent:\s*false/,
+    ];
+    const missing = want.filter((re) => !re.test(browserCode));
+    return missing.length === 0 || `缺 ${missing.length} 项开关`;
+  });
+  check('28a. 浏览器**不挂** preload（远程页面拿不到任何桥）', () =>
+    !/preload\s*:/.test(browserCode) || 'browser-view.cjs 的 webPreferences 里出现了 preload');
+
+  check('29. 权限一律默认拒绝', () =>
+    /* 参数表里本身带 ')'，所以不能写 [^)]* —— 用有界的 [\s\S] 跨过去 */
+    /setPermissionRequestHandler\([\s\S]{0,160}?callback\(false\)\)/.test(browserCode) &&
+    /setPermissionCheckHandler\(\(\)\s*=>\s*false\)/.test(browserCode) ||
+    '没有把 permission handler 设成拒绝');
+
+  check('30. window.open 不开新窗口（deny，不建 BrowserWindow）', () =>
+    /setWindowOpenHandler\([\s\S]*?action:\s*'deny'/.test(browserCode) &&
+    !/new\s+BrowserWindow/.test(browserCode) ||
+    'setWindowOpenHandler 没有 deny，或 browser-view 里建了 BrowserWindow');
+
+  check('31. 关闭会真正销毁 webContents', () =>
+    /webContents\.close\(\)/.test(browserCode) && /removeChildView/.test(browserCode) || '关闭路径没有销毁 webContents');
+
+  check('32. 导航判定与窗口 open 都过 isAllowedBrowserUrl', () => {
+    const n = (browserCode.match(/isAllowedBrowserUrl\(/g) || []).length;
+    return n >= 2 || `只出现 ${n} 次（will-navigate 与 setWindowOpenHandler 都该过一遍）`;
+  });
+  check('32a. 主进程把浏览器 webContents 从通用导航收口里排除', () =>
+    /isBrowserWebContents\(wc\)\)\s*return;/.test(mainSrc) || 'hardenWebContents 没跳过内置浏览器');
+
+  /* 值断言：直接拿真值验规则本身（与上面 net-probe 那批同一个做法）。 */
+  const B_ORIGIN = `http://127.0.0.1:${PORT}`;
+  const browserDeny = [
+    [`${B_ORIGIN}/`, 'Pi GUI 自己'],
+    [`${B_ORIGIN}/api/status`, 'Pi GUI 的 /api'],
+    [`http://localhost:${PORT}/`, 'Pi GUI 的 localhost 别名（同一台服务，origin 字符串不同）'],
+    ['http://example.com', '明文远程 http'],
+    ['http://localhost.evil.com', 'localhost 前缀伪装'],
+    ['http://127.0.0.1.evil.com', '127.0.0.1 前缀伪装'],
+    ['file:///C:/Windows/win.ini', 'file:'],
+    ['javascript:alert(1)', 'javascript:'],
+    ['data:text/html,<script>alert(1)</script>', 'data:'],
+    ['vbscript:msgbox(1)', 'vbscript:'],
+    ['ftp://example.com', 'ftp:'],
+    ['chrome://settings', 'chrome:'],
+    ['devtools://x', 'devtools:'],
+    ['about:blank', 'about:'],
+    ['https://user:pw@example.com', '带凭据的 URL'],
+    ['https://exam ple.com', '含空白'],
+  ];
+  for (const [url, why] of browserDeny) {
+    check(`33. 内置浏览器拒绝：${why}`, () =>
+      isAllowedBrowserUrl(url, { origin: B_ORIGIN }) === false || url);
+  }
+
+  const browserAllow = [
+    ['https://example.com/a', '远程 https'],
+    ['https://github.com/HYJ1817/pi-gui', 'https'],
+    ['http://localhost:3000', 'localhost 开发服务器'],
+    ['http://127.0.0.1:5173', '127.0.0.1 开发服务器'],
+    ['http://[::1]:3000', '::1 开发服务器'],
+    ['http://localhost:3000/app?x=1#y', '带路径与查询'],
+  ];
+  for (const [url, why] of browserAllow) {
+    check(`34. 内置浏览器放行：${why}`, () =>
+      isAllowedBrowserUrl(url, { origin: B_ORIGIN }) === true || url);
+  }
+
+  /* 地址栏补全：localhost:3000 会被 URL 语法误当成 scheme=localhost，
+   * 所以这条特别值得钉住。 */
+  const addressCases = [
+    ['example.com', 'https://example.com'],
+    ['example.com:8080/x', 'https://example.com:8080/x'],
+    ['localhost:3000', 'http://localhost:3000'],
+    ['127.0.0.1:5173', 'http://127.0.0.1:5173'],
+    ['[::1]:3000', 'http://[::1]:3000'],
+    ['https://a.example/x', 'https://a.example/x'],
+  ];
+  for (const [input, want] of addressCases) {
+    check(`35. 地址补全 ${input} → ${want}`, () => normalizeAddressInput(input).url === want || JSON.stringify(normalizeAddressInput(input)));
+  }
+
+  /* 几何收敛：renderer 量出来的矩形不可信，主进程必须再夹一次。 */
+  check('36. clampBounds 挡负数 / NaN / 溢出', () => {
+    const a = clampBounds({ x: -50, y: NaN, width: 1e9, height: 200 }, { width: 1000, height: 700 });
+    const b = clampBounds({ x: 800, y: 0, width: 420, height: 700 }, { width: 1000, height: 700 });
+    const okA = a.x === 0 && a.y === 0 && a.width === 1000 && a.height === 200;
+    // 右边只剩 200px，420 宽的 view 必须被夹到 200，否则会盖住工具栏
+    const okB = b.x === 800 && b.width === 200 && b.height === 700;
+    return (okA && okB) || JSON.stringify([a, b]);
+  });
+
+  /* renderer 侧：新加的模块不许碰特权 API（public/ 全量扫描已在上面做过，
+   * 这里显式点名两个新文件，免得以后被重构掉还没人发现）。 */
+  const newFrontCode = ['right-pane.js', 'browser-pane.js']
+    .map((f) => fs.readFileSync(path.join(ROOT, 'public', f), 'utf8'))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ \t]*\/\/.*$/gm, '');
+  check('37. 右栏两个新模块不碰 ipcRenderer / shell / require(electron)', () =>
+    !/ipcRenderer/.test(newFrontCode) &&
+    !/require\(\s*['"]electron['"]\s*\)/.test(newFrontCode) &&
+    !/shell\.(openExternal|openPath|openItem|showItemInFolder)\s*\(/.test(newFrontCode) ||
+    '新模块里出现了特权 API');
+  check('37a. 前端只用白名单化的 browser 桥，不传任意 channel', () =>
+    !/invoke\(\s*[^'"]/.test(newFrontCode) || '出现了含变量的 invoke(...)');
 
   console.log('');
   console.log(`${pass}/${pass + fail} 通过`);
