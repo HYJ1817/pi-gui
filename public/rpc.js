@@ -8,11 +8,11 @@
  *   - pi 对非法的思考档位也回 {ok:true}（medium 被静默夹成 high、bogus 被忽略），
  *     所以设置类命令一律**回读 get_state**，不然界面会显示一个 pi 根本没接受的值。 */
 
-import { el, S } from './state.js';
+import { el, S, confirmStop, invalidateStop } from './state.js';
 import { sendCommand, downloadSessionHtml } from './api.js';
 import { toast, withNotificationSource } from './ui/toast.js';
 import { setStatus } from './shell.js';
-import { clearThread, rebuildFromMessages, noteLoadFailure } from './messages.js';
+import { clearThread, rebuildFromMessages, noteLoadFailure, setStreaming } from './messages.js';
 import { applyTree } from './tree.js';
 import { applyState, applyStats, onModels, onThinkingLevels } from './usage.js';
 import { autoGrow, updateSendState, renderModelControls, imageInputBlocked } from './composer.js';
@@ -198,6 +198,11 @@ export function respond(id, payload) {
 
 export async function submit() {
   if (S.submitting || S.fallbackActive) return;
+  /* 停止中**一律不发**。这一条是 Stop 语义的核心：停止期间发出去的消息，
+   * 会在下面被 `S.streaming` 判成 steer，排进那个还没停干净的旧 run
+   * —— 旧任务继续跑、新任务被吞。后端也有同样的闸门（stop_in_progress），
+   * 两层都要有：这里是为了不产生一次注定失败的往返与错误提示。 */
+  if (S.stopping) return;
   if (!S.hasProject || S.switching || S.bridgeState !== 'ready') {
     toast('还没有选择项目：先在左侧「添加文件夹」选一个目录。', 'info');
     return;
@@ -246,12 +251,82 @@ export async function submit() {
   }
 }
 
+/* ---------- 停止（Stop = 权威停止，不是「请求一下」）----------
+ *
+ * 旧实现是「写一条 abort → 立刻 setStatus('已请求停止…')」，而 HTTP 200 只代表
+ * 命令写进了 stdin。于是用户看到「已请求停止」就发下一条，新消息被 `S.streaming`
+ * 判成 steer 排进旧 run —— 旧任务继续完成，新任务也被执行。
+ *
+ * 现在：点下 Stop 先进 `S.stopping`（发送键禁用 / Enter 不提交 / 重复点击不重发），
+ * 等**后端**拿到 Pi 的权威确认（abort 应答保证会话已空闲）才落回可发送状态。
+ * 后端还立着一道屏障：停止未确认期间 prompt / steer / follow_up 一律拒绝
+ * （`stop_in_progress`），前端 disabled 只是第一层，不是唯一一层。 */
+
+/** 停止已被后端确认。HTTP 与 SSE 两条路径谁先到都调它，**幂等**。
+ *
+ *  `confirmStop()` 会 ++stopGeneration：可能还在飞的另一次等待（HTTP 超时前
+ *  那一条、或用户点的第二次 Stop）据此认领失败，不会再写一次状态。 */
+function applyStopConfirmed() {
+  confirmStop();
+  /* abort 应答的官方语义是「会话已经空闲」，所以这一刻 streaming 必然为假 ——
+   * 不必等 agent_settled。不收口的话，agent_settled 到达前的那几毫秒里
+   * 下一条消息仍会被判成 steer。 */
+  setStreaming(false);
+  setStatus('已停止');
+  updateSendState();
+}
+
+/** 后端广播的停止状态（SSE）。**只在权威确认时用** —— 它覆盖的是
+ *  「HTTP 已经超时、屏障稍后才解除」那条路径。 */
+export function onStopState(evt) {
+  /* 断线重连会补发 backlog：那时候的「已停止」是历史，不是现在 ——
+   * 不能拿它往刚打开的界面上写状态栏。 */
+  if (evt?._replay) return;
+  if (evt?.state === 'stopped') applyStopConfirmed();
+  else if (evt?.state === 'reset') invalidateStop();
+}
+
 export async function stop() {
+  /* 停止中再点 Stop：**不重发**。后端会用同一个屏障去重（不会写出第二条
+   * clear_queue / abort），这里只是不做无意义的第二次往返。 */
+  if (S.stopping) return;
   const fallbackWasActive = S.fallbackActive;
   cancelFallback('stop');
   if (!S.streaming && !fallbackWasActive) return;
+
+  const generation = ++S.stopGeneration;
+  S.stopping = true;
+  /* 这一轮 run 期间用户点过 Stop：之后 provider 报回的 cancelled / aborted
+   * 只有在这个标记还在时才按「用户停止」呈现（见 messages.js 的说明）。 */
+  S.stopOwnedTurn = true;
+  updateSendState();
+  /* 「正在停止…」而不是「已请求停止…」—— 后者会让用户以为已经停了。 */
+  setStatus('正在停止…');
+
   const result = await sendCommand({ type: 'abort' });
-  if (result?.ok) setStatus('已请求停止…');
+  /* 代对不上 = 这次停止已经作废（换了工作区 / Pi 换代 / 又点了一次 /
+   * SSE 已经先行确认）。迟到的应答不许再动界面。 */
+  if (S.stopGeneration !== generation) return;
+
+  if (result?.ok) return applyStopConfirmed();
+
+  /* 浏览器取消确认失败：Pi 那边**照旧收到 abort 了**（两件事，不能因为浏览器
+   * 不可用就不停 Pi），所以保持 stopping，等屏障解除。错误提示由 sendCommand
+   * 统一弹（安全文案来自后端），这里不覆盖状态栏。 */
+  if (result?.code === 'browser_cancel_unconfirmed') return updateSendState();
+
+  if (result?.code === 'stop_unconfirmed' || result?.network) {
+    /* 等不到 Pi 的权威应答：**不解除保护**。宁可暂时不让发，也不把新任务
+     * 塞进旧 run。后台屏障仍然挂着，后端的 stop_state 事件会来收口；
+     * 用户仍可重启 Pi 作为恢复路径。 */
+    setStatus('停止尚未得到 Pi 确认，请等待或重启 Pi');
+    return updateSendState();
+  }
+
+  /* 其余情况（bridge 已换代 / 环境不允许发出停止）：这次停止不成立，
+   * 放回可发送状态。 */
+  invalidateStop();
+  updateSendState();
 }
 
 export const newSession = () => sendCommand({ type: 'new_session' });

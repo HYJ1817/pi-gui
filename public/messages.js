@@ -126,6 +126,9 @@ export function syncToolWorking() {
 export function setStreaming(on) {
   S.streaming = on;
   el.btnStop.hidden = !on;
+  /* 新的一轮开始了：上一轮那次「用户停止」的归属到此结束。
+   * 之后 provider 再报 cancelled / aborted，就不是用户停的，照常当错误显示。 */
+  if (on) S.stopOwnedTurn = false;
   if (on) showWorking();
   else hideWorking();
   updateSendState();
@@ -573,8 +576,20 @@ export function dropTrailingError() {
  *   - 失败 / 中断 → 加错误卡片或「已中断」，返回 true */
 export function rebuildAssistant(bodyEl, msg) {
   const content = Array.isArray(msg.content) ? msg.content : [];
-  const failed = msg?.stopReason === 'error' || Boolean(msg?.errorMessage);
   const aborted = msg?.stopReason === 'aborted';
+  /* 「用户主动停止」与「真正的失败」必须分开，判据是**停止归属**而不是
+   * 文案里有没有 cancelled 字样：
+   *
+   *   - `aborted` + S.stopOwnedTurn：这一轮 run 期间用户点过 Stop，且还没开始
+   *     下一轮 —— Pi 报的 stopReason:'aborted' 是我们的停止。渲染成中性状态。
+   *   - 其余情况（包括 stopReason:'error' 且 errorMessage 里带「请求已取消」）：
+   *     **照旧渲染错误块**。不吞任何非本次停止造成的取消错误 ——
+   *     provider 自己的 cancelled / 扩展的 abort 都要看得见。
+   *
+   * 只认 stopReason、不认文案：`errorMessage` 是已经被分类过的结果
+   * （见 model-generation.js），拿它反推「是不是取消」会把无关错误也吞掉。 */
+  const ownedAbort = aborted && S.stopOwnedTurn === true;
+  const failed = !ownedAbort && (msg?.stopReason === 'error' || Boolean(msg?.errorMessage));
 
   const liveBlocks = S.current?.body === bodyEl ? S.blocks : null;
   const nodes = [];
@@ -607,7 +622,7 @@ export function rebuildAssistant(bodyEl, msg) {
   }
 
   if (failed) bodyEl.appendChild(errorBlock(msg));
-  else if (aborted) bodyEl.appendChild(noteBlock('已中断'));
+  else if (aborted) bodyEl.appendChild(noteBlock(ownedAbort ? '已由用户取消' : '已中断'));
 
   return bodyEl.childElementCount > 0;
 }

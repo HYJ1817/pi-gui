@@ -44,6 +44,26 @@ const PAUSE_TIMEOUT_MS = 10000;
  *  所以这里给 10 秒足够；超时返回 null 而不是抛错，让调用方自己降级。 */
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 
+/** 等 Pi 权威 abort 应答的上限。
+ *
+ *  官方语义（docs/rpc-commands.md → abort）：`abort` 是「中止当前操作**并等会话
+ *  变成空闲之后**才应答」（实现见 `core/agent-session.ts` 的 `abort()`：先
+ *  `agent.abort()`，再 `await waitForIdle()`）。所以它比普通命令慢是正常的，
+ *  这里给的时间也比 request() 的默认值宽。
+ *
+ *  ⚠️ **超时不是「停止完成」** —— 只是把 stop_unconfirmed 报给调用方；
+ *  barrier 继续挂着，见下面「停止屏障」一段。 */
+const STOP_TIMEOUT_MS = 30000;
+
+/** clear_queue 与「settled 后回读 get_state」这类**辅助**步骤的上限。
+ *  它们失败只影响降级路径，不该把停止本身拖住。 */
+const STOP_ASSIST_TIMEOUT_MS = 5000;
+
+/** HTTP 层报告 stop_unconfirmed 的宽限：比 abort 应答的上限多留一点，
+ *  让 RPC 层先给出明确原因（明确失败 / 超时），而不是两边同时到点。
+ *  这段等待**只影响报告**，不影响屏障。 */
+const STOP_REPORT_GRACE_MS = 5000;
+
 /**
  * @param runtime       共享运行态（要 cwd）。只读，不改。
  * @param publish       事件出口（SSE 总线的 publish）。
@@ -85,6 +105,8 @@ export function createRpcBridge({
   /* pauseForMaintenance 的等待上限（测试注入短值）。 */
   pauseTimeoutMs = PAUSE_TIMEOUT_MS,
   restartDelayMs = RESTART_DELAY_MS,
+  /* 等 Pi abort 应答的上限（测试注入短值）。见文件里「停止屏障」一段。 */
+  stopTimeoutMs = STOP_TIMEOUT_MS,
 }) {
   /* 实际启动命令：launch identity 优先，`piBin` 只是缺省（老调用方 / 单测）。
    * 这是「bridge spawn 的那个东西」的唯一取值处 —— 下面不再出现第二个来源。 */
@@ -371,6 +393,15 @@ export function createRpcBridge({
           entry.resolve(msg.success === false ? { __error: msg.error || '命令失败' } : (msg.data ?? {}));
           continue; // Backend requests close here; compatibility already observed them.
         }
+        /* 停止等待期间盯两条权威信号：
+         *   - `agent_settled`（会话级真正结束）—— 可能与 abort 应答**任意先后**到；
+         *   - `response/abort/success` —— 走 request() 配对的应答在上面就 `continue`
+         *     掉了，而**超时之后才到**的那一条也会被下面当成「过期内应答」丢掉；
+         *     两种都不能漏掉这条权威证据，所以在这里按 command 认一次。
+         *     有 `abortWritten` 守着：不会拿一条与本轮无关的旧应答解除屏障。
+         * ⚠️ 必须在下面那条 `continue` **之前** —— 超时后的应答正好走那一条。 */
+        if (msg?.type === 'agent_settled') noteStopSettled();
+        else if (msg?.type === 'response' && msg.command === 'abort' && msg.success === true) noteStopAbortResponse();
         // Timed-out internal replies belong to the same private numeric ID space.
         if (msg?.type === 'response' && Number.isInteger(msg.id) && msg.id > 0 && msg.id < nextRequestId) continue;
         publish({ ...msg, bridgeRun: run, cwd });
@@ -402,6 +433,9 @@ export function createRpcBridge({
       if (pi !== child) return;
       browserLaunch?.invalidate({disable:true,revoke:true});
       pi = null;
+      /* 进程没了：旧 run 不可能还在跑，停止屏障随之作废
+       * （否则一次没等到应答的停止会把界面永久锁死）。 */
+      releaseStop('bridge-reset');
       // 进程没了，挂起的请求不可能再有应答 —— 立刻放掉，别让调用方干等到超时
       settleAllPending(null);
       const failed = snapshot.state === 'error';
@@ -466,17 +500,13 @@ export function createRpcBridge({
       throw new Error('项目已切换，请在当前项目重试此操作');
     }
     const { __bridgeRun, ...wireCommand } = cmd;
-    if (cmd.type === 'abort' && browserLaunch?.available()) {
-      const child=pi, run=bridgeRun;
-      // Acknowledge browser cancellation before acknowledging Stop to the GUI.
-      // Still stop Pi if desktop transport fails, but do not claim browser ack.
-      return browserLaunch.invalidate({strict:true}).then(() => {
-        if (pi === child && bridgeRun === run && childUsable()) child.stdin.write(JSON.stringify(wireCommand) + '\n');
-      }, () => {
-        if (pi === child && bridgeRun === run && childUsable()) child.stdin.write(JSON.stringify(wireCommand) + '\n');
-        throw new Error('Pi 已收到停止请求，但内置浏览器取消确认不可用。');
-      });
-    }
+    /* Stop 不是 fire-and-forget：它必须等 Pi 那条权威 abort 应答。
+     * 兼容入口也走同一条路 —— 谁调 send({type:'abort'}) 都拿到 abortAndWait()
+     * 的 Promise，不会再出现「写进 stdin 就当停了」的第二套语义。 */
+    if (wireCommand.type === 'abort') return abortAndWait(wireCommand);
+    /* 停止屏障：会开新 run 的命令在停止期间**写不进 stdin**（后端保护，
+     * 不依赖前端 disabled）。 */
+    stopGuard(wireCommand);
     pi.stdin.write(JSON.stringify(wireCommand) + '\n');
   }
 
@@ -490,6 +520,14 @@ export function createRpcBridge({
    * 注意这里**不**校验 cmd.id —— 由本模块发号，调用方传的 id 会被覆盖。 */
   function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
     return new Promise((resolve) => {
+      /* 停止屏障对内部调用同样成立 —— 没有哪条内部路径需要绕开它。
+       * （clear_queue / abort / get_state 回读都不在阻断名单里。） */
+      try {
+        stopGuard(cmd);
+      } catch (err) {
+        resolve({ __error: err.message, __code: err.code });
+        return;
+      }
       if (!runtime.getCurrentCwd() || restartRequested || maintenance || !childUsable()) {
         resolve(null);
         return;
@@ -517,11 +555,243 @@ export function createRpcBridge({
     });
   }
 
+  /* ---------- 停止屏障（Stop = 权威停止，不是 fire-and-forget） ----------
+   *
+   * ---------- 为什么需要这一层 ----------
+   *
+   * 旧路径里 Stop 就是「往 stdin 写一条 abort，HTTP 立刻 200」。但 `abort` 的官方
+   * 契约是「**等会话变空闲之后**才应答」——写下去不等于停了。这中间有一段窗口，
+   * 而窗口期里前端还认为 `S.streaming === true`，于是用户下一条消息会被当成
+   * `steer` **排进那个还活着的旧 run**（旧任务被 abort 掉之后又继续跑完，
+   * 新任务也被吞进去）。这是「Stop 假完成」的全部机制。
+   *
+   * ---------- 规则 ----------
+   *
+   *   1. 屏障立起来之后，`prompt` / `steer` / `follow_up` 一律拒绝（稳定错误
+   *      `stop_in_progress`），**写不进 pi 的 stdin**。这是后端自己的保护 ——
+   *      前端 disabled、双击、旧 tab、手工 HTTP 都绕不过它。
+   *   2. 屏障只在拿到**权威证据**时解除（`releaseStop`）：
+   *        - Pi 回 `{type:'response',command:'abort',success:true}`（官方语义保证此时已空闲）
+   *        - `agent_settled` 之后再回读 `get_state` 确认 idle
+   *        - bridge 换代 / 进程退出 / 维护暂停（旧 run 随进程消失）
+   *      **超时不解除**。宁可暂时不让发，也不把新任务塞进旧 run。
+   *   3. 同一时刻只有一次停止在飞：重复调用**复用同一个 Promise**，
+   *      不会写出第二条 clear_queue / abort。
+   *
+   * ---------- 顺序 ----------
+   *
+   *   browser 取消确认（P29）→ clear_queue → abort → 等权威应答 → 解除。
+   *
+   *   浏览器必须最先失效（自动动作不能再产生新的工具调用）；
+   *   clear_queue 必须在 abort **之前**：官方文档明确说 abort 会把**仍留在队列里**
+   *   的 steering / follow-up 继续跑完 —— 不先清队列，就是「provider 请求被 abort，
+   *   旧队列又把 agent 拉起来」。 */
+
+  /** 停止期间不允许写进 pi 的命令：会开一次新 run 的三条。 */
+  const STOP_BLOCKED_COMMANDS = new Set(['prompt', 'steer', 'follow_up']);
+
+  /** 当前在飞的停止。null = 没有屏障。 */
+  let stopRun = null;
+  let stopSeq = 0;
+
+  /** 停止期间对「会开新 run 的命令」的唯一闸门。`send()` 与 `request()` 共用。 */
+  function stopGuard(cmd) {
+    if (!stopRun || !STOP_BLOCKED_COMMANDS.has(cmd && cmd.type)) return;
+    const err = new Error('上一轮正在停止，等 Pi 确认停止后再发送。');
+    err.code = 'stop_in_progress';
+    throw err;
+  }
+
+  /** 屏障状态（给 /api/status、诊断与测试看；不含任何用户内容）。 */
+  function stopState() {
+    if (!stopRun) return null;
+    return {
+      pending: true,
+      generation: stopRun.generation,
+      bridgeRun: stopRun.run,
+      /* clear_queue 的处置：cleared / unsupported（旧 pi 不认识这条命令）/ unknown */
+      queue: stopRun.queue,
+      abortWritten: stopRun.abortWritten,
+      settledSeen: stopRun.settledSeen,
+      startedAt: stopRun.startedAt,
+    };
+  }
+
+  /** 解除屏障。**只有权威证据能走到这里**（见上面第 2 条）。 */
+  function releaseStop(evidence) {
+    const run = stopRun;
+    if (!run) return;
+    stopRun = null;
+    /* bridge 换代 = 旧 run 已经随进程消失：停止的目标达成了，但这不是
+     * 「Pi 确认停止」，所以要如实分开，不谎报一次 abort 确认。 */
+    const result = evidence === 'bridge-reset'
+      ? { ok: false, code: 'stop_reset', error: 'Pi 已重启，上一轮已随进程结束。', evidence, queue: run.queue }
+      : { ok: true, evidence, queue: run.queue };
+    run.resolveDone(result);
+    run.resolveReport(result);
+    publish({
+      type: 'stop_state',
+      state: result.ok ? 'stopped' : 'reset',
+      evidence,
+      queue: run.queue,
+      bridgeRun: run.run,
+      cwd: runtime.getCurrentCwd(),
+    });
+  }
+
+  /** 一次停止的全过程。**不抛** —— 结果通过 run.report / run.done 给出去。 */
+  async function runStop(run) {
+    /* 1. 浏览器自动动作先失效（P29）。失败**不谎报成功**（报告里带明确 code），
+     *    但仍然把 abort 送给 Pi —— 那是两件事，不能因为浏览器不可用就不停 Pi。 */
+    if (browserLaunch?.available()) {
+      try {
+        await browserLaunch.invalidate({ strict: true });
+      } catch {
+        run.resolveReport({
+          ok: false,
+          code: 'browser_cancel_unconfirmed',
+          error: 'Pi 已收到停止请求，但内置浏览器取消确认不可用。',
+        });
+      }
+      if (stopRun !== run) return;
+    }
+
+    /* 2. clear_queue：清掉已经排队的 steering / followUp，否则 abort 之后
+     *    它们会把 agent 重新拉起来。
+     *
+     *    能力**按当前 pi 的实际应答判定**，不按版本号猜：认识的版本回
+     *    `success:true` + `data:{steering,followUp}`；不认识的版本走 rpc-mode 的
+     *    default 分支回 `Unknown command: clear_queue`。两种都如实记进 stopState，
+     *    **不把失败静默当成功**。 */
+    const cleared = await request({ type: 'clear_queue' }, { timeoutMs: Math.min(STOP_ASSIST_TIMEOUT_MS, stopTimeoutMs) });
+    if (stopRun !== run) return;
+    if (cleared && !cleared.__error) run.queue = 'cleared';
+    else if (cleared && /unknown command/i.test(String(cleared.__error))) run.queue = 'unsupported';
+    else run.queue = 'unknown';
+
+    /* 3. abort —— 走 request() 的 id 配对，等的是 Pi 那条**权威应答**。
+     *    stdin.write 成功不算数。官方语义保证应答发出时会话已经空闲。 */
+    run.abortWritten = true;
+    const aborted = await request({ type: 'abort' }, { timeoutMs: stopTimeoutMs });
+    if (stopRun !== run) return;
+    if (aborted && !aborted.__error) {
+      releaseStop('abort-response');
+      return;
+    }
+    /* 没等到应答 / Pi 明确报错：**不解除屏障**。
+     * 剩下的出路只有「agent_settled 后回读确认 idle」与 bridge 换代。 */
+    run.abortError = aborted ? String(aborted.__error || '') : '';
+    run.resolveReport({
+      ok: false,
+      code: 'stop_unconfirmed',
+      error: '停止尚未得到 Pi 确认，请等待或重启 Pi。',
+    });
+  }
+
+  /* `agent_settled` = 「Pi 不会再自动继续」的权威事件（规则见 server/pi-activity.js）。
+   * 停止等待期间看到它 → 回读一次 `get_state` 确认真的空闲，才解除屏障。
+   *
+   * ⚠️ 两个顺序都必须对：agent_settled 可能**先于** abort 应答到。所以这里
+   * 只把它当佐证 —— 而且**abort 还没写出去时绝不解除**：屏障一撤，用户可能立刻
+   * 发新 prompt，而 abort 排在它后面进 stdin，会把新的一轮打断。 */
+  /* Pi 回了权威 abort 应答。配对上之后 runStop 自己会收口；这里管的是
+   * **超时之后才到**的那一条 —— 它同样是权威证据，不能因为本地已经放弃了
+   * 就不认它（否则屏障只能等到 bridge 换代才解除）。 */
+  function noteStopAbortResponse() {
+    const run = stopRun;
+    if (!run || !run.abortWritten) return;
+    releaseStop('abort-response');
+  }
+
+  function noteStopSettled() {
+    const run = stopRun;
+    if (!run) return;
+    run.settledSeen = true;
+    if (!run.abortWritten || run.readback) return;
+    run.readback = true;
+    request({ type: 'get_state' }, { timeoutMs: Math.min(STOP_ASSIST_TIMEOUT_MS, stopTimeoutMs) }).then((state) => {
+      if (stopRun !== run) return;
+      /* 只在**确实读到 idle** 时解除；读不到（超时 / 报错）就继续挂着。 */
+      if (state && !state.__error && state.isStreaming === false && state.isCompacting !== true) {
+        releaseStop('agent-settled-idle');
+      }
+    });
+  }
+
+  /**
+   * 权威停止：Browser 取消确认 + Pi 取消确认，两者都拿到才算 `ok:true`。
+   *
+   * 返回值形状（**永不 reject**）：
+   *   `{ok:true,  evidence, queue}`                       —— 停止已确认
+   *   `{ok:false, code:'browser_cancel_unconfirmed'}`     —— 浏览器取消确认失败（旧语义）
+   *   `{ok:false, code:'stop_unconfirmed'}`               —— 等不到 Pi 权威应答（屏障仍在）
+   *   `{ok:false, code:'stop_reset'}`                     —— 停止期间 bridge 换代
+   *   `{ok:false, code:'stop_in_progress'|...}`           —— 环境不允许发出停止
+   *
+   * **重复调用复用同一个 Promise**：不会写出第二条 clear_queue / abort。
+   */
+  function abortAndWait(cmd = {}) {
+    if (!runtime.getCurrentCwd()) return Promise.resolve({ ok: false, code: 'no-project', error: '还没有选择项目：先在左侧「添加文件夹」选一个目录，再发送消息。' });
+    if (maintenance) return Promise.resolve({ ok: false, code: 'maintenance', error: 'Pi 正在更新，完成后会自动恢复；稍后再试。' });
+    if (restartRequested) return Promise.resolve({ ok: false, code: 'restarting', error: 'pi 正在重启，请稍后重试' });
+    if (!childUsable()) return Promise.resolve({ ok: false, code: 'not-running', error: 'pi 子进程未运行' });
+    if (cmd.__bridgeRun != null && cmd.__bridgeRun !== bridgeRun) {
+      return Promise.resolve({ ok: false, code: 'stale-workspace', error: '项目已切换，请在当前项目重试此操作' });
+    }
+
+    const existing = stopRun && stopRun.run === bridgeRun ? stopRun : null;
+    /* 第一次调用要尽快把「浏览器取消确认失败」之类的明确失败报出去；
+     * 后续调用（重复点 Stop）等的是**屏障解除**本身。两者都不发第二条 abort。 */
+    const wait = existing ? existing.done : startStop().report;
+    /* 宽限按 stopTimeoutMs 缩放：生产是 30s + 5s，测试注入短值时就按比例短，
+     * 否则一条「等不到应答」的用例要白等 5 秒。 */
+    return reportWithin(wait, stopTimeoutMs + Math.min(STOP_REPORT_GRACE_MS, stopTimeoutMs));
+  }
+
+  /** 立起屏障并跑一次停止流程。 */
+  function startStop() {
+    let resolveReport, resolveDone;
+    const run = {
+      generation: ++stopSeq,
+      run: bridgeRun,
+      startedAt: Date.now(),
+      queue: 'pending',
+      abortWritten: false,
+      settledSeen: false,
+      readback: false,
+      abortError: '',
+      report: new Promise((resolve) => { resolveReport = resolve; }),
+      done: new Promise((resolve) => { resolveDone = resolve; }),
+      resolveReport: (value) => resolveReport(value),
+      resolveDone: (value) => resolveDone(value),
+    };
+    stopRun = run;
+    runStop(run);
+    return run;
+  }
+
+  /** 给一次等待套上超时。**超时不取消任何东西** —— 屏障照旧挂着。 */
+  function reportWithin(promise, timeoutMs) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({
+        ok: false,
+        code: 'stop_unconfirmed',
+        error: '停止尚未得到 Pi 确认，请等待或重启 Pi。',
+      }), timeoutMs);
+      promise.then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      });
+    });
+  }
+
   /** 重启 pi 子进程 —— 用于让它重新读取 ~/.pi/agent/models.json */
   function restart({ sessionPath = null } = {}) {
     launchGeneration++;
     starting = false;
     browserLaunch?.invalidate({disable:true,revoke:true});
+    /* 换进程 = 换了一代：旧 run 与旧屏障一起作废（新进程里没有那个 run）。 */
+    releaseStop('bridge-reset');
     /* 维护期间用户点「重启 Pi」不该插进维护流程：更新完成后会自己 resume。 */
     if (maintenance) return;
     // Backend-only Pi readback; scoped to this workspace and consumed once.
@@ -560,6 +830,7 @@ export function createRpcBridge({
     launchGeneration++;
     starting = false;
     browserLaunch?.invalidate({disable:true,revoke:true});
+    releaseStop('bridge-reset');
     settleAllPending(null);
     if (restartTimer) {
       clearTimeout(restartTimer);
@@ -604,6 +875,8 @@ export function createRpcBridge({
     launchGeneration++;
     starting = false;
     browserLaunch?.invalidate({disable:true,revoke:true});
+    /* 维护会把进程停掉 —— 旧 run 就此消失，屏障跟着作废。 */
+    releaseStop('bridge-reset');
     if (maintenance) return Promise.resolve({ ok: false, code: 'already-in-maintenance' });
     const cwd = runtime.getCurrentCwd();
     const previousState = snapshot.state;
@@ -716,6 +989,9 @@ export function createRpcBridge({
       piRunning: Boolean(pi),
       pid: pi?.pid ?? null,
       bridgeRun,
+      /* 停止屏障（在飞时非 null）。UI 超时之后仍有权威依据可查：
+       * 屏障还在 = 新的 prompt / steer 仍然会被后端拒绝。 */
+      stop: stopState(),
       args: buildArgs(),
       // 前端用它决定「显示引导还是显示输入框」。cwd 为空就等价于没有项目，
       // 但显式给一个字段更不容易被将来的改动弄丢。
@@ -724,5 +1000,5 @@ export function createRpcBridge({
     };
   }
 
-  return { start, send, request, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState };
+  return { start, send, request, abortAndWait, stopState, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState };
 }

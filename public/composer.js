@@ -57,7 +57,9 @@ export function initComposerLayout() {
 
 export function updateSendState() {
   // 没有项目时 pi 没起来，发出去只会 503 —— 直接按住发送键
-  if (!S.hasProject || S.switching || S.bridgeState !== 'ready' || S.submitting || S.modelSwitchPending || S.fallbackActive
+  /* `S.stopping`：停止期间**不许发**。这一条是 Stop 语义的一部分 ——
+   * 界面上「正在停止」时还能点发送的话，新消息会变成旧 run 的 steer。 */
+  if (!S.hasProject || S.switching || S.bridgeState !== 'ready' || S.submitting || S.modelSwitchPending || S.fallbackActive || S.stopping
     || (imageInputBlocked() && S.attachments.some(a => a.kind === 'image'))) {
     el.btnSend.disabled = true;
     return;

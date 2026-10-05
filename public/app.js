@@ -14,7 +14,7 @@
  *   - 权限确认走 extension_ui_request / extension_ui_response 子协议。
  */
 
-import { $, el, S } from './state.js';
+import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
 import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
@@ -41,6 +41,7 @@ import {
   forkFrom,
   newSession,
   onResponse,
+  onStopState,
   setModel,
   setSessionName,
   setSessionListRefresh,
@@ -215,7 +216,14 @@ function handleEvent(evt) {
       /* Pi 已经收尾：还挂在 pending 的 approval 对话框不可能再被应答（Pi 侧
        * 在 abort/timeout 时已自行 resolve），本地作废，别留一张永远等的卡。 */
       expireAll('agent-settled');
+      /* ⚠️ 这里**不动 S.stopping**。agent_settled 与 abort 应答的先后不确定；
+       * 它先到时如果就把 stopping 落下去，用户能在屏障还挂着的时候发新消息
+       * —— 那正是要修的 bug。停止的收口只有 stop_state 事件与 HTTP 应答。 */
       return onSettled();
+    case 'stop_state':
+      /* 后端停止屏障的状态广播（见 server/rpc-bridge.js）。它覆盖的是
+       * 「HTTP 等超时了、屏障稍后才解除」那条路径。 */
+      return onStopState(evt);
     case 'message_start':
       return onMessageStart(evt);
     case 'message_update':
@@ -316,7 +324,12 @@ setBridgeReconciler(reconcileBridgeSnapshot);
 export function reconcileBridgeSnapshot(snapshot) {
   if (snapshot.bridgeInstance && S.bridgeInstance && snapshot.bridgeInstance !== S.bridgeInstance
     || Number.isInteger(snapshot.bridgeRun) && Number.isInteger(S.bridgeRun) && snapshot.bridgeRun !== S.bridgeRun
-    || ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(snapshot.bridgeState || snapshot.state)) cancelFallback('bridge-lifecycle');
+    || ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(snapshot.bridgeState || snapshot.state)) {
+    cancelFallback('bridge-lifecycle');
+    /* 换了进程/换了一代执行线：还在飞的停止应答已经不属于任何东西，
+     * 覆盖它是错的。后端同样会在这些时刻解除屏障（releaseStop）。 */
+    invalidateStop();
+  }
   const evt = { ...snapshot, type: 'bridge_status', state: snapshot.bridgeState || snapshot.state,
     error: snapshot.bridgeError ?? snapshot.error, hint: snapshot.bridgeHint ?? snapshot.hint,
     reason: snapshot.maintenance?.reason ?? snapshot.reason };

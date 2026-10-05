@@ -73,7 +73,9 @@ export async function sendCommand(cmd) {
   const j = await sendJSON('/api/command', { body: wire });
   if (j.network) {
     toast('无法连接后端：' + j.error, 'error');
-    return { ok: false };
+    /* `network` 要带出去：调用方（例如 stop）据此分清「后端明确回答」
+     * 与「根本没问到」—— 后者不能当作停止已经结束。 */
+    return { ok: false, network: true };
   }
   if (!j.ok) toast(j.error || '命令发送失败', 'error');
   return j;

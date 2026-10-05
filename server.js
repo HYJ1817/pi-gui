@@ -720,7 +720,11 @@ const route = createRouter({
   /* 给 router 的 rpc 包一层：**命令被 bridge 接受之后**通知活动状态。
    * 这是「prompt 已经发出去、agent_start 还没到」那个窗口的唯一来源 ——
    * 只靠 pi 的事件会在这段窗口里误判成空闲，从而允许更新。
-   * send 抛错（桥没接受）时不标记：没发出去的命令不该让人以为在跑。 */
+   * send 抛错（桥没接受）时不标记：没发出去的命令不该让人以为在跑。
+   *
+   * `abortAndWait` 走同一套前置检查与记账（它不会写进 pi 的 stdin 之外的地方，
+   * 但同样是「用户下的一条命令」）—— 这里显式列出来，别让 `...rpc` 把它
+   * 悄悄漏过守卫。 */
   rpc: {
     ...rpc,
     send: (cmd) => {
@@ -731,6 +735,16 @@ const route = createRouter({
       modelGeneration.noteCommandAccepted(cmd);
       piActivity.noteCommandAccepted(cmd);
       return result;
+    },
+    abortAndWait: (cmd) => {
+      if (providerAuth.snapshot().sync.state === 'syncing') {
+        return Promise.resolve({ ok: false, code: 'auth-syncing', error: '认证后的模型状态正在同步，请稍后再试' });
+      }
+      modelGeneration.guardCommand(cmd);
+      const { __fallbackOwner, ...wire } = cmd;
+      modelGeneration.noteCommandAccepted(cmd);
+      piActivity.noteCommandAccepted(cmd);
+      return rpc.abortAndWait(wire);
     },
   },
   providers,

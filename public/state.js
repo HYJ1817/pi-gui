@@ -73,6 +73,23 @@ export const S = {
   bridgeState: 'starting',
   syncPending: null,
   streaming: false,
+  /* 「正在停止」是**独立于 streaming 的第三态**（P30 Stop 语义）。
+   *
+   * 为什么不复用 S.streaming：Pi 的 abort 应答可能比 agent_settled 晚到
+   * （也可能早到），两种顺序下 streaming 都会先变 false —— 而那时后端
+   * 屏障可能还挂着。用 streaming 当「能不能发」的判据，就会把新消息
+   * 变成旧 run 的 steer，正是要修的那个 bug。
+   *
+   * stopping 为真时：发送键禁用、submit() 直接返回、Stop 重复点击不重发。
+   * 只有后端给出权威停止确认（HTTP ok 或 stop_state 事件）才落回 false。 */
+  stopping: false,
+  /* 停止的「代」：每次 stop() / 换工作区 / bridge 换代都 ++。
+   * 迟到的停止应答靠它认领 —— 代对不上就一概不写状态、不解除屏障。 */
+  stopGeneration: 0,
+  /* 这一轮 run 期间用户点过 Stop。用于把「Provider 报的 cancelled」
+   * 与「用户主动停止」分开：只有它还是 true 时才按用户停止呈现，
+   * 否则保留真正的取消错误（不吞错误）。新的 run 一开始就清掉。 */
+  stopOwnedTurn: false,
   submitting: false,
   fallbackActive: false,
   fallbackRuntime: null,
@@ -153,6 +170,9 @@ export const S = {
 export function beginWorkspaceSwitch(cwd) {
   S.cancelFallback?.('workspace-switch');
   S.workspaceGeneration++;
+  /* 换工作区 = 换了一条执行线：上一次停止的应答（如果还在飞）不许再动
+   * 新工作区的界面，也不许解除新工作区的屏障（那一代已经作废了）。 */
+  invalidateStop();
   S.switching = true;
   S.thinkingLevels = [];
   S.modelSwitchPending = true;
@@ -164,6 +184,30 @@ export function beginWorkspaceSwitch(cwd) {
 }
 
 export const ownsWorkspace = (generation) => generation === S.workspaceGeneration;
+
+/* ---------- 停止的「代」 ----------
+ *
+ * 停止是**异步**的：点下去到后端确认之间，世界可能已经变了（换工作区、
+ * 重启 Pi、Pi 退出、用户又点了一次）。所以每次停止都领一个号，
+ * 迟到的应答先验证身份再写状态 —— 代对不上就什么都不做。
+ *
+ * `invalidateStop` 是唯一让「旧停止」失效的地方 —— 它同时把 UI 从 stopping
+ * 里放出来：那个旧 run 已经不属于任何还在等它的东西了。 */
+export function invalidateStop() {
+  S.stopGeneration++;
+  S.stopping = false;
+  S.stopOwnedTurn = false;
+}
+
+/** 停止已被权威确认（Pi 的 abort 应答 / bridge 已换代）。
+ *
+ *  与 invalidateStop 的区别只有一处：**保留 stopOwnedTurn** ——
+ *  被中断的那条消息还没渲染出来，它仍然属于「用户主动停止」。
+ *  两者都 ++stopGeneration（迟到的应答据此认领失败）。 */
+export function confirmStop() {
+  S.stopGeneration++;
+  S.stopping = false;
+}
 
 /* 用量 DOM 的渲染钩子。
  *

@@ -60,7 +60,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
 /**
  * @param auth          本地访问控制（denyRequest / handleHealth）
  * @param sse           事件总线（subscribe）
- * @param rpc           pi 桥接（send / request / restart / getState）
+ * @param rpc           pi 桥接（send / request / abortAndWait / restart / getState）
  * @param providers     供应商（handle / handleModels）
  * @param projects      项目（handle / handleFs）
  * @param projectConfig 当前项目的配置（handle）
@@ -119,11 +119,23 @@ export function createRouter({
         try {
           if (cmd.type === 'export_html') return json(res, 400, { ok: false, error: '请使用安全会话导出入口' });
           if (typeof cmd.id === 'number') return json(res, 400, { ok: false, error: '客户端请求 ID 必须为字符串' });
-          // Abort waits for browser cancellation acknowledgement.
+          /* Stop 是**权威停止**，不是 fire-and-forget：它等的是 Pi 那条 abort
+           * 应答（官方语义：应答发出时会话已经空闲）。所以它有自己的出口，
+           * 不能混进下面「桥已接受就算成功」的通用路径。
+           * `ok:true` 才代表停止已确认；`stop_unconfirmed` 代表**没确认**
+           * ——那时后端的停止屏障仍然挂着，新的 prompt / steer 照样发不出去。 */
+          if (cmd.type === 'abort') {
+            const stop = await rpc.abortAndWait(cmd);
+            return json(res, stop.ok ? 200 : 503, stop.ok
+              ? { ok: true, stop: { evidence: stop.evidence, queue: stop.queue } }
+              : { ok: false, code: stop.code, error: stop.error });
+          }
           await rpc.send(cmd);
           return json(res, 200, { ok: true });
         } catch (err) {
-          return json(res, 503, { ok: false, error: String(err.message) });
+          /* `code` 是稳定标识（例如 stop_in_progress）—— 前端据它区分
+           * 「正在停止」与真正的失败，不去匹配文案。 */
+          return json(res, 503, { ok: false, error: String(err.message), ...(err.code ? { code: err.code } : {}) });
         }
       })
       .catch((err) => json(res, 413, { ok: false, error: String(err.message) }));
