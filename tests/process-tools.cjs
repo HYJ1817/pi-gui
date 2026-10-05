@@ -1,0 +1,48 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {EventEmitter}=require('node:events');
+let checks=0;const ok=(v)=>{assert.ok(v);checks++;};
+(async()=>{
+  const {createProcessBridge}=await import('../server/process-bridge.js');
+  const extension=await import('../extensions/pi-gui-process/index.js');
+  const {processActivity}=await import('../public/process-activity.js');
+  const {projectProcessEvent}=await import('../server/process-activity.js');
+  const {limitedEnvironment}=await import('../server/process-runner.js');
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'p31-tools-'));let workspace=root,epoch=1,blocked=false,handles=[];
+  fs.mkdirSync(path.join(root,'dist/core/extensions'),{recursive:true});fs.writeFileSync(path.join(root,'dist/core/extensions/types.d.ts'),'getAllTools() registerTool<');
+  const host=createProcessBridge({runtime:{getCurrentCwd:()=>workspace,getWorkspaceGeneration:()=>epoch,isShuttingDown:()=>false},launch:{packageDir:()=>root},getRpcState:()=>({bridgeRun:1,stop:{pending:blocked}}),runner:()=>{const h=new EventEmitter();h.stop=async()=>h.emit('close',0);handles.push(h);return h;}});
+  try{
+    const config=await host.prepare();ok(config.args[0]==='--extension');ok(!JSON.stringify(host.report()).includes(config.env.PI_GUI_PROCESS_TOKEN));
+    process.env.PI_GUI_PROCESS_URL=config.env.PI_GUI_PROCESS_URL;process.env.PI_GUI_PROCESS_TOKEN=config.env.PI_GUI_PROCESS_TOKEN;
+    const tools=new Map();let start;
+    extension.default({on:(name,fn)=>{assert.equal(name,'session_start');start=fn;},getAllTools:()=>[],registerTool:t=>tools.set(t.name,t)});start();start();ok(tools.size===5);
+    const call=(action,args={})=>tools.get('gui_process_'+action).execute('fixture',args).then(r=>r.details);
+    ok((await call('start',{command:'node',args:[]})).code==='process_control_disabled');
+    let state=host.manager.snapshot();host.manager.enable(true,state.generation);
+    const a=await call('start',{command:'node',args:[],ready:{type:'log',marker:'READY'}});ok(a.ok);handles[0].emit('started');handles[0].emit('log',Buffer.from('READY\nAuthorization: Bearer abc\n'));
+    ok((await call('status',{id:a.process.id,revision:1,waitReady:true})).process.ready);
+    ok(!JSON.stringify(await call('logs',{id:a.process.id,revision:1})).includes('abc'));
+    blocked=true;ok((await call('restart',{id:a.process.id,revision:1})).code==='cancelled');blocked=false;
+    const r=await call('restart',{id:a.process.id,revision:1});ok(r.process.revision===2);
+    ok((await call('stop',{id:a.process.id,revision:1})).code==='stale_process');
+    ok((await call('stop',{id:a.process.id,revision:2})).process.state==='exited');
+    const denied=await fetch(config.env.PI_GUI_PROCESS_URL+'/state',{method:'POST',headers:{'Content-Type':'application/json','X-Pi-Process-Token':config.env.PI_GUI_PROCESS_TOKEN,Origin:'http://127.0.0.1'},body:JSON.stringify({requestId:'x'})}).then(r=>r.json());ok(denied.code==='unauthorized');
+    const unicode=await fetch(config.env.PI_GUI_PROCESS_URL+'/state',{method:'POST',headers:{'Content-Type':'application/json','X-Pi-Process-Token':'é'+'x'.repeat(35)},body:JSON.stringify({requestId:'unicode'})}).then(r=>r.json());ok(unicode.code==='unauthorized');ok((await call('status')).ok);
+    let conflict,registered=0;extension.default({on:(_,fn)=>conflict=fn,getAllTools:()=>[{name:'gui_process_start'}],registerTool:()=>registered++,ui:{notify:()=>{}}});conflict();ok(registered===0);
+    host.observe({type:'response',command:'switch_session',success:true});ok(!host.manager.snapshot().enabled);
+    const switched=host.manager.snapshot();host.manager.enable(true,switched.generation);
+    const fresh=await call('start',{command:'node',args:['fresh.js'],ready:{type:'log',marker:'FRESH',timeoutMs:10000}});
+    await extension.transport({url:config.env.PI_GUI_PROCESS_URL,token:config.env.PI_GUI_PROCESS_TOKEN},'/cancel',{requestId:'old-session-request'});
+    ok(host.manager.snapshot().processes.find(p=>p.id===fresh.process.id).state==='starting');
+    const other=await call('start',{command:'node',args:['other.js'],ready:{type:'log',marker:'OTHER',timeoutMs:10000}});
+    const abort=new AbortController();const waiting=tools.get('gui_process_status').execute('wait',{id:fresh.process.id,revision:1,waitReady:true},abort.signal);
+    await new Promise(r=>setTimeout(r,20));abort.abort();await waiting;await new Promise(r=>setTimeout(r,20));
+    ok(host.manager.snapshot().processes.find(p=>p.id===fresh.process.id).state==='exited');
+    ok(host.manager.snapshot().processes.find(p=>p.id===other.process.id).state==='starting');
+    const oldToken=config.env.PI_GUI_PROCESS_TOKEN;await host.prepare();
+    const stale=await extension.transport({url:config.env.PI_GUI_PROCESS_URL,token:oldToken},'/state',{requestId:'old'});ok(stale.code==='unauthorized');
+    const projected=projectProcessEvent({type:'tool_execution_start',toolName:'gui_process_start',args:{env:{API_KEY:'raw-secret'},args:['raw-secret']}});ok(!JSON.stringify(projected).includes('raw-secret'));
+    const activity=processActivity({name:'gui_process_logs',args:{env:'raw-secret'},status:'success',details:{ok:true,process:{state:'ready'},lines:['raw-secret']}});ok(!JSON.stringify(activity).includes('raw-secret'));ok(activity.facts.includes('ready'));
+    const env=limitedEnvironment({PATH:'fixture',Path:'fixture',SystemRoot:'fixture',API_KEY:'private',PI_GUI_PROCESS_TOKEN:'private'},{PORT:'3000'});ok(Object.keys(env).length===3);ok(!JSON.stringify(env).includes('private'));
+    console.log(`Process tools: ${checks}/${checks}`);
+  }finally{delete process.env.PI_GUI_PROCESS_URL;delete process.env.PI_GUI_PROCESS_TOKEN;await host.dispose();fs.rmSync(root,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1;});

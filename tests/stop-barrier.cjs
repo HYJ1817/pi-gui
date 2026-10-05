@@ -178,6 +178,7 @@ async function main() {
   let syncing = false;
   const guarded = [], modelAccepted = [], activityAccepted = [];
   const context = {
+    managedProcesses: null,
     createRouter(options) { return createRouter(options); },
     rpc: raw,
     auth: { denyRequest: () => null },

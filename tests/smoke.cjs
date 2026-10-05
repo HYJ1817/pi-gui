@@ -2694,7 +2694,7 @@ staticCheck();
 
   // --- 弹层：更多 ---
   $('btnMore').click();
-  check('更多菜单 4 项（重启已移入设置）', () => window.document.querySelectorAll('#modalCard .modal-item').length === 4);
+  check('更多菜单 5 项（含开发进程，重启已移入设置）', () => window.document.querySelectorAll('#modalCard .modal-item').length === 5);
   $('modal').click();
 
   // --- 导出：相对路径补成绝对 ---

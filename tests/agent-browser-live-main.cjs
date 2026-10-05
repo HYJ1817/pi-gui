@@ -67,7 +67,8 @@ async function main() {
   check(new Set(snapshot.elements.map((x) => x.ref)).size === snapshot.elements.length, 'refs unique');
   const button = snapshot.elements.find((x) => x.role === 'button' && x.name === 'Save');
   const input = snapshot.elements.find((x) => x.name === 'Username' && x.role === 'textbox');
-  check((await call('click', { ref: button.ref })).ok, 'real pointer click');
+  const clicked = await call('click', { ref: button.ref });
+  check(clicked.ok, 'real pointer click (' + (clicked.code || 'ok') + ')');
   await new Promise(resolve => setTimeout(resolve, 100));
   check((await wc.executeJavaScript("document.getElementById('state').textContent")) === 'clicked', 'click changed DOM');
   check((await call('fill', { ref: input.ref, text: 'hello fixture' })).ok, 'fill input');
