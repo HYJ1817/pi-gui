@@ -310,7 +310,7 @@ export function cancelPiUpdateAuto() {
 function notifyOnce(version) {
   if (!version || notifiedVersion === version) return;
   notifiedVersion = version;
-  toast(`Pi ${version} 可用 —— 在侧栏「诊断」里可以更新`, 'info');
+  toast(`Pi ${version} 可用 —— 在「设置 → 应用与更新」里可以更新`, 'info');
 }
 
 /* ---------- 执行更新 ---------- */

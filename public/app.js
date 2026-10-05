@@ -91,6 +91,8 @@ import { showNotice, hideNotice } from './ui/notice.js';
 import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
+import { configureSecondaryPane } from './ui/secondary-surface.js';
+import { openAppUpdates } from './settings.js';
 
 /* ---------- 装配 ---------- */
 
@@ -121,6 +123,7 @@ mountSessionPlans($('sessionPlans'));
  * 网页版（浏览器里跑 npm start）没有 preload 桥 —— 那时 browserPane 为 null，
  * 入口按钮直接不显示，而不是画一个点了没反应的按钮。 */
 const rightPane = initRightPane();
+configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
 initGuiBrowserState();
 
@@ -133,7 +136,7 @@ if (btnBrowser) {
     /* 右栏可能从内部（工具栏的 ×）关掉，只有它自己知道 —— 所以入口按钮的
      * 状态跟着事件走，不去猜。 */
     document.addEventListener('pi-gui:right-pane', (e) => {
-      const open = e.detail?.open === true;
+      const open = e.detail?.open === true && e.detail?.surface === 'browser';
       btnBrowser.setAttribute('aria-pressed', open ? 'true' : 'false');
       btnBrowser.classList.toggle('is-active', open);
     });
@@ -779,14 +782,13 @@ function openMoreMenu() {
         close();
         openStatsPanel();
       }],
-      ['重启 pi', () => {
-        close();
-        restartPi();
-      }],
     ];
 
     for (const [label, fn] of entries) {
-      const item = document.createElement('div');
+      const item = document.createElement('button');
+      item.type = 'button';
+      if (label === '导出会话 HTML') item.id = 'btnShare';
+      if (label === '会话统计') item.id = 'btnStats';
       item.className = 'modal-item';
       item.textContent = label;
       item.onclick = () => {
@@ -909,8 +911,6 @@ document.addEventListener('paste', (e) => {
 // 顶栏
 $('btnTree').onclick = openBranchPanel;
 $('btnMore').onclick = openMoreMenu;
-$('btnShare').onclick = exportHtml;
-$('btnStats').onclick = openStatsPanel;
 
 // 侧栏导航
 $('navNew').onclick = newSession;
@@ -928,9 +928,18 @@ function goChat() {
 
 $('navHome').onclick = goChat;
 $('navChanges').onclick = openChangesPanel;
+document.addEventListener('pi-gui:right-pane', (event) => {
+  const open = event.detail?.open === true && event.detail?.surface === 'changes';
+  $('navChanges').setAttribute('aria-pressed', String(open));
+  $('navChanges').classList.toggle('is-active', open);
+});
 $('navProviders').onclick = openProvidersPanel;
 $('navProviderAuth').onclick = openProviderAuthPanel;
 $('navDiagnostics').onclick = openDiagnostics;
+$('navCapabilities').onclick = () => openExtensions({ tab: 'capabilities' });
+$('navMcp').onclick = () => openExtensions({ tab: 'mcp' });
+$('navAppUpdates').onclick = openAppUpdates;
+$('navRestartPi').onclick = restartPi;
 /* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
 $('navPalette').onclick = () => {
   $('globalMoreMenu').hidden = true;
@@ -950,7 +959,7 @@ $('btnPickProject').onclick = openDirPicker;
 $('btnProjectSettings').onclick = openProjectSettings;
 
 // 扩展能力（Skills / MCP）保留全局入口；模型供应商位于 More 菜单。
-$('navExtensions').onclick = openExtensions;
+$('navExtensions').onclick = () => openExtensions({ tab: 'skills' });
 $('navPlanner').onclick = () => openPlanner();
 
 const globalMenu = $('globalMoreMenu');
@@ -960,6 +969,18 @@ globalMore.onclick = () => {
   globalMore.setAttribute('aria-expanded', String(!globalMenu.hidden));
   if (!globalMenu.hidden) globalMenu.querySelector('button')?.focus();
 };
+globalMenu.addEventListener('keydown', (event) => {
+  const buttons = [...globalMenu.querySelectorAll('button:not([disabled])')];
+  const index = buttons.indexOf(document.activeElement);
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
+  }
+  if (event.key === 'Tab' && (event.shiftKey && index === 0 || !event.shiftKey && index === buttons.length - 1)) {
+    globalMenu.hidden = true;
+    globalMore.setAttribute('aria-expanded', 'false');
+  }
+});
 for (const entry of globalMenu.querySelectorAll('button')) {
   entry.addEventListener('click', () => {
     globalMenu.hidden = true;
@@ -1010,8 +1031,8 @@ function setSidebarCollapsed(collapsed) {
   collapseSidebar.setAttribute('aria-expanded', String(!collapsed));
   expandSidebar.setAttribute('aria-expanded', String(!collapsed));
 }
-collapseSidebar.onclick = () => setSidebarCollapsed(true);
-expandSidebar.onclick = () => setSidebarCollapsed(false);
+collapseSidebar.onclick = () => { setSidebarCollapsed(true); expandSidebar.focus(); };
+expandSidebar.onclick = () => { setSidebarCollapsed(false); collapseSidebar.focus(); };
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').closest('.rail-group');
@@ -1065,6 +1086,7 @@ const canPrompt = () => S.hasProject && !S.switching && S.bridgeState === 'ready
 
 /* 侧栏的「搜索会话」那一条路径（展开分组 + 聚焦搜索框）也在这里复用。 */
 function openSessionSearch() {
+  setSidebarCollapsed(false);
   group.classList.add('open');
   $('groupHead').setAttribute('aria-expanded', 'true');
   $('projectSidebar').classList.add('search-open');
@@ -1079,7 +1101,7 @@ const openView = (view) => () => {
   if (view === 'chat') return goChat();
   if (view === 'planner') return openPlanner();
   if (view === 'changes') return openChangesPanel();
-  return openExtensions();
+  return openExtensions({ tab: 'skills' });
 };
 
 registerShortcut({ id: 'palette', combo: 'primary+k', label: '打开命令面板', group: '通用', when: canRun, run: () => openPalette() });
@@ -1097,6 +1119,8 @@ assertNoConflicts();
 installShortcuts({});
 
 defineCommands([
+  { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => { if (globalMenu.hidden) globalMore.click(); } },
+  { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: openAppUpdates },
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', run: goChat },
   { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', run: () => openPlanner() },
   { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', run: () => openChangesPanel() },

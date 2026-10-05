@@ -108,7 +108,7 @@ export function openPalette(ctx = {}) {
       row.dataset.commandId = cmd.id;
       row.append(node('span', 'palette-title', cmd.title));
       if (cmd.hint) row.append(node('span', 'palette-hint', cmd.hint));
-      row.onclick = () => run(cmd);
+      row.onclick = (event) => { event?.stopPropagation(); run(cmd); };
       list.appendChild(row);
     });
     const current = list.querySelector('.palette-item.on');
@@ -131,8 +131,9 @@ export function openPalette(ctx = {}) {
     } catch (err) {
       toast(`命令执行失败：${err && err.message ? err.message : err}`, 'error');
     }
-    /* 动作没开弹层时把焦点还回原处（通常是输入框）；开了弹层就交给弹层自己管焦点。 */
-    if (el.modal.hidden && el.confirmLayer.hidden && returnFocus && returnFocus.isConnected) {
+    /* 菜单或工作面已接管焦点时保留交接；没有接管才还给原入口。 */
+    const handedOff = document.activeElement !== document.body && document.activeElement?.isConnected;
+    if (!handedOff && el.modal.hidden && el.confirmLayer.hidden && returnFocus && returnFocus.isConnected) {
       try {
         returnFocus.focus();
       } catch {

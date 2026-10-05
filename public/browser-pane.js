@@ -276,6 +276,7 @@ let surfaceRef = null;
 /** 关右栏 = 关浏览器：主进程那边同时销毁 WebContentsView。
  *  反复开 → 关 → 开 必须走同一条路，否则 webContents 会一代代留下来。 */
 function closeBrowserPane() {
+  if (paneRef?.onSurfaceChange) { paneRef.close(); return; }
   if (surfaceRef) {
     surfaceRef.close();
     surfaceRef = null;
@@ -287,6 +288,12 @@ function closeBrowserPane() {
 /** @param {object} pane  right-pane.js 的 initRightPane() 返回的面板对象 */
 export function attachBrowserPane(pane) {
   paneRef = pane;
+  pane.onSurfaceChange?.((next) => {
+    if (next === 'browser' || !surfaceRef) return;
+    surfaceRef.close();
+    surfaceRef = null;
+    window.piGuiDesktop?.browser?.close();
+  });
   window.piGuiDesktop?.browser?.onAgentOpen?.(() => {
     if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane });
     surfaceRef.openFromAgent();

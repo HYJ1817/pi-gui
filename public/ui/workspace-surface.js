@@ -1,8 +1,8 @@
 /* 一级工作区只管理承载和生命周期；业务模块各自渲染唯一的一份内容。 */
 import { $ } from '../state.js';
 
-const rail = { chat: 'navHome', planner: 'navPlanner', changes: 'navChanges', extensions: 'navExtensions' };
-const titles = { planner: '任务', changes: '文件变更', extensions: '扩展' };
+const rail = { chat: 'navHome', planner: 'navPlanner', extensions: 'navExtensions' };
+const titles = { planner: '任务', extensions: 'Skills 与扩展' };
 let current = { view: 'chat', token: 0, dispose: null };
 let chatScroll = { top: 0, atBottom: true };
 
@@ -17,14 +17,13 @@ function sync(view) {
   $('workViewTitle').textContent = titles[view] || '';
   $('btnTree').hidden = !chat;
   $('btnMore').hidden = !chat;
-  $('btnShare').hidden = !chat;
-  $('btnStats').hidden = !chat;
   for (const button of $('globalRail').querySelectorAll('.rail-icon')) {
     const active = button.id === rail[view];
     button.classList.toggle('is-active', active);
     if (active) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
+  document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-view', { detail: { view } }));
 }
 
 export function workspaceView() { return current.view; }

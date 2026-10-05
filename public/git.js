@@ -35,7 +35,7 @@ import {
 import { listChanges, onChanges } from './changes.js';
 import { toast } from './ui/toast.js';
 import { confirmModal } from './ui/modal.js';
-import { openWorkSurface } from './ui/workspace-surface.js';
+import { openSecondarySurface } from './ui/secondary-surface.js';
 import { allHunksOpen, bindDiffToggles, countDiffLines, diffHtml, setAllHunks } from './diff.js';
 
 /* 自动刷新的防抖窗口。
@@ -230,7 +230,7 @@ export async function refreshGitNow() {
 /* ---------- 面板 ---------- */
 
 export function openChangesPanel() {
-  const surface = openWorkSurface('changes', (card, instance) => {
+  const surface = openSecondarySurface('changes', (card, instance) => {
     card.classList.add('changes');
     activeChangesSurface = instance;
     instance.onDispose(() => {

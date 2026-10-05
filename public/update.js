@@ -283,7 +283,7 @@ export function cancelUpdateAuto() {
 function notifyOnce(version) {
   if (!version || notifiedVersion === version) return;
   notifiedVersion = version;
-  toast(`Pi GUI v${version} 已发布 —— 详情见侧栏「诊断」`, 'info');
+  toast(`Pi GUI v${version} 已发布 —— 详情见「设置 → 应用与更新」`, 'info');
 }
 
 /* ---------- 渲染 ---------- */

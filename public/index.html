@@ -15,11 +15,10 @@
     <div class="global-rail-links">
       <button type="button" class="rail-icon is-active" id="navHome" aria-label="对话" aria-current="page" title="对话"><svg viewBox="0 0 24 24"><path d="M4 10l8-6 8 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M9 20v-7h6v7"/></svg></button>
       <button type="button" class="rail-icon" id="navPlanner" aria-label="任务" title="任务"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 5.5h2.5v3H4zM4 11.5h2.5v3H4zM4 17.5h2.5v3H4z"/></svg><span class="rail-badge" id="planCount"></span></button>
-      <button type="button" class="rail-icon" id="navChanges" aria-label="文件变更" title="文件变更"><svg viewBox="0 0 24 24"><path d="M7 4.5h10a2 2 0 0 1 2 2v13l-3-2-3 2-3-2-3 2v-13a2 2 0 0 1 2-2z"/><path d="M10 9.5h4M10 13h4"/></svg><span class="rail-badge" id="changesCount" hidden></span></button>
-      <button type="button" class="rail-icon" id="navExtensions" aria-label="扩展" title="Skills 与扩展"><svg viewBox="0 0 24 24"><path d="M10 4.5H6.5A2 2 0 0 0 4.5 6.5V10M14 4.5h3.5a2 2 0 0 1 2 2V10M10 19.5H6.5a2 2 0 0 1-2-2V14M14 19.5h3.5a2 2 0 0 0 2-2V14"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2"/></svg><span class="rail-badge" id="extCount"></span></button>
+      <button type="button" class="rail-icon" id="navExtensions" aria-label="Skills 与扩展" title="Skills 与扩展"><svg viewBox="0 0 24 24"><path d="M10 4.5H6.5A2 2 0 0 0 4.5 6.5V10M14 4.5h3.5a2 2 0 0 1 2 2V10M10 19.5H6.5a2 2 0 0 1-2-2V14M14 19.5h3.5a2 2 0 0 0 2-2V14"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2"/></svg><span class="rail-badge" id="extCount"></span></button>
     </div>
     <div class="global-rail-bottom">
-      <button type="button" class="rail-icon" id="navGlobalMore" aria-label="更多全局功能" aria-controls="globalMoreMenu" aria-expanded="false" title="更多"><svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.5" cy="12" r="1.5"/></svg><span class="rp-dot" id="updateDot" hidden></span></button>
+      <button type="button" class="rail-icon" id="navGlobalMore" aria-label="设置" aria-controls="globalMoreMenu" aria-expanded="false" title="设置"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 3 3 1v6l-3 1-1 3H9l-1-3-3-1V8l3-1z"/><circle cx="12" cy="11" r="3"/></svg><span class="rp-dot" id="updateDot" hidden></span></button>
       <button type="button" class="rail-icon" id="btnSidebarExpand" aria-label="展开项目侧栏" aria-controls="projectSidebar" aria-expanded="true" title="展开项目侧栏" hidden><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM10 5v14M13 12h5m-2-2 2 2-2 2"/></svg></button>
     </div>
   </nav>
@@ -46,17 +45,28 @@
     <footer class="rail-foot"><span class="avatar">π</span><span class="foot-name" id="footName">—</span><span class="grow"></span><span class="conn" id="conn"></span><span class="foot-state" id="connText">连接中</span></footer>
   </aside>
 
-  <div class="global-more-menu" id="globalMoreMenu" hidden role="menu" aria-label="更多全局功能">
-    <!-- P24：命令面板与快捷键帮助也在这里给一个可见入口 —— 快捷键要能被发现，
-         不能只写在文档里。它们是**既有动作**的另一个入口，不是新功能。 -->
-    <button type="button" role="menuitem" id="navPalette" title="打开命令面板">命令面板…</button>
-    <button type="button" role="menuitem" id="navShortcutHelp" title="查看键盘快捷键">键盘快捷键…</button>
-    <!-- 两个小点并排：一个是 Pi GUI 自己（update.js），一个是 Pi 运行时（pi-update.js）。
-         放在菜单项里而不是侧栏那颗 More 按钮上，是因为 `.global-rail .rp-dot` 是绝对定位的
-         （top/right 都固定），两颗点会完全重叠、谁也看不见；菜单里的点按文档流排。 -->
-    <button type="button" role="menuitem" id="navDiagnostics">诊断<span class="rp-dot" id="menuUpdateDot" hidden></span><span class="rp-dot" id="piUpdateDot" hidden></span></button>
-    <button type="button" role="menuitem" id="navProviders">模型供应商<span class="rp-count" id="providerCount"></span></button>
-    <button type="button" role="menuitem" id="navProviderAuth">供应商与认证</button>
+  <div class="global-more-menu settings-menu" id="globalMoreMenu" hidden role="menu" aria-label="设置">
+    <section role="group" aria-labelledby="settingsAccounts"><h3 id="settingsAccounts">模型与账户</h3>
+      <button type="button" role="menuitem" id="navProviders">模型供应商<span class="rp-count" id="providerCount"></span></button>
+      <button type="button" role="menuitem" id="navProviderAuth">供应商与认证</button>
+    </section>
+    <section role="group" aria-labelledby="settingsCapabilities"><h3 id="settingsCapabilities">Agent 能力</h3>
+      <button type="button" role="menuitem" id="navCapabilities">能力状态</button>
+    </section>
+    <section role="group" aria-labelledby="settingsExtensions"><h3 id="settingsExtensions">扩展与 MCP</h3>
+      <button type="button" role="menuitem" id="navMcp">MCP 配置</button>
+    </section>
+    <section role="group" aria-labelledby="settingsApp"><h3 id="settingsApp">应用与更新</h3>
+      <button type="button" role="menuitem" id="navAppUpdates">Pi GUI 与 Pi 更新<span class="rp-dot" id="menuUpdateDot" hidden></span><span class="rp-dot" id="piUpdateDot" hidden></span></button>
+      <button type="button" role="menuitem" id="navRestartPi">重启 Pi</button>
+    </section>
+    <section role="group" aria-labelledby="settingsDiagnostics"><h3 id="settingsDiagnostics">诊断</h3>
+      <button type="button" role="menuitem" id="navDiagnostics">运行状态与诊断</button>
+    </section>
+    <section role="group" aria-labelledby="settingsKeyboard"><h3 id="settingsKeyboard">键盘与命令</h3>
+      <button type="button" role="menuitem" id="navPalette" title="打开命令面板">命令面板…</button>
+      <button type="button" role="menuitem" id="navShortcutHelp" title="查看键盘快捷键">键盘快捷键…</button>
+    </section>
   </div>
 
   <main class="stage" id="workspace">
@@ -71,20 +81,14 @@
       <h1 id="workViewTitle" hidden></h1>
       <div class="sess-plans" id="sessionPlans" hidden></div>
       <div class="head-right">
-        <!-- 内置浏览器入口。放在聊天顶部右侧操作区（More / 分享 / 统计 旁边），
+        <button type="button" class="icon-btn" id="navChanges" aria-label="文件变更" title="文件变更" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M7 4.5h10a2 2 0 0 1 2 2v13l-3-2-3 2-3-2-3 2v-13a2 2 0 0 1 2-2z"/><path d="M10 9.5h4M10 13h4"/></svg><span class="head-count" id="changesCount" hidden></span></button>
+        <!-- Browser 与 Changes 是按需右栏；导出与统计收在会话 More 内。
              刻意**不**进左侧全局导航栏 —— 它是一个面板，不是第四个一级视图。 -->
         <button type="button" class="icon-btn" id="btnBrowser" title="内置浏览器" aria-label="内置浏览器" aria-pressed="false">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.6 9.5h16.8M3.6 14.5h16.8"/><path d="M12 3.5c2.2 2.4 3.3 5.3 3.3 8.5s-1.1 6.1-3.3 8.5c-2.2-2.4-3.3-5.3-3.3-8.5S9.8 5.9 12 3.5z"/></svg>
         </button>
         <button type="button" class="icon-btn" id="btnMore" title="更多" aria-label="更多操作">
           <svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>
-        </button>
-        <button type="button" class="share-btn" id="btnShare">
-          <svg viewBox="0 0 24 24"><path d="M12 15.5V4"/><path d="M8 8l4-4 4 4"/><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
-          <span>分享</span>
-        </button>
-        <button type="button" class="icon-btn" id="btnStats" title="会话统计" aria-label="会话统计">
-          <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17"/></svg>
         </button>
       </div>
     </header>
@@ -110,13 +114,8 @@
         <!-- 形态 A：已选项目，pi 就绪 -->
         <div class="welcome-pane" id="welcomeReady" hidden>
           <svg class="welcome-mark" viewBox="0 0 24 24"><path d="M4.5 8h15M9.5 8v11M15.5 8v8"/></svg>
-          <h2>Pi 已就绪</h2>
-          <p>在下面描述你的任务。文件改动与命令执行会实时显示在这里。</p>
-          <div class="welcome-keys">
-            <span><kbd>Enter</kbd> 发送</span>
-            <span><kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
-            <span><kbd>Esc</kbd> 停止</span>
-          </div>
+          <h2>开始一个任务</h2>
+          <p>在下方输入你想完成的事。</p>
         </div>
 
         <!-- 形态 B：还没选项目。
@@ -127,8 +126,8 @@
           <svg class="welcome-mark" viewBox="0 0 24 24">
             <path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h3.2l1.6 2h8.2a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>
           </svg>
-          <h2>先添加一个文件夹</h2>
-          <p>pi 会在你选定的目录里读写文件、执行命令。<br>选一个项目文件夹就可以开始了。</p>
+          <h2>打开项目，开始工作</h2>
+          <p>选择 Pi 将要读写和执行命令的项目文件夹。</p>
           <button type="button" class="welcome-cta" id="btnPickProject">
             <svg viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>
             <span>添加文件夹</span>

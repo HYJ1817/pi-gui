@@ -266,8 +266,7 @@ export function renderProjects() {
 
     select.append(icon, body);
     item.append(select);
-    if (isActive) item.append(headerAction('newSession', '新对话'), headerAction('search', '搜索会话'));
-    else item.append(headerAction('newSession', `在「${label}」中新对话`, async () => {
+    if (!isActive) item.append(headerAction('newSession', `在「${label}」中新对话`, async () => {
       if (S.streaming) return toast('正在生成回答，请先停止再新建其它项目的会话', 'warn');
       await activateForSessionAction(p, () => sessionActions.newSession?.());
     }));

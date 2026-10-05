@@ -74,6 +74,7 @@ export function initRightPane() {
   const listeners = new Set();
   /** 订阅者：surface 想知道「有没有弹层盖上来了」。 */
   const occlusionListeners = new Set();
+  const surfaceListeners = new Set();
 
   function viewportEl() {
     return root.querySelector('.rp-viewport');
@@ -201,7 +202,7 @@ export function initRightPane() {
    * 各自去调一遍：弹层有三个（#modal / #confirmLayer / #paletteLayer），
    * 而且以后还可能加新的。集中一处判断，就不会出现「新加的弹层忘了通知」。
    * 这也正是「一个事实只有一个 owner」。 */
-  const overlays = ['modal', 'confirmLayer', 'paletteLayer'].map(byId).filter(Boolean);
+  const overlays = ['modal', 'confirmLayer', 'paletteLayer', 'globalMoreMenu'].map(byId).filter(Boolean);
 
   function overlaysVisible() {
     return overlays.some((n) => !n.hidden);
@@ -226,7 +227,13 @@ export function initRightPane() {
   /* ---------- 打开 / 关闭 ---------- */
 
   function open(nextSurface) {
-    surface = nextSurface || surface || 'browser';
+    const next = nextSurface || surface || 'browser';
+    if (surface !== next) {
+      for (const fn of surfaceListeners) fn(next);
+      root.querySelector('.rp-body').replaceChildren();
+    }
+    surface = next;
+    root.dataset.surface = surface;
     root.hidden = false;
     app.classList.add('rp-open');
     applyWidth();
@@ -235,11 +242,17 @@ export function initRightPane() {
   }
 
   function close() {
+    const focusInside = root.contains(document.activeElement);
+    const previous = surface;
+    for (const fn of surfaceListeners) fn(null);
+    root.querySelector('.rp-body').replaceChildren();
     surface = null;
+    delete root.dataset.surface;
     root.hidden = true;
     app.classList.remove('rp-open');
     applyMode();
     announce();
+    if (focusInside) byId(previous === 'browser' ? 'btnBrowser' : 'navChanges')?.focus();
   }
 
   /** 告诉外面「右栏开了/关了」—— 入口按钮的 aria-pressed 要跟着变，
@@ -249,6 +262,14 @@ export function initRightPane() {
       new CustomEvent('pi-gui:right-pane', { detail: { open: !root.hidden, surface } })
     );
   }
+
+  root.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || overlaysVisible()) return;
+    event.preventDefault(); event.stopPropagation(); close();
+  });
+  document.addEventListener('pi-gui:workspace-view', event => {
+    if (event.detail?.view !== 'chat' && !root.hidden) close();
+  });
 
   return {
     root,
@@ -276,6 +297,7 @@ export function initRightPane() {
       }
       return () => occlusionListeners.delete(fn);
     },
+    onSurfaceChange: (fn) => { surfaceListeners.add(fn); return () => surfaceListeners.delete(fn); },
     /** 容器尺寸可能变了（例如侧栏折叠），主动重量一次。 */
     refresh: () => {
       applyMode();
