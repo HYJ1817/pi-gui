@@ -14,8 +14,17 @@ Composer 保留原有的 `composerBox`、`input` 和所有控制按钮 ID。它�
 | Context | `renderCtxChip` 显示真实百分比，`openCtxTip` 展示已有的上下文、输入、输出、缓存读取和成本字段 |
 | Model | `openModelPicker` 使用现有模型列表与 `setModel` |
 | Thinking | `openThinkPicker` 使用现有档位与 `setThinkingLevel` |
-| Send | `submit`，运行中仍可通过现有路径发送 steer |
-| Stop | `stop`，运行时成为视觉上的主要动作 |
+| Send | `submit`，运行中仍可通过现有路径发送 steer；**停止未确认期间禁用**（`S.stopping`），那时发出去会变成旧 run 的 steer |
+| Stop | `stop`，运行时成为视觉上的主要动作；点击后立即进入「正在停止…」，等 Pi 回了权威 abort 应答才落回可发送状态（见下） |
+
+**「正在停止…」是一个独立状态，不是 `S.streaming` 的别名。** Pi 的 abort 应答
+（官方语义：等会话变空闲之后才应答）与 `agent_settled` 谁先到都可能，两种顺序下
+`streaming` 都会先变 false，所以拿它当「能不能发」的判据就会把新消息变成旧 run 的
+steer。界面用 `S.stopping`：点击那一刻置真（发送键禁用、Enter 不提交、再点 Stop 不
+重发），只有后端确认（HTTP 应答或 `stop_state` 事件）才落回假，状态栏先说
+「正在停止…」、确认后才是「已停止」。超时未确认时保持禁用并在状态栏说明
+「停止尚未得到 Pi 确认，请等待或重启 Pi」——**不解除保护**。停止期间输入框里的
+字保留，只是不让提交。后端还有一道同样的闸门（`stop_in_progress`），前端禁用不是唯一一层。
 
 附件托盘展示原有 `loading`、解析结果和 `error` 字段，不增加业务状态；每项仍调用 `removeAttachment`。文件名、状态和模型名继续用 `textContent` 写入。拖入状态继续用原有 `dragDepth` 控制，只调整边框和背景。无项目时仍由 `applyProjectState` 锁定输入区。
 

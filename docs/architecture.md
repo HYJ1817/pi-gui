@@ -141,6 +141,18 @@ P25 的认证 adapter 是独立例外：它只在私有 worker 内 import 同一
   调用方要的是「拿不到就降级」，而不是让一个读接口抛 500。
   超时、子进程退出、重启时统一 `settleAllPending(null)`，不让调用方干等超时。
   数字 ID 的后端应答（含启动就绪确认）只在后端消费，不广播给 Renderer。
+- **停止是一座屏障**（`abortAndWait()`）。`abort` 的官方契约是「中止当前操作
+  **并等会话变成空闲之后**才应答」，所以「写进 stdin」不等于停了 —— 这中间那段
+  窗口正是「新消息被当成 steer 排进旧 run」的入口。屏障立起来之后
+  `prompt` / `steer` / `follow_up` 一律拒绝（稳定错误 `stop_in_progress`），
+  **写不到 pi 的 stdin**：前端 disabled、双击、旧 tab、手工 HTTP 都绕不过它。
+  顺序固定：browser 取消确认（P29）→ `clear_queue` → `abort` → 等权威应答。
+  `clear_queue` 必须在 abort **之前**：官方文档明确说 abort 会把**还留在队列里**的
+  steering / follow-up 继续跑完（不先清队列 = 旧队列把 agent 重新拉起来）。
+  解除只认权威证据：abort 应答、`agent_settled` 后回读 `get_state` 确认 idle、
+  或 bridge 换代（旧 run 随进程消失）。**超时不解除** —— 超时只说明「没问到」，
+  不代表旧 run 已经结束；宁可暂时不让发，也不把新任务塞进旧 run。
+  重复点 Stop 复用同一个 Promise，不会写出第二条 clear_queue / abort。
 - **没有项目就不启动 pi**。pi 的 cwd 只能在启动时确定；随便挑一个目录当 cwd
   会凭空造出一批会话文件，还会把那个目录的历史会话显示给用户。
 
