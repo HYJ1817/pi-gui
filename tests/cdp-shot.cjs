@@ -458,7 +458,7 @@ async function main() {
   await shotOf('#globalMoreMenu', '63-global-more', 'P14-A：低频入口', ['诊断', '模型供应商'], [['More 展开且入口为真按钮', `!document.querySelector('#globalMoreMenu').hidden && [...document.querySelectorAll('#globalMoreMenu button')].every(b => b.tagName === 'BUTTON' && typeof b.onclick === 'function')`], ['More 左边缘贴齐 Global Rail', `Math.abs(document.querySelector('#globalMoreMenu').getBoundingClientRect().left - document.querySelector('#globalRail').getBoundingClientRect().right) <= 1`]]);
   await evalJs(`document.querySelector('#navGlobalMore').click()`);
   await evalJs(`document.querySelector('#navChanges').click()`);
-  await shotOf('#globalRail', '64-rail-changes', 'P14-A：文件变更激活', [], [['文件变更为唯一激活', `document.querySelector('#navChanges[aria-current="page"]') && document.querySelectorAll('#globalRail [aria-current="page"]').length === 1`]]);
+  await shotOf('#navChanges', '64-rail-changes', 'P14-A：文件变更激活', [], [['文件变更为唯一激活', `document.querySelector('#navChanges[aria-pressed="true"]') && document.querySelectorAll('#globalRail [aria-current="page"]').length === 1`]]);
   await evalJs(`document.querySelector('#navHome').click()`);
   await evalJs(`document.querySelector('#navPlanner').click()`);
   await shotOf('#globalRail', '65-rail-planner', 'P14-A：任务激活', [], [['任务为唯一激活', `document.querySelector('#navPlanner[aria-current="page"]') && document.querySelectorAll('#globalRail [aria-current="page"]').length === 1`]]);
@@ -977,21 +977,21 @@ async function main() {
   await sleep(180);
   await evalJs(`document.querySelector('#navChanges').click()`);
   await sleep(500);
-  await shotOf('#workSurface', '111-workspace-changes', 'P14-D：Changes Stage 工作区', ['文件变更', 'public/app.js'], [...surfaceChecks('changes'), ['真实文件行', `document.querySelectorAll('#workSurface .chg-row').length>=3`]]);
-  await evalJs(`document.querySelector('#workSurface .chg-main')?.click()`);
+  await shotOf('#rightPane', '111-workspace-changes', 'P14-D：Changes Stage 工作区', ['文件变更', 'public/app.js'], [['右栏工作面可见且保留中央 Planner', `!document.querySelector('#rightPane').hidden && document.querySelector('#rightPane').dataset.surface==='changes' && document.querySelector('#workspace').dataset.workspaceView==='planner'`], ['真实文件行', `document.querySelectorAll('#rightPane .chg-row').length>=3`]]);
+  await evalJs(`document.querySelector('#rightPane .chg-main')?.click()`);
   await sleep(300);
-  await shotOf('#workSurface .chg-row.open', '112-workspace-changes-expanded', 'P14-D：展开的 unified diff', ['public/app.js'], [['diff 有实际高度', `document.querySelector('#workSurface .chg-diff')?.getBoundingClientRect().height>30`], ['页面无横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`]]);
+  await shotOf('#rightPane .chg-row.open', '112-workspace-changes-expanded', 'P14-D：展开的 unified diff', ['public/app.js'], [['diff 有实际高度', `document.querySelector('#rightPane .chg-diff')?.getBoundingClientRect().height>30`], ['页面无横向溢出', `document.documentElement.scrollWidth<=innerWidth+1`]]);
   await evalJs(`document.querySelector('#chgFilterSession')?.click()`);
-  await shotOf('#workSurface', '113-workspace-changes-filter-session', 'P14-D：仅本次会话', ['仅本次会话'], [['过滤按钮选中', `document.querySelector('#chgFilterSession')?.classList.contains('on')`]]);
+  await shotOf('#rightPane', '113-workspace-changes-filter-session', 'P14-D：仅本次会话', ['本会话编辑'], [['过滤按钮选中', `document.querySelector('#chgFilterSession')?.classList.contains('on')`]]);
   await evalJs(`fetch('/api/__work-surface/git-clean?value=1').then(r=>r.ok)`);
-  await evalJs(`document.querySelector('#workSurface .chg-head .btn:not(.danger)')?.click()`);
+  await evalJs(`document.querySelector('#rightPane .chg-head .btn:not(.danger)')?.click()`);
   await sleep(350);
-  await shotOf('#workSurface', '114-workspace-changes-clean', 'P14-D：干净工作区中性空态', ['没有文件变更'], [['无文件行', `document.querySelectorAll('#workSurface .chg-row').length===0`]]);
+  await shotOf('#rightPane', '114-workspace-changes-clean', 'P14-D：干净工作区中性空态', ['没有文件变更'], [['无文件行', `document.querySelectorAll('#rightPane .chg-row').length===0`]]);
   await evalJs(`fetch('/api/__work-surface/git-clean?value=0').then(r=>r.ok)`);
-  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
   await sleep(550);
   /* P22：Extensions 工作区默认落在 All（统一能力视图），Skills 是它的第四个过滤器。 */
-  await shotOf('#workSurface', '115-workspace-extensions', 'P14-D / P22：扩展工作区默认落在 All 能力视图', ['Web Access', 'Native MCP', '已加载'], [...surfaceChecks('extensions'), ['能力行与统一状态行都在', `document.querySelectorAll('#workSurface .cap-view .ext-item').length>=8 && [...document.querySelectorAll('#workSurface .cap-view .cap-status-line')].every(e=>e.textContent.trim().length>0)`], ['项目级 Extension 没丢', `[...document.querySelectorAll('#workSurface .cap-view .ext-name')].some(e=>e.textContent==='acme-toolkit')`]]);
+  await shotOf('#workSurface', '115-workspace-extensions', 'P14-D / P22：扩展工作区显式选择 All 能力视图', ['Web Access', 'Native MCP', '已加载'], [...surfaceChecks('extensions'), ['能力行与统一状态行都在', `document.querySelectorAll('#workSurface .cap-view .ext-item').length>=8 && [...document.querySelectorAll('#workSurface .cap-view .cap-status-line')].every(e=>e.textContent.trim().length>0)`], ['项目级 Extension 没丢', `[...document.querySelectorAll('#workSurface .cap-view .ext-name')].some(e=>e.textContent==='acme-toolkit')`]]);
   await evalJs(`document.querySelector('#extensionsTabSkills').click()`);
   await sleep(400);
   await shotOf('#workSurface', '115b-workspace-skills', 'P14-D：Skills Stage 工作区', ['Skills', 'code-review'], [['Skill 列表可见', `document.querySelectorAll('#workSurface .ext-list .ext-item').length===3`]]);
@@ -1049,7 +1049,7 @@ async function main() {
   const viewportChecks = (selector) => [
     ['无整体横向或纵向滚动', `document.documentElement.scrollWidth<=innerWidth+1 && document.documentElement.scrollHeight<=innerHeight+1`],
     ['工作区有可用高度且位于 Stage 内', `(() => {const a=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),s=document.querySelector('#workspace').getBoundingClientRect();return a.height>180&&a.left>=s.left-1&&a.right<=s.right+1&&a.bottom<=s.bottom+1})()`],
-    ['关键操作在 Stage 水平边界内', `(() => {const s=document.querySelector('#workspace').getBoundingClientRect();return [...document.querySelectorAll('#chatComposer button,#workSurface .chg-head button,#workSurface .ext-bar button,#workSurface .planner-bar button')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).every(e=>{const r=e.getBoundingClientRect();return r.left>=s.left-1&&r.right<=s.right+1})})()`],
+    ['关键操作在 Stage 水平边界内', `(() => {const s=document.querySelector('#workspace').getBoundingClientRect();return [...document.querySelectorAll('#chatComposer button,#rightPane .chg-head button,#workSurface .ext-bar button,#workSurface .planner-bar button')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).every(e=>{const r=e.getBoundingClientRect();return r.left>=s.left-1&&r.right<=s.right+1})})()`],
     ['内部滚动容器承担滚动', `getComputedStyle(document.querySelector(${JSON.stringify(selector==='#chatView'?'#stream':'#workSurface')})).overflowY===${JSON.stringify(selector==='#chatView'?'auto':'hidden')}`],
     ['可见交互控件无琥珀色', neutralControls],
   ];
@@ -1067,8 +1067,8 @@ async function main() {
   await shotOf('.planner-rv', '130-neutral-planner-review', 'P14-E：Review 操作为灰阶', [], [['计算后的交互色为中性', neutralControls]]);
   await evalJs(`document.querySelector('#navChanges').click()`);
   await sleep(350);
-  await shotOf('#workSurface', '131-neutral-changes', 'P14-E：Git 过滤与危险按钮主体中性', ['文件变更'], [...viewportChecks('#workSurface')]);
-  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await shotOf('#rightPane', '131-neutral-changes', 'P30：右栏 Git 过滤与危险按钮主体中性', ['文件变更'], [['右栏无横向溢出', `document.querySelector('#rightPane').scrollWidth<=document.querySelector('#rightPane').clientWidth+1`], ['计算后的交互色为中性', neutralControls]]);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
   await sleep(350);
   /* P22：默认落在 All 能力视图；这一张量的是 Skill 选中行的中性色，所以先切到 Skills。 */
   await evalJs(`document.querySelector('#extensionsTabSkills')?.click()`);
@@ -1083,7 +1083,7 @@ async function main() {
   await sleep(320);
   await evalJs(`document.querySelector('#chgFilterAll')?.click()`);
   await sleep(150);
-  await evalJs(`document.querySelector('#workSurface .chg-head .btn.danger')?.click()`);
+  await evalJs(`document.querySelector('#rightPane .chg-head .btn.danger')?.click()`);
   await sleep(200);
   await shotOf('#confirmLayer', '134-neutral-confirm', 'P14-E：危险确认主操作使用中性底色', ['撤销全部'], [['计算后的交互色为中性', neutralControls], ['危险按钮无大面积红色背景', `(() => {const b=document.querySelector('#confirmLayer .btn.danger');return !!b&&getComputedStyle(b).backgroundColor!=='rgb(248, 113, 113)'})()`], ['确认按钮文字完整且操作区不溢出', `(() => {const a=document.querySelector('#confirmLayer .modal-actions');return a.scrollWidth<=a.clientWidth+1&&[...a.querySelectorAll('button')].every(b=>getComputedStyle(b).whiteSpace==='nowrap'&&b.getBoundingClientRect().height>=30)})()`]]);
   await evalJs(`document.querySelector('#confirmLayer .btn:not(.danger)')?.click()`);
@@ -1170,7 +1170,7 @@ async function main() {
   ]);
 
   /* P15: 在真浏览器布局中检查 Extension 列表和详情。 */
-  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
   await sleep(260);
   await evalJs(`document.querySelector('#extensionsTabExtensions').click()`);
   for (let i=0; i<40 && !await evalJs(`document.querySelector('#workSurface .ext-extension-item')`); i++) await sleep(50);
@@ -1307,7 +1307,7 @@ async function main() {
   await sleep(120);
   await evalJs(`fetch('/api/__conversation?what=quota-restore-model').then(r=>r.ok)`);
   await sleep(160);
-  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
   await sleep(300);
   /* P22：Pi Memory 的 setup 已并入统一的 Capability 详情（不再是 Extensions 页里的一段）。 */
   await evalJs(`document.querySelector('#extensionsTabCapabilities')?.click()`);
@@ -1326,7 +1326,7 @@ async function main() {
    * 700/900/1200/1536 四档宽度。断言只描述**结构事实**（有几个字段、有没有
    * 那个元素），不描述像素值 —— 像素值随字体变，钉它只会得到假红。 */
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
   await sleep(500);
   await evalJs(`document.querySelector('#extensionsTabAll')?.click()`);
   await sleep(400);
@@ -1381,7 +1381,7 @@ async function main() {
 
   for (const [width, label] of [[700, '176-capability-700'], [900, '177-capability-900'], [1200, '178-capability-1200'], [1536, '179-capability-1536']]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
-    await evalJs(`document.querySelector('#navExtensions').click()`);
+    await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
     await sleep(460);
     await shotOf('#workSurface', label, `P22：${width}px 能力视图 —— 无横向溢出、无巨型卡片`, ['Web Access'], [
       ...surfaceChecks('extensions'),
@@ -1393,7 +1393,7 @@ async function main() {
   await send('Emulation.clearDeviceMetricsOverride');
   await sleep(300);
 
-  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
   await sleep(460);
   await evalJs(`(() => {const s=document.querySelector('#workSurface .cap-view .ext-search');s.value='memory';s.dispatchEvent(new Event('input'))})()`);
   await sleep(260);
@@ -1550,7 +1550,7 @@ async function main() {
   await send('Emulation.setDeviceMetricsOverride',{...sessionMenuViewport,deviceScaleFactor:1,mobile:false});
 
   /* UX-CAP-01：Native MCP 的详情 —— 只留适用的字段。 */
-  await evalJs(`document.querySelector('#navExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabAll').click()`);
   await sleep(520);
   await evalJs(`document.querySelector('#extensionsTabAll')?.click()`);
   await sleep(320);
@@ -1993,7 +1993,10 @@ async function main() {
     const token=getComputedStyle(document.documentElement).getPropertyValue('--titlebar').trim();
     if (Math.abs(r.top)>0.5) return '顶栏不在窗口顶部：top='+r.top;
     if (Math.abs(r.height-46)>0.5) return '高度不是 46：'+r.height;
-    if (r.right < innerWidth-1) return '顶栏没有铺到右侧原生按钮区：right='+r.right+' innerWidth='+innerWidth;
+    const pane=document.querySelector('#rightPane');
+    const boundary=pane.hidden ? innerWidth : pane.getBoundingClientRect().left;
+    if (Math.abs(r.right-boundary)>1) return '中央顶栏未与窗口或右栏边界衔接：right='+r.right+' boundary='+boundary;
+    if (!pane.hidden && Math.abs(pane.getBoundingClientRect().right-innerWidth)>1) return '右栏未延伸到窗口右边界';
     if (!/rgb\\(13, 13, 13\\)/.test(cs.backgroundColor)) return '背景色不对：'+cs.backgroundColor;
     if (token.toLowerCase() !== '#0d0d0d') return '--titlebar 不是 electron overlay 的颜色：'+token;
     if (cs.borderBottomWidth !== '1px') return '底部分隔线不见了：'+cs.borderBottomWidth;

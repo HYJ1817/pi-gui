@@ -1584,7 +1584,9 @@ const server = http.createServer(async (req, res) => {
       push({ type: 'tool_execution_end', toolCallId: 'p20-timeout', isError: true, result: { content: [{ type: 'text', text: 'browser_wait_for_load failed (timeout): PRIVATE_UPSTREAM_MESSAGE' }], details: { ok: false, kind: 'timeout', message: 'PRIVATE_UPSTREAM_MESSAGE' } } });
       return json(res, 200, { ok: true });
     }
-    if (what === 'fixture' || what === 'reset') {
+    if (what === 'empty') {
+      push({ type: 'response', command: 'get_messages', success: true, data: { messages: [] } });
+    } else if (what === 'fixture' || what === 'reset') {
       push({ type: 'response', command: 'get_messages', success: true, data: { messages: what === 'fixture' ? P14B_MESSAGES : MESSAGES } });
     } else if (what === 'long-thread') {
       /* 长会话夹具（UX 场景用）：N 次「提问 + 回答」，每次回答长度差异很大，
@@ -1638,5 +1640,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`视觉夹具已启动: http://127.0.0.1:${PORT}/`);
+  console.log(`视觉夹具已启动: http://127.0.0.1:${server.address().port}/`);
 });

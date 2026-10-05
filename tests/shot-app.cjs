@@ -128,7 +128,7 @@ function connect(url) {
       captionReserve: headRight === null ? null : window.innerWidth - headRight,
       dragRail: region('.rail-head'),
       dragStage: region('.stage-head'),
-      dragBtn: region('#btnStats'),
+      dragBtn: region('#btnMore'),
     };
 
     return {
@@ -201,7 +201,7 @@ function connect(url) {
   for (const [label, val, want] of [
     ['.rail-head ', tb.dragRail, 'drag'],
     ['.stage-head', tb.dragStage, 'drag'],
-    ['#btnStats  ', tb.dragBtn, 'no-drag'],
+    ['#btnMore  ', tb.dragBtn, 'no-drag'],
   ]) {
     const ok = val === want;
     if (!ok) titlebarBad++;

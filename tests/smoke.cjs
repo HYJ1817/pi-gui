@@ -1940,12 +1940,12 @@ staticCheck();
    * 真实的 git 行为（路径逃逸、重命名、中文文件名、restore…）在 tests/git.cjs 里
    * 用临时仓库验，这里全部走桩，不碰开发者的仓库。 */
 
-  const chgRows = () => [...window.document.querySelectorAll('#workSurface .chg-row')];
-  const chgText = () => ($('workSurface') ? $('workSurface').textContent : '');
+  const chgRows = () => [...window.document.querySelectorAll('#rightPane .chg-row')];
+  const chgText = () => ($('rightPane') ? $('rightPane').textContent : '');
   const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
   const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
 
-  check('全局栏有「文件变更」入口', () => window.document.querySelector('#globalRail #navChanges') !== null);
+  check('全局栏有「文件变更」入口', () => window.document.querySelector('.head-right #navChanges') !== null);
 
   gitStub.status = {
     ok: true,
@@ -1963,12 +1963,12 @@ staticCheck();
 
   $('navChanges').click();
   await new Promise((r) => setTimeout(r, 20));
-  check('变更工作区打开且没有 Modal 遮罩', () => $('workspace').dataset.workspaceView === 'changes' && !$('workSurface').hidden && $('modal').hidden);
+  check('变更工作区打开且没有 Modal 遮罩', () => $('workspace').dataset.workspaceView === 'chat' && !$('rightPane').hidden && $('modal').hidden);
   check('列表渲染 5 行', () => chgRows().length === 5);
   check('Changes 全部过滤器的选中语义与状态一致', () => $('chgFilterAll').classList.contains('on') && $('chgFilterAll').getAttribute('aria-pressed') === 'true' && $('chgFilterSession').getAttribute('aria-pressed') === 'false');
   check('状态字母正确', () => chgRows().map((x) => x.querySelector('.chg-code').textContent).join('') === 'MA??M??');
   check('含空格与中文的路径原样渲染', () => chgRows().some((x) => x.querySelector('.chg-path').textContent === 'docs/中文 说明.md'));
-  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('workSurface')) === 0 || `解析出了 ${liveCount($('workSurface'))} 个危险元素`);
+  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('rightPane')) === 0 || `解析出了 ${liveCount($('rightPane'))} 个危险元素`);
   check('恶意文件名仍以原样文本呈现（没被截断或吃掉）', () =>
     chgRows().some((x) => x.querySelector('.chg-path').textContent === 'tmp/<img onerror=alert(1)>.txt'));
   check('增删行数渲染', () => {
@@ -2086,7 +2086,7 @@ staticCheck();
   chgRows()[0].querySelector('.chg-acts .btn.danger').click();
   await new Promise((r) => setTimeout(r, 10));
   check('撤销先弹二次确认', () => $('confirmLayer').hidden === false && confirmText().includes('尚未提交的改动会丢失'));
-  check('确认层不破坏下层工作区', () => $('workspace').dataset.workspaceView === 'changes' && chgRows().length === 5);
+  check('确认层不破坏下层工作区', () => $('rightPane').dataset.surface === 'changes' && chgRows().length === 5);
   confirmBtn('取消').click();
   await new Promise((r) => setTimeout(r, 10));
   check('取消确认则不发起撤销', () => gitCalls.filter((c) => c.kind === 'restore').length === restoreBefore);
@@ -2329,7 +2329,7 @@ staticCheck();
 
   /* --- 全部撤销 --- */
   console.log('\n--- 全部撤销 ---');
-  const allBtnInHead = () => $('workSurface').querySelector('.chg-head .btn.danger');
+  const allBtnInHead = () => $('rightPane').querySelector('.chg-head .btn.danger');
 
   gitStub.status = { ok: true, isRepo: true, projectRoot: 'C:\\pi-GUI', files: FILES5 };
   await window.loadGitStatus();
@@ -2681,6 +2681,7 @@ staticCheck();
   $('modal').click();
 
   // --- 弹层：统计 ---
+  $('btnMore').click();
   $('btnStats').click();
   await new Promise((r) => setTimeout(r, 10));
   es.emit({
@@ -2693,7 +2694,7 @@ staticCheck();
 
   // --- 弹层：更多 ---
   $('btnMore').click();
-  check('更多菜单 5 项', () => window.document.querySelectorAll('#modalCard .modal-item').length === 5);
+  check('更多菜单 4 项（重启已移入设置）', () => window.document.querySelectorAll('#modalCard .modal-item').length === 4);
   $('modal').click();
 
   // --- 导出：相对路径补成绝对 ---
@@ -7557,7 +7558,7 @@ staticCheck();
   check('Rail 扩展入口打开扩展工作区', () => $('workspace').dataset.workspaceView === 'extensions' && $('modal').hidden && $('navExtensions').getAttribute('aria-current') === 'page');
   $('navHome').click();
   $('navChanges').click();
-  check('Rail 文件变更入口打开文件工作区', () => $('workspace').dataset.workspaceView === 'changes' && $('modal').hidden && $('navChanges').getAttribute('aria-current') === 'page');
+  check('Rail 文件变更入口打开文件工作区', () => $('workspace').dataset.workspaceView === 'chat' && $('modal').hidden && $('navChanges').getAttribute('aria-pressed') === 'true');
   $('navHome').click();
 
   /* P14-B：独立夹具走现有历史与流式入口，核对真实节点与可操作性。
@@ -7829,8 +7830,8 @@ staticCheck();
     check('P14-D 非 Chat 时流式正文继续进入原 Conversation', () => $('stream').textContent.includes('离开 Chat 后继续生成') && window.S.streaming);
     $('workSurface').querySelector('.planner-goal')?.focus();
     $('navChanges').click();
-    check('P14-E Surface 被替换后焦点回到当前一级导航', () => window.document.activeElement === $('navChanges'));
-    check('P14-D Changes 替换 Planner 且仅一份 Surface', () => $('workspace').dataset.workspaceView === 'changes' && host.querySelector('.chg-body') && !host.querySelector('.planner-pane') && $('navChanges').getAttribute('aria-current') === 'page');
+    check('P30 Changes 不替换当前 Planner 焦点', () => $('workSurface').contains(window.document.activeElement));
+    check('P30 Changes 在右栏且 Planner 保持原实例', () => $('workspace').dataset.workspaceView === 'planner' && $('rightPane').querySelector('.chg-body') && host.querySelector('.planner-pane') && $('navChanges').getAttribute('aria-pressed') === 'true');
     $('navExtensions').click();
     check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
     check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
