@@ -5,8 +5,8 @@
  * 或者路径前缀多一层，都只会在别人解压后暴露 —— 那时已经发出去了。
  *
  * 「便携」在这里指**不用安装**（不写注册表、不建快捷方式），
- * 不是说零残留：Electron 的 userData 仍会落在 %APPDATA%。
- * 所以这里用 PI_GUI_DATA 指到临时目录，避免污染真实用户数据。
+ * 不是说零残留：Electron 的 userData 默认会落在 %APPDATA%。
+ * 测试同时隔离后端 PI_GUI_DATA 和 Electron profile，避免触碰真实用户数据。
  *
  * ---------- 就绪探测为什么走 /api/health ----------
  *
@@ -140,7 +140,7 @@ async function until(fn, ms, label) {
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.NODE_OPTIONS;
 
-  const p = spawn(path.join(APP_DIR, EXE), ['--no-sandbox'], {
+  const p = spawn(path.join(APP_DIR, EXE), ['--no-sandbox', `--user-data-dir=${path.join(DEST, '_profile')}`], {
     cwd: APP_DIR,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
