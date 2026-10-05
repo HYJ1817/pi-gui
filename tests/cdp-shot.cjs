@@ -606,6 +606,28 @@ async function main() {
   await evalJs(`fetch('/api/__push?what=running').then(r=>r.ok)`);
   await sleep(160);
   await shotOf('#composerBox', '97-composer-running', 'P14-C：运行时 Stop 为主操作', ['停止'], [['停止可用且发送入口仍在', `!document.querySelector('#btnStop').hidden && document.querySelector('#btnSend').getBoundingClientRect().width>0`], ['控件不越界', controls]]);
+  /* P30：停止是**权威停止**。夹具扣住 abort 的应答，界面就该停在「正在停止…」
+   * —— 状态栏不许说「已请求停止…」，发送入口不许可用，输入的字不能丢。 */
+  await evalJs(`fetch('/api/__composer?what=hold-stop').then(r=>r.ok)`);
+  await evalJs(`(() => { const t=document.querySelector('#input'); t.value='停止之后要发的'; t.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  await sleep(80);
+  await evalJs(`document.querySelector('#btnStop').click(); true`);
+  await sleep(240);
+  await shotOf('#composerBox', '105-composer-stopping', 'P30：停止未确认期间发送禁用，状态栏说「正在停止…」', ['正在停止'], [
+    ['状态栏不是「已请求停止…」', `document.querySelector('#statusText').textContent==='正在停止…'`],
+    ['发送键禁用', `document.querySelector('#btnSend').disabled===true`],
+    ['输入的字仍留着', `document.querySelector('#input').value==='停止之后要发的'`],
+    ['控件不越界', controls],
+  ]);
+  await evalJs(`fetch('/api/__composer?what=release-stop').then(r=>r.ok)`);
+  await sleep(240);
+  await shotOf('#composerBox', '106-composer-stopped', 'P30：确认之后才是「已停止」，发送入口恢复', [], [
+    ['状态栏是「已停止」', `document.querySelector('#statusText').textContent==='已停止'`],
+    ['发送键恢复可用（内容还在）', `document.querySelector('#btnSend').disabled===false`],
+    ['停止按钮已收起', `document.querySelector('#btnStop').hidden===true`],
+    ['控件不越界', controls],
+  ]);
+  await evalJs(`(() => { const t=document.querySelector('#input'); t.value=''; t.dispatchEvent(new Event('input',{bubbles:true})); })()`);
   await evalJs(`fetch('/api/__push?what=settled').then(r=>r.ok)`);
   await evalJs(`(() => { const b=${box}; b.classList.add('is-locked'); document.querySelector('#input').disabled=true; document.querySelector('#btnSend').disabled=true; })()`);
   await shotOf('#composerBox', '98-composer-locked', 'P14-C：无项目时输入区锁定视觉夹具', [], [['输入不可编辑且发送不可用', `document.querySelector('#input').disabled && document.querySelector('#btnSend').disabled && ${box}.classList.contains('is-locked')`]]);

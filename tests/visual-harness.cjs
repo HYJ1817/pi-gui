@@ -645,6 +645,9 @@ const safeName = (name) =>
 
 const clients = new Set();
 let holdNextComposerUpload = false;
+/* P30：扣住下一条 abort 的 HTTP 应答，用来取「停止未确认」那一帧。 */
+let holdNextStop = false;
+let heldStop = null;
 let workSurfaceGitClean = false;
 /* P22：让 /api/extensions 返回「发现失败」，用来截「未知（无法确认）」而不是「未安装」。 */
 let capabilityRegistryFail = false;
@@ -1397,6 +1400,14 @@ const server = http.createServer(async (req, res) => {
     } catch {
       return json(res, 400, { ok: false, error: '命令不是合法 JSON' });
     }
+    /* P30：真实停止要等 Pi 的权威确认 —— 夹具这里把那条 abort 应答**扣住**，
+     * 界面才会停在「正在停止…」（而不可能实现的状态）。由
+     * `/api/__composer?what=release-stop` 放行。 */
+    if (cmd.type === 'abort' && holdNextStop) {
+      holdNextStop = false;
+      heldStop = res;
+      return;
+    }
     json(res, 200, { ok: true });
     // 稍等一下再回，模拟真实往返，让加载态有机会被截到
     setTimeout(() => push({ ...replyFor(cmd), id: cmd.id }), 30);
@@ -1441,6 +1452,19 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/__composer' && url.searchParams.get('what') === 'hold-upload') {
     holdNextComposerUpload = true;
     return json(res, 200, { ok: true });
+  }
+
+  if (p === '/api/__composer' && url.searchParams.get('what') === 'hold-stop') {
+    holdNextStop = true;
+    return json(res, 200, { ok: true });
+  }
+
+  if (p === '/api/__composer' && url.searchParams.get('what') === 'release-stop') {
+    const held = heldStop;
+    heldStop = null;
+    /* 权威停止的应答形状与真后端一致（evidence 来自 server/rpc-bridge.js）。 */
+    if (held) json(held, 200, { ok: true, stop: { evidence: 'abort-response', queue: 'cleared' } });
+    return json(res, 200, { ok: true, released: Boolean(held) });
   }
 
   // 排查用：手动往事件流里推一条，确认前端到底收没收到

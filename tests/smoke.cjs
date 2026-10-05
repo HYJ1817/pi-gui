@@ -3088,6 +3088,65 @@ staticCheck();
   es.emit({ type: 'agent_settled' });
   check('结束后停止按钮隐藏', () => $('btnStop').hidden === true);
 
+  /* --- Stop 是权威停止（P30）：装配层的三条路径 ---
+   *
+   * 后端时序在 tests/stop-barrier.cjs；这里测的是**界面装配**：
+   * 按钮 / Enter / SSE 分发有没有接对。停止没确认之前，界面必须一个字都发不出去
+   * —— 那正是「新任务变成旧 run 的 steer」的入口。 */
+  {
+    const baseFetch = window.fetch;
+    let abortReply = { ok: true, stop: { evidence: 'abort-response' } };
+    window.fetch = async (url, opts) => {
+      const body = opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
+      if (String(url).includes('/api/command') && body && body.type === 'abort') {
+        commands.push(body);
+        return { json: async () => abortReply };
+      }
+      return baseFetch(url, opts);
+    };
+    window.S.hasProject = true;
+    window.S.switching = false;
+    window.S.bridgeState = 'ready';
+    window.S.stopping = false;
+    es.emit({ type: 'agent_start' });
+    $('input').value = '停止之后要发的';
+    $('input').dispatchEvent(new window.Event('input', { bubbles: true }));
+    check('停止之前发送键可用', () => $('btnSend').disabled === false);
+    commands.length = 0;
+    $('btnStop').click();
+    check('点 Stop 立即进入 stopping', () => window.S.stopping === true);
+    check('停止期间发送键禁用', () => $('btnSend').disabled === true);
+    check('状态栏说「正在停止…」而不是「已请求停止…」', () => $('statusText').textContent === '正在停止…');
+    check('Stop 只发一条 abort', () => commands.filter((c) => c.type === 'abort').length === 1);
+    $('btnStop').click();
+    check('再点 Stop 不重复发送', () => commands.filter((c) => c.type === 'abort').length === 1);
+    $('btnSend').click();
+    $('input').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    check('停止期间点发送 / 按 Enter 都不提交', () => !commands.some((c) => c.type === 'prompt' || c.type === 'steer'));
+    check('停止期间更不会把新内容当 steer 插进旧 run', () => !commands.some((c) => c.type === 'steer'));
+    es.emit({ type: 'agent_settled' });
+    check('agent_settled 先到也不解除 stopping（屏障还没解除）', () => window.S.stopping === true);
+    check('输入的字仍然留着', () => $('input').value === '停止之后要发的');
+    await new Promise((r) => setTimeout(r, 20));
+    check('后端确认后（HTTP ok）界面落回「已停止」', () => window.S.stopping === false && $('statusText').textContent === '已停止');
+
+    /* 超时那条路径由后端广播 stop_state 收口 —— 装配层必须把它接上。 */
+    window.S.stopping = true;
+    window.S.streaming = true;
+    es.emit({ type: 'stop_state', state: 'stopped', evidence: 'abort-response' });
+    check('stop_state 事件收口 stopping 与 streaming', () => window.S.stopping === false && window.S.streaming === false);
+    check('stop_state 之后状态栏是「已停止」', () => $('statusText').textContent === '已停止');
+
+    /* 换进程/换代：旧停止的应答不许再动界面。 */
+    const run = Number.isInteger(window.S.bridgeRun) ? window.S.bridgeRun : 1;
+    window.S.bridgeRun = run;
+    window.S.stopping = true;
+    es.emit({ type: 'bridge_status', state: 'restarting', bridgeRun: run });
+    check('bridge 换代解除 stopping', () => window.S.stopping === false);
+    window.fetch = baseFetch;
+    window.S.stopping = false;
+  }
+
   // --- 权限确认子协议（P19：对话框统一走 #confirmLayer 这一套确认 foundation） ---
   window.S.switching = false;
   es.emit({ type: 'extension_ui_request', id: 'ui1', method: 'confirm', title: '允许执行 rm 吗？', message: 'rm -rf /tmp/x' });
