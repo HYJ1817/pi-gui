@@ -95,6 +95,7 @@ export function createRpcBridge({
   env = process.env,
   projectLaunch = null,
   browserLaunch = null,
+  processLaunch = null,
   compat = null,
   spawnProcess = spawn,
   /* 进程树终止原语（**注入**，见文件头的说明）。Windows 上 `child.kill()`
@@ -240,6 +241,7 @@ export function createRpcBridge({
     const childEnv = { ...env };
     delete childEnv.PI_GUI_TOKEN;
     for (const key of ['PI_GUI_BROWSER_BRIDGE_URL','PI_GUI_BROWSER_BRIDGE_TOKEN','PI_GUI_BROWSER_EXTENSION','PI_GUI_BROWSER_URL','PI_GUI_BROWSER_TOKEN']) delete childEnv[key];
+    for (const key of ['PI_GUI_PROCESS_URL','PI_GUI_PROCESS_TOKEN']) delete childEnv[key];
     if (browser) Object.assign(childEnv, browser.env);
 
     const opts = {
@@ -321,11 +323,19 @@ export function createRpcBridge({
         }
         starting = false;
       }
-      child = spawnPi(launchBin, browser ? [...args,...browser.args] : args, browser);
+      let managed = null;
+      if (processLaunch?.available()) {
+        starting = true;
+        managed = await processLaunch.prepare();
+        if (generation !== launchGeneration || runtime.isShuttingDown() || maintenance || runtime.getCurrentCwd() !== cwd) return;
+        starting = false;
+      }
+      child = spawnPi(launchBin, [...args,...(browser?.args||[]),...(managed?.args||[])], {env:{...(browser?.env||{}),...(managed?.env||{})}});
       pi = child;
     } catch (err) {
       starting = false;
       browserLaunch?.invalidate({disable:true,revoke:true});
+      processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       restartRequested = false;
       publish({ type: 'bridge_status', state: 'error', error: '无法启动 pi。', hint: '确认 pi 已安装并在 PATH 中，或检查 PI_BIN 配置。', cwd, bridgeRun: run });
       return;
@@ -343,6 +353,7 @@ export function createRpcBridge({
     child.on('error', (err) => {
       if (pi !== child || child === retiringChild) return;
       browserLaunch?.invalidate({disable:true,revoke:true});
+      processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       restartRequested = false;
       publish({
         type: 'bridge_status',
@@ -432,6 +443,7 @@ export function createRpcBridge({
     const onStopped = (code, signal) => {
       if (pi !== child) return;
       browserLaunch?.invalidate({disable:true,revoke:true});
+      processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       pi = null;
       /* 进程没了：旧 run 不可能还在跑，停止屏障随之作废
        * （否则一次没等到应答的停止会把界面永久锁死）。 */
@@ -641,6 +653,11 @@ export function createRpcBridge({
 
   /** 一次停止的全过程。**不抛** —— 结果通过 run.report / run.done 给出去。 */
   async function runStop(run) {
+    if (processLaunch?.available()) {
+      try { await processLaunch.invalidate({strict:true}); }
+      catch { run.resolveReport({ok:false,code:'process_cancel_unconfirmed',error:'Pi 已收到停止请求，但开发进程动作取消确认不可用。'}); }
+      if (stopRun !== run) return;
+    }
     /* 1. 浏览器自动动作先失效（P29）。失败**不谎报成功**（报告里带明确 code），
      *    但仍然把 abort 送给 Pi —— 那是两件事，不能因为浏览器不可用就不停 Pi。 */
     if (browserLaunch?.available()) {
@@ -790,6 +807,7 @@ export function createRpcBridge({
     launchGeneration++;
     starting = false;
     browserLaunch?.invalidate({disable:true,revoke:true});
+      processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
     /* 换进程 = 换了一代：旧 run 与旧屏障一起作废（新进程里没有那个 run）。 */
     releaseStop('bridge-reset');
     /* 维护期间用户点「重启 Pi」不该插进维护流程：更新完成后会自己 resume。 */
@@ -830,6 +848,7 @@ export function createRpcBridge({
     launchGeneration++;
     starting = false;
     browserLaunch?.invalidate({disable:true,revoke:true});
+      processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
     releaseStop('bridge-reset');
     settleAllPending(null);
     if (restartTimer) {
@@ -875,6 +894,7 @@ export function createRpcBridge({
     launchGeneration++;
     starting = false;
     browserLaunch?.invalidate({disable:true,revoke:true});
+      processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
     /* 维护会把进程停掉 —— 旧 run 就此消失，屏障跟着作废。 */
     releaseStop('bridge-reset');
     if (maintenance) return Promise.resolve({ ok: false, code: 'already-in-maintenance' });

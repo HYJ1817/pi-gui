@@ -1,0 +1,15 @@
+.process-panel { padding: 18px; min-width: 0; }
+.process-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.process-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.process-permission { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+.process-permission input { margin: 0; accent-color: var(--control-primary); }
+.process-note, .process-message, .process-meta, .process-endpoint { color: var(--t2); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.process-row { padding: 18px 0; border-top: 1px solid var(--line-soft); }
+.process-row h4 { margin: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.process-meta { margin: 5px 0; }
+.process-row[data-state="failed"] .process-meta { color: var(--err); }
+.process-endpoint { margin: 0 0 10px; }
+.process-actions { display: flex; gap: 8px; margin: 10px 0; }
+.process-logs { max-height: 260px; overflow: auto; margin: 12px 0 0; padding: 8px 0; font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.process-logs:empty { display: none; }
+.process-panel :focus-visible { outline: 2px solid var(--focus-ring, var(--text)); outline-offset: 3px; }

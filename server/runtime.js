@@ -12,11 +12,14 @@
  */
 export function createRuntime({ initialCwd = null } = {}) {
   let currentCwd = initialCwd;
+  let workspaceGeneration = 0;
   let shuttingDown = false;
 
   return {
     getCurrentCwd: () => currentCwd,
+    getWorkspaceGeneration: () => workspaceGeneration,
     setCurrentCwd: (v) => {
+      if (v !== currentCwd) workspaceGeneration++;
       currentCwd = v;
     },
     isShuttingDown: () => shuttingDown,

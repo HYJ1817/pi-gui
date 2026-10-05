@@ -15,7 +15,7 @@ export function configureSecondaryPane(pane) {
   });
 }
 
-export function openSecondarySurface(view, mount) {
+export function openSecondarySurface(view, mount, {label='文件变更',headerSelector='.chg-head',triggerId='navChanges'}={}) {
   if (!secondaryPane) throw new Error('Right pane not configured');
   const hadFocus = secondaryPane.root.contains(document.activeElement);
   secondaryCurrent?.dispose?.();
@@ -23,12 +23,12 @@ export function openSecondarySurface(view, mount) {
   secondaryPane.open(view);
   const host = document.createElement('section');
   host.className = 'rp-surface secondary-surface';
-  host.setAttribute('aria-label', '文件变更');
+  host.setAttribute('aria-label', label);
   const close = document.createElement('button');
   close.id = 'rightPaneClose';
   close.type = 'button'; close.className = 'icon-btn secondary-close';
-  close.textContent = '×'; close.setAttribute('aria-label', '关闭文件变更');
-  close.onclick = () => { secondaryPane.close(); $('navChanges')?.focus(); };
+  close.textContent = '×'; close.setAttribute('aria-label', `关闭${label}`);
+  close.onclick = () => { secondaryPane.close(); $(triggerId)?.focus(); };
   const instance = {
     view, token: ++secondaryToken, dispose: null,
     isCurrent: () => secondaryCurrent === instance,
@@ -37,7 +37,7 @@ export function openSecondarySurface(view, mount) {
   secondaryCurrent = instance;
   secondaryPane.root.querySelector('.rp-body').replaceChildren(host);
   mount(host, instance);
-  host.querySelector('.chg-head')?.append(close);
+  host.querySelector(headerSelector)?.append(close);
   if (hadFocus) close.focus();
   return instance;
 }

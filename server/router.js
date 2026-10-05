@@ -104,6 +104,7 @@ export function createRouter({
   capabilityInstall = null,
   quota = null,
   compat = null,
+  processes = null,
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -156,6 +157,7 @@ export function createRouter({
     }
 
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
+    if (url.pathname === '/api/processes') return processes ? processes.handle(req,res,url) : json(res,503,{ok:false,code:'process_unavailable'});
     if (url.pathname === '/api/command' && req.method === 'POST') return handleCommand(req, res);
     if (url.pathname === '/api/session-export') {
       if (!sessionExport) return json(res, 503, { ok: false, error: '导出模块未启用' });

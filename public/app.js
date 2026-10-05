@@ -92,6 +92,7 @@ import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
+import { openProcessPanel } from './process-panel.js';
 import { openAppUpdates } from './settings.js';
 
 /* ---------- 装配 ---------- */
@@ -775,6 +776,7 @@ function openMoreMenu() {
     list.className = 'modal-list';
 
     const entries = [
+      ['开发进程', openProcessPanel],
       ['重命名会话', renameSession],
       ['导出会话 HTML', exportHtml],
       ['压缩上下文', compactNow],
@@ -1119,6 +1121,7 @@ assertNoConflicts();
 installShortcuts({});
 
 defineCommands([
+  { id:'view.processes',title:'开发进程',group:'视图',keywords:'process dev server 服务 进程 日志',run:openProcessPanel },
   { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => { if (globalMenu.hidden) globalMore.click(); } },
   { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: openAppUpdates },
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', run: goChat },

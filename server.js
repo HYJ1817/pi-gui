@@ -55,6 +55,8 @@ import { createRouter } from './server/router.js';
 import { createSessionExport } from './server/session-export.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createGuiBrowserLaunch } from './server/gui-browser-launch.js';
+import { createProcessBridge } from './server/process-bridge.js';
+import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createDiagnostics } from './server/diagnostics.js';
@@ -268,14 +270,18 @@ const piActivity = createPiActivity();
 const modelGeneration = createModelGeneration();
 let cliInFlight = 0;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
+const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port});
 const rpc = createRpcBridge({
   runtime,
   browserLaunch: guiBrowserLaunch,
+  processLaunch: managedProcesses,
   /* Pi 更新前的暂停要确认**整棵进程树**都退出了（Windows 上经 npm .cmd 启动时，
    * 只 kill 外层包装不足以说明 pi 本体已停）。原语在这里注入：rpc-bridge 自己
    * 不认识业务模块（有架构守卫钉着），复用的是 agents/cli.js 里验证过的 killTree。 */
   killProcessTree: killTree,
   publish: (event) => {
+    event = projectProcessEvent(event);
+    managedProcesses.observe(event);
     extensionRegistryRef?.observe(event);
     /* bridge 生命周期一变，runtime probe（RPC / 工具事件 / 原生 MCP）就没有意义了 ——
      * 旧 run 的结论不许留在表里。维护态也算：那一刻 runtime 正要被换掉。 */
@@ -715,6 +721,7 @@ const providerAuth = providerAuthRef = createProviderAuth({
 });
 
 const route = createRouter({
+  processes: managedProcesses,
   auth,
   sse,
   /* 给 router 的 rpc 包一层：**命令被 bridge 接受之后**通知活动状态。
@@ -774,7 +781,8 @@ const server = http.createServer(route);
 
 // ---------- 生命周期 ----------
 
-function shutdown() {
+async function shutdown() {
+  if(runtime.isShuttingDown())return;
   providerAuth.dispose();
   runtime.setShuttingDown(true);
   /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted
@@ -795,6 +803,7 @@ function shutdown() {
   }
   sse.closeAll();
   rpc.stop();
+  try { await managedProcesses.dispose(); } catch { /* Pipe EOF / Job close is also an exit cleanup boundary. */ }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1500).unref();
 }

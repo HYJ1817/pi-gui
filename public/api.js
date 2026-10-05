@@ -85,6 +85,9 @@ export async function sendCommand(cmd) {
 
 export const fetchStatus = () => getJSON('/api/status');
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
+export const fetchProcesses = () => getJSON('/api/processes');
+export const controlProcess = body => sendJSON('/api/processes',{body});
+export const fetchProcessLogs = (generation,id,revision,cursor=0) => getJSON('/api/processes?'+new URLSearchParams({generation,id,revision,cursor}));
 export const fetchProjects = () => getJSON('/api/projects');
 
 /** 版本检查（P5）。后端只读公开 GitHub Release 元数据，不下载、不安装。

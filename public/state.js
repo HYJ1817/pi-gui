@@ -170,6 +170,7 @@ export const S = {
 export function beginWorkspaceSwitch(cwd) {
   S.cancelFallback?.('workspace-switch');
   S.workspaceGeneration++;
+  if(typeof document!=='undefined' && typeof window!=='undefined')document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-generation'));
   /* 换工作区 = 换了一条执行线：上一次停止的应答（如果还在飞）不许再动
    * 新工作区的界面，也不许解除新工作区的屏障（那一代已经作废了）。 */
   invalidateStop();

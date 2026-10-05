@@ -252,7 +252,7 @@ export function initRightPane() {
     app.classList.remove('rp-open');
     applyMode();
     announce();
-    if (focusInside) byId(previous === 'browser' ? 'btnBrowser' : 'navChanges')?.focus();
+    if (focusInside) byId(previous === 'browser' ? 'btnBrowser' : previous === 'process' ? 'btnMore' : 'navChanges')?.focus();
   }
 
   /** 告诉外面「右栏开了/关了」—— 入口按钮的 aria-pressed 要跟着变，
