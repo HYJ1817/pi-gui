@@ -16,6 +16,20 @@ smoke 仍为 1324 条，更新三个旧行为断言，没有删除断言。
 当前项目关闭后的欢迎区、可见侧栏 CTA 及既有目录选择器。
 使用独立端口，避免与现有服务/单文件 EXE 测试的默认端口冲突。
 
+## P31 Managed Dev Process
+
+`npm test` 包含 manager、private tool bridge、Stop barrier、DOM stale ownership 和 Windows/POSIX guardian 协议五个离线套件。它们使用 `os.tmpdir()` fixture 和注入的进程句柄，不依赖真 Pi、系统端口常量或真实账号。
+
+真实测试显式开启：
+
+```powershell
+$env:PI_GUI_PROCESS_LIVE='1'
+$env:P31_VITE_CLI='existing-vite-installation/bin/vite.js'
+npm run test:process-live
+```
+
+不自动下载 Vite/Flask。Vite 从已有安装读取，所有项目文件、热更新和服务运行目录均为临时 fixture；Python 使用标准库 `http.server`。`P31_PYTHON` / `P31_NODE` 可指定现有可执行文件。Electron 用真实 public renderer、preload、右栏、P29 Browser controller 与私有工具 HTTP bridge，不调用模型或真实 Pi。`.shots/p31` 保存状态/分辨率截图。Windows live 会实际运行 Job Object 并验证主进程退出和 backend 突然退出时的后代端口消失；POSIX 真机需在对应内核运行同一 live 入口，注入协议测试不代表真机结果。
+
 ## P25 供应商与认证
 
 认证测试使用 `os.tmpdir()` 内的假 Pi 包、公开 SDK 与 provider fixture，
@@ -1215,4 +1229,3 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
 ⚠️ 夹具侧新增 `POST /api/capabilities/install`（**不执行任何命令**，
 只回形状正确的响应）与 `/api/__capability/install-hold|install-release`
 （把请求挂住，用来截「安装中…」那一帧）。harness 有状态，**每轮截图前重启**。
-

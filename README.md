@@ -22,6 +22,10 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 
 ## 核心能力
 
+- **受控开发进程（P31）** —— 在对话「更多 → 开发进程」或命令面板打开右栏，单独允许 Agent 控制。
+  `gui_process_*` 可结构化启动、等待就绪、读脱敏日志、重启和停止当前工作区服务。
+  切换工作区、重启 Pi、应用退出会清理；不会扩大 Browser 权限。边界见 [Managed Dev Process](docs/p31-managed-process.md)。
+
 - **内置浏览器 Agent Control（P29）** —— 桌面右栏的「Agent 控制」默认关闭，开启后 Pi 可通过
   `gui_browser_*` 验证 localhost 页面：读取、点击、填表、截图、console/network、刷新。
   随安装包提供，不需额外安装，不开启调试端口，不控制用户 Chrome；与外部 `browser_*` 独立。
