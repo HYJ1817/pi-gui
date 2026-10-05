@@ -35,10 +35,26 @@ export async function downloadSessionHtml() {
   } catch { return { ok: false, error: '无法下载会话 HTML，请重试' }; }
 }
 
+/* 客户端并发节流：限制同时在途的请求数，避免无节制调用压垮后端（CWE-770）。
+ * 超出上限的请求排队等待，而不是无限制地同时发出。 */
+const MAX_INFLIGHT_REQUESTS = 6;
+let inflightRequests = 0;
+const requestQueue = [];
+async function limitedFetch(url, opts) {
+  if (inflightRequests >= MAX_INFLIGHT_REQUESTS) await new Promise((resolve) => requestQueue.push(resolve));
+  inflightRequests++;
+  try {
+    return await fetch(url, opts);
+  } finally {
+    inflightRequests--;
+    requestQueue.shift()?.();
+  }
+}
+
 /** GET 一个 JSON 接口。网络层失败返回 {ok:false, network:true}。 */
 export async function getJSON(url) {
   try {
-    const r = await fetch(url);
+    const r = await limitedFetch(url);
     return await r.json();
   } catch (err) {
     return { ok: false, error: err.message, network: true };
@@ -58,7 +74,7 @@ export async function sendJSON(url, { method = 'POST', body, contentType } = {})
     opts.body = JSON.stringify(body || {});
   }
   try {
-    const r = await fetch(url, opts);
+    const r = await limitedFetch(url, opts);
     return await r.json();
   } catch (err) {
     return { ok: false, error: err.message, network: true };
