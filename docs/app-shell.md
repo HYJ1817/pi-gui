@@ -1,5 +1,10 @@
 # P14-A App Shell
 
+当前入口经过 P30 收敛：Global Rail 为对话、任务、Skills 与扩展、设置；Changes 与 Browser 是顶栏按需右栏，不再替换中央对话。
+设置分组提供模型与账户、Agent 能力、扩展与 MCP、应用与更新、诊断、键盘与命令。
+当前项目的新对话/搜索复用侧栏入口，导出/统计收进会话 More。
+完整当前映射见 [P30 IA 审计](p30-ui-ia.md)，验收见 [P30 验收报告](p30-acceptance.md)。以下保留各阶段的设计记录。
+
 界面分为三列：52px 的 Global Rail、项目与会话侧栏、工作区。700px 窗口下 Rail 收至 46px，项目侧栏收至 190px；侧栏也可手动折叠，折叠只改变 DOM 可见性，不写入项目或会话状态。展开后仍定位同一项目和会话。
 
 Global Rail 只调用已有功能：对话返回主工作区；任务打开 Planner；文件变更打开 Git Changes；扩展打开 Skills / Extensions / MCP；更多菜单提供诊断和模型供应商。版本检查仍在诊断面板里，发现新版本时 Rail 更多入口显示提示点。分支树和会话操作保留在工作区顶部的原有入口。没有 Voice、Automations、Worktree、Cloud Tasks 或 PR Review 入口。
