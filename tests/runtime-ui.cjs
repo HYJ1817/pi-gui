@@ -1,0 +1,56 @@
+const assert = require('node:assert/strict');
+const { JSDOM } = require('jsdom');
+(async () => {
+  let checks = 0; const ok = (label, value) => { assert.ok(value, label); checks++; console.log('  ok  ' + label); };
+  const dom = new JSDOM('<button id="opener">会话</button><div id="modal" hidden><div id="modalCard"></div></div><div id="confirmLayer" hidden><div id="confirmCard"></div></div><div id="toasts"></div>', { url: 'http://127.0.0.1/' });
+  global.window = dom.window; global.document = dom.window.document; global.localStorage = dom.window.localStorage;
+  const { openRuntimeSessions, observeRuntimeEvent } = await import('../public/runtime-sessions.js');
+  const owner = id => ({ backendInstance: 'backend', projectId: 'project', repoId: 'repo', workspaceId: id, workspaceEpoch: 'epoch', conversationId: id, runtimeId: id, runtimeGeneration: 'one', sessionId: id });
+  const A = owner('A'), B = owner('B'), records = [A, B].map(o => ({ conversationId: o.conversationId, workspace: { branch: o.conversationId, projectId: 'project' }, owner: o, lifecycle: 'ready', activity: 'running' }));
+  const requests = []; let completeStop;
+  global.fetch = async (_url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend', items: records };
+    const b = JSON.parse(opts.body); requests.push(b);
+    if (b.command?.type === 'abort') return new Promise(resolve => completeStop = resolve);
+    if (b.action === 'read') return { ok: true, data: { messages: [] } };
+    return { ok: true };
+  } });
+  const until = async predicate => { for (let n = 0; n < 100; n++) { if (predicate()) return; await new Promise(r => setImmediate(r)); } throw Error('ui_fixture_timeout'); };
+  const modal = document.querySelector('#modalCard'), btn = text => [...modal.querySelectorAll('button')].find(b => b.textContent === text);
+  document.querySelector('#opener').focus(); openRuntimeSessions({ path: '/fixture' }); await until(() => modal.querySelectorAll('[data-conversation-id]').length === 2);
+  ok('列表读取不会spawn', !requests.some(r => r.action === 'start'));
+  const delta = (o, seq, text) => observeRuntimeEvent({ type: 'runtime_event', owner: o, eventSequence: seq, event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: text } } });
+  delta(A, 1, '<img onerror=evil> A'); delta(B, 1, 'Only B');
+  ok('A文本作为文本显示，无HTML解析', modal.querySelector('pre').textContent.includes('<img') && !modal.querySelector('img'));
+  const input = modal.querySelector('textarea'); input.value = 'draft A'; input.dispatchEvent(new dom.window.Event('input'));
+  modal.querySelector('[data-conversation-id="B"]').click(); await until(() => requests.some(r => r.action === 'focus' && r.owner.conversationId === 'B'));
+  ok('切B展示B输出，保存A草稿', modal.querySelector('pre').textContent === 'Only B' && input.value === '');
+  delta(A, 2, 'late A'); ok('后台A事件不能落到B DOM', !modal.querySelector('pre').textContent.includes('late A'));
+  input.value = 'task B'; input.dispatchEvent(new dom.window.Event('input')); btn('发送').click(); await until(() => requests.some(r => r.command?.message === 'task B'));
+  ok('发送captured B完整owner', requests.find(r => r.command?.message === 'task B').owner.workspaceId === 'B');
+  await until(() => !btn('停止').disabled); btn('停止').click(); await until(() => completeStop);
+  modal.querySelector('[data-conversation-id="A"]').click(); await until(() => input.value === 'draft A');
+  completeStop({ ok: true }); await until(() => !btn('发送').disabled);
+  ok('迟到B Stop响应不丢A草稿或内容', input.value === 'draft A' && modal.querySelector('pre').textContent.includes('late A'));
+  ok('Stop发给B而非当前UI A', requests.find(r => r.command?.type === 'abort').owner.conversationId === 'B');
+  const approval = (o, seq) => observeRuntimeEvent({ type: 'runtime_event', owner: o, eventSequence: seq,
+    event: { type: 'extension_ui_request', id: 'shared-approval', method: 'confirm', title: 'Approve fixture ' + o.conversationId } });
+  approval(A, 3); const capturedAConfirm = btn('确认');
+  ok('A审批handler可捕获', capturedAConfirm && modal.textContent.includes('Approve fixture A'));
+  approval(B, 2); modal.querySelector('[data-conversation-id="B"]').click();
+  await until(() => modal.textContent.includes('Approve fixture B'));
+  capturedAConfirm.click(); await until(() => requests.some(r => r.command?.type === 'extension_ui_response'));
+  const answered = requests.filter(r => r.command?.type === 'extension_ui_response');
+  ok('捕获A审批后切B，相同approval id仍只发给A完整owner', answered.length === 1 && answered[0].owner.conversationId === 'A'
+    && answered[0].owner.workspaceId === 'A' && answered[0].command.id === 'shared-approval' && answered[0].command.confirmed === true);
+  await until(() => !btn('发送').disabled);
+  ok('迟到A审批不会清除B独立审批', modal.textContent.includes('Approve fixture B') && !!btn('确认'));
+  const focusables = [...modal.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),[tabindex="0"]')];
+  focusables.at(-1).focus(); document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  ok('Tab不逃出dialog', document.activeElement === focusables[0]);
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })); ok('Shift Tab反向循环', document.activeElement === focusables.at(-1));
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  ok('Escape关闭并恢复入口焦点', document.querySelector('#modal').hidden && document.activeElement.id === 'opener');
+  delta(B, 3, 'closed dialog'); ok('关闭后事件不恢复DOM', modal.children.length === 0);
+  console.log(`Runtime UI: ${checks}/${checks}`);
+})().catch(e => { console.error(e); process.exitCode = 1; });

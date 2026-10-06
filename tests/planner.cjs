@@ -940,6 +940,38 @@ async function mkProject(name) {
     check('§45. 手工新建计划（Planner 不是唯一入口）', () => (created.ok && created.plan.status === 'draft') || JSON.stringify(created));
     const pid = created.plan.id;
 
+    /* P32 的保守互斥必须在执行边界检查；读计划和 Stop 不被阻断。 */
+    let independentLive = true, plannerStarts = 0, plannerStops = 0, verifyStarts = 0, verifyStops = 0;
+    const generations = [];
+    const guardedPlanner = createPlanner({ runtime, registry, store, env: process.env,
+      executionBlocked: () => independentLive,
+      scheduler: { activePlanId: () => null, start: async () => { plannerStarts++;return { ok: true }; }, stop: () => { plannerStops++;return { ok: true }; } },
+      verifier: { hasRunning: () => false, start: () => { verifyStarts++;return { ok: true }; }, stop: () => { verifyStops++;return { ok: true }; } },
+      generate: () => new Promise((resolve, reject) => generations.push({ resolve, reject })) });
+    const blockedGeneration = await guardedPlanner.generatePlan({ goal: 'offline fixture' });
+    check('P32 独立runtime阻断计划生成，未调用模型adapter', () => blockedGeneration.code === 'workspace_in_use' && generations.length === 0);
+    const guardedHit = async suffix => {
+      const res = mockRes();await guardedPlanner.handle({ method: 'POST' }, res, new URL(`/api/plans/${pid}/${suffix}`, 'http://127.0.0.1:7788'));return res;
+    };
+    const blockedStart = await guardedHit('start');
+    check('P32 独立runtime阻断scheduler.start', () => blockedStart.code === 409 && blockedStart.json().code === 'workspace_in_use' && plannerStarts === 0);
+    const blockedVerify = await guardedHit('tasks/a/attempts/1/verify');
+    check('P32 独立runtime阻断verification.start', () => blockedVerify.code === 409 && blockedVerify.json().code === 'workspace_in_use' && verifyStarts === 0);
+    const allowedStop = await guardedHit('stop');
+    check('P32 互斥不会阻断计划Stop', () => allowedStop.json().ok && plannerStops === 1);
+    const allowedVerifyStop = await guardedHit('tasks/a/attempts/1/verify/stop');
+    check('P32 互斥不会阻断验证Stop', () => allowedVerifyStop.json().ok && verifyStops === 1);
+    independentLive = false;
+    const generatingOne = guardedPlanner.generatePlan({ goal: 'first offline fixture' });
+    const generatingTwo = guardedPlanner.generatePlan({ goal: 'second offline fixture' });
+    check('P32 等待模型生成期间projectSwitchBlockReason阻断runtime admission', () => generations.length === 2 && /生成/.test(guardedPlanner.projectSwitchBlockReason()));
+    generations[0].resolve({ ok: false, error: 'fixture response' });await generatingOne;
+    check('P32 一个生成完成后另一个仍持有闸门', () => /生成/.test(guardedPlanner.projectSwitchBlockReason()));
+    generations[1].reject(Error('fixture generation rejected'));const generationRejected = await generatingTwo;
+    check('P32 生成抛错也释放generating闸门', () => generationRejected.ok === false && guardedPlanner.projectSwitchBlockReason() === null);
+    const unblockedStart = await guardedHit('start');
+    check('P32 关闭独立runtime后计划start恢复', () => unblockedStart.json().ok && plannerStarts === 1);
+
     const listed = (await hit('GET', '/api/plans')).json();
     check('列表只列当前项目的计划', () => (listed.ok && listed.plans.some((p) => p.id === pid)) || JSON.stringify(listed.plans));
 

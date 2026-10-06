@@ -196,6 +196,7 @@ async function main() {
   for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative',
     'approvalProbe', 'extensions', 'sessions', 'sessionSearch', 'planner', 'gitRoutes',
     'uploads', 'diagnostics', 'updateCheck', 'piUpdate', 'capabilityInstall', 'quota', 'piCompat']) context[name] = {};
+  Object.assign(context, { runtimeRoutes: null, primaryOwner: () => null, runtimeRegistry: { liveCount: () => 0 } });
   const route = vm.runInNewContext(source.slice(start, end) + '\nroute;', context);
 
   const server = http.createServer(route);

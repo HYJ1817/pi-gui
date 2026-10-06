@@ -163,6 +163,21 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
       getProjects: () => [{ path: PROJ_A }, { path: PROJ_B }],
     });
 
+  section('P32 agent目录tilde展开与真实会话定位');
+  for (const configured of ['~/agent', '~\\agent']) {
+    const tilde = createSessions({ runtime: { getCurrentCwd: () => PROJ_A }, env: { HOME: TMP, PI_CODING_AGENT_DIR: configured }, dataDir: path.join(TMP, 'tilde-data') });
+    const found = await tilde.list();
+    check(`agentDir ${configured} 展开TestHOME后扫描已有session`, () => found.ok && found.sessions.some(s => s.sessionId === 'a1'));
+    const located = tilde.resolveByUuid('a1');
+    check(`agentDir ${configured} 精确locator仍归属fixture header`, () => located && path.resolve(located.file) === path.resolve(files.a1));
+  }
+  const bareHome = path.join(TMP, 'bare-home'), bareCwd = path.join(TMP, 'bare-project');fs.mkdirSync(bareCwd);
+  const bareFile = mkSession(path.join(bareHome, 'sessions', I.dirNameFor(bareCwd)), { id: 'bare-tilde', cwd: bareCwd, ts: '2026-09-25T10:00:00.000Z' });
+  const bare = createSessions({ runtime: { getCurrentCwd: () => bareCwd }, env: { HOME: bareHome, PI_CODING_AGENT_DIR: '~' }, dataDir: path.join(TMP, 'bare-data') });
+  check('bare tilde使用TestHOME自身而非默认.pi/agent', () => bare.agentDir === bareHome && bare.resolveByUuid('bare-tilde')?.file === bareFile);
+  const injectedHome = createSessions({ runtime: { getCurrentCwd: () => PROJ_A }, homeDir: TMP, env: { HOME: path.join(TMP, 'unused-home'), PI_CODING_AGENT_DIR: '~/agent' }, dataDir: path.join(TMP, 'injected-home-data') });
+  check('显式homeDir优先于env.HOME参与tilde展开', () => injectedHome.resolveByUuid('a1')?.file === files.a1);
+
   {
     let rpcCalls = 0;
     const preview = createSessions({

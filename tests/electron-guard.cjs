@@ -384,8 +384,8 @@ async function main() {
     !/webview/i.test(publicCode) && !/webview/i.test(browserCode) || '出现了 webview');
 
   check('27. 用独立 partition，且**非持久化**', () =>
-    /partition:\s*PARTITION/.test(browserCode) &&
-    /session\.fromPartition\(PARTITION\)/.test(browserCode) &&
+    /partition\s*=\s*PARTITION/.test(browserCode) &&
+    /session\.fromPartition\(partition\)/.test(browserCode) &&
     BROWSER_PARTITION === 'pi-gui-browser' ||
     `partition=${BROWSER_PARTITION}`);
   check('27a. partition 不带 persist: 前缀（退出即清空）', () =>

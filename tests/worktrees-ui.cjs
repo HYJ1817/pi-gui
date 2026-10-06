@@ -47,7 +47,7 @@ const ok = (name, value) => { assert.ok(value, name); checks++; console.log('  o
   ok('归档走后端 epoch，不删除目录', requests.some(r => r.body?.action === 'archive' && r.body.epoch === 'epoch'));
   await until(() => document.activeElement.classList.contains('row-action-trigger'));
   ok('异步刷新后菜单触发点恢复焦点，Tab 不逃出 dialog', modal.contains(document.activeElement));
-  const first = modal.querySelector('button'), last = [...modal.querySelectorAll('button:not([disabled])')].at(-1);
+  const first = modal.querySelector('button:not([disabled])'), last = [...modal.querySelectorAll('button:not([disabled])')].at(-1);
   last.focus(); document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
   ok('Tab 在现有 dialog 内循环', document.activeElement === first);
   first.focus(); document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));

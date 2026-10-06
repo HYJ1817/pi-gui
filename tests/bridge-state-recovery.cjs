@@ -44,6 +44,42 @@ async function main() {
     spawnProcess() { throw Error('SECRET fixture launch path'); } });
   broken.start();
   check(broken.getState().bridgeState === 'error' && !JSON.stringify(broken.getState()).includes('SECRET'), 'launch error snapshot uses safe fixed fields');
+  function outputFixture(limit) {
+    let worker, stopped = 0;
+    const observed = [], bridge = createRpcBridge({ runtime: { getCurrentCwd: () => 'fixture', isShuttingDown: () => false },
+      publish: e => observed.push(e), piBin: 'fixture', isWin: false, autoRestart: false,
+      ...(limit === undefined ? {} : { maxOutputLineBytes: limit }),
+      spawnProcess() {
+        worker = new EventEmitter();worker.stdout = new EventEmitter();worker.stderr = new EventEmitter();
+        worker.stdout.setEncoding = worker.stderr.setEncoding = () => {};
+        worker.stdin = { on() {}, write(line) { worker.command = JSON.parse(line); }, end() {} };
+        worker.kill = () => { stopped++;worker.emit('exit', 0, null); };return worker;
+      } });
+    bridge.start();worker.emit('spawn');
+    worker.stdout.emit('data', JSON.stringify({ type: 'response', id: worker.command.id, command: 'get_state', success: true, data: {} }) + '\n');
+    return { bridge, worker, observed, stopped: () => stopped };
+  }
+  const packed = outputFixture(256);
+  packed.worker.stdout.emit('data', Array.from({ length: 6 }, (_, i) => JSON.stringify({ type: 'fixture_output', i, text: '中🙂'.repeat(5) }) + '\n').join(''));
+  check(packed.stopped() === 0 && packed.observed.filter(e => e.type === 'fixture_output').length === 6, 'stdout limit applies per line, not aggregate transport chunk');packed.bridge.stop();
+  const exact = outputFixture(256), base = JSON.stringify({ type: 'fixture_output', text: '中🙂' });
+  const exactLine = JSON.stringify({ type: 'fixture_output', text: '中🙂' + 'x'.repeat(256 - Buffer.byteLength(base)) });
+  check(Buffer.byteLength(exactLine) === 256, 'Unicode stdout fixture uses byte-exact boundary');
+  exact.worker.stdout.emit('data', exactLine.slice(0, 100));exact.worker.stdout.emit('data', exactLine.slice(100) + '\n');
+  check(exact.stopped() === 0 && exact.observed.some(e => e.type === 'fixture_output'), 'byte-limit JSON line accepts LF delimiter outside payload budget');exact.bridge.stop();
+  const crlf = outputFixture(256);crlf.worker.stdout.emit('data', exactLine + '\r\n');
+  check(crlf.stopped() === 0 && crlf.observed.some(e => e.type === 'fixture_output'), 'byte-limit JSON line accepts complete CRLF outside payload budget');crlf.bridge.stop();
+  const splitCrlf = outputFixture(256);splitCrlf.worker.stdout.emit('data', exactLine + '\r');splitCrlf.worker.stdout.emit('data', '\n');
+  check(splitCrlf.stopped() === 0 && splitCrlf.observed.some(e => e.type === 'fixture_output'), 'split CRLF transport preserves exact payload boundary');splitCrlf.bridge.stop();
+  const flooded = outputFixture(256);flooded.worker.stdout.emit('data', 'PRIVATE_FIXTURE_' + 'x'.repeat(256 - Buffer.byteLength('PRIVATE_FIXTURE_')));
+  check(flooded.stopped() === 0, 'stdout incomplete line remains accepted at exact byte limit');
+  flooded.worker.stdout.emit('data', 'x');
+  check(flooded.stopped() === 1 && flooded.observed.some(e => e.type === 'bridge_status' && e.state === 'error'), 'stdout no-LF overflow fails closed and terminates owned child');
+  check(!JSON.stringify(flooded.observed).includes('PRIVATE_FIXTURE'), 'stdout overflow emits fixed safe error, never buffered payload');
+  const completeOverflow = outputFixture(256);completeOverflow.worker.stdout.emit('data', exactLine.replace('中🙂', '中🙂x') + '\n');
+  check(completeOverflow.stopped() === 1 && !completeOverflow.observed.some(e => e.type === 'fixture_output'), 'complete oversized JSON line is rejected before publish');
+  const larger = outputFixture();larger.worker.stdout.emit('data', JSON.stringify({ type: 'fixture_output', text: '中🙂'.repeat(170000) }) + '\n');
+  check(larger.stopped() === 0 && larger.observed.some(e => e.type === 'fixture_output' && e.text.length === 510000), 'default stdout budget accepts existing responses above one MiB');larger.bridge.stop();
   const { JSDOM } = require('jsdom');
   const fs = require('node:fs'), path = require('node:path');
   const { bundle } = require('./esm-bundle.cjs');
