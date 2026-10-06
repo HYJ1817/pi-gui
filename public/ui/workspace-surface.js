@@ -1,22 +1,29 @@
 /* 一级工作区只管理承载和生命周期；业务模块各自渲染唯一的一份内容。 */
 import { $ } from '../state.js';
 
-const rail = { chat: 'navHome', planner: 'navPlanner', extensions: 'navExtensions' };
+const rail = { chat: 'navHome', planner: 'navPlanner', extensions: 'navExtensions', runtime: 'navHome' };
 const titles = { planner: '任务', extensions: 'Skills 与扩展' };
 let current = { view: 'chat', token: 0, dispose: null };
 let chatScroll = { top: 0, atBottom: true };
 
 function sync(view) {
   const chat = view === 'chat';
+  /* P32.4-B：`runtime` 是第四种中央承载（focused 并行会话）。它不是 work surface
+   * —— planner/extensions 那套是可插拔容器，而并行会话有自己的容器与生命周期。 */
+  const runtime = view === 'runtime';
+  const work = !chat && !runtime;
   $('workspace').dataset.workspaceView = view;
   $('chatView').hidden = !chat;
   $('chatComposer').hidden = !chat;
-  $('workSurface').hidden = chat;
-  $('title').hidden = !chat;
-  $('workViewTitle').hidden = chat;
+  $('workSurface').hidden = !work;
+  $('runtimeView').hidden = !runtime;
+  /* 会话视图仍然属于「会话」这一段，所以标题与项目树都保持可见：
+   * 用户在并行会话里同样需要点侧栏切走。 */
+  $('title').hidden = work;
+  $('workViewTitle').hidden = !work;
   $('workViewTitle').textContent = titles[view] || '';
-  $('btnTree').hidden = !chat;
-  $('btnMore').hidden = !chat;
+  $('btnTree').hidden = work;
+  $('btnMore').hidden = work;
   for (const button of $('globalRail').querySelectorAll('.rail-icon')) {
     const active = button.id === rail[view];
     button.classList.toggle('is-active', active);
@@ -45,6 +52,18 @@ export function showChat({ focusComposer = false } = {}) {
     stream.scrollTop = chatScroll.atBottom ? stream.scrollHeight : chatScroll.top;
   }
 }
+
+/** P32.4-B：中央切到某条并行会话。与 showChat 对称 —— 视图本体由组合根挂载到
+ * `#runtimeView`（它不是可插拔 work surface）。返回是否发生了切换。 */
+export function showRuntimeConversation() {
+  const returning = current.view !== 'runtime';
+  if (current.dispose) current.dispose();
+  current = { view: 'runtime', token: current.token + 1, dispose: null };
+  sync('runtime');
+  return returning;
+}
+
+export function runtimeViewElement() { return $('runtimeView'); }
 
 export function openWorkSurface(view, mount) {
   if (!titles[view]) throw new Error('Unknown work surface: ' + view);

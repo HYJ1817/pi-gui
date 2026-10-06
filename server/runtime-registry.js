@@ -231,5 +231,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     inUse: root => leases.has(rootKey(root)), liveCount: () => lives.size, runningCount: () => [...lives.values()].filter(l => l.activity !== 'idle').length,
     busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready'),
     async closeAll() { const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); },
-    getAdapter: expected => resolve(expected).adapter, getOwner: id => lives.has(id) ? owner(lives.get(id)) : null };
+    getAdapter: expected => resolve(expected).adapter, getOwner: id => lives.has(id) ? owner(lives.get(id)) : null,
+    /* P32.4：只给**后端**用的历史定位 —— **不进 snapshot**，也不出现在任何 SSE 帧里。
+     * locator 是绑定时已证明过的绝对路径；读历史只读它，不需要、也不接受
+     * Renderer 传路径。这样 dormant 会话也能看历史而不必 spawn 一个 child。 */
+    historyTarget: id => { const record = records.get(id); return record ? { sessionId: record.sessionId || null, sessionLocator: record.sessionLocator || null } : null; } };
 }

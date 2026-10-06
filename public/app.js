@@ -78,7 +78,9 @@ import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
-import { showChat } from './ui/workspace-surface.js';
+import { showChat, showRuntimeConversation, runtimeViewElement } from './ui/workspace-surface.js';
+import { createRuntimeConversation } from './runtime-conversation.js';
+import { setRuntimeFocusHandler } from './runtime-nav.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
@@ -105,6 +107,12 @@ setForkHandler(forkFrom);
 /* 会话列表挂在当前项目那一行下面（参考 Codex，不单开窗口）。
  * projects.js 不 import sessions.js，由这里把渲染函数递进去。 */
 setSessionsSlot(renderSidebarSessions);
+
+/* P32.4-B：侧栏点一条并行会话 → 中央切到它。
+ * focus 本身由 runtime-nav 发（带 captured owner），这里只负责把中央视图换过去；
+ * 切回经典会话/项目时由 showChat() 换回来。 */
+const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement() });
+setRuntimeFocusHandler(conversationId => { runtimeConversation.show(conversationId); showRuntimeConversation(); });
 setProjectSessionActions({ newSession, search: openSessionSearch, previewRow: createSidebarPreviewRow, openPreviewSession: openSidebarPreviewSession });
 
 /* 会话一变（新开 / 分叉 / 切换）就要重画侧栏那块列表。

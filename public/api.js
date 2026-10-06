@@ -86,6 +86,8 @@ export async function sendCommand(cmd) {
 
 export const fetchStatus = () => getJSON('/api/status');
 export const fetchRuntimeSessions = () => getJSON('/api/runtime-sessions');
+/* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
+export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProcesses = () => getJSON('/api/processes');
