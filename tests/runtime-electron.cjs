@@ -164,9 +164,41 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     const recovered=state.items.find(r=>r.conversationId===owners[0].conversationId).owner;
     check(recovered.backendInstance!==owners[0].backendInstance&&recovered.sessionId===owners[0].sessionId,'disk recovery keeps native session and allocates fresh backend owner');
     await api({action:'close',owner:recovered});
+
+    /* P32.4-A 闭环：在临时真实 Git 项目里，从**侧栏**点「新建并行会话」走完整条链
+     * （真实 worktree prepare/create + 真实 runtime start），并确认新行出现、Runtime 真的起来。
+     * 这一段专门盯住 askBranchName 的「创建并启动」是否回传真实分支名 —— 曾经写成
+     * finish(null)，按钮看着能点、实际什么都不发生。 */
+    await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
+    await until(() => read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length===2`), 30000);
+    const rowsBefore = await read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length`);
+    const recordsBefore = (await api()).items.length;
+    await read(`document.querySelector('#pjRuntimeList .pj-runtime-new').click()`);
+    await until(() => read(`!!document.querySelector('#modalCard input') && !document.querySelector('#modal').hidden`), 20000);
+    await read(`(()=>{const i=document.querySelector('#modalCard input');i.value='p32-4-ui-loop';i.dispatchEvent(new Event('input'));})()`);
+    await read(`[...document.querySelectorAll('#modalCard button')].find(b=>b.textContent==='创建并启动').click()`);
+    /* 必须等到 **ready** 再取 owner：registry 在 child 就绪时会轮换
+     * runtimeGeneration（见 runtime-registry 的 emit），在 starting 阶段捕获的
+     * owner 随后就是 stale_runtime。 */
+    await until(async () => { state = await api(); const rec = state.items.find(i => i.workspace.branch === 'p32-4-ui-loop');
+      return state.items.length === recordsBefore + 1 && rec?.lifecycle === 'ready' && typeof rec.owner?.sessionId === 'string'; }, 120000);
+    check(state.liveCount === 1, 'P32.4 sidebar create loop actually started a runtime');
+    const createdOwner = state.items.find(i => i.owner && i.workspace.branch === 'p32-4-ui-loop')?.owner;
+    check(Boolean(createdOwner), 'P32.4 created conversation carries the entered branch name');
+    await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
+    await until(() => read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length===${rowsBefore + 1}`), 30000);
+    check(true, 'P32.4 new parallel conversation appears in the sidebar after creation');
+    check(await read(`document.querySelector('#pjRuntimeList').textContent.includes('p32-4-ui-loop')`), 'P32.4 new sidebar row shows its branch name');
+    await shot('sidebar-created', OUT4);
+    /* 收尾只做尽力而为的关闭：close 的权威语义由 P32.3 段断言，这里失败也不该
+     * 让「创建闭环」这一段的结论失真。 */
+    const closed = await api({ action: 'close', owner: createdOwner });
+    check(closed.ok === true, 'P32.4 created runtime can be closed through its owned handle');
     assert.deepEqual(errors,[], 'renderer console errors');check(true, 'no renderer console errors');
     fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ checks, platform: process.platform, electron: process.versions.electron, screenshots, errors }, null, 2)); console.log(`Runtime Electron ${checks}/${checks}; ${screenshots.length} screenshots`);
   }
   async function finish(code) { try { backend?.kill(); await host?.stop(); await legacyHost?.stop(); browser?.destroy(); for (const page of pages) { page.closeAllConnections(); page.close(); } win?.destroy(); } catch {} setTimeout(() => app.exit(code), 500); }
-  main().then(() => finish(0), async error => { console.error(error); try { console.error(await read(`document.querySelector('#modalCard')?.textContent`)); } catch {} await finish(1); });
+  /* 失败时把渲染进程 console 错误与 modal 状态一起打出来 —— 否则
+   * 「Script failed to execute」这类错误只能看到 Electron 的包装信息，定位不到根因。 */
+  main().then(() => finish(0), async error => { console.error(error); console.error('renderer console errors: ' + JSON.stringify(errors)); try { console.error('modal state: ' + JSON.stringify(await read(`({open: !document.querySelector('#modal').hidden, listBtns: document.querySelectorAll('.runtime-list .btn').length})`))); } catch (e) { console.error('modal unreadable: ' + e.message); } await finish(1); });
 }

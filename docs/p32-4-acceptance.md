@@ -83,7 +83,7 @@ Runtime Fixture
 
 ### 4.1 确定性测试（离线，进 `npm test` 唯一入口）
 
-新增 `tests/runtime-nav.cjs`（18 条），覆盖验收清单 A 组：
+新增 `tests/runtime-nav.cjs`（31 条），覆盖验收清单 A 组 + 「新建并行会话」闭环：
 
 | # | 断言 |
 |---|---|
@@ -104,6 +104,18 @@ Runtime Fixture
 | 15 | 点击该会话后 attention 清除 |
 | 16–17 | 运行中 / 错误 的状态文案 |
 | 18 | 非 Git 项目不显示并行会话块 |
+| 19–20 | 点「新建并行会话」打开对话框；给出可编辑的分支名默认值 |
+| 21–24 | 点「创建并启动」按 **prepare → create → start** 依次发生；prepare 带真实分支名；**start 用 create 返回的 workspace.id + epoch**（不是 UI 猜的）；对话框关闭 |
+| 25 | 点「取消」不创建任何东西 |
+| 26 | Escape 不创建任何东西 |
+| 27 | Enter 与点击行为一致（同样走完 prepare→create→start） |
+| 28–29 | **prepare 失败后不 create、不 start**；**create 失败后不 start** |
+| 30 | start 失败时如实提示「工作区已创建」，不谎报成功 |
+
+> 第 19–30 条是为一个**真实 blocker** 补的：`askBranchName()` 的「创建并启动」原来写成
+> `finish(null)`，任何合法分支名都被当成「取消」，`createParallelConversation()` 直接 return ——
+> 按钮看着能点、实际什么都不发生。「按钮存在」这类断言抓不到它，必须真的点下去并检查动作序列。
+> 修复后已用**回退验证**确认这套断言确实会红（回退 `finish(null)` → 第 21 条立即失败）。
 
 另在 `tests/runtime-registry.cjs` 增加 1 条后端契约断言（换焦点时两侧都广播、
 同一时刻只有一条 `focused`）：31 → **32**。
@@ -124,19 +136,27 @@ Runtime Fixture
 
 ### 4.3 真实 Electron（`npm run test:runtime-electron`）
 
-**48/48 通过，13 张截图，EXIT 0**（原 36 条 + 新增 12 条 P32.4 断言）。
+**54/54 通过，14 张截图，EXIT 0**（原 36 条 + 新增 18 条 P32.4 断言）。
 使用真实 Electron + production server + 临时真实 Git + fixture Pi。
 
 新增断言（真实窗口 + 真实后端）：侧栏列出两条并行会话 / 提供「新建并行会话」/
 不显示 runtime 诊断身份与裸 id / 点击不改变排序 / 点击既不 spawn 也不 stop /
-关闭后仍以「已关闭」留在侧栏。
+关闭后仍以「已关闭」留在侧栏；以及**创建闭环**——在临时真实 Git 项目里从侧栏点
+「新建并行会话」、输入分支名、点「创建并启动」，确认 Runtime 真的起来（`lifecycle==='ready'`）、
+新行出现在侧栏并显示该分支名、且能用捕获到的 owner 正常关闭。
 
 新增截图（`.shots/p32-4/`）：`sidebar-a-running-b-focused`、`sidebar-1280x800`、
-`sidebar-1920x1080`、`sidebar-zoom125`、`sidebar-dormant`。
+`sidebar-1920x1080`、`sidebar-zoom125`、`sidebar-dormant`、`sidebar-created`。
 
 **截图发现并修掉的视觉缺陷**：`新建并行会话` 原来直接用 `<button>` 套 `.pj-sess`，
 露出浏览器默认按钮底色（深色主题下是一块白）。已补样式（透明底 + hover 用 `--hover`），
 重跑后截图正常。这类问题 jsdom 断言抓不到 —— 正是仓库约定「改了 UI 必须给真实截图」的理由。
+
+**闭环测试暴露的一处时序陷阱（测试侧，不是产品缺陷）**：第一次写闭环时在
+`lifecycle === 'starting'` 就捕获 owner，随后 `close` 返回 `stale_runtime` ——
+registry 在 child 就绪时会轮换 `runtimeGeneration`（见 `runtime-emit`），
+starting 阶段的 owner 自然失效。改为等 `lifecycle === 'ready'` 再取 owner 即通过。
+这条断言本身也因此更强：它证明的是「Runtime 真的起来了」，而不只是「注册表里多了一条」。
 
 ### 4.4 构建与打包
 

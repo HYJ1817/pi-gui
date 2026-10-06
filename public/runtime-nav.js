@@ -224,7 +224,10 @@ function askBranchName() {
       const actions = el('div', 'modal-actions');
       const ok = el('button', 'btn primary', '创建并启动');
       ok.type = 'button';
-      ok.onclick = () => { const value = input.value.trim(); if (!value) return; finish(null); close(); };
+      /* ⚠️ 这里必须回**真实输入值**。曾经写成 finish(null)，于是任何合法分支名都被
+       * 当成「取消」，createParallelConversation() 直接 return —— 按钮看着能点，
+       * 实际什么都不做。回归见 tests/runtime-nav.cjs 的「新建并行会话」一节。 */
+      ok.onclick = () => { const value = input.value.trim(); if (!value) return; finish(value); close(); };
       actions.append(ok);
       card.append(actions);
       input.focus();

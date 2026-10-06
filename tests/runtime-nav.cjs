@@ -110,5 +110,99 @@ const { JSDOM } = require('jsdom');
   await nav.loadRuntimeNav({ path: '/not-a-repo' }, { parent: list });
   ok('非 Git 项目不显示并行会话块', list.querySelector('#pjRuntimeList').hidden === true && rows().length === 0);
 
+  /* ---------- 「新建并行会话」的创建闭环 ----------
+   *
+   * 这一节存在的理由：`askBranchName()` 曾经在「创建并启动」里写成 `finish(null)`，
+   * 于是**任何合法分支名都被当成取消**，按钮看着能点、实际什么都不发生。
+   * 「按钮存在」这种断言抓不到它 —— 必须真的点下去并检查后续动作序列。 */
+  const card = () => document.querySelector('#modalCard');
+  const btn = text => [...card().querySelectorAll('button')].find(b => b.textContent === text);
+  const branchInput = () => card().querySelector('input');
+
+  function mockApi({ prepare, create, start } = {}) {
+    const calls = [];
+    global.fetch = async (url, opts = {}) => ({ json: async () => {
+      const u = String(url);
+      if (u.startsWith('/api/worktrees') && !opts.body) return { ok: true, projectId: 'project', contextGeneration: 7, items: [] };
+      if (u.startsWith('/api/runtime-sessions') && !opts.body) return { ok: true, backendInstance: 'backend', items };
+      const body = JSON.parse(opts.body); calls.push({ url: u, body });
+      if (u.startsWith('/api/worktrees')) {
+        if (body.action === 'prepare') return prepare ? prepare(body) : { ok: true, nonce: 'nonce-1' };
+        if (body.action === 'create') return create ? create(body) : { ok: true, workspace: { id: 'ws-new', epoch: 'epoch-new', branch: body.branch } };
+        return { ok: true };
+      }
+      if (body.action === 'start') return start ? start(body) : { ok: true };
+      return { ok: true };
+    } });
+    return calls;
+  }
+
+  async function openCreateDialog() {
+    document.querySelector('.pj-runtime-new').click();
+    for (let n = 0; n < 80 && !btn('创建并启动'); n++) await new Promise(r => setImmediate(r));
+    return Boolean(btn('创建并启动'));
+  }
+
+  /* 上一节把 worktrees mock 成 not_git 并隐藏了整块；先恢复成 Git 项目再重载。 */
+  let calls = mockApi();
+  await nav.loadRuntimeNav({ path: '/fixture' }, { parent: list });
+  ok('点击「新建并行会话」打开输入分支名的对话框', await openCreateDialog());
+  ok('对话框给出可编辑的分支名默认值', typeof branchInput().value === 'string' && branchInput().value.length > 0);
+
+  branchInput().value = 'pi-gui/p32/regression';
+  btn('创建并启动').click();
+  for (let n = 0; n < 80 && !calls.some(c => c.body.action === 'start'); n++) await new Promise(r => setImmediate(r));
+  const seq = calls.map(c => c.body.action).filter(Boolean);
+  ok('创建按 prepare → create → start 依次发生', JSON.stringify(seq) === JSON.stringify(['prepare', 'create', 'start']));
+  ok('prepare 带上真实分支名', calls[0].body.branch === 'pi-gui/p32/regression');
+  const startCall = calls.find(c => c.body.action === 'start');
+  ok('start 用 create 返回的 workspace.id + epoch', startCall.body.args.id === 'ws-new' && startCall.body.args.epoch === 'epoch-new');
+  ok('start 不是用 UI 里猜的 id', startCall.body.args.id !== 'main-project' && typeof startCall.body.args.id === 'string');
+  ok('创建后对话框关闭', card().children.length === 0);
+
+  /* Cancel 不得创建 */
+  calls = mockApi();
+  await openCreateDialog();
+  btn('取消').click();
+  await new Promise(r => setImmediate(r));
+  ok('点「取消」不创建任何东西', calls.length === 0);
+
+  /* Escape 不得创建 */
+  calls = mockApi();
+  await openCreateDialog();
+  branchInput().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await new Promise(r => setImmediate(r));
+  ok('Escape 不创建任何东西', calls.length === 0);
+
+  /* Enter 与点击一致 */
+  calls = mockApi();
+  await openCreateDialog();
+  branchInput().value = 'pi-gui/p32/enter';
+  branchInput().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  for (let n = 0; n < 80 && !calls.some(c => c.body.action === 'start'); n++) await new Promise(r => setImmediate(r));
+  ok('Enter 与点击行为一致（同样走完 prepare→create→start）',
+    JSON.stringify(calls.map(c => c.body.action).filter(Boolean)) === JSON.stringify(['prepare', 'create', 'start'])
+    && calls[0].body.branch === 'pi-gui/p32/enter');
+
+  /* 失败短路：任一步失败，后续步骤不得继续 */
+  calls = mockApi({ prepare: () => ({ ok: false, error: 'branch_conflict' }) });
+  await openCreateDialog();
+  btn('创建并启动').click();
+  for (let n = 0; n < 40; n++) await new Promise(r => setImmediate(r));
+  ok('prepare 失败后不 create、不 start', calls.map(c => c.body.action).join(',') === 'prepare');
+
+  calls = mockApi({ create: () => ({ ok: false, error: 'partial_creation' }) });
+  await openCreateDialog();
+  btn('创建并启动').click();
+  for (let n = 0; n < 40; n++) await new Promise(r => setImmediate(r));
+  ok('create 失败后不 start', calls.map(c => c.body.action).join(',') === 'prepare,create');
+
+  calls = mockApi({ start: () => ({ ok: false, error: 'runtime_limit' }) });
+  await openCreateDialog();
+  btn('创建并启动').click();
+  for (let n = 0; n < 80 && !calls.some(c => c.body.action === 'start'); n++) await new Promise(r => setImmediate(r));
+  ok('start 失败时如实提示「工作区已创建」，不谎报成功',
+    document.querySelector('#toasts').textContent.includes('工作区已创建'));
+
   console.log(`Runtime nav: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
