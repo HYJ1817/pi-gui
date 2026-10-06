@@ -13,6 +13,17 @@ const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8',
   let createWorktrees;
   try { ({ createWorktrees } = await import('../server/worktrees.js')); } catch (e) { if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e; }
   await check('生命周期模块可用', () => assert.equal(typeof createWorktrees, 'function'));
+  // Windows 的 8.3 短名（`C:\Program Files` ↔ `C:\PROGRA~1`）：`fs.realpathSync` **不展开**
+  // 短名，而 git 与系统 API 返回长名。GitHub Actions 的 Windows 运行器临时目录正是短名
+  // 形状（`…\RUNNER~1\…`），于是同一目录得到两个字符串，`samePath` / `isInside` 判不出
+  // 包含关系，`repository()` 会把合法项目误判成 invalid_project —— 整条 worktree 套件在
+  // CI 上必红、在长名机器上全绿。这条断言把「两种写法必须归一到同一路径」钉住。
+  // 卷上关掉 8.3 生成时短名不存在，该断言跳过（跳过不计入分子分母）。
+  const SHORT_ALIAS = 'C:\\PROGRA~1', LONG_ALIAS = 'C:\\Program Files';
+  if (process.platform === 'win32' && fs.existsSync(SHORT_ALIAS) && fs.existsSync(LONG_ALIAS)) {
+    const { canonicalPath } = await import('../lib/safe-path.js');
+    await check('8.3 短名与长名归一到同一路径', () => assert.equal(canonicalPath(SHORT_ALIAS), canonicalPath(LONG_ALIAS)));
+  }
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'p32-worktrees-'));
   const repo = path.join(fixture, 'repo 中文'), data = path.join(fixture, 'data');
   fs.mkdirSync(repo); fs.mkdirSync(data); fs.mkdirSync(path.join(repo, 'src'));

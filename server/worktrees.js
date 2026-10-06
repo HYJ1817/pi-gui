@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
-import { isInside } from '../lib/safe-path.js';
+import { isInside, canonicalPath } from '../lib/safe-path.js';
 import { samePath, failure, fileIdentity, worktreeGit, repository, inventory, sourceCommit, validBranch, dirtyStatus, branchName, adminDirectory } from '../lib/git-worktree.js';
 import { json, readRawBody } from './http-utils.js';
 
@@ -29,7 +29,10 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
   busyReason = () => null, activate = async () => { throw failure('workspace_unavailable'); }, onMissing = async () => {}, now = Date.now,
   isWorkspaceInUse = () => false } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
-  const dataRoot = fs.realpathSync(dataDir), dataIdentity = fileIdentity(dataRoot);
+  // 受控根必须是**规范形式**：Windows 的 `fs.realpathSync` 不展开 8.3 短名，而 git 与
+  // 系统 API 返回长名。用短名（CI 运行器的临时目录就是短名）建 dataRoot 会让下面所有
+  // 派生路径与 git 输出不同形，`samePath`/`isInside` 全部判不出包含关系。
+  const dataRoot = canonicalPath(dataDir), dataIdentity = fileIdentity(dataRoot);
   const root = path.join(dataRoot, 'worktrees'), manifest = path.join(dataRoot, 'worktrees.json');
   let entries = [], invalid = false, queue = Promise.resolve(), disposed = false, timer = null;
   const confirmations = new Map();
@@ -226,8 +229,11 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
   }
   function withActivation(cwd, action) {
     return serialize(async guard => {
-      const r = entries.find(r => !r.removed && within(r, cwd));
-      let canonical = path.resolve(cwd); try { canonical = fs.realpathSync(cwd); } catch { /* normal activation checks existence */ }
+      // 外部传入的 cwd 可能是 8.3 短名（Windows 的 CI 临时目录就是这种形状）。
+      // 必须先取规范形式，否则「是否落在受控根内」会漏判，未登记路径会被当成
+      // 普通目录放行 —— 这正是 tests/worktrees.cjs 里那条断言的用途。
+      let canonical = path.resolve(cwd); try { canonical = canonicalPath(cwd); } catch { /* 存在性在下面统一校验 */ }
+      const r = entries.find(r => !r.removed && (within(r, cwd) || within(r, canonical)));
       if ((isInside(root, path.resolve(cwd)) || isInside(root, canonical)) && !r) throw failure('unknown_workspace');
       if (r && (!isInside(target(r), path.resolve(cwd)) || !isInside(target(r), canonical))) throw failure('unsafe_path');
       if (r) { checkBusy(); await owned(r); await projectInfo(r.project); if (r.archived) throw failure('workspace_archived'); }
