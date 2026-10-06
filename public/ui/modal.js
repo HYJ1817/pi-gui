@@ -208,6 +208,8 @@ document.addEventListener('keydown', (e) => {
     }
     return;
   }
+  // A dialog action menu owns its keyboard event until it closes.
+  if (!el.modal.hidden && document.querySelector('#actionMenu') && el.modal.contains(document.querySelector('[aria-controls="actionMenu"][aria-expanded="true"]'))) return;
   if (!el.modal.hidden) trapTab(el.modalCard, e);
   if (e.key === 'Escape' && !el.modal.hidden) {
     e.preventDefault();

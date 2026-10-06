@@ -44,6 +44,7 @@ import { createAuth } from './server/auth.js';
 import { createEventBus } from './server/sse.js';
 import { createGitRoutes } from './server/git-routes.js';
 import { createProjects, resolveInitialCwd } from './server/projects.js';
+import { createWorktrees } from './server/worktrees.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createProviders } from './server/providers.js';
 import { createAuthSdk, sanitizeModelEvent } from './server/provider-auth-sdk.js';
@@ -314,6 +315,7 @@ const rpc = createRpcBridge({
 /* Planner 的引用占位。projects 的闸门要用到它，但 planner 依赖 runtime / sse，
  * 只能排在 projects 之后 —— 所以先声明、后回填（闸门只在请求时被调用）。 */
 let plannerRef = null;
+let worktreesRef = null;
 /* P9 收口：Verifier 的引用占位，同一个理由 —— Scheduler 的闸门要问
  * 「现在有没有独立验证在跑」，而 verifier 自己又要拿 scheduler（问「有没有计划在跑」）。
  * 两边都不 import 对方，只在这里互相拿到一个**只读**的轻量函数。 */
@@ -333,7 +335,23 @@ const projects = createProjects({
    * planner 那边（`projectSwitchBlockReason`）—— 放那边才测得到，
    * 这里只做一行透传，规则只有一份。 */
   beforeActivate: () => piBusyReason(false)?.error || null,
+  getWorkspaceProject: cwd => worktreesRef?.projectFor(cwd),
+  withActivation: (cwd, action) => worktreesRef ? worktreesRef.withActivation(cwd, action) : action(),
 });
+
+const worktrees = createWorktrees({
+  dataDir: DATA_DIR, getProjects: () => projects.read().items,
+  getContext: () => ({ cwd: runtime.getCurrentCwd(), generation: runtime.getWorkspaceGeneration() }),
+  busyReason: () => piBusyReason()?.code || (rpc.stopState()?.pending || ['starting', 'restarting', 'maintenance'].includes(rpc.getState().state) ? 'workspace_busy' : null)
+    || (managedProcesses.manager.snapshot().cleanupPending || managedProcesses.manager.snapshot().processes.some(p => !p.cleanupConfirmed) ? 'workspace_busy' : null),
+  activate: cwd => projects.activatePath(cwd, { validated: true }),
+  onMissing: async () => {
+    runtime.setCurrentCwd(null);
+    rpc.restart();
+    await managedProcesses.invalidate({ disable: true, revoke: true });
+  },
+});
+worktreesRef = worktrees;
 
 const providers = createProviders({ modelsJson: MODELS_JSON });
 const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
@@ -721,6 +739,7 @@ const providerAuth = providerAuthRef = createProviderAuth({
 });
 
 const route = createRouter({
+  worktrees,
   processes: managedProcesses,
   auth,
   sse,
@@ -785,6 +804,7 @@ async function shutdown() {
   if(runtime.isShuttingDown())return;
   providerAuth.dispose();
   runtime.setShuttingDown(true);
+  worktrees.dispose();
   /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted
    * 再落盘。不这么做的话它们会以 running 留在盘上，下次启动才被恢复 ——
    * 中间那段时间界面会显示一个永远不会动的「运行中」。 */
@@ -853,7 +873,8 @@ server.on('error', async (err) => {
   process.exit(1);
 });
 
-rpc.start();
+worktrees.monitor();
+worktrees.validateCurrent().then(() => rpc.start(), () => { runtime.setCurrentCwd(null); rpc.start(); });
 /* 显式绑定回环地址。
  *
  * 不要依赖 Node 的默认行为，也不要写 '0.0.0.0' —— 这个服务能驱动 pi 执行

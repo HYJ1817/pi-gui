@@ -57,12 +57,13 @@ export function resolveInitialCwd(projectsFile, env = process.env) {
  *                     有计划正在跑的时候切项目，会让某个 task 的输出归属
  *                     变得说不清（见 server/planner/index.js 的说明）。
  */
-export function createProjects({ projectsFile, runtime, restartPi, isWin, beforeActivate = null }) {
+export function createProjects({ projectsFile, runtime, restartPi, isWin, beforeActivate = null,
+  getWorkspaceProject = () => null, withActivation = (_cwd, action) => action() }) {
   function read() {
     try {
       const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
       if (data && Array.isArray(data.items)) {
-        return { active: runtime.getCurrentCwd() || '', items: data.items };
+        return { active: getWorkspaceProject(runtime.getCurrentCwd()) || runtime.getCurrentCwd() || '', items: data.items };
       }
     } catch {
       /* 首次运行 —— 空列表，等用户自己添加 */
@@ -151,6 +152,28 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
     return norm(a) === norm(b);
   }
 
+  async function activatePath(target, { validated = false } = {}) {
+    const resolved = path.resolve(String(target || ''));
+    const action = () => {
+      try { if (!fs.statSync(resolved).isDirectory()) throw Error(); }
+      catch { return { ok: false, code: 'directory-unavailable', error: '目录不可用，请重新选择工作区。' }; }
+      if (beforeActivate) {
+        const reason = beforeActivate();
+        if (reason) return { ok: false, code: 'plan-running', error: reason };
+      }
+      const cfg = read();
+      const parent = getWorkspaceProject(resolved);
+      // Persist the actual workspace for restart, while retaining the original project row/order.
+      cfg.active = resolved;
+      if (!parent && !cfg.items.some(p => samePath(p.path, resolved))) cfg.items.push({ path: resolved, name: path.basename(resolved) || resolved });
+      write(cfg);
+      runtime.setCurrentCwd(resolved);
+      restartPi();
+      return { ok: true, cwd: resolved };
+    };
+    return validated ? action() : withActivation(resolved, action);
+  }
+
   function handle(req, res, url) {
     if (req.method === 'GET') {
       return json(res, 200, { ok: true, ...read(), cwd: runtime.getCurrentCwd() });
@@ -158,7 +181,7 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
 
     if (req.method === 'POST' && url.pathname === '/api/projects') {
       return readBody(req)
-        .then((raw) => {
+        .then(async (raw) => {
           let payload;
           try {
             payload = JSON.parse(raw || '{}');
@@ -197,7 +220,8 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
       const raw = url.searchParams.get('path') || '';
       if (!raw.trim()) return json(res, 400, { ok: false, error: '路径必填' });
       const resolved = path.resolve(raw);
-      const removingCurrent = samePath(resolved, runtime.getCurrentCwd());
+      return Promise.resolve(withActivation(resolved, () => {
+      const removingCurrent = samePath(resolved, runtime.getCurrentCwd()) || samePath(resolved, getWorkspaceProject(runtime.getCurrentCwd()));
       if (removingCurrent && beforeActivate) {
         const reason = beforeActivate();
         if (reason) return json(res, 409, { ok: false, code: 'workspace-busy', error: reason });
@@ -212,11 +236,12 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
         restartPi();
       }
       return json(res, 200, { ok: true, removed: resolved, closedWorkspace: removingCurrent, count: before - cfg.items.length });
+      })).catch(err => json(res, 409, { ok: false, code: err.code || 'workspace-busy', error: '工作区操作尚未完成，请刷新后重试。' }));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/projects/activate') {
       return readBody(req)
-        .then((raw) => {
+        .then(async (raw) => {
           let payload;
           try {
             payload = JSON.parse(raw || '{}');
@@ -224,34 +249,8 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
             return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
           }
 
-          const resolved = path.resolve(String(payload.path || ''));
-          try {
-            if (!fs.statSync(resolved).isDirectory()) throw new Error('not a directory');
-          } catch {
-            return json(res, 400, { ok: false, error: `目录不可用：${resolved}` });
-          }
-
-          /* 有计划正在执行时不许切项目。
-           * 技术上能切，但切完之后「某个 task 的输出属于哪个项目」就得靠
-           * generation 去猜 —— 那是最难查的一类状态错。第一版直接拒绝，
-           * 让用户先停止计划（界面上有停止按钮）。 */
-          if (beforeActivate) {
-            const reason = beforeActivate();
-            if (reason) return json(res, 409, { ok: false, code: 'plan-running', error: reason });
-          }
-
-          const cfg = read();
-          cfg.active = resolved;
-          if (!cfg.items.some((p) => samePath(p.path, resolved))) {
-            cfg.items.push({ path: resolved, name: path.basename(resolved) || resolved });
-          }
-          write(cfg);
-
-          // pi 只能在启动时确定 cwd，所以切换项目必须重启子进程。
-          // 先改共享态、再重启 —— 反了的话新进程会拿到旧 cwd。
-          runtime.setCurrentCwd(resolved);
-          restartPi();
-          return json(res, 200, { ok: true, cwd: resolved });
+          const result = await activatePath(payload.path);
+          return json(res, result.ok ? 200 : result.code === 'directory-unavailable' ? 400 : 409, result);
         })
         .catch((err) => json(res, 500, { ok: false, error: String(err.message) }));
     }
@@ -259,5 +258,5 @@ export function createProjects({ projectsFile, runtime, restartPi, isWin, before
     return json(res, 405, { ok: false, error: 'Method not allowed' });
   }
 
-  return { handle, handleFs, read, write, samePath, listDirectory };
+  return { handle, handleFs, read, write, samePath, listDirectory, activatePath };
 }

@@ -26,6 +26,7 @@ import { clearThread, setStreaming } from './messages.js';
 import { clearSessionPlans } from './session-plans.js';
 import { renderAttachments } from './attachments.js';
 import { draftSync } from './draft.js';
+import { openWorktreeManager } from './worktrees.js';
 
 let projectData = { active: '', items: [] };
 let activationQueue = Promise.resolve();
@@ -256,6 +257,9 @@ export function renderProjects() {
        * 清聊天，那是一个菜单动作不该顺手制造的副作用。
        * 「移除项目」按**这一行的 path** 操作，与是不是当前项目无关。 */
       openActionMenu(menuTrigger, [
+        { label: '工作区管理', icon: MENU_ICONS.archive, onClick: () => openWorktreeManager(p, {
+          activateWorkspace: (workspace, run) => activateProject(workspace.cwd, `${label} · ${workspace.branch || '主工作区'}`, run),
+        }) },
         ...(isActive ? [
           { label: '项目设置', icon: MENU_ICONS.pencil, onClick: () => openProjectSettings() },
           { separator: true },
@@ -357,7 +361,7 @@ export async function removeProject(target) {
   return task;
 }
 
-export function activateProject(target, label) {
+export function activateProject(target, label, activate = apiActivateProject) {
   pendingProjectAction = null;
   showChat();
   const generation = beginWorkspaceSwitch(target);
@@ -376,7 +380,7 @@ export function activateProject(target, label) {
   // 已在途的请求结束后，只有最后一次选择可以更新界面。
   const task = activationQueue.catch(() => {}).then(async () => {
     if (!ownsWorkspace(generation)) return;
-    const j = await apiActivateProject(target);
+    const j = await activate(target);
     if (!ownsWorkspace(generation)) return;
     if (!j.ok) {
       S.switching = false;

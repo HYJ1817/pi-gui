@@ -2327,6 +2327,23 @@ button.pj-sess-primary{cursor:pointer}
  * 深灰底、1px 柔和边框、9px 圆角、轻阴影；宽 190–240px、项高 32px。
  * `position:fixed` 且挂在 body 上 —— **不会被侧栏的 overflow 裁掉**，
  * 也不会被会话区盖住。z-index 30：在正文与顶栏之上，弹层（60+）与确认层（70）之下。 */
+.wt-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.wt-head h3{margin:0}
+.wt-notice{color:var(--t2);font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.wt-notice:empty{display:none}
+.wt-list{max-height:42vh;overflow:auto;margin:12px 0}
+.wt-row{display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.wt-info{flex:1;min-width:0}.wt-name{overflow-wrap:anywhere;font-size:13px}
+.wt-row .modal-desc{margin:4px 0 0;font-size:11px}
+.wt-row .row-action-trigger{opacity:1;flex:0 0 28px;width:28px;height:28px;padding:6px;border:0;border-radius:5px;background:transparent;color:var(--t2);cursor:pointer}
+.wt-row .row-action-trigger svg{width:16px;height:16px;display:block}
+.wt-row .row-action-trigger:hover,.wt-row .row-action-trigger[aria-expanded="true"]{background:var(--control-hover);color:var(--t1)}
+.wt-row .row-action-trigger:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.wt-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.wt-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--t2);min-width:0}
+.wt-form input{width:100%;min-width:0;box-sizing:border-box;padding:8px;background:var(--bg);color:var(--t1);border:1px solid var(--line);border-radius:6px;font:inherit}
+.wt-form .primary{grid-column:1/-1;justify-self:end}
+@media(max-width:560px){.wt-form{grid-template-columns:1fr}.wt-row{gap:6px}}
 .action-menu{
   position:fixed;z-index:30;min-width:190px;max-width:240px;padding:5px;
   background:#2a2c2e;border:1px solid #414448;border-radius:9px;

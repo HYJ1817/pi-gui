@@ -89,6 +89,8 @@ export const fetchProcesses = () => getJSON('/api/processes');
 export const controlProcess = body => sendJSON('/api/processes',{body});
 export const fetchProcessLogs = (generation,id,revision,cursor=0) => getJSON('/api/processes?'+new URLSearchParams({generation,id,revision,cursor}));
 export const fetchProjects = () => getJSON('/api/projects');
+export const fetchWorktrees = project => getJSON('/api/worktrees?' + new URLSearchParams({ project }));
+export const worktreeAction = (action, args, contextGeneration) => sendJSON('/api/worktrees', { body: { action, ...args, contextGeneration } });
 
 /** 版本检查（P5）。后端只读公开 GitHub Release 元数据，不下载、不安装。
  *

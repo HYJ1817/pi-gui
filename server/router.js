@@ -105,6 +105,7 @@ export function createRouter({
   quota = null,
   compat = null,
   processes = null,
+  worktrees = null,
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -118,6 +119,7 @@ export function createRouter({
           return json(res, 400, { ok: false, error: '命令不是合法 JSON' });
         }
         try {
+          if (worktrees && cmd.type !== 'abort') await worktrees.validateCurrent();
           if (cmd.type === 'export_html') return json(res, 400, { ok: false, error: '请使用安全会话导出入口' });
           if (typeof cmd.id === 'number') return json(res, 400, { ok: false, error: '客户端请求 ID 必须为字符串' });
           /* Stop 是**权威停止**，不是 fire-and-forget：它等的是 Pi 那条 abort
@@ -158,6 +160,7 @@ export function createRouter({
 
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
     if (url.pathname === '/api/processes') return processes ? processes.handle(req,res,url) : json(res,503,{ok:false,code:'process_unavailable'});
+    if (url.pathname === '/api/worktrees') return worktrees ? worktrees.handle(req,res,url) : json(res,503,{ok:false,code:'worktrees_unavailable'});
     if (url.pathname === '/api/command' && req.method === 'POST') return handleCommand(req, res);
     if (url.pathname === '/api/session-export') {
       if (!sessionExport) return json(res, 503, { ok: false, error: '导出模块未启用' });

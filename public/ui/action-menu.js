@@ -93,7 +93,9 @@ function onKeydown(event) {
   }
   if (event.key === 'Tab') {
     /* 菜单是浮层，Tab 出去等于离开它 —— 直接收起，焦点交给浏览器按 DOM 继续走。 */
-    closeActionMenu({ restoreFocus: false });
+    const dialogMenu = Boolean(openState.anchor.closest('.modal'));
+    if (dialogMenu) event.preventDefault();
+    closeActionMenu({ restoreFocus: dialogMenu });
   }
 }
 
@@ -195,7 +197,7 @@ export function openActionMenu(anchor, items = []) {
     button.appendChild(el('span', 'action-menu-label', item.label));
     button.onclick = () => {
       if (button.disabled) return;
-      closeActionMenu({ restoreFocus: false });
+      closeActionMenu({ restoreFocus: true });
       if (typeof item.onClick === 'function') item.onClick();
     };
     menu.appendChild(button);
@@ -209,7 +211,7 @@ export function openActionMenu(anchor, items = []) {
 
   /* 先挂上去再量尺寸（`visibility:hidden` 下仍然可以量到真实宽高）。 */
   menu.style.visibility = 'hidden';
-  document.body.appendChild(menu);
+  (anchor.closest('.modal') || document.body).appendChild(menu);
   position(menu, anchor);
   menu.style.visibility = '';
 
