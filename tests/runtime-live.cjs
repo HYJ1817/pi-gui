@@ -47,7 +47,13 @@ const { execFileSync } = require('node:child_process'), { pathToFileURL } = requ
     const started = Date.now(), duration = Number(process.env.P32_STRESS_MS || 1800000); let round = 0;
     while (Date.now() - started < duration) {
       round++; const roundStart = Date.now(), expected = round;
+      const before = await Promise.all(runtimes.map(async r => (await r.request({ type: 'get_state' }))?.messageCount ?? 0));
       await Promise.all(runtimes.map(r => r.send({ type: 'prompt', message: `Modify only counter.js in this workspace so it contains exactly: export const counter = ${expected};\nUse the write tool. Then use bash to run a Node assertion reading counter.js and checking the counter. Do not change anything else or use network. Reply briefly when verified.` })));
+      // A get_state poll issued immediately after send() can still observe the
+      // pre-run isStreaming=false and race past the task. Wait for the run to be
+      // observed as started (streaming, or a new session message) before treating
+      // "not streaming" as "finished".
+      await until(async () => { const states = await Promise.all(runtimes.map(r => r.request({ type: 'get_state' }))); return states.every((s, i) => s?.isStreaming === true || (s?.messageCount ?? 0) > before[i]); }, 60000);
       await until(async () => { const states = await Promise.all(runtimes.map(r => r.request({ type: 'get_state' }))); return states.every(s => !s.isStreaming); });
       check(workspaces.every(cwd => fs.readFileSync(path.join(cwd, 'counter.js'), 'utf8').includes(`counter = ${expected}`)), 'real A/B coding round ' + round);
       check(fs.readFileSync(path.join(repo, 'counter.js'), 'utf8').includes('counter = 0'), 'main unchanged round ' + round);
@@ -57,7 +63,13 @@ const { execFileSync } = require('node:child_process'), { pathToFileURL } = requ
       // Keep actual children alive and repeat real coding periodically. This is
       // durability with overlapping tasks, not a claimed continuous token stream.
       const nextRound = Math.min(started + duration, Date.now() + 110000);
-      while (Date.now() < nextRound) { await sleep(Math.min(10000, nextRound - Date.now())); const states = await Promise.all(runtimes.map(r => r.request({ type: 'get_state' }))); check(states.every(s => typeof s.sessionId === 'string'), 'both real children responsive'); }
+      while (Date.now() < nextRound) { await sleep(Math.min(10000, nextRound - Date.now())); const states = await Promise.all(runtimes.map(r => r.request({ type: 'get_state' })));
+        // Keep the assertion identical; record why it failed so a timeout (null from
+        // rpc-bridge's 10s request budget) can be told apart from a dead child.
+        if (!states.every(s => typeof s.sessionId === 'string')) {
+          report.unresponsive ||= []; report.unresponsive.push({ atMs: Date.now() - started, raw: states.map(s => s == null ? String(s) : typeof s === 'object' ? Object.keys(s) : typeof s), bridgeStates: runtimes.map(r => r.getState().state) }); save();
+        }
+        check(states.every(s => typeof s.sessionId === 'string'), 'both real children responsive'); }
     }
     check(events.every(list => list.some(e => e.type === 'tool_execution_start')), 'both children executed real tools');
     report.elapsedMs = Date.now() - started; report.ok = true;

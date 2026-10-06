@@ -99,6 +99,7 @@
     "test:worktrees-live": "node tests/worktrees-electron.cjs",
     "test:runtime": "node tests/runtime-registry.cjs && node tests/runtime-http.cjs && node tests/runtime-store.cjs && node tests/runtime-ui.cjs && node tests/session-runtime.cjs && node tests/pi-supervisor.cjs && node tests/runtime-browser.cjs && node tests/process-budget.cjs && node tests/runtime-events.cjs && node tests/runtime-processes.cjs",
     "test:runtime-live": "node tests/runtime-live.cjs",
+    "test:runtime-soak": "node tests/runtime-soak.cjs",
     "test:runtime-electron": "node tests/runtime-electron.cjs"
   },
   "devDependencies": {
