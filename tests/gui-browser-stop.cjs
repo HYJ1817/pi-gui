@@ -104,7 +104,7 @@ async function main() {
       lastSendResult?.catch(() => {});
       return lastSendResult;
     } },
-    auth: { denyRequest: () => null }, sse: {}, managedProcesses: null,
+    auth: { denyRequest: () => null }, sse: {}, managedProcesses: null, worktrees: null,
     providerAuth: { snapshot: () => ({ sync: { state: syncing ? 'syncing' : 'idle' } }) },
     modelGeneration: {
       guardCommand(command) { if (guardError) throw guardError; guarded.push(command); },

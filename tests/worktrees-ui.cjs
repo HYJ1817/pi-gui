@@ -1,0 +1,67 @@
+const assert = require('node:assert/strict');
+const { JSDOM } = require('jsdom');
+let checks = 0;
+const ok = (name, value) => { assert.ok(value, name); checks++; console.log('  ok  ' + name); };
+(async () => {
+  const dom = new JSDOM('<button id="opener">管理</button><div id="modal" class="modal" hidden><div id="modalCard"></div></div><div id="confirmLayer" class="modal confirm" hidden><div id="confirmCard"></div></div><div id="toasts"></div>', { url: 'http://127.0.0.1/' });
+  global.window = dom.window; global.document = dom.window.document; global.localStorage = dom.window.localStorage;
+  let openWorktreeManager; try { ({ openWorktreeManager } = await import('../public/worktrees.js')); } catch (e) { if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e; }
+  ok('有真实 Worktree 管理入口', typeof openWorktreeManager === 'function');
+  const { S } = await import('../public/state.js'); S.workspaceGeneration = 1;
+  const requests = [], project = { path: '/fixture', name: 'Fixture' };
+  const rows = [{ id: 'main', kind: 'main', cwd: '/fixture', branch: 'main', current: true, health: 'healthy' },
+    { id: 'A', epoch: 'epoch', kind: 'managed', cwd: '/controlled/A', branch: '<img onerror=evil>', health: 'healthy', archived: false, current: false }];
+  let fail = false, resolveSlow;
+  global.fetch = async (url, opts = {}) => {
+    const body = opts.body ? JSON.parse(opts.body) : null; requests.push({ url, body });
+    if (!body) return { json: async () => fail ? { ok: false, error: '读取失败' } : { ok: true, items: rows, contextGeneration: 7 } };
+    if (body.action === 'prepare') return { json: async () => ({ ok: true, nonce: 'nonce', plan: { sourceHash: 'a'.repeat(40), branch: 'pi-gui/A', mainDirty: true } }) };
+    if (body.action === 'create') return { json: async () => ({ ok: true }) };
+    if (body.action === 'archive') { rows[1].archived = body.archived; return { json: async () => ({ ok: true }) }; }
+    if (body.action === 'remove') return { json: async () => ({ ok: false, error: '未合并工作，拒绝移除。' }) };
+    return { json: async () => ({ ok: true }) };
+  };
+  const until = async fn => { for (let i = 0; i < 100; i++) { if (fn()) return; await new Promise(r => setTimeout(r, 5)); } throw Error('UI state not reached'); };
+  const button = (root, text) => [...root.querySelectorAll('button')].find(b => b.textContent === text);
+  const modal = document.getElementById('modalCard'), confirm = document.getElementById('confirmCard');
+  document.getElementById('opener').focus();
+  openWorktreeManager(project, { activateWorkspace: async () => {} });
+  await until(() => modal.textContent.includes('主工作区'));
+  ok('显示 main 与 owned 工作区，文字输入不解析 HTML', modal.textContent.includes('<img onerror=evil>') && !modal.querySelector('img'));
+  button(modal, '创建工作区').click(); await until(() => !document.getElementById('confirmLayer').hidden);
+  ok('dirty main 风险提示明确，不自动复制/stash/reset', confirm.textContent.includes('未提交') && confirm.textContent.includes('stash/reset'));
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await until(() => document.getElementById('confirmLayer').hidden);
+  ok('Escape 取消确认不会 create', !requests.some(r => r.body?.action === 'create'));
+  button(modal, '创建工作区').click(); await until(() => !document.getElementById('confirmLayer').hidden);
+  button(confirm, '创建工作区').click(); await until(() => requests.some(r => r.body?.action === 'create'));
+  ok('create 只传 nonce 和 authoritative context，不传 path/env', JSON.stringify(requests.find(r => r.body?.action === 'create').body) === JSON.stringify({ action: 'create', nonce: 'nonce', contextGeneration: 7 }));
+  await until(() => !button(modal, '创建工作区').disabled);
+  const trigger = modal.querySelector('.wt-row .row-action-trigger'); trigger.click();
+  await until(() => button(document, '归档'));
+  ok('菜单在 dialog 层内，不被遮罩盖住', document.getElementById('modal').contains(document.getElementById('actionMenu')));
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  ok('菜单 Escape 只关闭菜单，恢复 trigger 焦点', !document.getElementById('modal').hidden && !document.getElementById('actionMenu') && document.activeElement === trigger);
+  trigger.click();
+  button(document, '归档').click(); await until(() => rows[1].archived);
+  ok('归档走后端 epoch，不删除目录', requests.some(r => r.body?.action === 'archive' && r.body.epoch === 'epoch'));
+  await until(() => document.activeElement.classList.contains('row-action-trigger'));
+  ok('异步刷新后菜单触发点恢复焦点，Tab 不逃出 dialog', modal.contains(document.activeElement));
+  const first = modal.querySelector('button'), last = [...modal.querySelectorAll('button:not([disabled])')].at(-1);
+  last.focus(); document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  ok('Tab 在现有 dialog 内循环', document.activeElement === first);
+  first.focus(); document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+  ok('Shift+Tab 回到最后控件', document.activeElement === last);
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  ok('关闭恢复触发入口焦点', document.activeElement.id === 'opener');
+  fail = true; openWorktreeManager(project, { activateWorkspace: async () => {} }); await until(() => modal.textContent.includes('读取失败'));
+  ok('错误有真实重试入口', Boolean(button(modal, '重试'))); fail = false; button(modal, '重试').click(); await until(() => modal.textContent.includes('主工作区'));
+  ok('重试恢复列表', modal.textContent.includes('<img onerror=evil>'));
+  S.workspaceGeneration++; document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
+  ok('切 workspace 作废旧弹窗', document.getElementById('modal').hidden);
+  global.fetch = () => new Promise(resolve => { resolveSlow = resolve; });
+  openWorktreeManager(project, { activateWorkspace: async () => {} }); document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  resolveSlow({ json: async () => ({ ok: true, items: rows, contextGeneration: 7 }) }); await new Promise(r => setTimeout(r, 10));
+  ok('迟到列表不能恢复已关闭 modal', document.getElementById('modal').hidden && !modal.textContent);
+  console.log(`Worktree UI: ${checks}/${checks} passed`); dom.window.close();
+})().catch(e => { console.error(e); process.exitCode = 1; });

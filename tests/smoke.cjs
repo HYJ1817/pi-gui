@@ -6582,15 +6582,15 @@ staticCheck();
         JSON.stringify({ opened, switched, beforeAria, afterAria });
     });
 
-    /* 项目菜单只放**真实已有**的两个功能，且移除前必须确认。 */
+    /* 项目菜单保留既有动作，新增受控工作区管理；移除仍须确认。 */
     {
       const trigger = row().querySelector('.pj-row-menu-trigger');
       trigger.onclick({ preventDefault() {}, stopPropagation() {} });
       await wait(20);
       const menu = window.document.getElementById('actionMenu');
       const labels = menu ? [...menu.querySelectorAll('[role="menuitem"]')].map((b) => b.querySelector('.action-menu-label').textContent) : [];
-      check('项目菜单：只有「项目设置」与「移除项目」', () =>
-        labels.join(',') === '项目设置,移除项目' || JSON.stringify(labels));
+      check('项目菜单：工作区管理、项目设置与移除项目均可发现', () =>
+        labels.join(',') === '工作区管理,项目设置,移除项目' || JSON.stringify(labels));
       check('项目菜单：移除项是 danger 层级，且有分隔线', () =>
         Boolean(menu && menu.querySelector('.action-menu-item.danger') && menu.querySelector('[role="separator"]'))
         || '层级 / 分隔线不对');
@@ -6601,7 +6601,7 @@ staticCheck();
 
       // 移除：必须先确认，且确认文案说明不动磁盘文件
       const items = [...menu.querySelectorAll('[role="menuitem"]')];
-      items[1].click();
+      items.find(b => b.querySelector('.action-menu-label').textContent === '移除项目').click();
       await wait(20);
       check('项目菜单：点「移除项目」先弹确认（不是点一下就移除）', () =>
         $('confirmLayer').hidden === false || '没有弹确认框');
@@ -6673,7 +6673,7 @@ staticCheck();
 
       const activeMenu = await openRowMenu(activeRow.querySelector('.pj-row-menu-trigger'));
       check('项目菜单作用域：当前项目有「项目设置」与「移除项目」', () =>
-        menuLabels(activeMenu).join(',') === '项目设置,移除项目' || JSON.stringify(menuLabels(activeMenu)));
+        menuLabels(activeMenu).join(',') === '工作区管理,项目设置,移除项目' || JSON.stringify(menuLabels(activeMenu)));
       window.closeActionMenu?.();
       await wait(10);
 
@@ -6681,8 +6681,8 @@ staticCheck();
       const labels = menuLabels(inactiveMenu);
       check('项目菜单作用域：非当前项目**没有**「项目设置」', () =>
         !labels.includes('项目设置') || JSON.stringify(labels));
-      check('项目菜单作用域：非当前项目只剩「移除项目」', () =>
-        labels.join(',') === '移除项目' || JSON.stringify(labels));
+      check('项目菜单作用域：非当前项目可管理工作区及移除项目', () =>
+        labels.join(',') === '工作区管理,移除项目' || JSON.stringify(labels));
 
       // 点非当前项目的三点：只开菜单，不切项目、不重启 Pi
       const genBefore = window.S.workspaceGeneration;
