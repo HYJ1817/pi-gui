@@ -1,20 +1,20 @@
 # P32.3 Multi Session Runtime：实施与验收记录
 
-日期：2026-10-06。状态：实现及离线/Electron 验证已完成；**尚未通过本阶段验收**。真实模型 coding 与至少 30 分钟并行压力测试没有通过，不能进入 P32.4。
+日期：2026-10-06（第二轮接手复验）。状态：**仍未宣告通过**，由用户交 ChatGPT 复验。此前缺失的两项硬性验收证据中，真实 A/B 并行 coding 已取得通过证据；30 分钟并行压力测试结论见第五节。
 
 ## 基线与交付边界
 
-- before HEAD：`698fcab252795d29176aa6c21bc40e3e0e2def52`（P32.1/P32.2 已合并基线）。
-- 代码/测试 after HEAD：`891026425914193cb4d5decfc0c8a72472a6eb63`；最终分支 HEAD 另包含本验收文档提交，以 `git rev-parse HEAD` 为准。
-- branch：`codex/p32-worktree-multisession`。
-- 用户已授权推送当前分支；未合并、未发布。业务、测试、文档按回滚边界拆提交，保留既有未跟踪的 `.p25-1-release-a2b10ddfebd7413789311029f931a3ca/`。
-- 遵循 [ADR 0032](adr/0032-worktree-multisession.md) 的 A+B3；不改 Pi 本体、RPC/schema，不新增第三方依赖。
+- 本轮接手 before HEAD：`161473139598ab02685bbffbfae4b1c578e271b6`（上一轮推送 HEAD，与任务书一致）。
+- 本轮 after HEAD：以 `git rev-parse HEAD` 为准（本文件提交即最终 HEAD）；未合并 main、未发版、未开始 P32.4。
+- branch：`codex/p32-worktree-multisession`。工作区在本轮开始时干净，仅保留既有未跟踪目录 `.p25-1-release-a2b10ddfebd7413789311029f931a3ca/`；全程未使用 `reset --hard` / `git clean` / 强制 checkout。
+- 本轮新增/修改的仓库文件仅三处：`tests/runtime-soak.cjs`（新增 opt-in 并行稳定性 soak）、`package.json`（新增 `test:runtime-soak` 脚本，1 行）、`tests/runtime-live.cjs`（等待竞态最小修复 + 失败时补充原始证据；断言与阈值未变）、本文件。
+- 遵循 [ADR 0032](adr/0032-worktree-multisession.md) 的 A+B3；未改 Pi 本体、RPC/schema，未新增第三方依赖。
 
 ## 架构与 identity
 
 每个 conversation 固定绑定一个经过 P32.2 验证的受控 worktree，拥有独立官方 Pi child、RPC bridge、Activity、ModelGeneration、project config、Browser scope、Managed Process manager、审批集合。经典主会话路径继续保留，独立会话不用全局 Renderer S 路由事件。
 
-所有控制/回读使用完整 owner：`backendInstance / projectId / repoId / workspaceId / workspaceEpoch / conversationId / runtimeId / runtimeGeneration / sessionId`。backend/runtime identity 使用随机标识；sessionId 在官方 get_state 确认后绑定。PID 仅是观测值，不能作为控制权限。已经证明的原生 session identity 在 child 崩溃时保留，错误状态仍能传到该会话；明确重启时才分配新 runtime/generation。
+所有控制/回读使用完整 owner：`backendInstance / projectId / repoId / workspaceId / workspaceEpoch / conversationId / runtimeId / runtimeGeneration / sessionId`。backend/runtime identity 使用随机标识；sessionId 在官方 get_state 确认后绑定。PID 仅是观测值，不能作为控制权限。原生 session identity 在 child 崩溃时保留，错误状态仍能传到该会话；明确重启时才分配新 runtime/generation。
 
 工作区 canonical root lease 在 spawn 前取得，生命周期 admission 与 P32.2 工作区操作共用锁；同一工作区不能有第二个 writer。恢复逐项核对 project/repo/workspace/epoch/cwd/root/branch，不接受 Renderer 提供任意工作目录。经典主工作区及其目录别名不能同时接独立 writer。
 
@@ -37,7 +37,7 @@
 
 每个 runtime backlog 限制 200 帧/1 MiB，前端文本 1 MiB UTF-8、100 tool 摘要、32 审批。全局 SSE 历史限制 800 帧/8 MiB，最多 8 clients，单 client 输出/待发队列 128 MiB；超限断开并重新发现。RPC 单条 JSON 上限 96 MiB，传输分帧、有背压，LF/CRLF 分隔符不占消息预算。截断显式标记并可受身份约束回读历史。
 
-Managed Process 全局最多 8 个活动实例，沿用 P31 spec/token/generation/tree cleanup、ready、ring buffer、脱敏。每个 Pi child/模型请求/开发进程分别消耗内存、连接和系统资源；当前硬预算不代替真实长期资源验收。
+Managed Process 全局最多 8 个活动实例，沿用 P31 spec/token/generation/tree cleanup、ready、ring buffer、脱敏。每个 Pi child/模型请求/开发进程分别消耗内存、连接和系统资源。
 
 ## Browser / Process / 审批边界
 
@@ -53,80 +53,185 @@ Process 每会话独立 manager；跨 processId/token/bridge generation 拒绝�
 
 本机是 Windows；真实树清理、duplex、Electron、实际 Node HTTP 服务均已在 Windows 执行。**没有 POSIX 真机证据**；离线条件/协议检查不等于 POSIX 实跑。
 
-## 验证记录
+## 一、HTTP 502 诊断结论
 
-日志目录：`C:\Users\21022\AppData\Local\Temp\pi-gui-p32-3-3ec1643284934d55808ec8b3d69849ff`。默认 npm test 仍完全离线、确定性：原 69 个脚本加 10 个专项，共 79 个；不依赖本机真实 Pi/model。
+**结论：502 来自上游账号策略，不是 pi-GUI 的传输层或 Runtime 缺陷。因此本轮未改动任何 Runtime 架构。**
 
-| 检查 | 实际结果 |
+诊断链（每一步都是本轮实测，未打印任何密钥）：
+
+| 步骤 | 实际结果 |
 |---|---|
-| 修改前 npm test | EXIT 0，baseline.log |
-| 第一轮集成 npm test | EXIT 0，integrated-full.log |
-| 第二轮全量 npm test | EXIT 0，final-full.log；后续边界修复须看最终轮日志 |
-| 后续全量 npm test | EXIT 0，final-full-2.log；关闭会话前端修复后再运行 final-full-3.log |
-| 最终源码 npm test | EXIT 0，final-full-3.log；全部 79 个脚本，新专项共 184/184 |
-| 推送前专项复测 | EXIT 0，pre-push-runtime.log；10 个专项共 184/184 |
-| registry | 31/31 |
+| magpie 代理存活 | `127.0.0.1:3425` LISTENING（`magpie-windows-amd64.exe`），`GET /v1/models` 返回 200，43 个模型 |
+| 绕过 Pi 与 pi-GUI，直接 POST magpie `/v1/chat/completions`（model=`gemini/gemini-3.8-flash`） | **HTTP 502**，响应体为 Google 侧原文：`Gemini CLI: This client is no longer supported for Gemini Code Assist for individuals. To continue using Gemini, please migrate to the Antigravity suite …` |
+| Pi 真实版本与入口 | `@earendil-works/pi-coding-agent` **1.0.4**，入口 `dist/bundle/cli.js`（`createPiLaunch().cliEntry()` 解析，kind=node） |
+| Pi 实际选择的 Provider/Model | `settings.json` → `magpie` / `gemini/gemini-3.8-flash`；magpie 上游 `gemini` 账号在 `logins.json` 中 `auth: null` |
+| 本机其它 provider 实测 | `codex/gpt-5.6-sol` → 200；`zcode/GLM-5.3-Flash` → 502 `exceed quota limit`；`deepseek/*` 余额 ¥0.99；`workbuddy/*` → 200 |
+
+即：magpie 的 gemini 路由所绑定的 Gemini CLI 个人账号已被 Google 停用，magpie 原样转发上游 502。**上游服务异常，不是 pi-GUI 实现缺陷**；不需要为它修改 Runtime 架构。
+
+未做（按要求）：未读取/打印/提交/上传 API Key 与 OAuth token 内容；未修改用户全局 magpie 配置；未刷新 OAuth 或重新登录；未猜测任何模型是否支持工具调用（改用真实运行证明，见第四节）。
+
+**附带安全观察（未使用、未复制、未提交其值）**：`~/.config/magpie/providers.json` 以明文保存 DeepSeek API Key。这是用户本机配置的卫生问题，不属于 P32.3 范围，仅在此记录。
+
+## 二、本轮实测环境与两项宿主级限制
+
+本轮 agent 会话的执行环境与上一轮不同（Git 由 2.53.0.windows.2 变为 2.55.0.windows.3），并存在两项**宿主级拦截**，与 pi-GUI 代码无关：
+
+1. **文件 symlink 创建被静默降级为 0 字节普通文件**。连系统 `mklink` 也报「创建成功」但产物不是重分析点（`fsutil reparsepoint query` → 错误 4390），`readlink` → EINVAL；目录 junction 正常。已用隔离探针在多个目录、托管 Node、清空 `NODE_OPTIONS`、禁用工具沙箱四种条件下复现。
+2. **同步 spawn 在 stdin 为管道时必然 EBUSY**。`spawnSync` / `execFileSync` 未显式给 `stdio`（默认 stdin=pipe）时返回 `EBUSY`；显式 `['ignore','pipe','pipe']` 正常，**异步 `spawn` 完全正常**（因此产品自身的 child/guardian/Process 路径不受影响）。
+
+为取得可比较的数字，本轮使用了一个**透明 harness 适配器**（位于临时目录，不在仓库内）：仅在调用方未指定 `stdio` 且未提供 `input` 时，把同步 spawn 的默认 stdin 由 pipe 改为 ignore。它不修改任何产品代码、测试文件或断言。
+
+第 2 项限制无法消除；第 1 项无法消除，因此 `tests/hotfix.cjs` 的 `H5 failure cleanup and path privacy: symlink` 用例在本环境**必然失败**（该用例要求 symlink 产物被拒绝为 502，而本环境根本产不出 symlink）。这是环境伪影，不是产品回归：HEAD 未变、工作区干净，且上一轮日志中同一套件为 26/26。
+
+## 三、真实模型与 A/B 并行 coding（此前缺失项之一）
+
+用户本轮指定使用 `magpie / workbuddy/glm-5.3-flash`（WorkBuddy 免费额度）。该模型通过 Pi 的 `openai-completions` 路径接入，凭据由官方 SDK 在进程 env 中传递；测试全程使用 `os.tmpdir()` 下的临时 Git repo、两个真实 `git worktree`、临时 agentDir 与 sessions 目录，**未触碰任何真实业务项目**。
+
+命令：`PI_GUI_RUNTIME_LIVE=1 P32_LIVE_MODEL=workbuddy/glm-5.3-flash P32_STRESS_MS=600000 npm run test:runtime-live`
+
+10 分钟运行结果（`live/runtime-live.json`，EXIT 0）：
+
+| 项目 | 实际值 |
+|---|---|
+| 两个真实 Pi child 的原生 sessionId | `01a110fb-1e47-7124-aa45-54686a5e55fc` / `01a110fb-2233-778c-9743-52954315ebe5`（不同） |
+| 真实 coding 轮次 | 4 轮，每轮 A、B 同时收到任务 |
+| 累计真实工具执行数 | A/B 各 3 → 5 → 7 → 9（每轮 +2，证明 write 与 bash 真实执行） |
+| 各轮 A/B 工作区 Git 状态 | 均为 `M counter.js`（各自 worktree 内被真实修改） |
+| main 仓库 | 每轮 `counter = 0` 不变 |
+| 断言 | 53/53 通过；`both children executed real tools` 通过 |
+| 清理 | `cleanupConfirmed: true` |
+
+即：**A/B 同时真实 coding 成功**——两路拥有不同 Pi child、不同原生 session、真实工具执行与真实文件写入，且互不污染、main 不受影响。
+
+### 30 分钟真实并行压力测试（此前缺失项之二）
+
+命令：`PI_GUI_RUNTIME_LIVE=1 P32_LIVE_MODEL=workbuddy/glm-5.3-flash P32_STRESS_MS=1800000 npm run test:runtime-live`
+
+| 项目 | 实际值 |
+|---|---|
+| 起止 | 2026-10-06T12:04:53Z → 12:35:04Z（UTC），本地 20:04:53 → 20:35:04 |
+| 实际持续时间 | **1,800,015 ms（30 分 0.015 秒）**，`EXIT 0` |
+| 并行执行线 | 2 条独立 Runtime（各自 Pi child、各自 worktree、各自原生 session） |
+| 完成的真实 coding 轮次 | **14 轮**，每轮 A、B 同时收到任务并各自完成 |
+| 累计真实工具执行 | A 2→28，B 4→43（每轮每路 +2：write + bash） |
+| 各轮工作区 | 每轮 A、B 均为 `M counter.js`，main 每轮 `counter = 0` 不变 |
+| 断言 | **177/177 通过**（含每轮 `real A/B coding round N`、`main unchanged round N`、周期性 `both real children responsive`） |
+| 模型/版本 | `magpie` / `workbuddy/glm-5.3-flash`；Pi `1.0.4` |
+| backend RSS 采样 | 113.3–113.7 MB（14 个样本，波动 <0.4 MB，无增长趋势） |
+| 清理 | `cleanupConfirmed: true`；无 generation 失败事件；无 `unresponsive` 记录 |
+
+即：**在 30 分钟内持续、周期性地交错执行真实 Agent 工作负载**（不是让两个空闲 child 挂着等待），并全程保持 A/B 隔离。
+
+#### 该长跑之前两次失败的原因（已定位并修复）
+
+第一次（`live30`）在约 147 秒时 `both real children responsive` 断言失败；最小复现探针在 5 分钟内 60 次轮询**未复现**，根因未定（见"剩余风险"）。
+
+第二次（`live30b`）在第 5 轮 `real A/B coding round 5` 失败。现场证据（保留的临时工作区 + Pi 会话 JSONL）：
+
+- A/B 两侧会话文件都只到第 5 轮的 **user** 消息（`export const counter = 5;`），**其后没有任何 assistant 回合**；
+- 两侧 `counter.js` 仍为 `counter = 4`；
+- 无 generation 失败事件。
+
+根因是**测试自身的等待竞态**，不是产品缺陷：`send()` 之后立刻轮询 `get_state`，可能在 Pi 尚未把 `isStreaming` 置真时读到 `false`，于是把"还没开始"当成"已经结束"，随后对尚未写入的文件做断言。
+
+最小修复（`tests/runtime-live.cjs`）：在 `send()` 后先等待"运行已被观测到开始"（`isStreaming === true` 或该会话 `messageCount` 增长），再等待结束。该修改**加强**了判定——原先"未开始"会被误判为"已完成"，现在必须先证明真的跑起来了。修复后同一命令 30 分钟运行一次通过。
+
+## 四、不消耗模型的部分证据（fixture 并行 soak）
+
+用户本轮选择"先跑不耗模型的证据"。为此新增 opt-in 套件 `tests/runtime-soak.cjs`（`npm run test:runtime-soak`），它使用**生产实现**：真实 `createRuntimeRegistry` + 真实 `runtime-routes` + 真实 `router`/SSE 总线 + 真实 HTTP 服务 + 真实 `createSessionRuntime` + 真实 `git worktree` + 真实 Managed Dev Process。Pi child 是本地 fixture（说真实 RPC 线协议、真实写文件、真实发 tool 事件），因此**它只证明稳定性与隔离，不构成真实模型 coding 证据**。
+
+覆盖维度（每轮循环一种）：
+
+- 2 个独立 Runtime 在工作区 A/B 同时执行任务，断言"同一瞬间两路都在 streaming"；
+- 多次 focus 切换（A→B→A→B）时后台任务不中断；
+- 权威 Stop A：A 停止且不再产生新的工具副作用，B 继续并完成任务；
+- A child crash（exit 7）→ A 进入 error、B 不受影响、显式 restart 后保留原生 session 并换新 runtime identity；
+- 显式启用第 3 个 Runtime 并在其真实工作区完成任务，第 4 个被 `runtime_limit` 拒绝（`totalCount` 上限 3）；
+- 每个 Runtime 独立 Managed Dev Process：start/logs/ready、真实端口互不相同、真实 HTTP 响应归属正确、错误 revision 被 `stale_process` 拒绝、stop A 不影响 B；
+- SSE 重连：live `eventSequence` 单调无重复，`_replay` 帧被标记且仍带 owner；
+- 关闭后 lease/slot 回收（`inUse(root)=false`、`liveCount` 递减）；
+- 后端重启：新 registry 从磁盘重新发现会话为 dormant、不自动 spawn，resume 后绑定**同一原生 sessionId** 并分配新 generation；
+- 结束时无存活 runtime、全部 owned 树清理确认。
+
+结果（30 分钟版，`PI_GUI_SOAK_MS=1800000`）：
+
+| 项目 | 实际值 |
+|---|---|
+| 起止 / 持续时间 | 2026-10-06T13:16:56Z → 13:47:11Z，**1,809,952 ms（30 分 10 秒）**，`EXIT 0` |
+| 轮次 / 断言 | **215 轮 / 1140 项断言全通过**，`failures: []` |
+| 维度覆盖 | coding 53、focus 27、stop 27、crash 27、runtime 上限 27、managed process 27、SSE 27 |
+| A/B 真实并行重叠 | 53/53 个 coding 轮次都观测到"A、B 同一瞬间都在 streaming" |
+| SSE | 重连 28 次，累计 27,325 帧，live `eventSequence` 全程单调无重复，`_replay` 帧均带 owner |
+| backend RSS | 71.4–228.8 MB（216 个样本） |
+| 结束时 | 无存活 runtime、无 owned 树残留、租约与槽位已回收 |
+
+soak 装置在验证期自身发现并修掉两处 **harness** bug（不是产品缺陷）：① 失败路径没有关闭监听中的 HTTP 服务与 SSE 客户端，导致进程不退出（表现像"清理挂住"，隔离探针证明 `manager.dispose()` / `runtime.dispose()` 实际为 206 ms / 132 ms）；② 用 `processes[0]` 取受控进程，而早前轮次留下的已退出记录排在前，导致找不到本轮进程（第 14 轮"process ready B"失败与"B process closed"超时均由此而来）。改为按进程 id 定位后即通过。
+
+> 本节是**不消耗模型的部分证据**，只证明稳定性与隔离，**不能替代**第三节的真实模型 coding 验收。
+
+## 五、最终测试结果（本轮实测）
+
+### 完整 `npm test`
+
+- 链式 `npm test`（仓库唯一入口）：**EXIT 1**，在第 7 个脚本 `tests/hotfix.cjs` 中断（`&&` 链），原因是上文环境伪影的 symlink 用例。前 6 个脚本通过，其余 72 个未执行。
+- 为不被一个环境伪影遮住其余结果，另用同一入口的脚本清单**逐个运行**（不改任何测试）：**78/79 通过，仅 `tests/hotfix.cjs` 失败**（25/26，唯一失败项是 symlink 环境伪影）。
+  - 说明：首轮逐脚本运行时因与本轮 soak 冒烟并发，`models-api.cjs`（本地 6665 端口）与 `runtime-processes.cjs`（process ready 超时）出现瞬时争用失败；无并发负载重跑后两者均通过（50/50、10/10），故以 78/79 为准。
+
+### P32.3 专项（`npm run test:runtime`，10 个套件）
+
+| 套件 | 结果 |
+|---|---|
+| runtime registry | 31/31 |
 | runtime HTTP | 12/12 |
-| runtime store | 25/25，新增 dormant/null owner 重复刷新与关闭恢复回归 |
+| runtime store | 25/25 |
 | runtime UI | 14/14 |
-| session factory | 5/5，真实 Windows guardian + fixture Pi |
-| Pi supervisor | 24/24；5.25 MiB Unicode/image JSON digest 一致、背压/认证/嵌套树 |
-| runtime Browser | 45/45，HTTP/IPC 身份、独立 scope、关闭幂等、经典视图可见性 |
+| session factory（真实 Windows guardian + fixture Pi） | 5/5 |
+| Pi supervisor | 24/24 |
+| runtime Browser scope | 45/45 |
 | 全局 Process budget | 4/4 |
 | SSE bounded delivery | 14/14 |
-| 实际 Node HTTP Process | 10/10，A/B ready、文件/端口隔离、脱敏、restart/stop/dispose A 不影响 B、退出清理 |
-| 原 bridge recovery | 55/55（原 45 条保留，新增输出预算行为） |
-| 原 sessions | 91 passed，0 failed（原 85 条保留，新增 tilde 路径恢复） |
-| 原 Planner | 124 passed，0 failed（原 115 条保留，新增互斥/并发 generation/Stop） |
-| Electron | 36/36、8 张截图，实际 Electron 44.4.3 + production server + 临时真实 Git + fixture Pi；包括 125% 缩放、真实 Escape、可见错误态、crash/restart/磁盘重新发现 |
-| Electron build | 最终重建成功，整包 327.7 MB、运行时 234.9 MB，build-app-final.log |
-| 打包后端 app-check | 26/26；新 temp 初次缺 PDF fixture 19/21，补运行 fixtures 后复测通过 |
+| 实际 Node HTTP Process | 10/10 |
+| **合计** | **184/184** |
 
-新增 suite 的每条断言都保留；原有断言没有删除。上表不把未执行/跳过项目计为通过。Electron fixture RPC 只能证明路由和生命周期，不能代替真实模型 coding。
+与上一轮报告数字完全一致。
 
-验收中发现并修复的实际问题：迟到 session locator 写回新 generation、并发 close 重复清理/释放新 lease、审批闭包串到切换后的会话、多行 stdout 误占单行预算、后台退出未撤销 Browser 网关、child 崩溃清空 session identity 导致前端误丢错误态、dormant/null owner 重复刷新抛异常。对应行为回归已保留；崩溃/关闭相关修复另外经过真实 Electron 再验证。
+### Electron 真机（`npm run test:runtime-electron`）
 
-| 用户验收场景 | 证据与缺项 |
+**36/36，8 张截图，EXIT 0**。使用实际 Electron 44.4.3 + production server + 临时真实 Git + fixture Pi，覆盖 A/B 独立 child、focus 切换、真实 HTTP 权威 Stop、独立 Browser scope 与 CDP snapshot 隔离、remote 权限拒绝、崩溃/重启、磁盘重新发现、三个分辨率与 125% 缩放、真实键盘 Escape/Tab。
+
+### 构建与打包
+
+本轮未改动 `public/`、`server/`、`electron/` 任何文件，因此未重新构建产物；上一轮的 `build:app` 成功记录（整包 327.7 MB）继续有效。**本项为"未重新执行"，不是本轮通过。**
+
+## 六、代码变更与回归测试
+
+| 变更 | 原因 | 回归 |
+|---|---|---|
+| 新增 `tests/runtime-soak.cjs` | P32.3 缺少可复跑的并行稳定性/隔离证据载体（fixture，不耗模型） | 自身即断言集；opt-in，不进 `npm test` |
+| `package.json` 新增 `test:runtime-soak` | 让该 opt-in 套件可被复跑 | 1 行，`npm test` 链未变 |
+| `tests/runtime-live.cjs` 修复等待竞态 | 30 分钟运行曾在 `real A/B coding round 5` 失败：`send()` 后立即轮询 `get_state` 可能读到运行开始前的 `isStreaming=false`，把"未开始"当"已结束"。现场证据为会话 JSONL 只有 user 消息、无 assistant 回合 | 在 `send()` 后先等待"运行已被观测开始"（`isStreaming===true` 或 `messageCount` 增长）再等待结束。判定被**加强**：修复前"未开始"会被误判为"完成"，修复后必须先证明真的跑起来 |
+| `tests/runtime-live.cjs` 失败时记录原始证据 | 第一次 30 分钟运行在 `both real children responsive` 失败，但无法判断是 `rpc-bridge` 的 10 秒请求超时（返回 `null`）还是 child 已死 | 断言、阈值、判定完全未变，仅新增 `report.unresponsive` 诊断字段 |
+
+**未做任何"为通过测试而放宽"的改动**：未放宽 ownership、Stop、路径校验、权限或资源上限；未删除既有断言；未跳过失败测试；未用 sleep 或 PID 存在替代权威状态。
+
+## 七、结论
+
+| 分类 | 内容 |
 |---|---|
-| A/B worktree 创建、dirty main、branch/path 冲突、dirty remove、非 Git | P32.2 原有临时真实 Git suites 在 npm test 保留；Electron 实际创建 A/B |
-| 同时真实 coding、文件/Git 隔离 | fixture Git/Process 隔离已过；真实模型 coding HTTP 502，缺项 |
-| A streaming 切 B 并发送、Stop A 不停 B | registry/HTTP/UI/factory + Electron 实际输入/后端检查；Pi 回复为 fixture |
-| B Browser/Process 与 A 隔离 | 实际 Electron/CDP A/B 页面与 localhost 拒绝；实际 Node HTTP P31 managers A/B ready/restart/stop/dispose |
-| stale workspace/runtime、迟到事件与返回 | registry/store/UI/HTTP 可控 barrier；不依赖固定 sleep 判断 stale |
-| 重启应用重新发现 session/worktree | Electron 的 production backend 重启 + 页面重载；零 scoped auto-spawn、旧 backend owner 拒绝、原生 session 恢复；非整应用窗口重开 |
-| 外部删除 worktree | 既有 worktree missing/open/restore suites；registry epoch replacement 隔离；未在运行中强行删除 Windows 锁定 cwd |
-| Pi crash/restart 单会话 | 实际 supervised fixture Pi exit 7、A 可见错误、B 继续 streaming，A 重启保持原生 session/fresh runtime owner |
-| 2–3 会话至少 30 分钟 | 未通过，不以短 fixture 流程替代 |
+| **已通过** | ① 真实 A/B 并行 coding（独立 Pi child/原生 session、真实工具与文件写入、工作区与 main 隔离）；② **30 分钟 2 路真实并行压力测试**（1,800,015 ms、14 轮、177/177 断言、RSS 平稳、清理确认）；③ **30 分钟 fixture 并行 soak**（1,809,952 ms、215 轮、1140/1140 断言、53 次并行重叠、28 次 SSE 重连、无残留）；④ P32.3 专项 184/184；⑤ Electron 真机 36/36；⑥ 逐脚本完整套件 78/79；⑦ HTTP 502 根因定位（上游账号策略，非产品缺陷） |
+| **未通过** | 无产品级失败项 |
+| **未执行** | 本轮未重新构建/打包（未改 `public/`、`server/`、`electron/` 产品代码）；POSIX 真机验证；三 Chromium view 内存 |
+| **外部服务阻塞** | `gemini/*` 全部经 magpie 返回 502（Google 已停用该个人账号的 Gemini CLI 登录，需用户迁移到 Antigravity 或指定 GCP 项目）；`zcode/*` 配额超限；`deepseek/*` 余额 ¥0.99 |
+| **环境限制（非产品）** | ① 文件 symlink 被宿主静默降级 → `tests/hotfix.cjs` 的 `H5 … symlink` 用例必然失败，并因此使链式 `npm test` 在第 7 个脚本中断；② 同步 spawn stdin=pipe 必然 EBUSY → 需透明 harness 适配器才能跑完；③ 首轮逐脚本运行曾因与本轮 soak 并发出现两处瞬时争用失败，无并发重跑后消失 |
 
-### 截图与键盘
+**本轮不宣告 P32.3 验收通过。** 未合并 main、未发布、未开始 P32.4。HEAD、验收摘要与剩余风险由用户交 ChatGPT 复验。
 
-截图位于 `C:\pi-GUI\.shots\p32-3\`，尺寸及 overflow 数据在 report.json。1280×800、1440×900、1920×1080 均以 CSS viewport 实测，Windows DPI 会使 PNG 像素尺寸更大。
+## 剩余风险
 
-1. [1280×800 A/B streaming](../.shots/p32-3/running-B-1280x800.png)
-2. [1440×900 A/B streaming](../.shots/p32-3/running-B-1440x900.png)
-3. [1920×1080 A/B streaming](../.shots/p32-3/running-B-1920x1080.png)
-4. [Stop A，B 继续](../.shots/p32-3/A-stopped-B-running.png)
-5. [独立 Browser 右栏打开](../.shots/p32-3/scoped-browser-open.png)
-6. [Browser 关闭](../.shots/p32-3/scoped-browser-closed.png)
-7. [125% 页面缩放](../.shots/p32-3/running-B-zoom125.png)
-8. [A 崩溃，B 继续](../.shots/p32-3/A-crashed-B-running.png)
-
-真实 Electron 输入检查 Tab/Shift+Tab 焦点循环、Escape 关闭、A streaming 切 B 发任务、A Stop 不停 B；offline UI 另外验证草稿隔离、迟到 Stop/history/approval、共享审批 ID 不串线。三个尺寸检测 document scrollWidth/Height 不超 viewport；125% 缩放另截图。现有 palette/search/project/history 等完整整合保留经典路径，独立会话完整导航属于 P32.4。
-
-### 真实 Pi / coding / 压力测试：未通过
-
-`test:runtime-live` 是 opt-in，全部写入临时 Git repo/worktrees、agentDir、sessions/dataDir；读取已有模型定义/凭据，仅在进程 env 中使用 key，不复制用户认证文件、不刷新 OAuth、不改真实项目。
-
-2026-10-06 实际官方 Pi 1.0.4 两个 child 分别完成 RPC ready，原生 session IDs 不同。当前默认 `magpie / gemini/gemini-3.8-flash` 两路请求均出现 HTTP 502，各重试四次，没有 coding tool 执行、没有目标文件产生。日志 runtime-live.log、报告 runtime-live.json；失败后 cleanupConfirmed=true。
-
-这只证明真实 child 启动/身份分离及失败清理；**不证明真实 A/B coding、热修改隔离、真实模型 Stop 或 30 分钟压力测试**。尚需用户指定可用的已配置 Provider/Model，或选择重试当前默认模型；不会自行猜另一模型。
-
-## 关键文件与已知限制
-
-新增核心：server/runtime-registry.js、session-runtime.js、pi-supervisor.js、runtime-routes.js、runtime-browser-launch.js；extensions/pi-gui-process/runtime-child.cjs；electron/browser-runtime-host.cjs；public/runtime-store.js、runtime-sessions.js。
-
-组合与兼容：server.js、router.js、worktrees.js、rpc-bridge.js、sessions.js、sse.js、planner/index.js、process-bridge.js、managed-processes.js；electron/main/preload/browser-view；public/api/app/worktrees/browser-pane/styles。专项 suite 经 package.json 接入唯一 npm test 入口。
-
-限制：本阶段窄入口位于 worktree 菜单/独立会话 modal，未实现 P32.4 完整侧栏、历史搜索、模型选择 UI、attention 通知整合。第三方 Extension/MCP/全局 memory 不是 OS sandbox，可能共享内部状态；不承诺其完全隔离。当前拒绝与 Planner/维护共存，属于保守 writer 安全策略。清理无法证明时保留 lease，需要人工恢复；不自动 stash/reset/强制移除。
-
-真实模型和 30 分钟验收缺项、POSIX 真机缺项必须保留，不能以 fixture/Electron 截图或 npm test 替代。当前阶段不宣告完成，后续阶段未启动。
+1. **一次未定根因的间歇失败**：本轮第一次 30 分钟运行（`live30`）在约 147 秒的 `both real children responsive` 断言失败；最小复现探针在 5 分钟内 60 次轮询未复现，此后两次 30 分钟运行（`live30b`、`live30c`）也未在该断言处失败。`rpc-bridge.request()` 默认 10 秒超时返回 `null`，因此该次失败可能只是"某次 `get_state` 超过 10 秒"，也可能是 child 真实退出。本轮已给测试补上 `report.unresponsive` 原始证据记录（记录 raw 返回形状与 bridge state）以便下次直接判定，但**该单次事件的根因未定**，属未决风险。
+2. `runtime-live` 让两个 child 共用同一个 `--session-dir`（临时目录），这与产品中每个 runtime 各自按 cwd 分目录的形状不同，是上述间歇现象的候选干扰源，本轮未证明也未排除。
+3. 第三方 Extension/MCP/全局 memory 不是 OS sandbox，可能共享内部状态；不承诺完全隔离。
+4. 清理无法证明时保留 lease，需要人工恢复；不自动 stash/reset/强制移除。
+5. POSIX 真机、三 Chromium view 内存、不同 Pi 版本兼容性仍待后续阶段验证。
+6. `gemini/*` 在本机仍不可用（上游账号策略）。在用户迁移 magpie 的 Google 账号（Antigravity 或 `GOOGLE_CLOUD_PROJECT`）之前，本机默认模型仍会返回 502；本轮验收改用 `workbuddy/glm-5.3-flash`，结论不依赖 gemini。
