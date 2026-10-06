@@ -2,12 +2,40 @@
 
 日期：2026-10-06（第二轮接手复验）。状态：**仍未宣告通过**，由用户交 ChatGPT 复验。此前缺失的两项硬性验收证据中，真实 A/B 并行 coding 已取得通过证据；30 分钟并行压力测试结论见第五节。
 
+## 后续状态（本记录写完之后，用户明确指示）
+
+本节由用户指示追加，**不是**我的自行决定：
+
+1. **已推送到 origin** 的 `codex/p32-worktree-multisession`（用户指示）。
+2. **已合并 main**（用户指示）：`main` 由 `698fcab`（P32.2）**快进**到本分支 HEAD，7 个提交、无合并提交、无冲突，已推送 `698fcab..<新 HEAD>`。功能分支与 main 指向同一提交。
+   > 这与本任务书里「不要合并 main」相冲突；按用户后续明确指示执行，此处如实记录。
+   > **P32.3 是否验收通过仍由 ChatGPT 复验判定，我不作此宣告。**
+3. **修复了 main 上既存的 CI 红**（用户指示）。该红**不是本轮引入**：`698fcab`（P32.2 那次推送）的 CI 同样失败，Node 22 / 24 两个 job 都在 `tests/worktrees.cjs` 处中断。
+
+### 该 CI 红的根因与修复
+
+- 失败点：`tests/worktrees.cjs` 的 `manager.list({ project: repo })`（`repo` 名为 `repo 中文`）→ `lib/git-worktree.js` 的 `repository()` 抛 `invalid_project`。
+- 根因：**Windows 8.3 短名**。`fs.realpathSync` **不展开**短名，而 `git rev-parse --show-toplevel` 返回长名；`path.relative(root, fs.realpathSync(project))` 因此得到 `..\REPO中~1`，合法项目被判成 `invalid_project`。GitHub Actions 的 Windows 运行器临时目录正是短名形状（`…\RUNNER~1\…`），本机 `os.tmpdir()` 是长名 —— 所以 CI 必红、本机全绿。
+- 最小复现（本机逐字复现 CI 报错）：
+  ```bash
+  # 取一个 8.3 短名目录（卷上关掉 8.3 生成时无短名，此路不通）
+  SHORT=$(node -e "const{execFileSync}=require('child_process');console.log(execFileSync('cmd',['/c','for %I in (C:\\\\Users\\\\<you>\\\\AppData\\\\Local\\\\Temp\\\\p32-ci-sim) do @echo %~sI'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim())")
+  TMP="$SHORT" TEMP="$SHORT" node tests/worktrees.cjs   # 修复前：invalid_project；修复后：56/56
+  ```
+- 修复（只做归一化，**未放宽任何校验**）：
+  - `lib/safe-path.js` 新增导出 `canonicalPath()`：Windows 上走 `fs.realpathSync.native`（会展开短名），并允许**尾部不存在**（归一到最深已存在前缀再拼回尾巴），使 `…/worktrees/unknown` 这类路径也能参与「是否落在受控根内」的判定。
+  - `lib/git-worktree.js` 的 `repository()`：比较前对项目侧取规范形式（`root`/`common` 直接来自 git，保持原值以免改动 `repoId`）。
+  - `server/worktrees.js`：受控根 `dataRoot` 取规范形式；`withActivation()` 对外部传入的 `cwd` 同时用原值与规范值判定。
+    > 只改 `dataRoot` 不改 `withActivation` 会让「未登记受控路径」判定漏判（测试直接抓到「Missing expected rejection」）—— 所以两者必须一起改，这正是本节存在的理由。
+- 回归：`tests/worktrees.cjs` 新增 1 条断言（`C:\PROGRA~1` ↔ `C:\Program Files` 必须归一到同一路径；卷上无 8.3 时跳过），总数 55 → 56。
+- 验证：`tests/worktrees.cjs` 在**长名 TMP 与短名 TMP 两种条件下均 56/56**；`worktrees-http` 14/14、`worktrees-ui` 16/16、`git` 161/161；P32.3 专项 184/184；`planner` 124、`project-config` 115、`modules` 117、`server-security` 36 全通过。
+
 ## 基线与交付边界
 
 - 本轮接手 before HEAD：`161473139598ab02685bbffbfae4b1c578e271b6`（上一轮推送 HEAD，与任务书一致）。
-- 本轮 after HEAD：**以 `git rev-parse HEAD` 为准**（本文件所在提交即最终 HEAD，不在此写死自引用哈希）。本轮共三个提交：`4a96b12` 测试基建（新增 soak、修复 live 等待竞态）、`7431bef` 本验收文档、最后一个提交仅补记推送状态；三个提交均已推送到 origin 同名分支 `codex/p32-worktree-multisession`。未合并 main、未发版、未开始 P32.4。
+- 本轮 after HEAD：**以 `git rev-parse HEAD` 为准**（本文件所在提交即最终 HEAD，不在此写死自引用哈希）。本轮提交：`4a96b12` 测试基建（新增 soak、修复 live 等待竞态）、`7431bef` 本验收文档、之后为补记推送状态与 8.3 短名修复的文档/代码提交。除 `698fcab` 那一版之外，全部已推送到 origin；`main` 与本分支指向同一提交（见上节）。
 - branch：`codex/p32-worktree-multisession`。工作区在本轮开始时干净，仅保留既有未跟踪目录 `.p25-1-release-a2b10ddfebd7413789311029f931a3ca/`；全程未使用 `reset --hard` / `git clean` / 强制 checkout。
-- 本轮新增/修改的仓库文件仅三处：`tests/runtime-soak.cjs`（新增 opt-in 并行稳定性 soak）、`package.json`（新增 `test:runtime-soak` 脚本，1 行）、`tests/runtime-live.cjs`（等待竞态最小修复 + 失败时补充原始证据；断言与阈值未变）、本文件。
+- 本轮新增/修改的仓库文件：`tests/runtime-soak.cjs`（新增 opt-in 并行稳定性 soak）、`package.json`（新增 `test:runtime-soak` 脚本，1 行）、`tests/runtime-live.cjs`（等待竞态最小修复 + 失败时补充原始证据；断言与阈值未变）、`lib/safe-path.js` + `lib/git-worktree.js` + `server/worktrees.js` + `tests/worktrees.cjs`（8.3 短名归一化修复与回归，见上节）、本文件。
 - 遵循 [ADR 0032](adr/0032-worktree-multisession.md) 的 A+B3；未改 Pi 本体、RPC/schema，未新增第三方依赖。
 
 ## 架构与 identity
@@ -225,7 +253,7 @@ soak 装置在验证期自身发现并修掉两处 **harness** bug（不是产�
 | **外部服务阻塞** | `gemini/*` 全部经 magpie 返回 502（Google 已停用该个人账号的 Gemini CLI 登录，需用户迁移到 Antigravity 或指定 GCP 项目）；`zcode/*` 配额超限；`deepseek/*` 余额 ¥0.99 |
 | **环境限制（非产品）** | ① 文件 symlink 被宿主静默降级 → `tests/hotfix.cjs` 的 `H5 … symlink` 用例必然失败，并因此使链式 `npm test` 在第 7 个脚本中断；② 同步 spawn stdin=pipe 必然 EBUSY → 需透明 harness 适配器才能跑完；③ 首轮逐脚本运行曾因与本轮 soak 并发出现两处瞬时争用失败，无并发重跑后消失 |
 
-**本轮不宣告 P32.3 验收通过。** 未合并 main、未发布、未开始 P32.4。HEAD、验收摘要与剩余风险由用户交 ChatGPT 复验。
+**本轮不宣告 P32.3 验收通过。** 未发版、未开始 P32.4。`main` 与功能分支已按用户后续明确指示指向同一提交（见文首「后续状态」），但验收结论仍由 ChatGPT 复验判定。HEAD、验收摘要与剩余风险由用户交 ChatGPT 复验。
 
 ## 剩余风险
 
