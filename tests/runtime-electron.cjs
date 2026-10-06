@@ -14,7 +14,10 @@ if (!process.versions.electron) {
   const check = (value, label) => { assert.ok(value, label); checks++; console.log('PASS ' + label); };
   const read = expression => win.webContents.executeJavaScript(expression, true);
   async function until(fn, timeout = 20000) { const end = Date.now() + timeout; while (Date.now() < end) { if (await fn()) return; await sleep(80); } throw Error('Electron fixture timeout'); }
-  async function click(selector) { const p = await read(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`); for (const type of ['mousePressed', 'mouseReleased']) await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type, ...p, button: 'left', clickCount: 1 }); }
+  /* 点击前先把目标滚进可视区再取坐标：modal 卡片是可滚动的，元素被滚出卡片时
+   * 它的 rect 落在卡片之外 —— 点下去命中的是**遮罩**，于是 modal 被关掉，
+   * 后续断言只会说「元素是 null」，离根因很远。 */
+  async function click(selector) { const p = await read(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw new Error('click target missing: '+${JSON.stringify(selector)});e.scrollIntoView({block:'center',inline:'nearest'});const r=e.getBoundingClientRect();if(r.width<1||r.height<1)throw new Error('click target not laid out: '+${JSON.stringify(selector)});return{x:r.x+r.width/2,y:r.y+r.height/2}})()`); for (const type of ['mousePressed', 'mouseReleased']) await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type, ...p, button: 'left', clickCount: 1 }); }
   const key = (keyCode, modifiers = []) => { win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
   async function shot(name, dir = OUT) { await sleep(200); const box = await read(`({w:innerWidth,h:innerHeight,sw:document.documentElement.scrollWidth,sh:document.documentElement.scrollHeight,card:document.querySelector('#modalCard').getBoundingClientRect().toJSON()})`);
     check(box.sw <= box.w + 1 && box.sh <= box.h + 1, name + ' no page overlap/overflow'); const file = path.join(dir, name + '.png'); fs.writeFileSync(file, (await win.webContents.capturePage()).toPNG()); screenshots.push({ file, box }); }
@@ -74,20 +77,21 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     started = await api({ action: 'start', args: { id: workspaces[1].id, epoch: workspaces[1].epoch, allowThird: true } }); check(started.ok, 'B explicit third total child');
     let state; await until(async () => { state = await api(); return state.items.every(r => r.lifecycle === 'ready' && r.owner.sessionId); });
     const owners = workspaces.map(w => state.items.find(r => r.owner.workspaceId === w.id).owner);
-    await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}}))`); await until(() => read(`document.querySelectorAll('.runtime-list .btn').length===2`));
+    await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}}))`); await until(() => read(`document.querySelectorAll('#modalCard .runtime-list .btn').length===2`));
     await api({ action: 'command', owner: owners[0], command: { type: 'prompt', message: 'TASK_A' } });
-    await click('.runtime-list .btn:nth-child(2)'); await read(`document.querySelector('.runtime-body textarea').value='TASK_B';document.querySelector('.runtime-body textarea').dispatchEvent(new Event('input'))`); await click('.runtime-controls .primary');
-    await until(() => read(`document.querySelector('.runtime-output').textContent.includes('TASK_B')`));
-    check(await read(`!document.querySelector('.runtime-output').textContent.includes('TASK_A')`), 'A streaming focus B output isolated');
+    await click('#modalCard .runtime-list .btn:nth-child(2)'); await read(`document.querySelector('#modalCard .runtime-body textarea').value='TASK_B';document.querySelector('#modalCard .runtime-body textarea').dispatchEvent(new Event('input'))`);
+    await click('#modalCard .runtime-controls .primary');
+    await until(() => read(`document.querySelector('#modalCard .runtime-output').textContent.includes('TASK_B')`));
+    check(await read(`!document.querySelector('#modalCard .runtime-output').textContent.includes('TASK_A')`), 'A streaming focus B output isolated');
     for (const [w, h] of [[1280, 800], [1440, 900], [1920, 1080]]) { win.setContentSize(w, h); await shot(`running-B-${w}x${h}`); }
     win.webContents.setZoomFactor(1.25);await shot('running-B-zoom125');win.webContents.setZoomFactor(1);
-    await click('.runtime-list .btn:first-child'); await until(() => read(`document.querySelector('.runtime-output').textContent.includes('TASK_A')`)); await click('.runtime-controls .btn:nth-child(2)');
+    await click('#modalCard .runtime-list .btn:first-child'); await until(() => read(`document.querySelector('#modalCard .runtime-output').textContent.includes('TASK_A')`)); await click('#modalCard .runtime-controls .btn:nth-child(2)');
     await until(async () => { state = await api(); return state.items.find(r => r.owner?.workspaceId === workspaces[0].id)?.activity === 'idle'; });
     check(state.items.find(r => r.owner?.workspaceId === workspaces[1].id)?.activity === 'running', 'real HTTP authoritative Stop A leaves B running'); await shot('A-stopped-B-running');
     const first = await read(`(()=>{const q=document.querySelector('#modalCard button:not([disabled])');q.focus();return q.textContent})()`); key('Tab', ['shift']); await sleep(80); check(await read(`document.querySelector('#modalCard').contains(document.activeElement)`), 'Shift Tab stays in dialog'); key('Tab'); await sleep(80); check(await read(`document.activeElement.textContent===${JSON.stringify(first)}`), 'Tab wraps to first control');
     key('Escape');await until(()=>read(`document.querySelector('#modal').hidden`));check(true,'real keyboard Escape closes scoped dialog');
-    await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}}))`);await until(()=>read(`document.querySelectorAll('.runtime-list .btn').length===2`));
-    await read(`document.querySelectorAll('.runtime-controls .btn')[4].click()`); await until(() => read(`document.querySelector('#rightPane')?.dataset.surface==='runtime-browser'`)); await shot('scoped-browser-open');
+    await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}}))`);await until(()=>read(`document.querySelectorAll('#modalCard .runtime-list .btn').length===2`));
+    await read(`document.querySelectorAll('#modalCard .runtime-controls .btn')[4].click()`); await until(() => read(`document.querySelector('#rightPane')?.dataset.surface==='runtime-browser'`)); await shot('scoped-browser-open');
     check(host.records.size === 2, 'two Browser owner records');
     const { transport } = await import('../extensions/pi-gui-browser/index.js');
     const scopes = owners.map(({ repoId, ...scope }) => scope), snapshots = [];
@@ -110,12 +114,12 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     // Restore A, whose toolbar is mounted, before using its close button.
     await api({ action: 'focus', owner: owners[0] });
     await click('#browserClose'); await until(() => read(`document.querySelector('#rightPane').hidden`)); await shot('scoped-browser-closed');
-    await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}}))`);await until(()=>read(`document.querySelectorAll('.runtime-list .btn').length===2`));
+    await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}}))`);await until(()=>read(`document.querySelectorAll('#modalCard .runtime-list .btn').length===2`));
     await api({action:'command',owner:owners[1],command:{type:'prompt',message:'B_SURVIVES_CRASH'}});
     await api({action:'command',owner:owners[0],command:{type:'prompt',message:'FIXTURE_CRASH'}});
     await until(async()=>{state=await api();return state.items.find(r=>r.conversationId===owners[0].conversationId)?.lifecycle==='error';});
     check(state.items.find(r=>r.conversationId===owners[1].conversationId).activity==='running','A Pi crash does not stop B');
-    await until(()=>read(`document.querySelector('.runtime-body .modal-desc').textContent.includes('错误')`));check(true,'crash state visible in selected A');await shot('A-crashed-B-running');
+    await until(()=>read(`document.querySelector('#modalCard .runtime-body .modal-desc').textContent.includes('错误')`));check(true,'crash state visible in selected A');await shot('A-crashed-B-running');
     const crashed=state.items.find(r=>r.conversationId===owners[0].conversationId).owner;
     const restartResult=await api({action:'restart',owner:crashed});assert.ok(restartResult.ok,JSON.stringify(restartResult));check(true,'restart crashed A through owned cleanup');
     await until(async()=>{state=await api();const a=state.items.find(r=>r.conversationId===owners[0].conversationId);return a.lifecycle==='ready'&&a.owner?.sessionId===owners[0].sessionId;});
@@ -145,6 +149,46 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     for (const [w, h] of [[1280, 800], [1920, 1080]]) { win.setContentSize(w, h); await shot(`sidebar-${w}x${h}`, OUT4); }
     win.webContents.setZoomFactor(1.25); await shot('sidebar-zoom125', OUT4); win.webContents.setZoomFactor(1);
     win.setContentSize(1440, 900);
+
+    /* ---- P32.4-B：侧栏点一行 → 中央切到那条会话，草稿按会话隔离 ---- */
+    const rowSel = id => `#pjRuntimeList [data-conversation-id="${id}"] button`;
+    const centerBranch = () => read(`document.querySelector('#runtimeView .rtc-head .rtc-title')?.textContent || ''`);
+    const centerDraft = () => read(`document.querySelector('#runtimeView textarea')?.value ?? null`);
+    const clickRow = id => read(`document.querySelector('${rowSel(id)}').click()`);
+    const [idA, idB] = await read(`[...document.querySelectorAll('#pjRuntimeList [data-conversation-id]')].map(r=>r.dataset.conversationId)`);
+    await clickRow(idA);
+    await until(() => read(`document.querySelector('#workspace').dataset.workspaceView === 'runtime'
+      && (document.querySelector('#runtimeView .rtc-head .rtc-title')?.textContent||'').includes('runtime-A')`), 20000);
+    check(true, 'P32.4-B sidebar focus switches the centre to that conversation');
+    check(await read(`!document.querySelector('#runtimeView').hidden && document.querySelector('#chatView').hidden`), 'P32.4-B centre hides the classic chat while a parallel conversation is focused');
+    await read(`(()=>{const t=document.querySelector('#runtimeView textarea');t.value='draft-A-live';t.dispatchEvent(new Event('input'));})()`);
+    await shot('sidebar-focus-a', OUT4);
+    await clickRow(idB);
+    await until(async () => (await centerBranch()).includes('runtime-B'), 20000);
+    check((await centerDraft()) === '', 'P32.4-B switching to B shows an empty draft (A draft does not leak)');
+    await read(`(()=>{const t=document.querySelector('#runtimeView textarea');t.value='draft-B-live';t.dispatchEvent(new Event('input'));})()`);
+    await clickRow(idA);
+    await until(async () => (await centerBranch()).includes('runtime-A'), 20000);
+    check((await centerDraft()) === 'draft-A-live', 'P32.4-B switching back to A restores its own draft');
+    await shot('sidebar-focus-a-draft', OUT4);
+    /* 中央真的能发任务，且 Stop 只打当前这条会话。 */
+    const ownerOf = async id => (await api()).items.find(i => i.owner?.conversationId === id)?.owner;
+    const activityOf = async id => (await api()).items.find(i => i.owner?.conversationId === id)?.activity;
+    await read(`(()=>{const t=document.querySelector('#runtimeView textarea');t.value='TASK_A2';t.dispatchEvent(new Event('input'));})()`);
+    await read(`[...document.querySelectorAll('#runtimeView button')].find(b=>b.textContent==='发送').click()`);
+    await until(async () => (await activityOf(idA)) === 'running', 30000);
+    check(true, 'P32.4-B centre composer sends through the focused conversation');
+    /* 同时让 B 也在跑 —— 否则「Stop A 不影响 B」证明不了什么。 */
+    await api({ action: 'command', owner: await ownerOf(idB), command: { type: 'prompt', message: 'B_BUSY' } });
+    await until(async () => (await activityOf(idB)) === 'running', 30000);
+    check(!(await read(`[...document.querySelectorAll('#runtimeView button')].find(b=>b.textContent==='停止').disabled`)), 'P32.4-B centre Stop is enabled while the focused conversation is running');
+    await read(`[...document.querySelectorAll('#runtimeView button')].find(b=>b.textContent==='停止').click()`);
+    await until(async () => (await activityOf(idA)) === 'idle', 60000);
+    check(true, 'P32.4-B centre Stop targeted the focused conversation (A)');
+    check((await activityOf(idB)) === 'running', 'P32.4-B Stop on A leaves B running');
+    /* 回到经典会话时中央必须换回 chat，否则看起来像「点了没反应」。 */
+    await read(`import('/ui/workspace-surface.js').then(m=>m.showChat())`);
+    check(await read(`document.querySelector('#workspace').dataset.workspaceView === 'chat' && !document.querySelector('#runtimeView').offsetParent`), 'P32.4-B leaving the parallel conversation restores the classic chat centre');
     await api({ action: 'close', owner: resumed }); await api({ action: 'close', owner: owners[1] }); state = await api(); check(state.liveCount === 0 && state.items.length === 2, 'close cleanup retains lazy records');
     /* 关闭 Runtime 之后：会话仍在侧栏、显示为已关闭，且**没有**任何 child 被启动。 */
     await read(`import('/ui/modal.js').then(m=>m.closeModal())`); await sleep(200);
@@ -200,5 +244,5 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
   async function finish(code) { try { backend?.kill(); await host?.stop(); await legacyHost?.stop(); browser?.destroy(); for (const page of pages) { page.closeAllConnections(); page.close(); } win?.destroy(); } catch {} setTimeout(() => app.exit(code), 500); }
   /* 失败时把渲染进程 console 错误与 modal 状态一起打出来 —— 否则
    * 「Script failed to execute」这类错误只能看到 Electron 的包装信息，定位不到根因。 */
-  main().then(() => finish(0), async error => { console.error(error); console.error('renderer console errors: ' + JSON.stringify(errors)); try { console.error('modal state: ' + JSON.stringify(await read(`({open: !document.querySelector('#modal').hidden, listBtns: document.querySelectorAll('.runtime-list .btn').length})`))); } catch (e) { console.error('modal unreadable: ' + e.message); } await finish(1); });
+  main().then(() => finish(0), async error => { console.error(error); console.error('renderer console errors: ' + JSON.stringify(errors)); try { console.error('state: ' + JSON.stringify(await read(`({open: !document.querySelector('#modal').hidden, listBtns: document.querySelectorAll('#modalCard .runtime-list .btn').length, out: (document.querySelector('#modalCard .runtime-output')||{}).textContent, view: document.querySelector('#workspace').dataset.workspaceView, navRows: document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length, appBooted: Boolean(document.querySelector('#pjSessionsBox'))})`))); } catch (e) { console.error('state unreadable: ' + e.message); } await finish(1); });
 }
