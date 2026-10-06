@@ -106,6 +106,9 @@ export function createRouter({
   compat = null,
   processes = null,
   worktrees = null,
+  runtimeSessions = null,
+  legacyScope = null,
+  requireLegacyScope = () => false,
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -159,6 +162,15 @@ export function createRouter({
     }
 
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
+    if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
+    if (req.method !== 'GET' && requireLegacyScope()) {
+      let expected;
+      try { expected = JSON.parse(req.headers['x-pi-gui-owner'] || 'null'); } catch { expected = null; }
+      const actual = legacyScope?.();
+      if (!expected || !actual || Object.keys(actual).some(k => expected[k] !== actual[k]) || Object.keys(expected).length !== Object.keys(actual).length) {
+        return json(res, 409, { ok: false, code: 'stale_runtime', error: '请求缺少当前会话身份，请同步状态后重试。' });
+      }
+    }
     if (url.pathname === '/api/processes') return processes ? processes.handle(req,res,url) : json(res,503,{ok:false,code:'process_unavailable'});
     if (url.pathname === '/api/worktrees') return worktrees ? worktrees.handle(req,res,url) : json(res,503,{ok:false,code:'worktrees_unavailable'});
     if (url.pathname === '/api/command' && req.method === 'POST') return handleCommand(req, res);

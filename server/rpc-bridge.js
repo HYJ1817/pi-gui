@@ -106,6 +106,8 @@ export function createRpcBridge({
   /* pauseForMaintenance 的等待上限（测试注入短值）。 */
   pauseTimeoutMs = PAUSE_TIMEOUT_MS,
   restartDelayMs = RESTART_DELAY_MS,
+  autoRestart = true,
+  maxOutputLineBytes = 96 * 1024 * 1024,
   /* 等 Pi abort 应答的上限（测试注入短值）。见文件里「停止屏障」一段。 */
   stopTimeoutMs = STOP_TIMEOUT_MS,
 }) {
@@ -242,6 +244,7 @@ export function createRpcBridge({
     delete childEnv.PI_GUI_TOKEN;
     for (const key of ['PI_GUI_BROWSER_BRIDGE_URL','PI_GUI_BROWSER_BRIDGE_TOKEN','PI_GUI_BROWSER_EXTENSION','PI_GUI_BROWSER_URL','PI_GUI_BROWSER_TOKEN']) delete childEnv[key];
     for (const key of ['PI_GUI_PROCESS_URL','PI_GUI_PROCESS_TOKEN']) delete childEnv[key];
+    for (const key of ['PI_GUI_RUNTIME_BROWSER_URL','PI_GUI_RUNTIME_BROWSER_TOKEN']) delete childEnv[key];
     if (browser) Object.assign(childEnv, browser.env);
 
     const opts = {
@@ -372,12 +375,18 @@ export function createRpcBridge({
       if (pi !== child) return;
       if (child === retiringChild || runtime.getCurrentCwd() !== cwd) return;
       stdoutBuf += chunk;
+      const overBudget = (line) => Buffer.byteLength(line) > maxOutputLineBytes;
+      const rejectOversize = () => {
+        stdoutBuf = ''; publish({ type: 'bridge_status', state: 'error', error: 'Pi 输出超过有界协议预算', bridgeRun: run });
+        stop();
+      };
       let nl;
       // 只按 LF 切分 —— pi 协议明确要求
       while ((nl = stdoutBuf.indexOf('\n')) !== -1) {
         let line = stdoutBuf.slice(0, nl);
         stdoutBuf = stdoutBuf.slice(nl + 1);
         if (line.endsWith('\r')) line = line.slice(0, -1);
+        if (overBudget(line)) { rejectOversize(); return; }
         if (!line) continue;
         let msg;
         try {
@@ -417,6 +426,9 @@ export function createRpcBridge({
         if (msg?.type === 'response' && Number.isInteger(msg.id) && msg.id > 0 && msg.id < nextRequestId) continue;
         publish({ ...msg, bridgeRun: run, cwd });
       }
+      // Complete lines have independent budgets; only the unfinished line is
+      // retained across chunks. A newline delimiter does not consume its budget.
+      if (overBudget(stdoutBuf.endsWith('\r') ? stdoutBuf.slice(0, -1) : stdoutBuf)) rejectOversize();
     });
 
     child.stderr.setEncoding('utf8');
@@ -470,7 +482,7 @@ export function createRpcBridge({
         }
         return;
       }
-      if (!runtime.isShuttingDown()) {
+      if (!runtime.isShuttingDown() && (autoRestart || restartRequested)) {
         const deliberate = restartRequested;
         crashStreak = deliberate || Date.now() - startedAt >= 5000 ? 0 : crashStreak + 1;
         const delay = deliberate ? 0 : Math.min(restartDelayMs * 2 ** Math.max(0, crashStreak - 1), 30000);

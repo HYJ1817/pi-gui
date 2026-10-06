@@ -2,6 +2,7 @@ import { S } from './state.js';
 import { fetchWorktrees, worktreeAction } from './api.js';
 import { openModal, closeModal, confirmModal, dismissConfirm } from './ui/modal.js';
 import { openActionMenu, closeActionMenu, MENU_ICONS } from './ui/action-menu.js';
+import { openRuntimeSessions } from './runtime-sessions.js';
 
 const healthLabels = { healthy: '可用', missing: '目录已丢失', unavailable: '身份无法确认', changed: '分支已变化', locked: 'Git 已锁定', creating: '创建未完成' };
 function node(tag, className, text) {
@@ -20,8 +21,8 @@ export function openWorktreeManager(project, { activateWorkspace } = {}) {
     card.classList.add('wide', 'wt-manager');
     card.setAttribute('aria-label', '工作区管理');
     const head = node('div', 'wt-head');
-    head.append(node('h3', '', '工作区管理'), button('关闭', close)); card.append(head);
-    card.append(node('p', 'modal-desc', `${project.name || '项目'} · 当前仍按顺序切换工作区。`));
+    head.append(node('h3', '', '工作区管理'), button('独立会话', () => { close(); openRuntimeSessions(project); }), button('关闭', close)); card.append(head);
+    card.append(node('p', 'modal-desc', `${project.name || '项目'} · 独立会话须使用不同工作区。`));
     const notice = node('div', 'wt-notice'); notice.setAttribute('role', 'status'); card.append(notice);
     const list = node('div', 'wt-list'); card.append(list);
     const form = node('form', 'wt-form');
@@ -84,6 +85,7 @@ export function openWorktreeManager(project, { activateWorkspace } = {}) {
           open.dataset.unavailable = String(!usable); open.disabled = busy || !usable; item.append(open);
           if (row.kind === 'managed') {
             const menu = button('⋯', () => openActionMenu(menu, [
+              { label: '独立会话', disabled: row.health !== 'healthy' || row.archived || row.current, onClick: () => { close(); openRuntimeSessions(project, row); } },
               { label: row.archived ? '取消归档' : '归档', icon: MENU_ICONS.archive, disabled: row.current, onClick: () => action('archive', row, { archived: !row.archived }) },
               ...(row.health !== 'healthy' ? [{ label: '以此分支新建', onClick: () => { source.value = row.branch; source.focus(); } }] : []),
               { label: '移除工作区', icon: MENU_ICONS.trash, danger: true, disabled: row.current || row.health !== 'healthy', onClick: async () => {

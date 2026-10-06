@@ -127,7 +127,9 @@ export function buildPlannerPrompt({ goal, title, agentIds, maxTasks = 8 }) {
   ].join('\n');
 }
 
-export function createPlanner({ runtime, registry, store, scheduler, env = process.env, sessionDir = null, generate = null, sessions = null, verifier = null }) {
+export function createPlanner({ runtime, registry, store, scheduler, env = process.env, sessionDir = null, generate = null, sessions = null, verifier = null, executionBlocked = () => false }) {
+  let generating = 0;
+  const isolationError = () => ({ ok: false, code: 'workspace_in_use', error: '请先关闭独立会话，再执行计划或验证。' });
   /* ---------- 生成计划 ---------- */
 
   /** 默认生成器：用 pi 适配器 + 独立会话跑一次，然后严格校验它的输出。 */
@@ -167,14 +169,18 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
    * @returns {{ok:true, plan}|{ok:false, error, raw, errors}}
    */
   async function generatePlan({ goal, title }) {
+    if (executionBlocked()) return isolationError();
     const cwd = runtime.getCurrentCwd();
     if (!cwd) return { ok: false, error: '还没有选择项目', raw: null, errors: [] };
 
     let g;
+    generating++;
     try {
       g = await generateFn({ goal, title });
     } catch (err) {
       return { ok: false, error: `生成时出错：${err.message}`, raw: null, errors: [] };
+    } finally {
+      generating--;
     }
     if (!g.ok) return { ok: false, error: g.error, raw: g.raw || null, errors: [] };
 
@@ -819,6 +825,7 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
         }
         if (parts.length !== 6) return json(res, 404, { ok: false, error: '不认识的验证操作' });
 
+        if (executionBlocked()) return json(res, 409, isolationError());
         const r = verifier.start(base);
         return json(res, 200, r.ok ? { ok: true, ...base, verification: r.verification } : { ok: false, code: r.code, error: r.error });
       }
@@ -826,6 +833,7 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
       if (method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
 
       if (action === 'start') {
+        if (executionBlocked()) return json(res, 409, isolationError());
         /* 运行前必须确认 agent 可用（§34），不要启动到一半才报 command not found */
         const problems = checkAgents(plan);
         if (problems.length) {
@@ -894,6 +902,7 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
      * 两条理由、两条文案，分开说：用户需要知道该去停哪一个（停计划还是停验证）。
      */
     projectSwitchBlockReason: () => {
+      if (generating) return '计划正在生成';
       if (scheduler.activePlanId()) {
         return '当前有任务正在执行。请先停止计划再切换项目 —— 否则任务的输出会归属到说不清的项目上。';
       }

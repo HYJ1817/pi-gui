@@ -66,7 +66,7 @@ export function probeReady(ready,signal) {
     socket.once('error',()=>finish(false));socket.once('timeout',()=>finish(false));signal?.addEventListener('abort',abort,{once:true});
   });
 }
-export function createManagedProcesses({context,launch=launchOwnedProcess,blockedPorts=()=>[],isBlocked=()=>false}={}) {
+export function createManagedProcesses({context,launch=launchOwnedProcess,blockedPorts=()=>[],isBlocked=()=>false,canStart=()=>true}={}) {
   let ownerKey='',generation=randomUUID(),enabled=false,cancelEpoch=0,disposed=false;
   const records=new Map(),waiters=new Set();
   function current() {
@@ -81,7 +81,7 @@ export function createManagedProcesses({context,launch=launchOwnedProcess,blocke
   function notify(){for(const fn of [...waiters])fn();}
   function guard(g,permission=true){const owner=current();if(disposed||!owner.cwd||g!==generation)throw fail('stale_generation');if(permission&&(!enabled||isBlocked()))throw fail(!enabled?'process_control_disabled':'cancelled');return owner;}
   function summary(r){return {id:r.id,revision:r.revision,command:path.basename(r.spec.command),argCount:r.spec.args.length,state:r.state,ready:r.state==='ready',cleanupConfirmed:r.closed,endpoint:r.spec.ready?.type==='http'?r.spec.ready.url:r.spec.ready?.type==='tcp'?`http://${r.spec.ready.host==='::1'?'[::1]':r.spec.ready.host}:${r.spec.ready.port}/`:null,uptimeMs:Math.max(0,(r.endedAt||Date.now())-r.startedAt),exitCode:r.exitCode??null,code:r.code||null};}
-  function snapshot(){current();return {ok:true,generation,enabled,cleanupPending:[...records.values()].some(r=>r.generation!==generation&&!r.closed),processes:[...records.values()].filter(r=>r.generation===generation).map(summary)};}
+  function snapshot(){current();return {ok:true,generation,enabled,activeCount:[...records.values()].filter(r=>ACTIVE.has(r.state)||!r.closed||r.restarting).length,cleanupPending:[...records.values()].some(r=>r.generation!==generation&&!r.closed),processes:[...records.values()].filter(r=>r.generation===generation).map(summary)};}
   function lookup(args,g){guard(g,false);const r=records.get(args.id);if(!r||r.generation!==g||r.revision!==args.revision)throw fail('stale_process');return r;}
   function append(r,line){const text=redactProcessLine(line);r.lines.push({cursor:++r.cursor,text});r.bytes+=Buffer.byteLength(text);while(r.lines.length>256||r.bytes>65536){r.bytes-=Buffer.byteLength(r.lines.shift().text);} }
   function settleReady(r){if(r.state!=='starting'||r.generation!==generation)return;r.state='ready';clearTimeout(r.timeout);r.probeAbort.abort();notify();}
@@ -138,6 +138,7 @@ export function createManagedProcesses({context,launch=launchOwnedProcess,blocke
       if([...records.values()].filter(r=>ACTIVE.has(r.state)||!r.closed).length>=8)throw fail('process_limit');
       // Reserve ownership before asynchronous preflight so concurrent starts deduplicate.
       const r={id:randomUUID(),generation:g,revision:1,spec,fingerprint,state:'starting',startedAt:Date.now(),lines:[],bytes:0,cursor:0,closed:true,probeAbort:new AbortController()};records.set(r.id,r);
+      if(!canStart()){r.state='failed';r.code='process_limit';throw fail('process_limit');}
       for(const old of records.values())if(records.size>64&&!ACTIVE.has(old.state)&&old.closed)records.delete(old.id);
       if(spec.ready&&spec.ready.type!=='log'&&await probeReady({...spec.ready,type:'tcp'},signal)){
         r.state='failed';r.code='port_in_use';throw fail('port_in_use');
@@ -164,7 +165,7 @@ export function createManagedProcesses({context,launch=launchOwnedProcess,blocke
       try{
         await terminate(r);guard(g);if(epoch!==cancelEpoch||signal?.aborted||r.controlEpoch!==controlEpoch)throw fail('cancelled');
         if(r.spec.ready&&r.spec.ready.type!=='log'&&await probeReady({...r.spec.ready,type:'tcp'},signal))throw fail('port_in_use');
-        guard(g);if(epoch!==cancelEpoch||signal?.aborted||r.controlEpoch!==controlEpoch)throw fail('cancelled');r.revision++;await run(r);return {ok:true,process:summary(r)};
+        guard(g);if(epoch!==cancelEpoch||signal?.aborted||r.controlEpoch!==controlEpoch)throw fail('cancelled');if(!canStart())throw fail('process_limit');r.revision++;await run(r);return {ok:true,process:summary(r)};
       }finally{r.restarting=false;}
     }
     throw fail('unknown_action');

@@ -2546,3 +2546,16 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .fallback-status{font-size:12px;color:var(--t2);padding:6px 12px;max-width:100%;overflow-wrap:anywhere}
 .fallback-status summary{cursor:pointer}
 .fallback-status div{padding:5px 0}
+.modal-card.wide.runtime-dialog { width: min(1040px, calc(100vw - 48px)); max-width: 1040px; }
+.runtime-layout { display: grid; grid-template-columns: minmax(160px, 240px) minmax(0, 1fr); gap: 24px; }
+.runtime-list { display: flex; flex-direction: column; align-items: stretch; gap: 6px; max-height: 60vh; overflow: auto; }
+.runtime-list .btn { text-align: left; white-space: normal; }
+.runtime-list [aria-pressed="true"] { background: var(--control-active); }
+.runtime-body { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.runtime-body[hidden] { display: none; }
+.runtime-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.runtime-output { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; max-height: 32vh; min-height: 100px; overflow: auto; margin: 0; padding: 12px 0; }
+.runtime-body textarea { width: 100%; resize: vertical; min-height: 64px; padding: 10px; background: var(--input); color: var(--t1); border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.runtime-approval { padding: 12px 0; }
+.runtime-approval .btn { margin-right: 8px; }
+@media (max-width: 720px) { .runtime-layout { grid-template-columns: 1fr; gap: 12px; } .runtime-list { max-height: 120px; } }

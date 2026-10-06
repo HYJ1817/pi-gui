@@ -20,7 +20,7 @@ export const syncProviderAuth = () => sendJSON('/api/provider-auth/sync', { body
 
 export async function downloadSessionHtml() {
   try {
-    const response = await fetch('/api/session-export', { method: 'POST' });
+    const response = await fetch('/api/session-export', { method: 'POST', headers: S.legacyOwner ? { 'X-Pi-Gui-Owner': JSON.stringify(S.legacyOwner) } : {} });
     if (!response.ok) return await response.json();
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -57,6 +57,7 @@ export async function sendJSON(url, { method = 'POST', body, contentType } = {})
     opts.headers = { 'Content-Type': 'application/json' };
     opts.body = JSON.stringify(body || {});
   }
+  if (S.legacyOwner) opts.headers = { ...opts.headers, 'X-Pi-Gui-Owner': JSON.stringify(S.legacyOwner) };
   try {
     const r = await fetch(url, opts);
     return await r.json();
@@ -84,6 +85,8 @@ export async function sendCommand(cmd) {
 /* ---------- 状态 / 项目 ---------- */
 
 export const fetchStatus = () => getJSON('/api/status');
+export const fetchRuntimeSessions = () => getJSON('/api/runtime-sessions');
+export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProcesses = () => getJSON('/api/processes');
 export const controlProcess = body => sendJSON('/api/processes',{body});

@@ -58,6 +58,7 @@ const {
  * 否则右栏存在的意义（访问外站）当场就没了。见 browser-view.cjs 文件头。 */
 const { createBrowserController, isBrowserWebContents } = require('./browser-view.cjs');
 const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
+const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -76,6 +77,7 @@ let win = null;
 let server = null;
 let browser = null;
 let browserAgent = null;
+let runtimeBrowserHost = null;
 let quitting = false;
 const log = [];
 
@@ -180,6 +182,7 @@ async function ensureServer() {
       // 而令牌只经由下面的 installTokenHeader() 注入到请求头里。
       PI_GUI_TOKEN: AUTH_TOKEN,
       ...browserAgent.environment(),
+      ...runtimeBrowserHost.environment(),
       // projects.json 和上传缓存要写到可写的地方。默认是应用安装目录，
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
@@ -197,6 +200,10 @@ async function ensureServer() {
   server.stderr.on('data', collect);
   server.on('exit', () => {
     server = null;
+    // A dead backend cannot own a Browser scope. Revoke its private gateways
+    // even while the desktop window remains open to show the failure.
+    browserAgent?.stop().catch(() => {});
+    runtimeBrowserHost?.stop().catch(() => {});
   });
 
   if (!(await waitForServer())) {
@@ -621,6 +628,7 @@ function createWindow() {
    * 拖动窗口的瞬间右栏的 view 会超出窗口边缘。 */
   win.on('resize', () => {
     if (browser) browser.syncBounds();
+    runtimeBrowserHost?.syncBounds();
   });
   win.on('move', scheduleSaveWindowState);
   win.on('maximize', scheduleSaveWindowState);
@@ -752,12 +760,18 @@ if (!app.requestSingleInstanceLock()) {
     /* 右栏内置浏览器。与上面两个 handler 同一时机 —— 必须在 createWindow()
      * 之前注册，否则页面首帧调用会拿到 "No handler registered"。
      * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */
-    browser = createBrowserController({ origin: ORIGIN, getWindow: () => win, ipcMain });
+    browser = createBrowserController({ origin: ORIGIN, getWindow: () => win, ipcMain,
+      isVisible: () => !runtimeBrowserHost || runtimeBrowserHost.isLegacyVisible() });
     browser.register();
     browserAgent = createBrowserAgentHost({ browser, origin: ORIGIN, getWindow: () => win, ipcMain,
       extensionPath: path.join(fs.existsSync(path.join(__dirname, 'server.cjs')) ? __dirname : ROOT,
         'extensions', 'pi-gui-browser', 'index.js') });
     await browserAgent.start();
+    runtimeBrowserHost = createRuntimeBrowserHost({ origin: ORIGIN, getWindow: () => win, ipcMain,
+      onFocus: active => browser.setOccluded(active),
+      extensionPath: path.join(fs.existsSync(path.join(__dirname, 'server.cjs')) ? __dirname : ROOT,
+        'extensions', 'pi-gui-browser', 'index.js') });
+    await runtimeBrowserHost.start();
     // 用户数据目录先建出来 —— 后端启动就要往里写 projects.json
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true });
@@ -795,6 +809,7 @@ if (!app.requestSingleInstanceLock()) {
     // 浏览器 view 先于后端收掉：它的 webContents 不随窗口自动销毁
     if (browser) browser.destroy();
     browserAgent?.stop();
+    runtimeBrowserHost?.stop();
     killServer();
   });
 

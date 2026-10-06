@@ -39,6 +39,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { isSea } from './lib/assets.js';
 import { createAuth } from './server/auth.js';
 import { createEventBus } from './server/sse.js';
@@ -60,6 +61,10 @@ import { createProcessBridge } from './server/process-bridge.js';
 import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
+import { createRuntimeRegistry } from './server/runtime-registry.js';
+import { createRuntimeRoutes } from './server/runtime-routes.js';
+import { createSessionRuntime } from './server/session-runtime.js';
+import { createRuntimeBrowserGateway } from './server/runtime-browser-launch.js';
 import { createDiagnostics } from './server/diagnostics.js';
 import { createMcp } from './server/mcp.js';
 import { createMcpNative, buildPiEntry } from './server/mcp-native.js';
@@ -269,9 +274,13 @@ const authRuntimeListeners = new Set();
  * 两者都只增删计数，不读任何用户数据。 */
 const piActivity = createPiActivity();
 const modelGeneration = createModelGeneration();
+let primaryNativeSession = null;
 let cliInFlight = 0;
+const processManagers = new Set();
+const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
-const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port});
+const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission});
+processManagers.add(managedProcesses.manager);
 const rpc = createRpcBridge({
   runtime,
   browserLaunch: guiBrowserLaunch,
@@ -281,6 +290,8 @@ const rpc = createRpcBridge({
    * 不认识业务模块（有架构守卫钉着），复用的是 agents/cli.js 里验证过的 killTree。 */
   killProcessTree: killTree,
   publish: (event) => {
+    if (event.type === 'bridge_status' && event.state !== 'ready') primaryNativeSession = null;
+    if (event.type === 'response' && event.command === 'get_state' && typeof event.data?.sessionId === 'string') primaryNativeSession = event.data.sessionId;
     event = projectProcessEvent(event);
     managedProcesses.observe(event);
     extensionRegistryRef?.observe(event);
@@ -295,9 +306,9 @@ const rpc = createRpcBridge({
     piActivity.observe(event);
     for (const listener of authRuntimeListeners) listener(event);
     providerAuthRef?.observeRuntime(event);
-    sse.publish(modelGeneration.observe(event?.type === 'extension_error'
+    sse.publish({ ...modelGeneration.observe(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
-      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null)));
+      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null)), legacyOwner: primaryOwner() });
   },
   piBin: PI_BIN,
   launch: piLaunch,
@@ -316,6 +327,7 @@ const rpc = createRpcBridge({
  * 只能排在 projects 之后 —— 所以先声明、后回填（闸门只在请求时被调用）。 */
 let plannerRef = null;
 let worktreesRef = null;
+let runtimeRegistryRef = null;
 /* P9 收口：Verifier 的引用占位，同一个理由 —— Scheduler 的闸门要问
  * 「现在有没有独立验证在跑」，而 verifier 自己又要拿 scheduler（问「有没有计划在跑」）。
  * 两边都不 import 对方，只在这里互相拿到一个**只读**的轻量函数。 */
@@ -334,7 +346,7 @@ const projects = createProjects({
    * P9 收口：**独立验证也算「正在这个工作区里干活」**，规则与两条文案都在
    * planner 那边（`projectSwitchBlockReason`）—— 放那边才测得到，
    * 这里只做一行透传，规则只有一份。 */
-  beforeActivate: () => piBusyReason(false)?.error || null,
+  beforeActivate: () => runtimeRegistryRef?.liveCount() ? '请先关闭独立会话，再切换经典聊天工作区。' : piBusyReason(false)?.error || null,
   getWorkspaceProject: cwd => worktreesRef?.projectFor(cwd),
   withActivation: (cwd, action) => worktreesRef ? worktreesRef.withActivation(cwd, action) : action(),
 });
@@ -345,7 +357,10 @@ const worktrees = createWorktrees({
   busyReason: () => piBusyReason()?.code || (rpc.stopState()?.pending || ['starting', 'restarting', 'maintenance'].includes(rpc.getState().state) ? 'workspace_busy' : null)
     || (managedProcesses.manager.snapshot().cleanupPending || managedProcesses.manager.snapshot().processes.some(p => !p.cleanupConfirmed) ? 'workspace_busy' : null),
   activate: cwd => projects.activatePath(cwd, { validated: true }),
-  onMissing: async () => {
+  isWorkspaceInUse: root => runtimeRegistryRef?.inUse(root) === true,
+  onMissing: async workspace => {
+    if (runtimeRegistryRef) await runtimeRegistryRef.invalidateWorkspace(workspace.id);
+    if (!workspace.current) return;
     runtime.setCurrentCwd(null);
     rpc.restart();
     await managedProcesses.invalidate({ disable: true, revoke: true });
@@ -388,6 +403,7 @@ const mcpNative = createMcpNative({
   readTrust: async () => (await skills.readIndex()).trust,
   rpc,
   runCli: async (entry, args, opts) => {
+    if (runtimeRegistryRef?.liveCount()) return { ok: false, spawnFailed: true, error: '请先关闭独立会话，再执行 Pi CLI 管理操作。' };
     /* 记在飞的 CLI 动作数：Pi 更新前要确认没有别的 pi 进程正在跑
      * （MCP login/logout 这类动作与替换 runtime 文件互斥）。 */
     cliInFlight += 1;
@@ -536,6 +552,7 @@ verifierRef = verifier;
  * P9：planner 再拿到 verifier —— 验证的路由挂在 Planner 的接口下，
  * 但「能不能跑、跑什么」的判断全在 Verifier 里。 */
 const planner = createPlanner({
+  executionBlocked: () => (runtimeRegistryRef?.liveCount() || 0) > 0,
   runtime,
   registry: agentRegistry,
   store: planStore,
@@ -623,6 +640,7 @@ function resolvePiCliEntry() {
 }
 
 function runPiCliCommand(args, opts = {}) {
+  if (runtimeRegistryRef?.liveCount()) return Promise.resolve({ ok: false, spawnFailed: true, error: '请先关闭独立会话，再执行 Pi CLI 管理操作。' });
   const entry = (opts && opts.entry) || (() => {
     const r = resolvePiCliEntry();
     return r.ok ? r.entry : null;
@@ -670,6 +688,7 @@ function piBusyReason(includeAuth = true) {
   if (includeAuth && providerAuthRef?.inFlight()) return { code: 'busy-auth', error: '供应商认证或模型同步正在进行，请稍后再试' };
   const turn = piActivity.busy();
   if (turn) return turn;
+  if (runtimeRegistryRef?.busy()) return { code: 'busy-runtime', error: '独立会话仍在运行、停止或清理，请先完成该操作。' };
   if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
   if (piUpdate && piUpdate.isRunning()) return { code: 'busy-pi-update', error: 'Pi 更新正在进行中，请稍后再试' };
   if (capabilityInstall && capabilityInstall.isRunning()) return { code: 'busy-install', error: '另一个扩展安装正在进行中，请稍后再试' };
@@ -693,7 +712,7 @@ const piUpdate = createPiUpdate({
      * （shell:false + args 数组 + 超时 + 有界输出）。 */
     return runPiCliCommand(args, opts);
   },
-  pauseBridge: (reason) => rpc.pauseForMaintenance(reason),
+  pauseBridge: async reason => { await runtimeRegistryRef?.closeAll(); return rpc.pauseForMaintenance(reason); },
   resumeBridge: () => rpc.resumeFromMaintenance(),
   invalidateCaches: invalidatePiCaches,
   busyReason: piBusyReason,
@@ -717,7 +736,7 @@ const capabilityInstall = createCapabilityInstall({
   busyReason: piBusyReason,
   resolveInstallTarget: () => resolvePiCliEntry(),
   runInstall: (args, opts) => runPiCliCommand(args, opts),
-  pauseBridge: (reason) => rpc.pauseForMaintenance(reason),
+  pauseBridge: async reason => { await runtimeRegistryRef?.closeAll(); return rpc.pauseForMaintenance(reason); },
   resumeBridge: () => rpc.resumeFromMaintenance(),
   invalidateCaches: invalidatePiCaches,
 });
@@ -732,13 +751,63 @@ const providerAuth = providerAuthRef = createProviderAuth({
     const result = await rpc.request({ type: 'get_available_models' });
     return Array.isArray(result?.models) ? result.models : null;
   },
-  synchronize: createAuthRuntimeSync({
+  synchronize: async (...args) => {
+    await runtimeRegistryRef?.closeAll();
+    return createAuthRuntimeSync({
     rpc, getCwd: () => runtime.getCurrentCwd(), busyReason: () => piBusyReason(false),
     subscribe: listener => { authRuntimeListeners.add(listener); return () => authRuntimeListeners.delete(listener); },
-  }),
+    })(...args);
+  },
 });
 
+const runtimeBrowser = createRuntimeBrowserGateway();
+const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
+  dataDir: DATA_DIR, publish: sse.publish,
+  externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),
+  beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
+    || rpc.maintenanceState() || plannerRef?.projectSwitchBlockReason() || cliInFlight ? 'maintenance' : null,
+  beforeCommand: cmd => providerAuth.snapshot().sync.state === 'syncing' ? 'auth_syncing'
+    : null,
+  admission: (args, action) => worktrees.withWorkspace(args, workspace => {
+    const current = runtime.getCurrentCwd(), relative = current ? path.relative(workspace.root, fs.realpathSync(current)) : null;
+    if (relative !== null && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) {
+      const error = new Error('workspace_in_use'); error.code = 'workspace_in_use'; throw error;
+    }
+    return action(workspace);
+  }),
+  resolveWorkspace: args => worktrees.withWorkspace(args, workspace => workspace),
+  validateWorkspace: workspace => worktrees.withWorkspace({ id: workspace.workspaceId, epoch: workspace.workspaceEpoch }, () => {}),
+  onFocus: async owner => { if (!owner) { await runtimeBrowser.focus(null); return; } const { repoId, ...scope } = owner; await runtimeBrowser.focus(scope); },
+  factory: async (context, emit) => {
+    const launch = createPiLaunch({ piBin: PI_BIN, env: process.env, getCwd: () => context.cwd });
+    const browser = await runtimeBrowser.allocate(launch, context.owner);
+    let adapter;
+    try { adapter = await createSessionRuntime({ context, emit, piBin: PI_BIN, env: process.env, dataDir: DATA_DIR,
+      guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig }); }
+    catch (error) { await browser?.dispose(); throw error; }
+    processManagers.add(adapter.managed.manager);
+    const dispose = adapter.dispose;
+    adapter.dispose = async () => { await dispose(); processManagers.delete(adapter.managed.manager); };
+    return adapter;
+  },
+});
+const runtimeRoutes = createRuntimeRoutes({ registry: runtimeRegistry,
+  validateWorkspace: owner => worktrees.withWorkspace({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}) });
+const runtimeHealthTimer = setInterval(() => { void runtimeRegistry.healthCheck().catch(() => {}); }, 5000);
+runtimeHealthTimer.unref();
+
+function primaryOwner() {
+  const state = rpc.getState(), cwd = runtime.getCurrentCwd() || '';
+  const workspace = createHash('sha256').update(process.platform === 'win32' ? cwd.toLowerCase() : cwd).digest('hex');
+  return { backendInstance: runtimeRegistryRef?.snapshot().backendInstance || state.bridgeInstance,
+    projectId: workspace, repoId: null, workspaceId: workspace, workspaceEpoch: String(runtime.getWorkspaceGeneration()),
+    conversationId: 'classic-chat', runtimeId: state.bridgeInstance, runtimeGeneration: String(state.bridgeRun), sessionId: primaryNativeSession };
+}
+
 const route = createRouter({
+  runtimeSessions: runtimeRoutes,
+  legacyScope: primaryOwner,
+  requireLegacyScope: () => runtimeRegistry.liveCount() > 0,
   worktrees,
   processes: managedProcesses,
   auth,
@@ -753,6 +822,7 @@ const route = createRouter({
    * 悄悄漏过守卫。 */
   rpc: {
     ...rpc,
+    getState: () => ({ ...rpc.getState(), legacyOwner: primaryOwner() }),
     send: (cmd) => {
       if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
       modelGeneration.guardCommand(cmd);
@@ -804,6 +874,8 @@ async function shutdown() {
   if(runtime.isShuttingDown())return;
   providerAuth.dispose();
   runtime.setShuttingDown(true);
+  clearInterval(runtimeHealthTimer);
+  try { await runtimeRegistry.dispose(); } catch { /* Owned guardians also stop on backend EOF. */ }
   worktrees.dispose();
   /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted
    * 再落盘。不这么做的话它们会以 running 留在盘上，下次启动才被恢复 ——

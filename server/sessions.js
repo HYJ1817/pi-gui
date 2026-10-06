@@ -109,7 +109,9 @@ function compareCreation(a, b) {
 
 export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [], getProjects = () => [] } = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
-  const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, '.pi', 'agent');
+  const configuredAgentDir = env.PI_CODING_AGENT_DIR;
+  const AGENT_DIR = configuredAgentDir === '~' ? HOME : configuredAgentDir?.startsWith('~/') || configuredAgentDir?.startsWith('~\\')
+    ? path.join(HOME, configuredAgentDir.slice(2)) : configuredAgentDir || path.join(HOME, '.pi', 'agent');
   const ROOT = path.join(AGENT_DIR, 'sessions');
 
   /* ---------- P7：额外的会话根目录 ----------

@@ -100,8 +100,8 @@ function buildToolbar(host) {
  * @param {object} o.pane                 right-pane.js 的 initRightPane() 返回的面板对象
  * @param {() => void} o.onRequestClose   点工具栏的 × 时调用（由外层决定怎么关）
  */
-export function createBrowserSurface({ pane, onRequestClose }) {
-  const bridge = window.piGuiDesktop.browser;
+export function createBrowserSurface({ pane, onRequestClose, bridge = window.piGuiDesktop.browser,
+  surfaceName = 'browser', onAgentState = acceptGuiBrowserState }) {
   const host = document.createElement('div');
   host.className = 'rp-surface rp-surface-browser';
   const ui = buildToolbar(host);
@@ -162,7 +162,7 @@ export function createBrowserSurface({ pane, onRequestClose }) {
         try {
           await bridge.setAgentControl(!agentState.enabled);
           const next = await bridge.agentStatus();
-          if (!disposed && next) { agentState = next; acceptGuiBrowserState(next); }
+          if (!disposed && next) { agentState = next; onAgentState(next); }
         } catch {
           if (!disposed) toast('无法更改 Agent 控制状态', 'warn');
         } finally {
@@ -194,12 +194,12 @@ export function createBrowserSurface({ pane, onRequestClose }) {
         if (disposed || !next) return;
         agentRevision++;
         agentState = next;
-        acceptGuiBrowserState(next);
+        onAgentState(next);
         render();
       }));
       const initialRevision = agentRevision;
       if (typeof bridge.agentStatus === 'function') Promise.resolve(bridge.agentStatus()).then((next) => {
-        if (!disposed && next && initialRevision === agentRevision) { agentState = next; acceptGuiBrowserState(next); render(); }
+        if (!disposed && next && initialRevision === agentRevision) { agentState = next; onAgentState(next); render(); }
       }).catch(() => {});
       // 量出来的矩形交给主进程，由它 clamp 后再摆 WebContentsView
       unsubs.push(pane.onViewport((rect) => bridge.setBounds(rect)));
@@ -239,7 +239,7 @@ export function createBrowserSurface({ pane, onRequestClose }) {
     host,
     isLive: () => !disposed,
     async open() {
-      pane.open('browser');
+      pane.open(surfaceName);
       mount();
       const r = await bridge.open();
       if (!r?.ok) {
@@ -252,7 +252,7 @@ export function createBrowserSurface({ pane, onRequestClose }) {
     // Agent has already created/navigated the native view. Mounting the chrome
     // must neither call open() again nor move focus away from that page.
     openFromAgent() {
-      pane.open('browser');
+      pane.open(surfaceName);
       mount();
     },
     close() {

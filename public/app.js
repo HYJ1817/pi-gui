@@ -19,6 +19,7 @@ import { fmt } from './util.js';
 import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
 import { sendCommand } from './api.js';
+import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
 import { observeMemoryEvent } from './memory.js';
@@ -124,6 +125,7 @@ mountSessionPlans($('sessionPlans'));
  * 网页版（浏览器里跑 npm start）没有 preload 桥 —— 那时 browserPane 为 null，
  * 入口按钮直接不显示，而不是画一个点了没反应的按钮。 */
 const rightPane = initRightPane();
+configureRuntimeSessions({ pane: rightPane });
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
 initGuiBrowserState();
@@ -171,6 +173,7 @@ function handle(evt) {
 }
 
 function handleEvent(evt) {
+  if (['runtime_event', 'runtime_state', 'runtime_closed'].includes(evt.type)) { observeRuntimeEvent(evt); return; }
   if (evt.type === 'bridge_status' || evt.type === 'bridge_snapshot') {
     if (evt._replay) return;
     return reconcileBridgeSnapshot(evt);
@@ -181,6 +184,7 @@ function handleEvent(evt) {
   if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
+  if (evt.legacyOwner && evt.bridgeRun === S.bridgeRun) S.legacyOwner = evt.legacyOwner;
   if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeGuiBrowserEvent(evt); observeMcpEvent(evt); observeApprovalEvent(evt); }
   observeFallbackEvent(evt);
   switch (evt.type) {
@@ -354,6 +358,7 @@ export function reconcileBridgeSnapshot(snapshot) {
   if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
   if (Number.isInteger(evt.bridgeRevision)) S.bridgeRevision = evt.bridgeRevision;
   if (typeof evt.cwd === 'string') S.cwd = evt.cwd;
+  if (snapshot.legacyOwner) S.legacyOwner = snapshot.legacyOwner;
   S.hasProject = evt.hasProject ?? Boolean(S.cwd);
   bridgeRecovery.observe({ ...evt, hasProject: S.hasProject });
   observeWebEvent(evt);

@@ -41,6 +41,7 @@
 const { WebContentsView, session, shell } = require('electron');
 const { normalizeAddressInput, isAllowedBrowserUrl, clampBounds, PARTITION } = require('./browser-policy.cjs');
 const { allowedAgentUrl } = require('./browser-agent-policy.cjs');
+const scopedSessions = new WeakSet();
 
 /** 这个 webContents 是不是内置浏览器的。
  *
@@ -49,7 +50,7 @@ const { allowedAgentUrl } = require('./browser-agent-policy.cjs');
  * **构造过程中**就触发了，那时我们还没来得及给 wc 挂任何标记。 */
 function isBrowserWebContents(wc) {
   try {
-    return Boolean(wc && wc.session) && wc.session === session.fromPartition(PARTITION);
+    return Boolean(wc && wc.session) && (wc.session === session.fromPartition(PARTITION) || scopedSessions.has(wc.session));
   } catch {
     return false;
   }
@@ -88,7 +89,8 @@ const ERR_ABORTED = -3;
  * @param {Electron.IpcMain} o.ipcMain
  * @param {(url:string)=>Promise<void>} [o.openExternal]  注入点，测试用
  */
-function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u) => shell.openExternal(u) }) {
+function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u) => shell.openExternal(u),
+  partition = PARTITION, send = null, isVisible = () => true }) {
   let view = null; // WebContentsView | null
   let generation = 0;
   let ready = Promise.resolve();
@@ -116,7 +118,8 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
   function ensureSession() {
     if (sessionReady) return;
     sessionReady = true;
-    const s = session.fromPartition(PARTITION);
+    const s = session.fromPartition(partition);
+    if (partition !== PARTITION) scopedSessions.add(s);
     s.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     s.setPermissionCheckHandler(() => false);
     s.on('will-download', (event) => {
@@ -126,6 +129,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
   }
 
   function emit() {
+    if (send) { send('pi-gui:browser-state', { ...state }); return; }
     const w = win();
     if (w) {
       try {
@@ -147,6 +151,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     if (kind === '下载') {
       /* 下载被拒不是「页面加载失败」，不该顶掉地址栏的 URL 与错误态；
        * 用一次性提示告诉用户，让它自己在 renderer 里淡出。 */
+      if (send) { send('pi-gui:browser-notice', { kind: 'download-blocked', message }); return; }
       const w = win();
       if (w) {
         try {
@@ -181,14 +186,14 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
   function applyBounds() {
     const w = win();
     if (!view || !w) return;
-    if (occluded) return; // 被遮住时不上屏，等恢复时再同步
+    if (occluded || !isVisible()) return; // 被遮住或后台工作面不上屏
     const content = w.getContentBounds();
     view.setBounds(clampBounds(lastRect, { width: content.width, height: content.height }));
   }
 
   function attach() {
     const w = win();
-    if (!view || !w) return;
+    if (!view || !w || occluded || !isVisible()) return;
     try {
       w.contentView.addChildView(view);
     } catch {
@@ -215,7 +220,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
 
     view = new WebContentsView({
       webPreferences: {
-        partition: PARTITION, // ← 独立 session，见文件头
+        partition, // ← 每 runtime 独立 session，见文件头
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,

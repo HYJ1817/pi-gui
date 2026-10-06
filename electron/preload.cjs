@@ -45,6 +45,27 @@ try {
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
     isDesktop: true,
+    runtimeBrowser: {
+      onState: cb => {
+        if (typeof cb !== 'function') return () => {};
+        const listener = (_event, value) => cb(value);
+        ipcRenderer.on('pi-gui:runtime-browser-state', listener);
+        return () => ipcRenderer.removeListener('pi-gui:runtime-browser-state', listener);
+      },
+      onAgentState: cb => {
+        if (typeof cb !== 'function') return () => {};
+        const listener = (_event, value) => cb(value);
+        ipcRenderer.on('pi-gui:runtime-browser-agent-state', listener);
+        return () => ipcRenderer.removeListener('pi-gui:runtime-browser-agent-state', listener);
+      },
+      status: scope => ipcRenderer.invoke('pi-gui:runtime-browser-status', { scope }),
+      enable: (scope, enabled) => ipcRenderer.invoke('pi-gui:runtime-browser-enable', { scope, enabled }),
+      open: scope => ipcRenderer.invoke('pi-gui:runtime-browser-open', { scope }),
+      navigate: (scope, url) => ipcRenderer.invoke('pi-gui:runtime-browser-navigate', { scope, url }),
+      command: (scope, command) => ipcRenderer.invoke('pi-gui:runtime-browser-command', { scope, command }),
+      bounds: (scope, rect) => ipcRenderer.invoke('pi-gui:runtime-browser-bounds', { scope, rect }),
+      occluded: (scope, occluded) => ipcRenderer.invoke('pi-gui:runtime-browser-occluded', { scope, occluded }),
+    },
 
     /**
      * 用系统默认程序打开当前项目内的一个文件。

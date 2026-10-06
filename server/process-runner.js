@@ -11,7 +11,7 @@ export function processAssets(){
   if(!isSea())return path.join(rootDir(),'extensions','pi-gui-process');
   if(!extracted){
     extracted=fs.mkdtempSync(path.join(os.tmpdir(),'pi-gui-process-'));fs.chmodSync(extracted,0o700);
-    for(const name of ['index.js','runner-win.ps1','runner-posix.cjs'])fs.writeFileSync(path.join(extracted,name),readAsset(`extensions/pi-gui-process/${name}`),{mode:0o600,flag:'wx'});
+    for(const name of ['index.js','runner-win.ps1','runner-posix.cjs','runtime-child.cjs'])fs.writeFileSync(path.join(extracted,name),readAsset(`extensions/pi-gui-process/${name}`),{mode:0o600,flag:'wx'});
     fs.writeFileSync(path.join(extracted,'package.json'),'{"type":"module"}',{mode:0o600,flag:'wx'});
   }
   return extracted;

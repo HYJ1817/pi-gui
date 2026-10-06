@@ -26,7 +26,8 @@ const MESSAGES = {
 };
 
 export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cwd: null, generation: 0 }),
-  busyReason = () => null, activate = async () => { throw failure('workspace_unavailable'); }, onMissing = async () => {}, now = Date.now } = {}) {
+  busyReason = () => null, activate = async () => { throw failure('workspace_unavailable'); }, onMissing = async () => {}, now = Date.now,
+  isWorkspaceInUse = () => false } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
   const dataRoot = fs.realpathSync(dataDir), dataIdentity = fileIdentity(dataRoot);
   const root = path.join(dataRoot, 'worktrees'), manifest = path.join(dataRoot, 'worktrees.json');
@@ -90,7 +91,7 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
     if (isInside(target(r), path.resolve(cwd))) return true;
     try { return isInside(target(r), fs.realpathSync(cwd)); } catch { return false; }
   }
-  function inUse(r) { return within(r, getContext().cwd); }
+  function inUse(r) { return within(r, getContext().cwd) || isWorkspaceInUse(target(r)); }
   function noNestedRepositories(dir) {
     const pending = [dir]; let visited = 0;
     while (pending.length) {
@@ -105,7 +106,7 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
   }
   function summary(r) {
     return { id: r.id, epoch: r.epoch, repoId: r.repoId, kind: 'managed', path: target(r), cwd: path.join(target(r), r.prefix || ''),
-      branch: r.branch, health: r.health, archived: r.archived === true, current: inUse(r), removed: r.removed === true };
+      branch: r.branch, health: r.health, archived: r.archived === true, current: within(r, getContext().cwd), inUse: inUse(r), removed: r.removed === true };
   }
   async function health(r) {
     if (r.removed) return 'removed';
@@ -234,6 +235,19 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
       return action();
     });
   }
+  // Registry admission holds the same lifecycle lock as archive/remove. The
+  // callback reserves its immutable workspace lease before this lock releases.
+  function withWorkspace(args, action) {
+    return serialize(async guard => {
+      const r = lookup({ id: args.id, epoch: args.epoch });
+      await owned(r); if (r.archived) throw failure('workspace_archived');
+      const project = await projectInfo(r.project), cwd = path.join(target(r), r.prefix || '');
+      if (!isInside(target(r), fs.realpathSync(cwd))) throw failure('unsafe_path');
+      guard();
+      return action({ projectId: project.projectId, repoId: r.repoId, workspaceId: r.id, workspaceEpoch: r.epoch,
+        cwd, root: target(r), branch: r.branch });
+    });
+  }
   async function handle(req, res, url) {
     try {
       if (req.method === 'GET') return json(res, 200, await list({ project: url.searchParams.get('project') }));
@@ -246,7 +260,7 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
       return json(res, 200, await actions[action](args, contextGeneration));
     } catch (e) { const code = Object.hasOwn(MESSAGES, e.code) ? e.code : 'invalid_request'; return json(res, 409, { ok: false, code, error: MESSAGES[code] }); }
   }
-  return { prepare, create, list, open, archive, remove, projectFor, validateCurrent, withActivation, handle,
+  return { prepare, create, list, open, archive, remove, projectFor, validateCurrent, withActivation, withWorkspace, handle,
     monitor() { if (!timer) { timer = setInterval(() => { void validateCurrent().catch(() => {}); }, 5000); timer.unref(); } },
     dispose() { disposed = true; clearInterval(timer); confirmations.clear(); } };
 }
