@@ -5,7 +5,7 @@
 ## 基线与交付边界
 
 - 本轮接手 before HEAD：`161473139598ab02685bbffbfae4b1c578e271b6`（上一轮推送 HEAD，与任务书一致）。
-- 本轮 after HEAD：以 `git rev-parse HEAD` 为准（本文件提交即最终 HEAD）；未合并 main、未发版、未开始 P32.4。
+- 本轮 after HEAD：**`7431befcaa4e71ca4f0bb3637543ee68ef98285d`**（代码/测试提交 `4a96b12`，本文件提交 `7431bef`），已推送到 origin 同名分支 `codex/p32-worktree-multisession`；`git ls-remote` 与本地 HEAD 一致。未合并 main、未发版、未开始 P32.4。
 - branch：`codex/p32-worktree-multisession`。工作区在本轮开始时干净，仅保留既有未跟踪目录 `.p25-1-release-a2b10ddfebd7413789311029f931a3ca/`；全程未使用 `reset --hard` / `git clean` / 强制 checkout。
 - 本轮新增/修改的仓库文件仅三处：`tests/runtime-soak.cjs`（新增 opt-in 并行稳定性 soak）、`package.json`（新增 `test:runtime-soak` 脚本，1 行）、`tests/runtime-live.cjs`（等待竞态最小修复 + 失败时补充原始证据；断言与阈值未变）、本文件。
 - 遵循 [ADR 0032](adr/0032-worktree-multisession.md) 的 A+B3；未改 Pi 本体、RPC/schema，未新增第三方依赖。
