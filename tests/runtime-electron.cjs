@@ -8,7 +8,7 @@ if (!process.versions.electron) {
   child.on('error', () => { process.exitCode = 1; }); child.on('exit', code => { process.exitCode = code ?? 1; fs.rm(world, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {}); });
 } else {
   const { app, BrowserWindow, ipcMain } = require('electron'); app.on('window-all-closed', () => {});
-  const ROOT = path.resolve(__dirname, '..'), world = process.env.P32_RUNTIME_WORLD, OUT = path.join(ROOT, '.shots/p32-3');
+  const ROOT = path.resolve(__dirname, '..'), world = process.env.P32_RUNTIME_WORLD, OUT = path.join(ROOT, '.shots/p32-3'), OUT4 = path.join(ROOT, '.shots/p32-4');
   let win, backend, host, browser, legacyHost, origin, checks = 0; const errors = [], screenshots = [], pages = [];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const check = (value, label) => { assert.ok(value, label); checks++; console.log('PASS ' + label); };
@@ -16,8 +16,8 @@ if (!process.versions.electron) {
   async function until(fn, timeout = 20000) { const end = Date.now() + timeout; while (Date.now() < end) { if (await fn()) return; await sleep(80); } throw Error('Electron fixture timeout'); }
   async function click(selector) { const p = await read(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`); for (const type of ['mousePressed', 'mouseReleased']) await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type, ...p, button: 'left', clickCount: 1 }); }
   const key = (keyCode, modifiers = []) => { win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
-  async function shot(name) { await sleep(200); const box = await read(`({w:innerWidth,h:innerHeight,sw:document.documentElement.scrollWidth,sh:document.documentElement.scrollHeight,card:document.querySelector('#modalCard').getBoundingClientRect().toJSON()})`);
-    check(box.sw <= box.w + 1 && box.sh <= box.h + 1, name + ' no page overlap/overflow'); const file = path.join(OUT, name + '.png'); fs.writeFileSync(file, (await win.webContents.capturePage()).toPNG()); screenshots.push({ file, box }); }
+  async function shot(name, dir = OUT) { await sleep(200); const box = await read(`({w:innerWidth,h:innerHeight,sw:document.documentElement.scrollWidth,sh:document.documentElement.scrollHeight,card:document.querySelector('#modalCard').getBoundingClientRect().toJSON()})`);
+    check(box.sw <= box.w + 1 && box.sh <= box.h + 1, name + ' no page overlap/overflow'); const file = path.join(dir, name + '.png'); fs.writeFileSync(file, (await win.webContents.capturePage()).toPNG()); screenshots.push({ file, box }); }
   async function api(body, route = '/api/runtime-sessions') { const legacy = (await (await fetch(origin + '/api/status')).json()).legacyOwner; return (await fetch(origin + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Pi-Gui-Owner': JSON.stringify(legacy) }, body: JSON.stringify(body) } : {})).json(); }
   async function main() {
     app.setPath('userData', path.join(world, 'electron')); await app.whenReady(); fs.mkdirSync(OUT, { recursive: true });
@@ -122,7 +122,36 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     const resumed=state.items.find(r=>r.conversationId===owners[0].conversationId).owner;
     check(resumed.runtimeGeneration!==owners[0].runtimeGeneration&&resumed.runtimeId!==owners[0].runtimeId,'restart keeps native session and rotates runtime identity');
     check(!(await api({action:'command',owner:owners[0],command:{type:'prompt',message:'STALE'}})).ok,'old A owner cannot write restarted child');
+
+    /* ---- P32.4-A：项目会话区里的并行会话（真实 Electron + 真实后端） ----
+     * 侧栏读的是 registry 快照 + worktrees 归属，不 spawn；点击只改 focus。 */
+    fs.mkdirSync(OUT4, { recursive: true });
+    /* 关掉 P32.3 的窄入口 modal —— P32.4 的验收对象是**侧栏**，modal 开着会挡住它。 */
+    await read(`import('/ui/modal.js').then(m=>m.closeModal())`); await sleep(200);
+    await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
+    await until(()=>read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length===2`),60000);
+    check(true,'P32.4 sidebar lists both parallel conversations');
+    check(await read(`!!document.querySelector('#pjRuntimeList .pj-runtime-new')`),'P32.4 sidebar offers 新建并行会话');
+    check(await read(`!/runtimeId|runtimeGeneration|workspaceEpoch/.test(document.querySelector('#pjRuntimeList').textContent)`),'P32.4 sidebar hides runtime debug identity');
+    check(await read(`!/(backendInstance|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4})/.test(document.querySelector('#pjRuntimeList').textContent)`),'P32.4 sidebar shows no raw ids');
+    const liveBefore = (await api()).liveCount;
+    const orderBefore = await read(`[...document.querySelectorAll('#pjRuntimeList [data-conversation-id]')].map(r=>r.dataset.conversationId).join(',')`);
+    await read(`document.querySelector('#pjRuntimeList [data-conversation-id]').querySelector('button').click()`);
+    await until(async()=>{state=await api();return !!state.focusedConversationId;},30000);
+    const orderAfter = await read(`[...document.querySelectorAll('#pjRuntimeList [data-conversation-id]')].map(r=>r.dataset.conversationId).join(',')`);
+    check(orderAfter === orderBefore,'P32.4 clicking a conversation does not reorder the sidebar');
+    check((await api()).liveCount === liveBefore,'P32.4 clicking a conversation neither spawns nor stops a runtime');
+    await shot('sidebar-a-running-b-focused', OUT4);
+    for (const [w, h] of [[1280, 800], [1920, 1080]]) { win.setContentSize(w, h); await shot(`sidebar-${w}x${h}`, OUT4); }
+    win.webContents.setZoomFactor(1.25); await shot('sidebar-zoom125', OUT4); win.webContents.setZoomFactor(1);
+    win.setContentSize(1440, 900);
     await api({ action: 'close', owner: resumed }); await api({ action: 'close', owner: owners[1] }); state = await api(); check(state.liveCount === 0 && state.items.length === 2, 'close cleanup retains lazy records');
+    /* 关闭 Runtime 之后：会话仍在侧栏、显示为已关闭，且**没有**任何 child 被启动。 */
+    await read(`import('/ui/modal.js').then(m=>m.closeModal())`); await sleep(200);
+    await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
+    await until(()=>read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length===2`),30000);
+    check(await read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length===2 && document.querySelector('#pjRuntimeList').textContent.includes('已关闭')`),'P32.4 closed runtimes stay visible as dormant rows');
+    await shot('sidebar-dormant', OUT4);
     const oldBackend=state.backendInstance;
     await new Promise(resolve=>{backend.once('exit',resolve);backend.kill();});
     backend=launchBackend();backend.stdout.resume();backend.stderr.resume();
