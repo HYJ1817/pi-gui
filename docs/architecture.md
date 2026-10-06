@@ -1,5 +1,13 @@
 # 架构
 
+## P32.2 Worktree 生命周期
+
+`lib/git-worktree.js` 复用有界 Git runner，提供 canonical repository/inventory/commit/ref 查询。
+`server/worktrees.js` 持有 GUI manifest、目录/epoch 所有权、确认 nonce、健康检测和保守移除；
+组合根把项目 activation、generation、Stop/Planner/Process 清理闸门注入该模块。
+`public/worktrees.js` 从项目三点菜单打开原生弹窗，复用项目切换和菜单/焦点基础设施。
+本阶段仍只有一个 Pi child / bridge，不启用并行 session。见 [worktrees.md](worktrees.md)。
+
 ## P29 内置浏览器 Agent Control
 
 `electron/browser-view.cjs` 保持 WebContentsView / 独立 session / 导航 / bounds 的唯一宿主。

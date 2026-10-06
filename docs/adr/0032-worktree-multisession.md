@@ -1,10 +1,10 @@
 # ADR 0032：Worktree 与并行 Session 的隔离边界
 
-- 状态：**Proposed / 待 ChatGPT 验收**；不是已批准的实现决策。
+- 状态：**Accepted（P32.1）**。2026-10-06 用户明确要求「继续 p32.2」，据此执行生命周期阶段；后续 P32.3 / P32.4 仍须逐阶段验收。
 - 日期：2026-10-06。
 - 基线：main / v0.22.0，`30ffad882748264866a9c23c663eae302e975f9e`。
 - 分支：`codex/p32-worktree-multisession`。
-- 当前阶段：P32.1 Design Spike。只新增设计文档，不改变产品行为。
+- 本文设计来源：P32.1 Design Spike，当时只新增设计文档；P32.2 实现与边界见 [worktrees.md](../worktrees.md)。
 - 勘察与验证：[P32.1 报告](../p32-design-spike.md)。
 
 ## 1. 问题与目标
