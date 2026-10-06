@@ -1,15 +1,16 @@
 import { fetchRuntimeSessions, runtimeSessionAction } from './api.js';
-import { createRuntimeStore } from './runtime-store.js';
+import { runtimeStore as store, observeRuntimeFrame, onRuntimeChange } from './runtime-state.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { createBrowserSurface } from './browser-pane.js';
 
-const store = createRuntimeStore();
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const node = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const button = (text, action) => { const e = node('button', 'btn', text); e.type = 'button'; e.onclick = action; return e; };
 const labels = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中', idle: '空闲', running: '运行中', stopping: '正在停止' };
 let pane, render = null, selected = null, browserSurface = null, browserOwner = null;
-export function observeRuntimeEvent(frame) { if (store.apply(frame)) render?.(); }
+/* P32.4：帧到达时统一由 runtime-state.js 广播；本模块只订阅自己的重画。 */
+onRuntimeChange(() => render?.());
+export function observeRuntimeEvent(frame) { observeRuntimeFrame(frame); }
 export function configureRuntimeSessions(options) {
   pane = options.pane;
   pane?.onSurfaceChange(next => {

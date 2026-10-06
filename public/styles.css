@@ -2559,3 +2559,21 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .runtime-approval { padding: 12px 0; }
 .runtime-approval .btn { margin-right: 8px; }
 @media (max-width: 720px) { .runtime-layout { grid-template-columns: 1fr; gap: 12px; } .runtime-list { max-height: 120px; } }
+
+/* ---------- P32.4：项目会话区里的并行会话 ----------
+ *
+ * 信息密度沿用 P30：**一个**状态点 + 一行必要时的小字，不做彩色 badge，
+ * 不把 runtimeId / workspace UUID / PID 这类诊断字段放进正常 UI。
+ * 行位置只由后端 createdAt 决定，这里不参与排序。 */
+.pj-runtime-list{display:flex;flex-direction:column;gap:2px}
+.pj-runtime-list[hidden]{display:none}
+.project-sidebar .pj-runtime{min-height:30px}
+.pj-runtime-dot.running{border-color:var(--run);background:var(--run);opacity:1}
+.pj-runtime-dot.stopping{border-color:var(--warn);background:var(--warn);opacity:.85}
+.pj-runtime-dot.error{border-color:var(--err);background:var(--err);opacity:.85}
+.pj-runtime-dot.ready{border-color:var(--ok);opacity:.85}
+.pj-runtime-status{margin-left:auto;flex:0 0 auto;font-size:10.5px;color:var(--t3)}
+.pj-runtime-attention{flex:0 0 6px;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--run)}
+.pj-runtime-new{display:flex;align-items:center;gap:6px;width:100%;background:transparent;border:0;text-align:left;font:inherit;cursor:pointer;color:var(--t3)}
+.pj-runtime-new:hover{color:var(--t1);background:var(--hover)}
+.pj-runtime-plus{flex:0 0 6px;text-align:center;opacity:.75}

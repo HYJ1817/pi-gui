@@ -60,6 +60,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   function summary(record) {
     const live = lives.get(record.conversationId);
     return { conversationId: record.conversationId, workspace: { ...record.workspace },
+      /* P32.4：侧栏要按**创建时间**排会话，且点击不得让行换位。排序键必须来自
+       * 后端持久记录（record.createdAt），不能由前端按「最近活动」猜 ——
+       * 那正是「点一下行就跳位置」的来源。 */
+      createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
       revision: revisions.get(record.conversationId) || 0,
       owner: live ? owner(live) : null, lifecycle: live?.lifecycle || 'dormant', activity: live?.activity || 'idle',
       attention: live?.attention === true, focused: focused === record.conversationId, historyRequired: live?.historyRequired === true,
@@ -189,7 +193,13 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       historyRequired: live.historyRequired || (live.events.length > 0 && cursor < live.events[0].frame.eventSequence - 1),
       events: live.events.filter(e => e.frame.eventSequence > cursor).map(e => e.frame), item: summary(live.record) };
   }
-  function focus(expected) { return serialize(async () => { const live = resolve(expected); await onFocus(owner(live)); resolve(expected); focused = live.record.conversationId; live.attention = false; changed(live); return { ok: true, item: summary(live.record) }; }); }
+  function focus(expected) { return serialize(async () => { const live = resolve(expected); await onFocus(owner(live)); resolve(expected);
+    const previous = focused; focused = live.record.conversationId; live.attention = false;
+    /* 焦点是**单值**：换了焦点必须把旧的那条也广播出去。只广播新的，旧会话的
+     * item.focused 会一直留在前端 —— P32.4 的侧栏正是按这个字段画高亮的，
+     * 于是会同时出现两行「当前」。 */
+    if (previous && previous !== focused) { const prior = lives.get(previous); if (prior) changed(prior); }
+    changed(live); return { ok: true, item: summary(live.record) }; }); }
   function blur(expected) { return serialize(async () => {
     const live = resolve(expected); if (focused !== live.record.conversationId) return { ok: true };
     await onFocus(null); resolve(expected); focused = null; changed(live); return { ok: true };
