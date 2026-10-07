@@ -1,361 +1,198 @@
-# P32.4 Multi Session UI：实施与验收记录
+# P32.4 Multi Session UI：最终实施与复验记录
 
-日期：2026-10-06。状态：**已完成 P32.4-A、P32.4-B，P32.4-C 只做了 Changes 绑定**；不宣告 P32.4 通过，由用户交 ChatGPT 复验。
+日期：2026-10-07。完成实施，等待 ChatGPT 最终验收。passed、failed、not executed、environment blocked 与 fixture / real Electron / real Git / real Pi 分别标记。
 
-## 一、接手基线与分支
+## 1. Baseline
 
-- before HEAD：`cbee9b83ef13efa5ac2dc67e784785044ad4030b`（`main`，已包含通过验收的 P32.3）。
-- 已核实 `main` 的提交图：P32.3 验收 HEAD `e2cfe088feeb6172a9458215c3c8b6630525e9f0` 是 `main` 的**祖先**（`git merge-base --is-ancestor` 为真），`origin/main` 与本地一致。
-- 基于 `main` 新建分支：**`codex/p32-multisession-ui`**（不在旧 P32.3 分支上继续）。
-- after HEAD：以 `git rev-parse HEAD` 为准（本文件所在提交即最终 HEAD，不写死自引用哈希）。
-- 未合并 main、未发版、未开始 P32.5。
+- 本轮 before HEAD：`09182a26479bb6fbf97b139826b03e6629a01c4c`；分支 `codex/p32-multisession-ui`，开始时 fetch 核实本地与远端一致。
+- main / merge-base：`cbee9b83ef13efa5ac2dc67e784785044ad4030b`。保留既有 A/B；不在旧 P32.3 分支重做。
+- 版本仍为 0.22.0；未合并 main、改版本、打 tag、发布 Release 或开始 P32.5。
+- 接手前已有未跟踪目录 `.p25-1-release-a2b10ddfebd7413789311029f931a3ca/`，本轮未修改、删除或提交。最终 tracked changes 为空；完整 status 仍会列出此既有目录。
+- 阅读项目 memory、架构/安全/测试文档和实际代码。Jev 只作路由建议，最终方案由代码复核决定。
 
-> **需要如实指出的一点**：`main` 目前**没有观察到绿色 CI**。最后一次运行是 `cancelled`（重跑被并发组取消），再上一次是 `failure`：Node 24 job 停在 `tests/session-runtime.cjs` 的 `fixture_timeout`，Node 22 job 撞上 workflow 的 25 分钟作业上限。这与「P32.3 已验收通过」的表述有出入，我按事实记录，不阻塞 P32.4。
+## 2. Architecture
 
-## 二、本次交付范围（重要）
+`runtime-state.js` 持有单一 store，侧栏、中央和旧工作区对话框都是视图。registry 提供完整 owner、revision/eventSequence、状态和资源数；前端只持有草稿、滚动、选择意图和安全模型元数据。
 
-任务书建议内部按 P32.4-A → E 拆分，并写明「验收后再继续」。本轮完成 **A** 与 **B**，各自都做完整（实现 + 确定性测试 + 真实 Electron 验证 + 截图）。
+Changes：conversation → backend workspace identity → `worktrees.withWorkspace({id,epoch}, operation)`，锁覆盖整个 Git 操作。Browser/Process 通过已有 scoped API 和 `runtime-secondary.js` 跟随中央选择。历史路径由 registry 私有记录提供，不接受 renderer 文件路径。
 
-C–E **未开始**，原因见第七节。这是刻意的分阶段交付，不是遗漏。
+沿用原生 ES modules、Node HTTP、P30 right pane 与现有 Electron controllers。无新增依赖、框架、provider/auth 系统或第二套 registry；不修改 Pi 本体、native session schema 或 P32.3 核心 identity 架构。
 
-## 三、P32.4-A 做了什么
+## 3. P32.4-A
 
-### 3.1 单一事实源（先做这一步的理由）
+保留当前项目侧栏、新建入口、后台 attention 和状态。projectId 来自 worktrees authority；排序按持久 createdAt/conversationId，点击和后台输出不重排。列表读取/dormant 点击不 spawn。
 
-P32.3 的 `public/runtime-store.js` 是一个纯模型（`seed` / `apply` / `history`），
-`runtime-sessions.js` 里自己 `createRuntimeStore()` 建了一份实例。P32.4 要在**侧栏**
-再加一个视图；如果各自建一份 store，revision / eventSequence / owner 三条防护就会被
-拆成两套 —— A 视图漏掉的迟到事件会从 B 视图漏进去。
+新建仍编排 prepare→create→start，失败不进入后续动作；工作区已建而启动失败如实提示。后端 focus 同时广播旧/新记录。新增读取合并、选择意图代次和键盘导航，原创建/归属检查保留。
 
-所以先新增 `public/runtime-state.js`：**只建一次** store，并把「变化广播」也放在这里
-（谁 apply 谁广播一次，视图只订阅）。侧栏与 modal 现在都是同一份 store 的视图，
-谁都不依赖对方。
+## 4. P32.4-B
 
-### 3.2 侧栏集成
+中央保持输出、工具、审批和发送/停止/重启/关闭/恢复。动作捕获完整 owner，草稿/滚动按 conversationId 分离；后台事件进自己的 store，不抢焦点。dormant 只读历史不占 slot，显式恢复才启动 child。
 
-新增 `public/runtime-nav.js`，把并行会话渲染进**当前项目的会话区**（`.pj-sess-list`），
-排在经典会话之前：
+恢复 focus 等待 ready 和非空 native sessionId；selection epoch 使 A→B→A、离开中央等旧意图失效。旧 generation、迟到 Stop/审批与后台 streaming 回归保留。
 
-```
-Runtime Fixture
-  ├─ runtime-A        就绪      ← focused 时高亮
-  ├─ runtime-B        运行中  ●  ← 后台完成时的 attention 小点
-  └─ + 新建并行会话
-```
+## 5. P32.4-C
 
-- **归属**：只认 `GET /api/worktrees?project=…` 返回的 `projectId`（后端按 Git common-dir
-  算出的稳定身份），再筛 registry 快照里 `workspace.projectId` 相同的会话。**不按标题或
-  路径字符串猜归属**。非 Git 项目拿不到 `projectId` → 整块不显示（也不摆一个必然失败的入口）。
-- **排序**：只按后端持久化的 `createdAt` 升序（同值时用 conversationId 兜底），
-  点击与后台事件都不会让行换位。
-- **状态**：一个轻量状态点（running / stopping / error / ready）+ 一行小字；
-  attention 只是一个 6px 小点。**不显示** runtimeId / runtimeGeneration / workspace UUID /
-  sessionId / epoch（有断言把这条钉住）。
-- **不 spawn**：列出来只读快照 + worktrees，不发任何 `start`。
+**passed，自门完成后进入 D。** 阶段 runtime 348/348、worktrees 86/86、smoke 1338/1338、Process UI 17/17；real Electron 109/109，27 张截图，exit 0。最终数字见第 14 节。
 
-### 3.3 focus 语义
+- Changes 不再用 record.root 授权；无 scoped header 才走经典路径。空/未知/失效会话以及 stale/archived/removed/locked workspace 均拒绝，不回落。
+- Browser A/B 独立原生 WebContentsView、权限、viewport/CDP。后台操作不显示在当前会话；切换 detach/hide 而不销毁后台 view；重复同 owner focus 保留绑定。
+- Process 注入已有 panel transport，切换取消旧 polling/results；权威 status 返回前禁用权限 checkbox；stop/restart A 不影响 B。
+- 右栏保留 surface kind，B 无 Browser 时显示空态，dormant 不启动；返回经典恢复经典 scope。
 
-- live 会话：点击发**一条** `{action:'focus', owner}`，owner 是**动作触发时捕获**的完整
-  owner（backendInstance/projectId/repoId/workspaceId/workspaceEpoch/conversationId/
-  runtimeId/runtimeGeneration/sessionId），不是执行结束时再读「当前 focused」。
-- dormant 会话：**不发 focus**（没有 live owner 可校验），更不会顺手 spawn 一个。
-  只把意图交给中央视图，需要继续执行时由用户显式恢复。
-- 点击不改变排序、不发 prompt/abort/start（均有断言）。
+## 6. P32.4-D
 
-### 3.4 「新建并行会话」
+**passed，自门完成后进入 E。** 阶段 runtime 415/415；real Electron 133/133，32 张截图，exit 0。
 
-是 **P32.2 `prepare`+`create` 与 P32.3 `start` 的编排**，不是第二条创建路径：
-`fetchWorktrees` → `worktreeAction('prepare')` → `worktreeAction('create')` →
-`runtimeSessionAction({action:'start'})`。后端返回什么就显示什么（dirty / branch 冲突 /
-`runtime_limit` / `workspace_busy` 都如实呈现，前端不自己模拟）。工作区建好但 runtime 没起来时，
-提示里明确说「工作区已创建，可在工作区管理里重试」，不谎报成功。
+共享 runtime-resources preflight 适用于侧栏、中央恢复、旧工作区对话框。第三个名额先确认 CPU/内存/模型成本；取消不发 start/resume，确认仅对捕获动作 allowThird。第四个请求实际到达后端并收到 runtime_limit。
 
-### 3.5 一处后端事实源修复
+totalCount 来自完整后端快照并包括经典 child；unknown 不显示为 0。cleanup_pending 保留 count/lease，等待 Pi、Browser、Process 全部清理。快照请求合并并防旧响应覆盖，100 个 delta 不触发资源 GET。
 
-`server/runtime-registry.js` 的 `focus()` 原来**只广播新焦点那一条**，旧会话的
-`item.focused` 会一直留在前端 —— 侧栏正是按这个字段画高亮的，于是会同时出现两行「当前」。
-改为换焦点时把旧的那条也广播一次（焦点是单值）。这是补齐事实源，不是在前端造第二套状态。
+## 7. P32.4-E
 
-同时给 `summary()` 增加了 `createdAt`（记录里本来就有），作为稳定排序的事实依据 ——
-排序键不能由前端按「最近活动」猜，那正是「点一下行就跳位置」的来源。
+live conversation 独立模型控制器，native readback 确认模型/thinking；历史搜索使用明确 locator。标题优先 proven native sessionName，缺失时 branch fallback，createdAt 顺序稳定。
 
-## 三·B、P32.4-B 做了什么：中央的 focused conversation
+侧栏 ArrowUp/Down/Home/End 移动焦点、Enter 选择；重绘保留焦点而不抢输入。中央 Enter 发送、Shift+Enter 换行、IME 不提交；Escape/Tab 经 real Electron 验证。runtime/classic 标题缓存分离，经典后台事件不覆盖 runtime 标题。
 
-### 3.6 中央会话承载
+保留现有样式/P30 控制器，局部调整 runtime 表单、换行与右栏分配宽度。实测 1280×800、1440×900、1920×1080、125%、150%，含中央模型/composer 与右栏边界及原生 Browser viewport。
 
-新增 `public/runtime-conversation.js`，中央多了第四种承载
-（`#workspace[data-workspace-view='runtime']`）。侧栏点一行 → 中央切到那条会话，
-看到它自己的输出/工具/审批，能发送、停止、重启、关闭、恢复。
+## 8. Owner / identity rules
 
-- 状态一律读 `runtime-state.js` 里**同一份** store，本模块只做投影与动作，
-  不缓存 text/tools/approvals。它自己持有的只有**纯视图态**：滚动位置 +
-  「正在看哪条」——这两样不属于 runtime 事实，后端也不该知道。
-- 发任务/停止/重启/关闭/审批应答都用**动作触发时捕获的完整 owner**。
+完整 owner 九字段：`backendInstance/projectId/repoId/workspaceId/workspaceEpoch/conversationId/runtimeId/runtimeGeneration/sessionId`。PID 不作为 owner；store accepted event 的 revision/eventSequence 防护保留。
 
-### 3.7 draft / scroll 隔离
+动作在点击时捕获身份，await 后用 token/selection epoch 和 owner 再确认。旧 backend/runtime/generation/session/选择意图结果不得修改新会话。native sessionId 未绑定时不 focus。
 
-草稿存在 store 记录的 `draft` 上（沿用 P32.3 做法）；滚动位置按 conversationId
-存在本模块的 Map 里。切 A → B → A，两边都不串 —— 有断言钉住。
+历史五字段 locator 与运行 owner 职责不同，不需恢复 child。私有 locator/cwd/文件证明不进 snapshot/SSE/DOM。原始工具参数、worker error、credentials 不进入诊断；错误为固定安全码/文案。对话正文是有意显示的内容。
 
-### 3.8 dormant：看历史 vs 恢复 Agent
+## 9. Browser / Process / Changes
 
-新增 `server/session-history.js`（只读解析）与 `GET /api/runtime-sessions?conversationId=…`：
+**real Electron + real Git + fixture Pi：passed。** OS-temp 真实 repo/worktrees 分别改动，status/diff/open/restore/restore-all 验证 A 不改 B 或经典 workspace，覆盖锁、失效、root/metadata replacement。
 
-- 「打开历史」只读 registry 记录里**后端持有、绑定时已证明过**的 `sessionLocator`，
-  **不 spawn**，因此不占 Runtime slot（默认只有 2 个）。Renderer 只传 conversationId，
-  **不传任何路径**；`sessionLocator` 也**不进 snapshot / 不进任何 SSE 帧**（有断言）。
-- 「恢复会话」是**唯一**会 spawn 的路径，必须用户显式点。
-- 读的是尾部（最近的消息在文件末尾），有字节上限；只取 user/assistant 的 text 片段，
-  toolResult/图片/thinking/toolCall 参数一律不进 —— 与 `session-search.js` 同一取舍。
-  **已知限制：只读历史里看不到工具调用。**
-- 原生 locator 已失效时给明确文案，不猜 `--continue`。
+Browser 实测独立原生 view、后台 CDP、不抢焦点、权限 revision、旧回调与关闭/重启。main capturePage 不含原生 view 内容，需看配对 native capture。
 
-### 3.9 为什么不吃经典 sessions 模块
+Process 使用真实 Node HTTP 服务和 Windows 进程树，由 fixture Pi 经生产 private bridge 发起；权限默认关、日志隔离、A stop/restart、B RPC/HTTP 继续与最终清理均验证。没有把 fixture model 回复当作 real Pi。
 
-`sessions.js` 的归属判定是「header.cwd 在**当前经典项目**里」，而并行会话的会话文件
-落在各自 worktree 的 cwd 下 —— 用那条路只会得到 null。所以这里直接读 registry 里
-已证明的 locator。形状判定仍只有一处（复用 `pi-compat` 的 `sessionMessageBody`）。
+## 10. Resource limits
 
-## 三·D、P32.4-C（部分完成）：Changes 绑定到 focused 会话
+后端默认 2、显式第三个、硬上限 3，含经典 child。前端不造第二套 limit；第四拒绝、workspace lease 和 cleanup barrier 仍由后端执行。
 
-### 3.10 先识别真实边界，再动最小的一处
+确认取消无 child；历史无 slot。cleanup_pending/failure 仍占名额并保留 lease；Pi/Browser 完成但 Process 未确认时不可复用。全清理后才释放。重启后的持久记录 dormant，不自动启动。
 
-`server/git-routes.js` 原来只认一个 `runtime.getCurrentCwd()` —— 全局单工作区。
-并行会话的文件在各自 worktree 里，用**全局** cwd 去看 Changes 就会「在看 A 的会话，
-却显示经典工作区的改动」。按任务书要求：**不要硬做假多会话**，先认边界，再做最小 adapter。
+## 11. Model isolation
 
-adapter 只做一件事：**带会话身份时，由后端解析出该会话已验证的 workspace root**；
-解析不出来就**明确拒绝，绝不回落**到经典 cwd（回落才是真正的串线来源）。
+复用 modelIdentity/modelCapability，保留 true/false/unknown，不从名字猜 reasoning。只有 reasoning=true 且 native Pi levels 明确返回时允许 thinking；false/unknown 禁用。
 
-- `server/runtime-registry.js`：新增 `workspaceRootOf(conversationId)`，读的是记录里
-  的 `workspace.root`（后端持有、P32.2 已验证过的根），**不进 snapshot**。
-- `server/git-routes.js`：新增可注入的 `resolveScopedCwd(req)`；返回 `null` = 走经典
-  单工作区（行为不变），返回 `{ cwd }` = 会话作用域，返回 `{ error }` = 409 明确拒绝。
-  带会话身份但解析失败时**不回落**。
-- `server.js`：接线，只从请求头 `X-Pi-Gui-Conversation` 取 conversationId，
-  再问 registry 要根 —— **Renderer 永远不提交文件系统路径**。
-- `public/api.js`：`setGitConversationScope(id)`；所有 git 请求带上该头。
-- `public/app.js`：中央切到并行会话时设作用域并 `refreshGitNow()`；
-  离开并行会话（回到经典 chat/工作区）时清掉作用域并重取。
+先注册等待者再发 scoped mutation。HTTP ack≠成功；需 store 已接受的 native SSE response 匹配 full owner/id/command/success，再 get_state/readback。切 A→B、旧 generation、失败/超时不得污染 B 或替换已确认旧选择。
 
-### 3.11 C 还没做完的部分（下次继续）
+private RPC null/__error 不投影为成功；get_available_thinking_levels 使用既有 read 白名单。thinking failure 移除原始 error/data。provider/auth 沿用共享实现，不另存 key/auth。
 
-任务书 §十二 里 C 的其余内容本轮**未做**：
+## 12. History/Search
 
-- 中央会话视图上的 **Browser / Process 入口**（现在只有 P32.3 的 modal 里有）；
-- **切 A → B 时右栏 Browser scope 跟着切换**、A 的后台 scope 继续存在但不可叠在 UI 上
-  （验收项 25 / 26 / 27 / 29）。这部分需要动 `right-pane` 的挂载与
-  `electron/browser-runtime-host` 的 focus 目标，属独立可验收的一块。
+复用现有 parser/预算与经典归属；runtime candidates 来自当前 projectId registry。公开 locator 恰为 `projectId/workspaceId/workspaceEpoch/conversationId/nativeSessionId`。项目/locator/native identity/后端记录变化使迟到结果失效。
 
-已完成的 Changes（验收项 28）见上；它已经满足「不得让 Renderer 提交任意路径」这条硬约束。
+同 fd bounded read，前后验证 native header id/cwd，验证 canonical path 和 dev/ino/birthtimeMs。同 inode 等长身份改写拒绝，正常追加兼容；旧 manifest v1 无文件证明时仍检查 native header。新增私有字段不改 Pi schema。
 
-## 四、验证
+live 搜索打开只读历史，可返回运行输出；dormant/removed workspace/重启记录可读已证明 session，不 spawn。只展示 user/assistant text，无 tools/thinking/images。搜索每文件 8 MiB、总 48 MiB、最多 30 结果/每会话 5 命中/160 字符 snippet；历史最近 4 MiB、最多 800 消息。
 
-### 4.1 确定性测试（离线，进 `npm test` 唯一入口）
+## 13. Electron scenarios
 
-新增 `tests/runtime-nav.cjs`（31 条），覆盖验收清单 A 组 + 「新建并行会话」闭环：
+最终 frozen source `npm run test:runtime-electron`：**170/170，exit 0，43 截图，renderer errors=[]**。独立 `P32_RUNTIME_CLASSIC_SHOT=1`：**2/2，exit 0，1 截图，errors=[]**。退出后按 fixture 命令行身份检查 owned Electron/Node/cmd 为 0。
 
-| # | 断言 |
+保留全部 A/B/C/D 检查，覆盖发送/停止/草稿/后台输出、审批/迟到结果、Browser/Process/Git、第三取消/确认、第四后端拒绝、cleanup slot、模型响应/readback、三态 reasoning、native history 搜索、键盘和全部尺寸。
+
+Electron 44.4.3、生产 server/renderer、real Git worktrees、real native Browser/Node 服务；Pi/model 回复为 fixture。没有模型网络调用。
+
+## 14. Test results
+
+最终 canonical `npm test`：**passed，exit 0，89 个链脚本全部完成**。package.json 唯一入口包含 89 个链脚本；新增套件在此登记，未复制到 CI。
+
+| 最终 runtime 套件 | 实际结果 |
+|---|---:|
+| registry / HTTP / store / UI | 32/32、12/12、25/25、16/16 |
+| nav / conversation | 38/38、48/48 |
+| Changes / secondary / Git UI | 60/60、17/17、6/6 |
+| resources / cleanup | 45/45、16/16 |
+| models / history-search / finish UI | 51/51、35/35、27/27 |
+| session runtime / supervisor | 5/5、24/24 |
+| Browser / Process budget / events / real Process | 48/48、4/4、14/14、10/10 |
+| **20 套件合计** | **533/533** |
+
+其他受影响检查：smoke 1338/1338、modules 117/117、worktrees 86/86、经典 search 71/71、Process UI 17/17、browser-pane 52/52、UI IA 12/12。Electron 170/170；经典 capture 2/2、app-check 26/26 单列，不混入 runtime。
+
+未删除断言。阶段 runtime 348→415→533，Electron 109→133→170；历史最终新增 3 条并发文件回归。经典 search Windows symlink 检查因权限跳过，实际执行 71；跳过不计分子分母，旧其他环境 72/72 不是当前数字。
+
+## 15. Build/package
+
+`npm run build:app -- --rebuild`：**passed，exit 0，13.534 秒**。显式使用既有 Electron 44.4.3 本机 zip 离线构建，无下载/新增安装。版本 0.22.0。
+
+- 入口 `dist-app/Pi GUI-win32-x64/Pi GUI.exe`：246,324,736 字节；整包 343,661,959 字节；server.cjs 1,954,077 字节。
+- exe SHA256：`3FA1209BC80D67DF26ACD9EF7D616DD7874D8642A8C333F0017AA1F9511CF894`。
+- server.cjs SHA256：`0182E1D6FF7D991C78277C2F71A66368D983E1286FD58A14F19D52B6F81029AB`。
+- runtime-models/conversation、right-pane、shell、styles、main、browser-runtime-host 源码与随包文件 SHA256 一致。
+
+app-check 首次 **environment blocked / failed，exit 1**：127.0.0.1:7799 listen EACCES。确认 24790/24791 可 bind 后，既有 CHECK_PORT=24790 重跑 **passed 26/26，exit 0**，无测试实现改动。OS-temp 隔离随包 app、无 node_modules，验证 private RPC ready、资源/PDF/docx/路径拒绝/无项目不启动；Pi 为 fixture。
+
+SEA 辅产物 injector 的既有 signature warning 保留；成功注入不等于签名。未执行 installer/签名/Release。
+
+## 16. Screenshots
+
+最终 44 张 real Electron 截图随提交保存在 `docs/evidence/p32-4/`。最小场景映射：
+
+| 场景 | 图片 |
 |---|---|
-| 1 | A/B 两条并行会话都显示 |
-| 2 | 排序按后端 `createdAt`，不是字母序（fixture 故意让创建序与字母序相反） |
-| 3 | dormant 会话也列出（不因休眠而隐藏） |
-| 4 | 列表读取不 spawn Runtime |
-| 5 | 提供「新建并行会话」入口 |
-| 6 | dormant 行点击不发 focus、不 spawn |
-| 7 | live 会话显示就绪态 |
-| 8 | 点击只发 focus，且 owner 九个字段齐全 |
-| 9 | 点击不改变排序 |
-| 10 | 点击不发 prompt / abort / start |
-| 11 | focused 行只有一个 |
-| 12 | focus 换到 B 之后仍只有一个 focused |
-| 13 | 后台完成给出 attention 提示 |
-| 14 | attention 不抢 focus |
-| 15 | 点击该会话后 attention 清除 |
-| 16–17 | 运行中 / 错误 的状态文案 |
-| 18 | 非 Git 项目不显示并行会话块 |
-| 19–20 | 点「新建并行会话」打开对话框；给出可编辑的分支名默认值 |
-| 21–24 | 点「创建并启动」按 **prepare → create → start** 依次发生；prepare 带真实分支名；**start 用 create 返回的 workspace.id + epoch**（不是 UI 猜的）；对话框关闭 |
-| 25 | 点「取消」不创建任何东西 |
-| 26 | Escape 不创建任何东西 |
-| 27 | Enter 与点击行为一致（同样走完 prepare→create→start） |
-| 28–29 | **prepare 失败后不 create、不 start**；**create 失败后不 start** |
-| 30 | start 失败时如实提示「工作区已创建」，不谎报成功 |
+| 单经典会话 | [classic](evidence/p32-4/classic-ui.png) |
+| A/B、attention | [central](evidence/p32-4/e-central-1280x800.png) |
+| A running / B focused | [running-focused](evidence/p32-4/sidebar-a-running-b-focused.png) |
+| error / dormant | [error](evidence/p32-4/A-crashed-B-running.png)、[dormant](evidence/p32-4/sidebar-dormant.png) |
+| A/B Browser | [native A](evidence/p32-4/c-browser-native-a.png)、[native B](evidence/p32-4/c-browser-native-b.png)、[B chrome](evidence/p32-4/c-browser-b-native-owner.png) |
+| Process A/B | [A](evidence/p32-4/c-process-a.png)、[B](evidence/p32-4/c-process-b.png) |
+| Changes A/B | [A](evidence/p32-4/c-changes-a.png)、[B](evidence/p32-4/c-changes-b.png) |
+| 2/2 resource | [two](evidence/p32-4/d-two-regular-slots.png) |
+| third confirmation / active | [confirm](evidence/p32-4/d-third-confirmation.png)、[active](evidence/p32-4/d-third-active.png) |
+| fourth rejection | [fourth](evidence/p32-4/d-fourth-rejected.png) |
+| A/B different model | [reasoning A](evidence/p32-4/e-model-a-reasoning.png)、[text B](evidence/p32-4/e-model-b-text.png) |
+| 1280×800 / 1440×900 / 1920×1080 | [1280](evidence/p32-4/e-central-1280x800.png)、[1440](evidence/p32-4/e-central-1440x900.png)、[1920](evidence/p32-4/e-central-1920x1080.png) |
+| 125% / 150% | [125](evidence/p32-4/e-central-zoom125.png)、[150](evidence/p32-4/e-central-zoom150.png) |
+| Browser 150% bounds | [chrome](evidence/p32-4/e-browser-zoom150.png)、[native](evidence/p32-4/e-browser-native-zoom150.png) |
+| live / dormant search | [live](evidence/p32-4/e-search-live-history-a.png)、[dormant](evidence/p32-4/e-search-dormant-history-b.png) |
 
-> 第 19–30 条是为一个**真实 blocker** 补的：`askBranchName()` 的「创建并启动」原来写成
-> `finish(null)`，任何合法分支名都被当成「取消」，`createParallelConversation()` 直接 return ——
-> 按钮看着能点、实际什么都不发生。「按钮存在」这类断言抓不到它，必须真的点下去并检查动作序列。
-> 修复后已用**回退验证**确认这套断言确实会红（回退 `finish(null)` → 第 21 条立即失败）。
+原始本机日志在 `.shots/p32-4/electron-{c,d,e}-run.log`、electron-report.json、classic-report.json，未跟踪。提交中的 [delivery index](evidence/p32-4/delivery.md) 保留安全摘要和图片清单；harness 可复现完整日志。main capture 不含 native view，原生内容须看配对图片。
 
-另在 `tests/runtime-registry.cjs` 增加 1 条后端契约断言（换焦点时两侧都广播、
-同一时刻只有一条 `focused`）：31 → **32**。
+## 17. Bugs found/fixed
 
-新增 `tests/runtime-conversation.cjs`（**26 条**），覆盖验收清单 B 组 + dormant 生命周期：
+- C：record root 非授权；旧 Browser/Process/Git 结果；权限返回前 checkbox；重复 focus 破坏 native view；重复归属读取。均以实际隔离/拒绝检查修复。
+- D：恢复 focus 早于 native sessionId，A→B→A 旧恢复抢焦点。真实 Electron 暴露后，ready+sessionId 与 selection epoch 修复。
+- E：native null/__error 当成功；新增异常后 ready probe 未 catch。固定错误保留 slot/lease，防旧 generation 污染。
+- E 首轮 **failed visual review**：166/166 功能检查通过，但 150% 右栏覆盖模型/composer，原 overflow 检查漏报。修复 runtime 宽度分配并增加中央/pane/native 边界检查，最终 170/170 与截图复核通过。
+- 独立复核 **P2 failed**：同 inode 等长 native header/body 替换绕过旧校验。确定性 RED→同 fd 读后 header 校验→35/35 GREEN，独立复核确认无剩余 E blocker。
+- harness 的 checkbox、READY 时序、confirm layer、host lookup、zoom 坐标问题经生产行为核实后修 fixture/等待/测量，未删断言绕过产品缺陷。
+- app-check EACCES 初次失败与端口重跑均记录于第 15 节。
 
-| # | 断言 |
+## 18. Known limits
+
+历史只回放文本，不回放 tools/images/thinking，大文件会截断。搜索前部 8 MiB 与历史尾部 4 MiB 不相同；超预算记录的 userIndex 未必在历史片段内，可能无法滚到命中，但不显示别的身份或自动 spawn。
+
+旧 manifest 无文件身份时用 native header/canonical proof；新绑定增加文件证明。本次验证正常追加及可复现替换/改写，未宣称跨进程文件事务锁。
+
+模型信息来自 Pi/shared capability，缺信息保持 unknown，刷新失败需重试。更窄于支持尺寸时仍沿用 P30 overlay；只证明指定尺寸/zoom。原生与主窗口截图分开。未签名本地产物不等于 installer/Release。
+
+## 19. Unverified items
+
+| 项目 | 状态 |
 |---|---|
-| 7 | A/B 草稿分离（A 打字 → 切 B 为空 → 切回 A 仍在） |
-| 8 | A/B 滚动位置分离（按 conversationId 恢复） |
-| 9 | A streaming 时切 B，A 的 delta 后台继续（切回能看到迟到 delta） |
-| 10 | 切到 B 后 A 的新 delta 不进 B 的 DOM |
-| 11 | **旧 generation 的 delta 不进入重启后的 A**（新 generation 的正常进入） |
-| 12 | 迟到的 A Stop 响应不改 B 的草稿与输出 |
-| 13 | 同 approval id 按 owner 隔离：捕获 A 的确认后切 B，应答仍只发给 A；且不清掉 B 自己的审批 |
-| 14 | 切到 dormant 不 spawn、不自动读历史，显示「已关闭」 |
-| 14b | dormant 时发送禁用，且给出「恢复会话」「打开历史」 |
-| — | 「打开历史」只发只读请求、不 spawn；历史视图标注「未被启动，不占运行名额」且禁止发送 |
-| 15 | **只有显式「恢复会话」才发 resume** |
-| 16 | 「关闭会话」带 captured owner；关闭后视图回到已关闭并给出恢复入口 |
-| — | Stop/送任务都用完整 nine-field owner |
+| real Pi / real model 完整任务 | **not executed**；fixture 不能替代 |
+| 30 分钟真实模型并行 stress | **not executed** |
+| POSIX | **not executed / unverified**，Windows 证据不外推 |
+| 当前远端 CI | **unverified**；未查询/等待最终 CI，旧阶段 CI 状态不作为现状 |
+| GitHub Release 列表 | **not executed**；未查询/创建/发布 |
+| installer / 签名 / 正式发布 | **not executed** |
+| Windows symlink 检查 | **environment blocked / skipped**，不计分母 |
 
-### 4.2 回归（本轮实测）
+以上为证据边界，最终是否通过由 ChatGPT 复验决定。
 
-| 套件 | 结果 |
-|---|---|
-| `npm run test:runtime`（P32.3 专项 + 新增 nav/conversation/changes） | **268/268**（registry 32、HTTP 12、store 25、UI 14、nav 31、**conversation 42**、**changes 10**、factory 5、supervisor 24、Browser 45、Process budget 4、SSE 14、真实 Node HTTP Process 10） |
-| `tests/smoke.cjs`（侧栏结构契约） | 1338/1338 通过 |
-| `tests/worktrees-ui.cjs` | 16/16 passed |
-| `tests/ui-ia.cjs`（P30 IA） | 12/12 passed |
-| `tests/sessions.cjs` | 91 passed, 0 failed |
-| `tests/session-search.cjs` | 72/72 通过 |
-| `tests/hotfix-ui.cjs` | 10/10 通过 |
+## 20. Final HEAD
 
-`npm test` 链脚本数 79 → **82**（新增 `tests/runtime-nav.cjs`、`tests/runtime-conversation.cjs`、`tests/runtime-changes.cjs`）。
+最终 HEAD 为包含本记录的分支 tip，以 `git rev-parse HEAD` / `git ls-remote origin refs/heads/codex/p32-multisession-ui` 核对。本文件避免写自身自引用 SHA；交付回复提供实际完整 after HEAD。
 
-### 4.3 真实 Electron（`npm run test:runtime-electron`）
+提交清单/文件边界见 [delivery index](evidence/p32-4/delivery.md)。业务、测试、测试入口和文档/截图按回滚边界拆分，中文提交。只 push 指定分支，不 merge/tag/Release。既有未跟踪目录例外见第 1 节。
 
-**68/68 通过，17 张截图，EXIT 0**（原 36 条 + 新增 32 条 P32.4 断言）。
-使用真实 Electron + production server + 临时真实 Git + fixture Pi。
-
-新增断言（真实窗口 + 真实后端）：
-- A 段：侧栏列出两条并行会话 / 提供「新建并行会话」/ 不显示 runtime 诊断身份与裸 id /
-  点击不改变排序 / 点击既不 spawn 也不 stop / 关闭后仍以「已关闭」留在侧栏；
-  **创建闭环**——从侧栏点「新建并行会话」、输入分支名、点「创建并启动」，
-  确认 Runtime 真的起来（`lifecycle==='ready'`）、新行出现在侧栏并显示该分支名、
-  能用捕获到的 owner 正常关闭。
-- B 段：侧栏点一行 → **中央切到那条会话**（`data-workspace-view==='runtime'`）且经典 chat 被隐藏 /
-  切到 B 草稿为空（A 草稿不串）/ 切回 A 草稿仍在 / **中央 composer 真的把任务发出去**（A 变为 running）/
-  让 B 同时也在跑之后，**中央「停止」只停 A，B 仍在 running** / 离开并行会话后中央回到经典 chat。
-
-新增截图（`.shots/p32-4/`）：`sidebar-a-running-b-focused`、`sidebar-1280x800`、
-`sidebar-1920x1080`、`sidebar-zoom125`、`sidebar-dormant`、`sidebar-created`、
-`sidebar-focus-a`、`sidebar-focus-a-draft`。
-
-## 三·C、本轮修掉的两个 harness 缺陷（都曾伪装成产品故障）
-
-1. **全局类名冲突**：中央视图一开始复用了 modal 的 `.runtime-output` / `.runtime-controls`，
-   而中央的 DOM 在 modal **之前** —— 测试里的 `document.querySelector('.runtime-controls .primary')`
-   命中的是隐藏的中央按钮（rect 0×0），点击落到 modal 遮罩上把 modal 关掉，
-   后续表现为「`.runtime-output` 是 null」。修法：中央视图全部改用 `rtc-` 前缀自己的类名，
-   并把 Electron 测试的 modal 选择器一律限定到 `#modalCard`。
-2. **点击前没有滚动到可见区**：modal 卡片可滚动，元素被滚出卡片时它的 rect 落在卡片之外，
-   点下去命中的是遮罩 —— 同一个「modal 莫名关掉」的现象，而且**偶发**（取决于内容高度）。
-   `click()` 现在先 `scrollIntoView({block:'center'})` 再取坐标，rect 为 0×0 时直接抛明确错误。
-   这一条修完，之前记录的「P32.3 段偶发失败」在本轮多次运行中不再出现。
-
-**截图发现并修掉的视觉缺陷**：`新建并行会话` 原来直接用 `<button>` 套 `.pj-sess`，
-露出浏览器默认按钮底色（深色主题下是一块白）。已补样式（透明底 + hover 用 `--hover`），
-重跑后截图正常。这类问题 jsdom 断言抓不到 —— 正是仓库约定「改了 UI 必须给真实截图」的理由。
-
-**闭环测试暴露的一处时序陷阱（测试侧，不是产品缺陷）**：第一次写闭环时在
-`lifecycle === 'starting'` 就捕获 owner，随后 `close` 返回 `stale_runtime` ——
-registry 在 child 就绪时会轮换 `runtimeGeneration`（见 `runtime-emit`），
-starting 阶段的 owner 自然失效。改为等 `lifecycle === 'ready'` 再取 owner 即通过。
-这条断言本身也因此更强：它证明的是「Runtime 真的起来了」，而不只是「注册表里多了一条」。
-
-### 4.4 构建与打包
-
-见第九节。
-
-## 五、明确区分证据类型
-
-| 类型 | 本轮有哪些 |
-|---|---|
-| **fixture（离线确定性）** | `tests/runtime-nav.cjs` 全部 31 条 + `tests/runtime-conversation.cjs` 全部 42 条；`runtime-registry.cjs` 新增 1 条 |
-| **真实 Electron** | `runtime-electron.cjs` 全部 68 条（含 32 条 P32.4），真实窗口/真实后端/真实 Git |
-| **真实 Pi** | 本轮**没有**；P32.4-A/B 不涉及模型调用（`runtime-live` 属 P32.3 证据） |
-| **未执行** | C–E 的全部验收项（第 25–43 条）；`build:app` 与 `app-check` 见第九节 |
-
-## 六、截图
-
-`.shots/p32-4/`：
-
-1. `sidebar-a-running-b-focused.png` — A focused（高亮）、B 带 attention 小点，两行并行会话 + 「新建并行会话」
-2. `sidebar-1280x800.png`
-3. `sidebar-1920x1080.png`
-4. `sidebar-zoom125.png`
-5. `sidebar-dormant.png` — 关闭 Runtime 后会话仍在侧栏、显示「已关闭」
-6. `sidebar-created.png` — 从侧栏「新建并行会话」创建出的会话（B 段闭环）
-7. `sidebar-focus-a.png` / `sidebar-focus-a-draft.png` — 中央切到 A、草稿隔离
-8. `sidebar-b-operable-while-a-pending.png` — A 有动作在飞时切到 B，B 仍可操作
-
-任务书列的 11 张里，`单会话普通状态` / `Browser scoped pane` 由 P32.3 的 `.shots/p32-3/` 覆盖；
-`Runtime limit confirmation`（D 未实现）、`A error`（属 C/D 的语义）本轮**未产出**。
-
-## 七、为什么停在 B（未做 C–E）
-
-任务书自己写明「P32.4-A … 验收后再继续」，并规定「如果过程中发现某一步实际需要大改 P32.3
-架构，停止并报告，不要偷偷扩大任务」。A 与 B 各自都做完整并单独验证（实现 + 确定性测试 +
-真实 Electron + 截图 + 重建产物）之后停在这里。
-
-C 需要把右栏（Browser/Process/Changes）的挂载从「全局 currentCwd」改成「focused owner」，
-D 需要新增资源配额 UX 与第三次启动确认，E 是模型选择与无障碍收尾 —— 三者都可以独立验收，
-且都不需要改 P32.3 Runtime 架构。
-
-因此本轮**不写**「P32.4 完成」，明确停在 B。C–E 的计划见第八节。
-
-## 八、C–E 计划（未实施）
-
-- **C**：Changes 已完成（见第三·D 节）。**剩下的**是右栏 Browser/Process 绑定 focused owner：
-  把 `right-pane` 的挂载从全局 `currentCwd` 改为 focused owner，并让切 A→B 时 scope 跟着切换
-  （验收项 25 / 26 / 27 / 29）。
-- **D**：资源 UX（2/2 文案、第三个 Runtime 的显式确认、第四个由后端 `runtime_limit` 拒绝、
-  dormant/close/resume 入口）。
-- **E**：per-runtime 模型选择、thinking capability、search/history 接入、键盘/焦点/无障碍、视觉收尾。
-
-## 九、构建与打包
-
-本轮修改了 `public/`（新增 `runtime-state.js`、`runtime-nav.js`，改 `sessions.js`、
-`runtime-sessions.js`、`styles.css`），按仓库约定**重建了产物**，未引用上一轮结果：
-
-| 检查 | 实际结果 |
-|---|---|
-| `npm run build:app -- --rebuild`（A+B 之后重跑） | **EXIT 0**；`dist-app/Pi GUI-win32-x64`，入口 `Pi GUI.exe` 234.9 MB，整包 **327.7 MB** |
-| 打包后端 `npm run test:app`（app-check） | **26/26 通过**，EXIT 0 |
-
-## 十、已知限制
-
-1. 侧栏并行会话的标题用工作区分支名（新会话还没有可读标题）；会话标题的接入属 E。
-2. 中央视图已经可用（B），但**per-runtime 模型选择、搜索/历史接入、键盘/无障碍**属 E，尚未做。
-3. 「新建并行会话」用 `openModal` 要分支名，默认值 `pi-gui/p32/<8 hex>`；完整的工作区
-   预检提示（源提交、dirty 提示）仍只在「工作区管理」里展示。
-4. 侧栏不显示经典会话与并行会话的先后语义说明，靠视觉分组；文案属 E。
-5. 未做 POSIX 真机验证。
-
-## 十一、本轮失败样本与修复
-
-4. **B 的异步串线（复验发现，已修）**： 原来用模块级的  归属结果，
-   / 也是跨会话的单值。后果有两个真实缺陷：① 历史请求在飞时切走，
-   A 的历史会画到 B 上；② A 的 Stop pending 会让 **B 的控件被禁用**，且 A 的迟到响应
-   会写进 B 的提示条。修法：按 conversationId 保存 ，
-   动作在开始时捕获 target，响应只写 target 那一格并只在「当前看的还是 target」时重画；
-   历史请求另记**代次**，同一会话连点两次时先发的后回也不覆盖。
-   新增 16 条确定性断言（含可控「门」构造乱序返回），Electron 补一条「A 有动作在飞时
-   切到 B，B 仍可操作」。
-
-1. **`focus` 只广播新焦点** → 前端按 `item.focused` 画会同时出现两行「当前」。
-   修在事实源（`server/runtime-registry.js` 换焦点时两侧都广播），并加后端契约断言。
-   不是在前端造第二套状态。
-2. **「新建并行会话」按钮露出浏览器默认底色**（深色主题下是一块白）—— jsdom 断言抓不到，
-   由真实截图发现。补 CSS 后重跑截图正常。
-3. **测试自身的一处笔误**：先用 `conversationId`（随机 UUID）断言「两侧都广播」，
-   应为 `workspaceId`。改为按 `workspaceId` 断言后通过。
-4. **B 的异步串线（复验发现，已修）**：`loadHistory()` 原来用模块级的 `id` 归属结果，
-   `busy` / `notice` 也是跨会话的单值。后果是两个真实缺陷：① 历史请求在飞时切走会话，
-   A 的历史会画到 B 上；② A 的 Stop 还在 pending 时切到 B，**B 的控件会被 A 的 busy 禁用**，
-   且 A 的迟到响应会写进 B 的提示条。
-   修法：按 conversationId 保存 `pending / notice / history / pendingHistory`；动作在**开始时
-   捕获 target**，响应只写 target 那一格，并且只在「当前看的还是 target」时才重画 DOM；
-   历史请求另记**代次**，同一会话连点两次时先发的后回也不能覆盖。
-   新增 16 条确定性断言（用可控的「门」精确构造乱序返回与迟到响应），
-   Electron 补一条「A 有动作在飞时切到 B，B 仍可操作」。
+P32.4 implementation complete, waiting for ChatGPT acceptance.
