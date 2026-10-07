@@ -45,6 +45,7 @@ const { JSDOM } = require('jsdom');
     { conversationId: 'A', createdAt: '2026-01-01T00:00:00.000Z', workspace: { branch: 'branch-A', projectId: 'project' }, owner: owner('A'), lifecycle: 'ready', activity: 'running', attention: false, error: null, stop: null },
     { conversationId: 'B', createdAt: '2026-01-02T00:00:00.000Z', workspace: { branch: 'branch-B', projectId: 'project' }, owner: owner('B'), lifecycle: 'ready', activity: 'running', attention: false, error: null, stop: null },
     { conversationId: 'D', createdAt: '2026-01-03T00:00:00.000Z', workspace: { branch: 'branch-D', projectId: 'project' }, owner: null, lifecycle: 'dormant', activity: 'idle', attention: false, error: null, stop: null },
+    { conversationId: 'E', createdAt: '2026-01-04T00:00:00.000Z', workspace: { branch: 'branch-E', projectId: 'project' }, owner: null, lifecycle: 'dormant', activity: 'idle', attention: false, error: null, stop: null },
   ] });
 
   frame('A', 1, 'A-output'); frame('B', 1, 'B-output');
@@ -135,6 +136,91 @@ const { JSDOM } = require('jsdom');
   frame('A', 4, '-fresh-new-gen', 'two');
   ok('新 generation 的 delta 正常进入', output().textContent.includes('-fresh-new-gen'));
 
+  /* ---------- 异步串线：历史与动作都必须按 captured target 归属 ----------
+   *
+   * 这一节盯住两个真实缺陷（都曾被上一个版本写出来）：
+   *   1) loadHistory() 用模块级的 id 归属结果 —— 请求在飞时切走，A 的历史会画到 B 上；
+   *   2) busy/notice 是模块级单值 —— A 的 Stop pending 会让 B 的控件被禁用，
+   *      而且 A 的迟到响应会写进 B 的提示条。
+   * 用「可控的门」把响应压在手里，精确构造乱序返回。 */
   view.dispose();
+  const calls = [];
+  const gates = new Map();
+  const gate = label => { let g = gates.get(label); if (!g) { g = {}; g.promise = new Promise(r => { g.open = r; }); gates.set(label, g); } return g; };
+  global.fetch = async (url, opts = {}) => ({ json: async () => {
+    const u = String(url);
+    if (!opts.body) {
+      const m = /conversationId=([^&]+)/.exec(u);
+      if (m) { const key = decodeURIComponent(m[1]); calls.push({ history: key }); return gate('history:' + key).promise; }
+      return { ok: true, backendInstance: 'backend', items: [] };
+    }
+    const body = JSON.parse(opts.body); calls.push({ body });
+    if (body.command?.type === 'abort') return gate('abort:' + body.owner.conversationId).promise;
+    return { ok: true };
+  } });
+
+  const view2 = createRuntimeConversation({ host });
+  const out2 = () => host.querySelector('.rtc-output');
+  const input2 = () => host.querySelector('textarea');
+  const btn2 = text => [...host.querySelectorAll('button')].find(b => b.textContent === text);
+  const notice2 = () => host.querySelector('.rtc-notice').textContent;
+  const state2 = () => host.querySelector('.rtc-state').textContent;
+
+  /* 1–4：dormant D 的历史延迟返回，中途切到 dormant E */
+  view2.show('D'); btn2('打开历史').click(); await tick();
+  ok('dormant D 发出历史请求', calls.some(c => c.history === 'D'));
+  view2.show('E'); await tick();
+  gate('history:D').open({ ok: true, messages: [{ role: 'user', text: 'D-历史' }], truncated: false });
+  await tick(4);
+  ok('D 的历史返回后，当前会话 E 不显示 D 的历史', !out2().textContent.includes('D-历史'));
+  ok('D 的历史返回不改 E 的状态行', state2().includes('已关闭'));
+  ok('D 的历史返回不改 E 的 notice', notice2() === '');
+  view2.show('D'); await tick();
+  ok('切回 D 能看到自己的历史', out2().textContent.includes('D-历史'));
+
+  /* 5：D/E 同时各发一次历史请求，**乱序**返回也不能串 */
+  view2.dispose();
+  const view3 = createRuntimeConversation({ host });
+  const out3 = () => host.querySelector('.rtc-output');
+  const btn3 = text => [...host.querySelectorAll('button')].find(b => b.textContent === text);
+  view3.show('D'); btn3('打开历史').click(); await tick();
+  view3.show('E'); btn3('打开历史').click(); await tick();
+  gate('history:E').open({ ok: true, messages: [{ role: 'user', text: 'E-历史' }], truncated: false });
+  await tick();
+  gate('history:D').open({ ok: true, messages: [{ role: 'user', text: 'D-历史' }], truncated: false });
+  await tick(4);
+  ok('后回的 D 历史不覆盖当前 E 的历史', out3().textContent.includes('E-历史') && !out3().textContent.includes('D-历史'));
+  view3.show('D'); await tick();
+  ok('切到 D 看到的是 D 自己的历史', out3().textContent.includes('D-历史'));
+
+  /* 6–7：Stop A pending 时切 B —— B 必须完全可操作，且不受 A 的迟到响应影响 */
+  /* 前面那一节把 A 关成 dormant 了；这里把四个会话都重设成已知状态（seed 直接覆盖 item），
+   * 让这一节的起点确定，不再受前面用例的副作用影响。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [
+    { conversationId: 'A', createdAt: '2026-01-01T00:00:00.000Z', workspace: { branch: 'branch-A', projectId: 'project' }, owner: owner('A'), lifecycle: 'ready', activity: 'running', attention: false, error: null, stop: null },
+    { conversationId: 'B', createdAt: '2026-01-02T00:00:00.000Z', workspace: { branch: 'branch-B', projectId: 'project' }, owner: owner('B'), lifecycle: 'ready', activity: 'running', attention: false, error: null, stop: null },
+  ] });
+  await tick();
+  view3.show('A');
+  btn3('停止').click(); await tick(2);
+  ok('A 的 Stop 已发出且仍未完成', calls.some(c => c.body?.command?.type === 'abort' && c.body.owner.conversationId === 'A'));
+  view3.show('B'); await tick();
+  ok('A pending 时切到 B，B 的控件不被 A 的 busy 禁用', !btn3('停止').disabled && !btn3('重启').disabled && !btn3('关闭会话').disabled);
+  input2().value = 'draft-B3'; input2().dispatchEvent(new dom.window.Event('input'));
+  const bNotice = notice2();
+  const bBefore = { notice: bNotice, draft: 'draft-B3', output: out3().textContent, state: state2() };
+  gate('abort:A').open({ ok: false, error: '会话操作未完成', code: 'runtime_not_ready' });
+  await tick(4);
+  ok('A 的 Stop 失败响应不改 B 的 notice', notice2() === bBefore.notice);
+  ok('A 的 Stop 失败响应不改 B 的 state', state2() === bBefore.state);
+  ok('A 的 Stop 失败响应不改 B 的 output', out3().textContent === bBefore.output);
+  ok('A 的 Stop 失败响应不改 B 的草稿', input2().value === bBefore.draft);
+  ok('A 的 Stop 失败响应不禁用 B 的控件', !btn3('停止').disabled);
+  view3.show('A'); await tick();
+  ok('A 的迟到失败只记在 A 自己身上', notice2().includes('操作未完成') || notice2().includes('运行'));
+  view3.show('B'); await tick();
+  ok('切回 B 后 B 的 notice 仍为空（A 的错误不跟过来）', notice2() === bNotice && bNotice === '');
+
+  view3.dispose();
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

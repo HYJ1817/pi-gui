@@ -186,10 +186,33 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     await until(async () => (await activityOf(idA)) === 'idle', 60000);
     check(true, 'P32.4-B centre Stop targeted the focused conversation (A)');
     check((await activityOf(idB)) === 'running', 'P32.4-B Stop on A leaves B running');
+    /* A 有动作在飞时切到 B：B 的控件必须按 **B 自己**的状态可操作。
+     * 用「重启 A」当那个长时间 pending 的动作（要重 spawn child），比 Stop 稳。 */
+    await api({ action: 'command', owner: await ownerOf(idB), command: { type: 'prompt', message: 'B_AGAIN' } });
+    await until(async () => (await activityOf(idB)) === 'running', 30000);
+    await clickRow(idA);
+    await until(async () => (await centerBranch()).includes('runtime-A'), 20000);
+    await read(`[...document.querySelectorAll('#runtimeView button')].find(b=>b.textContent==='重启').click()`);
+    await clickRow(idB);
+    await until(async () => (await centerBranch()).includes('runtime-B'), 20000);
+    check(!(await read(`[...document.querySelectorAll('#runtimeView button')].find(b=>b.textContent==='停止').disabled`)),
+      'P32.4-B pending on A does not disable B controls after switching');
+    check(await read(`document.querySelector('#runtimeView .rtc-notice').textContent === ''`), 'P32.4-B B shows no notice borrowed from A');
+    await shot('sidebar-b-operable-while-a-pending', OUT4);
+
     /* 回到经典会话时中央必须换回 chat，否则看起来像「点了没反应」。 */
     await read(`import('/ui/workspace-surface.js').then(m=>m.showChat())`);
     check(await read(`document.querySelector('#workspace').dataset.workspaceView === 'chat' && !document.querySelector('#runtimeView').offsetParent`), 'P32.4-B leaving the parallel conversation restores the classic chat centre');
-    await api({ action: 'close', owner: resumed }); await api({ action: 'close', owner: owners[1] }); state = await api(); check(state.liveCount === 0 && state.items.length === 2, 'close cleanup retains lazy records');
+    /* 用**当前** owner 关闭 A/B：P32.4-B 段重启过 A，identity 已经换代，
+     * 拿旧的 resumed/owners[1] 去关只会得到 stale_runtime。关的还是同两条会话。
+     * 先等 A 的重启落定（ready），否则 close 会和 restart 撞在一起。 */
+    await until(async () => { const s = await api(); const a = s.items.find(i => i.owner?.conversationId === owners[0].conversationId); return a?.lifecycle === 'ready'; }, 60000).catch(() => {});
+    state = await api();
+    const currentOwnerOf = id => state.items.find(i => i.owner?.conversationId === id)?.owner;
+    await api({ action: 'close', owner: currentOwnerOf(owners[0].conversationId) });
+    await api({ action: 'close', owner: currentOwnerOf(owners[1].conversationId) });
+    state = await api();
+    check(state.liveCount === 0 && state.items.length === 2, `close cleanup retains lazy records (live=${state.liveCount}, items=${state.items.length})`);
     /* 关闭 Runtime 之后：会话仍在侧栏、显示为已关闭，且**没有**任何 child 被启动。 */
     await read(`import('/ui/modal.js').then(m=>m.closeModal())`); await sleep(200);
     await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
