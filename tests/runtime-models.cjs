@@ -93,7 +93,7 @@ const assert = require('node:assert/strict');
   // Real RPC child fixtures prove native error data is not wrapped as a
   // successful model read, and the registry admits the native levels read.
   const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p32-runtime-models-'));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'p32-runtime-models-')));
   const packageDir = path.join(dir, 'node_modules/@earendil-works/pi-coding-agent'); fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '1.0.4', bin: { pi: 'cli.cjs' } }));
   const cli = path.join(packageDir, 'cli.cjs');
@@ -105,13 +105,19 @@ const assert = require('node:assert/strict');
   }
   const { createRuntimeRegistry } = await import('../server/runtime-registry.js');
   const cwd = path.join(dir, 'workspace'); fs.mkdirSync(cwd);
-  let adapter, registry; const emitted = [];
+  let adapter, registry, fixtureFailure; const emitted = [];
   try {
     adapter = await createSessionRuntime({ piBin: cli, env: { ...process.env, PI_NO_CONTINUE: '1' }, dataDir: path.join(dir, 'adapter-data'), context: { cwd, isCurrent: () => true }, emit: event => emitted.push(event) });
     let failure; try { await adapter.request({ type: 'get_state' }); } catch (e) { failure = e; }
     ok('unstarted native read is unconfirmed rather than fake success', failure?.code === 'pi_request_unconfirmed');
     adapter.start();
-    const deadline = Date.now() + 20000; while (adapter.getState().state !== 'ready') { if (Date.now() > deadline) throw Error('native_model_fixture_ready_timeout'); await new Promise(r => setTimeout(r, 20)); }
+    const deadline = Date.now() + 20000; while (adapter.getState().state !== 'ready') {
+      if (Date.now() > deadline) throw Error('native_model_fixture_ready_timeout', { cause: {
+        state: adapter.getState().state,
+        events: emitted.map(event => ({ type: event.type, state: event.state, code: event.code })),
+      } });
+      await new Promise(r => setTimeout(r, 20));
+    }
     ok('real native child state read preserves model shape', (await adapter.request({ type: 'get_state' })).model.id === 'native');
     failure = null; try { await adapter.request({ type: 'get_available_thinking_levels' }); } catch (e) { failure = e; }
     ok('native private __error is rejected before success projection', failure?.code === 'pi_request_failed' && !failure.message.includes('secret'));
@@ -179,6 +185,19 @@ const assert = require('node:assert/strict');
       rejectRetired(Error('secret retired identity failure')); for (let n = 0; n < 3; n++) await new Promise(r => setImmediate(r));
       ok('retired child identity rejection cannot resurrect error or slot', unhandled.length === 0 && registry.snapshot().totalCount === 0 && registry.snapshot().items[0].lifecycle === 'dormant' && registry.snapshot().items[0].error === null);
     } finally { process.off('unhandledRejection', onUnhandled); }
-  } finally { await Promise.allSettled([adapter?.dispose(), registry?.dispose()]); fs.rmSync(dir, { recursive: true, force: true }); }
+  } catch (error) { fixtureFailure = error; throw error; }
+  finally {
+    const cleanup = await Promise.allSettled([adapter?.dispose(), registry?.dispose()]);
+    if (cleanup.some(result => result.status === 'rejected')) {
+      console.error('native_model_fixture_cleanup_unconfirmed');
+      if (!fixtureFailure) fixtureFailure = Error('native_model_fixture_cleanup_unconfirmed');
+    }
+    try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); }
+    catch (error) {
+      if (!fixtureFailure) fixtureFailure = error;
+      else console.error('native_model_fixture_remove_failed:' + error.code);
+    }
+    if (fixtureFailure) throw fixtureFailure;
+  }
   console.log(`Runtime models: ${checks}/${checks}`);
-})().catch(e => { console.error(e); process.exitCode = 1; });
+})().catch(e => { console.error(e); process.exit(1); });
