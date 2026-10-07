@@ -46,11 +46,12 @@ function el(tag, cls, text) {
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0 };
 
-export function createRuntimeConversation({ host, onNotice = () => {}, openBrowser = null, openProcesses = null }) {
+export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, models = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
   const historyCache = new Map();     // conversationId -> { messages, truncated }
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
-  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null;
+  const modelOwners = new Map();
+  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null;
 
   function viewOf(conversationId) {
     let view = views.get(conversationId);
@@ -64,7 +65,15 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   host.append(root);
   /* store 一变就重画。本模块只**订阅**、不自己 apply —— 各视图各自 apply 会把
    * eventSequence 游标吃两遍，第二个视图就再也看不到那一帧。 */
-  const unsubscribe = onRuntimeChange(() => { if (alive) { focusResumed(); draw(); } });
+  const unsubscribe = onRuntimeChange(() => { if (alive) { focusResumed(); ensureModels(); draw(); } });
+  function ensureModels() {
+    const record = store.get(id);
+    if (!active || !models || record?.item.lifecycle !== 'ready' || !record.owner?.sessionId) return;
+    const key = JSON.stringify(record.owner);
+    if (modelOwners.get(id) === key) return;
+    modelOwners.set(id, key);
+    void models.refresh(id);
+  }
   function focusResumed() {
     const view = current(), record = store.get(id);
     if (!active || !view.focusOnReady || !record?.owner || record.item.lifecycle !== 'ready'
@@ -78,10 +87,23 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
 
   const head = el('div', 'rtc-head');
   const title = el('div', 'rtc-title');
+  title.setAttribute('role', 'heading'); title.setAttribute('aria-level', '2');
   const state = el('div', 'rtc-state');
+  state.setAttribute('role', 'status');
   const resources = el('div', 'runtime-resource-count'); resources.setAttribute('role', 'status');
   const controls = el('div', 'rtc-controls');
   head.append(title, state, resources, controls); root.append(head);
+  const modelRow = el('div', 'rtc-models'); modelRow.hidden = !models;
+  const modelLabel = el('label', 'rtc-model-field', '模型');
+  const modelSelect = el('select'); modelSelect.setAttribute('aria-label', '当前会话模型'); modelLabel.append(modelSelect);
+  const thinkingLabel = el('label', 'rtc-model-field', '推理强度');
+  const thinkingSelect = el('select'); thinkingSelect.setAttribute('aria-label', '当前会话推理强度'); thinkingLabel.append(thinkingSelect);
+  const modelRefresh = el('button', 'btn', '刷新模型'); modelRefresh.type = 'button';
+  const modelNotice = el('span', 'rtc-model-notice'); modelNotice.setAttribute('role', 'status');
+  modelRow.append(modelLabel, thinkingLabel, modelRefresh, modelNotice); root.append(modelRow);
+  modelSelect.onchange = () => { const target = id, choice = modelSelect.value; draw(); if (target && choice) void models?.setModel(target, JSON.parse(choice)); };
+  thinkingSelect.onchange = () => { const target = id, level = thinkingSelect.value; draw(); if (target && level) void models?.setThinking(target, level); };
+  modelRefresh.onclick = () => { if (id) void models?.refresh(id); };
   const notice = el('p', 'rtc-notice'); notice.setAttribute('role', 'status'); root.append(notice);
   /* 类名**故意与 modal 的 `.runtime-output` 不同**：官方 modal 用的是全局选择器
    * （测试也这么取），中央再挂一个同名元素会让 `document.querySelector('.runtime-output')`
@@ -91,6 +113,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   const input = el('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前会话的任务'); root.append(input);
   input.oninput = () => { const r = store.get(id); if (r && !current().history) r.draft = input.value; };
+  input.onkeydown = event => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault(); if (!send.disabled) send.click();
+    }
+  };
 
   const send = el('button', 'btn primary', '发送'); send.type = 'button';
   const stop = el('button', 'btn', '停止'); stop.type = 'button';
@@ -98,7 +125,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   const end = el('button', 'btn', '关闭会话'); end.type = 'button';
   const resume = el('button', 'btn', '恢复会话'); resume.type = 'button';
   const historyBtn = el('button', 'btn', '打开历史'); historyBtn.type = 'button';
-  controls.append(send, stop, restart, end, resume, historyBtn);
+  const liveBtn = el('button', 'btn', '返回实时会话'); liveBtn.type = 'button';
+  liveBtn.onclick = () => { if (id) { current().history = null; draw(); } };
+  controls.append(send, stop, restart, end, resume, historyBtn, liveBtn);
   const browserBtn = el('button', 'btn', 'Browser'), processBtn = el('button', 'btn', '开发进程');
   browserBtn.type = processBtn.type = 'button';
   browserBtn.hidden = !openBrowser || !window.piGuiDesktop?.runtimeBrowser;
@@ -136,6 +165,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   /** 发一个动作。target 在**开始时捕获**，响应只写 target 自己的视图态。 */
   async function action(target, payload, after) {
     const view = viewOf(target);
+    const selection = focusEpoch;
     if (view.pending || !alive) return null;
     view.pending = true; if (id === target) draw();
     try {
@@ -145,6 +175,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
        * 也不改当前会话的 notice —— 切回去才看得到它自己的结果。 */
       view.notice = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
       after?.(result);
+      if (payload.action === 'restart' && result.ok && active && id === target && selection === focusEpoch) {
+        view.focusOnReady = result.owner?.runtimeId || null; focusResumed();
+      }
       if (payload.action === 'close' || payload.action === 'restart') await refreshRuntimeResources();
       return result;
     } finally {
@@ -157,23 +190,28 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   function owned(name, extra = {}) { const target = id, r = store.get(target); if (target && r?.owner) void action(target, { action: name, owner: { ...r.owner }, ...extra }); }
 
   /** 只读历史：不 spawn，不占 Runtime slot。请求归属、缓存键、结果归属都用 captured target。 */
-  async function loadHistory() {
+  async function loadHistory(expectedLocator = null, match = null) {
     const target = id;
     if (!target) return;
     const view = viewOf(target);
     if (view.pendingHistory) return;
-    if (historyCache.has(target)) { view.history = historyCache.get(target); if (id === target) draw(); return; }
+    if (expectedLocator) { view.history = null; historyCache.delete(target); }
+    if (!expectedLocator && historyCache.has(target)) { view.history = historyCache.get(target); if (id === target) draw(); return; }
     const token = ++view.historyToken;
     view.pendingHistory = true; if (id === target) draw();
     try {
       const result = await fetchRuntimeHistory(target);
       /* 代次对不上（同一会话又发了一次）或已销毁 → 丢弃这个响应。 */
       if (!alive || view.historyToken !== token) return;
+      if (expectedLocator && (!matchesLocator(store.get(target)?.item, expectedLocator)
+        || !result.locator || Object.keys(expectedLocator).some(key => result.locator[key] !== expectedLocator[key]))) {
+        view.history = null; historyCache.delete(target); view.notice = '会话历史身份已变化，请重新搜索。'; return;
+      }
       if (result?.ok === false) {
         view.notice = result.code === 'history_unavailable' ? '这条会话没有可读的历史（原生记录已失效），只能新建会话。' : '读取历史失败。';
         return;
       }
-      const payload = { messages: result.messages || [], truncated: result.truncated === true };
+      const payload = { messages: result.messages || [], truncated: result.truncated === true, match };
       historyCache.set(target, payload);
       /* 只写 **target** 的历史：中央已经切到别的会话时，B 的 DOM 一个字都不动。 */
       view.history = payload;
@@ -194,22 +232,65 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   }
 
   function saveScroll() { if (id && !current().history) scrollTops.set(id, output.scrollTop); }
+  function matchesLocator(item, locator) {
+    return item?.conversationId === locator.conversationId && item.nativeSessionId === locator.nativeSessionId
+      && ['projectId', 'workspaceId', 'workspaceEpoch'].every(key => item.workspace?.[key] === locator[key]);
+  }
+  function drawModels(record, view) {
+    if (!models) return;
+    const data = models.get(id), identity = model => JSON.stringify({ providerId: model.providerId || model.provider, modelId: model.modelId || model.id });
+    const selected = data?.model ? identity(data.model) : '';
+    const options = [...(data?.models || [])];
+    if (data?.model && !options.some(model => identity(model) === selected)) options.unshift(data.model);
+    const signature = JSON.stringify(options);
+    if (modelSelect.dataset.options !== signature) {
+      modelSelect.dataset.options = signature; modelSelect.replaceChildren();
+      const empty = el('option', '', '模型暂不可用'); empty.value = ''; modelSelect.append(empty);
+      for (const model of options) { const option = el('option', '', `${model.name || model.id || model.modelId} · ${model.providerId || model.provider}`); option.value = identity(model); modelSelect.append(option); }
+    }
+    modelSelect.value = selected;
+    const levels = data?.reasoning === true ? data.levels || [] : [];
+    if (thinkingSelect.dataset.options !== JSON.stringify(levels)) {
+      thinkingSelect.dataset.options = JSON.stringify(levels); thinkingSelect.replaceChildren();
+      const empty = el('option', '', '暂不可用'); empty.value = ''; thinkingSelect.append(empty);
+      for (const level of levels) { const option = el('option', '', level); option.value = level; thinkingSelect.append(option); }
+    }
+    thinkingSelect.value = data?.thinkingLevel || '';
+    const disabled = !record?.owner || record.item.lifecycle !== 'ready' || view.pending || data?.pending || Boolean(view.history);
+    modelSelect.disabled = disabled || !options.length;
+    thinkingSelect.disabled = disabled || data?.reasoning !== true || !levels.length;
+    modelRefresh.disabled = disabled;
+    modelNotice.textContent = data?.notice || (data?.pending ? '等待 Pi 确认…' : data?.reasoning === false ? '此模型不支持推理' : data?.reasoning !== true ? '推理能力未知' : !levels.length ? '推理强度暂不可用' : '');
+  }
 
   function draw() {
     if (!host) return;
     const r = store.get(id), view = current();
     root.hidden = !id;
     if (!id) return;
-    title.textContent = r?.item?.workspace?.branch || '并行会话';
+    title.textContent = r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
+    title.title = title.textContent;
+    if (active) onTitle(title.textContent);
+    drawModels(r, view);
     resources.textContent = resourceText();
     notice.textContent = view.notice;
-    if (view.history) state.textContent = `只读历史 · ${view.history.messages.length} 条${view.history.truncated ? '（仅显示最近部分）' : ''} · 未被启动，不占运行名额`;
+    if (view.history) state.textContent = `只读历史 · ${view.history.messages.length} 条${view.history.truncated ? '（仅显示最近部分）' : ''} · ${r?.owner ? '查看记录不增加运行名额' : '未被启动，不占运行名额'}`;
     else if (view.pendingHistory) state.textContent = '读取历史…';
     else state.textContent = statusLine(r?.item) || (r ? '' : '这条会话还没有记录');
 
     if (view.history) {
-      output.textContent = view.history.messages.map(m => `${m.role === 'user' ? '我' : '助手'}：${m.text}`).join('\n\n') || '（没有可显示的正文）';
+      if (renderedHistory !== view.history || renderedId !== id) {
+        output.replaceChildren(); let userIndex = 0;
+        for (const message of view.history.messages) {
+          const row = el('span', '', `${message.role === 'user' ? '我' : '助手'}：${message.text}\n\n`);
+          if (message.role === 'user') row.dataset.historyUserIndex = String(userIndex++);
+          output.append(row);
+        }
+        if (!view.history.messages.length) output.textContent = '（没有可显示的正文）';
+        renderedHistory = view.history; delete output.dataset.historyMatch;
+      }
     } else {
+      renderedHistory = null;
       output.textContent = r?.text || '等待任务';
     }
     tools.textContent = r && !view.history ? r.tools.map(t => `${t.name} · ${t.state}`).join(' / ') : '';
@@ -226,6 +307,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     restart.disabled = end.disabled = busy || !live;
     resume.disabled = busy || live;
     historyBtn.disabled = busy || live || view.pendingHistory;
+    liveBtn.hidden = !live || !view.history; liveBtn.disabled = busy;
 
     const key = JSON.stringify([id, r?.owner, r?.approvals]);
     if (key !== approvalKey) {
@@ -245,8 +327,16 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
       }
     }
     /* 恢复滚动位置（按 conversationId 隔离）：切回 A 时不该停在 B 的位置。 */
-    const top = scrollTops.get(id);
-    output.scrollTop = top === undefined ? output.scrollHeight : top;
+    if (view.history) {
+      const index = view.history.match?.userIndex;
+      if (active && Number.isInteger(index) && index >= 0 && output.dataset.historyMatch !== String(index)) {
+        output.querySelector(`[data-history-user-index="${index}"]`)?.scrollIntoView?.({ block: 'center' });
+        output.dataset.historyMatch = String(index);
+      }
+    } else {
+      const top = scrollTops.get(id);
+      output.scrollTop = top === undefined ? output.scrollHeight : top;
+    }
   }
 
   return {
@@ -256,14 +346,21 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     show(next) {
       focusEpoch++;
       active = true;
-      if (next === id) { draw(); return; }
+      if (next === id) { ensureModels(); draw(); return; }
       saveScroll();
       if (id) viewOf(id).focusOnReady = null;
       id = next || null;
+      ensureModels();
       approvalKey = ''; renderedId = null;
       draw();
     },
     draw,
+    async openHistory(locator, match = null) {
+      if (!matchesLocator(store.get(locator?.conversationId)?.item, locator)) return false;
+      this.show(locator.conversationId);
+      await loadHistory(locator, match);
+      return alive && id === locator.conversationId && Boolean(current().history);
+    },
     /** 离开中央视图时记下滚动位置。 */
     leave() { active = false; focusEpoch++; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
     dispose() { alive = false; unsubscribe(); root.remove(); },

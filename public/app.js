@@ -18,7 +18,7 @@ import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
 import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
-import { sendCommand } from './api.js';
+import { sendCommand, runtimeSessionAction } from './api.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
@@ -31,7 +31,7 @@ import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast, withNotificationSource } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
-import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText } from './shell.js';
+import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText, setRuntimeTitle } from './shell.js';
 import { createBridgeRecovery } from './bridge-recovery.js';
 import { samePath } from './util.js';
 import { autoGrow, initComposerLayout, updateSendState } from './composer.js';
@@ -73,7 +73,7 @@ import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
@@ -84,6 +84,8 @@ import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler } from './runtime-nav.js';
 import { refreshRuntimeResources } from './runtime-resources.js';
+import { createRuntimeModels } from './runtime-models.js';
+import { runtimeStore } from './runtime-state.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
@@ -114,7 +116,8 @@ setSessionsSlot(renderSidebarSessions);
 /* P32.4-B：侧栏点一条并行会话 → 中央切到它。
  * focus 本身由 runtime-nav 发（带 captured owner），这里只负责把中央视图换过去；
  * 切回经典会话/项目时由 showChat() 换回来。 */
-const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses() });
+const runtimeModels = createRuntimeModels({ onChange: conversationId => { if (runtimeConversation.conversationId === conversationId) runtimeConversation.draw(); } });
+const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), models: runtimeModels, onTitle: setRuntimeTitle, openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses() });
 const conversationScopeActive = () => Boolean(gitConversationScope());
 const focusRuntimeConversation = conversationId => {
   runtimeConversation.show(conversationId);
@@ -126,6 +129,20 @@ const focusRuntimeConversation = conversationId => {
   void refreshGitNow();
 };
 setRuntimeFocusHandler(focusRuntimeConversation);
+setRuntimeHistoryHandler((locator, match) => {
+  const item = runtimeStore.get(locator.conversationId)?.item;
+  if (item?.nativeSessionId !== locator.nativeSessionId || item.workspace?.projectId !== locator.projectId
+    || item.workspace?.workspaceId !== locator.workspaceId || item.workspace?.workspaceEpoch !== locator.workspaceEpoch) {
+    toast('会话历史身份已变化，请重新搜索。', 'warn'); return;
+  }
+  // Search navigation reads the proven native record without starting an Agent.
+  // A live conversation's existing focus remains separate from read-only intent.
+  focusRuntimeConversation(locator.conversationId);
+  if (item.owner && item.lifecycle === 'ready' && item.owner.sessionId) {
+    void runtimeSessionAction({ action: 'focus', owner: { ...item.owner } }).catch(() => {});
+  }
+  void runtimeConversation.openHistory(locator, match);
+});
 
 /* 中央离开并行会话（回到经典 chat / 工作区）时，Changes 也要跟着离开那个会话的作用域。 */
 document.addEventListener('pi-gui:workspace-view', event => {

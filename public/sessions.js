@@ -60,6 +60,8 @@ import { clearRuntimeNav, loadRuntimeNav, repaintRuntimeNav, runtimeNavCount, se
 /* P32.4：并行会话与经典会话共用同一块列表区，两边都要能独立决定这块存不存在。
  * runtime 状态变化由 runtime-nav 自己订阅（它不该依赖本模块替它接线）。 */
 let currentProject = {};
+let runtimeHistoryHandler = null;
+export function setRuntimeHistoryHandler(fn) { runtimeHistoryHandler = typeof fn === 'function' ? fn : null; }
 
 /** 进行中的会话一次最多列几条，超出折叠（和 Codex 一样给个「展开显示」）。 */
 const COLLAPSED = 6;
@@ -579,6 +581,12 @@ async function doSwitch(s, locateUserIndex = null) {
  */
 function pickResult(res, match) {
   if (!res) return;
+  if (res.locator) {
+    const locator = res.locator;
+    if (!['projectId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'nativeSessionId'].every(k => typeof locator[k] === 'string' && locator[k])) return;
+    runtimeHistoryHandler?.({ ...locator }, match ? { ...match } : null);
+    return;
+  }
   if (capMissing('switchSession')) {
     toast('当前 pi 没有提供「切换会话」能力（详情见侧栏「诊断」）', 'warn');
     return;
