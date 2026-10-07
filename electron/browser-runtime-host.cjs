@@ -23,6 +23,8 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
   const lookup=scope=>{const key=scopeKey(scope),r=records.get(key);if(!r)throw Error('stale_runtime');return r;};
   function focus(scope){
     const next=scope==null?null:lookup(scope).key;
+    // 同一 owner 的重复 focus（如关闭覆盖层时迟到的 focus 回应）不撤掉已绑定视图。
+    if(next!==null&&next===focused)return {ok:true};
     focused=next;
     // Focus never exposes an old rectangle before the renderer binds its pane.
     for(const r of records.values())r.controller.setOccluded(true);
