@@ -50,7 +50,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   const scrollTops = new Map();       // conversationId -> scrollTop
   const historyCache = new Map();     // conversationId -> { messages, truncated }
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
-  let id = null, alive = true, active = false, approvalKey = '', renderedId = null;
+  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null;
 
   function viewOf(conversationId) {
     let view = views.get(conversationId);
@@ -67,7 +67,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   const unsubscribe = onRuntimeChange(() => { if (alive) { focusResumed(); draw(); } });
   function focusResumed() {
     const view = current(), record = store.get(id);
-    if (!active || !view.focusOnReady || !record?.owner || record.item.lifecycle !== 'ready') return;
+    if (!active || !view.focusOnReady || !record?.owner || record.item.lifecycle !== 'ready'
+      || typeof record.owner.sessionId !== 'string' || !record.owner.sessionId) return;
     if (record.owner.runtimeId !== view.focusOnReady) return;
     view.focusOnReady = null;
     // A resumed history view has no prior live focus. Bind only the current
@@ -121,11 +122,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   end.onclick = () => owned('close');
   resume.onclick = () => {
     const target = id;
+    const selection = focusEpoch;
     if (!target || current().pending) return;
     void action(target, { action: 'resume', conversationId: target }, result => {
       if (result.ok) {
         viewOf(target).history = null;
-        if (active && id === target) { viewOf(target).focusOnReady = result.owner?.runtimeId || null; focusResumed(); }
+        if (active && id === target && selection === focusEpoch) { viewOf(target).focusOnReady = result.owner?.runtimeId || null; focusResumed(); }
       }
     });
   };
@@ -252,6 +254,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     get conversationId() { return id; },
     /** 切到某条会话。dormant 时只清历史缓存，**不**自动去读、更不 spawn。 */
     show(next) {
+      focusEpoch++;
       active = true;
       if (next === id) { draw(); return; }
       saveScroll();
@@ -262,7 +265,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     },
     draw,
     /** 离开中央视图时记下滚动位置。 */
-    leave() { active = false; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
+    leave() { active = false; focusEpoch++; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
     dispose() { alive = false; unsubscribe(); root.remove(); },
   };
 }
