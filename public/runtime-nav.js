@@ -40,6 +40,7 @@ let token = 0;
 let loading = null;
 let focusHandler = null;
 let createHandler = null;
+let focusIntent = 0;
 
 /** 中央视图切换由组合根注入（P32.4-B 的落点）；A 阶段没注入时点击只改 focus 状态。 */
 export function setRuntimeFocusHandler(fn) { focusHandler = fn || null; }
@@ -71,6 +72,7 @@ export function loadRuntimeNav(project, context = {}) {
 }
 
 async function readRuntimeNav(project) {
+  if (project?.path !== currentProjectPath) focusIntent++;
   if (typeof project?.path === 'string') currentProjectPath = project.path;
   const t = ++token;
   const [snapshot, worktrees] = await Promise.all([
@@ -105,9 +107,10 @@ export function repaintRuntimeNav() {
   paint();
 }
 
-export function clearRuntimeNav() { members = []; projectId = ''; token++; host = null; loading = null; }
+export function clearRuntimeNav() { members = []; projectId = ''; token++; focusIntent++; host = null; loading = null; }
 
 function label(item) {
+  if (item?.title) return item.title;
   const branch = item?.workspace?.branch;
   if (branch) return branch;
   return '并行会话';
@@ -132,6 +135,8 @@ function stateClass(item) {
 }
 
 async function focusConversation(conversationId) {
+  const intent = ++focusIntent;
+  const project = projectId;
   const record = store.get(conversationId);
   if (!record?.owner) {
     /* dormant：没有 live runtime，**不能**发 focus（后端也没有 owner 可校验），
@@ -146,6 +151,8 @@ async function focusConversation(conversationId) {
     const result = await runtimeSessionAction({ action: 'focus', owner });
     if (result?.ok === false) return;
   } catch { return; }
+  if (intent !== focusIntent || project !== projectId || !store.get(conversationId)?.owner
+    || Object.keys(owner).some(key => store.get(conversationId).owner[key] !== owner[key])) return;
   focusHandler?.(conversationId);
 }
 
@@ -164,6 +171,14 @@ function row(member) {
   const title = el('span', 'pj-sess-title', label(item));
   primary.append(dot, title, el('span', 'pj-runtime-status', status));
   primary.onclick = () => { void focusConversation(member.conversationId); };
+  primary.onkeydown = event => {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const buttons = [...host.querySelectorAll('.pj-sess-primary')];
+    const position = buttons.indexOf(primary);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+      : Math.max(0, Math.min(buttons.length - 1, position + (event.key === 'ArrowDown' ? 1 : -1)));
+    event.preventDefault(); buttons[next]?.focus();
+  };
   rowEl.append(primary);
 
   /* attention 只是一个很轻的小点，点了就清（focus 会让后端把 attention 置回 false）。 */
@@ -257,6 +272,8 @@ function paint() {
     host.id = 'pjRuntimeList';
     parent.prepend(host);
   }
+  const focused = host.contains(document.activeElement) ? document.activeElement.closest('[data-conversation-id]')?.dataset.conversationId : null;
+  const newFocused = host.contains(document.activeElement) && document.activeElement.classList.contains('pj-runtime-new');
   host.replaceChildren();
   /* 只有确认了 Git 项目身份才给这块（含「新建并行会话」）：非 Git 项目没有
    * worktree，摆一个必然失败的入口比不摆更糟。 */
@@ -267,4 +284,8 @@ function paint() {
   host.append(resources);
   for (const member of members) host.append(row(member));
   host.append(newConversationRow());
+  if (focused) [...host.querySelectorAll('[data-conversation-id]')].find(row => row.dataset.conversationId === focused)?.querySelector('button')?.focus({ preventScroll: true });
+  else if (newFocused) host.querySelector('.pj-runtime-new')?.focus({ preventScroll: true });
 }
+
+document.addEventListener('pi-gui:workspace-view', event => { if (event.detail?.view !== 'runtime') focusIntent++; });
