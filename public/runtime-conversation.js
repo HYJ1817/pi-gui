@@ -50,7 +50,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   const scrollTops = new Map();       // conversationId -> scrollTop
   const historyCache = new Map();     // conversationId -> { messages, truncated }
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
-  let id = null, alive = true, approvalKey = '', renderedId = null;
+  let id = null, alive = true, active = false, approvalKey = '', renderedId = null;
 
   function viewOf(conversationId) {
     let view = views.get(conversationId);
@@ -64,7 +64,16 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   host.append(root);
   /* store 一变就重画。本模块只**订阅**、不自己 apply —— 各视图各自 apply 会把
    * eventSequence 游标吃两遍，第二个视图就再也看不到那一帧。 */
-  const unsubscribe = onRuntimeChange(() => { if (alive) draw(); });
+  const unsubscribe = onRuntimeChange(() => { if (alive) { focusResumed(); draw(); } });
+  function focusResumed() {
+    const view = current(), record = store.get(id);
+    if (!active || !view.focusOnReady || !record?.owner || record.item.lifecycle !== 'ready') return;
+    if (record.owner.runtimeId !== view.focusOnReady) return;
+    view.focusOnReady = null;
+    // A resumed history view has no prior live focus. Bind only the current
+    // target, with its ready owner; switching away cancels this intent.
+    void runtimeSessionAction({ action: 'focus', owner: { ...record.owner } }).catch(() => {});
+  }
 
   const head = el('div', 'rtc-head');
   const title = el('div', 'rtc-title');
@@ -113,7 +122,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   resume.onclick = () => {
     const target = id;
     if (!target || current().pending) return;
-    void action(target, { action: 'resume', conversationId: target }, result => { if (result.ok) viewOf(target).history = null; });
+    void action(target, { action: 'resume', conversationId: target }, result => {
+      if (result.ok) {
+        viewOf(target).history = null;
+        if (active && id === target) { viewOf(target).focusOnReady = result.owner?.runtimeId || null; focusResumed(); }
+      }
+    });
   };
   historyBtn.onclick = () => { void loadHistory(); };
 
@@ -238,15 +252,17 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     get conversationId() { return id; },
     /** 切到某条会话。dormant 时只清历史缓存，**不**自动去读、更不 spawn。 */
     show(next) {
+      active = true;
       if (next === id) { draw(); return; }
       saveScroll();
+      if (id) viewOf(id).focusOnReady = null;
       id = next || null;
       approvalKey = ''; renderedId = null;
       draw();
     },
     draw,
     /** 离开中央视图时记下滚动位置。 */
-    leave() { saveScroll(); },
+    leave() { active = false; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
     dispose() { alive = false; unsubscribe(); root.remove(); },
   };
 }

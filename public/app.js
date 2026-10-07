@@ -131,6 +131,7 @@ setRuntimeFocusHandler(focusRuntimeConversation);
 document.addEventListener('pi-gui:workspace-view', event => {
   if (event.detail?.view === 'runtime') return;   // 具体会话由上面的 focus handler 设定
   if (!conversationScopeActive()) return;
+  runtimeConversation.leave();
   runtimeSecondary.leave();
   setGitConversationScope(null);
   void refreshGitNow();
