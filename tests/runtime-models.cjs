@@ -107,15 +107,34 @@ const assert = require('node:assert/strict');
   const cwd = path.join(dir, 'workspace'); fs.mkdirSync(cwd);
   let adapter, registry, fixtureFailure; const emitted = [], transport = [];
   const { createPiSupervisor } = await import('../server/pi-supervisor.js');
-  const { launchOwnedProcess } = await import('../server/process-runner.js');
+  const { launchOwnedProcess, processAssets } = await import('../server/process-runner.js');
+  // Add fixed stage markers to a private copy; never print the guardian spec.
+  const diagnosticAssets = path.join(dir, 'guardian-assets'); fs.mkdirSync(diagnosticAssets);
+  for (const name of ['runner-win.ps1', 'runner-posix.cjs', 'runtime-child.cjs']) {
+    let source = fs.readFileSync(path.join(processAssets(), name), 'utf8');
+    if (name === 'runner-win.ps1') {
+      for (const [anchor, stage] of [
+        ["$ErrorActionPreference = 'Stop'", 'before_encoding'],
+        ['$spec = $null', 'before_read'],
+        ['  Add-Type -TypeDefinition', 'after_read'],
+        ['  [string[]]$entries =', 'after_compile'],
+        ['  [PiGuiJob]::Run(', 'before_run'],
+      ]) {
+        if (!source.includes(anchor)) throw Error('guardian_fixture_anchor_missing');
+        source = source.replace(anchor, `[Console]::Error.WriteLine('fixture_guardian_phase:${stage}')\n` + anchor);
+      }
+    }
+    fs.writeFileSync(path.join(diagnosticAssets, name), source);
+  }
   const transportStart = Date.now();
   const trace = (stage, code) => { if (transport.length < 32) transport.push({ stage, code, elapsedMs: Date.now() - transportStart }); };
   const supervisorFactory = options => {
     const supervisor = createPiSupervisor({ ...options, launch(spec, launchOptions) {
-      const guardian = launchOwnedProcess(spec, launchOptions);
+      const guardian = launchOwnedProcess(spec, { ...launchOptions, assets: diagnosticAssets });
       for (const stage of ['started', 'failure', 'close']) guardian.on(stage, () => trace('guardian_' + stage));
       guardian.on('log', chunk => {
         const text = chunk.toString();
+        for (const match of text.matchAll(/fixture_guardian_phase:(before_encoding|before_read|after_read|after_compile|before_run)/g)) trace(match[1]);
         for (const code of ['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND', 'SyntaxError', 'ENOENT', 'EACCES']) {
           if (text.includes(code)) trace('guardian_diagnostic', code);
         }
