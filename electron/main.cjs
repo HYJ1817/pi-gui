@@ -244,7 +244,8 @@ function installTokenHeader() {
  * 顺带一提，主进程发的 fetch 不会被 onBeforeSendHeaders 覆盖（那只作用于
  * 渲染进程的 session），所以这里要自己带令牌头。 */
 function installOpenPathHandler() {
-  ipcMain.handle('pi-gui:open-path', async (_e, relPath) => {
+  ipcMain.handle('pi-gui:open-path', async (_e, relPath, conversationId = null) => {
+    if (conversationId !== null && (typeof conversationId !== 'string' || !/^[\da-f-]{36}$/.test(conversationId))) return { ok: false, error: '会话身份不可用' };
     if (typeof relPath !== 'string' || !relPath.trim()) {
       return { ok: false, error: '缺少文件路径' };
     }
@@ -258,7 +259,7 @@ function installOpenPathHandler() {
         const res = await fetch(`${ORIGIN}/api/git/open`, {
           method: 'POST',
           signal: ctl.signal,
-          headers: { 'Content-Type': 'application/json', [TOKEN_HEADER]: AUTH_TOKEN },
+          headers: { 'Content-Type': 'application/json', [TOKEN_HEADER]: AUTH_TOKEN, ...(conversationId ? { 'X-Pi-Gui-Conversation': conversationId } : {}) },
           body: JSON.stringify({ path: relPath }),
         });
         status = res.status;

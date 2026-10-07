@@ -158,9 +158,14 @@ export const fetchProviderModels = (payload) => sendJSON('/api/providers/models'
 /* P32.4-C：Changes 要跟随 focused 的并行会话。这里**只放 conversationId** ——
  * 工作区根由后端从 registry 记录解析；前端永远不提交文件系统路径。 */
 let gitConversationId = null;
-export function setGitConversationScope(id) { gitConversationId = typeof id === 'string' && id ? id : null; }
+export function setGitConversationScope(id) {
+  const next = typeof id === 'string' && id ? id : null;
+  if (next === gitConversationId) return;
+  gitConversationId = next;
+  document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+}
 export function gitConversationScope() { return gitConversationId; }
-const gitScopeHeaders = () => (gitConversationId ? { 'X-Pi-Gui-Conversation': gitConversationId } : undefined);
+const gitScopeHeaders = (id = gitConversationId) => (id ? { 'X-Pi-Gui-Conversation': id } : undefined);
 
 export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders());
 
@@ -172,9 +177,9 @@ export const fetchGitDiff = (path, context) =>
 
 /** 撤销单个文件。两个布尔是**授权开关**，默认全关：
  *  deleteUntracked 允许删除未跟踪文件，unstage 允许取消暂存（会改 index）。 */
-export const restoreGitPath = (path, { deleteUntracked = false, unstage = false } = {}) =>
+export const restoreGitPath = (path, { deleteUntracked = false, unstage = false } = {}, conversationId = gitConversationId) =>
   sendJSON('/api/git/restore', {
-    headers: gitScopeHeaders(),
+    headers: gitScopeHeaders(conversationId),
     body: { path, deleteUntracked: Boolean(deleteUntracked), unstage: Boolean(unstage) },
   });
 
@@ -184,9 +189,9 @@ export const restoreGitPath = (path, { deleteUntracked = false, unstage = false 
  *  一个字都不动。用户看过计划点头后再带 `planned: true` 重发，这次才真的执行。
  *  两个布尔是授权开关：unstage 允许取消暂存（会改 index），
  *  deleteUntracked 允许删除未跟踪文件。 */
-export const restoreAllGitPaths = ({ deleteUntracked = false, unstage = false, planned = false } = {}) =>
+export const restoreAllGitPaths = ({ deleteUntracked = false, unstage = false, planned = false } = {}, conversationId = gitConversationId) =>
   sendJSON('/api/git/restore-all', {
-    headers: gitScopeHeaders(),
+    headers: gitScopeHeaders(conversationId),
     body: { deleteUntracked: Boolean(deleteUntracked), unstage: Boolean(unstage), planned: Boolean(planned) },
   });
 

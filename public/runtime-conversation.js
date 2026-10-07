@@ -45,7 +45,7 @@ function el(tag, cls, text) {
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0 };
 
-export function createRuntimeConversation({ host, onNotice = () => {} }) {
+export function createRuntimeConversation({ host, onNotice = () => {}, openBrowser = null, openProcesses = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
   const historyCache = new Map();     // conversationId -> { messages, truncated }
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
@@ -87,6 +87,12 @@ export function createRuntimeConversation({ host, onNotice = () => {} }) {
   const resume = el('button', 'btn', '恢复会话'); resume.type = 'button';
   const historyBtn = el('button', 'btn', '打开历史'); historyBtn.type = 'button';
   controls.append(send, stop, restart, end, resume, historyBtn);
+  const browserBtn = el('button', 'btn', 'Browser'), processBtn = el('button', 'btn', '开发进程');
+  browserBtn.type = processBtn.type = 'button';
+  browserBtn.hidden = !openBrowser || !window.piGuiDesktop?.runtimeBrowser;
+  processBtn.hidden = !openProcesses;
+  browserBtn.onclick = () => openBrowser?.(); processBtn.onclick = () => openProcesses?.();
+  controls.append(browserBtn, processBtn);
 
   send.onclick = () => {
     const target = id;

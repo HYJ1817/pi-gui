@@ -1,24 +1,19 @@
 import { fetchRuntimeSessions, runtimeSessionAction } from './api.js';
 import { runtimeStore as store, observeRuntimeFrame, onRuntimeChange } from './runtime-state.js';
 import { openModal, confirmModal } from './ui/modal.js';
-import { createBrowserSurface } from './browser-pane.js';
 
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const node = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const button = (text, action) => { const e = node('button', 'btn', text); e.type = 'button'; e.onclick = action; return e; };
 const labels = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中', idle: '空闲', running: '运行中', stopping: '正在停止' };
-let pane, render = null, selected = null, browserSurface = null, browserOwner = null;
+let pane, render = null, selected = null;
+let focusView = null, openBoundBrowser = null;
 /* P32.4：帧到达时统一由 runtime-state.js 广播；本模块只订阅自己的重画。 */
 onRuntimeChange(() => render?.());
 export function observeRuntimeEvent(frame) { observeRuntimeFrame(frame); }
 export function configureRuntimeSessions(options) {
   pane = options.pane;
-  pane?.onSurfaceChange(next => {
-    if (next === 'runtime-browser' || !browserSurface) return;
-    browserSurface.close(); browserSurface = null;
-    const owner = browserOwner; browserOwner = null;
-    if (owner) { const { repoId, ...scope } = owner; void window.piGuiDesktop?.runtimeBrowser?.command(scope, 'close'); void runtimeSessionAction({ action: 'blur', owner }); }
-  });
+  focusView = options.focusView || null; openBoundBrowser = options.openBrowser || null;
 }
 
 // A narrow phase-3 control surface. It never changes the legacy renderer's S or
@@ -47,25 +42,11 @@ export function openRuntimeSessions(project, workspace = null) {
     const restart = button('重启', () => owned('restart')); controls.append(restart);
     const end = button('关闭会话', () => owned('close')); controls.append(end);
     const browse = button('Browser', async () => {
-      const r = store.get(selected); if (!r?.owner || !pane || !window.piGuiDesktop?.runtimeBrowser) return;
+      const r = store.get(selected); if (!r?.owner || !pane || !openBoundBrowser || !window.piGuiDesktop?.runtimeBrowser) return;
       const owner = { ...r.owner }, result = await runtimeSessionAction({ action: 'focus', owner });
       if (!alive || !result.ok || !same(store.get(selected)?.owner, owner)) return;
-      if (browserSurface) { browserSurface.close(); browserSurface = null; }
-      const desktop = window.piGuiDesktop.runtimeBrowser, { repoId, ...scope } = owner;
-      const matches = frame => ['backendInstance', 'runtimeId', 'runtimeGeneration'].every(k => frame.scope?.[k] === scope[k]);
-      const bridge = {
-        open: () => desktop.open(scope), navigate: url => desktop.navigate(scope, url),
-        back: () => desktop.command(scope, 'back'), forward: () => desktop.command(scope, 'forward'), reload: () => desktop.command(scope, 'reload'), stop: () => desktop.command(scope, 'stop'),
-        setBounds: rect => desktop.bounds(scope, rect), setOccluded: value => desktop.occluded(scope, value),
-        setAgentControl: enabled => desktop.enable(scope, enabled), agentStatus: () => desktop.status(scope),
-        onState: cb => desktop.onState(frame => { if (matches(frame)) cb(frame.state); }),
-        onAgentState: cb => desktop.onAgentState(frame => { if (matches(frame)) cb(frame.state); }),
-        onNotice: () => () => {}, openExternal: () => Promise.resolve({ ok: false }),
-      };
-      browserOwner = owner;
-      browserSurface = createBrowserSurface({ pane, bridge, surfaceName: 'runtime-browser', onAgentState: () => {}, onRequestClose: () => pane.close() });
-      browserSurface.ui.external.hidden = true;
-      keepBrowser = true; close(); await browserSurface.open();
+      focusView?.(owner.conversationId);
+      keepBrowser = true; close(); await openBoundBrowser();
     }); browse.hidden = !window.piGuiDesktop?.runtimeBrowser; controls.append(browse);
     const processes = button('开发进程', () => showProcesses()); controls.append(processes);
     const processBox = node('div', 'runtime-processes'); body.append(processBox);
@@ -100,6 +81,7 @@ export function openRuntimeSessions(project, workspace = null) {
       const owner = { ...r.owner }; const focused = await runtimeSessionAction({ action: 'focus', owner });
       if (!alive || !same(store.get(id)?.owner, owner)) return;
       if (!focused.ok) { notice.textContent = focused.error; return; }
+      focusView?.(id);
       if (r.text && (!r.truncated || r.item.activity !== 'idle')) return;
       const cursor = r.cursor, result = await runtimeSessionAction({ action: 'read', owner, command: { type: 'get_messages' } });
       if (alive && result.ok) { store.history(id, result.data?.messages || [], owner, cursor); draw(); }
@@ -160,6 +142,7 @@ export function openRuntimeSessions(project, workspace = null) {
     }
     render = draw; void refresh(); timer = setInterval(() => { if (!busy) void refresh(); }, 3000);
   }, () => { alive = false; request++; render = null; clearInterval(timer);
-    const owner = store.get(selected)?.owner; if (!keepBrowser && owner) void runtimeSessionAction({ action: 'blur', owner });
+    // 中央视图接管 focus 后，关 modal 只关闭覆盖层；不能把仍可见的会话 blur。
+    const owner = store.get(selected)?.owner; if (!focusView && !keepBrowser && owner) void runtimeSessionAction({ action: 'blur', owner });
   });
 }

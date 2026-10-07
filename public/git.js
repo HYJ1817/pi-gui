@@ -31,6 +31,7 @@ import {
   resolveGitOpenTarget,
   restoreAllGitPaths,
   restoreGitPath,
+  gitConversationScope,
 } from './api.js';
 import { listChanges, onChanges } from './changes.js';
 import { toast } from './ui/toast.js';
@@ -49,6 +50,12 @@ const REFRESH_DEBOUNCE_MS = 450;
  * 顶掉，于是「连续 N 次操作」只产生 1 次刷新。 */
 let refreshTimer = null;
 let statusRequest = 0;
+let scopeRevision = 0;
+document.addEventListener('pi-gui:git-scope', () => {
+  scopeRevision++; statusRequest++;
+  S.changes = blankChanges(); view.sessionOnly = false;
+  renderChangesBody();
+});
 
 const STATUS_LABEL = {
   M: '已修改',
@@ -186,6 +193,7 @@ export function renderChangesBadge() {
 /** 本次会话改过的文件，归一成项目相对路径的集合。 */
 export function sessionFileSet() {
   const set = new Set();
+  if (gitConversationScope()) return set; // Classic event ledger does not own runtime files.
   for (const e of listChanges()) {
     const rel = toProjectRel(e.path, S.changes.projectRoot);
     if (rel) set.add(rel);
@@ -470,6 +478,7 @@ function fillStat(span, add, del) {
 
 function changeRow(f, inSession) {
   const surface = activeChangesSurface;
+  const revision = scopeRevision;
   const row = document.createElement('div');
   row.className = 'chg-row';
 
@@ -536,7 +545,7 @@ function changeRow(f, inSession) {
     diffBox.appendChild(hint('正在读取差异…'));
 
     const r = await fetchGitDiff(f.path, dstate.context);
-    if (!surface || !surface.isCurrent()) return;
+    if (!surface || !surface.isCurrent() || revision !== scopeRevision) return;
     dstate.busy = false;
     dstate.loaded = true;
 
@@ -742,7 +751,7 @@ async function openFile(f) {
   if (bridge && typeof bridge.openPath === 'function') {
     let r;
     try {
-      r = await bridge.openPath(f.path);
+      r = await bridge.openPath(f.path, gitConversationScope());
     } catch (err) {
       toast('打开失败：' + err.message, 'error');
       return;
@@ -767,6 +776,7 @@ const needsUnstage = (f) =>
 
 /** 撤销单个文件的改动。危险操作，一律先二次确认。 */
 async function restoreFile(f) {
+  const conversationId = gitConversationScope(), revision = scopeRevision;
   const untracked = Boolean(f.untracked);
   const unstage = needsUnstage(f);
 
@@ -813,9 +823,10 @@ async function restoreFile(f) {
   const okText = untracked ? '删除文件' : stagedAdd ? '取消暂存并删除' : unstage ? '取消暂存并撤销' : '撤销改动';
 
   const ok = await confirmModal({ title, message, okText, danger: true });
-  if (!ok) return;
+  if (!ok || revision !== scopeRevision) return;
 
-  let r = await restoreGitPath(f.path, opts);
+  let r = await restoreGitPath(f.path, opts, conversationId);
+  if (revision !== scopeRevision) return;
 
   /* 列表可能已经过期（比如这个文件刚被 git add 了）。后端会把「还需要什么
    * 授权」原样告诉我们，这里最多再问一轮 —— 不做循环重试，
@@ -830,8 +841,8 @@ async function restoreFile(f) {
       okText: '取消暂存并删除',
       danger: true,
     });
-    if (!again) return;
-    r = await restoreGitPath(f.path, { unstage: true, deleteUntracked: true });
+    if (!again || revision !== scopeRevision) return;
+    r = await restoreGitPath(f.path, { unstage: true, deleteUntracked: true }, conversationId);
   } else if (r && r.needsUnstage && !opts.unstage) {
     const again = await confirmModal({
       title: '取消暂存并撤销',
@@ -839,8 +850,8 @@ async function restoreFile(f) {
       okText: '取消暂存并撤销',
       danger: true,
     });
-    if (!again) return;
-    r = await restoreGitPath(f.path, { ...opts, unstage: true });
+    if (!again || revision !== scopeRevision) return;
+    r = await restoreGitPath(f.path, { ...opts, unstage: true }, conversationId);
   } else if (r && r.needsConfirm && !opts.deleteUntracked) {
     const again = await confirmModal({
       title: '删除未跟踪文件',
@@ -848,10 +859,11 @@ async function restoreFile(f) {
       okText: '删除文件',
       danger: true,
     });
-    if (!again) return;
-    r = await restoreGitPath(f.path, { ...opts, deleteUntracked: true });
+    if (!again || revision !== scopeRevision) return;
+    r = await restoreGitPath(f.path, { ...opts, deleteUntracked: true }, conversationId);
   }
 
+  if (revision !== scopeRevision) return;
   if (!r || r.network) {
     toast('无法连接后端，撤销未执行。', 'error');
     return;
@@ -892,12 +904,14 @@ function restoreDoneText(action) {
  *      「删掉新文件」是两个不同的意愿，不该捆成一个按钮。
  *   3. 带授权执行，然后如实汇报结果（恢复了多少、多少没处理、多少要手动）。 */
 async function restoreAll() {
+  const conversationId = gitConversationScope(), revision = scopeRevision;
   if (restoringAll) return;
   restoringAll = true;
   syncRestoreAllBtn(S.changes);
 
   try {
-    const plan = await restoreAllGitPaths({});
+    const plan = await restoreAllGitPaths({}, conversationId);
+    if (revision !== scopeRevision) return;
 
     if (!plan || plan.network) {
       toast('无法连接后端，未执行。', 'error');
@@ -926,13 +940,14 @@ async function restoreAll() {
       altText: nUntracked ? `仅撤销已跟踪文件（保留 ${nUntracked} 个）` : '',
       danger: true,
     });
-    if (!choice) return;
+    if (!choice || revision !== scopeRevision) return;
 
     /* confirmModal 的返回值：主按钮 `true`、备选 `'alt'`、取消 `false`。
      * 只有走主路径才删未跟踪文件 —— 「仅撤销已跟踪文件」这条路径存在的全部意义
      * 就是不删东西。 */
     const del = choice === true && nUntracked > 0;
-    const r = await restoreAllGitPaths({ planned: true, unstage: true, deleteUntracked: del });
+    const r = await restoreAllGitPaths({ planned: true, unstage: true, deleteUntracked: del }, conversationId);
+    if (revision !== scopeRevision) return;
 
     if (!r || r.network) {
       toast('无法连接后端，未执行。', 'error');

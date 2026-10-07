@@ -268,7 +268,7 @@ export function initRightPane() {
     event.preventDefault(); event.stopPropagation(); close();
   });
   document.addEventListener('pi-gui:workspace-view', event => {
-    if (event.detail?.view !== 'chat' && !root.hidden) close();
+    if (!['chat', 'runtime'].includes(event.detail?.view) && !root.hidden) close();
   });
 
   return {

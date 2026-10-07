@@ -228,6 +228,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
     const text = String(input ?? '').trim();
     if (!text) return;
     const r = await bridge.navigate(text);
+    if (disposed) return;
     if (!r?.ok) {
       // 拒绝的理由由主进程给（不回显被拒的地址），照实说
       state = { ...state, error: { kind: 'rejected', message: r?.error || '已拒绝该地址' } };
@@ -242,6 +243,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
       pane.open(surfaceName);
       mount();
       const r = await bridge.open();
+      if (disposed) return;
       if (!r?.ok) {
         state = { ...state, error: { kind: 'open-failed', message: r?.error || '无法打开内置浏览器' } };
         render();

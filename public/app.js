@@ -80,6 +80,7 @@ import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
 import { showChat, showRuntimeConversation, runtimeViewElement } from './ui/workspace-surface.js';
 import { createRuntimeConversation } from './runtime-conversation.js';
+import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler } from './runtime-nav.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
@@ -96,7 +97,7 @@ import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
-import { openProcessPanel } from './process-panel.js';
+import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
 import { openAppUpdates } from './settings.js';
 
 /* ---------- 装配 ---------- */
@@ -112,21 +113,24 @@ setSessionsSlot(renderSidebarSessions);
 /* P32.4-B：侧栏点一条并行会话 → 中央切到它。
  * focus 本身由 runtime-nav 发（带 captured owner），这里只负责把中央视图换过去；
  * 切回经典会话/项目时由 showChat() 换回来。 */
-const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement() });
+const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses() });
 const conversationScopeActive = () => Boolean(gitConversationScope());
-setRuntimeFocusHandler(conversationId => {
+const focusRuntimeConversation = conversationId => {
   runtimeConversation.show(conversationId);
   showRuntimeConversation();
+  runtimeSecondary.focus(conversationId);
   /* P32.4-C：Changes 跟随 focused 会话。只设 conversationId ——
    * 工作区根由后端从 registry 记录解析，前端不传路径。 */
   setGitConversationScope(conversationId);
   void refreshGitNow();
-});
+};
+setRuntimeFocusHandler(focusRuntimeConversation);
 
 /* 中央离开并行会话（回到经典 chat / 工作区）时，Changes 也要跟着离开那个会话的作用域。 */
 document.addEventListener('pi-gui:workspace-view', event => {
   if (event.detail?.view === 'runtime') return;   // 具体会话由上面的 focus handler 设定
   if (!conversationScopeActive()) return;
+  runtimeSecondary.leave();
   setGitConversationScope(null);
   void refreshGitNow();
 });
@@ -150,7 +154,9 @@ mountSessionPlans($('sessionPlans'));
  * 网页版（浏览器里跑 npm start）没有 preload 桥 —— 那时 browserPane 为 null，
  * 入口按钮直接不显示，而不是画一个点了没反应的按钮。 */
 const rightPane = initRightPane();
-configureRuntimeSessions({ pane: rightPane });
+const runtimeSecondary = rightPane ? createRuntimeSecondary({ pane: rightPane }) : null;
+const openProcessPanel = () => conversationScopeActive() ? runtimeSecondary?.openProcesses() : openClassicProcessPanel();
+configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation, openBrowser: () => runtimeSecondary?.openBrowser() });
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
 initGuiBrowserState();
@@ -160,7 +166,7 @@ if (btnBrowser) {
   if (!browserPane) {
     btnBrowser.hidden = true; // 网页版：没有内置浏览器这回事
   } else {
-    btnBrowser.addEventListener('click', () => browserPane.toggle());
+    btnBrowser.addEventListener('click', () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.toggle());
     /* 右栏可能从内部（工具栏的 ×）关掉，只有它自己知道 —— 所以入口按钮的
      * 状态跟着事件走，不去猜。 */
     document.addEventListener('pi-gui:right-pane', (e) => {
@@ -1160,7 +1166,7 @@ defineCommands([
   { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表', run: () => openExtensions() },
   /* 内置浏览器：只是**右栏的一个面板**，不是第四个一级视图 —— 所以它在这里，
    * 不进左侧全局导航栏。when 为假（网页版）时压根不进列表，不灰着骗人。 */
-  { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => browserPane.open() },
+  { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.open() },
   { id: 'view.capabilities', title: '能力视图（Capabilities）', group: '视图', keywords: 'capability 能力 状态 可用', run: () => openExtensions({ tab: 'capabilities' }) },
   { id: 'view.skills', title: 'Skills', group: '视图', keywords: 'skill 技能', run: () => openExtensions({ tab: 'skills' }) },
   { id: 'view.mcp', title: 'MCP', group: '视图', keywords: 'mcp server 原生', run: () => openExtensions({ tab: 'mcp' }) },
