@@ -1,5 +1,17 @@
 // Actual Node dev servers under separate production session-runtime managers.
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), assert = require('node:assert/strict');
+const http = require('node:http');
+// These are raw HTTP service probes. Ephemeral OS ports can be Fetch-forbidden
+// (for example 6000); that does not mean the controlled server failed to listen.
+const readService = url => new Promise((resolve, reject) => {
+  const request = http.get(url, response => {
+    let body = ''; response.setEncoding('utf8');
+    response.on('data', chunk => { body += chunk; });
+    response.on('end', () => resolve(body)); response.on('error', reject);
+  });
+  request.setTimeout(5000, () => request.destroy(Error('service_probe_timeout')));
+  request.on('error', reject);
+});
 (async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'p32-process-scopes-')); let checks = 0;
   const check = (value, name) => { assert.ok(value, name); checks++; console.log('  ok  ' + name); };
@@ -28,15 +40,15 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
       urls.push('http://127.0.0.1:' + logs.lines.find(l => /^READY \d+/.test(l.text)).text.split(' ')[1]);
       check(!JSON.stringify(logs).includes('fixture-secret'), '日志脱敏 ' + i);
     }
-    check(await (await fetch(urls[0])).text() === 'A' && await (await fetch(urls[1])).text() === 'B', '服务HTTP响应与各自cwd一致');
+    check(await readService(urls[0]) === 'A' && await readService(urls[1]) === 'B', '服务HTTP响应与各自cwd一致');
     await assert.rejects(() => managers[0].action('stop', { id: starts[1].id, revision: starts[1].revision }, generations[0]), error => error.code === 'stale_process'); checks++;
     const old = starts[0]; await managers[0].action('restart', { id: old.id, revision: old.revision }, generations[0]);
     await until(() => managers[0].snapshot().processes[0]?.state === 'ready');
-    check(await (await fetch(urls[1])).text() === 'B', 'restart A不重启B');
+    check(await readService(urls[1]) === 'B', 'restart A不重启B');
     const a = managers[0].snapshot().processes[0]; await managers[0].action('stop', { id: a.id, revision: a.revision }, generations[0]);
-    check(await (await fetch(urls[1])).text() === 'B', 'stop A不停止B');
-    await runtimes[0].dispose(); check(runtimes[0].cleanupConfirmed() && await (await fetch(urls[1])).text() === 'B', 'dispose A整树清理B继续RPC和HTTP');
-    await runtimes[1].dispose(); await until(async () => { try { await fetch(urls[1]); return false; } catch { return true; } });
+    check(await readService(urls[1]) === 'B', 'stop A不停止B');
+    await runtimes[0].dispose(); check(runtimes[0].cleanupConfirmed() && await readService(urls[1]) === 'B', 'dispose A整树清理B继续RPC和HTTP');
+    await runtimes[1].dispose(); await until(async () => { try { await readService(urls[1]); return false; } catch { return true; } });
     check(runtimes[1].cleanupConfirmed(), '退出清理B服务实际关闭');
     console.log(`Runtime Process real ${process.platform}: ${checks}/${checks}`);
   } finally { await Promise.allSettled(runtimes.map(r => r.dispose())); fs.rmSync(root, { recursive: true, force: true }); }
