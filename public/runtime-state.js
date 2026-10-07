@@ -19,10 +19,22 @@ export const runtimeStore = createRuntimeStore();
  * eventSequence 游标吃两遍，第二个视图就再也看不到那一帧）。 */
 const listeners = new Set();
 export function onRuntimeChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+const lifecycleListeners = new Set();
+export function onRuntimeLifecycle(fn) { lifecycleListeners.add(fn); return () => lifecycleListeners.delete(fn); }
+function broadcast() { for (const fn of [...listeners]) fn(); }
+export function seedRuntimeSnapshot(snapshot) { if (runtimeStore.seed(snapshot)) broadcast(); }
 
 /** SSE 帧入口：返回 true 表示这份帧真的改动了 store（视图据此重画）。 */
 export function observeRuntimeFrame(frame) {
+  const id = frame.owner?.conversationId || frame.conversationId;
+  const prior = runtimeStore.get(id);
+  const lifecycle = prior?.item?.lifecycle, owner = prior?.owner, error = prior?.item?.error;
   if (!runtimeStore.apply(frame)) return false;
-  for (const fn of [...listeners]) fn();
+  broadcast();
+  const next = runtimeStore.get(id);
+  if (frame.type === 'runtime_closed' || frame.type === 'runtime_state' &&
+      (lifecycle !== next?.item?.lifecycle || owner?.runtimeGeneration !== next?.owner?.runtimeGeneration || error !== next?.item?.error)) {
+    for (const fn of [...lifecycleListeners]) fn();
+  }
   return true;
 }

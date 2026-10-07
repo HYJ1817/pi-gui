@@ -2597,3 +2597,5 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .runtime-conversation .rtc-controls{display:flex;gap:8px;flex-wrap:wrap}
 .runtime-conversation .rtc-approvals:empty{display:none}
 .runtime-conversation .rtc-approval{padding:8px 0}
+.runtime-resource-count{color:var(--t3);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.pj-runtime-list>.runtime-resource-count{padding:4px 12px}

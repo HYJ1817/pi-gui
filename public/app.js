@@ -83,6 +83,7 @@ import { createRuntimeConversation } from './runtime-conversation.js';
 import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler } from './runtime-nav.js';
+import { refreshRuntimeResources } from './runtime-resources.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
@@ -391,6 +392,9 @@ export function reconcileBridgeSnapshot(snapshot) {
   if (typeof evt.cwd === 'string') S.cwd = evt.cwd;
   if (snapshot.legacyOwner) S.legacyOwner = snapshot.legacyOwner;
   S.hasProject = evt.hasProject ?? Boolean(S.cwd);
+  // Classic children share the backend budget with independent conversations.
+  // Refresh only after this snapshot passed the bridge authority guards.
+  void refreshRuntimeResources().catch(() => {});
   bridgeRecovery.observe({ ...evt, hasProject: S.hasProject });
   observeWebEvent(evt);
   observeSubagentEvent(evt);

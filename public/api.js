@@ -86,7 +86,15 @@ export async function sendCommand(cmd) {
 /* ---------- 状态 / 项目 ---------- */
 
 export const fetchStatus = () => getJSON('/api/status');
-export const fetchRuntimeSessions = () => getJSON('/api/runtime-sessions');
+let runtimeReadSequence = 0;
+export async function fetchRuntimeSessions() {
+  const sequence = ++runtimeReadSequence;
+  const snapshot = await getJSON('/api/runtime-sessions');
+  // Local ordering only; never sent to backend or displayed. Resource counts
+  // have no backend revision, so views must reject delayed earlier readbacks.
+  if (snapshot && typeof snapshot === 'object') Object.defineProperty(snapshot, '_runtimeReadSequence', { value: sequence });
+  return snapshot;
+}
 /* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
 export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });

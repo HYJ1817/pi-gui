@@ -1,6 +1,6 @@
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
 export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
-  let backend = null; const records = new Map();
+  let backend = null, resources = null, resourceReadSequence = 0; const records = new Map();
   const bound = text => {
     const bytes = new TextEncoder().encode(text);
     if (bytes.length <= limit) return text;
@@ -8,7 +8,18 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   };
   function fresh(item) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', approvals: [], truncated: false }; }
   function seed(snapshot) {
-    if (snapshot.backendInstance !== backend) { records.clear(); backend = snapshot.backendInstance; }
+    if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
+    const sequence = snapshot._runtimeReadSequence;
+    if (Number.isInteger(sequence)) {
+      if (sequence < resourceReadSequence) return false;
+      resourceReadSequence = sequence;
+    }
+    if (snapshot.backendInstance !== backend) { records.clear(); resources = null; backend = snapshot.backendInstance; }
+    // Only complete authoritative snapshots update occupancy. SSE items cannot
+    // prove that cleanup finished, or account for the classic external child.
+    if (['liveCount', 'totalCount', 'limit', 'hardLimit'].every(k => Number.isInteger(snapshot[k]) && snapshot[k] >= 0)) {
+      resources = { liveCount: snapshot.liveCount, totalCount: snapshot.totalCount, limit: snapshot.limit, hardLimit: snapshot.hardLimit };
+    }
     for (const item of snapshot.items || []) {
       const prior = records.get(item.conversationId);
       if (prior && Number.isInteger(item.revision) && item.revision < (prior.item.revision || 0)) continue;
@@ -19,6 +30,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         } else { const next = fresh(item); if (prior) next.draft = prior.draft; records.set(item.conversationId, next); }
       } else prior.item = item;
     }
+    return true;
   }
   function apply(frame) {
     if (frame._replay) return false;
@@ -51,7 +63,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     const bounded = bound(r.text); if (bounded !== r.text) { r.text = bounded; r.truncated = true; }
     return true;
   }
-  return { seed, apply, get: id => records.get(id), values: () => [...records.values()],
+  return { seed, apply, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
     history(id, messages, expectedOwner, expectedCursor) { const r = records.get(id); if (!r || !same(r.owner, expectedOwner) || r.cursor !== expectedCursor) return false;
       const text = (messages || []).filter(m => ['user', 'assistant'].includes(m.role)).map(m => (m.content || []).filter(c => c.type === 'text').map(c => c.text || '').join('')).join('\n\n');
       r.text = bound(text); if (r.text !== text) r.truncated = true; return true; },

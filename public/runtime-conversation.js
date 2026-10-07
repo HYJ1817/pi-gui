@@ -32,6 +32,7 @@
  */
 import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
 import { runtimeStore as store, onRuntimeChange } from './runtime-state.js';
+import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
 
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
@@ -68,8 +69,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   const head = el('div', 'rtc-head');
   const title = el('div', 'rtc-title');
   const state = el('div', 'rtc-state');
+  const resources = el('div', 'runtime-resource-count'); resources.setAttribute('role', 'status');
   const controls = el('div', 'rtc-controls');
-  head.append(title, state, controls); root.append(head);
+  head.append(title, state, resources, controls); root.append(head);
   const notice = el('p', 'rtc-notice'); notice.setAttribute('role', 'status'); root.append(notice);
   /* 类名**故意与 modal 的 `.runtime-output` 不同**：官方 modal 用的是全局选择器
    * （测试也这么取），中央再挂一个同名元素会让 `document.querySelector('.runtime-output')`
@@ -111,8 +113,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
   resume.onclick = () => {
     const target = id;
     if (!target || current().pending) return;
-    viewOf(target).history = null;
-    void action(target, { action: 'resume', conversationId: target });
+    void action(target, { action: 'resume', conversationId: target }, result => { if (result.ok) viewOf(target).history = null; });
   };
   historyBtn.onclick = () => { void loadHistory(); };
 
@@ -122,12 +123,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     if (view.pending || !alive) return null;
     view.pending = true; if (id === target) draw();
     try {
-      const result = await runtimeSessionAction(payload);
+      const result = await (payload.action === 'resume' ? launchRuntimeSession(payload) : runtimeSessionAction(payload));
       if (!alive) return null;
       /* 迟到响应只更新 **target** 那一格：切到别的会话时既不改当前 DOM，
        * 也不改当前会话的 notice —— 切回去才看得到它自己的结果。 */
-      view.notice = result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '';
+      view.notice = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
       after?.(result);
+      if (payload.action === 'close' || payload.action === 'restart') await refreshRuntimeResources();
       return result;
     } finally {
       view.pending = false;
@@ -171,6 +173,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     const life = LIFECYCLE[item.lifecycle] || item.lifecycle;
     const act = item.lifecycle === 'ready' ? (ACTIVITY[item.activity] || item.activity) : '';
     const reason = item.error === 'generation_failed' ? ' · 生成失败，请重试或检查模型' : item.error ? ' · 运行异常' : '';
+    if (item.error === 'cleanup_pending') return '清理未完成 · 运行名额仍被占用';
     return `${life}${act ? ' · ' + act : ''}${reason}`;
   }
 
@@ -182,6 +185,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, openBrows
     root.hidden = !id;
     if (!id) return;
     title.textContent = r?.item?.workspace?.branch || '并行会话';
+    resources.textContent = resourceText();
     notice.textContent = view.notice;
     if (view.history) state.textContent = `只读历史 · ${view.history.messages.length} 条${view.history.truncated ? '（仅显示最近部分）' : ''} · 未被启动，不占运行名额`;
     else if (view.pendingHistory) state.textContent = '读取历史…';

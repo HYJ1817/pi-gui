@@ -11,7 +11,8 @@
  * 才会走到创建/恢复路径（由调用方注入，复用 P32.2 + P32.3 既有入口）。
  */
 import { fetchRuntimeSessions, fetchWorktrees, runtimeSessionAction, worktreeAction } from './api.js';
-import { runtimeStore as store, onRuntimeChange } from './runtime-state.js';
+import { runtimeStore as store, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
+import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
@@ -82,7 +83,7 @@ async function readRuntimeNav(project) {
    * 而是后端按 Git common-dir 算出的稳定身份。拿不到就不显示（非 Git 项目
    * 本来也不该有并行会话），不猜。 */
   projectId = typeof worktrees?.projectId === 'string' ? worktrees.projectId : '';
-  store.seed(snapshot);
+  seedRuntimeSnapshot(snapshot);
   members = (projectId ? snapshot.items : [])
     .filter(item => item?.workspace?.projectId === projectId)
     .map(item => ({ conversationId: item.conversationId, createdAt: typeof item.createdAt === 'string' ? item.createdAt : '' }))
@@ -114,6 +115,7 @@ function label(item) {
 
 function statusText(item) {
   if (!item) return '';
+  if (item.error === 'cleanup_pending') return '清理未完成';
   if (item.lifecycle === 'error') return '错误';
   if (item.activity === 'stopping') return '正在停止';
   if (item.activity === 'running') return '运行中';
@@ -198,10 +200,11 @@ async function createParallelConversation() {
     const created = await worktreeAction('create', { nonce: plan.nonce }, list.contextGeneration);
     if (!created || created.ok === false) return toast(created?.error || '创建并行会话失败', 'error');
     const workspace = created.workspace;
-    const started = await runtimeSessionAction({ action: 'start', args: { id: workspace.id, epoch: workspace.epoch } });
-    if (started && started.ok === false) {
+    const started = await launchRuntimeSession({ action: 'start', args: { id: workspace.id, epoch: workspace.epoch } });
+    if (started?.cancelled) toast('未启动会话。工作区已创建，可稍后从「工作区管理」启动。', 'info');
+    if (started && started.ok === false && !started.cancelled) {
       /* 工作区已经建好了，只是 runtime 没起来 —— 如实说清楚，不要谎报成功。 */
-      toast(`${started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn');
+      toast(`${runtimeLimitNotice(started) || started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn');
     }
     await loadRuntimeNav({ path: currentProjectPath }, { parent });
   } catch (e) {
@@ -259,6 +262,9 @@ function paint() {
    * worktree，摆一个必然失败的入口比不摆更糟。 */
   host.hidden = !projectId;
   if (!projectId) return;
+  const resources = el('div', 'runtime-resource-count', resourceText());
+  resources.setAttribute('role', 'status');
+  host.append(resources);
   for (const member of members) host.append(row(member));
   host.append(newConversationRow());
 }
