@@ -105,17 +105,41 @@ const assert = require('node:assert/strict');
   }
   const { createRuntimeRegistry } = await import('../server/runtime-registry.js');
   const cwd = path.join(dir, 'workspace'); fs.mkdirSync(cwd);
-  let adapter, registry, fixtureFailure; const emitted = [];
+  let adapter, registry, fixtureFailure; const emitted = [], transport = [];
+  const { createPiSupervisor } = await import('../server/pi-supervisor.js');
+  const { launchOwnedProcess } = await import('../server/process-runner.js');
+  const transportStart = Date.now();
+  const trace = (stage, code) => { if (transport.length < 32) transport.push({ stage, code, elapsedMs: Date.now() - transportStart }); };
+  const supervisorFactory = options => {
+    const supervisor = createPiSupervisor({ ...options, launch(spec, launchOptions) {
+      const guardian = launchOwnedProcess(spec, launchOptions);
+      for (const stage of ['started', 'failure', 'close']) guardian.on(stage, () => trace('guardian_' + stage));
+      guardian.on('log', chunk => {
+        const text = chunk.toString();
+        for (const code of ['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND', 'SyntaxError', 'ENOENT', 'EACCES']) {
+          if (text.includes(code)) trace('guardian_diagnostic', code);
+        }
+      });
+      return guardian;
+    } });
+    return { ...supervisor, spawnProcess(...args) {
+      const child = supervisor.spawnProcess(...args);
+      child.on('spawn', () => trace('native_spawn'));
+      child.on('error', error => trace('native_error', ['pi_connect_timeout', 'pi_spawn_failed', 'pi_guardian_failed', 'stop_unconfirmed', 'pi_channel_closed'].includes(error.code) ? error.code : 'other'));
+      return child;
+    } };
+  };
   try {
-    adapter = await createSessionRuntime({ piBin: cli, env: { ...process.env, PI_NO_CONTINUE: '1' }, dataDir: path.join(dir, 'adapter-data'), context: { cwd, isCurrent: () => true }, emit: event => emitted.push(event) });
+    adapter = await createSessionRuntime({ piBin: cli, supervisorFactory, env: { ...process.env, PI_NO_CONTINUE: '1' }, dataDir: path.join(dir, 'adapter-data'), context: { cwd, isCurrent: () => true }, emit: event => emitted.push(event) });
     let failure; try { await adapter.request({ type: 'get_state' }); } catch (e) { failure = e; }
     ok('unstarted native read is unconfirmed rather than fake success', failure?.code === 'pi_request_unconfirmed');
     adapter.start();
     const deadline = Date.now() + 20000; while (adapter.getState().state !== 'ready') {
-      if (Date.now() > deadline) throw Error('native_model_fixture_ready_timeout', { cause: {
+      if (Date.now() > deadline) throw Error('native_model_fixture_ready_timeout:' + JSON.stringify({
         state: adapter.getState().state,
         events: emitted.map(event => ({ type: event.type, state: event.state, code: event.code })),
-      } });
+        transport,
+      }));
       await new Promise(r => setTimeout(r, 20));
     }
     ok('real native child state read preserves model shape', (await adapter.request({ type: 'get_state' })).model.id === 'native');
