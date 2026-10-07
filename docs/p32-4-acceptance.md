@@ -1,6 +1,6 @@
 # P32.4 Multi Session UI：实施与验收记录
 
-日期：2026-10-06。状态：**已完成 P32.4-A 与 P32.4-B，C–E 未开始**；不宣告 P32.4 通过，由用户交 ChatGPT 复验。
+日期：2026-10-06。状态：**已完成 P32.4-A、P32.4-B，P32.4-C 只做了 Changes 绑定**；不宣告 P32.4 通过，由用户交 ChatGPT 复验。
 
 ## 一、接手基线与分支
 
@@ -116,6 +116,39 @@ Runtime Fixture
 落在各自 worktree 的 cwd 下 —— 用那条路只会得到 null。所以这里直接读 registry 里
 已证明的 locator。形状判定仍只有一处（复用 `pi-compat` 的 `sessionMessageBody`）。
 
+## 三·D、P32.4-C（部分完成）：Changes 绑定到 focused 会话
+
+### 3.10 先识别真实边界，再动最小的一处
+
+`server/git-routes.js` 原来只认一个 `runtime.getCurrentCwd()` —— 全局单工作区。
+并行会话的文件在各自 worktree 里，用**全局** cwd 去看 Changes 就会「在看 A 的会话，
+却显示经典工作区的改动」。按任务书要求：**不要硬做假多会话**，先认边界，再做最小 adapter。
+
+adapter 只做一件事：**带会话身份时，由后端解析出该会话已验证的 workspace root**；
+解析不出来就**明确拒绝，绝不回落**到经典 cwd（回落才是真正的串线来源）。
+
+- `server/runtime-registry.js`：新增 `workspaceRootOf(conversationId)`，读的是记录里
+  的 `workspace.root`（后端持有、P32.2 已验证过的根），**不进 snapshot**。
+- `server/git-routes.js`：新增可注入的 `resolveScopedCwd(req)`；返回 `null` = 走经典
+  单工作区（行为不变），返回 `{ cwd }` = 会话作用域，返回 `{ error }` = 409 明确拒绝。
+  带会话身份但解析失败时**不回落**。
+- `server.js`：接线，只从请求头 `X-Pi-Gui-Conversation` 取 conversationId，
+  再问 registry 要根 —— **Renderer 永远不提交文件系统路径**。
+- `public/api.js`：`setGitConversationScope(id)`；所有 git 请求带上该头。
+- `public/app.js`：中央切到并行会话时设作用域并 `refreshGitNow()`；
+  离开并行会话（回到经典 chat/工作区）时清掉作用域并重取。
+
+### 3.11 C 还没做完的部分（下次继续）
+
+任务书 §十二 里 C 的其余内容本轮**未做**：
+
+- 中央会话视图上的 **Browser / Process 入口**（现在只有 P32.3 的 modal 里有）；
+- **切 A → B 时右栏 Browser scope 跟着切换**、A 的后台 scope 继续存在但不可叠在 UI 上
+  （验收项 25 / 26 / 27 / 29）。这部分需要动 `right-pane` 的挂载与
+  `electron/browser-runtime-host` 的 focus 目标，属独立可验收的一块。
+
+已完成的 Changes（验收项 28）见上；它已经满足「不得让 Renderer 提交任意路径」这条硬约束。
+
 ## 四、验证
 
 ### 4.1 确定性测试（离线，进 `npm test` 唯一入口）
@@ -179,7 +212,7 @@ Runtime Fixture
 
 | 套件 | 结果 |
 |---|---|
-| `npm run test:runtime`（P32.3 专项 + 新增 nav/conversation） | **258/258**（registry 32、HTTP 12、store 25、UI 14、nav 31、**conversation 42**、factory 5、supervisor 24、Browser 45、Process budget 4、SSE 14、真实 Node HTTP Process 10） |
+| `npm run test:runtime`（P32.3 专项 + 新增 nav/conversation/changes） | **268/268**（registry 32、HTTP 12、store 25、UI 14、nav 31、**conversation 42**、**changes 10**、factory 5、supervisor 24、Browser 45、Process budget 4、SSE 14、真实 Node HTTP Process 10） |
 | `tests/smoke.cjs`（侧栏结构契约） | 1338/1338 通过 |
 | `tests/worktrees-ui.cjs` | 16/16 passed |
 | `tests/ui-ia.cjs`（P30 IA） | 12/12 passed |
@@ -187,7 +220,7 @@ Runtime Fixture
 | `tests/session-search.cjs` | 72/72 通过 |
 | `tests/hotfix-ui.cjs` | 10/10 通过 |
 
-`npm test` 链脚本数 79 → **81**（新增 `tests/runtime-nav.cjs`、`tests/runtime-conversation.cjs`）。
+`npm test` 链脚本数 79 → **82**（新增 `tests/runtime-nav.cjs`、`tests/runtime-conversation.cjs`、`tests/runtime-changes.cjs`）。
 
 ### 4.3 真实 Electron（`npm run test:runtime-electron`）
 
@@ -273,9 +306,9 @@ D 需要新增资源配额 UX 与第三次启动确认，E 是模型选择与无
 
 ## 八、C–E 计划（未实施）
 
-- **C**：右栏绑定 focused conversation。Browser/Process 已有 owner scope（P32.3 完成），
-  需要把 `right-pane` 的挂载从全局 `currentCwd` 改为 focused owner；Changes 需要
-  focused 的 verified workspace root（后端已有 `withWorkspace`，不得接受 Renderer 传路径）。
+- **C**：Changes 已完成（见第三·D 节）。**剩下的**是右栏 Browser/Process 绑定 focused owner：
+  把 `right-pane` 的挂载从全局 `currentCwd` 改为 focused owner，并让切 A→B 时 scope 跟着切换
+  （验收项 25 / 26 / 27 / 29）。
 - **D**：资源 UX（2/2 文案、第三个 Runtime 的显式确认、第四个由后端 `runtime_limit` 拒绝、
   dormant/close/resume 入口）。
 - **E**：per-runtime 模型选择、thinking capability、search/history 接入、键盘/焦点/无障碍、视觉收尾。
