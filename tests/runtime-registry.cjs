@@ -65,6 +65,17 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     await check('Stop A 不停止 B，agent_end不代表idle', () => { assert.equal(adapters[0].commands.at(-1).type, 'abort'); assert.equal(adapters[1].commands.length, 1); adapters[1].emit({ type: 'agent_end', bridgeRun: 1 }); assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'B').activity, 'running'); });
     await check('不能用 switch_session 改写固定 conversation', () => reject(() => registry.command(ao, { type: 'switch_session', sessionPath: '/tmp/unknown' }), 'invalid_command'));
     await check('Focus 只选视图，不 spawn/stop', async () => { await registry.focus(bo); await registry.focus(ao); assert.equal(spawnCount, 3); assert.equal(adapters[1].commands.length, 1); });
+    await check('换焦点时旧会话也被广播（前端按 item.focused 画，否则会两行同时高亮）', async () => {
+      const before = events.length;
+      await registry.focus(bo);
+      const states = events.slice(before).filter(e => e.type === 'runtime_state');
+      const touched = new Set(states.map(e => e.owner.workspaceId));
+      assert.ok(touched.has('A') && touched.has('B'), '两侧都要广播');
+      assert.equal(states.filter(e => e.item.focused).length, 1, '同一时刻只有一条 focused');
+      assert.equal(states.find(e => e.item.focused).owner.workspaceId, 'B');
+      assert.equal(registry.snapshot().items.filter(i => i.focused).length, 1, '快照里也只有一个 focused');
+      await registry.focus(ao);
+    });
     await check('事件附完整身份，同 toolCallId不合并', () => { adapters[0].emit({ type: 'tool_execution_start', toolCallId: 'same', toolName: 'write' }); adapters[1].emit({ type: 'tool_execution_start', toolCallId: 'same', toolName: 'write' }); const got = events.filter(e => e.event?.type === 'tool_execution_start'); assert.equal(got.length, 2); assert.notEqual(got[0].owner.conversationId, got[1].owner.conversationId); });
     await check('有界 backlog/bytes且截断显式', () => { for (let i = 0; i < 220; i++) adapters[0].emit({ type: 'message_update', delta: 'x'.repeat(8000) }); const state = registry.events(ao, 0); assert.ok(state.events.length <= 200); assert.ok(state.bytes <= 1024 * 1024); assert.equal(state.historyRequired, true); });
     await check('Unicode backlog按UTF8字节计量，预算不按字符估算', () => {

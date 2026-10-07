@@ -18,7 +18,7 @@ import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
 import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
-import { sendCommand } from './api.js';
+import { sendCommand, runtimeSessionAction } from './api.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
@@ -31,7 +31,7 @@ import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { toast, withNotificationSource } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
-import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText } from './shell.js';
+import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText, setRuntimeTitle } from './shell.js';
 import { createBridgeRecovery } from './bridge-recovery.js';
 import { samePath } from './util.js';
 import { autoGrow, initComposerLayout, updateSendState } from './composer.js';
@@ -68,17 +68,24 @@ import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions, flushProjectSessionAction } from './projects.js';
 import { loadProviders, openProvidersPanel, openProviderAuthPanel, reloadPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
-import { loadGitStatus, openChangesPanel } from './git.js';
+import { loadGitStatus, openChangesPanel, refreshGitNow } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
-import { showChat } from './ui/workspace-surface.js';
+import { showChat, showRuntimeConversation, runtimeViewElement } from './ui/workspace-surface.js';
+import { createRuntimeConversation } from './runtime-conversation.js';
+import { createRuntimeSecondary } from './runtime-secondary.js';
+import { setGitConversationScope, gitConversationScope } from './api.js';
+import { setRuntimeFocusHandler } from './runtime-nav.js';
+import { refreshRuntimeResources } from './runtime-resources.js';
+import { createRuntimeModels } from './runtime-models.js';
+import { runtimeStore } from './runtime-state.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
@@ -93,7 +100,7 @@ import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
-import { openProcessPanel } from './process-panel.js';
+import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
 import { openAppUpdates } from './settings.js';
 
 /* ---------- 装配 ---------- */
@@ -105,6 +112,47 @@ setForkHandler(forkFrom);
 /* 会话列表挂在当前项目那一行下面（参考 Codex，不单开窗口）。
  * projects.js 不 import sessions.js，由这里把渲染函数递进去。 */
 setSessionsSlot(renderSidebarSessions);
+
+/* P32.4-B：侧栏点一条并行会话 → 中央切到它。
+ * focus 本身由 runtime-nav 发（带 captured owner），这里只负责把中央视图换过去；
+ * 切回经典会话/项目时由 showChat() 换回来。 */
+const runtimeModels = createRuntimeModels({ onChange: conversationId => { if (runtimeConversation.conversationId === conversationId) runtimeConversation.draw(); } });
+const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), models: runtimeModels, onTitle: setRuntimeTitle, openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses() });
+const conversationScopeActive = () => Boolean(gitConversationScope());
+const focusRuntimeConversation = conversationId => {
+  runtimeConversation.show(conversationId);
+  showRuntimeConversation();
+  runtimeSecondary.focus(conversationId);
+  /* P32.4-C：Changes 跟随 focused 会话。只设 conversationId ——
+   * 工作区根由后端从 registry 记录解析，前端不传路径。 */
+  setGitConversationScope(conversationId);
+  void refreshGitNow();
+};
+setRuntimeFocusHandler(focusRuntimeConversation);
+setRuntimeHistoryHandler((locator, match) => {
+  const item = runtimeStore.get(locator.conversationId)?.item;
+  if (item?.nativeSessionId !== locator.nativeSessionId || item.workspace?.projectId !== locator.projectId
+    || item.workspace?.workspaceId !== locator.workspaceId || item.workspace?.workspaceEpoch !== locator.workspaceEpoch) {
+    toast('会话历史身份已变化，请重新搜索。', 'warn'); return;
+  }
+  // Search navigation reads the proven native record without starting an Agent.
+  // A live conversation's existing focus remains separate from read-only intent.
+  focusRuntimeConversation(locator.conversationId);
+  if (item.owner && item.lifecycle === 'ready' && item.owner.sessionId) {
+    void runtimeSessionAction({ action: 'focus', owner: { ...item.owner } }).catch(() => {});
+  }
+  void runtimeConversation.openHistory(locator, match);
+});
+
+/* 中央离开并行会话（回到经典 chat / 工作区）时，Changes 也要跟着离开那个会话的作用域。 */
+document.addEventListener('pi-gui:workspace-view', event => {
+  if (event.detail?.view === 'runtime') return;   // 具体会话由上面的 focus handler 设定
+  if (!conversationScopeActive()) return;
+  runtimeConversation.leave();
+  runtimeSecondary.leave();
+  setGitConversationScope(null);
+  void refreshGitNow();
+});
 setProjectSessionActions({ newSession, search: openSessionSearch, previewRow: createSidebarPreviewRow, openPreviewSession: openSidebarPreviewSession });
 
 /* 会话一变（新开 / 分叉 / 切换）就要重画侧栏那块列表。
@@ -125,7 +173,9 @@ mountSessionPlans($('sessionPlans'));
  * 网页版（浏览器里跑 npm start）没有 preload 桥 —— 那时 browserPane 为 null，
  * 入口按钮直接不显示，而不是画一个点了没反应的按钮。 */
 const rightPane = initRightPane();
-configureRuntimeSessions({ pane: rightPane });
+const runtimeSecondary = rightPane ? createRuntimeSecondary({ pane: rightPane }) : null;
+const openProcessPanel = () => conversationScopeActive() ? runtimeSecondary?.openProcesses() : openClassicProcessPanel();
+configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation, openBrowser: () => runtimeSecondary?.openBrowser() });
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
 initGuiBrowserState();
@@ -135,7 +185,7 @@ if (btnBrowser) {
   if (!browserPane) {
     btnBrowser.hidden = true; // 网页版：没有内置浏览器这回事
   } else {
-    btnBrowser.addEventListener('click', () => browserPane.toggle());
+    btnBrowser.addEventListener('click', () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.toggle());
     /* 右栏可能从内部（工具栏的 ×）关掉，只有它自己知道 —— 所以入口按钮的
      * 状态跟着事件走，不去猜。 */
     document.addEventListener('pi-gui:right-pane', (e) => {
@@ -360,6 +410,9 @@ export function reconcileBridgeSnapshot(snapshot) {
   if (typeof evt.cwd === 'string') S.cwd = evt.cwd;
   if (snapshot.legacyOwner) S.legacyOwner = snapshot.legacyOwner;
   S.hasProject = evt.hasProject ?? Boolean(S.cwd);
+  // Classic children share the backend budget with independent conversations.
+  // Refresh only after this snapshot passed the bridge authority guards.
+  void refreshRuntimeResources().catch(() => {});
   bridgeRecovery.observe({ ...evt, hasProject: S.hasProject });
   observeWebEvent(evt);
   observeSubagentEvent(evt);
@@ -1135,7 +1188,7 @@ defineCommands([
   { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表', run: () => openExtensions() },
   /* 内置浏览器：只是**右栏的一个面板**，不是第四个一级视图 —— 所以它在这里，
    * 不进左侧全局导航栏。when 为假（网页版）时压根不进列表，不灰着骗人。 */
-  { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => browserPane.open() },
+  { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.open() },
   { id: 'view.capabilities', title: '能力视图（Capabilities）', group: '视图', keywords: 'capability 能力 状态 可用', run: () => openExtensions({ tab: 'capabilities' }) },
   { id: 'view.skills', title: 'Skills', group: '视图', keywords: 'skill 技能', run: () => openExtensions({ tab: 'skills' }) },
   { id: 'view.mcp', title: 'MCP', group: '视图', keywords: 'mcp server 原生', run: () => openExtensions({ tab: 'mcp' }) },

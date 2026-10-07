@@ -7,10 +7,24 @@ const CODES = new Set(['stale_runtime', 'stale_workspace', 'unknown_workspace', 
   'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args']);
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const fail = () => { throw Object.assign(Error('invalid_request'), { code: 'invalid_request' }); };
-export function createRuntimeRoutes({ registry, validateWorkspace = async () => {} } = {}) {
+export function createRuntimeRoutes({ registry, validateWorkspace = async () => {}, readHistory = null } = {}) {
   return { async handle(req, res) {
     try {
-      if (req.method === 'GET') return json(res, 200, registry.snapshot());
+      if (req.method === 'GET') {
+        /* P32.4：只读历史。**不 spawn** —— 读的是 registry 记录里后端持有、
+         * 绑定时已证明过的 sessionLocator；前端只传 conversationId，不传路径。 */
+        const conversationId = new URL(req.url, 'http://127.0.0.1').searchParams.get('conversationId');
+        if (!conversationId) return json(res, 200, registry.snapshot());
+        const target = registry.historyTarget(conversationId);
+        if (!target) return json(res, 404, { ok: false, code: 'unknown_conversation' });
+        if (!target.sessionLocator || !readHistory) return json(res, 409, { ok: false, code: 'history_unavailable' });
+        const history = await readHistory(target.sessionLocator, target);
+        if (!history?.ok) return json(res, 409, { ok: false, code: history?.code || 'history_unavailable' });
+        const current = registry.historyTarget(conversationId);
+        if (!current || current.sessionLocator !== target.sessionLocator || JSON.stringify(current.locator) !== JSON.stringify(target.locator)
+          || JSON.stringify(current.sessionIdentity) !== JSON.stringify(target.sessionIdentity)) return json(res, 409, { ok: false, code: 'history_unavailable' });
+        return json(res, 200, { ok: true, sessionId: target.sessionId, locator: target.locator, messages: history.messages, truncated: history.truncated === true });
+      }
       if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'invalid_request' });
       const body = JSON.parse((await readRawBody(req, 96 * 1024 * 1024)).toString('utf8'));
       if (!closed(body, ['action', 'owner', 'args', 'conversationId', 'allowThird', 'command', 'cursor'])) fail();

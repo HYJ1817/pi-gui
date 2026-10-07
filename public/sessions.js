@@ -55,6 +55,13 @@ import {
   refreshSearch,
   setSearchChangeHandler,
 } from './session-search.js';
+import { clearRuntimeNav, loadRuntimeNav, repaintRuntimeNav, runtimeNavCount, setRuntimeNavParent } from './runtime-nav.js';
+
+/* P32.4：并行会话与经典会话共用同一块列表区，两边都要能独立决定这块存不存在。
+ * runtime 状态变化由 runtime-nav 自己订阅（它不该依赖本模块替它接线）。 */
+let currentProject = {};
+let runtimeHistoryHandler = null;
+export function setRuntimeHistoryHandler(fn) { runtimeHistoryHandler = typeof fn === 'function' ? fn : null; }
 
 /** 进行中的会话一次最多列几条，超出折叠（和 Codex 一样给个「展开显示」）。 */
 const COLLAPSED = 6;
@@ -308,6 +315,10 @@ export async function renderSidebarSessions(projectEl, project = {}) {
   archivedOpen = false;
   /* 每个项目记住自己的展开状态，并换上对应的折叠箭头。 */
   projectKey = project.path || projectEl.title;
+  currentProject = project || {};
+  /* 换了项目 → 并行会话的归属与列表必须整块丢掉重来，不能拿着 A 的
+   * conversationId 去画 B 的侧栏。 */
+  clearRuntimeNav();
   collapsed = !projectExpanded(projectKey, true);
   if (chevRef && chevRef.isConnected) chevRef.remove();
   chevRef = makeChevron(projectEl, projectEl.querySelector('.pj-name')?.textContent || '');
@@ -352,7 +363,12 @@ async function fill(box, token) {
   // 旧请求回来晚了，或者这块已经被项目列表重渲染带走了
   if (token !== loadToken || !box.isConnected || !ownsWorkspace(generation) || !S.hasProject) return;
 
-  if (!data.hasProject || !(data.sessions || []).length) {
+  /* P32.4：并行会话与经典会话共用这块区域，所以「有没有内容可显示」要两边一起看。
+   * 只读快照 + worktrees 归属，**不 spawn**；列出来本身不消耗 Runtime slot。 */
+  const runtimeCount = await loadRuntimeNav(currentProject, { parent: null });
+  if (token !== loadToken || !box.isConnected || !ownsWorkspace(generation) || !S.hasProject) return;
+
+  if ((!data.hasProject || !(data.sessions || []).length) && !runtimeCount) {
     clearSessionPlans(); // 没有会话就没有关联可显示
     box.remove();
     /* 一个会话都没有 → 没有可折叠的东西，箭头必须跟着消失，
@@ -402,6 +418,13 @@ function paintList() {
 
   area.dataset.view = 'list';
   area.replaceChildren();
+
+  /* P32.4：并行会话排在经典会话**之前** —— 它们是「正在跑的活」，经典列表是
+   * 「历史」。identity 仍然分开：并行会话走 registry 的 conversationId，
+   * 经典会话走 pi 的 session id，两者不合并成一个字段。
+   * 容器由 runtime-nav 自己在 area 里 prepend，重画时会被 replaceChildren 清掉再建。 */
+  setRuntimeNavParent(area);
+  repaintRuntimeNav();
 
   const all = data.sessions || [];
   const live = all.filter((s) => !s.archived);
@@ -558,6 +581,12 @@ async function doSwitch(s, locateUserIndex = null) {
  */
 function pickResult(res, match) {
   if (!res) return;
+  if (res.locator) {
+    const locator = res.locator;
+    if (!['projectId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'nativeSessionId'].every(k => typeof locator[k] === 'string' && locator[k])) return;
+    runtimeHistoryHandler?.({ ...locator }, match ? { ...match } : null);
+    return;
+  }
   if (capMissing('switchSession')) {
     toast('当前 pi 没有提供「切换会话」能力（详情见侧栏「诊断」）', 'warn');
     return;

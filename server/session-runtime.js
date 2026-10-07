@@ -19,6 +19,12 @@ const fail = code => Object.assign(Error(code), { code });
 // This narrow surface projects tool activity. Raw args/result/worker diagnostics
 // stay in Pi; message text is intentional conversation content, not diagnostics.
 export function projectRuntimeEvent(event) {
+  if (event?.type === 'response' && event.success === false && ['set_thinking_level', 'cycle_thinking_level'].includes(event.command)) {
+    const response = { type: 'response', command: event.command, success: false, error: 'Pi 未能完成思考级别操作；请检查模型配置后重试。' };
+    if (typeof event.id === 'string' || typeof event.id === 'number') response.id = event.id;
+    if (Number.isInteger(event.bridgeRun)) response.bridgeRun = event.bridgeRun;
+    return response;
+  }
   if (['bridge_stderr', 'bridge_parse_error'].includes(event?.type)) return { type: event.type, bridgeRun: event.bridgeRun };
   if (event?.type === 'extension_error') return { type: event.type, error: '扩展执行或加载失败', bridgeRun: event.bridgeRun };
   if (event?.type?.startsWith('tool_execution_')) return { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName,
@@ -83,7 +89,13 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   return {
     start: () => resumeFile ? rpc.restart({ sessionPath: resumeFile }) : rpc.start(),
     getState: rpc.getState, request: async cmd => {
+      if (disposed || !context.isCurrent()) throw fail('stale_runtime');
       const result = await rpc.request(cmd);
+      if (disposed || !context.isCurrent()) throw fail('stale_runtime');
+      if (!result) throw fail('pi_request_unconfirmed');
+      // Private RPC requests encode native failure as __error. Never turn that
+      // object into a successful public model/state read or expose its text.
+      if (Object.hasOwn(result, '__error')) throw fail('pi_request_failed');
       return projectRuntimeEvent(generation.observe(sanitizeModelEvent({ type: 'response', command: cmd.type, success: true, data: result },
         ['get_state', 'get_available_models'].includes(cmd.type) ? readModelsConfig() : null))).data;
     },

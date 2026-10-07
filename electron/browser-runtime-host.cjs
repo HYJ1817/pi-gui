@@ -23,8 +23,11 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
   const lookup=scope=>{const key=scopeKey(scope),r=records.get(key);if(!r)throw Error('stale_runtime');return r;};
   function focus(scope){
     const next=scope==null?null:lookup(scope).key;
+    // 同一 owner 的重复 focus（如关闭覆盖层时迟到的 focus 回应）不撤掉已绑定视图。
+    if(next!==null&&next===focused)return {ok:true};
     focused=next;
-    for(const r of records.values())r.controller.setOccluded(r.key!==focused);
+    // Focus never exposes an old rectangle before the renderer binds its pane.
+    for(const r of records.values())r.controller.setOccluded(true);
     onFocus(next!==null);
     return {ok:true};
   }
@@ -75,7 +78,7 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
     if(!allowed(event))return {ok:false,code:'desktop_required'};
     if(disposed)return {ok:false,code:'stale_runtime'};
     try{const r=lookup(body?.scope);if(needsFocus&&r.key!==focused)return {ok:false,code:'not_focused'};
-      if(action==='status')return {ok:true,...project(r)};
+      if(action==='status')return {ok:true,...project(r),opened:Boolean(r.controller.getWebContents?.()),browserState:r.controller.getState?.()};
       if(action==='enable'){if(typeof body.enabled!=='boolean')throw Error('invalid_request');if(body.enabled&&!project(r).available)return {ok:false,code:'cdp_unavailable'};return {ok:true,...await r.agent.setEnabled(body.enabled)};}
       if(action==='open')return r.controller.open();
       if(action==='navigate')return r.controller.navigate(body.url);

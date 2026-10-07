@@ -4,7 +4,7 @@
  * 而它们本身又不属于任何一个业务域。放在这里可以避免
  * projects → app → projects 这类循环。 */
 
-import { el, S, ownsWorkspace } from './state.js';
+import { $, el, S, ownsWorkspace } from './state.js';
 import { fetchStatus } from './api.js';
 import { maintenanceCopy } from './status-copy.js';
 import { updateSendState, renderModelControls } from './composer.js';
@@ -53,10 +53,19 @@ export function setBridgeState(state, detail = '', maintenanceReason = null) {
   applyProjectState();
 }
 
+let classicTitle = el.title?.textContent || '新会话', runtimeTitle = null;
 export function setTitleText(t) {
   if (!t) return;
-  el.title.textContent = t;
+  classicTitle = t;
+  if ($('workspace')?.dataset.workspaceView !== 'runtime') el.title.textContent = t;
 }
+export function setRuntimeTitle(t) {
+  runtimeTitle = t || null;
+  if ($('workspace')?.dataset.workspaceView === 'runtime' && el.title) el.title.textContent = runtimeTitle || classicTitle;
+}
+document.addEventListener('pi-gui:workspace-view', event => {
+  if (el.title) el.title.textContent = event.detail?.view === 'runtime' ? runtimeTitle || classicTitle : classicTitle;
+});
 
 /** 「有没有项目」决定整块界面的形态。
  *

@@ -34,11 +34,21 @@ function gitStatusOf(result) {
 
 /**
  * @param runtime 共享运行态（要 cwd）。只读，不改。
+ * @param withScopedWorkspace 可选的会话 authority wrapper。必须在整个 action
+ *        完成后才释放 P32.2 lifecycle lock；action(null) 仅用于经典请求。
  */
-export function createGitRoutes({ runtime }) {
-  function handle(req, res, url) {
+export function createGitRoutes({ runtime, withScopedWorkspace = null }) {
+  async function handle(req, res, url) {
+    if (!withScopedWorkspace) return operate(req, res, url, runtime.getCurrentCwd());
+    try {
+      return await withScopedWorkspace(req, cwd => operate(req, res, url, cwd === null ? runtime.getCurrentCwd() : cwd));
+    } catch (error) {
+      return json(res, 409, { ok: false, isRepo: false, code: error.code || 'workspace_unavailable',
+        error: '这条会话的工作区当前不可用，请刷新后重试。' });
+    }
+  }
+  function operate(req, res, url, cwd) {
     const sub = url.pathname.slice('/api/git/'.length);
-    const cwd = runtime.getCurrentCwd();
 
     if (sub === 'status' && req.method === 'GET') {
       return gitStatus(cwd)

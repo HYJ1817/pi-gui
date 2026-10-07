@@ -38,6 +38,9 @@ const MIN_WIDTH = 320;
  * 拿实际可用宽度跟它比，而不是写一个看起来合理的窗口断点。
  * （四个验收尺寸 700/900/1200/1536 都真实量过，见 tests/cdp-shot.cjs。） */
 const CHAT_FLOOR = 420;
+// Runtime controls wrap and model fields stack; keep them beside the pane at
+// the supported zoom sizes instead of covering them with the classic drawer.
+const RUNTIME_FLOOR = 320;
 
 const byId = (id) => document.getElementById(id);
 
@@ -110,17 +113,26 @@ export function initRightPane() {
     const sidebar = byId('projectSidebar');
     const railW = rail ? rail.getBoundingClientRect().width : 0;
     const sideW = sidebar && !sidebar.hidden ? sidebar.getBoundingClientRect().width : 0;
-    const available = app.clientWidth - railW - sideW - (root.hidden ? 0 : width) - resizer.offsetWidth;
-    const mode = !root.hidden && available < CHAT_FLOOR ? 'overlay' : 'dock';
+    const available = app.clientWidth - railW - sideW - (root.hidden ? 0 : root.getBoundingClientRect().width) - resizer.offsetWidth;
+    const floor = byId('workspace')?.dataset.workspaceView === 'runtime' ? RUNTIME_FLOOR : CHAT_FLOOR;
+    const mode = !root.hidden && available < floor ? 'overlay' : 'dock';
     if (root.dataset.mode !== mode) root.dataset.mode = mode;
   }
 
   function applyWidth() {
+    let renderedWidth = width;
+    if (byId('workspace')?.dataset.workspaceView === 'runtime') {
+      const railW = byId('globalRail')?.getBoundingClientRect().width || 0;
+      const sidebar = byId('projectSidebar');
+      const sideW = sidebar && !sidebar.hidden ? sidebar.getBoundingClientRect().width : 0;
+      const room = Math.floor(app.clientWidth - railW - sideW - RUNTIME_FLOOR - resizer.offsetWidth);
+      renderedWidth = Math.min(width, Math.max(MIN_WIDTH, room));
+    }
     /* 变量写在 :root 上而不是面板自己身上 —— #toasts 是 body 的另一个子节点，
      * 它要靠 var(--rp-width) 往左让开右栏（见 styles.css 的 Toast 一节）。
      * 写在面板上，那条规则就取不到值了。 */
-    document.documentElement.style.setProperty('--rp-width', width + 'px');
-    root.style.width = width + 'px';
+    document.documentElement.style.setProperty('--rp-width', renderedWidth + 'px');
+    root.style.width = renderedWidth + 'px';
     applyMode();
     scheduleMeasure();
   }
@@ -179,7 +191,7 @@ export function initRightPane() {
    * 没它只是「面板不会自动重量」，不该让整个模块加载失败。 */
   if (typeof ResizeObserver !== 'undefined') {
     const ro = new ResizeObserver(() => {
-      applyMode();
+      applyWidth();
       scheduleMeasure();
     });
     /* 也盯住两侧固定列：侧栏折叠时 app 的尺寸没变，变的是 stage 与面板各分到多少 ——
@@ -189,9 +201,10 @@ export function initRightPane() {
     }
   }
   window.addEventListener('resize', () => {
-    applyMode();
+    applyWidth();
     scheduleMeasure();
   });
+  document.addEventListener('pi-gui:workspace-view', applyWidth);
 
   /* ---------- 被弹层遮住时把原生 view 摘下去 ----------
    *
@@ -268,7 +281,7 @@ export function initRightPane() {
     event.preventDefault(); event.stopPropagation(); close();
   });
   document.addEventListener('pi-gui:workspace-view', event => {
-    if (event.detail?.view !== 'chat' && !root.hidden) close();
+    if (!['chat', 'runtime'].includes(event.detail?.view) && !root.hidden) close();
   });
 
   return {

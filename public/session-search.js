@@ -284,6 +284,7 @@ function statusLine(text, cls) {
 function makeResult(res, onPick) {
   const box = node('div', 'pj-sr');
   box.dataset.sessionId = res.id;
+  if (res.locator) box.dataset.conversationId = res.locator.conversationId;
   if (res.archived) box.classList.add('archived');
 
   const head = node('button', 'pj-sr-head');
@@ -292,6 +293,7 @@ function makeResult(res, onPick) {
   head.onclick = () => onPick(res, (res.matches || [])[0] || null);
   const title = node('span', 'pj-sr-title', res.title || '（无标题）');
   head.append(title);
+  if (res.locator) head.append(node('span', 'pj-sr-badge', '并行 · 只读历史'));
   if (res.archived) head.append(node('span', 'pj-sr-badge', '已归档'));
   head.append(node('span', 'pj-sr-time', fmtTime(res.updatedAt)));
   box.append(head);

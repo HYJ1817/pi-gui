@@ -117,7 +117,7 @@ function textParts(content) {
   return out.join('\n');
 }
 
-export function createSessionSearch({ runtime, sessions, limits = {}, env = process.env } = {}) {
+export function createSessionSearch({ runtime, sessions, runtimeCandidates = async () => [], readRuntimeCandidate = null, limits = {}, env = process.env } = {}) {
   const L = { ...LIMITS, ...limits };
   const P = sessions.forSearch;
   const SEP = path.sep;
@@ -160,8 +160,8 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
   }
 
   /** 解析一个会话文件 → 可搜索的消息序列。读不出来回 null（坏文件不拖垮搜索）。 */
-  function parse(file, maxBytes) {
-    const r = P.readCapped(file, maxBytes);
+  function parse(file, maxBytes, verified = null) {
+    const r = verified || P.readCapped(file, maxBytes);
     if (!r) return null;
 
     const lines = r.text.split('\n');
@@ -283,8 +283,15 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
 
     const { cwd, items, skipped: unreadable } = P.ownedSessions();
     if (!cwd) return { ...empty, hasProject: false };
-
-    const want = sc === 'all' ? items : items.filter((s) => (sc === 'archived' ? s.archived : !s.archived));
+    const candidates = readRuntimeCandidate && sc !== 'archived' ? await runtimeCandidates(cwd) : [];
+    const sameContext = () => P.normCwd(runtime.getCurrentCwd()) === P.normCwd(cwd);
+    if (!sameContext()) return { ...empty, ok: false, code: 'stale_workspace' };
+    const parallel = Array.isArray(candidates) ? candidates.map(target => ({
+      id: 'runtime-' + target.locator.conversationId, sessionId: target.sessionId, title: target.title,
+      file: target.sessionLocator, locator: target.locator, target,
+      createdAt: target.createdAt, updatedAt: statOf(target.sessionLocator).mtimeMs, archived: false,
+    })) : [];
+    const want = [...(sc === 'all' ? items : items.filter((s) => (sc === 'archived' ? s.archived : !s.archived))), ...parallel];
     /* 最近更新的先看 —— 这样命中上限先被「用户更可能想找的」占掉；
      * 最终排序用的也是这个顺序。 */
     want.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -310,7 +317,7 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
        * 「连续遇到一堆坏文件」就又变回一次长阻塞。 */
       seen++;
       if (seen % L.yieldEvery === 0) await new Promise((r) => setImmediate(r));
-      if (!insideRoot(s.file)) {
+      if (!s.locator && !insideRoot(s.file)) {
         skipped++;
         continue;
       }
@@ -320,7 +327,10 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
         /* 每个会话都按**同一个**上限读。不用「剩余预算」去压这一次的上限 ——
          * 那会让同一个关键词的结果随扫描顺序变化（前一次搜得到、后一次搜不到）。
          * 预算的作用是**限制扫几个会话**，不是限制每个读多少。 */
-        rec = parsed(s.file, L.maxSessionBytes);
+        if (s.locator) {
+          const verified = await readRuntimeCandidate(s.target, L.maxSessionBytes);
+          rec = verified?.ok ? parse(s.file, L.maxSessionBytes, verified) : null;
+        } else rec = parsed(s.file, L.maxSessionBytes);
       } catch {
         rec = null; // 单个坏文件绝不能把整次搜索带塌
       }
@@ -361,7 +371,8 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
         archived: Boolean(s.archived),
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
-        messageCount: s.messageCount,
+        messageCount: s.messageCount ?? rec.entries.length,
+        ...(s.locator ? { locator: { ...s.locator } } : {}),
         matches: matches.slice(0, L.maxMatchesPerSession),
       });
     }
@@ -374,6 +385,7 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
     }
     results.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
+    if (!sameContext()) return { ...empty, ok: false, code: 'stale_workspace' };
     return {
       ok: true,
       query,
@@ -393,9 +405,9 @@ export function createSessionSearch({ runtime, sessions, limits = {}, env = proc
     const scope = url.searchParams.get('scope') || 'active';
     return search(q, scope)
       .then((r) => json(res, 200, r))
-      .catch((err) =>
+      .catch(() =>
         // 搜索失败不回 500：前端只需要「失败了」，不需要分辨状态码
-        json(res, 200, { ok: false, error: String((err && err.message) || err), results: [] })
+        json(res, 200, { ok: false, code: 'search_unavailable', error: '搜索未完成，请重试。', results: [] })
       );
   }
 

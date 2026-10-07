@@ -36,9 +36,9 @@ export async function downloadSessionHtml() {
 }
 
 /** GET 一个 JSON 接口。网络层失败返回 {ok:false, network:true}。 */
-export async function getJSON(url) {
+export async function getJSON(url, headers) {
   try {
-    const r = await fetch(url);
+    const r = await fetch(url, headers ? { headers } : undefined);
     return await r.json();
   } catch (err) {
     return { ok: false, error: err.message, network: true };
@@ -46,7 +46,7 @@ export async function getJSON(url) {
 }
 
 /** POST / DELETE 一个 JSON 接口。网络层失败同样返回结构化结果，不抛。 */
-export async function sendJSON(url, { method = 'POST', body, contentType } = {}) {
+export async function sendJSON(url, { method = 'POST', body, contentType, headers } = {}) {
   if (url === '/api/restart' || url === '/api/sessions/switch' || url.includes('/open-session')
     || (url === '/api/command' && ['abort', 'new_session', 'fork', 'switch_session', 'steer', 'follow_up'].includes(body?.type))) S.cancelFallback?.('user-operation');
   const opts = { method };
@@ -58,6 +58,7 @@ export async function sendJSON(url, { method = 'POST', body, contentType } = {})
     opts.body = JSON.stringify(body || {});
   }
   if (S.legacyOwner) opts.headers = { ...opts.headers, 'X-Pi-Gui-Owner': JSON.stringify(S.legacyOwner) };
+  if (headers) opts.headers = { ...opts.headers, ...headers };
   try {
     const r = await fetch(url, opts);
     return await r.json();
@@ -85,7 +86,17 @@ export async function sendCommand(cmd) {
 /* ---------- 状态 / 项目 ---------- */
 
 export const fetchStatus = () => getJSON('/api/status');
-export const fetchRuntimeSessions = () => getJSON('/api/runtime-sessions');
+let runtimeReadSequence = 0;
+export async function fetchRuntimeSessions() {
+  const sequence = ++runtimeReadSequence;
+  const snapshot = await getJSON('/api/runtime-sessions');
+  // Local ordering only; never sent to backend or displayed. Resource counts
+  // have no backend revision, so views must reject delayed earlier readbacks.
+  if (snapshot && typeof snapshot === 'object') Object.defineProperty(snapshot, '_runtimeReadSequence', { value: sequence });
+  return snapshot;
+}
+/* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
+export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProcesses = () => getJSON('/api/processes');
@@ -152,18 +163,31 @@ export const fetchProviderModels = (payload) => sendJSON('/api/providers/models'
 
 /* ---------- Git 变更 ---------- */
 
-export const fetchGitStatus = () => getJSON('/api/git/status');
+/* P32.4-C：Changes 要跟随 focused 的并行会话。这里**只放 conversationId** ——
+ * 工作区根由后端从 registry 记录解析；前端永远不提交文件系统路径。 */
+let gitConversationId = null;
+export function setGitConversationScope(id) {
+  const next = typeof id === 'string' && id ? id : null;
+  if (next === gitConversationId) return;
+  gitConversationId = next;
+  document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+}
+export function gitConversationScope() { return gitConversationId; }
+const gitScopeHeaders = (id = gitConversationId) => (id ? { 'X-Pi-Gui-Conversation': id } : undefined);
+
+export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders());
 
 /** 拉某个文件的 diff。`context` 为 undefined 时不传，由 git 用默认上下文；
  *  传数字或 'all' 则是用户显式要求展开更多上下文 —— 这必须重新问后端，
  *  前端无法从已截断的正文里补出被 git 裁掉的上下文行。 */
 export const fetchGitDiff = (path, context) =>
-  sendJSON('/api/git/diff', { body: context === undefined || context === null ? { path } : { path, context } });
+  sendJSON('/api/git/diff', { headers: gitScopeHeaders(), body: context === undefined || context === null ? { path } : { path, context } });
 
 /** 撤销单个文件。两个布尔是**授权开关**，默认全关：
  *  deleteUntracked 允许删除未跟踪文件，unstage 允许取消暂存（会改 index）。 */
-export const restoreGitPath = (path, { deleteUntracked = false, unstage = false } = {}) =>
+export const restoreGitPath = (path, { deleteUntracked = false, unstage = false } = {}, conversationId = gitConversationId) =>
   sendJSON('/api/git/restore', {
+    headers: gitScopeHeaders(conversationId),
     body: { path, deleteUntracked: Boolean(deleteUntracked), unstage: Boolean(unstage) },
   });
 
@@ -173,13 +197,14 @@ export const restoreGitPath = (path, { deleteUntracked = false, unstage = false 
  *  一个字都不动。用户看过计划点头后再带 `planned: true` 重发，这次才真的执行。
  *  两个布尔是授权开关：unstage 允许取消暂存（会改 index），
  *  deleteUntracked 允许删除未跟踪文件。 */
-export const restoreAllGitPaths = ({ deleteUntracked = false, unstage = false, planned = false } = {}) =>
+export const restoreAllGitPaths = ({ deleteUntracked = false, unstage = false, planned = false } = {}, conversationId = gitConversationId) =>
   sendJSON('/api/git/restore-all', {
+    headers: gitScopeHeaders(conversationId),
     body: { deleteUntracked: Boolean(deleteUntracked), unstage: Boolean(unstage), planned: Boolean(planned) },
   });
 
 /** 只做校验并拿回绝对路径；真正「用系统默认程序打开」由 Electron 侧完成。 */
-export const resolveGitOpenTarget = (path) => sendJSON('/api/git/open', { body: { path } });
+export const resolveGitOpenTarget = (path) => sendJSON('/api/git/open', { headers: gitScopeHeaders(), body: { path } });
 
 /* ---------- 扩展能力（Skills / MCP） ---------- */
 

@@ -2559,3 +2559,56 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .runtime-approval { padding: 12px 0; }
 .runtime-approval .btn { margin-right: 8px; }
 @media (max-width: 720px) { .runtime-layout { grid-template-columns: 1fr; gap: 12px; } .runtime-list { max-height: 120px; } }
+
+/* ---------- P32.4：项目会话区里的并行会话 ----------
+ *
+ * 信息密度沿用 P30：**一个**状态点 + 一行必要时的小字，不做彩色 badge，
+ * 不把 runtimeId / workspace UUID / PID 这类诊断字段放进正常 UI。
+ * 行位置只由后端 createdAt 决定，这里不参与排序。 */
+.pj-runtime-list{display:flex;flex-direction:column;gap:2px}
+.pj-runtime-list[hidden]{display:none}
+.project-sidebar .pj-runtime{min-height:30px}
+.pj-runtime-dot.running{border-color:var(--run);background:var(--run);opacity:1}
+.pj-runtime-dot.stopping{border-color:var(--warn);background:var(--warn);opacity:.85}
+.pj-runtime-dot.error{border-color:var(--err);background:var(--err);opacity:.85}
+.pj-runtime-dot.ready{border-color:var(--ok);opacity:.85}
+.pj-runtime-status{margin-left:auto;flex:0 0 auto;font-size:10.5px;color:var(--t3)}
+.pj-runtime-attention{flex:0 0 6px;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--run)}
+.pj-runtime-new{display:flex;align-items:center;gap:6px;width:100%;background:transparent;border:0;text-align:left;font:inherit;cursor:pointer;color:var(--t3)}
+.pj-runtime-new:hover{color:var(--t1);background:var(--hover)}
+.pj-runtime-plus{flex:0 0 6px;text-align:center;opacity:.75}
+
+/* ---------- P32.4-B：中央的并行会话承载 ----------
+ *
+ * 与 chat 同宽同留白（沿用 --conversation-max-width），因为它就是「一条对话」，
+ * 不该看起来像另一个产品。 */
+.runtime-conversation-view{flex:1;min-height:0;overflow:auto;display:flex;justify-content:center;padding:var(--work-surface-padding)}
+.runtime-conversation-view[hidden]{display:none}
+.runtime-conversation{width:100%;max-width:var(--conversation-max-width);display:flex;flex-direction:column;gap:10px;min-height:0}
+.runtime-conversation .rtc-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.runtime-conversation .rtc-output{flex:1;min-height:120px;max-height:none;margin:0;padding:12px 0;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
+.runtime-conversation textarea{width:100%;min-height:86px;max-height:240px;resize:vertical;font:inherit;background:var(--input);color:var(--t1);border:1px solid var(--line);border-radius:12px;padding:12px 14px;flex-shrink:0}
+.runtime-conversation textarea:focus-visible,.rtc-models select:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.runtime-conversation textarea::placeholder{color:var(--t2)}
+.runtime-conversation textarea:disabled{opacity:.65}
+.rtc-models{display:flex;align-items:end;flex-wrap:wrap;gap:8px 12px;min-width:0}
+.rtc-model-field{display:flex;flex-direction:column;gap:4px;color:var(--t2);font-size:12px;min-width:0;max-width:100%}
+.rtc-model-field:first-child{flex:1 1 240px}
+.rtc-models select{min-width:0;width:100%;max-width:100%;color:var(--t1);background:var(--input);border:1px solid var(--line);border-radius:7px;padding:7px 9px;font:inherit}
+.rtc-model-notice{font-size:12px;color:var(--t2);overflow-wrap:anywhere;flex:1 1 180px}
+.runtime-conversation .rtc-title{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.runtime-conversation .rtc-controls{width:100%;min-width:0}
+.runtime-conversation .rtc-notice{font-size:12px;color:var(--t2);overflow-wrap:anywhere}
+.runtime-conversation .rtc-notice:empty{display:none}
+@media(max-width:900px){.runtime-conversation-view{padding:14px}.runtime-conversation .rtc-controls{gap:6px}.rtc-model-field:first-child{flex-basis:180px}}
+/* 中央会话视图自己的类名（`rtc-` 前缀）：**不复用 modal 的 `.runtime-*`** ——
+ * 同名元素会让 `document.querySelector('.runtime-controls')` 之类命中隐藏的中央视图
+ * （它在 DOM 里更靠前），进而把点击落到遮罩上。样式各写各的。 */
+.runtime-conversation .rtc-title{font-weight:600}
+.runtime-conversation .rtc-state{color:var(--t2);font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.runtime-conversation .rtc-state:empty{display:none}
+.runtime-conversation .rtc-controls{display:flex;gap:8px;flex-wrap:wrap}
+.runtime-conversation .rtc-approvals:empty{display:none}
+.runtime-conversation .rtc-approval{padding:8px 0}
+.runtime-resource-count{color:var(--t3);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.pj-runtime-list>.runtime-resource-count{padding:4px 12px}

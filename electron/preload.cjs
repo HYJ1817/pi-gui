@@ -46,6 +46,11 @@ try {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
     isDesktop: true,
     runtimeBrowser: {
+      onOpen: callback => {
+        const listener = (_event, frame) => callback(frame);
+        ipcRenderer.on('pi-gui:runtime-browser-open', listener);
+        return () => ipcRenderer.removeListener('pi-gui:runtime-browser-open', listener);
+      },
       onState: cb => {
         if (typeof cb !== 'function') return () => {};
         const listener = (_event, value) => cb(value);
@@ -73,7 +78,7 @@ try {
      * @param {string} relPath 项目相对路径（形如 a/b.txt）。绝对路径会被后端拒绝。
      * @returns {Promise<{ok:boolean, abs?:string, error?:string}>}
      */
-    openPath: (relPath) => ipcRenderer.invoke('pi-gui:open-path', String(relPath ?? '')),
+    openPath: (relPath, conversationId = null) => ipcRenderer.invoke('pi-gui:open-path', String(relPath ?? ''), conversationId),
 
     /**
      * 用系统浏览器打开一个链接（版本检查的「查看 Release」/「下载」）。

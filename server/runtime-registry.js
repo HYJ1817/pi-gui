@@ -26,9 +26,12 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const value = JSON.parse(fs.readFileSync(manifest, 'utf8'));
       if (value.version !== 1 || !Array.isArray(value.items) || value.items.length > 256) throw Error();
       for (const r of value.items) {
-        if (!closed(r, ['conversationId', 'workspace', 'sessionId', 'sessionLocator', 'createdAt']) || typeof r.conversationId !== 'string'
+        if (!closed(r, ['conversationId', 'workspace', 'sessionId', 'sessionLocator', 'sessionIdentity', 'sessionName', 'createdAt']) || typeof r.conversationId !== 'string'
           || !/^[\da-f-]{36}$/.test(r.conversationId) || records.has(r.conversationId)
           || !closed(r.workspace, ['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root', 'branch'])
+          || (r.sessionName !== undefined && (typeof r.sessionName !== 'string' || r.sessionName.length > 200))
+          || (r.sessionIdentity != null && (!closed(r.sessionIdentity, ['dev', 'ino', 'birthtimeMs'])
+            || !['dev', 'ino', 'birthtimeMs'].every(k => typeof r.sessionIdentity[k] === 'number' && Number.isFinite(r.sessionIdentity[k]))))
           || !['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root'].every(k => typeof r.workspace[k] === 'string')) throw Error();
         records.set(r.conversationId, r);
       }
@@ -60,6 +63,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   function summary(record) {
     const live = lives.get(record.conversationId);
     return { conversationId: record.conversationId, workspace: { ...record.workspace },
+      /* P32.4：侧栏要按**创建时间**排会话，且点击不得让行换位。排序键必须来自
+       * 后端持久记录（record.createdAt），不能由前端按「最近活动」猜 ——
+       * 那正是「点一下行就跳位置」的来源。 */
+      createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
+      nativeSessionId: record.sessionId || null, sessionName: record.sessionName || null, title: record.sessionName || record.workspace.branch || '并行会话',
       revision: revisions.get(record.conversationId) || 0,
       owner: live ? owner(live) : null, lifecycle: live?.lifecycle || 'dormant', activity: live?.activity || 'idle',
       attention: live?.attention === true, focused: focused === record.conversationId, historyRequired: live?.historyRequired === true,
@@ -77,7 +85,18 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     if (event.type === 'bridge_status') {
       live.lifecycle = event.state === 'ready' ? 'ready' : ['error', 'exited'].includes(event.state) ? 'error' : 'starting';
-      if (event.state === 'ready') { live.everReady = true; void refreshSession(live); }
+      if (event.state === 'ready') {
+        live.everReady = true;
+        const generation = live.generation;
+        void refreshSession(live).catch(() => {
+          if (!belongs(live) || generation !== live.generation) return;
+          // A failed private read cannot establish native identity. Keep the
+          // child, slot and lease owned until explicit close/restart; publish
+          // only a fixed code, never upstream request error or worker payload.
+          live.lifecycle = 'error'; live.error = 'session_state_unconfirmed'; live.attention = true;
+          changed(live);
+        });
+      }
       else { live.activity = 'idle'; if (!live.everReady) live.sessionId = null; }
       if (['error', 'exited'].includes(event.state)) { live.error = 'runtime_unavailable'; live.attention = true; }
     }
@@ -112,6 +131,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const locator = live.adapter.sessionLocator ? await live.adapter.sessionLocator(state) : null;
     if (!belongs(live) || generation !== live.generation) return;
     live.record.sessionId = state.sessionId; live.record.sessionLocator = locator;
+    live.record.sessionIdentity = null;
+    if (locator) try { const st = fs.statSync(locator); live.record.sessionIdentity = { dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs }; } catch {}
+    if (typeof state.sessionName === 'string') live.record.sessionName = state.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
     try { save(); } catch { live.error = 'metadata_write_failed'; }
     changed(live);
   }
@@ -178,9 +200,13 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     changed(live); return { ok: true };
   }
   async function read(expected, cmd) {
-    if (!['get_state', 'get_messages', 'get_session_stats', 'get_available_models', 'get_commands'].includes(cmd?.type)) throw fail('invalid_command');
+    if (!['get_state', 'get_messages', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands'].includes(cmd?.type)) throw fail('invalid_command');
     const live = resolve(expected); await validateWorkspace(live.record.workspace); resolve(expected);
     const result = await live.adapter.request(cmd); resolve(expected);
+    if (cmd.type === 'get_state' && result?.sessionId === live.sessionId && typeof result.sessionName === 'string') {
+      const name = result.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
+      if (live.record.sessionName !== name) { live.record.sessionName = name; save(); changed(live); }
+    }
     return result;
   }
   function events(expected, cursor = 0) {
@@ -189,7 +215,13 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       historyRequired: live.historyRequired || (live.events.length > 0 && cursor < live.events[0].frame.eventSequence - 1),
       events: live.events.filter(e => e.frame.eventSequence > cursor).map(e => e.frame), item: summary(live.record) };
   }
-  function focus(expected) { return serialize(async () => { const live = resolve(expected); await onFocus(owner(live)); resolve(expected); focused = live.record.conversationId; live.attention = false; changed(live); return { ok: true, item: summary(live.record) }; }); }
+  function focus(expected) { return serialize(async () => { const live = resolve(expected); await onFocus(owner(live)); resolve(expected);
+    const previous = focused; focused = live.record.conversationId; live.attention = false;
+    /* 焦点是**单值**：换了焦点必须把旧的那条也广播出去。只广播新的，旧会话的
+     * item.focused 会一直留在前端 —— P32.4 的侧栏正是按这个字段画高亮的，
+     * 于是会同时出现两行「当前」。 */
+    if (previous && previous !== focused) { const prior = lives.get(previous); if (prior) changed(prior); }
+    changed(live); return { ok: true, item: summary(live.record) }; }); }
   function blur(expected) { return serialize(async () => {
     const live = resolve(expected); if (focused !== live.record.conversationId) return { ok: true };
     await onFocus(null); resolve(expected); focused = null; changed(live); return { ok: true };
@@ -221,5 +253,23 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     inUse: root => leases.has(rootKey(root)), liveCount: () => lives.size, runningCount: () => [...lives.values()].filter(l => l.activity !== 'idle').length,
     busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready'),
     async closeAll() { const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); },
-    getAdapter: expected => resolve(expected).adapter, getOwner: id => lives.has(id) ? owner(lives.get(id)) : null };
+    getAdapter: expected => resolve(expected).adapter, getOwner: id => lives.has(id) ? owner(lives.get(id)) : null,
+    /* P32.4：只给**后端**用的历史定位 —— **不进 snapshot**，也不出现在任何 SSE 帧里。
+     * locator 是绑定时已证明过的绝对路径；读历史只读它，不需要、也不接受
+     * Renderer 传路径。这样 dormant 会话也能看历史而不必 spawn 一个 child。 */
+    historyTarget: id => { guardStore(); const record = records.get(id); return record ? historyTarget(record) : null; },
+    searchTargets: projectId => { guardStore(); return [...records.values()].filter(r => r.workspace.projectId === projectId && r.sessionLocator && r.sessionId).map(historyTarget); },
+    /* 持久记录只提供身份，不能授权 Git 访问。实际 cwd/root 及 lifecycle lock
+     * 由 P32.2 withWorkspace 验证和持有，dormant 会话也走同一 authority。 */
+    workspaceIdentityOf: id => { guardStore(); const workspace = records.get(id)?.workspace;
+      return workspace ? { id: workspace.workspaceId, epoch: workspace.workspaceEpoch } : null; } };
+
+  function historyTarget(record) {
+    const w = record.workspace;
+    return { sessionId: record.sessionId || null, sessionLocator: record.sessionLocator || null,
+      sessionIdentity: record.sessionIdentity || null, cwd: w.cwd,
+      title: record.sessionName || w.branch || '并行会话', createdAt: record.createdAt,
+      locator: { projectId: w.projectId, workspaceId: w.workspaceId, workspaceEpoch: w.workspaceEpoch,
+        conversationId: record.conversationId, nativeSessionId: record.sessionId || null } };
+  }
 }

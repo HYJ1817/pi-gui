@@ -55,6 +55,7 @@ import { createAuthRuntimeSync } from './server/provider-auth-runtime.js';
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
 import { createSessionExport } from './server/session-export.js';
+import { readSessionMessages, readSessionText } from './server/session-history.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createGuiBrowserLaunch } from './server/gui-browser-launch.js';
 import { createProcessBridge } from './server/process-bridge.js';
@@ -372,7 +373,21 @@ const providers = createProviders({ modelsJson: MODELS_JSON });
 const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
 const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
-const gitRoutes = createGitRoutes({ runtime });
+const gitRoutes = createGitRoutes({
+  runtime,
+  /* P32.4-C：Changes 跟随 focused 会话。前端只给 conversationId（请求头），
+   * registry 只提供 workspace identity；P32.2 在整个 Git 操作期间持锁，
+   * 验证并提供 authoritative root。**不接受 Renderer 传路径**。
+   * registry 在下面才建，所以用惰性引用，不把装配顺序倒过来。
+   * 解析不出来就明确拒绝，**不回落**到经典 currentCwd。 */
+  withScopedWorkspace: (req, action) => {
+    const id = req.headers?.['x-pi-gui-conversation'];
+    if (id === undefined) return action(null);
+    const identity = typeof id === 'string' && id ? runtimeRegistryRef?.workspaceIdentityOf?.(id) : null;
+    if (!identity) throw Object.assign(Error('unknown_conversation'), { code: 'unknown_conversation' });
+    return worktrees.withWorkspace(identity, workspace => action(workspace.root));
+  },
+});
 
 /* Skills 与 MCP。
  *
@@ -488,7 +503,15 @@ const sessions = createSessions({
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
  * import，而搜索必须复用同一处归属判定（见 server/session-search.js 的文件头）。
  * 它只回答「关键词命中哪些会话的哪些消息」，切会话仍然走 sessions.switchTo。 */
-const sessionSearch = createSessionSearch({ runtime, sessions });
+const sessionSearch = createSessionSearch({ runtime, sessions,
+  runtimeCandidates: async cwd => {
+    try {
+      const listing = await worktrees.list({ project: worktrees.projectFor(cwd) || cwd });
+      return listing?.projectId ? runtimeRegistryRef?.searchTargets(listing.projectId) || [] : [];
+    } catch { return []; }
+  },
+  readRuntimeCandidate: (target, maxBytes) => readSessionText(target.sessionLocator, { expected: target, maxBytes }),
+});
 
 /* Planner / Multi-Agent 编排层（P5）。
  *
@@ -792,7 +815,10 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   },
 });
 const runtimeRoutes = createRuntimeRoutes({ registry: runtimeRegistry,
-  validateWorkspace: owner => worktrees.withWorkspace({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}) });
+  validateWorkspace: owner => worktrees.withWorkspace({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}),
+  /* P32.4：只读历史。目标路径来自 registry 记录（后端持有、绑定时已证明），
+   * Renderer 只给 conversationId —— 不接受任何来自前端的路径。 */
+  readHistory: (locator, target) => readSessionMessages(locator, { expected: target }) });
 const runtimeHealthTimer = setInterval(() => { void runtimeRegistry.healthCheck().catch(() => {}); }, 5000);
 runtimeHealthTimer.unref();
 

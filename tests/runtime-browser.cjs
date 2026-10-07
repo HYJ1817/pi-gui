@@ -59,7 +59,12 @@ function browserRequest(connection,path,body,token=connection.token){return new 
     ok((await open(event,{scope:A})).code==='not_focused');
     await act({action:'focus',scope:A});ok(controllers[0].opts.isVisible()&&!controllers[1].opts.isVisible()&&focused.at(-1)===true);
     ok((await open(event,{scope:A})).ok===true);
-    await act({action:'focus',scope:B});ok(controllers[0].hidden===true&&controllers[1].hidden===false);
+    await act({action:'focus',scope:B});ok(controllers[0].hidden===true&&controllers[1].hidden===true);
+    ok(!controllers[0].closed&&!controllers[1].closed);
+    await handlers.get('pi-gui:runtime-browser-occluded')(event,{scope:B,occluded:false});
+    ok(controllers[1].hidden===false&&controllers[0].hidden===true);
+    await act({action:'focus',scope:B});
+    ok(controllers[1].hidden===false&&controllers[0].hidden===true);
     ok(attached.size===0&&!host.isLegacyVisible());
     legacy.destroy();legacy.open();ok(attached.size===0&&!host.isLegacyVisible());
     legacy.setOccluded(false);legacy.syncBounds();legacy.open();ok(attached.size===0);
