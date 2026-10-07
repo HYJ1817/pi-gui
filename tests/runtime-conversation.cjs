@@ -222,5 +222,21 @@ const { JSDOM } = require('jsdom');
   ok('切回 B 后 B 的 notice 仍为空（A 的错误不跟过来）', notice2() === bNotice && bNotice === '');
 
   view3.dispose();
+  const focusCalls = [];
+  global.fetch = async (_url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend', items: [] };
+    const body = JSON.parse(opts.body); focusCalls.push(body);
+    return body.action === 'resume' ? { ok: true, owner: owner(body.conversationId, 'resumed') } : { ok: true };
+  } });
+  const view4 = createRuntimeConversation({ host });
+  view4.show('D'); [...host.querySelectorAll('button')].find(b => b.textContent === '恢复会话').click(); await tick();
+  ok('恢复请求接收确认时还不 focus 未就绪的 owner', !focusCalls.some(c => c.action === 'focus'));
+  observeRuntimeFrame({ type: 'runtime_state', owner: owner('D', 'resumed'), item: { conversationId: 'D', revision: 100, owner: owner('D', 'resumed'), lifecycle: 'ready', activity: 'idle' } }); await tick();
+  ok('当前历史会话恢复就绪后 focus 完整 ready owner', focusCalls.some(c => c.action === 'focus' && c.owner.conversationId === 'D' && c.owner.runtimeGeneration === 'resumed'));
+  view4.show('E'); [...host.querySelectorAll('button')].find(b => b.textContent === '恢复会话').click(); await tick();
+  view4.show('B');
+  observeRuntimeFrame({ type: 'runtime_state', owner: owner('E', 'resumed'), item: { conversationId: 'E', revision: 101, owner: owner('E', 'resumed'), lifecycle: 'ready', activity: 'idle' } }); await tick();
+  ok('切走后的恢复就绪不会抢走 B 焦点', !focusCalls.some(c => c.action === 'focus' && c.owner.conversationId === 'E'));
+  view4.dispose();
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
