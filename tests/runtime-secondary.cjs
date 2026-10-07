@@ -1,0 +1,53 @@
+const assert = require('node:assert/strict');
+const { JSDOM } = require('jsdom');
+(async () => {
+  let checks = 0; const ok = (name, value) => { assert.ok(value, name); checks++; console.log('PASS ' + name); };
+  const html=require('node:fs').readFileSync(require('node:path').join(__dirname,'../public/index.html'),'utf8');
+  const dom = new JSDOM(html, {url:'http://localhost/'});
+  global.window=dom.window; global.document=dom.window.document; global.localStorage=dom.window.localStorage;
+  const {runtimeStore:store,observeRuntimeFrame}=await import('../public/runtime-state.js');
+  const {createRuntimeSecondary}=await import('../public/runtime-secondary.js');
+  const owner=id=>({backendInstance:'b',projectId:'p',repoId:'r',workspaceId:id,workspaceEpoch:'e',conversationId:id,runtimeId:id,runtimeGeneration:'g',sessionId:id});
+  store.seed({backendInstance:'b',items:['A','B','D'].map(id=>({conversationId:id,workspace:{branch:id},owner:id==='D'?null:owner(id),lifecycle:id==='D'?'dormant':'ready',activity:'idle'}))});
+  let surface=null; const changes=new Set();
+  const pane={root:document.querySelector('#rightPane'),open(next){if(next!==surface)for(const f of changes)f(next);surface=next;},close(){for(const f of changes)f(null);surface=null;this.root.querySelector('.rp-body').replaceChildren();},surface:()=>surface,onSurfaceChange(f){changes.add(f);return()=>changes.delete(f);},onViewport:()=>()=>{},onOccluded(f){f(false);return()=>{};}};
+  (await import('../public/ui/secondary-surface.js')).configureSecondaryPane(pane);
+  const states=new Set(),events=[],opened=new Set();let late;
+  const desktop={status:async scope=>({ok:true,opened:opened.has(scope.conversationId),browserState:{url:'http://localhost/'+scope.conversationId},available:false}),
+    open:async scope=>{opened.add(scope.conversationId);events.push(['open',scope.conversationId]);return {ok:true};},command:async(scope,action)=>{events.push([action,scope.conversationId]);if(action==='close')opened.delete(scope.conversationId);return {ok:true};},
+    occluded:async(scope,value)=>{events.push(['occluded',scope.conversationId,value]);return {ok:true};},bounds:async()=>({ok:true}),onState:f=>{states.add(f);return()=>states.delete(f);},onAgentState:()=>()=>{},onOpen:()=>()=>{}};
+  window.piGuiDesktop={runtimeBrowser:desktop};
+  global.fetch=async(_url,opts)=>({json:async()=>{const b=JSON.parse(opts.body);events.push(b);if(b.action==='process'){
+    if(b.owner.conversationId==='A')return new Promise(r=>{late=r;});
+    return {ok:true,available:true,enabled:true,generation:'pb',processes:[]};}return {ok:true};}});
+  const c=createRuntimeSecondary({pane}); const tick=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
+  c.focus('A');await c.openBrowser();await tick();ok('Browser A uses captured owner',events.some(e=>e[0]==='open'&&e[1]==='A'));
+  ok('Browser chrome replaces loading placeholder',!document.querySelector('.rp-body').textContent.includes('正在读取 Browser')&&document.querySelectorAll('#browserToolbar').length===1);
+  c.focus('B');await tick();ok('B without Browser does not display A',!document.querySelector('#browserAddress')&&document.querySelector('.rp-body').textContent.includes('打开'));
+  ok('focus switch preserves A Browser',opened.has('A')&&!events.some(e=>e[0]==='close'&&e[1]==='A'));
+  await c.openBrowser();await tick();ok('Browser B is independent',opened.has('B'));
+  c.focus('A');await tick();ok('return A displays own URL',document.querySelector('#browserAddress').value==='http://localhost/A');
+  c.focus('B');await tick();for(const f of states)f({scope:owner('A'),state:{url:'http://localhost/LATE-A'}});
+  ok('background A event cannot replace B',document.querySelector('#browserAddress').value==='http://localhost/B');
+  for(const f of states)f({scope:{...owner('B'),runtimeGeneration:'old'},state:{url:'http://localhost/STALE'}});
+  ok('stale browser generation ignored',!document.querySelector('#browserAddress').value.includes('STALE'));
+  document.querySelector('#browserClose').click();await tick();ok('close B leaves A alive',!opened.has('B')&&opened.has('A'));
+  c.focus('A');c.openProcesses();await tick();ok('Process status captures A',events.some(e=>e.action==='process'&&e.owner.conversationId==='A'));
+  ok('Browser detaches native view when Process opens',events.some(e=>e[0]==='occluded'&&e[1]==='A'&&e[2]===true));
+  c.focus('B');await tick();late({ok:true,enabled:true,generation:'pa',processes:[{id:'same',command:'A PRIVATE',revision:1,state:'ready'}]});await tick();
+  ok('late A Process cannot update B pane',!document.querySelector('.rp-body').textContent.includes('A PRIVATE'));
+  ok('Process B only uses B owner',events.filter(e=>e.action==='process').at(-1).owner.conversationId==='B');
+  c.focus('D');await tick();ok('dormant pane explicit empty state',document.querySelector('.rp-body').textContent.includes('恢复'));
+  c.leave();ok('leaving runtime removes prior Process pane',pane.surface()===null&&!document.querySelector('.process-panel'));
+  c.focus('A');await tick();
+  const initialStatus=desktop.status;let statusReply;
+  desktop.status=()=>new Promise(r=>{statusReply=r;});
+  const pending=c.openBrowser();await tick();pane.open('changes');
+  statusReply({ok:true,opened:true,browserState:{url:'http://localhost/LATE'}});await pending;await tick();
+  ok('late Browser status does not replace Changes',pane.surface()==='changes'&&!document.querySelector('#browserAddress'));
+  const pendingClose=c.openBrowser();await tick();pane.close();
+  statusReply({ok:true,opened:true});await pendingClose;await tick();
+  ok('late Browser status cannot reopen closed pane',pane.surface()===null);
+  desktop.status=initialStatus;
+  c.dispose();pane.close();dom.window.close();console.log(`Runtime secondary: ${checks}/${checks}`);
+})().catch(e=>{console.error(e);process.exitCode=1;});
