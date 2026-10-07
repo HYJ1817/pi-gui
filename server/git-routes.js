@@ -34,11 +34,29 @@ function gitStatusOf(result) {
 
 /**
  * @param runtime 共享运行态（要 cwd）。只读，不改。
+ * @param resolveScopedCwd P32.4-C：可选的「按会话取工作区」。返回
+ *        `{ cwd }` / `{ error }` / `null`（null = 走经典单工作区）。
+ *        Changes 必须跟随 focused 会话；**不能**在解析失败时悄悄回落到
+ *        `runtime.getCurrentCwd()` —— 那会把 A 的改动画成 B 的。
  */
-export function createGitRoutes({ runtime }) {
+export function createGitRoutes({ runtime, resolveScopedCwd = null }) {
+  /* 统一解析本次请求的目标工作区；带会话身份但解析不出来时直接拒绝。 */
+  function targetScope(req, res) {
+    if (!resolveScopedCwd) return runtime.getCurrentCwd();
+    let scoped = null;
+    try { scoped = resolveScopedCwd(req); } catch { scoped = { error: 'unknown_conversation' }; }
+    if (scoped === null) return runtime.getCurrentCwd();
+    if (!scoped || scoped.error || typeof scoped.cwd !== 'string' || !scoped.cwd) {
+      json(res, 409, { ok: false, isRepo: false, code: scoped?.error || 'unknown_conversation',
+        error: '这条会话的工作区当前不可用，请刷新后重试。' });
+      return undefined;
+    }
+    return scoped.cwd;
+  }
   function handle(req, res, url) {
     const sub = url.pathname.slice('/api/git/'.length);
-    const cwd = runtime.getCurrentCwd();
+    const cwd = targetScope(req, res);
+    if (cwd === undefined) return undefined;
 
     if (sub === 'status' && req.method === 'GET') {
       return gitStatus(cwd)

@@ -68,7 +68,7 @@ import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions, flushProjectSessionAction } from './projects.js';
 import { loadProviders, openProvidersPanel, openProviderAuthPanel, reloadPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
-import { loadGitStatus, openChangesPanel } from './git.js';
+import { loadGitStatus, openChangesPanel, refreshGitNow } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner } from './planner.js';
@@ -80,6 +80,7 @@ import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
 import { showChat, showRuntimeConversation, runtimeViewElement } from './ui/workspace-surface.js';
 import { createRuntimeConversation } from './runtime-conversation.js';
+import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler } from './runtime-nav.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
@@ -112,7 +113,23 @@ setSessionsSlot(renderSidebarSessions);
  * focus 本身由 runtime-nav 发（带 captured owner），这里只负责把中央视图换过去；
  * 切回经典会话/项目时由 showChat() 换回来。 */
 const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement() });
-setRuntimeFocusHandler(conversationId => { runtimeConversation.show(conversationId); showRuntimeConversation(); });
+const conversationScopeActive = () => Boolean(gitConversationScope());
+setRuntimeFocusHandler(conversationId => {
+  runtimeConversation.show(conversationId);
+  showRuntimeConversation();
+  /* P32.4-C：Changes 跟随 focused 会话。只设 conversationId ——
+   * 工作区根由后端从 registry 记录解析，前端不传路径。 */
+  setGitConversationScope(conversationId);
+  void refreshGitNow();
+});
+
+/* 中央离开并行会话（回到经典 chat / 工作区）时，Changes 也要跟着离开那个会话的作用域。 */
+document.addEventListener('pi-gui:workspace-view', event => {
+  if (event.detail?.view === 'runtime') return;   // 具体会话由上面的 focus handler 设定
+  if (!conversationScopeActive()) return;
+  setGitConversationScope(null);
+  void refreshGitNow();
+});
 setProjectSessionActions({ newSession, search: openSessionSearch, previewRow: createSidebarPreviewRow, openPreviewSession: openSidebarPreviewSession });
 
 /* 会话一变（新开 / 分叉 / 切换）就要重画侧栏那块列表。
