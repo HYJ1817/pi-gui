@@ -236,9 +236,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
      * locator 是绑定时已证明过的绝对路径；读历史只读它，不需要、也不接受
      * Renderer 传路径。这样 dormant 会话也能看历史而不必 spawn 一个 child。 */
     historyTarget: id => { const record = records.get(id); return record ? { sessionId: record.sessionId || null, sessionLocator: record.sessionLocator || null } : null; },
-    /* P32.4-C：只给**后端**用的 workspace root 定位（同样不进 snapshot）。
-     * Changes 要跟随 focused 会话，而后端不接受 Renderer 传路径 —— 前端只给
-     * conversationId，根在这里解析。找不到就返回 null，**绝不回落**到全局 cwd：
-     * 那会把 A 的改动画成 B 的。 */
-    workspaceRootOf: id => { const record = records.get(id); return record?.workspace?.root || null; } };
+    /* 持久记录只提供身份，不能授权 Git 访问。实际 cwd/root 及 lifecycle lock
+     * 由 P32.2 withWorkspace 验证和持有，dormant 会话也走同一 authority。 */
+    workspaceIdentityOf: id => { guardStore(); const workspace = records.get(id)?.workspace;
+      return workspace ? { id: workspace.workspaceId, epoch: workspace.workspaceEpoch } : null; } };
 }

@@ -376,14 +376,16 @@ const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({
   runtime,
   /* P32.4-C：Changes 跟随 focused 会话。前端只给 conversationId（请求头），
-   * 工作区根由 registry 记录解析 —— **不接受 Renderer 传路径**。
+   * registry 只提供 workspace identity；P32.2 在整个 Git 操作期间持锁，
+   * 验证并提供 authoritative root。**不接受 Renderer 传路径**。
    * registry 在下面才建，所以用惰性引用，不把装配顺序倒过来。
    * 解析不出来就明确拒绝，**不回落**到经典 currentCwd。 */
-  resolveScopedCwd: (req) => {
+  withScopedWorkspace: (req, action) => {
     const id = req.headers?.['x-pi-gui-conversation'];
-    if (typeof id !== 'string' || !id) return null;
-    const root = runtimeRegistryRef?.workspaceRootOf?.(id);
-    return root ? { cwd: root } : { error: 'unknown_conversation' };
+    if (id === undefined) return action(null);
+    const identity = typeof id === 'string' && id ? runtimeRegistryRef?.workspaceIdentityOf?.(id) : null;
+    if (!identity) throw Object.assign(Error('unknown_conversation'), { code: 'unknown_conversation' });
+    return worktrees.withWorkspace(identity, workspace => action(workspace.root));
   },
 });
 
