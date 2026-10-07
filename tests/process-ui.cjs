@@ -13,7 +13,7 @@ const assert=require('node:assert/strict');const {JSDOM}=require('jsdom');let ch
     if(url.includes('?')){fetches++;return {json:()=>new Promise(r=>resolveLogs=r)};}
     return {json:async()=>({ok:true,generation,enabled:true,processes:generation==='A'?[{id:'owned-A',revision:1,command:'node',argCount:1,state:'ready',uptimeMs:100,endpoint:null}]:[]})};
   };
-  openProcessPanel();for(let i=0;i<20&&!resolveLogs;i++)await new Promise(r=>setImmediate(r));ok(fetches===1);ok(!!document.querySelector('.process-row'));
+  openProcessPanel();ok(document.querySelector('.process-permission input').disabled);for(let i=0;i<20&&!resolveLogs;i++)await new Promise(r=>setImmediate(r));ok(fetches===1);ok(!!document.querySelector('.process-row'));
   beginWorkspaceSwitch('B');generation='B';ok(!document.querySelector('.process-row'));ok(document.querySelector('.process-permission input').disabled);
   resolveLogs({ok:true,lines:[{cursor:1,text:'OLD_A_SECRET'}],cursor:1});await new Promise(r=>setImmediate(r));ok(!document.body.textContent.includes('OLD_A_SECRET'));
   beginWorkspaceSwitch('A');generation='A2';await new Promise(r=>setTimeout(r,1100));ok(!document.querySelector('.process-row'));listener(null);delete global.fetch;

@@ -11,7 +11,7 @@ export function openProcessPanel({transport=null,isOwnerCurrent=()=>true}={}){
   openSecondarySurface('process',(host,instance)=>{
     host.classList.add('process-panel');
     const head=element('header','process-head');head.append(element('h3','','开发进程'));host.append(head);
-    const permission=element('label','process-permission');const toggle=document.createElement('input');toggle.type='checkbox';toggle.setAttribute('aria-label','允许 Agent 管理当前工作区开发进程');permission.append(toggle,document.createTextNode('允许 Agent 管理开发进程'));host.append(permission);
+    const permission=element('label','process-permission');const toggle=document.createElement('input');toggle.type='checkbox';toggle.disabled=true;toggle.setAttribute('aria-label','允许 Agent 管理当前工作区开发进程');permission.append(toggle,document.createTextNode('允许 Agent 管理开发进程'));host.append(permission);
     const note=element('p','process-note','仅当前工作区；与浏览器权限分开。切换工作区或重启 Pi 会清理进程。');host.append(note);
     const message=element('p','process-message');message.setAttribute('role','status');host.append(message);
     const list=element('div','process-list');host.append(list);
