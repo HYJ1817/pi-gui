@@ -179,7 +179,7 @@ Runtime Fixture
 
 | 套件 | 结果 |
 |---|---|
-| `npm run test:runtime`（P32.3 专项 + 新增 nav/conversation） | **242/242**（registry 32、HTTP 12、store 25、UI 14、nav 31、**conversation 26**、factory 5、supervisor 24、Browser 45、Process budget 4、SSE 14、真实 Node HTTP Process 10） |
+| `npm run test:runtime`（P32.3 专项 + 新增 nav/conversation） | **258/258**（registry 32、HTTP 12、store 25、UI 14、nav 31、**conversation 42**、factory 5、supervisor 24、Browser 45、Process budget 4、SSE 14、真实 Node HTTP Process 10） |
 | `tests/smoke.cjs`（侧栏结构契约） | 1338/1338 通过 |
 | `tests/worktrees-ui.cjs` | 16/16 passed |
 | `tests/ui-ia.cjs`（P30 IA） | 12/12 passed |
@@ -191,7 +191,7 @@ Runtime Fixture
 
 ### 4.3 真实 Electron（`npm run test:runtime-electron`）
 
-**65/65 通过，16 张截图，EXIT 0**（原 36 条 + 新增 29 条 P32.4 断言）。
+**68/68 通过，17 张截图，EXIT 0**（原 36 条 + 新增 32 条 P32.4 断言）。
 使用真实 Electron + production server + 临时真实 Git + fixture Pi。
 
 新增断言（真实窗口 + 真实后端）：
@@ -238,9 +238,9 @@ starting 阶段的 owner 自然失效。改为等 `lifecycle === 'ready'` 再取
 
 | 类型 | 本轮有哪些 |
 |---|---|
-| **fixture（离线确定性）** | `tests/runtime-nav.cjs` 全部 18 条；`runtime-registry.cjs` 新增 1 条 |
-| **真实 Electron** | `runtime-electron.cjs` 46 条（含 10 条 P32.4），真实窗口/真实后端/真实 Git |
-| **真实 Pi** | 本轮**没有**；P32.4-A 不涉及模型调用（`runtime-live` 属 P32.3 证据） |
+| **fixture（离线确定性）** | `tests/runtime-nav.cjs` 全部 31 条 + `tests/runtime-conversation.cjs` 全部 42 条；`runtime-registry.cjs` 新增 1 条 |
+| **真实 Electron** | `runtime-electron.cjs` 全部 68 条（含 32 条 P32.4），真实窗口/真实后端/真实 Git |
+| **真实 Pi** | 本轮**没有**；P32.4-A/B 不涉及模型调用（`runtime-live` 属 P32.3 证据） |
 | **未执行** | C–E 的全部验收项（第 25–43 条）；`build:app` 与 `app-check` 见第九节 |
 
 ## 六、截图
@@ -252,23 +252,27 @@ starting 阶段的 owner 自然失效。改为等 `lifecycle === 'ready'` 再取
 3. `sidebar-1920x1080.png`
 4. `sidebar-zoom125.png`
 5. `sidebar-dormant.png` — 关闭 Runtime 后会话仍在侧栏、显示「已关闭」
+6. `sidebar-created.png` — 从侧栏「新建并行会话」创建出的会话（B 段闭环）
+7. `sidebar-focus-a.png` / `sidebar-focus-a-draft.png` — 中央切到 A、草稿隔离
+8. `sidebar-b-operable-while-a-pending.png` — A 有动作在飞时切到 B，B 仍可操作
 
 任务书列的 11 张里，`单会话普通状态` / `Browser scoped pane` 由 P32.3 的 `.shots/p32-3/` 覆盖；
-`Runtime limit confirmation`（D 未实现）、`A error`（可加但属 B 的中央视图语义）本轮**未产出**。
+`Runtime limit confirmation`（D 未实现）、`A error`（属 C/D 的语义）本轮**未产出**。
 
-## 七、为什么停在 A（未做 B–E）
+## 七、为什么停在 B（未做 C–E）
 
 任务书自己写明「P32.4-A … 验收后再继续」，并规定「如果过程中发现某一步实际需要大改 P32.3
-架构，停止并报告，不要偷偷扩大任务」。B 需要新设计**中央会话承载**：`#workspace` 目前只有
-chat / planner / extensions 三种 `data-workspace-view`，`messages.js` 独占 `#stream`。
-把「focused runtime conversation」做成第四种中央视图，牵涉草稿/滚动隔离、历史与 resume 的
-分界、以及经典单会话路径的回归面 —— 这是一个独立、需要单独验收的设计决策，不适合塞进 A 里顺手做。
+架构，停止并报告，不要偷偷扩大任务」。A 与 B 各自都做完整并单独验证（实现 + 确定性测试 +
+真实 Electron + 截图 + 重建产物）之后停在这里。
 
-因此本轮**不写**「完成」，明确停在这里。B–E 的具体计划见第八节。
+C 需要把右栏（Browser/Process/Changes）的挂载从「全局 currentCwd」改成「focused owner」，
+D 需要新增资源配额 UX 与第三次启动确认，E 是模型选择与无障碍收尾 —— 三者都可以独立验收，
+且都不需要改 P32.3 Runtime 架构。
 
-## 八、B–E 计划（未实施）
+因此本轮**不写**「P32.4 完成」，明确停在 B。C–E 的计划见第八节。
 
-- **B**：已完成（见第三·B 节）。
+## 八、C–E 计划（未实施）
+
 - **C**：右栏绑定 focused conversation。Browser/Process 已有 owner scope（P32.3 完成），
   需要把 `right-pane` 的挂载从全局 `currentCwd` 改为 focused owner；Changes 需要
   focused 的 verified workspace root（后端已有 `withWorkspace`，不得接受 Renderer 传路径）。
@@ -289,13 +293,22 @@ chat / planner / extensions 三种 `data-workspace-view`，`messages.js` 独占 
 ## 十、已知限制
 
 1. 侧栏并行会话的标题用工作区分支名（新会话还没有可读标题）；会话标题的接入属 E。
-2. 点击并行会话目前只改 focus 状态（行高亮由后端广播驱动），中央视图切换属 B。
+2. 中央视图已经可用（B），但**per-runtime 模型选择、搜索/历史接入、键盘/无障碍**属 E，尚未做。
 3. 「新建并行会话」用 `openModal` 要分支名，默认值 `pi-gui/p32/<8 hex>`；完整的工作区
    预检提示（源提交、dirty 提示）仍只在「工作区管理」里展示。
 4. 侧栏不显示经典会话与并行会话的先后语义说明，靠视觉分组；文案属 E。
 5. 未做 POSIX 真机验证。
 
 ## 十一、本轮失败样本与修复
+
+4. **B 的异步串线（复验发现，已修）**： 原来用模块级的  归属结果，
+   / 也是跨会话的单值。后果有两个真实缺陷：① 历史请求在飞时切走，
+   A 的历史会画到 B 上；② A 的 Stop pending 会让 **B 的控件被禁用**，且 A 的迟到响应
+   会写进 B 的提示条。修法：按 conversationId 保存 ，
+   动作在开始时捕获 target，响应只写 target 那一格并只在「当前看的还是 target」时重画；
+   历史请求另记**代次**，同一会话连点两次时先发的后回也不覆盖。
+   新增 16 条确定性断言（含可控「门」构造乱序返回），Electron 补一条「A 有动作在飞时
+   切到 B，B 仍可操作」。
 
 1. **`focus` 只广播新焦点** → 前端按 `item.focused` 画会同时出现两行「当前」。
    修在事实源（`server/runtime-registry.js` 换焦点时两侧都广播），并加后端契约断言。
@@ -304,3 +317,12 @@ chat / planner / extensions 三种 `data-workspace-view`，`messages.js` 独占 
    由真实截图发现。补 CSS 后重跑截图正常。
 3. **测试自身的一处笔误**：先用 `conversationId`（随机 UUID）断言「两侧都广播」，
    应为 `workspaceId`。改为按 `workspaceId` 断言后通过。
+4. **B 的异步串线（复验发现，已修）**：`loadHistory()` 原来用模块级的 `id` 归属结果，
+   `busy` / `notice` 也是跨会话的单值。后果是两个真实缺陷：① 历史请求在飞时切走会话，
+   A 的历史会画到 B 上；② A 的 Stop 还在 pending 时切到 B，**B 的控件会被 A 的 busy 禁用**，
+   且 A 的迟到响应会写进 B 的提示条。
+   修法：按 conversationId 保存 `pending / notice / history / pendingHistory`；动作在**开始时
+   捕获 target**，响应只写 target 那一格，并且只在「当前看的还是 target」时才重画 DOM；
+   历史请求另记**代次**，同一会话连点两次时先发的后回也不能覆盖。
+   新增 16 条确定性断言（用可控的「门」精确构造乱序返回与迟到响应），
+   Electron 补一条「A 有动作在飞时切到 B，B 仍可操作」。
