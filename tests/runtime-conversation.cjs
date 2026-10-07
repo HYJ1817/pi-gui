@@ -231,6 +231,9 @@ const { JSDOM } = require('jsdom');
   const view4 = createRuntimeConversation({ host });
   view4.show('D'); [...host.querySelectorAll('button')].find(b => b.textContent === '恢复会话').click(); await tick();
   ok('恢复请求接收确认时还不 focus 未就绪的 owner', !focusCalls.some(c => c.action === 'focus'));
+  const unboundD = { ...owner('D', 'resumed'), sessionId: null };
+  observeRuntimeFrame({ type: 'runtime_state', owner: unboundD, item: { conversationId: 'D', revision: 99, owner: unboundD, lifecycle: 'ready', activity: 'idle' } }); await tick();
+  ok('ready 尚未绑定原生 sessionId 时不消耗 focus 意图', !focusCalls.some(c => c.action === 'focus'));
   observeRuntimeFrame({ type: 'runtime_state', owner: owner('D', 'resumed'), item: { conversationId: 'D', revision: 100, owner: owner('D', 'resumed'), lifecycle: 'ready', activity: 'idle' } }); await tick();
   ok('当前历史会话恢复就绪后 focus 完整 ready owner', focusCalls.some(c => c.action === 'focus' && c.owner.conversationId === 'D' && c.owner.runtimeGeneration === 'resumed'));
   view4.show('E'); [...host.querySelectorAll('button')].find(b => b.textContent === '恢复会话').click(); await tick();
@@ -238,5 +241,23 @@ const { JSDOM } = require('jsdom');
   observeRuntimeFrame({ type: 'runtime_state', owner: owner('E', 'resumed'), item: { conversationId: 'E', revision: 101, owner: owner('E', 'resumed'), lifecycle: 'ready', activity: 'idle' } }); await tick();
   ok('切走后的恢复就绪不会抢走 B 焦点', !focusCalls.some(c => c.action === 'focus' && c.owner.conversationId === 'E'));
   view4.dispose();
+  for (const [target, leave] of [['F', false], ['G', true]]) {
+    runtimeStore.seed({ backendInstance: 'backend', items: [{ conversationId: target, owner: null, lifecycle: 'dormant', revision: 1 }] });
+    let finishResume;
+    global.fetch = async (_url, opts = {}) => ({ json: async () => {
+      if (!opts.body) return { ok: true, backendInstance: 'backend', items: [] };
+      const body = JSON.parse(opts.body); focusCalls.push(body);
+      if (body.action === 'resume') return new Promise(resolve => { finishResume = resolve; });
+      return { ok: true };
+    } });
+    const returningView = createRuntimeConversation({ host }); returningView.show(target);
+    [...host.querySelectorAll('button')].find(b => b.textContent === '恢复会话').click(); await tick();
+    if (leave) returningView.leave(); else returningView.show('B');
+    returningView.show(target);
+    finishResume({ ok: true, owner: owner(target, 'resumed') }); await tick();
+    observeRuntimeFrame({ type: 'runtime_state', owner: owner(target, 'resumed'), item: { conversationId: target, revision: 100, owner: owner(target, 'resumed'), lifecycle: 'ready', activity: 'idle' } }); await tick();
+    ok(leave ? '离开经典视图再返回不恢复迟到 focus 意图' : '切走再切回不重新创建迟到 focus 意图', !focusCalls.some(c => c.action === 'focus' && c.owner.conversationId === target));
+    returningView.dispose();
+  }
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
