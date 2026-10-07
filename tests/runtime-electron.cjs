@@ -51,10 +51,24 @@ if(process.argv.includes('--version')){console.log('1.0.4');process.exit(0)}
 const resume=process.argv.indexOf('--session'),restored=resume>=0?process.argv[resume+1]:null;
 const id=restored?JSON.parse(fs.readFileSync(restored,'utf8').split('\n')[0]).id:crypto.randomUUID(),name=path.basename(process.cwd());
 let streaming=false,timer;const send=v=>console.log(JSON.stringify(v));
+const fixtureModels=[{provider:'fixture',id:'reason-a',name:'Fixture Reason A',reasoning:true,input:['text'],contextWindow:64000,maxTokens:4096},{provider:'fixture',id:'text-b',name:'Fixture Text B',reasoning:false,input:['text']},{provider:'fixture',id:'unknown',name:'Fixture Unknown',input:['text']},{provider:'fixture',id:'delayed',name:'Fixture Delayed',reasoning:true,input:['text']},{provider:'fixture',id:'reject',name:'Fixture Rejected',reasoning:true,input:['text']}];
+const branch=require('child_process').execFileSync('git',['branch','--show-current'],{encoding:'utf8',windowsHide:true}).trim();
+let currentModel=fixtureModels[branch==='runtime-B'?1:0],thinkingLevel='low',readbackUntil=0;
 const folder=path.join(process.env.PI_CODING_AGENT_DIR,'sessions','--'+process.cwd().replace(/[\\/:]/g,'-')+'--');fs.mkdirSync(folder,{recursive:true});
 const file=restored||path.join(folder,new Date().toISOString().replace(/[:.]/g,'-')+'_'+id+'.jsonl');if(!restored)fs.writeFileSync(file,JSON.stringify({type:'session',version:3,id,cwd:process.cwd(),timestamp:new Date().toISOString()})+'\n');
+const nativeMessages=()=>fs.readFileSync(file,'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(e=>e.type==='message').map(e=>e.message);
+const appendMessage=(role,text)=>{const entries=fs.readFileSync(file,'utf8').trim().split('\n').map(line=>JSON.parse(line));const parent=entries.findLast(e=>e.type!=='session'&&e.id)?.id||null;fs.appendFileSync(file,JSON.stringify({type:'message',id:crypto.randomUUID(),parentId:parent,timestamp:new Date().toISOString(),message:{role,content:[{type:'text',text}],timestamp:Date.now(),...(role==='assistant'?{api:'openai-completions',provider:currentModel.provider,model:currentModel.id,stopReason:'stop',usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}:{})}})+'\n');};
 require('readline').createInterface({input:process.stdin}).on('line',async line=>{
 const c=JSON.parse(line);if(c.type==='prompt'&&c.message==='FIXTURE_CRASH')process.exit(7);
+if(c.type==='set_model'){
+  const next=fixtureModels.find(m=>m.provider===c.provider&&m.id===c.modelId);
+  await new Promise(r=>setTimeout(r,650));
+  if(!next||next.id==='reject'){send({type:'response',id:c.id,command:c.type,success:false,error:'Fixture model rejected'});return;}
+  currentModel=next;thinkingLevel=next.reasoning===true?'low':'off';readbackUntil=Date.now()+650;
+  send({type:'response',id:c.id,command:c.type,success:true,data:next});return;
+}
+if(c.type==='set_thinking_level'){await new Promise(r=>setTimeout(r,450));thinkingLevel=c.level;send({type:'response',id:c.id,command:c.type,success:true,data:{level:thinkingLevel}});return;}
+if(c.type==='get_state'&&Date.now()<readbackUntil)await new Promise(r=>setTimeout(r,readbackUntil-Date.now()));
 if(c.type==='prompt'&&c.message.startsWith('FIXTURE_PROCESS_START ')){
   // The fixture Pi consumes its private capability exactly as the extension does.
   // Credentials stay in this child environment and never enter RPC/output/files.
@@ -64,9 +78,9 @@ if(c.type==='prompt'&&c.message.startsWith('FIXTURE_PROCESS_START ')){
   diagnostic({stateOk:state.ok,stateCode:state.code,resultOk:result.ok,resultCode:result.code,processState:result.process?.state});
   send({type:'response',id:c.id,command:c.type,success:result.ok===true,data:{disposition:'started'}});}catch(error){diagnostic({errorName:error.name});send({type:'response',id:c.id,command:c.type,success:false,data:{code:'fixture_bridge_failed'}});}return;
 }
-if(c.type==='prompt'){streaming=true;send({type:'agent_start'});send({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:name+' '+c.message}});clearTimeout(timer);timer=setTimeout(()=>{streaming=false;send({type:'agent_end'});send({type:'agent_settled'});},15000);}
+if(c.type==='prompt'){appendMessage('user',c.message);appendMessage('assistant',name+' '+c.message);streaming=true;send({type:'agent_start'});send({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:name+' '+c.message}});clearTimeout(timer);timer=setTimeout(()=>{streaming=false;send({type:'agent_end'});send({type:'agent_settled'});},15000);}
 if(c.type==='abort'){streaming=false;clearTimeout(timer);send({type:'agent_settled'});}
-send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_state'?{sessionId:id,sessionFile:file,isStreaming:streaming,messageCount:0}:c.type==='get_messages'?{messages:[]}:c.type==='get_available_models'?{models:[]}:c.type==='get_commands'?{commands:[]}:c.type==='prompt'?{disposition:'started'}:{}});
+send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_state'?{sessionId:id,sessionFile:file,isStreaming:streaming,messageCount:nativeMessages().length,model:currentModel,thinkingLevel}:c.type==='get_messages'?{messages:nativeMessages()}:c.type==='get_available_models'?{models:fixtureModels}:c.type==='get_available_thinking_levels'?{levels:currentModel.reasoning===true?['off','low','high']:[]}:c.type==='get_commands'?{commands:[]}:c.type==='prompt'?{disposition:'started'}:{}});
 });`);
     const piBin = path.join(world, process.platform === 'win32' ? 'pi.cmd' : 'pi');
     const trace = path.join(world, 'fixture-trace.jsonl');
@@ -81,7 +95,7 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     browser = require('../electron/browser-view.cjs').createBrowserController({ origin, getWindow: () => win, ipcMain, isVisible: () => !host || host.isLegacyVisible() }); browser.register();
     legacyHost = require('../electron/browser-agent-host.cjs').createBrowserAgentHost({ browser, origin, getWindow: () => win, ipcMain, extensionPath: path.join(ROOT, 'extensions/pi-gui-browser/index.js') }); await legacyHost.start();
     host = require('../electron/browser-runtime-host.cjs').createRuntimeBrowserHost({ origin, getWindow: () => win, ipcMain, extensionPath: path.join(ROOT, 'extensions/pi-gui-browser/index.js'), onFocus: active => browser.setOccluded(active) }); await host.start();
-    const timingFile = path.join(OUT4, 'electron-timing.jsonl'), timingHook = path.join(world, 'timing.cjs');
+    const timingFile = path.join(OUT4, process.env.P32_RUNTIME_CLASSIC_SHOT === '1' ? 'electron-classic-timing.jsonl' : 'electron-timing.jsonl'), timingHook = path.join(world, 'timing.cjs');
     fs.mkdirSync(OUT4, { recursive: true }); fs.writeFileSync(timingFile, '');
     fs.writeFileSync(timingHook, `const fs=require('fs'),cp=require('child_process'),http=require('http');const log=v=>fs.appendFileSync(${JSON.stringify(timingFile)},JSON.stringify(v)+'\\n');const spawn=cp.spawn;cp.spawn=function(command,args,options){const start=Date.now(),child=spawn.call(this,command,args,options);if(/^(git|git.exe)$/.test(require('path').basename(command))){log({kind:'git-start',pid:child.pid,operation:args[0]});child.once('close',code=>log({kind:'git-close',pid:child.pid,operation:args[0],ms:Date.now()-start,code}));}return child};require('module').syncBuiltinESMExports();const create=http.createServer;http.createServer=function(...args){const server=create.apply(this,args);server.prependListener('request',(req,res)=>{const start=Date.now(),route=new URL(req.url,'http://127.0.0.1').pathname;log({kind:'http-start',route});res.once('finish',()=>log({kind:'http-finish',route,ms:Date.now()-start,status:res.statusCode}));});return server};`);
     const processDiagnostics = path.join(world, 'process-diagnostics.jsonl');
@@ -96,6 +110,13 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
       const stream = await fetch(origin + '/api/events'); const reader = stream.body.getReader(); const chunk = await reader.read(); await reader.cancel();
       for (const line of new TextDecoder().decode(chunk.value).split('\n')) if (line.startsWith('data: ')) { const event = JSON.parse(line.slice(6)); if (['bridge_stderr', 'bridge_parse_error'].includes(event.type)) console.error('Fixture diagnostic ' + JSON.stringify(event)); }
       throw error; }
+    if (process.env.P32_RUNTIME_CLASSIC_SHOT === '1') {
+      await until(() => read(`!document.querySelector('#pjSessionsBox').textContent.includes('读取会话')`));
+      await shot('classic-ui', OUT4);
+      check(errors.length === 0, 'classic capture has no renderer console errors');
+      fs.writeFileSync(path.join(OUT4, 'classic-report.json'), JSON.stringify({ mode: 'classic-capture-only', checks, screenshots, errors, platform: process.platform, electron: process.versions.electron }, null, 2));
+      console.log(`Runtime Electron classic capture ${checks}/${checks}; ${screenshots.length} screenshots`); return;
+    }
     const workspaces = [];
     for (const name of ['A', 'B']) { const list = await api(null, '/api/worktrees?project=' + encodeURIComponent(repo)); const plan = await api({ action: 'prepare', project: repo, branch: 'runtime-' + name, source: 'HEAD', contextGeneration: list.contextGeneration }, '/api/worktrees'); assert.ok(plan.ok, JSON.stringify(plan)); const created = await api({ action: 'create', nonce: plan.nonce, contextGeneration: list.contextGeneration }, '/api/worktrees'); assert.ok(created.ok, JSON.stringify(created)); const next = await api(null, '/api/worktrees?project=' + encodeURIComponent(repo)); workspaces.push(next.items.find(w => w.branch === 'runtime-' + name)); }
     let started = await api({ action: 'start', args: { id: workspaces[0].id, epoch: workspaces[0].epoch } }); check(started.ok, 'A scoped child start');
@@ -488,6 +509,116 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     check((await api()).totalCount === 2 && await read(`window.__resourceRequests.length===2`), 'P32.4-D closed B history remains accessible without another launch');
     await shot('d-close-slot-recovered-history', OUT4);
     await read(`window.__dOff();window.fetch=window.__resourceOriginalFetch;delete window.__resourceOriginalFetch;delete window.__dOff`);
+
+    /* P32.4-E: native model confirmation, exact history identity and physical
+     * keyboard/layout checks share the same real fixture-owned conversations. */
+    await centerButton('恢复会话'); await until(() => read(`!document.querySelector('#confirmLayer').hidden`));
+    await read(`[...document.querySelectorAll('#confirmCard button')].find(b=>b.textContent==='继续启动').click()`);
+    await until(async () => { state = await api(); return state.items.find(r => r.conversationId === idB)?.owner?.sessionId && state.focusedConversationId === idB; });
+    const eOwnerB = state.items.find(r => r.conversationId === idB).owner;
+    const modelSel = '#runtimeView select[aria-label="当前会话模型"]', thinkingSel = '#runtimeView select[aria-label="当前会话推理强度"]';
+    const modelValue = () => read(`document.querySelector(${JSON.stringify(modelSel)}).value`);
+    const modelId = async () => JSON.parse((await modelValue()) || '{}').modelId;
+    const chooseModel = value => read(`(()=>{const s=document.querySelector(${JSON.stringify(modelSel)});s.value=JSON.stringify({providerId:'fixture',modelId:${JSON.stringify(value)}});s.dispatchEvent(new Event('change'))})()`);
+    await until(async () => (await modelId()) === 'text-b' && await read(`!document.querySelector(${JSON.stringify(modelSel)}).disabled`));
+    check(await read(`document.querySelector(${JSON.stringify(thinkingSel)}).disabled&&document.querySelector('.rtc-model-notice').textContent.includes('不支持推理')`), 'P32.4-E B false capability disables native thinking choices');
+    await shot('e-model-b-text', OUT4);
+    await clickRow(idA); await until(async () => (await modelId()) === 'reason-a');
+    check(await read(`!document.querySelector(${JSON.stringify(thinkingSel)}).disabled&&[...document.querySelector(${JSON.stringify(thinkingSel)}).options].map(o=>o.value).join(',')===',off,low,high'`), 'P32.4-E A thinking choices come from native Pi levels');
+    await shot('e-model-a-reasoning', OUT4);
+    await chooseModel('delayed');
+    check((await modelId()) === 'reason-a' && await read(`document.querySelector(${JSON.stringify(modelSel)}).disabled`), 'P32.4-E HTTP setter ack cannot optimistically replace A model');
+    await clickRow(idB); await until(async () => (await modelId()) === 'text-b');
+    await sleep(1500);
+    check((await modelId()) === 'text-b', 'P32.4-E late correlated A model response/readback never overwrites B selector');
+    await clickRow(idA); await until(async () => (await modelId()) === 'delayed' && await read(`!document.querySelector(${JSON.stringify(modelSel)}).disabled`));
+    check(true, 'P32.4-E A selector changes only after successful native response and readback');
+    await chooseModel('reject'); await clickRow(idB); await sleep(900);
+    check((await modelId()) === 'text-b', 'P32.4-E late failed A model request never changes B');
+    await clickRow(idA); await until(() => read(`document.querySelector('.rtc-model-notice').textContent.includes('未能确认')`));
+    check((await modelId()) === 'delayed', 'P32.4-E native setter rejection preserves last confirmed A model');
+    await chooseModel('unknown'); await until(async () => (await modelId()) === 'unknown');
+    check(await read(`document.querySelector(${JSON.stringify(thinkingSel)}).disabled&&document.querySelector('.rtc-model-notice').textContent.includes('未知')`), 'P32.4-E unknown reasoning capability stays unknown without guessed levels');
+    await chooseModel('reason-a'); await until(async () => (await modelId()) === 'reason-a' && await read(`!document.querySelector(${JSON.stringify(thinkingSel)}).disabled`));
+    await read(`(()=>{const s=document.querySelector(${JSON.stringify(thinkingSel)});s.value='high';s.dispatchEvent(new Event('change'))})()`);
+    await until(() => read(`!document.querySelector(${JSON.stringify(thinkingSel)}).disabled&&document.querySelector(${JSON.stringify(thinkingSel)}).value==='high'`));
+    check(true, 'P32.4-E A thinking setter confirmed by native readback');
+    await read(`document.querySelector(${JSON.stringify(thinkingSel)}).focus()`); key('Up');
+    await until(() => read(`!document.querySelector(${JSON.stringify(thinkingSel)}).disabled&&document.querySelector(${JSON.stringify(thinkingSel)}).value==='low'`));
+    check(true, 'P32.4-E physical Arrow navigation selects a native allowed thinking level');
+    await clickRow(idB); await until(async () => (await modelId()) === 'text-b');
+    check(await read(`document.querySelector(${JSON.stringify(thinkingSel)}).disabled`), 'P32.4-E A thinking change leaves B unsupported capability intact');
+
+    await clickRow(idA); await until(async () => (await modelId()) === 'reason-a');
+    const composerSel = '#runtimeView textarea[aria-label="给当前会话的任务"]';
+    await click(composerSel);
+    await read(`(()=>{const i=document.querySelector(${JSON.stringify(composerSel)});i.value='E_NATIVE_A_UNIQUE';i.dispatchEvent(new Event('input'))})()`);
+    key('Enter'); await until(() => read(`document.querySelector('.rtc-output').textContent.includes('E_NATIVE_A_UNIQUE')`));
+    check(await read(`document.querySelector(${JSON.stringify(composerSel)}).value===''`), 'P32.4-E physical Enter sends only captured A and clears confirmed draft');
+    await api({ action: 'command', owner: recovered, command: { type: 'abort' } });
+    await api({ action: 'command', owner: eOwnerB, command: { type: 'prompt', message: 'E_NATIVE_B_UNIQUE' } });
+    await api({ action: 'command', owner: eOwnerB, command: { type: 'abort' } });
+    await click(composerSel); key('Tab'); await sleep(100);
+    check(await read(`document.activeElement!==document.querySelector(${JSON.stringify(composerSel)})`), 'P32.4-E physical Tab leaves central composer through normal focus order');
+    key('Tab', ['shift']); await sleep(100);
+    check(await read(`document.activeElement===document.querySelector(${JSON.stringify(composerSel)})`), 'P32.4-E physical Shift+Tab restores central composer focus');
+    await read(`(()=>{const b=document.querySelector('#pjRuntimeList .pj-runtime-new');b.focus();b.click()})()`);
+    await until(() => read(`!document.querySelector('#modal').hidden`));
+    key('Tab'); await sleep(100); check(await read(`document.querySelector('#modalCard').contains(document.activeElement)`), 'P32.4-E branch modal traps physical Tab');
+    key('Escape'); await until(() => read(`document.querySelector('#modal').hidden`));
+    check(await read(`document.activeElement===document.querySelector('#pjRuntimeList .pj-runtime-new')`), 'P32.4-E Escape closes modal and restores exact trigger focus');
+
+    await centerButton('开发进程');
+    for (const [w, h] of [[1280, 800], [1440, 900], [1920, 1080]]) {
+      win.setContentSize(w, h); await until(() => read(`innerWidth===${w}&&innerHeight===${h}`));
+      check(await read(`(()=>{const c=document.querySelector(${JSON.stringify(composerSel)}).getBoundingClientRect(),p=document.querySelector('#rightPane').getBoundingClientRect();return c.width>100&&c.bottom<=innerHeight+1&&c.right<=p.left+1})()`), `P32.4-E central composer stays usable beside right pane ${w}x${h}`);
+      await shot(`e-central-${w}x${h}`, OUT4);
+    }
+    win.setContentSize(1440, 900);
+    for (const zoom of [1.25, 1.5]) {
+      win.webContents.setZoomFactor(zoom); await until(() => read(`Math.abs(innerWidth-${1440 / zoom})<2`));
+      check(await read(`(()=>{const c=document.querySelector(${JSON.stringify(composerSel)}).getBoundingClientRect(),m=document.querySelector(${JSON.stringify(modelSel)}).getBoundingClientRect(),p=document.querySelector('#rightPane').getBoundingClientRect();return c.width>100&&c.right<=p.left+1&&m.right<=p.left+1})()`), `P32.4-E zoom ${zoom * 100} central composer and model selector are not covered by right pane`);
+      await shot(`e-central-zoom${zoom * 100}`, OUT4);
+    }
+    win.webContents.setZoomFactor(1); await until(() => read(`innerWidth===1440`));
+    await centerButton('Browser');
+    let eBrowserRecord;
+    await until(() => { eBrowserRecord = [...host.records.values()].find(r => r.scope.runtimeId === recovered.runtimeId);
+      return eBrowserRecord && win.contentView.children.some(v => v.webContents === eBrowserRecord.controller.getWebContents()); });
+    const { repoId: eRepoId, ...eBrowserScope } = recovered;
+    await read(`window.piGuiDesktop.runtimeBrowser.navigate(${JSON.stringify(eBrowserScope)},${JSON.stringify(`http://127.0.0.1:${pages[0].address().port}`)})`);
+    await until(() => eBrowserRecord.controller.getWebContents().executeJavaScript(`document.body?.textContent.includes('OWNER_A')`));
+    win.webContents.setZoomFactor(1.5); await until(() => read(`Math.abs(innerWidth-960)<2`)); await sleep(250);
+    const eNativeView = win.contentView.children.find(v => v.webContents === eBrowserRecord.controller.getWebContents()), eNativeBounds = eNativeView.getBounds(), eWindowSize = win.getContentSize();
+    check(eNativeBounds.width > 0 && eNativeBounds.height > 0 && eNativeBounds.x >= 0 && eNativeBounds.y >= 0 && eNativeBounds.x + eNativeBounds.width <= eWindowSize[0] && eNativeBounds.y + eNativeBounds.height <= eWindowSize[1], 'P32.4-E actual native Browser bounds stay inside the window at 150 percent zoom');
+    await shot('e-browser-zoom150', OUT4);
+    const eNativeFile = path.join(OUT4, 'e-browser-native-zoom150.png'); fs.writeFileSync(eNativeFile, (await eNativeView.webContents.capturePage()).toPNG()); screenshots.push({ file: eNativeFile, nativeBrowser: true, ownerLabel: 'A', bounds: eNativeBounds });
+    win.webContents.setZoomFactor(1); await until(() => read(`innerWidth===1440`));
+
+    const search = await api(null, '/api/sessions/search?q=E_NATIVE_&scope=all');
+    const aHit = search.results.find(r => r.locator?.conversationId === idA), bHit = search.results.find(r => r.locator?.conversationId === idB);
+    check(aHit?.locator.nativeSessionId === recovered.sessionId && bHit?.locator.nativeSessionId === eOwnerB.sessionId && aHit.locator.workspaceId !== bHit.locator.workspaceId, 'P32.4-E real native body search preserves project/worktree/conversation/native identity');
+    await click('#navSearch'); await read(`(()=>{const i=document.querySelector('.pj-search-input');i.value='E_NATIVE_';i.dispatchEvent(new Event('input'))})()`);
+    await until(() => read(`document.querySelectorAll('.pj-sr[data-conversation-id]').length===2`));
+    await click(`.pj-sr[data-conversation-id="${idA}"] .pj-sr-hit`);
+    await until(() => read(`document.querySelector('.rtc-state').textContent.includes('只读历史')&&document.querySelector('.rtc-output').textContent.includes('E_NATIVE_A_UNIQUE')`));
+    check(!await read(`document.querySelector('.rtc-output').textContent.includes('E_NATIVE_B_UNIQUE')`), 'P32.4-E live search opens exact A native history without cross-owner body');
+    await shot('e-search-live-history-a', OUT4);
+    await api({ action: 'close', owner: eOwnerB });
+    await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
+    await click('#navSearch'); await read(`(()=>{const i=document.querySelector('.pj-search-input');i.value='E_NATIVE_B_UNIQUE';i.dispatchEvent(new Event('input'))})()`);
+    await until(() => read(`Boolean(document.querySelector('.pj-sr[data-conversation-id="${idB}"] .pj-sr-hit'))`));
+    await click(`.pj-sr[data-conversation-id="${idB}"] .pj-sr-hit`);
+    await until(() => read(`document.querySelector('.rtc-state').textContent.includes('只读历史')&&document.querySelector('.rtc-output').textContent.includes('E_NATIVE_B_UNIQUE')`));
+    check((await api()).totalCount === 2 && !await read(`document.querySelector('.rtc-output').textContent.includes('E_NATIVE_A_UNIQUE')`), 'P32.4-E dormant native body result opens B history without spawn or A contamination');
+    await shot('e-search-dormant-history-b', OUT4);
+    await click('.pj-search-input'); key('Escape'); await until(() => read(`document.querySelector('.pj-search-input').value===''`));
+    check(true, 'P32.4-E physical Escape clears integrated search back to normal history navigation');
+    await click('#navHome'); await until(() => read(`document.querySelector('#workspace').dataset.workspaceView==='chat'`));
+    await click('#input'); await read(`(()=>{const i=document.querySelector('#input');i.value='E_CLASSIC_BODY_UNIQUE';i.dispatchEvent(new Event('input'))})()`); key('Enter');
+    await until(async () => { const r = await api(null, '/api/sessions/search?q=E_CLASSIC_BODY_UNIQUE&scope=all'); return r.results?.some(item => !item.locator); });
+    check(await read(`!document.querySelector('#chatComposer').hidden&&document.querySelector('#runtimeView').hidden`), 'P32.4-E classic physical Enter and native body search retain ordinary session identity');
+    await api({ type: 'abort' }, '/api/command');
     await api({action:'close',owner:recovered});
 
     /* P32.4-A 闭环：在临时真实 Git 项目里，从**侧栏**点「新建并行会话」走完整条链
