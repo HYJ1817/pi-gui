@@ -36,6 +36,7 @@ let currentProjectPath = '';
 let parent = null;
 let host = null;
 let token = 0;
+let loading = null;
 let focusHandler = null;
 let createHandler = null;
 
@@ -58,8 +59,17 @@ export function runtimeNavItems() {
 export function setRuntimeNavParent(next) { parent = next || null; }
 
 /** 从后端重新拉一次归属与快照。返回归属数量，便于调用方决定是否还画这块。 */
-export async function loadRuntimeNav(project, context = {}) {
+export function loadRuntimeNav(project, context = {}) {
   if (context.parent) parent = context.parent;
+  const path = project?.path || '';
+  if (loading?.path === path) return loading.promise;
+  const task = { path, promise: null };
+  loading = task;
+  task.promise = readRuntimeNav(project).finally(() => { if (loading === task) loading = null; });
+  return task.promise;
+}
+
+async function readRuntimeNav(project) {
   if (typeof project?.path === 'string') currentProjectPath = project.path;
   const t = ++token;
   const [snapshot, worktrees] = await Promise.all([
@@ -94,7 +104,7 @@ export function repaintRuntimeNav() {
   paint();
 }
 
-export function clearRuntimeNav() { members = []; projectId = ''; token++; host = null; }
+export function clearRuntimeNav() { members = []; projectId = ''; token++; host = null; loading = null; }
 
 function label(item) {
   const branch = item?.workspace?.branch;

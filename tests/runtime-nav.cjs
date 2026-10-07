@@ -204,5 +204,25 @@ const { JSDOM } = require('jsdom');
   ok('start 失败时如实提示「工作区已创建」，不谎报成功',
     document.querySelector('#toasts').textContent.includes('工作区已创建'));
 
+  // 某条快照先发现新会话、归属列表尚在读取时，持续 SSE 不得不断废弃前一个读取。
+  const { runtimeStore } = await import('../public/runtime-state.js');
+  let listReads = 0, snapshotReads = 0, releaseList;
+  let discoveryItems = [record('A', '2026-01-01', { owner: owner('A'), lifecycle: 'ready' })];
+  global.fetch = async url => ({ json: async () => String(url).startsWith('/api/worktrees')
+    ? { ok: true, projectId: 'project' }
+    : { ok: true, backendInstance: 'backend', items: discoveryItems } });
+  await nav.loadRuntimeNav({ path: '/fixture' });
+  discoveryItems = [...discoveryItems, record('C', '2026-01-03', { owner: owner('C'), lifecycle: 'ready' })];
+  runtimeStore.seed({ ok: true, backendInstance: 'backend', items: discoveryItems });
+  global.fetch = async url => ({ json: async () => {
+    if (String(url).startsWith('/api/worktrees')) { listReads++; return new Promise(resolve => { releaseList = resolve; }); }
+    snapshotReads++; return { ok: true, backendInstance: 'backend', items: discoveryItems };
+  } });
+  for (let n = 0; n < 50; n++) observeRuntimeEvent({ type: 'runtime_event', owner: owner('A'), eventSequence: 1000 + n,
+    event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '.' } } });
+  await new Promise(r => setImmediate(r));
+  ok('50 个 SSE 只发一次尚未完成的归属读取', listReads === 1 && snapshotReads === 1);
+  releaseList({ ok: true, projectId: 'project' }); await new Promise(r => setImmediate(r));
+  ok('归属读取完成后新会话正常出现', order() === 'A,C');
   console.log(`Runtime nav: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
