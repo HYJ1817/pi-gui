@@ -55,7 +55,7 @@ import { createAuthRuntimeSync } from './server/provider-auth-runtime.js';
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
 import { createSessionExport } from './server/session-export.js';
-import { readSessionMessages } from './server/session-history.js';
+import { readSessionMessages, readSessionText } from './server/session-history.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createGuiBrowserLaunch } from './server/gui-browser-launch.js';
 import { createProcessBridge } from './server/process-bridge.js';
@@ -503,7 +503,15 @@ const sessions = createSessions({
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
  * import，而搜索必须复用同一处归属判定（见 server/session-search.js 的文件头）。
  * 它只回答「关键词命中哪些会话的哪些消息」，切会话仍然走 sessions.switchTo。 */
-const sessionSearch = createSessionSearch({ runtime, sessions });
+const sessionSearch = createSessionSearch({ runtime, sessions,
+  runtimeCandidates: async cwd => {
+    try {
+      const listing = await worktrees.list({ project: worktrees.projectFor(cwd) || cwd });
+      return listing?.projectId ? runtimeRegistryRef?.searchTargets(listing.projectId) || [] : [];
+    } catch { return []; }
+  },
+  readRuntimeCandidate: (target, maxBytes) => readSessionText(target.sessionLocator, { expected: target, maxBytes }),
+});
 
 /* Planner / Multi-Agent 编排层（P5）。
  *
@@ -810,7 +818,7 @@ const runtimeRoutes = createRuntimeRoutes({ registry: runtimeRegistry,
   validateWorkspace: owner => worktrees.withWorkspace({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}),
   /* P32.4：只读历史。目标路径来自 registry 记录（后端持有、绑定时已证明），
    * Renderer 只给 conversationId —— 不接受任何来自前端的路径。 */
-  readHistory: locator => readSessionMessages(locator) });
+  readHistory: (locator, target) => readSessionMessages(locator, { expected: target }) });
 const runtimeHealthTimer = setInterval(() => { void runtimeRegistry.healthCheck().catch(() => {}); }, 5000);
 runtimeHealthTimer.unref();
 

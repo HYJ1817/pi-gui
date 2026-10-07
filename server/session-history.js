@@ -26,10 +26,44 @@
  * 工具调用**，这是已知限制，不是 bug（活动中的会话由 runtime store 另外记工具）。
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { sessionMessageBody } from './pi-compat.js';
 
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_MESSAGES = 800;
+const key = value => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
+const sameFile = (a, b) => a.dev === b.dev && a.ino === b.ino && a.birthtimeMs === b.birthtimeMs;
+
+/** Same-fd bounded read. Expected fields are backend proof, never renderer paths. */
+export function readSessionText(file, { expected = null, maxBytes = DEFAULT_MAX_BYTES, tail = false } = {}) {
+  if (typeof file !== 'string' || !file) return { ok: false, code: 'invalid_target' };
+  let fd;
+  try {
+    const real = fs.realpathSync(file);
+    if (expected && key(real) !== key(file)) throw Error();
+    fd = fs.openSync(real, 'r');
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || (expected?.sessionIdentity && !sameFile(stat, expected.sessionIdentity))) throw Error();
+    const validateHeader = () => {
+      if (!expected) return;
+      const headerBytes = Buffer.alloc(Math.min(fs.fstatSync(fd).size, 64 * 1024));
+      const n = fs.readSync(fd, headerBytes, 0, headerBytes.length, 0);
+      const first = headerBytes.subarray(0, n).toString('utf8').split('\n')[0];
+      const header = JSON.parse(first);
+      if (header.type !== 'session' || !expected.sessionId || header.id !== expected.sessionId
+        || typeof header.cwd !== 'string' || typeof expected.cwd !== 'string' || key(header.cwd) !== key(expected.cwd)) throw Error();
+    };
+    validateHeader();
+    const size = Math.min(stat.size, maxBytes), offset = tail ? Math.max(0, stat.size - size) : 0;
+    const buffer = Buffer.alloc(size), n = fs.readSync(fd, buffer, 0, size, offset);
+    // An in-place rewrite keeps the inode. Prove native header ownership again
+    // after the body read; ordinary Pi appends preserve this header.
+    validateHeader();
+    if (!sameFile(stat, fs.fstatSync(fd)) || !sameFile(stat, fs.statSync(real)) || key(fs.realpathSync(file)) !== key(real)) throw Error();
+    return { ok: true, text: buffer.subarray(0, n).toString('utf8'), size: stat.size, truncated: stat.size > maxBytes };
+  } catch { return { ok: false, code: 'history_unavailable' }; }
+  finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
+}
 
 function parts(content) {
   if (typeof content === 'string') return content;
@@ -40,31 +74,10 @@ function parts(content) {
 }
 
 /** 读取一条会话文件的对话正文。失败一律返回 { ok:false, code }，不抛。 */
-export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMessages = DEFAULT_MAX_MESSAGES } = {}) {
-  if (typeof file !== 'string' || !file) return { ok: false, code: 'invalid_target' };
-  let stat, real;
-  try {
-    real = fs.realpathSync(file);
-    stat = fs.statSync(real);
-  } catch { return { ok: false, code: 'session_unavailable' }; }
-  if (!stat.isFile()) return { ok: false, code: 'session_unavailable' };
-  let text, truncatedBySize = false;
-  try {
-    if (stat.size > maxBytes) {
-      truncatedBySize = true;
-      /* 读**尾部**：最近的消息在文件末尾，旧对话截掉比新对话截掉有用。
-       * 用 fd 定长读取，不把整个文件读进内存。 */
-      const fd = fs.openSync(real, 'r');
-      try {
-        const buffer = Buffer.alloc(maxBytes);
-        const read = fs.readSync(fd, buffer, 0, maxBytes, Math.max(0, stat.size - maxBytes));
-        text = buffer.subarray(0, read).toString('utf8');
-      } finally { fs.closeSync(fd); }
-    } else {
-      text = fs.readFileSync(real, 'utf8');
-    }
-  } catch { return { ok: false, code: 'session_unavailable' }; }
-
+export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMessages = DEFAULT_MAX_MESSAGES, expected = null } = {}) {
+  const read = readSessionText(file, { maxBytes, expected, tail: true });
+  if (!read.ok) return read;
+  const text = read.text, truncatedBySize = read.truncated;
   const lines = text.split('\n');
   /* 第 0 行是 header（`{type:'session'}`），一律跳过；按字节预算从尾部截断时，
    * 被切掉的那一行本来就是半行，同样被这一跳丢掉 —— 两种情况下 start 都是 1。 */
