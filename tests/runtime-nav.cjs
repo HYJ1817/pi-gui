@@ -224,5 +224,28 @@ const { JSDOM } = require('jsdom');
   ok('50 个 SSE 只发一次尚未完成的归属读取', listReads === 1 && snapshotReads === 1);
   releaseList({ ok: true, projectId: 'project' }); await new Promise(r => setImmediate(r));
   ok('归属读取完成后新会话正常出现', order() === 'A,C');
+  const primary = id => document.querySelector(`[data-conversation-id="${id}"] .pj-sess-primary`);
+  primary('A').focus();
+  primary('A').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  ok('ArrowDown 将键盘焦点移到下一条而不改变排序', document.activeElement === primary('C') && order() === 'A,C');
+  primary('C').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+  ok('Home 返回第一条键盘焦点', document.activeElement === primary('A'));
+  observeRuntimeEvent({ type: 'runtime_event', owner: owner('A'), eventSequence: 2000,
+    event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '.' } } });
+  ok('后台 SSE 重画保留当前侧栏键盘焦点', document.activeElement === primary('A'));
+  const outside = document.createElement('input'); document.body.append(outside); outside.focus();
+  observeRuntimeEvent({ type: 'runtime_event', owner: owner('A'), eventSequence: 2001,
+    event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '.' } } });
+  ok('后台 SSE 不从输入框抢焦点', document.activeElement === outside);
+  const focusResponses = new Map(), selected = [];
+  nav.setRuntimeFocusHandler(id => selected.push(id));
+  global.fetch = async (_url, opts) => ({ json: async () => new Promise(resolve => {
+    focusResponses.set(JSON.parse(opts.body).owner.conversationId, resolve);
+  }) });
+  primary('A').click(); await new Promise(resolve => setImmediate(resolve));
+  primary('C').click(); await new Promise(resolve => setImmediate(resolve));
+  focusResponses.get('C')({ ok: true }); await new Promise(resolve => setImmediate(resolve));
+  focusResponses.get('A')({ ok: true }); await new Promise(resolve => setImmediate(resolve));
+  ok('乱序 focus 应答只打开用户最后选择的会话', selected.join(',') === 'C');
   console.log(`Runtime nav: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
