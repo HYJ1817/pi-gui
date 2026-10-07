@@ -44,7 +44,7 @@ export function projectRuntimeEvent(event) {
 
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
-  sessionDir = null, extraArgs = [] } = {}) {
+  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -52,7 +52,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   // SEA is not a Node script runner. Resolve the same Node executable the npm
   // launch uses; Electron backend already runs with ELECTRON_RUN_AS_NODE.
   const node = isSea() ? resolveExecutable('node', [], env).command : process.execPath;
-  const supervisor = createPiSupervisor({ node });
+  const supervisor = supervisorFactory({ node });
   const activity = createPiActivity(), generation = createModelGeneration(), approvals = new Map();
   let rpc, disposed = false, cleanup = false, disposal = null;
   const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission });
