@@ -391,7 +391,10 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     await clickRow(idA); await until(() => read(`document.querySelector('.chg-path')?.textContent==='a-only.txt'`));
     await click('.chg-acts .danger'); await until(() => read(`!document.querySelector('#confirmLayer').hidden`));
     await read(`[...document.querySelectorAll('#confirmCard button')].find(b=>b.textContent==='撤销改动').click()`);
-    await until(() => fs.readFileSync(path.join(roots[0], 'a-only.txt'), 'utf8') === 'base\n');
+    await until(() => {
+      try { return fs.readFileSync(path.join(roots[0], 'a-only.txt'), 'utf8') === 'base\n'; }
+      catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+    }); // Git may briefly unlink the file while restoring its tracked contents.
     check(fs.readFileSync(path.join(roots[1], 'b-only.txt'), 'utf8') === 'B changed\n' && fs.readFileSync(path.join(repo, 'a-only.txt'), 'utf8') === 'base\n', 'P32.4-C UI restore A leaves B worktree and classic cwd untouched');
     await shot('c-changes-a-restored', OUT4);
 
