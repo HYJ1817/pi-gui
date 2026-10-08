@@ -5,6 +5,9 @@ $ErrorActionPreference = 'Stop'
 # one UTF-8 reader for both the spec and EOF control, including buffered bytes.
 $spec = $null
 try {
+  # Resolve this built-in cmdlet module directly. Discovery against ambient
+  # module locations is unnecessary for the private guardian.
+  Import-Module "$PSHOME\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1"
   Add-Type -TypeDefinition @'
 using System;
 using System.IO;
