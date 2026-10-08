@@ -154,6 +154,8 @@ function createFakePi() {
 async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
+  const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
+  const { createSessionRevertAuthority } = await import('../server/session-revert-authority.js');
 
   const cwd = os.tmpdir();
   const pi = createFakePi();
@@ -178,6 +180,7 @@ async function main() {
   let syncing = false;
   const guarded = [], modelAccepted = [], activityAccepted = [];
   const context = {
+    createSessionRevertRoutes, createSessionRevertAuthority, getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     managedProcesses: null, worktrees: null,
     createRouter(options) { return createRouter(options); },
     rpc: raw,

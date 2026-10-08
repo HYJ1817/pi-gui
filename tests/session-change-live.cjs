@@ -134,6 +134,62 @@ const { execFileSync } = require('node:child_process');
       await verify('bom.txt', bom, Buffer.from('\ufeffgamma\r\nbeta\r\n'));
       assert.equal(typeof editResult.details.diff, 'string'); assert.equal(typeof editResult.details.patch, 'string');
     });
+    // P33.3 end-to-end: real default tools -> durable evidence -> actual HTTP preview.
+    const previewPath = path.join(workspace, 'preview.txt');
+    const previewB = Buffer.from('user preexisting\nanchor-one\nbody\nanchor-two\ntail\n');
+    await fs.writeFile(previewPath, previewB);
+    await run('write', { path:'preview.txt', content:'agent-one\nanchor-one\nbody\nanchor-two\ntail\n' });
+    await run('edit', { path:'preview.txt', edits:[{oldText:'body',newText:'agent-two'}] });
+    const previewC = Buffer.from('agent-one\nanchor-one\nagent-two\nanchor-two\nuser later\n');
+    const previewR = Buffer.from('user preexisting\nanchor-one\nbody\nanchor-two\nuser later\n');
+    await fs.writeFile(previewPath, previewC);
+    const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
+    const { createRouter } = await import('../server/router.js');
+    const { createAuth } = await import('../server/auth.js');
+    const { runSessionRevert } = await import('../server/session-revert-compute.js');
+    const { createServer } = await import('node:http');
+    const previewIds = (await store.summary(scope)).operations.filter(row=>row.relativePath==='preview.txt').map(row=>row.operationId);
+    const evidenceSnapshot = await store.previewSnapshot(scope,{evidenceIds:previewIds});
+    const journalBefore = await fs.readFile(path.join(root,'data/revert-evidence/v1/journal.jsonl'));
+    const gitBefore = ['HEAD','HEAD^{tree}'].map(ref=>execFileSync('git',['-C',workspace,'rev-parse',ref],{stdio:'pipe'}).toString());
+    const indexBefore = await fs.readFile(path.join(workspace,'.git/index'));
+    const previewServer = createServer(createRouter({ auth:createAuth({token:'fixture-preview-token',port:0}),
+      sessionRevert:createSessionRevertRoutes({store,withAuthority:async(_req,body,fn)=>{
+        assert.deepEqual(body.owner,owner);
+        return fn({scope,root:workspace,activeWriter:false,revalidate:async()=>{}});
+      }}) }));
+    await new Promise(resolve=>previewServer.listen(0,'127.0.0.1',resolve));
+    const previewCall = async extra=>fetch(`http://127.0.0.1:${previewServer.address().port}/api/session-revert/preview`,{method:'POST',
+      headers:{'content-type':'application/json','x-pi-gui-token':'fixture-preview-token'},
+      body:JSON.stringify({owner,evidenceIds:previewIds,mode:'confirmed_limited',...extra})}).then(r=>r.json());
+    try {
+      await check('real write/edit durable evidence produces exact byte candidate without writing',async()=>{
+        const candidate = await runSessionRevert({records:evidenceSnapshot.records,selectedOperationIds:previewIds,current:previewC,gapRevision:evidenceSnapshot.gapRevision});
+        assert.equal(candidate.status,'candidate');assert.deepEqual(candidate.candidate,previewR);
+        assert.deepEqual(await fs.readFile(previewPath),previewC);
+      });
+      await check('real evidence HTTP summary separates content eligibility from unprepared writeback',async()=>{
+        const result=await previewCall({});assert.equal(result.ok,true);assert.equal(result.files[0].status,'candidate');
+        assert.equal(result.files[0].limited.contentEligible,true);assert.equal(result.files[0].limited.applyEligible,false);
+        assert.equal(result.files[0].limited.reason,'metadata_unsupported');assert.equal(result.strict.contentEligible,false);assert.equal(result.backupReady,false);
+        assert.ok(!JSON.stringify(result).includes('user preexisting'));assert.ok(!JSON.stringify(result).includes(previewC.toString()));
+      });
+      await check('real evidence explicit diff is deterministic and preserves later user region',async()=>{
+        const first=await previewCall({includeDiff:true}),second=await previewCall({includeDiff:true});
+        assert.deepEqual(first,second);assert.match(first.files[0].diff,/\+user preexisting/);assert.match(first.files[0].diff,/\+body/);
+        assert.ok(!first.files[0].diff.includes('-user later'));assert.deepEqual(await fs.readFile(previewPath),previewC);
+      });
+      await check('real evidence current overlapping edit refuses content candidate',async()=>{
+        const conflict=Buffer.from('user conflict\nanchor-one\nagent-two\nanchor-two\nuser later\n');await fs.writeFile(previewPath,conflict);
+        const result=await previewCall({});assert.equal(result.ok,true);assert.equal(result.files[0].status,'refused');
+        assert.equal(result.files[0].limited.contentEligible,false);assert.deepEqual(await fs.readFile(previewPath),conflict);
+      });
+      await check('all real preview requests leave journal index and Git refs unchanged',async()=>{
+        assert.deepEqual(await fs.readFile(path.join(root,'data/revert-evidence/v1/journal.jsonl')),journalBefore);
+        assert.deepEqual(await fs.readFile(path.join(workspace,'.git/index')),indexBefore);
+        assert.deepEqual(['HEAD','HEAD^{tree}'].map(ref=>execFileSync('git',['-C',workspace,'rev-parse',ref],{stdio:'pipe'}).toString()),gitBefore);
+      });
+    } finally { await new Promise(resolve=>{previewServer.close(resolve);previewServer.closeAllConnections();}); }
     await run('write', { path: 'hook-input.txt', content: 'hook after\n' });
     await check('later tool_call rewrite captures final operation path', async () => {
       await verify('hook-final.txt', null, Buffer.from('hook after\n'));
@@ -244,7 +300,7 @@ const { execFileSync } = require('node:child_process');
     });
     const reopened = await createSessionChangeStore({ dataDir: path.join(root, 'data') });
     await check('production ACL and digest verification survive store reopen', async () => {
-      const summary = await reopened.summary(scope); assert.equal(summary.operationCount, 11);
+      const summary = await reopened.summary(scope); assert.equal(summary.operationCount, 13); // Original 11 + real preview write/edit.
       const original = await record('bom.txt'); const copy = await reopened.read(scope, original.operationId); assert.deepEqual(copy.before, bom);
     });
     console.log(`Session change REAL installed Pi ${metadata.version}: ${checks}/${checks}; production ${process.platform === 'win32' ? 'Windows ACL' : 'POSIX permissions'}; fixture stream provider, no real model`);

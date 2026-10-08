@@ -47,6 +47,8 @@ async function waitFor(what, fn, timeoutMs = 4000) {
 async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
+  const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
+  const { createSessionRevertAuthority } = await import('../server/session-revert-authority.js');
   let ack, entered, stopped = false, writeError = null, lastSendResult;
   let abortReply = true;
   const writes = [], guarded = [], modelAccepted = [], activityAccepted = [];
@@ -92,6 +94,7 @@ async function main() {
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
   let syncing = false, guardError = null, wrapped = null, captureError = null, disabled = 0;
   const context = {
+    createSessionRevertRoutes, createSessionRevertAuthority, getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     createRouter(options) { wrapped = options.rpc; return createRouter(options); },
     rpc: { ...raw, send(command) {
       lastSendResult = raw.send(command);
