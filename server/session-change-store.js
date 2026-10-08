@@ -190,7 +190,48 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     for (const operation of operations) levels[operation.evidenceLevel] = (levels[operation.evidenceLevel] || 0) + 1;
     return { revision: w.revision, gapRevision: w.gapRevision, operationCount: items.length, eligibleCount: operations.filter(o => o.eligible).length, levels, operations };
   }
+  // Both forms must already be authorized by the backend. Presence of an owner
+  // must never fall back to dormant authority when that owner is malformed.
+  function previewIdentity(scope) {
+    return scope && Object.hasOwn(scope, 'runtimeOwner') ? identity(scope) : persistentIdentity(scope);
+  }
+  async function previewSnapshot(scope, value) {
+    const s = previewIdentity(scope), ids = value?.evidenceIds;
+    const maxOperations = value?.maxOperations ?? 128;
+    if (!Number.isSafeInteger(maxOperations) || maxOperations < 1 || maxOperations > 128
+      || !Array.isArray(ids) || ids.length < 1 || ids.length > maxOperations) fail('evidence_quota_exceeded');
+    const selectedOperationIds = [...new Set(ids.map(identifier))];
+    const session = scopeKey(s), workspace = workspaceKey(s), paths = new Set();
+    for (const id of selectedOperationIds) {
+      const record = records.get(session + ':' + id);
+      if (!record) fail('evidence_not_found');
+      paths.add(record.path);
+    }
+    if (paths.size > 32) fail('evidence_quota_exceeded');
+    const selectedRecords = [...records.values()].filter(r => workspaceKey(r.scope) === workspace && paths.has(r.path))
+      .sort((a, b) => a.workspaceSequence - b.workspaceSequence);
+    if (selectedRecords.length > maxOperations) fail('evidence_quota_exceeded');
+    // Count every materialized reference, even deduplicated objects: this bounds
+    // the returned raw buffers as well as disk reads without a caller override.
+    let bytes = 0;
+    for (const record of selectedRecords) for (const key of ['beforeRef', 'intendedAfterRef', 'observedAfterRef']) {
+      validateReference(record[key]); bytes += record[key]?.bytes ?? 0;
+      if (bytes > 128 * 1024 ** 2) fail('evidence_quota_exceeded');
+    }
+    const w = ws(s), result = { revision: w.revision, gapRevision: w.gapRevision, selectedOperationIds, records: [], retentionDays: limits.retentionDays };
+    try {
+      await noLinks(root); await noLinks(objects); await noLinks(journal, true);
+      if (!await checker(root, false)) fail('evidence_integrity_failed');
+      await childPrivacy(objects); await childPrivacy(journal);
+      for (const record of selectedRecords) result.records.push({ ...structuredClone(record),
+        before: await verifyRef(record.beforeRef), intendedAfter: await verifyRef(record.intendedAfterRef), observedAfter: await verifyRef(record.observedAfterRef) });
+    } catch { fail('evidence_integrity_failed'); }
+    return result;
+  }
   return {
+    // Private read-only snapshot; raw bytes must never be projected to public APIs.
+    previewSnapshot: (scope, value) => queue(() => previewSnapshot(scope, value)),
+    previewRevision: scope => queue(() => { const w = ws(previewIdentity(scope)); return { revision: w.revision, gapRevision: w.gapRevision }; }),
     settings: scope => queue(() => settings(identity(scope))),
     configure: (scope, value) => queue(async () => {
       const s = identity(scope); if (value?.enabled === true && value.acknowledged !== true) fail('evidence_consent_required');

@@ -108,6 +108,7 @@ export function createRouter({
   worktrees = null,
   runtimeSessions = null,
   sessionChanges = null,
+  sessionRevert = null,
   legacyScope = null,
   requireLegacyScope = () => false,
   commandAdmission = async () => false,
@@ -167,6 +168,7 @@ export function createRouter({
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
     if (url.pathname === '/api/session-change/evidence') return sessionChanges ? sessionChanges.handle(req, res, url) : json(res,503,{ok:false,code:'capture_unavailable'});
+    if (url.pathname.startsWith('/api/session-revert/')) return sessionRevert ? sessionRevert.handle(req, res, url) : json(res,503,{ok:false,code:'preview_unavailable'});
     if (req.method !== 'GET' && requireLegacyScope()) {
       let expected;
       try { expected = JSON.parse(req.headers['x-pi-gui-owner'] || 'null'); } catch { expected = null; }

@@ -87,6 +87,9 @@ fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset
 copyInto(STAGE, path.join(ROOT, 'public'), 'public');
 // Official Pi --extension path stays within the installed application.
 copyInto(STAGE, path.join(ROOT, 'extensions'), 'extensions');
+fs.mkdirSync(path.join(STAGE, 'revert-compute'), { recursive: true });
+fs.copyFileSync(path.join(ROOT, 'lib/session-revert.js'), path.join(STAGE, 'revert-compute/algorithm.mjs'));
+fs.copyFileSync(path.join(ROOT, 'server/session-revert-worker.mjs'), path.join(STAGE, 'revert-compute/worker.mjs'));
 
 for (const [key, src] of [
   ['pdfjs/standard_fonts', path.join(PDFJS, 'standard_fonts')],

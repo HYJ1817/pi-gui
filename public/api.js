@@ -98,6 +98,11 @@ export async function fetchRuntimeSessions() {
 /* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
 export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
+// Explicit content opt-in; no restore/apply command or preview body persistence.
+export const previewSessionRevert = ({ evidenceIds, mode = 'confirmed_limited', conversationId, owner, evidenceRevision, includeDiff = false }) =>
+  sendJSON('/api/session-revert/preview', { body: { evidenceIds, mode, includeDiff,
+    ...(conversationId ? { conversationId } : {}), ...(owner ? { owner } : {}),
+    ...(evidenceRevision !== undefined ? { evidenceRevision } : {}) } });
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProcesses = () => getJSON('/api/processes');
 export const controlProcess = body => sendJSON('/api/processes',{body});

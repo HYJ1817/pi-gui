@@ -61,6 +61,8 @@ import { createGuiBrowserLaunch } from './server/gui-browser-launch.js';
 import { createProcessBridge } from './server/process-bridge.js';
 import { createSessionChangeStore } from './server/session-change-store.js';
 import { createSessionChangeBridge } from './server/session-change-bridge.js';
+import { createSessionRevertRoutes } from './server/session-revert-routes.js';
+import { createSessionRevertAuthority } from './server/session-revert-authority.js';
 import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
@@ -877,6 +879,10 @@ function primaryOwner() {
 }
 
 const route = createRouter({
+  sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore,
+    withAuthority:createSessionRevertAuthority({ classicBridge:sessionChanges, classicOwner:primaryOwner,
+      classicNativeState:()=>rpc.request({type:'get_state'}), classicBusy:()=>Boolean(piActivity.busy() || rpc.getState().stop?.pending),
+      registry:runtimeRegistry, worktrees }) }),
   commandAdmission: async cmd => {
     if (!runtime.getCurrentCwd()) return false;
     if (cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') { await sessionChanges.disable(); return true; }
