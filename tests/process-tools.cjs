@@ -18,9 +18,11 @@ let checks=0;const ok=(v)=>{assert.ok(v);checks++;};
     const call=(action,args={})=>tools.get('gui_process_'+action).execute('fixture',args).then(r=>r.details);
     ok((await call('start',{command:'node',args:[]})).code==='process_control_disabled');
     let state=host.manager.snapshot();host.manager.enable(true,state.generation);
-    const a=await call('start',{command:'node',args:[],ready:{type:'log',marker:'READY'}});ok(a.ok);handles[0].emit('started');handles[0].emit('log',Buffer.from('READY\nAuthorization: Bearer abc\n'));
+    const fixtureSecret='fixture-process-redaction-secret-abc';
+    const a=await call('start',{command:'node',args:[],ready:{type:'log',marker:'READY'}});ok(a.ok);handles[0].emit('started');handles[0].emit('log',Buffer.from('READY\nAuthorization: Bearer '+fixtureSecret+'\n'));
     ok((await call('status',{id:a.process.id,revision:1,waitReady:true})).process.ready);
-    ok(!JSON.stringify(await call('logs',{id:a.process.id,revision:1})).includes('abc'));
+    // A short substring such as abc can occur in unrelated random process IDs.
+    ok(!JSON.stringify(await call('logs',{id:a.process.id,revision:1})).includes(fixtureSecret));
     blocked=true;ok((await call('restart',{id:a.process.id,revision:1})).code==='cancelled');blocked=false;
     const r=await call('restart',{id:a.process.id,revision:1});ok(r.process.revision===2);
     ok((await call('stop',{id:a.process.id,revision:1})).code==='stale_process');
