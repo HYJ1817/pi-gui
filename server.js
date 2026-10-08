@@ -59,6 +59,8 @@ import { readSessionMessages, readSessionText } from './server/session-history.j
 import { createRpcBridge } from './server/rpc-bridge.js';
 import { createGuiBrowserLaunch } from './server/gui-browser-launch.js';
 import { createProcessBridge } from './server/process-bridge.js';
+import { createSessionChangeStore } from './server/session-change-store.js';
+import { createSessionChangeBridge } from './server/session-change-bridge.js';
 import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
@@ -95,6 +97,7 @@ import { runShellCommand, runCli, killTree } from './server/agents/cli.js';
 import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
+import { json } from './server/http-utils.js';
 
 // 数据目录：projects.json 和上传缓存放这里。
 //
@@ -281,11 +284,35 @@ const processManagers = new Set();
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
 const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission});
+let evidenceStore = null;
+const getEvidenceStore = () => evidenceStore ||= createSessionChangeStore({ dataDir: DATA_DIR });
+function evidenceScope(owner, nativeSessionId) {
+  return { runtimeOwner: { ...owner, sessionId: nativeSessionId }, conversationId: owner.conversationId,
+    nativeSessionId, workspaceId: owner.workspaceId, workspaceEpoch: owner.workspaceEpoch };
+}
+const sessionChanges = createSessionChangeBridge({ store: getEvidenceStore, launch: piLaunch,
+  notify: event => sse.publish(event),
+  resolveScope: async () => {
+    const state = await rpc.request({ type: 'get_state' });
+    if (!state?.sessionId || state.__error) throw Error('capture_unavailable');
+    primaryNativeSession = state.sessionId;
+    return evidenceScope(primaryOwner(), state.sessionId);
+  },
+  withAuthority: action => {
+    const cwd = runtime.getCurrentCwd(), epoch = runtime.getWorkspaceGeneration();
+    if (!cwd) throw Error('capture_unavailable');
+    return worktrees.withActivation(cwd, async () => {
+      if (runtime.getCurrentCwd() !== cwd || runtime.getWorkspaceGeneration() !== epoch) throw Error('stale_workspace');
+      return action({ root: fs.realpathSync(cwd) });
+    });
+  },
+});
 processManagers.add(managedProcesses.manager);
 const rpc = createRpcBridge({
   runtime,
   browserLaunch: guiBrowserLaunch,
   processLaunch: managedProcesses,
+  sessionChangeLaunch: sessionChanges,
   /* Pi 更新前的暂停要确认**整棵进程树**都退出了（Windows 上经 npm .cmd 启动时，
    * 只 kill 外层包装不足以说明 pi 本体已停）。原语在这里注入：rpc-bridge 自己
    * 不认识业务模块（有架构守卫钉着），复用的是 agents/cli.js 里验证过的 killTree。 */
@@ -296,6 +323,7 @@ const rpc = createRpcBridge({
     event = projectProcessEvent(event);
     managedProcesses.observe(event);
     extensionRegistryRef?.observe(event);
+    sessionChanges.observe(event);
     /* bridge 生命周期一变，runtime probe（RPC / 工具事件 / 原生 MCP）就没有意义了 ——
      * 旧 run 的结论不许留在表里。维护态也算：那一刻 runtime 正要被换掉。 */
     if (event?.type === 'bridge_status'
@@ -806,7 +834,25 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     const browser = await runtimeBrowser.allocate(launch, context.owner);
     let adapter;
     try { adapter = await createSessionRuntime({ context, emit, piBin: PI_BIN, env: process.env, dataDir: DATA_DIR,
-      guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig }); }
+      guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig,
+      createChanges: ({ launch, context, requestState }) => createSessionChangeBridge({ store: getEvidenceStore, launch,
+        notify: event => emit(event),
+        resolveScope: async () => {
+          const state = await requestState();
+          let owner = context.getOwner();
+          // Startup hello may finish just before registry's independent private
+          // native-session readback binds the owner. Wait briefly, never invent it.
+          for (let attempt = 0; owner.sessionId === null && context.isCurrent() && attempt < 25; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 20)); owner = context.getOwner();
+          }
+          if (!context.isCurrent() || !state?.sessionId || state.__error || owner.sessionId !== state.sessionId) throw Error('stale_runtime');
+          return evidenceScope(owner, state.sessionId);
+        },
+        withAuthority: action => worktrees.withWorkspace({ id: context.workspace.workspaceId, epoch: context.workspace.workspaceEpoch }, async workspace => {
+          if (!context.isCurrent()) throw Error('stale_runtime'); return action(workspace);
+        }),
+      }),
+    }); }
     catch (error) { await browser?.dispose(); throw error; }
     processManagers.add(adapter.managed.manager);
     const dispose = adapter.dispose;
@@ -831,6 +877,35 @@ function primaryOwner() {
 }
 
 const route = createRouter({
+  commandAdmission: async cmd => {
+    if (!runtime.getCurrentCwd()) return false;
+    if (cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') { await sessionChanges.disable(); return true; }
+    if (['prompt', 'steer', 'follow_up'].includes(cmd.type)) await sessionChanges.assertReady();
+    return false;
+  },
+  sessionChanges: { async handle(req, res) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'method_not_allowed' });
+    try {
+      const conversationId = req.headers['x-pi-gui-conversation'];
+      let bridge = sessionChanges;
+      if (conversationId) {
+        const item = runtimeRegistry.snapshot().items.find(item => item.conversationId === conversationId);
+        if (!item?.owner) {
+          const target = runtimeRegistry.historyTarget(conversationId), identity = runtimeRegistry.workspaceIdentityOf(conversationId);
+          if (!target?.sessionId || !identity) return json(res, 409, { ok: false, code: 'no_evidence' });
+          return await worktrees.withWorkspace(identity, async workspace => {
+            const stat = fs.statSync(workspace.root);
+            const summary = await (await getEvidenceStore()).summaryPersistent({ projectId: workspace.projectId, repoId: workspace.repoId,
+              workspaceId: workspace.workspaceId, workspaceEpoch: workspace.workspaceEpoch, conversationId, nativeSessionId: target.sessionId,
+              workspaceFingerprint: createHash('sha256').update(JSON.stringify([stat.dev, stat.ino, stat.birthtimeMs])).digest('hex') });
+            return json(res, 200, { ok: true, ...summary, sourceVerified: false, reason: 'runtime_closed', externalConcurrencyUnexcluded: true });
+          });
+        }
+        bridge = runtimeRegistry.getAdapter(item.owner).changes;
+      }
+      return json(res, 200, await bridge.summary());
+    } catch { return json(res, 409, { ok: false, code: 'capture_unavailable' }); }
+  } },
   runtimeSessions: runtimeRoutes,
   legacyScope: primaryOwner,
   requireLegacyScope: () => runtimeRegistry.liveCount() > 0,
@@ -901,6 +976,7 @@ async function shutdown() {
   providerAuth.dispose();
   runtime.setShuttingDown(true);
   clearInterval(runtimeHealthTimer);
+  await sessionChanges.dispose();
   try { await runtimeRegistry.dispose(); } catch { /* Owned guardians also stop on backend EOF. */ }
   worktrees.dispose();
   /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted

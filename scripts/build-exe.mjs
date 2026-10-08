@@ -48,6 +48,7 @@ function main() {
 
   for (const f of walk(path.join(ROOT, 'public'))) add(rel(f), f);
   for (const f of walk(path.join(ROOT, 'extensions','pi-gui-process'))) add(rel(f), f);
+  for (const f of walk(path.join(ROOT, 'extensions','pi-gui-revert'))) add(rel(f), f);
 
   for (const [key, sub] of [
     ['pdfjs/standard_fonts', 'standard_fonts'],

@@ -44,7 +44,7 @@ export function projectRuntimeEvent(event) {
 
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
-  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor } = {}) {
+  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -56,6 +56,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const activity = createPiActivity(), generation = createModelGeneration(), approvals = new Map();
   let rpc, disposed = false, cleanup = false, disposal = null;
   const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission });
+  const changes = createChanges?.({ runtime, launch, context, requestState: () => rpc.request({ type: 'get_state' }) }) || null;
   const config = createProjectConfig({ runtime, env, restartPi: () => rpc.restart() });
   const sessions = createSessions({ runtime, env, dataDir, extraSessionRoots: sessionDir ? [sessionDir] : [] });
   const launchOptions = { ...config, launchArgs() { const value = config.launchArgs(); return { ...value, args: [...value.args, ...(sessionDir ? ['--session-dir', sessionDir] : []), ...extraArgs] }; },
@@ -71,12 +72,12 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   rpc = createRpcBridge({ runtime, launch: { ...launch, bin: node }, piBin: node, isWin: false,
     autoRestart: false,
     env: { ...env, ELECTRON_RUN_AS_NODE: '1', PI_NO_CONTINUE: '1' }, projectLaunch: launchOptions,
-    browserLaunch: browser, processLaunch: managed,
+    browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes,
     spawnProcess: (_command, args, opts) => supervisor.spawnProcess(node, [...entry.baseArgs, ...args], { ...opts, shell: false }),
     killProcessTree: supervisor.killProcessTree,
     publish(event) {
       if (disposed || !context.isCurrent()) return;
-      managed.observe(event); activity.observe(event);
+      managed.observe(event); changes?.observe(event); activity.observe(event);
       if (event.type === 'extension_ui_request' && typeof event.id === 'string') {
         if (approvals.size >= 32) approvals.delete(approvals.keys().next().value);
         approvals.set(event.id, event.method);
@@ -99,7 +100,10 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       return projectRuntimeEvent(generation.observe(sanitizeModelEvent({ type: 'response', command: cmd.type, success: true, data: result },
         ['get_state', 'get_available_models'].includes(cmd.type) ? readModelsConfig() : null))).data;
     },
-    send(cmd) {
+    async send(cmd) {
+      if (disposed || !context.isCurrent()) throw fail('stale_runtime');
+      if (changes && cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') return changes.disable();
+      if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && !(cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable')) await changes?.assertReady();
       if (disposed || !context.isCurrent()) throw fail('stale_runtime');
       cmd = { ...cmd, id: typeof cmd.id === 'string' ? cmd.id : randomUUID() };
       if (cmd.type === 'extension_ui_response') {
@@ -110,7 +114,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       const { __fallbackOwner, ...wire } = cmd;
       const result = rpc.send(wire); generation.noteCommandAccepted(cmd); activity.noteCommandAccepted(cmd); return result;
     },
-    abortAndWait: cmd => rpc.abortAndWait(cmd), activity, managed,
+    abortAndWait: cmd => rpc.abortAndWait(cmd), activity, managed, changes,
     async sessionLocator(state) {
       const target = sessions.resolveByUuid(state.sessionId);
       return target && (!state.sessionFile || path.resolve(target.file) === path.resolve(state.sessionFile)) ? fs.realpathSync(target.file) : null;
@@ -120,7 +124,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       if (disposal) return disposal;
       disposed = true; runtime.setShuttingDown(true); rpc.stop();
       disposal = (async () => {
-        await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.()]);
+        await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.(), changes?.dispose()]);
         cleanup = true;
       })(); return disposal;
     },

@@ -150,7 +150,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     leases.set(key, live); lives.set(record.conversationId, live); changed(live);
     try {
       live.adapter = await factory({ cwd: record.workspace.cwd, workspace: { ...record.workspace }, owner: owner(live),
-        sessionId: record.sessionId, sessionLocator: record.sessionLocator, isCurrent: () => belongs(live) }, event => emit(live, event));
+        sessionId: record.sessionId, sessionLocator: record.sessionLocator, isCurrent: () => belongs(live), getOwner: () => owner(live) }, event => emit(live, event));
       if (!belongs(live)) throw fail('stale_runtime');
       live.adapter.start();
       return { ok: true, conversationId: record.conversationId, owner: owner(live), item: summary(record) };

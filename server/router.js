@@ -107,8 +107,10 @@ export function createRouter({
   processes = null,
   worktrees = null,
   runtimeSessions = null,
+  sessionChanges = null,
   legacyScope = null,
   requireLegacyScope = () => false,
+  commandAdmission = async () => false,
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -136,6 +138,7 @@ export function createRouter({
               ? { ok: true, stop: { evidence: stop.evidence, queue: stop.queue } }
               : { ok: false, code: stop.code, error: stop.error });
           }
+          if (await commandAdmission(cmd)) return json(res, 200, { ok: true });
           await rpc.send(cmd);
           return json(res, 200, { ok: true });
         } catch (err) {
@@ -163,6 +166,7 @@ export function createRouter({
 
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
+    if (url.pathname === '/api/session-change/evidence') return sessionChanges ? sessionChanges.handle(req, res, url) : json(res,503,{ok:false,code:'capture_unavailable'});
     if (req.method !== 'GET' && requireLegacyScope()) {
       let expected;
       try { expected = JSON.parse(req.headers['x-pi-gui-owner'] || 'null'); } catch { expected = null; }
