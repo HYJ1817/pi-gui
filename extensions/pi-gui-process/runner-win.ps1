@@ -1,10 +1,12 @@
 # Private guardian. Spec arrives over stdin; argv contains no process environment.
 $ErrorActionPreference = 'Stop'
-[Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+# This is a redirected protocol pipe, not an interactive console. Mutating
+# Console.InputEncoding/OutputEncoding can block under the CI host. Keep one
+# UTF-8 reader for both the spec and EOF control, including its buffered bytes.
+$inputReader = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), (New-Object System.Text.UTF8Encoding($false)))
 $spec = $null
 try {
-  $spec = [Console]::In.ReadLine() | ConvertFrom-Json
+  $spec = $inputReader.ReadLine() | ConvertFrom-Json
   Add-Type -TypeDefinition @'
 using System;
 using System.IO;
@@ -45,7 +47,7 @@ public static class PiGuiJob {
     b.Append('\\',slashes*2);return b.Append('"').ToString();
   }
   static void Send(string type,string identity,uint code) { Console.Out.WriteLine("{\"type\":\""+type+"\",\"identity\":\""+identity+"\",\"code\":"+code+"}");Console.Out.Flush(); }
-  public static void Run(string command,string[] args,string cwd,string[] entries,string identity) {
+  public static void Run(string command,string[] args,string cwd,string[] entries,string identity,TextReader input) {
     IntPtr job=IntPtr.Zero,read=IntPtr.Zero,write=IntPtr.Zero,nul=IntPtr.Zero,env=IntPtr.Zero,list=IntPtr.Zero,handles=IntPtr.Zero;
     PROCESS process=new PROCESS();bool assigned=false;FileStream stream=null;Task pump=null;
     try {
@@ -69,7 +71,7 @@ public static class PiGuiJob {
       stream=new FileStream(new SafeFileHandle(read,true),FileAccess.Read);read=IntPtr.Zero;
       pump=Task.Run(()=>stream.CopyTo(Console.OpenStandardError()));
       Check(ResumeThread(process.thread)!=0xffffffff);Send("started",identity,0);
-      var control=Task.Run(()=>Console.In.ReadLine());bool exited=false;
+      var control=Task.Run(()=>input.ReadLine());bool exited=false;
       while(true) {
         if(control.IsCompleted){Check(TerminateJobObject(job,0));break;}
         if(!exited&&WaitForSingleObject(process.process,0)==0){uint code;Check(GetExitCodeProcess(process.process,out code));Send("exit",identity,code);exited=true;}
@@ -91,7 +93,7 @@ public static class PiGuiJob {
 }
 '@
   [string[]]$entries = @($spec.env.psobject.Properties | ForEach-Object { $_.Name + '=' + [string]$_.Value })
-  [PiGuiJob]::Run([string]$spec.command, [string[]]@($spec.args), [string]$spec.cwd, $entries, [string]$spec.identity)
+  [PiGuiJob]::Run([string]$spec.command, [string[]]@($spec.args), [string]$spec.cwd, $entries, [string]$spec.identity, $inputReader)
 } catch {
   # Never forward native exception messages, source snippets, spec, or paths.
   [Console]::Out.WriteLine((@{ type='failure'; identity=[string]$spec.identity } | ConvertTo-Json -Compress))
