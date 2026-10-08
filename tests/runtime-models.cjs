@@ -114,10 +114,11 @@ const assert = require('node:assert/strict');
     let source = fs.readFileSync(path.join(processAssets(), name), 'utf8');
     if (name === 'runner-win.ps1') {
       for (const [anchor, stage] of [
-        ["$ErrorActionPreference = 'Stop'", 'before_reader'],
-        ['$spec = $null', 'before_read'],
-        ['  Add-Type -TypeDefinition', 'after_read'],
-        ['  [string[]]$entries =', 'after_compile'],
+        ["$ErrorActionPreference = 'Stop'", 'before_script'],
+        ['  Add-Type -TypeDefinition', 'before_compile'],
+        ['  $inputReader = [PiGuiJob]::OpenInput()', 'after_compile'],
+        ['  $spec = $inputReader.ReadLine()', 'after_reader'],
+        ['  [string[]]$entries =', 'after_read'],
         ['  [PiGuiJob]::Run(', 'before_run'],
       ]) {
         if (!source.includes(anchor)) throw Error('guardian_fixture_anchor_missing');
@@ -136,7 +137,7 @@ const assert = require('node:assert/strict');
       guardian.on('log', chunk => {
         const text = diagnosticTail + chunk.toString();
         diagnosticTail = text.slice(-128);
-        for (const match of text.matchAll(/fixture_guardian_phase:(before_reader|before_read|after_read|after_compile|before_run)/g)) {
+        for (const match of text.matchAll(/fixture_guardian_phase:(before_script|before_compile|after_compile|after_reader|after_read|before_run)/g)) {
           if (!diagnosticStages.has(match[1])) { diagnosticStages.add(match[1]); trace(match[1]); }
         }
         for (const code of ['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND', 'SyntaxError', 'ENOENT', 'EACCES']) {
