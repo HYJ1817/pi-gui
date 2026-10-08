@@ -1,12 +1,10 @@
 # Private guardian. Spec arrives over stdin; argv contains no process environment.
 $ErrorActionPreference = 'Stop'
-# This is a redirected protocol pipe, not an interactive console. Mutating
-# Console.InputEncoding/OutputEncoding can block under the CI host. Keep one
-# UTF-8 reader for both the spec and EOF control, including its buffered bytes.
-$inputReader = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), (New-Object System.Text.UTF8Encoding($false)))
+# This is a redirected protocol pipe, not an interactive console. Open its
+# actual inherited handle without Console's global input initialization. Keep
+# one UTF-8 reader for both the spec and EOF control, including buffered bytes.
 $spec = $null
 try {
-  $spec = $inputReader.ReadLine() | ConvertFrom-Json
   Add-Type -TypeDefinition @'
 using System;
 using System.IO;
@@ -40,6 +38,12 @@ public static class PiGuiJob {
   [DllImport("kernel32")] static extern bool GetExitCodeProcess(IntPtr process,out uint code);
   [DllImport("kernel32")] static extern bool TerminateProcess(IntPtr process,uint code);
   [DllImport("kernel32")] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32",SetLastError=true)] static extern IntPtr GetStdHandle(int type);
+  public static TextReader OpenInput() {
+    var handle=GetStdHandle(-10);
+    if(handle==IntPtr.Zero||handle==new IntPtr(-1))throw new Exception("input_unavailable");
+    return new StreamReader(new FileStream(new SafeFileHandle(handle,false),FileAccess.Read),new UTF8Encoding(false));
+  }
   static void Check(bool value) { if(!value)throw new Exception("native_failure"); }
   static string Quote(string arg) {
     var b=new StringBuilder("\""); int slashes=0;
@@ -92,6 +96,8 @@ public static class PiGuiJob {
   }
 }
 '@
+  $inputReader = [PiGuiJob]::OpenInput()
+  $spec = $inputReader.ReadLine() | ConvertFrom-Json
   [string[]]$entries = @($spec.env.psobject.Properties | ForEach-Object { $_.Name + '=' + [string]$_.Value })
   [PiGuiJob]::Run([string]$spec.command, [string[]]@($spec.args), [string]$spec.cwd, $entries, [string]$spec.identity, $inputReader)
 } catch {
