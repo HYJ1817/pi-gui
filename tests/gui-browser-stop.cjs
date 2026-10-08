@@ -90,7 +90,7 @@ async function main() {
   const start = source.indexOf('const route = createRouter({');
   const end = source.indexOf('\nconst server = http.createServer(route);', start);
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
-  let syncing = false, guardError = null, wrapped = null;
+  let syncing = false, guardError = null, wrapped = null, captureError = null, disabled = 0;
   const context = {
     createRouter(options) { wrapped = options.rpc; return createRouter(options); },
     rpc: { ...raw, send(command) {
@@ -105,13 +105,14 @@ async function main() {
       return lastSendResult;
     } },
     auth: { denyRequest: () => null }, sse: {}, managedProcesses: null, worktrees: null,
+    sessionChanges: { assertReady: async () => { if (captureError) throw captureError; }, disable: async () => { disabled++; } },
     providerAuth: { snapshot: () => ({ sync: { state: syncing ? 'syncing' : 'idle' } }) },
     modelGeneration: {
       guardCommand(command) { if (guardError) throw guardError; guarded.push(command); },
       noteCommandAccepted: (command) => modelAccepted.push(command),
     },
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
-    createSessionExport: () => null, runtime: {}, piLaunch: { packageDir: () => null },
+    createSessionExport: () => null, runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
   };
   for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative',
     'approvalProbe', 'extensions', 'sessions', 'sessionSearch', 'planner', 'gitRoutes',
@@ -184,6 +185,16 @@ async function main() {
       try { assert.throws(() => wrapped.send({ type: 'prompt' }), error => error === writeError); }
       finally { writeError = null; }
       assert.deepEqual([modelAccepted.length, activityAccepted.length], before);
+    });
+    await check('P33 capture admission rejects before synchronous Pi send', async () => {
+      const before = writes.length; captureError = Error('source_unverified');
+      try { assert.equal((await post({ type: 'prompt', message: 'fixture' })).status, 503); assert.equal(writes.length, before); }
+      finally { captureError = null; }
+    });
+    await check('P33 explicit disable works without forwarding a model prompt', async () => {
+      const before = writes.length; captureError = Error('capture_unavailable');
+      try { assert.equal((await post({ type: 'prompt', message: '/gui-capture disable' })).status, 200); assert.equal(disabled, 1); assert.equal(writes.length, before); }
+      finally { captureError = null; }
     });
     await check('C provider 与模型守卫仍然同步生效，且不写不记账', () => {
       const before = [writes.length, modelAccepted.length, activityAccepted.length];
