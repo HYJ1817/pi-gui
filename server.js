@@ -39,7 +39,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isSea } from './lib/assets.js';
 import { createAuth } from './server/auth.js';
 import { createEventBus } from './server/sse.js';
@@ -62,7 +62,9 @@ import { createProcessBridge } from './server/process-bridge.js';
 import { createSessionChangeStore } from './server/session-change-store.js';
 import { createSessionChangeBridge } from './server/session-change-bridge.js';
 import { createSessionRevertRoutes } from './server/session-revert-routes.js';
-import { createSessionRevertAuthority } from './server/session-revert-authority.js';
+import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
+import { createSessionRevertAdmission } from './server/session-revert-admission.js';
+import { inspectFileMetadata } from './server/session-revert-metadata.js';
 import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
@@ -283,9 +285,10 @@ const modelGeneration = createModelGeneration();
 let primaryNativeSession = null;
 let cliInFlight = 0;
 const processManagers = new Set();
+const mutationAdmission = createSessionRevertAdmission();
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
-const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission});
+const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission,mutationAdmission});
 let evidenceStore = null;
 const getEvidenceStore = () => evidenceStore ||= createSessionChangeStore({ dataDir: DATA_DIR });
 function evidenceScope(owner, nativeSessionId) {
@@ -293,6 +296,7 @@ function evidenceScope(owner, nativeSessionId) {
     nativeSessionId, workspaceId: owner.workspaceId, workspaceEpoch: owner.workspaceEpoch };
 }
 const sessionChanges = createSessionChangeBridge({ store: getEvidenceStore, launch: piLaunch,
+  admission: mutationAdmission, inspectFileMetadata,
   notify: event => sse.publish(event),
   resolveScope: async () => {
     const state = await rpc.request({ type: 'get_state' });
@@ -404,7 +408,7 @@ const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identity
 const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({
-  runtime,
+  runtime, admission: mutationAdmission,
   /* P32.4-C：Changes 跟随 focused 会话。前端只给 conversationId（请求头），
    * registry 只提供 workspace identity；P32.2 在整个 Git 操作期间持锁，
    * 验证并提供 authoritative root。**不接受 Renderer 传路径**。
@@ -448,6 +452,7 @@ const mcpNative = createMcpNative({
   readTrust: async () => (await skills.readIndex()).trust,
   rpc,
   runCli: async (entry, args, opts) => {
+    if (runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
     if (runtimeRegistryRef?.liveCount()) return { ok: false, spawnFailed: true, error: '请先关闭独立会话，再执行 Pi CLI 管理操作。' };
     /* 记在飞的 CLI 动作数：Pi 更新前要确认没有别的 pi 进程正在跑
      * （MCP login/logout 这类动作与替换 runtime 文件互斥）。 */
@@ -605,7 +610,11 @@ verifierRef = verifier;
  * P9：planner 再拿到 verifier —— 验证的路由挂在 Planner 的接口下，
  * 但「能不能跑、跑什么」的判断全在 Verifier 里。 */
 const planner = createPlanner({
-  executionBlocked: () => (runtimeRegistryRef?.liveCount() || 0) > 0,
+  executionBlocked: () => {
+    if ((runtimeRegistryRef?.liveCount() || 0) > 0) return true;
+    try { if (runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd()); } catch { return true; }
+    return false;
+  },
   runtime,
   registry: agentRegistry,
   store: planStore,
@@ -836,8 +845,9 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     const browser = await runtimeBrowser.allocate(launch, context.owner);
     let adapter;
     try { adapter = await createSessionRuntime({ context, emit, piBin: PI_BIN, env: process.env, dataDir: DATA_DIR,
-      guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig,
+      guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission,
       createChanges: ({ launch, context, requestState }) => createSessionChangeBridge({ store: getEvidenceStore, launch,
+        admission: mutationAdmission, inspectFileMetadata,
         notify: event => emit(event),
         resolveScope: async () => {
           const state = await requestState();
@@ -878,11 +888,33 @@ function primaryOwner() {
     conversationId: 'classic-chat', runtimeId: state.bridgeInstance, runtimeGeneration: String(state.bridgeRun), sessionId: primaryNativeSession };
 }
 
-const route = createRouter({
-  sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore,
-    withAuthority:createSessionRevertAuthority({ classicBridge:sessionChanges, classicOwner:primaryOwner,
+const revertAuthority = createSessionRevertAuthority({ classicBridge:sessionChanges, classicOwner:primaryOwner,
       classicNativeState:()=>rpc.request({type:'get_state'}), classicBusy:()=>Boolean(piActivity.busy() || rpc.getState().stop?.pending),
-      registry:runtimeRegistry, worktrees }) }),
+      registry:runtimeRegistry, worktrees });
+const revertMutationAuthority = createSessionRevertMutationAuthority({ withAuthority: revertAuthority, admission: mutationAdmission,
+  stopAndDrain: async root => {
+    const rootKey = mutationAdmission.keyOf(root), targets = [];
+    const classicMatches = runtime.getCurrentCwd() && mutationAdmission.keyOf(runtime.getCurrentCwd()) === rootKey;
+    if (classicMatches && (plannerRef?.projectSwitchBlockReason() || cliInFlight)) throw Object.assign(Error('active_writer'), { code: 'active_writer' });
+    if (classicMatches) targets.push({ classic: true, manager: managedProcesses.manager });
+    for (const item of runtimeRegistry.snapshot().items) {
+      if (!item.owner) continue;
+      const identity = runtimeRegistry.workspaceIdentityOf(item.conversationId);
+      const workspace = await worktrees.withWorkspace(identity, workspace => workspace);
+      if (mutationAdmission.keyOf(workspace.root) === rootKey) targets.push({ owner: item.owner, manager: runtimeRegistry.getAdapter(item.owner).managed.manager });
+    }
+    for (const target of targets) {
+      const state = target.manager.snapshot();
+      if (state.activeCount || state.cleanupPending || state.processes.some(process => !process.cleanupConfirmed)) throw Object.assign(Error('active_writer'), { code: 'active_writer' });
+    }
+    for (const target of targets) {
+      const result = target.classic ? await rpc.abortAndWait({ type: 'abort', id: randomUUID() })
+        : await runtimeRegistry.command(target.owner, { type: 'abort', id: randomUUID() });
+      if (!result?.ok) throw Object.assign(Error('active_writer'), { code: 'active_writer' });
+    }
+  } });
+const route = createRouter({
+  sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority }),
   commandAdmission: async cmd => {
     if (!runtime.getCurrentCwd()) return false;
     if (cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') { await sessionChanges.disable(); return true; }
@@ -931,6 +963,7 @@ const route = createRouter({
     ...rpc,
     getState: () => ({ ...rpc.getState(), legacyOwner: primaryOwner() }),
     send: (cmd) => {
+      if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
       if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
       modelGeneration.guardCommand(cmd);
       const { __fallbackOwner, ...wire } = cmd;

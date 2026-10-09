@@ -42,10 +42,36 @@ export async function evidenceTarget(root, absolute, exclusions = []) {
 }
 
 /** One private capability per child launch. Raw bytes never enter public events. */
-export function createSessionChangeBridge({ store, launch, resolveScope, withAuthority, extensionPath, supported, notify = () => {} } = {}) {
+export function createSessionChangeBridge({ store, launch, resolveScope, withAuthority, extensionPath, supported, notify = () => {}, admission = null, inspectFileMetadata = null } = {}) {
   let server = null, token = null, url = null, disposed = false, sourceVerified = false, reason = 'extension_unavailable', userDisabled = null;
   let sourceGapPending = false;
   let queue = Promise.resolve();
+  const writers = new Map(), capturePaths = new Map();
+  const releaseWriters = () => { for (const release of writers.values()) release(); writers.clear(); capturePaths.clear(); };
+  async function metadata(absolute, expected) {
+    if (!inspectFileMetadata) return undefined;
+    await evidenceTarget(path.dirname(absolute), absolute);
+    let actual = null, beforeIdentity = null;
+    const fingerprint = stat => [stat.dev, stat.ino, stat.birthtimeMs, stat.size, stat.mtimeMs, stat.ctimeMs, stat.mode, stat.nlink].join(':');
+    try {
+      const handle = await fs.open(absolute, 'r');
+      try {
+        const stat = await handle.stat();
+        if (!stat.isFile() || stat.nlink !== 1 || stat.size > LIMIT) fail('unsupported_evidence_path');
+        const buffer = Buffer.alloc(stat.size + 1); let offset = 0;
+        while (offset < buffer.length) { const result = await handle.read(buffer, offset, buffer.length - offset, offset); if (!result.bytesRead) break; offset += result.bytesRead; }
+        beforeIdentity = fingerprint(stat);
+        if (offset !== stat.size || fingerprint(await handle.stat()) !== beforeIdentity || fingerprint(await fs.lstat(absolute)) !== beforeIdentity) fail('evidence_integrity_failed');
+        actual = buffer.subarray(0, offset);
+      } finally { await handle.close(); }
+    } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    if (expected === null ? actual !== null : actual === null || !expected.equals(actual)) fail('evidence_integrity_failed');
+    const result = await inspectFileMetadata(absolute);
+    let afterIdentity = null;
+    try { afterIdentity = fingerprint(await fs.lstat(absolute)); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    if (afterIdentity !== beforeIdentity) fail('evidence_integrity_failed');
+    return result;
+  }
   const serial = action => { const result = queue.catch(() => {}).then(action); queue = result.catch(() => {}); return result; };
   const getStore = async () => typeof store === 'function' ? store() : store;
   const persistentKey = scope => JSON.stringify([scope.runtimeOwner.projectId, scope.runtimeOwner.repoId, scope.workspaceId,
@@ -87,6 +113,14 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
   }
   async function action(endpoint, body) {
     return scoped(body.nativeSessionId, async (data, scope, workspace) => {
+      if (endpoint === '/begin-io' || endpoint === '/end-io') {
+        if (!closed(body, ['nativeSessionId', 'ioId']) || !id(body.ioId)) fail('invalid_request');
+        if (endpoint === '/begin-io') {
+          if (writers.has(body.ioId) || writers.size >= 128) fail('invalid_request');
+          writers.set(body.ioId, admission?.enterWriter(workspace.root) || (() => {}));
+        } else { writers.get(body.ioId)?.(); writers.delete(body.ioId); }
+        return { ok: true };
+      }
       if (endpoint === '/hello') {
         if (!closed(body, ['nativeSessionId', 'sources', 'version']) || body.version !== 1 || !closed(body.sources, ['write', 'edit'])) fail('invalid_request');
         const verified = body.sources.write === 'own' && body.sources.edit === 'own';
@@ -121,16 +155,24 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
         const relative = await evidenceTarget(workspace.root, body.path, config.exclusions);
         const before = bytes(body.before), args = { operationId: body.operationId, parentOperationId: body.parentOperationId,
           toolCallId: body.toolCallId, path: relative, before, effectiveToolSource: body.effectiveToolSource };
+        const beforeMetadata = await metadata(body.path, before);
+        if (beforeMetadata !== undefined) args.beforeMetadata = beforeMetadata;
+        if (!capturePaths.has(body.operationId) && capturePaths.size >= 128) fail('evidence_quota_exceeded');
         if (endpoint === '/before') await data.captureBefore(scope, args, before);
         else await data.prepare(scope, { ...args, intendedAfter: bytes(body.intendedAfter) });
+        capturePaths.set(body.operationId, body.path);
         return { ok: true };
       }
       if (endpoint === '/settle') {
         if (!closed(body, ['nativeSessionId', 'operationId', 'observedAfter', 'toolOutcome', 'mutationOutcome', 'evidenceLevel']) || !id(body.operationId)
           || !['success', 'error', 'aborted'].includes(body.toolOutcome) || !['unchanged', 'written', 'unknown'].includes(body.mutationOutcome)
           || !['intent_verified', 'incomplete'].includes(body.evidenceLevel)) fail('invalid_request');
-        await data.settle(scope, body.operationId, { observedAfter: bytes(body.observedAfter), toolOutcome: body.toolOutcome,
-          mutationOutcome: body.mutationOutcome, evidenceLevel: sourceVerified ? body.evidenceLevel : 'incomplete' });
+        const observedAfter = bytes(body.observedAfter), absolute = capturePaths.get(body.operationId);
+        const afterMetadata = absolute ? await metadata(absolute, observedAfter) : undefined;
+        await data.settle(scope, body.operationId, { observedAfter, toolOutcome: body.toolOutcome,
+          mutationOutcome: body.mutationOutcome, evidenceLevel: sourceVerified ? body.evidenceLevel : 'incomplete',
+          ...(afterMetadata === undefined ? {} : { afterMetadata }) });
+        capturePaths.delete(body.operationId);
         return { ok: true };
       }
       if (endpoint === '/outcome') {
@@ -140,7 +182,7 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
         return { ok: true };
       }
       fail('invalid_request');
-    });
+    }, endpoint === '/begin-io' || endpoint === '/end-io');
   }
   async function privateRoute(req, res) {
     const admitted = token;
@@ -190,7 +232,7 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
     disable,
     // Backend-only authority callback. No new private or public wire endpoint.
     withEvidenceAuthority: action => scoped(undefined, (_data, scope, workspace) => action(scope, workspace), true),
-    async assertReady() { const value = await state(); if (value.enabled && !sourceVerified) fail('source_unverified'); },
+    async assertReady() { await scoped(undefined, (_data, _scope, workspace) => admission?.assertAllowed(workspace.root), true); const value = await state(); if (value.enabled && !sourceVerified) fail('source_unverified'); },
     async summary() {
       try { return await scoped(undefined, async (data, scope) => ({ ok: true, capture: { enabled: userDisabled !== persistentKey(scope) && (await data.settings(scope)).enabled,
         retentionDays: 7, noticeVersion: 1 }, sourceVerified, reason,
@@ -205,6 +247,9 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
       if (event?.type === 'tool_execution_start' && !['write', 'edit', 'read', 'ls', 'grep', 'find'].includes(event.toolName))
         void scoped(undefined, (data, scope) => data.gap(scope, 'unknown_tool')).catch(() => {});
     },
+    // Revocation is not proof that a child stopped touching disk. Abandoned
+    // brackets stay fail-closed until the owner proves process-tree cleanup.
+    confirmWritersStopped: releaseWriters,
     async invalidate() { token = null; userDisabled = null; sourceVerified = false; reason = 'extension_unavailable'; },
     async dispose() {
       disposed = true; token = null; sourceVerified = false; await queue.catch(() => {});

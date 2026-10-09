@@ -9,11 +9,11 @@ import {json,readRawBody} from './http-utils.js';
 const ACTIONS=new Set(['start','status','logs','stop','restart']);
 const same=(a,b)=>{if(typeof a!=='string'||typeof b!=='string')return false;const left=Buffer.from(a),right=Buffer.from(b);return left.length===right.length&&timingSafeEqual(left,right);};
 const closed=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(k=>keys.includes(k));
-export function createProcessBridge({runtime,launch,getRpcState=()=>({}),guiPort=()=>null,runner,processAdmission=()=>true}={}){
+export function createProcessBridge({runtime,launch,getRpcState=()=>({}),guiPort=()=>null,runner,processAdmission=()=>true,mutationAdmission=null}={}){
   let server=null,token=null,url=null,session=0,disposed=false,supported=false;
   const pending=new Map(),seen=new Set();
   const manager=createManagedProcesses({context:()=>({cwd:runtime.getCurrentCwd(),workspace:runtime.getWorkspaceGeneration?.()??0,run:getRpcState().bridgeRun??0,session}),launch:runner,
-    canStart:processAdmission,isBlocked:()=>Boolean(getRpcState().stop?.pending||runtime.isShuttingDown()),blockedPorts:()=>[guiPort(),server?.address()?.port].filter(Boolean)});
+    canStart:processAdmission,isBlocked:()=>{try{if(runtime.getCurrentCwd())mutationAdmission?.assertAllowed(runtime.getCurrentCwd());}catch{return true;}return Boolean(getRpcState().stop?.pending||runtime.isShuttingDown());},blockedPorts:()=>[guiPort(),server?.address()?.port].filter(Boolean)});
   try{const types=fs.readFileSync(path.join(launch.packageDir(),'dist/core/extensions/types.d.ts'),'utf8');supported=types.includes('getAllTools()')&&types.includes('registerTool<');}catch{/* unknown API: no tool injection */}
   function authorized(req){return !req.headers.origin&&same(req.headers['x-pi-process-token'],token);}
   async function privateRoute(req,res){

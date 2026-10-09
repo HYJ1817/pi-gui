@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { json, readRawBody } from './http-utils.js';
 import { runSessionRevert } from './session-revert-compute.js';
 import { SESSION_REVERT_REASONS } from '../lib/session-revert.js';
+import { createSessionRevertService, revertFileId, safeRevertCode } from './session-revert-service.js';
 
 const DEFAULTS = { maxFiles: 32, maxOperations: 128, rawBytes: 128 * 1024 ** 2, fileBytes: 2 * 1024 ** 2, deadlineMs: 30000, computeMs: 2000, diffBytes: 32 * 1024 };
 const REQUIRES = ['metadata_validation', 'prepare_backup', 'confirmation', 'bounded_writer'];
@@ -102,9 +103,29 @@ function previewDiff(current, candidate, maxBytes) {
   return { diff };
 }
 /** Read-only preview. Caller authenticates token/Origin and authorizes the complete current or dormant scope. */
-export function createSessionRevertRoutes({ store, withAuthority, budgets = {} } = {}) {
+export function createSessionRevertRoutes({ store, withAuthority, withMutationAuthority, writer, budgets = {} } = {}) {
   const limits = Object.fromEntries(Object.entries(DEFAULTS).map(([key, maximum]) => [key, Number.isSafeInteger(budgets[key]) && budgets[key] > 0 ? Math.min(maximum, budgets[key]) : maximum]));
+  const service=createSessionRevertService({store,withAuthority,withMutationAuthority,...(writer?{writer}:{})});
   async function handle(req, res, url = new URL(req.url, 'http://localhost')) {
+    const endpoint=url.pathname.slice('/api/session-revert/'.length);
+    if(['prepare','apply','cancel','recover-preview','export'].includes(endpoint)){
+      if(req.method!=='POST')return json(res,405,{ok:false,code:'method_not_allowed'});
+      let body;try{body=JSON.parse((await readRawBody(req,16*1024)).toString('utf8'));}catch(e){return json(res,e instanceof SyntaxError?400:413,{ok:false,code:e instanceof SyntaxError?'invalid_request':'request_too_large'});}
+      const fields={prepare:['evidenceIds','selectedFileIds','mode','evidenceRevision','sourcePlanId'],
+        apply:['planId','requestId','confirmationToken','mode','selectedFileIds','confirmation'],cancel:['planId'],
+        'recover-preview':['sourcePlanId','selectedFileIds','includeDiff'],export:['sourcePlanId','fileId','exportName']};
+      if(!closed(body,['conversationId','owner',...fields[endpoint]]))return json(res,400,{ok:false,code:'invalid_request'});
+      try{
+        if(endpoint==='export'){
+          const result=await service.exportMaterial(req,body);
+          res.writeHead(200,{'content-type':'application/octet-stream','content-disposition':'attachment; filename="'+result.name+'"',
+            'cache-control':'no-store','x-content-type-options':'nosniff','content-length':result.bytes.length});return res.end(result.bytes);
+        }
+        const methods={prepare:'prepare',apply:'apply',cancel:'cancel','recover-preview':'recoverPreview'};
+        return json(res,200,await service[methods[endpoint]](req,body));
+      }catch(e){const code=safeRevertCode(e);return json(res,code==='invalid_request'?400:409,{ok:false,code,
+        needsRepreview:['stale_evidence','stale_current','stale_runtime','stale_workspace','plan_expired'].includes(code)});}
+    }
     if (url.pathname !== '/api/session-revert/preview') return json(res, 404, { ok: false, code: 'not_found' });
     if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'method_not_allowed' });
     let body;
@@ -175,7 +196,7 @@ export function createSessionRevertRoutes({ store, withAuthority, budgets = {} }
             || !Array.isArray(outcome.operationIds) || !outcome.operationIds.every(identifier)
             || !Array.isArray(outcome.conflictOperationIds) || !outcome.conflictOperationIds.every(identifier)
             || !(outcome.evidenceLevel === null || ['intent_verified', 'exclusive_verified', 'observed', 'incomplete', 'unsupported'].includes(outcome.evidenceLevel))) fail('preview_unavailable');
-          const file = { relativePath: publicPath, status: outcome.status, reason: outcome.reason, action: outcome.action,
+          const file = { fileId:publicPath?revertFileId(scope,publicPath):null, relativePath: publicPath, status: outcome.status, reason: outcome.reason, action: outcome.action,
             operationIds: outcome.operationIds, conflictOperationIds: outcome.conflictOperationIds, evidenceLevel: outcome.evidenceLevel,
             contentEligible: outcome.contentEligible, strict: strict(), limited: limited(outcome.contentEligible, outcome.reason) };
           if (outcome.contentEligible && current) file.changeSummary = {
@@ -218,5 +239,5 @@ export function createSessionRevertRoutes({ store, withAuthority, budgets = {} }
         { ok: false, code, needsRepreview: ['stale_evidence', 'stale_current', 'stale_runtime', 'stale_generation', 'stale_workspace'].includes(code) });
     } finally { activePreviews--; }
   }
-  return { handle };
+  return { handle, dispose:service.dispose };
 }

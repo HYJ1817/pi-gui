@@ -58,3 +58,24 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
     });
   };
 }
+
+/** Resolve and release lifecycle authority BEFORE Stop: extension settle needs it. */
+export function createSessionRevertMutationAuthority({ withAuthority, admission, stopAndDrain }) {
+  return async (req, body, action, { lease: suppliedLease } = {}) => {
+    const first = await withAuthority(req, body, authority => ({ root: authority.root, scope: authority.scope }));
+    const lease = suppliedLease || admission.acquire(first.root);
+    try {
+      lease.assertCurrent(first.root);
+      await stopAndDrain(first.root);
+      await lease.drain();
+      return await withAuthority(req, body, async authority => {
+        lease.assertCurrent(authority.root);
+        if (!equal({ ...first.scope, runtimeOwner: undefined }, { ...authority.scope, runtimeOwner: undefined })
+          || Boolean(first.scope.runtimeOwner) !== Boolean(authority.scope.runtimeOwner)
+          || (first.scope.runtimeOwner && !equal(first.scope.runtimeOwner, authority.scope.runtimeOwner))) fail('stale_runtime');
+        await authority.revalidate();
+        return action({ ...authority, lease });
+      });
+    } catch (error) { lease.release(); throw error; }
+  };
+}

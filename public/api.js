@@ -98,11 +98,16 @@ export async function fetchRuntimeSessions() {
 /* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
 export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
-// Explicit content opt-in; no restore/apply command or preview body persistence.
+// Explicit content opt-in; preview/confirmation data is never persisted here.
 export const previewSessionRevert = ({ evidenceIds, mode = 'confirmed_limited', conversationId, owner, evidenceRevision, includeDiff = false }) =>
   sendJSON('/api/session-revert/preview', { body: { evidenceIds, mode, includeDiff,
     ...(conversationId ? { conversationId } : {}), ...(owner ? { owner } : {}),
     ...(evidenceRevision !== undefined ? { evidenceRevision } : {}) } });
+// Protocol only; P33.5 supplies the actual confirmation interface.
+export const prepareSessionRevert = body => sendJSON('/api/session-revert/prepare', { body });
+export const applySessionRevert = body => sendJSON('/api/session-revert/apply', { body });
+export const cancelSessionRevert = body => sendJSON('/api/session-revert/cancel', { body });
+export const previewSessionRevertRecovery = body => sendJSON('/api/session-revert/recover-preview', { body });
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProcesses = () => getJSON('/api/processes');
 export const controlProcess = body => sendJSON('/api/processes',{body});

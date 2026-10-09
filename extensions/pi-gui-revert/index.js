@@ -102,6 +102,13 @@ export function installSessionChangeExtension(pi, {createWriteToolDefinition, cr
 
   async function execute(name, callId, args, signal, update, ctx) {
     await synchronize(ctx);
+    const ioId = randomUUID(), nativeSessionId = sessionId;
+    await post('/begin-io', { ioId, nativeSessionId });
+    try { return await executeCaptured(name, callId, args, signal, update, ctx); }
+    finally { await post('/end-io', { ioId, nativeSessionId }); }
+  }
+  async function executeCaptured(name, callId, args, signal, update, ctx) {
+    await synchronize(ctx);
     const nativeSessionId=sessionId;
     let current=await state();
     if(!current.enabled) {

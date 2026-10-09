@@ -8,6 +8,30 @@ const GAP_REASONS = new Set(['unknown_tool', 'shell', 'disabled', 'source_change
 const DEFAULTS = { fileBytes: 2 * 1024 ** 2, operationBytes: 16 * 1024 ** 2, operationFiles: 32, conversationBytes: 128 * 1024 ** 2, globalBytes: 512 * 1024 ** 2, retentionDays: 7 };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 function fail(code) { throw Object.assign(new Error(code), { code }); }
+// Only bounded, plain JSON may cross the trusted capture/persistence boundary.
+function boundedJson(value, maxBytes = 256 * 1024) {
+  let nodes = 0;
+  function visit(v, depth = 0) {
+    if (++nodes > 20000 || depth > 16) fail('invalid_evidence_operation');
+    if (v === null || typeof v === 'boolean' || typeof v === 'string') return;
+    if (typeof v === 'number' && Number.isFinite(v)) return;
+    if (typeof v !== 'object' || (!Array.isArray(v) && Object.getPrototypeOf(v) !== Object.prototype)) fail('invalid_evidence_operation');
+    for (const key of Object.keys(v)) {
+      const descriptor = Object.getOwnPropertyDescriptor(v, key);
+      if (['__proto__', 'constructor', 'prototype'].includes(key) || !descriptor || !Object.hasOwn(descriptor, 'value')) fail('invalid_evidence_operation');
+      visit(descriptor.value, depth + 1);
+    }
+  }
+  visit(value); const text = JSON.stringify(value);
+  if (Buffer.byteLength(text) > maxBytes) fail('evidence_quota_exceeded');
+  return JSON.parse(text);
+}
+const metadata = value => {
+  if (value == null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) fail('invalid_evidence_operation');
+  return boundedJson(value, 16 * 1024);
+};
+const APPLY_STATES = new Set(['prepared', 'replacing', 'moving', 'applied_verified', 'recovery_required', 'not_applied']);
 function identity(scope) {
   const owner = scope?.runtimeOwner;
   if (!owner || !OWNER_KEYS.every(k => (k === 'repoId' && owner[k] === null) || (typeof owner[k] === 'string' && owner[k].length > 0 && owner[k].length <= 256 && !/[\x00-\x1f]/.test(owner[k])))
@@ -75,17 +99,32 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     await fs.mkdir(objects, { mode: 0o700, recursive: true }); await noLinks(objects); await noLinks(journal, true);
     await childPrivacy(objects);
   } catch { fail('evidence_privacy_unavailable'); }
-  const records = new Map(), configurations = new Map(), workspaces = new Map();
+  const records = new Map(), configurations = new Map(), workspaces = new Map(), plans = new Map(), backups = new Map(), consumed = new Map();
   let chain = '', pending = Promise.resolve(), broken = false;
   const queue = fn => { const task = pending.then(async () => { if (broken) fail('evidence_integrity_failed'); try { return await fn(); } catch (e) { if (e.code === 'evidence_integrity_failed') broken = true; if (e.code?.startsWith('evidence_') || ['invalid_evidence_scope', 'invalid_evidence_operation', 'unsupported_evidence_path'].includes(e.code)) throw e; fail('evidence_storage_failed'); } }); pending = task.catch(() => {}); return task; };
   function ws(s) { const key = workspaceKey(s); if (!workspaces.has(key)) workspaces.set(key, { revision: 0, sequence: 0, gapRevision: 0 }); return workspaces.get(key); }
   function apply(event) {
-    const s = identity(event.scope), w = ws(s);
+    const s = event.type === 'apply' ? previewIdentity(event.scope) : identity(event.scope), w = ws(s);
     if (event.revision !== w.revision + 1) fail('evidence_integrity_failed');
     w.revision = event.revision;
     if (event.type === 'operation') { const r = event.record; if (r.workspaceSequence > w.sequence) w.sequence = r.workspaceSequence; records.set(scopeKey(s) + ':' + r.operationId, r); }
     else if (event.type === 'gap') w.gapRevision = event.revision;
     else if (event.type === 'settings') configurations.set(scopeKey(s), event.settings);
+    else if (event.type === 'apply') {
+      if (event.action === 'restore_object') {
+        validateReference(event.ref);
+        if (event.ref) backups.set(scopeKey(s) + ':' + event.ref.digest, { scope: s, ref: event.ref });
+      } else if (event.action === 'plan') {
+        const plan = event.plan;
+        if (!plan || !APPLY_STATES.has(plan.state) || plan.planId !== identifier(plan.planId) || scopeKey(plan.scope) !== scopeKey(s)) fail('evidence_integrity_failed');
+        plans.set(scopeKey(s) + ':' + plan.planId, plan);
+        for (const id of plan.consumedOperationIds || []) {
+          const key = scopeKey(s) + ':' + identifier(id), owner = consumed.get(key);
+          if (owner && owner !== plan.planId) fail('evidence_integrity_failed');
+          consumed.set(key, plan.planId);
+        }
+      } else fail('evidence_integrity_failed');
+    }
     else fail('evidence_integrity_failed');
   }
   function validateReference(ref) {
@@ -135,6 +174,13 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
       if (verified.has(reference.digest)) { if (verified.get(reference.digest) !== reference.bytes) fail('evidence_integrity_failed'); }
       else { await verifyRef(reference); verified.set(reference.digest, reference.bytes); }
     }
+    for (const backup of backups.values()) await verifyRef(backup.ref);
+    for (const plan of [...plans.values()]) {
+      for (const reference of planReferences(plan)) await verifyRef(reference);
+      if (['prepared', 'replacing', 'moving'].includes(plan.state)) await append(plan.scope, { type: 'apply', action: 'plan', plan: {
+        ...plan, state: 'recovery_required', completion: 'recovery_required', restartReconciled: true, updatedAt: now(),
+      } });
+    }
     const restartGaps = new Map();
     for (const record of [...records.values()]) if (['begun', 'prepared'].includes(record.state) || (record.state === 'observed' && record.toolResultObserved !== true)) {
       await append(record.scope, { type: 'operation', record: { ...record, state: 'incomplete', evidenceLevel: 'incomplete', mutationOutcome: record.state === 'observed' ? record.mutationOutcome : 'unknown' } });
@@ -165,6 +211,7 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
       const location = path.join(objects, name); await noLinks(location, true); const st = await fs.stat(location); global.set(name, st.size);
     }
     for (const r of all) for (const key of ['beforeRef', 'intendedAfterRef', 'observedAfterRef']) if (r[key]) { global.set(r[key].digest, Math.max(global.get(r[key].digest) || 0, r[key].bytes)); if (scopeKey(r.scope) === scopeKey(s)) conversation.set(r[key].digest, r[key].bytes); }
+    for (const backup of backups.values()) { global.set(backup.ref.digest, backup.ref.bytes); if (scopeKey(backup.scope) === scopeKey(s)) conversation.set(backup.ref.digest, backup.ref.bytes); }
     if ([...global.values()].reduce((a, b) => a + b, 0) > limits.globalBytes || [...conversation.values()].reduce((a, b) => a + b, 0) > limits.conversationBytes) fail('evidence_quota_exceeded');
   }
   async function capture(s, args, before, prepared) {
@@ -173,11 +220,13 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     const target = relative(args.path);
     if (settings(s).exclusions.some(p => target === p || target.startsWith(p + '/'))) fail('evidence_path_excluded');
     if (old) { authorized(s, old); if (old.state !== 'begun' || !prepared || old.path !== target || old.toolCallId !== args.toolCallId || JSON.stringify(old.beforeRef) !== JSON.stringify(ref(before))) fail('invalid_evidence_operation'); }
+    if (old && args.beforeMetadata != null && JSON.stringify(metadata(args.beforeMetadata)) !== JSON.stringify(old.beforeMetadata ?? null)) fail('invalid_evidence_operation');
     const record = { operationId: id, parentOperationId: args.parentOperationId == null ? null : identifier(args.parentOperationId),
       toolCallId: toolIdentifier(args.toolCallId), path: target, scope: s, workspaceSequence: old?.workspaceSequence || ws(s).sequence + 1,
       effectiveToolSource: identifier(args.effectiveToolSource), state: prepared ? 'prepared' : 'begun', evidenceLevel: 'incomplete',
       attributionGapRevision: old?.attributionGapRevision ?? ws(s).gapRevision, createdAt: old?.createdAt ?? now(), beforeRef: ref(before), intendedAfterRef: prepared ? ref(args.intendedAfter) : null,
-      observedAfterRef: null, toolOutcome: 'pending', mutationOutcome: 'unknown', toolResultObserved: false };
+      observedAfterRef: null, beforeMetadata: old ? metadata(old.beforeMetadata) : metadata(args.beforeMetadata), afterMetadata: null,
+      toolOutcome: 'pending', mutationOutcome: 'unknown', toolResultObserved: false };
     await quota(s, record); record.beforeRef = await blob(before); if (prepared) record.intendedAfterRef = await blob(args.intendedAfter);
     await append(s, { type: 'operation', record }); return structuredClone(record);
   }
@@ -185,7 +234,7 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     const w = ws(s), items = [...records.values()].filter(r => scopeKey(r.scope) === scopeKey(s));
     const operations = items.map(r => ({ operationId: r.operationId, workspaceSequence: r.workspaceSequence, relativePath: r.path, state: r.state,
       // P33.2 has no verified mechanism to end an unknown writer's lifetime.
-      evidenceLevel: r.evidenceLevel, eligible: r.evidenceLevel === 'intent_verified' && r.toolResultObserved === true && w.gapRevision === 0 && r.attributionGapRevision === 0 && now() - r.createdAt <= limits.retentionDays * 86400000 }));
+      evidenceLevel: r.evidenceLevel, consumed: consumed.has(scopeKey(s) + ':' + r.operationId), eligible: !consumed.has(scopeKey(s) + ':' + r.operationId) && r.evidenceLevel === 'intent_verified' && r.toolResultObserved === true && w.gapRevision === 0 && r.attributionGapRevision === 0 && now() - r.createdAt <= limits.retentionDays * 86400000 }));
     const levels = { intent_verified: 0, incomplete: 0, observed: 0 };
     for (const operation of operations) levels[operation.evidenceLevel] = (levels[operation.evidenceLevel] || 0) + 1;
     return { revision: w.revision, gapRevision: w.gapRevision, operationCount: items.length, eligibleCount: operations.filter(o => o.eligible).length, levels, operations };
@@ -223,12 +272,146 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
       await noLinks(root); await noLinks(objects); await noLinks(journal, true);
       if (!await checker(root, false)) fail('evidence_integrity_failed');
       await childPrivacy(objects); await childPrivacy(journal);
-      for (const record of selectedRecords) result.records.push({ ...structuredClone(record),
+      for (const record of selectedRecords) result.records.push({ ...structuredClone(record), beforeMetadata: record.beforeMetadata ?? null, afterMetadata: record.afterMetadata ?? null,
+        consumed: consumed.has(scopeKey(record.scope) + ':' + record.operationId),
         before: await verifyRef(record.beforeRef), intendedAfter: await verifyRef(record.intendedAfterRef), observedAfter: await verifyRef(record.observedAfterRef) });
     } catch { fail('evidence_integrity_failed'); }
     return result;
   }
+  function planReferences(plan) {
+    const references = [];
+    for (const file of plan.files || plan.paths || []) for (const key of ['currentRef', 'candidateRef', 'restoreRef']) {
+      if (Object.hasOwn(file, key)) { validateReference(file[key]); if (file[key]) references.push(file[key]); }
+    }
+    return references;
+  }
+  async function restorePut(scope, bytes) {
+    const s = previewIdentity(scope), reference = ref(bytes);
+    if (!reference) return null;
+    await quota(s, { scope: s, operationId: '__restore_backup', beforeRef: reference, intendedAfterRef: null, observedAfterRef: null });
+    await blob(bytes);
+    await append(s, { type: 'apply', action: 'restore_object', ref: reference });
+    return structuredClone(reference);
+  }
+  async function restoreRead(scope, reference) {
+    const s = previewIdentity(scope); validateReference(reference);
+    await noLinks(root); await noLinks(objects); await noLinks(journal, true);
+    if (!await checker(root, false)) fail('evidence_privacy_unavailable');
+    if (reference === null) return null;
+    const backup = backups.get(scopeKey(s) + ':' + reference.digest);
+    if (!backup || backup.ref.bytes !== reference.bytes) fail('evidence_not_found');
+    return verifyRef(reference);
+  }
+  async function applyCreate(scope, input) {
+    const s = previewIdentity(scope), value = boundedJson(input);
+    const planId = identifier(value.planId), key = scopeKey(s) + ':' + planId, creationHash = digest(JSON.stringify(value));
+    if (value.token != null || typeof value.tokenHash !== 'string' || !/^[0-9a-f]{64}$/.test(value.tokenHash)
+      || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= now()) fail('invalid_evidence_operation');
+    if (value.requestId != null) identifier(value.requestId);
+    const selectedOperationIds = [...new Set((value.selectedOperationIds ?? value.operationIds ?? []).map(identifier))];
+    if (selectedOperationIds.length > 128 || (value.files ?? value.paths ?? []).length > 32) fail('evidence_quota_exceeded');
+    if (value.scope && scopeKey(previewIdentity(value.scope)) !== scopeKey(s)) fail('invalid_evidence_scope');
+    const old = plans.get(key);
+    // Idempotent creation returns the exact durable plan only for the same binding.
+    if (old) {
+      if (old.creationHash !== creationHash || old.tokenHash !== value.tokenHash || old.requestId !== (value.requestId ?? null)
+        || JSON.stringify(old.selectedOperationIds) !== JSON.stringify(selectedOperationIds)
+        || JSON.stringify(old.files ?? old.paths) !== JSON.stringify(value.files ?? value.paths)) fail('invalid_evidence_operation');
+      return structuredClone(old);
+    }
+    for (const p of plans.values()) if (scopeKey(p.scope) === scopeKey(s) && value.requestId != null && p.requestId === value.requestId) fail('invalid_evidence_operation');
+    for (const id of selectedOperationIds) if (consumed.has(scopeKey(s) + ':' + id)) fail('invalid_evidence_operation');
+    for (const reference of planReferences(value)) await restoreRead(s, reference);
+    const plan = { ...value, planId, scope: s, creationHash, requestId: value.requestId ?? null, selectedOperationIds, state: 'prepared', completion: 'prepared',
+      consumedOperationIds: [], createdAt: now(), updatedAt: now() };
+    await append(s, { type: 'apply', action: 'plan', plan }); return structuredClone(plan);
+  }
+  async function applyUpdate(scope, planId, input) {
+    const s = previewIdentity(scope), key = scopeKey(s) + ':' + identifier(planId), old = plans.get(key);
+    if (!old) fail('evidence_not_found');
+    const patch = boundedJson(input);
+    const mutable = new Set(['state', 'completion', 'files', 'paths', 'requestId', 'confirmationAt', 'failureCode', 'completedAt', 'recoveryStatus']);
+    if (Object.keys(patch).some(k => !mutable.has(k))) fail('invalid_evidence_operation');
+    const completionStates = { applying: 'prepared', completed: 'applied_verified', partial: 'recovery_required', refused: 'not_applied', cancelled: 'not_applied' };
+    const patchedFiles = patch.files ?? patch.paths ?? old.files ?? old.paths ?? [];
+    const intent = patchedFiles.find(file => ['replacing', 'moving'].includes(file.state))?.state;
+    const state = patch.state ?? (patch.completion && (completionStates[patch.completion] ?? patch.completion)) ?? intent ?? old.state;
+    const transitions = { prepared: ['prepared', 'replacing', 'moving', 'not_applied', 'recovery_required'],
+      replacing: ['replacing', 'moving', 'applied_verified', 'recovery_required', 'not_applied'], moving: ['moving', 'replacing', 'applied_verified', 'recovery_required', 'not_applied'],
+      recovery_required: ['recovery_required'], applied_verified: ['applied_verified'], not_applied: ['not_applied'] };
+    if (!transitions[old.state].includes(state)) fail('invalid_evidence_operation');
+    if (patch.requestId != null) {
+      identifier(patch.requestId);
+      if (old.requestId && old.requestId !== patch.requestId) fail('invalid_evidence_operation');
+      for (const p of plans.values()) if (scopeKey(p.scope) === scopeKey(s) && p.planId !== planId && p.requestId === patch.requestId) fail('invalid_evidence_operation');
+    } else if (Object.hasOwn(patch, 'requestId') && old.requestId) fail('invalid_evidence_operation');
+    const plan = { ...old, ...patch, state, completion: patch.completion ?? (patch.state ? state : old.completion), updatedAt: now() };
+    const previousFiles = old.files ?? old.paths ?? [], files = plan.files ?? plan.paths ?? [];
+    if (files.length !== previousFiles.length) fail('invalid_evidence_operation');
+    const immutableFileKeys = ['fileId', 'relativePath', 'path', 'operationIds', 'currentRef', 'candidateRef', 'restoreRef', 'currentMetadata', 'currentFingerprint', 'parentIdentity', 'action'];
+    for (let index = 0; index < files.length; index++) {
+      for (const field of immutableFileKeys) if (JSON.stringify(files[index][field]) !== JSON.stringify(previousFiles[index][field])) fail('invalid_evidence_operation');
+      const prior = previousFiles[index].state, next = files[index].state;
+      if (prior && (!APPLY_STATES.has(next) || !transitions[prior]?.includes(next))) fail('invalid_evidence_operation');
+      if (next === 'applied_verified') {
+        const candidate = files[index].candidateRef ?? files[index].restoreRef;
+        if (candidate) {
+          if (files[index].observedPostDigest !== candidate.digest) fail('invalid_evidence_operation');
+        } else if (files[index].observedPostDigest !== null || typeof files[index].recoveryPath !== 'string' || !files[index].recoveryPath
+          || !files[index].recoveryMetadata || typeof files[index].recoveryMetadata !== 'object') fail('invalid_evidence_operation');
+      }
+    }
+    for (const reference of planReferences(plan)) await restoreRead(s, reference);
+    const ids = new Set(old.consumedOperationIds);
+    for (const file of files) if (file.state === 'applied_verified') for (const id of file.operationIds || []) {
+      identifier(id);
+      if (!old.selectedOperationIds.includes(id) || !records.has(scopeKey(s) + ':' + id)) fail('invalid_evidence_operation');
+      const consumer = consumed.get(scopeKey(s) + ':' + id);
+      if (consumer && consumer !== planId) fail('invalid_evidence_operation');
+      ids.add(id);
+    }
+    if (state === 'applied_verified' && files.some(file => file.state !== 'applied_verified')) fail('invalid_evidence_operation');
+    plan.consumedOperationIds = [...ids];
+    await append(s, { type: 'apply', action: 'plan', plan }); return structuredClone(plan);
+  }
+  async function gc() {
+    // No record or plan is evicted here. In particular, uncertain crash intents
+    // stay pinned indefinitely and completed backups exceed the seven day floor.
+    // Only a blob never referenced by a durable event (e.g. ENOSPC before append)
+    // can be removed. This conservative policy trades capacity for recoverability.
+    await noLinks(root); await noLinks(objects);
+    if (!await checker(root, false)) fail('evidence_privacy_unavailable');
+    await childPrivacy(objects);
+    const pinned = new Set();
+    for (const record of records.values()) for (const key of ['beforeRef', 'intendedAfterRef', 'observedAfterRef']) if (record[key]) pinned.add(record[key].digest);
+    for (const backup of backups.values()) pinned.add(backup.ref.digest);
+    for (const plan of plans.values()) for (const reference of planReferences(plan)) pinned.add(reference.digest);
+    let removed = 0, bytes = 0;
+    for (const name of await fs.readdir(objects)) {
+      if (!/^[0-9a-f]{64}$/.test(name)) fail('evidence_integrity_failed');
+      if (pinned.has(name)) continue;
+      const location = path.join(objects, name); await noLinks(location, true); await childPrivacy(location);
+      const st = await fs.lstat(location);
+      if (!st.isFile() || st.nlink !== 1) fail('evidence_integrity_failed');
+      await fs.unlink(location); removed++; bytes += st.size;
+    }
+    return { removed, bytes };
+  }
   return {
+    // Private persistence APIs: no references, paths or token hashes are public projections.
+    restorePut: (scope, bytes) => queue(() => restorePut(scope, bytes)),
+    restoreRead: (scope, reference) => queue(() => restoreRead(scope, reference)),
+    restoreRecoveryRoot: scope => queue(async () => {
+      const s = previewIdentity(scope), location = path.join(root, 'recovery', digest(Buffer.from(workspaceKey(s))));
+      await noLinks(root); if (!await checker(root, false)) fail('evidence_privacy_unavailable');
+      await noLinks(location); await fs.mkdir(location, { recursive: true, mode: 0o700 });
+      await noLinks(location); await childPrivacy(location); return location;
+    }),
+    applyCreate: (scope, plan) => queue(() => applyCreate(scope, plan)),
+    applyUpdate: (scope, planId, patch) => queue(() => applyUpdate(scope, planId, patch)),
+    applyGet: (scope, planId) => queue(() => { const s = previewIdentity(scope), plan = plans.get(scopeKey(s) + ':' + identifier(planId)); if (!plan) fail('evidence_not_found'); return structuredClone(plan); }),
+    applyList: scope => queue(() => { const s = previewIdentity(scope); return [...plans.values()].filter(plan => scopeKey(plan.scope) === scopeKey(s)).map(plan => structuredClone(plan)); }),
+    collectGarbage: () => queue(gc),
     // Private read-only snapshot; raw bytes must never be projected to public APIs.
     previewSnapshot: (scope, value) => queue(() => previewSnapshot(scope, value)),
     previewRevision: scope => queue(() => { const w = ws(previewIdentity(scope)); return { revision: w.revision, gapRevision: w.gapRevision }; }),
@@ -244,7 +427,7 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     settle: (scope, operationId, value) => queue(async () => {
       const s = identity(scope), key = scopeKey(s) + ':' + identifier(operationId), old = records.get(key);
       if (!old) fail('evidence_not_found'); authorized(s, old); if (!['prepared', 'begun'].includes(old.state)) fail('invalid_evidence_operation');
-      const record = { ...old, observedAfterRef: ref(value.observedAfter), toolOutcome: identifier(value.toolOutcome), mutationOutcome: identifier(value.mutationOutcome), state: 'observed', evidenceLevel: 'incomplete', toolResultObserved: false };
+      const record = { ...old, afterMetadata: metadata(value.afterMetadata), observedAfterRef: ref(value.observedAfter), toolOutcome: identifier(value.toolOutcome), mutationOutcome: identifier(value.mutationOutcome), state: 'observed', evidenceLevel: 'incomplete', toolResultObserved: false };
       if (old.state === 'prepared' && record.observedAfterRef && record.observedAfterRef.digest === old.intendedAfterRef?.digest && value.evidenceLevel === 'intent_verified') record.evidenceLevel = value.evidenceLevel;
       else record.state = 'incomplete';
       await quota(s, record); record.observedAfterRef = await blob(value.observedAfter); await append(s, { type: 'operation', record });

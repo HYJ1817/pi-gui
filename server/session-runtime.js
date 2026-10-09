@@ -44,7 +44,7 @@ export function projectRuntimeEvent(event) {
 
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
-  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null } = {}) {
+  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -55,7 +55,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const supervisor = supervisorFactory({ node });
   const activity = createPiActivity(), generation = createModelGeneration(), approvals = new Map();
   let rpc, disposed = false, cleanup = false, disposal = null;
-  const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission });
+  const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission, mutationAdmission });
   const changes = createChanges?.({ runtime, launch, context, requestState: () => rpc.request({ type: 'get_state' }) }) || null;
   const config = createProjectConfig({ runtime, env, restartPi: () => rpc.restart() });
   const sessions = createSessions({ runtime, env, dataDir, extraSessionRoots: sessionDir ? [sessionDir] : [] });
@@ -111,6 +111,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
         approvals.delete(cmd.id);
       }
       generation.guardCommand(cmd);
+      if (['prompt', 'steer', 'follow_up'].includes(cmd.type)) mutationAdmission?.assertAllowed(context.cwd);
       const { __fallbackOwner, ...wire } = cmd;
       const result = rpc.send(wire); generation.noteCommandAccepted(cmd); activity.noteCommandAccepted(cmd); return result;
     },
@@ -125,6 +126,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       disposed = true; runtime.setShuttingDown(true); rpc.stop();
       disposal = (async () => {
         await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.(), changes?.dispose()]);
+        changes?.confirmWritersStopped();
         cleanup = true;
       })(); return disposal;
     },
