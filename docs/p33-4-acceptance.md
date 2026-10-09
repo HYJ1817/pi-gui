@@ -168,3 +168,92 @@ writer 22/22 包含备份前置、stale C、journal/元数据复制失败、stag
 ### 后续授权交付记录
 
 用户在上述本地交付后明确指示“推送”。因此将本阶段变更按业务、测试、报告三个回滚边界提交并推送当前 main；开发前后 HEAD/未提交状态是该指示之前的审计快照。业务提交 `dba4c9e`，测试提交 `50b1f60`，报告提交以本文件所在最终 Git HEAD 为准。此次交付授权不改变“P33.4 尚未通过整体验收”的结论，也不包含发版或 P33.5。
+
+## 16. P33.4a：普通权限元数据阻塞与补强验收
+
+本节更新日期：2026-10-09。前述章节保留 P33.4 历史实测；本节容量统计和故障证据取代第 8、14 节对应缺口描述，**不改变第 15 节整体验收未通过的结论**。
+
+### 16.1 基线、范围与安全契约
+
+开发前及本轮交付 HEAD 均为 `24637010df1eea09ce80e76bdbbed18267a135cc`、main；本轮未提交、推送、发版。开发前仅有既存未跟踪 `.p25-1-release-a2b10ddfebd7413789311029f931a3ca/`，未改动。改动是本地待审阅工作区变更。
+
+修改：`server/session-change-store.js`、`server/session-revert-metadata.js`、`server/session-revert-service.js`、`tests/session-revert-apply.cjs`、`tests/session-revert-recovery.cjs`、`package.json`、本报告。新增：`server/session-revert-storage.js`、`tests/session-revert-windows-faults.cjs`、`tests/session-revert-metadata-research.cjs`、`docs/p33-4a-implementation-plan.md`、`docs/p33-4a-metadata-design-delta.md`。没有实现新 writer profile、修改 Pi 或进入 P33.5。
+
+**已确认事实：**当前 profile 仍需要完整 before/after/current 元数据；读取不到审计 SACL 就拒绝。新增元数据修复只是在 hidden 文件枚举 ADS 时使用 `-Force`，并在审计权限拒绝之前分类非零/未知 EA；没有把 SACL unknown 当空，也没有移除检查。位置：`server/session-revert-metadata.js:34`、`:40`、`:41`、`:42`。
+
+### 16.2 官方接口评估与真实 NTFS 实验
+
+微软 [SACL Access Right](https://learn.microsoft.com/en-us/windows/win32/secauthz/sacl-access-right) 要求启用 SeSecurityPrivilege；[GetNamedSecurityInfoW](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getnamedsecurityinfow) 的 READ_CONTROL/owner 能力不等于审计 SACL 读取能力。[AdjustTokenPrivileges](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges) 不能赋予令牌原先没有的权限。本轮没有自动提升权限或修改系统策略。
+
+[ReplaceFileW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew) 明确列出 DACL、security resource attributes、部分流等保持性；没有据此推定完整审计 SACL 保持性。最终文件对象来自 candidate，部分错误可能留下中间状态；不使用 ignore merge/ACL flags，不称为 CAS。其他 move/handle API 的存在也不构成不可读 SACL 的证明。
+
+真实临时 NTFS 试验使用官方 ReplaceFileW flags=0，构造保护 DACL、命名 ADS、非空 EA、Hidden/Archive/NotContentIndexed 属性。实际结果：
+
+| 项目 | 原生结果及边界 |
+|---|---|
+| 内容及备份 | R=`R`，backup C=`C`，均逐字节正确 |
+| DACL | 单次构造的保护 DACL 前后相等；不是完整继承 ACL 矩阵 |
+| ADS | 原合成 `probe` 流在 R 中保留 |
+| EA | **R 中未保留原 EA**；backup 保有原 EA；不能批准整体元数据资格 |
+| 属性 | 8226→8226；不推论未测试属性 |
+| SACL | auditReadable=false，saclEqual=null、backupSaclEqual=null；**不可读/未验证，非空值或空值均未证明** |
+
+可复现：`npm run test:revert-metadata-research`，实现 `tests/session-revert-metadata-research.cjs:33`、`:37`、`:41`、`:44`；生产拒绝断言 `:56`。实验的通过数表示内容、DACL、ADS、备份及拒绝分类断言通过，不把 EA 保持失败或 SACL 未验证记为元数据安全通过。本实验独立 opt-in，不要求 CI 具有审计权限。
+
+**技术判断：**在已验收的“候选替换+完整枚举/复制/回读”契约下，本机没有普通权限生产恢复的充分证明。不能用一次 ReplaceFileW 成功替代它。详见 [设计差异与风险](p33-4a-metadata-design-delta.md)：保持原文件对象、仅修改数据的原型需要改变禁止原位覆盖的契约，并增加中途失败风险；目前仅提出待批准研究，不接入生产。用户第 5 项明确要求安全契约变更先批准，已请求该批准及独立审计权限环境信息；未收到答复前不执行依赖步骤。
+
+### 16.3 恢复材料容量与保留
+
+对象与 recovery 文件使用 Windows handle 的 `FileStandardInfo.AllocationSize`，并同时考虑逻辑字节，取 max；不使用 Node blocks 猜测 NTFS 分配。依据：[FILE_STANDARD_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_standard_info)、[GetFileInformationByHandleEx](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex)。同一 handle 查询流表，未知/命名流拒绝，不默默遗漏 ADS。实现：`server/session-revert-storage.js:18`、`:22`、`:70`。分配单元探测检查真实证据目录及祖先，拒绝 EFS、压缩、reparse 和未知属性；目录身份不以兄弟活动改变的 mtime/size 判断。位置 `:29`、`:93`；真实祖先 junction 拒绝和 sibling activity 用例 `tests/session-revert-recovery.cjs:258`。未创建 EFS 证书或在真实用户证书库写入；真正 EFS 加密目录未验证。
+
+全库预算包括实际去重对象、不同副本的恢复文件、未记录但仍存在的恢复材料和待移动预留；新对象按文件系统分配单元估计，已存在对象以实测计费。私有遍历最多 20000 节点，15 秒预算，固定层级，拒绝危险链接、硬链接、未知分配或权限变化。位置：`server/session-change-store.js:213`、`:221`、`:225`。prepare 新建文件移走前占用预留；apply 提交前复查，取消/超时/失败释放预留及 GUI admission，成功改计实际保留材料。位置：`server/session-revert-service.js:26`、`:109`、`:187`、`:199`、`:209`；store API `:458`、`:466`、`:472`。
+
+128 MiB conversation 仍是逻辑证据预算，512 MiB global 是上述正文材料预算；journal 另有 32 MiB 上限。目录/MFT 等文件系统内部开销、任意外部程序的提交后增长不构成严格全盘配额保证。新对象预估与检查不能替代操作系统磁盘保留或排他；空间不足安全拒绝，保留 pin，不为腾空间删除备份。实际 NTFS 样本 logical=2、AllocationSize=8、allocationUnit=4096，说明不能把所有小文件都描述为实际分配 4096。证据：`tests/session-revert-recovery.cjs:204`。
+
+### 16.4 故障、竞争与重启补充
+
+新增 `tests/session-revert-windows-faults.cjs`：独立进程替换源父目录/恢复父目录后拒绝；Windows 独立进程打开 FileStream、不共享 Delete，验证 native replace/move 失败保留 C；真实子进程在 afterStage/持久 intent/afterRename 三边界退出，重开 store 识别 recovery_required，C/R 可读且不重试。位置分别 `:46`、`:81`、`:89`、`:112`。
+
+ENOSPC、两次 staging fsync、EXDEV 使用定点故障注入，来源在测试名称明确标注；**不是实际满盘或跨卷实测**。位置 `:55`、`:68`、`:74`。真实父目录与打开句柄测试仍使用 metadata fixture；不能据此宣称完整 SACL 复制通过。原独立进程最后校验后写入 D 被 R 覆盖的测试继续保留（writer:36），备份范围仍只到 C。这是已展示的数据丢失窗口，未把它改成零风险测试。
+
+尚缺：真实 ENOSPC 卷、真实跨卷、具备权限的非空及继承 SACL 全矩阵、断电测试、普通权限 native classic/managed/打包 R→重新确认→C 闭环。进程退出证据不等于断电持久性。
+
+### 16.5 回归、真实 Pi 与打包结果
+
+变更前独立完整基线：100 套件、退出 0；确认之后才允许生产代码改动。本轮最终 `npm test`：**101 套件、退出 0**，P33 相关 12 套件合计 **356/356、失败 0、跳过 0**。全套另有 1 项既有环境跳过：session-search 的 5i 符号链接权限/开发者模式用例，不计入通过。测试入口保留原 100 套件，只新增 Windows faults；未删除旧断言或修改旧测试预期。
+
+| 套件/证据 | 通过/失败/跳过 | 类型和实测边界 |
+|---|---|---|
+| P33.2 store / bridge / tools | 35/0/0；23/0/0；30/0/0 | fixture、真实临时文件；store 旧断言不变；100-op reopen 570 ms，object privacy checks=2，这不是全部写操作耗时 |
+| P33.3 algorithm / store / HTTP / worker | 67/0/0；14/0/0；65/0/0；19/0/0 | 逆三方、完整归属与只读链路 |
+| P33.4 writer / recovery / admission / apply | 22/0/0；24/0/0；15/0/0；29/0/0 | 真实临时文件系统；写回资格使用 metadata fixture |
+| 新 Windows faults | 13/0/0 | 独立进程/native sharing；部分故障为注入 |
+| 最终真实 Pi 默认工具 | 25/0/0 | 实装 Pi 1.0.4；fixture stream model，没有网络模型 |
+| 最终源码 RPC / 打包 RPC / packaged worker / app-check | 18/0/0；18/0/0；19/0/0；26/0/0 | classic/managed protocol 与后端加载；native 恢复仍拒绝 |
+| 原生 ReplaceFileW 研究 | 6/0/0 | 6 项断言通过；EA 保持失败、SACL 不可读另行明确记录，不能称为元数据保持性通过 |
+
+恢复套件 11→24，apply 27→29，新增 faults 13；P33 合计 328→356，旧断言均保留。红测试包括服务尚未建立 move 预留、祖先 junction 未拒绝、hidden ADS/EA 分类问题，均先复现再修复；不是通过删检查或改预期变绿。未发现新增功能回归。
+
+最终源码与重建包分别验证，`npm run build:app -- --rebuild` 退出 0、整包 327.9 MB。最终真实 Pi B/A/P→候选→preview→prepare 仍给出 `metadata_audit_unavailable` 并保留 C；两个实装 Pi 隔离 workspace 的采集、重载/恢复及私有目录 reopen 检查通过。classic/managed RPC 18 项证明身份、extension、preview、strict unavailable 和资格拒绝协议，**不证明 R 写回和 C 再恢复**。打包 worker 同样不代替 native 元数据资格。
+
+本机 TEMP 可复核日志：`pi-gui-p33-4a-baseline.log`、`pi-gui-p33-4a-full.log`、`pi-gui-p33-4a-live-final.log`、`pi-gui-p33-4a-metadata-final.log`、`pi-gui-p33-4a-build.log`、`pi-gui-p33-4a-rpc-final.log`、`pi-gui-p33-4a-packaged-rpc-final.log`、`pi-gui-p33-4a-packaged-worker-final.log`、`pi-gui-p33-4a-app-check-final.log`。测试仅操作 fresh 临时项目，日志仅记录合成测试及固定错误，不向产品日志输出快照正文。Native allocation 新扫描有额外 PowerShell/ACL 成本，大量材料可能触发 15 秒拒绝；尚未完成长期、大规模性能验收，不删除 pin 来换性能。
+
+只读复核确认：新容量队列不递归获取自身、不新增 authority 锁顺序；lease finally 清理不依赖 journal 健康；没有新增 HTTP/SSE/Activity/localStorage 或原始证据出口。语法与 diff 检查通过。没有实现或验证任何新的 OS 排他 provider。
+
+### 16.6 P33.4a 门槛结论
+
+| 门槛 | 本轮状态 |
+|---|---|
+| 官方接口研究、未知 SACL 不放行 | 已完成；仍拒绝 |
+| ordinary user 元数据保持及 native 直接恢复 | **阻塞**；本机 SACL 不可读，没有足够替代证明 |
+| 恢复区实际分配及容量限制 | 已补齐受限正文材料统计与预留；不宣称 OS 硬配额 |
+| 父目录/句柄/进程崩溃边界 | 已有真实 Windows 临时测试；元数据为 fixture |
+| 真实 ENOSPC、EXDEV、断电、完整继承 SACL | 未验证；注入测试不替代 |
+| classic/managed/打包完整 native R→C | **阻塞**；不能以只读预览或 fixture 写回来宣称通过 |
+| 契约替代方案 | 设计差异已交付，待用户批准与独立验证环境 |
+
+**P33.4a 最终验收仍未通过。** 当前是契约内的安全补强和可复核阻塞报告；不通过删检查、unknown 放行或调整测试预期增加资格。等待人工验收及必要设计/环境决策，不自动提交、推送、发版或进入 P33.5。
+
+### P33.4a 后续授权交付
+
+用户在本轮本地报告交付后明确要求“推送”，据此按业务、测试、报告边界提交并推送 main。上述 HEAD/工作区描述保留开发与本地交付时的审计快照；交付后的报告提交以本文件所在 Git HEAD 为准。推送授权不代表通过最终验收，也不批准元数据契约变更、发版或 P33.5；既存未跟踪发布目录不纳入提交。
