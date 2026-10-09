@@ -155,7 +155,8 @@ async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
   const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
-  const { createSessionRevertAuthority } = await import('../server/session-revert-authority.js');
+  const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
+  const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
 
   const cwd = os.tmpdir();
   const pi = createFakePi();
@@ -174,13 +175,14 @@ async function main() {
   /* 路由用**生产的那一段装配**（从 server.js 里原样取出来跑），不另抄一份 wrapper
    * —— 抄一份就等于测了个仿制品。这一段里现在有 abortAndWait 的前置守卫与记账。 */
   const source = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
-  const start = source.indexOf('const route = createRouter({');
+  const start = source.indexOf('const revertAuthority = createSessionRevertAuthority({');
   const end = source.indexOf('\nconst server = http.createServer(route);', start);
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
   let syncing = false;
   const guarded = [], modelAccepted = [], activityAccepted = [];
   const context = {
-    createSessionRevertRoutes, createSessionRevertAuthority, getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
+    createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority,
+    mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     managedProcesses: null, worktrees: null,
     createRouter(options) { return createRouter(options); },
     rpc: raw,

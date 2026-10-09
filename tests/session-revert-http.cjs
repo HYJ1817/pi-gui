@@ -42,7 +42,7 @@ const check = async (name, fn) => { await fn(); checks++; console.log('  ok  ' +
     await check('same Origin is accepted', async () => assert.equal((await request({}, { headers: { origin: base } })).ok, true));
     await check('GET cannot preview', async () => assert.equal((await request({}, { method: 'GET' })).status, 405));
     await check('raw endpoint is unavailable', async () => assert.equal((await request({}, { url: '/api/session-revert/raw' })).status, 404));
-    await check('apply endpoint is unavailable', async () => assert.equal((await request({}, { url: '/api/session-revert/apply' })).status, 404));
+    await check('apply endpoint rejects requests without a prepared confirmed plan', async () => assert.equal((await request({}, { url: '/api/session-revert/apply' })).code, 'invalid_request'));
     for (const key of ['path', 'root', 'nativeSessionId', 'scope', 'before', 'indexRef', 'readonly'])
       await check('closed schema rejects ' + key, async () => assert.equal((await request({ [key]: 'private' })).status, 400));
     await check('malformed JSON is fixed refusal', async () => assert.equal((await request({}, { raw: '{' })).code, 'invalid_request'));

@@ -48,7 +48,8 @@ async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
   const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
-  const { createSessionRevertAuthority } = await import('../server/session-revert-authority.js');
+  const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
+  const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
   let ack, entered, stopped = false, writeError = null, lastSendResult;
   let abortReply = true;
   const writes = [], guarded = [], modelAccepted = [], activityAccepted = [];
@@ -89,12 +90,13 @@ async function main() {
   await raw.start();
   // Evaluate the production composition block verbatim: do not copy its send wrapper.
   const source = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
-  const start = source.indexOf('const route = createRouter({');
+  const start = source.indexOf('const revertAuthority = createSessionRevertAuthority({');
   const end = source.indexOf('\nconst server = http.createServer(route);', start);
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
   let syncing = false, guardError = null, wrapped = null, captureError = null, disabled = 0;
   const context = {
-    createSessionRevertRoutes, createSessionRevertAuthority, getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
+    createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority,
+    mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     createRouter(options) { wrapped = options.rpc; return createRouter(options); },
     rpc: { ...raw, send(command) {
       lastSendResult = raw.send(command);
@@ -198,6 +200,19 @@ async function main() {
       const before = writes.length; captureError = Error('capture_unavailable');
       try { assert.equal((await post({ type: 'prompt', message: '/gui-capture disable' })).status, 200); assert.equal(disabled, 1); assert.equal(writes.length, before); }
       finally { captureError = null; }
+    });
+    await check('P33.4 retained workspace lease rejects every new turn before Pi stdin or acceptance bookkeeping', async () => {
+      const lease = context.mutationAdmission.acquire(os.tmpdir());
+      const before = [writes.length, modelAccepted.length, activityAccepted.length];
+      try {
+        for (const type of ['prompt', 'steer', 'follow_up']) {
+          assert.throws(() => wrapped.send({ type, message: 'blocked' }), { code: 'workspace_revert_busy' });
+          assert.equal((await post({ type, message: 'blocked' })).status, 503);
+        }
+        assert.deepEqual([writes.length, modelAccepted.length, activityAccepted.length], before);
+      } finally { lease.release(); }
+      wrapped.send({ type: 'prompt', message: 'released' });
+      assert.equal(writes.length, before[0] + 1);
     });
     await check('C provider 与模型守卫仍然同步生效，且不写不记账', () => {
       const before = [writes.length, modelAccepted.length, activityAccepted.length];

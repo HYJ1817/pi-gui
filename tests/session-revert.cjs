@@ -30,6 +30,7 @@ let passed = 0;
   test('token limit refuses', () => assert.equal(merge('a\nb','A\nb','A\nb',{maxTokens:1}).reason,'budget_exceeded'));
   test('time limit refuses', () => assert.equal(merge('a','b','b',{maxMs:0}).reason,'budget_exceeded'));
   test('selected simple content eligible', () => assert.equal(compute([rec('1',1,'a','A')],'A').contentEligible,true));
+  test('durably consumed operation cannot receive another candidate', () => assert.equal(compute([rec('1',1,'a','A',{consumed:true})],'A').reason,'already_reverted'));
   test('three same-session edits reversed', () => assert.equal(compute([rec('1',1,'a','b'),rec('2',2,'b','c'),rec('3',3,'c','d')],'d').candidate.toString(),'a'));
   test('three edits with independent user intermediate', () => assert.equal(compute([rec('1',1,'a\nx\n','b\nx\n'),rec('2',2,'b\nU\n','c\nU\n'),rec('3',3,'c\nU\n','d\nU\n')],'d\nU\n').candidate.toString(),'a\nU\n'));
   const other = { ...scope, conversationId:'other', nativeSessionId:'other-native' };

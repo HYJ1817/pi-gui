@@ -18,6 +18,10 @@ const { execFileSync } = require('node:child_process');
   const pi = await import(pathToFileURL(path.join(packageDir, 'dist/index.js')));
   const { createSessionChangeStore } = await import('../server/session-change-store.js');
   const { createSessionChangeBridge } = await import('../server/session-change-bridge.js');
+  const { inspectFileMetadata } = await import('../server/session-revert-metadata.js');
+  const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
+  const { createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
+  const { createSessionRevertService, revertFileId } = await import('../server/session-revert-service.js');
   const { installSessionChangeExtension, transport } = await import('../extensions/pi-gui-revert/index.js');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-gui-session-change-live-'));
   const workspace = path.join(root, 'workspace'), agentDir = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
@@ -43,7 +47,8 @@ const { execFileSync } = require('node:child_process');
     const wsStat = await fs.stat(workspace);
     const workspaceFingerprint = createHash('sha256').update(JSON.stringify([wsStat.dev, wsStat.ino, wsStat.birthtimeMs])).digest('hex');
     const scope = { runtimeOwner: owner, conversationId: owner.conversationId, workspaceId: owner.workspaceId, workspaceEpoch: owner.workspaceEpoch, nativeSessionId: owner.sessionId, workspaceFingerprint };
-    bridge = createSessionChangeBridge({ store, launch, resolveScope: async () => scope,
+    const admission = createSessionRevertAdmission();
+    bridge = createSessionChangeBridge({ store, launch, resolveScope: async () => scope, admission, inspectFileMetadata,
       withAuthority: async fn => fn({ root: workspace }), extensionPath: path.resolve(__dirname, '../extensions/pi-gui-revert/index.js') });
     const prepared = await bridge.prepare();
     assert.ok(prepared, 'Bound installed Pi public API is unverified');
@@ -188,6 +193,24 @@ const { execFileSync } = require('node:child_process');
         assert.deepEqual(await fs.readFile(path.join(root,'data/revert-evidence/v1/journal.jsonl')),journalBefore);
         assert.deepEqual(await fs.readFile(path.join(workspace,'.git/index')),indexBefore);
         assert.deepEqual(['HEAD','HEAD^{tree}'].map(ref=>execFileSync('git',['-C',workspace,'rev-parse',ref],{stdio:'pipe'}).toString()),gitBefore);
+      });
+      await check('real default tools persist independently inspected native metadata without inventing support',async()=>{
+        for(const row of evidenceSnapshot.records){assert.equal(typeof row.beforeMetadata.supported,'boolean');assert.equal(typeof row.afterMetadata.supported,'boolean');}
+      });
+      await check('real BAP native prepare preserves current bytes when metadata cannot qualify',async()=>{
+        await fs.writeFile(previewPath,previewC);
+        const withAuthority=async(_req,_body,fn)=>fn({scope,root:workspace,activeWriter:false,revalidate:async()=>{}});
+        const withMutationAuthority=createSessionRevertMutationAuthority({withAuthority,admission,stopAndDrain:async()=>{}});
+        const service=createSessionRevertService({store,withAuthority,withMutationAuthority});
+        try{
+          const actual=await inspectFileMetadata(previewPath);
+          const preparation=service.prepare({},{evidenceIds:previewIds,selectedFileIds:[revertFileId(scope,'preview.txt')],mode:'confirmed_limited',evidenceRevision:(await store.previewRevision(scope)).revision});
+          if(!actual.supported){await assert.rejects(preparation,e=>e.code==='metadata_audit_unavailable'||e.code==='metadata_unsupported');console.log('native apply BLOCKED:',actual.reason);}
+          else{const plan=await preparation;await service.cancel({},{planId:plan.planId});console.log('native prepare qualified; apply not tested by this capture probe');}
+          assert.deepEqual(await fs.readFile(previewPath),previewC);assert.deepEqual(await fs.readFile(path.join(workspace,'.git/index')),indexBefore);
+          assert.deepEqual(['HEAD','HEAD^{tree}'].map(ref=>execFileSync('git',['-C',workspace,'rev-parse',ref],{stdio:'pipe'}).toString()),gitBefore);
+          admission.assertAllowed(workspace);
+        }finally{service.dispose();}
       });
     } finally { await new Promise(resolve=>{previewServer.close(resolve);previewServer.closeAllConnections();}); }
     await run('write', { path: 'hook-input.txt', content: 'hook after\n' });
