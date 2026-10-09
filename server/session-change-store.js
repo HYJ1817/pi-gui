@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
+import { constants } from 'node:fs';
+import { measureStorageFiles, measureAllocationUnit } from './session-revert-storage.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 const GAP_REASONS = new Set(['unknown_tool', 'shell', 'disabled', 'source_changed', 'capture_failed', 'restart', 'excluded_path', 'incomplete', 'external_writer_possible', 'session_changed', 'extension_unavailable']);
@@ -85,7 +87,7 @@ async function privacy(target, initialize, requireProtected = true) {
 }
 
 /** Private raw evidence store. Callers authenticate authority and capture target identities. */
-export async function createSessionChangeStore({ dataDir, privacyCheck, budgets = {}, now = Date.now } = {}) {
+export async function createSessionChangeStore({ dataDir, privacyCheck, budgets = {}, now = Date.now, allocationProbe = measureStorageFiles, allocationUnit } = {}) {
   const limits = { ...DEFAULTS, ...budgets };
   if (typeof dataDir !== 'string' || !Object.values(limits).every(n => Number.isSafeInteger(n) && n > 0)) fail('evidence_privacy_unavailable');
   const root = path.resolve(dataDir, 'revert-evidence', 'v1'), objects = path.join(root, 'objects'), journal = path.join(root, 'journal.jsonl');
@@ -99,7 +101,10 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     await fs.mkdir(objects, { mode: 0o700, recursive: true }); await noLinks(objects); await noLinks(journal, true);
     await childPrivacy(objects);
   } catch { fail('evidence_privacy_unavailable'); }
+  allocationUnit ??= await measureAllocationUnit(root);
+  if (!Number.isSafeInteger(allocationUnit) || allocationUnit < 1 || typeof allocationProbe !== 'function') fail('evidence_storage_failed');
   const records = new Map(), configurations = new Map(), workspaces = new Map(), plans = new Map(), backups = new Map(), consumed = new Map();
+  const reservations = new Map();
   let chain = '', pending = Promise.resolve(), broken = false;
   const queue = fn => { const task = pending.then(async () => { if (broken) fail('evidence_integrity_failed'); try { return await fn(); } catch (e) { if (e.code === 'evidence_integrity_failed') broken = true; if (e.code?.startsWith('evidence_') || ['invalid_evidence_scope', 'invalid_evidence_operation', 'unsupported_evidence_path'].includes(e.code)) throw e; fail('evidence_storage_failed'); } }); pending = task.catch(() => {}); return task; };
   function ws(s) { const key = workspaceKey(s); if (!workspaces.has(key)) workspaces.set(key, { revision: 0, sequence: 0, gapRevision: 0 }); return workspaces.get(key); }
@@ -137,7 +142,7 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     let bytes, fd;
     try {
       const expected = await fs.lstat(location);
-      fd = await fs.open(location, 'r');
+      fd = await fs.open(location, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
       const stat = await fd.stat();
       if (!stat.isFile() || stat.nlink !== 1 || stat.size !== ref.bytes || stat.size > limits.fileBytes || stat.dev !== expected.dev || stat.ino !== expected.ino) fail('evidence_integrity_failed');
       const buffer = Buffer.alloc(ref.bytes + 1); let count = 0;
@@ -205,15 +210,64 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     const refs = [next.beforeRef, next.intendedAfterRef, next.observedAfterRef].filter(Boolean);
     if (refs.reduce((n, r) => n + r.bytes, 0) > limits.operationBytes || limits.operationFiles < 1) fail('evidence_quota_exceeded');
     const all = [...records.values()].filter(r => !(scopeKey(r.scope) === scopeKey(s) && r.operationId === next.operationId)); all.push(next);
-    const global = new Map(), conversation = new Map();
-    for (const name of await fs.readdir(objects)) {
-      if (!/^[0-9a-f]{64}$/.test(name)) fail('evidence_integrity_failed');
-      const location = path.join(objects, name); await noLinks(location, true); const st = await fs.stat(location); global.set(name, st.size);
-    }
-    for (const r of all) for (const key of ['beforeRef', 'intendedAfterRef', 'observedAfterRef']) if (r[key]) { global.set(r[key].digest, Math.max(global.get(r[key].digest) || 0, r[key].bytes)); if (scopeKey(r.scope) === scopeKey(s)) conversation.set(r[key].digest, r[key].bytes); }
-    for (const backup of backups.values()) { global.set(backup.ref.digest, backup.ref.bytes); if (scopeKey(backup.scope) === scopeKey(s)) conversation.set(backup.ref.digest, backup.ref.bytes); }
-    if ([...global.values()].reduce((a, b) => a + b, 0) > limits.globalBytes || [...conversation.values()].reduce((a, b) => a + b, 0) > limits.conversationBytes) fail('evidence_quota_exceeded');
+    const { objectCharges: global, recoveryBytes } = await materialUsage(), conversation = new Map();
+    const projected = r => { if (!global.has(r.digest)) global.set(r.digest, Math.ceil(r.bytes / allocationUnit) * allocationUnit); };
+    for (const r of all) for (const key of ['beforeRef', 'intendedAfterRef', 'observedAfterRef']) if (r[key]) { projected(r[key]); if (scopeKey(r.scope) === scopeKey(s)) conversation.set(r[key].digest, r[key].bytes); }
+    for (const backup of backups.values()) { projected(backup.ref); if (scopeKey(backup.scope) === scopeKey(s)) conversation.set(backup.ref.digest, backup.ref.bytes); }
+    checkGlobal([...global.values()].reduce((a, b) => a + b, recoveryBytes));
+    if ([...conversation.values()].reduce((a, b) => a + b, 0) > limits.conversationBytes) fail('evidence_quota_exceeded');
   }
+  const statIdentity = s => [s.dev, s.ino, s.birthtimeMs, s.size, s.mtimeMs, s.ctimeMs, s.mode, s.nlink].join(':');
+  function checkGlobal(actualBytes, extraBytes = 0) {
+    const total = [...reservations.values()].reduce((sum, value) => sum + value, actualBytes + extraBytes);
+    if (!Number.isSafeInteger(total) || total > limits.globalBytes) fail('evidence_quota_exceeded');
+  }
+  async function materialUsage() {
+    await noLinks(root); if (!await checker(root, false)) fail('evidence_privacy_unavailable');
+    const deadline = Date.now() + 15000;
+    const timed = () => { if (Date.now() >= deadline) fail('evidence_storage_failed'); };
+    const files = [], directories = [[root, await fs.lstat(root)]]; let nodes = 0;
+    async function walk(location, depth, objectDirectory = false) {
+      await noLinks(location); const before = await fs.lstat(location);
+      if (!before.isDirectory() || before.isSymbolicLink()) fail('evidence_integrity_failed');
+      await childPrivacy(location); directories.push([location, before]);
+      const entries = await fs.opendir(location);
+      for await (const entry of entries) {
+        timed();
+        if (++nodes > 20000) fail('evidence_quota_exceeded');
+        const valid = objectDirectory ? /^[0-9a-f]{64}$/.test(entry.name) : depth === 0 ? /^[0-9a-f]{64}$/.test(entry.name) : depth === 1 ? /^move-[a-zA-Z0-9_-]{1,64}$/.test(entry.name) : entry.name === 'object';
+        if (!valid) fail('evidence_integrity_failed');
+        const child = path.join(location, entry.name), stat = await fs.lstat(child);
+        if (stat.isSymbolicLink()) fail('evidence_integrity_failed');
+        if (objectDirectory || depth === 2) {
+          if (!stat.isFile() || stat.nlink !== 1 || !Number.isSafeInteger(stat.size) || stat.size < 0) fail('evidence_integrity_failed');
+          await childPrivacy(child); files.push({ location: child, stat, objectName: objectDirectory ? entry.name : null });
+        } else {
+          if (!stat.isDirectory()) fail('evidence_integrity_failed');
+          await walk(child, depth + 1);
+        }
+      }
+    }
+    await walk(objects, 0, true);
+    const recovery = path.join(root, 'recovery');
+    let recoveryExists = true;
+    try { await fs.lstat(recovery); } catch (e) { if (e.code !== 'ENOENT') throw e; recoveryExists = false; }
+    if (recoveryExists) await walk(recovery, 0);
+    timed(); const rows = await allocationProbe(files.map(file => file.location), { deadline }); timed();
+    if (!Array.isArray(rows) || rows.length !== files.length) fail('evidence_storage_failed');
+    const objectCharges = new Map(); let recoveryBytes = 0;
+    for (let i = 0; i < files.length; i++) {
+      timed();
+      const file = files[i], row = rows[i], after = await fs.lstat(file.location);
+      if (after.isSymbolicLink() || statIdentity(after) !== statIdentity(file.stat)) fail('evidence_integrity_failed');
+      if (!row || row.logicalBytes !== after.size || !Number.isSafeInteger(row.allocatedBytes) || row.allocatedBytes < 0
+        || row.chargeBytes !== Math.max(row.logicalBytes, row.allocatedBytes)) fail('evidence_storage_failed');
+      if (file.objectName) objectCharges.set(file.objectName, row.chargeBytes); else recoveryBytes += row.chargeBytes;
+    }
+    for (const [location, before] of directories) { timed(); await noLinks(location); if (statIdentity(await fs.lstat(location)) !== statIdentity(before)) fail('evidence_integrity_failed'); }
+    return { objectCharges, recoveryBytes };
+  }
+  const reservationKey = (scope, allocationId) => scopeKey(previewIdentity(scope)) + ':' + identifier(allocationId);
   async function capture(s, args, before, prepared) {
     const id = identifier(args.operationId), key = scopeKey(s) + ':' + id, old = records.get(key);
     if (!settings(s).enabled) fail('evidence_consent_required');
@@ -401,6 +455,21 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     // Private persistence APIs: no references, paths or token hashes are public projections.
     restorePut: (scope, bytes) => queue(() => restorePut(scope, bytes)),
     restoreRead: (scope, reference) => queue(() => restoreRead(scope, reference)),
+    restoreRecoveryReserve: (scope, allocationId, chargeBytes) => queue(async () => {
+      const key = reservationKey(scope, allocationId);
+      if (!Number.isSafeInteger(chargeBytes) || chargeBytes < 0 || chargeBytes > limits.globalBytes) fail('evidence_quota_exceeded');
+      if (reservations.has(key) && reservations.get(key) !== chargeBytes) fail('invalid_evidence_operation');
+      const usage = await materialUsage();
+      checkGlobal([...usage.objectCharges.values()].reduce((a, b) => a + b, usage.recoveryBytes), reservations.has(key) ? 0 : chargeBytes);
+      reservations.set(key, chargeBytes);
+    }),
+    restoreRecoveryCheck: (scope, allocationId) => queue(async () => {
+      if (!reservations.has(reservationKey(scope, allocationId))) fail('invalid_evidence_operation');
+      const usage = await materialUsage(); checkGlobal([...usage.objectCharges.values()].reduce((a, b) => a + b, usage.recoveryBytes));
+    }),
+    // Releasing a private reservation cannot upgrade evidence or touch disk.
+    // It must remain available when an integrity failure has closed writes.
+    restoreRecoveryRelease: (scope, allocationId) => { reservations.delete(reservationKey(scope, allocationId)); },
     restoreRecoveryRoot: scope => queue(async () => {
       const s = previewIdentity(scope), location = path.join(root, 'recovery', digest(Buffer.from(workspaceKey(s))));
       await noLinks(root); if (!await checker(root, false)) fail('evidence_privacy_unavailable');

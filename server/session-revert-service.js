@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { runSessionRevert } from './session-revert-compute.js';
 import { createSessionRevertWriter } from './session-revert-writer.js';
+import path from 'node:path';
+import { measureStorageFiles } from './session-revert-storage.js';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = code => { throw Object.assign(Error(code), {code}); };
@@ -17,13 +19,13 @@ export const REVERT_RISK_NOTICE = Object.freeze({version:1,mode:'confirmed_limit
 
 /** Private plan service. No raw contents or references are returned except explicit export/diff. */
 export function createSessionRevertService({store,withAuthority,withMutationAuthority,writer=createSessionRevertWriter(),
-  compute=runSessionRevert,now=Date.now,ttlMs=60000}={}) {
+  compute=runSessionRevert,allocationProbe=measureStorageFiles,now=Date.now,ttlMs=60000}={}) {
   if (!Number.isSafeInteger(ttlMs)||ttlMs<1||ttlMs>60000) throw Error('invalid plan lifetime');
   const leases=new Map(), inflight=new Map();
   const data = async()=>typeof store==='function'?store():store;
-  const finishLease = planId => {const owned=leases.get(planId);if(owned){clearTimeout(owned.timer);owned.lease.release();leases.delete(planId);}};
-  const retain = (planId,lease)=>{
-    const timer=setTimeout(()=>finishLease(planId),ttlMs);timer.unref?.();leases.set(planId,{lease,timer});
+  const finishLease = async planId => {const owned=leases.get(planId);if(owned){clearTimeout(owned.timer);leases.delete(planId);try{await Promise.allSettled(owned.reservationIds.map(id=>Promise.resolve().then(()=>owned.store.restoreRecoveryRelease(owned.scope,id))));}finally{owned.lease.release();}}};
+  const retain = (planId,lease,store,scope,reservationIds)=>{
+    const timer=setTimeout(()=>{void finishLease(planId).catch(()=>{});},ttlMs);timer.unref?.();leases.set(planId,{lease,timer,store,scope,reservationIds});
   };
   const publicPlan = plan=>({ok:true,planId:plan.planId,mode:plan.mode,expiresAt:plan.expiresAt,revision:plan.revision,gapRevision:plan.gapRevision,
     target:{conversationId:plan.scope.conversationId,workspaceId:plan.scope.workspaceId,workspaceEpoch:plan.scope.workspaceEpoch},
@@ -50,7 +52,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
     const recovery=body.sourcePlanId!==undefined;
     if(!recovery&&(!Array.isArray(body.evidenceIds)||!body.evidenceIds.length||body.evidenceIds.length>128||!body.evidenceIds.every(id)||new Set(body.evidenceIds).size!==body.evidenceIds.length))fail('invalid_request');
     return withMutationAuthority(req,body,async authority=>{
-      const s=await data(),scope=authority.scope,lease=authority.lease;
+      const s=await data(),scope=authority.scope,lease=authority.lease,reservationIds=[];
       try {
         lease.assertCurrent(authority.root);if(authority.activeWriter!==false)fail('active_writer');await authority.revalidate?.();
         let expected=body.evidenceRevision, gap, work=[];
@@ -88,7 +90,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
         }
         // Every file must qualify before any plan can become confirmable.
         await authority.revalidate?.();await revisionCheck(s,scope,expected,gap);
-        const files=[],diffs=new Map();let diffBudget=32768;
+        const planId=randomUUID(),files=[],diffs=new Map();let diffBudget=32768;
         for(const item of work){
           lease.assertCurrent(authority.root);
           const view=boundedRevertDiff(item.current.bytes,item.candidate,diffBudget);
@@ -104,18 +106,30 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
             currentMetadata:item.current.metadata,currentFingerprint:item.current.fingerprint,parentIdentity:item.current.parentIdentity,
             action:item.action,state:'prepared',observedPostDigest:null,recoveryPath:item.recoveryPath??null,recoveryMetadata:item.recoveryMetadata??null,restoredMetadata:item.restoredMetadata??null});
         }
+        const moves=files.filter(file=>file.action==='move_to_recovery');
+        if(moves.length){
+          const measured=await allocationProbe(moves.map(file=>path.resolve(authority.root,...file.relativePath.split('/'))));
+          if(!Array.isArray(measured)||measured.length!==moves.length)fail('evidence_storage_failed');
+          for(let i=0;i<moves.length;i++){
+            const charge=measured[i]?.chargeBytes;
+            if(!Number.isSafeInteger(charge)||charge< moves[i].currentRef.bytes)fail('evidence_storage_failed');
+            const allocationId=planId+'_'+moves[i].fileId;
+            await s.restoreRecoveryReserve(scope,allocationId,charge);reservationIds.push(allocationId);
+            if((await inspectFile(authority,moves[i].relativePath)).fingerprint!==moves[i].currentFingerprint)fail('stale_current');
+          }
+        }
         await authority.revalidate?.();await revisionCheck(s,scope,expected,gap);lease.assertCurrent(authority.root);
-        const planId=randomUUID(),token=randomBytes(32).toString('hex'),createdAt=now();
+        const token=randomBytes(32).toString('hex'),createdAt=now();
         const plan={planId,requestId:null,scope,mode:body.mode,kind:recovery?'recover':'revert',sourcePlanId:body.sourcePlanId??null,
           selectedOperationIds:files.flatMap(f=>f.operationIds),selectedFileIds:[...body.selectedFileIds],files,
           revision:expected+1,gapRevision:gap,riskNoticeVersion:1,expiresAt:createdAt+ttlMs,createdAt,
           tokenHash:hash(token),confirmationAt:null,completion:'prepared',residualRacePossible:true};
         await s.applyCreate(scope,plan);expected++;
         await revisionCheck(s,scope,expected,gap);await authority.revalidate?.();lease.assertCurrent(authority.root);
-        retain(planId,lease);const response=publicPlan(plan);
+        retain(planId,lease,s,scope,reservationIds);const response=publicPlan(plan);
         for(const file of response.files)file.diff=diffs.get(file.fileId);
         return {...response,confirmationToken:token};
-      }catch(e){lease.release();throw e;}
+      }catch(e){try{await Promise.allSettled(reservationIds.map(id=>Promise.resolve().then(()=>s.restoreRecoveryRelease(scope,id))));}finally{lease.release();}throw e;}
     });
   }
   function validConfirmation(body,plan){
@@ -170,7 +184,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
             currentMetadata:file.currentMetadata,candidate:materials[i].candidate,action:file.action,backupVerified:true,
             recoveryPath:file.recoveryPath,recoveryMetadata:file.recoveryMetadata,restoredMetadata:file.restoredMetadata,
             ...(['restore_moved','move_to_recovery'].includes(file.action)?{recoveryRoot:await writer.ensureRecoveryRoot(authority.root,await s.restoreRecoveryRoot(scope)),recoveryRootVerified:true}:{}),
-            stateCheck:async()=>{authority.lease.assertCurrent(authority.root);await authority.revalidate?.();await revisionCheck(s,scope,expected,plan.gapRevision);},
+            stateCheck:async()=>{authority.lease.assertCurrent(authority.root);await authority.revalidate?.();await revisionCheck(s,scope,expected,plan.gapRevision);if(file.action==='move_to_recovery')await s.restoreRecoveryCheck(scope,plan.planId+'_'+file.fileId);},
             recordState:async (state,details={})=>{
               const value=typeof state==='string'?{state,...details}:state;
               if(!['replacing','moving','applied_verified'].includes(value.state))fail('invalid_writer_state');intent=true;
@@ -182,6 +196,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
             }});
           if(result?.state==='recovery_required'||result?.ok===false)throw Object.assign(Error('writer_failed'),{code:result.reason||'write_failed',recoveryRequired:true});
           if(file.state!=='applied_verified')throw Object.assign(Error('unverified writer result'),{code:'post_verification_failed',recoveryRequired:true});
+          if(file.action==='move_to_recovery'){const id=plan.planId+'_'+file.fileId;await s.restoreRecoveryRelease(scope,id);owned.reservationIds=owned.reservationIds.filter(value=>value!==id);}
         }catch(e){
           file.state=intent||e.recoveryRequired?'recovery_required':'not_applied';file.reason=safeRevertCode(e);
           for(const remaining of plan.files.slice(i+1))remaining.state='not_applied';
@@ -191,13 +206,13 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
         }
       }
       await persist({completion:'completed',files:plan.files});return publicResult(plan);
-    },{lease:owned.lease});}finally{finishLease(body.planId);}
+    },{lease:owned.lease});}finally{await finishLease(body.planId);}
   }
   async function cancel(req,body){return withAuthority(req,body,async authority=>{
     const s=await data(),plan=await authorizedPlan(s,authority,body.planId);
     if(plan.requestId||inflight.has(plan.planId+':'+body.requestId))fail('plan_consumed');
     if(plan.completion==='prepared')await s.applyUpdate(authority.scope,plan.planId,{completion:'cancelled',files:plan.files.map(f=>({...f,state:'not_applied'}))});
-    finishLease(plan.planId);return {ok:true,planId:plan.planId,completion:'cancelled'};
+    await finishLease(plan.planId);return {ok:true,planId:plan.planId,completion:'cancelled'};
   });}
   async function recoverPreview(req,body){return withAuthority(req,body,async authority=>{
     const s=await data();
@@ -222,7 +237,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
     if(!file?.currentRef)fail('recovery_unavailable');const bytes=await s.restoreRead(authority.scope,file.currentRef);
     await authority.revalidate?.();return {bytes,name:body.exportName};
   });}
-  return {prepare,apply,cancel,recoverPreview,exportMaterial,dispose(){for(const key of leases.keys())finishLease(key);}};
+  return {prepare,apply,cancel,recoverPreview,exportMaterial,dispose(){for(const key of [...leases.keys()])void finishLease(key).catch(()=>{});}};
 }
 
 // Display-only diff; never accepted as input to a writer.

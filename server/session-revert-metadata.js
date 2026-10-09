@@ -37,9 +37,9 @@ const INSPECT = HEADER + PRIVILEGE + `try {
  if(($a -band (-bnot (2+32+128+8192))) -ne 0){@{supported=$false;reason='metadata_attributes_unsupported'}|ConvertTo-Json -Compress; exit};
  $drive=[IO.Path]::GetPathRoot($p); $v=Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='"+$drive.TrimEnd('\\')+"'");
  if(!$v -or $v.FileSystem -ne 'NTFS' -or $v.DriveType -ne 3 -or !$v.VolumeSerialNumber){@{supported=$false;reason='metadata_volume_unsupported'}|ConvertTo-Json -Compress; exit};
- $streams=@(Get-Item -LiteralPath $p -Stream *); if(@($streams|Where-Object {$_.Stream -ne ':$DATA'}).Count -ne 0){@{supported=$false;reason='metadata_streams_unsupported'}|ConvertTo-Json -Compress; exit};
- if(!$auditEnabled){@{supported=$false;reason='metadata_audit_unavailable'}|ConvertTo-Json -Compress; exit};
+ $streams=@(Get-Item -LiteralPath $p -Force -Stream *); if(@($streams|Where-Object {$_.Stream -ne ':$DATA'}).Count -ne 0){@{supported=$false;reason='metadata_streams_unsupported'}|ConvertTo-Json -Compress; exit};
  $eaSize=[RevertNative]::EaSize($p); if($eaSize -ne 0){@{supported=$false;reason='metadata_extended_attributes_unsupported'}|ConvertTo-Json -Compress; exit};
+ if(!$auditEnabled){@{supported=$false;reason='metadata_audit_unavailable'}|ConvertTo-Json -Compress; exit};
  try {$acl=Get-Acl -LiteralPath $p -Audit} catch {@{supported=$false;reason='metadata_audit_unavailable'}|ConvertTo-Json -Compress; exit};
  $sddl=$acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::All);
  @{supported=$true;version=1;profile='${PROFILE}';platform='win32';volume=($v.DeviceID+':'+$v.VolumeSerialNumber);acl=$sddl;attributes=$a;streams=@()}|ConvertTo-Json -Compress -Depth 5
