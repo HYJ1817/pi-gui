@@ -129,6 +129,153 @@ const rejects = (fn, code) => assert.rejects(fn, e => e.code === code);
         await rejects(() => guarded.restorePut(scope, Buffer.from('y')), 'evidence_privacy_unavailable');
       } finally { await fs.rm(isolated, { recursive: true, force: true }); }
     });
+    const logicalProbe = async paths => Promise.all(paths.map(async location => { const st = await fs.lstat(location); return { logicalBytes: st.size, allocatedBytes: st.size, chargeBytes: st.size }; }));
+    async function capacityFixture(fn, globalBytes = 12) {
+      const isolated = await fs.mkdtemp(path.join(os.tmpdir(), 'p334-capacity-'));
+      try {
+        const opts = { dataDir: isolated, privacyCheck: async () => true, allocationProbe: logicalProbe, allocationUnit: 1, budgets: { globalBytes } };
+        const bounded = await createSessionChangeStore(opts);
+        const recoveryRoot = await bounded.restoreRecoveryRoot(scope);
+        const sub = await fs.mkdtemp(path.join(recoveryRoot, 'move-'));
+        await fn(bounded, path.join(sub, 'object'), opts);
+      } finally { await fs.rm(isolated, { recursive: true, force: true }); }
+    }
+    await check('actual recovery material including unjournaled files blocks new objects across scopes', async () => {
+      await capacityFixture(async (bounded, object) => {
+        await bounded.restorePut(scope, Buffer.from('1234'));
+        await fs.writeFile(object, '12345678');
+        await rejects(() => bounded.restorePut({ ...scope, conversationId: 'other' }, Buffer.from('x')), 'evidence_quota_exceeded');
+        assert.equal(await fs.readFile(object, 'utf8'), '12345678');
+        assert.deepEqual(await bounded.collectGarbage(), { removed: 0, bytes: 0 });
+      });
+    });
+    await check('same bytes in deduplicated objects and a moved file occupy separate capacity', async () => {
+      await capacityFixture(async (bounded, object) => {
+        await bounded.restorePut(scope, Buffer.from('1234'));
+        await bounded.restorePut(scope, Buffer.from('1234'));
+        await fs.writeFile(object, '1234');
+        await rejects(() => bounded.restoreRecoveryReserve(scope, 'new_move', 1), 'evidence_quota_exceeded');
+      }, 8);
+    });
+    await check('queued reservations prevent concurrent admission and release does not delete retained files', async () => {
+      await capacityFixture(async (bounded, object) => {
+        const outcomes = await Promise.allSettled([bounded.restoreRecoveryReserve(scope, 'first', 8), bounded.restoreRecoveryReserve({ ...scope, conversationId: 'other' }, 'second', 8)]);
+        assert.equal(outcomes[0].status, 'fulfilled'); assert.equal(outcomes[1].reason.code, 'evidence_quota_exceeded');
+        await rejects(() => bounded.restorePut(scope, Buffer.from('12345')), 'evidence_quota_exceeded');
+        await bounded.restoreRecoveryRelease({ ...scope, conversationId: 'other' }, 'first');
+        await rejects(() => bounded.restorePut(scope, Buffer.from('12345')), 'evidence_quota_exceeded');
+        await bounded.restoreRecoveryRelease(scope, 'first');
+        await fs.writeFile(object, '12345678');
+        await rejects(() => bounded.restoreRecoveryReserve(scope, 'third', 5), 'evidence_quota_exceeded');
+        assert.equal(await fs.readFile(object, 'utf8'), '12345678');
+      });
+    });
+    await check('recheck refuses late recovery growth and restart counts retained material without deleting it', async () => {
+      await capacityFixture(async (bounded, object, opts) => {
+        await fs.writeFile(object, '1234');
+        await bounded.restoreRecoveryReserve(scope, 'pending', 8);
+        await bounded.restoreRecoveryCheck(scope, 'pending');
+        await fs.appendFile(object, '5');
+        await rejects(() => bounded.restoreRecoveryCheck(scope, 'pending'), 'evidence_quota_exceeded');
+        const reopened = await createSessionChangeStore(opts);
+        await rejects(() => reopened.restoreRecoveryReserve(scope, 'new', 8), 'evidence_quota_exceeded');
+        assert.equal(await fs.readFile(object, 'utf8'), '12345');
+      });
+    });
+    await check('recovery traversal refuses hardlinks and unexpected nested directories', async () => {
+      await capacityFixture(async (bounded, object) => {
+        await fs.writeFile(object, 'x'); await fs.link(object, path.join(path.dirname(object), 'alias'));
+        await rejects(() => bounded.restorePut(scope, Buffer.from('y')), 'evidence_integrity_failed');
+        assert.equal(await fs.readFile(object, 'utf8'), 'x');
+      });
+      await capacityFixture(async (bounded, object) => {
+        await fs.mkdir(path.join(path.dirname(object), 'unexpected'));
+        await rejects(() => bounded.restorePut(scope, Buffer.from('y')), 'evidence_integrity_failed');
+      });
+    });
+    await check('unknown or inconsistent allocated-byte probes fail before backup writes', async () => {
+      await capacityFixture(async (bounded, object, opts) => {
+        await fs.writeFile(object, 'x');
+        const unknown = await createSessionChangeStore({ ...opts, allocationProbe: async () => [{ logicalBytes: 2, allocatedBytes: null, chargeBytes: 2 }] });
+        await rejects(() => unknown.restorePut(scope, Buffer.from('y')), 'evidence_storage_failed');
+        assert.equal((await fs.readdir(path.join(opts.dataDir, 'revert-evidence', 'v1', 'objects'))).length, 0);
+      });
+    });
+    await check('native allocation probe measures real file allocation and reserves rounded future blobs', async () => {
+      const { measureStorageFiles, measureAllocationUnit } = await import('../server/session-revert-storage.js');
+      await capacityFixture(async (bounded, object, opts) => {
+        await fs.writeFile(object, 'xx');
+        const [row] = await measureStorageFiles([object]), unit = await measureAllocationUnit(path.dirname(object));
+        assert.equal(row.logicalBytes, 2); assert.ok(Number.isSafeInteger(row.allocatedBytes)); assert.ok(row.chargeBytes >= 2);
+        assert.ok(Number.isSafeInteger(unit) && unit > 0);
+        const native = await createSessionChangeStore({ dataDir: opts.dataDir, privacyCheck: async () => true, budgets: { globalBytes: row.chargeBytes + unit - 1 } });
+        await rejects(() => native.restorePut(scope, Buffer.from('z')), 'evidence_quota_exceeded');
+        assert.equal(await fs.readFile(object, 'utf8'), 'xx');
+        console.log(`    native allocation logical=${row.logicalBytes} allocated=${row.allocatedBytes} unit=${unit}`);
+      });
+    });
+    await check('deduplicated existing objects keep measured allocation without future-write rounding', async () => {
+      await capacityFixture(async (bounded, object, opts) => {
+        const bytes = Buffer.from('xx'), name = require('node:crypto').createHash('sha256').update(bytes).digest('hex');
+        await fs.writeFile(path.join(opts.dataDir, 'revert-evidence', 'v1', 'objects', name), bytes);
+        const tight = await createSessionChangeStore({ ...opts, allocationUnit: 8, budgets: { globalBytes: 2 } });
+        assert.deepEqual(await tight.restoreRead(scope, await tight.restorePut(scope, bytes)), bytes);
+      });
+    });
+    await check('recovery junction is refused and reservation release remains available after integrity failure', async () => {
+      await capacityFixture(async (bounded, object) => {
+        await bounded.restoreRecoveryReserve(scope, 'pending', 1);
+        const parent = path.dirname(object), other = await fs.mkdtemp(path.join(os.tmpdir(), 'p334-junction-'));
+        try {
+          await fs.rmdir(parent); await fs.symlink(other, parent, process.platform === 'win32' ? 'junction' : 'dir');
+          await rejects(() => bounded.restorePut(scope, Buffer.from('x')), 'evidence_integrity_failed');
+          await bounded.restoreRecoveryRelease(scope, 'pending');
+          assert.deepEqual(await fs.readdir(other), []);
+        } finally { await fs.unlink(parent); await fs.rm(other, { recursive: true, force: true }); }
+      });
+    });
+    await check('native allocation deadline is bounded and unknown reservation cannot authorize a move', async () => {
+      const { measureStorageFiles } = await import('../server/session-revert-storage.js');
+      await capacityFixture(async (bounded, object) => {
+        await fs.writeFile(object, 'x');
+        await rejects(() => measureStorageFiles([object], { deadline: Date.now() - 1 }), 'evidence_storage_failed');
+        await rejects(() => bounded.restoreRecoveryCheck(scope, 'missing'), 'invalid_evidence_operation');
+        await bounded.restoreRecoveryReserve(scope, 'bound', 1);
+        await rejects(() => bounded.restoreRecoveryReserve(scope, 'bound', 2), 'invalid_evidence_operation');
+        await rejects(() => bounded.restoreRecoveryReserve(scope, 'negative', -1), 'evidence_quota_exceeded');
+        await rejects(() => bounded.restoreRecoveryReserve(scope, 'nan', NaN), 'evidence_quota_exceeded');
+      });
+    });
+    if (process.platform === 'win32') await check('native allocation refuses private recovery ADS before new backup allocation', async () => {
+      await capacityFixture(async (bounded, object, opts) => {
+        await fs.writeFile(object, 'x'); await fs.writeFile(object + ':hidden', 'hidden retained stream');
+        const native = await createSessionChangeStore({ dataDir: opts.dataDir, privacyCheck: async () => true });
+        await rejects(() => native.restorePut(scope, Buffer.from('y')), 'evidence_storage_failed');
+        assert.equal(await fs.readFile(object + ':hidden', 'utf8'), 'hidden retained stream');
+        assert.deepEqual(await fs.readdir(path.join(opts.dataDir, 'revert-evidence', 'v1', 'objects')), []);
+      });
+    });
+    await check('allocation-unit probe refuses an unsupported ancestor instead of trusting only the volume root', async () => {
+      const { measureAllocationUnit } = await import('../server/session-revert-storage.js');
+      await capacityFixture(async (bounded, object, opts) => {
+        const actual = path.join(opts.dataDir, 'unit-actual'), alias = path.join(opts.dataDir, 'unit-alias');
+        await fs.mkdir(path.join(actual, 'child'), { recursive: true });
+        await fs.symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
+        try { await rejects(() => measureAllocationUnit(path.join(alias, 'child')), 'evidence_storage_failed'); }
+        finally { await fs.unlink(alias); }
+      });
+    });
+    await check('sibling directory activity does not change allocation-root ancestor identity', async () => {
+      const { measureAllocationUnit } = await import('../server/session-revert-storage.js');
+      await capacityFixture(async (bounded, object, opts) => {
+        const stable = path.join(opts.dataDir, 'unit-stable'); await fs.mkdir(stable);
+        const unitPromise = measureAllocationUnit(stable);
+        const activity = new Promise((resolve, reject) => setTimeout(() => fs.mkdir(path.join(opts.dataDir, 'unit-sibling')).then(resolve, reject), 50));
+        const [unit] = await Promise.all([unitPromise, activity]);
+        assert.ok(Number.isSafeInteger(unit) && unit > 0);
+        assert.deepEqual(await fs.readdir(stable), []);
+      });
+    });
     console.log(`session-revert-recovery: ${checks}/${checks}`);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 })().catch(e => { console.error(e); process.exitCode = 1; });
