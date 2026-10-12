@@ -2612,3 +2612,13 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .runtime-conversation .rtc-approval{padding:8px 0}
 .runtime-resource-count{color:var(--t3);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
 .pj-runtime-list>.runtime-resource-count{padding:4px 12px}
+:root { --session-change-row-gap: 12px; }
+.session-change-body { overflow: auto; min-height: 0; padding: 0 16px 16px; }
+.session-change-note { font-size: 12px; line-height: 1.6; color: var(--t2); margin: 8px 0; overflow-wrap: anywhere; }
+.session-change-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px; }
+.session-change-actions [aria-pressed="true"] { background: var(--hover); }
+.session-change-row { border-top: 1px solid var(--line); padding: var(--session-change-row-gap) 0; min-width: 0; }
+.session-change-path { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; line-height: 1.6; }
+.session-change-history-file { padding: 8px 0; }
+.session-change-history-file .session-change-actions { padding: 6px 0; }
+.session-change-preview { margin-top: 8px; min-width: 0; }

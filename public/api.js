@@ -108,6 +108,20 @@ export const prepareSessionRevert = body => sendJSON('/api/session-revert/prepar
 export const applySessionRevert = body => sendJSON('/api/session-revert/apply', { body });
 export const cancelSessionRevert = body => sendJSON('/api/session-revert/cancel', { body });
 export const previewSessionRevertRecovery = body => sendJSON('/api/session-revert/recover-preview', { body });
+export const fetchSessionEvidence = body => sendJSON('/api/session-revert/query', { body });
+/** Fetch into memory first; caller checks that the captured view is still current. */
+export async function downloadSessionRevertBackup(body, isCurrent = () => true) {
+  try {
+    const response = await fetch('/api/session-revert/export', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    if (!response.ok) return await response.json();
+    const blob = await response.blob();
+    if (!isCurrent()) return {ok:false,code:'stale_runtime'};
+    const url=URL.createObjectURL(blob),anchor=document.createElement('a');
+    anchor.href=url; anchor.download=body.exportName;document.body.append(anchor);anchor.click();anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);return {ok:true};
+  } catch {return {ok:false,code:'export_unavailable'};}
+}
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
 export const fetchProcesses = () => getJSON('/api/processes');
 export const controlProcess = body => sendJSON('/api/processes',{body});

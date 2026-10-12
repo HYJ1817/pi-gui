@@ -232,6 +232,10 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
     disable,
     // Backend-only authority callback. No new private or public wire endpoint.
     withEvidenceAuthority: action => scoped(undefined, (_data, scope, workspace) => action(scope, workspace), true),
+    async captureStatus(scope) {
+      return { enabled:userDisabled !== persistentKey(scope) && (await (await getStore()).settings(scope)).enabled,
+        sourceVerified, reason };
+    },
     async assertReady() { await scoped(undefined, (_data, _scope, workspace) => admission?.assertAllowed(workspace.root), true); const value = await state(); if (value.enabled && !sourceVerified) fail('source_unverified'); },
     async summary() {
       try { return await scoped(undefined, async (data, scope) => ({ ok: true, capture: { enabled: userDisabled !== persistentKey(scope) && (await data.settings(scope)).enabled,

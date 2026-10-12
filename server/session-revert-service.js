@@ -217,7 +217,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
   async function recoverPreview(req,body){return withAuthority(req,body,async authority=>{
     const s=await data();
     if(body.sourcePlanId===undefined){const plans=await s.applyList(authority.scope);await authority.revalidate?.();return {ok:true,plans:plans.slice(-64).reverse().map(plan=>({planId:plan.planId,completion:plan.completion,state:plan.state,
-      createdAt:plan.createdAt,files:plan.files.map(f=>({fileId:f.fileId,relativePath:f.relativePath,state:f.state,backupAvailable:f.currentRef!==null}))})),backupReady:false,residualRacePossible:true};}
+      createdAt:plan.createdAt,files:plan.files.map(f=>({fileId:f.fileId,relativePath:f.relativePath,state:f.state,backupAvailable:Boolean(f.currentRef)}))})),backupReady:false,residualRacePossible:true};}
     const plan=await authorizedPlan(s,authority,body.sourcePlanId,{historical:true});if(!ids(body.selectedFileIds))fail('invalid_request');
     const files=[];
     for(const fileId of body.selectedFileIds){const file=plan.files.find(f=>f.fileId===fileId);if(!file?.currentRef)fail('recovery_unavailable');

@@ -298,6 +298,53 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
   function previewIdentity(scope) {
     return scope && Object.hasOwn(scope, 'runtimeOwner') ? identity(scope) : persistentIdentity(scope);
   }
+  // Journal metadata only: no object reads, reservations, consumption or append.
+  function queryEvidence(scope, { limit = 25, cursor } = {}) {
+    const s = previewIdentity(scope), w = ws(s), key = scopeKey(s);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) fail('invalid_request');
+    let offset = 0;
+    if (cursor !== undefined) {
+      if (typeof cursor !== 'string' || !/^\d{1,15}:\d{1,8}$/.test(cursor)) fail('invalid_request');
+      const [revision, start] = cursor.split(':').map(Number);
+      if (revision !== w.revision) fail('stale_evidence');
+      offset = start;
+    }
+    const byPath = new Map(); let operationCount = 0;
+    for (const record of records.values()) {
+      if (scopeKey(record.scope) !== key) continue;
+      if (!byPath.has(record.path)) byPath.set(record.path, []);
+      byPath.get(record.path).push(record); operationCount++;
+    }
+    if (offset > byPath.size) fail('invalid_request');
+    const history = new Set();
+    for (const plan of plans.values()) if (scopeKey(plan.scope) === key)
+      for (const file of plan.files || []) if (file.currentRef) history.add(file.relativePath);
+    const files = []; let incomplete = false, expired = false, eligibleCount = 0;
+    let index = 0;
+    for (const [relativePath, items] of byPath) {
+      items.sort((a,b) => a.workspaceSequence - b.workspaceSequence);
+      const old = items.some(r => now() - r.createdAt > limits.retentionDays * 86400000);
+      const gap = w.gapRevision > 0 || items.some(r => r.attributionGapRevision > 0);
+      const complete = items.every(r => r.state === 'observed' && r.toolResultObserved === true
+        && r.evidenceLevel === 'intent_verified' && r.intendedAfterRef && r.observedAfterRef);
+      const used = items.some(r => consumed.has(key + ':' + r.operationId));
+      const reason = gap ? 'attribution_gap' : old ? 'expired_evidence' : !complete ? 'incomplete_evidence'
+        : used ? 'already_reverted' : items.length > 128 ? 'budget_exceeded' : null;
+      incomplete ||= !complete || gap; expired ||= old; if (!reason) eligibleCount++;
+      if (index >= offset && index < offset + limit) files.push({ relativePath,
+        operationType: items[0].beforeRef === null ? 'created' : 'modified', operationCount:items.length,
+        evidenceIds:items.length <= 128 ? items.map(r => r.operationId) : [],
+        evidenceLevel:items.every(r=>r.evidenceLevel===items[0].evidenceLevel)?items[0].evidenceLevel:'incomplete', evidenceComplete:complete, expired:old,
+        attributionGap:gap, previewEligible:reason === null, previewStatus:'not_previewed', reason,
+        historyAvailable:history.has(relativePath) });
+      index++;
+    }
+    return { revision:w.revision, gapRevision:w.gapRevision, fileCount:byPath.size, operationCount,
+      evidenceComplete:operationCount > 0 && !incomplete, attributionGap:w.gapRevision > 0, expired,
+      previewEligible:eligibleCount > 0, eligibleFileCount:eligibleCount,
+      capture:{ enabled:settings(s).enabled, retentionDays:limits.retentionDays },
+      files, nextCursor:offset + limit < byPath.size ? w.revision + ':' + (offset + limit) : null };
+  }
   async function previewSnapshot(scope, value) {
     const s = previewIdentity(scope), ids = value?.evidenceIds;
     const maxOperations = value?.maxOperations ?? 128;
@@ -484,6 +531,10 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     // Private read-only snapshot; raw bytes must never be projected to public APIs.
     previewSnapshot: (scope, value) => queue(() => previewSnapshot(scope, value)),
     previewRevision: scope => queue(() => { const w = ws(previewIdentity(scope)); return { revision: w.revision, gapRevision: w.gapRevision }; }),
+    queryEvidence: (scope, page) => queue(() => {
+      try { return { value:queryEvidence(scope,page) }; }
+      catch(e) { if(['invalid_request','stale_evidence'].includes(e.code))return {error:e.code}; throw e; }
+    }).then(result => { if(result.error)fail(result.error); return result.value; }),
     settings: scope => queue(() => settings(identity(scope))),
     configure: (scope, value) => queue(async () => {
       const s = identity(scope); if (value?.enabled === true && value.acknowledged !== true) fail('evidence_consent_required');

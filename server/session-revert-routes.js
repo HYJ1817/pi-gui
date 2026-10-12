@@ -103,11 +103,40 @@ function previewDiff(current, candidate, maxBytes) {
   return { diff };
 }
 /** Read-only preview. Caller authenticates token/Origin and authorizes the complete current or dormant scope. */
-export function createSessionRevertRoutes({ store, withAuthority, withMutationAuthority, writer, budgets = {} } = {}) {
+export function createSessionRevertRoutes({ store, withAuthority, withMutationAuthority, withReadAdmission, writer, budgets = {} } = {}) {
   const limits = Object.fromEntries(Object.entries(DEFAULTS).map(([key, maximum]) => [key, Number.isSafeInteger(budgets[key]) && budgets[key] > 0 ? Math.min(maximum, budgets[key]) : maximum]));
   const service=createSessionRevertService({store,withAuthority,withMutationAuthority,...(writer?{writer}:{})});
   async function handle(req, res, url = new URL(req.url, 'http://localhost')) {
+    if(withReadAdmission){
+      try{withReadAdmission();}
+      catch(e){return json(res,503,{ok:false,code:e?.code==='evidence_initializing'?'evidence_initializing':'evidence_unavailable'});}
+    }
     const endpoint=url.pathname.slice('/api/session-revert/'.length);
+    if (endpoint === 'query') {
+      if (req.method !== 'POST') return json(res,405,{ok:false,code:'method_not_allowed'});
+      let body;
+      try { body=JSON.parse((await readRawBody(req,16*1024)).toString('utf8')); }
+      catch(e) {return json(res,e instanceof SyntaxError?400:413,{ok:false,code:e instanceof SyntaxError?'invalid_request':'request_too_large'});}
+      if (!closed(body,['conversationId','owner','limit','cursor'])
+        || !validBody({conversationId:body.conversationId,owner:body.owner,evidenceIds:['query'],mode:'confirmed_limited'},limits.maxOperations)
+        || body.limit !== undefined && (!Number.isSafeInteger(body.limit) || body.limit < 1 || body.limit > 50)
+        || body.cursor !== undefined && (typeof body.cursor !== 'string' || !/^\d{1,15}:\d{1,8}$/.test(body.cursor)))
+        return json(res,400,{ok:false,code:'invalid_request'});
+      try {
+        const result=await withAuthority(req,body,async authority=>{
+          const data=typeof store==='function'?await store():store;
+          const summary=await data.queryEvidence(authority.scope,{limit:body.limit,cursor:body.cursor});
+          await authority.revalidate?.();
+          const fresh=await data.previewRevision(authority.scope);
+          if(fresh.revision!==summary.revision || fresh.gapRevision!==summary.gapRevision)fail('stale_evidence');
+          return {ok:true,...summary,...(authority.capture?{capture:{...summary.capture,...authority.capture}}:{}),
+            owner:authority.scope.runtimeOwner?{...authority.scope.runtimeOwner}:null,
+            target:{conversationId:authority.scope.conversationId,workspaceId:authority.scope.workspaceId,workspaceEpoch:authority.scope.workspaceEpoch},
+            activeWriter:authority.activeWriter!==false, mode:'confirmed_limited',applyEligible:false,externalConcurrencyUnexcluded:true};
+        },{allowActiveWriter:true});
+        return json(res,200,result);
+      }catch(e){const code=e?.code==='invalid_request'?'invalid_request':safeCode(e);return json(res,code==='invalid_request'?400:409,{ok:false,code});}
+    }
     if(['prepare','apply','cancel','recover-preview','export'].includes(endpoint)){
       if(req.method!=='POST')return json(res,405,{ok:false,code:'method_not_allowed'});
       let body;try{body=JSON.parse((await readRawBody(req,16*1024)).toString('utf8'));}catch(e){return json(res,e instanceof SyntaxError?400:413,{ok:false,code:e instanceof SyntaxError?'invalid_request':'request_too_large'});}

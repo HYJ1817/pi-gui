@@ -62,6 +62,7 @@ import { createProcessBridge } from './server/process-bridge.js';
 import { createSessionChangeStore } from './server/session-change-store.js';
 import { createSessionChangeBridge } from './server/session-change-bridge.js';
 import { createSessionRevertRoutes } from './server/session-revert-routes.js';
+import { createSessionEvidenceAdmission } from './server/session-evidence-admission.js';
 import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
 import { inspectFileMetadata } from './server/session-revert-metadata.js';
@@ -291,6 +292,8 @@ const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
 const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission,mutationAdmission});
 let evidenceStore = null;
 const getEvidenceStore = () => evidenceStore ||= createSessionChangeStore({ dataDir: DATA_DIR });
+// Start legacy reconciliation independently of requests, without blocking GUI.
+const evidenceAdmission = createSessionEvidenceAdmission(getEvidenceStore);
 function evidenceScope(owner, nativeSessionId) {
   return { runtimeOwner: { ...owner, sessionId: nativeSessionId }, conversationId: owner.conversationId,
     nativeSessionId, workspaceId: owner.workspaceId, workspaceEpoch: owner.workspaceEpoch };
@@ -914,7 +917,8 @@ const revertMutationAuthority = createSessionRevertMutationAuthority({ withAutho
     }
   } });
 const route = createRouter({
-  sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority }),
+  sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,
+    withReadAdmission:()=>evidenceAdmission.assertReady() }),
   commandAdmission: async cmd => {
     if (!runtime.getCurrentCwd()) return false;
     if (cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') { await sessionChanges.disable(); return true; }

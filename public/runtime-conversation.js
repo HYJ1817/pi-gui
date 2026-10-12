@@ -33,6 +33,7 @@
 import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
 import { runtimeStore as store, onRuntimeChange } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
+import { openModal } from './ui/modal.js';
 
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
@@ -46,7 +47,7 @@ function el(tag, cls, text) {
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0 };
 
-export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, models = null }) {
+export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
   const historyCache = new Map();     // conversationId -> { messages, truncated }
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
@@ -134,6 +135,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   processBtn.hidden = !openProcesses;
   browserBtn.onclick = () => openBrowser?.(); processBtn.onclick = () => openProcesses?.();
   controls.append(browserBtn, processBtn);
+  if(openSessionChanges){
+    const more=el('button','btn','更多');more.type='button';more.id='runtimeSessionMore';
+    more.onclick=()=>openModal((card,close)=>{
+      card.append(el('h3','','会话操作'));
+      const entry=el('button','modal-item','本会话变更');entry.type='button';
+      entry.onclick=()=>{close();openSessionChanges();};card.append(entry);
+    });controls.append(more);
+  }
 
   send.onclick = () => {
     const target = id;

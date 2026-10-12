@@ -355,6 +355,7 @@ export function setSessionListRefresh(fn) {
  * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
 export function afterSessionSwitch() {
+  document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
   cancelFallback('session-switch');
   pendingModel();
   modelRefresh = null;

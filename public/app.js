@@ -98,6 +98,7 @@ import { startupNotice, NOTICE_ACTIONS } from './status-copy.js';
 import { showNotice, hideNotice } from './ui/notice.js';
 import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
+import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
@@ -117,7 +118,7 @@ setSessionsSlot(renderSidebarSessions);
  * focus 本身由 runtime-nav 发（带 captured owner），这里只负责把中央视图换过去；
  * 切回经典会话/项目时由 showChat() 换回来。 */
 const runtimeModels = createRuntimeModels({ onChange: conversationId => { if (runtimeConversation.conversationId === conversationId) runtimeConversation.draw(); } });
-const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), models: runtimeModels, onTitle: setRuntimeTitle, openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses() });
+const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), models: runtimeModels, onTitle: setRuntimeTitle, openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses(), openSessionChanges:openSessionChangesPanel });
 const conversationScopeActive = () => Boolean(gitConversationScope());
 const focusRuntimeConversation = conversationId => {
   runtimeConversation.show(conversationId);
@@ -234,7 +235,13 @@ function handleEvent(evt) {
   if (evt.type !== 'bridge_status' && Number.isInteger(evt.bridgeRun)) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
-  if (evt.legacyOwner && evt.bridgeRun === S.bridgeRun) S.legacyOwner = evt.legacyOwner;
+  if (evt.legacyOwner && evt.bridgeRun === S.bridgeRun) {
+    S.legacyOwner = evt.legacyOwner;
+    document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-context'));
+  }
+  if (!evt._replay && ['agent_start','tool_execution_start','tool_execution_end','agent_settled'].includes(evt.type))
+    document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-changed', {detail:{
+      workspaceId:S.legacyOwner?.workspaceId,workspaceEpoch:S.legacyOwner?.workspaceEpoch }}));
   if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeGuiBrowserEvent(evt); observeMcpEvent(evt); observeApprovalEvent(evt); }
   observeFallbackEvent(evt);
   switch (evt.type) {
@@ -408,7 +415,10 @@ export function reconcileBridgeSnapshot(snapshot) {
   if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
   if (Number.isInteger(evt.bridgeRevision)) S.bridgeRevision = evt.bridgeRevision;
   if (typeof evt.cwd === 'string') S.cwd = evt.cwd;
-  if (snapshot.legacyOwner) S.legacyOwner = snapshot.legacyOwner;
+  if (snapshot.legacyOwner) {
+    S.legacyOwner = snapshot.legacyOwner;
+    document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-context'));
+  }
   S.hasProject = evt.hasProject ?? Boolean(S.cwd);
   // Classic children share the backend budget with independent conversations.
   // Refresh only after this snapshot passed the bridge authority guards.
@@ -834,6 +844,7 @@ function openMoreMenu() {
     list.className = 'modal-list';
 
     const entries = [
+      ['本会话变更', () => openSessionChangesPanel()],
       ['开发进程', openProcessPanel],
       ['重命名会话', renameSession],
       ['导出会话 HTML', exportHtml],

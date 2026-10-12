@@ -10,7 +10,7 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
   const itemFor = id => registry.snapshot().items.find(item => item.conversationId === id);
   const busyIn = scope => registry.snapshot().items.some(item => item.workspace?.workspaceId === scope.workspaceId
     && item.owner && (item.activity !== 'idle' || item.lifecycle !== 'ready'));
-  return async (req, body, action) => {
+  return async (req, body, action, { allowActiveWriter = false } = {}) => {
     if (!body.conversationId || body.conversationId === 'classic-chat') {
       let expected = body.owner;
       if (!expected) { try { expected = JSON.parse(req.headers['x-pi-gui-owner'] || 'null'); } catch { fail('stale_runtime'); } }
@@ -20,9 +20,10 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
         const revalidate = async () => {
           const state = await classicNativeState();
           if (state?.sessionId !== scope.nativeSessionId || !equal(expected, classicOwner())) fail('stale_runtime');
-          if (classicBusy() || busyIn(scope)) fail('active_writer');
+          if (!allowActiveWriter && (classicBusy() || busyIn(scope))) fail('active_writer');
         };
-        return action({ scope, root:workspace.root, activeWriter:Boolean(classicBusy() || busyIn(scope)), revalidate });
+        return action({ scope, root:workspace.root, activeWriter:Boolean(classicBusy() || busyIn(scope)), revalidate,
+          ...(allowActiveWriter?{capture:await classicBridge.captureStatus?.(scope)}:{}) });
       });
     }
     const item = itemFor(body.conversationId);
@@ -35,9 +36,10 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
           if (!equal(itemFor(body.conversationId)?.owner, expected)) fail('stale_runtime');
           const state = await adapter.request({ type:'get_state' });
           if (state?.sessionId !== scope.nativeSessionId || !equal(itemFor(body.conversationId)?.owner, expected)) fail('stale_runtime');
-          if (busyIn(scope)) fail('active_writer');
+          if (!allowActiveWriter && busyIn(scope)) fail('active_writer');
         };
-        return action({ scope, root:workspace.root, activeWriter:busyIn(scope), revalidate });
+        return action({ scope, root:workspace.root, activeWriter:busyIn(scope), revalidate,
+          ...(allowActiveWriter?{capture:await adapter.changes.captureStatus?.(scope)}:{}) });
       });
     }
     if (body.owner) fail('stale_runtime');
@@ -52,7 +54,7 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
         if (itemFor(body.conversationId)?.owner) fail('stale_runtime');
         if (!equal(registry.workspaceIdentityOf(body.conversationId), identity)) fail('stale_workspace');
         if (registry.historyTarget(body.conversationId)?.sessionId !== target.sessionId) fail('stale_runtime');
-        if (busyIn(scope)) fail('active_writer');
+        if (!allowActiveWriter && busyIn(scope)) fail('active_writer');
       };
       return action({ scope, root:workspace.root, activeWriter:busyIn(scope), revalidate });
     });
