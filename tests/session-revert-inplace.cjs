@@ -79,13 +79,14 @@ const setup = (root, metadataKind = 'protected', withExtras = true) => one({ roo
 const check = async (name, fn) => { try { await fn(); passed++; console.log('ok', name); } catch (e) { failed++; console.error('FAIL', name, e.code || e.name); } };
 const skip = (name, reason) => { skipped++; console.log('SKIP', name, reason); };
 
-async function prepared(root, before, candidate, privateAcl = false) {
+async function prepared(root, before, candidate, privateAcl = false, researchOptions = {}) {
   const { createSessionChangeStore } = await import('../server/session-change-store.js');
   const scope = { projectId: 'prototype', repoId: null, workspaceId: 'temporary', workspaceEpoch: 'epoch', conversationId: 'isolated', nativeSessionId: 'fixture' };
-  const options = { dataDir: path.join(root, 'private-data'), ...(!privateAcl ? { privacyCheck: async () => true } : {}) };
+  const options = { dataDir: path.join(root, 'private-data'), ...(!privateAcl ? { privacyCheck: async () => true } : {}), ...researchOptions.storeOptions };
   const store = await createSessionChangeStore(options);
   const currentRef = await store.restorePut(scope, before), candidateRef = await store.restorePut(scope, candidate);
-  const planId = randomUUID(), file = { fileId: 'temporary-file', relativePath, operationIds: [], currentRef, candidateRef, state: 'prepared' };
+  const planId = randomUUID(), file = { fileId: 'temporary-file', relativePath, operationIds: [], currentRef, candidateRef, state: 'prepared',
+    ...(researchOptions.metadata ? { currentMetadata: researchOptions.metadata } : {}) };
   const plan = { planId, mode: 'research_only', tokenHash: hash(randomUUID()), expiresAt: Date.now() + 60000, files: [file], selectedOperationIds: [], residualRacePossible: true };
   await store.applyCreate(scope, plan);
   assert.deepEqual(await store.restoreRead(scope, currentRef), before);
@@ -114,7 +115,9 @@ async function write(root, C, R, { fault = 'none', afterReady, privateAcl = fals
   } finally { if (children.has(native.child)) await native.dispose(); }
 }
 
-(async () => {
+// Shared only by isolated research suites; direct npm test behavior is unchanged.
+module.exports = { start, one, fixture, observe, setup, prepared, write, fixturePowerShell, hash, relativePath };
+if (require.main === module) (async () => {
   await fs.access(helper);
   if (process.platform !== 'win32') { skip('original-object native experiment', 'Windows required'); console.log(`session-revert-inplace: 0/0; failed=0; skipped=${skipped}; research only`); return; }
   for (const [name, C, R] of [
