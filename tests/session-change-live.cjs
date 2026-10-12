@@ -158,16 +158,39 @@ const { execFileSync } = require('node:child_process');
     const journalBefore = await fs.readFile(path.join(root,'data/revert-evidence/v1/journal.jsonl'));
     const gitBefore = ['HEAD','HEAD^{tree}'].map(ref=>execFileSync('git',['-C',workspace,'rev-parse',ref],{stdio:'pipe'}).toString());
     const indexBefore = await fs.readFile(path.join(workspace,'.git/index'));
-    const previewServer = createServer(createRouter({ auth:createAuth({token:'fixture-preview-token',port:0}),
-      sessionRevert:createSessionRevertRoutes({store,withAuthority:async(_req,body,fn)=>{
+    const publicRoot=path.resolve(__dirname,'../public');
+    const serveStatic=async(res,pathname)=>{
+      const name=pathname==='/p33-gui'?'index.html':pathname.slice(1),target=path.resolve(publicRoot,name);
+      if(!target.startsWith(publicRoot+path.sep)){res.writeHead(404).end();return;}
+      try{let bytes=await fs.readFile(target);if(name==='index.html')bytes=Buffer.from(bytes.toString().replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''));
+        res.writeHead(200,{'content-type':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.css')?'text/css':'text/javascript'});res.end(bytes);
+      }catch{res.writeHead(404).end();}
+    };
+    const previewRoutes=createSessionRevertRoutes({store,withAuthority:async(_req,body,fn)=>{
         assert.deepEqual(body.owner,owner);
         return fn({scope,root:workspace,activeWriter:false,revalidate:async()=>{}});
-      }}) }));
+      }});
+    const previewServer = createServer((req,res)=>{
+      const pathname=new URL(req.url,'http://localhost').pathname;
+      if(!pathname.startsWith('/api/'))return serveStatic(res,pathname);
+      return createRouter({auth:createAuth({token:'fixture-preview-token',port:previewServer.address().port}),sessionRevert:previewRoutes})(req,res);
+    });
     await new Promise(resolve=>previewServer.listen(0,'127.0.0.1',resolve));
     const previewCall = async extra=>fetch(`http://127.0.0.1:${previewServer.address().port}/api/session-revert/preview`,{method:'POST',
       headers:{'content-type':'application/json','x-pi-gui-token':'fixture-preview-token'},
       body:JSON.stringify({owner,evidenceIds:previewIds,mode:'confirmed_limited',...extra})}).then(r=>r.json());
     try {
+      await check('real Pi journal is discoverable through bounded GUI query',async()=>{
+        const result=await fetch(`http://127.0.0.1:${previewServer.address().port}/api/session-revert/query`,{method:'POST',headers:{'content-type':'application/json','x-pi-gui-token':'fixture-preview-token'},body:JSON.stringify({owner,limit:25})}).then(r=>r.json());
+        assert.equal(result.ok,true);assert.deepEqual(result.files.find(f=>f.relativePath==='preview.txt').evidenceIds,previewIds);
+        assert.equal(result.applyEligible,false);
+      });
+      if(process.env.P33_GUI_E2E==='1')await check('real Pi capture to GUI selection and content candidate has no recovery write',async()=>{
+        const {spawn}=require('node:child_process');const env={...process.env,P33_GUI_URL:`http://127.0.0.1:${previewServer.address().port}`,P33_GUI_OWNER:JSON.stringify(owner),P33_GUI_USER_DATA:path.join(root,'electron')};delete env.ELECTRON_RUN_AS_NODE;
+        const child=spawn(require('electron'),[path.resolve(__dirname,'session-change-electron.cjs'),'--no-sandbox','--in-process-gpu'],{env,stdio:'inherit',windowsHide:true});
+        const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});assert.equal(code,0);
+        assert.deepEqual(await fs.readFile(previewPath),previewC);assert.deepEqual(await fs.readFile(path.join(root,'data/revert-evidence/v1/journal.jsonl')),journalBefore);
+      });
       await check('real write/edit durable evidence produces exact byte candidate without writing',async()=>{
         const candidate = await runSessionRevert({records:evidenceSnapshot.records,selectedOperationIds:previewIds,current:previewC,gapRevision:evidenceSnapshot.gapRevision});
         assert.equal(candidate.status,'candidate');assert.deepEqual(candidate.candidate,previewR);

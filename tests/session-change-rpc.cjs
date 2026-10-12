@@ -26,6 +26,19 @@ const {spawn,execFileSync}=require('node:child_process');
     while(Date.now()<deadline){evidence=await get('/api/session-change/evidence');if(evidence.sourceVerified)break;await pause();}
     check('actual explicit file extension source handshake is verified',()=>assert.equal(evidence.sourceVerified,true));
     check('private capture defaults off and no historical B synthesized',()=>{assert.equal(evidence.capture.enabled,false);assert.equal(evidence.operationCount,0);});
+    const query=async body=>fetch(base+'/api/session-revert/query',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)}).then(r=>r.json());
+    const classicQuery=await query({owner:status.legacyOwner,limit:1});
+    check('classic bounded GUI query returns explicit uncaptured empty scope',()=>{assert.equal(classicQuery.ok,true);assert.equal(classicQuery.capture.enabled,false);assert.equal(classicQuery.fileCount,0);assert.deepEqual(classicQuery.files,[]);assert.equal(classicQuery.applyEligible,false);});
+    const rejectedQuery=await query({owner:status.legacyOwner,path:workspace});
+    check('source or packaged GUI query denies client file paths',()=>assert.equal(rejectedQuery.code,'invalid_request'));
+    // Attach the renderer before emitting consent requests; replaying an already
+    // answered approval would cover the menu with an unrelated confirmation.
+    if(process.env.P33_RPC_GUI==='1'){
+      const env={...process.env,P33_GUI_URL:base,P33_GUI_USER_DATA:path.join(root,'electron'),P33_GUI_ACTUAL_APP:'1',P33_GUI_TAG:path.basename(entry)==='server.js'?'source':'packaged'};delete env.ELECTRON_RUN_AS_NODE;
+      const gui=spawn(require('electron'),[path.resolve(__dirname,'session-change-electron.cjs'),'--no-sandbox','--in-process-gpu'],{env,stdio:'inherit',windowsHide:true});
+      const code=await new Promise((resolve,reject)=>{gui.once('error',reject);gui.once('exit',resolve);});
+      check('real application menu and read-only query work in Electron',()=>assert.equal(code,0));
+    }
     eventsAbort=new AbortController();const stream=await fetch(base+'/api/events',{signal:eventsAbort.signal});const reader=stream.body.getReader();
     const eventPromise=(async()=>{let text='';const timeout=setTimeout(()=>eventsAbort.abort(),20000);try{for(;;){const next=await reader.read();if(next.done)throw Error('confirmation_missing');text+=Buffer.from(next.value).toString('utf8');const frames=text.split('\n\n');text=frames.pop();for(const frame of frames){const row=frame.split('\n').find(s=>s.startsWith('data:'));if(!row)continue;const event=JSON.parse(row.slice(5));if(event.type==='extension_ui_request'&&event.method==='confirm')return event;}}}finally{clearTimeout(timeout);}})();
     assert.equal((await post({type:'prompt',id:'consent-test',message:'/gui-capture enable'})).ok,true);
@@ -66,9 +79,15 @@ const {spawn,execFileSync}=require('node:child_process');
     check('managed actual preview uses current owner and workspace authority',()=>{assert.equal(runtimePreview.ok,false);assert.equal(runtimePreview.code,'evidence_not_found');});
     const managedStrict=await apiPost('/api/session-revert/prepare',{conversationId:started.conversationId,owner:item.owner,mode:'strict'});
     check('managed packaged/source preparation keeps strict provider unavailable',()=>assert.equal(managedStrict.code,'exclusive_provider_unavailable'));
+    const managedQuery=await query({conversationId:started.conversationId,owner:item.owner});
+    check('managed GUI query uses current nine-field owner',()=>{assert.equal(managedQuery.ok,true);assert.deepEqual(managedQuery.owner,item.owner);assert.equal(managedQuery.target.conversationId,started.conversationId);assert.equal(managedQuery.fileCount,0);});
     assert.equal((await apiPost('/api/runtime-sessions',{action:'close',owner:item.owner})).ok,true);
     const dormant=await fetch(base+'/api/session-change/evidence',{headers:{'x-pi-gui-conversation':started.conversationId}}).then(r=>r.json());
     check('closed runtime reads persistent evidence metadata through workspace authority',()=>{assert.equal(dormant.ok,true);assert.equal(dormant.sourceVerified,false);assert.equal(dormant.reason,'runtime_closed');assert.equal(dormant.operationCount,0);});
+    const closedQuery=await query({conversationId:started.conversationId});
+    check('closed GUI query resolves persistent scope without stale live owner',()=>{assert.equal(closedQuery.ok,true);assert.equal(closedQuery.owner,null);assert.equal(closedQuery.fileCount,0);});
+    const staleQuery=await query({conversationId:started.conversationId,owner:item.owner});
+    check('closed GUI query rejects former live generation',()=>assert.equal(staleQuery.code,'stale_runtime'));
     const dormantPreview=await previewPost({...previewBody,conversationId:started.conversationId});
     check('dormant actual preview requires no invented live owner',()=>{assert.equal(dormantPreview.ok,false);assert.equal(dormantPreview.code,'evidence_not_found');});
     const stale=await apiPost('/api/runtime-sessions',{action:'command',owner:item.owner,command:{type:'prompt',message:'must not run'}});
