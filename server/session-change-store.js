@@ -77,10 +77,15 @@ function powershell(script, target) {
 }
 async function privacy(target, initialize, requireProtected = true) {
   if (process.platform === 'win32') {
-    const script = `$ErrorActionPreference='Stop'; $p=$env:PI_GUI_EVIDENCE_ACL_TARGET; $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User; $allowed=@($sid.Value,'S-1-5-18','S-1-5-32-544'); `
+    // Elevated Windows tokens can default new child ownership to Administrators.
+    // The root remains user-owned; children may use only this token's default
+    // owner, and only when it is already in the private ACL allowlist.
+    const script = `$ErrorActionPreference='Stop'; $p=$env:PI_GUI_EVIDENCE_ACL_TARGET; $identity=[System.Security.Principal.WindowsIdentity]::GetCurrent(); $sid=$identity.User; $allowed=@($sid.Value,'S-1-5-18','S-1-5-32-544'); `
       + (initialize ? `$acl=New-Object System.Security.AccessControl.DirectorySecurity; $acl.SetOwner($sid); $acl.SetAccessRuleProtection($true,$false); foreach($s in $allowed){$id=New-Object System.Security.Principal.SecurityIdentifier($s); $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($id,'FullControl','ContainerInherit,ObjectInherit','None','Allow'); $acl.AddAccessRule($rule)}; Set-Acl -LiteralPath $p -AclObject $acl; ` : '')
-      + `$acl=Get-Acl -LiteralPath $p; if($acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value -ne $sid.Value){exit 2}; $rules=$acl.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]); $own=$false; foreach($r in $rules){if($r.AccessControlType -eq 'Allow'){if($allowed -notcontains $r.IdentityReference.Value){exit 3}; if($r.IdentityReference.Value -eq $sid.Value -and (($r.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl) -eq [System.Security.AccessControl.FileSystemRights]::FullControl)){$own=$true}}}; if(-not $own){exit 4}; ` + (requireProtected ? `if(-not $acl.AreAccessRulesProtected){exit 5}; ` : '') + `'private'`;
-    return (await powershell(script, target)) === 'private';
+      + `$acl=Get-Acl -LiteralPath $p; $owner=$acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; `
+      + (requireProtected ? `if($owner -ne $sid.Value){exit 2}; ` : `if($owner -ne $sid.Value -and ($owner -ne $identity.Owner.Value -or $allowed -notcontains $owner)){exit 2}; `)
+      + `$rules=$acl.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]); $own=$false; foreach($r in $rules){if($r.AccessControlType -eq 'Allow'){if($allowed -notcontains $r.IdentityReference.Value){exit 3}; if($r.IdentityReference.Value -eq $sid.Value -and (($r.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl) -eq [System.Security.AccessControl.FileSystemRights]::FullControl)){$own=$true}}}; if(-not $own){exit 4}; ` + (requireProtected ? `if(-not $acl.AreAccessRulesProtected){exit 5}; ` : '') + `'private'`;
+    return (await powershell(script, target).catch(() => null)) === 'private';
   }
   const st = await fs.stat(target);
   return st.uid === process.getuid() && (st.mode & 0o077) === 0;
@@ -106,7 +111,7 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
   const records = new Map(), configurations = new Map(), workspaces = new Map(), plans = new Map(), backups = new Map(), consumed = new Map();
   const reservations = new Map();
   let chain = '', pending = Promise.resolve(), broken = false;
-  const queue = fn => { const task = pending.then(async () => { if (broken) fail('evidence_integrity_failed'); try { return await fn(); } catch (e) { if (e.code === 'evidence_integrity_failed') broken = true; if (e.code?.startsWith('evidence_') || ['invalid_evidence_scope', 'invalid_evidence_operation', 'unsupported_evidence_path'].includes(e.code)) throw e; fail('evidence_storage_failed'); } }); pending = task.catch(() => {}); return task; };
+  const queue = fn => { const task = pending.then(async () => { if (broken) fail('evidence_integrity_failed'); try { return await fn(); } catch (e) { if (e.code === 'evidence_integrity_failed') broken = true; if ((typeof e.code === 'string' && e.code.startsWith('evidence_')) || ['invalid_evidence_scope', 'invalid_evidence_operation', 'unsupported_evidence_path'].includes(e.code)) throw e; fail('evidence_storage_failed'); } }); pending = task.catch(() => {}); return task; };
   function ws(s) { const key = workspaceKey(s); if (!workspaces.has(key)) workspaces.set(key, { revision: 0, sequence: 0, gapRevision: 0 }); return workspaces.get(key); }
   function apply(event) {
     const s = event.type === 'apply' ? previewIdentity(event.scope) : identity(event.scope), w = ws(s);
