@@ -182,6 +182,20 @@ const reject = (fn, code) => assert.rejects(fn, e => e.code === code && e.messag
       assert.deepEqual((await native.read(a, 'native-op')).before, input('native-op').before);
       const reopened = await createSessionChangeStore({ dataDir: nativeDir });
       assert.equal((await reopened.read(a, 'native-op')).state, 'incomplete');
+      if (process.platform === 'win32') await check('native foreign child ACL remains refused', async () => {
+        const target = path.join(nativeDir, 'revert-evidence', 'v1', 'objects');
+        const script = "$ErrorActionPreference='Stop'; $p=$env:PI_GUI_ACL_TEST_TARGET; $acl=Get-Acl -LiteralPath $p; $sid=New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($sid,'Read','Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl";
+        const env = { ...process.env, PI_GUI_ACL_TEST_TARGET: target };
+        for (const key of Object.keys(env)) if (key.toLowerCase() === 'psmodulepath') delete env[key];
+        const changed = require('node:child_process').spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env, encoding: 'utf8', timeout: 10000, windowsHide: true });
+        assert.equal(changed.status, 0, 'fixture ACL modification must succeed');
+        const before = fs.readdirSync(target).sort();
+        await reject(() => reopened.prepare(a, input('foreign-acl', {
+          before: Buffer.from('unique foreign ACL before'), intendedAfter: Buffer.from('unique foreign ACL after'),
+        })), 'evidence_privacy_unavailable');
+        assert.deepEqual(fs.readdirSync(target).sort(), before);
+        await reject(() => createSessionChangeStore({ dataDir: nativeDir }), 'evidence_privacy_unavailable');
+      });
     });
     await check('privacy failure is fail closed', async () => {
       await reject(() => createSessionChangeStore({ dataDir: path.join(dir, 'private-failure'), privacyCheck: async () => false }), 'evidence_privacy_unavailable');
@@ -242,7 +256,11 @@ const reject = (fn, code) => assert.rejects(fn, e => e.code === code && e.messag
       await full.configure(a,{enabled:true,acknowledged:true});
       const promises=require('node:fs/promises'),original=promises.open;
       promises.open=async function(target,...args){if(target===path.join(fullDir,'revert-evidence','v1','journal.jsonl'))throw Object.assign(Error('fixture disk full'),{code:'ENOSPC'});return original.call(this,target,...args);};
-      try{await reject(()=>full.prepare(a,input('disk-full')),'evidence_storage_failed');assert.equal((await full.summary(a)).operationCount,0);}
+      try{
+        await reject(()=>full.prepare(a,input('disk-full')),'evidence_storage_failed');assert.equal((await full.summary(a)).operationCount,0);
+        promises.open=async function(target,...args){if(target===path.join(fullDir,'revert-evidence','v1','journal.jsonl'))throw Object.assign(Error('fixture child exit'),{code:3});return original.call(this,target,...args);};
+        await reject(()=>full.prepare(a,input('numeric-exit')),'evidence_storage_failed');assert.equal((await full.summary(a)).operationCount,0);
+      }
       finally{promises.open=original;}
     });
     await check('separate process exit after prepared recovers incomplete evidence', async () => {
