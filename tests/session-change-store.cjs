@@ -164,7 +164,19 @@ const reject = (fn, code) => assert.rejects(fn, e => e.code === code && e.messag
     });
     await check('native platform private directory and inherited child permissions work', async () => {
       const nativeDir = path.join(dir, 'native-private');
-      const native = await createSessionChangeStore({ dataDir: nativeDir });
+      let native;
+      try { native = await createSessionChangeStore({ dataDir: nativeDir }); }
+      catch (error) {
+        if (process.platform === 'win32') {
+          // Only structural ACL facts: never print account names, SIDs or paths.
+          const script = "$ErrorActionPreference='Stop'; $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User; $admin=New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544'); $allowed=@($sid.Value,'S-1-5-18',$admin.Value); foreach($part in @('v1','v1/objects')){$p=Join-Path $env:PI_GUI_ACL_DIAGNOSTIC_ROOT $part; if(-not(Test-Path -LiteralPath $p)){[ordered]@{part=$part;exists=$false}|ConvertTo-Json -Compress;continue};$acl=Get-Acl -LiteralPath $p;$rules=$acl.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]);[ordered]@{part=$part;exists=$true;ownerIsUser=($acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value -eq $sid.Value);ownerIsAdministrators=($acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value -eq $admin.Value);protected=$acl.AreAccessRulesProtected;foreignAllow=(@($rules|Where-Object {$_.AccessControlType -eq 'Allow' -and $allowed -notcontains $_.IdentityReference.Value}).Count -gt 0)}|ConvertTo-Json -Compress}";
+          const env = { ...process.env, PI_GUI_ACL_DIAGNOSTIC_ROOT: path.join(nativeDir, 'revert-evidence') };
+          for (const key of Object.keys(env)) if (key.toLowerCase() === 'psmodulepath') delete env[key];
+          const result = require('node:child_process').spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env, encoding: 'utf8', timeout: 10000, windowsHide: true });
+          console.error('Native ACL diagnostic:', result.status === 0 ? result.stdout.trim() : 'unavailable');
+        }
+        throw error;
+      }
       await native.configure(a, { enabled: true, acknowledged: true });
       await native.prepare(a, input('native-op'));
       assert.deepEqual((await native.read(a, 'native-op')).before, input('native-op').before);
