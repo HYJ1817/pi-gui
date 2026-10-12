@@ -41,3 +41,9 @@
 ## 5. 已授权隔离研究的结果
 
 用户随后批准方案 C 的隔离实验。见 [原文件对象研究报告](p33-original-object-prototype-research.md)。真实 NTFS 原对象 C→R→新计划恢复 C、DACL/owner/group/非空 EA/ADS 保持已获得合成临时项目证据；非空 SACL 未验证。实验还观察到首段写入崩溃留下部分内容、独立 ADS/DACL writer 可并行修改元数据、Archive 位可能改变。因此此次研究没有完成生产契约替代证明，没有修改生产 writer 或 unknown 拒绝条件。第 3 节的生产批准及证据门槛继续有效。
+
+## 6. P33.4b 安全收敛（2026-10-12）
+
+见 [P33.4b 安全验证报告](p33-4b-safety-validation.md)。本轮编号为 A=候选替换、B=原对象原位、C=仅材料，与本稿旧编号不同。已交付独立审计环境的八格 SACL 见证工具，但当前 token auditError=1300，八格全未验证。新增真实 Win32 降权故障、2 MiB 输入、重启材料及独立属性竞争实验；官方 FileBasicInfo 恢复 Archive 仍可覆盖外部 Hidden 变化，不能作为安全修复。
+
+生产 A 和 metadata_audit_unavailable 拒绝不改。未来窄 B provider 可作为普通权限可用性的评估方向，但需独立 SACL 证明、原生版本/平台范围、Archive 已设置限定、代际备份/失败人工恢复，以及原位写入和 SACL 保持证明契约的单独批准；不提供自动 fallback。C 只是临时退路，不改变 P33 最终必须可直接恢复的目标。具体审批事项与未验证门槛见新报告 §10，本轮没有批准或实现生产契约变更。
