@@ -1,6 +1,6 @@
 # P33-D2：独立 Windows Native Writer 与隔离验证
 
-日期：2026-10-13。授权：仅 D2，独立 TEMP 文件；生产 Q1/Q2/Q3 未批准。**生产 B 不开放；特权 SACL 八组尚未验证，不能据普通令牌成功认定 D2 全部资格通过或自动进入 D3。**
+日期：2026-10-13。授权：仅 D2，独立 TEMP 文件；生产 Q1/Q2/Q3 未批准。**生产 B 不开放。后续已获单独授权的特权 CI 使用同一新 helper 完成 SACL 八组 8/8、失败0、跳过0，原八组缺证阻塞已补齐，见 §11；D2 可交人工验收，不自动进入 D3。** §1–10 保留此前本地交付与推送快照，不能把其中本机 skip 状态当作最新特权 CI 结果。
 
 ## 1. 基线、范围与实施安排
 
@@ -143,7 +143,7 @@ P33.3 合成完整 record 测试独立用户修改保留后实际写回，重叠
 
 独立 requesting-code-review 审查未发现正式入口泄漏；修正解释器路径和 Native 协议覆盖。复核不替代实测，审查时的资源 hash 属于其快照。
 
-## 9. 验收判断与下一阶段
+## 9. 本地交付时的验收判断与下一阶段（后续补证见 §11）
 
 **实现可提交 D2 人工审阅，完整 D2 安全资格尚未完成：新 helper SACL 八格没有真实执行，不能开始 D3。** 当前唯一新实测平台为普通 Windows26200 x64、本地 NTFS；无新 Windows26100/特权证据，无 POSIX、自然存储错误、长期 soak、特殊安全描述符或系统恢复保证。
 
@@ -158,3 +158,38 @@ P33.3 合成完整 record 测试独立用户修改保留后实际写回，重叠
 此次只授权提交与推送，不代表新 SACL 八组资格通过、Q1/Q2/Q3 批准、D3 授权或发版。前述完整112命令结果来自同一实现的开发验证，本次未重复完整全套。推送前另执行最终 source/packaged 同核心 TEMP C→R→C **3/3**，检查 helper SHA 相同、Git fixture index/HEAD保持，日志 `.probe/p33-d2-push-check.log/.exit`。生产白名单继续为空，正式入口固定拒绝；v0.24.0 tag 不变。
 
 暂存检查发现默认 text/eol 规则会将本轮生成的 helper CRLF 转为 LF，从而改变上述已实测 SHA。推送时额外在 `.gitattributes` 对此单一 helper 设置 `-text`，保留已验证字节；不修改 helper 内容、不禁用文本 diff。该文件的 whitespace 属性保留 blank-at-eol/blank-at-eof/space-before-tab 检查，并明确识别实际 CRLF（cr-at-eol）。重新按属性暂存后，blob 与工作文件的 SHA-256 均核对为 `7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef`，git diff --cached --check 通过，避免以不同资源字节交付原测试证据。
+
+## 11. 后续授权的特权 CI 八组补证
+
+用户明确确认补齐新 helper 的 SACL 验证，并另行批准提交/推送独立 CI 编排分支及触发运行。没有授权 main 的新提交、合并、生产改动、D3 或发版。
+
+**结论：此前唯一明确的“新 writer 八组真实 SACL 缺证”阻塞已补齐。** [严格 CI 运行 38383762389](https://github.com/HYJ1817/pi-gui/actions/runs/38383762389)成功，job `115250354430` 用时 **3分33秒**，严格命令退出0。环境为 **Windows Server 2025、OS 10.0.26100.0、NTFS、Node 24.21.0**。本机 Windows26200 的无权限结果仍是其自身事实，不被改写。
+
+编排分支 `codex/p33-d2-sacl-ci` 的 commit 为 `521f06f52fa2cc51ac39a462545da32def3c7eac`，只修改 `.github/workflows/ci.yml`，无产品源码改动。该 workflow 固定 checkout **目标源码 `672b3edbaf6aab2b81d1a34e9bf223d2e518e312`**，先核对 Git HEAD 和 helper SHA 后运行：
+
+```text
+node tests/session-revert-object-witness.cjs --require-audit
+```
+
+GitHub run 的 headSha 是编排 commit；实际受测源码是上列 checkout commit，两者不能混淆。实际文件 SHA、结果顶层 helperHash、八格各自 coreHelperHash、现有工作文件及提交字节都一致：**`7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef`**。仍由新 Native helper 的 CreateFileW/WriteFile/EOF/flush/readback 核心执行；旧研究 helper 只用于 fixture setup/observe，不执行旧 write/exercise。
+
+| SACL | DACL | C→R | reopened 持久 C 新 attempt 恢复 C | 比较 |
+|---|---|---|---|---|
+| 显式 | 受保护 | 完成 | 完成 | 两轮各17项全true |
+| 显式 | 继承 | 完成 | 完成 | 两轮各17项全true |
+| 继承 | 受保护 | 完成 | 完成 | 两轮各17项全true |
+| 继承 | 继承 | 完成 | 完成 | 两轮各17项全true |
+| 受保护 | 受保护 | 完成 | 完成 | 两轮各17项全true |
+| 受保护 | 继承 | 完成 | 完成 | 两轮各17项全true |
+| 混合 | 受保护 | 完成 | 完成 | 两轮各17项全true |
+| 混合 | 继承 | 完成 | 完成 | 两轮各17项全true |
+
+**8/8、failed=0、skipped=0**。八格 stage=complete、backupVerified=true，File ID、Owner/Group/DACL/SACL/完整 SDDL、非空 ADS/EA、属性、审计保护与继承计数、实际构造类型全部符合断言。八格 C SHA `d2ae42f607faf1bf6baa6864ebef4191e9955041ce51d4f02acbe55b65b50c82`；R SHA `8caec0132593f81a3e18cac5bf25bf8944bd545069473d874b625fbb4b5b4f4e`。
+
+runner 令牌原本已经拥有 SeSecurityPrivilege（初始 disabled）。外部 CI 步骤只启用该一次性进程已分配的 bit，然后由 Node/helper 继承；缺失时直接失败，不新增账户特权、改变系统审计策略、UAC 或改 helper 的权限逻辑。用户对此 CI 编排已单独确认；未将该准备步骤加入产品 writer/observer。
+
+原始 artifact `d2-sacl-witness-672b3ed` 已下载到 `.probe/p33-d2-ci-38383762389/d2-sacl-witness.log`，完整运行日志 `run.log`，独立核对后的 `verified-summary.json`。本地 checker 检查8个唯一组合、双轮全部布尔项、backupVerified、stage、hash、目标 commit 和本地字节，退出0；这些本地证据未提交到 Git。只认实际执行的八格，没有以旧 P33.4c 的8/8或本机 skip替代。
+
+资格边界仍为构造的标准 ACL/SACL、属性8226/非空ADS/EA见证样本及此 OS/API/hash；不是全部安全描述符、任意Windows、不可读SACL竞争或自然存储故障证明。普通权限四属性等证据仍来自此前 Windows26200；不能声称同一OS所有令牌已全面配对。生产 allowlist 仍为空，A 拒绝路径与 GUI 不变。完整112命令和本地故障/普通令牌验证本次没有重复，结果仍按此前快照记录；本轮新增的是独立严格八格证据。
+
+**D2 隔离开发/验证可交人工验收，可以提出 D3 的独立授权申请；不得自动开始 D3 或认定 Q1/Q2/Q3 已批准。** 补证完成时只推送了 CI 编排分支，没有合并/推送 main 或发版。用户随后明确要求“提交”，据此仅将本节补证及报告状态更新作为 main 独立文档提交；不推送、不合并 CI 分支、不进入 D3，仍等待人工验收。
