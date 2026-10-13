@@ -291,12 +291,6 @@ public sealed class InplaceFixture : IDisposable {
             $rootAcl.SetAccessRuleProtection($true,$false)
             $rootAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl',([Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit),[Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow))
             Set-Acl -LiteralPath $root -AclObject $rootAcl
-            if ($a.metadataKind -ne 'inherited') {
-                $fileAcl = Get-Acl -LiteralPath $path
-                $fileAcl.SetAccessRuleProtection($true,$false)
-                $fileAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl',[Security.AccessControl.AccessControlType]::Allow))
-                Set-Acl -LiteralPath $path -AclObject $fileAcl
-            }
             # inherited keeps the fresh default inheritance, never weakens it.
             $rootAudit = Get-Acl -LiteralPath $root -Audit
             $fileAudit = Get-Acl -LiteralPath $path -Audit
@@ -304,18 +298,20 @@ public sealed class InplaceFixture : IDisposable {
                 $rootAudit.AddAuditRule([Security.AccessControl.FileSystemAuditRule]::new($sid,'WriteData',([Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit),[Security.AccessControl.PropagationFlags]::None,([Security.AccessControl.AuditFlags]::Success -bor [Security.AccessControl.AuditFlags]::Failure)))
                 Set-Acl -LiteralPath $root -AclObject $rootAudit
                 $fileAudit = Get-Acl -LiteralPath $path -Audit
-                # A protected DACL can keep parent audit propagation from updating
-                # this fresh file. Explicitly request SACL inheritance independently
-                # of its DACL so the inherited/mixed fixture really has audit ACEs.
-                $fileAudit.SetAuditRuleProtection($false,$false)
-                Set-Acl -LiteralPath $path -AclObject $fileAudit
-                $fileAudit = Get-Acl -LiteralPath $path -Audit
             }
             if ($a.auditProfile -eq 'protected') { $fileAudit.SetAuditRuleProtection($true,$false) }
             if ($a.auditProfile -in @('explicit','protected','mixed')) {
                 $fileAudit.AddAuditRule([Security.AccessControl.FileSystemAuditRule]::new($sid,'ReadData',[Security.AccessControl.AuditFlags]::Success))
                 $fileAudit.AddAuditRule([Security.AccessControl.FileSystemAuditRule]::new($sid,'AppendData',[Security.AccessControl.AuditFlags]::Failure))
                 Set-Acl -LiteralPath $path -AclObject $fileAudit
+            }
+            # Establish actual inherited audit ACEs while this fresh file still
+            # inherits from its parent, then protect the independent DACL axis.
+            if ($a.metadataKind -ne 'inherited') {
+                $fileAcl = Get-Acl -LiteralPath $path -Audit
+                $fileAcl.SetAccessRuleProtection($true,$false)
+                $fileAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl',[Security.AccessControl.AccessControlType]::Allow))
+                Set-Acl -LiteralPath $path -AclObject $fileAcl
             }
             if ($a.withExtras) {
                 [InplaceFixture]::SetEa($path); [InplaceFixture]::SetAds($path)

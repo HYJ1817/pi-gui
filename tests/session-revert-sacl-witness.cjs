@@ -12,8 +12,8 @@ function compareWitness(before, after, spec) {
   checks.fixtureMaterials = !!before.ea && !before.ea.startsWith('status:') && before.ads === 'original-ads' && before.attributes === 8226;
   checks.daclKind = before.isDaclProtected === (spec.metadataKind === 'protected');
   checks.auditKind = spec.auditProfile === 'protected' ? before.isAuditProtected === true && before.inheritedAuditCount === 0 && before.explicitAuditCount >= 2
-    : spec.auditProfile === 'inherited' ? before.inheritedAuditCount > 0 && before.explicitAuditCount === 0
-      : spec.auditProfile === 'mixed' ? before.inheritedAuditCount > 0 && before.explicitAuditCount >= 2 : before.explicitAuditCount >= 2;
+    : spec.auditProfile === 'inherited' ? before.isAuditProtected === false && before.inheritedAuditCount > 0 && before.explicitAuditCount === 0
+      : spec.auditProfile === 'mixed' ? before.isAuditProtected === false && before.inheritedAuditCount > 0 && before.explicitAuditCount >= 2 : before.explicitAuditCount >= 2;
   return { matched: Object.values(checks).every(Boolean), checks };
 }
 async function runWitness() {
@@ -31,6 +31,9 @@ async function runWitness() {
         try {
           await h.fixture(Buffer.from('witness C\r\n'), async root => {
             const before = await h.one({ root, relativePath: h.relativePath, mode: 'sacl_setup', ...spec, withExtras: true });
+            row.stage = 'fixture_shape'; row.setupChecks = compareWitness(before, before, spec).checks;
+            row.setupAudit = { count: before.auditCount, explicit: before.explicitAuditCount, inherited: before.inheritedAuditCount, protected: before.isAuditProtected };
+            assert.equal(Object.values(row.setupChecks).every(Boolean), true);
             row.stage = 'repeat_setup';
             // Repeating setup must not reset a protected/inherited audit fixture.
             const repeated = h.start({ root, relativePath: h.relativePath, mode: 'sacl_setup', ...spec, withExtras: true });
