@@ -42,7 +42,7 @@ export async function evidenceTarget(root, absolute, exclusions = []) {
 }
 
 /** One private capability per child launch. Raw bytes never enter public events. */
-export function createSessionChangeBridge({ store, launch, resolveScope, withAuthority, extensionPath, supported, notify = () => {}, admission = null, inspectFileMetadata = null } = {}) {
+export function createSessionChangeBridge({ store, launch, resolveScope, withAuthority, extensionPath, supported, notify = () => {}, admission = null, inspectFileMetadata = null, inspectObjectEvidence = null } = {}) {
   let server = null, token = null, url = null, disposed = false, sourceVerified = false, reason = 'extension_unavailable', userDisabled = null;
   let sourceGapPending = false;
   let queue = Promise.resolve();
@@ -157,6 +157,10 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
           toolCallId: body.toolCallId, path: relative, before, effectiveToolSource: body.effectiveToolSource };
         const beforeMetadata = await metadata(body.path, before);
         if (beforeMetadata !== undefined) args.beforeMetadata = beforeMetadata;
+        if (inspectObjectEvidence) {
+          args.beforeObjectEvidence = await inspectObjectEvidence({root:workspace.root,relativePath:relative,scope,operationId:body.operationId,expectedDigest:before===null?null:createHash('sha256').update(before).digest('hex')});
+          args.objectEvidenceVersion = 1;
+        }
         if (!capturePaths.has(body.operationId) && capturePaths.size >= 128) fail('evidence_quota_exceeded');
         if (endpoint === '/before') await data.captureBefore(scope, args, before);
         else await data.prepare(scope, { ...args, intendedAfter: bytes(body.intendedAfter) });
@@ -169,9 +173,11 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
           || !['intent_verified', 'incomplete'].includes(body.evidenceLevel)) fail('invalid_request');
         const observedAfter = bytes(body.observedAfter), absolute = capturePaths.get(body.operationId);
         const afterMetadata = absolute ? await metadata(absolute, observedAfter) : undefined;
+        const objectAfter = inspectObjectEvidence && absolute ? await inspectObjectEvidence({root:workspace.root,relativePath:path.relative(workspace.root,absolute).replaceAll('\\','/'),scope,operationId:body.operationId,expectedDigest:observedAfter===null?null:createHash('sha256').update(observedAfter).digest('hex')}) : undefined;
         await data.settle(scope, body.operationId, { observedAfter, toolOutcome: body.toolOutcome,
           mutationOutcome: body.mutationOutcome, evidenceLevel: sourceVerified ? body.evidenceLevel : 'incomplete',
-          ...(afterMetadata === undefined ? {} : { afterMetadata }) });
+          ...(afterMetadata === undefined ? {} : { afterMetadata }),
+          ...(objectAfter === undefined ? {} : {objectEvidenceVersion:1,afterObjectEvidence:objectAfter}) });
         capturePaths.delete(body.operationId);
         return { ok: true };
       }

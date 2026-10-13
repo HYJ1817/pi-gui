@@ -51,6 +51,7 @@ function main() {
   for (const f of walk(path.join(ROOT, 'extensions','pi-gui-revert'))) add(rel(f), f);
   add('revert-compute/algorithm.mjs', path.join(ROOT, 'lib/session-revert.js'));
   add('revert-compute/worker.mjs', path.join(ROOT, 'server/session-revert-worker.mjs'));
+  add('revert-object/observe.ps1', path.join(ROOT, 'server/session-revert-object-native.ps1'));
 
   for (const [key, sub] of [
     ['pdfjs/standard_fonts', 'standard_fonts'],

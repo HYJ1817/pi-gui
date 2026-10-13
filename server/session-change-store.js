@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
 import { measureStorageFiles, measureAllocationUnit } from './session-revert-storage.js';
+import { normalizeObjectObservation, objectScopeBinding, OBJECT_PROFILE_ID } from './session-revert-object-profile.js';
+import { OBJECT_HELPER_HASH } from './session-revert-object-source.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 const GAP_REASONS = new Set(['unknown_tool', 'shell', 'disabled', 'source_changed', 'capture_failed', 'restart', 'excluded_path', 'incomplete', 'external_writer_possible', 'session_changed', 'extension_unavailable']);
@@ -280,14 +282,29 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     if (settings(s).exclusions.some(p => target === p || target.startsWith(p + '/'))) fail('evidence_path_excluded');
     if (old) { authorized(s, old); if (old.state !== 'begun' || !prepared || old.path !== target || old.toolCallId !== args.toolCallId || JSON.stringify(old.beforeRef) !== JSON.stringify(ref(before))) fail('invalid_evidence_operation'); }
     if (old && args.beforeMetadata != null && JSON.stringify(metadata(args.beforeMetadata)) !== JSON.stringify(old.beforeMetadata ?? null)) fail('invalid_evidence_operation');
+    const objectBefore = objectEvidence(s, args, 'beforeObjectEvidence', id, target, before);
+    if (old && old.objectEvidenceVersion !== args.objectEvidenceVersion) fail('invalid_evidence_operation');
+    if (old?.beforeObjectEvidence?.status === 'observed' && (objectBefore?.status !== 'observed'
+      || old.beforeObjectEvidence.file.id !== objectBefore.file.id || old.beforeObjectEvidence.file.digest !== objectBefore.file.digest)) fail('invalid_evidence_operation');
     const record = { operationId: id, parentOperationId: args.parentOperationId == null ? null : identifier(args.parentOperationId),
       toolCallId: toolIdentifier(args.toolCallId), path: target, scope: s, workspaceSequence: old?.workspaceSequence || ws(s).sequence + 1,
       effectiveToolSource: identifier(args.effectiveToolSource), state: prepared ? 'prepared' : 'begun', evidenceLevel: 'incomplete',
       attributionGapRevision: old?.attributionGapRevision ?? ws(s).gapRevision, createdAt: old?.createdAt ?? now(), beforeRef: ref(before), intendedAfterRef: prepared ? ref(args.intendedAfter) : null,
       observedAfterRef: null, beforeMetadata: old ? metadata(old.beforeMetadata) : metadata(args.beforeMetadata), afterMetadata: null,
       toolOutcome: 'pending', mutationOutcome: 'unknown', toolResultObserved: false };
+    if (objectBefore) Object.assign(record, { objectEvidenceVersion:1, beforeObjectEvidence:old?.beforeObjectEvidence ?? objectBefore, afterObjectEvidence:null });
     await quota(s, record); record.beforeRef = await blob(before); if (prepared) record.intendedAfterRef = await blob(args.intendedAfter);
     await append(s, { type: 'operation', record }); return structuredClone(record);
+  }
+  function objectEvidence(s, args, field, operationId, target, bytes) {
+    if (args.objectEvidenceVersion === undefined) { if (args[field] !== undefined) fail('invalid_evidence_operation'); return null; }
+    if (args.objectEvidenceVersion !== 1) fail('invalid_evidence_operation');
+    let value; try { value=normalizeObjectObservation(args[field]); } catch { fail('invalid_evidence_operation'); }
+    if (value.version!==1 || value.profileId!==OBJECT_PROFILE_ID || !['observed','unavailable'].includes(value.status)
+      || value.source?.helperHash!==OBJECT_HELPER_HASH || value.source.helperVersion!==1 || value.source.kind!=='win32-observe'
+      || value.binding?.scope!==objectScopeBinding(s) || value.binding.operationId!==operationId || value.binding.relativePathHash!==digest(target)) fail('invalid_evidence_operation');
+    if (value.status==='observed' && (!Buffer.isBuffer(bytes) || value.file?.digest!==digest(bytes) || value.file.bytes!==bytes.length || !value.file.id)) fail('invalid_evidence_operation');
+    return value;
   }
   function summarize(s) {
     const w = ws(s), items = [...records.values()].filter(r => scopeKey(r.scope) === scopeKey(s));
@@ -410,6 +427,8 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
   }
   async function applyCreate(scope, input) {
     const s = previewIdentity(scope), value = boundedJson(input);
+    // D1 only: no B plan can become executable through the legacy service/store.
+    if (value.providerId !== undefined || value.profileId === OBJECT_PROFILE_ID || (value.files??value.paths??[]).some(file=>file.action==='write_original')) fail('invalid_evidence_operation');
     const planId = identifier(value.planId), key = scopeKey(s) + ':' + planId, creationHash = digest(JSON.stringify(value));
     if (value.token != null || typeof value.tokenHash !== 'string' || !/^[0-9a-f]{64}$/.test(value.tokenHash)
       || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= now()) fail('invalid_evidence_operation');
@@ -507,6 +526,16 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     // Private persistence APIs: no references, paths or token hashes are public projections.
     restorePut: (scope, bytes) => queue(() => restorePut(scope, bytes)),
     restoreRead: (scope, reference) => queue(() => restoreRead(scope, reference)),
+    restoreDescriptor: (scope, reference) => queue(async () => {
+      const s=identity(scope); validateReference(reference);
+      if (!reference) fail('evidence_not_found');
+      const registered=backups.get(scopeKey(s)+':'+reference.digest);
+      if (!registered) fail('evidence_not_found');
+      if (JSON.stringify(registered.scope.runtimeOwner)!==JSON.stringify(s.runtimeOwner)) fail('invalid_evidence_scope');
+      await restoreRead(s,reference);
+      const privatePath=path.join(objects,reference.digest), stat=await fs.lstat(privatePath);
+      return {version:1,digest:reference.digest,bytes:reference.bytes,privatePath,identity:{dev:stat.dev,ino:stat.ino,birthtimeMs:stat.birthtimeMs}};
+    }),
     restoreRecoveryReserve: (scope, allocationId, chargeBytes) => queue(async () => {
       const key = reservationKey(scope, allocationId);
       if (!Number.isSafeInteger(chargeBytes) || chargeBytes < 0 || chargeBytes > limits.globalBytes) fail('evidence_quota_exceeded');
@@ -552,7 +581,10 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     settle: (scope, operationId, value) => queue(async () => {
       const s = identity(scope), key = scopeKey(s) + ':' + identifier(operationId), old = records.get(key);
       if (!old) fail('evidence_not_found'); authorized(s, old); if (!['prepared', 'begun'].includes(old.state)) fail('invalid_evidence_operation');
+      if (old.objectEvidenceVersion!==value.objectEvidenceVersion) fail('invalid_evidence_operation');
+      const objectAfter=objectEvidence(s,value,'afterObjectEvidence',operationId,old.path,value.observedAfter);
       const record = { ...old, afterMetadata: metadata(value.afterMetadata), observedAfterRef: ref(value.observedAfter), toolOutcome: identifier(value.toolOutcome), mutationOutcome: identifier(value.mutationOutcome), state: 'observed', evidenceLevel: 'incomplete', toolResultObserved: false };
+      if (objectAfter) record.afterObjectEvidence=objectAfter;
       if (old.state === 'prepared' && record.observedAfterRef && record.observedAfterRef.digest === old.intendedAfterRef?.digest && value.evidenceLevel === 'intent_verified') record.evidenceLevel = value.evidenceLevel;
       else record.state = 'incomplete';
       await quota(s, record); record.observedAfterRef = await blob(value.observedAfter); await append(s, { type: 'operation', record });

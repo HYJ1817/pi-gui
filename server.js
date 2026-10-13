@@ -66,6 +66,7 @@ import { createSessionEvidenceAdmission } from './server/session-evidence-admiss
 import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
 import { inspectFileMetadata } from './server/session-revert-metadata.js';
+import { observeFileObject } from './server/session-revert-object-observer.js';
 import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
@@ -299,7 +300,7 @@ function evidenceScope(owner, nativeSessionId) {
     nativeSessionId, workspaceId: owner.workspaceId, workspaceEpoch: owner.workspaceEpoch };
 }
 const sessionChanges = createSessionChangeBridge({ store: getEvidenceStore, launch: piLaunch,
-  admission: mutationAdmission, inspectFileMetadata,
+  admission: mutationAdmission, inspectFileMetadata, inspectObjectEvidence:observeFileObject,
   notify: event => sse.publish(event),
   resolveScope: async () => {
     const state = await rpc.request({ type: 'get_state' });
@@ -850,7 +851,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     try { adapter = await createSessionRuntime({ context, emit, piBin: PI_BIN, env: process.env, dataDir: DATA_DIR,
       guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission,
       createChanges: ({ launch, context, requestState }) => createSessionChangeBridge({ store: getEvidenceStore, launch,
-        admission: mutationAdmission, inspectFileMetadata,
+        admission: mutationAdmission, inspectFileMetadata, inspectObjectEvidence:observeFileObject,
         notify: event => emit(event),
         resolveScope: async () => {
           const state = await requestState();
