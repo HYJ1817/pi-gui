@@ -19,6 +19,7 @@ const { execFileSync } = require('node:child_process');
   const { createSessionChangeStore } = await import('../server/session-change-store.js');
   const { createSessionChangeBridge } = await import('../server/session-change-bridge.js');
   const { inspectFileMetadata } = await import('../server/session-revert-metadata.js');
+  const { observeFileObject } = await import('../server/session-revert-object-observer.js');
   const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
   const { createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
   const { createSessionRevertService, revertFileId } = await import('../server/session-revert-service.js');
@@ -48,7 +49,7 @@ const { execFileSync } = require('node:child_process');
     const workspaceFingerprint = createHash('sha256').update(JSON.stringify([wsStat.dev, wsStat.ino, wsStat.birthtimeMs])).digest('hex');
     const scope = { runtimeOwner: owner, conversationId: owner.conversationId, workspaceId: owner.workspaceId, workspaceEpoch: owner.workspaceEpoch, nativeSessionId: owner.sessionId, workspaceFingerprint };
     const admission = createSessionRevertAdmission();
-    bridge = createSessionChangeBridge({ store, launch, resolveScope: async () => scope, admission, inspectFileMetadata,
+    bridge = createSessionChangeBridge({ store, launch, resolveScope: async () => scope, admission, inspectFileMetadata, inspectObjectEvidence:observeFileObject,
       withAuthority: async fn => fn({ root: workspace }), extensionPath: path.resolve(__dirname, '../extensions/pi-gui-revert/index.js') });
     const prepared = await bridge.prepare();
     assert.ok(prepared, 'Bound installed Pi public API is unverified');
@@ -276,7 +277,7 @@ const { execFileSync } = require('node:child_process');
     const secondScope = { runtimeOwner: secondOwner, conversationId: secondOwner.conversationId, workspaceId: secondOwner.workspaceId,
       workspaceEpoch: secondOwner.workspaceEpoch, nativeSessionId: secondOwner.sessionId,
       workspaceFingerprint: createHash('sha256').update(JSON.stringify([secondStat.dev, secondStat.ino, secondStat.birthtimeMs])).digest('hex') };
-    secondBridge = createSessionChangeBridge({ store, launch, resolveScope: async () => secondScope, withAuthority: async fn => fn({ root: secondWorkspace }), extensionPath: extensionFile });
+    secondBridge = createSessionChangeBridge({ store, launch, resolveScope: async () => secondScope, withAuthority: async fn => fn({ root: secondWorkspace }), extensionPath: extensionFile, inspectObjectEvidence:observeFileObject });
     const secondPrepared = await secondBridge.prepare(); assert.ok(secondPrepared);
     const secondConnection = { url: secondPrepared.env.PI_GUI_SESSION_CHANGE_URL, token: secondPrepared.env.PI_GUI_SESSION_CHANGE_TOKEN };
     assert.notEqual(connection.token, secondConnection.token);
@@ -349,6 +350,7 @@ const { execFileSync } = require('node:child_process');
       const summary = await reopened.summary(scope); assert.equal(summary.operationCount, 13); // Original 11 + real preview write/edit.
       const original = await record('bom.txt'); const copy = await reopened.read(scope, original.operationId); assert.deepEqual(copy.before, bom);
     });
+    await check('D1 real default tools persist bound observations without legacy promotion',async()=>{const original=await record('bom.txt');assert.equal(original.objectEvidenceVersion,1);assert.equal(original.beforeObjectEvidence.status,'observed');assert.equal(original.afterObjectEvidence.status,'observed');assert.equal(original.beforeObjectEvidence.file.id,original.afterObjectEvidence.file.id);assert.equal(original.beforeObjectEvidence.file.digest,original.beforeRef.digest);assert.equal(original.afterObjectEvidence.file.digest,original.observedAfterRef.digest);assert.deepEqual((await reopened.read(scope,original.operationId)).beforeObjectEvidence,original.beforeObjectEvidence);});
     console.log(`Session change REAL installed Pi ${metadata.version}: ${checks}/${checks}; production ${process.platform === 'win32' ? 'Windows ACL' : 'POSIX permissions'}; fixture stream provider, no real model`);
   } finally {
     session?.dispose(); secondSession?.dispose(); await bridge?.dispose(); await secondBridge?.dispose();
