@@ -27,24 +27,34 @@ async function runWitness() {
     else {
       result.status = 'executed';
       for (const spec of matrix) {
-        const row = { ...spec, status: 'failed', reason: null };
+        const row = { ...spec, status: 'failed', reason: null, stage: 'setup' };
         try {
           await h.fixture(Buffer.from('witness C\r\n'), async root => {
             const before = await h.one({ root, relativePath: h.relativePath, mode: 'sacl_setup', ...spec, withExtras: true });
+            row.stage = 'repeat_setup';
             // Repeating setup must not reset a protected/inherited audit fixture.
             const repeated = h.start({ root, relativePath: h.relativePath, mode: 'sacl_setup', ...spec, withExtras: true });
             await repeated.exit; assert.equal(repeated.lines.at(-1).code, 'fresh_fixture_required');
+            row.stage = 'write';
             const written = await exercise(root, Buffer.from('witness C\r\n'), Buffer.from('witness R\n'), { privateAcl: true, realStorage: true, metadata: before });
-            assert.equal(written.exited.code, 0); const compared = compareWitness(before, written.observed, spec); assert.equal(compared.matched, true);
+            assert.equal(written.exited.code, 0); row.stage = 'compare_write'; const compared = compareWitness(before, written.observed, spec); row.checks = compared.checks; assert.equal(compared.matched, true);
+            row.stage = 'reopen';
             const restarted = await reopen(written.materials), savedC = await restarted.store.restoreRead(written.materials.scope, written.materials.file.currentRef);
             assert.deepEqual(savedC, Buffer.from('witness C\r\n'));
+            row.stage = 'restore';
             const restored = await exercise(root, written.actual, savedC, { privateAcl: true, realStorage: true, metadata: written.observed });
-            assert.equal(restored.exited.code, 0); assert.equal(compareWitness(before, restored.observed, spec).matched, true);
+            assert.equal(restored.exited.code, 0); row.stage = 'compare_restore'; const restoredComparison = compareWitness(before, restored.observed, spec); row.restoreChecks = restoredComparison.checks; assert.equal(restoredComparison.matched, true);
             assert.deepEqual(await fs.readFile(path.join(root, h.relativePath)), savedC);
             row.status = 'passed'; row.checks = compared.checks; row.osVersion = before.osVersion; row.fileSystem = before.fileSystem;
+            row.stage = 'complete';
             row.currentDigest = h.hash(savedC); row.candidateDigest = h.hash(written.actual); row.backupVerified = true; row.secondPlanHandshake = true; row.confirmationSource = 'fixture';
           }); result.passed++;
-        } catch { result.failed++; row.reason = 'witness_case_failed'; }
+        } catch (error) {
+          result.failed++; row.reason = 'witness_case_failed';
+          row.failureKind = error?.code === 'ERR_ASSERTION' ? 'assertion' : 'operation';
+          const field = /^witness metadata: (id|owner|group|dacl|sacl|fullSDDL|attributes|ads|ea|isAuditProtected|isDaclProtected)$/.exec(error?.message || '');
+          if (field) row.failureField = field[1];
+        }
         result.cases.push(row);
       }
       if (result.failed) result.status = 'failed';
