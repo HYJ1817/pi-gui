@@ -6,6 +6,9 @@
 *.cmd text eol=crlf
 *.bat text eol=crlf
 
+# D2 native helper 的资格与资源 hash 绑定实际字节，禁止传输时转换行尾。
+server/session-revert-object-write-native.ps1 -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
 # 二进制，别做任何行尾/编码处理
 *.png binary
 *.ico binary

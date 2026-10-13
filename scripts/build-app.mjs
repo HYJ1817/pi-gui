@@ -92,6 +92,7 @@ fs.copyFileSync(path.join(ROOT, 'lib/session-revert.js'), path.join(STAGE, 'reve
 fs.copyFileSync(path.join(ROOT, 'server/session-revert-worker.mjs'), path.join(STAGE, 'revert-compute/worker.mjs'));
 fs.mkdirSync(path.join(STAGE, 'revert-object'), { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'server/session-revert-object-native.ps1'), path.join(STAGE, 'revert-object/observe.ps1'));
+fs.copyFileSync(path.join(ROOT, 'server/session-revert-object-write-native.ps1'), path.join(STAGE, 'revert-object/write.ps1'));
 
 for (const [key, src] of [
   ['pdfjs/standard_fonts', path.join(PDFJS, 'standard_fonts')],
