@@ -43,6 +43,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
   }
   async function authorizedPlan(s,authority,planId,{historical=false}={}){
     if(!id(planId))fail('invalid_request');const plan=await s.applyGet(authority.scope,planId);
+    if(plan?.providerId!==undefined||plan?.files?.some(file=>file.action==='write_original'))fail('invalid_request');
     if(!plan||!(historical?equal(persistent(plan.scope),persistent(authority.scope)):scopeSame(plan.scope,authority.scope)))fail('stale_runtime');return plan;
   }
   async function prepare(req,body){
@@ -216,7 +217,7 @@ export function createSessionRevertService({store,withAuthority,withMutationAuth
   });}
   async function recoverPreview(req,body){return withAuthority(req,body,async authority=>{
     const s=await data();
-    if(body.sourcePlanId===undefined){const plans=await s.applyList(authority.scope);await authority.revalidate?.();return {ok:true,plans:plans.slice(-64).reverse().map(plan=>({planId:plan.planId,completion:plan.completion,state:plan.state,
+    if(body.sourcePlanId===undefined){const plans=(await s.applyList(authority.scope)).filter(plan=>plan.providerId===undefined&&!plan.files?.some(file=>file.action==='write_original'));await authority.revalidate?.();return {ok:true,plans:plans.slice(-64).reverse().map(plan=>({planId:plan.planId,completion:plan.completion,state:plan.state,
       createdAt:plan.createdAt,files:plan.files.map(f=>({fileId:f.fileId,relativePath:f.relativePath,state:f.state,backupAvailable:Boolean(f.currentRef)}))})),backupReady:false,residualRacePossible:true};}
     const plan=await authorizedPlan(s,authority,body.sourcePlanId,{historical:true});if(!ids(body.selectedFileIds))fail('invalid_request');
     const files=[];

@@ -6,12 +6,31 @@ import { constants } from 'node:fs';
 import { measureStorageFiles, measureAllocationUnit } from './session-revert-storage.js';
 import { normalizeObjectObservation, objectScopeBinding, OBJECT_PROFILE_ID } from './session-revert-object-profile.js';
 import { OBJECT_HELPER_HASH } from './session-revert-object-source.js';
+import { OBJECT_PROVIDER_ID, validateObjectPlan, sameObjectScope, objectRelativePath } from './session-revert-object-contract.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 const GAP_REASONS = new Set(['unknown_tool', 'shell', 'disabled', 'source_changed', 'capture_failed', 'restart', 'excluded_path', 'incomplete', 'external_writer_possible', 'session_changed', 'extension_unavailable']);
-const DEFAULTS = { fileBytes: 2 * 1024 ** 2, operationBytes: 16 * 1024 ** 2, operationFiles: 32, conversationBytes: 128 * 1024 ** 2, globalBytes: 512 * 1024 ** 2, retentionDays: 7 };
+const DEFAULTS = { fileBytes: 2 * 1024 ** 2, operationBytes: 16 * 1024 ** 2, operationFiles: 32, conversationBytes: 128 * 1024 ** 2, globalBytes: 512 * 1024 ** 2, retentionDays: 7, journalBytes:32 * 1024 ** 2 };
+const OBJECT_JOURNAL_RESERVE=262144;
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 function fail(code) { throw Object.assign(new Error(code), { code }); }
+function objectJournalEnvelope(item,previous,ownReserve) {
+  let body,hash,line;
+  const serialize=()=>{body=JSON.stringify(item);hash=digest(previous+'\n'+body);line=JSON.stringify({previous,hash,body})+'\n';return Buffer.byteLength(line);};
+  let charged=serialize();
+  if(ownReserve!==undefined) {
+    // Decimal digit changes can make an exact self-referential remaining
+    // amount oscillate. Charge the largest observed line, then serialize the
+    // final immutable body again; a byte of conservative charge is harmless.
+    for(let iteration=0;iteration<8;iteration++) {
+      if(charged>ownReserve)fail('evidence_quota_exceeded');
+      item.plan.journalReserveRemaining=ownReserve-charged;
+      const actual=serialize();if(actual<=charged)break;charged=actual;
+    }
+    if(Buffer.byteLength(line)>charged||item.plan.journalReserveRemaining!==ownReserve-charged)fail('evidence_storage_failed');
+  }
+  return {body,hash,line};
+}
 // Only bounded, plain JSON may cross the trusted capture/persistence boundary.
 function boundedJson(value, maxBytes = 256 * 1024) {
   let nodes = 0;
@@ -94,9 +113,9 @@ async function privacy(target, initialize, requireProtected = true) {
 }
 
 /** Private raw evidence store. Callers authenticate authority and capture target identities. */
-export async function createSessionChangeStore({ dataDir, privacyCheck, budgets = {}, now = Date.now, allocationProbe = measureStorageFiles, allocationUnit } = {}) {
+export async function createSessionChangeStore({ dataDir, privacyCheck, budgets = {}, now = Date.now, allocationProbe = measureStorageFiles, allocationUnit, objectPlanAuthority } = {}) {
   const limits = { ...DEFAULTS, ...budgets };
-  if (typeof dataDir !== 'string' || !Object.values(limits).every(n => Number.isSafeInteger(n) && n > 0)) fail('evidence_privacy_unavailable');
+  if (typeof dataDir !== 'string' || !Object.values(limits).every(n => Number.isSafeInteger(n) && n > 0) || limits.journalBytes>DEFAULTS.journalBytes) fail('evidence_privacy_unavailable');
   const root = path.resolve(dataDir, 'revert-evidence', 'v1'), objects = path.join(root, 'objects'), journal = path.join(root, 'journal.jsonl');
   const checker = privacyCheck || privacy;
   async function childPrivacy(target) { if (!await checker(target, false, false)) fail('evidence_privacy_unavailable'); }
@@ -112,8 +131,11 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
   if (!Number.isSafeInteger(allocationUnit) || allocationUnit < 1 || typeof allocationProbe !== 'function') fail('evidence_storage_failed');
   const records = new Map(), configurations = new Map(), workspaces = new Map(), plans = new Map(), backups = new Map(), consumed = new Map();
   const reservations = new Map();
+  // Journal capacity is logical admission, separate from actual material
+  // allocation. It neither preallocates sectors nor guarantees free disk space.
+  const journalReservations=new Map();
   let chain = '', pending = Promise.resolve(), broken = false;
-  const queue = fn => { const task = pending.then(async () => { if (broken) fail('evidence_integrity_failed'); try { return await fn(); } catch (e) { if (e.code === 'evidence_integrity_failed') broken = true; if ((typeof e.code === 'string' && e.code.startsWith('evidence_')) || ['invalid_evidence_scope', 'invalid_evidence_operation', 'unsupported_evidence_path'].includes(e.code)) throw e; fail('evidence_storage_failed'); } }); pending = task.catch(() => {}); return task; };
+  const queue = fn => { const task = pending.then(async () => { if (broken) fail('evidence_integrity_failed'); try { return await fn(); } catch (e) { if (e.code === 'evidence_integrity_failed') broken = true; if ((typeof e.code === 'string' && e.code.startsWith('evidence_')) || ['invalid_evidence_scope', 'invalid_evidence_operation', 'unsupported_evidence_path', 'production_allowlist_empty', 'stale_evidence', 'recovery_required'].includes(e.code)) throw e; fail('evidence_storage_failed'); } }); pending = task.catch(() => {}); return task; };
   function ws(s) { const key = workspaceKey(s); if (!workspaces.has(key)) workspaces.set(key, { revision: 0, sequence: 0, gapRevision: 0 }); return workspaces.get(key); }
   function apply(event) {
     const s = event.type === 'apply' ? previewIdentity(event.scope) : identity(event.scope), w = ws(s);
@@ -122,14 +144,28 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     if (event.type === 'operation') { const r = event.record; if (r.workspaceSequence > w.sequence) w.sequence = r.workspaceSequence; records.set(scopeKey(s) + ':' + r.operationId, r); }
     else if (event.type === 'gap') w.gapRevision = event.revision;
     else if (event.type === 'settings') configurations.set(scopeKey(s), event.settings);
-    else if (event.type === 'apply') {
+    else if (event.type === 'apply' || event.type === 'object_apply_v1') {
+      if(event.type==='object_apply_v1'&&event.action!=='plan')fail('evidence_integrity_failed');
       if (event.action === 'restore_object') {
         validateReference(event.ref);
         if (event.ref) backups.set(scopeKey(s) + ':' + event.ref.digest, { scope: s, ref: event.ref });
       } else if (event.action === 'plan') {
         const plan = event.plan;
         if (!plan || !APPLY_STATES.has(plan.state) || plan.planId !== identifier(plan.planId) || scopeKey(plan.scope) !== scopeKey(s)) fail('evidence_integrity_failed');
+        if(event.type==='object_apply_v1'&&plan.providerId!==OBJECT_PROVIDER_ID || event.type==='apply'&&(plan.providerId!==undefined||plan.profileId===OBJECT_PROFILE_ID||(plan.files??plan.paths??[]).some(f=>f.action==='write_original')))fail('evidence_integrity_failed');
+        if (plan.providerId === OBJECT_PROVIDER_ID) {
+          try { validateObjectPlan(plan); } catch { fail('evidence_integrity_failed'); }
+          if (!sameObjectScope(plan.scope, s) || plan.revision !== event.revision) fail('evidence_integrity_failed');
+        }
         plans.set(scopeKey(s) + ':' + plan.planId, plan);
+        if(plan.providerId===OBJECT_PROVIDER_ID) {
+          const reservation=plan.journalReserveRemaining??OBJECT_JOURNAL_RESERVE;
+          if(!Number.isSafeInteger(reservation)||reservation<0||reservation>OBJECT_JOURNAL_RESERVE)fail('evidence_integrity_failed');
+          const key=scopeKey(s)+':'+plan.planId;
+          if(['prepared','replacing','recovery_required'].includes(plan.state))journalReservations.set(key,reservation);
+          else journalReservations.delete(key);
+          if(plan.state==='applied_verified'&&plan.kind==='recover')for(const prior of objectLineage(plan.scope,plan).slice(1))journalReservations.delete(scopeKey(prior.scope)+':'+prior.planId);
+        }
         for (const id of plan.consumedOperationIds || []) {
           const key = scopeKey(s) + ':' + identifier(id), owner = consumed.get(key);
           if (owner && owner !== plan.planId) fail('evidence_integrity_failed');
@@ -164,14 +200,39 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     await noLinks(journal, true); await noLinks(objects);
     if (!await checker(root, false)) fail('evidence_privacy_unavailable');
     const item = { ...event, scope, revision: ws(scope).revision + 1, at: now() };
-    const body = JSON.stringify(item), hash = digest(chain + '\n' + body);
-    const line = JSON.stringify({ previous: chain, hash, body }) + '\n';
+    const ownKey=event.plan?.providerId===OBJECT_PROVIDER_ID?scopeKey(scope)+':'+event.plan.planId:null;
+    const ownReserve=ownKey?journalReservations.get(ownKey):undefined;
+    const {body,hash,line}=objectJournalEnvelope(item,chain,ownReserve);
     const size = await fs.stat(journal).then(st => st.size, e => { if (e.code === 'ENOENT') return 0; throw e; });
-    if (size + Buffer.byteLength(line) > 32 * 1024 ** 2) fail('evidence_quota_exceeded');
+    const reservedOthers=[...journalReservations].reduce((n,[key,value])=>n+(key===ownKey?0:value),0);
+    const retainedOwn=ownKey&&['prepared','replacing','recovery_required'].includes(event.plan.state)?event.plan.journalReserveRemaining:0;
+    if (size + Buffer.byteLength(line)+reservedOthers+retainedOwn > limits.journalBytes) fail('evidence_quota_exceeded');
     const fd = await fs.open(journal, 'a', 0o600);
     try { await childPrivacy(journal); await fd.writeFile(line); await fd.sync(); }
-    catch { broken = true; fail('evidence_storage_failed'); } finally { await fd.close(); }
+    catch { broken = true; fail('evidence_storage_failed'); } finally { try { await fd.close(); } catch { broken=true;fail('evidence_storage_failed'); } }
     chain = hash; apply(item);
+  }
+  // B intent and completion must be readable after fsync, before the caller can
+  // send a native commit or report success. The normal journal stays fail closed.
+  async function appendObject(scope, plan) {
+    await append(scope, { type:'object_apply_v1', action:'plan', plan });
+    try {
+      await noLinks(journal, true); await childPrivacy(journal);
+      const expected = await fs.lstat(journal), fd = await fs.open(journal, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+      try {
+        const before = await fd.stat();
+        if (!before.isFile() || before.nlink !== 1 || before.size > 32 * 1024 ** 2 || before.dev !== expected.dev || before.ino !== expected.ino) fail('evidence_integrity_failed');
+        const buffer=Buffer.alloc(before.size+1);let count=0;
+        while(count<buffer.length){const result=await fd.read(buffer,count,buffer.length-count,null);if(!result.bytesRead)break;count+=result.bytesRead;}
+        if(count!==before.size) fail('evidence_integrity_failed');
+        const text = buffer.subarray(0,count).toString('utf8');
+        const after = await fd.stat(), linked = await fs.lstat(journal);
+        if (after.size !== before.size || after.mtimeMs !== before.mtimeMs || linked.dev !== before.dev || linked.ino !== before.ino || linked.isSymbolicLink() || linked.nlink !== 1 || !text.endsWith('\n')) fail('evidence_integrity_failed');
+        let previous=''; let last;
+        for(const line of text.slice(0,-1).split('\n')) { const envelope=JSON.parse(line); if(envelope.previous!==previous || digest(previous+'\n'+envelope.body)!==envelope.hash) fail('evidence_integrity_failed'); previous=envelope.hash; last=JSON.parse(envelope.body); }
+        if(previous!==chain || last?.type!=='object_apply_v1' || last.action!=='plan' || JSON.stringify(last.plan)!==JSON.stringify(plan)) fail('evidence_integrity_failed');
+      } finally { await fd.close(); }
+    } catch { broken=true; fail('evidence_integrity_failed'); }
   }
   try {
     const text = await (async () => { try { const st = await fs.stat(journal); if (st.size > 32 * 1024 ** 2) fail('evidence_integrity_failed'); await childPrivacy(journal); return await fs.readFile(journal, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return ''; throw e; } })();
@@ -187,9 +248,17 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
       else { await verifyRef(reference); verified.set(reference.digest, reference.bytes); }
     }
     for (const backup of backups.values()) await verifyRef(backup.ref);
+    // An unfinished generation reserves the full allowance conservatively on
+    // restart. A near-capacity journal fails closed rather than replaying writes.
+    const resolvedReservations=objectResolvedKeys();
+    for(const plan of plans.values())if(plan.providerId===OBJECT_PROVIDER_ID&&['prepared','replacing','recovery_required'].includes(plan.state)&&!resolvedReservations.has(scopeKey(plan.scope)+':'+plan.planId))journalReservations.set(scopeKey(plan.scope)+':'+plan.planId,OBJECT_JOURNAL_RESERVE);
+    for(const key of resolvedReservations)journalReservations.delete(key);
     for (const plan of [...plans.values()]) {
       for (const reference of planReferences(plan)) await verifyRef(reference);
-      if (['prepared', 'replacing', 'moving'].includes(plan.state)) await append(plan.scope, { type: 'apply', action: 'plan', plan: {
+      if (plan.providerId === OBJECT_PROVIDER_ID && ['prepared','replacing'].includes(plan.state)) {
+        const state=plan.state==='prepared'?'not_applied':'recovery_required';
+        await appendObject(plan.scope, {...plan,state,completion:state,files:plan.files.map(f=>({...f,state})),revision:ws(plan.scope).revision+1,restartReconciled:true,updatedAt:now()});
+      } else if (['prepared', 'replacing', 'moving'].includes(plan.state)) await append(plan.scope, { type: 'apply', action: 'plan', plan: {
         ...plan, state: 'recovery_required', completion: 'recovery_required', restartReconciled: true, updatedAt: now(),
       } });
     }
@@ -454,6 +523,7 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
   async function applyUpdate(scope, planId, input) {
     const s = previewIdentity(scope), key = scopeKey(s) + ':' + identifier(planId), old = plans.get(key);
     if (!old) fail('evidence_not_found');
+    if (old.providerId === OBJECT_PROVIDER_ID) fail('invalid_evidence_operation');
     const patch = boundedJson(input);
     const mutable = new Set(['state', 'completion', 'files', 'paths', 'requestId', 'confirmationAt', 'failureCode', 'completedAt', 'recoveryStatus']);
     if (Object.keys(patch).some(k => !mutable.has(k))) fail('invalid_evidence_operation');
@@ -498,6 +568,142 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
     if (state === 'applied_verified' && files.some(file => file.state !== 'applied_verified')) fail('invalid_evidence_operation');
     plan.consumedOperationIds = [...ids];
     await append(s, { type: 'apply', action: 'plan', plan }); return structuredClone(plan);
+  }
+  async function objectAuthority(scope, planId, options) {
+    const s=identity(scope);
+    if(typeof objectPlanAuthority!=='function' || await objectPlanAuthority(s,planId,options?.capability)!==true) fail('production_allowlist_empty');
+    return s;
+  }
+  function objectCas(s, expectedRevision) {
+    if(!Number.isSafeInteger(expectedRevision) || expectedRevision!==ws(s).revision) fail('stale_evidence');
+  }
+  async function objectGet(scope, planId, options) {
+    const s=await objectAuthority(scope,identifier(planId),options),old=plans.get(scopeKey(s)+':'+planId);
+    if(!old) fail('evidence_not_found');
+    if(old.providerId!==OBJECT_PROVIDER_ID) fail('invalid_evidence_operation');
+    if(!sameObjectScope(old.scope,s)) fail('invalid_evidence_scope');
+    return structuredClone(old);
+  }
+  async function objectCreate(scope,input,options) {
+    const inputValue=boundedJson(input);
+    const s=await objectAuthority(scope,identifier(inputValue?.planId),options);objectCas(s,options?.expectedRevision);
+    let value;try { value=validateObjectPlan(inputValue); } catch { fail('invalid_evidence_operation'); }
+    if(!sameObjectScope(value.scope,s)) fail('invalid_evidence_scope');
+    if(value.state!=='prepared'||value.consumedOperationIds.length||value.revision!==ws(s).revision+1||value.expiresAt<=now()||value.createdAt>now()) fail('invalid_evidence_operation');
+    if(ws(s).gapRevision!==0)fail('evidence_attribution_gap');
+    const key=scopeKey(s)+':'+value.planId;if(plans.has(key)) fail('invalid_evidence_operation');
+    for(const id of value.selectedOperationIds) {
+      const record=records.get(scopeKey(s)+':'+id);
+      if(consumed.has(scopeKey(s)+':'+id)||!record||!sameObjectScope(record.scope,s)||record.objectEvidenceVersion!==1||record.evidenceLevel!=='intent_verified'||record.state!=='observed'||record.toolResultObserved!==true||record.attributionGapRevision!==0||!record.beforeRef||!record.intendedAfterRef||!record.observedAfterRef||JSON.stringify(record.intendedAfterRef)!==JSON.stringify(record.observedAfterRef)||record.beforeObjectEvidence?.status!=='observed'||record.afterObjectEvidence?.status!=='observed')fail('invalid_evidence_operation');
+    }
+    if(value.kind==='recover') {
+      const prior=plans.get(scopeKey(s)+':'+value.sourcePlanId);
+      if(!prior||prior.state!=='recovery_required') fail('invalid_evidence_operation');
+      const lineage=objectLineage(s,prior),original=lineage.at(-1);
+      if(original.files[0].relativePath!==value.files[0].relativePath||original.files[0].currentObject.file.id!==value.files[0].currentObject.file.id||JSON.stringify(original.files[0].currentRef)!==JSON.stringify(value.files[0].candidateRef)) fail('invalid_evidence_operation');
+    }
+    const ignore=value.kind==='recover'?objectLineage(s,plans.get(scopeKey(s)+':'+value.sourcePlanId)).map(p=>p.planId):[];
+    if(objectBlocked(s,value.files[0].relativePath,new Set(ignore),value.files[0].currentObject.file.id))fail('recovery_required');
+    for(const reference of planReferences(value)) {
+      const backup=backups.get(scopeKey(s)+':'+reference.digest);
+      if(!backup||!sameObjectScope(backup.scope,s)) fail('invalid_evidence_scope');
+      await restoreRead(s,reference);
+    }
+    const plan={...value,scope:s,journalReserveRemaining:OBJECT_JOURNAL_RESERVE};
+    journalReservations.set(key,OBJECT_JOURNAL_RESERVE);
+    try {await appendObject(s,plan);} catch(e) {if(!broken)journalReservations.delete(key);throw e;}
+    return structuredClone(plan);
+  }
+  async function objectUpdate(scope,planId,input,options) {
+    const s=await objectAuthority(scope,identifier(planId),options);objectCas(s,options?.expectedRevision);
+    const old=plans.get(scopeKey(s)+':'+planId);
+    if(!old) fail('evidence_not_found');
+    if(old.providerId!==OBJECT_PROVIDER_ID) fail('invalid_evidence_operation');
+    if(!sameObjectScope(old.scope,s)) fail('invalid_evidence_scope');
+    const patch=boundedJson(input),allowed=new Set(['state','completion','files','requestId','failureCode','confirmationAt','completedAt','recoveryStatus']);
+    if(Object.keys(patch).some(k=>!allowed.has(k))) fail('invalid_evidence_operation');
+    const state=patch.state??old.state,transitions={prepared:['replacing','not_applied'],replacing:['applied_verified','recovery_required'],applied_verified:[],recovery_required:[],not_applied:[]};
+    if(!transitions[old.state].includes(state)||patch.completion!=null&&patch.completion!==state) fail('invalid_evidence_operation');
+    const files=patch.files??old.files.map(f=>({...f,state}));
+    if(!Array.isArray(files)||files.length!==1) fail('invalid_evidence_operation');
+    const mutable=new Set(['state','intent','observedPostDigest','verifiedMeasurement','failureCode']);
+    const previous=old.files[0],file=files[0];
+    for(const field of new Set([...Object.keys(previous),...Object.keys(file)])) if(!mutable.has(field)&&JSON.stringify(previous[field])!==JSON.stringify(file[field])) fail('invalid_evidence_operation');
+    if(file.state!==state||old.requestId&&patch.requestId!=null&&patch.requestId!==old.requestId||Object.hasOwn(patch,'requestId')&&patch.requestId===null&&old.requestId) fail('invalid_evidence_operation');
+    if(old.files[0].intent&&JSON.stringify(file.intent)!==JSON.stringify(old.files[0].intent)) fail('invalid_evidence_operation');
+    const plan={...old,...patch,files,state,completion:state,revision:ws(s).revision+1,updatedAt:now()};
+    if(state==='replacing') {
+      if(!plan.requestId||file.intent?.journalRevision!==plan.revision) fail('invalid_evidence_operation');
+      for(const p of plans.values()) if(scopeKey(p.scope)===scopeKey(s)&&p.planId!==planId&&p.requestId===plan.requestId) fail('invalid_evidence_operation');
+    }
+    if(state==='applied_verified') {
+      for(const id of old.selectedOperationIds) {
+        const record=records.get(scopeKey(s)+':'+id);
+        if(!record||!sameObjectScope(record.scope,s)||consumed.has(scopeKey(s)+':'+id)) fail('invalid_evidence_operation');
+      }
+      plan.consumedOperationIds=[...old.selectedOperationIds];
+    }
+    try { validateObjectPlan(plan); } catch { fail('invalid_evidence_operation'); }
+    for(const reference of planReferences(plan)) await restoreRead(s,reference);
+    if(state==='replacing') {
+      // Admit the native commit only when this transaction can also durably
+      // describe the largest bounded completion. Native stdout is <=64 KiB;
+      // allow a second JSON escaping layer plus fixed envelope/intent overhead.
+      const reserve=journalReservations.get(scopeKey(s)+':'+planId);
+      const replacing={type:'object_apply_v1',action:'plan',plan:structuredClone(plan),scope:s,revision:plan.revision,at:now()};
+      const replacingBytes=Buffer.byteLength(objectJournalEnvelope(replacing,chain,reserve).line);
+      const completion={...structuredClone(plan),state:'applied_verified',completion:'applied_verified',consumedOperationIds:[...plan.selectedOperationIds],revision:plan.revision+1,
+        files:plan.files.map(file=>({...file,state:'applied_verified',observedPostDigest:file.candidateRef.digest,verifiedMeasurement:null}))};
+      const completing={type:'object_apply_v1',action:'plan',plan:completion,scope:s,revision:completion.revision,at:now()};
+      const completingBytes=Buffer.byteLength(objectJournalEnvelope(completing,'f'.repeat(64)).line)+2*65536+4096;
+      if(!Number.isSafeInteger(reserve)||reserve<replacingBytes+completingBytes)fail('evidence_quota_exceeded');
+    }
+    await appendObject(s,plan);return structuredClone(plan);
+  }
+  function objectLineage(s,source) {
+    const lineage=[],seen=new Set();let p=source;
+    while(p) {
+      if(lineage.length>=16||seen.has(p.planId)||p.providerId!==OBJECT_PROVIDER_ID||!sameObjectScope(p.scope,s)) fail('invalid_evidence_operation');
+      if(lineage.length&&(p.files[0].relativePath!==source.files[0].relativePath||p.files[0].currentObject.file.id!==source.files[0].currentObject.file.id)) fail('invalid_evidence_operation');
+      lineage.push(p);seen.add(p.planId);
+      if(p.kind==='revert')return lineage;
+      if(p.kind!=='recover')fail('invalid_evidence_operation');
+      p=plans.get(scopeKey(s)+':'+p.sourcePlanId);
+    }
+    fail('invalid_evidence_operation');
+  }
+  async function objectFileBlocked(scope,relativePath,options) {
+    const s=await objectAuthority(scope,null,options),target=objectRelativePath(relativePath),ignore=options?.ignorePlanIds??[];
+    if(!Array.isArray(ignore)||ignore.length>16||new Set(ignore).size!==ignore.length)fail('invalid_evidence_operation');
+    const ignored=new Set(ignore.map(identifier));
+    if(ignored.size) {
+      const rows=ignore.map(id=>plans.get(scopeKey(s)+':'+id));
+      if(rows.some(p=>!p||!sameObjectScope(p.scope,s)||p.providerId!==OBJECT_PROVIDER_ID||p.files[0].relativePath!==target))fail('invalid_evidence_operation');
+      const newest=rows.find(p=>!rows.some(other=>other.sourcePlanId===p.planId));
+      if(!newest||newest.state!=='recovery_required')fail('invalid_evidence_operation');
+      const chain=objectLineage(s,newest);
+      if(chain.length!==ignored.size||chain.some(p=>!ignored.has(p.planId)))fail('invalid_evidence_operation');
+    }
+    return objectBlocked(s,target,ignored);
+  }
+  function objectBlocked(scope,target,ignored,objectId=null) {
+    const resolved=objectResolvedKeys();
+    return [...plans.values()].some(p=>p.providerId===OBJECT_PROVIDER_ID&&samePhysicalWorkspace(p.scope,scope)&&['replacing','recovery_required'].includes(p.state)&&!(ignored.has(p.planId)&&sameObjectScope(p.scope,scope))&&!resolved.has(scopeKey(p.scope)+':'+p.planId)&&
+      (p.files[0].relativePath.toLowerCase()===target.toLowerCase() || objectId!==null&&p.files[0].currentObject.file.id===objectId));
+  }
+  function objectResolvedKeys() {
+    const resolved=new Set();
+    for(const p of plans.values())if(p.providerId===OBJECT_PROVIDER_ID&&p.kind==='recover'&&p.state==='applied_verified') {
+      for(const prior of objectLineage(p.scope,p).slice(1))resolved.add(scopeKey(prior.scope)+':'+prior.planId);
+    }
+    return resolved;
+  }
+  function samePhysicalWorkspace(a,b) {
+    if(a.workspaceFingerprint!=null&&b.workspaceFingerprint!=null)return a.workspaceFingerprint===b.workspaceFingerprint;
+    if(!['projectId','repoId','workspaceId'].every(k=>a[k]===b[k]))return false;
+    // Epoch and runtime generation invalidate authority, not a failed write to
+    // the same physical object. Unknown fingerprints require conservative block.
+    return a.workspaceFingerprint==null||b.workspaceFingerprint==null||a.workspaceFingerprint===b.workspaceFingerprint;
   }
   async function gc() {
     // No record or plan is evicted here. In particular, uncertain crash intents
@@ -558,6 +764,11 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
       await noLinks(location); await childPrivacy(location); return location;
     }),
     applyCreate: (scope, plan) => queue(() => applyCreate(scope, plan)),
+    objectCreate: (scope,plan,options) => queue(()=>objectCreate(scope,plan,options)),
+    objectUpdate: (scope,planId,patch,options) => queue(()=>objectUpdate(scope,planId,patch,options)),
+    objectGet: (scope,planId,options) => queue(()=>objectGet(scope,planId,options)),
+    objectFileBlocked: (scope,relativePath,options) => queue(()=>objectFileBlocked(scope,relativePath,options)),
+    objectList: (scope,options) => queue(async()=>{const s=await objectAuthority(scope,null,options);return [...plans.values()].filter(p=>p.providerId===OBJECT_PROVIDER_ID&&sameObjectScope(p.scope,s)).map(p=>structuredClone(p));}),
     applyUpdate: (scope, planId, patch) => queue(() => applyUpdate(scope, planId, patch)),
     applyGet: (scope, planId) => queue(() => { const s = previewIdentity(scope), plan = plans.get(scopeKey(s) + ':' + identifier(planId)); if (!plan) fail('evidence_not_found'); return structuredClone(plan); }),
     applyList: scope => queue(() => { const s = previewIdentity(scope); return [...plans.values()].filter(plan => scopeKey(plan.scope) === scopeKey(s)).map(plan => structuredClone(plan)); }),
