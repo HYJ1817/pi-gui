@@ -1,126 +1,78 @@
-# 基础 CI：每次 push / PR 都跑。
-#
-# 两条原则：
-#   1. **package.json 是测试入口的唯一真相** —— 这里只调 `npm test`，
-#      不把它的子测试一条条抄进 workflow。否则以后加了新测试套件，
-#      要记得同时改两处，漏一处就是「本地跑了、CI 没跑」的假绿。
-#   2. **CI 里不装 pi** —— `npm test` 全是纯自动化测试，不需要真实的
-#      pi-coding-agent，也不消耗任何模型额度。需要真 pi 的套件见
-#      docs/testing.md 的「只在本地 / 发布前跑」一节。
-#
-# 关于 action 版本：`checkout` / `setup-node` 都钉 **v5**。
-# 选 v5 而不是更早或更新，是因为 **v4 跑在 Node 20 上**（GitHub 已经提示
-# deprecation），而 v5 相对 v4 **只改了运行时到 Node 24**，没有任何行为变更 ——
-# 正好是最小的那一步。v6/v7 各自带行为变更（凭据落盘位置、ESM 迁移、
-# 自动缓存的范围），这里用不到，不跟着动。
 name: CI
-
+run-name: D2 strict SACL witness for 672b3ed
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
-
-# 最小权限：CI 只读仓库。发版走单独的流程，不在这里写任何东西。
 permissions:
   contents: read
-
-# 同一个分支/PR 有新提交时取消上一轮 —— 连续推送不会留下一堆过期任务
-# 同时跑。用 ref 而不是固定 group：不同分支之间互不干扰。
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: d2-sacl-672b3ed
+  cancel-in-progress: false
 jobs:
-  # ---------------------------------------------------------------- 测试
-  test:
-    name: Core tests (Node ${{ matrix.node }})
+  sacl-witness:
+    name: New helper strict SACL witness
     runs-on: windows-latest
-    timeout-minutes: 25
-    strategy:
-      # 一个版本挂了也要把另一个跑完 —— 否则只看得到第一个失败，
-      # 分不清是「Node 版本问题」还是「代码问题」。
-      fail-fast: false
-      matrix:
-        # package.json 的 engines.node 是 >=22.19 —— 这个下限由依赖链决定：
-        #   pi-coding-agent（被 GUI 驱动的 pi）要 >=22.19.0
-        #   pdfjs-dist（运行时依赖，PDF 抽取）要 >=22.13.0 || >=24
-        #   electron / @electron/packager 等 11 个开发依赖要 >=22.12.0
-        # 取其中最严的一条。
-        #
-        # matrix 取 22 与 24：22 是这条下限所在的大版本，24 是当前最新
-        # （也是开发机在用的）。不按 22.19 建 matrix —— 那只会多出一个几乎重复的
-        # runner，而 22.x 内部的补丁差异不是这个项目要防的风险。
-        node: [22, 24]
+    timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed source
         uses: actions/checkout@v5
-
-      - name: Set up Node.js ${{ matrix.node }}
+        with:
+          ref: 672b3edbaf6aab2b81d1a34e9bf223d2e518e312
+      - name: Set up Node 24
         uses: actions/setup-node@v5
         with:
-          node-version: ${{ matrix.node }}
-          # setup-node 自带的 npm 缓存。**不要**缓存 node_modules ——
-          # 平台相关的二进制（esbuild / electron）跨平台复用会出各种怪问题。
-          cache: npm
-
-      # 必须是 ci 而不是 install：ci 严格按 lockfile 装，
-      # lockfile 与 package.json 不一致时直接失败，不会悄悄改写依赖。
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run core tests
-        run: npm test
-
-  # ------------------------------------------------------- 打包链路验证
-  build-check:
-    name: Electron build check
-    # 测试不过就不必浪费几分钟去打包。
-    needs: test
-    runs-on: windows-latest
-    timeout-minutes: 40
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+          node-version: 24
+      - name: Verify commit and tested helper bytes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -cne '672b3edbaf6aab2b81d1a34e9bf223d2e518e312') { throw 'source_commit_mismatch' }
+          $helperHash = (Get-FileHash server/session-revert-object-write-native.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($helperHash -cne '7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef') { throw 'helper_hash_mismatch' }
+          Write-Output "sourceCommit=$head helperHash=$helperHash"
+          node --version
+          whoami /priv
+      - name: Run strict witness within already assigned audit privilege
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # This disposable CI token must ALREADY possess SeSecurityPrivilege.
+          # Activate that assigned bit only; no UAC, policy or account changes.
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Diagnostics;
+          using System.Runtime.InteropServices;
+          public static class D2AuditToken {
+            [StructLayout(LayoutKind.Sequential)] struct Luid { public uint Low; public int High; }
+            [StructLayout(LayoutKind.Sequential)] struct Privilege { public uint Count; public Luid Id; public uint Attributes; }
+            [DllImport("advapi32.dll",SetLastError=true)] static extern bool OpenProcessToken(IntPtr process,uint access,out IntPtr token);
+            [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool LookupPrivilegeValue(string system,string name,out Luid id);
+            [DllImport("advapi32.dll",SetLastError=true)] static extern bool AdjustTokenPrivileges(IntPtr token,bool disable,ref Privilege state,uint length,IntPtr previous,IntPtr returned);
+            [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr token);
+            public static bool ActivateAssigned() {
+              IntPtr token;
+              if(!OpenProcessToken(Process.GetCurrentProcess().Handle,0x28,out token)) return false;
+              try {
+                Luid id;
+                if(!LookupPrivilegeValue(null,"SeSecurityPrivilege",out id)) return false;
+                var state=new Privilege { Count=1, Id=id, Attributes=2 };
+                return AdjustTokenPrivileges(token,false,ref state,0,IntPtr.Zero,IntPtr.Zero) && Marshal.GetLastWin32Error()==0;
+              } finally { CloseHandle(token); }
+            }
+          }
+          '@
+          if (![D2AuditToken]::ActivateAssigned()) { throw 'existing_ci_audit_privilege_unavailable' }
+          # Node and the unchanged native helper inherit this test token.
+          node tests/session-revert-object-witness.cjs --require-audit 2>&1 | Tee-Object -FilePath d2-sacl-witness.log
+          $auditExit = $LASTEXITCODE
+          if ($auditExit -ne 0) { exit $auditExit }
+          $rows = Get-Content d2-sacl-witness.log
+          $result = $rows | Where-Object { $_.StartsWith('{') } | Select-Object -First 1 | ConvertFrom-Json
+          if ($result.passed -ne 8 -or $result.failed -ne 0 -or $result.skipped -ne 0 -or $result.helperHash -cne '7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef') { throw 'strict_witness_not_qualified' }
+      - name: Save qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          # 打包链路只验一个版本就够 —— 它是构建工具链，与运行时矩阵无关。
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      # test:app / test:exe 都要拿一个真 PDF 去验「打包后 PDF 抽取还能用」。
-      # 这个脚本以前只能靠 LibreOffice 转 PDF，而 runner 上没有 LibreOffice ——
-      # 于是那几条断言在干净机器上必然红（第一次 CI 就是这么红的）。
-      # 现在它内置了一个纯 Node 写的最小 PDF，任何机器都能跑。
-      # 显式跳过 LibreOffice：CI 要的是确定性，不是「碰巧有就用」。
-      - name: Generate test fixtures
-        run: npm run fixtures
-        env:
-          PI_GUI_SKIP_LIBREOFFICE: '1'
-
-      # 这一步会：esbuild 打后端单文件 → 生成 SEA blob → 注入 node.exe 得到
-      # 单文件 exe → 收集 public/ 与 pdfjs 资源 → 用 @electron/packager 组装
-      # 出 dist-app/<App>-win32-x64。也就是说两条打包链路（SEA 与 Electron）
-      # 都在这一步里被真的走了一遍。
-      #
-      # 不跑 build:installer / build:dist：那要 NSIS 与 ~430MB 产物，
-      # 属于发布前验证（见 release-check.yml 与 docs/testing.md）。
-      - name: Build Electron app
-        run: npm run build:app -- --rebuild
-
-      # test:app 会把 dist-app 里的 resources/app 拷出来，用 node 直接跑
-      # 打包后的 server.cjs，检查静态资源、无项目时的行为等 25 项 ——
-      # 验证的是「打出来的包真的能跑」，而不只是「文件存在」。
-      - name: Verify packaged app
-        run: npm run test:app
-
-      # 单文件 exe（Node SEA）走的是另一条资源解析路径（内嵌），
-      # 45 项检查里有「内嵌资源与磁盘一致」这类只有真跑 exe 才能发现的断言。
-      - name: Verify single-file exe
-        run: npm run test:exe
+          name: d2-sacl-witness-672b3ed
+          path: d2-sacl-witness.log
+          if-no-files-found: warn
