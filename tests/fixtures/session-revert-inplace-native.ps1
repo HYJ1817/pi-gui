@@ -304,6 +304,12 @@ public sealed class InplaceFixture : IDisposable {
                 $rootAudit.AddAuditRule([Security.AccessControl.FileSystemAuditRule]::new($sid,'WriteData',([Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit),[Security.AccessControl.PropagationFlags]::None,([Security.AccessControl.AuditFlags]::Success -bor [Security.AccessControl.AuditFlags]::Failure)))
                 Set-Acl -LiteralPath $root -AclObject $rootAudit
                 $fileAudit = Get-Acl -LiteralPath $path -Audit
+                # A protected DACL can keep parent audit propagation from updating
+                # this fresh file. Explicitly request SACL inheritance independently
+                # of its DACL so the inherited/mixed fixture really has audit ACEs.
+                $fileAudit.SetAuditRuleProtection($false,$false)
+                Set-Acl -LiteralPath $path -AclObject $fileAudit
+                $fileAudit = Get-Acl -LiteralPath $path -Audit
             }
             if ($a.auditProfile -eq 'protected') { $fileAudit.SetAuditRuleProtection($true,$false) }
             if ($a.auditProfile -in @('explicit','protected','mixed')) {
