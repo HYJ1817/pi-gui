@@ -10,6 +10,7 @@ const { spawn, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { unexpectedExeDiagnostics } = require('./fixtures/exe-diagnostics.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const OUTPUT_AT = process.argv.indexOf('--output-root');
@@ -112,7 +113,7 @@ async function main() {
   fs.mkdirSync(WORK, { recursive: true });
 
   const exe = spawn(EXE, [], {
-    cwd: path.join(ROOT, 'build'),
+    cwd: path.dirname(EXE),
     env: {
       ...process.env,
       PORT: String(PORT),
@@ -127,9 +128,11 @@ async function main() {
     windowsHide: true,
   });
 
-  let stdout = '';
+  let stdout = '', stderr = '', earlyExit = null;
+  exe.stdout.setEncoding('utf8'); exe.stderr.setEncoding('utf8');
   exe.stdout.on('data', (d) => (stdout += d));
-  exe.stderr.on('data', (d) => (stdout += d));
+  exe.stderr.on('data', (d) => (stderr += d));
+  exe.once('exit', (code, signal) => { earlyExit = { code, signal }; });
 
   /* 必须连子孙进程一起杀。
    *
@@ -357,12 +360,18 @@ async function main() {
       check('exe 内图片识别为 image', () => j.kind === 'image' || `kind=${j.kind}`);
     }
 
-    check('运行期没有崩栈输出', () => !/Error:|throw/i.test(stdout) || stdout.slice(0, 300));
+    const diagnostic = unexpectedExeDiagnostics({ executable: EXE, stdout, stderr, exit: earlyExit });
+    console.log('EXE diagnostic observation ' + JSON.stringify({
+      optionalCanvasWarningObserved: stderr.includes('Warning: Cannot load "@napi-rs/canvas" package:'),
+      classification: diagnostic, exitedBeforeCleanup: earlyExit !== null,
+    }));
+    check('运行期没有崩栈输出', () => diagnostic !== 'unexpected_error_output' || diagnostic);
+    check('运行期没有意外退出', () => earlyExit === null && exe.exitCode === null && exe.signalCode === null || 'unexpected_exit');
     /* 单文件 exe 的便携模式会把数据目录算成「exe 所在目录」——
      * 所以这里显式给了 PI_GUI_DATA，顺便确认它真的生效了：
      * 数据落在临时目录，而不是被写进 build/（构建产物不该被测试改脏）。 */
     check('数据目录用的是 PI_GUI_DATA 指的地方', () => fs.existsSync(DATA) || '临时数据目录没有被创建：' + DATA);
-    check('产物目录没有被写入（没有在 build/ 里生成 projects.json）', () => !fs.existsSync(path.join(ROOT, 'build', 'projects.json')) || 'build/ 里出现了 projects.json');
+    check('产物目录没有被写入（没有在 build/ 里生成 projects.json）', () => !fs.existsSync(path.join(path.dirname(EXE), 'projects.json')) || 'build/ 里出现了 projects.json');
   } finally {
     stop();
   }
