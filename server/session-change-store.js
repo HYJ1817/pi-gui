@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
+import { resolveObjectInterpreter } from './session-revert-object-resources.js';
 import { constants } from 'node:fs';
 import { measureStorageFiles, measureAllocationUnit } from './session-revert-storage.js';
 import { normalizeObjectObservation, objectScopeBinding, OBJECT_PROFILE_ID } from './session-revert-object-profile.js';
@@ -88,12 +89,13 @@ async function noLinks(target, file = false) {
     const parent = path.dirname(current); if (parent === current) break; current = parent;
   }
 }
-function powershell(script, target) {
+async function powershell(script, target) {
+  const interpreter = await resolveObjectInterpreter();
   const env = { ...process.env, PI_GUI_EVIDENCE_ACL_TARGET: target };
   // PowerShell 7 module paths can break Windows PowerShell's native ACL module.
   for (const key of Object.keys(env)) if (key.toLowerCase() === 'psmodulepath') delete env[key];
-  return new Promise((resolve, reject) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
-    { windowsHide: true, timeout: 10000, maxBuffer: 8192, env },
+  return new Promise((resolve, reject) => execFile(interpreter, ['-NoProfile', '-NonInteractive', '-Command', script],
+    { cwd: path.dirname(interpreter), windowsHide: true, timeout: 10000, maxBuffer: 8192, env },
     (error, stdout) => error ? reject(error) : resolve(stdout.trim())));
 }
 async function privacy(target, initialize, requireProtected = true) {

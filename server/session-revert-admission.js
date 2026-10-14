@@ -24,9 +24,16 @@ export function createSessionRevertAdmission({ timeoutMs = 60000 } = {}) {
     acquire(root) {
       const key = keyOf(root), state = stateOf(key);
       if (state.lease) fail('workspace_revert_busy');
+      const rootIdentity = fs.statSync(root, { bigint: true });
       let released = false;
       const lease = {
-        assertCurrent(candidate = root) { if (released || state.lease !== lease || keyOf(candidate) !== key) fail('stale_revert_token'); },
+        assertCurrent(candidate = root) {
+          try {
+            const current = fs.statSync(candidate, { bigint: true });
+            if (released || state.lease !== lease || keyOf(candidate) !== key || current.dev !== rootIdentity.dev
+              || current.ino !== rootIdentity.ino || current.birthtimeNs !== rootIdentity.birthtimeNs) throw Error();
+          } catch { fail('stale_revert_token'); }
+        },
         // Confirmation expires independently in the plan service. Once a valid
         // apply starts, keep GUI writers excluded until its OS operation settles.
         pinForApply() { lease.assertCurrent(); clearTimeout(expiry); },

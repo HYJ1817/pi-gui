@@ -51,7 +51,7 @@ function createObjectServiceCore({store,withAuthority,withMutationAuthority,capa
  const publicPlan=(p,token,diff)=>({ok:true,providerId:p.providerId,profileId:p.profileId,helperHash:p.helperHash,proofId:p.proofId,planId:p.planId,kind:p.kind,revision:p.revision,expiresAt:p.expiresAt,backupReady:true,riskNoticeVersion:2,nonAtomic:true,files:[{fileId:p.files[0].fileId,relativePath:p.files[0].relativePath,state:p.state,diff}],...(token?{confirmationToken:token}:{})});
  const publicResult=(p,durable=true)=>({ok:p.state==='applied_verified',planId:p.planId,requestId:p.requestId,completion:p.state,durable,recoveryAvailable:true,retryAllowed:false,nonAtomic:true});
  async function revision(s,scope,expected){const r=await s.previewRevision(scope);if(r.revision!==expected||r.gapRevision!==0)fail('stale_evidence');}
- async function get(s,a,planId){if(!id(planId))fail('invalid_request');const p=await s.objectGet(a.scope,planId,options());if(!p||!sameObjectScope(p.scope,a.scope))fail('stale_runtime');return validateObjectPlan(p);}
+ async function get(s,a,planId){if(!id(planId))fail('invalid_request');const p=await s.objectGet(a.scope,planId,options());if(!p||!sameObjectScope(p.scope,a.scope)||p.runtimeContext!==a.contextRevision)fail('stale_runtime');return validateObjectPlan(p);}
  async function finish(planId){const owned=leases.get(planId);if(!owned)return;clearTimeout(owned.timer);leases.delete(planId);try{await owned.store.restoreRecoveryRelease(owned.scope,planId);}finally{owned.lease.release();}}
  async function update(s,a,p,state,extra={}){
   const next={...p.files[0],state,...(extra.file??{})};const patch={state,completion:state,files:[next],...(extra.requestId!==undefined?{requestId:extra.requestId}:{})};
@@ -113,7 +113,7 @@ function createObjectServiceCore({store,withAuthority,withMutationAuthority,capa
     await a.revalidate();await revision(s,a.scope,expected);a.lease.assertCurrent(a.root);if(disposed)fail('service_disposed');
     const token=randomBytes(32).toString('hex'),at=now();
     const plan={schemaVersion:1,providerId:OBJECT_PROVIDER_ID,profileId:OBJECT_PROFILE_ID,helperHash:OBJECT_WRITER_HASH,proofId:proof.proofId,riskNoticeVersion:OBJECT_RISK_VERSION,
-     planId,tokenHash:objectHash(token),requestId:null,scope:a.scope,kind:recovery?'recover':'revert',sourcePlanId:source?.planId??null,selectedOperationIds:selected,consumedOperationIds:[],
+     planId,tokenHash:objectHash(token),requestId:null,scope:a.scope,...(a.contextRevision!==undefined?{runtimeContext:a.contextRevision}:{}),kind:recovery?'recover':'revert',sourcePlanId:source?.planId??null,selectedOperationIds:selected,consumedOperationIds:[],
      evidenceRevision:body.evidenceRevision,revision:expected+1,gapRevision:0,expiresAt:at+ttlMs,createdAt:at,updatedAt:at,state:'prepared',completion:'prepared',
      files:[{fileId:objectFileId(a.scope,relative),relativePath:relative,action:'write_original',operationIds:selected,currentRef,candidateRef,currentObject:current.observation,state:'prepared',intent:null,observedPostDigest:null,verifiedMeasurement:null,failureCode:null}]};
     created=await s.objectCreate(a.scope,validateObjectPlan(plan),options(expected));await revision(s,a.scope,created.revision);await a.revalidate();a.lease.assertCurrent(a.root);if(disposed)fail('service_disposed');

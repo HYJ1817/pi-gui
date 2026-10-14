@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { readAsset, hasBundledAssets } from '../lib/assets.js';
+import { loadObjectHelper, resolveObjectInterpreter } from './session-revert-object-resources.js';
 import { OBJECT_HELPER_HASH } from './session-revert-object-source.js';
 import { OBJECT_PROFILE_ID, OBJECT_PLATFORM_CANDIDATES, normalizeObjectObservation, objectScopeBinding } from './session-revert-object-profile.js';
 const digest=b=>createHash('sha256').update(b).digest('hex');
@@ -37,7 +37,9 @@ function createIsolatedWriter({owns,materials,admit,helperBytes,spawnProcess=spa
    inputs.push({path:d.privatePath,digest:d.digest,bytes:d.bytes,ino:big.ino.toString()});
   }
   if(inputs.length!==2)fail('invalid_material');
-  const bytes=helperBytes||readAsset(hasBundledAssets()?'revert-object/write.ps1':'server/session-revert-object-write-native.ps1');
+  // helperBytes is the existing private in-memory fault harness adapter. It is
+  // unreachable from production; ordinary resource reads must pass D4 integrity.
+  const bytes=helperBytes||loadObjectHelper('writer').bytes;
   const helperHash=digest(bytes),attemptId=randomUUID(),nonce=randomBytes(32).toString('hex');
   const bindingDigest=digest(JSON.stringify({attemptId,nonce,planId:authority.planId,intentRevision:authority.intentRevision,scope:objectScopeBinding(authority.scope),root,relativePath,inputs,expectedObject,proofId,helperHash}));
   const request={version:1,command:'open',attemptId,nonce,bindingDigest,planId:authority.planId,intentRevision:authority.intentRevision,root,relativePath,inputs,expectedObject};
@@ -49,10 +51,7 @@ function createIsolatedWriter({owns,materials,admit,helperBytes,spawnProcess=spa
   // accepts only the backend's bounded, hash-bound static resource on stdin.
   if(bytes.length>24576)fail('helper_budget');
   const bootstrap=`$ErrorActionPreference='Stop';$b=[Text.StringBuilder]::new();while($true){$c=[Console]::In.Read();if($c -lt 0){exit 2};if($c -eq 10){break};if($b.Length -ge 32768){exit 2};[void]$b.Append([char]$c)};$s=[Convert]::FromBase64String($b.ToString());$h=[BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)).Replace('-','').ToLowerInvariant();if($h -cne '${helperHash}'){exit 2};& ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString($s)))`;
-  const systemRoot=process.env.SystemRoot;
-  if(typeof systemRoot!=='string'||!path.isAbsolute(systemRoot)||systemRoot.startsWith('\\\\'))fail('native_interpreter_unavailable');
-  const interpreter=path.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
-  for(let at=interpreter;;at=path.dirname(at)){const st=await fs.lstat(at);if(st.isSymbolicLink())fail('native_interpreter_unavailable');if(path.dirname(at)===at)break;}
+  const interpreter=await resolveObjectInterpreter();
   const child=spawnProcess(interpreter,['-NoLogo','-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(bootstrap,'utf16le').toString('base64')],{env,cwd:path.dirname(interpreter),shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});
   let state='opening',buffer='',outputBytes=0,committed=false,terminal=null,exited=false,protocolBad=false;
   let readyResolve,resultResolve;const ready=new Promise(r=>readyResolve=r),result=new Promise(r=>resultResolve=r);

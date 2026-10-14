@@ -38,17 +38,22 @@ function plain(value, limits) {
 }
 const refValid = (r, limits) => r && Object.keys(r).length === 2 && /^[0-9a-f]{64}$/.test(r.digest) && Number.isSafeInteger(r.bytes) && r.bytes >= 0 && r.bytes <= limits.fileBytes;
 const DEFAULTS = Object.freeze({ journalBytes: 32 * 1024 ** 2, events: 20000, eventBytes: 1024 ** 2, nodes: 20000, depth: 16, fileBytes: 2 * 1024 ** 2, rawBytes: 4 * 1024 ** 2, deadlineMs: 30000 });
+const denyHistorical = () => false;
+function freezeSnapshot(value) {
+  if (value && typeof value === 'object') { for (const child of Object.values(value)) freezeSnapshot(child); Object.freeze(value); }
+  return value;
+}
 
 /** Independent damaged-journal reader. No Store import, writable handle or apply capability. */
-export function createSessionRevertObjectRecoveryReader({ dataDir, authorize = () => false, budgets = {}, privacyCheck } = {}) {
-  if (typeof dataDir !== 'string' || !path.isAbsolute(dataDir) || typeof authorize !== 'function') fail('invalid_evidence_scope');
+export function createSessionRevertObjectRecoveryReader({ dataDir, authorize = () => false, authorizeHistorical = denyHistorical, budgets = {}, privacyCheck } = {}) {
+  if (typeof dataDir !== 'string' || !path.isAbsolute(dataDir) || typeof authorize !== 'function' || typeof authorizeHistorical !== 'function') fail('invalid_evidence_scope');
   const limits = { ...DEFAULTS, ...budgets };
   if (Object.keys(budgets).some(k => !Object.hasOwn(DEFAULTS, k)) || Object.entries(limits).some(([k, v]) => !Number.isSafeInteger(v) || v <= 0 || v > DEFAULTS[k])) fail('recovery_budget_exceeded');
   const root = path.resolve(dataDir, 'revert-evidence', 'v1');
   const journal = path.join(root, 'journal.jsonl');
   async function scan(deadline) {
     const raw = await readRecoveryFile({ root, target: journal, maxBytes: limits.journalBytes, privacyCheck, deadline });
-    const plans = new Map(), refs = new Map(), revisions = new Map();
+    const plans = new Map(), refs = new Map(), revisions = new Map(), historicalScopes = new Map(), ambiguousPlans = new Set();
     let chain = '', offset = 0, count = 0, validBytes = 0, damaged = false;
     const decoder = new TextDecoder('utf-8', { fatal: true });
     while (offset < raw.length) {
@@ -89,6 +94,12 @@ export function createSessionRevertObjectRecoveryReader({ dataDir, authorize = (
               || event.plan.revision !== event.revision) fail('evidence_integrity_failed');
             if (!Number.isSafeInteger(event.plan.journalReserveRemaining) || event.plan.journalReserveRemaining < 0
               || event.plan.journalReserveRemaining > 262144) fail('evidence_integrity_failed');
+            // A globally addressed historical plan ID cannot choose between owners.
+            // Track a fully parsed, hash-bound candidate even if its transition
+            // subsequently ends the legal prefix; old scoped readers are unchanged.
+            const historicalScope = historicalScopes.get(event.plan.planId);
+            if (historicalScope && !sameObjectScope(historicalScope, event.plan.scope)) ambiguousPlans.add(event.plan.planId);
+            else historicalScopes.set(event.plan.planId, event.plan.scope);
             const pk = key(event.scope) + ':' + event.plan.planId, previous = plans.get(pk);
             if (previous) {
               if (!sameObjectScope(previous.scope, event.plan.scope)) fail('evidence_integrity_failed');
@@ -128,7 +139,7 @@ export function createSessionRevertObjectRecoveryReader({ dataDir, authorize = (
       } catch { damaged = true; break; }
       offset = end + 1;
     }
-    return { plans, refs, validBytes, validEvents: count, damaged };
+    return { plans, refs, validBytes, validEvents: count, damaged, ambiguousPlans, journalDigest: hash(raw), journalBytes: raw.length };
   }
   async function resolve(request, material) {
     if (!request || Object.keys(request).some(k => !['scope', 'planId', ...(material ? ['material'] : [])].includes(k))
@@ -140,9 +151,12 @@ export function createSessionRevertObjectRecoveryReader({ dataDir, authorize = (
     if (Date.now() > deadline) fail('recovery_budget_exceeded');
     const prefix = await scan(deadline), plan = prefix.plans.get(key(request.scope) + ':' + request.planId);
     if (!plan || !sameObjectScope(plan.scope, request.scope)) fail('recovery_prefix_insufficient');
+    return readMaterials(prefix, plan, material ? request.material : null, deadline);
+  }
+  async function readMaterials(prefix, plan, material, deadline) {
     const file = plan.files[0], available = {};
     let used = 0;
-    for (const name of material ? [request.material] : ['current', 'candidate']) {
+    for (const name of material ? [material] : ['current', 'candidate']) {
       const ref = file[name + 'Ref'];
       const registered = prefix.refs.get(refKey(plan.scope, ref?.digest));
       if (!refValid(ref, limits) || registered?.ref.bytes !== ref.bytes
@@ -155,5 +169,34 @@ export function createSessionRevertObjectRecoveryReader({ dataDir, authorize = (
     return { planId: plan.planId, state: plan.state, readOnly: true, applyEligible: false, damagedJournal: prefix.damaged,
       validPrefixBytes: prefix.validBytes, validEvents: prefix.validEvents, materials: available };
   }
-  return Object.freeze({ inspect: request => resolve(request, false), read: request => resolve(request, true) });
+  async function resolveHistorical(request, material) {
+    plain(request, limits);
+    if (!request || Object.keys(request).some(k => !['planId', ...(material ? ['material'] : [])].includes(k))
+      || !identifier(request.planId) || material && !['current', 'candidate'].includes(request.material)) fail('invalid_evidence_operation');
+    // Without a trusted historical callback even the private lookup is forbidden.
+    if (authorizeHistorical === denyHistorical) fail('recovery_unauthorized');
+    const planId = request.planId, selectedMaterial = material ? request.material : null;
+    const deadline = Date.now() + limits.deadlineMs, prefix = await scan(deadline);
+    const matches = [...prefix.plans.values()].filter(plan => plan.planId === planId);
+    if (matches.length !== 1 || prefix.ambiguousPlans.has(planId)) fail('recovery_prefix_insufficient');
+    const plan = matches[0];
+    // Bind authorization to this single verified prefix snapshot. Never rescan
+    // by a caller-provided owner or replace the old owner with a current runtime.
+    const scope = freezeSnapshot(JSON.parse(JSON.stringify(plan.scope)));
+    if (await authorizeHistorical(Object.freeze({ scope, planId, readOnly: true, applyEligible: false })) !== true) fail('recovery_unauthorized');
+    if (Date.now() > deadline) fail('recovery_budget_exceeded');
+    // Confirm that the authorized snapshot still has exactly the same journal
+    // bytes. This is a bounded integrity read, never a second plan lookup that
+    // might silently choose another owner/state after awaiting authorization.
+    const currentJournal = await readRecoveryFile({ root, target: journal, maxBytes: limits.journalBytes, privacyCheck, deadline });
+    if (currentJournal.length !== prefix.journalBytes || hash(currentJournal) !== prefix.journalDigest) fail('evidence_integrity_failed');
+    return readMaterials(prefix, plan, selectedMaterial, deadline);
+  }
+  // Keep the existing enumerable interface stable for the D3 scoped reader.
+  const reader = { inspect: request => resolve(request, false), read: request => resolve(request, true) };
+  Object.defineProperties(reader, {
+    inspectHistorical: { value: request => resolveHistorical(request, false) },
+    readHistorical: { value: request => resolveHistorical(request, true) }
+  });
+  return Object.freeze(reader);
 }

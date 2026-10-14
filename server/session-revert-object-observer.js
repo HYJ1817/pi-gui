@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { OBJECT_HELPER_BYTES, OBJECT_HELPER_HASH } from './session-revert-object-source.js';
+import { OBJECT_HELPER_HASH, loadObjectHelper, resolveObjectInterpreter } from './session-revert-object-resources.js';
 import { OBJECT_PROFILE_ID, objectScopeBinding, normalizeObjectObservation } from './session-revert-object-profile.js';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 export async function observeFileObject({root,relativePath,scope,operationId,expectedDigest}={}){
@@ -12,9 +12,10 @@ export async function observeFileObject({root,relativePath,scope,operationId,exp
  const base={version:1,profileId:OBJECT_PROFILE_ID,source:{kind:'win32-observe',helperVersion:1,helperHash:OBJECT_HELPER_HASH},binding:{scope:binding,operationId,relativePathHash:pathHash}};
  const unavailable=()=>({...base,status:'unavailable',reason:'object_observation_unavailable',nonAtomic:true});
  if(process.platform!=='win32')return unavailable();
- const script=OBJECT_HELPER_BYTES.toString('utf8'),env={...process.env};for(const k of Object.keys(env))if(k.toLowerCase()==='psmodulepath')delete env[k];
+ let helper,interpreter;try{helper=loadObjectHelper('observer');interpreter=await resolveObjectInterpreter();}catch{return unavailable();}
+ const script=helper.bytes.toString('utf8'),env={...process.env};for(const k of Object.keys(env))if(k.toLowerCase()==='psmodulepath')delete env[k];
  const result=await new Promise(resolve=>{
-  const child=spawn('powershell.exe',['-NoLogo','-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{env,windowsHide:true,stdio:['pipe','pipe','pipe']});
+  const child=spawn(interpreter,['-NoLogo','-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{env,cwd:path.dirname(interpreter),shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});
   let chunks=[],length=0,done=false;const timer=setTimeout(()=>{child.kill();finish(null);},30000);timer.unref?.();
   const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value);};
   child.stdout.on('data',b=>{length+=b.length;if(length>65536){child.kill();finish(null);}else chunks.push(b);});child.stderr.resume();child.on('error',()=>finish(null));child.stdin.on('error',()=>{});

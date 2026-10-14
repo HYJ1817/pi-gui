@@ -67,6 +67,7 @@ import { createSessionRevertAuthority, createSessionRevertMutationAuthority } fr
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
 import { inspectFileMetadata } from './server/session-revert-metadata.js';
 import { observeFileObject } from './server/session-revert-object-observer.js';
+import { createSessionRevertStopAndDrain } from './server/session-revert-object-runtime-authority.js';
 import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
@@ -896,27 +897,9 @@ const revertAuthority = createSessionRevertAuthority({ classicBridge:sessionChan
       classicNativeState:()=>rpc.request({type:'get_state'}), classicBusy:()=>Boolean(piActivity.busy() || rpc.getState().stop?.pending),
       registry:runtimeRegistry, worktrees });
 const revertMutationAuthority = createSessionRevertMutationAuthority({ withAuthority: revertAuthority, admission: mutationAdmission,
-  stopAndDrain: async root => {
-    const rootKey = mutationAdmission.keyOf(root), targets = [];
-    const classicMatches = runtime.getCurrentCwd() && mutationAdmission.keyOf(runtime.getCurrentCwd()) === rootKey;
-    if (classicMatches && (plannerRef?.projectSwitchBlockReason() || cliInFlight)) throw Object.assign(Error('active_writer'), { code: 'active_writer' });
-    if (classicMatches) targets.push({ classic: true, manager: managedProcesses.manager });
-    for (const item of runtimeRegistry.snapshot().items) {
-      if (!item.owner) continue;
-      const identity = runtimeRegistry.workspaceIdentityOf(item.conversationId);
-      const workspace = await worktrees.withWorkspace(identity, workspace => workspace);
-      if (mutationAdmission.keyOf(workspace.root) === rootKey) targets.push({ owner: item.owner, manager: runtimeRegistry.getAdapter(item.owner).managed.manager });
-    }
-    for (const target of targets) {
-      const state = target.manager.snapshot();
-      if (state.activeCount || state.cleanupPending || state.processes.some(process => !process.cleanupConfirmed)) throw Object.assign(Error('active_writer'), { code: 'active_writer' });
-    }
-    for (const target of targets) {
-      const result = target.classic ? await rpc.abortAndWait({ type: 'abort', id: randomUUID() })
-        : await runtimeRegistry.command(target.owner, { type: 'abort', id: randomUUID() });
-      if (!result?.ok) throw Object.assign(Error('active_writer'), { code: 'active_writer' });
-    }
-  } });
+  stopAndDrain: createSessionRevertStopAndDrain({ admission:mutationAdmission, registry:runtimeRegistry, worktrees,
+    classic:{ root:()=>runtime.getCurrentCwd(), blocked:()=>Boolean(plannerRef?.projectSwitchBlockReason()||cliInFlight),
+      manager:managedProcesses.manager, abort:command=>rpc.abortAndWait(command) } }) });
 const route = createRouter({
   sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,
     withReadAdmission:()=>evidenceAdmission.assertReady() }),

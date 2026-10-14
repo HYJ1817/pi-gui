@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+import { resolveObjectInterpreter } from './session-revert-object-resources.js';
 
 const fail = () => { throw Object.assign(Error('evidence_storage_failed'), { code: 'evidence_storage_failed' }); };
 const fingerprint = s => [s.dev, s.ino, s.size, s.birthtimeMs, s.mtimeMs, s.ctimeMs, s.mode, s.nlink].join(':');
@@ -43,6 +44,7 @@ public static class RevertAllocation {
  }
 }`;
 async function nativeProbe(paths, unit = false, timeout = 10000) {
+  const interpreter = await resolveObjectInterpreter().catch(() => fail());
   const text = JSON.stringify(paths);
   if (Buffer.byteLength(text, 'utf16le') > 24000 || paths.length > 32) fail();
   const env = { ...process.env, PI_GUI_ALLOCATION_INPUT: text };
@@ -50,8 +52,8 @@ async function nativeProbe(paths, unit = false, timeout = 10000) {
   const script = `$ErrorActionPreference='Stop'; try { Add-Type -TypeDefinition @'\n${nativeSource}\n'@; $items=ConvertFrom-Json $env:PI_GUI_ALLOCATION_INPUT; $result=@(foreach($p in $items){ `
     + (unit ? `[RevertAllocation]::Unit($p)` : `$n=[RevertAllocation]::Measure($p); @{logicalBytes=$n[0];allocatedBytes=$n[1]}`)
     + ` }); ConvertTo-Json -Compress -InputObject $result } catch { [Console]::Error.WriteLine('allocation_unavailable'); exit 1 }`;
-  return new Promise((resolve, reject) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
-    { windowsHide: true, timeout, maxBuffer: 8192, env }, (error, stdout) => {
+  return new Promise((resolve, reject) => execFile(interpreter, ['-NoProfile', '-NonInteractive', '-Command', script],
+    { cwd: path.dirname(interpreter), windowsHide: true, timeout, maxBuffer: 8192, env }, (error, stdout) => {
       if (error) return reject(Object.assign(Error('evidence_storage_failed'), { code: 'evidence_storage_failed' }));
       try { resolve(JSON.parse(stdout.trim())); } catch { reject(Object.assign(Error('evidence_storage_failed'), { code: 'evidence_storage_failed' })); }
     }));

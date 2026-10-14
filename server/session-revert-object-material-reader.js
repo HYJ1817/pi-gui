@@ -3,6 +3,7 @@ import path from 'node:path';
 import { constants } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { resolveObjectInterpreter } from './session-revert-object-resources.js';
 
 const fail = code => { throw Object.assign(Error(code), { code }); };
 const same = (a, b) => ['dev', 'ino', 'size', 'mtimeMs', 'ctimeMs', 'nlink'].every(k => a[k] === b[k]);
@@ -18,9 +19,11 @@ export async function recoveryMaterialPrivacy(target, initialize = false, requir
     + (requireProtected ? `if($owner -ne $sid -or -not $a.AreAccessRulesProtected){exit 2}; ` : `if($owner -ne $sid -and ($owner -ne $i.Owner.Value -or $allowed -notcontains $owner)){exit 2}; `)
     + `$own=$false; foreach($r in $a.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier])){if($r.AccessControlType -eq 'Allow'){if($allowed -notcontains $r.IdentityReference.Value){exit 3}; if($r.IdentityReference.Value -eq $sid -and (($r.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl) -eq [System.Security.AccessControl.FileSystemRights]::FullControl)){$own=$true}}}; if(-not $own){exit 4}; 'private'`;
   const env = { ...process.env, PI_GUI_RECOVERY_ACL_TARGET: target };
+  const interpreter = await resolveObjectInterpreter().catch(() => null);
+  if (!interpreter) return false;
   for (const key of Object.keys(env)) if (key.toLowerCase() === 'psmodulepath') delete env[key];
-  return await new Promise(resolve => execFile('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
-    { env, windowsHide: true, timeout: 10000, maxBuffer: 8192 }, (error, stdout) => resolve(!error && stdout.trim() === 'private')));
+  return await new Promise(resolve => execFile(interpreter, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+    { cwd: path.dirname(interpreter), env, windowsHide: true, timeout: 10000, maxBuffer: 8192 }, (error, stdout) => resolve(!error && stdout.trim() === 'private')));
 }
 
 export async function recoveryNoLinks(target, file = false) {

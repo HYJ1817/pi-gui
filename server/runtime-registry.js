@@ -15,7 +15,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   publish = () => {}, externalCount = () => 0, beforeStart = () => null, beforeCommand = () => null,
   admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024 } = {}) {
   const backendInstance = randomUUID(), records = new Map(), lives = new Map(), leases = new Map(), revisions = new Map();
-  let revision = 0;
+  let revision = 0, contextRevision = 0;
   fs.mkdirSync(dataDir, { recursive: true });
   const dataRoot = fs.realpathSync(dataDir), manifest = path.join(dataRoot, 'conversations.json');
   const rootIdentity = fs.statSync(dataRoot);
@@ -60,6 +60,40 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!live || (!allowRetired && !belongs(live)) || OWNER_KEYS.some(k => owner(live)[k] !== expected[k])) throw fail('stale_runtime');
     return live;
   }
+  function disposeResource(live, resource) {
+    resource.invalid = true;
+    if (resource.disposal) return resource.disposal;
+    resource.disposal = Promise.resolve().then(() => resource.dispose()).then(() => {
+      live.resources.delete(resource);
+    }).catch(() => { resource.disposal = null; throw fail('cleanup_pending'); });
+    return resource.disposal;
+  }
+  function invalidateResources(live) {
+    const resources = [...live.resources];
+    for (const resource of resources) resource.invalid = true;
+    return Promise.allSettled(resources.map(resource => disposeResource(live, resource))).then(results => {
+      if (results.some(result => result.status === 'rejected')) throw fail('cleanup_pending');
+    });
+  }
+  function settleResources(live) {
+    // Focus may happen inside a resource's preparing operation. Waiting here
+    // would make focus -> dispose -> prepare -> focus a lifecycle deadlock.
+    // Revocation is synchronous; retire still awaits every retained disposal.
+    void invalidateResources(live).catch(() => {
+      if (belongs(live)) { live.error = 'cleanup_pending'; changed(live); }
+    });
+  }
+  function bindResource(expected, resource) {
+    const live = resolve(expected);
+    if (!closed(resource, ['dispose']) || typeof resource.dispose !== 'function') throw fail('invalid_request');
+    if (live.resources.size >= 32) throw fail('runtime_resource_limit');
+    const binding = { expected: { ...expected }, dispose: resource.dispose, invalid: false, disposal: null };
+    live.resources.add(binding);
+    return Object.freeze({ isCurrent() {
+      if (binding.invalid) return false;
+      try { return resolve(binding.expected) === live; } catch { return false; }
+    }, dispose: () => disposeResource(live, binding) });
+  }
   function summary(record) {
     const live = lives.get(record.conversationId);
     return { conversationId: record.conversationId, workspace: { ...record.workspace },
@@ -81,7 +115,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!belongs(live) || !event || typeof event.type !== 'string') return;
     if (Number.isInteger(event.bridgeRun)) {
       if (event.bridgeRun < live.bridgeRun) return;
-      if (event.bridgeRun > live.bridgeRun) { live.bridgeRun = event.bridgeRun; if (live.everReady) live.generation = randomUUID(); }
+      if (event.bridgeRun > live.bridgeRun) { live.bridgeRun = event.bridgeRun; if (live.everReady) {
+        live.generation = randomUUID();
+        settleResources(live);
+      } }
     }
     if (event.type === 'bridge_status') {
       live.lifecycle = event.state === 'ready' ? 'ready' : ['error', 'exited'].includes(event.state) ? 'error' : 'starting';
@@ -146,7 +183,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const total = lives.size + externalCount();
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle',
-      sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key };
+      sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set() };
     leases.set(key, live); lives.set(record.conversationId, live); changed(live);
     try {
       live.adapter = await factory({ cwd: record.workspace.cwd, workspace: { ...record.workspace }, owner: owner(live),
@@ -215,8 +252,14 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       historyRequired: live.historyRequired || (live.events.length > 0 && cursor < live.events[0].frame.eventSequence - 1),
       events: live.events.filter(e => e.frame.eventSequence > cursor).map(e => e.frame), item: summary(live.record) };
   }
-  function focus(expected) { return serialize(async () => { const live = resolve(expected); await onFocus(owner(live)); resolve(expected);
-    const previous = focused; focused = live.record.conversationId; live.attention = false;
+  function focus(expected) { return serialize(async () => { const live = resolve(expected), previous = focused;
+    const prior = previous && previous !== live.record.conversationId ? lives.get(previous) : null;
+    if (previous !== live.record.conversationId) contextRevision++;
+    if (prior) for (const resource of prior.resources) resource.invalid = true;
+    try { await onFocus(owner(live)); resolve(expected); }
+    catch (error) { if (prior) settleResources(prior); throw error; }
+    focused = live.record.conversationId; live.attention = false;
+    if (prior) settleResources(prior);
     /* 焦点是**单值**：换了焦点必须把旧的那条也广播出去。只广播新的，旧会话的
      * item.focused 会一直留在前端 —— P32.4 的侧栏正是按这个字段画高亮的，
      * 于是会同时出现两行「当前」。 */
@@ -224,7 +267,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     changed(live); return { ok: true, item: summary(live.record) }; }); }
   function blur(expected) { return serialize(async () => {
     const live = resolve(expected); if (focused !== live.record.conversationId) return { ok: true };
-    await onFocus(null); resolve(expected); focused = null; changed(live); return { ok: true };
+    contextRevision++; for (const resource of live.resources) resource.invalid = true;
+    try { await onFocus(null); resolve(expected); }
+    catch (error) { settleResources(live); throw error; }
+    focused = null;
+    settleResources(live); changed(live); return { ok: true };
   }); }
   function retire(live) {
     if (live.retirePromise) return live.retirePromise;
@@ -232,16 +279,17 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!live.retired) { live.retired = true; live.generation = randomUUID(); }
     live.lifecycle = 'disposing';
     live.retirePromise = (async () => {
-      await live.adapter?.dispose();
+      const cleanup = await Promise.allSettled([invalidateResources(live), Promise.resolve().then(() => live.adapter?.dispose())]);
+      if (cleanup.some(result => result.status === 'rejected')) throw fail('cleanup_pending');
       if (live.adapter?.cleanupConfirmed && !live.adapter.cleanupConfirmed()) throw fail('cleanup_pending');
       if (leases.get(live.key) === live) leases.delete(live.key);
       if (lives.get(live.record.conversationId) === live) lives.delete(live.record.conversationId);
-      if (focused === live.record.conversationId && !lives.has(live.record.conversationId)) focused = null;
+      if (focused === live.record.conversationId && !lives.has(live.record.conversationId)) { focused = null; contextRevision++; }
       touch(live);
       publish({ type: 'runtime_closed', backendInstance, owner: live.closedOwner, conversationId: live.record.conversationId, item: summary(live.record) });
     })().catch(e => { live.retirePromise = null; live.error = 'cleanup_pending';
       touch(live);
-      publish({ type: 'runtime_state', owner: owner(live), item: summary(live.record) }); throw e; });
+      publish({ type: 'runtime_state', owner: owner(live), item: summary(live.record) }); throw fail('cleanup_pending'); });
     return live.retirePromise;
   }
   function close(expected) { const live = resolve(expected, true); live.retired = true; return serialize(() => retire(live)); }
@@ -249,7 +297,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   async function invalidateWorkspace(id) { const results = await Promise.allSettled([...lives.values()].filter(l => l.record.workspace.workspaceId === id).map(l => retire(l))); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
   async function healthCheck() { for (const live of [...lives.values()]) { try { await validateWorkspace(live.record.workspace); } catch { await retire(live).catch(() => {}); } } }
   async function dispose() { disposed = true; await queue.catch(() => {}); const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
-  return { start, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace,
+  return { start, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
+    contextRevision: () => contextRevision,
     inUse: root => leases.has(rootKey(root)), liveCount: () => lives.size, runningCount: () => [...lives.values()].filter(l => l.activity !== 'idle').length,
     busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready'),
     async closeAll() { const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); },
