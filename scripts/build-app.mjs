@@ -24,9 +24,13 @@ import { packager } from '@electron/packager';
 import { sizeOf, mb, copyInto, removePaths, clearDir, COPYRIGHT } from './util.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const BUILD = path.join(ROOT, 'build');
+const outputAt = process.argv.indexOf('--output-root');
+const OUTPUT_ROOT = outputAt < 0 ? ROOT : process.argv[outputAt + 1];
+if (!OUTPUT_ROOT || !path.isAbsolute(OUTPUT_ROOT)) throw new Error('--output-root requires an absolute build directory');
+const BUILD = path.join(OUTPUT_ROOT, 'build');
 const STAGE = path.join(BUILD, 'electron-app');
-const OUT = path.join(ROOT, 'dist-app');
+const OUT = path.join(OUTPUT_ROOT, 'dist-app');
+if (outputAt >= 0 && (fs.existsSync(STAGE) || fs.existsSync(OUT))) throw new Error('independent application output must be fresh');
 const PDFJS = path.join(ROOT, 'node_modules', 'pdfjs-dist');
 const APP_NAME = 'Pi GUI';
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
@@ -50,14 +54,14 @@ const step = (n, msg) => console.log(`\n[${n}] ${msg}`);
 step(1, '构建后端产物');
 const serverCjs = path.join(BUILD, 'server.cjs');
 if (process.argv.includes('--rebuild') || !fs.existsSync(serverCjs)) {
-  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-exe.mjs')], { stdio: 'inherit', cwd: ROOT });
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-exe.mjs'), ...(outputAt >= 0 ? ['--output-root', OUTPUT_ROOT] : [])], { stdio: 'inherit', cwd: ROOT });
 } else {
   console.log('  复用已有的 build/server.cjs（要重建加 --rebuild）');
 }
 
 /* 2. 图标 */
 step(2, '生成图标');
-execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'make-icon.mjs')], { stdio: 'inherit', cwd: ROOT });
+execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'make-icon.mjs'), ...(outputAt >= 0 ? ['--output-root', OUTPUT_ROOT] : [])], { stdio: 'inherit', cwd: ROOT });
 
 /* 3. 组装应用目录
  *
@@ -189,6 +193,8 @@ const appPaths = await packager({
   quiet: true,
   icon: ICON,
   appVersion: VERSION,
+  // An independent output root has no ancestor repository package.json.
+  ...(outputAt >= 0 ? { electronVersion: JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules/electron/package.json'), 'utf8')).version } : {}),
   ...(electronZipDir ? { electronZipDir } : {}),
   /* LegalCopyright 必须显式给。
    *

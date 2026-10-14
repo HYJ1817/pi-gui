@@ -15,7 +15,11 @@ import * as esbuild from 'esbuild';
 import { clearDir } from './util.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const BUILD = path.join(ROOT, 'build');
+const outputAt = process.argv.indexOf('--output-root');
+const OUTPUT_ROOT = outputAt < 0 ? ROOT : process.argv[outputAt + 1];
+if (!OUTPUT_ROOT || !path.isAbsolute(OUTPUT_ROOT)) throw new Error('--output-root requires an absolute build directory');
+const BUILD = path.join(OUTPUT_ROOT, 'build');
+if (outputAt >= 0 && fs.existsSync(BUILD)) throw new Error('independent build output must be fresh');
 const PDFJS = path.join(ROOT, 'node_modules', 'pdfjs-dist');
 
 // Windows 上注入 SEA blob 用的哨兵

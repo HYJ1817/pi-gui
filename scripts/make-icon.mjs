@@ -23,7 +23,10 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, 'build', 'icon.ico');
+const outputAt = process.argv.indexOf('--output-root');
+const OUTPUT_ROOT = outputAt < 0 ? ROOT : process.argv[outputAt + 1];
+if (!OUTPUT_ROOT || !path.isAbsolute(OUTPUT_ROOT)) throw new Error('--output-root requires an absolute build directory');
+const OUT = path.join(OUTPUT_ROOT, 'build', 'icon.ico');
 const SRC = path.join(ROOT, 'assets', 'icon-src.png');
 
 const AMBER = [0xe8, 0xa3, 0x3d]; // Codex 风格的琥珀色
@@ -406,7 +409,7 @@ const ico = buildIco(entries);
 fs.writeFileSync(OUT, ico);
 
 // 顺手导一张 256 PNG，方便在别处复用（比如网页 favicon）
-fs.writeFileSync(path.join(ROOT, 'build', 'icon.png'), toPng(downscale(master, masterSize, 256), 256));
+fs.writeFileSync(path.join(OUTPUT_ROOT, 'build', 'icon.png'), toPng(downscale(master, masterSize, 256), 256));
 
 // --preview：把小尺寸放大 6 倍拼一张对照图，人眼确认 16px 下还认不认得出
 if (process.argv.includes('--preview')) {
@@ -431,7 +434,7 @@ if (process.argv.includes('--preview')) {
     }
     ox += s * Z + gap;
   }
-  fs.writeFileSync(path.join(ROOT, 'build', 'icon-preview.png'), toPng(sheet, W, H));
+  fs.writeFileSync(path.join(OUTPUT_ROOT, 'build', 'icon-preview.png'), toPng(sheet, W, H));
 }
 
 console.log(`母图  ${fromImage ? `assets/icon-src.png（${masterSize}px）` : '程序化绘制（256px）'}`);

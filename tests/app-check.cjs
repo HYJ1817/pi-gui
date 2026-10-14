@@ -21,9 +21,12 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 
 const ROOT = path.join(__dirname, '..');
-const APP = path.join(ROOT, 'dist-app', 'Pi GUI-win32-x64', 'resources', 'app');
-const APP_EXE = path.join(ROOT, 'dist-app', 'Pi GUI-win32-x64', 'Pi GUI.exe');
-const ICON = path.join(ROOT, 'build', 'icon.ico');
+const OUTPUT_AT = process.argv.indexOf('--output-root');
+const OUTPUT_ROOT = OUTPUT_AT < 0 ? ROOT : process.argv[OUTPUT_AT + 1];
+if (!OUTPUT_ROOT || !path.isAbsolute(OUTPUT_ROOT)) throw Error('invalid independent build directory');
+const APP = path.join(OUTPUT_ROOT, 'dist-app', 'Pi GUI-win32-x64', 'resources', 'app');
+const APP_EXE = path.join(OUTPUT_ROOT, 'dist-app', 'Pi GUI-win32-x64', 'Pi GUI.exe');
+const ICON = path.join(OUTPUT_ROOT, 'build', 'icon.ico');
 const SANDBOX = path.join(os.tmpdir(), 'pi-gui-appcheck');
 const DATA = path.join(os.tmpdir(), 'pi-gui-appcheck-data');
 /* pi 的工作目录必须显式给。
@@ -153,7 +156,8 @@ async function main() {
    * 那样测不出「真的用上了随包资源」。 */
   for (const d of [SANDBOX, DATA, WORK]) fs.rmSync(d, { recursive: true, force: true });
   for (const d of [SANDBOX, DATA, WORK]) fs.mkdirSync(d, { recursive: true });
-  fs.cpSync(APP, SANDBOX, { recursive: true });
+  const { copyInto } = await import('../scripts/util.mjs');
+  copyInto(path.dirname(SANDBOX), APP, path.basename(SANDBOX));
 
   check('测试目录里没有 node_modules', () => {
     const hit = hasNodeModulesAncestor(SANDBOX);

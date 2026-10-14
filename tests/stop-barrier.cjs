@@ -156,6 +156,7 @@ async function main() {
   const { createRouter } = await import('../server/router.js');
   const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
   const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
+  const { createSessionRevertStopAndDrain } = await import('../server/session-revert-object-runtime-authority.js');
   const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
 
   const cwd = os.tmpdir();
@@ -181,9 +182,9 @@ async function main() {
   let syncing = false;
   const guarded = [], modelAccepted = [], activityAccepted = [];
   const context = {
-    createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority,
+    createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
-    managedProcesses: null, worktrees: null,
+    managedProcesses: { manager: null }, worktrees: null,
     createRouter(options) { return createRouter(options); },
     rpc: raw,
     auth: { denyRequest: () => null },

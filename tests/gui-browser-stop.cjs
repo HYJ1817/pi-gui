@@ -50,6 +50,7 @@ async function main() {
   const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
   const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
   const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
+  const { createSessionRevertStopAndDrain } = await import('../server/session-revert-object-runtime-authority.js');
   let ack, entered, stopped = false, writeError = null, lastSendResult;
   let abortReply = true;
   const writes = [], guarded = [], modelAccepted = [], activityAccepted = [];
@@ -95,7 +96,7 @@ async function main() {
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
   let syncing = false, guardError = null, wrapped = null, captureError = null, disabled = 0;
   const context = {
-    createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority,
+    createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     createRouter(options) { wrapped = options.rpc; return createRouter(options); },
     rpc: { ...raw, send(command) {
@@ -109,7 +110,7 @@ async function main() {
       lastSendResult?.catch(() => {});
       return lastSendResult;
     } },
-    auth: { denyRequest: () => null }, sse: {}, managedProcesses: null, worktrees: null,
+    auth: { denyRequest: () => null }, sse: {}, managedProcesses: { manager: null }, worktrees: null,
     sessionChanges: { assertReady: async () => { if (captureError) throw captureError; }, disable: async () => { disabled++; } },
     providerAuth: { snapshot: () => ({ sync: { state: syncing ? 'syncing' : 'idle' } }) },
     modelGeneration: {

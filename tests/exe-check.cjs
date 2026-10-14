@@ -12,7 +12,10 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
-const EXE = path.join(ROOT, 'build', 'Pi GUI.exe');
+const OUTPUT_AT = process.argv.indexOf('--output-root');
+const OUTPUT_ROOT = OUTPUT_AT < 0 ? ROOT : process.argv[OUTPUT_AT + 1];
+if (!OUTPUT_ROOT || !path.isAbsolute(OUTPUT_ROOT)) throw Error('invalid independent build directory');
+const EXE = path.join(OUTPUT_ROOT, 'build', 'Pi GUI.exe');
 const PORT = Number(process.env.CHECK_PORT || 7797);
 const BASE = `http://127.0.0.1:${PORT}`;
 const PDF = path.join(os.tmpdir(), 'pi-gui-fixtures', '发酵罐空气分布器设计.pdf');

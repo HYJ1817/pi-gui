@@ -58,7 +58,18 @@ export const slash = (p) => p.split(path.sep).join('/');
 export function copyInto(destDir, src, asName) {
   const dest = path.join(destDir, asName || path.basename(src));
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.cpSync(src, dest, { recursive: true });
+  // Explicit Unicode filesystem calls avoid Node 24.14's Windows cpSync
+  // directory-path corruption. Build inputs are fixed ordinary assets.
+  function copy(source, target) {
+    const stat = fs.lstatSync(source);
+    if (stat.isSymbolicLink()) throw new Error('build asset link is unsupported');
+    if (stat.isDirectory()) {
+      fs.mkdirSync(target, { recursive: true });
+      for (const name of fs.readdirSync(source)) copy(path.join(source, name), path.join(target, name));
+    } else if (stat.isFile()) fs.copyFileSync(source, target);
+    else throw new Error('build asset type is unsupported');
+  }
+  copy(src, dest);
   return dest;
 }
 
