@@ -549,9 +549,13 @@ function mkSession(dir, { id, cwd, ts = T1, entries = [], name = null, raw = nul
       dataDir: path.join(TMP, 'big-data'),
     });
     const bigDir = path.join(bigSessions.root, bigSessions._internals.dirNameFor(BIG_PROJ));
+    let parseReads = 0;
+    const measuredSessions = { ...bigSessions, forSearch: { ...bigSessions.forSearch,
+      readCapped(...args) { parseReads++; return bigSessions.forSearch.readCapped(...args); },
+    } };
     const bigSearch = createSessionSearch({
       runtime: bigRuntime,
-      sessions: bigSessions,
+      sessions: measuredSessions,
       limits: { maxResults: 20, maxTotalBytes: 4 * 1024 * 1024 },
     });
 
@@ -608,13 +612,19 @@ function mkSession(dir, { id, cwd, ts = T1, entries = [], name = null, raw = nul
     check('12e. 单次搜索不会长时间按住事件循环（<1500ms）', () => maxGap < 1500 || `最大停顿 ${maxGap}ms`);
     check('12f. 不产生巨量临时对象（堆增长 <200MB）', () => heapMb < 200 || `堆增长 ${heapMb.toFixed(1)}MB`);
 
-    /* 缓存确实生效：第二次搜同一个词应当命中解析缓存（同一批文件、mtime/size 未变）。
-     * 只断言「不慢于第一次」—— 时序抖动的余量还是要留的。 */
+    /* 缓存资格按实际解析读取判断，耗时只作观测。共享 runner 的调度延迟
+     * 不代表缓存失效；清空缓存的对照还必须证明计数器确实覆盖读取路径。 */
+    const firstReads = parseReads;
     const t1 = Date.now();
-    await bigSearch.search('NEEDLE');
+    const cachedResult = await bigSearch.search('NEEDLE');
     const second = Date.now() - t1;
-    check('12g. 再搜一次走缓存（不慢于首次）', () => second <= elapsed + 50 || `首次 ${elapsed}ms / 第二次 ${second}ms`);
+    check('12g. 再搜一次复用解析缓存且结果一致', () =>
+      (firstReads === N && parseReads === firstReads && JSON.stringify(cachedResult) === JSON.stringify(r)) ||
+      `首次解析读取 ${firstReads} / 再次累计 ${parseReads}`);
     console.log(`       第二次（命中缓存）耗时 ${second}ms`);
+    bigSearch.clearCache();
+    await bigSearch.search('NEEDLE');
+    check('12h. 清空缓存后重新读取全部会话', () => parseReads === firstReads + N || `累计解析读取 ${parseReads}`);
   }
 
   cleanup();
