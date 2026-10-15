@@ -7,7 +7,7 @@ import { constants } from 'node:fs';
 import { measureStorageFiles, measureAllocationUnit } from './session-revert-storage.js';
 import { normalizeObjectObservation, objectScopeBinding, OBJECT_PROFILE_ID } from './session-revert-object-profile.js';
 import { OBJECT_HELPER_HASH } from './session-revert-object-source.js';
-import { OBJECT_PROVIDER_ID, validateObjectPlan, sameObjectScope, objectRelativePath } from './session-revert-object-contract.js';
+import { OBJECT_PROVIDER_ID, validateObjectPlan, validatePersistedObjectPlan, sameObjectScope, objectRelativePath } from './session-revert-object-contract.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 const GAP_REASONS = new Set(['unknown_tool', 'shell', 'disabled', 'source_changed', 'capture_failed', 'restart', 'excluded_path', 'incomplete', 'external_writer_possible', 'session_changed', 'extension_unavailable']);
@@ -156,7 +156,7 @@ export async function createSessionChangeStore({ dataDir, privacyCheck, budgets 
         if (!plan || !APPLY_STATES.has(plan.state) || plan.planId !== identifier(plan.planId) || scopeKey(plan.scope) !== scopeKey(s)) fail('evidence_integrity_failed');
         if(event.type==='object_apply_v1'&&plan.providerId!==OBJECT_PROVIDER_ID || event.type==='apply'&&(plan.providerId!==undefined||plan.profileId===OBJECT_PROFILE_ID||(plan.files??plan.paths??[]).some(f=>f.action==='write_original')))fail('evidence_integrity_failed');
         if (plan.providerId === OBJECT_PROVIDER_ID) {
-          try { validateObjectPlan(plan); } catch { fail('evidence_integrity_failed'); }
+          try { validatePersistedObjectPlan(plan); } catch { fail('evidence_integrity_failed'); }
           if (!sameObjectScope(plan.scope, s) || plan.revision !== event.revision) fail('evidence_integrity_failed');
         }
         plans.set(scopeKey(s) + ':' + plan.planId, plan);

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { TextDecoder } from 'node:util';
-import { validateObjectPlan, sameObjectScope } from './session-revert-object-contract.js';
+import { validatePersistedObjectPlan, sameObjectScope } from './session-revert-object-contract.js';
 import { objectScopeBinding } from './session-revert-object-profile.js';
 import { readRecoveryFile } from './session-revert-object-material-reader.js';
 
@@ -88,7 +88,7 @@ export function createSessionRevertObjectRecoveryReader({ dataDir, authorize = (
               revisions.set(wk, event.revision); chain = envelope.hash; count++; validBytes = end + 1; offset = end + 1; continue;
             }
             if (event.type !== 'object_apply_v1') fail('evidence_integrity_failed');
-            validateObjectPlan(event.plan);
+            validatePersistedObjectPlan(event.plan);
             event.plan.scope = fullScope(event.plan.scope);
             if (!event.scope.runtimeOwner || key(event.plan.scope) !== key(event.scope) || !sameObjectScope(event.scope, event.plan.scope)
               || event.plan.revision !== event.revision) fail('evidence_integrity_failed');

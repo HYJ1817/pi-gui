@@ -7,13 +7,13 @@ import { evaluateObjectProfile, READONLY_OBJECT_PROOF, OBJECT_PROFILE_ID } from 
 import { OBJECT_HELPER_HASH } from './session-revert-object-source.js';
 import { runSessionRevert } from './session-revert-compute.js';
 import { boundedRevertDiff } from './session-revert-service.js';
-import { OBJECT_PROVIDER_ID, OBJECT_WRITER_HASH, OBJECT_RISK_VERSION, objectHash, objectFail as fail, objectIdentifier as id, objectFileId, objectRelativePath, sameObjectScope, validateObjectPlan } from './session-revert-object-contract.js';
+import { OBJECT_PROVIDER_ID, OBJECT_WRITER_HASH, OBJECT_RISK_VERSION, objectHash, objectFail as fail, objectIdentifier as id, objectFileId, objectRelativePath, sameObjectScope, validateObjectPlan, validatePersistedObjectPlan } from './session-revert-object-contract.js';
 
 const METHODS=['prepareObjectRevert','applyObjectRevert','cancelObjectRevert','inspectObjectRecovery','prepareObjectRecovery','exportVerifiedRecoveryMaterial'];
 // No option, request, environment setting or exported factory enables this provider.
 export function createSessionRevertObjectService(){return Object.freeze(Object.fromEntries([...METHODS.map(name=>[name,async()=>fail('production_allowlist_empty')]),['dispose',async()=>{}]]));}
-const exact=(v,keys)=>v&&Object.getPrototypeOf(v)===Object.prototype&&Object.keys(v).sort().join('|')===keys.slice().sort().join('|');
-const closed=(v,keys)=>v&&Object.getPrototypeOf(v)===Object.prototype&&Object.keys(v).every(k=>keys.includes(k));
+const closed=(v,keys)=>v&&Object.getPrototypeOf(v)===Object.prototype&&Reflect.ownKeys(v).every(k=>typeof k==='string'&&keys.includes(k)&&Object.hasOwn(Object.getOwnPropertyDescriptor(v,k),'value'));
+const exact=(v,keys)=>closed(v,keys)&&Reflect.ownKeys(v).length===keys.length;
 const safeError=e=>new Set(['stale_evidence','stale_current','stale_runtime','stale_workspace','active_writer','plan_expired','confirmation_required','plan_consumed','backup_invalid','recovery_required','evidence_integrity_failed','evidence_storage_failed','evidence_quota_exceeded','native_not_ready','native_unconfirmed','invalid_commit','object_metadata_changed','object_identity_changed']).has(e?.code)?e.code:'object_restore_unconfirmed';
 const normalizedScope=s=>({...s,projectId:s.projectId??s.runtimeOwner?.projectId,repoId:s.repoId??s.runtimeOwner?.repoId??null,workspaceFingerprint:s.workspaceFingerprint??null});
 const metadataEqual=(a,b)=>a.file.id===b.file.id&&a.file.attributes===b.file.attributes&&a.platform.volumeId===b.platform.volumeId&&a.times.creation===b.times.creation&&JSON.stringify(a.path)===JSON.stringify(b.path)&&['owner','group','dacl'].every(k=>a.security[k].value===b.security[k].value)&&JSON.stringify(a.streams)===JSON.stringify(b.streams)&&JSON.stringify(a.ea)===JSON.stringify(b.ea)&&(a.security.sacl.state!=='known'||b.security.sacl.state==='known'&&a.security.sacl.value===b.security.sacl.value);
@@ -48,10 +48,10 @@ function createObjectServiceCore({store,withAuthority,withMutationAuthority,capa
  const leases=new Map(),inflight=new Map(),preparing=new Set();let disposed=false;
  const data=async()=>typeof store==='function'?store():store;
  const options=expectedRevision=>({capability,expectedRevision});
- const publicPlan=(p,token,diff)=>({ok:true,providerId:p.providerId,profileId:p.profileId,helperHash:p.helperHash,proofId:p.proofId,planId:p.planId,kind:p.kind,revision:p.revision,expiresAt:p.expiresAt,backupReady:true,riskNoticeVersion:2,nonAtomic:true,files:[{fileId:p.files[0].fileId,relativePath:p.files[0].relativePath,state:p.state,diff}],...(token?{confirmationToken:token}:{})});
- const publicResult=(p,durable=true)=>({ok:p.state==='applied_verified',planId:p.planId,requestId:p.requestId,completion:p.state,durable,recoveryAvailable:true,retryAllowed:false,nonAtomic:true});
+ const publicPlan=(p,token,diff)=>({ok:true,providerId:p.providerId,profileId:p.profileId,helperHash:p.helperHash,proofId:p.proofId,planId:p.planId,kind:p.kind,revision:p.revision,expiresAt:p.expiresAt,backupReady:true,riskNoticeVersion:p.riskNoticeVersion,nonAtomic:true,currentBytes:p.files[0].currentRef.bytes,candidateBytes:p.files[0].candidateRef.bytes,objectId:p.files[0].currentObject.file.id,workspaceFingerprint:p.scope.workspaceFingerprint,workspaceId:p.scope.workspaceId,workspaceEpoch:p.scope.workspaceEpoch,runtimeGeneration:p.scope.runtimeOwner.runtimeGeneration,conversationId:p.scope.conversationId,files:[{fileId:p.files[0].fileId,relativePath:p.files[0].relativePath,state:p.state,diff}],...(token?{confirmationToken:token}:{})});
+ const publicResult=(p,durable=true)=>({ok:p.state==='applied_verified',planId:p.planId,requestId:p.requestId,completion:p.state,durable,backupReady:true,objectMaintained:p.state==='applied_verified',recoveryAvailable:true,retryAllowed:false,nonAtomic:true});
  async function revision(s,scope,expected){const r=await s.previewRevision(scope);if(r.revision!==expected||r.gapRevision!==0)fail('stale_evidence');}
- async function get(s,a,planId){if(!id(planId))fail('invalid_request');const p=await s.objectGet(a.scope,planId,options());if(!p||!sameObjectScope(p.scope,a.scope)||p.runtimeContext!==a.contextRevision)fail('stale_runtime');return validateObjectPlan(p);}
+ async function get(s,a,planId,historical=false){if(!id(planId))fail('invalid_request');const p=await s.objectGet(a.scope,planId,options());if(!p||!sameObjectScope(p.scope,a.scope)||p.runtimeContext!==a.contextRevision)fail('stale_runtime');validatePersistedObjectPlan(p);if(!historical&&p.riskNoticeVersion!==OBJECT_RISK_VERSION)fail('risk_version_unsupported');return p;}
  async function finish(planId){const owned=leases.get(planId);if(!owned)return;clearTimeout(owned.timer);leases.delete(planId);try{await owned.store.restoreRecoveryRelease(owned.scope,planId);}finally{owned.lease.release();}}
  async function update(s,a,p,state,extra={}){
   const next={...p.files[0],state,...(extra.file??{})};const patch={state,completion:state,files:[next],...(extra.requestId!==undefined?{requestId:extra.requestId}:{})};
@@ -122,7 +122,7 @@ function createObjectServiceCore({store,withAuthority,withMutationAuthority,capa
   });
  }
  function confirm(body,p){
-  if(!closed(body,['owner','conversationId','providerId','profileId','helperHash','proofId','planId','confirmationToken','requestId','riskNoticeVersion','confirmation'])||body.providerId!==p.providerId||body.profileId!==p.profileId||body.helperHash!==p.helperHash||body.proofId!==p.proofId||body.riskNoticeVersion!==p.riskNoticeVersion||!id(body.requestId)||typeof body.confirmationToken!=='string'||!/^[0-9a-f]{64}$/.test(body.confirmationToken)||!exact(body.confirmation,['externalWritersPaused','partialWriteRiskAccepted'])||body.confirmation.externalWritersPaused!==true||body.confirmation.partialWriteRiskAccepted!==true)fail('confirmation_required');
+  if(!closed(body,['owner','conversationId','providerId','profileId','helperHash','proofId','planId','confirmationToken','requestId','riskNoticeVersion','confirmation'])||body.providerId!==p.providerId||body.profileId!==p.profileId||body.helperHash!==p.helperHash||body.proofId!==p.proofId||p.riskNoticeVersion!==OBJECT_RISK_VERSION||body.riskNoticeVersion!==OBJECT_RISK_VERSION||!id(body.requestId)||typeof body.confirmationToken!=='string'||!/^[0-9a-f]{64}$/.test(body.confirmationToken)||!exact(body.confirmation,['externalWritersPaused','lastCheckRaceAccepted','partialOverwriteAccepted','metadataLimitsAccepted'])||['externalWritersPaused','lastCheckRaceAccepted','partialOverwriteAccepted','metadataLimitsAccepted'].some(k=>body.confirmation[k]!==true))fail('confirmation_required');
   if(!timingSafeEqual(Buffer.from(objectHash(body.confirmationToken),'hex'),Buffer.from(p.tokenHash,'hex')))fail('confirmation_required');
  }
  async function applyOnce(req,body){
@@ -155,7 +155,7 @@ function createObjectServiceCore({store,withAuthority,withMutationAuthority,capa
    }catch(e){
     const state=intent?'recovery_required':'not_applied';
     try{const latest=await s.objectGet(a.scope,p.planId,options());if(latest?.state==='applied_verified')return publicResult(latest);if(latest&&['prepared','replacing'].includes(latest.state))p=await update(s,a,latest,state,{...(intent?{requestId:body.requestId}:{}),file:{failureCode:safeError(e)}});return publicResult(p);}
-    catch{return {ok:false,planId:p.planId,requestId:body.requestId,completion:state,durable:false,recoveryAvailable:true,retryAllowed:false,nonAtomic:true,reason:'evidence_storage_failed'};}
+    catch{return {ok:false,planId:p.planId,requestId:body.requestId,completion:state,durable:false,backupReady:false,objectMaintained:false,recoveryAvailable:true,retryAllowed:false,nonAtomic:true,reason:'evidence_storage_failed'};}
    }finally{if(attempt)await attempt.close();}
   },{lease:owned.lease});}finally{await finish(body.planId);}
  }
@@ -165,8 +165,8 @@ function createObjectServiceCore({store,withAuthority,withMutationAuthority,capa
   const task=applyOnce(req,body);inflight.set(body.planId,{requestId:body.requestId,task});try{return await task;}finally{inflight.delete(body.planId);}
  }
  async function cancel(req,body){if(!closed(body,['owner','conversationId','planId']))fail('invalid_request');return withAuthority(req,body,async a=>{const s=await data(),p=await get(s,a,body.planId);if(inflight.has(p.planId)||p.state!=='prepared')fail('plan_consumed');const result=await update(s,a,p,'not_applied',{file:{failureCode:'cancelled'}});await finish(p.planId);return publicResult(result);});}
- async function inspectRecovery(req,body){if(!closed(body,['owner','conversationId','planId']))fail('invalid_request');return withAuthority(req,body,async a=>{const s=await data(),p=await get(s,a,body.planId),f=p.files[0];await s.restoreRead(a.scope,f.currentRef);await s.restoreRead(a.scope,f.candidateRef);await a.revalidate();return {...publicResult(p),revision:(await s.previewRevision(a.scope)).revision,readOnly:true};});}
- async function exportMaterial(req,body){if(!closed(body,['owner','conversationId','planId','material'])||!['current','candidate'].includes(body.material))fail('invalid_request');return withAuthority(req,body,async a=>{const s=await data(),p=await get(s,a,body.planId),ref=p.files[0][body.material+'Ref'],bytes=await s.restoreRead(a.scope,ref);await a.revalidate();return {bytes,digest:ref.digest,readOnly:true,applyEligible:false};});}
+ async function inspectRecovery(req,body){if(!closed(body,['owner','conversationId','planId']))fail('invalid_request');return withAuthority(req,body,async a=>{const s=await data(),p=await get(s,a,body.planId,true),f=p.files[0];await s.restoreRead(a.scope,f.currentRef);await s.restoreRead(a.scope,f.candidateRef);await a.revalidate();return {...publicResult(p),revision:(await s.previewRevision(a.scope)).revision,readOnly:true};});}
+ async function exportMaterial(req,body){if(!closed(body,['owner','conversationId','planId','material'])||!['current','candidate'].includes(body.material))fail('invalid_request');return withAuthority(req,body,async a=>{const s=await data(),p=await get(s,a,body.planId,true),ref=p.files[0][body.material+'Ref'],bytes=await s.restoreRead(a.scope,ref);await a.revalidate();return {bytes,digest:ref.digest,readOnly:true,applyEligible:false};});}
  function prepare(req,body,recovery){const task=prepareOnce(req,body,recovery);preparing.add(task);return task.finally(()=>preparing.delete(task));}
  return Object.freeze({prepareObjectRevert:(req,body)=>prepare(req,body,false),prepareObjectRecovery:(req,body)=>prepare(req,body,true),applyObjectRevert:apply,cancelObjectRevert:cancel,inspectObjectRecovery:inspectRecovery,exportVerifiedRecoveryMaterial:exportMaterial,
   async dispose(){disposed=true;await Promise.allSettled([...preparing,...[...inflight.values()].map(v=>v.task)]);await Promise.allSettled([...leases.keys()].map(expire));}});

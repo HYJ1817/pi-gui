@@ -2622,3 +2622,15 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .session-change-history-file { padding: 8px 0; }
 .session-change-history-file .session-change-actions { padding: 6px 0; }
 .session-change-preview { margin-top: 8px; min-width: 0; }
+.session-object-action { margin-top: 12px; min-width: 0; }
+.session-object-action .btn { white-space: normal; height: auto; min-height: 30px; max-width: 100%; }
+.object-revert-modal { z-index: 1002; padding: 18px; }
+.object-revert-modal > .modal-card { max-width: min(820px, 100%); max-height: calc(100vh - 36px); display: flex; flex-direction: column; overflow: hidden; }
+.object-revert-modal .object-revert-body { min-height: 0; overflow: auto; margin: 8px 0 14px; }
+.object-revert-modal .modal-actions { flex: 0 0 auto; flex-wrap: wrap; }
+.object-revert-modal .modal-actions .btn { white-space: normal; height: auto; min-height: 32px; }
+.object-revert-risk { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; font-size: 12px; line-height: 1.65; color: var(--t2); }
+.object-revert-risk input { flex: 0 0 auto; margin-top: 4px; }
+.object-revert-diff { max-height: 30vh; overflow: auto; }
+.object-revert-result .btn, .object-revert-recovery .btn { white-space: normal; height: auto; min-height: 32px; margin: 4px 6px 4px 0; max-width: 100%; }
+.object-revert-modal .btn:disabled, .session-object-action .btn:disabled { opacity: .45; cursor: not-allowed; }

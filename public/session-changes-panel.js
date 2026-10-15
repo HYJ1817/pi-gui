@@ -1,10 +1,12 @@
-/* Read-only journal projection. No Git, RPC commands, prepare or apply imports. */
+/* Journal projection with a separately qualified, default-off object action. */
 import { S } from './state.js';
 import { runtimeStore, onRuntimeChange } from './runtime-state.js';
 import { gitConversationScope, fetchSessionEvidence, previewSessionRevert,
   previewSessionRevertRecovery, downloadSessionRevertBackup } from './api.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
 import { diffHtml, bindDiffToggles } from './diff.js';
+import { createObjectRevertUI } from './session-revert-object-ui.js';
+import { objectRevertTransport } from './session-revert-object-api.js';
 
 const REASONS = {
   overlapping_changes:'当前内容与拟撤销区域冲突。', ambiguous_mapping:'无法唯一确定修改位置。',
@@ -37,13 +39,16 @@ function defaultContext() {
 }
 const wire=context=>({conversationId:context.conversationId,...(context.owner?{owner:context.owner}:{})});
 
-export function openSessionChangesPanel({context=defaultContext,transport}={}) {
+export function openSessionChangesPanel({context=defaultContext,transport,objectTransport}={}) {
   const api=transport || {query:fetchSessionEvidence,preview:previewSessionRevert,history:previewSessionRevertRecovery,export:downloadSessionRevertBackup};
   let alive=true,serial=0,viewGeneration=0,signature=fingerprint(context()),tab='changes',summary=null;
   let head,body,notice,instance;
+  const objectAPI=objectTransport || objectRevertTransport;
+  const objectContext=()=>({...context(),...(summary?.target?.workspaceFingerprint?{workspaceFingerprint:summary.target.workspaceFingerprint}:{})});
+  const objectUI=createObjectRevertUI({context:objectContext,isCurrent:()=>alive&&Boolean(instance?.isCurrent()),transport:objectAPI});
   const current=(token,key)=>alive&&instance.isCurrent()&&token===serial&&key===fingerprint(context());
   function hint(text,host=body){const p=node('p','session-change-note',text);p.setAttribute('role','status');host.append(p);return p;}
-  function clear(){serial++;viewGeneration++;summary=null;body.replaceChildren();}
+  function clear(){objectUI.invalidate();serial++;viewGeneration++;summary=null;body.replaceChildren();}
   function evidenceChanged(){if(!alive)return;clear();hint('文件或修改证据可能已变化，请刷新后重新预览。');}
   function drawDiff(host,file) {
     if(file.diffUnavailable){hint(sessionRevertReason(file.diffUnavailable),host);return;}
@@ -53,6 +58,7 @@ export function openSessionChangesPanel({context=defaultContext,transport}={}) {
     const root=box.querySelector('.diff');if(root)bindDiffToggles(root);host.append(box);
   }
   async function preview(file,host,trigger) {
+    objectUI.invalidate();
     const token=++serial,key=fingerprint(context()),identity={conversationId:summary?.target?.conversationId || context().conversationId,
       ...(summary?.owner?{owner:summary.owner}:{})},revision=summary?.revision;
     // Only one bounded body at a time. Re-opening computes current C again.
@@ -70,6 +76,8 @@ export function openSessionChangesPanel({context=defaultContext,transport}={}) {
     hint('差异显示当前 C → 候选 R：移除的是拟撤销内容，新增的是拟恢复内容；后续独立修改仅在算法能够证明时保留。',host);
     hint('候选仅反映本次读取；后续编辑需要重新预览，外部写入未被排除。',host);
     drawDiff(host,candidate);
+    const objectHost=node('div','session-object-action');host.append(objectHost);
+    objectUI.select({...file,evidenceRevision:revision},objectHost);
   }
   function drawSummary(result) {
     summary=result;
@@ -95,6 +103,7 @@ export function openSessionChangesPanel({context=defaultContext,transport}={}) {
     if(result.nextCursor)body.append(button('下一页',()=>void load(result.nextCursor)));
   }
   async function compare(plan,file,host,trigger) {
+    objectUI.invalidate();
     const token=++serial,key=fingerprint(context());
     for(const old of body.querySelectorAll('.session-change-preview'))old.replaceChildren();
     trigger.disabled=true;hint('正在比较历史备份…',host);
@@ -131,13 +140,33 @@ export function openSessionChangesPanel({context=defaultContext,transport}={}) {
       }
     }
   }
+  function drawObjectHistory(result) {
+    for(const record of result?.ok?result.plans || []:[]) {
+      const row=node('article','session-change-row');body.append(row);
+      row.append(node('div','session-change-path',record.relativePath || '单文件对象恢复记录'));
+      hint(`受限对象恢复 · ${STATES[record.completion] || STATES[record.state] || '历史状态未知'}`,row);
+      hint(`计划：${record.planId} · 持久记录：${record.durable===true?'已保存':'未完成或未知'} · 备份：${record.backupReady===true?'已验证可用':'不可确认'}`,row);
+      hint('历史记录仅显示状态，不会恢复确认或自动提交。正式产品恢复仍关闭。',row);
+      if(record.completion==='recovery_required'||record.state==='recovery_required') {
+        const target=node('div','session-change-preview');
+        row.append(button('查看对象恢复材料',()=>objectUI.openRecovery(record,target)),target);
+      }
+    }
+  }
   async function load(cursor) {
     clear();const token=serial,key=signature=fingerprint(context()),identity=wire(context());
     hint('正在读取…');
-    const result=tab==='changes'?await api.query({...identity,limit:25,...(cursor?{cursor}:{})}):await api.history(identity);
+    const results=tab==='changes'?[await api.query({...identity,limit:25,...(cursor?{cursor}:{})})]:await Promise.all([
+      api.history(identity),Promise.resolve().then(()=>objectAPI.history?.(identity)).catch(()=>({ok:false}))]);
+    const result=results[0];
     if(!current(token,key))return;body.replaceChildren();
-    if(!result.ok){hint(sessionRevertReason(result.code));return;}
-    if(tab==='changes')drawSummary(result);else drawHistory(result);
+    if(tab==='history'&&results[1]?.ok){
+      const target=results[1].target,c=context(),workspace=c.owner || c.workspace;
+      if(target?.conversationId===c.conversationId&&target.workspaceId===workspace?.workspaceId&&target.workspaceEpoch===workspace?.workspaceEpoch
+        &&typeof target.workspaceFingerprint==='string')summary={target};
+    }
+    if(!result.ok){hint(sessionRevertReason(result.code));if(tab==='history')drawObjectHistory(results[1]);return;}
+    if(tab==='changes')drawSummary(result);else {drawHistory(result);drawObjectHistory(results[1]);}
   }
   const contextChanged=()=>{if(alive&&signature!==fingerprint(context()))void load();};
   const workspaceMatches=identity=>{
@@ -154,7 +183,7 @@ export function openSessionChangesPanel({context=defaultContext,transport}={}) {
   for(const name of ['pi-gui:git-scope','pi-gui:session-evidence-context'])document.addEventListener(name,contextChanged);
   for(const name of ['pi-gui:workspace-generation','pi-gui:session-switch'])document.addEventListener(name,closeForSwitch);
   document.addEventListener('pi-gui:session-evidence-changed',classicEvidenceChanged);
-  const dispose=()=>{if(!alive)return;alive=false;serial++;summary=null;body?.replaceChildren();offRuntime();
+  const dispose=()=>{if(!alive)return;objectUI.dispose();alive=false;serial++;summary=null;body?.replaceChildren();offRuntime();
     for(const name of ['pi-gui:git-scope','pi-gui:session-evidence-context'])document.removeEventListener(name,contextChanged);
     for(const name of ['pi-gui:workspace-generation','pi-gui:session-switch'])document.removeEventListener(name,closeForSwitch);
     document.removeEventListener('pi-gui:session-evidence-changed',classicEvidenceChanged);};

@@ -6,6 +6,7 @@ import { json, readRawBody } from './http-utils.js';
 import { runSessionRevert } from './session-revert-compute.js';
 import { SESSION_REVERT_REASONS } from '../lib/session-revert.js';
 import { createSessionRevertService, revertFileId, safeRevertCode } from './session-revert-service.js';
+import { createSessionRevertObjectQualification, createSessionRevertObjectHistory } from './session-revert-object-presentation.js';
 
 const DEFAULTS = { maxFiles: 32, maxOperations: 128, rawBytes: 128 * 1024 ** 2, fileBytes: 2 * 1024 ** 2, deadlineMs: 30000, computeMs: 2000, diffBytes: 32 * 1024 };
 const REQUIRES = ['metadata_validation', 'prepare_backup', 'confirmation', 'bounded_writer'];
@@ -106,12 +107,20 @@ function previewDiff(current, candidate, maxBytes) {
 export function createSessionRevertRoutes({ store, withAuthority, withMutationAuthority, withReadAdmission, writer, budgets = {} } = {}) {
   const limits = Object.fromEntries(Object.entries(DEFAULTS).map(([key, maximum]) => [key, Number.isSafeInteger(budgets[key]) && budgets[key] > 0 ? Math.min(maximum, budgets[key]) : maximum]));
   const service=createSessionRevertService({store,withAuthority,withMutationAuthority,...(writer?{writer}:{})});
+  const objectQualification=createSessionRevertObjectQualification({store,withAuthority});
+  const objectHistory=createSessionRevertObjectHistory({store,withAuthority});
   async function handle(req, res, url = new URL(req.url, 'http://localhost')) {
     if(withReadAdmission){
       try{withReadAdmission();}
       catch(e){return json(res,503,{ok:false,code:e?.code==='evidence_initializing'?'evidence_initializing':'evidence_unavailable'});}
     }
     const endpoint=url.pathname.slice('/api/session-revert/'.length);
+    if(['object-qualification','object-history'].includes(endpoint)){
+      if(req.method!=='POST')return json(res,405,{ok:false,code:'method_not_allowed'});
+      let body;try{body=JSON.parse((await readRawBody(req,16*1024)).toString('utf8'));}catch(e){return json(res,e instanceof SyntaxError?400:413,{ok:false,code:e instanceof SyntaxError?'invalid_request':'request_too_large'});}
+      if(!validBody({...body,...(endpoint==='object-history'?{evidenceIds:['history']}:{}) ,mode:'confirmed_limited'},limits.maxOperations))return json(res,400,{ok:false,code:'invalid_request'});
+      try{return json(res,200,await (endpoint==='object-history'?objectHistory:objectQualification)(req,body));}catch(e){const code=e?.code==='invalid_request'?'invalid_request':safeCode(e);return json(res,code==='invalid_request'?400:409,{ok:false,code});}
+    }
     if (endpoint === 'query') {
       if (req.method !== 'POST') return json(res,405,{ok:false,code:'method_not_allowed'});
       let body;
@@ -131,7 +140,7 @@ export function createSessionRevertRoutes({ store, withAuthority, withMutationAu
           if(fresh.revision!==summary.revision || fresh.gapRevision!==summary.gapRevision)fail('stale_evidence');
           return {ok:true,...summary,...(authority.capture?{capture:{...summary.capture,...authority.capture}}:{}),
             owner:authority.scope.runtimeOwner?{...authority.scope.runtimeOwner}:null,
-            target:{conversationId:authority.scope.conversationId,workspaceId:authority.scope.workspaceId,workspaceEpoch:authority.scope.workspaceEpoch},
+            target:{conversationId:authority.scope.conversationId,workspaceId:authority.scope.workspaceId,workspaceEpoch:authority.scope.workspaceEpoch,workspaceFingerprint:authority.scope.workspaceFingerprint??null},
             activeWriter:authority.activeWriter!==false, mode:'confirmed_limited',applyEligible:false,externalConcurrencyUnexcluded:true};
         },{allowActiveWriter:true});
         return json(res,200,result);

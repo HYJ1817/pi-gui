@@ -72,7 +72,7 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
   service=await createService();
   const evidenceRevision=(await store.previewRevision(scope)).revision,fileId=objectFileId(scope,relativePath);
   const body={owner,conversationId:scope.conversationId,evidenceIds:[evidenceId],fileId,evidenceRevision};
-  const confirmation=(p,requestId=crypto.randomUUID())=>({owner:state.scope.runtimeOwner,conversationId:scope.conversationId,providerId:'windows-original-object-v1',profileId:'windows-original-object-v1',helperHash:OBJECT_WRITER_HASH,proofId:'p33-d2-isolated',planId:p.planId,confirmationToken:p.confirmationToken,requestId,riskNoticeVersion:2,confirmation:{externalWritersPaused:true,partialWriteRiskAccepted:true}});
+  const confirmation=(p,requestId=crypto.randomUUID())=>({owner:state.scope.runtimeOwner,conversationId:scope.conversationId,providerId:'windows-original-object-v1',profileId:'windows-original-object-v1',helperHash:OBJECT_WRITER_HASH,proofId:'p33-d2-isolated',planId:p.planId,confirmationToken:p.confirmationToken,requestId,riskNoticeVersion:3,confirmation:{externalWritersPaused:true,lastCheckRaceAccepted:true,partialOverwriteAccepted:true,metadataLimitsAccepted:true}});
   const value={root,target,options,scope,state,admission,evidenceId,evidenceRevision,fileId,body,before,after,current,relativePath,confirmation,createService,dependencies,
    get store(){return store;},get service(){return service;},
    async reopen(){store=await createSessionChangeStore(options);return store;},

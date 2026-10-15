@@ -3,7 +3,7 @@ import { objectScopeBinding, OBJECT_PROFILE_ID, normalizeObjectObservation, OBJE
 import { OBJECT_HELPER_HASH } from './session-revert-object-source.js';
 export const OBJECT_PROVIDER_ID='windows-original-object-v1';
 export const OBJECT_WRITER_HASH='7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef';
-export const OBJECT_RISK_VERSION=2;
+export const OBJECT_RISK_VERSION=3;
 export const objectHash=value=>createHash('sha256').update(value).digest('hex');
 export const objectFail=code=>{throw Object.assign(Error(code),{code});};
 export const objectIdentifier=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,256}$/.test(x);
@@ -21,11 +21,15 @@ export function objectBoundedJson(value,maxBytes=256*1024){
  visit(value,0);const text=JSON.stringify(value);if(Buffer.byteLength(text)>maxBytes)objectFail('object_budget_exceeded');return JSON.parse(text);
 }
 export function validateObjectRef(ref){if(!ref||Object.keys(ref).sort().join('|')!=='bytes|digest'||!hex(ref.digest)||!Number.isSafeInteger(ref.bytes)||ref.bytes<0||ref.bytes>2097152)objectFail('object_schema_invalid');}
-export function validateObjectPlan(input){
+export function validateObjectPlan(input){return validatePlan(input,false);}
+// A historical confirmation is never upgraded. Persisted v2 records remain
+// readable for reconciliation and verified material inspection only.
+export function validatePersistedObjectPlan(input){return validatePlan(input,true);}
+function validatePlan(input,historical){
  const p=objectBoundedJson(input),states=['prepared','replacing','applied_verified','recovery_required','not_applied'];
  if(p.runtimeContext!==undefined&&(!Number.isSafeInteger(p.runtimeContext)||p.runtimeContext<0))objectFail('object_schema_invalid');
  if(p.scope?.projectId!==undefined&&p.scope.projectId!==p.scope.runtimeOwner?.projectId||p.scope?.repoId!==undefined&&p.scope.repoId!==p.scope.runtimeOwner?.repoId)objectFail('object_schema_invalid');
- if(p.schemaVersion!==1||p.providerId!==OBJECT_PROVIDER_ID||p.profileId!==OBJECT_PROFILE_ID||p.helperHash!==OBJECT_WRITER_HASH||!objectIdentifier(p.proofId)||p.riskNoticeVersion!==OBJECT_RISK_VERSION||!objectIdentifier(p.planId)||!hex(p.tokenHash)||!objectScopeBinding(p.scope)||p.scope.workspaceFingerprint!=null&&!hex(p.scope.workspaceFingerprint))objectFail('object_schema_invalid');
+ if(p.schemaVersion!==1||p.providerId!==OBJECT_PROVIDER_ID||p.profileId!==OBJECT_PROFILE_ID||p.helperHash!==OBJECT_WRITER_HASH||!objectIdentifier(p.proofId)||!(p.riskNoticeVersion===OBJECT_RISK_VERSION||historical&&p.riskNoticeVersion===2)||!objectIdentifier(p.planId)||!hex(p.tokenHash)||!objectScopeBinding(p.scope)||p.scope.workspaceFingerprint!=null&&!hex(p.scope.workspaceFingerprint))objectFail('object_schema_invalid');
  if(!['revert','recover'].includes(p.kind)||!states.includes(p.state)||p.completion!==p.state||!Number.isSafeInteger(p.expiresAt)||!Number.isSafeInteger(p.createdAt)||!Number.isSafeInteger(p.updatedAt)||p.expiresAt<=p.createdAt||p.expiresAt-p.createdAt>60000||!Number.isSafeInteger(p.evidenceRevision)||!Number.isSafeInteger(p.revision)||p.revision<1||!Number.isSafeInteger(p.gapRevision)||p.gapRevision!==0)objectFail('object_schema_invalid');
  if(p.evidenceRevision<0||p.updatedAt<p.createdAt||!Array.isArray(p.selectedOperationIds)||p.selectedOperationIds.length>128||p.selectedOperationIds.some(x=>!objectIdentifier(x))||new Set(p.selectedOperationIds).size!==p.selectedOperationIds.length||!Array.isArray(p.consumedOperationIds)||new Set(p.consumedOperationIds).size!==p.consumedOperationIds.length||p.consumedOperationIds.some(x=>!p.selectedOperationIds.includes(x)))objectFail('object_schema_invalid');
  if(p.kind==='revert'&&(!p.selectedOperationIds.length||p.sourcePlanId!==null)||p.kind==='recover'&&(!objectIdentifier(p.sourcePlanId)||p.selectedOperationIds.length))objectFail('object_schema_invalid');
