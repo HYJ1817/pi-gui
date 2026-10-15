@@ -1,5 +1,7 @@
 // Test-only TEMP issuer. All roots/materials are created here, never by renderer.
 import assert from 'node:assert/strict';
+import {awaitVerifiedNativeOwner} from './session-revert-object-session-binding.mjs';
+import {saveInitialSnapshot,compareFinalSnapshot,createCleanup,preserveFailure,verifyTransactions} from './session-revert-object-d6final-checks.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -89,15 +91,21 @@ export async function createD6ModelFixture({rpcLauncher,mode='classic',modelConf
  let managedContext=null;
  const createAdapter=async(context,emit)=>createSessionRuntime({context,emit:ev=>{event(ev);emit(ev);},piBin:entry.entryPath,dataDir,sessionDir:sessions,env:{...process.env,PI_NO_CONTINUE:'1'},supervisorFactory,mutationAdmission:admission,
   createChanges:({launch:actualLaunch,requestState})=>createSessionChangeBridge({store,launch:actualLaunch,admission,extensionPath:extensionFile,inspectFileMetadata,inspectObjectEvidence:observeFileObject,
-   resolveScope:async()=>{const state=await requestState();if(!state?.sessionId||state.__error)fail('stale_runtime');if(mode==='classic')nativeSessionId=state.sessionId;const actual=mode==='classic'?classicOwner():context.getOwner();if(actual.sessionId!==state.sessionId)fail('stale_runtime');return {runtimeOwner:actual,projectId:actual.projectId,repoId:actual.repoId,conversationId:actual.conversationId,nativeSessionId:state.sessionId,workspaceId:actual.workspaceId,workspaceEpoch:actual.workspaceEpoch};},
+   resolveScope:async()=>{let actual;if(mode==='classic'){const state=await requestState();if(!state?.sessionId||state.__error)fail('stale_runtime');nativeSessionId=state.sessionId;actual=classicOwner();}else actual=await awaitVerifiedNativeOwner({context,requestState,isReady:()=>adapter?.getState().bridgeState==='ready'&&registry.snapshot().items.some(i=>i.conversationId===context.getOwner().conversationId&&i.lifecycle==='ready')});return {runtimeOwner:actual,projectId:actual.projectId,repoId:actual.repoId,conversationId:actual.conversationId,nativeSessionId:actual.sessionId,workspaceId:actual.workspaceId,workspaceEpoch:actual.workspaceEpoch};},
    withAuthority:fn=>mode==='classic'?worktrees.withActivation(repo,()=>fn({root:repo})):worktrees.withWorkspace({id:context.workspace.workspaceId,epoch:context.workspace.workspaceEpoch},fn),
   })});
  worktrees=createWorktrees({dataDir,getProjects:()=>[{path:repo,name:'D6 TEMP model'}],getContext:()=>({cwd:repo,generation:1}),isWorkspaceInUse:p=>registry?.inUse(p)||false});
  registry=createRuntimeRegistry({dataDir,admission:(args,fn)=>worktrees.withWorkspace(args,fn),validateWorkspace:w=>worktrees.withWorkspace({id:w.workspaceId,epoch:w.workspaceEpoch},()=>{}),factory:async(context,emit)=>{managedContext=context;return adapter=await createAdapter(context,emit);}});
  let withAuthority,bridge,target,gitBefore;
- const indexState=p=>({refs:git(p,'show-ref'),head:git(p,'rev-parse','HEAD'),index:null});
- async function gitState(p){return {...indexState(p),index:hash(await fs.readFile(path.resolve(p,git(p,'rev-parse','--git-path','index'))))};}
- async function cleanup(){active=false;await service?.dispose();await Promise.allSettled(attempts.map(a=>a.close()));await resourceBinding?.dispose();await registry?.dispose();await adapter?.dispose();worktrees?.dispose();}
+ const snapshotFile=path.join(root,'git-initial-snapshot.json');
+ const cleanupState=createCleanup([
+  ['deactivate',()=>{active=false;}],['service',()=>service?.dispose()],
+  ['attempts',async()=>{const results=await Promise.allSettled(attempts.map(a=>a.close()));const failed=results.filter(r=>r.status==='rejected');if(failed.length)throw new AggregateError(failed.map(r=>r.reason));}],
+  ['binding',()=>resourceBinding?.dispose()],['registry',()=>registry?.dispose()],
+  ['adapter',()=>adapter?.dispose()],['worktrees',()=>worktrees?.dispose()]
+ ]);
+ async function cleanup(){measure.cleanup=await cleanupState.run();return measure.cleanup;}
+
  try{
   if(mode==='managed'){
    const w=(await worktrees.create({nonce:(await worktrees.prepare({project:repo,branch:'codex/d6-real-model'})).nonce})).workspace;workspace=w.path;
@@ -113,13 +121,13 @@ export async function createD6ModelFixture({rpcLauncher,mode='classic',modelConf
   await wait(async()=>{const s=await bridge.summary();return s.sourceVerified;},promptTimeoutMs);measure.sourceVerified=true;
   withAuthority=createSessionRevertObjectRuntimeAuthority({withAuthority:createSessionRevertAuthority({registry,worktrees,classicBridge:bridge,classicOwner,classicNativeState:()=>adapter.request({type:'get_state'}),classicBusy:()=>adapter.activity.busy()}),registry,classicCurrent:()=>mode==='classic'?{owner:classicOwner(),ready:active&&adapter.getState().bridgeState==='ready'}:null});
   const resolved=await withAuthority({}, {owner,conversationId:owner.conversationId},a=>({scope:a.scope,root:a.root}));scope=resolved.scope;assert.equal(resolved.root,workspace);assert.equal(scope.runtimeOwner.sessionId,measure.sdkSessionId);
-  target=path.join(workspace,'file.txt');gitBefore={repo:await gitState(repo),workspace:await gitState(workspace)};
+  target=path.join(workspace,'file.txt');gitBefore=await saveInitialSnapshot(snapshotFile,{repo,workspace,target,owner,scope});measure.gitInitialSnapshot=snapshotFile;
   // Configure through the existing authenticated extension transport. The bridge
   // already prepared its own launch env; credentials never enter that channel.
   const prepared=await bridge.captureStatus(scope);assert.equal(prepared.sourceVerified,true);
   await store.configure(scope,{enabled:true,acknowledged:true,exclusions:[]});
-  if(preflightOnly)return {root,owner,scope,measure,preflightOnly:true,async dispose(){await cleanup();}};
- }catch(error){await cleanup();throw error;}
+  if(preflightOnly)return {root,owner,scope,measure,preflightOnly:true,async dispose(){return cleanup();}};
+ }catch(error){return preserveFailure(error,cleanupState);}
  let captureStarted=false;
  async function capture(){
   if(captureStarted||!active)fail('model_capture_already_started');captureStarted=true;
@@ -134,7 +142,7 @@ export async function createD6ModelFixture({rpcLauncher,mode='classic',modelConf
   assert.deepEqual(measure.rpcTools.map(r=>r.toolName),['write','edit']);assert.equal(measure.rpcTools.some(r=>r.isError),false);
   assert.deepEqual(await fs.readFile(target),Buffer.from('agent-one\nanchor-one\nagent-two\nanchor-two\ntail\n'));
   await fs.writeFile(target,C);
- }catch(error){await cleanup();throw error;}
+ }catch(error){return preserveFailure(error,cleanupState);}
  const stop=createSessionRevertStopAndDrain({admission,registry,worktrees,classic:{root:()=>mode==='classic'?workspace:null,manager:adapter.managed.manager,abort:command=>adapter.abortAndWait(command)}});
  const withMutationAuthority=createSessionRevertMutationAuthority({withAuthority,admission,stopAndDrain:async target=>{measure.stops++;await stop(target);}});
  const helperBytes=readAsset(hasBundledAssets()?'revert-object/write.ps1':'server/session-revert-object-write-native.ps1');assert.equal(hash(helperBytes),OBJECT_WRITER_HASH);
@@ -170,11 +178,17 @@ export async function createD6ModelFixture({rpcLauncher,mode='classic',modelConf
   fail('invalid_request');
  }catch(e){return {ok:false,code:e.code??'fixture_request_refused',needsRepreview:['stale_current','stale_runtime','stale_evidence','plan_expired'].includes(e.code)};}}
  async function verify(){
-  const saved=[];for(const id of plans.keys()){const p=await store.objectGet(scope,id,{capability:cap}),f=p.files[0],actualCurrent=await store.restoreRead(scope,f.currentRef),actualCandidate=await store.restoreRead(scope,f.candidateRef);assert.equal(hash(actualCurrent),f.currentRef.digest);assert.equal(hash(actualCandidate),f.candidateRef.digest);if(p.kind==='revert'){assert.deepEqual(actualCurrent,C);assert.deepEqual(actualCandidate,R);}else{assert.deepEqual(actualCandidate,C);assert.deepEqual(actualCurrent,plans.get(id).expectedCurrent);}if(p.state==='applied_verified')assert.equal(f.verifiedMeasurement.id,f.currentObject.file.id);saved.push({planId:id,kind:p.kind,state:p.state,currentDigest:f.currentRef.digest,candidateDigest:f.candidateRef.digest,materialBytesExact:true,measuredCurrentDigest:hash(plans.get(id).expectedCurrent),objectId:f.currentObject.file.id,verifiedObjectId:f.verifiedMeasurement?.id??null,metadataEqual:f.verifiedMeasurement?.metadataEqual??null});}
-  assert.deepEqual({repo:await gitState(repo),workspace:await gitState(workspace)},gitBefore);
-  return {...measure,scope,saved,finalDigest:hash(await fs.readFile(target)),B:hash(B),C:hash(C),R:hash(R),writerHash:OBJECT_WRITER_HASH,observerHash:OBJECT_HELPER_HASH,gitUnchanged:true};
+  const saved=[];for(const id of plans.keys()){const p=await store.objectGet(scope,id,{capability:cap}),f=p.files[0],actualCurrent=await store.restoreRead(scope,f.currentRef),actualCandidate=await store.restoreRead(scope,f.candidateRef);assert.equal(hash(actualCurrent),f.currentRef.digest);assert.equal(hash(actualCandidate),f.candidateRef.digest);if(p.kind==='revert'){assert.deepEqual(actualCurrent,C);assert.deepEqual(actualCandidate,R);}else{assert.deepEqual(actualCandidate,C);assert.deepEqual(actualCurrent,plans.get(id).expectedCurrent);}if(p.state==='applied_verified')assert.equal(f.verifiedMeasurement.id,f.currentObject.file.id);saved.push({planId:id,kind:p.kind,state:p.state,sourcePlanId:p.sourcePlanId??null,requestId:p.requestId??null,attemptId:f.intent?.attemptId??null,intentRequestId:f.intent?.requestId??null,readyDigest:f.intent?.readyDigest??null,readyObjectId:f.intent?.readyObjectId??null,bindingDigest:f.intent?.bindingDigest??null,currentDigest:f.currentRef.digest,candidateDigest:f.candidateRef.digest,materialBytesExact:true,measuredCurrentDigest:hash(plans.get(id).expectedCurrent),objectId:f.currentObject.file.id,verifiedObjectId:f.verifiedMeasurement?.id??null,metadataEqual:f.verifiedMeasurement?.metadataEqual??null});}
+  const current=await withAuthority({}, {owner,conversationId:owner.conversationId},async a=>{await a.revalidate();return {root:a.root,scope:a.scope};});
+  assert.equal(current.root,workspace);
+  const currentOwner=mode==='classic'?classicOwner():registry.getOwner(owner.conversationId);
+  const snapshot=await compareFinalSnapshot(snapshotFile,{repo,workspace,owner:currentOwner,scope:current.scope});
+  const D=hash(plans.get(saved.find(p=>p.kind==='recover')?.planId)?.expectedCurrent??Buffer.alloc(0));
+  const transactions=verifyTransactions(saved,{C:hash(C),R:hash(R),D,commits:measure.commits,opens:measure.opens});
+  assert.deepEqual(await fs.readFile(target),C);
+  return {...measure,scope,saved,finalDigest:hash(await fs.readFile(target)),B:hash(B),C:hash(C),R:hash(R),writerHash:OBJECT_WRITER_HASH,observerHash:OBJECT_HELPER_HASH,gitUnchanged:true,snapshot,transactions};
  }
- return {root,owner,scope,invoke,measure,verify,async dispose(){await cleanup();},async externalD(){await fs.writeFile(target,'external-D\nanchor-one\nbody\nanchor-two\nuser later\n');},target,C,R};
+ return {root,owner,scope,invoke,measure,verify,async dispose(){return cleanup();},async externalD(){await fs.writeFile(target,'external-D\nanchor-one\nbody\nanchor-two\nuser later\n');},target,C,R};
  }
- return {root,owner,scope,measure,phase:'ready',capture,async dispose(){await cleanup();}};
+ return {root,owner,scope,measure,phase:'ready',capture,async dispose(){return cleanup();}};
 }

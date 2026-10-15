@@ -5,13 +5,15 @@ const exec=promisify(execFile),ROOT=path.resolve(__dirname,'../..');
 async function command(file,args,options={}){
  return exec(file,args,{cwd:ROOT,maxBuffer:4*1024*1024,windowsHide:true,...options});
 }
-async function bundle(outfile,assetEntry){
+async function bundle(outfile,assetEntry,entry=path.join(ROOT,'tests/fixtures/session-revert-object-packed-launcher.mjs')){
+ const trusted=path.resolve(ROOT,'tests/fixtures');
+ entry=path.resolve(entry);assert.equal(path.dirname(entry),trusted);assert.match(path.basename(entry),/^session-revert-object-[a-z0-9-]+\.mjs$/);
  const esbuild=await import('esbuild');
  const privateExports=new Map([
   ['session-revert-object-writer.js','createIsolatedWriter'],
   ['session-revert-object-service.js','createObjectServiceCore, readObservedOriginal'],
  ]);
- return esbuild.build({entryPoints:[path.join(ROOT,'tests/fixtures/session-revert-object-packed-launcher.mjs')],bundle:true,platform:'node',format:'cjs',target:'node22',outfile,
+ return esbuild.build({entryPoints:[entry],bundle:true,platform:'node',format:'cjs',target:'node22',outfile,
   define:{'import.meta.url':'__SEA_URL__'},banner:{js:'var __SEA_URL__=require("url").pathToFileURL('+(assetEntry?JSON.stringify(assetEntry):'__filename')+').href;'},logLevel:'silent',
   plugins:[{name:'TEMP-only-private-exports',setup(b){b.onLoad({filter:/session-revert-object-(?:writer|service)\.js$/},async a=>{
    assert.equal(path.dirname(a.path),path.join(ROOT,'server'));

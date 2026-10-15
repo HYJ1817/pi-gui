@@ -12,7 +12,7 @@ async function loadService(){return serviceCore??=await internal('session-revert
 
 async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buffer.from('agent\nanchor\nuser\n'),current=Buffer.from('agent\nanchor\nuser-new\n'),relativePath='file.txt',storeOptions={},serviceOptions={},timeoutMs,spawnProcess,now=Date.now,ttlMs=60000}={}){
  if(process.platform!=='win32')throw Object.assign(Error('object_platform_unsupported'),{code:'object_platform_unsupported'});
- const root=await fs.mkdtemp(path.join(os.tmpdir(),'p33-D3-service-')),attempts=[];activeRoots.add(root);
+ const tempRoot=await fs.realpath(os.tmpdir()),root=await fs.realpath(await fs.mkdtemp(path.join(tempRoot,'p33-D3-service-'))),attempts=[];activeRoots.add(root);
  let service;
  try{
   const {createSessionChangeStore}=await import('../../server/session-change-store.js');
@@ -82,7 +82,7 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
   return await fn(value);
  }finally{
   await Promise.allSettled(attempts.map(a=>a.close()));await service?.dispose?.();activeRoots.delete(root);
-  assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.match(path.basename(root),/^p33-D3-service-/);
+  assert.equal(path.dirname(root),tempRoot);assert.match(path.basename(root),/^p33-D3-service-/);
   if(!retainedRoots.has(root))await fs.rm(root,{recursive:true,force:true});
  }
 }

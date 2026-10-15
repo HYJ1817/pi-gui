@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict');
+let passed=0;
+const check=async(name,fn)=>{await fn();passed++;console.log('ok '+name);};
+(async()=>{
+ let bind;try{({awaitVerifiedNativeOwner:bind}=await import('./fixtures/session-revert-object-session-binding.mjs'));}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
+ await check('bounded native owner synchronizer exists',()=>assert.equal(typeof bind,'function'));
+ const initial={backendInstance:'backend',projectId:'project',repoId:null,workspaceId:'workspace',workspaceEpoch:'epoch',conversationId:'conversation',runtimeId:'runtime',runtimeGeneration:'generation',sessionId:null};
+ function harness(){let owner={...initial},current=true,ready=false,sessionId='native-A',reads=0,polls=0,onRead=()=>{},onPoll=()=>{};const context={cwd:'fixture-root',workspace:{root:'fixture-root',workspaceEpoch:'epoch'},getOwner:()=>({...owner}),isCurrent:()=>current};return {context,get owner(){return owner;},set owner(v){owner=v;},set current(v){current=v;},set ready(v){ready=v;},set sessionId(v){sessionId=v;},set onRead(v){onRead=v;},set onPoll(v){onPoll=v;},get reads(){return reads;},get polls(){return polls;},async run(){return bind({context,isReady:()=>ready,requestState:async()=>{onRead(++reads);return {sessionId};},waitForChange:async()=>{onPoll(++polls);},maxPolls:3});}};}
+ const refused=(fn,code='stale_runtime')=>assert.rejects(fn,e=>e.code===code);
+ await check('hello before registry binding waits for identity and ready',async()=>{const h=harness();h.onPoll=n=>{if(n===1)h.owner={...h.owner,sessionId:'native-A'};if(n===2)h.ready=true;};const o=await h.run();assert.deepEqual(o,{...initial,sessionId:'native-A'});assert.equal(h.polls,2);assert.equal(h.reads,2);assert.equal(initial.sessionId,null);});
+ await check('already bound identity returns without arbitrary delay',async()=>{const h=harness();h.owner={...h.owner,sessionId:'native-A'};h.ready=true;assert.equal((await h.run()).sessionId,'native-A');assert.equal(h.polls,0);});
+ for(const field of ['backendInstance','projectId','repoId','workspaceId','workspaceEpoch','conversationId','runtimeId','runtimeGeneration'])await check(field+' change while waiting refuses',async()=>{const h=harness();h.onPoll=()=>{h.owner={...h.owner,[field]:'replacement',sessionId:'native-A'};h.ready=true;};await refused(()=>h.run());});
+ await check('native session changes during confirmation refuses',async()=>{const h=harness();h.owner={...h.owner,sessionId:'native-A'};h.ready=true;h.onRead=n=>{if(n===2)h.sessionId='native-B';};await refused(()=>h.run());});
+ await check('foreign bound owner session is never replaced by state',async()=>{const h=harness();h.owner={...h.owner,sessionId:'native-B'};h.ready=true;await refused(()=>h.run());assert.equal(h.owner.sessionId,'native-B');});
+ await check('workspace root switch rejects same final owner',async()=>{const h=harness();h.onPoll=()=>{h.context.cwd='other-root';h.owner={...h.owner,sessionId:'native-A'};h.ready=true;};await refused(()=>h.run());});
+ await check('workspace descriptor replacement rejects',async()=>{const h=harness();h.onPoll=()=>{h.context.workspace.root='recreated-root';};await refused(()=>h.run());});
+ for(const name of ['process exit','runtime dispose'])await check(name+' during binding refuses',async()=>{const h=harness();h.onPoll=()=>{h.current=false;};await refused(()=>h.run());});
+ await check('missing identity times out without manufacturing an owner',async()=>{const h=harness();await refused(()=>h.run(),'session_binding_unconfirmed');assert.equal(h.polls,3);assert.equal(h.owner.sessionId,null);});
+ await check('ready remains required after session binding',async()=>{const h=harness();h.owner={...h.owner,sessionId:'native-A'};await refused(()=>h.run(),'session_binding_unconfirmed');});
+ await check('duplicate hello validates current identity independently',async()=>{const h=harness();h.owner={...h.owner,sessionId:'native-A'};h.ready=true;assert.deepEqual(await h.run(),await h.run());assert.equal(h.reads,4);assert.equal(h.polls,0);});
+ await check('history session requires current generation and native readback',async()=>{const h=harness();h.owner={...h.owner,runtimeGeneration:'resumed-generation',sessionId:'native-A'};h.ready=true;assert.equal((await h.run()).runtimeGeneration,'resumed-generation');h.current=false;await refused(()=>h.run());});
+ await check('generation change during first private read refuses',async()=>{const h=harness();h.owner={...h.owner,sessionId:'native-A'};h.ready=true;h.onRead=()=>{h.owner={...h.owner,runtimeGeneration:'new-generation'};};await refused(()=>h.run());});
+ await check('disposal during confirmation cannot return identity',async()=>{const h=harness();h.owner={...h.owner,sessionId:'native-A'};h.ready=true;h.onRead=n=>{if(n===2)h.current=false;};await refused(()=>h.run());});
+ console.log(`Object session binding: ${passed}/${passed}; failed=0; skipped=0; layer=deterministic lifecycle DI; no model or writer`);
+})().catch(e=>{console.error('FAIL object session binding',e.code??e.message);process.exitCode=1;});

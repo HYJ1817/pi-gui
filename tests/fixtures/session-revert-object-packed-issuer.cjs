@@ -9,7 +9,7 @@ const {readAsset,hasBundledAssets}=require('../../lib/assets.js');
 async function loadWriter(){return privateWriter;}
 async function loadService(){return privateService;}
 
-async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buffer.from('agent\nanchor\nuser\n'),current=Buffer.from('agent\nanchor\nuser-new\n'),relativePath='file.txt',storeOptions={},serviceOptions={},timeoutMs,spawnProcess,now=Date.now,ttlMs=60000}={}){
+async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buffer.from('agent\nanchor\nuser\n'),current=Buffer.from('agent\nanchor\nuser-new\n'),relativePath='file.txt',storeOptions={},serviceOptions={},timeoutMs,spawnProcess,now=Date.now,ttlMs=60000,createOwner}={}){
  if(process.platform!=='win32')throw Object.assign(Error('object_platform_unsupported'),{code:'object_platform_unsupported'});
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'p33-D4 中文 space-')),attempts=[];activeRoots.add(root);
  let service;
@@ -22,7 +22,7 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
   const {createSessionRevertAdmission}=await import('../../server/session-revert-admission.js');
   const {createSessionRevertMutationAuthority}=await import('../../server/session-revert-authority.js');
   const rootStat=await fs.stat(root),workspaceFingerprint=hash(JSON.stringify([rootStat.dev,rootStat.ino,rootStat.birthtimeMs]));
-  const owner={backendInstance:'D3',projectId:'fixture',repoId:null,workspaceId:'workspace',workspaceEpoch:'epoch',conversationId:'conversation',runtimeId:'runtime',runtimeGeneration:'generation',sessionId:'11111111-1111-4111-8111-111111111111'};
+  const owner=createOwner?await createOwner(root):{backendInstance:'D3',projectId:'fixture',repoId:null,workspaceId:'workspace',workspaceEpoch:'epoch',conversationId:'conversation',runtimeId:'runtime',runtimeGeneration:'generation',sessionId:'11111111-1111-4111-8111-111111111111'};
   const scope={runtimeOwner:Object.freeze(owner),projectId:owner.projectId,repoId:owner.repoId,workspaceId:owner.workspaceId,workspaceEpoch:owner.workspaceEpoch,conversationId:owner.conversationId,nativeSessionId:owner.sessionId,workspaceFingerprint};
   const state={scope,stops:0,revalidations:0,nativeOpens:0,commitCalls:0,authorityActive:false,stopHook:null};
   const nativeCapabilities=new WeakSet(),storeCapabilities=new WeakSet(),capability=Object.freeze({});storeCapabilities.add(capability);
