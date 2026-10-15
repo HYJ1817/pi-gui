@@ -10,6 +10,22 @@ async function internal(file,name){
 async function loadWriter(){return writerCore??=await internal('session-revert-object-writer.js','createIsolatedWriter');}
 async function loadService(){return serviceCore??=await internal('session-revert-object-service.js','createObjectServiceCore, readObservedOriginal');}
 
+// Failure-only, read-only diagnostics. Keep raw process errors, identities,
+// ACLs, paths and evidence bytes out of CI logs; never change eligibility.
+async function diagnosePrivacy(root){
+ const {execFile}=require('node:child_process');
+ const {resolveObjectInterpreter}=await import('../../server/session-revert-object-resources.js');
+ const interpreter=await resolveObjectInterpreter();
+ const env={...process.env,PI_GUI_ACL_DIAGNOSTIC_ROOT:path.join(root,'private-data','revert-evidence','v1')};
+ for(const key of Object.keys(env))if(key.toLowerCase()==='psmodulepath')delete env[key];
+ const script="$ErrorActionPreference='Stop';try{$identity=[System.Security.Principal.WindowsIdentity]::GetCurrent();$sid=$identity.User;$allowed=@($sid.Value,'S-1-5-18','S-1-5-32-544');foreach($part in @('root','objects')){$p=$env:PI_GUI_ACL_DIAGNOSTIC_ROOT;if($part -eq 'objects'){$p=Join-Path $p 'objects'};if(-not(Test-Path -LiteralPath $p)){[ordered]@{part=$part;exists=$false}|ConvertTo-Json -Compress;continue};$acl=Get-Acl -LiteralPath $p;$owner=$acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value;$rules=$acl.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]);$own=$false;$foreign=$false;foreach($r in $rules){if($r.AccessControlType -eq 'Allow'){if($allowed -notcontains $r.IdentityReference.Value){$foreign=$true};if($r.IdentityReference.Value -eq $sid.Value -and (($r.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl) -eq [System.Security.AccessControl.FileSystemRights]::FullControl)){$own=$true}}};[ordered]@{part=$part;exists=$true;ownerIsUser=($owner -eq $sid.Value);ownerIsTokenDefault=($owner -eq $identity.Owner.Value);ownerIsAllowed=($allowed -contains $owner);protected=$acl.AreAccessRulesProtected;ownFullControl=$own;foreignAllow=$foreign}|ConvertTo-Json -Compress}}catch{'{\"diagnosticFailed\":true}';exit 1}";
+ const started=Date.now();
+ await new Promise(resolve=>execFile(interpreter,['-NoProfile','-NonInteractive','-Command',script],{env,windowsHide:true,timeout:10000,maxBuffer:8192},(error,stdout)=>{
+  const rows=[];for(const line of stdout.trim().split(/\r?\n/)){try{const row=JSON.parse(line);if(Object.keys(row).every(k=>k==='part'?['root','objects'].includes(row[k]):['exists','ownerIsUser','ownerIsTokenDefault','ownerIsAllowed','protected','ownFullControl','foreignAllow','diagnosticFailed'].includes(k)&&typeof row[k]==='boolean'))rows.push(row);}catch{}}
+  console.error('TEMP store ACL diagnostic '+JSON.stringify({elapsedMs:Date.now()-started,processSucceeded:!error,timedOut:!!error?.killed,exitCode:Number.isInteger(error?.code)?error.code:null,rows}));resolve();
+ }));
+}
+
 async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buffer.from('agent\nanchor\nuser\n'),current=Buffer.from('agent\nanchor\nuser-new\n'),relativePath='file.txt',storeOptions={},serviceOptions={},timeoutMs,spawnProcess,now=Date.now,ttlMs=60000}={}){
  if(process.platform!=='win32')throw Object.assign(Error('object_platform_unsupported'),{code:'object_platform_unsupported'});
  const tempRoot=await fs.realpath(os.tmpdir()),root=await fs.realpath(await fs.mkdtemp(path.join(tempRoot,'p33-D3-service-'))),attempts=[];activeRoots.add(root);
@@ -29,7 +45,7 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
   const nativeCapabilities=new WeakSet(),storeCapabilities=new WeakSet(),capability=Object.freeze({});storeCapabilities.add(capability);
   const objectPlanAuthority=(s,id,cap)=>activeRoots.has(root)&&storeCapabilities.has(cap)&&sameObjectScope(scope,s)&&(id==null||typeof id==='string'&&/^[A-Za-z0-9_-]{1,256}$/.test(id));
   const options={...storeOptions,dataDir:path.join(root,'private-data'),objectPlanAuthority,now};
-  let store=await createSessionChangeStore(options);
+  let store;try{store=await createSessionChangeStore(options);}catch(error){if(error.code==='evidence_privacy_unavailable'&&!storeOptions.privacyCheck)await diagnosePrivacy(root).catch(()=>console.error('TEMP store ACL diagnostic unavailable'));throw error;}
   const target=path.join(root,...relativePath.split('/'));assert.equal(path.relative(root,target).startsWith('..'),false);await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,before);
   const evidenceId='d3-evidence';
   await store.configure(scope,{enabled:true,acknowledged:true});
