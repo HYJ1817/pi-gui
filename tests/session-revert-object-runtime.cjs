@@ -2,6 +2,12 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {fixture}=require('./fixtures/session-revert-object-runtime-harness.cjs');
 let checks=0;const check=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
 (async()=>{
+ if(process.platform==='win32')await check('Aliased TEMP canonicalizes the fixture before actual Classic scope binding',async()=>{
+  const os=require('node:os'),tempRoot=fs.realpathSync(os.tmpdir()),root=fs.mkdtempSync(path.join(tempRoot,'p33-runtime-alias-')),real=path.join(root,'real'),alias=path.join(root,'alias');
+  fs.mkdirSync(real);fs.symlinkSync(real,alias,'junction');const saved={TEMP:process.env.TEMP,TMP:process.env.TMP,TMPDIR:process.env.TMPDIR};let completed=false;
+  try{process.env.TEMP=alias;process.env.TMP=alias;process.env.TMPDIR=alias;await fixture(async x=>{assert.equal(x.root,fs.realpathSync(x.root));assert.equal(path.dirname(x.root),real);const classic=await x.classicSession(),object=await x.objectService(classic.owner(),{classic});assert.equal(object.opens,0);assert.equal(object.commits,0);});completed=true;}
+  finally{for(const [key,value]of Object.entries(saved))if(value===undefined)delete process.env[key];else process.env[key]=value;assert.equal(path.dirname(root),tempRoot);assert.match(path.basename(root),/^p33-runtime-alias-/);if(completed)fs.rmSync(root,{recursive:true,force:true});}
+ });
  await fixture(async x=>{
   const {createSessionRevertAdmission}=await import('../server/session-revert-admission.js');
   await check('Admission refuses same-path root object replacement using BigInt identity',()=>{

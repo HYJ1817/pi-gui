@@ -2,11 +2,12 @@
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
 const crypto=require('node:crypto'),{pathToFileURL}=require('node:url'),base=path.resolve(__dirname,'../..'),hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 const activeRoots=new Set(),retainedRoots=new Set();let serviceCore,writerCore;
+const {appendRetentionIndex,preserveFixtureFailure}=require('./session-revert-retention.cjs');
 async function internal(file,names){const source=fs.readFileSync(path.join(base,'server',file),'utf8').replace(/from '(\.\.?\/[^']+)'/g,(_,p)=>"from '"+pathToFileURL(path.resolve(base,'server',p)).href+"'");return import('data:text/javascript;base64,'+Buffer.from(source+'\nexport { '+names+' };').toString('base64'));}
 const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8',windowsHide:true,env:{...process.env,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:path.join(cwd,'..','fixture-config'),GIT_TERMINAL_PROMPT:'0'}}).trim();
 const until=async fn=>{const end=Date.now()+25000;while(!fn()){if(Date.now()>end)throw Error('fixture_timeout');await new Promise(r=>setTimeout(r,15));}};
 async function fixture(action,{onFocus=async()=>{}}={}){
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'p33-D4-runtime-')),repo=path.join(root,'repo'),data=path.join(root,'data');
+ const tempRoot=fs.realpathSync(os.tmpdir()),root=fs.realpathSync(fs.mkdtempSync(path.join(tempRoot,'p33-D4-runtime-'))),repo=path.join(root,'repo'),data=path.join(root,'data');
  activeRoots.add(root);const services=[];
  let registry,worktrees;const children=[],events=[],classics=[];const classicCaps=new WeakSet();
  try{
@@ -63,9 +64,9 @@ async function fixture(action,{onFocus=async()=>{}}={}){
    const confirmation=p=>({...bodyOwner,providerId:'windows-original-object-v1',profileId:'windows-original-object-v1',helperHash:OBJECT_WRITER_HASH,proofId:'p33-d2-isolated',planId:p.planId,confirmationToken:p.confirmationToken,requestId:crypto.randomUUID(),riskNoticeVersion:3,confirmation:{externalWritersPaused:true,lastCheckRaceAccepted:true,partialOverwriteAccepted:true,metadataLimitsAccepted:true}});
    return {service,binding,scope,target,body,current,before,after,confirmation,get opens(){return opens;},get commits(){return commits;},get:planId=>evidenceStore.objectGet(scope,planId,{capability}),read:ref=>evidenceStore.restoreRead(scope,ref)};
   }
-  return await action({root,repo,data,a,b,get registry(){return registry;},worktrees,children,events,start,until,baseline,git,admission,getStore,objectService,classicSession,async retain(scope,planId){assert.ok(activeRoots.has(root));retainedRoots.add(root);fs.appendFileSync(path.join(base,'.probe/p33-d4-retained-materials.jsonl'),JSON.stringify({testOnly:true,root,dataDir:data,scope,planId})+'\n',{mode:0o600});},async reopenRegistry(){await registry.dispose();registry=createRuntimeRegistry(registryOptions);return registry;}});
- }catch(error){retainedRoots.add(root);fs.appendFileSync(path.join(base,'.probe/p33-d4-retained-materials.jsonl'),JSON.stringify({testOnly:true,root,dataDir:data,failed:true,reason:'fixture_failed'})+'\n',{mode:0o600});throw error;}finally{
-  await Promise.all(classics.map(c=>c.close()));await registry?.dispose();await Promise.all(services.map(binding=>binding.dispose()));worktrees?.dispose();activeRoots.delete(root);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.match(path.basename(root),/^p33-D4-runtime-/);if(!retainedRoots.has(root))fs.rmSync(root,{recursive:true,force:true});
+  return await action({root,repo,data,a,b,get registry(){return registry;},worktrees,children,events,start,until,baseline,git,admission,getStore,objectService,classicSession,async retain(scope,planId){assert.ok(activeRoots.has(root));retainedRoots.add(root);await appendRetentionIndex(base,'p33-d4-retained-materials.jsonl',{testOnly:true,root,dataDir:data,scope,planId});},async reopenRegistry(){await registry.dispose();registry=createRuntimeRegistry(registryOptions);return registry;}});
+ }catch(error){retainedRoots.add(root);await preserveFixtureFailure(base,{testOnly:true,root,dataDir:data,failed:true,reason:'fixture_failed'},error);}finally{
+  await Promise.all(classics.map(c=>c.close()));await registry?.dispose();await Promise.all(services.map(binding=>binding.dispose()));worktrees?.dispose();activeRoots.delete(root);assert.equal(path.dirname(root),tempRoot);assert.match(path.basename(root),/^p33-D4-runtime-/);if(!retainedRoots.has(root))fs.rmSync(root,{recursive:true,force:true});
  }
 }
 module.exports={fixture,until};

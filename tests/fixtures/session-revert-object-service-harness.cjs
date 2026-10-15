@@ -2,6 +2,7 @@
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),crypto=require('node:crypto'),{pathToFileURL}=require('node:url');
 const base=path.resolve(__dirname,'../..'),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const activeRoots=new Set(),retainedRoots=new Set();let writerCore,serviceCore;
+const {appendRetentionIndex}=require('./session-revert-retention.cjs');
 async function internal(file,name){
  const source=await fs.readFile(path.join(base,'server',file),'utf8');
  const resolved=source.replace(/from '(\.\.?\/[^']+)'/g,(_,p)=>"from '"+pathToFileURL(path.resolve(base,'server',p)).href+"'");
@@ -92,7 +93,7 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
   const value={root,target,options,scope,state,admission,evidenceId,evidenceRevision,fileId,body,before,after,current,relativePath,confirmation,createService,dependencies,
    get store(){return store;},get service(){return service;},
    async reopen(){store=await createSessionChangeStore(options);return store;},
-   async retain(){retainedRoots.add(root);const fd=await fs.open(path.join(base,'.probe/p33-d3-retained-materials.jsonl'),'a',0o600);try{await fd.writeFile(JSON.stringify({testOnly:true,root,dataDir:options.dataDir,scope})+'\n');await fd.sync();}finally{await fd.close();}return root;},
+   async retain(){retainedRoots.add(root);await appendRetentionIndex(base,'p33-d3-retained-materials.jsonl',{testOnly:true,root,dataDir:options.dataDir,scope});return root;},
    async revoke(){storeCapabilities.delete(capability);},
   };
   return await fn(value);
