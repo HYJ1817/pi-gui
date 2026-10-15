@@ -48,10 +48,13 @@ jobs:
   verify:
     name: Tests and packaging
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # npm test verifies compatibility against published historical code.
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
