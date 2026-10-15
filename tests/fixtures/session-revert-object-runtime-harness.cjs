@@ -7,7 +7,8 @@ async function internal(file,names){const source=fs.readFileSync(path.join(base,
 const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8',windowsHide:true,env:{...process.env,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:path.join(cwd,'..','fixture-config'),GIT_TERMINAL_PROMPT:'0'}}).trim();
 const until=async fn=>{const end=Date.now()+25000;while(!fn()){if(Date.now()>end)throw Error('fixture_timeout');await new Promise(r=>setTimeout(r,15));}};
 async function fixture(action,{onFocus=async()=>{}}={}){
- const tempRoot=fs.realpathSync(os.tmpdir()),root=fs.realpathSync(fs.mkdtempSync(path.join(tempRoot,'p33-D4-runtime-'))),repo=path.join(root,'repo'),data=path.join(root,'data');
+ const {canonicalPath}=await import('../../lib/safe-path.js');
+ const tempRoot=canonicalPath(os.tmpdir()),root=canonicalPath(fs.mkdtempSync(path.join(tempRoot,'p33-D4-runtime-'))),repo=path.join(root,'repo'),data=path.join(root,'data');
  activeRoots.add(root);const services=[];
  let registry,worktrees;const children=[],events=[],classics=[];const classicCaps=new WeakSet();
  try{

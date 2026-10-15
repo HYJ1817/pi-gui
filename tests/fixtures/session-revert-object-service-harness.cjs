@@ -11,6 +11,18 @@ async function internal(file,name){
 async function loadWriter(){return writerCore??=await internal('session-revert-object-writer.js','createIsolatedWriter');}
 async function loadService(){return serviceCore??=await internal('session-revert-object-service.js','createObjectServiceCore, readObservedOriginal');}
 
+async function observeAclProcess(action){
+ const processes=require('node:child_process'),{syncBuiltinESMExports}=require('node:module'),original=processes.execFile;
+ processes.execFile=function(file,args,options,callback){
+  if(typeof callback!=='function'||!options?.env?.PI_GUI_EVIDENCE_ACL_TARGET)return original.apply(this,arguments);
+  const started=Date.now();return original.call(this,file,args,options,(error,stdout,stderr)=>{
+   if(error)console.error('TEMP ACL process failure '+JSON.stringify({elapsedMs:Date.now()-started,killed:!!error.killed,signal:['SIGTERM','SIGKILL'].includes(error.signal)?error.signal:null,exitCode:Number.isInteger(error.code)?error.code:null,errorCode:['ETIMEDOUT','ENOENT','EACCES','EPERM','ERR_CHILD_PROCESS_STDIO_MAXBUFFER'].includes(error.code)?error.code:null}));
+   callback(error,stdout,stderr);
+  });
+ };syncBuiltinESMExports();
+ try{return await action();}finally{processes.execFile=original;syncBuiltinESMExports();}
+}
+
 // Failure-only, read-only diagnostics. Keep raw process errors, identities,
 // ACLs, paths and evidence bytes out of CI logs; never change eligibility.
 async function diagnosePrivacy(root){
@@ -46,7 +58,7 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
   const nativeCapabilities=new WeakSet(),storeCapabilities=new WeakSet(),capability=Object.freeze({});storeCapabilities.add(capability);
   const objectPlanAuthority=(s,id,cap)=>activeRoots.has(root)&&storeCapabilities.has(cap)&&sameObjectScope(scope,s)&&(id==null||typeof id==='string'&&/^[A-Za-z0-9_-]{1,256}$/.test(id));
   const options={...storeOptions,dataDir:path.join(root,'private-data'),objectPlanAuthority,now};
-  let store;try{store=await createSessionChangeStore(options);}catch(error){if(error.code==='evidence_privacy_unavailable'&&!storeOptions.privacyCheck)await diagnosePrivacy(root).catch(()=>console.error('TEMP store ACL diagnostic unavailable'));throw error;}
+  let store;try{store=await observeAclProcess(()=>createSessionChangeStore(options));}catch(error){if(error.code==='evidence_privacy_unavailable'&&!storeOptions.privacyCheck)await diagnosePrivacy(root).catch(()=>console.error('TEMP store ACL diagnostic unavailable'));throw error;}
   const target=path.join(root,...relativePath.split('/'));assert.equal(path.relative(root,target).startsWith('..'),false);await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,before);
   const evidenceId='d3-evidence';
   await store.configure(scope,{enabled:true,acknowledged:true});
