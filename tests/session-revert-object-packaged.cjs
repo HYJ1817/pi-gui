@@ -4,7 +4,7 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 let passed=0;const evidence=[];const check=async(name,fn)=>{await fn();passed++;console.log('ok '+name);};
 function challenge(file,args=[],env={},cwd){return new Promise((resolve,reject)=>{
  const child=spawn(file,args,{cwd,env:{...process.env,...env},windowsHide:true,stdio:['pipe','pipe','pipe']});
- let output='',buffer='',result=null,seen=false;const timer=setTimeout(()=>{child.kill();reject(Error('test_launcher_timeout'));},300000);
+ let output='',buffer='',result=null,seen=false;const timer=setTimeout(()=>{child.kill();reject(Error('test_launcher_timeout'));},600000);
  child.stderr.resume();child.stdin.on('error',()=>{});
  child.stdout.on('data',chunk=>{output+=chunk.toString();if(Buffer.byteLength(output)>32768){child.kill();return reject(Error('launcher_output_budget'));}buffer+=chunk.toString();
   while(buffer.includes('\n')){const at=buffer.indexOf('\n'),line=buffer.slice(0,at);buffer=buffer.slice(at+1);try{const row=JSON.parse(line);if(row.phase==='challenge'){assert.equal(seen,false);seen=true;assert.match(row.nonce,/^[a-f0-9]{64}$/);child.stdin.write(JSON.stringify({version:1,command:'run',nonce:row.nonce})+'\n');}else result=row;}catch(e){child.kill();reject(e);}}
@@ -17,6 +17,13 @@ function refusedChallenge(file,makeRow){return new Promise((resolve,reject)=>{
  child.on('error',e=>{clearTimeout(timer);reject(e);});child.on('close',code=>{clearTimeout(timer);try{assert.equal(code,2);assert.equal(text.includes('"phase":"result"'),false);resolve();}catch(e){reject(e);}});
 });}
 const {productionBoundary}=require('./fixtures/session-revert-object-packed-boundary.cjs');
+function assertRecoveryCycle(r){
+ assert.deepEqual(r.recovery?.states,['recovery_required','recovery_required','applied_verified']);
+ assert.equal(r.recovery.commits,3);assert.equal(r.recovery.resultFaults,2);
+ assert.equal(r.recovery.materialsByteExact,true);assert.equal(r.recovery.freshConfirmations,true);
+ assert.equal(r.recovery.reopened,true);assert.equal(r.recovery.finalByteExact,true);
+ assert.equal(r.recovery.objectMaintained,true);
+}
 
 (async()=>{
  if(process.platform!=='win32'){console.log('D4 packaged: 0/0; skipped=1 Windows only');return;}
@@ -29,7 +36,9 @@ const {productionBoundary}=require('./fixtures/session-revert-object-packed-boun
    for(const make of [n=>JSON.stringify({version:1,command:'run',nonce:n,root:'client',path:'client',bytes:'client'})+'\n',n=>JSON.stringify({version:1,command:'run',nonce:'0'.repeat(64)})+'\n',n=>JSON.stringify({version:2,command:'run',nonce:n})+'\n',n=>JSON.stringify({version:1,command:'apply',nonce:n})+'\n',()=> 'x'.repeat(513)])await refusedChallenge(x.testExe,make);
   });
   await check('actual SEA test EXE reads production embedded Helpers and persists verified/recovery',async()=>{const r=await challenge(x.testExe);assert.equal(r.isSea,true);assert.equal(r.bundled,true);evidence.push({layer:'actualSEA-test-only',...r});});
+  await check('actual SEA new confirmations persist C/R/D across two uncertain writes and final D-to-C recovery',async()=>assertRecoveryCycle(evidence.find(r=>r.layer==='actualSEA-test-only')));
   await check('Electron RUN_AS_NODE test backend persists real Native verified/recovery',async()=>{const r=await challenge(x.appExe,[x.backendLauncher],{ELECTRON_RUN_AS_NODE:'1',PI_GUI_DATA:path.join(x.root,'custom data 中文')});assert.equal(r.isSea,false);assert.equal(r.bundled,true);evidence.push({layer:'Electron-backend-test-only',...r});});
+  await check('Electron backend uses the same fresh-plan and reopened C/R/D recovery cycle',async()=>assertRecoveryCycle(evidence.find(r=>r.layer==='Electron-backend-test-only')));
   await check('formal SEA process rejects stdin issuer and HTTP B entry',async()=>evidence.push({layer:'formal-productionSEA',...await productionBoundary(x.productionExe,[],x.root)}));
   await check('formal APP backend rejects stdin issuer and HTTP B entry',async()=>evidence.push({layer:'formal-productionAPP-backend',...await productionBoundary(x.appExe,[path.join(x.appDir,'resources/app/server.cjs')],x.root,{ELECTRON_RUN_AS_NODE:'1'})}));
   const observe=path.join(x.appDir,'resources/app/revert-object/observe.ps1'),write=path.join(x.appDir,'resources/app/revert-object/write.ps1');

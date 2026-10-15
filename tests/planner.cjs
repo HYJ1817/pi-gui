@@ -696,14 +696,22 @@ async function mkProject(name) {
   {
     /* §34：不可用 agent 在启动前就被拦 */
     const proj = await mkProject('schedUnavail');
-    const { store, scheduler } = mkSched(proj, {}, 'dataUnavail');
+    const { registry, store, scheduler } = mkSched(proj, {}, 'dataUnavail');
+    // Availability is the input under test, never the host's installed CLI.
+    // A repaired/updated local installation must not start a real model task.
+    let unavailableStarts = 0;
+    registry.register({
+      id: 'claude', name: 'Unavailable fixture',
+      detect: () => ({ id: 'claude', available: false, reason: 'not-installed', detail: 'fixture unavailable' }),
+      start: () => { unavailableStarts++; throw new Error('unavailable_fixture_started'); },
+    });
     const plan = save(store, { title: '不可用', goal: 'g', tasks: [{ id: 'a', agent: 'claude' }] }, proj);
     await scheduler.start(plan);
     await scheduler.waitIdle();
     const cur = store.load(plan.id).plan;
     check('§34. 不可用 agent：任务失败且错误里说清原因（不是 command not found）', () => {
       const t = cur.tasks[0];
-      return (t.status === 'failed' && /不可用/.test(t.error)) || JSON.stringify({ s: t.status, e: t.error });
+      return (t.status === 'failed' && /不可用/.test(t.error) && unavailableStarts === 0) || JSON.stringify({ s: t.status, e: t.error, starts: unavailableStarts });
     });
   }
 
