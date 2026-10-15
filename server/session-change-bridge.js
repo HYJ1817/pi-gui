@@ -81,8 +81,10 @@ export function createSessionChangeBridge({ store, launch, resolveScope, withAut
     try {
       const dir = launch.packageDir(), pkg = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8'));
       const exports = await fs.readFile(path.join(dir, 'dist/index.d.ts'), 'utf8');
-      // Explicitly verified version. New versions need the real dispatcher proof again.
-      return pkg.version === '1.0.4' && ['createWriteToolDefinition', 'createEditToolDefinition'].every(n => exports.includes(n));
+      // Exact capture-only versions: 1.2.0 additionally has D6 real SDK/RPC,
+      // default write/edit source-handshake and object-capture evidence.
+      // Unknown versions still require dispatcher proof; B remains closed.
+      return ['1.0.4', '1.2.0'].includes(pkg.version) && ['createWriteToolDefinition', 'createEditToolDefinition'].every(n => exports.includes(n));
     } catch { return false; }
   }
   async function scoped(nativeSessionId, action, noStore = false) {

@@ -4,6 +4,22 @@ let checks=0;const check=async(name,fn)=>{await fn();checks++;console.log('  ok 
   let createSessionChangeBridge;try{({createSessionChangeBridge}=await import('../server/session-change-bridge.js'));}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
   await check('private evidence bridge exists',()=>assert.equal(typeof createSessionChangeBridge,'function'));
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'p33-bridge-')),workspace=path.join(root,'workspace');fs.mkdirSync(workspace);
+  // Public package entry/declarations match the reviewed installed Pi 1.2.0
+  // shape. Every package below is a TEMP fixture, never the global installation.
+  async function defaultCapability({version='1.2.0',api=['createWriteToolDefinition','createEditToolDefinition'],entry='./dist/index.js',missingTypes=false,invalidPackage=false}={}){
+    const pkgRoot=fs.mkdtempSync(path.join(root,'package-'));fs.mkdirSync(path.join(pkgRoot,'dist'));
+    fs.writeFileSync(path.join(pkgRoot,'package.json'),invalidPackage?'invalid json':JSON.stringify({name:'@earendil-works/pi-coding-agent',version,type:'module',exports:{'.':{types:'./dist/index.d.ts',import:entry}}}));
+    if(!missingTypes)fs.writeFileSync(path.join(pkgRoot,'dist/index.d.ts'),'export { '+api.join(', ')+' } from "./core/tools/index.ts";\n');
+    const probe=createSessionChangeBridge({launch:{packageDir:()=>pkgRoot},extensionPath:path.resolve('extensions/pi-gui-revert/index.js')});
+    try{const prepared=await probe.prepare();return {prepared,report:probe.report(),pkgRoot};}finally{await probe.dispose();}
+  }
+  try{
+    await check('default capture qualification preserves exact verified Pi 1.0.4',async()=>assert.ok((await defaultCapability({version:'1.0.4'})).prepared));
+    for(const version of ['1.2.1','1.2.0-rc.1','1.0.5','unknown'])await check('default capture rejects unverified Pi '+version,async()=>{const r=await defaultCapability({version});assert.equal(r.prepared,null);assert.equal(r.report.reason,'pi_api_unverified');});
+    for(const name of ['createWriteToolDefinition','createEditToolDefinition'])await check('default capture rejects missing '+name,async()=>{const r=await defaultCapability({api:[name==='createWriteToolDefinition'?'createEditToolDefinition':'createWriteToolDefinition']});assert.equal(r.prepared,null);assert.equal(r.report.reason,'pi_api_unverified');});
+    for(const [name,options] of [['missing declarations',{missingTypes:true}],['invalid package',{invalidPackage:true}],['different public entry',{entry:'./dist/private.js'}]])await check('default capture rejects '+name,async()=>{const r=await defaultCapability(options);assert.equal(r.prepared,null);assert.equal(r.report.reason,'pi_api_unverified');});
+    await check('default capture accepts reviewed exact Pi 1.2.0 public API without source certification',async()=>{const r=await defaultCapability();assert.ok(r.prepared);assert.equal(r.prepared.env.PI_GUI_SESSION_CHANGE_API,require('node:url').pathToFileURL(path.join(r.pkgRoot,'dist/index.js')).href);assert.equal(r.report.sourceVerified,false);assert.equal(r.report.bridgeReady,true);});
+  }catch(e){fs.rmSync(root,{recursive:true,force:true});throw e;}
   const native='11111111-1111-4111-8111-111111111111';let current=true,enabled=false,failPrepare=false,revision=0;
   const scope={runtimeOwner:{backendInstance:'backend',projectId:'project',repoId:'repo',workspaceId:'workspace',workspaceEpoch:'epoch',conversationId:'conversation',runtimeId:'runtime',runtimeGeneration:'generation',sessionId:native},conversationId:'conversation',workspaceId:'workspace',workspaceEpoch:'epoch',nativeSessionId:native};
   const records=new Map(),notifications=[],store={settings:async()=>({enabled,exclusions:['private'],noticeVersion:1}),configure:async(_s,v)=>{enabled=v.enabled;return {enabled,exclusions:[]};},captureBefore:async(s,v)=>{records.set(v.operationId,{...v,scope:s});revision++;},prepare:async(s,v)=>{if(failPrepare)throw Error('disk secret');records.set(v.operationId,{...v,scope:s});revision++;},settle:async(s,id,v)=>{assert.deepEqual(records.get(id).scope,s);Object.assign(records.get(id),v);revision++;},amendOutcome:async(s,id,v)=>{assert.deepEqual(records.get(id).scope,s);Object.assign(records.get(id),v,{toolResultObserved:true});revision++;},gap:async()=>++revision,summary:async()=>({operationCount:records.size,journalRevision:revision,paths:[...records.values()].map(v=>v.path),levels:{incomplete:records.size},attributionGap:true})};
