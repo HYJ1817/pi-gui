@@ -37,7 +37,10 @@ jobs:
   test:
     name: Core tests (Node ${{ matrix.node }})
     runs-on: windows-latest
-    timeout-minutes: 25
+    # The complete canonical suite now includes real TEMP Native safety checks;
+    # a measured full local run took 52 minutes. Keep every check and a finite
+    # job deadline rather than cancelling an otherwise healthy suite at 25 min.
+    timeout-minutes: 90
     strategy:
       # 一个版本挂了也要把另一个跑完 —— 否则只看得到第一个失败，
       # 分不清是「Node 版本问题」还是「代码问题」。
