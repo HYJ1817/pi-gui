@@ -1,5 +1,5 @@
 {
-  "passed": 43,
+  "passed": 57,
   "failed": 0,
   "claims": [
     {
@@ -119,6 +119,76 @@
     },
     {
       "label": "C3 · runtime 会话跟随 768 阅读轴",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "A · .ui2-tool-summary 原生 button 重置（无边框、透明底）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "A · .ui2-tool-summary:focus-visible 存在 2px 焦点环规则",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "A · .ui2-tool-summary 折叠图标随 aria-expanded 旋转",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "A · .ui2-tool-state 组状态弱化小字（10.5px / t3）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "A · .ui2-msg-meta-item 等宽数字对齐（tabular-nums）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "A · .think[data-state=error] 状态文字用 err 色",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · .ui2-runtime-thinking-body 用 pre-wrap + overflow-wrap:anywhere",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · 长思考文本不产生容器横向滚动",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · .ui2-runtime-usage 弱化小字（11.5px / t3）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · .ui2-runtime-tools 每项一行（flex 纵排）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · .ui2-runtime-tool[data-state=running] = run 色",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · .ui2-runtime-tool[data-state=done] = ok 色",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · .ui2-runtime-tool[data-state=error] = err 色",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "B · 未知 data-state 不为任何真实状态着色（回落 t2）",
       "ok": true,
       "got": true
     },

@@ -288,6 +288,107 @@ async function suite(send) {
   await shot('c3-reserved-probes');
   await evalJs(`document.querySelector('#u2c-probes').remove()`);
 
+  /* ---- C6 · A/B 真实 DOM 适配：按 tool-view.js / messages.js / message-meta.js
+         与 runtime-conversation.js 实际生成的类名/属性灌真实结构，验样式 ---- */
+  await evalJs(`(() => {
+    const probe = document.createElement('div');
+    probe.id = 'u2c-ab';
+    probe.style.cssText = 'position:fixed;top:8px;left:400px;right:8px;display:flex;flex-direction:column;gap:8px;background:var(--main);border:1px solid var(--line);border-radius:8px;padding:10px;z-index:99';
+    probe.innerHTML = [
+      '<section class="tl-group">',
+        '<button type="button" class="tl-group-head ui2-tool-summary" id="u2c-sum" aria-expanded="true" aria-controls="u2c-l" aria-describedby="u2c-st">操作 3 项</button>',
+        '<span class="ui2-tool-state" id="u2c-st" role="status">运行中 1 · 成功 1 · 失败 1</span>',
+        '<div class="tl-list" id="u2c-l">',
+          '<div class="tl-item" data-status="running"><span class="tl-dot"></span></div>',
+          '<div class="tl-item" data-status="success"><span class="tl-dot"></span></div>',
+          '<div class="tl-item" data-status="error"><span class="tl-dot"></span></div>',
+        '</div>',
+      '</section>',
+      '<div class="msg assistant"><div class="msg-body">',
+        '<div class="think" data-state="error"><button type="button" class="think-head">',
+          '<span>思考过程 · 12 字</span><span class="ui2-think-status"> · 发生错误</span>',
+        '</button><div class="think-body">思考内容</div></div>',
+        '<footer class="ui2-msg-meta" aria-label="本条助手消息用量">',
+          '<span class="ui2-msg-meta-item" data-kind="input">输入 1,234 Token</span>',
+          ' · <span class="ui2-msg-meta-item" data-kind="output">输出 56 Token</span>',
+        '</footer>',
+      '</div></div>',
+      '<div class="runtime-conversation">',
+        '<details class="ui2-runtime-thinking" id="u2c-think" open>',
+          '<summary class="ui2-runtime-thinking-head">思考过程 · 12 字</summary>',
+          '<pre class="ui2-runtime-thinking-body" id="u2c-think-body">' + 'X'.repeat(400) + '</pre>',
+        '</details>',
+        '<p class="ui2-runtime-usage">本轮 · 输入 12 · 输出 3</p>',
+        '<div class="rtc-state ui2-runtime-tools">',
+          '<span class="ui2-runtime-tool" data-state="running">read · 运行中</span>',
+          '<span class="ui2-runtime-tool" data-state="done">bash · 完成</span>',
+          '<span class="ui2-runtime-tool" data-state="error">edit · 失败</span>',
+          '<span class="ui2-runtime-tool" data-state="bogus">weird · 怪</span>',
+        '</div>',
+      '</div>',
+    ].join('');
+    document.body.appendChild(probe);
+    return 'ok';
+  })()`);
+
+  /* --- A 侧 --- */
+  await expect('A · .ui2-tool-summary 原生 button 重置（无边框、透明底）',
+    `(() => { const s = getComputedStyle(document.getElementById('u2c-sum'));
+      return s.borderTopWidth === '0px' && (s.backgroundColor === 'rgba(0, 0, 0, 0)' || s.backgroundColor === 'transparent'); })()`);
+  await expect('A · .ui2-tool-summary:focus-visible 存在 2px 焦点环规则',
+    `(() => { const hits = [];
+      for (const ss of document.styleSheets) {
+        let rules; try { rules = ss.cssRules; } catch { continue; }
+        for (const r of rules) {
+          if (r.selectorText && r.selectorText.includes('.ui2-tool-summary:focus-visible'))
+            hits.push(r.style.outline || r.cssText);
+        }
+      }
+      return hits.some(x => /(^|\\s)2px/.test(x)); })()`);
+  await evalJs(`document.getElementById('u2c-sum').setAttribute('aria-expanded', 'false')`);
+  await sleep(200);
+  const chevCollapsed = await evalJs(`getComputedStyle(document.getElementById('u2c-sum'), '::before').transform`);
+  await evalJs(`document.getElementById('u2c-sum').setAttribute('aria-expanded', 'true')`);
+  await sleep(200);
+  const chevExpanded = await evalJs(`getComputedStyle(document.getElementById('u2c-sum'), '::before').transform`);
+  await expect('A · .ui2-tool-summary 折叠图标随 aria-expanded 旋转',
+    `${JSON.stringify(chevCollapsed)} !== 'none' && ${JSON.stringify(chevExpanded)} !== 'none' && ${JSON.stringify(chevCollapsed)} !== ${JSON.stringify(chevExpanded)}`);
+  await expect('A · .ui2-tool-state 组状态弱化小字（10.5px / t3）',
+    `(() => { const s = getComputedStyle(document.getElementById('u2c-st'));
+      return s.fontSize === '10.5px' && s.color === 'rgb(166, 163, 155)'; })()`);
+  await expect('A · .ui2-msg-meta-item 等宽数字对齐（tabular-nums）',
+    `(() => { const s = getComputedStyle(document.querySelector('#u2c-ab .ui2-msg-meta-item'));
+      return s.fontVariantNumeric.includes('tabular'); })()`);
+  await expect('A · .think[data-state=error] 状态文字用 err 色',
+    `getComputedStyle(document.querySelector('#u2c-ab .ui2-think-status')).color === 'rgb(248, 113, 113)'`);
+
+  /* --- B 侧 --- */
+  await expect('B · .ui2-runtime-thinking-body 用 pre-wrap + overflow-wrap:anywhere',
+    `(() => { const s = getComputedStyle(document.getElementById('u2c-think-body'));
+      return s.whiteSpace === 'pre-wrap' && s.overflowWrap === 'anywhere'; })()`);
+  await expect('B · 长思考文本不产生容器横向滚动',
+    `(() => { const b = document.getElementById('u2c-think-body');
+      return b.scrollWidth <= b.clientWidth + 1; })()`);
+  await expect('B · .ui2-runtime-usage 弱化小字（11.5px / t3）',
+    `(() => { const s = getComputedStyle(document.querySelector('#u2c-ab .ui2-runtime-usage'));
+      return s.fontSize === '11.5px' && s.color === 'rgb(166, 163, 155)'; })()`);
+  await expect('B · .ui2-runtime-tools 每项一行（flex 纵排）',
+    `getComputedStyle(document.querySelector('#u2c-ab .ui2-runtime-tools')).flexDirection === 'column'`);
+  await expect('B · .ui2-runtime-tool[data-state=running] = run 色',
+    `(() => { const t = [...document.querySelectorAll('#u2c-ab .ui2-runtime-tool')];
+      return getComputedStyle(t.find(e => e.dataset.state === 'running')).color === 'rgb(34, 211, 238)'; })()`);
+  await expect('B · .ui2-runtime-tool[data-state=done] = ok 色',
+    `(() => { const t = [...document.querySelectorAll('#u2c-ab .ui2-runtime-tool')];
+      return getComputedStyle(t.find(e => e.dataset.state === 'done')).color === 'rgb(74, 222, 128)'; })()`);
+  await expect('B · .ui2-runtime-tool[data-state=error] = err 色',
+    `(() => { const t = [...document.querySelectorAll('#u2c-ab .ui2-runtime-tool')];
+      return getComputedStyle(t.find(e => e.dataset.state === 'error')).color === 'rgb(248, 113, 113)'; })()`);
+  await expect('B · 未知 data-state 不为任何真实状态着色（回落 t2）',
+    `(() => { const t = [...document.querySelectorAll('#u2c-ab .ui2-runtime-tool')];
+      return getComputedStyle(t.find(e => e.dataset.state === 'bogus')).color === 'rgb(195, 194, 183)'; })()`);
+  if (process.env.UI2C_AB_SHOT !== '0') await shot('c6-ab-dom', '#u2c-ab');
+  await evalJs(`document.getElementById('u2c-ab').remove()`);
+
   /* ---- C4 · 四档宽度 sweep：阅读列、气泡、代码块、无溢出 ---- */
   const colCentered = `(() => {
     const t = document.querySelector('.thread').getBoundingClientRect();
