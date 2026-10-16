@@ -1,0 +1,121 @@
+FAIL message-specific metadata exists for three known usages: Expected values to be strictly equal:
+
+0 !== 3
+
+FAIL two assistant messages keep different input usage: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- '输入 11 Token'
+
+PASS missing usage stays absent despite global lastTurn
+FAIL zero reasoning is distinct from unknown: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- '思考 0 Token（含在输出中）'
+
+FAIL all seven actual zero fields remain visible: Expected values to be strictly equal:
+
+0 !== 7
+
+PASS global or inferred time never enters metadata
+PASS live final authoritative usage equals historical usage
+PASS live authoritative body replaces streamed draft
+PASS malformed usage cannot create numeric metadata
+PASS total is not invented by adding input/output
+PASS tool-only usage does not resurrect empty assistant shell
+PASS tool-only tool entry is retained
+FAIL thinking-only message keeps actual metadata: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- '输出 1 Token'
+
+PASS single tool has no duplicate batch title
+PASS real message boundary groups both tools once
+FAIL batch summary is native keyboard button: Expected values to be strictly equal:
+
+'DIV' !== 'BUTTON'
+
+FAIL summary controls its unique ARIA list: The expression evaluated to a falsy value:
+
+  assert.ok(list.id)
+
+FAIL batch can collapse without destroying tool nodes: Expected values to be strictly equal:
+
+false !== true
+
+FAIL running tools are discoverable while collapsed: The input did not match the regular expression /运行中 2/. Input:
+
+''
+
+FAIL failure stays discoverable while collapsed: The input did not match the regular expression /失败 1/. Input:
+
+''
+
+PASS provider cancellation error is not silently reclassified
+FAIL status updates preserve chosen collapsed state: Expected values to be strictly equal:
+
+false !== true
+
+FAIL settled running tool becomes discoverable incomplete: The input did not match the regular expression /未完成 1/. Input:
+
+''
+
+FAIL batch expands same list and tool ids: Expected values to be strictly equal:
+
+null !== 'true'
+
+PASS history uses same grouped status semantics
+FAIL history uses same interactive batch summary: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- '操作 2 项'
+
+PASS separate assistant and orphan boundaries are retained
+PASS orphan toolResult remains visible at its own position
+FAIL explicit cancelled and interrupted presentation states survive collapse: The input did not match the regular expression /已中断 1.*已取消 1/. Input:
+
+''
+
+FAIL thinking exposes actual streaming state: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- 'streaming'
+
+FAIL thinking region has explicit accessible label: Expected values to be strictly equal:
+
+null !== 'region'
+
+FAIL thinking end state comes from actual event: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- 'returned'
+
+PASS final authority reuses expanded thinking node
+FAIL final thinking is complete without invented duration/token: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- 'complete'
+
+FAIL interruption updates unfinished thinking state: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- 'interrupted'
+
+FAIL error message preserves real zero metadata and safe text: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- '输入 0 Token'
+
+PASS retry removes error-only shell even with sibling metadata
+PASS untrusted message/thinking/tool text never becomes active HTML
+PASS untrusted usage cannot leak into metadata
+UI-2A Classic 18/39; failed=21; skipped=0; DOM/fixture, not layout evidence
