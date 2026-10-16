@@ -146,12 +146,14 @@ async function waitReady(ms = 20000) {
     const cssRules = [...cssClean.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
     const rulesFor = (re) => cssRules.filter((r) => re.test(r.sel));
 
-    check('styles.css 有全局深色滚动条规则（不再只给个别容器打补丁）', () => {
+    check('styles.css 有全局主题滚动条规则（不再只给个别容器打补丁）', () => {
       const globalBar = rulesFor(/^::-webkit-scrollbar$/);
       if (!globalBar.length) return '缺少不带选择器前缀的全局 ::-webkit-scrollbar';
       const thumb = rulesFor(/^::-webkit-scrollbar-thumb$/);
       if (!thumb.length) return '缺少全局 ::-webkit-scrollbar-thumb';
-      if (!/background-color\s*:\s*#2c2c2c/i.test(thumb[0].body)) return thumb[0].body.trim();
+      if (!/background-color\s*:\s*var\(--ui-scrollbar\)/i.test(thumb[0].body)) return thumb[0].body.trim();
+      const tokens = fs.readFileSync(path.join(ROOT, 'public/tokens.css'), 'utf8');
+      if ([...tokens.matchAll(/--ui-scrollbar:\s*[^;]+;/g)].length !== 2) return '缺少明暗滚动条 Token';
       return (/width\s*:\s*10px/.test(globalBar[0].body) && /height\s*:\s*10px/.test(globalBar[0].body)) ||
         globalBar[0].body.trim();
     });
@@ -174,13 +176,15 @@ async function waitReady(ms = 20000) {
     /* 标题栏颜色是**跨进程常量**：主进程的 titleBarOverlay 画右侧原生按钮带，
      * 页面用 --titlebar 画 .stage-head。两边漂移时右上角会露出一块异色，
      * 看起来就是「顶部断开」。这里把两个文件钉在一起。 */
-    check('styles.css 的 --titlebar 与 electron 的 titleBarOverlay.color 一致', () => {
-      const token = cssClean.match(/--titlebar\s*:\s*(#[0-9a-fA-F]{3,8})/);
-      if (!token) return 'styles.css 里没有 --titlebar';
-      const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
-      const overlay = main.match(/titleBarOverlay\s*:\s*\{[^}]*color\s*:\s*'(#[0-9a-fA-F]{3,8})'/);
-      if (!overlay) return 'electron/main.cjs 里没找到 titleBarOverlay.color';
-      return token[1].toLowerCase() === overlay[1].toLowerCase() || `css=${token[1]} electron=${overlay[1]}`;
+    check('两主题的 --titlebar 与 Electron overlay 调色板一致', () => {
+      const tokens = fs.readFileSync(path.join(ROOT, 'public', 'tokens.css'), 'utf8');
+      const { THEME_PALETTE } = require('../electron/theme.cjs');
+      const blocks = [...tokens.matchAll(/:root(?:\[data-theme="light"\])?\s*\{([^}]+)\}/g)];
+      if (blocks.length < 2 || !/--titlebar:\s*var\(--ui-titlebar\)/.test(tokens)) return '缺少主题别名';
+      return ['dark', 'light'].every((mode, i) => {
+        const color = blocks[i][1].match(/--ui-titlebar:\s*(#[0-9a-f]+)/)?.[1];
+        return color === THEME_PALETTE[mode].background;
+      }) || 'CSS 与 native 调色板漂移';
     });
     check('stage-head 有明确背景（不靠 .stage 透上来）且抬在正文之上', () => {
       const hit = rulesFor(/(^|,)\s*\.stage-head\s*$/).find((r) => /background\s*:/.test(r.body));
@@ -223,6 +227,10 @@ async function waitReady(ms = 20000) {
      * （含 public/ui/ 子目录）。所以这里不能只看 app.js 的大小 ——
      * 要顺着 import 把整张图走一遍，逐个确认能被静态托管出去。
      * 嵌套路径（/ui/modal.js）和 SEA 内嵌资源都是新的失败面，值得盯。 */
+    for (const [asset, mime] of [['/tokens.css', 'text/css'], ['/theme-init.js', 'javascript'], ['/theme.js', 'javascript']]) {
+      const response = await get(asset);
+      check(asset + ' 可独立加载且 MIME 正确', () => response.status === 200 && response.type.includes(mime) && !response.body.trimStart().startsWith('<'));
+    }
     const js = await get('/app.js');
     check('app.js 200', () => js.status === 200 || '状态 ' + js.status);
     check('app.js 不是 HTML 兜底', () => !js.body.includes('<title>') || '返回了 HTML');

@@ -8,7 +8,11 @@ if (!process.versions.electron) {
   child.on('error', () => { process.exitCode = 1; }); child.on('exit', code => { process.exitCode = code ?? 1; fs.rm(world, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {}); });
 } else {
   const { app, BrowserWindow, ipcMain } = require('electron'); app.on('window-all-closed', () => {});
-  const ROOT = path.resolve(__dirname, '..'), world = process.env.P32_RUNTIME_WORLD, OUT = path.join(ROOT, '.shots/p32-3'), OUT4 = path.join(ROOT, '.shots/p32-4');
+  const ROOT = path.resolve(__dirname, '..'), world = process.env.P32_RUNTIME_WORLD;
+  const evidenceRoot = process.env.P32_RUNTIME_EVIDENCE;
+  if (evidenceRoot && !path.isAbsolute(evidenceRoot)) throw Error('P32_RUNTIME_EVIDENCE must be absolute');
+  const OUT = evidenceRoot ? path.join(evidenceRoot, 'p32-3') : path.join(ROOT, '.shots/p32-3');
+  const OUT4 = evidenceRoot ? path.join(evidenceRoot, 'p32-4') : path.join(ROOT, '.shots/p32-4');
   let win, backend, host, browser, legacyHost, origin, checks = 0; const errors = [], screenshots = [], pages = [];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const check = (value, label) => { assert.ok(value, label); checks++; console.log('PASS ' + label); };
@@ -104,6 +108,12 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     backend.stdout.resume(); let backendErrors = ''; backend.stderr.on('data', chunk => { backendErrors = (backendErrors + chunk.toString()).slice(-2048); });
     await until(async () => { try { return (await fetch(origin + '/api/status')).ok; } catch { return false; } });
     win.webContents.on('console-message', (_event, level, message) => { if (level >= 3) errors.push(message); }); await win.loadURL(origin); win.webContents.debugger.attach('1.3');
+    if (process.env.P32_RUNTIME_THEME) {
+      assert.ok(['light', 'dark'].includes(process.env.P32_RUNTIME_THEME), 'fixture theme enum');
+      await read(`localStorage.setItem('pi-gui.theme.v1', ${JSON.stringify(process.env.P32_RUNTIME_THEME)})`);
+      await win.loadURL(origin);
+      check(await read(`document.documentElement.dataset.theme===${JSON.stringify(process.env.P32_RUNTIME_THEME)}`), 'fixture renderer restores requested theme');
+    }
     let bridgeStatus;
     try { await until(async () => { bridgeStatus = await api(null, '/api/status'); return bridgeStatus.state === 'ready' && await read(`!!document.querySelector('.pj-row-menu-trigger')`); }); }
     catch (error) { console.error('Fixture bridge ' + JSON.stringify({ state: bridgeStatus?.state, error: bridgeStatus?.error, hint: bridgeStatus?.hint })); console.error(backendErrors); if (fs.existsSync(trace)) console.error(fs.readFileSync(trace, 'utf8'));
