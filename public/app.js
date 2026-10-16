@@ -102,7 +102,7 @@ import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
-import { openAppUpdates } from './settings.js';
+import { openAppUpdates, openAppearance } from './settings.js';
 
 /* ---------- 装配 ---------- */
 
@@ -1010,6 +1010,7 @@ $('navDiagnostics').onclick = openDiagnostics;
 $('navCapabilities').onclick = () => openExtensions({ tab: 'capabilities' });
 $('navMcp').onclick = () => openExtensions({ tab: 'mcp' });
 $('navAppUpdates').onclick = openAppUpdates;
+$('navAppearance').onclick = () => { $('navGlobalMore').focus(); openAppearance(); };
 $('navRestartPi').onclick = restartPi;
 /* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
 $('navPalette').onclick = () => {

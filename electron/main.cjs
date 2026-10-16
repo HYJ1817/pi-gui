@@ -25,7 +25,7 @@ if (process.env.ELECTRON_RUN_AS_NODE && process.versions.electron) {
   return;
 }
 
-const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain, nativeTheme } = require('electron');
 
 if (!app || typeof app.whenReady !== 'function') {
   console.error(
@@ -58,6 +58,7 @@ const {
  * 否则右栏存在的意义（访问外站）当场就没了。见 browser-view.cjs 文件头。 */
 const { createBrowserController, isBrowserWebContents } = require('./browser-view.cjs');
 const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
+const { createDesktopTheme } = require('./theme.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
@@ -74,6 +75,7 @@ const AUTH_TOKEN = crypto.randomBytes(32).toString('hex');
 const TOKEN_HEADER = 'X-Pi-Gui-Token';
 
 let win = null;
+let desktopTheme = null;
 let server = null;
 let browser = null;
 let browserAgent = null;
@@ -578,7 +580,7 @@ function createWindow() {
     ...(Number.isFinite(saved?.x) && Number.isFinite(saved?.y) ? { x: saved.x, y: saved.y } : {}),
     minWidth: MIN_W,
     minHeight: MIN_H,
-    backgroundColor: '#0d0d0d', // 和页面底色一致，避免加载时闪白
+    backgroundColor: desktopTheme.windowOptions().backgroundColor,
     title: 'Pi GUI',
     ...(fs.existsSync(iconFile) ? { icon: iconFile } : {}),
     autoHideMenuBar: true, // 藏掉 Electron 默认的 File/Edit/View 菜单，按 Alt 仍可唤出
@@ -593,20 +595,17 @@ function createWindow() {
      * 右侧还要给原生按钮让位，否则会盖住顶栏最右的几个图标。
      * 高度取 46 是为了和 .rail-head / .stage-head 的行高对齐。
      *
-     * ⚠️ 颜色是**跨进程常量**，两处必须同一个值：
-     *   - 这里 `color`：#0d0d0d
-     *   - public/styles.css 的 `--titlebar`（.stage-head 的背景就是它）
-     * 主进程画右边那条原生按钮带、页面画左边那一段，值一漂移右上角就会露出
-     * 一块异色，看起来就是「顶部断开」。改一处就要改另一处 ——
-     * tests/dev-server.cjs 有一条断言盯着这两个值是否一致。
-     * symbolColor #9b9b9b 对应 --t2（顶栏图标的颜色）。 */
+     * theme.cjs 在建窗前恢复偏好，并同步原生按钮带与页面的主题快照。
+     * tests/dev-server.cjs 核对两种调色板与 tokens.css 的标题栏颜色；
+     * 右栏标题也使用同一 --titlebar，防止顶部出现异色色块。 */
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0d0d0d', symbolColor: '#9b9b9b', height: 46 },
+    titleBarOverlay: desktopTheme.windowOptions().titleBarOverlay,
     show: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
+      additionalArguments: ['--pi-gui-theme-bridge'],
       /* 只为「用系统默认程序打开文件」与「用系统浏览器打开 Release 链接」
        * 挂一个桥（见 preload.cjs）。contextIsolation 保持开启 —— 桥经
        * contextBridge 暴露，页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
@@ -614,6 +613,7 @@ function createWindow() {
     },
   });
 
+  desktopTheme.applyWindow();
   win.once('ready-to-show', () => {
     /* 先量偏差，再最大化 —— 顺序不能反：最大化之后 getContentBounds() 给的是
        最大化后的客户区，量出来的偏差会大得离谱，之后每次保存都会被减掉这么多。 */
@@ -751,6 +751,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    desktopTheme = createDesktopTheme({ ipcMain, nativeTheme, getWindow: () => win, origin: ORIGIN,
+      preferenceFile: path.join(app.getPath('userData'), 'theme-preferences.json') });
+    desktopTheme.register();
     // 令牌头的注入必须赶在窗口发第一个请求之前装好
     installTokenHeader();
     // 「用系统默认程序打开文件」与「用系统浏览器打开链接」两个 IPC ——

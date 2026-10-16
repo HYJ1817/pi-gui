@@ -318,7 +318,7 @@ export function renderUsageState() {
   if (el.uCtxBar) {
     const clamped = pct == null ? 0 : Math.max(0, Math.min(100, pct));
     el.uCtxBar.style.width = clamped + '%';
-    el.uCtxBar.style.background = pct == null ? '#aeb3b6' : pct > 85 ? 'var(--err)' : pct > 65 ? 'var(--warn)' : '#aeb3b6';
+    el.uCtxBar.style.background = pct == null ? 'var(--ui-text-muted)' : pct > 85 ? 'var(--err)' : pct > 65 ? 'var(--warn)' : 'var(--ui-text-muted)';
   }
   if (el.uNote) {
     el.uNote.textContent = ctx && ctx.tokens != null && ctx.contextWindow
