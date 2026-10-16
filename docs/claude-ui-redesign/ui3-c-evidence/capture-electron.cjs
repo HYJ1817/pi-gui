@@ -246,6 +246,28 @@ async function reopenMenu(cdp, query = '') {
     check(s.menuOpen === true, '右栏打开时菜单仍正常显示', { menuOpen: s.menuOpen });
     await shot(cdp, 'menu-with-browser-pane.png');
     facts.push({ step: 'browser-pane-open', ...s });
+
+    /* --- 6. 生命周期事件（真实 Chromium 中分发应用同款 CustomEvent；
+     *     这不是键盘/IME 验收，合成 KeyboardEvent 也不在本节使用） --- */
+    await cdp.eval(`(() => { const b = document.getElementById('browserClose'); if (b) b.click(); return true; })()`);
+    await sleep(250);
+    await reopenMenu(cdp, '');
+    let opened = await cdp.eval(`window.__ui3.isOpen()`);
+    check(opened === true, '生命周期：菜单先打开', { opened });
+    await cdp.eval(`(() => { document.dispatchEvent(new CustomEvent('pi-gui:workspace-view', { detail: { view: 'planner' } })); return true; })()`);
+    await sleep(120);
+    let closed = await cdp.eval(`window.__ui3.isOpen()`);
+    let valueAfter = await cdp.eval(`document.getElementById('input').value`);
+    check(closed === false, 'workspace-view 离开 Chat → 菜单关闭', { closed, valueAfter });
+    check(valueAfter === '/', '关闭时不清空输入（草稿保留）', { valueAfter });
+
+    await reopenMenu(cdp, '');
+    await cdp.eval(`(() => { document.dispatchEvent(new CustomEvent('pi-gui:session-switch')); return true; })()`);
+    await sleep(120);
+    closed = await cdp.eval(`window.__ui3.isOpen()`);
+    check(closed === false, 'session-switch（同代内换会话）→ 菜单关闭', { closed });
+    await shot(cdp, 'menu-closed-after-lifecycle.png');
+    facts.push({ step: 'lifecycle-closed' });
   } catch (err) {
     check(false, '采集过程异常', String(err && err.message ? err.message : err));
     console.error(err);

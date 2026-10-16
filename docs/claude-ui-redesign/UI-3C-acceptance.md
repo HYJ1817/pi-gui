@@ -2,7 +2,9 @@
 
 执行：2026-10-16（本地，Asia/Shanghai）。独立工作区 `C:/pi-GUI-ui3-commands`，分支 `codex/ui3-commands`，共同基线 `d1524cb02f010cf9d474727c212f4048fc9abf75`（本分支创建时 HEAD 即为此值）。本报告只描述内联 Slash 命令菜单（UI-3C）；不含 `@` 文件索引，不改 pi 本体，不推送、不合并 main、不发版。
 
-**结论：C1–C5 已实现并有可复现证据。** 内联菜单通过 `palette-model.js` 的同一份注册表取候选、调用同一份 `run()`；独立命令面板 `palette.js` 完整保留。jsdom 契约 **41/41 通过**，真实 Electron 采集 **13/13 通过、5 张截图**。合成键盘事件不能代替真实中文 IME 的人工终验（见第 8 节）。
+**结论：C1–C5 已实现并有可复现证据。** 内联菜单通过 `palette-model.js` 的同一份注册表取候选、调用同一份 `run()`；独立命令面板 `palette.js` 完整保留。jsdom 契约 **46/46 通过**（含 2026-10-17 生命周期修复新增 5 条），真实 Electron 采集 **17/17 通过、6 张截图**。合成键盘事件不能代替真实中文 IME 的人工终验（见第 8 节）。
+
+> 2026-10-17 生命周期修复（会话/视图切换关闭菜单）见第 9 节；该节记录产品提交 `be52611`、测试提交 `34389fd`。
 
 ## 0. 勘察结论（先读代码，后动手）
 
@@ -111,7 +113,7 @@ CSS 全部在 `public/ui3-inline-commands.css`，类名统一 `.ui3-inline-*`，
 
 ### 5.1 离线契约 `tests/ui3-inline-commands.cjs`（jsdom，真 `public/index.html`）
 
-实际命令 `node tests/ui3-inline-commands.cjs` → **41/41 通过**，退出 0。覆盖任务列出的 1–14 项与可离线判定的 a11y/CSS 契约（第 15 项的真实排版在 5.2）。要点：
+实际命令 `node tests/ui3-inline-commands.cjs` → **46/46 通过**，退出 0（原 41 条全部保留，第 9 节新增 5 条）。覆盖任务列出的 1–14 项与可离线判定的 a11y/CSS 契约（第 15 项的真实排版在 5.2）。要点：
 
 - 输入 `/` / 前导空白 / 换行后触发；失去前缀自动关闭；
 - `/query` 实时筛选、无候选显示「没有匹配的命令」空状态；
@@ -124,12 +126,12 @@ CSS 全部在 `public/ui3-inline-commands.css`，类名统一 `.ui3-inline-*`，
 - `palette.openPalette()` 仍可打开且列出同一注册表；
 - `pi-gui:workspace-generation` 关闭菜单且旧候选不再执行；
 - 过期（`when` 变假）/未知（id 消失）候选：不执行、`fetch` 全程为 0；
-- destroy 后 DOM/监听/aria 清理，重挂不重复触发；
+- destroy 后 DOM/监听/aria 清理，重挂不重复触发；新增生命周期监听同样随 destroy 解绑；
 - `ensureStylesheet` 幂等；CSS 含约定类名与 reduced-motion 分支。
 
 ### 5.2 真实 Electron 证据 `docs/claude-ui-redesign/ui3-c-evidence/`
 
-脚本 `capture-electron.cjs`：真实 `electron .`（`--remote-debugging-port` + CDP），全新临时 `PI_GUI_DATA`/`PI_CWD`，真实 input 事件，`Page.captureScreenshot`。实际运行 → **13/13 通过，5 张截图**（`results.json`）：
+脚本 `capture-electron.cjs`：真实 `electron .`（`--remote-debugging-port` + CDP），全新临时 `PI_GUI_DATA`/`PI_CWD`，真实 input 事件，`Page.captureScreenshot`。实际运行 → **17/17 通过，6 张截图**（`results.json`）：
 
 | 截图 | 场景 | 关键实测 |
 |---|---|---|
@@ -138,8 +140,9 @@ CSS 全部在 `public/ui3-inline-commands.css`，类名统一 `.ui3-inline-*`，
 | `menu-light.png` | 浅色 `/` | 25 候选，浅色 token 生效（白底深字） |
 | `menu-narrow-700.png` | 700px 视口 `/` | x=8 w=264，菜单不越界 |
 | `menu-with-browser-pane.png` | 打开右侧原生 Browser 后 `/` | 右栏已开（`paneLeft=900`），菜单右边界 855，**margin=45px**，不与原生视图重叠 |
+| `menu-closed-after-lifecycle.png` | 分发 `session-switch` 后 | 菜单已关闭，输入框仍保留 `/`（草稿未清） |
 
-说明：真实 Electron 窗口 `capturePage` **不包含原生 `WebContentsView` 内容**（原生子视图不在页面合成里），截图里右栏网页区域为空属正常；菜单与右栏边界由几何实测（margin≥0）证明。「深色 22 / 浅色 25 条」是启动早期 `app` 状态尚未完全就绪时 `when()` 的诚实结果差异，不是筛选 bug。
+说明：真实 Electron 窗口 `capturePage` **不包含原生 `WebContentsView` 内容**（原生子视图不在页面合成里），截图里右栏网页区域为空属正常；菜单与右栏边界由几何实测（margin≥0）证明。「深色 22 / 浅色 25 条」是启动早期 `app` 状态尚未完全就绪时 `when()` 的诚实结果差异，不是筛选 bug。第 5.2 节末尾 4 条为生命周期实测（在真实 Chromium 里分发应用同款 `CustomEvent`，**不是**键盘/IME 验收）。
 
 ## 6. 集成方需要添加的导入、初始化及事件路由
 
@@ -172,19 +175,19 @@ el.input.addEventListener('keydown', (e) => {
 
 **样式**：无需改 `index.html` —— `attach()` 会幂等注入 `<link href="/ui3-inline-commands.css">`。若集成方偏好静态引入，可在 `<link href="/styles.css">` 之后加 `<link rel="stylesheet" href="/ui3-inline-commands.css">`；`ensureStylesheet` 检测到后不会重复注入。
 
-**可选**：无法改 keydown 的宿主用 `inlineCommandMenu.bindKeyboard()`（在 composer 子树捕获阶段兜底）。切换项目/会话无需手动调用——模块已订阅 `pi-gui:workspace-generation` 自动关闭。
+**可选**：无法改 keydown 的宿主用 `inlineCommandMenu.bindKeyboard()`（在 composer 子树捕获阶段兜底）。切换项目/会话无需手动调用——模块已订阅 `pi-gui:workspace-generation`、`pi-gui:session-switch`、`pi-gui:workspace-view` 自动关闭（见第 9 节）。
 
 ## 7. 分支 HEAD 与未提交文件情况
 
 - 分支 `codex/ui3-commands`，创建时 HEAD = 基线 `d1524cb02f010cf9d474727c212f4048fc9abf75`。
-- 新增（未提交时）：
-  - `public/ui/inline-command-menu.js`
-  - `public/ui3-inline-commands.css`
-  - `tests/ui3-inline-commands.cjs`
-  - `docs/claude-ui-redesign/ui3-c-evidence/`（`capture-electron.cjs`、`results.json`、5 张 PNG）
+- 新增/修改（本任务范围内）：
+  - `public/ui/inline-command-menu.js`（新增，含生命周期修复）
+  - `public/ui3-inline-commands.css`（新增）
+  - `tests/ui3-inline-commands.cjs`（新增，46 条）
+  - `docs/claude-ui-redesign/ui3-c-evidence/`（`capture-electron.cjs`、`results.json`、6 张 PNG）
   - 本报告 `docs/claude-ui-redesign/UI-3C-acceptance.md`
 - **未改**任何受限文件（`app.js`/`composer.js`/`palette.js`/`palette-model.js`/`shortcuts.js`/`index.html`/`styles.css`/`tokens.css`/`rpc.js`/`package.json`/`server`/`electron`）；未改 `package.json`（完整测试由集成方接入 canonical `npm test`）。
-- 本地提交，不 push、不 merge main、不发版。精确 HEAD 见本分支 `git log -1`（不写成文档内自引用的哈希）。
+- 本地提交，不 push、不 merge main、不发版。各阶段提交 SHA 见第 9 节。
 
 ## 8. 未解决问题 / 已知取舍
 
@@ -194,3 +197,35 @@ el.input.addEventListener('keydown', (e) => {
 4. **`bindKeyboard` 兜底路径**：真实键盘交互的推荐路径是 `handleKeydown` 早退（app.js 需改一行）。`bindKeyboard` 的捕获阶段兜底已在 jsdom 覆盖绑定/解绑，但未在真实 Electron 里单独驱动验证其 preempt 顺序（主路径已在真实 Electron 走通）。
 5. **采集夹具解锁了禁用输入框**：采集时页面无项目、Composer 处于 `is-locked/disabled`，脚本只解锁 textarea 以取得真实打字与排版证据；「when 过滤」由 jsdom 套件单独证明。这不影响生产逻辑。
 6. **未接入 canonical 测试**：按任务要求未改 `package.json`；集成方应把 `node tests/ui3-inline-commands.cjs` 加进 `npm test`（本报告不代改）。
+
+## 9. 2026-10-17 生命周期修复：会话 / 视图切换关闭菜单
+
+**动机**：原实现只监听 `pi-gui:workspace-generation`。核实真实事件契约后发现两个缺口：
+
+- `pi-gui:session-switch`（`public/rpc.js:358`，`afterSessionSwitch()`）覆盖**新建 / 切换 / 分叉会话**，且**不递增 `workspaceGeneration`** —— 同一工作区内换会话时旧菜单不会关，旧的待选候选仍可被接受；
+- `pi-gui:workspace-view`（`public/ui/workspace-surface.js:33`，`sync(view)`，`detail.view ∈ chat|planner|extensions|runtime`）在中央视图切换时发出 —— 离开 Classic Chat 后旧菜单仍浮着。
+
+**修复**（仅 `public/ui/inline-command-menu.js`，+14 行）：
+
+- 新增两条 `document` 监听：
+  - `onSessionSwitch` → `close()`；
+  - `onWorkspaceView(event)` → `detail.view && detail.view !== 'chat'` 时 `close()`（回到 chat 不自动弹）。
+- 保留原有 `pi-gui:workspace-generation` 监听；两条新监听在 `attach()` 注册、`destroy()` 解绑（`removeEventListener` 同名函数），`attach()` 幂等不重复绑定。
+- 监听**只调 `close()`**：不改输入值（草稿保留）、不 `submit`、不 `stop`、不执行命令。`close()` 复位 ARIA（`aria-expanded=false`、移除 `aria-controls`/`aria-activedescendant`）并清活动候选。
+- 命令执行前重新校验：`accept()` 仍按 id 从**当前**注册表重取实例并 `fresh.run()`；会话/视图切换后菜单已关，旧候选无从执行（第 7 项要求在代码与测试中同时成立）。
+
+**实际提交 SHA（本地，未 push）**：
+
+| 提交 | 完整 SHA | 内容 |
+|---|---|---|
+| 产品修复 | `be5261162814310b31233b085c634716d1cc386a` | `public/ui/inline-command-menu.js` 两条监听（+14 行） |
+| 测试 | `34389fdd48bd14d9e382668ae378fdf9df59310b` | `tests/ui3-inline-commands.cjs` +5 条（41 → 46） |
+
+本报告与 Electron 证据的归档提交在其后（其 SHA 见本分支 `git log`，不在文档内自引用）。
+
+**测试证据（实际数字）**：
+
+- `node tests/ui3-inline-commands.cjs` → **46/46 通过，退出 0**。新增 5 条：`session-switch` 关闭（同代内）；会话切换后旧候选不执行且 `fetch=0`；`workspace-view` 离开 Chat（planner/runtime/extensions）关闭且草稿保留；返回 Chat 不自动弹出；生命周期监听随 destroy 解绑、重复 attach 不重复。
+- `node docs/claude-ui-redesign/ui3-c-evidence/capture-electron.cjs` → **17/17 通过，6 张截图**。新增 4 条在真实 Chromium 里通过分发应用同款 `CustomEvent` 验证（明确**非**键盘/IME 验收）：`workspace-view` 关闭、关闭后输入 `/` 仍在（草稿保留）、`session-switch` 关闭。截图 `menu-closed-after-lifecycle.png`。
+
+**范围**：只修当前 Slash 命令菜单，未扩大功能；未改 `app.js`/`styles.css`/`index.html`/`package.json`/RPC/Server/Electron。
