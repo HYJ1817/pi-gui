@@ -1,0 +1,22 @@
+已生成 docx: C:\Users\21022\AppData\Local\Temp\pi-gui-ui3a-fixtures-056340254b404eb5aea5ad091bccf2d6\pi-gui-fixtures\发酵罐空气分布器设计.docx  (1627 字节)
+已生成 png: C:\Users\21022\AppData\Local\Temp\pi-gui-ui3a-fixtures-056340254b404eb5aea5ad091bccf2d6\pi-gui-fixtures\red.png  (88 字节)
+已生成最小 PDF: C:\Users\21022\AppData\Local\Temp\pi-gui-ui3a-fixtures-056340254b404eb5aea5ad091bccf2d6\pi-gui-fixtures\发酵罐空气分布器设计.pdf  (746 字节)
+
+=== docx 抽取 ===
+长度: 385 字符
+前 200 字: "发酵罐空气分布器的设计参数核算\n一、设计依据\n依据《发酵工程设备设计手册》第 3 版，通风发酵罐采用单管式空气分布器，\n出口气速取 10～15 m/s，管口距罐底 40 mm，罐底设置防冲刷钢板。\n二、结构参数\n罐体公称容积 V = 50 m³，装料系数 η = 0.75，实际装液量 37.5 m³。\n通气量 Q = 1.2 vvm，则标准状态下空气流量为 0.75 m³/s。\n空气分布器出口内径"
+段落命中: 13/13
+
+=== 用 LibreOffice 转 PDF（覆盖最小 PDF） ===
+已生成 PDF: 453303 字节
+Warning: TT: undefined function: 21
+
+=== PDF 抽取 ===
+页数: 1，长度: 385 字符
+前 200 字: "发酵罐空气分布器的设计参数核算\n一、设计依据\n依据《发酵工程设备设计手册》第 3 版，通风发酵罐采用单管式空气分布器，\n出口气速取 10～15 m/s，管口距罐底 40 mm，罐底设置防冲刷钢板。\n二、结构参数\n罐体公称容积 V = 50 m³，装料系数 η = 0.75，实际装液量 37.5 m³。\n通气量 Q = 1.2 vvm，则标准状态下空气流量为 0.75 m³/s。\n空气分布器出口内径"
+中文段落命中: 13/13（最小 PDF 是英文的，0 属正常）
+含 DN300: true
+
+=== extract() 统一入口 ===
+发酵罐空气分布器设计.docx → kind=text, 385 字符
+unknown.bin → 抛错: ENOENT: no such file or directory, open 'C:\Users\21022\AppData\Local\Temp\pi-gui-ui3a-fixtures-056340254b404eb5aea5ad091bccf2d6\pi-gui-fixtures\nope.bin'

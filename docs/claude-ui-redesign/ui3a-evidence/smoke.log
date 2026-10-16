@@ -1,0 +1,1372 @@
+
+--- Tool Timeline：实时 ---
+
+--- Tool Timeline：历史重建 ---
+
+--- Tool Timeline：中断收尾 ---
+
+--- Tool Timeline：真实会话 fixture ---
+
+--- 会话过滤 ---
+
+--- hunk 折叠 ---
+
+--- 上下文切换 ---
+
+--- 全部撤销 ---
+
+--- 取消暂存（单文件） ---
+
+--- Tool Timeline：Git 回填 ---
+
+--- P8-C 人工审阅：三态 / 编辑 / 冲突 / 汇总 / stale ---
+
+--- P9 独立验证：按钮 / 状态 / 输出 / XSS / stale ---
+
+--- P10 历史 Diff：入口 / 面板 / 纯文本 / 不漂移 ---
+
+--- P11 人工门控：badge / 等待原因 / 编辑器 / Plan 汇总 ---
+
+--- P13 Planner 收敛：下一步 / Attempt 折叠 / 动作层级 / 门控文案 ---
+
+--- 跨项目会话：等待 Pi 就绪与过期动作防护 ---
+  ok   找得到 el 定义
+  ok   el 对象覆盖全部引用
+  ok   $('id') 全部存在于 HTML
+  ok   模块加载无异常
+  ok   静态按钮都声明 type
+  ok   P14-E 交互选择器不引用黄色强调
+  ok   P14-A 三列外壳与全局导航存在
+  ok   P14-A 侧栏有独立折叠按钮
+  ok   侧栏按钮初始语义为展开
+  ok   存储为 0 时项目分组实际折叠
+  ok   项目分组可从存储折叠态恢复
+  ok   消息输入有可识别名称
+  ok   启动首帧显示恢复中而不闪未选项目
+  ok   EventSource 已连接
+  ok   项目列表已渲染 2 项
+  ok   当前项目高亮
+  ok   供应商计数 = 1
+  ok   P25 发现 OAuth 时 OpenAI 显示 ChatGPT
+  ok   P25 发现模型不推断登录状态
+  ok   P25 API Key 方法提供官方交互说明，不提供原文输入
+  ok   P25 OAuth 登录按钮仅按发现方法显示
+  ok   P25 安全链接拒绝非 HTTPS、userinfo、token、fragment
+  ok   P25 正常 PKCE 授权链接保留
+  ok   P25 登录只发送 OAuth 方法和 providerId
+  ok   P25 设备码与取消动作实际呈现
+  ok   P25 浏览器 bridge 失败不声称已打开
+  ok   P25 浏览器 bridge 成功后才显示打开提示
+  ok   P25 相同 revision 保留授权回复草稿和焦点
+  ok   P25 手动授权码只提交 flow 和 prompt 对应回复
+  ok   P25 较低 flow revision 不覆盖当前回复
+  ok   P25 方法选择提交稳定 option ID 和 prompt ID
+  ok   P25 取消发送 flow ID 并回读真实状态
+  ok   P25 成功后重新 GET，不乐观指派模型
+  ok   P25 pending 同步提供实际 retry API
+  ok   P25 过期 HTTP 响应不替换新 flow
+  ok   P25 最后消费者卸载后停止轮询且不取消登录
+  ok   P25 重新打开恢复服务端 flow
+  ok   P25 关闭面板不取消认证
+  ok   供应商入口不在顶部导航里
+  ok   供应商入口在全局 More 菜单
+  ok   诊断入口在全局 More 菜单
+  ok   Global Rail 入口都是可聚焦的真按钮且有名称
+  ok   Global Rail 初始激活项唯一
+  ok   折叠仅隐藏项目侧栏，保留全局栏与工作区
+  ok   侧栏折叠按钮语义与侧栏状态一致
+  ok   展开项目侧栏仍保留当前项目
+  ok   侧栏展开按钮语义与侧栏状态一致
+  ok   More 展开并提供真实入口
+  ok   More 可收起
+  ok   项目低频动作可展开
+  ok   项目低频动作可收起
+  ok   搜索前项目区域实际折叠
+  ok   搜索入口重新展开项目区域并聚焦搜索框
+  ok   右下角没有重复的供应商按钮
+  ok   boot 请求 get_state
+  ok   boot 请求 get_messages
+  ok   标题 = 会话名
+  ok   底部 = 会话名
+  ok   模型 chip
+  ok   思考 chip
+  ok   上下文百分比
+  ok   上下文进度条宽度
+  ok   成本显示
+  ok   P25 logout 回读 model=null 清除旧模型名
+  ok   P25 logout 回读 model=null 清除 usage 模型和供应商身份
+  ok   P25 logout 回读 model=null 清除远端额度及供应商身份
+  ok   P25 恢复 get_state fixture 后模型和供应商来自 Pi 回读
+  ok   分支计数 = 3（只算对话条目）
+  ok   message 取嵌套消息体（真实形状）
+  ok   message 兼容扁平形状（顶层 role/content）
+  ok   message 的 content 是块数组时取 text 块
+  ok   message 只有 toolCall 时不空白
+  ok   model_change 带出 provider/modelId
+  ok   thinking_level_change 带出档位
+  ok   context_edit 带出目标 id
+  ok   session_info 带出会话名
+  ok   label 带出标签
+  ok   compaction 带出 tokens
+  ok   未知类型有兜底（不出现 undefined）
+  ok   任何条目都不会渲染成 [object Object]
+  ok   用户消息已渲染
+  ok   助手增量已拼装
+  ok   message_end 校正渲染
+  ok   错误块已渲染
+  ok   错误标题译成人话
+  ok   错误带处理建议
+  ok   原始错误码保留
+  ok   错误块挂在最后一条助手消息里
+  ok   重试时撤掉错误块
+  ok   重试时空掉的助手外壳一起收走
+  ok   没有留下没有正文的助手消息
+  ok   失败前已有正文时保留外壳
+  ok   失败前已有正文时正文仍在
+  ok   失败前已有正文时错误块仍被撤掉
+  ok   401 译成 Key 无效
+  ok   429 译成限流
+  ok   网络错误译成连接失败
+  ok   未知错误有兜底
+  ok   空回复有提示而非空白
+  ok   中断有提示
+  ok   只有工具调用的消息不留空白「Pi」
+  ok   每条助手消息的正文都非空
+  ok   tool start 建出 running 条目
+  ok   条目挂在时间线分组里
+  ok   显示工具语义名而不是原始名
+  ok   显示参数摘要（命令原文）
+  ok   running 的图标是实心圆（不是对勾）
+  ok   partialResult 是累积值：整体替换而不是累加
+  ok   update 不会把状态改掉
+  ok   运行中给一行「在动」的反馈（输出尾巴）
+  ok   空的 partialResult 不会清掉已有输出
+  ok   end 转 success
+  ok   end 用权威结果覆盖流式输出
+  ok   成功后图标换成对勾
+  ok   成功后给出时长（0.1s 精度）
+  ok   成功条目不编造退出码
+  ok   失败的工具转 error 状态
+  ok   失败图标是叉
+  ok   从输出文本里解析出 exit code
+  ok   解析不到退出码时不按 isError 猜一个
+  ok   长输出默认折叠
+  ok   折叠时不在时间线上铺全文
+  ok   read 的结果行报行数而不是贴内容
+  ok   有输出时展开按钮可见
+  ok   折叠状态下悬停能看到输出
+  ok   展开后显示完整输出
+  ok   展开后按钮文案变成「收起」
+  ok   可以再收起
+  ok   未知工具降级显示，不报错
+  ok   未知工具也能正常收尾
+  ok   工具参数里的 HTML 不产生活元素
+  ok   工具输出里的 <script> 只是文本
+  ok   时间线正文里没有任何非白名单活标签
+  ok   同一批工具落在同一个组里
+  ok   一组超过一项时显示「操作 N 项」
+  ok   新的 assistant 消息开启新的一组
+  ok   只有一项的组不摆「操作 1 项」的废话标题
+  ok   刷新（历史重建）后条目语义与实时一致
+  ok   历史重建的时长由消息时间戳估出
+  ok   planHistory 把消息分成 user / assistant / tools 三类
+  ok   toolResult 不单独成项（被前面的 assistant 收走）
+  ok   历史重建把工具调用画成时间线条目
+  ok   历史重建的条目是成功态
+  ok   历史重建的关键结果行来自 toolResult 正文
+  ok   历史重建时正文与用户消息都还在
+  ok   文本 → 工具 → 文本 的交错顺序被保留
+  ok   缺 toolResult 的调用降级为「未完成」，而不是消失
+  ok   「未完成」的图标是虚线圆（区别于成功/失败）
+  ok   缺结果时不留下空白「Pi」外壳
+  ok   孤儿 toolResult 就地降级显示，不被静默吃掉
+  ok   未知 role 不会打断整段重建
+  ok   一条 assistant 消息里的多个工具调用按原顺序渲染
+  ok   多调用落在同一个组里
+  ok   多调用各自都有时长
+  ok   工具跑着时是 running
+  ok   agent 收尾时把没有 end 的条目收成「未完成」
+  ok   收尾后不残留 running 条目
+  ok   fixture 自身自洽（每条 toolCall 都有 toolResult）
+  ok   真实会话重建：每条 toolCall 都画出来了
+  ok   真实会话重建：分组数 = 带工具调用的 assistant 消息数
+  ok   真实会话重建：失败条目数与 isError 一致
+  ok   真实会话重建：没有凭空多出「未完成」
+  ok   真实会话重建：退出码从输出文本里解析出来
+  ok   真实会话重建：edit 的 +N −M 来自工具自己的 details.diff
+  ok   真实会话重建：write 的结果行报字节数
+  ok   真实会话重建：全篇不产生活元素
+  ok   真实会话重建：没有留下空白「Pi」
+  ok   真实会话重建：用户 / 正文 / 工具交替出现
+  ok   真实会话重建不产生运行时错误
+  ok   非改动类工具不入账
+  ok   write 成功记入账本
+  ok   账本变化触发订阅
+  ok   同文件重复改动累加计数
+  ok   失败的工具不入账
+  ok   对外给的是副本（改不动账本）
+  ok   clearChanges 清空账本
+  ok   取消订阅后不再触发
+  ok   全局栏有「文件变更」入口
+  ok   徽标显示变更数
+  ok   变更工作区打开且没有 Modal 遮罩
+  ok   列表渲染 5 行
+  ok   Changes 全部过滤器的选中语义与状态一致
+  ok   状态字母正确
+  ok   含空格与中文的路径原样渲染
+  ok   恶意文件名只作为文本（不产生活元素）
+  ok   恶意文件名仍以原样文本呈现（没被截断或吃掉）
+  ok   增删行数渲染
+  ok   未跟踪文件标注「未跟踪」
+  ok   已暂存文件标注「已暂存」
+  ok   未跟踪目录标注「目录」
+  ok   说明文字不重复（未跟踪只出现一次）
+  ok   未跟踪目录的说明是「未跟踪 · 目录」
+  ok   网页行只提供可执行的撤销按钮
+  ok   未跟踪文件的按钮写「删除」而非「撤销」
+  ok   点击行会去拉 diff（带正确路径）
+  ok   diff 就地展开
+  ok   diff 用等宽容器（pre.diff-body）
+  ok   暂存区与工作区分段显示
+  ok   diff 行分类：新增 / 删除 / hunk / 元信息
+  ok   `+++ b/x` 被当成元信息而不是新增行
+  ok   再点一次收起 diff
+  ok   收起后不重复请求
+  ok   恶意文件名与内容不产生活标签
+  ok   <script> 被转义成可读文本
+  ok   未跟踪文件的 diff 标为「未跟踪文件的内容」
+  ok   二进制文件明确提示看不了
+  ok   二进制不渲染文本 diff 块
+  ok   超限的 diff 有截断提示
+  ok   未跟踪目录的 notice 会显示
+  ok   缺 numstat 时从 diff 正文补出 +N −M
+  ok   撤销先弹二次确认
+  ok   确认层不破坏下层工作区
+  ok   取消确认则不发起撤销
+  ok   取消后确认层收起、面板还在
+  ok   确认后按 tracked 方式撤销（不带 deleteUntracked）
+  ok   未跟踪文件的确认文案点明「将删除该文件」
+  ok   确认后带 deleteUntracked=true
+  ok   撤销成功后提示已删除
+  ok   撤销后自动重拉状态并重画面板
+  ok   后端要求再确认时会追问一轮
+  ok   追问后以 deleteUntracked=true 重试
+  ok   过滤行有「全部」与「仅本次会话」两个页签
+  ok   「全部」页签显示 Git 总数
+  ok   「仅本次会话」只算项目内的账本条目
+  ok   项目外的账本路径不参与匹配
+  ok   匹配到的行带「本会话」标记
+  ok   「本会话」标记不改变行数（仍是全部 5 行）
+  ok   切到「仅本次会话」后只剩匹配的 2 行
+  ok   仅本次会话过滤器的选中语义同步
+  ok   过滤后剩下的确实是被改过的那两个文件
+  ok   侧栏徽标仍是 Git 总数，不受过滤影响
+  ok   切回「全部」恢复 5 行
+  ok   本会话无记录时给出解释（并说明 bash 不计入）
+  ok   账本有记录但对不上时给的是另一种解释
+  ok   两种情况不会混用同一句话
+  ok   切回全部后列表回来
+  ok   diff 根节点标出 hunk 数量
+  ok   每个 hunk 一个可折叠块
+  ok   hunk 默认是展开的
+  ok   每个 hunk 都有可点击的标题栏
+  ok   展开态显示下三角
+  ok   hunk 标题栏标出该块的 +N −M
+  ok   hunk 头文本原样保留（含函数上下文）
+  ok   首次渲染时折叠按钮就可见（不会把自己藏起来）
+  ok   全展开状态下按钮写「折叠全部块」
+  ok   点标题栏折叠这一个 hunk
+  ok   折叠后三角朝右
+  ok   另一个 hunk 不受影响
+  ok   有折叠块时按钮是「展开全部块」
+  ok   「展开全部块」把两个都展开
+  ok   全展开后按钮变成「折叠全部块」
+  ok   「折叠全部块」把两个都折叠
+  ok   再点回来又是全展开
+  ok   hunk 内部的 `+++ x` 算新增行而不是文件头
+  ok   hunk 内部的 `+++ x` 不会同时被当成元信息
+  ok   工具条有三个上下文档位
+  ok   默认档是「默认」（不传 -U）
+  ok   首次拉 diff 不带 context 参数
+  ok   切到 20 行会重新问后端（不是本地重排）
+  ok   重拉时带上了 context=20
+  ok   切换后「20 行」成为选中档
+  ok   切到「全部」传的是字符串 'all'
+  ok   切换上下文后 hunk 折叠状态重建（仍是默认展开）
+  ok   新文件沿用上次选的上下文档位
+  ok   沿用的档位在界面上也是选中态
+  ok   有变更时「全部撤销」可用
+  ok   「全部撤销」先干跑拿计划（不带 planned）
+  ok   确认框列出三类数量
+  ok   确认框逐条列出将被删除的文件
+  ok   有未跟踪文件时给第二条路径
+  ok   主路径带 planned + unstage + deleteUntracked
+  ok   撤销全部后提示结果并重拉状态
+  ok   第二条路径带 deleteUntracked=false
+  ok   有保留项时提示里说明「被保留」
+  ok   取消确认后不执行（没有带 planned 的调用）
+  ok   工作区干净时「全部撤销」禁用
+  ok   已暂存文件的确认框点明「会改动暂存内容」
+  ok   确认按钮写「取消暂存并撤销」
+  ok   已暂存文件带 unstage=true 撤销（不带删除授权）
+  ok   提示语说明已取消暂存
+  ok   已暂存新增文件的确认框点明会删除
+  ok   确认按钮写「取消暂存并删除」
+  ok   两个授权一次给全（unstage + deleteUntracked）
+  ok   后端说 requiresUnstage 时会追问一次
+  ok   追问后一次带上两个授权
+  ok   未跟踪目录不弹删除确认框
+  ok   未跟踪目录只给一句说明，不发起撤销请求
+  ok   未跟踪目录的提示说明要手动处理
+  ok   工作区干净时有明确空状态
+  ok   干净时徽标隐藏
+  ok   干净时没有过滤行（没有东西可过滤）
+  ok   非 Git 仓库给中性提示（不是报错）
+  ok   没装 git 时给友好文案
+  ok   没有项目时引导去添加文件夹
+  ok   列表过长时有截断提示
+  ok   变更面板可关闭
+  ok   只读工具（read）不触发刷新
+  ok   write 结束后自动刷新
+  ok   连续多次改动被防抖合并成一次
+  ok   bash 结束后也会刷新（它可能改了文件）
+  ok   失败的工具不触发刷新
+  ok   先用工具自己 details.diff 的单次统计
+  ok   Git 刷新回来后用整文件数字覆盖单次统计
+  ok   文件离开变更列表后撤掉回填的数字
+  ok   分支弹层打开
+  ok   分支树渲染 3 个节点
+  ok   分支节点文本不是 [object Object]
+  ok   分支节点只列对话条目
+  ok   操作类条目不出现在分支树里
+  ok   分叉点标出支线数
+  ok   分支树左对齐（不按深度递进缩进）
+  ok   节点上的 label 作为徽标渲染
+  ok   分支弹层是「按钮固定 + 树体滚动」布局
+  ok   节点悬停给出完整文本与可点击说明
+  ok   供应商弹层打开
+  ok   P14-E 新 Modal 不继承上一弹层的布局类
+  ok   供应商列表渲染
+  ok   未解析的 $ENV_VAR 有告警
+  ok   添加表单打开
+  ok   P25 原文密钥被表单拦截，不发送配置写请求
+  ok   P25 表单只提示环境变量引用与官方登录
+  ok   保存后弹出 key 告警
+  ok   统计弹层有数据行
+  ok   更多菜单 6 项（含本会话变更与开发进程，重启已移入设置）
+  ok   旧导出响应不再向界面投影服务器路径
+  ok   模型浮层已打开
+  ok   浮层标题为「选择模型」
+  ok   模型按供应商分组
+  ok   模型项 103 个
+  ok   Provider 数量准确
+  ok   Provider 是原生按钮且 controls 对应容器
+  ok   当前 Provider 默认展开，其余默认收起
+  ok   收起模型容器 hidden
+  ok   点击整行展开 Provider
+  ok   再点击整行收起 Provider
+  ok   重新打开保留用户展开状态
+  ok   当前模型 Provider 重新打开时必定可见
+  ok   当前模型带对勾
+  ok   相同 id 不同 Provider 只有真正当前项
+  ok   点选后浮层关闭
+  ok   set_model 带 provider+modelId
+  ok   Pi 确认前不回读状态
+  ok   切模型立即清理档位并阻止旧选择器
+  ok   切模型期间不会打开旧档位
+  ok   点选时不抢先弹提示
+  ok   pi 确认后才提示已切换
+  ok   Pi 确认后回读状态和档位
+  ok   只回来档位时仍等待 state
+  ok   两份结果回来后结束等待
+  ok   思考浮层 3 项
+  ok   思考项带说明
+  ok   set_thinking_level 已发送
+  ok   切档位后回读状态
+  ok   设置失败后再次回读状态
+  ok   回读后档位被纠正
+  ok   新档位到达前不使用 A 的 max
+  ok   B 的真实 state 与候选一起显示
+  ok   B 的 Thinking picker 仅四项，没有 max
+  ok   set_model 失败回读模型与候选恢复 Pi 实际状态
+  ok   reasoning=false 仍按 Pi 返回两档
+  ok   B 延迟的 state 和 levels 不覆盖 C
+  ok   旧思考设置回读也不能覆盖新模型
+  ok   连续切换等前一 set_model 确认后再发送
+  ok   前一确认后发送最后选择的 Provider + id
+  ok   跨 Provider 切换后当前组展开且当前项唯一可见
+  ok   关闭清除 model-mode
+  ok   特殊 Provider 使用 textContent 与安全序号 ID
+  ok   消失后重新出现的非当前 Provider 恢复默认收起
+  ok   上下文圆环百分比
+  ok   圆环有进度
+  ok   上下文提示已弹出
+  ok   提示文案对齐 Codex
+  ok   再点不误关提示
+  ok   移开鼠标后提示关闭
+  ok   图片附件渲染缩略图
+  ok   附件托盘已显示
+  ok   仅有附件也能发送
+  ok   PDF 附件渲染为文件卡片
+  ok   PDF 元信息含页数
+  ok   docx 附件已加入
+  ok   未知二进制标记为不可解析
+  ok   消息含用户正文
+  ok   图片以图像内容说明
+  ok   PDF 生成 pi-file 块
+  ok   docx 生成 pi-file 块
+  ok   无法解析的附件附上路径
+  ok   图片转成 pi 的 ImageContent
+  ok   附件可移除
+  ok   移除后不再出现在消息里
+  ok   发送时带上 images
+  ok   发送时正文含附件块
+  ok   发送后托盘清空
+  ok   发送后托盘隐藏
+  ok   用户消息已渲染
+  ok   附件正文折叠成卡片
+  ok   折叠卡片标题正确
+  ok   正文默认收起
+  ok   点击可展开
+  ok   展开后能看到内容
+  ok   长正文没有铺在气泡里
+  ok   重建后附件仍是折叠卡片
+  ok   重建后不暴露裸 pi-file 标签
+  ok   重建后卡片标题正确
+  ok   重建后正文仍然收起
+  ok   重建后图片显示缩略图
+  ok   缩略图 src 是 data URL
+  ok   空行切成两个段落
+  ok   段内换行保留为 br
+  ok   代码块不被 br 包裹
+  ok   代码块前后无多余空行
+  ok   无序列表渲染成 ul
+  ok   有序列表渲染成 ol
+  ok   列表后接段落正确收尾
+  ok   标题渲染成 h4
+  ok   行内代码仍然生效
+  ok   加粗仍然生效
+  ok   HTML 被转义
+  ok   原始 script 标签被转义
+  ok   img + onerror 不产生活标签
+  ok   iframe 被转义
+  ok   svg/onload 被转义
+  ok   不生成任何 on* 事件属性
+  ok   危险 scheme 一律不产生链接
+  ok   javascript: 链接退化成可读纯文本
+  ok   图片不产生远程加载
+  ok   http(s) 链接正常放行且带 noopener
+  ok   相对链接放行
+  ok   混合脏输入不产生活标签
+  ok   表格渲染成 table
+  ok   表格对齐方式生效
+  ok   正文里的竖线不误判成表格
+  ok   引用渲染成 blockquote
+  ok   分隔线渲染成 hr
+  ok   一级标题也渲染成 h4
+  ok   嵌套列表塞进父 li 内
+  ok   任务列表未勾选
+  ok   任务列表已勾选
+  ok   删除线渲染成 del
+  ok   斜体渲染成 em
+  ok   snake_case 不被当成斜体
+  ok   代码块带语言标签
+  ok   diff 代码块逐行着色
+  ok   有内容时发送键可用
+  ok   prompt 已发送
+  ok   输入框已清空
+  ok   发送后按钮重新禁用
+  ok   流式中显示停止按钮
+  ok   流式中发送走 steer
+  ok   结束后停止按钮隐藏
+  ok   停止之前发送键可用
+  ok   点 Stop 立即进入 stopping
+  ok   停止期间发送键禁用
+  ok   状态栏说「正在停止…」而不是「已请求停止…」
+  ok   Stop 只发一条 abort
+  ok   再点 Stop 不重复发送
+  ok   停止期间点发送 / 按 Enter 都不提交
+  ok   停止期间更不会把新内容当 steer 插进旧 run
+  ok   agent_settled 先到也不解除 stopping（屏障还没解除）
+  ok   输入的字仍然留着
+  ok   后端确认后（HTTP ok）界面落回「已停止」
+  ok   stop_state 事件收口 stopping 与 streaming
+  ok   stop_state 之后状态栏是「已停止」
+  ok   bridge 换代解除 stopping
+  ok   权限确认用统一确认层
+  ok   权限文案
+  ok   只给一次性的允许 / 拒绝
+  ok   extension_ui_response 已回传
+  ok   确认层已收起
+  ok   拖拽进入高亮输入框
+  ok   拖拽离开取消高亮
+  ok   解析中的附件不阻塞发送键逻辑
+  ok   项目分组点击后容器与内容实际折叠
+  ok   项目分组再次点击后容器与内容恢复
+  ok   切换项目调用 activate
+  ok   项目行有一个三点入口（旧的常驻 ✕ 已移除）
+  ok   项目行：没有常驻的绝对路径副标题（不再占第二行）
+  ok   项目行：每行只有一个名字节点
+  ok   项目行：完整路径仍在 title 上（hover / 读屏拿得到）
+  ok   项目行：路径也进了无障碍名字（视觉副标题去掉后仍可读）
+  ok   有消息时欢迎块收起但仍在 DOM 里
+  ok   新会话后欢迎块重新出现
+  ok   未选项目时显示「先添加文件夹」引导块
+  ok   未选项目时输入区上锁
+  ok   未选项目时发送键禁用
+  ok   P14-E 无项目返回 Chat 时焦点留在可用导航
+  ok   未选项目时提交被拦住（不发命令）
+  ok   选了项目后输入区解锁
+  ok   选了项目后引导块收起
+  ok   parseModelLine 已暴露到全局
+  ok   只写 id
+  ok   id|显示名
+  ok   带全套能力参数
+  ok   ctx / max 是长名字的别名
+  ok   显示名不会被误当成布尔旗标
+  ok   未知键被忽略且不破坏整行
+  ok   非法数值被丢弃
+  ok   空行返回 null
+  ok   modelLine 与 parseModelLine 能往返
+  ok   modelLine 会换掉显示名里的竖线（否则把行切乱）
+  ok   fmtTokens 格式化
+  ok   弹层有「拉取」按钮，且拉取面板默认收起
+  ok   恢复偏好：配置里的模型可用 → 发 set_model 且带 provider + modelId
+  ok   恢复偏好：拿不到可用模型列表时不猜模型、不发 set_model
+  ok   恢复偏好：A 项目按 A 的配置发 set_model
+  ok   恢复偏好：切到 B 项目后按 B 的配置走（不继承上一个项目的配置）
+  ok   恢复偏好：模型失效时给一次轻提示（不是静默）
+  ok   恢复偏好：模型失效时不发 set_model
+  ok   恢复偏好：同一个失效模型不重复提示（重启多次也只说一次）
+  ok   恢复偏好：环境变量钉住模型时项目配置不参与（env > 项目配置）
+  ok   恢复偏好：已经是这个模型 → 不发多余的 set_model
+  ok   恢复偏好：不碰思考档位（那是 pi 的启动参数，不是会话命令）
+  ok   恢复偏好：没有项目时安静跳过、不发命令、不抛错
+  ok   设置弹层：打开后有模型 / 思考两个下拉与指令 / 忽略两个文本域
+  ok   设置弹层：模型下拉按供应商分组（optgroup）
+  ok   设置弹层：已保存的模型被选中（不是默认落到第一项）
+  ok   设置弹层：思考档位用 pi 的完整列表（不是当前模型支持的那几个）
+  ok   设置弹层：已保存的思考档位被选中
+  ok   设置弹层：指令文本域带上了已保存内容
+  ok   设置弹层：忽略规则每行一条
+  ok   设置弹层：常用命令渲染成「名称 + 命令」两栏
+  ok   设置弹层：说了不保存密钥
+  ok   设置弹层：显示当前生效的模型与档位（和已保存值区分开）
+  ok   保存：发出 PUT，且 model 是 { provider, id } 结构
+  ok   保存：instructions / ignore / commands 按形状发出
+  ok   保存：成功后弹层关闭
+  ok   设置弹层：配置里的模型当前不可用时，下拉里有「当前不可用」占位项
+  ok   设置弹层：默认选中的就是那个占位项（打开设置不会被悄悄换模型）
+  ok   设置弹层：配置有警告时在弹层里显式说明
+  ok   保存失败：弹层不关闭（用户输入不丢）
+  ok   保存失败：明确报错，不假装成功
+  ok   扩展面板：All / Capabilities / Extensions / Skills / MCP 五个过滤器各有独立 Tab
+  ok   扩展面板：默认打开 All 能力视图并显示统一状态
+  ok   P15 Extension 列表分开显示加载状态与来源
+  ok   P15 Extension 详情显示命令并说明 tool registry 限制
+  ok   扩展面板：Skills 列表渲染出名称与状态
+  ok   扩展面板：已启用的那条有绿色圆点，被停用的那条有灰圆点
+  ok   扩展面板：一条坏 skill 只影响它自己（其余四条仍在）
+  ok   扩展面板：坏 skill 的错误就地显示，不是整页报错
+  ok   扩展面板：项目未信任时显式说明原因（否则用户以为配置丢了）
+  ok   扩展面板：未信任那条自己也带说明
+  ok   扩展面板：DOM 里没有密钥样式的字符串
+  ok   扩展面板：搜索能过滤（只剩 pdf-tools）
+  ok   扩展面板：搜索也覆盖路径（否则「按文件找」做不到）
+  ok   扩展面板：搜不到时给中性文案，不是空白
+  ok   扩展面板：作用域筛选（项目）只剩项目级那条
+  ok   扩展面板：状态筛选（已启用）只剩已加载那条
+  ok   扩展面板：点一条能看详情，且带 SKILL.md 正文（只读）
+  ok   扩展面板：详情里列出了同目录文件
+  ok   扩展面板：详情里区分「pi 是否加载」与「磁盘上有」
+  ok   扩展面板：可启停的那条给了「停用」按钮
+  ok   扩展面板：停用前先二次确认（且说明不会动 skill 文件）
+  ok   扩展面板：确认后发 PUT，且 enabled=false
+  ok   扩展面板：PUT 走的是 ID 路径，不发绝对路径
+  ok   扩展面板：改完提示需要重启 pi 才生效
+  ok   扩展面板：pi 没应答时显示「状态未知」，并说明原因
+  ok   扩展面板：pi 没应答时详情里写「无法确认」而不是「否」
+  ok   MCP 标签页：如实说这个 pi 带 MCP 能力（不再写死「没有原生 MCP」）
+  ok   MCP 标签页：给出可核对的出处（不是空口断言）
+  ok   MCP 标签页：显示运行中的 pi 版本与来源
+  ok   MCP 标签页：列出 built-in 能力并说明它不是扫目录扫到的
+  ok   MCP 标签页：说清 RPC 没有工具清单命令（不伪造工具注册表）
+  ok   MCP 标签页：区分 ExtensionAPI 与 RPC（getAllTools 拿不到）
+  ok   MCP 标签页：Server 明细走原生摘要（不是空页也不是假列表）
+  ok   MCP 标签页：MCP 配置只取结构，凭据值不进页面
+  ok   MCP 标签页：指出官方替代路径是 extension 并列出本机已有的
+  ok   MCP 标签页：声明不安装 / 不执行扩展（边界说清楚）
+  ok   MCP 标签页：连接状态只以「运行：」为前缀出现（有运行时证据才说）
+  ok   MCP 标签页：DOM 里没有密钥样式的字符串
+  ok   MCP 标签页：原生状态横幅（active + 原因）
+  ok   MCP 标签页：server 行带 exposure / 传输面 / 生效徽标
+  ok   MCP 标签页：运行时状态（connected / needs-auth + 工具数）
+  ok   MCP 标签页：声明 enable 等走 /mcp（不伪造开关）
+  ok   MCP 标签页：运行观察行（没调用过≠不支持）
+  ok   MCP 标签页：刷新按钮发出 POST /api/mcp/status
+  ok   MCP 标签页：移除走确认框，确认后发 remove（带 scope）
+  ok   MCP 标签页：添加表单拒绝坏名字，且没有凭据字段
+  ok   MCP 标签页：显示 0.99.2 的 description 与资源数（有才显示）
+  ok   MCP 标签页：说清运行时状态属于当前项目（切项目不沿用）
+  ok   MCP 标签页：声明 GUI 不接收任何凭据值 + OAuth 归 pi
+  ok   MCP 标签页：项目未信任时明确说明「读被忽略 + 写被拒绝」
+  ok   MCP 标签页：未信任的项目条目显示「未生效（项目未信任）」
+  ok   MCP 标签页：信任未知时 fail closed（提示 + 条目未生效）
+  ok   MCP 标签页：没有运行时证据时说「尚未获取」（未知≠没有）
+  ok   MCP 标签页：闭集外的 state 显示「无法识别」，不打印上游原文
+  ok   MCP 标签页：把 pi 关于「项目 mcp.json 被忽略」的说明显示出来
+  ok   MCP 标签页：未信任项目里同名 server 不覆盖用户级（用户级仍「生效中」）
+  ok   MCP 标签页：已信任时同名项正确显示「被项目同名覆盖」
+  ok   Planner：面板有「计划」与「Agent」两个 Tab
+  ok   Planner：计划列表渲染出当前项目的计划（含已完成的旧计划）
+  ok   Planner：未选中时提示先选一个计划（不是空白页）
+  ok   47. 选中后详情渲染出 4 个任务，标题可编辑
+  ok   47b. 每个任务显示 agent 与依赖
+  ok   49/50. 四种状态各自渲染：成功 / 失败 / 已取消 / 被阻塞
+  ok   49b. 状态圆点区分开：成功=ok、失败=err、取消=dim（不标红）
+  ok   §25. 取消不是失败：已取消那条**没有**用错误色
+  ok   50b. 失败任务把错误文本显示出来
+  ok   51. 失败/被中断的任务有「重试」按钮
+  ok   53. attempt 历史被保留（两次尝试都列出来，没被覆盖）
+  ok   §19. 任务结果展示 Changes（含 +N −M）与「执行期间观察到」的措辞
+  ok   §26. 暂停时明确提示要用户选「重试 / 跳过 / 停止」
+  ok   51b. 点「重试」调用 /api/plans/:id/tasks/:taskId/retry
+  ok   48. Agent Tab 列出全部 agent，并标出可用的
+  ok   48b. 不可用的 agent 显式说明原因（装坏了 vs 没装）
+  ok   48c. Agent Tab 说清「pi 没有原生 sub-agent / plan mode」（不冒领能力）
+  ok   §10. 能力用统一字段展示（不出现 if codex / if claude 那种硬编码文案）
+  ok   §33. 生成失败：显示失败原因 + 校验错误清单
+  ok   §33b. 生成失败：把 Planner 的原始输出摆出来（诊断区，不是崩溃）
+  ok   §33c. 诊断区有「重新生成」入口
+  ok   Planner：DOM 里没有密钥样式的字符串
+  ok   会话：没有独立的会话入口了（不再单开窗口）
+  ok   会话：列表挂在**当前项目那一行下面**（不是别处）
+  ok   会话：当前项目只有一份可操作列表，其它项目是独立预览
+  ok   会话：标题是第一条用户消息（不是文件名/时间戳）
+  ok   会话：当前会话高亮，且不给点
+  ok   会话：显示相对时间
+  ok   会话：侧栏里没有任何绝对路径
+  ok   会话：点一条会调 /api/sessions/switch，且传的是 ID 不是路径
+  ok   会话：每条会话行只有一个三点入口（旧的 ✎ / ⤓ / ✕ 都收进去了）
+  ok   会话：当前会话也显示完整三个菜单项
+  ok   会话：当前会话的归档与删除禁用，说明需先切换
+  ok   会话：点击禁用操作不会写盘或弹删除确认
+  ok   会话：菜单是可访问的浮层（role=menu / menuitem / aria-expanded）
+  ok   会话：点重命名 → 仍然是行内输入框（不是第二套改名弹窗），菜单已收起
+  ok   会话：回车保存 → 调 /api/sessions/name
+  ok   会话：非当前会话也显示完整三个菜单项
+  ok   会话：历史会话重命名禁用且解释需先打开，不误改当前会话
+  ok   会话：删除项是 danger 层级（不是整行常驻鲜红）
+  ok   会话：菜单项带分隔线（危险动作与安全动作分开）
+  ok   会话：点三点不触发切换（没有 /switch 请求）
+  ok   会话：点归档 → POST /api/sessions/archive（带 id 与 archived:true）
+  ok   会话：已归档的收进折叠组（默认不列出来）
+  ok   会话：折叠组的标题里没有绝对路径
+  ok   会话：折叠组那行仍然用 .pj-sess-more（新三点没有抢它的类名）
+  ok   会话：展开折叠组后能看到已归档那条
+  ok   会话：已归档那条的统一菜单显示「取消归档」
+  ok   会话：删除先弹二次确认（不是点一下就删）
+  ok   会话：删除确认文案说明文件没被抹掉
+  ok   会话：未确认时不发删除请求
+  ok   会话：确认后 → POST /api/sessions/delete（传 ID）
+  ok   会话：删除后确认框关掉了
+  ok   P7. 会话头部有关联容器（没有关联时整块 hidden，不占位）
+  ok   P7. 有关联时显示「关联 N 个任务」
+  ok   P7. 窄条显示计划名与任务名（看得出属于哪个计划的哪个任务）
+  ok   P7. 窄条里没有绝对路径 / 会话 id
+  ok   P7. 多条关联时给「展开全部」
+  ok   P7. 展开后两条都列出来
+  ok   P7. 点「查看任务」打开 Planner 面板
+  ok   P7. 任务显示关联会话的**标题**（不是一串 id）
+  ok   P7. 有会话的任务上有「打开会话」按钮
+  ok   P7. 每次 attempt 各显示自己的会话（retry 不覆盖旧的那条）
+  ok   P7. 没有关联会话时说「无可关联会话」（不报错、不显示 id）
+  ok   P7. 关联会话已被删除时明确说明（不静默消失）
+  ok   P7. 执行期间变更以**文本节点**渲染（路径不会被当 HTML 解析）
+  ok   P7. 措辞是「执行期间变更」，不写成「该 Agent 修改」
+  ok   P7. 采集不到变化时如实说明（不是假装「没有变化」）
+  ok   P7. Plan 级汇总：关联会话去重后的条数
+  ok   P7. Plan 级汇总：执行期间涉及的文件数（去重）
+  ok   P7. 汇总里的会话可展开并直接打开
+  ok   P7. 点「打开会话」调 open-session，且 URL 里没有任何路径 / 会话 id
+  ok   P7. 打开成功后收起弹层（要能看到对话区）
+  ok   P7. 「没有可关联会话」只提示、界面照常（不当成错误状态）
+  ok   P7. 提示里说的是原因，不是「未知错误」
+  ok   P7. 换项目/无会话时窄条被清空并隐藏（不残留上一个项目的关联）
+  ok   R24. Plan 汇总：执行结果按最新一次 attempt 归类，interrupted 单列
+  ok   R24b. interrupted **不并进** failed（防回归：这里只允许有 1 条失败）
+  ok   R25. Plan 汇总：审阅分母只含「最新一次成功」的任务
+  ok   R24c. 中断为 0 时**不显示**「中断 0」（常态不加噪声）
+  ok   R24d. attempt 明细里 interrupted 仍然显示「被中断」（只改汇总，不动明细）
+  ok   R25b. 失败 / 取消 / 被中断的最新结果**不进**「待审阅」分母
+  ok   R26. 「最新一次 attempt」规则：multrev 的最新一次是 pending，不是历史那次 accepted
+  ok   R27. 旧 attempt 的 accepted 不被隐藏、也不改写成「已过期 / 旧版」
+  ok   R28. 没有 attempt 的任务算「尚无结果」，不算「待审阅」
+  ok   R1. 成功的 attempt 有「人工审阅」区
+  ok   R2. 未审阅显示「待审阅」
+  ok   R3. 已保存的审阅显示「已接受」+ 说明 + 本地时间
+  ok   R4. 「需修改」态照常显示
+  ok   R4b. 状态文字是**真文字**，不只靠颜色（圆点旁边还有标签）
+  ok   R5. 失败的 attempt 只有「需要修改」，没有「接受本次结果」
+  ok   R6. 已取消的 attempt 只有「需要修改」
+  ok   R7. 被中断的 attempt 只有「需要修改」
+  ok   R8. 正在执行的那一次不给审阅操作，只说明完成后可审阅
+  ok   R8b. 执行中那次尝试在历史里**显式占位**（不会凭空消失）
+  ok   R17. verificationSnapshot 的 command 直接显示
+  ok   R18. verificationSnapshot 的 description 直接显示
+  ok   R19. 没有快照时如实说没有，并把「当前任务」的要求另起一行标出
+  ok   R20. 验证结果永远是「尚未独立确认」，且全卡片没有「验证通过」类字样
+  ok   R21. 会话入口仍然存在（复用 P7，不重做一套）
+  ok   R22. 还有未提交差异的文件给出「查看当前 Diff」入口
+  ok   R22b. 已经 clean 的文件**仍然列出**，只是如实说明已无差异（不隐藏历史关系）
+  ok   R22c. 明显写明 diff 是**当前工作区**的，不是这次执行当时的快照
+  ok   R22d. 20 个文件默认收起，可展开（不糊成一面墙）
+  ok   R23. 超长路径被截断但带 title 全路径（不撑爆卡片）
+  ok   R23b. 采集不全时明确标出（不因为「有内容」就不提）
+  ok   R29. 审阅说明按纯文本渲染（img/script/svg 都进不了 DOM）
+  ok   R9. 点「接受本次结果」进入编辑态（**先不保存**）
+  ok   R9b. 进入编辑态没有发任何保存请求
+  ok   R10. 说明框 maxlength=1000 且有字数计数
+  ok   R11. 编辑态有「保存」与「取消」
+  ok   R12. 可在两个状态间切换（切换只是改选择，仍不保存）
+  ok   R12b. 失败的 attempt 在编辑态里**没有**「接受本次结果」这个选项
+  ok   R13-prep. 说明输入有实时字数反馈
+  ok   R13. 保存把状态与说明按身份发给后端
+  ok   R14. 保存成功后回到展示态、显示新判断
+  ok   R14b. 保存成功后编辑框收起
+  ok   R14c. 保存不会顺手重试任务 / 改执行状态（只写审阅）
+  ok   R15. expectedRevision 用的是**当前渲染那一版**（夹具里是 3，不是 0）
+  ok   R16. 已有判断时提供「清除」
+  ok   R16b. 清除前有确认（不静默丢掉说明）
+  ok   R16c. 清除走**同一个** API（status=pending），没有 DELETE 接口
+  ok   R16d. 清除后回到「待审阅」
+  ok   R30. 保存失败显示**后端原话**，不是「出错了」
+  ok   R30b. 失败后仍是编辑态，输入不丢
+  ok   R30c. 失败后按钮变成「重试」（失败不能把用户困在原地）
+  ok   R31. 冲突显示「已在其他窗口被修改」+「重新加载」
+  ok   R31b. 冲突时本地输入原样保留
+  ok   R31c. 冲突不自动重试（只发了这一次请求）
+  ok   R31d. 冲突不 last-write-wins（界面没有变成「已接受」）
+  ok   R31e. 点「重新加载」重新拉一次计划详情
+  ok   R32-prep. 保存已发出，按钮进入「正在保存…」
+  ok   R32. 切项目之后回来的审阅响应不写进界面（stale 守卫）
+  ok   R32b. 那次响应没有写进别的 attempt（okcmd 的判断还是上一步存下的）
+  ok   R32c. 旧面板被收成提示，**不留下永久「正在保存…」**（草稿里的 saving 标记一起清掉）
+  ok   R32d. 收成提示后旧面板没有可点的审阅操作（没有说明框、没有保存按钮）
+  ok   R33. 旧面板的响应**不会关掉**后来打开的新 Planner
+  ok   R33b. 新 Planner 的 DOM 不被旧响应污染（没有 stale 提示、没有旧 saving 态）
+  ok   R33c. 新 Planner 仍然是自己的计划列表（没有被旧响应重画）
+  ok   V1. 有快照命令的 attempt 给「运行验证」
+  ok   V2. 只有 description 的任务**不给**按钮（不许把描述猜成命令）
+  ok   V2b. 但这种 attempt 仍然显示「尚未独立确认」
+  ok   V3. 通过 → 「通过」+ 命令 + 退出码 + 耗时
+  ok   V4. 失败 → 「失败」+ 输出摘要 + 「输出已截断」
+  ok   V5. 已中断 → 「已中断」+「重新运行验证」
+  ok   V6. 正在验证 → 「正在验证…」+「停止验证」
+  ok   V6b. 状态都带**文字**，不是只画个点
+  ok   V7. 输出摘要是**纯文本**渲染（XSS：注入节点数为 0）
+  ok   V7b. 输出框里只有文本节点（不是 innerHTML 塞进去的）
+  ok   V8. 长命令截断但带 title 全命令（不撑爆卡片）
+  ok   V9. 验证通过**不会**动人工审阅那一行（两者各自独立）
+  ok   V9b. 「独立验证」与「人工审阅」是**两行不同的东西**（不是一行里的两段字）
+  ok   V10. 点「运行验证」调 verify 接口，URL 带 planId/taskId/attempt
+  ok   V11. 启动后立刻变成「正在验证…」+「停止验证」
+  ok   V12. 点「停止验证」调 .../verify/stop
+  ok   V13. 被拒绝时显示**后端原话**（不是 generic 错误）
+  ok   V9c. 验证明细显示**实际执行目录**
+  ok   V9d. 来源是冻结快照时**不加** fallback 说明（它就是当时的目录）
+  ok   V9e. 老 attempt 的 fallback **有明确说明**（不冒充冻结记录）
+  ok   V9f. 长目录截断但带 title 全路径（不撑爆卡片）
+  ok   V9g. 目录也是**纯文本**渲染（XSS 注入节点为 0）
+  ok   V15. 验证在跑 →「开始执行 / 保存修改 / 删除计划」被禁用
+  ok   V16. 并且把原因写出来（点名是**哪一条**在跑）
+  ok   V17. 任务级的「重试」也被禁用
+  ok   V18. 验证结束之后按钮恢复可用（锁释放）
+  ok   V14. 切项目之后回来的验证响应不写进界面（stale 守卫）
+  ok   W1. 有证据的 attempt 给「查看本次 Diff」
+  ok   W2. 老 attempt（没有这个字段）**不假装有 Diff**
+  ok   W3. 采集失败：说明原因，且不给按钮
+  ok   W4. 证据不完整时明确提示
+  ok   W5. **「查看当前 Diff」与「查看本次 Diff」是两个入口**（措辞分开，不混）
+  ok   W6. 面板标题与说明**写明这是历史证据**（不是现在的文件）
+  ok   W7. 文件列表：类型标记 + 路径 + 增删行数
+  ok   W8. patch 默认**收起**（几十个文件不会一次塞进 DOM）
+  ok   W9. 展开后能看到 unified diff（纯文本）
+  ok   W10. binary 文件：说明「不展示文本 Diff」，且**没有** patch 块
+  ok   W11. 截断被明确标出（文件级 + 整体）
+  ok   W12. renamed / deleted 的类型标记与 oldPath 都显示出来
+  ok   W13. 大量文件的说明（只保留前 N 个）也摆出来了
+  ok   W14. 路径 / patch / note 里的 XSS **一个 DOM 节点都没生成**
+  ok   W15. 它们都以**文本**显示出来（没有被吃掉）
+  ok   W16. **当前工作区换了内容，历史面板仍然显示当时那条 patch**（重算实现会红）
+  ok   G1. 开了门控的任务有「人工门控」标记
+  ok   G2. 成功但待验收 → 「等待人工验收」
+  ok   G3. 已接受 → 「门控已通过」
+  ok   G4. 需要修改 → 「需要修改 · 门控未通过」
+  ok   G5. 还没成功过 → 「还没有成功执行 · 门控未开始」
+  ok   G6. 没开门控的任务**没有**这一行
+  ok   G7. 下游写明「等待人工验收：上游 id」
+  ok   G8. 上游失败的下游说「上游任务失败」——**不能**说成等验收
+  ok   G9. Plan 顶部写明「已暂停：等待人工验收」
+  ok   G10. Plan 顶部有门控汇总（1/3 已通过 · 待验收 2）
+  ok   G11. 门控任务上的勾选框是**选中**的
+  ok   G12. 没开门控的任务勾选框**未选中**
+  ok   G13. 勾选框旁边写清了它的含义
+  ok   G14. 勾上之后勾选框保持选中（不会自己弹回去）
+  ok   G15. 恶意 task id / 上游 id 都是**纯文本**（没有注入节点）
+  ok   G16. **执行失败**的门控任务不说「等待人工验收」——没有可验收的产出
+  ok   G17. **旧 accepted 不算已通过**：当前没成功、只有历史 accepted → 不显示「门控已通过」
+  ok   导航 1. 空会话 → 没有 marker
+  ok   导航 2. 一条用户消息 → 1 个 marker
+  ok   导航 3. user + assistant → 仍然只有 1 个 marker（assistant 不画点）
+  ok   导航 4. 三次问答 → 3 个 marker
+  ok   导航 5. tool call / tool result 不产生 marker
+  ok   导航 6. 历史重建（rebuildFromMessages）会重建 markers
+  ok   导航 6b. 每条用户消息有稳定的 data-nav-id
+  ok   导航 7. 实时新增用户消息立刻加 marker（不等 assistant 回复完）
+  ok   导航 19. marker 聚成紧凑一组（不再按内容比例铺满容器）
+  ok   导航 19b. 整组在容器里垂直居中
+  ok   导航 19c. 顺序不变：第 1 次提问 → 第 1 条 marker
+  ok   导航 19d. 紧凑聚簇仍然保留内容偏移（点击跳转靠它）
+  ok   导航 19e. 40 条时整组仍紧凑（跨度小于容器的一半）
+  ok   导航 19f. 40 条时相邻间距一致（等距短线组）
+  ok   导航 20. 100 条用户消息 → 100 个 marker
+  ok   导航 22. 100 条时 marker 不超出容器高度
+  ok   导航 18. 密集时仍保持最小间距（不糊成一根实线）
+  ok   导航 21. 500 条用户消息不崩，且仍不超出容器
+  ok   导航 13a. scrollTop=0 → current=0
+  ok   导航 13b. 滚到第 3 条 → current=2
+  ok   导航 13c. 滚到第 4 条内部 → current=3（回答再长也属于它前面那次提问）
+  ok   导航 13d. 高亮的那条带 .on 类
+  ok   导航 28. 当前提问的消息带 data-current-question
+  ok   导航 12. 点 marker 只写 #stream 的滚动位置（不再用 scrollIntoView）
+  ok   导航 12b. 滚动真的落在 #stream 上（不是只调了个空函数）
+  ok   P14-B 点击 marker 立即更新当前项
+  ok   导航 23/24. marker 是 button（Enter / Space 天然可用），且有 aria-label
+  ok   导航 14. hover 提示取对应用户消息正文
+  ok   导航 15. 预览折掉换行与多余空格
+  ok   导航 15b. 长文本被截断（不把完整 prompt 塞进提示）
+  ok   导航 16. 中文预览正常（不出现乱码或截半个字）
+  ok   导航 8. new_session → 清空 minimap
+  ok   导航 9. 清空对话区（切项目会走这条）→ marker 同时清掉，不会短暂留着旧的
+  ok   导航 17. 容器高度变化后重算位置（等比压缩）
+  ok   导航 18b. 内容高度变化（streaming / Timeline 折叠）后重算内容偏移
+  ok   导航 25. 预览走 textContent，没有把用户正文拼进 innerHTML
+  ok   导航 25b. marker 与提示都只有文本节点，没有 HTML 注入面
+  ok   P13-A1. ready 计划 → 下一步是「有任务可以执行」
+  ok   P13-A2. 页面上真有「下一步」区域，ready 时带「开始执行」
+  ok   P13-A3. running 计划 → 下一步是执行状态（不是可执行）
+  ok   P13-A4. running 时「下一步」里没有「开始执行」这种误导 CTA
+  ok   P13-A5. waiting-review → 下一步指向「验收 … 的最新成功结果」
+  ok   P13-A6. 同时有失败和待验收 → 失败优先，一次只给一个主焦点
+  ok   P13-A7. 独立验证在跑 → 验证优先于执行/失败
+  ok   P13-A8. completed → 已完成；门控全通过才给第二行
+  ok   P13-A9. 恶意 task id 在「下一步」里是纯文本（不是标签）
+  ok   P13-A10. runnable 只数 status=ready（A ready + B pending + C success → 1）
+  ok   P13-A11. 页面上的「下一步」写的就是这句精确文案（数量是数出来的，不是写死的）
+  ok   P13-A12. ready 计划却数不出 ready 任务 → 诚实降级「计划待执行」，不拿 pending 凑数
+  ok   P13-B1. 十次尝试默认只展开最新一条
+  ok   P13-B2. 收起的那条 body 带 hidden、按钮 aria-expanded=false
+  ok   P13-B3. 折叠控件是真 button，aria-controls 指向本体
+  ok   P13-B4. 手动展开旧 attempt → 重绘后仍然展开（Blocker 2）
+  ok   P13-B5. 手动收起最新一条 → 重绘不偷偷把它展开
+  ok   P13-B6. 展开状态按 task+attempt 隔离（同为第 1 次互不影响，邻居不受牵连）
+  ok   P13-B7. 正在验证的旧 attempt 自动展开（交互必需 > 默认收起）
+  ok   P13-B8. 摘要行三个维度并存：执行 / 独立验证 / 人工验收
+  ok   P13-B9. focus 带 attempt → 那条旧 attempt 被展开并定位（Blocker 4）
+  ok   P13-B10. 重开面板 → 折叠选择清空，回落到默认（只展开最新一条）
+  ok   P13-B11. 折叠头 R1：成功 + 未审阅 → 「待审阅」
+  ok   P13-B12. 折叠头 R2：成功 + 已接受 → 「已接受」
+  ok   P13-B13. 折叠头 R3：成功 + 需修改 → 「需修改」
+  ok   P13-B14. 折叠头 R4：失败 + 未审阅 → **不渲染**这一格（执行状态仍在）
+  ok   P13-B15. 折叠头 R5+R6：取消 / 被中断同样不渲染这一格
+  ok   P13-B16. 折叠头 R7：失败 + 需修改 → 仍显示「需修改」（人为标记不被抹掉）
+  ok   P13-B17. 历史隔离：Attempt 1 成功·已接受不被 task 失败改写，Attempt 2 失败·不写「待审阅」
+  ok   P13-C0. 手动收起单次尝试 → 收起态下草稿入口仍拿得到（预检）
+  ok   P13-C1. 收起后草稿仍在 DOM 里（收起 ≠ 丢稿）
+  ok   P13-C2. 展开 + 重绘后草稿文字还在（Blocker 3）
+  ok   P13-D1. 等验收的成功任务顶部有「验收结果」主按钮
+  ok   P13-D2. 当前操作排在尝试历史之前（不必滚过历史才能重试）
+  ok   P13-D3. 已验收通过的任务不给「验收结果」
+  ok   P13-D4. 点「验收结果」→ 最新一次 attempt 展开 + 打开审阅编辑器
+  ok   P13-E1. §二十九：重试排队中（pending）→ 尚未产生新结果 · 门控未开始
+  ok   P13-E2. §二十九：真的失败仍写「执行未成功 · 门控未开始」（P12 判据不变）
+  ok   P13-E3. 旧 accepted + 新 pending 仍不显示「门控已通过」（P12 回归）
+  ok   重建历史时跳过只有工具调用的助手消息
+  ok   重建历史时正文那条仍在
+  ok   重建历史时用户消息仍在
+  ok   超大 Tool 输出有上限并保留尾部
+  ok   旧 Project Config 响应被丢弃
+  ok   旧 Git refresh 被丢弃
+  ok   旧 Skills badge 响应被丢弃
+  ok   A→B→C 仅 C 更新项目与消息
+  ok   中间项目 B 不触发多余 restart
+  ok   项目完成同步后输入恢复
+  ok   SSE backlog 重放不重复 Tool Entry
+  ok   pi crash 收尾 running Tool
+  ok   重复历史重建仍只有一份消息
+  ok   未知事件守卫：前置状态成立（有消息、bridgeRun 是数字）
+  ok   未知事件不产生运行时错误
+  ok   未知事件不改 bridgeRun
+  ok   未知事件不清当前会话（消息还在）
+  ok   未知事件不把内容渲染进对话区
+  ok   未知事件不影响连接状态
+  ok   未知 response command 不抛
+  ok   未知 response command 不改动对话区内容
+  ok   降级：没有兼容摘要时改名入口照常出现（未验证 ≠ 不支持）
+  ok   降级：sessionNaming 不可用 → 保留完整菜单且所有项禁用
+  ok   降级：switchSession 不可用 → 会话行不给点
+  ok   降级：禁用的会话行带 off 类并写明原因
+  ok   降级：核心能力不可用时给一次明显提示
+  ok   降级：提示措辞说事实（不是「版本不支持」）
+  ok   降级：同类提示不重复弹（不是每次回读状态都弹）
+  ok   降级：历史读不出来 → 对话区留一条说明（而不是空白）
+  ok   降级：这条说明是**追加**的，没有把已有内容冲掉
+  ok   降级：恢复后改名入口回来了
+  ok   搜索：输入框就在会话区域里（不是新面板、不是弹层）
+  ok   搜索：有「活跃 / 已归档 / 全部」三个范围
+  ok   搜索：空关键词不发请求
+  ok   搜索：空关键词时显示普通会话列表
+  ok   搜索：关键词不足 2 个字符 → 提示、不发请求
+  ok   搜索：debounce —— 刚敲完不立刻发请求
+  ok   搜索：debounce 期间显示「正在搜索…」
+  ok   搜索：debounce 到点后只发一次请求，关键词正确
+  ok   搜索：结果里有会话标题
+  ok   搜索：标题和命中行用可聚焦按钮
+  ok   搜索：结果里有相对时间
+  ok   搜索：结果里有命中类型标记
+  ok   搜索：活跃范围下不出现已归档的会话
+  ok   搜索：显示命中数量
+  ok   搜索：结果里不出现 .jsonl 文件名或绝对路径
+  ok   搜索：snippet 走文本节点（桩里的 <img onerror> 原样显示为文本）
+  ok   搜索：snippet 里没有真的插入 img 元素（即没走 innerHTML）
+  ok   搜索：关键词高亮是 <mark> 元素（安全建出来的）
+  ok   搜索：点「已归档」立刻重搜且带 scope=archived
+  ok   搜索：归档范围的结果里只剩归档会话
+  ok   搜索：「全部」范围下归档会话也能被搜到
+  ok   搜索：归档会话带「已归档」标记
+  ok   搜索：失败时显示「搜索失败」而不是空白
+  ok   搜索：没有命中时显示「没有找到相关会话」
+  ok   搜索：清空关键词 → 恢复普通会话列表
+  ok   搜索：旧请求回来晚了会被丢弃（不覆盖新结果）
+  ok   搜索：切项目后搜索框清空、不再显示上一个项目的搜索结果
+  ok   搜索：结果里有可点的「你问的」命中行
+  ok   搜索：点结果会切到那个会话，传的是稳定 ID 而不是路径
+  ok   搜索：历史渲染完成后定位到命中那次提问（第 2 条，不是最底）
+  ok   搜索：这次定位同样只写 #stream（全程没有 scrollIntoView）
+  ok   会话样式：每行都有装饰圆点，不进入读屏名称
+  ok   折叠：每个项目都有独立展开箭头
+  ok   折叠：默认展开（列表可见、aria-expanded=true）
+  ok   折叠：箭头在项目行内、且是行内第一个元素（不新增兄弟节点）
+  ok   折叠：aria-controls 指向会话块本身
+  ok   折叠：箭头是可键盘操作的 button，带「展开 / 收起」标签
+  ok   折叠：箭头没有破坏「会话块紧跟当前项目行」这条既有结构
+  ok   折叠：折叠前列表里有会话
+  ok   折叠：点箭头 → 会话块隐藏、aria-expanded=false、标签变「展开」
+  ok   折叠：只是隐藏，会话行没有从 DOM 里消失（搜索 / 改名 / 归档还要用）
+  ok   折叠：项目行本身没被折掉（折的只是这个项目的会话）
+  ok   折叠：再点一次恢复展开
+  ok   折叠：点箭头不会误触项目切换
+  ok   折叠：上面那两次点击之后状态仍然是展开（没被切换带乱）
+  ok   折叠：点三点只开菜单，不误触折叠、也不切项目
+  ok   项目菜单：工作区管理、项目设置与移除项目均可发现
+  ok   项目菜单：移除项是 danger 层级，且有分隔线
+  ok   项目菜单：挂在 body 上（不会被侧栏 overflow 裁掉）
+  ok   项目菜单：打开时 trigger 的 aria-expanded=true
+  ok   项目菜单：点「移除项目」先弹确认（不是点一下就移除）
+  ok   项目菜单：确认文案说明只移除列表、不删磁盘文件
+  ok   项目菜单：取消之后确认框关掉（且没有真的移除）
+  ok   项目菜单：点「项目设置」走既有 openProjectSettings（同一个弹层）
+  ok   项目展开：其它项目默认收起，controls 指向独立列表
+  ok   项目展开：显示自己的会话，当前聊天不切换
+  ok   项目展开：多个项目可同时展开，当前标记不串项目
+  ok   项目展开：重画保留用户的展开状态
+  ok   项目展开：再次点击只收起该项目
+  ok   项目菜单作用域：当前项目有「项目设置」与「移除项目」
+  ok   项目菜单作用域：非当前项目**没有**「项目设置」
+  ok   项目菜单作用域：非当前项目可管理工作区及移除项目
+  ok   项目菜单作用域：点非当前项目的三点只开菜单，不切项目、不重启 Pi
+  ok   项目菜单作用域：非当前项目的移除确认框说的是这一行（不是当前项目）
+  ok   项目菜单作用域：最终移除的目标是这一行的 path
+  ok   项目菜单：Escape 关闭并把焦点还给三点
+  ok   项目菜单：点菜单外关闭
+  ok   折叠：同一项目重新渲染后保留收起状态
+  ok   折叠：折叠状态下点「搜索会话」会自动展开（输入框不能被藏住）
+  ok   折叠：展开后搜索仍然照常出结果（search-open 状态没被折叠破坏）
+  ok   跨项目会话：先激活项目，Pi 尚未就绪时不发送 switch_session
+  ok   跨项目会话：就绪后只打开所选稳定 ID
+  ok   跨项目会话：同一就绪动作只执行一次
+  ok   跨项目新对话：等待 Pi 就绪，不在重启期间发送
+  ok   跨项目动作：后续切换取消旧项目待办
+  ok   更新：诊断面板顶部有「版本」小节
+  ok   更新：当前版本来自诊断快照（前端不硬编码版本号）
+  ok   更新：有「检查更新」按钮
+  ok   更新：idle 时不显示任何下载按钮
+  ok   更新：点「检查更新」立刻进入 checking（按钮禁用 + 文案变化）
+  ok   更新：手动检查走 force=1（绕过后端缓存）
+  ok   更新：无更新时明确说「当前已是最新版本」
+  ok   更新：无更新时显示版本号
+  ok   更新：无更新时没有下载按钮（不给一个能点但没意义的入口）
+  ok   更新：无更新时侧栏小点不亮
+  ok   更新：失败时说「暂时无法检查更新」，并给出后端文案
+  ok   更新：失败时**不出现**「已是最新版」这类错误结论
+  ok   更新：失败时按钮变成「重试」
+  ok   更新：检查失败后当前版本**仍然可见**（不会退化成没有版本号）
+  ok   更新：点「重试」能恢复正常
+  ok   更新：有更新时显示新版本号与当前版本
+  ok   更新：有更新时显示发布时间
+  ok   更新：有更新时侧栏「诊断」上的小点亮起
+  ok   更新：按钮里有「查看 Release」
+  ok   更新：识别出的资产给中文标签（安装版 / 便携版 / 校验和）
+  ok   更新：下载按钮带上真实文件名（鼠标悬停能看到，不是猜的）
+  ok   更新：Release Notes 渲染出来了
+  ok   更新：Release Notes 是可滚动容器（长说明不会把底部按钮顶出去）
+  ok   更新：Release Notes 复用消息区的 Markdown 排版（不另抄一套）
+  ok   更新：notes 里的原始 HTML 被转义，DOM 里没有活标签
+  ok   更新：notes 里的 <script> 原样显示为文本（不是被过滤掉，是语法上不成立）
+  ok   更新：notes 里的 javascript: 链接不产生任何可点元素
+  ok   更新：notes 里的站外链接**退化成纯文本**（看得见原文，点不动）
+  ok   更新：notes 里一个真 <a> 都没有（中键 / 右键菜单绕不过校验）
+  ok   更新：notes 里的 GitHub 链接是白名单内的可点元素
+  ok   更新：点白名单内的 notes 链接会交给主进程（页面自己不做导航）
+  ok   更新：前端 isSafeReleaseUrl 允许 GitHub 官方 host
+  ok   更新：前端 isSafeReleaseUrl 拒绝第三方 host 与危险 scheme
+  ok   更新：前端白名单与主进程实现完全一致（三份实现不许漂开）
+  ok   网页版：站外 host 被拒绝，且**没有**真的去打开
+  ok   网页版：拒绝时明确说出来（不静默）
+  ok   网页版：拒绝 javascript:alert(1)
+  ok   网页版：拒绝 file:///C:/Windows/win.ini
+  ok   网页版：拒绝 data:text/html,x
+  ok   网页版：拒绝 http://github.com/x
+  ok   网页版：所有被拒的都没产生打开动作
+  ok   网页版：GitHub 官方链接正常放行（退化成新标签页）
+  ok   更新：主进程拒绝打开时界面明确说明（不静默失败）
+  ok   更新：允许时经 preload 的桥打开，且 URL 就是 Release 页
+  ok   更新：assets 为空时 UI 不崩，只剩「查看 Release」
+  ok   更新：assets 为空时也没有下载按钮
+  ok   更新：连点三次只产生一次请求
+  ok   更新：连点之后 UI 与唯一那次响应一致（没有 stale 状态）
+  ok   更新：再检查一次后 UI 反映最新结果（不是上一次的）
+  ok   更新：关闭再打开诊断，更新状态仍在（没有回到 idle）
+  ok   更新：关闭再打开后按钮仍然可用（没有被禁用状态卡住）
+  ok   更新：自动检查失败完全静默（不弹提示）
+  ok   更新：自动检查失败不自动弹 Modal
+  ok   更新：自动检查失败后回到 idle，不留一个用户没请求过的错误态
+  ok   更新：自动检查无更新时静默（不弹提示）
+  ok   更新：自动检查走不带 force 的普通请求（吃后端缓存，避开限流）
+  ok   更新：自动发现新版本时给一次轻提示
+  ok   更新：自动发现新版本也不弹 Modal
+  ok   更新：同一个版本不重复弹提示
+  ok   更新：initUpdateAuto 立刻返回，且不马上发请求（不阻塞启动）
+  ok   更新：到点后自动检查才真的发出去
+  ok   Pi 更新：诊断里能渲染出 Pi 区块（与 Pi GUI 更新分开）
+  ok   Pi 更新：检查走 GET /api/pi-update，且与 /api/update 的流水分开
+  ok   Pi 更新：有新版时状态是 available，且能显示目标版本
+  ok   Pi 更新：未验收（unverified）时界面给出警告文案
+  ok   Pi 更新：点更新会先弹确认框（不是直接发请求）
+  ok   Pi 更新：确认框正文说清停机+自动重启、不动 Extension/模型/Node、当前与目标版本
+  ok   Pi 更新：未验收警告在确认框里也出现（不隐藏、也不拦更新）
+  ok   Pi 更新：确认框点取消 → 一个请求都不发
+  ok   Pi 更新：确认后 POST body 恰好是 action/confirm/两个 expected（不接受任意命令）
+  ok   Pi 更新：跑起来之后相位是 updating（按钮进入禁用）
+  ok   Pi 轮询：POST 被接受后进入 updating，按钮禁用
+  ok   Pi 轮询：轮询真的发生过（不是一次检查就收工）
+  ok   Pi 轮询：逐相位观察到 updating → verifying → restarting
+  ok   Pi 轮询：忙态期间按钮全程禁用（没有一刻被放回可用）
+  ok   Pi 轮询：终态 latest，running=false，消息说已是最新
+  ok   Pi 轮询：到终态后**停止**轮询（不再继续打接口）
+  ok   Pi 轮询：终态后按钮不再是「更新中…」（不会永久禁用）
+  ok   Pi 轮询：失败终态经轮询到达界面（phase=failed + 原因）
+  ok   Pi 轮询：失败后不再继续轮询，也不会自己变回 available
+  ok   Pi 轮询：暂停失败经轮询到达界面（phase=failed + errorCode）
+  ok   Pi 轮询：显示真实的暂停失败原因
+  ok   Pi 轮询：暂停失败**绝不显示成功**（没有「已是最新版本」）
+  ok   Pi 轮询：暂停失败不显示成「没有新版本」（updateAvailable 保持 false 且相位是 failed）
+  ok   Pi 轮询：暂停失败后停止轮询（不会继续到「变回 available」）
+  ok   Pi 轮询：按钮不卡死（可点，且不是忙态文案）
+  ok   Pi 更新：失败时显示后端给的原因，且相位是 failed
+  ok   Pi 更新：离线（PI_OFFLINE）只影响这一块，不抛错、不弹崩溃
+  ok   Pi 更新：后端闸门说忙 → 原样显示原因（不假装已开始）
+  ok   Pi 更新：被拒之后按钮回到可用（不是永久禁用）
+  ok   Pi 更新：自动检查到点之前不发请求
+  ok   Pi 更新：自动检查只发 GET（检查），绝不自动安装
+  ok   会话：new_session 之后侧栏列表会重画（回归守卫）
+  ok   Rail 任务入口打开 Planner 工作区
+  ok   Rail 对话入口返回工作区
+  ok   Rail 扩展入口打开扩展工作区
+  ok   Rail 文件变更入口打开文件工作区
+  ok   P14-B 历史 User 使用消息语义并保留行内代码
+  ok   P14-B 历史 Assistant 使用消息语义和开放正文
+  ok   P14-B Thinking 默认折叠且有可访问控制
+  ok   P14-B Thinking 展开显示原有内容
+  ok   P14-B Thinking 再次点击收起但保留内容
+  ok   P14-B 多附件仍为两个独立文件块
+  ok   P14-B 文件详情是可访问按钮
+  ok   P14-B 文件详情展开后可见
+  ok   P14-B 流式 Thinking 默认折叠
+  ok   P14-B 手动展开优先于流式完成默认态
+  ok   P14-B message_end 保留手动展开和原节点
+  ok   P14-B 手动收起在流式结束后仍保持收起
+  ok   P14-B message_end 权威正文不被待执行流式绘制覆盖
+  ok   P14-B 竞态前提：首段已经由 rAF 绘制
+  ok   P14-B message_end 复用流式正文节点
+  ok   P14-B message_end 立即写入尚未绘制的尾段
+  ok   P14-B 下一帧不会把最终正文回退为首段
+  ok   P14-B running 工具有明确状态文字
+  ok   P14-B 工具详情按钮有展开语义
+  ok   P14-B 工具详情在当前行下方展开
+  ok   P14-B 原有工具行点击仍可展开详情
+  ok   P14-B success 工具状态有图标和文字
+  ok   P14-B error 工具状态有图标和文字
+  ok   P14-B incomplete 工具状态有图标和文字
+  ok   P14-B interrupted 工具状态有图标和文字
+  ok   P14-B cancelled 工具状态有图标和文字
+  ok   P14-B unknown 工具状态有图标和文字
+  ok   P14-C 页面只有一套 Composer 与输入控件
+  ok   P14-C 仅观察 Composer 外层高度
+  ok   P14-C 初始高度写入留白变量
+  ok   P14-C 多行或附件增高同步留白变量
+  ok   P14-C 附件删除后留白变量缩回
+  ok   P14-C 输入增长 40px 不超过视口上限
+  ok   P14-C 输入增长 90px 不超过视口上限
+  ok   P14-C 输入增长 170px 不超过视口上限
+  ok   P14-C 输入增长 600px 不超过视口上限
+  ok   P14-C 空输入禁用发送
+  ok   P14-C IME 合成 Enter 不触发发送
+  ok   P14-C Shift+Enter 保留浏览器换行默认动作
+  ok   P14-C Attach 仍调用同一个 file input
+  ok   P14-C 附件托盘显示解析中与错误文字
+  ok   P14-C 附件删除按钮有独立可访问名称
+  ok   P14-C 附件删除仍调用原有状态路径
+  ok   P14-C 嵌套拖拽离开不闪烁
+  ok   P14-C 拖拽彻底离开恢复外观
+  ok   P14-C drop 清除拖入视觉状态
+  ok   P14-C Model picker 控件与选中项可键盘访问
+  ok   P14-C Picker Escape 关闭并回到触发按钮
+  ok   P14-C Thinking picker 复用可访问弹层
+  ok   P14-C Context 提示有锚点语义
+  ok   P14-C Context 提示只展示已有真实统计字段
+  ok   P14-C Context 提示关闭时语义同步
+  ok   P14-C Context hover 前弹层确实关闭
+  ok   P14-C Context hover 无运行时异常
+  ok   P14-C Context hover 延迟后打开真实 tooltip
+  ok   P14-C Context hover 离开后延迟关闭
+  ok   P14-C Send 与 Stop 有独立可访问名称
+  ok   P14-C Home 回到同一个输入框并聚焦
+  ok   P14-D 默认 Chat 且 Home 唯一激活
+  ok   P14-D Planner 在 Stage 且 Chat 节点仅隐藏
+  ok   P14-E Planner Tab 语义与可见面板一致
+  ok   P14-D Planner rail 唯一激活
+  ok   P14-D 非 Chat 时流式正文继续进入原 Conversation
+  ok   P30 Changes 不替换当前 Planner 焦点
+  ok   P30 Changes 在右栏且 Planner 保持原实例
+  ok   P14-D Extensions 替换 Changes 并清掉 Git 容器
+  ok   P14-E Extensions Tab 语义与可见面板一致
+  ok   P14-D More 不抢主视图
+  ok   P14-D 二级 Modal 覆盖 Extensions
+  ok   P14-D 关闭二级 Modal 后仍在 Extensions
+  ok   P14-D 返回 Chat 保留 Conversation 节点与滚动
+  ok   P14-D 返回 Chat 保留 Composer、草稿与附件节点
+  ok   P14-D 返回 Chat 立即看到后台流式内容
+  ok   P14-D Surface host 不重复创建
+  ok   P14-D 收口：新对话前仍在 Planner
+  ok   P14-E 新对话点击前焦点在侧栏按钮
+  ok   P14-D 收口：新对话确实发出 RPC 且应答前不切视图
+  ok   P14-D 收口：新对话成功后 Chat 唯一激活且 Surface 卸载
+  ok   P14-E 侧栏新对话成功后焦点进入 Composer
+  ok   P14-E 无项目时成功换会话回 Home 而不聚焦禁用输入
+  ok   P14-E 失败切换前焦点在历史会话按钮
+  ok   P14-D 收口：切旧会话失败仍留 Planner 且 Surface 未清空
+  ok   P14-E 失败切换保持旧会话按钮焦点
+  ok   P14-E 成功切换前焦点在历史会话按钮
+  ok   P14-D 收口：侧栏旧会话成功切到 Chat 且只激活 Home
+  ok   P14-E 历史会话刷新确实移除原焦点按钮
+  ok   P14-E 历史会话刷新后焦点仍在 Composer
+  ok   P14-D 收口：侧栏成功切换走现有 boot 历史重建链路
+  ok   P14-D 收口：新会话历史在 Chat 中可见
+  ok   P14-D 切项目立即返回 Chat 并卸载旧 Surface
+  ok   P14-D 项目切换后一级视图仍为 Chat
+  ok   P16 SSE 并发调用按 id 隔离
+  ok   P16 Extension details.error 不伪装成功
+  ok   P16 start/update/end 仍是原节点
+  ok   P16 设置区显示实际调用证据
+  ok   P16 固定官方安装命令
+  ok   P16 第三方权限说明
+  ok   P16 重启清空调用证据
+  ok   P16 重启期间 Composer 不可用
+  ok   P16 重启先确认
+  ok   P16 确认后复用现有 restart API
+  ok   P16 重启失败可重试
+  ok   P16 切项目后旧确认不重启
+  ok   P16 切项目后观察为空
+  ok   P16 切项目同步期间旧 run 不能污染证据
+  ok   P17 SSE partial details 进入原节点
+  ok   P17 SSE 逆序完成保持两个独立节点
+  ok   P17 两次完成只刷新一次 Git
+  ok   P17 不把 child 输出加入 Changes 账本
+  ok   P17 不创建 Planner 任务或调用 RPC
+  ok   P17 Runtime evidence 独立显示
+  ok   P17 激活期间丢弃旧 start/update/end
+  ok   P17 新 run 拒绝旧 run end
+  ok   P17 Stop 后无运行 spinner
+  ok   P17 重启清空 observation
+  ok   P17 安装仅固定命令
+  ok   P17 重启先确认
+  ok   P17 重启 API 失败后可重试
+  ok   P17 旧 workspace 确认不重启
+  ok   P18 SSE 检索按 id 独立且不铺全文
+  ok   P18 SSE 逆序完成保持两个独立节点
+  ok   P18 时间线不显示 raw args/details
+  ok   P18 不额外刷新 Git
+  ok   P18 不进入 Changes 账本
+  ok   P18 不创建 Planner 任务或调用 RPC
+  ok   P18 Runtime evidence 独立显示
+  ok   P18 安装仅固定命令
+  ok   P18 长期记忆与会话搜索分开说明
+  ok   P18 激活期间丢弃旧 start/end
+  ok   P18 Stop 后无运行 spinner
+  ok   P18 重启清空 observation
+  ok   P18 重启先确认
+  ok   P18 重启 API 失败后可重试
+  ok   P18 旧 workspace 确认不重启
+  ok   P19 真实 SSE 用统一确认框弹审批
+  ok   P19 只有一次性的允许 / 拒绝
+  ok   P19 SSE 重放不重复弹窗
+  ok   P19 允许走 extension_ui_response
+  ok   P19 已结算的请求不再弹出
+  ok   P19 Stop 取消 pending 并收掉卡片
+  ok   P19 切项目同步期间不弹新请求
+  ok   P19 重启清空 pending 并收卡
+  ok   P20 SSE 输入内容不进 DOM
+  ok   P20 SSE 逆序完成保持两个独立节点
+  ok   P20 时间线不显示 raw args/details
+  ok   P20 输入动作只说「已输入文本」
+  ok   P20 打开页面只说主机名
+  ok   P20 页面标题不进入 DOM
+  ok   P20 只给安全的可点击来源
+  ok   P20 不额外刷新 Git
+  ok   P20 不创建 Planner 任务或调用 RPC
+  ok   P20 设置区显示实际调用证据
+  ok   P20 安装仅固定命令
+  ok   P20 明说与 Web Search 是两件事
+  ok   P20 不假装有审批
+  ok   P20 激活期间丢弃旧 start
+  ok   P20 Stop 后无运行 spinner
+  ok   P20 重启清空 observation
+  ok   P22 All 是默认过滤器，且每行都有统一状态行
+  ok   P22 已知能力都在：Web / Subagents / Memory / Browser / Native MCP / Approval / Usage / Skills
+  ok   P22 All 里同时保留通用 Extension（含不认识 / 坏掉的那些）
+  ok   P22 built-in 用 builtin: 前缀，且详情说清它不来自目录扫描
+  ok   P22 详情只画适用的状态字段（第三方 Extension：五个）
+  ok   P22 diagnostic=null 时连「诊断」这一行都不画（不再写「诊断 无」）
+  ok   P22 第三方 Extension 给出固定官方命令与一键安装 / 复制 / 安装后重启
+  ok   P22 点「安装」先弹确认：命令 / 权限 / 用户级都写清楚
+  ok   P22 确认框点「取消」→ 一个安装请求都不发
+  ok   P22 null 显示「未知（无法确认）」，不显示成「否」
+  ok   P22/P24 installed=null 时给的是「重新检查」，不是「安装」
+  ok   P22 Native MCP 不显示 npm 安装命令
+  ok   P22 Native MCP 复用 P20.6 的原生状态词汇
+  ok   P22 Native MCP 明说「包里有」不等于「已启用」
+  ok   P22 Native MCP 详情不再是一串「不适用」
+  ok   P22 搜索按名称过滤
+  ok   P22 搜索覆盖用途 / 描述
+  ok   P22 搜索覆盖状态文案
+  ok   P22 搜不到时给中性空态，不是空白页
+  ok   P22 Capabilities 过滤器只留已知能力
+  ok   P22 Usage 只给一个只读入口
+  ok   P22 Usage 入口复用既有上下文 Tip，不复制数据
+  ok   P22 restartRequired 进入统一状态（结论行 + 需要重启一行）
+  ok   P24 一键安装：未安装时按钮是「安装」
+  ok   P24 一键安装：请求体只带 capabilityId（+ 确认与工作区守卫），没有包名 / 命令
+  ok   P24 安装后按重新发现的证据重画：状态行写「已安装」，动作区不再摆一个按不动的按钮
+  ok   P24 没有加载证据时如实说未知（已安装 / 已加载未知，不伪造已加载）
+  ok   P24 安装按钮只出现在第三方 Extension 上（Native MCP / built-in / Skills / Usage 都没有）
+  ok   P22/P24 Capability 视图没有任何自由输入（不提供任意包名入口）
+  ok   P22 切项目后旧能力结果不落地
+  ok   P24 安装真实性（Web）：未安装时主按钮是「安装」
+  ok   P24 安装真实性（Web）：命令成功但 Registry 没有它 → 绝不写「已安装」
+  ok   P24 安装真实性（Subagents）：未安装时主按钮是「安装」
+  ok   P24 安装真实性（Subagents）：命令成功但 Registry 没有它 → 绝不写「已安装」
+  ok   P24 安装真实性（Memory）：未安装时主按钮是「安装」
+  ok   P24 安装真实性（Memory）：命令成功但 Registry 没有它 → 绝不写「已安装」
+  ok   P24 安装真实性（Browser）：未安装时主按钮是「安装」
+  ok   P24 安装真实性（Browser）：命令成功但 Registry 没有它 → 绝不写「已安装」
+  ok   P24 安装真实性（Web）：Registry 确认后写「已安装」，加载状态仍如实说未知
+  ok   P24 安装真实性（Web）：已安装后动作区不再摆一个按不动的「已安装」按钮
+  ok   P24 安装真实性（Subagents）：Registry 确认后写「已安装」，加载状态仍如实说未知
+  ok   P24 安装真实性（Subagents）：已安装后动作区不再摆一个按不动的「已安装」按钮
+  ok   P24 安装真实性（Memory）：Registry 确认后写「已安装」，加载状态仍如实说未知
+  ok   P24 安装真实性（Memory）：已安装后动作区不再摆一个按不动的「已安装」按钮
+  ok   P24 安装真实性（Browser）：Registry 确认后写「已安装」，加载状态仍如实说未知
+  ok   P24 安装真实性（Browser）：已安装后动作区不再摆一个按不动的「已安装」按钮
+  ok   P24 安装真实性（Web）：已安装状态下动作区不出现「已安装」按钮
+  ok   P24 安装真实性（Subagents）：已安装状态下动作区不出现「已安装」按钮
+  ok   P24 安装真实性（Memory）：已安装状态下动作区不出现「已安装」按钮
+  ok   P24 安装真实性（Browser）：已安装状态下动作区不出现「已安装」按钮
+  ok   P24 安装真实性（防线）：没有 onRecheck → 命令成功也不写「已安装」
+  ok   P24 安装真实性（防线）：如实说「命令已完成，待确认」，并且停用（不是点了没反应）
+  ok   P24 安装真实性：installed=null 且没有 recheck 入口 → 不画按钮（不给点了没反应的入口）
+  ok   P23 诊断：五个新小节都在
+  ok   P23 诊断：版本来源与核对状态分开摆
+  ok   P23 诊断：probe 三值文案（支持 / 不支持 / 未知）与出处都在
+  ok   P23 诊断：兼容矩阵显示当前基线与已验证版本
+  ok   P23 诊断：Native MCP 只给状态与计数（**没有 server 名字**）
+  ok   P23 诊断：Extension 版本按 name@version 显示
+  ok   P23 诊断：有「复制诊断摘要」按钮（在 JSON 复制之前）
+  ok   P23 摘要：含版本 / 来源 / 核对 / 兼容 / probe / MCP / Extension
+  ok   P23 摘要：不含会话正文 / 凭据 / 绝对路径 / 原始 payload
+  ok   P23 摘要：口径与面板一致（同一份快照，不另取数据）
+  ok   P23 摘要：点「复制诊断摘要」写进剪贴板的就是那段文本
+  ok   P23 漂移：不认识的工具名被记下（不记名字本身）
+  ok   P23 漂移：同一条只记一次（updateEntry 每个阶段都会跑）
+  ok   P23 漂移：闭集外的 MCP 运行状态也记（字段名 + 类型）
+  ok   P23 漂移：诊断摘要里带上前端漂移（来源 · 字段 · 类型）
+  ok   P23 漂移：bridge 重启后清空（旧 run 的观察不留）
+  ok   P24 快捷键：注册表无冲突（重复键位在装配时就炸）
+  ok   P24 快捷键：面板 / 帮助 / 四个视图都在表里，且都带人看的 label
+  ok   P24 快捷键：在输入框里按 Ctrl+K 也能打开面板（边写边叫出来）
+  ok   P24 快捷键：不带修饰键的普通按键不会在输入框里被抢
+  ok   P24 面板：快捷键能打开，且焦点在搜索框里
+  ok   P24 面板：常用动作默认就在列表里（不用先搜索）
+  ok   P24 面板：不可执行的动作**不出现**（没在流式就不给「停止生成」）
+  ok   P24 面板：会话条目只在有查询时出现（不刷屏）
+  ok   P24 面板：搜索按名称过滤
+  ok   P24 面板：↓ 移动选中项（aria-selected 跟着走）
+  ok   P24 面板：↑ 回到第一项
+  ok   P24 面板：第一项就是默认视图（顺序稳定）
+  ok   P24 面板：执行后立刻关闭（不留面板挡结果）
+  ok   P24 面板：MCP 命令打开扩展页并停在 MCP 过滤器
+  ok   P24 面板：Esc 关闭并把焦点还给打开它的元素
+  ok   P24 面板：Tab 留在搜索框上（aria-modal 语义）
+  ok   P24 可发现：More 菜单里有「命令面板 / 键盘快捷键」两个可见入口
+  ok   P24 可发现：点菜单里的「命令面板…」真的能打开面板
+  ok   P24 可发现：点菜单里的「键盘快捷键…」真的能打开帮助
+  ok   P24 危险动作：面板里有「重启 Pi」
+  ok   P24 危险动作：从面板重启**必须先确认**（隐藏快捷键 / 面板都不是旁路）
+  ok   P24 危险动作：取消之后什么都没发生（确认框收起、桥接状态不变）
+  ok   P24 帮助：从注册表渲染，含分组与键位写法
+  ok   P24 帮助：也列出输入 / 弹层那几条既有键位
+  ok   P24 草稿：按 workspace + session 分键，且 key 里没有路径原文
+  ok   P24 草稿：写进去的 JSON 只有 v / text / at 三个字段
+  ok   P24 草稿：附件二进制 / 抽取正文 / 本机路径都不进 localStorage
+  ok   P24 草稿：发送成功后清掉
+  ok   P24 草稿：空文本不落盘（不留幽灵草稿）
+  ok   P24 草稿：换会话后输入框换成新会话的草稿（互不串）
+  ok   P24 草稿：两条会话是两个 key
+  ok   P24 草稿：切回原会话 → 原文恢复
+  ok   P24 草稿：换项目不会串到上一个项目的草稿
+  ok   P24 草稿：草稿长度有上限（不会把 localStorage 撑爆）
+  ok   P24 状态条：同一条失败不再同时弹 toast（同一件事不说三遍）
+  ok   P24 状态条：pi 启动失败时常驻显示 error + 后可执行的下一步
+  ok   P24 状态条：给的是已有入口（重启 / 诊断），不是自动修复
+  ok   P24 状态条：「打开诊断」走的就是既有诊断面板
+  ok   P24 状态条：可关闭，且不会被同一条重复重建
+  ok   P24 状态条：pi 起来之后自动收起
+  ok   P24 维护态：安装扩展时的连接文案说的是安装，不是更新
+  ok   P24 维护态：常驻条同样按 reason 说清在做什么（语气是信息不是故障）
+  ok   P24 维护态：输入区不锁死，但 placeholder 说明在等什么
+  ok   P24 维护态：Pi 自更新仍说「更新」
+  ok   P24 维护态：回到 ready 之后 reason 被清掉（不留上一条的措辞）
+  ok   无残留 el 引用错误
+
+1338/1338 通过

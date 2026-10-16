@@ -1,0 +1,36 @@
+  ok  unknown stays null without name guessing
+  ok  reasoning and explicit capabilities: true
+  ok  reasoning and explicit capabilities: false
+  ok  reasoning and explicit capabilities: null
+  ok  input text is explicit false for images; absent or empty input is unknown
+  ok  token limits accept positive finite numbers without defaults
+  ok  structured identity preserves slash IDs and isolates providers
+  ok  field merge Pi > user > provider including false and invalid fallthrough
+  ok  merge never crosses Provider/model identity
+  ok  capability allowlist strips secrets and untrusted evidence/levels
+  ok  Provider metadata retains false and text-only evidence
+  ok  runtime safe projection retains identity and capability, no credentials
+  ok  SSE model merge uses explicit same-identity user metadata
+  ok  malformed user metadata cannot break otherwise valid Pi events
+  ok  safe Provider config uses user evidence and excludes secrets
+  ok  old disk models.json is read without migration or writes
+  ok  old models.json line roundtrip preserves false and text-only input
+  ok  S.models has structured identities and capability projection
+  ok  empty thinking response disables UI and clears old High
+  ok  metadata reasoning=true does not synthesize selectable levels
+  ok  off-only Pi levels are unavailable; Pi list beats static reasoning=false
+  ok  image=false blocks image upload but permits normal files
+  ok  unknown/true image capability does not block image entry
+  ok  unknown image model really accepts image selection
+  ok  repeated model ID on another Provider never inherits images or tools
+  ok  switch to image=false blocks existing image submission without losing draft
+  ok  model pending clears old capability restrictions and thinking display
+  ok  stale state/levels never override final model capabilities
+  ok  failed thinking readback leaves unavailable and no stale High
+  ok  current-model Pi-only levels allow only that selection and await state
+  ok  workspace generation rejects prior-model readback
+  ok  boot after restart replaces capabilities from actual Pi state
+  ok  session state change drops prior thinking levels immediately
+  ok  session-switch entry invalidates in-flight state and choices before delayed boot
+
+Model capabilities: 34/34 通过
