@@ -15,7 +15,9 @@ const OUT = process.env.UI_THEME_EVIDENCE || path.join(ROOT, 'docs/claude-ui-red
 if (!process.versions.electron) {
   const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-theme-electron-'));
   const env = { ...process.env, UI1_THEME_WORLD: world }; delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn(require('electron'), [__filename, '--no-sandbox', '--in-process-gpu'], { env, stdio: 'inherit', windowsHide: true });
+  // This opt-in GUI acceptance needs a genuinely visible native window.
+  // SW_HIDE in STARTUPINFO can hide its first ShowWindow and make PrintWindow black.
+  const child = spawn(require('electron'), [__filename, '--no-sandbox', '--in-process-gpu'], { env, stdio: 'inherit', windowsHide: false });
   child.on('error', error => { console.error(error); process.exitCode = 1; });
   child.on('exit', code => {
     process.exitCode = code ?? 1;
