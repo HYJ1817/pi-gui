@@ -170,6 +170,7 @@ export function updateEntry(node, entry) {
   if (!p) return;
 
   const status = entry.status || 'running';
+  const previousStatus = node.dataset.status;
   node.dataset.status = status;
   node.className = 'tl-item' + (node.classList.contains('open') ? ' open' : '');
 
@@ -268,6 +269,9 @@ export function updateEntry(node, entry) {
   syncToggle(p);
   syncTitle(node, p);
 
+  // Duration/output/Git repaint ticks must not rescan a whole batch.
+  if (previousStatus !== status) syncGroup(node.closest('.tl-group'));
+
   /* 预览行数不再单独占位：resultLine 已经给了「最有价值的一行」（§5/§6），
    * 完整输出在折叠区里。多铺一块预览会让紧凑的时间线变成三倍高。 */
   return node;
@@ -307,6 +311,25 @@ function argsTextOf(entry) {
 
 /* ---------- 分组（§12） ---------- */
 
+let groupId = 0;
+
+function syncGroup(group) {
+  const g = group?._tlGroup;
+  if (!g) return;
+  const multiple = g.count >= 2;
+  g.head.hidden = !multiple;
+  g.state.hidden = !multiple;
+  setText(g.head, multiple ? `操作 ${g.count} 项` : '');
+  const counts = new Map();
+  for (const node of g.list.children) {
+    const status = Object.hasOwn(STATUS_TEXT, node.dataset.status) ? node.dataset.status : 'unknown';
+    counts.set(status, (counts.get(status) || 0) + 1);
+  }
+  const summary = ['running', 'error', 'incomplete', 'interrupted', 'cancelled', 'unknown', 'success']
+    .filter(status => counts.has(status)).map(status => `${STATUS_TEXT[status]} ${counts.get(status)}`).join(' · ');
+  setText(g.state, multiple ? summary : '');
+}
+
 /* 一组 = 一条 assistant 消息里的全部 toolCall。
  * 这个边界是**真实存在**的（消息本身就是边界），不是「超过几秒算一组」那种猜测。
  * 只有一项时不摆「操作 1 项」这种废话标题。 */
@@ -315,16 +338,35 @@ export function createGroup() {
   g.className = 'tl-group';
   g.setAttribute('aria-label', '工具操作');
 
-  const head = document.createElement('div');
-  head.className = 'tl-group-head';
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'tl-group-head ui2-tool-summary';
   head.hidden = true;
   g.appendChild(head);
 
+  const state = document.createElement('span');
+  state.className = 'ui2-tool-state';
+  state.id = 'tool-group-state-' + ++groupId;
+  state.setAttribute('role', 'status');
+  state.hidden = true;
+  head.setAttribute('aria-describedby', state.id);
+  g.appendChild(state);
+
   const list = document.createElement('div');
   list.className = 'tl-list';
+  list.id = 'tool-group-list-' + groupId;
+  head.setAttribute('aria-controls', list.id);
+  head.setAttribute('aria-expanded', 'true');
   g.appendChild(list);
 
-  g._tlGroup = { head, list, count: 0 };
+  g._tlGroup = { head, list, state, count: 0 };
+  head.addEventListener('click', () => {
+    const open = list.hidden;
+    if (!open && list.contains(document.activeElement)) head.focus();
+    list.hidden = !open;
+    head.setAttribute('aria-expanded', String(open));
+    g.classList.toggle('is-collapsed', !open);
+  });
   return g;
 }
 
@@ -333,10 +375,7 @@ export function addToGroup(group, node) {
   const g = group._tlGroup;
   g.list.appendChild(node);
   g.count += 1;
-  if (g.count >= 2) {
-    g.head.hidden = false;
-    g.head.textContent = `操作 ${g.count} 项`;
-  }
+  syncGroup(group);
   return g.count;
 }
 
