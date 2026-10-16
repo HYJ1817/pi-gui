@@ -1,0 +1,223 @@
+{
+  "passed": 43,
+  "failed": 0,
+  "claims": [
+    {
+      "label": "C1 · 阅读轴变量解析为 768px",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C1 · 输入框宽=正文轴（920/888 的 32px 历史差取消）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C1 · 正文字级=UI-1 prose 档（14px）且行高放宽到 1.75",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C1 · 用户气泡 18px 圆角 + 端点内距 ≥16px（圆角不吃字）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C1 · 短气泡按内容收缩且贴正文右缘",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C1 · 长气泡不超过阅读列 76%",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C1 · 视口无横向溢出",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C1 · 代码块 prt 圆角 8px + 1 hairline 框",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C5 · 落场动画挂着（消息新进场的一次性 3px 上浮）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C2 · thinking 展开可见",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C5 · 展开淡入（display:none→block 重播 animation，JS 零改动）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C5 · 运行态呼吸保留（状态指示属必要动效）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C2 · 连续调用收进一个 hairline 卡片（8px 圆角）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C2 · 行间用 1px 分隔线（替代左竖线列）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C2 · 行最小高度保持 30px 紧凑体量",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C2 · 工具详情展开态有内容高度",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C5 · 工具详情展开走同一拍淡入",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "预留 · .ui2-tool-summary 12px 次级色 + 120ms 过渡",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "预留 · .ui2-chev 展开态旋转（与 .think-head 同构）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "预留 · .ui2-msg-meta 11.5px 弱化条",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "预留 · .ui2-runtime-status[data-state=running] = running 语义色",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "预留 · .ui2-runtime-meta 弱化小字",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C3 · runtime 转录跟随正文字级（14px / 行高 ≥1.7）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C3 · runtime 会话跟随 768 阅读轴",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 700px：视口无横向溢出",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 700px：阅读列居中并收在轴内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 700px：长代码块内部滚动不出列",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 700px：用户气泡仍在正文列内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 900px：视口无横向溢出",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 900px：阅读列居中并收在轴内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 900px：长代码块内部滚动不出列",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 900px：用户气泡仍在正文列内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1200px：视口无横向溢出",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1200px：阅读列居中并收在轴内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1200px：长代码块内部滚动不出列",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1200px：用户气泡仍在正文列内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1536px：视口无横向溢出",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1536px：阅读列居中并收在轴内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1536px：长代码块内部滚动不出列",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C4 · 1536px：用户气泡仍在正文列内",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C5 · reduced-motion：落场动画关闭",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C5 · reduced-motion：展开淡入关闭（内容仍可直接显示）",
+      "ok": true,
+      "got": true
+    },
+    {
+      "label": "C5 · 移除模拟后落场动画恢复",
+      "ok": true,
+      "got": true
+    }
+  ],
+  "cdpPort": 9226,
+  "out": "C:\\pi-GUI-ui2-visual\\docs\\claude-ui-redesign\\ui-2-c-evidence\\cdp"
+}
