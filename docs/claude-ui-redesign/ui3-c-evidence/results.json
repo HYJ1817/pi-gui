@@ -1,0 +1,272 @@
+{
+  "when": "2026-10-16T17:35:23.059Z",
+  "appPort": 7793,
+  "shots": [
+    "menu-dark.png",
+    "menu-dark-filter.png",
+    "menu-light.png",
+    "menu-narrow-700.png",
+    "menu-with-browser-pane.png"
+  ],
+  "facts": [
+    {
+      "step": "setup",
+      "registryCommands": 22
+    },
+    {
+      "step": "dark-open",
+      "theme": "dark",
+      "menuOpen": true,
+      "menu": {
+        "x": 151,
+        "y": 430,
+        "w": 741,
+        "h": 341
+      },
+      "items": 22,
+      "emptyShown": false,
+      "paneOpen": false,
+      "paneLeft": null,
+      "rpWidth": 420,
+      "focusIsInput": true,
+      "inputValue": "/",
+      "overlap": null,
+      "toastCount": 0
+    },
+    {
+      "step": "dark-filter",
+      "theme": "dark",
+      "menuOpen": true,
+      "menu": {
+        "x": 151,
+        "y": 450,
+        "w": 741,
+        "h": 321
+      },
+      "items": 9,
+      "emptyShown": false,
+      "paneOpen": false,
+      "paneLeft": null,
+      "rpWidth": 420,
+      "focusIsInput": true,
+      "inputValue": "/re",
+      "overlap": null,
+      "toastCount": 0
+    },
+    {
+      "step": "light-open",
+      "theme": "light",
+      "menuOpen": true,
+      "menu": {
+        "x": 151,
+        "y": 430,
+        "w": 741,
+        "h": 341
+      },
+      "items": 25,
+      "emptyShown": false,
+      "paneOpen": false,
+      "paneLeft": null,
+      "rpWidth": 420,
+      "focusIsInput": true,
+      "inputValue": "/",
+      "overlap": null,
+      "toastCount": 1
+    },
+    {
+      "step": "narrow-700",
+      "theme": "light",
+      "menuOpen": true,
+      "menu": {
+        "x": 8,
+        "y": 372,
+        "w": 264,
+        "h": 341
+      },
+      "items": 25,
+      "emptyShown": false,
+      "paneOpen": false,
+      "paneLeft": null,
+      "rpWidth": 420,
+      "focusIsInput": true,
+      "inputValue": "/",
+      "overlap": null,
+      "toastCount": 0
+    },
+    {
+      "step": "browser-pane-margin",
+      "margin": 45
+    },
+    {
+      "step": "browser-pane-open",
+      "theme": "dark",
+      "menuOpen": true,
+      "menu": {
+        "x": 358,
+        "y": 430,
+        "w": 497,
+        "h": 341
+      },
+      "items": 25,
+      "emptyShown": false,
+      "paneOpen": true,
+      "paneLeft": 900,
+      "rpWidth": 420,
+      "focusIsInput": true,
+      "inputValue": "/",
+      "overlap": null,
+      "toastCount": 0
+    }
+  ],
+  "checks": [
+    {
+      "label": "真实页面注入内联命令模块成功",
+      "pass": true,
+      "detail": {
+        "ok": true,
+        "commands": 22
+      }
+    },
+    {
+      "label": "深色：输入 `/` 打开菜单",
+      "pass": true,
+      "detail": {
+        "theme": "dark",
+        "menuOpen": true,
+        "menu": {
+          "x": 151,
+          "y": 430,
+          "w": 741,
+          "h": 341
+        },
+        "items": 22,
+        "emptyShown": false,
+        "paneOpen": false,
+        "paneLeft": null,
+        "rpWidth": 420,
+        "focusIsInput": true,
+        "inputValue": "/",
+        "overlap": null,
+        "toastCount": 0
+      }
+    },
+    {
+      "label": "深色：候选来自真实注册表（>0）",
+      "pass": true,
+      "detail": {
+        "items": 22
+      }
+    },
+    {
+      "label": "焦点仍在输入框（combobox 语义）",
+      "pass": true,
+      "detail": {
+        "focus": true
+      }
+    },
+    {
+      "label": "深色：筛选输入为 /re",
+      "pass": true,
+      "detail": {
+        "value": "/re"
+      }
+    },
+    {
+      "label": "深色：筛选后有候选或空状态（诚实）",
+      "pass": true,
+      "detail": {
+        "items": 9,
+        "empty": false
+      }
+    },
+    {
+      "label": "浅色：data-theme=light",
+      "pass": true,
+      "detail": {
+        "theme": "light"
+      }
+    },
+    {
+      "label": "浅色：菜单正常打开",
+      "pass": true,
+      "detail": {
+        "theme": "light",
+        "menuOpen": true,
+        "menu": {
+          "x": 151,
+          "y": 430,
+          "w": 741,
+          "h": 341
+        },
+        "items": 25,
+        "emptyShown": false,
+        "paneOpen": false,
+        "paneLeft": null,
+        "rpWidth": 420,
+        "focusIsInput": true,
+        "inputValue": "/",
+        "overlap": null,
+        "toastCount": 1
+      }
+    },
+    {
+      "label": "窄屏：菜单打开",
+      "pass": true,
+      "detail": {
+        "theme": "light",
+        "menuOpen": true,
+        "menu": {
+          "x": 8,
+          "y": 372,
+          "w": 264,
+          "h": 341
+        },
+        "items": 25,
+        "emptyShown": false,
+        "paneOpen": false,
+        "paneLeft": null,
+        "rpWidth": 420,
+        "focusIsInput": true,
+        "inputValue": "/",
+        "overlap": null,
+        "toastCount": 0
+      }
+    },
+    {
+      "label": "窄屏：菜单宽度不超出视口",
+      "pass": true,
+      "detail": {
+        "x": 8,
+        "y": 372,
+        "w": 264,
+        "h": 341
+      }
+    },
+    {
+      "label": "右栏 Browser 已打开（原生 WebContentsView）",
+      "pass": true,
+      "detail": {
+        "paneOpen": true,
+        "paneLeft": 900
+      }
+    },
+    {
+      "label": "菜单右边界不越过右栏（不与原生视图重叠）",
+      "pass": true,
+      "detail": {
+        "menuRight": 855,
+        "paneLeft": 900,
+        "margin": 45
+      }
+    },
+    {
+      "label": "右栏打开时菜单仍正常显示",
+      "pass": true,
+      "detail": {
+        "menuOpen": true
+      }
+    }
+  ],
+  "passed": 13,
+  "total": 13
+}
