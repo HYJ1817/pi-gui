@@ -45,7 +45,8 @@ const USAGE_KEYS = [
   ['input', '输入'], ['output', '输出'], ['cacheRead', '缓存读'], ['cacheWrite', '缓存写'],
   ['cacheWrite1h', '缓存写(1h)'], ['reasoning', '推理'], ['totalTokens', '合计'],
 ];
-const number = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
+const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+const tokenNumber = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 
 /** 与 runtime-store 同一条有界策略：按**字节**留末尾，不切出半个字符。 */
 function boundText(text, limit) {
@@ -58,7 +59,7 @@ function boundText(text, limit) {
 export function readUsage(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const out = {};
-  for (const [key] of USAGE_KEYS) { const value = number(raw[key]); if (value !== null) out[key] = value; }
+  for (const [key] of USAGE_KEYS) { const value = tokenNumber(raw[key]); if (value !== null) out[key] = value; }
   const cost = number(raw.cost?.total);
   if (cost !== null) out.costTotal = cost;
   return Object.keys(out).length ? out : null;
@@ -77,7 +78,7 @@ const grouped = value => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 export function usageText(stats) {
   if (!stats) return '';
   const parts = [];
-  for (const [key, label] of USAGE_KEYS) { const value = number(stats[key]); if (value !== null) parts.push(`${label} ${grouped(value)}`); }
+  for (const [key, label] of USAGE_KEYS) { const value = tokenNumber(stats[key]); if (value !== null) parts.push(`${label} ${grouped(value)}`); }
   const cost = number(stats.costTotal);
   if (cost !== null) parts.push(`预估成本 ${cost.toFixed(4)}`);   // 不补货币符号：线上没有单位
   if (!parts.length) return '';
@@ -96,16 +97,18 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
   let alive = true;
 
   const ownerKeyOf = owner => owner ? JSON.stringify(owner) : null;
-  function blank(ownerKey) { return { ownerKey, cursor: 0, thinking: '', truncated: false, usage: null, usageSource: null }; }
+  function blank(ownerKey, storeRecord) { return { ownerKey, storeRecord, cursor: 0, thinking: '', truncated: false, usage: null, usageSource: null }; }
 
   function recordFor(id, owner) {
     const ownerKey = ownerKeyOf(owner);
+    const current = store.get(id);
+    if (!current) { records.delete(id); return null; }
     let record = records.get(id);
-    if (!record) { record = blank(ownerKey); records.set(id, record); }
+    if (!record) { record = blank(ownerKey, current); records.set(id, record); }
     /* 换**runtime 身份**（重启 / 恢复 / 关闭后再起）就是另一条运行，旧记录一律作废。
      * owner 变成 null（关闭）时**不**重置 —— 与 runtime-store 对 text/tools 的处理一致：
      * 关闭后仍能读到上一次观察到的内容，直到下次真的换了 runtime 或权威快照重来。 */
-    else if (ownerKey !== null && record.ownerKey !== ownerKey) { record = blank(ownerKey); records.set(id, record); }
+    else if (record.storeRecord !== current || ownerKey !== null && record.ownerKey !== ownerKey) { record = blank(ownerKey, current); records.set(id, record); }
     /* 有界内存：只保留最近用到的若干条会话记录。 */
     while (records.size > conversationLimit) records.delete(records.keys().next().value);
     return record;
@@ -124,7 +127,7 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
   function reconcile() {
     for (const [id, record] of [...records]) {
       const key = ownerKeyOf(store.get(id)?.owner);
-      if (key !== null && key !== record.ownerKey) records.delete(id);
+      if (store.get(id) !== record.storeRecord || key !== null && key !== record.ownerKey) records.delete(id);
     }
   }
 
@@ -136,6 +139,7 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
     const id = frame.owner?.conversationId;
     if (!id) return;
     const record = recordFor(id, frame.owner);
+    if (!record) return;
     /* 纵深防御：广播只发生在 store 接受之后，序号本该严格递增；这里再挡一次。 */
     if (!Number.isInteger(frame.eventSequence) || frame.eventSequence <= record.cursor) return;
     record.cursor = frame.eventSequence;
@@ -159,7 +163,7 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
       const authoritative = thinkingText(event.message.content);
       if (authoritative !== null) setThinking(record, authoritative);
       const usage = readUsage(event.message.usage);
-      if (usage) { record.usage = usage; record.usageSource = 'message_end'; }
+      record.usage = usage; record.usageSource = usage ? 'message_end' : null;
     }
   }
 
@@ -172,7 +176,7 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
     const record = records.get(id);
     if (!record) return null;
     const key = ownerKeyOf(store.get(id)?.owner);
-    return key !== null && key !== record.ownerKey ? null : record;
+    return store.get(id) !== record.storeRecord || key !== null && key !== record.ownerKey ? null : record;
   }
 
   const unsubscribe = subscribe(apply);

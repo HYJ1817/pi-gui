@@ -140,7 +140,7 @@ export function onToolStart(evt) {
   startTicker();
   syncToolWorking();
   moveWorkingToEnd();
-  scrollBottom(true);
+  scrollBottom();
 }
 
 export function onToolUpdate(evt) {

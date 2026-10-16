@@ -357,7 +357,7 @@ function createAssistant() {
   S.current = { wrap, body };
   S.blocks.clear();
   moveWorkingToEnd();
-  scrollBottom(true);
+  scrollBottom();
   return S.current;
 }
 

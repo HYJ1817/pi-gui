@@ -334,6 +334,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     /* 「这一次 draw 是不是刚切到这条会话」——必须在下面写 renderedId 之前取。
      * 滚动策略要用它区分「用户主动切过来」与「同一条会话内的流式更新」。 */
     const entered = renderedId !== id;
+    // Capture intent before text/thinking/tool changes can increase scrollHeight.
+    const follow = !entered && !view.history && shouldFollow(output);
     root.hidden = !id;
     if (!id) return;
     title.textContent = r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
@@ -432,7 +434,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     } else if (entered) {
       const top = scrollTops.get(id);
       output.scrollTop = top === undefined ? output.scrollHeight : top;
-    } else if (shouldFollow(output)) {
+    } else if (follow) {
       output.scrollTop = output.scrollHeight;
     }
   }
