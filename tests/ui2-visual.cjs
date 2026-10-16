@@ -23,7 +23,7 @@ const path = require('node:path');
 
 const CHROME = process.env.UI2C_CHROME || process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const CDP_PORT = Number(process.env.UI2C_CDP_PORT || 9226);
-const OUT = path.join(__dirname, '..', 'docs', 'claude-ui-redesign', 'ui-2-c-evidence', 'cdp');
+const OUT = process.env.UI2_VISUAL_EVIDENCE || path.join(__dirname, '..', '.shots', 'ui2-visual');
 const KEEP = process.argv.includes('--keep');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -45,6 +45,9 @@ async function expect(label, expr) {
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-ui2-visual-'));
+  if (path.dirname(profile) !== path.resolve(os.tmpdir())) throw new Error('unexpected fixture profile parent');
+  let chrome, closeWs = () => {};
 
   /* ---- 1. Offline HTTP 夹具：随机端口，进程结束时收掉 ---- */
   const harness = spawn(process.execPath, [path.join(__dirname, 'visual-harness.cjs')], {
@@ -64,15 +67,15 @@ async function main() {
   console.log('夹具: ' + url);
   try {
     /* ---- 2. 无头 Chrome + DevTools 协议（headless=new 下窗口参数即视口） ---- */
-    const chrome = spawn(
+    chrome = spawn(
       CHROME,
       [
         '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
         '--disable-sync', '--hide-scrollbars', `--remote-debugging-port=${CDP_PORT}`,
-        `--user-data-dir=${path.join(os.tmpdir(), 'ui2c-cdp-profile')}`,
+        `--user-data-dir=${profile}`,
         '--window-size=1440,900', 'about:blank',
       ],
-      { stdio: 'ignore' }
+      { stdio: 'ignore', windowsHide: true }
     );
     chrome.on('error', (e) => { console.error('Chrome 启动失败: ' + e.message); process.exitCode = 1; });
     let targets = null;
@@ -88,7 +91,6 @@ async function main() {
     if (!page) throw new Error('拿不到 DevTools page target');
 
     let send = null;
-    let closeWs = () => {};
     await new Promise((res, rej) => {
       const ws = new WebSocket(page.webSocketDebuggerUrl);
       ws.onopen = res;
@@ -125,11 +127,16 @@ async function main() {
     if (!KEEP) { try { chrome.kill(); } catch {} }
     else console.log('(--keep) Chrome 保持: ' + url);
   } finally {
-    if (!KEEP) try { harness.kill(); } catch {}
+    if (!KEEP) {
+      closeWs();
+      try { chrome?.kill(); } catch {}
+      try { harness.kill(); } catch {}
+      fs.rm(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {});
+    }
   }
 
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ passed, failed, claims, cdpPort: CDP_PORT, out: OUT }, null, 2));
-  console.log(`\nUI-2C 视觉自检: ${passed}/${passed + failed} 通过 —— 报告: ` + path.join('docs', 'claude-ui-redesign', 'ui-2-c-evidence', 'cdp', 'report.json'));
+  console.log(`\nUI-2C 视觉自检: ${passed}/${passed + failed} 通过 —— 报告: ` + path.join(OUT, 'report.json'));
   if (failed) process.exitCode = 1;
 }
 

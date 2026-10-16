@@ -139,7 +139,7 @@ async function unit() {
 async function electron() {
   const { app, BrowserWindow } = require('electron');
   const { spawn } = require('node:child_process');
-  const out = path.join(ROOT, 'docs/claude-ui-redesign/ui2a-evidence');
+  const out = process.env.UI2_CLASSIC_EVIDENCE || path.join(ROOT, 'docs/claude-ui-redesign/ui2a-evidence');
   const world = process.env.UI2A_WORLD;
   const shots = [], facts = [], errors = [];
   let win, harness, passed = 0, exitCode = 0;

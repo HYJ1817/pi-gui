@@ -22,6 +22,7 @@ const { JSDOM } = require('jsdom');
   const { runtimeStore, observeRuntimeFrame } = await import('../public/runtime-state.js');
   const { createRuntimeConversation } = await import('../public/runtime-conversation.js');
   const { createRuntimeDisplay, usageText, readUsage, thinkingText } = await import('../public/runtime-display.js');
+  const { createRuntimeStore } = await import('../public/runtime-store.js');
 
   const owner = (id, gen = 'one') => ({ backendInstance: 'backend', projectId: 'project', repoId: 'repo', workspaceId: 'ws-' + id,
     workspaceEpoch: 'epoch', conversationId: id, runtimeId: 'rt-' + id, runtimeGeneration: gen, sessionId: 's-' + id });
@@ -63,6 +64,9 @@ const { JSDOM } = require('jsdom');
   ok('thinkingText：多个 thinking 块按顺序拼接', thinkingText([{ type: 'thinking', thinking: 'a' }, { type: 'text', text: 'x' }, { type: 'thinking', thinking: 'b' }]) === 'a\n\nb');
 
   /* ================= 2. 两个会话不同状态 ================= */
+
+  ok('集成：负数/小数Token与负成本不是有效用量', readUsage({ input: -1, output: 1.5, cost: { total: -0.1 } }) === null);
+  ok('集成：真实零Token和非负小数成本仍保留', readUsage({ input: 0, cost: { total: 0.0123 } }).costTotal === 0.0123);
 
   runtimeStore.seed({ backendInstance: 'backend', items: [item('A'), item('B', { activity: 'idle' })] });
   const view = createRuntimeConversation({ host });
@@ -339,6 +343,33 @@ const { JSDOM } = require('jsdom');
   ok('投影只保留最近 N 条会话记录（有界内存）',
     capped.thinkingOf('F3')?.text === 'F3-思考' && (capped.thinkingOf('F1') === null || capped.thinkingOf('F2') === null));
   capped.dispose();
+
+  const completed = createRuntimeDisplay();
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('U')] });
+  frame('U', 1, { type: 'message_start', message: { role: 'assistant' } });
+  frame('U', 2, { type: 'message_update', usage: { output: 9 } });
+  ok('集成：流式用量明确为临时观察值', completed.usageOf('U')?.source === 'message_update');
+  frame('U', 3, { type: 'message_end', message: { role: 'assistant', content: [] } });
+  ok('集成：终值usage缺失时省略，不继续声称仍在累计', completed.usageOf('U') === null);
+  completed.dispose();
+
+  const isolatedStore = createRuntimeStore();
+  let accepted;
+  const isolatedDisplay = createRuntimeDisplay({ store: isolatedStore, subscribe: fn => { accepted = fn; return () => {}; } });
+  isolatedStore.seed({ backendInstance: 'backend', items: [item('I')] });
+  const isolatedFrame = { type: 'runtime_event', owner: owner('I'), eventSequence: 1, event: { type: 'message_update', usage: { output: 3 }, assistantMessageEvent: { type: 'thinking_delta', delta: 'old backend thinking' } } };
+  if (isolatedStore.apply(isolatedFrame)) accepted(isolatedFrame);
+  ok('集成：展示投影只读已接受的fixture记录', isolatedDisplay.thinkingOf('I')?.text === 'old backend thinking');
+  const closedFrame = { type: 'runtime_closed', backendInstance: 'backend', conversationId: 'I', owner: owner('I'), item: item('I', { owner: null, lifecycle: 'closed' }) };
+  if (isolatedStore.apply(closedFrame)) accepted(closedFrame);
+  ok('集成：原位关闭仍保留本次已观察展示', isolatedDisplay.thinkingOf('I')?.text === 'old backend thinking');
+  isolatedStore.seed({ backendInstance: 'replacement', items: [item('I', { owner: null, lifecycle: 'closed' })] }); accepted();
+  ok('集成：后端换代同id dormant不继承旧thinking或usage', isolatedDisplay.thinkingOf('I') === null && isolatedDisplay.usageOf('I') === null);
+  isolatedStore.seed({ backendInstance: 'backend', items: [item('I')] });
+  if (isolatedStore.apply(isolatedFrame)) accepted(isolatedFrame);
+  isolatedStore.seed({ backendInstance: 'empty-backend', items: [] });
+  ok('集成：当前store记录已移除时读取不能返回残留展示', isolatedDisplay.thinkingOf('I') === null && isolatedDisplay.usageOf('I') === null);
+  isolatedDisplay.dispose();
 
   view.dispose(); dom.window.close();
   console.log(`Runtime display projection: ${checks}/${checks}`);

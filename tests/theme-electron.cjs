@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
-const OUT = path.join(ROOT, 'docs/claude-ui-redesign/ui-1-evidence/electron');
+const OUT = process.env.UI_THEME_EVIDENCE || path.join(ROOT, 'docs/claude-ui-redesign/ui-1-evidence/electron');
 if (!process.versions.electron) {
   const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-theme-electron-'));
   const env = { ...process.env, UI1_THEME_WORLD: world }; delete env.ELECTRON_RUN_AS_NODE;
