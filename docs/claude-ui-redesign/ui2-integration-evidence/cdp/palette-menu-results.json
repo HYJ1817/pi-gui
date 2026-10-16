@@ -1,0 +1,51 @@
+{
+  "checks": 26,
+  "passed": 26,
+  "failed": 0,
+  "results": [
+    {
+      "theme": "dark",
+      "background": "rgb(17, 17, 17)",
+      "token": "#111111",
+      "menuRole": "menu",
+      "separatorCount": 1,
+      "headStable": true,
+      "menu": [
+        "工作区管理",
+        "项目设置",
+        "移除项目"
+      ],
+      "wrongBackground": "背景色不对：rgb(13, 13, 13)",
+      "wrongToken": "--titlebar 不是 electron overlay 的颜色：#0d0d0d",
+      "wrongScrollbar": "滑块不符合主题：rgb(44, 44, 44)",
+      "builtinNegativeFields": [
+        "启用配置",
+        "已加载",
+        "missing source"
+      ],
+      "checks": 13
+    },
+    {
+      "theme": "light",
+      "background": "rgb(251, 251, 249)",
+      "token": "#fbfbf9",
+      "menuRole": "menu",
+      "separatorCount": 1,
+      "headStable": true,
+      "menu": [
+        "工作区管理",
+        "项目设置",
+        "移除项目"
+      ],
+      "wrongBackground": "背景色不对：rgb(13, 13, 13)",
+      "wrongToken": "--titlebar 不是 electron overlay 的颜色：#0d0d0d",
+      "wrongScrollbar": "滑块不符合主题：rgb(44, 44, 44)",
+      "builtinNegativeFields": [
+        "启用配置",
+        "已加载",
+        "missing source"
+      ],
+      "checks": 13
+    }
+  ]
+}

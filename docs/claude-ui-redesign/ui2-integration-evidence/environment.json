@@ -1,0 +1,11 @@
+{
+  "node": "v24.14.0",
+  "platform": "win32",
+  "arch": "x64",
+  "windowsRelease": "10.0.26200",
+  "npm": "11.9.0",
+  "timezone": "Asia/Shanghai",
+  "canonical": "npm test",
+  "offline": true,
+  "dependencySource": "existing node_modules junction; no install"
+}

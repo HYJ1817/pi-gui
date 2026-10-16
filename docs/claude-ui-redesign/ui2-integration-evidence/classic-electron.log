@@ -1,0 +1,68 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS dark initial RPC fixture history ready
+PASS dark actual theme
+PASS dark per-message metadata in real renderer
+PASS dark native summary button
+PASS dark/700 actual Enter collapses
+PASS dark/700 collapsed error discoverable
+PASS dark/700 Tab skips collapsed list
+PASS dark/700 actual Space expands
+PASS dark/700 Tab enters expanded list
+PASS dark/700 actual Thinking Enter
+PASS dark/700 correct CSS viewport and no page overflow
+PASS dark/900 actual Enter collapses
+PASS dark/900 collapsed error discoverable
+PASS dark/900 Tab skips collapsed list
+PASS dark/900 actual Space expands
+PASS dark/900 Tab enters expanded list
+PASS dark/900 actual Thinking Enter
+PASS dark/900 correct CSS viewport and no page overflow
+PASS dark/1200 actual Enter collapses
+PASS dark/1200 collapsed error discoverable
+PASS dark/1200 Tab skips collapsed list
+PASS dark/1200 actual Space expands
+PASS dark/1200 Tab enters expanded list
+PASS dark/1200 actual Thinking Enter
+PASS dark/1200 correct CSS viewport and no page overflow
+PASS dark/1536 actual Enter collapses
+PASS dark/1536 collapsed error discoverable
+PASS dark/1536 Tab skips collapsed list
+PASS dark/1536 actual Space expands
+PASS dark/1536 Tab enters expanded list
+PASS dark/1536 actual Thinking Enter
+PASS dark/1536 correct CSS viewport and no page overflow
+PASS light initial RPC fixture history ready
+PASS light actual theme
+PASS light per-message metadata in real renderer
+PASS light native summary button
+PASS light/700 actual Enter collapses
+PASS light/700 collapsed error discoverable
+PASS light/700 Tab skips collapsed list
+PASS light/700 actual Space expands
+PASS light/700 Tab enters expanded list
+PASS light/700 actual Thinking Enter
+PASS light/700 correct CSS viewport and no page overflow
+PASS light/900 actual Enter collapses
+PASS light/900 collapsed error discoverable
+PASS light/900 Tab skips collapsed list
+PASS light/900 actual Space expands
+PASS light/900 Tab enters expanded list
+PASS light/900 actual Thinking Enter
+PASS light/900 correct CSS viewport and no page overflow
+PASS light/1200 actual Enter collapses
+PASS light/1200 collapsed error discoverable
+PASS light/1200 Tab skips collapsed list
+PASS light/1200 actual Space expands
+PASS light/1200 Tab enters expanded list
+PASS light/1200 actual Thinking Enter
+PASS light/1200 correct CSS viewport and no page overflow
+PASS light/1536 actual Enter collapses
+PASS light/1536 collapsed error discoverable
+PASS light/1536 Tab skips collapsed list
+PASS light/1536 actual Space expands
+PASS light/1536 Tab enters expanded list
+PASS light/1536 actual Thinking Enter
+PASS light/1536 correct CSS viewport and no page overflow
+PASS no renderer errors
+UI-2A Electron 65/65; failed=0; screenshots=16

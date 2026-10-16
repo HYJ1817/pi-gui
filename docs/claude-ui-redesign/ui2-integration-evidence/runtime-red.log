@@ -1,0 +1,18 @@
+  ok  usage：没有有效数字就是 null（缺字段 ≠ 0）
+  ok  usage：真实 0 保留，缺的字段不出现
+  ok  usage 文案：只列有的字段，且**不带**货币符号（线上没有单位）
+  ok  usage 文案：流式中的数字标注「仍在累计」，不当终值
+  ok  usage 文案：一个数字都没有时是空串（整块隐藏）
+  ok  thinkingText：没有 thinking 块返回 null（与「空思考」区分开）
+  ok  thinkingText：多个 thinking 块按顺序拼接
+AssertionError [ERR_ASSERTION]: 集成：负数/小数Token与负成本不是有效用量
+    at ok (C:\pi-GUI-ui2-integration\tests\ui2-runtime-display.cjs:16:41)
+    at C:\pi-GUI-ui2-integration\tests\ui2-runtime-display.cjs:67:3
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

@@ -1,0 +1,242 @@
+{
+  "scope": "Isolated packaged Electron production main/preload startup and theme smoke only; no real project/Pi/model",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-build-557f38db-41b6-41aa-9311-e99bee5c9d5c\\desktop-smoke-1792162131418",
+  "checks": [
+    {
+      "pass": true,
+      "label": "packaged main creates application page on isolated local port"
+    },
+    {
+      "pass": true,
+      "label": "production preload desktop and native theme bridge available"
+    },
+    {
+      "pass": true,
+      "label": "renderer does not expose Node require"
+    },
+    {
+      "pass": true,
+      "label": "renderer renders production interface"
+    },
+    {
+      "pass": true,
+      "label": "isolated application has no real projects"
+    },
+    {
+      "pass": true,
+      "label": "packaged native theme set dark"
+    },
+    {
+      "pass": true,
+      "label": "renderer and native theme agree dark"
+    },
+    {
+      "pass": true,
+      "label": "packaged native theme set light"
+    },
+    {
+      "pass": true,
+      "label": "renderer and native theme agree light"
+    },
+    {
+      "pass": true,
+      "label": "no observed renderer exceptions"
+    },
+    {
+      "pass": true,
+      "label": "no observed renderer error entries"
+    },
+    {
+      "pass": true,
+      "label": "packaged desktop closes normally with exit 0"
+    }
+  ],
+  "rendererExceptions": [],
+  "rendererConsoleErrors": [],
+  "shots": [
+    {
+      "filename": "build-desktop-dark.png",
+      "theme": "dark",
+      "preference": "dark",
+      "snapshot": {
+        "preference": "dark",
+        "resolved": "dark",
+        "revision": 1,
+        "persisted": true
+      },
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "filename": "build-desktop-light.png",
+      "theme": "light",
+      "preference": "light",
+      "snapshot": {
+        "preference": "light",
+        "resolved": "light",
+        "revision": 2,
+        "persisted": true
+      },
+      "background": "rgb(251, 251, 249)"
+    }
+  ],
+  "updateAutoCancelled": true,
+  "timeline": [
+    {
+      "kind": "command",
+      "method": "Page.getFrameTree",
+      "epoch": 1792162132012
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.enable",
+      "epoch": 1792162132090
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "receivedEpoch": 1792162132096,
+      "context": 2,
+      "origin": "http://127.0.0.1:32772"
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "receivedEpoch": 1792162132097,
+      "context": 1,
+      "origin": "http://127.0.0.1:32772"
+    },
+    {
+      "kind": "command",
+      "method": "Log.enable",
+      "epoch": 1792162132097
+    },
+    {
+      "kind": "command",
+      "method": "Page.enable",
+      "epoch": 1792162132100
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.evaluate",
+      "epoch": 1792162132103
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.evaluate",
+      "epoch": 1792162132483
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.evaluate",
+      "epoch": 1792162132484
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.evaluate",
+      "epoch": 1792162132487
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.evaluate",
+      "epoch": 1792162132702
+    },
+    {
+      "kind": "command",
+      "method": "Page.captureScreenshot",
+      "epoch": 1792162132703
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.evaluate",
+      "epoch": 1792162132767
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.evaluate",
+      "epoch": 1792162132984
+    },
+    {
+      "kind": "command",
+      "method": "Page.captureScreenshot",
+      "epoch": 1792162132986
+    },
+    {
+      "kind": "command",
+      "method": "Page.close",
+      "epoch": 1792162133057
+    }
+  ],
+  "pid": 36572,
+  "target": {
+    "id": "9107811EAE7641072BE81599F6808746",
+    "type": "page",
+    "url": "http://127.0.0.1:32772/"
+  },
+  "attachEpoch": 1792162132006,
+  "frameTreeAtAttach": {
+    "frameTree": {
+      "frame": {
+        "id": "9107811EAE7641072BE81599F6808746",
+        "loaderId": "33C9CC6A0BA8DCCED8862607614625E4",
+        "url": "",
+        "domainAndRegistry": "",
+        "securityOrigin": "://",
+        "securityOriginDetails": {
+          "isLocalhost": false
+        },
+        "mimeType": "text/html",
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "secureContextType": "InsecureScheme",
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "gatedAPIFeatures": []
+      }
+    }
+  },
+  "contexts": [
+    {
+      "id": 2,
+      "name": "Electron Isolated Context",
+      "origin": "http://127.0.0.1:32772",
+      "auxData": {
+        "isDefault": false,
+        "type": "isolated",
+        "frameId": "9107811EAE7641072BE81599F6808746"
+      }
+    },
+    {
+      "id": 1,
+      "name": "",
+      "origin": "http://127.0.0.1:32772",
+      "auxData": {
+        "isDefault": true,
+        "type": "default",
+        "frameId": "9107811EAE7641072BE81599F6808746"
+      }
+    }
+  ],
+  "initial": {
+    "timeOrigin": 1792162131989.3,
+    "url": "http://127.0.0.1:32772",
+    "desktop": true,
+    "themeBridge": true,
+    "snapshot": {
+      "preference": "dark",
+      "resolved": "dark",
+      "revision": 0,
+      "persisted": true
+    },
+    "theme": "dark",
+    "require": "undefined",
+    "body": 126
+  },
+  "projects": {
+    "ok": true,
+    "projectCount": 0
+  },
+  "exitCode": 0,
+  "pass": true,
+  "checkCount": 12,
+  "passed": 12
+}

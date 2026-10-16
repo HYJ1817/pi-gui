@@ -1,0 +1,153 @@
+{
+  "baseline": "50d20dd",
+  "runs": {
+    "before": {
+      "exitCode": 1,
+      "assertions": null,
+      "failed": 11,
+      "rendererExceptions": 0,
+      "screenshots": 270,
+      "shotOfInvocations": 263,
+      "uxInvocations": 57,
+      "failureClaims": [
+        "UX-MENU-02-project-menu-open: 结构判据不成立 —— role=menu + 两个 menuitem",
+        "UX-08 切到「任务」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 切到「文件变更」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 切到「扩展」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 切到「对话」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 长对话滚动后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 开关命令面板后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 700×600：顶栏稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 900×700：顶栏稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 1200×800：顶栏稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 1536×900：顶栏稳定: 背景色不对：rgb(17, 17, 17)"
+      ]
+    },
+    "before-count": {
+      "exitCode": 1,
+      "assertions": 1761,
+      "failed": 11,
+      "rendererExceptions": 0,
+      "screenshots": 270,
+      "shotOfInvocations": 263,
+      "uxInvocations": 57,
+      "failureClaims": [
+        "UX-MENU-02-project-menu-open: 结构判据不成立 —— role=menu + 两个 menuitem",
+        "UX-08 切到「任务」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 切到「文件变更」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 切到「扩展」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 切到「对话」后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 长对话滚动后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-08 开关命令面板后顶栏仍然稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 700×600：顶栏稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 900×700：顶栏稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 1200×800：顶栏稳定: 背景色不对：rgb(17, 17, 17)",
+        "UX-09 1536×900：顶栏稳定: 背景色不对：rgb(17, 17, 17)"
+      ],
+      "passed": 1750
+    },
+    "after": {
+      "exitCode": 0,
+      "assertions": null,
+      "failed": 0,
+      "rendererExceptions": 0,
+      "screenshots": 270,
+      "shotOfInvocations": 263,
+      "uxInvocations": 57,
+      "failureClaims": []
+    },
+    "final": {
+      "exitCode": 1,
+      "assertions": 1761,
+      "failed": 4,
+      "rendererExceptions": 0,
+      "screenshots": 270,
+      "shotOfInvocations": 263,
+      "uxInvocations": 57,
+      "failureClaims": [
+        "174-capability-builtin: 结构判据不成立 —— 「启用 / 加载」显示不适用而不是否（eval 抛错：Cannot read properties of null (reading 'textContent')）",
+        "UX-01-scrollbars-palette: 结构判据不成立 —— 滚动条全局规则命中：细 10px / 深灰 / 轨道透明（滑块不是深灰：rgb(85, 83, 78)）",
+        "UX-02-scrollbars-diagnostics: 结构判据不成立 —— 滚动条全局规则命中（滑块不是深灰：rgb(85, 83, 78)）",
+        "UX-02-scrollbars-diagnostics: 结构判据不成立 —— 弹层卡片本身也没有亮白条（滑块不是深灰：rgb(85, 83, 78)）"
+      ],
+      "passed": 1757
+    },
+    "verified": {
+      "exitCode": 0,
+      "assertions": 1761,
+      "failed": 0,
+      "rendererExceptions": 0,
+      "screenshots": 270,
+      "shotOfInvocations": 263,
+      "uxInvocations": 57,
+      "failureClaims": [],
+      "passed": 1761
+    }
+  },
+  "footprint": {
+    "before": {
+      "shotOfCallsites": 194,
+      "uxCheckCallsites": 14
+    },
+    "after": {
+      "shotOfCallsites": 194,
+      "uxCheckCallsites": 14
+    }
+  },
+  "strictReturnGuard": true,
+  "independentAudit": {
+    "checks": 26,
+    "passed": 26,
+    "failed": 0,
+    "results": [
+      {
+        "theme": "dark",
+        "background": "rgb(17, 17, 17)",
+        "token": "#111111",
+        "menuRole": "menu",
+        "separatorCount": 1,
+        "headStable": true,
+        "menu": [
+          "工作区管理",
+          "项目设置",
+          "移除项目"
+        ],
+        "wrongBackground": "背景色不对：rgb(13, 13, 13)",
+        "wrongToken": "--titlebar 不是 electron overlay 的颜色：#0d0d0d",
+        "wrongScrollbar": "滑块不符合主题：rgb(44, 44, 44)",
+        "builtinNegativeFields": [
+          "启用配置",
+          "已加载",
+          "missing source"
+        ],
+        "checks": 13
+      },
+      {
+        "theme": "light",
+        "background": "rgb(251, 251, 249)",
+        "token": "#fbfbf9",
+        "menuRole": "menu",
+        "separatorCount": 1,
+        "headStable": true,
+        "menu": [
+          "工作区管理",
+          "项目设置",
+          "移除项目"
+        ],
+        "wrongBackground": "背景色不对：rgb(13, 13, 13)",
+        "wrongToken": "--titlebar 不是 electron overlay 的颜色：#0d0d0d",
+        "wrongScrollbar": "滑块不符合主题：rgb(44, 44, 44)",
+        "builtinNegativeFields": [
+          "启用配置",
+          "已加载",
+          "missing source"
+        ],
+        "checks": 13
+      }
+    ]
+  },
+  "limits": [
+    "offline real Chrome fixture; no real model or native caption pixel proof",
+    "old before/after passes used the original truthy guard; strict final is the acceptance result"
+  ]
+}

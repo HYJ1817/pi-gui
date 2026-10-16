@@ -1,0 +1,200 @@
+
+> pi-gui@0.25.0 test:ui2
+> node tests/ui2-classic.cjs && node tests/ui2-runtime-display.cjs && node tests/ui2-visual.cjs
+
+PASS message-specific metadata exists for three known usages
+PASS two assistant messages keep different input usage
+PASS missing usage stays absent despite global lastTurn
+PASS zero reasoning is distinct from unknown
+PASS all seven actual zero fields remain visible
+PASS global or inferred time never enters metadata
+PASS live final authoritative usage equals historical usage
+PASS live authoritative body replaces streamed draft
+PASS malformed usage cannot create numeric metadata
+PASS total is not invented by adding input/output
+PASS user and malformed array usage have no assistant metadata
+PASS tool-only usage does not resurrect empty assistant shell
+PASS tool-only tool entry is retained
+PASS pending update usage is not promoted to authoritative metadata
+PASS live tool-only final removes shell even with usage and streamed draft
+PASS thinking-only message keeps actual metadata
+PASS single tool has no duplicate batch title
+PASS real message boundary groups both tools once
+PASS batch summary is native keyboard button
+PASS summary controls its unique ARIA list
+PASS batch can collapse without destroying tool nodes
+PASS running tools are discoverable while collapsed
+PASS failure stays discoverable while collapsed
+PASS provider cancellation error is not silently reclassified
+PASS status updates preserve chosen collapsed state
+PASS settled running tool becomes discoverable incomplete
+PASS batch expands same list and tool ids
+PASS collapsing transfers focus out of the hidden list
+PASS history uses same grouped status semantics
+PASS history uses same interactive batch summary
+PASS separate assistant and orphan boundaries are retained
+PASS orphan toolResult remains visible at its own position
+PASS explicit cancelled and interrupted presentation states survive collapse
+PASS late tool keeps chosen collapse state and increments real count
+PASS thinking exposes actual streaming state
+PASS thinking region has explicit accessible label
+PASS thinking end state comes from actual event
+PASS final authority reuses expanded thinking node
+PASS final thinking is complete without invented duration/token
+PASS interruption updates unfinished thinking state
+PASS error without final content retains thinking and marks its true state
+PASS error before the next animation frame preserves pending thinking text
+PASS owned cancellation remains neutral with real usage
+PASS unowned cancellation with error stays visible as error
+PASS error message preserves real zero metadata and safe text
+PASS retry removes error-only shell even with sibling metadata
+PASS untrusted message/thinking/tool text never becomes active HTML
+PASS untrusted usage cannot leak into metadata
+UI-2A Classic 48/48; failed=0; skipped=0; DOM/fixture, not layout evidence
+  ok  usage：没有有效数字就是 null（缺字段 ≠ 0）
+  ok  usage：真实 0 保留，缺的字段不出现
+  ok  usage 文案：只列有的字段，且**不带**货币符号（线上没有单位）
+  ok  usage 文案：流式中的数字标注「仍在累计」，不当终值
+  ok  usage 文案：一个数字都没有时是空串（整块隐藏）
+  ok  thinkingText：没有 thinking 块返回 null（与「空思考」区分开）
+  ok  thinkingText：多个 thinking 块按顺序拼接
+  ok  A 显示自己的正文
+  ok  A 显示自己的 thinking 文本
+  ok  A 的思考块默认折叠（用户展开后不被流式收回）
+  ok  A 显示自己的工具与运行状态
+  ok  A 的状态行是自己的生命周期
+  ok  工具项之间只有空白文本节点（换成 flex+gap 时不会留下分隔符）
+  ok  B 显示自己的正文、工具与完成状态
+  ok  B 的思考是自己的，不与 A 混
+  ok  B 的状态行反映空闲（两会话状态确实不同）
+  ok  切到 B 后 A 的迟到 delta 不进 B 的 DOM
+  ok  切到 B 后 A 的迟到 thinking 不进 B 的思考块
+  ok  切回 A 看到自己的迟到正文与迟到思考
+  ok  重放同一 eventSequence 被拒（不重复追加）
+  ok  旧 runtimeGeneration 的迟到帧被拒
+  ok  流式 usage 显示，并标注仍在累计
+  ok  usage 文案不含货币符号与凭据
+  ok  message_end 的 thinking 是权威值（覆盖流式累积）
+  ok  message_end 的 usage 是终值（不再标「仍在累计」）
+  ok  usage 缺的字段不出现（没有缓存/推理这一轮）
+  ok  thinking 展示有界：字节数不超上限
+  ok  thinking 截断后不出现半个字符（无替换符）
+  ok  thinking 截断在标题里说明，不静默少显示
+  ok  正文超过 1MiB 上限后 store 标记截断
+  ok  正文截断时状态行说明「仅显示最近输出」
+  ok  正文展示同样有界（不绕过 store 的 1MiB 上限）
+  ok  停止带 A 的完整 owner
+  ok  关闭后回到已关闭并给出恢复入口
+  ok  关闭后控件按休眠态禁用
+  ok  关闭后正文与工具与 store 保持一致（store 保留，视图也保留）
+  ok  关闭后 thinking 与 usage 同样保留（与 store 的保留语义一致）
+  ok  关闭后审批被清掉（store 关掉时清 approvals）
+  ok  换代后不再显示上一个 runtime 的 thinking 与 usage（那是另一条运行）
+  ok  恢复后显示新 runtime 自己的正文与思考
+  ok  恢复后不残留上一个 runtime 的 usage
+  ok  旧代次的迟到正文与思考都不进新 runtime 的视图
+  ok  历史显示正文
+  ok  历史里没有 thinking（接口不提供，就不显示）
+  ok  历史里没有 usage（接口不提供，就不显示）
+  ok  历史里没有工具块（接口不提供，就不显示）
+  ok  历史状态行说明「只含正文」，用户知道为什么没有
+  ok  历史视图禁止发送
+  ok  历史消息缺字段时按空正文处理，不崩、不造内容
+  ok  A 的审批出现在 A 的视图里
+  ok  切到 B 显示 B 自己的审批
+  ok  捕获 A 的审批后切 B，应答仍只发给 A 的完整 owner
+  ok  A 的审批应答不清掉 B 自己的审批
+  ok  审批文本走 textContent（不可信标题不成为节点）
+  ok  不可信文本不产生任何注入节点
+  ok  不可信文本作为**文本**原样显示（不是被静默吞掉）
+  ok  工具名与审批标题同样只作为文本
+  ok  推理能力未知时，Thinking 控件禁用且明说「未知」（不猜成 false）
+  ok  能力未知不影响正文/思考展示（那是两件事）
+  ok  销毁前正常渲染
+  ok  销毁后 DOM 已摘除
+  ok  销毁后再来帧不抛异常、不重建 DOM
+  ok  外部传入的投影可用
+  ok  视图销毁后外部投影仍持有数据（所有权在外部）
+  ok  外部投影 dispose 后不再返回数据
+  ok  快照之前：G 有自己的 thinking 与 usage
+  ok  快照换代（不带帧）后不残留上一个 runtime 的 thinking 与 usage
+  ok  快照换代后新 runtime 的 thinking 正常进入
+  ok  切回 S1 恢复 S1 自己的滚动位置（不串到 S2）
+  ok  切回 S2 恢复 S2 自己的滚动位置
+  ok  近底 160 以内算贴底（跟随新内容）
+  ok  上滚超过 160 就不再跟随（视口归用户）
+  ok  恰好 160 边界不跟随（与 Classic 的 < 160 严格同一规则）
+  ok  投影只保留最近 N 条会话记录（有界内存）
+Runtime display projection: 74/74
+夹具: http://127.0.0.1:7124/
+  截图: c1-thread-layout.png
+PASS C1 · 阅读轴变量解析为 768px
+PASS C1 · 输入框宽=正文轴（920/888 的 32px 历史差取消）
+PASS C1 · 正文字级=UI-1 prose 档（14px）且行高放宽到 1.75
+PASS C1 · 用户气泡 18px 圆角 + 端点内距 ≥16px（圆角不吃字）
+PASS C1 · 短气泡按内容收缩且贴正文右缘
+PASS C1 · 长气泡不超过阅读列 76%
+PASS C1 · 视口无横向溢出
+PASS C1 · 代码块 prt 圆角 8px + 1 hairline 框
+PASS C5 · 落场动画挂着（消息新进场的一次性 3px 上浮）
+PASS C2 · thinking 展开可见
+PASS C5 · 展开淡入（display:none→block 重播 animation，JS 零改动）
+  截图: c2-think-expanded.png
+  截图: c2-tool-running.png
+PASS C5 · 运行态呼吸保留（状态指示属必要动效）
+  截图: c2-tool-group.png
+PASS C2 · 连续调用收进一个 hairline 卡片（8px 圆角）
+PASS C2 · 行间用 1px 分隔线（替代左竖线列）
+PASS C2 · 行最小高度保持 30px 紧凑体量
+  截图: c2-tl-more-expanded.png
+PASS C2 · 工具详情展开态有内容高度
+PASS C5 · 工具详情展开走同一拍淡入
+PASS 预留 · .ui2-tool-summary 12px 次级色 + 120ms 过渡
+PASS 预留 · .ui2-chev 展开态旋转（与 .think-head 同构）
+PASS 预留 · .ui2-msg-meta 11.5px 弱化条
+PASS 预留 · .ui2-runtime-status[data-state=running] = running 语义色
+PASS 预留 · .ui2-runtime-meta 弱化小字
+PASS C3 · runtime 转录跟随正文字级（14px / 行高 ≥1.7）
+PASS C3 · runtime 会话跟随 768 阅读轴
+  截图: c3-reserved-probes.png
+PASS A · .ui2-tool-summary 原生 button 重置（无边框、透明底）
+PASS A · .ui2-tool-summary:focus-visible 存在 2px 焦点环规则
+PASS A · .ui2-tool-summary 折叠图标随 aria-expanded 旋转
+PASS A · .ui2-tool-state 组状态弱化小字（10.5px / t3）
+PASS A · .ui2-msg-meta-item 等宽数字对齐（tabular-nums）
+PASS A · .think[data-state=error] 状态文字用 err 色
+PASS B · .ui2-runtime-thinking-body 用 pre-wrap + overflow-wrap:anywhere
+PASS B · 长思考文本不产生容器横向滚动
+PASS B · .ui2-runtime-usage 弱化小字（11.5px / t3）
+PASS B · .ui2-runtime-tools 每项一行（flex 纵排）
+PASS B · .ui2-runtime-tool[data-state=running] = run 色
+PASS B · .ui2-runtime-tool[data-state=done] = ok 色
+PASS B · .ui2-runtime-tool[data-state=error] = err 色
+PASS B · 未知 data-state 不为任何真实状态着色（回落 t2）
+  截图: c6-ab-dom.png
+  截图: c4-width-700.png
+PASS C4 · 700px：视口无横向溢出
+PASS C4 · 700px：阅读列居中并收在轴内
+PASS C4 · 700px：长代码块内部滚动不出列
+PASS C4 · 700px：用户气泡仍在正文列内
+  截图: c4-width-900.png
+PASS C4 · 900px：视口无横向溢出
+PASS C4 · 900px：阅读列居中并收在轴内
+PASS C4 · 900px：长代码块内部滚动不出列
+PASS C4 · 900px：用户气泡仍在正文列内
+  截图: c4-width-1200.png
+PASS C4 · 1200px：视口无横向溢出
+PASS C4 · 1200px：阅读列居中并收在轴内
+PASS C4 · 1200px：长代码块内部滚动不出列
+PASS C4 · 1200px：用户气泡仍在正文列内
+  截图: c4-width-1536.png
+PASS C4 · 1536px：视口无横向溢出
+PASS C4 · 1536px：阅读列居中并收在轴内
+PASS C4 · 1536px：长代码块内部滚动不出列
+PASS C4 · 1536px：用户气泡仍在正文列内
+PASS C5 · reduced-motion：落场动画关闭
+PASS C5 · reduced-motion：展开淡入关闭（内容仍可直接显示）
+PASS C5 · 移除模拟后落场动画恢复
+  截图: c5-final.png
+
+UI-2C 视觉自检: 57/57 通过 —— 报告: C:\pi-GUI-ui2-integration\docs\claude-ui-redesign\ui2-integration-evidence\visual\report.json

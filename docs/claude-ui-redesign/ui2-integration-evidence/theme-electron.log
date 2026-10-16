@@ -1,0 +1,77 @@
+
+START awaiting Electron readiness
+START Electron ready
+START offline harness ready
+START create themed window
+START native Browser controller ready
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+START early frame instrumentation ready
+START fixture page loaded
+SCENE initial-dark
+SCENE dark-700-sidebar-open-closed
+SCENE dark-700-sidebar-open-changes
+SCENE dark-700-sidebar-open-browser
+SCENE dark-700-sidebar-closed-closed
+SCENE dark-700-sidebar-closed-changes
+SCENE dark-700-sidebar-closed-browser
+SCENE dark-900-sidebar-open-closed
+SCENE dark-900-sidebar-open-changes
+SCENE dark-900-sidebar-open-browser
+SCENE dark-900-sidebar-closed-closed
+SCENE dark-900-sidebar-closed-changes
+SCENE dark-900-sidebar-closed-browser
+SCENE dark-1200-sidebar-open-closed
+SCENE dark-1200-sidebar-open-changes
+SCENE dark-1200-sidebar-open-browser
+SCENE dark-1200-sidebar-closed-closed
+SCENE dark-1200-sidebar-closed-changes
+SCENE dark-1200-sidebar-closed-browser
+SCENE dark-1536-sidebar-open-closed
+SCENE dark-1536-sidebar-open-changes
+SCENE dark-1536-sidebar-open-browser
+SCENE dark-1536-sidebar-closed-closed
+SCENE dark-1536-sidebar-closed-changes
+SCENE dark-1536-sidebar-closed-browser
+SCENE dark-appearance-keyboard
+SCENE dark-zoom-0.8-changes
+SCENE dark-zoom-1.25-changes
+SCENE dark-zoom-1.5-changes
+SCENE light-700-sidebar-open-closed
+SCENE light-700-sidebar-open-changes
+SCENE light-700-sidebar-open-browser
+SCENE light-700-sidebar-closed-closed
+SCENE light-700-sidebar-closed-changes
+SCENE light-700-sidebar-closed-browser
+SCENE light-900-sidebar-open-closed
+SCENE light-900-sidebar-open-changes
+SCENE light-900-sidebar-open-browser
+SCENE light-900-sidebar-closed-closed
+SCENE light-900-sidebar-closed-changes
+SCENE light-900-sidebar-closed-browser
+SCENE light-1200-sidebar-open-closed
+SCENE light-1200-sidebar-open-changes
+SCENE light-1200-sidebar-open-browser
+SCENE light-1200-sidebar-closed-closed
+SCENE light-1200-sidebar-closed-changes
+SCENE light-1200-sidebar-closed-browser
+SCENE light-1536-sidebar-open-closed
+SCENE light-1536-sidebar-open-changes
+SCENE light-1536-sidebar-open-browser
+SCENE light-1536-sidebar-closed-closed
+SCENE light-1536-sidebar-closed-changes
+SCENE light-1536-sidebar-closed-browser
+SCENE light-appearance-keyboard
+SCENE light-zoom-0.8-changes
+SCENE light-zoom-1.25-changes
+SCENE light-zoom-1.5-changes
+SCENE system-app-simulated-dark
+SCENE system-app-simulated-light
+SCENE light-reload-first-shell
+START create themed window
+START native Browser controller ready
+START early frame instrumentation ready
+START fixture page loaded
+SCENE light-recreated-window
+SCENE light-maximized
+SCENE light-unmaximized
+Theme Electron 489/489; failed 0; errors 0; screenshots 63
