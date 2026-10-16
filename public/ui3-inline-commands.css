@@ -1,0 +1,122 @@
+/* UI-3C：Composer 内联 Slash 命令菜单的样式。
+ *
+ * 全部类名以 `.ui3-inline-` 开头；颜色只取 `tokens.css` 的既有变量，
+ * 所以 Light / Dark 自动跟随 `:root[data-theme]`，本文件不写死任何主题色。
+ *
+ * 定位（left/top/width）由 inline-command-menu.js 实测后写在元素的行内样式上：
+ * 弹出方向、越界收回、窄屏、以及**避开右侧原生 WebContentsView**（按 `--rp-width`）
+ * 都是运行时的量，不是写死的断点。这里只负责外观与兜底约束。
+ */
+
+.ui3-inline-menu {
+  position: fixed;
+  z-index: 64; /* 高于 Composer(6) 与普通浮层，低于命令面板(65)/弹层(60+)/确认(70) */
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: calc(100vw - 16px);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-popover-surface);
+  box-shadow: var(--ui-shadow-popover);
+  color: var(--ui-text-primary);
+  font-family: var(--ui-font-sans);
+}
+.ui3-inline-menu[hidden] { display: none; }
+
+.ui3-inline-list {
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: min(46vh, 340px);
+}
+
+.ui3-inline-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: 8px 10px;
+  border-radius: var(--ui-radius-control);
+  cursor: pointer;
+  color: var(--ui-text-primary);
+  font-size: var(--ui-font-body);
+  line-height: 1.4;
+}
+.ui3-inline-item.on,
+.ui3-inline-item[aria-selected="true"] {
+  background: var(--ui-selected);
+}
+.ui3-inline-item .ui3-inline-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui3-inline-item .ui3-inline-group {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-hover);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-caption);
+}
+.ui3-inline-item .ui3-inline-hint {
+  flex: 0 0 auto;
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-font-caption);
+  white-space: nowrap;
+}
+
+.ui3-inline-empty {
+  padding: 14px 12px;
+  text-align: center;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-body);
+}
+.ui3-inline-empty[hidden] { display: none; }
+
+/* 焦点环：焦点其实留在 textarea 上（combobox 模式），这里只给活动项一个
+ * 不影响布局的内描边，键盘用户一眼能看出活动项。 */
+.ui3-inline-item.on:focus-visible,
+.ui3-inline-item:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+/* 键盘在输入框中聚焦时的输入框提示（不改变既有 app 样式，仅补一个状态色）：
+ * 内联菜单打开时，文本域本身保持既有外观，仅让 aria 状态可被发现。 */
+
+@media (prefers-reduced-motion: no-preference) {
+  .ui3-inline-menu {
+    animation: ui3-inline-pop var(--ui-duration-snap) var(--ui-ease-out);
+  }
+}
+@keyframes ui3-inline-pop {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 窄屏：贴近输入框、尽量用满可用宽度（left/width 仍由 JS 实测覆盖）。 */
+@media (max-width: 640px) {
+  .ui3-inline-menu {
+    border-radius: var(--ui-radius-control);
+  }
+  .ui3-inline-list {
+    max-height: min(40vh, 260px);
+    padding: 4px;
+  }
+  .ui3-inline-item {
+    padding: 9px 8px;
+  }
+  .ui3-inline-item .ui3-inline-group {
+    display: none; /* 很窄时先让位给名称，分组仍由顺序体现 */
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui3-inline-menu { animation: none; }
+}
