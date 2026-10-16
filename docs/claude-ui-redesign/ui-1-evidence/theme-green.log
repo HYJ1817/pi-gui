@@ -1,0 +1,40 @@
+
+> pi-gui@0.25.0 test:theme
+> node tests/theme.cjs
+
+ok desktop theme controller exists
+ok default stays dark even on light OS
+ok native initial window and overlay share background
+ok trusted preload receives only bounded snapshot fields
+ok fixed enum accepted light
+ok fixed enum accepted dark
+ok fixed enum accepted system
+ok invalid input rejected null
+ok invalid input rejected true
+ok invalid input rejected 1
+ok invalid input rejected {}
+ok invalid input rejected ["light"]
+ok invalid input rejected "Light"
+ok invalid input rejected "#fff"
+ok invalid input rejected "system "
+ok invalid input rejected "../../x"
+ok untrusted snapshot refused
+ok untrusted mutation cannot persist
+ok untrusted snapshot refused
+ok untrusted mutation cannot persist
+ok untrusted snapshot refused
+ok untrusted mutation cannot persist
+ok origin prefix spoof refused
+ok system OS update repaints native overlay
+ok explicit light ignores OS change
+ok restart restores preference before window creation
+ok dispose removes owned IPC and native listener
+ok corrupt preference defaults dark without overwriting file
+ok storage failure keeps display usable and reports persistence status
+ok blocking web initializer resolves dark/false
+ok blocking web initializer resolves light/true
+ok blocking web initializer resolves system/true
+ok blocking web initializer resolves system/false
+ok blocking web initializer resolves nonsense/false
+ok desktop startup authority wins over renderer storage
+Theme display: 35/35; failed=0; fixture persistence and IPC; not layout evidence

@@ -1,0 +1,19 @@
+{
+  "kind": "source audit only; visual rendering checked separately",
+  "uiTokenNames": 71,
+  "legacyAndGeometryNames": 112,
+  "unresolvedInStyles": [
+    "--composer-reserved-height"
+  ],
+  "literalColorDeclarationsRemainingInStyles": 0,
+  "themeDefaults": "dark",
+  "nativeThemes": [
+    "dark",
+    "light"
+  ],
+  "preferences": [
+    "dark",
+    "light",
+    "system"
+  ]
+}

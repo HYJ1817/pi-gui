@@ -1,0 +1,33 @@
+{
+  "head": "3e8d7296fc89c21d38e04879ef020c47680d7ce0",
+  "branch": "codex/ui-1-theme-shell",
+  "baselineTracked": 568,
+  "changedTracked": [
+    "electron/main.cjs",
+    "electron/preload.cjs",
+    "package.json",
+    "public/app.js",
+    "public/index.html",
+    "public/process.css",
+    "public/settings.js",
+    "public/styles.css",
+    "public/usage.js",
+    "tests/dev-server.cjs",
+    "tests/runtime-electron.cjs"
+  ],
+  "missingTracked": [],
+  "protectedCompared": 109,
+  "protectedChanged": [],
+  "newProductFiles": [
+    "electron/theme.cjs",
+    "public/theme-init.js",
+    "public/theme.js",
+    "public/tokens.css"
+  ],
+  "newTests": [
+    "tests/theme.cjs",
+    "tests/theme-electron.cjs"
+  ],
+  "ui0EvidenceEdited": false,
+  "recorded": "2026-10-16T13:56:26.235564+08:00"
+}

@@ -1,0 +1,33 @@
+
+> pi-gui@0.25.0 test:server
+> node tests/dev-server.cjs
+
+  ok   服务能起来
+  ok   隔离：没有读到开发机上的 projects.json（工作目录为空）
+  ok   根路径 200
+  ok   根路径是 HTML
+  ok   根路径内容正确
+  ok   根路径不是 404 兜底
+  ok   styles.css 200
+  ok   styles.css 有内容
+  ok   styles.css 保留了 [hidden] 兜底规则
+  ok   styles.css 里确认层的 z-index 高于普通弹层
+  FAIL styles.css 有全局深色滚动条规则（不再只给个别容器打补丁）  → background-color:var(--ui-scrollbar);border:2px solid transparent;background-clip:padding-box;border-radius:6px;
+  ok   styles.css 的滚动条规则同时覆盖横向
+  ok   styles.css 没有把滚动条整体隐藏
+  ok   styles.css 为不支持 webkit 伪元素的内核留了兜底
+  ok   styles.css 弹层滚动条仍被全局规则覆盖（且没有留下重复补丁）
+  ok   两主题的 --titlebar 与 Electron overlay 调色板一致
+  ok   stage-head 有明确背景（不靠 .stage 透上来）且抬在正文之上
+  ok   styles.css 里 .stage 用 overflow:clip（不是可被脚本滚动的 hidden）
+  ok   styles.css 有分支弹层的固定头尾布局
+  ok   styles.css 有诊断弹层的固定头尾布局
+  ok   app.js 200
+  ok   app.js 不是 HTML 兜底
+  ok   app.js 是模块入口（含 import）
+  ok   前端模块图能全部取到
+  ok   模块图共 92 个文件
+  ok   模块图总量够大（不是空壳）
+  ok   不存在的文件返回 404
+
+26/27 通过
