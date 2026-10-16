@@ -348,6 +348,55 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
     assert.equal(fetches.length, 0, '没有伪造 RPC（菜单关着的 Enter 走既有发送路径，与本模块无关）');
   });
 
+  /* ========== 11b. 会话切换（generation 不变）与中央视图切换 ========== */
+  section('11b. session-switch / workspace-view 生命周期');
+  check('pi-gui:session-switch 关闭菜单（同一 workspaceGeneration 内）', () => {
+    reset();
+    setInput('/al');
+    assert.equal(controller.isOpen(), true);
+    assert.equal(input.value, '/al');
+    /* 会话切换在 rpc.js 的 afterSessionSwitch 里发；**不**递增 workspaceGeneration，
+     * 所以只靠 workspace-generation 的旧实现会漏掉这条。 */
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:session-switch'));
+    assert.equal(controller.isOpen(), false, '同代内换会话也要关闭');
+    assert.equal(input.value, '/al', '不替用户清空草稿');
+    assert.equal(submits, 0, '不提交输入框');
+    assert.equal(stops, 0, '不停止任务');
+    assert.equal(runs.alpha, 0, '不执行待选命令');
+  });
+  check('会话切换后旧候选不能被执行、不发 RPC', () => {
+    reset();
+    setInput('/al');
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:session-switch'));
+    key('Enter');
+    assert.equal(runs.alpha, 0, '旧会话的待选命令不被执行');
+    assert.equal(fetches.length, 0, '没有伪造 RPC');
+  });
+  check('workspace-view 离开 Chat（planner/runtime/extensions）时关闭', () => {
+    for (const view of ['planner', 'runtime', 'extensions']) {
+      reset();
+      setInput('/al');
+      assert.equal(controller.isOpen(), true, view);
+      dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-view', { detail: { view } }));
+      assert.equal(controller.isOpen(), false, '离开 Chat 即关闭：' + view);
+      assert.equal(input.value, '/al', '草稿保留：' + view);
+    }
+  });
+  check('返回 Chat（workspace-view detail=chat）不自动弹出', () => {
+    reset();
+    setInput('/al');
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-view', { detail: { view: 'planner' } }));
+    assert.equal(controller.isOpen(), false);
+    /* 回来时输入框里还残留 `/al` —— 但用户没敲 `/`，不该自己弹菜单。 */
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-view', { detail: { view: 'chat' } }));
+    assert.equal(controller.isOpen(), false, '返回 Chat 不自动打开');
+    assert.equal(input.value, '/al');
+    /* 空输入 + chat 事件同样不弹 */
+    setInput('');
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-view', { detail: { view: 'chat' } }));
+    assert.equal(controller.isOpen(), false);
+  });
+
   /* ================= 12/13. 过期 / 未知命令不执行、不伪造 ================= */
   section('12/13. 过期与未知候选不可执行、不发伪造指令');
   check('打开后命令变得不可用 → 接受时按 when 重新判定，不执行', () => {
@@ -459,6 +508,38 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
     assert.equal(a, b, '只注入一个 link');
     assert.equal(dom.window.document.querySelectorAll('link[data-ui3-inline-commands]').length, 1);
     assert.ok(String(a.href).includes('ui3-inline-commands.css'), String(a.href));
+  });
+  check('生命周期监听随 destroy 解绑、重挂不重复绑定', () => {
+    controller.close();
+    const base = dom.window.document.querySelectorAll('.ui3-inline-menu').length;
+    const solo = createInlineCommandMenu({ input, getContext: () => ({ ...ctx }), injectStyles: false });
+    solo.attach();
+    solo.attach(); // 幂等
+    assert.equal(dom.window.document.querySelectorAll('.ui3-inline-menu').length, base + 1, '重复 attach 不重复 DOM');
+    const openVia = () => {
+      input.value = '/al';
+      input.setSelectionRange(3, 3);
+      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    };
+    openVia();
+    assert.equal(solo.isOpen(), true);
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:session-switch'));
+    assert.equal(solo.isOpen(), false, 'session-switch 生效且只绑一次');
+    openVia();
+    assert.equal(solo.isOpen(), true);
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-view', { detail: { view: 'runtime' } }));
+    assert.equal(solo.isOpen(), false, 'workspace-view 生效且只绑一次');
+
+    solo.destroy();
+    /* destroy 后三个生命周期事件都不该再影响它、也不该抛。 */
+    openVia();
+    assert.equal(solo.isOpen(), false, '销毁后不再响应输入');
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:session-switch'));
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation', { detail: { generation: 9 } }));
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-view', { detail: { view: 'planner' } }));
+    assert.equal(solo.isOpen(), false, '销毁后生命周期事件无副作用');
+    solo.destroy(); // 幂等
+    input.value = '';
   });
 
   /* ================= 15. CSS 契约（真实排版看 Electron 截图） ================= */
