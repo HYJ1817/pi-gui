@@ -20,9 +20,21 @@
 [hidden]{display:none !important}
 
 :root{
-  --conversation-max-width:920px;
-  --composer-max-width:calc(var(--conversation-max-width) - 32px);
-  --turn-gap:34px;
+  /* ---- UI-2C 校准：聊天阅读轴 ----
+   * 共同上限从 920px 收到 768px：
+   *  - Claude Code 实机截图里正文列与输入框几乎同宽（输入实测 767px），
+   *    旧的 --composer-max-width:920-32=888 与正文轴差了 32px 不是设计而是历史；
+   *  - 768px 下长段落的行长更接近母文档排版的舒适区间（66-76ch）。
+   * 消费点只有这几个（改值全部跟随，不需要另改）：
+   *   .thread（+72px 装订距）、.composer-box、.convo-nav 的左贴边、
+   *   .runtime-conversation。没有别处在断言具体数值 —— 旧值 920 保留在
+   *   docs/claude-ui-redesign/UI-2C-acceptance.md 的对照截图里。
+   * 窄屏溢出由「一直存在」的 min 姿势兜底：所有消费点写的都是 max-width，
+   * .thread/composer 还有 900px 断点直接回 100%。 */
+  --ui-prose-width:768px;
+  --conversation-max-width:var(--ui-prose-width);
+  --composer-max-width:var(--ui-prose-width);
+  --turn-gap:36px;
   --tool-row-height:30px;
 }
 
@@ -366,36 +378,46 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .thread{width:100%;max-width:calc(var(--conversation-max-width) + 72px);margin:0 auto;padding:26px 36px calc(var(--composer-reserved-height, 112px) + 22px);display:flex;flex-direction:column;gap:0;min-width:0}
 
 .msg{display:flex;flex-direction:column;gap:0;min-width:0}
-.msg-role{font-size:10px;color:var(--t3);letter-spacing:.3px;margin-bottom:4px}
+/* UI-2C：聊天正文用 UI-1 的 prose 字级（tokens.css --ui-font-prose），
+   行高放宽到 1.75 —— 这是「阅读文本」不是「界面文本」的排版诉求。
+   用户气泡里的正文随同一个字级，等宽/代码块有各自显式的更小字号。 */
+.msg-role{font-size:11px;color:var(--t3);letter-spacing:.3px;margin-bottom:5px}
 .msg-role::after{display:none}
 .msg.user{align-items:flex-end;margin-bottom:18px}
 .thread>.msg.user:not(:first-child){margin-top:var(--turn-gap)}
 .msg.user .msg-role{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .msg.user .msg-body{
   width:fit-content;max-width:76%;min-width:0;
-  background:var(--bubble-bg);border:0;border-radius:12px;
-  padding:9px 13px;color:var(--t1);overflow-wrap:anywhere;
+  background:var(--bubble-bg);border:0;border-radius:var(--ui-radius-bubble);
+  /* 18px 圆角需要水平内距明显大于圆角，否则端点会「粘」在一起 —— Claude 候选一致 */
+  padding:10px 16px;
+  color:var(--t1);
+  font-size:var(--ui-font-prose);line-height:1.75;
+  overflow-wrap:anywhere;
 }
 .msg.user .msg-body>div+div{margin-top:8px}
 .msg.user .msg-body p{margin:0}
-.msg.assistant{margin-bottom:16px}
-.msg.assistant .msg-body{color:var(--t1);overflow-wrap:anywhere;min-width:0}
+.msg.assistant{margin-bottom:18px}
+.msg.assistant .msg-body{color:var(--t1);overflow-wrap:anywhere;min-width:0;font-size:var(--ui-font-prose);line-height:1.75}
 .msg.assistant .assistant-text+.assistant-text{margin-top:12px}
-.msg.assistant .assistant-text p{margin:0 0 12px}
+.msg.assistant .assistant-text p{margin:0 0 13px}
 .msg.assistant .assistant-text>*:last-child{margin-bottom:0}
-.msg-body ul,.msg-body ol{margin:0 0 11px;padding-left:19px}
-.msg-body li{margin:0 0 4px}
+.msg-body ul,.msg-body ol{margin:0 0 12px;padding-left:21px}
+.msg-body ul ul{margin-bottom:0}
+.msg-body li{margin:0 0 5px}
 .msg-body li::marker{color:var(--t3)}
-.msg-body h4{margin:14px 0 7px;font-size:13px;font-weight:600;color:var(--t1)}
+/* 标题：markdown.js 把各级标题统一映射为 h4 —— 视觉上是「小节头」，
+   在 prose 字级基础上轻轻放大一号，靠间距而不是颜色区分。 */
+.msg-body h4{margin:16px 0 8px;font-size:var(--ui-font-prose);font-weight:600;color:var(--t1)}
 .msg-body>*:first-child{margin-top:0}
 .msg-body>*:last-child{margin-bottom:0}
 .msg-body code{
-  font-family:var(--mono);font-size:12px;background:var(--ui-code-surface);border:1px solid var(--line);
+  font-family:var(--mono);font-size:12.5px;background:var(--ui-code-surface);border:1px solid var(--line-soft);
   border-radius:4px;padding:1px 5px;color:var(--t1);
 }
 .msg-body pre.code{
   font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--ui-code-surface);
-  border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:10px 0;
+  border:1px solid var(--line);border-radius:var(--ui-radius-card);padding:11px 13px;margin:11px 0;
   overflow-x:auto;color:var(--t2);max-width:100%;
 }
 .msg-body pre.code code{background:none;border:0;padding:0;color:inherit;font-size:12px}
@@ -418,7 +440,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .msg-body del{color:var(--t3)}
 .msg-body hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 .msg-body blockquote{
-  margin:10px 0;padding:2px 0 2px 12px;border-left:2px solid var(--line);color:var(--t2);
+  margin:12px 0;padding:2px 0 2px 14px;border-left:2px solid var(--line);color:var(--t2);
 }
 .msg-body blockquote>*:last-child{margin-bottom:0}
 
@@ -449,6 +471,11 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .think-head svg{width:11px;height:11px;transition:transform .16s;fill:none;stroke:currentColor;stroke-width:1.8}
 .think-head[aria-expanded=true] svg{transform:rotate(90deg)}
 .think-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid var(--line);color:var(--t2)}
+/* UI-2C：思考状态补充文字（A 侧 .think-head 的第二个 span）。
+ * A 真实设置的 data-state 为 streaming / returned / complete / error / interrupted；
+ * 只有错误与中断做强调，其余保持 .think 的弱化色 —— 不给不存在的状态着色。 */
+.think[data-state=error] .ui2-think-status{color:var(--err)}
+.think[data-state=interrupted] .ui2-think-status{color:var(--warn)}
 
 /* ============ Tool Timeline ============
  *
@@ -457,14 +484,22 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
  * 完整输出收在折叠区里。
  *
  * 状态靠 data-status 区分，不靠颜色本身 —— 图标形状（对勾 / 叉 / 虚线圈）
- * 在灰度下也能分辨。 */
-.tl-group{display:flex;flex-direction:column;gap:2px;margin:7px 0 17px;padding-left:10px;border-left:1px solid var(--line);min-width:0}
-.tl-group-head{font-size:10.5px;color:var(--t3);letter-spacing:.2px;padding:0 0 4px 2px}
-.tl-list{display:flex;flex-direction:column;gap:1px;min-width:0}
+ * 在灰度下也能分辨。
+ *
+ * UI-2C：同一组连续调用收进一个 hairline 圆角容器（Claude 的分组观感），
+ * 行与行之间 1px 分隔、不再用左侧竖线包住整列 —— 竖线在长输出展开时
+ * 会把注意力拉到「缩进」而不是「这一组做了什么」。行内 hover 从圆角
+ * 小药丸改成填满行宽，与容器圆角一致。 */
+.tl-group{display:flex;flex-direction:column;gap:0;margin:9px 0 18px;min-width:0;
+  border:1px solid var(--line-soft);border-radius:var(--ui-radius-card);
+  padding:2px 3px 3px;background:var(--ui-user-surface)}
+.tl-group-head{font-size:10.5px;color:var(--t3);letter-spacing:.2px;padding:6px 9px 4px}
+.tl-list{display:flex;flex-direction:column;gap:0;min-width:0}
+.tl-list>.tl-item+.tl-item{border-top:1px solid var(--line-soft)}
 
-.tl-item{display:flex;gap:8px;min-height:var(--tool-row-height);padding:4px 8px 4px 3px;border-radius:5px;min-width:0}
+.tl-item{display:flex;gap:8px;min-height:var(--tool-row-height);padding:4px 7px;border-radius:var(--ui-radius-control);min-width:0;transition:background var(--ui-duration-snap) var(--ui-ease-out)}
 .tl-item:hover{background:var(--hover)}
-.tl-item.open{background:var(--ui-user-surface)}
+.tl-item.open{background:var(--ui-selected)}
 
 .tl-dot{flex:0 0 14px;width:14px;height:14px;margin-top:2px;display:flex;align-items:center;justify-content:center;color:var(--t3)}
 .tl-dot svg{width:13px;height:13px;stroke-width:2}
@@ -508,6 +543,39 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   padding:7px 9px;white-space:pre;overflow:auto;max-height:260px;
 }
 .tl-args{color:var(--t2);max-height:180px}
+
+/* ---------- UI-2C：UI-2A 的真实 DOM（Classic 消息 / 工具组 / 思考） ----------
+ * 对应 A 侧 tool-view.js / messages.js / message-meta.js 实际生成的节点：
+ *  - button.tl-group-head.ui2-tool-summary  原生 button（aria-expanded/-controls/-describedby）
+ *  - span.ui2-tool-state                    组级状态计数（role=status，单项组隐藏）
+ *  - footer.ui2-msg-meta > span.ui2-msg-meta-item[data-kind]
+ *  - .think[data-state] 里的 span.ui2-think-status
+ * 规则刻意不依赖 .tl-*：A 的 DOM 挂在哪一层都能用。
+ * A 的摘要按钮里**没有** chevron 元素，折叠图标由这里用 ::before 画、
+ * 随 [aria-expanded] 旋转（A 的结构契约明确授权由 C 绘制）。 */
+.ui2-tool-summary{
+  display:flex;align-items:center;gap:7px;width:100%;min-width:0;text-align:left;
+  border:0;background:transparent;font:inherit;font-size:12px;color:var(--t2);
+  padding:4px 8px;border-radius:var(--ui-radius-control);cursor:pointer;
+  transition:background var(--ui-duration-snap) var(--ui-ease-out),color var(--ui-duration-snap) var(--ui-ease-out);
+}
+.ui2-tool-summary:hover{background:var(--hover);color:var(--t1)}
+.ui2-tool-summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+/* 折叠图标：右下两条边组成的角；展开=朝下(45deg)、折叠=朝右(-45deg) */
+.ui2-tool-summary::before{
+  content:"";flex:0 0 auto;width:6px;height:6px;margin-right:1px;
+  border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+  transform:rotate(45deg);transition:transform var(--ui-duration-snap) var(--ui-ease-out);
+}
+.ui2-tool-summary[aria-expanded=false]::before{transform:rotate(-45deg)}
+.ui2-tool-state{font-size:10.5px;color:var(--t3);letter-spacing:.2px;line-height:1.5;padding:0 9px 5px}
+.ui2-msg-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--t3);min-width:0}
+.ui2-msg-meta-item{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* C 预留、A 未使用：A 的图标是内联 svg，摘要按钮也不含 chevron 元素。
+ * 作为兼容扩展保留，不代表 A 已经采用（见 UI-2C-acceptance.md 第 3 节）。 */
+.ui2-chev{width:12px;height:12px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;
+  transition:transform var(--ui-duration-snap) var(--ui-ease-out)}
+.ui2-tool-summary[aria-expanded=true] .ui2-chev{transform:rotate(90deg)}
 
 .note{
   display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3);
@@ -2562,10 +2630,13 @@ body.rp-resizing{cursor:col-resize;user-select:none}
  * 不该看起来像另一个产品。 */
 .runtime-conversation-view{flex:1;min-height:0;overflow:auto;display:flex;justify-content:center;padding:var(--work-surface-padding)}
 .runtime-conversation-view[hidden]{display:none}
-.runtime-conversation{width:100%;max-width:var(--conversation-max-width);display:flex;flex-direction:column;gap:10px;min-height:0}
+/* UI-2C：跟随聊天的新 768px 阅读轴（沿用 --conversation-max-width 变量，本身不用改）；
+   gap 给到与聊天气泡一致的 12px 呼吸。 */
+.runtime-conversation{width:100%;max-width:var(--conversation-max-width);display:flex;flex-direction:column;gap:12px;min-height:0}
 .runtime-conversation .rtc-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.runtime-conversation .rtc-output{flex:1;min-height:120px;max-height:none;margin:0;padding:12px 0;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
-.runtime-conversation textarea{width:100%;min-height:86px;max-height:240px;resize:vertical;font:inherit;background:var(--input);color:var(--t1);border:1px solid var(--line);border-radius:12px;padding:12px 14px;flex-shrink:0}
+/* 会话转录是「整段文本」，按聊天正文字级呈现而不是表单字级 */
+.runtime-conversation .rtc-output{flex:1;min-height:120px;max-height:none;margin:0;padding:14px 2px 16px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:var(--ui-font-prose);line-height:1.75}
+.runtime-conversation textarea{width:100%;min-height:86px;max-height:240px;resize:vertical;font:inherit;background:var(--input);color:var(--t1);border:1px solid var(--line);border-radius:12px;padding:12px 14px;transition:border-color var(--ui-duration-snap) var(--ui-ease-out);flex-shrink:0}
 .runtime-conversation textarea:focus-visible,.rtc-models select:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
 .runtime-conversation textarea::placeholder{color:var(--t2)}
 .runtime-conversation textarea:disabled{opacity:.65}
@@ -2590,6 +2661,43 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .runtime-conversation .rtc-approval{padding:8px 0}
 .runtime-resource-count{color:var(--t3);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
 .pj-runtime-list>.runtime-resource-count{padding:4px 12px}
+
+/* ---------- UI-2C：UI-2B 的真实 DOM（Runtime 中央对话） ----------
+ * 对应 B 侧 runtime-conversation.js 实际生成的节点：
+ *  - <details class="ui2-runtime-thinking">（hidden 时整块消失）
+ *      <summary class="ui2-runtime-thinking-head"> <pre class="ui2-runtime-thinking-body">
+ *  - <p class="ui2-runtime-usage">（每轮用量，[hidden] 由全局规则覆盖）
+ *  - <div class="rtc-state ui2-runtime-tools"> 内每项 <span class="ui2-runtime-tool" data-state>
+ * 工具项之间是**纯空白文本节点**，所以这里用 flex 把它们收成每项一行，
+ * 空白节点按规范不生成 flex item，自动消失。 */
+.ui2-runtime-thinking{margin:2px 0 6px;color:var(--t3);font-size:12px;line-height:1.65;min-width:0}
+.ui2-runtime-thinking-head{cursor:pointer;color:var(--t3);padding:2px 0;font-size:12px}
+.ui2-runtime-thinking-head:hover{color:var(--t2)}
+.ui2-runtime-thinking-head:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:3px}
+/* 必须 pre-wrap + overflow-wrap:anywhere：B 用的是 <pre>，默认 white-space:pre
+ * 会让长思考文本把中央列撑出横向滚动条。 */
+.ui2-runtime-thinking-body{
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid var(--line);
+  color:var(--t2);font-family:inherit;font-size:12px;line-height:1.65;
+}
+.ui2-runtime-usage{margin:0;font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere}
+.ui2-runtime-tools{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ui2-runtime-tool{font-size:12px;line-height:1.5;color:var(--t2);overflow-wrap:anywhere}
+/* B 真实使用的工具状态只有 running / done / error 三种，只给这三种着色 */
+.ui2-runtime-tool[data-state=running]{color:var(--run)}
+.ui2-runtime-tool[data-state=done]{color:var(--ok)}
+.ui2-runtime-tool[data-state=error]{color:var(--err)}
+
+/* ---------- UI-2C 预留：未使用的兼容扩展 ----------
+ * B 的 DOM 实际用的是 .ui2-runtime-usage / -tools / -tool，**没有**使用下面两个类。
+ * 保留为兼容扩展（未知 data-state 回落 t2），不代表 B 已经适配。 */
+.ui2-runtime-meta{font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere;min-width:0}
+.ui2-runtime-status{font-size:12px;color:var(--t2);line-height:1.5;overflow-wrap:anywhere;min-width:0}
+.ui2-runtime-status[data-state=running]{color:var(--run)}
+.ui2-runtime-status[data-state=ready],.ui2-runtime-status[data-state=ok]{color:var(--ok)}
+.ui2-runtime-status[data-state=stopping],.ui2-runtime-status[data-state=warn]{color:var(--warn)}
+.ui2-runtime-status[data-state=error]{color:var(--err)}
 :root { --session-change-row-gap: 12px; }
 .session-change-body { overflow: auto; min-height: 0; padding: 0 16px 16px; }
 .session-change-note { font-size: 12px; line-height: 1.6; color: var(--t2); margin: 8px 0; overflow-wrap: anywhere; }
@@ -2613,7 +2721,34 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .object-revert-result .btn, .object-revert-recovery .btn { white-space: normal; height: auto; min-height: 32px; margin: 4px 6px 4px 0; max-width: 100%; }
 .object-revert-modal .btn:disabled, .session-object-action .btn:disabled { opacity: .45; cursor: not-allowed; }
 
+/* ============ UI-2C 轻量动效 ============
+ *
+ * 刻意只保留两类动作，都在 200ms 内、缓出曲线（Claude Motion 原则：
+ * 「出现」类柔和快速、绝不横穿）：
+ *  1. 落场：新消息 / 工具组 / 系统行进入对话流时一次性的 3px 上浮淡入 ——
+ *     对"流式过程中哪些内容刚出来"给一个视觉锚点，不跟随滚动、不常驻。
+ *  2. 折叠反馈：think / 附件 / 工具详情展开时内容淡入。利用的是
+ *     display:none → 非 none 时 CSS animation 自动重播的特性，JS 侧
+ *     仍是纯 [hidden] 切换（一行都不用改）；折叠态（→ none）不需要动画。
+ * 常驻循环（spinner / tl-breathe 呼吸）**不在这里处理**：那是状态指示，
+ * 属于必要动效，reduced-motion 下也保留可辨识的最小形式。
+ * prefers-reduced-motion 在文件最末统一关掉上面这两类。 */
+@keyframes ui2-fade-in{from{opacity:0}}
+.think-body:not([hidden]),.msg-file-body,.tl-more:not([hidden]){
+  animation:ui2-fade-in var(--ui-duration-snap) var(--ui-ease-out);
+}
+@keyframes ui2-rise-in{from{opacity:0;transform:translateY(3px)}}
+.thread>.msg,.thread>.tl-group,.thread>.note,.thread>.working{
+  animation:ui2-rise-in var(--ui-duration-base) var(--ui-ease-out);
+}
+
 /* After component rules so the user's reduced-motion choice wins the cascade. */
 @media(prefers-reduced-motion:reduce){
   .icon-btn,.rail-icon,.nav-item,.pj-chev,.group-head .chev{transition:none}
+  /* 关掉上面两类装饰动效；spinner / 呼吸等状态指示保留 */
+  .thread>.msg,.thread>.tl-group,.thread>.note,.thread>.working{
+    animation:none;
+  }
+  .think-body:not([hidden]),.msg-file-body,.tl-more:not([hidden]){animation:none}
+  .toast{animation:none}
 }
