@@ -1,0 +1,100 @@
+{
+  "passed": 65,
+  "failed": 0,
+  "errors": [],
+  "screenshots": [
+    "dark-700-collapsed.png",
+    "dark-700-expanded.png",
+    "dark-900-collapsed.png",
+    "dark-900-expanded.png",
+    "dark-1200-collapsed.png",
+    "dark-1200-expanded.png",
+    "dark-1536-collapsed.png",
+    "dark-1536-expanded.png",
+    "light-700-collapsed.png",
+    "light-700-expanded.png",
+    "light-900-collapsed.png",
+    "light-900-expanded.png",
+    "light-1200-collapsed.png",
+    "light-1200-expanded.png",
+    "light-1536-collapsed.png",
+    "light-1536-expanded.png"
+  ],
+  "facts": [
+    {
+      "theme": "dark",
+      "width": 700,
+      "height": 900,
+      "scrollWidth": 700,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    },
+    {
+      "theme": "dark",
+      "width": 900,
+      "height": 900,
+      "scrollWidth": 900,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    },
+    {
+      "theme": "dark",
+      "width": 1200,
+      "height": 900,
+      "scrollWidth": 1200,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    },
+    {
+      "theme": "dark",
+      "width": 1536,
+      "height": 900,
+      "scrollWidth": 1536,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    },
+    {
+      "theme": "light",
+      "width": 700,
+      "height": 900,
+      "scrollWidth": 700,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    },
+    {
+      "theme": "light",
+      "width": 900,
+      "height": 900,
+      "scrollWidth": 900,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    },
+    {
+      "theme": "light",
+      "width": 1200,
+      "height": 900,
+      "scrollWidth": 1200,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    },
+    {
+      "theme": "light",
+      "width": 1536,
+      "height": 900,
+      "scrollWidth": 1536,
+      "dpr": 1.5,
+      "metadata": 3,
+      "groups": 2
+    }
+  ],
+  "electron": "44.4.3",
+  "note": "UI-1 CSS only; Agent C shared styles and final integration visual acceptance pending; offline fixture, no model",
+  "exitCode": 0
+}

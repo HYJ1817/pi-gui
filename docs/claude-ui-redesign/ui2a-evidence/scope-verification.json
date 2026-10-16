@@ -1,0 +1,37 @@
+{
+  "branch": "codex/ui2-classic",
+  "baseline": "d0585b89a81c0a93e894d58b9d078af75aa985b2",
+  "trackedModified": [
+    "public/messages.js",
+    "public/tool-view.js"
+  ],
+  "protectedFileChanges": [],
+  "newProductModule": "public/message-meta.js",
+  "newTest": "tests/ui2-classic.cjs",
+  "packageJsonUnchanged": true,
+  "productHashes": {
+    "public/messages.js": "37a238c9a81a2d5c7883b1f4522f8948b23dfa3f54698cc8af70324fcda9562c",
+    "public/tool-view.js": "30370ae9197c8da97d66b1e931ea34bf289d6acd77ea276065c25b400216c9c7",
+    "public/message-meta.js": "220c1f8b9815fa3d296c1a2de9998c0c7fd761d1bb4408d118e67a7b6e6eb0ed"
+  },
+  "recorded": "2026-10-16T19:30:30.180777+08:00",
+  "codeHead": "4b96190cdb60d01aa6c25507266b84e39f65d349",
+  "baselineDiffFiles": [
+    "public/message-meta.js",
+    "public/messages.js",
+    "public/tool-view.js",
+    "tests/ui2-classic.cjs"
+  ],
+  "brokenAcceptanceLinks": [],
+  "diffCheckExit": 0,
+  "smokeExit": 0,
+  "specialExits": {
+    "quota": 0,
+    "electron": 0,
+    "body": 0,
+    "classic": 0,
+    "ended": "2026-10-16T19:25:47.4156115+08:00"
+  },
+  "electronChecks": 65,
+  "screenshotCount": 16
+}
