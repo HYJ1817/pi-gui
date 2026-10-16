@@ -482,6 +482,16 @@ export function createInlineCommandMenu(options = {}) {
     close();
   }
   function onWorkspaceSwitch() { close(); }
+  /* 会话换掉（新建 / 切换 / 分叉）时，当前待选命令属于**上一条会话**，
+   * 必须立刻关闭并清掉活动候选 —— 注意这条事件在**同一 workspaceGeneration 内**
+   * 也会触发（`afterSessionSwitch` 不递增代次），所以不能只靠 workspace-generation。 */
+  function onSessionSwitch() { close(); }
+  /* 中央视图离开 Classic Chat（Planner / Runtime / Extensions）时关闭；
+   * 回到 chat 时**不自动打开**（用户没敲 `/` 就不该弹）。 */
+  function onWorkspaceView(event) {
+    const view = event && event.detail ? event.detail.view : null;
+    if (view && view !== 'chat') close();
+  }
   function onResize() { if (open) position(); }
   function onScopedKeydown(event) {
     if (event.target !== input) return;
@@ -502,6 +512,8 @@ export function createInlineCommandMenu(options = {}) {
     input.addEventListener('compositionend', onCompositionEnd);
     doc.addEventListener('mousedown', onDocMouseDown, true);
     doc.addEventListener('pi-gui:workspace-generation', onWorkspaceSwitch);
+    doc.addEventListener('pi-gui:session-switch', onSessionSwitch);
+    doc.addEventListener('pi-gui:workspace-view', onWorkspaceView);
     const win = doc.defaultView;
     if (win) win.addEventListener('resize', onResize);
     attached = true;
@@ -535,6 +547,8 @@ export function createInlineCommandMenu(options = {}) {
     input.removeEventListener('compositionend', onCompositionEnd);
     doc.removeEventListener('mousedown', onDocMouseDown, true);
     doc.removeEventListener('pi-gui:workspace-generation', onWorkspaceSwitch);
+    doc.removeEventListener('pi-gui:session-switch', onSessionSwitch);
+    doc.removeEventListener('pi-gui:workspace-view', onWorkspaceView);
     const win = doc.defaultView;
     if (win) win.removeEventListener('resize', onResize);
     if (keyScope) {
