@@ -2,7 +2,7 @@
 
 执行：2026-10-16；归档：2026-10-17，Asia/Shanghai。工作区 `C:/pi-GUI-ui2-integration`，分支 `codex/ui2-integration`。共同起点 `d0585b89a81c0a93e894d58b9d078af75aa985b2`（UI-1）。
 
-**结论：A/B/C 集成、展示修补、完整业务回归和隔离离线构建完成；严格桌面验收尚未全部通过。** 打包启动存在间歇性初始上下文错误，Windows原生标题栏接缝实拍仍未取得，不能宣布UI-2所有验收项已关闭。 本报告不授权进入 UI-3，不推送、不合并 main、不升级版本、不打 tag、不发版。
+**结论（2026-10-17 补验收）：UI-2集成、业务回归、构建与两项桌面补验收已完成。** 初次归档留下的启动错误现已用对照实验定位为验收工具过早启用CDP Runtime；原生标题栏现已取得真实Windows窗口截图和逐像素证据。初次失败记录完整保留，新增结论及范围见第9节。 本报告不授权进入 UI-3，不推送、不合并 main、不升级版本、不打 tag、不发版。
 
 ## 1. 输入分支、隔离与合并
 
@@ -77,7 +77,7 @@
 
 人工复核本轮 Classic light700-expanded、Runtime dark700长Thinking、light700工具和主题右栏截图：消息与输入轴一致，元信息能换行，工具失败红字/成功绿字在浅色可辨，长连续Thinking在列内折行；700px保留既有覆盖式右栏行为，不声称四栏可以同时完整阅读。参考用户 Claude 实机 `22-40-02`/`22-44-26` 截图的正文/工具摘要层级，没有复制字体或添加截图里的 Auto/Bypass/PDF 等能力。正文仍消费 UI-1 的14px token，是否调整到估算15px留后续统一Token校准；767px输入测量不当固定窗口规格。
 
-**原生标题栏未关闭项：** 本轮再次尝试 exact fixture HWND 的 Windows PrintWindow，dark/light均全黑；results 中 available=false，两张诊断图不计有效63张。不把 capturePage 当原生窗口截图。真实 setTitleBarOverlay API、网页/右栏46px顶带CSS与采样像素一致已验；原生按钮合成接缝/hover、真实OS主题事件及OS DPI仍需可用系统桌面补拍。System仅应用内 nativeTheme 模拟，应用zoom不等于完整OS DPI。
+**初次归档的原生标题栏缺口（本次补齐，见第9节）：** 本轮再次尝试 exact fixture HWND 的 Windows PrintWindow，dark/light均全黑；results 中 available=false，两张诊断图不计有效63张。不把 capturePage 当原生窗口截图。真实 setTitleBarOverlay API、网页/右栏46px顶带CSS与采样像素一致已验；原生按钮合成接缝/hover、真实OS主题事件及OS DPI仍需可用系统桌面补拍。System仅应用内 nativeTheme 模拟，应用zoom不等于完整OS DPI。
 
 ## 6. 测试基线与 cdp 陈旧断言
 
@@ -110,7 +110,7 @@
 
 SEA exe：99,442,176 bytes；SHA256 `2408e60b5143d38abe2b16c54c9942a2dbc397bc0c63fd1537ffac4859646ad5`。Electron入口exe：246,324,736 bytes；SHA256 `4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a`。入口exe哈希不代表整包哈希，public逐文件摘要另存。另实际启动隔离产物的 production main/preload，采集 [build-desktop-dark.png](ui2-integration-evidence/build-desktop-dark.png) / [build-desktop-light.png](ui2-integration-evidence/build-desktop-light.png)：真实主题桥、无renderer Node require、无真实项目、明暗主题一致并持久化均观察到正常。
 
-**桌面稳定性验收未通过，不能写成整体通过：** 4次有限烟测分别12/12退出0、10/11退出1、11/12退出1、12/12退出0。中间两次各出现2条Electron sandboxed_renderer/preloadScripts内部错误，属于同一主frame的初始空文档`origin=://`隔离上下文；后续本机应用页面default/isolated context及production preload/主题可用。失败试次未记录完整时间戳，最后一次带timeline验证无错误，不能据内部栈就认定环境原因，也未证明一定由CDP导致。见 [build-desktop-summary.json](ui2-integration-evidence/build-desktop-summary.json) 和四份原始report/log。没有扩大范围改Electron沙箱、安全设置或静默忽略console错误。该不确定项保留，不能把最后一次12/12覆盖前两次失败。
+**初次归档的桌面启动失败记录（后续归因与正常启动验证见第9节）：** 4次有限烟测分别12/12退出0、10/11退出1、11/12退出1、12/12退出0。中间两次各出现2条Electron sandboxed_renderer/preloadScripts内部错误，属于同一主frame的初始空文档`origin=://`隔离上下文；后续本机应用页面default/isolated context及production preload/主题可用。失败试次未记录完整时间戳，最后一次带timeline验证无错误，不能据内部栈就认定环境原因，也未证明一定由CDP导致。见 [build-desktop-summary.json](ui2-integration-evidence/build-desktop-summary.json) 和四份原始report/log。没有扩大范围改Electron沙箱、安全设置或静默忽略console错误。该试次本身仍按失败保留，不能把最后一次12/12覆盖前两次失败；第9节通过新的独立对照解释触发操作，而非删除这段记录。
 
 最初自写桌面夹具误读/api/projects结构（实际items），对照既有app-check修正；错误试次不列产品通过证据。所有桌面试次使用全新userData/data、无真实项目/Pi/model，更新调度通过既有取消导出关闭；未替换用户产物。实际打包桌面只验启动与主题，不代表打包后完整业务矩阵。
 
@@ -118,10 +118,55 @@ SEA exe：99,442,176 bytes；SHA256 `2408e60b5143d38abe2b16c54c9942a2dbc397bc0c6
 
 受保护路径与UI-1无差异：server/、lib/、server.js、electron/、public/runtime-store.js及runtime-state.js、Pi接口、Browser权限、审批协议、Git撤销/P33闸门均未改。展示订阅仍在原 owner/sequence/generation 校验之后，显示失效校验只能删去过期信息，不能接受原store拒绝的帧。无历史Thinking、单消息usage或工具结果时诚实省略；取消/中断不据工具文字伪造结果。
 
-未关闭问题还包括上述打包初始上下文间歇错误。未验证范围：原生窗口接缝实拍、完整OS DPI/真OS主题事件、全部真实中文IME候选窗、真模型完整任务、长时soak、POSIX、安装器升级与签名。P33 SACL环境跳过不构成生产资格；没有扩大UI2安全权限。
+两项初次归档的桌面缺口已按第9节收口。其余未验证范围保持明确：完整OS DPI/真OS主题事件、全部真实中文IME候选窗、真模型完整任务、长时soak、POSIX、安装器升级与签名。P33 SACL环境跳过不构成生产资格；没有扩大UI2安全权限。
 
 回退以本地集成提交为边界：三个 no-ff merge 保留源提交；先回退集成展示修补/测试入口，再按对应merge主线撤销A/B/C，或保留本分支转回UI-1另建验证分支。不要只回CSS遗漏真实DOM，不对原worktree做reset/clean，不覆盖用户数据。本轮没有session迁移或配置schema变化。隔离产物保留供审阅，不替换当前用户安装。
 
-**阶段判定：实现与联合业务回归完成，严格UI-2验收部分通过，暂不作无条件UI-3放行。** 未观察到受保护协议回归，但仍须定位打包初始空文档隔离上下文错误；原生接缝实拍缺口也不能关闭。若用户决定在已知限制下继续，当前产品/测试版本可作为UI-3代码起点；本轮不自行进入UI-3。
+**初次归档判定：业务回归完成，但两项桌面证据未关闭。此判定已被第9节补验收更新。** 现在已取得触发操作的对照证据及原生窗口截图，未发现需要修改产品协议或降低安全参数的问题。UI-2可作为UI-3起点，后续仍由用户下达阶段指令，本轮不自行进入UI-3。
 
-最终可执行代码及测试HEAD：`5f8a7671b8f991729e7d5da9431a26404f327967`；展示修补边界：`c63175c955666afcd4c77df659e8b084a0979be1`。最终归档提交只含本报告/证据，无产品变化；精确归档HEAD在交付对话与本分支Git记录中。所有操作仅在本地集成分支，无推送、main合并、tag、版本升级或发版。完成后停止，等待用户验收。
+初次交付的可执行代码及测试HEAD：`5f8a7671b8f991729e7d5da9431a26404f327967`；展示修补边界：`c63175c955666afcd4c77df659e8b084a0979be1`。最终归档提交只含本报告/证据，无产品变化；精确归档HEAD在交付对话与本分支Git记录中。所有操作仅在本地集成分支，无推送、main合并、tag、版本升级或发版。完成后停止，等待用户验收。
+
+## 9. 2026-10-17 补验收：关闭两项桌面缺口
+
+用户要求继续排查后，本次没有修改任何产品代码或安全协议。原先停止在“无法捕获/原因未明”过早；本次通过有界对照、真实系统截图和独立复核将两项收口，原始失败及全黑图仍保留。
+
+| 实际命令 | 结果 | 证据 |
+|---|---|---|
+| `node tests/ui2-startup-diagnostic.cjs --repeats=2` | **82/82，退出0**；4次正常启动全程零错误；2次负对照每次严格复现2条已知错误 | [最终结果](ui2-followup-evidence/startup/final-verification.json)、[调查报告](ui2-followup-evidence/startup/diagnosis.md) |
+| `node tests/ui2-native-caption.cjs`（独立输出目录，详其README） | **45/45，退出0**；17场景、34张系统窗口图/裁图 | [最终原生结果](ui2-followup-evidence/native-caption/owner-guard/report.json)、[捕获边界与复现](ui2-followup-evidence/native-caption/owner-guard/README.md) |
+| `node tests/theme-electron.cjs`（UI_THEME_EVIDENCE指向本次独立目录） | **489/489，退出0**；65图；保留原489条断言 | [实际退出码](ui2-followup-evidence/theme-electron-exit.json)、[结果](ui2-followup-evidence/theme-electron/results.json) |
+| 两个新增脚本的 `node --check` | 均退出0 | 实际执行；新脚本不需要新依赖 |
+
+这里的启动82条与第6节Runtime展示82条是不同套件，不混计。上述是本地桌面/诊断层（`docs/testing.md` 的E层），未加入跨机器的基础测试链；canonical `npm test` 仍保留原131条。本次只新增这些可选验收脚本、修正原主题测试的GUI可见性及文档，未改产品或canonical测试，因此不无故重跑53分钟的全链，也不把之前的全量结果冒称本次重新执行。第6节的实际完整退出0、原断言序列不变、19项环境跳过继续保留。
+
+### 9.1 启动错误的触发条件与正常启动验证
+
+相同Electron44.4.3与已打包production main/preload，最初六臂各两次：不开CDP、仅开端口、仅连WebSocket、Page指令、Page先行再启Runtime、production完成后再启Runtime，共12次均未观察到错误。随后只改变首指令为导航前的 `Runtime.enable`，2/2次严格复现原两条错误。
+
+主进程从 `web-contents-created` 起观察全部console/生命周期，负对照错误发生于初始空文档、production导航提交与观察器JS注入之前。外部CDP独立证明它们来自同一frame的空origin隔离context，随后才是正常production上下文。因此不能泛称“任何早期Runtime指令都失败”，也没有把内部栈直接归咎环境。
+
+最终回归保留无CDP与等待production `did-finish-load` 后再附加Runtime的正常组，各两次：**4次全程主进程错误0，正常退出0**。延后组验证真实renderer→native主题IPC、Dark/Light一致及磁盘偏好，各留实拍图。故障组仍必须命中空文档窗口、同frame、两条固定错误文本/来源和发生顺序，额外未知错误或未命中时机均失败/标未验证；不是把负对照当成“零错误”。
+
+这是验收工具触发操作的归因和修正，不是修补或升级Electron内部代码。观察器使用包副本的新增入口，再require字节不变的production main；exe/main/preload/server哈希保留一致。该包装入口限制仍明确，不扩大为未包装exe全业务、长期或全平台稳定性证明。无需改产品main/preload，也无需关闭沙箱。
+
+### 9.2 真实Windows原生窗口与接缝
+
+原测试用 `windowsHide:true` 启动GUI，导致Win32窗口实际不可见；hidden PowerShell的第一次ShowWindow还可能按其STARTUPINFO再次隐藏目标。另有可重复的PrintWindow缓存网页画面现象，故“非全黑”本身不足以证明主题/右栏是当前帧。
+
+本次只修正 `tests/theme-electron.cjs` 的GUI启动为 `windowsHide:false`，新增独立原生夹具：自己的窗口可见、临时topmost但不激活用户键盘焦点，刷新合成后采集。最终17场景中**12次为CopyFromScreen实际屏幕区域，5次为精确自有HWND的PrintWindow回退**，不将它们混称全部无遮挡屏幕抓取。没有使用capturePage冒充原生窗口。
+
+CopyFromScreen在前后检查owner/可见/非cloaked状态、Z-order外部相交和16px网格归属；保存前再次校验owner。desktop对齐是前置检查，不能宣称前后都测过。PrintWindow在入口、调用前后及保存前同样检查有效HWND/PID。两个反例只用自己另建的可见fixture窗口，故意expectedPid不匹配，两条捕获路径调用次数均0，均不保存PNG；独立复核发现的原回退路径保护缺口已在最终owner-guard版收紧。旧42/42及修补中间记录只作历史，不替代最终45/45。
+
+场景包括初始Dark、运行中Light/Dark切换、80/100/125/150%应用zoom、两主题最大化/还原和真实Changes/Browser右栏。原生minimize/maximize或restore/close按钮glyph区域与背景匹配；逐点重算的38个网页标题带样本及51个原生控制区域与报告一致。Dark顶带RGB17/17/17、Light251/251/249，stage、rail、可见pane及原生区域没有旧顶部异色色块。所有17场景必须齐全且可用、像素集合非空、四个pane名称与真实surface精确对应，少图不能假绿。
+
+代表证据：[Light Changes整窗](ui2-followup-evidence/native-caption/owner-guard/light-right-pane.png)、[Dark Browser原生按钮](ui2-followup-evidence/native-caption/owner-guard/dark-browser-right-pane-caption.png)、[Dark还原整窗](ui2-followup-evidence/native-caption/owner-guard/dark-restored.png)。实际显示scale为1.5，应用zoom不等于更改OS DPI。Browser空地址视口仍沿用独立WebContentsView的既有空页背景，只验应用顶带/原生接缝，不宣称外部网页内容强制跟随浅色。
+
+新增native/startup夹具保留 `sandbox:true / contextIsolation:true / nodeIntegration:false`，不带`--no-sandbox`、不禁GPU；原theme-electron矩阵仍沿用其既有`--no-sandbox / --in-process-gpu`参数，故只用作既有主题回归，不能借它声称验证了生产沙箱。新增两套的安全证据独立呈现。
+
+### 9.3 复核、源码与阶段结论
+
+[独立复核](ui2-followup-evidence/followup-review.md) 重新解码PNG验证实际像素、校验图像哈希并重放缺图/未知错误等反例；未发现需要修改产品的缺陷。[补验收源码审计](ui2-followup-evidence/source-audit.json) 验证public/electron/server/lib、canonical package和ABC源分支未变，99个public资产继续与之前离线产物一致。没有安装依赖或覆盖用户安装产物。
+
+**UI-2两项桌面验收缺口已关闭，达到本轮完成条件，具备进入UI-3的代码与验收基础。** 第8节其余范围限制不变，不把本次结果扩大成完整OS DPI、真模型、长期稳定性或发布资格。本轮只本地提交，停止于UI-2，不自行进入UI-3。
+
+补验收夹具提交：`87996819b9f4b1a2cee61456568cb9e983947779`。产品仍与初次已通过完整回归和离线构建的版本一致；随后仅作本报告/证据归档提交，交付HEAD见对话与Git记录。

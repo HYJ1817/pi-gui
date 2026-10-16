@@ -1,0 +1,100 @@
+{
+  "status": "blocked-no-capturable-owned-desktop",
+  "exitCode": 2,
+  "available": 0,
+  "facts": [
+    {
+      "name": "dark-initial",
+      "ownerPid": 10736,
+      "expectedPid": 10736,
+      "sessionId": 1,
+      "userInteractive": true,
+      "foregroundOwned": false,
+      "foregroundPid": 25220,
+      "visibleBefore": true,
+      "showWindowPreviousVisible": true,
+      "setForegroundReturn": false,
+      "visible": false,
+      "windowStyle": 80150528,
+      "dwmCloaked": 0,
+      "dwmResult": 0,
+      "inputDesktop": "Default",
+      "threadDesktop": "Default",
+      "windowStation": "WinSta0",
+      "openInputDesktopError": 0,
+      "safeForScreenCopy": false,
+      "gridSamples": 0,
+      "occludedSamples": 0,
+      "windowRect": [
+        369,
+        89,
+        2190,
+        1452
+      ],
+      "method": "PrintWindow exact own HWND",
+      "saved": true,
+      "captureError": "",
+      "electronVisible": false,
+      "electronFocused": true,
+      "theme": {
+        "preference": "dark",
+        "resolved": "dark",
+        "revision": 0,
+        "persisted": true
+      },
+      "zoom": 1,
+      "maximized": false,
+      "displayScale": 1.5,
+      "rightPane": false,
+      "file": "dark-initial.png",
+      "image": {
+        "width": 1821,
+        "height": 1363
+      },
+      "uniqueColors": 1,
+      "available": false,
+      "captionPixels": {
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "minimize": [
+          0,
+          0,
+          0
+        ],
+        "maximize": [
+          0,
+          0,
+          0
+        ],
+        "close": [
+          0,
+          0,
+          0
+        ]
+      },
+      "reason": "uniform OS capture; native caption not proven"
+    },
+    {
+      "name": "matrix-not-run",
+      "available": false,
+      "reason": "Initial exact own HWND capture uniform; desktop ownership gate unavailable. Bounded stop.",
+      "requestedMatrix": "dark/light switch, maximize/restore, zoom .8/1.25/1.5, right pane"
+    }
+  ],
+  "errors": [],
+  "durationMs": 2722,
+  "versions": {
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130"
+  },
+  "security": {
+    "contextIsolation": true,
+    "nodeIntegration": false,
+    "sandbox": true,
+    "noSandboxFlag": false
+  },
+  "limits": "No capturePage, no external program operation, no security/theme/DPI OS changes. App zoom is not OS DPI."
+}

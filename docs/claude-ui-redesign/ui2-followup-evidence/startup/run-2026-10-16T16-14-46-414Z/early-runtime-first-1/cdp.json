@@ -1,0 +1,341 @@
+{
+  "mode": "early-runtime-first",
+  "iteration": 1,
+  "origin": "http://127.0.0.1:8244",
+  "cdpPort": 8245,
+  "started": 1792167287177,
+  "timeline": [
+    {
+      "kind": "ws-connect",
+      "epoch": 1792167287888
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.enable",
+      "epoch": 1792167287893
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167287977,
+      "context": 2,
+      "origin": "://"
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167287978,
+      "context": 1,
+      "origin": "://"
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.consoleAPICalled",
+      "epoch": 1792167287978,
+      "eventTimestamp": 1792167287975.089,
+      "context": 2
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.consoleAPICalled",
+      "epoch": 1792167287978,
+      "eventTimestamp": 1792167287975.115,
+      "context": 2
+    },
+    {
+      "kind": "command",
+      "method": "Page.getFrameTree",
+      "epoch": 1792167287978
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextsCleared",
+      "epoch": 1792167287980
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167287980,
+      "context": 3,
+      "origin": "http://127.0.0.1:8244"
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167287981,
+      "context": 4,
+      "origin": "http://127.0.0.1:8244"
+    },
+    {
+      "kind": "command",
+      "method": "Page.enable",
+      "epoch": 1792167287983
+    },
+    {
+      "kind": "event",
+      "method": "Page.domContentEventFired",
+      "epoch": 1792167288095,
+      "eventTimestamp": 19549.249423
+    },
+    {
+      "kind": "event",
+      "method": "Page.loadEventFired",
+      "epoch": 1792167288107,
+      "eventTimestamp": 19549.251365
+    },
+    {
+      "kind": "event",
+      "method": "Page.frameStoppedLoading",
+      "epoch": 1792167288107
+    }
+  ],
+  "args": [
+    "--user-data-dir=C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-bQp90E\\early-runtime-first-1\\userdata",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=8245"
+  ],
+  "contexts": [
+    {
+      "id": 2,
+      "origin": "://",
+      "name": "Electron Isolated Context",
+      "uniqueId": "-5741763241089807870.5701959898845909829",
+      "auxData": {
+        "isDefault": false,
+        "type": "isolated",
+        "frameId": "3C9E98D8442E4EC0FACA3F3B6EA1C722"
+      }
+    },
+    {
+      "id": 1,
+      "origin": "://",
+      "name": "",
+      "uniqueId": "-2803491259989464338.7865036553295586915",
+      "auxData": {
+        "isDefault": true,
+        "type": "default",
+        "frameId": "3C9E98D8442E4EC0FACA3F3B6EA1C722"
+      }
+    },
+    {
+      "id": 3,
+      "origin": "http://127.0.0.1:8244",
+      "name": "",
+      "uniqueId": "3864362691248634120.-1936959308935300478",
+      "auxData": {
+        "isDefault": true,
+        "type": "default",
+        "frameId": "3C9E98D8442E4EC0FACA3F3B6EA1C722"
+      }
+    },
+    {
+      "id": 4,
+      "origin": "http://127.0.0.1:8244",
+      "name": "Electron Isolated Context",
+      "uniqueId": "-1313609807463507341.-6618018632165337482",
+      "auxData": {
+        "isDefault": false,
+        "type": "isolated",
+        "frameId": "3C9E98D8442E4EC0FACA3F3B6EA1C722"
+      }
+    }
+  ],
+  "consoleErrors": [
+    {
+      "context": 2,
+      "timestamp": 1792167287975.089,
+      "messages": [
+        "Electron sandboxed_renderer.bundle.js script failed to run"
+      ]
+    },
+    {
+      "context": 2,
+      "timestamp": 1792167287975.115,
+      "messages": [
+        "TypeError: Cannot destructure property 'preloadScripts' of 'binding.startupData' as it is null.\n    at node:electron/js2c/sandbox_bundle:2:124925\n    at node:electron/js2c/sandbox_bundle:2:125860\n    at ___electron_webpack_init__ (node:electron/js2c/sandbox_bundle:2:125864)\n    at node:electron/js2c/sandbox_bundle:2:125987"
+      ]
+    }
+  ],
+  "exceptions": [],
+  "pid": 20516,
+  "target": {
+    "id": "3C9E98D8442E4EC0FACA3F3B6EA1C722",
+    "url": "http://127.0.0.1:8244/"
+  },
+  "frameTree": {
+    "frameTree": {
+      "frame": {
+        "id": "3C9E98D8442E4EC0FACA3F3B6EA1C722",
+        "loaderId": "E3ECDF7D34C15035A05D6652B903D253",
+        "url": "http://127.0.0.1:8244/",
+        "domainAndRegistry": "",
+        "securityOrigin": "http://127.0.0.1:8244",
+        "securityOriginDetails": {
+          "isLocalhost": true
+        },
+        "mimeType": "text/html",
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "secureContextType": "SecureLocalhost",
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "gatedAPIFeatures": []
+      }
+    }
+  },
+  "exit": {
+    "code": 0,
+    "signal": null,
+    "epoch": 1792167290129
+  },
+  "observer": {
+    "events": [
+      {
+        "epoch": 1792167287488,
+        "kind": "require-production-main"
+      },
+      {
+        "epoch": 1792167287872,
+        "kind": "web-contents-created",
+        "wcId": 1,
+        "type": "window",
+        "url": "",
+        "preferences": {
+          "sandbox": true,
+          "contextIsolation": true,
+          "nodeIntegration": false
+        }
+      },
+      {
+        "epoch": 1792167287883,
+        "kind": "did-start-loading",
+        "wcId": 1,
+        "url": ""
+      },
+      {
+        "epoch": 1792167287884,
+        "kind": "did-start-navigation",
+        "wcId": 1,
+        "url": "http://127.0.0.1:8244/",
+        "inPlace": false,
+        "main": true
+      },
+      {
+        "epoch": 1792167287974,
+        "kind": "console-message",
+        "wcId": 1,
+        "url": "",
+        "level": 3,
+        "message": "Electron sandboxed_renderer.bundle.js script failed to run",
+        "line": 2,
+        "source": "node:electron/js2c/sandbox_bundle"
+      },
+      {
+        "epoch": 1792167287975,
+        "kind": "console-message",
+        "wcId": 1,
+        "url": "",
+        "level": 3,
+        "message": "TypeError: Cannot destructure property 'preloadScripts' of 'binding.startupData' as it is null.",
+        "line": 2,
+        "source": "node:electron/js2c/sandbox_bundle"
+      },
+      {
+        "epoch": 1792167287977,
+        "kind": "did-frame-navigate",
+        "wcId": 1,
+        "url": "http://127.0.0.1:8244/",
+        "code": 200,
+        "main": true
+      },
+      {
+        "epoch": 1792167288094,
+        "kind": "dom-ready",
+        "wcId": 1,
+        "url": "http://127.0.0.1:8244/"
+      },
+      {
+        "epoch": 1792167288105,
+        "kind": "did-finish-load",
+        "wcId": 1,
+        "url": "http://127.0.0.1:8244/"
+      },
+      {
+        "epoch": 1792167288105,
+        "kind": "observer-evaluate-start"
+      },
+      {
+        "epoch": 1792167288106,
+        "kind": "did-stop-loading",
+        "wcId": 1,
+        "url": "http://127.0.0.1:8244/"
+      },
+      {
+        "epoch": 1792167288147,
+        "kind": "observer-evaluate-end"
+      },
+      {
+        "epoch": 1792167289959,
+        "kind": "observer-close-window"
+      },
+      {
+        "epoch": 1792167289962,
+        "kind": "destroyed",
+        "wcId": 1,
+        "url": null
+      },
+      {
+        "epoch": 1792167289968,
+        "kind": "before-quit"
+      },
+      {
+        "epoch": 1792167289992,
+        "kind": "will-quit"
+      },
+      {
+        "epoch": 1792167289993,
+        "kind": "process-exit",
+        "code": 0
+      }
+    ],
+    "ready": true,
+    "checks": {
+      "desktop": true,
+      "themeBridge": true,
+      "hasProject": false,
+      "piRunning": false,
+      "projects": 0,
+      "timeOrigin": 1792167287877.8
+    },
+    "observerErrors": [],
+    "readyEpoch": 1792167288148,
+    "exitCode": 0
+  },
+  "mainConsoleErrors": [
+    {
+      "epoch": 1792167287974,
+      "kind": "console-message",
+      "wcId": 1,
+      "url": "",
+      "level": 3,
+      "message": "Electron sandboxed_renderer.bundle.js script failed to run",
+      "line": 2,
+      "source": "node:electron/js2c/sandbox_bundle"
+    },
+    {
+      "epoch": 1792167287975,
+      "kind": "console-message",
+      "wcId": 1,
+      "url": "",
+      "level": 3,
+      "message": "TypeError: Cannot destructure property 'preloadScripts' of 'binding.startupData' as it is null.",
+      "line": 2,
+      "source": "node:electron/js2c/sandbox_bundle"
+    }
+  ],
+  "productionReady": true,
+  "zeroErrorObserved": false
+}

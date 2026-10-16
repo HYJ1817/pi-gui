@@ -1,0 +1,40 @@
+{
+  "previousArchiveHead": "e5584d10ed84bedd726f8885dfaf538fbc1408ef",
+  "followupTestHead": "87996819b9f4b1a2cee61456568cb9e983947779",
+  "branch": "codex/ui2-integration",
+  "protectedDiffs": {
+    "public": "",
+    "electron": "",
+    "server": "",
+    "lib": "",
+    "server.js": "",
+    "package.json": "",
+    "package-lock.json": ""
+  },
+  "productPublicStillMatchesBuilt": 99,
+  "canonicalCommands": 131,
+  "canonicalPackageExactlyUnchanged": true,
+  "sourceWorktrees": [
+    {
+      "worktree": "C:\\pi-GUI-ui2-classic",
+      "head": "5573e7387b379ee5bebbc5cd35faf0157f82e230",
+      "status": ""
+    },
+    {
+      "worktree": "C:\\pi-GUI-ui2-runtime",
+      "head": "72294e6aa98b7edda7da016e95fa5781c074e138",
+      "status": ""
+    },
+    {
+      "worktree": "C:\\pi-GUI-ui2-visual",
+      "head": "ceab44e23065dc53a04ac6813f2ac64de49aee08",
+      "status": ""
+    }
+  ],
+  "actualFollowupCodeFiles": [
+    "tests/theme-electron.cjs",
+    "tests/ui2-native-caption.cjs",
+    "tests/ui2-startup-diagnostic.cjs"
+  ],
+  "evidenceLayer": "local opt-in GUI/diagnostic, docs/testing.md layer E; no repeat of unchanged canonical run"
+}

@@ -1,0 +1,106 @@
+{
+  "command": "node tests/ui2-startup-diagnostic.cjs --repeats=2",
+  "exitCode": 0,
+  "evidence": "run-2026-10-16T16-17-37-838Z",
+  "assertions": {
+    "passed": 82,
+    "total": 82
+  },
+  "normalRuns": [
+    {
+      "name": "no-cdp-1",
+      "mode": "no-cdp",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true,
+      "contractPass": true,
+      "assertions": {
+        "passed": 10,
+        "total": 10
+      }
+    },
+    {
+      "name": "late-runtime-1",
+      "mode": "late-runtime",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true,
+      "contractPass": true,
+      "assertions": {
+        "passed": 16,
+        "total": 16
+      }
+    },
+    {
+      "name": "no-cdp-2",
+      "mode": "no-cdp",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true,
+      "contractPass": true,
+      "assertions": {
+        "passed": 10,
+        "total": 10
+      }
+    },
+    {
+      "name": "late-runtime-2",
+      "mode": "late-runtime",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true,
+      "contractPass": true,
+      "assertions": {
+        "passed": 16,
+        "total": 16
+      }
+    }
+  ],
+  "negativeControls": [
+    {
+      "name": "early-runtime-first-1",
+      "mode": "early-runtime-first",
+      "iteration": 1,
+      "mainErrors": 2,
+      "cdpErrors": 2,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": false,
+      "contractPass": true,
+      "assertions": {
+        "passed": 15,
+        "total": 15
+      },
+      "negativeControlVerified": true
+    },
+    {
+      "name": "early-runtime-first-2",
+      "mode": "early-runtime-first",
+      "iteration": 2,
+      "mainErrors": 2,
+      "cdpErrors": 2,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": false,
+      "contractPass": true,
+      "assertions": {
+        "passed": 15,
+        "total": 15
+      },
+      "negativeControlVerified": true
+    }
+  ],
+  "conclusion": "4 normal runs have zero observed errors across full main-process observation; 2 early Runtime-first controls intentionally reproduce exactly two known initial-document errors each. All 6 lifecycle/isolation contracts and exact negative-control attribution pass. Not a claim of 6 error-free starts."
+}

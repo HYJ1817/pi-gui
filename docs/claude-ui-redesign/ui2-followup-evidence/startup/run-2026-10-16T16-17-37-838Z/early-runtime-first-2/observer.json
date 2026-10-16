@@ -1,0 +1,123 @@
+{
+  "events": [
+    {
+      "epoch": 1792167475860,
+      "kind": "require-production-main"
+    },
+    {
+      "epoch": 1792167476273,
+      "kind": "web-contents-created",
+      "wcId": 1,
+      "type": "window",
+      "url": "",
+      "preferences": {
+        "sandbox": true,
+        "contextIsolation": true,
+        "nodeIntegration": false
+      }
+    },
+    {
+      "epoch": 1792167476284,
+      "kind": "did-start-loading",
+      "wcId": 1,
+      "url": ""
+    },
+    {
+      "epoch": 1792167476285,
+      "kind": "did-start-navigation",
+      "wcId": 1,
+      "url": "http://127.0.0.1:5494/",
+      "inPlace": false,
+      "main": true
+    },
+    {
+      "epoch": 1792167476358,
+      "kind": "console-message",
+      "wcId": 1,
+      "url": "",
+      "level": 3,
+      "message": "Electron sandboxed_renderer.bundle.js script failed to run",
+      "line": 2,
+      "source": "node:electron/js2c/sandbox_bundle"
+    },
+    {
+      "epoch": 1792167476364,
+      "kind": "console-message",
+      "wcId": 1,
+      "url": "",
+      "level": 3,
+      "message": "TypeError: Cannot destructure property 'preloadScripts' of 'binding.startupData' as it is null.",
+      "line": 2,
+      "source": "node:electron/js2c/sandbox_bundle"
+    },
+    {
+      "epoch": 1792167476389,
+      "kind": "did-frame-navigate",
+      "wcId": 1,
+      "url": "http://127.0.0.1:5494/",
+      "code": 200,
+      "main": true
+    },
+    {
+      "epoch": 1792167476506,
+      "kind": "dom-ready",
+      "wcId": 1,
+      "url": "http://127.0.0.1:5494/"
+    },
+    {
+      "epoch": 1792167476523,
+      "kind": "did-finish-load",
+      "wcId": 1,
+      "url": "http://127.0.0.1:5494/"
+    },
+    {
+      "epoch": 1792167476524,
+      "kind": "observer-evaluate-start"
+    },
+    {
+      "epoch": 1792167476525,
+      "kind": "did-stop-loading",
+      "wcId": 1,
+      "url": "http://127.0.0.1:5494/"
+    },
+    {
+      "epoch": 1792167476559,
+      "kind": "observer-evaluate-end"
+    },
+    {
+      "epoch": 1792167478368,
+      "kind": "observer-close-window"
+    },
+    {
+      "epoch": 1792167478372,
+      "kind": "destroyed",
+      "wcId": 1,
+      "url": null
+    },
+    {
+      "epoch": 1792167478381,
+      "kind": "before-quit"
+    },
+    {
+      "epoch": 1792167478401,
+      "kind": "will-quit"
+    },
+    {
+      "epoch": 1792167478402,
+      "kind": "process-exit",
+      "code": 0
+    }
+  ],
+  "ready": true,
+  "checks": {
+    "desktop": true,
+    "themeBridge": true,
+    "hasProject": false,
+    "piRunning": false,
+    "projects": 0,
+    "timeOrigin": 1792167476279.6
+  },
+  "observerErrors": [],
+  "readyEpoch": 1792167476560,
+  "exitCode": 0
+}

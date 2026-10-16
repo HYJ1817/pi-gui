@@ -1,0 +1,6 @@
+{
+  "started": "2026-10-17T00:16:56.9826103+08:00",
+  "ended": "2026-10-17T00:17:42.7287173+08:00",
+  "exitCode": 0,
+  "command": "node tests/theme-electron.cjs"
+}

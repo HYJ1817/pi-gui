@@ -1,0 +1,103 @@
+{
+  "events": [
+    {
+      "epoch": 1792167220968,
+      "kind": "require-production-main"
+    },
+    {
+      "epoch": 1792167221347,
+      "kind": "web-contents-created",
+      "wcId": 1,
+      "type": "window",
+      "url": "",
+      "preferences": {
+        "sandbox": true,
+        "contextIsolation": true,
+        "nodeIntegration": false
+      }
+    },
+    {
+      "epoch": 1792167221358,
+      "kind": "did-start-loading",
+      "wcId": 1,
+      "url": ""
+    },
+    {
+      "epoch": 1792167221359,
+      "kind": "did-start-navigation",
+      "wcId": 1,
+      "url": "http://127.0.0.1:11841/",
+      "inPlace": false,
+      "main": true
+    },
+    {
+      "epoch": 1792167221437,
+      "kind": "did-frame-navigate",
+      "wcId": 1,
+      "url": "http://127.0.0.1:11841/",
+      "code": 200,
+      "main": true
+    },
+    {
+      "epoch": 1792167221525,
+      "kind": "dom-ready",
+      "wcId": 1,
+      "url": "http://127.0.0.1:11841/"
+    },
+    {
+      "epoch": 1792167221527,
+      "kind": "did-finish-load",
+      "wcId": 1,
+      "url": "http://127.0.0.1:11841/"
+    },
+    {
+      "epoch": 1792167221527,
+      "kind": "observer-evaluate-start"
+    },
+    {
+      "epoch": 1792167221528,
+      "kind": "did-stop-loading",
+      "wcId": 1,
+      "url": "http://127.0.0.1:11841/"
+    },
+    {
+      "epoch": 1792167221577,
+      "kind": "observer-evaluate-end"
+    },
+    {
+      "epoch": 1792167223381,
+      "kind": "observer-close-window"
+    },
+    {
+      "epoch": 1792167223388,
+      "kind": "destroyed",
+      "wcId": 1,
+      "url": null
+    },
+    {
+      "epoch": 1792167223395,
+      "kind": "before-quit"
+    },
+    {
+      "epoch": 1792167223413,
+      "kind": "will-quit"
+    },
+    {
+      "epoch": 1792167223414,
+      "kind": "process-exit",
+      "code": 0
+    }
+  ],
+  "ready": true,
+  "checks": {
+    "desktop": true,
+    "themeBridge": true,
+    "hasProject": false,
+    "piRunning": false,
+    "projects": 0,
+    "timeOrigin": 1792167221357.6
+  },
+  "observerErrors": [],
+  "readyEpoch": 1792167221577,
+  "exitCode": 0
+}

@@ -1,0 +1,36 @@
+{
+  "out": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-followup-evidence\\startup\\run-2026-10-16T16-14-46-414Z",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-bQp90E",
+  "runs": [
+    {
+      "name": "early-runtime-first-1",
+      "mode": "early-runtime-first",
+      "iteration": 1,
+      "mainErrors": 2,
+      "cdpErrors": 2,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": false
+    },
+    {
+      "name": "early-runtime-first-2",
+      "mode": "early-runtime-first",
+      "iteration": 2,
+      "mainErrors": 2,
+      "cdpErrors": 2,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": false
+    }
+  ],
+  "aggregate": [
+    {
+      "mode": "early-runtime-first",
+      "runs": 2,
+      "ready": 2,
+      "zeroErrorRuns": 0,
+      "errors": 4,
+      "harnessFailures": 0
+    }
+  ]
+}
