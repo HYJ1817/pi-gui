@@ -471,6 +471,11 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .think-head svg{width:11px;height:11px;transition:transform .16s;fill:none;stroke:currentColor;stroke-width:1.8}
 .think-head[aria-expanded=true] svg{transform:rotate(90deg)}
 .think-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid var(--line);color:var(--t2)}
+/* UI-2C：思考状态补充文字（A 侧 .think-head 的第二个 span）。
+ * A 真实设置的 data-state 为 streaming / returned / complete / error / interrupted；
+ * 只有错误与中断做强调，其余保持 .think 的弱化色 —— 不给不存在的状态着色。 */
+.think[data-state=error] .ui2-think-status{color:var(--err)}
+.think[data-state=interrupted] .ui2-think-status{color:var(--warn)}
 
 /* ============ Tool Timeline ============
  *
@@ -539,13 +544,15 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 }
 .tl-args{color:var(--t2);max-height:180px}
 
-/* ---------- UI-2C 预留：UI-2A 的工具摘要 / 元信息条 ----------
- * A 侧 DOM 还没有合进来，这里按任务书给的两个新类名提前备好样式，
- * 让合入当天只差把类名挂上去，不再改 CSS：
- *  - .ui2-tool-summary：一行静默摘要（工具名 + 关键参数 + chevron），
- *    展开态由 [aria-expanded] 表达（与 .think-head 同构）；
- *  - .ui2-msg-meta：消息底部的轻量元信息条（状态 / 用量 / 上下文行）。
- * 两条规则刻意不依赖 .tl-*：A 的 DOM 挂在哪一层都能用。 */
+/* ---------- UI-2C：UI-2A 的真实 DOM（Classic 消息 / 工具组 / 思考） ----------
+ * 对应 A 侧 tool-view.js / messages.js / message-meta.js 实际生成的节点：
+ *  - button.tl-group-head.ui2-tool-summary  原生 button（aria-expanded/-controls/-describedby）
+ *  - span.ui2-tool-state                    组级状态计数（role=status，单项组隐藏）
+ *  - footer.ui2-msg-meta > span.ui2-msg-meta-item[data-kind]
+ *  - .think[data-state] 里的 span.ui2-think-status
+ * 规则刻意不依赖 .tl-*：A 的 DOM 挂在哪一层都能用。
+ * A 的摘要按钮里**没有** chevron 元素，折叠图标由这里用 ::before 画、
+ * 随 [aria-expanded] 旋转（A 的结构契约明确授权由 C 绘制）。 */
 .ui2-tool-summary{
   display:flex;align-items:center;gap:7px;width:100%;min-width:0;text-align:left;
   border:0;background:transparent;font:inherit;font-size:12px;color:var(--t2);
@@ -554,10 +561,21 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 }
 .ui2-tool-summary:hover{background:var(--hover);color:var(--t1)}
 .ui2-tool-summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+/* 折叠图标：右下两条边组成的角；展开=朝下(45deg)、折叠=朝右(-45deg) */
+.ui2-tool-summary::before{
+  content:"";flex:0 0 auto;width:6px;height:6px;margin-right:1px;
+  border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+  transform:rotate(45deg);transition:transform var(--ui-duration-snap) var(--ui-ease-out);
+}
+.ui2-tool-summary[aria-expanded=false]::before{transform:rotate(-45deg)}
+.ui2-tool-state{font-size:10.5px;color:var(--t3);letter-spacing:.2px;line-height:1.5;padding:0 9px 5px}
+.ui2-msg-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--t3);min-width:0}
+.ui2-msg-meta-item{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* C 预留、A 未使用：A 的图标是内联 svg，摘要按钮也不含 chevron 元素。
+ * 作为兼容扩展保留，不代表 A 已经采用（见 UI-2C-acceptance.md 第 3 节）。 */
 .ui2-chev{width:12px;height:12px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;
   transition:transform var(--ui-duration-snap) var(--ui-ease-out)}
 .ui2-tool-summary[aria-expanded=true] .ui2-chev{transform:rotate(90deg)}
-.ui2-msg-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--t3);min-width:0}
 
 .note{
   display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3);
@@ -2644,12 +2662,36 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .runtime-resource-count{color:var(--t3);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
 .pj-runtime-list>.runtime-resource-count{padding:4px 12px}
 
-/* ---------- UI-2C 预留：UI-2B 的 runtime 展示类 ----------
- * A/B 的具体 DOM 还没有合入；按任务书给的新类名先把样式备齐：
- *  - .ui2-runtime-meta：一行不影响识别的辅助小字（模型 / 用量 / 计数…）；
- *  - .ui2-runtime-status：状态行，色随 [data-state]（running/ready/error/stopping）
- *    走 UI-1 语义色，形状仍是「文字」不加 badge（遵守 P30/P32.4 的克制原则）。
- * data-state 的取值清单是候选约定，B 侧落 DOM 时以实际取值为准，未知值回落 t2。 */
+/* ---------- UI-2C：UI-2B 的真实 DOM（Runtime 中央对话） ----------
+ * 对应 B 侧 runtime-conversation.js 实际生成的节点：
+ *  - <details class="ui2-runtime-thinking">（hidden 时整块消失）
+ *      <summary class="ui2-runtime-thinking-head"> <pre class="ui2-runtime-thinking-body">
+ *  - <p class="ui2-runtime-usage">（每轮用量，[hidden] 由全局规则覆盖）
+ *  - <div class="rtc-state ui2-runtime-tools"> 内每项 <span class="ui2-runtime-tool" data-state>
+ * 工具项之间是**纯空白文本节点**，所以这里用 flex 把它们收成每项一行，
+ * 空白节点按规范不生成 flex item，自动消失。 */
+.ui2-runtime-thinking{margin:2px 0 6px;color:var(--t3);font-size:12px;line-height:1.65;min-width:0}
+.ui2-runtime-thinking-head{cursor:pointer;color:var(--t3);padding:2px 0;font-size:12px}
+.ui2-runtime-thinking-head:hover{color:var(--t2)}
+.ui2-runtime-thinking-head:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:3px}
+/* 必须 pre-wrap + overflow-wrap:anywhere：B 用的是 <pre>，默认 white-space:pre
+ * 会让长思考文本把中央列撑出横向滚动条。 */
+.ui2-runtime-thinking-body{
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid var(--line);
+  color:var(--t2);font-family:inherit;font-size:12px;line-height:1.65;
+}
+.ui2-runtime-usage{margin:0;font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere}
+.ui2-runtime-tools{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ui2-runtime-tool{font-size:12px;line-height:1.5;color:var(--t2);overflow-wrap:anywhere}
+/* B 真实使用的工具状态只有 running / done / error 三种，只给这三种着色 */
+.ui2-runtime-tool[data-state=running]{color:var(--run)}
+.ui2-runtime-tool[data-state=done]{color:var(--ok)}
+.ui2-runtime-tool[data-state=error]{color:var(--err)}
+
+/* ---------- UI-2C 预留：未使用的兼容扩展 ----------
+ * B 的 DOM 实际用的是 .ui2-runtime-usage / -tools / -tool，**没有**使用下面两个类。
+ * 保留为兼容扩展（未知 data-state 回落 t2），不代表 B 已经适配。 */
 .ui2-runtime-meta{font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere;min-width:0}
 .ui2-runtime-status{font-size:12px;color:var(--t2);line-height:1.5;overflow-wrap:anywhere;min-width:0}
 .ui2-runtime-status[data-state=running]{color:var(--run)}
