@@ -1,0 +1,18 @@
+baseline ref: 8f0178e34153a8043d5c3a661ab7e35e96e499d5
+
+[P1-A] 修复前：SECRET_RE 的 lastIndex 污染
+连续调用 token/code/id（同一 secret）：
+  1: token=null code="sk-abcdefgh12345678" id=null
+  2: token="sk-abcdefgh12345678" code=null id="sk-abcdefgh12345678"
+  3: token=null code="sk-abcdefgh12345678" id=null
+  4: token="sk-abcdefgh12345678" code=null id="sk-abcdefgh12345678"
+原始 JSONL 含 secret：true
+  {"v":1,"timestamp":"2026-10-17T17:28:57.912Z","level":"INFO","source":"app","event":"electron.renderer_responsive","code":null,"runId":"373de21e-a14e-4b1e-b337-f1d6f6f60742","correlationId":"e44895dc-6a47-4144-832f-e2e4a70005bd","durationMs":null,"process":"backend"}
+  {"v":1,"timestamp":"2026-10-17T17:28:57.912Z","level":"INFO","source":"app","event":"electron.renderer_responsive","code":"sk-abcdefgh12345678","runId":"373de21e-a14e-4b1e-b337-f1d6f6f60742","correlationId":"5d3fafb5-bce2-4fe6-8f94-3b53fb4cfc54","durationMs":null,"process":"backend"}
+
+[P1-B] 修复前：一次网络失败后 Renderer 客户端永久停止
+第一次网络失败后： {"queued":0,"failing":true,"installed":false,"seen":1}
+后端恢复后再次记录：
+  logRendererEvent 返回值=false
+  60 秒内请求数=1
+  最终快照： {"queued":0,"failing":true,"installed":false,"seen":1}

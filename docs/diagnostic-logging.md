@@ -156,6 +156,13 @@ electron/main.cjs                             │   server.js（后端）
 
 凭据/路径替换沿用并扩展 `lib/redact.js` 的思路；不声称穷尽，因此不把原始内容作为输入。
 
+敏感判定本身必须**无状态**：`lib/log-contract.cjs` 的 `SECRET_RE` 刻意不带 `g`
+标志，只用于 `.test()`。带 `g` 的正则会把 `lastIndex` 留在上一处匹配之后，
+连续或交错检查同一个 secret 时可能第二次被判为安全。`token()`、`code()`、
+`id()`、`normalizeDetails()`、`normalizeStored()` 都复用这一个无状态判定；
+`tests/logging-secret-state.cjs` 覆盖连续、交错、不同字段顺序和多条事件，
+并扫描原始 JSONL、崩溃文件、日志 API 与 ZIP 的每个文件。
+
 ### 5.3 查看与导出的身份
 
 - 所有 `/api/logs/*` 走现有 `auth.denyRequest`（Origin + `PI_GUI_TOKEN`）。
@@ -164,6 +171,25 @@ electron/main.cjs                             │   server.js（后端）
 - 导出不发起任何网络请求、不创建 Issue、不上传。ZIP 由浏览器保存。
 - 符号链接、路径遍历、非白名单文件名不进入读取或 ZIP；导出文件名由服务端固定生成。
 - Renderer 事件入口限制 body 大小、批量条数、事件目录和速率；不接受任意 `source`、`level`、`runId` 或文件操作。
+
+### 5.4 Renderer 上报的失败与恢复
+
+Renderer 仍只通过 `/api/logs/events` 写日志；客户端不接触文件，也不新建业务状态机。
+网络失败分三类处理：
+
+| 结果 | 处理 | 原因 |
+|---|---|---|
+| 网络拒绝、408/425/429/5xx | 指数退避 1s → 30s，最多一个在飞请求 | 后端可能只是暂时重启 |
+| 4xx、无效响应 | 停止上报，等显式恢复 | 同一页面重试不会改变结果 |
+| `{ok:true, disabled:true}` | 暂停上报，等设置界面同步启用状态 | 用户明确关闭了日志 |
+
+- 本地队列 40 条、每批 10 条；连续失败 5 次后每次只探 1 条。
+- 已经发出但没拿到确认的批次直接丢弃并计入 `dropped`，**不重放**；否则一次
+  网络故障会在日志里变成两份。
+- 队列为空时不保留重试计时器；新事件到来后按剩余退避时间发送，不产生空转请求。
+- 恢复后写入一条 `logs.client_degraded`，只含 `reason`、`count`、`failures`
+  三个字段；不含 URL、请求正文、令牌或异常 message。
+- 页面重新加载得到全新的模块状态；旧的失败/暂停状态不会被继承
 
 ## 6. 故障报告 ZIP
 
@@ -229,6 +255,8 @@ pi-gui-bugreport-<UTC 时间>.zip
 
 - `tests/logging.cjs`：事件目录/级别/字段白名单、时间线、关联 ID、并发写入、轮转、容量/保留期、损坏文件、不可写目录、崩溃重启、分页、ZIP 清单与解压、导出失败、导出不上传、日志关闭、恶意 HTML、长中文。
 - `tests/logging-leaks.cjs`：向隔离环境注入 `sk-…`、Bearer、API Key、OAuth token、Cookie、用户目录、项目路径、模拟聊天正文/工具输出/Browser URL、环境变量凭据、异常 message/stack；逐一检查普通日志、详细日志、最近错误列表、ZIP 每个文件、Renderer 可访问数据和诊断快照。
+- `tests/logging-secret-state.cjs`：敏感判定无状态的连续/交错/字段顺序/多事件负向用例，以及从事件输入到原始 JSONL、崩溃文件、日志 API、ZIP 的端到端 secret 扫描。
+- `tests/logging-client.cjs`：Renderer 暂时断线恢复、连续失败退避、后端重启、队列上限、日志关闭、不可恢复错误、无效响应、页面重载，以及恢复事件真实落盘并进入 ZIP。
 - `tests/logging-ui.cjs`：空/错误/加载状态、筛选、分页、复制单条、详细模式、清理确认、导出预览/确认/失败降级、恶意 HTML 与长中文。
 - `tests/logging-packaged.cjs`：对隔离离线构建产物启动真实打包后端，验证日志落盘、读取、清理和 ZIP 导出；不能只在开发服务器上跑通。
 

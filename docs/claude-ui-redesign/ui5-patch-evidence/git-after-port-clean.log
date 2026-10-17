@@ -1,0 +1,193 @@
+
+=== 1. 临时仓库：状态解析 ===
+  ok   仓库被识别为 Git 仓库
+  ok   列出全部 10 项变更
+  ok   内部字段 _repoRel 不外泄
+  ok   M：工作区已修改
+  ok   M：增删行数正确（+1 −0）
+  ok   A：已暂存的新增文件
+  ok   D：工作区已删除
+  ok   R：重命名被识别，且带上原路径
+  ok   ??：未跟踪文件
+  ok   ??：未跟踪目录标记 isDir
+  ok   含空格的目录名正确返回
+  ok   含中文的文件名没有被转义成八进制
+  ok   二进制文件被标记（working 侧）
+  ok   二进制文件不给增删行数
+  ok   未跟踪的二进制文件也被标记
+  ok   路径按目录 + 文件名排序
+
+=== 2. 项目只是仓库的子目录 ===
+  ok   子目录被识别为仓库内
+  ok   只返回子目录内的变更
+  ok   路径是相对**项目**而非仓库根
+  ok   P10 原语：项目是仓库子目录时也能建出树
+  ok   P10 原语：执行后也能建出树
+  ok   numstat 只含项目内的 keep.txt
+  ok   numstat 不含仓库其余部分的改动
+  ok   diff 的路径是**相对项目**的（不是 sub/keep.txt）
+  ok   diff 里**只有** keep.txt 一个文件、且没有仓库其余部分
+  ok   patch 是这一轮的改动（+keep3）
+
+=== 3. 非 Git 目录 / 没有项目 ===
+  ok   非 Git 目录：ok:true 且 isRepo:false（不是错误）
+  ok   没有项目时明确回 noProject
+  ok   没有项目时 diff 不报服务器错误
+
+=== 4. 路径安全（越权一律拒绝） ===
+  ok   空路径 → empty
+  ok   ../ 逃逸 → escape
+  ok   嵌套 ../ 逃逸 → escape
+  ok   Windows 绝对路径 → absolute
+  ok   POSIX 绝对路径 → absolute
+  ok   UNC 路径 → absolute
+  ok   含 NUL 的路径 → illegal
+  ok   前缀伪装目录（../repo-evil）→ escape
+  ok   符号链接逃逸 → symlink
+  ok   diff 走同一条校验（越权 → 403 语义）
+
+=== 5. Diff ===
+  ok   工作区 diff 有内容
+  ok   工作区 diff 带 unified 头
+  ok   没有暂存内容时 staged 为空
+  ok   已暂存文件的 diff 出现在 staged 里
+  ok   已暂存文件的工作区 diff 为空
+  ok   未跟踪文件也能看到内容
+  ok   已删除文件的 diff 显示删除行
+  ok   二进制文件被标记 binary
+  ok   未跟踪目录给提示而不是展开
+  ok   含空格 + 中文的路径能取到 diff
+  ok   diff 头里的中文没有被转义
+  ok   重命名的 diff 同时给出旧路径与新路径
+
+=== 6. 打开文件（只校验并给绝对路径） ===
+  ok   正常文件返回绝对路径
+  ok   返回的绝对路径确实在项目里
+  ok   不存在的文件 → missing
+  ok   目录 → isdir
+
+=== 7. 撤销单个文件 ===
+  ok   工作区 M 可撤销
+  ok   撤销后内容回到 Git 版本
+  ok   撤销后该文件从列表消失
+  ok   已删除文件可恢复
+  ok   恢复后文件真的回来了
+  ok   未跟踪文件无确认 → needsConfirm
+  ok   拒绝文案明确说「将删除该文件」
+  ok   未确认时文件仍然在
+  ok   未跟踪文件带确认 → 删除
+  ok   确认后文件真的没了
+  ok   已暂存的文件拒绝撤销（不擅自改 index）
+  ok   拒绝后暂存内容原封不动
+  ok   重命名拒绝在单文件撤销里处理
+  ok   未跟踪目录拒绝自动删除
+  ok   撤销也走路径校验
+  ok   没有改动可撤时给出说明而不是报错
+
+=== 8. 只读一次环境变量的边界（子进程） ===
+  ok   git 超时被识别并给出可读错误
+  ok   diff 超过上限时标记 truncated
+  ok   truncated 时仍带回上限值
+  ok   PATH 里没有 git → 友好报错而不是崩溃
+  ok   git 未安装时 diff 也是同一套友好报错
+
+=== 9. HTTP 层：令牌 / Origin / 越权 ===
+  ok   无令牌 → 401
+  ok   错误令牌 → 401
+  ok   跨站 Origin → 403
+  ok   带令牌 → 200 且是仓库
+  ok   HTTP 层返回的路径是项目相对的
+  ok   POST diff → 200 且有正文
+  ok   diff 越权 → 403
+  ok   diff 绝对路径 → 403
+  ok   diff 缺 path → 400
+  ok   diff 请求体不是 JSON → 400
+  ok   GET diff → 405
+  ok   未知子接口 → 404
+  ok   POST open → 200 且给出绝对路径
+  ok   open 绝对路径 → 403
+  ok   open 不存在的文件 → 200 + ok:false（业务失败不是 HTTP 失败）
+  ok   HTTP 撤销未跟踪文件需确认 → 200 + needsConfirm
+  ok   日志里不出现令牌
+  ok   日志里不出现越权路径的内容
+
+=== 10. HTTP 层：没有项目时不是错误 ===
+  ok   没有项目时 status 仍是 200
+  ok   没有项目时 status 明确回 noProject
+  ok   没有项目时 diff 给的是可执行指引（不是报错）
+
+=== 11. 取消暂存（默认绝不碰 index） ===
+  ok   已暂存且未授权 → 拒绝，并明确标出 needsUnstage
+  ok   拒绝之后暂存内容确实没变（index 没被偷偷改）
+  ok   授权后 → 先取消暂存，再恢复工作区
+  ok   mod.txt 已回到 Git 版本
+  ok   取消暂存 + 恢复之后工作区彻底干净
+  ok   已暂存的删除 → 取消暂存后恢复
+  ok   被删的文件真的回来了
+  ok   已暂存的新增文件：只给 unstage 仍要确认
+  ok   文案说清「取消暂存后会变成未跟踪文件」
+  ok   被拒时 index 一个字都没改（仍是 A，文件也还在）
+  ok   两个授权一起给 → 取消暂存并删除
+  ok   文件真的被删掉了
+
+=== 12. 撤销全部：计划 → 授权 → 执行 ===
+  ok   不带 planned → 只回报计划
+  ok   计划里区分 plain / staged / untracked
+  ok   计划模式一个字都没动（工作区与计划前完全一致）
+  ok   给 unstage 不给删 → 已跟踪的恢复、未跟踪的保留
+  ok   未跟踪文件仍在磁盘上
+  ok   已跟踪的两个都回到 Git 版本
+  ok   保留项被标成 needsConfirm（还有事没做完）
+  ok   两个授权都给 → 全部清掉
+  ok   撤销全部之后 status 里一个文件都不剩
+  ok   重命名归入 skipped 而不是 staged/plain
+  ok   执行阶段也确实跳过了重命名
+  ok   工作区干净时不要求计划，直接回 total:0
+  ok   空仓库下上限不误伤（total:0 直接返回）
+  ok   超过上限时整体拒绝，不做「尽力而为」
+  ok   超限拒绝时一个文件都没删
+  ok   撤销全部在非仓库上也是「不是错误」
+  ok   撤销全部没有项目时给出指引
+
+=== 13. Diff 上下文（默认不动用户的 diff.context） ===
+  ok   默认不传 -U（回显 context 为 null）
+  ok   默认上下文是 3 行（前后各 3 = 6 行）
+  ok   context=20 → 上下文 40 行
+  ok   context=20 被回显
+  ok   context='all' → 展开整个文件（119 行上下文）
+  ok   context='all' 被回显成字符串 'all'
+  ok   上下文变多时新增/删除行数不变
+  ok   非法 context 被忽略，退回默认（不是 NaN 泄漏出来）
+  ok   非法 context 的实际上下文行数与默认一致
+  ok   超大 context 被钳到 200（文件只有 119 行可用）
+  ok   context=0 也是合法值（只要改动的行）
+
+=== 14. HTTP 层：restore-all 与 context 透传 ===
+  ok   restore-all 不需要 path，也不报 400
+  ok   restore-all 默认是干跑（needsPlan）
+  ok   干跑后文件都还在
+  ok   HTTP 透传 context=20
+  ok   HTTP 的 context=20 真的多给了上下文
+  ok   HTTP 透传 context='all'
+  ok   planned + 授权 → 真的执行了
+  ok   执行后未跟踪文件被删掉
+  ok   执行后 mod.txt 回到 Git 版本
+  ok   planned 但不给 unstage → 不碰 index（此处已无暂存内容，故为 total:0 或 kept）
+  ok   单文件 restore 也接受 unstage 参数
+
+=== 15. 静态守卫：写操作路径不许出现危险命令 ===
+  ok   不开 shell（参数只经数组传递）
+  ok   spawn 显式写出 shell: false
+  ok   没有 reset --hard
+  ok   没有 clean -f / -fd
+  ok   没有 checkout 整个工作区（checkout -- .）
+  ok   不做 commit / push / pull / branch / merge / rebase
+  ok   git 参数里没有模板字符串拼接
+  ok   不往项目里写内容（写入类 API 一律不用）
+  ok   临时目录只建在 os.tmpdir() 下
+  ok   删除只作用于临时目录（rmSync 不拿项目路径去删）
+  ok   临时 index 走 GIT_INDEX_FILE（不碰用户真实的 .git/index）
+  ok   applyRestore 用项目根解析路径，不信任 entry 里的字符串
+  ok   单文件撤销仍走 resolveProjectPath 校验
+
+161/161 通过
