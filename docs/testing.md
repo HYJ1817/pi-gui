@@ -1,5 +1,23 @@
 # 测试分层与 CI
 
+## UI-5 本地日志
+
+`npm test` 新增 `test:logging`：`tests/logging.cjs`（核心/持久化/轮转/分页/ZIP/HTTP）、
+`tests/logging-leaks.cjs`（注入秘密后扫描落盘、状态、条目和 ZIP 每个文件）与
+`tests/logging-ui.cjs`（jsdom 交互、恶意 HTML、清理确认、导出降级）。这些套件只写
+`os.tmpdir()` fixture，不读用户真实日志或项目。
+
+打包后另跑：
+
+```text
+node tests/logging-packaged.cjs --output-root <最终隔离构建根>
+node tests/ui5-logs-electron.cjs
+```
+
+前者启动 `resources/app/server.cjs` 并验证实际打包日志落盘、Renderer 事件、读取、预览和 ZIP；
+后者用真实 Electron + visual-harness 截图 700/900/1200/1536、Dark/Light、连续开关。
+两者需要图形/构建环境，因此不强制放进无图形的 CI；其实际结果记录在 UI-5 验收报告。
+
 ## P25.1 真机问题回归
 
 `npm test` 增加 `tests/hotfix.cjs`（22 条）和 `tests/hotfix-ui.cjs`（10 条）。

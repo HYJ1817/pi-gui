@@ -10,6 +10,16 @@ const zlib = require('node:zlib');
 const { createLogCore, scrubShortText } = require('../lib/log-core.cjs');
 const { createLogService } = require('../server/logging.js');
 
+/** 本机临时服务器的 loopback 连接偶发瞬断；只对本地测试做有限重试。 */
+async function fetchRetry(url, options) {
+  let last;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try { return await fetch(url, options); }
+    catch (error) { last = error; await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1))); }
+  }
+  throw last;
+}
+
 let passed = 0, failed = 0, skipped = 0;
 function check(name, fn) {
   try {
@@ -424,14 +434,14 @@ async function main() {
     });
     await withHttp(service, async (origin) => {
       await checkAsync('GET /api/logs/status 返回状态且不含绝对路径', async () => {
-        const response = await fetch(origin + '/api/logs/status');
+        const response = await fetchRetry(origin + '/api/logs/status');
         const body = await response.json();
         assert.equal(body.ok, true);
         assert.ok(body.status);
         assert.equal(JSON.stringify(body).includes(dir), false);
       });
       await checkAsync('POST /api/logs/events 只接受白名单事件与字段', async () => {
-        const response = await fetch(origin + '/api/logs/events', {
+        const response = await fetchRetry(origin + '/api/logs/events', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ events: [
             { event: 'ui.attachment_failed', details: { kind: 'image', reason: 'upload_failed', message: 'sk-abcdefghijklmnop' } },
@@ -442,37 +452,37 @@ async function main() {
         const body = await response.json();
         assert.equal(body.ok, true);
         assert.equal(body.accepted, 2);
-        const entries = await (await fetch(origin + '/api/logs/entries?limit=20')).json();
+        const entries = await (await fetchRetry(origin + '/api/logs/entries?limit=20')).json();
         const text = JSON.stringify(entries);
         assert.equal(text.includes('sk-abcdefghijklmnop'), false);
         assert.equal(text.includes('must-not-log'), false);
         assert.ok(entries.entries.some((entry) => entry.process === 'renderer' && entry.event === 'ui.attachment_failed'));
       });
       await checkAsync('POST /api/logs/settings 校验并返回状态', async () => {
-        const response = await fetch(origin + '/api/logs/settings', {
+        const response = await fetchRetry(origin + '/api/logs/settings', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'verbose' }),
         });
         const body = await response.json();
         assert.equal(body.ok, true);
         assert.equal(body.status.mode, 'verbose');
-        const bad = await fetch(origin + '/api/logs/settings', {
+        const bad = await fetchRetry(origin + '/api/logs/settings', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ retentionDays: 999 }),
         });
         assert.equal(bad.status, 409);
       });
       await checkAsync('导出需要显式确认，预览返回清单与计数', async () => {
-        const preview = await (await fetch(origin + '/api/logs/export/preview', {
+        const preview = await (await fetchRetry(origin + '/api/logs/export/preview', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windowMinutes: 60 }),
         })).json();
         assert.equal(preview.ok, true);
         assert.ok(preview.filesIncluded.includes('events.jsonl'));
-        const missing = await fetch(origin + '/api/logs/export', {
+        const missing = await fetchRetry(origin + '/api/logs/export', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windowMinutes: 60 }),
         });
         assert.equal(missing.status, 400);
       });
       await checkAsync('导出 ZIP 可直接解压，且不再向日志写入用户描述原文', async () => {
-        const response = await fetch(origin + '/api/logs/export', {
+        const response = await fetchRetry(origin + '/api/logs/export', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ confirm: true, windowMinutes: 60, description: '问题 sk-abcdefghijklmnop', repro: '重复打开' }),
         });
@@ -485,12 +495,12 @@ async function main() {
       });
       await checkAsync('清理需要确认；确认后状态回到空', async () => {
         service.core.flushSync();
-        const missing = await fetch(origin + '/api/logs/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const missing = await fetchRetry(origin + '/api/logs/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
         assert.equal(missing.status, 400);
-        const cleared = await (await fetch(origin + '/api/logs/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"confirm":true}' })).json();
+        const cleared = await (await fetchRetry(origin + '/api/logs/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"confirm":true}' })).json();
         assert.equal(cleared.ok, true);
         assert.equal(cleared.fileCount >= 1, true);
-        const status = await (await fetch(origin + '/api/logs/status')).json();
+        const status = await (await fetchRetry(origin + '/api/logs/status')).json();
         assert.equal(status.status.fileCount, 0);
       });
     });
