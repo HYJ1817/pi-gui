@@ -289,12 +289,74 @@ async function main() {
       assert.doesNotThrow(() => bad.flushSync());
       assert.doesNotThrow(() => bad.close({ reason: 'test' }));
     });
-    check('高频写入仍保持每行合法 JSON', () => {
+    check('高频写入仍保持每行合法 JSON，且有界批处理不阻塞调用方', () => {
+      const started = Date.now();
       for (let i = 0; i < 600; i++) core.event('runtime', 'runtime.owner_rejected', { operation: 'resolve', reason: 'owner_stale' });
       core.flushSync();
+      assert.ok(Date.now() - started < 5000, '600 events took ' + (Date.now() - started) + 'ms');
       const lines = fs.readFileSync(path.join(dir, files(dir)[0]), 'utf8').split(/\r?\n/).filter(Boolean);
       assert.equal(lines.length >= 600, true);
       for (const line of lines) JSON.parse(line);
+    });
+    core.close({ reason: 'test' });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  {
+    const dir = temp();
+    const failFs = new Proxy(fs, {
+      get(target, prop) {
+        if (prop === 'appendFileSync') return () => { throw Object.assign(Error('disk full fixture'), { code: 'ENOSPC' }); };
+        const value = target[prop];
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const core = createLogCore({ dir, role: 'app', version: '0.25.0', appRoot: path.join(__dirname, '..'), fsApi: failFs });
+    check('磁盘空间不足（ENOSPC）只进入降级状态，不影响调用方', () => {
+      assert.equal(core.event('pi-bridge', 'bridge.state', { state: 'ready', bridgeRun: 1 }), true);
+      assert.doesNotThrow(() => core.flushSync());
+      const status = core.status();
+      assert.equal(status.degraded, true);
+      assert.equal(status.lastErrorCode, 'disk_full');
+      assert.equal(core.event('pi-bridge', 'bridge.state', { state: 'ready' }), true);
+      assert.doesNotThrow(() => core.close({ reason: 'test' }));
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  {
+    const dir = temp();
+    const { createMainLogging } = require('../electron/logging.cjs');
+    const backendCore = createLogCore({ dir, role: 'app', version: '0.25.0', appRoot: path.join(__dirname, '..'), now: () => Date.parse('2026-10-17T12:00:00.000Z') });
+    const main = createMainLogging({ dir, version: '0.25.0', appRoot: path.join(__dirname, '..'), now: () => Date.parse('2026-10-17T12:00:00.000Z') });
+    check('后端与主进程并发写不同文件，事件保持各自进程身份', () => {
+      for (let i = 0; i < 100; i++) {
+        backendCore.event('pi-bridge', 'bridge.state', { state: 'ready', bridgeRun: i });
+        main.event('electron', 'app.ready', { role: 'main', windowCount: 1 });
+      }
+      backendCore.flushSync(); main.flushSync();
+      const lines = readLines(dir);
+      assert.ok(lines.some((line) => line.process === 'backend' && line.source === 'pi-bridge'));
+      assert.ok(lines.some((line) => line.process === 'main' && line.source === 'electron'));
+      for (const line of lines) JSON.parse(JSON.stringify(line));
+      assert.ok(files(dir).some((name) => name.startsWith('app-')));
+      assert.ok(files(dir).some((name) => name.startsWith('main-')));
+      backendCore.close({ reason: 'test' }); main.close('test');
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  {
+    const dir = temp();
+    const core = createLogCore({ dir, role: 'app', version: '0.25.0', appRoot: path.join(__dirname, '..') });
+    check('同一次操作跨后端/Renderer 用 correlationId 关联', () => {
+      const correlationId = 'corr12345678';
+      core.event('renderer', 'ui.stop_result', { result: 'confirmed' }, { correlationId, process: 'renderer' });
+      core.event('pi-bridge', 'bridge.stop_result', { result: 'stopped', bridgeRun: 1 }, { correlationId });
+      core.flushSync();
+      const linked = core.readEntries({ limit: 20 }).entries.filter((entry) => entry.correlationId === correlationId);
+      assert.equal(linked.length, 2);
+      assert.deepEqual(new Set(linked.map((entry) => entry.process)), new Set(['backend', 'renderer']));
     });
     core.close({ reason: 'test' });
     fs.rmSync(dir, { recursive: true, force: true });

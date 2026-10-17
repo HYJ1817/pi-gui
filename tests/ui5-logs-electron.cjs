@@ -182,6 +182,22 @@ async function run() {
 
     await close();
     check(await read(`document.getElementById('modal').hidden === true`), 'logs modal closes and restores the page');
+
+    for (let i = 0; i < 8; i++) {
+      await open();
+      await until(async () => !(await modal()).hidden);
+      await close();
+    }
+    await open();
+    await until(async () => !(await modal()).hidden);
+    const repeated = await read(`(()=>({
+      styles:document.querySelectorAll('#ui5-logs-style').length,
+      modals:document.querySelectorAll('#modal:not([hidden])').length,
+      cards:document.querySelectorAll('#modalCard > h3').length,
+      overflow:document.documentElement.scrollWidth>innerWidth+1
+    }))()`);
+    check(repeated.styles === 1 && repeated.modals === 1 && repeated.cards === 1 && !repeated.overflow, 'repeated logs open/close keeps one surface and one stylesheet', repeated);
+    await close();
     check(errors.length === 0, 'no renderer/harness console errors during logs UI checks', errors.slice(0, 8));
 
     const failed = checks.filter((item) => !item.pass).length;
