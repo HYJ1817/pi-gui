@@ -1,0 +1,358 @@
+{
+  "suite": "ui3-model-real",
+  "total": 79,
+  "pass": 79,
+  "fail": 0,
+  "shots": [
+    "models-dark-700.png",
+    "think-dark-700.png",
+    "think-unavailable-dark-700.png",
+    "think-unknown-dark-700.png",
+    "models-dark-900.png",
+    "think-dark-900.png",
+    "think-unavailable-dark-900.png",
+    "think-unknown-dark-900.png",
+    "models-dark-1200.png",
+    "think-dark-1200.png",
+    "think-unavailable-dark-1200.png",
+    "think-unknown-dark-1200.png",
+    "models-dark-1536.png",
+    "think-dark-1536.png",
+    "think-unavailable-dark-1536.png",
+    "think-unknown-dark-1536.png",
+    "models-light-700.png",
+    "think-light-700.png",
+    "think-unavailable-light-700.png",
+    "think-unknown-light-700.png",
+    "models-light-900.png",
+    "think-light-900.png",
+    "think-unavailable-light-900.png",
+    "think-unknown-light-900.png",
+    "models-light-1200.png",
+    "think-light-1200.png",
+    "think-unavailable-light-1200.png",
+    "think-unknown-light-1200.png",
+    "models-light-1536.png",
+    "think-light-1536.png",
+    "think-unavailable-light-1536.png",
+    "think-unknown-light-1536.png"
+  ],
+  "results": [
+    {
+      "label": "dark 700: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 700: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "dark 700: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "dark 700: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "dark 700: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "dark 700: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "dark 700: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 700: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "dark 700: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "dark 900: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 900: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "dark 900: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "dark 900: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "dark 900: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "dark 900: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "dark 900: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 900: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "dark 900: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "dark 1200: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "dark 1536: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "light 700: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 700: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "light 700: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "light 700: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "light 700: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "light 700: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "light 700: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 700: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "light 700: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "light 900: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 900: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "light 900: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "light 900: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "light 900: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "light 900: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "light 900: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 900: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "light 900: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "light 1200: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 1200: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "light 1200: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "light 1200: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "light 1200: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "light 1200: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "light 1200: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 1200: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "light 1200: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "light 1536: 模型弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 1536: 无横向溢出",
+      "ok": true
+    },
+    {
+      "label": "light 1536: 长模型名换行而不是撑破",
+      "ok": true
+    },
+    {
+      "label": "light 1536: 能力说明可见且有对比度",
+      "ok": true
+    },
+    {
+      "label": "light 1536: 选中态与身份行都在",
+      "ok": true
+    },
+    {
+      "label": "light 1536: Provider 折叠标题可见",
+      "ok": true
+    },
+    {
+      "label": "light 1536: Thinking 弹层不出视口",
+      "ok": true
+    },
+    {
+      "label": "light 1536: 不可用状态行在视口内且可读",
+      "ok": true
+    },
+    {
+      "label": "light 1536: 能力未知不画成不支持",
+      "ok": true
+    },
+    {
+      "label": "弹层 z-index 高于右栏与模态遮罩层以下",
+      "ok": true
+    },
+    {
+      "label": "弹层在派发按键前确实处于打开状态，且页面能接收按键",
+      "ok": true
+    },
+    {
+      "label": "真实方向键按漫游序列前进",
+      "ok": true
+    },
+    {
+      "label": "真实 ↑ 从首项回绕到末项",
+      "ok": true
+    },
+    {
+      "label": "真实 Escape 关闭弹层并把焦点还给触发按钮",
+      "ok": true
+    },
+    {
+      "label": "reduced-motion 下静态状态完整（不是一片空白）",
+      "ok": true
+    },
+    {
+      "label": "页面无 JS 异常",
+      "ok": true
+    }
+  ]
+}

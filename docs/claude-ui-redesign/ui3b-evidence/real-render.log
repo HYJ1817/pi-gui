@@ -1,0 +1,81 @@
+  ok  dark 700: 模型弹层不出视口
+  ok  dark 700: 无横向溢出
+  ok  dark 700: 长模型名换行而不是撑破
+  ok  dark 700: 能力说明可见且有对比度
+  ok  dark 700: 选中态与身份行都在
+  ok  dark 700: Provider 折叠标题可见
+  ok  dark 700: Thinking 弹层不出视口
+  ok  dark 700: 不可用状态行在视口内且可读
+  ok  dark 700: 能力未知不画成不支持
+  ok  dark 900: 模型弹层不出视口
+  ok  dark 900: 无横向溢出
+  ok  dark 900: 长模型名换行而不是撑破
+  ok  dark 900: 能力说明可见且有对比度
+  ok  dark 900: 选中态与身份行都在
+  ok  dark 900: Provider 折叠标题可见
+  ok  dark 900: Thinking 弹层不出视口
+  ok  dark 900: 不可用状态行在视口内且可读
+  ok  dark 900: 能力未知不画成不支持
+  ok  dark 1200: 模型弹层不出视口
+  ok  dark 1200: 无横向溢出
+  ok  dark 1200: 长模型名换行而不是撑破
+  ok  dark 1200: 能力说明可见且有对比度
+  ok  dark 1200: 选中态与身份行都在
+  ok  dark 1200: Provider 折叠标题可见
+  ok  dark 1200: Thinking 弹层不出视口
+  ok  dark 1200: 不可用状态行在视口内且可读
+  ok  dark 1200: 能力未知不画成不支持
+  ok  dark 1536: 模型弹层不出视口
+  ok  dark 1536: 无横向溢出
+  ok  dark 1536: 长模型名换行而不是撑破
+  ok  dark 1536: 能力说明可见且有对比度
+  ok  dark 1536: 选中态与身份行都在
+  ok  dark 1536: Provider 折叠标题可见
+  ok  dark 1536: Thinking 弹层不出视口
+  ok  dark 1536: 不可用状态行在视口内且可读
+  ok  dark 1536: 能力未知不画成不支持
+  ok  light 700: 模型弹层不出视口
+  ok  light 700: 无横向溢出
+  ok  light 700: 长模型名换行而不是撑破
+  ok  light 700: 能力说明可见且有对比度
+  ok  light 700: 选中态与身份行都在
+  ok  light 700: Provider 折叠标题可见
+  ok  light 700: Thinking 弹层不出视口
+  ok  light 700: 不可用状态行在视口内且可读
+  ok  light 700: 能力未知不画成不支持
+  ok  light 900: 模型弹层不出视口
+  ok  light 900: 无横向溢出
+  ok  light 900: 长模型名换行而不是撑破
+  ok  light 900: 能力说明可见且有对比度
+  ok  light 900: 选中态与身份行都在
+  ok  light 900: Provider 折叠标题可见
+  ok  light 900: Thinking 弹层不出视口
+  ok  light 900: 不可用状态行在视口内且可读
+  ok  light 900: 能力未知不画成不支持
+  ok  light 1200: 模型弹层不出视口
+  ok  light 1200: 无横向溢出
+  ok  light 1200: 长模型名换行而不是撑破
+  ok  light 1200: 能力说明可见且有对比度
+  ok  light 1200: 选中态与身份行都在
+  ok  light 1200: Provider 折叠标题可见
+  ok  light 1200: Thinking 弹层不出视口
+  ok  light 1200: 不可用状态行在视口内且可读
+  ok  light 1200: 能力未知不画成不支持
+  ok  light 1536: 模型弹层不出视口
+  ok  light 1536: 无横向溢出
+  ok  light 1536: 长模型名换行而不是撑破
+  ok  light 1536: 能力说明可见且有对比度
+  ok  light 1536: 选中态与身份行都在
+  ok  light 1536: Provider 折叠标题可见
+  ok  light 1536: Thinking 弹层不出视口
+  ok  light 1536: 不可用状态行在视口内且可读
+  ok  light 1536: 能力未知不画成不支持
+  ok  弹层 z-index 高于右栏与模态遮罩层以下
+  ok  弹层在派发按键前确实处于打开状态，且页面能接收按键
+  ok  真实方向键按漫游序列前进
+  ok  真实 ↑ 从首项回绕到末项
+  ok  真实 Escape 关闭弹层并把焦点还给触发按钮
+  ok  reduced-motion 下静态状态完整（不是一片空白）
+  ok  页面无 JS 异常
+
+UI-3B 真实渲染: 79/79 通过
