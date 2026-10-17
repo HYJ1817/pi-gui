@@ -1,6 +1,8 @@
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
 export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   let backend = null, resources = null, resourceReadSequence = 0; const records = new Map();
+  let rejectObserver = null;
+  const reject = (reason, extra = {}) => { try { rejectObserver?.(reason, extra); } catch { /* observation only */ } };
   const bound = text => {
     const bytes = new TextEncoder().encode(text);
     if (bytes.length <= limit) return text;
@@ -11,7 +13,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
     const sequence = snapshot._runtimeReadSequence;
     if (Number.isInteger(sequence)) {
-      if (sequence < resourceReadSequence) return false;
+      if (sequence < resourceReadSequence) { reject('stale_snapshot'); return false; }
       resourceReadSequence = sequence;
     }
     if (snapshot.backendInstance !== backend) { records.clear(); resources = null; backend = snapshot.backendInstance; }
@@ -22,7 +24,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     }
     for (const item of snapshot.items || []) {
       const prior = records.get(item.conversationId);
-      if (prior && Number.isInteger(item.revision) && item.revision < (prior.item.revision || 0)) continue;
+      if (prior && Number.isInteger(item.revision) && item.revision < (prior.item.revision || 0)) { reject('stale_revision'); continue; }
       if (!prior || !same(prior.owner, item.owner)) {
         if (prior?.owner && item.owner && prior.owner.runtimeId === item.owner.runtimeId && prior.owner.runtimeGeneration === item.owner.runtimeGeneration) {
           if (prior.owner.sessionId && !item.owner.sessionId) continue;
@@ -32,23 +34,39 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     }
     return true;
   }
-  function apply(frame) {
-    if (frame._replay) return false;
+  function applyDetailed(frame) {
+    if (frame._replay) { reject('replay'); return { ok: false, reason: 'replay' }; }
     if (frame.type === 'runtime_state' && frame.owner?.backendInstance === backend) {
       const record = records.get(frame.owner.conversationId);
-      if (!record) return false;
+      if (!record) { reject('unknown_conversation'); return { ok: false, reason: 'unknown_conversation' }; }
       if (record.owner && (record.owner.runtimeId !== frame.owner.runtimeId || record.owner.runtimeGeneration !== frame.owner.runtimeGeneration)
-        && !(Number.isInteger(frame.item?.revision) && frame.item.revision > (record.item.revision || 0))) return false;
-      seed({ backendInstance: backend, items: [frame.item] }); return true;
+        && !(Number.isInteger(frame.item?.revision) && frame.item.revision > (record.item.revision || 0))) {
+        reject('stale_generation');
+        return { ok: false, reason: 'stale_generation' };
+      }
+      seed({ backendInstance: backend, items: [frame.item] }); return { ok: true };
     }
     if (frame.type === 'runtime_closed' && frame.backendInstance === backend) {
       const r = records.get(frame.conversationId);
-      if (!r || !r.owner || r.owner.runtimeId !== frame.owner?.runtimeId || r.owner.runtimeGeneration !== frame.owner?.runtimeGeneration) return false;
-      r.item = frame.item; r.owner = null; r.approvals = []; return true;
+      if (!r || !r.owner || r.owner.runtimeId !== frame.owner?.runtimeId || r.owner.runtimeGeneration !== frame.owner?.runtimeGeneration) {
+        reject('closed_owner_mismatch');
+        return { ok: false, reason: 'closed_owner_mismatch' };
+      }
+      r.item = frame.item; r.owner = null; r.approvals = []; return { ok: true };
     }
-    if (frame.type !== 'runtime_event' || frame.owner?.backendInstance !== backend) return false;
+    if (frame.type !== 'runtime_event' || frame.owner?.backendInstance !== backend) {
+      reject('backend_mismatch');
+      return { ok: false, reason: 'backend_mismatch' };
+    }
     const r = records.get(frame.owner.conversationId);
-    if (!r || !same(r.owner, frame.owner) || frame.eventSequence <= r.cursor) return false;
+    if (!r || !same(r.owner, frame.owner)) {
+      reject('owner_mismatch');
+      return { ok: false, reason: 'owner_mismatch' };
+    }
+    if (frame.eventSequence <= r.cursor) {
+      reject('sequence_not_advanced', { sequenceGap: 0 });
+      return { ok: false, reason: 'sequence_not_advanced' };
+    }
     if (frame.eventSequence > r.cursor + 1) r.truncated = true;
     r.cursor = frame.eventSequence; const e = frame.event;
     if (e.type === 'message_start' && e.message?.role === 'assistant') r.text += '\n';
@@ -61,9 +79,11 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     }
     if (e.type === 'agent_settled' || e.type === 'bridge_status' && e.state !== 'ready') r.approvals = [];
     const bounded = bound(r.text); if (bounded !== r.text) { r.text = bounded; r.truncated = true; }
-    return true;
+    return { ok: true };
   }
-  return { seed, apply, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
+  function apply(frame) { return applyDetailed(frame).ok; }
+  return { seed, apply, applyDetailed, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
+    setRejectObserver(fn) { rejectObserver = typeof fn === 'function' ? fn : null; },
     history(id, messages, expectedOwner, expectedCursor) { const r = records.get(id); if (!r || !same(r.owner, expectedOwner) || r.cursor !== expectedCursor) return false;
       const text = (messages || []).filter(m => ['user', 'assistant'].includes(m.role)).map(m => (m.content || []).filter(c => c.type === 'text').map(c => c.text || '').join('')).join('\n\n');
       r.text = bound(text); if (r.text !== text) r.truncated = true; return true; },

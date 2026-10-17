@@ -19,7 +19,8 @@ import { fmt } from './util.js';
 import { renderModelPicker, renderThinkingPicker, thinkingAvailability, applyChipState, setTriggers } from './ui3-model-picker.js';
 import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
-import { sendCommand, runtimeSessionAction } from './api.js';
+import { sendCommand, runtimeSessionAction, setRequestFailureReporter } from './api.js';
+import { installRendererLogging, logRendererEvent } from './log-client.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
@@ -77,6 +78,7 @@ import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
+import { openLogs } from './logs.js';
 import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
 import { showChat, showRuntimeConversation, runtimeViewElement, workspaceView } from './ui/workspace-surface.js';
@@ -86,7 +88,7 @@ import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler } from './runtime-nav.js';
 import { refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeModels } from './runtime-models.js';
-import { onRuntimeChange, runtimeStore } from './runtime-state.js';
+import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver } from './runtime-state.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
@@ -104,6 +106,23 @@ import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
 import { openAppUpdates, openAppearance } from './settings.js';
+
+/* 日志只做观察：未捕获异常、网络失败与 SSE 断连在这里接入，
+ * 不改变任何业务状态机。 */
+installRendererLogging();
+setRequestFailureReporter((route, reason, status) => {
+  logRendererEvent('network.request_failed', { route, reason, httpStatus: status });
+});
+setRuntimeStoreRejectObserver((reason, extra = {}) => {
+  logRendererEvent('ui.runtime_frame_rejected', {
+    reason,
+    ...(Number.isInteger(extra.sequenceGap) ? { sequenceGap: extra.sequenceGap } : {}),
+  });
+});
+{
+  const missing = Object.values(el).filter((node) => !node).length;
+  if (missing) logRendererEvent('ui.dom_missing', { module: 'app', operation: 'bootstrap', count: missing });
+}
 
 /* ---------- 装配 ---------- */
 
@@ -206,10 +225,25 @@ if (btnBrowser) {
 
 /* ---------- SSE ---------- */
 
+let sseWasDown = false;
+let sseDownAt = 0;
 function connect() {
   const es = new EventSource('/api/events');
-  es.onopen = () => setTransportOnline(true);
-  es.onerror = () => setTransportOnline(false);
+  es.onopen = () => {
+    setTransportOnline(true);
+    if (sseWasDown) {
+      logRendererEvent('network.sse_reconnect', {}, { durationMs: Date.now() - sseDownAt });
+      sseWasDown = false;
+    }
+  };
+  es.onerror = () => {
+    setTransportOnline(false);
+    if (!sseWasDown) {
+      sseWasDown = true;
+      sseDownAt = Date.now();
+      logRendererEvent('network.sse_disconnect', { reason: 'error' });
+    }
+  };
   es.onmessage = (e) => {
     let evt;
     try {
@@ -942,6 +976,7 @@ document.addEventListener('pi-gui:right-pane', (event) => {
 $('navProviders').onclick = openProvidersPanel;
 $('navProviderAuth').onclick = openProviderAuthPanel;
 $('navDiagnostics').onclick = openDiagnostics;
+$('navLogs').onclick = openLogs;
 $('navCapabilities').onclick = () => openExtensions({ tab: 'capabilities' });
 $('navMcp').onclick = () => openExtensions({ tab: 'mcp' });
 $('navAppUpdates').onclick = openAppUpdates;
@@ -1153,6 +1188,7 @@ defineCommands([
   { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => openProvidersPanel() },
   { id: 'app.providerAuth', title: '供应商与认证', group: '全局', keywords: 'provider authentication OAuth login 认证', run: () => openProviderAuthPanel() },
   { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => openDiagnostics() },
+  { id: 'app.logs', title: '日志与故障报告', group: '全局', keywords: 'logs 日志 故障报告 bug report zip 导出', run: () => openLogs() },
   { id: 'app.copy-diagnostics', title: '复制诊断摘要', group: '全局', keywords: 'copy diagnostics 复制 摘要 issue', run: () => copyDiagnosticsSummary() },
   { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', run: () => openShortcutHelp() },
 ]);

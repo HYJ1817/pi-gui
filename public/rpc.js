@@ -9,6 +9,7 @@
  *     所以设置类命令一律**回读 get_state**，不然界面会显示一个 pi 根本没接受的值。 */
 
 import { el, S, confirmStop, invalidateStop } from './state.js';
+import { logRendererEvent } from './log-client.js';
 import { sendCommand, downloadSessionHtml } from './api.js';
 import { toast, withNotificationSource } from './ui/toast.js';
 import { setStatus } from './shell.js';
@@ -108,7 +109,7 @@ function acceptModelResponse(evt) {
       return true;
     }
     if (evt.success) toast('已切换到 ' + (evt.data?.name || evt.data?.id || request.modelId), 'info');
-    else if (evt.error) toast(evt.error, 'error');
+    else if (evt.error) { logRendererEvent('ui.model_switch_failed', { phase: 'response', code: 'command_failed' }); toast(evt.error, 'error'); }
     // 失败也读取 Pi 的实际模型，绝不保留乐观选择。
     refreshModelState({ completion: { resolve: request.resolve, success: evt.success === true, provider: request.provider, modelId: request.modelId } });
     return true;
@@ -140,6 +141,7 @@ export function onResponse(evt) {
   if (evt._replay && ['new_session', 'fork', 'set_model', 'compact'].includes(evt.command)) return;
   if (acceptModelResponse(evt)) return;
   if (!evt.success) {
+    if (evt.command === 'set_thinking_level') logRendererEvent('ui.thinking_failed', { phase: 'response', code: 'command_failed' });
     if (evt.command !== 'get_available_thinking_levels') {
       toast(evt.error || `命令 ${evt.command} 执行失败`, 'error');
     }
@@ -303,11 +305,15 @@ export async function stop() {
   /* 「正在停止…」而不是「已请求停止…」—— 后者会让用户以为已经停了。 */
   setStatus('正在停止…');
 
+  const stopStartedAt = Date.now();
   const result = await sendCommand({ type: 'abort' });
   /* 代对不上 = 这次停止已经作废（换了工作区 / Pi 换代 / 又点了一次 /
    * SSE 已经先行确认）。迟到的应答不许再动界面。 */
   if (S.stopGeneration !== generation) return;
 
+  logRendererEvent('ui.stop_result', {
+    result: result?.ok ? 'confirmed' : result?.code === 'browser_cancel_unconfirmed' ? 'browser_cancel_unconfirmed' : result?.network ? 'unknown' : result?.code || 'failed',
+  }, { durationMs: Date.now() - stopStartedAt });
   if (result?.ok) return applyStopConfirmed();
 
   /* 浏览器取消确认失败：Pi 那边**照旧收到 abort 了**（两件事，不能因为浏览器

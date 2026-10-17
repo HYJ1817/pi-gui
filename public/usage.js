@@ -17,6 +17,12 @@ import { withModelCapability, modelIdentity } from './model-capabilities.js';
 import { renderModelControls } from './composer.js';
 import { renderAttachments } from './attachments.js';
 import { observeFallbackState } from './fallback.js';
+import { logRendererEvent } from './log-client.js';
+
+/* 能力未知只用于低频诊断日志；它不是业务判定，视图仍由 model-capabilities 决定。 */
+function contextWindowMissing(c) {
+  return c?.contextWindow === null || c?.contextWindow === undefined;
+}
 
 /* ---------- 辅助工具 ---------- */
 
@@ -663,6 +669,11 @@ let modelWaiters = [];
 export function onModels(d) {
   const list = Array.isArray(d) ? d : d?.models;
   S.models = (Array.isArray(list) ? list : []).map(withModelCapability).filter(m => m?.modelId);
+  const unknownCapability = S.models.filter(m => {
+    const c = m.capability || {};
+    return contextWindowMissing(c) && !['imageInput', 'reasoning', 'toolCalling'].some(k => c.capabilities?.[k] !== null && c.capabilities?.[k] !== undefined);
+  }).length;
+  if (unknownCapability) logRendererEvent('ui.model_capability_unknown', { count: unknownCapability });
   if (modelWaiters.length) {
     const ws = modelWaiters;
     modelWaiters = [];

@@ -14,6 +14,7 @@ import { fmt, fmtSize, icon, iconFor } from './util.js';
 import { uploadFile } from './api.js';
 import { updateSendState, imageInputBlocked } from './composer.js';
 import { toast } from './ui/toast.js';
+import { logRendererEvent } from './log-client.js';
 
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -61,6 +62,7 @@ export async function handleFiles(fileList) {
       try {
         att.dataUrl = await fileToDataUrl(f);
       } catch {
+        logRendererEvent('ui.attachment_failed', { kind: 'image', reason: 'read_failed' });
         /* 缩略图失败不影响上传 */
       }
     }
@@ -84,6 +86,7 @@ export async function handleFiles(fileList) {
       att.loading = false;
       if (j.error) att.error = j.error;
     } catch (err) {
+      logRendererEvent('ui.attachment_failed', { kind: isImg ? 'image' : 'text', reason: 'upload_failed' });
       att.loading = false;
       att.error = err.message || '上传失败';
     }

@@ -22,6 +22,7 @@ import { S } from './state.js';
 import { closeModal, confirmModal, confirmSurfaceMeta, dismissConfirm, modalSurfaceMeta, openModal } from './ui/modal.js';
 import { feedbackContext, toast } from './ui/toast.js';
 import { sendCommand } from './api.js';
+import { logRendererEvent } from './log-client.js';
 import {
   approvalSummary,
   decidePayload,
@@ -99,6 +100,8 @@ async function deliver(request, send) {
   const network = result?.network === true;
   const ok = result?.ok === true;
   const outcome = ok ? 'sent' : result?.ok === false && !network ? 'failed' : 'unknown';
+  if (outcome === 'failed') logRendererEvent('runtime.approval_failed', { state: 'failed', reason: 'delivery_failed' });
+  else if (outcome === 'unknown') logRendererEvent('runtime.approval_unknown', { state: 'unknown', reason: 'delivery_unknown' });
   rememberDelivery(request.requestId, outcome, network);
   if (entry) entry.lastDelivery = outcome;
   return { ok, network, outcome };

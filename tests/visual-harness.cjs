@@ -1205,6 +1205,45 @@ const server = http.createServer(async (req, res) => {
     },
   });
 
+  /* UI-5：日志与故障报告的离线夹具。只用于界面/截图，不是用户日志。 */
+  if (p === '/api/logs/status') return json(res, 200, {
+    ok: true,
+    status: {
+      ok: true, version: 1, role: 'backend', appVersion: '0.25.0',
+      enabled: true, mode: 'standard', verboseUntil: null, verboseExpired: false,
+      retentionDays: 7, maxTotalMB: 20, maxFileBytes: 4194304,
+      dirWritable: true, degraded: false, lastErrorCode: null, writeFailures: 0, droppedRecords: 0,
+      settingsCorrupt: false, usageBytes: 73728, fileCount: 3, crashFileCount: 1,
+      files: [
+        { name: 'app-20261017.jsonl', role: 'app', kind: 'normal', size: 58368, date: '2026-10-17' },
+        { name: 'main-20261017.jsonl', role: 'main', kind: 'normal', size: 7168, date: '2026-10-17' },
+        { name: 'app-crash-20261017.jsonl', role: 'app', kind: 'crash', size: 8192, date: '2026-10-17' },
+      ],
+      session: { startedAt: '2026-10-17T11:30:00.000Z', previousUnclean: null },
+      recentErrors: [
+        { timestamp: '2026-10-17T11:59:00.000Z', level: 'ERROR', source: 'pi-bridge', event: 'bridge.request_timeout', code: 'BRIDGE_TIMEOUT', details: { operation: 'get_state', durationMs: 1200 } },
+        { timestamp: '2026-10-17T11:58:00.000Z', level: 'WARN', source: 'runtime', event: 'runtime.owner_rejected', code: 'OWNER_STALE', details: { operation: 'resolve', reason: 'owner_stale' } },
+      ],
+    },
+  });
+  if (p === '/api/logs/entries') {
+    const entries = [
+      { v: 1, timestamp: '2026-10-17T11:59:00.000Z', level: 'ERROR', source: 'pi-bridge', event: 'bridge.request_timeout', code: 'BRIDGE_TIMEOUT', correlationId: 'corr-demo-1001', durationMs: 1200, process: 'backend', details: { operation: 'get_state', durationMs: 1200 }, cursor: 'fixture-1' },
+      { v: 1, timestamp: '2026-10-17T11:58:00.000Z', level: 'WARN', source: 'runtime', event: 'runtime.owner_rejected', code: 'OWNER_STALE', correlationId: 'corr-demo-1002', process: 'backend', details: { operation: 'resolve', reason: 'owner_stale' }, cursor: 'fixture-2' },
+      { v: 1, timestamp: '2026-10-17T11:57:00.000Z', level: 'INFO', source: 'renderer', event: 'network.sse_reconnect', process: 'renderer', details: { durationMs: 800 }, cursor: 'fixture-3' },
+      { v: 1, timestamp: '2026-10-17T11:56:00.000Z', level: 'DEBUG', source: 'electron', event: 'electron.browser_view_state', process: 'main', details: { operation: 'attach', state: 'already_attached' }, cursor: 'fixture-4' },
+    ];
+    return json(res, 200, { ok: true, entries, nextCursor: null, truncated: false, scannedFiles: 3 });
+  }
+  if (p === '/api/logs/settings' && req.method === 'POST') {
+    return json(res, 200, { ok: true, status: { ok: true, enabled: true, mode: 'standard', retentionDays: 7, maxTotalMB: 20, usageBytes: 73728, fileCount: 3, crashFileCount: 1, degraded: false, files: [], session: {}, recentErrors: [] } });
+  }
+  if (p === '/api/logs/export/preview' && req.method === 'POST') {
+    return json(res, 200, { ok: true, windowMinutes: 30, entryCount: 24, errorCount: 2, truncated: false, filesIncluded: ['README.txt', 'report.md', 'diagnostics.json', 'events.jsonl', 'errors.jsonl'], files: [] });
+  }
+  if (p === '/api/logs/clear' && req.method === 'POST') return json(res, 200, { ok: true, fileCount: 3, bytes: 73728 });
+  if (p === '/api/logs/events' && req.method === 'POST') return json(res, 200, { ok: true, accepted: 0 });
+
   if (p === '/api/projects') {
     if (req.method === 'DELETE') {
       hotfixNoProject = true;

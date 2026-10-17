@@ -10,6 +10,21 @@
 import { feedbackContext, toast } from './ui/toast.js';
 import { S } from './state.js';
 
+/* 日志模块不直接 import 本文件（会成环）。由装配层注入一个只读报告器，
+ * 只传 /api/... 路由与状态码，不传 URL 查询串或错误正文。 */
+let requestFailureReporter = null;
+export function setRequestFailureReporter(fn) { requestFailureReporter = typeof fn === 'function' ? fn : null; }
+function requestRoute(url) {
+  try {
+    const pathname = new URL(String(url), 'http://127.0.0.1').pathname;
+    return /^\/api\/[A-Za-z0-9_./-]{1,80}$/.test(pathname) ? pathname : '/api/unknown';
+  } catch { return '/api/unknown'; }
+}
+function reportRequestFailure(url, status) {
+  if (!requestFailureReporter) return;
+  try { requestFailureReporter(requestRoute(url), status === 0 ? 'network' : 'http', Number.isFinite(status) ? status : 0); } catch { /* logging only */ }
+}
+
 /* 用户级认证不携带 workspace/model generation。 */
 export const fetchProviderAuth = () => getJSON('/api/provider-auth');
 export const loginProviderAuth = (providerId) => sendJSON('/api/provider-auth/login', { body: { providerId, authType: 'oauth' } });
@@ -39,8 +54,10 @@ export async function downloadSessionHtml() {
 export async function getJSON(url, headers) {
   try {
     const r = await fetch(url, headers ? { headers } : undefined);
+    if (r.status >= 500) reportRequestFailure(url, r.status);
     return await r.json();
   } catch (err) {
+    reportRequestFailure(url, 0);
     return { ok: false, error: err.message, network: true };
   }
 }
@@ -61,8 +78,10 @@ export async function sendJSON(url, { method = 'POST', body, contentType, header
   if (headers) opts.headers = { ...opts.headers, ...headers };
   try {
     const r = await fetch(url, opts);
+    if (r.status >= 500) reportRequestFailure(url, r.status);
     return await r.json();
   } catch (err) {
+    reportRequestFailure(url, 0);
     return { ok: false, error: err.message, network: true };
   }
 }
@@ -124,6 +143,44 @@ export async function downloadSessionRevertBackup(body, isCurrent = () => true) 
   } catch {return {ok:false,code:'export_unavailable'};}
 }
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
+/** Renderer 结构化日志批量上报；不经过业务状态机。 */
+export const sendLogEvents = events => sendJSON('/api/logs/events', { body: { events } });
+export const fetchLogsStatus = () => getJSON('/api/logs/status');
+export const fetchLogEntries = (params = {}) => getJSON('/api/logs/entries?' + new URLSearchParams(params));
+export const updateLogSettings = patch => sendJSON('/api/logs/settings', { body: patch });
+export const clearLogs = () => sendJSON('/api/logs/clear', { body: { confirm: true } });
+export const previewLogExport = windowMinutes => sendJSON('/api/logs/export/preview', { body: { windowMinutes } });
+
+/** 生成并保存故障报告 ZIP。响应是二进制，所以不经过 sendJSON。 */
+export async function downloadLogReport({ windowMinutes = 30, description = '', repro = '' } = {}) {
+  try {
+    const response = await fetch('/api/logs/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: true, windowMinutes, description, repro }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      return { ok: false, network: false, code: body?.code || 'export_failed', reason: body?.reason || null };
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"\s;]+)"?/i);
+    const filename = match ? match[1] : 'pi-gui-bugreport.zip';
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { ok: true, blob, filename };
+  } catch {
+    return { ok: false, network: true, code: 'export_failed', reason: null };
+  }
+}
 export const fetchProcesses = () => getJSON('/api/processes');
 export const controlProcess = body => sendJSON('/api/processes',{body});
 export const fetchProcessLogs = (generation,id,revision,cursor=0) => getJSON('/api/processes?'+new URLSearchParams({generation,id,revision,cursor}));
