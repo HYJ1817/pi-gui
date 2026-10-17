@@ -14,7 +14,7 @@ import {
 import { buildDiagnosticSummary } from './diagnostics.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
-import { logRendererEvent } from './log-client.js';
+import { logRendererEvent, setRendererLoggingEnabled } from './log-client.js';
 
 const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'];
 const SOURCES = ['app', 'electron', 'pi-bridge', 'runtime', 'renderer', 'browser', 'ui', 'network', 'logs', 'settings'];
@@ -167,6 +167,9 @@ export function openLogs() {
       }
       status = result.status;
       statusError = null;
+      /* 后端是启用状态的唯一真相；这里只把结果同步给上报客户端，
+       * 让“用户关闭日志”和“日志重新启用”都不需要额外的业务状态机。 */
+      setRendererLoggingEnabled(status.enabled === true);
       if (render && tab === 'overview') renderOverview();
       if (tab === 'logs' && logListHost && !entries.length) {
         const source = document.querySelector('.ui5-log-filter-source');
@@ -334,6 +337,7 @@ export function openLogs() {
         return;
       }
       status = result.status || status;
+      setRendererLoggingEnabled(status.enabled === true);
       if (tab === 'overview') renderOverview();
       toast('日志设置已更新', 'info');
     }

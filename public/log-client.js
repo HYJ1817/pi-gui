@@ -5,7 +5,11 @@
  * 不记录用户输入、聊天正文、工具输出或 URL 查询参数。
  *
  * 设计约束：
- *   - 队列有界；网络失败即停止本轮上报，避免日志拖慢或拖死界面；
+ *   - 队列有界；网络失败时只丢掉**已经发出但无法确认送达**的那一批，
+ *     不重放 —— 重放会让一次故障在日志里变成两份；
+ *   - 暂时断线用有上限的指数退避恢复；后端恢复后新事件继续落盘；
+ *   - 用户关闭日志（后端返回 disabled）时不继续请求，等设置界面显式恢复；
+ *   - 协议/认证类错误（4xx、无效响应）停止上报，不再无限重试；
  *   - 同一事件在短时间内只发一次（滚动/渲染循环不会把日志打满）；
  *   - 全局异常只取 error.name 与自身模块的安全堆栈帧，绝不取 message；
  *   - 事件名最终由后端白名单再校验一次；本模块不是信任边界。
@@ -16,12 +20,26 @@ const MAX_QUEUE = 40;
 const BATCH_SIZE = 10;
 const FLUSH_MS = 1200;
 const DEDUPE_MS = 5000;
+const RETRY_BASE_MS = 1000;
+const RETRY_MAX_MS = 30000;
+/* 连续失败到这个次数后，每次只探一条事件：避免整批整批地丢。 */
+const PROBE_AFTER_FAILURES = 5;
+
 const seen = new Map();
 let queue = [];
 let timer = null;
-let failing = false;
+let sending = false;
 let installed = false;
 let sequence = 0;
+let failures = 0;
+let failedSinceReport = 0;
+let dropped = 0;
+let droppedSinceReport = 0;
+let nextAttemptAt = 0;
+let suspended = false;
+let stopped = false;
+/* 页面卸载/重新安装时让仍在飞的请求失效，避免它回来后继续排计时器。 */
+let generation = 0;
 
 function safeName(value) {
   const name = value && typeof value.name === 'string' ? value.name : '';
@@ -68,6 +86,8 @@ const CLIENT_EVENTS = new Set([
   'runtime.sequence_rejected', 'runtime.revision_rejected', 'runtime.owner_rejected',
   'ui.runtime_frame_rejected', 'ui.runtime_owner_rejected', 'ui.logs_view_failed',
   'ui.logs_export_failed', 'ui.action_failed', 'app.uncaught_exception', 'app.unhandled_rejection',
+  /* 本地上报队列恢复后，用固定事件补偿报告丢弃计数；不含请求正文。 */
+  'logs.client_degraded',
 ]);
 
 function cleanDetails(details) {
@@ -87,8 +107,62 @@ function cleanDetails(details) {
   return out;
 }
 
+function clearTimer() {
+  if (!timer) return;
+  clearTimeout(timer);
+  timer = null;
+}
+
+function schedule(delay = FLUSH_MS) {
+  if (timer || sending || suspended || stopped || !queue.length) return;
+  /* 退避期间新事件必须等 remaining backoff，而不是重新等一个 FLUSH_MS；
+   * 队列为空时不会保留计时器，恢复由“下一条事件 + nextAttemptAt”驱动。 */
+  const remaining = Math.max(0, nextAttemptAt - Date.now());
+  const wait = failures > 0 ? remaining : Math.max(delay, remaining);
+  timer = setTimeout(() => {
+    timer = null;
+    void flush();
+  }, wait);
+}
+
+function noteDropped(eventCount, reportable = true) {
+  if (eventCount <= 0) return;
+  dropped += eventCount;
+  if (reportable) droppedSinceReport += eventCount;
+}
+
+/** 队列满时丢最旧的，保持内存有界；这是本地丢弃，不会产生新请求。 */
+function trimQueue() {
+  while (queue.length > MAX_QUEUE) {
+    queue.shift();
+    noteDropped(1);
+  }
+}
+
+function emitDegradedReport(reason) {
+  if (suspended || stopped) return false;
+  if (droppedSinceReport <= 0 && failedSinceReport <= 0) return false;
+  const count = droppedSinceReport;
+  const failureCount = failedSinceReport;
+  const accepted = logRendererEvent('logs.client_degraded', {
+    reason,
+    count,
+    failures: failureCount,
+  });
+  /* 去重窗口内可能拒绝这条报告；只有真正入队才清计数。 */
+  if (accepted) {
+    droppedSinceReport = Math.max(0, droppedSinceReport - count);
+    failedSinceReport = Math.max(0, failedSinceReport - failureCount);
+  }
+  return accepted;
+}
+
 export function logRendererEvent(event, details = {}, meta = {}) {
-  if (!CLIENT_EVENTS.has(event) || failing) return false;
+  if (!CLIENT_EVENTS.has(event)) return false;
+  if (suspended || stopped) {
+    noteDropped(1);
+    return false;
+  }
   const cleaned = cleanDetails(details);
   const key = event + ':' + JSON.stringify(cleaned);
   const now = Date.now();
@@ -106,7 +180,7 @@ export function logRendererEvent(event, details = {}, meta = {}) {
     ...(Number.isFinite(meta.durationMs) ? { durationMs: meta.durationMs } : {}),
     correlationId: 'ui-' + String(++sequence).padStart(6, '0') + '-' + Math.random().toString(36).slice(2, 10),
   });
-  while (queue.length > MAX_QUEUE) queue.shift();
+  trimQueue();
   schedule();
   return true;
 }
@@ -115,30 +189,100 @@ export function logOnce(event, details = {}, meta = {}) {
   return logRendererEvent(event, details, meta);
 }
 
-function schedule() {
-  if (timer || failing) return;
-  timer = setTimeout(() => {
-    timer = null;
-    void flush();
-  }, FLUSH_MS);
+/** 把 HTTP 结果分成三类：成功、可恢复、不可恢复。 */
+function isTransientFailure(result) {
+  if (!result || result.network === true) return true;
+  if (result.code === 'invalid_response') return false;
+  const status = Number(result.status);
+  if (!Number.isFinite(status) || status === 0) return true;
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function retryDelay() {
+  return Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.min(Math.max(failures - 1, 0), 5));
 }
 
 async function flush() {
-  if (failing || !queue.length) return;
-  const batch = queue.splice(0, BATCH_SIZE);
-  try {
-    const result = await sendLogEvents(batch);
-    if (result && result.ok === false && result.network) {
-      failing = true;
-      queue = [];
-      return;
-    }
-  } catch {
-    failing = true;
-    queue = [];
+  if (sending || suspended || stopped || !queue.length) return;
+  const now = Date.now();
+  if (now < nextAttemptAt) {
+    schedule(nextAttemptAt - now);
     return;
   }
-  if (queue.length) schedule();
+  sending = true;
+  const run = generation;
+  /* 连续失败后只探一条：失败时丢掉的批次更小，恢复探测也更快。 */
+  const batch = queue.splice(0, failures >= PROBE_AFTER_FAILURES ? 1 : BATCH_SIZE);
+  let result = null;
+  try {
+    result = await sendLogEvents(batch);
+  } catch {
+    result = { ok: false, network: true, status: 0 };
+  }
+  sending = false;
+
+  /* 页面已卸载，或请求期间用户关闭了日志：不要再排下一轮。 */
+  if (run !== generation || suspended || stopped) return;
+
+  if (result && result.ok === true && result.disabled === true) {
+    suspended = true;
+    noteDropped(batch.length + queue.length);
+    queue = [];
+    nextAttemptAt = 0;
+    clearTimer();
+    return;
+  }
+
+  if (result && result.ok === true) {
+    const recovered = failures > 0;
+    failures = 0;
+    nextAttemptAt = 0;
+    if (recovered) emitDegradedReport('network_recovered');
+    else if (droppedSinceReport > 0) emitDegradedReport('queue_overflow');
+    if (queue.length) schedule();
+    return;
+  }
+
+  if (isTransientFailure(result)) {
+    failures += 1;
+    failedSinceReport += 1;
+    /* 这一批已经发出，但没拿到确认：宁可丢掉也不重放。 */
+    noteDropped(batch.length);
+    nextAttemptAt = Date.now() + retryDelay();
+    schedule(nextAttemptAt - Date.now());
+    return;
+  }
+
+  /* 4xx / 无效响应：当前页面继续重试只会制造同样的失败。 */
+  stopped = true;
+  noteDropped(batch.length + queue.length);
+  queue = [];
+  nextAttemptAt = 0;
+  clearTimer();
+}
+
+/** 设置界面同步启用状态；恢复时清掉退避，让下一次事件立刻可发。 */
+export function setRendererLoggingEnabled(enabled) {
+  if (enabled === false) {
+    const wasActive = !suspended;
+    suspended = true;
+    noteDropped(queue.length);
+    queue = [];
+    nextAttemptAt = 0;
+    clearTimer();
+    return wasActive;
+  }
+  if (enabled !== true) return false;
+  const wasBlocked = suspended || stopped;
+  suspended = false;
+  stopped = false;
+  if (wasBlocked) {
+    failures = 0;
+    nextAttemptAt = 0;
+    if (droppedSinceReport > 0) emitDegradedReport('resumed');
+    schedule();
+  }
+  return wasBlocked;
 }
 
 /** 安装全局错误/未处理 rejection 观察器。只调用一次。 */
@@ -181,9 +325,24 @@ export function installRendererLogging() {
     window.removeEventListener('unhandledrejection', onRejection);
     window.removeEventListener('error', onResourceError, true);
     installed = false;
+    generation += 1;
+    clearTimer();
+    queue = [];
+    sending = false;
   };
 }
 
 export function rendererLogSnapshot() {
-  return { queued: queue.length, failing, installed, seen: seen.size };
+  return {
+    queued: queue.length,
+    failing: failures > 0,
+    installed,
+    seen: seen.size,
+    sending,
+    failures,
+    dropped,
+    suspended,
+    stopped,
+    nextAttemptAt,
+  };
 }

@@ -143,8 +143,36 @@ export async function downloadSessionRevertBackup(body, isCurrent = () => true) 
   } catch {return {ok:false,code:'export_unavailable'};}
 }
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
-/** Renderer 结构化日志批量上报；不经过业务状态机。 */
-export const sendLogEvents = events => sendJSON('/api/logs/events', { body: { events } });
+/** Renderer 结构化日志批量上报；不经过业务状态机。
+ *
+ * 特意不复用 sendJSON：日志通道自己失败时不能再走 requestFailureReporter
+ * 生成新的日志事件（那会形成“上报失败 → 再记一条失败”的反馈回路）。
+ * 这里保留 HTTP 状态码，客户端据此区分暂时断线与不可恢复错误。 */
+export async function sendLogEvents(events) {
+  try {
+    const response = await fetch('/api/logs/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events }),
+    });
+    let result = null;
+    try { result = await response.json(); } catch { /* 非 JSON 响应按无效响应处理 */ }
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        ...(result && typeof result.code === 'string' ? { code: result.code } : {}),
+      };
+    }
+    if (!result || typeof result !== 'object' || Array.isArray(result) || typeof result.ok !== 'boolean') {
+      return { ok: false, status: response.status, code: 'invalid_response' };
+    }
+    return { ...result, status: response.status };
+  } catch {
+    /* 不把 fetch 的异常正文带出去；调用方只需要“没拿到响应”。 */
+    return { ok: false, network: true, status: 0 };
+  }
+}
 export const fetchLogsStatus = () => getJSON('/api/logs/status');
 export const fetchLogEntries = (params = {}) => getJSON('/api/logs/entries?' + new URLSearchParams(params));
 export const updateLogSettings = patch => sendJSON('/api/logs/settings', { body: patch });
