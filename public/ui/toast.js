@@ -2,9 +2,35 @@
 
 import { el } from '../state.js';
 
+const STYLE_ID = 'ui4-feedback-style';
+const HOST_CLASS = 'ui4-feedback-toasts';
+const DEFAULT_DURATION = { info: 4200, success: 4200, warning: 7000, error: null };
 const recent = new Map();
 const DEDUPE_MS = 2500;
 let notificationSource = 'live';
+
+const KINDS = {
+  info: 'info',
+  success: 'success',
+  ok: 'success',
+  warn: 'warning',
+  warning: 'warning',
+  error: 'error',
+  danger: 'error',
+  bad: 'error',
+};
+
+export function ensureFeedbackStyles() {
+  if (typeof document === 'undefined' || !document.head) return false;
+  if (document.getElementById(STYLE_ID)) return true;
+  const link = document.createElement('link');
+  link.id = STYLE_ID;
+  link.rel = 'stylesheet';
+  link.href = '/ui4-feedback.css';
+  link.dataset.ui4Feedback = '';
+  document.head.appendChild(link);
+  return true;
+}
 
 /* Scope only synchronous event dispatch/rendering, never an async operation.
  * Reuse SSE's replay provenance; restoring state must not notify again. */
@@ -14,23 +40,185 @@ export function withNotificationSource(source, render) {
   try { return render(); } finally { notificationSource = previous; }
 }
 
-export function toast(msg, kind = 'info') {
-  if (notificationSource !== 'live') return;
-  if (!msg) return;
+export function toast(msg, kind = 'info', options = {}) {
+  if (notificationSource !== 'live') return null;
+  if (!msg) return null;
+  const text = String(msg);
+  const normalized = normalizeKind(kind);
+  const opts = options && typeof options === 'object' ? options : {};
   const now = Date.now();
-  const key = `${kind}\u0000${msg}`;
-  if (now - (recent.get(key) || 0) < DEDUPE_MS) return;
+  const key = `${normalized}\u0000${text}`;
+  if (now - (recent.get(key) || 0) < DEDUPE_MS) return null;
   recent.set(key, now);
   if (recent.size > 100) {
     for (const [k, at] of recent) if (now - at >= DEDUPE_MS) recent.delete(k);
   }
-  const t = document.createElement('div');
-  t.className = 'toast' + (kind === 'error' ? ' error' : kind === 'warn' ? ' warn' : '');
-  t.textContent = msg;
-  el.toasts.appendChild(t);
-  setTimeout(() => {
-    t.style.transition = 'opacity .25s';
-    t.style.opacity = '0';
-    setTimeout(() => t.remove(), 260);
-  }, 4200);
+
+  const host = el.toasts;
+  if (!host) return null;
+  const node = document.createElement('div');
+  node.className = legacyClass(normalized);
+  node.dataset.kind = normalized;
+  node.setAttribute('role', normalized === 'error' ? 'alert' : 'status');
+
+  const icon = document.createElement('span');
+  icon.className = 'ui4-feedback-toast-icon';
+  icon.setAttribute('aria-hidden', 'true');
+
+  const body = document.createElement('div');
+  body.className = 'ui4-feedback-toast-body';
+  body.textContent = text;
+
+  node.append(icon, body);
+
+  const action = opts.action;
+  if (action && action.label && typeof action.run === 'function') {
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'ui4-feedback-toast-action';
+    actionBtn.textContent = String(action.label);
+    if (action.title) actionBtn.title = String(action.title);
+    actionBtn.onclick = () => action.run();
+    node.append(actionBtn);
+  }
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'ui4-feedback-toast-close';
+  close.title = '关闭通知';
+  close.setAttribute('aria-label', '关闭通知');
+  close.onclick = () => dismiss(node);
+  node.append(close);
+
+  initHost(host);
+  placeToasts();
+  host.appendChild(node);
+  host.scrollTop = host.scrollHeight;
+
+  const duration = resolveDuration(normalized, opts);
+  if (duration != null) arm(node, duration);
+  node.addEventListener('pointerenter', () => pause(node));
+  node.addEventListener('pointerleave', () => resume(node));
+  node.addEventListener('focusin', () => pause(node));
+  node.addEventListener('focusout', (event) => {
+    if (!node.contains(event.relatedTarget)) resume(node);
+  });
+  return node;
+}
+
+function normalizeKind(kind) {
+  const raw = String(kind == null ? 'info' : kind).toLowerCase();
+  return KINDS[raw] || 'info';
+}
+
+function legacyClass(kind) {
+  return 'toast ui4-feedback-toast ui4-feedback-toast-' + kind
+    + (kind === 'error' ? ' error' : kind === 'warning' ? ' warn' : '');
+}
+
+function resolveDuration(kind, opts) {
+  if (opts.persistent === true) return null;
+  if (Number.isFinite(opts.duration)) return opts.duration > 0 ? opts.duration : null;
+  if (opts.persistent === false) return DEFAULT_DURATION[kind] ?? 4200;
+  return DEFAULT_DURATION[kind];
+}
+
+function arm(node, duration) {
+  node._ui4Deadline = Date.now() + duration;
+  node._ui4Remaining = duration;
+  node._ui4Timer = setTimeout(() => dismiss(node), duration);
+}
+
+function pause(node) {
+  if (!node._ui4Timer) return;
+  clearTimeout(node._ui4Timer);
+  node._ui4Timer = null;
+  node._ui4Remaining = Math.max(0, node._ui4Deadline - Date.now());
+}
+
+function resume(node) {
+  if (node._ui4Timer || node._ui4Remaining == null || !node.isConnected) return;
+  arm(node, node._ui4Remaining);
+}
+
+function dismiss(node) {
+  if (!node || node.dataset.leaving === 'true') return;
+  node.dataset.leaving = 'true';
+  if (node._ui4Timer) clearTimeout(node._ui4Timer);
+  node._ui4Timer = null;
+  const hadFocus = node.contains(document.activeElement);
+  node.classList.add('ui4-feedback-toast-leaving');
+  setTimeout(() => node.remove(), 180);
+  if (hadFocus) {
+    const target = el.input && !el.input.disabled ? el.input : document.body;
+    target?.focus?.();
+  }
+}
+
+function onHostKeydown(event) {
+  if (event.key !== 'Escape') return;
+  const node = event.target && event.target.closest ? event.target.closest('.ui4-feedback-toast') : null;
+  if (!node) return;
+  event.preventDefault();
+  dismiss(node);
+}
+
+function initHost(host) {
+  host.classList.add(HOST_CLASS);
+  if (host.dataset.ui4FeedbackReady === '1') return;
+  host.dataset.ui4FeedbackReady = '1';
+  host.setAttribute('role', 'region');
+  host.setAttribute('aria-label', '通知');
+  host.addEventListener('keydown', onHostKeydown);
+  if (typeof MutationObserver === 'function') {
+    try {
+      let queued = false;
+      const observer = new MutationObserver(() => {
+        if (queued) return;
+        queued = true;
+        const run = () => { queued = false; placeToasts(); };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+        else run();
+      });
+      const stage = document.querySelector('.stage');
+      if (stage) observer.observe(stage, { attributes: true, attributeFilter: ['style'] });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+    } catch { /* 布局观察只是位置微调，失败不影响通知本身 */ }
+  }
+}
+
+function placeToasts() {
+  const host = el.toasts;
+  if (!host || typeof window === 'undefined') return;
+  const vw = window.innerWidth || 0;
+  const vh = window.innerHeight || 0;
+  let right = 18;
+  let bottom = 18;
+  let maxWidth = vw > 0 ? Math.max(160, vw - 36) : 380;
+
+  const pane = document.getElementById('rightPane');
+  if (pane && !pane.hidden) {
+    const rect = pane.getBoundingClientRect();
+    if (rect.width > 0 && rect.left > 0 && vw > 0) {
+      right = Math.max(18, vw - rect.left + 18);
+      maxWidth = Math.min(maxWidth, Math.max(160, rect.left - 24));
+    }
+  }
+
+  const composer = document.getElementById('chatComposer');
+  if (composer && composer.getClientRects && composer.getClientRects().length) {
+    const rect = composer.getBoundingClientRect();
+    if (rect.height > 0 && rect.top > 0 && vh > 0) bottom = Math.max(18, vh - rect.top + 12);
+  }
+
+  host.style.setProperty('--ui4-toast-right', right + 'px');
+  host.style.setProperty('--ui4-toast-bottom', bottom + 'px');
+  host.style.setProperty('--ui4-toast-max', maxWidth + 'px');
+}
+
+ensureFeedbackStyles();
+if (typeof window !== 'undefined') window.addEventListener('resize', placeToasts);
+if (typeof document !== 'undefined') {
+  document.addEventListener('pi-gui:right-pane', placeToasts);
+  document.addEventListener('pi-gui:workspace-view', placeToasts);
 }

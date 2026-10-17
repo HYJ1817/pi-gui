@@ -1,0 +1,57 @@
+{
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "checks": [
+    {
+      "name": "Electron: four toast kinds render from the production module",
+      "pass": true
+    },
+    {
+      "name": "Electron: toast stack clears the composer and never causes page overflow",
+      "pass": true
+    },
+    {
+      "name": "Electron: light theme uses the same component and stays readable",
+      "pass": true
+    },
+    {
+      "name": "Electron: persistent notice renders bad/info/busy/unknown with real layout",
+      "pass": true
+    },
+    {
+      "name": "Electron: empty state keeps heading, helper copy and CTA hierarchy",
+      "pass": true
+    },
+    {
+      "name": "Electron: narrow viewport and open right pane never get covered by toasts",
+      "pass": true
+    },
+    {
+      "name": "Electron: reduced motion removes toast and spinner animation",
+      "pass": true
+    },
+    {
+      "name": "Electron: keyboard Escape closes a persistent error and page has no console errors",
+      "pass": true
+    },
+    {
+      "name": "Electron: screenshots were written for both themes and states",
+      "pass": true
+    }
+  ],
+  "command": "node tests/ui4-feedback.cjs --electron",
+  "screenshots": [
+    "ui4-toasts-dark.png",
+    "ui4-toasts-light.png",
+    "ui4-notice-dark.png",
+    "ui4-notice-light.png",
+    "ui4-empty-state-dark.png",
+    "ui4-narrow-right-pane.png"
+  ],
+  "origin": "offline visual-harness",
+  "userData": "C:\\Users\\21022\\AppData\\Local\\Temp\\ui4-feedback-electron-vPhHRl",
+  "consoleErrors": [
+    "ResizeObserver loop completed with undelivered notifications."
+  ]
+}
