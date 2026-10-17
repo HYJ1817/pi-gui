@@ -1,0 +1,35 @@
+PASS switching blocks actual send and mirrors disabled state
+PASS modelSwitchPending blocks actual send and mirrors disabled state
+PASS submitting blocks actual send and mirrors disabled state
+PASS stopping blocks actual send and mirrors disabled state
+PASS fallbackActive blocks actual send and mirrors disabled state
+PASS no project cannot send
+PASS bridge not ready cannot send
+PASS ready text sends without changing draft
+PASS empty composer disabled
+PASS existing attachment send policy preserved: load
+PASS existing attachment send policy preserved: err
+PASS all attachments render without content mutation
+PASS explicit states distinguish ready/loading/error/unreadable
+PASS thumbnail and size shown, long filename retains full path
+PASS untrusted name and error are inert text
+PASS loading exposes busy state and truncation stays explicit
+PASS image capability ["text"]
+PASS image capability ["text","image"]
+PASS image capability null
+PASS presentation preserves message and image wire format
+PASS async redraw retains focused removal button
+PASS remove transfers focus and removes only selected file
+PASS last removal returns focus to attach control
+PASS zero file size is real while missing file size stays hidden
+PASS actual upload pipeline exposes loading without changing file body
+PASS actual extraction result exposes truncation and original text
+PASS actual failed extraction never presents success
+PASS actual file selection obeys image capability false
+PASS long input caps at 184px
+PASS short viewport caps at 24vh
+PASS input shrinks after text removal
+PASS single measured reserved height
+PASS side pane width change recalculates input height
+PASS window resize refreshes reservation and preserves draft
+UI3 Composer: 34/34, failed=0, skipped=0

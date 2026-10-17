@@ -43,12 +43,48 @@ export function initComposerLayout() {
   const composer = el.composerBox.closest('.composer');
   const stage = composer?.closest('.stage');
   if (!composer || !stage) return;
-  const sync = () => {
+  composer.classList.add('ui3-composer');
+  let previousWidth = -1;
+  const reserve = () => {
     const height = Math.ceil(composer.getBoundingClientRect().height);
-    stage.style.setProperty('--composer-reserved-height', `${height}px`);
+    if (stage.style.getPropertyValue('--composer-reserved-height') !== `${height}px`) {
+      const stream = el.stream;
+      const atBottom = stream?.clientHeight > 0 && stream.scrollHeight - stream.clientHeight - stream.scrollTop <= 2;
+      stage.style.setProperty('--composer-reserved-height', `${height}px`);
+      // Growing the absolute Composer increases the thread's existing padding.
+      // Follow only readers already at the end; leave history readers in place.
+      if (atBottom) stream.scrollTop = stream.scrollHeight;
+    }
+  };
+  const sync = () => {
+    // Match the existing reading axis, excluding its real scrollbar gutter.
+    const gutter = el.stream ? el.stream.offsetWidth - el.stream.clientWidth : 0;
+    composer.style.setProperty('--ui3-composer-scrollbar-width', `${gutter}px`);
+    // A pane/sidebar resize can reflow text without a window resize event.
+    const width = composer.getBoundingClientRect().width;
+    if (Math.abs(width - previousWidth) > 0.5) {
+      previousWidth = width;
+      autoGrow();
+    }
+    reserve();
   };
   sync();
-  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sync).observe(composer);
+  let frame = 0;
+  const scheduleSync = () => {
+    if (!frame) frame = requestAnimationFrame(() => { frame = 0; sync(); });
+  };
+  // Measure/write on the next frame: changing textarea height inside the
+  // observer's delivery would trigger an undelivered-notifications loop.
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(() => {
+      reserve();
+      scheduleSync();
+    });
+    observer.observe(composer);
+  }
+  // A newly appearing history scrollbar does not resize the absolute Composer.
+  el.stream?.addEventListener('scroll', scheduleSync, { passive: true });
+  el.input.addEventListener('input', scheduleSync);
   window.addEventListener('resize', () => {
     autoGrow();
     sync();
@@ -57,15 +93,22 @@ export function initComposerLayout() {
 
 export function updateSendState() {
   el.btnStop.disabled = Boolean(S.stopping);
+  // Presentation mirrors the authoritative button state, never a second gate.
+  const reflect = () => {
+    el.composerBox.dataset.sendDisabled = String(el.btnSend.disabled);
+    el.composerBox.classList.toggle('ui3-composer-stopping', Boolean(S.stopping));
+  };
   // 没有项目时 pi 没起来，发出去只会 503 —— 直接按住发送键
   /* `S.stopping`：停止期间**不许发**。这一条是 Stop 语义的一部分 ——
    * 界面上「正在停止」时还能点发送的话，新消息会变成旧 run 的 steer。 */
   if (!S.hasProject || S.switching || S.bridgeState !== 'ready' || S.submitting || S.modelSwitchPending || S.fallbackActive || S.stopping
     || (imageInputBlocked() && S.attachments.some(a => a.kind === 'image'))) {
     el.btnSend.disabled = true;
+    reflect();
     return;
   }
   const hasText = Boolean(el.input.value.trim());
   const hasAtt = S.attachments.length > 0;
   el.btnSend.disabled = !hasText && !hasAtt;
+  reflect();
 }

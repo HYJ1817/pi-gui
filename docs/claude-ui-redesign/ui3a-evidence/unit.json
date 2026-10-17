@@ -1,0 +1,143 @@
+{
+  "passed": 34,
+  "failed": 0,
+  "skipped": 0,
+  "checks": [
+    {
+      "name": "switching blocks actual send and mirrors disabled state",
+      "pass": true
+    },
+    {
+      "name": "modelSwitchPending blocks actual send and mirrors disabled state",
+      "pass": true
+    },
+    {
+      "name": "submitting blocks actual send and mirrors disabled state",
+      "pass": true
+    },
+    {
+      "name": "stopping blocks actual send and mirrors disabled state",
+      "pass": true
+    },
+    {
+      "name": "fallbackActive blocks actual send and mirrors disabled state",
+      "pass": true
+    },
+    {
+      "name": "no project cannot send",
+      "pass": true
+    },
+    {
+      "name": "bridge not ready cannot send",
+      "pass": true
+    },
+    {
+      "name": "ready text sends without changing draft",
+      "pass": true
+    },
+    {
+      "name": "empty composer disabled",
+      "pass": true
+    },
+    {
+      "name": "existing attachment send policy preserved: load",
+      "pass": true
+    },
+    {
+      "name": "existing attachment send policy preserved: err",
+      "pass": true
+    },
+    {
+      "name": "all attachments render without content mutation",
+      "pass": true
+    },
+    {
+      "name": "explicit states distinguish ready/loading/error/unreadable",
+      "pass": true
+    },
+    {
+      "name": "thumbnail and size shown, long filename retains full path",
+      "pass": true
+    },
+    {
+      "name": "untrusted name and error are inert text",
+      "pass": true
+    },
+    {
+      "name": "loading exposes busy state and truncation stays explicit",
+      "pass": true
+    },
+    {
+      "name": "image capability [\"text\"]",
+      "pass": true
+    },
+    {
+      "name": "image capability [\"text\",\"image\"]",
+      "pass": true
+    },
+    {
+      "name": "image capability null",
+      "pass": true
+    },
+    {
+      "name": "presentation preserves message and image wire format",
+      "pass": true
+    },
+    {
+      "name": "async redraw retains focused removal button",
+      "pass": true
+    },
+    {
+      "name": "remove transfers focus and removes only selected file",
+      "pass": true
+    },
+    {
+      "name": "last removal returns focus to attach control",
+      "pass": true
+    },
+    {
+      "name": "zero file size is real while missing file size stays hidden",
+      "pass": true
+    },
+    {
+      "name": "actual upload pipeline exposes loading without changing file body",
+      "pass": true
+    },
+    {
+      "name": "actual extraction result exposes truncation and original text",
+      "pass": true
+    },
+    {
+      "name": "actual failed extraction never presents success",
+      "pass": true
+    },
+    {
+      "name": "actual file selection obeys image capability false",
+      "pass": true
+    },
+    {
+      "name": "long input caps at 184px",
+      "pass": true
+    },
+    {
+      "name": "short viewport caps at 24vh",
+      "pass": true
+    },
+    {
+      "name": "input shrinks after text removal",
+      "pass": true
+    },
+    {
+      "name": "single measured reserved height",
+      "pass": true
+    },
+    {
+      "name": "side pane width change recalculates input height",
+      "pass": true
+    },
+    {
+      "name": "window resize refreshes reservation and preserves draft",
+      "pass": true
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "base": "d1524cb02f010cf9d474727c212f4048fc9abf75",
+  "branch": "codex/ui3-composer",
+  "headBeforeDelivery": "d1524cb02f010cf9d474727c212f4048fc9abf75",
+  "changedTracked": [
+    "public/attachments.js",
+    "public/composer.js"
+  ],
+  "boundaries": [
+    {
+      "file": "public/composer.js",
+      "start": "export function imageInputBlocked",
+      "end": "export function autoGrow",
+      "unchanged": true,
+      "sha256": "20cdba745186cf9f37f0ab0101bbc24e380cda3f2756d509178acba92f115ef1"
+    },
+    {
+      "file": "public/attachments.js",
+      "start": "export async function handleFiles",
+      "end": "export function renderAttachments",
+      "unchanged": true,
+      "sha256": "01a76e7836abe5d66147dc5200490ad202abde47651039d994063b25c393a9dd"
+    },
+    {
+      "file": "public/attachments.js",
+      "start": "export const FILE_BLOCK_RE",
+      "end": null,
+      "unchanged": true,
+      "sha256": "5d6127ac3fd4eb3b2ccb4bdd2324f69cc29f60757f70498980661adf64a1bb29"
+    }
+  ],
+  "assets": [
+    {
+      "file": "composer.js",
+      "sourceSha256": "7d183a5e128338e7707539f50c587e08aed5d1cd9166ff7fcdc6731b69447142",
+      "packagedSha256": "7d183a5e128338e7707539f50c587e08aed5d1cd9166ff7fcdc6731b69447142",
+      "equal": true
+    },
+    {
+      "file": "attachments.js",
+      "sourceSha256": "43a8478a2954240ab6a388c15620f4d94a1ecb465c11703a7afcae0282583293",
+      "packagedSha256": "43a8478a2954240ab6a388c15620f4d94a1ecb465c11703a7afcae0282583293",
+      "equal": true
+    },
+    {
+      "file": "ui3-composer.css",
+      "sourceSha256": "2aa975863c970705bed0a04e0db1c4a01c17600db5cac325d7d9edad84fdab61",
+      "packagedSha256": "2aa975863c970705bed0a04e0db1c4a01c17600db5cac325d7d9edad84fdab61",
+      "equal": true
+    }
+  ],
+  "buildRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui3a-verified-build-bb1c69a5808f40c4aa75d6ea216b8450",
+  "original": {
+    "head": "d0585b89a81c0a93e894d58b9d078af75aa985b2",
+    "status": [
+      "?? .p25-1-release-a2b10ddfebd7413789311029f931a3ca/",
+      "?? .ui1-build-1792129861508-87b5d0aa15777/",
+      "?? .ui1-build-final-1792129898855-d578f0cafd427/",
+      "?? docs/claude-code-layout-spec.md",
+      "?? docs/claude-component-states.md",
+      "?? docs/claude-design-tokens.md",
+      "?? docs/claude-interaction-patterns.md",
+      "?? docs/claude-motion-native.json",
+      "?? docs/claude-pi-gui-mapping.md",
+      "?? docs/claude-tokens-full.json",
+      "?? docs/claude-ui-redesign/UI-0-acceptance.md",
+      "?? docs/claude-ui-redesign/UI-0-baseline.md",
+      "?? docs/claude-ui-redesign/UI-component-mapping.md",
+      "?? docs/claude-ui-redesign/UI-design-contract.md",
+      "?? docs/claude-ui-redesign/UI-implementation-plan.md",
+      "?? docs/claude-ui-redesign/evidence/",
+      "?? \"docs/\\347\\264\\240\\346\\235\\220.zip\""
+    ]
+  },
+  "productCommit": "b1b795ec85c82e4e6341e41b921af006a115d580"
+}
