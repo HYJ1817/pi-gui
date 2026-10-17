@@ -118,6 +118,8 @@ canonical 从 UI-2 的 131 条命令增加到 135：A/B/C 三套跨机器单元 
 
 本机原生命令输出转码使部分中文测试标题在日志中乱码，原始记录未改写；ASCII 套件标识、数字摘要与独立进程退出码用于核查。源码及截图中的中文不依赖这份终端日志。
 
+最终格式复核：`git diff --check d1524cb HEAD -- public tests package.json` 退出 0。包含所有原始证据的 `git diff --check d1524cb HEAD` 退出 2，仅 `cdp.log`、`cdp-before-ui3-spec.log`、`cdp-before-metric-fix.log` 中 51 处取景文本行尾空格；保留原始采集内容，没有为消除格式提示改写证据。此项是日志格式提示，不混记为测试通过或产品失败。
+
 ## 7. 隔离离线构建
 
 实际 `node scripts/build-app.mjs --rebuild --output-root <临时独立目录>`，使用已存在的本机 Electron ZIP 离线缓存，退出 0。路径在 [build-root.txt](ui3-integration-evidence/build-root.txt)，构建日志 [build.log](ui3-integration-evidence/build.log)。整包约 328.1 MB，入口约 234.9 MB。未覆盖既有安装产物。
