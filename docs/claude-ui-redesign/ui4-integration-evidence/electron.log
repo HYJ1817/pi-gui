@@ -1,0 +1,430 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS Chromium 页面拿到焦点（后续受信键盘才有意义）
+PASS public/ui4-pane.css 可被真实页面加载且只加载一次
+PASS ui4-pane.css 规则实际生效（样式表解析成功）
+PASS 右栏宽度边界由 right-pane.js 单点导出
+PASS 启动时右栏是关着的
+PASS --rp-width 缺省值仍是 420（既有 browser-pane 断言依赖）
+PASS 「文件变更」在 dock 模式打开
+PASS 打开宽度 = 持久化宽度 = --rp-width
+PASS Changes 顶部条与 46px 带高一致
+PASS Changes 的关闭按钮带可读标签
+PASS 关闭按钮落在标题带最右端
+PASS 焦点还在顶栏入口时 Escape 不关闭右栏（既有行为，如实记录）
+PASS Escape 关闭后焦点回到打开的入口按钮
+PASS 关闭后不留下任何 surface 内容
+PASS 分隔条把宽度如实报给读屏（min/now/aria-controls）
+PASS 鼠标拖动分隔条把右栏拖宽 ~90px
+PASS 拖动时 --rp-width 与真实宽度同步（Toast 让位依赖它）
+PASS 拖动后 aria-valuenow 跟着变
+PASS 拖动后的宽度写入既有 localStorage 键
+PASS 方向键按 12px 步进加宽
+PASS Shift+方向键按 40px 步进加宽
+PASS 方向键双向对称（能变窄）
+PASS Home 收到底限 320px
+PASS End 放到当前窗口允许的上限
+PASS 双击分隔条复位到默认宽 420
+PASS Browser 面在右栏打开
+PASS Browser 工具栏与其它面同一条 46px 标题带
+PASS 换面不改宽度（用户调过的宽度沿用）
+PASS 地址栏在默认宽下可读（宽度 > 120px）
+PASS 未导航时后退/前进如实禁用（不猜状态）
+PASS 打开后焦点落在地址栏
+PASS 原生 WebContentsView 已挂到窗口上
+PASS 原生 view 的宽度 = #browserViewport 的实测宽度
+PASS 地址栏导航到本地 fixture 页（既有桥接未被改动）
+PASS 导航成功时错误条保持隐藏（不制造假错误）
+PASS Browser 状态里的页面标题来自主进程实际导航
+PASS 弹层打开时原生 view 被摘下去（不被压住）
+PASS 弹层关闭后原生 view 重新挂回
+PASS 把右栏拖窄后 viewport 变窄
+PASS 原生 view 边界跟随右栏宽度（不是旧矩形）
+PASS 模型弹层不被右栏/原生 view 覆盖
+PASS 切到 Changes 后浏览器工具栏被卸载
+PASS 切到 Changes 后原生 view 已撤离
+PASS 切回 Browser 仍沿用用户拖过的宽度
+PASS 关闭右栏后原生 view 撤离
+PASS 关闭后焦点回到 Browser 入口
+PASS 「本会话变更」标题带与其它面同一高度
+PASS 标题带由 createPaneHeader 统一画出（标题 + 一行说明）
+PASS 关闭按钮就在标题带最右端（与其它面同一位置）
+PASS 文件条目数量来自后端 fileCount 对应的真实列表
+PASS 概览显示后端给出的真实计数
+PASS 状态标记反映「证据不完整 / 存在归因缺口」
+PASS 超长路径在面板内换行，不产生横向滚动
+PASS 不可信路径按文本呈现（没有解析出 <img>/没有执行 onerror）
+PASS 不可信文本原样可见（用户能看见后端到底给了什么）
+PASS 长路径带 title，省略后仍可读全
+PASS 内容能滚，标题带位置不动
+PASS 预览明确写出「实际恢复未开放」
+PASS 预览路径不触发任何写操作
+PASS 证据变化后旧预览失效并提示重新预览
+PASS 加载中有明确文案与 aria-busy
+PASS 空态明确区分「没有证据」与「没有改动」
+PASS 空态下不残留上一批文件行
+PASS 错误态有 role=status 且用法定的可读文案
+PASS 切换会话时旧文件行被清掉，只留切换提示
+PASS 从「更多」菜单打开的面关闭后焦点回到 #btnMore
+PASS 「开发进程」标题带与其它面同一高度
+PASS 开发进程标题由同一 header 画出
+PASS 权限开关仍是既有的事实控件（默认关，本例由 fixture 打开）
+PASS 开发进程里没有命令输入（没有假终端）
+PASS 进程行带真实的 data-state
+PASS 状态文字仍在 .process-meta（既有脚本与读屏都以它为事实源）
+PASS 状态点按 ready/failed 用不同的语义色
+PASS 超长命令与长日志不把面板撑出横向滚动
+PASS 日志区可聚焦、可滚、标注为脱敏日志
+PASS 停止按钮调用既有 control 接口且带真实 id
+PASS 没有进程时是明确空态（不是错误）
+PASS 空态不给假的操作入口
+PASS 开发进程关闭后焦点回到 #btnMore
+PASS 矩阵开始前宽度复位到默认 420（截图代表默认观感）
+PASS 默认宽度下标题带会显示说明行（窄了才让位）
+PASS 右栏关闭时不产生横向溢出 dark-700
+PASS 页面无横向溢出 dark-700-changes
+PASS 右栏完整落在视口内 dark-700-changes
+PASS 右栏内容不横向溢出 dark-700-changes
+PASS 标题带高度一致 dark-700-changes
+PASS 关闭按钮在标题带右端 dark-700-changes
+PASS 700px 走覆盖模式 dark-700-changes
+PASS 页面无横向溢出 dark-700-browser
+PASS 右栏完整落在视口内 dark-700-browser
+PASS 右栏内容不横向溢出 dark-700-browser
+PASS 标题带高度一致 dark-700-browser
+PASS 关闭按钮在标题带右端 dark-700-browser
+PASS 700px 走覆盖模式 dark-700-browser
+PASS 页面无横向溢出 dark-700-session
+PASS 右栏完整落在视口内 dark-700-session
+PASS 右栏内容不横向溢出 dark-700-session
+PASS 标题带高度一致 dark-700-session
+PASS 关闭按钮在标题带右端 dark-700-session
+PASS 700px 走覆盖模式 dark-700-session
+PASS 页面无横向溢出 dark-700-process
+PASS 右栏完整落在视口内 dark-700-process
+PASS 右栏内容不横向溢出 dark-700-process
+PASS 标题带高度一致 dark-700-process
+PASS 关闭按钮在标题带右端 dark-700-process
+PASS 700px 走覆盖模式 dark-700-process
+PASS 右栏关闭时不产生横向溢出 dark-900
+PASS 页面无横向溢出 dark-900-changes
+PASS 右栏完整落在视口内 dark-900-changes
+PASS 右栏内容不横向溢出 dark-900-changes
+PASS 标题带高度一致 dark-900-changes
+PASS 关闭按钮在标题带右端 dark-900-changes
+PASS 页面无横向溢出 dark-900-browser
+PASS 右栏完整落在视口内 dark-900-browser
+PASS 右栏内容不横向溢出 dark-900-browser
+PASS 标题带高度一致 dark-900-browser
+PASS 关闭按钮在标题带右端 dark-900-browser
+PASS 页面无横向溢出 dark-900-session
+PASS 右栏完整落在视口内 dark-900-session
+PASS 右栏内容不横向溢出 dark-900-session
+PASS 标题带高度一致 dark-900-session
+PASS 关闭按钮在标题带右端 dark-900-session
+PASS 页面无横向溢出 dark-900-process
+PASS 右栏完整落在视口内 dark-900-process
+PASS 右栏内容不横向溢出 dark-900-process
+PASS 标题带高度一致 dark-900-process
+PASS 关闭按钮在标题带右端 dark-900-process
+PASS 右栏关闭时不产生横向溢出 dark-1200
+PASS 页面无横向溢出 dark-1200-changes
+PASS 右栏完整落在视口内 dark-1200-changes
+PASS 右栏内容不横向溢出 dark-1200-changes
+PASS 标题带高度一致 dark-1200-changes
+PASS 关闭按钮在标题带右端 dark-1200-changes
+PASS 1200px 走 dock 模式 dark-1200-changes
+PASS 页面无横向溢出 dark-1200-browser
+PASS 右栏完整落在视口内 dark-1200-browser
+PASS 右栏内容不横向溢出 dark-1200-browser
+PASS 标题带高度一致 dark-1200-browser
+PASS 关闭按钮在标题带右端 dark-1200-browser
+PASS 1200px 走 dock 模式 dark-1200-browser
+PASS 页面无横向溢出 dark-1200-session
+PASS 右栏完整落在视口内 dark-1200-session
+PASS 右栏内容不横向溢出 dark-1200-session
+PASS 标题带高度一致 dark-1200-session
+PASS 关闭按钮在标题带右端 dark-1200-session
+PASS 1200px 走 dock 模式 dark-1200-session
+PASS 页面无横向溢出 dark-1200-process
+PASS 右栏完整落在视口内 dark-1200-process
+PASS 右栏内容不横向溢出 dark-1200-process
+PASS 标题带高度一致 dark-1200-process
+PASS 关闭按钮在标题带右端 dark-1200-process
+PASS 1200px 走 dock 模式 dark-1200-process
+PASS 右栏关闭时不产生横向溢出 dark-1536
+PASS 页面无横向溢出 dark-1536-changes
+PASS 右栏完整落在视口内 dark-1536-changes
+PASS 右栏内容不横向溢出 dark-1536-changes
+PASS 标题带高度一致 dark-1536-changes
+PASS 关闭按钮在标题带右端 dark-1536-changes
+PASS 1536px 走 dock 模式 dark-1536-changes
+PASS 页面无横向溢出 dark-1536-browser
+PASS 右栏完整落在视口内 dark-1536-browser
+PASS 右栏内容不横向溢出 dark-1536-browser
+PASS 标题带高度一致 dark-1536-browser
+PASS 关闭按钮在标题带右端 dark-1536-browser
+PASS 1536px 走 dock 模式 dark-1536-browser
+PASS 页面无横向溢出 dark-1536-session
+PASS 右栏完整落在视口内 dark-1536-session
+PASS 右栏内容不横向溢出 dark-1536-session
+PASS 标题带高度一致 dark-1536-session
+PASS 关闭按钮在标题带右端 dark-1536-session
+PASS 1536px 走 dock 模式 dark-1536-session
+PASS 页面无横向溢出 dark-1536-process
+PASS 右栏完整落在视口内 dark-1536-process
+PASS 右栏内容不横向溢出 dark-1536-process
+PASS 标题带高度一致 dark-1536-process
+PASS 关闭按钮在标题带右端 dark-1536-process
+PASS 1536px 走 dock 模式 dark-1536-process
+PASS 右栏关闭时不产生横向溢出 light-700
+PASS 页面无横向溢出 light-700-changes
+PASS 右栏完整落在视口内 light-700-changes
+PASS 右栏内容不横向溢出 light-700-changes
+PASS 标题带高度一致 light-700-changes
+PASS 关闭按钮在标题带右端 light-700-changes
+PASS 700px 走覆盖模式 light-700-changes
+PASS 页面无横向溢出 light-700-browser
+PASS 右栏完整落在视口内 light-700-browser
+PASS 右栏内容不横向溢出 light-700-browser
+PASS 标题带高度一致 light-700-browser
+PASS 关闭按钮在标题带右端 light-700-browser
+PASS 700px 走覆盖模式 light-700-browser
+PASS 页面无横向溢出 light-700-session
+PASS 右栏完整落在视口内 light-700-session
+PASS 右栏内容不横向溢出 light-700-session
+PASS 标题带高度一致 light-700-session
+PASS 关闭按钮在标题带右端 light-700-session
+PASS 700px 走覆盖模式 light-700-session
+PASS 页面无横向溢出 light-700-process
+PASS 右栏完整落在视口内 light-700-process
+PASS 右栏内容不横向溢出 light-700-process
+PASS 标题带高度一致 light-700-process
+PASS 关闭按钮在标题带右端 light-700-process
+PASS 700px 走覆盖模式 light-700-process
+PASS 右栏关闭时不产生横向溢出 light-900
+PASS 页面无横向溢出 light-900-changes
+PASS 右栏完整落在视口内 light-900-changes
+PASS 右栏内容不横向溢出 light-900-changes
+PASS 标题带高度一致 light-900-changes
+PASS 关闭按钮在标题带右端 light-900-changes
+PASS 页面无横向溢出 light-900-browser
+PASS 右栏完整落在视口内 light-900-browser
+PASS 右栏内容不横向溢出 light-900-browser
+PASS 标题带高度一致 light-900-browser
+PASS 关闭按钮在标题带右端 light-900-browser
+PASS 页面无横向溢出 light-900-session
+PASS 右栏完整落在视口内 light-900-session
+PASS 右栏内容不横向溢出 light-900-session
+PASS 标题带高度一致 light-900-session
+PASS 关闭按钮在标题带右端 light-900-session
+PASS 页面无横向溢出 light-900-process
+PASS 右栏完整落在视口内 light-900-process
+PASS 右栏内容不横向溢出 light-900-process
+PASS 标题带高度一致 light-900-process
+PASS 关闭按钮在标题带右端 light-900-process
+PASS 右栏关闭时不产生横向溢出 light-1200
+PASS 页面无横向溢出 light-1200-changes
+PASS 右栏完整落在视口内 light-1200-changes
+PASS 右栏内容不横向溢出 light-1200-changes
+PASS 标题带高度一致 light-1200-changes
+PASS 关闭按钮在标题带右端 light-1200-changes
+PASS 1200px 走 dock 模式 light-1200-changes
+PASS 页面无横向溢出 light-1200-browser
+PASS 右栏完整落在视口内 light-1200-browser
+PASS 右栏内容不横向溢出 light-1200-browser
+PASS 标题带高度一致 light-1200-browser
+PASS 关闭按钮在标题带右端 light-1200-browser
+PASS 1200px 走 dock 模式 light-1200-browser
+PASS 页面无横向溢出 light-1200-session
+PASS 右栏完整落在视口内 light-1200-session
+PASS 右栏内容不横向溢出 light-1200-session
+PASS 标题带高度一致 light-1200-session
+PASS 关闭按钮在标题带右端 light-1200-session
+PASS 1200px 走 dock 模式 light-1200-session
+PASS 页面无横向溢出 light-1200-process
+PASS 右栏完整落在视口内 light-1200-process
+PASS 右栏内容不横向溢出 light-1200-process
+PASS 标题带高度一致 light-1200-process
+PASS 关闭按钮在标题带右端 light-1200-process
+PASS 1200px 走 dock 模式 light-1200-process
+PASS 右栏关闭时不产生横向溢出 light-1536
+PASS 页面无横向溢出 light-1536-changes
+PASS 右栏完整落在视口内 light-1536-changes
+PASS 右栏内容不横向溢出 light-1536-changes
+PASS 标题带高度一致 light-1536-changes
+PASS 关闭按钮在标题带右端 light-1536-changes
+PASS 1536px 走 dock 模式 light-1536-changes
+PASS 页面无横向溢出 light-1536-browser
+PASS 右栏完整落在视口内 light-1536-browser
+PASS 右栏内容不横向溢出 light-1536-browser
+PASS 标题带高度一致 light-1536-browser
+PASS 关闭按钮在标题带右端 light-1536-browser
+PASS 1536px 走 dock 模式 light-1536-browser
+PASS 页面无横向溢出 light-1536-session
+PASS 右栏完整落在视口内 light-1536-session
+PASS 右栏内容不横向溢出 light-1536-session
+PASS 标题带高度一致 light-1536-session
+PASS 关闭按钮在标题带右端 light-1536-session
+PASS 1536px 走 dock 模式 light-1536-session
+PASS 页面无横向溢出 light-1536-process
+PASS 右栏完整落在视口内 light-1536-process
+PASS 右栏内容不横向溢出 light-1536-process
+PASS 标题带高度一致 light-1536-process
+PASS 关闭按钮在标题带右端 light-1536-process
+PASS 1536px 走 dock 模式 light-1536-process
+PASS 125% 缩放下布局宽度真的变小，标题带仍是一条完整带子
+PASS 125% 缩放下右栏仍在视口内（必要时退成覆盖模式）
+PASS 125% 缩放下没有横向溢出
+PASS reduced-motion 下加载点不动画（状态仍然可见）
+PASS Tab 从分隔条继续进入面板内部
+PASS 面板内键盘焦点位置都可以用 Escape 关闭
+PASS UI4 production entry statically loads each owned stylesheet once
+PASS all three production CSS files parsed without test style injection
+PASS production entry has no duplicate IDs
+PASS real sidebar collapse control matches matrix state: dark-700-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-700-sidebar-true
+PASS Toast/Notice leaves real Browser attached: dark-700-sidebar-true
+PASS Classic approval is visible with safe initial focus: dark-700-sidebar-true
+PASS approval fits actual Chromium viewport: dark-700-sidebar-true
+PASS cancelled approval restores real native View: dark-700-sidebar-true
+PASS real sidebar collapse control matches matrix state: dark-700-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-700-sidebar-false
+PASS Toast/Notice leaves real Browser attached: dark-700-sidebar-false
+PASS Classic approval is visible with safe initial focus: dark-700-sidebar-false
+PASS approval fits actual Chromium viewport: dark-700-sidebar-false
+PASS cancelled approval restores real native View: dark-700-sidebar-false
+PASS real sidebar collapse control matches matrix state: dark-900-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-900-sidebar-true
+PASS Toast/Notice leaves real Browser attached: dark-900-sidebar-true
+PASS Classic approval is visible with safe initial focus: dark-900-sidebar-true
+PASS approval fits actual Chromium viewport: dark-900-sidebar-true
+PASS cancelled approval restores real native View: dark-900-sidebar-true
+PASS real sidebar collapse control matches matrix state: dark-900-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-900-sidebar-false
+PASS Toast/Notice leaves real Browser attached: dark-900-sidebar-false
+PASS Classic approval is visible with safe initial focus: dark-900-sidebar-false
+PASS approval fits actual Chromium viewport: dark-900-sidebar-false
+PASS cancelled approval restores real native View: dark-900-sidebar-false
+PASS real sidebar collapse control matches matrix state: dark-1200-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-1200-sidebar-true
+PASS Toast/Notice leaves real Browser attached: dark-1200-sidebar-true
+PASS Classic approval is visible with safe initial focus: dark-1200-sidebar-true
+PASS approval fits actual Chromium viewport: dark-1200-sidebar-true
+PASS cancelled approval restores real native View: dark-1200-sidebar-true
+PASS real sidebar collapse control matches matrix state: dark-1200-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-1200-sidebar-false
+PASS Toast/Notice leaves real Browser attached: dark-1200-sidebar-false
+PASS Classic approval is visible with safe initial focus: dark-1200-sidebar-false
+PASS approval fits actual Chromium viewport: dark-1200-sidebar-false
+PASS cancelled approval restores real native View: dark-1200-sidebar-false
+PASS real sidebar collapse control matches matrix state: dark-1536-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-1536-sidebar-true
+PASS Toast/Notice leaves real Browser attached: dark-1536-sidebar-true
+PASS Classic approval is visible with safe initial focus: dark-1536-sidebar-true
+PASS approval fits actual Chromium viewport: dark-1536-sidebar-true
+PASS cancelled approval restores real native View: dark-1536-sidebar-true
+PASS real sidebar collapse control matches matrix state: dark-1536-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: dark-1536-sidebar-false
+PASS Toast/Notice leaves real Browser attached: dark-1536-sidebar-false
+PASS Classic approval is visible with safe initial focus: dark-1536-sidebar-false
+PASS approval fits actual Chromium viewport: dark-1536-sidebar-false
+PASS cancelled approval restores real native View: dark-1536-sidebar-false
+PASS real sidebar collapse control matches matrix state: light-700-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-700-sidebar-true
+PASS Toast/Notice leaves real Browser attached: light-700-sidebar-true
+PASS Classic approval is visible with safe initial focus: light-700-sidebar-true
+PASS approval fits actual Chromium viewport: light-700-sidebar-true
+PASS cancelled approval restores real native View: light-700-sidebar-true
+PASS real sidebar collapse control matches matrix state: light-700-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-700-sidebar-false
+PASS Toast/Notice leaves real Browser attached: light-700-sidebar-false
+PASS Classic approval is visible with safe initial focus: light-700-sidebar-false
+PASS approval fits actual Chromium viewport: light-700-sidebar-false
+PASS cancelled approval restores real native View: light-700-sidebar-false
+PASS real sidebar collapse control matches matrix state: light-900-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-900-sidebar-true
+PASS Toast/Notice leaves real Browser attached: light-900-sidebar-true
+PASS Classic approval is visible with safe initial focus: light-900-sidebar-true
+PASS approval fits actual Chromium viewport: light-900-sidebar-true
+PASS cancelled approval restores real native View: light-900-sidebar-true
+PASS real sidebar collapse control matches matrix state: light-900-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-900-sidebar-false
+PASS Toast/Notice leaves real Browser attached: light-900-sidebar-false
+PASS Classic approval is visible with safe initial focus: light-900-sidebar-false
+PASS approval fits actual Chromium viewport: light-900-sidebar-false
+PASS cancelled approval restores real native View: light-900-sidebar-false
+PASS real sidebar collapse control matches matrix state: light-1200-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-1200-sidebar-true
+PASS Toast/Notice leaves real Browser attached: light-1200-sidebar-true
+PASS Classic approval is visible with safe initial focus: light-1200-sidebar-true
+PASS approval fits actual Chromium viewport: light-1200-sidebar-true
+PASS cancelled approval restores real native View: light-1200-sidebar-true
+PASS real sidebar collapse control matches matrix state: light-1200-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-1200-sidebar-false
+PASS Toast/Notice leaves real Browser attached: light-1200-sidebar-false
+PASS Classic approval is visible with safe initial focus: light-1200-sidebar-false
+PASS approval fits actual Chromium viewport: light-1200-sidebar-false
+PASS cancelled approval restores real native View: light-1200-sidebar-false
+PASS real sidebar collapse control matches matrix state: light-1536-true
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-1536-sidebar-true
+PASS Toast/Notice leaves real Browser attached: light-1536-sidebar-true
+PASS Classic approval is visible with safe initial focus: light-1536-sidebar-true
+PASS approval fits actual Chromium viewport: light-1536-sidebar-true
+PASS cancelled approval restores real native View: light-1536-sidebar-true
+PASS real sidebar collapse control matches matrix state: light-1536-false
+PASS matrix uses ten actual newline-separated Composer lines
+PASS matrix contains all four actual notification kinds
+PASS Toast stack stays above Composer and left of native Browser: light-1536-sidebar-false
+PASS Toast/Notice leaves real Browser attached: light-1536-sidebar-false
+PASS Classic approval is visible with safe initial focus: light-1536-sidebar-false
+PASS approval fits actual Chromium viewport: light-1536-sidebar-false
+PASS cancelled approval restores real native View: light-1536-sidebar-false
+PASS explicit backend refusal stays visible and permits explicit retry
+PASS unknown delivery locks both decisions without claiming failure or execution
+PASS real Chromium late decision never authorizes a replacement approval
+PASS Slash menu still opens with UI4 surfaces
+PASS UI3 model popover still opens with native Browser
+PASS actual pane drag repositions Toast without covering Composer or Browser
+PASS Ctrl+K still opens the independent command palette
+PASS zoom fixture has one actual visible Toast
+PASS actual app zoom preserves Toast/Composer/Browser separation: 0.8
+PASS zoom fixture has one actual visible Toast
+PASS actual app zoom preserves Toast/Composer/Browser separation: 1.25
+PASS zoom fixture has one actual visible Toast
+PASS actual app zoom preserves Toast/Composer/Browser separation: 1.5
+PASS reduced motion applies to combined production Toast
+PASS no unhandled non-ResizeObserver renderer exceptions
+PASS after resize/Composer/Notice changes cease, geometry and observer callbacks/errors stop changing
+PASS renderer / harness 没有报错
+UI4 pane: 427/427 passed, 0 failed, 75 screenshots

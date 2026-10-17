@@ -1,0 +1,17 @@
+[
+  {
+    "branch": "codex/ui4-pane",
+    "head": "7fa6df15b52f5c6d417ef99b58c54a3d0f3d43af",
+    "parents": "17f855f01fedb7b13a13496ba45ebf8d28e465ac a097b17b26a8a3c6944c6ff2aae401349ee635f1"
+  },
+  {
+    "branch": "codex/ui4-approval",
+    "head": "54a90d37c9dcfde67b3cd79509e084a07514b7a7",
+    "parents": "7fa6df15b52f5c6d417ef99b58c54a3d0f3d43af c2b1044d40aea61f066bfa4845909c266e0f53be"
+  },
+  {
+    "branch": "codex/ui4-feedback",
+    "head": "68c9f92ac0920ac35682c08a11ed76c1a460c1e1",
+    "parents": "54a90d37c9dcfde67b3cd79509e084a07514b7a7 8679740192b39875b08232adf82439307d0aefd0"
+  }
+]

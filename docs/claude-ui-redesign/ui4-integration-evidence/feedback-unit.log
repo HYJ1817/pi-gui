@@ -1,0 +1,28 @@
+PASS stylesheet injected once and served from the owned file
+PASS info toast auto closes after its explicit short duration
+PASS success and ok aliases share one success treatment
+PASS warning and warn aliases keep the legacy .toast.warn hook
+PASS error toast is persistent by default and never becomes invisible silently
+PASS persistent=false opts back into the timed error path
+PASS multiple notifications queue without replacing each other
+PASS duplicate notification inside the dedupe window is suppressed
+PASS long Chinese and long English text stay complete and wrapped
+PASS untrusted text is inert in toasts and action labels
+PASS Escape closes the focused toast and returns focus to the composer
+PASS toast host exposes a named region and each toast a live role
+PASS historical replay does not create notifications
+PASS legacy toast call sites keep working unchanged
+PASS notice tones cover success, failure, warning, loading and unknown
+PASS unknown notice is neutral, never success or failure
+PASS notice shows title, multi-line detail, actions and a close control
+PASS notice actions call only the injected handler once
+PASS notice with the same identity/signature is not rebuilt
+PASS notice close hides it and clears the current id
+PASS notice text and action labels are inert under XSS-shaped input
+PASS long Chinese and English notice content remains complete
+PASS workspace switch is represented as busy, not success or failure
+PASS state matrix copy is rendered from the supplied model only
+PASS real startupNotice models keep their existing truth and actions
+PASS CSS is owned, prefixed and respects theme/reduced-motion/motion contracts
+PASS CSS keeps the legacy notice/toast hooks used by existing suites
+UI4 Feedback: 27/27, failed=0, skipped=0

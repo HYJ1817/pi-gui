@@ -1,0 +1,5375 @@
+{
+  "error": "Error: Script failed to execute, this normally means an error was thrown. Check the renderer console for the error.\n    at node:electron/js2c/sandbox_bundle:2:98760\n    at IpcRendererInternal.<anonymous> (node:electron/js2c/sandbox_bundle:2:93587)\n    at IpcRendererInternal.emit (node:electron/js2c/sandbox_bundle:2:36110)\n    at Object.onMessage (node:electron/js2c/sandbox_bundle:2:92801)",
+  "checks": [
+    {
+      "pass": true,
+      "name": "Chromium 页面拿到焦点（后续受信键盘才有意义）"
+    },
+    {
+      "pass": true,
+      "name": "public/ui4-pane.css 可被真实页面加载且只加载一次"
+    },
+    {
+      "pass": true,
+      "name": "ui4-pane.css 规则实际生效（样式表解析成功）"
+    },
+    {
+      "pass": true,
+      "name": "右栏宽度边界由 right-pane.js 单点导出",
+      "detail": {
+        "min": 320,
+        "default": 420
+      }
+    },
+    {
+      "pass": true,
+      "name": "启动时右栏是关着的",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "--rp-width 缺省值仍是 420（既有 browser-pane 断言依赖）",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "「文件变更」在 dock 模式打开",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "打开宽度 = 持久化宽度 = --rp-width",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Changes 顶部条与 46px 带高一致",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Changes 的关闭按钮带可读标签",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮落在标题带最右端",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "焦点还在顶栏入口时 Escape 不关闭右栏（既有行为，如实记录）"
+    },
+    {
+      "pass": true,
+      "name": "Escape 关闭后焦点回到打开的入口按钮"
+    },
+    {
+      "pass": true,
+      "name": "关闭后不留下任何 surface 内容"
+    },
+    {
+      "pass": true,
+      "name": "分隔条把宽度如实报给读屏（min/now/aria-controls）",
+      "detail": {
+        "min": "320",
+        "max": "864",
+        "now": "420",
+        "text": "420 像素",
+        "controls": "rightPane"
+      }
+    },
+    {
+      "pass": true,
+      "name": "鼠标拖动分隔条把右栏拖宽 ~90px",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 930,
+        "right": 1440,
+        "width": 510,
+        "scrollWidth": 509,
+        "clientWidth": 509,
+        "cssWidth": 510,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "拖动时 --rp-width 与真实宽度同步（Toast 让位依赖它）",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 930,
+        "right": 1440,
+        "width": 510,
+        "scrollWidth": 509,
+        "clientWidth": 509,
+        "cssWidth": 510,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "拖动后 aria-valuenow 跟着变"
+    },
+    {
+      "pass": true,
+      "name": "拖动后的宽度写入既有 localStorage 键"
+    },
+    {
+      "pass": true,
+      "name": "方向键按 12px 步进加宽",
+      "detail": {
+        "from": 510,
+        "to": 522
+      }
+    },
+    {
+      "pass": true,
+      "name": "Shift+方向键按 40px 步进加宽",
+      "detail": {
+        "from": 522,
+        "to": 562
+      }
+    },
+    {
+      "pass": true,
+      "name": "方向键双向对称（能变窄）"
+    },
+    {
+      "pass": true,
+      "name": "Home 收到底限 320px"
+    },
+    {
+      "pass": true,
+      "name": "End 放到当前窗口允许的上限",
+      "detail": {
+        "maxWidth": 864
+      }
+    },
+    {
+      "pass": true,
+      "name": "双击分隔条复位到默认宽 420"
+    },
+    {
+      "pass": true,
+      "name": "Browser 面在右栏打开",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1428,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Browser 工具栏与其它面同一条 46px 标题带",
+      "detail": {
+        "browser": 46,
+        "changes": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "换面不改宽度（用户调过的宽度沿用）",
+      "detail": {
+        "before": 420,
+        "after": 420
+      }
+    },
+    {
+      "pass": true,
+      "name": "地址栏在默认宽下可读（宽度 > 120px）"
+    },
+    {
+      "pass": true,
+      "name": "未导航时后退/前进如实禁用（不猜状态）"
+    },
+    {
+      "pass": true,
+      "name": "打开后焦点落在地址栏"
+    },
+    {
+      "pass": true,
+      "name": "原生 WebContentsView 已挂到窗口上"
+    },
+    {
+      "pass": true,
+      "name": "原生 view 的宽度 = #browserViewport 的实测宽度",
+      "detail": {
+        "x": 1021,
+        "y": 133,
+        "width": 419,
+        "height": 769
+      }
+    },
+    {
+      "pass": true,
+      "name": "地址栏导航到本地 fixture 页（既有桥接未被改动）"
+    },
+    {
+      "pass": true,
+      "name": "导航成功时错误条保持隐藏（不制造假错误）"
+    },
+    {
+      "pass": true,
+      "name": "Browser 状态里的页面标题来自主进程实际导航",
+      "detail": {
+        "open": true,
+        "url": "http://127.0.0.1:3210/",
+        "title": "UI4 pane fixture page",
+        "loading": false,
+        "canGoBack": true,
+        "canGoForward": false,
+        "error": null
+      }
+    },
+    {
+      "pass": true,
+      "name": "弹层打开时原生 view 被摘下去（不被压住）"
+    },
+    {
+      "pass": true,
+      "name": "弹层关闭后原生 view 重新挂回"
+    },
+    {
+      "pass": true,
+      "name": "把右栏拖窄后 viewport 变窄",
+      "detail": {
+        "viewportBefore": 419.3333435058594,
+        "narrower": 349.3333435058594
+      }
+    },
+    {
+      "pass": true,
+      "name": "原生 view 边界跟随右栏宽度（不是旧矩形）",
+      "detail": {
+        "x": 1091,
+        "y": 133,
+        "width": 349,
+        "height": 769
+      }
+    },
+    {
+      "pass": true,
+      "name": "模型弹层不被右栏/原生 view 覆盖",
+      "detail": {
+        "ok": true,
+        "right": 931,
+        "paneLeft": 1090,
+        "w": 232
+      }
+    },
+    {
+      "pass": true,
+      "name": "切到 Changes 后浏览器工具栏被卸载"
+    },
+    {
+      "pass": true,
+      "name": "切到 Changes 后原生 view 已撤离",
+      "detail": {
+        "exists": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "切回 Browser 仍沿用用户拖过的宽度",
+      "detail": {
+        "expected": 349.3333435058594,
+        "got": 350
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭右栏后原生 view 撤离"
+    },
+    {
+      "pass": true,
+      "name": "关闭后焦点回到 Browser 入口"
+    },
+    {
+      "pass": true,
+      "name": "「本会话变更」标题带与其它面同一高度",
+      "detail": {
+        "session": 46,
+        "other": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带由 createPaneHeader 统一画出（标题 + 一行说明）"
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮就在标题带最右端（与其它面同一位置）"
+    },
+    {
+      "pass": true,
+      "name": "文件条目数量来自后端 fileCount 对应的真实列表"
+    },
+    {
+      "pass": true,
+      "name": "概览显示后端给出的真实计数"
+    },
+    {
+      "pass": true,
+      "name": "状态标记反映「证据不完整 / 存在归因缺口」"
+    },
+    {
+      "pass": true,
+      "name": "超长路径在面板内换行，不产生横向滚动",
+      "detail": {
+        "paneOverflow": false,
+        "worst": 0
+      }
+    },
+    {
+      "pass": true,
+      "name": "不可信路径按文本呈现（没有解析出 <img>/没有执行 onerror）"
+    },
+    {
+      "pass": true,
+      "name": "不可信文本原样可见（用户能看见后端到底给了什么）"
+    },
+    {
+      "pass": true,
+      "name": "长路径带 title，省略后仍可读全"
+    },
+    {
+      "pass": true,
+      "name": "内容能滚，标题带位置不动",
+      "detail": {
+        "scrollTop": 260,
+        "headBefore": 46,
+        "headAfter": 46,
+        "overflow": "auto"
+      }
+    },
+    {
+      "pass": true,
+      "name": "预览明确写出「实际恢复未开放」"
+    },
+    {
+      "pass": true,
+      "name": "预览路径不触发任何写操作"
+    },
+    {
+      "pass": true,
+      "name": "证据变化后旧预览失效并提示重新预览"
+    },
+    {
+      "pass": true,
+      "name": "加载中有明确文案与 aria-busy"
+    },
+    {
+      "pass": true,
+      "name": "空态明确区分「没有证据」与「没有改动」"
+    },
+    {
+      "pass": true,
+      "name": "空态下不残留上一批文件行"
+    },
+    {
+      "pass": true,
+      "name": "错误态有 role=status 且用法定的可读文案"
+    },
+    {
+      "pass": true,
+      "name": "切换会话时旧文件行被清掉，只留切换提示"
+    },
+    {
+      "pass": true,
+      "name": "从「更多」菜单打开的面关闭后焦点回到 #btnMore"
+    },
+    {
+      "pass": true,
+      "name": "「开发进程」标题带与其它面同一高度",
+      "detail": {
+        "process": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "开发进程标题由同一 header 画出"
+    },
+    {
+      "pass": true,
+      "name": "权限开关仍是既有的事实控件（默认关，本例由 fixture 打开）"
+    },
+    {
+      "pass": true,
+      "name": "开发进程里没有命令输入（没有假终端）"
+    },
+    {
+      "pass": true,
+      "name": "进程行带真实的 data-state"
+    },
+    {
+      "pass": true,
+      "name": "状态文字仍在 .process-meta（既有脚本与读屏都以它为事实源）"
+    },
+    {
+      "pass": true,
+      "name": "状态点按 ready/failed 用不同的语义色",
+      "detail": [
+        "rgb(74, 222, 128)",
+        "rgb(248, 113, 113)"
+      ]
+    },
+    {
+      "pass": true,
+      "name": "超长命令与长日志不把面板撑出横向滚动"
+    },
+    {
+      "pass": true,
+      "name": "日志区可聚焦、可滚、标注为脱敏日志"
+    },
+    {
+      "pass": true,
+      "name": "停止按钮调用既有 control 接口且带真实 id",
+      "detail": {
+        "action": "stop",
+        "generation": "g1",
+        "id": "p1",
+        "revision": 1
+      }
+    },
+    {
+      "pass": true,
+      "name": "没有进程时是明确空态（不是错误）"
+    },
+    {
+      "pass": true,
+      "name": "空态不给假的操作入口"
+    },
+    {
+      "pass": true,
+      "name": "开发进程关闭后焦点回到 #btnMore"
+    },
+    {
+      "pass": true,
+      "name": "矩阵开始前宽度复位到默认 420（截图代表默认观感）"
+    },
+    {
+      "pass": true,
+      "name": "默认宽度下标题带会显示说明行（窄了才让位）"
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 dark-700",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-700-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 dark-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-700-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 dark-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-700-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 dark-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-700-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 dark-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 dark-900",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-900-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-900-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-900-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-900-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 dark-1200",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1200-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 dark-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1200-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 dark-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1200-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 dark-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1200-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 dark-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 dark-1536",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1536-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 dark-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1536-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 dark-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1536-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 dark-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 dark-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 dark-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 dark-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 dark-1536-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 dark-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 dark-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 light-700",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-700-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 light-700-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 690,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-700-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 light-700-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 688,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-700-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 light-700-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-700-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "700px 走覆盖模式 light-700-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 280,
+        "right": 700,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 690,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 light-900",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-900-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-900-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 888,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-900-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-900-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 888,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-900-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-900-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-900-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-900-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "overlay",
+        "left": 480,
+        "right": 900,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 888,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 light-1200",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1200-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 light-1200-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1200-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 light-1200-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1188,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1200-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 light-1200-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1200-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1200px 走 dock 模式 light-1200-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 780,
+        "right": 1200,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1188,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏关闭时不产生横向溢出 light-1536",
+      "detail": {
+        "hidden": true,
+        "surface": null,
+        "mode": "dock",
+        "left": 0,
+        "right": 0,
+        "width": 0,
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "cssWidth": 420,
+        "headHeight": 0,
+        "headTop": 0,
+        "headClass": null,
+        "closeRight": 0,
+        "closeLabel": null,
+        "bodyCount": 0,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1536-changes",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 light-1536-changes",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "chg-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1536-browser",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 light-1536-browser",
+      "detail": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1524,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1536-session",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 light-1536-session",
+      "detail": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "页面无横向溢出 light-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏完整落在视口内 light-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "右栏内容不横向溢出 light-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "标题带高度一致 light-1536-process",
+      "detail": {
+        "got": 46,
+        "want": 46
+      }
+    },
+    {
+      "pass": true,
+      "name": "关闭按钮在标题带右端 light-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "1536px 走 dock 模式 light-1536-process",
+      "detail": {
+        "hidden": false,
+        "surface": "process",
+        "mode": "dock",
+        "left": 1116,
+        "right": 1536,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1524,
+        "closeLabel": "关闭开发进程",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "125% 缩放下布局宽度真的变小，标题带仍是一条完整带子",
+      "detail": {
+        "zoomInner": 960,
+        "zoomed": {
+          "hidden": false,
+          "surface": "changes",
+          "mode": "overlay",
+          "left": 540,
+          "right": 960.0000305175781,
+          "width": 420.0000305175781,
+          "scrollWidth": 419,
+          "clientWidth": 419,
+          "cssWidth": 420,
+          "headHeight": 46.000003814697266,
+          "headTop": 46.000003814697266,
+          "headClass": "chg-head",
+          "closeRight": 948.0000629425049,
+          "closeLabel": "关闭文件变更",
+          "bodyCount": 1,
+          "pageOverflow": false
+        }
+      }
+    },
+    {
+      "pass": true,
+      "name": "125% 缩放下右栏仍在视口内（必要时退成覆盖模式）",
+      "detail": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 540,
+        "right": 960.0000305175781,
+        "width": 420.0000305175781,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46.000003814697266,
+        "headTop": 46.000003814697266,
+        "headClass": "chg-head",
+        "closeRight": 948.0000629425049,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "125% 缩放下没有横向溢出"
+    },
+    {
+      "pass": true,
+      "name": "reduced-motion 下加载点不动画（状态仍然可见）",
+      "detail": {
+        "animationName": "none",
+        "duration": "0s",
+        "paneTransition": "0s"
+      }
+    },
+    {
+      "pass": true,
+      "name": "Tab 从分隔条继续进入面板内部"
+    },
+    {
+      "pass": true,
+      "name": "面板内键盘焦点位置都可以用 Escape 关闭"
+    },
+    {
+      "pass": true,
+      "name": "UI4 production entry statically loads each owned stylesheet once"
+    },
+    {
+      "pass": true,
+      "name": "all three production CSS files parsed without test style injection"
+    },
+    {
+      "pass": true,
+      "name": "production entry has no duplicate IDs"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-700-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-700-sidebar-true",
+      "detail": {
+        "top": 201.34375,
+        "bottom": 630.6770935058594,
+        "left": 0,
+        "right": 262,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 280,
+        "w": 700,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-700-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-700-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-700-sidebar-true",
+      "detail": {
+        "x": 24,
+        "y": 277.4375,
+        "right": 676,
+        "bottom": 626.5625,
+        "w": 700,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-700-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-700-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-700-sidebar-false",
+      "detail": {
+        "top": 630.6771240234375,
+        "bottom": 630.6771240234375,
+        "left": 252,
+        "right": 262,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 280,
+        "w": 700,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-700-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-700-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-700-sidebar-false",
+      "detail": {
+        "x": 24,
+        "y": 277.4375,
+        "right": 676,
+        "bottom": 626.5625,
+        "w": 700,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-700-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-900-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-900-sidebar-true",
+      "detail": {
+        "top": 630.6771240234375,
+        "bottom": 630.6771240234375,
+        "left": 452,
+        "right": 462,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 480,
+        "w": 900,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-900-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-900-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-900-sidebar-true",
+      "detail": {
+        "x": 170,
+        "y": 275.375,
+        "right": 730,
+        "bottom": 628.625,
+        "w": 900,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-900-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-900-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-900-sidebar-false",
+      "detail": {
+        "top": 281.34375,
+        "bottom": 630.6770935058594,
+        "left": 82,
+        "right": 462,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 480,
+        "w": 900,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-900-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-900-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-900-sidebar-false",
+      "detail": {
+        "x": 170,
+        "y": 275.375,
+        "right": 730,
+        "bottom": 628.625,
+        "w": 900,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-900-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-1200-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-1200-sidebar-true",
+      "detail": {
+        "top": 626.6771240234375,
+        "bottom": 626.6771240234375,
+        "left": 752,
+        "right": 762,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 780,
+        "w": 1200,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-1200-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-1200-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-1200-sidebar-true",
+      "detail": {
+        "x": 320,
+        "y": 275.375,
+        "right": 880,
+        "bottom": 628.625,
+        "w": 1200,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-1200-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-1200-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-1200-sidebar-false",
+      "detail": {
+        "top": 626.6771240234375,
+        "bottom": 626.6771240234375,
+        "left": 752,
+        "right": 762,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 780,
+        "w": 1200,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-1200-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-1200-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-1200-sidebar-false",
+      "detail": {
+        "x": 320,
+        "y": 274.33526611328125,
+        "right": 880,
+        "bottom": 627.5852661132812,
+        "w": 1200,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-1200-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-1536-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-1536-sidebar-true",
+      "detail": {
+        "top": 277.34375,
+        "bottom": 626.6770935058594,
+        "left": 718,
+        "right": 1098,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 1116,
+        "w": 1536,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-1536-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-1536-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-1536-sidebar-true",
+      "detail": {
+        "x": 488,
+        "y": 275.375,
+        "right": 1048,
+        "bottom": 628.625,
+        "w": 1536,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-1536-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: dark-1536-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: dark-1536-sidebar-false",
+      "detail": {
+        "top": 626.6771240234375,
+        "bottom": 626.6771240234375,
+        "left": 1088,
+        "right": 1098,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 1116,
+        "w": 1536,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: dark-1536-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: dark-1536-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: dark-1536-sidebar-false",
+      "detail": {
+        "x": 488,
+        "y": 275.375,
+        "right": 1048,
+        "bottom": 628.625,
+        "w": 1536,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: dark-1536-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-700-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-700-sidebar-true",
+      "detail": {
+        "top": 630.6771240234375,
+        "bottom": 630.6771240234375,
+        "left": 252,
+        "right": 262,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 280,
+        "w": 700,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-700-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-700-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-700-sidebar-true",
+      "detail": {
+        "x": 24,
+        "y": 277.4375,
+        "right": 676,
+        "bottom": 626.5625,
+        "w": 700,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-700-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-700-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-700-sidebar-false",
+      "detail": {
+        "top": 201.34375,
+        "bottom": 630.6770935058594,
+        "left": 0,
+        "right": 262,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 280,
+        "w": 700,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-700-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-700-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-700-sidebar-false",
+      "detail": {
+        "x": 24,
+        "y": 277.4375,
+        "right": 676,
+        "bottom": 626.5625,
+        "w": 700,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-700-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-900-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-900-sidebar-true",
+      "detail": {
+        "top": 630.6771240234375,
+        "bottom": 630.6771240234375,
+        "left": 452,
+        "right": 462,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 480,
+        "w": 900,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-900-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-900-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-900-sidebar-true",
+      "detail": {
+        "x": 170,
+        "y": 275.375,
+        "right": 730,
+        "bottom": 628.625,
+        "w": 900,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-900-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-900-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-900-sidebar-false",
+      "detail": {
+        "top": 630.6771240234375,
+        "bottom": 630.6771240234375,
+        "left": 452,
+        "right": 462,
+        "composerTop": 642.6666870117188,
+        "paneLeft": 480,
+        "w": 900,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-900-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-900-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-900-sidebar-false",
+      "detail": {
+        "x": 170,
+        "y": 275.375,
+        "right": 730,
+        "bottom": 628.625,
+        "w": 900,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-900-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-1200-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-1200-sidebar-true",
+      "detail": {
+        "top": 277.34375,
+        "bottom": 626.6770935058594,
+        "left": 382,
+        "right": 762,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 780,
+        "w": 1200,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-1200-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-1200-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-1200-sidebar-true",
+      "detail": {
+        "x": 320,
+        "y": 274.9295654296875,
+        "right": 880,
+        "bottom": 628.1795654296875,
+        "w": 1200,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-1200-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-1200-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-1200-sidebar-false",
+      "detail": {
+        "top": 626.6771240234375,
+        "bottom": 626.6771240234375,
+        "left": 752,
+        "right": 762,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 780,
+        "w": 1200,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-1200-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-1200-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-1200-sidebar-false",
+      "detail": {
+        "x": 320,
+        "y": 275.375,
+        "right": 880,
+        "bottom": 628.625,
+        "w": 1200,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-1200-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-1536-true"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-1536-sidebar-true",
+      "detail": {
+        "top": 626.6771240234375,
+        "bottom": 626.6771240234375,
+        "left": 1088,
+        "right": 1098,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 1116,
+        "w": 1536,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-1536-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-1536-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-1536-sidebar-true",
+      "detail": {
+        "x": 488,
+        "y": 275.375,
+        "right": 1048,
+        "bottom": 628.625,
+        "w": 1536,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-1536-sidebar-true"
+    },
+    {
+      "pass": true,
+      "name": "real sidebar collapse control matches matrix state: light-1536-false"
+    },
+    {
+      "pass": true,
+      "name": "matrix uses ten actual newline-separated Composer lines"
+    },
+    {
+      "pass": true,
+      "name": "Toast stack stays above Composer and left of native Browser: light-1536-sidebar-false",
+      "detail": {
+        "top": 277.34375,
+        "bottom": 626.6770935058594,
+        "left": 718,
+        "right": 1098,
+        "composerTop": 638.6666870117188,
+        "paneLeft": 1116,
+        "w": 1536,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Toast/Notice leaves real Browser attached: light-1536-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "Classic approval is visible with safe initial focus: light-1536-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "approval fits actual Chromium viewport: light-1536-sidebar-false",
+      "detail": {
+        "x": 488,
+        "y": 275.375,
+        "right": 1048,
+        "bottom": 628.625,
+        "w": 1536,
+        "h": 900
+      }
+    },
+    {
+      "pass": true,
+      "name": "cancelled approval restores real native View: light-1536-sidebar-false"
+    },
+    {
+      "pass": true,
+      "name": "explicit backend refusal stays visible and permits explicit retry"
+    },
+    {
+      "pass": true,
+      "name": "unknown delivery locks both decisions without claiming failure or execution"
+    },
+    {
+      "pass": true,
+      "name": "real Chromium late decision never authorizes a replacement approval"
+    },
+    {
+      "pass": true,
+      "name": "Slash menu still opens with UI4 surfaces"
+    },
+    {
+      "pass": true,
+      "name": "UI3 model popover still opens with native Browser"
+    },
+    {
+      "pass": true,
+      "name": "actual pane drag repositions Toast without covering Composer or Browser",
+      "detail": {
+        "top": 728.34375,
+        "bottom": 770.6770858764648,
+        "left": 474.16668701171875,
+        "right": 697.0000305175781,
+        "composerTop": 782.6666870117188,
+        "paneLeft": 715,
+        "w": 1200,
+        "h": 900,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "Ctrl+K still opens the independent command palette"
+    },
+    {
+      "pass": true,
+      "name": "actual app zoom preserves Toast/Composer/Browser separation: 0.8",
+      "detail": {
+        "top": 893.6978759765625,
+        "bottom": 995.3645401000977,
+        "left": 617.0051879882812,
+        "right": 997.0051879882812,
+        "composerTop": 1007.3567504882812,
+        "paneLeft": 1015,
+        "w": 1500,
+        "h": 1125,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "actual app zoom preserves Toast/Composer/Browser separation: 1.25",
+      "detail": {
+        "top": 590.9417114257812,
+        "bottom": 590.9417114257812,
+        "left": 447.4000244140625,
+        "right": 457.0000247955322,
+        "composerTop": 602.933349609375,
+        "paneLeft": 475.0000305175781,
+        "w": 960,
+        "h": 720,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "actual app zoom preserves Toast/Composer/Browser separation: 1.5",
+      "detail": {
+        "top": 474.22222900390625,
+        "bottom": 474.22222900390625,
+        "left": 287.22222900390625,
+        "right": 297.0000066757202,
+        "composerTop": 486.22222900390625,
+        "paneLeft": 315,
+        "w": 800,
+        "h": 600,
+        "overflow": false
+      }
+    }
+  ],
+  "screenshots": [
+    "session-changes-error-1200-dark.png",
+    "process-active-1200-dark.png",
+    "dark-700-changes-changes.png",
+    "dark-700-browser-browser.png",
+    "dark-700-session-session-changes.png",
+    "dark-700-process-process.png",
+    "dark-900-changes-changes.png",
+    "dark-900-browser-browser.png",
+    "dark-900-session-session-changes.png",
+    "dark-900-process-process.png",
+    "dark-1200-changes-changes.png",
+    "dark-1200-browser-browser.png",
+    "dark-1200-session-session-changes.png",
+    "dark-1200-process-process.png",
+    "dark-1536-changes-changes.png",
+    "dark-1536-browser-browser.png",
+    "dark-1536-session-session-changes.png",
+    "dark-1536-process-process.png",
+    "light-700-changes-changes.png",
+    "light-700-browser-browser.png",
+    "light-700-session-session-changes.png",
+    "light-700-process-process.png",
+    "light-900-changes-changes.png",
+    "light-900-browser-browser.png",
+    "light-900-session-session-changes.png",
+    "light-900-process-process.png",
+    "light-1200-changes-changes.png",
+    "light-1200-browser-browser.png",
+    "light-1200-session-session-changes.png",
+    "light-1200-process-process.png",
+    "light-1536-changes-changes.png",
+    "light-1536-browser-browser.png",
+    "light-1536-session-session-changes.png",
+    "light-1536-process-process.png",
+    "changes-zoom125-dark.png",
+    "joint-feedback-dark-700-sidebar-true.png",
+    "joint-approval-dark-700-sidebar-true.png",
+    "joint-feedback-dark-700-sidebar-false.png",
+    "joint-approval-dark-700-sidebar-false.png",
+    "joint-feedback-dark-900-sidebar-true.png",
+    "joint-approval-dark-900-sidebar-true.png",
+    "joint-feedback-dark-900-sidebar-false.png",
+    "joint-approval-dark-900-sidebar-false.png",
+    "joint-feedback-dark-1200-sidebar-true.png",
+    "joint-approval-dark-1200-sidebar-true.png",
+    "joint-feedback-dark-1200-sidebar-false.png",
+    "joint-approval-dark-1200-sidebar-false.png",
+    "joint-feedback-dark-1536-sidebar-true.png",
+    "joint-approval-dark-1536-sidebar-true.png",
+    "joint-feedback-dark-1536-sidebar-false.png",
+    "joint-approval-dark-1536-sidebar-false.png",
+    "joint-feedback-light-700-sidebar-true.png",
+    "joint-approval-light-700-sidebar-true.png",
+    "joint-feedback-light-700-sidebar-false.png",
+    "joint-approval-light-700-sidebar-false.png",
+    "joint-feedback-light-900-sidebar-true.png",
+    "joint-approval-light-900-sidebar-true.png",
+    "joint-feedback-light-900-sidebar-false.png",
+    "joint-approval-light-900-sidebar-false.png",
+    "joint-feedback-light-1200-sidebar-true.png",
+    "joint-approval-light-1200-sidebar-true.png",
+    "joint-feedback-light-1200-sidebar-false.png",
+    "joint-approval-light-1200-sidebar-false.png",
+    "joint-feedback-light-1536-sidebar-true.png",
+    "joint-approval-light-1536-sidebar-true.png",
+    "joint-feedback-light-1536-sidebar-false.png",
+    "joint-approval-light-1536-sidebar-false.png",
+    "joint-explicit-delivery-failure.png",
+    "joint-unknown-delivery.png",
+    "joint-late-result-replacement.png",
+    "joint-pane-drag-feedback.png",
+    "joint-zoom-0.8.png",
+    "joint-zoom-1.25.png",
+    "joint-zoom-1.5.png"
+  ],
+  "errors": [
+    "Uncaught TypeError: Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'."
+  ]
+}

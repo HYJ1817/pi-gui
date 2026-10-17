@@ -1,0 +1,7 @@
+{
+  "electron": {"command":"node", "args":["tests/ui4-integration-electron.cjs"]},
+  "runtime-electron": {"command":"node", "args":["tests/ui4-runtime-electron.cjs"]},
+  "approval-electron": {"command":"node", "args":["tests/ui4-approval.cjs","--electron"], "env":{"UI4_EVIDENCE_ROOT":"C:/pi-GUI-ui4-integration/docs/claude-ui-redesign/ui4-integration-evidence/approval-electron"}},
+  "feedback-electron": {"command":"node", "args":["tests/ui4-feedback.cjs","--electron"], "env":{"UI4_EVIDENCE_ROOT":"C:/pi-GUI-ui4-integration/docs/claude-ui-redesign/ui4-integration-evidence/feedback-electron"}},
+  "cdp": {"command":"node", "args":["tests/ui4-cdp.cjs"]}
+}

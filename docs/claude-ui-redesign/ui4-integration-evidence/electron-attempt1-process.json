@@ -1,0 +1,11 @@
+{
+  "command": "node",
+  "args": [
+    "tests/ui4-integration-electron.cjs"
+  ],
+  "exitCode": 1,
+  "seconds": 52.1749125,
+  "startedUtc": "2026-10-17T10:40:27.8604066Z",
+  "finishedUtc": "2026-10-17T10:41:20.0367388Z",
+  "fixtureRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui4-electron-8f753bc7978e4c4e82167d5bcd5d02ee"
+}

@@ -1,0 +1,7 @@
+{
+  "command": "node scripts/build-app.mjs --rebuild --output-root <TEMP>",
+  "exitCode": 0,
+  "durationMs": 12148,
+  "outputRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui4-build-ZLR49f",
+  "electronZipDir": "C:/Users/21022/AppData/Local/electron/Cache/bb424f9061e7a2927a7fcc04709593fe81ac4633e2cd40456f2ef431743b1ee7"
+}

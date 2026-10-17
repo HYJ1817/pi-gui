@@ -1,0 +1,9 @@
+﻿{
+    "command":  "npm test",
+    "phase":  "final",
+    "exitCode":  0,
+    "seconds":  3393.3083502,
+    "startedUtc":  "2026-10-17T12:35:19.9376417Z",
+    "finishedUtc":  "2026-10-17T13:31:44.4572973Z",
+    "fixtureRoot":  "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui4-final-665b5ae8473d44a88ce90636acadb285"
+}

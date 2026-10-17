@@ -1,0 +1,154 @@
+FAIL late 允许一次 success cannot authorize replacement after expired: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 允许一次 success cannot authorize replacement after stop: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 允许一次 success cannot authorize replacement after workspace: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 允许一次 success cannot authorize replacement after session: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 允许一次 success cannot authorize replacement after bridge: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 允许一次 success cannot authorize replacement after timeout: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 拒绝 success cannot authorize replacement after expired: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 拒绝 success cannot authorize replacement after stop: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 拒绝 success cannot authorize replacement after workspace: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 拒绝 success cannot authorize replacement after session: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 拒绝 success cannot authorize replacement after bridge: new request must receive no implicit response
+
+2 !== 1
+
+FAIL late 拒绝 success cannot authorize replacement after timeout: new request must receive no implicit response
+
+2 !== 1
+
+FAIL old failure cannot unlock or alter replacement submitting confirmation: Expected values to be strictly equal:
+
+'false' !== 'true'
+
+FAIL late select success cannot close an unrelated replacement modal: Expected values to be strictly equal:
+
+true !== false
+
+FAIL lost response after acceptance is unknown and cannot send a second decision: The input did not match the regular expression /未知|无法确认/. Input:
+
+'ambiguous来源：Pi Extension · 确认请求请求内容fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待Esc 取消 · Tab 在按钮间移动 · Enter 不会替你允许拒绝允许一次'
+
+FAIL identical errors in different workspace generations are not deduplicated: a new-context failure must not be suppressed
+PASS ordinary command errors retain existing notification and wire behaviour
+FAIL malformed acknowledgement is unknown and cannot authorize a retry: The input did not match the regular expression /未知/. Input:
+
+'malformed来源：Pi Extension · 确认请求请求内容fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）后端没有接受这条应答，Pi 仍在等待；请重试或停止Esc 取消 · Tab 在按钮间移动 · Enter 不会替你允许拒绝允许一次'
+
+FAIL Notice same text updates callbacks and cannot retain a stale workspace action: Expected values to be strictly equal:
+
+1 !== 0
+
+FAIL Notice same-context handler refresh preserves DOM and focus: Expected values to be strictly equal:
+
+1 !== 0
+
+FAIL Toast pointer leave cannot resume a timer while its button has focus: Expected "actual" to be strictly unequal to:
+
+'true'
+FAIL runtime-A unknown owner cannot match explicit foreign workspace: The expression evaluated to a falsy value:
+
+  assert.ok(f.d.querySelector('.session-change-summary'))
+
+FAIL classic-chat unknown owner cannot match explicit foreign workspace: The expression evaluated to a falsy value:
+
+  assert.ok(f.d.querySelector('.session-change-summary'))
+
+FAIL Runtime missing owner and workspace never consumes missing-identity Classic evidence: The expression evaluated to a falsy value:
+
+  assert.ok(f.d.querySelector('.session-change-summary'))
+
+PASS only identity-free Classic evidence invalidates the identity-free Classic preview
+PASS known Runtime workspace invalidation requires both matching id and epoch
+FAIL cancelled loading clears busy immediately and ignores late result: pi-gui:session-evidence-changed: Expected "actual" to be strictly unequal to:
+
+'true'
+FAIL cancelled loading clears busy immediately and ignores late result: pi-gui:session-switch: Expected "actual" to be strictly unequal to:
+
+'true'
+PASS process polling stays serial across manual refresh and pending logs
+PASS process revision resets cursor and Stop retains real generation/id/revision transport
+PASS process dispose clears polling and rejects late log writes to replacement surface
+PASS process logs stay bounded and render untrusted text without HTML execution
+FAIL unknown confirm closes locally without contradictory response: Escape: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 确认请求请求内容fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待Esc 取消 · Tab 在按钮间移动 · Enter 不会替你允许拒绝允许一次'
+
+FAIL unknown confirm closes locally without contradictory response: backdrop: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 确认请求请求内容fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待Esc 取消 · Tab 在按钮间移动 · Enter 不会替你允许拒绝允许一次'
+
+FAIL unknown confirm closes locally without contradictory response: replace: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 确认请求请求内容fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待Esc 取消 · Tab 在按钮间移动 · Enter 不会替你允许拒绝允许一次'
+
+FAIL unknown confirm closes locally without contradictory response: Stop: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 确认请求请求内容fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待Esc 取消 · Tab 在按钮间移动 · Enter 不会替你允许拒绝允许一次'
+
+FAIL unknown select closes locally without contradictory response: Escape: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 选择请求fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待onetwo取消'
+
+FAIL unknown select closes locally without contradictory response: backdrop: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 选择请求fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待onetwo取消'
+
+FAIL unknown select closes locally without contradictory response: replace: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 选择请求fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待onetwo取消'
+
+FAIL unknown select closes locally without contradictory response: Stop: The input did not match the regular expression /未知|无法确认/. Input:
+
+'unknown-exit来源：Pi Extension · 选择请求fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）无法连接后端：应答没有送达，Pi 仍在等待onetwo取消'
+
+FAIL ordinary modal bound close cannot close a replacement instance: Expected values to be strictly equal:
+
+true !== false
+
+FAIL view navigation preserves real Classic pending with explicit provenance: The input did not match the regular expression /经典会话/. Input:
+
+'classic-background来源：Pi Extension · 确认请求请求内容fixture operation协议未提供结构化风险信息：这里不判断这次操作是否危险，请按上面的真实内容自行决定。来源：Pi Extension · 一次性决定（协议没有「总是允许」）Esc 取消 · Tab 在按钮间移动 · Enter 不会替你允许拒绝允许一次'
+
+FAIL late old-owner approval rejection cannot change new-owner notice: Runtime conversation: The input was expected to not match the regular expression /OLD_OWNER_APPROVAL_FAILURE/. Input:
+
+'fixture就绪 · 运行中运行名额暂不可用发送停止重启关闭会话恢复会话打开历史返回实时会话Browser开发进程模型推理强度刷新模型OLD_OWNER_APPROVAL_FAILURE等待任务'
+
+FAIL late old-owner approval rejection cannot change new-owner notice: Runtime dialog: The input was expected to not match the regular expression /OLD_OWNER_APPROVAL_FAILURE/. Input:
+
+'独立会话关闭每个会话独占工作区。关闭会话会停止其 Browser 和开发进程；记录保留。运行名额暂不可用OLD_OWNER_APPROVAL_FAILUREfixture · 运行中fixture就绪 · 运行中发送停止重启关闭会话Browser开发进程等待任务'
+
+PASS current-owner approval outcome remains visible and refreshed: false/false
+PASS current-owner approval outcome remains visible and refreshed: false/true
+PASS current-owner approval outcome remains visible and refreshed: true/false
+PASS current-owner approval outcome remains visible and refreshed: true/true
+UI4 integration: 11/48; failed=37; skipped=0

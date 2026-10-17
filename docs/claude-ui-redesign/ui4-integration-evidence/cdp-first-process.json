@@ -1,0 +1,8 @@
+{
+  "command": "node tests/ui4-cdp.cjs",
+  "childCommand": "node tests/cdp-shot.cjs --url=<offline port-0 harness> --tag=ui4-integration",
+  "fixturesExitCode": 0,
+  "exitCode": 1,
+  "durationMs": 269331,
+  "screenshots": "C:\\pi-GUI-ui4-integration\\.shots"
+}

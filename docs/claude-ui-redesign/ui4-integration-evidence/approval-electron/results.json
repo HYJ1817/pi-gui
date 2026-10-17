@@ -1,0 +1,649 @@
+{
+  "passed": 44,
+  "failed": 0,
+  "skipped": 0,
+  "exitCode": 0,
+  "checks": [
+    {
+      "name": "Electron 页面获得焦点（受信键盘可投递）",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-700-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-700-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-700-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-700-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-900-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-900-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-900-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-900-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1200-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1200-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1200-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1200-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1536-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1536-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1536-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-dark-1536-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-700-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-700-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-700-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-700-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-900-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-900-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-900-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-900-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1200-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1200-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1200-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1200-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1536-pane-closed：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1536-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1536-pane-open：卡片在视口内、正文/操作区无横向溢出",
+      "pass": true
+    },
+    {
+      "name": "approval-light-1536-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确",
+      "pass": true
+    },
+    {
+      "name": "提交中：卡片保留、按钮禁用、状态说明可见",
+      "pass": true
+    },
+    {
+      "name": "提交中重复点击仍只有一条命令",
+      "pass": true
+    },
+    {
+      "name": "投递失败：卡片不关闭、错误状态可见",
+      "pass": true
+    },
+    {
+      "name": "Runtime 卡：失败状态可见、无横向溢出、没有伪造的 Always 入口",
+      "pass": true
+    },
+    {
+      "name": "reduced-motion：审批卡不播放入场动画",
+      "pass": true
+    },
+    {
+      "name": "键盘：初始焦点是「拒绝」",
+      "pass": true
+    },
+    {
+      "name": "键盘：Tab 移到「允许一次」",
+      "pass": true
+    },
+    {
+      "name": "键盘：Shift+Tab 回到「拒绝」",
+      "pass": true
+    },
+    {
+      "name": "键盘：卡片聚焦时 Enter 不会允许",
+      "pass": true
+    },
+    {
+      "name": "键盘：Esc 走取消应答并收卡",
+      "pass": true
+    },
+    {
+      "name": "渲染过程无控制台错误",
+      "pass": true
+    }
+  ],
+  "facts": [
+    {
+      "label": "approval-dark-700-pane-closed",
+      "hidden": false,
+      "left": 24,
+      "top": 265.125,
+      "right": 676,
+      "bottom": 634.875,
+      "vw": 700,
+      "vh": 900,
+      "pageWidth": 700,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-dark-700-pane-open",
+      "hidden": false,
+      "left": 24,
+      "top": 265.125,
+      "right": 676,
+      "bottom": 634.875,
+      "vw": 700,
+      "vh": 900,
+      "pageWidth": 700,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-dark-900-pane-closed",
+      "hidden": false,
+      "left": 170,
+      "top": 254.2604217529297,
+      "right": 730,
+      "bottom": 645.7291717529297,
+      "vw": 900,
+      "vh": 900,
+      "pageWidth": 900,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-dark-900-pane-open",
+      "hidden": false,
+      "left": 170,
+      "top": 254.2604217529297,
+      "right": 730,
+      "bottom": 645.7291717529297,
+      "vw": 900,
+      "vh": 900,
+      "pageWidth": 900,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-dark-1200-pane-closed",
+      "hidden": false,
+      "left": 320,
+      "top": 254.2604217529297,
+      "right": 880,
+      "bottom": 645.7291717529297,
+      "vw": 1200,
+      "vh": 900,
+      "pageWidth": 1200,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-dark-1200-pane-open",
+      "hidden": false,
+      "left": 320,
+      "top": 254.2604217529297,
+      "right": 880,
+      "bottom": 645.7291717529297,
+      "vw": 1200,
+      "vh": 900,
+      "pageWidth": 1200,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-dark-1536-pane-closed",
+      "hidden": false,
+      "left": 488,
+      "top": 254.2604217529297,
+      "right": 1048,
+      "bottom": 645.7291717529297,
+      "vw": 1536,
+      "vh": 900,
+      "pageWidth": 1536,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-dark-1536-pane-open",
+      "hidden": false,
+      "left": 488,
+      "top": 254.2604217529297,
+      "right": 1048,
+      "bottom": 645.7291717529297,
+      "vw": 1536,
+      "vh": 900,
+      "pageWidth": 1536,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-700-pane-closed",
+      "hidden": false,
+      "left": 24,
+      "top": 265.125,
+      "right": 676,
+      "bottom": 634.875,
+      "vw": 700,
+      "vh": 900,
+      "pageWidth": 700,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-700-pane-open",
+      "hidden": false,
+      "left": 24,
+      "top": 265.125,
+      "right": 676,
+      "bottom": 634.875,
+      "vw": 700,
+      "vh": 900,
+      "pageWidth": 700,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-900-pane-closed",
+      "hidden": false,
+      "left": 170,
+      "top": 254.2604217529297,
+      "right": 730,
+      "bottom": 645.7291717529297,
+      "vw": 900,
+      "vh": 900,
+      "pageWidth": 900,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-900-pane-open",
+      "hidden": false,
+      "left": 170,
+      "top": 254.2604217529297,
+      "right": 730,
+      "bottom": 645.7291717529297,
+      "vw": 900,
+      "vh": 900,
+      "pageWidth": 900,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-1200-pane-closed",
+      "hidden": false,
+      "left": 320,
+      "top": 254.2604217529297,
+      "right": 880,
+      "bottom": 645.7291717529297,
+      "vw": 1200,
+      "vh": 900,
+      "pageWidth": 1200,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-1200-pane-open",
+      "hidden": false,
+      "left": 320,
+      "top": 254.2604217529297,
+      "right": 880,
+      "bottom": 645.7291717529297,
+      "vw": 1200,
+      "vh": 900,
+      "pageWidth": 1200,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-1536-pane-closed",
+      "hidden": false,
+      "left": 488,
+      "top": 254.2604217529297,
+      "right": 1048,
+      "bottom": 645.7291717529297,
+      "vw": 1536,
+      "vh": 900,
+      "pageWidth": 1536,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": true,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    },
+    {
+      "label": "approval-light-1536-pane-open",
+      "hidden": false,
+      "left": 488,
+      "top": 254.2604217529297,
+      "right": 1048,
+      "bottom": 645.7291717529297,
+      "vw": 1536,
+      "vh": 900,
+      "pageWidth": 1536,
+      "actionsOverflow": 0,
+      "detailOverflow": 0,
+      "btnHeights": [
+        32,
+        32
+      ],
+      "nowrap": true,
+      "focus": "拒绝",
+      "paneHidden": false,
+      "animation": "ui4-approval-in",
+      "status": "",
+      "busy": null,
+      "buttons": [
+        "拒绝",
+        "允许一次"
+      ]
+    }
+  ],
+  "screenshots": [
+    "approval-dark-700-pane-closed.png",
+    "approval-dark-700-pane-open.png",
+    "approval-dark-900-pane-closed.png",
+    "approval-dark-900-pane-open.png",
+    "approval-dark-1200-pane-closed.png",
+    "approval-dark-1200-pane-open.png",
+    "approval-dark-1536-pane-closed.png",
+    "approval-dark-1536-pane-open.png",
+    "approval-light-700-pane-closed.png",
+    "approval-light-700-pane-open.png",
+    "approval-light-900-pane-closed.png",
+    "approval-light-900-pane-open.png",
+    "approval-light-1200-pane-closed.png",
+    "approval-light-1200-pane-open.png",
+    "approval-light-1536-pane-closed.png",
+    "approval-light-1536-pane-open.png",
+    "state-submitting-dark-900.png",
+    "state-failed-dark-900.png",
+    "state-select-dark-900.png",
+    "state-input-dark-900.png",
+    "state-runtime-dark-900.png",
+    "reduced-motion-dark-1200.png"
+  ],
+  "errors": [],
+  "durationMs": 19558,
+  "versions": {
+    "electron": "44.4.3",
+    "chromium": "152.0.7977.130"
+  },
+  "limits": "Production public/ DOM/CSS in real Electron; offline fixture harness; capturePage web pixels only; no real Pi, no OS window chrome, no native browser view. Right pane uses the Changes surface (DOM), not the native Browser view."
+}

@@ -1,0 +1,12 @@
+﻿{
+    "command":  "node",
+    "args":  [
+                 "tests/ui4-approval.cjs",
+                 "--electron"
+             ],
+    "exitCode":  1,
+    "seconds":  2.8535558,
+    "startedUtc":  "2026-10-17T11:03:06.0499799Z",
+    "finishedUtc":  "2026-10-17T11:03:08.9057700Z",
+    "fixtureRoot":  "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui4-approval-electron-63aa401a9eb04bf894cef56d2eb8901e"
+}
