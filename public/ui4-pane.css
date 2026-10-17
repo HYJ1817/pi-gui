@@ -1,0 +1,380 @@
+/* UI-4A：右侧工作区（右栏）的布局与组件样式增量。
+ *
+ * ---------- 边界 ----------
+ *
+ * 这个文件**只消费** public/tokens.css 的语义 Token（--ui-*）与它的兼容别名
+ * （--t1/--t2/--t3/--line/--hover/--focus-ring…）。它不定义任何新的颜色来源：
+ * 要改配色去改 tokens.css。这里只新增两个**布局**自定义属性（--rp-head-h /
+ * --rp-pad），并且声明在 .right-pane 上，不外溢到全局。
+ *
+ * ---------- 它统一了什么 ----------
+ *
+ * 右栏里有四种被不同模块画出来的「顶部条」：
+ *   .rp-toolbar   —— browser-pane.js 的地址栏那一行
+ *   .chg-head     —— git.js 的「文件变更」标题行
+ *   .rp-head      —— right-pane.js 的 createPaneHeader()，本任务的
+ *                    「本会话变更」「开发进程」两面用它
+ *   .process-head —— runtime-secondary.js 的空态标题行
+ * 它们的 DOM 来源不同，但**语义结构相同**：标题 → 说明 → 弹性空白 → 工具按钮 → 关闭。
+ * 所以这里只对齐尺寸与节奏（46px 带高、同样的内边距、同样的字号、同一条分隔线），
+ * 不去重写任何一面的 DOM，也不新增第二套按钮/页签/空态组件。
+ *
+ * 面板内容自己滚（.rp-scroll / .chg-body），标题带用 sticky 固定；
+ * 这样 Browser 的原生 WebContentsView 矩形（.rp-viewport）也不会因为滚动而漂移。
+ *
+ * ---------- 加载方式 ----------
+ *
+ * index.html 里排在 process.css 之后（集成方负责加这一行，本任务不改 index.html）：
+ *   <link rel="stylesheet" href="/ui4-pane.css">
+ * 放在最后是为了让本文件在同优先级时覆盖 styles.css / process.css 的默认值。
+ * 即使本文件没被加载，右栏仍然可用 —— 这里没有一条规则是功能前提。 */
+
+.right-pane{
+  /* 右栏内部的节奏：一个标题带高度 + 一个内容内边距，别的都从这里派生。 */
+  --rp-head-h:46px;
+  --rp-pad:12px;
+  background:var(--ui-panel-surface);
+  border-left:1px solid var(--ui-border);
+  color:var(--ui-text-primary);
+  font-family:var(--ui-font-sans);
+  font-size:var(--ui-font-body);
+}
+/* 覆盖式抽屉：阴影回答「它浮在对话上面」，边框回答「边界在哪」。 */
+.right-pane[data-mode="overlay"]{box-shadow:var(--ui-shadow-panel);border-left-color:var(--ui-border-strong)}
+.right-pane[hidden]{display:none}
+
+.rp-body{overflow:hidden}
+.rp-surface{min-width:0}
+
+/* ================= 标题带 ================= */
+
+.rp-toolbar,
+.secondary-surface .chg-head,
+.secondary-surface .rp-head,
+.secondary-surface .process-head{
+  display:flex;align-items:center;gap:8px;
+  box-sizing:border-box;
+  height:var(--rp-head-h);min-height:var(--rp-head-h);flex:0 0 auto;
+  margin:0;padding:0 var(--rp-pad);
+  background:var(--ui-panel-surface);
+  border-bottom:1px solid var(--ui-border);
+  -webkit-app-region:drag;        /* 标题带的空白处仍然可以拖动窗口 */
+}
+.rp-toolbar button,
+.secondary-surface .chg-head button,
+.secondary-surface .rp-head button,
+.secondary-surface .process-head button{-webkit-app-region:no-drag}
+
+/* 标题与说明：一行读完；窄到放不下时说明先让位（说明不是唯一信息源）。 */
+.rp-head-main{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
+.rp-head-title,
+.secondary-surface .chg-head h3{
+  flex:0 0 auto;margin:0;
+  font-size:13px;font-weight:var(--ui-weight-strong);line-height:1.3;
+  color:var(--ui-text-primary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;
+}
+.rp-head-sub,
+.secondary-surface .chg-sub{
+  flex:0 1 auto;display:block;margin:0;min-width:0;
+  font-size:var(--ui-font-caption);line-height:1.3;
+  color:var(--ui-text-muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.rp-head-sub[hidden]{display:none}
+.rp-head-grow,
+.secondary-surface .chg-head .grow{flex:1 1 auto;min-width:0}
+.rp-head-actions,
+.secondary-surface .chg-head .rp-head-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0}
+.rp-head .icon-btn,
+.secondary-surface .chg-head .icon-btn,
+.secondary-surface .process-head .icon-btn{width:26px;height:26px;flex:0 0 26px}
+
+/* 关闭按钮：浏览器面是 .icon-btn（SVG ×），二级面是 .secondary-close（文本 ×）。
+ * 统一成同一个 26px 方块与同一个位置（最右），否则两个面的 × 会一大一小。 */
+.secondary-close{
+  flex:0 0 auto;width:26px;height:26px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;line-height:1;color:var(--ui-text-secondary);
+  background:transparent;border:0;border-radius:6px;cursor:pointer;
+}
+.secondary-close:hover{background:var(--ui-hover);color:var(--ui-text-primary)}
+
+/* 工具条里的小按钮（刷新/页签/行内动作）用同一套高度与圆角。 */
+.rp-btn{height:26px;padding:0 9px;border-radius:6px;font-size:11.5px;line-height:1}
+.rp-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* 页签行：独占一行，因为它两个中文标签加工具按钮在 320px 放不进标题带。 */
+.rp-bar{
+  display:flex;align-items:center;gap:8px;flex:0 0 auto;
+  box-sizing:border-box;padding:8px var(--rp-pad) 0;
+}
+.rp-tabs{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
+.rp-tab{
+  height:26px;padding:0 10px;border-radius:7px;
+  border:1px solid var(--ui-border);background:transparent;
+  color:var(--ui-text-secondary);font-family:inherit;font-size:11.5px;cursor:pointer;
+  white-space:nowrap;
+}
+.rp-tab:hover{background:var(--ui-hover);color:var(--ui-text-primary)}
+.rp-tab[aria-pressed="true"]{background:var(--ui-selected);border-color:var(--ui-border-strong);color:var(--ui-text-primary)}
+
+/* ================= 滚动容器 ================= */
+
+.secondary-surface{
+  display:flex;flex-direction:column;min-height:0;min-width:0;
+  padding:0;overflow:auto;overscroll-behavior:contain;
+  background:var(--ui-canvas);
+}
+/* 标题带固定：滚内容时「这是哪一面、怎么关」始终在视野里。 */
+.secondary-surface > .rp-head,
+.secondary-surface > .chg-head,
+.secondary-surface > .process-head{position:sticky;top:0;z-index:2}
+
+.rp-scroll{
+  flex:1 1 auto;min-height:0;min-width:0;overflow:auto;
+  overscroll-behavior:contain;
+  padding:var(--rp-pad);
+  scrollbar-gutter:stable;
+}
+/* .chg-body（git.js）由 styles.css 声明成 flex 列，这里只给它加上滚动。 */
+.secondary-surface .chg-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain}
+.secondary-surface .session-change-body{padding:0 var(--rp-pad) var(--rp-pad)}
+
+/* ================= 提示 / 状态标记 / 空态 ================= */
+
+.rp-notice,
+.session-change-note{
+  margin:8px 0;padding:0;
+  font-size:12px;line-height:1.65;color:var(--ui-text-secondary);
+  overflow-wrap:anywhere;
+}
+.secondary-surface > .rp-notice{
+  margin:8px var(--rp-pad) 0;padding:8px 10px;
+  background:var(--ui-info-surface);
+  border:1px solid var(--ui-info-border);
+  border-radius:var(--ui-radius-card);
+  color:var(--ui-text-secondary);
+}
+/* 只有「会变且需要被注意到」的提示才有底色，普通说明保持安静。 */
+.rp-notice[data-tone="warn"],
+.session-change-note[data-tone="warn"]{
+  padding:8px 10px;border-radius:var(--ui-radius-card);
+  background:var(--ui-warning-surface);border:1px solid var(--ui-warning-border);
+  color:var(--ui-warning);
+}
+.rp-notice[data-tone="error"],
+.session-change-note[data-tone="error"],
+.rp-error{
+  padding:8px 10px;border-radius:var(--ui-radius-card);
+  background:var(--ui-danger-surface);border:1px solid var(--ui-danger-border);
+  color:var(--ui-danger);
+}
+.secondary-surface .session-change-note[data-tone="error"]{margin:8px 0}
+
+.rp-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  height:20px;padding:0 7px;border-radius:var(--ui-radius-pill);
+  font-size:10.5px;line-height:1;white-space:nowrap;
+  background:var(--ui-hover);color:var(--ui-text-secondary);
+  border:1px solid var(--ui-border);
+}
+.rp-chip[data-tone="ok"]{background:var(--ui-success-surface);border-color:var(--ui-success-border);color:var(--ui-success)}
+.rp-chip[data-tone="warn"]{background:var(--ui-warning-surface);border-color:var(--ui-warning-border);color:var(--ui-warning)}
+.rp-chip[data-tone="muted"]{background:transparent;color:var(--ui-text-muted)}
+.rp-chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+
+.rp-empty{
+  display:flex;flex-direction:column;gap:4px;
+  margin:4px 0;padding:14px 12px;
+  border:1px dashed var(--ui-border);border-radius:var(--ui-radius-card);
+  background:transparent;min-width:0;
+}
+.rp-empty-title{margin:0;font-size:12.5px;font-weight:var(--ui-weight-medium);color:var(--ui-text-secondary)}
+.rp-empty-text{margin:0;font-size:11.5px;line-height:1.6;color:var(--ui-text-muted);overflow-wrap:anywhere}
+
+.rp-loading{
+  display:flex;align-items:center;gap:8px;
+  margin:4px 0;padding:10px 2px;
+  font-size:12px;color:var(--ui-text-muted);
+}
+.rp-loading-dot{
+  width:6px;height:6px;border-radius:50%;flex:0 0 6px;
+  background:var(--ui-text-muted);
+  animation:rp-pulse 1.2s var(--ui-ease-out) infinite;
+}
+@keyframes rp-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+/* ================= 本会话变更 ================= */
+
+.session-change-summary{
+  margin:10px 0 6px;padding:10px 12px;
+  border:1px solid var(--ui-border);border-radius:var(--ui-radius-card);
+  background:var(--ui-panel-surface);
+  min-width:0;
+}
+.session-change-summary-count{
+  margin:0 0 8px;font-size:12.5px;font-weight:var(--ui-weight-medium);
+  color:var(--ui-text-primary);overflow-wrap:anywhere;
+}
+.session-change-summary .rp-chips{margin:0}
+.session-change-list{display:flex;flex-direction:column;margin:6px 0 0;min-width:0}
+.session-change-row{
+  display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 8px;
+  padding:10px 0;border-top:1px solid var(--ui-border);min-width:0;
+}
+.session-change-row:first-child{border-top:0}
+/* 行内说明与预览各占整行，不参与到上面那一行的排布里去。
+ * 用 order 把动作按钮提到说明前面：DOM 里它仍在说明之后（既有脚本按
+ * `#row > button` 取它，也仍然取得到），但视觉上它跟路径同一行。 */
+.session-change-info{order:1;display:flex;align-items:flex-start;gap:8px;flex:1 1 240px;min-width:0}
+.session-change-name{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}
+.session-change-row > .btn{order:2;margin-left:auto;flex:0 0 auto;height:26px;padding:0 10px;font-size:11.5px;border-radius:7px;align-self:flex-start}
+.session-change-row > .session-change-note{order:3;flex:0 0 100%;margin:2px 0 0}
+.session-change-path,
+.session-change-meta{min-width:0}
+.session-change-path{
+  font-family:var(--ui-font-mono);font-size:11.5px;line-height:1.5;
+  color:var(--ui-text-primary);
+  overflow-wrap:anywhere;word-break:break-word;
+}
+.session-change-meta{margin:0;font-size:10.5px;line-height:1.5;color:var(--ui-text-muted);overflow-wrap:anywhere}
+.session-change-preview{order:4;flex:0 0 100%;min-width:0;margin-top:2px}
+.session-change-history-file{padding:8px 0;border-top:1px solid var(--ui-border);min-width:0}
+
+/* 状态字母：和「文件变更」的 .chg-code 同一套语义（A=新增/M=修改），
+ * 只做视觉重复编码，语义由紧邻的那行文字提供。 */
+.session-change-mark{
+  flex:0 0 auto;width:18px;height:18px;margin-top:1px;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--ui-font-mono);font-size:10.5px;line-height:1;
+  background:var(--ui-hover);color:var(--ui-text-secondary);
+}
+.session-change-mark[data-operation="created"]{background:var(--ui-success-surface);color:var(--ui-success)}
+
+/* ================= 开发进程 ================= */
+
+.process-panel{padding:0;min-width:0;background:var(--ui-canvas);color:var(--ui-text-primary)}
+.process-toolbar{display:flex;align-items:center;gap:10px;flex:0 0 auto;padding:8px var(--rp-pad) 0}
+.process-permission{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ui-text-secondary);cursor:pointer;min-width:0}
+.process-permission input{width:14px;height:14px;margin:0;padding:0;flex:0 0 auto;accent-color:var(--ui-brand)}
+.process-permission:has(input:disabled){cursor:default;color:var(--ui-text-muted)}
+.secondary-surface .process-note{
+  flex:0 0 auto;margin:4px var(--rp-pad) 0;
+  font-size:10.5px;line-height:1.55;color:var(--ui-text-muted);overflow-wrap:anywhere;
+}
+.secondary-surface .process-message{
+  flex:0 0 auto;margin:6px var(--rp-pad) 0;padding:0;
+  font-size:11.5px;line-height:1.6;color:var(--ui-text-secondary);overflow-wrap:anywhere;
+}
+.secondary-surface .process-message[data-tone="warn"]{color:var(--ui-warning)}
+.secondary-surface .process-message[data-tone="error"]{color:var(--ui-danger)}
+.secondary-surface .process-message[data-tone="info"]{color:var(--ui-text-muted)}
+
+.process-list{display:flex;flex-direction:column;min-width:0}
+.process-row{
+  display:flex;flex-direction:column;gap:6px;
+  padding:12px 0;border-top:1px solid var(--ui-border);min-width:0;
+}
+.process-row:first-child{border-top:0}
+.process-row-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.process-title,
+.process-row h4{
+  /* 命令本身可能很长：最多两行，剩下的交给 title 提示（下面的状态行仍然完整） */
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  margin:0;font-size:12.5px;font-weight:var(--ui-weight-medium);line-height:1.5;
+  color:var(--ui-text-primary);
+  overflow-wrap:anywhere;word-break:break-word;
+  font-family:var(--ui-font-mono);
+}
+/* 状态标记：圆点 + 文字。文字留在 .process-meta 里（读屏与既有脚本都以它为事实源），
+ * 这里只用一个点把状态从一行小字里拎出来。颜色不是唯一线索，文字仍然是。 */
+.process-meta{
+  display:flex;align-items:center;gap:6px;
+  margin:0;font-size:10.5px;line-height:1.5;color:var(--ui-text-secondary);overflow-wrap:anywhere;
+}
+.process-meta::before{
+  content:"";flex:0 0 6px;width:6px;height:6px;border-radius:50%;
+  background:var(--ui-text-muted);
+}
+.process-row[data-state="ready"] .process-meta::before,
+.process-row[data-state="running"] .process-meta::before{background:var(--ui-success)}
+.process-row[data-state="starting"] .process-meta::before,
+.process-row[data-state="stopping"] .process-meta::before{background:var(--ui-running)}
+.process-row[data-state="failed"] .process-meta::before{background:var(--ui-danger)}
+.process-row[data-state="failed"] .process-meta{color:var(--ui-danger)}
+.process-row[data-state="exited"] .process-meta::before{background:var(--ui-text-muted)}
+.process-endpoint{
+  margin:0;font-family:var(--ui-font-mono);font-size:10.5px;line-height:1.5;
+  color:var(--ui-text-muted);overflow-wrap:anywhere;word-break:break-all;
+}
+.process-actions{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 0}
+.process-actions .btn[disabled]{opacity:.4}
+/* 日志：等宽、可滚、可聚焦（键盘可读），高度按视口收缩，长日志不把按钮顶走。 */
+.process-logs{
+  margin:8px 0 0;padding:8px 10px;
+  max-height:min(220px,32vh);overflow:auto;overscroll-behavior:contain;
+  font-family:var(--ui-font-mono);font-size:11px;line-height:1.6;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  background:var(--ui-code-surface);color:var(--ui-text-secondary);
+  border:1px solid var(--ui-border);border-radius:var(--ui-radius-control);
+}
+.process-logs:empty{display:none}
+.process-logs:focus-visible{outline:2px solid var(--ui-focus);outline-offset:1px}
+
+/* ================= Browser ================= */
+
+.rp-toolbar{background:var(--ui-panel-surface)}
+.rp-toolbar .icon-btn{width:26px;height:26px;flex:0 0 26px}
+.rp-address{height:28px;border-radius:8px;font-size:12px}
+.browser-agent-bar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  padding:6px var(--rp-pad);flex:0 0 auto;
+  border-bottom:1px solid var(--ui-border);
+  background:var(--ui-panel-surface);
+}
+.browser-agent-status{font-size:10.5px;color:var(--ui-text-muted);min-width:0;overflow-wrap:anywhere}
+/* 原生 view 落地的位置：底色与画布一致，view 还没摆好时不会闪一块异色。 */
+.rp-viewport{background:var(--ui-canvas)}
+.secondary-surface .rp-error,
+.rp-surface-browser .rp-error{flex:0 0 auto;margin:0;border-radius:0;border-top:1px solid var(--ui-danger-border)}
+
+/* ================= 主题与窄屏 ================= */
+
+/* 容器查询按**右栏真实宽度**判断，而不是窗口宽度：右栏可以被拖动到很窄，
+ * 窗口本身可能很宽。Chromium 105+ 支持；不支持的浏览器就是「说明一直显示」，
+ * 不会坏。 */
+.secondary-surface{container-type:inline-size}
+@container (max-width:360px){
+  .rp-head-sub,
+  .secondary-surface .chg-sub{display:none}
+  .rp-head-title,
+  .secondary-surface .chg-head h3{max-width:100%}
+}
+@container (max-width:300px){
+  .rp-tab{padding:0 8px}
+  .session-change-info{gap:6px}
+}
+
+/* 覆盖模式下右栏压住对话：宽度仍按用户拖过的值，但不允许超出视口。 */
+@media (max-width:760px){
+  .right-pane[data-mode="overlay"]{max-width:min(100vw - 24px,520px)}
+  .secondary-surface{--rp-pad:10px}
+}
+
+/* 长内容兜底：面板内不出现横向滚动条（长路径/长 URL/长日志都必须换行）。 */
+.right-pane :is(.session-change-row,.process-row,.rp-empty,.rp-head,.chg-head,.process-head){min-width:0}
+.right-pane :is(.session-change-path,.process-endpoint,.process-title,.rp-head-sub){max-width:100%}
+
+/* 动效只用于「出现了」这一件事；拖动分隔条**不加**过渡（那会让宽度跟不上手）。 */
+.right-pane{transition:none}
+.rp-loading-dot{transition:none}
+@media (prefers-reduced-motion:reduce){
+  .rp-loading-dot{animation:none;opacity:.8}
+  .right-pane,.rp-head,.secondary-surface,.process-row{transition:none!important;animation:none!important}
+}
+
+/* 焦点：面板里的每个可操作元素都要看得见键盘焦点（控件级的形状各面不变）。 */
+.right-pane :is(.rp-tab,.rp-btn,.secondary-close,.process-actions .btn,.session-change-row > .btn):focus-visible{
+  outline:2px solid var(--ui-focus);outline-offset:2px;
+}
