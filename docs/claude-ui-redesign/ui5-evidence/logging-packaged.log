@@ -1,0 +1,16 @@
+  ok   包内存在 log-core.cjs
+  ok   包内存在 log-contract.cjs
+  ok   包内存在 zip.cjs
+  ok   包内存在 main.cjs
+  ok   包内存在 logging.cjs
+  ok   打包后端启动
+  ok   打包版状态接口返回日志状态
+  ok   打包版接收 Renderer 白名单事件
+  ok   打包版读取到事件并标记 renderer 进程
+  ok   打包版导出预览包含固定清单
+  ok   打包版导出 ZIP
+  ok   打包版 ZIP 固定五文件且可解压
+  ok   打包版日志目录独立于应用目录
+  ok   打包版清理日志
+  ok   打包版主进程可加载日志核心
+logging-packaged: 15 passed, 0 failed, 0 skipped

@@ -1,0 +1,702 @@
+{
+  "platform": "win32",
+  "startedAt": "2026-10-17T17:04:56.174Z",
+  "durationMs": 180000,
+  "rounds": [
+    {
+      "round": 1,
+      "kind": 1,
+      "startedAt": "2026-10-17T17:04:58.594Z",
+      "git": {
+        "A": 1,
+        "B": 1
+      },
+      "elapsedMs": 3528
+    },
+    {
+      "round": 2,
+      "kind": 2,
+      "startedAt": "2026-10-17T17:05:02.127Z",
+      "elapsedMs": 7303
+    },
+    {
+      "round": 3,
+      "kind": 3,
+      "startedAt": "2026-10-17T17:05:09.435Z",
+      "elapsedMs": 16092
+    },
+    {
+      "round": 4,
+      "kind": 4,
+      "startedAt": "2026-10-17T17:05:25.536Z",
+      "elapsedMs": 12852
+    },
+    {
+      "round": 5,
+      "kind": 5,
+      "startedAt": "2026-10-17T17:05:38.391Z",
+      "elapsedMs": 3453
+    },
+    {
+      "round": 6,
+      "kind": 6,
+      "startedAt": "2026-10-17T17:05:41.848Z",
+      "elapsedMs": 1446
+    },
+    {
+      "round": 7,
+      "kind": 7,
+      "startedAt": "2026-10-17T17:05:43.298Z",
+      "elapsedMs": 9720
+    },
+    {
+      "round": 8,
+      "kind": 0,
+      "startedAt": "2026-10-17T17:05:53.027Z",
+      "git": {
+        "A": 4,
+        "B": 6
+      },
+      "elapsedMs": 3602
+    },
+    {
+      "round": 9,
+      "kind": 1,
+      "startedAt": "2026-10-17T17:05:56.633Z",
+      "git": {
+        "A": 5,
+        "B": 7
+      },
+      "elapsedMs": 3597
+    },
+    {
+      "round": 10,
+      "kind": 2,
+      "startedAt": "2026-10-17T17:06:00.236Z",
+      "elapsedMs": 7288
+    },
+    {
+      "round": 11,
+      "kind": 3,
+      "startedAt": "2026-10-17T17:06:07.533Z",
+      "elapsedMs": 16103
+    },
+    {
+      "round": 12,
+      "kind": 4,
+      "startedAt": "2026-10-17T17:06:23.643Z",
+      "elapsedMs": 12804
+    },
+    {
+      "round": 13,
+      "kind": 5,
+      "startedAt": "2026-10-17T17:06:36.451Z",
+      "elapsedMs": 3271
+    },
+    {
+      "round": 14,
+      "kind": 6,
+      "startedAt": "2026-10-17T17:06:39.725Z",
+      "elapsedMs": 1405
+    },
+    {
+      "round": 15,
+      "kind": 7,
+      "startedAt": "2026-10-17T17:06:41.134Z",
+      "elapsedMs": 9648
+    },
+    {
+      "round": 16,
+      "kind": 0,
+      "startedAt": "2026-10-17T17:06:50.788Z",
+      "git": {
+        "A": 7,
+        "B": 11
+      },
+      "elapsedMs": 3579
+    },
+    {
+      "round": 17,
+      "kind": 1,
+      "startedAt": "2026-10-17T17:06:54.371Z",
+      "git": {
+        "A": 8,
+        "B": 12
+      },
+      "elapsedMs": 3620
+    },
+    {
+      "round": 18,
+      "kind": 2,
+      "startedAt": "2026-10-17T17:06:57.995Z",
+      "elapsedMs": 7306
+    },
+    {
+      "round": 19,
+      "kind": 3,
+      "startedAt": "2026-10-17T17:07:05.310Z",
+      "elapsedMs": 16139
+    },
+    {
+      "round": 20,
+      "kind": 4,
+      "startedAt": "2026-10-17T17:07:21.459Z",
+      "elapsedMs": 12859
+    },
+    {
+      "round": 21,
+      "kind": 5,
+      "startedAt": "2026-10-17T17:07:34.321Z",
+      "elapsedMs": 3478
+    },
+    {
+      "round": 22,
+      "kind": 6,
+      "startedAt": "2026-10-17T17:07:37.805Z",
+      "elapsedMs": 1455
+    },
+    {
+      "round": 23,
+      "kind": 7,
+      "startedAt": "2026-10-17T17:07:39.264Z",
+      "elapsedMs": 9718
+    },
+    {
+      "round": 24,
+      "kind": 0,
+      "startedAt": "2026-10-17T17:07:48.988Z",
+      "git": {
+        "A": 10,
+        "B": 16
+      },
+      "elapsedMs": 3554
+    },
+    {
+      "round": 25,
+      "kind": 1,
+      "startedAt": "2026-10-17T17:07:52.546Z",
+      "git": {
+        "A": 11,
+        "B": 17
+      },
+      "elapsedMs": 3564
+    },
+    {
+      "round": 26,
+      "kind": 2,
+      "startedAt": "2026-10-17T17:07:56.115Z",
+      "elapsedMs": 7275
+    }
+  ],
+  "samples": [
+    {
+      "atMs": 1014,
+      "backendRss": 77217792,
+      "freeMem": 4780978176,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B"
+      ]
+    },
+    {
+      "atMs": 4547,
+      "backendRss": 80338944,
+      "freeMem": 4763639808,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B"
+      ]
+    },
+    {
+      "atMs": 11855,
+      "backendRss": 76075008,
+      "freeMem": 4777930752,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B"
+      ]
+    },
+    {
+      "atMs": 27955,
+      "backendRss": 83820544,
+      "freeMem": 4765298688,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B"
+      ]
+    },
+    {
+      "atMs": 40811,
+      "backendRss": 90628096,
+      "freeMem": 4755685376,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B"
+      ]
+    },
+    {
+      "atMs": 44268,
+      "backendRss": 92385280,
+      "freeMem": 4742598656,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 45718,
+      "backendRss": 92499968,
+      "freeMem": 4738224128,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 55446,
+      "backendRss": 92848128,
+      "freeMem": 4740915200,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 59053,
+      "backendRss": 93835264,
+      "freeMem": 4706107392,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 62656,
+      "backendRss": 98476032,
+      "freeMem": 4809555968,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 69953,
+      "backendRss": 103043072,
+      "freeMem": 4911656960,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 86063,
+      "backendRss": 107581440,
+      "freeMem": 4930363392,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 98871,
+      "backendRss": 111038464,
+      "freeMem": 4933857280,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null
+      ]
+    },
+    {
+      "atMs": 102146,
+      "backendRss": 112218112,
+      "freeMem": 4926275584,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 103554,
+      "backendRss": 112283648,
+      "freeMem": 4923772928,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 113208,
+      "backendRss": 114483200,
+      "freeMem": 4742840320,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 116792,
+      "backendRss": 122216448,
+      "freeMem": 4809035776,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 120416,
+      "backendRss": 129544192,
+      "freeMem": 4791066624,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 127730,
+      "backendRss": 128741376,
+      "freeMem": 4793708544,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 143879,
+      "backendRss": 139489280,
+      "freeMem": 4785311744,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 156742,
+      "backendRss": 141402112,
+      "freeMem": 4807028736,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 160225,
+      "backendRss": 142311424,
+      "freeMem": 4753281024,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 161684,
+      "backendRss": 142733312,
+      "freeMem": 4795191296,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 171408,
+      "backendRss": 142213120,
+      "freeMem": 4799336448,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 174966,
+      "backendRss": 142716928,
+      "freeMem": 4797038592,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 178535,
+      "backendRss": 143659008,
+      "freeMem": 4772737024,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "atMs": 185818,
+      "backendRss": 142565376,
+      "freeMem": 4787081216,
+      "liveCount": 2,
+      "totalCount": 2,
+      "childRss": {
+        "A": null,
+        "B": null
+      },
+      "managed": [
+        "ws-A",
+        "ws-B",
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "checks": 149,
+  "failures": [],
+  "roundsRun": 26,
+  "roundCounts": {
+    "coding": 7,
+    "focus": 4,
+    "stop": 3,
+    "crash": 3,
+    "limit": 3,
+    "process": 3,
+    "sse": 3,
+    "recycle": 0
+  },
+  "overlapIntervals": [
+    {
+      "round": 1,
+      "from": 1792256698594,
+      "to": 1792256701841,
+      "bothRunning": true
+    },
+    {
+      "round": 8,
+      "from": 1792256753027,
+      "to": 1792256756332,
+      "bothRunning": true
+    },
+    {
+      "round": 9,
+      "from": 1792256756633,
+      "to": 1792256759936,
+      "bothRunning": true
+    },
+    {
+      "round": 16,
+      "from": 1792256810788,
+      "to": 1792256814068,
+      "bothRunning": true
+    },
+    {
+      "round": 17,
+      "from": 1792256814371,
+      "to": 1792256817704,
+      "bothRunning": true
+    },
+    {
+      "round": 24,
+      "from": 1792256868988,
+      "to": 1792256872259,
+      "bothRunning": true
+    },
+    {
+      "round": 25,
+      "from": 1792256872546,
+      "to": 1792256875813,
+      "bothRunning": true
+    }
+  ],
+  "endedAt": "2026-10-17T17:08:04.347Z",
+  "elapsedMs": 186768,
+  "sseConnects": 4,
+  "frames": 2237,
+  "ok": true
+}

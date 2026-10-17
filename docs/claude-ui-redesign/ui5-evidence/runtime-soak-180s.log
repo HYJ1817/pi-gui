@@ -1,0 +1,176 @@
+PASS HTTP start A/B accepted
+PASS A/B distinct runtimeId + native sessionId
+PASS A/B distinct runtimeGeneration
+PASS round 1: A/B prompt accepted
+PASS round 1: A and B were streaming at the same instant
+PASS round 1: A wrote only in A worktree
+PASS round 1: B wrote only in B worktree
+PASS round 1: no cross-worktree writes
+PASS round 1: main HEAD/index/dirty unchanged
+PROGRESS round=1 kind=1 t=5s
+PASS round 2: focus A
+PASS round 2: focus B
+PASS round 2: focus A
+PASS round 2: focus B
+PASS round 2: focus does not terminate background task
+PROGRESS round=2 kind=2 t=12s
+PASS round 3: Stop A accepted
+PASS round 3: A idle after authoritative Stop
+PASS round 3: B still running during A Stop
+PASS round 3: Stop A produced no further tool side effect
+PASS round 3: no late A tool write after the authoritative barrier
+PASS round 3: no late A tool execution after Stop
+PASS round 3: B completed after A Stop
+PROGRESS round=3 kind=3 t=28s
+PASS round 4: A crash did not stop B
+PASS round 4: B finished while A crashed
+PASS round 4: restart A accepted
+PASS round 4: restart keeps native session, fresh runtime identity
+PROGRESS round=4 kind=4 t=41s
+PASS round 5: explicit third runtime allowed
+PASS round 5: hard cap 3 enforced
+PASS round 5: total child count capped at 3
+PASS round 5: third runtime did real work in its own worktree
+PASS round 5: close third runtime
+PROGRESS round=5 kind=5 t=44s
+PASS round 6: managed process ready A
+PASS round 6: managed process ready B
+PASS round 6: two runtimes own distinct ports
+PASS round 6: dev servers serve their own workspace
+PASS round 6: stale process revision refused
+PASS round 6: stop A process leaves B serving
+PROGRESS round=6 kind=6 t=46s
+PASS round 7: SSE reconnect kept live eventSequence monotonic (replays excluded)
+PASS round 7: replayed frames are marked and still carry an owner
+PASS round 7: every runtime event carries a full owner
+PROGRESS round=7 kind=7 t=55s
+PASS round 8: A/B prompt accepted
+PASS round 8: A and B were streaming at the same instant
+PASS round 8: A wrote only in A worktree
+PASS round 8: B wrote only in B worktree
+PASS round 8: no cross-worktree writes
+PASS round 8: main HEAD/index/dirty unchanged
+PROGRESS round=8 kind=0 t=59s
+PASS round 9: A/B prompt accepted
+PASS round 9: A and B were streaming at the same instant
+PASS round 9: A wrote only in A worktree
+PASS round 9: B wrote only in B worktree
+PASS round 9: no cross-worktree writes
+PASS round 9: main HEAD/index/dirty unchanged
+PROGRESS round=9 kind=1 t=63s
+PASS round 10: focus A
+PASS round 10: focus B
+PASS round 10: focus A
+PASS round 10: focus B
+PASS round 10: focus does not terminate background task
+PROGRESS round=10 kind=2 t=70s
+PASS round 11: Stop A accepted
+PASS round 11: A idle after authoritative Stop
+PASS round 11: B still running during A Stop
+PASS round 11: Stop A produced no further tool side effect
+PASS round 11: no late A tool write after the authoritative barrier
+PASS round 11: no late A tool execution after Stop
+PASS round 11: B completed after A Stop
+PROGRESS round=11 kind=3 t=86s
+PASS round 12: A crash did not stop B
+PASS round 12: B finished while A crashed
+PASS round 12: restart A accepted
+PASS round 12: restart keeps native session, fresh runtime identity
+PROGRESS round=12 kind=4 t=99s
+PASS round 13: explicit third runtime allowed
+PASS round 13: hard cap 3 enforced
+PASS round 13: total child count capped at 3
+PASS round 13: third runtime did real work in its own worktree
+PASS round 13: close third runtime
+PROGRESS round=13 kind=5 t=102s
+PASS round 14: managed process ready A
+PASS round 14: managed process ready B
+PASS round 14: two runtimes own distinct ports
+PASS round 14: dev servers serve their own workspace
+PASS round 14: stale process revision refused
+PASS round 14: stop A process leaves B serving
+PROGRESS round=14 kind=6 t=104s
+PASS round 15: SSE reconnect kept live eventSequence monotonic (replays excluded)
+PASS round 15: replayed frames are marked and still carry an owner
+PASS round 15: every runtime event carries a full owner
+PROGRESS round=15 kind=7 t=113s
+PASS round 16: A/B prompt accepted
+PASS round 16: A and B were streaming at the same instant
+PASS round 16: A wrote only in A worktree
+PASS round 16: B wrote only in B worktree
+PASS round 16: no cross-worktree writes
+PASS round 16: main HEAD/index/dirty unchanged
+PROGRESS round=16 kind=0 t=117s
+PASS round 17: A/B prompt accepted
+PASS round 17: A and B were streaming at the same instant
+PASS round 17: A wrote only in A worktree
+PASS round 17: B wrote only in B worktree
+PASS round 17: no cross-worktree writes
+PASS round 17: main HEAD/index/dirty unchanged
+PROGRESS round=17 kind=1 t=120s
+PASS round 18: focus A
+PASS round 18: focus B
+PASS round 18: focus A
+PASS round 18: focus B
+PASS round 18: focus does not terminate background task
+PROGRESS round=18 kind=2 t=128s
+PASS round 19: Stop A accepted
+PASS round 19: A idle after authoritative Stop
+PASS round 19: B still running during A Stop
+PASS round 19: Stop A produced no further tool side effect
+PASS round 19: no late A tool write after the authoritative barrier
+PASS round 19: no late A tool execution after Stop
+PASS round 19: B completed after A Stop
+PROGRESS round=19 kind=3 t=144s
+PASS round 20: A crash did not stop B
+PASS round 20: B finished while A crashed
+PASS round 20: restart A accepted
+PASS round 20: restart keeps native session, fresh runtime identity
+PROGRESS round=20 kind=4 t=157s
+PASS round 21: explicit third runtime allowed
+PASS round 21: hard cap 3 enforced
+PASS round 21: total child count capped at 3
+PASS round 21: third runtime did real work in its own worktree
+PASS round 21: close third runtime
+PROGRESS round=21 kind=5 t=160s
+PASS round 22: managed process ready A
+PASS round 22: managed process ready B
+PASS round 22: two runtimes own distinct ports
+PASS round 22: dev servers serve their own workspace
+PASS round 22: stale process revision refused
+PASS round 22: stop A process leaves B serving
+PROGRESS round=22 kind=6 t=162s
+PASS round 23: SSE reconnect kept live eventSequence monotonic (replays excluded)
+PASS round 23: replayed frames are marked and still carry an owner
+PASS round 23: every runtime event carries a full owner
+PROGRESS round=23 kind=7 t=171s
+PASS round 24: A/B prompt accepted
+PASS round 24: A and B were streaming at the same instant
+PASS round 24: A wrote only in A worktree
+PASS round 24: B wrote only in B worktree
+PASS round 24: no cross-worktree writes
+PASS round 24: main HEAD/index/dirty unchanged
+PROGRESS round=24 kind=0 t=175s
+PASS round 25: A/B prompt accepted
+PASS round 25: A and B were streaming at the same instant
+PASS round 25: A wrote only in A worktree
+PASS round 25: B wrote only in B worktree
+PASS round 25: no cross-worktree writes
+PASS round 25: main HEAD/index/dirty unchanged
+PROGRESS round=25 kind=1 t=179s
+PASS round 26: focus A
+PASS round 26: focus B
+PASS round 26: focus A
+PASS round 26: focus B
+PASS round 26: focus does not terminate background task
+PROGRESS round=26 kind=2 t=186s
+PASS soak covered all required dimensions
+PASS A/B work intervals actually overlapped
+PASS closed runtime released workspace lease
+PASS closed runtime released registry slot
+PASS restart rediscovered conversations as dormant without spawning
+PASS resume after backend restart accepted
+PASS resume rebound the same native Pi session
+PASS resume allocated a fresh runtime generation
+PASS no live runtime after dispose
+Soak evidence: C:\pi-GUI-ui5\.ui5-evidence\soak180\runtime-soak.json

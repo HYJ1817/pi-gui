@@ -1,0 +1,26 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS production entry exposes the diagnostics/logs settings entry
+PASS logs surface is a real modal dialog
+PASS logs modal exposes overview/viewer/export tabs
+PASS logs modal fits the viewport without page overflow
+PASS logs content uses its own scroll region
+PASS viewer renders structured entries
+PASS error entries expand and show the stable code
+PASS log entries do not force horizontal overflow
+PASS export preview enables confirmation and lists the fixed ZIP manifest
+PASS logs overview fits dark-700
+PASS narrow logs toolbar keeps natural-width actions: dark-700
+PASS logs overview fits dark-900
+PASS logs overview fits dark-1200
+PASS logs overview fits dark-1536
+PASS logs overview fits light-700
+PASS narrow logs toolbar keeps natural-width actions: light-700
+PASS logs overview fits light-900
+PASS logs overview fits light-1200
+PASS logs overview fits light-1536
+PASS narrow export preview stays within viewport
+PASS logs modal closes and restores the page
+PASS repeated logs open/close keeps one surface and one stylesheet
+PASS no renderer/harness console errors during logs UI checks
+UI5 logs Electron: 23/23, failed=0, screenshots=10

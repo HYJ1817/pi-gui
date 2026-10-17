@@ -1,0 +1,373 @@
+{
+  "passed": 23,
+  "failed": 0,
+  "checks": [
+    {
+      "pass": true,
+      "name": "production entry exposes the diagnostics/logs settings entry"
+    },
+    {
+      "pass": true,
+      "name": "logs surface is a real modal dialog"
+    },
+    {
+      "pass": true,
+      "name": "logs modal exposes overview/viewer/export tabs"
+    },
+    {
+      "pass": true,
+      "name": "logs modal fits the viewport without page overflow",
+      "detail": {
+        "hidden": false,
+        "x": 280,
+        "y": 28,
+        "right": 1160,
+        "bottom": 874,
+        "w": 880,
+        "h": 846,
+        "vw": 1440,
+        "vh": 902,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 686,
+        "bodyClientHeight": 652,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(32, 32, 31)",
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs content uses its own scroll region"
+    },
+    {
+      "pass": true,
+      "name": "viewer renders structured entries",
+      "detail": {
+        "entries": 4,
+        "errorOpen": true,
+        "hasCode": "BRIDGE_TIMEOUT",
+        "hasDebug": true,
+        "bodyOverflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "error entries expand and show the stable code"
+    },
+    {
+      "pass": true,
+      "name": "log entries do not force horizontal overflow"
+    },
+    {
+      "pass": true,
+      "name": "export preview enables confirmation and lists the fixed ZIP manifest",
+      "detail": {
+        "preview": "时间范围最近 30 分钟事件24错误2ZIP 清单README.txt · report.md · diagnostics.json · events.jsonl · errors.jsonl",
+        "confirmDisabled": false,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits dark-700",
+      "detail": {
+        "hidden": false,
+        "x": 24,
+        "y": 10,
+        "right": 676,
+        "bottom": 890,
+        "w": 652,
+        "h": 880,
+        "vw": 700,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 842,
+        "bodyClientHeight": 673,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(32, 32, 31)",
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "narrow logs toolbar keeps natural-width actions: dark-700",
+      "detail": {
+        "cw": 651,
+        "btns": [
+          106.33333587646484,
+          106.33333587646484,
+          106.33333587646484,
+          81.33333587646484
+        ]
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits dark-900",
+      "detail": {
+        "hidden": false,
+        "x": 24,
+        "y": 28,
+        "right": 876,
+        "bottom": 872,
+        "w": 852,
+        "h": 844,
+        "vw": 900,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 686,
+        "bodyClientHeight": 650,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(32, 32, 31)",
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits dark-1200",
+      "detail": {
+        "hidden": false,
+        "x": 160,
+        "y": 28,
+        "right": 1040,
+        "bottom": 872,
+        "w": 880,
+        "h": 844,
+        "vw": 1200,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 686,
+        "bodyClientHeight": 650,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(32, 32, 31)",
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits dark-1536",
+      "detail": {
+        "hidden": false,
+        "x": 328,
+        "y": 28,
+        "right": 1208,
+        "bottom": 872,
+        "w": 880,
+        "h": 844,
+        "vw": 1536,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 686,
+        "bodyClientHeight": 650,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(32, 32, 31)",
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits light-700",
+      "detail": {
+        "hidden": false,
+        "x": 24,
+        "y": 10,
+        "right": 676,
+        "bottom": 890,
+        "w": 652,
+        "h": 880,
+        "vw": 700,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 842,
+        "bodyClientHeight": 673,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "narrow logs toolbar keeps natural-width actions: light-700",
+      "detail": {
+        "cw": 651,
+        "btns": [
+          106.33333587646484,
+          106.33333587646484,
+          106.33333587646484,
+          81.33333587646484
+        ]
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits light-900",
+      "detail": {
+        "hidden": false,
+        "x": 24,
+        "y": 28,
+        "right": 876,
+        "bottom": 872,
+        "w": 852,
+        "h": 844,
+        "vw": 900,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 686,
+        "bodyClientHeight": 650,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits light-1200",
+      "detail": {
+        "hidden": false,
+        "x": 160,
+        "y": 28,
+        "right": 1040,
+        "bottom": 872,
+        "w": 880,
+        "h": 844,
+        "vw": 1200,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 686,
+        "bodyClientHeight": 650,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs overview fits light-1536",
+      "detail": {
+        "hidden": false,
+        "x": 328,
+        "y": 28,
+        "right": 1208,
+        "bottom": 872,
+        "w": 880,
+        "h": 844,
+        "vw": 1536,
+        "vh": 900,
+        "role": "dialog",
+        "aria": "true",
+        "overflow": false,
+        "bodyScroll": true,
+        "bodyScrollHeight": 686,
+        "bodyClientHeight": 650,
+        "tabs": [
+          "概览",
+          "日志查看",
+          "导出故障报告"
+        ],
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "narrow export preview stays within viewport",
+      "detail": {
+        "overflow": false,
+        "pw": 621,
+        "pv": 621,
+        "mw": 676,
+        "vw": 700
+      }
+    },
+    {
+      "pass": true,
+      "name": "logs modal closes and restores the page"
+    },
+    {
+      "pass": true,
+      "name": "repeated logs open/close keeps one surface and one stylesheet",
+      "detail": {
+        "styles": 1,
+        "modals": 1,
+        "cards": 1,
+        "overflow": false
+      }
+    },
+    {
+      "pass": true,
+      "name": "no renderer/harness console errors during logs UI checks",
+      "detail": []
+    }
+  ],
+  "screenshots": [
+    "logs-dark-1200-overview.png",
+    "logs-dark-1200-viewer.png",
+    "logs-dark-1200-export.png",
+    "logs-dark-700-overview.png",
+    "logs-light-700-overview.png",
+    "logs-dark-1200-viewer-final.png",
+    "logs-dark-1200-export-final.png",
+    "logs-light-1200-viewer-final.png",
+    "logs-light-1200-export-final.png",
+    "logs-light-700-export.png"
+  ],
+  "errors": [],
+  "electron": "44.4.3",
+  "chrome": "152.0.7977.130"
+}
