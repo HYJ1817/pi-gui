@@ -12,7 +12,7 @@
  * 这里不认识任何业务模块 —— 装配层决定「重启」到底调谁。
  */
 import { $ } from '../state.js';
-import { ensureFeedbackStyles } from './toast.js';
+import { ensureFeedbackStyles, feedbackContext } from './toast.js';
 
 ensureFeedbackStyles();
 
@@ -73,8 +73,15 @@ export function showNotice(model) {
   if (!model || !model.title) return hideNotice();
   const tone = noticeTone(model.tone);
   const signature = signatureOf(model, tone);
+  // Production callers supply Classic startup/bridge state, not Runtime cards.
+  const context = feedbackContext({ runtime: false });
+  const validActions = (model.actions || []).filter(action => action && typeof action.run === 'function' && action.label);
+  const bind = (button, action) => { button.onclick = () => { if (!host.contains(button)) return; if (context === feedbackContext({ runtime: false })) action.run(); else hideNotice(); }; };
   /* 同一条已经在显示 → 不重建（避免每次事件都重画、把焦点抖掉）。 */
-  if (currentNode && currentNode.id === model.id && currentNode.signature === signature) return true;
+  if (currentNode && currentNode.id === model.id && currentNode.signature === signature && currentNode.context === context) {
+    host.querySelectorAll('.ui4-feedback-notice-action').forEach((button, index) => bind(button, validActions[index]));
+    return true;
+  }
 
   host.replaceChildren();
   host.hidden = false;
@@ -95,12 +102,11 @@ export function showNotice(model) {
   }
 
   const actions = node('div', 'notice-actions ui4-feedback-notice-actions');
-  for (const action of model.actions || []) {
-    if (!action || typeof action.run !== 'function' || !action.label) continue;
+  for (const action of validActions) {
     const button = node('button', 'btn tiny ui4-feedback-notice-action', action.label);
     button.type = 'button';
     if (action.title) button.title = String(action.title);
-    button.onclick = () => action.run();
+    bind(button, action);
     actions.appendChild(button);
   }
   const close = node('button', 'icon-btn notice-close ui4-feedback-notice-close', '✕');
@@ -111,14 +117,19 @@ export function showNotice(model) {
   actions.appendChild(close);
 
   host.append(dot, body, actions);
-  currentNode = { id: model.id, signature };
+  currentNode = { id: model.id, signature, context };
   return true;
 }
 
 function signatureOf(model, tone) {
   const actions = (model.actions || [])
-    .filter((action) => action && action.label)
+    .filter((action) => action && typeof action.run === 'function' && action.label)
     .map((action) => `${action.label}\u0000${action.title || ''}`)
     .join('\u0001');
   return `${tone}|${model.title}|${model.detail || ''}|${actions}`;
 }
+
+for (const name of ['pi-gui:workspace-generation', 'pi-gui:session-switch']) document.addEventListener(name, hideNotice);
+document.addEventListener('pi-gui:feedback-context', () => {
+  if (currentNode && currentNode.context !== feedbackContext({ runtime: false })) hideNotice();
+});

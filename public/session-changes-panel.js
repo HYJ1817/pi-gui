@@ -55,7 +55,7 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
   /* tone: 'info' | 'warn' | 'error' | undefined。只有真正会变的状态才带 role=status，
    * 否则每段说明都去打断读屏。 */
   function hint(text,host=body,tone){const p=node('p','session-change-note',text);if(tone){p.dataset.tone=tone;p.setAttribute('role','status');}host.append(p);return p;}
-  function clear(){objectUI.invalidate();serial++;viewGeneration++;summary=null;body.replaceChildren();}
+  function clear(){objectUI.invalidate();serial++;viewGeneration++;summary=null;body.replaceChildren();body.removeAttribute('aria-busy');}
   function evidenceChanged(){if(!alive)return;clear();hint('文件或修改证据可能已变化，请刷新后重新预览。',body,'warn');}
   function drawDiff(host,file) {
     if(file.diffUnavailable){hint(sessionRevertReason(file.diffUnavailable),host);return;}
@@ -211,7 +211,7 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
    * Runtime 帧仍然要求两边的 workspace 身份都真存在（unknownMeansSame 不开）。 */
   const workspaceMatches=(identity,{unknownMeansSame=false}={})=>{
     const active=context(),workspace=active.owner || active.workspace;
-    if(!workspace)return unknownMeansSame;
+    if(!workspace)return unknownMeansSame && active.conversationId==='classic-chat' && !identity?.workspaceId && !identity?.workspaceEpoch;
     return Boolean(identity?.workspaceId&&identity?.workspaceEpoch&&identity.workspaceId===workspace?.workspaceId&&identity.workspaceEpoch===workspace?.workspaceEpoch);
   };
   const offRuntime=onRuntimeChange(frame=>{
@@ -219,7 +219,7 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
     if(workspaceMatches(frame?.owner)
       && ['agent_start','tool_execution_start','tool_execution_end','agent_settled'].includes(frame?.event?.type))evidenceChanged();
   });
-  const classicEvidenceChanged=event=>{if(!event.detail||workspaceMatches(event.detail,{unknownMeansSame:true}))evidenceChanged();};
+  const classicEvidenceChanged=event=>{if(workspaceMatches(event.detail||{},{unknownMeansSame:true}))evidenceChanged();};
   const closeForSwitch=()=>{if(alive){clear();hint('会话或工作区正在切换，请重新打开本会话变更。',body,'warn');}};
   for(const name of ['pi-gui:git-scope','pi-gui:session-evidence-context'])document.addEventListener(name,contextChanged);
   for(const name of ['pi-gui:workspace-generation','pi-gui:session-switch'])document.addEventListener(name,closeForSwitch);

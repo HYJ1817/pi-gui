@@ -7,7 +7,7 @@
   right: var(--ui4-toast-right, 18px);
   bottom: var(--ui4-toast-bottom, 18px);
   max-width: min(380px, calc(100vw - 36px), var(--ui4-toast-max, 380px));
-  max-height: min(70vh, 560px);
+  max-height: min(70vh, 560px, var(--ui4-toast-height, 560px));
   overflow-x: hidden;
   overflow-y: auto;
   align-items: flex-end;
@@ -44,6 +44,12 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.ui4-feedback-context {
+  display: block;
+  color: var(--ui-text-secondary);
+  font-size: 11px;
 }
 
 .ui4-feedback-toast-icon {

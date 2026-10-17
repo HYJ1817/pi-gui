@@ -10,6 +10,8 @@ import { el, panels } from '../state.js';
 
 /* 当前弹层的关闭回调。只可能有一个弹层，所以用单个槽位就够。 */
 let closeHook = null;
+// A reused card element is not a dialog identity. Async closures own one token.
+let modalInstance = null;
 let modalReturnFocus = null;
 let confirmReturnFocus = null;
 /* UI-4B：当前确认框的展示元数据。approval.js 用它判断「屏幕上这张卡还是不是
@@ -59,6 +61,7 @@ function trapTab(card, e) {
 export function closeModal() {
   const hook = closeHook;
   closeHook = null;
+  modalInstance = null;
 
   el.modal.hidden = true;
   el.modalCard.innerHTML = '';
@@ -86,6 +89,8 @@ export function closeModal() {
 
 export function openModal(build, onClose, options = {}) {
   if (!el.modal.hidden) closeModal();
+  const instance = {};
+  modalInstance = instance;
   modalReturnFocus = document.activeElement;
   closeHook = null;
   el.modalCard.innerHTML = '';
@@ -102,7 +107,8 @@ export function openModal(build, onClose, options = {}) {
   panels.tree = null;
   panels.providers = null;
 
-  build(el.modalCard, closeModal);
+  build(el.modalCard, () => { if (modalInstance === instance) closeModal(); });
+  if (modalInstance !== instance) return;
   el.modal.hidden = false;
   closeHook = typeof onClose === 'function' ? onClose : null;
   focusDialog(el.modalCard, options.initialFocus);
@@ -385,7 +391,7 @@ export function confirmModal({
     confirmCancelPath = typeof onDecide === 'function' ? () => decide('cancel', no) : null;
 
     async function decide(answer, button) {
-      if (busy || settled) return;
+      if (confirmResolve !== resolve || busy || settled) return;
       if (typeof onDecide !== 'function') {
         settled = true;
         closeConfirm(answer);
@@ -400,7 +406,7 @@ export function confirmModal({
       }
       /* 提交期间卡片可能被生命周期收掉（Stop / 工作区切换 / 超时）。
        * 这时**不能**再碰已经清空的 DOM，也不能二次结算。 */
-      if (settled || el.confirmLayer.hidden) return;
+      if (confirmResolve !== resolve || settled || el.confirmLayer.hidden) return;
       if (outcome === true || outcome?.ok === true) {
         settled = true;
         closeConfirm(answer);
@@ -410,6 +416,20 @@ export function confirmModal({
        * 不自动重发 —— 重试必须是用户的下一次明确点击。 */
       setBusy(false);
       showFailure(outcome?.error || failureText);
+      if (outcome?.uncertain === true) {
+        settled = true;
+        for (const b of allButtons()) b.disabled = true;
+        status.dataset.state = 'unknown';
+        const close = document.createElement('button');
+        close.type = 'button'; close.className = 'btn'; close.textContent = '关闭提示';
+        close.onclick = () => { if (confirmResolve === resolve) closeConfirm(false); };
+        actions.append(close);
+        confirmCancelPath = close.onclick;
+        const hint = actions.querySelector('.ui4-confirm-hint');
+        if (hint) hint.textContent = 'Esc 仅关闭提示 · 不会重发或撤回决定';
+        close.focus();
+        return;
+      }
       (button || no).focus();
     }
 

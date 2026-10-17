@@ -1,6 +1,6 @@
 /* 轻提示。 */
 
-import { el } from '../state.js';
+import { el, S } from '../state.js';
 
 const STYLE_ID = 'ui4-feedback-style';
 const HOST_CLASS = 'ui4-feedback-toasts';
@@ -8,6 +8,47 @@ const DEFAULT_DURATION = { info: 4200, success: 4200, warning: 7000, error: null
 const recent = new Map();
 const DEDUPE_MS = 2500;
 let notificationSource = 'live';
+let contextEpoch = 0;
+let readRuntimeContext = () => null;
+let lastContext = null;
+
+// The composition root supplies a read-only view of the existing Runtime store.
+// No owner, focused conversation or lifecycle is duplicated here.
+export function configureFeedbackContext(read) {
+  readRuntimeContext = typeof read === 'function' ? read : () => null;
+  refreshFeedbackContext();
+}
+
+export function refreshFeedbackContext() {
+  const current = feedbackContext();
+  if (current === lastContext) return;
+  lastContext = current;
+  for (const node of el.toasts?.querySelectorAll('.ui4-feedback-toast') || []) {
+    if (node._ui4Context !== current) markHistorical(node);
+  }
+  document.dispatchEvent(new window.Event('pi-gui:feedback-context'));
+}
+
+// Presentation provenance only; never sent to a server or used as authority.
+export function feedbackContext({ runtime = true } = {}) {
+  return JSON.stringify([contextEpoch, S.workspaceGeneration ?? null, S.bridgeRun ?? null,
+    S.state?.sessionId ?? null, runtime ? readRuntimeContext() : null]);
+}
+
+function markHistorical(node) {
+  if (node.dataset.contextStale === 'true') return;
+  node.dataset.contextStale = 'true';
+  const label = document.createElement('span');
+  label.className = 'ui4-feedback-context'; label.textContent = '此前会话通知';
+  node.querySelector('.ui4-feedback-toast-body')?.prepend(label);
+  const action = node.querySelector('.ui4-feedback-toast-action');
+  if (action) { action.disabled = true; action.onclick = null; }
+}
+
+function contextChanged() {
+  contextEpoch++;
+  refreshFeedbackContext();
+}
 
 const KINDS = {
   info: 'info',
@@ -47,7 +88,8 @@ export function toast(msg, kind = 'info', options = {}) {
   const normalized = normalizeKind(kind);
   const opts = options && typeof options === 'object' ? options : {};
   const now = Date.now();
-  const key = `${normalized}\u0000${text}`;
+  const context = opts.context ?? feedbackContext();
+  const key = `${context}\u0000${normalized}\u0000${text}`;
   if (now - (recent.get(key) || 0) < DEDUPE_MS) return null;
   recent.set(key, now);
   if (recent.size > 100) {
@@ -56,9 +98,11 @@ export function toast(msg, kind = 'info', options = {}) {
 
   const host = el.toasts;
   if (!host) return null;
+  refreshFeedbackContext();
   const node = document.createElement('div');
   node.className = legacyClass(normalized);
   node.dataset.kind = normalized;
+  node._ui4Context = context;
   node.setAttribute('role', normalized === 'error' ? 'alert' : 'status');
 
   const icon = document.createElement('span');
@@ -78,7 +122,7 @@ export function toast(msg, kind = 'info', options = {}) {
     actionBtn.className = 'ui4-feedback-toast-action';
     actionBtn.textContent = String(action.label);
     if (action.title) actionBtn.title = String(action.title);
-    actionBtn.onclick = () => action.run();
+    actionBtn.onclick = () => { if (!node.isConnected) return; if (context === feedbackContext()) action.run(); else markHistorical(node); };
     node.append(actionBtn);
   }
 
@@ -93,15 +137,16 @@ export function toast(msg, kind = 'info', options = {}) {
   initHost(host);
   placeToasts();
   host.appendChild(node);
+  if (context !== feedbackContext()) markHistorical(node);
   host.scrollTop = host.scrollHeight;
 
   const duration = resolveDuration(normalized, opts);
   if (duration != null) arm(node, duration);
-  node.addEventListener('pointerenter', () => pause(node));
-  node.addEventListener('pointerleave', () => resume(node));
-  node.addEventListener('focusin', () => pause(node));
+  node.addEventListener('pointerenter', () => { node._ui4Hovered = true; pause(node); });
+  node.addEventListener('pointerleave', () => { node._ui4Hovered = false; resume(node); });
+  node.addEventListener('focusin', () => { node._ui4Focused = true; pause(node); });
   node.addEventListener('focusout', (event) => {
-    if (!node.contains(event.relatedTarget)) resume(node);
+    if (!node.contains(event.relatedTarget)) { node._ui4Focused = false; resume(node); }
   });
   return node;
 }
@@ -137,6 +182,7 @@ function pause(node) {
 }
 
 function resume(node) {
+  if (node._ui4Hovered || node._ui4Focused) return;
   if (node._ui4Timer || node._ui4Remaining == null || !node.isConnected) return;
   arm(node, node._ui4Remaining);
 }
@@ -175,6 +221,9 @@ function initHost(host) {
       let queued = false;
       const observer = new MutationObserver(() => {
         if (queued) return;
+        /* 文档可能已经销毁（窗口关闭 / 页面卸载），观察回调仍可能排到下一帧。
+         * 这时不再碰 DOM —— 否则 rAF 里会访问已不存在的 document。 */
+        if (typeof document === 'undefined' || !document?.documentElement) return;
         queued = true;
         const run = () => { queued = false; placeToasts(); };
         if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
@@ -188,8 +237,10 @@ function initHost(host) {
 }
 
 function placeToasts() {
+  /* rAF 可能比窗口活得更久（jsdom / 卸载中的页面）：先确认文档还在。 */
+  if (typeof document === 'undefined' || !document?.documentElement || typeof window === 'undefined') return;
   const host = el.toasts;
-  if (!host || typeof window === 'undefined') return;
+  if (!host) return;
   const vw = window.innerWidth || 0;
   const vh = window.innerHeight || 0;
   let right = 18;
@@ -214,6 +265,7 @@ function placeToasts() {
   host.style.setProperty('--ui4-toast-right', right + 'px');
   host.style.setProperty('--ui4-toast-bottom', bottom + 'px');
   host.style.setProperty('--ui4-toast-max', maxWidth + 'px');
+  host.style.setProperty('--ui4-toast-height', Math.max(0, vh - bottom - 12) + 'px');
 }
 
 ensureFeedbackStyles();
@@ -221,4 +273,6 @@ if (typeof window !== 'undefined') window.addEventListener('resize', placeToasts
 if (typeof document !== 'undefined') {
   document.addEventListener('pi-gui:right-pane', placeToasts);
   document.addEventListener('pi-gui:workspace-view', placeToasts);
+  document.addEventListener('pi-gui:workspace-view', refreshFeedbackContext);
+  for (const name of ['pi-gui:workspace-generation', 'pi-gui:session-switch']) document.addEventListener(name, contextChanged);
 }

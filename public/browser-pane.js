@@ -75,7 +75,10 @@ function buildToolbar(host) {
   agentStatus.setAttribute('role', 'status');
   agentStatus.hidden = true;
 
-  bar.append(back, forward, reload, address, external, close);
+  const title = document.createElement('h3');
+  title.className = 'rp-head-title ui4-browser-title';
+  title.textContent = '浏览器';
+  bar.append(title, back, forward, reload, address, external, close);
 
   const viewport = document.createElement('div');
   viewport.className = 'rp-viewport';

@@ -325,6 +325,11 @@
 /* ================= Browser ================= */
 
 .rp-toolbar{background:var(--ui-panel-surface)}
+.rp-surface-browser{container-type:inline-size}
+.ui4-browser-title{max-width:none}
+@container (max-width:360px){
+  .ui4-browser-title{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+}
 .rp-toolbar .icon-btn{width:26px;height:26px;flex:0 0 26px}
 .rp-address{height:28px;border-radius:8px;font-size:12px}
 .browser-agent-bar{

@@ -14,7 +14,7 @@ import { fetchRuntimeSessions, fetchWorktrees, runtimeSessionAction, worktreeAct
 import { runtimeStore as store, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
 import { openModal } from './ui/modal.js';
-import { toast } from './ui/toast.js';
+import { feedbackContext, toast } from './ui/toast.js';
 
 /* 侧栏自己订阅 store 的变化 —— 不依赖任何视图模块替它接线。 */
 onRuntimeChange(() => repaintRuntimeNav());
@@ -205,25 +205,26 @@ function newConversationRow() {
  *  runtime_limit / workspace_busy 都如实呈现，前端不自己模拟）。 */
 async function createParallelConversation() {
   if (!currentProjectPath) return;
+  const context = feedbackContext();
   const branch = await askBranchName();
   if (branch === null) return;
   try {
     const list = await fetchWorktrees(currentProjectPath);
-    if (!list || list.ok === false) return toast(list?.error || '无法读取工作区列表', 'error');
+    if (!list || list.ok === false) return toast(list?.error || '无法读取工作区列表', 'error', { context });
     const plan = await worktreeAction('prepare', { project: currentProjectPath, branch, source: 'HEAD' }, list.contextGeneration);
-    if (!plan || plan.ok === false) return toast(plan?.error || '创建前检查未通过', 'warn');
+    if (!plan || plan.ok === false) return toast(plan?.error || '创建前检查未通过', 'warn', { context });
     const created = await worktreeAction('create', { nonce: plan.nonce }, list.contextGeneration);
-    if (!created || created.ok === false) return toast(created?.error || '创建并行会话失败', 'error');
+    if (!created || created.ok === false) return toast(created?.error || '创建并行会话失败', 'error', { context });
     const workspace = created.workspace;
     const started = await launchRuntimeSession({ action: 'start', args: { id: workspace.id, epoch: workspace.epoch } });
-    if (started?.cancelled) toast('未启动会话。工作区已创建，可稍后从「工作区管理」启动。', 'info');
+    if (started?.cancelled) toast('未启动会话。工作区已创建，可稍后从「工作区管理」启动。', 'info', { context });
     if (started && started.ok === false && !started.cancelled) {
       /* 工作区已经建好了，只是 runtime 没起来 —— 如实说清楚，不要谎报成功。 */
-      toast(`${runtimeLimitNotice(started) || started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn');
+      toast(`${runtimeLimitNotice(started) || started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn', { context });
     }
     await loadRuntimeNav({ path: currentProjectPath }, { parent });
   } catch (e) {
-    toast('新建并行会话失败：' + (e?.message || e), 'error');
+    toast('新建并行会话失败：' + (e?.message || e), 'error', { context });
   }
 }
 

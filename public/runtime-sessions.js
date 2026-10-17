@@ -63,8 +63,14 @@ export function openRuntimeSessions(project, workspace = null) {
     async function action(payload, after) {
       if (busy || !alive) return; busy = true; draw();
       try { const result = await (['start', 'resume'].includes(payload.action) ? launchRuntimeSession(payload) : runtimeSessionAction(payload)); if (!alive) return;
-        notice.textContent = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
-        after?.(result); await refresh(); return result;
+        const owner = store.get(payload.owner?.conversationId)?.owner;
+        const staleApproval = payload.command?.type === 'extension_ui_response'
+          && (!same(owner, payload.owner) || !same(payload.owner, owner));
+        if (!staleApproval) {
+          notice.textContent = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
+          after?.(result);
+        }
+        await refresh(); return staleApproval ? null : result;
       } finally { busy = false; if (alive) draw(); }
     }
     async function launch(payload) {

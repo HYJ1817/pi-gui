@@ -29,7 +29,7 @@ import { observeGuiBrowserEvent, initGuiBrowserState } from './gui-browser-capab
 import { observeMcpEvent } from './mcp-observer.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
-import { toast, withNotificationSource } from './ui/toast.js';
+import { configureFeedbackContext, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText, setRuntimeTitle } from './shell.js';
@@ -79,14 +79,14 @@ import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
-import { showChat, showRuntimeConversation, runtimeViewElement } from './ui/workspace-surface.js';
+import { showChat, showRuntimeConversation, runtimeViewElement, workspaceView } from './ui/workspace-surface.js';
 import { createRuntimeConversation } from './runtime-conversation.js';
 import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler } from './runtime-nav.js';
 import { refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeModels } from './runtime-models.js';
-import { runtimeStore } from './runtime-state.js';
+import { onRuntimeChange, runtimeStore } from './runtime-state.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
@@ -120,6 +120,12 @@ setSessionsSlot(renderSidebarSessions);
  * 切回经典会话/项目时由 showChat() 换回来。 */
 const runtimeModels = createRuntimeModels({ onChange: conversationId => { if (runtimeConversation.conversationId === conversationId) runtimeConversation.draw(); } });
 const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), models: runtimeModels, onTitle: setRuntimeTitle, openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses(), openSessionChanges:openSessionChangesPanel });
+configureFeedbackContext(() => {
+  if (workspaceView() !== 'runtime') return null;
+  const id = runtimeConversation.conversationId, owner = runtimeStore.get(id)?.owner;
+  return [id, ...['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'].map(key => owner?.[key] ?? null)];
+});
+onRuntimeChange(refreshFeedbackContext);
 const conversationScopeActive = () => Boolean(gitConversationScope());
 const focusRuntimeConversation = conversationId => {
   runtimeConversation.show(conversationId);

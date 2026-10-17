@@ -20,7 +20,7 @@
 
 import { S } from './state.js';
 import { closeModal, confirmModal, confirmSurfaceMeta, dismissConfirm, modalSurfaceMeta, openModal } from './ui/modal.js';
-import { toast } from './ui/toast.js';
+import { feedbackContext, toast } from './ui/toast.js';
 import { sendCommand } from './api.js';
 import {
   approvalSummary,
@@ -82,7 +82,7 @@ function stillCurrent(request) {
  *   · `sent`      —— HTTP 已接受、命令已写进 Pi 的 stdin。协议没有回执，
  *                    所以这**不是**「Pi 已确认执行」；
  *   · `failed`    —— 后端明确拒绝（stale_approval / 桥接不在 / 停止屏障…）；
- *   · `unreached` —— 根本没问到后端（网络层失败）。
+ *   · `unknown`   —— 网络或响应解析失败；可能已经写入 stdin，不能重发决定。
  *
  * 旧实现用 fire-and-forget 的 respond()，失败完全不可见：卡片照常关闭、
  * 状态记成 allowed。这里改成可等待的发送，让调用方决定是收卡还是保留重试。
@@ -91,13 +91,14 @@ async function deliver(request, send) {
   const entry = pending.get(request.requestId);
   let result;
   try {
-    result = await sendCommand({ type: 'extension_ui_response', id: request.requestId, ...send });
+    result = await sendCommand({ type: 'extension_ui_response', id: request.requestId, ...send }, { notify: false });
+    // The owned card (or Stop's local warning) displays this result once.
   } catch {
-    result = { ok: false, error: 'send-failed' };
+    result = { ok: false, network: true };
   }
   const network = result?.network === true;
   const ok = result?.ok === true;
-  const outcome = ok ? 'sent' : network ? 'unreached' : 'failed';
+  const outcome = ok ? 'sent' : result?.ok === false && !network ? 'failed' : 'unknown';
   rememberDelivery(request.requestId, outcome, network);
   if (entry) entry.lastDelivery = outcome;
   return { ok, network, outcome };
@@ -167,11 +168,12 @@ export function cancelPendingApprovals() {
     entry.expired = true;
     pending.delete(id);
     rememberSettled(id, 'cancelled');
-    if (!entry.submitting) {
+    if (!entry.submitting && !entry.deliveryUnknown) {
       /* Stop 的取消是**用户明确意图**：即使投递失败也要收卡，并把失败原因
        * 说出来。留着卡片让用户再点一次「拒绝」并不能让 Pi 收到取消。 */
+      const context = feedbackContext();
       void deliver(entry.request, decidePayload(entry.request.kind, 'cancel')).then((r) => {
-        if (!r.ok) toast(r.network ? '已停止，但取消审批的应答没能送达后端' : '已停止；Pi 已不再等待这条审批', 'warn');
+        if (!r.ok) toast(r.outcome === 'unknown' ? '停止已请求；审批取消的投递结果未知，无法确认 Pi 是否收到' : '停止已请求；后端未接受审批取消，请重新读取会话状态', 'warn', { context });
       });
     }
     closeSurface(entry);
@@ -232,7 +234,7 @@ function closeSurface(entry) {
 
 /** 卡片上的「来源 / 一次性 / 超时」事实行。全部来自协议真实字段或模型常量。 */
 function contextNote(request) {
-  const bits = ['来源：Pi Extension', '一次性决定（协议没有「总是允许」）'];
+  const bits = ['此请求来自经典会话，与 Runtime / Planner 视图分别归属', '一次性决定（协议没有「总是允许」）'];
   if (request.timeout) bits.push(`Pi 会在 ${Math.round(request.timeout / 1000)} 秒后按默认值处理`);
   return bits.join(' · ');
 }
@@ -263,7 +265,7 @@ export function approvalCardModel(request) {
     requestId: request?.requestId || '',
     kind,
     title: request?.title || `Pi Extension ${KIND_LABELS[kind] || '请求'}`,
-    source: '来源：Pi Extension',
+    source: '来源：Pi Extension · 经典会话',
     kindLabel: KIND_LABELS[kind] || '请求',
     details,
     context: contextNote(request || {}),
@@ -460,7 +462,21 @@ async function commitDecision(request, decision, value) {
   const status = statusForDecision(request.kind, decision);
   const result = await deliver(request, decidePayload(request.kind, decision, value));
   entry.submitting = false;
+  const ownsSurface = (entry.surface === 'confirm' ? confirmSurfaceMeta() : modalSurfaceMeta())?.requestId === request.requestId;
+  const current = pending.get(request.requestId) === entry && !entry.expired && stillCurrent(request);
+  if (!result.ok && (!current || !ownsSurface)) {
+    toast(result.outcome === 'unknown' ? '此前审批的投递结果未知，不能据此重发决定；Stop 不能撤回已发决定。' : '此前审批的应答未被后端接受；不会自动重发。', 'warn', { context: entry.context, persistent: true });
+  }
+  // Never let a late decision change the surface or settled status of a replacement.
+  if (!current) {
+    return { ok: false, stale: true };
+  }
   if (!result.ok) {
+    if (result.outcome === 'unknown') {
+      entry.deliveryUnknown = true;
+      rememberSettled(request.requestId, 'unknown');
+      return { ok: false, uncertain: true, outcome: 'unknown', error: '投递结果未知：决定可能已送达，不能重复发送。Stop 不能撤回已经发出的决定；可关闭提示并重新读取会话状态。' };
+    }
     /* 投递失败：撤销本地结算，把卡片留在屏幕上让用户重试。
      * 不自动重发 —— 重试必须是用户的下一次明确点击。
      * 但如果这条在等待期间已经被生命周期作废（Stop / 切工作区 / 超时），
@@ -470,7 +486,7 @@ async function commitDecision(request, decision, value) {
     return {
       ok: false,
       outcome: result.outcome,
-      error: result.network ? '无法连接后端：应答没有送达，Pi 仍在等待' : '后端没有接受这条应答，Pi 仍在等待；请重试或停止',
+      error: '后端没有接受这条应答；请核实当前会话后重试或停止。',
     };
   }
   settle(request.requestId, status);
@@ -481,7 +497,7 @@ async function commitDecision(request, decision, value) {
 
 function show(request) {
   const { requestId, kind } = request;
-  const entry = { request, timer: null, expired: false, settled: false, submitting: false, surface: null };
+  const entry = { request, timer: null, expired: false, settled: false, submitting: false, surface: null, context: feedbackContext() };
   pending.set(requestId, entry);
 
   /* timeout 是 Pi 真实给的字段，且 rpc-mode.js 到点就自己用默认值 resolve ——
@@ -507,7 +523,7 @@ function show(request) {
       surface: 'approval',
       meta: { requestId, kind, enterBlocked: true },
       submittingText: '正在把决定发给 Pi…',
-      failureText: '应答没有送达 Pi，这条请求仍在等待。',
+      failureText: '未能确认应答结果，请核实当前会话状态。',
       onDecide: (answer) => {
         if (answer === true) return commitDecision(request, 'allow');
         if (answer === 'cancel' || answer === 'alt') return commitDecision(request, 'cancel');
@@ -516,6 +532,7 @@ function show(request) {
     }).then((answer) => {
       /* 没有 onDecide 成功路径之外的关闭只可能来自：被别的确认框顶掉、
        * Esc / 点遮罩（提交中已屏蔽）。这些在协议语义里都是「取消」。 */
+      if (entry.deliveryUnknown) { dropPending(requestId); return; }
       if (entry.expired || entry.settled) return;
       if (answer === true) void commitDecision(request, 'allow');
       else if (answer === 'alt') void commitDecision(request, 'cancel');
@@ -597,13 +614,21 @@ function show(request) {
       const result = await commitDecision(request, decision, value);
       /* 提交期间卡片可能被生命周期收掉（Stop / 工作区切换 / 超时）——
        * 这时 DOM 已清空，不能再写状态或还焦点。 */
-      if (!card.isConnected || entry.expired) return;
+      if (!card.isConnected || entry.expired || modalSurfaceMeta()?.requestId !== requestId || !stillCurrent(request)) return;
       if (result.ok) {
         close();
         return;
       }
       setBusy(false);
       showFailure(result.error);
+      if (result.uncertain) {
+        for (const b of buttons) b.disabled = true;
+        card.querySelectorAll('input,textarea').forEach(input => { input.readOnly = true; });
+        status.dataset.state = 'unknown';
+        cancel.disabled = false; cancel.textContent = '关闭提示'; cancel.onclick = close;
+        cancel.focus();
+        return;
+      }
       (button || cancel).focus();
     };
 
@@ -635,7 +660,7 @@ function show(request) {
     if (request.placeholder && kind !== 'editor') input.placeholder = request.placeholder;
     if (kind === 'editor' && request.prefill) input.value = request.prefill;
     card.appendChild(input);
-    setTimeout(() => input.focus(), 30);
+    setTimeout(() => { if (modalSurfaceMeta()?.requestId === requestId && !entry.expired) input.focus(); }, 30);
 
     const ok = document.createElement('button');
     ok.type = 'button';
@@ -649,6 +674,7 @@ function show(request) {
     /* 被别的弹层顶掉（openModal 会先关旧的）：没结算过的按取消结掉，
      * 不能让这条请求永远挂着。用户主动的 Esc / 点遮罩走下面的 onCancel，
      * 那条路径会把失败原因留在卡片上。 */
+    if (entry.deliveryUnknown) { dropPending(requestId); return; }
     if (!entry.expired && !entry.settled) void commitDecision(request, 'cancel');
   }, {
     surface: 'approval',
@@ -669,7 +695,7 @@ export function approvalSnapshot() {
   return {
     pending: [...pending.values()].map((e) => ({ ...e.request })),
     settled: [...settled.entries()].map(([requestId, status]) => ({ requestId, status })),
-    /* 应答投递结果（sent / failed / unreached）。**不是**「Pi 已确认执行」——
+    /* 应答投递结果（sent / failed / unknown）。**不是**「Pi 已确认执行」——
      * 协议没有回执，sent 只代表后端接受了命令并写进 stdin。 */
     deliveries: [...deliveries.values()].map((d) => ({ ...d })),
     persistentDecisionSupported: supportsPersistentDecision(),

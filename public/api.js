@@ -7,7 +7,7 @@
  * 读操作可以据此静默降级，写操作可以据此弹提示。
  * 「用户点了按钮却什么都没发生」是最糟的体验，所以写操作必须能说出原因。 */
 
-import { toast } from './ui/toast.js';
+import { feedbackContext, toast } from './ui/toast.js';
 import { S } from './state.js';
 
 /* 用户级认证不携带 workspace/model generation。 */
@@ -70,16 +70,17 @@ export async function sendJSON(url, { method = 'POST', body, contentType, header
 /* ---------- pi 的 RPC 命令 ---------- */
 
 /** 把一条 RPC 命令发进后端。这是驱动 pi 的唯一出口。 */
-export async function sendCommand(cmd) {
+export async function sendCommand(cmd, { notify = true } = {}) {
+  const context = feedbackContext();
   const wire = Number.isInteger(S.bridgeRun) ? { ...cmd, __bridgeRun: S.bridgeRun } : cmd;
   const j = await sendJSON('/api/command', { body: wire });
   if (j.network) {
-    toast('无法连接后端：' + j.error, 'error');
+    if (notify) toast('无法连接后端：' + j.error, 'error', { context });
     /* `network` 要带出去：调用方（例如 stop）据此分清「后端明确回答」
      * 与「根本没问到」—— 后者不能当作停止已经结束。 */
     return { ok: false, network: true };
   }
-  if (!j.ok) toast(j.error || '命令发送失败', 'error');
+  if (!j.ok && notify) toast(j.error || '命令发送失败', 'error', { context });
   return j;
 }
 

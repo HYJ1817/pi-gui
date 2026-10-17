@@ -120,6 +120,11 @@
 }
 
 /* 状态行：pending / error。成功路径直接收卡，所以不存在「已完成」的静态态。 */
+.modal-card[data-surface="approval"] .ui4-confirm-status[data-state="unknown"] {
+  color: var(--ui-text-secondary);
+  background: var(--ui-panel-surface);
+  border: 1px solid var(--ui-border);
+}
 .modal-card[data-surface="approval"] .ui4-confirm-status {
   flex: 0 0 auto;
   font-size: 12px;

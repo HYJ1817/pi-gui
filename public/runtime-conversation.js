@@ -215,6 +215,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     try {
       const result = await (payload.action === 'resume' ? launchRuntimeSession(payload) : runtimeSessionAction(payload));
       if (!alive) return null;
+      if (payload.command?.type === 'extension_ui_response') {
+        const currentOwner = store.get(target)?.owner;
+        if (!same(currentOwner, payload.owner) || !same(payload.owner, currentOwner)) return null;
+      }
       /* 迟到响应只更新 **target** 那一格：切到别的会话时既不改当前 DOM，
        * 也不改当前会话的 notice —— 切回去才看得到它自己的结果。 */
       view.notice = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
