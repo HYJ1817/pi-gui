@@ -466,6 +466,12 @@ export function renderThinkingPicker({
 
   openPop(anchorFor('think'), activeOptions);
   syncRoving();
+  // Read-only explanations may have no enabled options. Give the dialog
+  // keyboard focus so its existing Escape handler remains reachable.
+  if (!pop.contains(document.activeElement)) {
+    pop.tabIndex = -1;
+    pop.focus();
+  }
 }
 
 /* ---------- 触发元素 ---------- */

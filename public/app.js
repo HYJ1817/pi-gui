@@ -16,7 +16,8 @@
 
 import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
-import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
+import { renderModelPicker, renderThinkingPicker, thinkingAvailability, applyChipState, setTriggers } from './ui3-model-picker.js';
+import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
 import { sendCommand, runtimeSessionAction } from './api.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
@@ -91,7 +92,7 @@ import { runtimeStore } from './runtime-state.js';
  * 「谁提供动作」与「谁需要动作」的地方。 */
 import { registerShortcut, installShortcuts, assertNoConflicts } from './shortcuts.js';
 import { openShortcutHelp } from './ui/shortcut-help.js';
-import { openPalette, paletteOpen } from './palette.js';
+import { openPalette as showCommandPalette, paletteOpen } from './palette.js';
 import { defineCommands, setDynamicCommands } from './palette-model.js';
 import { initDraft, draftSync, clearDraft } from './draft.js';
 import { startupNotice, NOTICE_ACTIONS } from './status-copy.js';
@@ -556,148 +557,74 @@ function onUiRequest(evt) {  switch (evt.method) {
 /* ---------- 选择器 ---------- */
 
 const expandedModelProviders = new Set();
-const knownModelProviders = new Set();
+let inlineCommandMenu = null;
+
+function openPalette(ctx = {}) {
+  inlineCommandMenu?.close();
+  closePop();
+  return showCommandPalette(ctx);
+}
 
 function openModelPicker() {
+  inlineCommandMenu?.close();
   if (!S.models.length) {
     sendCommand({ type: 'get_available_models' });
     toast('正在获取模型列表…', 'info');
     return;
   }
-
-  const { modelId: currentId, providerId: currentProvider } = modelIdentity(S.state?.model);
-
-  pop.innerHTML = '';
-  pop.appendChild(popTitle('选择模型'));
-
-  // 按供应商分组，和 pi 的模型来源一一对应
-  const groups = new Map();
-  for (const m of S.models) {
-    const key = m.providerId || m.provider || '默认';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(m);
-  }
-
-  for (const provider of knownModelProviders) {
-    if (!groups.has(provider)) {
-      knownModelProviders.delete(provider);
-      expandedModelProviders.delete(provider);
-    }
-  }
-  let groupIndex = 0;
-  for (const [provider, list] of groups) {
-    const isCurrent = currentProvider ? provider === currentProvider
-      : list.some((m) => currentId ? (m.id || m.name) === currentId : m.name === el.modelText.textContent);
-    knownModelProviders.add(provider);
-    if (isCurrent) expandedModelProviders.add(provider);
-    const group = document.createElement('div');
-    group.className = 'pop-model-group';
-    group.dataset.provider = provider;
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.className = 'pop-provider';
-    const models = document.createElement('div');
-    models.className = 'pop-provider-models';
-    models.id = 'model-provider-' + (++groupIndex);
-    header.setAttribute('aria-controls', models.id);
-    const chev = document.createElement('span');
-    chev.className = 'pop-provider-chev';
-    chev.setAttribute('aria-hidden', 'true');
-    const name = document.createElement('span');
-    name.className = 'pop-provider-name';
-    name.textContent = provider;
-    const count = document.createElement('span');
-    count.className = 'pop-provider-count';
-    count.textContent = String(list.length);
-    const syncExpanded = () => {
-      const expanded = expandedModelProviders.has(provider);
-      header.setAttribute('aria-expanded', String(expanded));
-      models.hidden = !expanded;
-      chev.textContent = expanded ? '⌄' : '›';
-    };
-    syncExpanded();
-    header.append(chev, name, count);
-    header.addEventListener('click', () => {
-      if (expandedModelProviders.has(provider)) expandedModelProviders.delete(provider);
-      else expandedModelProviders.add(provider);
-      syncExpanded();
-      openPop(el.btnModel, { model: true });
-      header.focus();
-    });
-    group.append(header, models);
-    pop.appendChild(group);
-    for (const m of list) {
-      const id = m.modelId || m.id || m.name;
-      const isCur = currentProvider ? (m.providerId || m.provider) === currentProvider && id === currentId
-        : currentId ? id === currentId : m.name === el.modelText.textContent;
-      models.appendChild(
-        popItem({
-          label: m.name || id,
-          sub: modelCapabilitySummary(m).text,
-          on: isCur,
-          onClick: () => {
-            closePop({ restoreFocus: true });
-            // 实测：pi 的 set_model 需要 provider + modelId 两个字段，
-            // 只传 model 会报 "Model not found: <provider>/undefined"
-            setModel(m.providerId || m.provider, id);
-          },
-        })
-      );
-      models.lastElementChild.title = modelCapabilitySummary(m).title;
-    }
-  }
-
-  const foot = document.createElement('div');
-  foot.className = 'pop-foot';
-  const t = document.createElement('span');
-  t.textContent = '共 ' + S.models.length + ' 个可用模型';
-  foot.appendChild(t);
-  pop.appendChild(foot);
-
-  openPop(el.btnModel, { model: true });
+  renderModelPicker({
+    models: S.models, current: S.state?.model || null,
+    expanded: expandedModelProviders, pending: S.modelSwitchPending,
+    onSelect: (provider, modelId) => setModel(provider, modelId),
+  });
 }
 
 function openThinkPicker() {
-  if (S.modelSwitchPending) {
-    toast('正在读取当前模型支持的思考等级…', 'info');
-    return;
-  }
-  if (!S.thinkingLevels.length) {
-    toast('Pi 未提供可选思考等级。', 'info');
-    return;
-  }
-
-  const current = (S.state?.thinkingLevel || el.thinkText.textContent.replace('思考 ', '')).trim();
-
-  const DESC = {
-    off: '不思考，最快',
-    minimal: '最少思考',
-    low: '轻量思考',
-    medium: '中等思考',
-    high: '深度思考',
-    max: '最大思考预算',
-  };
-
-  pop.innerHTML = '';
-  pop.appendChild(popTitle('思考等级'));
-
-  for (const lv of S.thinkingLevels) {
-    const name = typeof lv === 'string' ? lv : lv.level || lv.name;
-    pop.appendChild(
-      popItem({
-        label: name,
-        sub: DESC[name] || '',
-        on: name === current,
-        onClick: () => {
-          closePop({ restoreFocus: true });
-          setThinkingLevel(name);
-        },
-      })
-    );
-  }
-
-  openPop(el.btnThink);
+  inlineCommandMenu?.close();
+  renderThinkingPicker({
+    levels: S.thinkingLevels, current: S.state?.thinkingLevel || null,
+    model: S.state?.model || null, pending: S.modelSwitchPending,
+    onSelect: level => { if (!el.btnThink.disabled) setThinkingLevel(level); },
+  });
 }
+
+// The selection control stays disabled. Its sibling only explains Pi facts.
+const thinkingInfo = document.createElement('button');
+thinkingInfo.id = 'btnThinkInfo';
+thinkingInfo.type = 'button';
+thinkingInfo.className = 'chip ui3-thinking-info';
+thinkingInfo.textContent = '思考说明';
+thinkingInfo.setAttribute('aria-haspopup', 'dialog');
+thinkingInfo.setAttribute('aria-controls', 'composerPopover');
+thinkingInfo.setAttribute('aria-expanded', 'false');
+el.btnThink.after(thinkingInfo);
+thinkingInfo.onclick = () => {
+  if (popVisible() && currentAnchor() === thinkingInfo) return closePop();
+  setTriggers({ think: thinkingInfo });
+  openThinkPicker();
+  setTriggers({ think: el.btnThink });
+};
+let thinkingInfoFacts = '';
+function syncThinkingInfo() {
+  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels, pending: S.modelSwitchPending });
+  applyChipState(el.btnThink, availability.state);
+  thinkingInfo.hidden = !el.btnThink.disabled || !S.hasProject || S.switching
+    || !['ready', 'maintenance'].includes(S.bridgeState);
+  thinkingInfo.title = availability.detail || availability.label;
+  thinkingInfo.setAttribute('aria-label', '思考能力说明：' + thinkingInfo.title);
+  const facts = JSON.stringify([availability.state, availability.detail, thinkingInfo.hidden,
+    S.state?.model?.providerId || S.state?.model?.provider, S.state?.model?.modelId || S.state?.model?.id]);
+  if (facts !== thinkingInfoFacts && popVisible() && currentAnchor() === thinkingInfo) {
+    const focused = pop.contains(document.activeElement) || document.activeElement === thinkingInfo;
+    closePop();
+    if (focused) (thinkingInfo.hidden ? el.btnThink.disabled ? el.btnModel : el.btnThink : thinkingInfo).focus();
+  }
+  thinkingInfoFacts = facts;
+}
+new MutationObserver(syncThinkingInfo).observe(el.composerBox, {
+  childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'],
+});
+syncThinkingInfo();
 
 /* ---------- 会话统计 / 重命名 / 更多 ---------- */
 
@@ -889,6 +816,8 @@ el.input.addEventListener('input', () => {
 });
 
 el.input.addEventListener('keydown', (e) => {
+  if (inlineCommandMenu?.handleKeydown(e)) return;
+  if (e.isComposing || e.keyCode === 229 || inlineCommandMenu?.isComposing()) return;
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     submit();
@@ -1243,6 +1172,11 @@ setDynamicCommands((ctx = {}) => {
 
 /* 草稿：绑定输入监听 + 首次恢复。身份（项目/会话）变化时由 draftSync 对齐。 */
 initDraft();
+inlineCommandMenu = createInlineCommandMenu({
+  input: el.input, injectStyles: false,
+  onError: () => toast('命令执行失败，请重试。', 'error'),
+});
+inlineCommandMenu.attach();
 
 /* ---------- 启动 ---------- */
 

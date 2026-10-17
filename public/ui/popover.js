@@ -23,6 +23,8 @@ export function closePop({ restoreFocus = false } = {}) {
   pop.innerHTML = '';
   pop.classList.remove('tip-mode', 'model-mode');
   pop.style.maxHeight = '';
+  pop.style.minWidth = '';
+  pop.style.maxWidth = '';
   if (previous) previous.setAttribute('aria-expanded', 'false');
   anchor = null;
   if (restoreFocus) previous?.focus();
@@ -36,14 +38,21 @@ export function openPop(target, { tip = false, model = false, align = 'right' } 
   pop.setAttribute('aria-label', tip ? '上下文占用' : '选择选项');
   pop.hidden = false;
 
+  // Native Browser content cannot be covered by page z-index. Keep anchored
+  // menus on the available side of the existing pane without changing it.
+  const pane = document.getElementById('rightPane');
+  const edge = pane && !pane.hidden ? Math.max(40, Math.min(window.innerWidth, pane.getBoundingClientRect().left)) : window.innerWidth;
+  pop.style.minWidth = Math.min(232, edge - 16) + 'px';
+  pop.style.maxWidth = Math.min(420, edge - 16) + 'px';
+
   const a = target.getBoundingClientRect();
   const r = pop.getBoundingClientRect();
 
   let left = align === 'left' ? a.left : a.right - r.width;
-  left = Math.max(8, Math.min(left, window.innerWidth - r.width - 8));
+  left = Math.max(8, Math.min(left, edge - r.width - 8));
 
   const composer = target.closest('.composer');
-  if (model) {
+  if (model || (composer && !tip)) {
     const available = (composer ? composer.getBoundingClientRect().top : a.top) - 16;
     pop.style.maxHeight = Math.max(32, Math.min(window.innerHeight - 16, available)) + 'px';
   } else {

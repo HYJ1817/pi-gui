@@ -74,7 +74,7 @@ export function ensureStylesheet(doc = typeof document !== 'undefined' ? documen
   link.setAttribute('data-ui3-inline-commands', '');
   let href = './ui3-inline-commands.css';
   try {
-    href = new URL('../ui3-inline-commands.css', import.meta.url).href;
+    href = new URL('/ui3-inline-commands.css', doc.baseURI).href;
   } catch {
     /* 老引擎没有 URL/import.meta —— 回落相对路径 */
   }
@@ -259,6 +259,7 @@ export function createInlineCommandMenu(options = {}) {
     const win = doc.defaultView || (typeof window !== 'undefined' ? window : null);
     if (!win || typeof input.getBoundingClientRect !== 'function') return;
     const anchor = input.getBoundingClientRect();
+    const composerTop = input.closest?.('.composer-box')?.getBoundingClientRect().top ?? anchor.top;
     const vw = win.innerWidth || 0;
     const vh = win.innerHeight || 0;
     /* 右栏是**原生 WebContentsView**，z-index 管不着。菜单不假称能盖住它，
@@ -266,8 +267,10 @@ export function createInlineCommandMenu(options = {}) {
      * 全局变量，不去改它的遮挡协议。 */
     let rpWidth = 0;
     try {
+      const pane = doc.getElementById('rightPane');
+      // --rp-width remembers the preferred width even while the pane is closed.
       const raw = win.getComputedStyle(doc.documentElement).getPropertyValue('--rp-width');
-      rpWidth = parseFloat(raw) || 0;
+      rpWidth = pane && !pane.hidden ? parseFloat(raw) || 0 : 0;
     } catch {
       rpWidth = 0;
     }
@@ -276,11 +279,14 @@ export function createInlineCommandMenu(options = {}) {
     let width = anchor.width || rightLimit - leftMin;
     width = Math.max(MIN_WIDTH, Math.min(width, rightLimit - leftMin));
     menuEl.style.width = Math.round(width) + 'px';
+    // The attachment tray belongs to the same input surface. Prefer a shorter,
+    // internally scrollable menu above the whole surface over covering its Xs.
+    menuEl.style.maxHeight = Math.max(48, composerTop - 16) + 'px';
     const rect = menuEl.getBoundingClientRect();
     const h = rect.height || 0;
     let left = anchor.left;
     left = Math.max(leftMin, Math.min(left, rightLimit - width));
-    let top = anchor.top - h - 8;
+    let top = composerTop - h - 8;
     if (top < 8) top = Math.min(anchor.bottom + 8, vh - h - 8);
     if (top < 8) top = 8;
     menuEl.style.left = Math.round(left) + 'px';
@@ -499,13 +505,13 @@ export function createInlineCommandMenu(options = {}) {
   }
 
   /** 安装监听与 DOM。可重复调用（幂等）。 */
-  function attach(el) {
+  function attach(targetHost) {
     if (attached) return controller;
     if (injectStyles) ensureStylesheet(doc);
     build();
-    if (el && el.isConnected !== false) {
+    if (targetHost && targetHost.isConnected !== false) {
       /* 允许集成方指定挂载点；换了就把菜单搬过去。 */
-      if (el !== host) { el.appendChild(menuEl); host = el; }
+      if (targetHost !== host) { targetHost.appendChild(menuEl); host = targetHost; }
     }
     input.addEventListener('input', onInput);
     input.addEventListener('compositionstart', onCompositionStart);

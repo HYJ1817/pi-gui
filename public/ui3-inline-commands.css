@@ -26,6 +26,7 @@
 .ui3-inline-menu[hidden] { display: none; }
 
 .ui3-inline-list {
+  min-height: 0;
   margin: 0;
   padding: 6px;
   overflow-y: auto;
