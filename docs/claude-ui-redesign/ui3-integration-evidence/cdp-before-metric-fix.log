@@ -1,0 +1,1140 @@
+目标: http://127.0.0.1:9912
+页面状态: 已连接
+模型 chip: DeepSeek V4 Pro
+左下供应商入口: {"text":"模型供应商1","top":0,"bottom":0,"left":0,"w":0,"railBottom":746,"aboveQuota":true,"inRail":false,"inViewport":true,"navItems":2,"cornerBtns":0}
+  截图: ui3-integration-01-default.png
+模型浮层: {"left":899,"top":374,"w":232,"h":246,"anchorRight":1131,"anchorTop":687,"inViewport":true,"items":2,"groups":["deepseek"]}
+  截图: ui3-integration-02-model-popover.png
+思考浮层项数: 3
+  截图: ui3-integration-03-think-popover.png
+上下文提示: {"text":"背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (USD)$15.0000","left":776,"top":301,"inViewport":true}
+  截图: ui3-integration-04-ctx-tooltip.png
+附件: 跳过（先跑 npm run fixtures 生成固件）
+对话区: {"user":1,"assistant":3,"fileCards":1,"imgChips":1,"rawTags":0}
+  截图: ui3-integration-08-thread.png
+  截图: ui3-integration-09-thread-top.png
+  截图: ui3-integration-10-file-expanded.png
+  截图: ui3-integration-57-shell-expanded.png
+      57-shell-expanded [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: Pi项目 新对话＋ 搜索会话 项目··· 添加文件夹 项目设置 pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes 上下文6%上下文 61.23k / 1M输入 / 输出1
+      P14-A：Rail + 项目侧栏 + 工作区
+  截图: ui3-integration-58-project-sessions.png
+      58-project-sessions [✓ 取景中心在视口内 结构判据成立] rect=215..349/134
+        取景元素文本: ⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条
+      P14-A：项目下有多条会话
+  截图: ui3-integration-59-session-selected.png
+      59-session-selected [✓ 取景中心在视口内 结构判据成立] rect=215..249/34
+        取景元素文本: 发酵罐空气分布器设计核算2 分钟前
+      P14-A：当前会话选中
+  截图: ui3-integration-67-project-group-collapsed.png
+      67-project-group-collapsed [✓ 取景中心在视口内 结构判据成立] rect=140..168/28
+        取景元素文本: 项目
+      P14-A：项目分组点击后实际折叠
+  截图: ui3-integration-68-project-group-restored.png
+      68-project-group-restored [✓ 取景中心在视口内 结构判据成立] rect=140..168/28
+        取景元素文本: 项目
+      P14-A：项目分组再次点击后恢复
+  截图: ui3-integration-60-sidebar-collapsed.png
+      60-sidebar-collapsed [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: π 5 3
+      P14-A：折叠后 Rail 仍在
+  截图: ui3-integration-61-usage-compact.png
+      61-usage-compact [✓ 取景中心在视口内 结构判据成立] rect=669..702/33
+        取景元素文本: 上下文6%上下文 61.23k / 1M输入 / 输出18.42k / 3.11k缓存读取40.2k累计成本$0.0842远端额度¥110.00 | $15.00
+      P14-A：用量摘要
+  截图: ui3-integration-62-usage-expanded.png
+      62-usage-expanded [✓ 取景中心在视口内 结构判据成立] rect=527..702/175
+        取景元素文本: 上下文6%上下文 61.23k / 1M输入 / 输出18.42k / 3.11k缓存读取40.2k累计成本$0.0842远端额度¥110.00 | $15.00
+      P14-A：用量明细
+  截图: ui3-integration-63-global-more.png
+      63-global-more [✓ 取景中心在视口内 结构判据成立] rect=94..703/609
+        取景元素文本: 模型与账户 模型供应商1 供应商与认证 Agent 能力 能力状态 扩展与 MCP MCP 配置 应用与更新 Pi GUI 与 Pi 更新 重启 Pi 诊断 运行状态与诊断 键盘与命令 命令面板… 键盘快捷键… 界面 外观与主题…
+      P14-A：低频入口
+  截图: ui3-integration-64-rail-changes.png
+      64-rail-changes [✓ 取景中心在视口内 结构判据成立] rect=10..36/26
+        取景元素文本: 3
+      P14-A：文件变更激活
+  截图: ui3-integration-65-rail-planner.png
+      65-rail-planner [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: π 5 3
+      P14-A：任务激活
+  截图: ui3-integration-66-shell-narrow-700.png
+      66-shell-narrow-700 [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI 关联 2 个任务修复 SSE 重连问题修改后端 · 第 2 次查看任务展开全部 2 条 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你帮我核对一下这份设计说明里的通气量和管径，另外
+      P14-A：700px 工作区仍在视口
+  截图: ui3-integration-900-shell-width.png
+      900-shell-width [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI 关联 2 个任务修复 SSE 重连问题修改后端 · 第 2 次查看任务展开全部 2 条 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你帮我核对一下这份设计说明里的通气量和管径，另外
+      P14-A：900px 三列布局
+  截图: ui3-integration-1200-shell-width.png
+      1200-shell-width [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI 关联 2 个任务修复 SSE 重连问题修改后端 · 第 2 次查看任务展开全部 2 条 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你帮我核对一下这份设计说明里的通气量和管径，另外
+      P14-A：1200px 三列布局
+  截图: ui3-integration-1536-shell-width.png
+      1536-shell-width [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI 关联 2 个任务修复 SSE 重连问题修改后端 · 第 2 次查看任务展开全部 2 条 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你帮我核对一下这份设计说明里的通气量和管径，另外
+      P14-A：1536px 三列布局
+  截图: ui3-integration-69-conversation-user-short.png
+      69-conversation-user-short [✓ 取景中心在视口内 结构判据成立] rect=383..428/45
+        取景元素文本: 你好，继续。
+      P14-B：短 User Bubble 靠右且按内容收缩
+  截图: ui3-integration-70-conversation-user-long.png
+      70-conversation-user-long [✓ 取景中心在视口内 结构判据成立] rect=237..575/339
+        取景元素文本: 你请保留完整路径、换行和长链接。public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-
+      P14-B：长 User Bubble 有宽度上限且换行
+  截图: ui3-integration-71-assistant-open-text.png
+      71-assistant-open-text [✓ 取景中心在视口内 结构判据成立] rect=317..476/159
+        取景元素文本: Pi思考过程 · 17 字 · 已完成先核对步骤，再用现有工具检查结果。我会沿着现有实现继续检查。当前结论段落、列表和 inlineCode 都保持原有 Markdown 语义。
+      P14-B：Assistant 开放正文与 Markdown
+  截图: ui3-integration-72-thinking-collapsed.png
+      72-thinking-collapsed [✓ 取景中心在视口内 结构判据成立] rect=384..408/24
+        取景元素文本: 思考过程 · 17 字 · 已完成
+      P14-B：Thinking 默认折叠
+  截图: ui3-integration-73-thinking-expanded.png
+      73-thinking-expanded [✓ 取景中心在视口内 结构判据成立] rect=369..423/54
+        取景元素文本: 思考过程 · 17 字 · 已完成先核对步骤，再用现有工具检查结果。
+      P14-B：Thinking 展开后显示真实内容
+  截图: ui3-integration-74-tool-running.png
+      74-tool-running [✓ 取景中心在视口内 结构判据成立] rect=549..584/35
+        取景元素文本: 读取文件运行中public/messages.js详细信息输出详细信息{ "path": "public/messages.js" }
+      P14-B：工具运行状态
+  截图: ui3-integration-75-tool-success.png
+      75-tool-success [✓ 取景中心在视口内 结构判据成立] rect=530..584/54
+        取景元素文本: 读取文件成功public/messages.js0.8s展开输出1 行输出已读取 640 行详细信息{ "path": "public/messages.js" }
+      P14-B：工具成功状态
+  截图: ui3-integration-76-tool-failed.png
+      76-tool-failed [✓ 取景中心在视口内 结构判据成立] rect=529..584/55
+        取景元素文本: 执行命令失败npm test0.0s展开输出exit code 1输出Command exited with code 1详细信息{ "command": "npm test" }
+      P14-B：工具失败状态与退出码
+  截图: ui3-integration-77-tool-group-mixed.png
+      77-tool-group-mixed [✓ 取景中心在视口内 结构判据成立] rect=286..506/219
+        取景元素文本: 操作 3 项失败 1 · 成功 2读取文件成功src/fermenter/sizing.js0.3s展开输出6 行输出export function outletDiameter(q, v) { return Math.sqrt((4 * q) / (Math.PI * v)); } export function a
+      P14-B：连续工具组有成功与失败
+  截图: ui3-integration-78-attachment-single.png
+      78-attachment-single [✓ 取景中心在视口内 结构判据成立] rect=151..190/39
+        取景元素文本: 发酵罐空气分布器设计.pdf1 页 · 386 字发酵罐空气分布器的设计参数核算 一、设计依据 依据《发酵工程设备设计手册》第 3 版，通风发酵罐采用单管式空气分布器， 出口气速取 10～15 m/s，管口距罐底 40 mm，罐底设置防冲刷钢板。 二、结构参数 罐体公称容积 V = 50 m³，装料系数 η = 0.7
+      P14-B：单附件紧凑文件块
+  截图: ui3-integration-79-attachment-multiple.png
+      79-attachment-multiple [✓ 取景中心在视口内 结构判据成立] rect=353..459/106
+        取景元素文本: 你设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 · Word附件二正文
+      P14-B：多附件自然堆叠
+  截图: ui3-integration-80-minimap.png
+      80-minimap [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…好，继续。请保留完整路径、换行和长链接。public/very-long-conversa…设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…
+      P14-B：Minimap 当前点与点击定位
+  截图: ui3-integration-81-long-code.png
+      81-long-code [✓ 取景中心在视口内 结构判据成立] rect=369..423/54
+        取景元素文本: const veryLongLine = "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+      P14-B：长代码只在代码块内横向滚动
+  截图: ui3-integration-82-narrow-700.png
+      82-narrow-700 [✓ 取景中心在视口内 结构判据成立] rect=166..799/633
+        取景元素文本: 你请保留完整路径、换行和长链接。public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-
+      P14-B：700px 阅读列与长 URL
+  截图: ui3-integration-83-conversation-900.png
+      83-conversation-900 [✓ 取景中心在视口内 结构判据成立] rect=265..702/437
+        取景元素文本: 你请保留完整路径、换行和长链接。public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-
+      P14-B：900px 阅读列与长 URL
+  截图: ui3-integration-84-conversation-1200.png
+      84-conversation-1200 [✓ 取景中心在视口内 结构判据成立] rect=314..652/339
+        取景元素文本: 你请保留完整路径、换行和长链接。public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-
+      P14-B：1200px 阅读列与长 URL
+  截图: ui3-integration-85-conversation-1536.png
+      85-conversation-1536 [✓ 取景中心在视口内 结构判据成立] rect=314..652/339
+        取景元素文本: 你请保留完整路径、换行和长链接。public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-
+      P14-B：1536px 阅读列与长 URL
+  截图: ui3-integration-86-composer-idle.png
+      86-composer-idle [✓ 取景中心在视口内 结构判据成立] rect=628..728/100
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：浮动单容器，空输入
+  截图: ui3-integration-87-composer-text.png
+      87-composer-text [✓ 取景中心在视口内 结构判据成立] rect=628..728/100
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：单行输入可发送
+  截图: ui3-integration-88-composer-multiline.png
+      88-composer-multiline [✓ 取景中心在视口内 结构判据成立] rect=585..728/143
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：三行向上增长
+  截图: ui3-integration-89-composer-max-height.png
+      89-composer-max-height [✓ 取景中心在视口内 结构判据成立] rect=489..728/239
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：长输入在 textarea 内滚动
+  截图: ui3-integration-93-composer-dragover.png
+      93-composer-dragover [✓ 取景中心在视口内 结构判据成立] rect=628..728/100
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：拖入态仅增强边界
+  截图: ui3-integration-94-composer-model-picker.png
+      94-composer-model-picker [✓ 取景中心在视口内 结构判据成立] rect=374..620/246
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理共 2 个可用模型
+      P14-C：模型选择器向上展开
+  截图: ui3-integration-95-composer-thinking-picker.png
+      95-composer-thinking-picker [✓ 取景中心在视口内 结构判据成立] rect=479..620/141
+        取景元素文本: 思考等级off不思考，最快high深度思考max最大思考预算
+      P14-C：思考等级选择器向上展开
+  截图: ui3-integration-96-composer-context-popover.png
+      96-composer-context-popover [✓ 取景中心在视口内 结构判据成立] rect=301..620/319
+        取景元素文本: 背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (U
+      P14-C：上下文占用提示
+  截图: ui3-integration-96a-composer-context-hover.png
+      96a-composer-context-hover [✓ 取景中心在视口内 结构判据成立] rect=301..620/319
+        取景元素文本: 背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (U
+      P14-C：真实鼠标悬停打开 Context 提示
+  截图: ui3-integration-96b-composer-context-hover-retained.png
+      96b-composer-context-hover-retained [✓ 取景中心在视口内 结构判据成立] rect=301..620/319
+        取景元素文本: 背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (U
+      P14-C：鼠标移到提示上方仍保持打开
+  截图: ui3-integration-96c-composer-context-hover-leave.png
+      96c-composer-context-hover-leave [✓ 取景中心在视口内 结构判据成立] rect=687..714/27
+        取景元素文本: 6%
+      P14-C：离开提示后关闭
+  截图: ui3-integration-97-composer-running.png
+      97-composer-running [✓ 取景中心在视口内 结构判据成立] rect=628..728/100
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：运行时 Stop 为主操作
+  截图: ui3-integration-105-composer-stopping.png
+      105-composer-stopping [✓ 取景中心在视口内 结构判据成立] rect=628..728/100
+        取景元素文本: 正在停止… 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P30：停止未确认期间发送禁用，状态栏说「正在停止…」
+  截图: ui3-integration-106-composer-stopped.png
+      106-composer-stopped [✓ 取景中心在视口内 结构判据成立] rect=628..728/100
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P30：确认之后才是「已停止」，发送入口恢复
+  截图: ui3-integration-98-composer-locked.png
+      98-composer-locked [✓ 取景中心在视口内 结构判据成立] rect=628..728/100
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：无项目时输入区锁定视觉夹具
+  截图: ui3-integration-99-composer-700.png
+      99-composer-700 [✓ 取景中心在视口内 结构判据成立] rect=786..886/100
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：700px 控件全部可达
+  截图: ui3-integration-100-composer-900.png
+      100-composer-900 [✓ 取景中心在视口内 结构判据成立] rect=786..886/100
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：900px 控件全部可达
+  截图: ui3-integration-101-composer-1200.png
+      101-composer-1200 [✓ 取景中心在视口内 结构判据成立] rect=782..882/100
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：1200px 控件全部可达
+  截图: ui3-integration-102-composer-1536.png
+      102-composer-1536 [✓ 取景中心在视口内 结构判据成立] rect=782..882/100
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：1536px 控件全部可达
+  截图: ui3-integration-103-composer-low-height.png
+      103-composer-low-height [✓ 取景中心在视口内 结构判据成立] rect=382..586/204
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：700×600 仍留有对话空间
+  截图: ui3-integration-104-composer-long-text.png
+      104-composer-long-text [✓ 取景中心在视口内 结构判据成立] rect=642..886/244
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-C：长 URL、路径和中文不推出页面
+
+--- P8-C：人工审阅场景 ---
+  截图: ui3-integration-11-rev-summary.png
+      11-rev-summary [✓ 取景中心在视口内] rect=443..500/57
+        取景元素文本: 执行结果成功 4 · 失败 1 · 中断 1成功结果审阅已接受 2 · 需修改 0 · 待审阅 2
+      Plan 顶部审阅汇总（只看最新一次 attempt）
+  截图: ui3-integration-12-rev-pending.png
+      12-rev-pending [✓ 取景中心在视口内] rect=359..583/224
+        取景元素文本: 第 1 次成功0s尚未独立确认待审阅证据 2 个文件▾会话无可关联会话执行期间变更tests/reliability.cjs当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 2 个文件的变化（冻结证据，不会随工作区改变）验证要求确认登录错误提示验证结果尚未独立确认人工审阅○ 待审阅接受本次结果需要修改
+      Scene 1：成功 + 待审阅 + 验证要求(description) + 会话 + 当前 Diff 入口
+  截图: ui3-integration-13-rev-accepted.png
+      13-rev-accepted [✓ 取景中心在视口内] rect=263..680/416
+        取景元素文本: 第 1 次成功0s通过已接受证据 1 个文件▾会话SSE race analysis打开会话执行期间变更src/auth.js当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 1 个文件的变化（冻结证据，不会随工作区改变）验证要求npm test验证结果通过重新运行验证命令npm test目录.结果退出码
+      Scene 2：已接受 + 说明 + reviewedAt
+  截图: ui3-integration-14-rev-needs-changes.png
+      14-rev-needs-changes [✓ 取景中心在视口内] rect=331..612/282
+        取景元素文本: 第 2 次失败0s尚未独立确认需修改无证据第二次也失败：模型报 402▾会话bridge reconnect fix（第二次）打开会话执行期间变更server/rpc-bridge.js当前工作区已无该文件的未提交差异server/sse.js当前工作区已无该文件的未提交差异这次执行没有变更证据（更早版本没有采集）验证
+      Scene 3：需修改（失败 + 已写明理由）
+  截图: ui3-integration-15-rev-retry-history.png
+      15-rev-retry-history [✓ 取景中心在视口内] rect=256..687/431
+        取景元素文本: 本次执行第 1 次成功0s正在验证…已接受无证据▾会话第一轮（已接受）打开会话执行期间变更server/sse.js当前工作区已无该文件的未提交差异这次执行没有变更证据（更早版本没有采集）验证要求npm test验证结果正在验证…停止验证命令npm test目录.人工审阅✓ 已接受9月25日 19:36第一轮的实现保留
+      Scene 4：Attempt 1 已接受 + Attempt 2 执行中（运行期不给审阅操作）
+  截图: ui3-integration-16-rev-failed.png
+      16-rev-failed [✓ 取景中心在视口内] rect=454..490/36
+        取景元素文本: 第 1 次失败0s失败证据 2 个文件第一次故意失败：模型报 402▸会话bridge reconnect fix（第一次）打开会话执行期间变更server/rpc-bridge.js当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 2 个文件的变化（冻结证据，不会随工作区改变）⚠ 证据不完整验证要求np
+      Scene 5：失败的 Attempt 只有「需要修改」
+  截图: ui3-integration-56-attempt-failed-compact.png
+      56-attempt-failed-compact [✓ 取景中心在视口内 结构判据成立] rect=454..490/36
+        取景元素文本: 第 1 次失败0s失败证据 2 个文件第一次故意失败：模型报 402▸会话bridge reconnect fix（第一次）打开会话执行期间变更server/rpc-bridge.js当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 2 个文件的变化（冻结证据，不会随工作区改变）⚠ 证据不完整验证要求np
+      P13：失败的 Attempt —— 折叠头不写「待审阅」，展开的审阅区照旧
+  截图: ui3-integration-17-rev-null-snapshot.png
+      17-rev-null-snapshot [✓ 取景中心在视口内] rect=349..594/245
+        取景元素文本: 第 1 次成功0s尚未独立确认待审阅无证据▾会话关联会话已删除执行期间变更：采集不到（这个项目不是 git 仓库，或这次执行被中断）这次执行没有变更证据（更早版本没有采集）验证要求该次执行没有保存历史验证要求当前任务验证要求npm run test:unit验证结果尚未独立确认人工审阅○ 待审阅接受本次结果需要修改
+      没有历史验证要求 → 另起一行标「当前任务验证要求」
+  截图: ui3-integration-18-rev-editor.png
+      18-rev-editor [✓ 取景中心在视口内] rect=379..564/185
+        取景元素文本: 人工审阅✓ 接受本次结果↻ 需要修改说明16 / 1000保存取消
+      编辑态：状态选择 + 说明 + 字数 + 保存
+  截图: ui3-integration-19-rev-conflict.png
+      19-rev-conflict [✓ 取景中心在视口内] rect=348..594/246
+        取景元素文本: 人工审阅✓ 接受本次结果↻ 需要修改说明16 / 1000保存取消这条审阅已经在其他窗口被修改。你写的内容还留着 —— 点「重新加载」会拿服务端最新的那一版覆盖它。重新加载
+      Scene 6：冲突 —— 本地输入保留，等你点重新加载
+  截图: ui3-integration-24-verify-never.png
+      24-verify-never [✓ 取景中心在视口内] rect=269..673/404
+        取景元素文本: 第 1 次成功0s尚未独立确认待审阅证据 2 个文件▾会话无可关联会话执行期间变更tests/reliability.cjs当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 2 个文件的变化（冻结证据，不会随工作区改变）验证要求确认登录错误提示验证结果尚未独立确认人工审阅✓ 接受本次结果↻ 需要修改说明1
+      P9：从未验证 ——「尚未独立确认」+「运行验证」
+  截图: ui3-integration-25-verify-passed.png
+      25-verify-passed [✓ 取景中心在视口内] rect=263..680/416
+        取景元素文本: 第 1 次成功0s通过已接受证据 1 个文件▾会话SSE race analysis打开会话执行期间变更src/auth.js当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 1 个文件的变化（冻结证据，不会随工作区改变）验证要求npm test验证结果通过重新运行验证命令npm test目录.结果退出码
+      P9：验证通过 —— 命令 / 退出码 / 耗时 / 输出摘要
+  截图: ui3-integration-26-verify-failed.png
+      26-verify-failed [✓ 取景中心在视口内] rect=454..490/36
+        取景元素文本: 第 1 次失败0s失败证据 2 个文件第一次故意失败：模型报 402▸会话bridge reconnect fix（第一次）打开会话执行期间变更server/rpc-bridge.js当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 2 个文件的变化（冻结证据，不会随工作区改变）⚠ 证据不完整验证要求np
+      P9：验证失败 —— 失败输出 +「输出已截断」
+  截图: ui3-integration-27-verify-interrupted.png
+      27-verify-interrupted [✓ 取景中心在视口内] rect=342..680/337
+        取景元素文本: 第 1 次被中断0s已中断无证据应用关闭时被中断▾会话被中断的那次打开会话执行期间变更：采集不到（这个项目不是 git 仓库，或这次执行被中断）这次执行没有采集到变更证据（应用关闭时被中断，未完成结束状态采集）验证要求npm run build验证结果已中断重新运行验证命令npm run build目录packages
+      P9：已中断 +「重新运行验证」
+  截图: ui3-integration-28-verify-running.png
+      28-verify-running [✓ 取景中心在视口内] rect=319..625/306
+        取景元素文本: 第 1 次成功0s正在验证…已接受无证据▾会话第一轮（已接受）打开会话执行期间变更server/sse.js当前工作区已无该文件的未提交差异这次执行没有变更证据（更早版本没有采集）验证要求npm test验证结果正在验证…停止验证命令npm test目录.人工审阅✓ 已接受9月25日 19:36第一轮的实现保留修改判断
+      P9：正在验证… +「停止验证」
+  截图: ui3-integration-31-attempt-diff.png
+      31-attempt-diff [✓ 取景中心在视口内] rect=82..664/582
+        取景元素文本: 历史 Diff · 第 1 次尝试这是该 Attempt 执行前后观察到的工作区变化。之后的修改不会改变这里的内容。1 个文件Msrc/auth.js+2 −1diff --git a/src/auth.js b/src/auth.js index 1111111..2222222 100644 --- a/src/a
+      P10：历史 Diff（修改）—— 面板写明这是执行前后的冻结证据
+  截图: ui3-integration-32-attempt-diff-added-deleted.png
+      32-attempt-diff-added-deleted [✓ 取景中心在视口内] rect=82..664/582
+        取景元素文本: 历史 Diff · 第 1 次尝试这是该 Attempt 执行前后观察到的工作区变化。之后的修改不会改变这里的内容。2 个文件Atests/login.test.js+40 −0diff --git a/tests/login.test.js b/tests/login.test.js new file mode 10
+      P10：历史 Diff —— 新增 / 删除
+  截图: ui3-integration-33-attempt-diff-binary.png
+      33-attempt-diff-binary [✓ 取景中心在视口内] rect=195..245/50
+        取景元素文本: Massets/logo.png二进制二进制文件已变化，不展示文本 Diff
+      P10：历史 Diff —— 二进制文件（展开：不展示文本 Diff）
+  截图: ui3-integration-34-attempt-diff-truncated.png
+      34-attempt-diff-truncated [✓ 取景中心在视口内] rect=226..390/164
+        取景元素文本: Mserver/rpc-bridge.js+12 −3已截断diff --git a/server/rpc-bridge.js b/server/rpc-bridge.js --- a/server/rpc-bridge.js +++ b/server/rpc-bridge.js @@ -1,2 +1,2 @@ -co
+      P10：历史 Diff —— 截断（展开：单文件 patch + 已截断）
+  截图: ui3-integration-35-attempt-diff-unavailable.png
+      35-attempt-diff-unavailable [✓ 取景中心在视口内] rect=342..679/337
+        取景元素文本: 第 1 次被中断0s已中断无证据应用关闭时被中断▾会话被中断的那次打开会话执行期间变更：采集不到（这个项目不是 git 仓库，或这次执行被中断）这次执行没有采集到变更证据（应用关闭时被中断，未完成结束状态采集）验证要求npm run build验证结果已中断重新运行验证命令npm run build目录packages
+      P10：历史 Diff —— 采集不到（如实说原因，不给按钮）
+      历史 Diff 长内容：scrollWidth=1418 innerWidth=1418 → 横向溢出=false
+  截图: ui3-integration-36-attempt-diff-long.png
+      36-attempt-diff-long [✓ 取景中心在视口内] rect=82..664/582
+        取景元素文本: 历史 Diff · 第 1 次尝试这是该 Attempt 执行前后观察到的工作区变化。之后的修改不会改变这里的内容。1 个文件Mpackages/something/really/really/really/long/path/to/generated/adapter/implementation.js+120 −8d
+      P10：历史 Diff —— 超长路径 + 超长单行 patch
+      历史 Diff @700：scrollWidth=700 innerWidth=700 → 横向溢出=false
+  截图: ui3-integration-37-attempt-diff-narrow-700.png
+      37-attempt-diff-narrow-700 [✓ 取景中心在视口内] rect=105..846/741
+        取景元素文本: 历史 Diff · 第 1 次尝试这是该 Attempt 执行前后观察到的工作区变化。之后的修改不会改变这里的内容。1 个文件Mpackages/something/really/really/really/long/path/to/generated/adapter/implementation.js+120 −8d
+      P10：历史 Diff —— 窄窗口 700px
+  截图: ui3-integration-48-next-action-verification.png
+      48-next-action-verification [✓ 取景中心在视口内 结构判据成立] rect=420..466/46
+        取景元素文本: 下一步正在独立验证 live · 第 1 次尝试查看任务
+      P13：下一步 —— 独立验证在跑（优先级最高，且不给「开始执行」）
+  截图: ui3-integration-49-attempt-history-collapsed.png
+      49-attempt-history-collapsed [✓ 取景中心在视口内 结构判据成立] rect=104..840/737
+        取景元素文本: 失败backendpi依赖 analyze第 2 次3s重试跳过Agentauto（自动挑一个可用的）PiCodexClaude Code（不可用）依赖analyzetestsdocslivehub需要人工验收后再继续下游第一次故意失败：模型报 402执行期间观察到的工作区变化server/rpc-bridge.jsm
+      P13：历史尝试默认收起（每条任务只展开最新一次）
+  截图: ui3-integration-50-attempt-history-expanded.png
+      50-attempt-history-expanded [✓ 取景中心在视口内 结构判据成立] rect=-89..1033/1122
+        取景元素文本: 失败backendpi依赖 analyze第 2 次3s重试跳过Agentauto（自动挑一个可用的）PiCodexClaude Code（不可用）依赖analyzetestsdocslivehub需要人工验收后再继续下游第一次故意失败：模型报 402执行期间观察到的工作区变化server/rpc-bridge.jsm
+      P13：手动展开历史那一次（用户的选择盖过默认规则）
+  截图: ui3-integration-52-attempt-head-summary.png
+      52-attempt-head-summary [✓ 取景中心在视口内 结构判据成立] rect=318..624/306
+        取景元素文本: 第 1 次成功0s正在验证…已接受无证据▾会话第一轮（已接受）打开会话执行期间变更server/sse.js当前工作区已无该文件的未提交差异这次执行没有变更证据（更早版本没有采集）验证要求npm test验证结果正在验证…停止验证命令npm test目录.人工审阅✓ 已接受9月25日 19:36第一轮的实现保留修改判断
+      P13：折叠头 —— 执行 / 验证 / 验收 / 证据四个维度分行（验证在跑 → 强制展开）
+  截图: ui3-integration-53-focus-attempt.png
+      53-focus-attempt [✓ 取景中心在视口内 结构判据成立] rect=-89..1033/1122
+        取景元素文本: 失败backendpi依赖 analyze第 2 次3s重试跳过Agentauto（自动挑一个可用的）PiCodexClaude Code（不可用）依赖analyzetestsdocslivehub需要人工验收后再继续下游第一次故意失败：模型报 402执行期间观察到的工作区变化server/rpc-bridge.jsm
+      P13：focus 到旧 attempt —— 打开面板就展开它并滚到视口内
+  截图: ui3-integration-38-review-gate-pending.png
+      38-review-gate-pending [✓ 取景中心在视口内] rect=462..481/19
+        取景元素文本: 人工门控等待人工验收第 1 次尝试
+      P11：门控 —— 执行成功，等待人工验收
+  截图: ui3-integration-39-review-gate-accepted.png
+      39-review-gate-accepted [✓ 取景中心在视口内] rect=462..481/19
+        取景元素文本: 人工门控门控已通过第 1 次尝试
+      P11：门控 —— 已接受（门控已通过）
+  截图: ui3-integration-40-review-gate-needs-changes.png
+      40-review-gate-needs-changes [✓ 取景中心在视口内] rect=462..481/19
+        取景元素文本: 人工门控需要修改 · 门控未通过第 2 次尝试
+      P11：门控 —— 需要修改 · 门控未通过
+  截图: ui3-integration-45-review-gate-retry-pending.png
+      45-review-gate-retry-pending [✓ 取景中心在视口内] rect=462..481/19
+        取景元素文本: 人工门控尚未产生新结果 · 门控未开始第 1 次尝试
+      P12→P13：门控 —— 重试排队中（历史 accepted 不算已通过；还没跑过 ≠ 执行未成功）
+  截图: ui3-integration-55-next-action-blocked.png
+      55-next-action-blocked [✓ 取景中心在视口内 结构判据成立] rect=399..445/46
+        取景元素文本: 下一步处理被阻塞的任务 gated-faildown查看任务
+      P13：下一步 —— 被上游卡住（点名到具体任务，排在「等验收」之前）
+  截图: ui3-integration-41-review-gate-downstream-blocked.png
+      41-review-gate-downstream-blocked [✓ 取景中心在视口内] rect=462..481/19
+        取景元素文本: 等待人工验收：gated-a
+      P11：下游 —— 等待人工验收：gated-a
+  截图: ui3-integration-42-review-gate-plan-paused.png
+      42-review-gate-plan-paused [✓ 取景中心在视口内] rect=363..383/21
+        取景元素文本: 进度 4/7已暂停：等待人工验收人工门控 1/5 已通过 · 待验收 3
+      P11：Plan 顶部 —— 已暂停·等待人工验收 + 门控汇总
+  截图: ui3-integration-43-review-gate-editor.png
+      43-review-gate-editor [✓ 取景中心在视口内] rect=461..481/20
+        取景元素文本: 需要人工验收后再继续下游
+      P11：任务上的门控勾选框
+      门控页：scrollWidth=1418 innerWidth=1418 → 横向溢出=false
+      门控页 @700：scrollWidth=700 innerWidth=700 → 横向溢出=false
+  截图: ui3-integration-44-review-gate-narrow-700.png
+      44-review-gate-narrow-700 [✓ 取景中心在视口内] rect=400..1020/620
+        取景元素文本: 成功gated-longpi人工门控等待人工验收第 1 次尝试验收结果Agentauto（自动挑一个可用的）PiCodexClaude Code（不可用）依赖gated-agated-okgated-needgated-retrygated-downgated-faildown需要人工验收后再继续下游本次执行第 1 次
+      P11：窄窗口 700px —— 超长标题 + 门控行
+  截图: ui3-integration-46-next-action-ready.png
+      46-next-action-ready [✓ 取景中心在视口内 结构判据成立] rect=399..445/46
+        取景元素文本: 下一步有 1 个任务可以执行开始执行
+      P13：下一步 —— 可以执行（唯一给「开始执行」的分支）
+      下一步 @700：scrollWidth=700 innerWidth=700 → 横向溢出=false
+  截图: ui3-integration-54-next-action-narrow-700.png
+      54-next-action-narrow-700 [✓ 取景中心在视口内 结构判据成立] rect=674..720/46
+        取景元素文本: 下一步有 1 个任务可以执行开始执行
+      P13：窄窗口 700px —— 下一步与它的按钮不挤成一团
+  截图: ui3-integration-47-next-action-review.png
+      47-next-action-review [✓ 取景中心在视口内 结构判据成立] rect=399..445/46
+        取景元素文本: 下一步验收 gated-main 的最新成功结果查看任务
+      P13：下一步 —— 等人工验收（点名到具体任务，不写「去验收」）
+  截图: ui3-integration-20-stress-long-note.png
+      20-stress-long-note [✓ 取景中心在视口内] rect=-31..975/1006
+        取景元素文本: 第 1 次成功0s失败已接受证据 1 个文件▾会话长说明打开会话执行期间变更src/generated/module-0.js当前工作区已无该文件的未提交差异src/generated/module-1.js当前工作区已无该文件的未提交差异src/generated/module-2.js当前工作区已无该文件的未提交差
+      压力：1000 字说明 + 20 个文件 + 超长路径
+  截图: ui3-integration-29-verify-long.png
+      29-verify-long [✓ 取景中心在视口内] rect=328..615/287
+        取景元素文本: 命令npm run test -- --reporter=spec --grep "reconnect|stale|bridgeRun|sse-backlog" --timeout=30000 --reporter-options maxDiffSize=200000目录packages/something/reall
+      P9 压力：长命令 + 长输出（被截断）
+  截图: ui3-integration-21-stress-many-attempts.png
+      21-stress-many-attempts [✓ 取景中心在视口内] rect=162..781/619
+        取景元素文本: 尝试历史第 1 次成功0s尚未独立确认已接受无证据▸会话第 1 次尝试的会话打开会话执行期间变更src/try-1.js当前工作区已无该文件的未提交差异这次执行没有变更证据（更早版本没有采集）验证要求npm test验证结果尚未独立确认运行验证人工审阅✓ 已接受9月25日 19:40第一次曾经通过修改判断清除第 2 次
+      压力：10 次尝试
+  截图: ui3-integration-51-attempt-history-10.png
+      51-attempt-history-10 [✓ 取景中心在视口内 结构判据成立] rect=162..781/619
+        取景元素文本: 尝试历史第 1 次成功0s尚未独立确认已接受无证据▸会话第 1 次尝试的会话打开会话执行期间变更src/try-1.js当前工作区已无该文件的未提交差异这次执行没有变更证据（更早版本没有采集）验证要求npm test验证结果尚未独立确认运行验证人工审阅✓ 已接受9月25日 19:40第一次曾经通过修改判断清除第 2 次
+      P13：10 次尝试 —— 默认只展开第 10 次，9 条历史收起但一条不少
+      窄窗口 700：scrollWidth=700 innerWidth=700 → 横向溢出=false
+  截图: ui3-integration-22-stress-narrow-700.png
+      22-stress-narrow-700 [✓ 取景中心在视口内] rect=179..1242/1062
+        取景元素文本: 第 1 次成功0s失败已接受证据 1 个文件▾会话长说明打开会话执行期间变更src/generated/module-0.js当前工作区已无该文件的未提交差异src/generated/module-1.js当前工作区已无该文件的未提交差异src/generated/module-2.js当前工作区已无该文件的未提交差
+      压力：窄窗口 700px
+      plan-1 @700：scrollWidth=700 innerWidth=700 → 横向溢出=false
+  截图: ui3-integration-23-summary-narrow-700.png
+      23-summary-narrow-700 [✓ 取景中心在视口内] rect=682..739/57
+        取景元素文本: 执行结果成功 4 · 失败 1 · 中断 1成功结果审阅已接受 2 · 需修改 0 · 待审阅 2
+      窄窗口 700px：含「中断」的汇总行
+  截图: ui3-integration-30-verify-narrow-700.png
+      30-verify-narrow-700 [✓ 取景中心在视口内] rect=615..807/192
+        取景元素文本: 命令npm test目录src结果退出码 1 · 耗时 18snot ok 118 - bridge drops stale response AssertionError: expected 2 to equal 1 at tests/reliability.cjs:88:7 not ok 119 - reconne
+      P9 窄窗口 700px：验证明细（命令 + 输出）
+  截图: ui3-integration-105-workspace-chat.png
+      105-workspace-chat [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 关联 2 个任务修复 SSE 重连问题修改后端 · 第 2 次查看任务展开全部 2 条 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你帮我核对一下这份设计说明里的通气量和管径，另外
+      P14-D：Chat 默认一级视图
+  截图: ui3-integration-106-workspace-planner.png
+      106-workspace-planner [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 计划Agent生成计划新建空计划当前项目的计划（5）已暂停修复 SSE 重连问题6 个任务 · 成功 4 · 失败 1已完成压力场景：长说明 / 多文件 / 多次尝试2 个任务 · 成功 1 · 失败 1已暂停人工验收门控：等待 / 通过 / 需修改7 个任务 · 成功 4 · 失败 0待执行P13 下一步：可执行2 
+      P14-D：Planner Stage 工作区
+  截图: ui3-integration-107-workspace-planner-detail.png
+      107-workspace-planner-detail [✓ 取景中心在视口内 结构判据成立] rect=221..722/501
+        取景元素文本: 已暂停让 bridgeRun 的过期响应不再覆盖新状态开始执行保存修改删除计划刷新进度 4/6已暂停：有任务失败，请选择重试 / 跳过 / 停止有独立验证正在运行（live 第 1 次）—— 先停止它，再开始执行 / 编辑 / 删除 / 重试下一步正在独立验证 live · 第 1 次尝试查看任务执行结果成功 4 · 
+      P14-D：Plan detail 与下一步
+  截图: ui3-integration-108-workspace-planner-attempts.png
+      108-workspace-planner-attempts [✓ 取景中心在视口内 结构判据成立] rect=289..654/365
+        取景元素文本: 尝试历史第 1 次失败0s失败证据 2 个文件第一次故意失败：模型报 402▸会话bridge reconnect fix（第一次）打开会话执行期间变更server/rpc-bridge.js当前工作区已无该文件的未提交差异查看本次 Diff这次执行前后 2 个文件的变化（冻结证据，不会随工作区改变）⚠ 证据不完整验证
+      P14-D：Attempt 历史折叠
+  截图: ui3-integration-109-workspace-planner-review.png
+      109-workspace-planner-review [✓ 取景中心在视口内 结构判据成立] rect=438..504/66
+        取景元素文本: 人工审阅○ 待审阅接受本次结果需要修改
+      P14-D：人工验收
+  截图: ui3-integration-110-workspace-planner-verification.png
+      110-workspace-planner-verification [✓ 取景中心在视口内 结构判据成立] rect=449..494/44
+        取景元素文本: 命令npm test目录.
+      P14-D：验证状态
+  截图: ui3-integration-111-workspace-changes.png
+      111-workspace-changes [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 文件变更Git 工作区 · 磁盘真实状态全部撤销刷新×全部3本会话编辑1记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。Mpublic/app.js已修改+12−3本会话撤销Adocs/说明.md新增 · 已暂存+4撤销??new/fixture.txt未跟踪+2删除
+      P14-D：Changes Stage 工作区
+  截图: ui3-integration-112-workspace-changes-expanded.png
+      112-workspace-changes-expanded [✓ 取景中心在视口内 结构判据成立] rect=164..366/202
+        取景元素文本: Mpublic/app.js已修改+12−3本会话撤销上下文默认20 行全部折叠全部块工作区（尚未 git add）diff --git a/public/app.js b/public/app.js▾@@ -1,2 +1,2 @@+1−1-old line+new line
+      P14-D：展开的 unified diff
+  截图: ui3-integration-113-workspace-changes-filter-session.png
+      113-workspace-changes-filter-session [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 文件变更Git 工作区 · 磁盘真实状态全部撤销刷新×全部3本会话编辑1记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。Mpublic/app.js已修改+12−3本会话撤销
+      P14-D：仅本次会话
+  截图: ui3-integration-114-workspace-changes-clean.png
+      114-workspace-changes-clean [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 文件变更Git 工作区 · 磁盘真实状态全部撤销刷新×没有文件变更。工作区是干净的。
+      P14-D：干净工作区中性空态
+  截图: ui3-integration-115-workspace-extensions.png
+      115-workspace-extensions [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新共 20 项 · 已加载 8 · 未加载/不可用 3 · 未知 9「未知（
+      P14-D / P22：扩展工作区显式选择 All 能力视图
+  截图: ui3-integration-115b-workspace-skills.png
+      115b-workspace-skills [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP全部作用域项目用户临时全部状态已启用未启用有问题刷新共 3 个 · 已启用 1
+      P14-D：Skills Stage 工作区
+  截图: ui3-integration-116-workspace-skill-detail.png
+      116-workspace-skill-detail [✓ 取景中心在视口内 结构判据成立] rect=281..722/441
+        取景元素文本: code-review已启用用户审查源代码中的问题路径skills/code-review/SKILL.md发现来源作用域基准pi 是否加载是这个 Skill 没有可写入的 settings 文件，无法在这里启停。复制路径SKILL.md（只读）# Skill 这是可复现的 SKILL.md 详情。
+      P14-D：Skill 详情
+  截图: ui3-integration-117-workspace-skill-untrusted.png
+      117-workspace-skill-untrusted [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP全部作用域项目用户临时全部状态已启用未启用有问题刷新共 3 个 · 已启用 1
+      P14-D：未信任 Skill 状态
+  截图: ui3-integration-118-workspace-mcp.png
+      118-workspace-mcp [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP这个 pi 带 MCP 能力检测到的 pi 版本：0.99.1（来源 pack
+      P14-D / P20.6：MCP 原生集成（版本真值 + built-in + Server 管理面）
+P14-D 保持诊断: {"node":true,"draft":"未发送草稿","attachment":true,"scroll":808,"expected":808}
+  截图: ui3-integration-119-workspace-switch-preserves-chat.png
+      119-workspace-switch-preserves-chat [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 关联 2 个任务修复 SSE 重连问题修改后端 · 第 2 次查看任务展开全部 2 条 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你帮我核对一下这份设计说明里的通气量和管径，另外这张
+      P14-D：切换后保留 Chat、草稿、附件与后台流式内容
+  截图: ui3-integration-120-workspace-700.png
+      120-workspace-700 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 计划Agent生成计划新建空计划当前项目的计划（5）已暂停修复 SSE 重连问题6 个任务 · 成功 4 · 失败 1已完成压力场景：长说明 / 多文件 / 多次尝试2 个任务 · 成功 1 · 失败 1已暂停人工验收门控：等待 / 通过 / 需修改7 个任务 · 成功 4 · 失败 0待执行P13 下一步：可执行2 
+      P14-D：700px Planner 无整体横向溢出
+  截图: ui3-integration-121-workspace-900.png
+      121-workspace-900 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 计划Agent生成计划新建空计划当前项目的计划（5）已暂停修复 SSE 重连问题6 个任务 · 成功 4 · 失败 1已完成压力场景：长说明 / 多文件 / 多次尝试2 个任务 · 成功 1 · 失败 1已暂停人工验收门控：等待 / 通过 / 需修改7 个任务 · 成功 4 · 失败 0待执行P13 下一步：可执行2 
+      P14-D：900px Planner 无整体横向溢出
+  截图: ui3-integration-122-workspace-1200.png
+      122-workspace-1200 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 计划Agent生成计划新建空计划当前项目的计划（5）已暂停修复 SSE 重连问题6 个任务 · 成功 4 · 失败 1已完成压力场景：长说明 / 多文件 / 多次尝试2 个任务 · 成功 1 · 失败 1已暂停人工验收门控：等待 / 通过 / 需修改7 个任务 · 成功 4 · 失败 0待执行P13 下一步：可执行2 
+      P14-D：1200px Planner 无整体横向溢出
+  截图: ui3-integration-123-workspace-1536.png
+      123-workspace-1536 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 计划Agent生成计划新建空计划当前项目的计划（5）已暂停修复 SSE 重连问题6 个任务 · 成功 4 · 失败 1已完成压力场景：长说明 / 多文件 / 多次尝试2 个任务 · 成功 1 · 失败 1已暂停人工验收门控：等待 / 通过 / 需修改7 个任务 · 成功 4 · 失败 0待执行P13 下一步：可执行2 
+      P14-D：1536px Planner 无整体横向溢出
+  截图: ui3-integration-124-workspace-low-height.png
+      124-workspace-low-height [✓ 取景中心在视口内 结构判据成立] rect=46..600/554
+        取景元素文本: 计划Agent生成计划新建空计划当前项目的计划（5）已暂停修复 SSE 重连问题6 个任务 · 成功 4 · 失败 1已完成压力场景：长说明 / 多文件 / 多次尝试2 个任务 · 成功 1 · 失败 1已暂停人工验收门控：等待 / 通过 / 需修改7 个任务 · 成功 4 · 失败 0待执行P13 下一步：可执行2 
+      P14-D：700×600 工作区内部滚动
+  截图: ui3-integration-125-workspace-session-switch-to-chat.png
+      125-workspace-session-switch-to-chat [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 已停止 6
+      P14-D 收口：Planner 切历史会话后回 Chat
+  截图: ui3-integration-126-neutral-buttons-chat.png
+      126-neutral-buttons-chat [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 已停止 6
+      P14-E：Chat 控件与选中侧栏为灰阶
+  截图: ui3-integration-127-neutral-composer-controls.png
+      127-neutral-composer-controls [✓ 取景中心在视口内 结构判据成立] rect=628..746/118
+        取景元素文本: 已停止 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P14-E：Composer 控件与发送按钮为灰阶
+  截图: ui3-integration-128-neutral-popover.png
+      128-neutral-popover [✓ 取景中心在视口内 结构判据成立] rect=374..620/246
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理共 2 个可用模型
+      P14-E：Popover 当前项为灰阶
+  截图: ui3-integration-129-neutral-planner.png
+      129-neutral-planner [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 计划Agent生成计划新建空计划当前项目的计划（5）已暂停修复 SSE 重连问题6 个任务 · 成功 4 · 失败 1已完成压力场景：长说明 / 多文件 / 多次尝试2 个任务 · 成功 1 · 失败 1已暂停人工验收门控：等待 / 通过 / 需修改7 个任务 · 成功 4 · 失败 0待执行P13 下一步：可执行2 
+      P14-E：Planner 主次按钮为灰阶
+  截图: ui3-integration-130-neutral-planner-review.png
+      130-neutral-planner-review [✓ 取景中心在视口内 结构判据成立] rect=422..521/99
+        取景元素文本: 人工审阅✓ 已接受9月25日 19:33第一次实现已确认修改判断清除
+      P14-E：Review 操作为灰阶
+  截图: ui3-integration-131-neutral-changes.png
+      131-neutral-changes [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 文件变更Git 工作区 · 磁盘真实状态全部撤销刷新×全部3本会话编辑0记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。本次会话还没有记录到文件改动。 账本只记 write / edit 这两个工具 —— 通过 bash 改的文件不会出现在这里，切到「全部」可以看到它们。
+      P30：右栏 Git 过滤与危险按钮主体中性
+  截图: ui3-integration-132-neutral-extensions.png
+      132-neutral-extensions [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP全部作用域项目用户临时全部状态已启用未启用有问题刷新共 3 个 · 已启用 1
+      P14-E：Skill 选中与 Tabs 为灰阶
+  截图: ui3-integration-133-neutral-modal.png
+      133-neutral-modal [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 模型供应商这里添加的供应商会写进 pi 的 C:\Users\21022\.pi\agent\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。deepseek2 个模型 · openai-completions添加供应商重载 pi 配置关闭
+      P14-E：供应商 Modal 按钮为灰阶
+  截图: ui3-integration-134-neutral-confirm.png
+      134-neutral-confirm [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 撤销全部改动将把工作区恢复成 Git 中的版本： · 恢复 1 个已修改 / 已删除的文件 · 先取消暂存，再恢复 1 个已暂存的文件（会改动 Git 暂存内容） · 删除 1 个未跟踪文件（这些文件不在 Git 里，删掉无法找回） 将被删除的文件： new/fixture.txt 这些文件尚未被 Git 跟踪，删除后
+      P14-E：危险确认主操作使用中性底色
+  截图: ui3-integration-135-focus-keyboard.png
+      135-focus-keyboard [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI Skills 与扩展 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 READM
+      P14-E：真实键盘 Tab 焦点环
+  截图: ui3-integration-139-responsive-chat-700.png
+      139-responsive-chat-700 [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 已停止
+      P14-E：chat 700×900
+  截图: ui3-integration-140-responsive-planner-700.png
+      140-responsive-planner-700 [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI 任务 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 
+      P14-E：planner 700×900
+  截图: ui3-integration-141-responsive-changes-700.png
+      141-responsive-changes-700 [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI 任务 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 
+      P14-E：changes 700×900
+  截图: ui3-integration-142-responsive-extensions-700.png
+      142-responsive-extensions-700 [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 3 pi-GUI Skills 与扩展 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 READM
+      P14-E：extensions 700×900
+  截图: ui3-integration-143-low-height-chat.png
+      143-low-height-chat [✓ 取景中心在视口内 结构判据成立] rect=0..650/650
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 已停止
+      P14-E：chat 900×650
+  截图: ui3-integration-144-low-height-planner.png
+      144-low-height-planner [✓ 取景中心在视口内 结构判据成立] rect=0..600/600
+        取景元素文本: 3 pi-GUI 任务 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 
+      P14-E：planner 700×600
+  截图: ui3-integration-145-low-height-extensions.png
+      145-low-height-extensions [✓ 取景中心在视口内 结构判据成立] rect=0..600/600
+        取景元素文本: 3 pi-GUI Skills 与扩展 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 READM
+      P14-E：extensions 700×600
+  截图: ui3-integration-147-low-height-chat-700.png
+      147-low-height-chat-700 [✓ 取景中心在视口内 结构判据成立] rect=0..600/600
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 已停止
+      P14-E：chat 700×600
+  截图: ui3-integration-148-low-height-chat-1200.png
+      148-low-height-chat-1200 [✓ 取景中心在视口内 结构判据成立] rect=0..650/650
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 已停止
+      P14-E：chat 1200×650
+  截图: ui3-integration-149-low-height-chat-1536.png
+      149-low-height-chat-1536 [✓ 取景中心在视口内 结构判据成立] rect=0..650/650
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 已停止
+      P14-E：chat 1536×650
+  截图: ui3-integration-150-popover-700-low.png
+      150-popover-700-low [✓ 取景中心在视口内 结构判据成立] rect=232..478/246
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理共 2 个可用模型
+      P14-E：700×600 Popover 不裁切
+  截图: ui3-integration-151-more-700-low.png
+      151-more-700-low [✓ 取景中心在视口内 结构判据成立] rect=21..557/536
+        取景元素文本: 模型与账户 模型供应商1 供应商与认证 Agent 能力 能力状态 扩展与 MCP MCP 配置 应用与更新 Pi GUI 与 Pi 更新 重启 Pi 诊断 运行状态与诊断 键盘与命令 命令面板… 键盘快捷键… 界面 外观与主题…
+      P14-E：700×600 More 可访问
+  截图: ui3-integration-152-modal-700-low.png
+      152-modal-700-low [✓ 取景中心在视口内 结构判据成立] rect=0..600/600
+        取景元素文本: 模型供应商这里添加的供应商会写进 pi 的 C:\Users\21022\.pi\agent\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。deepseek2 个模型 · openai-completions添加供应商重载 pi 配置关闭
+      P14-E：700×600 Modal 按钮可见
+  截图: ui3-integration-153-dpi-rounded-701.png
+      153-dpi-rounded-701 [✓ 取景中心在视口内 结构判据成立] rect=0..602/602
+        取景元素文本: 3 pi-GUI 任务 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 
+      P14-E：Electron DPI 取整后仍进入窄屏布局
+  截图: ui3-integration-154-session-switch-focus.png
+      154-session-switch-focus [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明 6% 
+      P14-E：真鼠标切换侧栏历史会话后 Composer 获焦点
+  截图: ui3-integration-155-extension-registry.png
+      155-extension-registry [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新发现 5 个 Extension · 加载状态仅在 Pi 提供证据时确认p
+      P15：Extension 发现列表和只读详情
+  截图: ui3-integration-156-web-activity.png
+      156-web-activity [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 2 项成功 2Searched th
+      P16：离线 Web Search 与 URL Fetch Activity
+  截图: ui3-integration-165-browser-activity.png
+      165-browser-activity [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 8 项失败 1 · 成功 7Sear
+      P20：真实浏览器 Activity，输入内容与页面正文不投影
+  截图: ui3-integration-157-subagent-workflow.png
+      157-subagent-workflow [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 12 项运行中 1 · 失败 1 ·
+      P17：真实结构化 child 状态与显式关系
+  截图: ui3-integration-158-subagent-background.png
+      158-subagent-background [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 12 项运行中 1 · 失败 1 ·
+      P17：后台启动与完成分开、loader 不启动 child
+  截图: ui3-integration-159-subagent-supervisor.png
+      159-subagent-supervisor [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 17 项运行中 1 · 失败 1 ·
+      P17 收口：Supervisor 安全 metadata，消息与路径不展示
+  截图: ui3-integration-160-memory-activity.png
+      160-memory-activity [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 22 项运行中 1 · 失败 1 ·
+      P18：Pi Memory 写入与检索 Activity，正文与绝对路径不铺开
+  截图: ui3-integration-161-memory-status.png
+      161-memory-status [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 22 项运行中 1 · 失败 1 ·
+      P18：忘记 / 状态 / Scratchpad 的语义与安全投影
+  截图: ui3-integration-163-memory-soft-failure.png
+      163-memory-soft-failure [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: 3 pi-GUI 3 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。操作 26 项运行中 1 · 失败 1 ·
+      P18-Fix：details={} 的 soft-failure 降级为「结果不可用」，不按请求参数猜成功
+  截图: ui3-integration-164-approval-request.png
+      164-approval-request [✓ 取景中心在视口内 结构判据成立] rect=0..746/746
+        取景元素文本: Allow rm -rf build/?A permission extension wants to run a destructive command. 来源：Pi Extension · 一次性决定（协议没有「总是允许」） · Pi 会在 30 秒后按默认值处理拒绝允许一次
+      P19：Extension 审批请求走统一确认层，只给一次性的允许 / 拒绝
+  截图: ui3-integration-167-usage-multicurrency.png
+      167-usage-multicurrency [✓ 取景中心在视口内 结构判据成立] rect=527..702/175
+        取景元素文本: 上下文6%上下文 61.23k / 1M输入 / 输出18.42k / 3.11k缓存读取40.2k累计成本$0.0842远端额度¥110.00 | $15.00
+      P21-Fix-2：DeepSeek 多币种额度只做并排摘要（不相加）
+  截图: ui3-integration-168-usage-quota-popover.png
+      168-usage-quota-popover [✓ 取景中心在视口内 结构判据成立] rect=301..620/319
+        取景元素文本: 背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (U
+      P21-Fix-2：额度 Popover 逐币种展示（DOM 构建，无 innerHTML 插值）
+  截图: ui3-integration-169-usage-unknown-unit.png
+      169-usage-unknown-unit [✓ 取景中心在视口内 结构判据成立] rect=527..702/175
+        取景元素文本: 上下文6%上下文 61.23k / 1M输入 / 输出18.42k / 3.11k缓存读取40.2k累计成本$0.0842远端额度75.00
+      P21-Fix-4：单位未知时只显示数值（不加 $ / ¥）
+  截图: ui3-integration-170-usage-unknown-unit-popover.png
+      170-usage-unknown-unit-popover [✓ 取景中心在视口内 结构判据成立] rect=302..620/318
+        取景元素文本: 背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (unknown-unit)刷新剩余额度75.0000已使用25总额度100单位未知：由供应商站点的展示单位设置决定，Pi GUI 不猜货币
+      P21-Fix-4：单位未知时 Popover 拆成数值行并标注「单位未知」
+  截图: ui3-integration-162-memory-setup.png
+      162-memory-setup [✓ 取景中心在视口内 结构判据成立] rect=285..722/437
+        取景元素文本: Pi Memory（长期记忆）跨会话的长期记忆检索与写入，由第三方 Extension 提供工具。已安装，加载状态未知 · 需重启 Pi第三方 Extension安装状态已安装启用配置已停用已加载未知（无法确认）运行观察本次 Pi 运行观察到调用：memory_forget · memory_read · memory
+      P22：Pi Memory 设置区（统一布局：固定命令 + 真实运行观察 + 限制）
+  截图: ui3-integration-171-capability-all.png
+      171-capability-all [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新共 20 项 · 已加载 8 · 未加载/不可用 3 · 未知 9「未知（
+      P22：All —— 一条统一界面回答「这个能力现在能不能用」
+  截图: ui3-integration-172-capability-web-setup.png
+      172-capability-web-setup [✓ 取景中心在视口内 结构判据成立] rect=285..876/591
+        取景元素文本: Web Access联网搜索与抓取网页正文：web_search / fetch_content / get_search_content。已加载第三方 Extension安装状态已安装启用配置已启用已加载已确认加载运行观察本次 Pi 运行观察到调用：fetch_content · web_search（共 2 个）需
+      P22：统一 setup 布局 —— 名称 / 用途 / **只画适用的字段** / 固定官方命令 / 一键安装 / 限制
+  截图: ui3-integration-173-capability-native-mcp.png
+      173-capability-native-mcp [✓ 取景中心在视口内 结构判据成立] rect=285..876/591
+        取景元素文本: Native MCP（pi 内置）pi 原生 MCP 集成：把外部 MCP server 的工具注册进 Pi，配置走 pi 自己的 mcp.json。原生 MCP 生效中pi 内置能力启用配置已启用已加载已确认加载运行观察本次 Pi 运行尚未观察到调用需要重启未知（无法确认）来源Native MCP 来自 Pi 的 b
+      P22：Native MCP 进入统一体验，但**不显示** npm 安装命令
+  截图: ui3-integration-174-capability-builtin.png
+      174-capability-builtin [✓ 取景中心在视口内 结构判据成立] rect=285..876/591
+        取景元素文本: builtin:mcppi 包自带的 built-in 扩展；第三方 Extension 注册同名能力时会被接管已安装，加载状态未知pi 内置扩展安装状态已安装来源编译在 pi 包里（dist/extensions/），不由 Extension Registry 的目录扫描发现，也没有 npm 安装命令。「包里带了它」
+      P22：built-in 能力 —— 「包里带了它」≠「当前启用了它」
+  截图: ui3-integration-175-capability-unknown.png
+      175-capability-unknown [✓ 取景中心在视口内 结构判据成立] rect=327..876/549
+        取景元素文本: Web Access联网搜索与抓取网页正文：web_search / fetch_content / get_search_content。状态未知（无法确认）第三方 Extension安装状态未知（无法确认）启用配置未知（无法确认）已加载未知（无法确认）运行观察本次 Pi 运行观察到调用：fetch_content 
+      P22：发现失败时是「未知（无法确认）」，绝不是「未安装」
+  截图: ui3-integration-176-capability-700.png
+      176-capability-700 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新共 20 项 · 已加载 8 · 未加载/不可用 3 · 未知 9「未知（
+      P22：700px 能力视图 —— 无横向溢出、无巨型卡片
+  截图: ui3-integration-177-capability-900.png
+      177-capability-900 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新共 20 项 · 已加载 8 · 未加载/不可用 3 · 未知 9「未知（
+      P22：900px 能力视图 —— 无横向溢出、无巨型卡片
+  截图: ui3-integration-178-capability-1200.png
+      178-capability-1200 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新共 20 项 · 已加载 8 · 未加载/不可用 3 · 未知 9「未知（
+      P22：1200px 能力视图 —— 无横向溢出、无巨型卡片
+  截图: ui3-integration-179-capability-1536.png
+      179-capability-1536 [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新共 20 项 · 已加载 8 · 未加载/不可用 3 · 未知 9「未知（
+      P22：1536px 能力视图 —— 无横向溢出、无巨型卡片
+  截图: ui3-integration-180-capability-search.png
+      180-capability-search [✓ 取景中心在视口内 结构判据成立] rect=46..746/700
+        取景元素文本: 扩展与能力能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。AllCapabilitiesExtensionsSkillsMCP刷新共 20 项 · 已加载 8 · 未加载/不可用 3 · 未知 9 · 当
+      P22：按名称 / 用途 / 状态搜索（搜索与过滤器叠加）
+  截图: ui3-integration-UX-MENU-01-project-row-hover.png
+      UX-MENU-01-project-row-hover [✓ 取景中心在视口内 结构判据成立] rect=170..402/232
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes
+      P24 侧栏：项目行 hover —— 行尾三点显形，行仍然是紧凑的一行
+  截图: ui3-integration-UX-MENU-02-project-menu-open.png
+      UX-MENU-02-project-menu-open [✓ 取景中心在视口内 结构判据成立] rect=214..333/119
+        取景元素文本: 工作区管理项目设置移除项目
+      P24 / P32 侧栏：项目菜单 —— 工作区管理 / 项目设置 / 分隔线 / 移除项目（danger）
+  截图: ui3-integration-UX-MENU-05a-danger-at-rest.png
+      UX-MENU-05a-danger-at-rest [✓ 取景中心在视口内 结构判据成立] rect=214..333/119
+        取景元素文本: 工作区管理项目设置移除项目
+      P24 侧栏：危险项的静止态 —— 不常驻鲜红，只比普通项略暗一档
+  截图: ui3-integration-UX-MENU-05-danger-item-hover.png
+      UX-MENU-05-danger-item-hover [✓ 取景中心在视口内 结构判据成立] rect=214..333/119
+        取景元素文本: 工作区管理项目设置移除项目
+      P24 侧栏：危险项 hover —— 这时才有轻微红色
+  截图: ui3-integration-UX-MENU-05b-menu-escaped.png
+      UX-MENU-05b-menu-escaped [✓ 取景中心在视口内 结构判据成立] rect=170..402/232
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes
+      P24 侧栏：Escape 关闭菜单并把焦点还给三点
+  截图: ui3-integration-UX-MENU-02b-remove-confirm.png
+      UX-MENU-02b-remove-confirm [✓ 取景中心在视口内 结构判据成立] rect=384..516/132
+        取景元素文本: 移除这个项目？「pi-GUI」会从 Pi GUI 的项目列表里移除，不会删除磁盘上的项目文件。取消移除项目
+      P24 侧栏：移除项目前确认 —— 只移除列表，不删磁盘文件
+  截图: ui3-integration-UX-MENU-03-session-row-hover.png
+      UX-MENU-03-session-row-hover [✓ 取景中心在视口内 结构判据成立] rect=170..402/232
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes
+      P24 侧栏：会话行 hover —— 行尾三点显形，标题与时间仍在同一行
+  截图: ui3-integration-UX-MENU-04-session-menu-open.png
+      UX-MENU-04-session-menu-open [✓ 取景中心在视口内 结构判据成立] rect=251..399/148
+        取景元素文本: 重命名归档删除会话重命名：请先打开这条会话。
+      P24 侧栏：统一会话菜单，历史会话的重命名禁用并解释
+  截图: ui3-integration-UX-SESSION-MENU-current-700x600.png
+      UX-SESSION-MENU-current-700x600 [✓ 取景中心在视口内 结构判据成立] rect=285..449/164
+        取景元素文本: 重命名归档删除会话当前会话正在使用，请先切换到其它会话再归档或删除。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-SESSION-MENU-history-700x600.png
+      UX-SESSION-MENU-history-700x600 [✓ 取景中心在视口内 结构判据成立] rect=251..399/148
+        取景元素文本: 重命名归档删除会话重命名：请先打开这条会话。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-SESSION-MENU-current-900x700.png
+      UX-SESSION-MENU-current-900x700 [✓ 取景中心在视口内 结构判据成立] rect=285..449/164
+        取景元素文本: 重命名归档删除会话当前会话正在使用，请先切换到其它会话再归档或删除。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-SESSION-MENU-history-900x700.png
+      UX-SESSION-MENU-history-900x700 [✓ 取景中心在视口内 结构判据成立] rect=251..399/148
+        取景元素文本: 重命名归档删除会话重命名：请先打开这条会话。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-SESSION-MENU-current-1200x800.png
+      UX-SESSION-MENU-current-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=285..449/164
+        取景元素文本: 重命名归档删除会话当前会话正在使用，请先切换到其它会话再归档或删除。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-SESSION-MENU-history-1200x800.png
+      UX-SESSION-MENU-history-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=251..399/148
+        取景元素文本: 重命名归档删除会话重命名：请先打开这条会话。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-SESSION-MENU-current-1536x900.png
+      UX-SESSION-MENU-current-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=285..449/164
+        取景元素文本: 重命名归档删除会话当前会话正在使用，请先切换到其它会话再归档或删除。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-SESSION-MENU-history-1536x900.png
+      UX-SESSION-MENU-history-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=251..399/148
+        取景元素文本: 重命名归档删除会话重命名：请先打开这条会话。
+      统一菜单：当前与历史会话的受限操作有可见说明
+  截图: ui3-integration-UX-CAP-01-native-clean-detail.png
+      UX-CAP-01-native-clean-detail [✓ 取景中心在视口内 结构判据成立] rect=285..876/591
+        取景元素文本: Native MCP（pi 内置）pi 原生 MCP 集成：把外部 MCP server 的工具注册进 Pi，配置走 pi 自己的 mcp.json。原生 MCP 生效中pi 内置能力启用配置已启用已加载已确认加载运行观察本次 Pi 运行尚未观察到调用需要重启未知（无法确认）来源Native MCP 来自 Pi 的 b
+      P24 Capability：Native MCP 详情只留适用的字段（不再是一串「不适用」）
+  截图: ui3-integration-UX-CAP-02-install-available.png
+      UX-CAP-02-install-available [✓ 取景中心在视口内 结构判据成立] rect=285..876/591
+        取景元素文本: Subagents在当前对话内把工作委派给子 Agent：subagent / subagents_enable / bg_wait / subagent_supervisor。未安装第三方 Extension安装状态未安装启用配置未知（无法确认）已加载未知（无法确认）运行观察本次 Pi 运行尚未观察到调用需要重启未知
+      P24 Capability：未安装的第三方能力 —— 一键安装 + 复制命令
+  截图: ui3-integration-UX-CAP-03a-install-confirm.png
+      UX-CAP-03a-install-confirm [✓ 取景中心在视口内 结构判据成立] rect=291..609/317
+        取景元素文本: 安装 Subagents？将使用当前 Pi 的官方安装命令安装： pi install npm:pi-subagents 该 Extension 会以 Pi 进程的权限运行，可能访问本地文件、执行命令或访问网络。只应安装你信任的第三方代码。 安装范围：用户级 安装完成后 Pi GUI 会自动重新启动 Pi，使 Exte
+      P24 Capability：安装前确认 —— 命令 / 权限 / 用户级 / 会自动重启 Pi
+  截图: ui3-integration-UX-CAP-03b-install-progress.png
+      UX-CAP-03b-install-progress [✓ 取景中心在视口内 结构判据成立] rect=248..913/664
+        取景元素文本: Subagents在当前对话内把工作委派给子 Agent：subagent / subagents_enable / bg_wait / subagent_supervisor。未安装第三方 Extension安装状态未安装启用配置未知（无法确认）已加载未知（无法确认）运行观察本次 Pi 运行尚未观察到调用需要重启未知
+      P24 Capability：安装中… —— 按钮禁用、禁止重复提交
+  截图: ui3-integration-UX-CAP-03c-install-unconfirmed.png
+      UX-CAP-03c-install-unconfirmed [✓ 取景中心在视口内 结构判据成立] rect=248..913/664
+        取景元素文本: Subagents在当前对话内把工作委派给子 Agent：subagent / subagents_enable / bg_wait / subagent_supervisor。未安装第三方 Extension安装状态未安装启用配置未知（无法确认）已加载未知（无法确认）运行观察本次 Pi 运行尚未观察到调用需要重启未知
+      P24 Capability：命令跑完但 Registry 还没确认到它 —— 如实显示「尚未确认」，不伪造已加载
+  截图: ui3-integration-181-diagnostics-upgrade.png
+      181-diagnostics-upgrade [✓ 取景中心在视口内 结构判据成立] rect=99..801/702
+        取景元素文本: 诊断这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。版本Pi GUI v0.15.0检查更新当前已是最新版本v0.15.0PiPi 0.99.2检查 Pi 更新更新到 1.0.0新版本 1.0.0 可用该版本尚未经过 Pi 
+      P23：诊断面板 —— 版本核对 / 能力 probe / 兼容矩阵 / Native MCP / Extension 版本 + 复制诊断摘要
+  截图: ui3-integration-182-diagnostics-700.png
+      182-diagnostics-700 [✓ 取景中心在视口内 结构判据成立] rect=99..801/702
+        取景元素文本: 诊断这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。版本Pi GUI v0.15.0检查更新当前已是最新版本v0.15.0PiPi 0.99.2检查 Pi 更新更新到 1.0.0新版本 1.0.0 可用该版本尚未经过 Pi 
+      P23：700px —— 诊断面板按钮换行、内容区滚动、无横向溢出
+  截图: ui3-integration-183-command-palette.png
+      183-command-palette [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 视图开发进程全局设置应用与更新视图对话任务（Planner）文件变更扩展（Extensions）能力视图（Capabilities）SkillsMCP用量与额度会话新对话搜索会话会话统计重命名会话导出会话为 HTML执行压缩上下文重启 Pi全局项目设置模型供应商供应商与认证诊断复制诊断摘要键盘快捷键没有匹配的命令
+      P24：命令面板（默认列表就是常用动作，不含不可执行项）
+  截图: ui3-integration-184-palette-search.png
+      184-palette-search [✓ 取景中心在视口内 结构判据成立] rect=0..900/900
+        取景元素文本: 会话会话统计视图对话会话新对话搜索会话重命名会话导出会话为 HTML没有匹配的命令
+      P24：搜索（中文名 / 关键词 / 组名都能命中，会话条目按需出现）
+  截图: ui3-integration-184b-palette-focus-restored.png
+      184b-palette-focus-restored [✓ 取景中心在视口内 结构判据成立] rect=782..882/100
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P24：Esc 关面板后焦点回到输入框（不是丢在 body 上）
+  截图: ui3-integration-185-shortcut-help.png
+      185-shortcut-help [✓ 取景中心在视口内 结构判据成立] rect=113..787/674
+        取景元素文本: 键盘快捷键Windows / Linux 映射。在输入框里打字时不会被抢 —— 不带修饰键的组合一律让给文本输入。通用打开命令面板Ctrl+K打开命令面板（备用键）Ctrl+Shift+P键盘快捷键帮助Ctrl+/视图切到对话Alt+1切到任务Alt+2切到文件变更Alt+3切到扩展与能力Alt+4输入与弹层发送消息E
+      P24：快捷键帮助（注册表渲染 + 当前平台映射 + 既有输入键位）
+  截图: ui3-integration-186-draft-restore.png
+      186-draft-restore [✓ 取景中心在视口内 结构判据成立] rect=782..882/100
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P24：未发送草稿在刷新后恢复（只存纯文本，按项目 + 会话隔离）
+  截图: ui3-integration-186b-draft-cleared.png
+      186b-draft-cleared [✓ 取景中心在视口内 结构判据成立] rect=782..882/100
+        取景元素文本: 6% DeepSeek V4 Pro 思考 high 思考说明 停止
+      P24：清空输入框后本地草稿被删除（不留幽灵草稿）
+  截图: ui3-integration-187-startup-error.png
+      187-startup-error [✓ 取景中心在视口内 结构判据成立] rect=54..133/79
+        取景元素文本: pi 启动失败无法启动 pi：spawn pi ENOENT 确认 pi 已安装并在 PATH 中，或用环境变量 PI_BIN 指定完整路径。重启 Pi打开诊断✕
+      P24：pi 启动失败 —— 常驻说明 + 后端给的下一步 + 两个已有入口
+  截图: ui3-integration-188-connection-lost.png
+      188-connection-lost [✓ 取景中心在视口内 结构判据成立] rect=54..133/79
+        取景元素文本: pi 已退出无法启动 pi：spawn pi ENOENT 正在跑的那一轮已经结束；重启 pi 之后可以继续用同一个会话。重启 Pi打开诊断✕
+      P24：pi 已退出 —— 同一套文案与同一个下一步
+  截图: ui3-integration-189-connection-restored.png
+      189-connection-restored [✓ 取景中心在视口内 结构判据成立] rect=0..0/0
+        取景元素文本: 
+      P24：恢复连接后状态条自动收起（不留残影）
+  截图: ui3-integration-190-daily-700x600.png
+      190-daily-700x600 [✓ 取景中心在视口内 结构判据成立] rect=0..600/600
+        取景元素文本: 视图开发进程全局设置应用与更新视图对话任务（Planner）文件变更扩展（Extensions）能力视图（Capabilities）SkillsMCP用量与额度会话新对话搜索会话会话统计重命名会话导出会话为 HTML执行压缩上下文重启 Pi全局项目设置模型供应商供应商与认证诊断复制诊断摘要键盘快捷键没有匹配的命令
+      P24：700×600 命令面板 —— 不裁切、不横向溢出
+  截图: ui3-integration-191-daily-701x602.png
+      191-daily-701x602 [✓ 取景中心在视口内 结构判据成立] rect=0..602/602
+        取景元素文本: 视图开发进程全局设置应用与更新视图对话任务（Planner）文件变更扩展（Extensions）能力视图（Capabilities）SkillsMCP用量与额度会话新对话搜索会话会话统计重命名会话导出会话为 HTML执行压缩上下文重启 Pi全局项目设置模型供应商供应商与认证诊断复制诊断摘要键盘快捷键没有匹配的命令
+      P24：701×602 命令面板 —— 不裁切、不横向溢出
+  截图: ui3-integration-192-composer-not-covering.png
+      192-composer-not-covering [✓ 取景中心在视口内 结构判据成立] rect=46..560/514
+        取景元素文本: 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你请补全 README 的测试说明Pi这是 README 会话的历史消息：测试说明已整理完成。 请补全 README 的测试说明
+      P24：低高度（900×560）输入区不遮消息、不横向溢出
+  截图: ui3-integration-UX-01-scrollbars-palette.png
+      UX-01-scrollbars-palette [✓ 取景中心在视口内 结构判据成立] rect=108..574/466
+        取景元素文本: 视图开发进程全局设置应用与更新视图对话任务（Planner）文件变更扩展（Extensions）能力视图（Capabilities）SkillsMCP用量与额度会话新对话搜索会话会话统计重命名会话导出会话为 HTML执行压缩上下文重启 Pi全局项目设置模型供应商供应商与认证诊断复制诊断摘要键盘快捷键没有匹配的命令
+      UX-01：命令面板 —— 深色细滚动条（不是 Windows 默认亮白条）
+  截图: ui3-integration-UX-02-scrollbars-diagnostics.png
+      UX-02-scrollbars-diagnostics [✓ 取景中心在视口内 结构判据成立] rect=202..740/538
+        取景元素文本: 版本Pi GUI v0.15.0检查更新当前已是最新版本v0.15.0PiPi 0.99.2检查 Pi 更新更新到 1.0.0新版本 1.0.0 可用该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。系统Windows_NT 10.0.26100 x64Nodev24.14.
+      UX-02：诊断弹层 —— 中间滚动区同样是深色细滚动条
+  截图: ui3-integration-UX-03-sidebar-project-expanded.png
+      UX-03-sidebar-project-expanded [✓ 取景中心在视口内 结构判据成立] rect=170..402/232
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes
+      UX-03：项目行与会话行是同一套紧凑层级（路径不再占第二行），当前项目默认展开
+  截图: ui3-integration-UX-04-sidebar-project-collapsed.png
+      UX-04-sidebar-project-collapsed [✓ 取景中心在视口内 结构判据成立] rect=180..214/34
+        取景元素文本: pi-GUI
+      UX-04：点箭头折叠该项目的会话（只剩项目行，且箭头语义同步）
+  截图: ui3-integration-UX-05-conversation-nav-compact.png
+      UX-05-conversation-nav-compact [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 第 1 个问题：请检查模块 #1 的实现第 2 个问题：请检查模块 #2 的实现第 3 个问题：请检查模块 #3 的实现第 4 个问题：请检查模块 #4 的实现第 5 个问题：请检查模块 #5 的实现第 6 个问题：请检查模块 #6 的实现第 7 个问题：请检查模块 #7 的实现第 8 个问题：请检查模块 #8 的实现
+      UX-05：24 次提问的 marker 聚成一组紧凑短线（不再按内容比例铺满整屏）
+      UX-06 第一条：.stage-head 位置不变 [✓]
+      UX-06 第一条：#chatView 的 top/bottom 不变 [✓]
+      UX-06 第一条：输入区位置不变 [✓]
+      UX-06 第一条：只有 #stream.scrollTop 变了 [✓]
+      UX-06 第一条：.stage 没有被滚动（恒为 0） [✓]
+      UX-06 第一条：文档没有被滚动 [✓]
+      UX-06 第一条：目标消息落在滚动区里、且留了顶部余量（或已到底 clamp） [✓]
+      UX-06 中间一条：.stage-head 位置不变 [✓]
+      UX-06 中间一条：#chatView 的 top/bottom 不变 [✓]
+      UX-06 中间一条：输入区位置不变 [✓]
+      UX-06 中间一条：只有 #stream.scrollTop 变了 [✓]
+      UX-06 中间一条：.stage 没有被滚动（恒为 0） [✓]
+      UX-06 中间一条：文档没有被滚动 [✓]
+      UX-06 中间一条：目标消息落在滚动区里、且留了顶部余量（或已到底 clamp） [✓]
+      UX-06 最后一条：.stage-head 位置不变 [✓]
+      UX-06 最后一条：#chatView 的 top/bottom 不变 [✓]
+      UX-06 最后一条：输入区位置不变 [✓]
+      UX-06 最后一条：只有 #stream.scrollTop 变了 [✓]
+      UX-06 最后一条：.stage 没有被滚动（恒为 0） [✓]
+      UX-06 最后一条：文档没有被滚动 [✓]
+      UX-06 最后一条：目标消息落在滚动区里、且留了顶部余量（或已到底 clamp） [✓]
+      UX-06 很长回答之后的那一条：.stage-head 位置不变 [✓]
+      UX-06 很长回答之后的那一条：#chatView 的 top/bottom 不变 [✓]
+      UX-06 很长回答之后的那一条：输入区位置不变 [✓]
+      UX-06 很长回答之后的那一条：只有 #stream.scrollTop 变了 [✓]
+      UX-06 很长回答之后的那一条：.stage 没有被滚动（恒为 0） [✓]
+      UX-06 很长回答之后的那一条：文档没有被滚动 [✓]
+      UX-06 很长回答之后的那一条：目标消息落在滚动区里、且留了顶部余量（或已到底 clamp） [✓]
+      UX-06 历史恢复之后：.stage-head 位置不变 [✓]
+      UX-06 历史恢复之后：#chatView 的 top/bottom 不变 [✓]
+      UX-06 历史恢复之后：输入区位置不变 [✓]
+      UX-06 历史恢复之后：只有 #stream.scrollTop 变了 [✓]
+      UX-06 历史恢复之后：.stage 没有被滚动（恒为 0） [✓]
+      UX-06 历史恢复之后：文档没有被滚动 [✓]
+      UX-06 历史恢复之后：目标消息落在滚动区里、且留了顶部余量（或已到底 clamp） [✓]
+  截图: ui3-integration-UX-06-conversation-nav-after-jump.png
+      UX-06-conversation-nav-after-jump [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你第 1 个问题：请检查模块 #1 的实现Pi第 1 个回答。你第 2 个问题：请检查模块 #2 的实现Pi第 2 个回答。你第 3 个问题：请检查模块 #3
+      UX-06：点 marker 之后 —— 顶栏 / 正文 / 输入区都没动，只有正文自己滚了
+  截图: ui3-integration-UX-07-titlebar-chat.png
+      UX-07-titlebar-chat [✓ 取景中心在视口内 结构判据成立] rect=0..46/46
+        取景元素文本: 3 pi-GUI 3
+      UX-07：Chat 顶栏 —— 明确背景、和原生按钮同色、贴着窗口顶部的一条
+      UX-08 切到「任务」后顶栏仍然稳定 [✓]
+      UX-08 切到「文件变更」后顶栏仍然稳定 [✓]
+      UX-08 切到「扩展」后顶栏仍然稳定 [✓]
+      UX-08 切到「对话」后顶栏仍然稳定 [✓]
+      UX-08 长对话滚动后顶栏仍然稳定 [✓]
+      UX-08 开关命令面板后顶栏仍然稳定 [✓]
+  截图: ui3-integration-UX-08-titlebar-after-view-switch.png
+      UX-08-titlebar-after-view-switch [✓ 取景中心在视口内 结构判据成立] rect=46..900/854
+        取景元素文本: 正在恢复工作区… 正在连接上次使用的项目。 开始一个任务 在下方输入你想完成的事。 打开项目，开始工作 选择 Pi 将要读写和执行命令的项目文件夹。 添加文件夹 你第 1 个问题：请检查模块 #1 的实现Pi第 1 个回答。你第 2 个问题：请检查模块 #2 的实现Pi第 2 个回答。你第 3 个问题：请检查模块 #3
+      UX-08：Chat / 任务 / 文件变更 / 扩展来回切换、滚动、开关面板之后，顶栏位置与颜色不变
+      UX-09 700×600：顶栏稳定 [✓]
+      UX-09 700×600：项目行与会话行高度接近 [✓]
+      UX-09 700×600：导航聚簇或按策略隐藏 [✓]
+      UX-09 700×600：没有整体横向溢出 [✓]
+      UX-09 900×700：顶栏稳定 [✓]
+      UX-09 900×700：项目行与会话行高度接近 [✓]
+      UX-09 900×700：导航聚簇或按策略隐藏 [✓]
+      UX-09 900×700：没有整体横向溢出 [✓]
+      UX-09 1200×800：顶栏稳定 [✓]
+      UX-09 1200×800：项目行与会话行高度接近 [✓]
+      UX-09 1200×800：导航聚簇或按策略隐藏 [✓]
+      UX-09 1200×800：没有整体横向溢出 [✓]
+      UX-09 1536×900：顶栏稳定 [✓]
+      UX-09 1536×900：项目行与会话行高度接近 [✓]
+      UX-09 1536×900：导航聚簇或按策略隐藏 [✓]
+      UX-09 1536×900：没有整体横向溢出 [✓]
+  截图: ui3-integration-UX-09-titlebar-narrow-700x600.png
+      UX-09-titlebar-narrow-700x600 [✓ 取景中心在视口内 结构判据成立] rect=0..46/46
+        取景元素文本: 3 pi-GUI 3
+      UX-09：700×600 关键布局抽查 —— 顶栏仍是同一色、同一条
+  截图: ui3-integration-UX-MODEL-01-provider-collapsed-700x600.png
+      UX-MODEL-01-provider-collapsed-700x600 [✓ 取景中心在视口内 结构判据成立] rect=168..478/310
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理›zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      Provider 默认折叠，当前组可见
+  截图: ui3-integration-UX-MODEL-02-provider-expanded-700x600.png
+      UX-MODEL-02-provider-expanded-700x600 [✓ 取景中心在视口内 结构判据成立] rect=119..478/359
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      小 Provider 整行展开，无需滚过百模型
+  截图: ui3-integration-UX-MODEL-03-many-models-700x600.png
+      UX-MODEL-03-many-models-700x600 [✓ 取景中心在视口内 ✗ 结构判据不成立: UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出] rect=8..478/470
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      100 模型展开，仅 picker 内滚动、长 id 截断
+  截图: ui3-integration-UX-MODEL-04-current-provider-after-switch-700x600.png
+      UX-MODEL-04-current-provider-after-switch-700x600 [✓ 取景中心在视口内 结构判据成立] rect=8..478/470
+        取景元素文本: 选择模型zhipu / glm⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-m
+      Pi 确认跨 Provider 切换后，当前组展开且对勾唯一
+  截图: ui3-integration-UX-MODEL-05-thinking-after-model-switch-700x600.png
+      UX-MODEL-05-thinking-after-model-switch-700x600 [✓ 取景中心在视口内 结构判据成立] rect=306..478/172
+        取景元素文本: 思考等级off不思考，最快low轻量思考medium中等思考high深度思考
+      模型切换后 medium 生效，候选四档没有 max
+  截图: ui3-integration-UX-MODEL-01-provider-collapsed-900x700.png
+      UX-MODEL-01-provider-collapsed-900x700 [✓ 取景中心在视口内 结构判据成立] rect=268..578/310
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理›zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      Provider 默认折叠，当前组可见
+  截图: ui3-integration-UX-MODEL-02-provider-expanded-900x700.png
+      UX-MODEL-02-provider-expanded-900x700 [✓ 取景中心在视口内 结构判据成立] rect=219..578/359
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      小 Provider 整行展开，无需滚过百模型
+  截图: ui3-integration-UX-MODEL-03-many-models-900x700.png
+      UX-MODEL-03-many-models-900x700 [✓ 取景中心在视口内 ✗ 结构判据不成立: UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出] rect=8..578/570
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      100 模型展开，仅 picker 内滚动、长 id 截断
+  截图: ui3-integration-UX-MODEL-04-current-provider-after-switch-900x700.png
+      UX-MODEL-04-current-provider-after-switch-900x700 [✓ 取景中心在视口内 结构判据成立] rect=8..578/570
+        取景元素文本: 选择模型zhipu / glm⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-m
+      Pi 确认跨 Provider 切换后，当前组展开且对勾唯一
+  截图: ui3-integration-UX-MODEL-05-thinking-after-model-switch-900x700.png
+      UX-MODEL-05-thinking-after-model-switch-900x700 [✓ 取景中心在视口内 结构判据成立] rect=406..578/172
+        取景元素文本: 思考等级off不思考，最快low轻量思考medium中等思考high深度思考
+      模型切换后 medium 生效，候选四档没有 max
+  截图: ui3-integration-UX-MODEL-01-provider-collapsed-1200x800.png
+      UX-MODEL-01-provider-collapsed-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=364..674/310
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理›zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      Provider 默认折叠，当前组可见
+  截图: ui3-integration-UX-MODEL-02-provider-expanded-1200x800.png
+      UX-MODEL-02-provider-expanded-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=315..674/359
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      小 Provider 整行展开，无需滚过百模型
+  截图: ui3-integration-UX-MODEL-03-many-models-1200x800.png
+      UX-MODEL-03-many-models-1200x800 [✓ 取景中心在视口内 ✗ 结构判据不成立: UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出] rect=8..674/666
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      100 模型展开，仅 picker 内滚动、长 id 截断
+  截图: ui3-integration-UX-MODEL-04-current-provider-after-switch-1200x800.png
+      UX-MODEL-04-current-provider-after-switch-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=8..674/666
+        取景元素文本: 选择模型zhipu / glm⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-m
+      Pi 确认跨 Provider 切换后，当前组展开且对勾唯一
+  截图: ui3-integration-UX-MODEL-05-thinking-after-model-switch-1200x800.png
+      UX-MODEL-05-thinking-after-model-switch-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=502..674/172
+        取景元素文本: 思考等级off不思考，最快low轻量思考medium中等思考high深度思考
+      模型切换后 medium 生效，候选四档没有 max
+  截图: ui3-integration-UX-MODEL-01-provider-collapsed-1536x900.png
+      UX-MODEL-01-provider-collapsed-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=464..774/310
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理›zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      Provider 默认折叠，当前组可见
+  截图: ui3-integration-UX-MODEL-02-provider-expanded-1536x900.png
+      UX-MODEL-02-provider-expanded-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=415..774/359
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理›openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      小 Provider 整行展开，无需滚过百模型
+  截图: ui3-integration-UX-MODEL-03-many-models-1536x900.png
+      UX-MODEL-03-many-models-1536x900 [✓ 取景中心在视口内 ✗ 结构判据不成立: UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出] rect=8..774/766
+        取景元素文本: 选择模型deepseek / deepseek-v4-pro⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-
+      100 模型展开，仅 picker 内滚动、长 id 截断
+  截图: ui3-integration-UX-MODEL-04-current-provider-after-switch-1536x900.png
+      UX-MODEL-04-current-provider-after-switch-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=8..774/766
+        取景元素文本: 选择模型zhipu / glm⌄deepseek2DeepSeek V4 Pro能力未知DeepSeek V4 Flash推理⌄zhipu1GLM推理⌄openrouter100router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-m
+      Pi 确认跨 Provider 切换后，当前组展开且对勾唯一
+  截图: ui3-integration-UX-MODEL-05-thinking-after-model-switch-1536x900.png
+      UX-MODEL-05-thinking-after-model-switch-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=602..774/172
+        取景元素文本: 思考等级off不思考，最快low轻量思考medium中等思考high深度思考
+      模型切换后 medium 生效，候选四档没有 max
+  截图: ui3-integration-UX-SIDEBAR-project-sessions-700x600.png
+      UX-SIDEBAR-project-sessions-700x600 [✓ 取景中心在视口内 结构判据成立] rect=169..514/345
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes简单问候刚刚完全访问权限设置刚刚你好刚刚
+      项目标题、圆点会话和独立展开；预览不切聊天
+  截图: ui3-integration-UX-SIDEBAR-project-sessions-900x700.png
+      UX-SIDEBAR-project-sessions-900x700 [✓ 取景中心在视口内 结构判据成立] rect=170..515/345
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes简单问候刚刚完全访问权限设置刚刚你好刚刚
+      项目标题、圆点会话和独立展开；预览不切聊天
+  截图: ui3-integration-UX-SIDEBAR-project-sessions-1200x800.png
+      UX-SIDEBAR-project-sessions-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=170..515/345
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes简单问候刚刚完全访问权限设置刚刚你好刚刚
+      项目标题、圆点会话和独立展开；预览不切聊天
+  截图: ui3-integration-UX-SIDEBAR-project-sessions-1536x900.png
+      UX-SIDEBAR-project-sessions-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=170..515/345
+        取景元素文本: pi-GUI⌕活跃已归档全部发酵罐空气分布器设计核算2 分钟前帮我把 README 的测试那节补全1 小时前检查 server.js 的路由顺序2 小时前已归档 1 条fermenter-notes简单问候刚刚完全访问权限设置刚刚你好刚刚
+      项目标题、圆点会话和独立展开；预览不切聊天
+  截图: ui3-integration-P25-auth-native-list-700x600.png
+      P25-auth-native-list-700x600 [✓ 取景中心在视口内 结构判据成立] rect=66..534/468
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：pi · 模型：0ChatGPT 订阅登录API KeyAPI Key 请在官方 Pi 交互终端配置；
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-browser-700x600.png
+      P25-auth-browser-700x600 [✓ 取景中心在视口内 结构判据成立] rect=197..365/168
+        取景元素文本: 等待浏览器授权离线视觉夹具：仅展示安全认证状态打开授权页面取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-device-700x600.png
+      P25-auth-device-700x600 [✓ 取景中心在视口内 结构判据成立] rect=188..413/225
+        取景元素文本: 在浏览器中输入设备码离线视觉夹具：仅展示安全认证状态打开授权页面DEMO-2048取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-select-700x600.png
+      P25-auth-select-700x600 [✓ 取景中心在视口内 结构判据成立] rect=185..416/231
+        取景元素文本: 等待授权回复请选择 Pi 提供的登录方式选择认证方法浏览器授权设备码授权提交授权回复取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-unknown-700x600.png
+      P25-auth-unknown-700x600 [✓ 取景中心在视口内 结构判据成立] rect=66..534/468
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态当前 Pi 未提供可用认证接口。请使用官方交互式 pi 的 /login 与 /logout。已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：unkn
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-connected-700x600.png
+      P25-auth-connected-700x600 [✓ 取景中心在视口内 结构判据成立] rect=66..534/468
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用ChatGPT已连接（本机凭据）来源：pi · 模型：0ChatGPT 订阅登录API Key移除已存凭据API Key 请在官方 Pi 交互终端配置；先运行 pi，再
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-native-list-900x700.png
+      P25-auth-native-list-900x700 [✓ 取景中心在视口内 结构判据成立] rect=77..623/546
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：pi · 模型：0ChatGPT 订阅登录API KeyAPI Key 请在官方 Pi 交互终端配置；
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-browser-900x700.png
+      P25-auth-browser-900x700 [✓ 取景中心在视口内 结构判据成立] rect=208..376/168
+        取景元素文本: 等待浏览器授权离线视觉夹具：仅展示安全认证状态打开授权页面取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-device-900x700.png
+      P25-auth-device-900x700 [✓ 取景中心在视口内 结构判据成立] rect=208..433/225
+        取景元素文本: 在浏览器中输入设备码离线视觉夹具：仅展示安全认证状态打开授权页面DEMO-2048取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-select-900x700.png
+      P25-auth-select-900x700 [✓ 取景中心在视口内 结构判据成立] rect=208..439/231
+        取景元素文本: 等待授权回复请选择 Pi 提供的登录方式选择认证方法浏览器授权设备码授权提交授权回复取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-unknown-900x700.png
+      P25-auth-unknown-900x700 [✓ 取景中心在视口内 结构判据成立] rect=77..623/546
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态当前 Pi 未提供可用认证接口。请使用官方交互式 pi 的 /login 与 /logout。已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：unkn
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-connected-900x700.png
+      P25-auth-connected-900x700 [✓ 取景中心在视口内 结构判据成立] rect=77..623/546
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用ChatGPT已连接（本机凭据）来源：pi · 模型：0ChatGPT 订阅登录API Key移除已存凭据API Key 请在官方 Pi 交互终端配置；先运行 pi，再
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-native-list-1200x800.png
+      P25-auth-native-list-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=88..712/624
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：pi · 模型：0ChatGPT 订阅登录API KeyAPI Key 请在官方 Pi 交互终端配置；
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-browser-1200x800.png
+      P25-auth-browser-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=219..387/168
+        取景元素文本: 等待浏览器授权离线视觉夹具：仅展示安全认证状态打开授权页面取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-device-1200x800.png
+      P25-auth-device-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=219..444/225
+        取景元素文本: 在浏览器中输入设备码离线视觉夹具：仅展示安全认证状态打开授权页面DEMO-2048取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-select-1200x800.png
+      P25-auth-select-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=219..450/231
+        取景元素文本: 等待授权回复请选择 Pi 提供的登录方式选择认证方法浏览器授权设备码授权提交授权回复取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-unknown-1200x800.png
+      P25-auth-unknown-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=88..712/624
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态当前 Pi 未提供可用认证接口。请使用官方交互式 pi 的 /login 与 /logout。已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：unkn
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-connected-1200x800.png
+      P25-auth-connected-1200x800 [✓ 取景中心在视口内 结构判据成立] rect=89..711/623
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用ChatGPT已连接（本机凭据）来源：pi · 模型：0ChatGPT 订阅登录API Key移除已存凭据API Key 请在官方 Pi 交互终端配置；先运行 pi，再
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-native-list-1536x900.png
+      P25-auth-native-list-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=127..773/647
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：pi · 模型：0ChatGPT 订阅登录API KeyAPI Key 请在官方 Pi 交互终端配置；
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-browser-1536x900.png
+      P25-auth-browser-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=230..398/168
+        取景元素文本: 等待浏览器授权离线视觉夹具：仅展示安全认证状态打开授权页面取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-device-1536x900.png
+      P25-auth-device-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=230..455/225
+        取景元素文本: 在浏览器中输入设备码离线视觉夹具：仅展示安全认证状态打开授权页面DEMO-2048取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-select-1536x900.png
+      P25-auth-select-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=230..461/231
+        取景元素文本: 等待授权回复请选择 Pi 提供的登录方式选择认证方法浏览器授权设备码授权提交授权回复取消认证关闭面板不会取消认证；再次打开可继续。
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-unknown-1536x900.png
+      P25-auth-unknown-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=99..801/702
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态当前 Pi 未提供可用认证接口。请使用官方交互式 pi 的 /login 与 /logout。已配置 / 已认证 / 当前使用其他 Pi 支持的供应商（2）ChatGPT未知（无法确认）来源：unkn
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+  截图: ui3-integration-P25-auth-connected-1536x900.png
+      P25-auth-connected-1536x900 [✓ 取景中心在视口内 结构判据成立] rect=139..761/623
+        取景元素文本: 供应商与认证状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。刷新认证状态已配置 / 已认证 / 当前使用ChatGPT已连接（本机凭据）来源：pi · 模型：0ChatGPT 订阅登录API Key移除已存凭据API Key 请在官方 Pi 交互终端配置；先运行 pi，再
+      P25：离线认证状态、灰阶有界弹层与稳定 Composer
+页面异常: 无
+取景判据: ✗ 4 条 —— UX-MODEL-03-many-models-700x600: 结构判据不成立 —— UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出；UX-MODEL-03-many-models-900x700: 结构判据不成立 —— UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出；UX-MODEL-03-many-models-1200x800: 结构判据不成立 —— UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出；UX-MODEL-03-many-models-1536x900: 结构判据不成立 —— UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出
+取景断言数量: 1761（元素存在 / 取景中心 / 各关键词 / 各结构判据 / UX；失败 4）
+
+完成

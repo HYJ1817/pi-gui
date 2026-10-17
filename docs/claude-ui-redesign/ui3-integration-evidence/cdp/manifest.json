@@ -1,0 +1,1894 @@
+{
+  "images": [
+    {
+      "name": "ui3-integration-01-default.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 68439,
+      "sha256": "efe17afbda2bfcd360d8512822226cb62e25487ff560e6a97846430cd0626dda"
+    },
+    {
+      "name": "ui3-integration-02-model-popover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 78733,
+      "sha256": "ead53df5da1a6ce1bda058453153bfa49df0f8f5bd24bd94a9297a97cc175697"
+    },
+    {
+      "name": "ui3-integration-03-think-popover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 74321,
+      "sha256": "697544560b80e306455df4e5137b60c268adf4fe9efe8ad27bed58bffc030e38"
+    },
+    {
+      "name": "ui3-integration-04-ctx-tooltip.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 90520,
+      "sha256": "fbe9d24339342fce937726a97944b8da38ad01247ae47cf26df8b4cf201ca596"
+    },
+    {
+      "name": "ui3-integration-08-thread.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 68439,
+      "sha256": "efe17afbda2bfcd360d8512822226cb62e25487ff560e6a97846430cd0626dda"
+    },
+    {
+      "name": "ui3-integration-09-thread-top.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 75063,
+      "sha256": "2e7f06de6dbc8353c27950cee59949b157761e102e0a2560878b8214930ba426"
+    },
+    {
+      "name": "ui3-integration-10-file-expanded.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73536,
+      "sha256": "9dddda38c60956dbb840e236a34e9c59d48b89ce9e97a220cbbfa4623ee92ab3"
+    },
+    {
+      "name": "ui3-integration-100-composer-900.png",
+      "width": 900,
+      "height": 900,
+      "bytes": 74665,
+      "sha256": "000d221c2ab84a3c34e6d066d7ca83c70e462e9e1b7d63896f2f545f4a603faf"
+    },
+    {
+      "name": "ui3-integration-101-composer-1200.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 84770,
+      "sha256": "08616791b2640aaa953ecbc2a6db4616a0ffa2b169720c770c304479b8a2f3dd"
+    },
+    {
+      "name": "ui3-integration-102-composer-1536.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 87735,
+      "sha256": "da8c6026d7b597fa70ff99e1a0d0f62839e61bd25675a06dd8fea19bd74271ff"
+    },
+    {
+      "name": "ui3-integration-103-composer-low-height.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 54595,
+      "sha256": "85f7a32fcaf77836643dc7e0e4c0849344a29320c969029ca7175333b2205126"
+    },
+    {
+      "name": "ui3-integration-104-composer-long-text.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 78658,
+      "sha256": "9ba0f421dc88b678c98ad5522a5681723fd86af890e12efa2048db1b1c6b1af8"
+    },
+    {
+      "name": "ui3-integration-105-composer-stopping.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 77402,
+      "sha256": "68a836bbfdabb65809ee8a5b18cb85a473aa927901dff988a36f6f26a5e58b4b"
+    },
+    {
+      "name": "ui3-integration-105-workspace-chat.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 66218,
+      "sha256": "8af466fa847a9051a3c898131901e3b3c84dc5c4585df77403d10f2b230cb03a"
+    },
+    {
+      "name": "ui3-integration-106-composer-stopped.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 75330,
+      "sha256": "33e9280905f347df27f2123c3e9cc1332d1076a0b5e655bcc4e0925602116501"
+    },
+    {
+      "name": "ui3-integration-106-workspace-planner.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 55315,
+      "sha256": "c11ac77e202bc3f2d85971a2bfa54a4c0bad723167f0ce61d8d9d8999722dc2d"
+    },
+    {
+      "name": "ui3-integration-107-workspace-planner-detail.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 90200,
+      "sha256": "9b705a18b9ce3e6251bfdf9a12a1492384b26c1f8044e7bd5b3660b42a7fe0d5"
+    },
+    {
+      "name": "ui3-integration-108-workspace-planner-attempts.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 97895,
+      "sha256": "8dccf5c93b1270fe412fd0bf0b039978adf2b74ea06bcbba84d416bb25256f82"
+    },
+    {
+      "name": "ui3-integration-109-workspace-planner-review.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 89432,
+      "sha256": "cc60be76b2948a5936fbd17aa5f33c009536a4e23cf45b3ecfca9337820b60fb"
+    },
+    {
+      "name": "ui3-integration-11-rev-summary.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 91155,
+      "sha256": "f09077b62dfe2d64678937bf19d477e89ba9dc6ab8de000e99311758d2ce6e74"
+    },
+    {
+      "name": "ui3-integration-110-workspace-planner-verification.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 87225,
+      "sha256": "b8e2d9dffead3845bae7f5183f8a874f1b3d100ea14d469e4dafef1ae53635c2"
+    },
+    {
+      "name": "ui3-integration-111-workspace-changes.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 103485,
+      "sha256": "aef394a56f8d042730e779fbaff4b5455b3514201773538d175db0e7e27325a6"
+    },
+    {
+      "name": "ui3-integration-112-workspace-changes-expanded.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 112119,
+      "sha256": "f180806e7c1c7757e69875be7b7308504e1e60813b4fc6f7755e4ee0a2005105"
+    },
+    {
+      "name": "ui3-integration-113-workspace-changes-filter-session.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 97971,
+      "sha256": "2d70cd91d7583626f42c0f3689978d945b4f8b18f6621afd3bba7e59a7df0482"
+    },
+    {
+      "name": "ui3-integration-114-workspace-changes-clean.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 90288,
+      "sha256": "640d5f5d1ea40bdd55acb42699df12534c3dc4ab36bf415ae3814b6e3885be83"
+    },
+    {
+      "name": "ui3-integration-115-workspace-extensions.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 77397,
+      "sha256": "5a9f524961369ea325a4857c25e1b4722ffd5531e7581bd118112a64d09db73c"
+    },
+    {
+      "name": "ui3-integration-115b-workspace-skills.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 65843,
+      "sha256": "945619431c289d54c38f9b4ad11b1ffc1452df8db398f9505bc8f2a0d949e684"
+    },
+    {
+      "name": "ui3-integration-116-workspace-skill-detail.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 80315,
+      "sha256": "d58b98fab62ec3daf798f9eba7016884ab6e4f00b26cef357e34aaf2c4dad5d6"
+    },
+    {
+      "name": "ui3-integration-117-workspace-skill-untrusted.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 81692,
+      "sha256": "3d01634173303e798c2f10458ac1553d10847cd330e8e412dbafc896b819680d"
+    },
+    {
+      "name": "ui3-integration-118-workspace-mcp.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 79954,
+      "sha256": "58a0ab232647991185c2cb8cf16de128d3e5c3fbe02e351bc6a5d724fcce766a"
+    },
+    {
+      "name": "ui3-integration-119-workspace-switch-preserves-chat.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 72952,
+      "sha256": "25a5ef1245b659bdeec01fb1f9c2b74e2dd076bbd3e018112c4cac9eb51a3c10"
+    },
+    {
+      "name": "ui3-integration-12-rev-pending.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 86807,
+      "sha256": "b7a7305fa8ae6a8c4c4767a519ee687ba645a2ffa16467b42c1562d85ee26eb8"
+    },
+    {
+      "name": "ui3-integration-120-workspace-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 45584,
+      "sha256": "df34a76753496d926443baf5bd1c9d4bd73077f0a8adac459a67dea4feb6f20c"
+    },
+    {
+      "name": "ui3-integration-1200-shell-width.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 89915,
+      "sha256": "308d11e6f47870ba5df6e727d41e3d7096e1209d546733108bd46fac49a17aac"
+    },
+    {
+      "name": "ui3-integration-121-workspace-900.png",
+      "width": 900,
+      "height": 900,
+      "bytes": 51824,
+      "sha256": "9770ffbc0a3253451eb5894b15decbfe0143e996bf1decaa14f57877f4511e77"
+    },
+    {
+      "name": "ui3-integration-122-workspace-1200.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 54686,
+      "sha256": "de86e8f426f8f3f3b4dd26eda4fadaae7c72c274443d430250de535692dc7ee9"
+    },
+    {
+      "name": "ui3-integration-123-workspace-1536.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 56929,
+      "sha256": "df8b0a9a490de3633ce0b3b63060cb77bd99fa8492690b3b311fc30a1e1e23ed"
+    },
+    {
+      "name": "ui3-integration-124-workspace-low-height.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 37059,
+      "sha256": "5671f5263702a0eb687d65f03290c98b19b735ecf132670e2038264f72948d57"
+    },
+    {
+      "name": "ui3-integration-125-workspace-session-switch-to-chat.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 43315,
+      "sha256": "16d66b93d9d48e482bc2e32a0039f0f2ffbaa74507fd81e773f7f3114605d73d"
+    },
+    {
+      "name": "ui3-integration-126-neutral-buttons-chat.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 43285,
+      "sha256": "9e0bad25263b8b9753a87cd5d490de4c9dbab3d8cec844bdd5013802cabfcac4"
+    },
+    {
+      "name": "ui3-integration-127-neutral-composer-controls.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 43315,
+      "sha256": "16d66b93d9d48e482bc2e32a0039f0f2ffbaa74507fd81e773f7f3114605d73d"
+    },
+    {
+      "name": "ui3-integration-128-neutral-popover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 54762,
+      "sha256": "6dff1414c87981b7e96829239d470c869a8b01e9c3f1a917b15cec4ebbe841af"
+    },
+    {
+      "name": "ui3-integration-129-neutral-planner.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 55368,
+      "sha256": "98d25d95ece6ddbd4528ba5e2ec57e4ce15a0b6c6a30aaf6908e690e2f324663"
+    },
+    {
+      "name": "ui3-integration-13-rev-accepted.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 86457,
+      "sha256": "3ca6e3a0ca7e75918e62618bd596233ff2fec0acae79957dfe89268c10540f03"
+    },
+    {
+      "name": "ui3-integration-130-neutral-planner-review.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 76945,
+      "sha256": "202a56e3d1dfc4498193665edff3cc64a48ea925c5fbffc9990c6a4acbc97270"
+    },
+    {
+      "name": "ui3-integration-131-neutral-changes.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 93532,
+      "sha256": "41b2c322bfff34ba1207416918e612a1dd3ba9382d91fffb1e8b44aea86f1cfe"
+    },
+    {
+      "name": "ui3-integration-132-neutral-extensions.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 80384,
+      "sha256": "d95e7d4aeba5f7b21654c390716150770b952813f5f17ed61d3baf8de1f27920"
+    },
+    {
+      "name": "ui3-integration-133-neutral-modal.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 81871,
+      "sha256": "f108866afe205241740b7515d4b7ab7d49164157215b30fd83b8b44e2b46c890"
+    },
+    {
+      "name": "ui3-integration-134-neutral-confirm.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 104972,
+      "sha256": "c23b3a5bad5e9466637a7ad55654ee23c1c955c0817459f69776626800fb6901"
+    },
+    {
+      "name": "ui3-integration-135-focus-keyboard.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 99675,
+      "sha256": "e704f3199632b75c0bbb07b2c252a988c0adcc69a69324911745265abfb4d626"
+    },
+    {
+      "name": "ui3-integration-139-responsive-chat-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 46090,
+      "sha256": "db44f21776a92f878f8fd4bd0a22690004e5bbefed4f8b8c537b39fcb3c9cb9a"
+    },
+    {
+      "name": "ui3-integration-14-rev-needs-changes.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 95160,
+      "sha256": "1d13f7e885796e5f715763a5a486dd946315658af33cf2a7e52dc7db1ccda002"
+    },
+    {
+      "name": "ui3-integration-140-responsive-planner-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 45459,
+      "sha256": "75d49b2c1cf8b5840c589310b6cbb36bad61c86baa7ff3648f4c15f411e6e93f"
+    },
+    {
+      "name": "ui3-integration-141-responsive-changes-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 48572,
+      "sha256": "bb078e01d68d835b5970b2696e08f1ee61b93fdc24ba851b6ca82034b6c62e91"
+    },
+    {
+      "name": "ui3-integration-142-responsive-extensions-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 59177,
+      "sha256": "5452316f962dfe6a96d3033b47a1ca2947d90dd275fc12b10a924544c5bd8b9f"
+    },
+    {
+      "name": "ui3-integration-143-low-height-chat.png",
+      "width": 900,
+      "height": 650,
+      "bytes": 38618,
+      "sha256": "0019368648b8216ffd622b85d984050249252979fc4f6e037ba9864151eb8bbc"
+    },
+    {
+      "name": "ui3-integration-144-low-height-planner.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 36914,
+      "sha256": "8b49765e32880e8a432f9b1d6a90e72c0aa6eb1ba5dcce02c6b3424d5954be13"
+    },
+    {
+      "name": "ui3-integration-145-low-height-extensions.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 51274,
+      "sha256": "ca96b55556b813577242df162a0e741542b4f2da587b447323d22ee10515b762"
+    },
+    {
+      "name": "ui3-integration-147-low-height-chat-700.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 35110,
+      "sha256": "c5779b638f90bbb5f3d2a0fb62c15bf62d0d24e7c5dee9c8c6d7e52eda20e36b"
+    },
+    {
+      "name": "ui3-integration-148-low-height-chat-1200.png",
+      "width": 1200,
+      "height": 650,
+      "bytes": 41052,
+      "sha256": "fe3903ec805f674881791190e85a3ce8fdc549d4c24579b24068088d4769182c"
+    },
+    {
+      "name": "ui3-integration-149-low-height-chat-1536.png",
+      "width": 1536,
+      "height": 650,
+      "bytes": 42685,
+      "sha256": "26cd927dd7e8becf26578a4d07f72676f5bfa028e7a200960f0a4e929d8301b3"
+    },
+    {
+      "name": "ui3-integration-15-rev-retry-history.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 86796,
+      "sha256": "3d33e37692a11604d510daa6e6fd4344ad135df5d2624d3b3b87250ffed085b9"
+    },
+    {
+      "name": "ui3-integration-150-popover-700-low.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 45930,
+      "sha256": "73017d859f39ba521c12c10320b325282de760bf82f517d6b70dee35870b4258"
+    },
+    {
+      "name": "ui3-integration-151-more-700-low.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 33738,
+      "sha256": "6c39c3a075c192fc8625ab8c8cc661830e6433ac0ffa3180ffd87e9f1ac0c2d7"
+    },
+    {
+      "name": "ui3-integration-152-modal-700-low.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 44290,
+      "sha256": "6345f7fdd645e9a1608090d98acab9949ef8e66a68b5f4a468dbb7e6039953a1"
+    },
+    {
+      "name": "ui3-integration-153-dpi-rounded-701.png",
+      "width": 701,
+      "height": 602,
+      "bytes": 36868,
+      "sha256": "1485e59c86e35b7494d2aa8695fc49f3249ed1f14eccb01f2dcf2d24ebcc8be4"
+    },
+    {
+      "name": "ui3-integration-1536-shell-width.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 94581,
+      "sha256": "ac8de4b250744cfc3d6096ff6c55730244dee58eea43b03e1dea84c54a1fbf41"
+    },
+    {
+      "name": "ui3-integration-154-session-switch-focus.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 36793,
+      "sha256": "e7e0213b61b8a49d61559e553abdd25d59aeddcaccb14c03faae635d1aaac5cb"
+    },
+    {
+      "name": "ui3-integration-155-extension-registry.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 76858,
+      "sha256": "a05bd9b5e499477ecc6e9a9777a7fd902f36eaf01bc9a7a6958ed712f83704b2"
+    },
+    {
+      "name": "ui3-integration-156-web-activity.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 50288,
+      "sha256": "88bde7533629a71a5c868711d6ddc4905d97db0c97e5e39909bd3810a49f2673"
+    },
+    {
+      "name": "ui3-integration-157-subagent-workflow.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 69694,
+      "sha256": "117787205354d6522d62ecd27e4d7dd7d976e2719c0ed39a3436d97bccf3efd4"
+    },
+    {
+      "name": "ui3-integration-158-subagent-background.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 70597,
+      "sha256": "b4e81f7cefb551cbf2a870199854cc581ce1be71058f47c07e1089acc8c3d6a0"
+    },
+    {
+      "name": "ui3-integration-159-subagent-supervisor.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 66017,
+      "sha256": "8cf26ff32c2c6315ad0078f16fd4e955944de474d90928dc75d4fbc5ba05c552"
+    },
+    {
+      "name": "ui3-integration-16-rev-failed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 99176,
+      "sha256": "c79d2d23aed05a81e1d0f9a0a1e114293dd93a057455eae779a72b6208a366ca"
+    },
+    {
+      "name": "ui3-integration-160-memory-activity.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 62909,
+      "sha256": "d2e2d0286ef43fde2b1215e3b2cd6083e7eb090180412fe5202641f0c55c72e6"
+    },
+    {
+      "name": "ui3-integration-161-memory-status.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 60986,
+      "sha256": "ab2d6418a93176ac70550515096851c914a2ba07ea36d3ee846392a13fb3a9c5"
+    },
+    {
+      "name": "ui3-integration-162-memory-setup.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 140853,
+      "sha256": "7a97dbeacf97a388e23fd7cd49f13235b504f3eb368aed563221960081461cc0"
+    },
+    {
+      "name": "ui3-integration-163-memory-soft-failure.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 64314,
+      "sha256": "70045ca02a47ed25fae902e5d8fec37a75626eede1ef899d7508505c0e46fc28"
+    },
+    {
+      "name": "ui3-integration-164-approval-request.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 65834,
+      "sha256": "5d90788a737b13c9631258396f17263a55db0a4f17284cc232601268d3082c5a"
+    },
+    {
+      "name": "ui3-integration-165-browser-activity.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 62251,
+      "sha256": "561bcca32a487cc8180bf292dd7037ef5ef104603bc05432fea71306234f0959"
+    },
+    {
+      "name": "ui3-integration-167-usage-multicurrency.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73401,
+      "sha256": "ce9e8dcc10e7ac2fa5b69ddca7682f552c661b2a9edf90f00e9131402e711a25"
+    },
+    {
+      "name": "ui3-integration-168-usage-quota-popover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 102418,
+      "sha256": "17f6594571c1e445dbd31a63cab22696eec7d9e539b4948725d52523859ab7d2"
+    },
+    {
+      "name": "ui3-integration-169-usage-unknown-unit.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 87569,
+      "sha256": "84ad69fccd26aeea945bc0da2ce952bdc42fe73bc999662432a3b245875b1b48"
+    },
+    {
+      "name": "ui3-integration-17-rev-null-snapshot.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 87678,
+      "sha256": "61f99b716cac3fd1054bece1e87f1d3f9d195ac0dad8ecb923350704ac91988d"
+    },
+    {
+      "name": "ui3-integration-170-usage-unknown-unit-popover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 87596,
+      "sha256": "79f8af464003220f4b314844642a91aca4df301b383c7db3814b0d24eb1f3b79"
+    },
+    {
+      "name": "ui3-integration-171-capability-all.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 88071,
+      "sha256": "8ffb71d8a7f6234c5b2bbda39a1b24ebfacd6b4c9b44fcaa8927b248a7f5569d"
+    },
+    {
+      "name": "ui3-integration-172-capability-web-setup.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 137866,
+      "sha256": "1d074732b3cf68df25c1ad66ed011dfa232c46b29f8b7547b30f6f49291d23ed"
+    },
+    {
+      "name": "ui3-integration-173-capability-native-mcp.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 144023,
+      "sha256": "e27b2c70b0e4f9388cb6f80e3fb57726433e43adbe6d536243d8d65d45a4ceb1"
+    },
+    {
+      "name": "ui3-integration-174-capability-builtin.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 114049,
+      "sha256": "ba1f3b4fdf8116e435c48b590dd2fb4372120e8125f90618072fdfd7d706c479"
+    },
+    {
+      "name": "ui3-integration-175-capability-unknown.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 147666,
+      "sha256": "2c9048c3b818ebe4f5eaae8d4f1a62956b3ed8988e857dcce50bf8a6a175e9c6"
+    },
+    {
+      "name": "ui3-integration-176-capability-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 60004,
+      "sha256": "7cccdc4c9e67b70297ce9f4ffc224cf0e850bae3545f2f71290165ae8c7ac6f3"
+    },
+    {
+      "name": "ui3-integration-177-capability-900.png",
+      "width": 900,
+      "height": 900,
+      "bytes": 79195,
+      "sha256": "7c16cb5f0ea794012c9872a0f6e25d80103a67201e7e6b8f2c620d774a234f3f"
+    },
+    {
+      "name": "ui3-integration-178-capability-1200.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 85511,
+      "sha256": "62f749b15066382c55cdd33b2fc969349b809fec8cb51c175e4a6415830426f8"
+    },
+    {
+      "name": "ui3-integration-179-capability-1536.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 88329,
+      "sha256": "f66faa8b9654debcbfbebd96d8c17087cc968dbd282227467db62c8c4c91ab90"
+    },
+    {
+      "name": "ui3-integration-18-rev-editor.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 85317,
+      "sha256": "f0ee2babebdcf6cf86c2027c26dc82d77837651d1184d8cd1e4a72f28f279fc9"
+    },
+    {
+      "name": "ui3-integration-180-capability-search.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 63727,
+      "sha256": "d550dca63dec1f0cbb4d1991e2f176d8c080b55253b173d226fefdd279bd25d5"
+    },
+    {
+      "name": "ui3-integration-181-diagnostics-upgrade.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 101716,
+      "sha256": "fa422c5418a135d74ffc5edc12b99ad0dd26467738d37c45fad75300db48c79c"
+    },
+    {
+      "name": "ui3-integration-182-diagnostics-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 55897,
+      "sha256": "e79e5294bcea5b7ad446dec9efe0d32811c7e1a12ccea02f30960a7ae0f432b8"
+    },
+    {
+      "name": "ui3-integration-183-command-palette.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 47616,
+      "sha256": "0bf1d1d69241e19727c61ace618143d44c2dd0c7bb799b1257b2104a88a9ac3f"
+    },
+    {
+      "name": "ui3-integration-184-palette-search.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 42016,
+      "sha256": "1b20171d100423e1afa28a6c0a90018a98033c4f6f38d7110204095ce28f6c50"
+    },
+    {
+      "name": "ui3-integration-184b-palette-focus-restored.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 38279,
+      "sha256": "9b1bdc40b96ae2439ef0c60ef73403c64d63614a6573d2a9f13c1c68163e0f0d"
+    },
+    {
+      "name": "ui3-integration-185-shortcut-help.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 65922,
+      "sha256": "c191b3c2ea7a4bf914978639ced11fc26075c1865a1c9598364e63f6bbce9b3e"
+    },
+    {
+      "name": "ui3-integration-186-draft-restore.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 38070,
+      "sha256": "31f94841e3b1c0e2d67e3a43ffb4570afec6e80b269b476069fa073029b754e1"
+    },
+    {
+      "name": "ui3-integration-186b-draft-cleared.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 37650,
+      "sha256": "009f8c1c9c16f57e070e962d7f5b0b49ca6656c606ef6d4799853f507b824fc4"
+    },
+    {
+      "name": "ui3-integration-187-startup-error.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 50110,
+      "sha256": "bd057ca76e2073477d9c1ff9899f0e6fd0fa4c249263af00c9a6830d36a45abd"
+    },
+    {
+      "name": "ui3-integration-188-connection-lost.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 49451,
+      "sha256": "4e4fae63482696dc976f052c3443c4b55f88fe198913f64c495bbf1438c9f3cf"
+    },
+    {
+      "name": "ui3-integration-189-connection-restored.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 40997,
+      "sha256": "510fb05c7856ebd4130d5e0773b5adb2eac06c4f62c4208519d04c810f6e8646"
+    },
+    {
+      "name": "ui3-integration-19-rev-conflict.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 87755,
+      "sha256": "234a95c5bfd58ca0d110f337615a767afe8ab5322983dc85462dd669f258ef9b"
+    },
+    {
+      "name": "ui3-integration-190-daily-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 28676,
+      "sha256": "82899ae011d3afa7115959d22db4237e5a7bd6880eca6da4cfb96fa341bac9ab"
+    },
+    {
+      "name": "ui3-integration-191-daily-701x602.png",
+      "width": 701,
+      "height": 602,
+      "bytes": 29009,
+      "sha256": "11c24fe60f5a19e311c04df7af07da081b009ff2ba1ea09b1843eec1f292fc6b"
+    },
+    {
+      "name": "ui3-integration-192-composer-not-covering.png",
+      "width": 900,
+      "height": 560,
+      "bytes": 33672,
+      "sha256": "ce530d39139850eb05e59ca0c644e261ca57ade8f8e24a90fc22468e0d37455d"
+    },
+    {
+      "name": "ui3-integration-20-stress-long-note.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 67274,
+      "sha256": "615d194572192b718c5c82134d1e524f35c067604cdb05c0f7577ddbe0f330dd"
+    },
+    {
+      "name": "ui3-integration-21-stress-many-attempts.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 46451,
+      "sha256": "14505d986114a66b40d40b93f10b1318efb417273df35b84edf854438dd4f219"
+    },
+    {
+      "name": "ui3-integration-22-stress-narrow-700.png",
+      "width": 700,
+      "height": 950,
+      "bytes": 47325,
+      "sha256": "b176cd5d40680549aff1f62e4bf469b9bbee2b0ac8eec476f54cfe6f0a290804"
+    },
+    {
+      "name": "ui3-integration-23-summary-narrow-700.png",
+      "width": 700,
+      "height": 950,
+      "bytes": 32847,
+      "sha256": "abea48555a688cf1ab90c604a027efa778de8132b2110a6d79cd5fa9d80502a9"
+    },
+    {
+      "name": "ui3-integration-24-verify-never.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 89870,
+      "sha256": "1a432e4d54b8e2410c66bd7ecc86736948c9072dc5683f522f427aac9c03d4b8"
+    },
+    {
+      "name": "ui3-integration-25-verify-passed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 86457,
+      "sha256": "3ca6e3a0ca7e75918e62618bd596233ff2fec0acae79957dfe89268c10540f03"
+    },
+    {
+      "name": "ui3-integration-26-verify-failed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 99176,
+      "sha256": "c79d2d23aed05a81e1d0f9a0a1e114293dd93a057455eae779a72b6208a366ca"
+    },
+    {
+      "name": "ui3-integration-27-verify-interrupted.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 91617,
+      "sha256": "85752ae405185ed906d61a611d5baecad14756c7056a0ee9a7c8524d26893888"
+    },
+    {
+      "name": "ui3-integration-28-verify-running.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 87001,
+      "sha256": "8904f89981dcfd951634e1a96ea1ea6dc7547d5997b111023d1f8b104a5e304b"
+    },
+    {
+      "name": "ui3-integration-29-verify-long.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 65209,
+      "sha256": "ecefd1e1f69fa64fbc1aa2d10c2e06e147740326f146327bcb91284642198dff"
+    },
+    {
+      "name": "ui3-integration-30-verify-narrow-700.png",
+      "width": 700,
+      "height": 950,
+      "bytes": 37976,
+      "sha256": "58cb266a45a0e9d81d10b824f2d94668c800a159127ba6dfb721ef7d75cff2f8"
+    },
+    {
+      "name": "ui3-integration-31-attempt-diff.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 42374,
+      "sha256": "746862adb57867c5aeeff395753d65c252bcc0b63fca3c7d11d1fc9a507d3247"
+    },
+    {
+      "name": "ui3-integration-32-attempt-diff-added-deleted.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 48907,
+      "sha256": "731b6f78436840aa320690fc2970545f27955fdf60487312154f6b94cd03c615"
+    },
+    {
+      "name": "ui3-integration-33-attempt-diff-binary.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 53685,
+      "sha256": "6d3caa283f870857656f052bd0a1e5e5dc2cf55ca71cd5254d0868e683c34934"
+    },
+    {
+      "name": "ui3-integration-34-attempt-diff-truncated.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 59437,
+      "sha256": "1f97fcfb3ce1040b24be4bb32bd678b5a07dbd27f7947cf5aec19b43974fd9b3"
+    },
+    {
+      "name": "ui3-integration-35-attempt-diff-unavailable.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 53831,
+      "sha256": "68c892fe75c080d4df55d57801efb3b1c6b692ee0bcce0ee67cba890a72e831d"
+    },
+    {
+      "name": "ui3-integration-36-attempt-diff-long.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 47688,
+      "sha256": "c76d7912bf7278a95abd31fdeb4586c3d5d43df8311ddbf1d0de7c5e386f2d7f"
+    },
+    {
+      "name": "ui3-integration-37-attempt-diff-narrow-700.png",
+      "width": 700,
+      "height": 950,
+      "bytes": 34395,
+      "sha256": "120a77dfd46bcebb9107a7769e94aa7fde71d247fba5d1dd88ef67357c33d9c5"
+    },
+    {
+      "name": "ui3-integration-38-review-gate-pending.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 49243,
+      "sha256": "aa20ac15b8cb00b0a935124ce4ccde49dd42bb4469185f12ad1668d3bcc5408f"
+    },
+    {
+      "name": "ui3-integration-39-review-gate-accepted.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 46005,
+      "sha256": "7631fa5eb0704fa9face1e48181715b9810f2fc5169d518a81c6228854a7fdc0"
+    },
+    {
+      "name": "ui3-integration-40-review-gate-needs-changes.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 47735,
+      "sha256": "005abbf516a0f452707f427803994ada86d15c96117a1be86cbaa06474b68ef6"
+    },
+    {
+      "name": "ui3-integration-41-review-gate-downstream-blocked.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 47008,
+      "sha256": "79e71132bdb8668fda2c8613e821fc0a811bb4a7781726de291d14af45c16fde"
+    },
+    {
+      "name": "ui3-integration-42-review-gate-plan-paused.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 45096,
+      "sha256": "60a1b73793f42bec827f6ca204010db4d78b42872680708e3817ceb1b9d41e7d"
+    },
+    {
+      "name": "ui3-integration-43-review-gate-editor.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 46856,
+      "sha256": "aa6755dbc40b132741e3d831054e2af32ce7d1c4dad1fa493f22a3942b4cac19"
+    },
+    {
+      "name": "ui3-integration-44-review-gate-narrow-700.png",
+      "width": 700,
+      "height": 950,
+      "bytes": 38548,
+      "sha256": "f5f7d25b346cf42d64072a59da6f8b517c968242376e3043bb799d963c61bc07"
+    },
+    {
+      "name": "ui3-integration-45-review-gate-retry-pending.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 47605,
+      "sha256": "c363b637b80da75cdc594f527112d167782dcbb19bdce561977669b22e4cb856"
+    },
+    {
+      "name": "ui3-integration-46-next-action-ready.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 49194,
+      "sha256": "1e6a7f12e9c5bb4a3a6ada9255a72b08505232cd4d10571e40bdafd573eecf16"
+    },
+    {
+      "name": "ui3-integration-47-next-action-review.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 46002,
+      "sha256": "9a22339ea83380937af5a247f06b14bc5ccdc9f803fa9ba74eab8b2ee5dda91c"
+    },
+    {
+      "name": "ui3-integration-48-next-action-verification.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 49246,
+      "sha256": "956c01bc1f3fe7a24dac64905c29b7257e4f8ccc868a6408a074141d1145d4bf"
+    },
+    {
+      "name": "ui3-integration-49-attempt-history-collapsed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 46760,
+      "sha256": "b9f4c63e5c131dc2f29fb94c12b97910b988c1fa335d9ca29def4122d042f651"
+    },
+    {
+      "name": "ui3-integration-50-attempt-history-expanded.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 43278,
+      "sha256": "fc1d9a37d0970dc3bf0534c0df68b957f9d9d2a009732eee21dfaa015a3eda64"
+    },
+    {
+      "name": "ui3-integration-51-attempt-history-10.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 46451,
+      "sha256": "14505d986114a66b40d40b93f10b1318efb417273df35b84edf854438dd4f219"
+    },
+    {
+      "name": "ui3-integration-52-attempt-head-summary.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 45124,
+      "sha256": "2c24633d12a4919dfff7121caa6850d0bdc9a0d3440529b094c600847e1c5c67"
+    },
+    {
+      "name": "ui3-integration-53-focus-attempt.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 43490,
+      "sha256": "3f8ae0ff8b7b6b7c3b6ac09a49d70fc7f98384604b0092a9b3959d51817137d7"
+    },
+    {
+      "name": "ui3-integration-54-next-action-narrow-700.png",
+      "width": 700,
+      "height": 950,
+      "bytes": 33360,
+      "sha256": "4a25f5add5268549a8ba1c2127edb16d839d0e7767fd403eddfdff4d067ef0f5"
+    },
+    {
+      "name": "ui3-integration-55-next-action-blocked.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 45096,
+      "sha256": "60a1b73793f42bec827f6ca204010db4d78b42872680708e3817ceb1b9d41e7d"
+    },
+    {
+      "name": "ui3-integration-56-attempt-failed-compact.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 99176,
+      "sha256": "c79d2d23aed05a81e1d0f9a0a1e114293dd93a057455eae779a72b6208a366ca"
+    },
+    {
+      "name": "ui3-integration-57-shell-expanded.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73536,
+      "sha256": "9dddda38c60956dbb840e236a34e9c59d48b89ce9e97a220cbbfa4623ee92ab3"
+    },
+    {
+      "name": "ui3-integration-58-project-sessions.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73536,
+      "sha256": "9dddda38c60956dbb840e236a34e9c59d48b89ce9e97a220cbbfa4623ee92ab3"
+    },
+    {
+      "name": "ui3-integration-59-session-selected.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73536,
+      "sha256": "9dddda38c60956dbb840e236a34e9c59d48b89ce9e97a220cbbfa4623ee92ab3"
+    },
+    {
+      "name": "ui3-integration-60-sidebar-collapsed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 58718,
+      "sha256": "184bc7f9026c9626a763d895c9e50a9b630955a08418520bf4fe5dd9df8d280b"
+    },
+    {
+      "name": "ui3-integration-61-usage-compact.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73518,
+      "sha256": "1c2bd1b4ab7fc58324572fa76eea5e9e26fcfe3c8a9a5027c3829ab9e48460c8"
+    },
+    {
+      "name": "ui3-integration-62-usage-expanded.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 80060,
+      "sha256": "a03298cd625e976e97b112a199f02145c8ac898dee62dc5b153ec004d2d28b0d"
+    },
+    {
+      "name": "ui3-integration-63-global-more.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 79695,
+      "sha256": "d7b83f97f5d875455ce15285a59c654cef1fed1afcbc294694f1e37f5199f56b"
+    },
+    {
+      "name": "ui3-integration-64-rail-changes.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 94094,
+      "sha256": "8abb6fa91b8dde08baac55074ffaca5931db765610ab84e46d24816fe43f8186"
+    },
+    {
+      "name": "ui3-integration-65-rail-planner.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 55326,
+      "sha256": "d9c7e755be84f6c42991244721b70a7082be184fa0d251c3963871c8a1e858d4"
+    },
+    {
+      "name": "ui3-integration-66-shell-narrow-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 73061,
+      "sha256": "0b1bcf5ddadae55df06f620964df923708886a10d5cf25ae8be3f17f8f7164ac"
+    },
+    {
+      "name": "ui3-integration-67-project-group-collapsed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 64275,
+      "sha256": "f5dd0e07307b30d030edcea8d9d9db6a3221eed5e0ee04311af7dd078b03093b"
+    },
+    {
+      "name": "ui3-integration-68-project-group-restored.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73521,
+      "sha256": "61ef05015e4f5b6c0bc6b4e0541a0c4123a0cff2783678111009383224689c71"
+    },
+    {
+      "name": "ui3-integration-69-conversation-user-short.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 75922,
+      "sha256": "20fe177a3aac597480788a44e9ce95900520c8cd1defeaf4c9908b1f1d05e291"
+    },
+    {
+      "name": "ui3-integration-70-conversation-user-long.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 86082,
+      "sha256": "36c301eda8cd973fbf0e0e3f7face9f348b00d264244639ff3a8a2ca31b24e29"
+    },
+    {
+      "name": "ui3-integration-71-assistant-open-text.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 75811,
+      "sha256": "e700303b8835fba33923529b18990174353cca0e916281aa7c5afe59d2467be6"
+    },
+    {
+      "name": "ui3-integration-72-thinking-collapsed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 74234,
+      "sha256": "96cff1f6c9b531e0275ec6238f61a4ae848b2b8ecac2d2b2f8c09c9e04866116"
+    },
+    {
+      "name": "ui3-integration-73-thinking-expanded.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 73441,
+      "sha256": "3aa489c6002e62e1946900e9989f6ad5b1ee0d2e01497036204be636566a6e67"
+    },
+    {
+      "name": "ui3-integration-74-tool-running.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 64197,
+      "sha256": "05b065750a458e8ab145cdd8d125c2e81b8c35a8cb768cf84baa3aea09207270"
+    },
+    {
+      "name": "ui3-integration-75-tool-success.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 62462,
+      "sha256": "f41d73071243ef85fdeaa7a28ac57483d270aba4b4c04b7a5831f5f89da367de"
+    },
+    {
+      "name": "ui3-integration-76-tool-failed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 64277,
+      "sha256": "25dd66aa7fed0131db1e9c0c80065eb9b3d5e7b1852796564caed550fb69cd24"
+    },
+    {
+      "name": "ui3-integration-77-tool-group-mixed.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 77534,
+      "sha256": "3166d9a9f3b232df566e4fb76bef6809e38b99ad92621c3f6c7f0c22ead75ead"
+    },
+    {
+      "name": "ui3-integration-78-attachment-single.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 81598,
+      "sha256": "6a282bb9feddec1c33e17a37f9670a383e27ae28b9bb8e16309481abffea4e27"
+    },
+    {
+      "name": "ui3-integration-79-attachment-multiple.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 65705,
+      "sha256": "92881d9547508c22562135fd388a3c801b4d4f5c598755bd37d2cf58c2460949"
+    },
+    {
+      "name": "ui3-integration-80-minimap.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 81164,
+      "sha256": "bd42dd27740039a084f228b0fe0e2aebe91db3875eda5f5b459eeaf574fb9ea5"
+    },
+    {
+      "name": "ui3-integration-81-long-code.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 74123,
+      "sha256": "66bd51ef663771c91bf85a5efa12cb01f353bf0c5318396a3c25528805c185b7"
+    },
+    {
+      "name": "ui3-integration-82-narrow-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 78886,
+      "sha256": "8c898da57a692b788d25f10c418c1a57d9327a52329efb390530b137f8338ea3"
+    },
+    {
+      "name": "ui3-integration-83-conversation-900.png",
+      "width": 900,
+      "height": 900,
+      "bytes": 81094,
+      "sha256": "b71140e997b25974afa4e29a666af07f0c3d391bc1d9e4881a70cfa468850481"
+    },
+    {
+      "name": "ui3-integration-84-conversation-1200.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 86653,
+      "sha256": "b5e32ab84ca829b6b1e34bd0c07de8adc092ddbbd54583a39d636d01d50f3452"
+    },
+    {
+      "name": "ui3-integration-85-conversation-1536.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 89233,
+      "sha256": "1fc021c4d2d11edd1594150b4bc6fc1b80670a4b588eff6606adf987548d899c"
+    },
+    {
+      "name": "ui3-integration-86-composer-idle.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 74783,
+      "sha256": "3b66f5a599068937e531b8560c2967c274db764ba71f4f0bdefce00e5245b289"
+    },
+    {
+      "name": "ui3-integration-87-composer-text.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 74703,
+      "sha256": "6375764e23c1209717eea8292476a58efd6e9d9f83a80251cedb26f220b5053f"
+    },
+    {
+      "name": "ui3-integration-88-composer-multiline.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 68465,
+      "sha256": "055326a32f459d7bec60368ce54a21b80c7c9738631d97c643f7f2e04c45274a"
+    },
+    {
+      "name": "ui3-integration-89-composer-max-height.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 76428,
+      "sha256": "bded835c268b5721bc2ee1c9fc1a927779eacbabf4036095c2184832d869f9fd"
+    },
+    {
+      "name": "ui3-integration-900-shell-width.png",
+      "width": 900,
+      "height": 900,
+      "bytes": 74192,
+      "sha256": "586d8b9e6afad928cea964891b9cd305917eab094d7724d1dfba0fb3e1012ebe"
+    },
+    {
+      "name": "ui3-integration-93-composer-dragover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 74763,
+      "sha256": "c1b058a0367c6dd7415214599b6c3390b8a9872494d9bf1c40ebf561f24d3fcf"
+    },
+    {
+      "name": "ui3-integration-94-composer-model-picker.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 85095,
+      "sha256": "fdca693ca5a5c80d457a7cf4563b610696c8873be7faf4db34bda585d876a5e9"
+    },
+    {
+      "name": "ui3-integration-95-composer-thinking-picker.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 80666,
+      "sha256": "ae1289cf1df243b3096e44ed4f2b162b6a87796121a8732acd403ad3ffbdcc54"
+    },
+    {
+      "name": "ui3-integration-96-composer-context-popover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 96751,
+      "sha256": "2bd24e4aa38abad95f31472035ad7b1a060ff99c9436b0cdaeef028d1c1ec9fd"
+    },
+    {
+      "name": "ui3-integration-96a-composer-context-hover.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 97047,
+      "sha256": "e6c1e00e13986a1794148aa0468f339c2d23fe4f172b995c45d1a6cb45b76d23"
+    },
+    {
+      "name": "ui3-integration-96b-composer-context-hover-retained.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 96751,
+      "sha256": "2bd24e4aa38abad95f31472035ad7b1a060ff99c9436b0cdaeef028d1c1ec9fd"
+    },
+    {
+      "name": "ui3-integration-96c-composer-context-hover-leave.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 74769,
+      "sha256": "2bd429ff3d286dcb13cf877e2731fc6a4655eaf8d653654e7c1a73cdfc64e906"
+    },
+    {
+      "name": "ui3-integration-97-composer-running.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 76786,
+      "sha256": "66a34927060fbc22638d2ad7d1f747d0ef55d7c985df26a741f3e9694ebc84f3"
+    },
+    {
+      "name": "ui3-integration-98-composer-locked.png",
+      "width": 1418,
+      "height": 746,
+      "bytes": 75097,
+      "sha256": "d48f27470e21397f11a427b1f89c6fb8457c7a3eea794a0cb6c96ecfe92ef98b"
+    },
+    {
+      "name": "ui3-integration-99-composer-700.png",
+      "width": 700,
+      "height": 900,
+      "bytes": 69808,
+      "sha256": "b0a4c8edcbf42da826b88c3c3374ad8564e4eb736ab3a110c3fba82d5942c2a0"
+    },
+    {
+      "name": "ui3-integration-P25-auth-browser-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 77898,
+      "sha256": "e770c82572584b24e105e91ad47bad637fed6f63f0e3dc940ab8741fdbe26142"
+    },
+    {
+      "name": "ui3-integration-P25-auth-browser-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 91454,
+      "sha256": "894c0105619bc337801c632d882e617b70b16dd99df6070e452f781dd92e8384"
+    },
+    {
+      "name": "ui3-integration-P25-auth-browser-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 42772,
+      "sha256": "483b5b80d8ced5e1e0fb47b78f63a87652639b6da290391864aa0f8daeabd261"
+    },
+    {
+      "name": "ui3-integration-P25-auth-browser-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 63604,
+      "sha256": "dbcf779e2984d292f3386bcd00ee23335a75933d2d96521bd13b80a9fafffcd5"
+    },
+    {
+      "name": "ui3-integration-P25-auth-connected-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 79021,
+      "sha256": "f2d4d3f2c6cc1099951bd0e930834bc10389e984ceb28828c916f229663897b6"
+    },
+    {
+      "name": "ui3-integration-P25-auth-connected-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 92741,
+      "sha256": "6ef4b2fde83f306e7e2a2e7b7a75499b1cc78df02fc2554c544665f09c3ff278"
+    },
+    {
+      "name": "ui3-integration-P25-auth-connected-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 43989,
+      "sha256": "2000b376f991b5fc629c22a12ca16839f6d0921ade4d5aa2cdd573b356b48052"
+    },
+    {
+      "name": "ui3-integration-P25-auth-connected-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 63644,
+      "sha256": "72ac9ee1846fc2b1fd0703f227318cf4545a645505856fbde1ca19bdf0fbb28d"
+    },
+    {
+      "name": "ui3-integration-P25-auth-device-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 79565,
+      "sha256": "4cac339f25673f160e9b6a65909a1db5188ff531d6c5e5281877c82a10214fa3"
+    },
+    {
+      "name": "ui3-integration-P25-auth-device-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 90690,
+      "sha256": "4346db9a961860ff96484d37ecd4c8d1e4f624359efea34af13a31582805b300"
+    },
+    {
+      "name": "ui3-integration-P25-auth-device-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 43084,
+      "sha256": "e33600a556ae7ff7486ced68a94ae696b926c079fb79be5b99a1da93a52c6314"
+    },
+    {
+      "name": "ui3-integration-P25-auth-device-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 62796,
+      "sha256": "86c6f5779f10c8f2316977f29b1898ba0edb002a58d04ef677ea154972d93581"
+    },
+    {
+      "name": "ui3-integration-P25-auth-native-list-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 75178,
+      "sha256": "1ba420c30acacd246b75ca9e7aaf5cd16e202c5d395b89d5f34c2deb74d035a3"
+    },
+    {
+      "name": "ui3-integration-P25-auth-native-list-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 91365,
+      "sha256": "39f3d977fae7797fcbf90d0ceb9aa2503c77f9bee4468ea05ee60383ac983faf"
+    },
+    {
+      "name": "ui3-integration-P25-auth-native-list-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 41907,
+      "sha256": "0cc78ada853cf28d13122a8a4131fe022a44eba3a7795fd9fbf849342bc9e4ed"
+    },
+    {
+      "name": "ui3-integration-P25-auth-native-list-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 60870,
+      "sha256": "317483fb0d2baa8bdf05da339e0fdd2d161c0d8a483aef1e06a0ea529b004123"
+    },
+    {
+      "name": "ui3-integration-P25-auth-select-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 79321,
+      "sha256": "4ebc412f6306f0bd2d2a28d88bb32b6d17a7086c3113a6a153a09aad45d01696"
+    },
+    {
+      "name": "ui3-integration-P25-auth-select-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 91039,
+      "sha256": "a7e6544e1650b56ffd09501fefec3915fcc2fe51d16842b06546d834e6093516"
+    },
+    {
+      "name": "ui3-integration-P25-auth-select-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 43037,
+      "sha256": "204ae3bae9a90fc2642917fca6442ccab5d73f662001e143e6623983e8b6f59a"
+    },
+    {
+      "name": "ui3-integration-P25-auth-select-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 62327,
+      "sha256": "e1abd0c5642d8e148ab3ffec484bbac3d690b9fd97cafa2312f1f1b8f11f5dac"
+    },
+    {
+      "name": "ui3-integration-P25-auth-unknown-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 79959,
+      "sha256": "0661455e1ad588aaca25188b6e54b33c96062135a099d8d81266a212ba2bfb84"
+    },
+    {
+      "name": "ui3-integration-P25-auth-unknown-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 91927,
+      "sha256": "9156b549508ca8a79926937a0c2f0b19136d4d6993616240a9db8f30cccf1cfc"
+    },
+    {
+      "name": "ui3-integration-P25-auth-unknown-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 43443,
+      "sha256": "0420ffe9b6b80b0d47e0facc8a50fda5ce9a3eb40e30249f3510138ec5c4c74f"
+    },
+    {
+      "name": "ui3-integration-P25-auth-unknown-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 63314,
+      "sha256": "8788aca40179dc2f0f571b5e3cba0fb0f6de4933f6885becb6a97f75f58e83cf"
+    },
+    {
+      "name": "ui3-integration-UX-01-scrollbars-palette.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 50791,
+      "sha256": "2ca9485ab46167d3d22f454db0f65d73d1720bdc77fb6eb03ba50beec4e96f72"
+    },
+    {
+      "name": "ui3-integration-UX-02-scrollbars-diagnostics.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 75030,
+      "sha256": "af4802d70a14ead115f3abad8a81cfaf886c4dc0af5206fdd4961cfb45ffedf1"
+    },
+    {
+      "name": "ui3-integration-UX-03-sidebar-project-expanded.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 43665,
+      "sha256": "792deb2fe70d980509b74058ea2d6fd90fa4482de9eaec65ef97823ecf0b6ab5"
+    },
+    {
+      "name": "ui3-integration-UX-04-sidebar-project-collapsed.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 35983,
+      "sha256": "f1921707a4bf686a6a2685e9a5a210dde6022387a36e0c8ef34a342a5ca69725"
+    },
+    {
+      "name": "ui3-integration-UX-05-conversation-nav-compact.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 52652,
+      "sha256": "7eb76796ba91d2d1675072a37cbf0009aa083316be2e8303ae8d98814286bdca"
+    },
+    {
+      "name": "ui3-integration-UX-06-conversation-nav-after-jump.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 122078,
+      "sha256": "bcc38555c49ccedda4d89d825f1696279419abf8e9e4092f925b29f743073b34"
+    },
+    {
+      "name": "ui3-integration-UX-07-titlebar-chat.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 122078,
+      "sha256": "bcc38555c49ccedda4d89d825f1696279419abf8e9e4092f925b29f743073b34"
+    },
+    {
+      "name": "ui3-integration-UX-08-titlebar-after-view-switch.png",
+      "width": 1440,
+      "height": 900,
+      "bytes": 62968,
+      "sha256": "e6dd14e773abe70a3c385d508ff63f8a58538ed620bd23ab5c8070a28259447f"
+    },
+    {
+      "name": "ui3-integration-UX-09-titlebar-narrow-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 33816,
+      "sha256": "debe5563af631448a5ac230509456a284d60e7a05468e4945d8b8886afa4c0e4"
+    },
+    {
+      "name": "ui3-integration-UX-CAP-01-native-clean-detail.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 139305,
+      "sha256": "8ec4314b40580b8358c246beaec4c72aa3dd267ec7d73b4826eba60638fdb70c"
+    },
+    {
+      "name": "ui3-integration-UX-CAP-02-install-available.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 138866,
+      "sha256": "c378fd4413594a4b5f25d57f37f04f967974b72222581b284abe5324bcca6161"
+    },
+    {
+      "name": "ui3-integration-UX-CAP-03a-install-confirm.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 126972,
+      "sha256": "7b992dc7babd6274d5772b92ab3acbecb26f9d24d3ba4204e777da0b7a18aca1"
+    },
+    {
+      "name": "ui3-integration-UX-CAP-03b-install-progress.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 139851,
+      "sha256": "80dba2b444994cbe04294a28ef9c7b992a1c2bae76168a116574b003ce511bca"
+    },
+    {
+      "name": "ui3-integration-UX-CAP-03c-install-unconfirmed.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 142773,
+      "sha256": "b1f52b8428e013359e64aff1f8bb6dbc642bdf00369f9412e85744caff494b28"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-01-project-row-hover.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 36582,
+      "sha256": "79aa79f16148158b6498459e8ef3f9436e145d5caed8f92da6656fcf9f527d94"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-02-project-menu-open.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 37160,
+      "sha256": "71a6e72a42ffb6b74e523b18fbbfc2cd6ce6542d7a808e027b07c425a24eb275"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-02b-remove-confirm.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 43646,
+      "sha256": "a428f7c7249d2b933dfdbe1872c9a7bf6f522a060428628c609b785bc8491706"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-03-session-row-hover.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 37621,
+      "sha256": "2e72248f40c873d67b4e27871a900e1b6b2f39b1a08b44eff2e6c7db588e8399"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-04-session-menu-open.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 39307,
+      "sha256": "5fa4527bdfc79d2cdf55dc87722430dbfab7b51a8ca7e25ff0d2168902266334"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-05-danger-item-hover.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 37185,
+      "sha256": "99a7298bf35fc194e9ce86eb626f33e6ede92d6b5e6108657334119ec5dec9cc"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-05a-danger-at-rest.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 37160,
+      "sha256": "71a6e72a42ffb6b74e523b18fbbfc2cd6ce6542d7a808e027b07c425a24eb275"
+    },
+    {
+      "name": "ui3-integration-UX-MENU-05b-menu-escaped.png",
+      "width": 1200,
+      "height": 900,
+      "bytes": 37631,
+      "sha256": "2acd4a24e77a29ac7a5bec73fa3f3afc0f440616da7d1d87318f851bb81b6632"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-01-provider-collapsed-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 66252,
+      "sha256": "ddd34404290abfb63eb0813fa7afdc43029f8da5df89b11013622e6cca4ca2bb"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-01-provider-collapsed-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 78281,
+      "sha256": "6b898fdee93f0e3b9fed2cb2a879990c7c4c9aae5b72b09b66a4ae10b8ed0a2d"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-01-provider-collapsed-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 44472,
+      "sha256": "efb844a65abb77c007cea909879815193ff9286acd38eb086287fbe777cec82e"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-01-provider-collapsed-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 53635,
+      "sha256": "ac9021943fe3445e1c47d1837dbf3d933c52763b1d2152b840ddb31e67dba79b"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-02-provider-expanded-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 65856,
+      "sha256": "3cd1a772ed27b5f260b0f61976fd4ff5c05d770fb8bd7a2f02e47d9326f48c55"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-02-provider-expanded-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 79193,
+      "sha256": "9e98488876ee0401ced174f2d319882ca4afaa1640564cc431e6d5cb4c30b600"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-02-provider-expanded-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 45828,
+      "sha256": "09c92101c46d74a81b9429c4bd5305d065c69555d128e0778ebf642592924a19"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-02-provider-expanded-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 54748,
+      "sha256": "9882ea7d5fb2b2a55e6a95ab7bfc983726138ff5bd5e54aaec209106bb47e4ee"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-03-many-models-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 86600,
+      "sha256": "b5cc5cbb90f756a23cca4c9621c5f8c18ab23b6d2e3f2668382250130dc428b8"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-03-many-models-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 105786,
+      "sha256": "3241885d27c6712f7ddc1ba56780f0a0a6b06c49a01bd268bea9c9fa7031f85f"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-03-many-models-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 48795,
+      "sha256": "322985cfda1dfebce78567087c38de8e563d8f8fea760e4c5154f79d70b141ff"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-03-many-models-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 66974,
+      "sha256": "0cc021d87996331fc705b28b9e419b141248f57e4362ebd73054eca1e314022a"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-04-current-provider-after-switch-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 86739,
+      "sha256": "e10f25f60ed04c8966d323e7b0cfbc58bcff1a34f4981bda3bdb0fd87a15d8fc"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-04-current-provider-after-switch-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 106170,
+      "sha256": "c14c390ffe9ced6bcd64b14be5d79d10e298d7ad0c7a732250ee6b855496a8a6"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-04-current-provider-after-switch-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 50695,
+      "sha256": "c57b97ecba020e36a016cecf8c75f404e9c4e7ba7c86d0e595da8d2e3c64fdeb"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-04-current-provider-after-switch-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 68090,
+      "sha256": "f8e25c8f92eb2db8932b14302d16bd23fba47ac42602931b2e2835917416d487"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-05-thinking-after-model-switch-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 59699,
+      "sha256": "a6d03319bb4c1089fd2a731b7bdb3aaf68147b80941b543955949a94b93a3419"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-05-thinking-after-model-switch-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 73706,
+      "sha256": "036619d8399aff5f9001cbfc3035caa6b5cd8e1ed341e3aede9b7f83a0c362b2"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-05-thinking-after-model-switch-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 41048,
+      "sha256": "5de7a984469e9180d6f01ab8bdea97c2b5edb587a7d044ca3a75c260226fa24d"
+    },
+    {
+      "name": "ui3-integration-UX-MODEL-05-thinking-after-model-switch-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 48829,
+      "sha256": "dfb7f30d0ced2e68a93b2814960d66a480fa65069d74bd4ab0c39072b8f6b3cc"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-current-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 39917,
+      "sha256": "aa4be92620b3098f6adbd72b20657d9e52f761c5e15462fcce4daf56ef74d221"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-current-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 45247,
+      "sha256": "0d0a0bafc4ecb9bfdc8d5d3f8a9e362d4f3fdddd14ac8524fcbe88ee9056d63d"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-current-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 34459,
+      "sha256": "d038cd4c788a17fc7347ff771f3e22167a234e201bc244b191c35c64129ed061"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-current-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 36841,
+      "sha256": "93945517fa079a13e8139b795b7100906e3a9728a9dba5ee177e7295d59e1b25"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-history-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 39205,
+      "sha256": "ddc8b22f7885eb3c76ea6f9c56dbb4d3a1a13d958da24f3714bd252934ac1403"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-history-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 43763,
+      "sha256": "3fa6c3e9f331ce7d77593489f06e192011ef1342dacff9a2b052c86063a87ba7"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-history-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 32298,
+      "sha256": "b1cadea9943312f1438b6280405f6a5507a276d751caa710c334137a9679a97d"
+    },
+    {
+      "name": "ui3-integration-UX-SESSION-MENU-history-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 34035,
+      "sha256": "7299fd14a2d1394313884a8f30e63928ef61938deddc1e4b67be28e7c3fda747"
+    },
+    {
+      "name": "ui3-integration-UX-SIDEBAR-project-sessions-1200x800.png",
+      "width": 1200,
+      "height": 800,
+      "bytes": 53771,
+      "sha256": "a6bc31b1712a632b373ba05ca1f9ad17626d1eca79d260ffd9ec24846beb5b05"
+    },
+    {
+      "name": "ui3-integration-UX-SIDEBAR-project-sessions-1536x900.png",
+      "width": 1536,
+      "height": 900,
+      "bytes": 66519,
+      "sha256": "69c1a8db10ca7f48181b92b5ff1f6f6cf4b0adbe406b68854e13490d1823988b"
+    },
+    {
+      "name": "ui3-integration-UX-SIDEBAR-project-sessions-700x600.png",
+      "width": 700,
+      "height": 600,
+      "bytes": 38214,
+      "sha256": "5977c4f9a7bf6956080eb0bb71cd820646c9ffdfc0c92673dc96da590acf3186"
+    },
+    {
+      "name": "ui3-integration-UX-SIDEBAR-project-sessions-900x700.png",
+      "width": 900,
+      "height": 700,
+      "bytes": 46007,
+      "sha256": "6bccdf085453ce7da103ed6811c74a2ce05b4a47b9e02a3d7eef15f2cb9e4713"
+    }
+  ]
+}

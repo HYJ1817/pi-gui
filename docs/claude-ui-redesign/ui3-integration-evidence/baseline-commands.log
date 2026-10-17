@@ -1,0 +1,80 @@
+
+--- 1. 输入 `/` 打开全部可执行命令 ---
+  ok  行首 `/` 打开菜单，候选 = allCommands({query:""})
+  ok  前导空白的行首也能触发
+  ok  换行后的行首能触发（多行输入）
+  ok  失去命令前缀后自动关闭
+
+--- 2. 输入 `/query` 实时筛选 ---
+  ok  `/al` 只留 alpha；`/zzz` 无候选
+  ok  无候选展示明确空状态
+  ok  有候选时空状态隐藏
+
+--- 3. URL 与路径不误触发 ---
+  ok  https URL 不触发菜单
+  ok  scheme 后斜杠 不触发菜单
+  ok  Windows 绝对路径 不触发菜单
+  ok  普通正文里的斜杠 不触发菜单
+  ok  行内（非行首）斜杠 不触发菜单
+  ok  行首 POSIX 路径：第二个 `/` 立即关闭且从不执行
+  ok  parseSlashTrigger 直接判据
+
+--- 4. 仅展示 when(ctx) 可执行的命令 ---
+  ok  when 为假不进候选，为真才进
+  ok  与独立 Palette 用同一份 when 判定
+
+--- 5. ArrowUp / ArrowDown 移动活动项 ---
+  ok  ArrowDown/Up 移动并 preventDefault，且不发送消息
+  ok  环形移动（首尾相接）
+
+--- 6. Enter / Tab 接受当前命令 ---
+  ok  Enter 执行选中命令、清理输入片段、关闭菜单
+  ok  Tab 也接受（契约规定适用时）
+  ok  Shift+Tab 不接受（保留给反向焦点）
+
+--- 7. Escape 只关闭菜单，不触发 stop ---
+  ok  Escape 关闭菜单、不执行命令、不触发既有 Escape(stop)
+  ok  菜单没开时 Escape 照常走既有行为
+
+--- 8. 中文输入法 composition 不误确认 ---
+  ok  composition 期间不触发；compositionend 后再判断
+  ok  isComposing 的 Enter 不被接受（交给输入法上屏）
+  ok  keyCode 229（IME 占位键）不被接受
+
+--- 9. Enter 不会同时执行命令并发送聊天 ---
+  ok  一次 Enter：命令执行 1 次、聊天发送 0 次
+  ok  Shift+Enter 不执行命令（交给 Composer 换行）
+  ok  菜单关闭后 Enter 仍是原有发送行为
+
+--- 10. 独立命令面板完整保留 ---
+  ok  palette.openPalette() 仍能打开、内容来自同一注册表
+
+--- 11. 项目 / 会话切换关闭菜单并清上下文 ---
+  ok  pi-gui:workspace-generation 事件关闭菜单
+  ok  关闭后不会用旧候选在新上下文执行
+
+--- 11b. session-switch / workspace-view 生命周期 ---
+  ok  pi-gui:session-switch 关闭菜单（同一 workspaceGeneration 内）
+  ok  会话切换后旧候选不能被执行、不发 RPC
+  ok  workspace-view 离开 Chat（planner/runtime/extensions）时关闭
+  ok  返回 Chat（workspace-view detail=chat）不自动弹出
+
+--- 12/13. 过期与未知候选不可执行、不发伪造指令 ---
+  ok  打开后命令变得不可用 → 接受时按 when 重新判定，不执行
+  ok  候选 id 从注册表消失（未知命令）→ 不执行、不发 RPC
+  ok  模块从不调用 fetch / 不拼 RPC（只调 cmd.run）
+
+--- 可访问性契约 ---
+  ok  listbox / option / aria-expanded / aria-activedescendant
+  ok  候选行显示名称 / 分组 / 快捷键提示
+  ok  鼠标点击候选执行
+
+--- 14. destroy 后无重复监听 / 无残留 DOM ---
+  ok  destroy 移除 DOM、监听与 aria；重挂后不重复
+  ok  ensureStylesheet 幂等且指向 ui3-inline-commands.css
+  ok  生命周期监听随 destroy 解绑、重挂不重复绑定
+
+--- 15. 样式表类名契约（排版证据见 Electron 截图） ---
+  ok  CSS 含约定类名与 reduced-motion 分支
+
+46/46 通过

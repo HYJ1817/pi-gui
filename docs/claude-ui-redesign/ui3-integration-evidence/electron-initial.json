@@ -1,0 +1,74 @@
+{
+  "passed": 8,
+  "failed": 5,
+  "skipped": 0,
+  "exitCode": 1,
+  "checks": [
+    {
+      "pass": true,
+      "name": "three styles loaded from production index exactly once"
+    },
+    {
+      "pass": false,
+      "name": "real Enter runs registry command once, clears token, never submits"
+    },
+    {
+      "pass": false,
+      "name": "ordinary real Enter reaches original submit"
+    },
+    {
+      "pass": false,
+      "name": "real Escape only closes slash and preserves draft"
+    },
+    {
+      "pass": false,
+      "name": "real Ctrl+K preserves independent panel and closes slash"
+    },
+    {
+      "pass": true,
+      "name": "synthetic IME signals inside real Chromium never submit (not real OS IME)"
+    },
+    {
+      "pass": true,
+      "name": "pi-gui:session-switch closes menu without draft mutation"
+    },
+    {
+      "pass": true,
+      "name": "pi-gui:workspace-generation closes menu without draft mutation"
+    },
+    {
+      "pass": true,
+      "name": "planner lifecycle closes menu"
+    },
+    {
+      "pass": true,
+      "name": "runtime lifecycle closes menu"
+    },
+    {
+      "pass": true,
+      "name": "same-name current model is paired by Provider"
+    },
+    {
+      "pass": true,
+      "name": "reachable Thinking explanation unsupported"
+    },
+    {
+      "pass": false,
+      "name": "joint fixture completed",
+      "detail": "Error: Script failed to execute, this normally means an error was thrown. Check the renderer console for the error.\n    at node:electron/js2c/sandbox_bundle:2:98760\n    at IpcRendererInternal.<anonymous> (node:electron/js2c/sandbox_bundle:2:93587)\n    at IpcRendererInternal.emit (node:electron/js2c/sandbox_bundle:2:36110)\n    at Object.onMessage (node:electron/js2c/sandbox_bundle:2:92801)"
+    }
+  ],
+  "facts": [],
+  "screenshots": [
+    "thinking-unsupported.png"
+  ],
+  "errors": [
+    "Uncaught TypeError: Cannot read properties of null (reading 'dataset')"
+  ],
+  "durationMs": 6038,
+  "versions": {
+    "electron": "44.4.3",
+    "chromium": "152.0.7977.130"
+  },
+  "limits": "Production app/index styles and handlers, offline fixture HTTP, sandbox enabled; capturePage only web pixels. Composition synthetic, no OS IME or real model. Lifecycle events injected, not real Pi switching."
+}
