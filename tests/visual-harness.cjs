@@ -12,8 +12,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const PUB = path.join(__dirname, '..', 'public');
-const UPLOAD_DIR = path.join(__dirname, '..', '.uploads');
+const PUB = process.env.VISUAL_PUBLIC_ROOT || path.join(__dirname, '..', 'public');
+const UPLOAD_DIR = process.env.VISUAL_UPLOAD_DIR || path.join(__dirname, '..', '.uploads');
 const PORT = Number(process.env.HARNESS_PORT || 7789);
 const uxMode = process.env.UX_STATE_HARNESS === '1';
 let uxSwitchCount = 0;

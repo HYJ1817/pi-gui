@@ -2142,7 +2142,7 @@ async function main() {
     await shotOf('.pop','UX-MODEL-03-many-models-'+suffix,'100 模型展开，仅 picker 内滚动、长 id 截断',[],[
       ['布局稳定',modelLayout],
       ['picker 可以内部滚动',`(() => {const p=document.querySelector('.pop');p.scrollTop=120;const ok=p.scrollTop>0 && p.scrollHeight>p.clientHeight && getComputedStyle(p).overflowY==='auto';p.scrollTop=0;return ok})()`],
-      ['长 id 使用 ellipsis，没有横向溢出',`(() => { const e=document.querySelector('[data-provider="openrouter"] .pi-text'); return getComputedStyle(e).textOverflow==='ellipsis' && e.scrollWidth>e.clientWidth; })()`],
+      ['UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出',`(() => { const e=document.querySelector('[data-provider="openrouter"] .ui3-model-item .pi-text');if(!e)return false;const s=getComputedStyle(e),r=e.getBoundingClientRect(),p=document.querySelector('.pop').getBoundingClientRect();return s.whiteSpace==='normal'&&s.overflowWrap==='anywhere'&&Number(s.webkitLineClamp)===(innerWidth<=760?3:2)&&e.scrollWidth<=e.clientWidth+1&&r.right<=p.right&&r.height>=parseFloat(s.fontSize)*2; })()`],
     ]);
     await evalJs(`document.querySelector('[data-provider="zhipu"] .pop-item').click()`);
     await sleep(350);
