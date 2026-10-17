@@ -372,7 +372,7 @@ async function main() {
     const status = card().querySelector('.ui4-confirm-status');
     assert.equal(status.hidden, false);
     assert.equal(status.dataset.state, 'error');
-    assert.ok(status.textContent.includes('仍在等待'));
+    assert.ok(status.textContent.includes('没有接受'));
     assert.equal(snapshot().pending.length, 1, '失败后仍在等待用户重试');
     assert.equal(settledOf('fail1'), undefined);
     assert.equal(deliveryOf('fail1').outcome, 'failed');
@@ -387,22 +387,29 @@ async function main() {
     assert.equal(settledOf('fail1').status, 'allowed');
   });
 
-  await check('网络层失败：说明没送达，不声称 Pi 已收到', async () => {
+  await check('网络层失败：结果未知，不声称未送达、不重发决定', async () => {
     mode = { network: true };
     approval.observeApprovalEvent(request({ id: 'net1' }), S);
     buttonByText(card(), '允许一次').click();
     await tick(10);
     assert.equal(layer().hidden, false);
     const status = card().querySelector('.ui4-confirm-status').textContent;
-    assert.ok(status.includes('没有送达'), status);
+    assert.ok(status.includes('未知'), status);
+    assert.ok(!status.includes('没有送达'), status);
     assert.ok(!status.includes('已允许'), status);
-    assert.equal(deliveryOf('net1').outcome, 'unreached');
+    assert.equal(deliveryOf('net1').outcome, 'unknown');
     assert.equal(deliveryOf('net1').network, true);
     assert.equal(snapshot().pending.length, 1);
+    assert.equal(buttonByText(card(), '允许一次').disabled, true);
+    assert.equal(buttonByText(card(), '拒绝').disabled, true);
   });
 
   await check('失败后用 Esc 取消：取消也走真实投递，成功后收卡', async () => {
+    const before = commands.length;
+    key('Escape'); await tick(10);
+    assert.equal(commands.length, before, '未知投递的 Esc 仅关闭本地提示');
     mode = { response: { ok: false } };
+    approval.observeApprovalEvent(request({ id: 'retry-cancel' }), S);
     buttonByText(card(), '允许一次').click();
     await tick(10);
     assert.equal(layer().hidden, false);
@@ -410,7 +417,7 @@ async function main() {
     key('Escape');
     await tick(10);
     assert.equal(lastCommand().cancelled, true);
-    assert.equal(settledOf('net1').status, 'cancelled');
+    assert.equal(settledOf('retry-cancel').status, 'cancelled');
     assert.equal(layer().hidden, true);
   });
 
@@ -503,7 +510,7 @@ async function main() {
     buttonByText(modalCard(), 'A').click();
     await tick(10);
     assert.equal(modalLayer().hidden, false);
-    assert.ok(modalCard().querySelector('.ui4-confirm-status').textContent.includes('仍在等待'));
+    assert.ok(modalCard().querySelector('.ui4-confirm-status').textContent.includes('没有接受'));
     mode = { response: { ok: true } };
     buttonByText(modalCard(), 'A').click();
     await tick(10);
@@ -538,7 +545,7 @@ async function main() {
     key('Escape');
     await tick(10);
     assert.equal(modalLayer().hidden, false);
-    assert.ok(modalCard().querySelector('.ui4-confirm-status').textContent.includes('仍在等待'));
+    assert.ok(modalCard().querySelector('.ui4-confirm-status').textContent.includes('没有接受'));
     mode = { response: { ok: true } };
     modalLayer().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     await tick(10);
@@ -708,7 +715,7 @@ async function main() {
 async function runElectronScreenshots() {
   const { app, BrowserWindow } = require('electron');
   const { spawn } = require('node:child_process');
-  const OUT = path.resolve(__dirname, '../docs/claude-ui-redesign/ui4b-evidence/electron');
+  const OUT = process.env.UI4_EVIDENCE_ROOT || path.resolve(__dirname, '../.shots/ui4-approval');
   fs.mkdirSync(OUT, { recursive: true });
   const checks = [], facts = [], screenshots = [], errors = [];
   let pass = 0, fail = 0;
@@ -878,7 +885,9 @@ async function runElectronScreenshots() {
     check('投递失败：卡片不关闭、错误状态可见', () => {
       if (failFacts.hidden) throw new Error('card closed');
       if (failFacts.state !== 'error') throw new Error('state=' + failFacts.state);
-      if (!failFacts.text.includes('仍在等待')) throw new Error('text=' + failFacts.text);
+      /* 后端明确拒绝时卡片显示的是真实投递结果（不是「仍在等待」的旧文案）：
+       * Pi 仍持有这条请求，用户可以重试，但 UI 不能声称已经送达。 */
+      if (!failFacts.text.includes('后端没有接受')) throw new Error('text=' + failFacts.text);
     });
     await shot('state-failed-dark-900');
     await read(`__ui4.mode = 'ok'; __click('允许一次')`);

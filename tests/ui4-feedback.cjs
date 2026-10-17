@@ -7,7 +7,7 @@ const { pathToFileURL } = require('node:url');
 const assert = require('node:assert/strict');
 
 const ROOT = path.resolve(__dirname, '..');
-const OUT = path.join(ROOT, 'docs/claude-ui-redesign/ui4c-evidence');
+const OUT = process.env.UI4_EVIDENCE_ROOT || path.join(ROOT, '.shots/ui4-feedback');
 const checks = [];
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

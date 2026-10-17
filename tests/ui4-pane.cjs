@@ -29,7 +29,7 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const OUT = path.join(ROOT, 'docs/claude-ui-redesign/ui4a-evidence');
+const OUT = process.env.UI4_EVIDENCE_ROOT || path.join(ROOT, '.shots/ui4-pane');
 
 if (!process.versions.electron) {
   const world = fs.mkdtempSync(path.join(os.tmpdir(), 'ui4-pane-electron-'));
@@ -152,7 +152,7 @@ async function run() {
 
     harness = spawn(process.execPath, [path.join(ROOT, 'tests/visual-harness.cjs')], {
       cwd: world,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HARNESS_PORT: '0', VISUAL_PUBLIC_ROOT: path.join(ROOT, 'public'), VISUAL_UPLOAD_DIR: path.join(world, 'uploads') },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HARNESS_PORT: '0', VISUAL_PUBLIC_ROOT: process.env.UI4_ASSETS_ROOT || path.join(ROOT, 'public'), VISUAL_UPLOAD_DIR: path.join(world, 'uploads') },
       stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     });
     harness.stderr.on('data', chunk => errors.push('harness: ' + String(chunk)));
@@ -182,7 +182,7 @@ async function run() {
     check(await read('document.hasFocus()'), 'Chromium 页面拿到焦点（后续受信键盘才有意义）');
 
     /* ---------- 0. 样式表：集成方要加的那一行，本测试自己按同一路径挂上去 ---------- */
-    const styleOk = await read(`new Promise(resolve=>{const link=document.createElement('link');link.rel='stylesheet';link.href='/ui4-pane.css';link.id='ui4-pane-style';link.onload=()=>resolve(true);link.onerror=()=>resolve(false);document.head.append(link);})`);
+    const styleOk = await read(`!!document.querySelector('link#ui4-pane-style[href="/ui4-pane.css"]')`);
     check(styleOk && await read(`document.querySelectorAll('link[href="/ui4-pane.css"]').length===1`), 'public/ui4-pane.css 可被真实页面加载且只加载一次');
     check(await read(`(()=>{const rules=[...document.styleSheets].find(s=>s.href?.endsWith('/ui4-pane.css'));return Boolean(rules&&rules.cssRules.length>40)})()`), 'ui4-pane.css 规则实际生效（样式表解析成功）');
 
@@ -573,6 +573,7 @@ async function run() {
     check(true, '面板内键盘焦点位置都可以用 Escape 关闭');
 
     /* ---------- 8. 收尾 ---------- */
+    if (process.env.UI4_INTEGRATION === '1') await require('./ui4-integration-electron.cjs').run({ win, read, check, shot, key, click, closePane, nativeView, sleep, until, facts });
     check(errors.length === 0, 'renderer / harness 没有报错', errors.slice(0, 5));
 
     const failed = checks.filter(c => !c.pass);
@@ -587,7 +588,7 @@ async function run() {
       facts,
       screenshots,
       notes: [
-        '所有渲染都是生产 public/ 资源；唯一的注入是 ui4-pane.css 的 <link>（集成方负责加进 index.html）。',
+        '所有渲染都是生产入口的实际资源；不注入 CSS，静态 stylesheet 必须存在并解析成功。',
         'Browser 使用真实 WebContentsView（electron/browser-view.cjs）与离线 127.0.0.1 fixture 页。',
         '本会话变更 / 开发进程的数据由页内 fetch 夹具提供，形状照抄真实接口。',
         '不使用真实 Pi、不调用模型、不写用户项目。',

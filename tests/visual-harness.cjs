@@ -12,7 +12,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const PUB = process.env.VISUAL_PUBLIC_ROOT || path.join(__dirname, '..', 'public');
+/* 规范化成绝对路径：UI4_ASSETS_ROOT 从环境变量进来时可能是正斜杠，
+ * 而 path.join 产出反斜杠；下面的 startsWith 包含检查会因此恒假。
+ * 默认值本来就是绝对路径，不受影响。 */
+const PUB = path.resolve(process.env.VISUAL_PUBLIC_ROOT || path.join(__dirname, '..', 'public'));
 const UPLOAD_DIR = process.env.VISUAL_UPLOAD_DIR || path.join(__dirname, '..', '.uploads');
 const PORT = Number(process.env.HARNESS_PORT || 7789);
 const uxMode = process.env.UX_STATE_HARNESS === '1';

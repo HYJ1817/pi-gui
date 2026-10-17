@@ -1,0 +1,54 @@
+/* Additive native Runtime integration, real server and isolated fake Pi only. */
+const path = require('node:path');
+const { spawn } = require('node:child_process');
+if (require.main === module) {
+  const env = { ...process.env, UI4_RUNTIME_INTEGRATION: '1' };
+  env.P32_RUNTIME_EVIDENCE ||= path.resolve(__dirname, '../docs/claude-ui-redesign/ui4-integration-evidence/runtime-electron');
+  const child = spawn(process.execPath, [path.join(__dirname, 'runtime-electron.cjs')], { env, stdio: 'inherit', windowsHide: true });
+  child.on('error', error => { console.error(error); process.exitCode = 1; });
+  child.on('exit', code => { process.exitCode = code ?? 1; });
+}
+exports.run = async function ({ owner, api, read, until, check, shot, host, win, OUT }) {
+  const id = owner.conversationId;
+  await read(`document.querySelector('#pjRuntimeList [data-conversation-id="${id}"] .pj-sess-primary').click()`);
+  await until(() => read(`!document.querySelector('#runtimeView').hidden && !!document.querySelector('.rtc-controls')`));
+  await read(`[...document.querySelectorAll('.rtc-controls button')].find(b=>b.textContent==='Browser').click()`);
+  let native;
+  await until(() => { native = [...host.records.values()].find(r => r.scope.runtimeId === owner.runtimeId);
+    return native && win.contentView.children.some(v => v.webContents === native.controller.getWebContents()); });
+  check(true, 'UI4 Runtime Browser attaches the current authoritative native owner');
+  await api({ action: 'command', owner, command: { type: 'prompt', message: 'FIXTURE_UI4_APPROVAL' } });
+  await until(() => read(`!!document.querySelector('.rtc-approval button')`));
+  await shot('ui4-runtime-approval-browser', OUT);
+  await read(`(()=>{window.__ui4runtime={calls:0,held:true};const original=window.fetch.bind(window);window.fetch=async(url,options={})=>{if(String(url)==='/api/runtime-sessions'&&options.body){const body=JSON.parse(options.body);if(body.command?.type==='extension_ui_response'){__ui4runtime.calls++;if(__ui4runtime.held)await new Promise(resolve=>__ui4runtime.release=resolve);}}return original(url,options);};document.querySelector('.rtc-approval button').click();})()`);
+  await read(`(async()=>{__ui4runtime.toast=await import('/ui/toast.js');__ui4runtime.oldActions=0;__ui4runtime.first=__ui4runtime.toast.toast('UI4 Runtime context fixture failure','error',{action:{label:'夹具动作',run:()=>__ui4runtime.oldActions++}});})()`);
+  await until(() => read(`__ui4runtime.calls===1`));
+  await api({ action: 'restart', owner });
+  let next;
+  await until(async () => { const snapshot = await api(); next = snapshot.items.find(r => r.conversationId === id);
+    return next?.lifecycle === 'ready' && next.owner?.runtimeGeneration !== owner.runtimeGeneration; }, 60000);
+  owner = next.owner;
+  await until(() => read(`!document.querySelector('.rtc-approval')`));
+  check(!win.contentView.children.some(v => v.webContents === native.controller.getWebContents()), 'UI4 old native owner detaches on Runtime restart');
+  check(await read(`__ui4runtime.first.dataset.contextStale==='true'&&__ui4runtime.first.querySelector('.ui4-feedback-toast-action').disabled`), 'UI4 production feedback getter invalidates actions for the replaced actual Runtime owner');
+  check(await read(`Boolean(__ui4runtime.toast.toast('UI4 Runtime context fixture failure','error'))`), 'UI4 new actual owner does not lose same-text errors to old-owner deduplication');
+  await read(`__ui4runtime.held=false;__ui4runtime.release()`);
+  await new Promise(resolve => setTimeout(resolve, 350));
+  check(await read(`__ui4runtime.calls===1 && !document.querySelector('.rtc-approval') && !document.querySelector('.rtc-notice')?.textContent.includes('stale')`), 'UI4 stale held approval cannot authorize or display failure in the new owner');
+  await shot('ui4-runtime-owner-replaced', OUT);
+  await api({ action: 'command', owner, command: { type: 'prompt', message: 'FIXTURE_UI4_APPROVAL' } });
+  await until(() => read(`!!document.querySelector('.rtc-approval button')`));
+  await read(`(()=>{const row=document.querySelector('.rtc-approval');[...row.querySelectorAll('button')].find(b=>b.textContent==='拒绝').click()})()`);
+  await until(() => read(`!document.querySelector('.rtc-approval')`));
+  check(await read(`__ui4runtime.calls===2`), 'UI4 current-owner explicit denial sends exactly one actual backend response');
+  await shot('ui4-runtime-current-denied', OUT);
+  const other = (await api()).items.find(item => item.conversationId !== id);
+  if (!other) throw new Error('UI4 requires the existing multi-conversation fixture');
+  await read(`document.querySelector('#pjRuntimeList [data-conversation-id="${other.conversationId}"] .pj-sess-primary').click()`);
+  await until(() => read(`JSON.parse(__ui4runtime.toast.feedbackContext()).at(-1)?.[0]===${JSON.stringify(other.conversationId)}`));
+  check(await read(`Boolean(__ui4runtime.toast.toast('UI4 Runtime context fixture failure','error'))`), 'UI4 actual A to B navigation keeps identical real failures independent');
+  await shot('ui4-runtime-feedback-other-conversation', OUT);
+  await read(`document.querySelector('#pjRuntimeList [data-conversation-id="${id}"] .pj-sess-primary').click()`);
+  await until(() => read(`JSON.parse(__ui4runtime.toast.feedbackContext()).at(-1)?.[0]===${JSON.stringify(id)}`));
+  return owner;
+};
