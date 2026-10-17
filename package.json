@@ -21,7 +21,7 @@
     "test:auth": "node tests/provider-auth.cjs",
     "test:ui": "node tests/smoke.cjs",
     "test:theme": "node tests/theme.cjs",
-    "test:logging": "node tests/logging.cjs && node tests/logging-leaks.cjs && node tests/logging-ui.cjs",
+    "test:logging": "node tests/logging.cjs && node tests/logging-leaks.cjs && node tests/logging-secret-state.cjs && node tests/logging-client.cjs && node tests/logging-ui.cjs",
     "test:ui5:electron": "node tests/ui5-logs-electron.cjs",
     "test:logging:packaged": "node tests/logging-packaged.cjs",
     "test:ui2": "node tests/ui2-classic.cjs && node tests/ui2-runtime-display.cjs && node tests/ui2-visual.cjs",
