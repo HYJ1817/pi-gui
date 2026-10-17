@@ -111,6 +111,7 @@ async function main() {
       return lastSendResult;
     } },
     auth: { denyRequest: () => null }, sse: {}, managedProcesses: { manager: null }, worktrees: null,
+    logging: null,
     sessionChanges: { assertReady: async () => { if (captureError) throw captureError; }, disable: async () => { disabled++; } },
     providerAuth: { snapshot: () => ({ sync: { state: syncing ? 'syncing' : 'idle' } }) },
     modelGeneration: {

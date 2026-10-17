@@ -64,7 +64,7 @@ async function run() {
     await app.whenReady();
     harness = spawn(process.execPath, [path.join(ROOT, 'tests/visual-harness.cjs')], {
       cwd: world,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HARNESS_PORT: '0', VISUAL_PUBLIC_ROOT: path.join(ROOT, 'public'), VISUAL_UPLOAD_DIR: path.join(world, 'uploads') },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HARNESS_PORT: '0', VISUAL_PUBLIC_ROOT: process.env.UI5_ASSETS_ROOT || path.join(ROOT, 'public'), VISUAL_UPLOAD_DIR: path.join(world, 'uploads') },
       stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     });
     harness.stderr.on('data', (chunk) => errors.push('harness: ' + String(chunk)));

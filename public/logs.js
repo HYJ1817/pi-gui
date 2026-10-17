@@ -97,6 +97,10 @@ export function openLogs() {
   let preview = null;
   let exportWindow = 30;
   let exporting = false;
+  let statusRequest = 0;
+  let entriesRequest = 0;
+  let settingsRequest = 0;
+  let previewRequest = 0;
 
   openModal((card, close) => {
     card.classList.add('ui5-logs-modal');
@@ -130,6 +134,9 @@ export function openLogs() {
 
     function setTab(id) {
       tab = id;
+      /* 切走时让旧的日志读取失效；否则慢请求回来会把 loading 永久留在 true。 */
+      entriesRequest++;
+      loadingEntries = false;
       for (const [key, b] of Object.entries(tabButtons)) b.setAttribute('aria-selected', String(key === id));
       body.replaceChildren();
       logListHost = null;
@@ -149,8 +156,9 @@ export function openLogs() {
     }
 
     async function loadStatus(render = true) {
+      const request = ++statusRequest;
       const result = await fetchLogsStatus();
-      if (!alive) return;
+      if (!alive || request !== statusRequest) return;
       if (!result || result.ok === false || !result.status) {
         statusError = result?.error || '无法读取日志状态';
         if (render && tab === 'overview') renderOverview();
@@ -317,8 +325,9 @@ export function openLogs() {
     }
 
     async function applySettings(patch) {
+      const request = ++settingsRequest;
       const result = await updateLogSettings(patch);
-      if (!alive) return;
+      if (!alive || request !== settingsRequest) return;
       if (!result?.ok) {
         toast(result?.code === 'settings_write_failed' ? '日志设置未能保存（目录不可写）' : '日志设置无效或未能保存', 'warn');
         await loadStatus(tab === 'overview');
@@ -459,7 +468,7 @@ export function openLogs() {
     }
 
     async function loadEntries(reset = false) {
-      if (loadingEntries) return;
+      const request = ++entriesRequest;
       loadingEntries = true;
       const countNode = body.querySelector('.ui5-logs-inline-note');
       if (reset) { entries = []; cursor = null; more = false; }
@@ -470,8 +479,8 @@ export function openLogs() {
       if (filters.q.trim()) params.q = filters.q.trim();
       if (!reset && cursor) params.cursor = cursor;
       const result = await fetchLogEntries(params);
+      if (!alive || request !== entriesRequest || !logListHost) return;
       loadingEntries = false;
-      if (!alive || !logListHost) return;
       if (!result || result.ok === false) {
         logListHost.replaceChildren(node('div', 'ui5-logs-empty ui5-logs-error', '日志读取失败。请刷新重试；这不影响聊天。'));
         logRendererEvent('ui.logs_view_failed', { operation: 'entries', reason: result?.network ? 'network' : 'read_failed' });
@@ -500,6 +509,7 @@ export function openLogs() {
       }
       windowSelect.value = String(exportWindow);
       windowSelect.onchange = () => {
+        previewRequest++;
         exportWindow = Number(windowSelect.value);
         preview = null;
         renderPreview();
@@ -535,12 +545,13 @@ export function openLogs() {
       const actions = node('div', 'ui5-logs-export-actions');
       const previewButton = button('预览摘要');
       previewButton.onclick = async () => {
+        const request = ++previewRequest;
         previewButton.disabled = true;
         preview = null;
         renderPreview();
         const result = await previewLogExport(exportWindow);
         previewButton.disabled = false;
-        if (!alive) return;
+        if (!alive || request !== previewRequest) return;
         if (!result?.ok) {
           previewHost.replaceChildren(node('div', 'ui5-logs-error', '无法预览导出内容，请检查日志目录后重试。'));
           return;

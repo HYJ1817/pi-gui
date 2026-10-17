@@ -420,6 +420,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
+| [diagnostic-logging.md](docs/diagnostic-logging.md) | 本地结构化日志：事件/字段白名单、分级与保留、崩溃线索、进程边界、故障报告 ZIP 与负向测试 |
 | [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、P23 的版本真值 / probe registry / 兼容矩阵 / schema 漂移 |
 | [upgrade-playbook.md](docs/upgrade-playbook.md) | P23 升级流程：取 release、diff contract、更新 fixture、契约测试、显式 live test、更新矩阵与文档、人工验收；内置更新器只是其中第 1–6 步的便利层 |
 | [updates.md](docs/updates.md) | 两部分：Pi GUI 更新（数据源、SemVer、缓存与 single-flight、外链白名单、隐私、为什么不自动安装）与 Pi 运行时更新（检查、官方 `pi update --self`、维护暂停、版本复验） |
