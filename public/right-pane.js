@@ -44,6 +44,51 @@ const RUNTIME_FLOOR = 320;
 
 const byId = (id) => document.getElementById(id);
 
+/** 面板宽度的两个边界，交给测试与文档引用，避免别处再抄一份数字。 */
+export const RIGHT_PANE_LIMITS = Object.freeze({ min: MIN_WIDTH, default: DEFAULT_WIDTH });
+
+/* ---------- 面板顶部标题 ----------
+ *
+ * UI-4 起，「本会话变更」「开发进程」这类由本仓自己接线的面（surface）不再各画
+ * 一套标题 —— 它们共用一个外壳：标题 + 一行说明 + 右侧工具按钮，关闭按钮由
+ * ui/secondary-surface.js 追加在最右端（它只认 headerSelector，不认具体结构）。
+ *
+ * 这个文件仍然**不知道**里面装的是浏览器还是进程面板：这里只提供一个空壳，
+ * 标题、说明与按钮全部由调用方给。浏览器那一面由 browser-pane.js 自己画工具栏
+ * （它对原生 WebContentsView 有所有权，不适合由通用外壳代画），两者靠
+ * ui4-pane.css 对齐到同一条 46px 的标题带。 */
+export function createPaneHeader({ title = '', subtitle = '', actions = [], id } = {}) {
+  const head = document.createElement('header');
+  head.className = 'rp-head';
+  if (id) head.id = id;
+
+  const main = document.createElement('div');
+  main.className = 'rp-head-main';
+
+  const heading = document.createElement('h3');
+  heading.className = 'rp-head-title';
+  heading.textContent = title;
+
+  const sub = document.createElement('p');
+  sub.className = 'rp-head-sub';
+  sub.textContent = subtitle;
+  if (!subtitle) sub.hidden = true;
+
+  const grow = document.createElement('span');
+  grow.className = 'rp-head-grow';
+  grow.setAttribute('aria-hidden', 'true');
+
+  const slot = document.createElement('div');
+  slot.className = 'rp-head-actions';
+  for (const node of actions) if (node) slot.append(node);
+
+  /* 标题 → 说明 → 弹性空白 → 工具按钮，与 git.js 的 .chg-head 同一个顺序：
+   * 于是「文件变更」不用改结构就能和这两面对齐。 */
+  main.append(heading, sub, grow, slot);
+  head.append(main);
+  return { el: head, title: heading, subtitle: sub, actions: slot };
+}
+
 function readStoredWidth() {
   try {
     const raw = JSON.parse(localStorage.getItem(WIDTH_KEY) || 'null');
@@ -72,6 +117,9 @@ export function initRightPane() {
   let surface = null; // 当前装的是哪一面（'browser' | null）
   let rafId = 0;
   let occluded = false;
+  /* 打开前焦点在哪。关闭时还给**当时那个入口** —— 比按 surface 名硬编码一个
+   * 按钮准：runtime 的 Browser/进程入口与 Classic 的并不是同一组。 */
+  let lastTrigger = null;
 
   /** 订阅者：surface 想知道「viewport 矩形变了」。 */
   const listeners = new Set();
@@ -128,6 +176,7 @@ export function initRightPane() {
       const room = Math.floor(app.clientWidth - railW - sideW - RUNTIME_FLOOR - resizer.offsetWidth);
       renderedWidth = Math.min(width, Math.max(MIN_WIDTH, room));
     }
+    syncResizerA11y(renderedWidth);
     /* 变量写在 :root 上而不是面板自己身上 —— #toasts 是 body 的另一个子节点，
      * 它要靠 var(--rp-width) 往左让开右栏（见 styles.css 的 Toast 一节）。
      * 写在面板上，那条规则就取不到值了。 */
@@ -135,6 +184,16 @@ export function initRightPane() {
     root.style.width = renderedWidth + 'px';
     applyMode();
     scheduleMeasure();
+  }
+
+  /** 分隔条的读屏语义：宽度是真的能调的，就把当前值/范围如实报出来。 */
+  function syncResizerA11y(renderedWidth) {
+    const max = clampWidth(Number.MAX_SAFE_INTEGER);
+    const now = Math.round(renderedWidth);
+    resizer.setAttribute('aria-valuemin', String(MIN_WIDTH));
+    resizer.setAttribute('aria-valuemax', String(max));
+    resizer.setAttribute('aria-valuenow', String(now));
+    resizer.setAttribute('aria-valuetext', now + ' 像素');
   }
 
   function clampWidth(next) {
@@ -174,12 +233,21 @@ export function initRightPane() {
     document.addEventListener('mouseup', up);
   }
 
+  resizer.setAttribute('aria-controls', 'rightPane');
   resizer.addEventListener('mousedown', onDragStart);
+  // 双击回到默认宽：拖窄/拖宽之后总得有一条「回到原样」的路
+  resizer.addEventListener('dblclick', () => {
+    width = clampWidth(DEFAULT_WIDTH);
+    applyWidth();
+    storeWidth(width);
+  });
   // 键盘也能调宽度（无障碍）：分隔条是可聚焦的
   resizer.addEventListener('keydown', (e) => {
     const step = e.shiftKey ? 40 : 12;
     if (e.key === 'ArrowLeft') width = clampWidth(width + step);
     else if (e.key === 'ArrowRight') width = clampWidth(width - step);
+    else if (e.key === 'Home') width = MIN_WIDTH;
+    else if (e.key === 'End') width = clampWidth(Number.MAX_SAFE_INTEGER);
     else return;
     e.preventDefault();
     applyWidth();
@@ -240,6 +308,8 @@ export function initRightPane() {
   /* ---------- 打开 / 关闭 ---------- */
 
   function open(nextSurface) {
+    const focused = document.activeElement;
+    if (focused && focused !== document.body && !root.contains(focused)) lastTrigger = focused;
     const next = nextSurface || surface || 'browser';
     if (surface !== next) {
       for (const fn of surfaceListeners) fn(next);
@@ -254,6 +324,16 @@ export function initRightPane() {
     announce();
   }
 
+  /** 关闭后把焦点还回去：优先还原打开前的那个入口，它已经不在了
+   *  （例如从弹层菜单里点的）才退回按面板名找的既有入口。 */
+  function restoreFocus(previous) {
+    const remembered = lastTrigger && lastTrigger.isConnected ? lastTrigger : null;
+    lastTrigger = null;
+    const fallback = byId(previous === 'session-changes' && byId('workspace')?.dataset.workspaceView === 'runtime' ? 'runtimeSessionMore' : previous === 'browser' ? 'btnBrowser' : ['process','session-changes'].includes(previous) ? 'btnMore' : 'navChanges');
+    const target = remembered || fallback;
+    if (target && typeof target.focus === 'function') target.focus();
+  }
+
   function close() {
     const focusInside = root.contains(document.activeElement);
     const previous = surface;
@@ -265,7 +345,7 @@ export function initRightPane() {
     app.classList.remove('rp-open');
     applyMode();
     announce();
-    if (focusInside) byId(previous === 'session-changes' && byId('workspace')?.dataset.workspaceView === 'runtime' ? 'runtimeSessionMore' : previous === 'browser' ? 'btnBrowser' : ['process','session-changes'].includes(previous) ? 'btnMore' : 'navChanges')?.focus();
+    if (focusInside) restoreFocus(previous);
   }
 
   /** 告诉外面「右栏开了/关了」—— 入口按钮的 aria-pressed 要跟着变，
