@@ -84,6 +84,11 @@ for (const f of fs.readdirSync(path.join(ROOT, 'electron')).filter((n) => n.ends
   fs.copyFileSync(path.join(ROOT, 'electron', f), path.join(STAGE, f));
 }
 fs.copyFileSync(serverCjs, path.join(STAGE, 'server.cjs'));
+/* 主进程日志核心与后端共用同一份实现；打包后平铺在 resources/app/ 下，
+ * 与 electron/logging.cjs 的候选路径一致。 */
+for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs']) {
+  fs.copyFileSync(path.join(ROOT, 'lib', f), path.join(STAGE, f));
+}
 fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset-manifest.json'));
 
 /* 前端静态资源。漏了这个的话页面直接 404 —— 而且开发机上不会发现，

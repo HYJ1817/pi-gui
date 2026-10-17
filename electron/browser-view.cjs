@@ -90,7 +90,8 @@ const ERR_ABORTED = -3;
  * @param {(url:string)=>Promise<void>} [o.openExternal]  注入点，测试用
  */
 function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u) => shell.openExternal(u),
-  partition = PARTITION, send = null, isVisible = () => true }) {
+  partition = PARTITION, send = null, isVisible = () => true, logEvent = null }) {
+  const safeLog = (event, details) => { try { logEvent?.(event, details); } catch { /* observation only */ } };
   let view = null; // WebContentsView | null
   let generation = 0;
   let ready = Promise.resolve();
@@ -162,6 +163,11 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       }
       return;
     }
+    /* 只记录固定 kind，不记录 message / URL —— 它们可能来自页面内容。 */
+    safeLog('electron.browser_view_failed', {
+      operation: 'navigate',
+      reason: kind === 'load-failed' ? 'load_failed' : kind === 'crashed' ? 'crashed' : 'blocked',
+    });
     state = { ...state, error: { kind, message }, loading: false, ...(url ? { url } : {}) };
     emit();
   }
@@ -197,7 +203,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     try {
       w.contentView.addChildView(view);
     } catch {
-      /* 已经挂上去了 */
+      safeLog('electron.browser_view_state', { operation: 'attach', state: 'already_attached' });
     }
     applyBounds();
   }
@@ -208,7 +214,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     try {
       w.contentView.removeChildView(view);
     } catch {
-      /* 已经摘掉了 */
+      safeLog('electron.browser_view_state', { operation: 'detach', state: 'already_detached' });
     }
   }
 
@@ -218,20 +224,25 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     const w = win();
     if (!w) return false;
 
-    view = new WebContentsView({
-      webPreferences: {
-        partition, // ← 每 runtime 独立 session，见文件头
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-        webSecurity: true,
-        allowRunningInsecureContent: false,
-        spellcheck: false,
-        /* **刻意不挂 preload**：远程页面不该拿到任何桥。
-         * 主窗口那个 preload.cjs 绝不能复用到这里 —— 那等于把 openPath /
-         * openExternal 的转发能力交给任意网站。 */
-      },
-    });
+    try {
+      view = new WebContentsView({
+        webPreferences: {
+          partition, // ← 每 runtime 独立 session，见文件头
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+          webSecurity: true,
+          allowRunningInsecureContent: false,
+          spellcheck: false,
+          /* **刻意不挂 preload**：远程页面不该拿到任何桥。
+           * 主窗口那个 preload.cjs 绝不能复用到这里 —— 那等于把 openPath /
+           * openExternal 的转发能力交给任意网站。 */
+        },
+      });
+    } catch (error) {
+      safeLog('electron.browser_view_failed', { operation: 'create', reason: 'view_create_failed' });
+      throw error;
+    }
     view.setBackgroundColor('#0d0d0d');
     generation++;
 
@@ -388,6 +399,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       });
       return { ok: true, url: norm.url };
     } catch (err) {
+      safeLog('electron.browser_view_failed', { operation: 'navigate', reason: 'navigation_exception' });
       return { ok: false, error: '导航失败：' + (err && err.message ? err.message : String(err)) };
     }
   }

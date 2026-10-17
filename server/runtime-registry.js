@@ -13,7 +13,10 @@ const rootKey = p => process.platform === 'win32' ? path.resolve(p).toLowerCase(
 // workspace admission/health are injected by the composition root.
 export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, validateWorkspace = async () => {},
   publish = () => {}, externalCount = () => 0, beforeStart = () => null, beforeCommand = () => null,
-  admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024 } = {}) {
+  admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024,
+  logEvent = null } = {}) {
+  const diagLog = typeof logEvent === 'function' ? logEvent : () => {};
+  const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
   const backendInstance = randomUUID(), records = new Map(), lives = new Map(), leases = new Map(), revisions = new Map();
   let revision = 0, contextRevision = 0;
   fs.mkdirSync(dataDir, { recursive: true });
@@ -42,7 +45,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const now = fs.statSync(dataRoot);
       if (disposed || invalid || fs.realpathSync(dataRoot) !== dataRoot || now.dev !== rootIdentity.dev || now.ino !== rootIdentity.ino
         || (fs.existsSync(manifest) && fs.lstatSync(manifest).isSymbolicLink())) throw Error();
-    } catch { throw fail('registry_unavailable'); }
+    } catch {
+      safeLog('runtime.owner_rejected', { operation: 'guard', reason: 'registry_unavailable' });
+      throw fail('registry_unavailable');
+    }
   }
   function save() {
     guardStore(); const tmp = path.join(dataRoot, `.conversations-${randomUUID()}.tmp`);
@@ -55,9 +61,15 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     conversationId: live.record.conversationId, runtimeId: live.id, runtimeGeneration: live.generation, sessionId: live.sessionId }; }
   function belongs(live) { return !disposed && lives.get(live.record.conversationId) === live && !live.retired; }
   function resolve(expected, allowRetired = false) {
-    if (!closed(expected, OWNER_KEYS) || OWNER_KEYS.some(k => !Object.hasOwn(expected, k))) throw fail('stale_runtime');
+    if (!closed(expected, OWNER_KEYS) || OWNER_KEYS.some(k => !Object.hasOwn(expected, k))) {
+      safeLog('runtime.owner_rejected', { operation: 'resolve', reason: 'owner_shape' });
+      throw fail('stale_runtime');
+    }
     const live = lives.get(expected.conversationId);
-    if (!live || (!allowRetired && !belongs(live)) || OWNER_KEYS.some(k => owner(live)[k] !== expected[k])) throw fail('stale_runtime');
+    if (!live || (!allowRetired && !belongs(live)) || OWNER_KEYS.some(k => owner(live)[k] !== expected[k])) {
+      safeLog('runtime.owner_rejected', { operation: 'resolve', reason: 'owner_stale' });
+      throw fail('stale_runtime');
+    }
     return live;
   }
   function disposeResource(live, resource) {
@@ -158,10 +170,14 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!belongs(live) || generation !== live.generation || typeof state?.sessionId !== 'string' || !state.sessionId || state.sessionId.length > 128) return;
     if (live.record.sessionId && live.record.sessionId !== state.sessionId) {
       // Resume must select the proven disk session. Do not silently attach --continue.
-      live.error = 'session_mismatch'; void close(owner(live)).catch(() => {}); return;
+      live.error = 'session_mismatch';
+      safeLog('runtime.session_switch_failed', { phase: 'binding', code: 'session_mismatch' });
+      void close(owner(live)).catch(() => {}); return;
     }
     for (const other of lives.values()) if (other !== live && other.sessionId === state.sessionId) {
-      live.error = 'session_in_use'; void close(owner(live)).catch(() => {}); return;
+      live.error = 'session_in_use';
+      safeLog('runtime.session_switch_failed', { phase: 'binding', code: 'session_in_use' });
+      void close(owner(live)).catch(() => {}); return;
     }
     live.sessionId = state.sessionId;
     // The factory must prove any path against the scanner/header before persistence.
@@ -193,6 +209,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       return { ok: true, conversationId: record.conversationId, owner: owner(live), item: summary(record) };
     } catch (e) {
       live.lifecycle = 'error'; live.error = 'runtime_start_failed';
+      safeLog('runtime.start_failed', { phase: 'factory', code: e && e.code ? e.code : 'runtime_start_failed' });
       if (!live.adapter) { lives.delete(record.conversationId); leases.delete(key); }
       else await retire(live).catch(() => {});
       throw fail(e.code || 'runtime_start_failed');
@@ -222,8 +239,14 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     let live = resolve(expected);
     if (!cmd || !COMMANDS.has(cmd.type) || typeof cmd.id === 'number' || Object.hasOwn(cmd, 'sessionPath') || Object.hasOwn(cmd, '__owner')) throw fail('invalid_command');
     if (cmd.type !== 'abort') { await validateWorkspace(live.record.workspace); live = resolve(expected); }
-    const blocked = beforeCommand(cmd, live); if (blocked && cmd.type !== 'abort') throw fail(blocked);
-    if (live.lifecycle !== 'ready') throw fail('runtime_not_ready');
+    const blocked = beforeCommand(cmd, live); if (blocked && cmd.type !== 'abort') {
+      safeLog('runtime.owner_rejected', { operation: 'command', reason: 'before_command' });
+      throw fail(blocked);
+    }
+    if (live.lifecycle !== 'ready') {
+      safeLog('runtime.owner_rejected', { operation: 'command', reason: 'runtime_not_ready' });
+      throw fail('runtime_not_ready');
+    }
     if (cmd.type === 'abort') {
       live.activity = 'stopping'; changed(live);
       const result = await live.adapter.abortAndWait(cmd);
@@ -247,7 +270,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     return result;
   }
   function events(expected, cursor = 0) {
-    const live = resolve(expected); if (!Number.isSafeInteger(cursor) || cursor < 0) throw fail('invalid_cursor');
+    const live = resolve(expected);
+    if (!Number.isSafeInteger(cursor) || cursor < 0) {
+      safeLog('runtime.owner_rejected', { operation: 'events', reason: 'invalid_cursor' });
+      throw fail('invalid_cursor');
+    }
     return { ok: true, owner: owner(live), cursor: live.sequence, bytes: live.bytes,
       historyRequired: live.historyRequired || (live.events.length > 0 && cursor < live.events[0].frame.eventSequence - 1),
       events: live.events.filter(e => e.frame.eventSequence > cursor).map(e => e.frame), item: summary(live.record) };
@@ -288,6 +315,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       touch(live);
       publish({ type: 'runtime_closed', backendInstance, owner: live.closedOwner, conversationId: live.record.conversationId, item: summary(live.record) });
     })().catch(e => { live.retirePromise = null; live.error = 'cleanup_pending';
+      safeLog('runtime.cleanup_failed', { phase: 'retire', reason: 'cleanup_pending' });
       touch(live);
       publish({ type: 'runtime_state', owner: owner(live), item: summary(live.record) }); throw fail('cleanup_pending'); });
     return live.retirePromise;
