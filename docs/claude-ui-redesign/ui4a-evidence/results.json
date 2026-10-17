@@ -1,0 +1,186 @@
+{
+  "generatedAt": "2026-10-17T07:57:01.952Z",
+  "electron": "44.4.3",
+  "chrome": "152.0.7977.130",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\ui4-pane-electron-gvm8t6",
+  "checks": 280,
+  "failed": 0,
+  "failures": [],
+  "facts": [
+    {
+      "limits": {
+        "min": 320,
+        "default": 420
+      }
+    },
+    {
+      "resizerAria": {
+        "min": "320",
+        "max": "864",
+        "now": "420",
+        "text": "420 像素",
+        "controls": "rightPane"
+      }
+    },
+    {
+      "draggedWidth": 510
+    },
+    {
+      "browserPane": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1428,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "nativeAttached": {
+        "exists": true,
+        "attached": true,
+        "bounds": {
+          "x": 1021,
+          "y": 133,
+          "width": 419,
+          "height": 769
+        }
+      }
+    },
+    {
+      "widthFollow": {
+        "viewportBefore": 419.3333435058594,
+        "narrower": 349.3333435058594,
+        "bounds": {
+          "x": 1091,
+          "y": 133,
+          "width": 349,
+          "height": 769
+        }
+      }
+    },
+    {
+      "sessionPane": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1090,
+        "right": 1440,
+        "width": 350,
+        "scrollWidth": 349,
+        "clientWidth": 349,
+        "cssWidth": 350,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "overflowSession": {
+        "paneOverflow": false,
+        "worst": 0
+      }
+    },
+    {
+      "scrolled": {
+        "scrollTop": 260,
+        "headBefore": 46,
+        "headAfter": 46,
+        "overflow": "auto"
+      }
+    },
+    {
+      "dotColors": [
+        "rgb(74, 222, 128)",
+        "rgb(248, 113, 113)"
+      ]
+    },
+    {
+      "matrixCount": 32
+    },
+    {
+      "zoomed": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 540,
+        "right": 960.0000305175781,
+        "width": 420.0000305175781,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46.000003814697266,
+        "headTop": 46.000003814697266,
+        "headClass": "chg-head",
+        "closeRight": 948.0000629425049,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "reduced": {
+        "animationName": "none",
+        "duration": "0s",
+        "paneTransition": "0s"
+      }
+    }
+  ],
+  "screenshots": [
+    "session-changes-error-1200-dark.png",
+    "process-active-1200-dark.png",
+    "dark-700-changes-changes.png",
+    "dark-700-browser-browser.png",
+    "dark-700-session-session-changes.png",
+    "dark-700-process-process.png",
+    "dark-900-changes-changes.png",
+    "dark-900-browser-browser.png",
+    "dark-900-session-session-changes.png",
+    "dark-900-process-process.png",
+    "dark-1200-changes-changes.png",
+    "dark-1200-browser-browser.png",
+    "dark-1200-session-session-changes.png",
+    "dark-1200-process-process.png",
+    "dark-1536-changes-changes.png",
+    "dark-1536-browser-browser.png",
+    "dark-1536-session-session-changes.png",
+    "dark-1536-process-process.png",
+    "light-700-changes-changes.png",
+    "light-700-browser-browser.png",
+    "light-700-session-session-changes.png",
+    "light-700-process-process.png",
+    "light-900-changes-changes.png",
+    "light-900-browser-browser.png",
+    "light-900-session-session-changes.png",
+    "light-900-process-process.png",
+    "light-1200-changes-changes.png",
+    "light-1200-browser-browser.png",
+    "light-1200-session-session-changes.png",
+    "light-1200-process-process.png",
+    "light-1536-changes-changes.png",
+    "light-1536-browser-browser.png",
+    "light-1536-session-session-changes.png",
+    "light-1536-process-process.png",
+    "changes-zoom125-dark.png"
+  ],
+  "notes": [
+    "所有渲染都是生产 public/ 资源；唯一的注入是 ui4-pane.css 的 <link>（集成方负责加进 index.html）。",
+    "Browser 使用真实 WebContentsView（electron/browser-view.cjs）与离线 127.0.0.1 fixture 页。",
+    "本会话变更 / 开发进程的数据由页内 fetch 夹具提供，形状照抄真实接口。",
+    "不使用真实 Pi、不调用模型、不写用户项目。"
+  ]
+}
