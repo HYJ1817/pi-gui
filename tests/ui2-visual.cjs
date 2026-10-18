@@ -116,6 +116,9 @@ async function main() {
 
     await send('Page.enable');
     await send('Runtime.enable');
+    console.log('CDP native prefers-reduced-motion: ' + await evalJs(`matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduce' : 'no-preference'`));
+    // 普通动画检查显式选择媒体偏好，不继承 Windows Runner 的系统动效设置。
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
     await send('Page.navigate', { url });
     for (let i = 0; i < 50; i++) {
       await sleep(300);
@@ -434,7 +437,8 @@ async function suite(send) {
     `(() => { const b = document.querySelector('#u2c-assistant .think-body');
       return !b.hidden && getComputedStyle(b).animationName === 'none'; })()`);
   await evalJs(`(() => { const h = document.querySelector('#u2c-assistant .think-head'); if (h && h.getAttribute('aria-expanded') === 'true') h.click(); })()`);
-  await send('Emulation.setEmulatedMedia', { features: [] });
+  // 清空 features 会恢复宿主默认值；此处要恢复的是普通动画测试模式。
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   await sleep(200);
   await expect('C5 · 移除模拟后落场动画恢复',
     `(() => { const m = document.querySelector('.thread > .msg');
