@@ -1,0 +1,164 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS actual desktop preload
+PASS no-project is Electron
+PASS no-project no page overflow
+PASS no-project titlebar stable
+PASS no-project native caption reserve
+PASS empty-session is Electron
+PASS empty-session no page overflow
+PASS empty-session titlebar stable
+PASS empty-session native caption reserve
+PASS long-conversation is Electron
+PASS long-conversation no page overflow
+PASS long-conversation titlebar stable
+PASS long-conversation native caption reserve
+PASS streaming is Electron
+PASS streaming no page overflow
+PASS streaming titlebar stable
+PASS streaming native caption reserve
+PASS 1280x800 stopping disables repeat/send
+PASS stop-pending is Electron
+PASS stop-pending no page overflow
+PASS stop-pending titlebar stable
+PASS stop-pending native caption reserve
+PASS error is Electron
+PASS error no page overflow
+PASS error titlebar stable
+PASS error native caption reserve
+PASS 1280x800 native Browser loaded local fixture
+PASS browser-open is Electron
+PASS browser-open no page overflow
+PASS browser-open titlebar stable
+PASS 1280x800 Browser switched to Changes without replacing chat
+PASS changes-open is Electron
+PASS changes-open no page overflow
+PASS changes-open titlebar stable
+PASS 1280x800 close releases pane and returns focus
+PASS right-pane-closed is Electron
+PASS right-pane-closed no page overflow
+PASS right-pane-closed titlebar stable
+PASS right-pane-closed native caption reserve
+PASS no-project is Electron
+PASS no-project no page overflow
+PASS no-project titlebar stable
+PASS no-project native caption reserve
+PASS empty-session is Electron
+PASS empty-session no page overflow
+PASS empty-session titlebar stable
+PASS empty-session native caption reserve
+PASS long-conversation is Electron
+PASS long-conversation no page overflow
+PASS long-conversation titlebar stable
+PASS long-conversation native caption reserve
+PASS streaming is Electron
+PASS streaming no page overflow
+PASS streaming titlebar stable
+PASS streaming native caption reserve
+PASS 1440x900 stopping disables repeat/send
+PASS stop-pending is Electron
+PASS stop-pending no page overflow
+PASS stop-pending titlebar stable
+PASS stop-pending native caption reserve
+PASS error is Electron
+PASS error no page overflow
+PASS error titlebar stable
+PASS error native caption reserve
+PASS 1440x900 native Browser loaded local fixture
+PASS browser-open is Electron
+PASS browser-open no page overflow
+PASS browser-open titlebar stable
+PASS 1440x900 Browser switched to Changes without replacing chat
+PASS changes-open is Electron
+PASS changes-open no page overflow
+PASS changes-open titlebar stable
+PASS 1440x900 close releases pane and returns focus
+PASS right-pane-closed is Electron
+PASS right-pane-closed no page overflow
+PASS right-pane-closed titlebar stable
+PASS right-pane-closed native caption reserve
+PASS no-project is Electron
+PASS no-project no page overflow
+PASS no-project titlebar stable
+PASS no-project native caption reserve
+PASS empty-session is Electron
+PASS empty-session no page overflow
+PASS empty-session titlebar stable
+PASS empty-session native caption reserve
+PASS long-conversation is Electron
+PASS long-conversation no page overflow
+PASS long-conversation titlebar stable
+PASS long-conversation native caption reserve
+PASS streaming is Electron
+PASS streaming no page overflow
+PASS streaming titlebar stable
+PASS streaming native caption reserve
+PASS 1920x1080 stopping disables repeat/send
+PASS stop-pending is Electron
+PASS stop-pending no page overflow
+PASS stop-pending titlebar stable
+PASS stop-pending native caption reserve
+PASS error is Electron
+PASS error no page overflow
+PASS error titlebar stable
+PASS error native caption reserve
+PASS 1920x1080 native Browser loaded local fixture
+PASS browser-open is Electron
+PASS browser-open no page overflow
+PASS browser-open titlebar stable
+PASS 1920x1080 Browser switched to Changes without replacing chat
+PASS changes-open is Electron
+PASS changes-open no page overflow
+PASS changes-open titlebar stable
+PASS 1920x1080 close releases pane and returns focus
+PASS right-pane-closed is Electron
+PASS right-pane-closed no page overflow
+PASS right-pane-closed titlebar stable
+PASS right-pane-closed native caption reserve
+PASS settings is Electron
+PASS settings no page overflow
+PASS settings titlebar stable
+PASS settings native caption reserve
+PASS Settings arrow navigation
+PASS Settings Escape focus
+PASS Palette Tab stays inside
+PASS Palette Shift+Tab stays inside
+PASS palette is Electron
+PASS palette no page overflow
+PASS palette titlebar stable
+PASS palette native caption reserve
+PASS Palette Settings real click menu/focus handoff
+PASS Palette Settings real Enter menu/focus handoff
+PASS Project menu Escape focus
+PASS Session menu Escape focus
+PASS Search real input
+PASS Search first Escape clears query
+PASS Search second Escape closes and restores focus
+PASS Group collapse
+PASS Sidebar collapse focus
+PASS Shift+Tab reaches Settings in collapsed shell
+PASS Sidebar expand focus
+PASS planner-review is Electron
+PASS planner-review no page overflow
+PASS planner-review titlebar stable
+PASS planner-review native caption reserve
+PASS skills is Electron
+PASS skills no page overflow
+PASS skills titlebar stable
+PASS skills native caption reserve
+PASS Zoom 0.8 no overlap/overflow
+PASS zoom-0.8 is Electron
+PASS zoom-0.8 no page overflow
+PASS zoom-0.8 titlebar stable
+PASS Zoom 1.25 no overlap/overflow
+PASS zoom-1.25 is Electron
+PASS zoom-1.25 no page overflow
+PASS zoom-1.25 titlebar stable
+PASS Zoom 1.5 no overlap/overflow
+PASS zoom-1.5 is Electron
+PASS zoom-1.5 no page overflow
+PASS zoom-1.5 titlebar stable
+PASS real hover state
+PASS real keyboard focus ring
+PASS renderer has no console errors
+P30 Electron 161/161 passed; 37 screenshots

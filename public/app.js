@@ -16,9 +16,11 @@
 
 import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
-import { modelIdentity, modelCapabilitySummary } from './model-capabilities.js';
+import { renderModelPicker, renderThinkingPicker, thinkingAvailability, applyChipState, setTriggers } from './ui3-model-picker.js';
+import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
-import { sendCommand, runtimeSessionAction } from './api.js';
+import { sendCommand, runtimeSessionAction, setRequestFailureReporter } from './api.js';
+import { installRendererLogging, logRendererEvent } from './log-client.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
@@ -28,7 +30,7 @@ import { observeGuiBrowserEvent, initGuiBrowserState } from './gui-browser-capab
 import { observeMcpEvent } from './mcp-observer.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
-import { toast, withNotificationSource } from './ui/toast.js';
+import { configureFeedbackContext, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText, setRuntimeTitle } from './shell.js';
@@ -76,22 +78,23 @@ import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler } from './sessions.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
+import { openLogs } from './logs.js';
 import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
-import { showChat, showRuntimeConversation, runtimeViewElement } from './ui/workspace-surface.js';
+import { showChat, showRuntimeConversation, runtimeViewElement, workspaceView } from './ui/workspace-surface.js';
 import { createRuntimeConversation } from './runtime-conversation.js';
 import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler } from './runtime-nav.js';
 import { refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeModels } from './runtime-models.js';
-import { runtimeStore } from './runtime-state.js';
+import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver } from './runtime-state.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
 import { registerShortcut, installShortcuts, assertNoConflicts } from './shortcuts.js';
 import { openShortcutHelp } from './ui/shortcut-help.js';
-import { openPalette, paletteOpen } from './palette.js';
+import { openPalette as showCommandPalette, paletteOpen } from './palette.js';
 import { defineCommands, setDynamicCommands } from './palette-model.js';
 import { initDraft, draftSync, clearDraft } from './draft.js';
 import { startupNotice, NOTICE_ACTIONS } from './status-copy.js';
@@ -102,7 +105,24 @@ import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
-import { openAppUpdates } from './settings.js';
+import { openAppUpdates, openAppearance } from './settings.js';
+
+/* 日志只做观察：未捕获异常、网络失败与 SSE 断连在这里接入，
+ * 不改变任何业务状态机。 */
+installRendererLogging();
+setRequestFailureReporter((route, reason, status) => {
+  logRendererEvent('network.request_failed', { route, reason, httpStatus: status });
+});
+setRuntimeStoreRejectObserver((reason, extra = {}) => {
+  logRendererEvent('ui.runtime_frame_rejected', {
+    reason,
+    ...(Number.isInteger(extra.sequenceGap) ? { sequenceGap: extra.sequenceGap } : {}),
+  });
+});
+{
+  const missing = Object.values(el).filter((node) => !node).length;
+  if (missing) logRendererEvent('ui.dom_missing', { module: 'app', operation: 'bootstrap', count: missing });
+}
 
 /* ---------- 装配 ---------- */
 
@@ -119,6 +139,12 @@ setSessionsSlot(renderSidebarSessions);
  * 切回经典会话/项目时由 showChat() 换回来。 */
 const runtimeModels = createRuntimeModels({ onChange: conversationId => { if (runtimeConversation.conversationId === conversationId) runtimeConversation.draw(); } });
 const runtimeConversation = createRuntimeConversation({ host: runtimeViewElement(), models: runtimeModels, onTitle: setRuntimeTitle, openBrowser: () => runtimeSecondary.openBrowser(), openProcesses: () => runtimeSecondary.openProcesses(), openSessionChanges:openSessionChangesPanel });
+configureFeedbackContext(() => {
+  if (workspaceView() !== 'runtime') return null;
+  const id = runtimeConversation.conversationId, owner = runtimeStore.get(id)?.owner;
+  return [id, ...['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'].map(key => owner?.[key] ?? null)];
+});
+onRuntimeChange(refreshFeedbackContext);
 const conversationScopeActive = () => Boolean(gitConversationScope());
 const focusRuntimeConversation = conversationId => {
   runtimeConversation.show(conversationId);
@@ -199,10 +225,25 @@ if (btnBrowser) {
 
 /* ---------- SSE ---------- */
 
+let sseWasDown = false;
+let sseDownAt = 0;
 function connect() {
   const es = new EventSource('/api/events');
-  es.onopen = () => setTransportOnline(true);
-  es.onerror = () => setTransportOnline(false);
+  es.onopen = () => {
+    setTransportOnline(true);
+    if (sseWasDown) {
+      logRendererEvent('network.sse_reconnect', {}, { durationMs: Date.now() - sseDownAt });
+      sseWasDown = false;
+    }
+  };
+  es.onerror = () => {
+    setTransportOnline(false);
+    if (!sseWasDown) {
+      sseWasDown = true;
+      sseDownAt = Date.now();
+      logRendererEvent('network.sse_disconnect', { reason: 'error' });
+    }
+  };
   es.onmessage = (e) => {
     let evt;
     try {
@@ -556,148 +597,74 @@ function onUiRequest(evt) {  switch (evt.method) {
 /* ---------- 选择器 ---------- */
 
 const expandedModelProviders = new Set();
-const knownModelProviders = new Set();
+let inlineCommandMenu = null;
+
+function openPalette(ctx = {}) {
+  inlineCommandMenu?.close();
+  closePop();
+  return showCommandPalette(ctx);
+}
 
 function openModelPicker() {
+  inlineCommandMenu?.close();
   if (!S.models.length) {
     sendCommand({ type: 'get_available_models' });
     toast('正在获取模型列表…', 'info');
     return;
   }
-
-  const { modelId: currentId, providerId: currentProvider } = modelIdentity(S.state?.model);
-
-  pop.innerHTML = '';
-  pop.appendChild(popTitle('选择模型'));
-
-  // 按供应商分组，和 pi 的模型来源一一对应
-  const groups = new Map();
-  for (const m of S.models) {
-    const key = m.providerId || m.provider || '默认';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(m);
-  }
-
-  for (const provider of knownModelProviders) {
-    if (!groups.has(provider)) {
-      knownModelProviders.delete(provider);
-      expandedModelProviders.delete(provider);
-    }
-  }
-  let groupIndex = 0;
-  for (const [provider, list] of groups) {
-    const isCurrent = currentProvider ? provider === currentProvider
-      : list.some((m) => currentId ? (m.id || m.name) === currentId : m.name === el.modelText.textContent);
-    knownModelProviders.add(provider);
-    if (isCurrent) expandedModelProviders.add(provider);
-    const group = document.createElement('div');
-    group.className = 'pop-model-group';
-    group.dataset.provider = provider;
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.className = 'pop-provider';
-    const models = document.createElement('div');
-    models.className = 'pop-provider-models';
-    models.id = 'model-provider-' + (++groupIndex);
-    header.setAttribute('aria-controls', models.id);
-    const chev = document.createElement('span');
-    chev.className = 'pop-provider-chev';
-    chev.setAttribute('aria-hidden', 'true');
-    const name = document.createElement('span');
-    name.className = 'pop-provider-name';
-    name.textContent = provider;
-    const count = document.createElement('span');
-    count.className = 'pop-provider-count';
-    count.textContent = String(list.length);
-    const syncExpanded = () => {
-      const expanded = expandedModelProviders.has(provider);
-      header.setAttribute('aria-expanded', String(expanded));
-      models.hidden = !expanded;
-      chev.textContent = expanded ? '⌄' : '›';
-    };
-    syncExpanded();
-    header.append(chev, name, count);
-    header.addEventListener('click', () => {
-      if (expandedModelProviders.has(provider)) expandedModelProviders.delete(provider);
-      else expandedModelProviders.add(provider);
-      syncExpanded();
-      openPop(el.btnModel, { model: true });
-      header.focus();
-    });
-    group.append(header, models);
-    pop.appendChild(group);
-    for (const m of list) {
-      const id = m.modelId || m.id || m.name;
-      const isCur = currentProvider ? (m.providerId || m.provider) === currentProvider && id === currentId
-        : currentId ? id === currentId : m.name === el.modelText.textContent;
-      models.appendChild(
-        popItem({
-          label: m.name || id,
-          sub: modelCapabilitySummary(m).text,
-          on: isCur,
-          onClick: () => {
-            closePop({ restoreFocus: true });
-            // 实测：pi 的 set_model 需要 provider + modelId 两个字段，
-            // 只传 model 会报 "Model not found: <provider>/undefined"
-            setModel(m.providerId || m.provider, id);
-          },
-        })
-      );
-      models.lastElementChild.title = modelCapabilitySummary(m).title;
-    }
-  }
-
-  const foot = document.createElement('div');
-  foot.className = 'pop-foot';
-  const t = document.createElement('span');
-  t.textContent = '共 ' + S.models.length + ' 个可用模型';
-  foot.appendChild(t);
-  pop.appendChild(foot);
-
-  openPop(el.btnModel, { model: true });
+  renderModelPicker({
+    models: S.models, current: S.state?.model || null,
+    expanded: expandedModelProviders, pending: S.modelSwitchPending,
+    onSelect: (provider, modelId) => setModel(provider, modelId),
+  });
 }
 
 function openThinkPicker() {
-  if (S.modelSwitchPending) {
-    toast('正在读取当前模型支持的思考等级…', 'info');
-    return;
-  }
-  if (!S.thinkingLevels.length) {
-    toast('Pi 未提供可选思考等级。', 'info');
-    return;
-  }
-
-  const current = (S.state?.thinkingLevel || el.thinkText.textContent.replace('思考 ', '')).trim();
-
-  const DESC = {
-    off: '不思考，最快',
-    minimal: '最少思考',
-    low: '轻量思考',
-    medium: '中等思考',
-    high: '深度思考',
-    max: '最大思考预算',
-  };
-
-  pop.innerHTML = '';
-  pop.appendChild(popTitle('思考等级'));
-
-  for (const lv of S.thinkingLevels) {
-    const name = typeof lv === 'string' ? lv : lv.level || lv.name;
-    pop.appendChild(
-      popItem({
-        label: name,
-        sub: DESC[name] || '',
-        on: name === current,
-        onClick: () => {
-          closePop({ restoreFocus: true });
-          setThinkingLevel(name);
-        },
-      })
-    );
-  }
-
-  openPop(el.btnThink);
+  inlineCommandMenu?.close();
+  renderThinkingPicker({
+    levels: S.thinkingLevels, current: S.state?.thinkingLevel || null,
+    model: S.state?.model || null, pending: S.modelSwitchPending,
+    onSelect: level => { if (!el.btnThink.disabled) setThinkingLevel(level); },
+  });
 }
+
+// The selection control stays disabled. Its sibling only explains Pi facts.
+const thinkingInfo = document.createElement('button');
+thinkingInfo.id = 'btnThinkInfo';
+thinkingInfo.type = 'button';
+thinkingInfo.className = 'chip ui3-thinking-info';
+thinkingInfo.textContent = '思考说明';
+thinkingInfo.setAttribute('aria-haspopup', 'dialog');
+thinkingInfo.setAttribute('aria-controls', 'composerPopover');
+thinkingInfo.setAttribute('aria-expanded', 'false');
+el.btnThink.after(thinkingInfo);
+thinkingInfo.onclick = () => {
+  if (popVisible() && currentAnchor() === thinkingInfo) return closePop();
+  setTriggers({ think: thinkingInfo });
+  openThinkPicker();
+  setTriggers({ think: el.btnThink });
+};
+let thinkingInfoFacts = '';
+function syncThinkingInfo() {
+  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels, pending: S.modelSwitchPending });
+  applyChipState(el.btnThink, availability.state);
+  thinkingInfo.hidden = !el.btnThink.disabled || !S.hasProject || S.switching
+    || !['ready', 'maintenance'].includes(S.bridgeState);
+  thinkingInfo.title = availability.detail || availability.label;
+  thinkingInfo.setAttribute('aria-label', '思考能力说明：' + thinkingInfo.title);
+  const facts = JSON.stringify([availability.state, availability.detail, thinkingInfo.hidden,
+    S.state?.model?.providerId || S.state?.model?.provider, S.state?.model?.modelId || S.state?.model?.id]);
+  if (facts !== thinkingInfoFacts && popVisible() && currentAnchor() === thinkingInfo) {
+    const focused = pop.contains(document.activeElement) || document.activeElement === thinkingInfo;
+    closePop();
+    if (focused) (thinkingInfo.hidden ? el.btnThink.disabled ? el.btnModel : el.btnThink : thinkingInfo).focus();
+  }
+  thinkingInfoFacts = facts;
+}
+new MutationObserver(syncThinkingInfo).observe(el.composerBox, {
+  childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'],
+});
+syncThinkingInfo();
 
 /* ---------- 会话统计 / 重命名 / 更多 ---------- */
 
@@ -889,6 +856,8 @@ el.input.addEventListener('input', () => {
 });
 
 el.input.addEventListener('keydown', (e) => {
+  if (inlineCommandMenu?.handleKeydown(e)) return;
+  if (e.isComposing || e.keyCode === 229 || inlineCommandMenu?.isComposing()) return;
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     submit();
@@ -1007,9 +976,11 @@ document.addEventListener('pi-gui:right-pane', (event) => {
 $('navProviders').onclick = openProvidersPanel;
 $('navProviderAuth').onclick = openProviderAuthPanel;
 $('navDiagnostics').onclick = openDiagnostics;
+$('navLogs').onclick = openLogs;
 $('navCapabilities').onclick = () => openExtensions({ tab: 'capabilities' });
 $('navMcp').onclick = () => openExtensions({ tab: 'mcp' });
 $('navAppUpdates').onclick = openAppUpdates;
+$('navAppearance').onclick = () => { $('navGlobalMore').focus(); openAppearance(); };
 $('navRestartPi').onclick = restartPi;
 /* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
 $('navPalette').onclick = () => {
@@ -1217,6 +1188,7 @@ defineCommands([
   { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => openProvidersPanel() },
   { id: 'app.providerAuth', title: '供应商与认证', group: '全局', keywords: 'provider authentication OAuth login 认证', run: () => openProviderAuthPanel() },
   { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => openDiagnostics() },
+  { id: 'app.logs', title: '日志与故障报告', group: '全局', keywords: 'logs 日志 故障报告 bug report zip 导出', run: () => openLogs() },
   { id: 'app.copy-diagnostics', title: '复制诊断摘要', group: '全局', keywords: 'copy diagnostics 复制 摘要 issue', run: () => copyDiagnosticsSummary() },
   { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', run: () => openShortcutHelp() },
 ]);
@@ -1242,6 +1214,11 @@ setDynamicCommands((ctx = {}) => {
 
 /* 草稿：绑定输入监听 + 首次恢复。身份（项目/会话）变化时由 draftSync 对齐。 */
 initDraft();
+inlineCommandMenu = createInlineCommandMenu({
+  input: el.input, injectStyles: false,
+  onError: () => toast('命令执行失败，请重试。', 'error'),
+});
+inlineCommandMenu.attach();
 
 /* ---------- 启动 ---------- */
 

@@ -1,0 +1,74 @@
+[
+  {
+    "command": "node tests/ui3-composer.cjs",
+    "exitCode": 0,
+    "log": "ui3-composer.log",
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/smoke.cjs",
+    "exitCode": 0,
+    "log": "smoke.log",
+    "passed": 1338,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/daily-use.cjs",
+    "exitCode": 0,
+    "log": "daily-use.log",
+    "passed": 31,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/model-capabilities.cjs",
+    "exitCode": 0,
+    "log": "model-capabilities.log",
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/body-integrity.cjs",
+    "exitCode": 0,
+    "log": "body-integrity.log",
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/usage-quota.cjs",
+    "exitCode": 0,
+    "log": "usage-quota.log",
+    "passed": 229,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/stop-barrier.cjs",
+    "exitCode": 0,
+    "log": "stop-barrier.log",
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/ui2-classic.cjs",
+    "exitCode": 0,
+    "log": "ui2-classic.log",
+    "passed": 48,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "command": "node tests/ui3-composer.cjs --electron",
+    "exitCode": 0,
+    "passed": 182,
+    "failed": 0,
+    "skipped": 0,
+    "log": "electron.log"
+  }
+]

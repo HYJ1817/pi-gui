@@ -1,0 +1,129 @@
+
+> pi-gui@0.25.0 test:guard
+> node tests/electron-guard.cjs
+
+  ok   端口空着 → not-running
+  ok   陌生 JSON 服务 → foreign-service
+  ok   foreign-service 会带出可读的判据
+  ok   返回 HTML 的服务 → foreign-service
+  ok   协议版本不符 → foreign-service（不复用旧后端）
+  ok   协议不符时 detail 指出 protocol
+  ok   404 的陌生服务 → foreign-service
+  ok   本应用后端能起来
+  ok   真正的 pi-gui 后端 → pi-gui（可以复用）
+  ok   复用时会带出版本号
+  ok   复用时会带出协议版本
+  ok   isSelfUrl(根地址) = true
+  ok   isSelfUrl(带斜杠) = true
+  ok   isSelfUrl(带路径与查询) = true
+  ok   isSelfUrl(端口不同) = false
+  ok   isSelfUrl(主机名不同（我们只认 127.0.0.1）) = false
+  ok   isSelfUrl(前缀伪装（startsWith 会误判）) = false
+  ok   isSelfUrl(scheme 不同) = false
+  ok   isSelfUrl(file:) = false
+  ok   isSelfUrl(javascript:) = false
+  ok   isSelfUrl(data:) = false
+  ok   isSelfUrl(about:) = false
+  ok   isSelfUrl(根本不是 URL) = false
+  ok   isSafeExternal(https) = true
+  ok   isSafeExternal(http) = true
+  ok   isSafeExternal(大小写不敏感) = true
+  ok   isSafeExternal(javascript:) = false
+  ok   isSafeExternal(file:) = false
+  ok   isSafeExternal(data:) = false
+  ok   isSafeExternal(vbscript:) = false
+  ok   isSafeExternal(mailto（不交给系统浏览器）) = false
+  ok   isSafeExternal(chrome:) = false
+  ok   isSafeExternal(非法 URL) = false
+  ok   isSafeReleaseUrl 允许：Release 页面
+  ok   isSafeReleaseUrl 允许：下载 asset
+  ok   isSafeReleaseUrl 允许：API 地址
+  ok   isSafeReleaseUrl 允许：下载重定向落地域
+  ok   isSafeReleaseUrl 允许：raw 域
+  ok   isSafeReleaseUrl 拒绝：第三方 host
+  ok   isSafeReleaseUrl 拒绝：后缀伪装
+  ok   isSafeReleaseUrl 拒绝：后缀伪装（缺那个点）
+  ok   isSafeReleaseUrl 拒绝：带凭据的 URL
+  ok   isSafeReleaseUrl 拒绝：http（非 https）
+  ok   isSafeReleaseUrl 拒绝：javascript:
+  ok   isSafeReleaseUrl 拒绝：file:
+  ok   isSafeReleaseUrl 拒绝：data:
+  ok   isSafeReleaseUrl 拒绝：ftp:
+  ok   isSafeReleaseUrl 拒绝：非法 URL
+  ok   classifyHealth 容忍 undefined
+  ok   classifyHealth 容忍 body 为 null
+  ok   P14-E 700×600 窗口下限与状态恢复一致
+  ok   主窗口只 loadURL 一次（启动失败分支不得再加载页面）
+  ok   启动失败时弹错并退出，而不是继续开窗
+  ok   同时拦 will-navigate 与 will-redirect
+  ok   window.open 一律 deny
+  ok   导航规则挂在 app 级（所有 webContents 都覆盖）
+  ok   令牌经请求头注入，不进渲染进程
+  ok   主窗口挂了 preload
+  ok   contextIsolation 仍然开启
+  ok   nodeIntegration 仍然关闭
+  ok   preload 只经 contextBridge 暴露一个入口
+  ok   preload 不把 ipcRenderer 整个暴露出去
+  ok   preload 不接触令牌
+  ok   preload 不做路径判断（校验留在后端）
+  ok   IPC 处理器只转发给后端，不自己判断路径
+  ok   IPC 处理器在开窗之前注册
+  ok   主进程注册了 pi-gui:open-external
+  ok   openExternal 的判定用 isSafeReleaseUrl（比通用导航更严）
+  ok   open-external 处理器在开窗之前注册
+  ok   preload 暴露的是两个转发函数（openPath + openExternal）
+  ok   preload 的 openExternal 只转发，不自己判断 URL
+  ok   renderer 里不调用 Electron shell API（页面没有 shell 权限）
+  ok   renderer 里不出现 ipcRenderer
+  ok   renderer 里不 require electron
+  ok   前端打开外链只用 preload 的桥，不用 window.open
+  ok   前端不直接访问 GitHub API（只打自己的后端）
+  ok   26. 用 WebContentsView（不是 BrowserView / <webview>）
+  ok   26a. 全仓库不出现 BrowserView
+  ok   26b. 全仓库不出现 webview
+  ok   27. 用独立 partition，且**非持久化**
+  ok   27a. partition 不带 persist: 前缀（退出即清空）
+  ok   27b. 浏览器**不碰** defaultSession（令牌注入那条边界）
+  ok   28. 浏览器 webPreferences 的安全开关
+  ok   28a. 浏览器**不挂** preload（远程页面拿不到任何桥）
+  ok   29. 权限一律默认拒绝
+  ok   30. window.open 不开新窗口（deny，不建 BrowserWindow）
+  ok   31. 关闭会真正销毁 webContents
+  ok   32. 导航判定与窗口 open 都过 isAllowedBrowserUrl
+  ok   32a. 主进程把浏览器 webContents 从通用导航收口里排除
+  ok   33. 内置浏览器拒绝：Pi GUI 自己
+  ok   33. 内置浏览器拒绝：Pi GUI 的 /api
+  ok   33. 内置浏览器拒绝：Pi GUI 的 localhost 别名（同一台服务，origin 字符串不同）
+  ok   33. 内置浏览器拒绝：明文远程 http
+  ok   33. 内置浏览器拒绝：localhost 前缀伪装
+  ok   33. 内置浏览器拒绝：127.0.0.1 前缀伪装
+  ok   33. 内置浏览器拒绝：file:
+  ok   33. 内置浏览器拒绝：javascript:
+  ok   33. 内置浏览器拒绝：data:
+  ok   33. 内置浏览器拒绝：vbscript:
+  ok   33. 内置浏览器拒绝：ftp:
+  ok   33. 内置浏览器拒绝：chrome:
+  ok   33. 内置浏览器拒绝：devtools:
+  ok   33. 内置浏览器拒绝：about:
+  ok   33. 内置浏览器拒绝：带凭据的 URL
+  ok   33. 内置浏览器拒绝：含空白
+  ok   34. 内置浏览器放行：远程 https
+  ok   34. 内置浏览器放行：https
+  ok   34. 内置浏览器放行：localhost 开发服务器
+  ok   34. 内置浏览器放行：127.0.0.1 开发服务器
+  ok   34. 内置浏览器放行：::1 开发服务器
+  ok   34. 内置浏览器放行：带路径与查询
+  ok   35. 地址补全 example.com → https://example.com
+  ok   35. 地址补全 example.com:8080/x → https://example.com:8080/x
+  ok   35. 地址补全 localhost:3000 → http://localhost:3000
+  ok   35. 地址补全 127.0.0.1:5173 → http://127.0.0.1:5173
+  ok   35. 地址补全 [::1]:3000 → http://[::1]:3000
+  ok   35. 地址补全 https://a.example/x → https://a.example/x
+  ok   36. clampBounds 挡负数 / NaN / 溢出
+  ok   37. 右栏两个新模块不碰 ipcRenderer / shell / require(electron)
+  ok   37a. 前端只用白名单化的 browser 桥，不传任意 channel
+  ok   38. did-stop-loading 必须把 loading 归位
+  ok   38a. navigate 接受后把规范化 URL 写进 state
+  ok   38b. did-fail-load 采纳事件里的 URL 前必须先过安全校验
+
+123/123 通过

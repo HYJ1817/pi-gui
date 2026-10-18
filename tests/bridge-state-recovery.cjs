@@ -146,12 +146,16 @@ async function main() {
   delayedBrowser.recoveryTimers[0](); await new Promise(r => setTimeout(r, 20));
   check(delayedBrowser.w.document.querySelector('#stageNotice').textContent.includes('Pi 状态同步时间过长'), 'overdue notice is visible in real Renderer state machine');
   const buttons = [...delayedBrowser.w.document.querySelectorAll('#stageNotice button')];
+  /* 先验证「重启 Pi」仍走确认框。重新同步成功后 notice 会正确消失，
+   * 那时按钮已经脱离 DOM —— 脱离节点的点击不再执行（UI-4C）。
+   * 所以必须在同步成功之前点，否则测到的是过期引用。 */
+  buttons.find(e => e.textContent === '重启 Pi').click();
+  check(!delayedBrowser.w.document.querySelector('#confirmLayer').hidden && !delayedBrowser.calls.some(([u]) => u === '/api/restart'), 'recovery restart uses existing confirmed restartPi');
+  [...delayedBrowser.w.document.querySelectorAll('#confirmCard .modal-actions .btn')].find(e => e.textContent === '取消')?.click();
   const readBefore = delayedBrowser.calls.filter(([u]) => u === '/api/status').length;
   delayedBrowser.setStatus({ bridgeState: 'ready', bridgeRevision: 11 });
   buttons.find(e => e.textContent === '重新同步状态').click(); await new Promise(r => setTimeout(r, 20));
   check(delayedBrowser.w.S.bridgeState === 'ready' && delayedBrowser.calls.filter(([u]) => u === '/api/status').length === readBefore + 1 && !delayedBrowser.calls.some(([u]) => u === '/api/restart'), 'resync button restores ready without restart');
-  buttons.find(e => e.textContent === '重启 Pi').click();
-  check(!delayedBrowser.w.document.querySelector('#confirmLayer').hidden && !delayedBrowser.calls.some(([u]) => u === '/api/restart'), 'recovery restart uses existing confirmed restartPi');
   delayedBrowser.dom.window.close();
   const { createBridgeRecovery } = await import('../public/bridge-recovery.js');
   let status = { state: 'ready', hasProject: true, bridgeRun: 2 }, reads = 0, reconciled, delayed = false;

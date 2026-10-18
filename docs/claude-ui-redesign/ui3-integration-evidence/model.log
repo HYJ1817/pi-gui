@@ -1,0 +1,52 @@
+  ok  视图模块导出契约完整
+  ok  模块写法能被 esm-bundle 链接器接受
+  ok  thinkingAvailability 区分五种状态，不把它们压成一句
+  ok  Pi 的实时档位优先于静态 reasoning=false
+  ok  只有 off 的清单视为不可用
+  ok  能力未知不显示成不支持
+  ok  明确 false 与 unknown 在能力行里是不同的值
+  ok  Runtime 标签能分辨同名不同 Provider 的模型
+  ok  按 Provider 分组且顺序与来源一致
+  ok  每个 Provider 的模型数量准确
+  ok  模型条目总数等于列表长度
+  ok  当前 Provider 默认展开、其余收起
+  ok  组头是原生按钮且 aria-controls 指向自己的容器
+  ok  身份行显示 Provider/modelId
+  ok  当前模型恰好一个选中项
+  ok  两个 Provider 的同名模型只有真正当前的那个被选中
+  ok  当前组被强制展开，用户折叠记忆不掩盖当前位置
+  ok  选择后回调带 Provider + modelId，且只触发一次
+  ok  选择后弹层关闭
+  ok  视图模块自身不发 RPC，也不 import 任何传输层
+  ok  400+ 模型与超长名不抛错且计数正确
+  ok  长名写入 textContent，不产生元素注入
+  ok  消失的 Provider 不保留折叠记忆
+  ok  展开组内 ↑↓ 在可见项之间移动
+  ok  漫游跳过折叠起来的条目
+  ok  End / Home 跳到首末
+  ok  ↑ 从首项回绕到末项
+  ok  roving tabindex：只有一个停靠点
+  ok  → / ← 折叠展开 Provider，焦点留在组头
+  ok  键盘 Enter 走原生按钮行为，回调仍只触发一次
+  ok  Escape 关闭并把焦点还给触发按钮
+  ok  可用档位按 Pi 返回原样渲染，不加也不减
+  ok  不存在的档位不会凭空出现（不硬编码 off..max）
+  ok  档位说明来自展示文案，未知档位不编造说明
+  ok  推理能力 false：明确不可用，档位画出来但不可点
+  ok  推理能力 unknown：不显示成已支持
+  ok  Pi 没给档位：说明是「没给」而不是「不支持」
+  ok  pending 优先于其它一切判断
+  ok  pending 时点击档位不产生回调
+  ok  可用时选档位回调一次并关闭
+  ok  可用时不画状态行（「有 3 档」不是信息）
+  ok  Thinking 弹层不套 model-mode（不受模型高度钳制）
+  ok  pending 期间选中态只反映调用方传入的 current，且条目不可点
+  ok  无乐观选择：点击后视图不自己改选中态
+  ok  设置失败后回读纠正：视图只反映传入的 current
+  ok  空列表 + 无当前模型不抛错
+  ok  非字符串 / 重复档位被过滤，不污染渲染
+  ok  空模型列表不抛错
+  ok  applyChipState 写 data-ui3-state，清空时移除属性
+  ok  弹层沿用既有 ID 契约，未另建一套全局弹层
+
+UI-3B 模型选择器: 50/50 通过

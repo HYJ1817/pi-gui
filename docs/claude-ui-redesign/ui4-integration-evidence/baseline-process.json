@@ -1,0 +1,9 @@
+{
+  "command": "npm test",
+  "phase": "baseline",
+  "exitCode": 0,
+  "seconds": 3135.2321141,
+  "startedUtc": "2026-10-17T09:46:21.7403118Z",
+  "finishedUtc": "2026-10-17T10:38:36.9740081Z",
+  "fixtureRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui4-baseline-af4e977239cb48818498497739355edb"
+}

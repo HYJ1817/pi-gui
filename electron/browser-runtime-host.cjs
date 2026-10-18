@@ -15,7 +15,8 @@ function scopeKey(scope){
 /** Private backend lifecycle gateway. Each owner gets its own existing Browser bridge. */
 function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
   createController=options=>require('./browser-view.cjs').createBrowserController(options),
-  createAgent=createBrowserAgent,createBridge=createBrowserAgentBridge,onFocus=()=>{}}){
+  createAgent=createBrowserAgent,createBridge=createBrowserAgentBridge,onFocus=()=>{},logEvent=null}){
+  const safeLog=(event,details)=>{try{logEvent?.(event,details);}catch{}};
   const token=randomUUID(),records=new Map(),retired=new Set();let focused=null,server=null,url='',disposed=false,chain=Promise.resolve(),stopPromise=null;
   const send=(channel,value)=>{const w=getWindow();if(w&&!w.isDestroyed())try{w.webContents.send(channel,value);}catch{}};
   const project=r=>({...r.agent.status(),available:r.agent.status().available===true&&r.bridge.isSessionActive()});
@@ -45,12 +46,13 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
       }};
     r.bridge=createBridge({agent:executor,onAvailability:()=>send('pi-gui:runtime-browser-agent-state',{scope:owner,state:project(r)})});
     records.set(key,r);
-    try{await r.bridge.start();}catch{records.delete(key);r.agent.dispose();r.controller.destroy();throw Error('browser_unavailable');}
+    try{await r.bridge.start();}catch{safeLog('runtime.browser_failed',{operation:'allocate',code:'browser_unavailable'});records.delete(key);r.agent.dispose();r.controller.destroy();throw Error('browser_unavailable');}
     return {ok:true,connection:r.bridge.connection(),extensionPath};
   }
   async function disposeScope(scope){
-    const r=lookup(scope);await r.bridge.stop();r.agent.dispose();r.controller.destroy();records.delete(r.key);retired.add(r.key);
-    if(focused===r.key){focused=null;onFocus(false);}return {ok:true};
+    try{const r=lookup(scope);await r.bridge.stop();r.agent.dispose();r.controller.destroy();records.delete(r.key);retired.add(r.key);
+      if(focused===r.key){focused=null;onFocus(false);}return {ok:true};}
+    catch(error){safeLog('runtime.browser_failed',{operation:'dispose',code:'cleanup_failed'});throw error;}
   }
   function invalidateScope(r,body){
     const connection=r.bridge.connection();
@@ -85,7 +87,7 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
       if(action==='command'){if(!['back','forward','reload','stop','close'].includes(body.command))throw Error('invalid_request');if(body.command==='close'){r.controller.destroy();return {ok:true};}return r.controller.command(body.command);}
       if(action==='bounds'){r.controller.setBounds(body.rect);return {ok:true};}
       if(action==='occluded'){r.controller.setOccluded(body.occluded===true);return {ok:true};}
-    }catch{return {ok:false,code:'stale_runtime'};}
+    }catch{safeLog('runtime.browser_failed',{operation:action,code:'ipc_failed'});return {ok:false,code:'stale_runtime'};}
   };}
   for(const action of ['status','enable','open','navigate','command','bounds','occluded'])ipcMain.handle(`pi-gui:runtime-browser-${action}`,handler(action,!['status','enable'].includes(action)));
   return {

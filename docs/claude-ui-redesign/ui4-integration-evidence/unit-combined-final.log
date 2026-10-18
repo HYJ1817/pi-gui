@@ -1,0 +1,133 @@
+
+> pi-gui@0.25.0 test:ui4
+> node tests/ui4-approval.cjs && node tests/ui4-feedback.cjs && node tests/ui4-integration.cjs
+
+  ok  confirm 请求走统一确认层并显示来源 / 类型
+  ok  风险只陈述「协议没有结构化字段」，不猜危险等级
+  ok  确认卡只有一次性两个决定，没有 Always / Bypass / Auto
+  ok  长命令完整渲染，不在 UI 层二次截断
+  ok  空字段使用可读兜底，不渲染 undefined
+  ok  恶意 HTML / 额外字段不进 DOM
+  ok  允许一次只发一条 extension_ui_response{confirmed:true}
+  ok  拒绝只发 confirmed:false，不伪装成取消
+  ok  Esc 发 cancelled:true（fail-closed 的取消）
+  ok  点遮罩取消同样走协议应答
+  ok  提交中重复点击只发一条命令
+  ok  提交中 Esc / 点遮罩 / Enter 都不会补发第二条应答
+  ok  迟到结果不覆盖已作废状态，也不再弹卡
+  ok  SSE 重放已结算请求不会再次弹卡
+  ok  工作区切换：旧审批本地作废且不发应答
+  ok  会话切换：旧审批本地作废且不发应答
+  ok  卡片残留时点允许：本地作废、不发应答、卡片收掉
+  ok  Stop：pending 收到取消、卡片收掉、不留关不掉的卡
+  ok  Stop 打断提交中：不补发取消，卡片仍收掉
+  ok  超时：卡片收掉、不发应答、状态 expired
+  ok  桥接重启：本地作废且不向死进程发应答
+  ok  后端拒绝：卡片保留、原因可见、可重试且只重发一次
+  ok  网络层失败：结果未知，不声称未送达、不重发决定
+  ok  失败后用 Esc 取消：取消也走真实投递，成功后收卡
+  ok  初始焦点在「拒绝」，Tab / Shift+Tab 在按钮间循环
+  ok  卡片本身获得焦点时 Enter 不会替你允许
+  ok  审批确认卡叠在普通弹层之上，关闭审批不关掉下面的弹层
+  ok  审批超时只收自己的卡，不关别人的弹层
+  ok  select：真实选项、选择后只发 value
+  ok  select 提交中重复点击只发一次
+  ok  select 投递失败：卡片保留、可重试
+  ok  input：保留 placeholder，提交真实输入
+  ok  editor：prefill 真实值，取消发 cancelled
+  ok  input 的 Esc / 点遮罩走取消且失败时保留卡片
+  ok  Runtime 接口：确认点击只发一次，成功后不再可点
+  ok  Runtime 接口：失败可见并可重试
+  ok  Runtime 接口：owner 变化返回 null → 明确失效、不伪造取消
+  ok  Runtime 接口：select / input 真实值，恶意标题按文本
+  ok  approvalCardModel 不发明 scope / action / 持久化
+  ok  样式表幂等注入：只有一份，且复用已有 link
+  ok  CSS 只用 UI-1 语义 token，且覆盖三种审批 DOM
+  ok  approval.js 不再 fire-and-forget respond，也不拼 innerHTML
+  ok  modal.js 默认行为未变：没有 onDecide 时点击即关闭
+  ok  modal.js 危险确认仍然禁用 Enter 快捷确认
+
+ui4-approval: 44/44 通过
+PASS stylesheet injected once and served from the owned file
+PASS info toast auto closes after its explicit short duration
+PASS success and ok aliases share one success treatment
+PASS warning and warn aliases keep the legacy .toast.warn hook
+PASS error toast is persistent by default and never becomes invisible silently
+PASS persistent=false opts back into the timed error path
+PASS multiple notifications queue without replacing each other
+PASS duplicate notification inside the dedupe window is suppressed
+PASS long Chinese and long English text stay complete and wrapped
+PASS untrusted text is inert in toasts and action labels
+PASS Escape closes the focused toast and returns focus to the composer
+PASS toast host exposes a named region and each toast a live role
+PASS historical replay does not create notifications
+PASS legacy toast call sites keep working unchanged
+PASS notice tones cover success, failure, warning, loading and unknown
+PASS unknown notice is neutral, never success or failure
+PASS notice shows title, multi-line detail, actions and a close control
+PASS notice actions call only the injected handler once
+PASS notice with the same identity/signature is not rebuilt
+PASS notice close hides it and clears the current id
+PASS notice text and action labels are inert under XSS-shaped input
+PASS long Chinese and English notice content remains complete
+PASS workspace switch is represented as busy, not success or failure
+PASS state matrix copy is rendered from the supplied model only
+PASS real startupNotice models keep their existing truth and actions
+PASS CSS is owned, prefixed and respects theme/reduced-motion/motion contracts
+PASS CSS keeps the legacy notice/toast hooks used by existing suites
+UI4 Feedback: 27/27, failed=0, skipped=0
+PASS late 允许一次 success cannot authorize replacement after expired
+PASS late 允许一次 success cannot authorize replacement after stop
+PASS late 允许一次 success cannot authorize replacement after workspace
+PASS late 允许一次 success cannot authorize replacement after session
+PASS late 允许一次 success cannot authorize replacement after bridge
+PASS late 允许一次 success cannot authorize replacement after timeout
+PASS late 拒绝 success cannot authorize replacement after expired
+PASS late 拒绝 success cannot authorize replacement after stop
+PASS late 拒绝 success cannot authorize replacement after workspace
+PASS late 拒绝 success cannot authorize replacement after session
+PASS late 拒绝 success cannot authorize replacement after bridge
+PASS late 拒绝 success cannot authorize replacement after timeout
+PASS old failure cannot unlock or alter replacement submitting confirmation
+PASS late select success cannot close an unrelated replacement modal
+PASS replaced confirm retains visible late refusal without touching replacement
+PASS replaced confirm retains visible late unknown without touching replacement
+PASS replaced select retains visible late refusal without touching replacement
+PASS replaced select retains visible late unknown without touching replacement
+PASS lost response after acceptance is unknown and cannot send a second decision
+PASS identical errors in different workspace generations are not deduplicated
+PASS ordinary command errors retain existing notification and wire behaviour
+PASS malformed acknowledgement is unknown and cannot authorize a retry
+PASS Notice same text updates callbacks and cannot retain a stale workspace action
+PASS Notice same-context handler refresh preserves DOM and focus
+PASS Runtime A to B same-text feedback is not deduplicated and old action is disabled
+PASS same Runtime conversation owner replacement clears old Notice and guards captured callbacks
+PASS Toast pointer leave cannot resume a timer while its button has focus
+PASS runtime-A unknown owner cannot match explicit foreign workspace
+PASS classic-chat unknown owner cannot match explicit foreign workspace
+PASS Runtime missing owner and workspace never consumes missing-identity Classic evidence
+PASS only identity-free Classic evidence invalidates the identity-free Classic preview
+PASS known Runtime workspace invalidation requires both matching id and epoch
+PASS cancelled loading clears busy immediately and ignores late result: pi-gui:session-evidence-changed
+PASS cancelled loading clears busy immediately and ignores late result: pi-gui:session-switch
+PASS process polling stays serial across manual refresh and pending logs
+PASS process revision resets cursor and Stop retains real generation/id/revision transport
+PASS process dispose clears polling and rejects late log writes to replacement surface
+PASS process logs stay bounded and render untrusted text without HTML execution
+PASS unknown confirm closes locally without contradictory response: Escape
+PASS unknown confirm closes locally without contradictory response: backdrop
+PASS unknown confirm closes locally without contradictory response: replace
+PASS unknown confirm closes locally without contradictory response: Stop
+PASS unknown select closes locally without contradictory response: Escape
+PASS unknown select closes locally without contradictory response: backdrop
+PASS unknown select closes locally without contradictory response: replace
+PASS unknown select closes locally without contradictory response: Stop
+PASS ordinary modal bound close cannot close a replacement instance
+PASS view navigation preserves real Classic pending with explicit provenance
+PASS late old-owner approval rejection cannot change new-owner notice: Runtime conversation
+PASS late old-owner approval rejection cannot change new-owner notice: Runtime dialog
+PASS current-owner approval outcome remains visible and refreshed: false/false
+PASS current-owner approval outcome remains visible and refreshed: false/true
+PASS current-owner approval outcome remains visible and refreshed: true/false
+PASS current-owner approval outcome remains visible and refreshed: true/true
+UI4 integration: 54/54; failed=0; skipped=0

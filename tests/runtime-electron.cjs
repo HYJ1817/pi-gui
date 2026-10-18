@@ -4,11 +4,15 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { spawn, execFileSync } = require('node:child_process');
 if (!process.versions.electron) {
   const world = fs.mkdtempSync(path.join(os.tmpdir(), 'p32-runtime-electron-')), env = { ...process.env, P32_RUNTIME_WORLD: world }; delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn(require('electron'), [__filename, '--no-sandbox', '--in-process-gpu'], { env, stdio: 'inherit', windowsHide: true });
+  const child = spawn(require('electron'), [__filename, ...(env.UI4_RUNTIME_INTEGRATION ? [] : ['--no-sandbox']), '--in-process-gpu'], { env, stdio: 'inherit', windowsHide: true });
   child.on('error', () => { process.exitCode = 1; }); child.on('exit', code => { process.exitCode = code ?? 1; fs.rm(world, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {}); });
 } else {
   const { app, BrowserWindow, ipcMain } = require('electron'); app.on('window-all-closed', () => {});
-  const ROOT = path.resolve(__dirname, '..'), world = process.env.P32_RUNTIME_WORLD, OUT = path.join(ROOT, '.shots/p32-3'), OUT4 = path.join(ROOT, '.shots/p32-4');
+  const ROOT = path.resolve(__dirname, '..'), world = process.env.P32_RUNTIME_WORLD;
+  const evidenceRoot = process.env.P32_RUNTIME_EVIDENCE;
+  if (evidenceRoot && !path.isAbsolute(evidenceRoot)) throw Error('P32_RUNTIME_EVIDENCE must be absolute');
+  const OUT = evidenceRoot ? path.join(evidenceRoot, 'p32-3') : path.join(ROOT, '.shots/p32-3');
+  const OUT4 = evidenceRoot ? path.join(evidenceRoot, 'p32-4') : path.join(ROOT, '.shots/p32-4');
   let win, backend, host, browser, legacyHost, origin, checks = 0; const errors = [], screenshots = [], pages = [];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const check = (value, label) => { assert.ok(value, label); checks++; console.log('PASS ' + label); };
@@ -60,6 +64,8 @@ const nativeMessages=()=>fs.readFileSync(file,'utf8').trim().split('\n').map(lin
 const appendMessage=(role,text)=>{const entries=fs.readFileSync(file,'utf8').trim().split('\n').map(line=>JSON.parse(line));const parent=entries.findLast(e=>e.type!=='session'&&e.id)?.id||null;fs.appendFileSync(file,JSON.stringify({type:'message',id:crypto.randomUUID(),parentId:parent,timestamp:new Date().toISOString(),message:{role,content:[{type:'text',text}],timestamp:Date.now(),...(role==='assistant'?{api:'openai-completions',provider:currentModel.provider,model:currentModel.id,stopReason:'stop',usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}:{})}})+'\n');};
 require('readline').createInterface({input:process.stdin}).on('line',async line=>{
 const c=JSON.parse(line);if(c.type==='prompt'&&c.message==='FIXTURE_CRASH')process.exit(7);
+if(c.type==='prompt'&&c.message==='FIXTURE_UI4_APPROVAL'){send({type:'extension_ui_request',id:'ui4-'+id,method:'confirm',title:'Runtime 离线 fixture 审批'});send({type:'response',id:c.id,command:c.type,success:true,data:{disposition:'started'}});return;}
+if(c.type==='extension_ui_response'&&String(c.id).startsWith('ui4-')){send({type:'response',id:c.id,command:c.type,success:true,data:{}});send({type:'agent_settled'});return;}
 if(c.type==='set_model'){
   const next=fixtureModels.find(m=>m.provider===c.provider&&m.id===c.modelId);
   await new Promise(r=>setTimeout(r,650));
@@ -91,7 +97,7 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     await new Promise(r => fixtureProbe.on('close', r)); assert.equal(probeText.trim(), '1.0.4', 'fixture shim launch: ' + probeText);
     assert.ok(fs.existsSync(trace), 'fixture probe must execute the owned entry, not an installed pi');
     const reserve = require('node:net').createServer(); await new Promise(r => reserve.listen(0, '127.0.0.1', r)); const port = reserve.address().port; await new Promise(r => reserve.close(r)); origin = `http://127.0.0.1:${port}`;
-    win = new BrowserWindow({ width: 1440, height: 900, useContentSize: true, show: true, autoHideMenuBar: true, webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(ROOT, 'electron/preload.cjs') } });
+    win = new BrowserWindow({ width: 1440, height: 900, useContentSize: true, show: true, autoHideMenuBar: true, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(ROOT, 'electron/preload.cjs') } });
     browser = require('../electron/browser-view.cjs').createBrowserController({ origin, getWindow: () => win, ipcMain, isVisible: () => !host || host.isLegacyVisible() }); browser.register();
     legacyHost = require('../electron/browser-agent-host.cjs').createBrowserAgentHost({ browser, origin, getWindow: () => win, ipcMain, extensionPath: path.join(ROOT, 'extensions/pi-gui-browser/index.js') }); await legacyHost.start();
     host = require('../electron/browser-runtime-host.cjs').createRuntimeBrowserHost({ origin, getWindow: () => win, ipcMain, extensionPath: path.join(ROOT, 'extensions/pi-gui-browser/index.js'), onFocus: active => browser.setOccluded(active) }); await host.start();
@@ -104,6 +110,12 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     backend.stdout.resume(); let backendErrors = ''; backend.stderr.on('data', chunk => { backendErrors = (backendErrors + chunk.toString()).slice(-2048); });
     await until(async () => { try { return (await fetch(origin + '/api/status')).ok; } catch { return false; } });
     win.webContents.on('console-message', (_event, level, message) => { if (level >= 3) errors.push(message); }); await win.loadURL(origin); win.webContents.debugger.attach('1.3');
+    if (process.env.P32_RUNTIME_THEME) {
+      assert.ok(['light', 'dark'].includes(process.env.P32_RUNTIME_THEME), 'fixture theme enum');
+      await read(`localStorage.setItem('pi-gui.theme.v1', ${JSON.stringify(process.env.P32_RUNTIME_THEME)})`);
+      await win.loadURL(origin);
+      check(await read(`document.documentElement.dataset.theme===${JSON.stringify(process.env.P32_RUNTIME_THEME)}`), 'fixture renderer restores requested theme');
+    }
     let bridgeStatus;
     try { await until(async () => { bridgeStatus = await api(null, '/api/status'); return bridgeStatus.state === 'ready' && await read(`!!document.querySelector('.pj-row-menu-trigger')`); }); }
     catch (error) { console.error('Fixture bridge ' + JSON.stringify({ state: bridgeStatus?.state, error: bridgeStatus?.error, hint: bridgeStatus?.hint })); console.error(backendErrors); if (fs.existsSync(trace)) console.error(fs.readFileSync(trace, 'utf8'));
@@ -642,13 +654,14 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     await until(async () => { state = await api(); const rec = state.items.find(i => i.workspace.branch === 'p32-4-ui-loop');
       return state.items.length === recordsBefore + 1 && rec?.lifecycle === 'ready' && typeof rec.owner?.sessionId === 'string'; }, 120000);
     check(state.liveCount === 1, 'P32.4 sidebar create loop actually started a runtime');
-    const createdOwner = state.items.find(i => i.owner && i.workspace.branch === 'p32-4-ui-loop')?.owner;
+    let createdOwner = state.items.find(i => i.owner && i.workspace.branch === 'p32-4-ui-loop')?.owner;
     check(Boolean(createdOwner), 'P32.4 created conversation carries the entered branch name');
     await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
     await until(() => read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length===${rowsBefore + 1}`), 30000);
     check(true, 'P32.4 new parallel conversation appears in the sidebar after creation');
     check(await read(`document.querySelector('#pjRuntimeList').textContent.includes('p32-4-ui-loop')`), 'P32.4 new sidebar row shows its branch name');
     await shot('sidebar-created', OUT4);
+    if (process.env.UI4_RUNTIME_INTEGRATION === '1') createdOwner = await require('./ui4-runtime-electron.cjs').run({ owner: createdOwner, api, read, until, check, shot, host, win, OUT: OUT4 });
     /* 收尾只做尽力而为的关闭：close 的权威语义由 P32.3 段断言，这里失败也不该
      * 让「创建闭环」这一段的结论失真。 */
     const closed = await api({ action: 'close', owner: createdOwner });

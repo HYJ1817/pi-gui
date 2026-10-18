@@ -1,0 +1,128 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS single-line viewport, controls and cards fit
+PASS single-line measured reservation, axis and input cap
+PASS ten-lines viewport, controls and cards fit
+PASS ten-lines measured reservation, axis and input cap
+PASS ten lines grow and preserve text
+PASS growth-at-bottom viewport, controls and cards fit
+PASS growth-at-bottom measured reservation, axis and input cap
+PASS last message remains above composer after growth
+PASS long-English viewport, controls and cards fit
+PASS long-English measured reservation, axis and input cap
+PASS long-Chinese viewport, controls and cards fit
+PASS long-Chinese measured reservation, axis and input cap
+PASS Shift+Enter inserts newline without submission
+PASS dark-700-sidebar-true-closed viewport, controls and cards fit
+PASS dark-700-sidebar-true-closed measured reservation, axis and input cap
+PASS dark-700-sidebar-true-changes viewport, controls and cards fit
+PASS dark-700-sidebar-true-changes measured reservation, axis and input cap
+PASS dark-700-sidebar-true-browser viewport, controls and cards fit
+PASS dark-700-sidebar-true-browser measured reservation, axis and input cap
+PASS dark-700-sidebar-false-closed viewport, controls and cards fit
+PASS dark-700-sidebar-false-closed measured reservation, axis and input cap
+PASS dark-700-sidebar-false-changes viewport, controls and cards fit
+PASS dark-700-sidebar-false-changes measured reservation, axis and input cap
+PASS dark-700-sidebar-false-browser viewport, controls and cards fit
+PASS dark-700-sidebar-false-browser measured reservation, axis and input cap
+PASS dark-900-sidebar-true-closed viewport, controls and cards fit
+PASS dark-900-sidebar-true-closed measured reservation, axis and input cap
+PASS dark-900-sidebar-true-changes viewport, controls and cards fit
+PASS dark-900-sidebar-true-changes measured reservation, axis and input cap
+PASS dark-900-sidebar-true-browser viewport, controls and cards fit
+PASS dark-900-sidebar-true-browser measured reservation, axis and input cap
+PASS dark-900-sidebar-false-closed viewport, controls and cards fit
+PASS dark-900-sidebar-false-closed measured reservation, axis and input cap
+PASS dark-900-sidebar-false-changes viewport, controls and cards fit
+PASS dark-900-sidebar-false-changes measured reservation, axis and input cap
+PASS dark-900-sidebar-false-browser viewport, controls and cards fit
+PASS dark-900-sidebar-false-browser measured reservation, axis and input cap
+PASS dark-1200-sidebar-true-closed viewport, controls and cards fit
+PASS dark-1200-sidebar-true-closed measured reservation, axis and input cap
+PASS dark-1200-sidebar-true-changes viewport, controls and cards fit
+PASS dark-1200-sidebar-true-changes measured reservation, axis and input cap
+PASS dark-1200-sidebar-true-browser viewport, controls and cards fit
+PASS dark-1200-sidebar-true-browser measured reservation, axis and input cap
+PASS dark-1200-sidebar-false-closed viewport, controls and cards fit
+PASS dark-1200-sidebar-false-closed measured reservation, axis and input cap
+PASS dark-1200-sidebar-false-changes viewport, controls and cards fit
+PASS dark-1200-sidebar-false-changes measured reservation, axis and input cap
+PASS dark-1200-sidebar-false-browser viewport, controls and cards fit
+PASS dark-1200-sidebar-false-browser measured reservation, axis and input cap
+PASS dark-1536-sidebar-true-closed viewport, controls and cards fit
+PASS dark-1536-sidebar-true-closed measured reservation, axis and input cap
+PASS dark-1536-sidebar-true-changes viewport, controls and cards fit
+PASS dark-1536-sidebar-true-changes measured reservation, axis and input cap
+PASS dark-1536-sidebar-true-browser viewport, controls and cards fit
+PASS dark-1536-sidebar-true-browser measured reservation, axis and input cap
+PASS dark-1536-sidebar-false-closed viewport, controls and cards fit
+PASS dark-1536-sidebar-false-closed measured reservation, axis and input cap
+PASS dark-1536-sidebar-false-changes viewport, controls and cards fit
+PASS dark-1536-sidebar-false-changes measured reservation, axis and input cap
+PASS dark-1536-sidebar-false-browser viewport, controls and cards fit
+PASS dark-1536-sidebar-false-browser measured reservation, axis and input cap
+PASS light-700-sidebar-true-closed viewport, controls and cards fit
+PASS light-700-sidebar-true-closed measured reservation, axis and input cap
+PASS light-700-sidebar-true-changes viewport, controls and cards fit
+PASS light-700-sidebar-true-changes measured reservation, axis and input cap
+PASS light-700-sidebar-true-browser viewport, controls and cards fit
+PASS light-700-sidebar-true-browser measured reservation, axis and input cap
+PASS light-700-sidebar-false-closed viewport, controls and cards fit
+PASS light-700-sidebar-false-closed measured reservation, axis and input cap
+PASS light-700-sidebar-false-changes viewport, controls and cards fit
+PASS light-700-sidebar-false-changes measured reservation, axis and input cap
+PASS light-700-sidebar-false-browser viewport, controls and cards fit
+PASS light-700-sidebar-false-browser measured reservation, axis and input cap
+PASS light-900-sidebar-true-closed viewport, controls and cards fit
+PASS light-900-sidebar-true-closed measured reservation, axis and input cap
+PASS light-900-sidebar-true-changes viewport, controls and cards fit
+PASS light-900-sidebar-true-changes measured reservation, axis and input cap
+PASS light-900-sidebar-true-browser viewport, controls and cards fit
+PASS light-900-sidebar-true-browser measured reservation, axis and input cap
+PASS light-900-sidebar-false-closed viewport, controls and cards fit
+PASS light-900-sidebar-false-closed measured reservation, axis and input cap
+PASS light-900-sidebar-false-changes viewport, controls and cards fit
+PASS light-900-sidebar-false-changes measured reservation, axis and input cap
+PASS light-900-sidebar-false-browser viewport, controls and cards fit
+PASS light-900-sidebar-false-browser measured reservation, axis and input cap
+PASS light-1200-sidebar-true-closed viewport, controls and cards fit
+PASS light-1200-sidebar-true-closed measured reservation, axis and input cap
+PASS light-1200-sidebar-true-changes viewport, controls and cards fit
+PASS light-1200-sidebar-true-changes measured reservation, axis and input cap
+PASS light-1200-sidebar-true-browser viewport, controls and cards fit
+PASS light-1200-sidebar-true-browser measured reservation, axis and input cap
+PASS light-1200-sidebar-false-closed viewport, controls and cards fit
+PASS light-1200-sidebar-false-closed measured reservation, axis and input cap
+PASS light-1200-sidebar-false-changes viewport, controls and cards fit
+PASS light-1200-sidebar-false-changes measured reservation, axis and input cap
+PASS light-1200-sidebar-false-browser viewport, controls and cards fit
+PASS light-1200-sidebar-false-browser measured reservation, axis and input cap
+PASS light-1536-sidebar-true-closed viewport, controls and cards fit
+PASS light-1536-sidebar-true-closed measured reservation, axis and input cap
+PASS light-1536-sidebar-true-changes viewport, controls and cards fit
+PASS light-1536-sidebar-true-changes measured reservation, axis and input cap
+PASS light-1536-sidebar-true-browser viewport, controls and cards fit
+PASS light-1536-sidebar-true-browser measured reservation, axis and input cap
+PASS light-1536-sidebar-false-closed viewport, controls and cards fit
+PASS light-1536-sidebar-false-closed measured reservation, axis and input cap
+PASS light-1536-sidebar-false-changes viewport, controls and cards fit
+PASS light-1536-sidebar-false-changes measured reservation, axis and input cap
+PASS light-1536-sidebar-false-browser viewport, controls and cards fit
+PASS light-1536-sidebar-false-browser measured reservation, axis and input cap
+PASS dark-zoom-0.8-short-window viewport, controls and cards fit
+PASS dark-zoom-0.8-short-window measured reservation, axis and input cap
+PASS light-zoom-0.8-short-window viewport, controls and cards fit
+PASS light-zoom-0.8-short-window measured reservation, axis and input cap
+PASS dark-zoom-1.25-short-window viewport, controls and cards fit
+PASS dark-zoom-1.25-short-window measured reservation, axis and input cap
+PASS light-zoom-1.25-short-window viewport, controls and cards fit
+PASS light-zoom-1.25-short-window measured reservation, axis and input cap
+PASS dark-zoom-1.5-short-window viewport, controls and cards fit
+PASS dark-zoom-1.5-short-window measured reservation, axis and input cap
+PASS light-zoom-1.5-short-window viewport, controls and cards fit
+PASS light-zoom-1.5-short-window measured reservation, axis and input cap
+PASS stopping disables both actual controls without losing draft
+PASS keyboard removes attachment and retains tray focus
+PASS reduced motion disables local transition and spinner
+FAIL no renderer/harness errors: ["ResizeObserver loop completed with undelivered notifications."]
+UI3 Composer: 124/125, failed=1, skipped=0

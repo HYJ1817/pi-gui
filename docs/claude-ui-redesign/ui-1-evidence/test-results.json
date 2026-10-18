@@ -1,0 +1,523 @@
+{
+  "command": "npm test (PowerShell; UI-1 theme suite prepended; existing chain retained)",
+  "observedExitCode": 0,
+  "topLevelChainCommands": 128,
+  "logCreatedAtShanghai": "2026-10-16T13:50:14.584183+08:00",
+  "logLastWriteAtShanghai": "2026-10-16T14:37:24.299764+08:00",
+  "outputWindowSeconds": 2829.716,
+  "durationNote": "log creation to final write; excludes any silent command startup/teardown; approximate runtime only",
+  "logBytes": 456122,
+  "numericSummaries": [
+    {
+      "line": 52,
+      "text": "Theme display: 47/47; failed=0; fixture persistence and IPC; not layout evidence"
+    },
+    {
+      "line": 59,
+      "text": "Fixture retention: 6/6; failed=0; skipped=0; real TEMP filesystem, no Native writer"
+    },
+    {
+      "line": 83,
+      "text": "Object session binding: 23/23; failed=0; skipped=0; layer=deterministic lifecycle DI; no model or writer"
+    },
+    {
+      "line": 123,
+      "text": "EXE diagnostics: 19/19; pure classification, not packaged evidence"
+    },
+    {
+      "line": 142,
+      "text": "Object qualification: 17/17; failed=0; skipped=0 (real read-only Windows observation; synthetic capture and explicit metadata DI; NO production proof)"
+    },
+    {
+      "line": 162,
+      "text": "Object presentation: 25/25; read-only projection and DI authority"
+    },
+    {
+      "line": 215,
+      "text": "Object revert UI: 52/52; failed=0; skipped=0 (DI interaction only)"
+    },
+    {
+      "line": 261,
+      "text": "Object confirmation: 45/45; failed=0; skipped=0; v3 Native confirmation and v2 persisted migration"
+    },
+    {
+      "line": 263,
+      "text": "session-revert-sacl-witness: 0/0; failed=0; skipped=8; real audit environment only"
+    },
+    {
+      "line": 321,
+      "text": "Object profile: 55/55; failed=0; skipped=0; production allowlist empty"
+    },
+    {
+      "line": 334,
+      "text": "Object evidence: 12/12"
+    },
+    {
+      "line": 386,
+      "text": "Runtime models: 51/51"
+    },
+    {
+      "line": 462,
+      "text": "Model fallback: 74/74 通过"
+    },
+    {
+      "line": 498,
+      "text": "Model capabilities: 34/34 通过"
+    },
+    {
+      "line": 514,
+      "text": "15/15 passed"
+    },
+    {
+      "line": 570,
+      "text": "55/55 bridge-state-recovery passed"
+    },
+    {
+      "line": 624,
+      "text": "53/53 native-provider-quota assertions passed"
+    },
+    {
+      "line": 695,
+      "text": "26/26 通过"
+    },
+    {
+      "line": 707,
+      "text": "10/10 通过"
+    },
+    {
+      "line": 814,
+      "text": "105/105 通过"
+    },
+    {
+      "line": 852,
+      "text": "36/36 通过"
+    },
+    {
+      "line": 866,
+      "text": "P30 IA 12/12 passed"
+    },
+    {
+      "line": 2238,
+      "text": "1338/1338 通过"
+    },
+    {
+      "line": 2277,
+      "text": "31/31 通过"
+    },
+    {
+      "line": 2470,
+      "text": "161/161 通过"
+    },
+    {
+      "line": 2603,
+      "text": "117/117 通过"
+    },
+    {
+      "line": 2652,
+      "text": "37/37 通过"
+    },
+    {
+      "line": 2802,
+      "text": "115/115 通过"
+    },
+    {
+      "line": 3082,
+      "text": "52/52 通过"
+    },
+    {
+      "line": 3185,
+      "text": "75/75 通过"
+    },
+    {
+      "line": 3241,
+      "text": "38/38 通过"
+    },
+    {
+      "line": 3309,
+      "text": "66/66 通过"
+    },
+    {
+      "line": 3452,
+      "text": "141/141 通过"
+    },
+    {
+      "line": 3690,
+      "text": "236/236 通过"
+    },
+    {
+      "line": 3934,
+      "text": "215/215 通过"
+    },
+    {
+      "line": 4016,
+      "text": "80/80 通过"
+    },
+    {
+      "line": 5279,
+      "text": "72/72 通过"
+    },
+    {
+      "line": 5358,
+      "text": "57/57 通过"
+    },
+    {
+      "line": 5438,
+      "text": "62/62 通过"
+    },
+    {
+      "line": 5633,
+      "text": "173/173 通过"
+    },
+    {
+      "line": 5793,
+      "text": "136/136 通过"
+    },
+    {
+      "line": 6029,
+      "text": "202/202 通过（Pi 契约基线 1.0.0）"
+    },
+    {
+      "line": 6274,
+      "text": "229/229 通过"
+    },
+    {
+      "line": 6283,
+      "text": "5/5 通过"
+    },
+    {
+      "line": 6315,
+      "text": "30/30 通过"
+    },
+    {
+      "line": 6370,
+      "text": "50/50 通过"
+    },
+    {
+      "line": 6408,
+      "text": "36/36 通过"
+    },
+    {
+      "line": 6525,
+      "text": "87/87 通过"
+    },
+    {
+      "line": 6573,
+      "text": "34/34 通过"
+    },
+    {
+      "line": 6672,
+      "text": "73/73 通过"
+    },
+    {
+      "line": 6797,
+      "text": "123/123 通过"
+    },
+    {
+      "line": 6798,
+      "text": "21/21 gui browser policy checks passed"
+    },
+    {
+      "line": 6821,
+      "text": "22/22 gui browser controller checks passed"
+    },
+    {
+      "line": 6822,
+      "text": "gui-browser-bridge: 25/25 assertions passed"
+    },
+    {
+      "line": 6823,
+      "text": "gui-browser-tools: 31/31 assertions passed"
+    },
+    {
+      "line": 6847,
+      "text": "22/22 passed"
+    },
+    {
+      "line": 6848,
+      "text": "gui-browser-host: 18/18 passed"
+    },
+    {
+      "line": 6861,
+      "text": "gui-browser-stop: 12/12 cases passed"
+    },
+    {
+      "line": 6878,
+      "text": "stop-barrier: 16/16 cases passed"
+    },
+    {
+      "line": 6879,
+      "text": "Managed processes: 28/28"
+    },
+    {
+      "line": 6880,
+      "text": "Process tools: 25/25"
+    },
+    {
+      "line": 6881,
+      "text": "Process Stop: 10/10"
+    },
+    {
+      "line": 6882,
+      "text": "Process UI: 17/17"
+    },
+    {
+      "line": 6883,
+      "text": "Process runner protocol Windows/POSIX: 24/24"
+    },
+    {
+      "line": 6954,
+      "text": "Worktree lifecycle: 56/56 passed (win32, real Git fixtures)"
+    },
+    {
+      "line": 6969,
+      "text": "Worktree HTTP: 14/14 passed"
+    },
+    {
+      "line": 6986,
+      "text": "Worktree UI: 16/16 passed"
+    },
+    {
+      "line": 7019,
+      "text": "Runtime registry: 32/32"
+    },
+    {
+      "line": 7032,
+      "text": "Runtime HTTP: 12/12"
+    },
+    {
+      "line": 7033,
+      "text": "Runtime conversation store: 25/25"
+    },
+    {
+      "line": 7050,
+      "text": "Runtime UI: 16/16"
+    },
+    {
+      "line": 7089,
+      "text": "Runtime nav: 38/38"
+    },
+    {
+      "line": 7138,
+      "text": "Runtime conversation: 48/48"
+    },
+    {
+      "line": 7199,
+      "text": "Runtime changes scope: 60/60"
+    },
+    {
+      "line": 7217,
+      "text": "Runtime secondary: 17/17"
+    },
+    {
+      "line": 7224,
+      "text": "Runtime Git UI: 6/6"
+    },
+    {
+      "line": 7271,
+      "text": "45/45 runtime-resources assertions passed"
+    },
+    {
+      "line": 7288,
+      "text": "Runtime resource cleanup: 16/16"
+    },
+    {
+      "line": 7324,
+      "text": "Runtime history/search: 35/35"
+    },
+    {
+      "line": 7352,
+      "text": "Runtime finishing UI: 27/27"
+    },
+    {
+      "line": 7358,
+      "text": "Session runtime: 5/5"
+    },
+    {
+      "line": 7359,
+      "text": "Pi supervisor real win32 RPC/tree: 24/24"
+    },
+    {
+      "line": 7360,
+      "text": "Runtime Browser scope HTTP/IPC isolation: 48/48"
+    },
+    {
+      "line": 7361,
+      "text": "Global Process budget: 4/4"
+    },
+    {
+      "line": 7362,
+      "text": "Runtime SSE resource budgets: 14/14"
+    },
+    {
+      "line": 7372,
+      "text": "Runtime Process real win32: 10/10"
+    },
+    {
+      "line": 7396,
+      "text": "Object assets: 23/23; failed=0; skipped=0"
+    },
+    {
+      "line": 7409,
+      "text": "Object runtime authority: 12/12; failed=0; skipped=0; real TEMP root; labeled Registry DI"
+    },
+    {
+      "line": 7421,
+      "text": "Object history: 11/11; failed=0; skipped=0"
+    },
+    {
+      "line": 7448,
+      "text": "Session revert object runtime: 26/26; layer=real Registry/Worktrees + fakePi guardian; real-model=unverified"
+    },
+    {
+      "line": 7487,
+      "text": "Object store: 38/38; failed=0; skipped=0 (real TEMP filesystem; injected privacy/allocation)"
+    },
+    {
+      "line": 7519,
+      "text": "Object service: 30/30; failed=0; skipped=0; Native normal/recovery path + filesystem + labeled fault injection"
+    },
+    {
+      "line": 7571,
+      "text": "Object recovery reader: 51/51; failed=0; skipped=0; filesystem fixtures; Native writer not invoked"
+    },
+    {
+      "line": 7609,
+      "text": "session-change-store: 36/36"
+    },
+    {
+      "line": 7645,
+      "text": "Session change bridge: 35/35"
+    },
+    {
+      "line": 7677,
+      "text": "session-change-tools: 31/31"
+    },
+    {
+      "line": 7745,
+      "text": "session-revert: 67/67 scenarios passed"
+    },
+    {
+      "line": 7760,
+      "text": "session-revert-store: 14/14"
+    },
+    {
+      "line": 7826,
+      "text": "Session revert HTTP: 65/65"
+    },
+    {
+      "line": 7846,
+      "text": "Session revert worker/integration: 19/19"
+    },
+    {
+      "line": 7870,
+      "text": "session-revert-writer: 22/22"
+    },
+    {
+      "line": 7896,
+      "text": "session-revert-recovery: 24/24"
+    },
+    {
+      "line": 7912,
+      "text": "Session revert admission: 15/15"
+    },
+    {
+      "line": 7942,
+      "text": "Session revert apply: 29/29; fixture metadata, real temporary filesystem; NOT native metadata qualification"
+    },
+    {
+      "line": 7956,
+      "text": "session-revert-windows-faults: 13/13; failed=0; skipped=0"
+    },
+    {
+      "line": 7998,
+      "text": "session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility"
+    },
+    {
+      "line": 8055,
+      "text": "session-revert-inplace-safety: 43/43; failed=0; skipped=0; research only; no production eligibility"
+    },
+    {
+      "line": 8090,
+      "text": "Session change query: 34/34; failed=0; skipped=0"
+    },
+    {
+      "line": 8118,
+      "text": "Session change UI: 27/27; failed=0; skipped=0"
+    },
+    {
+      "line": 8130,
+      "text": "Session change startup server.js: 11/11; failed=0; skipped=0"
+    },
+    {
+      "line": 8166,
+      "text": "Object writer: 19/19; failed=0; skipped=0; isolated only"
+    },
+    {
+      "line": 8232,
+      "text": "Object faults: 45/45; failed=0; skipped=0; no production durable state machine"
+    },
+    {
+      "line": 8238,
+      "text": "Object witness: 0/0; failed=0; skipped=8"
+    }
+  ],
+  "jsonResultSummaries": [
+    {
+      "line": 103,
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "layer": "offline-contract",
+      "tool": null
+    },
+    {
+      "line": 262,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 8,
+      "layer": null,
+      "tool": "p33-4b-sacl-witness"
+    },
+    {
+      "line": 8237,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 8,
+      "layer": null,
+      "tool": "p33-d2-object-witness"
+    }
+  ],
+  "skipLines": [
+    {
+      "line": 263,
+      "text": "session-revert-sacl-witness: 0/0; failed=0; skipped=8; real audit environment only"
+    },
+    {
+      "line": 5220,
+      "text": "  --   跳过：本机建不了符号链接（需要权限或开发者模式），5i 未验"
+    },
+    {
+      "line": 7964,
+      "text": "SKIP protected nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL"
+    },
+    {
+      "line": 7967,
+      "text": "SKIP inherited nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL"
+    },
+    {
+      "line": 7998,
+      "text": "session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility"
+    },
+    {
+      "line": 8238,
+      "text": "Object witness: 0/0; failed=0; skipped=8"
+    }
+  ],
+  "failureMarkers": [],
+  "noCountPassedMarkers": [
+    "reliability: passed",
+    "interactions: passed",
+    "port-owner: passed"
+  ],
+  "countNote": "Do not sum nested/JSON/printed results into a claimed canonical assertion total. Skip counts are outside printed passed/total denominators. Line references preserve the source evidence."
+}

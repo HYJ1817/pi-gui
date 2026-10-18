@@ -1,0 +1,163 @@
+{
+  "events": [
+    {
+      "epoch": 1792167462124,
+      "kind": "require-production-main"
+    },
+    {
+      "epoch": 1792167462568,
+      "kind": "web-contents-created",
+      "wcId": 1,
+      "type": "window",
+      "url": "",
+      "preferences": {
+        "sandbox": true,
+        "contextIsolation": true,
+        "nodeIntegration": false
+      }
+    },
+    {
+      "epoch": 1792167462590,
+      "kind": "did-start-loading",
+      "wcId": 1,
+      "url": ""
+    },
+    {
+      "epoch": 1792167462590,
+      "kind": "did-start-navigation",
+      "wcId": 1,
+      "url": "http://127.0.0.1:14235/",
+      "inPlace": false,
+      "main": true
+    },
+    {
+      "epoch": 1792167462744,
+      "kind": "did-frame-navigate",
+      "wcId": 1,
+      "url": "http://127.0.0.1:14235/",
+      "code": 200,
+      "main": true
+    },
+    {
+      "epoch": 1792167462866,
+      "kind": "dom-ready",
+      "wcId": 1,
+      "url": "http://127.0.0.1:14235/"
+    },
+    {
+      "epoch": 1792167462878,
+      "kind": "did-finish-load",
+      "wcId": 1,
+      "url": "http://127.0.0.1:14235/"
+    },
+    {
+      "epoch": 1792167462879,
+      "kind": "observer-evaluate-start"
+    },
+    {
+      "epoch": 1792167462880,
+      "kind": "did-stop-loading",
+      "wcId": 1,
+      "url": "http://127.0.0.1:14235/"
+    },
+    {
+      "epoch": 1792167462920,
+      "kind": "observer-evaluate-end"
+    },
+    {
+      "epoch": 1792167463572,
+      "kind": "observer-theme-start",
+      "mode": "dark"
+    },
+    {
+      "epoch": 1792167463733,
+      "kind": "observer-theme-end",
+      "mode": "dark"
+    },
+    {
+      "epoch": 1792167463733,
+      "kind": "observer-theme-start",
+      "mode": "light"
+    },
+    {
+      "epoch": 1792167463894,
+      "kind": "observer-theme-end",
+      "mode": "light"
+    },
+    {
+      "epoch": 1792167465704,
+      "kind": "observer-close-window"
+    },
+    {
+      "epoch": 1792167465710,
+      "kind": "destroyed",
+      "wcId": 1,
+      "url": null
+    },
+    {
+      "epoch": 1792167465715,
+      "kind": "before-quit"
+    },
+    {
+      "epoch": 1792167465724,
+      "kind": "will-quit"
+    },
+    {
+      "epoch": 1792167465725,
+      "kind": "process-exit",
+      "code": 0
+    }
+  ],
+  "ready": true,
+  "checks": {
+    "desktop": true,
+    "themeBridge": true,
+    "hasProject": false,
+    "piRunning": false,
+    "projects": 0,
+    "timeOrigin": 1792167462584.2
+  },
+  "observerErrors": [],
+  "readyEpoch": 1792167462920,
+  "themes": [
+    {
+      "mode": "dark",
+      "observed": {
+        "ok": true,
+        "theme": "dark",
+        "preference": "dark",
+        "snapshot": {
+          "preference": "dark",
+          "resolved": "dark",
+          "revision": 1,
+          "persisted": true
+        }
+      },
+      "persisted": {
+        "version": 1,
+        "preference": "dark"
+      },
+      "screenshot": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-followup-evidence\\startup\\run-2026-10-16T16-17-37-838Z\\late-runtime-1\\dark.png"
+    },
+    {
+      "mode": "light",
+      "observed": {
+        "ok": true,
+        "theme": "light",
+        "preference": "light",
+        "snapshot": {
+          "preference": "light",
+          "resolved": "light",
+          "revision": 2,
+          "persisted": true
+        }
+      },
+      "persisted": {
+        "version": 1,
+        "preference": "light"
+      },
+      "screenshot": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-followup-evidence\\startup\\run-2026-10-16T16-17-37-838Z\\late-runtime-1\\light.png"
+    }
+  ],
+  "exitCode": 0
+}

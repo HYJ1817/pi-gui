@@ -1,0 +1,447 @@
+{
+  "createdAt": "2026-10-18T03:14:42.609Z",
+  "head": "c0769cd78d3e25d39aed5c97bde09af397a28cf8",
+  "canonical": "npm run test:logging && npm run test:ui4 && node tests/ui3-composer.cjs && node tests/ui3-model.cjs && node tests/ui3-inline-commands.cjs && node tests/ui3-integration.cjs && node tests/ui2-classic.cjs && node tests/ui2-runtime-display.cjs && node tests/ui2-visual.cjs && node tests/theme.cjs && node tests/session-revert-fixture-retention.cjs && node tests/session-revert-object-session-binding.cjs && node tests/session-revert-object-d6final-classic.cjs && node tests/exe-diagnostics.cjs && node tests/session-revert-object-qualification.cjs && node tests/session-revert-object-presentation.cjs && node tests/session-revert-object-ui.cjs && node tests/session-revert-object-confirmation.cjs && node tests/session-revert-sacl-witness.cjs && node tests/session-revert-object-profile.cjs && node tests/session-revert-object-evidence.cjs && node tests/runtime-models.cjs && node tests/model-fallback.cjs && node tests/model-capabilities.cjs && node tests/ux-state.cjs && node tests/bridge-state-recovery.cjs && node tests/native-provider-quota.cjs && node tests/stable-session-order.cjs && node tests/hotfix.cjs && node tests/hotfix-ui.cjs && node tests/provider-auth.cjs && node tests/provider-auth-runtime.cjs && node tests/ui-ia.cjs && node tests/smoke.cjs && node tests/daily-use.cjs && node tests/git.cjs && node tests/modules.cjs && node tests/reliability.cjs && node tests/interactions.cjs && node tests/sidebar-menu.cjs && node tests/port-owner.cjs && node tests/project-config.cjs && node tests/skills.cjs && node tests/extensions.cjs && node tests/capability.cjs && node tests/capability-install.cjs && node tests/web-access.cjs && node tests/subagents.cjs && node tests/memory.cjs && node tests/browser.cjs && node tests/approvals.cjs && node tests/planner.cjs && node tests/workflow-relations.cjs && node tests/reviews.cjs && node tests/review-gate.cjs && node tests/verification.cjs && node tests/evidence.cjs && node tests/attempt-lifecycle.cjs && node tests/sessions.cjs && node tests/session-search.cjs && node tests/pi-compat.cjs && node tests/pi-probes.cjs && node tests/pi-update.cjs && node tests/pi-version.cjs && node tests/mcp-native.cjs && node tests/usage-quota.cjs && node tests/body-integrity.cjs && node tests/dev-server.cjs && node tests/models-api.cjs && node tests/server-security.cjs && node tests/diagnostics.cjs && node tests/update-check.cjs && node tests/version-consistency.cjs && node tests/release-artifacts.cjs && node tests/electron-guard.cjs && node tests/gui-browser-policy.cjs && node tests/gui-browser-controller.cjs && node tests/gui-browser-bridge.cjs && node tests/gui-browser-tools.cjs && node tests/gui-browser-ui.cjs && node tests/gui-browser-host.cjs && node tests/gui-browser-stop.cjs && node tests/stop-barrier.cjs && node tests/managed-processes.cjs && node tests/process-tools.cjs && node tests/process-stop.cjs && node tests/process-ui.cjs && node tests/process-runner.cjs && node tests/worktrees.cjs && node tests/worktrees-http.cjs && node tests/worktrees-ui.cjs && node tests/runtime-registry.cjs && node tests/runtime-http.cjs && node tests/runtime-store.cjs && node tests/runtime-ui.cjs && node tests/runtime-nav.cjs && node tests/runtime-conversation.cjs && node tests/runtime-changes.cjs && node tests/runtime-secondary.cjs && node tests/runtime-git-ui.cjs && node tests/runtime-resources.cjs && node tests/runtime-resource-cleanup.cjs && node tests/runtime-history-search.cjs && node tests/runtime-finish-ui.cjs && node tests/session-runtime.cjs && node tests/pi-supervisor.cjs && node tests/runtime-browser.cjs && node tests/process-budget.cjs && node tests/runtime-events.cjs && node tests/runtime-processes.cjs && node tests/session-revert-object-assets.cjs && node tests/session-revert-object-authority.cjs && node tests/session-revert-object-history.cjs && node tests/session-revert-object-runtime.cjs && node tests/session-revert-object-store.cjs && node tests/session-revert-object-service.cjs && node tests/session-revert-object-recovery.cjs && node tests/session-change-store.cjs && node tests/session-change-bridge.cjs && node tests/session-change-tools.cjs && node tests/session-revert.cjs && node tests/session-revert-store.cjs && node tests/session-revert-http.cjs && node tests/session-revert-integration.cjs && node tests/session-revert-writer.cjs && node tests/session-revert-recovery.cjs && node tests/session-revert-admission.cjs && node tests/session-revert-apply.cjs && node tests/session-revert-windows-faults.cjs && node tests/session-revert-inplace.cjs && node tests/session-revert-inplace-safety.cjs && node tests/session-change-query.cjs && node tests/session-change-ui.cjs && node tests/session-change-startup.cjs && npm run test:session-revert-object-writer && npm run test:session-revert-object-faults && npm run test:session-revert-object-witness",
+  "hashes": [
+    {
+      "file": "public/api.js",
+      "sha256": "f1f99706e185650da2276bd9ad11a930d2603961c62c295dd418ca67f38ba08d"
+    },
+    {
+      "file": "public/app.js",
+      "sha256": "ee0b71e46c027e3c4f324d97176814b634e95151fe71c6d2cc84e3de56c1cc80"
+    },
+    {
+      "file": "public/approval-model.js",
+      "sha256": "d915b5b66f6cd38f7912be4eb7e40b219137ccbfa51fb1eebfc96e14569e0564"
+    },
+    {
+      "file": "public/approval.js",
+      "sha256": "d42e6160aa6bbffcb35d55ccac998eec48261565767c6ae798df2435bb9f43f9"
+    },
+    {
+      "file": "public/attachments.js",
+      "sha256": "e3a534717c4cb0b4cda8051c3795310325931b9121eab4f7f4d71d89442c2cc6"
+    },
+    {
+      "file": "public/bridge-recovery.js",
+      "sha256": "5770bb4d16e1268d415b3cc07b642893a5c8d430dafc3e0aa1bcd92bb7f6ebb5"
+    },
+    {
+      "file": "public/browser-activity.js",
+      "sha256": "0f131e2291e2b903b482820d85cb814a9fb187ae284a3c311449f604d8fda7db"
+    },
+    {
+      "file": "public/browser-capabilities.js",
+      "sha256": "4b77e168e98ccb261cd1b68b19d031de5775e1638c87f52515eb4f72f793421e"
+    },
+    {
+      "file": "public/browser-pane.js",
+      "sha256": "111abbfca958aa18d321107662c27935a4dac5019efb7795bf88fc72a57470c3"
+    },
+    {
+      "file": "public/browser.js",
+      "sha256": "c29fdd429c646cf188d9dcb24b4aeee8d4ebb4c291a79f72a90bf5163ca09bfe"
+    },
+    {
+      "file": "public/capability-model.js",
+      "sha256": "6cd6638f2a4a922f8ed4e0780377005055cdaecb2c1337e96cd3a674e7d2c8fd"
+    },
+    {
+      "file": "public/capability-view.js",
+      "sha256": "3e448e0e9e9764e41df4cc1b66fc894fb9035285e560ccb6e6d6545aa78a686b"
+    },
+    {
+      "file": "public/changes.js",
+      "sha256": "14100196966d454e1fdc4a67361ed73759968b59a04e34443171dce58ecf0f19"
+    },
+    {
+      "file": "public/composer.js",
+      "sha256": "7d183a5e128338e7707539f50c587e08aed5d1cd9166ff7fcdc6731b69447142"
+    },
+    {
+      "file": "public/conversation-nav.js",
+      "sha256": "d8c0c464e679f19f26fe0096c423e0645aaf4f5e77869e8b2acad742b44b38d7"
+    },
+    {
+      "file": "public/diagnostics.js",
+      "sha256": "b23be5a487e14c605a558149745602c30b593019d9e78094c2327e879d3d3ca2"
+    },
+    {
+      "file": "public/diff.js",
+      "sha256": "f9ad80a523ab8658df5522cff3a5d6ecc904f18a53e1c277bca06f3d4db94799"
+    },
+    {
+      "file": "public/draft.js",
+      "sha256": "66633fa13313436227240ddbd6eba233f7795cd4db0957e094c2ba82021c58e6"
+    },
+    {
+      "file": "public/extensions.js",
+      "sha256": "bb256bdec5793315fc1eb1fb2519236d31480e2eb7a7b55cb89de6ea9101d67e"
+    },
+    {
+      "file": "public/fallback.js",
+      "sha256": "fef0e93402773fc046160ecaf4f95e3fdd6f801a37f100f25078b4bdf869668c"
+    },
+    {
+      "file": "public/git.js",
+      "sha256": "832c421be029fdbfa75e5343f57761d857db8019841a5e84f73f6586c62b3871"
+    },
+    {
+      "file": "public/gui-browser-activity.js",
+      "sha256": "60276f01495ff693e6f8b296785cd7243ee842d9ae419eacb810347555155184"
+    },
+    {
+      "file": "public/gui-browser-capabilities.js",
+      "sha256": "6e864fcdd958b9f973cec4fd99b86cacd979981a8b7fce2f44b638a1966059ef"
+    },
+    {
+      "file": "public/index.html",
+      "sha256": "3372ad02bff67f7df4af2fa46f9ae04dc63c38dc86cc302356ef71991eb8f826"
+    },
+    {
+      "file": "public/log-client.js",
+      "sha256": "28f6eca8e6100949e571d022260f89f8ab4beb15e2d8cefb0d03282a1271336d"
+    },
+    {
+      "file": "public/logs.js",
+      "sha256": "b0f3bea0392f9a6d85028df0400fe04e02e59b10004216a9fa27f09e4f877a11"
+    },
+    {
+      "file": "public/markdown.js",
+      "sha256": "e72aa7309996a66739a8270aee9bd5fbc4895e27ab327d16792e3a09fcf09867"
+    },
+    {
+      "file": "public/mcp-activity.js",
+      "sha256": "947f07ac5ccfdd5db31f88dcf6fc599dd5175bb4e8a17cc28b1284f71e6b4f7b"
+    },
+    {
+      "file": "public/mcp-capabilities.js",
+      "sha256": "8781bf70b55364403c43212cc9ebca782e3c459990ededd454ac3affece6ef78"
+    },
+    {
+      "file": "public/mcp-observer.js",
+      "sha256": "9b3528ccbf35fa6779d90eb6841edc5e7de5d1b1d26df432b921f93205609733"
+    },
+    {
+      "file": "public/memory-activity.js",
+      "sha256": "b4e61d81a9d218f16d8c1eb4627198019c0d7f49915d46a8c8c69be9125bad49"
+    },
+    {
+      "file": "public/memory-capabilities.js",
+      "sha256": "673e33008139ffa9b6d6e878d13e249a874492ec85babba158fe2bcc9989d4b9"
+    },
+    {
+      "file": "public/memory.js",
+      "sha256": "e1d8d6c01c058207c88ba0ebb507445d151425723c05735a6742e15dfafb5e8a"
+    },
+    {
+      "file": "public/message-meta.js",
+      "sha256": "220c1f8b9815fa3d296c1a2de9998c0c7fd761d1bb4408d118e67a7b6e6eb0ed"
+    },
+    {
+      "file": "public/messages.js",
+      "sha256": "0c869c27013154d998d40c0cb031b9e4bb4c50455c07206dd4bb043b6e280d87"
+    },
+    {
+      "file": "public/model-capabilities.js",
+      "sha256": "85950be4a4c699f0a6bde0a0733179dc4deb67aac3b6bb04478476a241b50486"
+    },
+    {
+      "file": "public/model-fallback.js",
+      "sha256": "e942ee6feebd248e39f7e9a32f358886bea690238c4f2c637adbcedfe4594d2a"
+    },
+    {
+      "file": "public/palette-model.js",
+      "sha256": "d07bfcca25ac9a3698c8b00083fa77e0a2841b85cce4d995a76d60a4624fbbfd"
+    },
+    {
+      "file": "public/palette.js",
+      "sha256": "26ca6b8d9d96a2f49d25c8b952867c940a32847521548f04bfe06c0004061f36"
+    },
+    {
+      "file": "public/pi-update.js",
+      "sha256": "78c89c0590651182ea5cde77ce7716292b3ce19844a447e9773f5f5d95d925c3"
+    },
+    {
+      "file": "public/planner.js",
+      "sha256": "bb6296cfe9f7d113248d39390620ceefb3e89bea3c4861399339a44ac4b8c985"
+    },
+    {
+      "file": "public/process-activity.js",
+      "sha256": "ec6cc4afbcd730951019cf6d41418ea192ac4ec0cdd22f9b967c96b786a58fad"
+    },
+    {
+      "file": "public/process-panel.js",
+      "sha256": "eaf9aee85deddd2cabfe277c1dc22405de97d45c8d9b0bf64eed0ec0ceab061e"
+    },
+    {
+      "file": "public/process.css",
+      "sha256": "f5c78ea0fbcf0fc11ee7f606ccfb133f928e17ee56839467aa3500082025e517"
+    },
+    {
+      "file": "public/project-config.js",
+      "sha256": "601a5da4480aa05d150124da861be711e8e5f58e8c379df47c9721f1e13e086b"
+    },
+    {
+      "file": "public/projects.js",
+      "sha256": "6c9f19acdc643547317ff551d9a247937888eaf9ec2bcfd9af15476a762eec93"
+    },
+    {
+      "file": "public/provider-auth.js",
+      "sha256": "3d742ec046d6bfb3bebd37e0779d9fd72051601bed5990c32ac39777741560b6"
+    },
+    {
+      "file": "public/providers.js",
+      "sha256": "ce1bc8b7eb14fede007323f4a2120eef3f9bbf01bdf06093036a242d7eea7a73"
+    },
+    {
+      "file": "public/right-pane.js",
+      "sha256": "ca3354081e995f019f5f6b8741c73ce4bcd4a1f441540786aaa70c66ee3d7d55"
+    },
+    {
+      "file": "public/rpc.js",
+      "sha256": "5f361d0937d86c458eae8771ca546fc5491d2bf243313d14a4a69b4e771ebc72"
+    },
+    {
+      "file": "public/runtime-conversation.js",
+      "sha256": "372d8d1d05eb0ee1b2181d36666c78cd8a4c2e4aa9760ec59cf2022fbf372b35"
+    },
+    {
+      "file": "public/runtime-display.js",
+      "sha256": "6326ad0e48f0c6a4d6f1cd73a64c4e17c0d9c32e54fb5d6fffd96786cb658d73"
+    },
+    {
+      "file": "public/runtime-models.js",
+      "sha256": "8e12355eb6e5b1837576b64a1d7bf3d8a00a562e97f37c155f2bdb086a4dcc07"
+    },
+    {
+      "file": "public/runtime-nav.js",
+      "sha256": "a4284da2750b0b6859dbaf7665aa2eac00d19a48b82c249845be20b5c16ece1a"
+    },
+    {
+      "file": "public/runtime-resources.js",
+      "sha256": "e9fd52f53b499775bb10b05246df8ef090dc5777eed63c8baf680347f2142fb7"
+    },
+    {
+      "file": "public/runtime-secondary.js",
+      "sha256": "c11a855001e69ba37625ba3fc08325b0bf5036f3d746ce6767dcdd44f507ce22"
+    },
+    {
+      "file": "public/runtime-sessions.js",
+      "sha256": "5c29b1aeaafbe5979158b1db8f701a27952d45e77bea939ac8ee02650f27e922"
+    },
+    {
+      "file": "public/runtime-state.js",
+      "sha256": "b47d281cf1c9929726ee93f44e49b1a0a9ac50ee68020a0e39b6769150f6b5f5"
+    },
+    {
+      "file": "public/runtime-store.js",
+      "sha256": "c872f7dac79cf41e0de43a2129acbd4e8ea9820acecd7e1b68abf5af569321d3"
+    },
+    {
+      "file": "public/schema-drift.js",
+      "sha256": "341c5dc5e857c17667dfa167c1a20fc98a90fd13d44ce9f8ce102e8224d1c5c6"
+    },
+    {
+      "file": "public/session-changes-panel.js",
+      "sha256": "85bd9bc0b011fd207eaf9e41a916fd7d94ea2b04d197da914eebfcd7fdba45c8"
+    },
+    {
+      "file": "public/session-plans.js",
+      "sha256": "067a71adfb8718417a0c45b6ec1f3d1af1eaddae18a91eebca8672bc0e19e8d7"
+    },
+    {
+      "file": "public/session-revert-object-api.js",
+      "sha256": "dff09e708b73482c899ab205415950603fce3a2549b04f1fe0cfb74be8172ee6"
+    },
+    {
+      "file": "public/session-revert-object-ui.js",
+      "sha256": "c344454fdef64a97b1198bdfb06355f3b61f9974d024397042f58ad8cdad9cbb"
+    },
+    {
+      "file": "public/session-search.js",
+      "sha256": "5c25ab23d2936f297e4d30645fdc76aeff68c8b70af490ab5f1c3baa9d4f6430"
+    },
+    {
+      "file": "public/sessions.js",
+      "sha256": "149df770df8d25eaaee4855391ae7d913b8c1171c0c962a257e17a61180e86ff"
+    },
+    {
+      "file": "public/settings.js",
+      "sha256": "93857299c2e02874063acdfeafa4cad3d034aadf16c67b45daf537569d37b5c3"
+    },
+    {
+      "file": "public/shell.js",
+      "sha256": "3d130704bb520df805dd04d1e29fc3a1e25cb42d89d3625a334eeaedd4d1e528"
+    },
+    {
+      "file": "public/shortcuts.js",
+      "sha256": "344c896a1d9cd0c624dc40bf4c144e054e4366a8cf3c0568da4dd9e8726f1600"
+    },
+    {
+      "file": "public/sidebar-expansion.js",
+      "sha256": "979fe0c60527db6b2f540f10a292a0e822d9387981a7d37d8920e64d858ec874"
+    },
+    {
+      "file": "public/state.js",
+      "sha256": "7a6c915d0c3a644c953f9e2fa29407bf0f036e039fe67486819ae7e889601fce"
+    },
+    {
+      "file": "public/status-copy.js",
+      "sha256": "275462397acdbb205b0949f6a480d7eb6be6b014add8027d9d769665e46dac31"
+    },
+    {
+      "file": "public/styles.css",
+      "sha256": "f22f9bd1172e97ac412a3fc842f55b34d0e304945b327963d4c07ba111665232"
+    },
+    {
+      "file": "public/subagent-activity.js",
+      "sha256": "2364bb2787df14bc7e318b104b3ea6d8155840363b97e8a900772eaab34541ec"
+    },
+    {
+      "file": "public/subagent-capabilities.js",
+      "sha256": "d8315475255fff99c331109e2f43546c7d341fea1c7d2747e3cec846ad010829"
+    },
+    {
+      "file": "public/subagents.js",
+      "sha256": "3a2c5840a69362f8754e327dfe6432c062777a035b7d7cca5b1f0be0e758bd66"
+    },
+    {
+      "file": "public/theme-init.js",
+      "sha256": "915493fbf871a5c9fa1b7016415483f8da408b74e8ec213c75c4f80bf1c17ae0"
+    },
+    {
+      "file": "public/theme.js",
+      "sha256": "3e2f40b758656855fbf45b06287a0028d5fd384c1563af7a3f4d7cadd25b88c0"
+    },
+    {
+      "file": "public/tokens.css",
+      "sha256": "95bf8d5c4b6a89d07d52f3f70d3e0716794db1630fb7c0c67cdea160f46c285a"
+    },
+    {
+      "file": "public/tool-history.js",
+      "sha256": "3f68aa7067852b730b7c6606a934b644cab5212b0e7988a89397876b376bcf79"
+    },
+    {
+      "file": "public/tool-model.js",
+      "sha256": "26813a1c3ea67d397c4e2291bf34c9fc0a18119143cfbcfdcb40d71ee19b1385"
+    },
+    {
+      "file": "public/tool-view.js",
+      "sha256": "30370ae9197c8da97d66b1e931ea34bf289d6acd77ea276065c25b400216c9c7"
+    },
+    {
+      "file": "public/tools.js",
+      "sha256": "8d607b1fedbd41a900897a8233b6fc87b67cbab6c00bc7f543fef51ed4531b59"
+    },
+    {
+      "file": "public/tree.js",
+      "sha256": "8dacd66c68ec72b08f461422a34f3fff930b39bf69e21e9439ac934c4ecabc75"
+    },
+    {
+      "file": "public/ui/action-menu.js",
+      "sha256": "eb4d0e902f05265538467ca70dd3e3a2f0cdafe426e7c6d274b85a02b7bc7cd4"
+    },
+    {
+      "file": "public/ui/capability-setup.js",
+      "sha256": "f3989d6233f5f4db4a57034d6e90b1bf50388963b2472d9819fe03b6209bccee"
+    },
+    {
+      "file": "public/ui/fallback-settings.js",
+      "sha256": "9ef43934060af41b8ee9fb3cbb03a74000833a519ce4253c1a49befe0246e8b4"
+    },
+    {
+      "file": "public/ui/inline-command-menu.js",
+      "sha256": "e720393b98ea77da574969dd768e5c00059e65b5e2e18cd516cbade22ffdfdbf"
+    },
+    {
+      "file": "public/ui/modal.js",
+      "sha256": "16e9a00d1457520924f9cbd3da79dbc233e1367c3deb085084357e7ac1fc8140"
+    },
+    {
+      "file": "public/ui/notice.js",
+      "sha256": "6891734577cf03f4f4fc80e8f0697b054efadf8f57ffab77c0eaf07fd324dc48"
+    },
+    {
+      "file": "public/ui/popover.js",
+      "sha256": "d163cafb41853deff05d8766516a60bf51059749eb8d7f071f55a6d0422ff9e1"
+    },
+    {
+      "file": "public/ui/secondary-surface.js",
+      "sha256": "23ae7d774bcd99d73169f29eddb1a93d5555a00b213641f9cb82ecb7c7b56beb"
+    },
+    {
+      "file": "public/ui/shortcut-help.js",
+      "sha256": "696e652908327e1741dc92768e750c994de1d5c25651b8977e8026b9bcc88295"
+    },
+    {
+      "file": "public/ui/toast.js",
+      "sha256": "8d35fbbb6e9cc501c86986d1329baf291b7ef0618c823174f9f24faf4cef86f6"
+    },
+    {
+      "file": "public/ui/workspace-surface.js",
+      "sha256": "77c30c2d0667c56b8d5315b205bbc8f7a33dfa7c05468d58f4032071eee29341"
+    },
+    {
+      "file": "public/ui3-composer.css",
+      "sha256": "bae7db8410c3074345a3f876e4ef7c470a2be44454599d994a20fcf61bacc639"
+    },
+    {
+      "file": "public/ui3-inline-commands.css",
+      "sha256": "8c41064fecb14245cbfcc3181a49d3299b391ab7b65c3f9544c9aa79131d42d3"
+    },
+    {
+      "file": "public/ui3-model-picker.js",
+      "sha256": "87df847f9da87ac6a56a2b3a0c7dee86581760da01cb680fd5b6d23f7c6d21e3"
+    },
+    {
+      "file": "public/ui3-model.css",
+      "sha256": "e1669166d7c5af376417ec31a5630275268d20a1345bfde83e93caf4e8c4348d"
+    },
+    {
+      "file": "public/ui4-approval.css",
+      "sha256": "cba7ddf3768001481265570f070d41a72fc72f4b5536fef546a3cc471d3b0cc6"
+    },
+    {
+      "file": "public/ui4-feedback.css",
+      "sha256": "c6f5249b98e4f7a5567f6c662db5cf22c2016f1f120ffc7defc12537498c6e1e"
+    },
+    {
+      "file": "public/ui4-pane.css",
+      "sha256": "c5920595b3e80b675ce5b939c0115b0ff6ca5992446c295fab2fddc807f3e2ea"
+    },
+    {
+      "file": "public/ui5-logs.css",
+      "sha256": "7e6292fca9ca6f38169c7771c6e55f262670d44eb89da93ba1b67b971a243b77"
+    },
+    {
+      "file": "public/update.js",
+      "sha256": "59dc525c91e69b785c5f829c7ac85d7c717e6e4cc3a486561779aeb523517c29"
+    },
+    {
+      "file": "public/usage.js",
+      "sha256": "19811410dae2a72274420a83e3800c203cfaa0a7f212175367bdabb124918c45"
+    },
+    {
+      "file": "public/util.js",
+      "sha256": "47c1b1b05fd2046ebfae788810a27a04dcdfc3e8013e388e5cc7af3876b3f3ab"
+    },
+    {
+      "file": "public/web-access.js",
+      "sha256": "6f731113764ef0d1c253094ccedd6485827006c4157c0e35f9dd5231f1525d9a"
+    },
+    {
+      "file": "public/web-activity.js",
+      "sha256": "e99446ce9a1832f4e0925f87fd469770b164e916a42a85879f9d131af7963fd8"
+    },
+    {
+      "file": "public/web-capabilities.js",
+      "sha256": "79afbc96d31fbbf6466ecb36e4b85440a4648629f4bd9b94165a43a08249142a"
+    },
+    {
+      "file": "public/worktrees.js",
+      "sha256": "1eac93f7a8b71f250d8162f44874895579f7e135cc1a5d43aeefe731520b2a70"
+    }
+  ]
+}

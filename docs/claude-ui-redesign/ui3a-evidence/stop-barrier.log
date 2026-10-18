@@ -1,0 +1,17 @@
+  ok  1. 停止未确认期间，prompt / steer / follow_up 全部被后端拒绝，且不进 Pi stdin
+  ok  2. clear_queue 排在 abort 之前（官方顺序：先清队列再中止）
+  ok  3. abort 应答先到 → 以 abort-response 解除；随后的 agent_settled 不产生错误状态
+  ok  4. agent_settled 先到 → 回读 get_state 确认 idle 才解除（evidence = agent-settled-idle）
+  ok  5. abort 应答失败 → 不宣称成功，屏障继续挡着
+  ok  6. clear_queue 不被支持（旧 Pi）→ 明确降级，abort 与屏障照旧
+  ok  7. 连续点 Stop：只写出一次 clear_queue / abort，第二次复用同一个等待
+  ok  8. 认证同步中不绕过后端闸门，且不会留下屏障
+  ok  9. bridge 换代（重启 Pi / 换工作区）→ 屏障随手作废，不会把界面永久锁死
+  ok  10. 点 Stop 立即进入 stopping：发送键禁用、状态是「正在停止…」
+  ok  11. 停止未完成时：submit 不发送、再点 Stop 不重发、输入的字留着
+  ok  12. agent_settled 先到不解除 stopping；stop_state 事件才收口
+  ok  13. HTTP 应答先到：abort 应答保证已空闲，下一条消息走 prompt 而不是 steer
+  ok  14. 换工作区 / bridge 换代：旧停止作废，迟到应答不再写状态
+  ok  15. 网络失败 = 没问到，不算停止完成
+  ok  16. 用户主动停止的中断消息按中性状态呈现；非本次停止的取消照旧报错
+stop-barrier: 16/16 cases passed

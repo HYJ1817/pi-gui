@@ -111,7 +111,13 @@ export function createRpcBridge({
   maxOutputLineBytes = 96 * 1024 * 1024,
   /* 等 Pi abort 应答的上限（测试注入短值）。见文件里「停止屏障」一段。 */
   stopTimeoutMs = STOP_TIMEOUT_MS,
+  /* 结构化日志观察者（可选）。只接收稳定事件代码与白名单字段；
+   * 任何异常都被吞掉，绝不改变 bridge 行为。 */
+  logEvent = null,
 }) {
+  const diagLog = typeof logEvent === 'function' ? logEvent : () => {};
+  const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
+  const operationOf = (cmd) => (cmd && typeof cmd.type === 'string' ? cmd.type : 'unknown');
   /* 实际启动命令：launch identity 优先，`piBin` 只是缺省（老调用方 / 单测）。
    * 这是「bridge spawn 的那个东西」的唯一取值处 —— 下面不再出现第二个来源。 */
   const launchBin = (launch && typeof launch.bin === 'string' && launch.bin) ? launch.bin : piBin;
@@ -286,6 +292,7 @@ export function createRpcBridge({
     }
     const run = ++bridgeRun;
     const generation = ++launchGeneration;
+    safeLog('bridge.start', { phase: 'starting', bridgeRun: run });
     retiringChild = null;
 
     /* 项目配置要先「准备」再取参数。
@@ -349,6 +356,7 @@ export function createRpcBridge({
       processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       sessionChangeLaunch?.invalidate().catch(()=>{});
       restartRequested = false;
+      safeLog('bridge.start_failed', { phase: 'spawn', reason: 'spawn_error' });
       publish({ type: 'bridge_status', state: 'error', error: '无法启动 pi。', hint: '确认 pi 已安装并在 PATH 中，或检查 PI_BIN 配置。', cwd, bridgeRun: run });
       return;
     }
@@ -368,6 +376,7 @@ export function createRpcBridge({
       processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       sessionChangeLaunch?.invalidate().catch(()=>{});
       restartRequested = false;
+      safeLog('bridge.start_failed', { phase: 'process', reason: 'process_error' });
       publish({
         type: 'bridge_status',
         state: 'error',
@@ -380,6 +389,8 @@ export function createRpcBridge({
 
     let stdoutBuf = '';
     let readinessId = null;
+    let parseErrorCount = 0;
+    let lastParseLogAt = 0;
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       if (pi !== child) return;
@@ -387,6 +398,7 @@ export function createRpcBridge({
       stdoutBuf += chunk;
       const overBudget = (line) => Buffer.byteLength(line) > maxOutputLineBytes;
       const rejectOversize = () => {
+        safeLog('bridge.output_limit', { bytes: maxOutputLineBytes, bridgeRun: run });
         stdoutBuf = ''; publish({ type: 'bridge_status', state: 'error', error: 'Pi 输出超过有界协议预算', bridgeRun: run });
         stop();
       };
@@ -402,6 +414,12 @@ export function createRpcBridge({
         try {
           msg = JSON.parse(line);
         } catch {
+          parseErrorCount += 1;
+          if (!lastParseLogAt || Date.now() - lastParseLogAt >= 5000) {
+            safeLog('bridge.parse_error', { count: parseErrorCount, bridgeRun: run });
+            parseErrorCount = 0;
+            lastParseLogAt = Date.now();
+          }
           observeCompat((c) => c.observeParseError());
           publish({ type: 'bridge_parse_error', raw: line.slice(0, 400) });
           continue;
@@ -411,6 +429,7 @@ export function createRpcBridge({
         observeCompat((c) => c.observeUpstream(msg));
         if (msg?.type === 'response' && msg.id === readinessId && msg.command === 'get_state' && msg.success === true && !maintenance) {
           readinessId = null;
+          safeLog('bridge.ready', { bridgeRun: run, durationMs: Date.now() - startedAt });
           publish({ type: 'bridge_status', state: 'ready', pid: child.pid ?? null, cwd, bridgeRun: run });
         }
         /* 先看是不是某条挂起请求的应答。
@@ -457,6 +476,7 @@ export function createRpcBridge({
       const state = await request({ type: 'get_state' }, { timeoutMs: 30000 });
       if (pi !== child || child === retiringChild || maintenance || runtime.getCurrentCwd() !== cwd) return;
       if (snapshot.state !== 'ready' && (!state || state.__error || readinessId !== null)) {
+        safeLog('bridge.start_failed', { phase: 'readiness', reason: 'readiness_timeout' });
         publish({ type: 'bridge_status', state: 'error', error: 'Pi 未能完成 RPC 就绪确认。', hint: '重新同步状态，或在诊断中检查 Pi 启动情况。', cwd, bridgeRun: run });
       }
     });
@@ -464,6 +484,10 @@ export function createRpcBridge({
     const startedAt = Date.now();
     const onStopped = (code, signal) => {
       if (pi !== child) return;
+      const wasExpected = Boolean(maintenance || restartRequested || runtime.isShuttingDown());
+      safeLog(wasExpected ? 'bridge.exit' : 'bridge.connection_lost', wasExpected
+        ? { exitCode: Number.isFinite(code) ? code : undefined, signal: signal ? String(signal) : undefined, expected: true, uptimeMs: Date.now() - startedAt, bridgeRun: run }
+        : { state: 'exited', bridgeRun: run });
       browserLaunch?.invalidate({disable:true,revoke:true});
       processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       sessionChangeLaunch?.invalidate().catch(()=>{});
@@ -560,16 +584,19 @@ export function createRpcBridge({
       try {
         stopGuard(cmd);
       } catch (err) {
+        safeLog('bridge.request_failed', { operation: operationOf(cmd), code: err.code || 'request_rejected', bridgeRun });
         resolve({ __error: err.message, __code: err.code });
         return;
       }
       if (!runtime.getCurrentCwd() || restartRequested || maintenance || !childUsable()) {
+        safeLog('bridge.request_failed', { operation: operationOf(cmd), code: !runtime.getCurrentCwd() ? 'no_project' : restartRequested ? 'restarting' : maintenance ? 'maintenance' : 'not_running', bridgeRun });
         resolve(null);
         return;
       }
       const id = nextRequestId++;
       const timer = setTimeout(() => {
         pending.delete(id);
+        safeLog('bridge.request_timeout', { operation: operationOf(cmd), durationMs: timeoutMs, bridgeRun });
         resolve(null);
       }, timeoutMs);
       // timer.unref() 让一个挂起的请求不会拖住进程退出
@@ -657,6 +684,7 @@ export function createRpcBridge({
     const run = stopRun;
     if (!run) return;
     stopRun = null;
+    safeLog('bridge.stop_result', { result: evidence === 'bridge-reset' ? 'reset' : 'stopped', durationMs: Date.now() - run.startedAt, bridgeRun: run.run });
     /* bridge 换代 = 旧 run 已经随进程消失：停止的目标达成了，但这不是
      * 「Pi 确认停止」，所以要如实分开，不谎报一次 abort 确认。 */
     const result = evidence === 'bridge-reset'
@@ -721,6 +749,7 @@ export function createRpcBridge({
     /* 没等到应答 / Pi 明确报错：**不解除屏障**。
      * 剩下的出路只有「agent_settled 后回读确认 idle」与 bridge 换代。 */
     run.abortError = aborted ? String(aborted.__error || '') : '';
+    safeLog('bridge.stop_result', { result: 'unconfirmed', durationMs: Date.now() - run.startedAt, bridgeRun: run.run });
     run.resolveReport({
       ok: false,
       code: 'stop_unconfirmed',
@@ -813,11 +842,14 @@ export function createRpcBridge({
   /** 给一次等待套上超时。**超时不取消任何东西** —— 屏障照旧挂着。 */
   function reportWithin(promise, timeoutMs) {
     return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve({
-        ok: false,
-        code: 'stop_unconfirmed',
-        error: '停止尚未得到 Pi 确认，请等待或重启 Pi。',
-      }), timeoutMs);
+      const timer = setTimeout(() => {
+        safeLog('bridge.stop_timeout', { durationMs: timeoutMs, bridgeRun });
+        resolve({
+          ok: false,
+          code: 'stop_unconfirmed',
+          error: '停止尚未得到 Pi 确认，请等待或重启 Pi。',
+        });
+      }, timeoutMs);
       promise.then((result) => {
         clearTimeout(timer);
         resolve(result);
@@ -844,6 +876,7 @@ export function createRpcBridge({
       if (restartRequested) return;
       restartRequested = true;
       retiringChild = pi;
+      safeLog('bridge.restart', { reason: 'reload-config', bridgeRun });
       publish({ type: 'bridge_status', state: 'restarting', reason: 'reload-config', bridgeRun, cwd: runtime.getCurrentCwd() });
       try {
         pi.stdin.end();
@@ -959,6 +992,7 @@ export function createRpcBridge({
       /* 超时兜底：**不是「当它死了」**。进程还活着，所以撤销维护态、
        * 如实宣告「pi 还在跑」，并把失败原因带回去让 updater 放弃。 */
       const timer = setTimeout(() => {
+        safeLog('bridge.maintenance_timeout', { phase: 'pausing', durationMs: pauseTimeoutMs });
         maintenance = null;
         resumeRequested = false;
         publish({ type: 'bridge_status', state: childUsable() ? previousState : 'error',

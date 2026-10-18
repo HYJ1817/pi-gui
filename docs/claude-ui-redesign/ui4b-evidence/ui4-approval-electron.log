@@ -1,0 +1,96 @@
+  ok  confirm 请求走统一确认层并显示来源 / 类型
+  ok  风险只陈述「协议没有结构化字段」，不猜危险等级
+  ok  确认卡只有一次性两个决定，没有 Always / Bypass / Auto
+  ok  长命令完整渲染，不在 UI 层二次截断
+  ok  空字段使用可读兜底，不渲染 undefined
+  ok  恶意 HTML / 额外字段不进 DOM
+  ok  允许一次只发一条 extension_ui_response{confirmed:true}
+  ok  拒绝只发 confirmed:false，不伪装成取消
+  ok  Esc 发 cancelled:true（fail-closed 的取消）
+  ok  点遮罩取消同样走协议应答
+  ok  提交中重复点击只发一条命令
+  ok  提交中 Esc / 点遮罩 / Enter 都不会补发第二条应答
+  ok  迟到结果不覆盖已作废状态，也不再弹卡
+  ok  SSE 重放已结算请求不会再次弹卡
+  ok  工作区切换：旧审批本地作废且不发应答
+  ok  会话切换：旧审批本地作废且不发应答
+  ok  卡片残留时点允许：本地作废、不发应答、卡片收掉
+  ok  Stop：pending 收到取消、卡片收掉、不留关不掉的卡
+  ok  Stop 打断提交中：不补发取消，卡片仍收掉
+  ok  超时：卡片收掉、不发应答、状态 expired
+  ok  桥接重启：本地作废且不向死进程发应答
+  ok  后端拒绝：卡片保留、原因可见、可重试且只重发一次
+  ok  网络层失败：说明没送达，不声称 Pi 已收到
+  ok  失败后用 Esc 取消：取消也走真实投递，成功后收卡
+  ok  初始焦点在「拒绝」，Tab / Shift+Tab 在按钮间循环
+  ok  卡片本身获得焦点时 Enter 不会替你允许
+  ok  审批确认卡叠在普通弹层之上，关闭审批不关掉下面的弹层
+  ok  审批超时只收自己的卡，不关别人的弹层
+  ok  select：真实选项、选择后只发 value
+  ok  select 提交中重复点击只发一次
+  ok  select 投递失败：卡片保留、可重试
+  ok  input：保留 placeholder，提交真实输入
+  ok  editor：prefill 真实值，取消发 cancelled
+  ok  input 的 Esc / 点遮罩走取消且失败时保留卡片
+  ok  Runtime 接口：确认点击只发一次，成功后不再可点
+  ok  Runtime 接口：失败可见并可重试
+  ok  Runtime 接口：owner 变化返回 null → 明确失效、不伪造取消
+  ok  Runtime 接口：select / input 真实值，恶意标题按文本
+  ok  approvalCardModel 不发明 scope / action / 持久化
+  ok  样式表幂等注入：只有一份，且复用已有 link
+  ok  CSS 只用 UI-1 语义 token，且覆盖三种审批 DOM
+  ok  approval.js 不再 fire-and-forget respond，也不拼 innerHTML
+  ok  modal.js 默认行为未变：没有 onDecide 时点击即关闭
+  ok  modal.js 危险确认仍然禁用 Enter 快捷确认
+
+ui4-approval: 44/44 通过
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+  ok  Electron 页面获得焦点（受信键盘可投递）
+  ok  approval-dark-700-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-700-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-dark-700-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-700-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-dark-900-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-900-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-dark-900-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-900-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-dark-1200-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-1200-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-dark-1200-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-1200-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-dark-1536-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-1536-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-dark-1536-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-dark-1536-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-700-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-700-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-700-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-700-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-900-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-900-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-900-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-900-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-1200-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-1200-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-1200-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-1200-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-1536-pane-closed：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-1536-pane-closed：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  approval-light-1536-pane-open：卡片在视口内、正文/操作区无横向溢出
+  ok  approval-light-1536-pane-open：按钮可读、初始焦点在「拒绝」、右栏状态正确
+  ok  提交中：卡片保留、按钮禁用、状态说明可见
+  ok  提交中重复点击仍只有一条命令
+  ok  投递失败：卡片不关闭、错误状态可见
+  ok  Runtime 卡：失败状态可见、无横向溢出、没有伪造的 Always 入口
+  ok  reduced-motion：审批卡不播放入场动画
+  ok  键盘：初始焦点是「拒绝」
+  ok  键盘：Tab 移到「允许一次」
+  ok  键盘：Shift+Tab 回到「拒绝」
+  ok  键盘：卡片聚焦时 Enter 不会允许
+  ok  键盘：Esc 走取消应答并收卡
+  ok  渲染过程无控制台错误
+
+ui4-approval electron: 44/44 通过; screenshots=22
+
+ui4-approval: jsdom + Electron 全部通过

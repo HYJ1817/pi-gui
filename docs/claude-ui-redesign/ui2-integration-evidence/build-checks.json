@@ -1,0 +1,15 @@
+{
+  "fixturesExit": 0,
+  "appExit": 0,
+  "exeExit": 0,
+  "exeAssertions": "49/49",
+  "appAssertions": "26/26",
+  "exePort": 32741,
+  "appPorts": [
+    32751,
+    32752
+  ],
+  "seaAssetHashPort": 32761,
+  "seaAssetHashExit": 0,
+  "evidenceScope": "app-check validates packaged backend; not full desktop behavior. Actual SEA HTTP assets verified independently."
+}

@@ -99,6 +99,7 @@ export function createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  logging = null,
   updateCheck,
   piUpdate = null,
   capabilityInstall = null,
@@ -166,6 +167,10 @@ export function createRouter({
     }
 
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
+    /* 日志是应用级能力：认证已完成，但不能因为并行会话活着就要求经典 owner。 */
+    if (url.pathname === '/api/logs' || url.pathname.startsWith('/api/logs/')) {
+      return logging ? logging.handle(req, res, url) : json(res, 503, { ok: false, code: 'logs_unavailable' });
+    }
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
     if (url.pathname === '/api/session-change/evidence') return sessionChanges ? sessionChanges.handle(req, res, url) : json(res,503,{ok:false,code:'capture_unavailable'});
     if (url.pathname.startsWith('/api/session-revert/')) return sessionRevert ? sessionRevert.handle(req, res, url) : json(res,503,{ok:false,code:'preview_unavailable'});

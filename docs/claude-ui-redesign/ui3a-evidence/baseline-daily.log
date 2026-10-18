@@ -1,0 +1,39 @@
+
+--- A. 快捷键注册表 ---
+  ok  primary 按平台解析（mac → ⌘，别处 → Ctrl）
+  ok  组合修饰键顺序固定（ctrl+alt 与 alt+ctrl 是同一个键）
+  ok  畸形组合回 null（不抛、不猜）
+  ok  事件 → 组合串：只按修饰键不算组合
+  ok  平台显示写法
+  ok  文本输入判定：input / textarea / contenteditable 都为真
+  ok  注册：重复 id / 畸形 combo / 缺 run 都在注册时炸（早失败）
+  ok  冲突检测：同一个组合绑两次会被 assertNoConflicts 抓住
+  ok  分发：命中即执行并 preventDefault
+  ok  分发：**不抢普通文本输入**，但带修饰键的照常生效
+  ok  分发：显式 inInput 的键位可以在文本框里用普通键触发
+  ok  分发：when() 为假不触发；defaultPrevented 不重复处理
+  ok  列表：只读快照，带显示写法与可用性
+
+--- B. 命令面板模型 ---
+  ok  注册校验：缺 id / 缺 run / id 重复都抛
+  ok  when() 为假**不进列表**（不灰着骗人）
+  ok  动态命令每次求值都拿到当前 query（会话条目靠它按需出现）
+  ok  空查询返回全部且保持定义顺序（打开面板先看到常用动作）
+  ok  搜索排序：前缀 > 词首 > 子串 > 子序列
+  ok  搜索：中文子串、关键词、组名都能命中
+  ok  子序列匹配：gmc 命中「切到 MCP」这类缩写输入
+
+--- C. 启动 / 连接状态文案 ---
+  ok  六种连接状态都有文案与语气
+  ok  exited 用后端给的具体原因当标签（「pi 已退出 (1)」这类）
+  ok  maintenance 文案按 reason 分开：更新 pi / 安装扩展 / 未知原因
+  ok  维护态常驻条按 reason 说清在做什么（语气仍是信息，不是故障）
+  ok  connectionCopy 也认 reason（两条链路不能各说一套）
+  ok  启动失败 → 常驻说明带后端 error + hint，并给两个下一步
+  ok  pi 已退出 → 也常驻（不然用户只看到一条会消失的 toast）
+  ok  没选项目 / 正常 / 启动中都不占用常驻条
+  ok  关键能力不可用 → 常驻说明只给诊断入口（没有可自动做的修复）
+  ok  每个动作都有按钮文案与悬停说明（帮助面板与状态条共用一份）
+  ok  面板 loading / empty / failed 文案统一，且重试是独立的一句
+
+31/31 通过

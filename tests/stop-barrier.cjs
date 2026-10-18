@@ -185,6 +185,7 @@ async function main() {
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     managedProcesses: { manager: null }, worktrees: null,
+    logging: null,
     createRouter(options) { return createRouter(options); },
     rpc: raw,
     auth: { denyRequest: () => null },

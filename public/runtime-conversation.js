@@ -29,14 +29,30 @@
  * **不 spawn**（因此不占 Runtime slot，默认只有 2 个）；「恢复会话」才真的 spawn。
  *
  * 本模块**不发**focus —— focus 是侧栏/组合根的职责（见 runtime-nav.js）。
+ *
+ * ---------- UI-2B：thinking / usage 从哪来，为什么不是第二份真相 ----------
+ *
+ * 本模块读 store 拿生命周期、正文、工具、审批；**thinking 文本与单轮 usage** 不在
+ * store 里（store 刻意只持有那三类有界记录），改从 runtime-display.js 的**只读展示
+ * 投影**读。那份投影只订阅 store 已经接受并广播的帧，所以它不可能接受一条 store
+ * 拒掉的帧，也不复制 lifecycle/tools/approvals —— 不构成第二个事实源。
+ *
+ * 历史接口（`server/session-history.js`）**只取正文**，没有 thinking / 工具 / usage。
+ * 因此历史视图里这些块一律**隐藏**，并在状态行里说明「只含正文」—— 不做一个点不动
+ * 的假展开按钮，也不从正文文本里猜。
  */
 import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
 import { runtimeStore as store, onRuntimeChange } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
+import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
 import { openModal } from './ui/modal.js';
 
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
+/* 工具状态只映射 store 真实记过的三种；别的取值原样显示，不猜。 */
+const TOOL_STATE = { running: '运行中', done: '完成', error: '失败' };
+/* 历史接口不含这些字段（见文件头）。写在状态行里，用户才知道「这里为什么没有」。 */
+const HISTORY_NOTE = '历史只含正文（无工具、思考、用量）';
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -47,11 +63,15 @@ function el(tag, cls, text) {
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0 };
 
-export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null }) {
+export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null, display = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
   const historyCache = new Map();     // conversationId -> { messages, truncated }
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
   const modelOwners = new Map();
+  /* thinking / usage 的只读投影。**本视图自己建一份**（和 scrollTops/views 一样是按
+   * 会话的视图态），这样每个实例独立 dispose，测试之间也不共享残留记录。 */
+  const projection = display || createRuntimeDisplay();
+  const ownsProjection = !display;
   let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null;
 
   function viewOf(conversationId) {
@@ -109,8 +129,23 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   /* 类名**故意与 modal 的 `.runtime-output` 不同**：官方 modal 用的是全局选择器
    * （测试也这么取），中央再挂一个同名元素会让 `document.querySelector('.runtime-output')`
    * 命中中央那个（它在 DOM 里更靠前），看起来像「modal 的输出不更新」。 */
+  /* UI-2B：思考过程。用原生 details/summary —— 键盘可达、展开状态由元素自己持有，
+   * 流式更新只改文本，**不碰 open**，所以用户手动展开后不会被新块收回去。
+   * 数据来自 runtime-display.js 的只读投影；没有真实思考文本时整块隐藏。 */
+  const thinking = el('details', 'ui2-runtime-thinking'); thinking.hidden = true;
+  const thinkingHead = el('summary', 'ui2-runtime-thinking-head');
+  const thinkingBody = el('pre', 'ui2-runtime-thinking-body');
+  thinking.append(thinkingHead, thinkingBody); root.append(thinking);
+
   const output = el('pre', 'rtc-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前会话输出'); root.append(output);
-  const tools = el('div', 'rtc-state'); root.append(tools);
+
+  /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
+   * 它每帧都在变，做成 live region 会不停打断读屏。 */
+  const usage = el('p', 'ui2-runtime-usage'); usage.hidden = true; root.append(usage);
+
+  /* 工具状态：与上面的生命周期状态行分开的元素（同一个 `.rtc-state` 基类保留旧样式），
+   * 每个工具一项、带 `data-state`，Agent C 可以按状态着色而不必解析文本。 */
+  const tools = el('div', 'rtc-state ui2-runtime-tools'); root.append(tools);
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   const input = el('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前会话的任务'); root.append(input);
   input.oninput = () => { const r = store.get(id); if (r && !current().history) r.draft = input.value; };
@@ -180,6 +215,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     try {
       const result = await (payload.action === 'resume' ? launchRuntimeSession(payload) : runtimeSessionAction(payload));
       if (!alive) return null;
+      if (payload.command?.type === 'extension_ui_response') {
+        const currentOwner = store.get(target)?.owner;
+        if (!same(currentOwner, payload.owner) || !same(payload.owner, currentOwner)) return null;
+      }
       /* 迟到响应只更新 **target** 那一格：切到别的会话时既不改当前 DOM，
        * 也不改当前会话的 notice —— 切回去才看得到它自己的结果。 */
       view.notice = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
@@ -272,9 +311,35 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     modelNotice.textContent = data?.notice || (data?.pending ? '等待 Pi 确认…' : data?.reasoning === false ? '此模型不支持推理' : data?.reasoning !== true ? '推理能力未知' : !levels.length ? '推理强度暂不可用' : '');
   }
 
+  /* 工具行：每项一个 span，`data-state` 用 store 的原值（running/done/error）。
+   * 状态文案只映射 store 真实记过的那三种；遇到没见过的值原样显示，不猜。
+   *
+   * 项之间插的是**只有空白**的文本节点，不是 ' / ' 之类的分隔符：`.rtc-state` 已经
+   * 是 `white-space:pre-wrap`，所以现在一个工具一行；将来 Agent C 若把它改成
+   * flex + gap，纯空白文本节点按规范不会生成 flex item，自然消失，不必再改 DOM。 */
+  function drawTools(record, view) {
+    const items = record && !view.history ? record.tools : [];
+    const signature = items.map(t => `${t.id}\u0000${t.name}\u0000${t.state}`).join('\u0001');
+    if (tools.dataset.tools === signature) return;
+    tools.dataset.tools = signature;
+    tools.replaceChildren();
+    items.forEach((tool, index) => {
+      if (index) tools.append(document.createTextNode('\n'));
+      const row = el('span', 'ui2-runtime-tool');
+      row.dataset.state = String(tool.state);
+      row.textContent = `${tool.name} · ${TOOL_STATE[tool.state] || tool.state}`;
+      tools.append(row);
+    });
+  }
+
   function draw() {
     if (!host) return;
     const r = store.get(id), view = current();
+    /* 「这一次 draw 是不是刚切到这条会话」——必须在下面写 renderedId 之前取。
+     * 滚动策略要用它区分「用户主动切过来」与「同一条会话内的流式更新」。 */
+    const entered = renderedId !== id;
+    // Capture intent before text/thinking/tool changes can increase scrollHeight.
+    const follow = !entered && !view.history && shouldFollow(output);
     root.hidden = !id;
     if (!id) return;
     title.textContent = r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
@@ -283,9 +348,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     drawModels(r, view);
     resources.textContent = resourceText();
     notice.textContent = view.notice;
-    if (view.history) state.textContent = `只读历史 · ${view.history.messages.length} 条${view.history.truncated ? '（仅显示最近部分）' : ''} · ${r?.owner ? '查看记录不增加运行名额' : '未被启动，不占运行名额'}`;
+    if (view.history) state.textContent = `只读历史 · ${view.history.messages.length} 条${view.history.truncated ? '（仅显示最近部分）' : ''} · ${HISTORY_NOTE} · ${r?.owner ? '查看记录不增加运行名额' : '未被启动，不占运行名额'}`;
     else if (view.pendingHistory) state.textContent = '读取历史…';
-    else state.textContent = statusLine(r?.item) || (r ? '' : '这条会话还没有记录');
+    else {
+      /* 正文流被截断时说出来 —— 不声不响地少显示一段，用户会以为那就是全部。 */
+      const lifecycle = statusLine(r?.item) || (r ? '' : '这条会话还没有记录');
+      state.textContent = lifecycle + (r?.truncated ? `${lifecycle ? ' · ' : ''}仅显示最近输出` : '');
+    }
 
     if (view.history) {
       if (renderedHistory !== view.history || renderedId !== id) {
@@ -302,7 +371,19 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       renderedHistory = null;
       output.textContent = r?.text || '等待任务';
     }
-    tools.textContent = r && !view.history ? r.tools.map(t => `${t.name} · ${t.state}`).join(' / ') : '';
+    drawTools(r, view);
+
+    /* 思考过程：只在**实时**视图、且有真实思考文本时出现。历史没有这个数据，
+     * 所以历史视图里它一律隐藏（不做一个点不动的假展开）。 */
+    const thought = view.history ? null : projection.thinkingOf(id);
+    thinking.hidden = !thought;
+    if (thought) {
+      thinkingBody.textContent = thought.text;
+      thinkingHead.textContent = `思考过程 · ${thought.text.length} 字${thought.truncated ? '（已截断）' : ''}`;
+    } else { thinkingBody.textContent = ''; thinking.open = false; }
+
+    const usageLine = view.history ? '' : usageText(projection.usageOf(id));
+    usage.hidden = !usageLine; usage.textContent = usageLine;
 
     if (renderedId !== id || document.activeElement !== input) input.value = view.history ? '' : (r?.draft || '');
     renderedId = id;
@@ -335,16 +416,30 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         approvals.append(row);
       }
     }
-    /* 恢复滚动位置（按 conversationId 隔离）：切回 A 时不该停在 B 的位置。 */
+    /* ---------- 滚动：切会话恢复位置，流式只在贴底时跟随 ----------
+     *
+     * 原实现**每次** draw 都把 scrollTop 写回 saveScroll 记下的那个值。于是「用户
+     * 上滚读上文、后台还在流式」时，每来一帧就被拽回切过来那一刻的位置，根本读不了。
+     *
+     * 现在的判据（与 Classic `messages.js:78` 同一条「近底 160」规则）：
+     *   - **刚切到这条会话**（renderedId 变了）→ 恢复它自己保存的位置（没存过就贴底）。
+     *     切会话是用户主动的，这一刻按保存值走。
+     *   - **同一条会话内**（流式/状态更新）→ 只在**已经贴底**时才跟着新内容走；
+     *     一旦上滚离开底部，视口就归用户，直到他滚回底部。
+     * 判据只用 scrollTop/scrollHeight/clientHeight，不依赖 scroll 事件 ——
+     * jsdom 不派发 scroll 事件、也不做布局，靠事件判定的写法在测试里会假绿。
+     */
     if (view.history) {
       const index = view.history.match?.userIndex;
       if (active && Number.isInteger(index) && index >= 0 && output.dataset.historyMatch !== String(index)) {
         output.querySelector(`[data-history-user-index="${index}"]`)?.scrollIntoView?.({ block: 'center' });
         output.dataset.historyMatch = String(index);
       }
-    } else {
+    } else if (entered) {
       const top = scrollTops.get(id);
       output.scrollTop = top === undefined ? output.scrollHeight : top;
+    } else if (follow) {
+      output.scrollTop = output.scrollHeight;
     }
   }
 
@@ -372,6 +467,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     },
     /** 离开中央视图时记下滚动位置。 */
     leave() { active = false; focusEpoch++; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
-    dispose() { alive = false; unsubscribe(); root.remove(); },
+    dispose() {
+      alive = false; unsubscribe(); root.remove();
+      /* 只拆自己建的那一份投影；外部传进来的（`display`）归外部管。 */
+      if (ownsProjection) projection.dispose();
+    },
   };
 }

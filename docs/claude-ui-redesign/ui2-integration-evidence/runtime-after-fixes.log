@@ -1,0 +1,83 @@
+  ok  usage：没有有效数字就是 null（缺字段 ≠ 0）
+  ok  usage：真实 0 保留，缺的字段不出现
+  ok  usage 文案：只列有的字段，且**不带**货币符号（线上没有单位）
+  ok  usage 文案：流式中的数字标注「仍在累计」，不当终值
+  ok  usage 文案：一个数字都没有时是空串（整块隐藏）
+  ok  thinkingText：没有 thinking 块返回 null（与「空思考」区分开）
+  ok  thinkingText：多个 thinking 块按顺序拼接
+  ok  集成：负数/小数Token与负成本不是有效用量
+  ok  集成：真实零Token和非负小数成本仍保留
+  ok  A 显示自己的正文
+  ok  A 显示自己的 thinking 文本
+  ok  A 的思考块默认折叠（用户展开后不被流式收回）
+  ok  A 显示自己的工具与运行状态
+  ok  A 的状态行是自己的生命周期
+  ok  工具项之间只有空白文本节点（换成 flex+gap 时不会留下分隔符）
+  ok  B 显示自己的正文、工具与完成状态
+  ok  B 的思考是自己的，不与 A 混
+  ok  B 的状态行反映空闲（两会话状态确实不同）
+  ok  切到 B 后 A 的迟到 delta 不进 B 的 DOM
+  ok  切到 B 后 A 的迟到 thinking 不进 B 的思考块
+  ok  切回 A 看到自己的迟到正文与迟到思考
+  ok  重放同一 eventSequence 被拒（不重复追加）
+  ok  旧 runtimeGeneration 的迟到帧被拒
+  ok  流式 usage 显示，并标注仍在累计
+  ok  usage 文案不含货币符号与凭据
+  ok  message_end 的 thinking 是权威值（覆盖流式累积）
+  ok  message_end 的 usage 是终值（不再标「仍在累计」）
+  ok  usage 缺的字段不出现（没有缓存/推理这一轮）
+  ok  thinking 展示有界：字节数不超上限
+  ok  thinking 截断后不出现半个字符（无替换符）
+  ok  thinking 截断在标题里说明，不静默少显示
+  ok  正文超过 1MiB 上限后 store 标记截断
+  ok  正文截断时状态行说明「仅显示最近输出」
+  ok  正文展示同样有界（不绕过 store 的 1MiB 上限）
+  ok  停止带 A 的完整 owner
+  ok  关闭后回到已关闭并给出恢复入口
+  ok  关闭后控件按休眠态禁用
+  ok  关闭后正文与工具与 store 保持一致（store 保留，视图也保留）
+  ok  关闭后 thinking 与 usage 同样保留（与 store 的保留语义一致）
+  ok  关闭后审批被清掉（store 关掉时清 approvals）
+  ok  换代后不再显示上一个 runtime 的 thinking 与 usage（那是另一条运行）
+  ok  恢复后显示新 runtime 自己的正文与思考
+  ok  恢复后不残留上一个 runtime 的 usage
+  ok  旧代次的迟到正文与思考都不进新 runtime 的视图
+  ok  历史显示正文
+  ok  历史里没有 thinking（接口不提供，就不显示）
+  ok  历史里没有 usage（接口不提供，就不显示）
+  ok  历史里没有工具块（接口不提供，就不显示）
+  ok  历史状态行说明「只含正文」，用户知道为什么没有
+  ok  历史视图禁止发送
+  ok  历史消息缺字段时按空正文处理，不崩、不造内容
+  ok  A 的审批出现在 A 的视图里
+  ok  切到 B 显示 B 自己的审批
+  ok  捕获 A 的审批后切 B，应答仍只发给 A 的完整 owner
+  ok  A 的审批应答不清掉 B 自己的审批
+  ok  审批文本走 textContent（不可信标题不成为节点）
+  ok  不可信文本不产生任何注入节点
+  ok  不可信文本作为**文本**原样显示（不是被静默吞掉）
+  ok  工具名与审批标题同样只作为文本
+  ok  推理能力未知时，Thinking 控件禁用且明说「未知」（不猜成 false）
+  ok  能力未知不影响正文/思考展示（那是两件事）
+  ok  销毁前正常渲染
+  ok  销毁后 DOM 已摘除
+  ok  销毁后再来帧不抛异常、不重建 DOM
+  ok  外部传入的投影可用
+  ok  视图销毁后外部投影仍持有数据（所有权在外部）
+  ok  外部投影 dispose 后不再返回数据
+  ok  快照之前：G 有自己的 thinking 与 usage
+  ok  快照换代（不带帧）后不残留上一个 runtime 的 thinking 与 usage
+  ok  快照换代后新 runtime 的 thinking 正常进入
+  ok  切回 S1 恢复 S1 自己的滚动位置（不串到 S2）
+  ok  切回 S2 恢复 S2 自己的滚动位置
+  ok  近底 160 以内算贴底（跟随新内容）
+  ok  上滚超过 160 就不再跟随（视口归用户）
+  ok  恰好 160 边界不跟随（与 Classic 的 < 160 严格同一规则）
+  ok  投影只保留最近 N 条会话记录（有界内存）
+  ok  集成：流式用量明确为临时观察值
+  ok  集成：终值usage缺失时省略，不继续声称仍在累计
+  ok  集成：展示投影只读已接受的fixture记录
+  ok  集成：原位关闭仍保留本次已观察展示
+  ok  集成：后端换代同id dormant不继承旧thinking或usage
+  ok  集成：当前store记录已移除时读取不能返回残留展示
+Runtime display projection: 82/82

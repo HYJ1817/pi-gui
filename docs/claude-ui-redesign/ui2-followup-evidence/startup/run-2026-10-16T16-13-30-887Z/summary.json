@@ -1,0 +1,176 @@
+{
+  "out": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-followup-evidence\\startup\\run-2026-10-16T16-13-30-887Z",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-lq6Hrc",
+  "runs": [
+    {
+      "name": "no-cdp-1",
+      "mode": "no-cdp",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "port-only-1",
+      "mode": "port-only",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "early-attach-1",
+      "mode": "early-attach",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "early-page-1",
+      "mode": "early-page",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "early-runtime-1",
+      "mode": "early-runtime",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "late-runtime-1",
+      "mode": "late-runtime",
+      "iteration": 1,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "no-cdp-2",
+      "mode": "no-cdp",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "port-only-2",
+      "mode": "port-only",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "early-attach-2",
+      "mode": "early-attach",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "early-page-2",
+      "mode": "early-page",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "early-runtime-2",
+      "mode": "early-runtime",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    },
+    {
+      "name": "late-runtime-2",
+      "mode": "late-runtime",
+      "iteration": 2,
+      "mainErrors": 0,
+      "cdpErrors": 0,
+      "ready": true,
+      "exit": 0,
+      "zeroErrorObserved": true
+    }
+  ],
+  "aggregate": [
+    {
+      "mode": "no-cdp",
+      "runs": 2,
+      "ready": 2,
+      "zeroErrorRuns": 2,
+      "errors": 0,
+      "harnessFailures": 0
+    },
+    {
+      "mode": "port-only",
+      "runs": 2,
+      "ready": 2,
+      "zeroErrorRuns": 2,
+      "errors": 0,
+      "harnessFailures": 0
+    },
+    {
+      "mode": "early-attach",
+      "runs": 2,
+      "ready": 2,
+      "zeroErrorRuns": 2,
+      "errors": 0,
+      "harnessFailures": 0
+    },
+    {
+      "mode": "early-page",
+      "runs": 2,
+      "ready": 2,
+      "zeroErrorRuns": 2,
+      "errors": 0,
+      "harnessFailures": 0
+    },
+    {
+      "mode": "early-runtime",
+      "runs": 2,
+      "ready": 2,
+      "zeroErrorRuns": 2,
+      "errors": 0,
+      "harnessFailures": 0
+    },
+    {
+      "mode": "late-runtime",
+      "runs": 2,
+      "ready": 2,
+      "zeroErrorRuns": 2,
+      "errors": 0,
+      "harnessFailures": 0
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+PASS message-specific metadata exists for three known usages
+PASS two assistant messages keep different input usage
+PASS missing usage stays absent despite global lastTurn
+PASS zero reasoning is distinct from unknown
+PASS all seven actual zero fields remain visible
+PASS global or inferred time never enters metadata
+PASS live final authoritative usage equals historical usage
+PASS live authoritative body replaces streamed draft
+PASS malformed usage cannot create numeric metadata
+PASS total is not invented by adding input/output
+PASS user and malformed array usage have no assistant metadata
+PASS tool-only usage does not resurrect empty assistant shell
+PASS tool-only tool entry is retained
+PASS pending update usage is not promoted to authoritative metadata
+PASS live tool-only final removes shell even with usage and streamed draft
+PASS thinking-only message keeps actual metadata
+PASS single tool has no duplicate batch title
+PASS real message boundary groups both tools once
+PASS batch summary is native keyboard button
+PASS summary controls its unique ARIA list
+PASS batch can collapse without destroying tool nodes
+PASS running tools are discoverable while collapsed
+PASS failure stays discoverable while collapsed
+PASS provider cancellation error is not silently reclassified
+PASS status updates preserve chosen collapsed state
+PASS settled running tool becomes discoverable incomplete
+PASS batch expands same list and tool ids
+PASS collapsing transfers focus out of the hidden list
+PASS history uses same grouped status semantics
+PASS history uses same interactive batch summary
+PASS separate assistant and orphan boundaries are retained
+PASS orphan toolResult remains visible at its own position
+PASS explicit cancelled and interrupted presentation states survive collapse
+PASS late tool keeps chosen collapse state and increments real count
+PASS thinking exposes actual streaming state
+PASS thinking region has explicit accessible label
+PASS thinking end state comes from actual event
+PASS final authority reuses expanded thinking node
+PASS final thinking is complete without invented duration/token
+PASS interruption updates unfinished thinking state
+PASS error without final content retains thinking and marks its true state
+PASS error before the next animation frame preserves pending thinking text
+PASS owned cancellation remains neutral with real usage
+PASS unowned cancellation with error stays visible as error
+PASS error message preserves real zero metadata and safe text
+PASS retry removes error-only shell even with sibling metadata
+PASS untrusted message/thinking/tool text never becomes active HTML
+PASS untrusted usage cannot leak into metadata
+UI-2A Classic 48/48; failed=0; skipped=0; DOM/fixture, not layout evidence

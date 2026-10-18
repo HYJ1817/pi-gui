@@ -1,0 +1,172 @@
+{
+  "mode": "no-cdp",
+  "iteration": 1,
+  "origin": "http://127.0.0.1:12801",
+  "cdpPort": null,
+  "started": 1792167458906,
+  "timeline": [],
+  "args": [
+    "--user-data-dir=C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-nlCaae\\no-cdp-1\\userdata",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--no-first-run"
+  ],
+  "contexts": [],
+  "consoleErrors": [],
+  "exceptions": [],
+  "pid": 25132,
+  "exit": {
+    "code": 0,
+    "signal": null,
+    "epoch": 1792167461916
+  },
+  "observer": {
+    "events": [
+      {
+        "epoch": 1792167459196,
+        "kind": "require-production-main"
+      },
+      {
+        "epoch": 1792167459631,
+        "kind": "web-contents-created",
+        "wcId": 1,
+        "type": "window",
+        "url": "",
+        "preferences": {
+          "sandbox": true,
+          "contextIsolation": true,
+          "nodeIntegration": false
+        }
+      },
+      {
+        "epoch": 1792167459643,
+        "kind": "did-start-loading",
+        "wcId": 1,
+        "url": ""
+      },
+      {
+        "epoch": 1792167459644,
+        "kind": "did-start-navigation",
+        "wcId": 1,
+        "url": "http://127.0.0.1:12801/",
+        "inPlace": false,
+        "main": true
+      },
+      {
+        "epoch": 1792167459739,
+        "kind": "did-frame-navigate",
+        "wcId": 1,
+        "url": "http://127.0.0.1:12801/",
+        "code": 200,
+        "main": true
+      },
+      {
+        "epoch": 1792167459877,
+        "kind": "dom-ready",
+        "wcId": 1,
+        "url": "http://127.0.0.1:12801/"
+      },
+      {
+        "epoch": 1792167459895,
+        "kind": "did-finish-load",
+        "wcId": 1,
+        "url": "http://127.0.0.1:12801/"
+      },
+      {
+        "epoch": 1792167459896,
+        "kind": "observer-evaluate-start"
+      },
+      {
+        "epoch": 1792167459897,
+        "kind": "did-stop-loading",
+        "wcId": 1,
+        "url": "http://127.0.0.1:12801/"
+      },
+      {
+        "epoch": 1792167459944,
+        "kind": "observer-evaluate-end"
+      },
+      {
+        "epoch": 1792167461752,
+        "kind": "observer-close-window"
+      },
+      {
+        "epoch": 1792167461756,
+        "kind": "destroyed",
+        "wcId": 1,
+        "url": null
+      },
+      {
+        "epoch": 1792167461761,
+        "kind": "before-quit"
+      },
+      {
+        "epoch": 1792167461780,
+        "kind": "will-quit"
+      },
+      {
+        "epoch": 1792167461781,
+        "kind": "process-exit",
+        "code": 0
+      }
+    ],
+    "ready": true,
+    "checks": {
+      "desktop": true,
+      "themeBridge": true,
+      "hasProject": false,
+      "piRunning": false,
+      "projects": 0,
+      "timeOrigin": 1792167459636.4
+    },
+    "observerErrors": [],
+    "readyEpoch": 1792167459944,
+    "exitCode": 0
+  },
+  "mainConsoleErrors": [],
+  "productionReady": true,
+  "zeroErrorObserved": true,
+  "assertions": [
+    {
+      "label": "harness completed",
+      "pass": true
+    },
+    {
+      "label": "packaged application exits normally",
+      "pass": true
+    },
+    {
+      "label": "production preload ready; no real projects or Pi",
+      "pass": true
+    },
+    {
+      "label": "main observer has no execution errors",
+      "pass": true
+    },
+    {
+      "label": "no preload failure or renderer crash",
+      "pass": true
+    },
+    {
+      "label": "no CDP uncaught exceptions",
+      "pass": true
+    },
+    {
+      "label": "main observation starts on initial empty document before navigation",
+      "pass": true
+    },
+    {
+      "label": "production sandbox and isolation remain enabled",
+      "pass": true
+    },
+    {
+      "label": "normal control has zero errors throughout main and CDP observations",
+      "pass": true
+    },
+    {
+      "label": "no-CDP control has no debug endpoint or external commands",
+      "pass": true
+    }
+  ],
+  "contractPass": true
+}

@@ -288,6 +288,7 @@ async function main() {
   /* 每张截图都把「框住的那个元素」的取景信息打出来：矩形在不在视口里、文本是什么、
    * 关键词齐不齐。判据不再靠人眼比对 png —— 日志就是截图内容的机器可查证据。 */
   const shotFailures = [];
+  let shotChecks = 0;
   /* `mustTrue`：结构判据 —— 收起/展开、真 button、aria-*、可见高度这些。
    * 截图和 textContent **都分不出**收起与展开（收起的节点还在 DOM 里，文本照样
    * 算进去），所以这类判据必须显式算出来，算不过就进失败清单、最后 exit 1。 */
@@ -312,6 +313,7 @@ async function main() {
         };
       })()`
     );
+    shotChecks += 2 + (must?.length || 0) + (mustTrue?.length || 0);
     if (!probe) {
       console.log('  跳过（找不到 ' + sel + '）');
       shotFailures.push(n + ': 找不到 ' + sel);
@@ -323,7 +325,7 @@ async function main() {
     if (mustTrue && mustTrue.length) {
       badTrue =
         (await evalJs(
-          `(() => { const bad = []; for (const [what, expr] of ${JSON.stringify(mustTrue)}) { let v; try { v = eval(expr); } catch (e) { v = 'eval 抛错：' + e.message; } if (!v) bad.push(what + (typeof v === 'string' && v !== 'false' ? '（' + v + '）' : '')); } return bad; })()`
+          `(() => { const bad = []; for (const [what, expr] of ${JSON.stringify(mustTrue)}) { let v; try { v = eval(expr); } catch (e) { v = 'eval 抛错：' + e.message; } if (v !== true) bad.push(what + (typeof v === 'string' && v !== 'false' ? '（' + v + '）' : '')); } return bad; })()`
         )) || [];
     }
     const flag = (probe.missing.length ? '✗ 缺 ' + probe.missing.join('/') : '✓') +
@@ -1360,7 +1362,7 @@ async function main() {
   await evalJs(`[...document.querySelectorAll('#workSurface .cap-view .ext-item')].find(n=>n.textContent.includes('builtin:mcp'))?.click()`);
   await sleep(300);
   await shotOf('#workSurface .cap-view .ext-detail', '174-capability-builtin', 'P22：built-in 能力 —— 「包里带了它」≠「当前启用了它」', ['builtin:mcp', 'pi 内置扩展', '出处'], [
-    ['「启用 / 加载」显示不适用而不是否', `(() => {const v=k=>document.querySelector('#workSurface .cap-rows [data-k="'+k+'"] .ext-row-v').textContent;return v('启用配置')==='不适用'&&v('已加载')==='不适用'})()`],
+    ['built-in 只显示已安装状态和独立来源说明，不伪造启用/加载字段', `(() => {const d=document.querySelector('#workSurface .cap-view .ext-detail'),rows=d.querySelector('.cap-rows');return JSON.stringify([...rows.querySelectorAll('.ext-row')].map(r=>[r.dataset.k,r.querySelector('.ext-row-v').textContent]))===JSON.stringify([['安装状态','已安装']])&&!rows.textContent.includes('不适用')&&[...d.querySelectorAll('.ext-sec-head')].some(h=>h.textContent==='来源'&&h.nextElementSibling?.classList.contains('cap-note')&&h.nextElementSibling.textContent.trim().length>0)})()`],
     ['带原文出处', `document.querySelector('#workSurface .cap-view .ext-detail .ext-code.quote').textContent.includes('builtin: true')`],
     ['说明不由目录扫描发现', `document.querySelector('#workSurface .cap-view .ext-detail').textContent.includes('不由 Extension Registry 的目录扫描发现')`],
   ]);
@@ -1450,11 +1452,11 @@ async function main() {
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...projectTriggerPoint });
     await sleep(300);
   }
-  await shotOf('#actionMenu', 'UX-MENU-02-project-menu-open', 'P24 侧栏：项目菜单 —— 项目设置 / 分隔线 / 移除项目（danger）', ['项目设置', '移除项目'], [
+  await shotOf('#actionMenu', 'UX-MENU-02-project-menu-open', 'P24 / P32 侧栏：项目菜单 —— 工作区管理 / 项目设置 / 分隔线 / 移除项目（danger）', ['项目设置', '移除项目'], [
     ['菜单挂在 body 上（不被侧栏 overflow 裁掉）', `document.querySelector('#actionMenu').parentElement===document.body`],
     ['菜单完全在视口内（不跑出窗口）', `(() => {const r=document.querySelector('#actionMenu').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})()`],
     ['没有盖住对话区', `(() => {const m=document.querySelector('#actionMenu').getBoundingClientRect();const c=document.querySelector('#chatView');if(!c)return true;return m.right<=c.getBoundingClientRect().left+1})()`],
-    ['role=menu + 两个 menuitem', `document.querySelector('#actionMenu').getAttribute('role')==='menu'&&document.querySelectorAll('#actionMenu [role="menuitem"]').length===2`],
+    ['role=menu + 三个有序 menuitem（工作区管理 / 项目设置 / 移除项目）', `document.querySelector('#actionMenu').getAttribute('role')==='menu'&&JSON.stringify([...document.querySelectorAll('#actionMenu [role="menuitem"]')].map(b=>b.textContent.trim()))===JSON.stringify(['工作区管理','项目设置','移除项目'])`],
     ['有低对比分隔线', `Boolean(document.querySelector('#actionMenu [role="separator"]'))`],
     ['宽度 180–240px', `(() => {const w=document.querySelector('#actionMenu').getBoundingClientRect().width;return w>=180&&w<=240})()`],
     ['每项高 30–38px', `[...document.querySelectorAll('#actionMenu .action-menu-item')].every(b=>{const h=b.getBoundingClientRect().height;return h>=30&&h<=38})`],
@@ -1777,6 +1779,7 @@ async function main() {
    * 这样即使跑在 --hide-scrollbars 下也验得到（截图里看不到滚动条本身）。
    * https://chromium.googlesource.com/chromium/src/+/main/docs/ */
   const uxCheck = (name, ok, detail) => {
+    shotChecks++;
     console.log('      ' + name + ' [' + (ok ? '✓' : '✗ ' + (detail || '')) + ']');
     if (!ok) shotFailures.push(name + (detail ? ': ' + detail : ''));
   };
@@ -1788,7 +1791,11 @@ async function main() {
     const tr = getComputedStyle(e, '::-webkit-scrollbar-track');
     if (bar.getPropertyValue('width') !== '10px') return '宽度不是 10px：' + bar.getPropertyValue('width');
     if (bar.getPropertyValue('height') !== '10px') return '横向不是 10px：' + bar.getPropertyValue('height');
-    if (!/rgb\\(44, 44, 44\\)/.test(th.getPropertyValue('background-color'))) return '滑块不是深灰：' + th.getPropertyValue('background-color');
+    const palette = { dark: ['#55534e', 'rgb(85, 83, 78)'], light: ['#b4b1a9', 'rgb(180, 177, 169)'] };
+    const expected = palette[document.documentElement.dataset.theme];
+    if (!expected) return '未知主题：' + document.documentElement.dataset.theme;
+    if (getComputedStyle(document.documentElement).getPropertyValue('--ui-scrollbar').trim().toLowerCase() !== expected[0]) return '滚动条 Token 不符合主题';
+    if (th.getPropertyValue('background-color') !== expected[1]) return '滑块不符合主题：' + th.getPropertyValue('background-color');
     if (!/rgba\\(0, 0, 0, 0\\)/.test(tr.getPropertyValue('background-color'))) return '轨道不是透明：' + tr.getPropertyValue('background-color');
     return true;
   })()`;
@@ -1997,8 +2004,12 @@ async function main() {
     const boundary=pane.hidden ? innerWidth : pane.getBoundingClientRect().left;
     if (Math.abs(r.right-boundary)>1) return '中央顶栏未与窗口或右栏边界衔接：right='+r.right+' boundary='+boundary;
     if (!pane.hidden && Math.abs(pane.getBoundingClientRect().right-innerWidth)>1) return '右栏未延伸到窗口右边界';
-    if (!/rgb\\(13, 13, 13\\)/.test(cs.backgroundColor)) return '背景色不对：'+cs.backgroundColor;
-    if (token.toLowerCase() !== '#0d0d0d') return '--titlebar 不是 electron overlay 的颜色：'+token;
+    // UI-1 验收 §3 与 electron/theme.cjs 的两套窗口调色板；不接受任意 Token 自洽。
+    const palette = { dark: ['#111111', 'rgb(17, 17, 17)'], light: ['#fbfbf9', 'rgb(251, 251, 249)'] };
+    const expected = palette[document.documentElement.dataset.theme];
+    if (!expected) return '未知主题：'+document.documentElement.dataset.theme;
+    if (cs.backgroundColor !== expected[1]) return '背景色不对：'+cs.backgroundColor;
+    if (token.toLowerCase() !== expected[0]) return '--titlebar 不是 electron overlay 的颜色：'+token;
     if (cs.borderBottomWidth !== '1px') return '底部分隔线不见了：'+cs.borderBottomWidth;
     if (getComputedStyle(document.querySelector('#workspace')).overflowY !== 'clip') return '.stage 不是 overflow:clip';
     return true;
@@ -2131,7 +2142,7 @@ async function main() {
     await shotOf('.pop','UX-MODEL-03-many-models-'+suffix,'100 模型展开，仅 picker 内滚动、长 id 截断',[],[
       ['布局稳定',modelLayout],
       ['picker 可以内部滚动',`(() => {const p=document.querySelector('.pop');p.scrollTop=120;const ok=p.scrollTop>0 && p.scrollHeight>p.clientHeight && getComputedStyle(p).overflowY==='auto';p.scrollTop=0;return ok})()`],
-      ['长 id 使用 ellipsis，没有横向溢出',`(() => { const e=document.querySelector('[data-provider="openrouter"] .pi-text'); return getComputedStyle(e).textOverflow==='ellipsis' && e.scrollWidth>e.clientWidth; })()`],
+      ['UI-3 长 id 按两行/窄屏三行截断，容器不横向溢出',`(() => { const e=document.querySelector('[data-provider="openrouter"] .ui3-model-item .pi-text');if(!e)return false;const s=getComputedStyle(e),r=e.getBoundingClientRect(),p=document.querySelector('.pop').getBoundingClientRect();return s.whiteSpace==='normal'&&s.overflowWrap==='anywhere'&&Number(s.webkitLineClamp)===(innerWidth<=760?3:2)&&e.scrollWidth<=e.clientWidth+1&&r.right<=p.right&&r.height>=parseFloat(s.fontSize)*2; })()`],
     ]);
     await evalJs(`document.querySelector('[data-provider="zhipu"] .pop-item').click()`);
     await sleep(350);
@@ -2180,6 +2191,7 @@ async function main() {
   await authShots();
   console.log('页面异常: ' + (pageErrors.length ? pageErrors.join(' | ') : '无'));
   console.log('取景判据: ' + (shotFailures.length ? '✗ ' + shotFailures.length + ' 条 —— ' + shotFailures.join('；') : '✓ 全部截图的取景中心都在视口内且关键词齐'));
+  console.log('取景断言数量: ' + shotChecks + '（元素存在 / 取景中心 / 各关键词 / 各结构判据 / UX；失败 ' + shotFailures.length + '）');
 
   ws.close();
   chrome.kill();

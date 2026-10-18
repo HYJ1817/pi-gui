@@ -1,0 +1,123 @@
+Smoke failure: no observed renderer error entries
+{
+  "scope": "Isolated packaged Electron production main/preload startup and theme smoke only; no real project/Pi/model",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-build-557f38db-41b6-41aa-9311-e99bee5c9d5c\\desktop-smoke-1792162024791",
+  "checks": [
+    {
+      "pass": true,
+      "label": "packaged main creates application page on isolated local port"
+    },
+    {
+      "pass": true,
+      "label": "production preload desktop and native theme bridge available"
+    },
+    {
+      "pass": true,
+      "label": "renderer does not expose Node require"
+    },
+    {
+      "pass": true,
+      "label": "renderer renders production interface"
+    },
+    {
+      "pass": true,
+      "label": "isolated application has no real projects"
+    },
+    {
+      "pass": true,
+      "label": "packaged native theme set dark"
+    },
+    {
+      "pass": true,
+      "label": "renderer and native theme agree dark"
+    },
+    {
+      "pass": true,
+      "label": "packaged native theme set light"
+    },
+    {
+      "pass": true,
+      "label": "renderer and native theme agree light"
+    },
+    {
+      "pass": true,
+      "label": "no observed renderer exceptions"
+    },
+    {
+      "pass": false,
+      "label": "no observed renderer error entries"
+    }
+  ],
+  "rendererExceptions": [],
+  "rendererConsoleErrors": [
+    {
+      "type": "console.error",
+      "argumentTypes": [
+        "string"
+      ],
+      "messages": [
+        "Electron sandboxed_renderer.bundle.js script failed to run"
+      ]
+    },
+    {
+      "type": "console.error",
+      "argumentTypes": [
+        "object"
+      ],
+      "messages": [
+        "TypeError: Cannot destructure property 'preloadScripts' of 'binding.startupData' as it is null.\n    at node:electron/js2c/sandbox_bundle:2:124925\n    at node:electron/js2c/sandbox_bundle:2:125860\n    at ___electron_webpack_init__ (node:electron/js2c/sandbox_bundle:2:125864)\n    at node:electron/js2c/sandbox_bundle:2:125987"
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "filename": "build-desktop-dark.png",
+      "theme": "dark",
+      "preference": "dark",
+      "snapshot": {
+        "preference": "dark",
+        "resolved": "dark",
+        "revision": 1,
+        "persisted": true
+      },
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "filename": "build-desktop-light.png",
+      "theme": "light",
+      "preference": "light",
+      "snapshot": {
+        "preference": "light",
+        "resolved": "light",
+        "revision": 2,
+        "persisted": true
+      },
+      "background": "rgb(251, 251, 249)"
+    }
+  ],
+  "updateAutoCancelled": true,
+  "pid": 35904,
+  "initial": {
+    "url": "http://127.0.0.1:32772",
+    "desktop": true,
+    "themeBridge": true,
+    "snapshot": {
+      "preference": "dark",
+      "resolved": "dark",
+      "revision": 0,
+      "persisted": true
+    },
+    "theme": "dark",
+    "require": "undefined",
+    "body": 126
+  },
+  "projects": {
+    "ok": true,
+    "projectCount": 0
+  },
+  "pass": false,
+  "failure": "no observed renderer error entries",
+  "cleanupResult": "already exited or cleanup failed: 128",
+  "checkCount": 11,
+  "passed": 10
+}

@@ -1,0 +1,9 @@
+{
+  "command": "npm test",
+  "exitCode": 0,
+  "durationSeconds": 2988.7558005,
+  "startedUtc": "2026-10-17T05:48:26.8400630Z",
+  "finishedUtc": "2026-10-17T06:38:15.5972932Z",
+  "fixtureRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui3-persistent-tests-6330096238ff4721b8e82305235469b7",
+  "scope": "frozen final product sources; persistent local test runner"
+}

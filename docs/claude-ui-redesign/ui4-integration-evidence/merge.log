@@ -1,0 +1,173 @@
+Merge made by the 'ort' strategy.
+ docs/claude-ui-redesign/UI-4A-acceptance.md        | 261 +++++++++
+ .../ui4a-evidence/changes-zoom125-dark.png         | Bin 0 -> 220666 bytes
+ .../ui4a-evidence/dark-1200-browser-browser.png    | Bin 0 -> 137500 bytes
+ .../ui4a-evidence/dark-1200-changes-changes.png    | Bin 0 -> 161337 bytes
+ .../ui4a-evidence/dark-1200-process-process.png    | Bin 0 -> 224152 bytes
+ .../dark-1200-session-session-changes.png          | Bin 0 -> 228507 bytes
+ .../ui4a-evidence/dark-1536-browser-browser.png    | Bin 0 -> 149051 bytes
+ .../ui4a-evidence/dark-1536-changes-changes.png    | Bin 0 -> 172124 bytes
+ .../ui4a-evidence/dark-1536-process-process.png    | Bin 0 -> 237612 bytes
+ .../dark-1536-session-session-changes.png          | Bin 0 -> 242508 bytes
+ .../ui4a-evidence/dark-700-browser-browser.png     | Bin 0 -> 55280 bytes
+ .../ui4a-evidence/dark-700-changes-changes.png     | Bin 0 -> 77903 bytes
+ .../ui4a-evidence/dark-700-process-process.png     | Bin 0 -> 140280 bytes
+ .../dark-700-session-session-changes.png           | Bin 0 -> 144896 bytes
+ .../ui4a-evidence/dark-900-browser-browser.png     | Bin 0 -> 112259 bytes
+ .../ui4a-evidence/dark-900-changes-changes.png     | Bin 0 -> 134383 bytes
+ .../ui4a-evidence/dark-900-process-process.png     | Bin 0 -> 196819 bytes
+ .../dark-900-session-session-changes.png           | Bin 0 -> 201003 bytes
+ .../ui4a-evidence/light-1200-browser-browser.png   | Bin 0 -> 137906 bytes
+ .../ui4a-evidence/light-1200-changes-changes.png   | Bin 0 -> 160708 bytes
+ .../ui4a-evidence/light-1200-process-process.png   | Bin 0 -> 223133 bytes
+ .../light-1200-session-session-changes.png         | Bin 0 -> 229705 bytes
+ .../ui4a-evidence/light-1536-browser-browser.png   | Bin 0 -> 149779 bytes
+ .../ui4a-evidence/light-1536-changes-changes.png   | Bin 0 -> 173176 bytes
+ .../ui4a-evidence/light-1536-process-process.png   | Bin 0 -> 236788 bytes
+ .../light-1536-session-session-changes.png         | Bin 0 -> 243839 bytes
+ .../ui4a-evidence/light-700-browser-browser.png    | Bin 0 -> 56034 bytes
+ .../ui4a-evidence/light-700-changes-changes.png    | Bin 0 -> 78797 bytes
+ .../ui4a-evidence/light-700-process-process.png    | Bin 0 -> 138807 bytes
+ .../light-700-session-session-changes.png          | Bin 0 -> 145429 bytes
+ .../ui4a-evidence/light-900-browser-browser.png    | Bin 0 -> 106985 bytes
+ .../ui4a-evidence/light-900-changes-changes.png    | Bin 0 -> 129067 bytes
+ .../ui4a-evidence/light-900-process-process.png    | Bin 0 -> 190199 bytes
+ .../light-900-session-session-changes.png          | Bin 0 -> 196194 bytes
+ .../ui4a-evidence/process-active-1200-dark.png     | Bin 0 -> 220739 bytes
+ docs/claude-ui-redesign/ui4a-evidence/results.json | 186 +++++++
+ docs/claude-ui-redesign/ui4a-evidence/run.log      | 283 ++++++++++
+ .../session-changes-error-1200-dark.png            | Bin 0 -> 156969 bytes
+ public/process-panel.js                            |  78 ++-
+ public/right-pane.js                               |  82 ++-
+ public/session-changes-panel.js                    |  97 +++-
+ public/ui4-pane.css                                | 380 +++++++++++++
+ tests/ui4-pane.cjs                                 | 618 +++++++++++++++++++++
+ 43 files changed, 1941 insertions(+), 44 deletions(-)
+ create mode 100644 docs/claude-ui-redesign/UI-4A-acceptance.md
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/changes-zoom125-dark.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1200-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1200-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1200-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1200-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1536-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1536-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1536-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-1536-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-700-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-700-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-700-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-700-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-900-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-900-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-900-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/dark-900-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1200-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1200-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1200-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1200-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1536-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1536-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1536-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-1536-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-700-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-700-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-700-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-700-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-900-browser-browser.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-900-changes-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-900-process-process.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/light-900-session-session-changes.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/process-active-1200-dark.png
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/results.json
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/run.log
+ create mode 100644 docs/claude-ui-redesign/ui4a-evidence/session-changes-error-1200-dark.png
+ create mode 100644 public/ui4-pane.css
+ create mode 100644 tests/ui4-pane.cjs
+Merge made by the 'ort' strategy.
+ docs/claude-ui-redesign/UI-4B-acceptance.md        |  176 ++
+ .../electron/approval-dark-1200-pane-closed.png    |  Bin 0 -> 153001 bytes
+ .../electron/approval-dark-1200-pane-open.png      |  Bin 0 -> 162397 bytes
+ .../electron/approval-dark-1536-pane-closed.png    |  Bin 0 -> 158940 bytes
+ .../electron/approval-dark-1536-pane-open.png      |  Bin 0 -> 197558 bytes
+ .../electron/approval-dark-700-pane-closed.png     |  Bin 0 -> 111717 bytes
+ .../electron/approval-dark-700-pane-open.png       |  Bin 0 -> 95774 bytes
+ .../electron/approval-dark-900-pane-closed.png     |  Bin 0 -> 139943 bytes
+ .../electron/approval-dark-900-pane-open.png       |  Bin 0 -> 134271 bytes
+ .../electron/approval-light-1200-pane-closed.png   |  Bin 0 -> 136838 bytes
+ .../electron/approval-light-1200-pane-open.png     |  Bin 0 -> 153306 bytes
+ .../electron/approval-light-1536-pane-closed.png   |  Bin 0 -> 142175 bytes
+ .../electron/approval-light-1536-pane-open.png     |  Bin 0 -> 193720 bytes
+ .../electron/approval-light-700-pane-closed.png    |  Bin 0 -> 105253 bytes
+ .../electron/approval-light-700-pane-open.png      |  Bin 0 -> 99214 bytes
+ .../electron/approval-light-900-pane-closed.png    |  Bin 0 -> 118177 bytes
+ .../electron/approval-light-900-pane-open.png      |  Bin 0 -> 123708 bytes
+ .../electron/reduced-motion-dark-1200.png          |  Bin 0 -> 116493 bytes
+ .../ui4b-evidence/electron/results.json            |  649 +++++++
+ .../electron/state-failed-dark-900.png             |  Bin 0 -> 113379 bytes
+ .../electron/state-input-dark-900.png              |  Bin 0 -> 115991 bytes
+ .../electron/state-runtime-dark-900.png            |  Bin 0 -> 53693 bytes
+ .../electron/state-select-dark-900.png             |  Bin 0 -> 102688 bytes
+ .../electron/state-submitting-dark-900.png         |  Bin 0 -> 109063 bytes
+ .../ui4b-evidence/regressions.log                  | 1934 ++++++++++++++++++++
+ .../ui4b-evidence/ui4-approval-electron.log        |   96 +
+ .../ui4b-evidence/ui4-approval-jsdom.log           |   46 +
+ public/approval.js                                 |  519 +++++-
+ public/ui/modal.js                                 |  281 ++-
+ public/ui4-approval.css                            |  377 ++++
+ tests/ui4-approval.cjs                             | 1010 ++++++++++
+ 31 files changed, 5011 insertions(+), 77 deletions(-)
+ create mode 100644 docs/claude-ui-redesign/UI-4B-acceptance.md
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-1200-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-1200-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-1536-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-1536-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-700-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-700-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-900-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-dark-900-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-1200-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-1200-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-1536-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-1536-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-700-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-700-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-900-pane-closed.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/approval-light-900-pane-open.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/reduced-motion-dark-1200.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/results.json
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/state-failed-dark-900.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/state-input-dark-900.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/state-runtime-dark-900.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/state-select-dark-900.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/electron/state-submitting-dark-900.png
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/regressions.log
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/ui4-approval-electron.log
+ create mode 100644 docs/claude-ui-redesign/ui4b-evidence/ui4-approval-jsdom.log
+ create mode 100644 public/ui4-approval.css
+ create mode 100644 tests/ui4-approval.cjs
+Merge made by the 'ort' strategy.
+ docs/claude-ui-redesign/UI-4C-acceptance.md        | 169 ++++++
+ .../claude-ui-redesign/ui4c-evidence/electron.json |  57 ++
+ .../ui4c-evidence/ui4-empty-state-dark.png         | Bin 0 -> 71397 bytes
+ .../ui4c-evidence/ui4-narrow-right-pane.png        | Bin 0 -> 41551 bytes
+ .../ui4c-evidence/ui4-notice-dark.png              | Bin 0 -> 123444 bytes
+ .../ui4c-evidence/ui4-notice-light.png             | Bin 0 -> 125481 bytes
+ .../ui4c-evidence/ui4-toasts-dark.png              | Bin 0 -> 154801 bytes
+ .../ui4c-evidence/ui4-toasts-light.png             | Bin 0 -> 158053 bytes
+ docs/claude-ui-redesign/ui4c-evidence/unit.json    | 116 ++++
+ public/ui/notice.js                                |  65 ++-
+ public/ui/toast.js                                 | 216 ++++++-
+ public/ui4-feedback.css                            | 494 ++++++++++++++++
+ tests/ui4-feedback.cjs                             | 619 +++++++++++++++++++++
+ 13 files changed, 1706 insertions(+), 30 deletions(-)
+ create mode 100644 docs/claude-ui-redesign/UI-4C-acceptance.md
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/electron.json
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/ui4-empty-state-dark.png
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/ui4-narrow-right-pane.png
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/ui4-notice-dark.png
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/ui4-notice-light.png
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/ui4-toasts-dark.png
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/ui4-toasts-light.png
+ create mode 100644 docs/claude-ui-redesign/ui4c-evidence/unit.json
+ create mode 100644 public/ui4-feedback.css
+ create mode 100644 tests/ui4-feedback.cjs

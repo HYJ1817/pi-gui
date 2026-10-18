@@ -25,7 +25,7 @@ if (process.env.ELECTRON_RUN_AS_NODE && process.versions.electron) {
   return;
 }
 
-const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain, nativeTheme } = require('electron');
 
 if (!app || typeof app.whenReady !== 'function') {
   console.error(
@@ -58,7 +58,9 @@ const {
  * 否则右栏存在的意义（访问外站）当场就没了。见 browser-view.cjs 文件头。 */
 const { createBrowserController, isBrowserWebContents } = require('./browser-view.cjs');
 const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
+const { createDesktopTheme } = require('./theme.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
+const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -74,12 +76,23 @@ const AUTH_TOKEN = crypto.randomBytes(32).toString('hex');
 const TOKEN_HEADER = 'X-Pi-Gui-Token';
 
 let win = null;
+let desktopTheme = null;
 let server = null;
 let browser = null;
 let browserAgent = null;
 let runtimeBrowserHost = null;
 let quitting = false;
+let mainLog = null;
+let serverStartedAt = 0;
+const bootAt = Date.now();
 const log = [];
+
+function mlog(source, event, details = {}, meta = {}) {
+  try { mainLog?.event(source, event, details, meta); } catch { /* logging must never break the shell */ }
+}
+function mcrash(error, details = {}) {
+  try { mainLog?.crash('electron', 'app.uncaught_exception', error, { role: 'main', reason: 'uncaught', ...details }); } catch { /* noop */ }
+}
 
 /* ---------- 服务进程 ---------- */
 
@@ -150,6 +163,7 @@ async function ensureServer() {
   const probe = await probePort();
 
   if (probe.state === 'pi-gui') {
+    mlog('electron', 'electron.backend_spawn', { reused: true, phase: 'reuse' });
     const access = await verifyAccess();
     if (!access.ok) {
       const why =
@@ -167,10 +181,13 @@ async function ensureServer() {
   }
 
   if (probe.state === 'foreign-service') {
+    mlog('electron', 'electron.backend_start_failed', { phase: 'foreign_service', code: 'PORT_OCCUPIED' });
     throw new Error(foreignServiceMessage(probe.detail));
   }
 
   const { cmd, args, cwd } = serverCommand();
+  mlog('electron', 'electron.backend_spawn', { reused: false, phase: 'spawn' });
+  serverStartedAt = Date.now();
   server = spawn(cmd, args, {
     cwd,
     env: {
@@ -187,6 +204,8 @@ async function ensureServer() {
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
       PI_GUI_DATA: process.env.PI_GUI_DATA || app.getPath('userData'),
+      // 主进程与后端共享同一固定日志目录；目录本身不受项目/会话切换影响。
+      ...(mainLog && mainLog.dir ? { PI_GUI_LOG_DIR: mainLog.dir } : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -198,7 +217,11 @@ async function ensureServer() {
   };
   server.stdout.on('data', collect);
   server.stderr.on('data', collect);
-  server.on('exit', () => {
+  server.on('exit', (code, signal) => {
+    const expected = quitting;
+    mlog('electron', expected ? 'electron.backend_exited' : 'electron.backend_crashed', expected
+      ? { expected: true, exitCode: Number.isFinite(code) ? code : undefined, durationMs: serverStartedAt ? Date.now() - serverStartedAt : undefined }
+      : { exitCode: Number.isFinite(code) ? code : undefined, signal: signal ? String(signal) : undefined, durationMs: serverStartedAt ? Date.now() - serverStartedAt : undefined });
     server = null;
     // A dead backend cannot own a Browser scope. Revoke its private gateways
     // even while the desktop window remains open to show the failure.
@@ -209,7 +232,11 @@ async function ensureServer() {
   if (!(await waitForServer())) {
     // 起不来的原因可能不止一个，所以这里再探一次，把「被占了」和「自己崩了」分开说
     const again = await probePort(500);
-    if (again.state === 'foreign-service') throw new Error(foreignServiceMessage(again.detail));
+    if (again.state === 'foreign-service') {
+      mlog('electron', 'electron.backend_start_failed', { phase: 'foreign_service', code: 'PORT_OCCUPIED' });
+      throw new Error(foreignServiceMessage(again.detail));
+    }
+    mlog('electron', 'electron.backend_start_failed', { phase: 'timeout', code: 'BACKEND_TIMEOUT' });
     throw new Error(`后端服务没能在 ${PORT} 端口起来。\n\n${log.join('').trim() || '（没有任何输出）'}`);
   }
   return { reused: false };
@@ -578,7 +605,7 @@ function createWindow() {
     ...(Number.isFinite(saved?.x) && Number.isFinite(saved?.y) ? { x: saved.x, y: saved.y } : {}),
     minWidth: MIN_W,
     minHeight: MIN_H,
-    backgroundColor: '#0d0d0d', // 和页面底色一致，避免加载时闪白
+    backgroundColor: desktopTheme.windowOptions().backgroundColor,
     title: 'Pi GUI',
     ...(fs.existsSync(iconFile) ? { icon: iconFile } : {}),
     autoHideMenuBar: true, // 藏掉 Electron 默认的 File/Edit/View 菜单，按 Alt 仍可唤出
@@ -593,20 +620,17 @@ function createWindow() {
      * 右侧还要给原生按钮让位，否则会盖住顶栏最右的几个图标。
      * 高度取 46 是为了和 .rail-head / .stage-head 的行高对齐。
      *
-     * ⚠️ 颜色是**跨进程常量**，两处必须同一个值：
-     *   - 这里 `color`：#0d0d0d
-     *   - public/styles.css 的 `--titlebar`（.stage-head 的背景就是它）
-     * 主进程画右边那条原生按钮带、页面画左边那一段，值一漂移右上角就会露出
-     * 一块异色，看起来就是「顶部断开」。改一处就要改另一处 ——
-     * tests/dev-server.cjs 有一条断言盯着这两个值是否一致。
-     * symbolColor #9b9b9b 对应 --t2（顶栏图标的颜色）。 */
+     * theme.cjs 在建窗前恢复偏好，并同步原生按钮带与页面的主题快照。
+     * tests/dev-server.cjs 核对两种调色板与 tokens.css 的标题栏颜色；
+     * 右栏标题也使用同一 --titlebar，防止顶部出现异色色块。 */
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0d0d0d', symbolColor: '#9b9b9b', height: 46 },
+    titleBarOverlay: desktopTheme.windowOptions().titleBarOverlay,
     show: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
+      additionalArguments: ['--pi-gui-theme-bridge'],
       /* 只为「用系统默认程序打开文件」与「用系统浏览器打开 Release 链接」
        * 挂一个桥（见 preload.cjs）。contextIsolation 保持开启 —— 桥经
        * contextBridge 暴露，页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
@@ -614,6 +638,7 @@ function createWindow() {
     },
   });
 
+  desktopTheme.applyWindow();
   win.once('ready-to-show', () => {
     /* 先量偏差，再最大化 —— 顺序不能反：最大化之后 getContentBounds() 给的是
        最大化后的客户区，量出来的偏差会大得离谱，之后每次保存都会被减掉这么多。 */
@@ -653,6 +678,10 @@ function createWindow() {
   win.webContents.on('render-process-gone', (_e, details) => {
     const reason = details?.reason || 'unknown';
     const exitCode = details?.exitCode ?? '?';
+    mlog('electron', 'electron.renderer_gone', {
+      reason: String(reason).slice(0, 80),
+      exitCode: Number.isFinite(details?.exitCode) ? details.exitCode : undefined,
+    });
     console.error(`[Pi GUI] 渲染进程退出：reason=${reason} exitCode=${exitCode}`);
 
     // 崩溃可能发生在首帧之前，这时窗口还藏着，得先让它可见再弹窗
@@ -673,6 +702,7 @@ function createWindow() {
   // 页面加载失败（后端没起来、端口被占等）。同样别让它静默。
   win.webContents.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
     if (!isMainFrame) return;
+    mlog('electron', 'electron.page_load_failed', { errorCode: String(code), isMainFrame: true });
     console.error(`[Pi GUI] 页面加载失败：${code} ${desc} ${url}`);
     if (win && !win.isDestroyed() && !win.isVisible()) win.show();
     dialog.showErrorBox(
@@ -722,6 +752,13 @@ function createWindow() {
     }
   });
 
+  win.on('unresponsive', () => {
+    mlog('electron', 'electron.renderer_unresponsive', {});
+  });
+  win.on('responsive', () => {
+    mlog('electron', 'electron.renderer_responsive', {});
+  });
+
   win.on('closed', () => {
     /* 窗口先走，浏览器 view 必须跟着销毁：它是挂在 contentView 上的
      * 原生子视图，窗口没了它就该没了 —— 但它的 webContents 不随窗口自动收，
@@ -751,6 +788,21 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    try {
+      mainLog = createMainLogging({
+        dir: defaultMainLogDir({ app }),
+        version: app.getVersion(),
+        appRoot: ROOT,
+      });
+      process.on('uncaughtExceptionMonitor', (error) => mcrash(error));
+      mlog('electron', 'app.ready', { role: 'main', durationMs: Date.now() - bootAt, windowCount: 0 });
+    } catch {
+      /* 日志不可用时外壳照常启动；这是可观测性，不是启动前置条件。 */
+      mainLog = null;
+    }
+    desktopTheme = createDesktopTheme({ ipcMain, nativeTheme, getWindow: () => win, origin: ORIGIN,
+      preferenceFile: path.join(app.getPath('userData'), 'theme-preferences.json') });
+    desktopTheme.register();
     // 令牌头的注入必须赶在窗口发第一个请求之前装好
     installTokenHeader();
     // 「用系统默认程序打开文件」与「用系统浏览器打开链接」两个 IPC ——
@@ -762,7 +814,8 @@ if (!app.requestSingleInstanceLock()) {
      * 之前注册，否则页面首帧调用会拿到 "No handler registered"。
      * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */
     browser = createBrowserController({ origin: ORIGIN, getWindow: () => win, ipcMain,
-      isVisible: () => !runtimeBrowserHost || runtimeBrowserHost.isLegacyVisible() });
+      isVisible: () => !runtimeBrowserHost || runtimeBrowserHost.isLegacyVisible(),
+      logEvent: (event, details) => mlog('electron', event, details) });
     browser.register();
     browserAgent = createBrowserAgentHost({ browser, origin: ORIGIN, getWindow: () => win, ipcMain,
       extensionPath: path.join(fs.existsSync(path.join(__dirname, 'server.cjs')) ? __dirname : ROOT,
@@ -770,6 +823,7 @@ if (!app.requestSingleInstanceLock()) {
     await browserAgent.start();
     runtimeBrowserHost = createRuntimeBrowserHost({ origin: ORIGIN, getWindow: () => win, ipcMain,
       onFocus: active => browser.setOccluded(active),
+      logEvent: (event, details) => mlog('electron', event, details),
       extensionPath: path.join(fs.existsSync(path.join(__dirname, 'server.cjs')) ? __dirname : ROOT,
         'extensions', 'pi-gui-browser', 'index.js') });
     await runtimeBrowserHost.start();
@@ -785,11 +839,22 @@ if (!app.requestSingleInstanceLock()) {
       /* 注意：走到这里绝不能再去 loadURL。
        * 端口被别的程序占用时把窗口指向那个端口，用户会看到一个陌生的页面
        * 加一堆查不出原因的 API 报错 —— 那比直接报错难排查得多。 */
+      mlog('electron', 'electron.backend_start_failed', { phase: 'startup', code: 'BACKEND_UNAVAILABLE' });
+      try { mainLog?.close('backend_start_failed'); } catch { /* noop */ }
       dialog.showErrorBox('Pi GUI 启动失败', String(err.message || err));
       app.exit(1);
       return;
     }
-    createWindow();
+    try {
+      createWindow();
+      mlog('electron', 'electron.window_created', { windowCount: 1, durationMs: Date.now() - bootAt });
+    } catch (error) {
+      try {
+        mainLog?.crash('electron', 'app.uncaught_exception', error, { role: 'main', reason: 'window_create_failed' });
+      } catch { /* noop */ }
+      dialog.showErrorBox('Pi GUI 启动失败', '主窗口创建失败。请重新启动应用；若反复出现，请导出故障报告。');
+      app.exit(1);
+    }
   });
 
   // 关掉窗口就是退出程序 —— 桌面应用不该留个后台进程偷偷活着
@@ -807,6 +872,7 @@ if (!app.requestSingleInstanceLock()) {
     // 再兜一层：Ctrl+Q、系统关机等直接触发 quit 的情况，窗口可能还活着也可能已经没了
     saveWindowState();
     quitting = true;
+    try { mainLog?.close('quit'); } catch { /* noop */ }
     // 浏览器 view 先于后端收掉：它的 webContents 不随窗口自动销毁
     if (browser) browser.destroy();
     browserAgent?.stop();
@@ -814,7 +880,16 @@ if (!app.requestSingleInstanceLock()) {
     killServer();
   });
 
+  app.on('child-process-gone', (_event, details) => {
+    mlog('electron', 'electron.child_process_gone', {
+      type: details?.type ? String(details.type).slice(0, 40) : undefined,
+      reason: details?.reason ? String(details.reason).slice(0, 80) : undefined,
+      exitCode: Number.isFinite(details?.exitCode) ? details.exitCode : undefined,
+    });
+  });
+
   process.on('exit', () => {
+    try { mainLog?.flushSync(); } catch { /* noop */ }
     if (!quitting) killServer();
   });
 }

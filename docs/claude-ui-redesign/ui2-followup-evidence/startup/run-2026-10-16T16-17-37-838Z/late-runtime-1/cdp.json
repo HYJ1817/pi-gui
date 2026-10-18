@@ -1,0 +1,340 @@
+{
+  "mode": "late-runtime",
+  "iteration": 1,
+  "origin": "http://127.0.0.1:14235",
+  "cdpPort": 14236,
+  "started": 1792167461929,
+  "timeline": [
+    {
+      "kind": "ws-connect",
+      "epoch": 1792167463306
+    },
+    {
+      "kind": "command",
+      "method": "Page.getFrameTree",
+      "epoch": 1792167463314
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.enable",
+      "epoch": 1792167463319
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167463321,
+      "context": 2,
+      "origin": "http://127.0.0.1:14235"
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167463321,
+      "context": 1,
+      "origin": "http://127.0.0.1:14235"
+    },
+    {
+      "kind": "command",
+      "method": "Page.enable",
+      "epoch": 1792167463322
+    }
+  ],
+  "args": [
+    "--user-data-dir=C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-nlCaae\\late-runtime-1\\userdata",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=14236"
+  ],
+  "contexts": [
+    {
+      "id": 2,
+      "origin": "http://127.0.0.1:14235",
+      "name": "Electron Isolated Context",
+      "uniqueId": "5590624718657885920.1131278953981096764",
+      "auxData": {
+        "isDefault": false,
+        "type": "isolated",
+        "frameId": "A697840CD47DC33955A94F3841E57AD7"
+      }
+    },
+    {
+      "id": 1,
+      "origin": "http://127.0.0.1:14235",
+      "name": "",
+      "uniqueId": "34108936757783855.-6230544713455892225",
+      "auxData": {
+        "isDefault": true,
+        "type": "default",
+        "frameId": "A697840CD47DC33955A94F3841E57AD7"
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "exceptions": [],
+  "pid": 7660,
+  "target": {
+    "id": "A697840CD47DC33955A94F3841E57AD7",
+    "url": "http://127.0.0.1:14235/"
+  },
+  "frameTree": {
+    "frameTree": {
+      "frame": {
+        "id": "A697840CD47DC33955A94F3841E57AD7",
+        "loaderId": "90D7AFBB80E59E830526358FE4EC5CA8",
+        "url": "http://127.0.0.1:14235/",
+        "domainAndRegistry": "",
+        "securityOrigin": "http://127.0.0.1:14235",
+        "securityOriginDetails": {
+          "isLocalhost": true
+        },
+        "mimeType": "text/html",
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "secureContextType": "SecureLocalhost",
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "gatedAPIFeatures": []
+      }
+    }
+  },
+  "exit": {
+    "code": 0,
+    "signal": null,
+    "epoch": 1792167465912
+  },
+  "observer": {
+    "events": [
+      {
+        "epoch": 1792167462124,
+        "kind": "require-production-main"
+      },
+      {
+        "epoch": 1792167462568,
+        "kind": "web-contents-created",
+        "wcId": 1,
+        "type": "window",
+        "url": "",
+        "preferences": {
+          "sandbox": true,
+          "contextIsolation": true,
+          "nodeIntegration": false
+        }
+      },
+      {
+        "epoch": 1792167462590,
+        "kind": "did-start-loading",
+        "wcId": 1,
+        "url": ""
+      },
+      {
+        "epoch": 1792167462590,
+        "kind": "did-start-navigation",
+        "wcId": 1,
+        "url": "http://127.0.0.1:14235/",
+        "inPlace": false,
+        "main": true
+      },
+      {
+        "epoch": 1792167462744,
+        "kind": "did-frame-navigate",
+        "wcId": 1,
+        "url": "http://127.0.0.1:14235/",
+        "code": 200,
+        "main": true
+      },
+      {
+        "epoch": 1792167462866,
+        "kind": "dom-ready",
+        "wcId": 1,
+        "url": "http://127.0.0.1:14235/"
+      },
+      {
+        "epoch": 1792167462878,
+        "kind": "did-finish-load",
+        "wcId": 1,
+        "url": "http://127.0.0.1:14235/"
+      },
+      {
+        "epoch": 1792167462879,
+        "kind": "observer-evaluate-start"
+      },
+      {
+        "epoch": 1792167462880,
+        "kind": "did-stop-loading",
+        "wcId": 1,
+        "url": "http://127.0.0.1:14235/"
+      },
+      {
+        "epoch": 1792167462920,
+        "kind": "observer-evaluate-end"
+      },
+      {
+        "epoch": 1792167463572,
+        "kind": "observer-theme-start",
+        "mode": "dark"
+      },
+      {
+        "epoch": 1792167463733,
+        "kind": "observer-theme-end",
+        "mode": "dark"
+      },
+      {
+        "epoch": 1792167463733,
+        "kind": "observer-theme-start",
+        "mode": "light"
+      },
+      {
+        "epoch": 1792167463894,
+        "kind": "observer-theme-end",
+        "mode": "light"
+      },
+      {
+        "epoch": 1792167465704,
+        "kind": "observer-close-window"
+      },
+      {
+        "epoch": 1792167465710,
+        "kind": "destroyed",
+        "wcId": 1,
+        "url": null
+      },
+      {
+        "epoch": 1792167465715,
+        "kind": "before-quit"
+      },
+      {
+        "epoch": 1792167465724,
+        "kind": "will-quit"
+      },
+      {
+        "epoch": 1792167465725,
+        "kind": "process-exit",
+        "code": 0
+      }
+    ],
+    "ready": true,
+    "checks": {
+      "desktop": true,
+      "themeBridge": true,
+      "hasProject": false,
+      "piRunning": false,
+      "projects": 0,
+      "timeOrigin": 1792167462584.2
+    },
+    "observerErrors": [],
+    "readyEpoch": 1792167462920,
+    "themes": [
+      {
+        "mode": "dark",
+        "observed": {
+          "ok": true,
+          "theme": "dark",
+          "preference": "dark",
+          "snapshot": {
+            "preference": "dark",
+            "resolved": "dark",
+            "revision": 1,
+            "persisted": true
+          }
+        },
+        "persisted": {
+          "version": 1,
+          "preference": "dark"
+        },
+        "screenshot": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-followup-evidence\\startup\\run-2026-10-16T16-17-37-838Z\\late-runtime-1\\dark.png"
+      },
+      {
+        "mode": "light",
+        "observed": {
+          "ok": true,
+          "theme": "light",
+          "preference": "light",
+          "snapshot": {
+            "preference": "light",
+            "resolved": "light",
+            "revision": 2,
+            "persisted": true
+          }
+        },
+        "persisted": {
+          "version": 1,
+          "preference": "light"
+        },
+        "screenshot": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-followup-evidence\\startup\\run-2026-10-16T16-17-37-838Z\\late-runtime-1\\light.png"
+      }
+    ],
+    "exitCode": 0
+  },
+  "mainConsoleErrors": [],
+  "productionReady": true,
+  "zeroErrorObserved": true,
+  "assertions": [
+    {
+      "label": "harness completed",
+      "pass": true
+    },
+    {
+      "label": "packaged application exits normally",
+      "pass": true
+    },
+    {
+      "label": "production preload ready; no real projects or Pi",
+      "pass": true
+    },
+    {
+      "label": "main observer has no execution errors",
+      "pass": true
+    },
+    {
+      "label": "no preload failure or renderer crash",
+      "pass": true
+    },
+    {
+      "label": "no CDP uncaught exceptions",
+      "pass": true
+    },
+    {
+      "label": "main observation starts on initial empty document before navigation",
+      "pass": true
+    },
+    {
+      "label": "production sandbox and isolation remain enabled",
+      "pass": true
+    },
+    {
+      "label": "normal control has zero errors throughout main and CDP observations",
+      "pass": true
+    },
+    {
+      "label": "normal Runtime attach occurs after production load plus readiness delay",
+      "pass": true
+    },
+    {
+      "label": "real renderer/native bridge agrees for dark",
+      "pass": true
+    },
+    {
+      "label": "native preference persisted on disk for dark",
+      "pass": true
+    },
+    {
+      "label": "actual packaged screenshot captured for dark",
+      "pass": true
+    },
+    {
+      "label": "real renderer/native bridge agrees for light",
+      "pass": true
+    },
+    {
+      "label": "native preference persisted on disk for light",
+      "pass": true
+    },
+    {
+      "label": "actual packaged screenshot captured for light",
+      "pass": true
+    }
+  ],
+  "contractPass": true
+}

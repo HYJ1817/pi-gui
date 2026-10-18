@@ -1,0 +1,24 @@
+PASS production styles loaded once each
+PASS production input opens real registered slash candidate
+PASS Enter runs exactly once, consumes command token, no send
+PASS command removes only token and preserves surrounding draft
+PASS Escape closes slash without abort or losing draft
+PASS IME ordinary Enter guarded {"isComposing":true}
+PASS IME ordinary Enter guarded {"keyCode":229}
+PASS composition lifecycle closes menu and prevents submit
+PASS Ctrl+K target opens independent panel with slash closed
+PASS lifecycle pi-gui:session-switch preserves draft and closes menu
+PASS lifecycle pi-gui:workspace-view preserves draft and closes menu
+PASS lifecycle pi-gui:workspace-view preserves draft and closes menu
+PASS production model view selects only matching Provider identity
+PASS unavailable Thinking explanation reachable: unsupported
+PASS explanation Escape restores actual trigger focus: unsupported
+PASS unavailable Thinking explanation reachable: unknown
+PASS explanation Escape restores actual trigger focus: unknown
+PASS unavailable Thinking explanation reachable: unavailable
+PASS explanation Escape restores actual trigger focus: unavailable
+PASS pending explanation cannot enable selection or send
+PASS real returned levels enable existing button and hide explanation entry
+PASS readback closes obsolete pending explanation and restores enabled trigger
+PASS ordinary Enter reaches original submit exactly once
+UI3 integration 23/23; failed=0; skipped=0

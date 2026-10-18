@@ -76,6 +76,7 @@ import { createRuntimeRoutes } from './server/runtime-routes.js';
 import { createSessionRuntime } from './server/session-runtime.js';
 import { createRuntimeBrowserGateway } from './server/runtime-browser-launch.js';
 import { createDiagnostics } from './server/diagnostics.js';
+import { createLogService } from './server/logging.js';
 import { createMcp } from './server/mcp.js';
 import { createMcpNative, buildPiEntry } from './server/mcp-native.js';
 import { createPiBuiltins } from './server/pi-builtins.js';
@@ -144,6 +145,17 @@ function readOwnVersion() {
     return '0.0.0';
   }
 }
+
+/* 本地日志在其它模块之前建立：后端启动失败、Pi 起不来这些事件也必须留下线索。
+ * 日志目录由服务层固定（PI_GUI_LOG_DIR / PI_GUI_DATA / 系统应用数据），
+ * 从不使用项目目录；Electron 主进程会把它指到同一个 userData/logs。 */
+let diagnosticsRef = null;
+const logging = createLogService({
+  version: VERSION,
+  appRoot: __dirname,
+  getDiagnostics: () => diagnosticsRef?.readSnapshot?.() || null,
+});
+logging.installCrashMonitor();
 
 // pi 的用户级自定义供应商配置。
 // 注意：这是「用户配置」，与 pi 自身的 models-store.json（模型目录缓存）不是一回事。
@@ -319,6 +331,21 @@ const sessionChanges = createSessionChangeBridge({ store: getEvidenceStore, laun
   },
 });
 processManagers.add(managedProcesses.manager);
+function observeForStructuredLog(event) {
+  if (event && event.type === 'bridge_status') {
+    logging.log('pi-bridge', 'bridge.state', {
+      state: event.state || 'unknown', phase: event.phase, reason: event.reason,
+      bridgeRun: Number.isInteger(event.bridgeRun) ? event.bridgeRun : undefined,
+    });
+  }
+  if (event && event.type === 'response' && event.success === false) {
+    const operation = typeof event.command === 'string' ? event.command : 'unknown';
+    if (operation === 'set_model') logging.log('pi-bridge', 'bridge.model_switch_failed', { phase: 'response', code: 'command_failed' });
+    else if (operation === 'set_thinking_level') logging.log('pi-bridge', 'bridge.thinking_failed', { phase: 'response', code: 'command_failed' });
+    logging.log('pi-bridge', 'bridge.command_failed', { operation, code: 'command_failed' });
+  }
+}
+
 const rpc = createRpcBridge({
   runtime,
   browserLaunch: guiBrowserLaunch,
@@ -328,7 +355,9 @@ const rpc = createRpcBridge({
    * 只 kill 外层包装不足以说明 pi 本体已停）。原语在这里注入：rpc-bridge 自己
    * 不认识业务模块（有架构守卫钉着），复用的是 agents/cli.js 里验证过的 killTree。 */
   killProcessTree: killTree,
+  logEvent: (event, details) => logging.log('pi-bridge', event, details),
   publish: (event) => {
+    try { observeForStructuredLog(event); } catch { /* observation only */ }
     if (event.type === 'bridge_status' && event.state !== 'ready') primaryNativeSession = null;
     if (event.type === 'response' && event.command === 'get_state' && typeof event.data?.sessionId === 'string') primaryNativeSession = event.data.sessionId;
     event = projectProcessEvent(event);
@@ -654,6 +683,7 @@ const diagnostics = createDiagnostics({
   version: VERSION,
   env: process.env,
 });
+diagnosticsRef = diagnostics;
 
 /* P5 版本检查：只读公开 GitHub Release 元数据，判断有没有新版。
  *
@@ -830,6 +860,7 @@ const providerAuth = providerAuthRef = createProviderAuth({
 const runtimeBrowser = createRuntimeBrowserGateway();
 const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   dataDir: DATA_DIR, publish: sse.publish,
+  logEvent: (event, details) => logging.log('runtime', event, details),
   externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
     || rpc.maintenanceState() || plannerRef?.projectSwitchBlockReason() || cliInFlight ? 'maintenance' : null,
@@ -987,6 +1018,7 @@ const route = createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  logging,
   updateCheck,
   piUpdate,
   capabilityInstall,
@@ -1025,6 +1057,7 @@ async function shutdown() {
   sse.closeAll();
   rpc.stop();
   try { await managedProcesses.dispose(); } catch { /* Pipe EOF / Job close is also an exit cleanup boundary. */ }
+  try { logging.dispose(); } catch { /* 日志收尾不能挡住退出 */ }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1500).unref();
 }
@@ -1066,6 +1099,8 @@ server.on('error', async (err) => {
       setTimeout(() => process.exit(0), 400);
       return;
     }
+    logging.log('app', 'electron.backend_start_failed', { phase: 'port_in_use', code: 'EADDRINUSE' });
+    logging.dispose();
     console.error(`端口 ${PORT} 已被其他程序占用。请关闭占用程序，或设置 PORT 使用其他端口。`);
     process.exit(1);
     return;

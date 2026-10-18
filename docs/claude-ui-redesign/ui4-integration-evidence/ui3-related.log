@@ -1,0 +1,250 @@
+
+> pi-gui@0.25.0 test:ui3
+> node tests/ui3-integration-electron.cjs
+
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS Chromium page has focus before trusted CDP keys
+PASS three styles loaded from production index exactly once
+PASS real Enter runs registry command once, clears token, never submits
+PASS ordinary real Enter reaches original submit
+PASS real Escape only closes slash and preserves draft
+PASS real Ctrl+K preserves independent panel and closes slash
+PASS synthetic IME signals inside real Chromium never submit (not real OS IME)
+PASS pi-gui:session-switch closes menu without draft mutation
+PASS pi-gui:workspace-generation closes menu without draft mutation
+PASS planner lifecycle closes menu
+PASS runtime lifecycle closes menu
+PASS actual Planner entry closes menu with draft intact
+PASS actual Runtime surface transition closes Classic menu without draft mutation
+PASS same-name current model is paired by Provider
+PASS reachable Thinking explanation unsupported
+PASS reachable Thinking explanation unknown
+PASS reachable Thinking explanation unavailable
+PASS pending explanation keeps real selection/send gates
+PASS actual same-name click sends one correct Provider identity and pending disables controls
+PASS failed switch uses Pi authoritative readback for Thinking and blocked image, preserves draft
+PASS authoritative supported model restores actual capability controls
+PASS layout matrix explicitly restores six attachments after ordinary submit cleared them
+PASS dark-700-sidebar-true-closed visible within viewport
+PASS dark-700-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS dark-700-sidebar-true-closed visible within viewport
+PASS dark-700-sidebar-true-changes visible within viewport
+PASS dark-700-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS dark-700-sidebar-true-changes menu avoids native/right pane
+PASS dark-700-sidebar-true-changes visible within viewport
+PASS dark-700-sidebar-true-changes menu avoids native/right pane
+PASS dark-700-sidebar-true-browser visible within viewport
+PASS dark-700-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS dark-700-sidebar-true-browser menu avoids native/right pane
+PASS dark-700-sidebar-true-browser visible within viewport
+PASS dark-700-sidebar-true-browser menu avoids native/right pane
+PASS dark-700-sidebar-false-closed visible within viewport
+PASS dark-700-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS dark-700-sidebar-false-closed visible within viewport
+PASS dark-700-sidebar-false-changes visible within viewport
+PASS dark-700-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS dark-700-sidebar-false-changes menu avoids native/right pane
+PASS dark-700-sidebar-false-changes visible within viewport
+PASS dark-700-sidebar-false-changes menu avoids native/right pane
+PASS dark-700-sidebar-false-browser visible within viewport
+PASS dark-700-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS dark-700-sidebar-false-browser menu avoids native/right pane
+PASS dark-700-sidebar-false-browser visible within viewport
+PASS dark-700-sidebar-false-browser menu avoids native/right pane
+PASS dark-900-sidebar-true-closed visible within viewport
+PASS dark-900-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS dark-900-sidebar-true-closed visible within viewport
+PASS dark-900-sidebar-true-changes visible within viewport
+PASS dark-900-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS dark-900-sidebar-true-changes menu avoids native/right pane
+PASS dark-900-sidebar-true-changes visible within viewport
+PASS dark-900-sidebar-true-changes menu avoids native/right pane
+PASS dark-900-sidebar-true-browser visible within viewport
+PASS dark-900-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS dark-900-sidebar-true-browser menu avoids native/right pane
+PASS dark-900-sidebar-true-browser visible within viewport
+PASS dark-900-sidebar-true-browser menu avoids native/right pane
+PASS dark-900-sidebar-false-closed visible within viewport
+PASS dark-900-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS dark-900-sidebar-false-closed visible within viewport
+PASS dark-900-sidebar-false-changes visible within viewport
+PASS dark-900-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS dark-900-sidebar-false-changes menu avoids native/right pane
+PASS dark-900-sidebar-false-changes visible within viewport
+PASS dark-900-sidebar-false-changes menu avoids native/right pane
+PASS dark-900-sidebar-false-browser visible within viewport
+PASS dark-900-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS dark-900-sidebar-false-browser menu avoids native/right pane
+PASS dark-900-sidebar-false-browser visible within viewport
+PASS dark-900-sidebar-false-browser menu avoids native/right pane
+PASS dark-1200-sidebar-true-closed visible within viewport
+PASS dark-1200-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS dark-1200-sidebar-true-closed visible within viewport
+PASS dark-1200-sidebar-true-changes visible within viewport
+PASS dark-1200-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS dark-1200-sidebar-true-changes menu avoids native/right pane
+PASS dark-1200-sidebar-true-changes visible within viewport
+PASS dark-1200-sidebar-true-changes menu avoids native/right pane
+PASS dark-1200-sidebar-true-browser visible within viewport
+PASS dark-1200-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS dark-1200-sidebar-true-browser menu avoids native/right pane
+PASS dark-1200-sidebar-true-browser visible within viewport
+PASS dark-1200-sidebar-true-browser menu avoids native/right pane
+PASS dark-1200-sidebar-false-closed visible within viewport
+PASS dark-1200-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS dark-1200-sidebar-false-closed visible within viewport
+PASS dark-1200-sidebar-false-changes visible within viewport
+PASS dark-1200-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS dark-1200-sidebar-false-changes menu avoids native/right pane
+PASS dark-1200-sidebar-false-changes visible within viewport
+PASS dark-1200-sidebar-false-changes menu avoids native/right pane
+PASS dark-1200-sidebar-false-browser visible within viewport
+PASS dark-1200-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS dark-1200-sidebar-false-browser menu avoids native/right pane
+PASS dark-1200-sidebar-false-browser visible within viewport
+PASS dark-1200-sidebar-false-browser menu avoids native/right pane
+PASS dark-1536-sidebar-true-closed visible within viewport
+PASS dark-1536-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS dark-1536-sidebar-true-closed visible within viewport
+PASS dark-1536-sidebar-true-changes visible within viewport
+PASS dark-1536-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS dark-1536-sidebar-true-changes menu avoids native/right pane
+PASS dark-1536-sidebar-true-changes visible within viewport
+PASS dark-1536-sidebar-true-changes menu avoids native/right pane
+PASS dark-1536-sidebar-true-browser visible within viewport
+PASS dark-1536-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS dark-1536-sidebar-true-browser menu avoids native/right pane
+PASS dark-1536-sidebar-true-browser visible within viewport
+PASS dark-1536-sidebar-true-browser menu avoids native/right pane
+PASS dark-1536-sidebar-false-closed visible within viewport
+PASS dark-1536-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS dark-1536-sidebar-false-closed visible within viewport
+PASS dark-1536-sidebar-false-changes visible within viewport
+PASS dark-1536-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS dark-1536-sidebar-false-changes menu avoids native/right pane
+PASS dark-1536-sidebar-false-changes visible within viewport
+PASS dark-1536-sidebar-false-changes menu avoids native/right pane
+PASS dark-1536-sidebar-false-browser visible within viewport
+PASS dark-1536-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS dark-1536-sidebar-false-browser menu avoids native/right pane
+PASS dark-1536-sidebar-false-browser visible within viewport
+PASS dark-1536-sidebar-false-browser menu avoids native/right pane
+PASS light-700-sidebar-true-closed visible within viewport
+PASS light-700-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS light-700-sidebar-true-closed visible within viewport
+PASS light-700-sidebar-true-changes visible within viewport
+PASS light-700-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS light-700-sidebar-true-changes menu avoids native/right pane
+PASS light-700-sidebar-true-changes visible within viewport
+PASS light-700-sidebar-true-changes menu avoids native/right pane
+PASS light-700-sidebar-true-browser visible within viewport
+PASS light-700-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS light-700-sidebar-true-browser menu avoids native/right pane
+PASS light-700-sidebar-true-browser visible within viewport
+PASS light-700-sidebar-true-browser menu avoids native/right pane
+PASS light-700-sidebar-false-closed visible within viewport
+PASS light-700-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS light-700-sidebar-false-closed visible within viewport
+PASS light-700-sidebar-false-changes visible within viewport
+PASS light-700-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS light-700-sidebar-false-changes menu avoids native/right pane
+PASS light-700-sidebar-false-changes visible within viewport
+PASS light-700-sidebar-false-changes menu avoids native/right pane
+PASS light-700-sidebar-false-browser visible within viewport
+PASS light-700-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS light-700-sidebar-false-browser menu avoids native/right pane
+PASS light-700-sidebar-false-browser visible within viewport
+PASS light-700-sidebar-false-browser menu avoids native/right pane
+PASS light-900-sidebar-true-closed visible within viewport
+PASS light-900-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS light-900-sidebar-true-closed visible within viewport
+PASS light-900-sidebar-true-changes visible within viewport
+PASS light-900-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS light-900-sidebar-true-changes menu avoids native/right pane
+PASS light-900-sidebar-true-changes visible within viewport
+PASS light-900-sidebar-true-changes menu avoids native/right pane
+PASS light-900-sidebar-true-browser visible within viewport
+PASS light-900-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS light-900-sidebar-true-browser menu avoids native/right pane
+PASS light-900-sidebar-true-browser visible within viewport
+PASS light-900-sidebar-true-browser menu avoids native/right pane
+PASS light-900-sidebar-false-closed visible within viewport
+PASS light-900-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS light-900-sidebar-false-closed visible within viewport
+PASS light-900-sidebar-false-changes visible within viewport
+PASS light-900-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS light-900-sidebar-false-changes menu avoids native/right pane
+PASS light-900-sidebar-false-changes visible within viewport
+PASS light-900-sidebar-false-changes menu avoids native/right pane
+PASS light-900-sidebar-false-browser visible within viewport
+PASS light-900-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS light-900-sidebar-false-browser menu avoids native/right pane
+PASS light-900-sidebar-false-browser visible within viewport
+PASS light-900-sidebar-false-browser menu avoids native/right pane
+PASS light-1200-sidebar-true-closed visible within viewport
+PASS light-1200-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS light-1200-sidebar-true-closed visible within viewport
+PASS light-1200-sidebar-true-changes visible within viewport
+PASS light-1200-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS light-1200-sidebar-true-changes menu avoids native/right pane
+PASS light-1200-sidebar-true-changes visible within viewport
+PASS light-1200-sidebar-true-changes menu avoids native/right pane
+PASS light-1200-sidebar-true-browser visible within viewport
+PASS light-1200-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS light-1200-sidebar-true-browser menu avoids native/right pane
+PASS light-1200-sidebar-true-browser visible within viewport
+PASS light-1200-sidebar-true-browser menu avoids native/right pane
+PASS light-1200-sidebar-false-closed visible within viewport
+PASS light-1200-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS light-1200-sidebar-false-closed visible within viewport
+PASS light-1200-sidebar-false-changes visible within viewport
+PASS light-1200-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS light-1200-sidebar-false-changes menu avoids native/right pane
+PASS light-1200-sidebar-false-changes visible within viewport
+PASS light-1200-sidebar-false-changes menu avoids native/right pane
+PASS light-1200-sidebar-false-browser visible within viewport
+PASS light-1200-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS light-1200-sidebar-false-browser menu avoids native/right pane
+PASS light-1200-sidebar-false-browser visible within viewport
+PASS light-1200-sidebar-false-browser menu avoids native/right pane
+PASS light-1536-sidebar-true-closed visible within viewport
+PASS light-1536-sidebar-true-closed menu leaves attachments and Composer actions uncovered
+PASS light-1536-sidebar-true-closed visible within viewport
+PASS light-1536-sidebar-true-changes visible within viewport
+PASS light-1536-sidebar-true-changes menu leaves attachments and Composer actions uncovered
+PASS light-1536-sidebar-true-changes menu avoids native/right pane
+PASS light-1536-sidebar-true-changes visible within viewport
+PASS light-1536-sidebar-true-changes menu avoids native/right pane
+PASS light-1536-sidebar-true-browser visible within viewport
+PASS light-1536-sidebar-true-browser menu leaves attachments and Composer actions uncovered
+PASS light-1536-sidebar-true-browser menu avoids native/right pane
+PASS light-1536-sidebar-true-browser visible within viewport
+PASS light-1536-sidebar-true-browser menu avoids native/right pane
+PASS light-1536-sidebar-false-closed visible within viewport
+PASS light-1536-sidebar-false-closed menu leaves attachments and Composer actions uncovered
+PASS light-1536-sidebar-false-closed visible within viewport
+PASS light-1536-sidebar-false-changes visible within viewport
+PASS light-1536-sidebar-false-changes menu leaves attachments and Composer actions uncovered
+PASS light-1536-sidebar-false-changes menu avoids native/right pane
+PASS light-1536-sidebar-false-changes visible within viewport
+PASS light-1536-sidebar-false-changes menu avoids native/right pane
+PASS light-1536-sidebar-false-browser visible within viewport
+PASS light-1536-sidebar-false-browser menu leaves attachments and Composer actions uncovered
+PASS light-1536-sidebar-false-browser menu avoids native/right pane
+PASS light-1536-sidebar-false-browser visible within viewport
+PASS light-1536-sidebar-false-browser menu avoids native/right pane
+PASS zoom-0.8 visible within viewport
+PASS zoom-0.8 menu leaves attachments and Composer actions uncovered
+PASS zoom-0.8 visible within viewport
+PASS zoom-1.25 visible within viewport
+PASS zoom-1.25 menu leaves attachments and Composer actions uncovered
+PASS zoom-1.25 visible within viewport
+PASS zoom-1.5 visible within viewport
+PASS zoom-1.5 menu leaves attachments and Composer actions uncovered
+PASS zoom-1.5 visible within viewport
+PASS reduced-motion visible within viewport
+PASS reduced-motion menu leaves attachments and Composer actions uncovered
+PASS reduced-motion actually disables menu, Composer and loading spinner motion
+PASS no renderer or harness errors
+UI3 joint Electron 243/243; failed=0; skipped=0

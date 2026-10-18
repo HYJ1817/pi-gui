@@ -1,0 +1,30 @@
+{
+  "ui1ChainCommands": 128,
+  "ui2ChainCommands": 131,
+  "ui1Signatures": 113,
+  "ui2Signatures": 116,
+  "previousCountSequenceUnchanged": true,
+  "differences": [],
+  "newSignatures": [
+    {
+      "line": 53,
+      "text": "UI-2A Classic 48/48; failed=0; skipped=0; DOM/fixture, not layout evidence"
+    },
+    {
+      "line": 136,
+      "text": "Runtime display projection: 82/82"
+    },
+    {
+      "line": 208,
+      "text": "UI-2C 视觉自检: 57/57 通过 —— 报告: C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\visual-canonical-final\\report.json"
+    }
+  ],
+  "skipped": {
+    "saclWitness": 8,
+    "inplaceSacl": 2,
+    "objectWitness": 8,
+    "sessionSymlink": 1
+  },
+  "skippedTotal": 19,
+  "observedExitCode": 0
+}

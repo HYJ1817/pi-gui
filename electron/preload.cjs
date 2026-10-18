@@ -42,9 +42,30 @@
 try {
   const { contextBridge, ipcRenderer } = require('electron');
 
+  // The fixed display snapshot is read before the first document paint. Nothing
+  // from it is an authority for files, Pi, Browser or approvals.
+  const themeEnabled = process.argv.includes('--pi-gui-theme-bridge');
+  let themeLatest = themeEnabled ? ipcRenderer.sendSync('pi-gui:theme-snapshot') : null;
+  const themeListeners = new Set();
+  ipcRenderer.on('pi-gui:theme-changed', (_event, snapshot) => {
+    if (!snapshot || !Number.isInteger(snapshot.revision) || snapshot.revision < (themeLatest?.revision ?? -1)) return;
+    themeLatest = snapshot;
+    for (const listener of themeListeners) listener(snapshot);
+  });
+
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
     isDesktop: true,
+    ...(themeEnabled ? { theme: {
+      snapshot: () => themeLatest,
+      set: mode => ipcRenderer.invoke('pi-gui:theme-set', mode),
+      onChange: callback => {
+        if (typeof callback !== 'function') return () => {};
+        themeListeners.add(callback);
+        if (themeLatest) callback(themeLatest);
+        return () => themeListeners.delete(callback);
+      },
+    } } : {}),
     runtimeBrowser: {
       onOpen: callback => {
         const listener = (_event, frame) => callback(frame);

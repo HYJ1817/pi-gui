@@ -1,0 +1,45 @@
+{
+  "recorded": "2026-10-16T18:56:53.135818+08:00",
+  "head": "3e8d7296fc89c21d38e04879ef020c47680d7ce0",
+  "branch": "codex/ui-1-theme-shell",
+  "trackedChanged": [
+    "electron/main.cjs",
+    "electron/preload.cjs",
+    "package.json",
+    "public/app.js",
+    "public/index.html",
+    "public/process.css",
+    "public/settings.js",
+    "public/styles.css",
+    "public/usage.js",
+    "tests/dev-server.cjs",
+    "tests/runtime-electron.cjs"
+  ],
+  "trackedMissing": [],
+  "protectedUnexpected": [],
+  "finalProductBuildHashMismatches": [],
+  "acceptanceBrokenLinks": [],
+  "diffCheckExit": 0,
+  "canonicalExit": 0,
+  "canonicalSeconds": 2829.7752332,
+  "existingTestChainPreserved": true,
+  "noVersionOrDependencyChange": true,
+  "themeElectron": {
+    "passed": 489,
+    "failed": 0,
+    "exit": 0,
+    "validScreenshots": 63,
+    "nativeCaptureUnverified": 2
+  },
+  "runtimeLight": {
+    "passed": 171,
+    "rendererErrors": [],
+    "exit": 0,
+    "screenshots": 43
+  },
+  "ia": {
+    "passed": 161,
+    "errors": [],
+    "screenshots": 37
+  }
+}

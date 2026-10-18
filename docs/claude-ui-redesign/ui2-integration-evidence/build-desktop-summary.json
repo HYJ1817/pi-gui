@@ -1,0 +1,85 @@
+{
+  "scope": "Packaged production main/preload startup and themes only",
+  "aggregateRendererZeroErrorAcceptance": false,
+  "runs": [
+    {
+      "file": "build-desktop-report-pass1.json",
+      "checks": "12/12",
+      "exit": 0,
+      "errors": 0
+    },
+    {
+      "file": "build-desktop-report-repeat.json",
+      "checks": "10/11",
+      "exit": 1,
+      "errors": 2,
+      "normalClose": "not reached because fail-fast assertion; own already-exited pid cleanup was attempted"
+    },
+    {
+      "file": "build-desktop-report-context1.json",
+      "checks": "11/12",
+      "exit": 1,
+      "desktopExit": 0,
+      "errors": 2
+    },
+    {
+      "file": "build-desktop-report-timeline.json",
+      "checks": "12/12",
+      "exit": 0,
+      "desktopExit": 0,
+      "errors": 0
+    }
+  ],
+  "observed": {
+    "errorContext": 2,
+    "errorContextDescription": {
+      "id": 2,
+      "name": "Electron Isolated Context",
+      "origin": "://",
+      "auxData": {
+        "isDefault": false,
+        "type": "isolated",
+        "frameId": "A7A2C7764C3F9EC3C21E73D00198DE19"
+      }
+    },
+    "productionContexts": [
+      {
+        "id": 3,
+        "name": "",
+        "origin": "http://127.0.0.1:32772",
+        "auxData": {
+          "isDefault": true,
+          "type": "default",
+          "frameId": "A7A2C7764C3F9EC3C21E73D00198DE19"
+        }
+      },
+      {
+        "id": 4,
+        "name": "Electron Isolated Context",
+        "origin": "http://127.0.0.1:32772",
+        "auxData": {
+          "isDefault": false,
+          "type": "isolated",
+          "frameId": "A7A2C7764C3F9EC3C21E73D00198DE19"
+        }
+      }
+    ],
+    "lastTarget": {
+      "id": "9107811EAE7641072BE81599F6808746",
+      "type": "page",
+      "url": "http://127.0.0.1:32772/"
+    },
+    "lastFrameAtAttach": "",
+    "lastApplicationTimeOrigin": 1792162131989.3,
+    "lastAttachEpoch": 1792162132006
+  },
+  "attribution": "The failing run error context 2 is Electron Isolated Context with origin :// on the same frame; production page default/isolated contexts are 3/4 with http://127.0.0.1:32772 origin. Harness created no extra page and did not navigate; only attaches existing production page. This narrows the issue to initial empty-document isolated context. Its detailed event timing was not captured in the failing runs; the one bounded timestamped verification was clean, so exact trigger and whether CDP contributes remain unverified. Do not infer environment-only cause from internal stack.",
+  "differences": "Same built binary, fresh userData/data each run, same ports and startup flags. First clean run lacked context/timeline capture; later context and timeline capture added diagnostic observation only. Scheduling differences were not controlled.",
+  "fixtureCorrection": "Initial self-written harness incorrectly expected projects.projects instead of existing API projects.items and stopped early; corrected against app-check. Those runs are excluded from acceptance. One early cleanup attempt raced an already-exited own pid; no user pid was targeted.",
+  "offline": "Real exported cancelUpdateAuto/cancelPiUpdateAuto were called immediately through local CDP; PI_GUI_OFFLINE=1; no real project, Pi, model, or update request.",
+  "screenshots": [
+    "build-desktop-dark.png",
+    "build-desktop-light.png"
+  ],
+  "conclusion": "Production startup/preload and Dark/Light theme behavior observed working. Stable zero renderer error acceptance remains unmet because 2 of 4 bounded smoke runs emitted Electron initial-context errors. Keep this explicit limitation; no product/security changes were attempted."
+}

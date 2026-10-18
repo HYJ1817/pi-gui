@@ -21,6 +21,7 @@ const listeners = new Set();
 export function onRuntimeChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 const lifecycleListeners = new Set();
 export function onRuntimeLifecycle(fn) { lifecycleListeners.add(fn); return () => lifecycleListeners.delete(fn); }
+export function setRuntimeStoreRejectObserver(fn) { runtimeStore.setRejectObserver(fn); }
 function broadcast(frame) { for (const fn of [...listeners]) fn(frame); }
 export function seedRuntimeSnapshot(snapshot) { if (runtimeStore.seed(snapshot)) broadcast(); }
 

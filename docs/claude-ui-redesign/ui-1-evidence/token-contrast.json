@@ -1,0 +1,456 @@
+{
+  "layer": "calculated solid-token contrast, not rendered/composited state proof",
+  "rows": [
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-canvas",
+      "ratio": 15.881,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-panel-surface",
+      "ratio": 15.147,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-input-surface",
+      "ratio": 14.181,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-nav-surface",
+      "ratio": 16.422,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-canvas",
+      "ratio": 10.192,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-panel-surface",
+      "ratio": 9.721,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-input-surface",
+      "ratio": 9.101,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-nav-surface",
+      "ratio": 10.539,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-canvas",
+      "ratio": 7.247,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-panel-surface",
+      "ratio": 6.912,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-input-surface",
+      "ratio": 6.471,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-nav-surface",
+      "ratio": 7.494,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-link",
+      "background": "--ui-canvas",
+      "ratio": 8.653,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-link",
+      "background": "--ui-panel-surface",
+      "ratio": 8.253,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-link",
+      "background": "--ui-input-surface",
+      "ratio": 7.727,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-link",
+      "background": "--ui-nav-surface",
+      "ratio": 8.948,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-success",
+      "background": "--ui-canvas",
+      "ratio": 10.48,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-success",
+      "background": "--ui-panel-surface",
+      "ratio": 9.995,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-success",
+      "background": "--ui-input-surface",
+      "ratio": 9.358,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-success",
+      "background": "--ui-nav-surface",
+      "ratio": 10.837,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-warning",
+      "background": "--ui-canvas",
+      "ratio": 10.939,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-warning",
+      "background": "--ui-panel-surface",
+      "ratio": 10.433,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-warning",
+      "background": "--ui-input-surface",
+      "ratio": 9.768,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-warning",
+      "background": "--ui-nav-surface",
+      "ratio": 11.312,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-danger",
+      "background": "--ui-canvas",
+      "ratio": 6.602,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-danger",
+      "background": "--ui-panel-surface",
+      "ratio": 6.296,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-danger",
+      "background": "--ui-input-surface",
+      "ratio": 5.895,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-danger",
+      "background": "--ui-nav-surface",
+      "ratio": 6.826,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-running",
+      "background": "--ui-canvas",
+      "ratio": 10.105,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-running",
+      "background": "--ui-panel-surface",
+      "ratio": 9.638,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-running",
+      "background": "--ui-input-surface",
+      "ratio": 9.023,
+      "meets4_5": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "--ui-running",
+      "background": "--ui-nav-surface",
+      "ratio": 10.449,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-canvas",
+      "ratio": 19.173,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-panel-surface",
+      "ratio": 19.683,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-input-surface",
+      "ratio": 19.683,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-primary",
+      "background": "--ui-nav-surface",
+      "ratio": 18.997,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-canvas",
+      "ratio": 7.732,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-panel-surface",
+      "ratio": 7.937,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-input-surface",
+      "ratio": 7.937,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-secondary",
+      "background": "--ui-nav-surface",
+      "ratio": 7.661,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-canvas",
+      "ratio": 5.18,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-panel-surface",
+      "ratio": 5.318,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-input-surface",
+      "ratio": 5.318,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-text-muted",
+      "background": "--ui-nav-surface",
+      "ratio": 5.132,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-link",
+      "background": "--ui-canvas",
+      "ratio": 7.894,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-link",
+      "background": "--ui-panel-surface",
+      "ratio": 8.104,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-link",
+      "background": "--ui-input-surface",
+      "ratio": 8.104,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-link",
+      "background": "--ui-nav-surface",
+      "ratio": 7.822,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-success",
+      "background": "--ui-canvas",
+      "ratio": 6.946,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-success",
+      "background": "--ui-panel-surface",
+      "ratio": 7.13,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-success",
+      "background": "--ui-input-surface",
+      "ratio": 7.13,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-success",
+      "background": "--ui-nav-surface",
+      "ratio": 6.882,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-warning",
+      "background": "--ui-canvas",
+      "ratio": 6.674,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-warning",
+      "background": "--ui-panel-surface",
+      "ratio": 6.851,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-warning",
+      "background": "--ui-input-surface",
+      "ratio": 6.851,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-warning",
+      "background": "--ui-nav-surface",
+      "ratio": 6.612,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-danger",
+      "background": "--ui-canvas",
+      "ratio": 6.303,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-danger",
+      "background": "--ui-panel-surface",
+      "ratio": 6.47,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-danger",
+      "background": "--ui-input-surface",
+      "ratio": 6.47,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-danger",
+      "background": "--ui-nav-surface",
+      "ratio": 6.245,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-running",
+      "background": "--ui-canvas",
+      "ratio": 5.219,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-running",
+      "background": "--ui-panel-surface",
+      "ratio": 5.358,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-running",
+      "background": "--ui-input-surface",
+      "ratio": 5.358,
+      "meets4_5": true
+    },
+    {
+      "theme": "light",
+      "foreground": "--ui-running",
+      "background": "--ui-nav-surface",
+      "ratio": 5.171,
+      "meets4_5": true
+    }
+  ],
+  "pass": 64,
+  "fail": 0,
+  "excluded": "brand decorative, shadows, alpha state surfaces and embedded third-party Browser documents"
+}

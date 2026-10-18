@@ -1,0 +1,9 @@
+  ok   普通/详细日志只接收白名单字段，秘密与聊天正文不落盘
+  ok   异常 message / 原始 stack 不进崩溃文件，只保留安全错误名与自身帧
+  ok   设置更改/清理等系统事件同样不含注入秘密
+  ok   Renderer HTTP 入口拒绝未知事件并把已知字段收敛
+  ok   导出预览/状态不泄露日志目录或秘密
+  ok   ZIP 每个文件都不含注入秘密，描述也经过复核
+  ok   状态/条目在最终导出前仍不含秘密
+  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）
+logging-leaks: 7 passed, 0 failed, 1 skipped

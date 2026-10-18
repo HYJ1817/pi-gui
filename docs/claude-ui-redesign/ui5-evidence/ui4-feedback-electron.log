@@ -1,0 +1,12 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS Electron: four toast kinds render from the production module
+PASS Electron: toast stack clears the composer and never causes page overflow
+PASS Electron: light theme uses the same component and stays readable
+PASS Electron: persistent notice renders bad/info/busy/unknown with real layout
+PASS Electron: empty state keeps heading, helper copy and CTA hierarchy
+PASS Electron: narrow viewport and open right pane never get covered by toasts
+PASS Electron: reduced motion removes toast and spinner animation
+PASS Electron: keyboard Escape closes a persistent error and page has no console errors
+PASS Electron: screenshots were written for both themes and states
+UI4 Feedback: 9/9, failed=0, skipped=0

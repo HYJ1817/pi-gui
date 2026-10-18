@@ -1,0 +1,49 @@
+{
+  "capturedAt": "2026-10-17T05:30:15.942Z",
+  "hashes": [
+    {
+      "file": "public/app.js",
+      "sha256": "2359d14cf31f54b68803b8dedc77fe0a35f1885775eedff4dbfa9063ac59ffec"
+    },
+    {
+      "file": "public/index.html",
+      "sha256": "2cf10aa1e0e897e6c38a6d4e5abd262053f101ce0f48b69f53f0651512ccef33"
+    },
+    {
+      "file": "public/ui/inline-command-menu.js",
+      "sha256": "e720393b98ea77da574969dd768e5c00059e65b5e2e18cd516cbade22ffdfdbf"
+    },
+    {
+      "file": "public/ui3-inline-commands.css",
+      "sha256": "1dba533da4012c1f65ed2f915d073435a486c3a1ab46fce96b2ac7a4730f0fdc"
+    },
+    {
+      "file": "public/ui/popover.js",
+      "sha256": "d163cafb41853deff05d8766516a60bf51059749eb8d7f071f55a6d0422ff9e1"
+    },
+    {
+      "file": "public/ui3-model-picker.js",
+      "sha256": "87df847f9da87ac6a56a2b3a0c7dee86581760da01cb680fd5b6d23f7c6d21e3"
+    },
+    {
+      "file": "public/composer.js",
+      "sha256": "7d183a5e128338e7707539f50c587e08aed5d1cd9166ff7fcdc6731b69447142"
+    },
+    {
+      "file": "public/attachments.js",
+      "sha256": "43a8478a2954240ab6a388c15620f4d94a1ecb465c11703a7afcae0282583293"
+    },
+    {
+      "file": "public/ui3-composer.css",
+      "sha256": "2aa975863c970705bed0a04e0db1c4a01c17600db5cac325d7d9edad84fdab61"
+    },
+    {
+      "file": "public/ui3-model.css",
+      "sha256": "e1669166d7c5af376417ec31a5630275268d20a1345bfde83e93caf4e8c4348d"
+    },
+    {
+      "file": "package.json",
+      "sha256": "fc95cc44fc305ccbbab5f3782f7accca76330e83a7bce4ca88e7113b49642258"
+    }
+  ]
+}

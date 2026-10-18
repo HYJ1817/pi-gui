@@ -1,0 +1,40 @@
+{
+  "sourceRoot": "C:\\pi-GUI-ui4-integration\\public",
+  "packagedRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui4-build-ZLR49f\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public",
+  "sourceFiles": 107,
+  "packagedFiles": 107,
+  "onlySource": [],
+  "onlyPackaged": [],
+  "mismatched": [],
+  "css": [
+    {
+      "id": "ui4-pane-style",
+      "href": "/ui4-pane.css",
+      "links": 1,
+      "exists": true,
+      "bytes": 18415
+    },
+    {
+      "id": "ui4-approval-style",
+      "href": "/ui4-approval.css",
+      "links": 1,
+      "exists": true,
+      "bytes": 11350
+    },
+    {
+      "id": "ui4-feedback-style",
+      "href": "/ui4-feedback.css",
+      "links": 1,
+      "exists": true,
+      "bytes": 10932
+    }
+  ],
+  "zip": {
+    "path": "C:/Users/21022/AppData/Local/electron/Cache/bb424f9061e7a2927a7fcc04709593fe81ac4633e2cd40456f2ef431743b1ee7/electron-v44.4.3-win32-x64.zip",
+    "bytes": 158247567,
+    "sha256": "790a355b684d5c7cc8dc3cdd8c4cca7c4b2d054685427c7554a956879a82e70b"
+  },
+  "version": "0.25.0",
+  "appBytes": 246324736,
+  "totalBytes": 344184388
+}

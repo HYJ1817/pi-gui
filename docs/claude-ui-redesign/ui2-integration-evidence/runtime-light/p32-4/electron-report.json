@@ -1,0 +1,789 @@
+{
+  "checks": 171,
+  "platform": "win32",
+  "electron": "44.4.3",
+  "screenshots": [
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\running-B-1280x800.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 120,
+          "y": 155.89584350585938,
+          "width": 1040,
+          "height": 488.2083435058594,
+          "top": 155.89584350585938,
+          "right": 1160,
+          "bottom": 644.1041870117188,
+          "left": 120
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\running-B-1440x900.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 200,
+          "y": 205.89584350585938,
+          "width": 1040,
+          "height": 488.2083435058594,
+          "top": 205.89584350585938,
+          "right": 1240,
+          "bottom": 694.1041870117188,
+          "left": 200
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\running-B-1920x1080.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 440,
+          "y": 295.8958435058594,
+          "width": 1040,
+          "height": 488.2083435058594,
+          "top": 295.8958435058594,
+          "right": 1480,
+          "bottom": 784.1041870117188,
+          "left": 440
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\running-B-zoom125.png",
+      "box": {
+        "w": 1536,
+        "h": 864,
+        "sw": 1536,
+        "sh": 864,
+        "card": {
+          "x": 248.00001525878906,
+          "y": 188.15834045410156,
+          "width": 1040,
+          "height": 487.683349609375,
+          "top": 188.15834045410156,
+          "right": 1288.000015258789,
+          "bottom": 675.8416900634766,
+          "left": 248.00001525878906
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\A-stopped-B-running.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 440,
+          "y": 295.8958435058594,
+          "width": 1040,
+          "height": 488.2083435058594,
+          "top": 295.8958435058594,
+          "right": 1480,
+          "bottom": 784.1041870117188,
+          "left": 440
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\scoped-browser-open.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\scoped-browser-closed.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-3\\A-crashed-B-running.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 440,
+          "y": 295.8958435058594,
+          "width": 1040,
+          "height": 488.2083435058594,
+          "top": 295.8958435058594,
+          "right": 1480,
+          "bottom": 784.1041870117188,
+          "left": 440
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-a-running-b-focused.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-1280x800.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-1920x1080.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-zoom125.png",
+      "box": {
+        "w": 1536,
+        "h": 864,
+        "sw": 1536,
+        "sh": 864,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-focus-a.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-focus-a-draft.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-b-operable-while-a-pending.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-browser-native-a.png",
+      "nativeBrowser": true,
+      "ownerLabel": "A"
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-browser-native-b.png",
+      "nativeBrowser": true,
+      "ownerLabel": "B"
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-browser-b-native-owner.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-process-permission-0.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-process-permission-1.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-process-a.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-process-b.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-changes-a.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-changes-b.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\c-changes-a-restored.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-dormant.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\d-two-regular-slots.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\d-third-confirmation.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\d-third-active.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\d-fourth-rejected.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\d-close-slot-recovered-history.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-model-b-text.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-model-a-reasoning.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-central-1280x800.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-central-1440x900.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-central-1920x1080.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-central-zoom125.png",
+      "box": {
+        "w": 1152,
+        "h": 720,
+        "sw": 1152,
+        "sh": 720,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-central-zoom150.png",
+      "box": {
+        "w": 960,
+        "h": 600,
+        "sw": 960,
+        "sh": 600,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-browser-zoom150.png",
+      "box": {
+        "w": 960,
+        "h": 600,
+        "sw": 960,
+        "sh": 600,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-browser-native-zoom150.png",
+      "nativeBrowser": true,
+      "ownerLabel": "A",
+      "bounds": {
+        "x": 640,
+        "y": 129,
+        "width": 320,
+        "height": 471
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-search-live-history-a.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\e-search-dormant-history-b.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI-ui2-integration\\docs\\claude-ui-redesign\\ui2-integration-evidence\\runtime-light\\p32-4\\sidebar-created.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    }
+  ],
+  "errors": []
+}

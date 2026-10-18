@@ -1,0 +1,169 @@
+{
+  "recordedUtc": "2026-10-16T05:52:43.154Z",
+  "outputRoot": "C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427",
+  "offline": true,
+  "existingBuildDistUntouched": true,
+  "electronZip": "C:/Users/21022/AppData/Local/electron/Cache/bb424f9061e7a2927a7fcc04709593fe81ac4633e2cd40456f2ef431743b1ee7/electron-v44.4.3-win32-x64.zip",
+  "build": {
+    "outputRoot": "C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427",
+    "temp": "C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427\\temp",
+    "fixtureExitCode": 0,
+    "recordedUtc": "2026-10-16T05:51:54.2678940Z",
+    "buildExitCode": 0
+  },
+  "assets": [
+    {
+      "relative": "electron/theme.cjs",
+      "sourceSha256": "b74117110488b4ff1c9bfc258602e407a5ded28efd252c268d3a7ab0459e7346",
+      "packagedSha256": "b74117110488b4ff1c9bfc258602e407a5ded28efd252c268d3a7ab0459e7346",
+      "match": true,
+      "bytes": 3747
+    },
+    {
+      "relative": "electron/main.cjs",
+      "sourceSha256": "2e01135ae0f6d58817564441bdad8ccc6211cc20e57ba69c4436cbce56953473",
+      "packagedSha256": "2e01135ae0f6d58817564441bdad8ccc6211cc20e57ba69c4436cbce56953473",
+      "match": true,
+      "bytes": 38341
+    },
+    {
+      "relative": "electron/preload.cjs",
+      "sourceSha256": "5734bac4c3c3c828ea52fea7c18b4afb32c7fd4f1c689073cd4f556e1eb167c5",
+      "packagedSha256": "5734bac4c3c3c828ea52fea7c18b4afb32c7fd4f1c689073cd4f556e1eb167c5",
+      "match": true,
+      "bytes": 9973
+    },
+    {
+      "relative": "public/theme.js",
+      "sourceSha256": "3e2f40b758656855fbf45b06287a0028d5fd384c1563af7a3f4d7cadd25b88c0",
+      "packagedSha256": "3e2f40b758656855fbf45b06287a0028d5fd384c1563af7a3f4d7cadd25b88c0",
+      "match": true,
+      "bytes": 1801
+    },
+    {
+      "relative": "public/theme-init.js",
+      "sourceSha256": "915493fbf871a5c9fa1b7016415483f8da408b74e8ec213c75c4f80bf1c17ae0",
+      "packagedSha256": "915493fbf871a5c9fa1b7016415483f8da408b74e8ec213c75c4f80bf1c17ae0",
+      "match": true,
+      "bytes": 826
+    },
+    {
+      "relative": "public/tokens.css",
+      "sourceSha256": "95bf8d5c4b6a89d07d52f3f70d3e0716794db1630fb7c0c67cdea160f46c285a",
+      "packagedSha256": "95bf8d5c4b6a89d07d52f3f70d3e0716794db1630fb7c0c67cdea160f46c285a",
+      "match": true,
+      "bytes": 5231
+    },
+    {
+      "relative": "public/styles.css",
+      "sourceSha256": "8a25131f371b6a8a2745e0afc840f8faaf65fdf6648c647669aefb4d6c907134",
+      "packagedSha256": "8a25131f371b6a8a2745e0afc840f8faaf65fdf6648c647669aefb4d6c907134",
+      "match": true,
+      "bytes": 142706
+    },
+    {
+      "relative": "public/process.css",
+      "sourceSha256": "f5c78ea0fbcf0fc11ee7f606ccfb133f928e17ee56839467aa3500082025e517",
+      "packagedSha256": "f5c78ea0fbcf0fc11ee7f606ccfb133f928e17ee56839467aa3500082025e517",
+      "match": true,
+      "bytes": 1421
+    },
+    {
+      "relative": "public/index.html",
+      "sourceSha256": "d02643a26e2021be88afac7157a9943e08a3b4d7baf1496565910b21297fdfa8",
+      "packagedSha256": "d02643a26e2021be88afac7157a9943e08a3b4d7baf1496565910b21297fdfa8",
+      "match": true,
+      "bytes": 16589
+    },
+    {
+      "relative": "public/app.js",
+      "sourceSha256": "2a211f684d95b2a22542971a6602dedfa9d6ba824089a8d98e5a00536871e973",
+      "packagedSha256": "2a211f684d95b2a22542971a6602dedfa9d6ba824089a8d98e5a00536871e973",
+      "match": true,
+      "bytes": 57212
+    },
+    {
+      "relative": "public/settings.js",
+      "sourceSha256": "93857299c2e02874063acdfeafa4cad3d034aadf16c67b45daf537569d37b5c3",
+      "packagedSha256": "93857299c2e02874063acdfeafa4cad3d034aadf16c67b45daf537569d37b5c3",
+      "match": true,
+      "bytes": 2657
+    },
+    {
+      "relative": "public/usage.js",
+      "sourceSha256": "f136b88a8a60bf348982a1be895e5a7e0f9f854407d7ad8ab4ba2003dd05a1b7",
+      "packagedSha256": "f136b88a8a60bf348982a1be895e5a7e0f9f854407d7ad8ab4ba2003dd05a1b7",
+      "match": true,
+      "bytes": 28418
+    }
+  ],
+  "seaThemeAssets": [
+    {
+      "asset": "public/tokens.css",
+      "inManifest": true
+    },
+    {
+      "asset": "public/theme.js",
+      "inManifest": true
+    },
+    {
+      "asset": "public/theme-init.js",
+      "inManifest": true
+    }
+  ],
+  "binaries": [
+    {
+      "file": "C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427\\build\\Pi GUI.exe",
+      "bytes": 99414016,
+      "sha256": "81b0b1523895df951106a8f637144bde0b581f71eb38d9494114af35f069b17b"
+    },
+    {
+      "file": "C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427\\dist-app\\Pi GUI-win32-x64\\Pi GUI.exe",
+      "bytes": 246324736,
+      "sha256": "4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a"
+    }
+  ],
+  "limits": [
+    "No installer or portable package built.",
+    "app-check validates packaged backend with Node, not the full Electron UI.",
+    "Electron first paint/overlay evidence is collected separately."
+  ],
+  "checks": {
+    "exe": {
+      "exeCheckExitCode": 0,
+      "checkedUtc": "2026-10-16T05:52:27.5958310Z",
+      "appCheckExitCode": 1,
+      "outputRoot": "C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427",
+      "passed": 49,
+      "total": 49,
+      "log": "build-final-exe-check.log"
+    },
+    "appInitial": {
+      "exitCode": 1,
+      "passed": 25,
+      "total": 26,
+      "reason": "Repository-local TEMP made C:/pi-GUI/node_modules an ancestor; no-node_modules isolation precondition failed.",
+      "log": "build-final-app-check.log"
+    },
+    "appFinal": {
+      "temp": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui1-check-80edf864fd21416090cb49bea86c5d38",
+      "fixtureExitCode": 0,
+      "appCheckExitCode": 0,
+      "checkedUtc": "2026-10-16T05:53:23.6177652Z",
+      "passed": 26,
+      "total": 26,
+      "log": "build-final-app-check-external.log"
+    }
+  },
+  "completedUtc": "2026-10-16T05:53:35.382Z",
+  "commands": [
+    "npm run fixtures",
+    "npm run build:app -- --rebuild --output-root C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427",
+    "node tests/exe-check.cjs --output-root C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427",
+    "node tests/app-check.cjs --output-root C:\\pi-GUI\\.ui1-build-final-1792129898855-d578f0cafd427"
+  ],
+  "supersededBuild": {
+    "outputRoot": "C:/pi-GUI/.ui1-build-1792129861508-87b5d0aa15777",
+    "reason": "Final reduced-motion CSS placement changed after first build; preserved and replaced by fresh final output."
+  }
+}

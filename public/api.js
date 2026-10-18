@@ -7,8 +7,23 @@
  * 读操作可以据此静默降级，写操作可以据此弹提示。
  * 「用户点了按钮却什么都没发生」是最糟的体验，所以写操作必须能说出原因。 */
 
-import { toast } from './ui/toast.js';
+import { feedbackContext, toast } from './ui/toast.js';
 import { S } from './state.js';
+
+/* 日志模块不直接 import 本文件（会成环）。由装配层注入一个只读报告器，
+ * 只传 /api/... 路由与状态码，不传 URL 查询串或错误正文。 */
+let requestFailureReporter = null;
+export function setRequestFailureReporter(fn) { requestFailureReporter = typeof fn === 'function' ? fn : null; }
+function requestRoute(url) {
+  try {
+    const pathname = new URL(String(url), 'http://127.0.0.1').pathname;
+    return /^\/api\/[A-Za-z0-9_./-]{1,80}$/.test(pathname) ? pathname : '/api/unknown';
+  } catch { return '/api/unknown'; }
+}
+function reportRequestFailure(url, status) {
+  if (!requestFailureReporter) return;
+  try { requestFailureReporter(requestRoute(url), status === 0 ? 'network' : 'http', Number.isFinite(status) ? status : 0); } catch { /* logging only */ }
+}
 
 /* 用户级认证不携带 workspace/model generation。 */
 export const fetchProviderAuth = () => getJSON('/api/provider-auth');
@@ -39,8 +54,10 @@ export async function downloadSessionHtml() {
 export async function getJSON(url, headers) {
   try {
     const r = await fetch(url, headers ? { headers } : undefined);
+    if (r.status >= 500) reportRequestFailure(url, r.status);
     return await r.json();
   } catch (err) {
+    reportRequestFailure(url, 0);
     return { ok: false, error: err.message, network: true };
   }
 }
@@ -61,8 +78,10 @@ export async function sendJSON(url, { method = 'POST', body, contentType, header
   if (headers) opts.headers = { ...opts.headers, ...headers };
   try {
     const r = await fetch(url, opts);
+    if (r.status >= 500) reportRequestFailure(url, r.status);
     return await r.json();
   } catch (err) {
+    reportRequestFailure(url, 0);
     return { ok: false, error: err.message, network: true };
   }
 }
@@ -70,16 +89,17 @@ export async function sendJSON(url, { method = 'POST', body, contentType, header
 /* ---------- pi 的 RPC 命令 ---------- */
 
 /** 把一条 RPC 命令发进后端。这是驱动 pi 的唯一出口。 */
-export async function sendCommand(cmd) {
+export async function sendCommand(cmd, { notify = true } = {}) {
+  const context = feedbackContext();
   const wire = Number.isInteger(S.bridgeRun) ? { ...cmd, __bridgeRun: S.bridgeRun } : cmd;
   const j = await sendJSON('/api/command', { body: wire });
   if (j.network) {
-    toast('无法连接后端：' + j.error, 'error');
+    if (notify) toast('无法连接后端：' + j.error, 'error', { context });
     /* `network` 要带出去：调用方（例如 stop）据此分清「后端明确回答」
      * 与「根本没问到」—— 后者不能当作停止已经结束。 */
     return { ok: false, network: true };
   }
-  if (!j.ok) toast(j.error || '命令发送失败', 'error');
+  if (!j.ok && notify) toast(j.error || '命令发送失败', 'error', { context });
   return j;
 }
 
@@ -123,6 +143,72 @@ export async function downloadSessionRevertBackup(body, isCurrent = () => true) 
   } catch {return {ok:false,code:'export_unavailable'};}
 }
 export const fetchDiagnostics = () => getJSON('/api/diagnostics');
+/** Renderer 结构化日志批量上报；不经过业务状态机。
+ *
+ * 特意不复用 sendJSON：日志通道自己失败时不能再走 requestFailureReporter
+ * 生成新的日志事件（那会形成“上报失败 → 再记一条失败”的反馈回路）。
+ * 这里保留 HTTP 状态码，客户端据此区分暂时断线与不可恢复错误。 */
+export async function sendLogEvents(events) {
+  try {
+    const response = await fetch('/api/logs/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events }),
+    });
+    let result = null;
+    try { result = await response.json(); } catch { /* 非 JSON 响应按无效响应处理 */ }
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        ...(result && typeof result.code === 'string' ? { code: result.code } : {}),
+      };
+    }
+    if (!result || typeof result !== 'object' || Array.isArray(result) || typeof result.ok !== 'boolean') {
+      return { ok: false, status: response.status, code: 'invalid_response' };
+    }
+    return { ...result, status: response.status };
+  } catch {
+    /* 不把 fetch 的异常正文带出去；调用方只需要“没拿到响应”。 */
+    return { ok: false, network: true, status: 0 };
+  }
+}
+export const fetchLogsStatus = () => getJSON('/api/logs/status');
+export const fetchLogEntries = (params = {}) => getJSON('/api/logs/entries?' + new URLSearchParams(params));
+export const updateLogSettings = patch => sendJSON('/api/logs/settings', { body: patch });
+export const clearLogs = () => sendJSON('/api/logs/clear', { body: { confirm: true } });
+export const previewLogExport = windowMinutes => sendJSON('/api/logs/export/preview', { body: { windowMinutes } });
+
+/** 生成并保存故障报告 ZIP。响应是二进制，所以不经过 sendJSON。 */
+export async function downloadLogReport({ windowMinutes = 30, description = '', repro = '' } = {}) {
+  try {
+    const response = await fetch('/api/logs/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: true, windowMinutes, description, repro }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      return { ok: false, network: false, code: body?.code || 'export_failed', reason: body?.reason || null };
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"\s;]+)"?/i);
+    const filename = match ? match[1] : 'pi-gui-bugreport.zip';
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { ok: true, blob, filename };
+  } catch {
+    return { ok: false, network: true, code: 'export_failed', reason: null };
+  }
+}
 export const fetchProcesses = () => getJSON('/api/processes');
 export const controlProcess = body => sendJSON('/api/processes',{body});
 export const fetchProcessLogs = (generation,id,revision,cursor=0) => getJSON('/api/processes?'+new URLSearchParams({generation,id,revision,cursor}));

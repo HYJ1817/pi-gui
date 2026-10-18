@@ -199,6 +199,16 @@ async function main() {
     const proj = await jsonReq('/api/projects');
     check('无令牌读项目列表 → 401', () => proj.status === 401 || `状态 ${proj.status}`);
 
+    /* 日志是应用级接口，但仍必须经过同一套认证；它不开放任意路径读取。 */
+    const logsNo = await jsonReq('/api/logs/status');
+    check('无令牌读日志状态 → 401', () => logsNo.status === 401 || `状态 ${logsNo.status}`);
+    const logsRight = await jsonReq('/api/logs/status', { headers: { 'X-Pi-Gui-Token': TOKEN } });
+    check('正确令牌读日志状态 → 200', () => logsRight.status === 200 || `状态 ${logsRight.status}`);
+    const logsExportNo = await jsonReq('/api/logs/export', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true, windowMinutes: 30 }),
+    });
+    check('无令牌导出故障报告 → 401', () => logsExportNo.status === 401 || `状态 ${logsExportNo.status}`);
+
     /* ---- 3. 来源校验 ---- */
     const cross = await jsonReq('/api/status', { headers: { 'X-Pi-Gui-Token': TOKEN, Origin: 'http://evil.example' } });
     check('跨站 Origin + 正确令牌 → 403', () => cross.status === 403 || `状态 ${cross.status}`);

@@ -1,0 +1,382 @@
+/* UI-4B：审批 / 确认交互的展示层。
+ *
+ * 只使用 UI-1 的语义 token（--ui-*）；不定义任何主题颜色，不引入外部字体或资源。
+ * 覆盖三处**既有 DOM**，不新增弹层：
+ *   · #confirmLayer 的审批确认卡（data-surface="approval"）；
+ *   · #modal 的 select / input / editor 审批卡（data-surface="approval"）；
+ *   · Runtime 的 .rtc-approval / .runtime-approval（runtime-conversation.js /
+ *     runtime-sessions.js 生成，本任务不允许改那两个文件 —— 这里只做视觉统一）。
+ *
+ * 设计约束：
+ *   · 不压缩确认步骤、不隐藏正文、不把危险内容折叠进 tooltip；
+ *   · 长命令 / 长路径 / 长标题必须换行，卡片自身滚动，绝不撑出视口；
+ *   · 动效只做「出现」的淡入，不延迟任何决定，也不改变 Esc / Enter 语义；
+ *   · reduced-motion 下全部关闭。 */
+
+/* ---------- 审批确认卡 ---------- */
+
+.modal-card[data-surface="approval"] {
+  max-width: min(560px, calc(100vw - 48px));
+  max-height: min(82vh, 720px);
+  display: flex;
+  flex-direction: column;
+  /* 卡片自身滚动：正文区（details）已经可以独立滚，这里是兜底 ——
+   * 极窄或极矮窗口下按钮仍能被滚到，而不是被裁掉。 */
+  overflow: auto;
+  border-color: var(--ui-border-strong);
+  background: var(--ui-popover-surface);
+  box-shadow: var(--ui-shadow-popover);
+  animation: ui4-approval-in var(--ui-duration-snap) var(--ui-ease-out) both;
+}
+
+.modal-card[data-surface="approval"] > h3 {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: var(--ui-weight-strong);
+  line-height: 1.45;
+  color: var(--ui-text-primary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  margin-bottom: var(--ui-space-1);
+}
+
+/* 来源 / 类型：协议能证明的事实，不是「风险等级」。 */
+.modal-card[data-surface="approval"] .ui4-confirm-source {
+  flex: 0 0 auto;
+  font-size: var(--ui-font-caption);
+  line-height: 1.5;
+  color: var(--ui-text-muted);
+  margin-bottom: var(--ui-space-2);
+}
+
+/* 请求正文：扩展给用户判断用的原文。完整显示、可滚动、按需换行。
+ * 600 字符的上限来自 approval-model.js 的规范化（本任务不可改），
+ * 这里**不再**二次截断。 */
+.modal-card[data-surface="approval"] .ui4-confirm-details {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin-bottom: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-code-surface);
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-detail {
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-detail:last-child {
+  border-bottom: 0;
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-detail-label {
+  font-size: var(--ui-font-caption);
+  color: var(--ui-text-muted);
+  margin-bottom: var(--ui-space-1);
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-detail-text {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ui-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-height: 42vh;
+  overflow: auto;
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-detail.is-mono .ui4-confirm-detail-text {
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+/* 风险说明：只陈述「协议没有结构化风险字段」这一事实。
+ * 用中性表面，不用 danger/warning 颜色 —— 那会把「未知」伪装成「已判定危险」。 */
+.modal-card[data-surface="approval"] .ui4-confirm-risk {
+  flex: 0 0 auto;
+  font-size: var(--ui-font-caption);
+  line-height: 1.6;
+  color: var(--ui-text-secondary);
+  background: var(--ui-user-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  margin-bottom: var(--ui-space-2);
+  overflow-wrap: anywhere;
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-context {
+  flex: 0 0 auto;
+  font-size: var(--ui-font-caption);
+  line-height: 1.6;
+  color: var(--ui-text-muted);
+  margin-bottom: var(--ui-space-3);
+  overflow-wrap: anywhere;
+}
+
+/* 状态行：pending / error。成功路径直接收卡，所以不存在「已完成」的静态态。 */
+.modal-card[data-surface="approval"] .ui4-confirm-status[data-state="unknown"] {
+  color: var(--ui-text-secondary);
+  background: var(--ui-panel-surface);
+  border: 1px solid var(--ui-border);
+}
+.modal-card[data-surface="approval"] .ui4-confirm-status {
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-radius: var(--ui-radius-control);
+  margin-bottom: var(--ui-space-2);
+  overflow-wrap: anywhere;
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-status[hidden] {
+  display: none;
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-status[data-state="pending"] {
+  color: var(--ui-text-secondary);
+  background: var(--ui-info-surface);
+  border: 1px solid var(--ui-info-border);
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-status[data-state="error"] {
+  color: var(--ui-danger);
+  background: var(--ui-danger-surface);
+  border: 1px solid var(--ui-danger-border);
+}
+
+.modal-card[data-surface="approval"] .ui4-confirm-hint {
+  flex: 1 1 auto;
+  align-self: center;
+  font-size: var(--ui-font-caption);
+  line-height: 1.5;
+  color: var(--ui-text-muted);
+  text-align: left;
+  margin-right: auto;
+}
+
+/* 操作区：允许（primary）与拒绝（默认按钮）在视觉上必须可区分；
+ * 危险与否不由 UI 判定，所以这里不给「允许」上 danger 色，
+ * 只让主次清楚：主按钮实心、拒绝按钮描边。 */
+.modal-card[data-surface="approval"] .modal-actions {
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+  margin-top: auto;
+  padding-top: var(--ui-space-2);
+}
+
+.modal-card[data-surface="approval"] .modal-actions .btn {
+  height: auto;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.modal-card[data-surface="approval"] .modal-actions .btn.primary {
+  min-width: 96px;
+}
+
+.modal-card[data-surface="approval"] .modal-actions .btn:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* 提交中：按钮禁用但保持文字完整（不改成图标、不缩水），
+ * 让用户仍能看清自己刚点的是哪一个决定。 */
+.modal-card[data-surface="approval"][aria-busy="true"] .modal-actions .btn {
+  opacity: .55;
+  cursor: progress;
+}
+
+/* ---------- select / input / editor 审批卡 ---------- */
+
+.modal-card[data-surface="approval"] .modal-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 42vh;
+  overflow: auto;
+  margin-bottom: var(--ui-space-3);
+}
+
+.modal-card[data-surface="approval"] .modal-item {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--ui-border);
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.modal-card[data-surface="approval"] .modal-item:hover {
+  background: var(--ui-hover);
+}
+
+.modal-card[data-surface="approval"] .modal-item:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.modal-card[data-surface="approval"] .modal-input {
+  flex: 0 0 auto;
+  min-height: 36px;
+  background: var(--ui-input-surface);
+  border-color: var(--ui-border-control);
+  color: var(--ui-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.modal-card[data-surface="approval"] .modal-input:focus {
+  border-color: var(--ui-focus);
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.modal-card[data-surface="approval"] textarea.modal-input {
+  min-height: 132px;
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.modal-card[data-surface="approval"][aria-busy="true"] .modal-input {
+  opacity: .7;
+}
+
+/* ---------- Runtime 审批（既有 DOM，仅视觉统一） ----------
+ *
+ * runtime-conversation.js 的 .rtc-approval 与 runtime-sessions.js 的
+ * .runtime-approval 结构一致：<div><p>标题</p><button…>…</div>。
+ * 这里把它做成一张可读的卡片，正文换行、按钮成组，不改变点击语义。 */
+
+.rtc-approval,
+.runtime-approval {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  margin: var(--ui-space-2) 0;
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-warning-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-warning-surface);
+}
+
+.rtc-approval > p,
+.runtime-approval > p {
+  flex: 1 1 100%;
+  margin: 0 0 var(--ui-space-1);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ui-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rtc-approval .btn,
+.runtime-approval .btn {
+  height: auto;
+  min-height: 30px;
+  white-space: nowrap;
+}
+
+.rtc-approval textarea,
+.runtime-approval textarea {
+  flex: 1 1 100%;
+  min-height: 64px;
+  background: var(--ui-input-surface);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-text-primary);
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: var(--ui-space-2);
+  overflow-wrap: anywhere;
+}
+
+.rtc-approval textarea:focus,
+.runtime-approval textarea:focus {
+  border-color: var(--ui-focus);
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+/* 可集成展示接口 (renderRuntimeApproval) 的状态行：独占一行，
+ * 失败时用 danger surface；成功也只说「已交给 Pi」，不说「已确认」。 */
+.rtc-approval > .ui4-confirm-status,
+.runtime-approval > .ui4-confirm-status {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: var(--ui-space-2);
+  border-radius: var(--ui-radius-control);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ui-text-secondary);
+  background: var(--ui-info-surface);
+  border: 1px solid var(--ui-info-border);
+  overflow-wrap: anywhere;
+}
+
+.rtc-approval > .ui4-confirm-status[data-state="error"],
+.runtime-approval > .ui4-confirm-status[data-state="error"] {
+  color: var(--ui-danger);
+  background: var(--ui-danger-surface);
+  border-color: var(--ui-danger-border);
+}
+
+/* 窄屏：按钮不挤成两行碎块，操作区整体换行。 */
+@media (max-width: 720px) {
+  .modal-card[data-surface="approval"] {
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 32px);
+    padding: var(--ui-space-3);
+  }
+
+  .modal-card[data-surface="approval"] .ui4-confirm-hint {
+    flex: 1 1 100%;
+    order: 2;
+    margin: var(--ui-space-1) 0 0;
+  }
+
+  .modal-card[data-surface="approval"] .modal-actions {
+    justify-content: stretch;
+  }
+
+  .modal-card[data-surface="approval"] .modal-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* 低高度窗口：正文先让位，操作区始终可见。 */
+@media (max-height: 560px) {
+  .modal-card[data-surface="approval"] .ui4-confirm-detail-text {
+    max-height: 28vh;
+  }
+
+  .modal-card[data-surface="approval"] .modal-list {
+    max-height: 30vh;
+  }
+}
+
+@keyframes ui4-approval-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-card[data-surface="approval"] {
+    animation: none;
+  }
+}

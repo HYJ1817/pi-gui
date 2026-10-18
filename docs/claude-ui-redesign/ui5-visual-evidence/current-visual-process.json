@@ -1,0 +1,14 @@
+{
+  "source": {
+    "exitCode": 0,
+    "log": "current-final.log",
+    "screenshots": "current-final"
+  },
+  "package": {
+    "startedAt": "2026-10-18T14:20:56.6743293+08:00",
+    "finishedAt": "2026-10-18T14:21:40.1322295+08:00",
+    "exitCode": 0,
+    "log": "packaged-current-final.log",
+    "screenshots": "packaged-current-final"
+  }
+}

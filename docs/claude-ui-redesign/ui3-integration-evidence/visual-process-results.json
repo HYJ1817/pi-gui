@@ -1,0 +1,42 @@
+[
+  {
+    "command": "node tests/ui3-integration-electron.cjs",
+    "exitCode": 0,
+    "passed": 243,
+    "failed": 0,
+    "skipped": 0,
+    "screenshots": 107,
+    "report": "electron/results.json"
+  },
+  {
+    "command": "UI3_ASSETS_ROOT=<packaged public> node tests/ui3-integration-electron.cjs",
+    "exitCode": 0,
+    "passed": 243,
+    "failed": 0,
+    "skipped": 0,
+    "screenshots": 107,
+    "report": "packaged-electron/results.json"
+  },
+  {
+    "command": "node tests/ui3-cdp.cjs",
+    "exitCode": 0,
+    "passed": 1761,
+    "failed": 0,
+    "skipped": 0,
+    "screenshots": 270,
+    "report": "cdp-process.json"
+  },
+  {
+    "command": "node scripts/build-app.mjs --rebuild --output-root <build-root.txt>",
+    "exitCode": 0,
+    "report": "build.log"
+  },
+  {
+    "command": "node tests/app-check.cjs --output-root <build-root.txt>",
+    "exitCode": 0,
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0,
+    "report": "app-check-process.json"
+  }
+]

@@ -1,0 +1,191 @@
+PASS switching blocks actual send and mirrors disabled state
+PASS modelSwitchPending blocks actual send and mirrors disabled state
+PASS submitting blocks actual send and mirrors disabled state
+PASS stopping blocks actual send and mirrors disabled state
+PASS fallbackActive blocks actual send and mirrors disabled state
+PASS no project cannot send
+PASS bridge not ready cannot send
+PASS ready text sends without changing draft
+PASS empty composer disabled
+PASS existing attachment send policy preserved: load
+PASS existing attachment send policy preserved: err
+PASS all attachments render without content mutation
+PASS explicit states distinguish ready/loading/error/unreadable
+PASS thumbnail and size shown, long filename retains full path
+PASS untrusted name and error are inert text
+PASS loading exposes busy state and truncation stays explicit
+PASS image capability ["text"]
+PASS image capability ["text","image"]
+PASS image capability null
+PASS presentation preserves message and image wire format
+PASS async redraw retains focused removal button
+PASS remove transfers focus and removes only selected file
+PASS last removal returns focus to attach control
+PASS zero file size is real while missing file size stays hidden
+PASS actual upload pipeline exposes loading without changing file body
+PASS actual extraction result exposes truncation and original text
+PASS actual failed extraction never presents success
+PASS actual file selection obeys image capability false
+PASS long input caps at 184px
+PASS short viewport caps at 24vh
+PASS input shrinks after text removal
+PASS single measured reserved height
+PASS side pane width change recalculates input height
+PASS window resize refreshes reservation and preserves draft
+UI3 Composer: 34/34, failed=0, skipped=0
+  ok  视图模块导出契约完整
+  ok  模块写法能被 esm-bundle 链接器接受
+  ok  thinkingAvailability 区分五种状态，不把它们压成一句
+  ok  Pi 的实时档位优先于静态 reasoning=false
+  ok  只有 off 的清单视为不可用
+  ok  能力未知不显示成不支持
+  ok  明确 false 与 unknown 在能力行里是不同的值
+  ok  Runtime 标签能分辨同名不同 Provider 的模型
+  ok  按 Provider 分组且顺序与来源一致
+  ok  每个 Provider 的模型数量准确
+  ok  模型条目总数等于列表长度
+  ok  当前 Provider 默认展开、其余收起
+  ok  组头是原生按钮且 aria-controls 指向自己的容器
+  ok  身份行显示 Provider/modelId
+  ok  当前模型恰好一个选中项
+  ok  两个 Provider 的同名模型只有真正当前的那个被选中
+  ok  当前组被强制展开，用户折叠记忆不掩盖当前位置
+  ok  选择后回调带 Provider + modelId，且只触发一次
+  ok  选择后弹层关闭
+  ok  视图模块自身不发 RPC，也不 import 任何传输层
+  ok  400+ 模型与超长名不抛错且计数正确
+  ok  长名写入 textContent，不产生元素注入
+  ok  消失的 Provider 不保留折叠记忆
+  ok  展开组内 ↑↓ 在可见项之间移动
+  ok  漫游跳过折叠起来的条目
+  ok  End / Home 跳到首末
+  ok  ↑ 从首项回绕到末项
+  ok  roving tabindex：只有一个停靠点
+  ok  → / ← 折叠展开 Provider，焦点留在组头
+  ok  键盘 Enter 走原生按钮行为，回调仍只触发一次
+  ok  Escape 关闭并把焦点还给触发按钮
+  ok  可用档位按 Pi 返回原样渲染，不加也不减
+  ok  不存在的档位不会凭空出现（不硬编码 off..max）
+  ok  档位说明来自展示文案，未知档位不编造说明
+  ok  推理能力 false：明确不可用，档位画出来但不可点
+  ok  推理能力 unknown：不显示成已支持
+  ok  Pi 没给档位：说明是「没给」而不是「不支持」
+  ok  pending 优先于其它一切判断
+  ok  pending 时点击档位不产生回调
+  ok  可用时选档位回调一次并关闭
+  ok  可用时不画状态行（「有 3 档」不是信息）
+  ok  Thinking 弹层不套 model-mode（不受模型高度钳制）
+  ok  pending 期间选中态只反映调用方传入的 current，且条目不可点
+  ok  无乐观选择：点击后视图不自己改选中态
+  ok  设置失败后回读纠正：视图只反映传入的 current
+  ok  空列表 + 无当前模型不抛错
+  ok  非字符串 / 重复档位被过滤，不污染渲染
+  ok  空模型列表不抛错
+  ok  applyChipState 写 data-ui3-state，清空时移除属性
+  ok  弹层沿用既有 ID 契约，未另建一套全局弹层
+
+UI-3B 模型选择器: 50/50 通过
+
+--- 1. 输入 `/` 打开全部可执行命令 ---
+  ok  行首 `/` 打开菜单，候选 = allCommands({query:""})
+  ok  前导空白的行首也能触发
+  ok  换行后的行首能触发（多行输入）
+  ok  失去命令前缀后自动关闭
+
+--- 2. 输入 `/query` 实时筛选 ---
+  ok  `/al` 只留 alpha；`/zzz` 无候选
+  ok  无候选展示明确空状态
+  ok  有候选时空状态隐藏
+
+--- 3. URL 与路径不误触发 ---
+  ok  https URL 不触发菜单
+  ok  scheme 后斜杠 不触发菜单
+  ok  Windows 绝对路径 不触发菜单
+  ok  普通正文里的斜杠 不触发菜单
+  ok  行内（非行首）斜杠 不触发菜单
+  ok  行首 POSIX 路径：第二个 `/` 立即关闭且从不执行
+  ok  parseSlashTrigger 直接判据
+
+--- 4. 仅展示 when(ctx) 可执行的命令 ---
+  ok  when 为假不进候选，为真才进
+  ok  与独立 Palette 用同一份 when 判定
+
+--- 5. ArrowUp / ArrowDown 移动活动项 ---
+  ok  ArrowDown/Up 移动并 preventDefault，且不发送消息
+  ok  环形移动（首尾相接）
+
+--- 6. Enter / Tab 接受当前命令 ---
+  ok  Enter 执行选中命令、清理输入片段、关闭菜单
+  ok  Tab 也接受（契约规定适用时）
+  ok  Shift+Tab 不接受（保留给反向焦点）
+
+--- 7. Escape 只关闭菜单，不触发 stop ---
+  ok  Escape 关闭菜单、不执行命令、不触发既有 Escape(stop)
+  ok  菜单没开时 Escape 照常走既有行为
+
+--- 8. 中文输入法 composition 不误确认 ---
+  ok  composition 期间不触发；compositionend 后再判断
+  ok  isComposing 的 Enter 不被接受（交给输入法上屏）
+  ok  keyCode 229（IME 占位键）不被接受
+
+--- 9. Enter 不会同时执行命令并发送聊天 ---
+  ok  一次 Enter：命令执行 1 次、聊天发送 0 次
+  ok  Shift+Enter 不执行命令（交给 Composer 换行）
+  ok  菜单关闭后 Enter 仍是原有发送行为
+
+--- 10. 独立命令面板完整保留 ---
+  ok  palette.openPalette() 仍能打开、内容来自同一注册表
+
+--- 11. 项目 / 会话切换关闭菜单并清上下文 ---
+  ok  pi-gui:workspace-generation 事件关闭菜单
+  ok  关闭后不会用旧候选在新上下文执行
+
+--- 11b. session-switch / workspace-view 生命周期 ---
+  ok  pi-gui:session-switch 关闭菜单（同一 workspaceGeneration 内）
+  ok  会话切换后旧候选不能被执行、不发 RPC
+  ok  workspace-view 离开 Chat（planner/runtime/extensions）时关闭
+  ok  返回 Chat（workspace-view detail=chat）不自动弹出
+
+--- 12/13. 过期与未知候选不可执行、不发伪造指令 ---
+  ok  打开后命令变得不可用 → 接受时按 when 重新判定，不执行
+  ok  候选 id 从注册表消失（未知命令）→ 不执行、不发 RPC
+  ok  模块从不调用 fetch / 不拼 RPC（只调 cmd.run）
+
+--- 可访问性契约 ---
+  ok  listbox / option / aria-expanded / aria-activedescendant
+  ok  候选行显示名称 / 分组 / 快捷键提示
+  ok  鼠标点击候选执行
+
+--- 14. destroy 后无重复监听 / 无残留 DOM ---
+  ok  destroy 移除 DOM、监听与 aria；重挂后不重复
+  ok  ensureStylesheet 幂等且指向 ui3-inline-commands.css
+  ok  生命周期监听随 destroy 解绑、重挂不重复绑定
+
+--- 15. 样式表类名契约（排版证据见 Electron 截图） ---
+  ok  CSS 含约定类名与 reduced-motion 分支
+
+46/46 通过
+PASS production styles loaded once each
+PASS production input opens real registered slash candidate
+PASS Enter runs exactly once, consumes command token, no send
+PASS command removes only token and preserves surrounding draft
+PASS Escape closes slash without abort or losing draft
+PASS IME ordinary Enter guarded {"isComposing":true}
+PASS IME ordinary Enter guarded {"keyCode":229}
+PASS composition lifecycle closes menu and prevents submit
+PASS Ctrl+K target opens independent panel with slash closed
+PASS lifecycle pi-gui:session-switch preserves draft and closes menu
+PASS lifecycle pi-gui:workspace-view preserves draft and closes menu
+PASS lifecycle pi-gui:workspace-view preserves draft and closes menu
+PASS production model view selects only matching Provider identity
+PASS unavailable Thinking explanation reachable: unsupported
+PASS explanation Escape restores actual trigger focus: unsupported
+PASS unavailable Thinking explanation reachable: unknown
+PASS explanation Escape restores actual trigger focus: unknown
+PASS unavailable Thinking explanation reachable: unavailable
+PASS explanation Escape restores actual trigger focus: unavailable
+PASS pending explanation cannot enable selection or send
+PASS real returned levels enable existing button and hide explanation entry
+PASS readback closes obsolete pending explanation and restores enabled trigger
+PASS ordinary Enter reaches original submit exactly once
+UI3 integration 23/23; failed=0; skipped=0

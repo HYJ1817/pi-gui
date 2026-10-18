@@ -1,0 +1,44 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-bQp90E",
+  "buildRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-build-557f38db-41b6-41aa-9311-e99bee5c9d5c",
+  "modes": [
+    "early-runtime-first"
+  ],
+  "repeats": 2,
+  "identities": [
+    {
+      "file": "Pi GUI.exe",
+      "original": "4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a",
+      "fixture": "4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a"
+    },
+    {
+      "file": "resources/app/main.cjs",
+      "original": "2e01135ae0f6d58817564441bdad8ccc6211cc20e57ba69c4436cbce56953473",
+      "fixture": "2e01135ae0f6d58817564441bdad8ccc6211cc20e57ba69c4436cbce56953473"
+    },
+    {
+      "file": "resources/app/preload.cjs",
+      "original": "5734bac4c3c3c828ea52fea7c18b4afb32c7fd4f1c689073cd4f556e1eb167c5",
+      "fixture": "5734bac4c3c3c828ea52fea7c18b4afb32c7fd4f1c689073cd4f556e1eb167c5"
+    },
+    {
+      "file": "resources/app/server.cjs",
+      "original": "f7368a569ac30a7ba09ca24eee54510d7d4276d9e444e0d91c97a76497435aac",
+      "fixture": "f7368a569ac30a7ba09ca24eee54510d7d4276d9e444e0d91c97a76497435aac"
+    }
+  ],
+  "originalPackage": {
+    "name": "pi-gui",
+    "productName": "Pi GUI",
+    "version": "0.25.0",
+    "main": "main.cjs"
+  },
+  "fixturePackage": {
+    "name": "pi-gui",
+    "productName": "Pi GUI",
+    "version": "0.25.0",
+    "main": "startup-observer.cjs"
+  },
+  "observerMutation": "fixture package main points to observer; observer requires unchanged production main",
+  "securityMutation": false
+}

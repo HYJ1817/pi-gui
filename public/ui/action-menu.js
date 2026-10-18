@@ -108,9 +108,18 @@ function onDocMouseDown(event) {
 
 function onScroll(event) {
   if (!openState) return;
-  /* 菜单自己滚动不算「页面动了」；其它任何容器滚动都会让固定定位看起来跑偏，
-   * 所以直接收起 —— 比起「浮在半空对不上锚点」，收起是更诚实的表现。 */
-  if (openState.menu.contains(event.target)) return;
+  const { menu, anchor } = openState;
+  /* 菜单自己滚动不算「页面动了」。 */
+  if (menu.contains(event.target)) return;
+  /* 只有**能移动锚点**的滚动才会让菜单跑偏：滚动的容器要么是文档本身，
+   * 要么是锚点的祖先。无关区域（例如浮动的 Toast 栈）滚动时锚点没动，
+   * 菜单没有理由消失 —— UI-4C 把 Toast 栈变成可滚动容器后，它的滚动事件
+   * 曾经把正开着的会话菜单收掉。 */
+  const doc = anchor.ownerDocument;
+  const target = event.target;
+  const movesAnchor = target === doc || target === doc.documentElement || target === doc.defaultView
+    || (typeof target?.contains === 'function' && target.contains(anchor));
+  if (!movesAnchor) return;
   closeActionMenu({ restoreFocus: false });
 }
 

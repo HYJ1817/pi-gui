@@ -1,0 +1,49 @@
+PASS late 允许一次 success cannot authorize replacement after expired
+PASS late 允许一次 success cannot authorize replacement after stop
+PASS late 允许一次 success cannot authorize replacement after workspace
+PASS late 允许一次 success cannot authorize replacement after session
+PASS late 允许一次 success cannot authorize replacement after bridge
+PASS late 允许一次 success cannot authorize replacement after timeout
+PASS late 拒绝 success cannot authorize replacement after expired
+PASS late 拒绝 success cannot authorize replacement after stop
+PASS late 拒绝 success cannot authorize replacement after workspace
+PASS late 拒绝 success cannot authorize replacement after session
+PASS late 拒绝 success cannot authorize replacement after bridge
+PASS late 拒绝 success cannot authorize replacement after timeout
+PASS old failure cannot unlock or alter replacement submitting confirmation
+PASS late select success cannot close an unrelated replacement modal
+PASS lost response after acceptance is unknown and cannot send a second decision
+PASS identical errors in different workspace generations are not deduplicated
+PASS ordinary command errors retain existing notification and wire behaviour
+PASS malformed acknowledgement is unknown and cannot authorize a retry
+PASS Notice same text updates callbacks and cannot retain a stale workspace action
+PASS Notice same-context handler refresh preserves DOM and focus
+PASS Toast pointer leave cannot resume a timer while its button has focus
+PASS runtime-A unknown owner cannot match explicit foreign workspace
+PASS classic-chat unknown owner cannot match explicit foreign workspace
+PASS Runtime missing owner and workspace never consumes missing-identity Classic evidence
+PASS only identity-free Classic evidence invalidates the identity-free Classic preview
+PASS known Runtime workspace invalidation requires both matching id and epoch
+PASS cancelled loading clears busy immediately and ignores late result: pi-gui:session-evidence-changed
+PASS cancelled loading clears busy immediately and ignores late result: pi-gui:session-switch
+PASS process polling stays serial across manual refresh and pending logs
+PASS process revision resets cursor and Stop retains real generation/id/revision transport
+PASS process dispose clears polling and rejects late log writes to replacement surface
+PASS process logs stay bounded and render untrusted text without HTML execution
+PASS unknown confirm closes locally without contradictory response: Escape
+PASS unknown confirm closes locally without contradictory response: backdrop
+PASS unknown confirm closes locally without contradictory response: replace
+PASS unknown confirm closes locally without contradictory response: Stop
+PASS unknown select closes locally without contradictory response: Escape
+PASS unknown select closes locally without contradictory response: backdrop
+PASS unknown select closes locally without contradictory response: replace
+PASS unknown select closes locally without contradictory response: Stop
+PASS ordinary modal bound close cannot close a replacement instance
+PASS view navigation preserves real Classic pending with explicit provenance
+PASS late old-owner approval rejection cannot change new-owner notice: Runtime conversation
+PASS late old-owner approval rejection cannot change new-owner notice: Runtime dialog
+PASS current-owner approval outcome remains visible and refreshed: false/false
+PASS current-owner approval outcome remains visible and refreshed: false/true
+PASS current-owner approval outcome remains visible and refreshed: true/false
+PASS current-owner approval outcome remains visible and refreshed: true/true
+UI4 integration: 48/48; failed=0; skipped=0

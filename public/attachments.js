@@ -14,6 +14,7 @@ import { fmt, fmtSize, icon, iconFor } from './util.js';
 import { uploadFile } from './api.js';
 import { updateSendState, imageInputBlocked } from './composer.js';
 import { toast } from './ui/toast.js';
+import { logRendererEvent } from './log-client.js';
 
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -27,7 +28,7 @@ function fileToDataUrl(file) {
 function attMeta(a) {
   if (a.loading) return '解析中…';
   if (a.error) return a.error;
-  if (a.kind === 'image') return imageInputBlocked() ? '当前模型不支持图片，请移除或切换模型' : `已就绪 · 图片 · ${fmtSize(a.size)}`;
+  if (a.kind === 'image') return imageInputBlocked() ? '当前模型不支持图片，请移除或切换模型' : '已就绪 · 图片';
   if (a.kind === 'text') {
     const bits = [];
     if (a.pages) bits.push(a.pages + ' 页');
@@ -36,7 +37,7 @@ function attMeta(a) {
     if (a.note) bits.push(a.note);
     return `已就绪 · ${bits.join(' · ')}`;
   }
-  return `二进制 · ${fmtSize(a.size)} · pi 读不了`;
+  return '二进制 · pi 读不了';
 }
 
 export async function handleFiles(fileList) {
@@ -61,6 +62,7 @@ export async function handleFiles(fileList) {
       try {
         att.dataUrl = await fileToDataUrl(f);
       } catch {
+        logRendererEvent('ui.attachment_failed', { kind: 'image', reason: 'read_failed' });
         /* 缩略图失败不影响上传 */
       }
     }
@@ -84,6 +86,7 @@ export async function handleFiles(fileList) {
       att.loading = false;
       if (j.error) att.error = j.error;
     } catch (err) {
+      logRendererEvent('ui.attachment_failed', { kind: isImg ? 'image' : 'text', reason: 'upload_failed' });
       att.loading = false;
       att.error = err.message || '上传失败';
     }
@@ -103,18 +106,27 @@ export function removeAttachment(id) {
 
 export function renderAttachments() {
   const box = el.attachTray;
+  const focused = box.contains(document.activeElement) ? document.activeElement.dataset.attachmentId : undefined;
+  const focusIndex = focused === undefined ? -1 : [...box.querySelectorAll('.att-x')].indexOf(document.activeElement);
+  box.classList.add('ui3-attachment-tray');
   box.innerHTML = '';
 
   if (!S.attachments.length) {
     box.hidden = true;
+    if (focused !== undefined) el.btnAttach.focus({ preventScroll: true });
     return;
   }
   box.hidden = false;
 
   for (const a of S.attachments) {
     const d = document.createElement('div');
-    d.className = 'att' + (a.loading ? ' loading' : '') + (a.error ? ' err' : '');
+    const state = a.loading ? 'loading' : a.error ? 'error'
+      : a.kind === 'image' ? imageInputBlocked() ? 'blocked' : 'ready'
+        : a.kind === 'text' ? a.truncated ? 'truncated' : 'ready' : 'unreadable';
+    d.className = 'att ui3-attachment-card' + (a.loading ? ' loading' : '') + (a.error ? ' err' : '');
+    d.dataset.state = state;
     d.setAttribute('role', 'listitem');
+    d.setAttribute('aria-busy', String(Boolean(a.loading)));
 
     if (a.kind === 'image' && a.dataUrl) {
       const th = document.createElement('div');
@@ -147,12 +159,19 @@ export function renderAttachments() {
     const m = document.createElement('span');
     m.className = 'att-meta';
     m.textContent = attMeta(a);
-    body.append(n, m);
+    m.title = m.textContent;
+    const size = document.createElement('span');
+    size.className = 'ui3-attachment-size';
+    // Zero bytes is real information; missing sizes stay unknown.
+    size.textContent = typeof a.size === 'number' && Number.isFinite(a.size) && a.size >= 0 ? fmtSize(a.size) : '';
+    size.hidden = !size.textContent;
+    body.append(n, m, size);
     d.appendChild(body);
 
     const x = document.createElement('button');
     x.type = 'button';
-    x.className = 'att-x';
+    x.className = 'att-x ui3-attachment-remove';
+    x.dataset.attachmentId = String(a.id);
     x.title = '移除';
     x.setAttribute('aria-label', `移除附件：${a.name}`);
     x.appendChild(icon(['M7 7l10 10', 'M17 7L7 17']));
@@ -163,6 +182,12 @@ export function renderAttachments() {
     d.appendChild(x);
 
     box.appendChild(d);
+  }
+  if (focused !== undefined) {
+    const buttons = [...box.querySelectorAll('.att-x')];
+    const target = buttons.find(button => button.dataset.attachmentId === focused)
+      || buttons[Math.min(focusIndex, buttons.length - 1)];
+    target?.focus({ preventScroll: true });
   }
 }
 

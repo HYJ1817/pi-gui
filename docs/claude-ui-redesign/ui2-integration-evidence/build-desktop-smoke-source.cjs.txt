@@ -1,0 +1,41 @@
+const fs=require('node:fs'),path=require('node:path'),net=require('node:net'),{spawn,execFileSync}=require('node:child_process');
+const root=__dirname,source='C:/pi-GUI-ui2-integration',evidence=path.join(source,'docs/claude-ui-redesign/ui2-integration-evidence');
+const world=path.join(root,'desktop-smoke-'+Date.now());fs.mkdirSync(world,{recursive:true});
+const report={scope:'Isolated packaged Electron production main/preload startup and theme smoke only; no real project/Pi/model',world,checks:[],rendererExceptions:[],rendererConsoleErrors:[],shots:[],updateAutoCancelled:false,timeline:[]};
+const check=(pass,label)=>{report.checks.push({pass:!!pass,label});if(!pass)throw new Error(label)};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));let app,ws;
+async function free(port){await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(port,'127.0.0.1',()=>s.close(resolve))})}
+(async()=>{
+await free(32771);await free(32772);
+const env={...process.env,PORT:'32772',PI_GUI_DATA:path.join(world,'data'),PI_CODING_AGENT_DIR:path.join(world,'agent'),PI_BIN:path.join(world,'no-real-pi.cmd'),PI_CWD:'',PI_GUI_OFFLINE:'1',TEMP:path.join(root,'tmp'),TMP:path.join(root,'tmp')};delete env.ELECTRON_RUN_AS_NODE;
+app=spawn(path.join(root,'dist-app/Pi GUI-win32-x64/Pi GUI.exe'),['--user-data-dir='+path.join(world,'userdata'),'--remote-debugging-address=127.0.0.1','--remote-debugging-port=32771','--disable-background-networking','--disable-component-update','--no-first-run'],{cwd:world,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+report.pid=app.pid;app.stdout.on('data',()=>{});app.stderr.on('data',()=>{});
+let target;for(let i=0;i<100;i++){try{const list=await(await fetch('http://127.0.0.1:32771/json/list')).json();target=list.find(x=>x.type==='page'&&x.url.startsWith('http://127.0.0.1:32772'));if(target)break}catch{}await sleep(100)}check(target,'packaged main creates application page on isolated local port');
+report.target={id:target.id,type:target.type,url:target.url};report.attachEpoch=Date.now();ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{ws.onopen=resolve;ws.onerror=reject});
+let id=0;const pending=new Map();
+function send(method,params={}){report.timeline.push({kind:'command',method,epoch:Date.now()});return new Promise((resolve,reject)=>{const n=++id;const timer=setTimeout(()=>{pending.delete(n);reject(new Error('CDP timeout '+method))},10000);pending.set(n,m=>{clearTimeout(timer);if(m.error)reject(new Error(m.error.message));else resolve(m.result)});ws.send(JSON.stringify({id:n,method,params}))})}
+ws.onmessage=event=>{const m=JSON.parse(event.data);if(m.method&&['Runtime.consoleAPICalled','Runtime.executionContextCreated','Runtime.executionContextDestroyed','Runtime.executionContextsCleared','Page.frameNavigated'].includes(m.method)){report.timeline.push({kind:'event',method:m.method,receivedEpoch:Date.now(),timestamp:m.params?.timestamp,context:m.params?.executionContextId??m.params?.context?.id,origin:m.params?.context?.origin,url:m.params?.frame?.url})}if(m.id&&pending.has(m.id)){pending.get(m.id)(m);pending.delete(m.id)}if(m.method==='Runtime.executionContextCreated'){(report.contexts??=[]).push({id:m.params.context.id,name:m.params.context.name,origin:m.params.context.origin,auxData:m.params.context.auxData})}if(m.method==='Runtime.exceptionThrown')report.rendererExceptions.push(m.params.exceptionDetails.text);if(m.method==='Runtime.consoleAPICalled'&&m.params.type==='error')report.rendererConsoleErrors.push({context:m.params.executionContextId,timestamp:m.params.timestamp,type:'console.error',argumentTypes:m.params.args.map(x=>x.type),messages:m.params.args.map(x=>String(x.value??x.description??'').slice(0,600))});if(m.method==='Log.entryAdded'&&m.params.entry.level==='error')report.rendererConsoleErrors.push({type:m.params.entry.source,text:m.params.entry.text})};
+async function evaluate(expression){const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.text);return r.result.value}
+report.frameTreeAtAttach=await send('Page.getFrameTree');await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
+report.updateAutoCancelled=await evaluate(`(async()=>{const a=await import('/update.js'),b=await import('/pi-update.js');a.cancelUpdateAuto();b.cancelPiUpdateAuto();return true})()`);
+await sleep(300);
+report.initial=await evaluate(`({timeOrigin:performance.timeOrigin,url:location.origin,desktop:window.piGuiDesktop?.isDesktop===true,themeBridge:typeof window.piGuiDesktop?.theme?.set==='function',snapshot:window.piGuiDesktop?.theme?.snapshot?.(),theme:document.documentElement.dataset.theme,require:typeof window.require,body:document.body.innerText.length})`);
+check(report.initial.desktop&&report.initial.themeBridge,'production preload desktop and native theme bridge available');
+check(report.initial.require==='undefined','renderer does not expose Node require');check(report.initial.body>30,'renderer renders production interface');
+report.projects=await evaluate(`fetch('/api/projects').then(r=>r.json()).then(d=>({ok:d.ok,projectCount:Array.isArray(d.items)?d.items.length:null}))`);
+check(report.projects.projectCount===0,'isolated application has no real projects');
+for(const mode of ['dark','light']){
+const changed=await evaluate(`import('/theme.js').then(m=>m.setThemePreference('${mode}'))`);check(changed,'packaged native theme set '+mode);
+await sleep(200);
+const observed=await evaluate(`({theme:document.documentElement.dataset.theme,preference:document.documentElement.dataset.themePreference,snapshot:window.piGuiDesktop.theme.snapshot(),background:getComputedStyle(document.body).backgroundColor})`);
+check(observed.theme===mode&&observed.snapshot.preference===mode,'renderer and native theme agree '+mode);
+const image=await send('Page.captureScreenshot',{format:'png'});const filename='build-desktop-'+mode+'.png';fs.writeFileSync(path.join(evidence,filename),Buffer.from(image.data,'base64'));report.shots.push({filename,...observed});
+}
+check(report.rendererExceptions.length===0,'no observed renderer exceptions');report.checks.push({pass:report.rendererConsoleErrors.length===0,label:'no observed renderer error entries'});
+await send('Page.close').catch(()=>{});
+for(let i=0;i<80&&app.exitCode===null;i++)await sleep(100);report.exitCode=app.exitCode;check(app.exitCode===0,'packaged desktop closes normally with exit 0');
+report.pass=report.checks.every(x=>x.pass);if(!report.pass)process.exitCode=1;
+})().catch(e=>{report.pass=false;report.failure=e.message;console.error('Smoke failure:',e.message);process.exitCode=1}).finally(async()=>{
+ws?.close();if(app&&app.exitCode===null){try{execFileSync('taskkill',['/pid',String(app.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});report.fallbackCleanupOwnPid=app.pid}catch(e){report.cleanupResult='already exited or cleanup failed: '+e.status}}
+report.checkCount=report.checks.length;report.passed=report.checks.filter(c=>c.pass).length;fs.writeFileSync(path.join(evidence,'build-desktop-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+});

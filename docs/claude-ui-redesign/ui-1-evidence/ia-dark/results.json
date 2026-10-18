@@ -1,0 +1,1178 @@
+{
+  "checks": 161,
+  "errors": [],
+  "screenshots": [
+    "no-project-1280x800.png",
+    "empty-session-1280x800.png",
+    "long-conversation-1280x800.png",
+    "streaming-1280x800.png",
+    "stop-pending-1280x800.png",
+    "error-1280x800.png",
+    "native-browser-1280x800.png",
+    "browser-open-1280x800.png",
+    "changes-open-1280x800.png",
+    "right-pane-closed-1280x800.png",
+    "no-project-1440x900.png",
+    "empty-session-1440x900.png",
+    "long-conversation-1440x900.png",
+    "streaming-1440x900.png",
+    "stop-pending-1440x900.png",
+    "error-1440x900.png",
+    "native-browser-1440x900.png",
+    "browser-open-1440x900.png",
+    "changes-open-1440x900.png",
+    "right-pane-closed-1440x900.png",
+    "no-project-1920x1080.png",
+    "empty-session-1920x1080.png",
+    "long-conversation-1920x1080.png",
+    "streaming-1920x1080.png",
+    "stop-pending-1920x1080.png",
+    "error-1920x1080.png",
+    "native-browser-1920x1080.png",
+    "browser-open-1920x1080.png",
+    "changes-open-1920x1080.png",
+    "right-pane-closed-1920x1080.png",
+    "settings-1440x900.png",
+    "palette-1440x900.png",
+    "planner-review-1440x900.png",
+    "skills-1440x900.png",
+    "zoom-0.8-1440x900.png",
+    "zoom-1.25-1440x900.png",
+    "zoom-1.5-1440x900.png"
+  ],
+  "facts": [
+    {
+      "name": "no-project",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "empty-session",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "long-conversation",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "streaming",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "stop-pending",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "error",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "browser-open",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 548,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 548,
+        "height": 46
+      },
+      "pane": {
+        "x": 860,
+        "y": 0,
+        "width": 420,
+        "height": 800
+      },
+      "surface": "browser",
+      "mode": "dock",
+      "active": "browserAddress",
+      "captionReserve": 432
+    },
+    {
+      "name": "changes-open",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 548,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 548,
+        "height": 46
+      },
+      "pane": {
+        "x": 860,
+        "y": 0,
+        "width": 420,
+        "height": 800
+      },
+      "surface": "changes",
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 432
+    },
+    {
+      "name": "right-pane-closed",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1280,
+        800
+      ],
+      "scroll": [
+        1280,
+        800
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 800
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 968,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "navChanges",
+      "captionReserve": 150
+    },
+    {
+      "name": "no-project",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "empty-session",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "long-conversation",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "streaming",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "stop-pending",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "error",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "browser-open",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 708,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 708,
+        "height": 46
+      },
+      "pane": {
+        "x": 1020,
+        "y": 0,
+        "width": 420,
+        "height": 900
+      },
+      "surface": "browser",
+      "mode": "dock",
+      "active": "browserAddress",
+      "captionReserve": 432
+    },
+    {
+      "name": "changes-open",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 708,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 708,
+        "height": 46
+      },
+      "pane": {
+        "x": 1020,
+        "y": 0,
+        "width": 420,
+        "height": 900
+      },
+      "surface": "changes",
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 432
+    },
+    {
+      "name": "right-pane-closed",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "navChanges",
+      "captionReserve": 150
+    },
+    {
+      "name": "no-project",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "empty-session",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "long-conversation",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "streaming",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "stop-pending",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "error",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "browser-open",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1188,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1188,
+        "height": 46
+      },
+      "pane": {
+        "x": 1500,
+        "y": 0,
+        "width": 420,
+        "height": 1080
+      },
+      "surface": "browser",
+      "mode": "dock",
+      "active": "browserAddress",
+      "captionReserve": 432
+    },
+    {
+      "name": "changes-open",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1188,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1188,
+        "height": 46
+      },
+      "pane": {
+        "x": 1500,
+        "y": 0,
+        "width": 420,
+        "height": 1080
+      },
+      "surface": "changes",
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 432
+    },
+    {
+      "name": "right-pane-closed",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1920,
+        1080
+      ],
+      "scroll": [
+        1920,
+        1080
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 1080
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1608,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "navChanges",
+      "captionReserve": 150
+    },
+    {
+      "name": "settings",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "navProviders",
+      "captionReserve": 150
+    },
+    {
+      "name": "palette",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "",
+      "captionReserve": 150
+    },
+    {
+      "name": "planner-review",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "navPlanner",
+      "captionReserve": 150
+    },
+    {
+      "name": "skills",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1440,
+        900
+      ],
+      "scroll": [
+        1440,
+        900
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 900
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 1128,
+        "height": 46
+      },
+      "pane": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "mode": "dock",
+      "active": "navExtensions",
+      "captionReserve": 150
+    },
+    {
+      "name": "zoom-0.8",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1800,
+        1125
+      ],
+      "scroll": [
+        1800,
+        1125
+      ],
+      "stage": {
+        "x": 311.9921875,
+        "y": 0,
+        "width": 1068.0078125,
+        "height": 1125
+      },
+      "head": {
+        "x": 311.9921875,
+        "y": 0,
+        "width": 1068.0078125,
+        "height": 45.98958206176758
+      },
+      "pane": {
+        "x": 1380,
+        "y": 0,
+        "width": 420,
+        "height": 1125
+      },
+      "surface": "changes",
+      "mode": "dock",
+      "active": "navChanges",
+      "captionReserve": 431.9922332763672
+    },
+    {
+      "name": "zoom-1.25",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        1152,
+        720
+      ],
+      "scroll": [
+        1152,
+        720
+      ],
+      "stage": {
+        "x": 312.0000305175781,
+        "y": 0,
+        "width": 840.0000610351562,
+        "height": 720.0000610351562
+      },
+      "head": {
+        "x": 312.0000305175781,
+        "y": 0,
+        "width": 840.0000610351562,
+        "height": 46.000003814697266
+      },
+      "pane": {
+        "x": 732.0000610351562,
+        "y": 0,
+        "width": 420.0000305175781,
+        "height": 720.0000610351562
+      },
+      "surface": "changes",
+      "mode": "overlay",
+      "active": "navChanges",
+      "captionReserve": 11.999992370605469
+    },
+    {
+      "name": "zoom-1.5",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+      "size": [
+        960,
+        600
+      ],
+      "scroll": [
+        960,
+        600
+      ],
+      "stage": {
+        "x": 312,
+        "y": 0,
+        "width": 648,
+        "height": 600
+      },
+      "head": {
+        "x": 312,
+        "y": 0,
+        "width": 648,
+        "height": 46
+      },
+      "pane": {
+        "x": 540,
+        "y": 0,
+        "width": 420,
+        "height": 600
+      },
+      "surface": "changes",
+      "mode": "overlay",
+      "active": "navChanges",
+      "captionReserve": 12
+    }
+  ],
+  "fixture": "offline visual-harness + actual Electron/preload/browser controller",
+  "userData": "os.tmpdir fixture"
+}

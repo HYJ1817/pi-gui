@@ -1,0 +1,13 @@
+=== 敏感判定状态 ===
+  ok   token/code/id 连续检测同一 secret 时不会交替放行
+  ok   不同函数/安全值交错调用时状态不串扰
+  ok   normalizeEvent 连续同值 secret 不会在第二次放行
+  ok   不同字段顺序：secret 先经过 token，也不会让后面的 errorName 放行
+  ok   normalizeStored 连续多条事件同样拒绝 secret 字段
+=== 端到端落盘 / 崩溃 / ZIP ===
+  ok   原始 JSONL 与崩溃记录不包含连续事件里的 secret
+  ok   ZIP 的每个文件都不包含 secret
+=== HTTP 日志 API / 崩溃记录 / ZIP ===
+  ok   POST 连续/交错 secret 后，日志 API 与原始文件都不含 secret
+  ok   HTTP 导出的 ZIP 每个文件都不含 secret
+logging-secret-state: 9 passed, 0 failed

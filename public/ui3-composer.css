@@ -1,0 +1,67 @@
+/* UI-3A component sheet. Integration loads this after styles.css; no global controls. */
+#chatComposer {right:var(--ui3-composer-scrollbar-width,0px);background:var(--ui-canvas)}
+#chatComposer .composer-box {
+  /* Keep the measured footprint/DOM; only the textarea carries the contour.
+     The canvas masks transcript text behind the separate controls row. */
+  border:0;border-radius:0;background:var(--ui-canvas);padding:0;
+  transition:none;
+}
+#chatComposer .composer-box.drop #input {outline-color:var(--ui-focus);background:var(--ui-user-surface)}
+#chatComposer #input {
+  display:block;font-family:var(--ui-font-sans);font-size:var(--ui-font-prose);
+  color:var(--ui-text-primary);line-height:1.7;
+  min-height:40px;padding:var(--ui-space-2) 48px var(--ui-space-2) var(--ui-space-3);
+  background:var(--ui-input-surface);border-radius:var(--ui-radius-composer);
+  outline:1px solid var(--ui-border-control);outline-offset:0;
+  transition:outline-color var(--ui-duration-snap) var(--ui-ease-out);
+  overflow-wrap:anywhere;white-space:pre-wrap;
+}
+#chatComposer #input::placeholder {color:var(--ui-text-muted)}
+#chatComposer #input:focus {outline-color:var(--ui-focus)}
+#chatComposer #input:focus-visible {outline:2px solid var(--ui-focus);outline-offset:2px}
+#chatComposer .composer-bar {position:relative;gap:var(--ui-space-2);flex-wrap:wrap;padding:var(--ui-space-2) var(--ui-space-1) 0}
+/* Anchor Send to the input's lower edge even when attachments or controls wrap.
+   Stop stays an independent, labelled action; Pi also supports sending steer. */
+#chatComposer #btnSend {position:absolute;right:var(--ui-space-2);bottom:calc(100% + 5px)}
+#chatComposer .cb-left {flex:1 1 var(--ui-space-6)}
+#chatComposer .cb-right {
+  margin-left:auto;flex-wrap:wrap;justify-content:flex-end;gap:var(--ui-space-1);
+  /* Reserve the attachment control before wrapping this group internally. */
+  max-width:calc(100% - var(--ui-space-6) - var(--ui-space-2));
+}
+#chatComposer .status-text {color:var(--ui-text-muted);font-size:var(--ui-font-caption)}
+#chatComposer button:focus-visible {outline:2px solid var(--ui-focus);outline-offset:2px}
+#chatComposer button:disabled {cursor:not-allowed}
+#chatComposer #btnSend:not(:disabled):hover {background:var(--ui-primary-hover)}
+#chatComposer .ui3-composer-stopping #btnStop {color:var(--ui-text-muted);background:var(--ui-selected)}
+#chatComposer .ui3-attachment-tray {
+  gap:var(--ui-space-2);padding:var(--ui-space-1) var(--ui-space-1) var(--ui-space-3);
+  max-height:min(160px,18vh);overflow:auto;overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+#chatComposer .ui3-attachment-card {
+  align-items:flex-start;flex:0 1 240px;max-width:100%;min-width:0;
+  gap:var(--ui-space-2);padding:var(--ui-space-2);
+  border-radius:var(--ui-radius-card);border-color:var(--ui-border);
+  background:var(--ui-panel-surface);opacity:1;
+}
+#chatComposer .ui3-attachment-card .att-body {align-self:center}
+#chatComposer .ui3-attachment-card .att-name {font-size:var(--ui-font-body);color:var(--ui-text-primary)}
+#chatComposer .ui3-attachment-card .att-meta,
+#chatComposer .ui3-attachment-size {display:block;font-size:var(--ui-font-caption);color:var(--ui-text-muted);line-height:1.5}
+#chatComposer .ui3-attachment-card[data-state="error"] {border-color:var(--ui-danger-border);background:var(--ui-danger-surface)}
+#chatComposer .ui3-attachment-card[data-state="error"] .att-meta {color:var(--ui-danger)}
+#chatComposer .ui3-attachment-card[data-state="blocked"],
+#chatComposer .ui3-attachment-card[data-state="unreadable"] {border-color:var(--ui-warning-border)}
+#chatComposer .ui3-attachment-card[data-state="blocked"] .att-meta,
+#chatComposer .ui3-attachment-card[data-state="unreadable"] .att-meta,
+#chatComposer .ui3-attachment-card[data-state="truncated"] .att-meta {color:var(--ui-warning)}
+#chatComposer .ui3-attachment-card[data-state="loading"] .att-meta {color:var(--ui-running)}
+#chatComposer .ui3-attachment-card .att-thumb,
+#chatComposer .ui3-attachment-card .att-ic {width:var(--ui-space-6);height:var(--ui-space-6);border-radius:var(--ui-radius-control)}
+#chatComposer .ui3-attachment-remove {border-radius:var(--ui-radius-control);color:var(--ui-text-muted)}
+#chatComposer .ui3-attachment-remove:hover {background:var(--ui-danger-surface);color:var(--ui-danger)}
+@media (prefers-reduced-motion:reduce) {
+  #chatComposer .composer-box,#chatComposer #input {transition:none}
+  #chatComposer .att-spin {animation:none}
+}

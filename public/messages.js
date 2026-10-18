@@ -29,6 +29,7 @@ import { FILE_BLOCK_RE } from './attachments.js';
 import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
 import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, renderEntry } from './tool-view.js';
+import { renderMessageMeta } from './message-meta.js';
 
 /* ---------- 线程与滚动 ---------- */
 
@@ -144,6 +145,9 @@ export function onSettled() {
 
 export function interruptActive() {
   setStreaming(false);
+  for (const block of S.blocks.values()) {
+    if (block.kind === 'think' && block.node) setThinkingState(block.node, 'interrupted');
+  }
   S.current = null;
   S.blocks.clear();
   /* agent 已经收尾了，还有条目停在 running —— 说明那次工具执行没有等到
@@ -172,12 +176,25 @@ function thinkingBlock(text = '') {
   const body = document.createElement('div');
   body.className = 'think-body';
   body.id = 'thinking-detail-' + ++disclosureId;
+  button.id = 'thinking-summary-' + disclosureId;
+  body.setAttribute('role', 'region');
+  body.setAttribute('aria-labelledby', button.id);
+  const status = document.createElement('span');
+  status.className = 'ui2-think-status';
+  button.appendChild(status);
   button.setAttribute('aria-controls', body.id);
   setDisclosure(button, body, false);
   button.addEventListener('click', () => setDisclosure(button, body, body.hidden));
   wrap.append(button, body);
   updateThinking(wrap, text);
+  setThinkingState(wrap, 'streaming');
   return wrap;
+}
+
+function setThinkingState(wrap, state) {
+  wrap.dataset.state = state;
+  const labels = { streaming: '生成中', returned: '已返回', complete: '已完成', error: '发生错误', interrupted: '已中断' };
+  wrap.querySelector('.ui2-think-status').textContent = ' · ' + labels[state];
 }
 
 function updateThinking(wrap, text) {
@@ -340,7 +357,7 @@ function createAssistant() {
   S.current = { wrap, body };
   S.blocks.clear();
   moveWorkingToEnd();
-  scrollBottom(true);
+  scrollBottom();
   return S.current;
 }
 
@@ -442,6 +459,8 @@ export function onMessageUpdate(evt) {
       break;
     case 'thinking_end': {
       if (typeof d.content === 'string') setBlockText(idx, 'think', d.content);
+      const block = S.blocks.get(idx);
+      if (block?.kind === 'think') setThinkingState(block.node, 'returned');
       break;
     }
     default:
@@ -460,6 +479,10 @@ export function onMessageEnd(evt) {
      * 工具卡片由 tools.js 直接挂在 thread 上，不在这个 body 里，所以不受影响；
      * 下一轮 message_start 会再建一个新的外壳。 */
     if (!keep) S.current.wrap.remove();
+    else {
+      const meta = renderMessageMeta(msg);
+      if (meta) S.current.wrap.appendChild(meta);
+    }
   }
   S.current = null;
   S.blocks.clear();
@@ -607,12 +630,17 @@ export function rebuildAssistant(bodyEl, msg) {
       const old = liveBlocks?.get(idx);
       const node = old?.kind === 'think' ? old.node : thinkingBlock();
       updateThinking(node, part.thinking || '');
+      setThinkingState(node, aborted ? 'interrupted' : failed ? 'error' : 'complete');
       nodes.push(node);
     }
   });
   // pi 报错时可能不给最终 content；保留已经流给用户的正文。
   if (!content.length && (failed || aborted) && liveBlocks) {
-    for (const block of liveBlocks.values()) if (block.text && block.node) nodes.push(block.node);
+    for (const block of liveBlocks.values()) if (block.text && block.node) {
+      paint(block); // message_end cleared pending rAF; keep its received tail too.
+      if (block.kind === 'think') setThinkingState(block.node, aborted ? 'interrupted' : 'error');
+      nodes.push(block.node);
+    }
   }
   syncMessageChildren(bodyEl, nodes);
 
@@ -658,6 +686,8 @@ export function rebuildFromMessages(data) {
        * 整条跳过。那次工具调用不会因此消失 —— 紧跟其后的 tools 计划项会画它。 */
       if (!rebuildAssistant(body, item.message)) continue;
       wrap.appendChild(body);
+      const meta = renderMessageMeta(item.message);
+      if (meta) wrap.appendChild(meta);
       frag.appendChild(wrap);
       continue;
     }

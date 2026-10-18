@@ -1,0 +1,140 @@
+{
+  "mode": "early-attach",
+  "iteration": 2,
+  "origin": "http://127.0.0.1:1898",
+  "cdpPort": 1899,
+  "started": 1792167235296,
+  "timeline": [
+    {
+      "kind": "ws-connect",
+      "epoch": 1792167235834
+    }
+  ],
+  "args": [
+    "--user-data-dir=C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-lq6Hrc\\early-attach-2\\userdata",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=1899"
+  ],
+  "contexts": [],
+  "consoleErrors": [],
+  "exceptions": [],
+  "pid": 31816,
+  "target": {
+    "id": "63EE05AC253DD3F79D44F53DFAD82548",
+    "url": "http://127.0.0.1:1898/"
+  },
+  "exit": {
+    "code": 0,
+    "signal": null,
+    "epoch": 1792167238108
+  },
+  "observer": {
+    "events": [
+      {
+        "epoch": 1792167235438,
+        "kind": "require-production-main"
+      },
+      {
+        "epoch": 1792167235821,
+        "kind": "web-contents-created",
+        "wcId": 1,
+        "type": "window",
+        "url": "",
+        "preferences": {
+          "sandbox": true,
+          "contextIsolation": true,
+          "nodeIntegration": false
+        }
+      },
+      {
+        "epoch": 1792167235831,
+        "kind": "did-start-loading",
+        "wcId": 1,
+        "url": ""
+      },
+      {
+        "epoch": 1792167235832,
+        "kind": "did-start-navigation",
+        "wcId": 1,
+        "url": "http://127.0.0.1:1898/",
+        "inPlace": false,
+        "main": true
+      },
+      {
+        "epoch": 1792167235907,
+        "kind": "did-frame-navigate",
+        "wcId": 1,
+        "url": "http://127.0.0.1:1898/",
+        "code": 200,
+        "main": true
+      },
+      {
+        "epoch": 1792167235998,
+        "kind": "dom-ready",
+        "wcId": 1,
+        "url": "http://127.0.0.1:1898/"
+      },
+      {
+        "epoch": 1792167235999,
+        "kind": "did-finish-load",
+        "wcId": 1,
+        "url": "http://127.0.0.1:1898/"
+      },
+      {
+        "epoch": 1792167235999,
+        "kind": "observer-evaluate-start"
+      },
+      {
+        "epoch": 1792167236000,
+        "kind": "did-stop-loading",
+        "wcId": 1,
+        "url": "http://127.0.0.1:1898/"
+      },
+      {
+        "epoch": 1792167236052,
+        "kind": "observer-evaluate-end"
+      },
+      {
+        "epoch": 1792167237863,
+        "kind": "observer-close-window"
+      },
+      {
+        "epoch": 1792167237867,
+        "kind": "destroyed",
+        "wcId": 1,
+        "url": null
+      },
+      {
+        "epoch": 1792167237871,
+        "kind": "before-quit"
+      },
+      {
+        "epoch": 1792167237890,
+        "kind": "will-quit"
+      },
+      {
+        "epoch": 1792167237891,
+        "kind": "process-exit",
+        "code": 0
+      }
+    ],
+    "ready": true,
+    "checks": {
+      "desktop": true,
+      "themeBridge": true,
+      "hasProject": false,
+      "piRunning": false,
+      "projects": 0,
+      "timeOrigin": 1792167235826.7
+    },
+    "observerErrors": [],
+    "readyEpoch": 1792167236053,
+    "exitCode": 0
+  },
+  "mainConsoleErrors": [],
+  "productionReady": true,
+  "zeroErrorObserved": true
+}

@@ -1,0 +1,230 @@
+{
+  "mode": "early-runtime",
+  "iteration": 1,
+  "origin": "http://127.0.0.1:4769",
+  "cdpPort": 4770,
+  "started": 1792167223638,
+  "timeline": [
+    {
+      "kind": "ws-connect",
+      "epoch": 1792167224195
+    },
+    {
+      "kind": "command",
+      "method": "Page.getFrameTree",
+      "epoch": 1792167224198
+    },
+    {
+      "kind": "command",
+      "method": "Runtime.enable",
+      "epoch": 1792167224267
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167224276,
+      "context": 2,
+      "origin": "http://127.0.0.1:4769"
+    },
+    {
+      "kind": "event",
+      "method": "Runtime.executionContextCreated",
+      "epoch": 1792167224276,
+      "context": 1,
+      "origin": "http://127.0.0.1:4769"
+    },
+    {
+      "kind": "command",
+      "method": "Page.enable",
+      "epoch": 1792167224276
+    },
+    {
+      "kind": "event",
+      "method": "Page.domContentEventFired",
+      "epoch": 1792167224374,
+      "eventTimestamp": 19485.529208
+    },
+    {
+      "kind": "event",
+      "method": "Page.loadEventFired",
+      "epoch": 1792167224386,
+      "eventTimestamp": 19485.531004
+    },
+    {
+      "kind": "event",
+      "method": "Page.frameStoppedLoading",
+      "epoch": 1792167224387
+    }
+  ],
+  "args": [
+    "--user-data-dir=C:\\Users\\21022\\AppData\\Local\\Temp\\pi-ui2-startup-lq6Hrc\\early-runtime-1\\userdata",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=4770"
+  ],
+  "contexts": [
+    {
+      "id": 2,
+      "origin": "http://127.0.0.1:4769",
+      "name": "Electron Isolated Context",
+      "uniqueId": "6618598809962626633.4253280253728526790",
+      "auxData": {
+        "isDefault": false,
+        "type": "isolated",
+        "frameId": "A90EABB16DEB487C7D82277783CACF96"
+      }
+    },
+    {
+      "id": 1,
+      "origin": "http://127.0.0.1:4769",
+      "name": "",
+      "uniqueId": "2277352294811537040.-6908330381286177760",
+      "auxData": {
+        "isDefault": true,
+        "type": "default",
+        "frameId": "A90EABB16DEB487C7D82277783CACF96"
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "exceptions": [],
+  "pid": 2724,
+  "target": {
+    "id": "A90EABB16DEB487C7D82277783CACF96",
+    "url": "http://127.0.0.1:4769/"
+  },
+  "frameTree": {
+    "frameTree": {
+      "frame": {
+        "id": "A90EABB16DEB487C7D82277783CACF96",
+        "loaderId": "A75C9D5A58D008BAE9949FDD9B856B5E",
+        "url": "",
+        "domainAndRegistry": "",
+        "securityOrigin": "://",
+        "securityOriginDetails": {
+          "isLocalhost": false
+        },
+        "mimeType": "text/html",
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "secureContextType": "InsecureScheme",
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "gatedAPIFeatures": []
+      }
+    }
+  },
+  "exit": {
+    "code": 0,
+    "signal": null,
+    "epoch": 1792167226446
+  },
+  "observer": {
+    "events": [
+      {
+        "epoch": 1792167223781,
+        "kind": "require-production-main"
+      },
+      {
+        "epoch": 1792167224182,
+        "kind": "web-contents-created",
+        "wcId": 1,
+        "type": "window",
+        "url": "",
+        "preferences": {
+          "sandbox": true,
+          "contextIsolation": true,
+          "nodeIntegration": false
+        }
+      },
+      {
+        "epoch": 1792167224193,
+        "kind": "did-start-loading",
+        "wcId": 1,
+        "url": ""
+      },
+      {
+        "epoch": 1792167224193,
+        "kind": "did-start-navigation",
+        "wcId": 1,
+        "url": "http://127.0.0.1:4769/",
+        "inPlace": false,
+        "main": true
+      },
+      {
+        "epoch": 1792167224269,
+        "kind": "did-frame-navigate",
+        "wcId": 1,
+        "url": "http://127.0.0.1:4769/",
+        "code": 200,
+        "main": true
+      },
+      {
+        "epoch": 1792167224374,
+        "kind": "dom-ready",
+        "wcId": 1,
+        "url": "http://127.0.0.1:4769/"
+      },
+      {
+        "epoch": 1792167224385,
+        "kind": "did-finish-load",
+        "wcId": 1,
+        "url": "http://127.0.0.1:4769/"
+      },
+      {
+        "epoch": 1792167224386,
+        "kind": "observer-evaluate-start"
+      },
+      {
+        "epoch": 1792167224387,
+        "kind": "did-stop-loading",
+        "wcId": 1,
+        "url": "http://127.0.0.1:4769/"
+      },
+      {
+        "epoch": 1792167224425,
+        "kind": "observer-evaluate-end"
+      },
+      {
+        "epoch": 1792167226233,
+        "kind": "observer-close-window"
+      },
+      {
+        "epoch": 1792167226236,
+        "kind": "destroyed",
+        "wcId": 1,
+        "url": null
+      },
+      {
+        "epoch": 1792167226240,
+        "kind": "before-quit"
+      },
+      {
+        "epoch": 1792167226259,
+        "kind": "will-quit"
+      },
+      {
+        "epoch": 1792167226259,
+        "kind": "process-exit",
+        "code": 0
+      }
+    ],
+    "ready": true,
+    "checks": {
+      "desktop": true,
+      "themeBridge": true,
+      "hasProject": false,
+      "piRunning": false,
+      "projects": 0,
+      "timeOrigin": 1792167224187.8
+    },
+    "observerErrors": [],
+    "readyEpoch": 1792167224426,
+    "exitCode": 0
+  },
+  "mainConsoleErrors": [],
+  "productionReady": true,
+  "zeroErrorObserved": true
+}

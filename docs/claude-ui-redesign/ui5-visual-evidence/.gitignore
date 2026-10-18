@@ -1,0 +1,25 @@
+# Raw duplicate attempts remain available locally. Commit the accepted before,
+# final production Main/interaction matrices, logs, and explicit failure sample.
+/latest/
+/before/
+/before-complete/
+/before-final/
+/before-target/
+/before-theme/
+/before-ui3/
+/before-ui4/
+/after/
+/after-final/
+/after-ui3/
+/after-ui4/
+/after-theme/
+/after-logs/
+/final-polished/
+/packaged-public/
+/final-approval/
+/final-feedback/
+/final-ui3/
+/final-ui4/
+/final-electron/*
+!/final-electron/light-900-multiline.png
+!/final-electron/results.json

@@ -1,0 +1,6 @@
+{
+  "ProcessId": 31104,
+  "ParentProcessId": 27600,
+  "CreationDate": "2026-10-18T11:14:42.840767+08:00",
+  "CommandLine": "\"C:\\A看剧\\\\node.exe\"  \"C:\\A看剧\\\\node_modules\\npm\\bin\\npm-cli.js\" test"
+}

@@ -1,0 +1,185 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS A scoped child start
+PASS B explicit third total child
+PASS A streaming focus B output isolated
+PASS running-B-1280x800 no page overlap/overflow
+PASS running-B-1440x900 no page overlap/overflow
+PASS running-B-1920x1080 no page overlap/overflow
+PASS running-B-zoom125 no page overlap/overflow
+PASS real HTTP authoritative Stop A leaves B running
+PASS A-stopped-B-running no page overlap/overflow
+PASS Shift Tab stays in dialog
+PASS Tab wraps to first control
+PASS real keyboard Escape closes scoped dialog
+PASS scoped-browser-open no page overlap/overflow
+PASS two Browser owner records
+PASS Browser permission owned 0
+PASS Browser Agent localhost open 0
+PASS actual CDP snapshot scope 0
+PASS P29 remote permission remains denied 0
+PASS actual scoped CDP screenshot
+PASS Browser permission owned 1
+PASS Browser Agent localhost open 1
+PASS actual CDP snapshot scope 1
+PASS P29 remote permission remains denied 1
+PASS scoped-browser-closed no page overlap/overflow
+PASS A Pi crash does not stop B
+PASS crash state visible in selected A
+PASS A-crashed-B-running no page overlap/overflow
+PASS restart crashed A through owned cleanup
+PASS restart keeps native session and rotates runtime identity
+PASS old A owner cannot write restarted child
+PASS P32.4 sidebar lists both parallel conversations
+PASS P32.4 sidebar offers 新建并行会话
+PASS P32.4 sidebar hides runtime debug identity
+PASS P32.4 sidebar shows no raw ids
+PASS P32.4 clicking a conversation does not reorder the sidebar
+PASS P32.4 clicking a conversation neither spawns nor stops a runtime
+PASS sidebar-a-running-b-focused no page overlap/overflow
+PASS sidebar-1280x800 no page overlap/overflow
+PASS sidebar-1920x1080 no page overlap/overflow
+PASS sidebar-zoom125 no page overlap/overflow
+PASS P32.4-B sidebar focus switches the centre to that conversation
+PASS P32.4-B centre hides the classic chat while a parallel conversation is focused
+PASS sidebar-focus-a no page overlap/overflow
+PASS P32.4-B switching to B shows an empty draft (A draft does not leak)
+PASS P32.4-B switching back to A restores its own draft
+PASS sidebar-focus-a-draft no page overlap/overflow
+PASS P32.4-B centre composer sends through the focused conversation
+PASS P32.4-B centre Stop is enabled while the focused conversation is running
+PASS P32.4-B centre Stop targeted the focused conversation (A)
+PASS P32.4-B Stop on A leaves B running
+PASS P32.4-B pending on A does not disable B controls after switching
+PASS P32.4-B B shows no notice borrowed from A
+PASS sidebar-b-operable-while-a-pending no page overlap/overflow
+PASS P32.4-C central Browser native view belongs to A
+PASS P32.4-C central Browser native view belongs to B
+PASS P32.4-C A Browser remains alive behind B
+PASS c-browser-b-native-owner no page overlap/overflow
+PASS P32.4-C modal Escape retains central A focus and native Browser
+PASS P32.4-C ordinary modal close retains central A focus and native Browser
+PASS P32.4-C returning to A preserves its original native Browser
+PASS P32.4-C background A Browser performs real CDP navigation
+PASS P32.4-C A Browser event preserves B pane and native owner
+PASS P32.4-C background Browser event does not steal keyboard focus
+PASS P32.4-C retired A Browser owner cannot remount
+PASS P32.4-C close Browser B preserves Browser A
+PASS P32.4-C owned Process permission starts disabled 0
+PASS c-process-permission-0 no page overlap/overflow
+PASS P32.4-C real checkbox click enables requested Process permission 0
+PASS P32.4-C fixture Pi starts process through private owned bridge 0
+PASS P32.4-C real Node HTTP worker belongs to A
+PASS P32.4-C owned Process permission starts disabled 1
+PASS c-process-permission-1 no page overlap/overflow
+PASS P32.4-C real checkbox click enables requested Process permission 1
+PASS P32.4-C fixture Pi starts process through private owned bridge 1
+PASS P32.4-C real Node HTTP worker belongs to B
+PASS P32.4-C A/B production Process managers allocate independent records
+PASS P32.4-C focused Process logs/status isolate A
+PASS c-process-a no page overlap/overflow
+PASS P32.4-C focused Process logs/status isolate B
+PASS c-process-b no page overlap/overflow
+PASS P32.4-C late real A Process HTTP response cannot overwrite B pane
+PASS P32.4-C cross-owner process id rejected
+PASS P32.4-C UI stop A leaves actual B worker responding
+PASS P32.4-C UI restart A leaves actual B worker responding
+PASS P32.4-C restarted A is an actual ready Node service
+PASS P32.4-C old Process revision rejected after restart
+PASS c-changes-a no page overlap/overflow
+PASS P32.4-C focused A Changes contains only A modification; pane=["a-only.txt"]; fixture Git=["M a-only.txt"]
+PASS P32.4-C focus switches Changes to B modification
+PASS c-changes-b no page overlap/overflow
+PASS P32.4-C UI restore A leaves B worktree and classic cwd untouched
+PASS c-changes-a-restored no page overlap/overflow
+PASS P32.4-B leaving the parallel conversation restores the classic chat centre
+PASS close cleanup retains lazy records (live=0, items=2)
+PASS P32.4-C closing runtimes actually closes both owned Node HTTP workers
+PASS P32.4-C runtime close disposes owned Browser records and native views
+PASS P32.4 closed runtimes stay visible as dormant rows
+PASS sidebar-dormant no page overlap/overflow
+PASS backend restart discovers disk sessions without spawning scoped children
+PASS old backend identity cannot operate restored registry
+PASS resume revalidates Git worktree and proven native session file
+PASS disk recovery keeps native session and allocates fresh backend owner
+PASS P32.4-D classic plus A fills two regular slots with backend limits unchanged
+PASS P32.4-D sidebar resource count comes from totalCount including classic
+PASS d-two-regular-slots no page overlap/overflow
+PASS P32.4-D dormant B history opens at full regular capacity without spawning
+PASS P32.4-D opening history never sends a launch request
+PASS P32.4-D third Resume explains resource cost before launch
+PASS P32.4-D third confirmation appears before any Pi spawn request
+PASS d-third-confirmation no page overlap/overflow
+PASS P32.4-D Cancel leaves B dormant and sends no resume
+PASS P32.4-D confirmed central Resume sends top-level allowThird true exactly once
+D after third safe focus evidence: {"backendFocusedB":true,"renderer":{"requests":[{"action":"resume","conversationId":"d11b29ca-51bc-487e-a275-4905c19df259","workspaceId":null,"allowThird":true,"ok":true,"code":null,"returnedOwner":{"conversationId":"d11b29ca-51bc-487e-a275-4905c19df259","runtimeId":"ae51c67e-5ec2-4d65-b81f-8f4223a1156e","runtimeGeneration":"30112b3b-752a-4938-9c13-18a9b3862aeb"}}],"focusRequests":[{"action":"focus","conversationId":"d11b29ca-51bc-487e-a275-4905c19df259","runtimeId":"ae51c67e-5ec2-4d65-b81f-8f4223a1156e","runtimeGeneration":"30112b3b-752a-4938-9c13-18a9b3862aeb","ok":true,"code":null}],"title":"runtime-B","view":"runtime","b":{"lifecycle":"ready","conversationId":"d11b29ca-51bc-487e-a275-4905c19df259","runtimeId":"ae51c67e-5ec2-4d65-b81f-8f4223a1156e","runtimeGeneration":"30112b3b-752a-4938-9c13-18a9b3862aeb"}}}
+PASS P32.4-D third child ready preserves existing A runtime
+PASS d-third-active no page overlap/overflow
+PASS P32.4-D fourth sidebar create actually reaches backend and receives runtime_limit
+PASS P32.4-D fourth request shows backend rejection without another third confirmation
+PASS P32.4-D fourth rejection never replaces or closes existing A/B
+PASS d-fourth-rejected no page overlap/overflow
+PASS P32.4-D resumed current central B receives backend focus after ready
+PASS P32.4-D third conversation owns real Browser and ready Node service before close
+PASS P32.4-D closed SSE does not optimistically release the authoritative slot count
+PASS P32.4-D close frees third Browser owner before slot readback drops
+PASS P32.4-D close actually stops third owned Node service before released-slot readback
+PASS P32.4-D closing B recovers its slot and preserves A
+PASS P32.4-D closed B history remains accessible without another launch
+PASS d-close-slot-recovered-history no page overlap/overflow
+PASS P32.4-E B false capability disables native thinking choices
+PASS e-model-b-text no page overlap/overflow
+PASS P32.4-E A thinking choices come from native Pi levels
+PASS e-model-a-reasoning no page overlap/overflow
+PASS P32.4-E HTTP setter ack cannot optimistically replace A model
+PASS P32.4-E late correlated A model response/readback never overwrites B selector
+PASS P32.4-E A selector changes only after successful native response and readback
+PASS P32.4-E late failed A model request never changes B
+PASS P32.4-E native setter rejection preserves last confirmed A model
+PASS P32.4-E unknown reasoning capability stays unknown without guessed levels
+PASS P32.4-E A thinking setter confirmed by native readback
+PASS P32.4-E physical Arrow navigation selects a native allowed thinking level
+PASS P32.4-E A thinking change leaves B unsupported capability intact
+PASS P32.4-E physical Enter sends only captured A and clears confirmed draft
+PASS P32.4-E physical Tab leaves central composer through normal focus order
+PASS P32.4-E physical Shift+Tab restores central composer focus
+PASS P32.4-E branch modal traps physical Tab
+PASS P32.4-E Escape closes modal and restores exact trigger focus
+PASS P32.4-E central composer stays usable beside right pane 1280x800
+PASS e-central-1280x800 no page overlap/overflow
+PASS P32.4-E central composer stays usable beside right pane 1440x900
+PASS e-central-1440x900 no page overlap/overflow
+PASS P32.4-E central composer stays usable beside right pane 1920x1080
+PASS e-central-1920x1080 no page overlap/overflow
+PASS P32.4-E zoom 125 central composer and model selector are not covered by right pane
+PASS e-central-zoom125 no page overlap/overflow
+PASS P32.4-E zoom 150 central composer and model selector are not covered by right pane
+PASS e-central-zoom150 no page overlap/overflow
+PASS P32.4-E actual native Browser bounds stay inside the window at 150 percent zoom
+PASS e-browser-zoom150 no page overlap/overflow
+PASS P32.4-E real native body search preserves project/worktree/conversation/native identity
+PASS P32.4-E live search opens exact A native history without cross-owner body
+PASS e-search-live-history-a no page overlap/overflow
+PASS P32.4-E dormant native body result opens B history without spawn or A contamination
+PASS e-search-dormant-history-b no page overlap/overflow
+PASS P32.4-E physical Escape clears integrated search back to normal history navigation
+PASS P32.4-E classic physical Enter and native body search retain ordinary session identity
+PASS P32.4 sidebar create loop actually started a runtime
+PASS P32.4 created conversation carries the entered branch name
+PASS P32.4 new parallel conversation appears in the sidebar after creation
+PASS P32.4 new sidebar row shows its branch name
+PASS sidebar-created no page overlap/overflow
+PASS UI4 Runtime Browser attaches the current authoritative native owner
+PASS ui4-runtime-approval-browser no page overlap/overflow
+PASS UI4 old native owner detaches on Runtime restart
+PASS UI4 production feedback getter invalidates actions for the replaced actual Runtime owner
+PASS UI4 new actual owner does not lose same-text errors to old-owner deduplication
+PASS UI4 stale held approval cannot authorize or display failure in the new owner
+PASS ui4-runtime-owner-replaced no page overlap/overflow
+PASS UI4 current-owner explicit denial sends exactly one actual backend response
+PASS ui4-runtime-current-denied no page overlap/overflow
+PASS UI4 actual A to B navigation keeps identical real failures independent
+PASS ui4-runtime-feedback-other-conversation no page overlap/overflow
+PASS P32.4 created runtime can be closed through its owned handle
+PASS no renderer console errors
+Runtime Electron 181/181; 47 screenshots

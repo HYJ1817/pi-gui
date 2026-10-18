@@ -1,0 +1,7 @@
+{
+  "fixtureCommand": "node tests/fixtures.mjs",
+  "fixtureExitCode": 0,
+  "command": "node tests/app-check.cjs --output-root <build-root.txt>",
+  "exitCode": 0,
+  "buildRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-ui3-final-delivery-e8c6ebcac46145efac1068daf8b66a6f"
+}

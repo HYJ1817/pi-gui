@@ -10,9 +10,10 @@ Last updated: 2026-10-03.
 
 ## Summary
 
-- **No telemetry. No analytics. No crash reporting. No advertising. No user accounts.**
+- **No telemetry. No analytics. No upload of crash reports. No advertising. No user accounts.**
 - Pi GUI does not collect, store or transmit any usage data, and it does not have a
-  backend that could receive it.
+  backend that could receive it. Diagnostic logs and crash clues are written **locally**
+  (see [Local diagnostic logs](#local-diagnostic-logs)), never uploaded automatically.
 - The only automatic network requests are **two version checks** against public
   endpoints, described below. They send no data about you.
 - Everything else that touches the network is started by **you**, and uses credentials
@@ -129,19 +130,54 @@ extensions run inside `pi` and may make their own network requests, subject to t
 policies. Pi GUI displays the activity it can observe but does not control what an
 extension sends. What is installed, and whether it runs, is your choice.
 
+## Local diagnostic logs
+
+Pi GUI keeps a small, local, structured diagnostic log so that an intermittent bug can
+still be investigated after it happens. **These logs are never uploaded automatically**
+and there is no server that receives them.
+
+- Location: a private `logs` folder under the app's user-data directory
+  (`%APPDATA%\Pi GUI\logs` for the installed app; `%APPDATA%\pi-gui\logs` when running
+  from source). It is not written into your projects or Git repositories, and changing
+  projects or sessions does not change it.
+- Default: enabled in **standard** mode (INFO and above), retained for **7 days**, with a
+  **20 MB** total cap and a **4 MB** per-file cap. Settings → 诊断 → 日志与故障报告 lets
+  you disable it, switch to a temporary **verbose** mode (which returns to standard after
+  24 hours), change retention/capacity, inspect logs, and clear them.
+- What is recorded: stable event codes, timestamps, source, severity, correlation IDs,
+  durations, and a small allow-listed set of technical metadata. Crash files are stored
+  separately so the next launch can show evidence of an abnormal exit.
+- What is **not** recorded: chat messages, model replies, tool inputs/outputs, file or
+  image contents, configuration contents, environment variables, API keys, OAuth tokens,
+  cookies, authorization headers, `PI_GUI_TOKEN`, project/home absolute paths, browser
+  page contents, Git diffs, or raw command lines. The app deliberately does not capture
+  raw console output or Pi stdout as a log source.
+- Export: “导出故障报告” creates a ZIP **on your machine** with a fixed manifest
+  (`README.txt`, `report.md`, `diagnostics.json`, `events.jsonl`, `errors.jsonl`). It
+  includes the existing redacted diagnostics snapshot and a bounded time window of
+  structured events. It is not uploaded, does not create a GitHub issue, does not attach
+  screenshots, and does not include chat history or project files. You must choose to
+  save/ share it yourself. The report form warns you to review any text you type.
+
+See [docs/diagnostic-logging.md](docs/diagnostic-logging.md) for the full event/field
+allow-list, export bounds, and security tests. Local logs contain no telemetry and are
+not “crash reporting” to us; they remain on your computer unless you choose to share the
+ZIP.
+
 ## What is stored on your machine
 
 All state is local:
 
-- `%APPDATA%\Pi GUI` — window layout, your project list, and interface preferences.
-  (When running from source instead of the installed build, this is `%APPDATA%\pi-gui`.)
+- `%APPDATA%\Pi GUI` — window layout, your project list, interface preferences, and the
+  private local diagnostic logs described above. (When running from source instead of
+  the installed build, this is `%APPDATA%\pi-gui`.)
 - Your own `pi` configuration, sessions and credentials live in pi's own directories and
   are managed by `pi`, not by Pi GUI.
 
 Nothing in these folders is uploaded anywhere. Uninstalling the application removes the
 program files but leaves `%APPDATA%\Pi GUI` alone (see
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md#uninstallation)); delete that folder
-manually to remove the remaining settings.
+manually to remove the remaining settings and logs.
 
 ## Disabling the automatic checks
 
@@ -180,5 +216,14 @@ Pi GUI 是**纯本地**桌面程序：没有账号、**没有遥测 / 埋点 / �
 因此不产生哈希。
 你装的 Pi Extension 可能自行联网，那由该 Extension 自己负责。
 
-本机数据都在 `%APPDATA%\Pi GUI`（窗口布局、项目列表）：不卸载不删除，卸载程序**只删程序
-文件、保留这份数据**。完整说明见 [PRIVACY.md](PRIVACY.md) 英文部分。
+Pi GUI 还会在本机写一份**结构化诊断日志**（默认开启，标准级别，保留 7 天、总上限
+20 MB、单文件 4 MB），用来查偶发故障。它只记录稳定事件代码、时间、来源、关联标识、
+耗时和白名单技术元信息；**不记录聊天正文、工具输入输出、文件内容、配置原文、环境变量、
+凭据、Cookie、Authorization、`PI_GUI_TOKEN`、项目/HOME 绝对路径或浏览器页面内容**，
+也**不会自动上传**。设置 → 诊断 → 日志与故障报告可以关闭、切换临时详细模式（24 小时后
+自动回标准）、查看、清理，或在**本机**生成固定清单的故障报告 ZIP（不自动建 Issue、
+不附截图、不含聊天历史与项目文件）；是否发送由你自己决定。完整边界见
+[docs/diagnostic-logging.md](docs/diagnostic-logging.md)。
+
+本机数据都在 `%APPDATA%\Pi GUI`（窗口布局、项目列表、本地诊断日志）：不卸载不删除，
+卸载程序**只删程序文件、保留这份数据**。完整说明见 [PRIVACY.md](PRIVACY.md) 英文部分。

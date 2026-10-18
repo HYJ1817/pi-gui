@@ -1,0 +1,141 @@
+/* UI-3B：模型选择器与 Thinking 等级选择器的样式增量。
+ *
+ * ---------- 边界 ----------
+ *
+ * 这个文件**只消费** public/tokens.css 的语义 Token（--ui-*）与它的兼容别名
+ * （--t1/--t2/--t3/--hover/--line/--focus-ring…），不定义任何新的颜色来源，
+ * 也不新增全局自定义属性。要改配色，改 tokens.css —— 那是唯一正确落点。
+ *
+ * 它只画既有 .pop-* / .chip 契约**没画**的那部分：
+ *   - 当前模型身份行（同名模型分属两个 Provider 时唯一能把它们分开的地方）
+ *   - Thinking「不可用」的四种分档
+ *   - 能力未知的中性呈现（不是「不支持」）
+ *   - Chip 的 pending / 不可用分档
+ *   - 键盘漫游的 focus-visible 与 reduced-motion
+ *
+ * 既有的 .pop / .pop-provider* / .pop-item* / .chip 规则留在 styles.css 里不动；
+ * 这里只做叠加，所以即使本文件没被加载，列表依然是可用且语义正确的。
+ *
+ * ---------- 加载方式 ----------
+ *
+ * index.html 里排在 styles.css 之后：
+ *   <link rel="stylesheet" href="/ui3-model.css">
+ * 放在后面是为了让本文件的规则在同优先级时覆盖 styles.css 的默认值。 */
+
+/* ---------- 当前模型身份行 ---------- */
+
+.ui3-current{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px 7px;margin:0 0 2px;
+  font:11.5px var(--ui-font-mono);
+  color:var(--ui-text-muted);
+  border-bottom:1px solid var(--ui-border);
+  overflow-wrap:anywhere;
+}
+.ui3-current::before{
+  content:"";flex:0 0 auto;width:5px;height:5px;border-radius:50%;
+  background:var(--ui-text-muted);
+}
+.ui3-current.ui3-pending::before{background:var(--ui-warning)}
+
+.ui3-empty{
+  padding:10px;font-size:12.5px;color:var(--ui-text-muted);text-align:center;
+}
+
+/* ---------- 模型条目 ---------- */
+
+/* 长模型名换行而不是撑破弹层。两行封顶，超出仍交给 .pop 自己的纵向滚动。 */
+.pop .ui3-model-item .pi-text{
+  white-space:normal;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+}
+/* 选中态用既有 --ui-selected，与 .pop-item.on 同源，只是补一条左侧标记，
+   让「当前项」在几百个条目里也能一眼看到（对勾在右侧，长列表里容易滑出视线）。 */
+.pop .ui3-model-item.on{
+  background:var(--ui-selected);
+  box-shadow:inset 2px 0 0 var(--ui-link);
+}
+/* 推理能力的三值：只有明确 false 才降调，unknown 保持中性。 */
+.pop .ui3-model-item[data-reasoning="no"] .pi-text{color:var(--ui-text-secondary)}
+
+/* 能力未知：中性、斜体，明确区别于「不支持」。 */
+.pop .ui3-model-item .pi-sub.ui3-cap-unknown{
+  color:var(--ui-text-muted);font-style:italic;font-family:inherit;
+}
+
+/* ---------- Provider 折叠标题 ---------- */
+
+/* 既有的 .pop-provider 已给好尺寸与 hover；这里补选中组的强调与焦点环。
+   ⌄ / › 由 JS 写进 .pop-provider-chev，宽度固定住，折叠切换时标题不跳动。 */
+.pop .pop-provider{font-weight:var(--ui-weight-medium)}
+.pop .pop-provider:focus-visible{
+  outline:2px solid var(--ui-focus);outline-offset:-2px;
+}
+.pop-model-group[data-current="true"] > .pop-provider{color:var(--ui-text-primary)}
+.pop-model-group[data-current="true"] > .pop-provider .pop-provider-name{
+  color:var(--ui-text-primary);
+}
+.pop-provider-chev{transition:color var(--ui-duration-snap) var(--ui-ease-out)}
+
+/* ---------- Thinking ---------- */
+
+.ui3-think-state{
+  padding:7px 10px 8px;margin:0 0 2px;
+  font-size:11.5px;line-height:1.5;
+  color:var(--ui-text-muted);
+  border-bottom:1px solid var(--ui-border);
+  overflow-wrap:anywhere;
+}
+/* 四种不可用各有各的说法，配色只区分「明确不行」与「还不知道」：
+   unsupported 是上游给的明确事实，可以用中性偏弱的强调；
+   unknown 没有证据，绝不能画成错误色（那等于替上游定罪）。 */
+.ui3-think-state[data-state="unsupported"]{color:var(--ui-text-secondary)}
+.ui3-think-state[data-state="unknown"]{color:var(--ui-text-muted);font-style:italic}
+.ui3-think-state[data-state="pending"]{color:var(--ui-text-secondary)}
+.ui3-think-state[data-state="no-model"]{color:var(--ui-text-muted)}
+
+.pop .ui3-think-item .pi-sub{font-family:inherit;color:var(--ui-text-muted)}
+.pop .ui3-think-item.on{background:var(--ui-selected);box-shadow:inset 2px 0 0 var(--ui-link)}
+.pop .ui3-think-item:disabled{opacity:.4;cursor:default}
+.pop .ui3-think-item:disabled:hover{background:transparent}
+
+/* ---------- Chip ---------- */
+
+/* data-ui3-state 由 applyChipState() 写入。接线前只有 :disabled 生效，
+   接线后「同步中」与「不可用」才分得开。 */
+.chip[data-ui3-state="pending"]{color:var(--ui-text-muted)}
+.chip[data-ui3-state="unsupported"],
+.chip[data-ui3-state="unavailable"],
+.chip[data-ui3-state="no-model"]{color:var(--ui-text-muted)}
+/* 能力未知：保持中性，不用警告色 —— 未知不是故障。 */
+.chip[data-ui3-state="unknown"]{color:var(--ui-text-muted)}
+.chip[data-ui3-state="ready"] .chip-dot{background:var(--ui-link)}
+.chip:disabled{cursor:default;opacity:.4}
+.chip:disabled:hover{background:transparent;color:var(--ui-text-secondary)}
+.chip[data-ui3-state="pending"]:disabled{opacity:.55}
+
+/* 模型 Chip 的长名：既有 #modelText 已截断，这里补 title 提示的视觉反馈。 */
+.cb-right .chip #modelText{overflow-wrap:normal}
+
+/* ---------- 焦点与动效 ---------- */
+
+.pop .ui3-model-item:focus-visible,
+.pop .ui3-think-item:focus-visible{
+  outline:2px solid var(--ui-focus);outline-offset:-2px;
+}
+/* 键盘漫游时 roving tabindex 把非当前项设为 -1；它们仍可被程序聚焦，
+   所以显式保证 :focus-visible 的环不被任何 overflow 裁掉。 */
+.pop .pop-item,.pop .pop-provider{scroll-margin-block:4px}
+
+@media(prefers-reduced-motion:reduce){
+  .pop-provider-chev{transition:none}
+}
+
+/* ---------- 窄窗口 ---------- */
+
+/* 700×600 下弹层仍要能滚到每一项。位置由 ui/popover.js 的 openPop 算，
+   这里只保证内容不被横向撑破（长 Provider 名 / 长模型 id）。 */
+@media(max-width:760px){
+  .pop .ui3-model-item .pi-text{-webkit-line-clamp:3}
+  .pop-provider-name,.ui3-current{overflow-wrap:anywhere}
+}

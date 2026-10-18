@@ -1,0 +1,104 @@
+
+> pi-gui@0.25.0 test:ui4
+> node tests/ui4-approval.cjs && node tests/ui4-feedback.cjs && node tests/ui4-integration.cjs
+
+  ok  confirm 请求走统一确认层并显示来源 / 类型
+  ok  风险只陈述「协议没有结构化字段」，不猜危险等级
+  ok  确认卡只有一次性两个决定，没有 Always / Bypass / Auto
+  ok  长命令完整渲染，不在 UI 层二次截断
+  ok  空字段使用可读兜底，不渲染 undefined
+  ok  恶意 HTML / 额外字段不进 DOM
+ FAIL 允许一次只发一条 extension_ui_response{confirmed:true}: Expected values to be strictly equal:
+
+false !== true
+
+  ok  拒绝只发 confirmed:false，不伪装成取消
+  ok  Esc 发 cancelled:true（fail-closed 的取消）
+  ok  点遮罩取消同样走协议应答
+  ok  提交中重复点击只发一条命令
+  ok  提交中 Esc / 点遮罩 / Enter 都不会补发第二条应答
+Error: Uncaught [TypeError: Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.]
+    at reportException (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at DocumentImpl._dispatch (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at DocumentImpl.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:253:25
+    at async check (C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:32:9)
+    at async main (C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:246:3)
+    at async C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:996:25 TypeError: Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.
+    at exports.convert (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\Event.js:22:9)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:236:24)
+    at refreshFeedbackContext (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:29:12)
+    at Document.contextChanged (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:50:3)
+    at Document.callTheUserObjectsOperation (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+    at invokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at DocumentImpl._dispatch (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at DocumentImpl.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+  ok  迟到结果不覆盖已作废状态，也不再弹卡
+  ok  SSE 重放已结算请求不会再次弹卡
+Error: Uncaught [TypeError: Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.]
+    at reportException (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at DocumentImpl._dispatch (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at DocumentImpl.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:280:25
+    at check (C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:32:15)
+    at main (C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:276:9)
+    at async C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:996:25 TypeError: Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.
+    at exports.convert (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\Event.js:22:9)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:236:24)
+    at refreshFeedbackContext (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:29:12)
+    at Document.contextChanged (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:50:3)
+    at Document.callTheUserObjectsOperation (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+    at invokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at DocumentImpl._dispatch (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at DocumentImpl.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+  ok  工作区切换：旧审批本地作废且不发应答
+Error: Uncaught [TypeError: Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.]
+    at reportException (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at DocumentImpl._dispatch (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at DocumentImpl.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:291:25
+    at check (C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:32:15)
+    at main (C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:288:9)
+    at async C:\pi-GUI-ui4-integration\tests\ui4-approval.cjs:996:25 TypeError: Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.
+    at exports.convert (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\Event.js:22:9)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:236:24)
+    at refreshFeedbackContext (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:29:12)
+    at Document.contextChanged (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:50:3)
+    at Document.callTheUserObjectsOperation (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+    at invokeEventListeners (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at DocumentImpl._dispatch (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at DocumentImpl.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+  ok  会话切换：旧审批本地作废且不发应答
+  ok  卡片残留时点允许：本地作废、不发应答、卡片收掉
+  ok  Stop：pending 收到取消、卡片收掉、不留关不掉的卡
+  ok  Stop 打断提交中：不补发取消，卡片仍收掉
+C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\Event.js:22
+  throw new globalObject.TypeError(`${context} is not of type 'Event'.`);
+  ^
+
+TypeError: Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.
+    at exports.convert (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\Event.js:22:9)
+    at Document.dispatchEvent (C:\pi-GUI\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:236:24)
+    at refreshFeedbackContext (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:29:12)
+    at toast (file:///C:/pi-GUI-ui4-integration/public/ui/toast.js:101:3)
+    at expire (file:///C:/pi-GUI-ui4-integration/public/approval.js:191:29)
+    at Timeout.<anonymous> (file:///C:/pi-GUI-ui4-integration/public/approval.js:506:36)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+
+Node.js v24.14.0

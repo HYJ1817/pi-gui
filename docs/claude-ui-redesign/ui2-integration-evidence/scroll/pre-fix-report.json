@@ -1,0 +1,1023 @@
+{
+  "passed": 40,
+  "failed": 16,
+  "exitCode": 1,
+  "checks": [
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 0",
+      "detail": {
+        "top": 3123.333251953125,
+        "height": 3980,
+        "client": 856,
+        "gap": 0.666748046875
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 1",
+      "detail": {
+        "top": 3161.333251953125,
+        "height": 4017,
+        "client": 856,
+        "gap": -0.333251953125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 2",
+      "detail": {
+        "top": 3198.666748046875,
+        "height": 4055,
+        "client": 856,
+        "gap": 0.333251953125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 3",
+      "detail": {
+        "top": 3236,
+        "height": 4092,
+        "client": 856,
+        "gap": 0
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 4",
+      "detail": {
+        "top": 3273.333251953125,
+        "height": 4130,
+        "client": 856,
+        "gap": 0.666748046875
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 5",
+      "detail": {
+        "top": 3311.333251953125,
+        "height": 4167,
+        "client": 856,
+        "gap": -0.333251953125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 6",
+      "detail": {
+        "top": 3348.666748046875,
+        "height": 4205,
+        "client": 856,
+        "gap": 0.333251953125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 7",
+      "detail": {
+        "top": 3386,
+        "height": 4242,
+        "client": 856,
+        "gap": 0
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 8",
+      "detail": {
+        "top": 3423.333251953125,
+        "height": 4280,
+        "client": 856,
+        "gap": 0.666748046875
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 9",
+      "detail": {
+        "top": 3461.333251953125,
+        "height": 4317,
+        "client": 856,
+        "gap": -0.333251953125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 10",
+      "detail": {
+        "top": 3498.666748046875,
+        "height": 4355,
+        "client": 856,
+        "gap": 0.333251953125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic bottom follows delta 11",
+      "detail": {
+        "top": 3536,
+        "height": 4392,
+        "client": 856,
+        "gap": 0
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic delta preserves user scroll",
+      "detail": {
+        "before": {
+          "top": 100,
+          "height": 4392,
+          "client": 856,
+          "gap": 3436
+        },
+        "after": {
+          "top": 100,
+          "height": 5292,
+          "client": 856,
+          "gap": 4336
+        }
+      }
+    },
+    {
+      "pass": true,
+      "label": "Classic returning bottom resumes follow",
+      "detail": {
+        "top": 5186,
+        "height": 6042,
+        "client": 856,
+        "gap": 0
+      }
+    },
+    {
+      "pass": false,
+      "label": "Classic new assistant does not steal reader scroll",
+      "detail": {
+        "top": 5227.33349609375,
+        "height": 6083,
+        "client": 856,
+        "gap": -0.33349609375
+      }
+    },
+    {
+      "pass": false,
+      "label": "Classic tool start does not steal reader scroll",
+      "detail": {
+        "top": 5295.33349609375,
+        "height": 6152,
+        "client": 856,
+        "gap": 0.66650390625
+      }
+    },
+    {
+      "pass": true,
+      "label": "Runtime fixture has real scroll geometry",
+      "detail": {
+        "top": 0,
+        "height": 3705,
+        "client": 229,
+        "gap": 3476
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 0",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 4195,
+        "client": 229,
+        "gap": 489.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 1",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 4685,
+        "client": 229,
+        "gap": 979.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 2",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 5175,
+        "client": 229,
+        "gap": 1469.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 3",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 5665,
+        "client": 229,
+        "gap": 1959.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 4",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 6155,
+        "client": 229,
+        "gap": 2449.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 5",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 6645,
+        "client": 229,
+        "gap": 2939.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 6",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 7135,
+        "client": 229,
+        "gap": 3429.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 7",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 7625,
+        "client": 229,
+        "gap": 3919.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 8",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 8115,
+        "client": 229,
+        "gap": 4409.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 9",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 8605,
+        "client": 229,
+        "gap": 4899.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 10",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 9095,
+        "client": 229,
+        "gap": 5389.333251953125
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime bottom follows large delta 11",
+      "detail": {
+        "top": 3476.666748046875,
+        "height": 9585,
+        "client": 229,
+        "gap": 5879.333251953125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Runtime delta preserves user scroll",
+      "detail": {
+        "before": {
+          "top": 120,
+          "height": 9585,
+          "client": 229,
+          "gap": 9236
+        },
+        "after": {
+          "top": 120,
+          "height": 10565,
+          "client": 229,
+          "gap": 10216
+        }
+      }
+    },
+    {
+      "pass": true,
+      "label": "Runtime legal late A event leaves B text and draft isolated"
+    },
+    {
+      "pass": true,
+      "label": "Runtime A scroll draft and late text restored",
+      "detail": {
+        "top": 120,
+        "height": 10590,
+        "client": 229,
+        "gap": 10241
+      }
+    },
+    {
+      "pass": true,
+      "label": "Runtime B scroll and draft restored",
+      "detail": {
+        "top": 240,
+        "height": 3705,
+        "client": 229,
+        "gap": 3236
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime returning bottom resumes follow",
+      "detail": {
+        "top": 10360.6669921875,
+        "height": 11080,
+        "client": 229,
+        "gap": 490.3330078125
+      }
+    },
+    {
+      "pass": true,
+      "label": "Runtime leave and same-id show preserve reader viewport",
+      "detail": {
+        "top": 180,
+        "height": 11570,
+        "client": 229,
+        "gap": 11161
+      }
+    },
+    {
+      "pass": true,
+      "label": "Runtime stop request preserves reading viewport",
+      "detail": {
+        "top": 180,
+        "height": 11570,
+        "client": 229,
+        "gap": 11161
+      }
+    },
+    {
+      "pass": true,
+      "label": "Runtime history uses actual API renderer and disables composer"
+    },
+    {
+      "pass": true,
+      "label": "Runtime history redraw preserves reading viewport",
+      "detail": {
+        "top": 210,
+        "height": 4538,
+        "client": 229,
+        "gap": 4099
+      }
+    },
+    {
+      "pass": false,
+      "label": "Runtime history returns to its live text and composer"
+    },
+    {
+      "pass": true,
+      "label": "dark 700 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 700,
+        "page": 700,
+        "thinking": {
+          "w": 420,
+          "sw": 420,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "dark 700 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 700,
+        "page": 700,
+        "thinking": {
+          "w": 420,
+          "sw": 420,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "dark 900 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 900,
+        "page": 900,
+        "thinking": {
+          "w": 580,
+          "sw": 580,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "dark 900 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 900,
+        "page": 900,
+        "thinking": {
+          "w": 580,
+          "sw": 580,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "dark 1200 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 1200,
+        "page": 1200,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "dark 1200 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 1200,
+        "page": 1200,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "dark 1536 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 1536,
+        "page": 1536,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "dark 1536 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 1536,
+        "page": 1536,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(240, 239, 236)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 700 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 700,
+        "page": 700,
+        "thinking": {
+          "w": 420,
+          "sw": 420,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 700 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 700,
+        "page": 700,
+        "thinking": {
+          "w": 420,
+          "sw": 420,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 900 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 900,
+        "page": 900,
+        "thinking": {
+          "w": 580,
+          "sw": 580,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 900 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 900,
+        "page": 900,
+        "thinking": {
+          "w": 580,
+          "sw": 580,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 1200 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 1200,
+        "page": 1200,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 1200 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 1200,
+        "page": 1200,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 1536 long Thinking wraps without page overflow",
+      "detail": {
+        "width": 1536,
+        "page": 1536,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "light 1536 unknown usage hidden, truncation and real tool three states",
+      "detail": {
+        "width": 1536,
+        "page": 1536,
+        "thinking": {
+          "w": 762,
+          "sw": 762,
+          "whiteSpace": "pre-wrap",
+          "wrap": "anywhere"
+        },
+        "usageHidden": true,
+        "states": [
+          "done",
+          "error",
+          "running"
+        ],
+        "truncation": true,
+        "output": {
+          "h": 120,
+          "sh": 120
+        },
+        "color": "rgb(11, 11, 11)"
+      }
+    },
+    {
+      "pass": true,
+      "label": "No renderer or harness console errors",
+      "detail": []
+    }
+  ],
+  "facts": [
+    {
+      "theme": "dark",
+      "width": 700,
+      "page": 700,
+      "thinking": {
+        "w": 420,
+        "sw": 420,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(240, 239, 236)"
+    },
+    {
+      "theme": "dark",
+      "width": 900,
+      "page": 900,
+      "thinking": {
+        "w": 580,
+        "sw": 580,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(240, 239, 236)"
+    },
+    {
+      "theme": "dark",
+      "width": 1200,
+      "page": 1200,
+      "thinking": {
+        "w": 762,
+        "sw": 762,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(240, 239, 236)"
+    },
+    {
+      "theme": "dark",
+      "width": 1536,
+      "page": 1536,
+      "thinking": {
+        "w": 762,
+        "sw": 762,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(240, 239, 236)"
+    },
+    {
+      "theme": "light",
+      "width": 700,
+      "page": 700,
+      "thinking": {
+        "w": 420,
+        "sw": 420,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(11, 11, 11)"
+    },
+    {
+      "theme": "light",
+      "width": 900,
+      "page": 900,
+      "thinking": {
+        "w": 580,
+        "sw": 580,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(11, 11, 11)"
+    },
+    {
+      "theme": "light",
+      "width": 1200,
+      "page": 1200,
+      "thinking": {
+        "w": 762,
+        "sw": 762,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(11, 11, 11)"
+    },
+    {
+      "theme": "light",
+      "width": 1536,
+      "page": 1536,
+      "thinking": {
+        "w": 762,
+        "sw": 762,
+        "whiteSpace": "pre-wrap",
+        "wrap": "anywhere"
+      },
+      "usageHidden": true,
+      "states": [
+        "done",
+        "error",
+        "running"
+      ],
+      "truncation": true,
+      "output": {
+        "h": 120,
+        "sh": 120
+      },
+      "color": "rgb(11, 11, 11)"
+    }
+  ],
+  "screenshots": [
+    "classic-reading.png",
+    "classic-after-tool.png",
+    "runtime-scroll.png",
+    "runtime-history.png",
+    "runtime-dark-700.png",
+    "runtime-dark-900.png",
+    "runtime-dark-1200.png",
+    "runtime-dark-1536.png",
+    "runtime-light-700.png",
+    "runtime-light-900.png",
+    "runtime-light-1200.png",
+    "runtime-light-1536.png"
+  ],
+  "errors": [],
+  "durationMs": 9421,
+  "versions": {
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130"
+  },
+  "coverage": "Actual Electron production ESM and validated runtime frames, temporary userData, offline port-0 harness; fixture-only no real Pi/model; history/stop separate acceptance"
+}
