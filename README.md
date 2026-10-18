@@ -361,10 +361,11 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 ## 测试与开发
 
 ```bash
-npm test           # 40 个套件，纯自动化，约 3-4 分钟（不联网、不花模型额度）
+npm test           # 完整 canonical 测试链（不联网、不花模型额度）
 ```
 
-`npm test` 是测试入口的**唯一真相** —— CI 只调它，不把子测试抄进 workflow。
+`npm test` 是测试入口的**唯一真相** —— CI 在运行时递归读取同一条链并按隔离组执行，
+workflow 不另存套件列表；`node scripts/run-test-group.mjs --validate` 可核对覆盖。
 需要真 pi 的（`test:skills-live` 等）与需要 NSIS 的
 （`test:portable` / `test:installer`）都不进默认 CI。
 
@@ -372,8 +373,9 @@ npm test           # 40 个套件，纯自动化，约 3-4 分钟（不联网、
 （手动，跑完整发布路径但不发版）→ `release.yml`（tag 触发，验证全过才发布）。
 三者调的是同一套 npm 脚本。
 
-CI 在 **windows runner** 上跑：Node 22 与 24 各跑一遍 `npm test`，
-通过后做一次 Electron 打包并验产物（25 项 + 47 项）。
+CI 在 **windows runner** 上固定 Node 24.14.0：`core` / `ui` / `security` / `faults`
+四组并行，Native 组内串行；全部通过后才做 Electron 打包并验产物（25 项 + 47 项）。
+Node 22 不再持续验证；产品 `engines.node` 仍保持 `>=22.19`。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /
 `test:skills` / `test:planner` / `test:workflow` / `test:reviews` / `test:verify` /
@@ -419,6 +421,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [project-config.md](docs/project-config.md) | 项目配置：位置、字段、优先级、指令注入、坏配置行为 |
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
+| [ci-optimization-audit.md](docs/ci-optimization-audit.md) | CI 优化审计：143 个套件的实测耗时、资源边界、分组与并行规则 |
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
 | [diagnostic-logging.md](docs/diagnostic-logging.md) | 本地结构化日志：事件/字段白名单、分级与保留、崩溃线索、进程边界、故障报告 ZIP 与负向测试 |
 | [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、P23 的版本真值 / probe registry / 兼容矩阵 / schema 漂移 |

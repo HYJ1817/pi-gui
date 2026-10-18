@@ -116,9 +116,18 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 
 ## 二、`npm test` 的定位
 
-**`package.json` 的 `test` 脚本是测试入口的唯一真相。** CI 只调 `npm test`，
-不把子测试抄进 workflow —— 抄一份就会有两个真相，以后加了新套件漏改一处，
-就是「本地跑了、CI 没跑」的假绿。
+**`package.json` 的 `pretest` + `test` 脚本是测试入口的唯一真相。** 本地 `npm test`
+完整串行执行；CI 用 `scripts/run-test-group.mjs` 在运行时递归展开同一份链，再按
+`core` / `ui` / `security` / `faults` 分到独立 runner。workflow 不保存第二份套件清单，
+未知新套件默认进入 `core`。提交前可运行：
+
+```text
+node scripts/run-test-group.mjs --validate
+```
+
+它会检查四组是否恰好覆盖 canonical 链、是否重复、测试文件是否存在。`npm test` 的
+`pretest` 还会运行 `tests/ci-test-plan.cjs` 与 `tests/ci-workflow.cjs`，保证这套编排水位
+本身不会静默漂移。
 
 P15 的 `tests/extensions.cjs` 使用 `os.tmpdir()` 中的 Pi 目录和假 RPC，覆盖发现、
 作用域、重复、坏 metadata、缺失 package、路径越界、command 关联、未知工具、
@@ -132,21 +141,9 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 33 条 RPC 命令里没有一条返回已注册工具清单，`rpc-types.d.ts` 两版 diff 为空。
 `tests/pi-version.cjs` 把这条钉住了。）
 
-`npm test` 里现在有 40 个套件，全部是**纯自动化**：
-
-```
-smoke 1198 · daily-use 28 · git 161 · modules 117 · reliability · interactions · port-owner
-project-config 115 · skills 196 · extensions 52 · capability 62 · web-access 66 · subagents 141
-memory 236 · browser 215 · approvals 80 · planner 115 · workflow-relations 71
-reviews 133 · review-gate 217 · verification 136 · evidence 100 · attempt-lifecycle 98
-sessions 77 · session-search 71 · pi-compat 57 · pi-probes 62 · pi-update 173 · pi-version 136 · mcp-native 187
-usage-quota 229 · body-integrity 5
-dev-server 20 · models-api 50 · server-security 36 · diagnostics 15 · update-check 87
-version-consistency 34 · release-artifacts 70 · electron-guard 76
-```
-
-> 这张表是**手写维护**的量级参考（见第七节第 2 条）：数字只说明「这些套件确实在断言
-> 东西」，不参与任何判断，真实数字以 `npm test` 的输出为准。不要为同步它引入脚本生成。
+`npm test` 包含全部默认自动化套件；当前叶子数量、真实耗时、资源边界和分组归属统一见
+[CI 性能优化审计](ci-optimization-audit.md)。数量不在这里手写维护，`--validate` 每次都会
+和 `package.json` 对表。
 
 > `daily-use`（P24）是**纯逻辑**套件：快捷键注册表、命令面板模型、状态文案。
 > 它不碰 DOM、不碰网络、不碰真 pi —— 所以这些规则在任何机器上结论都一样。
@@ -450,7 +447,7 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 
 | workflow | 触发 | 内容 | 为什么这样分 |
 |---|---|---|---|
-| `ci.yml` | push / PR 到 main、手动 | `test`（matrix Node 22/24 跑 `npm test`）+ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`） | 每次提交都要跑的便宜层。`build-check` 刻意**不**跑 `build:installer` —— 那要 NSIS 和 ~430MB 产物 |
+| `ci.yml` | push / PR 到 main、手动 | `test-plan` → Node 24.14.0 的四组测试 matrix（`core` / `ui` / `security` / `faults`）→ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`）→ 最终 `ci-gate` | 每次提交的完整检查。Native 组内串行、组间独立 runner；任何组失败、取消、跳过或未执行都会让最终 Gate 失败 |
 | `release-check.yml` | **手动**（`workflow_dispatch`） | 完整发布路径：`npm test` → 两条打包链路 → `test:app` / `test:exe` / `test:portable` / `test:installer` → `release:collect` → `release:verify` | 45-60 分钟，**不创建 Release**。挂到每个 PR 上会让贡献者等到放弃；而 PR 需要的版本一致性守卫已经在 `npm test` 里 |
 | `release.yml` | **tag `v*`** | `npm run release:check -- --tag=<tag> --with-installer` → draft → 上传 → 核对 sha256 → publish | 正式发布。**全部验证通过之后才碰 GitHub**，所以失败不会留下半成品 |
 
@@ -460,7 +457,7 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 `ci.yml` 的 `build-check` 只验两条打包链路能出产物；安装程序 / 便携版的真装真跑
 放在后面两个 workflow 里，因为那要 NSIS 与 ~430MB 产物。见下一节。
 
-### Node 版本：最低 22.19，CI 测 22 与 24
+### Node 版本：产品最低 22.19，CI 固定 24.14.0
 
 `package.json` 的 `engines.node` 是 **`>=22.19`** —— 这个下限由依赖链决定，
 不是随手定的：
@@ -473,9 +470,10 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 
 取其中最严的一条 ⇒ **22.19**。
 
-CI 的 matrix 是 **22 与 24**：22 是这条下限所在的大版本，24 是当前最新
-（也是开发机在用的版本）。不按 22.19 建 matrix —— 那只会多出一个几乎重复的
-runner，而 22.x 内部的补丁差异不是这个项目要防的风险。
+CI 固定 Node **24.14.0**，与当前开发机一致。Node 22 已从持续集成移除，不再作为
+每次提交的兼容性门；这不改变 `engines.node >=22.19` 的产品声明。原因是 Electron、
+pdfjs 和开发依赖仍允许该下限，而移除 CI 覆盖本身不构成提高产品最低版本的依据。
+Release 与 Release Check 也固定 24.14.0，并继续串行执行完整测试，不经过 CI 分组。
 
 ## 四、不进默认 CI 的测试
 
@@ -636,7 +634,7 @@ npm run release:check -- --with-installer
 它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
 
 ```
-版本一致性（含 tag）  →  npm test（A 层 40 个套件）
+版本一致性（含 tag）  →  npm test（完整 canonical 测试链）
   →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
   →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
   →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256

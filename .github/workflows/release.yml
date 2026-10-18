@@ -48,6 +48,9 @@ on:
 permissions:
   contents: write
 
+env:
+  NODE_VERSION: '24.14.0'
+
 concurrency:
   group: release-${{ github.ref }}
   # 发版不能中途取消 —— 取消一个正在上传的 Release 只会留下更难收拾的状态。
@@ -71,7 +74,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install dependencies
