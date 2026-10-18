@@ -6,13 +6,18 @@
 `package.json#scripts.test` 递归展开并串行执行，共 143 个叶子套件，全部退出码为 0，
 实测总耗时 52.8 分钟。
 
-最新成功 CI 实际墙钟为 55 分 46 秒：Node 24 的 `npm test` 为 46 分 14 秒，
-Node 22 为 53 分 11 秒，Electron build check 为 1 分 45 秒。两遍完整测试约消耗
-102 分 36 秒 runner 时间。Release 的完整预检耗时 63 分 43 秒。
+最终五组云端完整运行已成功：**31m47s**，相对原始 main 的 55m46s 节省 **23m59s
+（43.01%）**。143 个原有套件全部保留，新增两个 CI 自检，145/145 叶子退出 0；
+具体作业、权限跳过与 runner 消耗见 [验收报告](ci-optimization-acceptance.md)，
+每个套件的真实组别、退出码和云端耗时见 [执行记录](ci-optimization-results.json)。
+
+优化前 main 的最近成功 CI 实际墙钟为 55 分 46 秒：Node 24 的 `npm test` 为 46 分 14 秒，
+Node 22 为 53 分 11 秒，Electron build check 为 1 分 47 秒。两个测试 job 合计
+100 分 55 秒 runner 时间；含构建为 102 分 42 秒。Release 的完整预检耗时 63 分 43 秒。
 
 真正需要优先处理的不是 Electron，而是 P33 Native 文件安全链。最慢的 20 个套件如下；
-其中故障注入超过 11 分钟、Writer 接近 8 分钟，说明不能把多个 Native 套件放进同一
-runner 内并发。
+其中故障注入超过 11 分钟、Writer 接近 8 分钟。耗时说明了优化优先级；是否可并行
+由资源与 fixture 的隔离证据决定，不以耗时推断。下面先保留本机基线，云端复测见后文。
 
 | # | 套件 | 秒 | 组 | 模块 |
 |---:|---|---:|---|---|
@@ -51,11 +56,11 @@ runner 内并发。
 | Node 22 setup（缓存） | 9s |
 | Node 22 `npm ci` | 9s |
 | Node 22 `Run core tests` | 53m11s |
-| Electron build job 总计 | 1m45s |
+| Electron build job 总计 | 1m47s |
 | Electron packaged app | 12s |
 | SEA single-file exe | 11s |
 
-## 分组建议
+## 初始四组测算与云端校正
 
 分组不新增第二份测试清单。统一编排器递归读取 `package.json#scripts.test`；
 未知的新套件默认进入 `core`。矩阵只消费编排器输出的组名，作业再用同一编排器执行该组。
@@ -79,7 +84,7 @@ runner 内并发。
 Electron fixture 使用独立 userData；测试启动器只在组内串行执行。固定测试端口变量按组分配；
 使用随机端口的套件继续使用 `listen(0)` / `HARNESS_PORT=0`。
 
-P33 Native 不假定可以并发共享目标文件。所有 Native 用例留在同一个串行安全组；
+P33 Native 不假定可以并发共享目标文件。每个 Native 组内部保持串行；
 跨组并行只依赖 runner 级隔离，不使用关闭用户进程、共享 Writer 目标或共享可变 fixture 的办法。
 
 ## 安全覆盖
@@ -89,14 +94,55 @@ DACL/SACL；会话变更存储；故障注入；Crash Recovery；进程异常退
 Runtime/Owner/Stop Barrier；Approval；Browser/Electron 隔离；日志脱敏与 ZIP 导出。
 SACL 因权限不足产生的跳过仍由套件自己的输出报告真实分子/分母，编排器不会把它们改写为通过。
 
+## 云端实测对分组的修正
+
+[四组完整运行 39147743120](https://github.com/HYJ1817/pi-gui/actions/runs/39147743120)
+在 `afb03be4eb455f9d1f20fbd3a93db1ea9fceab1d` 上成功，145 个叶子记录均退出 0。
+墙钟 50m39s，全部 job 占用合计 79m56s。安全组 47m56s 是关键路径。
+
+| 云端重型套件 | 真实进程秒数 |
+|---|---:|
+| Object Faults | 1031.330 |
+| Object Writer | 660.850 |
+| Object Runtime | 600.740 |
+| SACL Witness | 547.070 |
+| Object Service | 433.700 |
+| Object Confirmation | 180.740 |
+| In-place | 151.300 |
+
+这里不能拿本机 SACL 权限不足时的 0.759s 当成 Windows runner 的执行成本；本次云端
+Witness 确实执行 8/8。Object Witness 则明确报告 `existing_token_sacl_unavailable`、
+0/0、skip 8，不能把两个 Witness 的权限能力混同。
+
+通过日志时间戳定位到的实际慢子场景包括：Service 的“新 Agent 操作在已验证恢复后”
+相邻输出间隔 105.204s；Runtime 的“第二个真实 worktree 同名路径独立恢复”100.417s；
+“损坏 Native 返回后的 recovery_required/C/R 保留”93.391s；“真实 D3/D2 写入”91.003s。
+Faults 中 timeout 注入的输出间隔为 60.526s，属于本来要验证的超时故障路径，不能删减。
+Writer 的 protected/inherited 元数据见证各有约 56.7/56.6s 输出间隔。
+这些间隔用于定位子场景，包含 fixture/setup/cleanup 成本，不冒充单条断言的精密基准；
+SACL 套件集中输出八个 case，当前日志不足以给八个 case 分别计时。
+
+因此最终采用五组：`core` 75、`ui` 23、`security` 27、`native` 2、`faults` 18。
+新增 `native` 只接收 Object Runtime 与 Object Writer，保留两个文件内部全部串行顺序。
+代码核对：D2 使用 `p33-inplace-D2-*` fresh TEMP；D4 Runtime 使用 canonical TEMP
+下 `p33-D4-runtime-*`、自建 Git/假 Pi/Registry；各自创建 evidence store 和 capability。
+共享的是只读 harness/产品源码；retention 索引在各自 runner 的 `.probe` 下，未共享可变材料。
+五组的最终云端实测见 [验收报告](ci-optimization-acceptance.md)。
+
+新增的两个 CI 自检属于 core，不操作 Native 文件目标或共享 fixture；云端实测
+`ci-test-plan.cjs` 0.184s（含失败传播隔离子进程）、`ci-workflow.cjs` 0.039s，均退出 0。
+其中前者自动校验完整集合，后者守卫 Node pin 与安全门；失败均阻止最终 Gate 成功。
+
 ## 全量套件耗时表
 
 说明：
 
 - “实际耗时”是本次 Node 24.14.0 串行审计的进程墙钟，不是从文件名推断。
-- “Native”表示代码路径检测到文件系统或 Native 操作；不把整个套件误称为纯函数。
-- 所有套件都保留 `npm test` 中的原始顺序；组内顺序不变。跨套件没有显式执行依赖；
-  若未来新增依赖，必须改成显式 fixture 或编排器依赖，不能靠运行顺序。
+- “Native”列是源码路径中的文件系统/Native 信号，包含普通 Node 文件操作，不能据此
+  认定整个套件均执行了 Win32 Native。Fixture 列表示共享代码，不表示共享可变材料。
+- 所有套件都保留 `npm test` 中的组内相对顺序。隔离 CI 实际发现 D2 retention 索引
+  隐式依赖其他套件预建 `.probe`；已改用会自行创建目录的既有 retention helper，
+  并增加回归断言。不能把原始串行通过当成不存在顺序依赖的证明。
 - CI 失败时组内按 `npm test` 原有的短路语义停止；成功时必须恰好覆盖下表全部套件。
 
 | # | 套件 | 秒 | 模块 | Native | 独占资源 | Fixture | 顺序依赖 | 并行判断 | 失败安全影响 | 组 |
@@ -117,14 +163,14 @@ SACL 因权限不足产生的跳过仍由套件自己的输出报告真实分子
 | 14 | `ui2-runtime-display.cjs` | 0.873 | Runtime/进程 | 否 | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | UI/交互回归；失败即阻断 | ui |
 | 15 | `ui2-visual.cjs` | 10.795 | UI | 是（TEMP） | Electron fixture / 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | UI/交互回归；失败即阻断 | ui |
 | 16 | `theme.cjs` | 0.534 | UI | 是（TEMP） | Electron fixture | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | UI/交互回归；失败即阻断 | ui |
-| 17 | `session-revert-fixture-retention.cjs` | 0.113 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 18 | `session-revert-object-session-binding.cjs` | 0.092 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 19 | `session-revert-object-d6final-classic.cjs` | 2.830 | P33 撤销/Native | 是（TEMP） | 子进程 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 20 | `exe-diagnostics.cjs` | 0.093 | 发布/构建守卫 | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 可与其他 runner 独立并行 | 核心功能/发布守卫；失败即阻断 | core |
-| 21 | `session-revert-object-qualification.cjs` | 16.203 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 17 | `session-revert-fixture-retention.cjs` | 0.113 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 18 | `session-revert-object-session-binding.cjs` | 0.092 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 19 | `session-revert-object-d6final-classic.cjs` | 2.830 | P33 撤销/Native | 是（TEMP） | 子进程 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 20 | `exe-diagnostics.cjs` | 0.093 | 发布/构建守卫 | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 可与其他 runner 独立并行 | 核心功能/发布守卫；失败即阻断 | core |
+| 21 | `session-revert-object-qualification.cjs` | 16.203 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 22 | `session-revert-object-presentation.cjs` | 0.193 | P33 撤销/Native | 是（TEMP） | loopback HTTP/测试端口 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 23 | `session-revert-object-ui.cjs` | 0.823 | P33 撤销/Native | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 24 | `session-revert-object-confirmation.cjs` | 133.719 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 24 | `session-revert-object-confirmation.cjs` | 133.719 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 25 | `session-revert-sacl-witness.cjs` | 0.759 | P33 撤销/Native | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 26 | `session-revert-object-profile.cjs` | 5.810 | P33 撤销/Native | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 27 | `session-revert-object-evidence.cjs` | 10.215 | P33 撤销/Native | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
@@ -140,7 +186,7 @@ SACL 因权限不足产生的跳过仍由套件自己的输出报告真实分子
 | 37 | `provider-auth.cjs` | 1.193 | 模型/供应商/能力 | 是（TEMP） | loopback HTTP/测试端口 / 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | 核心功能/发布守卫；失败即阻断 | core |
 | 38 | `provider-auth-runtime.cjs` | 0.216 | 模型/供应商/能力 | 否 | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | 核心功能/发布守卫；失败即阻断 | core |
 | 39 | `ui-ia.cjs` | 1.085 | UI | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | UI/交互回归；失败即阻断 | ui |
-| 40 | `smoke.cjs` | 70.065 | UI | 是（TEMP） | Electron fixture | 仓库 fixtures（只读） | 无显式跨套件依赖 | 可与其他 runner 独立并行 | UI/交互回归；失败即阻断 | ui |
+| 40 | `smoke.cjs` | 70.065 | UI | 是（TEMP） | Electron fixture | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 可与其他 runner 独立并行 | UI/交互回归；失败即阻断 | ui |
 | 41 | `daily-use.cjs` | 0.104 | UI | 否 | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | UI/交互回归；失败即阻断 | ui |
 | 42 | `git.cjs` | 26.304 | Git | 是（TEMP） | 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | 核心功能/发布守卫；失败即阻断 | core |
 | 43 | `modules.cjs` | 0.182 | Core | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | 核心功能/发布守卫；失败即阻断 | core |
@@ -218,11 +264,11 @@ SACL 因权限不足产生的跳过仍由套件自己的输出报告真实分子
 | 115 | `runtime-events.cjs` | 0.089 | Runtime/进程 | 否 | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 可与其他 runner 独立并行 | 核心功能/发布守卫；失败即阻断 | core |
 | 116 | `runtime-processes.cjs` | 2.559 | Runtime/进程 | 是（TEMP） | loopback HTTP/测试端口 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
 | 117 | `session-revert-object-assets.cjs` | 2.561 | P33 撤销/Native | 是（TEMP） | Electron fixture / 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 118 | `session-revert-object-authority.cjs` | 5.910 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 118 | `session-revert-object-authority.cjs` | 5.910 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 119 | `session-revert-object-history.cjs` | 23.731 | P33 撤销/Native | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 120 | `session-revert-object-runtime.cjs` | 451.052 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 120 | `session-revert-object-runtime.cjs` | 451.052 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | native |
 | 121 | `session-revert-object-store.cjs` | 5.441 | P33 撤销/Native | 是（TEMP） | 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 122 | `session-revert-object-service.cjs` | 307.287 | P33 撤销/Native | 是（TEMP） | loopback HTTP/测试端口 / 子进程 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 122 | `session-revert-object-service.cjs` | 307.287 | P33 撤销/Native | 是（TEMP） | loopback HTTP/测试端口 / 子进程 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 123 | `session-revert-object-recovery.cjs` | 18.331 | P33 撤销/Native | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
 | 124 | `session-change-store.cjs` | 152.299 | P33 会话变更 | 是（TEMP） | 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
 | 125 | `session-change-bridge.cjs` | 0.244 | P33 会话变更 | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
@@ -236,11 +282,11 @@ SACL 因权限不足产生的跳过仍由套件自己的输出报告真实分子
 | 133 | `session-revert-admission.cjs` | 0.336 | P33 撤销/Native | 是（TEMP） | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 134 | `session-revert-apply.cjs` | 82.094 | P33 撤销/Native | 是（TEMP） | loopback HTTP/测试端口 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 135 | `session-revert-windows-faults.cjs` | 8.535 | P33 撤销/Native | 是（TEMP） | 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
-| 136 | `session-revert-inplace.cjs` | 129.365 | P33 撤销/Native | 是（TEMP） | 子进程 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 136 | `session-revert-inplace.cjs` | 129.365 | P33 撤销/Native | 是（TEMP） | 子进程 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 137 | `session-revert-inplace-safety.cjs` | 62.821 | P33 撤销/Native | 是（TEMP） | 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
 | 138 | `session-change-query.cjs` | 5.403 | P33 会话变更 | 是（TEMP） | loopback HTTP/测试端口 / 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 139 | `session-change-ui.cjs` | 0.578 | P33 会话变更 | 否 | 进程内 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
 | 140 | `session-change-startup.cjs` | 10.994 | P33 会话变更 | 是（TEMP） | loopback HTTP/测试端口 / 子进程 | 测试自建 TEMP | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
-| 141 | `session-revert-object-writer.cjs` | 478.724 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
-| 142 | `session-revert-object-faults.cjs` | 699.831 | P33 撤销/Native | 是（TEMP） | 子进程 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
-| 143 | `session-revert-object-witness.cjs` | 0.801 | P33 撤销/Native | 是（TEMP） | 进程内 | 仓库 fixtures（只读） | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |
+| 141 | `session-revert-object-writer.cjs` | 478.724 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | native |
+| 142 | `session-revert-object-faults.cjs` | 699.831 | P33 撤销/Native | 是（TEMP） | 子进程 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | 故障注入/恢复证据；失败即阻断 | faults |
+| 143 | `session-revert-object-witness.cjs` | 0.801 | P33 撤销/Native | 是（TEMP） | 进程内 | 复用 fixture 代码；状态独立 | 无显式跨套件依赖 | 仅跨 runner 并行；组内串行 | P33 安全证据；失败即阻断 | security |

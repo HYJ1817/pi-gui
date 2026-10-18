@@ -1,6 +1,6 @@
 # 每次 push / PR 的完整 CI。
 #
-# package.json 的 test（连同 npm 自动执行的 pretest）仍是唯一测试清单。
+# package.json 的 test（连同 npm 自动执行的前后置生命周期）仍是唯一测试清单。
 # 这里只在运行时把这份清单递归展开为隔离组；workflow 不保存第二份套件列表。
 name: CI
 
@@ -80,8 +80,8 @@ jobs:
       - name: Prepare isolated test directories
         shell: pwsh
         run: |
-          # Native P33 fixtures rely on the hosted runner's supported TEMP drive
-          # on C:. RUNNER_TEMP is on D: and changes file-system/ACL behavior.
+          # Keep Native fixtures in the standard profile TEMP used by baseline.
+          # The D:-based run failed SACL setup; the C: reference path passes it.
           $tempBase = Join-Path $env:USERPROFILE 'AppData\Local\Temp'
           $temp = Join-Path $tempBase "pi-gui-ci-$env:TEST_GROUP"
           $resultsRoot = Join-Path $env:RUNNER_TEMP "pi-gui-ci-$env:TEST_GROUP"
@@ -142,7 +142,7 @@ jobs:
       - name: Verify single-file exe
         run: npm run test:exe
 
-  # 唯一汇总门。矩阵里任一格失败，或依赖未执行 / 被取消 / 跳过，这里都必须红。
+  # 唯一汇总门。矩阵里任一格失败，或依赖未执行 / 被取消 / 跳过，均不得显示成功。
   ci-gate:
     name: CI gate
     needs: [test-plan, test, build-check]

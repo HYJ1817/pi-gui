@@ -40,8 +40,8 @@
   文件里追加了一行。）
 - **测试不依赖真 pi。** 要探测外部程序就造 fixture —— 假的全局 npm 目录、假的 `.cmd`
   shim、注入的 `env`。断言「跑测试这台机器装了什么」的测试在 CI 上必红。
-- **`npm test` 是测试入口的唯一真相。** 新套件加进 `package.json` 的 `pretest` / `test`
-  脚本；CI 可以让 `scripts/run-test-group.mjs` 递归读取这份链并分组执行，但不得在
+- **`npm test` 是测试入口的唯一真相。** 新套件加进 `package.json` 的 `test` 链及 npm
+  生命周期脚本；CI 可以让 `scripts/run-test-group.mjs` 递归读取这份链并分组执行，但不得在
   workflow 或第二份计划文件里另抄一套测试清单。
 - **改完 `public/` 或 `server/` 必须重建产物**（`npm run build:exe` /
   `npm run build:app -- --rebuild`），否则用户打开看到的还是旧的排版。
