@@ -373,8 +373,8 @@ workflow 不另存套件列表；`node scripts/run-test-group.mjs --validate` �
 （手动，跑完整发布路径但不发版）→ `release.yml`（tag 触发，验证全过才发布）。
 三者调的是同一套 npm 脚本。
 
-CI 在 **windows runner** 上固定 Node 24.14.0：`core` / `ui` / `security` / `faults`
-四组并行，Native 组内串行；全部通过后才做 Electron 打包并验产物（25 项 + 47 项）。
+CI 在 **windows runner** 上固定 Node 24.14.0：`core` / `ui` / `security` / `native` / `faults`
+五组并行，Native 组内串行；全部通过后才做 Electron 打包并验产物（实际数量以当次输出为准）。
 Node 22 不再持续验证；产品 `engines.node` 仍保持 `>=22.19`。
 
 常用单跑：`test:ui` / `test:git` / `test:modules` / `test:config` /

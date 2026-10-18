@@ -18,7 +18,7 @@ for (const [name, text] of Object.entries({ ci, release, releaseCheck, signpath 
 assert.match(ci, /test-plan:[\s\S]*?node scripts\/run-test-group\.mjs --validate --github-output/);
 assert.match(ci, /group:\s*\$\{\{\s*fromJSON\(needs\.test-plan\.outputs\.groups\)\s*\}\}/);
 assert.match(ci, /fail-fast:\s*false/);
-assert.match(ci, /max-parallel:\s*4/);
+assert.match(ci, /max-parallel:\s*5/);
 assert.match(ci, /node scripts\/run-test-group\.mjs --group/);
 assert.match(ci, /\$tempBase = Join-Path \$env:USERPROFILE 'AppData\\Local\\Temp'/);
 assert.match(ci, /TEMP=\$temp/);

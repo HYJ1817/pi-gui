@@ -10,7 +10,7 @@ async function main() {
   const planModule = await import(pathToFileURL(path.join(root, 'scripts/test-group-plan.mjs')));
   const plan = planModule.createTestGroupPlan({ root, packageJson });
 
-  assert.deepEqual(plan.groups, ['core', 'ui', 'security', 'faults']);
+  assert.deepEqual(plan.groups, ['core', 'ui', 'security', 'native', 'faults']);
   assert.equal(plan.leaves.length, new Set(plan.leaves).size, 'canonical test chain contains duplicate leaf commands');
   assert.equal(
     plan.groups.reduce((sum, group) => sum + plan.byGroup.get(group).length, 0),
@@ -31,7 +31,8 @@ async function main() {
 
   const groupOf = (name) => plan.groupByCommand.get(`node tests/${name}`);
   const expected = {
-    'session-revert-object-writer.cjs': 'security',
+    'session-revert-object-writer.cjs': 'native',
+    'session-revert-object-runtime.cjs': 'native',
     'session-revert-inplace.cjs': 'security',
     'session-revert-sacl-witness.cjs': 'security',
     'session-revert-object-faults.cjs': 'faults',

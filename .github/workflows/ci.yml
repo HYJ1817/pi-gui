@@ -1,7 +1,7 @@
 # 每次 push / PR 的完整 CI。
 #
 # package.json 的 test（连同 npm 自动执行的 pretest）仍是唯一测试清单。
-# 这里只在运行时把这份清单递归展开为四个隔离组；workflow 不保存第二份套件列表。
+# 这里只在运行时把这份清单递归展开为隔离组；workflow 不保存第二份套件列表。
 name: CI
 
 on:
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 先验证“四组并集 == package.json 的完整测试链”。该 job 的 groups
+  # 先验证“分组并集 == package.json 的完整测试链”。该 job 的 groups
   # output 是下面 matrix 的唯一来源；新增测试默认归入 core，不能静默漏跑。
   test-plan:
     name: Validate complete test plan
@@ -47,7 +47,7 @@ jobs:
         shell: pwsh
         run: node scripts/run-test-group.mjs --validate --github-output "$env:GITHUB_OUTPUT"
 
-  # 四个独立 runner 并行。组内仍按 package.json 中的原始顺序串行执行；
+  # 五个独立 runner 并行。组内仍按 package.json 中的原始顺序串行执行；
   # Native 文件身份、句柄和权限用例不共享 runner 或可变目标。
   test:
     name: Tests (${{ matrix.group }})
@@ -56,7 +56,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 5
       matrix:
         group: ${{ fromJSON(needs.test-plan.outputs.groups) }}
     env:

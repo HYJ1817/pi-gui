@@ -118,14 +118,14 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 
 **`package.json` 的 `pretest` + `test` 脚本是测试入口的唯一真相。** 本地 `npm test`
 完整串行执行；CI 用 `scripts/run-test-group.mjs` 在运行时递归展开同一份链，再按
-`core` / `ui` / `security` / `faults` 分到独立 runner。workflow 不保存第二份套件清单，
+`core` / `ui` / `security` / `native` / `faults` 分到独立 runner。workflow 不保存第二份套件清单，
 未知新套件默认进入 `core`。提交前可运行：
 
 ```text
 node scripts/run-test-group.mjs --validate
 ```
 
-它会检查四组是否恰好覆盖 canonical 链、是否重复、测试文件是否存在。`npm test` 的
+它会检查各组是否恰好覆盖 canonical 链、是否重复、测试文件是否存在。`npm test` 的
 `pretest` 还会运行 `tests/ci-test-plan.cjs` 与 `tests/ci-workflow.cjs`，保证这套编排水位
 本身不会静默漂移。
 
@@ -447,7 +447,7 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 
 | workflow | 触发 | 内容 | 为什么这样分 |
 |---|---|---|---|
-| `ci.yml` | push / PR 到 main、手动 | `test-plan` → Node 24.14.0 的四组测试 matrix（`core` / `ui` / `security` / `faults`）→ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`）→ 最终 `ci-gate` | 每次提交的完整检查。Native 组内串行、组间独立 runner；任何组失败、取消、跳过或未执行都会让最终 Gate 失败 |
+| `ci.yml` | push / PR 到 main、手动 | `test-plan` → Node 24.14.0 的五组测试 matrix（`core` / `ui` / `security` / `native` / `faults`）→ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`）→ 最终 `ci-gate` | 每次提交的完整检查。Native 组内串行、组间独立 runner；任何组失败、取消、跳过或未执行都会让最终 Gate 失败 |
 | `release-check.yml` | **手动**（`workflow_dispatch`） | 完整发布路径：`npm test` → 两条打包链路 → `test:app` / `test:exe` / `test:portable` / `test:installer` → `release:collect` → `release:verify` | 45-60 分钟，**不创建 Release**。挂到每个 PR 上会让贡献者等到放弃；而 PR 需要的版本一致性守卫已经在 `npm test` 里 |
 | `release.yml` | **tag `v*`** | `npm run release:check -- --tag=<tag> --with-installer` → draft → 上传 → 核对 sha256 → publish | 正式发布。**全部验证通过之后才碰 GitHub**，所以失败不会留下半成品 |
 

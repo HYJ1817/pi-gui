@@ -13,6 +13,7 @@ const GROUP_PORTS = Object.freeze({
   ui: { TEST_PORT: '17891', GUARD_PORT: '17892', SEC_PORT: '17893', GIT_PORT: '17894' },
   security: { TEST_PORT: '17901', GUARD_PORT: '17902', SEC_PORT: '17903', GIT_PORT: '17904' },
   faults: { TEST_PORT: '17911', GUARD_PORT: '17912', SEC_PORT: '17913', GIT_PORT: '17914' },
+  native: { TEST_PORT: '17921', GUARD_PORT: '17922', SEC_PORT: '17923', GIT_PORT: '17924' },
 });
 
 function parseArgs(argv) {

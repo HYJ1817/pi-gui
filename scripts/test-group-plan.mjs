@@ -1,7 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const GROUPS = Object.freeze(['core', 'ui', 'security', 'faults']);
+export const GROUPS = Object.freeze(['core', 'ui', 'security', 'native', 'faults']);
+
+// These two suites own fresh TEMP roots and do not consume another suite's
+// mutable fixture. Keep each suite intact; isolate their expensive Native work
+// on a separate runner instead of running assertions concurrently.
+const NATIVE_TESTS = new Set([
+  'session-revert-object-runtime.cjs',
+  'session-revert-object-writer.cjs',
+]);
 
 const FAULT_TESTS = new Set([
   'session-change-store.cjs',
@@ -90,6 +98,7 @@ export function classifyTestCommand(command, groups = GROUPS) {
   const match = String(command).match(/^node tests\/([^\s]+)(?:\s|$)/);
   const name = match ? match[1] : '';
   if (FAULT_TESTS.has(name)) return 'faults';
+  if (NATIVE_TESTS.has(name)) return 'native';
   if (/^session-(?:change|revert)-/.test(name)) return 'security';
   if (UI_PATTERNS.some((pattern) => pattern.test(name))) return 'ui';
   return 'core';
