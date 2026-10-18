@@ -20,6 +20,10 @@ assert.match(ci, /group:\s*\$\{\{\s*fromJSON\(needs\.test-plan\.outputs\.groups\
 assert.match(ci, /fail-fast:\s*false/);
 assert.match(ci, /max-parallel:\s*4/);
 assert.match(ci, /node scripts\/run-test-group\.mjs --group/);
+assert.match(ci, /\$tempBase = Join-Path \$env:USERPROFILE 'AppData\\Local\\Temp'/);
+assert.match(ci, /TEMP=\$temp/);
+assert.doesNotMatch(ci, /TEMP=\$[^\n]*RUNNER_TEMP/);
+assert.match(ci, /PI_GUI_CI_RESULTS=\$results/);
 assert.match(ci, /build-check:[\s\S]*?needs:\s*test\b/);
 assert.match(ci, /ci-gate:[\s\S]*?needs:\s*\[test-plan,\s*test,\s*build-check\]/);
 assert.match(ci, /ci-gate:[\s\S]*?if:\s*\$\{\{\s*always\(\)\s*\}\}/);

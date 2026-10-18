@@ -80,9 +80,12 @@ jobs:
       - name: Prepare isolated test directories
         shell: pwsh
         run: |
-          $root = Join-Path $env:RUNNER_TEMP "pi-gui-ci-$env:TEST_GROUP"
-          $temp = Join-Path $root 'tmp'
-          $results = Join-Path $root 'results'
+          # Native P33 fixtures rely on the hosted runner's supported TEMP drive
+          # on C:. RUNNER_TEMP is on D: and changes file-system/ACL behavior.
+          $tempBase = Join-Path $env:USERPROFILE 'AppData\Local\Temp'
+          $temp = Join-Path $tempBase "pi-gui-ci-$env:TEST_GROUP"
+          $resultsRoot = Join-Path $env:RUNNER_TEMP "pi-gui-ci-$env:TEST_GROUP"
+          $results = Join-Path $resultsRoot 'results'
           New-Item -ItemType Directory -Force -Path $temp, $results | Out-Null
           "TEMP=$temp" >> $env:GITHUB_ENV
           "TMP=$temp" >> $env:GITHUB_ENV
