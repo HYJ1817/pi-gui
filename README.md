@@ -422,6 +422,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [development.md](docs/development.md) | 从源码跑、三种构建形态、离线/代理构建、发版流程与坑 |
 | [testing.md](docs/testing.md) | 测试分层：哪些进 CI、哪些要真 pi、哪些只在发布前跑 |
 | [ci-optimization-audit.md](docs/ci-optimization-audit.md) | CI 优化审计：143 个套件的实测耗时、资源边界、分组与并行规则 |
+| [ci-optimization-acceptance.md](docs/ci-optimization-acceptance.md) | CI 优化验收：结构、覆盖一致性、安全门、实测性能、风险和回滚 |
 | [diagnostics.md](docs/diagnostics.md) | 诊断快照：收集范围、脱敏规则、隐私边界与测试 |
 | [diagnostic-logging.md](docs/diagnostic-logging.md) | 本地结构化日志：事件/字段白名单、分级与保留、崩溃线索、进程边界、故障报告 ZIP 与负向测试 |
 | [pi-compatibility.md](docs/pi-compatibility.md) | 与 pi 的边界、依赖哪些能力、缺失时怎么降级、P23 的版本真值 / probe registry / 兼容矩阵 / schema 漂移 |
