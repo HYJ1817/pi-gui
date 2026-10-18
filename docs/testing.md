@@ -1,5 +1,19 @@
 # 测试分层与 CI
 
+## 2026-10-18 高风险问题回归
+
+`npm test` 纳入 `tests/high-risk-regressions.cjs`，使用实际上传路由、临时文件、
+Runtime store/视图、registry，以及接临时假 Pi 的真实 RPC bridge/guardian。
+覆盖百分号文件名、同毫秒上传、排他创建碰撞与重试上限、两处会话输入面在
+延迟发送期间的新草稿、owner 换代，以及追加失败/乱序响应/停止屏障。
+所有内容与项目均为 `os.tmpdir()` fixture，不调用模型或真实 Pi。
+
+真实 Electron 交互单独运行 `node tests/high-risk-electron.cjs`。它用生产
+renderer/CSS、受信鼠标/文本输入和受控 API 响应，覆盖中央与弹窗各六种草稿
+情形，保存响应前后截图和 `report.json`。输出位置由运行时打印的独立临时
+目录确定。该测试启动参数包含 `--no-sandbox`，仅作为交互证据，不作为
+Electron 沙箱或真实 Pi 验收；不修改产品启动参数。
+
 ## UI-5 本地日志
 
 `npm test` 新增 `test:logging`：`tests/logging.cjs`（核心/持久化/轮转/分页/ZIP/HTTP）、
