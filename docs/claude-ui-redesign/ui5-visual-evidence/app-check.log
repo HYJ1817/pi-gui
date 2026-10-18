@@ -1,0 +1,23 @@
+  ok   测试目录里没有 node_modules
+  ok   随包资源齐全
+  ok   应用图标已嵌入 exe
+  ok   icon.ico 结构正确且圆角已切
+  ok   随包带了许可证与第三方署名
+  ok   内嵌后端能启动
+  ok   pi 子进程已拉起
+  ok   私有 RPC 确认打包后的 bridge ready
+  ok   根路径返回页面
+  ok   styles.css 正常
+  ok   [hidden] 兜底规则还在
+  ok   目录穿越被挡
+  FAIL PDF 固件存在（先跑 npm run fixtures）  → false
+  ok   运行期没有崩栈输出
+  FAIL 上传缓存写到了数据目录  → 数据目录里没有 .uploads
+  ok   应用目录没有被写入
+  ok   没有项目时 hasProject 为 false
+  ok   没有项目时不启动 pi
+  ok   没有项目时项目列表为空
+  ok   没有项目时命令被拒绝
+  ok   拒绝时要说清楚该做什么
+
+19/21 通过

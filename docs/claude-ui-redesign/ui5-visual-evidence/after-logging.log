@@ -1,0 +1,81 @@
+
+> pi-gui@0.25.0 test:logging
+> node tests/logging.cjs && node tests/logging-leaks.cjs && node tests/logging-secret-state.cjs && node tests/logging-client.cjs && node tests/logging-ui.cjs
+
+=== 日志核心 ===
+  ok   启动产生结构化 app.start，且默认目录在注入的临时目录
+  ok   标准模式不写 DEBUG，详细模式写 DEBUG
+  ok   未知事件与未知字段直接丢弃
+  ok   开始/失败/耗时使用同一 correlationId
+  ok   禁用后不再写日志；重新启用后恢复
+  ok   设置文件拒绝非法值，并保留有效设置
+  ok   清理只删日志文件，不删设置/会话标记
+  ok   保留期清理只保留窗口内的文件
+  ok   详细模式到期自动回标准并持久化
+  ok   文件超过上限后轮转，旧文件保留且可读
+  ok   损坏行被跳过，后续日志仍可读取
+  ok   分页不重复（cursor 向前翻页）
+  ok   崩溃进入独立 crash 文件，且不记录异常 message
+  ok   未正常关闭后重启可看到上次异常退出线索
+  ok   正常关闭后下一次启动不再误报异常退出
+  ok   不可写目录只降级，不把异常抛给业务
+  ok   高频写入仍保持每行合法 JSON，且有界批处理不阻塞调用方
+  ok   磁盘空间不足（ENOSPC）只进入降级状态，不影响调用方
+  ok   后端与主进程并发写不同文件，事件保持各自进程身份
+  ok   同一次操作跨后端/Renderer 用 correlationId 关联
+=== 导出 ZIP ===
+  ok   导出含固定五文件，目录/内容可解压，错误单独列出
+  ok   导出不调用网络
+  ok   导出失败明确返回固定错误码，不抛出
+=== HTTP 服务契约 ===
+  ok   GET /api/logs/status 返回状态且不含绝对路径
+  ok   POST /api/logs/events 只接受白名单事件与字段
+  ok   POST /api/logs/settings 校验并返回状态
+  ok   导出需要显式确认，预览返回清单与计数
+  ok   导出 ZIP 可直接解压，且不再向日志写入用户描述原文
+  ok   清理需要确认；确认后状态回到空
+=== Electron 主进程适配 ===
+  ok   主进程写独立 main-* 文件，不与后端同名
+  ok   主进程按 mtime 重新读取后端写入的日志设置
+  ok   主进程默认目录由 userData / PI_GUI_DATA 决定，不使用项目目录
+logging: 32 passed, 0 failed, 0 skipped
+  ok   普通/详细日志只接收白名单字段，秘密与聊天正文不落盘
+  ok   异常 message / 原始 stack 不进崩溃文件，只保留安全错误名与自身帧
+  ok   设置更改/清理等系统事件同样不含注入秘密
+  ok   Renderer HTTP 入口拒绝未知事件并把已知字段收敛
+  ok   导出预览/状态不泄露日志目录或秘密
+  ok   ZIP 每个文件都不含注入秘密，描述也经过复核
+  ok   状态/条目在最终导出前仍不含秘密
+  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）
+logging-leaks: 7 passed, 0 failed, 1 skipped
+=== 敏感判定状态 ===
+  ok   token/code/id 连续检测同一 secret 时不会交替放行
+  ok   不同函数/安全值交错调用时状态不串扰
+  ok   normalizeEvent 连续同值 secret 不会在第二次放行
+  ok   不同字段顺序：secret 先经过 token，也不会让后面的 errorName 放行
+  ok   normalizeStored 连续多条事件同样拒绝 secret 字段
+=== 端到端落盘 / 崩溃 / ZIP ===
+  ok   原始 JSONL 与崩溃记录不包含连续事件里的 secret
+  ok   ZIP 的每个文件都不包含 secret
+=== HTTP 日志 API / 崩溃记录 / ZIP ===
+  ok   POST 连续/交错 secret 后，日志 API 与原始文件都不含 secret
+  ok   HTTP 导出的 ZIP 每个文件都不含 secret
+logging-secret-state: 9 passed, 0 failed
+=== Renderer 日志断线恢复 ===
+  ok   暂时网络失败：只丢已发出未确认的批次，退避后恢复并补报丢弃计数
+  ok   连续网络失败：退避有上限，队列空时不发请求
+  ok   队列达到上限：保留最新事件、丢弃最旧事件并保持有界
+  ok   日志被用户关闭：停止上报，重新启用后新事件恢复
+  ok   不可恢复错误：停止重试；显式恢复后才重新尝试
+  ok   无效 200 响应按不可恢复处理，不无限重试
+  ok   页面重新加载：新的客户端不继承旧的失败状态
+  ok   后端重启：恢复后的事件真实落盘并进入 ZIP，断线期间批次不重放
+logging-client: 8 passed, 0 failed
+PASS 打开日志面板：状态、文件、最近错误与隐私说明都在同一弹层
+PASS 设置修改走 API 并更新状态，非法路径没有被发送
+PASS 日志查看：按级别/来源/搜索加载真实条目并分页，所有内容走 textContent
+PASS 恶意 HTML 与长中文只作为文本呈现
+PASS 空日志和读取失败都有明确状态
+PASS 清理日志必须经过二次确认，取消不发请求
+PASS 导出前先预览；失败时给出提示并提供复制的降级路径
+logging-ui: 7 passed, 0 failed

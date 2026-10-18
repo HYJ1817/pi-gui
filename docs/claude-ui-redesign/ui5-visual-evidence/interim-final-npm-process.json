@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-10-18T11:14:42.5223697+08:00",
+  "command": "npm test",
+  "exitCode": 1,
+  "finishedAt": "2026-10-18T11:23:47.8555887+08:00",
+  "securityPort": 17947,
+  "gitPort": 17949,
+  "durationSeconds": 545.3332777
+}

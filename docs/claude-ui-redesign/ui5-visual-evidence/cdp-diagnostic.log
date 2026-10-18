@@ -1,0 +1,6 @@
+目标: http://127.0.0.1:3406
+页面状态: 已连接
+模型 chip: DeepSeek V4 Pro
+左下供应商入口: {"text":"模型供应商1","top":0,"bottom":0,"left":0,"w":0,"railBottom":746,"aboveQuota":true,"inRail":false,"inViewport":true,"navItems":2,"cornerBtns":0}
+ok startup replay is quiet
+失败: {"exceptionId":1,"text":"Uncaught","lineNumber":0,"columnNumber":123,"scriptId":"108","stackTrace":{"callFrames":[{"functionName":"","scriptId":"108","url":"","lineNumber":0,"columnNumber":129},{"functionName":"","scriptId":"108","url":"","lineNumber":0,"columnNumber":237}]},"exception":{"type":"obj

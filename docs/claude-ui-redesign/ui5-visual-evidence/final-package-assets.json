@@ -1,0 +1,35 @@
+{
+  "root": "C:\\Users\\21022\\AppData\\Local\\Temp\\ui5-visual-final-build-ffd210303574422383e9e8289740a6c9",
+  "public": {
+    "sourceCount": 110,
+    "packageCount": 110,
+    "onlySource": [],
+    "onlyPackage": [],
+    "mismatch": []
+  },
+  "frozenPublicMismatch": [],
+  "electron": [
+    {
+      "file": "main.cjs",
+      "source": "60721c17d5a23baccf17650ccc958e560b6cca01558570e8541e178a76fd2bc3",
+      "packaged": "60721c17d5a23baccf17650ccc958e560b6cca01558570e8541e178a76fd2bc3"
+    },
+    {
+      "file": "preload.cjs",
+      "source": "5734bac4c3c3c828ea52fea7c18b4afb32c7fd4f1c689073cd4f556e1eb167c5",
+      "packaged": "5734bac4c3c3c828ea52fea7c18b4afb32c7fd4f1c689073cd4f556e1eb167c5"
+    }
+  ],
+  "executables": [
+    {
+      "path": "C:\\Users\\21022\\AppData\\Local\\Temp\\ui5-visual-final-build-ffd210303574422383e9e8289740a6c9\\build\\Pi GUI.exe",
+      "bytes": 99749888,
+      "sha256": "d2a7d2731fe9ab946a52a47db6d748bbebcf1adfcb08944a9458656082b3eee0"
+    },
+    {
+      "path": "C:\\Users\\21022\\AppData\\Local\\Temp\\ui5-visual-final-build-ffd210303574422383e9e8289740a6c9\\dist-app\\Pi GUI-win32-x64\\Pi GUI.exe",
+      "bytes": 246324736,
+      "sha256": "4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a"
+    }
+  ]
+}

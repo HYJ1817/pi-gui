@@ -1,0 +1,6151 @@
+{
+  "entry": "electron/main.cjs",
+  "fixture": "offline visual-harness behind identity proxy; no real Pi or project",
+  "passed": 66,
+  "failed": 3,
+  "checks": [
+    {
+      "pass": true,
+      "name": "production main keeps sandbox"
+    },
+    {
+      "pass": true,
+      "name": "production main keeps context isolation"
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-empty no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 298.09375,
+          "w": 840,
+          "h": 166
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": null,
+        "thread": {
+          "x": 206,
+          "y": 298.09375,
+          "w": 840,
+          "h": 166
+        },
+        "composer": {
+          "x": 242,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 254.6666717529297,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 254.6666717529297,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1148,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-history no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 516.875
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-tools no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": false,
+      "name": "compact input and separate toolbar preserve usable heights",
+      "detail": {
+        "c": 99.33333587646484,
+        "i": 40,
+        "toolbarTop": 835.3333740234375,
+        "inputBottom": 835.3333740234375,
+        "leftWidth": 312,
+        "bg": "rgba(255, 255, 255, 0.05)"
+      }
+    },
+    {
+      "pass": false,
+      "name": "wide navigation leaves reference-sized space for conversation",
+      "detail": {
+        "c": 99.33333587646484,
+        "i": 40,
+        "toolbarTop": 835.3333740234375,
+        "inputBottom": 835.3333740234375,
+        "leftWidth": 312,
+        "bg": "rgba(255, 255, 255, 0.05)"
+      }
+    },
+    {
+      "pass": false,
+      "name": "tool group has an open surface while retaining result rows",
+      "detail": {
+        "c": 99.33333587646484,
+        "i": 40,
+        "toolbarTop": 835.3333740234375,
+        "inputBottom": 835.3333740234375,
+        "leftWidth": 312,
+        "bg": "rgba(255, 255, 255, 0.05)"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-input no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-attachment no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 331,
+          "y": -5.333333492279053,
+          "w": 840,
+          "h": 905.625
+        },
+        "composer": {
+          "x": 367,
+          "y": 693.8854370117188,
+          "w": 768,
+          "h": 188.11459350585938
+        },
+        "input": {
+          "x": 379.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 379.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "attachment removal preserves actual draft"
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-model no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": {
+          "x": 786,
+          "y": 531,
+          "w": 232,
+          "h": 243.59375
+        },
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "model Escape closes and restores trigger focus"
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-thinking no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": {
+          "x": 861,
+          "y": 634,
+          "w": 232,
+          "h": 140.95834350585938
+        },
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-slash no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-changes no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 312,
+          "y": 46,
+          "w": 468,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 344,
+          "y": 782.6666870117188,
+          "w": 404,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 356.66668701171875,
+          "y": 795.3333740234375,
+          "w": 378.66668701171875,
+          "h": 40
+        },
+        "bar": {
+          "x": 356.66668701171875,
+          "y": 835.3333740234375,
+          "w": 378.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 468,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-browser no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 312,
+          "y": 46,
+          "w": 468,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 344,
+          "y": 782.6666870117188,
+          "w": 404,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 356.66668701171875,
+          "y": 795.3333740234375,
+          "w": 378.66668701171875,
+          "h": 40
+        },
+        "bar": {
+          "x": 356.66668701171875,
+          "y": 835.3333740234375,
+          "w": 378.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 468,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-browser-preview no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 312,
+          "y": 46,
+          "w": 468,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 344,
+          "y": 782.6666870117188,
+          "w": 404,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 356.66668701171875,
+          "y": 795.3333740234375,
+          "w": 378.66668701171875,
+          "h": 40
+        },
+        "bar": {
+          "x": 356.66668701171875,
+          "y": 835.3333740234375,
+          "w": 378.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 468,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "production native Browser WebContentsView attached"
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-browser-modal no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 312,
+          "y": 46,
+          "w": 468,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 344,
+          "y": 782.6666870117188,
+          "w": 404,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 356.66668701171875,
+          "y": 795.3333740234375,
+          "w": 378.66668701171875,
+          "h": 40
+        },
+        "bar": {
+          "x": 356.66668701171875,
+          "y": 835.3333740234375,
+          "w": 378.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 468,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "modal detaches native Browser"
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-processes no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 312,
+          "y": 46,
+          "w": 468,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 344,
+          "y": 782.6666870117188,
+          "w": 404,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 356.66668701171875,
+          "y": 795.3333740234375,
+          "w": 378.66668701171875,
+          "h": 40
+        },
+        "bar": {
+          "x": 356.66668701171875,
+          "y": 835.3333740234375,
+          "w": 378.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 468,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-session-changes no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 312,
+          "y": 46,
+          "w": 468,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 344,
+          "y": 782.6666870117188,
+          "w": 404,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 356.66668701171875,
+          "y": 795.3333740234375,
+          "w": 378.66668701171875,
+          "h": 40
+        },
+        "bar": {
+          "x": 356.66668701171875,
+          "y": 835.3333740234375,
+          "w": 378.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 468,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-settings no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-diagnostics no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-logs no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-approval no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 336,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 372,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 384.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 384.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1300-reference no horizontal page overflow",
+      "detail": {
+        "w": 1300,
+        "h": 890,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1300,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 890
+        },
+        "thread": {
+          "x": 386,
+          "y": 46,
+          "w": 840,
+          "h": 816.625
+        },
+        "composer": {
+          "x": 422,
+          "y": 772.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 434.66668701171875,
+          "y": 785.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 434.66668701171875,
+          "y": 825.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 988,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1300-long-conversation no horizontal page overflow",
+      "detail": {
+        "w": 1300,
+        "h": 890,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1300,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 890
+        },
+        "thread": {
+          "x": 381,
+          "y": -1430.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 417,
+          "y": 772.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 429.66668701171875,
+          "y": 785.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 429.66668701171875,
+          "y": 825.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 988,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-700-expanded no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 701,
+        "sidebar": {
+          "x": 46,
+          "y": 0,
+          "w": 190,
+          "h": 900
+        },
+        "thread": {
+          "x": 236,
+          "y": -1430.666748046875,
+          "w": 455.3333435058594,
+          "h": 2721.80224609375
+        },
+        "composer": {
+          "x": 252,
+          "y": 786.6666870117188,
+          "w": 423.3333435058594,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 264.66668701171875,
+          "y": 799.3333740234375,
+          "w": 398,
+          "h": 40
+        },
+        "bar": {
+          "x": 264.66668701171875,
+          "y": 839.3333740234375,
+          "w": 398,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 236,
+          "y": 0,
+          "w": 465.3333435058594,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-700-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 701,
+        "sidebar": null,
+        "thread": {
+          "x": 46,
+          "y": -1356,
+          "w": 645.3333740234375,
+          "h": 2427.09375
+        },
+        "composer": {
+          "x": 62,
+          "y": 786.6666870117188,
+          "w": 613.3333740234375,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 74.66667175292969,
+          "y": 799.3333740234375,
+          "w": 588,
+          "h": 40
+        },
+        "bar": {
+          "x": 74.66667175292969,
+          "y": 839.3333740234375,
+          "w": 588,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 46,
+          "y": 0,
+          "w": 655.3333740234375,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-700-multiline no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 701,
+        "sidebar": null,
+        "thread": {
+          "x": 46,
+          "y": -1356,
+          "w": 645.3333740234375,
+          "h": 2571.09375
+        },
+        "composer": {
+          "x": 62,
+          "y": 642.6666870117188,
+          "w": 613.3333740234375,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 74.66667175292969,
+          "y": 655.3333740234375,
+          "w": 588,
+          "h": 184
+        },
+        "bar": {
+          "x": 74.66667175292969,
+          "y": 839.3333740234375,
+          "w": 588,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 46,
+          "y": 0,
+          "w": 655.3333740234375,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-700-pane no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 701,
+        "sidebar": null,
+        "thread": {
+          "x": 46,
+          "y": -1356,
+          "w": 645.3333740234375,
+          "h": 2571.09375
+        },
+        "composer": {
+          "x": 62,
+          "y": 642.6666870117188,
+          "w": 613.3333740234375,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 74.66667175292969,
+          "y": 655.3333740234375,
+          "w": 588,
+          "h": 184
+        },
+        "bar": {
+          "x": 74.66667175292969,
+          "y": 839.3333740234375,
+          "w": 588,
+          "h": 34
+        },
+        "pane": {
+          "x": 281.3333435058594,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 46,
+          "y": 0,
+          "w": 655.3333740234375,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-900-expanded no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 900,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 224,
+          "h": 900
+        },
+        "thread": {
+          "x": 276,
+          "y": -1380.666748046875,
+          "w": 614,
+          "h": 2476.09375
+        },
+        "composer": {
+          "x": 292,
+          "y": 786.6666870117188,
+          "w": 582,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 304.66668701171875,
+          "y": 799.3333740234375,
+          "w": 556.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 304.66668701171875,
+          "y": 839.3333740234375,
+          "w": 556.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 276,
+          "y": 0,
+          "w": 624,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-900-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 900,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1307.3333740234375,
+          "w": 838,
+          "h": 2280.09375
+        },
+        "composer": {
+          "x": 68,
+          "y": 786.6666870117188,
+          "w": 806,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 80.66667175292969,
+          "y": 799.3333740234375,
+          "w": 780.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 80.66667175292969,
+          "y": 839.3333740234375,
+          "w": 780.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 848,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-900-multiline no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 900,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1307.3333740234375,
+          "w": 838,
+          "h": 2424.09375
+        },
+        "composer": {
+          "x": 68,
+          "y": 642.6666870117188,
+          "w": 806,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 80.66667175292969,
+          "y": 655.3333740234375,
+          "w": 780.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 80.66667175292969,
+          "y": 839.3333740234375,
+          "w": 780.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 848,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-900-pane no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 900,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1430.666748046875,
+          "w": 418,
+          "h": 2865.80224609375
+        },
+        "composer": {
+          "x": 68,
+          "y": 642.6666870117188,
+          "w": 386,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 80.66667175292969,
+          "y": 655.3333740234375,
+          "w": 360.66668701171875,
+          "h": 184
+        },
+        "bar": {
+          "x": 80.66667175292969,
+          "y": 839.3333740234375,
+          "w": 360.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 480,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 428,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-expanded no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 331,
+          "y": -1380.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 367,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 379.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 379.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": null,
+        "thread": {
+          "x": 201,
+          "y": -1380.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 237,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 249.6666717529297,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 249.6666717529297,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1148,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-multiline no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": null,
+        "thread": {
+          "x": 201,
+          "y": -1380.666748046875,
+          "w": 840,
+          "h": 2464.59375
+        },
+        "composer": {
+          "x": 237,
+          "y": 638.6666870117188,
+          "w": 768,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 249.6666717529297,
+          "y": 651.3333740234375,
+          "w": 742.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 249.6666717529297,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1148,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1200-pane no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1200,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1429.3333740234375,
+          "w": 718,
+          "h": 2587.09375
+        },
+        "composer": {
+          "x": 84,
+          "y": 638.6666870117188,
+          "w": 654,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 96.66667175292969,
+          "y": 651.3333740234375,
+          "w": 628.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 96.66667175292969,
+          "y": 835.3333740234375,
+          "w": 628.6666870117188,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 728,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1536-expanded no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1536,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 499,
+          "y": -1380.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 535,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 547.6666870117188,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 547.6666870117188,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 1224,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1536-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1536,
+        "sidebar": null,
+        "thread": {
+          "x": 369,
+          "y": -1380.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 405,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 417.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 417.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1484,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1536-multiline no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1536,
+        "sidebar": null,
+        "thread": {
+          "x": 369,
+          "y": -1380.666748046875,
+          "w": 840,
+          "h": 2464.59375
+        },
+        "composer": {
+          "x": 405,
+          "y": 638.6666870117188,
+          "w": 768,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 417.66668701171875,
+          "y": 651.3333740234375,
+          "w": 742.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 417.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1484,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark-1536-pane no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "dark",
+        "pageWidth": 1536,
+        "sidebar": null,
+        "thread": {
+          "x": 159,
+          "y": -1380.666748046875,
+          "w": 840,
+          "h": 2464.59375
+        },
+        "composer": {
+          "x": 195,
+          "y": 638.6666870117188,
+          "w": 768,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 207.6666717529297,
+          "y": 651.3333740234375,
+          "w": 742.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 207.6666717529297,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": {
+          "x": 1116,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1064,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-700-expanded no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 701,
+        "sidebar": {
+          "x": 46,
+          "y": 0,
+          "w": 190,
+          "h": 900
+        },
+        "thread": {
+          "x": 236,
+          "y": -1380.666748046875,
+          "w": 455.3333435058594,
+          "h": 2721.80224609375
+        },
+        "composer": {
+          "x": 252,
+          "y": 786.6666870117188,
+          "w": 423.3333435058594,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 264.66668701171875,
+          "y": 799.3333740234375,
+          "w": 398,
+          "h": 40
+        },
+        "bar": {
+          "x": 264.66668701171875,
+          "y": 839.3333740234375,
+          "w": 398,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 236,
+          "y": 0,
+          "w": 465.3333435058594,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-700-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 701,
+        "sidebar": null,
+        "thread": {
+          "x": 46,
+          "y": -1306.666748046875,
+          "w": 645.3333740234375,
+          "h": 2427.09375
+        },
+        "composer": {
+          "x": 62,
+          "y": 786.6666870117188,
+          "w": 613.3333740234375,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 74.66667175292969,
+          "y": 799.3333740234375,
+          "w": 588,
+          "h": 40
+        },
+        "bar": {
+          "x": 74.66667175292969,
+          "y": 839.3333740234375,
+          "w": 588,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 46,
+          "y": 0,
+          "w": 655.3333740234375,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-700-multiline no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 701,
+        "sidebar": null,
+        "thread": {
+          "x": 46,
+          "y": -1306.666748046875,
+          "w": 645.3333740234375,
+          "h": 2571.09375
+        },
+        "composer": {
+          "x": 62,
+          "y": 642.6666870117188,
+          "w": 613.3333740234375,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 74.66667175292969,
+          "y": 655.3333740234375,
+          "w": 588,
+          "h": 184
+        },
+        "bar": {
+          "x": 74.66667175292969,
+          "y": 839.3333740234375,
+          "w": 588,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 46,
+          "y": 0,
+          "w": 655.3333740234375,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-700-pane no horizontal page overflow",
+      "detail": {
+        "w": 701,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 701,
+        "sidebar": null,
+        "thread": {
+          "x": 46,
+          "y": -1306.666748046875,
+          "w": 645.3333740234375,
+          "h": 2571.09375
+        },
+        "composer": {
+          "x": 62,
+          "y": 642.6666870117188,
+          "w": 613.3333740234375,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 74.66667175292969,
+          "y": 655.3333740234375,
+          "w": 588,
+          "h": 184
+        },
+        "bar": {
+          "x": 74.66667175292969,
+          "y": 839.3333740234375,
+          "w": 588,
+          "h": 34
+        },
+        "pane": {
+          "x": 281.3333435058594,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 46,
+          "y": 0,
+          "w": 655.3333740234375,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-900-expanded no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 900,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 224,
+          "h": 900
+        },
+        "thread": {
+          "x": 276,
+          "y": -1330.666748046875,
+          "w": 614,
+          "h": 2476.09375
+        },
+        "composer": {
+          "x": 292,
+          "y": 786.6666870117188,
+          "w": 582,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 304.66668701171875,
+          "y": 799.3333740234375,
+          "w": 556.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 304.66668701171875,
+          "y": 839.3333740234375,
+          "w": 556.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 276,
+          "y": 0,
+          "w": 624,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-900-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 900,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1257.3333740234375,
+          "w": 838,
+          "h": 2280.09375
+        },
+        "composer": {
+          "x": 68,
+          "y": 786.6666870117188,
+          "w": 806,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 80.66667175292969,
+          "y": 799.3333740234375,
+          "w": 780.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 80.66667175292969,
+          "y": 839.3333740234375,
+          "w": 780.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 848,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-900-multiline no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 900,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1257.3333740234375,
+          "w": 838,
+          "h": 2424.09375
+        },
+        "composer": {
+          "x": 68,
+          "y": 642.6666870117188,
+          "w": 806,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 80.66667175292969,
+          "y": 655.3333740234375,
+          "w": 780.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 80.66667175292969,
+          "y": 839.3333740234375,
+          "w": 780.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 848,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-900-pane no horizontal page overflow",
+      "detail": {
+        "w": 900,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 900,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1380.666748046875,
+          "w": 418,
+          "h": 2865.80224609375
+        },
+        "composer": {
+          "x": 68,
+          "y": 642.6666870117188,
+          "w": 386,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 80.66667175292969,
+          "y": 655.3333740234375,
+          "w": 360.66668701171875,
+          "h": 184
+        },
+        "bar": {
+          "x": 80.66667175292969,
+          "y": 839.3333740234375,
+          "w": 360.66668701171875,
+          "h": 34
+        },
+        "pane": {
+          "x": 480,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 428,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1200-expanded no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1200,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 331,
+          "y": -1330.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 367,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 379.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 379.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 888,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1200-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1200,
+        "sidebar": null,
+        "thread": {
+          "x": 201,
+          "y": -1330.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 237,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 249.6666717529297,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 249.6666717529297,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1148,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1200-multiline no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1200,
+        "sidebar": null,
+        "thread": {
+          "x": 201,
+          "y": -1330.666748046875,
+          "w": 840,
+          "h": 2464.59375
+        },
+        "composer": {
+          "x": 237,
+          "y": 638.6666870117188,
+          "w": 768,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 249.6666717529297,
+          "y": 651.3333740234375,
+          "w": 742.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 249.6666717529297,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1148,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1200-pane no horizontal page overflow",
+      "detail": {
+        "w": 1200,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1200,
+        "sidebar": null,
+        "thread": {
+          "x": 52,
+          "y": -1379.3333740234375,
+          "w": 718,
+          "h": 2587.09375
+        },
+        "composer": {
+          "x": 84,
+          "y": 638.6666870117188,
+          "w": 654,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 96.66667175292969,
+          "y": 651.3333740234375,
+          "w": 628.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 96.66667175292969,
+          "y": 835.3333740234375,
+          "w": 628.6666870117188,
+          "h": 34
+        },
+        "pane": {
+          "x": 780,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 728,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1536-expanded no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1536,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 260,
+          "h": 900
+        },
+        "thread": {
+          "x": 499,
+          "y": -1330.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 535,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 547.6666870117188,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 547.6666870117188,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312,
+          "y": 0,
+          "w": 1224,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1536-collapsed no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1536,
+        "sidebar": null,
+        "thread": {
+          "x": 369,
+          "y": -1330.666748046875,
+          "w": 840,
+          "h": 2320.59375
+        },
+        "composer": {
+          "x": 405,
+          "y": 782.6666870117188,
+          "w": 768,
+          "h": 99.33333587646484
+        },
+        "input": {
+          "x": 417.66668701171875,
+          "y": 795.3333740234375,
+          "w": 742.6666870117188,
+          "h": 40
+        },
+        "bar": {
+          "x": 417.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1484,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1536-multiline no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1536,
+        "sidebar": null,
+        "thread": {
+          "x": 369,
+          "y": -1330.666748046875,
+          "w": 840,
+          "h": 2464.59375
+        },
+        "composer": {
+          "x": 405,
+          "y": 638.6666870117188,
+          "w": 768,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 417.66668701171875,
+          "y": 651.3333740234375,
+          "w": 742.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 417.66668701171875,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1484,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "light-1536-pane no horizontal page overflow",
+      "detail": {
+        "w": 1536,
+        "h": 900,
+        "dpr": 1.5,
+        "theme": "light",
+        "pageWidth": 1536,
+        "sidebar": null,
+        "thread": {
+          "x": 159,
+          "y": -1330.666748046875,
+          "w": 840,
+          "h": 2464.59375
+        },
+        "composer": {
+          "x": 195,
+          "y": 638.6666870117188,
+          "w": 768,
+          "h": 243.33334350585938
+        },
+        "input": {
+          "x": 207.6666717529297,
+          "y": 651.3333740234375,
+          "w": 742.6666870117188,
+          "h": 184
+        },
+        "bar": {
+          "x": 207.6666717529297,
+          "y": 835.3333740234375,
+          "w": 742.6666870117188,
+          "h": 34
+        },
+        "pane": {
+          "x": 1116,
+          "y": 0,
+          "w": 420,
+          "h": 900
+        },
+        "title": {
+          "x": 52,
+          "y": 0,
+          "w": 1064,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "zoom-0.8-composer no horizontal page overflow",
+      "detail": {
+        "w": 1500,
+        "h": 1125,
+        "dpr": 1.2000000476837158,
+        "theme": "light",
+        "pageWidth": 1500,
+        "sidebar": {
+          "x": 51.9921875,
+          "y": 0,
+          "w": 260,
+          "h": 1125
+        },
+        "thread": {
+          "x": 480.98956298828125,
+          "y": -1194.84375,
+          "w": 840,
+          "h": 2320.2734375
+        },
+        "composer": {
+          "x": 516.9921875,
+          "y": 1007.3567504882812,
+          "w": 767.9947509765625,
+          "h": 99.6484375
+        },
+        "input": {
+          "x": 529.8176879882812,
+          "y": 1020.1822509765625,
+          "w": 742.34375,
+          "h": 40
+        },
+        "bar": {
+          "x": 529.8176879882812,
+          "y": 1060.1822509765625,
+          "w": 742.34375,
+          "h": 33.99739456176758
+        },
+        "pane": null,
+        "title": {
+          "x": 311.9921875,
+          "y": 0,
+          "w": 1188.0078125,
+          "h": 45.98958206176758
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "zoom-0.8-model no horizontal page overflow",
+      "detail": {
+        "w": 1500,
+        "h": 1125,
+        "dpr": 1.2000000476837158,
+        "theme": "light",
+        "pageWidth": 1500,
+        "sidebar": {
+          "x": 51.9921875,
+          "y": 0,
+          "w": 260,
+          "h": 1125
+        },
+        "thread": {
+          "x": 480.98956298828125,
+          "y": -1194.84375,
+          "w": 840,
+          "h": 2320.2734375
+        },
+        "composer": {
+          "x": 516.9921875,
+          "y": 1007.3567504882812,
+          "w": 767.9947509765625,
+          "h": 99.6484375
+        },
+        "input": {
+          "x": 529.8176879882812,
+          "y": 1020.1822509765625,
+          "w": 742.34375,
+          "h": 40
+        },
+        "bar": {
+          "x": 529.8176879882812,
+          "y": 1060.1822509765625,
+          "w": 742.34375,
+          "h": 33.99739456176758
+        },
+        "pane": null,
+        "title": {
+          "x": 311.9921875,
+          "y": 0,
+          "w": 1188.0078125,
+          "h": 45.98958206176758
+        },
+        "popover": {
+          "x": 935.9895629882812,
+          "y": 755.9895629882812,
+          "w": 231.9921875,
+          "h": 243.4765625
+        },
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "zoom-1.25-composer no horizontal page overflow",
+      "detail": {
+        "w": 960,
+        "h": 720,
+        "dpr": 1.875,
+        "theme": "light",
+        "pageWidth": 960,
+        "sidebar": {
+          "x": 52.000003814697266,
+          "y": 0,
+          "w": 260,
+          "h": 720.0000610351562
+        },
+        "thread": {
+          "x": 312.0000305175781,
+          "y": -1195.0667724609375,
+          "w": 638.4000244140625,
+          "h": 2486.5751953125
+        },
+        "composer": {
+          "x": 344.0000305175781,
+          "y": 602.933349609375,
+          "w": 574,
+          "h": 99.0666732788086
+        },
+        "input": {
+          "x": 356.5333557128906,
+          "y": 615.4666748046875,
+          "w": 548.933349609375,
+          "h": 40.000003814697266
+        },
+        "bar": {
+          "x": 356.5333557128906,
+          "y": 655.4666748046875,
+          "w": 548.933349609375,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312.0000305175781,
+          "y": 0,
+          "w": 648.0000610351562,
+          "h": 46.000003814697266
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "zoom-1.25-model no horizontal page overflow",
+      "detail": {
+        "w": 960,
+        "h": 720,
+        "dpr": 1.875,
+        "theme": "light",
+        "pageWidth": 960,
+        "sidebar": {
+          "x": 52.000003814697266,
+          "y": 0,
+          "w": 260,
+          "h": 720.0000610351562
+        },
+        "thread": {
+          "x": 312.0000305175781,
+          "y": -1195.0667724609375,
+          "w": 638.4000244140625,
+          "h": 2486.5751953125
+        },
+        "composer": {
+          "x": 344.0000305175781,
+          "y": 602.933349609375,
+          "w": 574,
+          "h": 99.0666732788086
+        },
+        "input": {
+          "x": 356.5333557128906,
+          "y": 615.4666748046875,
+          "w": 548.933349609375,
+          "h": 40.000003814697266
+        },
+        "bar": {
+          "x": 356.5333557128906,
+          "y": 655.4666748046875,
+          "w": 548.933349609375,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 312.0000305175781,
+          "y": 0,
+          "w": 648.0000610351562,
+          "h": 46.000003814697266
+        },
+        "popover": {
+          "x": 570,
+          "y": 353.0000305175781,
+          "w": 232.00001525878906,
+          "h": 242.00001525878906
+        },
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "zoom-1.5-composer no horizontal page overflow",
+      "detail": {
+        "w": 800,
+        "h": 600,
+        "dpr": 2.25,
+        "theme": "light",
+        "pageWidth": 800,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 224,
+          "h": 600
+        },
+        "thread": {
+          "x": 276,
+          "y": -1194.888916015625,
+          "w": 514.2222290039062,
+          "h": 2624.5
+        },
+        "composer": {
+          "x": 292,
+          "y": 486.22222900390625,
+          "w": 482,
+          "h": 99.77777862548828
+        },
+        "input": {
+          "x": 304.8888854980469,
+          "y": 499.1111145019531,
+          "w": 456.22222900390625,
+          "h": 40
+        },
+        "bar": {
+          "x": 304.8888854980469,
+          "y": 539.1111450195312,
+          "w": 456.22222900390625,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 276,
+          "y": 0,
+          "w": 524,
+          "h": 46
+        },
+        "popover": null,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "zoom-1.5-model no horizontal page overflow",
+      "detail": {
+        "w": 800,
+        "h": 600,
+        "dpr": 2.25,
+        "theme": "light",
+        "pageWidth": 800,
+        "sidebar": {
+          "x": 52,
+          "y": 0,
+          "w": 224,
+          "h": 600
+        },
+        "thread": {
+          "x": 276,
+          "y": -1194.888916015625,
+          "w": 514.2222290039062,
+          "h": 2624.5
+        },
+        "composer": {
+          "x": 292,
+          "y": 486.22222900390625,
+          "w": 482,
+          "h": 99.77777862548828
+        },
+        "input": {
+          "x": 304.8888854980469,
+          "y": 499.1111145019531,
+          "w": 456.22222900390625,
+          "h": 40
+        },
+        "bar": {
+          "x": 304.8888854980469,
+          "y": 539.1111450195312,
+          "w": 456.22222900390625,
+          "h": 34
+        },
+        "pane": null,
+        "title": {
+          "x": 276,
+          "y": 0,
+          "w": 524,
+          "h": 46
+        },
+        "popover": {
+          "x": 424,
+          "y": 234,
+          "w": 232,
+          "h": 244.48611450195312
+        },
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+      }
+    },
+    {
+      "pass": true,
+      "name": "real Chromium reduced motion enabled"
+    }
+  ],
+  "shots": [
+    "dark-1200-empty.png",
+    "dark-1200-collapsed.png",
+    "dark-1200-history.png",
+    "dark-1200-tools.png",
+    "dark-1200-input.png",
+    "dark-1200-attachment.png",
+    "dark-1200-model.png",
+    "dark-1200-thinking.png",
+    "dark-1200-slash.png",
+    "dark-1200-changes.png",
+    "dark-1200-browser.png",
+    "dark-1200-browser-preview.png",
+    "dark-1200-browser-modal.png",
+    "dark-1200-processes.png",
+    "dark-1200-session-changes.png",
+    "dark-1200-settings.png",
+    "dark-1200-diagnostics.png",
+    "dark-1200-logs.png",
+    "dark-1200-approval.png",
+    "dark-1300-reference.png",
+    "dark-1300-long-conversation.png",
+    "dark-700-expanded.png",
+    "dark-700-collapsed.png",
+    "dark-700-multiline.png",
+    "dark-700-pane.png",
+    "dark-900-expanded.png",
+    "dark-900-collapsed.png",
+    "dark-900-multiline.png",
+    "dark-900-pane.png",
+    "dark-1200-expanded.png",
+    "dark-1200-collapsed.png",
+    "dark-1200-multiline.png",
+    "dark-1200-pane.png",
+    "dark-1536-expanded.png",
+    "dark-1536-collapsed.png",
+    "dark-1536-multiline.png",
+    "dark-1536-pane.png",
+    "light-700-expanded.png",
+    "light-700-collapsed.png",
+    "light-700-multiline.png",
+    "light-700-pane.png",
+    "light-900-expanded.png",
+    "light-900-collapsed.png",
+    "light-900-multiline.png",
+    "light-900-pane.png",
+    "light-1200-expanded.png",
+    "light-1200-collapsed.png",
+    "light-1200-multiline.png",
+    "light-1200-pane.png",
+    "light-1536-expanded.png",
+    "light-1536-collapsed.png",
+    "light-1536-multiline.png",
+    "light-1536-pane.png",
+    "zoom-0.8-composer.png",
+    "zoom-0.8-model.png",
+    "zoom-1.25-composer.png",
+    "zoom-1.25-model.png",
+    "zoom-1.5-composer.png",
+    "zoom-1.5-model.png"
+  ],
+  "facts": [
+    {
+      "name": "dark-1200-empty",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 298.09375,
+        "w": 840,
+        "h": 166
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": null,
+      "thread": {
+        "x": 206,
+        "y": 298.09375,
+        "w": 840,
+        "h": 166
+      },
+      "composer": {
+        "x": 242,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 254.6666717529297,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 254.6666717529297,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1148,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-history",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 516.875
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "platformFonts": {
+        "fonts": [
+          {
+            "familyName": "Microsoft YaHei",
+            "glyphCount": 8,
+            "isCustomFont": false,
+            "postScriptName": "MicrosoftYaHei"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dark-1200-tools",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-input",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-attachment",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 331,
+        "y": -5.333333492279053,
+        "w": 840,
+        "h": 905.625
+      },
+      "composer": {
+        "x": 367,
+        "y": 693.8854370117188,
+        "w": 768,
+        "h": 188.11459350585938
+      },
+      "input": {
+        "x": 379.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 379.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-model",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": {
+        "x": 786,
+        "y": 531,
+        "w": 232,
+        "h": 243.59375
+      },
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-thinking",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": {
+        "x": 861,
+        "y": 634,
+        "w": 232,
+        "h": 140.95834350585938
+      },
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-slash",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-changes",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 312,
+        "y": 46,
+        "w": 468,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 344,
+        "y": 782.6666870117188,
+        "w": 404,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 356.66668701171875,
+        "y": 795.3333740234375,
+        "w": 378.66668701171875,
+        "h": 40
+      },
+      "bar": {
+        "x": 356.66668701171875,
+        "y": 835.3333740234375,
+        "w": 378.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 468,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-browser",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 312,
+        "y": 46,
+        "w": 468,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 344,
+        "y": 782.6666870117188,
+        "w": 404,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 356.66668701171875,
+        "y": 795.3333740234375,
+        "w": 378.66668701171875,
+        "h": 40
+      },
+      "bar": {
+        "x": 356.66668701171875,
+        "y": 835.3333740234375,
+        "w": 378.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 468,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-browser-preview",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 312,
+        "y": 46,
+        "w": 468,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 344,
+        "y": 782.6666870117188,
+        "w": 404,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 356.66668701171875,
+        "y": 795.3333740234375,
+        "w": 378.66668701171875,
+        "h": 40
+      },
+      "bar": {
+        "x": 356.66668701171875,
+        "y": 835.3333740234375,
+        "w": 378.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 468,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "nativeCapture": "native-dark-browser",
+      "exitCode": 0,
+      "result": "{\"expectedPid\":9984,\"saved\":true,\"includes\":\"owned client area only; native hidden-titlebar overlay is inside client\",\"reason\":\"owned_client_area_including_native_caption_overlay\",\"method\":\"CopyFromScreen\"}",
+      "contentSize": [
+        1200,
+        900
+      ],
+      "bounds": {
+        "x": 193,
+        "y": 69,
+        "width": 1200,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-1200-browser-modal",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 312,
+        "y": 46,
+        "w": 468,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 344,
+        "y": 782.6666870117188,
+        "w": 404,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 356.66668701171875,
+        "y": 795.3333740234375,
+        "w": 378.66668701171875,
+        "h": 40
+      },
+      "bar": {
+        "x": 356.66668701171875,
+        "y": 835.3333740234375,
+        "w": 378.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 468,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-processes",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 312,
+        "y": 46,
+        "w": 468,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 344,
+        "y": 782.6666870117188,
+        "w": 404,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 356.66668701171875,
+        "y": 795.3333740234375,
+        "w": 378.66668701171875,
+        "h": 40
+      },
+      "bar": {
+        "x": 356.66668701171875,
+        "y": 835.3333740234375,
+        "w": 378.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 468,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-session-changes",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 312,
+        "y": 46,
+        "w": 468,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 344,
+        "y": 782.6666870117188,
+        "w": 404,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 356.66668701171875,
+        "y": 795.3333740234375,
+        "w": 378.66668701171875,
+        "h": 40
+      },
+      "bar": {
+        "x": 356.66668701171875,
+        "y": 835.3333740234375,
+        "w": 378.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 468,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-settings",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-diagnostics",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-logs",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-approval",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 336,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 372,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 384.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 384.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1300-reference",
+      "zoom": 1,
+      "contentSize": [
+        1300,
+        890
+      ],
+      "w": 1300,
+      "h": 890,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1300,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 890
+      },
+      "thread": {
+        "x": 386,
+        "y": 46,
+        "w": 840,
+        "h": 816.625
+      },
+      "composer": {
+        "x": 422,
+        "y": 772.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 434.66668701171875,
+        "y": 785.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 434.66668701171875,
+        "y": 825.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 988,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1300-long-conversation",
+      "zoom": 1,
+      "contentSize": [
+        1300,
+        890
+      ],
+      "w": 1300,
+      "h": 890,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1300,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 890
+      },
+      "thread": {
+        "x": 381,
+        "y": -1430.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 417,
+        "y": 772.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 429.66668701171875,
+        "y": 785.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 429.66668701171875,
+        "y": 825.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 988,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "nativeCapture": "native-dark-1300",
+      "exitCode": 0,
+      "result": "{\"expectedPid\":9984,\"saved\":true,\"includes\":\"owned client area only; native hidden-titlebar overlay is inside client\",\"reason\":\"owned_client_area_including_native_caption_overlay\",\"method\":\"CopyFromScreen\"}",
+      "contentSize": [
+        1300,
+        890
+      ],
+      "bounds": {
+        "x": 193,
+        "y": 69,
+        "width": 1300,
+        "height": 890
+      }
+    },
+    {
+      "name": "dark-700-expanded",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 701,
+      "sidebar": {
+        "x": 46,
+        "y": 0,
+        "w": 190,
+        "h": 900
+      },
+      "thread": {
+        "x": 236,
+        "y": -1430.666748046875,
+        "w": 455.3333435058594,
+        "h": 2721.80224609375
+      },
+      "composer": {
+        "x": 252,
+        "y": 786.6666870117188,
+        "w": 423.3333435058594,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 264.66668701171875,
+        "y": 799.3333740234375,
+        "w": 398,
+        "h": 40
+      },
+      "bar": {
+        "x": 264.66668701171875,
+        "y": 839.3333740234375,
+        "w": 398,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 236,
+        "y": 0,
+        "w": 465.3333435058594,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-700-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 701,
+      "sidebar": null,
+      "thread": {
+        "x": 46,
+        "y": -1356,
+        "w": 645.3333740234375,
+        "h": 2427.09375
+      },
+      "composer": {
+        "x": 62,
+        "y": 786.6666870117188,
+        "w": 613.3333740234375,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 74.66667175292969,
+        "y": 799.3333740234375,
+        "w": 588,
+        "h": 40
+      },
+      "bar": {
+        "x": 74.66667175292969,
+        "y": 839.3333740234375,
+        "w": 588,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 46,
+        "y": 0,
+        "w": 655.3333740234375,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-700-multiline",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 701,
+      "sidebar": null,
+      "thread": {
+        "x": 46,
+        "y": -1356,
+        "w": 645.3333740234375,
+        "h": 2571.09375
+      },
+      "composer": {
+        "x": 62,
+        "y": 642.6666870117188,
+        "w": 613.3333740234375,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 74.66667175292969,
+        "y": 655.3333740234375,
+        "w": 588,
+        "h": 184
+      },
+      "bar": {
+        "x": 74.66667175292969,
+        "y": 839.3333740234375,
+        "w": 588,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 46,
+        "y": 0,
+        "w": 655.3333740234375,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-700-pane",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 701,
+      "sidebar": null,
+      "thread": {
+        "x": 46,
+        "y": -1356,
+        "w": 645.3333740234375,
+        "h": 2571.09375
+      },
+      "composer": {
+        "x": 62,
+        "y": 642.6666870117188,
+        "w": 613.3333740234375,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 74.66667175292969,
+        "y": 655.3333740234375,
+        "w": 588,
+        "h": 184
+      },
+      "bar": {
+        "x": 74.66667175292969,
+        "y": 839.3333740234375,
+        "w": 588,
+        "h": 34
+      },
+      "pane": {
+        "x": 281.3333435058594,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 46,
+        "y": 0,
+        "w": 655.3333740234375,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-900-expanded",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 900,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 224,
+        "h": 900
+      },
+      "thread": {
+        "x": 276,
+        "y": -1380.666748046875,
+        "w": 614,
+        "h": 2476.09375
+      },
+      "composer": {
+        "x": 292,
+        "y": 786.6666870117188,
+        "w": 582,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 304.66668701171875,
+        "y": 799.3333740234375,
+        "w": 556.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 304.66668701171875,
+        "y": 839.3333740234375,
+        "w": 556.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 276,
+        "y": 0,
+        "w": 624,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-900-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 900,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1307.3333740234375,
+        "w": 838,
+        "h": 2280.09375
+      },
+      "composer": {
+        "x": 68,
+        "y": 786.6666870117188,
+        "w": 806,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 80.66667175292969,
+        "y": 799.3333740234375,
+        "w": 780.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 80.66667175292969,
+        "y": 839.3333740234375,
+        "w": 780.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 848,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-900-multiline",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 900,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1307.3333740234375,
+        "w": 838,
+        "h": 2424.09375
+      },
+      "composer": {
+        "x": 68,
+        "y": 642.6666870117188,
+        "w": 806,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 80.66667175292969,
+        "y": 655.3333740234375,
+        "w": 780.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 80.66667175292969,
+        "y": 839.3333740234375,
+        "w": 780.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 848,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-900-pane",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 900,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1430.666748046875,
+        "w": 418,
+        "h": 2865.80224609375
+      },
+      "composer": {
+        "x": 68,
+        "y": 642.6666870117188,
+        "w": 386,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 80.66667175292969,
+        "y": 655.3333740234375,
+        "w": 360.66668701171875,
+        "h": 184
+      },
+      "bar": {
+        "x": 80.66667175292969,
+        "y": 839.3333740234375,
+        "w": 360.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 480,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 428,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-expanded",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 331,
+        "y": -1380.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 367,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 379.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 379.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": null,
+      "thread": {
+        "x": 201,
+        "y": -1380.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 237,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 249.6666717529297,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 249.6666717529297,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1148,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-multiline",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": null,
+      "thread": {
+        "x": 201,
+        "y": -1380.666748046875,
+        "w": 840,
+        "h": 2464.59375
+      },
+      "composer": {
+        "x": 237,
+        "y": 638.6666870117188,
+        "w": 768,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 249.6666717529297,
+        "y": 651.3333740234375,
+        "w": 742.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 249.6666717529297,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1148,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1200-pane",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1200,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1429.3333740234375,
+        "w": 718,
+        "h": 2587.09375
+      },
+      "composer": {
+        "x": 84,
+        "y": 638.6666870117188,
+        "w": 654,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 96.66667175292969,
+        "y": 651.3333740234375,
+        "w": 628.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 96.66667175292969,
+        "y": 835.3333740234375,
+        "w": 628.6666870117188,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 728,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1536-expanded",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1536,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 499,
+        "y": -1380.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 535,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 547.6666870117188,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 547.6666870117188,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 1224,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1536-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1536,
+      "sidebar": null,
+      "thread": {
+        "x": 369,
+        "y": -1380.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 405,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 417.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 417.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1484,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1536-multiline",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1536,
+      "sidebar": null,
+      "thread": {
+        "x": 369,
+        "y": -1380.666748046875,
+        "w": 840,
+        "h": 2464.59375
+      },
+      "composer": {
+        "x": 405,
+        "y": 638.6666870117188,
+        "w": 768,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 417.66668701171875,
+        "y": 651.3333740234375,
+        "w": 742.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 417.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1484,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "dark-1536-pane",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "dark",
+      "pageWidth": 1536,
+      "sidebar": null,
+      "thread": {
+        "x": 159,
+        "y": -1380.666748046875,
+        "w": 840,
+        "h": 2464.59375
+      },
+      "composer": {
+        "x": 195,
+        "y": 638.6666870117188,
+        "w": 768,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 207.6666717529297,
+        "y": 651.3333740234375,
+        "w": 742.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 207.6666717529297,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": {
+        "x": 1116,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1064,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-700-expanded",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 701,
+      "sidebar": {
+        "x": 46,
+        "y": 0,
+        "w": 190,
+        "h": 900
+      },
+      "thread": {
+        "x": 236,
+        "y": -1380.666748046875,
+        "w": 455.3333435058594,
+        "h": 2721.80224609375
+      },
+      "composer": {
+        "x": 252,
+        "y": 786.6666870117188,
+        "w": 423.3333435058594,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 264.66668701171875,
+        "y": 799.3333740234375,
+        "w": 398,
+        "h": 40
+      },
+      "bar": {
+        "x": 264.66668701171875,
+        "y": 839.3333740234375,
+        "w": 398,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 236,
+        "y": 0,
+        "w": 465.3333435058594,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-700-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 701,
+      "sidebar": null,
+      "thread": {
+        "x": 46,
+        "y": -1306.666748046875,
+        "w": 645.3333740234375,
+        "h": 2427.09375
+      },
+      "composer": {
+        "x": 62,
+        "y": 786.6666870117188,
+        "w": 613.3333740234375,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 74.66667175292969,
+        "y": 799.3333740234375,
+        "w": 588,
+        "h": 40
+      },
+      "bar": {
+        "x": 74.66667175292969,
+        "y": 839.3333740234375,
+        "w": 588,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 46,
+        "y": 0,
+        "w": 655.3333740234375,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-700-multiline",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 701,
+      "sidebar": null,
+      "thread": {
+        "x": 46,
+        "y": -1306.666748046875,
+        "w": 645.3333740234375,
+        "h": 2571.09375
+      },
+      "composer": {
+        "x": 62,
+        "y": 642.6666870117188,
+        "w": 613.3333740234375,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 74.66667175292969,
+        "y": 655.3333740234375,
+        "w": 588,
+        "h": 184
+      },
+      "bar": {
+        "x": 74.66667175292969,
+        "y": 839.3333740234375,
+        "w": 588,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 46,
+        "y": 0,
+        "w": 655.3333740234375,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-700-pane",
+      "zoom": 1,
+      "contentSize": [
+        701,
+        900
+      ],
+      "w": 701,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 701,
+      "sidebar": null,
+      "thread": {
+        "x": 46,
+        "y": -1306.666748046875,
+        "w": 645.3333740234375,
+        "h": 2571.09375
+      },
+      "composer": {
+        "x": 62,
+        "y": 642.6666870117188,
+        "w": 613.3333740234375,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 74.66667175292969,
+        "y": 655.3333740234375,
+        "w": 588,
+        "h": 184
+      },
+      "bar": {
+        "x": 74.66667175292969,
+        "y": 839.3333740234375,
+        "w": 588,
+        "h": 34
+      },
+      "pane": {
+        "x": 281.3333435058594,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 46,
+        "y": 0,
+        "w": 655.3333740234375,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-900-expanded",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 900,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 224,
+        "h": 900
+      },
+      "thread": {
+        "x": 276,
+        "y": -1330.666748046875,
+        "w": 614,
+        "h": 2476.09375
+      },
+      "composer": {
+        "x": 292,
+        "y": 786.6666870117188,
+        "w": 582,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 304.66668701171875,
+        "y": 799.3333740234375,
+        "w": 556.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 304.66668701171875,
+        "y": 839.3333740234375,
+        "w": 556.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 276,
+        "y": 0,
+        "w": 624,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-900-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 900,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1257.3333740234375,
+        "w": 838,
+        "h": 2280.09375
+      },
+      "composer": {
+        "x": 68,
+        "y": 786.6666870117188,
+        "w": 806,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 80.66667175292969,
+        "y": 799.3333740234375,
+        "w": 780.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 80.66667175292969,
+        "y": 839.3333740234375,
+        "w": 780.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 848,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-900-multiline",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 900,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1257.3333740234375,
+        "w": 838,
+        "h": 2424.09375
+      },
+      "composer": {
+        "x": 68,
+        "y": 642.6666870117188,
+        "w": 806,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 80.66667175292969,
+        "y": 655.3333740234375,
+        "w": 780.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 80.66667175292969,
+        "y": 839.3333740234375,
+        "w": 780.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 848,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-900-pane",
+      "zoom": 1,
+      "contentSize": [
+        900,
+        900
+      ],
+      "w": 900,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 900,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1380.666748046875,
+        "w": 418,
+        "h": 2865.80224609375
+      },
+      "composer": {
+        "x": 68,
+        "y": 642.6666870117188,
+        "w": 386,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 80.66667175292969,
+        "y": 655.3333740234375,
+        "w": 360.66668701171875,
+        "h": 184
+      },
+      "bar": {
+        "x": 80.66667175292969,
+        "y": 839.3333740234375,
+        "w": 360.66668701171875,
+        "h": 34
+      },
+      "pane": {
+        "x": 480,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 428,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1200-expanded",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1200,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 331,
+        "y": -1330.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 367,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 379.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 379.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1200-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1200,
+      "sidebar": null,
+      "thread": {
+        "x": 201,
+        "y": -1330.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 237,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 249.6666717529297,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 249.6666717529297,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1148,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1200-multiline",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1200,
+      "sidebar": null,
+      "thread": {
+        "x": 201,
+        "y": -1330.666748046875,
+        "w": 840,
+        "h": 2464.59375
+      },
+      "composer": {
+        "x": 237,
+        "y": 638.6666870117188,
+        "w": 768,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 249.6666717529297,
+        "y": 651.3333740234375,
+        "w": 742.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 249.6666717529297,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1148,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1200-pane",
+      "zoom": 1,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1200,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1200,
+      "sidebar": null,
+      "thread": {
+        "x": 52,
+        "y": -1379.3333740234375,
+        "w": 718,
+        "h": 2587.09375
+      },
+      "composer": {
+        "x": 84,
+        "y": 638.6666870117188,
+        "w": 654,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 96.66667175292969,
+        "y": 651.3333740234375,
+        "w": 628.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 96.66667175292969,
+        "y": 835.3333740234375,
+        "w": 628.6666870117188,
+        "h": 34
+      },
+      "pane": {
+        "x": 780,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 728,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1536-expanded",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1536,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 260,
+        "h": 900
+      },
+      "thread": {
+        "x": 499,
+        "y": -1330.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 535,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 547.6666870117188,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 547.6666870117188,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312,
+        "y": 0,
+        "w": 1224,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1536-collapsed",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1536,
+      "sidebar": null,
+      "thread": {
+        "x": 369,
+        "y": -1330.666748046875,
+        "w": 840,
+        "h": 2320.59375
+      },
+      "composer": {
+        "x": 405,
+        "y": 782.6666870117188,
+        "w": 768,
+        "h": 99.33333587646484
+      },
+      "input": {
+        "x": 417.66668701171875,
+        "y": 795.3333740234375,
+        "w": 742.6666870117188,
+        "h": 40
+      },
+      "bar": {
+        "x": 417.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1484,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1536-multiline",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1536,
+      "sidebar": null,
+      "thread": {
+        "x": 369,
+        "y": -1330.666748046875,
+        "w": 840,
+        "h": 2464.59375
+      },
+      "composer": {
+        "x": 405,
+        "y": 638.6666870117188,
+        "w": 768,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 417.66668701171875,
+        "y": 651.3333740234375,
+        "w": 742.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 417.66668701171875,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1484,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "light-1536-pane",
+      "zoom": 1,
+      "contentSize": [
+        1536,
+        900
+      ],
+      "w": 1536,
+      "h": 900,
+      "dpr": 1.5,
+      "theme": "light",
+      "pageWidth": 1536,
+      "sidebar": null,
+      "thread": {
+        "x": 159,
+        "y": -1330.666748046875,
+        "w": 840,
+        "h": 2464.59375
+      },
+      "composer": {
+        "x": 195,
+        "y": 638.6666870117188,
+        "w": 768,
+        "h": 243.33334350585938
+      },
+      "input": {
+        "x": 207.6666717529297,
+        "y": 651.3333740234375,
+        "w": 742.6666870117188,
+        "h": 184
+      },
+      "bar": {
+        "x": 207.6666717529297,
+        "y": 835.3333740234375,
+        "w": 742.6666870117188,
+        "h": 34
+      },
+      "pane": {
+        "x": 1116,
+        "y": 0,
+        "w": 420,
+        "h": 900
+      },
+      "title": {
+        "x": 52,
+        "y": 0,
+        "w": 1064,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "zoom-0.8-composer",
+      "zoom": 0.8,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1500,
+      "h": 1125,
+      "dpr": 1.2000000476837158,
+      "theme": "light",
+      "pageWidth": 1500,
+      "sidebar": {
+        "x": 51.9921875,
+        "y": 0,
+        "w": 260,
+        "h": 1125
+      },
+      "thread": {
+        "x": 480.98956298828125,
+        "y": -1194.84375,
+        "w": 840,
+        "h": 2320.2734375
+      },
+      "composer": {
+        "x": 516.9921875,
+        "y": 1007.3567504882812,
+        "w": 767.9947509765625,
+        "h": 99.6484375
+      },
+      "input": {
+        "x": 529.8176879882812,
+        "y": 1020.1822509765625,
+        "w": 742.34375,
+        "h": 40
+      },
+      "bar": {
+        "x": 529.8176879882812,
+        "y": 1060.1822509765625,
+        "w": 742.34375,
+        "h": 33.99739456176758
+      },
+      "pane": null,
+      "title": {
+        "x": 311.9921875,
+        "y": 0,
+        "w": 1188.0078125,
+        "h": 45.98958206176758
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "zoom-0.8-model",
+      "zoom": 0.8,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 1500,
+      "h": 1125,
+      "dpr": 1.2000000476837158,
+      "theme": "light",
+      "pageWidth": 1500,
+      "sidebar": {
+        "x": 51.9921875,
+        "y": 0,
+        "w": 260,
+        "h": 1125
+      },
+      "thread": {
+        "x": 480.98956298828125,
+        "y": -1194.84375,
+        "w": 840,
+        "h": 2320.2734375
+      },
+      "composer": {
+        "x": 516.9921875,
+        "y": 1007.3567504882812,
+        "w": 767.9947509765625,
+        "h": 99.6484375
+      },
+      "input": {
+        "x": 529.8176879882812,
+        "y": 1020.1822509765625,
+        "w": 742.34375,
+        "h": 40
+      },
+      "bar": {
+        "x": 529.8176879882812,
+        "y": 1060.1822509765625,
+        "w": 742.34375,
+        "h": 33.99739456176758
+      },
+      "pane": null,
+      "title": {
+        "x": 311.9921875,
+        "y": 0,
+        "w": 1188.0078125,
+        "h": 45.98958206176758
+      },
+      "popover": {
+        "x": 935.9895629882812,
+        "y": 755.9895629882812,
+        "w": 231.9921875,
+        "h": 243.4765625
+      },
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "zoom-1.25-composer",
+      "zoom": 1.25,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 960,
+      "h": 720,
+      "dpr": 1.875,
+      "theme": "light",
+      "pageWidth": 960,
+      "sidebar": {
+        "x": 52.000003814697266,
+        "y": 0,
+        "w": 260,
+        "h": 720.0000610351562
+      },
+      "thread": {
+        "x": 312.0000305175781,
+        "y": -1195.0667724609375,
+        "w": 638.4000244140625,
+        "h": 2486.5751953125
+      },
+      "composer": {
+        "x": 344.0000305175781,
+        "y": 602.933349609375,
+        "w": 574,
+        "h": 99.0666732788086
+      },
+      "input": {
+        "x": 356.5333557128906,
+        "y": 615.4666748046875,
+        "w": 548.933349609375,
+        "h": 40.000003814697266
+      },
+      "bar": {
+        "x": 356.5333557128906,
+        "y": 655.4666748046875,
+        "w": 548.933349609375,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312.0000305175781,
+        "y": 0,
+        "w": 648.0000610351562,
+        "h": 46.000003814697266
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "zoom-1.25-model",
+      "zoom": 1.25,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 960,
+      "h": 720,
+      "dpr": 1.875,
+      "theme": "light",
+      "pageWidth": 960,
+      "sidebar": {
+        "x": 52.000003814697266,
+        "y": 0,
+        "w": 260,
+        "h": 720.0000610351562
+      },
+      "thread": {
+        "x": 312.0000305175781,
+        "y": -1195.0667724609375,
+        "w": 638.4000244140625,
+        "h": 2486.5751953125
+      },
+      "composer": {
+        "x": 344.0000305175781,
+        "y": 602.933349609375,
+        "w": 574,
+        "h": 99.0666732788086
+      },
+      "input": {
+        "x": 356.5333557128906,
+        "y": 615.4666748046875,
+        "w": 548.933349609375,
+        "h": 40.000003814697266
+      },
+      "bar": {
+        "x": 356.5333557128906,
+        "y": 655.4666748046875,
+        "w": 548.933349609375,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 312.0000305175781,
+        "y": 0,
+        "w": 648.0000610351562,
+        "h": 46.000003814697266
+      },
+      "popover": {
+        "x": 570,
+        "y": 353.0000305175781,
+        "w": 232.00001525878906,
+        "h": 242.00001525878906
+      },
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "zoom-1.5-composer",
+      "zoom": 1.5,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 800,
+      "h": 600,
+      "dpr": 2.25,
+      "theme": "light",
+      "pageWidth": 800,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 224,
+        "h": 600
+      },
+      "thread": {
+        "x": 276,
+        "y": -1194.888916015625,
+        "w": 514.2222290039062,
+        "h": 2624.5
+      },
+      "composer": {
+        "x": 292,
+        "y": 486.22222900390625,
+        "w": 482,
+        "h": 99.77777862548828
+      },
+      "input": {
+        "x": 304.8888854980469,
+        "y": 499.1111145019531,
+        "w": 456.22222900390625,
+        "h": 40
+      },
+      "bar": {
+        "x": 304.8888854980469,
+        "y": 539.1111450195312,
+        "w": 456.22222900390625,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 276,
+        "y": 0,
+        "w": 524,
+        "h": 46
+      },
+      "popover": null,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "name": "zoom-1.5-model",
+      "zoom": 1.5,
+      "contentSize": [
+        1200,
+        900
+      ],
+      "w": 800,
+      "h": 600,
+      "dpr": 2.25,
+      "theme": "light",
+      "pageWidth": 800,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "w": 224,
+        "h": 600
+      },
+      "thread": {
+        "x": 276,
+        "y": -1194.888916015625,
+        "w": 514.2222290039062,
+        "h": 2624.5
+      },
+      "composer": {
+        "x": 292,
+        "y": 486.22222900390625,
+        "w": 482,
+        "h": 99.77777862548828
+      },
+      "input": {
+        "x": 304.8888854980469,
+        "y": 499.1111145019531,
+        "w": 456.22222900390625,
+        "h": 40
+      },
+      "bar": {
+        "x": 304.8888854980469,
+        "y": 539.1111450195312,
+        "w": 456.22222900390625,
+        "h": 34
+      },
+      "pane": null,
+      "title": {
+        "x": 276,
+        "y": 0,
+        "w": 524,
+        "h": 46
+      },
+      "popover": {
+        "x": 424,
+        "y": 234,
+        "w": 232,
+        "h": 244.48611450195312
+      },
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Roboto, sans-serif"
+    },
+    {
+      "nativeCapture": "native-light-1200",
+      "exitCode": 0,
+      "result": "{\"expectedPid\":9984,\"saved\":true,\"includes\":\"owned client area only; native hidden-titlebar overlay is inside client\",\"reason\":\"owned_client_area_including_native_caption_overlay\",\"method\":\"CopyFromScreen\"}",
+      "contentSize": [
+        1200,
+        900
+      ],
+      "bounds": {
+        "x": 193,
+        "y": 69,
+        "width": 1200,
+        "height": 901
+      }
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,90 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS production main keeps sandbox
+PASS production main keeps context isolation
+PASS dark-1200-empty no horizontal page overflow
+PASS empty conversation starts at the top of the reading axis
+PASS dark-1200-collapsed no horizontal page overflow
+PASS dark-1200-history no horizontal page overflow
+PASS dark-1200-tools no horizontal page overflow
+PASS compact input keeps Send inside its surface and toolbar below
+PASS wide navigation leaves reference-sized space for conversation
+PASS tool group has an open surface while retaining result rows
+PASS dark-1200-input no horizontal page overflow
+PASS dark-1200-attachment no horizontal page overflow
+PASS attachment removal preserves actual draft
+PASS dark-1200-model no horizontal page overflow
+PASS model Escape closes and restores trigger focus
+PASS dark-1200-thinking no horizontal page overflow
+PASS dark-1200-slash no horizontal page overflow
+PASS Slash stays a compact command list instead of filling the reading column
+PASS dark-1200-changes no horizontal page overflow
+PASS opening Changes retains a readable session title
+PASS dark-1200-browser no horizontal page overflow
+PASS dark-1200-browser-preview no horizontal page overflow
+PASS production native Browser WebContentsView attached
+PASS dark-1200-browser-modal no horizontal page overflow
+PASS modal detaches native Browser
+PASS dark-1200-processes no horizontal page overflow
+PASS dark-1200-session-changes no horizontal page overflow
+PASS dark-1200-settings no horizontal page overflow
+PASS dark-1200-diagnostics no horizontal page overflow
+PASS dark-1200-logs no horizontal page overflow
+PASS dark-1200-approval no horizontal page overflow
+PASS dark-1300-reference no horizontal page overflow
+PASS dark-1300-long-conversation no horizontal page overflow
+PASS dark-700-expanded no horizontal page overflow
+PASS dark-700-collapsed no horizontal page overflow
+PASS dark-700-multiline no horizontal page overflow
+PASS dark-700-pane no horizontal page overflow
+PASS dark-700-expanded-pane no horizontal page overflow
+PASS dark-900-expanded no horizontal page overflow
+PASS dark-900-collapsed no horizontal page overflow
+PASS dark-900-multiline no horizontal page overflow
+PASS dark-900-pane no horizontal page overflow
+PASS dark-900-expanded-pane no horizontal page overflow
+PASS dark-1200-expanded no horizontal page overflow
+PASS dark-1200-collapsed no horizontal page overflow
+PASS dark-1200-multiline no horizontal page overflow
+PASS dark-1200-pane no horizontal page overflow
+PASS dark-1200-expanded-pane no horizontal page overflow
+PASS dark-1536-expanded no horizontal page overflow
+PASS dark-1536-collapsed no horizontal page overflow
+PASS dark-1536-multiline no horizontal page overflow
+PASS dark-1536-pane no horizontal page overflow
+PASS dark-1536-expanded-pane no horizontal page overflow
+PASS light-700-expanded no horizontal page overflow
+PASS light-700-collapsed no horizontal page overflow
+PASS light-700-multiline no horizontal page overflow
+PASS light-700-pane no horizontal page overflow
+PASS light-700-expanded-pane no horizontal page overflow
+PASS light-900-expanded no horizontal page overflow
+PASS light-900-collapsed no horizontal page overflow
+PASS light-900-multiline no horizontal page overflow
+PASS light-900-pane no horizontal page overflow
+PASS light-900-expanded-pane no horizontal page overflow
+PASS light-1200-expanded no horizontal page overflow
+PASS light-1200-collapsed no horizontal page overflow
+PASS light-1200-multiline no horizontal page overflow
+PASS light-1200-pane no horizontal page overflow
+PASS light-1200-expanded-pane no horizontal page overflow
+PASS light-1536-expanded no horizontal page overflow
+PASS light-1536-collapsed no horizontal page overflow
+PASS light-1536-multiline no horizontal page overflow
+PASS light-1536-pane no horizontal page overflow
+PASS light-1536-expanded-pane no horizontal page overflow
+PASS dark-zoom-0.8-composer no horizontal page overflow
+PASS dark-zoom-0.8-model no horizontal page overflow
+PASS dark-zoom-1.25-composer no horizontal page overflow
+PASS dark-zoom-1.25-model no horizontal page overflow
+PASS dark-zoom-1.5-composer no horizontal page overflow
+PASS dark-zoom-1.5-model no horizontal page overflow
+PASS light-zoom-0.8-composer no horizontal page overflow
+PASS light-zoom-0.8-model no horizontal page overflow
+PASS light-zoom-1.25-composer no horizontal page overflow
+PASS light-zoom-1.25-model no horizontal page overflow
+PASS light-zoom-1.5-composer no horizontal page overflow
+PASS light-zoom-1.5-model no horizontal page overflow
+PASS real Chromium reduced motion enabled
+UI5 visual 86/86 errors=0
+fixture cleanup EPERM

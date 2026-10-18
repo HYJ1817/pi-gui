@@ -1,0 +1,11 @@
+{
+  "exitCode": 0,
+  "logLines": 8852,
+  "failMarkers": [],
+  "canonicalCommands": 137,
+  "publicWasUnmodified": true,
+  "skips": [
+    "SKIP protected nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL\r",
+    "SKIP inherited nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL\r"
+  ]
+}

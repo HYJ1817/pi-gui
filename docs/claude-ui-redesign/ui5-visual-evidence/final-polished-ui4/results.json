@@ -1,0 +1,3229 @@
+{
+  "generatedAt": "2026-10-18T03:27:26.472Z",
+  "electron": "44.4.3",
+  "chrome": "152.0.7977.130",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\ui4-pane-electron-PB7cPz",
+  "checks": 427,
+  "failed": 0,
+  "failures": [],
+  "facts": [
+    {
+      "limits": {
+        "min": 320,
+        "default": 420
+      }
+    },
+    {
+      "resizerAria": {
+        "min": "320",
+        "max": "864",
+        "now": "420",
+        "text": "420 像素",
+        "controls": "rightPane"
+      }
+    },
+    {
+      "draggedWidth": 510
+    },
+    {
+      "browserPane": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1020,
+        "right": 1440,
+        "width": 420,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-toolbar",
+        "closeRight": 1428,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "nativeAttached": {
+        "exists": true,
+        "attached": true,
+        "bounds": {
+          "x": 1021,
+          "y": 133,
+          "width": 419,
+          "height": 769
+        }
+      }
+    },
+    {
+      "widthFollow": {
+        "viewportBefore": 419.3333435058594,
+        "narrower": 349.3333435058594,
+        "bounds": {
+          "x": 1091,
+          "y": 133,
+          "width": 349,
+          "height": 769
+        }
+      }
+    },
+    {
+      "sessionPane": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1090,
+        "right": 1440,
+        "width": 350,
+        "scrollWidth": 349,
+        "clientWidth": 349,
+        "cssWidth": 350,
+        "headHeight": 46,
+        "headTop": 46,
+        "headClass": "rp-head",
+        "closeRight": 1428,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "overflowSession": {
+        "paneOverflow": false,
+        "worst": 0
+      }
+    },
+    {
+      "scrolled": {
+        "scrollTop": 260,
+        "headBefore": 46,
+        "headAfter": 46,
+        "overflow": "auto"
+      }
+    },
+    {
+      "dotColors": [
+        "rgb(74, 222, 128)",
+        "rgb(248, 113, 113)"
+      ]
+    },
+    {
+      "matrixCount": 32
+    },
+    {
+      "zoomed": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 540,
+        "right": 960.0000305175781,
+        "width": 420.0000305175781,
+        "scrollWidth": 419,
+        "clientWidth": 419,
+        "cssWidth": 420,
+        "headHeight": 46.000003814697266,
+        "headTop": 46.000003814697266,
+        "headClass": "chg-head",
+        "closeRight": 948.0000629425049,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "reduced": {
+        "animationName": "none",
+        "duration": "0s",
+        "paneTransition": "0s"
+      }
+    },
+    {
+      "jointGeometry": "dark-700-sidebar-true",
+      "top": 145.6666717529297,
+      "bottom": 655.0000152587891,
+      "left": 0,
+      "right": 262,
+      "composerTop": 667,
+      "paneLeft": 280,
+      "w": 700,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "dark-700-sidebar-false",
+      "top": 145.6666717529297,
+      "bottom": 655.0000152587891,
+      "left": 0,
+      "right": 262,
+      "composerTop": 667,
+      "paneLeft": 280,
+      "w": 700,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "dark-900-sidebar-true",
+      "top": 305.66668701171875,
+      "bottom": 655.0000305175781,
+      "left": 82,
+      "right": 462,
+      "composerTop": 667,
+      "paneLeft": 480,
+      "w": 900,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "dark-900-sidebar-false",
+      "top": 305.66668701171875,
+      "bottom": 655.0000305175781,
+      "left": 82,
+      "right": 462,
+      "composerTop": 667,
+      "paneLeft": 480,
+      "w": 900,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "dark-1200-sidebar-true",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 382,
+      "right": 762,
+      "composerTop": 663,
+      "paneLeft": 780,
+      "w": 1200,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "dark-1200-sidebar-false",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 382,
+      "right": 762,
+      "composerTop": 663,
+      "paneLeft": 780,
+      "w": 1200,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "dark-1536-sidebar-true",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 718,
+      "right": 1098,
+      "composerTop": 663,
+      "paneLeft": 1116,
+      "w": 1536,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "dark-1536-sidebar-false",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 718,
+      "right": 1098,
+      "composerTop": 663,
+      "paneLeft": 1116,
+      "w": 1536,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-700-sidebar-true",
+      "top": 145.6666717529297,
+      "bottom": 655.0000152587891,
+      "left": 0,
+      "right": 262,
+      "composerTop": 667,
+      "paneLeft": 280,
+      "w": 700,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-700-sidebar-false",
+      "top": 145.6666717529297,
+      "bottom": 655.0000152587891,
+      "left": 0,
+      "right": 262,
+      "composerTop": 667,
+      "paneLeft": 280,
+      "w": 700,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-900-sidebar-true",
+      "top": 305.66668701171875,
+      "bottom": 655.0000305175781,
+      "left": 82,
+      "right": 462,
+      "composerTop": 667,
+      "paneLeft": 480,
+      "w": 900,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-900-sidebar-false",
+      "top": 305.66668701171875,
+      "bottom": 655.0000305175781,
+      "left": 82,
+      "right": 462,
+      "composerTop": 667,
+      "paneLeft": 480,
+      "w": 900,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-1200-sidebar-true",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 382,
+      "right": 762,
+      "composerTop": 663,
+      "paneLeft": 780,
+      "w": 1200,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-1200-sidebar-false",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 382,
+      "right": 762,
+      "composerTop": 663,
+      "paneLeft": 780,
+      "w": 1200,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-1536-sidebar-true",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 718,
+      "right": 1098,
+      "composerTop": 663,
+      "paneLeft": 1116,
+      "w": 1536,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "jointGeometry": "light-1536-sidebar-false",
+      "top": 301.66668701171875,
+      "bottom": 651.0000305175781,
+      "left": 718,
+      "right": 1098,
+      "composerTop": 663,
+      "paneLeft": 1116,
+      "w": 1536,
+      "h": 900,
+      "overflow": false
+    },
+    {
+      "toastDuringActualDrag": {
+        "top": 752.6666870117188,
+        "bottom": 795.0000228881836,
+        "left": 474.16668701171875,
+        "right": 697.0000305175781,
+        "composerTop": 807,
+        "paneLeft": 715,
+        "w": 1200,
+        "h": 900,
+        "overflow": false
+      },
+      "nativeView": {
+        "exists": true,
+        "attached": true,
+        "bounds": {
+          "x": 716,
+          "y": 133,
+          "width": 484,
+          "height": 767
+        }
+      }
+    },
+    {
+      "zoom": 0.8,
+      "top": 918.359375,
+      "bottom": 1020.0260391235352,
+      "left": 617.0051879882812,
+      "right": 997.0051879882812,
+      "composerTop": 1032.0181884765625,
+      "paneLeft": 1015,
+      "w": 1500,
+      "h": 1125,
+      "overflow": false
+    },
+    {
+      "zoom": 1.25,
+      "top": 513.9417114257812,
+      "bottom": 615.0083847045898,
+      "left": 77.00000762939453,
+      "right": 457.00003814697266,
+      "composerTop": 627.0000610351562,
+      "paneLeft": 475.0000305175781,
+      "w": 960,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "zoom": 1.5,
+      "top": 397.22222900390625,
+      "bottom": 499.00000762939453,
+      "left": -83,
+      "right": 297,
+      "composerTop": 511,
+      "paneLeft": 315,
+      "w": 800,
+      "h": 600,
+      "overflow": false
+    },
+    {
+      "resizeObserverInvestigation": {
+        "stableA": {
+          "diag": {
+            "callbacks": {
+              "other": 112,
+              "pane": 79,
+              "composer": 79
+            },
+            "resizeErrors": 0,
+            "unexpected": [],
+            "measurements": [
+              {
+                "source": "other",
+                "width": 912,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 848,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 902,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 838,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 768,
+                "height": 1040.953125
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 700,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 422,
+                "height": 75
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 788.71875
+              },
+              {
+                "source": "composer",
+                "width": 422,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 612,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 900,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 194,
+                "height": 844
+              },
+              {
+                "source": "pane",
+                "width": 223.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 162,
+                "height": 281
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 582,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1200,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 902,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 838,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1138,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1074,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1536,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1238,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1174,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1474,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1410,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 700,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 612,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 189.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 422,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 612,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 900,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 194,
+                "height": 844
+              },
+              {
+                "source": "pane",
+                "width": 223.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 162,
+                "height": 281
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 582,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1200,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 902,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 838,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1138,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1074,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1536,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1238,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1174,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1474,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1410,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1200,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 653,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 589,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 953,
+                "height": 1079
+              },
+              {
+                "source": "pane",
+                "width": 484.15625,
+                "height": 1125
+              },
+              {
+                "source": "composer",
+                "width": 889.015625,
+                "height": 74.984375
+              },
+              {
+                "source": "other",
+                "width": 898.390625,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.453125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 834,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 738.21875,
+                "height": 554
+              },
+              {
+                "source": "pane",
+                "width": 484.109375,
+                "height": 600
+              },
+              {
+                "source": "composer",
+                "width": 706,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 653,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 589,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 622.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 99
+              },
+              {
+                "source": "other",
+                "width": 856,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 792,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 872,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 808,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 872,
+                "height": 666.65625
+              },
+              {
+                "source": "composer",
+                "width": 808,
+                "height": 146
+              },
+              {
+                "source": "other",
+                "width": 890,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 826,
+                "height": 170
+              },
+              {
+                "source": "other",
+                "width": 421,
+                "height": 642.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 357,
+                "height": 194
+              },
+              {
+                "source": "other",
+                "width": 439,
+                "height": 666.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 375,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 455,
+                "height": 618.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 391,
+                "height": 207.78125
+              },
+              {
+                "source": "other",
+                "width": 473,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 409,
+                "height": 213.546875
+              },
+              {
+                "source": "other",
+                "width": 489,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 425,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 489,
+                "height": 666.65625
+              },
+              {
+                "source": "other",
+                "width": 507,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 443,
+                "height": 207.78125
+              },
+              {
+                "source": "other",
+                "width": 523,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 459,
+                "height": 213.546875
+              },
+              {
+                "source": "other",
+                "width": 523,
+                "height": 642.65625
+              },
+              {
+                "source": "composer",
+                "width": 459,
+                "height": 99
+              },
+              {
+                "source": "other",
+                "width": 541,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 477,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 557,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 493,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 557,
+                "height": 618.65625
+              },
+              {
+                "source": "composer",
+                "width": 493,
+                "height": 146
+              },
+              {
+                "source": "other",
+                "width": 575,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 511,
+                "height": 170
+              },
+              {
+                "source": "other",
+                "width": 591,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 527,
+                "height": 170
+              },
+              {
+                "source": "other",
+                "width": 591,
+                "height": 666.65625
+              },
+              {
+                "source": "composer",
+                "width": 527,
+                "height": 194
+              },
+              {
+                "source": "other",
+                "width": 609,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 545,
+                "height": 207.78125
+              },
+              {
+                "source": "other",
+                "width": 625,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 561,
+                "height": 213.546875
+              },
+              {
+                "source": "other",
+                "width": 625,
+                "height": 642.65625
+              },
+              {
+                "source": "other",
+                "width": 643,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 579,
+                "height": 219
+              }
+            ]
+          },
+          "composer": {
+            "x": 52,
+            "y": 531,
+            "width": 643,
+            "height": 237,
+            "top": 531,
+            "right": 695,
+            "bottom": 768,
+            "left": 52
+          },
+          "reserved": "237px"
+        },
+        "stableB": {
+          "diag": {
+            "callbacks": {
+              "other": 112,
+              "pane": 79,
+              "composer": 79
+            },
+            "resizeErrors": 0,
+            "unexpected": [],
+            "measurements": [
+              {
+                "source": "other",
+                "width": 912,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 848,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 902,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 838,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 768,
+                "height": 1040.953125
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 700,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 422,
+                "height": 75
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 788.71875
+              },
+              {
+                "source": "composer",
+                "width": 422,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 612,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 900,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 194,
+                "height": 844
+              },
+              {
+                "source": "pane",
+                "width": 223.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 162,
+                "height": 281
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 582,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1200,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 902,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 838,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1138,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1074,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1536,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1238,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1174,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1474,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1410,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 700,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 612,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 189.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 422,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 454,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 612,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 644,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 900,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 194,
+                "height": 844
+              },
+              {
+                "source": "pane",
+                "width": 223.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 162,
+                "height": 281
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 582,
+                "height": 219
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 614,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 386,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 788.71875
+              },
+              {
+                "source": "other",
+                "width": 418,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1200,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 902,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 838,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 418,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 482,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1138,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1074,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1536,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 235.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1238,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1174,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 754,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 818,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1474,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 0,
+                "height": 0
+              },
+              {
+                "source": "composer",
+                "width": 1410,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 419.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 990,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 784.71875
+              },
+              {
+                "source": "other",
+                "width": 1054,
+                "height": 854
+              },
+              {
+                "source": "other",
+                "width": 718,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 1200,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 219
+              },
+              {
+                "source": "composer",
+                "width": 654,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 653,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 589,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 953,
+                "height": 1079
+              },
+              {
+                "source": "pane",
+                "width": 484.15625,
+                "height": 1125
+              },
+              {
+                "source": "composer",
+                "width": 889.015625,
+                "height": 74.984375
+              },
+              {
+                "source": "other",
+                "width": 898.390625,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.453125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 834,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 738.21875,
+                "height": 554
+              },
+              {
+                "source": "pane",
+                "width": 484.109375,
+                "height": 600
+              },
+              {
+                "source": "composer",
+                "width": 706,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 653,
+                "height": 854
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 900
+              },
+              {
+                "source": "composer",
+                "width": 589,
+                "height": 75
+              },
+              {
+                "source": "other",
+                "width": 838,
+                "height": 622.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 806,
+                "height": 99
+              },
+              {
+                "source": "other",
+                "width": 856,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 792,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 872,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 808,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 872,
+                "height": 666.65625
+              },
+              {
+                "source": "composer",
+                "width": 808,
+                "height": 146
+              },
+              {
+                "source": "other",
+                "width": 890,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 826,
+                "height": 170
+              },
+              {
+                "source": "other",
+                "width": 421,
+                "height": 642.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 357,
+                "height": 194
+              },
+              {
+                "source": "other",
+                "width": 439,
+                "height": 666.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 375,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 455,
+                "height": 618.65625
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 391,
+                "height": 207.78125
+              },
+              {
+                "source": "other",
+                "width": 473,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 409,
+                "height": 213.546875
+              },
+              {
+                "source": "other",
+                "width": 489,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 425,
+                "height": 219
+              },
+              {
+                "source": "other",
+                "width": 489,
+                "height": 666.65625
+              },
+              {
+                "source": "other",
+                "width": 507,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 443,
+                "height": 207.78125
+              },
+              {
+                "source": "other",
+                "width": 523,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 459,
+                "height": 213.546875
+              },
+              {
+                "source": "other",
+                "width": 523,
+                "height": 642.65625
+              },
+              {
+                "source": "composer",
+                "width": 459,
+                "height": 99
+              },
+              {
+                "source": "other",
+                "width": 541,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 477,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 557,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 493,
+                "height": 122
+              },
+              {
+                "source": "other",
+                "width": 557,
+                "height": 618.65625
+              },
+              {
+                "source": "composer",
+                "width": 493,
+                "height": 146
+              },
+              {
+                "source": "other",
+                "width": 575,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 511,
+                "height": 170
+              },
+              {
+                "source": "other",
+                "width": 591,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 527,
+                "height": 170
+              },
+              {
+                "source": "other",
+                "width": 591,
+                "height": 666.65625
+              },
+              {
+                "source": "composer",
+                "width": 527,
+                "height": 194
+              },
+              {
+                "source": "other",
+                "width": 609,
+                "height": 674
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 720
+              },
+              {
+                "source": "composer",
+                "width": 545,
+                "height": 207.78125
+              },
+              {
+                "source": "other",
+                "width": 625,
+                "height": 698
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 744
+              },
+              {
+                "source": "composer",
+                "width": 561,
+                "height": 213.546875
+              },
+              {
+                "source": "other",
+                "width": 625,
+                "height": 642.65625
+              },
+              {
+                "source": "other",
+                "width": 643,
+                "height": 722
+              },
+              {
+                "source": "pane",
+                "width": 484.328125,
+                "height": 768
+              },
+              {
+                "source": "composer",
+                "width": 579,
+                "height": 219
+              }
+            ]
+          },
+          "composer": {
+            "x": 52,
+            "y": 531,
+            "width": 643,
+            "height": 237,
+            "top": 531,
+            "right": 695,
+            "bottom": 768,
+            "left": 52
+          },
+          "reserved": "237px"
+        }
+      }
+    }
+  ],
+  "screenshots": [
+    "session-changes-error-1200-dark.png",
+    "process-active-1200-dark.png",
+    "dark-700-changes-changes.png",
+    "dark-700-browser-browser.png",
+    "dark-700-session-session-changes.png",
+    "dark-700-process-process.png",
+    "dark-900-changes-changes.png",
+    "dark-900-browser-browser.png",
+    "dark-900-session-session-changes.png",
+    "dark-900-process-process.png",
+    "dark-1200-changes-changes.png",
+    "dark-1200-browser-browser.png",
+    "dark-1200-session-session-changes.png",
+    "dark-1200-process-process.png",
+    "dark-1536-changes-changes.png",
+    "dark-1536-browser-browser.png",
+    "dark-1536-session-session-changes.png",
+    "dark-1536-process-process.png",
+    "light-700-changes-changes.png",
+    "light-700-browser-browser.png",
+    "light-700-session-session-changes.png",
+    "light-700-process-process.png",
+    "light-900-changes-changes.png",
+    "light-900-browser-browser.png",
+    "light-900-session-session-changes.png",
+    "light-900-process-process.png",
+    "light-1200-changes-changes.png",
+    "light-1200-browser-browser.png",
+    "light-1200-session-session-changes.png",
+    "light-1200-process-process.png",
+    "light-1536-changes-changes.png",
+    "light-1536-browser-browser.png",
+    "light-1536-session-session-changes.png",
+    "light-1536-process-process.png",
+    "changes-zoom125-dark.png",
+    "joint-feedback-dark-700-sidebar-true.png",
+    "joint-approval-dark-700-sidebar-true.png",
+    "joint-feedback-dark-700-sidebar-false.png",
+    "joint-approval-dark-700-sidebar-false.png",
+    "joint-feedback-dark-900-sidebar-true.png",
+    "joint-approval-dark-900-sidebar-true.png",
+    "joint-feedback-dark-900-sidebar-false.png",
+    "joint-approval-dark-900-sidebar-false.png",
+    "joint-feedback-dark-1200-sidebar-true.png",
+    "joint-approval-dark-1200-sidebar-true.png",
+    "joint-feedback-dark-1200-sidebar-false.png",
+    "joint-approval-dark-1200-sidebar-false.png",
+    "joint-feedback-dark-1536-sidebar-true.png",
+    "joint-approval-dark-1536-sidebar-true.png",
+    "joint-feedback-dark-1536-sidebar-false.png",
+    "joint-approval-dark-1536-sidebar-false.png",
+    "joint-feedback-light-700-sidebar-true.png",
+    "joint-approval-light-700-sidebar-true.png",
+    "joint-feedback-light-700-sidebar-false.png",
+    "joint-approval-light-700-sidebar-false.png",
+    "joint-feedback-light-900-sidebar-true.png",
+    "joint-approval-light-900-sidebar-true.png",
+    "joint-feedback-light-900-sidebar-false.png",
+    "joint-approval-light-900-sidebar-false.png",
+    "joint-feedback-light-1200-sidebar-true.png",
+    "joint-approval-light-1200-sidebar-true.png",
+    "joint-feedback-light-1200-sidebar-false.png",
+    "joint-approval-light-1200-sidebar-false.png",
+    "joint-feedback-light-1536-sidebar-true.png",
+    "joint-approval-light-1536-sidebar-true.png",
+    "joint-feedback-light-1536-sidebar-false.png",
+    "joint-approval-light-1536-sidebar-false.png",
+    "joint-explicit-delivery-failure.png",
+    "joint-unknown-delivery.png",
+    "joint-late-result-replacement.png",
+    "joint-pane-drag-feedback.png",
+    "joint-zoom-0.8.png",
+    "joint-zoom-1.25.png",
+    "joint-zoom-1.5.png",
+    "joint-reduced-motion.png"
+  ],
+  "notes": [
+    "所有渲染都是生产入口的实际资源；不注入 CSS，静态 stylesheet 必须存在并解析成功。",
+    "Browser 使用真实 WebContentsView（electron/browser-view.cjs）与离线 127.0.0.1 fixture 页。",
+    "本会话变更 / 开发进程的数据由页内 fetch 夹具提供，形状照抄真实接口。",
+    "不使用真实 Pi、不调用模型、不写用户项目。"
+  ]
+}
