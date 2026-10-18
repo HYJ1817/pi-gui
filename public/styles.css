@@ -324,6 +324,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 
 .stage-head{
   display:flex;align-items:center;gap:5px;height:46px;flex:0 0 46px;
+  container-type:inline-size;
   /* 右侧留出原生最小化 / 最大化 / 关闭按钮的位置（3 × 46px）。
      不留的话顶栏最右那几个图标会被系统按钮压住，点不到。 */
   padding:0 150px 0 12px;border-bottom:1px solid var(--line-soft);
@@ -492,12 +493,12 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
  * 小药丸改成填满行宽，与容器圆角一致。 */
 .tl-group{display:flex;flex-direction:column;gap:0;margin:9px 0 18px;min-width:0;
   border:1px solid var(--line-soft);border-radius:var(--ui-radius-card);
-  padding:2px 3px 3px;background:var(--ui-user-surface)}
+  padding:2px 3px 3px;background:transparent}
 .tl-group-head{font-size:10.5px;color:var(--t3);letter-spacing:.2px;padding:6px 9px 4px}
 .tl-list{display:flex;flex-direction:column;gap:0;min-width:0}
 .tl-list>.tl-item+.tl-item{border-top:1px solid var(--line-soft)}
 
-.tl-item{display:flex;gap:8px;min-height:var(--tool-row-height);padding:4px 7px;border-radius:var(--ui-radius-control);min-width:0;transition:background var(--ui-duration-snap) var(--ui-ease-out)}
+.tl-item{display:flex;gap:8px;min-height:var(--tool-row-height);padding:4px 7px;border-radius:0;min-width:0;transition:background var(--ui-duration-snap) var(--ui-ease-out)}
 .tl-item:hover{background:var(--hover)}
 .tl-item.open{background:var(--ui-selected)}
 
@@ -627,7 +628,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .chip{
   display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;border-radius:7px;
   border:1px solid transparent;background:transparent;color:var(--t2);font-size:12px;
-  font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .13s,color .13s;
+  font-family:inherit;cursor:pointer;white-space:nowrap;transition:background var(--ui-duration-snap) var(--ui-ease-out),color var(--ui-duration-snap) var(--ui-ease-out);
 }
 .chip:hover{background:var(--hover);color:var(--t1)}
 .chip:focus-visible,.ctx-chip:focus-visible,.icon-btn:focus-visible,.att-x:focus-visible,
@@ -641,7 +642,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .mic-btn{
   width:30px;height:30px;border-radius:50%;border:0;background:var(--ui-primary-surface);color:var(--ui-on-primary);
   display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;
-  transition:opacity .14s,background .14s;
+  transition:opacity var(--ui-duration-snap) var(--ui-ease-out),background var(--ui-duration-snap) var(--ui-ease-out);
 }
 .mic-btn svg{width:15px;height:15px;stroke-width:2}
 .mic-btn:hover:not(:disabled){background:var(--ui-selected)}
@@ -1160,7 +1161,10 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   min-width:232px;max-width:min(420px,92vw);max-height:min(62vh,520px);overflow:auto;
 }
 .pop[hidden]{display:none}
-.pop.model-mode{overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+/* A stable preferred width prevents shrink-to-fit from changing after the
+ * anchor position is measured when a long provider group gains a scrollbar.
+ * The existing inline max-width still constrains the available pane space. */
+.pop.model-mode{width:420px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
 .pop-provider{display:flex;align-items:center;gap:7px;width:100%;height:32px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--t2);font:12px var(--font);text-align:left;cursor:pointer}
 .pop-provider:hover{background:var(--hover)}
 .pop-provider-chev{width:12px;flex:0 0 12px;color:var(--t3);font-size:13px}
@@ -1941,6 +1945,8 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .sess-plans .sp-open:hover,
 .sess-plans .sp-toggle:hover { background: var(--hover); }
 @media (max-width: 1100px) { .sess-plans { display: none; } }
+/* Pane/sidebar width matters as well as window width: protect the session title. */
+@container (max-width:620px) { .sess-plans { display:none; } }
 
 /* 一次尝试：状态行 → 会话行 → 执行期间变更行。
    覆盖早先的「一行 flex」（那时 attempt 里只有状态与错误两段文字）。 */
@@ -2307,7 +2313,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .rail-badge{position:absolute;right:0;bottom:0;font-size:9px;line-height:13px;min-width:13px;border-radius:8px;background:var(--control-active);color:var(--t1);text-align:center}
 .rail-badge:empty{display:none}
 .global-rail .rp-dot{position:absolute;top:4px;right:4px;box-shadow:none}
-.project-sidebar{width:260px;flex:0 0 260px;min-width:0;overflow:hidden}
+.project-sidebar{width:236px;flex:0 0 236px;min-width:0;overflow:hidden}
 .project-sidebar .rail-head{padding:0 12px 0 16px}
 .project-sidebar .brand{font-size:14px;font-weight:500}
 .brand-sub{font-size:11px;color:var(--t3);font-weight:400}
@@ -2339,7 +2345,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .project-sidebar .project .pj-chev[aria-expanded="false"]{opacity:1}
 .project-sidebar .pj-sessions{border-left:0;margin:0 0 8px;padding-left:0}
 .project-sidebar:not(.search-open) .pj-search{display:none}
-.project-sidebar .pj-sess{min-height:34px;padding:4px 10px;border-radius:7px;font-size:13px;color:var(--t1)}
+.project-sidebar .pj-sess{min-height:30px;padding:2px 10px;border-radius:7px;font-size:13px;color:var(--t1)}
 .project-sidebar .pj-sess-primary{gap:12px}
 .pj-sess-dot{width:6px;height:6px;flex:0 0 6px;border:1px solid var(--t3);border-radius:50%;opacity:.65}
 .project-sidebar .pj-sess-time{display:none}
@@ -2555,7 +2561,7 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .head-right .icon-btn.is-active{background:var(--control-active);color:var(--t1)}
 
 /* P30: shared row rhythm and contextual work; existing control tokens stay authoritative. */
-:root{--sidebar-row-height:34px;--sidebar-icon-size:16px}
+:root{--sidebar-row-height:30px;--sidebar-icon-size:16px}
 .project-sidebar .nav-item,.project-sidebar .project,.project-sidebar .pj-sess{min-height:var(--sidebar-row-height)}
 .project-sidebar .nav-item .ni-ic,.project-sidebar .pj-header-action svg{width:var(--sidebar-icon-size);height:var(--sidebar-icon-size)}
 .project-sidebar .rail-nav{gap:2px;padding-bottom:12px}
@@ -2744,7 +2750,7 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 
 /* After component rules so the user's reduced-motion choice wins the cascade. */
 @media(prefers-reduced-motion:reduce){
-  .icon-btn,.rail-icon,.nav-item,.pj-chev,.group-head .chev{transition:none}
+  .icon-btn,.rail-icon,.nav-item,.pj-chev,.group-head .chev,.chip,.mic-btn,.btn-stop{transition:none}
   /* 关掉上面两类装饰动效；spinner / 呼吸等状态指示保留 */
   .thread>.msg,.thread>.tl-group,.thread>.note,.thread>.working{
     animation:none;

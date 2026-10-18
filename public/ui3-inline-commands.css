@@ -15,7 +15,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-width: calc(100vw - 16px);
+  /* Runtime inline width still bounds the available space beside native panes. */
+  max-width: min(320px, calc(100vw - 16px));
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-card);
   background: var(--ui-popover-surface);
@@ -38,7 +39,7 @@
   display: flex;
   align-items: center;
   gap: var(--ui-space-2);
-  padding: 8px 10px;
+  padding: 6px 10px;
   border-radius: var(--ui-radius-control);
   cursor: pointer;
   color: var(--ui-text-primary);

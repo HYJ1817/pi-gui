@@ -1,23 +1,28 @@
 /* UI-3A component sheet. Integration loads this after styles.css; no global controls. */
-#chatComposer {right:var(--ui3-composer-scrollbar-width,0px)}
+#chatComposer {right:var(--ui3-composer-scrollbar-width,0px);background:var(--ui-canvas)}
 #chatComposer .composer-box {
-  border-radius:var(--ui-radius-composer);
-  background:var(--ui-input-surface);
-  border-color:var(--ui-border-control);
-  padding:var(--ui-space-3);
-  transition:border-color var(--ui-duration-snap) var(--ui-ease-out);
+  /* Keep the measured footprint/DOM; only the textarea carries the contour.
+     The canvas masks transcript text behind the separate controls row. */
+  border:0;border-radius:0;background:var(--ui-canvas);padding:0;
+  transition:none;
 }
-#chatComposer .composer-box:focus-within {border-color:var(--ui-focus)}
-#chatComposer .composer-box.drop {border-color:var(--ui-focus);background:var(--ui-user-surface)}
+#chatComposer .composer-box.drop #input {outline-color:var(--ui-focus);background:var(--ui-user-surface)}
 #chatComposer #input {
   display:block;font-family:var(--ui-font-sans);font-size:var(--ui-font-prose);
   color:var(--ui-text-primary);line-height:1.7;
-  padding:var(--ui-space-1) var(--ui-space-1) var(--ui-space-2);
+  min-height:40px;padding:var(--ui-space-2) 48px var(--ui-space-2) var(--ui-space-3);
+  background:var(--ui-input-surface);border-radius:var(--ui-radius-composer);
+  outline:1px solid var(--ui-border-control);outline-offset:0;
+  transition:outline-color var(--ui-duration-snap) var(--ui-ease-out);
   overflow-wrap:anywhere;white-space:pre-wrap;
 }
 #chatComposer #input::placeholder {color:var(--ui-text-muted)}
-#chatComposer #input:focus-visible {outline:0}
-#chatComposer .composer-bar {gap:var(--ui-space-2);flex-wrap:wrap;padding-top:var(--ui-space-1)}
+#chatComposer #input:focus {outline-color:var(--ui-focus)}
+#chatComposer #input:focus-visible {outline:2px solid var(--ui-focus);outline-offset:2px}
+#chatComposer .composer-bar {position:relative;gap:var(--ui-space-2);flex-wrap:wrap;padding:var(--ui-space-2) var(--ui-space-1) 0}
+/* Anchor Send to the input's lower edge even when attachments or controls wrap.
+   Stop stays an independent, labelled action; Pi also supports sending steer. */
+#chatComposer #btnSend {position:absolute;right:var(--ui-space-2);bottom:calc(100% + 5px)}
 #chatComposer .cb-left {flex:1 1 var(--ui-space-6)}
 #chatComposer .cb-right {
   margin-left:auto;flex-wrap:wrap;justify-content:flex-end;gap:var(--ui-space-1);
@@ -57,6 +62,6 @@
 #chatComposer .ui3-attachment-remove {border-radius:var(--ui-radius-control);color:var(--ui-text-muted)}
 #chatComposer .ui3-attachment-remove:hover {background:var(--ui-danger-surface);color:var(--ui-danger)}
 @media (prefers-reduced-motion:reduce) {
-  #chatComposer .composer-box {transition:none}
+  #chatComposer .composer-box,#chatComposer #input {transition:none}
   #chatComposer .att-spin {animation:none}
 }
