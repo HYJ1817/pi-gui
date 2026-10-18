@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  1.431,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:56:26.1145793+08:00",
+    "id":  "electron-guard",
+    "startedAt":  "2026-10-18T15:56:24.6838605+08:00",
+    "command":  "node tests/electron-guard.cjs",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  5.28,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:39:28.8342963+08:00",
+    "id":  "logging",
+    "startedAt":  "2026-10-18T15:39:23.5556200+08:00",
+    "command":  "npm.cmd run test:logging",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-d72f1b489e5f4f4b91cbae8353c17800"
+}

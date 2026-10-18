@@ -1,0 +1,12 @@
+{
+  "nodeModules": "junction to C:\\pi-GUI-ui5\\node_modules after npm ci offline ENOTCACHED",
+  "command": "npm test",
+  "temp": "C:\\Users\\21022\\AppData\\Local\\pi-gui-ui5-integration-b2ca15a7f1fc477098c57beeadafdb67",
+  "securityPort": "1733",
+  "head": "54549876a9212c61f38adaf04a63499df67f282a",
+  "finishedAt": "2026-10-18T14:46:39.6345905+08:00",
+  "durationSeconds": 184.1407656,
+  "exitCode": 1,
+  "startedAt": "2026-10-18T14:43:35.4938786+08:00",
+  "gitPort": "1732"
+}

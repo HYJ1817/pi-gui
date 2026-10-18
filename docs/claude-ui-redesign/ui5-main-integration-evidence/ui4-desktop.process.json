@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  273.922,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:50:38.9509397+08:00",
+    "id":  "ui4-desktop",
+    "startedAt":  "2026-10-18T15:46:05.0285370+08:00",
+    "command":  "npm.cmd run test:ui4:desktop",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

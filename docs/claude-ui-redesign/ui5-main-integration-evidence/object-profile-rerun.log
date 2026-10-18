@@ -1,0 +1,58 @@
+ok independent object profile exists
+ok well formed observation keeps private SACL unknown and no production eligibility
+ok legacy evidence
+ok unknown profile
+ok unknown helper
+ok missing proof
+ok unknown proof
+ok proof helper mismatch
+ok proof Windows mismatch
+ok unverified Windows build
+ok non NTFS
+ok network volume
+ok reparse target
+ok junction parent
+ok multiple hardlinks
+ok unknown identity
+ok ADS unknown
+ok named ADS
+ok EA unknown
+ok EA nonempty
+ok unknown owner
+ok unknown group
+ok unknown dacl
+ok unapproved attributes
+ok non text
+ok too large
+ok created file
+ok rename
+ok attribution gap
+ok observed evidence
+ok tool result unfinished
+ok reference length mismatch
+ok DACL changed
+ok expired
+ok consumed
+ok new file ID
+ok workspace epoch changed
+ok runtime generation changed
+ok operation changed
+ok known SACL cannot carry null
+ok observation incomplete
+ok Archive candidate 32 never qualifies
+ok Archive candidate 34 never qualifies
+ok Archive candidate 8224 never qualifies
+ok Archive candidate 8226 never qualifies
+ok caller cannot enable with approved proof and consent
+ok normalizer rejects excessive payload
+ok null and primitive observations have fixed refusals
+ok actual Windows NTFS observe is bounded and does not change file content/object
+ok actual unavailable SACL is not synthesized empty
+ok actual stream enumeration and EA empty differ from unknown
+ok real Unicode relative path binds without exposing its absolute path
+ok real named ADS is fully enumerated and refused
+ok path traversal/ADS inputs never reach native observer
+native read-only measurement {"osVersion":"10.0.26200.0","architecture":"x64","fileSystem":"NTFS","idEqual":true,"digest":"751c4b9a9da25e33c2cd628bb2c57a4f9f94f967c763d235bc357eb60d65d33b","bytes":12,"attributesEqual":true,"saclState":"unavailable","eaState":"known","eaBytes":0,"streamCount":1,"lastAccessEqual":false,"productionEligible":false}
+native EA negative {"eaBytes":28,"eaPreserved":true,"adsPreserved":true,"objectPreserved":true}
+ok actual nonempty EA is observed and rejected without modifying fixture metadata
+Object profile: 55/55; failed=0; skipped=0; production allowlist empty

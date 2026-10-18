@@ -1,0 +1,6 @@
+{
+  "root": "C:\\Users\\21022\\AppData\\Local\\pi-gui-ui5-integration-b2ca15a7f1fc477098c57beeadafdb67\\p33-object-raw-EaKeAi",
+  "code": 0,
+  "stdout": "{\"status\":\"unavailable\",\"nonAtomic\":true,\"reason\":\"System.Management.Automation.MethodInvocationException: ʹ�á�1�����������á�Observe��ʱ�����쳣:��canonical��\"}\r\n",
+  "stderr": "#< CLIXML\r\n<Objs Version=\"1.1.0.1\" xmlns=\"http://schemas.microsoft.com/powershell/2004/04\"><Obj S=\"progress\" RefId=\"0\"><TN RefId=\"0\"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N=\"SourceId\">1</I64><PR N=\"Record\"><AV>����׼���״�ʹ��ģ�顣</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>"
+}

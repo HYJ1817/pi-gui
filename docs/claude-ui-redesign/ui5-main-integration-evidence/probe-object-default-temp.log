@@ -1,0 +1,97 @@
+helper { bytes: 10612, source: 'source' }
+interpreter C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe
+observation {
+  "version": 1,
+  "profileId": "windows-original-object-v1",
+  "source": {
+    "kind": "win32-observe",
+    "helperVersion": 1,
+    "helperHash": "230eade3a3611f2340b8ecb3d536b61d2adb88deabc44b44d7c59ec065a2063f"
+  },
+  "binding": {
+    "scope": "cf152e042c7a9500f42e11b40a239d2648377405c431cd6d1f03638239d08628",
+    "operationId": "operation",
+    "relativePathHash": "aadf327c8267c09d6fffd87a1a80ad3c798469ff332b7a57b9e8c045d46b2af7"
+  },
+  "status": "observed",
+  "platform": {
+    "state": "known",
+    "osVersion": "10.0.26200.0",
+    "architecture": "x64",
+    "fileSystem": "NTFS",
+    "driveType": 3,
+    "volumeId": "fa794ff6"
+  },
+  "file": {
+    "state": "known",
+    "id": "fa794ff6:00260000002e6428",
+    "links": 1,
+    "bytes": 13,
+    "attributes": 32,
+    "isFile": true,
+    "reparse": false,
+    "digest": "b8af7f3e0b0e7089c453cce3fe7dd2dd07d69f8ac4d6a9b4b6f26ff5c705128c",
+    "encoding": "utf8"
+  },
+  "path": {
+    "state": "known",
+    "parents": [
+      {
+        "id": "fa794ff6:0005000000000005",
+        "binding": "3dc8472eaebe1a9d728dd16aab7e8a9b3f693e08045c242d7bca625e867aebee",
+        "reparse": false
+      },
+      {
+        "id": "fa794ff6:006e000000000648",
+        "binding": "c53a4215accb368fae59e2e70468c7b6108bae9806e8aaa189eed9dc698b11cc",
+        "reparse": false
+      },
+      {
+        "id": "fa794ff6:000100000013e656",
+        "binding": "830623b9461785ec55cd5f5fbcee6057ba5dba93677e081685e505f27c3c1151",
+        "reparse": false
+      },
+      {
+        "id": "fa794ff6:001c0000002e641c",
+        "binding": "3281eb79f6c665eadb0fe7a624c76cc4b1ea1fdb0d65d6d5cec34d88d746a86d",
+        "reparse": false
+      }
+    ],
+    "relativePathHash": "aadf327c8267c09d6fffd87a1a80ad3c798469ff332b7a57b9e8c045d46b2af7"
+  },
+  "security": {
+    "sacl": {
+      "state": "unavailable",
+      "value": null
+    },
+    "owner": {
+      "state": "known",
+      "value": "S-1-5-21-1438667463-2246196521-1563484803-1001"
+    },
+    "group": {
+      "state": "known",
+      "value": "S-1-5-21-1438667463-2246196521-1563484803-1001"
+    },
+    "dacl": {
+      "state": "known",
+      "value": "D:AI(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;ID;FA;;;S-1-5-21-1438667463-2246196521-1563484803-1001)"
+    }
+  },
+  "streams": {
+    "state": "known",
+    "names": [
+      "::$DATA"
+    ]
+  },
+  "ea": {
+    "state": "known",
+    "bytes": 0
+  },
+  "times": {
+    "state": "known",
+    "creation": "134367796717726930",
+    "lastAccess": "134367796717736935",
+    "lastWrite": "134367796717736935"
+  },
+  "nonAtomic": true
+}

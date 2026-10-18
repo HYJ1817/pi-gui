@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  49.836,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  1,
+    "finishedAt":  "2026-10-18T15:57:16.9380432+08:00",
+    "id":  "theme-electron",
+    "startedAt":  "2026-10-18T15:56:27.1018351+08:00",
+    "command":  "node tests/theme-electron.cjs",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

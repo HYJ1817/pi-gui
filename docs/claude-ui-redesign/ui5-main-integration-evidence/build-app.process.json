@@ -1,0 +1,10 @@
+{
+  "durationSeconds": 15.417309,
+  "exitCode": 0,
+  "offline": true,
+  "finishedAt": "2026-10-18T15:59:46.4898294+08:00",
+  "startedAt": "2026-10-18T15:59:31.0725847+08:00",
+  "command": "node scripts/build-app.mjs --rebuild --output-root <TEMP>",
+  "head": "54549876a9212c61f38adaf04a63499df67f282a",
+  "root": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab"
+}

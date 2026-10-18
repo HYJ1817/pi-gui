@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  45.264,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:41:36.2317505+08:00",
+    "id":  "ui3",
+    "startedAt":  "2026-10-18T15:40:50.9674818+08:00",
+    "command":  "npm.cmd run test:ui3",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

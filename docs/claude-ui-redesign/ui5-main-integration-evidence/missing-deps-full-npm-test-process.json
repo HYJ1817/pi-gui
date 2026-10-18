@@ -1,0 +1,11 @@
+{
+  "command": "npm test",
+  "securityPort": "1668",
+  "gitPort": "1667",
+  "temp": "C:\\Users\\21022\\AppData\\Local\\pi-gui-ui5-integration-9c9bfc64c06b4f4b9d049a5b93af0f59",
+  "durationSeconds": 2.1528959,
+  "head": "54549876a9212c61f38adaf04a63499df67f282a",
+  "exitCode": 1,
+  "startedAt": "2026-10-18T14:43:10.0850226+08:00",
+  "finishedAt": "2026-10-18T14:43:12.2378603+08:00"
+}

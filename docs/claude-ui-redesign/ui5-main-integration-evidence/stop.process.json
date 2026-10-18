@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  1.948,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:55:18.0404465+08:00",
+    "id":  "stop",
+    "startedAt":  "2026-10-18T15:55:16.0921158+08:00",
+    "command":  "npm.cmd run test:stop",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

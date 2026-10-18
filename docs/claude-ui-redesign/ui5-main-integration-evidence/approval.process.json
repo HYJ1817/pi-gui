@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  5.216,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:55:16.0362612+08:00",
+    "id":  "approval",
+    "startedAt":  "2026-10-18T15:55:10.8199022+08:00",
+    "command":  "node tests/approvals.cjs",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

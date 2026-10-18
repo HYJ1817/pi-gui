@@ -1,0 +1,12 @@
+{
+  "command": "npm test",
+  "nodeModules": "junction to C:\\pi-GUI-ui5\\node_modules",
+  "exitCode": 0,
+  "durationSeconds": 3031.1114104,
+  "head": "54549876a9212c61f38adaf04a63499df67f282a",
+  "temp": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-integration-6e7c102c476347188a3df0df6f9141a4",
+  "finishedAt": "2026-10-18T15:39:12.7719080+08:00",
+  "gitPort": "12323",
+  "securityPort": "12324",
+  "startedAt": "2026-10-18T14:48:41.6605593+08:00"
+}

@@ -1,0 +1,19 @@
+helper { bytes: 10612, source: 'source' }
+interpreter C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe
+observation {
+  "version": 1,
+  "profileId": "windows-original-object-v1",
+  "source": {
+    "kind": "win32-observe",
+    "helperVersion": 1,
+    "helperHash": "230eade3a3611f2340b8ecb3d536b61d2adb88deabc44b44d7c59ec065a2063f"
+  },
+  "binding": {
+    "scope": "cf152e042c7a9500f42e11b40a239d2648377405c431cd6d1f03638239d08628",
+    "operationId": "operation",
+    "relativePathHash": "aadf327c8267c09d6fffd87a1a80ad3c798469ff332b7a57b9e8c045d46b2af7"
+  },
+  "status": "unavailable",
+  "reason": "object_observation_unavailable",
+  "nonAtomic": true
+}

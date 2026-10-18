@@ -1,0 +1,159 @@
+{
+    "tests":  [
+                  {
+                      "durationSeconds":  5.06,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:40:50.8690665+08:00",
+                      "id":  "logging",
+                      "startedAt":  "2026-10-18T15:40:45.8103625+08:00",
+                      "command":  "npm.cmd run test:logging",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  45.264,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:41:36.2317505+08:00",
+                      "id":  "ui3",
+                      "startedAt":  "2026-10-18T15:40:50.9674818+08:00",
+                      "command":  "npm.cmd run test:ui3",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  257.712,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:45:54.0011599+08:00",
+                      "id":  "ui3-visual",
+                      "startedAt":  "2026-10-18T15:41:36.2894251+08:00",
+                      "command":  "npm.cmd run test:ui3:visual",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  10.886,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:46:04.9698603+08:00",
+                      "id":  "ui4",
+                      "startedAt":  "2026-10-18T15:45:54.0838034+08:00",
+                      "command":  "npm.cmd run test:ui4",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  273.922,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:50:38.9509397+08:00",
+                      "id":  "ui4-desktop",
+                      "startedAt":  "2026-10-18T15:46:05.0285370+08:00",
+                      "command":  "npm.cmd run test:ui4:desktop",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  271.737,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:55:10.7600149+08:00",
+                      "id":  "ui4-cdp",
+                      "startedAt":  "2026-10-18T15:50:39.0228117+08:00",
+                      "command":  "npm.cmd run test:ui4:cdp",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  5.216,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:55:16.0362612+08:00",
+                      "id":  "approval",
+                      "startedAt":  "2026-10-18T15:55:10.8199022+08:00",
+                      "command":  "node tests/approvals.cjs",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  1.948,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:55:18.0404465+08:00",
+                      "id":  "stop",
+                      "startedAt":  "2026-10-18T15:55:16.0921158+08:00",
+                      "command":  "npm.cmd run test:stop",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  59.01,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:56:17.1077005+08:00",
+                      "id":  "runtime",
+                      "startedAt":  "2026-10-18T15:55:18.0973798+08:00",
+                      "command":  "npm.cmd run test:runtime",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  7.466,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:56:24.6330249+08:00",
+                      "id":  "agent-browser",
+                      "startedAt":  "2026-10-18T15:56:17.1667528+08:00",
+                      "command":  "npm.cmd run test:agent-browser",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  1.431,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:56:26.1145793+08:00",
+                      "id":  "electron-guard",
+                      "startedAt":  "2026-10-18T15:56:24.6838605+08:00",
+                      "command":  "node tests/electron-guard.cjs",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  0.878,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:56:27.0493899+08:00",
+                      "id":  "theme",
+                      "startedAt":  "2026-10-18T15:56:26.1716848+08:00",
+                      "command":  "npm.cmd run test:theme",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  49.836,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  1,
+                      "finishedAt":  "2026-10-18T15:57:16.9380432+08:00",
+                      "id":  "theme-electron",
+                      "startedAt":  "2026-10-18T15:56:27.1018351+08:00",
+                      "command":  "node tests/theme-electron.cjs",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  31.295,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:57:48.3012357+08:00",
+                      "id":  "ui5-logs-electron",
+                      "startedAt":  "2026-10-18T15:57:17.0058697+08:00",
+                      "command":  "npm.cmd run test:ui5:electron",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  },
+                  {
+                      "durationSeconds":  43.441,
+                      "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+                      "exitCode":  0,
+                      "finishedAt":  "2026-10-18T15:58:31.8040777+08:00",
+                      "id":  "ui5-visual",
+                      "startedAt":  "2026-10-18T15:57:48.3631365+08:00",
+                      "command":  "npm.cmd run test:ui5:visual",
+                      "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+                  }
+              ],
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b",
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "failed":  [
+                   "theme-electron"
+               ]
+}

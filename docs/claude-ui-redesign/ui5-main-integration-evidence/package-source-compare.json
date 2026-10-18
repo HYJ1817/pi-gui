@@ -1,0 +1,152 @@
+{
+  "pairs": [
+    {
+      "source": "electron\\browser-agent-bridge.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\browser-agent-bridge.cjs",
+      "equal": true,
+      "sourceBytes": 7158,
+      "packagedBytes": 7158
+    },
+    {
+      "source": "electron\\browser-agent-host.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\browser-agent-host.cjs",
+      "equal": true,
+      "sourceBytes": 2491,
+      "packagedBytes": 2491
+    },
+    {
+      "source": "electron\\browser-agent-policy.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\browser-agent-policy.cjs",
+      "equal": true,
+      "sourceBytes": 2761,
+      "packagedBytes": 2761
+    },
+    {
+      "source": "electron\\browser-agent.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\browser-agent.cjs",
+      "equal": true,
+      "sourceBytes": 17301,
+      "packagedBytes": 17301
+    },
+    {
+      "source": "electron\\browser-policy.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\browser-policy.cjs",
+      "equal": true,
+      "sourceBytes": 8260,
+      "packagedBytes": 8260
+    },
+    {
+      "source": "electron\\browser-runtime-host.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\browser-runtime-host.cjs",
+      "equal": true,
+      "sourceBytes": 9588,
+      "packagedBytes": 9588
+    },
+    {
+      "source": "electron\\browser-view.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\browser-view.cjs",
+      "equal": true,
+      "sourceBytes": 21824,
+      "packagedBytes": 21824
+    },
+    {
+      "source": "electron\\logging.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\logging.cjs",
+      "equal": true,
+      "sourceBytes": 2663,
+      "packagedBytes": 2663
+    },
+    {
+      "source": "electron\\main.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\main.cjs",
+      "equal": true,
+      "sourceBytes": 42234,
+      "packagedBytes": 42234
+    },
+    {
+      "source": "electron\\net-probe.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\net-probe.cjs",
+      "equal": true,
+      "sourceBytes": 8159,
+      "packagedBytes": 8159
+    },
+    {
+      "source": "electron\\preload.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\preload.cjs",
+      "equal": true,
+      "sourceBytes": 9973,
+      "packagedBytes": 9973
+    },
+    {
+      "source": "electron\\theme.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\theme.cjs",
+      "equal": true,
+      "sourceBytes": 3747,
+      "packagedBytes": 3747
+    },
+    {
+      "source": "lib\\log-core.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\log-core.cjs",
+      "equal": true,
+      "sourceBytes": 42665,
+      "packagedBytes": 42665
+    },
+    {
+      "source": "lib\\log-contract.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\log-contract.cjs",
+      "equal": true,
+      "sourceBytes": 17489,
+      "packagedBytes": 17489
+    },
+    {
+      "source": "lib\\zip.cjs",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\zip.cjs",
+      "equal": true,
+      "sourceBytes": 3494,
+      "packagedBytes": 3494
+    },
+    {
+      "source": "public/index.html",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\index.html",
+      "equal": true,
+      "sourceBytes": 17213,
+      "packagedBytes": 17213
+    },
+    {
+      "source": "public/app.js",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\app.js",
+      "equal": true,
+      "sourceBytes": 57698,
+      "packagedBytes": 57698
+    },
+    {
+      "source": "public/styles.css",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\styles.css",
+      "equal": true,
+      "sourceBytes": 150384,
+      "packagedBytes": 150384
+    },
+    {
+      "source": "public/ui3-composer.css",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\ui3-composer.css",
+      "equal": true,
+      "sourceBytes": 4463,
+      "packagedBytes": 4463
+    },
+    {
+      "source": "public/ui4-feedback.css",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\ui4-feedback.css",
+      "equal": true,
+      "sourceBytes": 11303,
+      "packagedBytes": 11303
+    },
+    {
+      "source": "public/ui5-logs.css",
+      "packaged": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\ui5-logs.css",
+      "equal": true,
+      "sourceBytes": 8702,
+      "packagedBytes": 8702
+    }
+  ],
+  "allEqual": true
+}

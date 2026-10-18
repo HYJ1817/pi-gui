@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  7.466,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:56:24.6330249+08:00",
+    "id":  "agent-browser",
+    "startedAt":  "2026-10-18T15:56:17.1667528+08:00",
+    "command":  "npm.cmd run test:agent-browser",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

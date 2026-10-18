@@ -1,0 +1,14 @@
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\pi-GUI-merge\\node_modules',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\pi-GUI-merge\node_modules\yargs-parser\build'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\pi-GUI-merge\\node_modules\\yargs-parser\\build'
+npm warn cleanup     }
+npm warn cleanup   ]
+npm warn cleanup ]
+npm error code ENOTCACHED
+npm error request to https://registry.npmjs.org/xmlchars/-/xmlchars-2.2.0.tgz failed: cache mode is 'only-if-cached' but no cached response is available.
+npm error A complete log of this run can be found in: C:\Users\21022\AppData\Local\npm-cache\_logs\2026-10-18T06_43_24_674Z-debug-0.log

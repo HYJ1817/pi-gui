@@ -1,0 +1,89 @@
+
+> pi-gui@0.25.0 test
+> npm run test:logging && npm run test:ui4 && node tests/ui3-composer.cjs && node tests/ui3-model.cjs && node tests/ui3-inline-commands.cjs && node tests/ui3-integration.cjs && node tests/ui2-classic.cjs && node tests/ui2-runtime-display.cjs && node tests/ui2-visual.cjs && node tests/theme.cjs && node tests/session-revert-fixture-retention.cjs && node tests/session-revert-object-session-binding.cjs && node tests/session-revert-object-d6final-classic.cjs && node tests/exe-diagnostics.cjs && node tests/session-revert-object-qualification.cjs && node tests/session-revert-object-presentation.cjs && node tests/session-revert-object-ui.cjs && node tests/session-revert-object-confirmation.cjs && node tests/session-revert-sacl-witness.cjs && node tests/session-revert-object-profile.cjs && node tests/session-revert-object-evidence.cjs && node tests/runtime-models.cjs && node tests/model-fallback.cjs && node tests/model-capabilities.cjs && node tests/ux-state.cjs && node tests/bridge-state-recovery.cjs && node tests/native-provider-quota.cjs && node tests/stable-session-order.cjs && node tests/hotfix.cjs && node tests/hotfix-ui.cjs && node tests/provider-auth.cjs && node tests/provider-auth-runtime.cjs && node tests/ui-ia.cjs && node tests/smoke.cjs && node tests/daily-use.cjs && node tests/git.cjs && node tests/modules.cjs && node tests/reliability.cjs && node tests/interactions.cjs && node tests/sidebar-menu.cjs && node tests/port-owner.cjs && node tests/project-config.cjs && node tests/skills.cjs && node tests/extensions.cjs && node tests/capability.cjs && node tests/capability-install.cjs && node tests/web-access.cjs && node tests/subagents.cjs && node tests/memory.cjs && node tests/browser.cjs && node tests/approvals.cjs && node tests/planner.cjs && node tests/workflow-relations.cjs && node tests/reviews.cjs && node tests/review-gate.cjs && node tests/verification.cjs && node tests/evidence.cjs && node tests/attempt-lifecycle.cjs && node tests/sessions.cjs && node tests/session-search.cjs && node tests/pi-compat.cjs && node tests/pi-probes.cjs && node tests/pi-update.cjs && node tests/pi-version.cjs && node tests/mcp-native.cjs && node tests/usage-quota.cjs && node tests/body-integrity.cjs && node tests/dev-server.cjs && node tests/models-api.cjs && node tests/server-security.cjs && node tests/diagnostics.cjs && node tests/update-check.cjs && node tests/version-consistency.cjs && node tests/release-artifacts.cjs && node tests/electron-guard.cjs && node tests/gui-browser-policy.cjs && node tests/gui-browser-controller.cjs && node tests/gui-browser-bridge.cjs && node tests/gui-browser-tools.cjs && node tests/gui-browser-ui.cjs && node tests/gui-browser-host.cjs && node tests/gui-browser-stop.cjs && node tests/stop-barrier.cjs && node tests/managed-processes.cjs && node tests/process-tools.cjs && node tests/process-stop.cjs && node tests/process-ui.cjs && node tests/process-runner.cjs && node tests/worktrees.cjs && node tests/worktrees-http.cjs && node tests/worktrees-ui.cjs && node tests/runtime-registry.cjs && node tests/runtime-http.cjs && node tests/runtime-store.cjs && node tests/runtime-ui.cjs && node tests/runtime-nav.cjs && node tests/runtime-conversation.cjs && node tests/runtime-changes.cjs && node tests/runtime-secondary.cjs && node tests/runtime-git-ui.cjs && node tests/runtime-resources.cjs && node tests/runtime-resource-cleanup.cjs && node tests/runtime-history-search.cjs && node tests/runtime-finish-ui.cjs && node tests/session-runtime.cjs && node tests/pi-supervisor.cjs && node tests/runtime-browser.cjs && node tests/process-budget.cjs && node tests/runtime-events.cjs && node tests/runtime-processes.cjs && node tests/session-revert-object-assets.cjs && node tests/session-revert-object-authority.cjs && node tests/session-revert-object-history.cjs && node tests/session-revert-object-runtime.cjs && node tests/session-revert-object-store.cjs && node tests/session-revert-object-service.cjs && node tests/session-revert-object-recovery.cjs && node tests/session-change-store.cjs && node tests/session-change-bridge.cjs && node tests/session-change-tools.cjs && node tests/session-revert.cjs && node tests/session-revert-store.cjs && node tests/session-revert-http.cjs && node tests/session-revert-integration.cjs && node tests/session-revert-writer.cjs && node tests/session-revert-recovery.cjs && node tests/session-revert-admission.cjs && node tests/session-revert-apply.cjs && node tests/session-revert-windows-faults.cjs && node tests/session-revert-inplace.cjs && node tests/session-revert-inplace-safety.cjs && node tests/session-change-query.cjs && node tests/session-change-ui.cjs && node tests/session-change-startup.cjs && npm run test:session-revert-object-writer && npm run test:session-revert-object-faults && npm run test:session-revert-object-witness
+
+
+> pi-gui@0.25.0 test:logging
+> node tests/logging.cjs && node tests/logging-leaks.cjs && node tests/logging-secret-state.cjs && node tests/logging-client.cjs && node tests/logging-ui.cjs
+
+=== 日志核心 ===
+  ok   启动产生结构化 app.start，且默认目录在注入的临时目录
+  ok   标准模式不写 DEBUG，详细模式写 DEBUG
+  ok   未知事件与未知字段直接丢弃
+  ok   开始/失败/耗时使用同一 correlationId
+  ok   禁用后不再写日志；重新启用后恢复
+  ok   设置文件拒绝非法值，并保留有效设置
+  ok   清理只删日志文件，不删设置/会话标记
+  ok   保留期清理只保留窗口内的文件
+  ok   详细模式到期自动回标准并持久化
+  ok   文件超过上限后轮转，旧文件保留且可读
+  ok   损坏行被跳过，后续日志仍可读取
+  ok   分页不重复（cursor 向前翻页）
+  ok   崩溃进入独立 crash 文件，且不记录异常 message
+  ok   未正常关闭后重启可看到上次异常退出线索
+  ok   正常关闭后下一次启动不再误报异常退出
+  ok   不可写目录只降级，不把异常抛给业务
+  ok   高频写入仍保持每行合法 JSON，且有界批处理不阻塞调用方
+  ok   磁盘空间不足（ENOSPC）只进入降级状态，不影响调用方
+  ok   后端与主进程并发写不同文件，事件保持各自进程身份
+  ok   同一次操作跨后端/Renderer 用 correlationId 关联
+=== 导出 ZIP ===
+  ok   导出含固定五文件，目录/内容可解压，错误单独列出
+  ok   导出不调用网络
+  ok   导出失败明确返回固定错误码，不抛出
+=== HTTP 服务契约 ===
+  ok   GET /api/logs/status 返回状态且不含绝对路径
+  ok   POST /api/logs/events 只接受白名单事件与字段
+  ok   POST /api/logs/settings 校验并返回状态
+  ok   导出需要显式确认，预览返回清单与计数
+  ok   导出 ZIP 可直接解压，且不再向日志写入用户描述原文
+  ok   清理需要确认；确认后状态回到空
+=== Electron 主进程适配 ===
+  ok   主进程写独立 main-* 文件，不与后端同名
+  ok   主进程按 mtime 重新读取后端写入的日志设置
+  ok   主进程默认目录由 userData / PI_GUI_DATA 决定，不使用项目目录
+logging: 32 passed, 0 failed, 0 skipped
+  ok   普通/详细日志只接收白名单字段，秘密与聊天正文不落盘
+  ok   异常 message / 原始 stack 不进崩溃文件，只保留安全错误名与自身帧
+  ok   设置更改/清理等系统事件同样不含注入秘密
+  ok   Renderer HTTP 入口拒绝未知事件并把已知字段收敛
+  ok   导出预览/状态不泄露日志目录或秘密
+  ok   ZIP 每个文件都不含注入秘密，描述也经过复核
+  ok   状态/条目在最终导出前仍不含秘密
+  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）
+logging-leaks: 7 passed, 0 failed, 1 skipped
+=== 敏感判定状态 ===
+  ok   token/code/id 连续检测同一 secret 时不会交替放行
+  ok   不同函数/安全值交错调用时状态不串扰
+  ok   normalizeEvent 连续同值 secret 不会在第二次放行
+  ok   不同字段顺序：secret 先经过 token，也不会让后面的 errorName 放行
+  ok   normalizeStored 连续多条事件同样拒绝 secret 字段
+=== 端到端落盘 / 崩溃 / ZIP ===
+  ok   原始 JSONL 与崩溃记录不包含连续事件里的 secret
+  ok   ZIP 的每个文件都不包含 secret
+=== HTTP 日志 API / 崩溃记录 / ZIP ===
+  ok   POST 连续/交错 secret 后，日志 API 与原始文件都不含 secret
+  ok   HTTP 导出的 ZIP 每个文件都不含 secret
+logging-secret-state: 9 passed, 0 failed
+node:internal/modules/cjs/loader:1459
+  throw err;
+  ^
+
+Error: Cannot find module 'jsdom'
+Require stack:
+- C:\pi-GUI-merge\tests\logging-client.cjs
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1456:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1066:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1071:22)
+    at Module._load (node:internal/modules/cjs/loader:1242:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1556:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (C:\pi-GUI-merge\tests\logging-client.cjs:16:19)
+    at Module._compile (node:internal/modules/cjs/loader:1812:14)
+    at Object..js (node:internal/modules/cjs/loader:1943:10) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\pi-GUI-merge\\tests\\logging-client.cjs' ]
+}
+
+Node.js v24.14.0

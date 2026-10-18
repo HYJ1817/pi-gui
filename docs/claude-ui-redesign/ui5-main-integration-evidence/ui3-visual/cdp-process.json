@@ -1,0 +1,7 @@
+{
+  "command": "node tests/ui3-cdp.cjs",
+  "childCommand": "node tests/cdp-shot.cjs --url=<offline port-0 harness> --tag=ui3-integration",
+  "exitCode": 0,
+  "durationMs": 257090,
+  "screenshots": "C:\\pi-GUI-merge\\.shots"
+}

@@ -1,0 +1,5 @@
+失败: 无项目模式的后端没能启动：
+
+  启动失败：listen EACCES: permission denied 127.0.0.1:7799
+
+

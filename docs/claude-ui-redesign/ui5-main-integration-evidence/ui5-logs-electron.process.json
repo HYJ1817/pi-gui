@@ -1,0 +1,10 @@
+{
+    "durationSeconds":  31.295,
+    "head":  "54549876a9212c61f38adaf04a63499df67f282a",
+    "exitCode":  0,
+    "finishedAt":  "2026-10-18T15:57:48.3012357+08:00",
+    "id":  "ui5-logs-electron",
+    "startedAt":  "2026-10-18T15:57:17.0058697+08:00",
+    "command":  "npm.cmd run test:ui5:electron",
+    "temp":  "C:\\WINDOWS\\TEMP\\pi-gui-ui5-focused-2baba07b603d43c9b9a616067f56409b"
+}

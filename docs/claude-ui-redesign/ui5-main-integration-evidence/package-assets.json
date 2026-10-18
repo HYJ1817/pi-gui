@@ -1,0 +1,62 @@
+{
+  "buildRoot": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab",
+  "sourcePublicCount": 110,
+  "packagedPublicCount": 110,
+  "onlySource": [],
+  "onlyPackage": [],
+  "mismatch": [],
+  "packagedAssets": [
+    {
+      "file": "main.cjs",
+      "present": true,
+      "bytes": 42234
+    },
+    {
+      "file": "preload.cjs",
+      "present": true,
+      "bytes": 9973
+    },
+    {
+      "file": "server.cjs",
+      "present": true,
+      "bytes": 2257907
+    },
+    {
+      "file": "logging.cjs",
+      "present": true,
+      "bytes": 2663
+    },
+    {
+      "file": "log-core.cjs",
+      "present": true,
+      "bytes": 42665
+    },
+    {
+      "file": "log-contract.cjs",
+      "present": true,
+      "bytes": 17489
+    },
+    {
+      "file": "zip.cjs",
+      "present": true,
+      "bytes": 3494
+    },
+    {
+      "file": "theme.cjs",
+      "present": true,
+      "bytes": 3747
+    }
+  ],
+  "executables": [
+    {
+      "path": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\build\\Pi GUI.exe",
+      "bytes": 99744768,
+      "sha256": "50e2d9a5c0042a1d6086e5900df4f82ee499034456fa2e0bbe463723b4b00056"
+    },
+    {
+      "path": "C:\\WINDOWS\\TEMP\\pi-gui-ui5-main-integration-build-a4abb5fa473f4c07a309de2be2491dab\\dist-app\\Pi GUI-win32-x64\\Pi GUI.exe",
+      "bytes": 246324736,
+      "sha256": "4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a"
+    }
+  ]
+}

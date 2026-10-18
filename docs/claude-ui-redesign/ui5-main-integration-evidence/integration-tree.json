@@ -1,0 +1,14 @@
+{
+  "main": "8fc16e167240990c84339a50c6449e16057bb5bd",
+  "docsDiffFromUi5": [
+    "AGENTS.md",
+    "REVIEW.md"
+  ],
+  "conflicts": [],
+  "mergeBase": "3e8d7296fc89c21d38e04879ef020c47680d7ce0",
+  "productTreeEqualsUi5": true,
+  "lockVersion": "0.25.0",
+  "version": "0.25.0",
+  "ui5": "2e2c2cd5fbb757cd96c682619c44f9a162562f81",
+  "integrationHead": "54549876a9212c61f38adaf04a63499df67f282a"
+}
