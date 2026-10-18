@@ -1,7 +1,7 @@
 /* Actual integrated app; all fixture writes live in os.tmpdir. No Pi/network. */
 'use strict';
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawn}=require('node:child_process');
-const ROOT=path.resolve(__dirname,'..'),OUT=path.join(ROOT,'docs/claude-ui-redesign/ui3-integration-evidence',process.env.UI3_ASSETS_ROOT?'packaged-electron':'electron');
+const ROOT=path.resolve(__dirname,'..'),OUT=process.env.UI3_EVIDENCE_ROOT||path.join(ROOT,'docs/claude-ui-redesign/ui3-integration-evidence',process.env.UI3_ASSETS_ROOT?'packaged-electron':'electron');
 if(!process.versions.electron){
  const world=fs.mkdtempSync(path.join(os.tmpdir(),'ui3-integrated-electron-')),env={...process.env,UI3_WORLD:world};delete env.ELECTRON_RUN_AS_NODE;
  const child=spawn(require('electron'),[__filename],{env,stdio:'inherit',windowsHide:false});

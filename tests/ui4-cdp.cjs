@@ -1,7 +1,7 @@
 /* Isolated offline wrapper around the existing CDP visual regression. */
 'use strict';
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),net=require('node:net'),{spawn}=require('node:child_process');
-const ROOT=path.resolve(__dirname,'..'),OUT=path.join(ROOT,'docs/claude-ui-redesign/ui4-integration-evidence');
+const ROOT=path.resolve(__dirname,'..'),OUT=process.env.UI4_CDP_EVIDENCE_ROOT||path.join(ROOT,'docs/claude-ui-redesign/ui4-integration-evidence');
 async function main(){
  const world=fs.mkdtempSync(path.join(os.tmpdir(),'ui4-cdp-'));let harness;let fixturesExit=null;
  /* cdp-shot 的附件矩阵从 os.tmpdir()/pi-gui-fixtures 读真实 docx/pdf。
