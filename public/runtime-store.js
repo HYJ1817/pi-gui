@@ -8,7 +8,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (bytes.length <= limit) return text;
     return new TextDecoder().decode(bytes.slice(-limit)).replace(/^\uFFFD+/, '');
   };
-  function fresh(item) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', approvals: [], truncated: false }; }
+  function fresh(item) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', draftRevision: 0, approvals: [], truncated: false }; }
   function seed(snapshot) {
     if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
     const sequence = snapshot._runtimeReadSequence;
@@ -29,7 +29,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         if (prior?.owner && item.owner && prior.owner.runtimeId === item.owner.runtimeId && prior.owner.runtimeGeneration === item.owner.runtimeGeneration) {
           if (prior.owner.sessionId && !item.owner.sessionId) continue;
           prior.owner = item.owner; prior.item = item;
-        } else { const next = fresh(item); if (prior) next.draft = prior.draft; records.set(item.conversationId, next); }
+        } else { const next = fresh(item); if (prior) { next.draft = prior.draft; next.draftRevision = prior.draftRevision; } records.set(item.conversationId, next); }
       } else prior.item = item;
     }
     return true;

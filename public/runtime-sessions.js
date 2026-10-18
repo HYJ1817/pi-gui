@@ -32,12 +32,17 @@ export function openRuntimeSessions(project, workspace = null) {
     const output = node('pre', 'runtime-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前独立会话输出'); body.append(output);
     const tools = node('div', 'modal-desc'), approvals = node('div', 'runtime-approvals'); body.append(tools, approvals);
     const input = node('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前独立会话的任务'); body.append(input);
-    input.oninput = () => { const r = store.get(selected); if (r) r.draft = input.value; };
+    input.oninput = () => { const r = store.get(selected); if (r) { r.draft = input.value; r.draftRevision++; } };
     const send = button('发送', async () => {
       const r = store.get(selected), text = input.value.trim(); if (!r?.owner || !text || busy) return;
       const owner = { ...r.owner }, id = selected;
+      const draft = input.value, draftRevision = r.draftRevision;
       await action({ action: 'command', owner, command: { type: 'prompt', message: text } }, result => {
-        const current = store.get(id); if (result.ok && same(current?.owner, owner)) { current.draft = ''; if (selected === id) input.value = ''; }
+        const current = store.get(id);
+        if (result.ok && same(current?.owner, owner) && current.draftRevision === draftRevision && current.draft === draft) {
+          current.draft = ''; current.draftRevision++;
+          if (selected === id && input.value === draft) input.value = '';
+        }
       });
     }); send.classList.add('primary'); controls.append(send);
     const stop = button('停止', () => owned('command', { command: { type: 'abort' } })); controls.append(stop);

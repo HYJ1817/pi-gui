@@ -148,7 +148,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const tools = el('div', 'rtc-state ui2-runtime-tools'); root.append(tools);
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   const input = el('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前会话的任务'); root.append(input);
-  input.oninput = () => { const r = store.get(id); if (r && !current().history) r.draft = input.value; };
+  input.oninput = () => { const r = store.get(id); if (r && !current().history) { r.draft = input.value; r.draftRevision++; } };
   input.onkeydown = event => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault(); if (!send.disabled) send.click();
@@ -185,9 +185,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (!target || !r?.owner || !text || current().pending) return;
     viewOf(target).history = null;        // 一旦真的要发，就回到实时视图
     const owner = { ...r.owner };
+    const draft = input.value, draftRevision = r.draftRevision;
     void action(target, { action: 'command', owner, command: { type: 'prompt', message: text } }, (result) => {
       const still = store.get(target);
-      if (result.ok && same(still?.owner, owner)) { still.draft = ''; if (id === target) input.value = ''; }
+      // An acknowledgement owns the submitted version, not later user edits.
+      if (result.ok && same(still?.owner, owner) && still.draftRevision === draftRevision && still.draft === draft) {
+        still.draft = ''; still.draftRevision++;
+        if (id === target && input.value === draft) input.value = '';
+      }
     });
   };
   stop.onclick = () => owned('command', { command: { type: 'abort' } });
