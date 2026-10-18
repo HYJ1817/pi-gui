@@ -37,6 +37,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_VERSION: '24.14.0'
+
 concurrency:
   group: release-check-${{ github.ref }}
   # 发版验证不做「取消旧的」—— 它本来就可能跑十几分钟，
@@ -59,7 +62,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install dependencies
@@ -97,7 +100,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install dependencies

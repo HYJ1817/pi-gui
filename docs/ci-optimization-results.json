@@ -1,0 +1,987 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Recorded CI evidence, not an executable test inventory",
+  "baselineSha": "cbcd6c21a147fb71946af61e2ea16a94973b0a9f",
+  "implementationHeadSha": "336152214e1451dfdc025a018201acb690f5f4f0",
+  "checkoutMergeSha": "db31079fce3646c1096860d1bbb5b499e1787c02",
+  "runUrl": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496",
+  "node": "24.14.0",
+  "npm": "11.9.0",
+  "coverage": {
+    "baselineLeaves": 143,
+    "canonicalLeaves": 145,
+    "recordedLeaves": 145,
+    "missing": [],
+    "duplicates": [],
+    "failedLeaves": 0,
+    "added": [
+      "node tests/ci-test-plan.cjs",
+      "node tests/ci-workflow.cjs"
+    ]
+  },
+  "assertionSkips": [
+    {
+      "suite": "session-revert-object-witness.cjs",
+      "count": 8,
+      "reason": "existing_token_sacl_unavailable"
+    },
+    {
+      "suite": "session-revert-inplace-safety.cjs",
+      "count": 1,
+      "reason": "negative missing-privilege case: token has privilege"
+    }
+  ],
+  "assertionSkipCount": 9,
+  "timing": {
+    "wallSeconds": 1907.0,
+    "runnerSeconds": 4876,
+    "baselineWallSeconds": 3346.0,
+    "baselineRunnerSeconds": 6162.0,
+    "wallSavedSeconds": 1439.0,
+    "runnerSavedSeconds": 1286.0
+  },
+  "groups": {
+    "core": {
+      "leaves": 75,
+      "elapsedSeconds": 171.799
+    },
+    "faults": {
+      "leaves": 18,
+      "elapsedSeconds": 1331.654
+    },
+    "native": {
+      "leaves": 2,
+      "elapsedSeconds": 1296.034
+    },
+    "security": {
+      "leaves": 27,
+      "elapsedSeconds": 1618.709
+    },
+    "ui": {
+      "leaves": 23,
+      "elapsedSeconds": 114.525
+    }
+  },
+  "jobs": [
+    {
+      "name": "Validate complete test plan",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117751919865",
+      "elapsedSeconds": 47
+    },
+    {
+      "name": "Tests (core)",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117752105546",
+      "elapsedSeconds": 210
+    },
+    {
+      "name": "Tests (native)",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117752105595",
+      "elapsedSeconds": 1332
+    },
+    {
+      "name": "Tests (ui)",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117752105612",
+      "elapsedSeconds": 155
+    },
+    {
+      "name": "Tests (security)",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117752105645",
+      "elapsedSeconds": 1657
+    },
+    {
+      "name": "Tests (faults)",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117752105707",
+      "elapsedSeconds": 1370
+    },
+    {
+      "name": "Electron build check",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117758405021",
+      "elapsedSeconds": 102
+    },
+    {
+      "name": "CI gate",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39153427496/job/117758794620",
+      "elapsedSeconds": 3
+    }
+  ],
+  "tests": [
+    {
+      "command": "node tests/ci-test-plan.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.184
+    },
+    {
+      "command": "node tests/ci-workflow.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.039
+    },
+    {
+      "command": "node tests/logging.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.238
+    },
+    {
+      "command": "node tests/logging-leaks.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.208
+    },
+    {
+      "command": "node tests/logging-secret-state.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.149
+    },
+    {
+      "command": "node tests/logging-client.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 2.129
+    },
+    {
+      "command": "node tests/logging-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 1.499
+    },
+    {
+      "command": "node tests/ui4-approval.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 5.652
+    },
+    {
+      "command": "node tests/ui4-feedback.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 1.438
+    },
+    {
+      "command": "node tests/ui4-integration.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 2.147
+    },
+    {
+      "command": "node tests/ui3-composer.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.547
+    },
+    {
+      "command": "node tests/ui3-model.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.627
+    },
+    {
+      "command": "node tests/ui3-inline-commands.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.566
+    },
+    {
+      "command": "node tests/ui3-integration.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.875
+    },
+    {
+      "command": "node tests/ui2-classic.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.655
+    },
+    {
+      "command": "node tests/ui2-runtime-display.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 1.038
+    },
+    {
+      "command": "node tests/ui2-visual.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 24.666
+    },
+    {
+      "command": "node tests/theme.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.483
+    },
+    {
+      "command": "node tests/session-revert-fixture-retention.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.104
+    },
+    {
+      "command": "node tests/session-revert-object-session-binding.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.071
+    },
+    {
+      "command": "node tests/session-revert-object-d6final-classic.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 1.816
+    },
+    {
+      "command": "node tests/exe-diagnostics.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.039
+    },
+    {
+      "command": "node tests/session-revert-object-qualification.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 25.779
+    },
+    {
+      "command": "node tests/session-revert-object-presentation.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.2
+    },
+    {
+      "command": "node tests/session-revert-object-ui.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.912
+    },
+    {
+      "command": "node tests/session-revert-object-confirmation.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 180.057
+    },
+    {
+      "command": "node tests/session-revert-sacl-witness.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 561.225
+    },
+    {
+      "command": "node tests/session-revert-object-profile.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 5.952
+    },
+    {
+      "command": "node tests/session-revert-object-evidence.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 13.359
+    },
+    {
+      "command": "node tests/runtime-models.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 4.592
+    },
+    {
+      "command": "node tests/model-fallback.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 1.387
+    },
+    {
+      "command": "node tests/model-capabilities.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.481
+    },
+    {
+      "command": "node tests/ux-state.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 7.278
+    },
+    {
+      "command": "node tests/bridge-state-recovery.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 1.256
+    },
+    {
+      "command": "node tests/native-provider-quota.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.44
+    },
+    {
+      "command": "node tests/stable-session-order.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.085
+    },
+    {
+      "command": "node tests/hotfix.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.465
+    },
+    {
+      "command": "node tests/hotfix-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.856
+    },
+    {
+      "command": "node tests/provider-auth.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 1.032
+    },
+    {
+      "command": "node tests/provider-auth-runtime.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.133
+    },
+    {
+      "command": "node tests/ui-ia.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.967
+    },
+    {
+      "command": "node tests/smoke.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 67.939
+    },
+    {
+      "command": "node tests/daily-use.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.057
+    },
+    {
+      "command": "node tests/git.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 10.752
+    },
+    {
+      "command": "node tests/modules.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.07
+    },
+    {
+      "command": "node tests/reliability.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.083
+    },
+    {
+      "command": "node tests/interactions.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.314
+    },
+    {
+      "command": "node tests/sidebar-menu.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.467
+    },
+    {
+      "command": "node tests/port-owner.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.75
+    },
+    {
+      "command": "node tests/project-config.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.263
+    },
+    {
+      "command": "node tests/skills.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.783
+    },
+    {
+      "command": "node tests/extensions.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.171
+    },
+    {
+      "command": "node tests/capability.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.06
+    },
+    {
+      "command": "node tests/capability-install.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.048
+    },
+    {
+      "command": "node tests/web-access.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.324
+    },
+    {
+      "command": "node tests/subagents.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.378
+    },
+    {
+      "command": "node tests/memory.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.35
+    },
+    {
+      "command": "node tests/browser.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.328
+    },
+    {
+      "command": "node tests/approvals.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 4.941
+    },
+    {
+      "command": "node tests/planner.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 13.884
+    },
+    {
+      "command": "node tests/workflow-relations.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 5.795
+    },
+    {
+      "command": "node tests/reviews.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 5.91
+    },
+    {
+      "command": "node tests/review-gate.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 13.383
+    },
+    {
+      "command": "node tests/verification.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 6.759
+    },
+    {
+      "command": "node tests/evidence.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 13.706
+    },
+    {
+      "command": "node tests/attempt-lifecycle.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 10.57
+    },
+    {
+      "command": "node tests/sessions.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.414
+    },
+    {
+      "command": "node tests/session-search.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 1.125
+    },
+    {
+      "command": "node tests/pi-compat.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.047
+    },
+    {
+      "command": "node tests/pi-probes.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.517
+    },
+    {
+      "command": "node tests/pi-update.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.435
+    },
+    {
+      "command": "node tests/pi-version.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.281
+    },
+    {
+      "command": "node tests/mcp-native.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.417
+    },
+    {
+      "command": "node tests/usage-quota.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.413
+    },
+    {
+      "command": "node tests/body-integrity.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.144
+    },
+    {
+      "command": "node tests/dev-server.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 1.189
+    },
+    {
+      "command": "node tests/models-api.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 1.269
+    },
+    {
+      "command": "node tests/server-security.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 3.318
+    },
+    {
+      "command": "node tests/diagnostics.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.055
+    },
+    {
+      "command": "node tests/update-check.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.386
+    },
+    {
+      "command": "node tests/version-consistency.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.065
+    },
+    {
+      "command": "node tests/release-artifacts.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.21
+    },
+    {
+      "command": "node tests/electron-guard.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 1.367
+    },
+    {
+      "command": "node tests/gui-browser-policy.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.045
+    },
+    {
+      "command": "node tests/gui-browser-controller.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 5.239
+    },
+    {
+      "command": "node tests/gui-browser-bridge.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.312
+    },
+    {
+      "command": "node tests/gui-browser-tools.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.091
+    },
+    {
+      "command": "node tests/gui-browser-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.47
+    },
+    {
+      "command": "node tests/gui-browser-host.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.039
+    },
+    {
+      "command": "node tests/gui-browser-stop.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.763
+    },
+    {
+      "command": "node tests/stop-barrier.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.996
+    },
+    {
+      "command": "node tests/managed-processes.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.113
+    },
+    {
+      "command": "node tests/process-tools.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.249
+    },
+    {
+      "command": "node tests/process-stop.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.1
+    },
+    {
+      "command": "node tests/process-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 1.596
+    },
+    {
+      "command": "node tests/process-runner.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.079
+    },
+    {
+      "command": "node tests/worktrees.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 14.961
+    },
+    {
+      "command": "node tests/worktrees-http.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 2.368
+    },
+    {
+      "command": "node tests/worktrees-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.548
+    },
+    {
+      "command": "node tests/runtime-registry.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.094
+    },
+    {
+      "command": "node tests/runtime-http.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.12
+    },
+    {
+      "command": "node tests/runtime-store.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.258
+    },
+    {
+      "command": "node tests/runtime-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.463
+    },
+    {
+      "command": "node tests/runtime-nav.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 7.551
+    },
+    {
+      "command": "node tests/runtime-conversation.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.352
+    },
+    {
+      "command": "node tests/runtime-changes.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 9.716
+    },
+    {
+      "command": "node tests/runtime-secondary.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.358
+    },
+    {
+      "command": "node tests/runtime-git-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.472
+    },
+    {
+      "command": "node tests/runtime-resources.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 4.734
+    },
+    {
+      "command": "node tests/runtime-resource-cleanup.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.103
+    },
+    {
+      "command": "node tests/runtime-history-search.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 4.588
+    },
+    {
+      "command": "node tests/runtime-finish-ui.cjs",
+      "group": "ui",
+      "exitCode": 0,
+      "durationSeconds": 0.495
+    },
+    {
+      "command": "node tests/session-runtime.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.623
+    },
+    {
+      "command": "node tests/pi-supervisor.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 6.354
+    },
+    {
+      "command": "node tests/runtime-browser.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.082
+    },
+    {
+      "command": "node tests/process-budget.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 0.099
+    },
+    {
+      "command": "node tests/runtime-events.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.041
+    },
+    {
+      "command": "node tests/runtime-processes.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 1.878
+    },
+    {
+      "command": "node tests/session-revert-object-assets.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 2.288
+    },
+    {
+      "command": "node tests/session-revert-object-authority.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 5.073
+    },
+    {
+      "command": "node tests/session-revert-object-history.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 21.35
+    },
+    {
+      "command": "node tests/session-revert-object-runtime.cjs",
+      "group": "native",
+      "exitCode": 0,
+      "durationSeconds": 578.933
+    },
+    {
+      "command": "node tests/session-revert-object-store.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 12.766
+    },
+    {
+      "command": "node tests/session-revert-object-service.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 429.301
+    },
+    {
+      "command": "node tests/session-revert-object-recovery.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 19.699
+    },
+    {
+      "command": "node tests/session-change-store.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 133.843
+    },
+    {
+      "command": "node tests/session-change-bridge.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.266
+    },
+    {
+      "command": "node tests/session-change-tools.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.328
+    },
+    {
+      "command": "node tests/session-revert.cjs",
+      "group": "core",
+      "exitCode": 0,
+      "durationSeconds": 0.067
+    },
+    {
+      "command": "node tests/session-revert-store.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 111.351
+    },
+    {
+      "command": "node tests/session-revert-http.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 4.727
+    },
+    {
+      "command": "node tests/session-revert-integration.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.483
+    },
+    {
+      "command": "node tests/session-revert-writer.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 5.315
+    },
+    {
+      "command": "node tests/session-revert-recovery.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 10.959
+    },
+    {
+      "command": "node tests/session-revert-admission.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.331
+    },
+    {
+      "command": "node tests/session-revert-apply.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 72.606
+    },
+    {
+      "command": "node tests/session-revert-windows-faults.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 6.823
+    },
+    {
+      "command": "node tests/session-revert-inplace.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 157.462
+    },
+    {
+      "command": "node tests/session-revert-inplace-safety.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 72.556
+    },
+    {
+      "command": "node tests/session-change-query.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 4.255
+    },
+    {
+      "command": "node tests/session-change-ui.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.672
+    },
+    {
+      "command": "node tests/session-change-startup.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 16.492
+    },
+    {
+      "command": "node tests/session-revert-object-writer.cjs",
+      "group": "native",
+      "exitCode": 0,
+      "durationSeconds": 717.066
+    },
+    {
+      "command": "node tests/session-revert-object-faults.cjs",
+      "group": "faults",
+      "exitCode": 0,
+      "durationSeconds": 1059.275
+    },
+    {
+      "command": "node tests/session-revert-object-witness.cjs",
+      "group": "security",
+      "exitCode": 0,
+      "durationSeconds": 0.622
+    }
+  ]
+}

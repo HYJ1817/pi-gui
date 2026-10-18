@@ -21,6 +21,8 @@
     "test:auth": "node tests/provider-auth.cjs",
     "test:ui": "node tests/smoke.cjs",
     "test:theme": "node tests/theme.cjs",
+    "pretest": "npm run test:ci",
+    "test:ci": "node tests/ci-test-plan.cjs && node tests/ci-workflow.cjs",
     "test:logging": "node tests/logging.cjs && node tests/logging-leaks.cjs && node tests/logging-secret-state.cjs && node tests/logging-client.cjs && node tests/logging-ui.cjs",
     "test:ui5:electron": "node tests/ui5-logs-electron.cjs",
     "test:ui5:visual": "node tests/ui5-visual-electron.cjs",
