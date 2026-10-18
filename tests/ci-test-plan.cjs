@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '..');
@@ -49,6 +51,48 @@ async function main() {
 
   assert.equal(planModule.classifyTestCommand('node tests/new-future-test.cjs'), 'core');
   assert.throws(() => planModule.classifyTestCommand('node tests/new-test.cjs', ['unknown']), /unknown test group/);
+
+  // npm runs lifecycle hooks for both the root test and nested npm-run aliases.
+  // A newly added hook must not disappear from CI while running locally.
+  const lifecycle = planModule.createTestGroupPlan({ root, packageJson: { scripts: {
+    pretest: 'node tests/before.cjs',
+    test: 'npm run contract',
+    posttest: 'node tests/after.cjs',
+    precontract: 'node tests/before-contract.cjs',
+    contract: 'node tests/future-contract.cjs',
+    postcontract: 'node tests/after-contract.cjs',
+  } } });
+  assert.deepEqual(lifecycle.leaves, [
+    'node tests/before.cjs', 'node tests/before-contract.cjs',
+    'node tests/future-contract.cjs', 'node tests/after-contract.cjs',
+    'node tests/after.cjs',
+  ]);
+  assert.deepEqual(lifecycle.byGroup.get('core'), lifecycle.leaves);
+
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-ci-failure-'));
+  try {
+    fs.mkdirSync(path.join(fixture, 'tests'));
+    const names = ['fail.cjs', 'must-not-run.cjs', 'ui-fake.cjs',
+      'session-revert-fake.cjs', 'session-revert-object-runtime.cjs', 'stop-barrier.cjs'];
+    fs.writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ scripts: {
+      test: names.map((name) => `node tests/${name}`).join(' && '),
+    } }));
+    for (const name of names) {
+      fs.writeFileSync(path.join(fixture, 'tests', name), name === 'fail.cjs'
+        ? 'process.exitCode = 17;'
+        : "require('node:fs').writeFileSync('unexpected-execution', 'ran');");
+    }
+    const resultFile = path.join(fixture, 'results.json');
+    const failed = spawnSync(process.execPath, [path.join(root, 'scripts/run-test-group.mjs'),
+      '--group', 'core', '--results', resultFile], { cwd: fixture, encoding: 'utf8', windowsHide: true });
+    assert.equal(failed.status, 1, failed.stderr);
+    const recorded = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+    assert.equal(recorded.results.length, 1, 'failure must stop the group');
+    assert.equal(recorded.results[0].status, 17, 'preserve the failing child exit code');
+    assert.equal(fs.existsSync(path.join(fixture, 'unexpected-execution')), false);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
 
   console.log(`ci-test-plan: ${plan.leaves.length} leaves across ${plan.groups.length} groups; coverage exact`);
 }

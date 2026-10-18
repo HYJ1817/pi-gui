@@ -79,7 +79,7 @@ function expandLeafCommands(packageJson) {
     for (const command of splitCommandChain(script)) {
       const alias = command.match(/^npm run ([^\s]+)$/);
       if (alias) {
-        expandScript(alias[1], [...stack, name]);
+        expandRun(alias[1], [...stack, name]);
         continue;
       }
       if (seen.has(command)) throw new Error(`duplicate leaf test command: ${command}`);
@@ -88,8 +88,15 @@ function expandLeafCommands(packageJson) {
     }
   }
 
-  if (typeof scripts.pretest === 'string' && scripts.pretest.trim()) expandScript('pretest', []);
-  expandScript('test', []);
+  function expandRun(name, stack) {
+    if (stack.includes(name)) throw new Error(`cyclic npm script: ${[...stack, name].join(' -> ')}`);
+    for (const hook of [`pre${name}`, name, `post${name}`]) {
+      if (hook !== name && !(typeof scripts[hook] === 'string' && scripts[hook].trim())) continue;
+      expandScript(hook, hook === name ? stack : [...stack, name]);
+    }
+  }
+
+  expandRun('test', []);
   return leaves;
 }
 
