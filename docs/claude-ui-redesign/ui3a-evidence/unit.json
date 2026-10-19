@@ -40,11 +40,11 @@
       "pass": true
     },
     {
-      "name": "existing attachment send policy preserved: load",
+      "name": "attachment send policy distinguishes pending and failed: load",
       "pass": true
     },
     {
-      "name": "existing attachment send policy preserved: err",
+      "name": "attachment send policy distinguishes pending and failed: err",
       "pass": true
     },
     {

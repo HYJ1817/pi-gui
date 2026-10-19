@@ -39,7 +39,7 @@ async function unit() {
   check('empty composer disabled', () => assert.equal(send.disabled, true));
   for (const attachment of [{ id: 'load', name: 'upload.txt', loading: true }, { id: 'err', name: 'bad.pdf', error: '提取失败' }]) {
     w.S.attachments = [attachment]; w.renderAttachments(); w.updateSendState();
-    check('existing attachment send policy preserved: ' + attachment.id, () => assert.equal(send.disabled, false));
+    check('attachment send policy distinguishes pending and failed: ' + attachment.id, () => assert.equal(send.disabled, attachment.loading === true));
   }
   const fixtures = [
     { id: 'img', name: 'image.png', size: 1024, kind: 'image', dataUrl: 'data:image/png;base64,YQ==' },
@@ -55,12 +55,14 @@ async function unit() {
   check('thumbnail and size shown, long filename retains full path', () => { assert.equal(tray.querySelector('img').getAttribute('src'), fixtures[0].dataUrl); assert.equal(tray.querySelectorAll('.ui3-attachment-size').length, 5); assert.equal(tray.children[1].querySelector('.att-name').title, fixtures[1].path); });
   check('untrusted name and error are inert text', () => { assert.equal(tray.children[3].querySelector('img,b'), null); assert.ok(tray.children[3].textContent.includes('<b>提取失败</b>')); });
   check('loading exposes busy state and truncation stays explicit', () => { assert.equal(tray.children[2].getAttribute('aria-busy'), 'true'); assert.ok(tray.children[1].textContent.includes('已截断')); });
+  w.S.attachments = fixtures.filter(a => !a.loading);
   for (const inputTypes of [['text'], ['text', 'image'], null]) {
     w.S.state.model = inputTypes ? { input: inputTypes } : {};
     w.renderAttachments(); w.updateSendState();
     check('image capability ' + JSON.stringify(inputTypes), () => { assert.equal(send.disabled, inputTypes?.length === 1); assert.equal(tray.children[0].dataset.state, inputTypes?.length === 1 ? 'blocked' : 'ready'); });
   }
   w.S.state.model = { input: ['text', 'image'] };
+  w.S.attachments = fixtures;
   const beforeMessage = w.buildMessage('正文'), beforeImages = JSON.stringify(w.attachmentImages());
   w.renderAttachments();
   check('presentation preserves message and image wire format', () => { assert.equal(w.buildMessage('正文'), beforeMessage); assert.equal(JSON.stringify(w.attachmentImages()), beforeImages); assert.ok(beforeMessage.includes('<pi-file name="' + fixtures[1].name + '" meta="3 字 · 已截断">\n原文\n…（内容过长，已截断）\n</pi-file>')); assert.equal(beforeImages, '[{"type":"image","data":"YQ==","mimeType":"image/png"}]'); });
