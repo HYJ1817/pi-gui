@@ -1,18 +1,7 @@
-# 基础 CI：每次 push / PR 都跑。
+# 每次 push / PR 的完整 CI。
 #
-# 两条原则：
-#   1. **package.json 是测试入口的唯一真相** —— 这里只调 `npm test`，
-#      不把它的子测试一条条抄进 workflow。否则以后加了新测试套件，
-#      要记得同时改两处，漏一处就是「本地跑了、CI 没跑」的假绿。
-#   2. **CI 里不装 pi** —— `npm test` 全是纯自动化测试，不需要真实的
-#      pi-coding-agent，也不消耗任何模型额度。需要真 pi 的套件见
-#      docs/testing.md 的「只在本地 / 发布前跑」一节。
-#
-# 关于 action 版本：`checkout` / `setup-node` 都钉 **v5**。
-# 选 v5 而不是更早或更新，是因为 **v4 跑在 Node 20 上**（GitHub 已经提示
-# deprecation），而 v5 相对 v4 **只改了运行时到 Node 24**，没有任何行为变更 ——
-# 正好是最小的那一步。v6/v7 各自带行为变更（凭据落盘位置、ESM 迁移、
-# 自动缓存的范围），这里用不到，不跟着动。
+# package.json 的 test（连同 npm 自动执行的前后置生命周期）仍是唯一测试清单。
+# 这里只在运行时把这份清单递归展开为隔离组；workflow 不保存第二份套件列表。
 name: CI
 
 on:
@@ -22,67 +11,106 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# 最小权限：CI 只读仓库。发版走单独的流程，不在这里写任何东西。
 permissions:
   contents: read
 
-# 同一个分支/PR 有新提交时取消上一轮 —— 连续推送不会留下一堆过期任务
-# 同时跑。用 ref 而不是固定 group：不同分支之间互不干扰。
+env:
+  NODE_VERSION: '24.14.0'
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ---------------------------------------------------------------- 测试
-  test:
-    name: Core tests (Node ${{ matrix.node }})
+  # 先验证“分组并集 == package.json 的完整测试链”。该 job 的 groups
+  # output 是下面 matrix 的唯一来源；新增测试默认归入 core，不能静默漏跑。
+  test-plan:
+    name: Validate complete test plan
     runs-on: windows-latest
-    # The complete canonical suite now includes real TEMP Native safety checks;
-    # a measured full local run took 52 minutes. Keep every check and a finite
-    # job deadline rather than cancelling an otherwise healthy suite at 25 min.
-    timeout-minutes: 90
-    strategy:
-      # 一个版本挂了也要把另一个跑完 —— 否则只看得到第一个失败，
-      # 分不清是「Node 版本问题」还是「代码问题」。
-      fail-fast: false
-      matrix:
-        # package.json 的 engines.node 是 >=22.19 —— 这个下限由依赖链决定：
-        #   pi-coding-agent（被 GUI 驱动的 pi）要 >=22.19.0
-        #   pdfjs-dist（运行时依赖，PDF 抽取）要 >=22.13.0 || >=24
-        #   electron / @electron/packager 等 11 个开发依赖要 >=22.12.0
-        # 取其中最严的一条。
-        #
-        # matrix 取 22 与 24：22 是这条下限所在的大版本，24 是当前最新
-        # （也是开发机在用的）。不按 22.19 建 matrix —— 那只会多出一个几乎重复的
-        # runner，而 22.x 内部的补丁差异不是这个项目要防的风险。
-        node: [22, 24]
+    timeout-minutes: 10
+    outputs:
+      groups: ${{ steps.plan.outputs.groups }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # Compatibility tests execute the published v0.24.0 Store directly.
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Set up Node.js ${{ matrix.node }}
+      - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: ${{ matrix.node }}
-          # setup-node 自带的 npm 缓存。**不要**缓存 node_modules ——
-          # 平台相关的二进制（esbuild / electron）跨平台复用会出各种怪问题。
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      # 必须是 ci 而不是 install：ci 严格按 lockfile 装，
-      # lockfile 与 package.json 不一致时直接失败，不会悄悄改写依赖。
+      - name: Validate canonical test chain and emit matrix
+        id: plan
+        shell: pwsh
+        run: node scripts/run-test-group.mjs --validate --github-output "$env:GITHUB_OUTPUT"
+
+  # 五个独立 runner 并行。组内仍按 package.json 中的原始顺序串行执行；
+  # Native 文件身份、句柄和权限用例不共享 runner 或可变目标。
+  test:
+    name: Tests (${{ matrix.group }})
+    needs: test-plan
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        group: ${{ fromJSON(needs.test-plan.outputs.groups) }}
+    env:
+      TEST_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Compatibility tests execute published historical code.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Run core tests
-        run: npm test
+      - name: Prepare isolated test directories
+        shell: pwsh
+        run: |
+          # Keep Native fixtures in the standard profile TEMP used by baseline.
+          # The D:-based run failed SACL setup; the C: reference path passes it.
+          $tempBase = Join-Path $env:USERPROFILE 'AppData\Local\Temp'
+          $temp = Join-Path $tempBase "pi-gui-ci-$env:TEST_GROUP"
+          $resultsRoot = Join-Path $env:RUNNER_TEMP "pi-gui-ci-$env:TEST_GROUP"
+          $results = Join-Path $resultsRoot 'results'
+          New-Item -ItemType Directory -Force -Path $temp, $results | Out-Null
+          "TEMP=$temp" >> $env:GITHUB_ENV
+          "TMP=$temp" >> $env:GITHUB_ENV
+          "TMPDIR=$temp" >> $env:GITHUB_ENV
+          "PI_GUI_CI_TEMP=$temp" >> $env:GITHUB_ENV
+          "PI_GUI_CI_RESULTS=$results" >> $env:GITHUB_ENV
 
-  # ------------------------------------------------------- 打包链路验证
+      - name: Run canonical test group
+        shell: pwsh
+        run: |
+          node scripts/run-test-group.mjs --group "$env:TEST_GROUP" `
+            --results "$env:PI_GUI_CI_RESULTS\results.json"
+
+      - name: Upload group timing and status
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.group }}
+          if-no-files-found: error
+          retention-days: 7
+          path: ${{ runner.temp }}/pi-gui-ci-${{ matrix.group }}/results
+
+  # 任何测试组失败时，该 job 因 needs: test 而被跳过，不会浪费打包时间。
   build-check:
     name: Electron build check
-    # 测试不过就不必浪费几分钟去打包。
     needs: test
     runs-on: windows-latest
     timeout-minutes: 40
@@ -93,40 +121,52 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          # 打包链路只验一个版本就够 —— 它是构建工具链，与运行时矩阵无关。
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      # test:app / test:exe 都要拿一个真 PDF 去验「打包后 PDF 抽取还能用」。
-      # 这个脚本以前只能靠 LibreOffice 转 PDF，而 runner 上没有 LibreOffice ——
-      # 于是那几条断言在干净机器上必然红（第一次 CI 就是这么红的）。
-      # 现在它内置了一个纯 Node 写的最小 PDF，任何机器都能跑。
-      # 显式跳过 LibreOffice：CI 要的是确定性，不是「碰巧有就用」。
       - name: Generate test fixtures
         run: npm run fixtures
         env:
           PI_GUI_SKIP_LIBREOFFICE: '1'
 
-      # 这一步会：esbuild 打后端单文件 → 生成 SEA blob → 注入 node.exe 得到
-      # 单文件 exe → 收集 public/ 与 pdfjs 资源 → 用 @electron/packager 组装
-      # 出 dist-app/<App>-win32-x64。也就是说两条打包链路（SEA 与 Electron）
-      # 都在这一步里被真的走了一遍。
-      #
-      # 不跑 build:installer / build:dist：那要 NSIS 与 ~430MB 产物，
-      # 属于发布前验证（见 release-check.yml 与 docs/testing.md）。
+      # 这一步同时走 Electron 组装与 Node SEA / 单文件注入两条打包链路。
       - name: Build Electron app
         run: npm run build:app -- --rebuild
 
-      # test:app 会把 dist-app 里的 resources/app 拷出来，用 node 直接跑
-      # 打包后的 server.cjs，检查静态资源、无项目时的行为等 25 项 ——
-      # 验证的是「打出来的包真的能跑」，而不只是「文件存在」。
       - name: Verify packaged app
         run: npm run test:app
 
-      # 单文件 exe（Node SEA）走的是另一条资源解析路径（内嵌），
-      # 45 项检查里有「内嵌资源与磁盘一致」这类只有真跑 exe 才能发现的断言。
       - name: Verify single-file exe
         run: npm run test:exe
+
+  # 唯一汇总门。矩阵里任一格失败，或依赖未执行 / 被取消 / 跳过，均不得显示成功。
+  ci-gate:
+    name: CI gate
+    needs: [test-plan, test, build-check]
+    if: ${{ always() }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every upstream job to succeed
+        shell: pwsh
+        env:
+          PLAN_RESULT: ${{ needs.test-plan.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BUILD_RESULT: ${{ needs.build-check.result }}
+        run: |
+          $checks = [ordered]@{
+            'test-plan' = $env:PLAN_RESULT
+            'test-matrix' = $env:TEST_RESULT
+            'build-check' = $env:BUILD_RESULT
+          }
+          $failed = @()
+          foreach ($entry in $checks.GetEnumerator()) {
+            Write-Host "$($entry.Key): $($entry.Value)"
+            if ($entry.Value -ne 'success') { $failed += "$($entry.Key)=$($entry.Value)" }
+          }
+          if ($failed.Count -gt 0) {
+            throw "CI incomplete or failed: $($failed -join ', ')"
+          }

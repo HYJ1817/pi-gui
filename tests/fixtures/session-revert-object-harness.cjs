@@ -1,5 +1,6 @@
 // Test-only capability issuer. Never a production import or bundled executable.
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),crypto=require('node:crypto'),{pathToFileURL}=require('node:url');
+const {appendRetentionIndex}=require('./session-revert-retention.cjs');
 const base=path.resolve(__dirname,'../..'),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const owner={backendInstance:'D2',projectId:'fixture',repoId:null,workspaceId:'workspace',workspaceEpoch:'epoch',conversationId:'conversation',runtimeId:'runtime',runtimeGeneration:'generation',sessionId:'11111111-1111-4111-8111-111111111111'};
 const scope={runtimeOwner:owner,workspaceId:owner.workspaceId,workspaceEpoch:owner.workspaceEpoch,conversationId:owner.conversationId,nativeSessionId:owner.sessionId};
@@ -39,7 +40,7 @@ async function prepare(root,C,R,{relativePath='workspace/file.txt',helperBytes,e
    assert.ok(activeRoots.has(root));retainedRoots.add(root);const observedRef=await store.restorePut(scope,observed);
    // Private local inspection inventory, not a product plan or recovery journal.
    // No paths/contents are sent on native stdout or user-facing test output.
-   const f=await fs.open(path.join(base,'.probe/p33-d2-retained-materials.jsonl'),'a',0o600);try{await f.writeFile(JSON.stringify({testOnly:true,label,root,options,scope,currentRef,candidateRef,observedRef})+'\n');await f.sync();}finally{await f.close();}
+   await appendRetentionIndex(base,'p33-d2-retained-materials.jsonl',{testOnly:true,label,root,options,scope,currentRef,candidateRef,observedRef});
    return observedRef;
   }
  };

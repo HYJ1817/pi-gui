@@ -38,6 +38,9 @@ permissions:
   actions: read
   contents: read
 
+env:
+  NODE_VERSION: '24.14.0'
+
 concurrency:
   # 按**待签的 tag** 分键，不用 github.ref —— 手动触发时 github.ref 是分支，
   # 两次签不同 tag 的运行会被错误地判成同一组而互相阻塞。
@@ -139,7 +142,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install dependencies

@@ -1,6 +1,6 @@
 // Test evidence only. No production module imports this helper.
 const fs=require('node:fs/promises'),path=require('node:path');
-const indexes=new Set(['p33-d3-retained-materials.jsonl','p33-d4-retained-materials.jsonl']);
+const indexes=new Set(['p33-d2-retained-materials.jsonl','p33-d3-retained-materials.jsonl','p33-d4-retained-materials.jsonl']);
 async function appendRetentionIndex(base,name,record){
  if(!indexes.has(name))throw Object.assign(Error('invalid_fixture_retention_index'),{code:'invalid_fixture_retention_index'});
  const directory=path.join(base,'.probe');
