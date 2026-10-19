@@ -447,10 +447,10 @@ export function createRpcBridge({
          *   - `response/abort/success` —— 走 request() 配对的应答在上面就 `continue`
          *     掉了，而**超时之后才到**的那一条也会被下面当成「过期内应答」丢掉；
          *     两种都不能漏掉这条权威证据，所以在这里按 command 认一次。
-         *     有 `abortWritten` 守着：不会拿一条与本轮无关的旧应答解除屏障。
+         *     应答必须匹配本轮 abort 的内部请求 ID；旧 Stop 的迟到成功应答不能替新 Stop 解锁。
          * ⚠️ 必须在下面那条 `continue` **之前** —— 超时后的应答正好走那一条。 */
         if (msg?.type === 'agent_settled') noteStopSettled();
-        else if (msg?.type === 'response' && msg.command === 'abort' && msg.success === true) noteStopAbortResponse();
+        else if (msg?.type === 'response' && msg.command === 'abort' && msg.success === true) noteStopAbortResponse(msg);
         // Timed-out internal replies belong to the same private numeric ID space.
         if (msg?.type === 'response' && Number.isInteger(msg.id) && msg.id > 0 && msg.id < nextRequestId) continue;
         publish({ ...msg, bridgeRun: run, cwd });
@@ -577,7 +577,7 @@ export function createRpcBridge({
    *       超时 / 子进程没起来 / 进程退出 → null。
    *
    * 注意这里**不**校验 cmd.id —— 由本模块发号，调用方传的 id 会被覆盖。 */
-  function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
+  function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, onId = null } = {}) {
     return new Promise((resolve) => {
       /* 停止屏障对内部调用同样成立 —— 没有哪条内部路径需要绕开它。
        * （clear_queue / abort / get_state 回读都不在阻断名单里。） */
@@ -594,6 +594,9 @@ export function createRpcBridge({
         return;
       }
       const id = nextRequestId++;
+      // Internal request identity is captured before the write, so even a synchronous
+      // fake Pi reply cannot be mistaken for a different Stop generation.
+      if (typeof onId === 'function') onId(id);
       const timer = setTimeout(() => {
         pending.delete(id);
         safeLog('bridge.request_timeout', { operation: operationOf(cmd), durationMs: timeoutMs, bridgeRun });
@@ -740,7 +743,7 @@ export function createRpcBridge({
     /* 3. abort —— 走 request() 的 id 配对，等的是 Pi 那条**权威应答**。
      *    stdin.write 成功不算数。官方语义保证应答发出时会话已经空闲。 */
     run.abortWritten = true;
-    const aborted = await request({ type: 'abort' }, { timeoutMs: stopTimeoutMs });
+    const aborted = await request({ type: 'abort' }, { timeoutMs: stopTimeoutMs, onId: id => { run.abortRequestId = id; } });
     if (stopRun !== run) return;
     if (aborted && !aborted.__error) {
       releaseStop('abort-response');
@@ -766,9 +769,11 @@ export function createRpcBridge({
   /* Pi 回了权威 abort 应答。配对上之后 runStop 自己会收口；这里管的是
    * **超时之后才到**的那一条 —— 它同样是权威证据，不能因为本地已经放弃了
    * 就不认它（否则屏障只能等到 bridge 换代才解除）。 */
-  function noteStopAbortResponse() {
+  function noteStopAbortResponse(msg) {
     const run = stopRun;
-    if (!run || !run.abortWritten) return;
+    // A successful but delayed response from an older abort must never release
+    // this generation's barrier. Only our own numeric request ID is authoritative.
+    if (!run || !run.abortWritten || msg?.id !== run.abortRequestId) return;
     releaseStop('abort-response');
   }
 
@@ -826,6 +831,7 @@ export function createRpcBridge({
       startedAt: Date.now(),
       queue: 'pending',
       abortWritten: false,
+      abortRequestId: null,
       settledSeen: false,
       readback: false,
       abortError: '',
