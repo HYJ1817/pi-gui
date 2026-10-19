@@ -9,6 +9,8 @@
  * 用法：
  *   npm run release:check                      # 全量：版本一致性 + 测试 + 构建 + 产物验证 + 守卫
  *   npm run release:check -- --with-installer  # 额外真装一遍安装程序（见下）
+ *   npm run release:check -- --tag=v<版本> --ci-sha=<精确Commit> --with-installer
+ *                                               # Release 专用：验证该 SHA 的完整 CI 后跳过重复测试
  *   npm run release:prepare                    # 跳过 npm test（迭代时用）
  *   node scripts/release-check.mjs --tag=v0.13.0
  *
@@ -37,12 +39,18 @@ import { readReleaseSummary } from './release-summary.mjs';
 import { collectReleaseArtifacts, RELEASE_DIR } from './collect-release-artifacts.mjs';
 import { checkReleaseDir } from './check-release-artifacts.mjs';
 import { verifyChecksums } from './make-checksums.mjs';
+import { createGitHubApi, verifyCheckoutCiProof } from './verify-ci-proof.mjs';
 
 const argv = process.argv.slice(2);
-const skipTests = argv.includes('--skip-tests');
+let skipTests = argv.includes('--skip-tests');
 const skipBuild = argv.includes('--skip-build');
 const withInstaller = argv.includes('--with-installer');
 const tag = argv.find((a) => a.startsWith('--tag='))?.slice('--tag='.length) ?? null;
+const ciSha = argv.find((a) => a.startsWith('--ci-sha='))?.slice('--ci-sha='.length) ?? null;
+const expectedSha = process.env.EXPECTED_SHA ?? null;
+const repo = argv.find((a) => a.startsWith('--repo='))?.slice('--repo='.length)
+  ?? process.env.GITHUB_REPOSITORY
+  ?? null;
 
 const APP_DIR = path.join(ROOT, 'dist-app', 'Pi GUI-win32-x64');
 
@@ -78,7 +86,7 @@ console.log('');
 console.log('  ══════════════════════════════════════════════════');
 console.log(
   '   Pi GUI 发布预检' +
-    (skipTests ? '（--skip-tests）' : '') +
+    (ciSha ? '（精确 SHA CI 证明）' : skipTests ? '（--skip-tests）' : '') +
     (skipBuild ? '（--skip-build）' : '') +
     (withInstaller ? '（含安装程序真装验证）' : '')
 );
@@ -111,9 +119,47 @@ console.log('  ═════════════════════�
   console.log(`     ✓ Release 摘要 ${path.relative(ROOT, summary.path).split(path.sep).join('/')}`);
 }
 
-/* ---------- 2. 全量测试 ---------- */
+/* ---------- 2. 精确 SHA 的完整 CI 证明 ----------
+ *
+ * Release 的 tag 只有在该 tag 指向的 commit 已经有一轮 main push CI 完成、
+ * 且最终 CI gate 成功时，才允许跳过重复的 npm test。任何未完成、失败、
+ * 无运行或身份不一致都会在这里阻断；API 错误也不会被当成“没有运行”。 */
+if (ciSha) {
+  stepNo += 1;
+  console.log(`\n[${stepNo}] 精确 SHA CI 证明`);
+  let api;
+  try {
+    api = createGitHubApi({ token: process.env.GITHUB_TOKEN });
+  } catch (err) {
+    fail('CI 证明不可用', [err.message]);
+  }
+  let head = '';
+  try {
+    head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8', windowsHide: true }).trim().toLowerCase();
+  } catch {
+    fail('无法读取当前 checkout 的 SHA');
+  }
+  if (!expectedSha) fail('缺少 workflow 事件 SHA', ['EXPECTED_SHA 未设置']);
+  if (ciSha !== head) fail('调用参数中的 SHA 与当前 checkout 不一致', [`参数 ${ciSha}`, `HEAD ${head}`]);
+  const proof = await verifyCheckoutCiProof({
+    tag,
+    checkoutSha: head,
+    expectedEventSha: expectedSha,
+    repo,
+    api,
+  });
+  if (!proof.ok) fail('精确 SHA 的 CI 证明未通过', proof.errors);
+  console.log(`     ✓ tag ${tag} → ${proof.tagCommitSha}`);
+  console.log(`     ✓ GitHub CI run #${proof.run.id}：${proof.run.conclusion}`);
+  console.log(`     ✓ ${proof.gate.id ? 'CI gate #' + proof.gate.id : 'CI gate'}：${proof.gate.conclusion}`);
+  skipTests = true;
+}
+
+/* ---------- 全量测试（手动完整检查时） ---------- */
 if (skipTests) {
-  console.log('\n[--] 跳过 npm test（--skip-tests）');
+  console.log(ciSha
+    ? '\n[--] 跳过 npm test（精确 SHA 的完整 CI 与最终 gate 已通过）'
+    : '\n[--] 跳过 npm test（--skip-tests）');
 } else {
   runStep('全量测试（npm test）', 'npm test');
 }

@@ -18,8 +18,13 @@
 # ---------- 失败不留半成品 ----------
 #
 # 顺序刻意是「**全部验证通过之后**才碰 GitHub」：
-#   版本/tag 一致性 → npm test → 构建 → 产物守卫 → 创建 draft → 上传 → 核对 → 发布
+#   tag/精确 SHA 证明 → main CI 与最终 gate → 构建 → 产物守卫
+#   → 创建 draft → 上传 → 核对 → 发布
 # 所以任何一个验证步骤失败时，**根本还没有 Release**。
+#
+# 精确 SHA 的 main push CI 已完成且 ci-gate 成功后，Release 才跳过重复的
+# npm test。CI 未完成、失败、找不到同一 SHA 的运行，或 tag/checkout/运行
+# 身份不一致，都会在碰 GitHub Release 之前失败。
 #
 # 真正需要 draft 的只有「上传」这一段：上传可能中途失败，而 GitHub 没有事务。
 # 用 draft 兜住它：draft 对用户不可见，上传 + 核对全过了才 publish。
@@ -32,8 +37,9 @@
 #
 # ---------- 权限 ----------
 #
-# 只开 contents: write（创建 Release / 上传附件需要）。
-# 不需要 issues / pull-requests / actions / packages，所以一个都不给。
+# 验证 / 打包和创建 Release 分成两个 job：构建脚本只能拿到只读权限；
+# 只有不执行 npm 生命周期的发布 job 才拿到 contents: write。
+# 两个 job 的 actions: read 只用于读取 CI 证明和传递同一次运行的已验证 artifact。
 # 用内置的 GITHUB_TOKEN，**不用个人 PAT** —— PAT 会绕过分支保护、无法随仓库
 # 转移、也容易过期。
 #
@@ -46,7 +52,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   NODE_VERSION: '24.14.0'
@@ -57,19 +63,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build, verify and publish
+  verify:
+    name: Prove CI, build and verify release
+    permissions:
+      contents: read
+      actions: read
     runs-on: windows-latest
-    timeout-minutes: 90
-    env:
-      # gh 读 GH_TOKEN。这里用的是内置的 GITHUB_TOKEN，不是 PAT。
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # npm test verifies compatibility against published historical code.
-          fetch-depth: 0
+          # Source tests are reused from exact-SHA CI; packaging only needs the tag commit.
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -90,7 +97,9 @@ jobs:
       #
       # **一条命令**跑完「打 tag 之前该做的事」，本机与 CI 跑的是同一套：
       #   版本一致性（含 tag 必须等于 v<package.json 的 version>）
-      #   → npm test
+      #   → 远端 tag 解析出的 commit 必须等于 checkout 的 HEAD
+      #   → 该 SHA 的 main push CI 已完成且 ci-gate 成功
+      #   → 通过后才跳过已经验证过的 npm test
       #   → build:app / build:installer --zip
       #   → test:app / test:exe / test:portable / test:installer
       #   → 集中到 dist-release/ + 产物守卫 + 独立复算 SHA256
@@ -100,8 +109,67 @@ jobs:
       #
       # 版本一致性在这里**带 tag 校验**：tag 与 package.json 不一致就直接失败，
       # 绝不「猜一个版本然后继续」。
-      - name: Release precheck (version, tests, build, artifact guards)
-        run: npm run release:check -- --tag=${{ github.ref_name }} --with-installer
+      - name: Release precheck (exact-SHA CI proof, build, artifact guards)
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $exactSha = (git rev-parse HEAD).Trim()
+          npm run release:check -- --tag="$env:RELEASE_TAG" --ci-sha="$exactSha" --with-installer
+
+      # 已通过守卫的资产在同一 workflow 内传给发布 job；关闭重复压缩，
+      # 因为两个正式二进制本身已经是压缩格式。
+      - name: Upload verified release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-dist
+          path: dist-release
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  # ------------------------------------------------- 创建/上传/核对/发布
+  publish:
+    name: Publish verified release
+    needs: verify
+    permissions:
+      contents: write
+      actions: read
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release summary
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download verified release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-dist
+          path: dist-release
+
+      - name: Re-check exact-SHA CI proof before draft
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $exactSha = (git rev-parse HEAD).Trim()
+          node scripts/verify-ci-proof.mjs --tag="$env:RELEASE_TAG" --sha="$exactSha" --expected-sha="$env:EXPECTED_SHA" --repo="$env:GITHUB_REPOSITORY"
+
+      # artifact 跨 job 传输后再验一次：文件名、数量、魔数、版本和 SHA256
+      # 都必须与发布前一致，然后才允许碰 GitHub Release。
+      - name: Re-verify downloaded release assets
+        run: npm run release:verify
 
       # ------------------------------------------------- 创建/上传/核对/发布
       #
@@ -119,4 +187,10 @@ jobs:
       #
       # 核对不过就抛错，此时还只是 draft，用户完全不知道它存在过。
       - name: Publish release (draft → upload → verify → publish)
-        run: node scripts/publish-release.mjs --tag=${{ github.ref_name }}
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-release.mjs --tag="$env:RELEASE_TAG" --expected-sha="$env:EXPECTED_SHA"

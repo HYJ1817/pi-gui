@@ -10,12 +10,14 @@
 #   ci.yml            每次 push / PR：npm test + build:app + test:app + test:exe
 #   release-check.yml **本文件**：不创建 Release，只把完整发布路径跑一遍
 #                     （含安装程序 / 便携版 / 产物守卫 / 校验和）
-#   release.yml       tag 触发：跑同一套预检，**通过之后**才创建并发布 Release
+#   release.yml       tag 触发：先核对精确 SHA 已通过 CI，再跑构建 / 安装 /
+#                     产物验证，通过之后才创建并发布 Release
 #
 # 三者调用的是**同一套 npm 脚本**（npm test / build:app / build:installer /
 # test:* / release:collect / release:verify），没有各自手写一份构建逻辑。
-# release.yml 更进一步，直接调那一条 `npm run release:check` 入口 ——
-# 所以本机跑通 release:check 就意味着这里也该通过。
+# release.yml 直接调 `npm run release:check`，但传入精确 SHA，验证该提交的
+# 完整 CI 与最终 gate 后跳过重复的 npm test；本文件始终保留完整 npm test，
+# 适合准备发版时手动做一次与 CI 历史无关的完整检查。
 #
 # 为什么**不**挂 pull_request：完整跑一次要 45-60 分钟（真装真卸 + 打 430MB 产物），
 # 挂在每个 PR 上会让贡献者等到放弃。而 PR 需要的版本一致性守卫已经在
