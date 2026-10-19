@@ -148,6 +148,9 @@ function createFakePi() {
       state.streaming = false;
       respond(cmd, {});
     },
+    // Re-deliver an already acknowledged abort to simulate a delayed/duplicate
+    // RPC frame from an older Stop while a newer Stop is pending.
+    emitAbortResponse(cmd) { respond(cmd, {}); },
   };
 }
 
@@ -362,6 +365,33 @@ async function main() {
       assert.equal(a.status, 200);
       assert.equal(b.status, 200, '第二次 Stop 也要拿到权威结论（复用同一次停止）');
       assert.equal(raw.stopState(), null);
+    });
+
+    await check('7b. 旧 Stop 的迟到 abort 成功应答不得解除新 Stop 的屏障', async () => {
+      resetLog();
+      pi.state.abortMode = 'manual';
+      const first = post({ type: 'abort' });
+      await waitFor('第一轮 abort 到达 Pi', () => has(c => c.type === 'abort'));
+      const firstAbort = pi.writes.find(c => c.type === 'abort');
+      pi.respondAbort();
+      assert.equal((await first).status, 200);
+
+      const second = post({ type: 'abort' });
+      await waitFor('第二轮 abort 到达 Pi', () => pi.writes.filter(c => c.type === 'abort').length === 2);
+      const secondAbort = pi.writes.filter(c => c.type === 'abort')[1];
+      assert.notEqual(secondAbort.id, firstAbort.id, '两次停止必须有不同的内部请求 ID');
+
+      // First abort has already completed. Its duplicate acknowledgement
+      // cannot prove that the newly pending abort has finished.
+      pi.emitAbortResponse(firstAbort);
+      await sleep(20);
+      assert.equal(raw.stopState()?.pending, true, '旧回复不得解除新屏障');
+      const blocked = await post({ type: 'prompt', message: 'blocked after old abort reply' });
+      assert.equal(blocked.body.code, 'stop_in_progress');
+      assert.ok(!has(c => c.message === 'blocked after old abort reply'));
+      pi.respondAbort();
+      assert.equal((await second).status, 200);
+      await waitFor('第二轮屏障正常解除', () => !raw.stopState());
     });
 
     await check('8. 认证同步中不绕过后端闸门，且不会留下屏障', async () => {
