@@ -742,8 +742,10 @@ export function createRpcBridge({
 
     /* 3. abort —— 走 request() 的 id 配对，等的是 Pi 那条**权威应答**。
      *    stdin.write 成功不算数。官方语义保证应答发出时会话已经空闲。 */
-    run.abortWritten = true;
-    const aborted = await request({ type: 'abort' }, { timeoutMs: stopTimeoutMs, onId: id => { run.abortRequestId = id; } });
+    const aborted = await request({ type: 'abort' }, { timeoutMs: stopTimeoutMs, onId: id => {
+      run.abortRequestId = id;
+      run.abortWritten = true;
+    } });
     if (stopRun !== run) return;
     if (aborted && !aborted.__error) {
       releaseStop('abort-response');
