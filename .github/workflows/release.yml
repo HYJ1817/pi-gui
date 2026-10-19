@@ -87,11 +87,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # NSIS 不在 windows-latest 的预装清单里，而 build:installer 需要 makensis。
-      # 装完之后 scripts/build-installer.mjs 的 findMakensis() 会在
-      # `C:\Program Files (x86)\NSIS\makensis.exe` 找到它（它本来就列了这个候选）。
-      - name: Install NSIS
-        run: choco install nsis --no-progress -y
+      # Official fixed-version installer; SHA256 is pinned and verified before execution.
+      # Bounded retries and a compiler version probe fail before any build on error.
+      - name: Install verified NSIS
+        run: node scripts/install-ci-nsis.mjs
 
       # ---------------------------------------------------------------- 预检
       #

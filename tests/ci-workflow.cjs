@@ -85,3 +85,8 @@ assert.doesNotMatch(release, /run-test-group\.mjs/);
 assert.doesNotMatch(releaseCheck, /run-test-group\.mjs/);
 
 console.log('ci-workflow: Node pin, dynamic matrix, final CI gate, exact-SHA release proof and permissions verified');
+
+for (const workflow of [release, releaseCheck]) {
+  assert.match(workflow, /run: node scripts\/install-ci-nsis\.mjs/);
+  assert.doesNotMatch(workflow, /run: choco install nsis/);
+}

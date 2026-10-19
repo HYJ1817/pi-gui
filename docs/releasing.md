@@ -205,7 +205,7 @@ permissions:
 顺序（**全部验证通过之后才碰 GitHub**）：
 
 ```
-checkout → setup-node → npm ci → 装 NSIS
+checkout → setup-node → npm ci → 获取并校验固定版本 NSIS
   → 解析 tag 提交，并证明它 == checkout HEAD
   → 查询该 SHA 在 main 的最新 push CI
   → 要求 CI 已完成、成功、最终 CI gate 成功
@@ -307,7 +307,9 @@ Release 页面现在分三层，顺序固定：
 - zip 与 SHA-256 都用 Node 自带能力（`tar` / `node:crypto`）解决，
   **不引入陌生的第三方 Action**。
 - workflow 里不 `curl | bash` 任何东西。唯一的 CI 专用依赖是 NSIS，
-  通过 `choco install nsis` 装。
+  通过 `scripts/install-ci-nsis.mjs` 获取官方 SourceForge 的固定版本安装程序；
+  SHA256 按微软 WinGet 清单钉定，核验后才执行。下载最多尝试三次，安装后必须
+  通过编译器版本探测，失败立即阻止构建。脚本仅允许在 Windows GitHub Actions runner 执行。
 
 ## 十、发完之后
 
