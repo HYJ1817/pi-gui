@@ -18,20 +18,23 @@
  * 但便携版没传成功」**。
  *
  * 用法：
- *   node scripts/publish-release.mjs --tag=v0.13.0              # 真发布
- *   node scripts/publish-release.mjs --tag=v0.13.0 --dry-run    # 做到「核对通过」就停，不发布
+ *   node scripts/publish-release.mjs --tag=v<版本> --expected-sha=<commit> [--dry-run]
  *
- * ⚠️ `--dry-run` 也需要 tag 在远端**已存在**（`gh release create` 会按需创建 tag），
- * 所以它不是一个「零副作用的彩排」—— 它仍会在远端留下一个 draft。
+ * 正式调用必须提供 GITHUB_TOKEN、GITHUB_REPOSITORY 和 EXPECTED_SHA；脚本会在
+ * 创建/复用 draft 前及 draft=false 前重新验证精确 SHA 的 CI 证明。
+ * `--dry-run` 要求 tag 已经在远端存在并通过 CI 证明；它仍会留下一个 draft，
+ * 不是零副作用彩排。
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ROOT } from './util.mjs';
 import { expectedAssetNames } from './check-release-artifacts.mjs';
 import { compareReleaseAssets, readLocalAssets, fetchRemoteAssets, makeGhRunner } from './verify-uploaded-release.mjs';
 import { readReleaseSummary, RELEASE_SUMMARY_REL } from './release-summary.mjs';
+import { createGitHubApi, verifyCheckoutCiProof } from './verify-ci-proof.mjs';
 
 /** 追加到 Release 页面末尾的固定说明。
  *
@@ -167,15 +170,19 @@ export function releaseState(gh, tag) {
  * @param dir      发布目录（dist-release）
  * @param gh       可注入的 gh 调用器 —— 测试传假的
  * @param dryRun   true 时做到「核对通过 + 追加说明」就停，**不 publish**
+ * @param verifyProof 可选回调；正式 CLI 强制提供，在创建/复用 draft 前和
+ *                    draft=false 前各调用一次
  * @returns {{steps:string[], state:string, published:boolean, url:string|null}}
  */
-export function publishRelease({
+export async function publishRelease({
   tag,
   dir,
   gh = makeGhRunner(),
   dryRun = false,
   log = console.log,
   summaryPath = path.join(ROOT, RELEASE_SUMMARY_REL),
+  verifyProof = null,
+  requireProof = false,
 } = {}) {
   if (!tag) throw new Error('必须给 tag');
   const steps = [];
@@ -195,6 +202,9 @@ export function publishRelease({
   /* 摘要也在碰 GitHub 之前校验。版本标记不匹配时宁可直接停，
    * 也不能把上一版的人类摘要带进这一版。 */
   const summary = readReleaseSummary({ expectedVersion: version, filePath: summaryPath });
+
+  if (requireProof && typeof verifyProof !== 'function') throw new Error('正式发布必须提供精确 SHA CI 证明');
+  if (typeof verifyProof === 'function') await verifyProof('before-draft');
 
   const state = releaseState(gh, tag);
   const plan = planRelease({ state });
@@ -252,6 +262,10 @@ export function publishRelease({
     return { steps, state, published: false, url: remote.url };
   }
 
+  /* tag 或最新 CI 可能在长步骤期间变化。draft 对用户不可见，
+   * 所以发布前再验证一次；失败时保留 draft，但绝不解除 draft。 */
+  if (typeof verifyProof === 'function') await verifyProof('before-publish');
+
   /* 最后才发布。 */
   gh(['release', 'edit', tag, '--draft=false']);
   steps.push('publish');
@@ -269,9 +283,12 @@ export function publishRelease({
 
 /* ---------- CLI ---------- */
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   const tag = argv.find((a) => a.startsWith('--tag='))?.slice('--tag='.length);
+  const expectedSha = argv.find((a) => a.startsWith('--expected-sha='))?.slice('--expected-sha='.length)
+    ?? process.env.EXPECTED_SHA
+    ?? null;
   const dirArg = argv.find((a) => a.startsWith('--dir='))?.slice('--dir='.length);
   const dryRun = argv.includes('--dry-run');
 
@@ -282,14 +299,36 @@ function main() {
      * 剥不掉。写死一个版本号，等发到那一个版本时 `release:check` 会在第 1 步
      * 直接红（`✗ 构建 / 发布链路里写死了版本号 X.Y.Z`），而修法只能是改这一行。
      * 用 `<版本>` 占位就永远不用跟着发版改（与 docs/releasing.md §八 同一条规矩）。 */
-    console.error('用法：node scripts/publish-release.mjs --tag=v<版本> [--dry-run]');
+    console.error('用法：node scripts/publish-release.mjs --tag=v<版本> --expected-sha=<commit> [--dry-run]');
     process.exit(1);
   }
 
   console.log('');
   let r;
   try {
-    r = publishRelease({ tag, dir: path.resolve(ROOT, dirArg || 'dist-release'), dryRun });
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8', windowsHide: true }).trim().toLowerCase();
+    const api = createGitHubApi({ token: process.env.GITHUB_TOKEN });
+    const verifyProof = async (stage) => {
+      const proof = await verifyCheckoutCiProof({
+        tag,
+        checkoutSha: head,
+        expectedEventSha: expectedSha,
+        repo: process.env.GITHUB_REPOSITORY,
+        api,
+      });
+      if (!proof.ok) {
+        const error = new Error(`${stage}: ${proof.errors.join(' ')}`);
+        error.code = proof.code;
+        throw error;
+      }
+    };
+    r = await publishRelease({
+      tag,
+      dir: path.resolve(ROOT, dirArg || 'dist-release'),
+      dryRun,
+      requireProof: true,
+      verifyProof,
+    });
   } catch (err) {
     console.error(`\n  ✗ ${err.message}\n`);
     process.exit(1);
@@ -301,4 +340,4 @@ function main() {
   console.log('');
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

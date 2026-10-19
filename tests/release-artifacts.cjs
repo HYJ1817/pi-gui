@@ -30,6 +30,15 @@ function check(name, cond, extra) {
     console.log('  FAIL ' + name + (ok ? '  → ' + ok : extra ? '  → ' + extra : ''));
   }
 }
+async function checkAsync(name, cond, extra) {
+  let ok;
+  try {
+    ok = await cond();
+  } catch (error) {
+    ok = `threw: ${error.message}`;
+  }
+  return check(name, ok, extra);
+}
 
 const V = '0.13.0';
 const SETUP = `Pi-GUI-Setup-${V}.exe`;
@@ -582,13 +591,13 @@ const SUMS = 'SHA256SUMS.txt';
     return (statesUnsigned && !overclaims) || JSON.stringify({ statesUnsigned, overclaims });
   });
 
-  check('25d. 摘要版本过期 → 在碰 GitHub 之前拒绝发布', () => {
+  await checkAsync('25d. 摘要版本过期 → 在碰 GitHub 之前拒绝发布', async () => {
     makeRelease();
     fs.writeFileSync(summaryPath, '<!-- pi-gui-release-summary: 0.12.0 -->\n\n- 旧摘要\n', 'utf8');
     const m = makeMockGh({ state: 'missing' });
     let msg = '';
     try {
-      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop, summaryPath });
+      await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop, summaryPath });
       return '没有抛错';
     } catch (e) {
       msg = e.message;
@@ -603,10 +612,10 @@ const SUMS = 'SHA256SUMS.txt';
       `msg=${msg} calls=${JSON.stringify(m.calls)}`;
   });
 
-  check('26. 没有 Release 时：创建 draft → 上传 → 核对 → 追加说明 → 发布 → 再确认', () => {
+  await checkAsync('26. 没有 Release 时：创建 draft → 上传 → 核对 → 追加说明 → 发布 → 再确认', async () => {
     makeRelease();
     const m = makeMockGh({ state: 'missing' });
-    const r = publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    const r = await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
     return (
       (r.published === true &&
         JSON.stringify(r.steps) ===
@@ -616,20 +625,92 @@ const SUMS = 'SHA256SUMS.txt';
     );
   });
 
-  check('26a. 只剩 draft 时：**不**重新创建，复用它', () => {
+  await checkAsync('26a. 只剩 draft 时：**不**重新创建，复用它', async () => {
     makeRelease();
     const m = makeMockGh({ state: 'draft' });
-    const r = publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    const r = await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
     const created = m.calls.some((c) => c[1] === 'create');
     return (!created && r.steps.includes('reuse-draft') && r.steps.includes('publish')) || JSON.stringify(r.steps);
   });
 
-  check('27. 已经有**已发布**的 Release → 抛错，且**绝不**上传或发布（不覆盖已发布二进制）', () => {
+  await checkAsync('26b. publish 前和 draft=false 前都重新验证身份', async () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing' });
+    const proofCalls = [];
+    const r = await publish({
+      tag: `v${V}`,
+      dir,
+      gh: m.gh,
+      log: noop,
+      verifyProof: async (stage) => {
+        proofCalls.push(stage);
+        return { ok: true };
+      },
+    });
+    return (r.published === true
+      && JSON.stringify(proofCalls) === JSON.stringify(['before-draft', 'before-publish'])) || JSON.stringify(proofCalls);
+  });
+
+  await checkAsync('26b1. formal publish refuses to skip proof when no verifier exists', async () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing' });
+    let msg = '';
+    try {
+      await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop, requireProof: true });
+    } catch (error) {
+      msg = error.message;
+    }
+    return (/必须提供精确 SHA CI 证明/.test(msg) && m.calls.length === 0) || `msg=${msg} calls=${JSON.stringify(m.calls)}`;
+  });
+
+  await checkAsync('26c. before-draft 证明失败时绝不碰 Release', async () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing' });
+    let msg = '';
+    try {
+      await publish({
+        tag: `v${V}`,
+        dir,
+        gh: m.gh,
+        log: noop,
+        verifyProof: async () => { throw new Error('proof lost before draft'); },
+      });
+    } catch (error) {
+      msg = error.message;
+    }
+    return (/proof lost before draft/.test(msg) && m.calls.length === 0) || `msg=${msg} calls=${JSON.stringify(m.calls)}`;
+  });
+
+  await checkAsync('26d. before-publish 证明失败时保留 draft 且绝不发布', async () => {
+    makeRelease();
+    const m = makeMockGh({ state: 'missing' });
+    let calls = 0;
+    let msg = '';
+    try {
+      await publish({
+        tag: `v${V}`,
+        dir,
+        gh: m.gh,
+        log: noop,
+        verifyProof: async () => {
+          calls += 1;
+          if (calls === 2) throw new Error('proof lost before publish');
+          return { ok: true };
+        },
+      });
+    } catch (error) {
+      msg = error.message;
+    }
+    const published = m.calls.some((call) => call[1] === 'edit' && call.includes('--draft=false'));
+    return (/proof lost before publish/.test(msg) && !published && m.isDraft() === true) || `msg=${msg} published=${published}`;
+  });
+
+  await checkAsync('27. 已经有**已发布**的 Release → 抛错，且**绝不**上传或发布（不覆盖已发布二进制）', async () => {
     makeRelease();
     const m = makeMockGh({ state: 'published' });
     let msg = '';
     try {
-      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
       return '没有抛错';
     } catch (e) {
       msg = e.message;
@@ -638,12 +719,12 @@ const SUMS = 'SHA256SUMS.txt';
     return (/已经.*发布/.test(msg) && !touched) || `msg=${msg} calls=${JSON.stringify(m.calls)}`;
   });
 
-  check('28. 上传后核对不过 → 抛错，且**绝不** publish（此时还只是 draft）', () => {
+  await checkAsync('28. 上传后核对不过 → 抛错，且**绝不** publish（此时还只是 draft）', async () => {
     makeRelease();
     const m = makeMockGh({ state: 'missing', breakAssets: true });
     let msg = '';
     try {
-      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
       return '没有抛错';
     } catch (e) {
       msg = e.message;
@@ -652,10 +733,10 @@ const SUMS = 'SHA256SUMS.txt';
     return (/核对没通过/.test(msg) && !published) || `msg=${msg} published=${published}`;
   });
 
-  check('28a. publish 必须排在 verify 之后（顺序断言，不只看有没有调用）', () => {
+  await checkAsync('28a. publish 必须排在 verify 之后（顺序断言，不只看有没有调用）', async () => {
     makeRelease();
     const m = makeMockGh({ state: 'missing' });
-    publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+    await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
     const seq = m.calls.map((c) => `${c[1]}${c.includes('--draft=false') ? ':publish' : ''}`);
     const upload = seq.findIndex((x) => x === 'upload');
     const verifyView = seq.findIndex((x, i) => x === 'view' && i > upload);
@@ -663,22 +744,22 @@ const SUMS = 'SHA256SUMS.txt';
     return (upload >= 0 && verifyView > upload && publishIndex > verifyView) || JSON.stringify(seq);
   });
 
-  check('29. --dry-run：做到核对通过就停，**不**发布（远端留下 draft）', () => {
+  await checkAsync('29. --dry-run：做到核对通过就停，**不**发布（远端留下 draft）', async () => {
     makeRelease();
     const m = makeMockGh({ state: 'missing' });
-    const r = publish({ tag: `v${V}`, dir, gh: m.gh, dryRun: true, log: noop });
+    const r = await publish({ tag: `v${V}`, dir, gh: m.gh, dryRun: true, log: noop });
     return (
       (r.published === false && !r.steps.includes('publish') && m.isDraft() === true) ||
       JSON.stringify([r.steps, m.isDraft()])
     );
   });
 
-  check('30. 发布目录为空 → 抛错（不会去 create 一个没有附件的 Release）', () => {
+  await checkAsync('30. 发布目录为空 → 抛错（不会去 create 一个没有附件的 Release）', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const m = makeMockGh({ state: 'missing' });
     try {
-      publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
+      await publish({ tag: `v${V}`, dir, gh: m.gh, log: noop });
       return '没有抛错';
     } catch (e) {
       return /发布目录是空的/.test(e.message) || e.message;
