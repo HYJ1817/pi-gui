@@ -63,6 +63,33 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     adapters[0].emit({ type: 'agent_start', bridgeRun: 1 }); adapters[1].emit({ type: 'agent_start', bridgeRun: 1 });
     await registry.command(ao, { type: 'abort' });
     await check('Stop A 不停止 B，agent_end不代表idle', () => { assert.equal(adapters[0].commands.at(-1).type, 'abort'); assert.equal(adapters[1].commands.length, 1); adapters[1].emit({ type: 'agent_end', bridgeRun: 1 }); assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'B').activity, 'running'); });
+    await check('Runtime Stop 等待确认期间不放行新任务，旧 settled 不能误改状态', async () => {
+      const adapter = adapters[0], original = adapter.abortAndWait;
+      let releaseAbort;
+      const awaitingAbort = new Promise(resolve => { releaseAbort = resolve; });
+      adapter.abortAndWait = () => awaitingAbort;
+      let stopping;
+      try {
+        stopping = registry.command(ao, { type: 'abort' });
+        await tick();
+        const activity = () => registry.snapshot().items.find(i => i.owner?.workspaceId === 'A')?.activity;
+        assert.equal(activity(), 'stopping');
+        adapter.emit({ type: 'agent_settled', bridgeRun: 1 });
+        assert.equal(activity(), 'stopping', '停止确认前，即使旧 settled 到达也不能标成 idle');
+        const before = adapter.commands.length;
+        await reject(() => registry.command(ao, { type: 'prompt', message: 'must remain blocked' }), 'stop_in_progress');
+        assert.equal(adapter.commands.length, before, '未确认的新任务不得进入 Pi');
+        assert.equal(registry.snapshot().items.find(i => i.owner?.workspaceId === 'B')?.activity, 'running',
+          'A 停止不得影响 B');
+        releaseAbort({ ok: true, evidence: 'abort-response' });
+        await stopping;
+        assert.equal(activity(), 'idle');
+      } finally {
+        releaseAbort({ ok: true, evidence: 'abort-response' });
+        await stopping?.catch(() => {});
+        adapter.abortAndWait = original;
+      }
+    });
     await check('不能用 switch_session 改写固定 conversation', () => reject(() => registry.command(ao, { type: 'switch_session', sessionPath: '/tmp/unknown' }), 'invalid_command'));
     await check('Focus 只选视图，不 spawn/stop', async () => { await registry.focus(bo); await registry.focus(ao); assert.equal(spawnCount, 3); assert.equal(adapters[1].commands.length, 1); });
     await check('换焦点时旧会话也被广播（前端按 item.focused 画，否则会两行同时高亮）', async () => {
