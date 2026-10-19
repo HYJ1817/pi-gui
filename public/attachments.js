@@ -57,6 +57,10 @@ export async function handleFiles(fileList) {
       loading: true,
       kind: isImg ? 'image' : 'unknown',
     };
+    // 预览读取同样属于待处理阶段，先占住附件和发送闸门。
+    S.attachments.push(att);
+    renderAttachments();
+    updateSendState();
 
     if (isImg) {
       try {
@@ -68,12 +72,10 @@ export async function handleFiles(fileList) {
     }
 
     if (isImg && imageInputBlocked()) {
+      removeAttachment(att.id);
       toast('当前模型不支持图片，仍可添加普通文件。', 'info');
       continue;
     }
-    S.attachments.push(att);
-    renderAttachments();
-    updateSendState();
 
     try {
       const j = await uploadFile(f, att.name);

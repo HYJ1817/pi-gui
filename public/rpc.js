@@ -212,6 +212,7 @@ export async function submit() {
   const text = el.input.value.trim();
   const atts = S.attachments.slice();
   if (!text && !atts.length) return;
+  if (atts.some(a => a.loading)) return toast('附件正在解析，请稍后发送。', 'info');
   if (S.modelSwitchPending) return toast('正在确认当前模型，请稍后发送。', 'info');
   if (imageInputBlocked() && atts.some(a => a.kind === 'image')) {
     toast('当前模型不支持图片，请移除图片或切换模型。', 'info');

@@ -70,6 +70,10 @@ export function draftKey(ws = workspaceHash(), session = sessionHash()) {
 
 /* ---------- 存储层（所有 localStorage 访问都包了 try/catch）---------- */
 
+// 存储被拒绝时只在本页保留同样有字符上限的纯文本；换身份也不能丢掉旧输入。
+// 不含附件，刷新即丢弃；持久化恢复成功或显式清空后移除。
+const transientDrafts = new Map();
+
 function storage() {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -80,6 +84,7 @@ function storage() {
 
 /** 读一条草稿的文本（读不到/格式不对/版本不对 → ''）。 */
 export function readDraftText(key) {
+  if (transientDrafts.has(key)) return transientDrafts.get(key);
   const store = storage();
   if (!store || !key) return '';
   let raw = null;
@@ -101,9 +106,10 @@ export function readDraftText(key) {
 /** 写一条草稿。空文本 = 删除（不留幽灵草稿）。返回真正写下的 payload 或 null。 */
 export function writeDraftText(key, text) {
   const store = storage();
-  if (!store || !key) return null;
+  if (!key) return null;
   const value = typeof text === 'string' ? text : '';
   if (!value.trim()) {
+    transientDrafts.delete(key);
     try {
       store.removeItem(key);
     } catch {
@@ -112,8 +118,11 @@ export function writeDraftText(key, text) {
     return null;
   }
   const payload = { v: DRAFT_VERSION, text: value.slice(0, DRAFT_MAX_CHARS), at: Date.now() };
+  transientDrafts.set(key, payload.text);
+  if (!store) return null;
   try {
     store.setItem(key, JSON.stringify(payload));
+    transientDrafts.delete(key);
   } catch {
     return null;
   }
@@ -121,6 +130,7 @@ export function writeDraftText(key, text) {
 }
 
 export function removeDraft(key) {
+  transientDrafts.delete(key);
   const store = storage();
   if (!store || !key) return;
   try {
@@ -132,8 +142,7 @@ export function removeDraft(key) {
 
 /* ---------- 与输入框的绑定 ---------- */
 
-/* 上一次「归到某个 key」的文本。用来判断输入框里的内容是不是用户刚打的
- * 还没归档的字 —— 那种情况下换身份**不许**用旧草稿覆盖它。 */
+/* 上一次归档的文本；换身份时用它判断是否还有防抖窗口内的输入要保存。 */
 let lastSavedText = '';
 let currentKey = null;
 let timer = null;
@@ -171,7 +180,7 @@ function scheduleSave() {
  * 规则：
  *   - 先把「还在输入框里、尚未归档」的字归到**旧** key（避免丢字）；
  *   - key 没变 → 什么都不做；
- *   - key 变了 → 用新 key 的草稿填充输入框（用户刚打的、还没归档的字不动）。
+ *   - key 变了 → 旧文本已归档，用新 key 的草稿填充输入框。
  */
 export function draftSync() {
   if (!el.input) return null;
@@ -197,14 +206,7 @@ export function draftSync() {
     timer = null;
   }
 
-  const untouched = live === '' || live === lastSavedText;
   currentKey = next;
-  if (!untouched) {
-    /* 用户正在打字（输入框里的字还没归档到任何身份）—— 不覆盖它。
-     * 下一次输入会把这段字归到新身份，行为可预测。 */
-    lastSavedText = live;
-    return currentKey;
-  }
   const restored = readDraftText(next);
   el.input.value = restored;
   lastSavedText = restored;
@@ -251,4 +253,5 @@ export function resetDraftState() {
   currentKey = null;
   lastSavedText = '';
   installed = false;
+  transientDrafts.clear();
 }

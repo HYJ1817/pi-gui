@@ -240,9 +240,6 @@ export function applyState(d) {
   if (previousSessionId && nextSessionId && previousSessionId !== nextSessionId) {
     S.thinkingLevels = [];
     clearSessionUsage();
-    /* P24：会话身份变了 = 草稿身份也变了 —— 未发送草稿按会话隔离，
-     * 换会话要立刻对齐（旧会话的留在旧 key，新会话的有就恢复）。 */
-    draftSync();
   }
 
   if (d.model) {
@@ -259,6 +256,8 @@ export function applyState(d) {
   if (nextSessionId) {
     S.localUsage.sessionId = nextSessionId;
   }
+  // 身份写入后再对齐；draftSync 用内部旧 key 归档输入，不会把旧文本带入新会话。
+  draftSync();
 
   if (d.model) {
     const modelName = d.model.name || d.model.id || '模型';

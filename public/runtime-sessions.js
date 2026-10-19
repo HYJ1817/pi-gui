@@ -1,5 +1,5 @@
 import { fetchRuntimeSessions, runtimeSessionAction } from './api.js';
-import { runtimeStore as store, observeRuntimeFrame, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
+import { runtimeStore as store, observeRuntimeFrame, onRuntimeChange, seedRuntimeSnapshot, respondToRuntimeApproval } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
 import { openModal } from './ui/modal.js';
 
@@ -67,7 +67,7 @@ export function openRuntimeSessions(project, workspace = null) {
     }
     async function action(payload, after) {
       if (busy || !alive) return; busy = true; draw();
-      try { const result = await (['start', 'resume'].includes(payload.action) ? launchRuntimeSession(payload) : runtimeSessionAction(payload)); if (!alive) return;
+      try { const result = await (['start', 'resume'].includes(payload.action) ? launchRuntimeSession(payload) : runtimeSessionAction(payload)); if (!alive) return result;
         const owner = store.get(payload.owner?.conversationId)?.owner;
         const staleApproval = payload.command?.type === 'extension_ui_response'
           && (!same(owner, payload.owner) || !same(payload.owner, owner));
@@ -134,18 +134,28 @@ export function openRuntimeSessions(project, workspace = null) {
       if (r.owner) controls.querySelector('[data-resume]')?.remove();
       const nextApprovalKey = JSON.stringify([selected, r.owner, r.approvals]);
       if (nextApprovalKey === approvalKey) return;
+      const priorRows = new Map([...approvals.children].map(row => [row._runtimeApproval, row]));
       approvalKey = nextApprovalKey; approvals.replaceChildren();
       for (const a of r.approvals) {
+        const priorRow = priorRows.get(a);
+        if (priorRow && same(r.owner, priorRow._runtimeOwner) && same(priorRow._runtimeOwner, r.owner)) {
+          priorRow.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; });
+          approvals.append(priorRow); continue;
+        }
         const approvalOwner = { ...r.owner }, approvalConversation = selected;
         const row = node('div', 'runtime-approval'); row.append(node('p', '', a.title));
+        row._runtimeApproval = a;
+        row._runtimeOwner = approvalOwner;
         const respond = response => {
           if (!same(store.get(approvalConversation)?.owner, approvalOwner)) return;
-          return action({ action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } });
+          row.querySelectorAll('button,textarea').forEach(control => { control.disabled = true; });
+          return respondToRuntimeApproval(approvalOwner, a, () => action({ action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } }));
         };
         if (a.method === 'confirm') row.append(button('确认', () => respond({ confirmed: true })), button('拒绝', () => respond({ confirmed: false })));
         else if (a.method === 'select') for (const value of a.options) row.append(button(value, () => respond({ value })));
         else { const value = node('textarea'); value.setAttribute('aria-label', a.title || '审批输入'); row.append(value, button('提交', () => respond({ value: value.value }))); }
-        row.append(button('取消', () => respond({ cancelled: true }))); approvals.append(row);
+        row.append(button('取消', () => respond({ cancelled: true })));
+        row.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; }); approvals.append(row);
       }
     }
     render = draw; void refresh();

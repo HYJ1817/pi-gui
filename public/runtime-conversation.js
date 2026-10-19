@@ -42,7 +42,7 @@
  * 的假展开按钮，也不从正文文本里猜。
  */
 import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
-import { runtimeStore as store, onRuntimeChange } from './runtime-state.js';
+import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
 import { openModal } from './ui/modal.js';
@@ -65,7 +65,6 @@ const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false
 
 export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null, display = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
-  const historyCache = new Map();     // conversationId -> { messages, truncated }
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
   const modelOwners = new Map();
   /* thinking / usage 的只读投影。**本视图自己建一份**（和 scrollTops/views 一样是按
@@ -86,7 +85,18 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   host.append(root);
   /* store 一变就重画。本模块只**订阅**、不自己 apply —— 各视图各自 apply 会把
    * eventSequence 游标吃两遍，第二个视图就再也看不到那一帧。 */
-  const unsubscribe = onRuntimeChange(() => { if (alive) { focusResumed(); ensureModels(); draw(); } });
+  const historyStamp = record => JSON.stringify([record?.owner, record?.item?.lifecycle, record?.item?.revision,
+    record?.item?.nativeSessionId, record?.item?.workspace, record?.cursor]);
+  function invalidateHistory() {
+    for (const [target, view] of views) {
+      if (!view.history && !view.pendingHistory) continue;
+      const record = store.get(target);
+      if (record === view.historyRecord && historyStamp(record) === view.historyStamp) continue;
+      if (view.historyLocator && !matchesLocator(record?.item, view.historyLocator)) view.notice = '会话历史身份已变化，请重新搜索。';
+      view.history = null; view.pendingHistory = false; view.historyToken++;
+    }
+  }
+  const unsubscribe = onRuntimeChange(() => { if (alive) { invalidateHistory(); focusResumed(); ensureModels(); draw(); } });
   function ensureModels() {
     const record = store.get(id);
     if (!active || !models || record?.item.lifecycle !== 'ready' || !record.owner?.sessionId) return;
@@ -204,7 +214,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (!target || current().pending) return;
     void action(target, { action: 'resume', conversationId: target }, result => {
       if (result.ok) {
-        viewOf(target).history = null;
+        const view = viewOf(target);
+        view.history = null; view.pendingHistory = false; view.historyToken++;
         if (active && id === target && selection === focusEpoch) { viewOf(target).focusOnReady = result.owner?.runtimeId || null; focusResumed(); }
       }
     });
@@ -219,7 +230,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     view.pending = true; if (id === target) draw();
     try {
       const result = await (payload.action === 'resume' ? launchRuntimeSession(payload) : runtimeSessionAction(payload));
-      if (!alive) return null;
+      if (!alive) return result;
       if (payload.command?.type === 'extension_ui_response') {
         const currentOwner = store.get(target)?.owner;
         if (!same(currentOwner, payload.owner) || !same(payload.owner, currentOwner)) return null;
@@ -248,24 +259,25 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (!target) return;
     const view = viewOf(target);
     if (view.pendingHistory) return;
-    if (expectedLocator) { view.history = null; historyCache.delete(target); }
-    if (!expectedLocator && historyCache.has(target)) { view.history = historyCache.get(target); if (id === target) draw(); return; }
+    if (expectedLocator) view.history = null;
+    const record = store.get(target), stamp = historyStamp(record);
+    view.historyRecord = record; view.historyStamp = stamp;
+    view.historyLocator = expectedLocator && { ...expectedLocator };
     const token = ++view.historyToken;
     view.pendingHistory = true; if (id === target) draw();
     try {
       const result = await fetchRuntimeHistory(target);
       /* 代次对不上（同一会话又发了一次）或已销毁 → 丢弃这个响应。 */
-      if (!alive || view.historyToken !== token) return;
+      if (!alive || view.historyToken !== token || store.get(target) !== record || historyStamp(record) !== stamp) return;
       if (expectedLocator && (!matchesLocator(store.get(target)?.item, expectedLocator)
         || !result.locator || Object.keys(expectedLocator).some(key => result.locator[key] !== expectedLocator[key]))) {
-        view.history = null; historyCache.delete(target); view.notice = '会话历史身份已变化，请重新搜索。'; return;
+        view.history = null; view.notice = '会话历史身份已变化，请重新搜索。'; return;
       }
       if (result?.ok === false) {
         view.notice = result.code === 'history_unavailable' ? '这条会话没有可读的历史（原生记录已失效），只能新建会话。' : '读取历史失败。';
         return;
       }
       const payload = { messages: result.messages || [], truncated: result.truncated === true, match };
-      historyCache.set(target, payload);
       /* 只写 **target** 的历史：中央已经切到别的会话时，B 的 DOM 一个字都不动。 */
       view.history = payload;
     } catch { if (alive && view.historyToken === token) view.notice = '读取历史失败。'; }
@@ -366,7 +378,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         output.replaceChildren(); let userIndex = 0;
         for (const message of view.history.messages) {
           const row = el('span', '', `${message.role === 'user' ? '我' : '助手'}：${message.text}\n\n`);
-          if (message.role === 'user') row.dataset.historyUserIndex = String(userIndex++);
+          if (message.messageId) row.dataset.historyMessageId = message.messageId;
+          if (message.role === 'user') {
+            const index = Object.hasOwn(message, 'userIndex') ? message.userIndex : userIndex;
+            if (Number.isInteger(index)) row.dataset.historyUserIndex = String(index);
+            userIndex++;
+          }
           output.append(row);
         }
         if (!view.history.messages.length) output.textContent = '（没有可显示的正文）';
@@ -406,18 +423,28 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
 
     const key = JSON.stringify([id, r?.owner, r?.approvals]);
     if (key !== approvalKey) {
+      const priorRows = new Map([...approvals.children].map(row => [row._runtimeApproval, row]));
       approvalKey = key; approvals.replaceChildren();
       for (const a of r?.approvals || []) {
+        const priorRow = priorRows.get(a);
+        if (priorRow && same(r.owner, priorRow._runtimeOwner) && same(priorRow._runtimeOwner, r.owner)) {
+          priorRow.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; });
+          approvals.append(priorRow); continue;
+        }
         const approvalOwner = { ...r.owner }, approvalId = id;
         const row = el('div', 'rtc-approval'); row.append(el('p', '', a.title));
+        row._runtimeApproval = a;
+        row._runtimeOwner = approvalOwner;
         const respond = response => {
           if (!same(store.get(approvalId)?.owner, approvalOwner)) return Promise.resolve(null);
-          return action(approvalId, { action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } });
+          row.querySelectorAll('button,textarea').forEach(control => { control.disabled = true; });
+          return respondToRuntimeApproval(approvalOwner, a, () => action(approvalId, { action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } }));
         };
         if (a.method === 'confirm') { const yes = el('button', 'btn', '确认'); const no = el('button', 'btn', '拒绝'); yes.type = no.type = 'button'; yes.onclick = () => respond({ confirmed: true }); no.onclick = () => respond({ confirmed: false }); row.append(yes, no); }
         else if (a.method === 'select') for (const value of a.options) { const b = el('button', 'btn', value); b.type = 'button'; b.onclick = () => respond({ value }); row.append(b); }
         else { const value = el('textarea'); value.setAttribute('aria-label', a.title || '审批输入'); const submit = el('button', 'btn', '提交'); submit.type = 'button'; submit.onclick = () => respond({ value: value.value }); row.append(value, submit); }
         const cancel = el('button', 'btn', '取消'); cancel.type = 'button'; cancel.onclick = () => respond({ cancelled: true }); row.append(cancel);
+        row.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; });
         approvals.append(row);
       }
     }
@@ -435,10 +462,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
      * jsdom 不派发 scroll 事件、也不做布局，靠事件判定的写法在测试里会假绿。
      */
     if (view.history) {
-      const index = view.history.match?.userIndex;
-      if (active && Number.isInteger(index) && index >= 0 && output.dataset.historyMatch !== String(index)) {
-        output.querySelector(`[data-history-user-index="${index}"]`)?.scrollIntoView?.({ block: 'center' });
-        output.dataset.historyMatch = String(index);
+      const match = view.history.match, index = match?.userIndex, messageId = match?.messageId;
+      const matchKey = JSON.stringify([messageId, index]);
+      if (active && match && output.dataset.historyMatch !== matchKey) {
+        const rows = [...output.children];
+        const row = messageId ? rows.find(r => r.dataset.historyMessageId === messageId)
+          : Number.isInteger(index) && index >= 0 ? rows.find(r => r.dataset.historyUserIndex === String(index)) : null;
+        row?.scrollIntoView?.({ block: 'center' });
+        output.dataset.historyMatch = matchKey;
       }
     } else if (entered) {
       const top = scrollTops.get(id);

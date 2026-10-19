@@ -23,6 +23,14 @@ const lifecycleListeners = new Set();
 export function onRuntimeLifecycle(fn) { lifecycleListeners.add(fn); return () => lifecycleListeners.delete(fn); }
 export function setRuntimeStoreRejectObserver(fn) { runtimeStore.setRejectObserver(fn); }
 function broadcast(frame) { for (const fn of [...listeners]) fn(frame); }
+// 共享待提交状态，防止中央/弹窗同时提交同一审批。后端仍是权限校验的唯一裁决者。
+export async function respondToRuntimeApproval(owner, approval, send) {
+  if (!runtimeStore.beginApproval(owner, approval)) return null;
+  broadcast();
+  let result;
+  try { result = await send(); return result; }
+  finally { runtimeStore.finishApproval(owner, approval, result?.ok === true); broadcast(); }
+}
 export function seedRuntimeSnapshot(snapshot) { if (runtimeStore.seed(snapshot)) broadcast(); }
 
 /** SSE 帧入口：返回 true 表示这份帧真的改动了 store（视图据此重画）。 */
