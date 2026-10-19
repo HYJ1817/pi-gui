@@ -1,5 +1,42 @@
 # 测试分层与 CI
 
+## 2026-10-19 原始审查剩余回归
+
+`npm test` 新增 `tests/review-regressions.cjs`，覆盖附件解析期间的发送闸门、
+DOCX XML 顺序、Classic 防抖草稿隔离、历史失效/最新 800 条/搜索定位、
+中央与弹窗审批的提交/失败/owner 竞争及其他审批输入保留。
+原 `tests/high-risk-regressions.cjs` 继续执行。
+
+真实交互单独跑 `node tests/review-electron.cjs`，使用完整生产 app/CSS、受信
+键鼠和离线 fixture，输出截图与报告到本次独立 `os.tmpdir()` 目录。此夹具的
+`--no-sandbox` 不作为产品沙箱证明。打包后运行
+`node tests/review-packaged.cjs <绝对构建根>`，检查 App/SEA 实际 DOCX 上传和
+随包的九个修改模块是否与源码摘要一致；它需要事先构建，不属于无产物的基础 CI。
+
+本机若系统 TEMP 对原生子进程不可写，可仅为测试进程指定独立 TEMP/TMP/TMPDIR；
+普通 Git 测试可用 `GIT_CEILING_DIRECTORIES` 保持“非 Git 目录”fixture 的语义，
+但 Worktree 安全封装有意清除 Git 环境变量，因此完整验证不能统一使用仓库内 TEMP。
+本机可只为实际使用 esbuild 的套件单独指定可写 TEMP，其余 fixture 留在仓库外；
+不得放宽产品的环境清理或路径断言。并行验证应分别设置 HTTP 及 `UI2C_CDP_PORT`。
+若沙箱阻止打包产物的子进程在仓库外新建数据目录，可仅对 `app-check` /
+`exe-check` 使用隔离的仓库内 TEMP；这是夹具放行，不是产品目录或 CI 默认路径。
+遇到 PowerShell 策略限制时先核实失败原因，测试进程策略不替代 SACL 权限，
+真实跳过必须照实记录。详见[本轮验收记录](remaining-review-fixes-20261019.md)。
+
+## 2026-10-18 高风险问题回归
+
+`npm test` 纳入 `tests/high-risk-regressions.cjs`，使用实际上传路由、临时文件、
+Runtime store/视图、registry，以及接临时假 Pi 的真实 RPC bridge/guardian。
+覆盖百分号文件名、同毫秒上传、排他创建碰撞与重试上限、两处会话输入面在
+延迟发送期间的新草稿、owner 换代，以及追加失败/乱序响应/停止屏障。
+所有内容与项目均为 `os.tmpdir()` fixture，不调用模型或真实 Pi。
+
+真实 Electron 交互单独运行 `node tests/high-risk-electron.cjs`。它用生产
+renderer/CSS、受信鼠标/文本输入和受控 API 响应，覆盖中央与弹窗各六种草稿
+情形，保存响应前后截图和 `report.json`。输出位置由运行时打印的独立临时
+目录确定。该测试启动参数包含 `--no-sandbox`，仅作为交互证据，不作为
+Electron 沙箱或真实 Pi 验收；不修改产品启动参数。
+
 ## UI-5 本地日志
 
 `npm test` 新增 `test:logging`：`tests/logging.cjs`（核心/持久化/轮转/分页/ZIP/HTTP）、

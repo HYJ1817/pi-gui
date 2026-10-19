@@ -1,5 +1,5 @@
 import { fetchRuntimeSessions, runtimeSessionAction } from './api.js';
-import { runtimeStore as store, observeRuntimeFrame, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
+import { runtimeStore as store, observeRuntimeFrame, onRuntimeChange, seedRuntimeSnapshot, respondToRuntimeApproval } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
 import { openModal } from './ui/modal.js';
 
@@ -32,12 +32,17 @@ export function openRuntimeSessions(project, workspace = null) {
     const output = node('pre', 'runtime-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前独立会话输出'); body.append(output);
     const tools = node('div', 'modal-desc'), approvals = node('div', 'runtime-approvals'); body.append(tools, approvals);
     const input = node('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前独立会话的任务'); body.append(input);
-    input.oninput = () => { const r = store.get(selected); if (r) r.draft = input.value; };
+    input.oninput = () => { const r = store.get(selected); if (r) { r.draft = input.value; r.draftRevision++; } };
     const send = button('发送', async () => {
       const r = store.get(selected), text = input.value.trim(); if (!r?.owner || !text || busy) return;
       const owner = { ...r.owner }, id = selected;
+      const draft = input.value, draftRevision = r.draftRevision;
       await action({ action: 'command', owner, command: { type: 'prompt', message: text } }, result => {
-        const current = store.get(id); if (result.ok && same(current?.owner, owner)) { current.draft = ''; if (selected === id) input.value = ''; }
+        const current = store.get(id);
+        if (result.ok && same(current?.owner, owner) && current.draftRevision === draftRevision && current.draft === draft) {
+          current.draft = ''; current.draftRevision++;
+          if (selected === id && input.value === draft) input.value = '';
+        }
       });
     }); send.classList.add('primary'); controls.append(send);
     const stop = button('停止', () => owned('command', { command: { type: 'abort' } })); controls.append(stop);
@@ -62,7 +67,7 @@ export function openRuntimeSessions(project, workspace = null) {
     }
     async function action(payload, after) {
       if (busy || !alive) return; busy = true; draw();
-      try { const result = await (['start', 'resume'].includes(payload.action) ? launchRuntimeSession(payload) : runtimeSessionAction(payload)); if (!alive) return;
+      try { const result = await (['start', 'resume'].includes(payload.action) ? launchRuntimeSession(payload) : runtimeSessionAction(payload)); if (!alive) return result;
         const owner = store.get(payload.owner?.conversationId)?.owner;
         const staleApproval = payload.command?.type === 'extension_ui_response'
           && (!same(owner, payload.owner) || !same(payload.owner, owner));
@@ -129,18 +134,28 @@ export function openRuntimeSessions(project, workspace = null) {
       if (r.owner) controls.querySelector('[data-resume]')?.remove();
       const nextApprovalKey = JSON.stringify([selected, r.owner, r.approvals]);
       if (nextApprovalKey === approvalKey) return;
+      const priorRows = new Map([...approvals.children].map(row => [row._runtimeApproval, row]));
       approvalKey = nextApprovalKey; approvals.replaceChildren();
       for (const a of r.approvals) {
+        const priorRow = priorRows.get(a);
+        if (priorRow && same(r.owner, priorRow._runtimeOwner) && same(priorRow._runtimeOwner, r.owner)) {
+          priorRow.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; });
+          approvals.append(priorRow); continue;
+        }
         const approvalOwner = { ...r.owner }, approvalConversation = selected;
         const row = node('div', 'runtime-approval'); row.append(node('p', '', a.title));
+        row._runtimeApproval = a;
+        row._runtimeOwner = approvalOwner;
         const respond = response => {
           if (!same(store.get(approvalConversation)?.owner, approvalOwner)) return;
-          return action({ action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } });
+          row.querySelectorAll('button,textarea').forEach(control => { control.disabled = true; });
+          return respondToRuntimeApproval(approvalOwner, a, () => action({ action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } }));
         };
         if (a.method === 'confirm') row.append(button('确认', () => respond({ confirmed: true })), button('拒绝', () => respond({ confirmed: false })));
         else if (a.method === 'select') for (const value of a.options) row.append(button(value, () => respond({ value })));
         else { const value = node('textarea'); value.setAttribute('aria-label', a.title || '审批输入'); row.append(value, button('提交', () => respond({ value: value.value }))); }
-        row.append(button('取消', () => respond({ cancelled: true }))); approvals.append(row);
+        row.append(button('取消', () => respond({ cancelled: true })));
+        row.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; }); approvals.append(row);
       }
     }
     render = draw; void refresh();

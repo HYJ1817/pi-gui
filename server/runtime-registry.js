@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 const COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'get_state', 'get_messages', 'get_tree', 'get_session_stats', 'get_available_models', 'get_commands', 'set_model', 'cycle_model', 'set_thinking_level', 'cycle_thinking_level', 'set_session_name', 'extension_ui_response', 'compact']);
 const TURNS = new Set(['prompt', 'steer', 'follow_up']);
+const MAX_PENDING_TURNS = 32;
 const fail = code => Object.assign(Error(code), { code });
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const rootKey = p => process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p);
@@ -146,13 +147,19 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
           changed(live);
         });
       }
-      else { live.activity = 'idle'; if (!live.everReady) live.sessionId = null; }
+      else { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); if (!live.everReady) live.sessionId = null; }
       if (['error', 'exited'].includes(event.state)) { live.error = 'runtime_unavailable'; live.attention = true; }
     }
-    if (event.type === 'agent_start') live.activity = 'running';
-    if (event.type === 'agent_settled') { if (live.activity !== 'stopping') live.activity = 'idle'; if (focused !== live.record.conversationId) live.attention = true; }
-    if (event.type === 'response' && TURNS.has(event.command) && (event.success === false || event.data?.disposition === 'handled')) live.activity = 'idle';
-    if (event.type === 'stop_state') live.activity = event.pending ? 'stopping' : 'idle';
+    if (event.type === 'agent_start') { live.agentActive = true; if (live.activity !== 'stopping') live.activity = 'running'; }
+    if (event.type === 'agent_settled') { live.agentActive = false; live.pendingTurns.clear(); if (live.activity !== 'stopping') live.activity = 'idle'; if (focused !== live.record.conversationId) live.attention = true; }
+    // A response settles only its captured request. Other requests may still be
+    // awaiting acknowledgement, even before the first agent_start arrives.
+    if (event.type === 'response' && typeof event.success === 'boolean' && TURNS.has(event.command) && live.pendingTurns.get(event.id) === event.command) {
+      live.pendingTurns.delete(event.id);
+      if (event.success === true && event.data?.disposition !== 'handled') live.agentActive = true;
+      if (!live.agentActive && !live.pendingTurns.size && live.activity !== 'stopping') live.activity = 'idle';
+    }
+    if (event.type === 'stop_state') { live.activity = event.pending ? 'stopping' : 'idle'; if (!event.pending) { live.agentActive = false; live.pendingTurns.clear(); } }
     if (event.type === 'extension_ui_request' || event.type === 'extension_error') live.attention = true;
     if (event.generationResult?.outcome === 'failed') { live.error = 'generation_failed'; live.attention = true; }
     // Diagnostic raw lines are never retained in parallel conversation buffers.
@@ -198,7 +205,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (leases.has(key)) throw fail('workspace_in_use');
     const total = lives.size + externalCount();
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
-    const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle',
+    const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
       sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set() };
     leases.set(key, live); lives.set(record.conversationId, live); changed(live);
     try {
@@ -250,13 +257,25 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (cmd.type === 'abort') {
       live.activity = 'stopping'; changed(live);
       const result = await live.adapter.abortAndWait(cmd);
-      live = resolve(expected); if (result.ok) live.activity = 'idle'; changed(live); return result;
+      live = resolve(expected); if (result.ok) { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); } changed(live); return result;
     }
     if (TURNS.has(cmd.type) && live.activity === 'stopping') throw fail('stop_in_progress');
-    const prior = live.activity;
-    if (TURNS.has(cmd.type)) { live.error = null; live.activity = 'running'; changed(live); }
+    if (TURNS.has(cmd.type)) {
+      cmd = { ...cmd, id: typeof cmd.id === 'string' ? cmd.id : randomUUID() };
+      if (live.pendingTurns.has(cmd.id)) throw fail('invalid_command');
+      if (live.pendingTurns.size >= MAX_PENDING_TURNS) throw fail('runtime_request_limit');
+      live.pendingTurns.set(cmd.id, cmd.type);
+      live.error = null; live.activity = 'running'; changed(live);
+    }
     try { await live.adapter.send(cmd); resolve(expected); }
-    catch (error) { if (belongs(live) && live.activity === 'running' && TURNS.has(cmd.type)) { live.activity = prior; changed(live); } throw error; }
+    catch (error) {
+      if (belongs(live) && TURNS.has(cmd.type)) {
+        live.pendingTurns.delete(cmd.id);
+        if (!live.agentActive && !live.pendingTurns.size && live.activity !== 'stopping') live.activity = 'idle';
+        changed(live);
+      }
+      throw error;
+    }
     changed(live); return { ok: true };
   }
   async function read(expected, cmd) {

@@ -8,7 +8,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (bytes.length <= limit) return text;
     return new TextDecoder().decode(bytes.slice(-limit)).replace(/^\uFFFD+/, '');
   };
-  function fresh(item) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', approvals: [], truncated: false }; }
+  function fresh(item) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', draftRevision: 0, approvals: [], truncated: false }; }
   function seed(snapshot) {
     if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
     const sequence = snapshot._runtimeReadSequence;
@@ -25,11 +25,13 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     for (const item of snapshot.items || []) {
       const prior = records.get(item.conversationId);
       if (prior && Number.isInteger(item.revision) && item.revision < (prior.item.revision || 0)) { reject('stale_revision'); continue; }
-      if (!prior || !same(prior.owner, item.owner)) {
+      // 两次没有 owner 的快照仍是同一条关闭记录；只读资源预检不能换掉它。
+      const ownerUnchanged = prior && (prior.owner === item.owner || same(prior.owner, item.owner));
+      if (!ownerUnchanged) {
         if (prior?.owner && item.owner && prior.owner.runtimeId === item.owner.runtimeId && prior.owner.runtimeGeneration === item.owner.runtimeGeneration) {
           if (prior.owner.sessionId && !item.owner.sessionId) continue;
           prior.owner = item.owner; prior.item = item;
-        } else { const next = fresh(item); if (prior) next.draft = prior.draft; records.set(item.conversationId, next); }
+        } else { const next = fresh(item); if (prior) { next.draft = prior.draft; next.draftRevision = prior.draftRevision; } records.set(item.conversationId, next); }
       } else prior.item = item;
     }
     return true;
@@ -84,6 +86,19 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   function apply(frame) { return applyDetailed(frame).ok; }
   return { seed, apply, applyDetailed, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
     setRejectObserver(fn) { rejectObserver = typeof fn === 'function' ? fn : null; },
+    beginApproval(owner, approval) {
+      const r = records.get(owner?.conversationId);
+      if (!r || !same(r.owner, owner) || !r.approvals.includes(approval) || approval.submitting) return false;
+      approval.submitting = true; return true;
+    },
+    finishApproval(owner, approval, success) {
+      const r = records.get(owner?.conversationId);
+      if (!r || !r.approvals.includes(approval)) return;
+      // 同一代 runtime 补齐 sessionId 时仍可能保留此对象；只释放旧请求的 pending，
+      // 不把旧 owner 的成功当成新 owner 的审批完成。
+      if (success && same(r.owner, owner)) r.approvals = r.approvals.filter(a => a !== approval);
+      else delete approval.submitting;
+    },
     history(id, messages, expectedOwner, expectedCursor) { const r = records.get(id); if (!r || !same(r.owner, expectedOwner) || r.cursor !== expectedCursor) return false;
       const text = (messages || []).filter(m => ['user', 'assistant'].includes(m.role)).map(m => (m.content || []).filter(c => c.type === 'text').map(c => c.text || '').join('')).join('\n\n');
       r.text = bound(text); if (r.text !== text) r.truncated = true; return true; },

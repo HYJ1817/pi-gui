@@ -8,6 +8,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { extract, clampInline, maxBytes } from '../lib/extract.js';
 import { json, readRawBody } from './http-utils.js';
 
@@ -26,17 +27,27 @@ export function createUploads({ dataDir }) {
 
   function handle(req, res, url) {
     const rawName = url.searchParams.get('name') || 'file';
-    const name = safeName(decodeURIComponent(rawName));
+    // URLSearchParams has already decoded the query value, including literal %.
+    const name = safeName(rawName);
 
     readRawBody(req, maxBytes())
       .then(async (buf) => {
         if (!buf.length) return json(res, 400, { ok: false, error: '文件内容为空' });
 
         fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const stored = `${stamp}_${name}`;
-        const filePath = path.join(UPLOAD_DIR, stored);
-        fs.writeFileSync(filePath, buf);
+        let stored, filePath;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          // Match the former timestamp's 24-byte prefix: adding another UUID
+          // would make previously valid multibyte filenames exceed NAME_MAX.
+          stored = `${randomBytes(12).toString('hex')}_${name}`;
+          filePath = path.join(UPLOAD_DIR, stored);
+          try { fs.writeFileSync(filePath, buf, { flag: 'wx' }); break; }
+          catch (err) {
+            if (err.code !== 'EEXIST') throw err;
+            filePath = null;
+          }
+        }
+        if (!filePath) throw new Error('无法分配上传文件，请重试');
 
         let result;
         try {
