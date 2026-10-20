@@ -48,6 +48,7 @@ import { scrollToUserTurn } from './conversation-nav.js';
 import { clearSessionPlans, refreshSessionPlans } from './session-plans.js';
 import { projectExpanded, setProjectExpanded } from './sidebar-expansion.js';
 import { showChat } from './ui/workspace-surface.js';
+import { runtimeStore } from './runtime-state.js';
 import {
   createSearchBar,
   renderSearchResults,
@@ -429,7 +430,8 @@ function paintList() {
   setRuntimeNavParent(area);
   repaintRuntimeNav();
 
-  const all = data.sessions || [];
+  const owned = new Set(runtimeStore.values().filter(r=>r.item.kind==='project').map(r=>r.item.nativeSessionId).filter(Boolean));
+  const all = (data.sessions || []).filter(s=>!s.sessionId||!owned.has(s.sessionId));
   const live = all.filter((s) => !s.archived);
   const arch = all.filter((s) => s.archived);
 

@@ -50,7 +50,7 @@ import { openModal } from './ui/modal.js';
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
 /* 工具状态只映射 store 真实记过的状态；别的取值原样显示，不猜。 */
-const TOOL_STATE = { running: '运行中', done: '完成', error: '失败', interrupted: '未完成' };
+const TOOL_STATE = { running: '运行中', waiting: '等待写入', done: '完成', error: '失败', interrupted: '未完成' };
 /* 历史接口不含这些字段（见文件头）。写在状态行里，用户才知道「这里为什么没有」。 */
 const HISTORY_NOTE = '历史只含正文（无工具、思考、用量）';
 

@@ -182,7 +182,7 @@ export function updateEntry(node, entry) {
   }
 
   setText(p.label, entry.label + (entry.known ? '' : ' ' + entry.name));
-  setText(p.statusText, STATUS_TEXT[status] || STATUS_TEXT.unknown);
+  setText(p.statusText, status==='running'&&entry.waiting ? '等待写入' : STATUS_TEXT[status] || STATUS_TEXT.unknown);
   setText(p.arg, entry.summary);
 
   /* +N −M：Git 的数字优先，退回工具自己给的（见 tool-model.statOf） */

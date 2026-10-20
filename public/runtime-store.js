@@ -55,7 +55,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         return { ok: false, reason: 'closed_owner_mismatch' };
       }
       r.item = frame.item; r.owner = null; r.approvals = [];
-      for (const tool of r.tools) if (tool.state === 'running') tool.state = 'interrupted';
+      for (const tool of r.tools) if (['running','waiting'].includes(tool.state)) tool.state = 'interrupted';
       return { ok: true };
     }
     if (frame.type !== 'runtime_event' || frame.owner?.backendInstance !== backend) {
@@ -77,13 +77,14 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (e.type === 'message_update' && e.assistantMessageEvent?.type === 'text_delta') r.text += e.assistantMessageEvent.delta || '';
     if (e.type === 'tool_execution_start') { r.tools.push({ id: e.toolCallId, name: e.toolName, state: 'running' }); if (r.tools.length > 100) r.tools.shift(); }
     if (e.type === 'tool_execution_end') { const t = r.tools.find(t => t.id === e.toolCallId); if (t) t.state = e.isError ? 'error' : 'done'; }
+    if (e.type === 'tool_wait_state') { const t=r.tools.find(t=>t.id===e.toolCallId); if(t&&['running','waiting'].includes(t.state))t.state=e.waiting?'waiting':'running'; }
     if (e.type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(e.method)) {
       r.approvals.push({ id: e.id, method: e.method, title: String(e.title || '').slice(0, 1024), options: Array.isArray(e.options) ? e.options.slice(0, 100).map(String) : [] });
       if (r.approvals.length > 32) r.approvals.shift();
     }
     if (e.type === 'agent_settled' || e.type === 'bridge_status' && e.state !== 'ready' || e.type === 'stop_state' && e.pending === false) {
       r.approvals = [];
-      for (const tool of r.tools) if (tool.state === 'running') tool.state = 'interrupted';
+      for (const tool of r.tools) if (['running','waiting'].includes(tool.state)) tool.state = 'interrupted';
     }
     const bounded = bound(r.text); if (bounded !== r.text) { r.text = bounded; r.truncated = true; }
     return { ok: true };

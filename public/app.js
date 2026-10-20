@@ -66,7 +66,7 @@ import {
   setStreaming,
   syncWelcome,
 } from './messages.js';
-import { onToolEnd, onToolStart, onToolUpdate } from './tools.js';
+import { onToolEnd, onToolStart, onToolUpdate, onToolWait } from './tools.js';
 import { openBranchPanel, setForkHandler } from './tree.js';
 import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
 import { handleFiles, renderAttachments } from './attachments.js';
@@ -89,8 +89,8 @@ import { showChat, showRuntimeConversation, runtimeViewElement, workspaceView } 
 import { createRuntimeConversation } from './runtime-conversation.js';
 import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
-import { setRuntimeFocusHandler, createParallelConversation } from './runtime-nav.js';
-import { refreshRuntimeResources } from './runtime-resources.js';
+import { setRuntimeFocusHandler, createParallelConversation, focusRuntimeById } from './runtime-nav.js';
+import { refreshRuntimeResources, launchRuntimeSession, runtimeLimitNotice } from './runtime-resources.js';
 import { createRuntimeModels } from './runtime-models.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver, seedRuntimeSnapshot, observeRuntimeFrame, refreshRuntimeViews } from './runtime-state.js';
@@ -194,6 +194,23 @@ document.addEventListener('pi-gui:workspace-view', event => {
   void refreshGitNow();
 });
 const sessionNavigation = createSessionNavigation({
+  focusExisting: (session,project) => {
+    const record=runtimeStore.values().find(r=>r.owner&&r.item.nativeSessionId===session?.sessionId&&samePath(r.item.workspace?.cwd,project.path));
+    if (!record) return false;
+    void focusRuntimeById(record.item.conversationId); return true;
+  },
+  openRuntime: async (session,project,text,intent) => {
+    intent.requestId ||= crypto.randomUUID();
+    const result=await launchRuntimeSession({action:'open-session',args:{project:project.path,...(session?{session:session.id}:{requestId:intent.requestId})}},
+      {isExisting:snapshot=>Boolean(session?.sessionId)&&snapshot?.items?.some(item=>item.owner&&item.nativeSessionId===session.sessionId&&samePath(item.workspace?.cwd,project.path))});
+    if (!result?.ok) return {...result,error:runtimeLimitNotice(result)||result?.error||'会话未能打开，输入已保留。'};
+    const record=runtimeStore.get(result.conversationId);
+    const draft=intent.getDraft?.()??text;
+    if (record && draft && !record.draft) {record.draft=draft;record.draftRevision++;}
+    void refreshSidebarSessions();
+    if (intent.isCurrent()) { await focusRuntimeById(result.conversationId); }
+    return result;
+  },
   busy: () => Boolean(S.streaming || S.submitting || S.stopping || S.fallbackActive || approvalSnapshot().pending.length),
   continueSession: async (session, project) => {
     if (!samePath(project.path, S.cwd)) return false;
@@ -387,6 +404,8 @@ function handleEvent(evt) {
       return onMessageEnd(evt);
     case 'tool_execution_start':
       return onToolStart(evt);
+    case 'tool_wait_state':
+      return onToolWait(evt);
     case 'tool_execution_update':
       return onToolUpdate(evt);
     case 'tool_execution_end':

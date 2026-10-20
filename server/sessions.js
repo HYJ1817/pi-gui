@@ -645,7 +645,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
    * 逐渐分叉的代码路径，而分叉出来的那条迟早会漏掉某个收尾动作。
    */
   async function switchToTarget(target) {
-    if (switchBlocked()) return { ok: false, code: 'session_running', error: '原会话仍在后台执行；可以查看其它会话，执行交接需等待当前工作区空闲。' };
+    if (switchBlocked(target)) return { ok: false, code: 'session_running', error: '该执行交接会影响正在运行的会话，请从所属会话入口继续。' };
     if (!rpc || typeof rpc.request !== 'function') return { ok: false, code: 'no-rpc', error: 'pi 未连接，无法切换会话' };
     const res = await rpc.request({ type: 'switch_session', sessionPath: target.file });
     if (!res) return { ok: false, code: 'no-answer', error: 'pi 没有应答（可能正在忙，或子进程未运行）' };
@@ -760,6 +760,11 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     switchTo,
     history,
     historyTarget,
+    resolveProjectSession(id, project) {
+      if (typeof id !== 'string' || !/^[a-f0-9]{16}$/.test(id) || typeof project !== 'string'
+        || !getProjects().some(p => typeof p.path === 'string' && normCwd(p.path) === normCwd(project))) return null;
+      return resolveId(id, project);
+    },
     rename,
     setArchived,
     remove,

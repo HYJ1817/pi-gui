@@ -318,7 +318,7 @@ function writeFileAtomic(file, text) {
  * @param env       环境变量来源，默认 process.env。用来判断哪些开关被环境变量钉住了。
  * @param restartPi 需要重启 pi 时的回调（注入而不是 import，避免与 rpc-bridge 成环）
  */
-export function createProjectConfig({ runtime, env = process.env, restartPi = null }) {
+export function createProjectConfig({ runtime, env = process.env, restartPi = null, instructionsFile = null }) {
   /** 环境变量钉住了哪些开关。只回布尔，绝不回值 —— 免得把模型名甚至密钥漏到前端。 */
   function envPins() {
     const has = (k) => Boolean(String(env[k] || '').trim());
@@ -403,7 +403,7 @@ export function createProjectConfig({ runtime, env = process.env, restartPi = nu
 
     const { config } = read();
     const text = (config && config.instructions) || '';
-    const file = instructionsPath(cwd);
+    const file = instructionsFile || instructionsPath(cwd);
 
     if (!text.trim()) {
       try {
@@ -483,7 +483,7 @@ export function createProjectConfig({ runtime, env = process.env, restartPi = nu
     if (config.thinking && !pins.thinking) out.args.push('--thinking', config.thinking);
 
     if (config.instructions && config.instructions.trim()) {
-      const file = instructionsPath(cwd);
+      const file = instructionsFile || instructionsPath(cwd);
       // 只有文件真的在才传：--append-system-prompt 对不存在的路径会当**字面量文本**
       // 拼进系统提示词（实测），那就等于把一条路径当指令注进去了。
       if (fs.existsSync(file)) out.args.push('--append-system-prompt', file);

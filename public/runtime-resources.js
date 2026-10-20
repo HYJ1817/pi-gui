@@ -11,6 +11,7 @@ export function resourceText(resources = runtimeStore.resources()) {
 }
 export function runtimeLimitNotice(result) {
   if (result?.code === 'runtime_busy') return '此会话已有任务正在执行，草稿已保留；可以切到其它会话继续。';
+  if (result?.code === 'tool_guard_unavailable') return '工具写入协调尚未就绪，请重启应用后再试；输入已保留。';
   if (result?.code === 'runtime_limit') return '运行名额已满。可以打开历史，关闭一个运行中的会话后再恢复，或稍后恢复。';
   if (result?.code === 'cleanup_pending') return '清理未完成，运行名额仍被占用。请等待清理完成后再试。';
   return null;
@@ -20,11 +21,11 @@ export function createResourceLauncher({ read, send, confirm, seed = () => {} })
   const snapshot = async () => { const s = await read(); if (s?.ok !== false) seed(s); return s; };
   const third = s => s?.ok !== false && Number.isInteger(s?.totalCount) && s.totalCount === s.limit && s.totalCount < s.hardLimit;
   const ask = () => confirm({ title: '启动第三个会话？', message: '当前已有两个活动会话。继续将启动第 3 个 Pi 会话，会增加 CPU、内存和模型请求占用。', okText: '继续启动', cancelText: '取消' });
-  const extra = p => p.action === 'start' ? { ...p, args: { ...p.args, allowThird: true } } : { ...p, allowThird: true };
-  return async payload => {
+  const extra = p => ['start','open-session'].includes(p.action) ? { ...p, args: { ...p.args, allowThird: true } } : { ...p, allowThird: true };
+  return async (payload, { isExisting = () => false } = {}) => {
     let approved = false;
     const before = await snapshot();
-    if (third(before)) {
+    if (third(before) && !isExisting(before)) {
       if (await ask() !== true) return { ok: false, cancelled: true };
       approved = true;
     }

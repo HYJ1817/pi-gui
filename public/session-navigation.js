@@ -11,7 +11,7 @@ import { draftKey, hashKey, readDraftText, writeDraftText, removeDraft, DRAFT_MA
 const node = (tag, cls, text) => { const element = document.createElement(tag); if (cls) element.className = cls; if (text != null) element.textContent = text; return element; };
 const primaryBusy = () => Boolean(S.streaming || S.submitting || S.stopping || S.fallbackActive);
 
-export function createSessionNavigation({ continueSession, newSession, createParallel, restoreNewDraft = () => {},
+export function createSessionNavigation({ continueSession, newSession, createParallel, openRuntime = null, focusExisting = null, restoreNewDraft = () => {},
   readHistory = fetchSessionHistory, readSessions = fetchSessions,
   busy = primaryBusy, background = null } = {}) {
   const hasBackground = background || (() => busy() || runtimeStore.values().some(record => record.owner));
@@ -25,6 +25,7 @@ export function createSessionNavigation({ continueSession, newSession, createPar
     project = projectOf(project);
     // This row still owns the untouched classic DOM and its pending approvals.
     if (session?.current && samePath(project.path, S.cwd)) { viewed = null; showChat({ focusComposer: true }); return true; }
+    if (focusExisting?.(session,project)) return true;
     if (!hasBackground()) return false;
     showHistory(session, project, locateUserIndex);
     return true;
@@ -70,7 +71,17 @@ export function createSessionNavigation({ continueSession, newSession, createPar
       };
       label.append(input); card.append(label);
       const actions = node('div', 'ext-bar');
+      const runtimeIntent = {isCurrent:()=>instance.isCurrent(),getDraft:()=>input.value};
       const resume = button(session ? '继续此会话' : '创建此会话', async () => {
+        if (openRuntime) {
+          resume.disabled = true;
+          try {
+            const result = await openRuntime(session,project,input.value,runtimeIntent);
+            if (instance.isCurrent() && result?.ok === false) status.textContent = result.error || '会话未能打开，输入已保留，请重试。';
+          } catch { if (instance.isCurrent()) status.textContent = '会话未能打开，输入已保留，请重试。'; }
+          finally { if (instance.isCurrent()) resume.disabled = false; }
+          return;
+        }
         if (busy()) { status.textContent = '同一工作目录仍有后台任务。可先保留草稿，或在独立工作区新建并行会话。'; return; }
         resume.disabled = true;
         let transfer = null;
@@ -88,6 +99,7 @@ export function createSessionNavigation({ continueSession, newSession, createPar
       const parallel = button('在独立工作区新建并行会话', () => createParallel?.(project));
       actions.append(resume, parallel); card.append(actions);
       if (!session) input.focus();
+      if (openRuntime) queueMicrotask(()=>{if(instance.isCurrent())resume.click();});
     });
   }
 

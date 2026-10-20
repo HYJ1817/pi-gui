@@ -9,13 +9,14 @@ const MAX_PENDING_TURNS = 32;
 const fail = code => Object.assign(Error(code), { code });
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const rootKey = p => process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p);
+const projectWorkspace = w => typeof w?.workspaceId === 'string' && w.workspaceId.startsWith('project-');
 
 // A registry owns lifetimes, not Pi's session schema. All executable adapters and
 // workspace admission/health are injected by the composition root.
 export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, validateWorkspace = async () => {},
   publish = () => {}, externalCount = () => 0, beforeStart = () => null, beforeCommand = () => null,
   admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024,
-  logEvent = null } = {}) {
+  logEvent = null, sharedAdmission = async () => { throw fail('tool_guard_unavailable'); } } = {}) {
   const diagLog = typeof logEvent === 'function' ? logEvent : () => {};
   const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
   const backendInstance = randomUUID(), records = new Map(), lives = new Map(), leases = new Map(), revisions = new Map();
@@ -30,10 +31,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const value = JSON.parse(fs.readFileSync(manifest, 'utf8'));
       if (value.version !== 1 || !Array.isArray(value.items) || value.items.length > 256) throw Error();
       for (const r of value.items) {
-        if (!closed(r, ['conversationId', 'workspace', 'sessionId', 'sessionLocator', 'sessionIdentity', 'sessionName', 'createdAt']) || typeof r.conversationId !== 'string'
+        if (!closed(r, ['conversationId', 'workspace', 'sessionId', 'sessionLocator', 'sessionIdentity', 'sessionName', 'createdAt', 'requestId']) || typeof r.conversationId !== 'string'
           || !/^[\da-f-]{36}$/.test(r.conversationId) || records.has(r.conversationId)
           || !closed(r.workspace, ['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root', 'branch'])
           || (r.sessionName !== undefined && (typeof r.sessionName !== 'string' || r.sessionName.length > 200))
+          || (r.requestId !== undefined && (typeof r.requestId !== 'string' || !/^[\da-f-]{36}$/.test(r.requestId)))
           || (r.sessionIdentity != null && (!closed(r.sessionIdentity, ['dev', 'ino', 'birthtimeMs'])
             || !['dev', 'ino', 'birthtimeMs'].every(k => typeof r.sessionIdentity[k] === 'number' && Number.isFinite(r.sessionIdentity[k]))))
           || !['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root'].every(k => typeof r.workspace[k] === 'string')) throw Error();
@@ -109,7 +111,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   }
   function summary(record) {
     const live = lives.get(record.conversationId);
-    return { conversationId: record.conversationId, workspace: { ...record.workspace },
+    return { conversationId: record.conversationId, workspace: { ...record.workspace }, kind: projectWorkspace(record.workspace) ? 'project' : 'worktree',
       /* P32.4：侧栏要按**创建时间**排会话，且点击不得让行换位。排序键必须来自
        * 后端持久记录（record.createdAt），不能由前端按「最近活动」猜 ——
        * 那正是「点一下行就跳位置」的来源。 */
@@ -152,6 +154,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     if (event.type === 'agent_start') { live.agentActive = true; if (live.activity !== 'stopping') live.activity = 'running'; }
     if (event.type === 'agent_settled') { live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); if (live.activity !== 'stopping') live.activity = 'idle'; if (focused !== live.record.conversationId) live.attention = true; }
+    if (event.type === 'agent_settled') void refreshSession(live).catch(()=>{if(belongs(live)){live.error='session_state_unconfirmed';changed(live);}});
     // A response settles only its captured request. Other requests may still be
     // awaiting acknowledgement, even before the first agent_start arrives.
     if (event.type === 'response' && typeof event.success === 'boolean' && TURNS.has(event.command) && live.pendingTurns.get(event.id) === event.command) {
@@ -198,7 +201,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.record.sessionId = state.sessionId; live.record.sessionLocator = locator;
     live.record.sessionIdentity = null;
     if (locator) try { const st = fs.statSync(locator); live.record.sessionIdentity = { dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs }; } catch {}
-    if (typeof state.sessionName === 'string') live.record.sessionName = state.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
+    if (typeof state.sessionName === 'string' && (state.sessionName.trim() || !projectWorkspace(live.record.workspace))) live.record.sessionName = state.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
     try { save(); } catch { live.error = 'metadata_write_failed'; }
     changed(live);
   }
@@ -207,12 +210,19 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!options.workspaceChecked) await validateWorkspace(record.workspace); guardStore();
     if (beforeStart()) throw fail(beforeStart());
     const key = rootKey(fs.realpathSync(record.workspace.root));
-    if (leases.has(key)) throw fail('workspace_in_use');
+    const occupants = leases.get(key);
+    if (!projectWorkspace(record.workspace)) { if (occupants?.size) throw fail('workspace_in_use'); }
+    else {
+      if (occupants && [...occupants].some(l => !projectWorkspace(l.record.workspace))) throw fail('workspace_in_use');
+      await sharedAdmission(record.workspace, [...lives.values()].map(l => ({ workspace:l.record.workspace, adapter:l.adapter })));
+      guardStore();
+    }
     const total = lives.size + externalCount();
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
       sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map() };
-    leases.set(key, live); lives.set(record.conversationId, live); changed(live);
+    if (!leases.has(key)) leases.set(key, new Set());
+    leases.get(key).add(live); lives.set(record.conversationId, live); changed(live);
     try {
       live.adapter = await factory({ cwd: record.workspace.cwd, workspace: { ...record.workspace }, owner: owner(live),
         sessionId: record.sessionId, sessionLocator: record.sessionLocator, isCurrent: () => belongs(live), getOwner: () => owner(live) }, event => emit(live, event));
@@ -222,7 +232,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     } catch (e) {
       live.lifecycle = 'error'; live.error = 'runtime_start_failed';
       safeLog('runtime.start_failed', { phase: 'factory', code: e && e.code ? e.code : 'runtime_start_failed' });
-      if (!live.adapter) { lives.delete(record.conversationId); leases.delete(key); }
+      if (!live.adapter) { lives.delete(record.conversationId); leases.get(key)?.delete(live); if (!leases.get(key)?.size) leases.delete(key); }
       else await retire(live).catch(() => {});
       throw fail(e.code || 'runtime_start_failed');
     }
@@ -237,6 +247,30 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       try { return await launchRecord(record, { ...args, workspaceChecked: Boolean(admitted) }); }
       catch (e) { if (!lives.has(record.conversationId)) records.delete(record.conversationId); save(); throw e; }
     }));
+  }
+  // Backend-only input: HTTP callers cannot provide workspace paths or native
+  // locators. The ordinary-session resolver must prove them before this method.
+  function openProjectSession({ workspace, sessionId = null, sessionLocator = null, sessionIdentity = null, sessionName = '', requestId }, options = {}) {
+    return serialize(async () => {
+      guardStore();
+      if (!projectWorkspace(workspace)) throw fail('invalid_request');
+      await validateWorkspace(workspace);
+      let record = [...records.values()].find(r => r.workspace.workspaceId === workspace.workspaceId
+        && r.workspace.workspaceEpoch === workspace.workspaceEpoch && (sessionId ? r.sessionId === sessionId : requestId && r.requestId === requestId));
+      if (record && lives.has(record.conversationId)) {
+        const live = lives.get(record.conversationId);
+        if (live.retired) throw fail('cleanup_pending');
+        return {ok:true,conversationId:record.conversationId,owner:owner(live),item:summary(record)};
+      }
+      const fresh = !record;
+      if (fresh) {
+        if (records.size >= 256) throw fail('conversation_limit');
+        record = {conversationId:randomUUID(),workspace,sessionId,sessionLocator,sessionIdentity,sessionName:String(sessionName).slice(0,200),createdAt:new Date().toISOString(),...(requestId?{requestId}:{})};
+        records.set(record.conversationId,record); save();
+      }
+      try { return await launchRecord(record,options); }
+      catch(e) { if (fresh && !lives.has(record.conversationId)) {records.delete(record.conversationId);save();} throw e; }
+    });
   }
   function resume(id, options = {}) {
     return serialize(async () => { const record = records.get(id); if (!record) throw fail('unknown_conversation');
@@ -288,7 +322,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!['get_state', 'get_messages', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands'].includes(cmd?.type)) throw fail('invalid_command');
     const live = resolve(expected); await validateWorkspace(live.record.workspace); resolve(expected);
     const result = await live.adapter.request(cmd); resolve(expected);
-    if (cmd.type === 'get_state' && result?.sessionId === live.sessionId && typeof result.sessionName === 'string') {
+    if (cmd.type === 'get_state' && result?.sessionId === live.sessionId && typeof result.sessionName === 'string' && (result.sessionName.trim() || !projectWorkspace(live.record.workspace))) {
       const name = result.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
       if (live.record.sessionName !== name) { live.record.sessionName = name; save(); changed(live); }
     }
@@ -335,7 +369,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const cleanup = await Promise.allSettled([invalidateResources(live), Promise.resolve().then(() => live.adapter?.dispose())]);
       if (cleanup.some(result => result.status === 'rejected')) throw fail('cleanup_pending');
       if (live.adapter?.cleanupConfirmed && !live.adapter.cleanupConfirmed()) throw fail('cleanup_pending');
-      if (leases.get(live.key) === live) leases.delete(live.key);
+      leases.get(live.key)?.delete(live); if (!leases.get(live.key)?.size) leases.delete(live.key);
       if (lives.get(live.record.conversationId) === live) lives.delete(live.record.conversationId);
       if (focused === live.record.conversationId && !lives.has(live.record.conversationId)) { focused = null; contextRevision++; }
       touch(live);
@@ -351,7 +385,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   async function invalidateWorkspace(id) { const results = await Promise.allSettled([...lives.values()].filter(l => l.record.workspace.workspaceId === id).map(l => retire(l))); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
   async function healthCheck() { for (const live of [...lives.values()]) { try { await validateWorkspace(live.record.workspace); } catch { await retire(live).catch(() => {}); } } }
   async function dispose() { disposed = true; await queue.catch(() => {}); const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
-  return { start, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
+  return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
+    ownsNativeSession: id => Boolean(id) && [...lives.values()].some(l => l.sessionId === id || l.record.sessionId === id),
     contextRevision: () => contextRevision,
     inUse: root => leases.has(rootKey(root)), liveCount: () => lives.size, runningCount: () => [...lives.values()].filter(l => l.activity !== 'idle').length,
     busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready'),
