@@ -15,18 +15,141 @@
  * 用法：
  *   node tests/ui2-visual.cjs              # 跑完即收口，exit code=fail 数
  *   node tests/ui2-visual.cjs --keep       # 保留 Chrome / harness 进程手测
- *   UI2C_CHROME=... UI2C_CDP_PORT=9226     # 可覆盖 Chrome 路径与调试端口 */
-const { spawn } = require('node:child_process');
+ *   UI2C_CHROME=... UI2C_CDP_PORT=9226     # 可覆盖 Chrome 路径与调试端口；
+ *                                           # 未指定端口时由 Chrome 自动分配 */
+const { execFileSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const CHROME = process.env.UI2C_CHROME || process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const CDP_PORT = Number(process.env.UI2C_CDP_PORT || 9226);
+const BROWSER_CANDIDATES = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/microsoft-edge',
+];
+
+function findBrowser() {
+  const explicit = process.env.UI2C_CHROME || process.env.CHROME_PATH;
+  if (explicit) return explicit;
+  for (const candidate of BROWSER_CANDIDATES) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  const commands = process.platform === 'win32'
+    ? [['where.exe', ['chrome.exe']], ['where.exe', ['msedge.exe']]]
+    : [['which', ['google-chrome']], ['which', ['chromium']], ['which', ['microsoft-edge']]];
+  for (const [command, args] of commands) {
+    try {
+      const found = execFileSync(command, args, { encoding: 'utf8', windowsHide: true })
+        .split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+      if (found && fs.existsSync(found)) return found;
+    } catch { /* 该浏览器不在 PATH 中 */ }
+  }
+  return null;
+}
+
+const CHROME = findBrowser();
 const OUT = process.env.UI2_VISUAL_EVIDENCE || path.join(__dirname, '..', '.shots', 'ui2-visual');
 const KEEP = process.argv.includes('--keep');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function configuredCdpPort() {
+  const raw = process.env.UI2C_CDP_PORT;
+  if (raw === undefined || raw === '') return 0;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`UI2C_CDP_PORT 必须是 1-65535 的整数，实际为 ${JSON.stringify(raw)}`);
+  }
+  return port;
+}
+
+function tail(text, limit = 4000) {
+  const value = String(text || '').trim();
+  return value.length > limit ? '…' + value.slice(-limit) : value;
+}
+
+function browserDiagnostic({ profile, requestedPort, actualPort, exit, spawnError, stdout, stderr }) {
+  const details = [
+    `profile=${profile}`,
+    `requestedPort=${requestedPort}`,
+    `actualPort=${actualPort || 'unknown'}`,
+    `exit=${exit ? `code=${exit.code},signal=${exit.signal}` : 'none'}`,
+  ];
+  if (spawnError) details.push(`spawnError=${spawnError}`);
+  if (tail(stdout)) details.push(`stdout=${tail(stdout)}`);
+  if (tail(stderr)) details.push(`stderr=${tail(stderr)}`);
+  return details.join('\n');
+}
+
+async function launchCdpBrowser(requestedPort) {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-ui2-visual-'));
+  if (path.dirname(profile) !== path.resolve(os.tmpdir())) {
+    throw new Error('unexpected fixture profile parent');
+  }
+
+  const args = [
+    '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
+    '--no-default-browser-check', '--disable-sync', '--disable-component-update',
+    '--disable-background-networking', '--disable-default-apps', '--metrics-recording-only',
+    '--hide-scrollbars', '--remote-debugging-address=127.0.0.1',
+    `--remote-debugging-port=${requestedPort}`,
+    `--user-data-dir=${profile}`,
+    '--window-size=1440,900', 'about:blank',
+  ];
+  const chrome = spawn(CHROME, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  let stdout = '';
+  let stderr = '';
+  let exit = null;
+  let spawnError = null;
+  chrome.stdout.on('data', (chunk) => { stdout = tail(stdout + chunk, 12000); });
+  chrome.stderr.on('data', (chunk) => { stderr = tail(stderr + chunk, 12000); });
+  chrome.once('exit', (code, signal) => { exit = { code, signal }; });
+  chrome.once('error', (error) => { spawnError = error.message; });
+
+  const devToolsPortFile = path.join(profile, 'DevToolsActivePort');
+  let actualPort = requestedPort;
+  let lastTargets = null;
+  for (let i = 0; i < 75; i++) {
+    if (exit || spawnError) break;
+    if (!actualPort) {
+      try {
+        const firstLine = fs.readFileSync(devToolsPortFile, 'utf8').split(/\r?\n/, 1)[0];
+        const parsed = Number(firstLine);
+        if (Number.isInteger(parsed) && parsed > 0) actualPort = parsed;
+      } catch { /* Chrome 尚未写出 DevToolsActivePort */ }
+    }
+    if (actualPort) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${actualPort}/json/list`);
+        lastTargets = await response.json();
+        const page = lastTargets.find((target) => target.type === 'page');
+        if (page) return { chrome, page, profile, actualPort };
+      } catch { /* DevTools HTTP 端点尚未就绪 */ }
+    }
+    await sleep(200);
+  }
+
+  const diagnostic = browserDiagnostic({
+    profile, requestedPort, actualPort, exit, spawnError, stdout, stderr,
+  });
+  try { chrome.kill(); } catch {}
+  fs.rmSync(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 });
+  const targetSummary = Array.isArray(lastTargets)
+    ? lastTargets.map((target) => target.type).join(', ') || '(empty)'
+    : '(endpoint unavailable)';
+  throw new Error(`拿不到 DevTools page target（targets=${targetSummary}）\n${diagnostic}`);
+}
 
 let evalJs = null; /* 页面求值函数，main() 里接上 */
 const KEYFRAME_FADE = 'ui2-fade-in';
@@ -44,10 +167,13 @@ async function expect(label, expr) {
 }
 
 async function main() {
+  if (!CHROME) {
+    throw new Error('找不到可用于 CDP 的 Chromium 浏览器。设置 UI2C_CHROME/CHROME_PATH，或安装 Chrome/Edge。已检查: ' +
+      BROWSER_CANDIDATES.join(', '));
+  }
   fs.mkdirSync(OUT, { recursive: true });
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-ui2-visual-'));
-  if (path.dirname(profile) !== path.resolve(os.tmpdir())) throw new Error('unexpected fixture profile parent');
-  let chrome, closeWs = () => {};
+  const requestedPort = configuredCdpPort();
+  let chrome, profile, actualPort, closeWs = () => {};
 
   /* ---- 1. Offline HTTP 夹具：随机端口，进程结束时收掉 ---- */
   const harness = spawn(process.execPath, [path.join(__dirname, 'visual-harness.cjs')], {
@@ -66,29 +192,22 @@ async function main() {
   });
   console.log('夹具: ' + url);
   try {
-    /* ---- 2. 无头 Chrome + DevTools 协议（headless=new 下窗口参数即视口） ---- */
-    chrome = spawn(
-      CHROME,
-      [
-        '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
-        '--disable-sync', '--hide-scrollbars', `--remote-debugging-port=${CDP_PORT}`,
-        `--user-data-dir=${profile}`,
-        '--window-size=1440,900', 'about:blank',
-      ],
-      { stdio: 'ignore', windowsHide: true }
-    );
-    chrome.on('error', (e) => { console.error('Chrome 启动失败: ' + e.message); process.exitCode = 1; });
-    let targets = null;
-    for (let i = 0; i < 60; i++) {
-      await sleep(300);
+    /* ---- 2. 无头 Chrome + DevTools 协议。默认让 Chrome 分配空闲端口，
+           避免 Runner 上固定端口被占用；仍保留 UI2C_CDP_PORT 覆盖能力。 ---- */
+    console.log('浏览器: ' + CHROME);
+    let page;
+    let startupFailure;
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const r = await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`);
-        targets = await r.json();
-        if (targets.some((t) => t.type === 'page')) break;
-      } catch { /* 还没起来 */ }
+        ({ chrome, page, profile, actualPort } = await launchCdpBrowser(requestedPort));
+        break;
+      } catch (error) {
+        startupFailure = error;
+        console.error(`Chrome/CDP 启动失败（第 ${attempt}/2 次）\n` + error.message);
+        if (attempt === 2) throw startupFailure;
+      }
     }
-    const page = targets && targets.find((t) => t.type === 'page');
-    if (!page) throw new Error('拿不到 DevTools page target');
+    console.log(`CDP: http://127.0.0.1:${actualPort}/`);
 
     let send = null;
     await new Promise((res, rej) => {
@@ -134,11 +253,13 @@ async function main() {
       closeWs();
       try { chrome?.kill(); } catch {}
       try { harness.kill(); } catch {}
-      fs.rm(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {});
+      if (profile) {
+        fs.rm(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {});
+      }
     }
   }
 
-  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ passed, failed, claims, cdpPort: CDP_PORT, out: OUT }, null, 2));
+  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ passed, failed, claims, browser: CHROME, cdpPort: actualPort, out: OUT }, null, 2));
   console.log(`\nUI-2C 视觉自检: ${passed}/${passed + failed} 通过 —— 报告: ` + path.join(OUT, 'report.json'));
   if (failed) process.exitCode = 1;
 }
