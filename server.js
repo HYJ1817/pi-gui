@@ -63,6 +63,9 @@ import { createSessionChangeStore } from './server/session-change-store.js';
 import { createSessionChangeBridge } from './server/session-change-bridge.js';
 import { createSessionRevertRoutes } from './server/session-revert-routes.js';
 import { createSessionEvidenceAdmission } from './server/session-evidence-admission.js';
+import { createSessionToolScheduler } from './server/session-tool-scheduler.js';
+import { createSessionToolBridge } from './server/session-tool-bridge.js';
+import { createOrdinarySessions, isProjectWorkspace, rootsOverlap, toolWorkspaceRoot } from './server/ordinary-sessions.js';
 import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
 import { inspectFileMetadata } from './server/session-revert-metadata.js';
@@ -301,6 +304,10 @@ let primaryNativeSession = null;
 let cliInFlight = 0;
 const processManagers = new Set();
 const mutationAdmission = createSessionRevertAdmission();
+const toolScheduler = createSessionToolScheduler({admission:mutationAdmission});
+const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch:piLaunch,getCwd:()=>runtime.getCurrentCwd(),
+  getRoot:()=>toolWorkspaceRoot(runtime.getCurrentCwd()),readState:()=>rpc.request({type:'get_state'}),
+  onEvent:event=>sse.publish({...event,legacyOwner:primaryOwner()})});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
 const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission,mutationAdmission});
@@ -373,6 +380,7 @@ const rpc = createRpcBridge({
     /* 主会话活动状态：真实事件语义见 server/pi-activity.js 的文件头。
      * 这里只转发，规则只有一份（可测）。 */
     piActivity.observe(event);
+    primaryToolGuard.observe(event);
     for (const listener of authRuntimeListeners) listener(event);
     providerAuthRef?.observeRuntime(event);
     sse.publish({ ...modelGeneration.observe(event?.type === 'extension_error'
@@ -384,6 +392,7 @@ const rpc = createRpcBridge({
   isWin: IS_WIN,
   projectLaunch: projectConfig,
   compat: piCompat,
+  toolLaunch: primaryToolGuard,
 });
 
 /* 依赖方向：projects → rpc 通过**注入回调**表达，而不是 import ——
@@ -453,7 +462,7 @@ const gitRoutes = createGitRoutes({
     if (id === undefined) return action(null);
     const identity = typeof id === 'string' && id ? runtimeRegistryRef?.workspaceIdentityOf?.(id) : null;
     if (!identity) throw Object.assign(Error('unknown_conversation'), { code: 'unknown_conversation' });
-    return worktrees.withWorkspace(identity, workspace => action(workspace.root));
+    return withWorkspaceIdentity(identity, workspace => action(workspace.root));
   },
 });
 
@@ -567,6 +576,8 @@ const sessions = createSessions({
   compat: piCompat,
   extraSessionRoots: [PLANNER_SESSION_DIR],
   getProjects: () => projects.read().items,
+  readHistory: (file, expected) => readSessionMessages(file, { expected }),
+  switchBlocked: target => Boolean(piActivity.busy() || rpc.stopState()?.pending || runtimeRegistryRef?.ownsNativeSession(target?.sessionId)),
 });
 
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
@@ -858,6 +869,13 @@ const providerAuth = providerAuthRef = createProviderAuth({
 });
 
 const runtimeBrowser = createRuntimeBrowserGateway();
+const ordinarySessions = createOrdinarySessions({getProjects:()=>projects.read().items,sessions,getRegistry:()=>runtimeRegistryRef,
+  currentNative:async()=>runtime.getCurrentCwd() ? (await rpc.request({type:'get_state'}))?.sessionId : null});
+function withWorkspaceIdentity(identity, action) {
+  return typeof identity?.id === 'string' && identity.id.startsWith('project-')
+    ? ordinarySessions.withWorkspace(identity,action) : worktrees.withWorkspace(identity,action);
+}
+const conversationWorkspaces = {withWorkspace:withWorkspaceIdentity};
 const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   dataDir: DATA_DIR, publish: sse.publish,
   logEvent: (event, details) => logging.log('runtime', event, details),
@@ -874,14 +892,27 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     return action(workspace);
   }),
   resolveWorkspace: args => worktrees.withWorkspace(args, workspace => workspace),
-  validateWorkspace: workspace => worktrees.withWorkspace({ id: workspace.workspaceId, epoch: workspace.workspaceEpoch }, () => {}),
+  validateWorkspace: workspace => isProjectWorkspace(workspace) ? ordinarySessions.validate(workspace)
+    : worktrees.withWorkspace({ id: workspace.workspaceId, epoch: workspace.workspaceEpoch }, () => {}),
+  sharedAdmission: async (workspace, others) => {
+    for (const other of others) if (rootsOverlap(other.workspace.root,workspace.root)) {
+      if (!isProjectWorkspace(other.workspace)) throw Object.assign(Error('workspace_in_use'),{code:'workspace_in_use'});
+      if (!other.adapter?.toolGuard?.ready(other.workspace.cwd)) throw Object.assign(Error('tool_guard_unavailable'),{code:'tool_guard_unavailable'});
+    }
+    const cwd=runtime.getCurrentCwd();
+    if (cwd && rootsOverlap(await toolWorkspaceRoot(cwd),workspace.root)) {
+      await primaryToolGuard.assertReady();
+      const state=await rpc.request({type:'get_state'});
+      if (!primaryToolGuard.ready(cwd,state?.sessionId)) throw Object.assign(Error('tool_guard_unavailable'),{code:'tool_guard_unavailable'});
+    }
+  },
   onFocus: async owner => { if (!owner) { await runtimeBrowser.focus(null); return; } const { repoId, ...scope } = owner; await runtimeBrowser.focus(scope); },
   factory: async (context, emit) => {
     const launch = createPiLaunch({ piBin: PI_BIN, env: process.env, getCwd: () => context.cwd });
     const browser = await runtimeBrowser.allocate(launch, context.owner);
     let adapter;
     try { adapter = await createSessionRuntime({ context, emit, piBin: PI_BIN, env: process.env, dataDir: DATA_DIR,
-      guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission,
+      guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission, toolScheduler,
       createChanges: ({ launch, context, requestState }) => createSessionChangeBridge({ store: getEvidenceStore, launch,
         admission: mutationAdmission, inspectFileMetadata, inspectObjectEvidence:observeFileObject,
         notify: event => emit(event),
@@ -896,7 +927,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
           if (!context.isCurrent() || !state?.sessionId || state.__error || owner.sessionId !== state.sessionId) throw Error('stale_runtime');
           return evidenceScope(owner, state.sessionId);
         },
-        withAuthority: action => worktrees.withWorkspace({ id: context.workspace.workspaceId, epoch: context.workspace.workspaceEpoch }, async workspace => {
+        withAuthority: action => withWorkspaceIdentity({ id: context.workspace.workspaceId, epoch: context.workspace.workspaceEpoch }, async workspace => {
           if (!context.isCurrent()) throw Error('stale_runtime'); return action(workspace);
         }),
       }),
@@ -909,7 +940,8 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   },
 });
 const runtimeRoutes = createRuntimeRoutes({ registry: runtimeRegistry,
-  validateWorkspace: owner => worktrees.withWorkspace({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}),
+  openSession:args=>ordinarySessions.open(args),
+  validateWorkspace: owner => withWorkspaceIdentity({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}),
   /* P32.4：只读历史。目标路径来自 registry 记录（后端持有、绑定时已证明），
    * Renderer 只给 conversationId —— 不接受任何来自前端的路径。 */
   readHistory: (locator, target) => readSessionMessages(locator, { expected: target }) });
@@ -926,9 +958,9 @@ function primaryOwner() {
 
 const revertAuthority = createSessionRevertAuthority({ classicBridge:sessionChanges, classicOwner:primaryOwner,
       classicNativeState:()=>rpc.request({type:'get_state'}), classicBusy:()=>Boolean(piActivity.busy() || rpc.getState().stop?.pending),
-      registry:runtimeRegistry, worktrees });
+      registry:runtimeRegistry, worktrees:conversationWorkspaces, classicRoot:()=>runtime.getCurrentCwd() });
 const revertMutationAuthority = createSessionRevertMutationAuthority({ withAuthority: revertAuthority, admission: mutationAdmission,
-  stopAndDrain: createSessionRevertStopAndDrain({ admission:mutationAdmission, registry:runtimeRegistry, worktrees,
+  stopAndDrain: createSessionRevertStopAndDrain({ admission:mutationAdmission, registry:runtimeRegistry, worktrees:conversationWorkspaces,
     classic:{ root:()=>runtime.getCurrentCwd(), blocked:()=>Boolean(plannerRef?.projectSwitchBlockReason()||cliInFlight),
       manager:managedProcesses.manager, abort:command=>rpc.abortAndWait(command) } }) });
 const route = createRouter({
@@ -950,7 +982,7 @@ const route = createRouter({
         if (!item?.owner) {
           const target = runtimeRegistry.historyTarget(conversationId), identity = runtimeRegistry.workspaceIdentityOf(conversationId);
           if (!target?.sessionId || !identity) return json(res, 409, { ok: false, code: 'no_evidence' });
-          return await worktrees.withWorkspace(identity, async workspace => {
+          return await withWorkspaceIdentity(identity, async workspace => {
             const stat = fs.statSync(workspace.root);
             const summary = await (await getEvidenceStore()).summaryPersistent({ projectId: workspace.projectId, repoId: workspace.repoId,
               workspaceId: workspace.workspaceId, workspaceEpoch: workspace.workspaceEpoch, conversationId, nativeSessionId: target.sessionId,
@@ -982,6 +1014,7 @@ const route = createRouter({
     ...rpc,
     getState: () => ({ ...rpc.getState(), legacyOwner: primaryOwner() }),
     send: (cmd) => {
+      if (['new_session', 'switch_session', 'fork'].includes(cmd.type) && (piActivity.busy() || rpc.stopState()?.pending || cmd.type==='switch_session'&&runtimeRegistry.liveCount())) throw new Error('session_running');
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
       if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
       modelGeneration.guardCommand(cmd);
@@ -989,6 +1022,7 @@ const route = createRouter({
       const result = rpc.send(wire);
       modelGeneration.noteCommandAccepted(cmd);
       piActivity.noteCommandAccepted(cmd);
+      if (['prompt','steer','follow_up'].includes(cmd.type)) primaryToolGuard.resume();
       return result;
     },
     abortAndWait: (cmd) => {
@@ -1036,6 +1070,7 @@ async function shutdown() {
   runtime.setShuttingDown(true);
   clearInterval(runtimeHealthTimer);
   await sessionChanges.dispose();
+  await primaryToolGuard.dispose();
   try { await runtimeRegistry.dispose(); } catch { /* Owned guardians also stop on backend EOF. */ }
   worktrees.dispose();
   /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted

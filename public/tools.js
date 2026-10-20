@@ -150,6 +150,12 @@ export function onToolUpdate(evt) {
   schedulePaint(rec);
   startTicker();
 }
+export function onToolWait(evt) {
+  const rec=S.tools.get(evt.toolCallId);
+  if (!rec || rec.entry.status!=='running') return;
+  rec.entry.waiting=evt.waiting===true;
+  updateEntry(rec.node,rec.entry);
+}
 
 export function onToolEnd(evt) {
   const rec = S.tools.get(evt.toolCallId);

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { createRuntime } from './runtime.js';
 import { createPiLaunch } from './pi-launch.js';
 import { createRpcBridge } from './rpc-bridge.js';
@@ -14,6 +15,7 @@ import { projectProcessEvent } from './process-activity.js';
 import { resolveExecutable } from './process-runner.js';
 import { isSea } from '../lib/assets.js';
 import { randomUUID } from 'node:crypto';
+import { createSessionToolBridge } from './session-tool-bridge.js';
 
 const fail = code => Object.assign(Error(code), { code });
 // This narrow surface projects tool activity. Raw args/result/worker diagnostics
@@ -44,7 +46,7 @@ export function projectRuntimeEvent(event) {
 
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
-  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null } = {}) {
+  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null, toolScheduler = null } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -55,9 +57,15 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const supervisor = supervisorFactory({ node });
   const activity = createPiActivity(), generation = createModelGeneration(), approvals = new Map();
   let rpc, disposed = false, cleanup = false, disposal = null;
+  const toolGuard = toolScheduler ? createSessionToolBridge({scheduler:toolScheduler,launch,getCwd:()=>context.cwd,getRoot:()=>context.workspace.root,
+    readState:()=>rpc.request({type:'get_state'}),onEvent:emit}) : null;
   const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission, mutationAdmission });
   const changes = createChanges?.({ runtime, launch, context, requestState: () => rpc.request({ type: 'get_state' }) }) || null;
-  const config = createProjectConfig({ runtime, env, restartPi: () => rpc.restart() });
+  // Another session may be writing this same project. Its launch must not
+  // synchronize a shared project instruction file outside the tool queue.
+  const promptDir = context.workspace?.workspaceId?.startsWith('project-') ? fs.mkdtempSync(path.join(os.tmpdir(),'pi-gui-runtime-prompt-')) : null;
+  const promptFile = promptDir ? path.join(promptDir,'instructions.md') : null;
+  const config = createProjectConfig({ runtime, env, restartPi: () => rpc.restart(), instructionsFile:promptFile });
   const sessions = createSessions({ runtime, env, dataDir, extraSessionRoots: sessionDir ? [sessionDir] : [] });
   const launchOptions = { ...config, launchArgs() { const value = config.launchArgs(); return { ...value, args: [...value.args, ...(sessionDir ? ['--session-dir', sessionDir] : []), ...extraArgs] }; },
     prepareLaunch() { const value = config.prepareLaunch(); return { ...value, args: [...value.args, ...(sessionDir ? ['--session-dir', sessionDir] : []), ...extraArgs] }; } };
@@ -72,12 +80,13 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   rpc = createRpcBridge({ runtime, launch: { ...launch, bin: node }, piBin: node, isWin: false,
     autoRestart: false,
     env: { ...env, ELECTRON_RUN_AS_NODE: '1', PI_NO_CONTINUE: '1' }, projectLaunch: launchOptions,
-    browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes,
+    browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes, toolLaunch: toolGuard,
     spawnProcess: (_command, args, opts) => supervisor.spawnProcess(node, [...entry.baseArgs, ...args], { ...opts, shell: false }),
     killProcessTree: supervisor.killProcessTree,
     publish(event) {
       if (disposed || !context.isCurrent()) return;
       managed.observe(event); changes?.observe(event); activity.observe(event);
+      toolGuard?.observe(event);
       if (event.type === 'extension_ui_request' && typeof event.id === 'string') {
         if (approvals.size >= 32) approvals.delete(approvals.keys().next().value);
         approvals.set(event.id, event.method);
@@ -102,6 +111,10 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     },
     async send(cmd) {
       if (disposed || !context.isCurrent()) throw fail('stale_runtime');
+      if (context.workspace?.workspaceId?.startsWith('project-') && ['prompt','steer','follow_up'].includes(cmd.type)) {
+        if (!toolGuard) throw fail('tool_guard_unavailable');
+        await toolGuard.assertReady();
+      }
       if (changes && cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') return changes.disable();
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && !(cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable')) await changes?.assertReady();
       if (disposed || !context.isCurrent()) throw fail('stale_runtime');
@@ -113,9 +126,11 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       generation.guardCommand(cmd);
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type)) mutationAdmission?.assertAllowed(context.cwd);
       const { __fallbackOwner, ...wire } = cmd;
-      const result = rpc.send(wire); generation.noteCommandAccepted(cmd); activity.noteCommandAccepted(cmd); return result;
+      const result = rpc.send(wire); generation.noteCommandAccepted(cmd); activity.noteCommandAccepted(cmd);
+      if (['prompt','steer','follow_up'].includes(cmd.type)) toolGuard?.resume();
+      return result;
     },
-    abortAndWait: cmd => rpc.abortAndWait(cmd), activity, managed, changes,
+    abortAndWait: cmd => rpc.abortAndWait(cmd), activity, managed, changes, toolGuard,
     async sessionLocator(state) {
       const target = sessions.resolveByUuid(state.sessionId);
       return target && (!state.sessionFile || path.resolve(target.file) === path.resolve(state.sessionFile)) ? fs.realpathSync(target.file) : null;
@@ -125,8 +140,10 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       if (disposal) return disposal;
       disposed = true; runtime.setShuttingDown(true); rpc.stop();
       disposal = (async () => {
-        await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.(), changes?.dispose()]);
+        await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.(), changes?.dispose(), toolGuard?.dispose()]);
         changes?.confirmWritersStopped();
+        toolGuard?.confirmCleanup();
+        if (promptFile) { try { fs.rmSync(promptFile,{force:true});fs.rmdirSync(promptDir); } catch { /* only owned temporary prompt files */ } }
         cleanup = true;
       })(); return disposal;
     },

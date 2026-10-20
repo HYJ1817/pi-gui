@@ -97,6 +97,7 @@ export function createRpcBridge({
   browserLaunch = null,
   processLaunch = null,
   sessionChangeLaunch = null,
+  toolLaunch = null,
   compat = null,
   spawnProcess = spawn,
   /* 进程树终止原语（**注入**，见文件头的说明）。Windows 上 `child.kill()`
@@ -348,13 +349,20 @@ export function createRpcBridge({
         if (generation !== launchGeneration || runtime.isShuttingDown() || maintenance || runtime.getCurrentCwd() !== cwd) return;
         starting = false;
       }
-      child = spawnPi(launchBin, [...args,...(browser?.args||[]),...(managed?.args||[]),...(changes?.args||[])], {env:{...(browser?.env||{}),...(managed?.env||{}),...(changes?.env||{})}});
+      let tools = null;
+      if (toolLaunch?.available()) {
+        starting = true; tools = await toolLaunch.prepare();
+        if (generation !== launchGeneration || runtime.isShuttingDown() || maintenance || runtime.getCurrentCwd() !== cwd) return;
+        starting = false;
+      }
+      child = spawnPi(launchBin, [...args,...(browser?.args||[]),...(managed?.args||[]),...(changes?.args||[]),...(tools?.args||[])], {env:{...(browser?.env||{}),...(managed?.env||{}),...(changes?.env||{}),...(tools?.env||{})}});
       pi = child;
     } catch (err) {
       starting = false;
       browserLaunch?.invalidate({disable:true,revoke:true});
       processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       sessionChangeLaunch?.invalidate().catch(()=>{});
+      toolLaunch?.invalidate();
       restartRequested = false;
       safeLog('bridge.start_failed', { phase: 'spawn', reason: 'spawn_error' });
       publish({ type: 'bridge_status', state: 'error', error: '无法启动 pi。', hint: '确认 pi 已安装并在 PATH 中，或检查 PI_BIN 配置。', cwd, bridgeRun: run });
@@ -375,6 +383,7 @@ export function createRpcBridge({
       browserLaunch?.invalidate({disable:true,revoke:true});
       processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       sessionChangeLaunch?.invalidate().catch(()=>{});
+      toolLaunch?.invalidate();
       restartRequested = false;
       safeLog('bridge.start_failed', { phase: 'process', reason: 'process_error' });
       publish({
@@ -491,6 +500,7 @@ export function createRpcBridge({
       browserLaunch?.invalidate({disable:true,revoke:true});
       processLaunch?.invalidate({disable:true,revoke:true}).catch(()=>{});
       sessionChangeLaunch?.invalidate().catch(()=>{});
+      toolLaunch?.invalidate();
       pi = null;
       /* 进程没了：旧 run 不可能还在跑，停止屏障随之作废
        * （否则一次没等到应答的停止会把界面永久锁死）。 */
@@ -707,6 +717,7 @@ export function createRpcBridge({
 
   /** 一次停止的全过程。**不抛** —— 结果通过 run.report / run.done 给出去。 */
   async function runStop(run) {
+    toolLaunch?.pause();
     if (processLaunch?.available()) {
       try { await processLaunch.invalidate({strict:true}); }
       catch { run.resolveReport({ok:false,code:'process_cancel_unconfirmed',error:'Pi 已收到停止请求，但开发进程动作取消确认不可用。'}); }

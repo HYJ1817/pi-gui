@@ -431,7 +431,7 @@ async function main() {
     approval.observeApprovalEvent(request({ id: 'focus1' }), S);
     assert.equal(document.activeElement, buttonByText(card(), '拒绝'));
     key('Tab', { shiftKey: true });
-    assert.equal(document.activeElement, buttonByText(card(), '允许一次'), 'Shift+Tab 从第一个绕到最后一个');
+    assert.equal(document.activeElement, buttonByText(card(), '稍后处理'), 'Shift+Tab 从第一个绕到最后一个');
     key('Tab');
     assert.equal(document.activeElement, buttonByText(card(), '拒绝'), 'Tab 从最后一个绕回第一个');
     buttonByText(card(), '拒绝').click();

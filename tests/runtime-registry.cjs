@@ -59,7 +59,18 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     await check('旧 generation 拒绝', () => reject(() => registry.command({ ...ao, runtimeGeneration: 'old' }, { type: 'prompt', message: 'x' }), 'stale_runtime'));
     await registry.command(ao, { type: 'prompt', id: 'same', message: 'only A' });
     await registry.command(bo, { type: 'prompt', id: 'same', message: 'only B' });
+    await check('同一 Runtime 的第二条 prompt 在确认窗口也不会重复提交', async () => {
+      const before = adapters[0].commands.length;
+      await reject(() => registry.command(ao, { type: 'prompt', message: 'duplicate A' }), 'runtime_busy');
+      assert.equal(adapters[0].commands.length, before);
+      assert.equal(registry.snapshot().items.find(item => item.conversationId === bo.conversationId).activity, 'running');
+    });
     await check('同 request id 写入各自 stdin且 owner 不进 Pi wire', () => { assert.equal(adapters[0].commands[0].message, 'only A'); assert.equal(adapters[1].commands[0].message, 'only B'); assert.ok(!('owner' in adapters[0].commands[0])); });
+    await check('started 应答早于 agent_start 时仍保护同会话执行线', async () => {
+      adapters[0].emit({ type: 'response', command: 'prompt', id: 'same', success: true, data: { disposition: 'started' } });
+      await reject(() => registry.command(ao, { type: 'prompt', message: 'not another turn' }), 'runtime_busy');
+      assert.equal(adapters[0].commands.length, 1);
+    });
     adapters[0].emit({ type: 'agent_start', bridgeRun: 1 }); adapters[1].emit({ type: 'agent_start', bridgeRun: 1 });
     await registry.command(ao, { type: 'abort' });
     await check('Stop A 不停止 B，agent_end不代表idle', () => { assert.equal(adapters[0].commands.at(-1).type, 'abort'); assert.equal(adapters[1].commands.length, 1); adapters[1].emit({ type: 'agent_end', bridgeRun: 1 }); assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'B').activity, 'running'); });

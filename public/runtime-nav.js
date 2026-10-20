@@ -15,6 +15,7 @@ import { runtimeStore as store, onRuntimeChange, seedRuntimeSnapshot } from './r
 import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
 import { openModal } from './ui/modal.js';
 import { feedbackContext, toast } from './ui/toast.js';
+import { samePath } from './util.js';
 
 /* 侧栏自己订阅 store 的变化 —— 不依赖任何视图模块替它接线。 */
 onRuntimeChange(() => repaintRuntimeNav());
@@ -74,6 +75,7 @@ export function loadRuntimeNav(project, context = {}) {
 async function readRuntimeNav(project) {
   if (project?.path !== currentProjectPath) focusIntent++;
   if (typeof project?.path === 'string') currentProjectPath = project.path;
+  const path = project?.path || '';
   const t = ++token;
   const [snapshot, worktrees] = await Promise.all([
     fetchRuntimeSessions().catch(() => null),
@@ -84,10 +86,11 @@ async function readRuntimeNav(project) {
   /* 归属只认 worktrees 返回的 projectId：它不是从路径字符串推出来的，
    * 而是后端按 Git common-dir 算出的稳定身份。拿不到就不显示（非 Git 项目
    * 本来也不该有并行会话），不猜。 */
-  projectId = typeof worktrees?.projectId === 'string' ? worktrees.projectId : '';
+  const ordinary = snapshot.items.find(item=>item.kind==='project'&&samePath(item.workspace?.cwd,path));
+  projectId = typeof worktrees?.projectId === 'string' ? worktrees.projectId : ordinary?.workspace?.projectId || '';
   seedRuntimeSnapshot(snapshot);
   members = (projectId ? snapshot.items : [])
-    .filter(item => item?.workspace?.projectId === projectId)
+    .filter(item => item.kind==='project' ? samePath(item.workspace?.cwd,path) : item?.workspace?.projectId === projectId)
     .map(item => ({ conversationId: item.conversationId, createdAt: typeof item.createdAt === 'string' ? item.createdAt : '' }))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.conversationId.localeCompare(b.conversationId));
   paint();
@@ -103,7 +106,7 @@ export function repaintRuntimeNav() {
   for (const record of store.values()) {
     if (!record.owner) continue;
     const id = record.owner.conversationId;
-    if (!known.has(id) && record.owner.projectId === projectId) { void loadRuntimeNav({ path: currentProjectPath }, { parent }); return; }  }
+    if (!known.has(id) && (record.owner.projectId === projectId || record.item.kind==='project'&&samePath(record.item.workspace?.cwd,currentProjectPath))) { void loadRuntimeNav({ path: currentProjectPath }, { parent }); return; }  }
   paint();
 }
 
@@ -118,6 +121,7 @@ function label(item) {
 
 function statusText(item) {
   if (!item) return '';
+  if (store.get(item.conversationId)?.approvals.length) return '待审批';
   if (item.error === 'cleanup_pending') return '清理未完成';
   if (item.lifecycle === 'error') return '错误';
   if (item.activity === 'stopping') return '正在停止';
@@ -155,6 +159,7 @@ async function focusConversation(conversationId) {
     || Object.keys(owner).some(key => store.get(conversationId).owner[key] !== owner[key])) return;
   focusHandler?.(conversationId);
 }
+export const focusRuntimeById = conversationId => focusConversation(conversationId);
 
 function row(member) {
   const item = store.get(member.conversationId)?.item || null;
@@ -203,15 +208,16 @@ function newConversationRow() {
 /** 「新建并行会话」= P32.2 create + P32.3 start 的**编排**，不是第二条创建路径。
  *  两个动作都走已验证的 HTTP 端点，后端返回什么就显示什么（dirty / branch 冲突 /
  *  runtime_limit / workspace_busy 都如实呈现，前端不自己模拟）。 */
-async function createParallelConversation() {
-  if (!currentProjectPath) return;
+export async function createParallelConversation(project = null) {
+  const projectPath = project?.path || currentProjectPath;
+  if (!projectPath) return;
   const context = feedbackContext();
   const branch = await askBranchName();
   if (branch === null) return;
   try {
-    const list = await fetchWorktrees(currentProjectPath);
+    const list = await fetchWorktrees(projectPath);
     if (!list || list.ok === false) return toast(list?.error || '无法读取工作区列表', 'error', { context });
-    const plan = await worktreeAction('prepare', { project: currentProjectPath, branch, source: 'HEAD' }, list.contextGeneration);
+    const plan = await worktreeAction('prepare', { project: projectPath, branch, source: 'HEAD' }, list.contextGeneration);
     if (!plan || plan.ok === false) return toast(plan?.error || '创建前检查未通过', 'warn', { context });
     const created = await worktreeAction('create', { nonce: plan.nonce }, list.contextGeneration);
     if (!created || created.ok === false) return toast(created?.error || '创建并行会话失败', 'error', { context });
@@ -222,7 +228,8 @@ async function createParallelConversation() {
       /* 工作区已经建好了，只是 runtime 没起来 —— 如实说清楚，不要谎报成功。 */
       toast(`${runtimeLimitNotice(started) || started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn', { context });
     }
-    await loadRuntimeNav({ path: currentProjectPath }, { parent });
+    if (!project || projectPath === currentProjectPath) await loadRuntimeNav({ path: projectPath }, { parent });
+    if (started?.ok && started.owner) await focusConversation(started.owner.conversationId);
   } catch (e) {
     toast('新建并行会话失败：' + (e?.message || e), 'error', { context });
   }

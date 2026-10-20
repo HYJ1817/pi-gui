@@ -23,6 +23,7 @@ import { closeModal, confirmModal, confirmSurfaceMeta, dismissConfirm, modalSurf
 import { feedbackContext, toast } from './ui/toast.js';
 import { sendCommand } from './api.js';
 import { logRendererEvent } from './log-client.js';
+import { workspaceView, showChat } from './ui/workspace-surface.js';
 import {
   approvalSummary,
   decidePayload,
@@ -60,6 +61,7 @@ function dropPending(requestId) {
   if (!entry) return null;
   if (entry.timer) clearTimeout(entry.timer);
   pending.delete(requestId);
+  refreshPendingEntry();
   return entry;
 }
 
@@ -181,6 +183,7 @@ export function cancelPendingApprovals() {
     }
     closeSurface(entry);
   }
+  refreshPendingEntry();
 }
 
 function expire(requestId, reason) {
@@ -191,6 +194,7 @@ function expire(requestId, reason) {
   pending.delete(requestId);
   rememberSettled(requestId, 'expired');
   closeSurface(entry);
+  refreshPendingEntry();
   if (reason === 'timeout') toast('这次 Pi Extension 请求已超时，Pi 按默认值处理了', 'info');
 }
 
@@ -234,6 +238,45 @@ function closeSurface(entry) {
     if (modalSurfaceMeta()?.requestId === entry.request.requestId) closeModal();
   }
 }
+
+let pendingButton = null;
+function refreshPendingEntry() {
+  if (typeof document === 'undefined') return;
+  const host = document.getElementById('btnMore');
+  if (!host) return;
+  if (!pendingButton?.isConnected) {
+    pendingButton = document.createElement('button'); pendingButton.type = 'button';
+    pendingButton.id = 'btnPendingClassicApproval'; pendingButton.className = 'btn tiny';
+    pendingButton.onclick = () => {
+      const entry = [...pending.values()].find(item => !item.expired && !item.settled);
+      if (!entry) return;
+      showChat(); present(entry);
+    };
+    host.before(pendingButton);
+  }
+  const count = [...pending.values()].filter(item => !item.expired && !item.settled).length;
+  pendingButton.hidden = count === 0;
+  pendingButton.textContent = `主会话待审批 ${count}`;
+  pendingButton.setAttribute('aria-label', `返回主会话处理 ${count} 条待审批请求`);
+}
+function suspend(entry) {
+  if (!entry || entry.submitting || entry.settled || entry.expired) return;
+  const card = entry.surface === 'confirm' ? document.getElementById('confirmCard') : document.getElementById('modalCard');
+  if ((entry.surface === 'confirm' ? confirmSurfaceMeta() : modalSurfaceMeta())?.requestId === entry.request.requestId) {
+    const input = card?.querySelector('input,textarea'); if (input) entry.inputValue = input.value;
+  }
+  entry.suspended = true; entry.presentation++;
+  closeSurface(entry); refreshPendingEntry();
+}
+function deferButton(entry, card) {
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'btn';
+  button.textContent = '稍后处理'; button.onclick = () => suspend(entry);
+  card.append(button);
+}
+if (typeof document !== 'undefined') document.addEventListener('pi-gui:workspace-view', event => {
+  if (event.detail?.view !== 'chat') for (const entry of pending.values()) suspend(entry);
+  refreshPendingEntry();
+});
 
 /** 卡片上的「来源 / 一次性 / 超时」事实行。全部来自协议真实字段或模型常量。 */
 function contextNote(request) {
@@ -500,7 +543,7 @@ async function commitDecision(request, decision, value) {
 
 function show(request) {
   const { requestId, kind } = request;
-  const entry = { request, timer: null, expired: false, settled: false, submitting: false, surface: null, context: feedbackContext() };
+  const entry = { request, timer: null, expired: false, settled: false, submitting: false, surface: null, presentation: 0, context: feedbackContext() };
   pending.set(requestId, entry);
 
   /* timeout 是 Pi 真实给的字段，且 rpc-mode.js 到点就自己用默认值 resolve ——
@@ -508,6 +551,17 @@ function show(request) {
   if (request.timeout) {
     entry.timer = setTimeout(() => expire(requestId, 'timeout'), Math.min(request.timeout + 50, 24 * 60 * 60 * 1000));
   }
+
+  refreshPendingEntry();
+  if (workspaceView() !== 'chat') { entry.suspended = true; return; }
+  present(entry);
+}
+
+function present(entry) {
+  if (entry.expired || entry.settled || entry.submitting || !stillCurrent(entry.request)) return;
+  entry.suspended = false;
+  const presentation = ++entry.presentation;
+  const request = entry.request, { requestId, kind } = request;
 
   const model = approvalCardModel(request);
 
@@ -533,6 +587,7 @@ function show(request) {
         return commitDecision(request, 'deny');
       },
     }).then((answer) => {
+      if (entry.suspended || entry.presentation !== presentation) return;
       /* 没有 onDecide 成功路径之外的关闭只可能来自：被别的确认框顶掉、
        * Esc / 点遮罩（提交中已屏蔽）。这些在协议语义里都是「取消」。 */
       if (entry.deliveryUnknown) { dropPending(requestId); return; }
@@ -541,6 +596,7 @@ function show(request) {
       else if (answer === 'alt') void commitDecision(request, 'cancel');
       else void commitDecision(request, 'deny');
     });
+    deferButton(entry, document.getElementById('confirmCard'));
     return;
   }
 
@@ -549,6 +605,7 @@ function show(request) {
    * 所以先把引用留在这里。 */
   let cancelButton = null;
   openModal((card, close) => {
+    deferButton(entry, card);
     const h = document.createElement('h3');
     h.id = 'ui4ApprovalTitle';
     h.textContent = model.title;
@@ -661,7 +718,8 @@ function show(request) {
     input.setAttribute('aria-labelledby', h.id);
     if (kind === 'editor') input.rows = 6;
     if (request.placeholder && kind !== 'editor') input.placeholder = request.placeholder;
-    if (kind === 'editor' && request.prefill) input.value = request.prefill;
+    if (entry.inputValue !== undefined) input.value = entry.inputValue;
+    else if (kind === 'editor' && request.prefill) input.value = request.prefill;
     card.appendChild(input);
     setTimeout(() => { if (modalSurfaceMeta()?.requestId === requestId && !entry.expired) input.focus(); }, 30);
 
@@ -674,6 +732,7 @@ function show(request) {
     actions.appendChild(ok);
     card.appendChild(actions);
   }, () => {
+    if (entry.suspended || entry.presentation !== presentation) return;
     /* 被别的弹层顶掉（openModal 会先关旧的）：没结算过的按取消结掉，
      * 不能让这条请求永远挂着。用户主动的 Esc / 点遮罩走下面的 onCancel，
      * 那条路径会把失败原因留在卡片上。 */

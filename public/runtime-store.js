@@ -54,7 +54,9 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         reject('closed_owner_mismatch');
         return { ok: false, reason: 'closed_owner_mismatch' };
       }
-      r.item = frame.item; r.owner = null; r.approvals = []; return { ok: true };
+      r.item = frame.item; r.owner = null; r.approvals = [];
+      for (const tool of r.tools) if (['running','waiting'].includes(tool.state)) tool.state = 'interrupted';
+      return { ok: true };
     }
     if (frame.type !== 'runtime_event' || frame.owner?.backendInstance !== backend) {
       reject('backend_mismatch');
@@ -75,17 +77,29 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (e.type === 'message_update' && e.assistantMessageEvent?.type === 'text_delta') r.text += e.assistantMessageEvent.delta || '';
     if (e.type === 'tool_execution_start') { r.tools.push({ id: e.toolCallId, name: e.toolName, state: 'running' }); if (r.tools.length > 100) r.tools.shift(); }
     if (e.type === 'tool_execution_end') { const t = r.tools.find(t => t.id === e.toolCallId); if (t) t.state = e.isError ? 'error' : 'done'; }
+    if (e.type === 'tool_wait_state') { const t=r.tools.find(t=>t.id===e.toolCallId); if(t&&['running','waiting'].includes(t.state))t.state=e.waiting?'waiting':'running'; }
     if (e.type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(e.method)) {
       r.approvals.push({ id: e.id, method: e.method, title: String(e.title || '').slice(0, 1024), options: Array.isArray(e.options) ? e.options.slice(0, 100).map(String) : [] });
       if (r.approvals.length > 32) r.approvals.shift();
     }
-    if (e.type === 'agent_settled' || e.type === 'bridge_status' && e.state !== 'ready') r.approvals = [];
+    if (e.type === 'agent_settled' || e.type === 'bridge_status' && e.state !== 'ready' || e.type === 'stop_state' && e.pending === false) {
+      r.approvals = [];
+      for (const tool of r.tools) if (['running','waiting'].includes(tool.state)) tool.state = 'interrupted';
+    }
     const bounded = bound(r.text); if (bounded !== r.text) { r.text = bounded; r.truncated = true; }
     return { ok: true };
   }
   function apply(frame) { return applyDetailed(frame).ok; }
   return { seed, apply, applyDetailed, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
     setRejectObserver(fn) { rejectObserver = typeof fn === 'function' ? fn : null; },
+    reconcileApprovals(owner, approvals, cursor) {
+      const r = records.get(owner?.conversationId);
+      if (!r || !same(r.owner, owner) || r.cursor > cursor || !Array.isArray(approvals)) return false;
+      const live = new Set(approvals.map(a => a.id));
+      r.approvals = r.approvals.filter(a => live.has(a.id));
+      for (const a of approvals) if (!r.approvals.some(old => old.id === a.id)) r.approvals.push({ id: a.id, method: a.method, title: String(a.title || '').slice(0, 1024), options: Array.isArray(a.options) ? a.options.slice(0, 100).map(String) : [] });
+      return true;
+    },
     beginApproval(owner, approval) {
       const r = records.get(owner?.conversationId);
       if (!r || !same(r.owner, owner) || !r.approvals.includes(approval) || approval.submitting) return false;
@@ -100,7 +114,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       else delete approval.submitting;
     },
     history(id, messages, expectedOwner, expectedCursor) { const r = records.get(id); if (!r || !same(r.owner, expectedOwner) || r.cursor !== expectedCursor) return false;
-      const text = (messages || []).filter(m => ['user', 'assistant'].includes(m.role)).map(m => (m.content || []).filter(c => c.type === 'text').map(c => c.text || '').join('')).join('\n\n');
+      const text = (messages || []).filter(m => ['user', 'assistant'].includes(m.role)).map(m => typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content : []).filter(c => c.type === 'text').map(c => c.text || '').join('')).join('\n\n');
       r.text = bound(text); if (r.text !== text) r.truncated = true; return true; },
   };
 }

@@ -32,6 +32,7 @@ export async function respondToRuntimeApproval(owner, approval, send) {
   finally { runtimeStore.finishApproval(owner, approval, result?.ok === true); broadcast(); }
 }
 export function seedRuntimeSnapshot(snapshot) { if (runtimeStore.seed(snapshot)) broadcast(); }
+export function refreshRuntimeViews() { broadcast(); }
 
 /** SSE 帧入口：返回 true 表示这份帧真的改动了 store（视图据此重画）。 */
 export function observeRuntimeFrame(frame) {

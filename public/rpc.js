@@ -336,7 +336,9 @@ export async function stop() {
   updateSendState();
 }
 
-export const newSession = () => sendCommand({ type: 'new_session' });
+let newSessionNavigator = null;
+export function setNewSessionNavigator(fn) { newSessionNavigator = typeof fn === 'function' ? fn : null; }
+export const newSession = () => newSessionNavigator?.() || sendCommand({ type: 'new_session' });
 
 /* 会话列表的刷新回调。
  *

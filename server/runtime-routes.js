@@ -3,11 +3,11 @@ import { json, readRawBody } from './http-utils.js';
 const CODES = new Set(['stale_runtime', 'stale_workspace', 'unknown_workspace', 'workspace_in_use', 'workspace_archived', 'workspace_unavailable',
   'runtime_limit', 'conversation_limit', 'unknown_conversation', 'invalid_request', 'invalid_command', 'invalid_cursor', 'runtime_not_ready',
   'runtime_start_failed', 'registry_unavailable', 'metadata_write_failed', 'cleanup_pending', 'pi_entry_unproven', 'session_unavailable',
-  'stop_in_progress', 'stale_approval', 'maintenance', 'auth_syncing', 'process_limit', 'process_control_disabled', 'cancelled',
-  'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args']);
+  'stop_in_progress', 'runtime_busy', 'stale_approval', 'maintenance', 'auth_syncing', 'process_limit', 'process_control_disabled', 'cancelled',
+  'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args', 'unknown_project', 'session_in_use', 'tool_guard_unavailable']);
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const fail = () => { throw Object.assign(Error('invalid_request'), { code: 'invalid_request' }); };
-export function createRuntimeRoutes({ registry, validateWorkspace = async () => {}, readHistory = null } = {}) {
+export function createRuntimeRoutes({ registry, validateWorkspace = async () => {}, readHistory = null, openSession = null } = {}) {
   return { async handle(req, res) {
     try {
       if (req.method === 'GET') {
@@ -30,6 +30,7 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
       if (!closed(body, ['action', 'owner', 'args', 'conversationId', 'allowThird', 'command', 'cursor'])) fail();
       let result;
       switch (body.action) {
+        case 'open-session': if (!openSession) fail(); result = await openSession(body.args); break;
         case 'start': result = await registry.start(body.args); break;
         case 'resume': result = await registry.resume(body.conversationId, { allowThird: body.allowThird === true }); break;
         case 'focus': result = await registry.focus(body.owner); break;

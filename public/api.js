@@ -464,9 +464,9 @@ export const stopPlanAttemptVerification = (planId, taskId, attempt) =>
  *  到底在哪个文件，并核对它确实属于当前项目。真正的切换复用现有的
  *  `switch_session` 链路，前端不需要（也不应该）另写一套加载。
  *  失败一律是 200 + ok:false（「这次执行没有关联会话」是正常结果，不是错误）。 */
-export const openPlanTaskSession = (planId, taskId, attempt) =>
+export const openPlanTaskSession = (planId, taskId, attempt, preview = false) =>
   sendJSON(
-    taskUrl(planId, taskId, 'open-session') + (attempt ? '?attempt=' + encodeURIComponent(attempt) : ''),
+    taskUrl(planId, taskId, 'open-session') + (attempt ? '?attempt=' + encodeURIComponent(attempt) : '') + (preview ? (attempt ? '&' : '?') + 'preview=1' : ''),
     {}
   );
 
@@ -484,6 +484,7 @@ export const fetchSessions = (project = null) => getJSON('/api/sessions' + (proj
 /** 切到某个会话。**只传后端给的稳定 ID**，不传路径 —— 后端会在自己的索引里
  *  解析，并核对那条会话确实属于当前项目。 */
 export const switchSession = (id) => sendJSON('/api/sessions/switch', { body: { id } });
+export const fetchSessionHistory = (id, project) => getJSON('/api/sessions/history?' + new URLSearchParams({ id, ...(project ? { project } : {}) }));
 
 /** 给**当前**会话起个名字（pi 的 set_session_name 只作用于当前会话）。 */
 export const renameSession = (name) => sendJSON('/api/sessions/name', { body: { name } });

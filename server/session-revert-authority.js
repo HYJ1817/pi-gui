@@ -1,14 +1,21 @@
 import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 
 const fail = code => { throw Object.assign(Error(code), { code }); };
 const equal = (left, right) => left && right && Object.keys(left).length === Object.keys(right).length
   && Object.keys(right).every(key => left[key] === right[key]);
 
 /** Reuses P32 authority; never resolves a path or native session from the client. */
-export function createSessionRevertAuthority({ classicBridge, classicOwner, classicNativeState, classicBusy, registry, worktrees }) {
+export function createSessionRevertAuthority({ classicBridge, classicOwner, classicNativeState, classicBusy, registry, worktrees, classicRoot = () => null }) {
   const itemFor = id => registry.snapshot().items.find(item => item.conversationId === id);
-  const busyIn = scope => registry.snapshot().items.some(item => item.workspace?.workspaceId === scope.workspaceId
+  const overlaps = (a,b) => {
+    if (!a || !b) return false;
+    const normalize = p => process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p);
+    const inside = (x,y) => {const p=path.relative(normalize(x),normalize(y));return !p || p!=='..'&&!p.startsWith('..'+path.sep)&&!path.isAbsolute(p);};
+    return inside(a,b)||inside(b,a);
+  };
+  const busyIn = (scope,root) => Boolean(overlaps(root,classicRoot()) && classicBusy()) || registry.snapshot().items.some(item => (item.workspace?.workspaceId === scope.workspaceId || overlaps(root,item.workspace?.root))
     && item.owner && (item.activity !== 'idle' || item.lifecycle !== 'ready'));
   return async (req, body, action, { allowActiveWriter = false } = {}) => {
     if (!body.conversationId || body.conversationId === 'classic-chat') {
@@ -20,9 +27,9 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
         const revalidate = async () => {
           const state = await classicNativeState();
           if (state?.sessionId !== scope.nativeSessionId || !equal(expected, classicOwner())) fail('stale_runtime');
-          if (!allowActiveWriter && (classicBusy() || busyIn(scope))) fail('active_writer');
+          if (!allowActiveWriter && (classicBusy() || busyIn(scope,workspace.root))) fail('active_writer');
         };
-        return action({ scope, root:workspace.root, activeWriter:Boolean(classicBusy() || busyIn(scope)), revalidate,
+        return action({ scope, root:workspace.root, activeWriter:Boolean(classicBusy() || busyIn(scope,workspace.root)), revalidate,
           ...(allowActiveWriter?{capture:await classicBridge.captureStatus?.(scope)}:{}) });
       });
     }
@@ -36,9 +43,9 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
           if (!equal(itemFor(body.conversationId)?.owner, expected)) fail('stale_runtime');
           const state = await adapter.request({ type:'get_state' });
           if (state?.sessionId !== scope.nativeSessionId || !equal(itemFor(body.conversationId)?.owner, expected)) fail('stale_runtime');
-          if (!allowActiveWriter && busyIn(scope)) fail('active_writer');
+          if (!allowActiveWriter && busyIn(scope,workspace.root)) fail('active_writer');
         };
-        return action({ scope, root:workspace.root, activeWriter:busyIn(scope), revalidate,
+        return action({ scope, root:workspace.root, activeWriter:busyIn(scope,workspace.root), revalidate,
           ...(allowActiveWriter?{capture:await adapter.changes.captureStatus?.(scope)}:{}) });
       });
     }
@@ -54,9 +61,9 @@ export function createSessionRevertAuthority({ classicBridge, classicOwner, clas
         if (itemFor(body.conversationId)?.owner) fail('stale_runtime');
         if (!equal(registry.workspaceIdentityOf(body.conversationId), identity)) fail('stale_workspace');
         if (registry.historyTarget(body.conversationId)?.sessionId !== target.sessionId) fail('stale_runtime');
-        if (!allowActiveWriter && busyIn(scope)) fail('active_writer');
+        if (!allowActiveWriter && busyIn(scope,workspace.root)) fail('active_writer');
       };
-      return action({ scope, root:workspace.root, activeWriter:busyIn(scope), revalidate });
+      return action({ scope, root:workspace.root, activeWriter:busyIn(scope,workspace.root), revalidate });
     });
   };
 }

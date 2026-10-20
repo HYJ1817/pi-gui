@@ -113,7 +113,7 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   });
   check('no "always allow" button exists', () => {
     const labels = [...card().querySelectorAll('button')].map((b) => b.textContent);
-    assert.deepEqual(labels, ['拒绝', '允许一次']);
+    assert.deepEqual(labels, ['拒绝', '允许一次', '稍后处理']);
     assert.ok(!labels.some((l) => /总是|始终|作用域|永久/.test(l)));
   });
   buttonByText(card(), '允许一次').click();
@@ -313,6 +313,41 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
     assert.equal(bare.piVersion, null);
   });
   fs.rmSync(root, { recursive: true, force: true });
+
+  /* Viewing another conversation must not resolve the classic request. */
+  const surfaces = await import('../public/ui/workspace-surface.js');
+  surfaces.showChat(); approval.expireAll('background-fixture');
+  approval.observeApprovalEvent(request({ id: 'background-confirm' }), S);
+  const beforeBackground = commands.length;
+  [...card().querySelectorAll('button')].find(b => b.textContent === '稍后处理').click();
+  await tick();
+  check('defer keeps confirm pending and sends no cancellation', () => {
+    assert.equal(commands.length, beforeBackground);
+    assert.ok(approval.approvalSnapshot().pending.some(r => r.requestId === 'background-confirm'));
+    assert.equal(layer().hidden, true);
+  });
+  surfaces.openWorkSurface('history', () => {});
+  approval.observeApprovalEvent(request({ id: 'background-input', method: 'input' }), S);
+  await tick();
+  check('background approval is discoverable without interrupting the viewed conversation', () => {
+    assert.equal(commands.length, beforeBackground);
+    assert.equal(modalLayer().hidden, true);
+    assert.equal(document.getElementById('btnPendingClassicApproval').hidden, false);
+    assert.ok(document.getElementById('btnPendingClassicApproval').textContent.includes('2'));
+  });
+  document.getElementById('btnPendingClassicApproval').click();
+  [...card().querySelectorAll('button')].find(b => b.textContent === '允许一次').click();
+  await tick();
+  check('resume only responds to the original owner request', () => {
+    assert.equal(lastCommand().id, 'background-confirm'); assert.equal(lastCommand().confirmed, true);
+    assert.ok(approval.approvalSnapshot().pending.some(r => r.requestId === 'background-input'));
+  });
+  document.getElementById('btnPendingClassicApproval').click();
+  modalCard().querySelector('input').value = 'partially entered';
+  [...modalCard().querySelectorAll('button')].find(b => b.textContent === '稍后处理').click();
+  await tick(); document.getElementById('btnPendingClassicApproval').click();
+  check('deferred input retains its draft without submitting it', () => assert.equal(modalCard().querySelector('input').value, 'partially entered'));
+  approval.expireAll('background-fixture-end');
 
   /* ---------- 回归：其它 feature 不受影响 ---------- */
   const pub = (f) => fs.readFileSync(path.join(__dirname, '../public', f), 'utf8');

@@ -1877,6 +1877,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   overscroll-behavior:contain;
 }
 .convo-nav::-webkit-scrollbar{display:none}
+.session-history-output .msg-body{white-space:pre-wrap;overflow-wrap:anywhere}
 
 .cn-marker{
   position:absolute;left:0;
