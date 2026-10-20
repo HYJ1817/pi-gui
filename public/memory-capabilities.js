@@ -84,7 +84,7 @@ export function memoryCapability(registry, observed = null) {
     notes: [
       '长期记忆由 Pi Extension 提供并落在 Pi 自己的目录里；Pi GUI 不读取、不索引、不复制它。绝对路径与记忆全文不进入 Activity。',
       '这不是「会话搜索」：会话搜索在当前项目的历史会话里找对话，Memory 工具检索的是 Extension 的长期记忆。两者不共享索引，也不会互相写入。',
-      'qmd 是 Extension 的可选依赖，Pi GUI 不安装、不配置、不检测系统包管理器；只有真实 tool result 报告 qmd 状态才展示。',
+      'qmd 是 Extension 的可选依赖，Pi GUI 不安装、不配置、不检测系统包管理器；只有 Extension 通知或真实 tool result 报告 qmd 状态才展示。',
       '运行观察只说明「这次 bridge run 真的调用过它」，磁盘上有目录不构成已加载的证据。',
     ],
     limits: [

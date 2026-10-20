@@ -2114,7 +2114,7 @@ staticCheck();
     const c = gitCalls.filter((x) => x.kind === 'restore').pop();
     return (c && c.body.deleteUntracked === true) || JSON.stringify(c);
   });
-  check('撤销成功后提示已删除', () => [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已删除未跟踪文件')));
+  check('撤销成功不再弹出例行通知', () => ![...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已删除未跟踪文件')));
   check('撤销后自动重拉状态并重画面板', () => {
     const n = gitCalls.filter((c) => c.kind === 'status').length;
     return (n > stBeforeDelete && chgRows().length === 5) || `status=${n} rows=${chgRows().length}`;
@@ -2362,8 +2362,8 @@ staticCheck();
     const c = gitCalls.filter((x) => x.kind === 'restore-all').pop();
     return (c && c.body.planned === true && c.body.unstage === true && c.body.deleteUntracked === true) || JSON.stringify(c && c.body);
   });
-  check('撤销全部后提示结果并重拉状态', () =>
-    [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已撤销 1 个文件')) || chgText().slice(0, 120));
+  check('撤销全部成功不弹通知，状态面板仍可见', () =>
+    ![...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已撤销 1 个文件')) && chgRows().length === 5);
 
   /* 第二条路径：只撤销已跟踪的，一个文件都不删 */
   gitStub['restore-all'] = PLAN3;
@@ -2415,9 +2415,8 @@ staticCheck();
     const c = gitCalls.filter((x) => x.kind === 'restore').pop();
     return (c && c.body.unstage === true && c.body.deleteUntracked === false) || JSON.stringify(c && c.body);
   });
-  check('提示语说明已取消暂存', () =>
-    [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已取消暂存并撤销')) ||
-    [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | '));
+  check('取消暂存并撤销成功不弹例行通知', () =>
+    ![...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已取消暂存并撤销')));
 
   /* 已暂存的**新增**文件：一次问清「取消暂存 + 删除」 */
   gitStub.status = {
@@ -2765,7 +2764,7 @@ staticCheck();
   // 成功提示只在 pi 确认后才出现（之前是点完就弹，失败时会撒谎）
   check('点选时不抢先弹提示', () => ![...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已切换到')));
   es.emit({ type: 'response', command: 'set_model', id: setModel.id, success: true, data: { provider: 'deepseek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' } });
-  check('pi 确认后才提示已切换', () => [...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已切换到 DeepSeek Reasoner')));
+  check('pi 确认后不弹切换成功通知，仍等待权威回读', () => window.S.modelSwitchPending && ![...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已切换到 DeepSeek Reasoner')));
   const replyLatest = (type, data) => es.emit({ type: 'response', command: type, id: commands.filter((c) => c.type === type).at(-1).id, success: true, data });
   check('Pi 确认后回读状态和档位', () => commands.filter((c) => c.type === 'get_state').length === gsBefore + 1 && commands.at(-1).type === 'get_available_thinking_levels');
   replyLatest('get_available_thinking_levels', { levels: ['off', 'low', 'high'] });
@@ -4721,7 +4720,7 @@ staticCheck();
           JSON.stringify({ span, gaps, navH: navHeight });
       });
       check('导航 19b. 整组在容器里垂直居中', () => {
-        const mid = (e[0].top + e[2].top) / 2;
+        const mid = (e[0].top + e[2].top + 12) / 2;
         return Math.abs(mid - navHeight / 2) <= 2 || `mid=${mid} navH=${navHeight}`;
       });
       check('导航 19c. 顺序不变：第 1 次提问 → 第 1 条 marker', () =>
@@ -4735,8 +4734,8 @@ staticCheck();
     {
       const e = window.navEntries();
       const span = e[e.length - 1].top - e[0].top;
-      check('导航 19e. 40 条时整组仍紧凑（跨度小于容器的一半）', () =>
-        (e.length === 40 && span < navHeight / 2) || `span=${span} navH=${navHeight}`);
+      check('导航 19e. 40 条命中区域不重叠，整组仍在视口高度内', () =>
+        (e.length === 40 && span <= navHeight && span >= 39 * 12) || `span=${span} navH=${navHeight}`);
       check('导航 19f. 40 条时相邻间距一致（等距短线组）', () => {
         const gaps = e.slice(1).map((x, i) => x.top - e[i].top);
         return (gaps.every((g) => Math.abs(g - gaps[0]) < 0.001) && gaps[0] > 0) || JSON.stringify(gaps.slice(0, 6));
@@ -4748,8 +4747,8 @@ staticCheck();
     {
       const e = window.navEntries();
       check('导航 20. 100 条用户消息 → 100 个 marker', () => e.length === 100 || e.length);
-      check('导航 22. 100 条时 marker 不超出容器高度', () =>
-        e.every((x) => x.top >= 0 && x.top <= navHeight) || `max=${Math.max(...e.map((x) => x.top))} navH=${navHeight}`);
+      check('导航 22. 100 条保留完整命中区，超长部分在导航内滚动', () =>
+        e.every((x, i) => x.top >= 0 && (i === 0 || x.top - e[i - 1].top >= 12)) || `max=${Math.max(...e.map((x) => x.top))} navH=${navHeight}`);
       const tops = e.map((x) => x.top);
       const sorted = [...tops].sort((a, b) => a - b);
       check('导航 18. 密集时仍保持最小间距（不糊成一根实线）', () =>
@@ -4758,8 +4757,8 @@ staticCheck();
     await rebuild(mkMsgs(500));
     {
       const e = window.navEntries();
-      check('导航 21. 500 条用户消息不崩，且仍不超出容器', () =>
-        (e.length === 500 && e.every((x) => x.top >= 0 && x.top <= navHeight)) || `n=${e.length} max=${Math.max(...e.map((x) => x.top))}`);
+      check('导航 21. 500 条用户消息保留独立命中区，不重叠压缩', () =>
+        (e.length === 500 && e.every((x, i) => x.top >= 0 && (i === 0 || x.top - e[i - 1].top >= 12))) || `n=${e.length} max=${Math.max(...e.map((x) => x.top))}`);
     }
 
     // 13. current marker 跟随滚动
@@ -7166,7 +7165,7 @@ staticCheck();
     stubUpdate = { ...UPDATE_AVAILABLE };
     window.initUpdateAuto({ delayMs: 0 });
     await sleep(60);
-    check('更新：自动发现新版本时给一次轻提示', () => /已发布/.test($('toasts').textContent) || $('toasts').textContent);
+    check('更新：自动发现新版本保留设置状态但不弹通知', () => window.getUpdateState().status === 'available' && $('toasts').textContent === '');
     check('更新：自动发现新版本也不弹 Modal', () => $('modal').hidden === true || '自动弹出了 Modal');
 
     /* 同一个版本不重复弹 */

@@ -402,11 +402,10 @@
 }
 
 .msg-err {
-  border: 1px solid var(--ui-danger-border);
-  border-left: 2px solid var(--ui-danger);
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-danger-surface);
-  padding: 9px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 2px 0;
 }
 
 .msg-err .me-head {
@@ -415,13 +414,13 @@
 }
 
 .msg-err .me-hint {
-  color: var(--ui-text-secondary);
+  color: var(--ui-danger);
   line-height: 1.6;
 }
 
 .msg-err .me-raw {
-  border-color: var(--ui-danger-border);
-  background: var(--ui-code-surface);
+  border: 0;
+  background: transparent;
   color: var(--ui-danger);
   overflow-wrap: anywhere;
 }

@@ -1313,15 +1313,14 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 
 /* 上游错误块 —— 之前这里是一片空白，用户完全看不出发生了什么 */
 .msg-err{
-  border:1px solid var(--ui-danger-border);border-left:2px solid var(--err);
-  background:var(--ui-danger-surface);border-radius:9px;padding:9px 12px;margin:2px 0;
+  border:0;background:transparent;border-radius:0;padding:2px 0;margin:2px 0;color:var(--err);
 }
 .me-head{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--err)}
 .me-head svg{width:13px;height:13px;color:var(--err);flex:0 0 auto}
-.me-hint{font-size:11.5px;color:var(--t2);margin-top:4px;line-height:1.6}
+.me-hint{font-size:11.5px;color:var(--err);margin-top:4px;line-height:1.6}
 .me-raw{
-  font-family:var(--mono);font-size:11px;color:var(--err);margin-top:8px;
-  padding:6px 9px;background:var(--ui-code-surface);border:1px solid var(--line-soft);border-radius:6px;
+  font-family:inherit;font-size:12px;color:var(--err);margin-top:4px;
+  padding:0;background:transparent;border:0;border-radius:0;
   white-space:pre-wrap;word-break:break-all;max-height:130px;overflow:auto;
 }
 .msg-note{font-size:11.5px;color:var(--t3);padding:2px 0}
@@ -1868,33 +1867,33 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 /* marker 排成**紧凑的一组短线**（Codex 那种），不再按「消息在整段内容里的
    比例位置」铺满整个纵向区域 —— 后者在长会话里会把点撒得满屏都是，离得很远
    且很难连续点。位置由 conversation-nav.js 的 layout() 算：
-   整组垂直居中、条数与可用高度决定间距，容器两端留 CLUSTER_PAD。 */
+   整组垂直居中、命中区不压缩，超长会话在最高 280px 的容器内滚动。 */
 .convo-nav{
   position:absolute;top:0;bottom:0;z-index:3;
   /* 跟阅读列左边缘对齐；窄窗口退回边缘，媒体查询再隐藏。 */
   left:max(4px,calc(50% - var(--conversation-max-width)/2 - 28px));
-  width:20px;
-  pointer-events:none; /* 只有 marker 自己可点，不挡正文的选中与点击 */
+  width:24px;height:min(100%,280px);margin-block:auto;
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:none;
+  overscroll-behavior:contain;
 }
+.convo-nav::-webkit-scrollbar{display:none}
 
 .cn-marker{
-  position:absolute;left:50%;transform:translateX(-50%);
-  width:9px;height:2px;padding:0;border:0;border-radius:2px;
-  background:var(--ui-border-control);cursor:pointer;pointer-events:auto;
-  transition:background .15s,width .15s,height .15s;
+  position:absolute;left:0;
+  width:24px;height:12px;padding:0;border:0;border-radius:2px;
+  background:transparent;cursor:pointer;
   /* 变长时向左长，视觉上贴着正文一侧 */
   transform-origin:center;
 }
-.cn-marker:hover,.cn-marker:focus-visible{
-  background:var(--t2);width:15px;outline:2px solid var(--focus-ring);outline-offset:3px;
-}
+.cn-marker::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:9px;height:2px;border-radius:1px;background:var(--ui-border-control);transition:background .15s,width .15s}
+.cn-marker:hover::before,.cn-marker:focus-visible::before{background:var(--t2);width:14px}
+.cn-marker:focus-visible{outline:1px solid var(--t2);outline-offset:-1px}
 /* 当前所在的那次提问：更亮更长 */
-.cn-marker.on{background:var(--t1);width:17px;height:3px}
-.cn-marker.on:hover{background:var(--t1)}
+.cn-marker.on::before{background:var(--t1);width:17px;height:3px}
 
 /* hover / 键盘聚焦时的摘要提示。刻意不用原生 title —— 需要控制截断与样式。 */
 .cn-tip{
-  position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);
+  position:fixed;transform:translateY(-50%);
   max-width:220px;padding:5px 9px;border-radius:7px;
   background:var(--hover);border:1px solid var(--line);color:var(--t1);
   font-size:11.5px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -1902,6 +1901,9 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   box-shadow:var(--ui-shadow-popover);
 }
 .cn-marker:hover .cn-tip,.cn-marker:focus-visible .cn-tip{opacity:1}
+.extension-notices{margin-top:16px}
+.extension-notice{font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--t2);margin:8px 0}
+.extension-notice[data-kind="error"]{color:var(--err)}
 
 /* 跳转不再用 scrollIntoView（它会连带滚动 .stage，把顶栏推出视口），
    改成只写 #stream.scrollTop，并在目标上方留 JUMP_PAD 的余量
@@ -2363,8 +2365,6 @@ button.pj-sess-primary{cursor:pointer}
 .quota>summary{list-style:none;padding:6px 9px;border-radius:7px;cursor:pointer}
 .quota>summary::-webkit-details-marker{display:none}
 .quota>summary:hover{background:var(--hover)}
-.quota>summary:after{content:"⌄";color:var(--t3);margin-left:5px}
-.quota[open]>summary:after{transform:rotate(180deg)}
 .quota-detail{padding:0 10px 10px}
 .project-sidebar .rail-foot{border-top:0;height:35px;flex-basis:35px}
 .global-more-menu{position:fixed;z-index:30;left:var(--global-rail-width);bottom:43px;width:270px;max-width:calc(100vw - var(--global-rail-width) - 12px);max-height:calc(100vh - 64px);overflow-y:auto;padding:8px;background:var(--ui-popover-surface);border:1px solid var(--control-border);border-radius:9px;box-shadow:var(--ui-shadow-popover)}

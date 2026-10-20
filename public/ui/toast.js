@@ -6,11 +6,17 @@ const STYLE_ID = 'ui4-feedback-style';
 const HOST_CLASS = 'ui4-feedback-toasts';
 const DEFAULT_DURATION = { info: 4200, success: 4200, warning: 7000, error: null };
 const recent = new Map();
-const DEDUPE_MS = 2500;
+const DEDUPE_MS = 30000;
 let notificationSource = 'live';
 let contextEpoch = 0;
 let readRuntimeContext = () => null;
 let lastContext = null;
+let logNotification = () => {};
+
+// Injected by the composition root to avoid toast -> API -> toast cycles.
+export function configureNotificationLogging(log) {
+  logNotification = typeof log === 'function' ? log : () => {};
+}
 
 // The composition root supplies a read-only view of the existing Runtime store.
 // No owner, focused conversation or lifecycle is duplicated here.
@@ -87,22 +93,29 @@ export function toast(msg, kind = 'info', options = {}) {
   const text = String(msg);
   const normalized = normalizeKind(kind);
   const opts = options && typeof options === 'object' ? options : {};
+  // Record structure only: notification bodies may contain paths or credentials.
+  logNotification(normalized === 'error' ? 'ui.notification_error' : 'ui.notification', { kind: normalized });
+  if ((normalized === 'info' || normalized === 'success') && !opts.action && opts.important !== true) return null;
   const now = Date.now();
   const context = opts.context ?? feedbackContext();
   const key = `${context}\u0000${normalized}\u0000${text}`;
+  const host = el.toasts;
+  if ([...host?.querySelectorAll('.ui4-feedback-toast') || []]
+    .some(node => node._ui4Key === key && node.dataset.leaving !== 'true')) return null;
   if (now - (recent.get(key) || 0) < DEDUPE_MS) return null;
   recent.set(key, now);
   if (recent.size > 100) {
     for (const [k, at] of recent) if (now - at >= DEDUPE_MS) recent.delete(k);
+    while (recent.size > 100) recent.delete(recent.keys().next().value);
   }
 
-  const host = el.toasts;
   if (!host) return null;
   refreshFeedbackContext();
   const node = document.createElement('div');
   node.className = legacyClass(normalized);
   node.dataset.kind = normalized;
   node._ui4Context = context;
+  node._ui4Key = key;
   node.setAttribute('role', normalized === 'error' ? 'alert' : 'status');
 
   const icon = document.createElement('span');

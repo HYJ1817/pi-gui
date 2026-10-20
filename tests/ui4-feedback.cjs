@@ -52,9 +52,9 @@ async function unit() {
     assert.equal(d.querySelectorAll('link[data-ui4-feedback]').length, 1);
   });
 
-  await check('info toast auto closes after its explicit short duration', async () => {
+  await check('explicit important info toast auto closes after its short duration', async () => {
     clear();
-    w.toast('已复制', 'info', { duration: 20 });
+    w.toast('已复制', 'info', { important: true, duration: 20 });
     assert.equal(nodes().length, 1);
     assert.equal(nodes()[0].dataset.kind, 'info');
     assert.equal(nodes()[0].getAttribute('role'), 'status');
@@ -66,8 +66,8 @@ async function unit() {
 
   await check('success and ok aliases share one success treatment', () => {
     clear();
-    w.toast('已保存', 'success', { duration: 5000 });
-    w.toast('计划已生成', 'ok', { duration: 5000 });
+    w.toast('已保存', 'success', { important: true, duration: 5000 });
+    w.toast('计划已生成', 'ok', { important: true, duration: 5000 });
     assert.deepEqual(nodes().map((node) => node.dataset.kind), ['success', 'success']);
     assert.ok(nodes()[0].classList.contains('ui4-feedback-toast-success'));
   });
@@ -104,16 +104,16 @@ async function unit() {
 
   await check('multiple notifications queue without replacing each other', () => {
     clear();
-    w.toast('第一条', 'info', { duration: 5000 });
-    w.toast('第二条', 'success', { duration: 5000 });
+    w.toast('第一条', 'info', { important: true, duration: 5000 });
+    w.toast('第二条', 'success', { important: true, duration: 5000 });
     w.toast('第三条', 'error');
     assert.deepEqual(nodes().map((node) => node.textContent), ['第一条', '第二条', '第三条']);
   });
 
   await check('duplicate notification inside the dedupe window is suppressed', () => {
     clear();
-    w.toast('重复通知', 'info', { duration: 5000 });
-    w.toast('重复通知', 'info', { duration: 5000 });
+    w.toast('重复通知', 'info', { important: true, duration: 5000 });
+    w.toast('重复通知', 'info', { important: true, duration: 5000 });
     assert.equal(nodes().length, 1);
   });
 
@@ -159,7 +159,7 @@ async function unit() {
 
   await check('toast host exposes a named region and each toast a live role', () => {
     clear();
-    w.toast('区域语义', 'info', { duration: 5000 });
+    w.toast('区域语义', 'info', { important: true, duration: 5000 });
     assert.equal(host.getAttribute('role'), 'region');
     assert.equal(host.getAttribute('aria-label'), '通知');
     assert.equal(nodes()[0].getAttribute('role'), 'status');
@@ -443,10 +443,10 @@ async function electron() {
       document.documentElement.dataset.theme = ${JSON.stringify(dark ? 'dark' : 'light')};
       const m = await import('/ui/toast.js');
       document.getElementById('toasts').replaceChildren();
-      m.toast('已复制诊断摘要' + suffix, 'success');
+      m.toast('需要确认的操作结果' + suffix, 'success', { important: true });
       m.toast('当前模型不支持图片，仍可添加普通文件。' + suffix, 'warning');
       m.toast('命令执行失败：后端返回 ENOENT。' + suffix, 'error');
-      m.toast('正在获取模型列表…' + suffix, 'info');
+      m.toast('需要处理的状态' + suffix, 'info', { important: true });
       return document.querySelectorAll('#toasts .toast').length;
     })()`);
 
@@ -570,7 +570,7 @@ async function electron() {
       try {
         await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
       } catch { /* setEmulatedMedia is best effort in older Electron */ }
-      await read(`(async () => { const m = await import('/ui/toast.js'); document.getElementById('toasts').replaceChildren(); m.toast('减少动效', 'info', { duration: 5000 }); })()`);
+      await read(`(async () => { const m = await import('/ui/toast.js'); document.getElementById('toasts').replaceChildren(); m.toast('减少动效', 'info', { important: true, duration: 5000 }); })()`);
       await wait(120);
       const fact = await read(`(() => { const t = document.querySelector('#toasts .toast'); return { media: matchMedia('(prefers-reduced-motion: reduce)').matches, animation: getComputedStyle(t).animationName }; })()`);
       if (fact.media) assert.equal(fact.animation, 'none');

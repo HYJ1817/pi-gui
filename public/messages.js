@@ -516,16 +516,19 @@ export function explainError(raw) {
   return { title: '请求失败', hint: '' };
 }
 
-export function errorBlock(msg) {
+export function errorBlock(msg, { announce = true } = {}) {
   const raw = msg?.errorMessage || '';
   const { title, hint } = explainError(raw);
 
   const d = document.createElement('div');
   d.className = 'msg-err';
+  if (announce) {
+    d.setAttribute('role', 'alert');
+    d.setAttribute('aria-atomic', 'true');
+  }
 
   const head = document.createElement('div');
   head.className = 'me-head';
-  head.appendChild(icon(['M12 4.5L21 20H3z', 'M12 10v4.5', 'M12 17.1v.3']));
   const t = document.createElement('span');
   t.textContent = title;
   head.appendChild(t);
@@ -598,6 +601,7 @@ export function dropTrailingError() {
  *   - content 真的为空、也不是失败/中断 → 加一句提示，返回 true（不是空白）
  *   - 失败 / 中断 → 加错误卡片或「已中断」，返回 true */
 export function rebuildAssistant(bodyEl, msg) {
+  const announceError = S.current?.body === bodyEl && !bodyEl.querySelector('.msg-err');
   const content = Array.isArray(msg.content) ? msg.content : [];
   const aborted = msg?.stopReason === 'aborted';
   /* 「用户主动停止」与「真正的失败」必须分开，判据是**停止归属**而不是
@@ -649,7 +653,7 @@ export function rebuildAssistant(bodyEl, msg) {
     bodyEl.appendChild(noteBlock('（这次没有返回内容）'));
   }
 
-  if (failed) bodyEl.appendChild(errorBlock(msg));
+  if (failed) bodyEl.appendChild(errorBlock(msg, { announce: announceError }));
   else if (aborted) bodyEl.appendChild(noteBlock(ownedAbort ? '已由用户取消' : '已中断'));
 
   return bodyEl.childElementCount > 0;

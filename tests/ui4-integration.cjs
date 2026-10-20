@@ -220,7 +220,7 @@ const click = (d, text, id = 'confirmCard') => {
   await check('Toast pointer leave cannot resume a timer while its button has focus', async () => {
     const f = fixture('C', 'ui/notice.js');
     try {
-      const toast = f.w.toast('timed mixed focus', 'info', { duration: 30 });
+      const toast = f.w.toast('timed mixed focus', 'info', { important: true, duration: 30 });
       toast.dispatchEvent(new f.w.Event('pointerenter'));
       toast.querySelector('button').focus();
       toast.dispatchEvent(new f.w.Event('pointerleave'));

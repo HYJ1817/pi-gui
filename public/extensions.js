@@ -33,6 +33,7 @@ import { capabilityTab } from './capability-view.js';
 import { snapshotMcpObservation } from './mcp-observer.js';
 import { noteUnknownEnum } from './schema-drift.js';
 import { SURFACE_COPY } from './status-copy.js';
+import { renderExtensionNotices } from './extension-notices.js';
 
 /* 状态 → 展示用的圆点与文案。
  * 键必须与 server/skills.js 里 state 的取值一一对应，多一个少一个都会显示成原始英文。 */
@@ -1070,7 +1071,18 @@ export function openExtensions(options = {}) {
       tabs.appendChild(button);
     }
 
-    card.append(tabs, body);
+    const notices = el('section', 'extension-notices');
+    const refreshNotices = () => renderExtensionNotices(notices);
+    document.addEventListener('pi-gui:extension-notices', refreshNotices);
+    document.addEventListener('pi-gui:workspace-generation', refreshNotices);
+    document.addEventListener('pi-gui:feedback-context', refreshNotices);
+    instance.onDispose(() => {
+      document.removeEventListener('pi-gui:extension-notices', refreshNotices);
+      document.removeEventListener('pi-gui:workspace-generation', refreshNotices);
+      document.removeEventListener('pi-gui:feedback-context', refreshNotices);
+    });
+    card.append(tabs, body, notices);
+    refreshNotices();
     render();
 
     // 没有项目时提示一下：用户级 skill 仍然能看，但项目级一栏会是空的

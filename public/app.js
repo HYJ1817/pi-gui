@@ -30,7 +30,8 @@ import { observeGuiBrowserEvent, initGuiBrowserState } from './gui-browser-capab
 import { observeMcpEvent } from './mcp-observer.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
-import { configureFeedbackContext, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
+import { configureFeedbackContext, configureNotificationLogging, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
+import { handleExtensionNotification } from './extension-notices.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, confirmModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText, setRuntimeTitle } from './shell.js';
@@ -110,6 +111,7 @@ import { openAppUpdates, openAppearance } from './settings.js';
 /* 日志只做观察：未捕获异常、网络失败与 SSE 断连在这里接入，
  * 不改变任何业务状态机。 */
 installRendererLogging();
+configureNotificationLogging(logRendererEvent);
 setRequestFailureReporter((route, reason, status) => {
   logRendererEvent('network.request_failed', { route, reason, httpStatus: status });
 });
@@ -584,7 +586,7 @@ function onStderr(evt) {
  * 它们没有应答，也就没有可追踪的生命周期。 */
 function onUiRequest(evt) {  switch (evt.method) {
     case 'notify':
-      return toast(evt.message, evt.notifyType === 'error' ? 'error' : evt.notifyType === 'warning' ? 'warn' : 'info');
+      return handleExtensionNotification(evt);
     case 'setStatus':
       return setStatus(evt.statusText || '');
     case 'setTitle':

@@ -171,8 +171,6 @@ function toggleProvider(header, force) {
   }
   container.hidden = !expand;
   header.setAttribute('aria-expanded', String(expand));
-  const chev = header.querySelector('.pop-provider-chev');
-  if (chev) chev.textContent = expand ? '⌄' : '›';
   /* 折叠改变了弹层高度，位置按外壳自己的算法重算；openPop 会顺手挪一次焦点，
    * 所以焦点要重新落回组头，漫游索引也跟着重算。 */
   reposition();
@@ -359,17 +357,13 @@ export function renderModelPicker({
     header.dataset.provider = provider;
     header.setAttribute('aria-controls', models_.id);
     header.setAttribute('aria-expanded', String(isExpanded));
-    const chev = document.createElement('span');
-    chev.className = 'pop-provider-chev';
-    chev.setAttribute('aria-hidden', 'true');
-    chev.textContent = isExpanded ? '⌄' : '›';
     const name = document.createElement('span');
     name.className = 'pop-provider-name';
     name.textContent = provider;
     const count = document.createElement('span');
     count.className = 'pop-provider-count';
     count.textContent = String(list.length);
-    header.append(chev, name, count);
+    header.append(name, count);
     header.addEventListener('click', () => toggleProvider(header));
 
     group.append(header, models_);

@@ -92,7 +92,7 @@ async function main() {
     await wait(300); replayWarnings(); assert.equal(toasts().length, 0);
   });
   clear();
-  await check('live warning still produces exactly one toast', () => { sources[0].emit({ type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: 'live unique warning' }); assert.equal(toasts().length, 1); });
+  await check('live extension warning is retained in status without a popup', () => { sources[0].emit({ type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: 'live unique warning' }); assert.equal(toasts().length, 0); assert.ok(w.extensionNotices().some(item => item.text === 'live unique warning')); });
   clear();
   await check('live extension error still produces exactly one toast', () => { sources[0].emit({ type: 'extension_error', error: 'live unique error' }); assert.equal(toasts().length, 1); });
   await check('custom provider management contains no Pi auth catalog', async () => { w.document.querySelector('#navProviders').click(); await wait(); assert.equal(w.document.querySelector('.provider-auth'), null); });
