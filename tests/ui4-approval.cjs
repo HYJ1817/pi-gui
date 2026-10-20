@@ -121,8 +121,8 @@ async function main() {
     assert.equal(approval.approvalCardModel({ requestId: 'm', kind: 'confirm', title: 'x', risk: 'unknown' }).risk, 'unknown');
   });
 
-  await check('确认卡只有一次性两个决定，没有 Always / Bypass / Auto', async () => {
-    assert.deepEqual(buttonsOf().map((b) => b.textContent), ['拒绝', '允许一次']);
+  await check('确认卡只有一次性和延期出口，没有 Always / Bypass / Auto', async () => {
+    assert.deepEqual(buttonsOf().map((b) => b.textContent), ['拒绝', '允许一次', '稍后处理']);
     const labels = [...card().querySelectorAll('button')].map((b) => b.textContent).join('|');
     assert.ok(!/总是|始终|永久|作用域|绕过|自动批准|Auto|Always|Bypass/i.test(labels), labels);
   });

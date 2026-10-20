@@ -248,6 +248,7 @@ export function confirmModal({
   okText = '确认',
   cancelText = '取消',
   altText = '',
+  deferText = '',
   danger = false,
   source = '',
   kindLabel = '',
@@ -257,6 +258,7 @@ export function confirmModal({
   surface = '',
   meta = null,
   onDecide = null,
+  onDefer = null,
   submittingText = '正在发送…',
   failureText = '发送失败，请重试。',
 }) {
@@ -358,9 +360,21 @@ export function confirmModal({
     yes.className = 'btn ' + (danger ? 'danger' : 'primary');
     yes.textContent = okText;
     actions.appendChild(yes);
+
+    /* 延期不是一次决定：它只收起当前卡片，请求仍由调用方保留。
+     * 该按钮必须和拒绝/允许同属忙碌集合，否则提交期间仍能切走，
+     * 留下一条无法从当前界面判断投递结果的审批。 */
+    let defer = null;
+    if (deferText && typeof onDefer === 'function') {
+      defer = document.createElement('button');
+      defer.type = 'button';
+      defer.className = 'btn';
+      defer.textContent = deferText;
+      actions.appendChild(defer);
+    }
     el.confirmCard.appendChild(actions);
 
-    const allButtons = () => [no, alt, yes].filter(Boolean);
+    const allButtons = () => [no, alt, yes, defer].filter(Boolean);
 
     /* 提交中：所有出口暂时关闭。这不是「禁用危险操作」，而是防止同一次决定
      * 被发两遍、以及提交途中 Esc 把一次已发出的允许再补一条取消。 */
@@ -436,6 +450,10 @@ export function confirmModal({
     no.onclick = () => decide(false, no);
     if (alt) alt.onclick = () => decide('alt', alt);
     yes.onclick = () => decide(true, yes);
+    if (defer) defer.onclick = () => {
+      if (confirmResolve !== resolve || busy || settled) return;
+      onDefer();
+    };
 
     el.confirmLayer.hidden = false;
     el.confirmCard.setAttribute('aria-labelledby', h.id);
