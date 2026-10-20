@@ -6,7 +6,7 @@
 
 - Worktree `C:/pi-GUI-ui5`，分支 `codex/ui5-diagnostics-polish`，HEAD `c0769cd78d3e25d39aed5c97bde09af397a28cf8`；开始时 clean，无用户未提交改动。
 - 已核对 `09f6320` 日志修复、`0add82d` 回归测试、`c0769cd` 证据归档；本轮不改这些实现。
-- 读取本 worktree 的 AGENTS、UI-1/2/3/4 集成报告及 UI-5/补丁验收。UI-0 的 `UI-design-contract.md`、`UI-component-mapping.md`、`UI-implementation-plan.md` 仅在 `C:/pi-GUI/docs/claude-ui-redesign/` 可用，以只读方式参考。两处均未找到 REVIEW.md；worktree 中的 `.workbuddy-ai/memory/MEMORY.md` 不存在，已只读参考原仓库该文件，并以现场 Git 状态为准。
+- 读取本 worktree 的 AGENTS、UI-1/2/3/4 集成报告及 UI-5/补丁验收。UI-0 的 `UI-design-contract.md`、`UI-component-mapping.md`、`UI-implementation-plan.md` 仅在 `C:/pi-GUI/docs/claude-ui-redesign/` 可用，以只读方式参考。两处均未找到 REVIEW.md，以现场 Git 状态为准。
 - 设计素材 `C:/pi-GUI/docs/素材.zip` 包含六份文本/JSON，已读取布局规格；其中截图 DPI 说明为 150%，尺寸仍需用真实截图校验。没有提取或复用品牌图标、字体或宠物素材。
 - 不 fetch/查 Release：遵守本项目离线约束。Jev 尝试因 API DNS 失败降级为普通工程判断；不把缓存远端状态视为当前事实。
 

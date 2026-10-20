@@ -3,7 +3,6 @@
 基线：最新核对的 `origin/main` 为 `3c7a8ac`，版本 v0.26.2。
 本地分支：`codex/ui-visual-finish`。原分支落后 main 13 个提交；未改动原分支历史。
 原有 `.p25-1-release-a2b10ddfebd7413789311029f931a3ca/` 未跟踪目录保留。
-仓库约定的 `.workbuddy-ai/memory/MEMORY.md` 不存在，以当前源码和文档为准。
 本轮未使用子代理，未新增依赖，未修改模型 API、Agent 执行或消息持久化。
 
 ## 五项结果
