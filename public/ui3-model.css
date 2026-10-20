@@ -49,11 +49,10 @@
   white-space:normal;overflow-wrap:anywhere;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
 }
-/* 选中态用既有 --ui-selected，与 .pop-item.on 同源，只是补一条左侧标记，
-   让「当前项」在几百个条目里也能一眼看到（对勾在右侧，长列表里容易滑出视线）。 */
+/* 当前项只用右侧中性对勾，键盘焦点独立呈现。 */
 .pop .ui3-model-item.on{
-  background:var(--ui-selected);
-  box-shadow:inset 2px 0 0 var(--ui-link);
+  background:transparent;
+  box-shadow:none;
 }
 /* 推理能力的三值：只有明确 false 才降调，unknown 保持中性。 */
 .pop .ui3-model-item[data-reasoning="no"] .pi-text{color:var(--ui-text-secondary)}
@@ -65,17 +64,16 @@
 
 /* ---------- Provider 折叠标题 ---------- */
 
-/* 既有的 .pop-provider 已给好尺寸与 hover；这里补选中组的强调与焦点环。
-   ⌄ / › 由 JS 写进 .pop-provider-chev，宽度固定住，折叠切换时标题不跳动。 */
+/* 原生整行按钮保留折叠及键盘语义，不再添加装饰箭头。 */
 .pop .pop-provider{font-weight:var(--ui-weight-medium)}
 .pop .pop-provider:focus-visible{
-  outline:2px solid var(--ui-focus);outline-offset:-2px;
+  outline:1px solid var(--ui-text-muted);outline-offset:-2px;
 }
 .pop-model-group[data-current="true"] > .pop-provider{color:var(--ui-text-primary)}
 .pop-model-group[data-current="true"] > .pop-provider .pop-provider-name{
   color:var(--ui-text-primary);
 }
-.pop-provider-chev{transition:color var(--ui-duration-snap) var(--ui-ease-out)}
+.pop .pop-provider-models .pop-item{padding-left:10px}
 
 /* ---------- Thinking ---------- */
 
@@ -95,7 +93,9 @@
 .ui3-think-state[data-state="no-model"]{color:var(--ui-text-muted)}
 
 .pop .ui3-think-item .pi-sub{font-family:inherit;color:var(--ui-text-muted)}
-.pop .ui3-think-item.on{background:var(--ui-selected);box-shadow:inset 2px 0 0 var(--ui-link)}
+.pop .ui3-think-item.on{background:transparent;box-shadow:none}
+.pop .ui3-model-item:hover,.pop .ui3-think-item:hover{background:var(--ui-hover)}
+.pop .ui3-model-item .pi-check,.pop .ui3-think-item .pi-check{color:var(--ui-text-secondary)}
 .pop .ui3-think-item:disabled{opacity:.4;cursor:default}
 .pop .ui3-think-item:disabled:hover{background:transparent}
 
@@ -121,15 +121,11 @@
 
 .pop .ui3-model-item:focus-visible,
 .pop .ui3-think-item:focus-visible{
-  outline:2px solid var(--ui-focus);outline-offset:-2px;
+  outline:1px solid var(--ui-text-muted);outline-offset:-2px;
 }
 /* 键盘漫游时 roving tabindex 把非当前项设为 -1；它们仍可被程序聚焦，
    所以显式保证 :focus-visible 的环不被任何 overflow 裁掉。 */
 .pop .pop-item,.pop .pop-provider{scroll-margin-block:4px}
-
-@media(prefers-reduced-motion:reduce){
-  .pop-provider-chev{transition:none}
-}
 
 /* ---------- 窄窗口 ---------- */
 

@@ -107,7 +107,25 @@ function makeMarker(entry) {
   const tip = document.createElement('span');
   tip.className = 'cn-tip';
   tip.textContent = entry.preview;
+  tip.setAttribute('aria-hidden', 'true');
   b.append(tip);
+  const placeTip = () => {
+    const rect = b.getBoundingClientRect();
+    tip.style.left = (rect.right + 8) + 'px';
+    tip.style.top = Math.max(20, Math.min(window.innerHeight - 20, rect.top + rect.height / 2)) + 'px';
+  };
+  b.addEventListener('pointerenter', placeTip);
+  b.addEventListener('focus', placeTip);
+  b.addEventListener('keydown', event => {
+    const index = entries.indexOf(entry);
+    const next = event.key === 'ArrowDown' ? index + 1 : event.key === 'ArrowUp' ? index - 1
+      : event.key === 'Home' ? 0 : event.key === 'End' ? entries.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    const target = entries[Math.max(0, Math.min(entries.length - 1, next))];
+    revealMarker(target);
+    target?.marker.focus({ preventScroll: true });
+  });
 
   b.addEventListener('click', (e) => {
     e.preventDefault();
@@ -123,6 +141,7 @@ function buildFrom(elements) {
   const nav = ensureNav();
   if (!nav) return;
   nav.replaceChildren();
+  nav.scrollTop = 0;
   entries = [];
 
   for (const element of elements) {
@@ -195,26 +214,16 @@ function layout() {
     e.topInContent = Math.max(0, r.top - streamTop + scrollTop);
   });
 
-  /* 第二步：marker 的位置 —— **紧凑聚簇**，不按内容比例铺满整个高度。
-   *
-   * 原来的做法是 `top = 消息偏移 / scrollHeight × 容器高`：一条很长的
-   * assistant 回答会把后面的点推到很远的地方，10～40 条的会话看起来像
-   * 撒了满屏的散点，离得远、很难连续点。用户要的是 Codex 那种「聚成一组
-   * 连续的短线」。所以改成：
-   *   - 顺序不变（第 1 次提问 → 第 1 条）；
-   *   - 条数与可用高度决定短线高度和间距，整组垂直居中；
-   *   - 放不下时压缩间距（甚至轻微重叠），但**绝不越出容器**；
-   *   - 内容偏移仍然算（topInContent），只是不再决定纵向位置。 */
+  // Fixed 12px hit targets never overlap. Long sessions scroll inside the
+  // existing bounded rail rather than compressing targets below usable size.
   const nav = ensureNav();
   const navH = nav ? nav.clientHeight : 0;
   if (!navH) return; // 导航列不可见（窄窗口隐藏）—— 内容偏移已经更新过了
 
   const n = entries.length;
-  const h = n <= 12 ? 3 : n <= 40 ? 2 : 1;
+  const h = 12;
   const avail = Math.max(0, navH - CLUSTER_PAD * 2);
-  let step = h + 2; // 目标间距：看着是一组连续短线，但仍分辨得出条数
-  const need = (n - 1) * step + h;
-  if (n > 1 && need > avail) step = (avail - h) / (n - 1); // 可能 < 1：宁可轻微重叠也不越界
+  const step = 14;
   const span = n > 1 ? (n - 1) * step + h : h;
   const start = CLUSTER_PAD + Math.max(0, (avail - span) / 2);
 
@@ -225,6 +234,13 @@ function layout() {
   });
 
   updateCurrent();
+}
+
+function revealMarker(entry) {
+  const nav = ensureNav();
+  if (!nav || !entry) return;
+  if (entry.top < nav.scrollTop) nav.scrollTop = entry.top;
+  else if (entry.top + 12 > nav.scrollTop + nav.clientHeight) nav.scrollTop = entry.top + 12 - nav.clientHeight;
 }
 
 /* ---------- 当前高亮 ---------- */
@@ -255,12 +271,16 @@ function setCurrent(idx) {
   if (idx === currentIndex) return;
   if (entries[currentIndex]) {
     entries[currentIndex].marker.classList.remove('on');
+    entries[currentIndex].marker.removeAttribute('aria-current');
     entries[currentIndex].element.removeAttribute('data-current-question');
   }
   currentIndex = idx;
   const cur = entries[idx];
   if (cur) {
     cur.marker.classList.add('on');
+    cur.marker.setAttribute('aria-current', 'true');
+    // Let users browse the rail without fighting automatic scroll-follow.
+    if (!navEl?.matches(':hover') && !navEl?.contains(document.activeElement)) revealMarker(cur);
     /* §28：给当前提问挂个标记，方便以后做别的视觉。第一版不改正文外观。 */
     cur.element.setAttribute('data-current-question', 'true');
   }

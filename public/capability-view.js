@@ -34,6 +34,7 @@ import { approvalCapability } from './approval.js';
 import { webObservation } from './web-access.js';
 import { subagentObservation } from './subagents.js';
 import { memoryObservation } from './memory.js';
+import { extensionNotices } from './extension-notices.js';
 import { browserObservation } from './browser.js';
 
 function el(tag, cls, text) {
@@ -61,10 +62,12 @@ export function usageEntryRow(onOpen = openCtxTip) {
  * 看到的永远是同一份观察。
  */
 export function collectKnownCapabilities({ registry = null, mcp = null, mcpNative = null, approval = null } = {}) {
+  const memory = memoryCapability(registry, memoryObservation());
+  memory.notes = [...extensionNotices().filter(item => item.feature === 'memory').map(item => item.text), ...memory.notes];
   return [
     webCapability(registry, webObservation()),
     subagentCapability(registry, subagentObservation()),
-    memoryCapability(registry, memoryObservation()),
+    memory,
     browserCapability(registry, browserObservation()),
     guiBrowserCapability(registry, guiBrowserObservation()),
     mcpCapability(mcp, mcpNative, mcpSnapshot()),
