@@ -34,6 +34,7 @@ import { fetchUpdate } from './api.js';
 import { md } from './markdown.js';
 import { $ } from './state.js';
 import { toast } from './ui/toast.js';
+import { connectAppUpdate, paintAppUpdate } from './app-update.js';
 
 /** 与后端 server/update-check.js 的 MAX_NOTES_CHARS 一致（后端已截断，这里兜底）。 */
 const MAX_NOTES = 4000;
@@ -63,6 +64,7 @@ let mounted = null;
  * 这个缺陷是真实截图抓出来的：无网那轮里失败后标题真的丢了版本号。 */
 let fallbackVersionText = '';
 let autoTimer = null;
+let postponed = false;
 
 function snapshot() {
   return { status, currentVersion, latestVersion, release, error: errorText };
@@ -290,6 +292,8 @@ function notifyOnce(version) {
 
 /** 把「版本与更新」区块画进给定容器。诊断面板每次重绘都会调它。 */
 export function renderUpdateSection(container, fallbackVersion = '') {
+  postponed = false;
+  connectAppUpdate(() => { if(mounted?.isConnected) paint(mounted); });
   if (fallbackVersion) fallbackVersionText = fallbackVersion;
   container.appendChild(node('div', 'ext-sec-head', '版本'));
   const box = node('div', 'update-sec');
@@ -303,6 +307,7 @@ export function renderUpdateSection(container, fallbackVersion = '') {
  * `paint(mounted)` 只有两个参数可传（没地方再传兜底版本），
  * 所以兜底值必须存在模块作用域里。见 fallbackVersionText 的说明。 */
 function paint(box, fallbackVersion = fallbackVersionText) {
+  const scroll = box.querySelector('.update-notes')?.scrollTop || 0;
   box.innerHTML = '';
   const shown = currentVersion || fallbackVersion || '';
   applyDot();
@@ -320,6 +325,10 @@ function paint(box, fallbackVersion = fallbackVersionText) {
   };
   head.appendChild(btn);
   box.appendChild(head);
+  if(postponed) {
+    const show=button('查看更新');show.onclick=()=>{postponed=false;paint(box);};box.appendChild(show);return;
+  }
+  if(status !== 'available') paintAppUpdate(box);
 
   if (status === 'checking') {
     box.appendChild(node('div', 'update-hint', '正在检查更新…'));
@@ -349,10 +358,12 @@ function paint(box, fallbackVersion = fallbackVersionText) {
   }
 
   paintAvailable(box, shown);
+  paintAppUpdate(box,{available:true,onLater:()=>{postponed=true;paint(box);}});
+  const notesElement=box.querySelector('.update-notes');if(notesElement)notesElement.scrollTop=scroll;
 }
 
 function paintAvailable(box, shownVersion) {
-  box.appendChild(node('div', 'update-hint ok', `发现新版本 v${latestVersion || release.tag || ''}`));
+  box.appendChild(node('div', 'update-hint', `发现新版本 v${latestVersion || release.tag || ''}`));
   box.appendChild(node('div', 'update-sub', `当前版本 v${shownVersion || '未知'}`));
   if (release.publishedAt) {
     box.appendChild(node('div', 'update-sub', `发布时间：${formatTime(release.publishedAt)}`));

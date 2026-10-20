@@ -1,0 +1,109 @@
+{
+  "checks": [
+    {
+      "source": "electron/app-update-desktop.cjs",
+      "sha256": "0927c98a210a3907101c0c52ecdb07ff96e2572d10fa2cdca541c7a98a95254d",
+      "matches": true
+    },
+    {
+      "source": "electron/app-update-recovery.cjs",
+      "sha256": "b00c1f41b71cd57696f579637653c5c91009907f72b84c56a953b0226dace6be",
+      "matches": true
+    },
+    {
+      "source": "electron/app-update.cjs",
+      "sha256": "3880211824d8700225b242640582b9892335a406af39f0f64484fc3b8a1ee851",
+      "matches": true
+    },
+    {
+      "source": "electron/browser-agent-bridge.cjs",
+      "sha256": "552111d70dad53069bc3c1dbb621f485afe526fe0331d3ef8429865dbe4edb38",
+      "matches": true
+    },
+    {
+      "source": "electron/browser-agent-host.cjs",
+      "sha256": "4f6c605dc2dd5b06f7af92f975c749574fda7c5d4a239d3bea104fa19e4e1507",
+      "matches": true
+    },
+    {
+      "source": "electron/browser-agent-policy.cjs",
+      "sha256": "1dc5d38fe87de857cd0e47e49c83d6ba4d03b62184e490353eff89feabd0df83",
+      "matches": true
+    },
+    {
+      "source": "electron/browser-agent.cjs",
+      "sha256": "65c22552de4afbe21f5ad16371ed835d93e27fdadec971cc9e749a92c6118124",
+      "matches": true
+    },
+    {
+      "source": "electron/browser-policy.cjs",
+      "sha256": "aef6418b30bc24c5540e99af828f080f4eb537bd24b28909b0f8dfa7f14289c7",
+      "matches": true
+    },
+    {
+      "source": "electron/browser-runtime-host.cjs",
+      "sha256": "cad6e78faa0858e510eec9d5e1b1ff7393c711e09bbe14fe4fe6579865d25f6e",
+      "matches": true
+    },
+    {
+      "source": "electron/browser-view.cjs",
+      "sha256": "85500a91ddce9d4ee7f34ad3c155afeb18e26f00be0ab581c8367427c5de1824",
+      "matches": true
+    },
+    {
+      "source": "electron/logging.cjs",
+      "sha256": "b55a58f99c69b83a08cf6a7decee99fb20e908106f11c6a1c52131eb950ba5c7",
+      "matches": true
+    },
+    {
+      "source": "electron/main.cjs",
+      "sha256": "5b51740bea5687ccb8b5fd6a17e0742c918b49dd6467c0ad70fbcd8edc4f260f",
+      "matches": true
+    },
+    {
+      "source": "electron/net-probe.cjs",
+      "sha256": "d2eb60ccf1095007475cb7ec3df25531c1a4e3f98234e9f195f1fe7915d0e2b8",
+      "matches": true
+    },
+    {
+      "source": "electron/preload.cjs",
+      "sha256": "bc3b6c84a83d0439680f04af94c5ec7a6dfe48a5d797610f82df15d20a9e12e4",
+      "matches": true
+    },
+    {
+      "source": "electron/theme.cjs",
+      "sha256": "b74117110488b4ff1c9bfc258602e407a5ded28efd252c268d3a7ab0459e7346",
+      "matches": true
+    },
+    {
+      "source": "electron/update-helper.ps1",
+      "sha256": "d166766811785ba11657364c61292ccfd93cde1eda0a5c7d2c34871c7bee12c2",
+      "matches": true
+    },
+    {
+      "source": "public/app-update.js",
+      "sha256": "443d82c10a338b1467e40461dc291588ac843849c0f703876150df8f03bb0eba",
+      "matches": true
+    },
+    {
+      "source": "public/update.js",
+      "sha256": "0f6a44ae674207850a9af55bc1264dbfaddda544fab0e43194d9f6347becc7ea",
+      "matches": true
+    },
+    {
+      "source": "public/styles.css",
+      "sha256": "d834394b9b8f37ed94d9bcde6842627ef3928c3e9c47eeddc73c1a26884d2427",
+      "matches": true
+    },
+    {
+      "source": "public/settings.js",
+      "sha256": "302daee596171a1de5418e72bb8dfe6bb9977c89f9d1c76f5396a946caa73cad",
+      "matches": true
+    },
+    {
+      "source": "build/server.cjs",
+      "sha256": "039d5d5375433fd64ebaee82d3f4b7c8c50277ee4cba6d982ac5a71bebe70955",
+      "matches": true
+    }
+  ]
+}

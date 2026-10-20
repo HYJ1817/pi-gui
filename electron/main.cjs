@@ -61,6 +61,7 @@ const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
+const { installAppUpdate } = require('./app-update-desktop.cjs');
 
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -207,7 +208,7 @@ async function ensureServer() {
       // 主进程与后端共享同一固定日志目录；目录本身不受项目/会话切换影响。
       ...(mainLog && mainLog.dir ? { PI_GUI_LOG_DIR: mainLog.dir } : {}),
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     windowsHide: true,
   });
 
@@ -810,6 +811,18 @@ if (!app.requestSingleInstanceLock()) {
     // "No handler registered"。
     installOpenPathHandler();
     installOpenExternalHandler();
+    try { installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
+      readUpdate:async()=>{
+        const r=await getJson(`${ORIGIN}/api/update?force=1`,10000,{[TOKEN_HEADER]:AUTH_TOKEN});
+        return r.body;
+      },
+      quit:async()=>{
+        await browserAgent?.stop();await runtimeBrowserHost?.stop();
+        app.quit();
+      },
+    }); } catch {
+      mlog('electron','electron.update_unavailable',{code:'UPDATE_CACHE_UNAVAILABLE'});
+    }
     /* 右栏内置浏览器。与上面两个 handler 同一时机 —— 必须在 createWindow()
      * 之前注册，否则页面首帧调用会拿到 "No handler registered"。
      * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */

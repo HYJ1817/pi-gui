@@ -180,7 +180,8 @@ async function main() {
    * —— 抄一份就等于测了个仿制品。这一段里现在有 abortAndWait 的前置守卫与记账。 */
   const source = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
   const start = source.indexOf('const revertAuthority = createSessionRevertAuthority({');
-  const end = source.indexOf('\nconst server = http.createServer(route);', start);
+  // Router composition ends before the independent app-update HTTP wrapper.
+  const end = source.indexOf('\nconst updateMaintenance = createAppUpdateMaintenance({', start);
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
   let syncing = false;
   const guarded = [], modelAccepted = [], activityAccepted = [];

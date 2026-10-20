@@ -56,6 +56,19 @@ try {
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
     isDesktop: true,
+    appUpdate: {
+      state: () => ipcRenderer.invoke('pi-gui:app-update-state'),
+      download: () => ipcRenderer.invoke('pi-gui:app-update-download', {confirm:true}),
+      cancel: () => ipcRenderer.invoke('pi-gui:app-update-cancel'),
+      openFolder: () => ipcRenderer.invoke('pi-gui:app-update-folder'),
+      install: () => ipcRenderer.invoke('pi-gui:app-update-install', {confirm:true}),
+      onState: callback => {
+        if(typeof callback !== 'function') return () => {};
+        const listener=(_event,state)=>callback(state);
+        ipcRenderer.on('pi-gui:app-update-state',listener);
+        return ()=>ipcRenderer.removeListener('pi-gui:app-update-state',listener);
+      },
+    },
     ...(themeEnabled ? { theme: {
       snapshot: () => themeLatest,
       set: mode => ipcRenderer.invoke('pi-gui:theme-set', mode),

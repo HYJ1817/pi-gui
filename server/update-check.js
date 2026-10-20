@@ -256,6 +256,7 @@ function sanitizeRelease(body, tag) {
       size: Number.isFinite(a.size) && a.size >= 0 ? a.size : null,
       url,
       kind: classifyAsset(name),
+      ...(/^sha256:[a-f0-9]{64}$/.test(a.digest) ? { digest: a.digest } : {}),
     });
   }
 

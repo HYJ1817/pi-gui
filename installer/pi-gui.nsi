@@ -139,6 +139,13 @@ Function CloseRunningInstance
   Pop $1 ; 输出（不用）
 
   ${If} $0 == 0
+    ; In-app upgrades have already drained the owning backend and waited for the
+    ; application handle. Silent mode must never force-kill another instance.
+    IfSilent silent_busy interactive_busy
+silent_busy:
+    SetErrorLevel 20
+    Quit
+interactive_busy:
     ; /SD 是必须的：NSIS 的 /S 只跳过向导页，**不会抑制 MessageBox**。
     ; 没有 /SD 时，静默安装会弹出这个框一直等人点 —— 升级脚本、CI、
     ; 以及本仓库的 test:installer 都会永久挂住。加了 /SD 之后，
@@ -160,7 +167,14 @@ Section "主程序" SEC_MAIN
   Call CloseRunningInstance
 
   SetOutPath "$INSTDIR"
+  SetOverwrite try
+  ClearErrors
   File /r "${APP_DIR}\*.*"
+  IfErrors install_failed install_written
+install_failed:
+  SetErrorLevel 21
+  Quit
+install_written:
 
   ; 卸载信息写在 HKCU —— 和「单用户安装」保持一致，
   ; 否则会出现「装在用户目录、卸载入口却要求管理员」的怪事。

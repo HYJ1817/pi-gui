@@ -1,0 +1,62 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-install-2dL1yk",
+  "currentVersion": "0.26.2",
+  "previousVersion": "0.26.0",
+  "previousArchiveSha256": "c3f3bdaf0d58967954a515a2ddaef6badf8ae42c38bcf35dedf9771b731bc020",
+  "candidateInstallerSha256": "8802fd8faabafc5d33b6085f3e6b053c6bd884e10c9d7a1ef3e2385878b65a6e",
+  "checks": [
+    {
+      "name": "official previous program version verified",
+      "pass": true
+    },
+    {
+      "name": "old version installed into TEMP via real NSIS",
+      "pass": true
+    },
+    {
+      "name": "real previous Electron and backend start at v0.26.0",
+      "pass": true
+    },
+    {
+      "name": "helper waits before changing installed files",
+      "pass": true
+    },
+    {
+      "name": "nonzero installer with partial write restores old files",
+      "pass": true
+    },
+    {
+      "name": "old version is usable after rollback",
+      "pass": true
+    },
+    {
+      "name": "helper waits before changing installed files",
+      "pass": true
+    },
+    {
+      "name": "backup failure is recorded",
+      "pass": true
+    },
+    {
+      "name": "backup failure after exit restarts unchanged old application",
+      "pass": true
+    },
+    {
+      "name": "helper waits before changing installed files",
+      "pass": true
+    },
+    {
+      "name": "real NSIS upgrade returns success",
+      "pass": true
+    },
+    {
+      "name": "restarted real backend and installed package confirm new version",
+      "pass": true
+    },
+    {
+      "name": "all seven user data sentinel hashes preserved",
+      "pass": true
+    }
+  ],
+  "isolation": "Real NSIS source with registration and shortcuts removed from test copy only; unique executable filename and faster zlib compression; real full released old program and rebuilt candidate; restricted host test uses ELECTRON_DISABLE_SANDBOX=1."
+}

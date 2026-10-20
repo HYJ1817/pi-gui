@@ -14,6 +14,7 @@ export function createSessionRevertAdmission({ timeoutMs = 60000 } = {}) {
   const cleanup = (key, state) => { if (!state.lease && !state.writers.size && !state.waiters.size) roots.delete(key); };
   return {
     keyOf,
+    busy: () => roots.size > 0,
     assertAllowed(root) { if (roots.get(keyOf(root))?.lease) fail('workspace_revert_busy'); },
     enterWriter(root) {
       const key = keyOf(root), state = stateOf(key);

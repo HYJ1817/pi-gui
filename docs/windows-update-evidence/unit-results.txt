@@ -1,0 +1,29 @@
+✔ classic bridge tracks pending approvals, commands and RPC before update (15.5847ms)
+✔ idle runtime with pending approval cannot pass app update maintenance (13.2134ms)
+✔ main IPC denies foreign window, subframe and wrong origin; startup version is rechecked (9.1284ms)
+✔ real backend private IPC freezes HTTP mutations, releases, then exits normally (280.5392ms)
+✔ private maintenance refuses active work, drains and freezes atomically (4.4624ms)
+✔ cleanup failure unlocks and resumes without claiming shutdown (0.2993ms)
+✔ Windows updater module is implemented (0.8012ms)
+✔ exact official repository, version, name and size binding (0.5904ms)
+✔ download requires explicit confirmation and never trusts renderer URL/path (2.2248ms)
+✔ download progress, ready persistence and rehash on next launch (36.6939ms)
+✔ SHA256 mismatch, failure retry and no executable admission (9.2291ms)
+✔ busy multiple sessions refuse install without launching or quitting (11.8076ms)
+✔ install ordered after prepare and verified package; duplicate install denied (14.7349ms)
+✔ portable/development never install and development never downloads (2.7462ms)
+✔ download cancellation removes partial file and supports retry (22.4463ms)
+✔ missing digest falls back to exact official checksum entry (7.6171ms)
+✔ foreign redirect, wrong size, duplicate checksum entries never become ready (7.3046ms)
+✔ install failure releases maintenance and permits retry with old application intact (18.7258ms)
+✔ tampered package after download cannot be launched (10.5877ms)
+✔ installed detection needs registered exact executable plus uninstaller, copied portable is refused (6.6161ms)
+✔ modified fallback manifest and package must still match official checksum before install (15.9804ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 401.9572

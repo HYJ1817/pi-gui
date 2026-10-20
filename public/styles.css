@@ -1136,8 +1136,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .update-label{font-size:11.5px;color:var(--t2);margin:8px 0 4px}
 .update-notes{
   font-size:12px;color:var(--t2);line-height:1.7;
-  background:var(--ui-code-surface);border:1px solid var(--line);border-radius:8px;
-  padding:9px 11px;max-height:220px;overflow:auto;
+  padding:9px 0;max-height:min(42vh,340px);overflow:auto;overscroll-behavior:contain;
 }
 /* Notes 的正文排版**直接复用 .msg-body**（元素上同时挂这两个类）——
  * 它是项目里唯一一处已经调好的 Markdown 排版（标题 / 列表 / 代码块 / 表格 /
@@ -1152,6 +1151,16 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .update-notes .update-link:hover{border-bottom-color:var(--t1)}
 .update-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.update-fixed-actions{position:sticky;bottom:0;background:var(--ui-popover-surface);padding:12px 0 4px;margin-top:8px}
+.update-sec progress{display:block;width:100%;height:6px;margin:12px 0;accent-color:var(--t1)}
+.modal-card.app-updates-card{display:flex;flex-direction:column;overflow:hidden;max-width:640px;max-height:88vh}
+.app-updates-card>.update-sec{display:flex;flex-direction:column;min-height:0;overflow:hidden;margin-bottom:8px}
+.app-updates-card .update-notes{flex:1 1 auto;min-height:50px;max-height:42vh}
+.app-updates-card .update-head,.app-updates-card .update-hint,.app-updates-card .update-sub,
+.app-updates-card .update-label,.app-updates-card .update-acts{flex-shrink:0}
+.app-updates-runtime{flex-shrink:0;font-size:12px;color:var(--t2);margin:4px 0 12px}
+.app-updates-runtime>summary{cursor:pointer;padding:4px 0}
+.app-updates-runtime>div{max-height:24vh;overflow:auto}
 
 /* ============ 浮层（锚定在触发元素上方的弹层） ============ */
 

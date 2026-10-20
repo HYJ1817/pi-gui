@@ -42,6 +42,7 @@ export function createSessionToolScheduler({ admission = null } = {}) {
     call.releaseWriter?.(); notify(c, call, false);
   }
   return {
+    busy: () => [...channels].some(channel => channel.calls.size > 0),
     channel(root, { onState } = {}) {
       if (disposed) throw failure('tool_guard_unavailable');
       const c = { path: root, root: key(fs.realpathSync.native(root)), identity: fs.statSync(root), calls: new Map(), paused: false, closed: false, onState };
