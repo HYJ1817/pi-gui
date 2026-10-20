@@ -92,7 +92,9 @@ async function main() {
   // Evaluate the production composition block verbatim: do not copy its send wrapper.
   const source = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
   const start = source.indexOf('const revertAuthority = createSessionRevertAuthority({');
-  const end = source.indexOf('\nconst server = http.createServer(route);', start);
+  // The update maintenance wrapper now sits between Router composition and HTTP.
+  // Evaluate only the real Router facade, keeping every Stop assertion below.
+  const end = source.indexOf('\nconst updateMaintenance = createAppUpdateMaintenance({', start);
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
   let syncing = false, guardError = null, wrapped = null, captureError = null, disabled = 0;
   const context = {

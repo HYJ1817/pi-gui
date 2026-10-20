@@ -119,3 +119,9 @@
 **尚未验证：未改动正式 NSIS 安装程序在独立 Windows 用户或 VM 的原安装位置升级。** 本机为 Windows 11 家庭版，未发现可用的 Hyper-V/VMware/VirtualBox/Windows Sandbox 环境；当前实际应用未被关闭或覆盖。没有自行创建账户或启用系统功能。具体执行和证据要求见 [正式安装验收清单](FORMAL-INSTALL-ACCEPTANCE.md)。本轮不再重复旧的 13 项重型改名夹具测试，因其不能补齐这一缺口。该项继续阻断完整安装升级验收，不能用本轮测试数字替代。
 
 回滚本次恢复修复可撤销对应修复提交；备份、用户数据及旧安装包不参与代码回滚。临时目录损坏、权限异常或安装锁无法确认释放时，仍可能需要关闭后手动检查或重装；不以超时推断安装器已退出。
+
+## 合并前 CI 补充
+
+PR #12 首次 CI 的 faults 组在 `gui-browser-stop.cjs` 的 Router 装配定位处失败，本机复现相同错误；同类搜索发现 `stop-barrier.cjs` 也仍依赖旧的 `http.createServer(route)` 片段结尾，并复现失败。应用更新增加独立维护包装后，测试应在 `createAppUpdateMaintenance` 装配之前结束 Router 取样。只调整这两处测试片段边界，不复制生产 facade、不改变产品代码或删除停止行为断言。
+
+修正后 `node tests/gui-browser-stop.cjs` **12/12**、`node tests/stop-barrier.cjs` **17/17**；合并前另复跑更新专项 **24/24**、Runtime Registry **35/35**、Session Runtime **7/7**。此次仅测试及文档修改，既有打包产物中的产品代码仍一致，不重复构建或本机完整 `npm test`。正式安装验收缺口仍保留，不能因 CI 通过而视为完成。
