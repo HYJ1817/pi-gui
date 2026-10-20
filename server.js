@@ -93,6 +93,7 @@ import { createPiProbes } from './server/pi-probes.js';
 import * as piCompatMatrix from './server/pi-compat-matrix.js';
 import { createSkills } from './server/skills.js';
 import { createUpdateCheck } from './server/update-check.js';
+import { createAppUpdateMaintenance } from './server/app-update-maintenance.js';
 import { createPiUpdate } from './server/pi-update.js';
 import { createCapabilityInstall } from './server/capability-install.js';
 import { createPiActivity } from './server/pi-activity.js';
@@ -1060,7 +1061,41 @@ const route = createRouter({
   compat: piCompat,
 });
 
-const server = http.createServer(route);
+const updateMaintenance = createAppUpdateMaintenance({
+  busyReason: piBusyReason,
+  otherBusy: () => rpc.stopState()?.pending || ['starting','restarting','maintenance'].includes(rpc.getState().state)
+    || rpc.updateBusy() || runtimeRegistry.updateBusy()
+    || toolScheduler.busy() || mutationAdmission.busy()
+    || [...processManagers].some(manager => manager.snapshot().activeCount || manager.snapshot().cleanupPending),
+  closeSessions: () => runtimeRegistry.closeAll(),
+  pause: () => rpc.pauseForMaintenance('app-update', { graceful: true }),
+  resume: () => rpc.resumeFromMaintenance(),
+});
+const server = http.createServer((req,res) => {
+  if (updateMaintenance.locked() && req.method !== 'GET' && req.method !== 'HEAD') {
+    const denied = auth.denyRequest(req);
+    if(denied)return json(res,denied.code,{ok:false,error:denied.error});
+    res.writeHead(503, {'Content-Type':'application/json'});
+    res.end(JSON.stringify({ok:false,code:'app_update_maintenance',error:'正在准备应用更新，请稍后重试。'}));
+    return;
+  }
+  updateMaintenance.track(req,res);
+  return route(req,res);
+});
+// Only the Electron parent owns this channel. No token, path or command payload.
+if (process.send) process.on('message', async message => {
+  if (!message || message.type !== 'app-update' || !Number.isSafeInteger(message.id)) return;
+  let result={ok:false,code:'invalid_action'};
+  try {
+    if(message.action==='prepare') result=await updateMaintenance.prepare();
+    if(message.action==='release') result=await updateMaintenance.release();
+    if(message.action==='shutdown' && updateMaintenance.locked()) {
+      process.send?.({type:'app-update',id:message.id,ok:true});
+      await shutdown();return;
+    }
+  } catch {result={ok:false,code:'cleanup_pending'};}
+  process.send?.({type:'app-update',id:message.id,...result});
+});
 
 // ---------- 生命周期 ----------
 

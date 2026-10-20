@@ -136,6 +136,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       return target && (!state.sessionFile || path.resolve(target.file) === path.resolve(state.sessionFile)) ? fs.realpathSync(target.file) : null;
     },
     cleanupConfirmed: () => cleanup,
+    updateBusy: () => rpc.updateBusy(),
     dispose() {
       if (disposal) return disposal;
       disposed = true; runtime.setShuttingDown(true); rpc.stop();

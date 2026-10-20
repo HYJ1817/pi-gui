@@ -198,6 +198,9 @@ export function createRpcBridge({
    * 是不必要的 —— pi 只是原样回显，本模块只认自己发出去的那些 id。
    * 真正需要防的是「同一时刻有多条 request 在等」，所以用 Map 而不是单变量。 */
   const pending = new Map();
+  const updateApprovals = new Set();
+  const updateCommands = new Map();
+  const updateKey = cmd => JSON.stringify([typeof cmd.id, cmd.id ?? null, cmd.command || cmd.type]);
   let nextRequestId = 1;
 
   /** 结束所有挂起请求（超时/退出/重启时用）。reason 只用于内部排查，不外发。 */
@@ -207,6 +210,7 @@ export function createRpcBridge({
       entry.resolve(value);
     }
     pending.clear();
+    updateApprovals.clear();updateCommands.clear();
   }
 
   /** 项目配置贡献的参数。纯读，失败不抛（拿不到就当没有）。 */
@@ -436,6 +440,12 @@ export function createRpcBridge({
         /* 兼容层先看一眼上游发了什么 —— 应答与事件都看。
          * **放在配对之前**：后端自己发起的 request 的应答也要被观察到。 */
         observeCompat((c) => c.observeUpstream(msg));
+        if (msg?.type === 'extension_ui_request' && ['select','confirm','input','editor'].includes(msg.method)) updateApprovals.add(msg.id);
+        if (msg?.type === 'agent_settled') updateApprovals.clear();
+        if (msg?.type === 'response') {
+          const key=updateKey(msg),count=updateCommands.get(key)||0;
+          if(count<=1)updateCommands.delete(key);else updateCommands.set(key,count-1);
+        }
         if (msg?.type === 'response' && msg.id === readinessId && msg.command === 'get_state' && msg.success === true && !maintenance) {
           readinessId = null;
           safeLog('bridge.ready', { bridgeRun: run, durationMs: Date.now() - startedAt });
@@ -576,7 +586,13 @@ export function createRpcBridge({
     /* 停止屏障：会开新 run 的命令在停止期间**写不进 stdin**（后端保护，
      * 不依赖前端 disabled）。 */
     stopGuard(wireCommand);
-    pi.stdin.write(JSON.stringify(wireCommand) + '\n');
+    if(wireCommand.type==='extension_ui_response') {
+      pi.stdin.write(JSON.stringify(wireCommand) + '\n');updateApprovals.delete(wireCommand.id);
+    } else {
+      const key=updateKey(wireCommand);updateCommands.set(key,(updateCommands.get(key)||0)+1);
+      try {pi.stdin.write(JSON.stringify(wireCommand) + '\n');}
+      catch(error){const count=updateCommands.get(key)||0;if(count<=1)updateCommands.delete(key);else updateCommands.set(key,count-1);throw error;}
+    }
   }
 
   /* 发一条命令并等它的应答。**永不 reject**，失败一律回 null ——
@@ -967,7 +983,7 @@ export function createRpcBridge({
    *
    * @returns {Promise<{ok:boolean, code?:string, stopped?:boolean}>} 只有确认退出才 ok:true
    */
-  function pauseForMaintenance(reason = 'pi-update') {
+  function pauseForMaintenance(reason = 'pi-update', { graceful = false } = {}) {
     launchGeneration++;
     starting = false;
     browserLaunch?.invalidate({disable:true,revoke:true});
@@ -1033,11 +1049,13 @@ export function createRpcBridge({
       /* 结束**整棵进程树**：Windows 上经 npm .cmd 启动时，只 kill 外层
        * 包装定义不了「pi 本体已经退出」这个前提。原语由组合根注入。 */
       try {
-        if (typeof killProcessTree === 'function') killProcessTree(child);
-        else child.kill();
+        if (!graceful) {
+          if (typeof killProcessTree === 'function') killProcessTree(child);
+          else child.kill();
+        }
       } catch {
         try {
-          child.kill();
+          if (!graceful) child.kill();
         } catch {
           /* noop */
         }
@@ -1099,5 +1117,6 @@ export function createRpcBridge({
     };
   }
 
-  return { start, send, request, abortAndWait, stopState, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState };
+  return { start, send, request, abortAndWait, stopState, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState,
+    updateBusy: () => Boolean(pending.size || updateApprovals.size || updateCommands.size) };
 }
