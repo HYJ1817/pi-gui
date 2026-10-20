@@ -3,7 +3,13 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { spawn } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 if (!process.versions.electron) {
-  const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-background-window-'));
+  // Electron's profile/screenshot writes can fail with EPERM when Windows
+  // carries a redirected TEMP ACL into the child. Keep this disposable world
+  // under the repository's ignored .shots directory, like the other Electron
+  // harnesses, so the test exercises the app rather than the host temp policy.
+  const shots = path.join(ROOT, '.shots');
+  fs.mkdirSync(shots, { recursive: true });
+  const world = fs.mkdtempSync(path.join(shots, 'session-background-'));
   const env = { ...process.env, BACKGROUND_WORLD: world }; delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(require('electron'), [__filename, '--no-sandbox'], { env, stdio: 'inherit', windowsHide: true });
   child.on('exit', code => { process.exitCode = code === 0 ? 0 : 1; });
@@ -43,7 +49,9 @@ async function run() {
       harness.on('error', reject);
     });
     win = new BrowserWindow({ width: 1280, height: 950, show: true, useContentSize: true, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
-    win.webContents.on('console-message', (_event, level, message) => { if (level >= 3) errors.push(message); });
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      if (level >= 3) errors.push(`${message} (${String(sourceId || '').split('/').pop()}:${line})`);
+    });
     await win.loadURL(origin); await sleep(1500); win.focus(); win.webContents.focus(); win.webContents.debugger.attach('1.3');
     await read(`(async()=>{
       window.ST=await import('/state.js');window.M=await import('/messages.js');window.P=await import('/projects.js');window.SESS=await import('/sessions.js');
@@ -59,7 +67,20 @@ async function run() {
         else if(u.pathname==='/api/sessions/history')value={ok:true,messages:[{role:'assistant',text:'B persisted result',userIndex:0}]};
         else if(u.pathname==='/api/worktrees')value={ok:true,projectId:'project',items:[]};
         else if(u.pathname==='/api/runtime-sessions'&&!body)value=snapshot;
-        else if(u.pathname==='/api/runtime-sessions'){runtimeActions.push(body);value={ok:true,owner:body.owner,data:{models:[],messages:[]}};}
+        else if(u.pathname==='/api/runtime-sessions'){
+          runtimeActions.push(body);
+          if(body.action==='open-session'){
+            const existing=body.args?.session==='bbbbbbbbbbbbbbbb',conversationId=existing?'B-runtime':'R-new';
+            let item=snapshot.items.find(i=>i.conversationId===conversationId);
+            if(!item){
+              const nativeSessionId=existing?'native-B':'native-new';
+              const owner={backendInstance:'fixture-backend',projectId:'project',repoId:'repo',workspaceId:'project-project',workspaceEpoch:'epoch',conversationId,runtimeId:'runtime-'+conversationId,runtimeGeneration:'generation',sessionId:nativeSessionId};
+              item={conversationId,kind:'project',title:existing?'B saved conversation':'新会话',sessionName:existing?'B saved conversation':'新会话',nativeSessionId,owner,revision:1,lifecycle:'ready',activity:'idle',createdAt:String(snapshot.items.length),workspace:{projectId:'project',repoId:'repo',workspaceId:'project-project',workspaceEpoch:'epoch',cwd:fixtureCwd,branch:''}};
+              snapshot={...snapshot,items:[...snapshot.items,item],liveCount:snapshot.liveCount+1,totalCount:snapshot.totalCount+1};
+            }
+            value={ok:true,conversationId,owner:item.owner,item};
+          }else value={ok:true,owner:body.owner,data:{models:[],messages:[]}};
+        }
         else if(u.pathname==='/api/command'){commands.push(body);value={ok:true};}
         else if(opt.method&&opt.method!=='GET'&&u.pathname!=='/api/logs/events'){otherWrites.push(u.pathname);return original(url,opt);}
         else return original(url,opt);
@@ -72,28 +93,44 @@ async function run() {
     })()`);
     await waitFor(`!!document.querySelector('button[aria-label="切换会话：B saved conversation"]')`);
     const other = 'button[aria-label="切换会话：B saved conversation"]', primary = 'button[aria-label="切换会话：A background task"]';
-    await click(other); await waitFor(`document.querySelector('#workSurface').textContent.includes('B persisted result')`);
-    check(await read(`WS.workspaceView()==='history'&&ST.S.streaming&&ST.S.thread===originalThread&&ST.S.thread.textContent.includes('A unfinished output')&&commands.length===0`), 'A -> B mouse switch keeps original stream and sends no switch/abort');
+    await click(other); await waitFor(`WS.workspaceView()==='runtime'&&document.querySelector('.rtc-title').textContent.includes('B saved conversation')`);
+    const bSwitch = await read(`({view:WS.workspaceView(),streaming:ST.S.streaming,sameThread:ST.S.thread===originalThread,text:ST.S.thread?.textContent||'',commands:[...commands],runtimeOutput:document.querySelector('#runtimeView .rtc-output').textContent,owner:RS.runtimeStore.get('B-runtime')?.owner})`);
+    check(bSwitch.view==='runtime'&&bSwitch.streaming&&bSwitch.sameThread&&bSwitch.text.includes('A unfinished output')
+      &&bSwitch.owner?.sessionId==='native-B'&&!bSwitch.runtimeOutput.includes('A unfinished output')&&bSwitch.commands.length===0,
+      'A -> B opens B runtime while A keeps streaming and sends no switch/abort', bSwitch);
     await read(`M.onMessageUpdate({assistantMessageEvent:{type:'text_delta',contentIndex:0,delta:' continuing in background'}})`);
     await read(`document.querySelector(${JSON.stringify(primary)}).focus()`); await keyEnter();
     check(await read(`WS.workspaceView()==='chat'&&ST.S.thread===originalThread&&ST.S.thread.textContent.includes('continuing in background')`), 'keyboard returns to A with live output retained');
-    for (let i=0;i<6;i++) { await click(other); await click(primary); }
+    for (let i=0;i<6;i++) {
+      await click(`button[aria-label^="并行会话：B saved conversation"]`);
+      await click(primary);
+    }
     check(await read(`WS.workspaceView()==='chat'&&ST.S.thread===originalThread&&ST.S.streaming&&ST.S.state.sessionId==='native-A'&&commands.length===0`), 'six rapid A/B round trips preserve task identity and mounted messages');
     await click('#navNew');
-    check(await read(`WS.workspaceView()==='history'&&!!document.querySelector('#workSurface textarea')&&!commands.some(c=>c.type==='new_session')&&ST.S.streaming`), 'new-session action opens an isolated draft without interrupting A');
+    // A is the classic external runtime and B occupies the second regular
+    // slot. Starting C is the documented third-slot confirmation path.
+    await waitFor(`!document.querySelector('#confirmLayer')?.hidden&&document.querySelector('#confirmCard').textContent.includes('启动第三个会话')`);
+    check(await read(`!commands.some(c=>c.type==='new_session')&&ST.S.streaming&&ST.S.thread===originalThread`), 'third-session confirmation does not touch A before approval');
+    await read(`[...document.querySelectorAll('#confirmCard button')].find(b=>b.textContent==='继续启动')?.click()`);
+    await waitFor(`WS.workspaceView()==='runtime'&&document.querySelector('.rtc-title').textContent.includes('新会话')`);
+    const newDraft = await read(`({view:WS.workspaceView(),textarea:!!document.querySelector('#runtimeView textarea'),commands:[...commands],streaming:ST.S.streaming,owner:RS.runtimeStore.get('R-new')?.owner})`);
+    check(newDraft.view==='runtime'&&newDraft.textarea&&newDraft.owner?.sessionId==='native-new'&&!newDraft.commands.some(c=>c.type==='new_session')&&newDraft.streaming,
+      'new-session action opens an isolated runtime without interrupting A', newDraft);
     await click(primary);
     await read(`AP.observeApprovalEvent({type:'extension_ui_request',id:'classic-approval-A',method:'confirm',title:'A fixture approval',message:'Only A may decide'},ST.S)`);
     await waitFor(`!![...document.querySelectorAll('#confirmCard button')].find(b=>b.textContent==='稍后处理')`);
     await read(`document.querySelectorAll('#confirmCard button').forEach(b=>{if(b.textContent==='稍后处理')b.id='deferA'})`); await click('#deferA');
-    await click(other);
+    // B is now a live runtime row, not the classic history row: keep A's
+    // deferred approval parked while B's own workspace stays focused.
+    await click(`button[aria-label^="并行会话：B saved conversation"]`);
     check(await read(`AP.approvalSnapshot().pending.length===1&&!commands.some(c=>c.type==='extension_ui_response')&&!document.querySelector('#btnPendingClassicApproval').hidden`), 'A approval is deferred while B is viewed, without cancellation or auto-approval');
-    for (const theme of ['light','dark']) { await read(`document.documentElement.dataset.theme='${theme}'`); await sleep(180); await shot(theme + '-background-history'); }
+    for (const theme of ['light','dark']) { await read(`document.documentElement.dataset.theme='${theme}'`); await sleep(180); await shot(theme + '-background-runtime'); }
     await click('#btnPendingClassicApproval'); await waitFor(`document.querySelector('#confirmCard').textContent.includes('A fixture approval')`);
     await read(`document.querySelectorAll('#confirmCard button').forEach(b=>{if(b.textContent==='允许一次')b.id='allowA'})`); await click('#allowA');
     check(await read(`commands.filter(c=>c.type==='extension_ui_response').length===1&&commands.find(c=>c.type==='extension_ui_response').id==='classic-approval-A'&&WS.workspaceView()==='chat'`), 'resumed approval sends exactly one response to A request');
-    await click(other); await click('#workSurface textarea');
+    await click(`button[aria-label^="并行会话：B saved conversation"]`); await click('#runtimeView textarea');
     await read(`M.onSettled()`);
-    check(await read(`document.activeElement===document.querySelector('#workSurface textarea')&&WS.workspaceView()==='history'`), 'background completion does not steal focus from B draft');
+    check(await read(`document.activeElement===document.querySelector('#runtimeView textarea')&&WS.workspaceView()==='runtime'`), 'background completion does not steal focus from B runtime');
     await read(`(async()=>{
       window.owners={};window.seq={RA:0,RB:0};window.emit=(id,event)=>RS.observeRuntimeFrame({type:'runtime_event',owner:owners[id],eventSequence:++seq[id],event});
       snapshot={ok:true,backendInstance:'fixture-backend',liveCount:2,totalCount:2,limit:3,hardLimit:3,items:['RA','RB'].map((id,i)=>{
@@ -111,7 +148,7 @@ async function run() {
     await read(`document.querySelectorAll('.rtc-approvals button').forEach(b=>{if(b.textContent==='确认')b.id='allowRB'})`); await click('#allowRB');
     check(await read(`runtimeActions.filter(a=>a.command?.type==='extension_ui_response').length===1&&runtimeActions.find(a=>a.command?.type==='extension_ui_response').owner.conversationId==='RB'&&RS.runtimeStore.get('RA').approvals.length===1`), 'equal approval IDs remain scoped to RB while RA stays pending');
     await shot('runtime-B-owner-isolation');
-    await click('.project:not(.active) .pj-select');
+    await read(`document.querySelectorAll('.project:not(.active) .pj-select')[0]?.click()`);
     check(await read(`WS.workspaceView()==='history'&&ST.S.cwd===fixtureCwd&&!otherWrites.includes('/api/projects/activate')`), 'project navigation preserves original execution cwd');
     check(await read(`!commands.some(c=>['abort','switch_session','new_session'].includes(c.type))&&!document.querySelector('#toasts').textContent.includes('正在生成回答')`), 'normal background navigation emits no destructive classic command or old restriction notice');
     const restored = await read(`(()=>{const items=snapshot.items.map(item=>({...item,revision:10,activity:'idle',nativeSessionId:item.owner.sessionId,lifecycle:item.conversationId==='RA'?'dormant':'ready',owner:item.conversationId==='RA'?null:item.owner}));return {...snapshot,items}})()`);
