@@ -6,11 +6,15 @@ const { JSDOM } = require('jsdom');
   global.window = dom.window; global.document = dom.window.document; global.localStorage = dom.window.localStorage;
   const { openRuntimeSessions, observeRuntimeEvent, configureRuntimeSessions } = await import('../public/runtime-sessions.js');
   const owner = id => ({ backendInstance: 'backend', projectId: 'project', repoId: 'repo', workspaceId: id, workspaceEpoch: 'epoch', conversationId: id, runtimeId: id, runtimeGeneration: 'one', sessionId: id });
-  const A = owner('A'), B = owner('B'), records = [A, B].map(o => ({ conversationId: o.conversationId, workspace: { branch: o.conversationId, projectId: 'project' }, owner: o, lifecycle: 'ready', activity: 'running' }));
+  const A = owner('A'), B = owner('B'), records = [A, B].map(o => ({ conversationId: o.conversationId, workspace: { branch: o.conversationId, projectId: 'project' }, owner: o, lifecycle: 'ready', activity: 'idle' }));
   const requests = []; let completeStop;
   global.fetch = async (_url, opts = {}) => ({ json: async () => {
     if (!opts.body) return { ok: true, backendInstance: 'backend', items: records };
     const b = JSON.parse(opts.body); requests.push(b);
+    if (b.command?.type === 'prompt') {
+      const record = records.find(record => record.conversationId === b.owner?.conversationId);
+      if (record) record.activity = 'running';
+    }
     if (b.command?.type === 'abort') return new Promise(resolve => completeStop = resolve);
     if (b.action === 'read') return { ok: true, data: { messages: [] } };
     return { ok: true };
@@ -30,6 +34,7 @@ const { JSDOM } = require('jsdom');
   ok('发送captured B完整owner', requests.find(r => r.command?.message === 'task B').owner.workspaceId === 'B');
   await until(() => !btn('停止').disabled); btn('停止').click(); await until(() => completeStop);
   modal.querySelector('[data-conversation-id="A"]').click(); await until(() => input.value === 'draft A');
+  records.find(record => record.conversationId === 'A').activity = 'idle';
   completeStop({ ok: true }); await until(() => !btn('发送').disabled);
   ok('迟到B Stop响应不丢A草稿或内容', input.value === 'draft A' && modal.querySelector('pre').textContent.includes('late A'));
   ok('Stop发给B而非当前UI A', requests.find(r => r.command?.type === 'abort').owner.conversationId === 'B');
@@ -43,7 +48,7 @@ const { JSDOM } = require('jsdom');
   const answered = requests.filter(r => r.command?.type === 'extension_ui_response');
   ok('捕获A审批后切B，相同approval id仍只发给A完整owner', answered.length === 1 && answered[0].owner.conversationId === 'A'
     && answered[0].owner.workspaceId === 'A' && answered[0].command.id === 'shared-approval' && answered[0].command.confirmed === true);
-  await until(() => !btn('发送').disabled);
+  await until(() => !btn('确认').disabled);
   ok('迟到A审批不会清除B独立审批', modal.textContent.includes('Approve fixture B') && !!btn('确认'));
   const focusables = [...modal.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),[tabindex="0"]')];
   focusables.at(-1).focus(); document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));

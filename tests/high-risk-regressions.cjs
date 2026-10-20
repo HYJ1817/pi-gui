@@ -99,7 +99,7 @@ async function main() {
     const owner = id => ({ backendInstance: 'fixture', projectId: 'p', repoId: 'r', workspaceId: id, workspaceEpoch: 'e', conversationId: id, runtimeId: id, runtimeGeneration: '1', sessionId: id });
     for (const surface of ['central', 'modal']) for (const scenario of ['unchanged', 'new draft', 'edit back to same text', 'switch target', 'failure', 'new owner']) {
       await check(surface + ': pending send preserves correct draft: ' + scenario, async () => {
-        const records = ['A', 'B'].map(id => ({ conversationId: id, owner: owner(id), workspace: { branch: id, projectId: 'p' }, lifecycle: 'ready', activity: 'running' }));
+        const records = ['A', 'B'].map(id => ({ conversationId: id, owner: owner(id), workspace: { branch: id, projectId: 'p' }, lifecycle: 'ready', activity: 'idle' }));
         store.seed({ backendInstance: 'reset-' + surface + scenario, items: [] });
         seedRuntimeSnapshot({ ok: true, backendInstance: 'fixture', items: records });
         let finish, calls = 0;
@@ -142,7 +142,7 @@ async function main() {
     dom.window.close();
 
     const { createRuntimeRegistry } = await import('../server/runtime-registry.js');
-    for (const command of ['prompt', 'steer', 'follow_up']) for (const handled of [false, true]) {
+    for (const command of ['steer', 'follow_up']) for (const handled of [false, true]) {
       await check(command + (handled ? ' handled' : ' rejected') + ' leaves original task running and stoppable', async () => {
         let emit, aborts = 0;
         const dir = path.join(root, command + '-' + handled); fs.mkdirSync(dir);
@@ -161,6 +161,24 @@ async function main() {
         } finally { await registry.dispose(); }
       });
     }
+    await check('prompt cannot create a second turn while the original task runs', async () => {
+      let emit, aborts = 0, sends = 0;
+      const dir = path.join(root, 'prompt-busy'); fs.mkdirSync(dir);
+      const workspace = { projectId: 'p', repoId: 'r', workspaceId: 'w', workspaceEpoch: 'e', cwd: dir, root: dir, branch: 'fixture' };
+      const registry = createRuntimeRegistry({ dataDir: path.join(dir, 'registry'), resolveWorkspace: async () => workspace,
+        factory: async (_ctx, publish) => { emit = publish; return { start: () => emit({ type: 'bridge_status', state: 'ready' }), request: async () => ({ sessionId: 'native' }), getState: () => ({}), send() { sends++; }, abortAndWait: async () => { aborts++; return { ok: true }; }, dispose: async () => {}, cleanupConfirmed: () => true }; } });
+      try {
+        const first = await registry.start({}); await tick(); const target = registry.getOwner(first.conversationId);
+        await registry.command(target, { type: 'prompt', id: 'original', message: 'fixture' }); emit({ type: 'agent_start' });
+        const before = sends;
+        await assert.rejects(() => registry.command(target, { type: 'prompt', id: 'extra', message: 'extra' }), error => error.code === 'runtime_busy');
+        assert.equal(sends, before, 'the rejected prompt must not reach the Pi adapter');
+        emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'still running' } });
+        assert.equal(registry.snapshot().items[0].activity, 'running');
+        assert.equal((await registry.command(target, { type: 'abort' })).ok, true); assert.equal(aborts, 1);
+        assert.equal(registry.snapshot().items[0].activity, 'idle');
+      } finally { await registry.dispose(); }
+    });
     await check('preflight failure returns idle; late response cannot release Stop barrier', async () => {
       let emit, finishStop;
       const dir = path.join(root, 'stop-barrier'); fs.mkdirSync(dir);
@@ -181,7 +199,7 @@ async function main() {
         emit({ type: 'response', command: 'prompt', id: 'after-stop', success: false }); assert.equal(registry.snapshot().items[0].activity, 'idle');
       } finally { await registry.dispose(); }
     });
-    await check('out-of-order failures retain unacknowledged and accepted original work', async () => {
+    await check('out-of-order responses retain the accepted original turn and reject a second prompt', async () => {
       let emit;
       const dir = path.join(root, 'pending-turns'); fs.mkdirSync(dir);
       const workspace = { projectId: 'p', repoId: 'r', workspaceId: 'w', workspaceEpoch: 'e', cwd: dir, root: dir, branch: 'fixture' };
@@ -191,8 +209,10 @@ async function main() {
         const first = await registry.start({}); await tick(); const target = registry.getOwner(first.conversationId);
         const send = id => registry.command(target, { type: 'prompt', id, message: 'fixture' });
         const reject = id => emit({ type: 'response', command: 'prompt', id, success: false });
-        await send('first'); await send('extra'); reject('extra');
-        assert.equal(registry.snapshot().items[0].activity, 'running', 'original acknowledgement still pending');
+        await send('first');
+        await assert.rejects(() => send('extra'), error => error.code === 'runtime_busy');
+        reject('extra');
+        assert.equal(registry.snapshot().items[0].activity, 'running', 'a late rejection cannot settle the original request');
         reject('first'); assert.equal(registry.snapshot().items[0].activity, 'idle', 'all preflight requests failed');
         await send('malformed'); emit({ type: 'response', command: 'prompt', id: 'malformed' });
         assert.equal(registry.snapshot().items[0].activity, 'running', 'missing success is unknown, not settlement');
@@ -200,16 +220,18 @@ async function main() {
         assert.equal(registry.snapshot().items[0].activity, 'running', 'wrong command cannot consume the request');
         reject('malformed'); assert.equal(registry.snapshot().items[0].activity, 'idle');
         await send('accepted'); emit({ type: 'response', command: 'prompt', id: 'accepted', success: true, data: { disposition: 'queued' } });
-        await send('extra-again'); reject('extra-again');
-        assert.equal(registry.snapshot().items[0].activity, 'running', 'queued original has not started yet');
+        await assert.rejects(() => send('extra-again'), error => error.code === 'runtime_busy');
+        reject('extra-again');
+        assert.equal(registry.snapshot().items[0].activity, 'running', 'a rejected addition cannot settle the accepted original');
         emit({ type: 'agent_settled' });
         await send('new-pending'); reject('extra-again');
         assert.equal(registry.snapshot().items[0].activity, 'running', 'late old rejection cannot settle new request');
         reject('new-pending'); assert.equal(registry.snapshot().items[0].activity, 'idle');
-        for (let i = 0; i < 32; i++) await send('bounded-' + i);
-        await assert.rejects(() => send('bounded-0'), e => e.code === 'invalid_command');
-        await assert.rejects(() => send('over-budget'), e => e.code === 'runtime_request_limit');
-        for (let i = 0; i < 32; i++) reject('bounded-' + i);
+        const add = id => registry.command(target, { type: 'steer', id, message: 'fixture' });
+        for (let i = 0; i < 32; i++) await add('bounded-' + i);
+        await assert.rejects(() => add('bounded-0'), e => e.code === 'invalid_command');
+        await assert.rejects(() => add('over-budget'), e => e.code === 'runtime_request_limit');
+        for (let i = 0; i < 32; i++) emit({ type: 'response', command: 'steer', id: 'bounded-' + i, success: false });
         assert.equal(registry.snapshot().items[0].activity, 'idle');
       } finally { await registry.dispose(); }
     });

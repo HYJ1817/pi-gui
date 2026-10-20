@@ -34,7 +34,7 @@ export function openRuntimeSessions(project, workspace = null) {
     const input = node('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前独立会话的任务'); body.append(input);
     input.oninput = () => { const r = store.get(selected); if (r) { r.draft = input.value; r.draftRevision++; } };
     const send = button('发送', async () => {
-      const r = store.get(selected), text = input.value.trim(); if (!r?.owner || !text || busy) return;
+      const r = store.get(selected), text = input.value.trim(); if (!r?.owner || !text || busy || r.item.activity !== 'idle') return;
       const owner = { ...r.owner }, id = selected;
       const draft = input.value, draftRevision = r.draftRevision;
       await action({ action: 'command', owner, command: { type: 'prompt', message: text } }, result => {
@@ -128,7 +128,7 @@ export function openRuntimeSessions(project, workspace = null) {
       output.textContent = r.text || '等待任务'; tools.textContent = r.tools.map(t => `${t.name} · ${t.state}`).join(' / ');
       if (renderedId !== selected || document.activeElement !== input) input.value = r.draft;
       renderedId = selected;
-      send.disabled = busy || r.item.lifecycle !== 'ready' || r.item.activity === 'stopping'; stop.disabled = busy || !r.owner || r.item.activity === 'idle';
+      send.disabled = busy || r.item.lifecycle !== 'ready' || r.item.activity !== 'idle'; stop.disabled = busy || !r.owner || r.item.activity === 'idle';
       restart.disabled = end.disabled = processes.disabled = browse.disabled = busy || !r.owner;
       if (!r.owner && !controls.querySelector('[data-resume]')) { const resume = button('恢复会话', () => launch({ action: 'resume', conversationId: selected })); resume.dataset.resume = 'true'; controls.append(resume); }
       if (r.owner) controls.querySelector('[data-resume]')?.remove();
