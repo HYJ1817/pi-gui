@@ -106,6 +106,7 @@ import { startupNotice, NOTICE_ACTIONS } from './status-copy.js';
 import { showNotice, hideNotice } from './ui/notice.js';
 import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
+import { openSpecsPanel } from './specs-panel.js';
 import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
@@ -258,6 +259,23 @@ configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation,
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
 initGuiBrowserState();
+
+const btnSpecs = $('btnSpecs');
+if (btnSpecs) {
+  if (!rightPane) {
+    btnSpecs.hidden = true;
+  } else {
+    btnSpecs.addEventListener('click', () => {
+      if (rightPane.isOpen() && rightPane.surface() === 'specs') rightPane.close();
+      else openSpecsPanel({ triggerId: 'btnSpecs' });
+    });
+    document.addEventListener('pi-gui:right-pane', (event) => {
+      const open = event.detail?.open === true && event.detail?.surface === 'specs';
+      btnSpecs.setAttribute('aria-pressed', String(open));
+      btnSpecs.classList.toggle('is-active', open);
+    });
+  }
+}
 
 const btnBrowser = $('btnBrowser');
 if (btnBrowser) {

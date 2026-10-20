@@ -43,6 +43,7 @@ Electron 只负责装一个窗口 —— 全部跑在本机，不开浏览器。
 - **会话搜索** —— 在当前项目内搜索历史提问和回答，并直接跳回对应会话
 - **文件变更** —— 以 Git 为准看改了什么，按 hunk 看 diff
 - **撤销** —— 逐文件撤销，或先看一遍完整计划再全部撤销
+- **Specs（T1）** —— 在右栏只读浏览项目根 `SPEC.md` 与 `specs/` Markdown，支持文档树、标题锚点和项目内相对链接
 - **Skills 管理** —— 发现、查看、启用/停用你已装的 Skills
 - **任务编排** —— 把大目标拆成带依赖的任务，交给不同 CLI 依次执行
 - **任务工作流** —— Planner 的每次 Agent 执行可关联对应会话与执行期间文件变化，
@@ -412,6 +413,7 @@ npm run release:check -- --with-installer    # → READY TO RELEASE
 | [security.md](docs/security.md) | 安全边界：回环、令牌、Origin、不可信输入、路径与子进程边界、密钥、Pi 运行时更新边界、以及你仍需负责的部分 |
 | [sessions.md](docs/sessions.md) | 会话：文件机制、列表与归属、当前/pending、切换、归档、软删除、分支、提问导航 |
 | [git-changes.md](docs/git-changes.md) | 文件变更：diff 渲染、撤销规则、权限闸门、设计取舍 |
+| [specs.md](docs/specs.md) | T1 Specs：发现范围、不透明 ID、项目/Worktree 隔离、路径与 Markdown 安全、空态与测试 |
 | [planner.md](docs/planner.md) | 任务编排：Planner/Executor、Agent registry、DAG、失败与恢复、限制 |
 | [workflows.md](docs/workflows.md) | 任务工作流：任务 ↔ 会话、任务 ↔ 文件、打开会话、项目隔离、元数据边界 |
 | [reviews.md](docs/reviews.md) | 人工审阅：执行结果 ≠ 验收、三个审阅状态、验证快照、当前 diff、冲突与 revision、限制 |

@@ -285,6 +285,14 @@ export function setGitConversationScope(id) {
 export function gitConversationScope() { return gitConversationId; }
 const gitScopeHeaders = (id = gitConversationId) => (id ? { 'X-Pi-Gui-Conversation': id } : undefined);
 
+/* Specs reuse the focused conversation scope used by Changes. The backend
+ * resolves that ID to a workspace root; no filesystem path crosses the wire. */
+export const fetchSpecs = () => getJSON('/api/specs', gitScopeHeaders());
+export const fetchSpecDocument = (id, workspace, generation) => getJSON(
+  '/api/specs/document?' + new URLSearchParams({ id, workspace: workspace?.id || '', generation: String(generation ?? '') }),
+  gitScopeHeaders()
+);
+
 export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders());
 
 /** 拉某个文件的 diff。`context` 为 undefined 时不传，由 git 用默认上下文；
