@@ -19,7 +19,7 @@ import { fmt } from './util.js';
 import { renderModelPicker, renderThinkingPicker, thinkingAvailability, applyChipState, setTriggers } from './ui3-model-picker.js';
 import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
-import { sendCommand, runtimeSessionAction, setRequestFailureReporter } from './api.js';
+import { sendCommand, runtimeSessionAction, setRequestFailureReporter, switchSession, fetchRuntimeSessions } from './api.js';
 import { installRendererLogging, logRendererEvent } from './log-client.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { observeWebEvent } from './web-access.js';
@@ -28,7 +28,7 @@ import { observeMemoryEvent } from './memory.js';
 import { observeBrowserEvent } from './browser.js';
 import { observeGuiBrowserEvent, initGuiBrowserState } from './gui-browser-capabilities.js';
 import { observeMcpEvent } from './mcp-observer.js';
-import { cancelPendingApprovals, expireAll, observeApprovalEvent } from './approval.js';
+import { cancelPendingApprovals, expireAll, observeApprovalEvent, approvalSnapshot } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { configureFeedbackContext, configureNotificationLogging, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
 import { handleExtensionNotification } from './extension-notices.js';
@@ -44,6 +44,8 @@ import {
   exportHtml,
   forkFrom,
   newSession,
+  afterSessionSwitch,
+  setNewSessionNavigator,
   onResponse,
   onStopState,
   setModel,
@@ -74,9 +76,10 @@ import { applyProjectPreferences, openProjectSettings } from './project-config.j
 import { loadGitStatus, openChangesPanel, refreshGitNow } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
 import { resetDrift } from './schema-drift.js';
-import { loadPlannerBadge, openPlanner } from './planner.js';
+import { loadPlannerBadge, openPlanner, setTaskSessionViewer } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
+import { createSessionNavigation } from './session-navigation.js';
 import { initConversationNav } from './conversation-nav.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { openLogs } from './logs.js';
@@ -86,10 +89,11 @@ import { showChat, showRuntimeConversation, runtimeViewElement, workspaceView } 
 import { createRuntimeConversation } from './runtime-conversation.js';
 import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
-import { setRuntimeFocusHandler } from './runtime-nav.js';
+import { setRuntimeFocusHandler, createParallelConversation } from './runtime-nav.js';
 import { refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeModels } from './runtime-models.js';
-import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver } from './runtime-state.js';
+import { createRuntimeRecovery } from './runtime-recovery.js';
+import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver, seedRuntimeSnapshot, observeRuntimeFrame, refreshRuntimeViews } from './runtime-state.js';
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
@@ -157,7 +161,14 @@ const focusRuntimeConversation = conversationId => {
   setGitConversationScope(conversationId);
   void refreshGitNow();
 };
-setRuntimeFocusHandler(focusRuntimeConversation);
+setRuntimeFocusHandler(conversationId => {
+  focusRuntimeConversation(conversationId);
+  const item = runtimeStore.get(conversationId)?.item;
+  if (!item?.owner && item?.nativeSessionId) void runtimeConversation.openHistory({
+    conversationId, projectId: item.workspace.projectId, workspaceId: item.workspace.workspaceId,
+    workspaceEpoch: item.workspace.workspaceEpoch, nativeSessionId: item.nativeSessionId,
+  });
+});
 setRuntimeHistoryHandler((locator, match) => {
   const item = runtimeStore.get(locator.conversationId)?.item;
   if (item?.nativeSessionId !== locator.nativeSessionId || item.workspace?.projectId !== locator.projectId
@@ -182,7 +193,29 @@ document.addEventListener('pi-gui:workspace-view', event => {
   setGitConversationScope(null);
   void refreshGitNow();
 });
-setProjectSessionActions({ newSession, search: openSessionSearch, previewRow: createSidebarPreviewRow, openPreviewSession: openSidebarPreviewSession });
+const sessionNavigation = createSessionNavigation({
+  busy: () => Boolean(S.streaming || S.submitting || S.stopping || S.fallbackActive || approvalSnapshot().pending.length),
+  continueSession: async (session, project) => {
+    if (!samePath(project.path, S.cwd)) return false;
+    const result = await switchSession(session.id);
+    if (!result.ok) return false;
+    afterSessionSwitch(); return result;
+  },
+  newSession: async (project, _draft, requestId) => {
+    if (!samePath(project.path, S.cwd)) return false;
+    return (await sendCommand({ type: 'new_session', id: requestId })).ok;
+  },
+  restoreNewDraft: text => { if (!el.input.value) { el.input.value = text; autoGrow(); updateSendState(); } },
+  createParallel: project => createParallelConversation(project),
+});
+setSessionOpenHandler((session, project, index) => sessionNavigation.open(session, project, index));
+setTaskSessionViewer(result => sessionNavigation.openResolvedHistory(result, { path: S.cwd }));
+setNewSessionNavigator(() => sessionNavigation.newDraft());
+setProjectSessionActions({ newSession, search: openSessionSearch, previewRow: createSidebarPreviewRow, openPreviewSession: openSidebarPreviewSession,
+  openBackgroundSession: (session, project) => sessionNavigation.open(session, project),
+  newBackgroundSession: project => sessionNavigation.newDraft(project),
+  browseProject: project => sessionNavigation.openProject(project),
+});
 
 /* 会话一变（新开 / 分叉 / 切换）就要重画侧栏那块列表。
  * rpc.js 不能 import sessions.js（sessions.js 已经 import 了 rpc.js，会成环），
@@ -229,9 +262,13 @@ if (btnBrowser) {
 
 let sseWasDown = false;
 let sseDownAt = 0;
+const recoverRuntimes = createRuntimeRecovery({ readSnapshot: fetchRuntimeSessions, read: runtimeSessionAction,
+  seed: seedRuntimeSnapshot, store: runtimeStore, observe: observeRuntimeFrame, changed: refreshRuntimeViews,
+  failed: () => logRendererEvent('ui.action_failed', { action: 'runtime_resync', reason: 'read_failed' }) });
 function connect() {
   const es = new EventSource('/api/events');
   es.onopen = () => {
+    void recoverRuntimes();
     setTransportOnline(true);
     if (sseWasDown) {
       logRendererEvent('network.sse_reconnect', {}, { durationMs: Date.now() - sseDownAt });
@@ -306,6 +343,7 @@ function handleEvent(evt) {
       return onExecutionEvent(evt);
     case 'response':
       onResponse(evt);
+      sessionNavigation.observeResponse(evt);
       if (S.syncPending && evt.success && (evt.command === 'get_state' || evt.command === 'get_messages')) {
         S.syncPending[evt.command === 'get_state' ? 'state' : 'messages'] = false;
         if (!S.syncPending.state && !S.syncPending.messages) {
@@ -324,6 +362,7 @@ function handleEvent(evt) {
       /* Pi 已经收尾：还挂在 pending 的 approval 对话框不可能再被应答（Pi 侧
        * 在 abort/timeout 时已自行 resolve），本地作废，别留一张永远等的卡。 */
       expireAll('agent-settled');
+      void refreshSidebarSessions();
       /* ⚠️ 这里**不动 S.stopping**。agent_settled 与 abort 应答的先后不确定；
        * 它先到时如果就把 stopping 落下去，用户能在屏障还挂着的时候发新消息
        * —— 那正是要修的 bug。停止的收口只有 stop_state 事件与 HTTP 应答。 */
@@ -1182,7 +1221,7 @@ defineCommands([
   { id: 'session.stats', title: '会话统计', group: '会话', keywords: 'stats 统计 token 成本', when: () => S.hasProject, run: () => openStatsPanel() },
   { id: 'session.rename', title: '重命名会话', group: '会话', keywords: 'rename 改名 标题', when: () => S.hasProject, run: () => renameSession() },
   { id: 'session.export', title: '导出会话为 HTML', group: '会话', keywords: 'export share 导出 分享', when: canPrompt, run: () => exportHtml() },
-  { id: 'run.stop', title: '停止生成', group: '执行', keywords: 'stop abort 中断 取消', when: () => S.streaming, run: () => stop() },
+  { id: 'run.stop', title: '停止生成', group: '执行', keywords: 'stop abort 中断 取消', when: () => workspaceView() === 'chat' && S.streaming, run: () => stop() },
   { id: 'run.compact', title: '压缩上下文', group: '执行', keywords: 'compact 压缩 context', when: canPrompt, run: () => compactNow() },
   /* 重启仍然走 restartPi()（唯一入口 + 确认）—— 面板不提供跳过确认的路径。 */
   { id: 'run.restart', title: '重启 Pi', group: '执行', keywords: 'restart 重载 reload pi', when: () => S.hasProject, run: () => restartPi() },

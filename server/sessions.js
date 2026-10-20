@@ -107,7 +107,7 @@ function compareCreation(a, b) {
   return ak < bk ? -1 : ak > bk ? 1 : 0;
 }
 
-export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [], getProjects = () => [] } = {}) {
+export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [], getProjects = () => [], readHistory = null, switchBlocked = () => false } = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const configuredAgentDir = env.PI_CODING_AGENT_DIR;
   const AGENT_DIR = configuredAgentDir === '~' ? HOME : configuredAgentDir?.startsWith('~/') || configuredAgentDir?.startsWith('~\\')
@@ -397,8 +397,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
   }
 
   /** 按 ID 找真实路径 —— 前端永远不传路径。 */
-  function resolveId(id) {
-    const cwd = runtime.getCurrentCwd();
+  function resolveId(id, cwd = runtime.getCurrentCwd()) {
     if (!cwd) return null;
     const want = normCwd(cwd);
     for (const f of candidateFiles(cwd)) {
@@ -646,18 +645,38 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
    * 逐渐分叉的代码路径，而分叉出来的那条迟早会漏掉某个收尾动作。
    */
   async function switchToTarget(target) {
+    if (switchBlocked()) return { ok: false, code: 'session_running', error: '原会话仍在后台执行；可以查看其它会话，执行交接需等待当前工作区空闲。' };
     if (!rpc || typeof rpc.request !== 'function') return { ok: false, code: 'no-rpc', error: 'pi 未连接，无法切换会话' };
     const res = await rpc.request({ type: 'switch_session', sessionPath: target.file });
     if (!res) return { ok: false, code: 'no-answer', error: 'pi 没有应答（可能正在忙，或子进程未运行）' };
     if (res.__error) return { ok: false, code: 'failed', error: String(res.__error) };
     if (res.cancelled) return { ok: false, code: 'cancelled', error: '切换被扩展取消了' };
-    return { ok: true, id: target.id, title: target.title };
+    return { ok: true, id: target.id, title: target.title, sessionId: target.sessionId };
   }
 
   async function switchTo(id) {
     const target = resolveId(id);
     if (!target) return { ok: false, code: 'not-found', error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
     return switchToTarget(target);
+  }
+
+  async function history(id, project = null) {
+    const cwd = project === null ? runtime.getCurrentCwd() : project;
+    if (typeof id !== 'string' || !/^[a-f0-9]{16}$/.test(id) || !cwd || !readHistory) return { ok: false, code: 'history_unavailable' };
+    if (project !== null && !getProjects().some(p => typeof p.path === 'string' && normCwd(p.path) === normCwd(project))) return { ok: false, code: 'unknown_project' };
+    const target = resolveId(id, cwd);
+    if (!target) return { ok: false, code: 'history_unavailable' };
+    return historyTarget(target);
+  }
+  async function historyTarget(target) {
+    if (!readHistory) return { ok: false, code: 'history_unavailable' };
+    try {
+      const stat = fs.statSync(target.file);
+      const result = await readHistory(target.file, { cwd: target.cwd, sessionId: target.sessionId,
+        sessionIdentity: { dev: stat.dev, ino: stat.ino, birthtimeMs: stat.birthtimeMs } });
+      if (!result?.ok) return { ok: false, code: 'history_unavailable' };
+      return { ok: true, id: target.id, sessionId: target.sessionId, title: target.title, messages: result.messages, truncated: result.truncated === true };
+    } catch { return { ok: false, code: 'history_unavailable' }; }
   }
 
   async function rename(name) {
@@ -688,6 +707,11 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
 
   async function handle(req, res, url) {
     const p = url.pathname;
+    if (p === '/api/sessions/history') {
+      if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'invalid_request' });
+      const result = await history(url.searchParams.get('id'), url.searchParams.get('project'));
+      return json(res, result.ok ? 200 : 409, result);
+    }
     if (p === '/api/sessions') {
       if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed' });
       try {
@@ -734,6 +758,8 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     handle,
     list,
     switchTo,
+    history,
+    historyTarget,
     rename,
     setArchived,
     remove,

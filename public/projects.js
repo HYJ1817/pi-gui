@@ -112,7 +112,7 @@ function attachPreview(item, p, index) {
       box.replaceChildren();
       const rows = (result.sessions || []).filter(s => !s.archived);
       for (const s of rows) box.append(sessionActions.previewRow(s, async selected => {
-        if (S.streaming) return toast('正在生成回答，请先停止再切换会话', 'warn');
+        if (sessionActions.openBackgroundSession?.(selected, p)) return;
         await activateForSessionAction(p, () => sessionActions.openPreviewSession(selected));
       }));
       if (!rows.length) box.textContent = '还没有会话';
@@ -271,7 +271,7 @@ export function renderProjects() {
     select.append(icon, body);
     item.append(select);
     if (!isActive) item.append(headerAction('newSession', `在「${label}」中新对话`, async () => {
-      if (S.streaming) return toast('正在生成回答，请先停止再新建其它项目的会话', 'warn');
+      if (sessionActions.newBackgroundSession?.(p)) return;
       await activateForSessionAction(p, () => sessionActions.newSession?.());
     }));
     item.append(menuTrigger);
@@ -362,6 +362,7 @@ export async function removeProject(target) {
 }
 
 export function activateProject(target, label, activate = apiActivateProject) {
+  if (sessionActions.browseProject?.({ path: target, name: label || target })) return Promise.resolve(false);
   pendingProjectAction = null;
   showChat();
   const generation = beginWorkspaceSwitch(target);

@@ -7,7 +7,7 @@
  * 而且和项目列表分处两个地方，切项目之后还要重新打开。
  *
  * 现在照 Codex 的做法：**会话直接列在当前项目那一行下面**，随项目列表一起渲染。
- * 点一条即切；当前那条高亮且不可点。
+ * 点一条即打开；运行中查看其它历史时保留原执行会话，当前项可返回实时输出。
  *
  * ---------- 为什么需要它 ----------
  *
@@ -24,7 +24,7 @@
  *    并核对那条会话确实属于当前项目 ⇒ 不可能切到别的项目上去。
  * 2. **切换后必须走 afterSessionSwitch()**：清空对话区与变更账本再重建。
  *    不走这一步的话，切完界面还挂着上一个会话的消息，看着像「切了没生效」。
- * 3. **正在流式输出时不给切** —— 切走会让那一轮的回答悬在半空。
+ * 3. **浏览与执行交接分离**：后台运行时只切视图，不能调用会中断 Pi 的 switch_session。
  * 4. ⚠️ **会话一变就必须重画这个列表。** 列表原本只在 renderProjects() 里渲染，
  *    而 new_session / fork / 切换都不触发它 —— 于是列表停在旧状态：旧会话仍然
  *    带着 `current` 标记，而当前项是**不给点**的（你已经在里面了），用户就再也
@@ -47,6 +47,7 @@ import { setAfterHistoryRendered } from './messages.js';
 import { scrollToUserTurn } from './conversation-nav.js';
 import { clearSessionPlans, refreshSessionPlans } from './session-plans.js';
 import { projectExpanded, setProjectExpanded } from './sidebar-expansion.js';
+import { showChat } from './ui/workspace-surface.js';
 import {
   createSearchBar,
   renderSearchResults,
@@ -61,6 +62,8 @@ import { clearRuntimeNav, loadRuntimeNav, repaintRuntimeNav, runtimeNavCount, se
  * runtime 状态变化由 runtime-nav 自己订阅（它不该依赖本模块替它接线）。 */
 let currentProject = {};
 let runtimeHistoryHandler = null;
+let sessionOpenHandler = null;
+export function setSessionOpenHandler(fn) { sessionOpenHandler = typeof fn === 'function' ? fn : null; }
 export function setRuntimeHistoryHandler(fn) { runtimeHistoryHandler = typeof fn === 'function' ? fn : null; }
 
 /** 进行中的会话一次最多列几条，超出折叠（和 Codex 一样给个「展开显示」）。 */
@@ -472,18 +475,21 @@ function makeRow(s, onPick = null) {
     ? '新会话：还没有消息，pi 还没把它写到磁盘上'
     : `${s.messageCount} 条消息 · ${fmtTime(s.updatedAt)}${s.createdAt ? ' · 创建于 ' + fmtTime(Date.parse(s.createdAt)) : ''}`;
 
-  const canSwitch = !s.current && !s.pending && !capMissing('switchSession');
+  const canSwitch = !s.pending && (s.current || !capMissing('switchSession'));
   const primary = el(canSwitch ? 'button' : 'span', 'pj-sess-primary');
   if (canSwitch) {
     primary.type = 'button';
     primary.setAttribute('aria-label', `切换会话：${s.title || '（无标题）'}`);
-    primary.onclick = () => onPick ? onPick(s) : doSwitch(s);
+    primary.onclick = () => onPick ? onPick(s) : s.current ? showChat({ focusComposer: true }) : doSwitch(s);
   }
   if (s.current) row.setAttribute('aria-current', 'true');
+  if (s.current) row.dataset.classicCurrent = 'true';
   const dot = el('span', 'pj-sess-dot');
   dot.setAttribute('aria-hidden', 'true');
   const title = el('span', 'pj-sess-title', s.title || '（无标题）');
-  primary.append(dot, title, el('span', 'pj-sess-time', fmtTime(s.updatedAt)));
+  const time = el('span', 'pj-sess-time', s.current && S.streaming ? '运行中' : fmtTime(s.updatedAt));
+  time.dataset.idleLabel = fmtTime(s.updatedAt);
+  primary.append(dot, title, time);
   row.append(primary);
 
   const acts = makeRowMenu(s, row, title, Boolean(onPick));
@@ -536,6 +542,9 @@ function startRename(row, titleEl, s) {
 }
 
 let busy = false;
+document.addEventListener('pi-gui:classic-activity', () => {
+  for (const time of document.querySelectorAll('[data-classic-current] .pj-sess-time')) time.textContent = S.streaming ? '运行中' : time.dataset.idleLabel || '';
+});
 
 /**
  * 切到某个会话。
@@ -543,11 +552,8 @@ let busy = false;
  * @param locateUserIndex 可选：切过去之后跳到第 N 次提问（搜索结果带的 userIndex）
  */
 async function doSwitch(s, locateUserIndex = null) {
+  if (sessionOpenHandler?.(s, currentProject, locateUserIndex)) return;
   if (busy) return;
-  if (S.streaming) {
-    toast('正在生成回答，等这一轮结束再切（或先点停止）', 'warn');
-    return;
-  }
   busy = true;
   /* **先挂待办再切** —— 顺序反了就可能挂在「历史已重建」回调之后，
    * 那一次定位永远等不到。 */
@@ -591,7 +597,7 @@ function pickResult(res, match) {
     toast('当前 pi 没有提供「切换会话」能力（详情见侧栏「诊断」）', 'warn');
     return;
   }
-  doSwitch({ id: res.id, title: res.title, archived: res.archived }, match ? match.userIndex : null);
+  doSwitch({ id: res.id, sessionId: res.sessionId, title: res.title, archived: res.archived }, match ? match.userIndex : null);
 }
 
 async function doArchive(s, archived) {

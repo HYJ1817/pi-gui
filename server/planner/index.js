@@ -236,7 +236,7 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
    * @param attemptParam 可选：指定第几次尝试。不传则取最近一次**有会话**的尝试
    *                     （最新那次可能因为 Agent 不支持而没关联到会话）。
    */
-  async function openTaskSession(plan, taskId, attemptParam) {
+  async function openTaskSession(plan, taskId, attemptParam, preview = false) {
     if (!sessions || typeof sessions.resolveByUuid !== 'function' || typeof sessions.switchToTarget !== 'function') {
       return { ok: false, error: '会话模块没有接入，暂时打不开会话' };
     }
@@ -252,11 +252,12 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
     if (!attempt.sessionId) {
       return { ok: false, error: '这次执行没有关联会话（所用的 Agent 不提供会话关联）' };
     }
-    if (task.status === TASK_STATUS.RUNNING) {
+    if (task.status === TASK_STATUS.RUNNING && !preview) {
       return { ok: false, error: '这个任务正在执行，它的会话正被写入。等它结束后再打开。' };
     }
     const target = sessions.resolveByUuid(attempt.sessionId);
     if (!target) return { ok: false, error: '关联的会话已经找不到了（可能已被删除或移动）' };
+    if (preview) return sessions.historyTarget ? sessions.historyTarget(target) : { ok: false, error: '只读历史暂不可用' };
     const r = await sessions.switchToTarget(target);
     if (!r.ok) return { ok: false, error: r.error || '切换会话失败', code: r.code };
     return { ok: true, id: r.id, title: r.title, sessionId: attempt.sessionId, taskId, attempt: attempt.attempt };
@@ -871,7 +872,7 @@ export function createPlanner({ runtime, registry, store, scheduler, env = proce
         /* P7：从任务跳到它的会话（规格 §7）。失败一律 200 + ok:false ——
          * 「这次执行没有关联会话」是**正常结果**，不是错误状态码。 */
         if (taskAction === 'open-session') {
-          const r = await openTaskSession(plan, taskId, url.searchParams.get('attempt'));
+          const r = await openTaskSession(plan, taskId, url.searchParams.get('attempt'), url.searchParams.get('preview') === '1');
           return json(res, 200, r.ok ? r : { ok: false, error: r.error, code: r.code || '' });
         }
         return json(res, 404, { ok: false, error: `不认识的任务操作：${taskAction}` });

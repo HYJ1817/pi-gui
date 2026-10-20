@@ -21,6 +21,7 @@
 
 import { el, S } from './state.js';
 import { registerConversationAnchor, rebuildConversationNav, clearConversationNav } from './conversation-nav.js';
+import { workspaceView } from './ui/workspace-surface.js';
 import { icon, iconFor } from './util.js';
 import { md } from './markdown.js';
 import { sendCommand } from './api.js';
@@ -125,7 +126,9 @@ export function syncToolWorking() {
 }
 
 export function setStreaming(on) {
+  const changed = S.streaming !== on;
   S.streaming = on;
+  if (changed) document.dispatchEvent(new window.Event('pi-gui:classic-activity'));
   el.btnStop.hidden = !on;
   /* 新的一轮开始了：上一轮那次「用户停止」的归属到此结束。
    * 之后 provider 再报 cancelled / aborted，就不是用户停的，照常当错误显示。 */
@@ -140,7 +143,7 @@ export function onSettled() {
   sendCommand({ type: 'get_session_stats' });
   sendCommand({ type: 'get_state' });
   sendCommand({ type: 'get_tree' });
-  el.input.focus();
+  if (workspaceView() === 'chat') el.input.focus();
 }
 
 export function interruptActive() {

@@ -49,8 +49,8 @@ import { openModal } from './ui/modal.js';
 
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
-/* 工具状态只映射 store 真实记过的三种；别的取值原样显示，不猜。 */
-const TOOL_STATE = { running: '运行中', done: '完成', error: '失败' };
+/* 工具状态只映射 store 真实记过的状态；别的取值原样显示，不猜。 */
+const TOOL_STATE = { running: '运行中', done: '完成', error: '失败', interrupted: '未完成' };
 /* 历史接口不含这些字段（见文件头）。写在状态行里，用户才知道「这里为什么没有」。 */
 const HISTORY_NOTE = '历史只含正文（无工具、思考、用量）';
 
@@ -192,7 +192,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   send.onclick = () => {
     const target = id;
     const r = store.get(target), text = input.value.trim();
-    if (!target || !r?.owner || !text || current().pending) return;
+    if (!target || !r?.owner || !text || current().pending || r.item.activity !== 'idle') return;
     viewOf(target).history = null;        // 一旦真的要发，就回到实时视图
     const owner = { ...r.owner };
     const draft = input.value, draftRevision = r.draftRevision;
@@ -414,7 +414,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
 
     /* 这些判据全部来自**当前会话自己的**视图态 —— A 的 pending 不会禁用 B 的控件。 */
     const live = Boolean(r?.owner), busy = view.pending;
-    send.disabled = busy || !live || r?.item?.lifecycle !== 'ready' || r?.item?.activity === 'stopping' || Boolean(view.history);
+    send.disabled = busy || !live || r?.item?.lifecycle !== 'ready' || r?.item?.activity !== 'idle' || Boolean(view.history);
     stop.disabled = busy || !live || r?.item?.activity === 'idle';
     restart.disabled = end.disabled = busy || !live;
     resume.disabled = busy || live;

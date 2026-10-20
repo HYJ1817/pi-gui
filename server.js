@@ -567,6 +567,8 @@ const sessions = createSessions({
   compat: piCompat,
   extraSessionRoots: [PLANNER_SESSION_DIR],
   getProjects: () => projects.read().items,
+  readHistory: (file, expected) => readSessionMessages(file, { expected }),
+  switchBlocked: () => Boolean(piActivity.busy() || rpc.stopState()?.pending),
 });
 
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
@@ -982,6 +984,7 @@ const route = createRouter({
     ...rpc,
     getState: () => ({ ...rpc.getState(), legacyOwner: primaryOwner() }),
     send: (cmd) => {
+      if (['new_session', 'switch_session', 'fork'].includes(cmd.type) && (piActivity.busy() || rpc.stopState()?.pending)) throw new Error('session_running');
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
       if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
       modelGeneration.guardCommand(cmd);

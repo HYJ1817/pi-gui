@@ -3,7 +3,7 @@ import { json, readRawBody } from './http-utils.js';
 const CODES = new Set(['stale_runtime', 'stale_workspace', 'unknown_workspace', 'workspace_in_use', 'workspace_archived', 'workspace_unavailable',
   'runtime_limit', 'conversation_limit', 'unknown_conversation', 'invalid_request', 'invalid_command', 'invalid_cursor', 'runtime_not_ready',
   'runtime_start_failed', 'registry_unavailable', 'metadata_write_failed', 'cleanup_pending', 'pi_entry_unproven', 'session_unavailable',
-  'stop_in_progress', 'stale_approval', 'maintenance', 'auth_syncing', 'process_limit', 'process_control_disabled', 'cancelled',
+  'stop_in_progress', 'runtime_busy', 'stale_approval', 'maintenance', 'auth_syncing', 'process_limit', 'process_control_disabled', 'cancelled',
   'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args']);
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const fail = () => { throw Object.assign(Error('invalid_request'), { code: 'invalid_request' }); };

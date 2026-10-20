@@ -10,6 +10,7 @@ export function resourceText(resources = runtimeStore.resources()) {
   return resources.totalCount > resources.limit ? `${resources.totalCount} 个会话正在运行` : `正在运行 ${resources.totalCount} / ${resources.limit}`;
 }
 export function runtimeLimitNotice(result) {
+  if (result?.code === 'runtime_busy') return '此会话已有任务正在执行，草稿已保留；可以切到其它会话继续。';
   if (result?.code === 'runtime_limit') return '运行名额已满。可以打开历史，关闭一个运行中的会话后再恢复，或稍后恢复。';
   if (result?.code === 'cleanup_pending') return '清理未完成，运行名额仍被占用。请等待清理完成后再试。';
   return null;

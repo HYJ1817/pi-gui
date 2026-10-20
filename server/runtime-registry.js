@@ -151,7 +151,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       if (['error', 'exited'].includes(event.state)) { live.error = 'runtime_unavailable'; live.attention = true; }
     }
     if (event.type === 'agent_start') { live.agentActive = true; if (live.activity !== 'stopping') live.activity = 'running'; }
-    if (event.type === 'agent_settled') { live.agentActive = false; live.pendingTurns.clear(); if (live.activity !== 'stopping') live.activity = 'idle'; if (focused !== live.record.conversationId) live.attention = true; }
+    if (event.type === 'agent_settled') { live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); if (live.activity !== 'stopping') live.activity = 'idle'; if (focused !== live.record.conversationId) live.attention = true; }
     // A response settles only its captured request. Other requests may still be
     // awaiting acknowledgement, even before the first agent_start arrives.
     if (event.type === 'response' && typeof event.success === 'boolean' && TURNS.has(event.command) && live.pendingTurns.get(event.id) === event.command) {
@@ -159,7 +159,12 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       if (event.success === true && event.data?.disposition !== 'handled') live.agentActive = true;
       if (!live.agentActive && !live.pendingTurns.size && live.activity !== 'stopping') live.activity = 'idle';
     }
-    if (event.type === 'stop_state') { live.activity = event.pending ? 'stopping' : 'idle'; if (!event.pending) { live.agentActive = false; live.pendingTurns.clear(); } }
+    if (event.type === 'stop_state') { live.activity = event.pending ? 'stopping' : 'idle'; if (!event.pending) { live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); } }
+    if (event.type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(event.method)) {
+      if (!live.approvals.has(event.id) && live.approvals.size >= 32) live.approvals.delete(live.approvals.keys().next().value);
+      live.approvals.set(event.id, event);
+    }
+    if (event.type === 'bridge_status' && event.state !== 'ready') live.approvals.clear();
     if (event.type === 'extension_ui_request' || event.type === 'extension_error') live.attention = true;
     if (event.generationResult?.outcome === 'failed') { live.error = 'generation_failed'; live.attention = true; }
     // Diagnostic raw lines are never retained in parallel conversation buffers.
@@ -206,7 +211,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const total = lives.size + externalCount();
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
-      sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set() };
+      sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map() };
     leases.set(key, live); lives.set(record.conversationId, live); changed(live);
     try {
       live.adapter = await factory({ cwd: record.workspace.cwd, workspace: { ...record.workspace }, owner: owner(live),
@@ -257,9 +262,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (cmd.type === 'abort') {
       live.activity = 'stopping'; changed(live);
       const result = await live.adapter.abortAndWait(cmd);
-      live = resolve(expected); if (result.ok) { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); } changed(live); return result;
+      live = resolve(expected); if (result.ok) { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); } changed(live); return result;
     }
     if (TURNS.has(cmd.type) && live.activity === 'stopping') throw fail('stop_in_progress');
+    if (cmd.type === 'prompt' && (live.agentActive || live.pendingTurns.size)) throw fail('runtime_busy');
     if (TURNS.has(cmd.type)) {
       cmd = { ...cmd, id: typeof cmd.id === 'string' ? cmd.id : randomUUID() };
       if (live.pendingTurns.has(cmd.id)) throw fail('invalid_command');
@@ -267,7 +273,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       live.pendingTurns.set(cmd.id, cmd.type);
       live.error = null; live.activity = 'running'; changed(live);
     }
-    try { await live.adapter.send(cmd); resolve(expected); }
+    try { await live.adapter.send(cmd); resolve(expected); if (cmd.type === 'extension_ui_response') live.approvals.delete(cmd.id); }
     catch (error) {
       if (belongs(live) && TURNS.has(cmd.type)) {
         live.pendingTurns.delete(cmd.id);
@@ -296,7 +302,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     return { ok: true, owner: owner(live), cursor: live.sequence, bytes: live.bytes,
       historyRequired: live.historyRequired || (live.events.length > 0 && cursor < live.events[0].frame.eventSequence - 1),
-      events: live.events.filter(e => e.frame.eventSequence > cursor).map(e => e.frame), item: summary(live.record) };
+      events: live.events.filter(e => e.frame.eventSequence > cursor).map(e => e.frame),
+      approvals: [...live.approvals.values()], item: summary(live.record) };
   }
   function focus(expected) { return serialize(async () => { const live = resolve(expected), previous = focused;
     const prior = previous && previous !== live.record.conversationId ? lives.get(previous) : null;

@@ -118,6 +118,7 @@ function label(item) {
 
 function statusText(item) {
   if (!item) return '';
+  if (store.get(item.conversationId)?.approvals.length) return '待审批';
   if (item.error === 'cleanup_pending') return '清理未完成';
   if (item.lifecycle === 'error') return '错误';
   if (item.activity === 'stopping') return '正在停止';
@@ -203,15 +204,16 @@ function newConversationRow() {
 /** 「新建并行会话」= P32.2 create + P32.3 start 的**编排**，不是第二条创建路径。
  *  两个动作都走已验证的 HTTP 端点，后端返回什么就显示什么（dirty / branch 冲突 /
  *  runtime_limit / workspace_busy 都如实呈现，前端不自己模拟）。 */
-async function createParallelConversation() {
-  if (!currentProjectPath) return;
+export async function createParallelConversation(project = null) {
+  const projectPath = project?.path || currentProjectPath;
+  if (!projectPath) return;
   const context = feedbackContext();
   const branch = await askBranchName();
   if (branch === null) return;
   try {
-    const list = await fetchWorktrees(currentProjectPath);
+    const list = await fetchWorktrees(projectPath);
     if (!list || list.ok === false) return toast(list?.error || '无法读取工作区列表', 'error', { context });
-    const plan = await worktreeAction('prepare', { project: currentProjectPath, branch, source: 'HEAD' }, list.contextGeneration);
+    const plan = await worktreeAction('prepare', { project: projectPath, branch, source: 'HEAD' }, list.contextGeneration);
     if (!plan || plan.ok === false) return toast(plan?.error || '创建前检查未通过', 'warn', { context });
     const created = await worktreeAction('create', { nonce: plan.nonce }, list.contextGeneration);
     if (!created || created.ok === false) return toast(created?.error || '创建并行会话失败', 'error', { context });
@@ -222,7 +224,8 @@ async function createParallelConversation() {
       /* 工作区已经建好了，只是 runtime 没起来 —— 如实说清楚，不要谎报成功。 */
       toast(`${runtimeLimitNotice(started) || started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn', { context });
     }
-    await loadRuntimeNav({ path: currentProjectPath }, { parent });
+    if (!project || projectPath === currentProjectPath) await loadRuntimeNav({ path: projectPath }, { parent });
+    if (started?.ok && started.owner) await focusConversation(started.owner.conversationId);
   } catch (e) {
     toast('新建并行会话失败：' + (e?.message || e), 'error', { context });
   }

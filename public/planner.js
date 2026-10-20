@@ -388,6 +388,8 @@ function planRelations(plan) {
 /* ---------- SSE 联动 ---------- */
 
 let executionHandler = null;
+let taskSessionViewer = null;
+export function setTaskSessionViewer(fn) { taskSessionViewer = typeof fn === 'function' ? fn : null; }
 /** 由 app.js 装配：SSE 收到 execution_event 时转给当前打开的面板。 */
 export function setExecutionHandler(fn) {
   executionHandler = fn;
@@ -1770,17 +1772,15 @@ export function openPlanner(focus = null) {
      * 不这么做就会出现「会话切了但界面还挂着上一个会话的消息」。
      */
     async function doOpenSession(planId, taskId, attempt) {
-      if (S.streaming) {
-        toast('正在生成回答，等这一轮结束再切会话（或先点停止）', 'warn');
-        return;
-      }
+      const preview = Boolean(S.streaming || S.submitting || S.stopping || S.fallbackActive);
       try {
-        const r = await openPlanTaskSession(planId, taskId, attempt);
+        const r = await openPlanTaskSession(planId, taskId, attempt, preview);
         if (!r.ok) {
           // 「没有可关联的会话」「会话已删除」都是正常结果，用 warn 不用 error
           toast(r.error || '打开会话失败', 'warn');
           return;
         }
+        if (preview) { taskSessionViewer?.(r); return; }
         afterSessionSwitch();
         toast('已切到任务会话：' + (r.title || '（无标题）'), 'info');
       } catch (err) {
