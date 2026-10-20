@@ -22,6 +22,7 @@ export function paintAppUpdate(container,{available=false,onLater=()=>{}}={}) {
   };
   if(s.completion?.phase==='completed')note(`已更新至 v${s.completion.version}`);
   if(s.completion?.error)note(s.completion.error);
+  if(s.completion?.phase==='waiting'){note('更新助手仍在运行，正在等待更新完成…');return;}
   if(s.mode==='development'){note('开发模式仅支持检查更新。');return;}
   if(!available&&!['ready','downloading','verifying','installing','failed','cancelled'].includes(s.phase))return;
   const acts=document.createElement('div');acts.className='update-acts update-fixed-actions';

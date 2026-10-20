@@ -1,6 +1,6 @@
 # Windows 应用内更新验收报告
 
-日期：2026-10-20，Windows x64；独立分支 `codex/windows-in-app-update`，基线 `31e7f71`。原工作区保留给另一个对话；未推送、未合并 main、未创建 Release、未改签名或发布审批。
+日期：2026-10-20，Windows x64；独立分支 `codex/windows-in-app-update`。当前修复及验证结果见文末「复审修复补充」；以下首轮记录基于 `31e7f71`，当时尚未推送，之后已按用户授权推送分支。原工作区保留给另一个对话；未将功能合并 main、未创建 Release、未改签名或发布审批。
 
 结论：本地实现和隔离验收完成，可供人工审查。正式签名产物、真实用户安装位置及下一版公网 Release 的全链路升级仍未验证，不能将本报告视为发布批准。本地候选版本仍为 0.26.2。
 
@@ -87,3 +87,35 @@
 - 安装包缓存与应用备份占用临时空间，当前保留供恢复；系统清理后需重新下载。GitHub 发布账号本身被接管不在 SHA256 机制能抵御的范围。
 - 开发改动按构建适配、业务功能、测试/文档分开提交，可依次回退；用户数据不参与代码回滚。安装失败优先助手恢复，`recovery_required` 时保留备份并手动重装。
 - 高风险安装变更仍需用户人工批准后才能合并或发布；本任务没有执行这些操作。
+# 2026-10-20 复审修复补充
+
+本节更新上文历史验收结论；历史 13/13 升级夹具仍不代表正式安装位置验证通过。
+
+- 已复现并修复启动恢复缺陷。新增回归在修复前 2/6 通过、4 项失败；修复后活动/恢复套件 6/6，原有 3 项保留，新增 3 项，无断言删减。成功、失败均消费对应 `pending.json`，下次启动不重复；助手排他锁未释放时显示等待、拒绝再次下载/安装，并主动推送最终结果。
+- 路径穿越和硬链接诊断文件被拒绝，不删除链接目标。辅助程序、NSIS、任务停止及签名发布规则未作行为调整。
+- `origin/main` 的 `bda1d4a` 已通过合并提交 `f0ee2d0` 同步**进入更新分支**；新增主线差异只有开发服务器断言和 Chrome/Edge 发现测试修复。没有将功能合入 main。
+- 本轮按用户要求由同一作者检查新增 diff，没有调用子代理，也没有声称新增 diff 已获独立功能/安全复审批准。高风险变更仍需最终人工决策。
+
+本轮实测（均 exit 0；未重复完整 `npm test`）：
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run test:app-update` | 24/24（15 下载/安装控制 + 2 维护 + 6 活动/恢复 + 1 真实后端） |
+| `npm run test:app-update:electron` | 16/16，原有 14 项保留，新增等待及失败手动入口 2 项 |
+| `node tests/app-update-windows-faults.cjs` | 6/6，真实 NSIS 超时故障注入 |
+| `node tests/dev-server.cjs` | 30/30 |
+| `UI2C_CDP_PORT=19276 node tests/ui2-visual.cjs`（PowerShell 用环境变量赋值） | 57/57，真实 Chrome |
+| `node tests/update-check.cjs` | 87/87 |
+| `node tests/electron-guard.cjs` | 123/123 |
+| `npm run build:app -- --rebuild` | 成功，本机缓存 Electron 44.4.3 离线构建 |
+| `npm run fixtures` 后 `node tests/app-check.cjs` | 26/26；真实打包后端、fixture Pi、临时数据 |
+| 打包目录与相关源码 SHA256/内容比对 | 21/21，新增恢复模块已包含，见 `build-equality.json` |
+| `npm run build:installer` | 成功，195 秒；原样标准 NSIS 脚本编译，未执行正式安装 |
+
+本轮本地候选 `dist-installer/Pi-GUI-Setup-0.26.2.exe`：105,470,207 bytes；SHA256 `a709f80ea6fb7bbea4bfc1cf3db36ad1ee90439ed6bc6a5d8526eecb68c3c381`。它包含恢复修复，替代上文历史构建数字；未发布、未新增签名操作。
+
+新截图：[助手等待更新](update-waiting.png)；Electron 原始结果：[ui-results.json](ui-results.json)。所有写用例仍使用临时 fixture，未更改当前用户实际安装或数据。
+
+**尚未验证：未改动正式 NSIS 安装程序在独立 Windows 用户或 VM 的原安装位置升级。** 本机为 Windows 11 家庭版，未发现可用的 Hyper-V/VMware/VirtualBox/Windows Sandbox 环境；当前实际应用未被关闭或覆盖。没有自行创建账户或启用系统功能。具体执行和证据要求见 [正式安装验收清单](FORMAL-INSTALL-ACCEPTANCE.md)。本轮不再重复旧的 13 项重型改名夹具测试，因其不能补齐这一缺口。该项继续阻断完整安装升级验收，不能用本轮测试数字替代。
+
+回滚本次恢复修复可撤销对应修复提交；备份、用户数据及旧安装包不参与代码回滚。临时目录损坏、权限异常或安装锁无法确认释放时，仍可能需要关闭后手动检查或重装；不以超时推断安装器已退出。

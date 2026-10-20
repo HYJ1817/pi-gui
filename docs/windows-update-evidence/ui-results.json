@@ -55,6 +55,14 @@
     {
       "name": "startup completion version displayed",
       "pass": true
+    },
+    {
+      "name": "active helper shows waiting without download or restart actions",
+      "pass": true
+    },
+    {
+      "name": "terminal failure keeps understandable error and Release link",
+      "pass": true
     }
   ],
   "bounds": {

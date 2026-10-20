@@ -3,6 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {spawn,execFileSync}=require('node:child_process');
 const {createAppUpdate,detectMode}=require('./app-update.cjs');
+const {readUpdateRecovery}=require('./app-update-recovery.cjs');
 
 function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,quit,dialog,shell}) {
   const mode=process.platform==='win32'?detectMode({packaged:app.isPackaged,exe:process.execPath}):'development';
@@ -59,32 +60,33 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
     catch{return {ok:false,error:'更新操作失败，请重试或打开 Release 页面手动安装。'};}
   };
   ipcMain.handle('pi-gui:app-update-state',guard(()=>({...updater.state(),...(completion?{completion}:{})})));
-  ipcMain.handle('pi-gui:app-update-download',guard(request=>updater.download(request)));
+  const pending=()=>completion?.phase==='waiting'?{ok:false,code:'update_pending',error:'更新助手仍在运行，请等待更新完成后再试。'}:null;
+  ipcMain.handle('pi-gui:app-update-download',guard(request=>pending()||updater.download(request)));
   ipcMain.handle('pi-gui:app-update-cancel',guard(()=>updater.cancel()));
   ipcMain.handle('pi-gui:app-update-folder',guard(async()=>{
     if(updater.state().phase!=='ready'||mode!=='portable')return {ok:false};
     const error=await shell.openPath(directory);return {ok:!error};
   }));
   ipcMain.handle('pi-gui:app-update-install',guard(async request=>{
+    if(pending())return pending();
     if(request?.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return {ok:false,error:'需要确认更新。'};
     const choice=await dialog.showMessageBox(getWindow(),{type:'question',buttons:['稍后','重启以更新'],defaultId:0,cancelId:0,
       message:'重启以安装已验证的更新？',detail:'应用会检查所有会话与后台操作。仍有活动任务时将拒绝更新，请先等待完成或在对应会话安全停止。'});
     if(choice.response!==1)return {ok:false,code:'cancelled'};
     return updater.install({confirm:true});
   }));
-  updater.onChange(state=>{const wc=getWindow()?.webContents;if(wc&&!wc.isDestroyed())wc.send('pi-gui:app-update-state',{...state,...(completion?{completion}:{})});});
+  const publish=state=>{const wc=getWindow()?.webContents;if(wc&&!wc.isDestroyed())wc.send('pi-gui:app-update-state',{...state,...(completion?{completion}:{})});};
+  updater.onChange(publish);
   // Cache recognition is offline. Startup never downloads or launches an installer.
   updater.restore().catch(()=>{});
-  try {
-    const pending=JSON.parse(fs.readFileSync(path.join(directory,'pending.json'),'utf8'));
-    if(!/^install-[A-Za-z0-9]+$/.test(pending.run))throw Error('invalid');
-    let result={phase:'unconfirmed'};
-    try {result=JSON.parse(fs.readFileSync(path.join(directory,pending.run,'result.json'),'utf8').replace(/^\uFEFF/,''));}catch{}
-    const completed=result.phase==='installed'&&pending.expectedVersion===app.getVersion();
-    completion=completed?{phase:'completed',mode,version:app.getVersion()}
-      :{phase:'failed',mode,error:'上次更新未完成。当前程序与用户数据已保留，可重试或打开 Release 页面手动安装。'};
-    // Preserve the result in state, including offline or no-new-release startup.
-  } catch { /* No pending update or helper still running. */ }
+  completion=readUpdateRecovery(directory,app.getVersion(),mode);
+  if(completion?.phase==='waiting') {
+    const timer=setInterval(()=>{
+      const next=readUpdateRecovery(directory,app.getVersion(),mode);
+      if(next&&next.phase!=='waiting'){completion=next;clearInterval(timer);publish(updater.state());}
+    },500);
+    timer.unref();app.once('before-quit',()=>clearInterval(timer));
+  }
   return updater;
 }
 module.exports={installAppUpdate};

@@ -55,6 +55,11 @@ async function main(){
     await set({phase:'idle',mode:'development'});check(await read(`document.querySelector('.update-sec').textContent.includes('开发模式仅支持检查更新')`),'development mode check only');
     await set({phase:'idle',mode:'installed',completion:{phase:'completed',version:'0.27.0'}});
     check(await read(`document.querySelector('.update-sec').textContent.includes('已更新至 v0.27.0')`),'startup completion version displayed');
+    await set({phase:'ready',completion:{phase:'waiting'}});
+    check(await read(`document.querySelector('.update-sec').textContent.includes('等待更新完成')&&!document.querySelector('.update-fixed-actions')`),'active helper shows waiting without download or restart actions');
+    fs.writeFileSync(path.join(out,'update-waiting.png'),(await win.webContents.capturePage()).toPNG());
+    await set({phase:'idle',completion:{phase:'failed',error:'上次更新未完成，可重试或手动安装。'}});
+    check(await read(`document.querySelector('.update-sec').textContent.includes('上次更新未完成')&&[...document.querySelectorAll('.update-sec button')].some(b=>b.textContent==='查看 Release')`),'terminal failure keeps understandable error and Release link');
     fs.writeFileSync(path.join(out,'ui-results.json'),JSON.stringify({checks,bounds},null,2));
   } finally {win.destroy();harness.kill();}
   console.log(`app-update Electron: ${checks.filter(c=>c.pass).length}/${checks.length}`);app.exit(checks.every(c=>c.pass)?0:1);
