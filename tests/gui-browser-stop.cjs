@@ -111,6 +111,12 @@ async function main() {
       return lastSendResult;
     } },
     auth: { denyRequest: () => null }, sse: {}, managedProcesses: { manager: null }, worktrees: null,
+    /* 装配片段现在把经典会话和普通项目统一交给 conversationWorkspaces。
+     * 本用例不进入 revert 路由，但必须提供真实形状的依赖，避免 VM 装配
+     * 用隐式全局或 null 掩盖生产引用已经漂移。 */
+    conversationWorkspaces: { withWorkspace: () => {
+      throw Object.assign(Error('fixture_workspace_unavailable'), { code: 'unknown_workspace' });
+    } },
     logging: null,
     sessionChanges: { assertReady: async () => { if (captureError) throw captureError; }, disable: async () => { disabled++; } },
     providerAuth: { snapshot: () => ({ sync: { state: syncing ? 'syncing' : 'idle' } }) },
@@ -119,6 +125,7 @@ async function main() {
       noteCommandAccepted: (command) => modelAccepted.push(command),
     },
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
+    primaryToolGuard: { resume() {} },
     createSessionExport: () => null, runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
   };
   for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative',

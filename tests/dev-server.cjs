@@ -162,9 +162,16 @@ async function waitReady(ms = 20000) {
       const bar = rulesFor(/^::-webkit-scrollbar$/)[0];
       return Boolean(bar && /height\s*:\s*10px/.test(bar.body)) || '横向滚动条没覆盖';
     });
-    /* 不许用「干脆不显示滚动条」来糊弄：用户得看得出这块能滚。 */
-    check('styles.css 没有把滚动条整体隐藏', () =>
-      !/scrollbar-width\s*:\s*none/.test(cssClean) || '出现了 scrollbar-width:none');
+    /* 普通滚动区不许用「干脆不显示滚动条」来糊弄。唯一例外是会话左侧导航：
+     * 它本身只有 24px 宽，超长会话需要在 280px 高的窄条内滚动；若展示原生
+     * 滚动条会吃掉命中区并破坏这条导航的纤细形态。局部例外必须由选择器钉死，
+     * 避免全局样式再次被一并隐藏。 */
+    check('styles.css 只允许会话导航隐藏自身滚动条', () => {
+      const hidden = cssRules.filter((r) =>
+        /scrollbar-width\s*:\s*none/i.test(r.body) && r.sel !== '.convo-nav');
+      return !hidden.length ||
+        hidden.map((r) => `${r.sel} { ${r.body.trim()} }`).join(' | ');
+    });
     check('styles.css 为不支持 webkit 伪元素的内核留了兜底', () =>
       /@supports\s+not\s+selector\(::-webkit-scrollbar\)/.test(cssClean) || '缺少 @supports 兜底');
     /* 删掉重复补丁之后，弹层里那条仍然由全局规则覆盖（不能出现「补丁删了、

@@ -57,14 +57,14 @@ HTTP 覆盖 token/Origin、body 上限/格式、authoritative generation、只�
 
 | 关键状态 | 截图 |
 |---|---|
-| 仅主工作区 | [main-only](../.shots/p32-2/main-only-1440x900.png) |
-| dirty main 创建风险 | [create-risk](../.shots/p32-2/create-risk-1440x900.png) |
-| A/B 工作区列表 | [workspaces](../.shots/p32-2/workspaces-1440x900.png) |
-| 当前工作区 | [current](../.shots/p32-2/current-worktree-1440x900.png) |
-| 归档但文件保留 | [archived](../.shots/p32-2/archived-1440x900.png) |
-| dirty 移除拒绝 | [dirty refusal](../.shots/p32-2/dirty-remove-refused-1440x900.png) |
-| 外部删除 | [missing](../.shots/p32-2/externally-missing-1440x900.png) |
-| 分支冲突 | [branch conflict](../.shots/p32-2/branch-conflict-1440x900.png) |
+| 仅主工作区 | `.shots/p32-2/main-only-1440x900.png` |
+| dirty main 创建风险 | `.shots/p32-2/create-risk-1440x900.png` |
+| A/B 工作区列表 | `.shots/p32-2/workspaces-1440x900.png` |
+| 当前工作区 | `.shots/p32-2/current-worktree-1440x900.png` |
+| 归档但文件保留 | `.shots/p32-2/archived-1440x900.png` |
+| dirty 移除拒绝 | `.shots/p32-2/dirty-remove-refused-1440x900.png` |
+| 外部删除 | `.shots/p32-2/externally-missing-1440x900.png` |
+| 分支冲突 | `.shots/p32-2/branch-conflict-1440x900.png` |
 
 1280×800 / 1440×900 / 1920×1080 三个列表截图均通过页面与 dialog bounds 检查；1280×800 的 125% 缩放（CSS viewport 1024×640）同样无溢出。原 P30 检查还覆盖 150% 缩放。
 

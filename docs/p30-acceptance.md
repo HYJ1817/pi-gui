@@ -8,7 +8,7 @@
 - branch：`codex/p30-ui-ia-cleanup`。
 - after implementation/test HEAD：`dac8eb45b64cade4c71d457520d24f67922a317a`；包含本报告的最终 HEAD 在交付回复中给出。
 - 没有推送、合并 main、改版本号或发布 Release。
-- 开始时已有的两个未跟踪工作目录保持原样；本次日志、辅助程序在 `.probe/p30/`，截图在 `.shots/`。
+- 开始时已有的两个未跟踪工作目录保持原样；本次日志、辅助程序在 `.probe/p30/`，截图在 `.shots/`。这些是本机生成且不随仓库分发的证据。
 
 ## 信息架构与入口
 
@@ -54,17 +54,17 @@ Changes 使用已有 right-pane，保留中央对话、滚动和草稿；与 Bro
 
 | 状态 | 截图 |
 |---|---|
-| 无项目 | [1280×800](../.shots/p30/no-project-1280x800.png)；[实际打包应用](../.shots/p30-packaged-1280x800-window.png) |
-| 空会话 | [1440×900](../.shots/p30/empty-session-1440x900.png) |
-| 普通长会话 | [1920×1080](../.shots/p30/long-conversation-1920x1080.png) |
-| Streaming | [1280×800](../.shots/p30/streaming-1280x800.png) |
-| Stop pending | [1440×900](../.shots/p30/stop-pending-1440x900.png) |
-| Error | [1440×900](../.shots/p30/error-1440x900.png) |
-| Browser 打开 | [窗口布局](../.shots/p30/browser-open-1440x900.png)；[原生页面](../.shots/p30/native-browser-1440x900.png) |
-| Changes 打开与 Diff | [1280×800](../.shots/p30/changes-open-1280x800.png) |
-| 右栏关闭 | [1920×1080](../.shots/p30/right-pane-closed-1920x1080.png) |
-| 设置 / 命令面板 | [设置](../.shots/p30/settings-1440x900.png)；[命令面板](../.shots/p30/palette-1440x900.png) |
-| Planner / Skills | [任务与审阅](../.shots/p30/planner-review-1440x900.png)；[Skills](../.shots/p30/skills-1440x900.png) |
+| 无项目 | `.shots/p30/no-project-1280x800.png`；`.shots/p30-packaged-1280x800-window.png` |
+| 空会话 | `.shots/p30/empty-session-1440x900.png` |
+| 普通长会话 | `.shots/p30/long-conversation-1920x1080.png` |
+| Streaming | `.shots/p30/streaming-1280x800.png` |
+| Stop pending | `.shots/p30/stop-pending-1440x900.png` |
+| Error | `.shots/p30/error-1440x900.png` |
+| Browser 打开 | `.shots/p30/browser-open-1440x900.png`；`.shots/p30/native-browser-1440x900.png` |
+| Changes 打开与 Diff | `.shots/p30/changes-open-1280x800.png` |
+| 右栏关闭 | `.shots/p30/right-pane-closed-1920x1080.png` |
+| 设置 / 命令面板 | `.shots/p30/settings-1440x900.png`；`.shots/p30/palette-1440x900.png` |
+| Planner / Skills | `.shots/p30/planner-review-1440x900.png`；`.shots/p30/skills-1440x900.png` |
 
 ## 三个尺寸与缩放
 
@@ -74,7 +74,7 @@ Changes 使用已有 right-pane，保留中央对话、滚动和草稿；与 Bro
 | 1440×900 | 同上，加设置、面板、Planner、Skills | 同上，设置分组可访问，焦点可见 |
 | 1920×1080 | 九个主要状态、原生 Browser 页面 | 同上，正文/右栏均在视口内 |
 
-以上为 `tests/ui-ia-electron.cjs` 的真实 `innerWidth/innerHeight`，见 [.shots/p30/results.json](../.shots/p30/results.json)。
+以上为 `tests/ui-ia-electron.cjs` 的真实 `innerWidth/innerHeight`，见 `.shots/p30/results.json`。
 页面缩放 80%、125%、150% 也验了 Changes、右栏边界、文档溢出与顶栏；有对应截图。
 本机 DPI 会使 PNG 物理像素与 CSS 像素不同。
 
@@ -100,21 +100,21 @@ Changes 使用已有 right-pane，保留中央对话、滚动和草稿；与 Bro
 
 | 检查 | 最终结果 | 证据 |
 |---|---|---|
-| `npm test` | exit 0，61 个套件脚本全部完成 | [.probe/p30/npm-test-final.log](../.probe/p30/npm-test-final.log) |
-| 新 IA 组装行为 | 12/12 | 同上；[focused log](../.probe/p30/ia-final.log) |
+| `npm test` | exit 0，61 个套件脚本全部完成 | `.probe/p30/npm-test-final.log` |
+| 新 IA 组装行为 | 12/12 | 同上；`.probe/p30/ia-final.log` |
 | 原 smoke | 1338/1338，与基线相同 | 同上 |
 | hotfix UI / 菜单 | 10/10、37/37 | 同上 |
 | Git fixture | 161/161 | 同上 |
 | 会话 / 搜索 | 71/71、57/57 | 同上 |
 | Provider/Auth / runtime | 105/105、36/36 | 同上 |
 | 原 Browser UI / Stop barrier | 22/22、16/16 | 同上 |
-| 现有完整 visual harness + cdp-shot | exit 0，276 张截图，全部取景判据通过，页面异常 0 | [visual-clean.log](../.probe/p30/visual-clean.log)；`.shots/p30-final-*.png` |
-| P30 真实 Electron | 161/161，37 张截图，console error 0 | [electron-final.log](../.probe/p30/electron-final.log)、[results.json](../.shots/p30/results.json) |
-| 现有打包 Browser 原生 UI | 52/52；开关、销毁、再开不留残留 | [browser-autoports.log](../.probe/p30/browser-autoports.log) |
-| 现有打包 `shot-app` | 三次 exit 0，实际视口见上表说明 | [packaged-shots-final.log](../.probe/p30/packaged-shots-final.log) |
-| `build:app -- --rebuild` | exit 0；SEA + Electron 生成；使用本机 Electron zip，无下载 | [build-final.log](../.probe/p30/build-final.log) |
-| `test:exe` / `test:app` 等价原脚本 | 48/48、26/26，exit 0 | [exe-final.log](../.probe/p30/exe-final.log)、[app-final.log](../.probe/p30/app-final.log) |
-| 源码/打包静态资源 SHA-256 | 7/7 相同，含新增模块与最终 palette | [asset-digests.json](../.probe/p30/asset-digests.json) |
+| 现有完整 visual harness + cdp-shot | exit 0，276 张截图，全部取景判据通过，页面异常 0 | `.probe/p30/visual-clean.log`；`.shots/p30-final-*.png` |
+| P30 真实 Electron | 161/161，37 张截图，console error 0 | `.probe/p30/electron-final.log`、`.shots/p30/results.json` |
+| 现有打包 Browser 原生 UI | 52/52；开关、销毁、再开不留残留 | `.probe/p30/browser-autoports.log` |
+| 现有打包 `shot-app` | 三次 exit 0，实际视口见上表说明 | `.probe/p30/packaged-shots-final.log` |
+| `build:app -- --rebuild` | exit 0；SEA + Electron 生成；使用本机 Electron zip，无下载 | `.probe/p30/build-final.log` |
+| `test:exe` / `test:app` 等价原脚本 | 48/48、26/26，exit 0 | `.probe/p30/exe-final.log`、`.probe/p30/app-final.log` |
+| 源码/打包静态资源 SHA-256 | 7/7 相同，含新增模块与最终 palette | `.probe/p30/asset-digests.json` |
 
 SEA 为 98,822,144 字节（94.2 MB）；Electron 入口为 246,324,736 字节（234.9 MB），整包 327.5 MB。
 桌面入口：`dist-app/Pi GUI-win32-x64/Pi GUI.exe`；单文件源码服务器入口：`build/Pi GUI.exe`。

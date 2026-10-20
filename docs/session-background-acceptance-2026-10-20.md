@@ -108,7 +108,7 @@ SHA256：
 
 在 `cfcbe01` 基线上完成普通会话并发实现后，执行以下定向套件，全部 exit 0：
 
-- `npm run test:session-concurrency`：工具调度 9/9、私有桥 4/4、普通会话解析 7/7、普通会话 Runtime 5/5、真实离线 Pi SDK/RPC 5/5；`modelRequests=0`。
+- `npm run test:session-concurrency`：工具调度 9/9、私有桥 4/4、普通会话解析 7/7、普通会话 Runtime 5/5，共 25/25；`modelRequests=0`。真实离线 Pi SDK/RPC 5/5 保留为显式 `npm run test:session-sdk`，因为它要求本机可解析 Pi SDK，不能作为默认 CI 的环境前提。
 - `session-background` 5/5、`session-background-ui` 9/9、`session-background-recovery` 6/6、`runtime-nav` 38/38。
 - `npm run test:session-background:electron`：16/16，覆盖 A/B 快速六次往返、第三会话确认、审批归属、Stop 隔离、项目 cwd 隔离、刷新恢复；renderer/harness errors 为 0。
 

@@ -375,16 +375,21 @@ const click = (d, text, id = 'confirmCard') => {
       assert.equal(f.d.getElementById('modalCard').textContent, 'new');
     } finally { f.close(); }
   });
-  await check('view navigation preserves real Classic pending with explicit provenance', async () => {
+  await check('view navigation suspends Classic pending and resumes it only from the Classic entry', async () => {
     const f = fixture('B', 'approval.js');
     try {
       f.w.observeApprovalEvent(request('classic-background'), f.w.S);
       f.d.getElementById('workspace').dataset.workspaceView = 'runtime';
       f.d.dispatchEvent(new f.w.CustomEvent('pi-gui:workspace-view', { detail: { view: 'runtime' } }));
-      assert.equal(f.d.getElementById('confirmLayer').hidden, false);
-      assert.match(f.d.getElementById('confirmCard').textContent, /经典会话/);
+      assert.equal(f.d.getElementById('confirmLayer').hidden, true);
       assert.equal(f.w.approvalSnapshot().pending.length, 1);
       assert.equal(f.calls.length, 0);
+      const pending = f.d.getElementById('btnPendingClassicApproval');
+      assert.equal(pending.hidden, false);
+      assert.match(pending.textContent, /主会话待审批 1/);
+      pending.click();
+      assert.equal(f.d.getElementById('confirmLayer').hidden, false);
+      assert.match(f.d.getElementById('confirmCard').textContent, /经典会话/);
       click(f.d, '拒绝'); await tick(); await tick();
       assert.equal(f.calls.length, 1); assert.equal(f.calls[0].confirmed, false);
     } finally { f.close(); }

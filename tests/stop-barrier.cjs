@@ -188,6 +188,12 @@ async function main() {
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     managedProcesses: { manager: null }, worktrees: null,
+    /* 路由装配把经典会话和普通项目统一交给 conversationWorkspaces。
+     * 本用例不进入 revert 路由，但必须提供真实形状，避免生产引用漂移被
+     * VM 的隐式全局掩盖。 */
+    conversationWorkspaces: { withWorkspace: () => {
+      throw Object.assign(Error('fixture_workspace_unavailable'), { code: 'unknown_workspace' });
+    } },
     logging: null,
     createRouter(options) { return createRouter(options); },
     rpc: raw,
@@ -199,6 +205,7 @@ async function main() {
       noteCommandAccepted: (command) => modelAccepted.push(command),
     },
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
+    primaryToolGuard: { resume() {} },
     createSessionExport: () => null,
     runtime: { getCurrentCwd: () => cwd },
     sessionChanges: { assertReady: async () => {}, disable: async () => ({ ok: true }) },

@@ -268,10 +268,10 @@ function suspend(entry) {
   entry.suspended = true; entry.presentation++;
   closeSurface(entry); refreshPendingEntry();
 }
-function deferButton(entry, card) {
+function deferButton(entry) {
   const button = document.createElement('button'); button.type = 'button'; button.className = 'btn';
   button.textContent = '稍后处理'; button.onclick = () => suspend(entry);
-  card.append(button);
+  return button;
 }
 if (typeof document !== 'undefined') document.addEventListener('pi-gui:workspace-view', event => {
   if (event.detail?.view !== 'chat') for (const entry of pending.values()) suspend(entry);
@@ -579,6 +579,8 @@ function present(entry) {
       context: model.context,
       surface: 'approval',
       meta: { requestId, kind, enterBlocked: true },
+      deferText: '稍后处理',
+      onDefer: () => suspend(entry),
       submittingText: '正在把决定发给 Pi…',
       failureText: '未能确认应答结果，请核实当前会话状态。',
       onDecide: (answer) => {
@@ -596,7 +598,6 @@ function present(entry) {
       else if (answer === 'alt') void commitDecision(request, 'cancel');
       else void commitDecision(request, 'deny');
     });
-    deferButton(entry, document.getElementById('confirmCard'));
     return;
   }
 
@@ -605,7 +606,6 @@ function present(entry) {
    * 所以先把引用留在这里。 */
   let cancelButton = null;
   openModal((card, close) => {
-    deferButton(entry, card);
     const h = document.createElement('h3');
     h.id = 'ui4ApprovalTitle';
     h.textContent = model.title;
@@ -695,6 +695,10 @@ function present(entry) {
     /* 先结算再关闭：close() 会触发下面的 onClose，如果顺序反了，
      * onClose 会先把这次请求按「取消」结掉，用户真正选的值就丢了。 */
     cancel.onclick = () => void decide('cancel', undefined, cancel);
+
+    const defer = deferButton(entry);
+    buttons.push(defer);
+    actions.appendChild(defer);
 
     if (kind === 'select') {
       const list = document.createElement('div');
