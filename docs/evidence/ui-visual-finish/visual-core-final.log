@@ -1,0 +1,861 @@
+test-group: core; 79 leaves; TEMP=C:\pi-GUI\.shots\visual-temp\pi-gui-ci-core-35896-1792477789196
+[1/79] node tests/ci-test-plan.cjs
+ci-test-plan: 150 leaves across 5 groups; coverage exact
+[2/79] node tests/ci-workflow.cjs
+ci-workflow: Node pin, dynamic matrix, final CI gate, exact-SHA release proof and permissions verified
+[3/79] node tests/release-ci-proof.cjs
+  ok   exact tag commit with successful push CI and CI gate passes
+  ok   annotated tag is resolved to its commit before matching CI
+  ok   tag commit different from checked-out SHA is blocked
+  ok   no push CI run for the exact SHA is blocked
+  ok   queued or in-progress push CI is blocked
+  ok   failed or cancelled push CI is blocked
+  ok   wrong SHA, branch, event, or workflow returned by CI API is blocked
+  ok   the newest exact-SHA run wins; an older success cannot hide a newer failure
+  ok   missing, incomplete, failed, or duplicate CI gate is blocked
+  ok   API failure blocks release and is not treated as missing or success
+  ok   invalid paged schema fails closed
+  ok   invalid run identity cannot choose a winner or become successful
+  ok   pagination total must remain consistent and account for every item
+  ok   event SHA must match the checkout SHA and tag commit
+  ok   GitHub API reader uses bounded authentication headers and never mutates the token
+  ok   missing token blocks CI proof before any network call
+
+release-ci-proof: 16/16; failed=0
+[4/79] node tests/nsis-bootstrap.cjs
+ok CLI refuses developer machines before downloading or installing
+ok official installer and digest are pinned
+NSIS installer SHA256 verified: bb43c2e945e913600f618f98b7fd78b997fe3a87a4f342d22b6dcab611e290cb
+ok verified bytes only are written
+NSIS download attempt 1 failed; retrying
+NSIS download attempt 2 failed; retrying
+NSIS installer SHA256 verified: bb43c2e945e913600f618f98b7fd78b997fe3a87a4f342d22b6dcab611e290cb
+ok transient HTTP failure retries then succeeds
+NSIS download attempt 1 failed; retrying
+NSIS download attempt 2 failed; retrying
+ok network errors are bounded to three attempts
+ok wrong digest fails without writing or retrying
+ok oversized response is rejected
+ok installer failure never probes or exports a compiler
+ok compiler must return expected version
+ok compiler probe failure is fatal
+NSIS compiler verified: v3.13
+ok silent install and compiler probe succeed
+NSIS compiler verified: v3.13
+ok verified compiler directory is exported only after success
+12/12 passed
+[5/79] node tests/review-regressions.cjs
+PASS DOCX preserves tabs and soft breaks
+PASS DOCX preserves runs, paragraphs and entities
+PASS history keeps latest 800 of 799 and exact truncation
+PASS history keeps latest 800 of 800 and exact truncation
+PASS history keeps latest 800 of 805 and exact truncation
+PASS history tail byte limit keeps final messages and never invents absolute turn indices
+PASS message cap preserves search turn indices across empty user and assistant messages
+PASS loading attachments disable button and direct/keyboard submit without clearing draft
+PASS direct submit cannot bypass pending attachment guard
+PASS image FileReader stage blocks submission before upload starts
+PASS actual upload completion restores sending with parsed content
+PASS failed parse is distinct from loading and remains explicitly sendable
+PASS classic applyState isolates A/B drafts after debounce
+PASS classic applyState isolates A/B drafts before debounce
+PASS classic identity switch retains unsent text when storage write is denied
+PASS approval native-owner enrichment during submission releases only the old pending marker
+PASS history reload after resume/new messages/close never reuses stale body
+PASS late history response cannot reopen old history after runtime identity changes
+PASS resume acknowledgement invalidates in-flight history before lifecycle SSE arrives
+PASS history search locates retained message by absolute user index after cap
+PASS history search locates retained message by native ID with byte-tail unknown index
+PASS central approval success: settles only captured request; failure retries
+PASS central approval failure: settles only captured request; failure retries
+PASS central approval owner change: settles only captured request; failure retries
+PASS modal approval success: settles only captured request; failure retries
+PASS modal approval failure: settles only captured request; failure retries
+PASS modal approval owner change: settles only captured request; failure retries
+PASS shared approval blocks duplicate across central/modal and survives sender disposal
+PASS central responding to one approval preserves another approval input
+PASS modal responding to one approval preserves another approval input
+PASS central approval captures enriched native owner instead of retaining stale controls
+PASS modal approval captures enriched native owner instead of retaining stale controls
+Review regressions: 32/32; failed=0; skipped=0
+[6/79] node tests/high-risk-regressions.cjs
+PASS isolated percent filename does not terminate actual upload router
+PASS filename preserved exactly: 中文附件.txt
+PASS filename preserved exactly: report%20final.txt
+PASS filename preserved exactly: literal%25.txt
+PASS same-millisecond uploads keep every path and original body
+PASS previously valid long Chinese filename stays within portable component limit
+PASS exclusive file creation retries collision and preserves previous upload
+PASS persistent allocation collisions fail without overwriting files
+PASS central: pending send preserves correct draft: unchanged
+PASS central: pending send preserves correct draft: new draft
+PASS central: pending send preserves correct draft: edit back to same text
+PASS central: pending send preserves correct draft: switch target
+PASS central: pending send preserves correct draft: failure
+PASS central: pending send preserves correct draft: new owner
+PASS modal: pending send preserves correct draft: unchanged
+PASS modal: pending send preserves correct draft: new draft
+PASS modal: pending send preserves correct draft: edit back to same text
+PASS modal: pending send preserves correct draft: switch target
+PASS modal: pending send preserves correct draft: failure
+PASS modal: pending send preserves correct draft: new owner
+PASS prompt rejected leaves original task running and stoppable
+PASS prompt handled leaves original task running and stoppable
+PASS steer rejected leaves original task running and stoppable
+PASS steer handled leaves original task running and stoppable
+PASS follow_up rejected leaves original task running and stoppable
+PASS follow_up handled leaves original task running and stoppable
+PASS preflight failure returns idle; late response cannot release Stop barrier
+PASS out-of-order failures retain unacknowledged and accepted original work
+PASS real bridge and guardian retain original fake-Pi task after rejected additions
+High-risk regressions: 29/29; failed=0; offline fixtures
+[7/79] node tests/logging.cjs
+=== 日志核心 ===
+  ok   启动产生结构化 app.start，且默认目录在注入的临时目录
+  ok   标准模式不写 DEBUG，详细模式写 DEBUG
+  ok   未知事件与未知字段直接丢弃
+  ok   开始/失败/耗时使用同一 correlationId
+  ok   禁用后不再写日志；重新启用后恢复
+  ok   设置文件拒绝非法值，并保留有效设置
+  ok   清理只删日志文件，不删设置/会话标记
+  ok   保留期清理只保留窗口内的文件
+  ok   详细模式到期自动回标准并持久化
+  ok   文件超过上限后轮转，旧文件保留且可读
+  ok   损坏行被跳过，后续日志仍可读取
+  ok   分页不重复（cursor 向前翻页）
+  ok   崩溃进入独立 crash 文件，且不记录异常 message
+  ok   未正常关闭后重启可看到上次异常退出线索
+  ok   正常关闭后下一次启动不再误报异常退出
+  ok   不可写目录只降级，不把异常抛给业务
+  ok   高频写入仍保持每行合法 JSON，且有界批处理不阻塞调用方
+  ok   磁盘空间不足（ENOSPC）只进入降级状态，不影响调用方
+  ok   后端与主进程并发写不同文件，事件保持各自进程身份
+  ok   同一次操作跨后端/Renderer 用 correlationId 关联
+=== 导出 ZIP ===
+  ok   导出含固定五文件，目录/内容可解压，错误单独列出
+  ok   导出不调用网络
+  ok   导出失败明确返回固定错误码，不抛出
+=== HTTP 服务契约 ===
+  ok   GET /api/logs/status 返回状态且不含绝对路径
+  ok   POST /api/logs/events 只接受白名单事件与字段
+  ok   POST /api/logs/settings 校验并返回状态
+  ok   导出需要显式确认，预览返回清单与计数
+  ok   导出 ZIP 可直接解压，且不再向日志写入用户描述原文
+  ok   清理需要确认；确认后状态回到空
+=== Electron 主进程适配 ===
+  ok   主进程写独立 main-* 文件，不与后端同名
+  ok   主进程按 mtime 重新读取后端写入的日志设置
+  ok   主进程默认目录由 userData / PI_GUI_DATA 决定，不使用项目目录
+logging: 32 passed, 0 failed, 0 skipped
+[8/79] node tests/logging-leaks.cjs
+  ok   普通/详细日志只接收白名单字段，秘密与聊天正文不落盘
+  ok   异常 message / 原始 stack 不进崩溃文件，只保留安全错误名与自身帧
+  ok   设置更改/清理等系统事件同样不含注入秘密
+  ok   Renderer HTTP 入口拒绝未知事件并把已知字段收敛
+  ok   导出预览/状态不泄露日志目录或秘密
+  ok   ZIP 每个文件都不含注入秘密，描述也经过复核
+  ok   状态/条目在最终导出前仍不含秘密
+  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）
+logging-leaks: 7 passed, 0 failed, 1 skipped
+[9/79] node tests/logging-secret-state.cjs
+=== 敏感判定状态 ===
+  ok   token/code/id 连续检测同一 secret 时不会交替放行
+  ok   不同函数/安全值交错调用时状态不串扰
+  ok   normalizeEvent 连续同值 secret 不会在第二次放行
+  ok   不同字段顺序：secret 先经过 token，也不会让后面的 errorName 放行
+  ok   normalizeStored 连续多条事件同样拒绝 secret 字段
+=== 端到端落盘 / 崩溃 / ZIP ===
+  ok   原始 JSONL 与崩溃记录不包含连续事件里的 secret
+  ok   ZIP 的每个文件都不包含 secret
+=== HTTP 日志 API / 崩溃记录 / ZIP ===
+  ok   POST 连续/交错 secret 后，日志 API 与原始文件都不含 secret
+  ok   HTTP 导出的 ZIP 每个文件都不含 secret
+logging-secret-state: 9 passed, 0 failed
+[10/79] node tests/logging-client.cjs
+=== Renderer 日志断线恢复 ===
+  ok   暂时网络失败：只丢已发出未确认的批次，退避后恢复并补报丢弃计数
+  ok   连续网络失败：退避有上限，队列空时不发请求
+  ok   队列达到上限：保留最新事件、丢弃最旧事件并保持有界
+  ok   日志被用户关闭：停止上报，重新启用后新事件恢复
+  ok   不可恢复错误：停止重试；显式恢复后才重新尝试
+  ok   无效 200 响应按不可恢复处理，不无限重试
+  ok   页面重新加载：新的客户端不继承旧的失败状态
+  ok   后端重启：恢复后的事件真实落盘并进入 ZIP，断线期间批次不重放
+logging-client: 8 passed, 0 failed
+[11/79] node tests/exe-diagnostics.cjs
+ok clean outputs
+ok exact caught optional canvas warning in stderr
+ok CRLF warning
+ok identical repeated known warning
+ok known warning cannot whitelist stdout
+ok unknown missing dependency
+ok wrong executable stack
+ok extra stack frame
+ok different caught exception
+ok malformed warning
+ok real stderr error alongside known warning
+ok real stdout error alongside known warning
+ok old throw detection retained
+ok native fatal error
+ok unhandled rejection without Error colon
+ok premature success exit
+ok premature nonzero exit
+ok premature signal exit
+ok real error still detected with premature exit
+EXE diagnostics: 19/19; pure classification, not packaged evidence
+[12/79] node tests/runtime-models.cjs
+  ok  A and B show independent native models
+  ok  native thinking levels and values are per conversation
+  ok  capability projection uses shared reasoning evidence
+  ok  native sessionName is projected
+  ok  model command captures complete A owner and unique string ID
+  ok  HTTP ack keeps old selection pending without optimistic reads
+  ok  wrong id command and stale owner never trigger readback
+  ok  successful delayed A does not change B
+  ok  matching native success performs readback
+  ok  selection updates only after authoritative state
+  ok  setter readback includes native thinking levels
+  ok  native model error is not HTTP success
+  ok  native failure leaves prior model and no readback
+  ok  safe notice never renders raw native error
+  ok  thinking captures B and exact requested level
+  ok  thinking native success is read back
+  ok  B thinking does not change A
+  ok  explicit unsupported reasoning exposes no levels
+  ok  unsupported thinking sends no command
+  ok  unknown reasoning remains unknown despite native levels
+  ok  unsupported native levels never become guessed defaults
+  ok  failed native readback does not confirm selection
+  ok  same-owner late refresh cannot overwrite newer readback
+  ok  same-owner concurrent mutations invalidate older waiter
+  ok  native success before delayed transport ack waits for both
+  ok  delayed HTTP ack then native readback succeeds
+  ok  combined ack/native wait timeout clears pending without success
+  ok  owner retirement cancels pending and clears model UI
+  ok  dormant refresh does not spawn or issue reads
+  ok  async state changes notify captured conversation IDs
+  ok  transport rejection requires no native wait or readback
+  ok  incomplete owner cannot render active model controls
+  ok  incomplete owner never issues model reads
+  ok  dispose unsubscribes accepted frame observer
+  ok  set_thinking_level failure keeps correlation but drops all raw payloads
+  ok  cycle_thinking_level failure keeps correlation but drops all raw payloads
+  ok  unstarted native read is unconfirmed rather than fake success
+  ok  real native child state read preserves model shape
+  ok  native private __error is rejected before success projection
+  ok  real native set_thinking_level error is safe before SSE publication
+  ok  real native cycle_thinking_level error is safe before SSE publication
+  ok  disposed adapter read is stale
+  ok  registry reads native available thinking levels under captured owner
+  ok  native levels read rejects stale owner
+  ok  ready identity failure produces zero unhandled rejections
+  ok  failed identity stays occupied and blocks commands
+  ok  failed identity error is safe in runtime state publication
+  ok  unconfirmed native identity fails command admission
+  ok  explicit close reclaims lease and later launch works
+  ok  late prior-generation identity rejection cannot poison new owner
+  ok  retired child identity rejection cannot resurrect error or slot
+Runtime models: 51/51
+[13/79] node tests/model-fallback.cjs
+  ok P28 pure module exposes fallback contracts
+  ok default disabled
+  ok identity/order/slash preserved without credentials
+  ok duplicate and primary excluded
+  ok enabled empty chain downgraded
+  ok classification 429 {"error":{"code":"rate_limit_exceeded"}}
+  ok classification 429 {"error":{"code":"insufficient_quota"}}
+  ok classification 402: {"message":"Insufficient Balance"}
+  ok classification 503 service unavailable
+  ok classification 500 status code (no body)
+  ok classification Connection error.
+  ok classification Request timed out.
+  ok classification 404 {"error":{"code":"model_not_found"}}
+  ok classification 401 {"error":{"code":"insufficient_quota"}}
+  ok classification 403 forbidden
+  ok classification 400 {"error":{"code":"context_length_exceeded"}}
+  ok classification 400 invalid parameters
+  ok classification 400 image unsupported
+  ok classification 404 page missing
+  ok classification a tool failed with 429
+  ok classification network somehow maybe bad
+  ok aborted forbidden
+  ok non-generation source cannot retry
+  ok history strips raw error body
+  ok image false skipped unknown allowed and no cross-provider capability
+  ok text false filtered but tools false not hard constraint
+  ok missing models skipped
+  ok runtime records each candidate once no loop
+  ok capability transition allowlists reason and discards previous error and private payload
+  ok generation owner module available
+  ok only settled current owned generation yields safe failure
+  ok visible text / thinking / tool activity blocks replay
+  ok native retry success replaces earlier failure
+  ok queued/handled never own fallback generation
+  ok all unsafe generation error channels removed
+  ok tree history strips nested Provider errors without touching user content
+  ok deep Pi tree safely normalizes without recursive stack overflow
+  ok steer cancels generation ownership
+  ok follow_up cancels generation ownership
+  ok abort cancels generation ownership
+  ok new_session cancels generation ownership
+  ok fork cancels generation ownership
+  ok set_model cancels generation ownership
+  ok bridge reset cancels ownership
+  ok backend owner token refuses late automatic commands after manual override
+  ok new unowned agent invalidates backend replay token
+  ok unowned error never acquires fallback ownership
+  ok project v1 reads disabled fallback without rewriting disk
+  ok fallback coordinator wired into submit
+  ok A -> B confirmed success preserves B and cleans once
+  ok A -> B fails -> C succeeds ordered and finite
+  ok exhausted stops preserves original input no duplicate replay
+  ok auth_error stops without switching
+  ok context_overflow stops without switching
+  ok request_incompatible stops without switching
+  ok unknown stops without switching
+  ok user_cancelled stops without switching
+  ok visible output forbids replay
+  ok history replay cannot trigger fallback
+  ok stop cancels while Pi not streaming
+  ok manual choice overrides in-flight fallback and stale set reply
+  ok workspace switch invalidates pending fallback
+  ok session request immediately invalidates fallback
+  ok restart immediately invalidates fallback
+  ok changed session readback cannot replay
+  ok steer and slash command retain normal send semantics
+  ok disabled config retains legacy immediate cleanup
+  ok project settings exposes ordered fallback editor
+  ok settings option retains identity across live catalog reorder
+  ok attachments survive retries and original images clean only after actual success
+  ok fallback confirmation timeout stops and preserves draft
+  ok Pi confirmed imageInput mismatch records real B -> C reason without sending B
+  ok Pi confirmed textInput mismatch records real B -> C reason without sending B
+  ok fallback status participates in composer height and uses readable results
+
+Model fallback: 74/74 通过
+[14/79] node tests/model-capabilities.cjs
+  ok  unknown stays null without name guessing
+  ok  reasoning and explicit capabilities: true
+  ok  reasoning and explicit capabilities: false
+  ok  reasoning and explicit capabilities: null
+  ok  input text is explicit false for images; absent or empty input is unknown
+  ok  token limits accept positive finite numbers without defaults
+  ok  structured identity preserves slash IDs and isolates providers
+  ok  field merge Pi > user > provider including false and invalid fallthrough
+  ok  merge never crosses Provider/model identity
+  ok  capability allowlist strips secrets and untrusted evidence/levels
+  ok  Provider metadata retains false and text-only evidence
+  ok  runtime safe projection retains identity and capability, no credentials
+  ok  SSE model merge uses explicit same-identity user metadata
+  ok  malformed user metadata cannot break otherwise valid Pi events
+  ok  safe Provider config uses user evidence and excludes secrets
+  ok  old disk models.json is read without migration or writes
+  ok  old models.json line roundtrip preserves false and text-only input
+  ok  S.models has structured identities and capability projection
+  ok  empty thinking response disables UI and clears old High
+  ok  metadata reasoning=true does not synthesize selectable levels
+  ok  off-only Pi levels are unavailable; Pi list beats static reasoning=false
+  ok  image=false blocks image upload but permits normal files
+  ok  unknown/true image capability does not block image entry
+  ok  unknown image model really accepts image selection
+  ok  repeated model ID on another Provider never inherits images or tools
+  ok  switch to image=false blocks existing image submission without losing draft
+  ok  model pending clears old capability restrictions and thinking display
+  ok  stale state/levels never override final model capabilities
+  ok  failed thinking readback leaves unavailable and no stale High
+  ok  current-model Pi-only levels allow only that selection and await state
+  ok  workspace generation rejects prior-model readback
+  ok  boot after restart replaces capabilities from actual Pi state
+  ok  session state change drops prior thinking levels immediately
+  ok  session-switch entry invalidates in-flight state and choices before delayed boot
+
+Model capabilities: 34/34 通过
+[15/79] node tests/ux-state.cjs
+ok startup restore and SSE replay produce no historical toasts
+ok ten A/B switches have no success or history toasts
+ok session switches never register another SSE listener
+ok historical tool warning remains in chat
+ok replayed new/fork acknowledgements never restart session rebuild
+ok search result uses quiet history restore
+ok live extension warning is retained in status without a popup
+ok live extension error still produces exactly one toast
+ok custom provider management contains no Pi auth catalog
+ok add provider opens existing creation form only
+ok independent auth entry opens Pi authentication UI
+ok configured authenticated current and model providers precede others
+ok other Pi providers are collapsed by default
+ok unknown stays unknown even with models
+ok auth refresh preserves expanded catalog
+15/15 passed
+[16/79] node tests/native-provider-quota.cjs
+  ok native DeepSeek exists without models.json and queries in worker
+  ok native real zero and currencies stay separate
+  ok private native cache hit
+  ok native resolved credential identity invalidates cache
+  ok native same credential concurrent requests share private fetch
+  ok openai exists but has no verified adapter
+  ok anthropic exists but has no verified adapter
+  ok google exists but has no verified adapter
+  ok moonshotai exists but has no verified adapter
+  ok moonshotai-cn exists but has no verified adapter
+  ok minimax exists but has no verified adapter
+  ok minimax-cn exists but has no verified adapter
+  ok mistral exists but has no verified adapter
+  ok groq exists but has no verified adapter
+  ok xai exists but has no verified adapter
+  ok siliconflow exists but has no verified adapter
+  ok unknown provider is not found
+  ok unsupported and unknown states do not query HTTP
+  ok 401 native state is safe
+  ok 403 native state is safe
+  ok 500 native state is safe
+  ok timeout native state is safe
+  ok network native state is safe
+  ok invalid JSON native state is safe
+  ok malformed object native state is safe
+  ok missing credential native state is safe
+  ok OAuth without resolved API Key native state is safe
+  ok auth failure native state is safe
+  ok future credential without resolved API Key native state is safe
+  ok OpenRouter key usage with no limit is not account balance
+  ok OpenRouter OAuth uses Pi final AuthResult API Key
+  ok OAuth HTTP/Renderer projection contains no credential
+  ok OAuth worker wire and parent diagnostics/logs contain no credential
+  ok OAuth final AuthResult without API Key is unsupported without HTTP
+  ok unsuitable OAuth preserves credential existence in worker and public facts
+  ok unsuitable OAuth HTTP facts retain credential without querying endpoint
+  ok future credential with Pi-resolved API Key is supported
+  ok OpenAI OAuth stays unsupported and does not query quota HTTP
+  ok provider response cannot reflect native key across boundary
+  ok quoted credential is scrubbed before worker serialization
+  ok custom explicit NewAPI and env key remain supported
+  ok custom legacy moonshot ID is preserved
+  ok main projects normalized fields and drops worker extras
+  ok missing public SDK is unknown capability, not not-found
+  ok packaged CJS adapters run inside actual native Worker
+  ok real private quota timeout settles unavailable safely
+  ok quota timeout does not terminate concurrent native OAuth worker
+  ok quota cancellation settles without disposing native auth
+  ok same SDK remains usable after quota cancellation
+  ok real worker messages never contain credential or SDK env
+  ok private cache stores hashed identities and normalized secret-free values
+  ok fixture diagnostics are private streams
+  ok parent stdout and stderr never receive native credentials
+53/53 native-provider-quota assertions passed
+[17/79] node tests/stable-session-order.cjs
+  ok   creation descending despite inverse mtimes
+  ok   old current is highlighted in its original position
+  ok   switch to B preserves order
+  ok   switch to B changes highlight only
+  ok   switch to C preserves order
+  ok   switch to C changes highlight only
+  ok   switch to A preserves order
+  ok   switch to A changes highlight only
+  ok   continue and session metadata never reorder
+  ok   rename still updates title
+  ok   last message remains informational
+  ok   mtime remains available for display and search
+  ok   disconnected list has the same creation order
+  ok   disconnected list has no sticky current
+  ok   pending new D has its final creation position
+  ok   pending creation is derived from real Pi filename
+  ok   pending is current and has no disk actions
+  ok   pending metadata refresh preserves creation
+  ok   pending recreation preserves order and identity
+  ok   persist D keeps exact pending order
+  ok   pending to disk keeps id and createdAt
+  ok   persisted D loses pending without duplication
+  ok   GUI factory restart preserves persisted order
+  ok   archive succeeds with existing flag mechanism
+  ok   active order after archive is D C A
+  ok   archived B preserves creation and list position
+  ok   unarchive restores B to creation position
+  ok   search retains its own result ordering
+  ok   API does not leak file paths
+  ok   old pending current is not pinned to top
+  ok   explicit path pending has unknown creation instead of wall clock
+  ok   unknown pending uses stable fallback across restart
+  ok   creation ties use deterministic lexical identity
+  ok   tie order survives mtime inversion and restart
+  ok   header createdAt then timestamp then filename determine creation
+  ok   header createdAt is preferred when valid
+  ok   invalid createdAt falls back to real header timestamp
+  ok   missing header timestamp uses filename creation
+  ok   impossible filename dates stay unknown
+  ok   legacy unknown creation stays unknown without mtime
+  ok   legacy lexical fallback survives changed mtime and restart
+
+41 passed, 0 failed
+[18/79] node tests/hotfix.cjs
+  ok  H1 internal numeric readback resolves without SSE
+  ok  H1 compatibility observes internal responses including readiness handshake
+  ok  H1 renderer string response remains an event
+  ok  H1 late internal responses remain private after timeout
+  ok  H4 GUI token stripped, provider environment retained
+  ok  H7 removing noncurrent B never restarts A
+  ok  H7 busy removal is rejected before configuration write
+  ok  H7 active removal closes runtime and bridge
+  ok  H7 deleted old folder cannot spawn or be recreated on restart
+  ok  H7 re-add remains closed until explicit activation
+  ok  P25 user-level OAuth survives closing current workspace
+  ok  H2 non-global canonical Pi is available in registry and auto
+  ok  H2 Planner executes canonical package
+  ok  H2 invalid explicit PI_BIN never falls back
+  ok  H2 two Pi packages never mix registry or diagnostics
+  ok  H5 export endpoint and cleanup
+  ok  H5 failure cleanup and path privacy: error
+  ok  H5 failure cleanup and path privacy: wrong-path
+  ok  H5 failure cleanup and path privacy: stale
+  ok  H5 failure cleanup and path privacy: symlink
+  ok  H5 cleanup failure remains contained: EPERM/false
+  ok  H5 cleanup failure remains contained: EPERM/true
+  ok  H5 cleanup failure remains contained: EBUSY/false
+  ok  H5 cleanup failure remains contained: EBUSY/true
+  ok  H5 old Pi rejects before issuing export command
+  ok  H5 router rejects raw exports and reserved numeric client IDs
+
+26/26 通过
+[19/79] node tests/provider-auth.cjs
+  ok  models.json GET never returns stored key/header values
+  ok  safe configuration still contains model id
+  ok  safe metadata POST preserves existing disk credential
+  ok  safe metadata POST preserves provider and same-id model headers only on disk
+  ok  POST response and subsequent GET never expose preserved keys or headers
+  ok  get_state model projection strips keys, headers and unknown auth fields
+  ok  get_state failed model operation strips native error and credential body
+  ok  get_available_models model projection strips keys, headers and unknown auth fields
+  ok  get_available_models failed model operation strips native error and credential body
+  ok  set_model model projection strips keys, headers and unknown auth fields
+  ok  set_model failed model operation strips native error and credential body
+  ok  cycle_model model projection strips keys, headers and unknown auth fields
+  ok  cycle_model failed model operation strips native error and credential body
+  ok  get_state null model preserved while unknown auth state omitted
+  ok  bridge stderr has closed safe diagnostic shape
+  ok  bridge parse error has closed safe diagnostic shape
+  ok  malformed JSON shape returns safe HTTP 400: null
+  ok  malformed JSON shape returns safe HTTP 400: []
+  ok  malformed JSON shape returns safe HTTP 400: "string"
+  ok  malformed JSON shape returns safe HTTP 400: 1
+  ok  malformed JSON shape returns safe HTTP 400: true
+  ok  HTTPS OAuth URL accepted
+  ok  unsafe OAuth URL rejected: javascript
+  ok  unsafe OAuth URL rejected: file
+  ok  unsafe OAuth URL rejected: http
+  ok  unsafe OAuth URL rejected: https
+  ok  unsafe OAuth URL rejected: https
+  ok  ChatGPT OAuth native metadata
+  ok  Pi-confirmed OAuth credential is locally connected
+  ok  account label never derived from raw credential
+  ok  stored API key is separate from authenticated
+  ok  API provider has no OAuth login
+  ok  API key is managed outside renderer
+  ok  unknown is null, not logged out
+  ok  environment remains its own source
+  ok  login enters a real single flight
+  ok  duplicate login rejected
+  ok  logout blocked until login drains
+  ok  browser phase from Pi event
+  ok  untrusted progress/instructions not echoed
+  ok  device code state
+  ok  select interaction uses native option ids
+  ok  answer accepted
+  ok  native promise gets selected id
+  ok  duplicate callback rejected
+  ok  workspace switch does not restart auth
+  ok  same Pi restart does not cancel auth
+  ok  success verified through Pi readback
+  ok  busy chat defers model reload
+  ok  idle chat refreshes real models
+  ok  logout operation started
+  ok  logout refreshes native credential metadata
+  ok  logout calls native API only once
+  ok  cancel state retained
+  ok  cancel error never carries credentials
+  ok  changed Pi identity invalidates old login
+  ok  maintenance rejects both login and logout before creating any flow
+  ok  maintenance release permits login while chat task remains busy
+  ok  busy chat defers model synchronization after maintenance release
+  ok  post-native credential read waits behind older pending status poll
+  ok  post-commit fresh read supersedes pre-commit poll credential snapshot
+  ok  later status polling retains native-confirmed credential after commit
+  ok  timeout aborts native login and ends failed
+  ok  timeout rejects pending native prompt
+  ok  timeout prompt settles rejected rather than hanging
+  ok  late response after timeout rejected as stale
+  ok  timeout performs native status readback and safe error projection
+  ok  login rejection produces fixed native-auth-failed
+  ok  login failure still re-reads credential state
+  ok  logout rejection produces fixed native-auth-failed
+  ok  logout failure still re-reads credential state
+  ok  late native success cannot resurrect cancelled flow
+  ok  late progress does not expose cancelled URL
+  ok  unsafe native URL aborts controller flight
+  ok  unsafe native URL credential absent from safe snapshot
+  ok  native prompt abort rejects only that prompt
+  ok  native prompt abort invalidates old prompt response
+  ok  native browser callback may complete after prompt abort
+  ok  actual public SDK worker discovers native OAuth and API methods
+  ok  actual public SDK enumeration never resolves stored API key
+  ok  actual worker environment excludes renderer HTTP credential
+  ok  actual public SDK credentials omitted from descriptors and worker messages
+  ok  actual stdout/stderr contain fixture secrets only on private streams
+  ok  actual progress and browser instructions projected before worker exit
+  ok  actual worker device native interaction confirms stored credential
+  ok  actual worker device callback preserves safe device code
+  ok  actual worker manual native interaction confirms stored credential
+  ok  actual worker manual prompt omits native message and extra fields
+  ok  actual worker select native interaction confirms stored credential
+  ok  actual worker select prompt omits native message and extra fields
+  ok  actual worker native abort signals matching prompt ID without aborting OAuth
+  ok  actual worker browser callback success survives native prompt abort
+  ok  actual worker failure errors use safe fixed code
+  ok  actual worker secret-input errors use safe fixed code
+  ok  actual worker logout error never exposes native exception
+  ok  actual worker logout re-enumeration confirms removed stored OAuth
+  ok  actual worker unsafe URL flow fails closed and aborts native SDK
+  ok  actual worker cancel drains native prompt and operation
+  ok  actual worker cancel rejects late authorization response
+  ok  actual worker cancel native metadata re-read is secret-free
+  ok  actual worker timeout drains native prompt and operation
+  ok  actual worker timeout rejects late authorization response
+  ok  actual worker timeout native metadata re-read is secret-free
+  ok  actual unsupported public SDK returns unknown fallback capability
+  ok  actual unsupported public SDK login fails with unsupported code
+
+105/105 通过
+[20/79] node tests/provider-auth-runtime.cjs
+  ok  real readback confirms new runtime
+  ok  restart receives authoritative current session
+  ok  new state models and thinking levels all read back
+  ok  lifecycle subscription removed after ready
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  cwd change during initial read does not restart new workspace
+  ok  busy check rejects restart after state read
+  ok  cwd change during restart fails old synchronization
+  ok  changed workspace receives no old follow-up RPC reads
+  ok  changed workspace removes lifecycle listener
+  ok  failed restart has no false success: error
+  ok  failed restart has no false success: exited
+  ok  failed restart has no false success: no-project
+  ok  spawn ready cannot conceal failed model readback
+  ok  late RPC results from replaced bridge cannot confirm synchronization
+  ok  missing ready event times out rather than reporting success
+  ok  timeout removes lifecycle subscriber
+  ok  old bridge ready cannot complete restart
+  ok  new bridge ready followed by readback completes
+  ok  actual bridge fake RPC session reload succeeds
+  ok  auth readback uses Promise results without broadcasting SSE responses
+  ok  actual bridge passes exact current session launch argv
+  ok  session override consumed once and never leaks to next cwd
+  ok  fake bridge spawned exactly three runs
+  ok  no-project auth synchronization succeeds without restarting a workspace
+  ok  no-project needs no chat readback for user-level auth
+  ok  auth synchronization reserves single flight before lifecycle reentry
+  ok  synchronization exposes busy runtime state
+  ok  second authentication cannot enter during model synchronization
+  ok  concurrent synchronization joins existing operation
+  ok  confirmed synchronization releases guard
+
+36/36 通过
+[21/79] node tests/git.cjs
+
+=== 1. 临时仓库：状态解析 ===
+  ok   仓库被识别为 Git 仓库
+  ok   列出全部 10 项变更
+  ok   内部字段 _repoRel 不外泄
+  ok   M：工作区已修改
+  ok   M：增删行数正确（+1 −0）
+  ok   A：已暂存的新增文件
+  ok   D：工作区已删除
+  ok   R：重命名被识别，且带上原路径
+  ok   ??：未跟踪文件
+  ok   ??：未跟踪目录标记 isDir
+  ok   含空格的目录名正确返回
+  ok   含中文的文件名没有被转义成八进制
+  ok   二进制文件被标记（working 侧）
+  ok   二进制文件不给增删行数
+  ok   未跟踪的二进制文件也被标记
+  ok   路径按目录 + 文件名排序
+
+=== 2. 项目只是仓库的子目录 ===
+  ok   子目录被识别为仓库内
+  ok   只返回子目录内的变更
+  ok   路径是相对**项目**而非仓库根
+  ok   P10 原语：项目是仓库子目录时也能建出树
+  ok   P10 原语：执行后也能建出树
+  ok   numstat 只含项目内的 keep.txt
+  ok   numstat 不含仓库其余部分的改动
+  ok   diff 的路径是**相对项目**的（不是 sub/keep.txt）
+  ok   diff 里**只有** keep.txt 一个文件、且没有仓库其余部分
+  ok   patch 是这一轮的改动（+keep3）
+
+=== 3. 非 Git 目录 / 没有项目 ===
+  FAIL 非 Git 目录：ok:true 且 isRepo:false（不是错误）  → {"ok":true,"isRepo":true,"root":"C:\\pi-GUI","projectRoot":"C:\\pi-GUI\\.shots\\visual-temp\\pi-gui-ci-core-35896-1792477789196\\pi-gui-git-scSXOU\\plain","files":[],"truncated":false}
+  ok   没有项目时明确回 noProject
+  ok   没有项目时 diff 不报服务器错误
+
+=== 4. 路径安全（越权一律拒绝） ===
+  ok   空路径 → empty
+  ok   ../ 逃逸 → escape
+  ok   嵌套 ../ 逃逸 → escape
+  ok   Windows 绝对路径 → absolute
+  ok   POSIX 绝对路径 → absolute
+  ok   UNC 路径 → absolute
+  ok   含 NUL 的路径 → illegal
+  ok   前缀伪装目录（../repo-evil）→ escape
+  ok   符号链接逃逸 → symlink
+  ok   diff 走同一条校验（越权 → 403 语义）
+
+=== 5. Diff ===
+  ok   工作区 diff 有内容
+  ok   工作区 diff 带 unified 头
+  ok   没有暂存内容时 staged 为空
+  ok   已暂存文件的 diff 出现在 staged 里
+  ok   已暂存文件的工作区 diff 为空
+  ok   未跟踪文件也能看到内容
+  ok   已删除文件的 diff 显示删除行
+  ok   二进制文件被标记 binary
+  ok   未跟踪目录给提示而不是展开
+  ok   含空格 + 中文的路径能取到 diff
+  ok   diff 头里的中文没有被转义
+  ok   重命名的 diff 同时给出旧路径与新路径
+
+=== 6. 打开文件（只校验并给绝对路径） ===
+  ok   正常文件返回绝对路径
+  ok   返回的绝对路径确实在项目里
+  ok   不存在的文件 → missing
+  ok   目录 → isdir
+
+=== 7. 撤销单个文件 ===
+  ok   工作区 M 可撤销
+  ok   撤销后内容回到 Git 版本
+  ok   撤销后该文件从列表消失
+  ok   已删除文件可恢复
+  ok   恢复后文件真的回来了
+  ok   未跟踪文件无确认 → needsConfirm
+  ok   拒绝文案明确说「将删除该文件」
+  ok   未确认时文件仍然在
+  ok   未跟踪文件带确认 → 删除
+  ok   确认后文件真的没了
+  ok   已暂存的文件拒绝撤销（不擅自改 index）
+  ok   拒绝后暂存内容原封不动
+  ok   重命名拒绝在单文件撤销里处理
+  ok   未跟踪目录拒绝自动删除
+  ok   撤销也走路径校验
+  ok   没有改动可撤时给出说明而不是报错
+
+=== 8. 只读一次环境变量的边界（子进程） ===
+  ok   git 超时被识别并给出可读错误
+  ok   diff 超过上限时标记 truncated
+  ok   truncated 时仍带回上限值
+  ok   PATH 里没有 git → 友好报错而不是崩溃
+  ok   git 未安装时 diff 也是同一套友好报错
+
+=== 9. HTTP 层：令牌 / Origin / 越权 ===
+  ok   无令牌 → 401
+  ok   错误令牌 → 401
+  ok   跨站 Origin → 403
+  ok   带令牌 → 200 且是仓库
+  ok   HTTP 层返回的路径是项目相对的
+  ok   POST diff → 200 且有正文
+  ok   diff 越权 → 403
+  ok   diff 绝对路径 → 403
+  ok   diff 缺 path → 400
+  ok   diff 请求体不是 JSON → 400
+  ok   GET diff → 405
+  ok   未知子接口 → 404
+  ok   POST open → 200 且给出绝对路径
+  ok   open 绝对路径 → 403
+  ok   open 不存在的文件 → 200 + ok:false（业务失败不是 HTTP 失败）
+  ok   HTTP 撤销未跟踪文件需确认 → 200 + needsConfirm
+  ok   日志里不出现令牌
+  ok   日志里不出现越权路径的内容
+
+=== 10. HTTP 层：没有项目时不是错误 ===
+  ok   没有项目时 status 仍是 200
+  ok   没有项目时 status 明确回 noProject
+  ok   没有项目时 diff 给的是可执行指引（不是报错）
+
+=== 11. 取消暂存（默认绝不碰 index） ===
+  ok   已暂存且未授权 → 拒绝，并明确标出 needsUnstage
+  ok   拒绝之后暂存内容确实没变（index 没被偷偷改）
+  ok   授权后 → 先取消暂存，再恢复工作区
+  ok   mod.txt 已回到 Git 版本
+  ok   取消暂存 + 恢复之后工作区彻底干净
+  ok   已暂存的删除 → 取消暂存后恢复
+  ok   被删的文件真的回来了
+  ok   已暂存的新增文件：只给 unstage 仍要确认
+  ok   文案说清「取消暂存后会变成未跟踪文件」
+  ok   被拒时 index 一个字都没改（仍是 A，文件也还在）
+  ok   两个授权一起给 → 取消暂存并删除
+  ok   文件真的被删掉了
+
+=== 12. 撤销全部：计划 → 授权 → 执行 ===
+  ok   不带 planned → 只回报计划
+  ok   计划里区分 plain / staged / untracked
+  ok   计划模式一个字都没动（工作区与计划前完全一致）
+  ok   给 unstage 不给删 → 已跟踪的恢复、未跟踪的保留
+  ok   未跟踪文件仍在磁盘上
+  ok   已跟踪的两个都回到 Git 版本
+  ok   保留项被标成 needsConfirm（还有事没做完）
+  ok   两个授权都给 → 全部清掉
+  ok   撤销全部之后 status 里一个文件都不剩
+  ok   重命名归入 skipped 而不是 staged/plain
+  ok   执行阶段也确实跳过了重命名
+  ok   工作区干净时不要求计划，直接回 total:0
+  ok   空仓库下上限不误伤（total:0 直接返回）
+  ok   超过上限时整体拒绝，不做「尽力而为」
+  ok   超限拒绝时一个文件都没删
+  FAIL 撤销全部在非仓库上也是「不是错误」  → {"ok":true,"isRepo":true,"total":0,"restored":[],"skipped":[],"kept":[],"needsConfirm":false}
+  ok   撤销全部没有项目时给出指引
+
+=== 13. Diff 上下文（默认不动用户的 diff.context） ===
+  ok   默认不传 -U（回显 context 为 null）
+  ok   默认上下文是 3 行（前后各 3 = 6 行）
+  ok   context=20 → 上下文 40 行
+  ok   context=20 被回显
+  ok   context='all' → 展开整个文件（119 行上下文）
+  ok   context='all' 被回显成字符串 'all'
+  ok   上下文变多时新增/删除行数不变
+  ok   非法 context 被忽略，退回默认（不是 NaN 泄漏出来）
+  ok   非法 context 的实际上下文行数与默认一致
+  ok   超大 context 被钳到 200（文件只有 119 行可用）
+  ok   context=0 也是合法值（只要改动的行）
+
+=== 14. HTTP 层：restore-all 与 context 透传 ===
+  ok   restore-all 不需要 path，也不报 400
+  ok   restore-all 默认是干跑（needsPlan）
+  ok   干跑后文件都还在
+  ok   HTTP 透传 context=20
+  ok   HTTP 的 context=20 真的多给了上下文
+  ok   HTTP 透传 context='all'
+  ok   planned + 授权 → 真的执行了
+  ok   执行后未跟踪文件被删掉
+  ok   执行后 mod.txt 回到 Git 版本
+  ok   planned 但不给 unstage → 不碰 index（此处已无暂存内容，故为 total:0 或 kept）
+  ok   单文件 restore 也接受 unstage 参数
+
+=== 15. 静态守卫：写操作路径不许出现危险命令 ===
+  ok   不开 shell（参数只经数组传递）
+  ok   spawn 显式写出 shell: false
+  ok   没有 reset --hard
+  ok   没有 clean -f / -fd
+  ok   没有 checkout 整个工作区（checkout -- .）
+  ok   不做 commit / push / pull / branch / merge / rebase
+  ok   git 参数里没有模板字符串拼接
+  ok   不往项目里写内容（写入类 API 一律不用）
+  ok   临时目录只建在 os.tmpdir() 下
+  ok   删除只作用于临时目录（rmSync 不拿项目路径去删）
+  ok   临时 index 走 GIT_INDEX_FILE（不碰用户真实的 .git/index）
+  ok   applyRestore 用项目根解析路径，不信任 entry 里的字符串
+  ok   单文件撤销仍走 resolveProjectPath 校验
+
+159/161 通过
+Error: test group core failed at node tests/git.cjs (exit 1)
+    at main (file:///C:/pi-GUI/scripts/run-test-group.mjs:132:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)

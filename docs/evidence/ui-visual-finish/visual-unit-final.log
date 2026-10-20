@@ -1,0 +1,11 @@
+PASS routine successes and information do not create a popup
+PASS actionable failures stay visible and duplicate live errors never stack
+PASS an explicit action can still surface an important status
+PASS suppressed and visible notifications log only declared structural metadata
+PASS error has one announcement and preserves its exact detail as text
+PASS optional qmd dependency is retained once in Memory status without a popup
+PASS unknown extension errors remain visible, ordinary warnings go to status
+PASS replay, stale runs and switched workspace do not retain stale status
+PASS extension status is bounded, inert text and stores no duplicate payload copies
+PASS 500 navigation targets have distinct 12px hit areas and retain exact scroll targets
+Visual finish: 10/10; failed=0

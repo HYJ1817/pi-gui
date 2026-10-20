@@ -1,0 +1,229 @@
+{
+  "passed": 32,
+  "failed": 0,
+  "checks": [
+    {
+      "pass": true,
+      "name": "context whole row opens details with mouse"
+    },
+    {
+      "pass": true,
+      "name": "context native keyboard Enter closes details"
+    },
+    {
+      "pass": true,
+      "name": "context has no decorative arrow"
+    },
+    {
+      "pass": true,
+      "name": "light: flat model selection and full provider button",
+      "detail": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "check": "rgb(82, 81, 78)",
+        "arrow": 0,
+        "width": 408.66668701171875
+      }
+    },
+    {
+      "pass": true,
+      "name": "light: keyboard expands arrowless provider"
+    },
+    {
+      "pass": true,
+      "name": "light: native Space toggles provider"
+    },
+    {
+      "pass": true,
+      "name": "light: actual mouse selects correct provider/model once"
+    },
+    {
+      "pass": true,
+      "name": "light: flat thinking selection"
+    },
+    {
+      "pass": true,
+      "name": "light: keyboard focus remains visible"
+    },
+    {
+      "pass": true,
+      "name": "light: keyboard changes thinking once"
+    },
+    {
+      "pass": true,
+      "name": "light: error has no nested panels or borders",
+      "detail": [
+        {
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "0px",
+          "left": "0px",
+          "pad": "0px",
+          "color": "rgb(185, 28, 28)"
+        },
+        {
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "0px",
+          "left": "0px",
+          "pad": "0px",
+          "color": "rgb(185, 28, 28)"
+        },
+        {
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "0px",
+          "left": "0px",
+          "pad": "0px",
+          "color": "rgb(185, 28, 28)"
+        }
+      ]
+    },
+    {
+      "pass": true,
+      "name": "light: history detail retained without repeated alert"
+    },
+    {
+      "pass": true,
+      "name": "dark: flat model selection and full provider button",
+      "detail": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "check": "rgb(195, 194, 183)",
+        "arrow": 0,
+        "width": 408.66668701171875
+      }
+    },
+    {
+      "pass": true,
+      "name": "dark: keyboard expands arrowless provider"
+    },
+    {
+      "pass": true,
+      "name": "dark: native Space toggles provider"
+    },
+    {
+      "pass": true,
+      "name": "dark: actual mouse selects correct provider/model once"
+    },
+    {
+      "pass": true,
+      "name": "dark: flat thinking selection"
+    },
+    {
+      "pass": true,
+      "name": "dark: keyboard focus remains visible"
+    },
+    {
+      "pass": true,
+      "name": "dark: keyboard changes thinking once"
+    },
+    {
+      "pass": true,
+      "name": "dark: error has no nested panels or borders",
+      "detail": [
+        {
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "0px",
+          "left": "0px",
+          "pad": "0px",
+          "color": "rgb(248, 113, 113)"
+        },
+        {
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "0px",
+          "left": "0px",
+          "pad": "0px",
+          "color": "rgb(248, 113, 113)"
+        },
+        {
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "0px",
+          "left": "0px",
+          "pad": "0px",
+          "color": "rgb(248, 113, 113)"
+        }
+      ]
+    },
+    {
+      "pass": true,
+      "name": "dark: history detail retained without repeated alert"
+    },
+    {
+      "pass": true,
+      "name": "routine operations and repeated optional dependency produce zero popups"
+    },
+    {
+      "pass": true,
+      "name": "dependency remains in live extension settings"
+    },
+    {
+      "pass": true,
+      "name": "500 targets remain in bounded thin rail with nonoverlapping hit areas",
+      "detail": {
+        "h": 280,
+        "sh": 7006,
+        "width": 24,
+        "min": 12,
+        "gap": 14,
+        "stage": 0,
+        "page": 1200
+      }
+    },
+    {
+      "pass": true,
+      "name": "clicking transparent area jumps to exact message without moving stage",
+      "detail": {
+        "delta": 19.333335876464844,
+        "index": 320,
+        "stage": 0,
+        "current": 1
+      }
+    },
+    {
+      "pass": true,
+      "name": "End reveals and focuses last of 500 targets"
+    },
+    {
+      "pass": true,
+      "name": "navigation preview escapes the scroll rail without clipping or offset",
+      "detail": {
+        "targetRight": 356,
+        "tipLeft": 364,
+        "tipRight": 428.71875
+      }
+    },
+    {
+      "pass": true,
+      "name": "last target remains keyboard accessible at clamped scroll position"
+    },
+    {
+      "pass": true,
+      "name": "700px: no page overflow"
+    },
+    {
+      "pass": true,
+      "name": "900px: no page overflow"
+    },
+    {
+      "pass": true,
+      "name": "1536px: no page overflow"
+    },
+    {
+      "pass": true,
+      "name": "no renderer or harness errors",
+      "detail": []
+    }
+  ],
+  "shots": [
+    "light-models.png",
+    "light-thinking.png",
+    "light-error.png",
+    "dark-models.png",
+    "dark-thinking.png",
+    "dark-error.png",
+    "extension-status.png",
+    "long-navigation.png",
+    "responsive-700.png",
+    "responsive-900.png",
+    "responsive-1536.png"
+  ],
+  "errors": []
+}

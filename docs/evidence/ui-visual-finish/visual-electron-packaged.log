@@ -1,0 +1,35 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS context whole row opens details with mouse
+PASS context native keyboard Enter closes details
+PASS context has no decorative arrow
+PASS light: flat model selection and full provider button
+PASS light: keyboard expands arrowless provider
+PASS light: native Space toggles provider
+PASS light: actual mouse selects correct provider/model once
+PASS light: flat thinking selection
+PASS light: keyboard focus remains visible
+PASS light: keyboard changes thinking once
+PASS light: error has no nested panels or borders
+PASS light: history detail retained without repeated alert
+PASS dark: flat model selection and full provider button
+PASS dark: keyboard expands arrowless provider
+PASS dark: native Space toggles provider
+PASS dark: actual mouse selects correct provider/model once
+PASS dark: flat thinking selection
+PASS dark: keyboard focus remains visible
+PASS dark: keyboard changes thinking once
+PASS dark: error has no nested panels or borders
+PASS dark: history detail retained without repeated alert
+PASS routine operations and repeated optional dependency produce zero popups
+PASS dependency remains in live extension settings
+PASS 500 targets remain in bounded thin rail with nonoverlapping hit areas
+PASS clicking transparent area jumps to exact message without moving stage
+PASS End reveals and focuses last of 500 targets
+PASS navigation preview escapes the scroll rail without clipping or offset
+PASS last target remains keyboard accessible at clamped scroll position
+PASS 700px: no page overflow
+PASS 900px: no page overflow
+PASS 1536px: no page overflow
+PASS no renderer or harness errors
+Visual Electron: 32/32; failed=0; evidence=C:\pi-GUI\.shots\ui-visual-finish-packaged
