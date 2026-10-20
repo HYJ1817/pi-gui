@@ -16,12 +16,44 @@
  *   node tests/ui2-visual.cjs              # 跑完即收口，exit code=fail 数
  *   node tests/ui2-visual.cjs --keep       # 保留 Chrome / harness 进程手测
  *   UI2C_CHROME=... UI2C_CDP_PORT=9226     # 可覆盖 Chrome 路径与调试端口 */
-const { spawn } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const CHROME = process.env.UI2C_CHROME || process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const BROWSER_CANDIDATES = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/microsoft-edge',
+];
+
+function findBrowser() {
+  const explicit = process.env.UI2C_CHROME || process.env.CHROME_PATH;
+  if (explicit) return explicit;
+  for (const candidate of BROWSER_CANDIDATES) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  const commands = process.platform === 'win32'
+    ? [['where.exe', ['chrome.exe']], ['where.exe', ['msedge.exe']]]
+    : [['which', ['google-chrome']], ['which', ['chromium']], ['which', ['microsoft-edge']]];
+  for (const [command, args] of commands) {
+    try {
+      const found = execFileSync(command, args, { encoding: 'utf8', windowsHide: true })
+        .split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+      if (found && fs.existsSync(found)) return found;
+    } catch { /* 该浏览器不在 PATH 中 */ }
+  }
+  return null;
+}
+
+const CHROME = findBrowser();
 const CDP_PORT = Number(process.env.UI2C_CDP_PORT || 9226);
 const OUT = process.env.UI2_VISUAL_EVIDENCE || path.join(__dirname, '..', '.shots', 'ui2-visual');
 const KEEP = process.argv.includes('--keep');
@@ -44,6 +76,10 @@ async function expect(label, expr) {
 }
 
 async function main() {
+  if (!CHROME) {
+    throw new Error('找不到可用于 CDP 的 Chromium 浏览器。设置 UI2C_CHROME/CHROME_PATH，或安装 Chrome/Edge。已检查: ' +
+      BROWSER_CANDIDATES.join(', '));
+  }
   fs.mkdirSync(OUT, { recursive: true });
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-ui2-visual-'));
   if (path.dirname(profile) !== path.resolve(os.tmpdir())) throw new Error('unexpected fixture profile parent');
@@ -67,6 +103,7 @@ async function main() {
   console.log('夹具: ' + url);
   try {
     /* ---- 2. 无头 Chrome + DevTools 协议（headless=new 下窗口参数即视口） ---- */
+    console.log('浏览器: ' + CHROME);
     chrome = spawn(
       CHROME,
       [
@@ -138,7 +175,7 @@ async function main() {
     }
   }
 
-  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ passed, failed, claims, cdpPort: CDP_PORT, out: OUT }, null, 2));
+  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ passed, failed, claims, browser: CHROME, cdpPort: CDP_PORT, out: OUT }, null, 2));
   console.log(`\nUI-2C 视觉自检: ${passed}/${passed + failed} 通过 —— 报告: ` + path.join(OUT, 'report.json'));
   if (failed) process.exitCode = 1;
 }
