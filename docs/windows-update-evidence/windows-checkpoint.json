@@ -1,0 +1,57 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-install-2dL1yk",
+  "checks": [
+    {
+      "name": "official previous program version verified",
+      "pass": true
+    },
+    {
+      "name": "old version installed into TEMP via real NSIS",
+      "pass": true
+    },
+    {
+      "name": "real previous Electron and backend start at v0.26.0",
+      "pass": true
+    },
+    {
+      "name": "helper waits before changing installed files",
+      "pass": true
+    },
+    {
+      "name": "nonzero installer with partial write restores old files",
+      "pass": true
+    },
+    {
+      "name": "old version is usable after rollback",
+      "pass": true
+    },
+    {
+      "name": "helper waits before changing installed files",
+      "pass": true
+    },
+    {
+      "name": "backup failure is recorded",
+      "pass": true
+    },
+    {
+      "name": "backup failure after exit restarts unchanged old application",
+      "pass": true
+    },
+    {
+      "name": "helper waits before changing installed files",
+      "pass": true
+    },
+    {
+      "name": "real NSIS upgrade returns success",
+      "pass": true
+    },
+    {
+      "name": "restarted real backend and installed package confirm new version",
+      "pass": true
+    },
+    {
+      "name": "all seven user data sentinel hashes preserved",
+      "pass": true
+    }
+  ]
+}
