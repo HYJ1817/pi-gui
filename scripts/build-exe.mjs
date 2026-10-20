@@ -86,13 +86,16 @@ function main() {
 
   /* 2. 打包服务端代码 */
   const pkgVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
-  esbuild.buildSync({
+  const bundle = esbuild.buildSync({
     entryPoints: [path.join(ROOT, 'server.js')],
     bundle: true,
     platform: 'node',
     format: 'cjs',
     target: 'node22',
     outfile: path.join(BUILD, 'server.cjs'),
+    // Keep filesystem writes in the Node owner. Some Windows worktree ACLs
+    // allow this process but deny writes by the esbuild child executable.
+    write: false,
     // 打包后是单文件，import.meta.url 在 CJS 下会变空，用 banner 注入真实路径
     define: {
       'import.meta.url': '__SEA_URL__',
@@ -103,6 +106,7 @@ function main() {
     banner: { js: 'var __SEA_URL__=require("url").pathToFileURL(__filename).href;' },
     logLevel: 'warning',
   });
+  fs.writeFileSync(path.join(BUILD, 'server.cjs'), bundle.outputFiles[0].contents);
   const bundleSize = fs.statSync(path.join(BUILD, 'server.cjs')).size;
   console.log(`  代码打包 ${(bundleSize / 1024 / 1024).toFixed(2)} MB`);
 
