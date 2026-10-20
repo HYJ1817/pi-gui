@@ -1,0 +1,74 @@
+{
+  "passed": 15,
+  "failed": 0,
+  "checks": [
+    {
+      "pass": true,
+      "name": "A -> B mouse switch keeps original stream and sends no switch/abort"
+    },
+    {
+      "pass": true,
+      "name": "keyboard returns to A with live output retained"
+    },
+    {
+      "pass": true,
+      "name": "six rapid A/B round trips preserve task identity and mounted messages"
+    },
+    {
+      "pass": true,
+      "name": "new-session action opens an isolated draft without interrupting A"
+    },
+    {
+      "pass": true,
+      "name": "A approval is deferred while B is viewed, without cancellation or auto-approval"
+    },
+    {
+      "pass": true,
+      "name": "resumed approval sends exactly one response to A request"
+    },
+    {
+      "pass": true,
+      "name": "background completion does not steal focus from B draft"
+    },
+    {
+      "pass": true,
+      "name": "RA output, tokens, tool and approval are owner-scoped"
+    },
+    {
+      "pass": true,
+      "name": "Stop RA does not stop or mix RB"
+    },
+    {
+      "pass": true,
+      "name": "equal approval IDs remain scoped to RB while RA stays pending"
+    },
+    {
+      "pass": true,
+      "name": "project navigation preserves original execution cwd"
+    },
+    {
+      "pass": true,
+      "name": "normal background navigation emits no destructive classic command or old restriction notice"
+    },
+    {
+      "pass": true,
+      "name": "real reload reads persisted result, never resumes exited RA or replays old approvals"
+    },
+    {
+      "pass": true,
+      "name": "reopened dormant session reads its proven native history without spawning a task"
+    },
+    {
+      "pass": true,
+      "name": "no renderer/harness errors",
+      "detail": []
+    }
+  ],
+  "shots": [
+    "C:\\pi-GUI\\.shots\\session-background\\electron-packaged\\light-background-history.png",
+    "C:\\pi-GUI\\.shots\\session-background\\electron-packaged\\dark-background-history.png",
+    "C:\\pi-GUI\\.shots\\session-background\\electron-packaged\\runtime-B-owner-isolation.png",
+    "C:\\pi-GUI\\.shots\\session-background\\electron-packaged\\reload-persisted-result.png"
+  ],
+  "errors": []
+}
