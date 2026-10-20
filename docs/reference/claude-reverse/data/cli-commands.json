@@ -1,0 +1,879 @@
+[
+ {
+  "name": "add-dir",
+  "type": "local",
+  "description": "Add a new working directory",
+  "argumentHint": "<path>",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "add-dir",
+  "type": "local-jsx",
+  "description": "Add a new working directory",
+  "argumentHint": "<path>",
+  "thinClientDispatch": "twin",
+  "immediate": true
+ },
+ {
+  "name": "advisor",
+  "type": "local",
+  "description": "Let Claude consult a stronger model at key moments",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "advisor",
+  "type": "local-jsx",
+  "description": "Let Claude consult a stronger model at key moments",
+  "thinClientDispatch": "control-request",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "agents",
+  "type": "local",
+  "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "artifacts",
+  "type": "local-jsx",
+  "description": "Browse your published and shared artifacts",
+  "immediate": true,
+  "runsBesideTurns": true
+ },
+ {
+  "name": "auto-mode-setup",
+  "type": "local",
+  "description": "Teach auto mode about your environment, plus optional rule tweaks",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "auto-mode-setup",
+  "type": "local-jsx",
+  "description": "Teach auto mode about your environment, plus optional rule tweaks",
+  "requiresObj": "workspace:!0,ink:!0"
+ },
+ {
+  "name": "autocompact",
+  "type": "local",
+  "description": "Configure the auto-compact window size",
+  "argumentHint": "[auto|<tokens>]",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "autocompact",
+  "type": "local-jsx",
+  "description": "Set how full the context gets before auto-summarizing",
+  "argumentHint": "[auto|<tokens>]",
+  "immediate": true
+ },
+ {
+  "name": "autofix-pr",
+  "type": "local-jsx",
+  "description": "Monitor and autofix any issues with the current PR",
+  "availability": [
+   "claude-ai",
+   "console-profile"
+  ]
+ },
+ {
+  "name": "background",
+  "type": "local-jsx",
+  "description": "Send this session to the background and free the terminal",
+  "argumentHint": "[prompt]",
+  "aliases": [
+   "bg"
+  ],
+  "immediate": true
+ },
+ {
+  "name": "branch",
+  "type": "local-jsx",
+  "description": "Create a branch of the current conversation at this point",
+  "argumentHint": "[name]"
+ },
+ {
+  "name": "brief",
+  "type": "local-jsx",
+  "description": "Toggle brief-only mode",
+  "immediate": true
+ },
+ {
+  "name": "btw",
+  "type": "local-jsx",
+  "description": "Ask a quick side question without interrupting the main conversation",
+  "argumentHint": "[question]",
+  "thinClientDispatch": "control-request",
+  "immediate": true
+ },
+ {
+  "name": "cd",
+  "type": "local-jsx",
+  "description": "Move this session to a new working directory",
+  "argumentHint": "<path>"
+ },
+ {
+  "name": "clear",
+  "type": "local",
+  "description": "Start a new session with empty context; previous session stays on disk (resumable with /resume)",
+  "argumentHint": "[name]",
+  "aliases": [
+   "reset",
+   "new"
+  ],
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "cloud-plugins",
+  "type": "local-jsx",
+  "description": "Choose whether cloud sessions use the plugins enabled on this machine",
+  "requiresObj": "workspace:!1,ink:!0"
+ },
+ {
+  "name": "color",
+  "type": "local",
+  "description": "Set the prompt bar color for this session",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "color",
+  "type": "local-jsx",
+  "description": "Set the prompt bar color for this session",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "compact",
+  "type": "local",
+  "description": "Free up context by summarizing the conversation so far",
+  "argumentHint": "<optional custom summarization instructions>",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "config",
+  "type": "local",
+  "description": "Set a setting by key",
+  "argumentHint": "key=value",
+  "aliases": [
+   "settings"
+  ],
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "context",
+  "type": "local",
+  "description": "Show current context usage",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "copy",
+  "type": "local-jsx",
+  "description": "Copy Claude's last response to clipboard (or /copy N for the Nth-latest)",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "daemon",
+  "type": "local-jsx",
+  "description": "Manage background services and routines",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "design-consent",
+  "type": "local",
+  "description": "Grant Claude agent access to your Design projects",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "design-login",
+  "type": "local-jsx",
+  "description": "Authorize design-system access for /design-sync with your claude.ai account"
+ },
+ {
+  "name": "design-revoke",
+  "type": "local",
+  "description": "Revoke Claude agent access to your Design projects",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "desktop",
+  "type": "local-jsx",
+  "description": "Continue the current session in Claude Desktop",
+  "aliases": [
+   "app"
+  ],
+  "availability": [
+   "claude-ai"
+  ]
+ },
+ {
+  "name": "diff",
+  "type": "local-jsx",
+  "thinClientDispatch": "control-request",
+  "immediate": true
+ },
+ {
+  "name": "effort",
+  "type": "local",
+  "description": "Set effort level for model usage",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "effort",
+  "type": "local-jsx",
+  "description": "Set effort level for model usage",
+  "thinClientDispatch": "control-request",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "exit",
+  "type": "local",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "exit",
+  "type": "local-jsx",
+  "aliases": [
+   "quit"
+  ],
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "export",
+  "type": "local-jsx",
+  "description": "Export the current conversation to a file or clipboard",
+  "argumentHint": "[filename]",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "extra-usage",
+  "type": "local",
+  "description": "Renamed to /usage-credits",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "extra-usage",
+  "type": "local-jsx",
+  "description": "Renamed to /usage-credits",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "fast",
+  "type": "local",
+  "argumentHint": "[on|off]",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "fast",
+  "type": "local-jsx",
+  "argumentHint": "[on|off]",
+  "thinClientDispatch": "control-request",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "feedback",
+  "type": "local-jsx",
+  "description": "Send feedback to Anthropic or report a bug",
+  "argumentHint": "[report]",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "focus",
+  "type": "local",
+  "description": "Toggle focus view: just your prompt, summary, and response",
+  "argumentHint": "[on|off]",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "focus",
+  "type": "local-jsx",
+  "description": "Toggle focus view: just your prompt, summary, and response",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "fork",
+  "type": "local-jsx",
+  "description": "Spawn a background agent that inherits the full conversation",
+  "argumentHint": "<directive>"
+ },
+ {
+  "name": "fork",
+  "type": "local-jsx",
+  "description": "Copy this conversation into a new background session and keep working here",
+  "argumentHint": "[prompt]"
+ },
+ {
+  "name": "goal",
+  "type": "local",
+  "description": "Set a goal \\u2014 keep working until the condition is met",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "goal",
+  "type": "local-jsx",
+  "description": "Set a goal Claude checks before stopping",
+  "argumentHint": "[<condition> | clear]",
+  "immediate": true
+ },
+ {
+  "name": "heapdump",
+  "type": "local",
+  "description": "Dump the JS heap to the Desktop; on Linux with no Desktop folder, the home directory",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "help",
+  "type": "local-jsx",
+  "description": "Show help and available commands",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "hooks",
+  "type": "local-jsx",
+  "description": "View hook configurations for tool events",
+  "requiresObj": "workspace:!1,ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "ide",
+  "type": "local-jsx",
+  "description": "Manage IDE integrations and show status",
+  "argumentHint": "[open]"
+ },
+ {
+  "name": "import",
+  "type": "local",
+  "description": "Import config from another AI coding agent",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "import",
+  "type": "local-jsx",
+  "description": "Import config from another AI coding agent",
+  "argumentHint": "[codex|gemini|cursor] [--dry-run]",
+  "immediate": true
+ },
+ {
+  "name": "init",
+  "type": "prompt"
+ },
+ {
+  "name": "insights",
+  "type": "prompt",
+  "description": "Generate a report analyzing your Claude Code sessions",
+  "requiresObj": "workspace:!0"
+ },
+ {
+  "name": "insights",
+  "type": "prompt",
+  "description": "Generate a report analyzing your Claude Code sessions"
+ },
+ {
+  "name": "install",
+  "type": "local-jsx",
+  "description": "Install Claude Code native build",
+  "argumentHint": "[options]"
+ },
+ {
+  "name": "install-github-app",
+  "type": "local-jsx",
+  "description": "Set up Claude GitHub Actions for a repository",
+  "availability": [
+   "claude-ai",
+   "console"
+  ]
+ },
+ {
+  "name": "install-slack-app",
+  "type": "local",
+  "description": "Install the Claude Slack app",
+  "supportsNonInteractive": false,
+  "availability": [
+   "claude-ai"
+  ]
+ },
+ {
+  "name": "list-agents",
+  "type": "local",
+  "description": "List subagents, teammates, and other Claude sessions you can message",
+  "aliases": [
+   "peers"
+  ],
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "login",
+  "type": "local-jsx"
+ },
+ {
+  "name": "logout",
+  "type": "local-jsx",
+  "description": "Sign out from your Anthropic account"
+ },
+ {
+  "name": "loops",
+  "type": "local-jsx",
+  "description": "List, create, and delete loops",
+  "immediate": true
+ },
+ {
+  "name": "mcp",
+  "type": "local",
+  "description": "Manage MCP servers",
+  "argumentHint": "[reconnect|enable|disable [<server>|all]]",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "mcp",
+  "type": "local-jsx",
+  "description": "Manage MCP servers",
+  "argumentHint": "[reconnect (<server>|all)|enable|disable [<server>|all]]",
+  "thinClientDispatch": "twin",
+  "immediate": true
+ },
+ {
+  "name": "mcp__",
+  "type": "prompt"
+ },
+ {
+  "name": "mcp__",
+  "type": "prompt"
+ },
+ {
+  "name": "memory",
+  "type": "local-jsx",
+  "description": "Edit CLAUDE.md files and memory settings",
+  "thinClientDispatch": "control-request"
+ },
+ {
+  "name": "mobile",
+  "type": "local-jsx",
+  "description": "Show QR code to download the Claude mobile app",
+  "aliases": [
+   "ios",
+   "android"
+  ],
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "model",
+  "type": "local",
+  "description": "Set the AI model for Claude Code",
+  "argumentHint": "<model>",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "model",
+  "type": "local-jsx",
+  "argumentHint": "[model]",
+  "thinClientDispatch": "control-request",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "output-style",
+  "type": "local",
+  "description": "List output styles or switch to one",
+  "argumentHint": "[style]",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "passes",
+  "type": "local-jsx",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "pause-memory",
+  "type": "local",
+  "aliases": [
+   "memory-pause",
+   "toggle-memory"
+  ],
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "permissions",
+  "type": "local-jsx",
+  "description": "Manage allow and deny tool permission rules",
+  "aliases": [
+   "allowed-tools"
+  ],
+  "thinClientDispatch": "control-request",
+  "immediate": true
+ },
+ {
+  "name": "plan",
+  "type": "local-jsx",
+  "description": "Enable plan mode or view the current session plan",
+  "argumentHint": "[open|<description>]",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "plugin",
+  "type": "local-jsx",
+  "description": "Manage Claude Code plugins",
+  "aliases": [
+   "plugins",
+   "marketplace"
+  ],
+  "requiresObj": "workspace:!1,ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "powerup",
+  "type": "local-jsx",
+  "description": "Discover Claude Code features through quick interactive lessons",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "privacy-settings",
+  "type": "local-jsx",
+  "description": "View and update your privacy settings",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "pro-trial-expired",
+  "type": "local-jsx",
+  "description": "Options shown when the Pro plan Claude Code trial has ended"
+ },
+ {
+  "name": "radio",
+  "type": "local",
+  "description": "Listen to Claude FM lo-fi radio",
+  "supportsNonInteractive": false
+ },
+ {
+  "name": "rate-limit-options",
+  "type": "local-jsx",
+  "description": "Manage usage limits and upgrade options",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "recap",
+  "type": "local",
+  "description": "Generate a one-line session recap now",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "reload-plugins",
+  "type": "local",
+  "description": "Activate pending plugin changes in the current session",
+  "argumentHint": "[--force]",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "control-request"
+ },
+ {
+  "name": "reload-skills",
+  "type": "local",
+  "description": "Pick up skills added or changed on disk during this session",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "remote-control",
+  "type": "local-jsx",
+  "aliases": [
+   "rc"
+  ],
+  "immediate": true
+ },
+ {
+  "name": "remote-env",
+  "type": "local-jsx",
+  "description": "Choose the default environment for cloud agents",
+  "availability": [
+   "claude-ai",
+   "console-profile"
+  ]
+ },
+ {
+  "name": "rename",
+  "type": "local",
+  "description": "Rename the current conversation",
+  "argumentHint": "[name]",
+  "aliases": [
+   "name"
+  ],
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "rename",
+  "type": "local-jsx",
+  "description": "Rename the current conversation",
+  "argumentHint": "[name]",
+  "aliases": [
+   "name"
+  ],
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "restart",
+  "type": "local",
+  "aliases": [
+   "update"
+  ],
+  "supportsNonInteractive": false
+ },
+ {
+  "name": "resume",
+  "type": "local-jsx",
+  "description": "Resume a previous conversation",
+  "argumentHint": "[conversation id or search term]",
+  "aliases": [
+   "continue"
+  ]
+ },
+ {
+  "name": "scroll-speed",
+  "type": "local-jsx",
+  "description": "Adjust mouse wheel scroll speed"
+ },
+ {
+  "name": "session",
+  "type": "local-jsx",
+  "description": "Show cloud session URL and QR code",
+  "aliases": [
+   "remote"
+  ],
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "setup-bedrock",
+  "type": "local-jsx",
+  "description": "Reconfigure Amazon Bedrock authentication, region, or model pins"
+ },
+ {
+  "name": "setup-vertex",
+  "type": "local-jsx",
+  "description": "Reconfigure Google Vertex AI authentication, project, region, or model pins"
+ },
+ {
+  "name": "skill-doctor",
+  "type": "local",
+  "description": "Show which loaded skills are unused and costing context",
+  "supportsNonInteractive": true,
+  "thinClientDispatch": "post-text"
+ },
+ {
+  "name": "skill-doctor",
+  "type": "local-jsx",
+  "description": "Show which loaded skills are unused and costing context",
+  "thinClientDispatch": "twin",
+  "immediate": true
+ },
+ {
+  "name": "skills",
+  "type": "local-jsx",
+  "description": "List available skills",
+  "thinClientDispatch": "control-request",
+  "immediate": true
+ },
+ {
+  "name": "status",
+  "type": "local-jsx",
+  "description": "Show Claude Code status including version, model, account, API connectivity, and tool statuses",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "stickers",
+  "type": "local",
+  "description": "Order Claude Code stickers",
+  "supportsNonInteractive": false
+ },
+ {
+  "name": "stop",
+  "type": "local",
+  "description": "Stop this background session; transcript and worktree are kept",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "stop",
+  "type": "local-jsx",
+  "description": "Stop this background session; transcript and worktree are kept",
+  "immediate": true
+ },
+ {
+  "name": "subtask",
+  "type": "local-jsx",
+  "description": "Send a subagent off with your full context; its result comes back here",
+  "argumentHint": "<task>"
+ },
+ {
+  "name": "tasks",
+  "type": "local-jsx",
+  "description": "View and manage everything running in the background",
+  "aliases": [
+   "bashes"
+  ],
+  "thinClientDispatch": "control-request",
+  "immediate": true
+ },
+ {
+  "name": "team-onboarding",
+  "type": "prompt",
+  "description": "Help teammates ramp on Claude Code with a guide from your usage",
+  "requiresObj": "workspace:!0"
+ },
+ {
+  "name": "teleport",
+  "type": "local-jsx",
+  "description": "Send this session to the cloud, or resume one from claude.ai",
+  "aliases": [
+   "tp"
+  ],
+  "availability": [
+   "claude-ai",
+   "console-profile"
+  ]
+ },
+ {
+  "name": "terminal-setup",
+  "type": "local-jsx",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "theme",
+  "type": "local-jsx",
+  "description": "Change the theme",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "tui",
+  "type": "local-jsx",
+  "description": "Set the terminal UI renderer (default | fullscreen)",
+  "argumentHint": "[default|fullscreen]"
+ },
+ {
+  "name": "ultraplan",
+  "type": "local-jsx",
+  "argumentHint": "<prompt>",
+  "availability": [
+   "claude-ai"
+  ]
+ },
+ {
+  "name": "ultrareview",
+  "type": "local",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "ultrareview",
+  "type": "local-jsx"
+ },
+ {
+  "name": "upgrade",
+  "type": "local-jsx",
+  "description": "Upgrade to Max for higher rate limits and more Opus",
+  "requiresObj": "ink:!0",
+  "availability": [
+   "claude-ai"
+  ]
+ },
+ {
+  "name": "usage",
+  "type": "local",
+  "description": "Show session cost, plan usage, and what's contributing to your limits",
+  "aliases": [
+   "cost",
+   "stats"
+  ],
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "usage",
+  "type": "local-jsx",
+  "description": "Show session cost, plan usage, and activity stats",
+  "aliases": [
+   "cost",
+   "stats"
+  ],
+  "thinClientDispatch": "control-request",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "usage-credits",
+  "type": "local",
+  "description": "Configure usage credits or request them from your admin when you hit a limit",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "usage-credits",
+  "type": "local-jsx",
+  "description": "Configure usage credits or request them from your admin when you hit a limit",
+  "requiresObj": "ink:!0"
+ },
+ {
+  "name": "version",
+  "type": "local",
+  "description": "Print the version this session is running (not what autoupdate downloaded)",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "version",
+  "type": "local-jsx",
+  "description": "Show this session's version (autoupdate may have a newer one)",
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "voice",
+  "type": "local",
+  "description": "Toggle voice mode",
+  "argumentHint": "[hold|tap|off]",
+  "supportsNonInteractive": false,
+  "availability": [
+   "claude-ai"
+  ]
+ },
+ {
+  "name": "web-setup",
+  "type": "local-jsx",
+  "description": "Set up cloud sessions with your GitHub account",
+  "availability": [
+   "claude-ai"
+  ]
+ },
+ {
+  "name": "wellbeing",
+  "type": "local-jsx",
+  "description": "Configure optional break reminders and quiet-hours nudges",
+  "aliases": [
+   "breaks",
+   "break-reminder",
+   "downtime"
+  ],
+  "requiresObj": "ink:!0",
+  "immediate": true
+ },
+ {
+  "name": "workflow-launch-exec",
+  "type": "local",
+  "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+  "supportsNonInteractive": true
+ },
+ {
+  "name": "workflows",
+  "type": "local-jsx",
+  "description": "Browse running and completed workflows",
+  "immediate": true
+ }
+]

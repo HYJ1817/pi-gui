@@ -1,0 +1,106 @@
+[
+ {
+  "accelerator": "CmdOrCtrl+,",
+  "label": "Settings"
+ },
+ {
+  "accelerator": "CmdOrCtrl+-",
+  "label": "Zoom Out"
+ },
+ {
+  "accelerator": "CmdOrCtrl+/",
+  "label": "Keyboard Shortcuts"
+ },
+ {
+  "accelerator": "CmdOrCtrl+;",
+  "label": "New Side Chat"
+ },
+ {
+  "accelerator": "CmdOrCtrl+=",
+  "label": "Zoom In (indie cooler version)"
+ },
+ {
+  "accelerator": "CmdOrCtrl+num0",
+  "label": "Zoom Out"
+ },
+ {
+  "accelerator": "CmdOrCtrl+numadd",
+  "label": "Zoom Out"
+ },
+ {
+  "accelerator": "CmdOrCtrl+numsub",
+  "label": "Zoom Out"
+ },
+ {
+  "accelerator": "Ctrl+Alt+-",
+  "label": "Sidebar"
+ },
+ {
+  "accelerator": "Ctrl+[",
+  "label": "Sidebar"
+ },
+ {
+  "accelerator": "Ctrl+]",
+  "label": "Sidebar"
+ },
+ {
+  "accelerator": "Ctrl+`",
+  "label": "View"
+ },
+ {
+  "accelerator": "F0",
+  "label": null
+ },
+ {
+  "accelerator": "F1",
+  "label": "Help"
+ },
+ {
+  "accelerator": "F10",
+  "label": "Full Screen"
+ },
+ {
+  "accelerator": "F11",
+  "label": "Full Screen"
+ },
+ {
+  "accelerator": "F12",
+  "label": null
+ },
+ {
+  "accelerator": "F2",
+  "label": null
+ },
+ {
+  "accelerator": "F3",
+  "label": "Find Next"
+ },
+ {
+  "accelerator": "F4",
+  "label": null
+ },
+ {
+  "accelerator": "F5",
+  "label": "Full Screen"
+ },
+ {
+  "accelerator": "F6",
+  "label": null
+ },
+ {
+  "accelerator": "F7",
+  "label": null
+ },
+ {
+  "accelerator": "F8",
+  "label": null
+ },
+ {
+  "accelerator": "F9",
+  "label": null
+ },
+ {
+  "accelerator": "Shift+F3",
+  "label": "Find Previous"
+ }
+]
