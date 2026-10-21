@@ -1,0 +1,66 @@
+  ok  preview route factory exists
+  ok  missing token is rejected before evidence read
+  ok  foreign Origin rejects valid token
+  ok  same Origin is accepted
+  ok  GET cannot preview
+  ok  raw endpoint is unavailable
+  ok  apply endpoint rejects requests without a prepared confirmed plan
+  ok  closed schema rejects path
+  ok  closed schema rejects root
+  ok  closed schema rejects nativeSessionId
+  ok  closed schema rejects scope
+  ok  closed schema rejects before
+  ok  closed schema rejects indexRef
+  ok  closed schema rejects readonly
+  ok  malformed JSON is fixed refusal
+  ok  oversized body is bounded
+  ok  empty selected ids refused
+  ok  invalid selected ids refused
+  ok  duplicate selected ids refused
+  ok  unknown mode refused
+  ok  diff requires boolean
+  ok  revision requires integer
+  ok  wrong dormant conversation refused
+  ok  stale owner refused
+  ok  active writer refuses before read
+  ok  strict is unavailable independently of content candidate
+  ok  limited candidate requires metadata and backups
+  ok  candidate change summary reports exact byte counts without content
+  ok  summary contains no raw bytes digest or absolute root
+  ok  explicit C to R diff is deterministic and bounded
+  ok  current bytes never change during preview
+  ok  authority is revalidated after candidate calculation
+  ok  authority is revalidated after final file reads
+  ok  current change at revalidation invalidates candidate and preserves external bytes
+  ok  owner invalidated after final reads refuses preview
+  ok  client stale revision requires repreview
+  ok  changed evidence revision invalidates candidate
+  ok  gap prevents candidate
+  ok  unsupported evidence is a file refusal rather than service error
+  ok  already reverted preview has empty diff and unchanged byte summary
+  ok  creation removal summary has absent candidate bytes
+  ok  refused preview omits candidate change summary
+  ok  missing current file is a read-only refusal
+  ok  binary current refuses content eligibility
+  ok  lower raw snapshot budget refuses without exposing bytes
+  ok  missing selected evidence is refused
+  ok  corrupt evidence is fixed refusal
+  ok  unrecognized store failure is redacted
+  ok  server evidence traversal path is refused
+  ok  sensitive server evidence path is refused
+  ok  directory target is refused
+  ok  hardlink target is refused
+  ok  junction ancestor is refused
+  ok  current file size is bounded before allocation with oversized reason
+  ok  worker computation budget has a distinct diff reason
+  ok  file count is bounded
+  ok  multi-file partial conflict preserves both disk files and refuses aggregate eligibility
+  ok  operation count is bounded
+  ok  explicit diff aggregate remains within 32KiB
+  ok  workspace mismatch is rejected even if store adapter returns it
+  ok  real persistent store snapshot previews with default worker
+  ok  request operation count is bounded
+  ok  private evidence I/O has a separate deadline from diff CPU
+  ok  preview admission bounds retained snapshots before store reads
+  ok  lower deadline refuses without writes
+Session revert HTTP: 65/65

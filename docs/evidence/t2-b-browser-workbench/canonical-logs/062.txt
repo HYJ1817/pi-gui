@@ -1,0 +1,14 @@
+ ok Changes is contextual, absent from global navigation
+ ok Settings has all five logical groups and bound actions
+ ok Settings Escape returns focus to its visible trigger
+ ok Palette Settings hands off menu and focus via click
+ ok Palette Settings hands off menu and focus via Enter
+ ok Changes preserves mounted conversation, scroll and draft
+ ok Changes close releases content and restores contextual focus
+ ok Browser → Changes disposes native view; no duplicate surfaces
+ ok Changes → Browser invalidates old Changes owner
+ ok Only one current-project New and Search action
+ ok Sidebar collapse hands focus to expand, and back
+ ok Stop pending disables its visible control until authoritative confirmation
+
+P30 IA 12/12 passed

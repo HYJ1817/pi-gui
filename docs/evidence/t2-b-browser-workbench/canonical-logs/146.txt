@@ -1,0 +1,52 @@
+ok hash-chain durable intent half-tail gives exact C/R without write eligibility
+ok partial completion is not accepted as verified
+ok legacy apply namespace cannot authenticate a B draft plan
+ok B namespace cannot register arbitrary recovery material refs
+ok B namespace cannot reinterpret a legacy A plan
+ok initial replacing without durable prepared event is rejected
+ok plan revision mismatch cuts prefix at prior prepared plan
+ok intent journalRevision mismatch cuts prefix at prior prepared plan
+ok event owner cannot authenticate plan of another generation
+ok immutable token change retains only previous valid prepared prefix
+ok immutable proof change retains only previous valid prepared prefix
+ok immutable kind/source change retains only previous valid prepared prefix
+ok immutable expiresAt change retains only previous valid prepared prefix
+ok immutable evidence revision change retains only previous valid prepared prefix
+ok state reversal and terminal-state replay stop at prior valid intent
+ok registered material current observation cannot mutate on transition
+ok Store restart recovery-required event preserves valid intent materials
+ok terminal recovery-required replay cannot change durable state
+ok invalid or missing initial journal reserve -1 rejects B prefix
+ok invalid or missing initial journal reserve 262145 rejects B prefix
+ok invalid or missing initial journal reserve undefined rejects B prefix
+ok ordinary reserve increase cuts prefix at prepared event
+ok legitimate restart reserve conservative rebuild may increase within maximum
+ok B plan event owner stripping cannot authenticate its embedded full owner
+ok B refs cannot borrow owner from plan when restore-object owner is missing
+ok actual Store reserve-bearing prepared/replacing/applied journal prefix reads completely
+ok actual Store restart reserve rebuild accepts full recovery-required prefix
+ok actual Store same refs registered by new generation preserve both owner-specific plans
+ok bad hash-chain before plan refuses ownership proof
+ok missing prefix reference registration refuses material
+ok unknown B schema stops prefix and never skips ahead
+ok foreign runtime owner remains refused even trusted authorize true
+ok request project/repo derived from complete owner; conflicting fields denied
+ok registered ref complete owner if present must match plan owner
+ok scope epoch and fingerprint mismatch refuse
+ok default authorization denies before disk access
+ok arbitrary path/ref/token and unknown material rejected
+ok missing and corrupt object fail closed
+ok hardlink object rejected
+ok symlink ancestor rejected with otherwise existing journal
+ok injected privacy refusal and ACL change fail closed
+ok journal, event, object, event-count and raw-byte budgets
+ok invalid UTF8 full line stops prefix without decoding replacement
+ok per-workspace revision discontinuity stops before plan
+ok plan scope cannot borrow foreign registered refs
+ok legacy A plan may coexist but never becomes B recovery material
+ok invalid bounded event is not skipped to later B plan
+ok recursive node budgets and deadline bound trusted callback
+ok post-read private-file replacement is detected
+ok real Windows private root and inherited child ACL accepted
+ok real Windows ordinary inherited TEMP root rejected without granting permissions
+Object recovery reader: 51/51; failed=0; skipped=0; filesystem fixtures; Native writer not invoked

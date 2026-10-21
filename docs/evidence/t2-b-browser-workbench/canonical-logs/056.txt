@@ -1,0 +1,54 @@
+  ok native DeepSeek exists without models.json and queries in worker
+  ok native real zero and currencies stay separate
+  ok private native cache hit
+  ok native resolved credential identity invalidates cache
+  ok native same credential concurrent requests share private fetch
+  ok openai exists but has no verified adapter
+  ok anthropic exists but has no verified adapter
+  ok google exists but has no verified adapter
+  ok moonshotai exists but has no verified adapter
+  ok moonshotai-cn exists but has no verified adapter
+  ok minimax exists but has no verified adapter
+  ok minimax-cn exists but has no verified adapter
+  ok mistral exists but has no verified adapter
+  ok groq exists but has no verified adapter
+  ok xai exists but has no verified adapter
+  ok siliconflow exists but has no verified adapter
+  ok unknown provider is not found
+  ok unsupported and unknown states do not query HTTP
+  ok 401 native state is safe
+  ok 403 native state is safe
+  ok 500 native state is safe
+  ok timeout native state is safe
+  ok network native state is safe
+  ok invalid JSON native state is safe
+  ok malformed object native state is safe
+  ok missing credential native state is safe
+  ok OAuth without resolved API Key native state is safe
+  ok auth failure native state is safe
+  ok future credential without resolved API Key native state is safe
+  ok OpenRouter key usage with no limit is not account balance
+  ok OpenRouter OAuth uses Pi final AuthResult API Key
+  ok OAuth HTTP/Renderer projection contains no credential
+  ok OAuth worker wire and parent diagnostics/logs contain no credential
+  ok OAuth final AuthResult without API Key is unsupported without HTTP
+  ok unsuitable OAuth preserves credential existence in worker and public facts
+  ok unsuitable OAuth HTTP facts retain credential without querying endpoint
+  ok future credential with Pi-resolved API Key is supported
+  ok OpenAI OAuth stays unsupported and does not query quota HTTP
+  ok provider response cannot reflect native key across boundary
+  ok quoted credential is scrubbed before worker serialization
+  ok custom explicit NewAPI and env key remain supported
+  ok custom legacy moonshot ID is preserved
+  ok main projects normalized fields and drops worker extras
+  ok missing public SDK is unknown capability, not not-found
+  ok packaged CJS adapters run inside actual native Worker
+  ok real private quota timeout settles unavailable safely
+  ok quota timeout does not terminate concurrent native OAuth worker
+  ok quota cancellation settles without disposing native auth
+  ok same SDK remains usable after quota cancellation
+  ok real worker messages never contain credential or SDK env
+  ok private cache stores hashed identities and normalized secret-free values
+  ok fixture diagnostics are private streams
+  ok parent stdout and stderr never receive native credentials
+53/53 native-provider-quota assertions passed

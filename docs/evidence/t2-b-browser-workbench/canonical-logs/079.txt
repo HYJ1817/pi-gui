@@ -1,0 +1,244 @@
+
+--- A. 适配面 ---
+  ok  适配 40 个工具
+  ok  全部以 browser_ 前缀
+
+--- B. 全量动作状态 ---
+  ok  browser_setup start
+  ok  browser_setup success
+  ok  browser_setup error
+  ok  browser_click start
+  ok  browser_click success
+  ok  browser_click error
+  ok  browser_type start
+  ok  browser_type success
+  ok  browser_type error
+  ok  browser_fill start
+  ok  browser_fill success
+  ok  browser_fill error
+  ok  browser_fill_form start
+  ok  browser_fill_form success
+  ok  browser_fill_form error
+  ok  browser_select_option start
+  ok  browser_select_option success
+  ok  browser_select_option error
+  ok  browser_set_checked start
+  ok  browser_set_checked success
+  ok  browser_set_checked error
+  ok  browser_focus start
+  ok  browser_focus success
+  ok  browser_focus error
+  ok  browser_press_key start
+  ok  browser_press_key success
+  ok  browser_press_key error
+  ok  browser_dispatch_key start
+  ok  browser_dispatch_key success
+  ok  browser_dispatch_key error
+  ok  browser_scroll start
+  ok  browser_scroll success
+  ok  browser_scroll error
+  ok  browser_page_info start
+  ok  browser_page_info success
+  ok  browser_page_info error
+  ok  browser_wait start
+  ok  browser_wait success
+  ok  browser_wait error
+  ok  browser_wait_for start
+  ok  browser_wait_for success
+  ok  browser_wait_for error
+  ok  browser_wait_for_load start
+  ok  browser_wait_for_load success
+  ok  browser_wait_for_load error
+  ok  browser_handle_dialog start
+  ok  browser_handle_dialog success
+  ok  browser_handle_dialog error
+  ok  browser_screenshot start
+  ok  browser_screenshot success
+  ok  browser_screenshot error
+  ok  browser_navigate start
+  ok  browser_navigate success
+  ok  browser_navigate error
+  ok  browser_open_urls start
+  ok  browser_open_urls success
+  ok  browser_open_urls error
+  ok  browser_go_back start
+  ok  browser_go_back success
+  ok  browser_go_back error
+  ok  browser_go_forward start
+  ok  browser_go_forward success
+  ok  browser_go_forward error
+  ok  browser_reload start
+  ok  browser_reload success
+  ok  browser_reload error
+  ok  browser_list_tabs start
+  ok  browser_list_tabs success
+  ok  browser_list_tabs error
+  ok  browser_current_tab start
+  ok  browser_current_tab success
+  ok  browser_current_tab error
+  ok  browser_switch_tab start
+  ok  browser_switch_tab success
+  ok  browser_switch_tab error
+  ok  browser_new_tab start
+  ok  browser_new_tab success
+  ok  browser_new_tab error
+  ok  browser_close_tab start
+  ok  browser_close_tab success
+  ok  browser_close_tab error
+  ok  browser_upload_file start
+  ok  browser_upload_file success
+  ok  browser_upload_file error
+  ok  browser_download start
+  ok  browser_download success
+  ok  browser_download error
+  ok  browser_print_to_pdf start
+  ok  browser_print_to_pdf success
+  ok  browser_print_to_pdf error
+  ok  browser_viewport_resize start
+  ok  browser_viewport_resize success
+  ok  browser_viewport_resize error
+  ok  browser_drag_and_drop start
+  ok  browser_drag_and_drop success
+  ok  browser_drag_and_drop error
+  ok  browser_http_get start
+  ok  browser_http_get success
+  ok  browser_http_get error
+  ok  browser_network_requests start
+  ok  browser_network_requests success
+  ok  browser_network_requests error
+  ok  browser_console start
+  ok  browser_console success
+  ok  browser_console error
+  ok  browser_snapshot start
+  ok  browser_snapshot success
+  ok  browser_snapshot error
+  ok  browser_execute_js start
+  ok  browser_execute_js success
+  ok  browser_execute_js error
+  ok  browser_run_script start
+  ok  browser_run_script success
+  ok  browser_run_script error
+  ok  browser_web_search start
+  ok  browser_web_search success
+  ok  browser_web_search error
+  ok  browser_read_page start
+  ok  browser_read_page success
+  ok  browser_read_page error
+
+--- C. navigate / open_urls ---
+  ok  Opened <host> 用真实页面地址
+  ok  viewport 来自 details
+  ok  新标签页语义来自闭集
+  ok  页面标题不投影
+  ok  running 时显示请求主机名
+  ok  无证据 → 明确说结果不可用
+  ok  open_urls 用真实成败计数
+
+--- D. 输入内容与凭据 ----------
+  ok  type 的正文不投影
+  ok  fill 的 value 不投影，只给元素与标签名
+  ok  fill_form 只给计数
+  ok  select 显示非敏感选项
+  ok  select 隐藏像凭据的选项
+  ok  选项 allowlist 是保守的
+  ok  具名按键显示，单字符不显示
+  ok  prompt 文本不投影
+  ok  请求头（Authorization/Cookie）不投影
+
+--- E. 原始结果与页面内容 ----------
+  ok  execute_js 不求值结果
+  ok  read_page 不铺正文与标题
+  ok  snapshot 只给结构计数
+  ok  网络与控制台记录不投影
+  ok  本机路径不投影
+  ok  截图只说格式与「已捕获」
+  ok  结果正文从不被解析
+  ok  事实长度有界
+
+--- F. 错误证据 ----------
+  ok  kind 是闭集才回显
+  ok  ok:false 优先于 pi 的 isError
+  ok  失败时仍给出请求目标（不是成功声明）
+
+--- G. URL 安全 ---
+  ok  拒绝 javascript:alert(1)
+  ok  拒绝 file:///tmp/a
+  ok  拒绝 data:text/html,hi
+  ok  拒绝 vbscript:msgbox(1)
+  ok  拒绝 chrome://settings
+  ok  拒绝 about:blank
+  ok  拒绝 https://user:pass@example.org
+  ok  拒绝 https://example.org/
+hi
+  ok  拒绝 https://
+  ok  拒绝 bad
+  ok  拒绝 (空)
+  ok  放行 https://pi.dev
+  ok  放行 http://example.org/a
+  ok  放行 https://pi.dev/docs
+  ok  带 query/fragment 不给链接，但主机名照常显示
+  ok  token URL 有主机名、无链接
+  ok  只有「打开页面」类动作给来源
+
+--- H. 并发与取消 ---
+  ok  并发按 toolCallId 各自独立
+  ok  逆序完成不串结果
+  ok  中断不残留 spinner
+  ok  cancelled metadata
+  ok  interrupted metadata
+
+--- I. 历史重建 ---
+  ok  历史与实时同一适配器
+  ok  历史缺 result → 未完成，不猜
+  ok  历史不铺原始 JSON
+
+--- J. 能力状态与运行观察 ---
+  ok  固定安装命令
+  ok  没有自动安装
+  ok  未发现
+  ok  发现 ≠ 观察到
+  ok  configured 来自 enabled 证据
+  ok  发现但被停用
+  ok  存在推不出已配置
+  ok  loaded 无证据就是未知
+  ok  发现失败保持未知
+  ok  别的包名不冒充
+  ok  运行时观察
+  ok  非浏览器工具不计入
+  ok  bridge 变更清空
+  ok  切项目清空
+  ok  旧 run 事件被拒
+  ok  restart 生命周期清空
+  ok  最近列表有界、计数不丢
+  ok  入口守卫
+
+--- K. 回归 ---
+  ok  web adapter 不受影响
+  ok  browser_web_search 不是 web_search
+  ok  browser 搜索结果只给计数与引擎
+  ok  subagent / memory 不受影响
+  ok  planner 不引用 browser 适配器
+  ok  未适配的 browser 工具走 generic fallback
+  ok  普通工具不受影响
+
+--- L. DOM ---
+  ok  开始渲染
+  ok  partial 原始正文不出现
+  ok  partial 阶段仍紧凑
+  ok  同一节点更新
+  ok  成功文案与安全来源
+  ok  原始参数不进 DOM
+  ok  无危险 HTML
+  ok  输入内容不进 DOM（含属性）
+  ok  危险 scheme 不生成链接
+  ok  未知工具 fallback 文案
+  ok  历史与实时渲染同一标签
+
+--- M. 设置区纪律 ---
+  ok  安装后重启委托给唯一共享实现
+  ok  共享重启流程保留失败可重试
+  ok  不假装有审批
+  ok  说明与 Web Search 的区别
+  ok  上游只给只读链接
+
+215/215 通过

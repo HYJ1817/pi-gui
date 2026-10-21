@@ -1,0 +1,103 @@
+
+--- 1. 统一状态投影 ---
+  ok  三值 + 第四值「不适用」各有唯一文案
+  ok  状态机：未安装 / 已安装未加载 / 已加载 / 加载未知
+  ok  结论行里 null 只有「未知（无法确认）」，没有「否」
+
+--- 1b. 状态行的适用性收口 ---
+  ok  NA（不适用）的字段不进入 stateRows
+  ok  descriptor 没声明的字段也不画（不替它编一句「未知」）
+  ok  null 仍然显示「未知（无法确认）」—— 不许被一起藏掉
+  ok  null ≠ 不适用：一个显示未知，一个整格不画
+  ok  诊断：没有错误就不画「诊断 无」，有错误才画
+  ok  第三方 Extension 的真实安装状态仍照常显示（收口没有削弱事实）
+
+--- 2. null 与 false 不互相冒充 ---
+  ok  发现失败 → 三值全是未知，不是 false
+  ok  空 registry（没有诊断）才敢说「未安装」
+  ok  「存在」推不出「已启用」，也推不出「已加载」
+  ok  运行观察为 null 时显示「未知」，不是「尚未观察到」
+
+--- 3. built-in 与 Native MCP ---
+  ok  native MCP 不显示 npm 安装命令，且说明来自 Pi 内置能力
+  ok  原生状态原样搬运 P20.6 的词汇，不重新判断
+  ok  replaced / disabled 的结论优先于「装没装」
+  ok  built-in 行带前缀、有 origin、没有安装命令
+  ok  built-in 不在 filesystem Extension 发现里（id 前缀不同）
+  ok  built-in 的「启用 / 加载」是不适用 —— 那两格直接不画
+  ok  Native MCP 详情不再是一串「不适用」
+  ok  Usage 详情不出现安装 / 加载这类无意义字段
+  ok  Skills 只画它真的有的字段（运行观察是 NA → 不画）
+  ok  读不到 built-in 清单时给诊断，不硬编码结论
+  ok  MCP server 行不把「生效」冒充成「已安装」
+  ok  MCP server 的运行状态不混进「运行观察」那一格
+
+--- 4. feature setup 统一布局 ---
+  ok  四个第三方 feature 各有一条固定官方安装命令
+  ok  每条 descriptor 都有名称 / 用途 / 出处 / 重启文案
+  ok  setup 视图模型含安装状态 / 命令 / 复制 / 重启 / 观察 / 限制
+  ok  第三方 feature 的六个状态都来自 Registry 的四值
+  ok  功能级「加载未知」与「已加载」分得开
+
+--- 5. unknown Extension 不丢 ---
+  ok  不认识的 Extension 仍在表里，状态是未知
+  ok  坏掉的 Extension 带诊断，且只影响它自己
+  ok  没有简介的 Extension 也照常显示
+  ok  发现接口失败时留下诊断，聊天不受影响
+
+--- 6. 搜索与过滤 ---
+  ok  五个过滤器与需求里点名的一致，All 在最前
+  ok  Capabilities 过滤只留已知能力
+  ok  Extensions 过滤含 registry 行与 built-in 行
+  ok  Skills / MCP 过滤各归其位
+  ok  搜索覆盖名称 / 用途 / 状态
+  ok  搜索与过滤器叠加，且空结果不是错误
+  ok  未知的过滤器 id 退回 All，不抛错
+  ok  概览计数与结论行一致
+
+--- 7. 运行观察与重置 ---
+  ok  观察快照 → 统一形状
+  ok  web 观察在 bridge 重启后清空
+  ok  换 workspace generation 也不沿用旧观察
+  ok  观察文案列出真的见过的工具，并给出总数
+  ok  观察到调用不构成「已加载」的证据
+
+--- 8. restartRequired ---
+  ok  Registry 的 restartRequired 进入统一状态
+  ok  没有重启证据时保持未知，不写成「否」
+  ok  配置禁用与已加载证据可以同时存在（改完没重启）
+
+--- 9. stale workspace ---
+  ok  投影层是纯函数：同样输入永远同样输出
+  ok  视图落地前同时过实例身份与 workspace generation
+  ok  视图不自己缓存观察（否则换项目会拿到旧 run 的结论）
+  ok  共享重启流程带 stale 守卫（切项目后不对着新项目重启）
+  ok  四个 feature 模块不再各自重启（唯一实现）
+
+--- 10. 没有自动安装 ---
+  ok  四个 setup 都声明 automaticInstall=false
+  ok  投影层与视图层都不执行安装（无 spawn / exec / child_process）
+  ok  一键安装：installed=false → install，命令仍是固定官方命令
+  ok  一键安装：installed=true → installed（不再提供安装动作）
+  ok  一键安装：installed=null → recheck（「无法确认」不当作「确认未安装」）
+  ok  一键安装：Native MCP / built-in / Skills / Usage / Approval 一律没有
+  ok  确认文案把命令、权限与「用户级」都说清楚（不静默信任第三方代码）
+  ok  一键安装只由 HTTP 发起：模型与视图层不含任何进程 / 文件动作
+  ok  Native MCP / built-in / Skills 都没有安装命令
+
+--- 11. Registry 不被特化 ---
+  ok  extension-registry.js 里没有任何 package-specific 分支
+  ok  共享只读 resolver 同样没有 feature 分支
+  ok  capability 层知道推荐包名 —— 那只是 setup metadata
+  ok  Registry 的只读动作契约没变
+
+--- 12. Web / Subagent / Memory / Browser / MCP / Usage 回归 ---
+  ok  Web / Subagent / Memory / Browser 的三值仍与 Registry 一致
+  ok  mcpSetup 的三值契约没被投影层改动
+  ok  Skills 行说清它不是 Extension
+  ok  pi 没应答时 Skills 行不硬说可用
+  ok  Usage 入口不编造安装状态，且只给一个只读入口
+  ok  Approval 行的结论来自 tool_call hook 证据
+  ok  built-in 数量与 P20.5 报告一致（不硬编码 4 个）
+
+75/75 通过

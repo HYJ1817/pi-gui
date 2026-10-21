@@ -1,0 +1,49 @@
+  ok  切到 A 显示 A 自己的输出
+  ok  切到 B 后不显示 A 的输出
+  ok  切到 B 后输入框为空（草稿不串）
+  ok  切回 A 草稿仍在
+  ok  切回 B 草稿仍在
+  ok  A 的滚动位置被恢复（不串到 B）
+  ok  B 的滚动位置被恢复
+  ok  切到 B 后 A 的新 delta 不进 B 的 DOM
+  ok  切回 A 能看到 A 的迟到 delta（后台确实继续在跑）
+  ok  Stop 带 A 的完整 owner
+  ok  迟到的 A Stop 响应不改 B 的草稿
+  ok  迟到的 A Stop 响应不改 B 的输出
+  ok  A 的审批出现在 A 的视图里
+  ok  切到 B 后显示的是 B 的审批
+  ok  捕获 A 的审批后切 B，应答仍只发给 A 的完整 owner
+  ok  A 的审批应答不清掉 B 自己的审批
+  ok  切到 dormant 只显示已关闭，不自动 spawn、不自动读历史
+  ok  dormant 时不显示发送，显示「恢复会话」与「打开历史」
+  ok  打开历史只发只读请求，不 spawn
+  ok  历史视图明确标注未启动、不占名额
+  ok  历史视图禁止发送
+  ok  只有显式「恢复会话」才发 resume
+  ok  关闭会话带 A 的 captured owner
+  ok  关闭后视图回到已关闭、并给出恢复入口
+  ok  旧 generation 的 delta 不进入重启后的 A
+  ok  新 generation 的 delta 正常进入
+  ok  dormant D 发出历史请求
+  ok  D 的历史返回后，当前会话 E 不显示 D 的历史
+  ok  D 的历史返回不改 E 的状态行
+  ok  D 的历史返回不改 E 的 notice
+  ok  切回 D 能看到自己的历史
+  ok  后回的 D 历史不覆盖当前 E 的历史
+  ok  切到 D 看到的是 D 自己的历史
+  ok  A 的 Stop 已发出且仍未完成
+  ok  A pending 时切到 B，B 的控件不被 A 的 busy 禁用
+  ok  A 的 Stop 失败响应不改 B 的 notice
+  ok  A 的 Stop 失败响应不改 B 的 state
+  ok  A 的 Stop 失败响应不改 B 的 output
+  ok  A 的 Stop 失败响应不改 B 的草稿
+  ok  A 的 Stop 失败响应不禁用 B 的控件
+  ok  A 的迟到失败只记在 A 自己身上
+  ok  切回 B 后 B 的 notice 仍为空（A 的错误不跟过来）
+  ok  恢复请求接收确认时还不 focus 未就绪的 owner
+  ok  ready 尚未绑定原生 sessionId 时不消耗 focus 意图
+  ok  当前历史会话恢复就绪后 focus 完整 ready owner
+  ok  切走后的恢复就绪不会抢走 B 焦点
+  ok  切走再切回不重新创建迟到 focus 意图
+  ok  离开经典视图再返回不恢复迟到 focus 意图
+Runtime conversation: 48/48

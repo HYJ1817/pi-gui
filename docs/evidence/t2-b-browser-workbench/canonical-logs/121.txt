@@ -1,0 +1,36 @@
+  ok  独立 registry 可用
+  ok  列举不 spawn
+  ok  A/B child 与 immutable cwd 独立
+  ok  并行 writer 不共用工作区
+  ok  默认 2 个上限
+  ok  第三条必须显式允许且硬上限 3
+  ok  命令缺 owner 拒绝
+  ok  旧 generation 拒绝
+  ok  同一 Runtime 的第二条 prompt 在确认窗口也不会重复提交
+  ok  同 request id 写入各自 stdin且 owner 不进 Pi wire
+  ok  started 应答早于 agent_start 时仍保护同会话执行线
+  ok  Stop A 不停止 B，agent_end不代表idle
+  ok  Runtime Stop 等待确认期间不放行新任务，旧 settled 不能误改状态
+  ok  不能用 switch_session 改写固定 conversation
+  ok  Focus 只选视图，不 spawn/stop
+  ok  换焦点时旧会话也被广播（前端按 item.focused 画，否则会两行同时高亮）
+  ok  事件附完整身份，同 toolCallId不合并
+  ok  有界 backlog/bytes且截断显式
+  ok  Unicode backlog按UTF8字节计量，预算不按字符估算
+  ok  异步 preflight 后再次校验，迟到命令不执行
+  ok  close 后 late callback 不发布
+  ok  恢复 conversation 生新 generation，旧 scope拒绝
+  ok  应用重启只重发现记录，不 spawn、不认旧child
+  ok  维护禁止新 child
+  ok  预算包含外部主 child/CLI
+  ok  重发现 external replacement epoch不继承
+  ok  manifest没有env/消息/PID
+  ok  after restart backendInstance不同
+  ok  迟到旧 sessionLocator 不修改恢复后的共享 record
+  ok  并发 close/retire 共享清理承诺，新 lease 与 owner 保留
+  ok  持久化恢复核对 admission 全部不可变 workspace 字段
+  ok  生成失败保留ready与owner，空输出也记录error/attention
+  ok  failed generation摘要附失败会话owner而不变成bridge crash
+  ok  失败后同一owner可retry，清error且不另spawn
+  ok  Pi crash保留已证明native session身份并权威发布错误态
+Runtime registry: 35/35

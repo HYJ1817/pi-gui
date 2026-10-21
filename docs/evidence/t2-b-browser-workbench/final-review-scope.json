@@ -1,0 +1,25 @@
+{
+  "base": "7db69cdc24debc28dfb7f9c91cdfcfa65b0df849",
+  "raw_git_diff_sha256": "f71e149743931cd82c6d6ffea30ea8ffc84f20795d9e5e448719f3f28231f966",
+  "complete_code_scope_sha256": "c5b0f6d6e1fb9fbe9b51c5e86dcbbd4d99210290046edef5435820d69d31b773",
+  "files": {
+    "docs/T2-B-plan.md": "4ce712e363931d286dc8113db33a34c74ca8b0b26d90ffd95f949f85ea04a61c",
+    "docs/architecture.md": "a88425432d55a2eafecd781d193a6e68a01faf9cad1a69e27a7b10acdf422ea0",
+    "docs/specs.md": "4febbc0937fd4591f3ee9e9665e90d1f17de0d9541c57dce48686993c8f45d4a",
+    "docs/work-surfaces.md": "4cf588a4affb5f0b87a6f0dd84ac64e67f63e5687e29e71e1a67e07475fcd10a",
+    "electron/browser-view.cjs": "69945698e6c320cce5b73543bb08450e39fb3a6ccb036c8044d72ddf6edfb718",
+    "package.json": "87a13dad70d87614f5423fe05c987d5a2741a9f001ff903557a99fc80f63ad96",
+    "public/app.js": "9c88186ab32280a604f8ea52e4736914ec4ae2569b53d8f9497ab4a9cc8fe2ff",
+    "public/browser-pane.js": "f1cd0e961b08351ca535823f66cb0ef4c095f91e886924ccde48b0cee185e4e2",
+    "public/right-pane.js": "e03de02d970b3f95744cd7deafa28edc6d02275a9a2f5a5fb16973cbb6b59f83",
+    "public/runtime-secondary.js": "94f1daf34f495c785d06396c01a65f94723c33f27198a321530f42a4a1165250",
+    "public/ui/split-workbench.js": "60377b67742c0602eafa8b7512e4c92ac127e26ac37ea7cb4b40a26079fd4617",
+    "public/ui4-pane.css": "6594a6589f0babc3efe15568c200254598ccff7d07df24a17b2cc8ad8d27ae16",
+    "tests/browser-viewport-safety.cjs": "f3d4a808ad32987eb24acab8218fb609d0b1a4f238aa1b566c9a34445f83b5d0",
+    "tests/browser-workbench-electron.cjs": "493ab0ee34fe75e3a6f5a2264fdfd075637cd5535c3dcddf2b57666d7c9166ac",
+    "tests/browser-workbench-ui.cjs": "2745c7cb5d6ba2985e09796078c6467c053d6b77533abf8bd75bf688787577d4",
+    "tests/gui-browser-ui.cjs": "3c9ded5626bc56a6f05ec4503cf2aad32bfa9b11f88933059502a12b41f4ab2f",
+    "tests/runtime-browser.cjs": "963c146c6e7dcba1b7972a7cd12b33a520240d233fffc0410bb227822842ec02",
+    "tests/runtime-secondary.cjs": "b220959c38d3cd85d3e0de1ec25d39d9c8fcd1061688cfd6bd67455ddd5bfe23"
+  }
+}

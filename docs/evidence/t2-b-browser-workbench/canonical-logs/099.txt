@@ -1,0 +1,41 @@
+  ok   后端能起来
+  ok   /api/health 免认证可访问
+  ok   health 声明 app = pi-gui
+  ok   health 声明 protocol = 1
+  ok   health 带版本号
+  ok   health 不泄露令牌
+  ok   health 的字段是白名单（不含多余信息）
+  ok   无令牌访问 /api/status → 401
+  ok   401 不回显令牌、也不透露期望值
+  ok   错误令牌 → 401
+  ok   正确令牌（X-Pi-Gui-Token）→ 200
+  ok   正确令牌（Authorization: Bearer）→ 200
+  ok   无令牌写命令 → 401
+  ok   无令牌读项目列表 → 401
+  ok   无令牌读日志状态 → 401
+  ok   正确令牌读日志状态 → 200
+  ok   无令牌导出故障报告 → 401
+  ok   跨站 Origin + 正确令牌 → 403
+  ok   同源 Origin + 正确令牌 → 200
+  ok   localhost 同源也被放行
+  ok   非回环地址 198.18.0.1:7797 连不上（只监听 127.0.0.1）
+  ok   启动日志里没有令牌
+  ok   启动日志明确是 127.0.0.1
+  ok   启动日志不出现 0.0.0.0
+  ok   启动日志说明令牌校验已启用
+  ok   后端显式 listen 到 127.0.0.1
+  ok   后端不把令牌交给 pi 子进程
+  ok   非法供应商名 → 400
+  ok   该错误响应不回显 apiKey
+  ok   models 不是数组 → 400
+  ok   该错误响应不回显 apiKey
+  ok   请求体不是合法 JSON → 400
+  ok   该错误响应不回显 apiKey
+  ok   错误路径全程没有把 apiKey 写进日志
+  ok   日志语句不引用请求体（结构上避免整包打日志）
+  ok   开发模式后端能起来
+  ok   开发模式无令牌可访问（npm start 体验不变）
+  ok   开发模式仍然拦跨站 Origin
+  ok   开发模式日志说明是开发模式
+
+39/39 通过

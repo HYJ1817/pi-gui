@@ -1,0 +1,17 @@
+  ok  有真实 Worktree 管理入口
+  ok  显示 main 与 owned 工作区，文字输入不解析 HTML
+  ok  dirty main 风险提示明确，不自动复制/stash/reset
+  ok  Escape 取消确认不会 create
+  ok  create 只传 nonce 和 authoritative context，不传 path/env
+  ok  菜单在 dialog 层内，不被遮罩盖住
+  ok  菜单 Escape 只关闭菜单，恢复 trigger 焦点
+  ok  归档走后端 epoch，不删除目录
+  ok  异步刷新后菜单触发点恢复焦点，Tab 不逃出 dialog
+  ok  Tab 在现有 dialog 内循环
+  ok  Shift+Tab 回到最后控件
+  ok  关闭恢复触发入口焦点
+  ok  错误有真实重试入口
+  ok  重试恢复列表
+  ok  切 workspace 作废旧弹窗
+  ok  迟到列表不能恢复已关闭 modal
+Worktree UI: 16/16 passed

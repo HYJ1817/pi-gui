@@ -1,0 +1,24 @@
+ok backup mandatory
+ok stale content untouched
+ok fixture metadata replace and durable ordering
+ok unsupported metadata refuses before write
+ok state authority failure leaves C
+ok durable journal failure leaves C
+ok metadata copy failure leaves C
+ok staging digest rechecked
+ok rename failure no unlink fallback
+ok post-write journal failure recovery required
+ok independent child final-window D lost and absent from C backup
+ok post verification detects unrelated D and preserves D
+ok path traversal rejected
+ok hardlinks rejected
+ok fixture move preserves object instead of unlink
+ok fixture moved restore
+native profile: metadata_audit_unavailable
+ok native metadata is fail closed or fully observed
+ok native private recovery directory ACL verifies
+ok native ADS refuses
+ok native readonly refuses
+ok native no-replace move refuses existing destination
+ok native no-replace move succeeds for absent destination
+session-revert-writer: 22/22

@@ -1,6 +1,6 @@
 # P14-D Stage Work Surfaces
 
-## 当前右栏工作区（T2-A）
+## 当前右栏工作区（T2-A / T2-B）
 
 下方 P14-D 记录为历史设计。当前 Changes 和 Specs 从会话顶栏进入右栏，
 默认单面板；标题内可开启 Specs（上）+ Changes（下）分屏，没有新增全局导航。
@@ -8,7 +8,12 @@
 `ui/split-workbench.js` 只管布局，两面板分别使用原有 mount、请求和状态。
 分屏比例独立于 `right-pane.js` 的宽度记忆；窗口宽度低于 900px 或内容高度低于
 448px 时回退为单面板页签，保留聊天节点、草稿与原有 dock/overlay 规则。
-Browser 的原生 WebContentsView 仍独占右栏并沿用原有 bounds/occlusion 生命周期。
+Browser 保留独占模式，标题内的分屏操作可改为 Browser（上）+ Changes（下）；
+它与 Specs + Changes 共用同一比例和回退机制，没有通用拖放或三面板布局。
+Browser 的原生 WebContentsView 沿用同一控制器与 session；布局切换只移动界面节点，
+不清除页面表单与导航历史。关闭按钮仍遵守原有销毁/运行时隐藏语义。
+右栏观察实际 viewport：隐藏页签、弹窗或拖动时统一 detach，重新显示前先提交新几何；
+主进程按窗口 zoom 转换为 DIP 后 clamp，不使用 devicePixelRatio。
 细节和验证见 [Specs](specs.md) 与 [T2-A 验收](T2-A-acceptance.md)。
 
 ## P14-D 历史记录

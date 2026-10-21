@@ -1,0 +1,32 @@
+ok Windows trimmed names, device aliases and disguised sensitive extensions denied
+ok formal factory ignores approved/config/env/DI, denies all six methods
+ok future HTTP shape cannot obtain service or writer capability
+ok actual same-byte twins require Node handle identity to match Win32 observation
+ok real Prepare P33.3 R preserves user lines, actual verified durable C/R
+ok client path/R/refs and foreign provider/proof/schema/token denied
+ok A service and legacy update reject B before writer calls
+ok real unchanged Win32 helper: persisted intent before commit, R/id/metadata + durable completion
+ok duplicate request/token cannot send second WriteFile; other request denied
+ok reopen durable completed record/materials without replay; P32 lifecycle release before Stop
+ok new Agent operation after verified restore ignores older consumed qualification history
+ok later cross-owner history remains refused after earliest selected qualification filtering
+ok stale revision/gap before native, no target write
+ok Stop failure and changed generation release admission
+ok new D refuses before Native Ready, never overwrites
+ok injected intent append failure sends zero commits, C/materials intact
+ok simulated partial write durable recovery_required, pins C/R, restart and GC no retry
+ok D→C new backup/new token/new confirmation, no automatic D overwrite
+ok second failure retains both generations and independent new D
+ok uncertain same file denied, workspace not permanently locked
+retained D3 generations digest 151b1e7d078a06a9b488aad4a012bad01f8f3e0fe61f23c78c387d94ced5936d commits 2
+ok dispose waits for pending prepare and cannot return a fresh token/retained lease
+ok concurrent duplicate shares one commit; closing retains admission until active attempt ends
+ok actual partial completion journal stays failed closed; no success from R equality
+ok independent Reader exports actual Store C/R valid intent prefix without modifying journal
+ok real Native R write with pipe-result fault persists uncertainty despite R equality
+ok real newly confirmed D→C Native recovery retains D and original failed generation
+ok capacity reserve refusal preserves original C and never returns backupReady
+ok replacement object identity refuses before Ready
+ok legacy/unknown version never receives isolated qualification
+ok cancel and true TTL expiration persist not_applied and release admission
+Object service: 30/30; failed=0; skipped=0; Native normal/recovery path + filesystem + labeled fault injection

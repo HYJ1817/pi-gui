@@ -1,0 +1,32 @@
+content measurement {"name":"LF","currentBytes":2,"candidateBytes":2,"currentDigest":"12f37a8a84034d3e623d726fe10e5031f4df997ac13f4d5571b5a90c41fb84fe","candidateDigest":"13b30eab8afdfab285103004686b2e6140ce53aa45a4f917341c740dfdb6e956","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 LF
+content measurement {"name":"BOM CRLF","currentBytes":6,"candidateBytes":6,"currentDigest":"d5a89ccad5d3c8fb804376aef0fd8185c76ccb222140966b9e3af3943d930b58","candidateDigest":"10b549b23eec5e17d83dc97cb1231e83b406f9d7605919d47f6d2c9e4f1c097f","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 BOM CRLF
+content measurement {"name":"mixed","currentBytes":5,"candidateBytes":5,"currentDigest":"4ba4dc514e98b17ba8f5040278836a08d9d80eb888af79e3d6772d59bf1096b2","candidateDigest":"edacfd2537fb69eec70c83796f5cf74a39c66a92788fbdda71a8131f6399ef48","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 mixed
+content measurement {"name":"empty","currentBytes":1,"candidateBytes":0,"currentDigest":"6b23c0d5f35d1b11f9b683f0b0a617355deb11277d91ae091d399c655b87940d","candidateDigest":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 empty
+content measurement {"name":"grow","currentBytes":0,"candidateBytes":8,"currentDigest":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","candidateDigest":"7f17e6585a422af9339da36cf60aa338963bc1d72a061b9dd95c1a6b27647e02","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 grow
+content measurement {"name":"size 1024","currentBytes":1024,"candidateBytes":1024,"currentDigest":"418bcc1d0a75aada93349f29d523e38aed97efe794df4c1971c311b2b4f752dd","candidateDigest":"dc78ef1f27b612d8de8cf8cb512fd737dd8fe1b2158db565a781aec4a13876de","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 size 1024
+content measurement {"name":"size 65536","currentBytes":65536,"candidateBytes":65536,"currentDigest":"b5b0b24ef14b848aa9fef2ae58fa73040e631e0915f28ec6095edf305528d202","candidateDigest":"4ecc6cf1278dedc1768a73c5ad7a9421ae183da5bb07e3194433c7bbf70288d5","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 size 65536
+content measurement {"name":"size 2097152","currentBytes":2097152,"candidateBytes":2097152,"currentDigest":"c4692ef80a4902caff3480ac025219af54f826df25ab29ea1c2634b1e958880e","candidateDigest":"8f3a655ca195e10693aee21a54719ca92ce1322938e8a7a25355aaa569e78189","idEqual":true,"metadataEqual":true,"saclState":"unavailable"}
+ok real Win32 size 2097152
+metadata witness {"kind":"protected","ownerEqual":true,"groupEqual":true,"daclEqual":true,"adsEqual":true,"eaEqual":true,"attributesEqual":true,"saclState":"unavailable","namedStreams":["::$DATA",":probe:$DATA"],"eaBytes":28,"productionAdmission":false}
+ok real metadata witness protected
+metadata witness {"kind":"inherited","ownerEqual":true,"groupEqual":true,"daclEqual":true,"adsEqual":true,"eaEqual":true,"attributesEqual":true,"saclState":"unavailable","namedStreams":["::$DATA",":probe:$DATA"],"eaBytes":28,"productionAdmission":false}
+ok real metadata witness inherited
+attribute measurement {"before":32,"after":32,"restore":true}
+ok real attributes 32
+attribute measurement {"before":34,"after":34,"restore":true}
+ok real attributes 34
+attribute measurement {"before":8224,"after":8224,"restore":true}
+ok real attributes 8224
+attribute measurement {"before":8226,"after":8226,"restore":true}
+ok real attributes 8226
+ok real Unicode path
+ok content algorithm preserves independent user change and refuses overlap
+ok formal graph has no writer or test harness import
+Object writer: 19/19; failed=0; skipped=0; isolated only

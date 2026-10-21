@@ -1,0 +1,10 @@
+  ok  Process权限逐session默认关闭
+  ok  两受控服务真实ready且id不同
+  ok  日志脱敏 0
+  ok  日志脱敏 1
+  ok  服务HTTP响应与各自cwd一致
+  ok  restart A不重启B
+  ok  stop A不停止B
+  ok  dispose A整树清理B继续RPC和HTTP
+  ok  退出清理B服务实际关闭
+Runtime Process real win32: 10/10

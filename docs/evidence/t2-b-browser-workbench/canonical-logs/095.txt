@@ -1,0 +1,245 @@
+=== 1. 数值语义：0 与 null 的分界 ===
+  ok   cleanNumber: 真实 0 保留为 0
+  ok   cleanNumber: "0" 字符串转为 0
+  ok   cleanNumber: 正数保留
+  ok   cleanNumber: null 返回 null
+  ok   cleanNumber: undefined 返回 null
+  ok   cleanNumber: 空字符串返回 null
+  ok   cleanNumber: NaN 返回 null
+  ok   cleanNumber: Infinity 返回 null
+=== 1b. 适配器识别（含自定义 baseUrl 的拒绝） ===
+  ok   resolveQuotaAdapter: openrouter 识别成功
+  ok   resolveQuotaAdapter: openrouter.ai baseUrl 识别成功
+  ok   resolveQuotaAdapter: deepseek 识别成功
+  ok   resolveQuotaAdapter: deepseek.com baseUrl 识别成功
+  ok   resolveQuotaAdapter: quotaAdapter: newapi 识别成功
+  ok   resolveQuotaAdapter: sub2api 当前无稳定契约 → null
+  ok   resolveQuotaAdapter: openai → null（unsupported）
+  ok   resolveQuotaAdapter: anthropic → null（unsupported）
+  ok   resolveQuotaAdapter: google → null（unsupported）
+  ok   resolveQuotaAdapter: 自称 openrouter 但 baseUrl 指向别处 → null
+  ok   resolveQuotaAdapter: 自称 deepseek 但 baseUrl 指向别处 → null
+=== 2. 安全与凭据脱敏 ===
+  ok   scrubSecret: 替换存在的 secret 为 ***
+  ok   scrubSecret: 空 secret 不报错
+  ok   scrubSecret: 文本未含 secret 原样返回
+=== 3. OpenRouter 契约（GET /api/v1/key） ===
+  ok   OpenRouter: 只调用 /api/v1/key（严格 URL）
+  ok   OpenRouter: Authorization 为 Bearer <key>
+  ok   OpenRouter: 请求成功返回 ok:true
+  ok   OpenRouter: status 为 ok
+  ok   OpenRouter: balance.amount = limit_remaining (8.0)
+  ok   OpenRouter: currency 为 USD
+  ok   OpenRouter: windows.used = usage (2.5)
+  ok   OpenRouter: windows.limit = limit (50)
+  ok   OpenRouter: windows.remaining = limit_remaining (8.0)
+  ok   OpenRouter: rateLimit.requests 正确 (20)
+  ok   OpenRouter: rateLimit.interval 正确 ("10s")
+  ok   OpenRouter: source 正确
+  ok   OpenRouter: limit_reset="monthly" 不是时间戳 → resetAt 为 null
+  ok   OpenRouter: expires_at 绝不映射成 resetAt
+  ok   OpenRouter: 结果里不含 API key 原文
+  ok   OpenRouter 真实 0 余额: balance.amount 严格为 0（非 null）
+  ok   OpenRouter: limit_reset 是合法时间戳时才作为 resetAt
+=== 4. DeepSeek 契约（GET /user/balance，多币种不相加） ===
+  ok   DeepSeek: 只调用 /user/balance（严格 URL）
+  ok   DeepSeek: Authorization 为 Bearer <key>
+  ok   DeepSeek: status 为 ok
+  ok   DeepSeek: balances 两个币种都在
+  ok   DeepSeek: CNY 那条 amount=110
+  ok   DeepSeek: USD 那条 amount=15
+  ok   DeepSeek: 两个币种**不相加**（没有 125 这种数）
+  ok   DeepSeek: primary 策略明确（优先 CNY）
+  ok   DeepSeek: granted/toppedUp 逐币种保留
+=== 5. NewAPI 契约（subscription + usage 两个 endpoint） ===
+  ok   NewAPI: 正好调用两个 endpoint
+  ok   NewAPI: 调用了 subscription
+  ok   NewAPI: 调用了 usage
+  ok   NewAPI: 两个 endpoint 各调用正好一次（没有重复或互相顶替）
+  ok   NewAPI: Authorization 为 Bearer <key>
+  ok   NewAPI: 配了 quotaUserId 时才带 New-Api-User（旧部署兼容）
+  ok   NewAPI: status 为 ok
+  ok   NewAPI: used = total_usage/100 = 25
+  ok   NewAPI: limit = hard_limit_usd = 100
+  ok   NewAPI: remaining = 100 - 25 = 75
+  ok   NewAPI: balance.amount = remaining = 75
+  ok   NewAPI: balance.currency 为 null（字段名带 _usd，但数值不保证是美元）
+  ok   NewAPI: windows.unit 为 null（generic numeric quota）
+  ok   NewAPI: 结果里没有把单位标成 USD/CNY
+  ok   NewAPI: 结果里不含 API key 原文
+  ok   NewAPI 无 quotaUserId: **不是** unsupported（正常执行）
+  ok   NewAPI 无 quotaUserId: 两个 endpoint 各一次
+  ok   NewAPI 无 quotaUserId: 用 subscription + usage 两个 URL
+  ok   NewAPI 无 quotaUserId: Authorization 仍是 Bearer <key>
+  ok   NewAPI 无 quotaUserId: 默认**不发** New-Api-User
+  ok   NewAPI 无 quotaUserId: used=25 / remaining=75 照常算出
+  ok   NewAPI 没配 quotaAdapter: status 为 unsupported（不按名字猜）
+  ok   NewAPI 没配 quotaAdapter: 零网络请求
+  ok   NewAPI 没配 apiKey: status 为 auth_error
+  ok   NewAPI 没配 apiKey: 零网络请求
+  ok   NewAPI 没配 apiKey: 文案是白名单
+  ok   NewAPI base path A: remaining = 100 - 25 = 75
+  ok   NewAPI base path A → B: 必须重新 fetch（不吃 A 的缓存）
+  ok   NewAPI base path A → B: 拿到的是 B 的结果
+  ok   NewAPI 尾部斜杠: /api-b/ 与 /api-b 是同一 identity（命中缓存）
+  ok   NewAPI 尾部斜杠: 结果与 /api-b 一致
+=== 6. unsupported 供应商：绝不发请求 ===
+  ok   OpenAI: status 严格为 unsupported
+  ok   OpenAI: balance 为 null
+  ok   OpenAI: source 为 none
+  ok   OpenAI: message 说明当前没有已验证额度接口
+  ok   Anthropic: status 严格为 unsupported
+  ok   Sub2API: status 严格为 unsupported
+  ok   unsupported 全部零请求
+=== 7. 认证与错误边界（文案安全） ===
+  ok   未配置 Key: status 为 auth_error
+  ok   未配置 Key: message 正确
+  ok   环境变量未设置: status 为 auth_error
+  ok   HTTP 401: status 为 auth_error
+  ok   HTTP 401: balance 为 null
+  ok   HTTP 401: 不把响应体带回前端
+  ok   网络错误: status 为 unavailable
+  ok   网络错误: message 是白名单文案且不含内部细节
+  ok   网络错误: 不泄露 ECONNREFUSED/主机端口
+  ok   畸形响应: status 为 error
+  ok   畸形响应: message 为白名单文案
+  ok   不存在的供应商: ok 为 false
+  ok   不存在的供应商: error 文案明确
+=== 8. HTTP handler：内部异常不回传 ===
+  ok   handler 异常: 状态码 500
+  ok   handler 异常: 统一安全文案
+  ok   handler 异常: 不回传内部 message / 路径 / key
+=== 9. 缓存身份（配置一变就是另一条身份） ===
+  ok   第一次请求: cached 为 false
+  ok   第一次请求: 发起了一次 fetch
+  ok   TTL 内请求: cached 为 true
+  ok   TTL 内请求: 未发起新的 fetch
+  ok   TTL 内请求: 返回相同 quota
+  ok   force=true 强制刷新: cached 为 false
+  ok   force=true 强制刷新: 发起了新的 fetch
+  ok   TTL 过期后: cached 为 false
+  ok   TTL 过期后: 发起了新的 fetch
+  ok   并发 3 次请求: 只执行了 1 次底层 fetch
+  ok   并发 3 次请求: 结果均正常
+  ok   环境变量改值: 必须重新 fetch（不吃 A 的缓存）
+  ok   环境变量改值: 第二次拿到的是新结果
+  ok   adapter 变化: 旧 newapi 结果不再命中
+  ok   adapter 变化: 去掉 adapter 后不再发 newapi 请求
+  ok   inFlight 隔离: B 发起自己的请求
+  ok   inFlight 隔离: B 拿到的是自己的结果
+  ok   inFlight 隔离: A 后 resolve 属于 A 身份
+  ok   inFlight 隔离: B 身份不会被 A 的结果污染
+  ok   clearCache(providerId): 清掉后必须重新 fetch
+=== 10. HTTP 路由集成 ===
+  ok   HTTP GET /api/quota/deepseek: 状态码 200
+  ok   HTTP GET: ok: true
+  ok   HTTP GET: 返回 quota 对象
+  ok   HTTP POST /api/quota/deepseek/refresh: 状态码 200
+  ok   HTTP POST refresh: cached 为 false
+  ok   HTTP GET /api/quota: 状态码 200
+  ok   HTTP GET /api/quota: quotas 包含 deepseek
+  ok   HTTP GET /api/quota: quotas 包含 openrouter
+  ok   HTTP GET /api/quota: 响应里没有任何 key 原文
+  ok   HTTP 不支持的请求方法: 405
+  ok   HTTP 不存在的 provider: 404
+=== 11. 前端 DOM：reset / session / provider / 多币种 / 0 与 null ===
+  ok   usage.js 注册了渲染钩子（state.js 不 import usage.js，避免成环）
+  ok   null 输入显示「—」，真实 0 显示 0：null → —
+  ok   null 输入 + 真实输出：— / 10
+  ok   缓存真实 0 显示 0（不是 —）
+  ok   成本真实 0 显示 $0.0000
+  ok   上下文 0% 显示 0%（不是 —）
+  ok   真实 0 输入显示 0 / 10
+  ok   缺失成本显示 —
+  ok   缺失上下文显示 —
+  ok   reset 前 DOM 上有真实数字
+  ok   resetUsageState: stats 清空
+  ok   resetUsageState: remoteQuota 清空
+  ok   resetUsageState: quotaLoading = false
+  ok   resetUsageState: quotaEpoch 自增（旧请求失效）
+  ok   resetUsageState: currentProviderId 清空
+  ok   resetUsageState: LocalUsage 清空
+  ok   resetUsageState: DOM 立即归零（不等下一次应答）
+  ok   resetUsageState: 上下文进度条清空
+  ok   resetUsageState: ctx chip 归零
+  ok   切项目: DOM 上的旧数字立刻消失
+  ok   session A: 有 session 级用量
+  ok   session 切换: stats 立刻为 null
+  ok   session 切换: session totals 立刻清空
+  ok   session 切换: lastTurn 立刻清空
+  ok   session 切换: sessionId 已更新为 B
+  ok   session 切换: DOM 立刻归零
+  ok   provider A: 侧栏显示 $20.00
+  ok   provider unknown: remoteQuota 清空
+  ok   provider unknown: quotaLoading = false
+  ok   provider unknown: DOM 显示 —
+  ok   provider unknown: epoch 自增（在途应答失效）
+  ok   多币种渲染不抛 ReferenceError
+  ok   多币种侧栏摘要：¥110.00 | $15.00
+  ok   多币种不相加（没有 125）
+  ok   多币种 Popover 渲染不抛错
+  ok   Popover 逐币种展示 CNY 与 USD
+  ok   Popover 显示赠送/充值（DOM 构建，无 innerHTML 插值）
+  ok   Popover 里没有 HTML 元素被动态注入
+  ok   NewAPI 未知单位渲染不抛错
+  ok   NewAPI 侧栏显示纯数值 75.00
+  ok   NewAPI 侧栏不含货币符号或币种名
+  ok   NewAPI Popover 渲染不抛错
+  ok   NewAPI Popover 显示数值 75 / 25 / 100
+  ok   NewAPI Popover 出现「剩余额度 / 已使用 / 总额度」三行
+  ok   NewAPI Popover 不含 $ 或 ¥
+  ok   NewAPI Popover 不含 USD / CNY
+  ok   NewAPI Popover 明确标注单位未知
+  ok   NewAPI Popover 里没有 HTML 元素被动态注入
+  ok   OpenRouter: 侧栏仍然是 $8.00（货币符号保留）
+  ok   OpenRouter: Popover 仍然是 $ 且有 USD 标注
+  ok   OpenRouter: remaining 与余额同值时不出现重复的「额度剩余」行
+  ok   OpenRouter: 没有「单位未知」标注
+  ok   DeepSeek: 侧栏仍然是 ¥110.00 | $15.00
+  ok   DeepSeek: Popover 仍然是 (CNY)/(USD) 逐条
+  ok   currencySymbol: USD → $
+  ok   currencySymbol: CNY → ¥
+  ok   currencySymbol: null/未知 → 空（不加符号）
+  ok   fmtBalanceShort(null 单位) 只输出数值
+  ok   fmtCurrency(null 单位) 只输出数值
+  ok   fmtMaybeMoney(null 单位) 只输出数值
+  ok   恶意 currency 只当文本（无 img 元素）
+  ok   恶意 currency 既不成元素、也不进 DOM（未知单位直接不加币种标注）
+  ok   余额为 null 时侧栏显示 —（不崩）
+  ok   fmtMaybeNumber: null → —
+  ok   fmtMaybeNumber: 0 → 0
+  ok   fmtMaybeNumber: 1234 → 1.23k（沿用 fmt 的紧凑写法）
+  ok   fmtMaybeMoney: null → —
+=== 12. Live Provider Opt-in 隔离（默认离线） ===
+  ok   默认不跑 live（LIVE_PROVIDER_TEST != 1 时不访问公网）
+=== 13. 静态守卫：源码不能带乱码 / 旧的 0 兜底 ===
+  ok   server/quota.js: 不含 U+FFFD 替换字符
+  ok   server/quota.js: 不含连续 Latin-1 乱码段
+  ok   server/quota.js: 不含 GBK 经典乱码标记
+  ok   public/usage.js: 不含 U+FFFD 替换字符
+  ok   public/usage.js: 不含连续 Latin-1 乱码段
+  ok   public/usage.js: 不含 GBK 经典乱码标记
+  ok   public/state.js: 不含 U+FFFD 替换字符
+  ok   public/state.js: 不含连续 Latin-1 乱码段
+  ok   public/state.js: 不含 GBK 经典乱码标记
+  ok   public/app.js: 不含 U+FFFD 替换字符
+  ok   public/app.js: 不含连续 Latin-1 乱码段
+  ok   public/app.js: 不含 GBK 经典乱码标记
+  ok   public/rpc.js: 不含 U+FFFD 替换字符
+  ok   public/rpc.js: 不含连续 Latin-1 乱码段
+  ok   public/rpc.js: 不含 GBK 经典乱码标记
+  ok   public/projects.js: 不含 U+FFFD 替换字符
+  ok   public/projects.js: 不含连续 Latin-1 乱码段
+  ok   public/projects.js: 不含 GBK 经典乱码标记
+  ok   tests/usage-quota.cjs: 不含 U+FFFD 替换字符
+  ok   tests/usage-quota.cjs: 不含连续 Latin-1 乱码段
+  ok   tests/usage-quota.cjs: 不含 GBK 经典乱码标记
+  ok   docs/usage-quota.md: 不含 U+FFFD 替换字符
+  ok   docs/usage-quota.md: 不含连续 Latin-1 乱码段
+  ok   docs/usage-quota.md: 不含 GBK 经典乱码标记
+  ok   usage.js 不再把缺失当 0：fmt(t.input || 0)
+  ok   usage.js 不再把缺失当 0：ctxPct() ?? 0
+  ok   usage.js 不再用 innerHTML 插值动态值
+  ok   approval 侧栏只读摘要不含 tooltip 临时变量
+
+229/229 通过

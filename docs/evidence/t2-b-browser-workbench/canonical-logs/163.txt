@@ -1,0 +1,12 @@
+  ok  slow evidence initialization does not block HTTP response
+  ok  pending request cannot call store or runtime authority
+  ok  initialization is started once independently of requests
+  ok  completed initialization opens read admission
+  ok  new reads do not restart initialization
+  ok  initialization failure has only a fixed public reason
+  ok  HTTP starts without installing or launching Pi
+  ok  pending journal operations are reconciled before read admission opens
+  ok  unauthorized scope is refused instead of inventing history
+  ok  HTTP query adds no journal reconciliation records
+  ok  GUI service survives rejected query
+Session change startup server.js: 11/11; failed=0; skipped=0

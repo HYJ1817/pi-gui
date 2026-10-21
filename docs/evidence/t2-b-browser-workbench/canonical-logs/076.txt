@@ -1,0 +1,68 @@
+  ok  web_search start
+  ok  web_search success
+  ok  web_search error
+  ok  fetch_content start
+  ok  fetch_content success
+  ok  fetch_content error
+  ok  get_search_content start
+  ok  get_search_content success
+  ok  get_search_content error
+  ok  query/queries
+  ok  missing query
+  ok  missing URL
+  ok  malformed result
+  ok  unknown provider is not guessed
+  ok  structured sources
+  ok  actual provider
+  ok  actual count
+  ok  no body regex sources
+  ok  fetch metadata
+  ok  reject javascript
+  ok  reject file
+  ok  reject data
+  ok  reject ftp
+  ok  reject //example.org
+  ok  reject https
+  ok  reject https
+  ok  reject bad
+  ok  safe http://example.org
+  ok  safe https://pi.dev/docs
+  ok  unknown tool fallback
+  ok  cancelled metadata
+  ok  extension error metadata
+  ok  abort settles spinner
+  ok  history same adapter
+  ok  concurrent identity
+  ok  bounded content projection
+  ok  absent setup
+  ok  discovered != observed
+  ok  configured enabled evidence
+  ok  discovered but disabled
+  ok  presence cannot infer configuration
+  ok  runtime observation
+  ok  bridge reset
+  ok  workspace reset
+  ok  stale events rejected
+  ok  restart lifecycle resets
+  ok  setup failure stays unknown
+  ok  no secrets projected
+  ok  fixed install command
+  ok  no install API
+  ok  desktop safe URL
+  ok  release guard unchanged
+  ok  desktop unsafe URL
+  ok  desktop URL validation parity
+  ok  source label never HTML
+  ok  external link Electron safe path
+  ok  invalid source no DOM link
+  ok  DOM start renderer
+  ok  DOM update is bounded
+  ok  DOM end same node
+  ok  DOM success with safe sources
+  ok  DOM no unsafe HTML
+  ok  DOM history uses same renderer
+  ok  DOM unknown fallback
+  ok  manual install restart delegates to the single shared layout
+  ok  feature module keeps no second restart implementation
+
+66/66 通过

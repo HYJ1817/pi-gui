@@ -1,0 +1,120 @@
+
+--- A. diff 解析与证据组装 ---
+  ok   A1. modified / added / deleted 都认出来
+  ok   A1b. patch 内容带上了
+  ok   A2. 含空格的路径：末尾的 TAB 被剥掉（否则路径就是错的）
+  ok   A3. rename：认得出，且记下 oldPath
+  ok   A4. binary：认得出，且**不带内容**
+  ok   A5. rename 在证据里只有**一条**（不是新旧各一条）
+  ok   A5b. 并且带 oldPath
+  ok   A6. 文件数超上限 → 只留前 N 个
+  ok   A7. 单个文件的 patch 被截到上限
+  ok   A8. **显式标了 truncated**（不悄悄裁）
+  ok   A9. 总量也被限住
+  ok   A10. 说明里点了「哪些被丢/被截」（用户要看得见）
+  ok   A11. 归一化会再压一遍：文件数 / patch / note 全部截到上限
+  ok   A11b. 认不出的 change 退成 modified（不猜成别的）
+  ok   A11c. 认不出的 status 退成 unavailable
+
+--- B. 执行前 → 执行后（真 git，真 scheduler） ---
+  ok   B1. status = available
+  ok   B2. 记下了那个文件（change=modified）
+  ok   B3. patch 是**执行前 → 执行后**的内容差
+  ok   B4. 路径是**项目相对**的（没有绝对路径进证据）
+  ok   B5. 证据里也没有绝对路径 / 临时目录泄露
+  ok   B6. **dirty 基线**：patch 是 2 → 3，**不是** 1 → 3（旧实现会拿 HEAD 当基线）
+  ok   B7. added：change=added 且有内容
+  ok   B8. untracked 的新文件也能进证据（这是 filesChanged 之外的增量）
+  ok   B9. deleted：change=deleted 且有删掉的内容
+  ok   B10. 补丁头是 /dev/null（added/deleted 的标准形状）
+  ok   B11. rename：git 认得出时用 renamed + oldPath
+  ok   B12. rename 不会变成「新旧两条」
+  ok   B13. binary：标了 binary，patch 不塞内容
+
+--- C. 冻结：之后怎么改都不动（P10 的核心） ---
+  ok   C1. **之后继续改工作区：历史证据一个字节都没变**（旧实现会给当前 diff）
+  ok   C1b. 而它仍然说的是当时那次执行（1 → 3），不是现在的 1 → 999
+  ok   C2. 工作区 clean 之后历史证据仍然在
+  ok   C2b. 前置条件：工作区此刻确实是 clean 的
+  ok   C3. 工作区又有新 diff 之后，旧 attempt 的证据仍不变
+  ok   C4-prep. Retry 被接受
+  ok   C4-prep2. 第二次执行跑完
+  ok   C5. Attempt 1 的证据没被重试动过
+  ok   C6. Attempt 2 有自己的证据，且与 Attempt 1 不同
+  ok   C7. Attempt 2 的 patch 是 3 → 4（从上次结束的状态起算）
+
+--- D. 采不到证据 ≠ 任务失败 ---
+  ok   D1-prep. 计划启动
+  ok   D2. 非 git 项目：outcome 仍是 success（证据失败不影响任务）
+  ok   D3. 证据如实标 unavailable + 说明原因
+  ok   D4-prep. 计划启动
+  ok   D5. 没接采集：unavailable + 原因，任务仍 success
+  ok   D6. 任务失败时也采集证据（它本来就有内容可采）
+  ok   D7-prep. 计划启动
+  ok   D8. 中断：不伪造 post 快照，如实说没采到结束状态
+  ok   D9. 硬崩恢复：补的 attempt 里证据是 unavailable + 说明（不拿当前工作区补）
+  ok   D10. 老 attempt 没有 changeEvidence → 归一化成 null（不假装有 Diff）
+  ok   D11. 老计划的 filesChanged 照常读得出来
+  ok   D12. schemaVersion 仍是 1（additive，不需要 migration）
+
+--- E. 四条写盘路径都不许覆盖证据 ---
+  ok   E1-prep. 审阅写入成功
+  ok   E1. Review 写入之后证据没被覆盖
+  ok   E1b. 审阅自己也写进去了
+  ok   E2-prep. PUT 成功
+  ok   E2. PUT Plan（带一份**不含证据**的任务副本）之后证据仍在
+  ok   E3. 又一次执行/写盘之后，Attempt 1 的证据仍在
+  ok   E4-prep. 验证启动成功
+  ok   E4-prep2. 验证此刻确实在跑（这个窗口是真的）
+  ok   E4-prep3. 验证结果确实写进去了（否则这条断言是空的）
+  ok   E4. **验证跑着时落盘的证据，没被验证的收尾覆盖**
+
+--- F. 上限、体量与不可信文本 ---
+  ok   F1. 大变更：文件数被限住
+  ok   F2. 大变更：总 patch 量被限住
+  ok   F3. 截断被**明确标出来**（状态 + 标记 + 说明）
+  ok   F4. 计划文件没有膨胀到失控（< 2 MB）
+  ok   F5. XSS 载荷原样存进 patch（当文本，不做任何编码）
+  ok   F6. 证据里没有 HTML 实体转义（前端用 textContent 渲染，不需要编码）
+
+--- G. 防回归证明：两条错误实现都会被这两条断言打红 ---
+  ok   G1. 「按当前工作区重算」会给出 1→999 —— 而 C1b 断言的是 1→3，两者不可能同时成立
+  ok   G2. **正确实现**给 2→3（B6 的断言成立）
+  ok   G3. **拿 HEAD 当基线的实现**给 1→3 —— B6 的断言在它上面**必红**
+
+--- H. 项目只是仓库的子目录 —— sibling 绝不进证据 ---
+  ok   H1. 只看见项目内的 inside.js
+  ok   H2. **不带仓库相对前缀**（不是 project/inside.js）
+  ok   H3. **sibling 完全没进来**
+  ok   H4. 没有 `..`、没有绝对路径、没有反斜杠
+  ok   H5. patch 是 inside.js 自己的 1 → 2
+  ok   H6. change=modified（没被认成 rename / added / deleted）
+  ok   H7. **整份证据里一个 sibling 字样都没有**（文件列表 + patch）
+  ok   H8. 状态是 **available**（不是 partial / unavailable）
+  ok   H9. files 为空 —— sibling 没被算进来
+  ok   H10. **dirty 基线仍是 2 → 3**（不是 1 → 3）
+  ok   H11. 而且仍然完全没有 sibling
+  ok   H12. sibling 有未提交改动时，项目侧仍然是「没变化」
+  ok   H13. 项目内 rename：认得出，两端都是 project-relative
+  ok   H13b. numstat 的新旧两条都是 project-relative
+  ok   H13c. 证据层并成**一条** renamed，两端都是 project-relative
+  ok   H14. 项目内 → 项目外：降级成 deleted，且**不出现 sibling 名字**
+  ok   H15. 项目外 → 项目内：降级成 added，且**不泄露 sibling 名字**
+
+--- I. path / oldPath 复用 filesChanged 那套安全规范化 ---
+  ok   I. 丢掉危险路径 "../../secret.js"
+  ok   I. 丢掉危险路径 "/absolute/file.js"
+  ok   I. 丢掉危险路径 "C:\\secret\\file.js"
+  ok   I. 丢掉危险路径 "\\\\server\\share\\a.js"
+  ok   I. 丢掉危险路径 "foo//bar.js"
+  ok   I. 丢掉危险路径 "a/../../b.js"
+  ok   I. 丢掉危险路径 ""
+  ok   I. 丢掉危险路径 ".."
+  ok   I. 保留合法路径 "src/foo.js"
+  ok   I. 保留合法路径 "with space/a.js"
+  ok   I. 保留合法路径 "中文/文件.js"
+  ok   I. 危险的 oldPath 退成 null（不是原样留着）
+  ok   I. 合法的 oldPath 保留
+  ok   I. 与 filesChanged 用的是同一个判据（同输入同输出）
+
+100 passed, 0 failed

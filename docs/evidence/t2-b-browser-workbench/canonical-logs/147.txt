@@ -1,0 +1,38 @@
+  ok store factory is available
+  ok consent defaults off and enable requires acknowledgement
+  ok B is durable before A exists
+  ok prepare preserves exact BOM and CRLF bytes
+  ok abort does not erase a verified mutation
+  ok eligibility waits for the final Pi tool result
+  ok sequences are global across workspace conversations
+  ok safe summary contains normalized relative paths but no raw content or digest
+  ok gap revision persists and contaminates the workspace
+  ok unknown writer gap also degrades later verified captures
+  ok gap between begun and prepared never resets capture provenance
+  ok restart turns uncompleted prepared records incomplete
+  ok mismatched P cannot claim verified intent
+  ok inconsistent owner is rejected
+  ok path traversal is rejected without leaking text
+  ok exclusions refuse raw capture and path settings cannot escape
+  ok new runtime owner may read history but cannot settle old operations
+  ok dormant summary uses persistent authority without inventing runtime owners
+  ok workspace fingerprint prevents replaced-root evidence reuse
+  ok unreferenced private objects count against disk quota
+  ok truncated journal fails closed on restart
+  ok exclusive verification cannot be asserted without a provider
+  ok classic owner allows the actual null repo identity and nested tool IDs
+  ok native foreign child ACL remains refused
+  ok native platform private directory and inherited child permissions work
+  ok privacy failure is fail closed
+  ok privacy is rechecked before any raw bytes enter a new blob
+  ok insecure objects directory is rejected before creating a blob
+  ok oversized corrupted object is refused without an unbounded readFile
+  ok lost final tool result becomes incomplete after restart and poisons prior eligibility
+  ok incomplete post verification poisons earlier workspace operations
+  ok ENOSPC before prepared journal never admits a protected operation
+  ok separate process exit after prepared recovers incomplete evidence
+  fixture replay 100 operations: 599 ms; object privacy checks: 2
+  ok 100-operation replay validates each deduplicated object once
+  ok file quota refuses before recording a complete operation
+  ok CAS deduplicates matching raw bytes and corruption fails closed
+session-change-store: 36/36

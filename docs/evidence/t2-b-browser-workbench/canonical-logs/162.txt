@@ -1,0 +1,28 @@
+  ok  read-only session panel exists
+  ok  session list uses distinct right surface
+  ok  file rows and captured counts displayed
+  ok  opening summary does not request content
+  ok  explicit single-file diff includes confirmed IDs revision owner mode
+  ok  candidate states read-only eligibility and renders diff
+  ok  diff does not enter localStorage
+  ok  unrelated worktree event leaves current candidate alone
+  ok  same-owner evidence change invalidates rendered candidate
+  ok  refused overlapping_changes displays safe reason and no success diff
+  ok  refused attribution_gap displays safe reason and no success diff
+  ok  refused expired_evidence displays safe reason and no success diff
+  ok  refused incomplete_evidence displays safe reason and no success diff
+  ok  changed current file requires repreview
+  ok  oversized diff is refused without truncated body
+  ok  late prior preview discarded after session switch
+  ok  late old summary cannot overwrite dormant current session
+  ok  dormant preview invalidates on shared-workspace classic writes
+  ok  history list shows incomplete prior state
+  ok  no automatic export on history open
+  ok  user export names existing single-file material
+  ok  concurrent backup comparison does not strand export or cancel authorized download
+  ok  no history is explicit empty state
+  ok  no evidence never claims no file modified
+  ok  unknown backend error remains generic
+  ok  capture disabled explicit UI state
+  ok  read-only actions never call prepare apply stop or git restore
+Session change UI: 27/27; failed=0; skipped=0

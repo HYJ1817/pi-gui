@@ -1,0 +1,47 @@
+
+--- A. 结构与单例 ---
+  ok   A1. 菜单挂在 body 上（不被侧栏 overflow 裁），role=menu / menuitem
+  ok   A2. 每项都有图标与文案（图标是 SVG，不是字符图标）
+  ok   A3. 没有可显示项 → 返回 null，且不留下空菜单
+  ok   A4. 分隔线：首尾与连续的被丢掉，中间那条带 role=separator
+  ok   A5. 同时最多一个菜单（开第二个会关掉第一个）
+  ok   A6. 同一个 trigger 再开一次 = 收起（toggle）
+  ok   A7. trigger 上有 aria-haspopup=menu / aria-expanded，关闭后回到 false
+  ok   A8. danger 项带 danger 类（只在 hover 时变红，由 CSS 决定）
+  ok   A9. disabled 项 disabled，且不参与键盘导航
+  ok   A10. 禁用原因可见、去重、仅文本，并由 aria-describedby 关联
+  ok   A11. 禁用项即使直接调用 onclick 也不执行，不关闭菜单
+
+--- B. 定位（锚定 / 翻转 / 夹紧） ---
+  ok   B1. 充裕空间：出现在 trigger 下方，右边缘与 trigger 对齐
+  ok   B2. 下方放不下 → 向上翻转（仍然贴着 trigger）
+  ok   B3. 右边缘会跑出视口时向左夹紧（绝不超出屏幕）
+  ok   B4. 上方也放不下时夹在视口内（不出现负坐标）
+
+--- C. 键盘与关闭 ---
+  ok   C1. 打开后焦点在第一项
+  ok   C2. ArrowDown / ArrowUp 循环，Home / End 跳首尾
+  ok   C3. Enter / Space 执行当前项并关闭菜单
+  ok   C4. Escape 关闭并把焦点还给 trigger
+  ok   C5. 点菜单外（mousedown）关闭
+  ok   C6. 点菜单内部不关闭
+  ok   C7. 窗口 resize 关闭
+  ok   C8. 页面滚动关闭；菜单自己滚动不关
+  ok   C9. 点项时**先关闭再执行**动作（动作里开弹层不会被自己盖住）
+  ok   C10. 关闭之后键盘监听不再起作用（没有残留监听器）
+  ok   C11. 图标是常量 SVG（细线单色，不是字符图标）
+
+--- D. 项目行 / 会话行的静态边界 ---
+  ok   D1. 项目行不再有 .pj-del，改成唯一的 .pj-row-menu-trigger
+  ok   D2. 会话行不再有 .pj-sess-act，也不再用 ✎ ⤓ ✕ ↩ 当图标
+  ok   D3. 新的三点类名与 .pj-sess-more（归档折叠）不冲突
+  ok   D4. 每行只有一个三点入口（项目和会话都是）
+  ok   D5. 项目菜单复用既有 openProjectSettings / removeProject，且移除前先确认
+  ok   D6. 会话菜单复用既有 startRename / doArchive / doDelete（没有第二套实现）
+  ok   D7. 会话菜单统一三个动作，受限动作禁用；pending 没有菜单
+  ok   D8. 两个 trigger 都自己拦掉冒泡（点三点绝不切换项目 / 会话）
+  ok   D9. 菜单项只放真实已有功能（没有 Codex 的置顶 / 分区 / 分支 / 资源管理器）
+  ok   D10. trigger 默认透明，hover / focus-within / 打开时可见
+  ok   D11. 菜单样式：单例浮层、在弹层之下、低对比分隔线、danger 只在 hover 变红
+
+37/37 通过

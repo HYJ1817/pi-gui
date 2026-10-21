@@ -1,0 +1,91 @@
+
+--- A. Task ↔ Session ---
+  ok   §38.1 attempt 保存了 sessionId
+  ok   §38.1 sessionId 是确定性拼出来的（含 planId / taskId / attempt）
+  ok   §38.1 sessionId 符合 pi 的字符集（否则 pi 会 exit 1）
+  ok   §16. sessionId 不是路径（不含分隔符 / 盘符）
+  ok   §7. task.result.sessionId 与 attempt 一致（详情接口一次给全，避免 N+1）
+  ok   §38.2 适配器不支持关联时 sessionId 为 null（不伪造）
+  ok   §38.5 failed 的 attempt 也保留 sessionId
+  ok   §38.3 retry 保留旧 attempt 的 session（历史没被覆盖）
+  ok   §38.4 retry 产生**新的** session（两次尝试各自的会话可区分）
+  ok   §29. 两次 attempt 的 filesChanged 各自独立保留
+  ok   §38.6 cancelled 的 attempt 保留 sessionId
+  ok   §30. cancelled 也保留执行期间已发生的文件变化字段（数组，可为空）
+  ok   §38.7 sessionId 不接受任意路径（posix 绝对路径被拒）
+  ok   §38.7 sessionId 不接受任意路径（Windows 绝对路径被拒）
+  ok   §38.7 sessionId 不接受 ../ 逃逸
+  ok   §38.7 落盘归一化会把非法 sessionId 抹成 null
+
+--- B. Task ↔ Files（执行期间观察到的变化） ---
+  ok   §38.9 新增文件被识别
+  ok   §38.10 修改文件被识别
+  ok   §38.13 无变化 → filesChanged 为空数组
+  ok   §38.14 路径是项目相对（不含盘符 / 不以 / 开头）
+  ok   §38.15 不出现绝对路径（不含临时目录前缀）
+  ok   §38.15 不出现 .. 逃逸
+  ok   §38.11 删除文件被识别（reverted）
+  ok   §38.12 rename 被识别成变化且路径仍是相对路径
+  ok   §12. 元数据里不含完整 diff（只有文件名）
+
+--- C. 项目归属与隔离 ---
+  ok   §38.16 A 项目的 plan 在 B 项目下被拒（403）
+  ok   §22. 从任务打开会话同样受 plan 归属保护（403）
+  ok   §22. 切回 A 之后同一个计划可访问
+  ok   §38.17 A 项目的会话在 A 项目下能解析到
+  ok   §38.8 别的项目的会话不允许在当前项目下解析（跨项目隔离）
+  ok   §38.17 切到 B 之后 B 的会话能解析、A 的不行
+  ok   §38.7 resolveByUuid 拒绝路径类输入
+  ok   §7. 工作目录是子目录的会话仍算本项目（否则任务会话永远打不开）
+
+--- D. 持久化与向后兼容 ---
+  ok   §38.19 relation 真的落在磁盘上（不是只在内存里）
+  ok   §38.19 新 store 读回来 relation 仍在（重启后不丢）
+  ok   §38.20 老计划（无 relation 字段）仍能正常加载
+  ok   §38.20 缺字段被补成 null / []（不是 undefined）
+  ok   §15. 不因新增字段而报格式版本问题
+  ok   §33. 一个老计划不会让列表读不出来
+  ok   §38.21 坏 relation 不拖垮加载
+  ok   §38.21 非法 sessionId（路径）被抹成 null
+  ok   §38.21 绝对路径 / .. 逃逸 / 非字符串被从 filesChanged 里剔除
+
+--- E. 隐私（新字段不许夹带正文 / 路径） ---
+  ok   §32. attempt 的键只有关系字段 + 既有状态字段
+  ok   §32. filesChanged 里没有绝对路径 / 会话文件路径
+  ok   §32. sessionId 里没有项目绝对路径
+  ok   §32. 关系字段里没有 prompt 文本（任务描述没有进 attempt）
+  ok   §38.24 关系字段里没有绝对 cwd
+
+--- F. 从任务打开会话（§7） ---
+  ok   §7. 能打开对应会话（复用 switch_session）
+  ok   §7. 切换用的是**解析出来的真实路径**（后端内部解析，前端不传路径）
+  ok   §7. 返回稳定 id 与标题给前端
+  ok   §6. 可以按 attempt 精确打开
+  ok   §7. 任务正在执行时拒绝打开（避免两个进程写同一个 jsonl）
+  ok   §27. 关联会话已被删除 → 明确说找不到（不猜、不新建）
+  ok   §16. 这次执行没有关联会话 → 明确说明（不报错、不崩）
+  ok   §7. 任务不存在 → 明确错误
+
+--- G. 反向查询与并行 ---
+  ok   §5. 会话 → 任务 反向查询能命中
+  ok   §5. 命中里带 plan / task 的可读信息（界面要显示「属于哪个计划」）
+  ok   §5. 非法 sessionId → 400（不可信输入先挡住）
+  ok   §8. 没有关联时回空列表（不是错误）
+  ok   §13. 并行任务各自的 sessionId 不同（没有互相覆盖）
+  ok   §13/§11. 并行任务各自至少记到自己的文件（重叠是允许的，语义是「执行期间」）
+  ok   §11. 措辞是「执行期间观察到的变化」，不声称 Agent 独占修改
+  ok   §13. 串行时文件不串（对照：证明并行那条重叠不是实现缺陷）
+
+--- H. 中断恢复（§31） ---
+  ok   §31. 运行中的任务在被中断前没有凭空写 attempt
+  ok   §31. shutdown 后任务标成 interrupted
+  ok   §31. 中断时补的 attempt 带 sessionId（那条会话确实存在过）
+  ok   §31. 拿不到 after 快照时**不猜**最终变化：filesChanged=[] 且标 incomplete
+  ok   §31. 中断后没有重复记账（同一条 attempt 只出现一次）
+  ok   §31. 退出后 plan 仍是 paused（不许被算成「失败」）
+
+--- I. 不是 git 仓库时的降级 ---
+  ok   §11. 不是 git 仓库 → filesChanged 空，但标 changeCaptureIncomplete（不假装没变化）
+  ok   §11. 任务本身照常成功（无 git 不是错误）
+
+71 passed, 0 failed

@@ -1,0 +1,103 @@
+
+--- 1. 资产命名契约 ---
+  ok   6. installer 名正确
+  ok   7. portable 名正确
+  ok   8. checksum 名正确
+  ok   8b. 允许文件就是这三个（白名单，不是黑名单）
+  ok   9. 文件名里的版本与期望一致时不算 stale
+  ok   10. 旧版本文件名会被认出来
+
+--- 2. 正式资产齐全 ---
+  ok   11. 三个资产齐全 + 校验和正确 → 通过
+  ok   11b. 报告里带每个资产的类型与大小
+
+--- 3. 缺失与空文件 ---
+  ok   15. 缺便携版 → 失败
+  ok   15b. 三个都缺 → 三条错误都报出来（不是只报第一条）
+  ok   17. 空文件 → 失败
+
+--- 3b. 文件魔数 ---
+  ok   17a. .exe 里其实是 HTML 错误页 → 失败
+  ok   17b. .zip 里其实是 PE 可执行文件 → 失败
+  ok   17c. 截断成一个字节的 .exe → 失败
+  ok   17d. 魔数正确时不误报
+  ok   17e. tar 改名成 .zip → 失败（曾真的发布出去过的缺陷）
+  ok   17f. 有 PK 开头但没有 EOCD → 失败（半截 / 伪造的 zip）
+  ok   17g. 结构完整的 zip 不误报
+  ok   15c. 目录不存在 → 失败（不是崩）
+
+--- 4. 不该出现的文件 ---
+  ok   18. 混进 fake-pi.cjs → 失败
+  ok   18. 混进 test-fixtures.zip → 失败
+  ok   18. 混进 debug.log → 失败
+  ok   18. 混进 .env → 失败
+  ok   18. 混进 app.pdb → 失败
+  ok   18. 混进 setup.exe → 失败
+  ok   16. 只允许三个正式资产（白名单语义，不是列举几个黑名单）
+
+--- 5. 旧版本混入 ---
+  ok   10a. 上次版本的安装包混进来 → 失败（且同时报「不该出现」与「版本不符」）
+
+--- 6. 校验和 ---
+  ok   11c. 校验和与文件一致 → verifyChecksums 通过
+  ok   11d. 校验和文件里只有裸文件名，没有绝对路径
+  ok   14. 排序稳定：同样的文件集每次生成的内容完全一样
+  ok   14b. 排序是按文件名字节序（`0` < `S`，所以 portable 在 Setup 之前）
+  ok   14c. hash 是 64 位小写十六进制
+  ok   12. 文件被改过之后校验和校验失败
+  ok   12b. 篡改后独立复算也能发现（verifyChecksums 直接对文件）
+  ok   15d. 缺 SHA256SUMS.txt → 失败
+  ok   12c. 校验和内容错 → 失败
+  ok   15e. 校验和没覆盖便携版 → 失败（防止「传了但没登记」）
+  ok   12d. 校验和格式不合法 → 失败（不静默跳过）
+  ok   13. 校验和里带绝对路径 → 失败
+  ok   14d. 校验和文件自己不进清单（不会自指）
+  ok   14e. writeChecksums 默认排除校验和文件自身
+
+--- 7. 语义重复 ---
+  ok   19. 两个文件都被识别成 installer → 失败（用户不知道该点哪个）
+
+--- 8. 构建 metadata 版本 ---
+  ok   20. 构建 metadata 版本一致 → 通过
+  ok   20b. 构建 metadata 是旧版本 → 失败（产物是旧版本打的）
+  ok   20c. 没有构建 metadata 时只警告、不失败（单独跑守卫的场景）
+
+--- 9. P5 兼容（资产必须被应用内更新面板认出来）---
+  ok   21. 正式安装包被 classifyAsset 识别成 installer
+  ok   22. 正式便携版被识别成 portable
+  ok   23. SHA256SUMS.txt 被识别成 checksums
+  ok   23b. 命名契约与 classifyAsset 一致（改名字会同时打红这两边）
+  ok   23c. 干净的一批资产全部能被 P5 识别（不会出现「只有查看 Release」）
+
+--- 10. 上传后核对 ---
+  ok   24. 本地与远端一致 → 通过
+  ok   24a. 少传一个附件 → 失败
+  ok   24b. 远端多了一个不该有的附件 → 失败
+  ok   24c. 内容与本地不一致（digest 不同）→ 失败
+  ok   24d. 大小对不上 → 失败
+  ok   24e. 远端没给 digest → 失败（「核对不了」不等于「核对通过」）
+  ok   24f. 一个附件都没有 → 失败
+
+--- 11. 发布编排（注入假 gh） ---
+  ok   25. 三种状态的决策表
+  ok   25a. 不认识的状态 → 抛错（不猜）
+  ok   25b. Release Notes 顺序是“本版摘要 → 自动 notes → 交付物”
+  ok   25c. Release Notes 组合是幂等的，重复跑 draft 不会叠加摘要或交付物
+  ok   25e. Release Notes 带 Code signing policy 与两份政策链接
+  ok   25f. Code signing policy 小节重复组合后也不叠加
+  ok   25g. Code signing 小节如实说明产物可能未签名（不谎称已签）
+  ok   25d. 摘要版本过期 → 在碰 GitHub 之前拒绝发布
+  ok   26. 没有 Release 时：创建 draft → 上传 → 核对 → 追加说明 → 发布 → 再确认
+  ok   26a. 只剩 draft 时：**不**重新创建，复用它
+  ok   26b. publish 前和 draft=false 前都重新验证身份
+  ok   26b1. formal publish refuses to skip proof when no verifier exists
+  ok   26c. before-draft 证明失败时绝不碰 Release
+  ok   26d. before-publish 证明失败时保留 draft 且绝不发布
+  ok   27. 已经有**已发布**的 Release → 抛错，且**绝不**上传或发布（不覆盖已发布二进制）
+  ok   28. 上传后核对不过 → 抛错，且**绝不** publish（此时还只是 draft）
+  ok   28a. publish 必须排在 verify 之后（顺序断言，不只看有没有调用）
+  ok   29. --dry-run：做到核对通过就停，**不**发布（远端留下 draft）
+  ok   30. 发布目录为空 → 抛错（不会去 create 一个没有附件的 Release）
+  ok   31. releaseState：只有「确实不存在」才算 missing，别的错误要抛出去
+
+77/77 通过

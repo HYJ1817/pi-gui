@@ -405,6 +405,11 @@
 .workbench-splitter[hidden]{display:none}
 .workbench-pane-specs{border-bottom:0}
 .workbench-pane-changes{border-top:0}
+.workbench-pane-browser > .rp-surface-browser{flex:1 1 0;min-height:0;width:100%}
+.workbench-pane-browser .rp-toolbar{gap:3px;padding-inline:8px}
+.workbench-pane-browser .ui4-browser-title{display:none}
+.workbench-pane-browser .rp-address{min-width:0}
+.workbench-pane-browser .browser-agent-bar{flex-wrap:wrap;min-height:0}
 @container (max-width:559px){
   .workbench-pane-specs .specs-layout{grid-template-rows:minmax(82px,34%) minmax(0,1fr)}
   .workbench-pane-specs .specs-layout.is-empty{grid-template-rows:minmax(0,1fr)}

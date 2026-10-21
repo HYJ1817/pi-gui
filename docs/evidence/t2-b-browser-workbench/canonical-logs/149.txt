@@ -1,0 +1,32 @@
+ok 1 - default extension imports the backend supplied public entry URL
+ok 2 - missing public entry fails with a fixed API unavailable error
+ok 3 - session_start does not wait on RPC-dependent bridge authority
+ok 4 - private HTTP transport uses token and sanitizes rejections
+ok 5 - late registration preserves official public metadata
+ok 6 - default off writes normally and records a durable gap
+ok 7 - tool input cannot manufacture server object evidence
+ok 8 - write records durable B and A then independently observed P
+ok 9 - prepare failure prevents writes and directory side effects
+ok 10 - edit uses its actual operation B and preserves ordinary error
+ok 11 - concurrent modification after prepare rejects stale overwrite
+ok 12 - outside workspace and hard links are rejected without mutation
+ok 13 - abort after mutation still settles actual bytes
+ok 14 - unknown tools create a durable coverage gap
+ok 15 - excluded policy is checked before reading or transporting private bytes
+ok 16 - before failure prevents mutation without leaking transport details
+ok 17 - settle failure reports capture failure after mutation
+ok 18 - oversized before content cannot be overwritten
+ok 19 - symlink paths are rejected
+ok 20 - cancelled user consent cannot enable capture
+ok 21 - exclude command preserves existing enabled consent
+ok 22 - new directories are explicitly incomplete evidence
+ok 23 - nested caller identity remains explicitly untracked when parent is not guarded
+ok 24 - native session change is reflected before the next operation
+ok 25 - final tool_result failure updates outcome without rewriting B A or P
+ok 26 - missing terminal tool event never fabricates an observed outcome
+ok 27 - failed final outcome transport records incomplete gap and fails closed
+ok 28 - dynamic source conflict blocks before unprotected mutation
+ok 29 - explicit disable bypasses a corrupt store and warns about persistence
+ok 30 - disabled capture remains usable despite hello and gap failure
+ok 31 - writer admission refusal blocks disabled native write before side effects
+session-change-tools: 31/31

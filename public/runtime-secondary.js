@@ -4,10 +4,12 @@ import { runtimeSessionAction } from './api.js';
 import { createBrowserSurface } from './browser-pane.js';
 import { openProcessPanel } from './process-panel.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
+import { openSplitWorkbench } from './ui/split-workbench.js';
 
 const same = (a,b) => Boolean(a&&b&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>a[k]===b[k]));
 export function createRuntimeSecondary({pane}) {
   let id=null, owner=null, browser=null, browserScope=null, pendingBrowser=false, serial=0, rebinding=false, alive=true;
+  let browserSplit=false;
   const desktop=()=>window.piGuiDesktop?.runtimeBrowser;
   const current=(captured,token)=>alive&&serial===token&&same(store.get(id)?.owner,captured)&&same(owner,captured);
   const scopeOf=captured=>{const {repoId,...scope}=captured;return scope;};
@@ -16,19 +18,44 @@ export function createRuntimeSecondary({pane}) {
     browser?.close();browser=null;browserScope=null;pendingBrowser=false;
   }
   function empty(kind,text,action){
-    openSecondarySurface(kind,(host)=>{
+    const draw=host=>{
       const head=document.createElement('header');head.className='process-head';const title=document.createElement('h3');title.textContent=kind==='runtime-browser'?'Browser':'开发进程';head.append(title);host.append(head);
       const note=document.createElement('p');note.className='process-message';note.setAttribute('role','status');note.textContent=text;host.append(note);
       if(action){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent='打开 Browser';b.onclick=action;host.append(b);}
-    },{label:kind==='runtime-browser'?'Browser':'开发进程',headerSelector:'.process-head',triggerId:'btnMore'});
+      if(kind==='runtime-browser'&&browserSplit){
+        const exit=document.createElement('button');exit.type='button';exit.className='btn tiny';exit.textContent='退出分屏';exit.onclick=()=>void mountBrowser(false,false);
+        const close=document.createElement('button');close.type='button';close.className='icon-btn';close.textContent='×';close.setAttribute('aria-label','关闭工作台');close.onclick=()=>pane.close();head.append(exit,close);
+      }
+    };
+    if(kind==='runtime-browser'&&browserSplit){
+      const previous=rebinding;rebinding=true;
+      try{openSplitWorkbench({returnSurface:'browser',browserOptions:{mount:draw,exit:()=>void mountBrowser(false,false),refresh:()=>pane.refresh?.()}});}
+      finally{rebinding=previous;}
+    }else openSecondarySurface(kind,draw,{label:kind==='runtime-browser'?'Browser':'开发进程',headerSelector:'.process-head',triggerId:'btnMore'});
   }
-  async function mountBrowser(create=false){
+  function placeBrowser(split){
+    if(!browser)return;
+    browserSplit=split;
+    rebinding=true;
+    try{
+      if(split)openSplitWorkbench({returnSurface:'browser',browserOptions:{
+        mount:target=>browser.moveTo(target,true),exit:()=>placeBrowser(false),refresh:()=>pane.refresh?.(),
+      }});
+      else{pane.open('runtime-browser');browser.moveTo(pane.root.querySelector('.rp-body'));}
+    }finally{rebinding=false;}
+  }
+  async function mountBrowser(create=false,split=browserSplit){
     detach();const captured=owner?{...owner}:null,token=++serial;
+    browserSplit=split;
     if(!captured){empty('runtime-browser','会话已关闭；恢复会话后可以使用 Browser。');return;}
     if(!desktop()){empty('runtime-browser','Browser 仅在桌面版可用。');return;}
     const scope=scopeOf(captured),api=desktop();
-    pendingBrowser=true;empty('runtime-browser','正在读取 Browser…');
-    const status=await api.status(scope);if(!current(captured,token))return;
+    pendingBrowser=true;
+    rebinding=true;
+    try{empty('runtime-browser','正在读取 Browser…');}finally{rebinding=false;}
+    let status;
+    try{status=await api.status(scope);}catch{status={ok:false};}
+    if(!current(captured,token))return;
     pendingBrowser=false;
     if(!status?.ok){empty('runtime-browser','此会话的 Browser 当前不可用。');return;}
     if(!create&&!status.opened){empty('runtime-browser','此会话尚未打开 Browser。',()=>void mountBrowser(true));return;}
@@ -41,10 +68,12 @@ export function createRuntimeSecondary({pane}) {
       onAgentState:cb=>api.onAgentState(frame=>{if(matches(frame))cb(frame.state);}),onNotice:()=>()=>{},openExternal:()=>Promise.resolve({ok:false})};
     browserScope=scope;
     pane.root.querySelector('.rp-body').replaceChildren();
-    browser=createBrowserSurface({pane,bridge,surfaceName:'runtime-browser',onAgentState:()=>{},onRequestClose:()=>{
+    browser=createBrowserSurface({pane,bridge,surfaceName:'runtime-browser',onAgentState:()=>{},
+      onRequestSplit:()=>placeBrowser(!browserSplit),onRequestClose:()=>{
       if(!current(captured,token))return;void api.command(scope,'close');pane.close();
     }});browser.ui.external.hidden=true;
     if(create)await browser.open();else browser.openFromAgent();
+    if(current(captured,token)&&split)placeBrowser(true);
   }
   function mountProcesses(){
     detach();
@@ -56,7 +85,7 @@ export function createRuntimeSecondary({pane}) {
   function rebind(){
     const kind=pane.surface();serial++;detach();
     rebinding=true;
-    try{if(kind==='runtime-browser'||kind==='browser')void mountBrowser();else if(kind==='process')mountProcesses();}
+    try{if(kind==='runtime-browser'||kind==='browser'||kind==='browser-changes-split')void mountBrowser(false,kind==='browser-changes-split');else if(kind==='process')mountProcesses();}
     finally{rebinding=false;}
   }
   const surfaceOff=pane.onSurfaceChange(next=>{if(!rebinding&&next!=='runtime-browser'&&(browser||pendingBrowser)){serial++;detach();}});
@@ -65,11 +94,12 @@ export function createRuntimeSecondary({pane}) {
     if(!same(owner,next)&&Boolean(owner||next)){owner=next?{...next}:null;rebind();}
   });
   const openOff=desktop()?.onOpen?.(frame=>{
-    if(!owner||!same(scopeOf(owner),{...frame.scope,sessionId:owner.sessionId})||pane.surface()!=='runtime-browser')return;
-    void mountBrowser();
+    if(!owner||!same(scopeOf(owner),{...frame.scope,sessionId:owner.sessionId})||!['runtime-browser','browser-changes-split'].includes(pane.surface()))return;
+    if(!browser)void mountBrowser();
   });
   return {focus(next){id=next;owner=store.get(id)?.owner?{...store.get(id).owner}:null;rebind();},
-    openBrowser:()=>mountBrowser(true),openProcesses:()=>mountProcesses(),
-    leave(){const old=owner;id=null;owner=null;serial++;detach();if(['runtime-browser','process'].includes(pane.surface()))pane.close();if(old)void runtimeSessionAction({action:'blur',owner:old});},
+    openBrowser:()=>browser?placeBrowser(false):mountBrowser(true,false),
+    openBrowserSplit:()=>browser?placeBrowser(true):mountBrowser(true,true),openProcesses:()=>mountProcesses(),
+    leave(){const old=owner;id=null;owner=null;serial++;detach();if(['runtime-browser','browser-changes-split','process'].includes(pane.surface()))pane.close();if(old)void runtimeSessionAction({action:'blur',owner:old});},
     dispose(){alive=false;serial++;detach();surfaceOff();unsubscribe();openOff?.();}};
 }

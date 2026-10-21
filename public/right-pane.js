@@ -135,8 +135,7 @@ export function initRightPane() {
   function measure() {
     rafId = 0;
     const vp = viewportEl();
-    if (!vp || root.hidden) return;
-    const r = vp.getBoundingClientRect();
+    const r = vp && !vp.closest('[hidden]') ? vp.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
     const rect = { x: r.left, y: r.top, width: r.width, height: r.height };
     for (const fn of listeners) {
       try {
@@ -145,6 +144,7 @@ export function initRightPane() {
         /* 单个订阅者出错不该影响别的 */
       }
     }
+    syncOcclusion(true);
   }
 
   function scheduleMeasure() {
@@ -209,7 +209,9 @@ export function initRightPane() {
 
   /* ---------- 拖动分隔条 ---------- */
 
+  let endWidthDrag = null;
   function onDragStart(e) {
+    endWidthDrag?.();
     e.preventDefault();
     const startX = e.clientX;
     const startW = width;
@@ -222,8 +224,10 @@ export function initRightPane() {
       applyWidth();
     };
     const up = () => {
+      endWidthDrag = null;
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
+      window.removeEventListener('blur', up);
       resizer.classList.remove('is-dragging');
       document.body.classList.remove('rp-resizing');
       storeWidth(width);
@@ -231,6 +235,8 @@ export function initRightPane() {
     };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
+    window.addEventListener('blur', up);
+    endWidthDrag = up;
   }
 
   resizer.setAttribute('aria-controls', 'rightPane');
@@ -289,8 +295,14 @@ export function initRightPane() {
     return overlays.some((n) => !n.hidden);
   }
 
-  function syncOcclusion() {
-    const next = overlaysVisible();
+  function syncOcclusion(reveal = false) {
+    const vp = viewportEl();
+    const rect = vp?.getBoundingClientRect();
+    const next = overlaysVisible() || root.hidden || !vp || Boolean(vp.closest('[hidden]')) ||
+      !(rect?.width > 0 && rect?.height > 0) ||
+      document.body.classList.contains('rp-resizing') || document.body.classList.contains('workbench-resizing');
+    // Reveal only after measure() has delivered this frame's bounds.
+    if (!next && occluded && reveal !== true) { scheduleMeasure(); return; }
     if (next === occluded) return;
     occluded = next;
     for (const fn of occlusionListeners) {
@@ -304,6 +316,21 @@ export function initRightPane() {
 
   const mo = new MutationObserver(syncOcclusion);
   for (const n of overlays) mo.observe(n, { attributes: true, attributeFilter: ['hidden'] });
+  mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  let observedViewport = null;
+  const viewportObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleMeasure) : null;
+  const viewportMutation = new MutationObserver(() => {
+    const vp = viewportEl();
+    if (vp !== observedViewport) {
+      viewportObserver?.disconnect();
+      observedViewport = vp;
+      if (vp) viewportObserver?.observe(vp);
+    }
+    // Hidden tabs must detach immediately, before the next geometry frame.
+    if (!vp || vp.closest('[hidden]')) syncOcclusion();
+    scheduleMeasure();
+  });
+  viewportMutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
 
   /* ---------- 打开 / 关闭 ---------- */
 
@@ -335,6 +362,7 @@ export function initRightPane() {
   }
 
   function close() {
+    endWidthDrag?.();
     const focusInside = root.contains(document.activeElement);
     const previous = surface;
     for (const fn of surfaceListeners) fn(null);
@@ -382,6 +410,7 @@ export function initRightPane() {
      *  打开右栏时如果已经有弹层，立刻用当前值回调一次，
      *  否则 surface 会以为「没被遮住」，把原生 view 留在弹层上面。 */
     onOccluded: (fn) => {
+      syncOcclusion();
       occlusionListeners.add(fn);
       try {
         fn(occluded);

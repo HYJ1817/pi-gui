@@ -11,7 +11,7 @@ function browserRequest(connection,path,body,token=connection.token){return new 
 (async()=>{
   const handlers=new Map(),sent=[],controllers=[],agents=[],focused=[];
   const attached=new Set(),sessions=new Map();
-  const sender={mainFrame:{},send:(channel,payload)=>sent.push({channel,payload})},window={webContents:sender,isDestroyed:()=>false,
+  const sender={mainFrame:{},getZoomFactor:()=>1,send:(channel,payload)=>sent.push({channel,payload})},window={webContents:sender,isDestroyed:()=>false,
     getContentBounds:()=>({width:1440,height:900}),contentView:{addChildView:view=>attached.add(view),removeChildView:view=>attached.delete(view)}};
   const originalLoad=Module._load;
   let createBrowserController;
@@ -29,6 +29,7 @@ function browserRequest(connection,path,body,token=connection.token){return new 
   }finally{Module._load=originalLoad;}
   let host;
   const legacy=createBrowserController({origin:'http://127.0.0.1:7788',getWindow:()=>window,ipcMain:{},send:()=>{},isVisible:()=>!host||host.isLegacyVisible()});
+  const bindLegacyViewport=()=>legacy.setBounds({x:1000,y:100,width:400,height:600});
   const event={sender,senderFrame:sender.mainFrame};
   host=createRuntimeBrowserHost({origin:'http://127.0.0.1:7788',getWindow:()=>window,ipcMain:{handle:(name,fn)=>handlers.set(name,fn)},extensionPath:'PRIVATE_EXTENSION_PATH',onFocus:flag=>{focused.push(flag);legacy.setOccluded(flag);},
     createController:opts=>{const c={opts,closed:false,hidden:true,opened:false,setOccluded:v=>{c.hidden=v;},destroy:()=>{c.closed=true;},open:()=>{c.opened=true;return {ok:true};},navigate:url=>({ok:true}),command:()=>({ok:true}),setBounds(){},syncBounds(){}};controllers.push(c);return c;},
@@ -38,7 +39,7 @@ function browserRequest(connection,path,body,token=connection.token){return new 
   const A=scope('A'),B=scope('B');
   try{
     await host.start();const env=host.environment(),url=env.PI_GUI_RUNTIME_BROWSER_URL,token=env.PI_GUI_RUNTIME_BROWSER_TOKEN;
-    legacy.open();ok(attached.size===1&&host.isLegacyVisible());
+    legacy.open();bindLegacyViewport();ok(attached.size===1&&host.isLegacyVisible());
     const act=body=>request(url,token,body);
     ok((await request(url,'wrong',{action:'allocate',scope:A})).status===403);
     ok((await request(url,token,{action:'allocate',scope:A},undefined,'http://localhost')).status===403);
@@ -66,7 +67,7 @@ function browserRequest(connection,path,body,token=connection.token){return new 
     await act({action:'focus',scope:B});
     ok(controllers[1].hidden===false&&controllers[0].hidden===true);
     ok(attached.size===0&&!host.isLegacyVisible());
-    legacy.destroy();legacy.open();ok(attached.size===0&&!host.isLegacyVisible());
+    legacy.destroy();legacy.open();bindLegacyViewport();ok(attached.size===0&&!host.isLegacyVisible());
     legacy.setOccluded(false);legacy.syncBounds();legacy.open();ok(attached.size===0);
     ok((await open(event,{scope:A})).code==='not_focused');
     const args={requestId:'same-id',action:'status',args:{},generation:1};
@@ -82,9 +83,10 @@ function browserRequest(connection,path,body,token=connection.token){return new 
     ok((await act({action:'allocate',scope:A})).code==='stale_runtime');
     ok((await status(event,{scope:B})).enabled===true);
     await act({action:'focus',scope:null});ok(focused.at(-1)===false&&controllers[1].hidden===true);
+    bindLegacyViewport();
     ok(host.isLegacyVisible()&&attached.size===1);
     await act({action:'focus',scope:B});ok(!host.isLegacyVisible()&&attached.size===0);
-    await act({action:'dispose',scope:B});ok(host.isLegacyVisible()&&attached.size===1);
+    await act({action:'dispose',scope:B});bindLegacyViewport();ok(host.isLegacyVisible()&&attached.size===1);
     const b2={...B,runtimeGeneration:'new-generation-B'};await act({action:'allocate',scope:b2});await act({action:'focus',scope:b2});
     ok(!host.isLegacyVisible()&&attached.size===0);
     const stopping=host.stop();ok((await status(event,{scope:b2})).code==='stale_runtime');

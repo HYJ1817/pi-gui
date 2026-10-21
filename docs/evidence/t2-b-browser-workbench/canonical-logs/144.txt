@@ -1,0 +1,39 @@
+ok independent B store APIs exist
+ok caller approval cannot authorize B persistence
+ok B requires exact trusted capability
+ok legacy intent_verified capture cannot be upgraded into a B plan
+ok missing selected record cannot create a B plan
+ok prepared plan is durable with actual revision
+ok v0.24 Store rejects B event namespace before changing journal bytes or mtime
+ok full runtime generation enforced
+ok legacy APIs reject B plan creation and mutation
+ok CAS rejects stale journal revision
+ok immutable native proof cannot be changed
+ok reopen prepared becomes not_applied without an intent
+ok intent records actual journal revision before native commit
+ok replacing cannot return to not_applied
+ok reopen intent is recovery_required with synchronized file state
+ok GC preserves C and R for uncertain plans
+ok B list is provider filtered and owner scoped
+ok uncertain file blocks only the same workspace path
+ok another conversation cannot bypass uncertainty or ignore its owner
+ok Windows case alias and new runtime generation stay blocked
+ok create atomically refuses case alias and same object renamed path
+ok known different physical fingerprints isolate worktrees across epochs
+ok recovery ignore requires the complete same-owner lineage
+ok second recovery cannot target previous D instead of original C
+ok second recovery retains ultimate original C
+ok durably verified recovery resolves only its complete prior lineage
+ok another failed branch remains blocked after shared ancestor resolves
+ok fsynced plan whose readback fails never reports prepared
+ok failed readback closes subsequent store calls
+ok readable fsynced failed-ack plan reopens as not_applied
+ok applied_verified requires actual bytes digest and identity proof
+ok durable verified completion consumes selected operation once
+ok journal reserve blocks unrelated append and terminal cancellation releases it
+ok restart conservatively rebuilds unfinished journal reserve and closes near-capacity writes
+ok journal decimal boundaries serialize the final plan without reserve oscillation
+ok large admitted plan refuses intent before writing when bounded completion cannot fit reserve
+ok create atomically refuses an attribution gap before other blockers
+ok corrupt normal journal remains closed
+Object store: 38/38; failed=0; skipped=0 (real TEMP filesystem; injected privacy/allocation)

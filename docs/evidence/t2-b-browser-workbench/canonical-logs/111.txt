@@ -1,0 +1,13 @@
+  ok  A 浏览器未确认时，HTTP 与 Pi 都压着；确认后按 clear_queue → abort 的顺序发出，abort 应答回来才算成功
+  ok  B 浏览器确认失败：abort 照样送出去，HTTP 503 只有安全文案，且不宣称成功
+  ok  C prompt 与 steer 仍是同步发送，剥掉备用标记并保持接受顺序
+  ok  C 同步写失败保持错误身份，且不标记「已接受」
+  ok  P33 capture admission rejects before synchronous Pi send
+  ok  P33 explicit disable works without forwarding a model prompt
+  ok  P33.4 retained workspace lease rejects every new turn before Pi stdin or acceptance bookkeeping
+  ok  C provider 与模型守卫仍然同步生效，且不写不记账
+  ok  D 包装层把 bridge 的停止 Promise 原样返回（不吞、不替换），确认前不写 Pi
+  ok  前端：浏览器确认失败时状态栏停在「正在停止…」，只有一条安全 toast
+  ok  前端：成功时显示「已停止」而不是「已请求停止…」，且不再多弹 toast
+  ok  前端：等待确认期间就显示「正在停止…」（不是「已请求停止…」）
+gui-browser-stop: 12/12 cases passed

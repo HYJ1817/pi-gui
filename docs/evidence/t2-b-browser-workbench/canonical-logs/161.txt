@@ -1,0 +1,35 @@
+  ok  store offers bounded read-only evidence query
+  ok  capture disabled is explicit empty state
+  ok  query rejects missing authentication before store access
+  ok  query rejects foreign Origin despite valid token
+  ok  query is POST-only with bounded request body
+  ok  bounded first page has accurate aggregate and selection IDs
+  ok  next page does not repeat first file
+  ok  summary contains no snapshots absolute path references or capabilities
+  ok  query does not use raw snapshot materialization
+  ok  reject page limit 0
+  ok  reject page limit 51
+  ok  reject page limit -1
+  ok  reject page limit 1.5
+  ok  reject page limit 1
+  ok  reject cursor bad
+  ok  reject cursor 0:999999
+  ok  reject cursor 0:-1
+  ok  client cannot supply file root or native session
+  ok  foreign conversation denied with safe code
+  ok  stale generation denied
+  ok  read-only summary works while Agent running without stopping
+  ok  authority invalidated during query yields no files
+  ok  pagination and summary do not mutate journal
+  ok  expiration is explicit and removes preview qualification
+  ok  new journal revision rejects old cursor
+  ok  unknown writes expose attribution gap instead of complete capture
+  ok  workspace epoch isolates evidence
+  ok  persistent closed session keeps only its own evidence
+  ok  history discovery has no synthetic plan
+  ok  query reports real existing history material only
+  ok  history list omits raw refs and confirmation tokens
+  ok  explicit single-file export returns exact backup bytes
+  ok  history reads and export leave existing journal intact
+  ok  all read-only UI endpoints preserve Git index ref and user file
+Session change query: 34/34; failed=0; skipped=0

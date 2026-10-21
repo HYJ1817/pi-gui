@@ -1,0 +1,1 @@
+gui-browser-bridge: 25/25 assertions passed

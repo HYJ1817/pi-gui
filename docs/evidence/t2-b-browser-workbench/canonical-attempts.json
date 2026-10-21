@@ -1,0 +1,887 @@
+{
+  "startedAt": "2026-10-21T09:46:44.164Z",
+  "totalLeaves": 166,
+  "completedBeforeInterruption": 55,
+  "results": [
+    {
+      "index": 56,
+      "command": "node tests/native-provider-quota.cjs",
+      "exitCode": 0,
+      "seconds": 0.592,
+      "tempOverride": "C:\\pi-GUI\\.probe\\t2b-quota-temp"
+    },
+    {
+      "index": 57,
+      "command": "node tests/stable-session-order.cjs",
+      "exitCode": 0,
+      "seconds": 0.136,
+      "tempOverride": null
+    },
+    {
+      "index": 58,
+      "command": "node tests/hotfix.cjs",
+      "exitCode": 0,
+      "seconds": 0.695,
+      "tempOverride": null
+    },
+    {
+      "index": 59,
+      "command": "node tests/hotfix-ui.cjs",
+      "exitCode": 0,
+      "seconds": 0.925,
+      "tempOverride": null
+    },
+    {
+      "index": 60,
+      "command": "node tests/provider-auth.cjs",
+      "exitCode": 0,
+      "seconds": 1.184,
+      "tempOverride": null
+    },
+    {
+      "index": 61,
+      "command": "node tests/provider-auth-runtime.cjs",
+      "exitCode": 0,
+      "seconds": 0.21,
+      "tempOverride": null
+    },
+    {
+      "index": 62,
+      "command": "node tests/ui-ia.cjs",
+      "exitCode": 0,
+      "seconds": 1.073,
+      "tempOverride": null
+    },
+    {
+      "index": 63,
+      "command": "node tests/smoke.cjs",
+      "exitCode": 0,
+      "seconds": 70.201,
+      "tempOverride": null
+    },
+    {
+      "index": 64,
+      "command": "node tests/daily-use.cjs",
+      "exitCode": 0,
+      "seconds": 0.095,
+      "tempOverride": null
+    },
+    {
+      "index": 65,
+      "command": "node tests/git.cjs",
+      "exitCode": 0,
+      "seconds": 21.031,
+      "tempOverride": null
+    },
+    {
+      "index": 66,
+      "command": "node tests/modules.cjs",
+      "exitCode": 0,
+      "seconds": 0.169,
+      "tempOverride": null
+    },
+    {
+      "index": 67,
+      "command": "node tests/reliability.cjs",
+      "exitCode": 0,
+      "seconds": 0.134,
+      "tempOverride": null
+    },
+    {
+      "index": 68,
+      "command": "node tests/interactions.cjs",
+      "exitCode": 0,
+      "seconds": 0.473,
+      "tempOverride": null
+    },
+    {
+      "index": 69,
+      "command": "node tests/sidebar-menu.cjs",
+      "exitCode": 0,
+      "seconds": 0.493,
+      "tempOverride": null
+    },
+    {
+      "index": 70,
+      "command": "node tests/port-owner.cjs",
+      "exitCode": 0,
+      "seconds": 0.931,
+      "tempOverride": null
+    },
+    {
+      "index": 71,
+      "command": "node tests/project-config.cjs",
+      "exitCode": 1,
+      "seconds": 0.364,
+      "tempOverride": null
+    },
+    {
+      "index": 71,
+      "command": "node tests/project-config.cjs",
+      "exitCode": 0,
+      "seconds": 0.421,
+      "tempOverride": "C:\\pi-GUI\\.probe\\t2b-quota-temp",
+      "log": "071-retry.txt"
+    },
+    {
+      "index": 72,
+      "command": "node tests/skills.cjs",
+      "exitCode": 0,
+      "seconds": 0.359,
+      "tempOverride": null,
+      "log": "072.txt"
+    },
+    {
+      "index": 73,
+      "command": "node tests/extensions.cjs",
+      "exitCode": 0,
+      "seconds": 0.67,
+      "tempOverride": null,
+      "log": "073.txt"
+    },
+    {
+      "index": 74,
+      "command": "node tests/capability.cjs",
+      "exitCode": 0,
+      "seconds": 0.103,
+      "tempOverride": null,
+      "log": "074.txt"
+    },
+    {
+      "index": 75,
+      "command": "node tests/capability-install.cjs",
+      "exitCode": 0,
+      "seconds": 0.088,
+      "tempOverride": null,
+      "log": "075.txt"
+    },
+    {
+      "index": 76,
+      "command": "node tests/web-access.cjs",
+      "exitCode": 0,
+      "seconds": 0.487,
+      "tempOverride": null,
+      "log": "076.txt"
+    },
+    {
+      "index": 77,
+      "command": "node tests/subagents.cjs",
+      "exitCode": 0,
+      "seconds": 0.533,
+      "tempOverride": null,
+      "log": "077.txt"
+    },
+    {
+      "index": 78,
+      "command": "node tests/memory.cjs",
+      "exitCode": 0,
+      "seconds": 0.514,
+      "tempOverride": null,
+      "log": "078.txt"
+    },
+    {
+      "index": 79,
+      "command": "node tests/browser.cjs",
+      "exitCode": 0,
+      "seconds": 0.494,
+      "tempOverride": null,
+      "log": "079.txt"
+    },
+    {
+      "index": 80,
+      "command": "node tests/approvals.cjs",
+      "exitCode": 0,
+      "seconds": 0.835,
+      "tempOverride": null,
+      "log": "080.txt"
+    },
+    {
+      "index": 81,
+      "command": "node tests/planner.cjs",
+      "exitCode": 0,
+      "seconds": 23.659,
+      "tempOverride": null,
+      "log": "081.txt"
+    },
+    {
+      "index": 82,
+      "command": "node tests/workflow-relations.cjs",
+      "exitCode": 0,
+      "seconds": 10.815,
+      "tempOverride": null,
+      "log": "082.txt"
+    },
+    {
+      "index": 83,
+      "command": "node tests/reviews.cjs",
+      "exitCode": 0,
+      "seconds": 10.11,
+      "tempOverride": null,
+      "log": "083.txt"
+    },
+    {
+      "index": 84,
+      "command": "node tests/review-gate.cjs",
+      "exitCode": 0,
+      "seconds": 19.025,
+      "tempOverride": null,
+      "log": "084.txt"
+    },
+    {
+      "index": 85,
+      "command": "node tests/verification.cjs",
+      "exitCode": 0,
+      "seconds": 9.666,
+      "tempOverride": null,
+      "log": "085.txt"
+    },
+    {
+      "index": 86,
+      "command": "node tests/evidence.cjs",
+      "exitCode": 0,
+      "seconds": 24.682,
+      "tempOverride": null,
+      "log": "086.txt"
+    },
+    {
+      "index": 87,
+      "command": "node tests/attempt-lifecycle.cjs",
+      "exitCode": 0,
+      "seconds": 14.705,
+      "tempOverride": null,
+      "log": "087.txt"
+    },
+    {
+      "index": 88,
+      "command": "node tests/sessions.cjs",
+      "exitCode": 0,
+      "seconds": 0.477,
+      "tempOverride": null,
+      "log": "088.txt"
+    },
+    {
+      "index": 89,
+      "command": "node tests/session-search.cjs",
+      "exitCode": 0,
+      "seconds": 1.753,
+      "tempOverride": null,
+      "log": "089.txt"
+    },
+    {
+      "index": 90,
+      "command": "node tests/pi-compat.cjs",
+      "exitCode": 0,
+      "seconds": 0.11,
+      "tempOverride": null,
+      "log": "090.txt"
+    },
+    {
+      "index": 91,
+      "command": "node tests/pi-probes.cjs",
+      "exitCode": 0,
+      "seconds": 0.34,
+      "tempOverride": null,
+      "log": "091.txt"
+    },
+    {
+      "index": 92,
+      "command": "node tests/pi-update.cjs",
+      "exitCode": 0,
+      "seconds": 0.482,
+      "tempOverride": null,
+      "log": "092.txt"
+    },
+    {
+      "index": 93,
+      "command": "node tests/pi-version.cjs",
+      "exitCode": 0,
+      "seconds": 0.399,
+      "tempOverride": null,
+      "log": "093.txt"
+    },
+    {
+      "index": 94,
+      "command": "node tests/mcp-native.cjs",
+      "exitCode": 0,
+      "seconds": 0.227,
+      "tempOverride": null,
+      "log": "094.txt"
+    },
+    {
+      "index": 95,
+      "command": "node tests/usage-quota.cjs",
+      "exitCode": 0,
+      "seconds": 0.577,
+      "tempOverride": null,
+      "log": "095.txt"
+    },
+    {
+      "index": 96,
+      "command": "node tests/body-integrity.cjs",
+      "exitCode": 0,
+      "seconds": 0.132,
+      "tempOverride": null,
+      "log": "096.txt"
+    },
+    {
+      "index": 97,
+      "command": "node tests/dev-server.cjs",
+      "exitCode": 0,
+      "seconds": 1.259,
+      "tempOverride": null,
+      "log": "097.txt"
+    },
+    {
+      "index": 98,
+      "command": "node tests/models-api.cjs",
+      "exitCode": 0,
+      "seconds": 1.294,
+      "tempOverride": null,
+      "log": "098.txt"
+    },
+    {
+      "index": 99,
+      "command": "node tests/server-security.cjs",
+      "exitCode": 0,
+      "seconds": 4.178,
+      "tempOverride": null,
+      "log": "099.txt"
+    },
+    {
+      "index": 100,
+      "command": "node tests/diagnostics.cjs",
+      "exitCode": 0,
+      "seconds": 0.09,
+      "tempOverride": null,
+      "log": "100.txt"
+    },
+    {
+      "index": 101,
+      "command": "node tests/update-check.cjs",
+      "exitCode": 0,
+      "seconds": 0.459,
+      "tempOverride": null,
+      "log": "101.txt"
+    },
+    {
+      "index": 102,
+      "command": "node tests/version-consistency.cjs",
+      "exitCode": 0,
+      "seconds": 0.115,
+      "tempOverride": null,
+      "log": "102.txt"
+    },
+    {
+      "index": 103,
+      "command": "node tests/release-artifacts.cjs",
+      "exitCode": 0,
+      "seconds": 0.273,
+      "tempOverride": null,
+      "log": "103.txt"
+    },
+    {
+      "index": 104,
+      "command": "node tests/electron-guard.cjs",
+      "exitCode": 0,
+      "seconds": 1.434,
+      "tempOverride": null,
+      "log": "104.txt"
+    },
+    {
+      "index": 105,
+      "command": "node tests/gui-browser-policy.cjs",
+      "exitCode": 0,
+      "seconds": 0.08,
+      "tempOverride": null,
+      "log": "105.txt"
+    },
+    {
+      "index": 106,
+      "command": "node tests/gui-browser-controller.cjs",
+      "exitCode": 0,
+      "seconds": 5.323,
+      "tempOverride": null,
+      "log": "106.txt"
+    },
+    {
+      "index": 107,
+      "command": "node tests/gui-browser-bridge.cjs",
+      "exitCode": 0,
+      "seconds": 0.371,
+      "tempOverride": null,
+      "log": "107.txt"
+    },
+    {
+      "index": 108,
+      "command": "node tests/gui-browser-tools.cjs",
+      "exitCode": 0,
+      "seconds": 0.15,
+      "tempOverride": null,
+      "log": "108.txt"
+    },
+    {
+      "index": 109,
+      "command": "node tests/gui-browser-ui.cjs",
+      "exitCode": 0,
+      "seconds": 0.511,
+      "tempOverride": null,
+      "log": "109.txt"
+    },
+    {
+      "index": 110,
+      "command": "node tests/gui-browser-host.cjs",
+      "exitCode": 0,
+      "seconds": 0.078,
+      "tempOverride": null,
+      "log": "110.txt"
+    },
+    {
+      "index": 111,
+      "command": "node tests/gui-browser-stop.cjs",
+      "exitCode": 0,
+      "seconds": 0.648,
+      "tempOverride": null,
+      "log": "111.txt"
+    },
+    {
+      "index": 112,
+      "command": "node tests/stop-barrier.cjs",
+      "exitCode": 0,
+      "seconds": 0.954,
+      "tempOverride": null,
+      "log": "112.txt"
+    },
+    {
+      "index": 113,
+      "command": "node tests/managed-processes.cjs",
+      "exitCode": 0,
+      "seconds": 0.119,
+      "tempOverride": null,
+      "log": "113.txt"
+    },
+    {
+      "index": 114,
+      "command": "node tests/process-tools.cjs",
+      "exitCode": 0,
+      "seconds": 0.231,
+      "tempOverride": null,
+      "log": "114.txt"
+    },
+    {
+      "index": 115,
+      "command": "node tests/process-stop.cjs",
+      "exitCode": 0,
+      "seconds": 0.111,
+      "tempOverride": null,
+      "log": "115.txt"
+    },
+    {
+      "index": 116,
+      "command": "node tests/process-ui.cjs",
+      "exitCode": 0,
+      "seconds": 1.623,
+      "tempOverride": null,
+      "log": "116.txt"
+    },
+    {
+      "index": 117,
+      "command": "node tests/process-runner.cjs",
+      "exitCode": 0,
+      "seconds": 0.095,
+      "tempOverride": null,
+      "log": "117.txt"
+    },
+    {
+      "index": 118,
+      "command": "node tests/worktrees.cjs",
+      "exitCode": 0,
+      "seconds": 29.365,
+      "tempOverride": null,
+      "log": "118.txt"
+    },
+    {
+      "index": 119,
+      "command": "node tests/worktrees-http.cjs",
+      "exitCode": 0,
+      "seconds": 4.452,
+      "tempOverride": null,
+      "log": "119.txt"
+    },
+    {
+      "index": 120,
+      "command": "node tests/worktrees-ui.cjs",
+      "exitCode": 0,
+      "seconds": 0.6,
+      "tempOverride": null,
+      "log": "120.txt"
+    },
+    {
+      "index": 121,
+      "command": "node tests/runtime-registry.cjs",
+      "exitCode": 0,
+      "seconds": 0.192,
+      "tempOverride": null,
+      "log": "121.txt"
+    },
+    {
+      "index": 122,
+      "command": "node tests/runtime-http.cjs",
+      "exitCode": 0,
+      "seconds": 0.185,
+      "tempOverride": null,
+      "log": "122.txt"
+    },
+    {
+      "index": 123,
+      "command": "node tests/runtime-store.cjs",
+      "exitCode": 0,
+      "seconds": 0.398,
+      "tempOverride": null,
+      "log": "123.txt"
+    },
+    {
+      "index": 124,
+      "command": "node tests/runtime-ui.cjs",
+      "exitCode": 0,
+      "seconds": 0.511,
+      "tempOverride": null,
+      "log": "124.txt"
+    },
+    {
+      "index": 125,
+      "command": "node tests/runtime-nav.cjs",
+      "exitCode": 0,
+      "seconds": 7.709,
+      "tempOverride": null,
+      "log": "125.txt"
+    },
+    {
+      "index": 126,
+      "command": "node tests/runtime-conversation.cjs",
+      "exitCode": 0,
+      "seconds": 0.532,
+      "tempOverride": null,
+      "log": "126.txt"
+    },
+    {
+      "index": 127,
+      "command": "node tests/runtime-changes.cjs",
+      "exitCode": 0,
+      "seconds": 19.916,
+      "tempOverride": null,
+      "log": "127.txt"
+    },
+    {
+      "index": 128,
+      "command": "node tests/runtime-secondary.cjs",
+      "exitCode": 0,
+      "seconds": 0.594,
+      "tempOverride": null,
+      "log": "128.txt"
+    },
+    {
+      "index": 129,
+      "command": "node tests/runtime-git-ui.cjs",
+      "exitCode": 0,
+      "seconds": 0.504,
+      "tempOverride": null,
+      "log": "129.txt"
+    },
+    {
+      "index": 130,
+      "command": "node tests/runtime-resources.cjs",
+      "exitCode": 0,
+      "seconds": 0.551,
+      "tempOverride": null,
+      "log": "130.txt"
+    },
+    {
+      "index": 131,
+      "command": "node tests/runtime-resource-cleanup.cjs",
+      "exitCode": 0,
+      "seconds": 0.122,
+      "tempOverride": null,
+      "log": "131.txt"
+    },
+    {
+      "index": 132,
+      "command": "node tests/runtime-history-search.cjs",
+      "exitCode": 0,
+      "seconds": 9.004,
+      "tempOverride": null,
+      "log": "132.txt"
+    },
+    {
+      "index": 133,
+      "command": "node tests/runtime-finish-ui.cjs",
+      "exitCode": 0,
+      "seconds": 0.517,
+      "tempOverride": null,
+      "log": "133.txt"
+    },
+    {
+      "index": 134,
+      "command": "node tests/session-runtime.cjs",
+      "exitCode": 0,
+      "seconds": 1.07,
+      "tempOverride": null,
+      "log": "134.txt"
+    },
+    {
+      "index": 135,
+      "command": "node tests/pi-supervisor.cjs",
+      "exitCode": 0,
+      "seconds": 2.765,
+      "tempOverride": null,
+      "log": "135.txt"
+    },
+    {
+      "index": 136,
+      "command": "node tests/runtime-browser.cjs",
+      "exitCode": 0,
+      "seconds": 0.132,
+      "tempOverride": null,
+      "log": "136.txt"
+    },
+    {
+      "index": 137,
+      "command": "node tests/process-budget.cjs",
+      "exitCode": 0,
+      "seconds": 0.117,
+      "tempOverride": null,
+      "log": "137.txt"
+    },
+    {
+      "index": 138,
+      "command": "node tests/runtime-events.cjs",
+      "exitCode": 0,
+      "seconds": 0.089,
+      "tempOverride": null,
+      "log": "138.txt"
+    },
+    {
+      "index": 139,
+      "command": "node tests/runtime-processes.cjs",
+      "exitCode": 0,
+      "seconds": 2.192,
+      "tempOverride": null,
+      "log": "139.txt"
+    },
+    {
+      "index": 140,
+      "command": "node tests/session-revert-object-assets.cjs",
+      "exitCode": 0,
+      "seconds": 2.26,
+      "tempOverride": null,
+      "log": "140.txt"
+    },
+    {
+      "index": 141,
+      "command": "node tests/session-revert-object-authority.cjs",
+      "exitCode": 0,
+      "seconds": 4.779,
+      "tempOverride": null,
+      "log": "141.txt"
+    },
+    {
+      "index": 142,
+      "command": "node tests/session-revert-object-history.cjs",
+      "exitCode": 0,
+      "seconds": 19.331,
+      "tempOverride": null,
+      "log": "142.txt"
+    },
+    {
+      "index": 143,
+      "command": "node tests/session-revert-object-runtime.cjs",
+      "exitCode": 0,
+      "seconds": 417.723,
+      "tempOverride": null,
+      "log": "143.txt"
+    },
+    {
+      "index": 144,
+      "command": "node tests/session-revert-object-store.cjs",
+      "exitCode": 0,
+      "seconds": 10.571,
+      "tempOverride": null,
+      "log": "144.txt"
+    },
+    {
+      "index": 145,
+      "command": "node tests/session-revert-object-service.cjs",
+      "exitCode": 0,
+      "seconds": 329.473,
+      "tempOverride": null,
+      "log": "145.txt"
+    },
+    {
+      "index": 146,
+      "command": "node tests/session-revert-object-recovery.cjs",
+      "exitCode": 0,
+      "seconds": 20.665,
+      "tempOverride": null,
+      "log": "146.txt"
+    },
+    {
+      "index": 147,
+      "command": "node tests/session-change-store.cjs",
+      "exitCode": 0,
+      "seconds": 163.368,
+      "tempOverride": null,
+      "log": "147.txt"
+    },
+    {
+      "index": 148,
+      "command": "node tests/session-change-bridge.cjs",
+      "exitCode": 0,
+      "seconds": 0.294,
+      "tempOverride": null,
+      "log": "148.txt"
+    },
+    {
+      "index": 149,
+      "command": "node tests/session-change-tools.cjs",
+      "exitCode": 0,
+      "seconds": 0.345,
+      "tempOverride": null,
+      "log": "149.txt"
+    },
+    {
+      "index": 150,
+      "command": "node tests/session-revert.cjs",
+      "exitCode": 0,
+      "seconds": 0.139,
+      "tempOverride": null,
+      "log": "150.txt"
+    },
+    {
+      "index": 151,
+      "command": "node tests/session-revert-store.cjs",
+      "exitCode": 0,
+      "seconds": 128.985,
+      "tempOverride": null,
+      "log": "151.txt"
+    },
+    {
+      "index": 152,
+      "command": "node tests/session-revert-http.cjs",
+      "exitCode": 0,
+      "seconds": 4.766,
+      "tempOverride": null,
+      "log": "152.txt"
+    },
+    {
+      "index": 153,
+      "command": "node tests/session-revert-integration.cjs",
+      "exitCode": 0,
+      "seconds": 0.493,
+      "tempOverride": null,
+      "log": "153.txt"
+    },
+    {
+      "index": 154,
+      "command": "node tests/session-revert-writer.cjs",
+      "exitCode": 0,
+      "seconds": 4.81,
+      "tempOverride": null,
+      "log": "154.txt"
+    },
+    {
+      "index": 155,
+      "command": "node tests/session-revert-recovery.cjs",
+      "exitCode": 0,
+      "seconds": 15.387,
+      "tempOverride": null,
+      "log": "155.txt"
+    },
+    {
+      "index": 156,
+      "command": "node tests/session-revert-admission.cjs",
+      "exitCode": 0,
+      "seconds": 0.354,
+      "tempOverride": null,
+      "log": "156.txt"
+    },
+    {
+      "index": 157,
+      "command": "node tests/session-revert-apply.cjs",
+      "exitCode": 0,
+      "seconds": 93.596,
+      "tempOverride": null,
+      "log": "157.txt"
+    },
+    {
+      "index": 158,
+      "command": "node tests/session-revert-windows-faults.cjs",
+      "exitCode": 0,
+      "seconds": 9.081,
+      "tempOverride": null,
+      "log": "158.txt"
+    },
+    {
+      "index": 159,
+      "command": "node tests/session-revert-inplace.cjs",
+      "exitCode": 0,
+      "seconds": 142.75,
+      "tempOverride": null,
+      "log": "159.txt"
+    },
+    {
+      "index": 160,
+      "command": "node tests/session-revert-inplace-safety.cjs",
+      "exitCode": 0,
+      "seconds": 72.113,
+      "tempOverride": null,
+      "log": "160.txt"
+    },
+    {
+      "index": 161,
+      "command": "node tests/session-change-query.cjs",
+      "exitCode": 0,
+      "seconds": 5.86,
+      "tempOverride": null,
+      "log": "161.txt"
+    },
+    {
+      "index": 162,
+      "command": "node tests/session-change-ui.cjs",
+      "exitCode": 0,
+      "seconds": 0.706,
+      "tempOverride": null,
+      "log": "162.txt"
+    },
+    {
+      "index": 163,
+      "command": "node tests/session-change-startup.cjs",
+      "exitCode": 0,
+      "seconds": 12.452,
+      "tempOverride": null,
+      "log": "163.txt"
+    },
+    {
+      "index": 164,
+      "command": "node tests/session-revert-object-writer.cjs",
+      "exitCode": 0,
+      "seconds": 518.6,
+      "tempOverride": null,
+      "log": "164.txt"
+    },
+    {
+      "index": 165,
+      "command": "node tests/session-revert-object-faults.cjs",
+      "exitCode": 0,
+      "seconds": 655.082,
+      "tempOverride": null,
+      "log": "165.txt"
+    },
+    {
+      "index": 166,
+      "command": "node tests/session-revert-object-witness.cjs",
+      "exitCode": 0,
+      "seconds": 0.675,
+      "tempOverride": null,
+      "log": "166.txt"
+    }
+  ]
+}

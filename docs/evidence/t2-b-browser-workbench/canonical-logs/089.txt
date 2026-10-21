@@ -1,0 +1,101 @@
+
+--- 1. 标题与正文 ---
+  ok   1a. 标题命中能搜到
+  ok   1b. 标题命中被标成 type=title
+  ok   1c. assistant 正文能搜到
+  ok   1d. 命中类型标成 assistant
+  ok   1e. 用户正文（非首条）能搜到
+  ok   1f. 不同会话各自命中
+  ok   1g. 英文大小写不敏感（三种写法的会话集合一致）
+  ok   1h. 大小写不敏感也确实命中了（不是都空）
+  ok   1i. 没命中 → ok 且结果为空（不是报错）
+
+--- 2. 工具输出 / 思考 / 图片 / 工具参数不索引 ---
+  ok   2a. thinking 正文不索引
+  ok   2b. toolResult 输出不索引
+  ok   2c. 图片 base64 不索引
+  ok   2d. toolCall 参数不索引
+  ok   2e. 同一批 content 里的 text 片段**仍然**索引（没一刀切）
+
+--- 3. active / archived / all ---
+  ok   3a. 归档调用成功
+  ok   3b. scope=active 不含已归档
+  ok   3c. scope=archived 只含已归档
+  ok   3d. scope=all 两者都含
+  ok   3e. 结果里带 archived 标记
+  ok   3f. 取消归档后立刻回到 active（flags 每次现读，不进缓存）
+
+--- 4. 软删除 ---
+  ok   4a. 删除前搜得到
+  ok   4b. 删除调用成功
+  ok   4c. 删除后搜不到
+  ok   4d. 文件被手工挪回来也不出现（flags 兜底）
+
+--- 5. 安全边界 ---
+  ok   5a. 别的项目的会话搜不到（只认 header.cwd）
+  ok   5b. 换到 B 项目之后就能搜到（证明刚才不是「文件不存在」）
+  ok   5c. 切回 A 之后又搜不到（不串项目）
+  ok   5e. 响应里不含 sessions 根目录的绝对路径
+  ok   5f. 响应里不含项目目录的绝对路径
+  ok   5g. 响应里不含文件名（.jsonl）
+  ok   5h. 只回稳定 ID（16 位 hex）与 pi 的 sessionId
+  --   跳过：本机建不了符号链接（需要权限或开发者模式），5i 未验
+
+--- 6. 上限与预算 ---
+  ok   6a. snippet 长度有上限
+  ok   6b. snippet 折掉了连续空白与换行
+  ok   6c. 命中词在 snippet 里（定位没被截掉）
+  ok   6d. 结果数量有上限（maxResults=2）
+  ok   6e. 上限内的内容搜得到
+  ok   6f. 超出读取上限的内容搜不到（不是无限读）
+  ok   6g. 被截断会在 scanned 里标出来
+  ok   6h. 关键词过短 → 直接返回空且标 tooShort（一次磁盘都不碰）
+  ok   6i. 纯空白也算过短
+  ok   6j. 超长关键词被截断（不报错）
+
+--- 7. 坏文件不拖垮整体 ---
+  ok   7a. 同目录有坏文件时，正常会话照样能搜到
+  ok   7b. 坏文件不会让整次搜索报错
+  ok   7c. 读不出来的文件被计入 skipped（可见，不是静默）
+
+--- 8. 改名后标题更新 ---
+  ok   8a. 改名前的标题搜得到
+  ok   8b. 改名后的新标题立刻搜得到
+  ok   8c. 结果里的 title 就是新名字
+  ok   8d. 旧标题不再命中标题（正文里还有，但那是 body 命中）
+
+--- 9. userIndex ---
+  ok   9a. 第一次提问 userIndex=0
+  ok   9b. 第二次提问 userIndex=1
+  ok   9c. 第一次回答归到第 0 次提问
+  ok   9d. 第二次回答归到第 1 次提问
+  ok   9e. 命中带 messageId（不用于定位，但便于诊断）
+
+--- 10. 缓存失效 ---
+  ok   10a. 首次搜到
+  ok   10b. 文件追加内容后（mtime+size 变了）能搜到新内容
+  ok   10c. 旧内容仍然搜得到（缓存不是整条换掉）
+  ok   10d. 同一关键词连搜两次结果完全一致（缓存不引入抖动）
+
+--- 11. HTTP 层 ---
+  ok   11a. GET /api/sessions/search 命中搜索模块（不被 /api/sessions/ 前缀吃掉）
+  ok   11b. 返回体带 query / scope / results / scanned
+  ok   11c. 搜索同样要令牌（不带 → 401）
+  ok   11d. POST /api/sessions/search → 405
+  ok   11e. scope 参数能透传
+  ok   11f. 非法 scope 被归一成 active（不报错、不透传）
+  ok   11g. /api/sessions 本身仍然走会话列表（没被搜索路由抢走）
+
+--- 12. 大量会话（性能边界） ---
+       200 个会话 / 每个 10 条消息：耗时 160ms · 事件循环最大停顿 55ms · 堆增长 0.3MB · 读取 417KB
+  ok   12a. 200 个会话里能搜到正确的结果
+  ok   12b. 每条结果都真的含关键词（不是被 filler 命中）
+  ok   12c. 结果数量受上限约束
+  ok   12d. 读取总量受预算约束（不是无限读）
+  ok   12e. 单次搜索不会长时间按住事件循环（<1500ms）
+  ok   12f. 不产生巨量临时对象（堆增长 <200MB）
+  ok   12g. 再搜一次复用解析缓存且结果一致
+       第二次（命中缓存）耗时 137ms
+  ok   12h. 清空缓存后重新读取全部会话
+
+72/72 通过

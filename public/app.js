@@ -258,7 +258,7 @@ const runtimeSecondary = rightPane ? createRuntimeSecondary({ pane: rightPane })
 const openProcessPanel = () => conversationScopeActive() ? runtimeSecondary?.openProcesses() : openClassicProcessPanel();
 configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation, openBrowser: () => runtimeSecondary?.openBrowser() });
 configureSecondaryPane(rightPane);
-const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane) : null;
+const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane, { openWorkbench: openSplitWorkbench }) : null;
 initGuiBrowserState();
 
 const btnSpecs = $('btnSpecs');
@@ -292,7 +292,7 @@ if (btnBrowser) {
     /* 右栏可能从内部（工具栏的 ×）关掉，只有它自己知道 —— 所以入口按钮的
      * 状态跟着事件走，不去猜。 */
     document.addEventListener('pi-gui:right-pane', (e) => {
-      const open = e.detail?.open === true && e.detail?.surface === 'browser';
+      const open = e.detail?.open === true && ['browser', 'runtime-browser', 'browser-changes-split'].includes(e.detail?.surface);
       btnBrowser.setAttribute('aria-pressed', open ? 'true' : 'false');
       btnBrowser.classList.toggle('is-active', open);
     });
@@ -1053,7 +1053,7 @@ function goChat() {
 $('navHome').onclick = goChat;
 $('navChanges').onclick = () => openChangesPanel();
 document.addEventListener('pi-gui:right-pane', (event) => {
-  const open = event.detail?.open === true && ['changes', 'workbench-split'].includes(event.detail?.surface);
+  const open = event.detail?.open === true && ['changes', 'workbench-split', 'browser-changes-split'].includes(event.detail?.surface);
   $('navChanges').setAttribute('aria-pressed', String(open));
   $('navChanges').classList.toggle('is-active', open);
 });

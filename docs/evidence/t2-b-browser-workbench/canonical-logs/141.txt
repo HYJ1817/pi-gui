@@ -1,0 +1,13 @@
+ok complete current nine-field owner, root fingerprint and context accepted
+ok aliased TEMP path is refused while canonical fixture root remains eligible
+ok focus switch then back invalidates an outstanding authority
+ok history cannot acquire mutation authority by matching native Session
+ok runtime error state refuses current owner
+ok unknown or mismatched root fingerprint refuses
+ok B action releases global lifecycle authority and reacquires it for validation
+ok active writer is drained before mutation revalidation
+ok focus ABA during Stop invalidates authority reacquisition
+ok Stop drain targets same root and rejects unconfirmed cleanup
+ok history authority defaults denied before private lookup
+ok immutable plan context refuses old token after focus ABA
+Object runtime authority: 12/12; failed=0; skipped=0; real TEMP root; labeled Registry DI

@@ -87,16 +87,19 @@ export function openSplitWorkbench({
   returnSurface = 'specs',
   specsOptions = {},
   changesOptions = {},
+  browserOptions = null,
 } = {}) {
   const triggerId = returnSurface === 'changes' ? 'navChanges' : 'btnSpecs';
   const instance = openSecondarySurface(
-    'workbench-split',
+    browserOptions ? 'browser-changes-split' : 'workbench-split',
     (host, view) => mountSplitWorkbench(host, view, {
       returnSurface,
       specsOptions,
       changesOptions,
+      browserOptions,
     }),
-    { label: 'Specs 与文件变更工作台', headerSelector: '.rp-head', triggerId }
+    { label: browserOptions ? 'Browser 与文件变更工作台' : 'Specs 与文件变更工作台',
+      headerSelector: browserOptions ? '.unused-browser-header' : '.rp-head', triggerId }
   );
   return instance;
 }
@@ -105,10 +108,13 @@ export function mountSplitWorkbench(host, view, {
   returnSurface = 'specs',
   specsOptions = {},
   changesOptions = {},
+  browserOptions = null,
 } = {}) {
   host.classList.add('workbench-split');
+  const topKind = browserOptions ? 'browser' : 'specs';
+  const topLabel = browserOptions ? 'Browser' : 'Specs';
   let storedRatio = readStoredRatio();
-  let activeFallback = returnSurface === 'changes' ? 'changes' : 'specs';
+  let activeFallback = returnSurface === 'changes' ? 'changes' : topKind;
   let fallback = false;
   let dragMove = null;
   let dragUp = null;
@@ -116,8 +122,8 @@ export function mountSplitWorkbench(host, view, {
   const modebar = node('div', 'workbench-modebar');
   modebar.setAttribute('role', 'group');
   modebar.setAttribute('aria-label', '工作台视图');
-  const specsTab = button('workbench-tab', 'Specs', '显示 Specs', () => selectFallback('specs'));
-  specsTab.dataset.workbenchTab = 'specs';
+  const specsTab = button('workbench-tab', topLabel, `显示 ${topLabel}`, () => selectFallback(topKind));
+  specsTab.dataset.workbenchTab = topKind;
   const changesTab = button('workbench-tab', 'Changes', '显示文件变更', () => selectFallback('changes'));
   changesTab.dataset.workbenchTab = 'changes';
   const modeGrow = node('span', 'workbench-grow');
@@ -127,18 +133,18 @@ export function mountSplitWorkbench(host, view, {
   modebar.append(specsTab, changesTab, modeGrow, modeExit, modeClose);
   modebar.hidden = true;
 
-  const specsPane = node('section', 'workbench-pane workbench-pane-specs');
-  specsPane.id = 'workbenchSpecsPane';
-  specsPane.setAttribute('aria-label', 'Specs 与 Changes 分屏');
+  const specsPane = node('section', `workbench-pane workbench-pane-${topKind}`);
+  specsPane.id = browserOptions ? 'workbenchBrowserPane' : 'workbenchSpecsPane';
+  specsPane.setAttribute('aria-label', `${topLabel} 与 Changes 分屏`);
   const changesPane = node('section', 'workbench-pane workbench-pane-changes');
   changesPane.id = 'workbenchChangesPane';
-  changesPane.setAttribute('aria-label', 'Specs 与 Changes 分屏');
+  changesPane.setAttribute('aria-label', `${topLabel} 与 Changes 分屏`);
 
   const splitter = node('div', 'workbench-splitter');
   splitter.setAttribute('role', 'separator');
   splitter.setAttribute('aria-orientation', 'horizontal');
-  splitter.setAttribute('aria-label', '调整 Specs 与文件变更的高度');
-  splitter.setAttribute('aria-controls', 'workbenchSpecsPane workbenchChangesPane');
+  splitter.setAttribute('aria-label', `调整 ${topLabel} 与文件变更的高度`);
+  splitter.setAttribute('aria-controls', `${specsPane.id} workbenchChangesPane`);
   splitter.tabIndex = 0;
   splitter.append(node('span', 'workbench-splitter-grip'));
 
@@ -148,18 +154,20 @@ export function mountSplitWorkbench(host, view, {
 
   const exitAction = button('btn rp-btn workbench-exit', '退出', '退出分屏，恢复单面板', () => exitSplit());
   exitAction.dataset.workbenchExit = 'true';
-  mountSpecsPanel(specsPane, view, {
+  if (browserOptions) browserOptions.mount(specsPane, exitSplit);
+  else mountSpecsPanel(specsPane, view, {
     ...specsOptions,
     extraActions: [...(specsOptions.extraActions || []), exitAction],
   });
   mountChangesPanel(changesPane, view, changesOptions);
 
   function selectFallback(next) {
-    activeFallback = next === 'changes' ? 'changes' : 'specs';
+    activeFallback = next === 'changes' ? 'changes' : topKind;
     applyLayout();
   }
 
   function exitSplit() {
+    if (browserOptions) { browserOptions.exit(); return; }
     const target = fallback ? activeFallback : returnSurface;
     if (target === 'changes') openChangesPanel(changesOptions);
     else openSpecsPanel(specsOptions);
@@ -173,7 +181,7 @@ export function mountSplitWorkbench(host, view, {
     splitter.setAttribute('aria-valuemin', String(min));
     splitter.setAttribute('aria-valuemax', String(max));
     splitter.setAttribute('aria-valuenow', String(now));
-    splitter.setAttribute('aria-valuetext', `Specs ${now}% / Changes ${100 - now}%`);
+    splitter.setAttribute('aria-valuetext', `${topLabel} ${now}% / Changes ${100 - now}%`);
   }
 
   function applyLayout() {
@@ -188,16 +196,17 @@ export function mountSplitWorkbench(host, view, {
     if (fallback) {
       endDrag();
       splitter.hidden = true;
-      specsPane.hidden = activeFallback !== 'specs';
+      specsPane.hidden = activeFallback !== topKind;
       changesPane.hidden = activeFallback !== 'changes';
       if (active === splitter || active?.matches('.secondary-close, .workbench-pane-specs .workbench-exit') ||
         (specsPane.hidden && specsPane.contains(active)) || (changesPane.hidden && changesPane.contains(active))) {
-        (activeFallback === 'specs' ? specsTab : changesTab).focus();
+        (activeFallback === topKind ? specsTab : changesTab).focus();
       }
       specsPane.style.flex = '1 1 auto';
       changesPane.style.flex = '1 1 auto';
-      specsTab.setAttribute('aria-pressed', String(activeFallback === 'specs'));
+      specsTab.setAttribute('aria-pressed', String(activeFallback === topKind));
       changesTab.setAttribute('aria-pressed', String(activeFallback === 'changes'));
+      browserOptions?.refresh();
       return;
     }
 
@@ -215,6 +224,7 @@ export function mountSplitWorkbench(host, view, {
       changesPane.style.flex = '1 1 0';
       syncA11y(height, ratio);
     }
+    browserOptions?.refresh();
   }
 
   function setRatio(next, persist = false) {

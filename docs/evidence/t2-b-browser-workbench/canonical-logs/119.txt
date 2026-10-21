@@ -1,0 +1,15 @@
+  ok  真实 router 对 Worktree API 保留 token 鉴权
+  ok  跨站 Origin 无法创建
+  ok  非法 JSON/超限 body 结构化拒绝
+  ok  未知参数/客户端 path 拒绝
+  ok  缺失或 stale generation 拒绝
+  ok  GET 返回 authoritative generation，列表不重启 runtime
+  ok  真实 HTTP 创建受控 worktree
+  ok  open 复用 projects activation，只有一次 restart
+  ok  父项目排序/数量稳定，active 映射主项目，保存实际 cwd
+  ok  stale open/stop scope 不能控制新 generation
+  ok  当前工作区 remove 拒绝
+  ok  外部删除后 prompt 闸门拒绝，不调用 rpc.send
+  ok  丢失工作区后主项目可重新激活
+  ok  移除父项目关闭其 active worktree，不删除工作文件
+Worktree HTTP: 14/14 passed

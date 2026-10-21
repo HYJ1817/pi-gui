@@ -1,0 +1,28 @@
+  ok native session title precedes branch
+  ok shell heading matches focused native conversation
+  ok classic background title cannot overwrite runtime heading
+  ok A displays its own selected model
+  ok reasoning uses only provided native levels
+  ok A thinking readback selected
+  ok selection dispatch captures A identity
+  ok pending setter retains old confirmed selection
+  ok A pending never disables B model
+  ok explicit unsupported reasoning disabled
+  ok unknown reasoning is not guessed
+  ok A confirmation cannot change visible B selector
+  ok return A shows readback model
+  ok activity does not repeatedly fetch models
+  ok Shift Enter does not submit
+  ok IME Enter does not submit
+  ok Enter submits captured A owner
+  ok search opens matching explicit native history
+  ok history match identifies target user turn
+  ok live readonly history adds no launch request
+  ok readonly history disables model mutation and prompt
+  ok live readonly offers return without resume
+  ok return live preserves runtime output
+  ok late A search navigation does not show A in B
+  ok wrong workspace identity rejected before fetch
+  ok native identity changed during read rejects body
+  ok return classic restores its own latest title
+Runtime finishing UI: 27/27

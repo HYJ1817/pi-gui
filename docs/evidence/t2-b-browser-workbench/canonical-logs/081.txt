@@ -1,0 +1,148 @@
+
+--- A. Plan / Task 模型与 DAG 校验 ---
+  ok   1. 合法 DAG 通过，并按拓扑序可用
+  ok   2. 重复 id 被拒
+  ok   3. 依赖不存在的任务被拒
+  ok   4. 自依赖被拒
+  ok   5. 成环被拒，并且报出环路径
+  ok   6. 未知 agent 被拒
+  ok   7. cwd 逃逸被拒（../、绝对路径、盘符都拦）
+  ok   7b. cwd 是项目内相对路径时通过（"." / "src"）
+  ok   7c. cwd 是上一级目录（真的出了项目）也被拒
+  ok   7d. 没有 root 任务被拒（全是环外依赖）
+  ok   7e. 空任务列表被拒，且同一句话不重复报
+  ok   7f. 任务数超上限被拒（防碎任务）
+  ok   7g. verification 只保存描述，Pi GUI 不持有可执行命令
+  ok   7h. buildTaskPrompt 把 verification 当指令交给 Agent（不是自己执行）
+  ok   7i. computeReadyStates：root=ready、依赖者=pending
+  ok   7j. computeReadyStates：依赖失败 → blocked；依赖被跳过 → blocked
+
+--- B. Agent Registry ---
+  ok   19a. 干净机器上如实报 not-installed，不假装可用
+  ok   19b. 干净机器上 auto 不会硬指一个不可用的 agent
+  ok   19. pi 能被探测到，且能力里有 toolEvents（唯一有工具级事件的）
+  ok   19c. 解析出的入口是 node 类型（.js 走 process.execPath，不拼 shell）
+  ok   19d. 「包在、入口不在」报 entry-missing（与 not-installed 区分开）
+  ok   20/21/22. 不可用的 agent 如实报 unavailable，并给出可核对的原因
+  ok   claude 若不可用，原因必须区分「装坏了」与「没装」
+  ok   23. 未知 agent 被拒（get 返回 null，且不抛）
+  ok   registry 每个 adapter 都暴露统一 capability 字段
+  ok   auto 的解析可预测：优先 pi
+  ok   auto 在 preferred 可用时听 preferred（fixture 里 codex 也可用）
+  ok   register 会校验 adapter 形状（缺 start 直接抛）
+  ok   一个 adapter 探测抛错不会拖垮整个 registry
+
+--- C. 进程执行层（真子进程） ---
+  ok   24. exit 0 → ok=true，stdout 收到
+  ok   25. exit 非 0 → ok=false 且带 exitCode
+  ok   26. spawn ENOENT → spawnFailed=true，永不 reject
+  ok   27. 超时 → timedOut=true，且真的被杀了（不拖 60 秒）
+  ok   28. 取消 → cancelled=true
+  ok   28b. 已经 abort 的 signal → 立刻返回，不启动进程
+  ok   29. 取消时收掉整棵进程树（孙子已经不在了）
+  ok   30. 巨大 stdout 被截断，且 truncated=true（不把内存交给它）
+  ok   30c. 行切分：U+2028 不切行（只有真正的 LF 才切）
+  ok   30e. 含空格/引号/分号的参数原样传给子进程（没有 shell 解释）
+  ok   30g. env 里传入的 PI_GUI_TOKEN 被摘掉（agent 不该看到访问令牌）
+
+--- D. Plan 持久化与恢复 ---
+  ok   31. 原子写：临时文件被 rename，不留 .tmp
+  ok   32. 能读回保存的计划
+  ok   33. 损坏的 plan 文件不拖垮列表（进 broken 而不是抛）
+  ok   34. 读操作**不会**把 running 翻成 interrupted（这个坑踩过）
+  ok   34b. recoverAll() 才做恢复：running → interrupted，plan → paused
+  ok   34c. 恢复后全部终态 → 直接落终态而不是 paused
+  ok   35. 不同项目隔离：list 只返回本项目的计划
+
+--- E. Scheduler 状态机（fake agent） ---
+  ok   8. 初始：root 是 ready，依赖者是 pending
+  ok   9. 依赖 success 后解锁，全部跑完（串行）
+  ok   11. 串行执行：没有两个任务同时 running
+  ok   12. 全部成功 → plan=completed
+  ok   15. 每个 task 的 attempt=1，attempts 有 1 条
+  ok   17. 成功的任务 result.success=true 且有耗时
+  ok   10. 依赖失败 → 后续任务 blocked
+  ok   13. 有失败 → plan=paused（不自动跳过、不自动重试）
+  ok   13b. 失败任务的 error 被记下来
+  ok   16. retry → attempt 递增（下次是第 2 次）
+  ok   16b. 重试成功后 attempt=2，且**保留**第 1 次的失败记录
+  ok   16c. 重试后依赖解锁并跑完 → completed
+  ok   14. 停止 Plan：在跑的与未跑的都标成 cancelled
+  ok   17b. 取消**不是**失败：没有 failed，plan=cancelled
+  ok   15. 取消单个 running task → cancelled，且不启动后续
+  ok   15b. 对已结束的任务再取消 → 明确拒绝（不静默）
+  ok   43. 重复 stop 是安全的（第二次明确说没有在跑的计划）
+  ok   26. 跳过任务 → 依赖它的仍然 blocked（不自动放行）
+  ok   26b. 全被阻塞时 start 被拒（不空转）
+  ok   18. 任务前后取工作区快照，算出 Changes
+  ok   18b. Changes 的措辞是「执行期间观察到的」，不声称是 Agent 改的
+  ok   18c. 发了 task_change 事件
+  ok   41. 允许第一个 plan 启动
+  ok   41b. 第二个 plan 被拒（一个 workspace 只允许一个 running）
+  ok   42. 对同一个 plan 重复 start 也被拒（busy）
+  ok   42b. activePlanId 反映正在跑的 plan
+  ok   42c. 停止后 activePlanId 归空
+  ok   31. 应用关闭时：running → interrupted，plan → paused（不是假装还在跑）
+  ok   §34. 不可用 agent：任务失败且错误里说清原因（不是 command not found）
+
+--- F. 安全边界 ---
+  ok   36/37. cwd 用 ../ 与绝对路径都进不来（模型输出视为不可信）
+  ok   38. 经符号链接指向项目外也被拒
+  ok   39. executable 不能来自客户端：计划里只有 agent id，没有命令
+  ok   39b. agent 字段只接受 registry 里的 id（模型编一个就被拒）
+  ok   40. stdout 是文本，前端渲染路径不含 innerHTML
+  ok   40b. 路由不接受客户端传 executable / shell command
+
+--- G. 统一执行事件 ---
+  ok   45. 每条执行事件都带 planId / taskId 字段 / agent / kind / timestamp
+  ok   45b. 帧上是 type=execution_event（和 pi 的事件流不混淆）
+  ok   45c. 事件种类覆盖 plan_start / task_start / task_success / plan_success
+  ok   46. _seq 由 SSE 总线统一分配（单调递增，便于重连去重）
+  ok   46b. SSE 总线仍然给每条事件挂 _seq（Planner 事件走同一条通道）
+
+--- H. §49 完整 Scheduler E2E（fake-agent） ---
+  ok   E2E-1. A 成功、B 成功、C 失败 → plan 暂停、D 阻塞
+  ok   E2E-2. B 写的文件真的落盘了
+  ok   E2E-3. B 的 Changes 里有 out/ 目录
+  ok   E2E-4. 重试 C 成功后 D 解锁并跑完 → plan completed
+  ok   E2E-5. C 保留了两次 attempt 的历史（失败证据没被覆盖）
+  ok   E2E-6. 依赖顺序正确：D 在 B 和 C 之后才开始
+  ok   E2E-8. 任务改了工作区，但 git 里仍然只有 1 个提交（§42 不自动 commit）
+  ok   E2E-9. 工作区确实是 dirty 的（改动留在那里等用户决定）
+
+--- I. Planner 路由（经真实 router） ---
+  ok   §34/§35. GET /api/agents 给出 available 列表与 auto
+  ok   §45. 手工新建计划（Planner 不是唯一入口）
+  ok   P32 独立runtime阻断计划生成，未调用模型adapter
+  ok   P32 独立runtime阻断scheduler.start
+  ok   P32 独立runtime阻断verification.start
+  ok   P32 互斥不会阻断计划Stop
+  ok   P32 互斥不会阻断验证Stop
+  ok   P32 等待模型生成期间projectSwitchBlockReason阻断runtime admission
+  ok   P32 一个生成完成后另一个仍持有闸门
+  ok   P32 生成抛错也释放generating闸门
+  ok   P32 关闭独立runtime后计划start恢复
+  ok   列表只列当前项目的计划
+  ok   §33. 成环的计划经路由被拒（不是 500）
+  ok   §33. 未知 agent 经路由被拒
+  ok   §38. start 成功并返回 activePlanId
+  ok   §46. 运行中改结构 → 409（结构锁定）
+  ok   §40. 计划运行中切项目 → 409 且没有真的切（runtime.cwd 未变）
+  ok   §24. stop 成功
+  ok   §40b. 计划停止后可以正常切项目
+  ok   §35. 切到别的项目后，原项目的计划不给操作（403）
+
+--- J. Planner 输出的解析与校验 ---
+  ok   33a. 从 ```json 围栏里抽 JSON
+  ok   33b. 从前后有废话的文本里抽第一个完整对象
+  ok   33c. 字符串里带花括号不会被截断
+  ok   33d. 抽不出来 → null（不抛）
+  ok   33e. 数组顶层 → null（计划必须是对象）
+  ok   44. Planner 的 system 指令里明确要求：任务数、agent 白名单、相对 cwd、显式依赖、验证任务
+
+--- K. 项目隔离与单活跃 ---
+  ok   §35. 计划文件按 projectRoot 隔离，互不可见
+  ok   §28. 计划存在 Pi GUI 自己的数据目录，不在项目仓库里
+  ok   §29. 计划**不**写进 .pi-gui/config.json
+
+124 passed, 0 failed

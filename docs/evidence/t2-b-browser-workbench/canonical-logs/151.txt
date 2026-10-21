@@ -1,0 +1,15 @@
+  ok snapshot includes ordered same-file interleaving with exact raw bytes
+  ok selected operation IDs cannot target another session
+  ok persistent scope reads dormant history without a synthetic owner
+  ok epoch fingerprint native conversation project and repo isolate selection
+  ok same relative path in other workspace generations is not disclosed
+  ok snapshot and revision queue atomically around concurrent writes
+  ok preview changes no journal bytes or captured records
+  ok requested operation limit is enforced and cannot exceed hard cap
+  ok 32-file snapshot limit includes all selected paths
+  ok 128-operation cap includes interleaved operations
+  ok raw byte budget conservatively counts duplicate references before reads
+  ok missing object fails closed with fixed integrity error
+  ok corrupt object fails closed with fixed integrity error
+  ok privacy object fails closed with fixed integrity error
+session-revert-store: 14/14

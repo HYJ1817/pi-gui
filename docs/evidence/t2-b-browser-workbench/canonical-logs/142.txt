@@ -1,0 +1,12 @@
+ok historical read-only methods exist
+ok default historical authorization rejects before private disk
+ok actual old-backend Store plan uses frozen verified historical owner and exact C/R
+ok historical methods never accept client owner/scope/path/root fields
+ok trusted historical denial does not return private lookup result
+ok ordinary scoped read keeps full owner binding after backend restart
+ok unknown plan cannot authorize using supplied callback
+ok duplicate planId across real Store owner scopes is refused
+ok corrupt material remains refused after historical authorization
+ok hash-bound valid prefix survives damaged tail without write eligibility
+ok journal changes during trusted authorization cannot swap historical snapshot
+Object history: 11/11; failed=0; skipped=0

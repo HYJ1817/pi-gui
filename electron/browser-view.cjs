@@ -99,7 +99,8 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
   const lifecycle = new Set();
   const notify = (type) => { for (const fn of lifecycle) { try { fn({ type, generation }); } catch {} } };
   let occluded = false; // 有 modal / palette 盖在上面时挂起
-  let lastRect = { x: 0, y: 0, width: 0, height: 0 };
+  let lastRect = null; // CSS coordinates from the current visible viewport binding.
+  let attached = false;
   let sessionReady = false;
   let state = { open: false, url: '', title: '', loading: false, canGoBack: false, canGoForward: false, error: null };
 
@@ -192,20 +193,26 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
   function applyBounds() {
     const w = win();
     if (!view || !w) return;
-    if (occluded || !isVisible()) return; // 被遮住或后台工作面不上屏
-    const content = w.getContentBounds();
-    view.setBounds(clampBounds(lastRect, { width: content.width, height: content.height }));
-  }
-
-  function attach() {
-    const w = win();
-    if (!view || !w || occluded || !isVisible()) return;
-    try {
-      w.contentView.addChildView(view);
-    } catch {
-      safeLog('electron.browser_view_state', { operation: 'attach', state: 'already_attached' });
+    if (occluded || !isVisible() || !lastRect) { detach(); return; }
+    let zoom;
+    try { zoom = w.webContents.getZoomFactor(); } catch { detach(); return; }
+    // DOM rects are CSS pixels; Electron child-view bounds are DIP, not device pixels.
+    const rect = Object.fromEntries(Object.entries(lastRect).map(([key, value]) => [key, value * zoom]));
+    if (!Number.isFinite(zoom) || zoom <= 0 || !Object.values(rect).every(Number.isFinite) || rect.width <= 0 || rect.height <= 0) {
+      detach(); return;
     }
-    applyBounds();
+    const content = w.getContentBounds();
+    const bounds = clampBounds(rect, { width: content.width, height: content.height });
+    if (bounds.width <= 0 || bounds.height <= 0) { detach(); return; }
+    view.setBounds(bounds);
+    if (!attached) {
+      try {
+        w.contentView.addChildView(view);
+        attached = true;
+      } catch {
+        safeLog('electron.browser_view_state', { operation: 'attach', state: 'already_attached' });
+      }
+    }
   }
 
   function detach() {
@@ -213,6 +220,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     if (!view || !w) return;
     try {
       w.contentView.removeChildView(view);
+      attached = false;
     } catch {
       safeLog('electron.browser_view_state', { operation: 'detach', state: 'already_detached' });
     }
@@ -330,7 +338,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
       canGoForward: false,
       error: null,
     };
-    attach();
+    applyBounds();
     emit();
     notify('created');
     return true;
@@ -342,6 +350,8 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     agentControlled = false;
     const dying = view;
     view = null;
+    lastRect = null;
+    attached = false;
     occluded = false;
     state = {
       open: false,
@@ -451,13 +461,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     ipcMain.handle('pi-gui:browser-set-bounds', (_e, rect) => {
       /* renderer 给的是页面算出来的数，这里只存**原始值**，
        * 上屏前一律过 clampBounds（见 applyBounds）。 */
-      lastRect = {
-        x: Number(rect?.x),
-        y: Number(rect?.y),
-        width: Number(rect?.width),
-        height: Number(rect?.height),
-      };
-      applyBounds();
+      setBounds(rect);
       return { ok: true };
     });
     ipcMain.handle('pi-gui:browser-set-occluded', (_e, flag) => {
@@ -488,8 +492,16 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
    * 它**不是**给页面用的接口 —— preload 暴露的仍然是白名单动作。 */
   function setOccluded(flag) {
     occluded = flag === true;
-    if (occluded) detach();
-    else attach();
+    if (occluded) {
+      // A hidden/moving viewport must supply fresh geometry before being reattached.
+      lastRect = null;
+      detach();
+    } else applyBounds();
+  }
+
+  function setBounds(rect) {
+    lastRect = { x: Number(rect?.x), y: Number(rect?.y), width: Number(rect?.width), height: Number(rect?.height) };
+    applyBounds();
   }
 
   return {
@@ -501,10 +513,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     getGeneration: () => generation,
     subscribeLifecycle: (fn) => { lifecycle.add(fn); return () => lifecycle.delete(fn); },
     setAgentControlled: (flag) => { agentControlled = flag === true; },
-    setBounds: (rect) => {
-      lastRect = { x: Number(rect?.x), y: Number(rect?.y), width: Number(rect?.width), height: Number(rect?.height) };
-      applyBounds();
-    },
+    setBounds,
     command,
     /* 下面两个就是 IPC 处理器调的那两个函数，在这里一并交出去，供
      * tests/browser-session-check.cjs 在**主进程里**直接驱动。
@@ -522,7 +531,7 @@ function createBrowserController({ origin, getWindow, ipcMain, openExternal = (u
     destroy,
     open: () => {
       if (!view) create();
-      else attach();
+      else applyBounds();
       return { ok: Boolean(view) };
     },
     close: destroy,

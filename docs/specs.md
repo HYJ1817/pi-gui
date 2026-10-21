@@ -94,7 +94,8 @@ workspace generation 与 conversation scope 防护，没有第二份文档索引
   避免把聊天区或两个内容区压到不可用；
 - 切换 Browser、Process、单面板或关闭右栏时，外层实例统一 dispose 两个子面板和
   ResizeObserver / window resize / 拖动监听器；
-- Browser 继续独占右栏，不参与分屏；没有新增文件读取接口或项目写入路径。
+- T2-A 阶段 Browser 仍独占右栏；T2-B 增加可选 Browser + Changes，共用同一分屏布局，
+  不改变 Specs 的只读读取边界，也不增加项目写入路径。
 
 验证入口：`npm run test:split`（jsdom 生命周期与交互）和
 `npm run test:split:electron`（真实 Electron 布局、截图与缩放）。完整证据见

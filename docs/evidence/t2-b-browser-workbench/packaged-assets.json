@@ -1,0 +1,44 @@
+[
+  {
+    "file": "public/app.js",
+    "bytes": 62649,
+    "sha256": "9c88186ab32280a604f8ea52e4736914ec4ae2569b53d8f9497ab4a9cc8fe2ff",
+    "equal": true
+  },
+  {
+    "file": "public/browser-pane.js",
+    "bytes": 14692,
+    "sha256": "f1cd0e961b08351ca535823f66cb0ef4c095f91e886924ccde48b0cee185e4e2",
+    "equal": true
+  },
+  {
+    "file": "public/right-pane.js",
+    "bytes": 18263,
+    "sha256": "e03de02d970b3f95744cd7deafa28edc6d02275a9a2f5a5fb16973cbb6b59f83",
+    "equal": true
+  },
+  {
+    "file": "public/runtime-secondary.js",
+    "bytes": 7592,
+    "sha256": "94f1daf34f495c785d06396c01a65f94723c33f27198a321530f42a4a1165250",
+    "equal": true
+  },
+  {
+    "file": "public/ui/split-workbench.js",
+    "bytes": 12182,
+    "sha256": "60377b67742c0602eafa8b7512e4c92ac127e26ac37ea7cb4b40a26079fd4617",
+    "equal": true
+  },
+  {
+    "file": "public/ui4-pane.css",
+    "bytes": 21974,
+    "sha256": "6594a6589f0babc3efe15568c200254598ccff7d07df24a17b2cc8ad8d27ae16",
+    "equal": true
+  },
+  {
+    "file": "electron/browser-view.cjs",
+    "bytes": 22403,
+    "sha256": "69945698e6c320cce5b73543bb08450e39fb3a6ccb036c8044d72ddf6edfb718",
+    "equal": true
+  }
+]

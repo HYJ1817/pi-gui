@@ -1,0 +1,36 @@
+  ok  private evidence bridge exists
+  ok  default capture qualification preserves exact verified Pi 1.0.4
+  ok  default capture rejects unverified Pi 1.2.1
+  ok  default capture rejects unverified Pi 1.2.0-rc.1
+  ok  default capture rejects unverified Pi 1.0.5
+  ok  default capture rejects unverified Pi unknown
+  ok  default capture rejects missing createWriteToolDefinition
+  ok  default capture rejects missing createEditToolDefinition
+  ok  default capture rejects missing declarations
+  ok  default capture rejects invalid package
+  ok  default capture rejects different public entry
+  ok  default capture accepts reviewed exact Pi 1.2.0 public API without source certification
+  ok  explicit extension launch and private capability
+  ok  no origin or foreign token admitted
+  ok  startup source verified only by own tools
+  ok  consent required for enabling
+  ok  actual authority scopes bytes and relative path
+  ok  client object profile claims are rejected before capture
+  ok  out of workspace refused without recording
+  ok  sensitive exclusion refused
+  ok  excluded preflight admits no raw bytes
+  ok  path ADS and git data refused
+  ok  native session mismatch refused
+  ok  prewrite store failure sanitized
+  ok  post observation cannot claim source is exclusive
+  ok  tool outcome and mutation outcome independent
+  ok  final Pi result has its own private amendment
+  ok  public summary never includes raw content or token
+  ok  dynamic source drift loses qualification
+  ok  stale owner and rotated token rejected
+  ok  explicit disable survives a failed evidence store in this launch
+  ok  failed disable persistence uses existing fixed warning notification
+  ok  disable override is bound to native session and cleared on launch
+  ok  extension errors require durable gap before renewed certification
+  ok  backend disable remains usable without a compatible extension
+Session change bridge: 35/35

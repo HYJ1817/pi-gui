@@ -1,0 +1,238 @@
+  ok  real tool list pinned to 0.4.2
+  ok  memory_write start recognized
+  ok  memory_read start recognized
+  ok  memory_search start recognized
+  ok  memory_forget start recognized
+  ok  memory_restore start recognized
+  ok  memory_status start recognized
+  ok  scratchpad start recognized
+  ok  unadapted memory-like tool falls back
+  ok  unrelated tool falls back
+  ok  write running label
+  ok  write long_term success
+  ok  write target from result
+  ok  write append mode
+  ok  write content not echoed
+  ok  write path excluded
+  ok  write session id and timestamp excluded
+  ok  write overwrite mode
+  ok  write daily target
+  ok  write requested mode is not a result fact
+  ok  write error label
+  ok  write incomplete label
+  ok  write missing target does not claim success
+  ok  write args.target is not success evidence
+  ok  read running label
+  ok  read long_term + path
+  ok  read long_term + {} is not success
+  ok  read scratchpad + path
+  ok  read scratchpad + {} is not success
+  ok  read daily + path + valid date
+  ok  read daily + path only is not success
+  ok  read daily + {} is not success
+  ok  read daily malformed result date is not success
+  ok  read list + files[]
+  ok  read list + {} is not success
+  ok  read requested date is not success evidence
+  ok  read soft-failure keeps target as request info
+  ok  read result date comes from details
+  ok  read path excluded
+  ok  read list count only
+  ok  read list filenames excluded
+  ok  read missing list metadata unknown
+  ok  read success hides content
+  ok  read soft-failure claims no content
+  ok  read raw result text never becomes success
+  ok  read raw result text excluded
+  ok  read raw result text absent from DOM
+  ok  read unknown target degrades
+  ok  search running label
+  ok  search success label
+  ok  search error label
+  ok  search stopped label
+  ok  search query shown
+  ok  search count shown
+  ok  search result mode wins over request
+  ok  search requested mode never invented
+  ok  search unknown mode ignored
+  ok  search zero results is a real count
+  ok  search missing count is not zero
+  ok  search without count names no mode
+  ok  search needsEmbed fact
+  ok  search embedStarted fact
+  ok  search needsEmbed negative not claimed
+  ok  search limit shown from request
+  ok  search query bounded
+  ok  search query single line
+  ok  search missing query degrades
+  ok  search result query used when args missing
+  ok  search malformed count ignored
+  ok  search huge count ignored
+  ok  forget running label
+  ok  forget success label
+  ok  forget removed count
+  ok  forget recovery available
+  ok  forget recovery id excluded
+  ok  forget recovery path excluded
+  ok  forget preview excluded
+  ok  forget no match is not a deletion
+  ok  forget missing count does not claim deletion
+  ok  forget invalid recovery id not advertised
+  ok  forget error label
+  ok  forget match bounded
+  ok  forget target default not invented
+  ok  restore running label
+  ok  restore success label
+  ok  restore count shown
+  ok  restore target shown
+  ok  restore id and path excluded
+  ok  restore already restored
+  ok  restore zero entries
+  ok  restore missing metadata degrades
+  ok  restore error label
+  ok  status success label
+  ok  status fact Long-term memory: 1200 chars
+  ok  status fact Scratchpad: 2 open / 5 total
+  ok  status fact Daily logs: 12
+  ok  status fact Latest daily log: 2026-09-30
+  ok  status fact qmd: available
+  ok  status fact Collection pi-memory: present
+  ok  status fact Embeddings: ready
+  ok  status fact Snapshot: stable
+  ok  status fact Update mode: background
+  ok  status dir excluded
+  ok  status qmd unavailable
+  ok  status snapshot stable displayed
+  ok  status snapshot per-turn displayed
+  ok  status snapshot unrecognized value is not silently dropped
+  ok  status snapshot unrecognized value never echoed
+  ok  status snapshot missing stays silent
+  ok  status snapshot non-string ignored
+  ok  status other unknown enums stay unknown
+  ok  status missing metadata degrades
+  ok  status missing metadata is not success
+  ok  status bad latest daily ignored
+  ok  status error label
+  ok  scratchpad running label
+  ok  scratchpad list running label
+  ok  scratchpad add + details.action
+  ok  scratchpad add + {} is not success
+  ok  scratchpad done + details.action
+  ok  scratchpad done + {} is not success
+  ok  scratchpad undo + details.action
+  ok  scratchpad undo + {} is not success
+  ok  scratchpad clear_done + action + removed
+  ok  scratchpad clear_done removed count
+  ok  scratchpad clear_done + {} is not success
+  ok  scratchpad clear_done without removed is not success
+  ok  scratchpad list + count/open
+  ok  scratchpad list + open only
+  ok  scratchpad list + {} is not success
+  ok  scratchpad action fact from details
+  ok  scratchpad counts
+  ok  scratchpad item text excluded
+  ok  scratchpad preview excluded
+  ok  scratchpad detail action wins over request
+  ok  scratchpad unknown action still semantic
+  ok  scratchpad prototype action safe
+  ok  scratchpad bounded hostile action
+  ok  scratchpad empty details list is not zero
+  ok  scratchpad error label
+  ok  hostile fields excluded from projection: memory_write
+  ok  hostile fields excluded from DOM: memory_write
+  ok  hostile fields excluded from projection: memory_read
+  ok  hostile fields excluded from DOM: memory_read
+  ok  hostile fields excluded from projection: memory_search
+  ok  hostile fields excluded from DOM: memory_search
+  ok  hostile fields excluded from projection: memory_forget
+  ok  hostile fields excluded from DOM: memory_forget
+  ok  hostile fields excluded from projection: memory_restore
+  ok  hostile fields excluded from DOM: memory_restore
+  ok  hostile fields excluded from projection: memory_status
+  ok  hostile fields excluded from DOM: memory_status
+  ok  hostile fields excluded from projection: scratchpad
+  ok  hostile fields excluded from DOM: scratchpad
+  ok  raw tool result never rendered
+  ok  malformed details string degrades
+  ok  malformed details array degrades
+  ok  null details degrades
+  ok  malformed args degrade
+  ok  hostile HTML inert in target
+  ok  hostile HTML inert in query
+  ok  facts bounded for hostile fields
+  ok  no drive path in any projection
+  ok  settled status incomplete
+  ok  settled status interrupted
+  ok  settled status cancelled
+  ok  unknown status degrades to generic label
+  ok  missing status degrades
+  ok  tracked entry starts running
+  ok  Stop settles spinner
+  ok  unobserved initially
+  ok  search observed
+  ok  other tools not implied
+  ok  independent tool observation
+  ok  workspace generation resets
+  ok  stale bridge run rejected
+  ok  current run observed
+  ok  restart clears observation
+  ok  scratchpad observed
+  ok  no-project clears observation
+  ok  other extensions cannot pollute
+  ok  switching rejects tool events
+  ok  mismatched run rejected
+  ok  current event accepted
+  ok  non-tool events always pass
+  ok  install command fixed
+  ok  absent setup
+  ok  discovery is not runtime evidence
+  ok  configured from enabled evidence
+  ok  disabled extension
+  ok  presence cannot infer configuration
+  ok  loaded unknown stays unknown
+  ok  registry failure stays unknown
+  ok  no automatic install
+  ok  no filesystem or network in adapter
+  ok  no project scope invented
+  ok  no Planner coupling
+  ok  no app state mutation
+  ok  capabilities contain no install or execution
+  ok  setup wiring delegates to the single shared restart flow
+  ok  restart failure retry available in shared component
+  ok  capability view renders memory capability
+  ok  app observes memory events
+  ok  timeline dispatches memory adapter
+  ok  memory tools are not mutating file tools
+  ok  memory write does not enter the Changes ledger
+  ok  Extension Registry not polluted by memory logic
+  ok  session search stays independent
+  ok  Planner has no memory feature
+  ok  web adapter unaffected
+  ok  subagent adapter unaffected
+  ok  generic fallback intact
+  ok  DOM start renderer
+  ok  DOM update keeps node
+  ok  DOM streaming raw output excluded
+  ok  DOM end same node
+  ok  DOM success label
+  ok  DOM excludes raw result
+  ok  DOM excludes raw args and details
+  ok  independent tool ids
+  ok  inverse completion distinct
+  ok  no duplicate DOM
+  ok  history uses same projection
+  ok  history raw content excluded
+  ok  history missing details degrades
+  ok  history without result is incomplete
+  ok  history no fabricated duration
+  ok  history read soft-failure degrades
+  ok  history read soft-failure raw text excluded
+  ok  history read soft-failure raw text absent DOM
+  ok  history scratchpad soft-failure degrades
+  ok  history scratchpad soft-failure raw text excluded
+  ok  history scratchpad soft-failure raw text absent DOM
+  ok  soft-failure hostile raw inert: memory_read
+  ok  soft-failure hostile raw inert: scratchpad
+  ok  soft-failure is not forced into error
+
+236/236 通过

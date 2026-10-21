@@ -1,0 +1,101 @@
+
+--- 1. SemVer（纯函数）---
+  ok   1. 相同版本 → 0
+  ok   2. patch 更大 → 有更新（0.12.0 < 0.12.1）
+  ok   3. minor 更大 → 有更新（0.11.0 < 0.12.0）
+  ok   4. major 更大 → 有更新（0.12.0 < 1.0.0）
+  ok   5. v 前缀与不带前缀等价
+  ok   6. prerelease 小于同版本正式版
+  ok   6b. prerelease 之间按 semver 规则排（rc.1 > beta.1；数字段 < 字母段）
+  ok   8. 非法版本不崩：parseVersion 回 null
+  ok   8b. 非法版本不崩：compareVersions 回 null（不是 0）
+  ok   8c. 缺段按 0 补（1 == 1.0.0，1.2 == 1.2.0）
+  ok   7. 稳定版用户不提示 prerelease（实测量：updateAvailable=false）
+  ok   7b. 不提示 prerelease 时不返回 release 正文
+  ok   7c. 自己就在 prerelease 轨道上的人不受「不提示 prerelease」限制
+
+--- 2. GitHub Release 响应 ---
+  ok   9. 正常 Release：结构完整
+  ok   10. 有更新：updateAvailable=true
+  ok   12. assets 正常：三个都识别出来
+  ok   12b. 资产类型标签是单一真相（后端给，前端不自己维护一份）
+  ok   12c. classifyAsset 认得出真实命名，认不出的一律 other
+  ok   11. 无更新：updateAvailable=false 且不带 release 正文
+  ok   13. assets 为空：不崩，assets 是空数组
+  ok   13b. asset 缺 browser_download_url 会被丢掉（不猜下载地址）
+  ok   13c. 站外 asset URL 会被后端过滤掉（不进响应）
+  ok   13d. html_url 站外时退回自建的 tag 链接（仍可打开，且是官方域）
+  ok   14. 缺 tag_name → invalid-response，不崩
+  ok   14b. tag_name 只有空白同样算 invalid-response
+  ok   14c. tag 不是合法版本 → invalid-response（不让非法版本把流程弄崩）
+  ok   15. 非 JSON → invalid-response
+  ok   15b. JSON 是数组（不是对象）→ invalid-response
+  ok   17. 403 + remaining=0 → rate-limit，文案是「稍后再试」
+  ok   16. 403（不是限流）→ github-error
+  ok   18. 404 → no-release（仓库上还没有已发布的 Release）
+  ok   19. 500 → github-error
+  ok   20. timeout → timeout（AbortController 生效）
+  ok   21. 网络层 reject（DNS 失败）→ network
+  ok   13e. Release Notes 超长被截断到 4000 字并标记 truncated
+  ok   13f. body 不是字符串时当空说明处理，不崩
+  ok   13g. 失败结果不进缓存，下一次立刻重试就能成功
+  ok   13h. fetchImpl 同步抛错 → 结构化 network 结果，不冒泡
+
+--- 3. 缓存与 single-flight ---
+  ok   22. 首次检查真的走了网络
+  ok   23. TTL 内复用缓存（不再请求）
+  ok   24. force=1 绕过缓存（多打一次）
+  ok   25. TTL 过期后重新请求
+  ok   25b. 重新请求后的结果又进了缓存
+  ok   26. 三个并发 force=1 只真正请求 GitHub 一次（single-flight）
+  ok   26b. 并发请求拿到的是同一份结果
+  ok   26c. 普通请求与 force 并发时同样只打一次
+
+--- 4. 隐私：请求里到底发了什么 ---
+  ok   27. 请求 URL 不含 cwd / 项目名
+  ok   28. 请求 headers 不含 Pi GUI 令牌
+  ok   29. 不发送 session 信息
+  ok   30. 不发送 model / provider
+  ok   31. 不发送 Diagnostics 内容
+  ok   31b. headers 只有 GitHub 必需的 User-Agent 与 Accept 两项
+  ok   31c. 不带 Authorization / Cookie
+  ok   31d. 是 GET 且没有请求体
+  ok   31e. 请求带 AbortSignal（timeout 真的接在 fetch 上）
+  ok   31f. User-Agent 只带版本号，不带机器/用户名信息
+  ok   31g. 响应里不带 header / 状态码 / 堆栈等技术细节
+  ok   31h. 失败响应也不回显 GitHub 的原文与 IP
+
+--- 5. 路由与本地鉴权 ---
+  ok   32. GET /api/update → 200 且 ok:true
+  ok   32b. 紧接着再 GET 走缓存（cached:true，不再打网络）
+  ok   33. GET /api/update?force=1 绕过缓存
+  ok   34. POST /api/update → 405（不是被静态资源兜底吞掉）
+  ok   35. /api/update 仍经过本地 API 鉴权（无令牌 → 401）
+  ok   35b. 鉴权失败时不会顺手去打 GitHub
+  ok   35c. 跨站 Origin → 403（和其余 /api/* 同一条规则）
+  ok   34b. PUT /api/update → 405
+  ok   35d. 未注入 updateCheck 时回 503 而不是崩
+
+--- 6. Release / 下载外链白名单 ---
+  ok   允许：Release 页面
+  ok   允许：下载 asset
+  ok   允许：API 地址
+  ok   允许：下载重定向落地域
+  ok   允许：raw 域
+  ok   允许：大小写不敏感
+  ok   拒绝：第三方 host
+  ok   拒绝：后缀伪装
+  ok   拒绝：后缀伪装（缺那个点）
+  ok   拒绝：前缀伪装
+  ok   拒绝：带凭据的 URL
+  ok   拒绝：http（非 https）
+  ok   拒绝：javascript:
+  ok   拒绝：file:
+  ok   拒绝：data:
+  ok   拒绝：ftp:
+  ok   拒绝：空串
+  ok   拒绝：根本不是 URL
+  ok   两份白名单实现完全一致（后端 ESM ↔ 主进程 CJS）
+  ok   两份 host 名单也一致
+
+87/87 通过

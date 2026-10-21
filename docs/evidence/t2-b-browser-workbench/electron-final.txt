@@ -1,0 +1,71 @@
+
+> pi-gui@0.27.0 test:browser-workbench:electron
+> node tests/browser-workbench-electron.cjs
+
+
+Preparing worktree (new branch 'fixture/b')
+PASS single Browser has valid native viewport
+PASS Browser and Changes simultaneously visible
+PASS single to split preserves native page and form
+PASS Diff expansion renders actual Git patch without replacing Browser
+PASS Agent Control starts disabled with a real isolated bridge session
+PASS Agent Control fills local native page in split
+PASS explicit disable rejects further Agent page actions
+PASS actual native-page pointer remains interactive in split
+PASS 1536px native view matches visible viewport
+PASS 1536px no horizontal document overflow
+PASS 1200px native view matches visible viewport
+PASS 1200px no horizontal document overflow
+PASS 900px native view matches visible viewport
+PASS 900px no horizontal document overflow
+PASS 720px native view matches visible viewport
+PASS 720px no horizontal document overflow
+PASS Changes fallback really detaches native Browser
+PASS Browser tab restores same native page
+PASS native Browser detaches during actual pointer drag
+PASS pointer drag updates Browser bounds
+PASS repeated actual drags keep one correctly bounded native view
+PASS keyboard resizing updates native bounds and persists shared ratio
+PASS modal excludes native Browser
+PASS 125 percent app zoom converts CSS to native DIP
+PASS short window degrades to tabs
+PASS back forward and reload retain same native page
+PASS preview session is not GUI default session
+PASS twenty layout switches retain exactly one native view
+PASS Specs workbench remains functional and native Browser removed
+PASS native reopen cycle 1 has one view
+PASS native reopen cycle 2 has one view
+PASS native reopen cycle 3 has one view
+PASS native reopen cycle 4 has one view
+PASS native reopen cycle 5 has one view
+PASS native reopen cycle 6 has one view
+PASS native reopen cycle 7 has one view
+PASS native reopen cycle 8 has one view
+PASS native reopen cycle 9 has one view
+PASS native reopen cycle 10 has one view
+PASS native reopen cycle 11 has one view
+PASS native reopen cycle 12 has one view
+PASS native reopen cycle 13 has one view
+PASS native reopen cycle 14 has one view
+PASS native reopen cycle 15 has one view
+PASS native reopen cycle 16 has one view
+PASS native reopen cycle 17 has one view
+PASS native reopen cycle 18 has one view
+PASS native reopen cycle 19 has one view
+PASS native reopen cycle 20 has one view
+PASS twenty real reopen and close cycles leave no native view
+PASS twenty native close cycles leave no hidden browser webContents
+PASS focused A displays its real temporary Worktree page
+PASS focused A has only its own native view
+PASS focused A Changes is scoped
+PASS focused B displays its real temporary Worktree page
+PASS focused B has only its own native view
+PASS focused B Changes is scoped
+PASS focused A displays its real temporary Worktree page
+PASS focused A has only its own native view
+PASS focused A Changes is scoped
+PASS runtime A and B have distinct nondefault sessions
+PASS session close destroys its native page
+PASS disposed session has no live hidden webContents
+PASS closing workbench leaves no attached native views
+Browser workbench Electron: 64/64; C:\pi-GUI\.probe\t2b-browser-evidence
