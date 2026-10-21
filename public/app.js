@@ -107,6 +107,7 @@ import { showNotice, hideNotice } from './ui/notice.js';
 import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
 import { openSpecsPanel } from './specs-panel.js';
+import { openSplitWorkbench } from './ui/split-workbench.js';
 import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
@@ -270,12 +271,17 @@ if (btnSpecs) {
       else openSpecsPanel({ triggerId: 'btnSpecs' });
     });
     document.addEventListener('pi-gui:right-pane', (event) => {
-      const open = event.detail?.open === true && event.detail?.surface === 'specs';
+      const open = event.detail?.open === true && ['specs', 'workbench-split'].includes(event.detail?.surface);
       btnSpecs.setAttribute('aria-pressed', String(open));
       btnSpecs.classList.toggle('is-active', open);
     });
   }
 }
+
+document.addEventListener('pi-gui:open-split-workbench', (event) => {
+  if (!rightPane) return;
+  openSplitWorkbench({ returnSurface: event.detail?.source === 'changes' ? 'changes' : 'specs' });
+});
 
 const btnBrowser = $('btnBrowser');
 if (btnBrowser) {
@@ -1045,9 +1051,9 @@ function goChat() {
 }
 
 $('navHome').onclick = goChat;
-$('navChanges').onclick = openChangesPanel;
+$('navChanges').onclick = () => openChangesPanel();
 document.addEventListener('pi-gui:right-pane', (event) => {
-  const open = event.detail?.open === true && event.detail?.surface === 'changes';
+  const open = event.detail?.open === true && ['changes', 'workbench-split'].includes(event.detail?.surface);
   $('navChanges').setAttribute('aria-pressed', String(open));
   $('navChanges').classList.toggle('is-active', open);
 });

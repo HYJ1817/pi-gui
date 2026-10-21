@@ -237,62 +237,82 @@ export async function refreshGitNow() {
 
 /* ---------- 面板 ---------- */
 
-export function openChangesPanel() {
-  const surface = openSecondarySurface('changes', (card, instance) => {
-    card.classList.add('changes');
-    activeChangesSurface = instance;
-    instance.onDispose(() => {
-      panels.changes = null;
-      restoreAllBtn = null;
-      if (activeChangesSurface === instance) activeChangesSurface = null;
-    });
+export function openChangesPanel(options = {}) {
+  const split = document.createElement('button');
+  split.type = 'button';
+  split.id = 'btnChangesSplit';
+  split.className = 'icon-btn changes-split-icon';
+  split.textContent = '⇅';
+  split.title = '同时显示 Specs 与文件变更';
+  split.setAttribute('aria-label', '与 Specs 分屏');
+  split.onclick = () => document.dispatchEvent(new window.CustomEvent(
+    'pi-gui:open-split-workbench',
+    { detail: { source: 'changes' } }
+  ));
+  return openSecondarySurface(
+    'changes',
+    (card, instance) => mountChangesPanel(card, instance, {
+      ...options,
+      extraActions: [...(options.extraActions || []), split],
+    })
+  );
+}
 
-    const head = document.createElement('div');
-    head.className = 'chg-head';
-
-    const h = document.createElement('h3');
-    h.textContent = '文件变更';
-
-    const sub = document.createElement('span');
-    sub.className = 'chg-sub';
-    sub.textContent = 'Git 工作区 · 磁盘真实状态';
-
-    const grow = document.createElement('span');
-    grow.className = 'grow';
-
-    /* 全部撤销。危险操作，所以用 danger 配色；具体确认在 restoreAll() 里，
-     * 那时会拿到后端算出的**权威**计划（恢复几个 / 取消暂存几个 / 删几个）。 */
-    const btnAll = document.createElement('button');
-    btnAll.type = 'button';
-    btnAll.className = 'btn tiny danger';
-    btnAll.textContent = '全部撤销';
-    btnAll.title = '把工作区所有改动恢复成 Git 中的版本';
-    btnAll.onclick = () => restoreAll();
-    restoreAllBtn = btnAll;
-
-    const btnRefresh = document.createElement('button');
-    btnRefresh.type = 'button';
-    btnRefresh.className = 'btn tiny';
-    btnRefresh.textContent = '刷新';
-    btnRefresh.onclick = () => refreshGitNow();
-
-    head.append(h, sub, grow, btnAll, btnRefresh);
-    card.appendChild(head);
-
-    const body = document.createElement('div');
-    body.className = 'chg-body';
-    card.appendChild(body);
-
-    /* 弹层里的动态容器。关闭时 modal.js 会把它置回 null，
-     * 于是「异步结果晚到」的情况会自然落空，不会往已卸载的节点里写。 */
-    panels.changes = body;
-
-    renderChangesBody();
+export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
+  card.classList.add('changes');
+  activeChangesSurface = instance;
+  instance.onDispose(() => {
+    panels.changes = null;
+    restoreAllBtn = null;
+    if (activeChangesSurface === instance) activeChangesSurface = null;
   });
+
+  const head = document.createElement('div');
+  head.className = 'chg-head';
+
+  const h = document.createElement('h3');
+  h.textContent = '文件变更';
+
+  const sub = document.createElement('span');
+  sub.className = 'chg-sub';
+  sub.textContent = 'Git 工作区 · 磁盘真实状态';
+
+  const grow = document.createElement('span');
+  grow.className = 'grow';
+
+  /* 全部撤销。危险操作，所以用 danger 配色；具体确认在 restoreAll() 里，
+   * 那时会拿到后端算出的**权威**计划（恢复几个 / 取消暂存几个 / 删几个）。 */
+  const btnAll = document.createElement('button');
+  btnAll.type = 'button';
+  btnAll.className = 'btn tiny danger';
+  btnAll.textContent = '全部撤销';
+  btnAll.title = '把工作区所有改动恢复成 Git 中的版本';
+  btnAll.onclick = () => restoreAll();
+  restoreAllBtn = btnAll;
+
+  const btnRefresh = document.createElement('button');
+  btnRefresh.type = 'button';
+  btnRefresh.id = 'btnChangesRefresh';
+  btnRefresh.className = 'btn tiny';
+  btnRefresh.textContent = '刷新';
+  btnRefresh.onclick = () => refreshGitNow();
+
+  head.append(h, sub, grow, btnAll, btnRefresh, ...extraActions);
+  card.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'chg-body';
+  card.appendChild(body);
+
+  /* 弹层里的动态容器。关闭时 modal.js 会把它置回 null，
+   * 于是「异步结果晚到」的情况会自然落空，不会往已卸载的节点里写。 */
+  panels.changes = body;
+
+  renderChangesBody();
 
   // 打开就用最新数据重画一次（先用已有状态垫一帧，避免空白等待）
   loadGitStatus().then(() => {
-    if (surface.isCurrent()) renderChangesBody();
+    if (instance.isCurrent()) renderChangesBody();
   });
 }
 

@@ -29,10 +29,30 @@ export function openSecondarySurface(view, mount, {label='文件变更',headerSe
   close.type = 'button'; close.className = 'icon-btn secondary-close';
   close.textContent = '×'; close.setAttribute('aria-label', `关闭${label}`);
   close.onclick = () => { secondaryPane.close(); $(triggerId)?.focus(); };
+  const disposers = new Set();
+  let disposed = false;
   const instance = {
-    view, token: ++secondaryToken, dispose: null,
+    view, token: ++secondaryToken,
     isCurrent: () => secondaryCurrent === instance,
-    onDispose(fn) { if (instance.isCurrent()) instance.dispose = fn; },
+    onDispose(fn) {
+      if (typeof fn === 'function' && instance.isCurrent()) disposers.add(fn);
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (secondaryCurrent === instance) secondaryCurrent = null;
+      for (const fn of [...disposers].reverse()) {
+        try {
+          fn();
+        } catch {
+          /* One surface must not prevent the other from releasing its listeners. */
+        }
+      }
+      disposers.clear();
+    },
+    close() {
+      secondaryPane.close();
+    },
   };
   secondaryCurrent = instance;
   secondaryPane.root.querySelector('.rp-body').replaceChildren(host);
