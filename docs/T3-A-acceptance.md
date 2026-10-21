@@ -6,6 +6,8 @@
   （「合并：增加 Browser 与 Changes 原生分屏工作台（T2-B）」），已包含 T2-A / T2-B。
 - 开发分支：`codex/t3-a-diff-comments`。
 - 独立 Worktree：`C:\Users\21022\.codex\worktrees\t3-a-diff-comments\pi-GUI`。
+- 本地提交：`3f1fa44` 功能、`907e304` 测试、`ea91a28` 文档与证据
+  （按回滚边界拆分；测试配置 `test:diff-comments` 随功能提交）。
 - 主工作区 `C:\pi-GUI` 未修改；其未跟踪的 `$null`、`.p25-1-release-*` 未触碰。
 - 本轮只做本地提交，未推送、未合并、未修改 `main`、未打 tag、未发布。
 
