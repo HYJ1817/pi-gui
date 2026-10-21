@@ -80,3 +80,22 @@ T1 提供只读的 Specs 知识入口：发现当前项目的根 `SPEC.md` 与 `
 `docs/evidence/t1-specs/` 截图。它不依赖真 Pi 或真实用户项目。
 
 本阶段不实现文档写入、Agent 自动维护、知识图谱、全局索引或新的任务编排。
+
+## T2-A Split Workbench
+
+T2-A 在右栏增加可选的 **Specs 上 / Git Changes 下**纵向分屏，单面板仍是默认行为。
+`public/ui/split-workbench.js` 只负责布局与比例；Specs 与 Changes 使用各自导出的
+`mountSpecsPanel()` / `mountChangesPanel()` 挂载，继续持有原来的唯一状态、请求序号、
+workspace generation 与 conversation scope 防护，没有第二份文档索引或 Git 事实源。
+
+- 分隔条支持鼠标拖动、方向键、Home/End、Shift 加速和双击恢复默认比例；
+- 只持久化 `pi-gui.workbench.split.v1` 中的比例，不保存文档正文、Diff 或选中状态；
+- 窗口宽度小于 900px 或内容高度不足 448px 时保留两个已挂载实例，但只显示一个面板，用 Specs / Changes 页签切换，
+  避免把聊天区或两个内容区压到不可用；
+- 切换 Browser、Process、单面板或关闭右栏时，外层实例统一 dispose 两个子面板和
+  ResizeObserver / window resize / 拖动监听器；
+- Browser 继续独占右栏，不参与分屏；没有新增文件读取接口或项目写入路径。
+
+验证入口：`npm run test:split`（jsdom 生命周期与交互）和
+`npm run test:split:electron`（真实 Electron 布局、截图与缩放）。完整证据见
+[`T2-A-acceptance.md`](T2-A-acceptance.md)。

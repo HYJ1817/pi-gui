@@ -1,0 +1,112 @@
+
+> pi-gui@0.27.0 test:specs
+> node tests/specs.cjs && node tests/specs-ui.cjs
+
+  ok  Specs API keeps the router-wide token authentication
+  ok  discovers root SPEC.md and Markdown recursively under specs/
+  ok  does not discover README, docs/, or non-Markdown files
+  ok  does not follow a directory junction out of the project
+  ok  returns opaque IDs and no absolute project path
+  ok  marks oversized Markdown without reading it during indexing
+  ok  reads only the indexed Markdown document
+  ok  serves .markdown siblings
+  ok  malformed Markdown remains readable text
+  ok  oversized files fail as a bounded document response
+  ok  invalid UTF-8 and NUL content degrade safely
+  ok  an arbitrary query path is never accepted as a document
+  ok  a deleted indexed document returns a safe not-found response
+  ok  a stale workspace token cannot read another worktree checkout
+  ok  a stale generation is rejected even for the same conversation scope
+  ok  another worktree index contains only its own documents
+  ok  no project is an empty state, not a filesystem error
+  ok  unknown deferred scope fails closed
+Specs: 18/18; skipped=0
+  ok  Markdown heading IDs are opt-in and preserve existing chat rendering
+  ok  duplicate Markdown headings receive stable unique anchors
+  ok  tree keeps SPEC.md first and nests specs directories
+  ok  relative Markdown links resolve only to indexed paths
+  ok  Specs opens inside the existing right pane without global navigation
+  ok  document tree renders SPEC.md and expandable directories
+  ok  SPEC.md is selected without requiring a second click
+  ok  directory collapse hides its descendants
+  ok  directory expand restores its descendants
+  ok  clicking a document fetches and renders Markdown in the same pane
+  ok  malicious Markdown remains inert text
+  ok  relative document links navigate inside the allowlisted index
+  ok  duplicate headings get distinct same-document anchors
+  ok  a relative link outside the indexed Specs set is blocked with a visible reason
+  ok  manual refresh discovers newly added documents
+  ok  an incomplete scan is disclosed instead of silently presenting a partial tree
+  ok  a failed refresh keeps the previous tree usable
+  ok  oversized or failed document reads preserve the tree and explain the degradation
+  ok  workspace change immediately removes the previous workspace content
+  ok  Specs auto-reloads for the new workspace generation
+  ok  focused conversation scope changes clear the previous tree immediately
+  ok  focused conversation scope changes reload Specs from the backend
+  ok  a late document response cannot overwrite the new workspace
+  ok  leaving Specs disposes its listeners and in-flight work
+  ok  an empty project has a compact state and leaves chat DOM untouched
+Specs UI: 25/25; skipped=0
+
+> pi-gui@0.27.0 test:split
+> node tests/split-workbench-ui.cjs
+
+  ok  split ratio helpers clamp persisted values and pointer positions
+  ok  a single Changes panel can switch to split without a second source of Git state
+  ok  exiting split restores the originating single-panel mode
+  ok  the split entry in the single Specs header opens the same workbench
+  ok  Specs and Changes mount together in one workbench instance
+  ok  split mode exposes a real horizontal separator and independent headers
+  ok  changing the selected Specs document leaves the expanded diff untouched
+  ok  refreshing Changes keeps the selected Specs document
+  ok  refreshing Specs keeps the Changes diff expanded
+  ok  keyboard adjusts the split ratio and persists it
+  ok  double-click restores the default split ratio
+  ok  Home and End keep both panes above their minimum heights
+  ok  mouse drag changes the split ratio without rebuilding either child
+  ok  ratio survives reopening while document content is not persisted
+  ok  short workbenches fall back to one visible panel instead of compressing both
+  ok  fallback tabs switch panels and retain both live child instances
+  ok  growing the window restores the two-pane layout with state intact
+  ok  growing out of fallback moves focus from the hidden mode bar to the splitter
+  ok  720px windows fall back without changing right-pane width or chat draft
+  ok  restoring width resumes both panels
+  ok  a Specs failure keeps the Changes state usable
+  ok  a Changes failure degrades independently without clearing Specs
+  ok  workspace generation changes immediately remove both old panes from view
+  ok  a late old-scope Changes response cannot overwrite the new workbench scope
+  ok  late document and diff responses cannot display A in focused B
+  ok  switching to Browser disposes the workbench without touching the chat draft
+  ok  entering fallback moves focus out of the now-hidden pane
+  ok  shrinking while splitter is focused transfers focus to a visible fallback tab
+  ok  repeated open/close releases split observers and leaves the right pane empty
+  ok  repeated open/close leaves no split scope, resize or drag listeners behind
+Split workbench UI: 30/30; skipped=0
+  ok   测试目录里没有 node_modules
+  ok   随包资源齐全
+  ok   应用图标已嵌入 exe
+  ok   icon.ico 结构正确且圆角已切
+  ok   随包带了许可证与第三方署名
+  ok   内嵌后端能启动
+  ok   pi 子进程已拉起
+  ok   私有 RPC 确认打包后的 bridge ready
+  ok   根路径返回页面
+  ok   styles.css 正常
+  ok   [hidden] 兜底规则还在
+  ok   目录穿越被挡
+  ok   无 node_modules 下 PDF 抽取成功
+  ok   PDF 正文含文档内容
+  ok   PDF 正文无乱码
+  ok   PDF 页数正确
+  ok   docx 抽取成功
+  ok   图片识别为 image
+  ok   运行期没有崩栈输出
+  ok   上传缓存写到了数据目录
+  ok   应用目录没有被写入
+  ok   没有项目时 hasProject 为 false
+  ok   没有项目时不启动 pi
+  ok   没有项目时项目列表为空
+  ok   没有项目时命令被拒绝
+  ok   拒绝时要说清楚该做什么
+
+26/26 通过
