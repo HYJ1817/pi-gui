@@ -101,10 +101,10 @@ Electron 夹具使用 `T3A_TEST_NO_SANDBOX=1`，证据目录指向仓库内 `C:\
 
 | 命令 | 结果 |
 | --- | --- |
-| `node tests/diff-comments.cjs` | 44/44 |
-| `node tests/diff-comments-ui.cjs` | 37/37 |
+| `node tests/diff-comments.cjs` | 51/51（复审前 44 + 新增 7） |
+| `node tests/diff-comments-ui.cjs` | 41/41（复审后 37 + 新增 4） |
 | `node tests/diff-comments-split.cjs` | 10/10 |
-| `npm run test:diff-comments` | 91/91（44+37+10） |
+| `npm run test:diff-comments` | 102/102（51+41+10） |
 | `node tests/git.cjs` | 161/161 |
 | `node tests/runtime-changes.cjs` | 60/60 |
 | `node tests/runtime-git-ui.cjs` | 6/6 |
@@ -118,7 +118,26 @@ Electron 夹具使用 `T3A_TEST_NO_SANDBOX=1`，证据目录指向仓库内 `C:\
 构建产物核对：`dist-app\Pi GUI-win32-x64\resources\app\public\diff-comments.js`
 （12564 B）与 `review-fill.js`（3890 B）均存在，且为最后几处修复后的重建结果。
 
-完整 `npm test` 见第七节（单次命令，退出 0，失败 0）。
+### 定向测试（复审修复后）
+
+| 命令 | 结果 |
+| --- | --- |
+| `node tests/diff-comments.cjs` | 51/51（新增 7：上下文行消失/重现/真正改变/刷新前后） |
+| `node tests/diff-comments-ui.cjs` | 41/41（新增 4：切换窗口内旧编辑器、旧 gutter、旧标记、草稿） |
+| `node tests/diff-comments-split.cjs` | 10/10 |
+| `node tests/git.cjs` | 161/161 |
+| `node tests/runtime-changes.cjs` | 60/60 |
+| `node tests/runtime-git-ui.cjs` | 6/6 |
+| `node tests/split-workbench-ui.cjs` | 30/30；skipped=0 |
+| `node tests/specs.cjs` | 18/18；skipped=0 |
+| `node tests/smoke.cjs` | 1338/1338 |
+| `node tests/diff-comments-electron.cjs` | 41/41（production 27 + native 14），截图重新生成 |
+| `npm run build:app -- --rebuild` + `fixtures` + `app-check` | 构建成功；26/26；两个改动文件与 `dist-app` 逐字节一致 |
+
+新增断言在修复前的代码上确认失败（`a hidden context row keeps the comment but marks it unverified`、
+`a session switch closes the old editor synchronously`），修复后通过，因此不是空转测试。
+
+完整 `npm test` 见第七节（单次命令，退出 0，失败 0；该次运行包含本轮修复后的代码）。
 
 ## 七、完整 `npm test`
 
@@ -132,8 +151,10 @@ $env:TEMP='C:\Users\21022\AppData\Local\Temp'; $env:TMP=$env:TEMP
 npm test
 ```
 
-结果：**单次命令跑完全部 169 个叶套件，退出码 0，失败 0**，日志 9369 行保存在
-`C:\Users\21022\.codex\tmp\t3a-full\npm-test-canonical.log`。
+结果：**单次命令跑完全部 169 个叶套件，退出码 0，失败 0**。
+第一轮日志 9369 行在 `C:\Users\21022\.codex\tmp\t3a-full\npm-test-canonical.log`；
+第二轮（含本节两条 Important 修复）9380 行在
+`C:\Users\21022\.codex\tmp\t3a-full\npm-test-fix2.log`，两轮都是完整单次运行。
 
 与本轮相关的套件数字：
 
@@ -141,7 +162,7 @@ npm test
 | --- | --- |
 | `test:ci`（ci-test-plan / ci-workflow / release-ci-proof / nsis-bootstrap） | 169 leaves across 5 groups；coverage exact |
 | `test:specs` | 18/18；skipped=0 |
-| `test:diff-comments` | 91/91（44+37+10） |
+| `test:diff-comments` | 102/102（51+41+10） |
 | `split-workbench-ui` | 30/30；skipped=0 |
 | `git.cjs` | 161/161 |
 | `worktrees.cjs` | 56/56（真实 Git 夹具） |
@@ -238,6 +259,27 @@ Browser + Changes 两种分屏、弹窗遮挡时原生视图 detach、窄窗回�
    Electron 测试新增「每个按钮都在标题带内且标题带高度 ≤48px」断言。
 
 复审未发现未处置的阻断项。自动检查不能代替用户审批。
+
+### 第二轮审查修复（两个 Important）
+
+外部审查在本分支提出两条 Important，均已修复并各补一组可复现的测试
+（先确认新测试在原代码上失败，再验证修复后通过）：
+
+7. **隐藏的上下文行被误判为已验证。**
+   `reconcileSectionOptions()` 在上下文行暂时不可见、但改动指纹未变时，
+   原本先无条件写 `verified = true` 再走「上下文可能只是超出上下文数量」分支，
+   于是汇总与反馈显示「当前位置有效」，而这次渲染其实没有任何证据。
+   现在该分支显式写 `verified = false`、`resolvedLine = null` 并保持
+   `stale = false`；行重新出现时恢复有效，改动指纹变化时仍按过期处理。
+8. **经典会话切换时旧编辑器未立即清理。**
+   `pi-gui:session-switch` 触发时，`dropReviewDraftSurface()` 只清草稿、不碰 DOM，
+   旧会话的行内编辑器和「保存评论」按钮会存活到 `S.state.sessionId` 追上之前，
+   此时保存会写进新会话的评论桶。现在 `suspendReviewSurface()` 同步移除所有
+   `.d-review-editor`、复位 `aria-expanded`、禁用旧 Diff 的 `.d-gutter`；
+   `openReviewEditor()` 与保存回调在 `reviewScopeSuspended` 时直接拒绝，
+   形成一个覆盖整个切换窗口的闭合闸门。
+
+这两条修复的定向结果见下方「定向测试（复审修复后）」。
 
 ## 十一、已知限制
 
