@@ -8,6 +8,16 @@
 登记的 `workspace.cwd`。`public/specs-panel.js` 复用右栏 surface、Markdown 渲染器和现有工作区
 generation 防护；无缓存、无文件监听、无项目写入。见 [specs.md](specs.md)。
 
+## T2-A Split Workbench
+
+`public/ui/split-workbench.js` 是右栏内的可选布局容器：上方挂载 Specs，
+下方挂载 Changes。布局容器只保存有界比例和窄高回退状态；两个业务模块通过
+`mountSpecsPanel()` / `mountChangesPanel()` 复用原有渲染、状态、请求与安全校验，
+不复制文档索引或 Git 事实源。`openSecondarySurface()` 仍保留单实例 API，但将所有
+disposer 改为集合，使一个工作台可以可靠释放两个子面板。高度不足时容器切换为
+Specs / Changes 单面板页签，不压缩聊天区。见 [specs.md](specs.md) 与
+[T2-A-acceptance.md](T2-A-acceptance.md)。
+
 ## P32.2 Worktree 生命周期
 
 `lib/git-worktree.js` 复用有界 Git runner，提供 canonical repository/inventory/commit/ref 查询。

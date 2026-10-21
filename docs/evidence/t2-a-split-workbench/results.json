@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-10-21T05:25:57.598Z",
+  "electron": "44.4.3",
+  "chrome": "152.0.7977.130",
+  "forcedDeviceScaleFactor": null,
+  "checks": 32,
+  "failed": 0,
+  "screenshots": [
+    "01-single-panel-specs.png",
+    "02-split-1536.png",
+    "02-split-1200.png",
+    "02-split-900.png",
+    "02-split-720.png",
+    "10-wide-specs.png",
+    "03-short-window-fallback.png",
+    "04-short-window-changes-tab.png",
+    "05-split-zoom-125.png",
+    "08-worktree-b.png",
+    "09-worktree-a-return.png",
+    "06-single-panel-restored.png"
+  ],
+  "fixture": "temporary Git repository; no real Pi or user project"
+}

@@ -1,0 +1,1049 @@
+{
+  "schemaVersion": 1,
+  "baseline": "048d2c7ece4b01315ae3a7987765d881d45ceed5",
+  "canonical": {
+    "passed": 164,
+    "failed": 0,
+    "mode": "completed npm test prefix plus continuation from the same canonical package.json plan",
+    "singleNpmTestExitCode": 1,
+    "interruption": "verification.cjs temporary rename EPERM; effective retry 136/136 in external TEMP",
+    "suites": [
+      {
+        "command": "node tests/ci-test-plan.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ci-workflow.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/release-ci-proof.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/nsis-bootstrap.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/app-update.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/app-update-maintenance.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/app-update-activity.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/app-update-backend.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-tool-scheduler.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-tool-bridge.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ordinary-session-resolver.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ordinary-session-runtime.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-background.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-background-ui.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-background-recovery.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui-visual-finish.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/review-regressions.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/high-risk-regressions.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/logging.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/logging-leaks.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/logging-secret-state.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/logging-client.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/logging-ui.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui4-approval.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui4-feedback.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui4-integration.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/specs.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/specs-ui.cjs",
+        "exitCode": 0,
+        "source": "effective targeted rerun after test helper fixes"
+      },
+      {
+        "command": "node tests/split-workbench-ui.cjs",
+        "exitCode": 0,
+        "source": "effective targeted rerun after test helper fixes"
+      },
+      {
+        "command": "node tests/ui3-composer.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui3-model.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui3-inline-commands.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui3-integration.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui2-classic.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui2-runtime-display.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui2-visual.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/theme.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-fixture-retention.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-session-binding.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-d6final-classic.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/exe-diagnostics.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-qualification.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-presentation.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-ui.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-confirmation.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-sacl-witness.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-profile.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/session-revert-object-evidence.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/runtime-models.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/model-fallback.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/model-capabilities.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ux-state.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/bridge-state-recovery.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/native-provider-quota.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/stable-session-order.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/hotfix.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/hotfix-ui.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/provider-auth.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/provider-auth-runtime.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/ui-ia.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/smoke.cjs",
+        "exitCode": 0,
+        "source": "effective targeted rerun after test helper fixes"
+      },
+      {
+        "command": "node tests/daily-use.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/git.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/modules.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/reliability.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/interactions.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/sidebar-menu.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/port-owner.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/project-config.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/skills.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/extensions.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/capability.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/capability-install.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/web-access.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/subagents.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/memory.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/browser.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/approvals.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/planner.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/workflow-relations.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/reviews.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/review-gate.cjs",
+        "exitCode": 0,
+        "source": "npm test completed prefix"
+      },
+      {
+        "command": "node tests/verification.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 9835
+      },
+      {
+        "command": "node tests/evidence.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 28098
+      },
+      {
+        "command": "node tests/attempt-lifecycle.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 15910
+      },
+      {
+        "command": "node tests/sessions.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 509
+      },
+      {
+        "command": "node tests/session-search.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 1887
+      },
+      {
+        "command": "node tests/pi-compat.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 98
+      },
+      {
+        "command": "node tests/pi-probes.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 375
+      },
+      {
+        "command": "node tests/pi-update.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 515
+      },
+      {
+        "command": "node tests/pi-version.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 563
+      },
+      {
+        "command": "node tests/mcp-native.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 293
+      },
+      {
+        "command": "node tests/usage-quota.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 643
+      },
+      {
+        "command": "node tests/body-integrity.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 165
+      },
+      {
+        "command": "node tests/dev-server.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 1285
+      },
+      {
+        "command": "node tests/models-api.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 1310
+      },
+      {
+        "command": "node tests/server-security.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 3789
+      },
+      {
+        "command": "node tests/diagnostics.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 106
+      },
+      {
+        "command": "node tests/update-check.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 423
+      },
+      {
+        "command": "node tests/version-consistency.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 132
+      },
+      {
+        "command": "node tests/release-artifacts.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 285
+      },
+      {
+        "command": "node tests/electron-guard.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 1454
+      },
+      {
+        "command": "node tests/gui-browser-policy.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 93
+      },
+      {
+        "command": "node tests/gui-browser-controller.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 5313
+      },
+      {
+        "command": "node tests/gui-browser-bridge.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 374
+      },
+      {
+        "command": "node tests/gui-browser-tools.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 156
+      },
+      {
+        "command": "node tests/gui-browser-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 552
+      },
+      {
+        "command": "node tests/gui-browser-host.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 109
+      },
+      {
+        "command": "node tests/gui-browser-stop.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 734
+      },
+      {
+        "command": "node tests/stop-barrier.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 1047
+      },
+      {
+        "command": "node tests/managed-processes.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 131
+      },
+      {
+        "command": "node tests/process-tools.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 253
+      },
+      {
+        "command": "node tests/process-stop.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 131
+      },
+      {
+        "command": "node tests/process-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 1687
+      },
+      {
+        "command": "node tests/process-runner.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 147
+      },
+      {
+        "command": "node tests/worktrees.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 33937
+      },
+      {
+        "command": "node tests/worktrees-http.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 5014
+      },
+      {
+        "command": "node tests/worktrees-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 641
+      },
+      {
+        "command": "node tests/runtime-registry.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 217
+      },
+      {
+        "command": "node tests/runtime-http.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 181
+      },
+      {
+        "command": "node tests/runtime-store.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 326
+      },
+      {
+        "command": "node tests/runtime-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 510
+      },
+      {
+        "command": "node tests/runtime-nav.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 7732
+      },
+      {
+        "command": "node tests/runtime-conversation.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 637
+      },
+      {
+        "command": "node tests/runtime-changes.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 22290
+      },
+      {
+        "command": "node tests/runtime-secondary.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 596
+      },
+      {
+        "command": "node tests/runtime-git-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 577
+      },
+      {
+        "command": "node tests/runtime-resources.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 605
+      },
+      {
+        "command": "node tests/runtime-resource-cleanup.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 145
+      },
+      {
+        "command": "node tests/runtime-history-search.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 10404
+      },
+      {
+        "command": "node tests/runtime-finish-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 533
+      },
+      {
+        "command": "node tests/session-runtime.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 1176
+      },
+      {
+        "command": "node tests/pi-supervisor.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 3242
+      },
+      {
+        "command": "node tests/runtime-browser.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 148
+      },
+      {
+        "command": "node tests/process-budget.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 134
+      },
+      {
+        "command": "node tests/runtime-events.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 91
+      },
+      {
+        "command": "node tests/runtime-processes.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 2469
+      },
+      {
+        "command": "node tests/session-revert-object-assets.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 2665
+      },
+      {
+        "command": "node tests/session-revert-object-authority.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 4998
+      },
+      {
+        "command": "node tests/session-revert-object-history.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 21749
+      },
+      {
+        "command": "node tests/session-revert-object-runtime.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 458484
+      },
+      {
+        "command": "node tests/session-revert-object-store.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 5411
+      },
+      {
+        "command": "node tests/session-revert-object-service.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 287664
+      },
+      {
+        "command": "node tests/session-revert-object-recovery.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 16346
+      },
+      {
+        "command": "node tests/session-change-store.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 131486
+      },
+      {
+        "command": "node tests/session-change-bridge.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 220
+      },
+      {
+        "command": "node tests/session-change-tools.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 266
+      },
+      {
+        "command": "node tests/session-revert.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 116
+      },
+      {
+        "command": "node tests/session-revert-store.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 102264
+      },
+      {
+        "command": "node tests/session-revert-http.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 4207
+      },
+      {
+        "command": "node tests/session-revert-integration.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 438
+      },
+      {
+        "command": "node tests/session-revert-writer.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 4065
+      },
+      {
+        "command": "node tests/session-revert-recovery.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 11627
+      },
+      {
+        "command": "node tests/session-revert-admission.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 316
+      },
+      {
+        "command": "node tests/session-revert-apply.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 69945
+      },
+      {
+        "command": "node tests/session-revert-windows-faults.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 7510
+      },
+      {
+        "command": "node tests/session-revert-inplace.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 117513
+      },
+      {
+        "command": "node tests/session-revert-inplace-safety.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 56774
+      },
+      {
+        "command": "node tests/session-change-query.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 4633
+      },
+      {
+        "command": "node tests/session-change-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 709
+      },
+      {
+        "command": "node tests/session-change-startup.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 10491
+      },
+      {
+        "command": "node tests/session-revert-object-writer.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 450893
+      },
+      {
+        "command": "node tests/session-revert-object-faults.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 659154
+      },
+      {
+        "command": "node tests/session-revert-object-witness.cjs",
+        "exitCode": 0,
+        "source": "canonical continuation",
+        "durationMs": 687
+      }
+    ]
+  },
+  "targeted": [
+    {
+      "command": "npm run test:specs",
+      "passed": 43,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:split",
+      "passed": 30,
+      "failed": 0
+    },
+    {
+      "command": "node tests/smoke.cjs",
+      "passed": 1338,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:split:electron",
+      "passed": 32,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:split:electron (device scale 1.25)",
+      "passed": 32,
+      "failed": 0
+    },
+    {
+      "command": "node tests/ui4-pane.cjs",
+      "passed": 280,
+      "failed": 0
+    },
+    {
+      "command": "node tests/app-check.cjs --output-root C:/pi-GUI/.probe/t2a-build-final",
+      "passed": 26,
+      "failed": 0
+    }
+  ],
+  "assertionsNote": "Skipped assertions are not included in passed totals. No aggregate assertion count is inferred from leaf count.",
+  "build": {
+    "command": "npm run build:app -- --rebuild --output-root C:/pi-GUI/.probe/t2a-build-final",
+    "exitCode": 0,
+    "assets": [
+      {
+        "file": "public/app.js",
+        "bytes": 62533,
+        "sha256": "2bedb352cd3bc68612288aff42c71ca9ce840e5bed275f95847c0ae10785aa1a",
+        "packagedMatch": true
+      },
+      {
+        "file": "public/git.js",
+        "bytes": 38978,
+        "sha256": "65d8773f9d870be8dd23056dbbe2f11a1dec65835d70ce56e4f95a4a64dfc229",
+        "packagedMatch": true
+      },
+      {
+        "file": "public/specs-panel.js",
+        "bytes": 15759,
+        "sha256": "1813f62c44121e5f3064c1cfd93b98af25e9fe677c1d28e161b6ccab5097359f",
+        "packagedMatch": true
+      },
+      {
+        "file": "public/ui/secondary-surface.js",
+        "bytes": 2186,
+        "sha256": "6976df9ed8588b6f2865b0ea90c981629cc11e634cbe95e4db02f39e4b29926d",
+        "packagedMatch": true
+      },
+      {
+        "file": "public/ui/split-workbench.js",
+        "bytes": 11581,
+        "sha256": "1139c028baab3419535d6f1cec499e76c02fbcb36cfd9e1a5295be3a94375602",
+        "packagedMatch": true
+      },
+      {
+        "file": "public/ui4-pane.css",
+        "bytes": 21650,
+        "sha256": "1724f35bd7c37fc5551b4752f8ccc033ff56e0f8f7f4a13f48c5c6ec85780509",
+        "packagedMatch": true
+      }
+    ]
+  },
+  "evidenceChecksums": [
+    {
+      "file": "01-single-panel-specs.png",
+      "sha256": "ec4aadc4a1c81ade39e8998d85c0f6632e94e0ce447dc8b21b62268ada1cbdbc"
+    },
+    {
+      "file": "02-split-1200.png",
+      "sha256": "faf2861807b78e5622f1a4e40f67194df32f556215f84562b878b2ce6c56819b"
+    },
+    {
+      "file": "02-split-1536.png",
+      "sha256": "8cd580f062a7a642f0fc5a8ff3971c9b63e252e337644c3c3df1fb6b7adb446a"
+    },
+    {
+      "file": "02-split-720.png",
+      "sha256": "cc1b509c5906823c28eddfb3aa2f578d8e92aba52ec306a678644092da98a7a1"
+    },
+    {
+      "file": "02-split-900.png",
+      "sha256": "542ce6b5fb8db8328e7a5b3367d9a53d880ed59ed3217df3267cc83e46bca560"
+    },
+    {
+      "file": "03-short-window-fallback.png",
+      "sha256": "3263f82592d9bc80a9c6c1c175cd5dbc039aaa42f2f928a12b6ff22636c823a5"
+    },
+    {
+      "file": "04-short-window-changes-tab.png",
+      "sha256": "b70d0befedb16c61ee0a62823eae7549ff48381d8299c24193257ecb219b196b"
+    },
+    {
+      "file": "05-split-zoom-125.png",
+      "sha256": "40c363746c5124f2253541f15ff6689200e0e99457bfa33cd4eed32b46e3392b"
+    },
+    {
+      "file": "06-single-panel-restored.png",
+      "sha256": "94abf8992807fbe4c7758a510667e6f22ce9e808f017dffff07ead4806fb62a6"
+    },
+    {
+      "file": "07-device-scale-125.png",
+      "sha256": "ef1ab4e23c838759ba37958c37841a169e486db07bd992080134698f2f03ec19"
+    },
+    {
+      "file": "08-worktree-b.png",
+      "sha256": "1d15f938bcd87b6dbe301e4f50629ab182f35a4b43efc2b5ccd1763ccf206b68"
+    },
+    {
+      "file": "09-worktree-a-return.png",
+      "sha256": "502ba4c99def0a257a74c25d0240d0b16ed217dd6e1d7b5d857737ac3b168188"
+    },
+    {
+      "file": "10-wide-specs.png",
+      "sha256": "b2b947dff9b2f479ecf35444ee145afa59eec0225ee5eafef5a8c7fd9e4885a0"
+    }
+  ]
+}

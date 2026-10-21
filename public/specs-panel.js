@@ -18,6 +18,10 @@ const button = (text, run) => {
   element.onclick = run;
   return element;
 };
+const requestSplit = () => document.dispatchEvent(new window.CustomEvent(
+  'pi-gui:open-split-workbench',
+  { detail: { source: 'specs' } }
+));
 const formatBytes = (bytes) => {
   const value = Number(bytes);
   if (!Number.isFinite(value) || value < 0) return '';
@@ -26,9 +30,27 @@ const formatBytes = (bytes) => {
   return (value / 1024 / 1024).toFixed(1) + ' MB';
 };
 
-export function openSpecsPanel({
+export function openSpecsPanel(options = {}) {
+  const triggerId = options.triggerId || 'btnSpecs';
+  const split = button('分屏', requestSplit);
+  split.id = 'btnSpecsSplit';
+  split.className += ' rp-btn';
+  split.title = '同时显示 Specs 与文件变更';
+  split.setAttribute('aria-label', '与文件变更分屏');
+  return openSecondarySurface(
+    'specs',
+    (host, view) => mountSpecsPanel(host, view, {
+      ...options,
+      extraActions: [...(options.extraActions || []), split],
+    }),
+    { label: 'Specs 项目文档', headerSelector: '.rp-head', triggerId }
+  );
+}
+
+export function mountSpecsPanel(host, view, {
   transport = { index: fetchSpecs, document: fetchSpecDocument },
   triggerId = 'btnSpecs',
+  extraActions = [],
 } = {}) {
   let alive = true;
   let indexSerial = 0;
@@ -352,14 +374,16 @@ export function openSpecsPanel({
     void loadIndex();
   }
 
-  instance = openSecondarySurface('specs', (host, view) => {
+  instance = view;
+  {
     host.classList.add('specs-surface');
     refresh = button('刷新', () => void loadIndex());
     refresh.className += ' rp-btn';
+    refresh.id = 'btnSpecsRefresh';
     header = createPaneHeader({
       title: 'Specs',
       subtitle: '项目文档 · 只读',
-      actions: [refresh],
+      actions: [refresh, ...extraActions],
       id: 'specsPaneHeader',
     });
     host.append(header.el);
@@ -397,9 +421,7 @@ export function openSpecsPanel({
       docPane.replaceChildren();
     });
     queueMicrotask(() => { if (isCurrent()) void loadIndex(); });
-  }, { label: 'Specs 项目文档', headerSelector: '.rp-head', triggerId });
-
-  return instance;
+  }
 }
 
 function countDocuments(directory) {

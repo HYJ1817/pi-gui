@@ -1,5 +1,18 @@
 # P14-D Stage Work Surfaces
 
+## 当前右栏工作区（T2-A）
+
+下方 P14-D 记录为历史设计。当前 Changes 和 Specs 从会话顶栏进入右栏，
+默认单面板；标题内可开启 Specs（上）+ Changes（下）分屏，没有新增全局导航。
+`ui/secondary-surface.js` 保留一个外层 surface 实例，用 dispose 集合释放两个业务面板；
+`ui/split-workbench.js` 只管布局，两面板分别使用原有 mount、请求和状态。
+分屏比例独立于 `right-pane.js` 的宽度记忆；窗口宽度低于 900px 或内容高度低于
+448px 时回退为单面板页签，保留聊天节点、草稿与原有 dock/overlay 规则。
+Browser 的原生 WebContentsView 仍独占右栏并沿用原有 bounds/occlusion 生命周期。
+细节和验证见 [Specs](specs.md) 与 [T2-A 验收](T2-A-acceptance.md)。
+
+## P14-D 历史记录
+
 Global Rail 的 Home、任务、文件变更、扩展是四个一级视图。`public/ui/workspace-surface.js` 只管理当前视图、Stage 容器、唯一激活的 Rail 项和实例生命周期；各业务模块继续渲染自己的唯一一套内容。`#workspace[data-workspace-view]` 供样式、测试与排查读取，真实状态保存在模块内存中。
 
 切出 Chat 时只隐藏 `#chatView` 和 `#chatComposer`。Conversation、Composer、附件及输入草稿的 DOM 不重建；SSE 消息继续写入同一消息流。返回 Home 即恢复原节点、滚动和当前流式状态。项目切换先回到 Chat，沿用 `workspaceGeneration` 清掉旧项目数据。

@@ -99,6 +99,7 @@
   background:transparent;border:0;border-radius:6px;cursor:pointer;
 }
 .secondary-close:hover{background:var(--ui-hover);color:var(--ui-text-primary)}
+.changes-split-icon{font-size:15px;line-height:1}
 
 /* 工具条里的小按钮（刷新/页签/行内动作）用同一套高度与圆角。 */
 .rp-btn{height:26px;padding:0 9px;border-radius:6px;font-size:11.5px;line-height:1}
@@ -382,4 +383,99 @@
 /* 焦点：面板里的每个可操作元素都要看得见键盘焦点（控件级的形状各面不变）。 */
 .right-pane :is(.rp-tab,.rp-btn,.secondary-close,.process-actions .btn,.session-change-row > .btn):focus-visible{
   outline:2px solid var(--ui-focus);outline-offset:2px;
+}
+
+/* ================= Specs + Changes 分屏工作台 =================
+ *
+ * 外层只做纵向布局；Specs 与 Changes 继续使用各自已有的标题、滚动容器
+ * 与业务状态。分隔条不带动画，拖动时只改两个面板的 flex basis。
+ */
+.workbench-split{
+  display:flex;flex-direction:column;
+  min-width:0;min-height:0;overflow:hidden;
+  container-type:inline-size;
+  background:var(--ui-canvas);
+}
+.workbench-pane{
+  display:flex;flex-direction:column;
+  min-width:0;min-height:0;overflow:hidden;
+}
+.workbench-pane[hidden],
+.workbench-modebar[hidden],
+.workbench-splitter[hidden]{display:none}
+.workbench-pane-specs{border-bottom:0}
+.workbench-pane-changes{border-top:0}
+@container (max-width:559px){
+  .workbench-pane-specs .specs-layout{grid-template-rows:minmax(82px,34%) minmax(0,1fr)}
+  .workbench-pane-specs .specs-layout.is-empty{grid-template-rows:minmax(0,1fr)}
+}
+
+.workbench-modebar{
+  display:flex;align-items:center;gap:5px;
+  flex:0 0 34px;min-width:0;height:34px;
+  box-sizing:border-box;padding:4px var(--rp-pad);
+  background:var(--ui-panel-surface);
+  border-bottom:1px solid var(--ui-border);
+}
+.workbench-tab{
+  flex:0 0 auto;height:25px;padding:0 9px;
+  border:1px solid transparent;border-radius:6px;
+  background:transparent;color:var(--ui-text-secondary);
+  font:inherit;font-size:11px;cursor:pointer;
+}
+.workbench-tab:hover{background:var(--ui-hover);color:var(--ui-text-primary)}
+.workbench-tab[aria-pressed="true"]{
+  border-color:var(--ui-border-strong);
+  background:var(--ui-selected);
+  color:var(--ui-text-primary);
+}
+.workbench-grow{flex:1 1 auto;min-width:0}
+.workbench-exit{flex:0 0 auto}
+.workbench-close{
+  flex:0 0 26px;width:26px;height:26px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;line-height:1;
+}
+
+.workbench-splitter{
+  position:relative;z-index:2;flex:0 0 8px;min-height:8px;
+  box-sizing:border-box;
+  cursor:row-resize;touch-action:none;
+  background:var(--ui-panel-surface);
+  border-top:1px solid var(--ui-border);
+  border-bottom:1px solid var(--ui-border);
+}
+.workbench-splitter-grip{
+  position:absolute;left:50%;top:50%;
+  width:36px;height:2px;border-radius:2px;
+  transform:translate(-50%,-50%);
+  background:var(--ui-border-strong);
+  opacity:.55;
+}
+.workbench-splitter:hover .workbench-splitter-grip,
+.workbench-splitter.is-dragging .workbench-splitter-grip{opacity:1}
+.workbench-splitter:focus-visible{
+  outline:2px solid var(--ui-focus);
+  outline-offset:-2px;
+}
+body.workbench-resizing{cursor:row-resize;user-select:none}
+
+/* 分屏模式下关闭按钮在 Specs 标题带；回退单面板时由模式条接管，
+ * 避免隐藏面板里的按钮仍留在 Tab 顺序中。 */
+.workbench-split.is-fallback .workbench-pane-specs > .rp-head .secondary-close{
+  display:none;
+}
+.workbench-split.is-fallback .workbench-pane-specs > .rp-head .workbench-exit{
+  display:none;
+}
+.workbench-split.is-fallback .workbench-modebar{
+  -webkit-app-region:drag;
+}
+.workbench-split.is-fallback .workbench-modebar button{
+  -webkit-app-region:no-drag;
+}
+
+@container (max-width:360px){
+  .workbench-modebar{padding-inline:8px}
+  .workbench-tab{padding-inline:7px}
 }

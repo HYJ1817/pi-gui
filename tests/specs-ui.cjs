@@ -3,7 +3,7 @@ const { JSDOM } = require('jsdom');
 
 let checks = 0;
 const ok = (name, value) => {
-  assert.ok(value, name);
+  assert.ok(typeof value === 'function' ? value() : value, name);
   checks++;
   console.log('  ok  ' + name);
 };
@@ -154,9 +154,9 @@ function indexPayload(workspaceId, generation, docs) {
     const specsDir = document.querySelector('[data-spec-dir="specs"] > button');
     specsDir.click();
     ok('directory collapse hides its descendants', () =>
-      specsDir.getAttribute('aria-expanded') === 'false' &&
-      document.querySelector('[data-spec-path="specs/overview.md"]') === null);
-    specsDir.click();
+      document.querySelector('[data-spec-dir="specs"] > button').getAttribute('aria-expanded') === 'false' &&
+      document.querySelector('[data-spec-dir="specs"] > .specs-dir-children').hidden);
+    document.querySelector('[data-spec-dir="specs"] > button').click();
     ok('directory expand restores its descendants', () =>
       Boolean(document.querySelector('[data-spec-path="specs/overview.md"]')));
 
