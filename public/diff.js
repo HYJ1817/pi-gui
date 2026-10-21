@@ -42,6 +42,8 @@ import { esc } from './util.js';
 
 /* hunk 头：`@@ -1,3 +1,4 @@`，后面可能跟一段函数上下文 */
 const HUNK_RE = /^@@/;
+/* hunk 头里的四段数字。缺省 count 表示 1；`,0` 在纯新增 / 纯删除时合法。 */
+const HUNK_HEAD_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 /* 文件级元信息。必须排在 + / - 判断**之前** —— 否则 `+++ b/x` 会被当成新增行、
  * `--- a/x` 会被当成删除行，整份 diff 的头两行永远是花的。
  * 但它**只对 hunk 之前的行**成立，见 classify() 的 inHunk 参数。 */
@@ -68,6 +70,89 @@ function lineHtml(line, cls) {
   return `<span class="dl${cls ? ' ' + cls : ''}">${esc(line) || ' '}</span>`;
 }
 
+/** FNV-1a 32 位。只用于「这一行内容是否还是同一行」，不是密码学哈希。 */
+export function lineHash(text) {
+  const value = String(text ?? '');
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+/**
+ * 当前这段 diff 的版本指纹。只纳入 hunk 里真正增删的代码行，不纳入文件名、
+ * 行号、hunk 头或上下文行 —— 调整上下文行数会改变后三者，却不代表被评论的
+ * 改动本身变了。上下文行内容一旦变化，它会以新增/删除行出现，指纹随之变化。
+ */
+export function diffFingerprint(text) {
+  const lines = String(text ?? '').replace(/\r\n/g, '\n').replace(/\n+$/, '').split('\n');
+  let inHunk = false;
+  const code = [];
+  for (const line of lines) {
+    if (HUNK_RE.test(line)) {
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk || line.startsWith('\\')) continue;
+    if (line.startsWith('+') || line.startsWith('-')) code.push(line);
+  }
+  return lineHash(code.join('\n'));
+}
+
+function parseHunkHeader(line) {
+  const match = HUNK_HEAD_RE.exec(line);
+  if (!match) return null;
+  return {
+    oldStart: Number(match[1]),
+    oldCount: match[2] === undefined ? 1 : Number(match[2]),
+    newStart: Number(match[3]),
+    newCount: match[4] === undefined ? 1 : Number(match[4]),
+  };
+}
+
+/**
+ * 一行真正可评论的 diff 正文。
+ *
+ * `.d-add` / `.d-del` 仍然只包住原始代码文本 —— 既有测试、语法配色和长行
+ * 横向滚动都依赖这一点。行号放在旁边的 button 里，因此新增 / 删除 / 上下文
+ * 三类行都能被键盘访问，而不会把数字混进 `.d-add` 的 textContent。
+ */
+function diffLineRow(line, cls, meta, hunkIndex, hunkHeader) {
+  const type = cls === 'd-add' ? 'add' : cls === 'd-del' ? 'del' : 'context';
+  const code = line.slice(1);
+  const oldLine = type === 'add' ? null : meta.oldLine;
+  const newLine = type === 'del' ? null : meta.newLine;
+  const oldText = oldLine === null ? '' : String(oldLine);
+  const newText = newLine === null ? '' : String(newLine);
+  const lineLabel = type === 'add'
+    ? `新增行，新文件第 ${newText} 行`
+    : type === 'del'
+      ? `删除行，旧文件第 ${oldText} 行`
+      : `上下文行，旧文件第 ${oldText} 行，新文件第 ${newText} 行`;
+  const attrs = [
+    `data-line-type="${type}"`,
+    `data-old-line="${oldText}"`,
+    `data-new-line="${newText}"`,
+    `data-hunk-index="${hunkIndex}"`,
+    // Only a hash: a hunk's trailing section text can come from user code, and
+    // untrusted text must not be serialized into an HTML attribute.
+    `data-hunk-header="${lineHash(hunkHeader)}"`,
+    `data-code-hash="${lineHash(code)}"`,
+  ].join(' ');
+
+  return (
+    `<span class="d-row" ${attrs}>` +
+    `<button class="d-gutter" type="button" aria-label="${esc(lineLabel)}；添加或编辑行评论">` +
+    `<span class="d-ln d-ln-old" aria-hidden="true">${esc(oldText)}</span>` +
+    `<span class="d-ln d-ln-new" aria-hidden="true">${esc(newText)}</span>` +
+    '</button>' +
+    `<span class="dl${cls ? ' ' + cls : ''}">${esc(line) || ' '}</span>` +
+    '</span>'
+  );
+}
+
 /** 一个 hunk 块：可点击的标题栏 + 若干行。 */
 function hunkWrap(header, bodyHtml, add, del) {
   const stat = [];
@@ -86,12 +171,19 @@ function hunkWrap(header, bodyHtml, add, del) {
   );
 }
 
-/** 把一段 unified diff 渲染成 HTML。空输入返回空串。 */
-export function diffHtml(text) {
+/**
+ * 把一段 unified diff 渲染成 HTML。空输入返回空串。
+ *
+ * `options.commentable === false` 时退回旧渲染，
+ * 用于调用方已经知道这段内容不能可靠定位的场景。
+ */
+export function diffHtml(text, { commentable = false } = {}) {
   const src = String(text ?? '');
   if (!src.trim()) return '';
 
   const lines = src.replace(/\r\n/g, '\n').replace(/\n+$/, '').split('\n');
+  const fingerprint = diffFingerprint(src);
+  const allowComments = commentable !== false;
 
   const out = []; // 顶层片段：元信息行 + hunk 块
   let hunk = null; // 当前 hunk 的累积状态
@@ -107,13 +199,38 @@ export function diffHtml(text) {
     if (HUNK_RE.test(line)) {
       flush();
       hunkCount += 1;
-      hunk = { header: line, body: [], add: 0, del: 0 };
+      const parsed = parseHunkHeader(line);
+      hunk = {
+        header: line,
+        body: [],
+        add: 0,
+        del: 0,
+        index: hunkCount - 1,
+        anchorable: allowComments && Boolean(parsed),
+        oldLine: parsed ? parsed.oldStart : 0,
+        newLine: parsed ? parsed.newStart : 0,
+      };
       continue;
     }
 
     const cls = classify(line, hunk !== null);
     if (hunk) {
-      hunk.body.push(lineHtml(line, cls));
+      /* 只有以空格 / + / - 开头的行才是真正的 diff 正文。被截断的尾行、
+       * 二进制提示或格式错误的行没有可靠行号，宁可不给评论锚点。 */
+      const codeLine = cls === 'd-add' || cls === 'd-del' || line.startsWith(' ');
+      if (hunk.anchorable && codeLine) {
+        hunk.body.push(diffLineRow(line, cls, hunk, hunk.index, hunk.header));
+        /* 行号只在“这一行真的进入渲染结果”之后才推进。二进制提示、
+         * 无结尾换行标记和无法解析的 hunk 都不会生成假锚点。 */
+        if (cls === 'd-add') hunk.newLine += 1;
+        else if (cls === 'd-del') hunk.oldLine += 1;
+        else {
+          hunk.oldLine += 1;
+          hunk.newLine += 1;
+        }
+      } else {
+        hunk.body.push(lineHtml(line, cls));
+      }
       if (cls === 'd-add') hunk.add += 1;
       else if (cls === 'd-del') hunk.del += 1;
     } else {
@@ -124,7 +241,12 @@ export function diffHtml(text) {
 
   // 顶层片段之间**不插换行**：每一行都是 display:block，换行会再叠一个空行。
   // 容器是 white-space:pre，源码里的换行是真会被渲染出来的。
-  return `<div class="diff" data-hunks="${hunkCount}"><pre class="diff-body">${out.join('')}</pre></div>`;
+  return (
+    `<div class="diff" data-hunks="${hunkCount}"` +
+    ` data-fingerprint="${fingerprint}"` +
+    ` data-anchorable="${allowComments ? '1' : '0'}">` +
+    `<pre class="diff-body">${out.join('')}</pre></div>`
+  );
 }
 
 /* ---------- 折叠交互 ---------- */

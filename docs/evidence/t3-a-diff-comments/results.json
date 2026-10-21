@@ -1,0 +1,76 @@
+{
+  "electron": "44.4.3",
+  "chrome": "152.0.7977.130",
+  "phases": [
+    {
+      "name": "production",
+      "exit": 0,
+      "result": {
+        "phase": "production",
+        "generatedAt": "2026-10-21T15:15:37.804Z",
+        "electron": "44.4.3",
+        "chrome": "152.0.7977.130",
+        "checks": 27,
+        "failed": 0,
+        "error": null,
+        "screenshots": [
+          "01-single-panel-changes.png",
+          "02-two-line-comments.png",
+          "03-review-summary.png",
+          "04-fill-composer.png",
+          "05-unverified-after-refresh.png",
+          "05-stale-comments.png",
+          "06-changes-1536.png",
+          "06-changes-1200.png",
+          "06-changes-900.png",
+          "06-changes-720.png",
+          "07-specs-changes-split.png"
+        ],
+        "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+      }
+    },
+    {
+      "name": "native",
+      "exit": 0,
+      "result": {
+        "phase": "native",
+        "generatedAt": "2026-10-21T15:15:41.293Z",
+        "electron": "44.4.3",
+        "chrome": "152.0.7977.130",
+        "checks": 14,
+        "failed": 0,
+        "error": null,
+        "screenshots": [
+          "08-browser-changes-split.png",
+          "08-browser-changes-split-native-page.png",
+          "09-browser-split-comment.png",
+          "09-browser-split-comment-native-page.png",
+          "10-browser-split-fallback.png"
+        ],
+        "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+      }
+    }
+  ],
+  "checks": 41,
+  "failed": 0,
+  "screenshots": [
+    "01-single-panel-changes.png",
+    "02-two-line-comments.png",
+    "03-review-summary.png",
+    "04-fill-composer.png",
+    "05-unverified-after-refresh.png",
+    "05-stale-comments.png",
+    "06-changes-1536.png",
+    "06-changes-1200.png",
+    "06-changes-900.png",
+    "06-changes-720.png",
+    "07-specs-changes-split.png",
+    "08-browser-changes-split.png",
+    "08-browser-changes-split-native-page.png",
+    "09-browser-split-comment.png",
+    "09-browser-split-comment-native-page.png",
+    "10-browser-split-fallback.png"
+  ],
+  "fixture": "temporary Git repositories; fake pi shim; no user project, no real model",
+  "generatedAt": "2026-10-21T15:15:41.881Z"
+}

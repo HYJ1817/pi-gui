@@ -82,6 +82,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const current = () => (id ? viewOf(id) : EMPTY);
 
   const root = el('div', 'runtime-conversation');
+  root.dataset.conversationId = '';
   host.append(root);
   /* store 一变就重画。本模块只**订阅**、不自己 apply —— 各视图各自 apply 会把
    * eventSequence 游标吃两遍，第二个视图就再也看不到那一帧。 */
@@ -490,6 +491,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       saveScroll();
       if (id) viewOf(id).focusOnReady = null;
       id = next || null;
+      root.dataset.conversationId = id || '';
       ensureModels();
       approvalKey = ''; renderedId = null;
       draw();

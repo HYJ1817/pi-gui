@@ -833,6 +833,11 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .chg-stat{flex:0 0 auto;display:flex;gap:6px;font-family:var(--mono);font-size:11px;color:var(--t3)}
 .chg-stat .add{color:var(--ui-diff-add);font-weight:400}
 .chg-stat .del{color:var(--ui-diff-delete);font-weight:400}
+.chg-review-n{
+  flex:0 0 auto;font-size:10px;line-height:15px;padding:0 6px;border-radius:5px;
+  background:var(--control-active);color:var(--t2);border:1px solid var(--line-soft);
+  white-space:nowrap;
+}
 .chg-acts{flex:0 0 auto;display:flex;gap:5px}
 
 /* 「本会话」标记。只是一个徽章 —— 它不改变这一行在不在列表里（那是过滤的事），
@@ -902,6 +907,96 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .d-hunkstat{flex:0 0 auto;display:flex;gap:5px;font-family:var(--mono);font-size:10.5px;margin-left:auto}
 .d-hunkstat .add{color:var(--ui-diff-add);font-weight:400}
 .d-hunkstat .del{color:var(--ui-diff-delete);font-weight:400}
+
+/* ---------- 行级评论入口 ----------
+ * 行号与评论入口共用左侧窄槽：不改变 .d-add / .d-del 的文本，也不把
+ * 行号混进语法配色。没有评论时入口低调，键盘聚焦时才明显。 */
+.d-hunkwrap > .d-row{
+  display:flex;align-items:flex-start;flex-wrap:wrap;
+  width:max-content;min-width:100%;box-sizing:border-box;padding:0!important;
+}
+.d-hunkwrap > .d-row > .dl{flex:0 0 auto;padding:0 10px;min-width:0}
+.d-gutter{
+  display:flex;flex:0 0 76px;width:76px;box-sizing:border-box;gap:6px;
+  padding:0 7px 0 4px;margin:0;border:0;background:transparent;color:var(--t3);
+  font-family:var(--mono);font-size:9.5px;line-height:inherit;text-align:right;
+  cursor:pointer;user-select:none;
+}
+.d-gutter:hover{background:var(--hover);color:var(--t1)}
+.d-gutter:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+.d-gutter[data-comment="1"]{color:var(--t1)}
+.d-gutter[data-comment="1"]::before{
+  content:"";flex:0 0 4px;width:4px;height:4px;margin-top:.65em;border-radius:50%;
+  background:currentColor;opacity:.72;
+}
+.d-gutter:disabled{cursor:default;opacity:.42}
+.d-ln{min-width:24px;opacity:.68;white-space:nowrap}
+.d-ln-new{text-align:right}
+.d-row.has-comment > .dl{box-shadow:inset 2px 0 0 var(--line-strong, var(--line))}
+.d-row.has-stale-comment > .dl{opacity:.7}
+.d-row.reviewing{background:var(--hover)}
+
+/* 编辑区在代码行内换行展开，不弹窗、不折叠 Diff。 */
+.d-hunkwrap > .d-row > .d-review-editor{
+  flex:1 0 100%;display:flex;flex-direction:column;gap:7px;
+  margin:4px 10px 8px 78px;padding:9px 10px;
+  border:1px solid var(--line);border-radius:8px;background:var(--main);
+  white-space:normal;font-family:var(--sans);font-size:12px;
+}
+.d-review-head{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.d-review-where{color:var(--t2);min-width:0;overflow-wrap:anywhere}
+.d-review-status{margin-left:auto;color:var(--t3);font-family:var(--mono);font-size:10px}
+.d-review-status.err{color:var(--err)}
+.d-review-editor textarea{
+  width:100%;box-sizing:border-box;min-height:62px;max-height:190px;resize:vertical;
+  padding:7px 8px;border:1px solid var(--line);border-radius:7px;
+  background:var(--input);color:var(--t1);font-family:inherit;font-size:12px;line-height:1.55;
+}
+.d-review-editor textarea:focus{outline:0;border-color:var(--focus-ring)}
+.d-review-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.d-review-hint{margin-left:auto;color:var(--t3);font-size:10.5px}
+.d-review-note{
+  flex:1 0 100%;margin:0 0 5px 78px;color:var(--warn,var(--t2));
+  font-family:var(--sans);font-size:10.5px;line-height:1.5;white-space:normal;
+}
+
+/* ---------- 审查意见汇总 ---------- */
+.review-summary-card{max-width:720px}
+.review-summary-head h3{margin:0 0 4px}
+.review-summary-note{margin:0;color:var(--t3);font-size:11px;line-height:1.55}
+.review-summary-actions{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 6px}
+.review-summary-status{min-height:18px;margin:4px 0;color:var(--t3);font-size:11px}
+.review-summary-body{
+  max-height:min(46vh,420px);overflow:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:12px;padding:2px 2px 6px;
+}
+.review-summary-empty{margin:12px 0;color:var(--t3);font-size:12px;line-height:1.6}
+.review-file-group h4{
+  margin:0 0 5px;font-family:var(--mono);font-size:11.5px;font-weight:500;
+  color:var(--t2);overflow-wrap:anywhere;
+}
+.review-item{
+  padding:7px 9px;border:1px solid var(--line-soft);border-radius:7px;
+  background:var(--card);
+}
+.review-item + .review-item{margin-top:5px}
+.review-item[data-stale="true"]{border-style:dashed}
+.review-item-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10.5px;color:var(--t3)}
+.review-item-meta > .btn{margin-left:0}
+.review-item-meta > .btn:first-of-type{margin-left:auto}
+.review-stale{color:var(--warn,var(--t2));font-weight:500}
+.review-unverified{color:var(--t3);font-weight:400}
+.review-item-code{
+  display:block;margin:5px 0;padding:4px 6px;border-radius:5px;
+  background:var(--ui-code-surface);color:var(--t2);
+  font-family:var(--mono);font-size:10.5px;overflow-wrap:anywhere;
+}
+.review-item-text{margin:5px 0 0;color:var(--t1);font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.review-feedback-preview{
+  width:100%;box-sizing:border-box;margin-top:8px;resize:vertical;
+  border:1px solid var(--line);border-radius:8px;background:var(--ui-code-surface);
+  color:var(--t2);font-family:var(--mono);font-size:10.5px;line-height:1.55;padding:8px 9px;
+}
 
 /* 表单 */
 .field{margin-bottom:12px}
@@ -2595,6 +2690,18 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .secondary-surface .chg-diff{flex:0 0 100%;max-width:100%}
 .secondary-surface .chg-filter{flex-wrap:wrap}
 .secondary-surface .chg-hint{background:transparent;border:0;padding:12px 0}
+.secondary-surface .d-gutter{flex-basis:62px;width:62px;padding-right:5px;gap:4px}
+.secondary-surface .d-ln{min-width:20px}
+.secondary-surface .d-review-editor{margin-left:64px}
+
+@container (max-width: 520px) {
+  .secondary-surface .d-gutter{flex-basis:52px;width:52px}
+  .secondary-surface .d-ln{min-width:17px;font-size:9px}
+  .secondary-surface .d-review-editor{margin-left:10px;margin-right:10px}
+  .secondary-surface .d-review-note{margin-left:10px;margin-right:10px}
+  .secondary-surface .d-review-hint{flex:1 0 100%;margin-left:0}
+  .review-feedback-preview{max-width:100%}
+}
 .secondary-close{flex-shrink:0;font-size:20px}
 
 .fallback-enable{display:flex!important;align-items:center;gap:8px;font-weight:400!important}
