@@ -12,6 +12,7 @@
 <link id="ui3-inline-commands-style" data-ui3-inline-commands rel="stylesheet" href="/ui3-inline-commands.css">
 <link rel="stylesheet" href="/process.css">
 <link id="ui4-pane-style" rel="stylesheet" href="/ui4-pane.css">
+<link id="specs-style" rel="stylesheet" href="/specs.css">
 <link id="ui4-approval-style" data-ui4-approval rel="stylesheet" href="/ui4-approval.css">
 <link id="ui4-feedback-style" data-ui4-feedback rel="stylesheet" href="/ui4-feedback.css">
 <link id="ui5-logs-style" data-ui5-logs rel="stylesheet" href="/ui5-logs.css">
@@ -96,6 +97,9 @@
       <div class="sess-plans" id="sessionPlans" hidden></div>
       <div class="head-right">
         <button type="button" class="icon-btn" id="navChanges" aria-label="文件变更" title="文件变更" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M7 4.5h10a2 2 0 0 1 2 2v13l-3-2-3 2-3-2-3 2v-13a2 2 0 0 1 2-2z"/><path d="M10 9.5h4M10 13h4"/></svg><span class="head-count" id="changesCount" hidden></span></button>
+        <button type="button" class="icon-btn" id="btnSpecs" title="项目 Specs" aria-label="项目 Specs" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M6 4.5h9l3 3v12H6z"/><path d="M15 4.5v3h3M9 11h6M9 14h6M9 17h4"/></svg>
+        </button>
         <!-- Browser 与 Changes 是按需右栏；导出与统计收在会话 More 内。
              刻意**不**进左侧全局导航栏 —— 它是一个面板，不是第四个一级视图。 -->
         <button type="button" class="icon-btn" id="btnBrowser" title="内置浏览器" aria-label="内置浏览器" aria-pressed="false">

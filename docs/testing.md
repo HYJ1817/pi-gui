@@ -1198,6 +1198,13 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
 | `npm run test:ui` | `tests/smoke.cjs` | **1256** | 真实点击链路（jsdom 里的整个应用），含**项目菜单作用域**与**安装真实性**两组回归 |
 | `npm run shots:harness` | `tests/cdp-shot.cjs` | 场景 +8 | 真 Chrome 的排版与运行状态 |
 
+### T1 Specs
+
+| 命令 | 套件 | 条数 | 量什么 |
+|---|---|---|---|
+| `npm run test:specs` | `tests/specs.cjs` + `tests/specs-ui.cjs` | **43** | 后端发现/隔离/读取降级 18 条；jsdom 树、链接、刷新、stale、截断/不完整扫描与空态 25 条 |
+| `npm run test:specs:electron` | `tests/specs-electron.cjs` | **10** | production Electron entry、跨文档锚点、未索引路径拒绝、1200/720 布局、空态和三张真实截图；不依赖真 Pi |
+
 ### 两个 correctness blocker 的回归（`tests/smoke.cjs`）
 
 - **项目菜单作用域**：只有当前项目那一行有「项目设置」——非当前项目的菜单

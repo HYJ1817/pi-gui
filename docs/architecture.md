@@ -1,5 +1,13 @@
 # 架构
 
+## T1 只读 Specs
+
+`server/specs.js` 只发现当前项目的根 `SPEC.md` 与 `specs/` 下 Markdown，返回不透明文档 ID；
+正文请求重新发现并按 ID 定位，所有读取继续经过 `lib/safe-path.js` 的 lexical/realpath 边界。
+经典项目使用 runtime cwd/generation，并行会话复用 Changes 的 conversation scope，由后端解析
+登记的 `workspace.cwd`。`public/specs-panel.js` 复用右栏 surface、Markdown 渲染器和现有工作区
+generation 防护；无缓存、无文件监听、无项目写入。见 [specs.md](specs.md)。
+
 ## P32.2 Worktree 生命周期
 
 `lib/git-worktree.js` 复用有界 Git runner，提供 canonical repository/inventory/commit/ref 查询。

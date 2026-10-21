@@ -459,6 +459,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     providers: { handle: stub('providers'), handleModels: stub('providers.models') },
     projects: { handle: stub('projects'), handleFs: stub('projects.fs') },
     projectConfig: { handle: stub('projectConfig') },
+    specs: { handle: stub('specs') },
     skills: { handle: stub('skills') },
     mcp: { handle: stub('mcp') },
     mcpNative: { handleServers: stub('mcp.servers'), handleStatus: stub('mcp.status') },
@@ -566,6 +567,16 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     calls.length = 0;
     hit('GET', '/api/projects', authHeaders);
     return calls[0] === 'projects' || calls.join(',');
+  });
+  check('GET /api/specs 命中 specs', () => {
+    calls.length = 0;
+    hit('GET', '/api/specs', authHeaders);
+    return calls[0] === 'specs' || calls.join(',');
+  });
+  check('GET /api/specs/document 命中 specs，不被 405 兜底吃掉', () => {
+    calls.length = 0;
+    const res = hit('GET', '/api/specs/document', authHeaders);
+    return (calls[0] === 'specs' && res.code !== 405) || calls.join(',') + '/' + res.code;
   });
 
   /* 扩展能力：Skills 有 PUT（启停），所以必须排在「非 GET → 405」之前。 */

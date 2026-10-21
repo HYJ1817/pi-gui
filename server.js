@@ -47,6 +47,7 @@ import { createGitRoutes } from './server/git-routes.js';
 import { createProjects, resolveInitialCwd } from './server/projects.js';
 import { createWorktrees } from './server/worktrees.js';
 import { createProjectConfig } from './server/project-config.js';
+import { createSpecs } from './server/specs.js';
 import { createProviders } from './server/providers.js';
 import { createAuthSdk, sanitizeModelEvent } from './server/provider-auth-sdk.js';
 import { createModelGeneration } from './server/model-generation.js';
@@ -464,6 +465,30 @@ const gitRoutes = createGitRoutes({
     const identity = typeof id === 'string' && id ? runtimeRegistryRef?.workspaceIdentityOf?.(id) : null;
     if (!identity) throw Object.assign(Error('unknown_conversation'), { code: 'unknown_conversation' });
     return withWorkspaceIdentity(identity, workspace => action(workspace.root));
+  },
+});
+const specs = createSpecs({
+  /* Mirror Changes' conversation scope, but read the project cwd rather than
+   * the Git worktree root so a project stored in a repo subdirectory keeps
+   * its own SPEC.md and specs/ tree. */
+  scopeForRequest: async (req) => {
+    const conversationId = req.headers?.['x-pi-gui-conversation'];
+    if (conversationId === undefined) {
+      return {
+        root: runtime.getCurrentCwd(),
+        scopeId: 'classic-chat',
+        generation: String(runtime.getWorkspaceGeneration()),
+      };
+    }
+    const identity = typeof conversationId === 'string' && conversationId
+      ? runtimeRegistryRef?.workspaceIdentityOf?.(conversationId)
+      : null;
+    if (!identity) throw Object.assign(Error('unknown_conversation'), { code: 'unknown_conversation' });
+    return withWorkspaceIdentity(identity, workspace => ({
+      root: workspace.cwd,
+      scopeId: workspace.workspaceId,
+      generation: workspace.workspaceEpoch,
+    }));
   },
 });
 
@@ -1042,6 +1067,7 @@ const route = createRouter({
   sessionExport: createSessionExport({ rpc, runtime, resolvePackageDir: piLaunch.packageDir }),
   projects,
   projectConfig,
+  specs,
   skills,
   mcp,
   mcpNative,

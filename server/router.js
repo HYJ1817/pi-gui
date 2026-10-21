@@ -64,6 +64,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param providers     供应商（handle / handleModels）
  * @param projects      项目（handle / handleFs）
  * @param projectConfig 当前项目的配置（handle）
+ * @param specs         只读 Specs 文档树与正文（handle）
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
  * @param mcpNative     P20.6 原生 MCP 状态与受控动作（handleServers / handleStatus）
@@ -88,6 +89,7 @@ export function createRouter({
   sessionExport = null,
   projects,
   projectConfig,
+  specs = null,
   skills,
   mcp,
   mcpNative = null,
@@ -253,6 +255,11 @@ export function createRouter({
      * 换成独立路径就没有这个约束，也不用在注释里维护「谁必须排在谁前面」。 */
     if (url.pathname === '/api/project-config') {
       return projectConfig.handle(req, res, url);
+    }
+    /* Specs is a read-only project surface. It has its own top-level path so it
+     * cannot be swallowed by the projects prefix or the non-GET fallback. */
+    if (url.pathname === '/api/specs' || url.pathname === '/api/specs/document') {
+      return specs ? specs.handle(req, res, url) : json(res, 503, { ok: false, code: 'specs_unavailable' });
     }
     /* 扩展能力（Skills / MCP）。和 project-config 同理用独立顶层路径，
      * 不挂在别的前缀下面，省掉一条「谁必须排在谁前面」的隐式约束。

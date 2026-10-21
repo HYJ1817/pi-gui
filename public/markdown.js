@@ -192,7 +192,25 @@ function table(head, aligns, rows) {
 const FENCE_OPEN = /^(`{3,}|~{3,})\s*([\w+#.-]*)\s*$/;
 const FENCE_CLOSE = /^(`{3,}|~{3,})\s*$/;
 
-function renderBlocks(lines) {
+function headingSlug(text, ctx) {
+  const plain = String(text)
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[`*_~]/g, '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'section';
+  const seen = ctx.headingSlugs.get(plain) || 0;
+  ctx.headingSlugs.set(plain, seen + 1);
+  return seen ? plain + '-' + (seen + 1) : plain;
+}
+
+function renderBlocks(lines, ctx) {
   const out = [];
   let para = [];
   let i = 0;
@@ -240,7 +258,9 @@ function renderBlocks(lines) {
     if (h) {
       flush();
       // 统一渲染成 h4：对话正文里六级标题的视觉差异没有意义，字号也不该乱跳
-      out.push('<h4>' + inline(h[2]) + '</h4>');
+      // Specs 预览按需加入页内锚点；聊天 Markdown 的既有输出保持不变。
+      const id = ctx.headingIds ? ` id="${esc(headingSlug(h[2], ctx))}"` : '';
+      out.push(`<h4${id}>` + inline(h[2]) + '</h4>');
       i++;
       continue;
     }
@@ -252,7 +272,7 @@ function renderBlocks(lines) {
         buf.push(lines[i].replace(/^\s*>\s?/, ''));
         i++;
       }
-      out.push('<blockquote>' + renderBlocks(buf) + '</blockquote>');
+      out.push('<blockquote>' + renderBlocks(buf, ctx) + '</blockquote>');
       continue;
     }
 
@@ -305,6 +325,7 @@ function renderBlocks(lines) {
 
 /** 渲染一段 Markdown 成 HTML。
  *  返回值里所有标签都由本文件生成，模型原文只以转义后的形式出现。 */
-export function md(src) {
-  return renderBlocks(String(src ?? '').split(/\r?\n/));
+export function md(src, { headingIds = false } = {}) {
+  const ctx = { headingIds: headingIds === true, headingSlugs: new Map() };
+  return renderBlocks(String(src ?? '').split(/\r?\n/), ctx);
 }
