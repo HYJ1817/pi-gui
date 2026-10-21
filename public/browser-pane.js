@@ -65,6 +65,8 @@ function buildToolbar(host) {
 
   const external = mk('browserExternal', ICON_EXTERNAL, '在系统浏览器中打开', '在系统浏览器中打开');
   const close = mk('browserClose', ICON_CLOSE, '关闭内置浏览器', '关闭');
+  const split = mk('browserSplit', '', 'Browser 与 Changes 分屏', 'Browser 与 Changes 分屏');
+  split.textContent = '⇅';
   const agent = mk('browserAgentControl', '', 'Agent 控制', '允许 Agent 控制 localhost 页面', 'btn tiny browser-agent-control');
   agent.textContent = 'Agent 控制';
   agent.setAttribute('aria-pressed', 'false');
@@ -78,7 +80,7 @@ function buildToolbar(host) {
   const title = document.createElement('h3');
   title.className = 'rp-head-title ui4-browser-title';
   title.textContent = '浏览器';
-  bar.append(title, back, forward, reload, address, external, close);
+  bar.append(title, back, forward, reload, address, external, split, close);
 
   const viewport = document.createElement('div');
   viewport.className = 'rp-viewport';
@@ -95,7 +97,7 @@ function buildToolbar(host) {
   agentBar.hidden = true;
   agentBar.append(agent, agentStatus);
   host.insertBefore(agentBar, viewport);
-  return { bar, back, forward, reload, address, external, close, viewport, error, agent, agentStatus, agentBar };
+  return { bar, back, forward, reload, address, external, split, close, viewport, error, agent, agentStatus, agentBar };
 }
 
 /**
@@ -104,10 +106,12 @@ function buildToolbar(host) {
  * @param {() => void} o.onRequestClose   点工具栏的 × 时调用（由外层决定怎么关）
  */
 export function createBrowserSurface({ pane, onRequestClose, bridge = window.piGuiDesktop.browser,
-  surfaceName = 'browser', onAgentState = acceptGuiBrowserState }) {
+  surfaceName = 'browser', onAgentState = acceptGuiBrowserState, onRequestSplit = null }) {
   const host = document.createElement('div');
   host.className = 'rp-surface rp-surface-browser';
   const ui = buildToolbar(host);
+  ui.split.hidden = !onRequestSplit;
+  ui.split.onclick = () => onRequestSplit?.();
 
   let state = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false, error: null };
   let editing = false;
@@ -164,8 +168,10 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
         render();
         try {
           await bridge.setAgentControl(!agentState.enabled);
+          if (disposed) return;
+          const revision = agentRevision;
           const next = await bridge.agentStatus();
-          if (!disposed && next) { agentState = next; onAgentState(next); }
+          if (!disposed && next && revision === agentRevision) { agentState = next; onAgentState(next); }
         } catch {
           if (!disposed) toast('无法更改 Agent 控制状态', 'warn');
         } finally {
@@ -187,10 +193,12 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
       });
 
       unsubs.push(bridge.onState((next) => {
+        if (disposed) return;
         state = { ...state, ...next };
         render();
       }));
       unsubs.push(bridge.onNotice((notice) => {
+        if (disposed) return;
         if (notice?.message) toast(notice.message, 'warn');
       }));
       if (typeof bridge.onAgentState === 'function') unsubs.push(bridge.onAgentState((next) => {
@@ -230,7 +238,8 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
   async function navigate(input) {
     const text = String(input ?? '').trim();
     if (!text) return;
-    const r = await bridge.navigate(text);
+    let r;
+    try { r = await bridge.navigate(text); } catch { r = { ok: false, error: '导航暂不可用' }; }
     if (disposed) return;
     if (!r?.ok) {
       // 拒绝的理由由主进程给（不回显被拒的地址），照实说
@@ -245,7 +254,8 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
     async open() {
       pane.open(surfaceName);
       mount();
-      const r = await bridge.open();
+      let r;
+      try { r = await bridge.open(); } catch { r = { ok: false, error: 'Browser 暂不可用' }; }
       if (disposed) return;
       if (!r?.ok) {
         state = { ...state, error: { kind: 'open-failed', message: r?.error || '无法打开内置浏览器' } };
@@ -259,6 +269,14 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
     openFromAgent() {
       pane.open(surfaceName);
       mount();
+    },
+    moveTo(target, split = false) {
+      if (disposed) mount();
+      target.append(host);
+      ui.split.textContent = split ? '↥' : '⇅';
+      ui.split.title = split ? '退出分屏' : 'Browser 与 Changes 分屏';
+      ui.split.setAttribute('aria-label', ui.split.title);
+      pane.refresh?.();
     },
     close() {
       unmount();
@@ -277,6 +295,31 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
 
 let paneRef = null;
 let surfaceRef = null;
+let moving = false;
+let workbenchOpener = null;
+
+function showClassicBrowser(split = false) {
+  if (!isBrowserAvailable() || (split && !workbenchOpener)) return false;
+  if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane,
+    onRequestSplit: workbenchOpener ? () => showClassicBrowser(paneRef.surface() !== 'browser-changes-split') : null });
+  const surface = surfaceRef;
+  const wasLive = surface.isLive();
+  moving = true;
+  try {
+    if (split) {
+      if (!wasLive) surface.open();
+      workbenchOpener({ returnSurface: 'browser', browserOptions: {
+        mount: target => surface.moveTo(target, true),
+        exit: () => showClassicBrowser(false),
+        refresh: () => paneRef.refresh?.(),
+      } });
+    } else if (wasLive) {
+      paneRef.open('browser');
+      surface.moveTo(paneRef.root.querySelector('.rp-body'));
+    } else surface.open();
+  } finally { moving = false; }
+  return true;
+}
 
 /** 关右栏 = 关浏览器：主进程那边同时销毁 WebContentsView。
  *  反复开 → 关 → 开 必须走同一条路，否则 webContents 会一代代留下来。 */
@@ -291,25 +334,31 @@ function closeBrowserPane() {
 }
 
 /** @param {object} pane  right-pane.js 的 initRightPane() 返回的面板对象 */
-export function attachBrowserPane(pane) {
+export function attachBrowserPane(pane, { openWorkbench = null } = {}) {
   paneRef = pane;
+  workbenchOpener = openWorkbench;
   pane.onSurfaceChange?.((next) => {
-    if (next === 'browser' || !surfaceRef) return;
+    if (moving || next === 'browser' || !surfaceRef) return;
     surfaceRef.close();
     surfaceRef = null;
     window.piGuiDesktop?.browser?.close();
   });
   window.piGuiDesktop?.browser?.onAgentOpen?.(() => {
-    if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane });
+    if (surfaceRef?.isLive()) return;
+    if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane,
+      onRequestSplit: workbenchOpener ? () => showClassicBrowser(paneRef.surface() !== 'browser-changes-split') : null });
     surfaceRef.openFromAgent();
+  });
+  document.addEventListener('pi-gui:workspace-generation', () => {
+    if (surfaceRef) closeBrowserPane();
   });
   return {
     open() {
       if (!isBrowserAvailable()) return false;
-      if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane });
-      surfaceRef.open();
+      void showClassicBrowser();
       return true;
     },
+    openSplit: () => showClassicBrowser(true),
     close: closeBrowserPane,
     /** 入口按钮的行为：没开就开，开着就聚焦地址栏（不重复建 view）。 */
     toggle() {
