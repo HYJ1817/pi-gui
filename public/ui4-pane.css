@@ -74,6 +74,10 @@
   color:var(--ui-text-primary);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;
 }
+.secondary-surface .chg-head{flex-wrap:nowrap;overflow:hidden}
+.secondary-surface .chg-head > .btn,
+.secondary-surface .chg-head > .icon-btn,
+.secondary-surface .chg-head > .secondary-close{flex:0 0 auto;white-space:nowrap}
 .rp-head-sub,
 .secondary-surface .chg-sub{
   flex:0 1 auto;display:block;margin:0;min-width:0;
@@ -351,6 +355,11 @@
  * 窗口本身可能很宽。Chromium 105+ 支持；不支持的浏览器就是「说明一直显示」，
  * 不会坏。 */
 .secondary-surface{container-type:inline-size}
+@container (max-width:620px){
+  /* The title's descriptive subtitle is the first thing to go; review and
+   * refresh must stay on the single 46px toolbar row instead of wrapping. */
+  .secondary-surface .chg-sub{display:none}
+}
 @container (max-width:360px){
   .rp-head-sub,
   .secondary-surface .chg-sub{display:none}

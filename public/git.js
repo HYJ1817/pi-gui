@@ -35,9 +35,28 @@ import {
 } from './api.js';
 import { listChanges, onChanges } from './changes.js';
 import { toast } from './ui/toast.js';
-import { confirmModal } from './ui/modal.js';
+import { confirmModal, openModal } from './ui/modal.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
 import { allHunksOpen, bindDiffToggles, countDiffLines, diffHtml, setAllHunks } from './diff.js';
+import {
+  REVIEW_LIMITS,
+  addComment,
+  beginReviewRefresh,
+  commentCount,
+  commentAtPosition,
+  commentForLine,
+  commentsForPath,
+  commentsForScope,
+  currentReviewScope,
+  deleteComment,
+  formatReviewFeedback,
+  lineLabel,
+  markMissingPathsStale,
+  reconcileSectionOptions,
+  sectionLabel as reviewSectionLabel,
+  updateComment,
+} from './diff-comments.js';
+import { fillReviewComposer } from './review-fill.js';
 
 /* 自动刷新的防抖窗口。
  *
@@ -54,7 +73,17 @@ let scopeRevision = 0;
 document.addEventListener('pi-gui:git-scope', () => {
   scopeRevision++; statusRequest++;
   S.changes = blankChanges(); view.sessionOnly = false;
+  dropReviewDraftSurface();
   renderChangesBody();
+});
+document.addEventListener('pi-gui:workspace-generation', () => {
+  dropReviewDraftSurface();
+});
+document.addEventListener('pi-gui:session-switch', () => {
+  /* Classic session switch: the comment bucket changes with S.state.sessionId,
+   * so unsaved text and expanded-diff state must not survive the switch. */
+  dropReviewDraftSurface();
+  suspendReviewSurface();
 });
 
 const STATUS_LABEL = {
@@ -83,8 +112,55 @@ let lastContext = null;
  * 但可用状态要跟着列表走，所以留一个槽位。 */
 let restoreAllBtn = null;
 let activeChangesSurface = null;
+let reviewButton = null;
+let reviewSummaryClose = null;
+/* A classic session switch changes the comment owner immediately, but
+ * S.state.sessionId only catches up after boot(). Keep the old session's
+ * counts off the screen during that window instead of pretending they belong
+ * to the new session. */
+let reviewScopeSuspended = false;
 /* 批量撤销进行中标记：连点两次会把同一个仓库撤两遍，第二次结果毫无意义。 */
 let restoringAll = false;
+/* Expanded diff state survives a list redraw caused by an external Git refresh. */
+const diffViewState = new Map();
+/* Unsaved comment text is captured before a destructive redraw and restored
+ * only inside the same workspace/conversation scope. */
+const pendingReviewDrafts = new Map();
+/* Block → {path, section, truncated}. A WeakMap keeps user-controlled paths out
+ * of DOM attributes entirely. */
+const reviewBlockMeta = new WeakMap();
+
+/**
+ * Unsaved editor text, which diff is expanded and the summary dialog all belong
+ * to one workspace/conversation. Comments themselves are scope-bucketed and
+ * stay available when the user comes back; only the transient surface is
+ * dropped here.
+ */
+function dropReviewDraftSurface() {
+  pendingReviewDrafts.clear();
+  diffViewState.clear();
+  reviewSummaryClose?.();
+  reviewSummaryClose = null;
+}
+
+function suspendReviewSurface() {
+  reviewScopeSuspended = true;
+  const box = panels.changes;
+  if (box) {
+    for (const node of box.querySelectorAll('.chg-review-n')) node.remove();
+    for (const row of box.querySelectorAll('.d-row.has-comment, .d-row.has-stale-comment')) {
+      row.classList.remove('has-comment', 'has-stale-comment');
+      delete row.dataset.commentId;
+      const gutter = row.querySelector('.d-gutter');
+      if (gutter) {
+        gutter.dataset.comment = '';
+        gutter.setAttribute('aria-pressed', 'false');
+        gutter.title = '为这一行添加评论';
+      }
+    }
+  }
+  syncReviewButton();
+}
 
 /* ---------- 状态 ---------- */
 
@@ -232,6 +308,11 @@ export function scheduleGitRefresh(delay = REFRESH_DEBOUNCE_MS) {
 export async function refreshGitNow() {
   const result = await loadGitStatus();
   if (!result) return;
+  reviewScopeSuspended = false;
+  preserveReviewDrafts();
+  /* New Git state means every anchor must be re-proved by a rendered diff.
+   * Collapsed files keep their comments as "尚未重新确认", never as valid. */
+  beginReviewRefresh();
   renderChangesBody();
 }
 
@@ -264,7 +345,12 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   instance.onDispose(() => {
     panels.changes = null;
     restoreAllBtn = null;
+    reviewButton = null;
     if (activeChangesSurface === instance) activeChangesSurface = null;
+    /* Closing the panel (or swapping it for another surface) discards unsaved
+     * editor text. This is a deliberate rule: drafts live in memory together
+     * with the visible editor, and are never resurrected after a close. */
+    dropReviewDraftSurface();
   });
 
   const head = document.createElement('div');
@@ -297,7 +383,16 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   btnRefresh.textContent = '刷新';
   btnRefresh.onclick = () => refreshGitNow();
 
-  head.append(h, sub, grow, btnAll, btnRefresh, ...extraActions);
+  const btnReview = document.createElement('button');
+  btnReview.type = 'button';
+  btnReview.id = 'btnChangesReview';
+  btnReview.className = 'btn tiny';
+  btnReview.textContent = '审查意见';
+  btnReview.title = '查看、复制或填入当前作用域的行级评论';
+  btnReview.onclick = () => openReviewSummary();
+  reviewButton = btnReview;
+
+  head.append(h, sub, grow, btnAll, btnReview, btnRefresh, ...extraActions);
   card.appendChild(head);
 
   const body = document.createElement('div');
@@ -321,10 +416,12 @@ export function renderChangesBody() {
   const box = panels.changes;
   if (!box || !box.isConnected) return;
 
+  preserveReviewDrafts();
   box.innerHTML = '';
   const c = S.changes;
 
   syncRestoreAllBtn(c);
+  syncReviewButton();
 
   if (!c.loaded) {
     box.appendChild(hint('正在读取 Git 状态…'));
@@ -350,6 +447,7 @@ export function renderChangesBody() {
     return;
   }
   if (!c.files.length) {
+    markMissingPathsStale([]);
     box.appendChild(hint('没有文件变更。工作区是干净的。'));
     return;
   }
@@ -358,6 +456,7 @@ export function renderChangesBody() {
   box.appendChild(filterRow(session));
 
   const shown = view.sessionOnly ? c.files.filter((f) => session.has(f.path)) : c.files;
+  markMissingPathsStale(c.files.map((f) => f.path));
 
   if (!shown.length) {
     /* 两种情况要分开说：账本本身是空的，和账本里有东西但都对不上当前工作区。
@@ -438,6 +537,22 @@ function syncRestoreAllBtn(c) {
   restoreAllBtn.title = usable
     ? `把工作区这 ${c.files.length} 项改动恢复成 Git 中的版本`
     : '当前没有可撤销的改动';
+}
+
+function syncReviewButton() {
+  if (!reviewButton) return;
+  if (reviewScopeSuspended) {
+    reviewButton.textContent = '审查意见';
+    reviewButton.disabled = true;
+    reviewButton.title = '正在切换会话；刷新后显示当前会话的评论';
+    return;
+  }
+  const count = commentCount();
+  reviewButton.textContent = count ? `审查意见 ${count}` : '审查意见';
+  reviewButton.disabled = false;
+  reviewButton.title = count
+    ? `当前作用域有 ${count} 条行级评论；评论只保留到应用重启`
+    : '还没有行级评论；在 Diff 行号上添加';
 }
 
 /* ---------- 列表项 ---------- */
@@ -530,17 +645,25 @@ function changeRow(f, inSession) {
   if (f.binary) stat.textContent = '二进制';
   else fillStat(stat, f.additions, f.deletions);
 
+  const commentN = commentsForPath(f.path).length;
   /* 「本会话」标记。只是标记，不是过滤条件 —— 它回答「这一条是不是 Agent 改的」，
    * 而列表里有没有它由上面的过滤决定。 */
+  const metaNodes = [code, info, stat];
+  if (commentN) {
+    const review = document.createElement('span');
+    review.className = 'chg-review-n';
+    review.textContent = `${commentN} 条评论`;
+    review.title = '这个文件在当前作用域的行级评论数';
+    metaNodes.push(review);
+  }
   if (inSession) {
     const s = document.createElement('span');
     s.className = 'chg-sess';
     s.textContent = '本会话';
     s.title = '这次会话里 write / edit 碰过这个文件';
-    main.append(code, info, stat, s);
-  } else {
-    main.append(code, info, stat);
+    metaNodes.push(s);
   }
+  main.append(...metaNodes);
 
   const acts = document.createElement('span');
   acts.className = 'chg-acts';
@@ -552,22 +675,35 @@ function changeRow(f, inSession) {
   const diffBox = document.createElement('div');
   diffBox.className = 'chg-diff';
   diffBox.dataset.role = 'diff';
-  diffBox.hidden = true;
+  const stateKey = `${currentReviewScope()}\u0000${f.path}`;
+  const retained = diffViewState.get(stateKey);
+  const hasPendingDraft = [...pendingReviewDrafts.values()].some((draft) => draft.path === f.path);
+  const reopen = Boolean(retained?.open && hasPendingDraft);
+  if (retained) diffBox.scrollTop = retained.scrollTop || 0;
+  diffBox.hidden = !reopen;
+  if (reopen) row.classList.add('open');
   row.appendChild(diffBox);
 
   /* 这一个文件的 diff 视图状态。context 是**按文件**记的：想细看某个文件的
    * 上下文是局部需求，不该顺手把别的文件也重拉一遍。 */
-  const dstate = { context: lastContext, loaded: false, busy: false };
+  const dstate = {
+    context: retained?.context ?? lastContext,
+    loaded: false,
+    busy: false,
+    stateKey,
+  };
 
   async function reloadDiff() {
     dstate.busy = true;
     diffBox.innerHTML = '';
     diffBox.appendChild(hint('正在读取差异…'));
 
+    const reviewScroll = diffBox.scrollTop;
     const r = await fetchGitDiff(f.path, dstate.context);
     if (!surface || !surface.isCurrent() || revision !== scopeRevision) return;
     dstate.busy = false;
     dstate.loaded = true;
+    rememberDiffView(dstate, diffBox, true);
 
     // 后端没给出增删行数时（未跟踪文件超限被跳过），从 diff 正文里补一次
     if (!f.binary && f.additions === null && f.deletions === null && r && r.ok) {
@@ -575,7 +711,7 @@ function changeRow(f, inSession) {
       if (n.add || n.del) fillStat(stat, n.add, n.del);
     }
 
-    renderDiffInto(diffBox, r, f, dstate, reloadDiff);
+    renderDiffInto(diffBox, r, f, dstate, reloadDiff, reviewScroll);
   }
 
   /* 点击行 = 就地展开 unified diff。
@@ -583,17 +719,32 @@ function changeRow(f, inSession) {
    * 而且嵌套弹层的返回路径（Esc 关哪一层）很容易做错。 */
   main.onclick = async () => {
     if (!diffBox.hidden) {
+      rememberDiffView(dstate, diffBox, false);
+      preserveReviewDrafts();
       diffBox.hidden = true;
       row.classList.remove('open');
       return;
     }
     diffBox.hidden = false;
     row.classList.add('open');
+    rememberDiffView(dstate, diffBox, true);
     if (dstate.loaded || dstate.busy) return;
     await reloadDiff();
   };
 
+  diffBox.addEventListener('scroll', () => rememberDiffView(dstate, diffBox, !diffBox.hidden), { passive: true });
+  if (reopen) queueMicrotask(() => { void reloadDiff().then(() => { diffBox.scrollTop = retained.scrollTop || 0; }); });
+
   return row;
+}
+
+function rememberDiffView(dstate, box, open) {
+  if (!dstate?.stateKey) return;
+  diffViewState.set(dstate.stateKey, {
+    open: Boolean(open),
+    context: dstate.context,
+    scrollTop: Number(box?.scrollTop) || 0,
+  });
 }
 
 /* ---------- Diff 渲染 ---------- */
@@ -607,13 +758,259 @@ function sectionLabel(text) {
 
 /* diffHtml() 自己先整体转义、再插入白名单标签，所以这里的 innerHTML 是安全的
  * （详见 public/diff.js 顶部的安全模型说明）。 */
-function diffBlock(text) {
+function diffBlock(text, { commentable = true } = {}) {
   const d = document.createElement('div');
   d.className = 'chg-block';
-  d.innerHTML = diffHtml(text);
+  d.innerHTML = diffHtml(text, { commentable });
   const root = d.querySelector('.diff');
   if (root) bindDiffToggles(root);
   return d;
+}
+
+function rowAnchor(row, section, path, fingerprint) {
+  const code = row.querySelector('.dl')?.textContent || '';
+  return {
+    path,
+    section,
+    type: row.dataset.lineType,
+    oldLine: row.dataset.oldLine === '' ? null : Number(row.dataset.oldLine),
+    newLine: row.dataset.newLine === '' ? null : Number(row.dataset.newLine),
+    hunkIndex: Number(row.dataset.hunkIndex),
+    hunkHeader: row.dataset.hunkHeader || '',
+    codeHash: row.dataset.codeHash || '',
+    diffFingerprint: fingerprint,
+    snippet: code.slice(1),
+  };
+}
+
+function rowLine(anchor) {
+  return {
+    type: anchor.type,
+    oldLine: anchor.oldLine,
+    newLine: anchor.newLine,
+    hunkIndex: anchor.hunkIndex,
+    hunkHeader: anchor.hunkHeader,
+    codeHash: anchor.codeHash,
+  };
+}
+
+function draftKey(path, section, anchor) {
+  return `${currentReviewScope()}\u0000${path}\u0000${section}\u0000${anchor.type}\u0000${anchor.oldLine ?? ''}\u0000${anchor.newLine ?? ''}\u0000${anchor.codeHash}`;
+}
+
+/* Unsaved editors are user text, so they are bounded like comments are: a long
+ * session of opening editors cannot grow this map without limit. */
+const MAX_PENDING_DRAFTS = 40;
+
+function setPendingDraft(key, value) {
+  pendingReviewDrafts.delete(key);
+  if (!value) return;
+  pendingReviewDrafts.set(key, value);
+  while (pendingReviewDrafts.size > MAX_PENDING_DRAFTS) {
+    pendingReviewDrafts.delete(pendingReviewDrafts.keys().next().value);
+  }
+}
+
+function preserveReviewDrafts() {
+  const box = panels.changes;
+  if (!box) return;
+  for (const editor of box.querySelectorAll('.d-review-editor[data-draft-key]')) {
+    const text = editor.querySelector('textarea')?.value || '';
+    if (!text.trim()) {
+      pendingReviewDrafts.delete(editor.dataset.draftKey);
+      continue;
+    }
+    setPendingDraft(editor.dataset.draftKey, {
+      text,
+      path: editor.dataset.path || '',
+      section: editor.dataset.section || 'working',
+      anchor: JSON.parse(editor.dataset.anchor || 'null'),
+    });
+  }
+}
+
+function setRowComment(row, comment) {
+  row.classList.toggle('has-comment', Boolean(comment));
+  row.classList.toggle('has-stale-comment', Boolean(comment?.stale));
+  if (comment) row.dataset.commentId = comment.id;
+  else delete row.dataset.commentId;
+  const gutter = row.querySelector('.d-gutter');
+  if (!gutter) return;
+  gutter.dataset.comment = comment ? '1' : '';
+  gutter.setAttribute('aria-pressed', String(Boolean(comment)));
+  gutter.title = comment ? '编辑这一行的评论' : '为这一行添加评论';
+}
+
+function closeReviewEditor(row) {
+  row.querySelector(':scope > .d-review-editor')?.remove();
+  row.classList.remove('reviewing');
+  row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
+}
+
+function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
+  closeReviewEditor(row);
+  const key = draftKey(path, section, anchor);
+  const existing = commentForLine(anchor);
+  const occupied = existing ? null : commentAtPosition(anchor);
+  const draft = pendingReviewDrafts.get(key);
+  const editor = document.createElement('span');
+  editor.className = 'd-review-editor';
+  editor.dataset.draftKey = key;
+  editor.dataset.path = path;
+  editor.dataset.section = section;
+  editor.dataset.anchor = JSON.stringify(anchor);
+
+  const head = document.createElement('span');
+  head.className = 'd-review-head';
+  const where = document.createElement('span');
+  where.className = 'd-review-where';
+  where.textContent = `${path} · ${reviewSectionLabel(section)} · ${existing || occupied ? lineLabel(existing || occupied) : row.querySelector('.d-gutter')?.getAttribute('aria-label')?.split('；')[0] || '代码行'}`;
+  const status = document.createElement('span');
+  status.className = 'd-review-status';
+  status.setAttribute('role', 'status');
+  head.append(where, status);
+
+  const input = document.createElement('textarea');
+  input.rows = 3;
+  input.maxLength = REVIEW_LIMITS.textChars;
+  input.value = draft?.text ?? existing?.text ?? '';
+  input.placeholder = '写下这一行的修改意见（纯文本，不会自动发送）';
+  input.setAttribute('aria-label', `评论 ${path} ${where.textContent}`);
+  input.addEventListener('input', () => {
+    const text = input.value;
+    if (text.trim()) setPendingDraft(key, { text, path, section, anchor });
+    else pendingReviewDrafts.delete(key);
+    status.textContent = `${text.length}/${REVIEW_LIMITS.textChars}`;
+  });
+  status.textContent = `${input.value.length}/${REVIEW_LIMITS.textChars}`;
+
+  const actions = document.createElement('span');
+  actions.className = 'd-review-actions';
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'btn tiny primary';
+  save.textContent = existing ? '保存修改' : '保存评论';
+  save.disabled = Boolean(occupied);
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn tiny';
+  cancel.textContent = '取消';
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn tiny danger';
+  remove.textContent = '删除';
+  remove.hidden = !(existing || occupied);
+  const hintNode = document.createElement('span');
+  hintNode.className = 'd-review-hint';
+  hintNode.textContent = occupied
+    ? '这一行已有一条过期评论；只能删除它，不能再挂一条新的。'
+    : existing ? '评论保存在内存中，应用重启后不保留。' : '同一行第一阶段只保留一条评论。';
+  actions.append(save, cancel, remove, hintNode);
+
+  const fail = (message) => {
+    status.textContent = message;
+    status.classList.add('err');
+  };
+  save.onclick = () => {
+    status.classList.remove('err');
+    const result = existing
+      ? updateComment(existing.id, input.value)
+      : addComment({ path, anchor, text: input.value });
+    if (!result.ok) {
+      fail(result.error);
+      return;
+    }
+    pendingReviewDrafts.delete(key);
+    setRowComment(row, result.comment);
+    closeReviewEditor(row);
+    syncReviewButton();
+    toast(existing ? '评论已更新' : '评论已保存', 'info');
+    row.querySelector('.d-gutter')?.focus({ preventScroll: true });
+  };
+  cancel.onclick = () => {
+    pendingReviewDrafts.delete(key);
+    closeReviewEditor(row);
+    row.querySelector('.d-gutter')?.focus({ preventScroll: true });
+  };
+  remove.onclick = () => {
+    const target = existing || occupied;
+    if (!target) return;
+    deleteComment(target.id);
+    pendingReviewDrafts.delete(key);
+    setRowComment(row, null);
+    closeReviewEditor(row);
+    syncReviewButton();
+    decorateReviewBlocks();
+    toast('评论已删除', 'info');
+    row.querySelector('.d-gutter')?.focus({ preventScroll: true });
+  };
+  if (occupied) {
+    input.value = occupied.text;
+    input.readOnly = true;
+    input.setAttribute('aria-readonly', 'true');
+    input.placeholder = '这条评论的原位置已变化；可复制或删除它。';
+  }
+  editor.append(head, input, actions);
+  row.appendChild(editor);
+  row.classList.add('reviewing');
+  row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'true');
+  if (focus) input.focus({ preventScroll: true });
+}
+
+function decorateReviewBlock(block, path, section, truncated) {
+  const root = block.querySelector('.diff');
+  if (!root) {
+    return;
+  }
+  /* A fixed enum, never user text: used to scope "jump to comment" lookups. */
+  block.dataset.reviewSection = section;
+  reviewBlockMeta.set(block, { path, section, truncated });
+  const fingerprint = root.dataset.fingerprint || '';
+  const rows = [...root.querySelectorAll('.d-hunkwrap > .d-row')];
+  if (truncated) {
+    /* The diff was cut at the backend limit: rows here cannot prove either
+     * validity or disappearance. Leave the stored status untouched instead of
+     * marking every review in this file as "原位置已变化". */
+    const note = document.createElement('p');
+    note.className = 'd-review-note';
+    note.textContent = '差异已截断，无法确认完整行号；此文件的评论暂不能定位，原状态保持不变。';
+    block.appendChild(note);
+    return;
+  }
+  const lines = rows.map((row) => rowLine(rowAnchor(row, section, path, fingerprint)));
+  reconcileSectionOptions(path, section, lines, fingerprint, { complete: true });
+
+  for (const row of rows) {
+    const anchor = rowAnchor(row, section, path, fingerprint);
+    const comment = commentForLine(anchor);
+    setRowComment(row, comment);
+    const gutter = row.querySelector('.d-gutter');
+    if (!gutter) continue;
+    gutter.setAttribute('aria-expanded', 'false');
+    if (!comment) gutter.dataset.comment = '';
+    gutter.onclick = () => {
+      preserveReviewDrafts();
+      openReviewEditor(row, { path, section, anchor });
+    };
+    const draft = pendingReviewDrafts.get(draftKey(path, section, anchor));
+    if (draft) openReviewEditor(row, { path, section, anchor, focus: false });
+  }
+
+}
+
+/** Re-apply row markers after a comment was deleted, without touching editors. */
+function decorateReviewBlocks() {
+  const box = panels.changes;
+  if (!box) return;
+  for (const block of box.querySelectorAll('.chg-block')) {
+    const meta = reviewBlockMeta.get(block);
+    const root = block.querySelector('.diff');
+    if (!meta || !root) continue;
+    const fingerprint = root.dataset.fingerprint || '';
+    for (const row of root.querySelectorAll('.d-hunkwrap > .d-row')) {
+      setRowComment(row, commentForLine(rowAnchor(row, meta.section, meta.path, fingerprint)));
+    }
+  }
 }
 
 /**
@@ -624,7 +1021,7 @@ function diffBlock(text) {
  *                diff 正文是 git 按 -U 现算的，前端没法从已截断的文本里
  *                「补出」被裁掉的上下文行。
  */
-function renderDiffInto(box, r, f, dstate, reload) {
+function renderDiffInto(box, r, f, dstate, reload, restoreScroll = 0) {
   box.innerHTML = '';
 
   // 所有内容塞进一个**每次重画都新建**的容器里挂事件。
@@ -668,11 +1065,16 @@ function renderDiffInto(box, r, f, dstate, reload) {
    * 会让人看不懂到底在跟谁比。 */
   if (staged.trim()) {
     wrap.appendChild(sectionLabel('暂存区（已 git add，尚未提交）'));
-    wrap.appendChild(diffBlock(staged));
+    const block = diffBlock(staged, { commentable: !r.truncated && !r.binary });
+    wrap.appendChild(block);
+    /* 截断的 diff 只允许在安全区显示评论入口；真正的禁用由 decorate 完成。 */
+    decorateReviewBlock(block, f.path, 'staged', r.truncated);
   }
   if (working.trim()) {
     wrap.appendChild(sectionLabel(r.untracked ? '未跟踪文件的内容' : '工作区（尚未 git add）'));
-    wrap.appendChild(diffBlock(working));
+    const block = diffBlock(working, { commentable: !r.truncated && !r.binary });
+    wrap.appendChild(block);
+    decorateReviewBlock(block, f.path, 'working', r.truncated);
   }
 
   /* 折叠按钮的文案和可见性要等**两个 diff 块都挂上去之后**再同步。
@@ -681,6 +1083,234 @@ function renderDiffInto(box, r, f, dstate, reload) {
   tools.sync();
 
   if (r.truncated) wrap.appendChild(truncatedHint(r));
+  if (restoreScroll) box.scrollTop = restoreScroll;
+}
+
+/* ---------- 审查意见汇总 ---------- */
+
+function openReviewSummary() {
+  const scope = currentReviewScope();
+  let closeThis = null;
+  let onReviewChange = null;
+  openModal((card, close) => {
+    closeThis = close;
+    reviewSummaryClose = close;
+    card.classList.add('review-summary-card');
+    const head = document.createElement('div');
+    head.className = 'review-summary-head';
+    const title = document.createElement('h3');
+    title.id = 'reviewSummaryTitle';
+    title.textContent = '审查意见';
+    const note = document.createElement('p');
+    note.className = 'review-summary-note';
+    note.textContent = '当前工作区与聚焦会话的临时评论；不会写入项目、Git 或 Planner，重启后不保留。';
+    head.append(title, note);
+
+    const actions = document.createElement('div');
+    actions.className = 'review-summary-actions';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn primary';
+    copy.textContent = '复制审查意见';
+    const fill = document.createElement('button');
+    fill.type = 'button';
+    fill.className = 'btn';
+    fill.textContent = '填入当前会话';
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'btn';
+    done.textContent = '关闭';
+    done.onclick = () => close();
+    actions.append(copy, fill, done);
+
+    const status = document.createElement('p');
+    status.className = 'review-summary-status';
+    status.setAttribute('role', 'status');
+
+    const body = document.createElement('div');
+    body.className = 'review-summary-body';
+    const preview = document.createElement('textarea');
+    preview.className = 'review-feedback-preview';
+    preview.readOnly = true;
+    preview.rows = 10;
+    preview.setAttribute('aria-label', '审查意见反馈预览');
+
+    const draw = () => {
+      const comments = commentsForScope(scope);
+      body.replaceChildren();
+      if (!comments.length) {
+        const empty = document.createElement('p');
+        empty.className = 'review-summary-empty';
+        empty.textContent = '当前作用域还没有评论。展开任意文件的 Diff，点击代码行左侧的行号即可添加。';
+        body.appendChild(empty);
+      } else {
+        const groups = new Map();
+        for (const comment of comments) {
+          if (!groups.has(comment.path)) groups.set(comment.path, []);
+          groups.get(comment.path).push(comment);
+        }
+        for (const [path, items] of [...groups].sort((a, b) => a[0].localeCompare(b[0], 'zh'))) {
+          const group = document.createElement('section');
+          group.className = 'review-file-group';
+          const heading = document.createElement('h4');
+          heading.textContent = path;
+          group.appendChild(heading);
+          for (const comment of items.sort((a, b) =>
+            String(a.anchor.section).localeCompare(String(b.anchor.section)) ||
+            Number(a.anchor.newLine ?? a.anchor.oldLine) - Number(b.anchor.newLine ?? b.anchor.oldLine)
+          )) {
+            const item = document.createElement('article');
+            item.className = 'review-item';
+            item.dataset.stale = String(Boolean(comment.stale));
+            const meta = document.createElement('div');
+            meta.className = 'review-item-meta';
+            const where = document.createElement('span');
+            where.textContent = `${reviewSectionLabel(comment.anchor.section)} · ${lineLabel(comment)}`;
+            if (comment.stale) {
+              const stale = document.createElement('b');
+              stale.className = 'review-stale';
+              stale.textContent = '原位置已变化';
+              where.append(' ', stale);
+            } else if (comment.verified === false) {
+              /* The list was refreshed but this diff has not been re-rendered,
+               * so the anchor is unproven rather than confirmed. */
+              const pending = document.createElement('span');
+              pending.className = 'review-unverified';
+              pending.textContent = '待重新确认';
+              pending.title = '再次展开这个文件的 Diff 即可确认位置';
+              where.append(' ', pending);
+            }
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'btn tiny';
+            edit.textContent = '编辑';
+            edit.onclick = () => {
+              close();
+              locateAndEdit(comment);
+            };
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'btn tiny danger';
+            del.textContent = '删除';
+            del.onclick = () => {
+              deleteComment(comment.id, scope);
+              syncReviewButton();
+              draw();
+              status.textContent = '评论已删除。';
+            };
+            meta.append(where, edit, del);
+            const text = document.createElement('p');
+            text.className = 'review-item-text';
+            text.textContent = comment.text;
+            if (comment.anchor.snippet) {
+              const code = document.createElement('code');
+              code.className = 'review-item-code';
+              code.textContent = comment.anchor.snippet;
+              item.append(meta, code, text);
+            } else {
+              item.append(meta, text);
+            }
+            group.appendChild(item);
+          }
+          body.appendChild(group);
+        }
+      }
+      const feedback = formatReviewFeedback(commentsForScope(scope));
+      preview.value = feedback;
+      copy.disabled = !comments.length;
+      fill.disabled = !comments.length;
+      if (!comments.length) status.textContent = '';
+    };
+
+    copy.onclick = () => {
+      const text = formatReviewFeedback(commentsForScope(scope));
+      if (!text) return;
+      const write = async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          status.textContent = '审查意见已复制（仅当前作用域，不含完整 Diff）。';
+        } catch {
+          status.textContent = '复制失败，请在下方预览中手动选中。';
+          preview.focus();
+          preview.select();
+        }
+      };
+      void write();
+    };
+    fill.onclick = () => {
+      const text = formatReviewFeedback(commentsForScope(scope));
+      const current = currentReviewScope();
+      if (current !== scope) {
+        status.textContent = '工作区已经变化，未填入其他会话。';
+        return;
+      }
+      const result = fillReviewComposer(text);
+      status.textContent = result.ok
+        ? `已填入当前会话${result.appended ? '（追加在原有草稿之后）' : ''}；不会自动发送。`
+        : result.error;
+      if (result.ok) close();
+    };
+
+    card.append(head, actions, status, body, preview);
+    draw();
+    /* The summary is a live view: a diff that re-renders behind the dialog can
+     * confirm or invalidate anchors while it is open. */
+    onReviewChange = (event) => {
+      if (event?.detail?.scope && event.detail.scope !== scope) return;
+      draw();
+    };
+    document.addEventListener('pi-gui:review-change', onReviewChange);
+  }, () => {
+    if (onReviewChange) document.removeEventListener('pi-gui:review-change', onReviewChange);
+    onReviewChange = null;
+    if (reviewSummaryClose === closeThis) reviewSummaryClose = null;
+  }, { className: 'review-summary', labelledBy: 'reviewSummaryTitle' });
+}
+
+function locateAndEdit(comment) {
+  const path = comment.path;
+  const row = [...(panels.changes?.querySelectorAll('.chg-row') || [])]
+    .find((item) => item.querySelector('.chg-path')?.textContent === path);
+  if (!row) {
+    toast('请先刷新文件变更，再编辑这条评论。', 'warn');
+    return;
+  }
+  if (row.querySelector('.chg-diff')?.hidden) row.querySelector('.chg-main')?.click();
+  /* The diff may still be loading after the click above, so wait for the
+   * anchored row instead of failing on a half-painted panel. */
+  const findRow = () => {
+    const selector = `.chg-block[data-review-section="${comment.anchor.section}"]` +
+      ` .d-row[data-line-type="${comment.anchor.type}"]` +
+      `[data-old-line="${comment.anchor.oldLine ?? ''}"][data-new-line="${comment.anchor.newLine ?? ''}"]` +
+      `[data-code-hash="${comment.anchor.codeHash}"]`;
+    return row.querySelector(selector);
+  };
+  const target = findRow();
+  if (!target) {
+    void locateWhenReady(row, findRow, comment);
+    return;
+  }
+  editLocatedRow(row, comment, target);
+}
+
+function editLocatedRow(row, comment, target) {
+  target.scrollIntoView?.({ block: 'center' });
+  openReviewEditor(target, {
+    path: comment.path,
+    section: comment.anchor.section,
+    anchor: rowAnchor(target, comment.anchor.section, comment.path, target.closest('.diff')?.dataset.fingerprint || ''),
+  });
+}
+
+async function locateWhenReady(row, findRow, comment) {
+  for (let i = 0; i < 40; i++) {
+    const target = findRow();
+    if (target) return editLocatedRow(row, comment, target);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    /* The panel, the row or the scope may have been replaced while waiting. */
+    if (!row.isConnected || !panels.changes?.contains(row) || comment.scope !== currentReviewScope()) return;
+  }
+  toast('这条评论的原位置已变化，请从审查意见中复制或删除。', 'warn');
 }
 
 /** 上下文行数选择 + 全部展开 / 折叠。
