@@ -40,6 +40,7 @@ async function main() {
   const {
     REVIEW_LIMITS,
     addComment,
+    beginReviewRefresh,
     commentCount,
     commentAtPosition,
     commentForLine,
@@ -205,6 +206,59 @@ async function main() {
   reconcileSection('a.txt', 'working', sameLines, anchor.diffFingerprint);
   check('unchanged diffs keep the comment live after refresh', () =>
     commentForLine(anchor)?.stale === false);
+
+  /* A context row can drop out of view purely because the caller asked for
+   * less surrounding context. That proves nothing about the line itself, so
+   * the comment must survive as "待重新确认", never as "当前位置有效". */
+  const ctxFp = diffFingerprint('@@ -1,4 +1,4 @@\n ctx\n-old\n+new\n tail\n');
+  const ctxAnchor = {
+    path: 'ctx.txt',
+    section: 'working',
+    type: 'context',
+    oldLine: 3,
+    newLine: 3,
+    hunkIndex: 0,
+    hunkHeader: 'bbbbbbbb',
+    codeHash: lineHash(' tail'),
+    diffFingerprint: ctxFp,
+    snippet: 'tail',
+  };
+  const ctxCreated = addComment({ path: 'ctx.txt', anchor: ctxAnchor, text: '上下文行意见' });
+  const ctxLine = {
+    type: 'context', oldLine: 3, newLine: 3, codeHash: ctxAnchor.codeHash,
+    hunkIndex: 0, hunkHeader: ctxAnchor.hunkHeader,
+  };
+  reconcileSection('ctx.txt', 'working', [ctxLine], ctxFp);
+  check('a visible context row is verified', () =>
+    ctxCreated.ok === true && commentForLine(ctxAnchor)?.verified === true &&
+    commentForLine(ctxAnchor)?.stale === false);
+
+  reconcileSection('ctx.txt', 'working', [], ctxFp);
+  const hidden = commentForLine(ctxAnchor);
+  check('a hidden context row keeps the comment but marks it unverified', () =>
+    hidden?.stale === false && hidden?.verified === false &&
+    hidden?.resolvedLine === null && commentCount() > 0);
+  check('an unverified comment never reports the position as valid', () => {
+    const text = formatReviewFeedback([hidden]);
+    return text.includes('尚未重新确认') && !text.includes('当前位置有效');
+  });
+
+  reconcileSection('ctx.txt', 'working', [ctxLine], ctxFp);
+  check('a reappearing context row becomes verified again', () =>
+    commentForLine(ctxAnchor)?.verified === true && commentForLine(ctxAnchor)?.stale === false);
+
+  reconcileSection('ctx.txt', 'working', [], ctxFp);
+  check('beginReviewRefresh marks every anchor unverified before the next render', () => {
+    beginReviewRefresh();
+    return commentForLine(ctxAnchor)?.verified === false && commentForLine(ctxAnchor)?.stale === false;
+  });
+
+  const ctxChanged = diffFingerprint('@@ -1,4 +1,4 @@\n ctx\n-old\n+other\n tail\n');
+  reconcileSection('ctx.txt', 'working', [], ctxChanged);
+  check('a context row missing from a changed diff goes stale instead of unverified', () =>
+    commentForLine(ctxAnchor)?.stale === true && commentForLine(ctxAnchor)?.verified === true);
+  check('an unverified comment still blocks the same line', () =>
+    addComment({ path: 'ctx.txt', anchor: ctxAnchor, text: '第二条' }).ok === false);
 
   reconcileSectionOptions('a.txt', 'working', [], '', { complete: false });
   check('a truncated diff leaves both validity and staleness unproven', () =>

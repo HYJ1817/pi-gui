@@ -258,10 +258,16 @@ export function reconcileSectionOptions(
     /* The requested context row may simply be outside the newly requested
      * context. That is safe only for context rows, and only while the set of
      * changed lines is unchanged. A row at the same position with different
-     * content is evidence that the old anchor is gone. */
+     * content is evidence that the old anchor is gone.
+     *
+     * The comment is kept, but this render does not show the row, so the
+     * anchor is unproven rather than verified. Reporting "当前位置有效" here
+     * would claim evidence this diff never produced. */
     if (!samePosition.length && anchor.type === 'context' && comment.lastFingerprint === fingerprint) {
-      if (wasStale) changed = true;
+      if (wasStale || wasVerified !== false) changed = true;
+      comment.stale = false;
       comment.resolvedLine = null;
+      comment.verified = false;
       continue;
     }
 

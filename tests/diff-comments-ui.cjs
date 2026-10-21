@@ -361,6 +361,28 @@ async function main() {
     editor(classicRow).querySelector('textarea').dispatchEvent(new window.Event('input', { bubbles: true }));
     ok('classic sessions get their own comment scope', () =>
       currentReviewScope().includes('classic:classic-a') && commentsForScope().length === 0);
+
+    /* The session-switch event fires before S.state.sessionId catches up.
+     * In that window the old editor must already be gone and its gutters
+     * must refuse to start a new one, otherwise Enter on 保存 would write
+     * into the incoming session's bucket. */
+    const staleGutter = classicRow.querySelector('.d-row[data-new-line="3"] .d-gutter');
+    const staleSave = save(classicRow);
+    document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
+    ok('a session switch closes the old editor synchronously', () =>
+      document.querySelectorAll('.d-review-editor').length === 0 &&
+      !classicRow.querySelector('.d-row.reviewing'));
+    ok('a session switch disables the old diff gutters until the new scope is painted', () =>
+      [...classicRow.querySelectorAll('.d-gutter')].every((b) => b.disabled === true));
+    staleGutter.click();
+    staleSave?.click?.();
+    await tick();
+    ok('a stale gutter or save button cannot open an editor in the switch window', () =>
+      document.querySelectorAll('.d-review-editor').length === 0 &&
+      document.querySelectorAll('.d-row.has-comment').length === 0);
+    ok('the unsaved classic draft was discarded, not stored', () =>
+      commentsForScope().length === 0);
+
     S.state = { sessionId: 'classic-b' };
     document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
     ok('a classic session switch removes the previous review counts immediately', () =>

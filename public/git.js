@@ -147,7 +147,25 @@ function suspendReviewSurface() {
   reviewScopeSuspended = true;
   const box = panels.changes;
   if (box) {
+    /* An open editor belongs to the session that is being left. Close it
+     * synchronously: the old textarea and its 保存 button must not survive
+     * into the window where S.state.sessionId has not caught up yet. */
+    for (const editor of box.querySelectorAll('.d-review-editor')) {
+      const row = editor.closest('.d-row');
+      editor.remove();
+      if (row) {
+        row.classList.remove('reviewing');
+        row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
+      }
+    }
     for (const node of box.querySelectorAll('.chg-review-n')) node.remove();
+    /* The rows still belong to the previous session until the next refresh
+     * repaints them. Without this, their gutters would open an editor whose
+     * anchor would then be written into the new session's bucket. */
+    for (const gutter of box.querySelectorAll('.d-gutter')) {
+      gutter.disabled = true;
+      gutter.title = '正在切换会话；刷新后再添加评论';
+    }
     for (const row of box.querySelectorAll('.d-row.has-comment, .d-row.has-stale-comment')) {
       row.classList.remove('has-comment', 'has-stale-comment');
       delete row.dataset.commentId;
@@ -848,6 +866,9 @@ function closeReviewEditor(row) {
 }
 
 function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
+  /* Belt and braces: a caller that kept a stale row reference must not be able
+   * to open an editor for a session that is already being left. */
+  if (reviewScopeSuspended) return;
   closeReviewEditor(row);
   const key = draftKey(path, section, anchor);
   const existing = commentForLine(anchor);
@@ -913,6 +934,10 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   };
   save.onclick = () => {
     status.classList.remove('err');
+    if (reviewScopeSuspended) {
+      fail('正在切换会话，未保存；请刷新后重试。');
+      return;
+    }
     const result = existing
       ? updateComment(existing.id, input.value)
       : addComment({ path, anchor, text: input.value });
