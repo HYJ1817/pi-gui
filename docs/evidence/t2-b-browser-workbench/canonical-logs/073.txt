@@ -1,0 +1,54 @@
+  ok  global and project candidates are separate
+  ok  duplicate declarations collapse to one path
+  ok  malformed metadata does not hide other extensions
+  ok  unknown extension keeps unknown load and tool states
+  ok  missing declaration is explicit
+  ok  missing managed npm package is diagnosed without installation
+  ok  package metadata supplies only verified version
+  ok  package manifest traversal is rejected
+  ok  RPC command links to extension path
+  ok  no RPC tool registry means no invented tool owner
+  ok  installed and enabled are distinct from loaded
+  ok  future authoritative tool registry maps multiple tools by path
+  ok  unknown tool falls back without an owner
+  ok  tool name does not infer capability from package name
+  ok  config and package metadata secrets are not sent to renderer
+  ok  read-only actions are explicit
+  ok  extension error is scoped and redacted
+  ok  Pi restart clears old runtime evidence
+  ok  untrusted project extension is present but not enabled or loaded
+  ok  unsupported mutation returns 405 without touching settings
+  ok  project switch excludes old project extensions and commands
+  ok  discovery failure and missing RPC do not throw
+  ok  in-flight RPC response from old workspace cannot claim a loaded extension
+  ok  A auto directory manifest discovers entry without index
+  ok  B settings directory resolves all manifest entries
+  ok  B settings directory without entry points uses one-level collection
+  ok  C auto discovery respects exclusion glob
+  ok  D exact force include overrides exclusion
+  ok  E force exclude beats force include and plain directory include regardless of order
+  ok  F package filter handles include exclude and exact overrides
+  ok  F package filter cannot revive manifest-excluded resources
+  ok  F omitted package object filter keeps default manifest resource set
+  ok  malformed filter cannot claim enabled=true
+  ok  G empty package filter explicitly disables all declared extensions
+  ok  H package manifest expands flat and nested glob without hidden paths
+  ok  I filter cannot introduce undeclared or outside-root files
+  ok  I literal and glob manifest traversal are rejected
+  ok  J malformed directory metadata falls back to index and isolates discovery error
+  ok  K disk discovery never invents loaded runtime evidence
+  ok  M settings secrets and extension source never reach renderer report
+  ok  helper patterns match relative path basename and absolute path
+  ok  helper exact overrides do not match basename or glob
+  ok  helper invalid pattern list keeps eligibility unknown
+  ok  directory root index.ts takes precedence over index.js and sibling discovery
+  ok  directory root manifest takes precedence over index
+  ok  ordinary directory manifest treats glob literally and falls back to index
+  ok  directory conventional discovery does not recurse beyond child entry points
+  ok  package without pi manifest uses conventional discovery
+  ok  empty manifest differs from object resource-filter fallback exactly as Pi 0.87
+  ok  unimplemented ignore-file rules carry unknown evidence and diagnostic
+  ok  symlink escape and symlink-root metadata cannot be discovered
+  ok  disabled configuration and current RPC load evidence remain independent until restart
+
+52/52 通过

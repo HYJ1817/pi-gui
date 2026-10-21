@@ -1,0 +1,62 @@
+fault measurement {"name":"write","kind":"real Win32 access-denied injection","nativeCode":5,"bytes":8,"digest":"acea9bbeb39f5ff3651c74794b588e60fa3c73cc48a5ee7b5b5561dacba9582a","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected write
+fault measurement {"name":"partial","kind":"real Win32 access-denied injection","nativeCode":5,"bytes":8,"digest":"244c9a8b7733da1df7e40e163de2052168e98553da964bb54d774da1cf0776bb","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected partial
+fault measurement {"name":"short","kind":"real request-size injection","nativeCode":null,"bytes":4,"digest":"ad49738ddc9ea282f541a4d462213ce512bde2d3a9aeb89ff414a34398985d30","result":"verified","materials":true,"automaticRetry":false}
+ok native injected short
+fault measurement {"name":"eof","kind":"real Win32 access-denied injection","nativeCode":5,"bytes":8,"digest":"48eb8d8c2e73fd567e3eb32793af73b4ae4000a6b7d6755cf8f48f06bab65a8d","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected eof
+fault measurement {"name":"flush","kind":"real Win32 access-denied injection","nativeCode":5,"bytes":4,"digest":"ad49738ddc9ea282f541a4d462213ce512bde2d3a9aeb89ff414a34398985d30","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected flush
+fault measurement {"name":"before_crash","kind":"process/protocol injection","nativeCode":null,"bytes":8,"digest":"acea9bbeb39f5ff3651c74794b588e60fa3c73cc48a5ee7b5b5561dacba9582a","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected before_crash
+fault measurement {"name":"mid_crash","kind":"process/protocol injection","nativeCode":null,"bytes":8,"digest":"244c9a8b7733da1df7e40e163de2052168e98553da964bb54d774da1cf0776bb","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected mid_crash
+fault measurement {"name":"after_crash","kind":"process/protocol injection","nativeCode":null,"bytes":4,"digest":"ad49738ddc9ea282f541a4d462213ce512bde2d3a9aeb89ff414a34398985d30","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected after_crash
+fault measurement {"name":"timeout","kind":"process/protocol injection","nativeCode":null,"bytes":8,"digest":"acea9bbeb39f5ff3651c74794b588e60fa3c73cc48a5ee7b5b5561dacba9582a","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected timeout
+fault measurement {"name":"stdout","kind":"process/protocol injection","nativeCode":null,"bytes":4,"digest":"ad49738ddc9ea282f541a4d462213ce512bde2d3a9aeb89ff414a34398985d30","result":"recovery_required","materials":true,"automaticRetry":false}
+ok native injected stdout
+ok wrong attempt, extra field, wrong binding and duplicate commit rejected
+ok cancel and expired authority never commit
+ok real native protocol refusal nonce
+ok real native protocol refusal attemptId
+ok real native protocol refusal version
+ok real native protocol refusal extra
+ok real native protocol refusal duplicate
+ok real native protocol refusal command
+ok real native protocol refusal budget
+ok pre-ready refusal content
+ok pre-ready refusal replacement
+ok pre-ready refusal hardlink
+ok pre-ready refusal junction
+ok pre-ready refusal badC
+ok pre-ready refusal badR
+ok pre-ready refusal proof
+ok pre-ready refusal unknownVersion
+ok pre-ready refusal arbitraryPath
+ok pre-ready refusal oversize
+ok pre-ready refusal readonly
+ok pre-ready refusal profile
+ok pre-ready refusal helper
+ok pre-ready refusal network
+ok pre-ready refusal filesystem
+ok pre-ready refusal unknownEA
+ok pre-ready refusal unknownADS
+ok pre-ready refusal unknownDACL
+ok pre-ready refusal attributes
+ok pre-ready refusal invalidUTF8
+ok pre-ready refusal controlText
+external race measurement {"race":"ADS","externalProcessSucceeded":true,"preCommitRefused":true,"globalMetadataExclusion":false}
+ok real external metadata race ADS
+external race measurement {"race":"DACL","externalProcessSucceeded":true,"preCommitRefused":true,"globalMetadataExclusion":false}
+ok real external metadata race DACL
+external race measurement {"race":"attributes","externalProcessSucceeded":true,"preCommitRefused":true,"globalMetadataExclusion":false}
+ok real external metadata race attributes
+new core sharing {"action":"write","blocked":true,"code":"EBUSY"}
+new core sharing {"action":"rename","blocked":true,"code":"EBUSY"}
+new core sharing {"action":"parent","blocked":true,"code":"EPERM"}
+ok new core held handles block independent main write, target rename and parent rename
+ok second independent recovery failure retains original C and intermediate D
+Object faults: 45/45; failed=0; skipped=0; no production durable state machine

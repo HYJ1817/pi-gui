@@ -1,0 +1,56 @@
+
+--- A. allowlist 与固定 argv ---
+  ok   A1. 四个已知 id → 四个固定官方 source
+  ok   A2. 未知 id / 空值 / 非字符串 / 原型键 → null（fail closed，绝不猜一个包）
+  ok   A3. 固定 argv 恰好是 install + source + --no-approve
+  ok   A4. argv 里没有 -l / --local / --approve / --all / --self / --force
+  ok   A5. renderer 传 source / command / args / url 一概无效（argv 只由 allowlist 决定）
+  ok   A6. 前端的 installId 集合与服务端 allowlist 完全一致
+
+--- B. 闸门（全在后端） ---
+  ok   B1. 没有显式确认 → confirm-required，不暂停、不执行
+  ok   B2. 未知 capability → unknown-capability（不暂停、不执行）
+  ok   B3. 忙（主会话 / Planner / 验证 / CLI / 更新 / 另一次安装）→ 拒绝并透传原因
+  ok   B4. 忙判据自己抛错 → busy-unknown（fail closed，不当作空闲）
+  ok   B5. 工作区过期 → workspace-stale（__expectedCwd 与 expectedCwd 都认）
+  ok   B6. 证明不到「这份 Pi 的官方入口」→ unsupported（不退回 PATH）
+
+--- C. 单飞（后端自己的锁） ---
+  ok   C1. 并发第二次安装 → install-running，且 runner 只被调一次
+  ok   C2. 跑完之后锁会释放（下一次仍能安装）
+
+--- D. 维护态、失败与恢复 ---
+  ok   D1. 暂停被拒（pause-failed）→ 失败，一次都不执行，也不 resume
+  ok   D2. 暂停超时 → pause-timeout（旧 Pi 还活着就绝不安装），不 resume
+  ok   D3. 已经在维护中（别人建的）→ 放弃，且绝不 resume 别人的维护态
+  ok   D4. 成功：pause → install → 清缓存 → resume，且 reason 是 capability-install
+  ok   D5. 安装子进程失败 → 仍然是失败 + **恢复 bridge**
+  ok   D6. 起不来 / 超时 / 抛错各有稳定 code（不能都叫 install-failed）
+  ok   D7. resume 自己抛错不会盖掉真正的失败原因
+
+--- E. 事实边界 ---
+  ok   E1. 成功只回「命令跑完了」：commandCompleted=true / loaded=null
+  ok   E2. 成功响应**不含** stdout / stderr / 原始输出
+  ok   E3. 响应里没有绝对 Pi 路径 / 入口 / 命令 / 环境变量
+
+--- F. 脱敏与隐私 ---
+  ok   F1. 失败文案脱敏：路径 / Bearer / token 形态都变占位符
+  ok   F2. 模块自己不起进程、不自己装包、不扫 npm
+  ok   F3. 安装逻辑**不在** Extension Registry 里（那条只读边界不动）
+  ok   F4. 共享的 CLI 出口只传 env:{}（令牌由 runCli 剔除，这一层不拼环境）
+
+--- G. server.js 装配 ---
+  ok   G1. 忙判据覆盖五个来源（会话 / CLI / 更新 / 安装 / Planner+验证）
+  ok   G2. 更新与安装**共用同一份**忙判据（不是各写一套）
+  ok   G3. 两个模块共用 launch identity / 缓存失效两个原语
+  ok   G4. router 有 /api/capabilities/install，且排在 405 兜底之前
+  ok   G5. 超时默认值够长（npm 拉包比更新慢）
+
+--- H. HTTP 层 ---
+  ok   H1. 非 POST → 405
+  ok   H2. 请求体不是合法 JSON → 400
+  ok   H3. 未知 capability → 200 + ok:false（业务拒绝不是协议错误）
+  ok   H4. 合法请求 → 200 + ok:true，且 argv 是固定的那三个
+  ok   H5. isRunning() 反映真实在飞状态（前端 disabled 之外的第二个真相）
+
+38/38 通过

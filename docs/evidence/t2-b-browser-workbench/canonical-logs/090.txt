@@ -1,0 +1,79 @@
+
+--- A. 完全兼容 ---
+  ok   A1. status = compatible
+  ok   A2. detected = true
+  ok   A3. 核心能力都是 true
+  ok   A4. 没有 missing
+  ok   A5. 协议信封 observed 被确认
+  ok   A6. 没有异常
+  ok   A7. 版本作为证据一并给出
+
+--- B. 缺可选能力（局部降级，核心仍可用） ---
+  ok   B1. status = partial（不是 incompatible）
+  ok   B2. sessionNaming 被标成不可用
+  ok   B3. 核心能力仍然 true（聊天不受影响）
+  ok   B4. missing 里点名了它
+  ok   B5. 记了一条 command-failed 异常
+  ok   B6. 没见 session_info **不**判命名不可用（「没观察到」≠「不存在」）
+  ok   B7. 它出现在 unverified 而不是 missing
+
+--- C. 缺核心能力 ---
+  ok   C1. spawn 失败 → rpc = false
+  ok   C2. status = incompatible
+  ok   C3. 异常里点名 spawn-failed（不含原始 error 文本）
+  ok   C4. get_state 被明确拒绝 → incompatible
+  ok   C5. 从未 ready 就退出 → rpc-start-failed + incompatible
+  ok   C6. ready 过之后崩溃：不翻 rpc 能力，只记 unexpected-exit
+  ok   C7. ready 之后一句话没说就退出 → rpc-start-failed，不判 compatible
+  ok   C8. 说过话之后才退出 → 只记意外退出，rpc 不受影响
+
+--- D. 版本未知 ---
+  ok   D1. 版本读不到 → compatible（**不是** incompatible）
+  ok   D2. versionKnown = false，version = null
+  ok   D3. 版本未知本身不产生异常
+  ok   D4. 版本探测抛错 → 当作未知，不抛出去
+
+--- E. 上游新增未知字段 ---
+  ok   E1. 多出来的字段不影响判定
+  ok   E2. 也不产生异常
+
+--- F. 未知事件 ---
+  ok   F1. 未知事件不抛
+  ok   F2. 状态不受影响（仍 compatible）
+  ok   F3. 但留下可见记录 unknown-event
+  ok   F4. 记录里带事件名（便于定位是哪个新事件）
+  ok   F5. 不记 payload 内容
+
+--- G. 畸形数据 ---
+  ok   G1. 全部不抛
+  ok   G2. 记了 unparsable-line
+  ok   G3. 记了 not-an-object
+  ok   G4. 记了 missing-type
+  ok   G5. 记了 missing-command
+  ok   G6. get_state 少了 sessionFile → missing-field 并点名字段
+
+--- H. 会话形状兼容 ---
+  ok   H1. 嵌套形状（pi 真实形状）取到消息体
+  ok   H2. 顶层形状（旧/自定义）也认
+  ok   H3. 空/非对象不抛，回 null
+  ok   H4. messagesList 认数组与 {messages} 两种
+  ok   H5. piState 用 sessionFile 当判据
+  ok   H6. 只见到嵌套形状时 sessionJsonl = true
+  ok   H7. 有文件但一条 header 都认不出 → sessionJsonl=false + 异常
+
+--- 三值语义 / 异常缓冲 ---
+  ok   未观察到任何东西 → unknown（不是 incompatible）
+  ok   未观察到时 detected = false
+  ok   所有能力都是 null
+  ok   只起来了还没问过任何命令 → 不是 incompatible
+  ok   异常缓冲有上限（≤20）
+  ok   保留的是最新的那批
+  ok   报告里不含任何原始值（只记结构与类型）
+  ok   报告里不含用户绝对路径指纹
+  ok   reset() 清空全部证据
+
+--- summary（前端降级用） ---
+  ok   summary 给出 status 与 missing
+  ok   summary 里没有任何多余字段（只给降级需要的东西）
+
+57/57 通过

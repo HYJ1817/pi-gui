@@ -1,0 +1,165 @@
+
+--- A. 归一化（老数据 / 非法值） ---
+  ok   A1. 老 Attempt 没有 review → 默认 pending
+  ok   A2. 老 Attempt 没有 verificationSnapshot → null
+  ok   A8. revision 默认 0
+  ok   A9a. 非法 revision（负数）被安全归一到 0
+  ok   A5. 非法 status（approved）被安全归一到 pending
+  ok   A6b. 非字符串 note 被归一到空串
+  ok   A9b. 非法 outcomeStatus 被归一到 null（不猜）
+  ok   §13. snapshot 只保留 command/description，多余键一律丢弃
+  ok   §13b. snapshot 里不含 prompt / cwd 这类多余内容
+  ok   §5/§20. 老计划照常能加载（不要求迁移）
+  ok   §5. 老计划照常出现在列表里
+
+--- B. verificationSnapshot ---
+  ok   B10. command 形式的验证要求被冻结进 attempt
+  ok   B15. snapshot 里不含 task.description
+  ok   B16. snapshot 里不含 prompt（不带「# 任务：」那种拼装正文）
+  ok   B11. description 形式的验证要求同样被冻结
+  ok   B12. 没有 verification → verificationSnapshot = null
+  ok   B13-prep. 改 verification 的 PUT 成功
+  ok   B13. 改了 task.verification 之后，历史 attempt 的 snapshot 不变
+  ok   B13b. 任务当前的 verification 确实已经是新值（证明上一条不是因为没改成功）
+
+--- C. 审阅资格 ---
+  ok   C17. success → accepted 允许
+  ok   C18. success → needs_changes 允许
+  ok   C-prep. 失败尝试的 outcomeStatus 是 failed（稳定字段，不是从 error 文案猜的）
+  ok   C-prep2. 失败尝试的 error 文案里没有「取消」之类的字样可供猜测
+  ok   C20. failed → accepted 拒绝
+  ok   C19. failed → needs_changes 允许
+  ok   C-prep3. 取消尝试的 outcomeStatus 是 cancelled
+  ok   C21. cancelled → accepted 拒绝
+  ok   C21b. cancelled → needs_changes 允许
+  ok   C-prep4. 中断尝试的 outcomeStatus 是 interrupted
+  ok   §36. 中断的 attempt 的 review 是 pending
+  ok   §36b. 中断的 attempt 保留了开始时冻结的 verificationSnapshot
+  ok   C22. interrupted → accepted 拒绝
+  ok   C22b. interrupted → needs_changes 允许
+  ok   C23. running → accepted 拒绝
+  ok   C24. running → needs_changes 拒绝
+  ok   C24b. running → 连「清除」也拒绝（没有记录可清）
+
+--- D. 精确定位 ---
+  ok   D-prep0. 失败尝试可以标记「需修改」
+  ok   D-prep. 该任务确实有两条 attempt
+  ok   D-prep2. Attempt 1 失败、Attempt 2 成功（各自的稳定结论）
+  ok   D25a. 给 Attempt 1 写审阅成功
+  ok   D25. 给 Attempt 1 写审阅**不改** Attempt 2
+  ok   D26a. 给 Attempt 2 写审阅成功
+  ok   D26. 给 Attempt 2 写审阅**不改** Attempt 1
+  ok   D27. task 不存在 → 稳定返回 ok:false（不是 500）
+  ok   D28. attempt 不存在 → 稳定返回 ok:false
+
+--- E. revision 与并发 ---
+  ok   E29/E30a. revision 1 → 2（每次成功写入都 +1）
+  ok   E30b. revision 2 → 3
+  ok   E30c. 只改 note 也递增 revision（§8 明确列出）
+  ok   E31. 陈旧的 expectedRevision → 409 review-conflict
+  ok   E31b. 冲突响应带 currentRevision（界面据此提示重新加载）
+  ok   E32. 陈旧的写入**没有**覆盖最新的 note
+  ok   E32b. 陈旧的写入没有改动 revision
+  ok   E33. 两个并发请求（同一个 expectedRevision）只能一个成功
+  ok   E33b. 另一个必须拿到冲突（不能两个都返回成功）
+  ok   E33c. 最终 revision 只涨了一次（不是两次）
+
+--- F. 持久化 ---
+  ok   F34. 重新从磁盘读，审阅仍在
+  ok   F35. reviewedAt 由后端生成（是数字且接近现在）
+  ok   F35b. 落盘文件里确实有 review 字段
+  ok   F36. 用同一个接口把状态改回 pending（清除）
+  ok   F37. 清除后 reviewedAt = null
+  ok   F37b. 清除后 note 也清空
+  ok   F38. 清除后 revision 继续递增（不是归零）
+  ok   F38b. 清除后的状态在磁盘上也生效
+  ok   F38c. 清除 Attempt 1 不影响 Attempt 2
+
+--- G. 重试 ---
+  ok   G40. 重试后 Attempt 1 的审阅历史保留（revision 累计到 3，没被新 attempt 清零）
+  ok   G41. 新的 Attempt 2 从 pending 起、revision 0 —— 重试**不继承**上一次的人工判断
+  ok   G42. Attempt 1 的 snapshot 是**当时**的要求（npm test）
+  ok   G42b. Attempt 2 的 snapshot 是**改过之后**的要求（npm run test:unit）
+  ok   G42c. 两条 attempt 的 snapshot 不同（各自反映当时的要求）
+  ok   G42d. 两条 attempt 的历史都在（没被覆盖）
+  ok   G-policy. 已成功的任务允许显式重试（P8-B 起；不再返回 settled）
+  ok   G-policy2. 重试没有动历史 attempts（还是 1 条）
+
+--- H. 计划编辑不擦历史 ---
+  ok   H43-prep. 改标题成功
+  ok   H43. 改 Plan title 不丢 Review
+  ok   H43b. 改 Plan title 不丢 Attempt history
+  ok   H44-prep. 改任务标题成功
+  ok   H44. 改 Task title 不丢 Review
+  ok   H45. 改 verification 不改历史 Snapshot
+  ok   H45b. 任务当前 verification 已是新值
+  ok   H45c. 三次 attempt 的 review / snapshot 都还在
+  ok   H46-prep. 陈旧 PUT 成功
+  ok   H46. 陈旧 Plan PUT 不覆盖新 Attempt（仍是最新的 3 条）
+  ok   H46b. 陈旧 PUT 也没有擦掉 Review
+  ok   H46c. 陈旧 PUT 的 attempts:[] 没有被当成「用户删掉了历史」
+
+--- H2. 被跳过的任务保留结论 ---
+  ok   H2-prep. PUT 成功
+  ok   H2. 改计划标题不会把 skipped 的任务退回 pending
+
+--- I. 项目归属 ---
+  ok   I47. A 项目里写 A 的计划 → 允许
+  ok   I48. B 项目写 A 的计划 → 403
+  ok   I48b. 403 之后磁盘上的审阅没有被动过
+  ok   I48c. 跨项目连读都不给（403）
+
+--- J. 隐私 ---
+  ok   J-prep. 写入了带特征串的 note
+  ok   J49. review / snapshot 里不含绝对 cwd
+  ok   J50. snapshot 里不含 prompt 正文
+  ok   J51. review 里不含完整 diff（没有 @@ / +++ / --- 这类 hunk 标记）
+  ok   J51b. review 只有四个字段，没有夹带别的东西
+  ok   J52. 诊断报告里没有审阅说明正文
+  ok   J52b. 诊断报告里也没有计划正文（连 plans 目录内容都不带出）
+
+--- K. 非法输入与写盘失败 ---
+  ok   K31a. status 非法
+  ok   K31b. note 不是字符串
+  ok   K31c. note 超限
+  ok   K31d. 缺 expectedRevision
+  ok   K31e. expectedRevision 非整数
+  ok   K31f. expectedRevision 为负
+  ok   K31g2. 1000 字边界被接受
+  ok   K31h. attempt 号非正整数 → 稳定拒绝
+  ok   K31i. attempt 号不是数字 → 稳定拒绝（不是 500）
+  ok   K31j. plan 不存在 → 404（与既有 API 一致）
+  ok   K31k. 路径形状不对 → 不是 500
+  ok   K29. 写盘失败 → 明确报错（不返回 ok:true）
+  ok   K29b. 写盘失败后磁盘上的原记录仍可读且没变
+
+--- L. 审阅只改审阅 ---
+  ok   L-prep. 给失败任务写 needs_changes 成功
+  ok   §33. 审阅不改 task.status（执行状态仍是 failed）
+  ok   §33b. 审阅不改 plan.status
+  ok   §33c. 审阅不产生新 attempt、不触发重试
+  ok   §33d. 审阅没有启动任何计划（调度器仍是空闲）
+
+--- M. 返回值形状 ---
+  ok   M32. 成功响应只回这一条 review（+ P11 的工作流后果），不回整份 plan
+  ok   M32d. gate 只带工作流后果（planStatus / reason / ready），不是计划副本
+  ok   M32b. 响应里没有 tasks / plan 大对象
+  ok   M32c. 响应的 review 形状正确
+
+--- N. 两个写者不互相覆盖（计划仍 active 时写审阅） ---
+  ok   N-prep. 计划已启动
+  ok   N-prep2. 拿到了「A 已完成、B 还在跑」的窗口（计划仍 active）
+  ok   N-prep3. 此刻调度器确实认为计划在跑
+  ok   N1. 计划运行中也能给**已结束**的 attempt 写审阅（不需要禁止）
+  ok   N2. B 跑完（Scheduler 又 persist 过一次）之后，A 的审阅**没有丢**
+  ok   N2b. B 自己的 attempt 也正常落盘了
+  ok   N2c. B 的 review 是默认 pending（没人审阅过它）
+  ok   N3-prep. 并行下也拿到了那个窗口
+  ok   N3. 并行时给已完成的 A 写审阅成功
+  ok   N4. 并行的 B 完成后，A 的审阅没有丢
+  ok   N5-prep. 审阅写入成功
+  ok   N5-prep2. 并发的 PUT 也成功（没被拒）
+  ok   N5b. PUT 的标题确实改了（证明它真的执行过）
+  ok   N5. 并发的 Plan 编辑没有擦掉刚落盘的审阅
+
+133 passed, 0 failed

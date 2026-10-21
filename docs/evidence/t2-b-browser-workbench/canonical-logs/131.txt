@@ -1,0 +1,17 @@
+  ok  zero count and unchanged backend limits
+  ok  classic external child occupies one regular slot
+  ok  classic plus A fills regular slots
+  ok  unconfirmed third does not spawn
+  ok  confirmed third uses existing backend admission
+  ok  fourth reaches backend rejection without spawn
+  ok  fourth rejection preserves A and B
+  ok  failed cleanup stays occupied and visibly pending
+  ok  failed cleanup retains workspace lease and owner
+  ok  failed cleanup cannot be replaced by resume
+  ok  failed cleanup does not donate its slot to C
+  ok  Pi and Browser completion cannot release unfinished Process slot
+  ok  no close event before all cleanup barriers complete
+  ok  all cleanup confirmations release slot and lease
+  ok  confirmed close keeps dormant conversation without owner
+  ok  app restart discovers dormant records without children
+Runtime resource cleanup: 16/16

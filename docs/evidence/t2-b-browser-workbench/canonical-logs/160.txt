@@ -1,0 +1,57 @@
+ok Mock classification R alone
+ok Mock classification C alone
+ok Mock classification no commit
+ok Mock classification durable result
+ok Mock classification partial bytes
+ok Mock classification new object
+ok Mock classification new D
+ok Mock classification metadata external change despite R
+ok Mock classification bad materials
+ok Mock missing observation cannot establish verified result
+ok Mock witness schema accepts only a complete matching observation
+ok Mock witness rejects changed fullSDDL
+ok Mock witness rejects changed sacl
+ok Mock witness rejects changed dacl
+ok Mock witness rejects changed ads
+ok Mock witness rejects changed ea
+ok Mock witness rejects changed attributes
+ok Mock witness rejects changed id
+ok Mock witness rejects changed auditReadable
+ok Mock witness unknown SACL never becomes empty
+privilege {"phase":"privilege","auditEnabled":false,"auditError":1300}
+ok read-only audit privilege probe
+API observation {"fault":"write_failure","cause":"write_failed","nativeCode":5,"bytes":8,"digest":"acea9bbeb39f5ff3651c74794b588e60fa3c73cc48a5ee7b5b5561dacba9582a","injected":true}
+ok real Win32 injected write_failure
+API observation {"fault":"write_after_partial_failure","cause":"write_failed","nativeCode":5,"bytes":8,"digest":"244c9a8b7733da1df7e40e163de2052168e98553da964bb54d774da1cf0776bb","injected":true}
+ok real Win32 injected write_after_partial_failure
+API observation {"fault":"eof_failure","cause":"eof_failed","nativeCode":5,"bytes":8,"digest":"48eb8d8c2e73fd567e3eb32793af73b4ae4000a6b7d6755cf8f48f06bab65a8d","injected":true}
+ok real Win32 injected eof_failure
+API observation {"fault":"flush_failure","cause":"flush_failed","nativeCode":5,"bytes":4,"digest":"ad49738ddc9ea282f541a4d462213ce512bde2d3a9aeb89ff414a34398985d30","injected":true}
+ok real Win32 injected flush_failure
+API observation {"fault":"zero_write","cause":"short_write","nativeCode":0,"bytes":8,"digest":"acea9bbeb39f5ff3651c74794b588e60fa3c73cc48a5ee7b5b5561dacba9582a","injected":true}
+ok real Win32 injected zero_write
+ok limited nonzero Win32 request exercises short-write loop
+ok post-write journal commit failure leaves R and incomplete history
+ok new fixture recovery plan restores durable C after partial write and backs up D
+ok second recovery failure retains original and intermediate preimages
+ok actual child changes D after crash; restart never retries
+ok corrupt object rejects reopen without workspace mutation
+ok corrupt journal rejects reopen without workspace mutation
+size observation {"size":1024,"digest":"fa243ac10569969fbe50eb5a47b8aa578d968965bbd7c33a035a255cbf2c6935","environmentCarriesContent":false}
+ok disk transport mixed UTF-8 byte-exact 1024
+size observation {"size":65536,"digest":"cd692c58bb7ddf6268d86fa03075b272ba457da6f906c714dde4f00f9f3e81ec","environmentCarriesContent":false}
+ok disk transport mixed UTF-8 byte-exact 65536
+size observation {"size":2097152,"digest":"d7c2810746d5b12a674743d58447e983b876f83902323aefbed6b735eb7004d5","environmentCarriesContent":false}
+ok disk transport mixed UTF-8 byte-exact 2097152
+ok tampered input rejects before native ready
+sharing observation {"action":"write","code":"EBUSY","realChild":true}
+sharing observation {"action":"rename","code":"EBUSY","realChild":true}
+sharing observation {"action":"replace","code":"EPERM","realChild":true}
+ok independent main stream writes and target rename are blocked by held data handle
+ok independent attribute handle can mutate while unnamed data stream is held
+Archive race {"handleApi":true,"externalHiddenWasSet":true,"cachedRestoreLostHidden":true,"productionEnabled":false}
+ok official Archive reset works but stale attribute replay loses independent Hidden change
+ok Archive already set preserves tested attributes without repair
+ok attribute old identity refuses replacement object
+ok missing audit privilege never changes SACL or creates setup marker
+session-revert-inplace-safety: 43/43; failed=0; skipped=0; research only; no production eligibility

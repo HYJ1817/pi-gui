@@ -1,0 +1,107 @@
+  ok  models.json GET never returns stored key/header values
+  ok  safe configuration still contains model id
+  ok  safe metadata POST preserves existing disk credential
+  ok  safe metadata POST preserves provider and same-id model headers only on disk
+  ok  POST response and subsequent GET never expose preserved keys or headers
+  ok  get_state model projection strips keys, headers and unknown auth fields
+  ok  get_state failed model operation strips native error and credential body
+  ok  get_available_models model projection strips keys, headers and unknown auth fields
+  ok  get_available_models failed model operation strips native error and credential body
+  ok  set_model model projection strips keys, headers and unknown auth fields
+  ok  set_model failed model operation strips native error and credential body
+  ok  cycle_model model projection strips keys, headers and unknown auth fields
+  ok  cycle_model failed model operation strips native error and credential body
+  ok  get_state null model preserved while unknown auth state omitted
+  ok  bridge stderr has closed safe diagnostic shape
+  ok  bridge parse error has closed safe diagnostic shape
+  ok  malformed JSON shape returns safe HTTP 400: null
+  ok  malformed JSON shape returns safe HTTP 400: []
+  ok  malformed JSON shape returns safe HTTP 400: "string"
+  ok  malformed JSON shape returns safe HTTP 400: 1
+  ok  malformed JSON shape returns safe HTTP 400: true
+  ok  HTTPS OAuth URL accepted
+  ok  unsafe OAuth URL rejected: javascript
+  ok  unsafe OAuth URL rejected: file
+  ok  unsafe OAuth URL rejected: http
+  ok  unsafe OAuth URL rejected: https
+  ok  unsafe OAuth URL rejected: https
+  ok  ChatGPT OAuth native metadata
+  ok  Pi-confirmed OAuth credential is locally connected
+  ok  account label never derived from raw credential
+  ok  stored API key is separate from authenticated
+  ok  API provider has no OAuth login
+  ok  API key is managed outside renderer
+  ok  unknown is null, not logged out
+  ok  environment remains its own source
+  ok  login enters a real single flight
+  ok  duplicate login rejected
+  ok  logout blocked until login drains
+  ok  browser phase from Pi event
+  ok  untrusted progress/instructions not echoed
+  ok  device code state
+  ok  select interaction uses native option ids
+  ok  answer accepted
+  ok  native promise gets selected id
+  ok  duplicate callback rejected
+  ok  workspace switch does not restart auth
+  ok  same Pi restart does not cancel auth
+  ok  success verified through Pi readback
+  ok  busy chat defers model reload
+  ok  idle chat refreshes real models
+  ok  logout operation started
+  ok  logout refreshes native credential metadata
+  ok  logout calls native API only once
+  ok  cancel state retained
+  ok  cancel error never carries credentials
+  ok  changed Pi identity invalidates old login
+  ok  maintenance rejects both login and logout before creating any flow
+  ok  maintenance release permits login while chat task remains busy
+  ok  busy chat defers model synchronization after maintenance release
+  ok  post-native credential read waits behind older pending status poll
+  ok  post-commit fresh read supersedes pre-commit poll credential snapshot
+  ok  later status polling retains native-confirmed credential after commit
+  ok  timeout aborts native login and ends failed
+  ok  timeout rejects pending native prompt
+  ok  timeout prompt settles rejected rather than hanging
+  ok  late response after timeout rejected as stale
+  ok  timeout performs native status readback and safe error projection
+  ok  login rejection produces fixed native-auth-failed
+  ok  login failure still re-reads credential state
+  ok  logout rejection produces fixed native-auth-failed
+  ok  logout failure still re-reads credential state
+  ok  late native success cannot resurrect cancelled flow
+  ok  late progress does not expose cancelled URL
+  ok  unsafe native URL aborts controller flight
+  ok  unsafe native URL credential absent from safe snapshot
+  ok  native prompt abort rejects only that prompt
+  ok  native prompt abort invalidates old prompt response
+  ok  native browser callback may complete after prompt abort
+  ok  actual public SDK worker discovers native OAuth and API methods
+  ok  actual public SDK enumeration never resolves stored API key
+  ok  actual worker environment excludes renderer HTTP credential
+  ok  actual public SDK credentials omitted from descriptors and worker messages
+  ok  actual stdout/stderr contain fixture secrets only on private streams
+  ok  actual progress and browser instructions projected before worker exit
+  ok  actual worker device native interaction confirms stored credential
+  ok  actual worker device callback preserves safe device code
+  ok  actual worker manual native interaction confirms stored credential
+  ok  actual worker manual prompt omits native message and extra fields
+  ok  actual worker select native interaction confirms stored credential
+  ok  actual worker select prompt omits native message and extra fields
+  ok  actual worker native abort signals matching prompt ID without aborting OAuth
+  ok  actual worker browser callback success survives native prompt abort
+  ok  actual worker failure errors use safe fixed code
+  ok  actual worker secret-input errors use safe fixed code
+  ok  actual worker logout error never exposes native exception
+  ok  actual worker logout re-enumeration confirms removed stored OAuth
+  ok  actual worker unsafe URL flow fails closed and aborts native SDK
+  ok  actual worker cancel drains native prompt and operation
+  ok  actual worker cancel rejects late authorization response
+  ok  actual worker cancel native metadata re-read is secret-free
+  ok  actual worker timeout drains native prompt and operation
+  ok  actual worker timeout rejects late authorization response
+  ok  actual worker timeout native metadata re-read is secret-free
+  ok  actual unsupported public SDK returns unknown fallback capability
+  ok  actual unsupported public SDK login fails with unsupported code
+
+105/105 通过

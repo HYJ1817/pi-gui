@@ -1,0 +1,226 @@
+
+--- A. frontmatter / glob / 校验 / ID（纯函数） ---
+  ok   A1. 正常 frontmatter 解析出 name / description
+  ok   A2. 引号包裹的 description 去掉引号
+  ok   A3. 块标量 | 能读多行
+  ok   A4. BOM + CRLF 不影响解析
+  ok   A5. 没有 frontmatter → null（不抛）
+  ok   A6. frontmatter 没闭合 → null（不抛）
+  ok   A7. 非字符串输入 → null（不抛）
+  ok   A8. 缩进的子键被忽略（只认顶层键）
+  ok   A9. 合法名字无告警
+  ok   A10. 大写 / 下划线 / 首尾连字符 / 连续连字符都被指出
+  ok   A11. 超长名字被指出
+  ok   A12. 空 description 被指出 / 正常 description 通过
+  ok   A13. 超长 description 被指出
+  ok   A14. glob ** 跨目录命中
+  ok   A15. glob 命中 SKILL.md 的父目录名（pi 的行为）
+  ok   A16. glob 单星不跨 /（普通文件上验证）
+  ok   A17. glob 不匹配就是 false
+  ok   A18. exact 命中「相对 baseDir 的 posix 路径」
+  ok   A19. exact 命中父目录（靠 parentRel）
+  ok   A20. exact 去掉 ./ 前缀后命中
+  ok   A21. exact **不比 name** —— 裸名字不命中（这是最容易踩的坑）
+  ok   A22. -exact 关掉它，并回报是哪条模式
+  ok   A23. !glob 关掉它
+  ok   A24. +exact 能盖过 !glob（强制包含）
+  ok   A25. -exact 能盖过 +exact（强制排除优先级最高）
+  ok   A26. 不带 !/+/ 前缀的普通条目不是 override（settings 里的路径条目）
+  ok   A27. 空数组 / undefined 都不关
+  ok   A28. ID 稳定（同一路径两次一致）
+  ok   A29. ID 是 16 位十六进制
+  ok   A30. 不同路径 ID 不同
+  ok   A31. ID 里不含路径分隔符或盘符（不泄露路径）
+
+--- B. 目录收集（pi 的两种模式） ---
+  ok   B1. pi 模式：根级 .md + 子目录 SKILL.md 都收，跳过点开头与 node_modules
+  ok   B2. pi 模式收到 3 个文件（one / nested/deep / root.md）
+  ok   B3. agents 模式：忽略根级 .md，只认子目录
+  ok   B4. 目录里有 SKILL.md 就当成一个 skill，不再往里递归
+  ok   B5. 目录不存在 → 空数组（不抛）
+  ok   B6. 祖先扫描被 .git 钉在项目内
+  ok   B7. cwd 为空 → 没有祖先目录
+
+--- C. settings 读 / 原子写 ---
+  ok   C1. 文件不存在 → exists=false、data={}、无错误
+  ok   C2. 非法 JSON → error 非空、不抛
+  ok   C3. 顶层是数组 → 报「不是一个 JSON 对象」
+  ok   C4. 原子写会建出父目录
+  ok   C5. 原子写产出格式化 JSON 且以换行结尾
+  ok   C6. 原子写不留 .tmp 残渣
+  ok   C7. 原子写失败时抛出（父路径是文件）
+
+--- D. 项目信任判定 ---
+  ok   D1. 没有项目 → trusted=false / reason=no-project
+  ok   D2. 项目有 .pi/skills → requiresTrust=true（闸门合上了）
+  ok   D3. 默认（RPC 非交互、无 UI）→ trusted=false / reason=ask-no-ui
+  ok   D4. --approve → trusted=true / reason=approve-flag
+  ok   D5. --no-approve → trusted=false / reason=no-approve-flag
+  ok   D6. trust.json 里记了 true → trusted=true / reason=trust-file
+  ok   D7. defaultProjectTrust=always → trusted=true
+  ok   D8. defaultProjectTrust=never → trusted=false
+
+--- E. 发现 / 状态判定 ---
+  ok   E1. GET /api/skills → 200 / ok=true
+  ok   E2. 四个发现根都在（agent / ~/.agents / 项目 .pi / 项目 .agents）
+  ok   E3. 根级 .md 在 pi 模式被收到、在 agents 模式被忽略
+  ok   E4. counts.total=7 / enabled=3 / project=3 / user=4
+  ok   E5. 排序：project 排在最前，user 在后
+  ok   E6. u-one：user / auto / 根 ~/.pi/agent/skills / loaded=true / enabled
+  ok   E7. u-one 的 rel 与停用模式带 skills/ 前缀（实测裸文件名不生效）
+  ok   E8. u-one 的 settingsPath 指向全局 settings
+  ok   E9. ua-one：来自 ~/.agents/skills，baseDir 是 ~/.agents
+  ok   E10. u-two 没有 description → state=invalid 且带 error
+  ok   E11. p-one（项目级 + 未信任）→ state=untrusted / blockedByTrust=true
+  ok   E12. p-one 的 settingsPath 指向项目 .pi/settings.json（作用域必须配对）
+  ok   E13. anc-one（项目 .agents）→ project 作用域，settingsPath 仍是项目 settings
+  ok   E14. p-broken 没有 description → invalid（优先级高于 untrusted）
+  ok   E15. 项目根的 blockedByTrust 标记为 true，用户根为 false
+  ok   E16. trust 在列表里如实报未信任（ask-no-ui）
+  ok   E17. 每条 skill 的 id 都不同且形如 16 位 hex
+  ok   E18. 每条 skill 都不含绝对路径以外的敏感字段（没有 secret 类字段）
+  ok   E19. --approve 后 trust.trusted=true / reason=approve-flag
+  ok   E20. --approve 后 p-one → enabled（不再 untrusted）
+  ok   E21. --approve 后 blockedByTrust 全部为 false
+  ok   E22. counts.enabled 变成 5（3 个用户级 + 2 个项目级）
+  ok   E23. pi 没起 → piReachable=false、loaded=null
+  ok   E24. pi 没起 → 状态是 unknown，且说明写「无法确认」而不是「否」
+  ok   E25. rpc 返回 __error → piReachable=false（不崩）
+  ok   E26. rpc 完全没传 → piReachable=false
+  ok   E27. 磁盘上有但 pi 没报 → state=not-loaded（不是 enabled）
+  ok   E28. not-loaded 的说明点出「磁盘上有，但 pi 没加载」
+
+--- F. 同名覆盖（project 胜出） ---
+  ok   F1. 同名两条都列出来（不静默丢掉一条）
+  ok   F2. project 那条 state=enabled 且描述来自 pi 报的项目版本
+  ok   F3. user 那条 state=shadowed 且 shadowedBy 指向项目文件
+  ok   F4. shadowed 的说明里点出「同名」与赢家
+  ok   F5. user 那条仍然 toggleable（能被用户自己关掉，免得一直被抢）
+  ok   F6. 两条的 path 各自指向自己的文件
+
+--- G. 被 settings 关掉 ---
+  ok   G1. 被 !glob 关掉 → state=disabled
+  ok   G2. disabledBy 回报是哪条模式
+  ok   G3. stateNote 里带出那条模式
+  ok   G4. 仍然 toggleable（用户可以自己打开）
+
+--- H. 详情（内容 / 文件 / 未知 ID / 逃逸） ---
+  ok   H1. GET 详情 → 200 / ok=true / skill 对得上
+  ok   H2. 详情带出正文（readable=true）
+  ok   H3. 详情列出同目录文件（含 SKILL.md）
+  ok   H4. 详情里没有 secret 类字段
+  ok   H5. 未知 ID → 404（不是 500、不是空 200）
+  ok   H6. 索引外的路径算出的 ID → 404（拿不到任何文件）
+  ok   H7. 路径穿越 ID → 404（不会被当成路径去读）
+  ok   H8. 绝对路径 ID → 404
+  ok   H9. 响应体里不包含被请求的那个路径（没有回显路径）
+  ok   H10. 超长 ID → 400
+  ok   H11. POST /api/skills → 405
+  ok   H12. DELETE → 405（第一版不提供删除）
+  ok   H13. pi 报了但磁盘没枚举到的 skill 会被补进列表（不丢信息）
+  ok   H14. 补进来的那条 toggleable=false（没有 settings 条目可写）
+  ok   H15. 临时（--skill）加载的 → scope=temporary
+  ok   H16. 临时 skill 的 disablePattern 为空（不假装能写 settings）
+  ok   H17. 详情：路径在已知根之外 → 403（纵深防御，不读它）
+  ok   H18. 详情：pi 没给路径 → 200 但 readable=false，并说明只能看元数据
+  ok   H19. 对临时 skill 启停 → 400 且说明是 --skill 临时加载
+  ok   H20. 对 package skill 启停 → 400（没有可写文件）
+
+--- I. 启停（只增删自己那条模式） ---
+  ok   I1. 起始状态 enabled（项目已信任、无停用规则）
+  ok   I2. PUT enabled=false → 200 / changed=true / restartRequired=true
+  ok   I3. 回传的 pattern 就是 -skills/p-one/SKILL.md
+  ok   I4. 回传的 path 是项目 settings（作用域配对）
+  ok   I5. 说明里写了「需要重启 pi 才生效」
+  ok   I6. 盘上新增了那条 - 模式
+  ok   I7. 未知字段 unknownField / other 原样保留
+  ok   I8. 用户自己的 !*nope* 没被碰
+  ok   I9. 写盘后没有 .tmp 残渣
+  ok   I10. 重新读列表 → state=disabled（写盘真的生效了）
+  ok   I11. 重复关闭 → changed=false / restartRequired=false（不做无意义重启）
+  ok   I12. 重复关闭会说明「设置本来就是这样」
+  ok   I13. PUT enabled=true → changed=true / restartRequired=true
+  ok   I14. 我们那条模式被删掉，用户那条与未知字段还在
+  ok   I15. 重新读列表 → 回到 enabled
+  ok   I16. - 模式优先级最高，disabledBy 报的是 - 那条
+  ok   I17. 打开时删掉我们那条，并警告还有 !*p-one* 在关着它
+  ok   I18. 盘上只剩用户那条通配（没动它）
+  ok   I19. 状态仍然是 disabled（因为通配还在）
+  ok   I20. 未信任时 state=untrusted
+  ok   I21. 未信任时仍可写（写的是用户自己的偏好），但带警告
+
+--- J. 写盘失败与非法 settings 的降级 ---
+  ok   J1. skills 不是数组时列表仍能出来（该项视为无停用规则）
+  ok   J2. 启停时发现 skills 不是数组 → 409（不擅自改用户的字段）
+  ok   J3. 409 之后盘上文件一字未改
+  ok   J4. settings 是坏 JSON 时列表不崩，且带一条诊断
+  ok   J5. 坏 JSON 时启停 → 409（不覆盖用户的文件）
+  ok   J6. 409 之后坏文件仍是原样（没被格式化掉）
+  ok   J7. enabled 不是布尔 → 400
+  ok   J8. 请求体不是合法 JSON → 400
+  ok   J9. 对未知 ID 启停 → 404
+
+--- K. 项目级与用户级隔离 ---
+  ok   K1. 切到 A 只看到 A 的项目 skill + 用户 skill
+  ok   K2. 切到 B 只看到 B 的项目 skill + 用户 skill
+  ok   K3. 两个项目各自的 settingsPath 不同
+  ok   K4. 关 A 的项目 skill 只写进 A 的 settings
+  ok   K5. 切回 B 时 b-skill 仍是 enabled（互不影响）
+  ok   K6. 用户级 skill 也没被牵连
+  ok   K7. 没有项目时只剩用户级 skill
+  ok   K8. 没有项目时 trust.reason=no-project
+
+--- L. MCP 能力报告 ---
+  ok   L1. GET /api/mcp → 200 / ok=true
+  ok   L2. 找不到 pi 包时 supported=null（不猜成 false）
+  ok   L3. reason 说明「无法检测」
+  ok   L4. servers 永远是空数组（没有原生 MCP 就没有 Server 可列）
+  ok   L5. POST /api/mcp → 405（只读）
+  ok   L6. 定位到 pi 包并读出真实版本号
+  ok   L7. 0.87 形态：既没有 builtin:mcp 也没有 registerMcpServer → supported=false
+  ok   L8. 0.87 形态：built-in 清单里只有 llama.cpp
+  ok   L9. reason 说清「两个判据都没有」，不是笼统的「官方不内置」
+  ok   L10. serversNote 说明为什么列不出 Server
+  ok   L11. 不再回 piPackageDir（绝对路径不进 renderer）
+  ok   L12. 版本状态带出处与状态
+  ok   L13. RPC 命令表被读出来，且确认没有工具清单命令
+  ok   L14. 0.99 形态：builtin:mcp → supported=true（不硬编码版本号）
+  ok   L15. built-in 四个都在，且标出可被替换的
+  ok   L16. 出处是可核对的原文（builtin 那一行）
+  ok   L17. ExtensionAPI 三值：registerMcpServer / getMcpServers / getAllTools
+  ok   L18. supported=true 时 serversNote 指向原生明细（/api/mcp/servers）
+  ok   L19. supported=true 时 servers 仍然是空（不编造 Server）
+  ok   L20. MCP 命令行出处来自 pi 自己的 docs/mcp.md
+  ok   L21. built-in 说明写清「不是扫目录扫到的」
+  ok   L22. built-in 清单形状不认识 → builtins 未知，不硬说没有
+  ok   L23. 两个判据都缺证据 → supported 保持 null（不猜成 false）
+  ok   L24. 用户级 mcp.json 存在 → exists=true
+  ok   L25. 项目级 mcp.json 存在 → exists=true
+  ok   L26. 关键：mcp.json 里的密钥绝不出现在响应里
+  ok   L27. 只报存在与否，不回配置内容与 Server 名
+  ok   L28. 没有项目 → 项目级 mcp.json 是未知（不是 false）
+  ok   L29. 列出用户级扩展目录里的条目
+  ok   L30. 跳过点开头文件
+  ok   L31. 列出项目级扩展目录（与用户级分开）
+  ok   L32. 目录不存在 → exists=false 而不是报错
+  ok   L33. 关键：扩展文件里的 secret **绝不出现在响应里**（只读名字，不读内容）
+  ok   L34. 条目只带名字/类型/大小/时间，没有内容字段
+  ok   L35. settings 里的 extensions / packages 被如实列出（不解析、不执行）
+  ok   L36. 报告里没有任何「已配置 / 已连接」这类没数据支撑的状态
+
+--- M. 访问控制（真实 router） ---
+  ok   M1. GET /api/skills 不带令牌 → 401
+  ok   M2. PUT /api/skills/<id> 不带令牌 → 401
+  ok   M3. GET /api/mcp 不带令牌 → 401
+  ok   M4. 跨站 Origin + 正确令牌 → 403（Origin 先判）
+  ok   M5. 带令牌同源 GET /api/skills → 200 且来自 skills
+  ok   M6. PUT 不被 405 兜底吃掉（路由顺序正确）→ 200
+  ok   M7. 带令牌同源 GET /api/mcp → 200 且来自 mcp
+  ok   M8. 新增两条路由没有遮蔽 /api/projects
+
+--- N. 装配与打包 ---
+  ok   N1. server.js 真的装配了 skills / mcp 并传给 router
+  ok   N2. router 里 /api/skills 与 /api/mcp 的转发都在 405 兜底之前
+  ok   N3. MAX_SKILL_BYTES 被导出（UI 需要说明截断）
+
+196 passed, 0 failed

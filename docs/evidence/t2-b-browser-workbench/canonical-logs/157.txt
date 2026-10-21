@@ -1,0 +1,30 @@
+  ok dirty preimage and later independent edits survive actual replacement
+  ok preexisting untracked content is replaced never moved
+  ok BOM mixed EOL and original user replacement restore exact bytes
+  ok three same-session operations reverse correctly
+  ok cross-session independent edit survives
+  ok same-area conflict refuses without changing C
+  ok attribution gap never upgraded by confirmation
+  ok unknown old metadata stays preview only
+  ok strict provider unavailable
+  ok missing risk acknowledgement rejects and cancel releases
+  ok mode and selected files are bound
+  ok tampered confirmation token rejects
+  ok user edits after prepare invalidate plan retain external bytes
+  ok expired plan cannot apply and releases gate
+  ok owner invalidation rejects old token
+  ok repeat request is idempotent and consumed operation cannot repeat
+  ok backup C can independently prepare and confirm restoration
+  ok new file moves privately and separate confirmation moves it back
+  ok moved file recovery refuses an occupied original path
+  ok historical backup survives runtime identity renewal without renewing old token
+  ok created file with user addition refuses move
+  ok one conflict rejects whole multi-file prepare
+  ok backup persistence failure releases gate and refuses write
+  ok multi-file failure stops remainder without rolling back verified files
+  ok concurrent duplicate apply shares one commit and does not deadlock
+  ok native full metadata cannot assume unreadable audit descriptor
+  ok prepare reserves move capacity until cancellation
+  ok move capacity refusal happens before confirmation and preserves source
+  ok authenticated HTTP prepare apply export enforce closed paths and confirmation
+Session revert apply: 29/29; fixture metadata, real temporary filesystem; NOT native metadata qualification

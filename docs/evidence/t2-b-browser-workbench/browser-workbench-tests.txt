@@ -1,0 +1,63 @@
+
+> pi-gui@0.27.0 test:browser-workbench
+> node tests/browser-workbench-ui.cjs && node tests/browser-viewport-safety.cjs
+
+PASS single Browser opens with one state subscription
+PASS Browser offers controlled split entry
+PASS Browser and Changes mount together
+PASS layout transition keeps same Browser chrome and current URL
+PASS right pane delivers Browser viewport rather than whole workbench
+PASS fallback Changes truly occludes hidden native Browser
+PASS fallback Browser restores viewport after measuring
+PASS ending drag cannot clear modal occlusion
+PASS closing modal reveals correctly scoped viewport
+PASS interrupted width drag releases native occlusion without mouseup
+PASS exit split restores same Browser without native close
+PASS twenty layout transitions keep one instance/subscription
+PASS classic project change closes old browser and workbench
+PASS closing workbench releases browser instance and listeners
+Browser workbench UI: 14/14
+✔ open creates a live but detached page until valid geometry arrives (5.2912ms)
+✔ CSS geometry becomes DIP exactly once at zoom 1 (0.8105ms)
+✔ CSS geometry becomes DIP exactly once at zoom 1.25 (1.0714ms)
+✔ CSS geometry becomes DIP exactly once at zoom 0.8 (0.5969ms)
+✔ syncBounds reads current GUI zoom from retained CSS geometry (0.6006ms)
+✔ NaN in x detaches instead of clamping invalid input into a page (0.6051ms)
+✔ NaN in y detaches instead of clamping invalid input into a page (0.5092ms)
+✔ NaN in width detaches instead of clamping invalid input into a page (0.4011ms)
+✔ NaN in height detaches instead of clamping invalid input into a page (0.4246ms)
+✔ positive infinity in x detaches instead of clamping invalid input into a page (0.4482ms)
+✔ positive infinity in y detaches instead of clamping invalid input into a page (0.4329ms)
+✔ positive infinity in width detaches instead of clamping invalid input into a page (0.43ms)
+✔ positive infinity in height detaches instead of clamping invalid input into a page (0.3854ms)
+✔ negative infinity in x detaches instead of clamping invalid input into a page (0.3911ms)
+✔ negative infinity in y detaches instead of clamping invalid input into a page (0.4077ms)
+✔ negative infinity in width detaches instead of clamping invalid input into a page (0.4005ms)
+✔ negative infinity in height detaches instead of clamping invalid input into a page (0.3997ms)
+✔ width=0 leaves no usable native rectangle (0.5343ms)
+✔ height=0 leaves no usable native rectangle (0.3881ms)
+✔ width=-1 leaves no usable native rectangle (0.4153ms)
+✔ height=-1 leaves no usable native rectangle (0.795ms)
+✔ width=0.01 leaves no usable native rectangle (0.392ms)
+✔ negative origins and oversize dimensions retain client-area clamping after zoom (0.429ms)
+✔ fully outside or zero-size client area detaches the native view (0.5813ms)
+✔ invalid GUI zoom 0 detaches fail-closed (0.4171ms)
+✔ invalid GUI zoom NaN detaches fail-closed (0.3894ms)
+✔ invalid GUI zoom Infinity detaches fail-closed (0.3922ms)
+✔ invalid GUI zoom -1 detaches fail-closed (0.3653ms)
+✔ occlusion invalidates old geometry; unocclusion and open cannot reuse it (0.454ms)
+✔ occluded geometry updates stay detached and apply latest bounds before add (0.5444ms)
+✔ invalid geometry while occluded cannot restore the previous valid bounds (0.4732ms)
+✔ background visibility never exposes a view (0.4886ms)
+✔ close clears the previous rectangle even when the next view is opened (0.4547ms)
+✔ IPC open, bounds and occlusion use the same guarded geometry path (0.5613ms)
+✔ 20 open, relocate and close cycles leave no native views or live pages (1.2471ms)
+✔ geometry does not change navigation, session isolation or lifecycle semantics (1.5995ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 30.5601

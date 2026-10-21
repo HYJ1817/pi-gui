@@ -1,0 +1,70 @@
+
+> pi-gui@0.27.0 test:agent-browser
+> node tests/gui-browser-policy.cjs && node tests/gui-browser-controller.cjs && node tests/gui-browser-bridge.cjs && node tests/gui-browser-tools.cjs && node tests/gui-browser-ui.cjs && node tests/gui-browser-host.cjs && node tests/gui-browser-stop.cjs
+
+21/21 gui browser policy checks passed
+ok disabled status and operation gate
+ok enabled attach snapshot semantic refs
+ok click actual pointer down and up
+ok fill fixed helper has text only as argument
+ok document invalidates refs and never reuses ids
+ok password and file controls are blocked before pointer or fill
+ok remote every action rejected except status
+ok remote subframe prevents page observation and keyboard operation
+ok cancelled queued command cannot send pointer
+ok no arbitrary action
+ok named Ctrl+Enter uses modifier and unknown key has stable error
+ok history remote entry fails before navigation side effect
+ok safe bounded network and console
+ok remote child console never survives child removal
+ok screenshots image content
+ok oversized viewport screenshot refused before capture
+ok in-flight cancellation stops next input event and preserves queue order
+ok debugger detaches unavailable and cannot silently reattach
+ok reattach has single event listener and single console record
+ok protocol timeout detaches and fences late result
+ok close disables and detach
+ok state projection excludes page title query and text
+22/22 gui browser controller checks passed
+gui-browser-bridge: 25/25 assertions passed
+gui-browser-tools: 31/31 assertions passed
+  ok  closed namespace independent of external browser
+  ok  gui_browser_open projects no raw content in DOM/title at any phase
+  ok  gui_browser_snapshot projects no raw content in DOM/title at any phase
+  ok  gui_browser_click projects no raw content in DOM/title at any phase
+  ok  gui_browser_fill projects no raw content in DOM/title at any phase
+  ok  gui_browser_press projects no raw content in DOM/title at any phase
+  ok  gui_browser_reload projects no raw content in DOM/title at any phase
+  ok  gui_browser_back projects no raw content in DOM/title at any phase
+  ok  gui_browser_forward projects no raw content in DOM/title at any phase
+  ok  gui_browser_screenshot projects no raw content in DOM/title at any phase
+  ok  gui_browser_console projects no raw content in DOM/title at any phase
+  ok  gui_browser_network projects no raw content in DOM/title at any phase
+  ok  gui_browser_status projects no raw content in DOM/title at any phase
+  ok  success needs structured proof and safe count
+  ok  stable controller and bridge errors are closed; unknown error text is hidden
+  ok  runtime observation scoped to workspace and run; missing remains unknown
+  ok  capability is bundled evidence, not external installation or invocation proof
+  ok  main state is allowlisted and capability reports current status without secrets
+  ok  agent open mounts same pane without calling open or stealing focus
+  ok  default off and explicit control uses authoritative main state
+  ok  user enables and busy status does not echo payload
+  ok  user can disable and no permission is persisted
+  ok  late toggle status cannot overwrite newer permission revocation
+  ok  closed surface cannot issue follow-up permission status after late enable
+
+24/24 passed
+gui-browser-host: 18/18 passed
+  ok  A 浏览器未确认时，HTTP 与 Pi 都压着；确认后按 clear_queue → abort 的顺序发出，abort 应答回来才算成功
+  ok  B 浏览器确认失败：abort 照样送出去，HTTP 503 只有安全文案，且不宣称成功
+  ok  C prompt 与 steer 仍是同步发送，剥掉备用标记并保持接受顺序
+  ok  C 同步写失败保持错误身份，且不标记「已接受」
+  ok  P33 capture admission rejects before synchronous Pi send
+  ok  P33 explicit disable works without forwarding a model prompt
+  ok  P33.4 retained workspace lease rejects every new turn before Pi stdin or acceptance bookkeeping
+  ok  C provider 与模型守卫仍然同步生效，且不写不记账
+  ok  D 包装层把 bridge 的停止 Promise 原样返回（不吞、不替换），确认前不写 Pi
+  ok  前端：浏览器确认失败时状态栏停在「正在停止…」，只有一条安全 toast
+  ok  前端：成功时显示「已停止」而不是「已请求停止…」，且不再多弹 toast
+  ok  前端：等待确认期间就显示「正在停止…」（不是「已请求停止…」）
+gui-browser-stop: 12/12 cases passed

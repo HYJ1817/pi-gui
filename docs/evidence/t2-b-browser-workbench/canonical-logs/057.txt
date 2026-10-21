@@ -1,0 +1,43 @@
+  ok   creation descending despite inverse mtimes
+  ok   old current is highlighted in its original position
+  ok   switch to B preserves order
+  ok   switch to B changes highlight only
+  ok   switch to C preserves order
+  ok   switch to C changes highlight only
+  ok   switch to A preserves order
+  ok   switch to A changes highlight only
+  ok   continue and session metadata never reorder
+  ok   rename still updates title
+  ok   last message remains informational
+  ok   mtime remains available for display and search
+  ok   disconnected list has the same creation order
+  ok   disconnected list has no sticky current
+  ok   pending new D has its final creation position
+  ok   pending creation is derived from real Pi filename
+  ok   pending is current and has no disk actions
+  ok   pending metadata refresh preserves creation
+  ok   pending recreation preserves order and identity
+  ok   persist D keeps exact pending order
+  ok   pending to disk keeps id and createdAt
+  ok   persisted D loses pending without duplication
+  ok   GUI factory restart preserves persisted order
+  ok   archive succeeds with existing flag mechanism
+  ok   active order after archive is D C A
+  ok   archived B preserves creation and list position
+  ok   unarchive restores B to creation position
+  ok   search retains its own result ordering
+  ok   API does not leak file paths
+  ok   old pending current is not pinned to top
+  ok   explicit path pending has unknown creation instead of wall clock
+  ok   unknown pending uses stable fallback across restart
+  ok   creation ties use deterministic lexical identity
+  ok   tie order survives mtime inversion and restart
+  ok   header createdAt then timestamp then filename determine creation
+  ok   header createdAt is preferred when valid
+  ok   invalid createdAt falls back to real header timestamp
+  ok   missing header timestamp uses filename creation
+  ok   impossible filename dates stay unknown
+  ok   legacy unknown creation stays unknown without mtime
+  ok   legacy lexical fallback survives changed mtime and restart
+
+41 passed, 0 failed

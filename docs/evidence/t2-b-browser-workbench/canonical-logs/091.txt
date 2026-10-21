@@ -1,0 +1,80 @@
+
+--- A. 兼容矩阵（小型、明确、不联网） ---
+  ok  版本比较：数字三段，非版本号回 null（不猜）
+  ok  已登记的 Pi 版本都能被认出来（verified + 基线元数据）
+  ok  没核对过的版本是 unverified —— 不是「不支持」，也不猜新/旧以外的结论
+  ok  版本没读到是 unknown（与「未核对」是两件事）
+  ok  当前基线是 1.0.0，且只有一条 current
+  ok  关键 Extension：同一版本 verified，别的版本 unverified，没版本 unknown
+  ok  矩阵摘要只有版本号与日期：没有路径、没有 URL、没有包内容
+  ok  Native MCP 契约是一份可核对的副本（闭集 + CLI + 命名）
+  ok  已知差异逐条带 between / affects / handling
+
+--- B. Capability probe registry（只读、无副作用） ---
+  ok  probe 表本身可列，且每条都有 label / what / fallback
+  ok  RpcCommand 解析：33 条命令，形状不认识时回 null（不猜）
+  ok  0.99 量级：RPC 命令集 / 对话框 / 审批 hook / builtin:mcp 都是支持
+  ok  「RPC 没有工具清单命令」是一条**正证据**（有根带 tool 的命令就变 false）
+  ok  MCP 闭集与 list --json 资源字段：有证据才是 true
+  ok  每条 probe 都带出处（相对路径或来源说明，不含绝对路径）
+  ok  runtime probe 取三值：支持 / 不支持 / 还没观察到
+  ok  0.87 量级：builtin:mcp 为 false，MCP 闭集读不到是未知
+  ok  0.99 量级：usage.md 没那句话 → 核心审批保持未知（不据此断言「有」）
+  ok  读不到包 → 源码类 probe 全部未知，runtime probe 仍照常给
+  ok  probe 抛错 / 文件读不出来 → 该条未知，其余 probe 不受影响
+  ok  形状不认识（文件读到了但没有那个联合）→ false，不是未知
+  ok  runtime 源缺失（没注入 compat / 摘要）→ unknown，不抛
+  ok  tool_call 阻断契约：0.87 旧措辞与 0.99.2 新措辞**都认**
+  ok  对话框契约：rpc.md（旧）与 rpc-extension-ui.md（0.99.2）**都认**，且证据指认命中的文件
+  ok  两处文档都读到、却都没有那句话 → false（不是「文件读不到」的未知）
+  ok  P19 能力报告与 P23 probe 对同一份 fixture 给出**一致结论**（两处不能各说各话）
+  ok  Native MCP 的被接管状态进 probe（replaced → mcp-replacement true）
+  ok  概览计数自洽，并单独列出「还没法下结论」的核心 probe
+
+--- C. probe 缓存 / stale / restart invalidation ---
+  ok  TTL 内复用同一次求值（on-disk 改动不会立刻生效）
+  ok  force: true 立即重读
+  ok  identity 一变立即重算（不去等 TTL）
+  ok  reset()（bridge 重启 / 换项目）后 runtime probe 立刻回未知
+  ok  peek() 不触发任何 I/O（缓存为空时回 null）
+
+--- D. 版本真值：value / source / status / updatedAt / verifiedAgainst ---
+  ok  核对过的版本带 verifiedAgainst（含核对日期与范围）
+  ok  没核对过的版本：unverified + verifiedAgainst=null，但**功能照常**
+  ok  畸形版本：status=malformed 且不假装核对过
+  ok  没注入矩阵 → unchecked（老调用方 / 单测不受影响）
+  ok  矩阵抛错不传播（降级成 unchecked）
+  ok  版本探测仍在 TTL / identity 维度上失效（P20.5 行为不变）
+
+--- E. schema 漂移：只记来源 + 字段名 + 类型 ---
+  ok  未知字段 / 未知枚举进 report.schema，且各自一条
+  ok  漂移记录**不含值、不含键名**（对象只给 typeof）
+  ok  漂移记录走同一个环形上限，reset() 清空
+  ok  漂移不是「异常」：兼容状态不受它影响
+  ok  版本核对状态进兼容报告（与 versionSource 分开）
+  ok  非法机制值被折成安全默认（不原样透传）
+
+--- F. Diagnostics：probe / 矩阵 / Native MCP / Extension 版本 ---
+  ok  版本真值的两个维度都在（来源 / 核对）
+  ok  probe 表进诊断：每条只有 id/kind/label/state/evidence（没有 fallback 全文）
+  ok  兼容矩阵摘要进诊断（基线版本 + Extension release）
+  ok  Native MCP 只给状态与计数（没有 server 名字）
+  ok  Extension 版本只列有可靠 metadata 的，并标作用域
+  ok  schema 漂移进诊断（来源 + 字段名），且隐私标记说清不含值
+  ok  整份快照不含注入的 secret；也没有绝对路径
+  ok  不注入新块时它们是 null（老调用方 / 老后端不受影响）
+  ok  Extension 列表有上限（诊断不是扩展清单）
+
+--- G. MCP 运行时投影：闭集外的状态折成 unknown 并记漂移 ---
+  ok  闭集外的 state 折成 unknown（不回显上游原文）
+  ok  闭集外的 exposure 折成 null（界面显示未知，不猜）
+  ok  两次漂移都上报了，且只有来源 + 字段名 + 类型
+  ok  onDrift 抛错不影响投影（契约仍成立）
+
+--- H. 纪律：不 spawn / 不联网 / 不执行第三方代码 ---
+  ok  probe / 矩阵模块不 spawn、不联网、不读用户数据
+  ok  probe 只读 pi 包的已知相对路径，且都限长
+  ok  schema-drift（前端）不记值、不记键名，只有 typeof
+  ok  诊断仍不收集正文 / 配置 / 环境变量（隐私标记没变）
+
+62/62 通过

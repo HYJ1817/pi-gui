@@ -1,0 +1,135 @@
+
+--- server/auth.js ---
+  ok   无令牌 → isDevMode
+  ok   有令牌 → 不是 devMode
+  ok   开发模式：不带 Origin 放行
+  ok   开发模式：跨站 Origin → 403
+  ok   开发模式：127.0.0.1 同源放行
+  ok   开发模式：localhost 同源放行
+  ok   开发模式：端口不同视为跨站 → 403
+  ok   有令牌：没带 → 401
+  ok   有令牌：X-Pi-Gui-Token 正确 → 放行
+  ok   有令牌：Bearer 正确 → 放行
+  ok   有令牌：错误令牌 → 401
+  ok   长度不同的令牌不抛异常、判 401
+  ok   401 响应不回显收到的令牌
+  ok   403 响应不回显 Origin
+  ok   跨站 Origin 优先于令牌判定（令牌对也拒）
+  ok   health 回 200
+  ok   health 带 app / protocol / version
+  ok   health 不带任何令牌信息
+
+--- server/runtime.js ---
+  ok   初始 cwd 来自构造参数
+  ok   setCurrentCwd 生效（同一份状态）
+  ok   shuttingDown 默认 false
+  ok   setShuttingDown 生效
+  ok   不传 initialCwd 时为 null
+
+--- server/sse.js ---
+  ok   backlog 默认上限 = 800
+  ok   publish 给事件挂上 _seq
+  ok   _seq 单调递增
+  ok   backlog 超上限后从头丢
+  ok   丢掉的是最老的（留下最后 3 条）
+  ok   _seq 不因丢弃而回退
+  ok   subscribe 回 200
+  ok   subscribe 用 text/event-stream
+  ok   subscribe 关掉缓存与代理缓冲
+  ok   连接先补发 backlog
+  ok   客户端计数 +1
+  ok   连上之后的新事件立刻推给客户端
+  ok   SSE 帧格式是 data: …\n\n
+  ok   连接关闭后从 clients 摘掉
+  ok   closeAll 收掉所有连接
+
+--- server/http-utils.js ---
+  ok   json 设置状态码
+  ok   json 声明 utf-8 JSON
+  ok   json 序列化载荷
+  ok   readRawBody 按 Buffer 累积（中文不被切坏）
+  ok   readRawBody 超限 → reject
+  ok   超限文案含上限（MB）
+  ok   readBody 返回字符串
+
+--- server/rpc-bridge.js ---
+  ok   无项目时 start 不 spawn，只发 no-project
+  ok   无项目时 send 抛错
+  ok   无项目时 send 的提示给出可执行指引（不是「子进程未运行」）
+  ok   有项目但 pi 未起时 send 抛「pi 子进程未运行」
+  ok   buildArgs 默认带 --mode rpc 与 --continue
+  ok   PI_NO_CONTINUE=1 时不带 --continue
+  ok   provider / model / thinking / no-session 都透传
+  ok   getState 报 piRunning=false（未启动）
+  ok   getState 的 pid 为 null
+  ok   getState 带 cwd 与 hasProject
+  ok   getState 带 args
+  ok   projectLaunch 的参数被追加到启动参数末尾
+  ok   projectLaunch 的参数出现在 getState().args 里（界面能看到真实启动参数）
+  ok   环境变量与项目配置不会给出两份 --thinking
+  ok   projectLaunch 抛错时不带塌 buildArgs（退回不带项目参数）
+  ok   无项目时 start() 不调 prepareLaunch（不启动 pi，也不写任何文件）
+  ok   rpc-bridge 里 prepareLaunch() 排在 buildArgs(extra) 之前
+  ok   rpc-bridge 不 import 任何业务模块（只靠注入认识项目配置）
+  ok   无项目时 hasProject=false
+
+--- server/router.js ---
+  ok   /api/health 免认证（不带令牌也 200）
+  ok   /api/health 走的是 auth 自己的处理器
+  ok   其余 /api/* 不带令牌 → 401
+  ok   /api/status 带令牌 → 200 且来自 rpc.getState
+  ok   跨站 Origin + 正确令牌仍被 403（Origin 先判）
+  ok   /api/providers/models 命中 handleModels（不被前缀吞掉）
+  ok   /api/providers 命中 providers
+  ok   /api/providers/foo 命中 providers（前缀）
+  ok   /api/projects/activate 命中 projects（前缀）
+  ok   /api/fs 命中 projects.handleFs
+  ok   /api/git/status 命中 gitRoutes
+  ok   /api/git 命中 gitRoutes（不带子路径）
+  ok   /api/upload 命中 uploads
+  ok   /api/events 命中 sse.subscribe
+  ok   /api/restart 命中 rpc.restart
+  ok   /api/project-config 命中 projectConfig（不被 /api/projects 前缀吃掉）
+  ok   /api/project-config 的 PUT 也命中 projectConfig
+  ok   /api/projects 仍然命中 projects（两条路径不互相遮蔽）
+  ok   GET /api/specs 命中 specs
+  ok   GET /api/specs/document 命中 specs，不被 405 兜底吃掉
+  ok   GET /api/skills 命中 skills
+  ok   PUT /api/skills/<id> 命中 skills（不被 405 兜底吃掉）
+  ok   GET /api/skills/<id> 命中 skills
+  ok   GET /api/mcp 命中 mcp
+  ok   GET /api/mcp/servers 命中 mcpNative（不被 405 兜底吃掉）
+  ok   POST /api/mcp/servers 命中 mcpNative（动作不被 405 兜底吃掉）
+  ok   POST /api/mcp/status 命中 mcpNative
+  ok   /api/skills 不带令牌 → 401（和其余 /api/* 一样过访问控制）
+  ok   /api/mcp 不带令牌 → 401
+  ok   /api/skills 不遮蔽 /api/projects（前缀不重叠）
+  ok   GET /api/agents 命中 planner
+  ok   GET /api/plans 命中 planner
+  ok   POST /api/plans 命中 planner（不被 405 兜底吃掉）
+  ok   POST /api/plans/<id>/start 命中 planner
+  ok   POST /api/plans/<id>/tasks/<tid>/retry 命中 planner
+  ok   GET /api/plans/<id> 命中 planner
+  ok   PUT /api/plans/<id> 命中 planner（不被 405 兜底吃掉）
+  ok   /api/plans 不带令牌 → 401
+  ok   /api/agents 不带令牌 → 401
+  ok   /api/plans 不遮蔽 /api/projects（前缀不重叠）
+  ok   /api/agents 不遮蔽 /api/plans（两者是独立路径）
+  ok   GET /api/git/status 不被 405 兜底吃掉
+  ok   未知非 GET 路径 → 405
+  ok   未知 GET 路径 → 404（静态兜底）
+  ok   根路径能取到 index.html
+  ok   静态资源声明 no-store
+  ok   目录穿越（..%5c）被 403 挡住
+  ok   穿越被挡住时不留任何文件内容
+  ok   编码的点段形式被 URL 归一化后落到 404（不报错、不漏文件）
+  ok   静态资源的 Content-Type 按扩展名给
+
+--- 依赖方向（不许成环） ---
+  ok   server/ 递归扫到 91 个模块（含 agents/ 与 planner/）
+  ok   server/ 下的模块只 import 同目录兄弟、http-utils 或 lib
+  ok   没有任何模块 import server.js（否则成环）
+  ok   模块之间无循环依赖
+  ok   router.js 不 import 任何业务模块（只依赖 http-utils 与 lib）
+
+119/119 通过

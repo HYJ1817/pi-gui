@@ -1,0 +1,23 @@
+ok disabled status and operation gate
+ok enabled attach snapshot semantic refs
+ok click actual pointer down and up
+ok fill fixed helper has text only as argument
+ok document invalidates refs and never reuses ids
+ok password and file controls are blocked before pointer or fill
+ok remote every action rejected except status
+ok remote subframe prevents page observation and keyboard operation
+ok cancelled queued command cannot send pointer
+ok no arbitrary action
+ok named Ctrl+Enter uses modifier and unknown key has stable error
+ok history remote entry fails before navigation side effect
+ok safe bounded network and console
+ok remote child console never survives child removal
+ok screenshots image content
+ok oversized viewport screenshot refused before capture
+ok in-flight cancellation stops next input event and preserves queue order
+ok debugger detaches unavailable and cannot silently reattach
+ok reattach has single event listener and single console record
+ok protocol timeout detaches and fences late result
+ok close disables and detach
+ok state projection excludes page title query and text
+22/22 gui browser controller checks passed

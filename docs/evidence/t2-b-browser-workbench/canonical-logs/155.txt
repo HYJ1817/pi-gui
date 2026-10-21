@@ -1,0 +1,26 @@
+  ok backup exact bytes and null absence remain private and durable
+  ok plan persistence binds request and rejects rebinding
+  ok restart marks uncertain intent recovery required without consuming
+  ok immutable token and scope cannot change
+  ok captured metadata is bounded JSON and old unknown metadata stays null
+  ok verified writes consume only their own operations and survive restart
+  ok GC removes only never journal referenced blobs and retains recovery pins
+  ok quota is checked before unjournaled backup creation
+  ok changed pinned blob and truncated apply journal fail closed on reopen
+  ok separate process exit after moving intent requires recovery without retry
+  ok privacy drift prevents backup reads and writes
+  ok actual recovery material including unjournaled files blocks new objects across scopes
+  ok same bytes in deduplicated objects and a moved file occupy separate capacity
+  ok queued reservations prevent concurrent admission and release does not delete retained files
+  ok recheck refuses late recovery growth and restart counts retained material without deleting it
+  ok recovery traversal refuses hardlinks and unexpected nested directories
+  ok unknown or inconsistent allocated-byte probes fail before backup writes
+    native allocation logical=2 allocated=8 unit=4096
+  ok native allocation probe measures real file allocation and reserves rounded future blobs
+  ok deduplicated existing objects keep measured allocation without future-write rounding
+  ok recovery junction is refused and reservation release remains available after integrity failure
+  ok native allocation deadline is bounded and unknown reservation cannot authorize a move
+  ok native allocation refuses private recovery ADS before new backup allocation
+  ok allocation-unit probe refuses an unsupported ancestor instead of trusting only the volume root
+  ok sibling directory activity does not change allocation-root ancestor identity
+session-revert-recovery: 24/24

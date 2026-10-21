@@ -1,0 +1,26 @@
+  ok  closed namespace independent of external browser
+  ok  gui_browser_open projects no raw content in DOM/title at any phase
+  ok  gui_browser_snapshot projects no raw content in DOM/title at any phase
+  ok  gui_browser_click projects no raw content in DOM/title at any phase
+  ok  gui_browser_fill projects no raw content in DOM/title at any phase
+  ok  gui_browser_press projects no raw content in DOM/title at any phase
+  ok  gui_browser_reload projects no raw content in DOM/title at any phase
+  ok  gui_browser_back projects no raw content in DOM/title at any phase
+  ok  gui_browser_forward projects no raw content in DOM/title at any phase
+  ok  gui_browser_screenshot projects no raw content in DOM/title at any phase
+  ok  gui_browser_console projects no raw content in DOM/title at any phase
+  ok  gui_browser_network projects no raw content in DOM/title at any phase
+  ok  gui_browser_status projects no raw content in DOM/title at any phase
+  ok  success needs structured proof and safe count
+  ok  stable controller and bridge errors are closed; unknown error text is hidden
+  ok  runtime observation scoped to workspace and run; missing remains unknown
+  ok  capability is bundled evidence, not external installation or invocation proof
+  ok  main state is allowlisted and capability reports current status without secrets
+  ok  agent open mounts same pane without calling open or stealing focus
+  ok  default off and explicit control uses authoritative main state
+  ok  user enables and busy status does not echo payload
+  ok  user can disable and no permission is persisted
+  ok  late toggle status cannot overwrite newer permission revocation
+  ok  closed surface cannot issue follow-up permission status after late enable
+
+24/24 passed

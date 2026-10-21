@@ -1,0 +1,48 @@
+
+--- 1. 版本号合法性 ---
+  ok   1a. 三段版本合法
+  ok   1b. 预发布版本合法（set-version 允许，发布时再拦）
+  ok   1c. build metadata 合法
+  ok   1d. 非法版本一律拒绝
+  ok   1e. isPrerelease 只对预发布为真
+
+--- 2. package / lock / tag 一致性 ---
+  ok   2. 三处一致 → 通过
+  ok   2b. lock 顶层与 package 不一致 → 失败
+  ok   2c. lock 的 packages[""] 与 package 不一致 → 失败（只改一处最常见的形态）
+  ok   3. tag === v<version> → 通过
+  ok   4. tag 与 package 不一致 → 失败，且说明期望值
+  ok   4b. tag 少了 v 前缀 → 失败
+  ok   4c. tag 大小写不同（V0.13.0）→ 失败（不做规范化猜测）
+  ok   5. package.json 版本本身非法 → 失败
+  ok   5b. 预发布 + tag → 失败（本轮只支持稳定版发布）
+  ok   5c. 预发布但**不带 tag** 只警告、不失败（本地迭代不该被挡住）
+
+--- 3. set-version（fixture，不碰真实 package.json） ---
+  ok   6. set-version 同步 package.json 与 lock 的两处版本
+  ok   6b. set-version 不改依赖的版本（lock 里有别的包也是 0.12.0）
+  ok   6c. set-version 不动其它字段
+  ok   6d. 报告改动了哪些文件
+  ok   7. set-version 幂等：已是目标版本时不再改动
+  ok   8. set-version 拒绝非法版本，且**一个字节都不写**
+  ok   8b. set-version 接受预发布版本
+  ok   9. unexpectedDiff 只容忍含 "version" 的行
+
+--- 4. 静态版本源守卫 ---
+  ok   10. 构建链路里写死版本号会被发现
+  ok   10a. 注释里提到版本号不算写死（只看代码，不看注释）
+  ok   10b. 不误报：文件里没有那个版本号时返回空
+
+--- 5. Release 摘要版本 ---
+  ok   11. Release 摘要能解析版本标记与正文
+  ok   11b. Release 摘要缺版本标记 → 拒绝
+  ok   11c. Release 摘要版本与目标版本不一致 → 拒绝
+  ok   11d. Release 摘要版本一致 → 通过
+
+--- 6. 当前仓库自检（只读） ---
+  ok   12. 真实仓库的 package / lock 一致
+  ok   12b. 真实仓库的构建链路里没有写死的版本号
+  ok   12c. 真实仓库的版本号是合法三段 SemVer
+  ok   12d. 真实仓库的 Release 摘要版本与 package.json 一致
+
+34/34 通过

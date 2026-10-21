@@ -1,0 +1,164 @@
+
+--- A. 跑起来、拿到真结果 ---
+  ok   A1. 有 command → 可以启动，返回一条 running 记录
+  ok   A1b. 启动时**命令用的是冻结快照**里的那条，不看 task.verification
+  ok   A1c. 落盘的 running 记录不带任何结论字段
+  ok   A2. 退出码 0 → passed（**不是 accepted**，那是人的事）
+  ok   A3. 记下了耗时与输出摘要
+  ok   A4. 退出码非 0 → failed，并留退出码
+  ok   A4b. stdout 与 stderr 都收进摘要（错在哪边没有统一规矩）
+  ok   A5. 命令根本起不来 → failed，并说明起不来的原因（不冒充「跑失败了」）
+  ok   A6. 超时 → failed，错误写「超时（Ns）」
+
+--- B. 输出不许把计划文件撑爆 ---
+  ok   B1. 落盘的摘要被截到上限以内
+  ok   B2. 保留的是**末尾**（失败原因在最后几行）
+  ok   B3. 被截断时带 truncated 记号（界面要能说「输出已截断」）
+  ok   B4. 计划文件实际大小仍然是 KB 级（没有几百 MB 日志）
+
+--- C. 哪些情况不允许跑（code 是契约） ---
+  ok   C1. 没有 verificationSnapshot → no-command（不许拿当前 task.verification 顶）
+  ok   C2. 只有 description → no-command，且说明与「没有快照」分开
+  ok   C3. attempt 不存在 → attempt-not-found
+  ok   C3b. task 不存在 → attempt-not-found
+  ok   C3c. plan 不存在 → not-found
+  ok   C4. 工作目录已经不存在 → invalid-cwd
+  ok   C5. 工作目录逃出项目（`../`）→ invalid-cwd（复用 safe-path 的判定）
+  ok   C6. 计划不属于当前项目 → workspace-stale（切项目后不许对着旧项目跑命令）
+  ok   C7. 没有项目 → no-project
+  ok   C8-prep. 计划已启动
+  ok   C8. 计划正在执行 → plan-active（规则只在 Verifier 里判一次）
+
+--- D. 停止 / 退出 / 崩了，都不能停在 running ---
+  ok   D1-prep. 正在跑
+  ok   D2. 同一个 Attempt 连点 → already-running
+  ok   D3. 停止 → ok
+  ok   D4. 取消后收成 interrupted（**不是 failed** —— 你没跑完，不是它错了）
+  ok   D4b. 停掉之后再停 → not-running
+  ok   D4c. 取消的耗时字段是数字（不是 null —— 我们真的知道跑了多久）
+  ok   D5. shutdown() 之后内存里没有在跑的验证
+  ok   D6. 落盘的是 interrupted + 人话说明
+  ok   D6b. 不猜退出码，也不拿「现在 − startedAt」冒充执行时长
+  ok   D7. 退出之后异步回来的结果**不会**把 interrupted 改写掉
+  ok   D8-prep. 磁盘上确实是 running
+  ok   D9. recoverAll 把 running 翻成 interrupted
+  ok   D9b. 恢复时不猜退出码 / 输出（进程崩了，我们什么都没拿到）
+  ok   D9c. 恢复计数把这条算进去了
+  ok   D10. 普通 load **不**动 running（恢复只在进程启动时做一次）
+
+--- E. 验证只写验证（不改执行状态、不改审阅） ---
+  ok   E1. 验证通过**不改** task.status（它还是 failed）
+  ok   E1b. 也不改 attempt 的 outcomeStatus
+  ok   E1c. 不自动 Retry（attempt 数不变、没有新 attempt）
+  ok   E2. 验证通过**不把 needs_changes 自动改成 accepted**
+  ok   E3. 验证失败**不把 accepted 自动改成别的**（包括 needs_changes）
+
+--- F. Retry 不碰旧 attempt 的验证结果 ---
+  ok   F-prep. Attempt 1 有了一条 failed 的验证结果
+  ok   F1. Retry 之后**旧 attempt 的验证结果原样保留**
+  ok   F2. 新 attempt **没有**验证结果（默认尚未独立确认）
+  ok   F3. 可以单独验证新 attempt，用的是**它自己的**快照命令
+  ok   F3b. 新 attempt 的结果独立记着（passed）
+  ok   F4. 两次验证的**命令不同**，各自记着自己那条
+
+--- G. 重新运行 = 替换，不是追加 ---
+  ok   G1. 同一个 attempt 重新验证 → 结果是**替换**（保存最新一次）
+  ok   G2. 第一阶段**不引入** verificationAttempts 历史数组（避免范围膨胀）
+
+--- H. 老计划不改一个字节就能打开 ---
+  ok   H1. 老 attempt 读得出来，verificationResult 归一化成 null
+  ok   H2. 快照仍然在（要求没有被吞掉）
+  ok   H3. schemaVersion 仍是 1 —— P9 是 additive，不需要 migration
+  ok   H4. 老计划照样能验证（命令从快照来）
+  ok   H4b. 跑完之后老记录上就多了一条证据
+
+--- I. 路由：语义全在 body 的 code 里 ---
+  ok   I1. POST verify → 200 + ok:true + running 记录
+  ok   I2. 连点 → 200 + ok:false + code=already-running
+  ok   I3. POST verify/stop → ok
+  ok   I3b. 停下来的这次收成 interrupted
+  ok   I4. 再停一次 → code=not-running
+  ok   I5. 没有可跑的命令 → code=no-command（不是 500，也不是 generic 错误）
+  ok   I6. 非 POST → 405
+  ok   I7. 计划详情里带 verificationRunning（liveness 由内存表说了算）
+  ok   I7b. 视图字段**不写回文件**
+  ok   I7c. 停完之后视图字段变 false
+
+--- K. 验证 / 审阅 / Scheduler 三方写盘互不覆盖 ---
+  ok   K-prep. 验证正在跑
+  ok   K1-prep. 验证进行中也能保存审阅
+  ok   K1. 验证写盘**没有冲掉**并发保存的审阅
+  ok   K2. 同时验证证据也在（两边都真的落盘了）
+  ok   K3-prep. 磁盘上先有一条验证结果
+  ok   K4-prep. 审阅写入成功
+  ok   K4. Review 写盘**没有覆盖**验证结果
+  ok   K4b. 审阅自己也写进去了（不是「两边都没写」）
+  ok   K5-prep. 计划已启动
+  ok   K5-prep2. 拿到「A 完成、B 在跑」的窗口（计划仍 active）
+  ok   K6. B 跑完（Scheduler 又整份写盘一次）之后，A 的验证结果**没有丢**
+  ok   K6b. B 自己的执行状态照常落盘（合并没有把执行状态也「保」掉）
+
+--- L. 同一个 workspace 同时只有一个实际执行者 ---
+  ok   L-prep. Plan A 已启动
+  ok   L-prep2. 调度器确实认为它在跑
+  ok   L1. Plan A 在跑 → 验证 Plan A 自己 → plan-active
+  ok   L2. **Plan A 在跑 → 验证同一个 workspace 的 Plan B → 也拒绝**（旧实现会放行）
+  ok   L2b. 被拒之后没有真的起命令
+  ok   L3. 计划跑完之后可以正常验证
+  ok   L4-prep. 一条验证正在跑，且对外的活跃态能读到它
+  ok   L5. 同一 attempt 再点 → already-running（**不是** verification-active）
+  ok   L6. 另一个 attempt 的验证 → verification-active（另一条在跑）
+  ok   L7. 验证在跑 → 启动**同一个** Plan → 拒绝 verification-active
+  ok   L8. 验证在跑 → 启动**另一个** Plan → 也拒绝
+  ok   L8b. 被拒之后磁盘上那块计划**没有被改成执行中**
+  ok   L9. 验证在跑 → Retry → 拒绝 verification-active
+  ok   L9b. Retry 被拒之后磁盘上任务状态没变（success 还在）
+  ok   L10. 验证在跑 → PUT Plan → 409 + verification-active
+  ok   L10b. 磁盘上标题**没有**被改
+  ok   L11. 验证在跑 → DELETE Plan → 409 + verification-active
+  ok   L11b. 磁盘上计划**还在**
+  ok   L12. 验证在跑 → 切项目被拒（`projectSwitchBlockReason()` 给出理由）
+  ok   L13. 验证在跑 → **Review 保存仍然允许**
+  ok   L13b. 盘上审阅与验证证据同时存在（谁也没冲掉谁）
+  ok   L14. 停止之后活跃态清零
+  ok   L15. 停止之后可以正常启动计划（锁全释放）
+  ok   L15b. 切项目闸门也放开了
+  ok   L16. 通过 之后收成 passed，且锁已释放
+  ok   L16. 退出码非 0 之后收成 failed，且锁已释放
+  ok   L16. 起不来 之后收成 failed，且锁已释放
+  ok   L16. 超时 之后收成 failed，且锁已释放
+  ok   L17. 中断（用户停止）之后锁已释放
+
+--- M. Attempt 冻结自己的工作目录 ---
+  ok   M1. **验证用的是 attempt 冻结的 packages/a，而不是 task 当前的 packages/b**（旧实现会跑错）
+  ok   M2. 结果里记着实际使用的目录与来源
+  ok   M3. 存的是**项目相对路径**（不是绝对路径 —— 项目搬走之后历史仍可读）
+  ok   M3b. 改 task 的目录**不会**动到已冻结的快照
+  ok   M4-prep. 计划已启动
+  ok   M5. 执行产生的 attempt 冻结了**当时**的工作目录
+  ok   M6-prep. Retry 被接受
+  ok   M6-prep2. 再次执行
+  ok   M7. 新 attempt 冻结的是**新**目录（packages/b）
+  ok   M8. 两次 attempt 的快照**互不覆盖**
+  ok   M9. 老 attempt（没有快照）→ fallback 到当前 task 目录，仍然能验证
+  ok   M10. fallback **被明确标记**（不冒充冻结快照）
+  ok   M11. fallback 用的确实是当前 task 的目录
+  ok   M12. 快照里的 `../` 逃逸 → invalid-cwd（不退到 fallback，也不跑）
+  ok   M13. 快照是绝对路径 → invalid-cwd
+  ok   M14. 快照指向已删除的目录 → invalid-cwd（不是「换一个地方跑」）
+  ok   M15. fallback 的目录不存在 → 同样 invalid-cwd（fallback 也要过 safe-path）
+  ok   M16. 老 attempt 读得出来：workingDirectorySnapshot 归一化成 null（**不做 migration**）
+  ok   M17. 老计划照样能验证（走 fallback）
+  ok   M17b. 跑完之后确实标了 fallback
+  ok   M18. schemaVersion 仍是 1（additive，不需要 migration）
+
+--- J. 真的走平台 shell 跑一条命令 ---
+  ok   J1. 启动成功
+  ok   J2. 真命令跑完 → passed，退出码 0
+  ok   J3. 输出摘要里是**真的**版本号（证明 stdout 真的被收上来了）
+  ok   J4. 命令在任务的 workingDirectory 下跑（cwd 走 spawn 选项，不拼 `cd X && …`）
+  ok   J5. 带 `&&` 的命令能跑（shell 真的把它当一条命令解释）
+  ok   J6. 非零退出码能从真命令里读回来
+  ok   J6b. node 的非法参数 → failed 且退出码非 0
+
+136 passed, 0 failed

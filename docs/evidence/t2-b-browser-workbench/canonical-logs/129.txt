@@ -1,0 +1,7 @@
+PASS restore shows actual confirmation
+PASS A confirmation after switch cannot restore B
+PASS restore-all plan targets captured A
+PASS switch during restore-all confirmation executes no write
+PASS explicit captured API identity survives current B
+PASS late A Changes status does not overwrite B
+Runtime Git UI: 6/6

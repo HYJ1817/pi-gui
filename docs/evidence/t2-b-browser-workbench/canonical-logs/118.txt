@@ -1,0 +1,71 @@
+  ok  生命周期模块可用
+  ok  8.3 短名与长名归一到同一路径
+  ok  非登记项目不能读写
+  ok  主工作区只读登记，列表不启动 Pi
+  ok  创建前明确 commit/dirty/branch，路径不是客户端输入
+  ok  同 repo A/B 两个真实 worktree，root/index/admin 分离
+  ok  nonce 只能使用一次
+  ok  body 不接受任意 path
+  ok  branch 选项/路径注入拒绝
+  ok  source 选项注入拒绝
+  ok  branch 冲突不覆盖
+  ok  外部 PATH 字符串不能成为工作区 id
+  ok  陈旧 epoch 不能打开/删除
+  ok  A 文件/状态不污染 B 或 main
+  ok  dirty worktree remove 拒绝且文件不变
+  ok  ignored 文件 remove 也保守拒绝
+  ok  untracked remove 拒绝
+  ok  staged remove 拒绝
+  ok  clean 但未合并提交 remove 拒绝
+  ok  已合并、干净、安全 worktree 可移除，branch 保留
+  ok  重复 remove 幂等，不删除其它路径
+  ok  open 只走单工作区 activate，cwd 权威来自后端
+  ok  active remove 拒绝
+  ok  active archive 拒绝
+  ok  archive 只修改 metadata，目录/branch 保留
+  ok  归档状态恢复后不自动 spawn
+  ok  archived open 给明确恢复错误
+  ok  既有 Planner/Stop/维护闸门不能绕过
+  ok  busy remove 拒绝
+  ok  dirty main 提示且不 stash/reset/复制未提交数据
+  ok  项目 generation 改变使确认失效
+  ok  目标 path 占用不覆盖
+  ok  Project 子目录保留 prefix，不落到 repo root
+  ok  同 repo 子项目能发现工作区，但保持当前项目映射
+  ok  locked worktree remove 拒绝
+  ok  外部删除 → missing，epoch 失效，当前执行线关闭
+  ok  missing open 不退回 main
+  ok  app restart 重新发现 missing，保留 branch 与 manifest
+  ok  非 Git 项目明确拒绝，不 git init
+  ok  确认后 branch 竞态再次检查
+  ok  重复并发 create 只创建一个工作区
+  ok  显式旧 generation 在队列执行前被拒绝
+  ok  确认后主区 dirty 变化拒绝创建
+  ok  同路径换成 junction/symlink 不接受为 owned worktree
+  ok  未知 managed root 路径不能直接激活绕过登记
+  ok  损坏 manifest 保守拒绝，原文件不覆盖
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+  ok  已跟踪目录内嵌套 Git 仓库也拒绝删除
+  ok  junction alias 不绕过受控 activation
+  ok  current alias 仍识别 in-use，不误删正在使用目录
+  ok  worktree 内部 junction 不能逃逸实际 cwd
+  ok  恢复/当前 cwd 逃逸会撤销执行上下文
+  ok  异步校验期间 generation 改变也不创建
+Preparing worktree (new branch 'external-fixture')
+  ok  外部 worktree 只读发现，不自动认领
+  ok  外部 worktree id 不能成为移除控制目标
+  ok  受控 Git add 不执行 repository post-checkout hook
+  ok  managed storage 不能放在仓库内污染 main Git 状态
+Worktree lifecycle: 56/56 passed (win32, real Git fixtures)

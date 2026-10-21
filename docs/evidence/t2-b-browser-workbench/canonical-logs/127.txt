@@ -1,0 +1,61 @@
+  ok  classic remains available without conversation
+  ok  A sees only A changes
+  ok  B sees only B changes
+  ok  registry gives identity only
+  ok  unknown conversation has no workspace identity
+  ok  snapshot omits backend locator methods
+  ok  status projectRoot is authoritative A root
+  ok  A diff is scoped
+  ok  A open is scoped
+  ok  restore A succeeds
+  ok  restore A changes only A
+  ok  restore-all A succeeds
+  ok  restore-all affects only A
+  ok  unknown conversation: status fails closed
+  ok  unknown conversation: diff fails closed
+  ok  unknown conversation: open fails closed
+  ok  unknown conversation: restore fails closed
+  ok  unknown conversation: restore-all fails closed
+  ok  unknown conversation: never reads classic cwd
+  ok  empty scoped identity: status fails closed
+  ok  empty scoped identity: diff fails closed
+  ok  empty scoped identity: open fails closed
+  ok  empty scoped identity: restore fails closed
+  ok  empty scoped identity: restore-all fails closed
+  ok  empty scoped identity: never reads classic cwd
+  ok  archived workspace: status fails closed
+  ok  archived workspace: diff fails closed
+  ok  archived workspace: open fails closed
+  ok  archived workspace: restore fails closed
+  ok  archived workspace: restore-all fails closed
+  ok  archived workspace: never reads classic cwd
+  ok  removed workspace: status fails closed
+  ok  removed workspace: diff fails closed
+  ok  removed workspace: open fails closed
+  ok  removed workspace: restore fails closed
+  ok  removed workspace: restore-all fails closed
+  ok  removed workspace: never reads classic cwd
+  ok  invalid health rejects before writing
+  ok  stale epoch after health invalidation: status fails closed
+  ok  stale epoch after health invalidation: diff fails closed
+  ok  stale epoch after health invalidation: open fails closed
+  ok  stale epoch after health invalidation: restore fails closed
+  ok  stale epoch after health invalidation: restore-all fails closed
+  ok  stale epoch after health invalidation: never reads classic cwd
+  ok  filesystem identity replacement rejected
+  ok  invalid locked health: status fails closed
+  ok  invalid locked health: diff fails closed
+  ok  invalid locked health: open fails closed
+  ok  invalid locked health: restore fails closed
+  ok  invalid locked health: restore-all fails closed
+  ok  invalid locked health: never reads classic cwd
+  ok  unknown registered workspace: status fails closed
+  ok  unknown registered workspace: diff fails closed
+  ok  unknown registered workspace: open fails closed
+  ok  unknown registered workspace: restore fails closed
+  ok  unknown registered workspace: restore-all fails closed
+  ok  unknown registered workspace: never reads classic cwd
+  ok  restore completes while archive is still queued
+  ok  archive runs after restore releases lifecycle lock
+  ok  all scoped failures preserve classic file
+Runtime changes scope: 60/60

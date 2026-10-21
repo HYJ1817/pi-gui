@@ -1,0 +1,249 @@
+
+--- A. 门控判定：只看**最新一次成功**尝试的 review ---
+  ok   A1. 没开门控 → 一律 satisfied，对下游完全透明
+  ok   A2. 开了门控但一次都没成功过 → 不满足，原因是 no-successful-attempt
+  ok   A3. success + pending → 不满足
+  ok   A4. success + accepted → 满足
+  ok   A5. success + needs_changes → 不满足
+  ok   A6. **旧 accepted 不继承**：Attempt1 accepted、Attempt2 success+pending → 用 Attempt2
+  ok   A7. 失败的 attempt 不算「成功」——Attempt2 failed 时仍看 Attempt1
+  ok   A8. 老 attempt 没有 review 字段 → 归一成 pending（不是 accepted）
+  ok   A9. 缺字段 → false（旧 Plan 行为完全不变）
+  ok   A10. 真值 → true
+  ok   A11. 假值（0 / null / "no"）→ false，不认字符串
+
+--- B. DAG：门控把下游标成 blocked + waiting-review ---
+  ok   B1. 依赖 success 但门控没满足 → blocked + waiting-review
+  ok   B2. 门控满足 → ready
+  ok   B3. needs_changes → blocked + waiting-review
+  ok   B4. **没开门控时行为与旧实现一致**：success 直接放行
+  ok   B5. 依赖失败 → dependency-failed（不是 waiting-review）
+  ok   B6. 依赖被跳过 → dependency-skipped
+  ok   B7. 多上游：一个在等验收、另一个已成功 → waiting-review
+  ok   B8. **失败优先**：一个在等验收、另一个失败 → dependency-failed
+  ok   B9. 优先级与顺序无关（失败那个排在后面也一样）
+
+--- C. 端到端：门控真的挡住了调度 ---
+  ok   C1. 上游执行成功（执行状态是真的 success）
+  ok   C2. 下游 **没有被执行**（blocked，不是 ready/success）
+  ok   C3. 下游一次 attempt 都没有（确实没跑）
+  ok   C4. Plan 是 paused（不是 running / completed）
+  ok   C5. paused 的原因是 waiting-review
+  ok   C7. 详情接口里下游带 blockedReason=waiting-review 与 waitingOn=[ok]
+  ok   C8. 上游的 gateState 说清「在等第 1 次尝试」
+  ok   C9. Plan 视图带门控汇总（waiting = 1）
+  ok   C10. blockedReason 与 waitingOn **没有**被写回计划文件
+  ok   C11. reviewGate 本身**要**留在盘上（它是策略，不是视图）
+  ok   C12. 接受这次审阅成功
+  ok   C13. 响应带回工作流后果：ready 里有 ok2、planStatus 是 ready
+  ok   C14. 盘上下游已变 ready（后端是权威，不是只在前端算）
+  ok   C15. **但没有自动执行**：它还是 ready，没有 running/attempt
+  ok   C16. 上游的执行状态没被审阅改动（仍是 success）
+  ok   C17. 门控现在满足了
+  ok   C18. 手动 start 能被接受（计划没有被锁死）
+  ok   C19. 下游这次真的跑了（success）
+  ok   C20. 标「需要修改」成功
+  ok   C21. 下游仍然 blocked
+  ok   C22. **没有自动 Retry**（attempts 数没变、没有新 attempt）
+  ok   C23. 上游执行状态没被改成 failed（执行 ≠ 审阅）
+  ok   C24. Plan 仍是 paused + waiting-review
+  ok   C25. 无关任务**照常执行**（门控不是全局锁）
+  ok   C26. 门控只挡住它的 downstream
+  ok   C27. 上游本身照常成功
+  ok   C28. 第一级完成，第二级 blocked
+  ok   C29. 第三级是 pending（还没轮到它，不是 waiting-review）
+  ok   C30. 第一级 accepted → 第二级 ready
+  ok   C31. 第二级跑完后自己也卡在门控上（第三级 blocked）
+  ok   C32. 第二级 accepted → 第三级 ready
+
+--- D. Plan 状态：等验收 → paused，验收通过 → completed ---
+  ok   D1. 最后一个任务成功但门控没满足 → Plan **不能** completed
+  ok   D2. 而是 paused + waiting-review
+  ok   D3. 任务本身的执行状态仍然是 success（等验收不是执行状态）
+  ok   D4. accepted → Plan completed
+  ok   D5. 而且不需要再点「继续」（没有可跑的任务了）
+  ok   D6. 响应里的 planStatus 也是 completed
+  ok   D7. accepted → needs_changes：Plan **从 completed 退回 paused**
+  ok   D8. 退回 paused 时 endedAt 被清掉（它不是「结束」了）
+  ok   D9. 历史执行结果**不被重写**（任务仍是 success、attempt 还在）
+  ok   D10. 再 accepted → Plan 又回到 completed
+  ok   D11. 第三次写入的 revision 一直涨（乐观并发没被破坏）
+  ok   D12. accepted → pending 也退回 paused
+
+--- E. Retry 之后门控重新关上 ---
+  ok   E1. 先让它通过一次：下游 ready
+  ok   E2. retry 被接受
+  ok   E3. 重试后上游回到 pending（**排队**，不自动跑 —— P8-B 的语义）
+  ok   E4. 下游**没有被当成已放行而跑掉**（它一次都没执行）
+  ok   E5. Attempt2 成功后门控**仍然**关着（旧 accepted 不被沿用）
+  ok   E6. 下游再次 blocked + waiting-review
+  ok   E7. Attempt1 的 accepted 记录**原样还在**（retry 不改历史）
+
+--- F. Verification / 证据 / 执行结论都不参与门控 ---
+  ok   F1. 验证结果「从没跑过」不影响门控判定
+  ok   F1. 验证结果「passed」不影响门控判定
+  ok   F1. 验证结果「failed」不影响门控判定
+  ok   F2. changeEvidence 不影响门控判定
+  ok   F3. 门控不改 execution outcome / attempt 结构
+  ok   F4. 依赖 failed → dependency-failed（不是 waiting-review）
+  ok   F4. 依赖 cancelled → dependency-cancelled（不是 waiting-review）
+  ok   F4. 依赖 skipped → dependency-skipped（不是 waiting-review）
+  ok   F4. 依赖 interrupted → dependency-interrupted（不是 waiting-review）
+  ok   F5. 老计划文件里确实没有 reviewGate 这个键
+  ok   F6. 读出来归一成 false
+  ok   F7. schemaVersion 没变（纯新增字段，不需要迁移）
+
+--- G. 并发、PUT 与重启 ---
+  ok   G1. revision 对不上 → 409
+  ok   G2. 冲突之后 DAG 一个字节没变
+  ok   G3. 写盘失败 → 如实报错（ok:false）
+  ok   G4. 而且盘上的 DAG 没变
+  ok   G5. PUT 成功（门控关着）
+  ok   G6. 关着门控 → 上游成功即可放行下游（ready）
+  ok   G7. reviewGate 落盘了（开关是策略，可以事后开）
+  ok   G8. 开上门控 → 下游**就地**变 blocked + waiting-review
+  ok   G9. 重启后门控状态从持久化 review 重算出来（satisfied）
+  ok   G10. 重启后下游状态与磁盘一致（ready）
+  ok   G11. 恢复出来的 attempt 是 pending，不是 accepted
+  ok   G12. 门控因此仍然关着
+  ok   G13. 切到别的项目后审阅被拒（403）
+  ok   G14. 而且没被写进去
+
+--- H. 门控字段里的文本都是纯数据 ---
+  ok   H1. waitingOn 里放的是**任务 id**，不是标题（标题是不可信文本）
+  ok   H2. blockedReason 是稳定的枚举值，不含任何计划内容
+  ok   H3. 响应里没有被转义/拼接过的 HTML（后端只给数据）
+
+--- I. Gate required：失败 / 取消 / 中断 / 跳过都不算「等验收」 ---
+  ok   I1. 没开门控 → enabled=false / required=false / satisfied=true（新增字段是 additive）
+  ok   I2. 成功 + pending → required=true（这才是真的在等人）
+  ok   I3. 成功 + accepted → required=true 且 satisfied=true
+  ok   I4. **执行失败 → required=false**（没有可验收的东西）
+  ok   I5. cancelled → required=false（沿用原执行语义）
+  ok   I5. interrupted → required=false（沿用原执行语义）
+  ok   I5. skipped → required=false（沿用原执行语义）
+  ok   I6. 还没跑过（pending）→ required=false
+  ok   I7. 老数据：状态是 success 却没有成功 attempt → 仍按「等验收」处理（不静默放行下游）
+  ok   I8. ★Blocker A：单个 gated 任务执行失败 → Plan = failed
+  ok   I9. workflowState = failed + settled（**不是** paused + waiting-review）
+  ok   I10. isPlanSettled 为真（门控不再把失败的计划卡住）
+  ok   I11. 详情接口的 workflowReason 不是 waiting-review
+  ok   I12. Plan 级门控汇总**不**把失败任务算成「待验收」
+  ok   I13. 上游的 gateState 仍如实报 required=false / no-successful-attempt
+  ok   I14. 执行状态没被审阅逻辑改写（还是 failed，attempt 还在）
+  ok   I15. 失败的 gated 上游 → 下游 blocked + dependency-failed（优先级不变）
+  ok   I16. 门控不改「失败」的原语义：与无门控的同构计划**完全同态**
+  ok   I16b. workflowReason 是 dependency-blocked，**不是** waiting-review
+  ok   I17. 下游一次都没被执行
+  ok   I17b. 无门控的孪生计划也没执行下游（对拍的另一半）
+  ok   I18. gated 任务被取消 → Plan = cancelled（不是 waiting-review）
+  ok   I19. gated 任务被中断 → Plan = failed（中断算失败），**不是** waiting-review
+  ok   I20. gated 任务被跳过 → Plan = completed（沿用原 skipped 语义）
+  ok   I21. 从没跑过的 gated 任务 → paused + pending（**没有成功尝试不等于**一律 waiting-review）
+
+--- J. Active Session Barrier：运行中 accepted 不自动启动下游 ---
+  ok   J1. 计划启动
+  ok   J2. 拿到「A 成功、X 还在跑」的窗口
+  ok   J3. 此刻计划仍然 active
+  ok   J4. 窗口里 B 一次都没跑（attempts=0）
+  ok   J5. 窗口里 DAG 判 B 为 waiting-review（status 是泵下一轮才刷新的，这里判据用纯函数）
+  ok   J6. 计划运行中也能把已结束的 attempt 标成 accepted
+  ok   J7. 运行中的响应不带 gate（§二十：本轮不扩 API）
+  ok   J8. accepted 没有打断正在跑的 X（barrier 只挡未启动的）
+  ok   J9. A 仍是 success（审阅不改执行状态）
+  ok   J10. A 的 accepted **没有**被 Scheduler 的整份写盘冲掉
+  ok   J11. 无关的 X 正常跑完（门控不是全局锁）
+  ok   J12. DAG 权威：accepted 之后 B 变成 ready
+  ok   J13. ★Blocker B：B 在**这一轮 session**里没被自动执行（attempts=0）
+  ok   J14. session 结束后 Plan = ready（不是 completed / paused+waiting-review / running）
+  ok   J15. 调度器已空闲（session 自然结束）
+  ok   J16. 用户手动再点「开始执行」→ 被接受
+  ok   J17. 新 session 才执行 B：success + attempts=1
+  ok   J18. 最终 Plan = completed
+  ok   J19. j2 也拿到了那个窗口
+  ok   J20. accepted → needs_changes 写入成功（X 还在跑）
+  ok   J21. X 正常完成（barrier 不 abort 任何在跑的东西）
+  ok   J22. B 是 blocked + waiting-review（DAG 权威以最新 Review 为准）
+  ok   J23. B 没被 barrier 错标成 ready，也没被执行
+  ok   J24. Plan = paused + waiting-review（不是 ready）
+  ok   J25. 历史执行结果不倒推（A / X 仍是 success）
+  ok   J26. j3 也拿到了那个窗口
+  ok   J27. accepted → pending 写入成功
+  ok   J28. B 是 blocked + waiting-review（不是 ready-but-stopped）
+  ok   J29. Plan = paused + waiting-review
+  ok   J30. barrier 不碰 terminal 任务（A / X 历史原样）
+  ok   J31. B 一次都没跑
+
+--- K. Retry 后的 pending 也是一道 checkpoint（旧 accepted 不放行） ---
+  ok   K1. 起点：Attempt1 success + accepted → required=true、satisfied=true（正常已验收）
+  ok   K2. 起点：downB 是 ready，且一次都没跑过
+  ok   K3. Retry 被接受（计划没在跑）
+  ok   K4. Retry 只动当前态：Attempt1 的 accepted 原样留在历史里
+  ok   K5. Retry 后门控 = pending + 旧 accepted → required=false（这次还没成功）
+  ok   K6. Retry 不自动执行任何东西（downB 仍 attempts=0，gateA 仍 pending）
+  ok   K7. 计划启动
+  ok   K8. session 建立
+  ok   K9. 拿到「attempt2 成功、X 还在跑」的窗口
+  ok   K10. 窗口里 downB 一次都没跑
+  ok   K11. attempt2 是新的那一次（attempt++，历史没被重写）
+  ok   K12. attempt2 被 accepted（session 进行中写入成功）
+  ok   K13. 验收确实发生在 session 进行中（barrier 才有意义）
+  ok   K14. ★Blocker：downB 在**这一轮 session**里没被自动执行（attempts=0）
+  ok   K15. 无关的 X 正常跑完（barrier 只挡未启动的）
+  ok   K16. 两次 attempt 的 review 互不污染（都还是 accepted）
+  ok   K17. downB 是 ready（acceptance 已发生，DAG 权威）
+  ok   K18. Plan 落到 ready（不是 completed / paused）
+  ok   K19. 调度器空闲（session 自然结束）
+  ok   K20. 用户手动再点「开始执行」→ 被接受
+  ok   K21. 新 session 才执行 downB：success + attempts=1
+  ok   K22. 最终 Plan = completed
+
+--- L. Plan 级门控汇总：satisfied 只数「已放行」的 ---
+  ok   L1. 当前失败 + 旧 accepted → gated=1 / **satisfied=0** / waiting=0（没有放行的东西）
+  ok   L2. 成功 + pending → waiting=1
+  ok   L3. 成功 + accepted → satisfied=1
+  ok   L4. 从没跑过的 gated 任务（pending）→ 既不 satisfied 也不 waiting（没有可验收的产出）
+  ok   L4b. 老数据 status=success 却没有成功 attempt → 仍算 waiting（宁可多问一句，§七）
+  ok   L5. 没开门控 → 不进分母
+  ok   L6. 混在一起：3 个门控（1 个放行、1 个在等、1 个没成功）
+
+--- M. 多级门控：中间那道门是在 session 里通过的，最后一级也不自动跑 ---
+  ok   M1. 计划启动（本轮要跑 gateB + slowX，gateA 已经终态）
+  ok   M2. 拿到「gateB 成功、X 还在跑」的窗口
+  ok   M3. 中间那道门被 accepted
+  ok   M4. 最后一级 downC 没被这一轮自动执行（attempts=0）
+  ok   M5. downC 是 ready、Plan 是 ready（等用户再点开始）
+  ok   M6. 新 session 才跑 downC → completed
+
+--- N. 多上游：只有**没通过**的那个进了 checkpoint ---
+  ok   N1. 计划启动（gateA 已终态，本轮跑 gateC + slowX）
+  ok   N2. 拿到「gateC 成功、X 还在跑」的窗口
+  ok   N3. 第二个上游被 accepted
+  ok   N4. 已验收的那个上游不挡人 —— downB 这一轮不跑（attempts=0）
+  ok   N5. downB 是 ready、Plan 是 ready
+  ok   N6. 新 session 才跑 downB → completed
+
+--- O. shouldCheckpointGate + checkpoint 内容：判据矩阵 ---
+  ok   O1. 没开门控 → 不是门（false）
+  ok   O2. 成功 + accepted → 已放行（false，正常流程一个字节都不受影响）
+  ok   O3. 成功 + pending → 没通过（true）
+  ok   O4. 成功 + needs_changes → 没通过（true）
+  ok   O5. ★Retry 之后的 pending + 旧 accepted → 没通过（true，这是本轮的 blocker）
+  ok   O6. ready + 旧 accepted → 没通过（true）
+  ok   O7. failed + 旧 accepted → 没通过（true）
+  ok   O8. cancelled + 旧 accepted → 没通过（true）
+  ok   O9. interrupted + 旧 accepted → 没通过（true）
+  ok   O10. skipped + 旧 accepted → 没通过（true）
+  ok   O11. running + 旧 accepted → 没通过（true，retry 后这一轮还没跑完）
+  ok   O12. 从没跑过（pending 无 attempt）→ 没通过（true）
+  ok   O13. 老数据 status=success 却无成功 attempt → 没通过（true，宁可多问一句）
+  ok   O14. 历史语义没被改：Retry 后仍报 satisfied=true / required=false（§八，我们没动 reviewGateState）
+  ok   O15. checkpoint：session 开始时没通过的门才进去（pending 的 gateA → [gateA]）
+  ok   O16. ★checkpoint：已验收的不进去（成功+accepted → {}，§二十）
+  ok   O17. ★checkpoint：Retry 后的 pending+旧 accepted **要进去**（blocker 的直接断言）
+  ok   O18. ★多上游：只记没通过的那个（[gateC]，不记 gateA）
+  ok   O19. 多上游里两个都没通过 → 两个都记（barrier 不挑）
+  ok   O20. 没有依赖 / 依赖不存在 → 不记（id 缺失不炸）
+  ok   O21. 两道门 → 各记各的（Map 按 task 分开）
+
+217 passed, 0 failed

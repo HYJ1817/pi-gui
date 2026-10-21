@@ -1,0 +1,160 @@
+
+--- A. 版本号解析 ---
+  ok  known: 0.99.1
+  ok  known: 0.87.0
+  ok  known: 1.0.0
+  ok  known: 0.99.1-beta.2
+  ok  known: 10.20.30+build.7
+  ok  malformed: not-a-version
+  ok  malformed: v0.99.1
+  ok  malformed: 0.99
+  ok  malformed: 0.99.1.2
+  ok  malformed: >=0.90
+  ok  malformed: 0.99.1 x
+  ok  malformed: xxxxxxxxxxxxxxxxxxxx
+  ok  unknown: null
+  ok  unknown: undefined
+  ok  unknown: ""
+  ok  unknown: "   "
+  ok  unknown: 123
+  ok  unknown: {}
+  ok  unknown: []
+  ok  probe 输出带噪声也能抠出版本
+  ok  probe 输出纯版本号
+  ok  probe 输出是垃圾 → malformed（不是 known）
+  ok  probe 输出为空 → unknown
+
+--- B. 版本真值（value / source / status / updatedAt） ---
+  ok  package.json 是首选来源
+  ok  值就是包里的版本号
+  ok  状态 known
+  ok  updatedAt 是 ISO 时间戳
+  ok  首选来源命中时不跑兜底探测
+  ok  TTL 内第二次读走缓存（不重复读文件）
+  ok  包里的 version 畸形 → status=malformed
+  ok  畸形时 value 保持 null（不把垃圾当版本号）
+  ok  畸形是**有信息**的结果：不退回兜底探测
+  ok  畸形时仍记来源
+  ok  包读不到 → 落到 pi --version
+  ok  兜底探测的值被解析出来
+  ok  兜底探测确实跑了
+  ok  两个来源都拿不到 → unknown / source=none
+  ok  探测抛错不传播，降级成 unknown
+  ok  没注入任何来源 → unknown（不猜）
+  ok  TTL 内不重读
+  ok  过了 TTL 会重读
+  ok  force 强制重读
+  ok  probe 用 args 数组调 --version（不拼 shell）
+  ok  probe 有超时与输出上限
+  ok  probe 无入口 → null（不猜）
+  ok  probe 抛错 → null
+  ok  probe 报 error → null
+  ok  probe 空输出 → null
+
+--- C. builtInExtensions 解析 ---
+  ok  0.87 原文 → 只有 llama.cpp
+  ok  0.87 原文 → hidden:true、不可替换
+  ok  0.99 原文 → 四个 built-in
+  ok  0.99 原文 → 后三个可被替换
+  ok  证据是那一行的原文（可核对）
+  ok  形状不认识 → null（不返回空数组冒充「没有」）
+
+--- D. built-in 能力探测 ---
+  ok  known=true 且给出出处文件
+  ok  四个 built-in 都在
+  ok  ExtensionAPI：registerMcpServer / getMcpServers / getAllTools 都读到
+  ok  RPC 命令表读出来，且没有工具清单命令
+  ok  MCP 命令行出处来自 docs/mcp.md
+  ok  updatedAt 是 ISO
+  ok  0.87：只有 llama.cpp
+  ok  0.87：没有 registerMcpServer / getMcpServers
+  ok  0.87：getAllTools **早就有**（不是新能力）
+  ok  0.87：没有 docs/mcp.md → mcpCli 未知（不是 false）
+  ok  包找不到 → known=false、builtins=null（不写成空数组）
+  ok  包找不到时 ExtensionAPI / RPC 都是未知
+  ok  包找不到**不影响** mcp.json 的存在性探测
+  ok  项目 A 有 mcp.json → exists=true
+  ok  切到项目 B 立刻变 false（缓存不串项目）
+  ok  切回 A 又对了
+
+--- E. MCP 报告三态 ---
+  ok  0.99 形态 → supported=true
+  ok  reason 指出 built-in:mcp 这条判据
+  ok  evidence 是可核对的原文
+  ok  servers 仍是空（不编造 Server）
+  ok  serversNote 指向原生明细（/api/mcp/servers）
+  ok  builtins 如实列出四个
+  ok  built-in 说明写清「不是扫目录扫到的」
+  ok  RPC：没有工具清单命令
+  ok  RPC：note 明说「不伪造工具注册表」
+  ok  get_commands 存在 ≠ 它是工具注册表
+  ok  0.87 legacy → supported=false（旧版本安全降级保留）
+  ok  0.87 legacy → 仍然不列 Server
+  ok  built-ins 形状不认识 → supported=null（不猜成 false）
+  ok  形状不认识时 builtins.entries=null
+  ok  找不到 pi 包 → supported=null（unavailable）
+  ok  找不到包时 piPackageFound=false
+  ok  报告带规范版本状态（value/source/status/updatedAt）
+  ok  piVersion 字符串字段保持向后兼容
+  ok  没注入时兜底也给完整状态（updatedAt 不为 null）
+
+--- F. 脱敏 ---
+  ok  mcp.json 的密钥不进报告
+  ok  mcp.json 的 Server 名与内容不进报告
+  ok  只报存在与否
+  ok  报告里没有 pi 包绝对路径
+  ok  诊断级的字段不含 payload（evidence 只有一行原文）
+
+--- G. schema drift 与异常记录 ---
+  ok  缺 sessionFile → 记一条 missing-field（形状漂移可见）
+  ok  版本状态出处进了报告
+  ok  异常里不含任何值（只有字段名与类型）
+  ok  未知事件被安全忽略但留痕
+  ok  未知事件的 payload 不进异常记录
+  ok  没注入版本源时 versionSource 为 null（不编造）
+  ok  版本源的未知枚举被归一（不回显原值）
+  ok  版本源抛错 → null，不影响报告
+
+--- H. launch identity：spawn 的命令与探测读的包同源 ---
+  ok  明确路径的入口 → source=env、包目录绑到它自己那份
+  ok  summary 只给脱敏字段，绝对路径一个字节都不出
+  ok  入口不存在 → packageDir=null（不退到「常见全局位置」去捡一份）
+  ok  POSIX：裸命令按 PATH 解析并绑上包
+  ok  Windows：先试精确名（cmd 的规则），同样绑上包
+  ok  PATHEXT 补后缀也能找到 pi.cmd 并绑上包
+  ok  没有 PATH → packageDir=null（不猜）
+  ok  ★ PATH 指向 A、B 藏在「常见全局位置」→ 绑的是 A，不是 B
+  ok  版本真值跟着 launch identity 走（读 A 的 package.json，不是 B 的）
+  ok  能力探测读的也是 A（不是 B 那份 0.99 built-ins）
+  ok  summary 只暴露 basename，不暴露 A 的路径
+  ok  显式指向 B 时就绑 B（身份跟 PI_BIN 走，不跟 PATH 走）
+  ok  Windows 下先按 cwd 找，切 cwd 后结论跟着变
+
+--- H2. formatLaunch：bridge 与 --version 用同一份成形规则 ---
+  ok  POSIX：参数走数组、不拼串、不加 shell
+  ok  Windows：拼成一条命令串、空 args、shell:true（绕开 DEP0190）
+  ok  launcher("--version") 走的就是 formatLaunch（同一份代码）
+  ok  version probe 按 launcher 拼出来的命令执行（注入的 run 收到同一份 spec）
+
+--- I. version cache 以 launch identity 为 key ---
+  ok  I1 同一 identity、TTL 未过 → 不重复 probe
+  ok  I2 同一 identity、TTL 过期 → 重新 probe
+  ok  I3 identity 改变、TTL 未过 → 立即重新 probe（不等 TTL）
+  ok  I4 A→B：0.87→0.99 立即更新
+  ok  I5 B→A：切回去立即更新（不残留 B 的值）
+  ok  I10 malformed 不跨 identity 泄漏（A 畸形→B 正常）
+  ok  I0 没注入 identityKey 时保持纯 TTL 行为（老调用方不受影响）
+  ok  I0b peek 不把内部 key 泄漏出去
+  ok  I6 cwd 变化但解析到同一个 Pi → key 不变（可复用 cache）
+  ok  I6b 同一 Pi、cwd 变了 → version 不重探（复用 TTL）
+  ok  I7 cwd 变化且解析成不同 Pi → key 改变
+  ok  I8 packageDir unknown、但 target 路径变了 → key 仍改变
+  ok  I9 packageDir unknown、同一 target → 可复用（key 稳定）
+  ok  I9b identityKey 是不透明串（不含绝对路径，可进不了 Diagnostics）
+
+--- I-int. 切项目集成：version / builtins / MCP 同源立即一致 ---
+  ok  集成 A：version=0.87.0、builtin:mcp 缺席
+  ok  集成 B：不等 TTL，version 立即 0.99.1、builtin:mcp=true
+  ok  集成 Diagnostics 侧：同一 pv 读到的就是诊断用的版本（切项目立即同步）
+
+136/136 通过

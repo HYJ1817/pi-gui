@@ -1,0 +1,149 @@
+
+--- 无项目 / 无配置 / 默认值 ---
+  ok   1. 无项目时 read() 报 hasProject=false 且 config=null
+  ok   1. 无项目 GET → 200 且 ok=true（不是 500）
+  ok   1. 无项目 GET 的 config 为 null、hasProject 为 false
+  ok   1. 无项目 PUT → 200 且明确说没项目（不假装成功、不 500）
+  ok   1. 无项目时 launchArgs() 返回空参数
+  ok   2. 项目存在但无配置文件 → exists=false、path 指向 .pi-gui/config.json
+  ok   2. 无配置文件时读到的就是默认配置
+  ok   2. 无配置文件不产生任何警告
+  ok   2. 读一次不会把 .pi-gui 目录创建出来
+  ok   2. GET 无配置 → 200 / ok=true / exists=false / 返回默认配置
+  ok   3. DEFAULT_CONFIG 被冻结（改不动）
+  ok   3. defaultConfig() 每次返回新对象（改一个不影响另一个）
+  ok   3. 默认配置的字段集合固定
+  ok   3. 默认 version 等于 CONFIG_VERSION
+
+--- 正常读取 / 未知字段 ---
+  ok   4. 正常读取：模型 / 思考 / 指令 / 忽略 / 命令都对得上
+  ok   8. 未知顶层字段被丢弃（apiKey / token / projectPath / foo 都不在结果里）
+  ok   8. 模型对象里的多余字段（apiKey）也被丢弃
+  ok   8. 保存后盘上不再残留未知字段
+  ok   4/8. 合并式保存：只改 ignore 不会把 model / instructions 抹掉
+
+--- 写入与原子写 ---
+  ok   5. PUT 成功 → 200 / ok=true / 回传路径与配置
+  ok   5. 盘上文件是格式化 JSON 且以换行结尾
+  ok   5. version 由后端定，客户端指定不了
+  ok   6. 写入后 .pi-gui 里不留临时文件
+  ok   6/21. 目标不可写 → 500 且 ok=false（不假装保存成功）
+  ok   6/21. 写失败时错误信息说清了「保存失败」
+  ok   6. 写失败后不留临时文件（临时文件被清掉）
+  ok   6. 写失败不会破坏原有内容（原目录还在）
+
+--- 损坏 / 异常 / 版本 ---
+  ok   7. 非法 JSON → 退回默认配置，不抛
+  ok   7. 非法 JSON → 有一条说明性警告
+  ok   7. 非法 JSON 时**不自动覆盖**损坏文件（用户没保存就不动它）
+  ok   7. 损坏配置下 GET 仍 200（不因为配置坏了打不开项目）
+  ok   7. GET 把警告透出来（前端能提示用户）
+  ok   21. 空文件 → 默认配置 + 警告
+  ok   21. version 高于支持 → 不崩、退回默认值
+  ok   21. version 高于支持 → 警告里点明版本号与备份建议
+  ok   21. version 高于支持 → 不动原文件
+  ok   21. version 不是数字 → 按当前版本处理 + 警告
+  ok   3. 缺少 version 字段 → 按当前版本处理，无警告
+  ok   21. 顶层是数组 → 默认值 + 警告
+  ok   3. 只给一部分字段时，其余字段用默认值
+
+--- 类型错误 ---
+  ok   9. model 是字符串 → 退回默认值且有警告
+  ok   9. model 缺 id → 退回默认值且有警告
+  ok   9. model 是数组 → 退回默认值且有警告
+  ok   9. thinking 是数字 → 退回默认值且有警告
+  ok   9. thinking 不在 pi 的档位里 → 退回默认值且有警告
+  ok   9. instructions 是数字 → 退回默认值且有警告
+  ok   9. ignore 是字符串 → 退回默认值且有警告
+  ok   9. ignore 里混了非字符串 → 退回默认值且有警告
+  ok   9. commands 是对象 → 退回默认值且有警告
+  ok   9. commands 条目缺 command → 退回默认值且有警告
+  ok   9. commands 条目是字符串 → 退回默认值且有警告
+
+--- 长度与数量上限 ---
+  ok   10. 超长 instructions 被截到上限
+  ok   10. 超长 instructions 有警告
+  ok   10. 写盘时也截断（不是只在响应里截断）
+  ok   11. ignore 数量超上限被截断
+  ok   11. ignore 截断有警告
+  ok   12. commands 数量超上限被截断
+  ok   12. commands 截断有警告
+  ok   12. 单项过长被截断（ignore 单项 / 命令名 / 命令体）
+
+--- 访问控制（经真实 router） ---
+  ok   13. GET 不带令牌 → 401
+  ok   13. PUT 不带令牌 → 401
+  ok   14. 跨站 Origin + 正确令牌 → 403（Origin 先判）
+  ok   13/14. 带令牌且同源 → 200 且来自 projectConfig
+  ok   /api/project-config 独立成路由后，/api/projects 仍命中 projects
+
+--- 项目隔离 / 路径安全 ---
+  ok   15. 切到 A 读到 A 的配置
+  ok   15. 切到 B 读到 B 的配置
+  ok   16. A / B 两份文件都在各自项目里，互不覆盖
+  ok   16. A 的盘上内容没有被 B 的写入改动
+  ok   18. PUT 里带 projectPath / absolutePath / cwd / path → 只写当前项目
+  ok   18. 那些路径字段本身不会被写进配置文件
+  ok   18. 旧项目的延迟保存返回 409，不能写到新项目
+  ok   17. cwd 置空后立刻变成「没有项目」
+  ok   17. cwd 为空时即使 URL 上带了路径也读不到任何项目配置
+
+--- 模型 / 思考档位的降级 ---
+  ok   19. 项目配置里的模型**绝不**进 pi 启动参数（过期模型会让 pi exit(1)）
+  ok   19. 模型仍被保存下来（降级的是启动方式，不是数据）
+  ok   20. 支持的思考档位进启动参数
+  ok   20. 不在 pi 支持列表里的档位被丢弃 + 警告
+  ok   20. 档位被丢弃后启动参数里没有 --thinking（pi 用它自己的默认）
+  ok   20. THINKING_LEVELS 与 pi 自己报的合法值一致（off/minimal/low/medium/high/xhigh/max）
+
+--- 环境变量 > 项目配置 ---
+  ok   环境变量钉住 thinking 时，项目配置不再给 --thinking
+  ok   环境变量钉住模型时，thinking 仍能生效（两者互不影响）
+  ok   env 只回布尔、不回值（模型名不泄露到前端）
+  ok   env 里没有任何字符串值
+
+--- 密钥边界 ---
+  ok   密钥：PUT 里的 apiKey / token / PI_GUI_TOKEN 一个都没写进配置
+  ok   密钥：模型对象里只剩 provider 与 id
+  ok   密钥：整个配置文件里没有出现 apiKey 这个键
+  ok   密钥：GET 响应里也没有 apiKey 字段
+
+--- 项目指令的注入载体 ---
+  ok   指令：保存后生成了 pi 能读的指令文件
+  ok   指令：产物内容与配置一致
+  ok   指令：launchArgs 里带上 --append-system-prompt 指向该文件
+  ok   指令：产物文件名带 .generated（明确是产物，不是输入）
+  ok   指令：内容未变时不重写文件
+  ok   指令：清空后产物被删除（不留旧指令继续注入）
+  ok   指令：清空后 launchArgs 不再带 --append-system-prompt
+  ok   指令：产物缺失时不传参数，并给出警告（避免把路径当指令注进去）
+  ok   指令：prepareLaunch 会重建缺失的产物并带上参数
+
+--- 保存后是否需要重启 pi ---
+  ok   只改 ignore / commands → 不需要重启 pi
+  ok   改 thinking → 需要重启 pi 且真的重启了
+  ok   首次写指令 → 需要重启
+  ok   指令内容变了（路径没变）→ 仍然需要重启
+  ok   指令内容没变 → 不需要重启
+  ok   只改模型 → 不需要重启（由前端用 set_model 落下去，不重启进程）
+
+--- 非 Git 项目 ---
+  ok   22. 非 Git 目录照样能读写项目配置
+  ok   22. 配置不写进 .git/，也不创建 .git/
+  ok   22. 配置放在 .pi-gui/ 而不是 .git/
+
+--- 打包兼容性（真实 bundle） ---
+  ok   打包：只 import node 内建、HTTP 原语与共享纯 fallback（无新增运行时依赖）
+  ok   打包：不读 package.json、不依赖 __PI_GUI_VERSION__ 之类的构建期注入
+  ok   装配：server.js 把 projectConfig 注入了 router 与 rpc-bridge
+  ok   打包：server.js 能被 esbuild 打成单文件（SEA exe / Electron 共用这份产物）
+  ok   打包：产物里有 server/project-config.js 的指纹（模块真的进包了）
+  ok   打包：产物里有 /api/project-config 路由（接线真的进包了）
+  ok   打包：产物里有 project_config_notice 事件名（桥接真的进包了）
+  ok   打包：产物里有 --append-system-prompt（指令注入路径进包了）
+
+--- 结构性护栏 ---
+  ok   护栏：launchArgs 里没有出现 --provider / --model（防止有人「顺手」加回来）
+  ok   护栏：config.json 的字段白名单里没有任何密钥类字段
+
+115/115 通过

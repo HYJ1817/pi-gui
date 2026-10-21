@@ -1,0 +1,111 @@
+
+--- 1. 目录名编码 ---
+  ok   dirNameFor 把盘符与分隔符换成 -，两边各加 --
+  ok   dirNameFor 保留中文与空格（实测的真实目录名）
+  ok   normCwd 归一化分隔符与大小写
+
+--- 2. 单个会话文件的解析 ---
+  ok   2a. 读出 header 的 id / cwd / 时间
+  ok   2b. 消息条数正确
+  ok   2c. 标题取第一条用户消息（不是最后一条、也不是助手消息）
+  ok   2d. 消息体嵌在 message 字段下也能读出来
+  ok   2e. 没有消息时给中性标题，不报错
+  ok   2f. 顶层 role/content 形状也认（两种都兼容）
+  ok   2g. 坏文件 → null（不抛）
+  ok   2h. 文件不存在 → null（不抛）
+  ok   2i. 第一行不是 session header → null
+
+--- 3. 列表 ---
+
+--- P32 agent目录tilde展开与真实会话定位 ---
+  ok   agentDir ~/agent 展开TestHOME后扫描已有session
+  ok   agentDir ~/agent 精确locator仍归属fixture header
+  ok   agentDir ~\agent 展开TestHOME后扫描已有session
+  ok   agentDir ~\agent 精确locator仍归属fixture header
+  ok   bare tilde使用TestHOME自身而非默认.pi/agent
+  ok   显式homeDir优先于env.HOME参与tilde展开
+  ok   项目预览：只列注册项目 B 的会话
+  ok   项目预览：不会调用 Pi 或伪造当前会话
+  ok   项目预览：文件内容不变且不返回路径
+  ok   项目预览：未知目录拒绝
+  ok   项目预览：上级目录拒绝
+  ok   项目预览：当前项目仍可读取当前会话
+  ok   3a. 只列当前项目的会话（B 项目的不出现）
+  ok   3b. 按创建时间倒序（旧会话更新也不置顶）
+  ok   3c. 标题是第一条用户消息
+  ok   3d. 从 pi 的 get_state 拿到当前会话并标出来
+  ok   3e. 每条的 id 是 16 位 hex（前端拿不到路径）
+  ok   3f. 返回里**不含**任何绝对路径字段
+  ok   3g. 目录在 A 但 header.cwd 是 B → **不列出**（只认 header，不信目录名）
+  ok   3h. pi 没连接（没有 rpc）时不报错，只是 currentId 为 null
+  ok   3i. 没选项目 → hasProject=false、空列表
+  ok   3j. pi 没应答时列表仍然正常，currentId 为 null
+  ok   3k. 猜不到目录时退回全量扫描，仍能按 header.cwd 找到会话
+  ok   3l. 一个坏文件不影响其余会话（并给一条诊断）
+
+--- 4. 安全边界 ---
+  ok   4a. 未知 id → not-found
+  ok   4b. 路径穿越字符串当 id → not-found（不会被当路径用）
+  ok   4c. 绝对路径当 id → not-found
+  ok   4d. not-found 的响应里不回显被请求的字符串
+  ok   4e. 拿另一个项目的会话 id 来切 → not-found（归属只认 header.cwd）
+  ok   4f. 正常切换：给 pi 发 switch_session + 真实路径
+
+--- 5. 切换与改名的降级 ---
+  ok   5a. 没有 rpc → no-rpc（不抛）
+  ok   5b. pi 没应答 → no-answer（不假装成功）
+  ok   5c. pi 明确报错 → failed，并把原因带回来
+  ok   5d. 被扩展取消 → cancelled
+  ok   5e. 改名 → 给 pi 发 set_session_name
+  ok   5f. 空名字被拒（不会发一条空名字过去）
+  ok   5g. 超长名字被截断到 120
+
+--- 6. HTTP 层 ---
+  ok   6a. GET /api/sessions 命中 sessions 模块并返回列表
+  ok   6b. 不带令牌 → 401
+  ok   项目预览 HTTP：query 正确传入独立项目列表
+  ok   项目预览 HTTP：仍需认证
+  ok   6c. POST /api/sessions/switch 不被 405 兜底吃掉（路由顺序正确）
+  ok   6d. id 不是字符串 → 400
+  ok   6e. PUT /api/sessions → 405
+  ok   6f. GET /api/sessions/archive → 405（不被静态兜底吃掉）
+  ok   6g. POST /api/sessions/delete 空 id → 400
+  ok   6h. 删除同样要令牌（不带 → 401）
+
+--- 7. 归档 / 删除（Pi GUI 自己的状态，不碰 pi） ---
+  ok   7a. 归档成功
+  ok   7b. 归档响应里不含绝对路径
+  ok   7c. 列表里该条 archived=true
+  ok   7d. 归档**不动磁盘**：文件还在原处（可逆的纯组织动作）
+  ok   7e. 没归档的那条仍是 archived=false
+  ok   7f. flags 用 pi 的 sessionId 记（文件挪位置也不失配）
+  ok   7g. flags 是原子写：目录里没有 .tmp 残留
+  ok   7h. 取消归档
+  ok   7i. 取消归档后 archived=false
+  ok   7j. 当前会话拒绝归档（pi 正开着它）
+  ok   7k. 被拒的归档没有偷偷写进 flags
+  ok   7l. 未知 id 归档 → 报错不抛
+  ok   7m. 删除成功
+  ok   7n. 删除响应里不含绝对路径
+  ok   7o. 原文件已被移走（不是留在原地）
+  ok   7p. 文件进了回收站目录（**不是 unlink** —— 误点可人工找回）
+  ok   7q. 回收站里那份内容与原文件一致
+  ok   7r. 删除后不再出现在列表里
+  ok   7s. 删除记进了 flags（可追溯是谁被删的）
+  ok   7t. 当前会话拒绝删除
+  ok   7u. 被拒的删除没有动文件
+  ok   7v. 未知 id 删除 → 报错不抛
+  ok   7w. 路径穿越字符串当 id → 拒绝（不会被当路径删）
+  ok   7x. flags 坏掉时列表照常打开，归档状态当 false
+
+--- 8. 当前会话补位 ---
+  ok   8a. 磁盘上不存在的当前会话会被补进列表
+  ok   8b. 补位那条带 current 与 pending 两个标记
+  ok   8c. 补位那条给了中性标题（不显示成空字符串）
+  ok   8d. 新建补位按文件名创建时间排在最前面
+  ok   8e. 磁盘上的会话仍然都在（补位不是替换）
+  ok   8f. 补位那条不能被归档（磁盘上还没有它）
+  ok   8g. 有名字就用名字，messageCount 也带过来
+  ok   8h. 当前会话已在磁盘上时不重复补位
+
+91 passed, 0 failed

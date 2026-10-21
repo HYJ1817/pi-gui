@@ -1,0 +1,25 @@
+PASS Browser A uses captured owner
+PASS Browser chrome replaces loading placeholder
+PASS B without Browser does not display A
+PASS focus switch preserves A Browser
+PASS Browser B is independent
+PASS return A displays own URL
+PASS background A event cannot replace B
+PASS stale browser generation ignored
+PASS close B leaves A alive
+PASS Process status captures A
+PASS Browser detaches native view when Process opens
+PASS late A Process cannot update B pane
+PASS Process B only uses B owner
+PASS dormant pane explicit empty state
+PASS leaving runtime removes prior Process pane
+PASS late Browser status does not replace Changes
+PASS late Browser status cannot reopen closed pane
+PASS Browser split uses existing runtime owner and Changes
+PASS runtime split exits without native recreation
+PASS new focused Browser absent still retains split Changes with explicit empty state
+PASS late A state cannot contaminate focused B split
+PASS twenty runtime layout transitions keep single Browser subscription
+PASS closing focused session retains scoped split empty state and no old Browser
+PASS runtime leave closes split and all subscriptions
+Runtime secondary: 24/24

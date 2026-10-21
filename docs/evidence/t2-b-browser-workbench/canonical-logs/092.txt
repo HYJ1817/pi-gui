@@ -1,0 +1,195 @@
+
+--- A. 检查（只读、固定 endpoint、白名单） ---
+  ok   A1. 0.99.2 → 1.0.0：updateAvailable=true / canUpdate=true
+  ok   A2. 带上当前版本与核对状态（前端要用它显示未验收警告）
+  ok   A3. packageName 是官方包名
+  ok   A4. 请求打的是固定 URL，且不带任何本机信息
+  ok   A5. 请求头只有 Accept 与 User-Agent（无 cookie / token / referer）
+  ok   A6. GET、无 body、带超时信号
+  ok   A7. 响应字段严格落在白名单里
+  ok   A8. 已是最新：updateAvailable=false / phase=latest / canUpdate=false
+  ok   A9. 已是最新时 canUpdate=false、reason=latest（按钮不该出现）
+  ok   A10. 响应形状不认识 → invalid-response，且不冒充新版本
+  ok   A11. 陌生 packageName → foreign-package（绝不据此更新）
+  ok   A12. 版本号不合法 → invalid-response
+  ok   A13. 超时 → errorCode=timeout
+  ok   A14. 网络失败 → errorCode=network（结构化失败，不抛）
+  ok   A15. 非 2xx → http-error
+  ok   A16. 失败不进缓存（下次仍会重试）
+  ok   A17. 失败之后再次检查仍会真的发请求
+  ok   A18. PI_OFFLINE=1 → 完全不发请求，返回 offline
+  ok   A19. isOffline() 认 1/true/yes/on，不认空与 0
+  ok   A20. TTL 内第二次检查走缓存（只有一次网络）
+  ok   A21. TTL 过期后重新检查（缓存不是永久的）
+  ok   A22. force=1 绕过缓存
+  ok   A23. 并发检查单飞：只打一次公网，两边都拿到结果
+  ok   A24. 相位集合是前端认的那几个
+
+--- B. 更新动作（确认 / 过期 / 固定参数 / 闸门） ---
+  ok   B1. confirm !== true → 拒绝（confirm-required），不暂停也不跑 updater
+  ok   B2. 只认 action=update
+  ok   B3. 当前版本与后端重读的不一致 → stale-current，不跑 updater
+  ok   B4. 目标版本已经变了 → stale-target（要求前端刷新）
+  ok   B5. 没有新版本 → no-update，**不起子进程**
+  ok   B6. 成功：参数**恰好**是 ["update","--self"]
+  ok   B7. 没有任何 --all / --extensions / --models
+  ok   B8. entry 一路传到 runner（与闸门解析的是同一个对象）
+  ok   B9. 成功后 phase=latest，installedVersion 是新版本
+  ok   B10. 成功后 bridge 被恢复（resume 恰好一次）
+  ok   B11. renderer 传的 command/args/packageName/version/url/env 全部无效
+  ok   B12. 后端闸门说忙 → 拒绝，且带上可执行原因
+  ok   B13. 证明不到官方入口 → unsupported，**不 fallback 到别的 pi**
+  ok   B14. 提示文案说清是「这份 Pi 无法通过官方 self-update 更新」
+  ok   B15. 并发更新被拒绝（update-running）
+  ok   B16. 工作区没变 → 放行（走到 updater 之前的所有闸门都过）
+  ok   B17. 工作区切走了 → workspace-stale
+  ok   B18. 暂停失败 → pause-failed，不跑 updater，也不 resume（那不是我们停的）
+  ok   B19. 已经在维护中 → update-running（不嵌套）
+
+--- C. maintenance：停得干净、不自动重启、resume 只启动一次 ---
+  ok   C1. 暂停时立刻发 maintenance/pausing
+  ok   C2. 挂起请求被安全 settle（不会干等到超时）
+  ok   C3. 当前 child 被要求退出（stdin.end + kill）
+  ok   C4. pauseForMaintenance 等进程真的退出才 resolve
+  ok   C5. 退出后发 maintenance/stopped，且**没有**自动重启
+  ok   C6. 维护期间不会拉起新 child（等一个 backoff 窗口也不动）
+  ok   C7. 维护期间 send() 被拒绝（不再接受新命令）
+  ok   C8. 维护期间 request() 直接回 null
+  ok   C9. 重复 pause → already-in-maintenance（防嵌套）
+  ok   C10. 维护态能从 getState() 读出来（刷新页面后前端才显示得对）
+  ok   C11. resume 之后正好启动一个新 child
+  ok   C12. resume 只发一次 starting
+  ok   C13. 再 resume → not-paused（不会顺手再拉起一个 pi）
+  ok   C14. resume 之后命令重新可用（child 活着）
+  ok   C15. 维护之后的意外退出仍走正常重启（crashStreak 没被维护搞脏）
+
+--- D. 身份：只解析一次、不 fallback ---
+  ok   D1. 解析入口最多两次（一次给 canUpdate 显示、一次给更新），执行时用闸门那次
+  ok   D2. runner 收到的是同一个 entry 对象（不是重新找的一份）
+  ok   D3. 模块自己不起进程（没有 child_process / spawn / exec）
+  ok   D4. 模块里没有别的安装方式（npm/pnpm/bun/curl/--all）
+  ok   D5. server 装配里 CLI 入口来自 launch identity（buildPiEntry(piLaunch.packageDir())）
+  ok   D6. 没有「PATH 再找一份 pi」的 fallback 分支（modify 里没有 bin="pi"）
+
+--- E. 缓存失效与版本复验 ---
+  ok   E1. 成功路径：先清 identity-bound 缓存，再**强制**重读版本
+  ok   E2. 成功之后检查缓存作废（版本已经变了）
+  ok   E3. updater 退出码 0 但版本没变 → verify-failed（不能说更新成功）
+  ok   E4. 复验失败也必须恢复 bridge（否则永久停在维护态）
+  ok   E5. 复验失败时 phase 是 failed
+  ok   E6. updater 非 0 → update-failed，且恢复 bridge
+  ok   E7. 错误文本脱敏（没有绝对路径、没有 token 原值）
+  ok   E8. 只回一句话摘要，不回原始 stderr
+  ok   E9. updater 超时 → update-timeout，且恢复 bridge
+  ok   E10. runner 抛错 → update-spawn-failed / update-failed，且恢复 bridge
+  ok   E11. 快照（诊断用）只含公开字段、不发请求
+  ok   E12. reset() 之后回到 idle（不残留上一次结论）
+
+--- F. HTTP 层：方法 / 错误码 / 202 语义 ---
+  ok   F1. 非 GET/POST → 405 JSON
+  ok   F2. 请求体不是 JSON → 400 bad-body
+  ok   F3. 合法 POST → 202 accepted + phase=updating（前端据此开始轮询）
+  ok   F4. 后台跑完后快照变成 latest
+  ok   F5. GET 离线 → 200 + ok:false/offline（业务结果不用 5xx）
+
+--- G. 更新状态与检查缓存必须分开（GET 语义） ---
+  ok   G1. 前置：更新前检查给出 available（这才是可以点的状态）
+  ok   G2. POST 被接受（202 语义：accepted + phase=updating）
+  ok   G3. **更新中 GET 不能回旧缓存**：phase=updating / running=true / canUpdate=false
+  ok   G4. 更新中 GET 不打公网（不重新检查）
+  ok   G5. 更新中 GET 保留本次 update 的 context（当前 0.99.2 → 目标 1.0.0）
+  ok   G6. 更新成功后 GET：phase=latest / running=false / installedVersion 是新版本
+  ok   G7. 成功后 updateAvailable=false（不能再显示「更新到 x」）
+  ok   G8. 成功终态不会被下一次普通 GET 用新检查覆盖
+  ok   G9. 用户显式 force 检查才允许覆盖终态（并真的打一次公网）
+  ok   G10. 相位序列属实：verifying / restarting 都出现过
+  ok   G11. updater 失败 → 结果 ok:false / code=update-failed
+  ok   G12. 失败后 GET：phase=failed / running=false / 带 errorCode 与脱敏 error
+  ok   G13. 失败后 GET 不打公网（不会被新检查覆盖成 available）
+  ok   G14. 连续轮询都还是 failed（不是「一次之后又变回 available」）
+  ok   G15. 失败终态仍带版本信息（有证据时给出 current/latest）
+  ok   G16. force 检查允许离开失败终态（用户主动要新检查）
+  ok   G17. 终态下诊断快照同样反映 latest（不是缓存的 available）
+
+--- H. pauseForMaintenance：超时不算「已停止」 ---
+  ok   H1. 进程没退出 → pause 失败（不是 ok:true/stopped:true）
+  ok   H2. 超时后维护态被撤销（进程还活着，bridge 继续可用）
+  ok   H3. 超时后关闭的命令通道如实显示 error，不凭 PID 猜 ready
+  ok   H4. 超时不会产生第二个 Pi child
+  ok   H5. 超时后 bridge 不卡维护：命令被干净拒绝，不会写到已关闭的 stdin
+  ok   H6. 超时后可以再试一次 pause（状态没卡死，仍然给出确定结论）
+  ok   H7. 迟到的退出仍走正常重启（crash backoff 没被维护搞脏）
+  ok   H8. pause 超时 → updater 调用次数为 0，结果码是 pause-timeout
+  ok   H9. pause 超时的提示说清「不会在它还活着时替换运行时」
+  ok   H10. pause 超时不 resume（不是我们停的），也不碰缓存失效
+
+--- I. 活动生命周期（agent_start → agent_settled）与闸门 ---
+  ok   I1. prompt 已被桥接受、agent_start 还没到 → 仍算忙（竞态窗口）
+  ok   I2. agent_start → 忙
+  ok   I3. agent_end(willRetry=true) **不算结束**：仍忙（自动重试还没跑）
+  ok   I4. 第二轮 run 的 agent_end（即使不重试）也仍算忙 —— 只有 settled 才算完
+  ok   I5. agent_settled → 空闲（这时才允许更新）
+  ok   I6. prompt 应答 disposition=handled（不会开 run）→ 撤回 pending
+  ok   I7. disposition=queued（排队等着跑）→ 仍然忙
+  ok   I8. disposition=started → 仍然忙（等 agent_settled）
+  ok   I9. bridge starting → 确定收口（不允许 busy 永久挂住）
+  ok   I9. bridge restarting → 确定收口（不允许 busy 永久挂住）
+  ok   I9. bridge exited → 确定收口（不允许 busy 永久挂住）
+  ok   I9. bridge error → 确定收口（不允许 busy 永久挂住）
+  ok   I9. bridge no-project → 确定收口（不允许 busy 永久挂住）
+  ok   I9. bridge maintenance → 确定收口（不允许 busy 永久挂住）
+  ok   I10. new_session → 换时间线，清账
+  ok   I11. prompt 已提交但 agent_start 未到 → 更新被拒（busy-turn），updater 一次没跑
+  ok   I12. agent_end(willRetry=true) 之后更新仍被拒（自动重试还没跑完）
+  ok   I13. agent_settled 之后才放行（真的走到 updater）
+
+--- J. 暂停失败 → failed 终态（不能报 latest） ---
+  ok   J.pause-timeout 前置：更新前是 available
+  ok   J.pause-timeout POST 被接受（accepted + phase=updating）
+  ok   J.pause-timeout **GET 是 failed，不是 latest**（ok:false / running:false）
+  ok   J.pause-timeout errorCode=pause-timeout + 脱敏 error
+  ok   J.pause-timeout 保留版本上下文（0.99.2 → 1.0.0）
+  ok   J.pause-timeout updateAvailable=false（不再显示「更新到 x」）
+  ok   J.pause-timeout updater 一次都没跑
+  ok   J.pause-timeout 没暂停成功就**不 resume**（维护态不是我们的）
+  ok   J.pause-timeout 不 invalidateCaches（一个字节都没改）
+  ok   J.pause-timeout 不变量：终态存在就一定有 result
+  ok   J.pause-timeout 连续 GET 保持 failed（不会被新检查覆盖）
+  ok   J.pause-timeout 诊断快照同样是 failed
+  ok   J.pause-timeout force 检查才允许离开终态
+  ok   J.pause-failed 前置：更新前是 available
+  ok   J.pause-failed POST 被接受（accepted + phase=updating）
+  ok   J.pause-failed **GET 是 failed，不是 latest**（ok:false / running:false）
+  ok   J.pause-failed errorCode=pause-failed + 脱敏 error
+  ok   J.pause-failed 保留版本上下文（0.99.2 → 1.0.0）
+  ok   J.pause-failed updateAvailable=false（不再显示「更新到 x」）
+  ok   J.pause-failed updater 一次都没跑
+  ok   J.pause-failed 没暂停成功就**不 resume**（维护态不是我们的）
+  ok   J.pause-failed 不 invalidateCaches（一个字节都没改）
+  ok   J.pause-failed 不变量：终态存在就一定有 result
+  ok   J.pause-failed 连续 GET 保持 failed（不会被新检查覆盖）
+  ok   J.pause-failed 诊断快照同样是 failed
+  ok   J.pause-failed force 检查才允许离开终态
+  ok   J.already-in-maintenance 前置：更新前是 available
+  ok   J.already-in-maintenance POST 被接受（accepted + phase=updating）
+  ok   J.already-in-maintenance **GET 是 failed，不是 latest**（ok:false / running:false）
+  ok   J.already-in-maintenance errorCode=update-running + 脱敏 error
+  ok   J.already-in-maintenance 保留版本上下文（0.99.2 → 1.0.0）
+  ok   J.already-in-maintenance updateAvailable=false（不再显示「更新到 x」）
+  ok   J.already-in-maintenance updater 一次都没跑
+  ok   J.already-in-maintenance 没暂停成功就**不 resume**（维护态不是我们的）
+  ok   J.already-in-maintenance 不 invalidateCaches（一个字节都没改）
+  ok   J.already-in-maintenance 不变量：终态存在就一定有 result
+  ok   J.already-in-maintenance 连续 GET 保持 failed（不会被新检查覆盖）
+  ok   J.already-in-maintenance 诊断快照同样是 failed
+  ok   J.already-in-maintenance force 检查才允许离开终态
+  ok   J11. 自相矛盾的终态（result=null）fail closed：不报 latest
+  ok   J12. 自相矛盾时仍然给出可读的脱敏原因
+  ok   J13.成功：终态有 result、phase 与 ok 一致
+  ok   J14.成功：GET 的 ok 与结果一致（不会把失败说成成功）
+  ok   J13.updater 失败：终态有 result、phase 与 ok 一致
+  ok   J14.updater 失败：GET 的 ok 与结果一致（不会把失败说成成功）
+  ok   J13.复验失败：终态有 result、phase 与 ok 一致
+  ok   J14.复验失败：GET 的 ok 与结果一致（不会把失败说成成功）
+
+173/173 通过

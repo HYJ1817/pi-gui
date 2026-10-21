@@ -1,0 +1,41 @@
+ok ordinary dirty content preserves file object and preimage backup
+ok shorter target preserves file object and preimage backup
+ok longer target preserves file object and preimage backup
+ok empty target preserves file object and preimage backup
+ok BOM mixed CRLF/LF exact bytes preserves file object and preimage backup
+measurement {"kind":"protected","idEqual":true,"daclEqual":true,"eaEqual":true,"adsEqual":true,"attributesEqual":true,"auditReadable":false}
+SKIP protected nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL
+ok protected DACL owner group ADS EA and tested attributes stay equal
+measurement {"kind":"inherited","idEqual":true,"daclEqual":true,"eaEqual":true,"adsEqual":true,"attributesEqual":true,"auditReadable":false}
+SKIP inherited nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL
+ok inherited DACL owner group ADS EA and tested attributes stay equal
+ok fresh second plan and durable current backup restore C without replacing file object
+BAP pipeline {"capture":"synthetic dispatcher","durableEvidence":true,"currentDigest":"3ad36eb25216df19947a07cff6d424418e772319a10d58f48c236102aea5c0d4","candidateDigest":"ee3614a8f0cc0ac4f20f7d723160839af154e9cb642cc7a432ccdbe25cca56ca","userBytesRetained":true,"productionMetadataQualified":false}
+ok existing durable B/A/P produces R preserving dirty and later independent bytes before isolated write
+ok stale C refuses before native ready and preserves new D
+ok cancel before durable intent writes nothing
+ok same bytes on a replacement object cannot satisfy old identity
+ok persistent preimage failure never reaches native commit
+ok durable intent append_open fails while native is ready; no commit or mutation
+ok durable intent append_fsync fails while native is ready; no commit or mutation
+ok multi-hardlink ordinary object refuses without touching either name
+ok junction in source parent refuses before writer admission
+ok readonly source refuses without removing its attribute
+crash observation {"boundary":"after_first_write","observedBytes":8,"observedDigest":"244c9a8b7733da1df7e40e163de2052168e98553da964bb54d774da1cf0776bb","state":"recovery_required","fullPreimageSaved":true}
+ok real native process exit after_first_write retains C/R and needs recovery, no retry
+crash observation {"boundary":"after_eof","observedBytes":4,"observedDigest":"ad49738ddc9ea282f541a4d462213ce512bde2d3a9aeb89ff414a34398985d30","state":"recovery_required","fullPreimageSaved":true}
+ok real native process exit after_eof retains C/R and needs recovery, no retry
+crash observation {"boundary":"after_flush","observedBytes":4,"observedDigest":"ad49738ddc9ea282f541a4d462213ce512bde2d3a9aeb89ff414a34398985d30","state":"recovery_required","fullPreimageSaved":true}
+ok real native process exit after_flush retains C/R and needs recovery, no retry
+ok existing independent data reader blocks original-object acquisition
+ok held source parent prevents real independent rename attempt
+mapping observation {"originalDataHandleClosed":true,"writerAcquired":false,"modeStrict":false}
+ok genuine preexisting writable mapping is measured; never inferred OS exclusion
+metadata race {"namedStreamWriterSucceeded":true,"primaryCandidateCorrect":true,"fullMetadataExclusion":false}
+ok independent ADS write can bypass unnamed stream share mode; metadata is not globally locked
+DACL race {"securityWriterSucceeded":true,"externalDaclRetained":true,"fullMetadataExclusion":false}
+ok independent DACL update during held data handle is preserved and exposes metadata admission gap
+attribute observation {"before":8192,"after":8224,"archiveChanged":true,"repaired":false}
+ok data-only write measures Archive attribute changes instead of repairing attributes
+ok prototype remains unreachable from production API and unknown SACL remains refused
+session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility

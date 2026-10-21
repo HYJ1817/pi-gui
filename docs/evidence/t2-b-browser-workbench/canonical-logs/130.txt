@@ -1,0 +1,47 @@
+  ok  0/2 authority projection
+  ok  1/2 authority projection
+  ok  2/2 authority projection
+  ok  third count does not render 3/2
+  ok  unknown count does not claim zero
+  ok  external classic count uses totalCount
+  ok  partial state seed preserves resource metadata
+  ok  backend replacement clears stale resource metadata
+  ok  confirmation names CPU memory and model requests
+  ok  cancel third sends no start
+  ok  confirmation names CPU memory and model requests
+  ok  confirmed third succeeds
+  ok  start allowThird is nested
+  ok  original captured payload is not mutated
+  ok  fourth genuinely reaches backend
+  ok  hard cap does not show third confirmation
+  ok  no implicit kill stop close or archive
+  ok  limit notice gives all alternatives
+  ok  confirmation names CPU memory and model requests
+  ok  resume allowThird is top level
+  ok  confirmation names CPU memory and model requests
+  ok  race refresh allows one confirmed retry
+  ok  confirmation names CPU memory and model requests
+  ok  race cancel does not retry
+  ok  each launch reads authoritative preflight and refreshes outcome
+  ok  cleanup pending cannot infer freed slot from item
+  ok  only confirmed snapshot releases slot
+  ok  dormant on restart never auto-spawns
+  ok  full capacity history works without launch
+  ok  central resume confirms before request
+  ok  confirmation defaults focus to Cancel
+  ok  Escape cancel sends no resume and preserves historical output
+  ok  central confirmed resume passes top-level allowThird
+  ok  third indicator renders authoritative count
+  ok  close preserves dormant conversation and snapshot reclaims slot
+  ok  central fourth reaches backend and leaves history enabled
+  ok  sidebar create performs admission before third start
+  ok  sidebar third cancel never starts created workspace
+  ok  legacy workspace launch confirms before start
+  ok  legacy workspace launch nests allowThird in args
+  ok  100 deltas trigger zero resource reads
+  ok  20 lifecycle changes share one in-flight snapshot
+  ok  one trailing refresh reconciles latest lifecycle
+  ok  late older snapshot cannot roll resource count back
+  ok  malformed snapshot preserves confirmed occupancy
+
+45/45 runtime-resources assertions passed

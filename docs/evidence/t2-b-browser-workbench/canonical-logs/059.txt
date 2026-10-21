@@ -1,0 +1,12 @@
+  ok  H1 numeric response IDs never throw
+  ok  H6 empty sidebar CTA invokes existing directory picker
+  ok  H6 populated sidebar keeps compact menu
+  ok  H8 Web rows expose diff and restore, no dead open action
+  ok  H3 filter explains terminal edits directly
+  ok  H8 Electron rows use desktop bridge
+  ok  H5 shared HTML export downloads through safe endpoint
+  ok  H7 active deletion clears workspace state and locks composer
+  ok  H7 current session relation banner is cleared
+  ok  H7 queued old bridge ready cannot reopen removed workspace
+
+10/10 通过

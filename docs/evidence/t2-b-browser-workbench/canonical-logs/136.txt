@@ -1,0 +1,1 @@
+Runtime Browser scope HTTP/IPC isolation: 48/48

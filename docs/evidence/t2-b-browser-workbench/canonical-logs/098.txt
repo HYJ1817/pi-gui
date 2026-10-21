@@ -1,0 +1,55 @@
+— 模块层（lib/models-api.js）
+  ok   OpenAI 极简形态能解析
+  ok   取到 2 个模型
+  ok   极简形态不编造能力参数
+  ok   走了 /v1 后缀补全
+  ok   OpenRouter 富形态能解析
+  ok   富形态填上了 contextWindow
+  ok   富形态填上了 maxTokens
+  ok   富形态识别出 reasoning
+  ok   富形态识别出图片输入
+  ok   纯文本模型不写 input
+  ok   Anthropic 形态能解析
+  ok   Anthropic 取到 display_name
+  ok   Anthropic 用 x-api-key 头
+  ok   Anthropic 带了 anthropic-version
+  ok   Google 形态能解析
+  ok   Google 去掉了 models/ 前缀
+  ok   Google 填上了 token 上限
+  ok   Google 过滤掉 embedding 模型
+  ok   Google 用 x-goog-api-key 头（不进 URL）
+  ok   逐级回退路径段后能找到接口
+  ok   回退确实试了多级
+  ok   最终命中的是回退后的路径
+  ok   401 被识别为失败
+  ok   401 的错误里说明了原因
+  ok   错误信息里没有泄露 key
+  ok   500 被识别为失败
+  ok   500 的错误里说明了状态码
+  ok   500 带出响应体时也没泄露 key
+  ok   泄露点被打了码（说明确实命中了这条分支）
+  ok   非模型列表的 JSON 被拒绝
+  ok   空列表算失败（会继续回退）
+  ok   拒绝执行 !command 形式的 key
+  ok   环境变量没设置时给出明确提示
+  ok   非法 Base URL 被拒绝
+  ok   候选 URL 不会拼出 /v1/v1
+
+— 路由层（真实 server.js）
+  ok   服务能起来
+  ok   路由没被 /api/providers 抢走（返回的是模型列表）
+  ok   HTTP 路径也取到 2 个模型
+  ok   没填 Base URL 时给出提示
+  ok   失败也回 200，前端只需看 ok 字段
+  ok   HTTP 路径同样识别出失败
+  ok   HTTP 路径同样不泄露 key
+  ok   供应商能保存
+  ok   供应商写进了隔离的临时 models.json
+  ok   contextWindow 被透传
+  ok   maxTokens 被透传
+  ok   reasoning 被透传
+  ok   input 被透传
+  ok   非法数值被丢弃（不是变成负数/NaN）
+  ok   白名单外的字段被丢弃
+
+50/50 通过

@@ -1,0 +1,27 @@
+ok Aliased TEMP canonicalizes the fixture before actual Classic scope binding
+ok Admission refuses same-path root object replacement using BigInt identity
+ok Actual Registry/Worktrees/fakePi guardian owns distinct sessions and keeps same-workspace exclusion
+ok B authority reuses actual Changes bridge/RPC/worktree and rejects dormant or unfocused owner
+ok Retained authority rejects focus A to B to A despite identical final owner
+ok Real Stop/drain runs after Worktrees lifecycle release and aborts only the matching physical root
+ok Bound resources reject all nine stale owner fields and retain at most 32 per live owner
+ok Focus A to B to A increments trusted revision and disposes prior resources without changing A runtime
+ok Focus revision and resource invalidation precede async disposal; worktree authority remains available
+ok Controlled bridgeRun change immediately revokes resource without changing the other actual fakePi session
+ok Retire invalidates owner before resource disposal and keeps admission until native task settles
+ok Git indexes, refs and main HEAD are unchanged by lifecycle recovery
+ok Close/resume and explicit restart prove new owner against actual TEMP session header
+ok Registry process restart rediscovers dormant history without spawning or trusting old backend owner
+ok Classic actual RPC and Changes authority restores TEMP main project without changing Git
+ok Same-byte replacement of an actual worktree file refuses old Plan before Native Ready
+ok Closed Runtime plus moved/recreated worktree cannot replay an old Plan
+ok Actual D3 core and unchanged D2 Native restore C to R under real Registry/Worktrees authority
+ok Same relative path on the second actual worktree restores independently and cannot borrow first-owner material
+ok Prepare with simultaneous focus revocation settles without lifecycle/disposal deadlock or returning token
+ok Close during actual Native Ready revokes owner while admission remains pinned until helper closes
+ok Actual Native write with damaged result retains recovery_required and C/R after Runtime close
+ok New backend may read validated historical C/R without inheriting old mutation owner or changing journal
+ok Failed focus callback still disposes invalidated resources without leaking reservations
+ok Disposal failure retains slot/lease, invalidates capability and exposes only cleanup_pending
+ok Explicit cleanup retry releases retained resource only after successful disposal
+Session revert object runtime: 26/26; layer=real Registry/Worktrees + fakePi guardian; real-model=unverified

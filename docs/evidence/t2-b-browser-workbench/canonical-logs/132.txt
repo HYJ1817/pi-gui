@@ -1,0 +1,36 @@
+  ok  native get_state name proves title
+  ok  native summary identity is explicit
+  ok  private file proof not exposed in snapshot
+  ok  native file proof captured at binding
+  ok  readback title persists without reorder
+  ok  empty native title has branch fallback
+  ok  history reads nested native text only
+  ok  classic and runtime search coexist
+  ok  current authoritative project excludes other conversation
+  ok  search result has full explicit native locator
+  ok  runtime search never exposes path or fileproof
+  ok  search parser excludes thinking and raw tool args
+  ok  runtime body match retains user turn index
+  ok  classic archived scope remains separate
+  ok  dormant history consumes no child
+  ok  removed workspace retains valid proven native history
+  ok  removed workspace history still searchable by project identity
+  ok  history HTTP carries validated captured locator
+  ok  late HTTP body rejected after captured locator changes
+  ok  native header identity replacement rejects body
+  ok  invalid native identity not searchable
+  ok  native cwd header replacement rejects body
+  ok  same header new file identity rejects body
+  ok  original file identity remains readable
+  ok  history and search never rewrite native file
+  ok  app restart history does not spawn
+  ok  fileproof/title optional manifest remains v1
+  ok  old v1 records compatible with same-fd header proof
+  ok  switch project uses explicit different membership
+  ok  late previous project search does not publish results
+  ok  existing result budget also bounds runtime search
+  ok  search errors omit private filesystem details
+  ok  same-inode native rewrite between proof and body fails closed
+  ok  legitimate native append during body read remains valid
+  ok  next bounded read includes legitimate appended message
+Runtime history/search: 35/35

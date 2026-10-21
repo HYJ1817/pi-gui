@@ -1,0 +1,24 @@
+ok build copies nested Unicode and space paths with exact bytes
+ok fixed helper loader exists
+ok observer source has approved bytes and fixed metadata
+ok observer Electron fixed resource has identical bytes
+ok observer source tamper rejected
+ok observer source missing resource never falls back
+ok observer Electron tamper rejected
+ok observer Electron missing resource never falls back
+ok observer cwd PATH env and fake cache cannot substitute helper
+ok writer source has approved bytes and fixed metadata
+ok writer Electron fixed resource has identical bytes
+ok writer source tamper rejected
+ok writer source missing resource never falls back
+ok writer Electron tamper rejected
+ok writer Electron missing resource never falls back
+ok writer cwd PATH env and fake cache cannot substitute helper
+ok unknown kind rejected with fixed code
+ok returned bytes cannot poison subsequent reads
+ok production writer still rejects and exports no fixture factory
+ok real observer ignores fake cwd and PATH interpreter
+ok real observer refuses source tampered script before execution
+ok real observer refuses Electron tampered script before execution
+ok real observer refuses relative SystemRoot without PATH fallback
+Object assets: 23/23; failed=0; skipped=0

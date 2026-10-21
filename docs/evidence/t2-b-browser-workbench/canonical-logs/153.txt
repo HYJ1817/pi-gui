@@ -1,0 +1,20 @@
+  ok bounded worker computation is available
+  ok bundled executable bytes bypass stale or tampered extraction caches
+  ok preview authority factory is available
+  ok worker result preserves raw Buffer representation
+  ok CPU bound worker is terminated within a fixed deadline
+  ok worker failures expose fixed reasons only
+  ok worker admission bounds concurrent computations without an unbounded queue
+  ok default worker computes actual algorithm without mutating input
+  ok renderer helper only sends an explicit read-only preview request
+  ok classic preview binds full owner and revalidates native session
+  ok classic missing identity refuses even when no runtime is active
+  ok classic native session change invalidates the preview
+  ok classic activity becoming busy invalidates the preview
+  ok managed preview accepts actual owner independently of legacy header
+  ok managed owner from another generation is refused
+  ok managed closing during preview invalidates authority
+  ok dormant preview uses persistent authority without invented runtime owner
+  ok dormant epoch change invalidates the preview
+  ok dormant stale live owner cannot grant authority
+Session revert worker/integration: 19/19

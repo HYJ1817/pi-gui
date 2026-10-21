@@ -1,0 +1,68 @@
+ok 1 dirty preimage preserved
+ok 2 later independent edit preserved exactly
+ok 3 same range refuses
+ok 4 already reverted noop
+ok 5 new file moves to recovery
+ok 6 absent new file noop
+ok 7 edited new file refused
+ok 8 deletion unsupported
+ok 9 missing existing file refuses
+ok 10 empty preimage is existing file
+ok 11 binary rejects even exact current
+ok 12 invalid utf8 refuses
+ok 13 BOM and mixed EOL exact
+ok 14 final newline exact
+ok 15 same point insert conflict
+ok 16 disjoint inserted line survives
+ok 17 nonunique repeated context refuses
+ok 18 byte limit refuses
+ok 19 cell limit refuses
+ok 20 token limit refuses
+ok 21 time limit refuses
+ok 22 selected simple content eligible
+ok 23 durably consumed operation cannot receive another candidate
+ok 24 three same-session edits reversed
+ok 25 three edits with independent user intermediate
+ok 26 other-session disjoint edit retained
+ok 27 other-session overlap refuses and identifies operation
+ok 28 observed cannot become eligible
+ok 29 post mismatch refuses
+ok 30 missing final event refuses
+ok 31 attribution gap refuses
+ok 32 missing selection no evidence
+ok 33 duplicate sequence refuses
+ok 34 incomplete intervening operation refuses
+ok 35 selected scope cannot cross workspace
+ok 36 selected scope cannot cross conversation
+ok 37 operation input buffers remain unchanged
+ok 38 repeat compute does not invert twice
+ok 39 expired evidence refuses
+ok 40 future evidence refuses
+ok 41 aborted result with complete actual mutation eligible
+ok 42 prior gap never cleared by capture
+ok 43 rename record refused
+ok 44 observed post absent refuses
+ok 45 new file with selected later edit moves complete file
+ok 46 preexisting untracked treated as replace
+ok 47 later binary current refuses
+ok 48 lone CR preserved
+ok 49 UTF8 Chinese bytes preserved
+ok 50 later selected overlap with user gap refuses
+ok 51 later canceled cross-session overlap still refuses
+ok 52 cross-session direct identifier dependency refuses
+ok 53 short identifier dependency refuses
+ok 54 changed existing identifier dependency refuses
+ok 55 Unicode identifier dependency refuses
+ok 56 removed later identifier use remains suspicious dependency
+ok 57 nonunique current mapping refuses
+ok 58 selected duplicate IDs refused
+ok 59 no evidence without records
+ok 60 invalid budget refuses safely
+ok 61 operation budget shared across chain
+ok 62 exclusive evidence preserved without invention
+ok 63 observed evidence reported as observed when refused
+ok 64 truthy final-event flag is not final evidence
+ok 65 nonexistent completed state is not final evidence
+ok 66 positive record gap cannot be hidden by caller gap zero
+ok 67 property independent line replacements
+session-revert: 67/67 scenarios passed

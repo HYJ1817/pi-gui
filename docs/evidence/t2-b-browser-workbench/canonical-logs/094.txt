@@ -1,0 +1,236 @@
+
+--- A. cache 绑定 workspace：切项目不串状态 ---
+  ok  A1. A 项目刷新拿到 runtime（a-only / connected）
+  ok  A2. 同一 workspace 的 GET 看得到缓存视图
+  ok  A3. 切到 B 后 runtime 回到「未刷新」（绝不出现 A 的 server）
+  ok  A4. 切到 B 后 GET /status 也不给 A 的状态
+  ok  A5. 切到 B 后 B 的摘要里没有 A 的 runtime 状态
+  ok  A6. 切到 B 后刷新会重新跑 list（不复用 A 的 TTL 缓存）
+  ok  A7. 切回 A 也不复用（A 的缓存已被 B 覆盖，键不同即失效）
+  ok  A8. A replaced=true → 切 B → B 重新 probe（replaced 不串过去）
+  ok  A9. 同 cwd + 同 identity，TTL 内复用（不重复跑 list）
+  ok  A10. launch identity 变化 → 不复用旧 cache
+  ok  A11. reset() 同时清空 runtime 与 command probe
+  ok  A12. 没有 launch identity 注入时，缓存仍按 cwd 隔离（不塌成全局）
+
+--- B. project trust：写操作闸门 + 项目 settings 前提 ---
+  ok  B1. 未信任项目 + project add → 拒绝，runCli 0 次
+  ok  B2. 未信任项目 + project remove → 拒绝，runCli 0 次
+  ok  B3. 已信任项目 → project add / remove 正常落到 pi CLI
+  ok  B4. 未信任项目下 user scope add / remove 仍可用
+  ok  B5. trust 拿不到（null）→ project 写操作 fail closed
+  ok  B6. trust 抛异常 → 也 fail closed（不当成 true）
+  ok  B7. 未信任项目的 .pi/settings.json 里 -builtin:mcp 不影响 native 状态
+  ok  B8. 已信任项目的 .pi/settings.json 里 -builtin:mcp → disabled
+  ok  B9. trust 未知 → 项目 settings 同样不参与（不下结论）
+  ok  B10. user settings 与 trusted project settings 的覆盖关系正确
+  ok  B11. 未信任 / 未知信任时，项目条目一律不标成「生效」
+
+--- C. secret contract：凭据值在 HTTP 边界即拒绝 ---
+  ok  C1. header value → reject（不调 runCli、不回显值）
+  ok  C2. oauth.clientSecret → reject
+  ok  C3. oauth 整块（含 clientId / callbackPort）→ reject
+  ok  C4. env value → reject
+  ok  C5. Authorization 明文（换名字直传）→ reject
+  ok  C6. auth（0.99.2 的 provider token 引用）→ reject
+  ok  C7. 原始 headers 对象 / env 对象 → reject
+  ok  C8. bearerTokenEnvVar 只传变量名 → 允许，且 argv 里没有 secret value
+  ok  C9. bearerTokenEnvVar 不是合法环境变量名 → reject
+  ok  C10. 干净 payload 的 success 响应不含配置原文
+  ok  C11. 被拒 payload 的 secret 不出现在任何响应字段里
+  ok  C12. mcp-auth.json 从不读取（含 token 的文件一个字节都不进报告）
+
+--- D. Pi 0.99.2 契约：新字段、别名、note ---
+  ok  D1. `codemode-deferred` 是 codemode 的别名（0.99.2 归一）
+  ok  D2. description 单行化 + 截断
+  ok  D3. `auth`（provider token 引用）计入 hasSecrets
+  ok  D4. 未知顶层键（timeout）不改变解析结果
+  ok  D5. 别名在 toolExposure 值里同样归一
+  ok  D6. refresh 接受 0.99.2 的 resources / resourceTemplates / toolExposure / note
+  ok  D7. `pi mcp add --description` 支持（非凭据字段），且**必须在 `--` 之前**
+  ok  D8. exposure 别名从 API 进来也会归一成规范值
+
+--- E. runtime parser：闭集外一律折成 unknown ---
+  ok  E1. 未知 state → "unknown"（不回显上游字符串）
+  ok  E2. 未知 scope → null（不认识就不猜）
+  ok  E3. 未知 exposure → null
+  ok  E4. transport 只留类型面，原文（路径/URL）不进报告
+  ok  E5. tools 走安全文本边界：raw tool name 不因字符集被删（Blocker B）
+  ok  E6. toolExposure 的键也是 raw tool name（单行化 + 限长），值限枚举
+  ok  E7. resources / resourceTemplates 只接受非负整数
+  ok  E8. error 脱敏；source/command/url/headers/env/未知字段一个都不取
+  ok  E9. scope=extension 如实映射（扩展注册的 server）
+  ok  E10. state 闭集内的值原样保留（含 0.99.2 的 closed）
+  ok  E11. 非法 server 名 / 非对象条目被整条丢弃
+  ok  E12. refresh 里出现闭集外 state 时，报告给的是 unknown 而不是原文
+
+--- G. project 同名覆盖：受 trust 约束 ---
+  ok  G1. trusted=true：项目同名项覆盖用户级
+  ok  G2. trusted=false：项目不覆盖，用户级继续生效
+  ok  G3. trust=null：同样不覆盖（fail closed）
+  ok  G4. trusted=true 但项目同名项 invalid → 用户级继续生效（与上游 skip 一致）
+  ok  G5. 项目没有同名 server → 用户级照常 active
+  ok  G6. 不同名互不覆盖（三种 trust 下都成立）
+  ok  G7. 未信任时项目文件坏了 → 用户级照样生效（不炸、不误标）
+  ok  G8. readConfigs 本身不产出 overridden（覆盖只在拿到 trust 后算）
+
+--- H. raw MCP tool name：安全文本边界，不是字符集白名单 ---
+  ok  H1. 合法 raw tool name 不因字符集被删（含连字符 / 空格 / 点 / Unicode / emoji）
+  ok  H2. 控制字符被替换（不产生换行注入）
+  ok  H3. 纯控制字符的名字没有可展示形态 → 从列表丢，但仍计入 toolCount
+  ok  H4. 超长 raw tool name 安全截断（不丢）
+  ok  H5. 非字符串一律丢弃，且不做 String() 转换
+  ok  H6. tools 不是数组 → null（不猜成空数组）
+  ok  H7. 展示列表有界（≤200），toolCount 仍是上游数量
+  ok  H8. toolExposure 的键是 raw tool name（含连字符/空格也保留）
+  ok  H9. sanitizeMcpRawToolName 是纯函数，非字符串回空串
+  ok  H10. refresh 端到端：get-user / Unicode / emoji 不被过滤
+
+--- I. 两层命名边界：CLI raw tool name ≠ 注册后的 Pi tool identifier ---
+  ok  I1. CLI 侧保留 raw 形态，不做 `-`→`_` 归一
+  ok  I2. Timeline 侧仍按注册后的标识符解析（0.99.2 归一后的形态）
+  ok  I3. Timeline 侧的边界是 `mcp__<server>__` 前缀；raw 名本身不匹配
+  ok  I6. 带控制字符的“标识符”不匹配 → 回 generic fallback（不产生多行注入）
+  ok  I4. 两个 parser 各自独立：CLI 侧不再有 tool 名字符集正则
+  ok  I5. mcp-activity 的资源工具与 mcp__ 解析无回归
+
+--- J. 上游校验对拍：GUI 接受的集合必须 ⊆ Pi 接受的集合 ---
+  ok  J·拒绝 args 不是 string[]
+  ok  J·拒绝 args 不是数组
+  ok  J·拒绝 env 不是 string→string
+  ok  J·拒绝 env 不是对象
+  ok  J·拒绝 cwd 不是 string
+  ok  J·拒绝 timeout <= 0
+  ok  J·拒绝 timeout 是负数
+  ok  J·拒绝 timeout 不是数字
+  ok  J·拒绝 description 不是 string
+  ok  J·拒绝 URL 不是 http/https
+  ok  J·拒绝 URL 不可解析
+  ok  J·拒绝 URL 是空串
+  ok  J·拒绝 headers 不是 string→string
+  ok  J·拒绝 headers 是数组
+  ok  J·拒绝 oauth 不是对象
+  ok  J·拒绝 oauth.clientId 不是 string
+  ok  J·拒绝 oauth.callbackPort 越界
+  ok  J·拒绝 oauth.callbackPort 非整数
+  ok  J·拒绝 oauth.callbackUrl 非 loopback
+  ok  J·拒绝 oauth.callbackUrl 带 query
+  ok  J·拒绝 oauth.callbackUrl 与 callbackPort 端口不一致
+  ok  J·拒绝 oauth.clientName 空白
+  ok  J·拒绝 oauth.authServerMetadataUrl 是 number
+  ok  J·拒绝 oauth.authServerMetadataUrl 是 object
+  ok  J·拒绝 oauth.authServerMetadataUrl 是数组
+  ok  J·拒绝 oauth.authServerMetadataUrl 是空串
+  ok  J·拒绝 oauth.authServerMetadataUrl 畸形
+  ok  J·拒绝 oauth.authServerMetadataUrl 用 ftp
+  ok  J·拒绝 oauth.authServerMetadataUrl 远端 http
+  ok  J·拒绝 oauth.authServerMetadataUrl 是 file:
+  ok  J·接受 oauth.authServerMetadataUrl 用 https（well-known）
+  ok  J·接受 oauth.authServerMetadataUrl 是 http + localhost
+  ok  J·接受 oauth.authServerMetadataUrl 是 http + 127.0.0.1
+  ok  J·接受 oauth.authServerMetadataUrl 是 http + [::1]
+  ok  J·接受 oauth.authServerMetadataUrl 允许 query 与 fragment（与 callbackUrl 不同）
+  ok  J·接受 oauth.authServerMetadataUrl 不校验端口
+  ok  J·oauth.authServerMetadataUrl 的值不进投影（oauth 整块不出后端）
+  ok  J·拒绝 auth.provider 缺失
+  ok  J·拒绝 auth.provider 空串
+  ok  J·拒绝 auth 在非 https 且非 loopback 的 URL 上
+  ok  J·拒绝 auth 出现在项目文件里（scope=project）
+  ok  J·拒绝 toolExposure 不是对象
+  ok  J·拒绝 toolExposure 有非法值 → 整条拒绝
+  ok  J·拒绝 type 是未知值
+  ok  J·拒绝 type=sse（legacy）
+  ok  J·拒绝 既无 command 也无 url
+  ok  J·拒绝 type=http 但只给 command
+  ok  J·拒绝 type=stdio 但只给 url
+  ok  J·接受 stdio 最小形态
+  ok  J·接受 stdio 完整形态
+  ok  J·接受 空 env / 空 headers / 空 oauth（上游 [].every() 通过）
+  ok  J·接受 空 args 数组
+  ok  J·接受 http + oauth 完整合法
+  ok  J·接受 auth + https
+  ok  J·接受 auth + http loopback
+  ok  J·接受 auth + https（scope=project 以外的 scope）
+  ok  J·接受 exposure 别名 codemode-deferred
+  ok  J·接受 command + url 并存（上游按 HTTP 收）
+  ok  J·接受 type=streamable-http
+  ok  J·接受 type=stdio 显式
+  ok  J·同文件 namespace 冲突：后者被拒，前者保留
+  ok  J·跨文件 namespace 冲突：project 那条被拒（global 已占位）
+  ok  J·同名（非 namespace 冲突）不算冲突 —— 那是覆盖
+  ok  J·不同名不冲突
+  ok  J·配置里的超长 server 名上游会接受（不限长度）
+  ok  J·动作入参（add/remove）仍限制 64 字符（输入侧防御）
+
+--- J2. 端到端：非法/冲突的 project 同名项不得覆盖用户级 ---
+  ok  J2-1. 截图场景：trusted 项目同名项 args 非法 → 用户级继续生效（不覆盖）
+  ok  J2-2. trusted 项目同名项 namespace 冲突 → 用户级继续生效
+  ok  J2-3. trusted 项目同名项合法 → 照常覆盖（证明上面两条不是恒真）
+  ok  J2-4. trusted 项目同名项带 auth → 项目文件不允许 auth，故不覆盖
+  ok  J2-5. 用户级自己非法 → 也不会被当成可覆盖对象（两侧都如实报 invalid）
+
+--- F1. parseMcpServers（只取结构） ---
+  ok  三条都解析出来
+  ok  缺省 enabled=true / exposure=codemode
+  ok  transport 类型只留面子
+  ok  secret 面只记有无
+  ok  secret 值一个字节都不进报告
+  ok  toolExposure 键值保留（枚举面）
+  ok  非法条目进 invalid（8 条里 7 条坏 + 1 条好）
+  ok  `{command,url}` 并存按 HTTP 接受（上游分支优先级，不是「只能二选一」）
+  ok  toolExposure 有坏值 → 整条拒绝（上游行为，不是只丢键）
+  ok  mcpServers 缺失 → 空（不是错）
+  ok  非对象 → error（不抛）
+
+--- F2. buildPiEntry（与 bridge 同一份包） ---
+  ok  入口派生成功：process.execPath + 真 js（无 PATH、无 shim）
+  ok  packageDir=null → null（不退回裸 pi）
+  ok  包坏了 → null
+  ok  入口不是 js → null
+
+--- F3. summary：scope / 状态机 ---
+  ok  项目同名覆盖用户级（shared 只生效项目那条）
+  ok  disabled 条目 effective=false
+  ok  证据齐 → native=active
+  ok  command/en transport 原文不进摘要
+  ok  替代扩展（get_commands 有 extension:mcp）→ replaced
+  ok  settings 关掉 builtin:mcp → disabled（注入判定）
+  ok  包里没有 builtin:mcp → unsupported（旧版本安全降级）
+  ok  证据不足 → unknown（不猜成 false）
+  ok  坏的 mcp.json → invalid 进报告、不炸摘要
+
+--- F4. refresh：运行时真相合并 ---
+  ok  entry 派生自包目录（process.execPath 跑真 js）
+  ok  exposure 以运行时为准（direct 覆盖配置的 codemode）
+  ok  tools 只留名字（≤200），count 对得上
+  ok  transport 原文（命令路径/URL）不进报告，只留类型
+  ok  错误文本脱敏（绝对路径折掉）+ 截断
+  ok  secret 值不进 refresh 报告
+  ok  TTL 内第二次走缓存（不重跑 list）
+  ok  packageDir=null → refresh 报 no-proven-entry（不跑裸 pi）
+  ok  list 输出非 JSON → bad-json（不解析人类文本）
+  ok  list 超时 → list-timeout（不挂死）
+
+--- F5. actions：argv / 校验 / stale / unsupported ---
+  ok  add stdio argv 精确（-- 打头，shell:false 由执行层保证）
+  ok  add http argv 精确（-l + --url）
+  ok  remove argv 精确 + 凭据保留提示
+  ok  login argv 带 --timeout
+  ok  logout argv 精确
+  ok  坏名字被拒（注入面关掉）
+  ok  非 http(s) url 被拒
+  ok  enable → unsupported-action（指引 /mcp，不编假动作）
+  ok  cwd 对不上 → workspace-stale（409 语义由 json 状态码承载）
+  ok  login 等待超时 → login-timeout + 终端指引
+  ok  pi 失败时 stderr 尾巴仍脱敏 + 截断（GUI 已不传任何 secret，故无值可泄）
+
+--- F6. 前端语义：mcp-activity / capabilities（纯函数，可单测） ---
+  ok  mcp__server__tool 解析（第一个 __ 是边界）
+  ok  0.99.2 下划线化的名字仍能解析（my-server → my_server）
+  ok  工具调用投影：server/tool/状态，无 args 全文
+  ok  error 态 + 未知工具 null（generic fallback 接管）
+  ok  资源工具投影（server/uri 摘要）
+  ok  运行观察按 server 聚合、切 run 清零
+  ok  mcpSetup 三值（缺证据不写 false）
+
+202/202 通过（Pi 契约基线 1.0.0）

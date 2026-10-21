@@ -1,0 +1,39 @@
+  ok  A/B 两条并行会话都显示
+  ok  排序按后端 createdAt，不是字母序
+  ok  dormant 会话也列出（不因休眠而隐藏）
+  ok  列表读取不 spawn Runtime
+  ok  提供「新建并行会话」入口
+  ok  dormant 行点击不发 focus、不 spawn
+  ok  live 会话显示就绪态
+  ok  点击只发 focus，且 owner 完整（不是当前 UI 推断）
+  ok  点击不改变排序
+  ok  点击不发 prompt / abort / start
+  ok  focused 行只有一个
+  ok  focus 换到 B 之后仍只有一个 focused
+  ok  后台完成给出 attention 提示
+  ok  attention 不抢 focus（focused 仍是 B）
+  ok  点击该会话后 attention 清除
+  ok  运行中显示运行态
+  ok  错误显示错误态
+  ok  非 Git 项目不显示并行会话块
+  ok  点击「新建并行会话」打开输入分支名的对话框
+  ok  对话框给出可编辑的分支名默认值
+  ok  创建按 prepare → create → start 依次发生
+  ok  prepare 带上真实分支名
+  ok  start 用 create 返回的 workspace.id + epoch
+  ok  start 不是用 UI 里猜的 id
+  ok  创建后对话框关闭
+  ok  点「取消」不创建任何东西
+  ok  Escape 不创建任何东西
+  ok  Enter 与点击行为一致（同样走完 prepare→create→start）
+  ok  prepare 失败后不 create、不 start
+  ok  create 失败后不 start
+  ok  start 失败时如实提示「工作区已创建」，不谎报成功
+  ok  50 个 SSE 只发一次尚未完成的归属读取
+  ok  归属读取完成后新会话正常出现
+  ok  ArrowDown 将键盘焦点移到下一条而不改变排序
+  ok  Home 返回第一条键盘焦点
+  ok  后台 SSE 重画保留当前侧栏键盘焦点
+  ok  后台 SSE 不从输入框抢焦点
+  ok  乱序 focus 应答只打开用户最后选择的会话
+Runtime nav: 38/38

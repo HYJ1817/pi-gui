@@ -1,0 +1,13 @@
+  ok  runtime HTTP受现有 token鉴权
+  ok  跨 Origin token正确仍拒绝
+  ok  启动/快照 owner齐全，不按activeUI路由
+  ok  command缺身份拒绝
+  ok  经典写入口在并行时缺scope拒绝
+  ok  经典 owner不能发独立会话命令
+  ok  scoped命令接受且仅写目标
+  ok  只读回读不成为prompt旁路
+  ok  客户端未知控制字段拒绝
+  ok  经典scope正确仍可独立发命令
+  ok  body/read/preflight晚到owner失效，未写stdin
+  ok  关闭保留conversation且不信旧owner
+Runtime HTTP: 12/12

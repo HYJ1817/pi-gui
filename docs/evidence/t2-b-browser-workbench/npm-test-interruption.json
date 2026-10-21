@@ -1,0 +1,7 @@
+{
+  "elapsedSeconds": 204.0407614,
+  "startedAt": "2026-10-21T09:41:50.3455080Z",
+  "exitCode": 1,
+  "command": "npm test",
+  "finishedAt": "2026-10-21T09:45:14.3931359Z"
+}

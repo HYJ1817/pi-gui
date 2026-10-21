@@ -1,0 +1,16 @@
+  ok  reservation is immediate, exclusive, and blocks canonical aliases
+  ok  already entered disk writer drains while gate rejects new writers
+  ok  drain timeout refuses mutation and release reopens admission
+  ok  expiry revokes retained confirmation lease
+  ok  authorized in-flight apply holds GUI gate past confirmation expiry until settled
+  ok  Stop runs after lifecycle lock release; callback reacquires and retains lease
+  ok  apply can reuse retained lease with fresh authority
+  ok  callback failure always releases lease
+  ok  lease reuse for another physical root is refused
+  ok  Stop failure releases gate before surfacing refusal
+  ok  disabled or broken evidence store still brackets native disk IO
+  ok  native metadata capture rejects mismatched before bytes
+  ok  unsupported native metadata preserves ordinary before capture
+  ok  native after bytes must match independently observed postimage
+  ok  invalidate keeps abandoned IO fail-closed until child cleanup proof
+Session revert admission: 15/15

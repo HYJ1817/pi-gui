@@ -1,0 +1,1516 @@
+{
+  "generatedAt": "2026-10-21T10:39:33.620Z",
+  "baseline": "7db69cdc24debc28dfb7f9c91cdfcfa65b0df849",
+  "canonical": {
+    "total": 166,
+    "passed": 166,
+    "failed": 0,
+    "singleNpmTestSucceeded": false,
+    "interrupted": {
+      "elapsedSeconds": 204.0407614,
+      "startedAt": "2026-10-21T09:41:50.3455080Z",
+      "exitCode": 1,
+      "command": "npm test",
+      "finishedAt": "2026-10-21T09:45:14.3931359Z"
+    },
+    "environmentAttempts": [
+      {
+        "index": 71,
+        "command": "node tests/project-config.cjs",
+        "exitCode": 1,
+        "seconds": 0.364,
+        "tempOverride": null
+      }
+    ],
+    "commands": [
+      {
+        "index": 1,
+        "command": "node tests/ci-test-plan.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 2,
+        "command": "node tests/ci-workflow.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 3,
+        "command": "node tests/release-ci-proof.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 4,
+        "command": "node tests/nsis-bootstrap.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 5,
+        "command": "node tests/app-update.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 6,
+        "command": "node tests/app-update-maintenance.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 7,
+        "command": "node tests/app-update-activity.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 8,
+        "command": "node tests/app-update-backend.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 9,
+        "command": "node tests/session-tool-scheduler.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 10,
+        "command": "node tests/session-tool-bridge.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 11,
+        "command": "node tests/ordinary-session-resolver.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 12,
+        "command": "node tests/ordinary-session-runtime.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 13,
+        "command": "node tests/session-background.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 14,
+        "command": "node tests/session-background-ui.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 15,
+        "command": "node tests/session-background-recovery.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 16,
+        "command": "node tests/ui-visual-finish.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 17,
+        "command": "node tests/review-regressions.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 18,
+        "command": "node tests/high-risk-regressions.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 19,
+        "command": "node tests/logging.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 20,
+        "command": "node tests/logging-leaks.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 21,
+        "command": "node tests/logging-secret-state.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 22,
+        "command": "node tests/logging-client.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 23,
+        "command": "node tests/logging-ui.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 24,
+        "command": "node tests/ui4-approval.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 25,
+        "command": "node tests/ui4-feedback.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 26,
+        "command": "node tests/ui4-integration.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 27,
+        "command": "node tests/specs.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 28,
+        "command": "node tests/specs-ui.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 29,
+        "command": "node tests/split-workbench-ui.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 30,
+        "command": "node tests/browser-workbench-ui.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 31,
+        "command": "node tests/browser-viewport-safety.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 32,
+        "command": "node tests/ui3-composer.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 33,
+        "command": "node tests/ui3-model.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 34,
+        "command": "node tests/ui3-inline-commands.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 35,
+        "command": "node tests/ui3-integration.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 36,
+        "command": "node tests/ui2-classic.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 37,
+        "command": "node tests/ui2-runtime-display.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 38,
+        "command": "node tests/ui2-visual.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 39,
+        "command": "node tests/theme.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 40,
+        "command": "node tests/session-revert-fixture-retention.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 41,
+        "command": "node tests/session-revert-object-session-binding.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 42,
+        "command": "node tests/session-revert-object-d6final-classic.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 43,
+        "command": "node tests/exe-diagnostics.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 44,
+        "command": "node tests/session-revert-object-qualification.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 45,
+        "command": "node tests/session-revert-object-presentation.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 46,
+        "command": "node tests/session-revert-object-ui.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 47,
+        "command": "node tests/session-revert-object-confirmation.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 48,
+        "command": "node tests/session-revert-sacl-witness.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 49,
+        "command": "node tests/session-revert-object-profile.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 50,
+        "command": "node tests/session-revert-object-evidence.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 51,
+        "command": "node tests/runtime-models.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 52,
+        "command": "node tests/model-fallback.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 53,
+        "command": "node tests/model-capabilities.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 54,
+        "command": "node tests/ux-state.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 55,
+        "command": "node tests/bridge-state-recovery.cjs",
+        "exitCode": 0,
+        "source": "npm-test-interrupted.txt (before interrupted leaf)",
+        "seconds": null,
+        "tempOverride": null
+      },
+      {
+        "index": 56,
+        "command": "node tests/native-provider-quota.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.592,
+        "tempOverride": "C:\\pi-GUI\\.probe\\t2b-quota-temp"
+      },
+      {
+        "index": 57,
+        "command": "node tests/stable-session-order.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.136,
+        "tempOverride": null
+      },
+      {
+        "index": 58,
+        "command": "node tests/hotfix.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.695,
+        "tempOverride": null
+      },
+      {
+        "index": 59,
+        "command": "node tests/hotfix-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.925,
+        "tempOverride": null
+      },
+      {
+        "index": 60,
+        "command": "node tests/provider-auth.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 1.184,
+        "tempOverride": null
+      },
+      {
+        "index": 61,
+        "command": "node tests/provider-auth-runtime.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.21,
+        "tempOverride": null
+      },
+      {
+        "index": 62,
+        "command": "node tests/ui-ia.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 1.073,
+        "tempOverride": null
+      },
+      {
+        "index": 63,
+        "command": "node tests/smoke.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 70.201,
+        "tempOverride": null
+      },
+      {
+        "index": 64,
+        "command": "node tests/daily-use.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.095,
+        "tempOverride": null
+      },
+      {
+        "index": 65,
+        "command": "node tests/git.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 21.031,
+        "tempOverride": null
+      },
+      {
+        "index": 66,
+        "command": "node tests/modules.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.169,
+        "tempOverride": null
+      },
+      {
+        "index": 67,
+        "command": "node tests/reliability.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.134,
+        "tempOverride": null
+      },
+      {
+        "index": 68,
+        "command": "node tests/interactions.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.473,
+        "tempOverride": null
+      },
+      {
+        "index": 69,
+        "command": "node tests/sidebar-menu.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.493,
+        "tempOverride": null
+      },
+      {
+        "index": 70,
+        "command": "node tests/port-owner.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/undefined",
+        "seconds": 0.931,
+        "tempOverride": null
+      },
+      {
+        "index": 71,
+        "command": "node tests/project-config.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/071-retry.txt",
+        "seconds": 0.421,
+        "tempOverride": "C:\\pi-GUI\\.probe\\t2b-quota-temp"
+      },
+      {
+        "index": 72,
+        "command": "node tests/skills.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/072.txt",
+        "seconds": 0.359,
+        "tempOverride": null
+      },
+      {
+        "index": 73,
+        "command": "node tests/extensions.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/073.txt",
+        "seconds": 0.67,
+        "tempOverride": null
+      },
+      {
+        "index": 74,
+        "command": "node tests/capability.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/074.txt",
+        "seconds": 0.103,
+        "tempOverride": null
+      },
+      {
+        "index": 75,
+        "command": "node tests/capability-install.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/075.txt",
+        "seconds": 0.088,
+        "tempOverride": null
+      },
+      {
+        "index": 76,
+        "command": "node tests/web-access.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/076.txt",
+        "seconds": 0.487,
+        "tempOverride": null
+      },
+      {
+        "index": 77,
+        "command": "node tests/subagents.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/077.txt",
+        "seconds": 0.533,
+        "tempOverride": null
+      },
+      {
+        "index": 78,
+        "command": "node tests/memory.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/078.txt",
+        "seconds": 0.514,
+        "tempOverride": null
+      },
+      {
+        "index": 79,
+        "command": "node tests/browser.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/079.txt",
+        "seconds": 0.494,
+        "tempOverride": null
+      },
+      {
+        "index": 80,
+        "command": "node tests/approvals.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/080.txt",
+        "seconds": 0.835,
+        "tempOverride": null
+      },
+      {
+        "index": 81,
+        "command": "node tests/planner.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/081.txt",
+        "seconds": 23.659,
+        "tempOverride": null
+      },
+      {
+        "index": 82,
+        "command": "node tests/workflow-relations.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/082.txt",
+        "seconds": 10.815,
+        "tempOverride": null
+      },
+      {
+        "index": 83,
+        "command": "node tests/reviews.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/083.txt",
+        "seconds": 10.11,
+        "tempOverride": null
+      },
+      {
+        "index": 84,
+        "command": "node tests/review-gate.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/084.txt",
+        "seconds": 19.025,
+        "tempOverride": null
+      },
+      {
+        "index": 85,
+        "command": "node tests/verification.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/085.txt",
+        "seconds": 9.666,
+        "tempOverride": null
+      },
+      {
+        "index": 86,
+        "command": "node tests/evidence.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/086.txt",
+        "seconds": 24.682,
+        "tempOverride": null
+      },
+      {
+        "index": 87,
+        "command": "node tests/attempt-lifecycle.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/087.txt",
+        "seconds": 14.705,
+        "tempOverride": null
+      },
+      {
+        "index": 88,
+        "command": "node tests/sessions.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/088.txt",
+        "seconds": 0.477,
+        "tempOverride": null
+      },
+      {
+        "index": 89,
+        "command": "node tests/session-search.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/089.txt",
+        "seconds": 1.753,
+        "tempOverride": null
+      },
+      {
+        "index": 90,
+        "command": "node tests/pi-compat.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/090.txt",
+        "seconds": 0.11,
+        "tempOverride": null
+      },
+      {
+        "index": 91,
+        "command": "node tests/pi-probes.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/091.txt",
+        "seconds": 0.34,
+        "tempOverride": null
+      },
+      {
+        "index": 92,
+        "command": "node tests/pi-update.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/092.txt",
+        "seconds": 0.482,
+        "tempOverride": null
+      },
+      {
+        "index": 93,
+        "command": "node tests/pi-version.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/093.txt",
+        "seconds": 0.399,
+        "tempOverride": null
+      },
+      {
+        "index": 94,
+        "command": "node tests/mcp-native.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/094.txt",
+        "seconds": 0.227,
+        "tempOverride": null
+      },
+      {
+        "index": 95,
+        "command": "node tests/usage-quota.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/095.txt",
+        "seconds": 0.577,
+        "tempOverride": null
+      },
+      {
+        "index": 96,
+        "command": "node tests/body-integrity.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/096.txt",
+        "seconds": 0.132,
+        "tempOverride": null
+      },
+      {
+        "index": 97,
+        "command": "node tests/dev-server.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/097.txt",
+        "seconds": 1.259,
+        "tempOverride": null
+      },
+      {
+        "index": 98,
+        "command": "node tests/models-api.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/098.txt",
+        "seconds": 1.294,
+        "tempOverride": null
+      },
+      {
+        "index": 99,
+        "command": "node tests/server-security.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/099.txt",
+        "seconds": 4.178,
+        "tempOverride": null
+      },
+      {
+        "index": 100,
+        "command": "node tests/diagnostics.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/100.txt",
+        "seconds": 0.09,
+        "tempOverride": null
+      },
+      {
+        "index": 101,
+        "command": "node tests/update-check.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/101.txt",
+        "seconds": 0.459,
+        "tempOverride": null
+      },
+      {
+        "index": 102,
+        "command": "node tests/version-consistency.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/102.txt",
+        "seconds": 0.115,
+        "tempOverride": null
+      },
+      {
+        "index": 103,
+        "command": "node tests/release-artifacts.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/103.txt",
+        "seconds": 0.273,
+        "tempOverride": null
+      },
+      {
+        "index": 104,
+        "command": "node tests/electron-guard.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/104.txt",
+        "seconds": 1.434,
+        "tempOverride": null
+      },
+      {
+        "index": 105,
+        "command": "node tests/gui-browser-policy.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/105.txt",
+        "seconds": 0.08,
+        "tempOverride": null
+      },
+      {
+        "index": 106,
+        "command": "node tests/gui-browser-controller.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/106.txt",
+        "seconds": 5.323,
+        "tempOverride": null
+      },
+      {
+        "index": 107,
+        "command": "node tests/gui-browser-bridge.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/107.txt",
+        "seconds": 0.371,
+        "tempOverride": null
+      },
+      {
+        "index": 108,
+        "command": "node tests/gui-browser-tools.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/108.txt",
+        "seconds": 0.15,
+        "tempOverride": null
+      },
+      {
+        "index": 109,
+        "command": "node tests/gui-browser-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/109.txt",
+        "seconds": 0.511,
+        "tempOverride": null
+      },
+      {
+        "index": 110,
+        "command": "node tests/gui-browser-host.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/110.txt",
+        "seconds": 0.078,
+        "tempOverride": null
+      },
+      {
+        "index": 111,
+        "command": "node tests/gui-browser-stop.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/111.txt",
+        "seconds": 0.648,
+        "tempOverride": null
+      },
+      {
+        "index": 112,
+        "command": "node tests/stop-barrier.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/112.txt",
+        "seconds": 0.954,
+        "tempOverride": null
+      },
+      {
+        "index": 113,
+        "command": "node tests/managed-processes.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/113.txt",
+        "seconds": 0.119,
+        "tempOverride": null
+      },
+      {
+        "index": 114,
+        "command": "node tests/process-tools.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/114.txt",
+        "seconds": 0.231,
+        "tempOverride": null
+      },
+      {
+        "index": 115,
+        "command": "node tests/process-stop.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/115.txt",
+        "seconds": 0.111,
+        "tempOverride": null
+      },
+      {
+        "index": 116,
+        "command": "node tests/process-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/116.txt",
+        "seconds": 1.623,
+        "tempOverride": null
+      },
+      {
+        "index": 117,
+        "command": "node tests/process-runner.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/117.txt",
+        "seconds": 0.095,
+        "tempOverride": null
+      },
+      {
+        "index": 118,
+        "command": "node tests/worktrees.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/118.txt",
+        "seconds": 29.365,
+        "tempOverride": null
+      },
+      {
+        "index": 119,
+        "command": "node tests/worktrees-http.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/119.txt",
+        "seconds": 4.452,
+        "tempOverride": null
+      },
+      {
+        "index": 120,
+        "command": "node tests/worktrees-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/120.txt",
+        "seconds": 0.6,
+        "tempOverride": null
+      },
+      {
+        "index": 121,
+        "command": "node tests/runtime-registry.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/121.txt",
+        "seconds": 0.192,
+        "tempOverride": null
+      },
+      {
+        "index": 122,
+        "command": "node tests/runtime-http.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/122.txt",
+        "seconds": 0.185,
+        "tempOverride": null
+      },
+      {
+        "index": 123,
+        "command": "node tests/runtime-store.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/123.txt",
+        "seconds": 0.398,
+        "tempOverride": null
+      },
+      {
+        "index": 124,
+        "command": "node tests/runtime-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/124.txt",
+        "seconds": 0.511,
+        "tempOverride": null
+      },
+      {
+        "index": 125,
+        "command": "node tests/runtime-nav.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/125.txt",
+        "seconds": 7.709,
+        "tempOverride": null
+      },
+      {
+        "index": 126,
+        "command": "node tests/runtime-conversation.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/126.txt",
+        "seconds": 0.532,
+        "tempOverride": null
+      },
+      {
+        "index": 127,
+        "command": "node tests/runtime-changes.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/127.txt",
+        "seconds": 19.916,
+        "tempOverride": null
+      },
+      {
+        "index": 128,
+        "command": "node tests/runtime-secondary.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/128.txt",
+        "seconds": 0.594,
+        "tempOverride": null
+      },
+      {
+        "index": 129,
+        "command": "node tests/runtime-git-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/129.txt",
+        "seconds": 0.504,
+        "tempOverride": null
+      },
+      {
+        "index": 130,
+        "command": "node tests/runtime-resources.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/130.txt",
+        "seconds": 0.551,
+        "tempOverride": null
+      },
+      {
+        "index": 131,
+        "command": "node tests/runtime-resource-cleanup.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/131.txt",
+        "seconds": 0.122,
+        "tempOverride": null
+      },
+      {
+        "index": 132,
+        "command": "node tests/runtime-history-search.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/132.txt",
+        "seconds": 9.004,
+        "tempOverride": null
+      },
+      {
+        "index": 133,
+        "command": "node tests/runtime-finish-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/133.txt",
+        "seconds": 0.517,
+        "tempOverride": null
+      },
+      {
+        "index": 134,
+        "command": "node tests/session-runtime.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/134.txt",
+        "seconds": 1.07,
+        "tempOverride": null
+      },
+      {
+        "index": 135,
+        "command": "node tests/pi-supervisor.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/135.txt",
+        "seconds": 2.765,
+        "tempOverride": null
+      },
+      {
+        "index": 136,
+        "command": "node tests/runtime-browser.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/136.txt",
+        "seconds": 0.132,
+        "tempOverride": null
+      },
+      {
+        "index": 137,
+        "command": "node tests/process-budget.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/137.txt",
+        "seconds": 0.117,
+        "tempOverride": null
+      },
+      {
+        "index": 138,
+        "command": "node tests/runtime-events.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/138.txt",
+        "seconds": 0.089,
+        "tempOverride": null
+      },
+      {
+        "index": 139,
+        "command": "node tests/runtime-processes.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/139.txt",
+        "seconds": 2.192,
+        "tempOverride": null
+      },
+      {
+        "index": 140,
+        "command": "node tests/session-revert-object-assets.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/140.txt",
+        "seconds": 2.26,
+        "tempOverride": null
+      },
+      {
+        "index": 141,
+        "command": "node tests/session-revert-object-authority.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/141.txt",
+        "seconds": 4.779,
+        "tempOverride": null
+      },
+      {
+        "index": 142,
+        "command": "node tests/session-revert-object-history.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/142.txt",
+        "seconds": 19.331,
+        "tempOverride": null
+      },
+      {
+        "index": 143,
+        "command": "node tests/session-revert-object-runtime.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/143.txt",
+        "seconds": 417.723,
+        "tempOverride": null
+      },
+      {
+        "index": 144,
+        "command": "node tests/session-revert-object-store.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/144.txt",
+        "seconds": 10.571,
+        "tempOverride": null
+      },
+      {
+        "index": 145,
+        "command": "node tests/session-revert-object-service.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/145.txt",
+        "seconds": 329.473,
+        "tempOverride": null
+      },
+      {
+        "index": 146,
+        "command": "node tests/session-revert-object-recovery.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/146.txt",
+        "seconds": 20.665,
+        "tempOverride": null
+      },
+      {
+        "index": 147,
+        "command": "node tests/session-change-store.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/147.txt",
+        "seconds": 163.368,
+        "tempOverride": null
+      },
+      {
+        "index": 148,
+        "command": "node tests/session-change-bridge.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/148.txt",
+        "seconds": 0.294,
+        "tempOverride": null
+      },
+      {
+        "index": 149,
+        "command": "node tests/session-change-tools.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/149.txt",
+        "seconds": 0.345,
+        "tempOverride": null
+      },
+      {
+        "index": 150,
+        "command": "node tests/session-revert.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/150.txt",
+        "seconds": 0.139,
+        "tempOverride": null
+      },
+      {
+        "index": 151,
+        "command": "node tests/session-revert-store.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/151.txt",
+        "seconds": 128.985,
+        "tempOverride": null
+      },
+      {
+        "index": 152,
+        "command": "node tests/session-revert-http.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/152.txt",
+        "seconds": 4.766,
+        "tempOverride": null
+      },
+      {
+        "index": 153,
+        "command": "node tests/session-revert-integration.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/153.txt",
+        "seconds": 0.493,
+        "tempOverride": null
+      },
+      {
+        "index": 154,
+        "command": "node tests/session-revert-writer.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/154.txt",
+        "seconds": 4.81,
+        "tempOverride": null
+      },
+      {
+        "index": 155,
+        "command": "node tests/session-revert-recovery.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/155.txt",
+        "seconds": 15.387,
+        "tempOverride": null
+      },
+      {
+        "index": 156,
+        "command": "node tests/session-revert-admission.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/156.txt",
+        "seconds": 0.354,
+        "tempOverride": null
+      },
+      {
+        "index": 157,
+        "command": "node tests/session-revert-apply.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/157.txt",
+        "seconds": 93.596,
+        "tempOverride": null
+      },
+      {
+        "index": 158,
+        "command": "node tests/session-revert-windows-faults.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/158.txt",
+        "seconds": 9.081,
+        "tempOverride": null
+      },
+      {
+        "index": 159,
+        "command": "node tests/session-revert-inplace.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/159.txt",
+        "seconds": 142.75,
+        "tempOverride": null
+      },
+      {
+        "index": 160,
+        "command": "node tests/session-revert-inplace-safety.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/160.txt",
+        "seconds": 72.113,
+        "tempOverride": null
+      },
+      {
+        "index": 161,
+        "command": "node tests/session-change-query.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/161.txt",
+        "seconds": 5.86,
+        "tempOverride": null
+      },
+      {
+        "index": 162,
+        "command": "node tests/session-change-ui.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/162.txt",
+        "seconds": 0.706,
+        "tempOverride": null
+      },
+      {
+        "index": 163,
+        "command": "node tests/session-change-startup.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/163.txt",
+        "seconds": 12.452,
+        "tempOverride": null
+      },
+      {
+        "index": 164,
+        "command": "node tests/session-revert-object-writer.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/164.txt",
+        "seconds": 518.6,
+        "tempOverride": null
+      },
+      {
+        "index": 165,
+        "command": "node tests/session-revert-object-faults.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/165.txt",
+        "seconds": 655.082,
+        "tempOverride": null
+      },
+      {
+        "index": 166,
+        "command": "node tests/session-revert-object-witness.cjs",
+        "exitCode": 0,
+        "source": "canonical-logs/166.txt",
+        "seconds": 0.675,
+        "tempOverride": null
+      }
+    ]
+  },
+  "screenshots": [
+    {
+      "file": "01-browser-single.png",
+      "sha256": "36e3a2bb9b6edc36d5a331f184b8c5a1b5e2b90a78d5db4286afebe6ee83416f",
+      "bytes": 33318
+    },
+    {
+      "file": "01-browser-single-native-page.png",
+      "sha256": "3b5e3e4d2e190be6ce6124c0c2e7d790654f228263a9d40642607751dad6a70e",
+      "bytes": 29402
+    },
+    {
+      "file": "02-browser-changes-1536.png",
+      "sha256": "3e6b599f6222f2cd9099ce8e0865093796d3f51048e72001a48b7ef02c24df53",
+      "bytes": 74276
+    },
+    {
+      "file": "02-browser-changes-1536-native-page.png",
+      "sha256": "368475858e66ca0205841e1bac25149c85d451a2bb865aaee635f5ce1ab418b6",
+      "bytes": 30090
+    },
+    {
+      "file": "02-browser-changes-1200.png",
+      "sha256": "50edc2ee3079d1f4ce8f741e64dcbb055a7744ef3843c4235c945be90565a5bc",
+      "bytes": 70633
+    },
+    {
+      "file": "02-browser-changes-1200-native-page.png",
+      "sha256": "368475858e66ca0205841e1bac25149c85d451a2bb865aaee635f5ce1ab418b6",
+      "bytes": 30090
+    },
+    {
+      "file": "02-browser-changes-900.png",
+      "sha256": "0bc214a81db698d5ecd1316e6ea881ae81b2847f67448793ad0fea941adee507",
+      "bytes": 68100
+    },
+    {
+      "file": "02-browser-changes-900-native-page.png",
+      "sha256": "368475858e66ca0205841e1bac25149c85d451a2bb865aaee635f5ce1ab418b6",
+      "bytes": 30090
+    },
+    {
+      "file": "02-browser-changes-720.png",
+      "sha256": "c94608f2a9b452a7212801a9ef0b0687459208f649676857a1c3b6dc659e75fe",
+      "bytes": 26757
+    },
+    {
+      "file": "02-browser-changes-720-native-page.png",
+      "sha256": "dc94cd6efd1313ea5a81c64b234d2b809f94e5f84190c2638dd329c19714786d",
+      "bytes": 33075
+    },
+    {
+      "file": "03-narrow-changes.png",
+      "sha256": "90785231f3c9eaf78273695847ab153c204ada6840c66af6bd79a15823b09c98",
+      "bytes": 58416
+    },
+    {
+      "file": "04-modal-occlusion.png",
+      "sha256": "45c043116a462aba4bb7d7445ba6d54892dbfe8c58f54bae471ad366ead37fa9",
+      "bytes": 67361
+    },
+    {
+      "file": "05-zoom-125.png",
+      "sha256": "ce5c1c4a7fedd91c40b18db09ac420a05fb12afd7e915ef6c98831237ff2ea42",
+      "bytes": 101753
+    },
+    {
+      "file": "05-zoom-125-native-page.png",
+      "sha256": "c012148272f263636c6d7b0039a66383741b9c6651a58d0c06d428f4c48d85a7",
+      "bytes": 30329
+    },
+    {
+      "file": "06-short-window.png",
+      "sha256": "94fd4532a489c0a4ca8d7bade0b7ef3121499ced48602074be7600ef346c751b",
+      "bytes": 29480
+    },
+    {
+      "file": "06-short-window-native-page.png",
+      "sha256": "246998a4fe33ffe66e8b2567052823e3d5ab63dbfad541608c74a177d7b7ee6e",
+      "bytes": 27131
+    },
+    {
+      "file": "07-focused-A.png",
+      "sha256": "fcd397c76e9a9ecb742a09f80428890dbc9c9bb0e8ac4074ed994e03487083dc",
+      "bytes": 52761
+    },
+    {
+      "file": "07-focused-A-native-page.png",
+      "sha256": "2d3c7946d3896936f9e452bd625d52262630e9b3e36e0566ebcef4dea7aec1b3",
+      "bytes": 65022
+    },
+    {
+      "file": "07-focused-B.png",
+      "sha256": "f0ea5733373523b6f35df4d5e576a2fc34fd35dd1ebcac87caa9fa9b429fb70d",
+      "bytes": 52654
+    },
+    {
+      "file": "07-focused-B-native-page.png",
+      "sha256": "4eb4c6e95df9f4841f558615ab3d75a96d94e8206f34f1996382f7a91e3cff2b",
+      "bytes": 64903
+    }
+  ],
+  "build": {
+    "root": "C:\\pi-GUI\\.probe\\t2b-build-verified",
+    "exitCode": 0,
+    "packagedCheck": "26/26",
+    "assets": [
+      {
+        "file": "public/app.js",
+        "bytes": 62649,
+        "sha256": "9c88186ab32280a604f8ea52e4736914ec4ae2569b53d8f9497ab4a9cc8fe2ff",
+        "equal": true
+      },
+      {
+        "file": "public/browser-pane.js",
+        "bytes": 14692,
+        "sha256": "f1cd0e961b08351ca535823f66cb0ef4c095f91e886924ccde48b0cee185e4e2",
+        "equal": true
+      },
+      {
+        "file": "public/right-pane.js",
+        "bytes": 18263,
+        "sha256": "e03de02d970b3f95744cd7deafa28edc6d02275a9a2f5a5fb16973cbb6b59f83",
+        "equal": true
+      },
+      {
+        "file": "public/runtime-secondary.js",
+        "bytes": 7592,
+        "sha256": "94f1daf34f495c785d06396c01a65f94723c33f27198a321530f42a4a1165250",
+        "equal": true
+      },
+      {
+        "file": "public/ui/split-workbench.js",
+        "bytes": 12182,
+        "sha256": "60377b67742c0602eafa8b7512e4c92ac127e26ac37ea7cb4b40a26079fd4617",
+        "equal": true
+      },
+      {
+        "file": "public/ui4-pane.css",
+        "bytes": 21974,
+        "sha256": "6594a6589f0babc3efe15568c200254598ccff7d07df24a17b2cc8ad8d27ae16",
+        "equal": true
+      },
+      {
+        "file": "electron/browser-view.cjs",
+        "bytes": 22403,
+        "sha256": "69945698e6c320cce5b73543bb08450e39fb3a6ccb036c8044d72ddf6edfb718",
+        "equal": true
+      }
+    ]
+  },
+  "limits": [
+    "fixture no-sandbox; normal sandbox runtime not verified",
+    "separate real renderer/native captures; no whole-window screenshot",
+    "legacy live Agent CDP click also fails on unchanged baseline"
+  ],
+  "commits": {
+    "feature": "5c7880b5a6f0e33aa7cbe0b0294a8120d3aae60b",
+    "tests": "034ae54ae0dc03bef3cb448ab7ffbed16486d22c"
+  }
+}

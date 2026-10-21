@@ -1,0 +1,114 @@
+
+--- A. 允许重试的状态 ---
+  ok   A-prep. 任务成功
+  ok   A1. success 允许显式重试（P8-B 的核心改动）
+  ok   A1b. 重试只改当前态，不动历史 attempts
+  ok   A1c. 重试后任务回到 pending（等用户点开始，不自动跑）
+  ok   A-prep2. 任务失败
+  ok   A2. failed 允许重试
+  ok   A-prep3. 任务被取消
+  ok   A3. cancelled 允许重试
+  ok   A3b. 重试后历史里那条 cancelled 仍在
+  ok   A-prep4. 任务被中断
+  ok   A4. interrupted 允许重试
+  ok   A4b. 重试后历史里那条 interrupted 仍在
+  ok   A5. running 拒绝重试（要先停止）
+  ok   A6. 从没跑过（pending，attempt 0）拒绝重试 —— 没有可重试的结果
+  ok   A7. skipped 仍允许重试（保持既有行为）
+
+--- B. 核心：历史一条都不能丢 ---
+  ok   B-prep. A、B 都成功、计划 completed
+  ok   B-prep2. A 的 Attempt 1 被人工接受
+  ok   B1. 成功任务重试成功
+  ok   B2. 重试后计划不再是 completed（否则 start 会被拒 / 状态自相矛盾）
+  ok   B3. 重试后下游 B 的当前态回到待重新评估（不再宣称基于旧 A 的成功）
+  ok   B3b. 下游被重置的 id 会回给调用方（界面据此刷新）
+  ok   B4. 重试**没有**新增 attempt（新记录要等真的开始执行）
+  ok   B5. Attempt 1 的 outcomeStatus 原样
+  ok   B6. Attempt 1 的 sessionId 原样
+  ok   B7. Attempt 1 的 filesChanged 原样
+  ok   B8. Attempt 1 的 review 原样（accepted + note + revision）
+  ok   B9. 下游 B 的历史 attempt 也原样保留
+  ok   B10. 跑完后确实多了一条 Attempt 2
+  ok   B11. 新的 Attempt 2 是 review=pending / revision=0
+  ok   B12. Attempt 号严格递增、不复用（1 → 2）
+  ok   B13. Attempt 1 依然是 accepted（旧结论不被新 attempt 改写）
+  ok   B14. 两次 attempt 的 sessionId 不同
+  ok   B15. 两次 attempt 的 verificationSnapshot 各自独立（1=npm test，2=npm run test:unit）
+  ok   B16. 下游 B 重新跑了一次（新的 attempt 号是 2）
+  ok   B17. 下游 B 的 Attempt 1 历史仍在
+  ok   B18. 全部跑完后计划回到 completed
+
+--- C. outcomeStatus 不会被后续操作改写 ---
+  ok   C-prep. A1 失败
+  ok   C1. 重试成功后 A1 的 outcomeStatus 仍是 failed
+  ok   C2. A2 是 success（两条各自的结论互不影响）
+  ok   C3. task.status 是 success，但历史里仍有一条 failed
+
+--- D. Plan 状态与依赖链 ---
+  ok   D-prep. completed 计划里再重试一次成功
+  ok   D1. completed → 重试后不再是 completed
+  ok   D2. 重试后能再次 start（不会返回 settled / nothing-ready）
+  ok   D3. 再跑一轮后计划又回到 completed
+  ok   D4. 两轮跑完 A 的历史是 [1,2,3]（严格递增、不复用）
+  ok   D-prep2. 计划 paused/failed 且 B 被阻塞
+  ok   D5. 失败计划里重试失败任务成功
+  ok   D6. 重试后能再次 start（不会因为 Plan 处于 failed 而被拒）
+  ok   D7. 跑完后 B 解锁并完成（依赖重新推进）
+  ok   D8. A1 的失败历史仍在
+  ok   D-prep3. 拿到「A 完成、B 在跑」的窗口
+  ok   D9. 下游正在执行时拒绝重试上游（不能在飞行中抽掉它的输入）
+
+--- E. 取消 / 关闭 / 重启不产生重复 attempt ---
+  ok   E1. 取消只形成**一条**历史 attempt
+  ok   E2. 那条的 outcomeStatus = cancelled
+  ok   E3. 取消后的 attempt 是 review=pending / revision=0
+  ok   E4. 取消不把 task 标成 failed（取消 ≠ 失败）
+  ok   E5. shutdown 只形成**一条** interrupted attempt
+  ok   E6. 那条的 outcomeStatus = interrupted（不是 cancelled）
+  ok   E7. shutdown 后 async finish 没有把 interrupted 改写成 cancelled
+  ok   E8. 中断的 attempt：filesChanged=[] 且标了采集不全（不猜）
+  ok   E9. 中断的 attempt 带 review=pending
+  ok   E10. 已 interrupted 的任务不会被 recoverAll 再补一条
+  ok   E11-prep. 磁盘上确实是「running 但历史里没有这次执行」
+  ok   E11. recoverAll 补了一条 interrupted attempt（不再出现「任务被中断但历史里找不到」）
+  ok   E12. 补的记录只写真的知道的：attempt 号与 startedAt
+  ok   E13. 拿不到的字段留空，不猜（sessionId / verificationSnapshot / filesChanged）
+  ok   E14. 补的记录带 review=pending
+  ok   E15. 任务被标成 interrupted、计划可继续
+  ok   E15b. recoverAll 的计数把这条算进去了
+  ok   E16. 再跑一次 recoverAll 不会重复补（attempt 号去重）
+
+--- F. 核心 E2E：A→B 跑完 → 接受 A → 改验证要求 → 重试 A → 再跑 ---
+  ok   F1. A Attempt 1：outcome=success / review=accepted / note 保留 / snapshot=npm test
+  ok   F2. A Attempt 2：独立结论 / review=pending revision 0 / snapshot=npm run test:unit
+  ok   F3. A Attempt 3（D 段又跑了一轮）也在，且历史是 [1,2,3]
+  ok   F4. B 的历史 attempt 仍然存在（1 与 2）
+  ok   F5. B 的 Attempt 1 结论仍是 success（下游历史没被上游重试改写）
+  ok   F6. 三次 attempt 的 sessionId 两两不同
+  ok   F7. 三次 attempt 的 filesChanged 各自独立保留
+
+--- G. Active Plan 的生命周期操作作用于 active.plan ---
+  ok   G-prep. 拿到「快任务已完成、慢任务仍在跑」且计划仍 active 的窗口
+  ok   G1. active Plan 里 retry 已完成的 Task → 拒绝，code=plan-active
+  ok   G1b. HTTP 路由下同一条规则（route 不自己判断 active）
+  ok   G2. retry 没有被自动执行：A 仍是 success、attempt 仍是 1、只有一条历史
+  ok   G2b. 慢任务跑完后计划正常收成 completed（A 没被翻回 pending）
+  ok   G-prep2. 并发 1：慢任务在跑、快任务尚未开始
+  ok   G3. active Plan 里 cancel 未开始的 Task → ok（且不是「取消了正在跑的」）
+  ok   G3b. 响应里的 plan 就是被改的那一份（不是陈旧副本）
+  ok   G3c. 取消已经落盘
+  ok   G4. Scheduler 收尾整份写盘之后，B 仍然是 cancelled（没被冲回 pending）
+  ok   G5. 被取消的 Task 从未执行 → 0 条 attempt、attempt 号仍是 0
+  ok   G5b. 慢任务本身正常成功（取消 B 不影响正在跑的 A）
+  ok   G-prep3. 并发 1：慢任务在跑、快任务尚未开始
+  ok   G6. active Plan 里 skip 未开始的 Task → ok
+  ok   G6b. 响应里的 plan 反映了 skipped
+  ok   G7. Scheduler 收尾整份写盘之后，B 仍然是 skipped（没被冲回 pending）
+  ok   G8. 被跳过的 Task 从未执行 → 0 条 attempt
+  ok   G-prep4. 此时没有正在执行的计划
+  ok   G9. 非 active Plan：cancel 仍然作用于传入的那份 plan 并落盘
+  ok   G10. 非 active Plan：skip 仍然作用于传入的那份 plan 并落盘
+  ok   G10b. inactive 时 cancel/skip 的返回值同样带 plan
+
+98 passed, 0 failed

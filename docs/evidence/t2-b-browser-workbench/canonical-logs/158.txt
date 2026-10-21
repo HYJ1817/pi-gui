@@ -1,0 +1,15 @@
+ok independent child replaces parent before final check; C and unrelated D survive (metadata fixture)
+ok injected staging writeFile ENOSPC leaves C; no commit (not actual full disk)
+ok injected staging sync EIO leaves C; no commit (not actual full disk)
+ok injected second staging fsync fails after metadata reset; C and cleanup preserved
+ok injected EXDEV moving retains source and reports uncertain commit (not actual cross-volume)
+ok independent child replaces recovery parent; refuses move and preserves C (metadata fixture)
+ok native independent no-delete-share handle blocks Node rename
+ok native sharing conflict at writer commit retains C and staging (metadata fixture)
+ok native MoveFileEx no-delete-share conflict retains C without destination
+ok native move sharing conflict through writer preserves C and recovery intent (metadata fixture)
+ok real child exits afterStage; durable C/R retained; restart does not retry (metadata fixture)
+ok real child exits afterIntent; durable C/R retained; restart does not retry (metadata fixture)
+ok real child exits afterRename; durable C/R retained; restart does not retry (metadata fixture)
+session-revert-windows-faults: 13/13; failed=0; skipped=0
+Evidence boundary: native Windows operations + fixture metadata; injected ENOSPC/fsync/EXDEV; no actual full disk, cross-volume, full SACL or power-loss proof.

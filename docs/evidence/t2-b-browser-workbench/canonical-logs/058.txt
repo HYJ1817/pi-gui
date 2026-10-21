@@ -1,0 +1,28 @@
+  ok  H1 internal numeric readback resolves without SSE
+  ok  H1 compatibility observes internal responses including readiness handshake
+  ok  H1 renderer string response remains an event
+  ok  H1 late internal responses remain private after timeout
+  ok  H4 GUI token stripped, provider environment retained
+  ok  H7 removing noncurrent B never restarts A
+  ok  H7 busy removal is rejected before configuration write
+  ok  H7 active removal closes runtime and bridge
+  ok  H7 deleted old folder cannot spawn or be recreated on restart
+  ok  H7 re-add remains closed until explicit activation
+  ok  P25 user-level OAuth survives closing current workspace
+  ok  H2 non-global canonical Pi is available in registry and auto
+  ok  H2 Planner executes canonical package
+  ok  H2 invalid explicit PI_BIN never falls back
+  ok  H2 two Pi packages never mix registry or diagnostics
+  ok  H5 export endpoint and cleanup
+  ok  H5 failure cleanup and path privacy: error
+  ok  H5 failure cleanup and path privacy: wrong-path
+  ok  H5 failure cleanup and path privacy: stale
+  ok  H5 failure cleanup and path privacy: symlink
+  ok  H5 cleanup failure remains contained: EPERM/false
+  ok  H5 cleanup failure remains contained: EPERM/true
+  ok  H5 cleanup failure remains contained: EBUSY/false
+  ok  H5 cleanup failure remains contained: EBUSY/true
+  ok  H5 old Pi rejects before issuing export command
+  ok  H5 router rejects raw exports and reserved numeric client IDs
+
+26/26 通过

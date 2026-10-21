@@ -1,0 +1,8 @@
+  ok  固定 workspace runtime factory 可用
+  ok  真实 guardian 两颗 RPC child 独立 ready/sessionId
+  ok  同 id 事件仍在独立发布闭包
+  ok  真实 RPC 两条输出、Token 与相同 tool/request ID 不串线
+  ok  A 权威 Stop 后 B仍streaming
+  ok  Stop A 使旧审批失效而 B 的同 ID 审批仍可独立完成
+  ok  A清理整树后 B继续RPC
+Session runtime: 7/7

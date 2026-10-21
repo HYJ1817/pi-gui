@@ -1,0 +1,143 @@
+  ok  start
+  ok  success
+  ok  error
+  ok  missing agent
+  ok  missing task
+  ok  long task bounded preview
+  ok  task single line
+  ok  malicious task inert
+  ok  custom agent
+  ok  input model never assumed
+  ok  resolved result model
+  ok  single foreground result
+  ok  partial structured details retained
+  ok  workflow child summary
+  ok  workflow authoritative child identities
+  ok  parent relation explicit
+  ok  workflow source never projected
+  ok  unrelated parent summary rejected
+  ok  no tasks inference
+  ok  no script count inference
+  ok  background launch not completion
+  ok  background actual id
+  ok  requested background without id unknown
+  ok  background missing id not fabricated
+  ok  loader running
+  ok  loader success
+  ok  loader error
+  ok  loader is no execution
+  ok  cancel result
+  ok  interrupted result
+  ok  failed child exit
+  ok  timed out result
+  ok  missing end settles spinner
+  ok  history same projection
+  ok  history missing metadata degrades
+  ok  history no fabricated duration
+  ok  unknown action safely bounded
+  ok  generic fallback
+  ok  secret fields excluded
+  ok  raw details absent DOM
+  ok  raw child output excluded
+  ok  update same node
+  ok  progress output bounded
+  ok  end same node
+  ok  independent tool ids
+  ok  inverse completion distinct
+  ok  no duplicate DOM
+  ok  unobserved initially
+  ok  loader != subagent observation
+  ok  loader observed
+  ok  workspace stale rejected
+  ok  bridge stale rejected
+  ok  current event accepted
+  ok  workspace resets observation
+  ok  restart resets observation
+  ok  discovery != runtime
+  ok  missing setup
+  ok  failed registry unknown
+  ok  disabled extension
+  ok  loaded unknown remains unknown
+  ok  manual install fixed
+  ok  no automatic install
+  ok  bg_wait completion
+  ok  bg_wait timeout not child completion
+  ok  status action
+  ok  steer action safe
+  ok  stop action not GUI kill
+  ok  successful foreground Git refresh
+  ok  failed no Git refresh
+  ok  launch alone no completion refresh
+  ok  wait completion Git refresh
+  ok  wait complete spelling retained
+  ok  wait missing state does not invent one
+  ok  partial diff is not Changes evidence
+  ok  invalid summary version rejected
+  ok  same size snapshot content changes
+  ok  no Planner task creation
+  ok  no Planner mutation
+  ok  supervisor recognized
+  ok  supervisor initially unobserved
+  ok  supervisor observed after start
+  ok  fresh supervisor does not imply subagent observed
+  ok  supervisor restart clears observation
+  ok  supervisor generation clears observation
+  ok  supervisor stale bridge rejected
+  ok  supervisor status start
+  ok  supervisor status success
+  ok  supervisor pending replies count
+  ok  supervisor status root excluded
+  ok  supervisor pending start
+  ok  supervisor pending success
+  ok  supervisor pending request count
+  ok  supervisor safe Request: req-1
+  ok  supervisor safe Run: run-1
+  ok  supervisor safe Agent: worker
+  ok  supervisor safe Child index: 0
+  ok  supervisor safe Reason: need_decision
+  ok  supervisor safe Expects reply: true
+  ok  supervisor pending question excluded
+  ok  supervisor pending requestBody excluded
+  ok  supervisor list success
+  ok  supervisor reply start
+  ok  supervisor reply success
+  ok  supervisor reply Request: req-1
+  ok  supervisor reply Run: run-1
+  ok  supervisor reply Agent: worker
+  ok  supervisor reply input message excluded
+  ok  supervisor details field excluded: message
+  ok  supervisor details field excluded: root
+  ok  supervisor details field excluded: channelDir
+  ok  supervisor details field excluded: requestFile
+  ok  supervisor details field excluded: replyFile
+  ok  supervisor details field excluded: env
+  ok  supervisor details field excluded: auth
+  ok  supervisor details field excluded: token
+  ok  supervisor details field excluded: apiKey
+  ok  supervisor details field excluded: credential
+  ok  supervisor details field excluded: transcript
+  ok  supervisor details field excluded: unknownField
+  ok  supervisor unknown action safe fallback
+  ok  supervisor unknown action bounded
+  ok  supervisor unknown action named
+  ok  supervisor unknown action raw input excluded
+  ok  supervisor error label
+  ok  supervisor error action and safe output
+  ok  supervisor history status
+  ok  supervisor history pending
+  ok  supervisor history list
+  ok  supervisor history reply
+  ok  supervisor child payload cannot cross adapter
+  ok  supervisor no completion Git refresh
+  ok  supervisor invalid pending count ignored
+  ok  supervisor missing pending metadata stays unknown
+  ok  supervisor missing action safe
+  ok  supervisor incomplete does not claim replied
+  ok  supervisor prototype action safe
+  ok  supervisor hostile HTML inert
+  ok  supervisor row values bounded
+  ok  supervisor rows bounded
+  ok  supervisor generic unknown fallback intact
+  ok  Planner source has no supervisor feature
+
+141/141 通过

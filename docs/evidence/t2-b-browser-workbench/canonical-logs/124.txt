@@ -1,0 +1,17 @@
+  ok  列表读取不会spawn
+  ok  A文本作为文本显示，无HTML解析
+  ok  切B展示B输出，保存A草稿
+  ok  后台A事件不能落到B DOM
+  ok  发送captured B完整owner
+  ok  迟到B Stop响应不丢A草稿或内容
+  ok  Stop发给B而非当前UI A
+  ok  A审批handler可捕获
+  ok  捕获A审批后切B，相同approval id仍只发给A完整owner
+  ok  迟到A审批不会清除B独立审批
+  ok  Tab不逃出dialog
+  ok  Shift Tab反向循环
+  ok  Escape关闭并恢复入口焦点
+  ok  关闭后事件不恢复DOM
+  ok  中央接管后 Escape 不撤销会话 focus
+  ok  已在中央查看会话时打开关闭弹窗不 blur
+Runtime UI: 16/16

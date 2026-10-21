@@ -18,6 +18,16 @@ disposer 改为集合，使一个工作台可以可靠释放两个子面板。�
 Specs / Changes 单面板页签，不压缩聊天区。见 [specs.md](specs.md) 与
 [T2-A-acceptance.md](T2-A-acceptance.md)。
 
+## T2-B Browser + Changes
+
+同一分屏容器通过有界 Browser adapter 挂载 `createBrowserSurface()` 的原有节点。
+经典 Browser 与 Runtime Browser 各自保留原控制器，独占/分屏切换不重新创建页面；
+真正关闭仍走原有销毁或 Runtime owner 的 detach/dispose 路径。
+`right-pane.js` 仍是 viewport 测量和遮挡的唯一 owner，观察实际 viewport 而非整个右栏，
+合并弹窗、隐藏页签与拖动遮挡；重新显示先上报新 bounds，再解除遮挡。
+主进程 `browser-view.cjs` 将 CSS 坐标按主窗口 zoom 转为 DIP、继续 clamp，并在有效
+bounds 设置之后才 attach。partition、导航策略、Agent bridge 与 owner 验证不变。
+
 ## P32.2 Worktree 生命周期
 
 `lib/git-worktree.js` 复用有界 Git runner，提供 canonical repository/inventory/commit/ref 查询。

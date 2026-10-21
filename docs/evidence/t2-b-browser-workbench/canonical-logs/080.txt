@@ -1,0 +1,86 @@
+  ok  dialog kinds are the four protocol methods
+  ok  fire-and-forget methods are not approvals
+  ok  dialog request is an approval
+  ok  missing id is refused (no identity, no dialog)
+  ok  unknown method is refused
+  ok  normalized keeps real fields
+  ok  no structured scope -> null
+  ok  no structured action -> null
+  ok  risk is unknown, never guessed from text
+  ok  source is the extension channel
+  ok  no persistent decision without a persistence protocol
+  ok  title and message are bounded
+  ok  options are strings only, deduped and bounded
+  ok  non-select keeps no options
+  ok  timeout must be a positive finite number
+  ok  editor prefill only for editor
+  ok  unknown extra fields are not projected
+  ok  confirm payloads
+  ok  value payloads
+  ok  status for decision
+  ok  summary has no payload beyond title
+  ok  confirm request opens the shared confirm layer
+  ok  card shows extension text and one-shot note
+  ok  no "always allow" button exists
+  ok  allow goes out as extension_ui_response
+  ok  allow settles the request
+  ok  allow closes the layer
+  ok  deny goes out as confirmed:false
+  ok  deny settles as denied
+  ok  a second confirm dismisses the first (fail-closed)
+  ok  duplicate while pending does not open a second dialog
+  ok  duplicate caused no extra command
+  ok  settled request is never re-opened (SSE replay)
+  ok  stale workspace generation is dropped
+  ok  stale bridge run is dropped
+  ok  during workspace switch nothing is shown
+  ok  bridge restart expires pending
+  ok  bridge restart does not answer a dead process
+  ok  bridge restart closes the card
+  ok  Stop cancels pending fail-closed
+  ok  Stop leaves nothing pending
+  ok  Stop closes the card
+  ok  timeout request is shown with its deadline
+  ok  timeout expires locally instead of guessing
+  ok  timeout sends no answer (Pi already resolved it)
+  ok  timeout removes the card
+  ok  select uses the modal layer with real options
+  ok  select answers with the chosen value
+  ok  select settles as answered
+  ok  input keeps the placeholder
+  ok  input answers with the typed value
+  ok  editor prefills a textarea
+  ok  editor cancel answers cancelled
+  ok  editor cancel settles as cancelled
+  ok  hostile HTML is inert in the card
+  ok  hostile extra fields never reach the DOM
+  ok  malformed options do not break select
+  ok  unknown event types are ignored
+  ok  dismissConfirm closes like a cancel
+  ok  confirmModal still returns true on primary
+  ok  danger confirm has no primary shortcut on Enter
+  ok  capability block reports supported and unsupported
+  ok  capability block states the real boundary
+  ok  capability block offers no Allow button
+  ok  unknown capability is not dressed up as protection
+  ok  probe finds the tool_call block contract
+  ok  probe finds the blocking dialog contract
+  ok  probe reports core has no built-in approval
+  ok  probe reports custom() degraded over RPC
+  ok  probe reports the pi version it read
+  ok  probe never leaks the package path
+  ok  missing pi package stays unknown
+  ok  bare command without PATH stays unknown (no global-package guessing)
+  ok  defer keeps confirm pending and sends no cancellation
+  ok  background approval is discoverable without interrupting the viewed conversation
+  ok  resume only responds to the original owner request
+  ok  deferred input retains its draft without submitting it
+  ok  approval does not touch tool timeline or adapters
+  ok  approval never parses tool payloads
+  ok  app.js no longer implements its own dialog modals
+  ok  only one confirmation surface is used for approvals
+  ok  every captured decision was an extension_ui_response
+  ok  Session Search untouched
+  ok  Planner untouched
+
+84/84 通过
