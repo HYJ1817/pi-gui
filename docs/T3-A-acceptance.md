@@ -6,8 +6,8 @@
   （「合并：增加 Browser 与 Changes 原生分屏工作台（T2-B）」），已包含 T2-A / T2-B。
 - 开发分支：`codex/t3-a-diff-comments`。
 - 独立 Worktree：`C:\Users\21022\.codex\worktrees\t3-a-diff-comments\pi-GUI`。
-- 本地提交：`3f1fa44` 功能、`907e304` 测试、`ea91a28` 文档与证据
-  （按回滚边界拆分；测试配置 `test:diff-comments` 随功能提交）。
+- 本地提交按回滚边界拆分：`3f1fa44` 功能（含 `package.json` 的测试入口）、
+  `907e304` 测试、`ea91a28` 文档与证据；其后只追加不改行为的验收报告文字修订。
 - 主工作区 `C:\pi-GUI` 未修改；其未跟踪的 `$null`、`.p25-1-release-*` 未触碰。
 - 本轮只做本地提交，未推送、未合并、未修改 `main`、未打 tag、未发布。
 
@@ -256,7 +256,7 @@ Browser + Changes 两种分屏、弹窗遮挡时原生视图 detach、窄窗回�
 本轮全部改动集中在前端与测试，可用一次 revert 完整回滚：
 
 ```powershell
-git revert --no-edit <本轮的三个本地提交>
+git revert --no-edit 724bd48..HEAD
 ```
 
 或按文件回滚而不动历史：
