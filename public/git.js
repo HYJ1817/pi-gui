@@ -971,6 +971,7 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   const stillHere = () => editor.isConnected && editorScope === currentReviewScope() && editorRevision === scopeRevision && !reviewScopeSuspended;
   const busy = value => { save.disabled = value || Boolean(occupied); remove.disabled = value; cancel.disabled = value; input.readOnly = value || Boolean(occupied); };
   save.onclick = async () => {
+    if (!stillHere()) return;
     status.classList.remove('err');
     if (reviewScopeSuspended) {
       fail('正在切换会话，未保存；请刷新后重试。');

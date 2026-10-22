@@ -430,6 +430,10 @@ async function main() {
       document.querySelectorAll('.d-review-editor').length === 0 &&
       commentsForScope().length === 0 &&
       !document.querySelector('#btnChangesReview').textContent.includes('1'));
+    const beforeStaleClick = requests.filter(r => r.url.endsWith('/api/review-comments') && r.body).length;
+    staleSave.click(); await tick();
+    ok('a detached old Save cannot write after the next session has fully recovered', () =>
+      commentsForScope().length === 0 && requests.filter(r => r.url.endsWith('/api/review-comments') && r.body).length === beforeStaleClick);
     S.state = { sessionId: 'classic-a' };
     document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
     await refreshGitNow();
