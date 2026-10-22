@@ -43,3 +43,6 @@ Diff 区间评论的当前语义与 v1 兼容见 [T3-C 功能说明](git-changes
 
 从评论选择、预览并确认修改任务见 [T4-A 当前行为](git-changes.md#十一准备修改任务t4-a)；
 [T4-A 验收](T4-A-acceptance.md) 记录其提交与实测范围。它不生成补丁或隔离执行代码。
+
+T4-B 候选执行目前仅完成[安全勘察设计](T4-B-design.md)和[受阻交付记录](T4-B-acceptance.md)，
+未开放候选写入/Agent 启动或真实候选 Diff 功能；不能将该设计当作当前能力。

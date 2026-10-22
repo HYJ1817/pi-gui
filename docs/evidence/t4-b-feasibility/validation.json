@@ -1,0 +1,114 @@
+{
+  "baselineSha": "03a223d7ac5f69f33a359e51f95905bfb07253b8",
+  "event": "push",
+  "attempt": 1,
+  "status": "completed",
+  "conclusion": "success",
+  "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39823004520",
+  "jobs": [
+    {
+      "name": "Validate complete test plan",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Tests (faults)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Tests (core)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Tests (ui)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Tests (security)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Tests (native)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Electron build check",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "CI gate",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "targeted": [
+    {
+      "passed": 56,
+      "skip": 0,
+      "exitCode": 0,
+      "command": "node tests/worktrees.cjs",
+      "failed": 0
+    },
+    {
+      "passed": 35,
+      "skip": 0,
+      "exitCode": 0,
+      "command": "node tests/runtime-registry.cjs",
+      "failed": 0
+    },
+    {
+      "passed": 100,
+      "skip": 0,
+      "exitCode": 0,
+      "command": "node tests/evidence.cjs",
+      "failed": 0
+    },
+    {
+      "passed": 17,
+      "skip": 0,
+      "exitCode": 0,
+      "command": "node tests/stop-barrier.cjs",
+      "failed": 0
+    }
+  ],
+  "initialFailures": [
+    {
+      "command": "node tests/stop-barrier.cjs",
+      "exitCode": 1,
+      "reason": "jsdom unavailable in fresh worktree",
+      "phase": "load",
+      "resolution": "reuse existing offline dependencies in worktree; rerun 17/17",
+      "assertionsExecuted": 0
+    }
+  ],
+  "notRun": [
+    "T4-B feature canonical",
+    "T4-B Electron end-to-end",
+    "App/SEA rebuild",
+    "independent functional review",
+    "independent safety or fault review"
+  ],
+  "scope": "Design and temporary feasibility observations only; candidate execution not implemented",
+  "documentation": {
+    "relativeLinksAndAnchors": 120,
+    "diffCheckExitCode": 0,
+    "passed": 120,
+    "failed": 0,
+    "probeSyntaxExitCode": 0
+  },
+  "productBehaviorSha": "03a223d7ac5f69f33a359e51f95905bfb07253b8",
+  "modifiedFiles": [
+    "docs/README.md",
+    "docs/T4-B-design.md",
+    "docs/T4-B-acceptance.md",
+    "docs/evidence/t4-b-feasibility/probe.mjs",
+    "docs/evidence/t4-b-feasibility/observations.json",
+    "docs/evidence/t4-b-feasibility/validation.json"
+  ]
+}
