@@ -154,13 +154,13 @@ function diffLineRow(line, cls, meta, hunkIndex, hunkHeader) {
 }
 
 /** 一个 hunk 块：可点击的标题栏 + 若干行。 */
-function hunkWrap(header, bodyHtml, add, del) {
+function hunkWrap(header, bodyHtml, add, del, complete = false) {
   const stat = [];
   if (add) stat.push(`<b class="add">+${add}</b>`);
   if (del) stat.push(`<b class="del">−${del}</b>`);
 
   return (
-    '<span class="d-hunkwrap" data-open="1">' +
+    `<span class="d-hunkwrap" data-open="1" data-range-complete="${complete ? '1' : '0'}">` +
     '<button class="d-hunkbar" type="button" title="折叠 / 展开这一块">' +
     '<span class="d-chev" aria-hidden="true">▾</span>' +
     `<span class="dl d-hunk">${esc(header) || ' '}</span>` +
@@ -191,7 +191,12 @@ export function diffHtml(text, { commentable = false } = {}) {
 
   const flush = () => {
     if (!hunk) return;
-    out.push(hunkWrap(hunk.header, hunk.body.join(''), hunk.add, hunk.del));
+    const p = hunk.parsed;
+    const complete = hunk.anchorable && hunk.validBody && p
+      && hunk.oldLine === p.oldStart + p.oldCount && hunk.newLine === p.newStart + p.newCount
+      && [p.oldStart,p.newStart,p.oldCount,p.newCount].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 100000000)
+      && (!p.oldCount || p.oldStart > 0) && (!p.newCount || p.newStart > 0);
+    out.push(hunkWrap(hunk.header, hunk.body.join(''), hunk.add, hunk.del, complete));
     hunk = null;
   };
 
@@ -206,6 +211,8 @@ export function diffHtml(text, { commentable = false } = {}) {
         add: 0,
         del: 0,
         index: hunkCount - 1,
+        parsed,
+        validBody: true,
         anchorable: allowComments && Boolean(parsed),
         oldLine: parsed ? parsed.oldStart : 0,
         newLine: parsed ? parsed.newStart : 0,
@@ -218,6 +225,7 @@ export function diffHtml(text, { commentable = false } = {}) {
       /* 只有以空格 / + / - 开头的行才是真正的 diff 正文。被截断的尾行、
        * 二进制提示或格式错误的行没有可靠行号，宁可不给评论锚点。 */
       const codeLine = cls === 'd-add' || cls === 'd-del' || line.startsWith(' ');
+      if (!codeLine && !line.startsWith('\\')) hunk.validBody = false;
       if (hunk.anchorable && codeLine) {
         hunk.body.push(diffLineRow(line, cls, hunk, hunk.index, hunk.header));
         /* 行号只在“这一行真的进入渲染结果”之后才推进。二进制提示、

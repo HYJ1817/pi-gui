@@ -49,12 +49,14 @@ import {
   currentReviewScope,
   formatReviewFeedback,
   lineLabel,
+  lineKey,
   markMissingPathsStale,
   reconcileSectionOptions,
   sectionLabel as reviewSectionLabel,
 } from './diff-comments.js';
 import { loadReviewComments, saveReviewComment, removeReviewComment, reviewPersistenceState } from './review-comment-persistence.js';
 import { fillReviewComposer } from './review-fill.js';
+import { selectReviewRange, rangeRows, reconcileReviewRange } from './review-comment-range.js';
 
 /* 自动刷新的防抖窗口。
  *
@@ -128,6 +130,16 @@ const pendingReviewDrafts = new Map();
 /* Block → {path, section, truncated}. A WeakMap keeps user-controlled paths out
  * of DOM attributes entirely. */
 const reviewBlockMeta = new WeakMap();
+let reviewRangeStart = null;
+
+function clearReviewRangeSelection(forget = true) {
+  for (const row of panels.changes?.querySelectorAll('.range-selected') || []) {
+    row.classList.remove('range-selected');
+    row.querySelector('.d-gutter')?.setAttribute('aria-pressed', String(row.classList.contains('has-comment')));
+  }
+  for (const node of panels.changes?.querySelectorAll('.d-review-range-action') || []) node.remove();
+  if (forget) reviewRangeStart = null;
+}
 
 /**
  * Unsaved editor text, which diff is expanded and the summary dialog all belong
@@ -136,6 +148,7 @@ const reviewBlockMeta = new WeakMap();
  * dropped here.
  */
 function dropReviewDraftSurface() {
+  clearReviewRangeSelection();
   pendingReviewDrafts.clear();
   diffViewState.clear();
   reviewSummaryClose?.();
@@ -464,6 +477,7 @@ export function renderChangesBody() {
   if (!box || !box.isConnected) return;
 
   preserveReviewDrafts();
+  clearReviewRangeSelection();
   box.innerHTML = '';
   const c = S.changes;
 
@@ -731,7 +745,7 @@ function changeRow(f, inSession) {
   const stateKey = `${currentReviewScope()}\u0000${f.path}`;
   const retained = diffViewState.get(stateKey);
   const hasPendingDraft = [...pendingReviewDrafts.values()].some((draft) => draft.path === f.path);
-  const reopen = Boolean(retained?.open && hasPendingDraft);
+  const reopen = Boolean(retained?.open && (hasPendingDraft || retained.loading));
   if (retained) diffBox.scrollTop = retained.scrollTop || 0;
   diffBox.hidden = !reopen;
   if (reopen) row.classList.add('open');
@@ -743,17 +757,24 @@ function changeRow(f, inSession) {
     context: retained?.context ?? lastContext,
     loaded: false,
     busy: false,
+    request: 0,
     stateKey,
   };
 
   async function reloadDiff() {
+    const request = ++dstate.request;
+    const scope = currentReviewScope();
+    preserveReviewDrafts();
+    clearReviewRangeSelection();
     dstate.busy = true;
+    rememberDiffView(dstate, diffBox, true);
     diffBox.innerHTML = '';
     diffBox.appendChild(hint('正在读取差异…'));
 
     const reviewScroll = diffBox.scrollTop;
     const r = await fetchGitDiff(f.path, dstate.context);
-    if (!surface || !surface.isCurrent() || revision !== scopeRevision) return;
+    if (!surface || !surface.isCurrent() || revision !== scopeRevision || request !== dstate.request
+      || !diffBox.isConnected || scope !== currentReviewScope() || reviewScopeSuspended) return;
     dstate.busy = false;
     dstate.loaded = true;
     rememberDiffView(dstate, diffBox, true);
@@ -796,6 +817,7 @@ function rememberDiffView(dstate, box, open) {
   diffViewState.set(dstate.stateKey, {
     open: Boolean(open),
     context: dstate.context,
+    loading: Boolean(dstate.busy),
     scrollTop: Number(box?.scrollTop) || 0,
   });
 }
@@ -832,6 +854,7 @@ function rowAnchor(row, section, path, fingerprint) {
     hunkHeader: row.dataset.hunkHeader || '',
     codeHash: row.dataset.codeHash || '',
     diffFingerprint: fingerprint,
+    rangeComplete: row.closest('.d-hunkwrap')?.dataset.rangeComplete === '1',
     snippet: code.slice(1),
   };
 }
@@ -844,11 +867,12 @@ function rowLine(anchor) {
     hunkIndex: anchor.hunkIndex,
     hunkHeader: anchor.hunkHeader,
     codeHash: anchor.codeHash,
+    rangeComplete: anchor.rangeComplete,
   };
 }
 
 function draftKey(path, section, anchor) {
-  return `${currentReviewScope()}\u0000${path}\u0000${section}\u0000${anchor.type}\u0000${anchor.oldLine ?? ''}\u0000${anchor.newLine ?? ''}\u0000${anchor.codeHash}`;
+  return `${currentReviewScope()}\u0000${path}\u0000${section}\u0000${lineKey(anchor)}`;
 }
 
 /* Unsaved editors are user text, so they are bounded like comments are: a long
@@ -868,8 +892,10 @@ function preserveReviewDrafts() {
   const box = panels.changes;
   if (!box) return;
   for (const editor of box.querySelectorAll('.d-review-editor[data-draft-key]')) {
-    const text = editor.querySelector('textarea')?.value || '';
-    if (!text.trim()) {
+    const input = editor.querySelector('textarea');
+    const text = input?.value || '';
+    const anchor = JSON.parse(editor.dataset.anchor || 'null');
+    if (!text.trim() && !anchor?.range) {
       pendingReviewDrafts.delete(editor.dataset.draftKey);
       continue;
     }
@@ -877,7 +903,8 @@ function preserveReviewDrafts() {
       text,
       path: editor.dataset.path || '',
       section: editor.dataset.section || 'working',
-      anchor: JSON.parse(editor.dataset.anchor || 'null'),
+      anchor,
+      focused: anchor?.range && document.activeElement === input,
     });
   }
 }
@@ -894,18 +921,22 @@ function setRowComment(row, comment) {
   gutter.title = comment ? '编辑这一行的评论' : '为这一行添加评论';
 }
 
-function closeReviewEditor(row) {
-  row.querySelector(':scope > .d-review-editor')?.remove();
-  row.classList.remove('reviewing');
-  row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
+function closeReviewEditor(row, key) {
+  for (const editor of row.querySelectorAll(':scope > .d-review-editor')) {
+    if (!key || editor.dataset.draftKey === key) editor.remove();
+  }
+  const open = Boolean(row.querySelector(':scope > .d-review-editor'));
+  row.classList.toggle('reviewing', open);
+  row.querySelector('.d-gutter')?.setAttribute('aria-expanded', String(open));
 }
 
 function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   /* Belt and braces: a caller that kept a stale row reference must not be able
    * to open an editor for a session that is already being left. */
   if (reviewScopeSuspended) return;
-  closeReviewEditor(row);
   const key = draftKey(path, section, anchor);
+  const current = [...row.querySelectorAll(':scope > .d-review-editor')].find(e => e.dataset.draftKey === key);
+  if (current) { if (focus) current.querySelector('textarea')?.focus({ preventScroll:true }); return; }
   const existing = commentForLine(anchor);
   const occupied = existing ? null : commentAtPosition(anchor);
   const draft = pendingReviewDrafts.get(key);
@@ -920,7 +951,7 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   head.className = 'd-review-head';
   const where = document.createElement('span');
   where.className = 'd-review-where';
-  where.textContent = `${path} · ${reviewSectionLabel(section)} · ${existing || occupied ? lineLabel(existing || occupied) : row.querySelector('.d-gutter')?.getAttribute('aria-label')?.split('；')[0] || '代码行'}`;
+  where.textContent = `${path} · ${reviewSectionLabel(section)} · ${lineLabel(existing || occupied || { anchor })}`;
   const status = document.createElement('span');
   status.className = 'd-review-status';
   status.setAttribute('role', 'status');
@@ -930,7 +961,7 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   input.rows = 3;
   input.maxLength = REVIEW_LIMITS.textChars;
   input.value = draft?.text ?? existing?.text ?? '';
-  input.placeholder = '写下这一行的修改意见（纯文本，不会自动发送）';
+  input.placeholder = '写下这段代码的修改意见（纯文本，不会自动发送）';
   input.setAttribute('aria-label', `评论 ${path} ${where.textContent}`);
   input.addEventListener('input', () => {
     const text = input.value;
@@ -960,7 +991,8 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   hintNode.className = 'd-review-hint';
   hintNode.textContent = occupied
     ? '这一行已有一条过期评论；只能删除它，不能再挂一条新的。'
-    : '保存成功后可跨重启恢复；未保存的草稿不恢复。同一行只保留一条评论。';
+    : anchor.range ? '区间最多 20 个 Diff 行；区间之间不可重叠，单行评论可共存。'
+      : '保存成功后可跨重启恢复；未保存的草稿不恢复。同一行只保留一条评论。';
   actions.append(save, cancel, remove, hintNode);
 
   const fail = (message) => {
@@ -986,15 +1018,15 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
       return;
     }
     pendingReviewDrafts.delete(key);
-    setRowComment(row, result.comment);
-    closeReviewEditor(row);
+    closeReviewEditor(row, key);
+    decorateReviewBlocks();
     syncReviewButton();
     toast(existing ? '评论已更新' : '评论已保存', 'info');
     row.querySelector('.d-gutter')?.focus({ preventScroll: true });
   };
   cancel.onclick = () => {
     pendingReviewDrafts.delete(key);
-    closeReviewEditor(row);
+    closeReviewEditor(row, key);
     row.querySelector('.d-gutter')?.focus({ preventScroll: true });
   };
   remove.onclick = async () => {
@@ -1008,7 +1040,7 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
     if (!result.ok) { fail(result.error); return; }
     pendingReviewDrafts.delete(key);
     setRowComment(row, null);
-    closeReviewEditor(row);
+    closeReviewEditor(row, key);
     syncReviewButton();
     decorateReviewBlocks();
     toast('评论已删除', 'info');
@@ -1025,6 +1057,64 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   row.classList.add('reviewing');
   row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'true');
   if (focus) input.focus({ preventScroll: true });
+}
+
+function chooseReviewRange(block, row, path, section, rows, fingerprint) {
+  const start = reviewRangeStart;
+  clearReviewRangeSelection(false);
+  let status = block.querySelector('.d-review-range-status');
+  if (!status) {
+    status = document.createElement('p'); status.className = 'd-review-range-status d-review-note';
+    status.setAttribute('role','status'); block.appendChild(status);
+  }
+  const a = start?.row;
+  if (!a?.isConnected || start.scope !== currentReviewScope() || start.block !== block) {
+    status.textContent = '请先在同一文件和分区点击起始行，再按 Shift 选择终点。'; return;
+  }
+  const anchors = rows.map(r => rowAnchor(r,section,path,fingerprint));
+  const anchor = selectReviewRange(anchors,rows.indexOf(a),rows.indexOf(row));
+  if (!anchor) {
+    status.textContent = '请选择同一完整 hunk 内的 2～20 个连续代码行；不能跨块或选择不完整内容。'; return;
+  }
+  status.textContent = `已选择：${lineLabel({anchor})}。Esc 取消；添加评论后才保存。`;
+  // Drop only a pristine, unsaved single editor opened as the selection's
+  // starting gesture. Saved opinions and user-entered drafts are untouched.
+  for (const editor of a.querySelectorAll(':scope > .d-review-editor')) {
+    const old = JSON.parse(editor.dataset.anchor);
+    if (!editor.querySelector('textarea')?.value && !commentForLine(old)) closeReviewEditor(a,editor.dataset.draftKey);
+  }
+  const first=Math.min(rows.indexOf(a),rows.indexOf(row)),last=Math.max(rows.indexOf(a),rows.indexOf(row));
+  for (const item of rows.slice(first,last+1)) {
+    item.classList.add('range-selected'); item.querySelector('.d-gutter')?.setAttribute('aria-pressed','true');
+  }
+  const action=document.createElement('span'); action.className='d-review-range-action';
+  const button=document.createElement('button'); button.type='button';button.className='btn tiny';button.textContent='添加区间评论';
+  button.setAttribute('aria-label',`添加区间评论：${lineLabel({anchor})}`);
+  button.onclick=()=>{
+    if (!action.isConnected || reviewScopeSuspended || start.scope !== currentReviewScope()) return;
+    preserveReviewDrafts(); clearReviewRangeSelection();status.textContent='';
+    openReviewEditor(rows[first],{path,section,anchor});
+  };
+  action.appendChild(button); rows[last].appendChild(action);
+}
+
+function paintReviewRanges(block, path, section, rows, fingerprint) {
+  for (const marker of block.querySelectorAll('.d-review-range-marker')) marker.remove();
+  for (const row of rows) row.classList.remove('has-range-comment');
+  for (const comment of commentsForPath(path).filter(c=>c.anchor.section===section&&c.anchor.range&&!c.stale&&c.verified)) {
+    const evidence=rangeRows(comment.anchor);
+    const selected=evidence.map(a=>rows.find(r=>{
+      const b=rowAnchor(r,section,path,fingerprint);
+      return a.type===b.type&&a.oldLine===b.oldLine&&a.newLine===b.newLine&&a.codeHash===b.codeHash;
+    }));
+    if (selected.some(r=>!r)) continue;
+    for (const row of selected) row.classList.add('has-range-comment');
+    const marker=document.createElement('button'); marker.type='button'; marker.className='btn tiny d-review-range-marker';
+    marker.textContent=`区间评论 · ${lineLabel(comment)}`;
+    marker.setAttribute('aria-label',`编辑区间评论：${lineLabel(comment)}`);
+    marker.onclick=()=>{preserveReviewDrafts();openReviewEditor(selected[0],{path,section,anchor:comment.anchor});};
+    selected.at(-1).appendChild(marker);
+  }
 }
 
 function decorateReviewBlock(block, path, section, truncated) {
@@ -1058,14 +1148,36 @@ function decorateReviewBlock(block, path, section, truncated) {
     if (!gutter) continue;
     gutter.setAttribute('aria-expanded', 'false');
     if (!comment) gutter.dataset.comment = '';
-    gutter.onclick = () => {
+    gutter.title += '；Shift 点击另一行选择区间（最多 20 行）';
+    gutter.onclick = (event) => {
+      if (reviewScopeSuspended || !row.isConnected) return;
+      if (event.shiftKey) { chooseReviewRange(block,row,path,section,rows,fingerprint);return; }
       preserveReviewDrafts();
+      clearReviewRangeSelection();
+      reviewRangeStart = { row, block, scope: currentReviewScope() };
       openReviewEditor(row, { path, section, anchor });
+    };
+    gutter.onkeydown = event => {
+      if (event.shiftKey && ['Enter',' '].includes(event.key)) {
+        event.preventDefault(); event.stopPropagation(); gutter.onclick(event);
+      }
     };
     const draft = pendingReviewDrafts.get(draftKey(path, section, anchor));
     if (draft) openReviewEditor(row, { path, section, anchor, focus: false });
   }
-
+  block.addEventListener('keydown',event=>{
+    if (event.key !== 'Escape' || !block.querySelector('.d-review-range-action')) return;
+    event.preventDefault();event.stopPropagation();const row=reviewRangeStart?.row;
+    clearReviewRangeSelection();block.querySelector('.d-review-range-status')?.remove();row?.querySelector('.d-gutter')?.focus({preventScroll:true});
+  });
+  paintReviewRanges(block,path,section,rows,fingerprint);
+  for (const draft of pendingReviewDrafts.values()) {
+    if (draft.path!==path || draft.section!==section || !draft.anchor?.range) continue;
+    if (reconcileReviewRange(draft.anchor,lines,fingerprint)!=='valid') continue;
+    const a=draft.anchor;
+    const row=rows.find(r=>r.dataset.lineType===a.type&&String(a.oldLine??'')===r.dataset.oldLine&&String(a.newLine??'')===r.dataset.newLine&&a.codeHash===r.dataset.codeHash);
+    if (row) openReviewEditor(row,{path,section,anchor:a,focus:Boolean(draft.focused)});
+  }
 }
 
 /** Re-apply row markers after a comment was deleted, without touching editors. */
@@ -1077,9 +1189,12 @@ function decorateReviewBlocks() {
     const root = block.querySelector('.diff');
     if (!meta || !root) continue;
     const fingerprint = root.dataset.fingerprint || '';
-    for (const row of root.querySelectorAll('.d-hunkwrap > .d-row')) {
+    const rows=[...root.querySelectorAll('.d-hunkwrap > .d-row')];
+    if (!meta.truncated) reconcileSectionOptions(meta.path,meta.section,rows.map(r=>rowLine(rowAnchor(r,meta.section,meta.path,fingerprint))),fingerprint);
+    for (const row of rows) {
       setRowComment(row, commentForLine(rowAnchor(row, meta.section, meta.path, fingerprint)));
     }
+    paintReviewRanges(block,meta.path,meta.section,rows,fingerprint);
   }
 }
 
@@ -1370,11 +1485,14 @@ function locateAndEdit(comment) {
 }
 
 function editLocatedRow(row, comment, target) {
+  if (comment.anchor.range && (comment.stale || !comment.verified)) {
+    toast('区间尚未确认或原位置已变化；可从审查意见复制或删除。','warn');return;
+  }
   target.scrollIntoView?.({ block: 'center' });
   openReviewEditor(target, {
     path: comment.path,
     section: comment.anchor.section,
-    anchor: rowAnchor(target, comment.anchor.section, comment.path, target.closest('.diff')?.dataset.fingerprint || ''),
+    anchor: comment.anchor.range ? comment.anchor : rowAnchor(target, comment.anchor.section, comment.path, target.closest('.diff')?.dataset.fingerprint || ''),
   });
 }
 

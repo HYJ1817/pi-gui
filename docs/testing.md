@@ -29,6 +29,13 @@
 
 ## T3-B 评论持久化验证
 
+T3-C 扩展同一 canonical alias：`test:diff-comments` 增加区间解析/schema/匹配与 UI，
+`test:review-comments` 增加 v1→v2 原子升级和故障验证；原套件断言保留。
+`npm run test:diff-comment-ranges:electron` 复用生产后端重启夹具，正常沙箱下保存单行 v1、
+加入区间升级、退出/重启恢复编辑、修改临时代码后过期、删除并再次重启。
+`npm run test:diff-comment-ranges:split` 扩展原 Electron 夹具验证 Specs/Browser、原生视图遮挡、
+四档窄窗和长行横向滚动。专项入口不替代 canonical；数字与失败历史见 [T3-C 验收](T3-C-acceptance.md)。
+
 `npm run test:review-comments` 已进入 canonical，覆盖真实临时文件、损坏/版本/UTF-8、
 CAS/残留锁、链接与目录替换、完整 owner、真实 Git Worktree + Runtime Registry 重建、
 认证 HTTP 与前端异步协调。Windows 文件占用使用真实 FileShare fixture；

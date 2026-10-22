@@ -1,0 +1,2195 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "sha": "8ae15efa51ad4f7bac907b60b22e06448308929a",
+    "pr": 18,
+    "prCI": 39769635804,
+    "mainCI": 39773851353,
+    "mainAttempt": 1,
+    "mainEvent": "push",
+    "gate": "success"
+  },
+  "behaviorSha": "c8c65af738fa16a6d20cef3ed1cf52b0bd53aae6",
+  "environment": {
+    "platform": "win32",
+    "node": "24.22.1",
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130",
+    "dependencyPreparation": "copied existing local dependencies; cached Electron zip; offline"
+  },
+  "canonical": {
+    "kind": "local complete grouped proof from npm test + lifecycle",
+    "sha": "c8c65af738fa16a6d20cef3ed1cf52b0bd53aae6",
+    "startedAt": "2026-10-22T12:57:53.367Z",
+    "finishedAt": "2026-10-22T13:15:21.624Z",
+    "commands": 177,
+    "passed": 177,
+    "failed": 0,
+    "groups": [
+      {
+        "group": "core",
+        "commands": 106,
+        "failed": 0,
+        "startedAt": "2026-10-22T12:57:53.367Z",
+        "finishedAt": "2026-10-22T13:04:44.698Z"
+      },
+      {
+        "group": "ui",
+        "commands": 24,
+        "failed": 0,
+        "startedAt": "2026-10-22T12:57:53.474Z",
+        "finishedAt": "2026-10-22T12:59:40.372Z"
+      },
+      {
+        "group": "security",
+        "commands": 27,
+        "failed": 0,
+        "startedAt": "2026-10-22T12:57:53.466Z",
+        "finishedAt": "2026-10-22T13:13:01.467Z"
+      },
+      {
+        "group": "native",
+        "commands": 2,
+        "failed": 0,
+        "startedAt": "2026-10-22T12:57:53.377Z",
+        "finishedAt": "2026-10-22T13:15:08.649Z"
+      },
+      {
+        "group": "faults",
+        "commands": 18,
+        "failed": 0,
+        "startedAt": "2026-10-22T12:57:53.466Z",
+        "finishedAt": "2026-10-22T13:15:21.624Z"
+      }
+    ],
+    "leaves": [
+      {
+        "group": "core",
+        "index": 1,
+        "command": "node tests/ci-test-plan.cjs",
+        "startedAt": "2026-10-22T12:57:53.369Z",
+        "durationMs": 417.7089,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 2,
+        "command": "node tests/ci-workflow.cjs",
+        "startedAt": "2026-10-22T12:57:53.787Z",
+        "durationMs": 148.9983,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 3,
+        "command": "node tests/release-ci-proof.cjs",
+        "startedAt": "2026-10-22T12:57:53.936Z",
+        "durationMs": 126.0396,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 4,
+        "command": "node tests/nsis-bootstrap.cjs",
+        "startedAt": "2026-10-22T12:57:54.062Z",
+        "durationMs": 250.7416,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 5,
+        "command": "node tests/app-update.cjs",
+        "startedAt": "2026-10-22T12:57:54.313Z",
+        "durationMs": 326.1186,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 6,
+        "command": "node tests/app-update-maintenance.cjs",
+        "startedAt": "2026-10-22T12:57:54.639Z",
+        "durationMs": 127.8681,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 7,
+        "command": "node tests/app-update-activity.cjs",
+        "startedAt": "2026-10-22T12:57:54.767Z",
+        "durationMs": 1007.0508,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 8,
+        "command": "node tests/app-update-backend.cjs",
+        "startedAt": "2026-10-22T12:57:55.774Z",
+        "durationMs": 437.8461,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 9,
+        "command": "node tests/session-tool-scheduler.cjs",
+        "startedAt": "2026-10-22T12:57:56.212Z",
+        "durationMs": 163.7153,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 10,
+        "command": "node tests/session-tool-bridge.cjs",
+        "startedAt": "2026-10-22T12:57:56.376Z",
+        "durationMs": 248.386,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 11,
+        "command": "node tests/ordinary-session-resolver.cjs",
+        "startedAt": "2026-10-22T12:57:56.624Z",
+        "durationMs": 156.27,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 12,
+        "command": "node tests/ordinary-session-runtime.cjs",
+        "startedAt": "2026-10-22T12:57:56.780Z",
+        "durationMs": 154.2909,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 13,
+        "command": "node tests/session-background.cjs",
+        "startedAt": "2026-10-22T12:57:56.935Z",
+        "durationMs": 157.9996,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 14,
+        "command": "node tests/session-background-ui.cjs",
+        "startedAt": "2026-10-22T12:57:57.093Z",
+        "durationMs": 716.1971,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 15,
+        "command": "node tests/session-background-recovery.cjs",
+        "startedAt": "2026-10-22T12:57:57.809Z",
+        "durationMs": 134.3621,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 16,
+        "command": "node tests/review-regressions.cjs",
+        "startedAt": "2026-10-22T12:57:57.943Z",
+        "durationMs": 2126.9749,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 17,
+        "command": "node tests/high-risk-regressions.cjs",
+        "startedAt": "2026-10-22T12:58:00.070Z",
+        "durationMs": 2946.8596,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 18,
+        "command": "node tests/logging.cjs",
+        "startedAt": "2026-10-22T12:58:03.017Z",
+        "durationMs": 386.3078,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 19,
+        "command": "node tests/logging-leaks.cjs",
+        "startedAt": "2026-10-22T12:58:03.404Z",
+        "durationMs": 257.6372,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 20,
+        "command": "node tests/logging-secret-state.cjs",
+        "startedAt": "2026-10-22T12:58:03.661Z",
+        "durationMs": 253.0581,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 21,
+        "command": "node tests/logging-client.cjs",
+        "startedAt": "2026-10-22T12:58:03.914Z",
+        "durationMs": 2431.1831,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 22,
+        "command": "node tests/specs.cjs",
+        "startedAt": "2026-10-22T12:58:06.345Z",
+        "durationMs": 257.7507,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 23,
+        "command": "node tests/specs-ui.cjs",
+        "startedAt": "2026-10-22T12:58:06.603Z",
+        "durationMs": 865.3659,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 24,
+        "command": "node tests/diff-comments.cjs",
+        "startedAt": "2026-10-22T12:58:07.469Z",
+        "durationMs": 729.7458,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 25,
+        "command": "node tests/diff-comments-ui.cjs",
+        "startedAt": "2026-10-22T12:58:08.198Z",
+        "durationMs": 1475.9322,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 26,
+        "command": "node tests/diff-comments-split.cjs",
+        "startedAt": "2026-10-22T12:58:09.674Z",
+        "durationMs": 781.3096,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 27,
+        "command": "node tests/diff-comment-ranges.cjs",
+        "startedAt": "2026-10-22T12:58:10.456Z",
+        "durationMs": 613.6703,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 28,
+        "command": "node tests/diff-comment-ranges-ui.cjs",
+        "startedAt": "2026-10-22T12:58:11.069Z",
+        "durationMs": 1065.1529,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 29,
+        "command": "node tests/review-comment-store.cjs",
+        "startedAt": "2026-10-22T12:58:12.135Z",
+        "durationMs": 1732.686,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 30,
+        "command": "node tests/review-comment-authority.cjs",
+        "startedAt": "2026-10-22T12:58:13.867Z",
+        "durationMs": 2659.7201,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 31,
+        "command": "node tests/review-comment-runtime.cjs",
+        "startedAt": "2026-10-22T12:58:16.527Z",
+        "durationMs": 14056.4023,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 32,
+        "command": "node tests/review-comment-http.cjs",
+        "startedAt": "2026-10-22T12:58:30.583Z",
+        "durationMs": 393.0869,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 33,
+        "command": "node tests/review-comment-persistence-ui.cjs",
+        "startedAt": "2026-10-22T12:58:30.977Z",
+        "durationMs": 514.3512,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 34,
+        "command": "node tests/review-comment-ranges-store.cjs",
+        "startedAt": "2026-10-22T12:58:31.491Z",
+        "durationMs": 566.9287,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 35,
+        "command": "node tests/split-workbench-ui.cjs",
+        "startedAt": "2026-10-22T12:58:32.058Z",
+        "durationMs": 892.8667,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 36,
+        "command": "node tests/browser-workbench-ui.cjs",
+        "startedAt": "2026-10-22T12:58:32.951Z",
+        "durationMs": 5910.7941,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 37,
+        "command": "node tests/browser-viewport-safety.cjs",
+        "startedAt": "2026-10-22T12:58:38.862Z",
+        "durationMs": 154.8979,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 38,
+        "command": "node tests/exe-diagnostics.cjs",
+        "startedAt": "2026-10-22T12:58:39.017Z",
+        "durationMs": 117.1074,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 39,
+        "command": "node tests/runtime-models.cjs",
+        "startedAt": "2026-10-22T12:58:39.134Z",
+        "durationMs": 1536.9824,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 40,
+        "command": "node tests/model-fallback.cjs",
+        "startedAt": "2026-10-22T12:58:40.671Z",
+        "durationMs": 1860.8842,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 41,
+        "command": "node tests/model-capabilities.cjs",
+        "startedAt": "2026-10-22T12:58:42.532Z",
+        "durationMs": 831.3593,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 42,
+        "command": "node tests/ux-state.cjs",
+        "startedAt": "2026-10-22T12:58:43.363Z",
+        "durationMs": 7805.8519,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 43,
+        "command": "node tests/native-provider-quota.cjs",
+        "startedAt": "2026-10-22T12:58:51.169Z",
+        "durationMs": 638.6614,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 44,
+        "command": "node tests/stable-session-order.cjs",
+        "startedAt": "2026-10-22T12:58:51.808Z",
+        "durationMs": 196.1285,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 45,
+        "command": "node tests/hotfix.cjs",
+        "startedAt": "2026-10-22T12:58:52.004Z",
+        "durationMs": 823.0323,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 46,
+        "command": "node tests/provider-auth.cjs",
+        "startedAt": "2026-10-22T12:58:52.827Z",
+        "durationMs": 1280.8276,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 47,
+        "command": "node tests/provider-auth-runtime.cjs",
+        "startedAt": "2026-10-22T12:58:54.108Z",
+        "durationMs": 487.783,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 48,
+        "command": "node tests/git.cjs",
+        "startedAt": "2026-10-22T12:58:54.596Z",
+        "durationMs": 37321.4431,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 49,
+        "command": "node tests/modules.cjs",
+        "startedAt": "2026-10-22T12:59:31.917Z",
+        "durationMs": 176.1198,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 50,
+        "command": "node tests/reliability.cjs",
+        "startedAt": "2026-10-22T12:59:32.093Z",
+        "durationMs": 172.1899,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 51,
+        "command": "node tests/interactions.cjs",
+        "startedAt": "2026-10-22T12:59:32.266Z",
+        "durationMs": 509.3214,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 52,
+        "command": "node tests/port-owner.cjs",
+        "startedAt": "2026-10-22T12:59:32.775Z",
+        "durationMs": 1183.7138,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 53,
+        "command": "node tests/project-config.cjs",
+        "startedAt": "2026-10-22T12:59:33.959Z",
+        "durationMs": 507.1883,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 54,
+        "command": "node tests/skills.cjs",
+        "startedAt": "2026-10-22T12:59:34.466Z",
+        "durationMs": 471.5591,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 55,
+        "command": "node tests/extensions.cjs",
+        "startedAt": "2026-10-22T12:59:34.937Z",
+        "durationMs": 934.6693,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 56,
+        "command": "node tests/capability.cjs",
+        "startedAt": "2026-10-22T12:59:35.872Z",
+        "durationMs": 151.8053,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 57,
+        "command": "node tests/capability-install.cjs",
+        "startedAt": "2026-10-22T12:59:36.024Z",
+        "durationMs": 139.5715,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 58,
+        "command": "node tests/web-access.cjs",
+        "startedAt": "2026-10-22T12:59:36.164Z",
+        "durationMs": 589.869,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 59,
+        "command": "node tests/subagents.cjs",
+        "startedAt": "2026-10-22T12:59:36.753Z",
+        "durationMs": 575.7437,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 60,
+        "command": "node tests/memory.cjs",
+        "startedAt": "2026-10-22T12:59:37.329Z",
+        "durationMs": 544.5079,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 61,
+        "command": "node tests/browser.cjs",
+        "startedAt": "2026-10-22T12:59:37.874Z",
+        "durationMs": 562.3489,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 62,
+        "command": "node tests/approvals.cjs",
+        "startedAt": "2026-10-22T12:59:38.436Z",
+        "durationMs": 901.3497,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 63,
+        "command": "node tests/planner.cjs",
+        "startedAt": "2026-10-22T12:59:39.337Z",
+        "durationMs": 36120.9901,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 64,
+        "command": "node tests/workflow-relations.cjs",
+        "startedAt": "2026-10-22T13:00:15.458Z",
+        "durationMs": 16360.0863,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 65,
+        "command": "node tests/reviews.cjs",
+        "startedAt": "2026-10-22T13:00:31.818Z",
+        "durationMs": 15315.558,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 66,
+        "command": "node tests/review-gate.cjs",
+        "startedAt": "2026-10-22T13:00:47.134Z",
+        "durationMs": 24919.613,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 67,
+        "command": "node tests/verification.cjs",
+        "startedAt": "2026-10-22T13:01:12.053Z",
+        "durationMs": 11280.0208,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 68,
+        "command": "node tests/evidence.cjs",
+        "startedAt": "2026-10-22T13:01:23.334Z",
+        "durationMs": 34499.1515,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 69,
+        "command": "node tests/attempt-lifecycle.cjs",
+        "startedAt": "2026-10-22T13:01:57.833Z",
+        "durationMs": 18891.9366,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 70,
+        "command": "node tests/sessions.cjs",
+        "startedAt": "2026-10-22T13:02:16.725Z",
+        "durationMs": 607.8107,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 71,
+        "command": "node tests/session-search.cjs",
+        "startedAt": "2026-10-22T13:02:17.333Z",
+        "durationMs": 2295.1094,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 72,
+        "command": "node tests/pi-compat.cjs",
+        "startedAt": "2026-10-22T13:02:19.628Z",
+        "durationMs": 117.0339,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 73,
+        "command": "node tests/pi-probes.cjs",
+        "startedAt": "2026-10-22T13:02:19.745Z",
+        "durationMs": 569.0402,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 74,
+        "command": "node tests/pi-update.cjs",
+        "startedAt": "2026-10-22T13:02:20.314Z",
+        "durationMs": 540.4598,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 75,
+        "command": "node tests/pi-version.cjs",
+        "startedAt": "2026-10-22T13:02:20.855Z",
+        "durationMs": 595.024,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 76,
+        "command": "node tests/mcp-native.cjs",
+        "startedAt": "2026-10-22T13:02:21.450Z",
+        "durationMs": 330.078,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 77,
+        "command": "node tests/usage-quota.cjs",
+        "startedAt": "2026-10-22T13:02:21.780Z",
+        "durationMs": 664.1575,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 78,
+        "command": "node tests/body-integrity.cjs",
+        "startedAt": "2026-10-22T13:02:22.444Z",
+        "durationMs": 193.0448,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 79,
+        "command": "node tests/dev-server.cjs",
+        "startedAt": "2026-10-22T13:02:22.637Z",
+        "durationMs": 1382.3339,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 80,
+        "command": "node tests/models-api.cjs",
+        "startedAt": "2026-10-22T13:02:24.019Z",
+        "durationMs": 1641.1928,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 81,
+        "command": "node tests/server-security.cjs",
+        "startedAt": "2026-10-22T13:02:25.661Z",
+        "durationMs": 4369.2653,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 82,
+        "command": "node tests/diagnostics.cjs",
+        "startedAt": "2026-10-22T13:02:30.030Z",
+        "durationMs": 150.2508,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 83,
+        "command": "node tests/update-check.cjs",
+        "startedAt": "2026-10-22T13:02:30.180Z",
+        "durationMs": 496.7346,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 84,
+        "command": "node tests/version-consistency.cjs",
+        "startedAt": "2026-10-22T13:02:30.677Z",
+        "durationMs": 195.4623,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 85,
+        "command": "node tests/release-artifacts.cjs",
+        "startedAt": "2026-10-22T13:02:30.872Z",
+        "durationMs": 491.0718,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 86,
+        "command": "node tests/electron-guard.cjs",
+        "startedAt": "2026-10-22T13:02:31.364Z",
+        "durationMs": 1646.7785,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 87,
+        "command": "node tests/gui-browser-policy.cjs",
+        "startedAt": "2026-10-22T13:02:33.010Z",
+        "durationMs": 146.3745,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 88,
+        "command": "node tests/gui-browser-controller.cjs",
+        "startedAt": "2026-10-22T13:02:33.157Z",
+        "durationMs": 5347.5024,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 89,
+        "command": "node tests/gui-browser-bridge.cjs",
+        "startedAt": "2026-10-22T13:02:38.504Z",
+        "durationMs": 501.0653,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 90,
+        "command": "node tests/gui-browser-tools.cjs",
+        "startedAt": "2026-10-22T13:02:39.005Z",
+        "durationMs": 266.6845,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 91,
+        "command": "node tests/gui-browser-host.cjs",
+        "startedAt": "2026-10-22T13:02:39.272Z",
+        "durationMs": 196.259,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 92,
+        "command": "node tests/worktrees.cjs",
+        "startedAt": "2026-10-22T13:02:39.468Z",
+        "durationMs": 55347.231,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 93,
+        "command": "node tests/worktrees-http.cjs",
+        "startedAt": "2026-10-22T13:03:34.816Z",
+        "durationMs": 7368.6192,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 94,
+        "command": "node tests/runtime-registry.cjs",
+        "startedAt": "2026-10-22T13:03:42.184Z",
+        "durationMs": 290.3228,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 95,
+        "command": "node tests/runtime-http.cjs",
+        "startedAt": "2026-10-22T13:03:42.475Z",
+        "durationMs": 243.5058,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 96,
+        "command": "node tests/runtime-store.cjs",
+        "startedAt": "2026-10-22T13:03:42.718Z",
+        "durationMs": 345.3313,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 97,
+        "command": "node tests/runtime-nav.cjs",
+        "startedAt": "2026-10-22T13:03:43.064Z",
+        "durationMs": 7849.684,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 98,
+        "command": "node tests/runtime-conversation.cjs",
+        "startedAt": "2026-10-22T13:03:50.913Z",
+        "durationMs": 775.2067,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 99,
+        "command": "node tests/runtime-changes.cjs",
+        "startedAt": "2026-10-22T13:03:51.689Z",
+        "durationMs": 35215.4208,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 100,
+        "command": "node tests/runtime-secondary.cjs",
+        "startedAt": "2026-10-22T13:04:26.904Z",
+        "durationMs": 779.2496,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 101,
+        "command": "node tests/runtime-resources.cjs",
+        "startedAt": "2026-10-22T13:04:27.683Z",
+        "durationMs": 705.5241,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 102,
+        "command": "node tests/runtime-history-search.cjs",
+        "startedAt": "2026-10-22T13:04:28.389Z",
+        "durationMs": 14556.2622,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 103,
+        "command": "node tests/session-runtime.cjs",
+        "startedAt": "2026-10-22T13:04:42.945Z",
+        "durationMs": 1296.1705,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 104,
+        "command": "node tests/runtime-browser.cjs",
+        "startedAt": "2026-10-22T13:04:44.241Z",
+        "durationMs": 178.8355,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 105,
+        "command": "node tests/runtime-events.cjs",
+        "startedAt": "2026-10-22T13:04:44.420Z",
+        "durationMs": 123.5284,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "core",
+        "index": 106,
+        "command": "node tests/session-revert.cjs",
+        "startedAt": "2026-10-22T13:04:44.544Z",
+        "durationMs": 154.6183,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 1,
+        "command": "node tests/ui-visual-finish.cjs",
+        "startedAt": "2026-10-22T12:57:53.477Z",
+        "durationMs": 764.3058,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 2,
+        "command": "node tests/logging-ui.cjs",
+        "startedAt": "2026-10-22T12:57:54.241Z",
+        "durationMs": 1478.1743,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 3,
+        "command": "node tests/ui4-approval.cjs",
+        "startedAt": "2026-10-22T12:57:55.719Z",
+        "durationMs": 1615.1801,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 4,
+        "command": "node tests/ui4-feedback.cjs",
+        "startedAt": "2026-10-22T12:57:57.334Z",
+        "durationMs": 1587.3798,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 5,
+        "command": "node tests/ui4-integration.cjs",
+        "startedAt": "2026-10-22T12:57:58.922Z",
+        "durationMs": 3545.2413,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 6,
+        "command": "node tests/ui3-composer.cjs",
+        "startedAt": "2026-10-22T12:58:02.467Z",
+        "durationMs": 625.9091,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 7,
+        "command": "node tests/ui3-model.cjs",
+        "startedAt": "2026-10-22T12:58:03.093Z",
+        "durationMs": 688.0688,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 8,
+        "command": "node tests/ui3-inline-commands.cjs",
+        "startedAt": "2026-10-22T12:58:03.781Z",
+        "durationMs": 625.098,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 9,
+        "command": "node tests/ui3-integration.cjs",
+        "startedAt": "2026-10-22T12:58:04.406Z",
+        "durationMs": 995.7551,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 10,
+        "command": "node tests/ui2-classic.cjs",
+        "startedAt": "2026-10-22T12:58:05.402Z",
+        "durationMs": 741.6632,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 11,
+        "command": "node tests/ui2-runtime-display.cjs",
+        "startedAt": "2026-10-22T12:58:06.144Z",
+        "durationMs": 859.5976,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 12,
+        "command": "node tests/ui2-visual.cjs",
+        "startedAt": "2026-10-22T12:58:07.003Z",
+        "durationMs": 10983.4012,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 13,
+        "command": "node tests/theme.cjs",
+        "startedAt": "2026-10-22T12:58:17.987Z",
+        "durationMs": 576.7947,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 14,
+        "command": "node tests/hotfix-ui.cjs",
+        "startedAt": "2026-10-22T12:58:18.564Z",
+        "durationMs": 984.1509,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 15,
+        "command": "node tests/ui-ia.cjs",
+        "startedAt": "2026-10-22T12:58:19.548Z",
+        "durationMs": 1135.8133,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 16,
+        "command": "node tests/smoke.cjs",
+        "startedAt": "2026-10-22T12:58:20.684Z",
+        "durationMs": 74201.3943,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 17,
+        "command": "node tests/daily-use.cjs",
+        "startedAt": "2026-10-22T12:59:34.885Z",
+        "durationMs": 162.0656,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 18,
+        "command": "node tests/sidebar-menu.cjs",
+        "startedAt": "2026-10-22T12:59:35.047Z",
+        "durationMs": 602.5024,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 19,
+        "command": "node tests/gui-browser-ui.cjs",
+        "startedAt": "2026-10-22T12:59:35.650Z",
+        "durationMs": 611.3017,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 20,
+        "command": "node tests/process-ui.cjs",
+        "startedAt": "2026-10-22T12:59:36.261Z",
+        "durationMs": 1749.2105,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 21,
+        "command": "node tests/worktrees-ui.cjs",
+        "startedAt": "2026-10-22T12:59:38.010Z",
+        "durationMs": 659.2467,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 22,
+        "command": "node tests/runtime-ui.cjs",
+        "startedAt": "2026-10-22T12:59:38.670Z",
+        "durationMs": 565.9936,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 23,
+        "command": "node tests/runtime-git-ui.cjs",
+        "startedAt": "2026-10-22T12:59:39.236Z",
+        "durationMs": 582.5362,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "ui",
+        "index": 24,
+        "command": "node tests/runtime-finish-ui.cjs",
+        "startedAt": "2026-10-22T12:59:39.818Z",
+        "durationMs": 553.2769,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 1,
+        "command": "node tests/session-revert-fixture-retention.cjs",
+        "startedAt": "2026-10-22T12:57:53.469Z",
+        "durationMs": 175.6723,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 2,
+        "command": "node tests/session-revert-object-session-binding.cjs",
+        "startedAt": "2026-10-22T12:57:53.645Z",
+        "durationMs": 136.1955,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 3,
+        "command": "node tests/session-revert-object-d6final-classic.cjs",
+        "startedAt": "2026-10-22T12:57:53.781Z",
+        "durationMs": 3448.769,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 4,
+        "command": "node tests/session-revert-object-qualification.cjs",
+        "startedAt": "2026-10-22T12:57:57.230Z",
+        "durationMs": 16885.7747,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 5,
+        "command": "node tests/session-revert-object-presentation.cjs",
+        "startedAt": "2026-10-22T12:58:14.115Z",
+        "durationMs": 216.689,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 6,
+        "command": "node tests/session-revert-object-ui.cjs",
+        "startedAt": "2026-10-22T12:58:14.332Z",
+        "durationMs": 837.5441,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 7,
+        "command": "node tests/session-revert-object-confirmation.cjs",
+        "startedAt": "2026-10-22T12:58:15.170Z",
+        "durationMs": 147898.2597,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 8,
+        "command": "node tests/session-revert-sacl-witness.cjs",
+        "startedAt": "2026-10-22T13:00:43.068Z",
+        "durationMs": 877.7259,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 9,
+        "command": "node tests/session-revert-object-profile.cjs",
+        "startedAt": "2026-10-22T13:00:43.945Z",
+        "durationMs": 6386.7847,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 10,
+        "command": "node tests/session-revert-object-evidence.cjs",
+        "startedAt": "2026-10-22T13:00:50.332Z",
+        "durationMs": 11181.0948,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 11,
+        "command": "node tests/session-revert-object-assets.cjs",
+        "startedAt": "2026-10-22T13:01:01.513Z",
+        "durationMs": 2777.6291,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 12,
+        "command": "node tests/session-revert-object-authority.cjs",
+        "startedAt": "2026-10-22T13:01:04.291Z",
+        "durationMs": 5519.0685,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 13,
+        "command": "node tests/session-revert-object-history.cjs",
+        "startedAt": "2026-10-22T13:01:09.810Z",
+        "durationMs": 23063.4929,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 14,
+        "command": "node tests/session-revert-object-store.cjs",
+        "startedAt": "2026-10-22T13:01:32.873Z",
+        "durationMs": 6311.9502,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 15,
+        "command": "node tests/session-revert-object-service.cjs",
+        "startedAt": "2026-10-22T13:01:39.185Z",
+        "durationMs": 340996.0731,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 16,
+        "command": "node tests/session-change-bridge.cjs",
+        "startedAt": "2026-10-22T13:07:20.182Z",
+        "durationMs": 247.0796,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 17,
+        "command": "node tests/session-change-tools.cjs",
+        "startedAt": "2026-10-22T13:07:20.429Z",
+        "durationMs": 330.7719,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 18,
+        "command": "node tests/session-revert-store.cjs",
+        "startedAt": "2026-10-22T13:07:20.760Z",
+        "durationMs": 113123.3017,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 19,
+        "command": "node tests/session-revert-http.cjs",
+        "startedAt": "2026-10-22T13:09:13.883Z",
+        "durationMs": 4396.4323,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 20,
+        "command": "node tests/session-revert-integration.cjs",
+        "startedAt": "2026-10-22T13:09:18.279Z",
+        "durationMs": 458.1982,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 21,
+        "command": "node tests/session-revert-writer.cjs",
+        "startedAt": "2026-10-22T13:09:18.738Z",
+        "durationMs": 4619.3307,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 22,
+        "command": "node tests/session-revert-admission.cjs",
+        "startedAt": "2026-10-22T13:09:23.357Z",
+        "durationMs": 320.8298,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 23,
+        "command": "node tests/session-revert-apply.cjs",
+        "startedAt": "2026-10-22T13:09:23.678Z",
+        "durationMs": 78732.8261,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 24,
+        "command": "node tests/session-revert-inplace.cjs",
+        "startedAt": "2026-10-22T13:10:42.411Z",
+        "durationMs": 132304.2796,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 25,
+        "command": "node tests/session-change-query.cjs",
+        "startedAt": "2026-10-22T13:12:54.715Z",
+        "durationMs": 5370.7466,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 26,
+        "command": "node tests/session-change-ui.cjs",
+        "startedAt": "2026-10-22T13:13:00.086Z",
+        "durationMs": 626.1613,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "security",
+        "index": 27,
+        "command": "node tests/session-revert-object-witness.cjs",
+        "startedAt": "2026-10-22T13:13:00.712Z",
+        "durationMs": 755.0784,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "native",
+        "index": 1,
+        "command": "node tests/session-revert-object-runtime.cjs",
+        "startedAt": "2026-10-22T12:57:53.380Z",
+        "durationMs": 542976.2629,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "native",
+        "index": 2,
+        "command": "node tests/session-revert-object-writer.cjs",
+        "startedAt": "2026-10-22T13:06:56.356Z",
+        "durationMs": 492293.4171,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 1,
+        "command": "node tests/bridge-state-recovery.cjs",
+        "startedAt": "2026-10-22T12:57:53.469Z",
+        "durationMs": 1250.6835,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 2,
+        "command": "node tests/gui-browser-stop.cjs",
+        "startedAt": "2026-10-22T12:57:54.720Z",
+        "durationMs": 742.1691,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 3,
+        "command": "node tests/stop-barrier.cjs",
+        "startedAt": "2026-10-22T12:57:55.462Z",
+        "durationMs": 1042.1943,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 4,
+        "command": "node tests/managed-processes.cjs",
+        "startedAt": "2026-10-22T12:57:56.504Z",
+        "durationMs": 164.3973,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 5,
+        "command": "node tests/process-tools.cjs",
+        "startedAt": "2026-10-22T12:57:56.668Z",
+        "durationMs": 280.9413,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 6,
+        "command": "node tests/process-stop.cjs",
+        "startedAt": "2026-10-22T12:57:56.949Z",
+        "durationMs": 154.0943,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 7,
+        "command": "node tests/process-runner.cjs",
+        "startedAt": "2026-10-22T12:57:57.104Z",
+        "durationMs": 164.6886,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 8,
+        "command": "node tests/runtime-resource-cleanup.cjs",
+        "startedAt": "2026-10-22T12:57:57.268Z",
+        "durationMs": 179.9095,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 9,
+        "command": "node tests/pi-supervisor.cjs",
+        "startedAt": "2026-10-22T12:57:57.448Z",
+        "durationMs": 3286.5612,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 10,
+        "command": "node tests/process-budget.cjs",
+        "startedAt": "2026-10-22T12:58:00.735Z",
+        "durationMs": 161.2373,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 11,
+        "command": "node tests/runtime-processes.cjs",
+        "startedAt": "2026-10-22T12:58:00.896Z",
+        "durationMs": 2607.3396,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 12,
+        "command": "node tests/session-revert-object-recovery.cjs",
+        "startedAt": "2026-10-22T12:58:03.503Z",
+        "durationMs": 21154.6692,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 13,
+        "command": "node tests/session-change-store.cjs",
+        "startedAt": "2026-10-22T12:58:24.658Z",
+        "durationMs": 168117.7698,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 14,
+        "command": "node tests/session-revert-recovery.cjs",
+        "startedAt": "2026-10-22T13:01:12.776Z",
+        "durationMs": 12904.4257,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 15,
+        "command": "node tests/session-revert-windows-faults.cjs",
+        "startedAt": "2026-10-22T13:01:25.680Z",
+        "durationMs": 8761.3611,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 16,
+        "command": "node tests/session-revert-inplace-safety.cjs",
+        "startedAt": "2026-10-22T13:01:34.441Z",
+        "durationMs": 73340.0833,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 17,
+        "command": "node tests/session-change-startup.cjs",
+        "startedAt": "2026-10-22T13:02:47.782Z",
+        "durationMs": 13952.1336,
+        "status": 0,
+        "signal": null,
+        "error": null
+      },
+      {
+        "group": "faults",
+        "index": 18,
+        "command": "node tests/session-revert-object-faults.cjs",
+        "startedAt": "2026-10-22T13:03:01.734Z",
+        "durationMs": 739889.8674,
+        "status": 0,
+        "signal": null,
+        "error": null
+      }
+    ],
+    "skippedAssertions": {
+      "total": 19,
+      "records": [
+        {
+          "suite": "logging",
+          "count": 1,
+          "reason": "file symlink fixture unavailable: EPERM"
+        },
+        {
+          "suite": "session-revert-sacl-witness",
+          "count": 8,
+          "reason": "SeSecurityPrivilege unavailable"
+        },
+        {
+          "suite": "session-revert-inplace",
+          "count": 2,
+          "reason": "nonempty protected/inherited SACL preservation unverified"
+        },
+        {
+          "suite": "session-revert-object-witness",
+          "count": 8,
+          "reason": "existing token SACL unavailable"
+        }
+      ]
+    },
+    "wallSeconds": 1048.257
+  },
+  "targeted": {
+    "rangeModel": {
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    "rangeUI": {
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    "rangeStore": {
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    "singleModel": 51,
+    "singleUI": 51,
+    "singleSplit": 10,
+    "store": 49,
+    "authority": 15,
+    "runtime": 8,
+    "http": 18,
+    "persistenceUI": 16
+  },
+  "electron": {
+    "packagedRestart": {
+      "sandbox": "normal",
+      "phases": [
+        {
+          "phase": "save",
+          "exit": 0,
+          "checks": 7,
+          "failed": 0,
+          "skipped": 0,
+          "electron": "44.4.3",
+          "chrome": "152.0.7977.130"
+        },
+        {
+          "phase": "restore-edit",
+          "exit": 0,
+          "checks": 7,
+          "failed": 0,
+          "skipped": 0,
+          "electron": "44.4.3",
+          "chrome": "152.0.7977.130"
+        },
+        {
+          "phase": "restore-stale",
+          "exit": 0,
+          "checks": 8,
+          "failed": 0,
+          "skipped": 0,
+          "electron": "44.4.3",
+          "chrome": "152.0.7977.130"
+        },
+        {
+          "phase": "restore-delete",
+          "exit": 0,
+          "checks": 7,
+          "failed": 0,
+          "skipped": 0,
+          "electron": "44.4.3",
+          "chrome": "152.0.7977.130"
+        },
+        {
+          "phase": "confirm-deleted",
+          "exit": 0,
+          "checks": 5,
+          "failed": 0,
+          "skipped": 0,
+          "electron": "44.4.3",
+          "chrome": "152.0.7977.130"
+        }
+      ],
+      "checks": 34,
+      "failed": 0,
+      "skipped": 0,
+      "generatedAt": "2026-10-22T12:59:46.765Z"
+    },
+    "rangeSplit": {
+      "electron": "44.4.3",
+      "chrome": "152.0.7977.130",
+      "phases": [
+        {
+          "name": "production",
+          "exit": 0,
+          "result": {
+            "phase": "production",
+            "generatedAt": "2026-10-22T12:56:29.547Z",
+            "electron": "44.4.3",
+            "chrome": "152.0.7977.130",
+            "checks": 29,
+            "failed": 0,
+            "error": null,
+            "screenshots": [
+              "01-single-panel-changes.png",
+              "02-two-line-comments.png",
+              "03-review-summary.png",
+              "04-fill-composer.png",
+              "05-unverified-after-refresh.png",
+              "05-stale-comments.png",
+              "06-changes-1536.png",
+              "06-changes-1200.png",
+              "06-changes-900.png",
+              "06-changes-720.png",
+              "07-specs-changes-split.png"
+            ],
+            "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+          }
+        },
+        {
+          "name": "native",
+          "exit": 0,
+          "result": {
+            "phase": "native",
+            "generatedAt": "2026-10-22T12:56:33.707Z",
+            "electron": "44.4.3",
+            "chrome": "152.0.7977.130",
+            "checks": 19,
+            "failed": 0,
+            "error": null,
+            "screenshots": [
+              "08-browser-changes-split.png",
+              "08-browser-changes-split-native-page.png",
+              "09-browser-split-comment.png",
+              "09-browser-split-comment-native-page.png",
+              "10-browser-split-fallback.png"
+            ],
+            "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+          }
+        }
+      ],
+      "checks": 48,
+      "failed": 0,
+      "screenshots": [
+        "01-single-panel-changes.png",
+        "02-two-line-comments.png",
+        "03-review-summary.png",
+        "04-fill-composer.png",
+        "05-unverified-after-refresh.png",
+        "05-stale-comments.png",
+        "06-changes-1536.png",
+        "06-changes-1200.png",
+        "06-changes-900.png",
+        "06-changes-720.png",
+        "07-specs-changes-split.png",
+        "08-browser-changes-split.png",
+        "08-browser-changes-split-native-page.png",
+        "09-browser-split-comment.png",
+        "09-browser-split-comment-native-page.png",
+        "10-browser-split-fallback.png"
+      ],
+      "fixture": "temporary Git repositories; fake pi shim; no user project, no real model",
+      "generatedAt": "2026-10-22T12:56:34.219Z"
+    },
+    "singleRegression": {
+      "electron": "44.4.3",
+      "chrome": "152.0.7977.130",
+      "phases": [
+        {
+          "name": "production",
+          "exit": 0,
+          "result": {
+            "phase": "production",
+            "generatedAt": "2026-10-22T12:59:04.539Z",
+            "electron": "44.4.3",
+            "chrome": "152.0.7977.130",
+            "checks": 27,
+            "failed": 0,
+            "error": null,
+            "screenshots": [
+              "01-single-panel-changes.png",
+              "02-two-line-comments.png",
+              "03-review-summary.png",
+              "04-fill-composer.png",
+              "05-unverified-after-refresh.png",
+              "05-stale-comments.png",
+              "06-changes-1536.png",
+              "06-changes-1200.png",
+              "06-changes-900.png",
+              "06-changes-720.png",
+              "07-specs-changes-split.png"
+            ],
+            "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+          }
+        },
+        {
+          "name": "native",
+          "exit": 0,
+          "result": {
+            "phase": "native",
+            "generatedAt": "2026-10-22T12:59:08.529Z",
+            "electron": "44.4.3",
+            "chrome": "152.0.7977.130",
+            "checks": 14,
+            "failed": 0,
+            "error": null,
+            "screenshots": [
+              "08-browser-changes-split.png",
+              "08-browser-changes-split-native-page.png",
+              "09-browser-split-comment.png",
+              "09-browser-split-comment-native-page.png",
+              "10-browser-split-fallback.png"
+            ],
+            "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+          }
+        }
+      ],
+      "checks": 41,
+      "failed": 0,
+      "screenshots": [
+        "01-single-panel-changes.png",
+        "02-two-line-comments.png",
+        "03-review-summary.png",
+        "04-fill-composer.png",
+        "05-unverified-after-refresh.png",
+        "05-stale-comments.png",
+        "06-changes-1536.png",
+        "06-changes-1200.png",
+        "06-changes-900.png",
+        "06-changes-720.png",
+        "07-specs-changes-split.png",
+        "08-browser-changes-split.png",
+        "08-browser-changes-split-native-page.png",
+        "09-browser-split-comment.png",
+        "09-browser-split-comment-native-page.png",
+        "10-browser-split-fallback.png"
+      ],
+      "fixture": "temporary Git repositories; fake pi shim; no user project, no real model",
+      "generatedAt": "2026-10-22T12:59:10.986Z"
+    },
+    "noSandboxUsed": false,
+    "specsScreenshot": "captured loading frame; omitted from delivered visual proof"
+  },
+  "artifacts": {
+    "buildExit": 0,
+    "app": {
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0
+    },
+    "sea": {
+      "passed": 49,
+      "failed": 0,
+      "skipped": 0
+    },
+    "matched": 8,
+    "resources": [
+      {
+        "path": "public/diff.js",
+        "source": "30a4b4d30e7dddd5c06cf785a0bfed71450c90f05df68a6d0b5c945af7e5aed9",
+        "packaged": "30a4b4d30e7dddd5c06cf785a0bfed71450c90f05df68a6d0b5c945af7e5aed9"
+      },
+      {
+        "path": "public/diff-comments.js",
+        "source": "86e3aa92ddb7c1f493c0547b86b76a7e7ef9cdfc2f7eb863672506f56775a51f",
+        "packaged": "86e3aa92ddb7c1f493c0547b86b76a7e7ef9cdfc2f7eb863672506f56775a51f"
+      },
+      {
+        "path": "public/git.js",
+        "source": "607d130a33471d4056a51261b906558f84686caf403b64c7d7790258d7de49de",
+        "packaged": "607d130a33471d4056a51261b906558f84686caf403b64c7d7790258d7de49de"
+      },
+      {
+        "path": "public/review-comment-range.js",
+        "source": "ccc634b7fac41b4e4ae98afa6603c71e6250c2f13fc5672ed67bfcfaf8844bf4",
+        "packaged": "ccc634b7fac41b4e4ae98afa6603c71e6250c2f13fc5672ed67bfcfaf8844bf4"
+      },
+      {
+        "path": "public/review-comment-data.js",
+        "source": "88a52f5d581511da12fcbb21193cdfd1720ae576be4b179b2b068c4140199c59",
+        "packaged": "88a52f5d581511da12fcbb21193cdfd1720ae576be4b179b2b068c4140199c59"
+      },
+      {
+        "path": "public/review-comment-persistence.js",
+        "source": "4867ee04e1a5d2a9b761758eba88a4efa32ea296dda9977d7892d27be506364e",
+        "packaged": "4867ee04e1a5d2a9b761758eba88a4efa32ea296dda9977d7892d27be506364e"
+      },
+      {
+        "path": "public/styles.css",
+        "source": "dddf66b4337104c50354dee2910e09d6f98311448e368c9f4b92820e8b04d2b3",
+        "packaged": "dddf66b4337104c50354dee2910e09d6f98311448e368c9f4b92820e8b04d2b3"
+      },
+      {
+        "path": "server.cjs",
+        "source": "530fde1b08ca18cf9a0fa5b5895faef73509941927f93538c667723430aee6a3",
+        "packaged": "530fde1b08ca18cf9a0fa5b5895faef73509941927f93538c667723430aee6a3"
+      }
+    ]
+  },
+  "docs": {
+    "links": 155,
+    "errors": []
+  },
+  "independentReview": {
+    "performed": false,
+    "reason": "User reserved independent external acceptance; no subagents or automated review agents"
+  },
+  "earlierRuns": {
+    "canonical138f556": "Stopped after a reproduced blank-range-editor refresh defect; excluded from final proof",
+    "rangeSplit": [
+      "Chromium unsafe random port fixture failure",
+      "incorrect fixture queried single instead of range editor",
+      "narrow editor overflow reproduced and fixed"
+    ]
+  },
+  "screenshots": [
+    {
+      "file": "browser-native-page.png",
+      "bytes": 19203,
+      "sha256": "e6423f8ab07cf8eda018cf3d91899e7248b35f7ae859d218936eeeb196ed72a3"
+    },
+    {
+      "file": "browser-range-comment.png",
+      "bytes": 64850,
+      "sha256": "6f71dc99338ad8137e5b861b245216d31f41be00699abfc313f47504ea73ce9e"
+    },
+    {
+      "file": "range-restored.png",
+      "bytes": 90975,
+      "sha256": "4d0d0c4057f1f72409bcab9d0e5b82cd12ccbb05b845c1d40c59ff388e5391a5"
+    },
+    {
+      "file": "range-stale.png",
+      "bytes": 113205,
+      "sha256": "c28baad2a2a69ac9937ebd6a8bec12315d3c64a2fd0efe1ccacbecadbf3286fd"
+    }
+  ],
+  "packageJsonSHA256": "63040f4508a60e20d6f1dd362315b4e6332b16f10a07e5c81aaf9d457d533e97",
+  "generatedAt": "2026-10-22T13:16:15.996Z"
+}

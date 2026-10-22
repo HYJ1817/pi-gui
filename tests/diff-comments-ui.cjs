@@ -99,8 +99,10 @@ async function main() {
   const openRow = async (name = 'A.txt') => {
     const row = rowOf(name);
     if (row.querySelector('.chg-diff').hidden) row.querySelector('.chg-main').click();
-    await until(() => row.querySelector('.d-row'));
-    return row;
+    // An in-flight mount status refresh may replace this row. The actual
+    // connected row must complete its request; detached DOM is not UI proof.
+    await until(() => rowOf(name)?.querySelector('.d-row'));
+    return rowOf(name);
   };
   const gutter = (row, newLine) => row.querySelector(`.d-row[data-new-line="${newLine}"][data-line-type="add"] .d-gutter`);
   const editor = (row) => row.querySelector('.d-review-editor');
@@ -483,6 +485,7 @@ async function main() {
     openChangesPanel();
     await until(() => document.querySelector('#btnReviewStorage')?.textContent === '评论已同步');
     const afterCloseRow = await openRow('B.txt');
+    ok('a mount status redraw preserves the pending open on a connected row',()=>afterCloseRow.isConnected);
     ok('reopening after a pending save exposes the confirmed comment without restoring its draft', () =>
       afterCloseRow.querySelectorAll('.d-row.has-comment').length === 1 && !editor(afterCloseRow));
 

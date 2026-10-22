@@ -5,6 +5,7 @@ import { fetchReviewComments, persistReviewComments, gitConversationScope } from
 import { runtimeStore } from './runtime-state.js';
 import { currentReviewScope, commentsForScope, positionKey, replaceReviewComments, beginReviewRefresh } from './diff-comments.js';
 import { REVIEW_DATA_LIMITS, REVIEW_STORAGE_MESSAGES, sanitizeReviewComments, reviewCommentWire, validReviewRevision } from './review-comment-data.js';
+import { reviewRangesOverlap } from './review-comment-range.js';
 
 const states = new Map();
 let epoch = 0;
@@ -122,6 +123,7 @@ export function saveReviewComment({ commentId, path, anchor, text }) {
       c.text = value; c.updatedAt = Math.max(now, c.updatedAt); return { comments, id: c.id };
     }
     if (comments.some(c => positionKey(c.anchor) === positionKey(anchor))) invalid('这一行已经有一条评论，请先处理原评论。');
+    if (comments.some(c => reviewRangesOverlap(c.anchor, anchor))) invalid('区间与已有区间评论重叠，请先处理原评论。');
     if (comments.length >= REVIEW_DATA_LIMITS.comments) invalid(`当前作用域最多保留 ${REVIEW_DATA_LIMITS.comments} 条评论。`);
     const id = globalThis.crypto?.randomUUID?.() || `review-${now.toString(36)}-${Math.random().toString(36).slice(2)}`;
     comments.push({ id, scope, path, anchor: { ...anchor }, text: value, createdAt: now, updatedAt: now,

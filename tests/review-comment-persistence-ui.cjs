@@ -113,6 +113,18 @@ const check=async(name,fn)=>{await fn();checks++;console.log('  ok '+name);};
     await check('the coordinator never uses localStorage or sends Agent commands',()=>{
       assert.equal(localStorage.length,0);assert.equal(calls.every(c=>c.url==='/api/review-comments'),true);
     });
+    await check('range write confirmation obeys the same old-response owner barrier',async()=>{
+      setGitConversationScope('B');await p.loadReviewComments({force:true});
+      const range=structuredClone(input);range.anchor.newLine=100;range.text='range from B';
+      range.anchor.range={version:1,lines:[{type:'add',oldLine:null,newLine:100,codeHash:'abcdef01'},{type:'add',oldLine:null,newLine:101,codeHash:'12345678'}]};
+      holdWrite=true;const saving=p.saveReviewComment(range);await Promise.resolve();
+      assert.equal(p.reviewPersistenceState().status,'saving');
+      setGitConversationScope('A');await p.loadReviewComments({force:true});held();assert.equal((await saving).ok,false);
+      assert.equal(model.commentsForScope().some(c=>c.anchor.range),false);
+      setGitConversationScope('B');await p.loadReviewComments({force:true});
+      assert.equal(model.commentsForScope().find(c=>c.anchor.range).text,'range from B');
+      assert.equal(model.commentsForScope().find(c=>c.anchor.range).verified,false);
+    });
     console.log(`Review comment persistence UI: ${checks}/${checks}; skipped=0`);
   }finally{dom.window.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

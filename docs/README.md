@@ -37,3 +37,6 @@
 - **P33 写入/撤销边界**涉及长期安全资格：[安全回退设计](p33-1-safe-session-revert-design.md)、[安全验证记录](p33-4b-safety-validation.md)、[后续安全契约提案](p33-4d-security-contract-proposal.md) 与 [D6 最终验收](p33-d6-final-acceptance.md) 均保留各自阶段范围。后续修改须沿代码核对当前资格，不能凭设计或旧报告推定已开放写入能力。
 
 本导航只提供阅读路径，不赋予推送、合并、修改仓库设置或发布权限；授权以 [AGENTS.md](../AGENTS.md) 为准。
+
+Diff 区间评论的当前语义与 v1 兼容见 [T3-C 功能说明](git-changes.md#十多行区间评论t3-c)，
+[T3-C 验收](T3-C-acceptance.md) 仅证明对应提交；不替代后续提交的验证。

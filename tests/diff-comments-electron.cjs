@@ -356,6 +356,15 @@ async function phaseProduction(world) {
     check('Specs + Changes split keeps both panes alive after a diff is expanded', await read(
       "document.querySelectorAll('.workbench-pane').length===2 && document.querySelector('#workbenchChangesPane .chg-row')!==null && !!document.querySelector('[data-spec-path]')"
     ));
+    if (process.env.T3C_RANGES === '1') {
+      await read(`(()=>{const a=[...document.querySelectorAll('#workbenchChangesPane .d-row[data-line-type=add] .d-gutter')];a[0].click();a.at(-1).dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:true}));document.querySelector('.d-review-range-action button').click()})()`);
+      check('Specs split supports a focused range editor alongside the original single',await read("(()=>{const e=[...document.querySelectorAll('.d-review-editor')].find(e=>JSON.parse(e.dataset.anchor).range);return !!e&&document.activeElement===e.querySelector('textarea')})()"));
+      await read("document.querySelector('#btnChangesRefresh').click()");
+      await until("[...document.querySelectorAll('.d-review-editor')].some(e=>JSON.parse(e.dataset.anchor).range&&document.activeElement===e.querySelector('textarea'))",'range editor after refresh');
+      await sleep(250);
+      await until("[...document.querySelectorAll('.d-review-editor')].some(e=>JSON.parse(e.dataset.anchor).range)",'stable range editor');
+      check('Specs split restores an empty range editor after real asynchronous refresh',await read("[...document.querySelectorAll('.d-review-editor')].some(e=>JSON.parse(e.dataset.anchor).range&&e.querySelector('textarea').value==='')"));
+    }
     await shot('07-specs-changes-split');
     check('real Electron renderer has no error-level console entries', rendererErrors.length === 0, rendererErrors.slice(0, 5));
   } catch (error) {
@@ -386,7 +395,7 @@ async function phaseNative(world) {
   write(project, 'example.js', 'const value = 1;\n');
   git('add', '.');
   git('commit', '-m', 'fixture');
-  write(project, 'example.js', 'const value = 2;\nconst added = true;\n');
+  write(project, 'example.js', 'const value = 2;\nconst added = true;\n' + (process.env.T3C_RANGES === '1' ? 'const long = "'+'x'.repeat(500)+'";\n' : ''));
   const diff = execFileSync('git', ['diff'], { cwd: project, encoding: 'utf8', windowsHide: true, env: gitEnv(world) });
 
   pageServer = http.createServer((req, res) => {
@@ -514,11 +523,11 @@ window.fixtureReady=true;
     }
     check(name + ' screenshot exists', fs.statSync(path.join(OUT, name + '.png')).size > 0);
   };
-  const clickSelector = async (selector) => {
+  const clickSelector = async (selector, shift = false) => {
     const point = await read(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});if(!n)return null;n.scrollIntoView({block:'center'});const r=n.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`);
     if (!point) throw new Error('missing ' + selector);
-    browserWindow.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(point.x), y: Math.round(point.y), button: 'left', clickCount: 1 });
-    browserWindow.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(point.x), y: Math.round(point.y), button: 'left', clickCount: 1 });
+    browserWindow.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(point.x), y: Math.round(point.y), button: 'left', clickCount: 1, modifiers:shift?['shift']:[] });
+    browserWindow.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(point.x), y: Math.round(point.y), button: 'left', clickCount: 1, modifiers:shift?['shift']:[] });
   };
 
   await until('window.fixtureReady===true', 'fixture renderer');
@@ -542,7 +551,11 @@ window.fixtureReady=true;
   await clickSelector('#workbenchChangesPane .chg-main');
   await until("document.querySelector('#workbenchChangesPane .d-row[data-line-type=\"add\"]')");
   const before = native().getBounds();
-  await clickSelector('#workbenchChangesPane .d-row[data-line-type="add"][data-new-line="2"] .d-gutter');
+  const rangeMode = process.env.T3C_RANGES === '1';
+  if (rangeMode) check('long code keeps horizontal Diff scrolling',await read("(()=>{const d=document.querySelector('#workbenchChangesPane .diff');return d.scrollWidth>d.clientWidth+100})()"));
+  if (rangeMode) await clickSelector('#workbenchChangesPane .d-row[data-line-type="add"][data-new-line="1"] .d-gutter');
+  await clickSelector('#workbenchChangesPane .d-row[data-line-type="add"][data-new-line="2"] .d-gutter',rangeMode);
+  if (rangeMode) { await until("document.querySelector('.d-review-range-action button')");await clickSelector('.d-review-range-action button'); }
   await until("document.querySelector('#workbenchChangesPane .d-review-editor textarea')");
   check('the comment editor opens below the native Browser without covering it', await read(
     `(()=>{const e=document.querySelector('#workbenchChangesPane .d-review-editor').getBoundingClientRect();
@@ -551,9 +564,9 @@ window.fixtureReady=true;
   ));
   await read(`(()=>{const t=document.querySelector('#workbenchChangesPane .d-review-editor textarea');t.focus();t.value='分屏状态下，这一行需要显式处理空值。';t.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await clickSelector('#workbenchChangesPane .d-review-editor .btn.primary');
-  await until("document.querySelector('#workbenchChangesPane .d-row.has-comment')");
+  await until(rangeMode ? "document.querySelector('#workbenchChangesPane .d-row.has-range-comment')" : "document.querySelector('#workbenchChangesPane .d-row.has-comment')");
   check('comment markers render in the lower pane while the native view stays attached', await read(
-    "document.querySelector('#workbenchChangesPane .d-row.has-comment')!==null && document.querySelector('#btnChangesReview').textContent.includes('1')"
+    `document.querySelector('#workbenchChangesPane .d-row.${rangeMode?'has-range-comment':'has-comment'}')!==null && document.querySelector('#btnChangesReview').textContent.includes('1')`
   ));
   check('the native view keeps the same identity and bounds during commenting', (() => {
     const now = native().getBounds();
@@ -573,7 +586,7 @@ window.fixtureReady=true;
   await read("document.querySelector('[data-workbench-tab=changes]').click()");
   await untilMain(() => !native(), 'fallback detach');
   check('the narrow fallback detaches the native view but keeps the comment', await read(
-    "document.querySelector('#workbenchChangesPane .d-row.has-comment')!==null"
+    `document.querySelector('#workbenchChangesPane .d-row.${rangeMode?'has-range-comment':'has-comment'}')!==null`
   ));
   await shot('10-browser-split-fallback');
 
@@ -581,6 +594,15 @@ window.fixtureReady=true;
     browserWindow.setContentSize(width, 850);
     await sleep(200);
     check(`${width}px native split has no horizontal overflow`, await read('document.documentElement.scrollWidth<=innerWidth+1'));
+    if (rangeMode) {
+      if (await read("!!document.querySelector('[data-workbench-tab=changes]')")) await read("document.querySelector('[data-workbench-tab=changes]').click()");
+      await read("document.querySelector('.d-review-range-marker').click()");
+      const geometry=await read("(()=>{const e=document.querySelector('.d-review-editor').getBoundingClientRect(),p=document.querySelector('#workbenchChangesPane').getBoundingClientRect();return {editor:e.toJSON(),pane:p.toJSON(),active:document.activeElement?.tagName}})()");
+      const fits=geometry.editor.width>100&&geometry.editor.left>=geometry.pane.left&&geometry.editor.right<=geometry.pane.right+1;
+      if(!fits){console.error('range editor geometry',geometry);await shot('range-editor-overflow');}
+      check(`${width}px range editor fits its Changes pane`,fits);
+      await read("[...document.querySelectorAll('.d-review-editor button')].find(b=>b.textContent==='取消').click()");
+    }
   }
   browserWindow.setContentSize(1200, 850);
   await sleep(200);

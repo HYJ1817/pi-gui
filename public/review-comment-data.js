@@ -1,4 +1,5 @@
 /* Shared, pure wire/disk schema. No DOM, I/O, code snippets or UI scope. */
+import { continuousReviewRows, rangePosition, reviewRangesOverlap } from './review-comment-range.js';
 export const REVIEW_DATA_LIMITS = Object.freeze({ scopes: 20, comments: 200, textChars: 2000, fileBytes: 2 * 1024 * 1024 });
 export const REVIEW_STORAGE_MESSAGES = Object.freeze({
   comment_invalid: '评论格式或容量不符合要求，未保存。',
@@ -19,9 +20,9 @@ const hash = v => typeof v === 'string' && /^[a-f0-9]{8}$/.test(v);
 const line = v => v === null || Number.isSafeInteger(v) && v > 0 && v <= 100000000;
 export const validReviewRevision = v => v === null || typeof v === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v);
 
-export function sanitizeReviewComments(value) {
+export function sanitizeReviewComments(value, { allowRanges = true } = {}) {
   if (!Array.isArray(value) || value.length > REVIEW_DATA_LIMITS.comments) invalid();
-  const ids = new Set(), positions = new Set();
+  const ids = new Set(), positions = new Set(), ranges = [];
   return value.map(c => {
     if (!closed(c, ['id', 'path', 'text', 'createdAt', 'updatedAt', 'anchor'])
       || typeof c.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(c.id) || ids.has(c.id)
@@ -31,7 +32,7 @@ export function sanitizeReviewComments(value) {
       || !Number.isSafeInteger(c.createdAt) || c.createdAt < 0
       || !Number.isSafeInteger(c.updatedAt) || c.updatedAt < c.createdAt) invalid();
     const a = c.anchor;
-    if (!closed(a, ['path', 'section', 'type', 'oldLine', 'newLine', 'hunkIndex', 'hunkHeader', 'codeHash', 'diffFingerprint'])
+    if (!closed(a, ['path', 'section', 'type', 'oldLine', 'newLine', 'hunkIndex', 'hunkHeader', 'codeHash', 'diffFingerprint', 'range'])
       || a.path !== c.path || !['working', 'staged'].includes(a.section) || !['add', 'del', 'context'].includes(a.type)
       || !line(a.oldLine) || !line(a.newLine) || a.oldLine === null && a.newLine === null
       || a.type === 'add' && (a.oldLine !== null || a.newLine === null)
@@ -39,15 +40,25 @@ export function sanitizeReviewComments(value) {
       || a.type === 'context' && (a.oldLine === null || a.newLine === null)
       || !Number.isSafeInteger(a.hunkIndex) || a.hunkIndex < 0 || a.hunkIndex > 1000000
       || !hash(a.hunkHeader) || !hash(a.codeHash) || !hash(a.diffFingerprint)) invalid();
-    const position = JSON.stringify([c.path, a.section, a.type, a.oldLine, a.newLine]);
+    if (Object.hasOwn(a,'range')) {
+      const r=a.range;
+      if (!allowRanges || !closed(r,['version','lines']) || r.version !== 1 || !continuousReviewRows(r.lines)
+        || r.lines.some(row => !closed(row,['type','oldLine','newLine','codeHash']))
+        || JSON.stringify(rangePosition(a)) !== JSON.stringify(rangePosition(r.lines[0])) || a.codeHash !== r.lines[0].codeHash
+        || ranges.some(other => reviewRangesOverlap(other,a))) invalid();
+      ranges.push(a);
+    }
+    const position = JSON.stringify([c.path, a.section, a.type, a.oldLine, a.newLine, a.range ? a.range.lines.map(rangePosition) : null]);
     if (positions.has(position)) invalid();
     ids.add(c.id); positions.add(position);
-    return { id: c.id, path: c.path, text: c.text, createdAt: c.createdAt, updatedAt: c.updatedAt, anchor: { ...a } };
+    return { id: c.id, path: c.path, text: c.text, createdAt: c.createdAt, updatedAt: c.updatedAt,
+      anchor: { ...a, ...(a.range ? {range:{version:1,lines:a.range.lines.map(row=>({...row}))}} : {}) } };
   });
 }
 
 export function reviewCommentWire(c) {
   const a = c.anchor;
   return { id: c.id, path: c.path, text: c.text, createdAt: c.createdAt, updatedAt: c.updatedAt,
-    anchor: Object.fromEntries(['path', 'section', 'type', 'oldLine', 'newLine', 'hunkIndex', 'hunkHeader', 'codeHash', 'diffFingerprint'].map(k => [k, a[k]])) };
+    anchor: { ...Object.fromEntries(['path', 'section', 'type', 'oldLine', 'newLine', 'hunkIndex', 'hunkHeader', 'codeHash', 'diffFingerprint'].map(k => [k, a[k]])),
+      ...(a.range ? {range:{version:a.range.version,lines:a.range.lines.map(r=>({...r}))}} : {}) } };
 }

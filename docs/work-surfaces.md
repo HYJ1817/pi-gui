@@ -18,7 +18,8 @@ Browser 的原生 WebContentsView 沿用同一控制器与 session；布局切�
 右栏观察实际 viewport：隐藏页签、弹窗或拖动时统一 detach，重新显示前先提交新几何；
 主进程按窗口 zoom 转换为 DIP 后 clamp，不使用 devicePixelRatio。
 细节和验证见 [Specs](specs.md)、[T2-A 验收](T2-A-acceptance.md) 与 [T2-B 验收](T2-B-acceptance.md)。
-Diff 行级评论的阶段行为与验收限制见 [T3-A 验收](T3-A-acceptance.md)，修改时仍须核对当前实现。
+Diff 单行/区间评论当前行为见 [Git Changes](git-changes.md#十多行区间评论t3-c)；
+[T3-A 验收](T3-A-acceptance.md) 只保留对应阶段限制，修改时仍须核对当前实现。
 
 ## P14-D 历史记录
 
