@@ -11,18 +11,35 @@ import { S } from './state.js';
 import { gitConversationScope } from './api.js';
 import { rangePosition, reviewRangeLabel, reviewRangesOverlap, reconcileReviewRange } from './review-comment-range.js';
 
-export const REVIEW_LIMITS = Object.freeze({
-  comments: 200,
-  textChars: 2000,
-  feedbackChars: 12000,
-  snippetChars: 160,
-});
+import { REVIEW_LIMITS } from './review-comment-limits.js';
+export { REVIEW_LIMITS };
 
 const SECTIONS = Object.freeze({ staged: '暂存区', working: '工作区' });
 const scopes = new Map();
 const MAX_SCOPES = 20;
 const NO_COMMENTS = Object.freeze([]);
 let sequence = 0;
+// Transient evidence generation, separate from disk revision and anchor policy.
+let evidenceRevision = 0;
+const evidenceReads = new Map();
+export const reviewEvidenceRevision = () => evidenceRevision;
+export const reviewEvidencePending = (scope = currentReviewScope()) => [...evidenceReads.values()].includes(scope);
+/** A late save acknowledgement cannot turn an in-flight read into evidence. */
+export function beginReviewEvidenceRead(scope = currentReviewScope(), path = null) {
+  const token = {};
+  evidenceReads.set(token, scope);
+  beginReviewRefresh(scope, path);
+  return (current = true) => {
+    evidenceReads.delete(token);
+    if (current) beginReviewRefresh(scope, path);
+    else invalidateReviewEvidence(scope);
+  };
+}
+export function invalidateReviewEvidence(scope = currentReviewScope()) {
+  evidenceRevision++;
+  try { document.dispatchEvent(new globalThis.CustomEvent('pi-gui:review-evidence', {detail:{scope}})); }
+  catch { /* Pure/headless callers have no document. */ }
+}
 
 /**
  * Reviews change from several places (saving, deleting, a diff re-render that
@@ -30,6 +47,7 @@ let sequence = 0;
  * so it listens instead of freezing whatever was true when it opened.
  */
 function emitChange(scope) {
+  invalidateReviewEvidence(scope);
   try {
     document.dispatchEvent(new globalThis.CustomEvent('pi-gui:review-change', { detail: { scope } }));
   } catch {
@@ -240,6 +258,7 @@ export function reconcileSectionOptions(
   fingerprint,
   { scope = currentReviewScope(), complete = true } = {}
 ) {
+  invalidateReviewEvidence(scope);
   const targets = peek(scope).filter((comment) => comment.path === path && comment.anchor.section === section);
   if (!complete) return targets;
   let changed = false;
@@ -314,9 +333,11 @@ export function reconcileSectionOptions(
  * Start a status refresh: until a diff is rendered again, no anchor in this
  * scope has been re-verified. Comments are never deleted here.
  */
-export function beginReviewRefresh(scope = currentReviewScope()) {
+export function beginReviewRefresh(scope = currentReviewScope(), path = null) {
+  invalidateReviewEvidence(scope);
   let changed = false;
   for (const comment of peek(scope)) {
+    if (path !== null && comment.path !== path) continue;
     if (comment.verified !== false) changed = true;
     comment.verified = false;
   }

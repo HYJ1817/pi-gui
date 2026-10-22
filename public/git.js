@@ -40,6 +40,7 @@ import { openSecondarySurface } from './ui/secondary-surface.js';
 import { allHunksOpen, bindDiffToggles, countDiffLines, diffHtml, setAllHunks } from './diff.js';
 import {
   REVIEW_LIMITS,
+  beginReviewEvidenceRead,
   beginReviewRefresh,
   commentCount,
   commentAtPosition,
@@ -56,6 +57,7 @@ import {
 } from './diff-comments.js';
 import { loadReviewComments, saveReviewComment, removeReviewComment, reviewPersistenceState } from './review-comment-persistence.js';
 import { fillReviewComposer } from './review-fill.js';
+import { mountReviewTaskPreview } from './review-task-preview.js';
 import { selectReviewRange, rangeRows, reconcileReviewRange } from './review-comment-range.js';
 
 /* 自动刷新的防抖窗口。
@@ -235,10 +237,13 @@ function blankChanges() {
 /** 拉一次 Git 工作区状态，写进 S.changes 并更新侧栏徽标。
  *  永远不抛：网络失败也落到「结构化错误」上，界面显示降级文案而不是崩掉。 */
 export async function loadGitStatus() {
+  const finishEvidence = beginReviewEvidenceRead();
   const generation = S.workspaceGeneration;
   const request = ++statusRequest;
   const c = S.changes;
-  const j = await fetchGitStatus();
+  let j;
+  try { j = await fetchGitStatus(); }
+  finally { finishEvidence(ownsWorkspace(generation) && request === statusRequest); }
   if (!ownsWorkspace(generation) || request !== statusRequest) return null;
 
   c.loaded = true;
@@ -762,6 +767,7 @@ function changeRow(f, inSession) {
   };
 
   async function reloadDiff() {
+    const finishEvidence = beginReviewEvidenceRead(currentReviewScope(), f.path);
     const request = ++dstate.request;
     const scope = currentReviewScope();
     preserveReviewDrafts();
@@ -772,7 +778,10 @@ function changeRow(f, inSession) {
     diffBox.appendChild(hint('正在读取差异…'));
 
     const reviewScroll = diffBox.scrollTop;
-    const r = await fetchGitDiff(f.path, dstate.context);
+    let r;
+    try { r = await fetchGitDiff(f.path, dstate.context); }
+    finally { finishEvidence(Boolean(surface?.isCurrent() && revision === scopeRevision && request === dstate.request
+      && diffBox.isConnected && scope === currentReviewScope() && !reviewScopeSuspended)); }
     if (!surface || !surface.isCurrent() || revision !== scopeRevision || request !== dstate.request
       || !diffBox.isConnected || scope !== currentReviewScope() || reviewScopeSuspended) return;
     dstate.busy = false;
@@ -1277,6 +1286,7 @@ function openReviewSummary() {
   const scope = currentReviewScope();
   let closeThis = null;
   let onReviewChange = null;
+  let taskPreview = null;
   openModal((card, close) => {
     closeThis = close;
     reviewSummaryClose = close;
@@ -1293,6 +1303,11 @@ function openReviewSummary() {
 
     const actions = document.createElement('div');
     actions.className = 'review-summary-actions';
+    const prepare = document.createElement('button');
+    prepare.type = 'button';
+    prepare.className = 'btn';
+    prepare.textContent = '准备修改任务';
+    prepare.onclick = () => taskPreview?.open();
     const copy = document.createElement('button');
     copy.type = 'button';
     copy.className = 'btn primary';
@@ -1306,7 +1321,7 @@ function openReviewSummary() {
     done.className = 'btn';
     done.textContent = '关闭';
     done.onclick = () => close();
-    actions.append(copy, fill, done);
+    actions.append(prepare, copy, fill, done);
 
     const status = document.createElement('p');
     status.className = 'review-summary-status';
@@ -1408,6 +1423,7 @@ function openReviewSummary() {
       preview.value = feedback;
       copy.disabled = !comments.length;
       fill.disabled = !comments.length;
+      prepare.disabled = !comments.length;
       status.textContent = storageLabel();
     };
 
@@ -1441,6 +1457,11 @@ function openReviewSummary() {
     };
 
     card.append(head, actions, status, body, preview);
+    taskPreview = mountReviewTaskPreview({card, scope, close, onVisibility: visible => {
+      for (const section of [note, actions, status, body, preview]) section.hidden = visible;
+      title.textContent = visible ? '准备修改任务' : '审查意见';
+      if (!visible) { draw(); prepare.focus(); }
+    }});
     draw();
     /* The summary is a live view: a diff that re-renders behind the dialog can
      * confirm or invalidate anchors while it is open. */
@@ -1451,6 +1472,7 @@ function openReviewSummary() {
     document.addEventListener('pi-gui:review-change', onReviewChange);
     document.addEventListener('pi-gui:review-storage', onReviewChange);
   }, () => {
+    taskPreview?.dispose();
     if (onReviewChange) document.removeEventListener('pi-gui:review-change', onReviewChange);
     if (onReviewChange) document.removeEventListener('pi-gui:review-storage', onReviewChange);
     onReviewChange = null;

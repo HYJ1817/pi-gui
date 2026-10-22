@@ -969,6 +969,17 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 
 /* ---------- 审查意见汇总 ---------- */
 .review-summary-card{max-width:720px}
+.review-task h4{margin:8px 0;font-size:13px;font-weight:500}
+.review-task .review-summary-note + .review-summary-note{margin-top:6px}
+.review-task-count{font-size:11px;color:var(--t2);margin:6px 0}
+.review-task-file,.review-task-item{display:flex;align-items:flex-start;gap:8px;overflow-wrap:anywhere}
+.review-task-file{font-size:11.5px;color:var(--t2);margin-bottom:5px;font-family:var(--mono)}
+.review-task-item{cursor:pointer}
+.review-task input[type="checkbox"]{flex:none;accent-color:var(--t2);margin-top:3px}
+.review-task-detail{min-width:0;flex:1}
+.review-task-detail .review-item-text{display:block}
+.review-task :focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.review-task .review-feedback-preview{max-height:46vh;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .review-summary-head h3{margin:0 0 4px}
 .review-summary-note{margin:0;color:var(--t3);font-size:11px;line-height:1.55}
 .review-summary-actions{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 6px}
