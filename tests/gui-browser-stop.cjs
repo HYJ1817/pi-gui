@@ -47,6 +47,9 @@ async function waitFor(what, fn, timeoutMs = 4000) {
 async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
+  const { createReviewCommentStore } = await import('../server/review-comment-store.js');
+  const { createReviewCommentAuthority } = await import('../server/review-comment-authority.js');
+  const { createReviewCommentRoutes } = await import('../server/review-comment-routes.js');
   const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
   const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
   const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
@@ -98,6 +101,11 @@ async function main() {
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
   let syncing = false, guardError = null, wrapped = null, captureError = null, disabled = 0;
   const context = {
+    // Keep the real composition dependency shape. This Stop fixture never
+    // calls comment routes, so constructing the lazy store performs no I/O.
+    createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
+    DATA_DIR: os.tmpdir(), __dirname: ROOT,
+    withWorkspaceIdentity: (...args) => context.conversationWorkspaces.withWorkspace(...args),
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     createRouter(options) { wrapped = options.rpc; return createRouter(options); },

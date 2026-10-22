@@ -157,6 +157,9 @@ function createFakePi() {
 async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
+  const { createReviewCommentStore } = await import('../server/review-comment-store.js');
+  const { createReviewCommentAuthority } = await import('../server/review-comment-authority.js');
+  const { createReviewCommentRoutes } = await import('../server/review-comment-routes.js');
   const { createSessionRevertRoutes } = await import('../server/session-revert-routes.js');
   const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
   const { createSessionRevertStopAndDrain } = await import('../server/session-revert-object-runtime-authority.js');
@@ -186,6 +189,11 @@ async function main() {
   let syncing = false;
   const guarded = [], modelAccepted = [], activityAccepted = [];
   const context = {
+    // Construct the actual lazy comment dependencies; this Stop-only fixture
+    // never enters their routes and must not hide production assembly drift.
+    createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
+    DATA_DIR: os.tmpdir(), __dirname: ROOT,
+    withWorkspaceIdentity: (...args) => context.conversationWorkspaces.withWorkspace(...args),
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     managedProcesses: { manager: null }, worktrees: null, specs: null,
