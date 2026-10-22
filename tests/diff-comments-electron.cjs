@@ -379,7 +379,7 @@ async function phaseProduction(world) {
     if (process.env.T3C_RANGES === '1') {
       await read(`(()=>{const a=[...document.querySelectorAll('#workbenchChangesPane .d-row[data-line-type=add] .d-gutter')];a[0].click();a.at(-1).dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:true}));document.querySelector('.d-review-range-action button').click()})()`);
       check('Specs split supports a focused range editor alongside the original single',await read("(()=>{const e=[...document.querySelectorAll('.d-review-editor')].find(e=>JSON.parse(e.dataset.anchor).range);return !!e&&document.activeElement===e.querySelector('textarea')})()"));
-      await read("document.querySelector('#btnChangesRefresh').click()");
+      await read("import('/git.js').then(m=>m.refreshGitNow())");
       await until("[...document.querySelectorAll('.d-review-editor')].some(e=>JSON.parse(e.dataset.anchor).range&&document.activeElement===e.querySelector('textarea'))",'range editor after refresh');
       await sleep(250);
       await until("[...document.querySelectorAll('.d-review-editor')].some(e=>JSON.parse(e.dataset.anchor).range)",'stable range editor');
