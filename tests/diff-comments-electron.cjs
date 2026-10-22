@@ -139,8 +139,9 @@ function makeRepo(world, name) {
 /* The fake pi answers every command successfully and exits with its parent. */
 const FAKE_PI = [
   'const parentPid = process.ppid;',
+  'const fs=require("node:fs"),path=require("node:path"); const sessionId="t3a-fixture",cwd=process.cwd(); const sessionFile=path.join(process.env.PI_CODING_AGENT_DIR,"sessions","--"+cwd.replace(/[\\\\/:]/g,"-")+"--","2026-01-01T00-00-00-000Z_"+sessionId+".jsonl"); fs.mkdirSync(path.dirname(sessionFile),{recursive:true}); if(!fs.existsSync(sessionFile))fs.writeFileSync(sessionFile,JSON.stringify({type:"session",version:3,id:sessionId,cwd,timestamp:"2026-01-01T00:00:00.000Z"})+String.fromCharCode(10));',
   'let input = ""; process.stdin.setEncoding("utf8");',
-  'process.stdin.on("data", chunk => { input += chunk; let i; while ((i = input.indexOf(String.fromCharCode(10))) >= 0) { const line = input.slice(0, i); input = input.slice(i + 1); try { const cmd = JSON.parse(line); process.stdout.write(JSON.stringify({ type: "response", command: cmd.type, id: cmd.id, success: true, data: { sessionId: "t3a-fixture", sessionName: "T3-A Fixture", messages: [], models: [], thinkingLevels: [] } }) + String.fromCharCode(10)); } catch {} } });',
+  'process.stdin.on("data", chunk => { input += chunk; let i; while ((i = input.indexOf(String.fromCharCode(10))) >= 0) { const line = input.slice(0, i); input = input.slice(i + 1); try { const cmd = JSON.parse(line); process.stdout.write(JSON.stringify({ type: "response", command: cmd.type, id: cmd.id, success: true, data: { sessionId, sessionFile, sessionName: "T3-A Fixture", messages: [], models: [], thinkingLevels: [] } }) + String.fromCharCode(10)); } catch {} } });',
   'setInterval(() => { try { process.kill(parentPid, 0); } catch { process.exit(0); } }, 400);',
 ].join('\n');
 
@@ -411,11 +412,17 @@ const browser=attachBrowserPane(pane,{openWorkbench:openSplitWorkbench});
 window.test={pane,browser,setGitConversationScope};
 window.fixtureReady=true;
 `;
+  const nativeComments = require('./fixtures/review-comment-backend.cjs')();
   fixtureServer = http.createServer((req, res) => {
     try {
       const route = new URL(req.url, 'http://localhost').pathname;
       if (route.startsWith('/api/')) {
         res.setHeader('Content-Type', 'application/json');
+        if (route === '/api/review-comments') {
+          let raw=''; req.on('data',chunk=>{raw+=chunk;});
+          req.on('end',async()=>{ const headers={}; for(const [k,v] of Object.entries(req.headers))if(k==='x-pi-gui-conversation')headers['X-Pi-Gui-Conversation']=v;
+            const response=await nativeComments.response({method:req.method,headers,body:raw});res.end(JSON.stringify(await response.json())); }); return;
+        }
         if (route === '/api/git/status') {
           return res.end(JSON.stringify({ ok: true, isRepo: true, files: [{ path: 'example.js', status: 'M', additions: 2, deletions: 1 }] }));
         }

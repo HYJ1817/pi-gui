@@ -68,7 +68,9 @@ async function main() {
   const requests = [];
   const statusFiles = (id) => [{ path: `${id || 'classic'}.txt`, status: 'M', staged: false, untracked: false, additions: 2, deletions: 0 }];
 
+  const reviewBackend = require('./fixtures/review-comment-backend.cjs')(() => S.cwd + '|' + S.state.sessionId);
   global.fetch = async (url, options = {}) => {
+    if (String(url).endsWith('/api/review-comments')) return reviewBackend.response(options);
     const id = options.headers?.['X-Pi-Gui-Conversation'] || null;
     requests.push({ url: String(url), id, body: options.body || '' });
     if (String(url).endsWith('/api/git/status')) {
@@ -111,6 +113,7 @@ async function main() {
     currentScope = currentReviewScope();
     await refreshGitNow();
     openChangesPanel();
+    await until(() => document.querySelector('#btnReviewStorage')?.textContent === '评论已同步');
     await until(() => rowOf('A.txt'));
     const row = await openRow('A.txt');
     ok('Changes renders real add rows with new line numbers', () =>
@@ -134,6 +137,37 @@ async function main() {
       document.getElementById('input').value === '');
     ok('comment is stored only in the current review scope', () =>
       commentsForScope(currentScope).length === 1 && commentsForScope('other').length === 0);
+
+    gutter(row, 1).click();
+    await tick();
+    editor(row).querySelector('textarea').value = '未落盘的编辑草稿';
+    editor(row).querySelector('textarea').dispatchEvent(new window.Event('input', { bubbles: true }));
+    reviewBackend.error = 'comment_storage_write_failed';
+    save(row).click(); await tick();
+    ok('a failed save keeps the actual editor text and confirmed comment unchanged', () =>
+      editor(row).querySelector('textarea').value === '未落盘的编辑草稿' &&
+      commentsForScope(currentScope)[0].text === '请把这个判断改成幂等' && editor(row).querySelector('.err'));
+    reviewBackend.error = 'comment_conflict';
+    save(row).click(); await tick();
+    ok('a revision conflict leaves the draft visible with an explicit error', () =>
+      editor(row).querySelector('textarea').value === '未落盘的编辑草稿' &&
+      document.querySelector('#btnReviewStorage').textContent === '重新加载评论');
+    reviewBackend.error = null;
+    document.querySelector('#btnReviewStorage').click(); await tick();
+    ok('explicit reload preserves the editor draft for the user to decide', () =>
+      editor(row).querySelector('textarea').value === '未落盘的编辑草稿');
+    editor(row).querySelector('textarea').value = '请把这个判断改成幂等';
+    let releaseSave;
+    reviewBackend.hold = () => new Promise(resolve => { releaseSave = resolve; });
+    save(row).click(); await tick();
+    ok('an unacknowledged save stays pending without closing the editor', () =>
+      editor(row) && save(row).disabled && editor(row).querySelector('.d-review-status').textContent.includes('正在保存'));
+    reviewBackend.hold = null; releaseSave(); await tick();
+    ok('only the acknowledged retry closes the editor and retains the marker', () => !editor(row) && gutter(row, 1).closest('.d-row').classList.contains('has-comment'));
+    gutter(row, 1).click(); await tick();
+    reviewBackend.error = 'comment_storage_write_failed'; remove(row).click(); await tick();
+    ok('failed deletion keeps both confirmed comment and editor available', () => editor(row) && commentsForScope(currentScope).length === 1);
+    reviewBackend.error = null; cancel(row).click(); await tick();
 
     row.querySelector('.chg-main').click();
     await tick();
@@ -432,6 +466,21 @@ async function main() {
     await tick();
     ok('a late status response cannot repaint the newer scope', () =>
       rowOf('B.txt') && !rowOf('A.txt'));
+
+    const pendingCloseRow = await openRow('B.txt');
+    gutter(pendingCloseRow, 1).click(); await tick();
+    editor(pendingCloseRow).querySelector('textarea').value = '关闭时仍在保存的评论';
+    let releaseClosed;
+    reviewBackend.hold = () => new Promise(resolve => { releaseClosed = resolve; });
+    save(pendingCloseRow).click(); await tick(); pane.close();
+    reviewBackend.hold = null; releaseClosed(); await tick();
+    ok('closing a panel while saving never resurrects its editor after the acknowledgement', () =>
+      !document.querySelector('.d-review-editor') && commentsForScope().length === 1);
+    openChangesPanel();
+    await until(() => document.querySelector('#btnReviewStorage')?.textContent === '评论已同步');
+    const afterCloseRow = await openRow('B.txt');
+    ok('reopening after a pending save exposes the confirmed comment without restoring its draft', () =>
+      afterCloseRow.querySelectorAll('.d-row.has-comment').length === 1 && !editor(afterCloseRow));
 
     document.getElementById('input').value = '切换前的聊天草稿';
     pane.open('browser');
