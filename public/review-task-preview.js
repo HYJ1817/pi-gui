@@ -9,10 +9,10 @@ import { gitConversationScope } from './api.js';
 import { runtimeStore } from './runtime-state.js';
 
 function node(tag, className, text) {
-  const el=document.createElement(tag);
-  if (className) el.className=className;
-  if (text) el.textContent=text;
-  return el;
+  const element=document.createElement(tag);
+  if (className) element.className=className;
+  if (text) element.textContent=text;
+  return element;
 }
 function button(text, action) {
   const b=node('button','btn',text); b.type='button'; b.onclick=action; return b;
@@ -106,7 +106,7 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
       fileCheck.checked=ids.length>0&&ids.every(id=>selectedIds.has(id));
       fileCheck.indeterminate=!fileCheck.checked&&ids.some(id=>selectedIds.has(id));
       fileCheck.onchange=()=>{for(const id of ids) {if(fileCheck.checked)selectedIds.add(id);else selectedIds.delete(id);}drawSelection();
-        [...body.querySelectorAll('.review-task-file input')].find(el=>el.getAttribute('aria-label')===fileCheck.getAttribute('aria-label'))?.focus();};
+        [...body.querySelectorAll('.review-task-file input')].find(box=>box.getAttribute('aria-label')===fileCheck.getAttribute('aria-label'))?.focus();};
       heading.append(fileCheck,node('span','',path));group.append(heading);
       for(const c of items) {
         const item=node('label','review-item review-task-item');
@@ -128,7 +128,7 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
     status.textContent=reviewEvidencePending(scope) ? '正在刷新 Diff，请等待后展开文件重新确认位置。'
       : available() ? '' : '当前身份或评论存储不可用，请返回审查意见并重新同步。';
     // Rebuilding labels must not lose keyboard focus after toggling a checkbox.
-    if(focusId) [...body.querySelectorAll('input[data-comment-id]')].find(el=>el.dataset.commentId===focusId)?.focus();
+    if(focusId) [...body.querySelectorAll('input[data-comment-id]')].find(box=>box.dataset.commentId===focusId)?.focus();
   }
   function invalidate() {
     invalidated=true;copy.disabled=fill.disabled=true;preview.value='';
