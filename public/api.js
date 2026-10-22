@@ -295,6 +295,11 @@ export const fetchSpecDocument = (id, workspace, generation) => getJSON(
 
 export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders());
 
+/* Headers are captured by the review coordinator before an async operation.
+ * No cwd, file path or permanent storage key is inferred by the renderer. */
+export const fetchReviewComments = headers => getJSON('/api/review-comments', headers);
+export const persistReviewComments = (body, headers) => sendJSON('/api/review-comments', { body, headers });
+
 /** 拉某个文件的 diff。`context` 为 undefined 时不传，由 git 用默认上下文；
  *  传数字或 'all' 则是用户显式要求展开更多上下文 —— 这必须重新问后端，
  *  前端无法从已截断的正文里补出被 git 裁掉的上下文行。 */
