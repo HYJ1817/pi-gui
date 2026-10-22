@@ -426,6 +426,7 @@ get_messages ─┘
     - `index.js` — HTTP 路由 + 计划生成（用 pi 适配器 + 独立会话，不污染主聊天）；
       另含「从任务打开会话」与「会话 → 任务」反查两条 P7 接口
   - `uploads.js` — 附件上传与落盘（`safeName`）
+  - `review-comment-authority.js` / `review-comment-store.js` / `review-comment-routes.js` — 当前 owner/稳定身份取证、有界原子存储与认证 HTTP；见 [评论设计](T3-B-plan.md)
   - `git-routes.js` — Git 接口的 **HTTP 适配层**，业务逻辑全在 `lib/git.js`
   - `router.js` — 路由表与静态资源。**顺序即语义**
   - `http-utils.js` — `json` / `readBody` / `readRawBody`。被五条链路共用，
@@ -460,6 +461,7 @@ get_messages ─┘
 - 语义适配器（按工具名匹配，互不依赖包名）：`web-activity.js` / `subagent-activity.js` /
   `memory-activity.js` / `browser-activity.js` / `mcp-activity.js`（`mcp__` 与资源工具，
   只投影 server / tool / 状态）；各自的 `*-capabilities.js` 管状态证据与运行观察
+- `review-comment-persistence.js` — 按需恢复、确认后提交模型、迟到响应和 CAS 冲突保护；`review-comment-data.js` 的纯 schema 经 `lib/` 适配器供后端复用
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）

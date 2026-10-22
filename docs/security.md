@@ -775,3 +775,28 @@ subagent_supervisor 的四个已知 action 与所有未知 action 都经过专�
 message、filesystem root、channelDir、requestFile、replyFile、raw request body/question、env/auth/token/apiKey/credential/transcript
 及未知 details 字段不进入 Activity DOM（包括隐藏详情、title 与历史）。status 只取 active/pending，pending/list 只取有限请求 metadata，reply 只取 replyTo/runId/agent。
 不回显原始错误输出，不扫描 channel filesystem，不读取 request files，不自动执行 supervisor action 或建立 GUI 回复/权限系统。
+
+## T3-B 评论存储边界
+
+`/api/review-comments` 先走现有认证与 Origin 校验，再解析完整当前 owner。
+经典会话通过后端私有 get_state、会话扫描器和工作区 lifecycle 取证；并行会话必须是当前焦点，
+使用可信 Runtime Registry 的持久 conversation、workspace ID/epoch 和原生会话文件身份。
+永久 SHA256 键不包含临时 runtime/generation；后端进程内 HMAC token、完整 owner 和 CAS revision
+共同阻止陈旧提交。前端不能选择磁盘路径、原生会话或其他作用域。
+
+固定应用目录需通过各级 symlink/junction、规范路径、目录对象身份校验；
+拒绝落入源码、当前 Git root/common 或已登记项目的 data。数据文件拒绝链接、hardlink、
+非普通文件、超限、非法 UTF-8、未知 schema/字段。应用数据有界读取，错误仅回固定代码和说明，
+评论、请求体和文件原文不进入日志、诊断包或远端遥测。
+
+写入持有跨实例排他锁，检查磁盘 revision，独占创建同目录临时文件，flush 后再次校验并 rename。
+文件占用/权限/磁盘错误不删除最后的有效数据；失败确认不代表磁盘一定未提交，重载可确认当前 revision。
+损坏或未知版本保留原文件并阻止空白覆盖，没有自动迁移或重置接口。
+
+异常退出留下的锁保守阻止后续写入；不靠 PID 猜测释放。恢复须先退出相关应用实例、备份整个目录，
+人工确认无写入者后处理残留锁/临时文件，损坏 JSON 保留待查。容量管理亦不自动淘汰旧作用域。
+这不是抵御同权限恶意本机进程/管理员的 OS 沙箱，也不承诺断电时目录元数据的持久性；
+原子替换前的进程中断保留旧提交，丢失确认时必须重载，不强行覆盖。
+
+具体格式、容量和 UI 语义见 [Git Changes](git-changes.md#九行级评论持久化t3-b)，
+验证范围见 [T3-B 验收](T3-B-acceptance.md)。不改变 Agent 执行、用户文件写入或撤销权限。

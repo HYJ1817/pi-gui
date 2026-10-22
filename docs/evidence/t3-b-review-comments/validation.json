@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "codeCommit": "5230a822a5d43ace1169a40e49882b2f82855179",
+  "baseCommit": "d81b3548ad6c93efdba36ee203f37c90f28e7867",
+  "platform": "win32",
+  "node": "v24.22.1",
+  "canonical": {
+    "source": "package.json test and npm lifecycle aliases",
+    "strategy": "Existing dynamic runner; five local isolated groups; not a single npm test success and not a GitHub CI result",
+    "commands": 174,
+    "failed": 0,
+    "groups": [
+      {
+        "group": "core",
+        "commands": 103,
+        "failed": 0,
+        "startedAt": "2026-10-22T10:37:26.440Z",
+        "finishedAt": "2026-10-22T10:43:37.430Z",
+        "resultSha256": "0e86709cd02d007db798248e5f7dc5347e5b21b142bbc746ac5208b84a966aab",
+        "logSha256": "5d3c713fc25e8af135eb3065620f5486b4bf89b93484c470559c28e106618390"
+      },
+      {
+        "group": "ui",
+        "commands": 24,
+        "failed": 0,
+        "startedAt": "2026-10-22T10:37:26.478Z",
+        "finishedAt": "2026-10-22T10:39:09.170Z",
+        "resultSha256": "44a4d54060face8d4b32e3c588ce707b98c0e247c3c0db7b2e2ec3a58bafc837",
+        "logSha256": "6719fe93843653b2db0f77bfbd2e1addf2c99d1960dcc58bb2a3b64eb567698f"
+      },
+      {
+        "group": "security",
+        "commands": 27,
+        "failed": 0,
+        "startedAt": "2026-10-22T10:37:26.478Z",
+        "finishedAt": "2026-10-22T10:53:10.690Z",
+        "resultSha256": "974fbd1fb8cee04002f9833362c303137bb41b96c2b42ad5262c28b983f7095d",
+        "logSha256": "8732ca1dd31ed7f83133dfbaf42a21a7f9b36ee468933364c927ab6bba10a717"
+      },
+      {
+        "group": "native",
+        "commands": 2,
+        "failed": 0,
+        "startedAt": "2026-10-22T10:37:26.505Z",
+        "finishedAt": "2026-10-22T10:54:35.408Z",
+        "resultSha256": "ce85799112af558715d93f83ed613012c4fa512e6299d16ad3a883963f9a8810",
+        "logSha256": "811ca55d580c84c0d2cad8a959f8f32a4024cdddb36ff94aad22c0979aabd15c"
+      },
+      {
+        "group": "faults",
+        "commands": 18,
+        "failed": 0,
+        "startedAt": "2026-10-22T10:37:26.574Z",
+        "finishedAt": "2026-10-22T10:55:08.962Z",
+        "resultSha256": "37c1e4aa67801c82c14bab7c30419e906bcb8478141dbe76bcd81d2a93ba69e1",
+        "logSha256": "fe3e00e58465b8f0ee4e7b77efe3c9492659552fbf03e3fe4f6612c81312d383"
+      }
+    ],
+    "skippedAssertions": 19,
+    "skipEvidence": [
+      {
+        "group": "core",
+        "command": "node tests/logging-leaks.cjs",
+        "count": 1,
+        "reasons": [
+          "Existing filesystem/platform fixture unavailable; see local log"
+        ]
+      },
+      {
+        "group": "security",
+        "command": "node tests/session-revert-sacl-witness.cjs",
+        "count": 8,
+        "reasons": [
+          "session-revert-sacl-witness: 0/0; failed=0; skipped=8; real audit environment only"
+        ]
+      },
+      {
+        "group": "security",
+        "command": "node tests/session-revert-inplace.cjs",
+        "count": 2,
+        "reasons": [
+          "Existing Win32 SACL preservation case unavailable (SeSecurityPrivilege)",
+          "Existing Win32 SACL preservation case unavailable (SeSecurityPrivilege)",
+          "session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility"
+        ]
+      },
+      {
+        "group": "security",
+        "command": "node tests/session-revert-object-witness.cjs",
+        "count": 8,
+        "reasons": [
+          "Object witness: 0/0; failed=0; skipped=8"
+        ]
+      }
+    ],
+    "manifestSha256": "8104b88ac9dc2a548e955f19f61ee83f5f6342655a822899bad6271ff77ea166"
+  },
+  "targeted": {
+    "store": 49,
+    "authority": 15,
+    "runtime": 7,
+    "http": 17,
+    "coordinator": 15,
+    "newTotal": 103,
+    "failed": 0,
+    "skipped": 0,
+    "diffModel": 51,
+    "changesUi": 50,
+    "specsSplit": 10
+  },
+  "electron": {
+    "normal": {
+      "checks": 25,
+      "failed": 0,
+      "skipped": 0,
+      "sandbox": "normal",
+      "phases": [
+        {
+          "name": "save",
+          "exit": 0,
+          "checks": 4
+        },
+        {
+          "name": "restore-edit",
+          "exit": 0,
+          "checks": 8
+        },
+        {
+          "name": "restore-delete",
+          "exit": 0,
+          "checks": 8
+        },
+        {
+          "name": "confirm-deleted",
+          "exit": 0,
+          "checks": 5
+        }
+      ],
+      "resultSha256": "0d1b36862223ee2f4bf0672568ce3461ec166185b6139da49b6f9b098bb9a4e2"
+    },
+    "packaged": {
+      "checks": 25,
+      "failed": 0,
+      "skipped": 0,
+      "sandbox": "normal",
+      "phases": [
+        {
+          "name": "save",
+          "exit": 0,
+          "checks": 4
+        },
+        {
+          "name": "restore-edit",
+          "exit": 0,
+          "checks": 8
+        },
+        {
+          "name": "restore-delete",
+          "exit": 0,
+          "checks": 8
+        },
+        {
+          "name": "confirm-deleted",
+          "exit": 0,
+          "checks": 5
+        }
+      ],
+      "resultSha256": "c2330a3676ddc4c3463fbc52d7ccade848df6b3e963f771f07b22839841d15c8"
+    },
+    "noSandbox": {
+      "checks": 25,
+      "failed": 0,
+      "skipped": 0,
+      "sandbox": "disabled-test-only",
+      "phases": [
+        {
+          "name": "save",
+          "exit": 0,
+          "checks": 4
+        },
+        {
+          "name": "restore-edit",
+          "exit": 0,
+          "checks": 8
+        },
+        {
+          "name": "restore-delete",
+          "exit": 0,
+          "checks": 8
+        },
+        {
+          "name": "confirm-deleted",
+          "exit": 0,
+          "checks": 5
+        }
+      ],
+      "resultSha256": "db819063a479517b5a3619273294941e055584bee652a98980bb682cc325b837"
+    },
+    "browserRegression": {
+      "checks": 41,
+      "failed": 0,
+      "skipped": 0,
+      "sandbox": "normal",
+      "phases": [
+        {
+          "name": "production",
+          "exit": 0,
+          "checks": 27
+        },
+        {
+          "name": "native",
+          "exit": 0,
+          "checks": 14
+        }
+      ],
+      "resultSha256": "01f638847b3b66a0e7201376dca0f640a02c4a653c5197a8ad9b1eaaa4d25e75"
+    }
+  },
+  "artifacts": {
+    "appChecks": 26,
+    "seaChecks": 49,
+    "failed": 0,
+    "resources": {
+      "sha": "5230a822a5d43ace1169a40e49882b2f82855179",
+      "resources": [
+        {
+          "file": "public/api.js",
+          "bytes": 29468,
+          "sha256": "a2279a693eda233b45516789a72090d03dbe8aa8886b5df64c73054c3c7b34d4",
+          "equal": true
+        },
+        {
+          "file": "public/git.js",
+          "bytes": 68576,
+          "sha256": "165151a33e6a09587ba80b17a96a502c5e7bdc08588c626bc64389ec980b12d5",
+          "equal": true
+        },
+        {
+          "file": "public/diff-comments.js",
+          "bytes": 13891,
+          "sha256": "8e1ebe0bbfd3f4c6e036c7a02cbf692c209b770d8629c065fdc3286f10b377fb",
+          "equal": true
+        },
+        {
+          "file": "public/review-comment-data.js",
+          "bytes": 4190,
+          "sha256": "64df730b3bd44c17c8ed972cbd9fa261fa8caafb2922586e9386b5dc900b9c16",
+          "equal": true
+        },
+        {
+          "file": "public/review-comment-persistence.js",
+          "bytes": 7908,
+          "sha256": "c6eed1b92991add245ec67f73e9e857d6c3a352b92416f6c43b242ec80e74792",
+          "equal": true
+        },
+        {
+          "file": "server.cjs",
+          "bytes": 2328128,
+          "sha256": "5d89ce0021b827c3721b72647831cc3c5f368414a43e056576c47862c521485b",
+          "equal": true
+        }
+      ],
+      "manifest": true
+    }
+  },
+  "independentReview": {
+    "performed": false,
+    "reason": "User explicitly requested no subagents; separate author self-reviews are not independent review"
+  },
+  "priorAttempts": [
+    {
+      "sha": "e17655b18b8c342b85c608d2fc5a0e3f7c802305",
+      "command": "npm test",
+      "exit": 1,
+      "reason": "Stop VM fixture missing newly added composition dependencies",
+      "proofSha256": "6dda91d2471e31bbd5e187b503b97cd71192731687e9558976a20a58e3cb9a4b"
+    },
+    {
+      "sha": "bbbf5618407f30271d47ff463e0105940f6838aa",
+      "result": "interrupted; not final proof",
+      "reason": "Found and fixed detached-editor cross-scope Save callback; complete final canonical rerun required"
+    }
+  ],
+  "finalizedAt": "2026-10-22T10:55:27.556Z",
+  "codeWorktreeClean": true,
+  "pushed": false,
+  "merged": false,
+  "released": false,
+  "documentation": {
+    "relativeLinks": 184,
+    "failed": 0,
+    "whitespaceDiffCheck": "passed"
+  }
+}

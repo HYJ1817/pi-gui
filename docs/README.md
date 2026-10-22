@@ -20,7 +20,7 @@
 | 任务 | 优先阅读 | 按影响追加 |
 | --- | --- | --- |
 | UI 与布局 | [工作区与生命周期](work-surfaces.md)、[应用外壳](app-shell.md) | [会话界面](conversation-ui.md)、[输入区](composer-ui.md)、[能力展示](capability-ux.md) |
-| Git Changes 与 Diff | [Git Changes](git-changes.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)；Diff 行级评论现状与限制参照 [T3-A 验收](T3-A-acceptance.md) 并核对当前代码 |
+| Git Changes 与 Diff | [Git Changes](git-changes.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)；行级评论当前设计见 [持久化说明](git-changes.md#九行级评论持久化t3-b)，历史 [T3-A 验收](T3-A-acceptance.md) 与 [T3-B 验收](T3-B-acceptance.md) 仅证明各自提交 |
 | Planner、Review、Verification | [Planner](planner.md)、[工作流与数据契约](workflows.md)、[人工审阅](reviews.md) | [审批](approvals.md)、[测试政策](testing.md#测试执行政策) |
 | Runtime、Worktree、多会话 | [会话](sessions.md)、[Worktree](worktrees.md)、[架构](architecture.md) | [运行恢复](runtime-recovery.md)、[进程管理](p31-managed-process.md)、[安全](security.md) |
 | Browser 与 Electron | [Browser](browser.md)、[Agent Control](agent-browser.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)、[构建](development.md) |
