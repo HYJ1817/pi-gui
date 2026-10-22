@@ -913,7 +913,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 行号混进语法配色。没有评论时入口低调，键盘聚焦时才明显。 */
 .d-hunkwrap > .d-row{
   display:flex;align-items:flex-start;flex-wrap:wrap;
-  width:max-content;min-width:100%;box-sizing:border-box;padding:0!important;
+  width:100%;min-width:0;box-sizing:border-box;padding:0!important;
 }
 .d-hunkwrap > .d-row > .dl{flex:0 0 auto;padding:0 10px;min-width:0}
 .d-gutter{
@@ -935,10 +935,17 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .d-row.has-comment > .dl{box-shadow:inset 2px 0 0 var(--line-strong, var(--line))}
 .d-row.has-stale-comment > .dl{opacity:.7}
 .d-row.reviewing{background:var(--hover)}
+.d-row.range-selected > .dl{background:var(--hover);box-shadow:inset 2px 0 0 var(--t3)}
+.d-row.has-range-comment > .dl{background:var(--hover)}
+.d-review-range-action,.d-review-range-marker{
+  flex:0 1 auto;margin:2px 10px 2px 76px;white-space:normal;overflow-wrap:anywhere;
+  font-family:var(--sans);max-width:calc(100% - 90px);
+}
+.d-review-range-action{flex:1 0 calc(100% - 90px)}
 
 /* 编辑区在代码行内换行展开，不弹窗、不折叠 Diff。 */
 .d-hunkwrap > .d-row > .d-review-editor{
-  flex:1 0 100%;display:flex;flex-direction:column;gap:7px;
+  flex:1 1 100%;min-width:0;display:flex;flex-direction:column;gap:7px;
   margin:4px 10px 8px 78px;padding:9px 10px;
   border:1px solid var(--line);border-radius:8px;background:var(--main);
   white-space:normal;font-family:var(--sans);font-size:12px;

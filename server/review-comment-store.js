@@ -60,11 +60,11 @@ export function createReviewCommentStore({ dataDir, protectedRoots = () => [], i
     return s;
   }
   function readDisk(scope) {
-    if (!guard(scope)) return { revision: null, comments: [] };
+    if (!guard(scope)) return { version: 1, revision: null, comments: [] };
     const file = path.join(root, scope.key + '.json'), before = plainFile(file);
     if (!before) {
       if (seen.has(scope.key)) fail('comment_storage_corrupt');
-      return { revision: null, comments: [] };
+      return { version: 1, revision: null, comments: [] };
     }
     const fd = io.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
     let text;
@@ -84,14 +84,15 @@ export function createReviewCommentStore({ dataDir, protectedRoots = () => [], i
     try {
       const v = JSON.parse(text);
       if (!v || Array.isArray(v) || Object.keys(v).length !== 4 || !Object.keys(v).every(k => ['version', 'scope', 'revision', 'comments'].includes(k))
-        || v.version !== 1 || v.scope !== scope.key || v.revision === null || !validReviewRevision(v.revision)) fail('comment_storage_corrupt');
-      const comments = sanitizeReviewComments(v.comments);
+        || ![1, 2].includes(v.version) || v.scope !== scope.key || v.revision === null || !validReviewRevision(v.revision)) fail('comment_storage_corrupt');
+      const comments = sanitizeReviewComments(v.comments, { allowRanges: v.version === 2 });
       seen.add(scope.key);
-      return { revision: v.revision, comments };
+      return { version: v.version, revision: v.revision, comments };
     } catch { fail('comment_storage_corrupt'); }
   }
   function read(scope) {
-    try { return readDisk(scope); } catch (e) { if (known(e)) throw e; fail('comment_storage_unavailable'); }
+    try { const { revision, comments } = readDisk(scope); return { revision, comments }; }
+    catch (e) { if (known(e)) throw e; fail('comment_storage_unavailable'); }
   }
   function removeOwned(file, expected) {
     try {
@@ -115,9 +116,13 @@ export function createReviewCommentStore({ dataDir, protectedRoots = () => [], i
       const files = names.filter(n => /^[a-f0-9]{64}\.json$/.test(n));
       const file = path.join(root, scope.key + '.json');
       if (!files.includes(path.basename(file)) && files.length >= REVIEW_DATA_LIMITS.scopes) fail('comment_storage_limit');
-      if (readDisk(scope).revision !== revision) fail('comment_conflict');
+      const current = readDisk(scope);
+      if (current.revision !== revision) fail('comment_conflict');
       const next = { revision: randomUUID(), comments };
-      const bytes = Buffer.from(JSON.stringify({ version: 1, scope: scope.key, ...next }) + '\n');
+      // Reading never migrates. Upgrade only as part of this locked CAS write;
+      // once upgraded, keep v2 even after deleting the last range.
+      const version = current.version === 2 || comments.some(c => c.anchor.range) ? 2 : 1;
+      const bytes = Buffer.from(JSON.stringify({ version, scope: scope.key, ...next }) + '\n');
       if (bytes.length > REVIEW_DATA_LIMITS.fileBytes) fail('comment_storage_limit');
       temp = path.join(root, `.comment-${randomUUID()}.tmp`);
       const fd = io.openSync(temp, 'wx', 0o600);

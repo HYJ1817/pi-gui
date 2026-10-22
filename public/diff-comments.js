@@ -9,6 +9,7 @@
  */
 import { S } from './state.js';
 import { gitConversationScope } from './api.js';
+import { rangePosition, reviewRangeLabel, reviewRangesOverlap, reconcileReviewRange } from './review-comment-range.js';
 
 export const REVIEW_LIMITS = Object.freeze({
   comments: 200,
@@ -84,18 +85,20 @@ export function sectionLabel(section) {
 
 export function lineLabel(comment) {
   const anchor = comment?.anchor || {};
+  if (anchor.range) return reviewRangeLabel(anchor);
   if (anchor.type === 'add') return `新文件第 ${anchor.newLine} 行`;
   if (anchor.type === 'del') return `旧文件第 ${anchor.oldLine} 行`;
   return `第 ${anchor.newLine ?? anchor.oldLine} 行`;
 }
 
 export function lineKey(anchor) {
-  return [anchor.path, anchor.section, anchor.type, anchor.oldLine ?? '', anchor.newLine ?? '', anchor.codeHash].join('|');
+  return positionKey(anchor) + '|' + (anchor.range ? anchor.range.lines.map(r => r.codeHash).join(',') : anchor.codeHash);
 }
 
 /** Git coordinates only — a visual line regardless of the code currently there. */
 export function positionKey(anchor) {
-  return [anchor.path, anchor.section, anchor.type, anchor.oldLine ?? '', anchor.newLine ?? ''].join('|');
+  return [anchor.path, anchor.section, anchor.type, anchor.oldLine ?? '', anchor.newLine ?? '',
+    anchor.range ? JSON.stringify(anchor.range.lines.map(rangePosition)) : ''].join('|');
 }
 
 export function commentsForScope(scope = currentReviewScope()) {
@@ -150,6 +153,8 @@ export function addComment({ path, anchor, text }, scope = currentReviewScope())
       comment: existing,
     };
   }
+
+  if (list.some(c => reviewRangesOverlap(c.anchor, anchor))) return { ok:false, error:'区间与已有区间评论重叠，请先处理原评论。' };
 
   const now = Date.now();
   const comment = {
@@ -243,6 +248,15 @@ export function reconcileSectionOptions(
     const wasVerified = comment.verified;
     comment.verified = true;
     const anchor = comment.anchor;
+    if (anchor.range) {
+      const result = reconcileReviewRange({ ...anchor, diffFingerprint: comment.lastFingerprint }, lines, fingerprint);
+      comment.stale = result === 'stale';
+      comment.verified = result !== 'pending';
+      comment.resolvedLine = result === 'valid' ? lineKey(anchor) : null;
+      if (result === 'valid') comment.lastFingerprint = fingerprint;
+      if (wasStale !== comment.stale || wasVerified !== comment.verified) changed = true;
+      continue;
+    }
     const exact = lines.filter((line) =>
       line.type === anchor.type &&
       String(line.oldLine ?? '') === String(anchor.oldLine ?? '') &&
