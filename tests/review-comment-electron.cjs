@@ -6,7 +6,8 @@ const { spawn, spawnSync, execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.resolve(process.env.T3B_EVIDENCE_DIR || path.join(ROOT, '.probe', 't3-b-electron'));
-const PHASES = ['save', 'restore-edit', 'restore-delete', 'confirm-deleted'];
+const RANGES = process.env.T3C_RANGES === '1';
+const PHASES = RANGES ? ['save', 'restore-edit', 'restore-stale', 'restore-delete', 'confirm-deleted'] : ['save', 'restore-edit', 'restore-delete', 'confirm-deleted'];
 const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -18,9 +19,9 @@ if (!process.versions.electron) {
     env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(world, 'gitconfig') }, stdio: 'pipe' });
   git('init', '-b', 'main'); git('config', 'core.autocrlf', 'false');
   git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid');
-  fs.writeFileSync(path.join(world, 'project', 'a.js'), 'export const value = 1;\n');
+  fs.writeFileSync(path.join(world, 'project', 'a.js'), RANGES ? 'export const value = 1;\nconst before = true;\nconst tail = true;\n' : 'export const value = 1;\n');
   git('add', '.'); git('commit', '-m', 'fixture');
-  fs.writeFileSync(path.join(world, 'project', 'a.js'), 'export const value = 2;\n');
+  fs.writeFileSync(path.join(world, 'project', 'a.js'), RANGES ? 'export const value = 2;\nconst added = 1;\nconst extra = 2;\nconst before = true;\nconst tail = true;\n' : 'export const value = 2;\n');
   // Match the upstream v3 native session header and cwd directory layout.
   fs.writeFileSync(path.join(world, 'fake-pi.cjs'), `
 const fs=require('node:fs'),path=require('node:path');
@@ -59,7 +60,7 @@ setInterval(()=>{try{process.kill(parent,0);}catch{process.exit(0);}},300);
     const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
     const base = `http://127.0.0.1:${port}`, project = path.join(world, 'project');
     const before = digest(path.join(project, 'a.js'));
-    backend = spawn(process.execPath, [path.join(ROOT, 'server.js')], { cwd: ROOT, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    backend = spawn(process.execPath, [process.env.T3B_BACKEND_ENTRY || path.join(ROOT, 'server.js')], { cwd: ROOT, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_CWD: project, PI_GUI_DATA: path.join(world, 'data'),
         PI_GUI_OPEN: '0', PI_GUI_OFFLINE: '1', PI_OFFLINE: '1', PI_BIN: path.join(world, 'fake-pi.cmd'), FAKE_PI_NODE: process.execPath,
         PI_CODING_AGENT_DIR: path.join(world, 'agent'), T3B_COMMAND_LOG: path.join(world, 'commands'), TEMP: world, TMP: world, TMPDIR: world } });
@@ -78,6 +79,13 @@ setInterval(()=>{try{process.kill(parent,0);}catch{process.exit(0);}},300);
     await until("document.querySelector('#btnReviewStorage')?.textContent==='评论已同步'", 'comment recovery');
     check('renderer keeps sandbox/context isolation', win.webContents.getLastWebPreferences().sandbox === true && win.webContents.getLastWebPreferences().contextIsolation === true);
     const storage = path.join(world, 'data', 'review-comments');
+    let changedDigest;
+    if (RANGES) {
+      await rangePhase();
+      check('comment recovery never sends an Agent message', !/^(prompt|steer|follow_up)$/m.test(fs.readFileSync(path.join(world, 'commands'), 'utf8')) && await read("document.querySelector('#input').value===''") );
+      check('review actions never modify project files', digest(path.join(project,'a.js')) === (phase === 'restore-stale' ? changedDigest : before));
+      return;
+    }
     if (phase !== 'save') {
       check('prior confirmed revision is present on disk', fs.readdirSync(storage).filter(n => n.endsWith('.json')).length === 1);
       await read("document.querySelector('#btnChangesReview').click()");
@@ -110,6 +118,62 @@ setInterval(()=>{try{process.kill(parent,0);}catch{process.exit(0);}},300);
     }
     check('comment recovery never sends an Agent message', !/^(prompt|steer|follow_up)$/m.test(fs.readFileSync(path.join(world, 'commands'), 'utf8')) && await read("document.querySelector('#input').value===''") );
     check('source content remains untouched', digest(path.join(project, 'a.js')) === before);
+
+    async function rangePhase() {
+      const summary=async()=>{await read("document.querySelector('#btnChangesReview').click()");await until("document.querySelector('.review-summary-body')",'summary');};
+      const closeSummary=()=>read("[...document.querySelectorAll('#modalCard button')].find(b=>b.textContent==='关闭').click()");
+      const openDiff=async()=>{await read("(()=>{const r=document.querySelector('.chg-row');if(r.querySelector('.chg-diff').hidden)r.querySelector('.chg-main').click()})()");await until("document.querySelectorAll('.d-row').length>=5",'range Diff');};
+      const disk=()=>JSON.parse(fs.readFileSync(path.join(storage,fs.readdirSync(storage).find(n=>n.endsWith('.json'))),'utf8'));
+      const save=async(text)=>{
+        await read(`(()=>{const t=[...document.querySelectorAll('.d-review-editor')].find(e=>JSON.parse(e.dataset.anchor).range)?.querySelector('textarea')||document.querySelector('.d-review-editor textarea');t.value=${JSON.stringify(text)};t.dispatchEvent(new Event('input',{bubbles:true}));t.closest('.d-review-editor').querySelector('.primary').click()})()`);
+        await until("!document.querySelector('.d-review-editor')",'range acknowledged');
+      };
+      if (phase === 'save') {
+        await openDiff();
+        await read("document.querySelector('.d-row[data-line-type=add] .d-gutter').click()");await save('single remains compatible');
+        check('single-only storage retains schema v1',disk().version===1);
+        // Real trusted Shift click on two distinct gutter coordinates.
+        const click=async(selector,shift=false)=>{
+          const p=await read(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});n.scrollIntoView({block:'center'});const r=n.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`);
+          for (const type of ['mouseDown','mouseUp']) win.webContents.sendInputEvent({type,...p,button:'left',clickCount:1,modifiers:shift?['shift']:[]});
+          await sleep(50);
+        };
+        await click('.d-row[data-new-line="2"] .d-gutter');await click('.d-row[data-new-line="4"] .d-gutter',true);
+        await until("document.querySelector('.d-review-range-action button')",'trusted range selection');
+        check('trusted Shift click highlights exactly three rows',await read("document.querySelectorAll('.range-selected').length===3"));
+        await read("document.querySelector('.d-review-range-action button').click()");
+        check('range editor receives keyboard focus',await read("document.activeElement===document.querySelector('.d-review-editor textarea')"));
+        await save('跨重启区间意见');
+        check('first range upgrades the actual v1 store and retains the single',disk().version===2&&disk().comments.length===2&&disk().comments.filter(c=>c.anchor.range).length===1);
+        fs.writeFileSync(path.join(OUT,'range-saved.png'),(await win.webContents.capturePage()).toPNG());
+      } else {
+        await summary();
+        check('single-line opinion restores beside the range',await read("[...document.querySelectorAll('.review-item-text')].some(n=>n.textContent==='single remains compatible')"));
+        if (phase === 'confirm-deleted') {
+          check('range deletion survives restart without deleting the single',await read("document.querySelectorAll('.review-item').length===1"));return;
+        }
+        check('restored ranges start pending',await read("document.querySelectorAll('.review-unverified').length===2"));await closeSummary();await openDiff();
+        if (['restore-edit','restore-stale'].includes(phase)) check('current complete Diff revalidates the range',await read("document.querySelectorAll('.d-review-range-marker').length===1"));
+        if (phase === 'restore-edit') {
+          await read("document.querySelector('.d-review-range-marker').click()");await save('跨重启修改区间');
+          check('range edit preserves single and ordered hashes',disk().comments.find(c=>c.anchor.range).text==='跨重启修改区间'&&disk().comments.find(c=>c.anchor.range).anchor.range.lines.length===3);
+          fs.writeFileSync(path.join(OUT,'range-restored.png'),(await win.webContents.capturePage()).toPNG());
+        } else if (phase === 'restore-stale') {
+          // Explicit fixture mutation, separate from review actions.
+          fs.writeFileSync(path.join(project,'a.js'),fs.readFileSync(path.join(project,'a.js'),'utf8').replace('const extra = 2','const extra = 99'));
+          changedDigest=digest(path.join(project,'a.js'));
+          await read("document.querySelector('#btnChangesRefresh').click()");await until("!document.querySelector('.d-row')",'refresh replaced Diff');await openDiff();await summary();
+          check('interior code change makes only the range stale',await read("document.querySelectorAll('.review-stale').length===1&&[...document.querySelectorAll('.review-item')].find(n=>n.textContent.includes('single remains')).dataset.stale==='false'"));
+          check('stale feedback retains the original range and text',await read("document.querySelector('.review-feedback-preview').value.includes('跨重启修改区间')&&document.querySelector('.review-feedback-preview').value.includes('新文件第 2～4 行')"));
+          fs.writeFileSync(path.join(OUT,'range-stale.png'),(await win.webContents.capturePage()).toPNG());
+        } else {
+          await summary();
+          check('stale state is re-established after another process restart',await read("document.querySelectorAll('.review-stale').length===1"));
+          await read("[...document.querySelectorAll('.review-item')].find(n=>n.textContent.includes('跨重启修改区间')).querySelector('.danger').click()");await until("document.querySelectorAll('.review-item').length===1",'range deletion');
+          check('deleting stale range keeps v2 and single',disk().version===2&&disk().comments.length===1&&!disk().comments[0].anchor.range);
+        }
+      }
+    }
   }).then(() => finish(0), error => { console.error(error); finish(1); });
   async function finish(failed) {
     fs.writeFileSync(path.join(OUT, phase + '.json'), JSON.stringify({ checks, failed, skipped: 0, electron: process.versions.electron, chrome: process.versions.chrome }));

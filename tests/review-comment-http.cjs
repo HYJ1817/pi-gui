@@ -72,6 +72,15 @@ let checks=0;const check=async(name,fn)=>{await fn();checks++;console.log('  ok 
       const response=await fetch(base+'/api/review-comments',{method:'POST',headers:{'x-pi-gui-token':token,'x-pi-gui-conversation':current,'x-pi-gui-owner':currentOwner},body:bytes});
       assert.equal(response.status,400);assert.deepEqual((await request()).body.comments,state.comments);
     });
+    await check('authenticated range roundtrip preserves the single and rejects forged row evidence',async()=>{
+      const range=makeComment();range.anchor.range={version:1,lines:[{type:'add',oldLine:null,newLine:1,codeHash:'abcdef01'},{type:'add',oldLine:null,newLine:2,codeHash:'12345678'}]};
+      let r=await request('POST',{scope:state.scope,token:state.token,revision:state.revision,comments:[...state.comments,range]});
+      assert.equal(r.status,200);assert.deepEqual((await request()).body.comments,r.body.comments);state=r.body;
+      const bad=structuredClone(state.comments);bad[1].anchor.range.lines[1].source='private source';
+      r=await request('POST',{scope:state.scope,token:state.token,revision:state.revision,comments:bad});assert.equal(r.status,400);assert.deepEqual((await request()).body.comments,state.comments);
+      // Return to the original single snapshot for the original isolation tests.
+      r=await request('POST',{scope:state.scope,token:state.token,revision:state.revision,comments:[state.comments[0]]});assert.equal(r.status,200);state=r.body;
+    });
     await check('switching scope cannot read or delete the previous scope',async()=>{
       current='B';currentOwner='owner-B';assert.equal((await request()).body.comments.length,0);
       const r=await request('POST',{scope:state.scope,token:state.token,revision:state.revision,comments:[]});assert.equal(r.status,409);

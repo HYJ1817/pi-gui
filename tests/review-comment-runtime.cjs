@@ -45,7 +45,9 @@ const check = async (name, action) => { await action(); checks++; console.log(' 
     registry = createRuntimeRegistry(options);
     const ar = await registry.start({ id: a.id, epoch: a.epoch }); await focus(ar.conversationId);
     const aOwner = registry.getOwner(ar.conversationId), aScope = await authority()(req(ar.conversationId), s => s);
-    const saved = store().write(aScope, null, [comment]);
+    const range = structuredClone(comment); range.id='range-a';range.text='A range only';
+    range.anchor.range={version:1,lines:[{type:'add',oldLine:null,newLine:1,codeHash:'abcdef01'},{type:'add',oldLine:null,newLine:2,codeHash:'12345678'}]};
+    const saved = store().write(aScope, null, [comment,range]);
     const br = await registry.start({ id: b.id, epoch: b.epoch }); await focus(br.conversationId);
     const bScope = await authority()(req(br.conversationId), s => s);
     await check('real linked worktrees share a repository but have separate comment identities', () => {
@@ -59,6 +61,10 @@ const check = async (name, action) => { await action(); checks++; console.log(' 
     await check('persisted conversation restores the same scope after manager/registry recreation', () => {
       assert.equal(restored.key, aScope.key); assert.notEqual(registry.getOwner(ar.conversationId).runtimeId, aOwner.runtimeId);
       assert.deepEqual(store().read(restored), saved);
+    });
+    await check('restored Worktree v2 contains both original single and range evidence',()=>{
+      const records=store().read(restored).comments;assert.deepEqual(records,[comment,range]);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(data,'review-comments',restored.key+'.json'),'utf8')).version,2);
     });
     await check('the old owner guard is invalid after backend recreation', () => assert.throws(() => aScope.assertCurrent()));
     await registry.closeAll();
