@@ -27,6 +27,19 @@
 
 以上不改变 CI 触发、测试清单、gate 或发布脚本，也不授予联网模型调用、推送、合并、tag 或发布权限。
 
+## T3-B 评论持久化验证
+
+`npm run test:review-comments` 已进入 canonical，覆盖真实临时文件、损坏/版本/UTF-8、
+CAS/残留锁、链接与目录替换、完整 owner、真实 Git Worktree + Runtime Registry 重建、
+认证 HTTP 与前端异步协调。Windows 文件占用使用真实 FileShare fixture；
+EACCES/EPERM/ENOSPC 和 flush 后目录替换另有明确的故障注入，不冒充真实磁盘耗尽。
+T3-A 的单元、Changes 与 Specs 分屏回归继续保留，并增加失败保留正文和关闭时迟到保存检查。
+
+`npm run test:review-comments:electron` 是专项：四个独立 Electron/后端进程共用专用临时数据，
+保存→退出→恢复并修改→重启后删除→再重启确认删除。默认正常沙箱；辅助诊断可显式
+`T3B_TEST_NO_SANDBOX=1`，结果必须分开记录。既有 `test:diff-comments:electron` 覆盖原生 Browser 分屏生命周期。
+验收数字与环境只见 [T3-B 验收](T3-B-acceptance.md)，不替代当前提交的完整证明。
+
 ## 2026-10-19 原始审查剩余回归
 
 `npm test` 新增 `tests/review-regressions.cjs`，覆盖附件解析期间的发送闸门、

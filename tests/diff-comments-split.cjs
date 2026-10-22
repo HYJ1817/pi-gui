@@ -91,7 +91,9 @@ const indexPayload = (id) => ({
   configureSecondaryPane(pane);
 
   let scope = 'A';
+  const reviewBackend = require('./fixtures/review-comment-backend.cjs')(() => S.cwd + '|' + S.state.sessionId);
   global.fetch = async (url, options = {}) => {
+    if (String(url).endsWith('/api/review-comments')) return reviewBackend.response(options);
     const id = options.headers?.['X-Pi-Gui-Conversation'] || null;
     if (String(url).endsWith('/api/git/status')) {
       return {

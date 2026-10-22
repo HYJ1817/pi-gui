@@ -1,8 +1,7 @@
 /* In-memory, line-anchored review comments for the Changes panel.
  *
- * There is deliberately no backend write route, localStorage entry or file
- * persistence here. A comment belongs to the exact workspace/conversation
- * scope it was created in, and disappears when the application restarts.
+ * This pure model owns anchor reconciliation. review-comment-persistence.js
+ * coordinates backend snapshots and confirmed writes; drafts remain in the UI.
  *
  * The anchor keeps both Git coordinates and content evidence. Matching is
  * conservative: when a line cannot be re-identified uniquely it is marked
@@ -195,6 +194,24 @@ export function deleteComment(commentId, scope = currentReviewScope()) {
   list.splice(index, 1);
   emitChange(scope);
   return true;
+}
+
+/** Only the persistence coordinator calls this after validating a backend
+ * snapshot. Restored anchors need new Diff evidence; derived flags and code
+ * snippets are never disk authority. */
+export function replaceReviewComments(records, scope = currentReviewScope(), { previous = [], restored = true } = {}) {
+  if (!Array.isArray(records) || records.length > REVIEW_LIMITS.comments) return false;
+  if (!records.length && !scopes.has(scope)) { emitChange(scope); return true; }
+  const list = writableBucket(scope);
+  if (!list) return false;
+  const next = records.map(record => {
+    const before = previous.find(c => c.id === record.id);
+    return { ...record, scope, anchor: { ...record.anchor, snippet: before?.anchor?.snippet || '' },
+      stale: restored ? false : Boolean(before?.stale), verified: restored ? false : before?.verified === true,
+      resolvedLine: restored ? null : before?.resolvedLine || null,
+      lastFingerprint: before?.lastFingerprint || record.anchor.diffFingerprint };
+  });
+  list.splice(0, list.length, ...next); emitChange(scope); return true;
 }
 
 /**

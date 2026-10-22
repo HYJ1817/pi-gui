@@ -40,7 +40,6 @@ import { openSecondarySurface } from './ui/secondary-surface.js';
 import { allHunksOpen, bindDiffToggles, countDiffLines, diffHtml, setAllHunks } from './diff.js';
 import {
   REVIEW_LIMITS,
-  addComment,
   beginReviewRefresh,
   commentCount,
   commentAtPosition,
@@ -48,14 +47,13 @@ import {
   commentsForPath,
   commentsForScope,
   currentReviewScope,
-  deleteComment,
   formatReviewFeedback,
   lineLabel,
   markMissingPathsStale,
   reconcileSectionOptions,
   sectionLabel as reviewSectionLabel,
-  updateComment,
 } from './diff-comments.js';
+import { loadReviewComments, saveReviewComment, removeReviewComment, reviewPersistenceState } from './review-comment-persistence.js';
 import { fillReviewComposer } from './review-fill.js';
 
 /* 自动刷新的防抖窗口。
@@ -113,6 +111,7 @@ let lastContext = null;
 let restoreAllBtn = null;
 let activeChangesSurface = null;
 let reviewButton = null;
+let reviewStorageButton = null;
 let reviewSummaryClose = null;
 /* A classic session switch changes the comment owner immediately, but
  * S.state.sessionId only catches up after boot(). Keep the old session's
@@ -332,6 +331,26 @@ export async function refreshGitNow() {
    * Collapsed files keep their comments as "尚未重新确认", never as valid. */
   beginReviewRefresh();
   renderChangesBody();
+  if (panels.changes) await restoreReviewComments();
+}
+
+async function restoreReviewComments(force = false) {
+  const scope = currentReviewScope(), revision = scopeRevision;
+  const result = await loadReviewComments({ force });
+  if (scope === currentReviewScope() && revision === scopeRevision && !reviewScopeSuspended) {
+    if (result.ok) {
+      if (S.changes.loaded && S.changes.isRepo) markMissingPathsStale(S.changes.files.map(f => f.path));
+      decorateReviewBlocks();
+    }
+    syncReviewButton();
+  }
+  return result;
+}
+
+function storageLabel() {
+  const state = reviewPersistenceState();
+  return state.error || ({ idle: '评论待恢复', loading: '评论恢复中', ready: '评论已同步',
+    saving: '评论保存中', error: '评论保存失败', conflict: '评论数据冲突', unavailable: '评论恢复不可用' }[state.status]);
 }
 
 /* ---------- 面板 ---------- */
@@ -364,6 +383,7 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
     panels.changes = null;
     restoreAllBtn = null;
     reviewButton = null;
+    reviewStorageButton = null;
     if (activeChangesSurface === instance) activeChangesSurface = null;
     /* Closing the panel (or swapping it for another surface) discards unsaved
      * editor text. This is a deliberate rule: drafts live in memory together
@@ -410,7 +430,16 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   btnReview.onclick = () => openReviewSummary();
   reviewButton = btnReview;
 
-  head.append(h, sub, grow, btnAll, btnReview, btnRefresh, ...extraActions);
+  const storage = document.createElement('button');
+  storage.type = 'button'; storage.id = 'btnReviewStorage'; storage.className = 'btn tiny';
+  storage.setAttribute('aria-label', '重新加载评论');
+  storage.onclick = () => restoreReviewComments(true);
+  reviewStorageButton = storage;
+  const onStorage = () => syncReviewButton();
+  document.addEventListener('pi-gui:review-storage', onStorage);
+  instance.onDispose(() => document.removeEventListener('pi-gui:review-storage', onStorage));
+
+  head.append(h, sub, grow, btnAll, btnReview, storage, btnRefresh, ...extraActions);
   card.appendChild(head);
 
   const body = document.createElement('div');
@@ -425,7 +454,7 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
 
   // 打开就用最新数据重画一次（先用已有状态垫一帧，避免空白等待）
   loadGitStatus().then(() => {
-    if (instance.isCurrent()) renderChangesBody();
+    if (instance.isCurrent()) { renderChangesBody(); void restoreReviewComments(); }
   });
 }
 
@@ -559,6 +588,12 @@ function syncRestoreAllBtn(c) {
 
 function syncReviewButton() {
   if (!reviewButton) return;
+  if (reviewStorageButton) {
+    const state = reviewPersistenceState();
+    reviewStorageButton.textContent = ['error', 'conflict', 'unavailable'].includes(state.status) ? '重新加载评论' : storageLabel();
+    reviewStorageButton.title = storageLabel() + '；重新加载已保存评论，保留当前编辑框的草稿';
+    reviewStorageButton.disabled = reviewScopeSuspended || ['saving', 'loading'].includes(state.status);
+  }
   if (reviewScopeSuspended) {
     reviewButton.textContent = '审查意见';
     reviewButton.disabled = true;
@@ -569,7 +604,7 @@ function syncReviewButton() {
   reviewButton.textContent = count ? `审查意见 ${count}` : '审查意见';
   reviewButton.disabled = false;
   reviewButton.title = count
-    ? `当前作用域有 ${count} 条行级评论；评论只保留到应用重启`
+    ? `当前作用域有 ${count} 条已保存的行级评论`
     : '还没有行级评论；在 Diff 行号上添加';
 }
 
@@ -925,22 +960,27 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   hintNode.className = 'd-review-hint';
   hintNode.textContent = occupied
     ? '这一行已有一条过期评论；只能删除它，不能再挂一条新的。'
-    : existing ? '评论保存在内存中，应用重启后不保留。' : '同一行第一阶段只保留一条评论。';
+    : '保存成功后可跨重启恢复；未保存的草稿不恢复。同一行只保留一条评论。';
   actions.append(save, cancel, remove, hintNode);
 
   const fail = (message) => {
     status.textContent = message;
     status.classList.add('err');
   };
-  save.onclick = () => {
+  const editorScope = currentReviewScope(), editorRevision = scopeRevision;
+  const stillHere = () => editor.isConnected && editorScope === currentReviewScope() && editorRevision === scopeRevision && !reviewScopeSuspended;
+  const busy = value => { save.disabled = value || Boolean(occupied); remove.disabled = value; cancel.disabled = value; input.readOnly = value || Boolean(occupied); };
+  save.onclick = async () => {
+    if (!stillHere()) return;
     status.classList.remove('err');
     if (reviewScopeSuspended) {
       fail('正在切换会话，未保存；请刷新后重试。');
       return;
     }
-    const result = existing
-      ? updateComment(existing.id, input.value)
-      : addComment({ path, anchor, text: input.value });
+    busy(true); status.textContent = '正在保存…';
+    const result = await saveReviewComment({ commentId: existing?.id, path, anchor, text: input.value });
+    if (!stillHere()) return;
+    busy(false);
     if (!result.ok) {
       fail(result.error);
       return;
@@ -957,10 +997,15 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
     closeReviewEditor(row);
     row.querySelector('.d-gutter')?.focus({ preventScroll: true });
   };
-  remove.onclick = () => {
+  remove.onclick = async () => {
     const target = existing || occupied;
     if (!target) return;
-    deleteComment(target.id);
+    if (!stillHere()) return;
+    busy(true); status.textContent = '正在删除…';
+    const result = await removeReviewComment(target.id);
+    if (!stillHere()) return;
+    busy(false);
+    if (!result.ok) { fail(result.error); return; }
     pendingReviewDrafts.delete(key);
     setRowComment(row, null);
     closeReviewEditor(row);
@@ -1128,7 +1173,7 @@ function openReviewSummary() {
     title.textContent = '审查意见';
     const note = document.createElement('p');
     note.className = 'review-summary-note';
-    note.textContent = '当前工作区与聚焦会话的临时评论；不会写入项目、Git 或 Planner，重启后不保留。';
+    note.textContent = '已保存评论归属当前工作区与会话，保存在应用数据目录，可跨重启恢复；未保存草稿不恢复。';
     head.append(title, note);
 
     const actions = document.createElement('div');
@@ -1217,11 +1262,15 @@ function openReviewSummary() {
             del.type = 'button';
             del.className = 'btn tiny danger';
             del.textContent = '删除';
-            del.onclick = () => {
-              deleteComment(comment.id, scope);
+            del.disabled = ['saving', 'loading', 'unavailable', 'conflict', 'idle'].includes(reviewPersistenceState(scope).status);
+            del.onclick = async () => {
+              if (scope !== currentReviewScope() || reviewScopeSuspended) return;
+              del.disabled = true;
+              const result = await removeReviewComment(comment.id);
+              if (!card.isConnected || scope !== currentReviewScope()) return;
               syncReviewButton();
               draw();
-              status.textContent = '评论已删除。';
+              status.textContent = result.ok ? '评论已删除。' : result.error;
             };
             meta.append(where, edit, del);
             const text = document.createElement('p');
@@ -1244,7 +1293,7 @@ function openReviewSummary() {
       preview.value = feedback;
       copy.disabled = !comments.length;
       fill.disabled = !comments.length;
-      if (!comments.length) status.textContent = '';
+      status.textContent = storageLabel();
     };
 
     copy.onclick = () => {
@@ -1285,8 +1334,10 @@ function openReviewSummary() {
       draw();
     };
     document.addEventListener('pi-gui:review-change', onReviewChange);
+    document.addEventListener('pi-gui:review-storage', onReviewChange);
   }, () => {
     if (onReviewChange) document.removeEventListener('pi-gui:review-change', onReviewChange);
+    if (onReviewChange) document.removeEventListener('pi-gui:review-storage', onReviewChange);
     onReviewChange = null;
     if (reviewSummaryClose === closeThis) reviewSummaryClose = null;
   }, { className: 'review-summary', labelledBy: 'reviewSummaryTitle' });

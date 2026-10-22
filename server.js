@@ -55,6 +55,9 @@ import { createProviderAuth } from './server/provider-auth.js';
 import { createAuthRuntimeSync } from './server/provider-auth-runtime.js';
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
+import { createReviewCommentStore } from './server/review-comment-store.js';
+import { createReviewCommentAuthority } from './server/review-comment-authority.js';
+import { createReviewCommentRoutes } from './server/review-comment-routes.js';
 import { createSessionExport } from './server/session-export.js';
 import { readSessionMessages, readSessionText } from './server/session-history.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
@@ -990,6 +993,14 @@ const revertMutationAuthority = createSessionRevertMutationAuthority({ withAutho
     classic:{ root:()=>runtime.getCurrentCwd(), blocked:()=>Boolean(plannerRef?.projectSwitchBlockReason()||cliInFlight),
       manager:managedProcesses.manager, abort:command=>rpc.abortAndWait(command) } }) });
 const route = createRouter({
+  reviewComments: createReviewCommentRoutes({
+    store: createReviewCommentStore({ dataDir: DATA_DIR,
+      protectedRoots: () => [__dirname, ...projects.read().items.map(p => p.path)] }),
+    withAuthority: createReviewCommentAuthority({ registry: runtimeRegistry, withWorkspace: withWorkspaceIdentity,
+      classic: { cwd: () => runtime.getCurrentCwd(), generation: () => runtime.getWorkspaceGeneration(),
+        owner: primaryOwner, state: () => rpc.request({ type: 'get_state' }),
+        resolveSession: id => sessions.resolveByUuid(id), withWorkspace: (cwd, action) => worktrees.withActivation(cwd, action) } }),
+  }),
   sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,
     withReadAdmission:()=>evidenceAdmission.assertReady() }),
   commandAdmission: async cmd => {
