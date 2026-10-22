@@ -51,6 +51,10 @@ async function until(fn){for(let i=0;i<200;i++){if(fn())return;await tick();}thr
   box(a.id).click();check('toggle retains keyboard focus and updates count',()=>!box(a.id).checked&&document.activeElement===box(a.id)&&document.querySelector('.review-task-count').textContent.includes('1 条'));
   generate();check('preview contains exactly selected range',()=>preview().value.includes('range opinion')&&!preview().value.includes('single opinion'));
   check('preview receives focus and distinguishes real workspace risk',()=>document.activeElement===preview()&&document.querySelector('.review-task').textContent.includes('真实工作区执行')&&preview().value.includes('不是代码补丁'));
+  preview().dispatchEvent(new window.KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true}));
+  check('last visible preview control wraps Tab to the visible first action',()=>document.activeElement===action('返回选择'));
+  action('返回选择').dispatchEvent(new window.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true}));
+  check('Shift Tab wraps back to the visible preview instead of hidden controls',()=>document.activeElement===preview());
   action('返回选择').click();check('back retains selection',()=>!box(a.id).checked&&box(r.id).checked);
   action('取消选择').click();check('empty selection disables preview',()=>action('预览修改任务').disabled&&boxes().every(b=>!b.checked));
   action('全选有效评论').click();check('select all excludes stale and pending',()=>boxes().filter(b=>b.checked).length===2);

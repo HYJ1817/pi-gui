@@ -16,6 +16,13 @@ module.exports=async function taskFlow({read,until,shot,win,check,label,focusSwi
   check(`${label}: returning preserves the subset`,await read(`document.querySelectorAll('.review-task input[data-comment-id]:checked').length===${expected.length}`));
   await click('全选有效评论');await click('预览修改任务');
   if(onPreview)await onPreview();
+  await read("document.querySelector('.review-task textarea').focus()");
+  win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'});win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});
+  await new Promise(r=>setTimeout(r,50));
+  check(`${label}: Tab wraps from preview to first visible action`,await read("document.activeElement===[...document.querySelectorAll('.review-task button')].find(b=>b.textContent==='返回选择')"));
+  win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab',modifiers:['shift']});win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab',modifiers:['shift']});
+  await new Promise(r=>setTimeout(r,50));
+  check(`${label}: Shift Tab returns to preview without visiting hidden summary`,await read("document.activeElement===document.querySelector('.review-task textarea')"));
   check(`${label}: adjusted preview includes every eligible opinion`,await read(`document.querySelector('.review-task-count').textContent.includes('${selected.length} 条')&&!!document.querySelector('.review-task textarea').value`));
   for(const width of [720,900,1200,1536]) {
     win.setContentSize(width,850);await new Promise(r=>setTimeout(r,200));
