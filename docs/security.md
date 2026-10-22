@@ -802,3 +802,9 @@ message、filesystem root、channelDir、requestFile、replyFile、raw request b
 
 具体格式、容量和 UI 语义见 [Git Changes](git-changes.md#九行级评论持久化t3-b)，
 验证范围见 [T3-B 验收](T3-B-acceptance.md)。不改变 Agent 执行、用户文件写入或撤销权限。
+
+T4-A 只在内存组合用户选中的已确认审查意见，不新增存储或执行入口。
+任务中的意见、路径与会话是被引用的数据，DOM 使用文本节点；预览过期即阻止复制和填入。
+沿用现有 Composer 归属与草稿追加检查，不发消息或模拟发送。提示文本不是强制文件写入隔离，
+用户随后发送可能让 Agent 在真实工作区修改文件。当前数据流与检查统一见
+[准备修改任务](git-changes.md#十一准备修改任务t4-a)。

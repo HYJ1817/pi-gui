@@ -1,0 +1,1866 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "sha": "062c87c155984ba9bddab52cac59234300fb498d",
+    "ciRun": 39796797262,
+    "event": "push",
+    "attempt": 1,
+    "runConclusion": "success",
+    "gate": "success",
+    "note": "build job API status inconsistent with completed steps; no independent 8/8 jobs claim"
+  },
+  "verifiedCommit": "45024299bd64dfa157a86559a14db58f55e178a6",
+  "canonical": {
+    "kind": "local groups dynamically expanded from npm test and lifecycle",
+    "startedAt": "2026-10-22T16:05:57.563Z",
+    "finishedAt": "2026-10-22T16:22:54.143Z",
+    "elapsedSeconds": 1016.58,
+    "commands": 179,
+    "failed": 0,
+    "skippedAssertions": 19,
+    "skipDetails": [
+      {
+        "suite": "logging symlink",
+        "count": 1
+      },
+      {
+        "suite": "session-revert-sacl-witness",
+        "count": 8
+      },
+      {
+        "suite": "inplace nonempty SACL",
+        "count": 2
+      },
+      {
+        "suite": "object witness",
+        "count": 8
+      }
+    ],
+    "groups": [
+      {
+        "schemaVersion": 1,
+        "group": "core",
+        "sha": "45024299bd64dfa157a86559a14db58f55e178a6",
+        "startedAt": "2026-10-22T16:05:57.563Z",
+        "finishedAt": "2026-10-22T16:12:22.386Z",
+        "results": [
+          {
+            "index": 1,
+            "command": "node tests/ci-test-plan.cjs",
+            "startedAt": "2026-10-22T16:05:57.568Z",
+            "durationMs": 504.2136,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 2,
+            "command": "node tests/ci-workflow.cjs",
+            "startedAt": "2026-10-22T16:05:58.072Z",
+            "durationMs": 150.0721,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 3,
+            "command": "node tests/release-ci-proof.cjs",
+            "startedAt": "2026-10-22T16:05:58.223Z",
+            "durationMs": 144.9641,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 4,
+            "command": "node tests/nsis-bootstrap.cjs",
+            "startedAt": "2026-10-22T16:05:58.368Z",
+            "durationMs": 319.8844,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 5,
+            "command": "node tests/app-update.cjs",
+            "startedAt": "2026-10-22T16:05:58.687Z",
+            "durationMs": 479.4881,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 6,
+            "command": "node tests/app-update-maintenance.cjs",
+            "startedAt": "2026-10-22T16:05:59.167Z",
+            "durationMs": 191.0856,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 7,
+            "command": "node tests/app-update-activity.cjs",
+            "startedAt": "2026-10-22T16:05:59.358Z",
+            "durationMs": 1525.1425,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 8,
+            "command": "node tests/app-update-backend.cjs",
+            "startedAt": "2026-10-22T16:06:00.883Z",
+            "durationMs": 540.2785,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 9,
+            "command": "node tests/session-tool-scheduler.cjs",
+            "startedAt": "2026-10-22T16:06:01.424Z",
+            "durationMs": 261.5479,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 10,
+            "command": "node tests/session-tool-bridge.cjs",
+            "startedAt": "2026-10-22T16:06:01.685Z",
+            "durationMs": 328.0255,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 11,
+            "command": "node tests/ordinary-session-resolver.cjs",
+            "startedAt": "2026-10-22T16:06:02.013Z",
+            "durationMs": 192.1919,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 12,
+            "command": "node tests/ordinary-session-runtime.cjs",
+            "startedAt": "2026-10-22T16:06:02.205Z",
+            "durationMs": 216.999,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 13,
+            "command": "node tests/session-background.cjs",
+            "startedAt": "2026-10-22T16:06:02.422Z",
+            "durationMs": 199.3508,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 14,
+            "command": "node tests/session-background-ui.cjs",
+            "startedAt": "2026-10-22T16:06:02.622Z",
+            "durationMs": 845.28,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 15,
+            "command": "node tests/session-background-recovery.cjs",
+            "startedAt": "2026-10-22T16:06:03.467Z",
+            "durationMs": 164.8919,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 16,
+            "command": "node tests/review-regressions.cjs",
+            "startedAt": "2026-10-22T16:06:03.632Z",
+            "durationMs": 2338.4828,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 17,
+            "command": "node tests/high-risk-regressions.cjs",
+            "startedAt": "2026-10-22T16:06:05.971Z",
+            "durationMs": 3826.2991,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 18,
+            "command": "node tests/logging.cjs",
+            "startedAt": "2026-10-22T16:06:09.797Z",
+            "durationMs": 549.592,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 19,
+            "command": "node tests/logging-leaks.cjs",
+            "startedAt": "2026-10-22T16:06:10.347Z",
+            "durationMs": 333.416,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 20,
+            "command": "node tests/logging-secret-state.cjs",
+            "startedAt": "2026-10-22T16:06:10.680Z",
+            "durationMs": 337.4796,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 21,
+            "command": "node tests/logging-client.cjs",
+            "startedAt": "2026-10-22T16:06:11.018Z",
+            "durationMs": 2727.1429,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 22,
+            "command": "node tests/specs.cjs",
+            "startedAt": "2026-10-22T16:06:13.745Z",
+            "durationMs": 311.3783,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 23,
+            "command": "node tests/specs-ui.cjs",
+            "startedAt": "2026-10-22T16:06:14.056Z",
+            "durationMs": 1145.1117,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 24,
+            "command": "node tests/diff-comments.cjs",
+            "startedAt": "2026-10-22T16:06:15.201Z",
+            "durationMs": 816.5605,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 25,
+            "command": "node tests/diff-comments-ui.cjs",
+            "startedAt": "2026-10-22T16:06:16.018Z",
+            "durationMs": 1904.2862,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 26,
+            "command": "node tests/diff-comments-split.cjs",
+            "startedAt": "2026-10-22T16:06:17.922Z",
+            "durationMs": 1116.6743,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 27,
+            "command": "node tests/diff-comment-ranges.cjs",
+            "startedAt": "2026-10-22T16:06:19.039Z",
+            "durationMs": 933.65,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 28,
+            "command": "node tests/diff-comment-ranges-ui.cjs",
+            "startedAt": "2026-10-22T16:06:19.973Z",
+            "durationMs": 1278.3602,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 29,
+            "command": "node tests/review-task.cjs",
+            "startedAt": "2026-10-22T16:06:21.251Z",
+            "durationMs": 149.397,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 30,
+            "command": "node tests/review-task-ui.cjs",
+            "startedAt": "2026-10-22T16:06:21.401Z",
+            "durationMs": 974.8095,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 31,
+            "command": "node tests/review-comment-store.cjs",
+            "startedAt": "2026-10-22T16:06:22.375Z",
+            "durationMs": 2432.9881,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 32,
+            "command": "node tests/review-comment-authority.cjs",
+            "startedAt": "2026-10-22T16:06:24.808Z",
+            "durationMs": 3502.6886,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 33,
+            "command": "node tests/review-comment-runtime.cjs",
+            "startedAt": "2026-10-22T16:06:28.311Z",
+            "durationMs": 14763.3426,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 34,
+            "command": "node tests/review-comment-http.cjs",
+            "startedAt": "2026-10-22T16:06:43.075Z",
+            "durationMs": 572.2726,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 35,
+            "command": "node tests/review-comment-persistence-ui.cjs",
+            "startedAt": "2026-10-22T16:06:43.647Z",
+            "durationMs": 671.3512,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 36,
+            "command": "node tests/review-comment-ranges-store.cjs",
+            "startedAt": "2026-10-22T16:06:44.318Z",
+            "durationMs": 854.6532,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 37,
+            "command": "node tests/split-workbench-ui.cjs",
+            "startedAt": "2026-10-22T16:06:45.173Z",
+            "durationMs": 1054.6423,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 38,
+            "command": "node tests/browser-workbench-ui.cjs",
+            "startedAt": "2026-10-22T16:06:46.227Z",
+            "durationMs": 5992.8248,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 39,
+            "command": "node tests/browser-viewport-safety.cjs",
+            "startedAt": "2026-10-22T16:06:52.220Z",
+            "durationMs": 162.388,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 40,
+            "command": "node tests/exe-diagnostics.cjs",
+            "startedAt": "2026-10-22T16:06:52.383Z",
+            "durationMs": 133.8087,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 41,
+            "command": "node tests/runtime-models.cjs",
+            "startedAt": "2026-10-22T16:06:52.517Z",
+            "durationMs": 1858.9674,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 42,
+            "command": "node tests/model-fallback.cjs",
+            "startedAt": "2026-10-22T16:06:54.376Z",
+            "durationMs": 2011.3642,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 43,
+            "command": "node tests/model-capabilities.cjs",
+            "startedAt": "2026-10-22T16:06:56.387Z",
+            "durationMs": 845.1819,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 44,
+            "command": "node tests/ux-state.cjs",
+            "startedAt": "2026-10-22T16:06:57.232Z",
+            "durationMs": 7758.3646,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 45,
+            "command": "node tests/native-provider-quota.cjs",
+            "startedAt": "2026-10-22T16:07:04.990Z",
+            "durationMs": 657.6918,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 46,
+            "command": "node tests/stable-session-order.cjs",
+            "startedAt": "2026-10-22T16:07:05.648Z",
+            "durationMs": 176.1659,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 47,
+            "command": "node tests/hotfix.cjs",
+            "startedAt": "2026-10-22T16:07:05.824Z",
+            "durationMs": 848.8551,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 48,
+            "command": "node tests/provider-auth.cjs",
+            "startedAt": "2026-10-22T16:07:06.673Z",
+            "durationMs": 1214.6853,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 49,
+            "command": "node tests/provider-auth-runtime.cjs",
+            "startedAt": "2026-10-22T16:07:07.888Z",
+            "durationMs": 228.9014,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 50,
+            "command": "node tests/git.cjs",
+            "startedAt": "2026-10-22T16:07:08.117Z",
+            "durationMs": 31126.5502,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 51,
+            "command": "node tests/modules.cjs",
+            "startedAt": "2026-10-22T16:07:39.243Z",
+            "durationMs": 191.51,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 52,
+            "command": "node tests/reliability.cjs",
+            "startedAt": "2026-10-22T16:07:39.435Z",
+            "durationMs": 197.9176,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 53,
+            "command": "node tests/interactions.cjs",
+            "startedAt": "2026-10-22T16:07:39.633Z",
+            "durationMs": 579.195,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 54,
+            "command": "node tests/port-owner.cjs",
+            "startedAt": "2026-10-22T16:07:40.212Z",
+            "durationMs": 1168.2312,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 55,
+            "command": "node tests/project-config.cjs",
+            "startedAt": "2026-10-22T16:07:41.380Z",
+            "durationMs": 457.7845,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 56,
+            "command": "node tests/skills.cjs",
+            "startedAt": "2026-10-22T16:07:41.838Z",
+            "durationMs": 538.136,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 57,
+            "command": "node tests/extensions.cjs",
+            "startedAt": "2026-10-22T16:07:42.376Z",
+            "durationMs": 937.1266,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 58,
+            "command": "node tests/capability.cjs",
+            "startedAt": "2026-10-22T16:07:43.313Z",
+            "durationMs": 165.4142,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 59,
+            "command": "node tests/capability-install.cjs",
+            "startedAt": "2026-10-22T16:07:43.479Z",
+            "durationMs": 142.1899,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 60,
+            "command": "node tests/web-access.cjs",
+            "startedAt": "2026-10-22T16:07:43.621Z",
+            "durationMs": 602.6539,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 61,
+            "command": "node tests/subagents.cjs",
+            "startedAt": "2026-10-22T16:07:44.223Z",
+            "durationMs": 644.979,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 62,
+            "command": "node tests/memory.cjs",
+            "startedAt": "2026-10-22T16:07:44.868Z",
+            "durationMs": 576.4029,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 63,
+            "command": "node tests/browser.cjs",
+            "startedAt": "2026-10-22T16:07:45.445Z",
+            "durationMs": 606.2836,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 64,
+            "command": "node tests/approvals.cjs",
+            "startedAt": "2026-10-22T16:07:46.051Z",
+            "durationMs": 886.0856,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 65,
+            "command": "node tests/planner.cjs",
+            "startedAt": "2026-10-22T16:07:46.937Z",
+            "durationMs": 34251.944,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 66,
+            "command": "node tests/workflow-relations.cjs",
+            "startedAt": "2026-10-22T16:08:21.189Z",
+            "durationMs": 14984.6018,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 67,
+            "command": "node tests/reviews.cjs",
+            "startedAt": "2026-10-22T16:08:36.174Z",
+            "durationMs": 13676.6209,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 68,
+            "command": "node tests/review-gate.cjs",
+            "startedAt": "2026-10-22T16:08:49.851Z",
+            "durationMs": 24150.4714,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 69,
+            "command": "node tests/verification.cjs",
+            "startedAt": "2026-10-22T16:09:14.001Z",
+            "durationMs": 11825.9188,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 70,
+            "command": "node tests/evidence.cjs",
+            "startedAt": "2026-10-22T16:09:25.827Z",
+            "durationMs": 34696.7942,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 71,
+            "command": "node tests/attempt-lifecycle.cjs",
+            "startedAt": "2026-10-22T16:10:00.524Z",
+            "durationMs": 18519.8028,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 72,
+            "command": "node tests/sessions.cjs",
+            "startedAt": "2026-10-22T16:10:19.044Z",
+            "durationMs": 518.764,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 73,
+            "command": "node tests/session-search.cjs",
+            "startedAt": "2026-10-22T16:10:19.563Z",
+            "durationMs": 1957.5256,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 74,
+            "command": "node tests/pi-compat.cjs",
+            "startedAt": "2026-10-22T16:10:21.520Z",
+            "durationMs": 126.7465,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 75,
+            "command": "node tests/pi-probes.cjs",
+            "startedAt": "2026-10-22T16:10:21.647Z",
+            "durationMs": 414.4031,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 76,
+            "command": "node tests/pi-update.cjs",
+            "startedAt": "2026-10-22T16:10:22.061Z",
+            "durationMs": 503.6974,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 77,
+            "command": "node tests/pi-version.cjs",
+            "startedAt": "2026-10-22T16:10:22.565Z",
+            "durationMs": 503.9618,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 78,
+            "command": "node tests/mcp-native.cjs",
+            "startedAt": "2026-10-22T16:10:23.069Z",
+            "durationMs": 293.3161,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 79,
+            "command": "node tests/usage-quota.cjs",
+            "startedAt": "2026-10-22T16:10:23.363Z",
+            "durationMs": 656.6199,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 80,
+            "command": "node tests/body-integrity.cjs",
+            "startedAt": "2026-10-22T16:10:24.019Z",
+            "durationMs": 190.6897,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 81,
+            "command": "node tests/dev-server.cjs",
+            "startedAt": "2026-10-22T16:10:24.210Z",
+            "durationMs": 1364.639,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 82,
+            "command": "node tests/models-api.cjs",
+            "startedAt": "2026-10-22T16:10:25.575Z",
+            "durationMs": 1582.3912,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 83,
+            "command": "node tests/server-security.cjs",
+            "startedAt": "2026-10-22T16:10:27.156Z",
+            "durationMs": 4567.4074,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 84,
+            "command": "node tests/diagnostics.cjs",
+            "startedAt": "2026-10-22T16:10:31.724Z",
+            "durationMs": 124.5802,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 85,
+            "command": "node tests/update-check.cjs",
+            "startedAt": "2026-10-22T16:10:31.848Z",
+            "durationMs": 453.6029,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 86,
+            "command": "node tests/version-consistency.cjs",
+            "startedAt": "2026-10-22T16:10:32.302Z",
+            "durationMs": 153.6129,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 87,
+            "command": "node tests/release-artifacts.cjs",
+            "startedAt": "2026-10-22T16:10:32.456Z",
+            "durationMs": 345.1712,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 88,
+            "command": "node tests/electron-guard.cjs",
+            "startedAt": "2026-10-22T16:10:32.801Z",
+            "durationMs": 1487.8013,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 89,
+            "command": "node tests/gui-browser-policy.cjs",
+            "startedAt": "2026-10-22T16:10:34.289Z",
+            "durationMs": 111.9845,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 90,
+            "command": "node tests/gui-browser-controller.cjs",
+            "startedAt": "2026-10-22T16:10:34.401Z",
+            "durationMs": 5311.3827,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 91,
+            "command": "node tests/gui-browser-bridge.cjs",
+            "startedAt": "2026-10-22T16:10:39.712Z",
+            "durationMs": 392.3865,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 92,
+            "command": "node tests/gui-browser-tools.cjs",
+            "startedAt": "2026-10-22T16:10:40.104Z",
+            "durationMs": 167.3914,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 93,
+            "command": "node tests/gui-browser-host.cjs",
+            "startedAt": "2026-10-22T16:10:40.272Z",
+            "durationMs": 119.9256,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 94,
+            "command": "node tests/worktrees.cjs",
+            "startedAt": "2026-10-22T16:10:40.392Z",
+            "durationMs": 42226.5009,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 95,
+            "command": "node tests/worktrees-http.cjs",
+            "startedAt": "2026-10-22T16:11:22.618Z",
+            "durationMs": 6438.2526,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 96,
+            "command": "node tests/runtime-registry.cjs",
+            "startedAt": "2026-10-22T16:11:29.056Z",
+            "durationMs": 252.5607,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 97,
+            "command": "node tests/runtime-http.cjs",
+            "startedAt": "2026-10-22T16:11:29.309Z",
+            "durationMs": 228.1896,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 98,
+            "command": "node tests/runtime-store.cjs",
+            "startedAt": "2026-10-22T16:11:29.537Z",
+            "durationMs": 294.5678,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 99,
+            "command": "node tests/runtime-nav.cjs",
+            "startedAt": "2026-10-22T16:11:29.832Z",
+            "durationMs": 7825.5235,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 100,
+            "command": "node tests/runtime-conversation.cjs",
+            "startedAt": "2026-10-22T16:11:37.657Z",
+            "durationMs": 587.799,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 101,
+            "command": "node tests/runtime-changes.cjs",
+            "startedAt": "2026-10-22T16:11:38.245Z",
+            "durationMs": 28130.18,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 102,
+            "command": "node tests/runtime-secondary.cjs",
+            "startedAt": "2026-10-22T16:12:06.375Z",
+            "durationMs": 703.3228,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 103,
+            "command": "node tests/runtime-resources.cjs",
+            "startedAt": "2026-10-22T16:12:07.079Z",
+            "durationMs": 638.2771,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 104,
+            "command": "node tests/runtime-history-search.cjs",
+            "startedAt": "2026-10-22T16:12:07.717Z",
+            "durationMs": 12963.1805,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 105,
+            "command": "node tests/session-runtime.cjs",
+            "startedAt": "2026-10-22T16:12:20.680Z",
+            "durationMs": 1265.5835,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 106,
+            "command": "node tests/runtime-browser.cjs",
+            "startedAt": "2026-10-22T16:12:21.946Z",
+            "durationMs": 173.6673,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 107,
+            "command": "node tests/runtime-events.cjs",
+            "startedAt": "2026-10-22T16:12:22.119Z",
+            "durationMs": 125.7736,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 108,
+            "command": "node tests/session-revert.cjs",
+            "startedAt": "2026-10-22T16:12:22.245Z",
+            "durationMs": 140.8236,
+            "status": 0,
+            "signal": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "schemaVersion": 1,
+        "group": "ui",
+        "sha": "45024299bd64dfa157a86559a14db58f55e178a6",
+        "startedAt": "2026-10-22T16:05:57.731Z",
+        "finishedAt": "2026-10-22T16:07:44.528Z",
+        "results": [
+          {
+            "index": 1,
+            "command": "node tests/ui-visual-finish.cjs",
+            "startedAt": "2026-10-22T16:05:57.734Z",
+            "durationMs": 889.2277,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 2,
+            "command": "node tests/logging-ui.cjs",
+            "startedAt": "2026-10-22T16:05:58.624Z",
+            "durationMs": 1685.5434,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 3,
+            "command": "node tests/ui4-approval.cjs",
+            "startedAt": "2026-10-22T16:06:00.309Z",
+            "durationMs": 1875.0004,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 4,
+            "command": "node tests/ui4-feedback.cjs",
+            "startedAt": "2026-10-22T16:06:02.184Z",
+            "durationMs": 1762.7076,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 5,
+            "command": "node tests/ui4-integration.cjs",
+            "startedAt": "2026-10-22T16:06:03.947Z",
+            "durationMs": 3781.5642,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 6,
+            "command": "node tests/ui3-composer.cjs",
+            "startedAt": "2026-10-22T16:06:07.729Z",
+            "durationMs": 893.2318,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 7,
+            "command": "node tests/ui3-model.cjs",
+            "startedAt": "2026-10-22T16:06:08.622Z",
+            "durationMs": 996.983,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 8,
+            "command": "node tests/ui3-inline-commands.cjs",
+            "startedAt": "2026-10-22T16:06:09.619Z",
+            "durationMs": 891.075,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 9,
+            "command": "node tests/ui3-integration.cjs",
+            "startedAt": "2026-10-22T16:06:10.510Z",
+            "durationMs": 1370.246,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 10,
+            "command": "node tests/ui2-classic.cjs",
+            "startedAt": "2026-10-22T16:06:11.880Z",
+            "durationMs": 927.7605,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 11,
+            "command": "node tests/ui2-runtime-display.cjs",
+            "startedAt": "2026-10-22T16:06:12.808Z",
+            "durationMs": 1003.0484,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 12,
+            "command": "node tests/ui2-visual.cjs",
+            "startedAt": "2026-10-22T16:06:13.811Z",
+            "durationMs": 10713.6498,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 13,
+            "command": "node tests/theme.cjs",
+            "startedAt": "2026-10-22T16:06:24.525Z",
+            "durationMs": 709.1671,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 14,
+            "command": "node tests/hotfix-ui.cjs",
+            "startedAt": "2026-10-22T16:06:25.234Z",
+            "durationMs": 1155.7382,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 15,
+            "command": "node tests/ui-ia.cjs",
+            "startedAt": "2026-10-22T16:06:26.390Z",
+            "durationMs": 1426.1972,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 16,
+            "command": "node tests/smoke.cjs",
+            "startedAt": "2026-10-22T16:06:27.816Z",
+            "durationMs": 70834.6148,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 17,
+            "command": "node tests/daily-use.cjs",
+            "startedAt": "2026-10-22T16:07:38.651Z",
+            "durationMs": 139.7687,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 18,
+            "command": "node tests/sidebar-menu.cjs",
+            "startedAt": "2026-10-22T16:07:38.791Z",
+            "durationMs": 636.6097,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 19,
+            "command": "node tests/gui-browser-ui.cjs",
+            "startedAt": "2026-10-22T16:07:39.427Z",
+            "durationMs": 668.9098,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 20,
+            "command": "node tests/process-ui.cjs",
+            "startedAt": "2026-10-22T16:07:40.096Z",
+            "durationMs": 1751.7185,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 21,
+            "command": "node tests/worktrees-ui.cjs",
+            "startedAt": "2026-10-22T16:07:41.848Z",
+            "durationMs": 727.818,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 22,
+            "command": "node tests/runtime-ui.cjs",
+            "startedAt": "2026-10-22T16:07:42.576Z",
+            "durationMs": 634.942,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 23,
+            "command": "node tests/runtime-git-ui.cjs",
+            "startedAt": "2026-10-22T16:07:43.211Z",
+            "durationMs": 694.5597,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 24,
+            "command": "node tests/runtime-finish-ui.cjs",
+            "startedAt": "2026-10-22T16:07:43.905Z",
+            "durationMs": 622.9485,
+            "status": 0,
+            "signal": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "schemaVersion": 1,
+        "group": "security",
+        "sha": "45024299bd64dfa157a86559a14db58f55e178a6",
+        "startedAt": "2026-10-22T16:05:57.660Z",
+        "finishedAt": "2026-10-22T16:20:45.110Z",
+        "results": [
+          {
+            "index": 1,
+            "command": "node tests/session-revert-fixture-retention.cjs",
+            "startedAt": "2026-10-22T16:05:57.663Z",
+            "durationMs": 182.0843,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 2,
+            "command": "node tests/session-revert-object-session-binding.cjs",
+            "startedAt": "2026-10-22T16:05:57.845Z",
+            "durationMs": 146.8725,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 3,
+            "command": "node tests/session-revert-object-d6final-classic.cjs",
+            "startedAt": "2026-10-22T16:05:57.992Z",
+            "durationMs": 5238.1149,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 4,
+            "command": "node tests/session-revert-object-qualification.cjs",
+            "startedAt": "2026-10-22T16:06:03.230Z",
+            "durationMs": 22268.0566,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 5,
+            "command": "node tests/session-revert-object-presentation.cjs",
+            "startedAt": "2026-10-22T16:06:25.498Z",
+            "durationMs": 275.5721,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 6,
+            "command": "node tests/session-revert-object-ui.cjs",
+            "startedAt": "2026-10-22T16:06:25.774Z",
+            "durationMs": 1030.2845,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 7,
+            "command": "node tests/session-revert-object-confirmation.cjs",
+            "startedAt": "2026-10-22T16:06:26.804Z",
+            "durationMs": 154075.692,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 8,
+            "command": "node tests/session-revert-sacl-witness.cjs",
+            "startedAt": "2026-10-22T16:09:00.881Z",
+            "durationMs": 808.9078,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 9,
+            "command": "node tests/session-revert-object-profile.cjs",
+            "startedAt": "2026-10-22T16:09:01.690Z",
+            "durationMs": 5912.5738,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 10,
+            "command": "node tests/session-revert-object-evidence.cjs",
+            "startedAt": "2026-10-22T16:09:07.602Z",
+            "durationMs": 10425.8574,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 11,
+            "command": "node tests/session-revert-object-assets.cjs",
+            "startedAt": "2026-10-22T16:09:18.028Z",
+            "durationMs": 3093.4121,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 12,
+            "command": "node tests/session-revert-object-authority.cjs",
+            "startedAt": "2026-10-22T16:09:21.122Z",
+            "durationMs": 6083.2297,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 13,
+            "command": "node tests/session-revert-object-history.cjs",
+            "startedAt": "2026-10-22T16:09:27.205Z",
+            "durationMs": 24076.1612,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 14,
+            "command": "node tests/session-revert-object-store.cjs",
+            "startedAt": "2026-10-22T16:09:51.281Z",
+            "durationMs": 6338.3099,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 15,
+            "command": "node tests/session-revert-object-service.cjs",
+            "startedAt": "2026-10-22T16:09:57.619Z",
+            "durationMs": 316328.1588,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 16,
+            "command": "node tests/session-change-bridge.cjs",
+            "startedAt": "2026-10-22T16:15:13.947Z",
+            "durationMs": 252.9632,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 17,
+            "command": "node tests/session-change-tools.cjs",
+            "startedAt": "2026-10-22T16:15:14.200Z",
+            "durationMs": 325.2231,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 18,
+            "command": "node tests/session-revert-store.cjs",
+            "startedAt": "2026-10-22T16:15:14.525Z",
+            "durationMs": 112024.4496,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 19,
+            "command": "node tests/session-revert-http.cjs",
+            "startedAt": "2026-10-22T16:17:06.550Z",
+            "durationMs": 4404.0338,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 20,
+            "command": "node tests/session-revert-integration.cjs",
+            "startedAt": "2026-10-22T16:17:10.954Z",
+            "durationMs": 462.1274,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 21,
+            "command": "node tests/session-revert-writer.cjs",
+            "startedAt": "2026-10-22T16:17:11.416Z",
+            "durationMs": 4451.9599,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 22,
+            "command": "node tests/session-revert-admission.cjs",
+            "startedAt": "2026-10-22T16:17:15.868Z",
+            "durationMs": 320.8913,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 23,
+            "command": "node tests/session-revert-apply.cjs",
+            "startedAt": "2026-10-22T16:17:16.189Z",
+            "durationMs": 76389.7395,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 24,
+            "command": "node tests/session-revert-inplace.cjs",
+            "startedAt": "2026-10-22T16:18:32.579Z",
+            "durationMs": 126000.4755,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 25,
+            "command": "node tests/session-change-query.cjs",
+            "startedAt": "2026-10-22T16:20:38.579Z",
+            "durationMs": 5172.3603,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 26,
+            "command": "node tests/session-change-ui.cjs",
+            "startedAt": "2026-10-22T16:20:43.751Z",
+            "durationMs": 634.1595,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 27,
+            "command": "node tests/session-revert-object-witness.cjs",
+            "startedAt": "2026-10-22T16:20:44.385Z",
+            "durationMs": 724.0686,
+            "status": 0,
+            "signal": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "schemaVersion": 1,
+        "group": "native",
+        "sha": "45024299bd64dfa157a86559a14db58f55e178a6",
+        "startedAt": "2026-10-22T16:05:57.616Z",
+        "finishedAt": "2026-10-22T16:22:38.541Z",
+        "results": [
+          {
+            "index": 1,
+            "command": "node tests/session-revert-object-runtime.cjs",
+            "startedAt": "2026-10-22T16:05:57.621Z",
+            "durationMs": 520834.1163,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 2,
+            "command": "node tests/session-revert-object-writer.cjs",
+            "startedAt": "2026-10-22T16:14:38.455Z",
+            "durationMs": 480085.2547,
+            "status": 0,
+            "signal": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "schemaVersion": 1,
+        "group": "faults",
+        "sha": "45024299bd64dfa157a86559a14db58f55e178a6",
+        "startedAt": "2026-10-22T16:05:57.647Z",
+        "finishedAt": "2026-10-22T16:22:54.143Z",
+        "results": [
+          {
+            "index": 1,
+            "command": "node tests/bridge-state-recovery.cjs",
+            "startedAt": "2026-10-22T16:05:57.650Z",
+            "durationMs": 1473.6839,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 2,
+            "command": "node tests/gui-browser-stop.cjs",
+            "startedAt": "2026-10-22T16:05:59.124Z",
+            "durationMs": 959.3718,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 3,
+            "command": "node tests/stop-barrier.cjs",
+            "startedAt": "2026-10-22T16:06:00.083Z",
+            "durationMs": 1590.1755,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 4,
+            "command": "node tests/managed-processes.cjs",
+            "startedAt": "2026-10-22T16:06:01.673Z",
+            "durationMs": 212.7886,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 5,
+            "command": "node tests/process-tools.cjs",
+            "startedAt": "2026-10-22T16:06:01.886Z",
+            "durationMs": 361.5092,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 6,
+            "command": "node tests/process-stop.cjs",
+            "startedAt": "2026-10-22T16:06:02.248Z",
+            "durationMs": 192.9581,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 7,
+            "command": "node tests/process-runner.cjs",
+            "startedAt": "2026-10-22T16:06:02.441Z",
+            "durationMs": 179.8216,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 8,
+            "command": "node tests/runtime-resource-cleanup.cjs",
+            "startedAt": "2026-10-22T16:06:02.620Z",
+            "durationMs": 238.8139,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 9,
+            "command": "node tests/pi-supervisor.cjs",
+            "startedAt": "2026-10-22T16:06:02.859Z",
+            "durationMs": 4134.3427,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 10,
+            "command": "node tests/process-budget.cjs",
+            "startedAt": "2026-10-22T16:06:06.994Z",
+            "durationMs": 199.2355,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 11,
+            "command": "node tests/runtime-processes.cjs",
+            "startedAt": "2026-10-22T16:06:07.193Z",
+            "durationMs": 3571.0775,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 12,
+            "command": "node tests/session-revert-object-recovery.cjs",
+            "startedAt": "2026-10-22T16:06:10.764Z",
+            "durationMs": 25243.375,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 13,
+            "command": "node tests/session-change-store.cjs",
+            "startedAt": "2026-10-22T16:06:36.007Z",
+            "durationMs": 164471.9745,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 14,
+            "command": "node tests/session-revert-recovery.cjs",
+            "startedAt": "2026-10-22T16:09:20.479Z",
+            "durationMs": 14029.9669,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 15,
+            "command": "node tests/session-revert-windows-faults.cjs",
+            "startedAt": "2026-10-22T16:09:34.509Z",
+            "durationMs": 8758.0607,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 16,
+            "command": "node tests/session-revert-inplace-safety.cjs",
+            "startedAt": "2026-10-22T16:09:43.267Z",
+            "durationMs": 65713.4267,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 17,
+            "command": "node tests/session-change-startup.cjs",
+            "startedAt": "2026-10-22T16:10:48.981Z",
+            "durationMs": 12097.316,
+            "status": 0,
+            "signal": null,
+            "error": null
+          },
+          {
+            "index": 18,
+            "command": "node tests/session-revert-object-faults.cjs",
+            "startedAt": "2026-10-22T16:11:01.078Z",
+            "durationMs": 713064.5124,
+            "status": 0,
+            "signal": null,
+            "error": null
+          }
+        ]
+      }
+    ]
+  },
+  "targeted": {
+    "model": 25,
+    "ui": 35,
+    "approval": 44,
+    "legacy": {
+      "model": 51,
+      "ui": 51,
+      "split": 10,
+      "range": 29,
+      "rangeUi": 22
+    },
+    "persistence": {
+      "store": 49,
+      "authority": 15,
+      "runtime": 8,
+      "http": 18,
+      "coordinator": 16,
+      "rangeStore": 17
+    },
+    "smoke": 1338,
+    "failed": 0,
+    "skipped": 0
+  },
+  "electron": {
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130",
+    "phases": [
+      {
+        "name": "production",
+        "exit": 0,
+        "result": {
+          "phase": "production",
+          "generatedAt": "2026-10-22T16:08:12.064Z",
+          "electron": "44.4.3",
+          "chrome": "152.0.7977.130",
+          "checks": 59,
+          "failed": 0,
+          "error": null,
+          "screenshots": [
+            "t4-selection.png",
+            "t4-production-720.png",
+            "t4-specs-1200.png"
+          ],
+          "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+        }
+      },
+      {
+        "name": "native",
+        "exit": 0,
+        "result": {
+          "phase": "native",
+          "generatedAt": "2026-10-22T16:08:18.281Z",
+          "electron": "44.4.3",
+          "chrome": "152.0.7977.130",
+          "checks": 34,
+          "failed": 0,
+          "error": null,
+          "screenshots": [
+            "t4-browser-1200.png"
+          ],
+          "fixture": "temporary Git repositories; fake pi shim; no user project, no real model"
+        }
+      }
+    ],
+    "checks": 93,
+    "failed": 0,
+    "screenshots": [
+      "t4-selection.png",
+      "t4-production-720.png",
+      "t4-browser-1200.png",
+      "t4-specs-1200.png"
+    ],
+    "fixture": "temporary Git repositories; fake pi shim; no user project, no real model",
+    "generatedAt": "2026-10-22T16:08:18.846Z",
+    "sandbox": "normal, contextIsolation=true, nodeIntegration=false; no no-sandbox"
+  },
+  "artifacts": {
+    "buildExit": 0,
+    "appCheck": 26,
+    "exeCheck": 49,
+    "failed": 0,
+    "resources": [
+      {
+        "file": "public/git.js",
+        "sha256": "322f90f5e8a365278342435bf9b10b177fedc56f72ab185252eba3612845da5b",
+        "matches": true
+      },
+      {
+        "file": "public/diff-comments.js",
+        "sha256": "64906c26c5ee143e13e2153ca744a53a7e8acc6ef8b8f80f036ecd0263138afc",
+        "matches": true
+      },
+      {
+        "file": "public/review-comment-limits.js",
+        "sha256": "3bcdf3cb1eeadb9f6bdd5c1501c28f09b45b1644a74481d23a56be0007953575",
+        "matches": true
+      },
+      {
+        "file": "public/review-task.js",
+        "sha256": "07eb25f8580f6394539edd0c5cf1adb1b67e36937bef54c080fc634d08fcb87c",
+        "matches": true
+      },
+      {
+        "file": "public/review-task-preview.js",
+        "sha256": "4e75de2ab819f4df05acb2938e772135fdf192a8e8adce23c7b4771ec1e44d77",
+        "matches": true
+      },
+      {
+        "file": "public/review-fill.js",
+        "sha256": "0027e2a5f4ff5f54b32b5f9025d52a8c79dc9a9bc93373a06a8c5ab20bfbf7fe",
+        "matches": true
+      },
+      {
+        "file": "public/styles.css",
+        "sha256": "ff55b39c0814f09ef76566cae857e8fd4f7be2f683cbeed36990625a9cbd6030",
+        "matches": true
+      },
+      {
+        "file": "public/review-comment-range.js",
+        "sha256": "ccc634b7fac41b4e4ae98afa6603c71e6250c2f13fc5672ed67bfcfaf8844bf4",
+        "matches": true
+      },
+      {
+        "file": "public/ui/modal.js",
+        "sha256": "d707cbbd6470adf1ba3b531a352383f85b85e874421e941cfbce08a4acf179bf",
+        "matches": true
+      },
+      {
+        "file": "server.cjs",
+        "sha256": "530fde1b08ca18cf9a0fa5b5895faef73509941927f93538c667723430aee6a3",
+        "matches": true
+      }
+    ]
+  },
+  "screenshots": [
+    {
+      "file": "t4-selection.png",
+      "bytes": 147640,
+      "sha256": "6c799b0871d5fce755c8c72af26cbdf18e54d45b7f95a42ccc1e1fe45e9eb882"
+    },
+    {
+      "file": "t4-production-720.png",
+      "bytes": 105602,
+      "sha256": "53e294cfd70d37bba4c9e7620e3f721ce7f9089102c5d3bdcbd74f8d0c7c9463"
+    },
+    {
+      "file": "t4-browser-1200.png",
+      "bytes": 112984,
+      "sha256": "7423941970365170eb095a2a6a2c937665f55221309471662e231e9a4ac4fa22"
+    },
+    {
+      "file": "t4-specs-1200.png",
+      "bytes": 152388,
+      "sha256": "6b8c3111175da9b32c533ed8e911e2c65a34eaa89c240f1b827ac1469dc49430"
+    }
+  ],
+  "review": {
+    "type": "author self review only",
+    "independentAcceptance": "pending; no subagents used"
+  },
+  "remoteActions": "no push, merge, tag, version change or release",
+  "failureHistory": [
+    "Model missing before implementation",
+    "Refresh pending/late acknowledgement/obsolete response regressions failed before fix",
+    "Electron fixture script quoting, stale DOM marker and premature refresh read corrected",
+    "Initial 69489a4 canonical smoke 1337/1338 local el false positive; other groups stopped, excluded; local identifiers renamed and focused smoke 1338/1338",
+    "c39fb86 full canonical 179/179 passed; subsequent real Electron keyboard audit exposed hidden controls in focus trap; corrected with unit and real Tab/ShiftTab regression, final proof rerun on 4502429"
+  ]
+}
