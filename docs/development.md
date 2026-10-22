@@ -1,11 +1,14 @@
 # 开发与构建
 
-面向维护者：怎么从源码跑、怎么构建三种形态、怎么发版，以及这条路上踩过的坑。
+面向维护者：怎么从源码跑、怎么构建三种形态，以及这条路上踩过的坑。
+开发规则见 [AGENTS.md](../AGENTS.md)，代码审查见 [REVIEW.md](../REVIEW.md)，
+按任务阅读见 [文档导航](README.md)；测试执行政策统一见 [testing.md](testing.md#测试执行政策)，
+正式发版步骤统一见 [releasing.md](releasing.md)。命令示例不授予推送、合并或发布权限。
 
 ## 一、从源码跑
 
 ```bash
-npm install
+npm ci             # 仅在已授权准备依赖时执行；已有依赖不为文档/只读任务重复安装
 npm start          # 只跑后端，用浏览器开 http://127.0.0.1:7788
 npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不用先 npm start）
 ```
@@ -43,7 +46,7 @@ node -e "const fs=require('fs');console.log(fs.readFileSync('build/Pi GUI.exe').
 | `npm run build:app` | `dist-app/<App>-win32-x64/` | 组装应用目录 + `@electron/packager` 打包 |
 | `npm run build:installer -- --zip` | `dist-installer/`（Setup.exe + portable.zip + SHA256SUMS.txt） | 需要 NSIS 的 `makensis` |
 | `npm run build:dist` | = `build:app` + `build:installer --zip` | |
-| `npm run release:check` | 无（只读产物） | 发布预检一条命令跑完；见 [releasing.md](releasing.md) |
+| `npm run release:check` | 构建及收集发布产物；不创建 Release | 默认含完整测试、构建与验证，有写盘等副作用；参数与隔离要求见 [releasing.md](releasing.md) |
 | `npm run release:collect` | `dist-release/`（Setup + portable + SHA256SUMS.txt） | 只收正式资产，上传前跑 |
 
 ### `--rebuild` 是什么意思
@@ -97,39 +100,9 @@ PATH → `%ProgramFiles(x86)%\NSIS` → electron-builder 的缓存。
 
 ## 四、发版流程
 
-**完整流程见 [releasing.md](releasing.md)** —— 那一篇是照着敲的步骤清单。
-这里只留最短的版本和两条不能忘的规矩：
-
-```bash
-npm run version:set -- 0.13.0             # 同步 package.json + package-lock.json
-npm run release:check -- --with-installer # 版本 + 全部测试 + 两条打包链路 + 产物守卫
-#   → 最后一行必须是 READY TO RELEASE
-git add package.json package-lock.json && git commit -m "v0.13.0" && git push
-git tag v0.13.0 && git push origin v0.13.0   # ← 这一步才触发发布
-```
-
-`release:check` 把原先散在文档里的 8 条命令收成了一条，而且**顺序钉在代码里**
-（`scripts/release-check.mjs`）—— 靠记忆执行多步流程，迟早会漏掉
-「没验产物就上传」那一步。
-
-两条不能忘的：
-
-1. **版本号必须在 tag 之前进仓库。** workflow 不会根据 tag 改 `package.json`；
-   两者不一致时预检直接失败。tag 只是证明「这个 commit 就是 0.13.0」。
-2. **`--with-installer` 在 CI 上必须带。** 它会让安装程序**真的装一遍再卸掉**，
-   而安装程序是「构建成功但一跑就废」的重灾区 —— 名字、大小、校验和都验不出
-   （实测踩到过：被中断的构建留下一个 48 MB 的半截 Setup.exe，而正常是 100 MB）。
-   本机默认不带，是因为开发机上可能装着一份你在用的 Pi GUI。
-
-单跑某一环（不需要全量）：
-
-```bash
-npm run version:check          # 版本一致性（可加 --tag=v0.13.0）
-npm run release:prepare        # 只构建 + 产物验证 + 守卫（跳过 npm test）
-npm run release:collect        # 集中正式资产到 dist-release/
-npm run release:verify         # 只看发布产物守卫
-npm run test:update            # 版本检查那套（不需要构建产物）
-```
+**唯一正式流程见 [releasing.md](releasing.md)**，版本准备、授权、精确 SHA CI 证明、
+tag 触发、打包安装与上传验证均在那里维护。本节只保留开发排查背景与链接。
+开发完成、代码验收、允许合并和允许发布的不同含义见 [REVIEW.md](../REVIEW.md#5-验证与合并准则)。
 
 ### 发完版之后：应用内就能看到
 
@@ -186,12 +159,10 @@ Release 一发出来，Pi GUI 的「诊断 → 版本」就会读到它（[updat
   最常见的原因是**应用还开着**（Electron 一个实例就是 5 个进程），Windows
   锁住目录。构建脚本的报错写得很清楚，照着做就行：关掉应用再重试。
   **不要去 kill 进程** —— 那可能是用户正在用的窗口。
-- **`gh release create` 是「先建 Draft → 传附件 → 最后才 publish」**。
-  中途被打断会留下一个附件为空的 Draft，而命令本身不报错。
-  补救：`gh release upload <tag> <files> --clobber` +
-  `gh release edit <tag> --draft=false`。
-- **发版后要确认代码在 main 上**：`gh release create` 只推标签，
-  不推标签所在的提交到分支。发完版查一次 `git status -sb` 不带 `[ahead N]`。
+- **上传中断可能留下 Draft**。当前恢复与重复执行规则统一见
+  [releasing.md](releasing.md#重复执行)，保留精确 SHA 和资产核验，不用手工发布命令绕过守卫。
+- **Release 必须对应 main 上已验证的精确提交**，当前脚本的证明要求见
+  [releasing.md](releasing.md#五releasecheck-做了什么)。本地无 ahead 状态不能替代这份证明。
 - **`dist-installer/` 不进仓库**（上百 MB 的二进制）。要分发就走
   GitHub Release 的附件。
 

@@ -1,5 +1,8 @@
 # P14-D Stage Work Surfaces
 
+本文负责 UI 工作区的承载、生命周期与布局约束。开发/审查规则见
+[AGENTS.md](../AGENTS.md) 和 [REVIEW.md](../REVIEW.md)，其他任务入口见 [文档导航](README.md)。
+
 ## 当前右栏工作区（T2-A / T2-B）
 
 下方 P14-D 记录为历史设计。当前 Changes 和 Specs 从会话顶栏进入右栏，
@@ -14,9 +17,13 @@ Browser 的原生 WebContentsView 沿用同一控制器与 session；布局切�
 不清除页面表单与导航历史。关闭按钮仍遵守原有销毁/运行时隐藏语义。
 右栏观察实际 viewport：隐藏页签、弹窗或拖动时统一 detach，重新显示前先提交新几何；
 主进程按窗口 zoom 转换为 DIP 后 clamp，不使用 devicePixelRatio。
-细节和验证见 [Specs](specs.md) 与 [T2-A 验收](T2-A-acceptance.md)。
+细节和验证见 [Specs](specs.md)、[T2-A 验收](T2-A-acceptance.md) 与 [T2-B 验收](T2-B-acceptance.md)。
+Diff 行级评论的阶段行为与验收限制见 [T3-A 验收](T3-A-acceptance.md)，修改时仍须核对当前实现。
 
 ## P14-D 历史记录
+
+以下记录保留当时 Stage 设计及其验证背景；涉及当前入口和右栏承载时，以上方当前实现为准。
+历史测试场景与通过结论不自动构成新行为提交的验证证明。
 
 Global Rail 的 Home、任务、文件变更、扩展是四个一级视图。`public/ui/workspace-surface.js` 只管理当前视图、Stage 容器、唯一激活的 Rail 项和实例生命周期；各业务模块继续渲染自己的唯一一套内容。`#workspace[data-workspace-view]` 供样式、测试与排查读取，真实状态保存在模块内存中。
 

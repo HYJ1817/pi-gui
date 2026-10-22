@@ -1,5 +1,9 @@
 # 架构
 
+本文负责系统结构、模块职责与状态归属。开发规则见 [AGENTS.md](../AGENTS.md)，
+代码审查见 [REVIEW.md](../REVIEW.md)，按任务选择文档见 [文档导航](README.md)。
+文中的阶段记录须结合当前代码阅读，不替代测试执行政策或正式发布流程。
+
 ## T1 只读 Specs
 
 `server/specs.js` 只发现当前项目的根 `SPEC.md` 与 `specs/` 下 Markdown，返回不透明文档 ID；

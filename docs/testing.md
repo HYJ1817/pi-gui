@@ -1,5 +1,32 @@
 # 测试分层与 CI
 
+本文是测试执行政策与证据有效范围的权威说明。开发硬约束与授权见
+[AGENTS.md](../AGENTS.md)，审查与合并门槛见 [REVIEW.md](../REVIEW.md)，
+正式发布步骤只见 [releasing.md](releasing.md)。下方阶段记录中的数字以当时提交和环境为限。
+
+## 测试执行政策
+
+**完整 canonical 的唯一来源是 `package.json` 的 `test` 链及 npm 前后置生命周期，包含递归展开的 alias。**
+本地 `npm test` 串行执行；CI 从同一来源生成隔离分组。定向测试是开发反馈，不能代替约定的完整证明。
+
+| 时机 | 执行要求 |
+| --- | --- |
+| 开发前 | 核对准确基线 SHA 的成功完整 CI，记录 run URL/ID、event、attempt 和 gate 结论，并跑必要的本地受影响套件基线。没有可信基线或涉及高风险边界时，补完整基线测试 |
+| 开发循环 | 运行新增功能、缺陷回归、受影响模块与相邻边界的定向测试；不要求每次小修改重跑完整 `npm test` |
+| 功能稳定后 | 默认完成一次本地完整 `npm test`；用户可预先选择由当前 PR 的完整 canonical CI 提供证明。未完成前明确标为「待验证」，不得称为通过 |
+| PR / main | 保留当前 workflow 的完整 canonical 分组、打包检查与最终 `CI gate`；PR 证明不替代发布所需的 main 精确 SHA 证明 |
+| 正式发布 | 只按 [releasing.md](releasing.md) 的精确 SHA CI 证明复用已验证测试；构建、安装、产物和上传校验继续执行 |
+| 纯文档 / 无行为影响的说明 | 自查 diff、链接与事实一致性，说明原因后可跳过完整 `npm test`；影响测试/发布输入的文件须另核对实际影响，不能仅因扩展名为 Markdown 就免验 |
+
+- **证明绑定代码状态。** 同一代码状态已有有效完整证明时不无故重复；记录被验证提交、工作区差异、命令、环境、退出码和实际数量。基线 CI 只证明基线，不证明新增改动；旧验收报告不能替代新行为提交的证据。
+- **变化后补验。** 完整验证后又改行为、测试链、构建/发布输入或权限边界，重跑受影响检查并使最终完整证明覆盖新代码状态。若随后只补验收文字，区分行为提交与文档提交，不把旧运行声称为新 SHA 的 CI；正式发布仍须取得发布提交自身的成功 main push CI。
+- **完整与专项各自独立。** 高风险变更保留 REVIEW 要求的安全、故障与环境验证，不能因耗时跳过。UI 布局须有真实交互/截图，产物、正常沙箱、安装升级等按影响专项验收；`--no-sandbox` 的交互结果不是正常沙箱证明。
+- **失败如实记录。** 失败、取消、意外跳过或未运行均不是通过。中断后按同一代码状态和同一 canonical 清单续跑，保留首次失败、重跑与最终唯一命令集合，并写明「累计验证」，不能称单次 `npm test` 成功。
+- **数量使用实测。** 套件数量与断言数量分别记录；skip 单列，不计入通过分子分母。断言减少须解释；不能为了提速删除安全断言或将失败改成 skip。
+- **审查按增量收敛。** 验证与独立审查分别提供证据；审查轮次和复审范围按 [REVIEW.md](../REVIEW.md#4-审查轮次与收敛)，不因一次小修复自动重启整套审查或无故重复已完成的全量验证。
+
+以上不改变 CI 触发、测试清单、gate 或发布脚本，也不授予联网模型调用、推送、合并、tag 或发布权限。
+
 ## 2026-10-19 原始审查剩余回归
 
 `npm test` 新增 `tests/review-regressions.cjs`，覆盖附件解析期间的发送闸门、
@@ -138,7 +165,7 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 
 | 层 | 命令 | 需要什么 | 跑在哪 |
 |---|---|---|---|
-| **A. 基础测试** | `npm test` | 只要 Node ≥ 22.19 | 每次 push / PR（CI）+ 本地 |
+| **A. 基础测试** | `npm test` | Node ≥ 22.19 与已准备的项目依赖；Native/权限相关限制见对应套件 | main push / PR 到 main（CI）；本地按[测试执行政策](#测试执行政策) |
 | **B. 打包验证** | `npm run test:exe` / `test:app` | 先跑 `npm run fixtures` 与 `build:exe` / `build:app` | CI 的 build-check job |
 | **C. 安装程序验证** | `npm run test:portable` / `test:installer` | 先跑 `build:installer`，且本机有 NSIS | 手动（release-check）或本地 |
 | **D. 真 pi 验证** | `npm run test:skills-live` / `test:reliability-live` / `test:inject` | 本机装了 `pi` | 只在本地 / 手动 |
@@ -153,7 +180,7 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 
 ## 二、`npm test` 的定位
 
-**`package.json` 的 `pretest` + `test` 脚本是测试入口的唯一真相。** 本地 `npm test`
+**`package.json` 的 `test` 链及 npm 前后置生命周期是测试入口的唯一真相。** 本地 `npm test`
 完整串行执行；CI 用 `scripts/run-test-group.mjs` 在运行时递归展开同一份链，再按
 `core` / `ui` / `security` / `native` / `faults` 分到独立 runner。workflow 不保存第二份套件清单，
 未知新套件默认进入 `core`。提交前可运行：
@@ -178,9 +205,9 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 33 条 RPC 命令里没有一条返回已注册工具清单，`rpc-types.d.ts` 两版 diff 为空。
 `tests/pi-version.cjs` 把这条钉住了。）
 
-`npm test` 包含全部默认自动化套件；当前叶子数量、真实耗时、资源边界和分组归属统一见
-[CI 性能优化审计](ci-optimization-audit.md)。数量不在这里手写维护，`--validate` 每次都会
-和 `package.json` 对表。
+`npm test` 包含全部默认自动化套件；当前叶子数量和分组以 `--validate` 从 `package.json`
+展开的结果为准，耗时与执行状态以当次运行记录为准。
+[CI 性能优化审计](ci-optimization-audit.md) 记录当时的资源边界与优化背景，不是当前数量或耗时的证明。
 
 > `daily-use`（P24）是**纯逻辑**套件：快捷键注册表、命令面板模型、状态文案。
 > 它不碰 DOM、不碰网络、不碰真 pi —— 所以这些规则在任何机器上结论都一样。
@@ -480,13 +507,13 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 
 ## 三、CI 里跑什么
 
-三个 workflow，分工按「多贵」划：
+这里列出三条测试/发布路径；签名 workflow 的用途另见 [code-signing.md](code-signing.md)：
 
 | workflow | 触发 | 内容 | 为什么这样分 |
 |---|---|---|---|
-| `ci.yml` | push / PR 到 main、手动 | `test-plan` → Node 24.14.0 的五组测试 matrix（`core` / `ui` / `security` / `native` / `faults`）→ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`）→ 最终 `ci-gate` | 每次提交的完整检查。Native 组内串行、组间独立 runner；任何组失败、取消、跳过或未执行都会让最终 Gate 失败 |
-| `release-check.yml` | **手动**（`workflow_dispatch`） | 完整发布路径：`npm test` → 两条打包链路 → `test:app` / `test:exe` / `test:portable` / `test:installer` → `release:collect` → `release:verify` | 45-60 分钟，**不创建 Release**。挂到每个 PR 上会让贡献者等到放弃；而 PR 需要的版本一致性守卫已经在 `npm test` 里 |
-| `release.yml` | **tag `v*`** | `npm run release:check -- --tag=<tag> --with-installer` → draft → 上传 → 核对 sha256 → publish | 正式发布。**全部验证通过之后才碰 GitHub**，所以失败不会留下半成品 |
+| `ci.yml` | main push、PR 到 main、手动 | `test-plan` → Node 24.14.0 的五组测试 matrix（`core` / `ui` / `security` / `native` / `faults`）→ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`）→ 最终 `ci-gate` | 完整 canonical 检查。Native 组内串行、组间独立 runner；任何组失败、取消、跳过或未执行均不得提供成功 gate |
+| `release-check.yml` | **手动**（`workflow_dispatch`） | 始终运行完整 `npm test` 和 App/SEA 打包检查；可选 installer job 再构建并验证 portable/安装程序与正式资产 | 不创建 Release；安装验证以手动输入 `installer` 为条件，默认 true，实际耗时以运行记录为准 |
+| `release.yml` | **推送 tag `v*`** | 精确 SHA 的 main push CI 证明 → `release:check`（含 `--ci-sha`、`--with-installer`）→ 已验证资产 → 独立 publish job | 正式发布复用已成功的完整测试证明，其余验证和 draft/上传/发布守卫见 [releasing.md](releasing.md) |
 
 三者调用的是**同一套 npm 脚本**，没有各自手写构建逻辑 ——
 `release.yml` 更是直接调那一条 `npm run release:check` 入口。
@@ -510,7 +537,8 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 CI 固定 Node **24.14.0**，与当前开发机一致。Node 22 已从持续集成移除，不再作为
 每次提交的兼容性门；这不改变 `engines.node >=22.19` 的产品声明。原因是 Electron、
 pdfjs 和开发依赖仍允许该下限，而移除 CI 覆盖本身不构成提高产品最低版本的依据。
-Release 与 Release Check 也固定 24.14.0，并继续串行执行完整测试，不经过 CI 分组。
+Release 与 Release Check 也固定 24.14.0。手动 Release Check 仍完整串行测试；
+正式 Release 复用同一 SHA 的成功 main 完整 CI，不再重复这次 `npm test`，证明缺失或失败即阻断。
 
 ## 四、不进默认 CI 的测试
 
@@ -662,35 +690,14 @@ jsdom **不做布局**（`getBoundingClientRect()` 恒为 0，也不套用外部
 
 ## 五、发布前验证（F 层）
 
-**一条命令**：
+发布命令、版本准备、tag、精确 SHA 证明、安装与上传校验统一见
+[releasing.md](releasing.md)，此处不维护第二份步骤清单。
+本机 `release:check` 默认完整测试；正式 Release 仅在脚本证明同一 SHA 的 main 完整 CI
+与 gate 成功后复用测试结果。`release:prepare` 的跳过测试模式不构成正式发布证明。
 
-```
-npm run release:check -- --with-installer
-```
-
-它按固定顺序跑完（顺序钉在 `scripts/release-check.mjs` 里，不靠记忆）：
-
-```
-版本一致性（含 tag）  →  npm test（完整 canonical 测试链）
-  →  build:app --rebuild  →  fixtures  →  test:app（25 项）  →  test:exe（47 项）
-  →  build:installer --zip  →  test:portable（11 项）  →  test:installer（20 项，需 --with-installer）
-  →  release:collect（集中到 dist-release/）  →  产物守卫  →  独立复算 SHA256
-```
-
-通过时最后一行是 `READY TO RELEASE`。
-
-> **`--with-installer` 为什么是显式开关**：`test:installer` 会**真的安装**
-> Pi GUI（写注册表、建快捷方式）再卸掉。一次性 runner 上没问题，但开发机上
-> 可能装着一份你在用的 Pi GUI —— 跑一遍就把它卸了。所以本机默认不跑。
-> 代价是：不带这个开关时，安装程序**没有被真正执行过** ——
-> 半截的 `Setup.exe`（名字、大小、校验和全都正常）只有真去装才会暴露。
-
-**CI 与 Release 用的是同一套**：`release.yml` 直接调这条入口，
-`release-check.yml` 调同一批 npm 脚本。所以本机通过就意味着 CI 也该通过。
-
-手动入口：GitHub Actions 里跑 **Release check**（`workflow_dispatch`，
-不创建 Release）；正式发布是 tag 触发的 **Release** workflow。
-完整发版步骤见 [releasing.md](releasing.md)。
+`--with-installer` 会真正安装、启动和卸载应用，只在隔离测试环境按授权执行；
+不得以本机已安装的用户应用验证。手动 Release Check 不创建 Release，但仍有安装等副作用。
+源码、产物、安装、正常沙箱与原位置升级证据分别报告，不能凭一个环境成功推定另一环境成功。
 
 > ⚠️ **`test:portable` / `test:installer` 必须在 runner 上真跑过一次。**
 > 它们的失败模式常常是环境相关的，而本机环境比 runner **更宽松**：
