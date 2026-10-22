@@ -36,7 +36,8 @@ function restoreFocus(node) {
 
 function trapTab(card, e) {
   if (e.key !== 'Tab') return;
-  const items = [...card.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]')];
+  const items = [...card.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]')]
+    .filter(item => !item.closest('[hidden]'));
   if (!items.length) {
     e.preventDefault();
     card.focus();

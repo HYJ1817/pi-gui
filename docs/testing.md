@@ -29,6 +29,12 @@
 
 ## T3-B 评论持久化验证
 
+T4-A 的 `npm run test:review-tasks` 随既有 `test:diff-comments` 纳入 canonical，
+覆盖纯任务投影、容量整体拒绝、引用数据、选择与过期快照、刷新进行中、经典/并行 Composer
+和草稿隔离。`npm run test:review-tasks:electron` 复用临时真实 Git + 正常沙箱 Electron，
+验证选择/返回/填入、Specs/Browser 原生遮挡、四档宽度与未发送/未改源文件；数字与失败历史见
+[T4-A 验收](T4-A-acceptance.md)。不替代完整 canonical、独立验收或 T4-B 隔离执行验证。
+
 T3-C 扩展同一 canonical alias：`test:diff-comments` 增加区间解析/schema/匹配与 UI，
 `test:review-comments` 增加 v1→v2 原子升级和故障验证；原套件断言保留。
 `npm run test:diff-comment-ranges:electron` 复用生产后端重启夹具，正常沙箱下保存单行 v1、
