@@ -141,6 +141,7 @@ const FAKE_PI = [
   'const parentPid = process.ppid;',
   'const fs=require("node:fs"),path=require("node:path"); const sessionId="t3a-fixture",cwd=process.cwd(); const sessionFile=path.join(process.env.PI_CODING_AGENT_DIR,"sessions","--"+cwd.replace(/[\\\\/:]/g,"-")+"--","2026-01-01T00-00-00-000Z_"+sessionId+".jsonl"); fs.mkdirSync(path.dirname(sessionFile),{recursive:true}); if(!fs.existsSync(sessionFile))fs.writeFileSync(sessionFile,JSON.stringify({type:"session",version:3,id:sessionId,cwd,timestamp:"2026-01-01T00:00:00.000Z"})+String.fromCharCode(10));',
   'let input = ""; process.stdin.setEncoding("utf8");',
+  'if(process.env.FAKE_COMMAND_LOG){process.stdin.on("data",chunk=>{for(const line of chunk.split(String.fromCharCode(10))){try{const c=JSON.parse(line);fs.appendFileSync(process.env.FAKE_COMMAND_LOG,c.type+String.fromCharCode(10))}catch{}}});}',
   'process.stdin.on("data", chunk => { input += chunk; let i; while ((i = input.indexOf(String.fromCharCode(10))) >= 0) { const line = input.slice(0, i); input = input.slice(i + 1); try { const cmd = JSON.parse(line); process.stdout.write(JSON.stringify({ type: "response", command: cmd.type, id: cmd.id, success: true, data: { sessionId, sessionFile, sessionName: "T3-A Fixture", messages: [], models: [], thinkingLevels: [] } }) + String.fromCharCode(10)); } catch {} } });',
   'setInterval(() => { try { process.kill(parentPid, 0); } catch { process.exit(0); } }, 400);',
 ].join('\n');
@@ -187,6 +188,7 @@ async function phaseProduction(world) {
       PI_OFFLINE: '1',
       PI_BIN: fakePi,
       FAKE_PI_NODE: process.execPath,
+      ...(process.env.T4A_TASKS==='1'?{FAKE_COMMAND_LOG:path.join(world,'command-types.log')}:{}),
       PI_CODING_AGENT_DIR: path.join(world, 'agent'),
       TEMP: world, TMP: world, TMPDIR: world,
     },
@@ -225,14 +227,14 @@ async function phaseProduction(world) {
       check(name + ' screenshot exists', fs.statSync(file).size > 0);
     };
     await win.webContents.debugger.attach('1.3');
-    const clickPoint = async (x, y) => {
-      await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-      await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    const clickPoint = async (x, y, shift=false) => {
+      await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1,modifiers:shift?8:0 });
+      await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1,modifiers:shift?8:0 });
     };
-    const clickSelector = async (selector) => {
+    const clickSelector = async (selector,shift=false) => {
       const point = await read(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});if(!n)return null;n.scrollIntoView({block:'center'});const r=n.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`);
       if (!point) throw new Error('missing element ' + selector);
-      await clickPoint(point.x, point.y);
+      await clickPoint(point.x, point.y,shift);
     };
 
     await until("document.querySelector('#connText')?.textContent.includes('已连接')", 'Pi fixture ready');
@@ -268,6 +270,24 @@ async function phaseProduction(world) {
       "document.querySelectorAll('.d-row.has-comment').length===2 && document.querySelector('#btnChangesReview').textContent.includes('2')"
     ));
     await shot('02-two-line-comments');
+
+    if(process.env.T4A_TASKS==='1') {
+      const before=fs.readFileSync(path.join(project,'src/app.js'));
+      await clickSelector('.d-row[data-line-type="add"][data-new-line="2"] .d-gutter');
+      await clickSelector('.d-row[data-line-type="add"][data-new-line="3"] .d-gutter',true);
+      await until("!!document.querySelector('.d-review-range-action button')");
+      await clickSelector('.d-review-range-action button');
+      await read("(()=>{const e=[...document.querySelectorAll('.d-review-editor')].find(e=>JSON.parse(e.dataset.anchor).range),t=e.querySelector('textarea');t.value='区间意见：拆分逻辑并保留异常处理';t.dispatchEvent(new Event('input',{bubbles:true}));e.querySelector('.btn.primary').click()})()");
+      await until("!!document.querySelector('.d-review-range-marker')");
+      await require('./fixtures/review-task-electron.cjs')({read,until,shot,win,check,label:'production'});
+      check('T4 production review flow leaves source bytes unchanged',before.equals(fs.readFileSync(path.join(project,'src/app.js'))));
+      // Remove only the extra fixture comment so all original T3 assertions run.
+      await read("document.querySelector('#btnChangesReview').click()");
+      await read("(()=>{const item=[...document.querySelectorAll('.review-summary-body .review-item')].find(e=>e.textContent.includes('区间意见：'));[...item.querySelectorAll('button')].find(b=>b.textContent==='删除').click()})()");
+      await until("import('/diff-comments.js').then(m=>m.commentsForScope().every(c=>!c.anchor.range))");
+      await read("[...document.querySelectorAll('#modalCard .review-summary-actions button')].find(b=>b.textContent==='关闭').click()");
+      await read("document.querySelector('.d-review-editor button:not(.primary)').click()");
+    }
 
     await clickSelector('#btnChangesReview');
     await until("document.querySelector('.review-feedback-preview')?.value.includes('负数边界')");
@@ -366,6 +386,13 @@ async function phaseProduction(world) {
       check('Specs split restores an empty range editor after real asynchronous refresh',await read("[...document.querySelectorAll('.d-review-editor')].some(e=>JSON.parse(e.dataset.anchor).range&&e.querySelector('textarea').value==='')"));
     }
     await shot('07-specs-changes-split');
+    if(process.env.T4A_TASKS==='1') {
+      await read("(()=>{const e=[...document.querySelectorAll('.d-review-editor')].find(e=>JSON.parse(e.dataset.anchor).range),t=e.querySelector('textarea');t.value='Specs 区间意见';t.dispatchEvent(new Event('input',{bubbles:true}));e.querySelector('.btn.primary').click()})()");
+      await until("!!document.querySelector('.d-review-range-marker')");
+      await require('./fixtures/review-task-electron.cjs')({read,until,shot,win,check,label:'specs',focusSwitch:true});
+      const commands=fs.readFileSync(path.join(world,'command-types.log'),'utf8').trim().split(/\r?\n/);
+      check('T4 production and Specs never send prompt, steer or follow_up',!commands.some(c=>['prompt','steer','follow_up'].includes(c)));
+    }
     check('real Electron renderer has no error-level console entries', rendererErrors.length === 0, rendererErrors.slice(0, 5));
   } catch (error) {
     try {
@@ -415,6 +442,7 @@ import {attachBrowserPane} from '/browser-pane.js';
 import {openSplitWorkbench} from '/ui/split-workbench.js';
 import {setGitConversationScope} from '/api.js';
 S.workspaceGeneration=1;S.switching=false;S.bridgeState='ready';S.hasProject=true;S.submitting=false;S.stopping=false;
+${process.env.T4A_TASKS==='1'?`S.cwd=${JSON.stringify(project)};S.state={sessionId:'native-task'};`:''}
 document.getElementById('projectSidebar').hidden=true;
 const pane=initRightPane();configureSecondaryPane(pane);
 const browser=attachBrowserPane(pane,{openWorkbench:openSplitWorkbench});
@@ -573,6 +601,16 @@ window.fixtureReady=true;
     return ['x', 'y', 'width', 'height'].every((key) => Math.abs(now[key] - before[key]) <= 1);
   })());
   await shot('09-browser-split-comment');
+  if(process.env.T4A_TASKS==='1') {
+    const beforeSource=fs.readFileSync(path.join(project,'example.js'));
+    await require('./fixtures/review-task-electron.cjs')({read,until,shot,win:browserWindow,check,label:'browser',onPreview:async()=>{
+      await untilMain(()=>!native(),'task preview detaches native Browser');
+      check('T4 native Browser cannot cover the actual task modal',!native());
+    }});
+    check('T4 Browser task flow leaves source bytes unchanged',beforeSource.equals(fs.readFileSync(path.join(project,'example.js'))));
+    browserWindow.setContentSize(1200,850);await sleep(200);
+    await untilMain(boundsMatch,'task modal closed restores native');
+  }
 
   await read("document.getElementById('modal').hidden=false");
   await untilMain(() => !native(), 'modal detach');

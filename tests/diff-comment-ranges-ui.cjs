@@ -69,6 +69,7 @@ async function until(fn){for(let i=0;i<200;i++){if(fn())return;await tick();}thr
  check('interior changes mark range stale while its single remains live',()=>document.querySelectorAll('.review-stale').length===1&&model.commentsForScope().find(c=>!c.anchor.range).stale===false);
  releaseDiff();await tick();
  check('an older detached Diff response cannot revalidate a changed range',()=>model.commentsForScope().find(c=>c.anchor.range).stale===true);
+ check('an older detached response cannot clear newer confirmation evidence',()=>model.commentsForScope().every(c=>c.verified===true));
  const rangeItem=[...document.querySelectorAll('.review-item')].find(i=>i.textContent.includes('edited range'));
  action(rangeItem,'删除').click();await until(()=>model.commentsForScope().length===1);
  check('stale ranges remain deletable from summary',()=>model.commentsForScope().every(c=>!c.anchor.range));
