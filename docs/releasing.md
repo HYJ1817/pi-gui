@@ -3,43 +3,69 @@
 一条可以照着敲的流程。目标是「人决定版本，机器验证并发布」——
 版本号由人定，其余（构建、测试、打包、校验和、上传、核对）全部交给脚本与 CI。
 
-```bash
-# 0. main 上全绿、工作区干净
-git status -sb && git pull
+本文是唯一正式发版步骤清单。开发与操作授权以 [AGENTS.md](../AGENTS.md) 为准，
+代码验收与合并门槛见 [REVIEW.md](../REVIEW.md)，测试执行政策见
+[testing.md](testing.md#测试执行政策)。版本准备、推送、合并、打 tag / 推送发布 tag
+和正式发布必须分别处于用户明确授权范围内；下列示例不构成授权。
+`READY TO RELEASE` 只表示所执行预检范围通过，不代表已获发布许可或全部生产安全资格。
 
-# 1. 改版本号（同步 package.json + package-lock.json）
-npm run version:set -- 0.13.0
+### 版本准备（独立分支）
+
+从最新 main 建版本准备分支，确认工作区改动与发布范围，再执行已授权的版本准备。
+下面是 PowerShell 示例，版本号仅作占位，替换为维护者已批准的实际版本：
+
+```powershell
+git status -sb
+git fetch origin main --tags
+$releaseVersion = '<维护者批准的三段版本号>'
+npm run version:set -- $releaseVersion
 
 # 2. 更新本版摘要（首行版本标记也要同步）
 #    编辑 .github/release-summary.md，写 3–6 条用户能看懂的变化
+npm run version:check
 
-# 3. 提交并推送版本准备提交到 main
+# 3. 按 AGENTS 约定将中文提交信息写入 Git 元数据目录，再本地提交
 git add package.json package-lock.json .github/release-summary.md
-git commit -m "v0.13.0"
-git push
-
-# 4. 等这个精确提交的完整 CI 和最终 CI gate 通过
-sha=$(git rev-parse HEAD)
-gh run list --workflow=ci.yml --branch main --commit "$sha" --limit 1
-gh run watch <上一条显示的 RUN_ID> --exit-status
-
-# 5. CI gate 通过后，打 tag 并推送 —— **这一步才会触发发布**
-git tag v0.13.0
-git push origin v0.13.0
-
-# 6. Release 复用该 SHA 的 CI 证明，只跑构建、安装、产物和上传验证
-#    正常约 8-12 分钟；CI 未完成/失败/找不到同一 SHA 时会在发布前失败
-#    draft 创建前和正式发布前还会各重验一次 tag / HEAD / CI / gate
-
-# 7. 核对 Release
-gh release view v0.13.0 --json isDraft,assets -q '.isDraft, (.assets[] | .name)'
-
-# 8. 用**旧版本**的 Pi GUI 手动点一次「检查更新」，确认能发现 0.13.0
+$commitMessagePath = (git rev-parse --git-path COMMIT_MSG_TMP.txt).Trim()
+Set-Content -LiteralPath $commitMessagePath -Encoding utf8 -Value "发布准备：v$releaseVersion"
+git commit -F $commitMessagePath
 ```
 
-> 版本号示例用 `0.13.0`。实际以你决定的下一个版本为准。日常正式发布只需要改动
-> `package.json` / `package-lock.json` / `.github/release-summary.md`，推送 main 并等
-> CI 通过后推送 tag。无需再手动运行 `release-check.yml`。
+经授权推送版本准备分支，按 REVIEW 完成 PR 验收并在取得合并许可后进入 main。
+不要把功能验收通过当作自行推送或合并的许可。
+
+### 精确提交证明与发布 tag
+
+在已更新到版本准备合并提交的干净 main 检出中继续；版本必须已进入这个提交。
+
+```powershell
+# 4. 查询并等待这个精确提交的 main push 完整 CI 和最终 CI gate
+$releaseSha = (git rev-parse HEAD).Trim()
+gh run list --workflow=ci.yml --branch main --event push --commit $releaseSha --limit 1
+$ciRunId = '<上一条返回的 RUN_ID>'
+gh run watch $ciRunId --exit-status
+gh run view $ciRunId --json headSha,event,headBranch,status,conclusion,jobs
+
+# 5. 确认上述身份、完整成功和 CI gate，再按明确的 tag/发布授权执行
+$releaseVersion = '<该提交内已批准的版本号>'
+git tag "v$releaseVersion" $releaseSha
+git push origin "v$releaseVersion"
+```
+
+**推送 `v*` tag 会自动触发正式发布工作流，不是仅上传一个标记。**
+CI 未完成、失败或查不到同一 SHA 时不得继续；PR head / PR merge ref 的成功不能替代此处 main push 证明。
+
+Release 脚本随后验证 tag / checkout / 事件 SHA 与 CI 身份，复用该 SHA 的成功完整测试，
+继续构建、安装、产物和上传验证；draft 前及正式发布前重验 CI 证明。
+耗时以实际运行记录为准，不能用旧运行或人工宣布通过绕过脚本。
+
+```powershell
+# 7. 核对 Release 的正式状态、三个附件与摘要，另按后文检查旧版更新发现
+gh release view "v$releaseVersion" --json isDraft,assets
+```
+
+后文历史示例使用 `0.13.0`，并非当前或下一版的指定版本。
+正式发布无需再重复手动运行 `release-check.yml`；该入口仍用于独立的完整验证。
 
 ## 一、版本号必须在 tag **之前**进仓库
 
@@ -202,7 +228,7 @@ permissions:
 
 **不挂 `push main`** —— 每次合并都发版不可接受，而且版本号必须由人决定。
 
-顺序（**全部验证通过之后才碰 GitHub**）：
+顺序（查询 GitHub CI 证明在前；全部发布预检通过之后才创建/复用 Release draft）：
 
 ```
 checkout → setup-node → npm ci → 获取并校验固定版本 NSIS
@@ -229,8 +255,8 @@ checkout → setup-node → npm ci → 获取并校验固定版本 NSIS
 而「已发布必须拒绝 / 只剩 draft 才复用 / 核对不过绝不 publish / publish 排最后」
 这几条正是最容易错的分支。挪进脚本之后，注入一个假 gh 就能把分支表全测一遍
 （见 `tests/release-artifacts.cjs` 的「发布编排」一节）。
-`.probe/validate-workflows.cjs` 还有一条断言守着：**release.yml 里不许出现裸的
-`gh release` 命令** —— 防止有人图省事把逻辑搬回 YAML。
+受版本控制的 `tests/ci-workflow.cjs`、`tests/release-ci-proof.cjs` 与发布相关测试
+校验编排和证明边界；本机 `.probe/` 探针不构成仓库长期测试入口。
 
 ### 为什么用 draft 兜上传
 
@@ -257,7 +283,7 @@ checkout → setup-node → npm ci → 获取并校验固定版本 NSIS
 发布之后再确认一次 `isDraft === false` 且附件数为 3。
 **不把「publish 命令退出 0」当成完整成功判据。**
 
-想只彩排到「核对通过」而不发布，可以在具备与 Release job 相同的
+经用户明确授权，想只彩排到「核对通过」而不发布，可以在具备与 Release job 相同的
 `GITHUB_TOKEN`、`GITHUB_REPOSITORY`、`EXPECTED_SHA` 环境中运行：
 
 ```bash
@@ -296,14 +322,14 @@ Release 页面现在分三层，顺序固定：
   `npm ci` 或 npm 构建生命周期，只下载同一次运行已 `release:verify` 的 artifact、
   再验一次，然后创建/上传/发布 Release。它会在 draft 前和正式发布前重新验证
   精确 SHA 的 CI 证明，避免已重跑或已变化的 CI 状态被旧结果掩盖。
-- `GITHUB_TOKEN` 只在 CI 证明步骤注入；`GH_TOKEN` 只在发布步骤注入。
+- `GITHUB_TOKEN` 在需要 CI 证明的步骤注入，包括发布脚本重验；`GH_TOKEN` 只在发布步骤注入。
   checkout 设置 `persist-credentials: false`，不会把写权限凭据留在仓库的
   Git 配置里供后续脚本读取。
   不要 issues / pull-requests / packages。
 - 用内置的 **`GITHUB_TOKEN`**，**不用个人 PAT**（PAT 会绕过分支保护、
   无法随仓库转移、也容易过期）。
-- Actions 只用 `actions/checkout` 与 `actions/setup-node`（钉 `v5`，与 ci.yml
-  一致；选 v5 的理由见 ci.yml 头部）。
+- 当前 Release 使用 `actions/checkout@v5`、`actions/setup-node@v5`、
+  `actions/upload-artifact@v7` 与 `actions/download-artifact@v8`；具体版本以 workflow 为准。
 - zip 与 SHA-256 都用 Node 自带能力（`tar` / `node:crypto`）解决，
   **不引入陌生的第三方 Action**。
 - workflow 里不 `curl | bash` 任何东西。唯一的 CI 专用依赖是 NSIS，
@@ -321,20 +347,26 @@ Release 页面现在分三层，顺序固定：
 
 ## 十一、本机手工验证（不打 tag）
 
-不想触发发布、只想确认「这批东西能发」时：
+不触发正式发布的验证入口如下；构建会写盘和收集产物，安装验证会真装真卸。
+按授权在隔离测试环境使用，不能把用户正在使用的安装作为测试目标。
 
 ```bash
 npm run version:check                     # 版本一致
-npm run release:check -- --with-installer # 可选：完整测试 + 构建 + 真装真卸 + 产物
+npm run release:check                     # 完整测试 + 构建 + portable/产物验证，默认不执行安装程序
 npm run release:prepare                   # 构建 + 产物验证 + 守卫（不跑 npm test）
 npm run release:verify                    # 只看产物守卫
 node scripts/make-checksums.mjs --dir=dist-release    # 重新生成校验和
 ```
 
+需要实际安装验证时，只在隔离环境执行 `npm run release:check -- --with-installer`。
+各行是按目的选择的入口，不要求顺序全部执行；`release:prepare` / `--skip-tests` 的成功
+不能替代完整 canonical 或精确 SHA 的正式发布证明。
+
 `release-check.yml` 仍是手动完整检查入口，始终运行 `npm test`；它不创建 Release。
+其中 installer job 受手动输入 `installer` 控制，默认 true。
 正式 tag 流程不再重复这一步，而是依赖 tag 精确 SHA 已经通过的完整 main CI。
 
-tag 本身仍应通过仓库 ruleset 保护、禁止移动；发布时的两次重验缩小竞态窗口，
+tag 应保持不变；ruleset 是否已配置须实际核实，文档不能证明已启用保护。发布时的重验缩小竞态窗口，
 但 GitHub 没有提供“验证 tag 与 publish 原子完成”的单一事务。
 
 手工核一个文件的 SHA-256 与 `SHA256SUMS.txt` 是否一致：
