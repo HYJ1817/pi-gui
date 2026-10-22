@@ -36,6 +36,8 @@ async function until(fn){for(let i=0;i<200;i++){if(fn())return;await tick();}thr
  check('selected gutters expose an accessible pressed state',()=>rows().slice(0,5).every(r=>r.querySelector('.d-gutter').getAttribute('aria-pressed')==='true'));
  document.querySelector('.d-review-range-action button').click();
  check('range editor keeps the other draft and receives focus',()=>rangeEditor()&&editors().length===2&&document.activeElement===rangeEditor().querySelector('textarea'));
+ await refresh();
+ check('a blank range editor and its focus survive an asynchronous list refresh',()=>rangeEditor()&&rangeEditor().querySelector('textarea').value===''&&document.activeElement===rangeEditor().querySelector('textarea'));
  input(rangeEditor(),'range review');backend.error='comment_storage_write_failed';action(rangeEditor(),'保存评论').click();await tick();
  check('failed range save preserves both drafts',()=>rangeEditor().querySelector('textarea').value==='range review'&&editors()[0].querySelector('textarea').value==='original single draft'&&model.commentsForScope().length===0);
  backend.error=null;action(rangeEditor(),'保存评论').click();await until(()=>model.commentsForScope().length===1);

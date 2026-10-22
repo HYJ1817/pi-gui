@@ -892,8 +892,10 @@ function preserveReviewDrafts() {
   const box = panels.changes;
   if (!box) return;
   for (const editor of box.querySelectorAll('.d-review-editor[data-draft-key]')) {
-    const text = editor.querySelector('textarea')?.value || '';
-    if (!text.trim()) {
+    const input = editor.querySelector('textarea');
+    const text = input?.value || '';
+    const anchor = JSON.parse(editor.dataset.anchor || 'null');
+    if (!text.trim() && !anchor?.range) {
       pendingReviewDrafts.delete(editor.dataset.draftKey);
       continue;
     }
@@ -901,7 +903,8 @@ function preserveReviewDrafts() {
       text,
       path: editor.dataset.path || '',
       section: editor.dataset.section || 'working',
-      anchor: JSON.parse(editor.dataset.anchor || 'null'),
+      anchor,
+      focused: anchor?.range && document.activeElement === input,
     });
   }
 }
@@ -1173,7 +1176,7 @@ function decorateReviewBlock(block, path, section, truncated) {
     if (reconcileReviewRange(draft.anchor,lines,fingerprint)!=='valid') continue;
     const a=draft.anchor;
     const row=rows.find(r=>r.dataset.lineType===a.type&&String(a.oldLine??'')===r.dataset.oldLine&&String(a.newLine??'')===r.dataset.newLine&&a.codeHash===r.dataset.codeHash);
-    if (row) openReviewEditor(row,{path,section,anchor:a,focus:false});
+    if (row) openReviewEditor(row,{path,section,anchor:a,focus:Boolean(draft.focused)});
   }
 }
 
