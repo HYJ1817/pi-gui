@@ -46,6 +46,7 @@ import { createEventBus } from './server/sse.js';
 import { createGitRoutes } from './server/git-routes.js';
 import { createProjects, resolveInitialCwd } from './server/projects.js';
 import { createWorktrees } from './server/worktrees.js';
+import { samePath } from './lib/git-worktree.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createSpecs } from './server/specs.js';
 import { createProviders } from './server/providers.js';
@@ -81,6 +82,8 @@ import { createRuntime } from './server/runtime.js';
 import { createRuntimeRegistry } from './server/runtime-registry.js';
 import { createRuntimeRoutes } from './server/runtime-routes.js';
 import { createSessionRuntime } from './server/session-runtime.js';
+import { createCandidateRuns } from './server/candidate-runs.js';
+import { createCandidateRoutes } from './server/candidate-routes.js';
 import { createRuntimeBrowserGateway } from './server/runtime-browser-launch.js';
 import { createDiagnostics } from './server/diagnostics.js';
 import { createLogService } from './server/logging.js';
@@ -411,6 +414,7 @@ const rpc = createRpcBridge({
 let plannerRef = null;
 let worktreesRef = null;
 let runtimeRegistryRef = null;
+let candidateRunsRef = null;
 /* P9 收口：Verifier 的引用占位，同一个理由 —— Scheduler 的闸门要问
  * 「现在有没有独立验证在跑」，而 verifier 自己又要拿 scheduler（问「有没有计划在跑」）。
  * 两边都不 import 对方，只在这里互相拿到一个**只读**的轻量函数。 */
@@ -906,12 +910,13 @@ function withWorkspaceIdentity(identity, action) {
 }
 const conversationWorkspaces = {withWorkspace:withWorkspaceIdentity};
 const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
-  dataDir: DATA_DIR, publish: sse.publish,
+  dataDir: DATA_DIR, publish: event => { sse.publish(event); void candidateRunsRef?.observe(event).catch(() => {}); },
   logEvent: (event, details) => logging.log('runtime', event, details),
   externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
     || rpc.maintenanceState() || plannerRef?.projectSwitchBlockReason() || cliInFlight ? 'maintenance' : null,
-  beforeCommand: cmd => providerAuth.snapshot().sync.state === 'syncing' ? 'auth_syncing'
+  beforeCommand: (cmd,live) => ['prompt','steer','follow_up'].includes(cmd.type) && candidateRunsRef?.busy() && !candidateRunsRef.owns(runtimeRegistryRef.getOwner(live.record.conversationId)) ? 'runtime_busy'
+    : providerAuth.snapshot().sync.state === 'syncing' ? 'auth_syncing'
     : null,
   admission: (args, action) => worktrees.withWorkspace(args, workspace => {
     const current = runtime.getCurrentCwd(), relative = current ? path.relative(workspace.root, fs.realpathSync(current)) : null;
@@ -942,6 +947,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     let adapter;
     try { adapter = await createSessionRuntime({ context, emit, piBin: PI_BIN, env: process.env, dataDir: DATA_DIR,
       guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission, toolScheduler,
+      candidateAudit: context.workspace.branch?.startsWith('pi-gui/t4b/') ? event => candidateRunsRef?.audit(context.getOwner(),event) : null,
       createChanges: ({ launch, context, requestState }) => createSessionChangeBridge({ store: getEvidenceStore, launch,
         admission: mutationAdmission, inspectFileMetadata, inspectObjectEvidence:observeFileObject,
         notify: event => emit(event),
@@ -969,6 +975,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   },
 });
 const runtimeRoutes = createRuntimeRoutes({ registry: runtimeRegistry,
+  beforeAction:body=>{if(candidateRunsRef?.busy()&&['start','resume','open-session'].includes(body.action))throw Object.assign(Error('runtime_busy'),{code:'runtime_busy'});},
   openSession:args=>ordinarySessions.open(args),
   validateWorkspace: owner => withWorkspaceIdentity({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}),
   /* P32.4：只读历史。目标路径来自 registry 记录（后端持有、绑定时已证明），
@@ -992,18 +999,21 @@ const revertMutationAuthority = createSessionRevertMutationAuthority({ withAutho
   stopAndDrain: createSessionRevertStopAndDrain({ admission:mutationAdmission, registry:runtimeRegistry, worktrees:conversationWorkspaces,
     classic:{ root:()=>runtime.getCurrentCwd(), blocked:()=>Boolean(plannerRef?.projectSwitchBlockReason()||cliInFlight),
       manager:managedProcesses.manager, abort:command=>rpc.abortAndWait(command) } }) });
+const reviewCommentStore=createReviewCommentStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+const reviewCommentAuthority=createReviewCommentAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
+  classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
+    resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
+const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,worktrees,registry:runtimeRegistry,readComments:scope=>reviewCommentStore.read(scope),
+  projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
+  contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:()=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||mutationAdmission.busy()),
+  protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
 const route = createRouter({
-  reviewComments: createReviewCommentRoutes({
-    store: createReviewCommentStore({ dataDir: DATA_DIR,
-      protectedRoots: () => [__dirname, ...projects.read().items.map(p => p.path)] }),
-    withAuthority: createReviewCommentAuthority({ registry: runtimeRegistry, withWorkspace: withWorkspaceIdentity,
-      classic: { cwd: () => runtime.getCurrentCwd(), generation: () => runtime.getWorkspaceGeneration(),
-        owner: primaryOwner, state: () => rpc.request({ type: 'get_state' }),
-        resolveSession: id => sessions.resolveByUuid(id), withWorkspace: (cwd, action) => worktrees.withActivation(cwd, action) } }),
-  }),
+  reviewComments: createReviewCommentRoutes({store:reviewCommentStore,withAuthority:reviewCommentAuthority}),
+  candidateRuns: createCandidateRoutes({runs:candidateRuns,withAuthority:reviewCommentAuthority}),
   sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,
     withReadAdmission:()=>evidenceAdmission.assertReady() }),
   commandAdmission: async cmd => {
+    if(candidateRuns.busy()&&['prompt','steer','follow_up'].includes(cmd.type))throw Object.assign(Error('候选任务正在执行，请先完成或停止。'),{code:'runtime_busy'});
     if (!runtime.getCurrentCwd()) return false;
     if (cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') { await sessionChanges.disable(); return true; }
     if (['prompt', 'steer', 'follow_up'].includes(cmd.type)) await sessionChanges.assertReady();
@@ -1143,6 +1153,7 @@ async function shutdown() {
   clearInterval(runtimeHealthTimer);
   await sessionChanges.dispose();
   await primaryToolGuard.dispose();
+  try { await candidateRuns.dispose(); } catch { /* pending cleanup remains fail-closed */ }
   try { await runtimeRegistry.dispose(); } catch { /* Owned guardians also stop on backend EOF. */ }
   worktrees.dispose();
   /* 有计划在跑就先收尾：abort 当前 Agent，并把 running 的 task 标成 interrupted

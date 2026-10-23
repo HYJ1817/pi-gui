@@ -43,3 +43,6 @@ Diff 区间评论的当前语义与 v1 兼容见 [T3-C 功能说明](git-changes
 
 从评论选择、预览并确认修改任务见 [T4-A 当前行为](git-changes.md#十一准备修改任务t4-a)；
 [T4-A 验收](T4-A-acceptance.md) 记录其提交与实测范围。它不生成补丁或隔离执行代码。
+
+T4-B 受限候选执行见[设计与安全边界](T4-B-design.md)及[验收记录](T4-B-acceptance.md)：
+明确确认后使用受控 Worktree 和原执行机制生成真实 Diff；不应用到原项目，独立外部审查状态以验收记录为准。

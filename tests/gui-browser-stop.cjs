@@ -104,6 +104,10 @@ async function main() {
     // Keep the real composition dependency shape. This Stop fixture never
     // calls comment routes, so constructing the lazy store performs no I/O.
     createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
+    // This fixture has no candidate run. Preserve the production facade shape
+    // without scanning a shared TEMP data directory; candidate Stop has its own
+    // isolated lifecycle and real Electron coverage.
+    createCandidateRuns: () => ({busy: () => false}), createCandidateRoutes: () => null, candidateRunsRef: null,
     DATA_DIR: os.tmpdir(), __dirname: ROOT,
     withWorkspaceIdentity: (...args) => context.conversationWorkspaces.withWorkspace(...args),
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,

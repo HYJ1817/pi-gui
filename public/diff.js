@@ -38,7 +38,7 @@
  * `+++ b/…` 文件头而着色成灰色。现在元信息只在首个 hunk 之前识别。
  */
 
-import { esc } from './util.js';
+import { esc } from './html-escape.js';
 
 /* hunk 头：`@@ -1,3 +1,4 @@`，后面可能跟一段函数上下文 */
 const HUNK_RE = /^@@/;

@@ -29,6 +29,11 @@
 
 ## T3-B 评论持久化验证
 
+T4-B 的 `npm run test:candidates` 随 `npm test` 纳入五个候选输入/存储/运行/HTTP/UI 套件。
+正常沙箱专项为 `node tests/candidate-electron.cjs`，使用独立临时 Git 与 fake Pi，覆盖审批、真实文件差分、重启、Stop、
+原项目/index/草稿不变及原生 Browser 遮挡。重建后运行 `node tests/candidate-packaged.cjs` 核验 App/SEA 的新资源及授权边界。
+这些专项不替代完整 canonical 或独立审查；数字、失败历史及平台限制见 [T4-B 验收](T4-B-acceptance.md)。
+
 T4-A 的 `npm run test:review-tasks` 随既有 `test:diff-comments` 纳入 canonical，
 覆盖纯任务投影、容量整体拒绝、引用数据、选择与过期快照、刷新进行中、经典/并行 Composer
 和草稿隔离。`npm run test:review-tasks:electron` 复用临时真实 Git + 正常沙箱 Electron，

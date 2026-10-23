@@ -46,7 +46,7 @@ export function projectRuntimeEvent(event) {
 
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
-  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null, toolScheduler = null } = {}) {
+  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null, toolScheduler = null, candidateAudit = null } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -58,12 +58,12 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const activity = createPiActivity(), generation = createModelGeneration(), approvals = new Map();
   let rpc, disposed = false, cleanup = false, disposal = null;
   const toolGuard = toolScheduler ? createSessionToolBridge({scheduler:toolScheduler,launch,getCwd:()=>context.cwd,getRoot:()=>context.workspace.root,
-    readState:()=>rpc.request({type:'get_state'}),onEvent:emit}) : null;
+    readState:()=>rpc.request({type:'get_state'}),onEvent:emit,audit:candidateAudit}) : null;
   const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission, mutationAdmission });
   const changes = createChanges?.({ runtime, launch, context, requestState: () => rpc.request({ type: 'get_state' }) }) || null;
   // Another session may be writing this same project. Its launch must not
   // synchronize a shared project instruction file outside the tool queue.
-  const promptDir = context.workspace?.workspaceId?.startsWith('project-') ? fs.mkdtempSync(path.join(os.tmpdir(),'pi-gui-runtime-prompt-')) : null;
+  const promptDir = context.workspace?.workspaceId?.startsWith('project-') || candidateAudit ? fs.mkdtempSync(path.join(os.tmpdir(),'pi-gui-runtime-prompt-')) : null;
   const promptFile = promptDir ? path.join(promptDir,'instructions.md') : null;
   const config = createProjectConfig({ runtime, env, restartPi: () => rpc.restart(), instructionsFile:promptFile });
   const sessions = createSessions({ runtime, env, dataDir, extraSessionRoots: sessionDir ? [sessionDir] : [] });

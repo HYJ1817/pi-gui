@@ -1,0 +1,90 @@
+{
+  "kind": "T4-B feasibility observations; NOT feature acceptance",
+  "platform": "win32",
+  "node": "v24.22.1",
+  "passed": 19,
+  "failed": 0,
+  "skip": 0,
+  "checks": [
+    {
+      "id": "P01-status-does-not-bind-dirty-bytes",
+      "outcome": "observed"
+    },
+    {
+      "id": "P02-preflight-reports-dirty",
+      "outcome": "observed"
+    },
+    {
+      "id": "P03-existing-create-accepts-same-status-content-drift",
+      "outcome": "observed"
+    },
+    {
+      "id": "P04-candidate-excludes-initial-dirty-input",
+      "outcome": "observed"
+    },
+    {
+      "id": "P05-create-does-not-copy-untracked-or-ignored",
+      "outcome": "observed"
+    },
+    {
+      "id": "P06-source-bytes-and-index-unchanged-by-create",
+      "outcome": "observed"
+    },
+    {
+      "id": "P07-existing-nonce-replay-is-rejected",
+      "outcome": "observed"
+    },
+    {
+      "id": "P08-tree-snapshot-preserves-real-index",
+      "outcome": "observed"
+    },
+    {
+      "id": "P09-one-tree-is-working-not-separate-staged-input",
+      "outcome": "observed"
+    },
+    {
+      "id": "P10-tree-adds-unselected-untracked-by-default",
+      "outcome": "observed"
+    },
+    {
+      "id": "P11-tree-excludes-ignored-input",
+      "outcome": "observed"
+    },
+    {
+      "id": "P12-external-process-is-not-blocked-by-tool-lease",
+      "outcome": "observed"
+    },
+    {
+      "id": "P13-time-window-evidence-accepts-external-only-write",
+      "outcome": "observed"
+    },
+    {
+      "id": "P14-before-after-diff-excludes-initial-dirty-baseline",
+      "outcome": "observed"
+    },
+    {
+      "id": "P15-return-to-input-has-empty-diff",
+      "outcome": "observed"
+    },
+    {
+      "id": "P16-git-snapshot-can-execute-clean-filter",
+      "outcome": "observed"
+    },
+    {
+      "id": "P17-tree-bytes-can-differ-from-disk-bytes",
+      "outcome": "observed"
+    },
+    {
+      "id": "P18-controlled-checkout-still-runs-smudge-filter",
+      "outcome": "observed"
+    },
+    {
+      "id": "P19-existing-path-boundary-rejects-link-escape",
+      "outcome": "observed"
+    }
+  ],
+  "baselineSha": "03a223d7ac5f69f33a359e51f95905bfb07253b8",
+  "command": "node docs/evidence/t4-b-feasibility/probe.mjs --temporary-fixtures",
+  "exitCode": 0,
+  "featureAcceptance": false
+}

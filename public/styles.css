@@ -2893,3 +2893,13 @@ body.rp-resizing{cursor:col-resize;user-select:none}
   .think-body:not([hidden]),.msg-file-body,.tl-more:not([hidden]){animation:none}
   .toast{animation:none}
 }
+/* Candidate preview reuses the review modal and real Diff renderer. */
+.review-task[data-candidate="true"] > :not(.candidate-flow) { display: none; }
+.candidate-flow { min-width: 0; max-width: 100%; }
+.candidate-facts { display: grid; grid-template-columns: minmax(80px,auto) minmax(0,1fr); gap: 6px 12px; font-size: 12px; }
+.candidate-facts dt { color: var(--text-muted); }
+.candidate-facts dd { margin: 0; overflow-wrap: anywhere; }
+.candidate-snapshot,.candidate-files { overflow-wrap: anywhere; font-size: 12px; }
+.candidate-file { border-top: 1px solid var(--border); padding: 8px 0; min-width: 0; }
+.candidate-file summary { cursor: pointer; overflow-wrap: anywhere; font-size: 12px; }
+.candidate-diff { max-width: 100%; overflow: auto; max-height: 440px; }

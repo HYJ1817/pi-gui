@@ -192,6 +192,9 @@ async function main() {
     // Construct the actual lazy comment dependencies; this Stop-only fixture
     // never enters their routes and must not hide production assembly drift.
     createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
+    // No candidate exists in this Stop facade fixture. Its independent real
+    // lifecycle is covered by candidate-runs and normal-sandbox Electron.
+    createCandidateRuns: () => ({busy: () => false}), createCandidateRoutes: () => null, candidateRunsRef: null,
     DATA_DIR: os.tmpdir(), __dirname: ROOT,
     withWorkspaceIdentity: (...args) => context.conversationWorkspaces.withWorkspace(...args),
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,

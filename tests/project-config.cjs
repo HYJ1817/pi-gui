@@ -736,13 +736,14 @@ function cleanup() {
       const esbuild = require('esbuild');
       const out = path.join(os.tmpdir(), `pi-gui-bundle-${process.pid}.cjs`);
       const pkgVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
-      esbuild.buildSync({
+      const compiled=esbuild.buildSync({
         entryPoints: [path.join(ROOT, 'server.js')],
         bundle: true,
         platform: 'node',
         format: 'cjs',
         target: 'node22',
         outfile: out,
+        write: false,
         define: {
           'import.meta.url': '__SEA_URL__',
           __PI_GUI_VERSION__: JSON.stringify(pkgVersion),
@@ -750,6 +751,8 @@ function cleanup() {
         banner: { js: 'var __SEA_URL__=require("url").pathToFileURL(__filename).href;' },
         logLevel: 'silent',
       });
+      // The production builder also writes through its Node owner on Windows.
+      fs.writeFileSync(out,compiled.outputFiles[0].contents);
       bundle = fs.readFileSync(out, 'utf8');
       fs.unlinkSync(out);
     } catch (e) {
