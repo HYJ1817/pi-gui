@@ -10,6 +10,10 @@ let checks=0;const check=(name,fn)=>{fn();checks++;console.log('ok '+name);};
   store.acquire();check('cross-instance writer lock refuses overlap',()=>assert.throws(()=>other.acquire(),e=>e.code==='candidate_storage_busy'));
   store.save(record);check('saved record is readable without exposing input in memory',()=>{const rows=other.readAll();assert.equal(rows.length,1);assert.equal(rows[0].run.id,id);assert.deepEqual(rows[0].input.files,[]);});
   const original=fs.readFileSync(file);
+  check('corrupt optional adoption extension cannot hide legacy history',()=>{
+   const nested=original.toString('utf8').slice(0,-1)+',"adoptionEvidence":'+'['.repeat(12000)+'null'+']'.repeat(12000)+'}';
+   try{fs.writeFileSync(file,nested);const rows=other.readAll();assert.equal(rows[0].run.id,id);assert.equal(rows[0].adoptionEvidence,null);}finally{fs.writeFileSync(file,original);}
+  });
   fs.writeFileSync(file,'{');check('corrupt JSON remains intact after refusal',()=>{assert.throws(()=>other.readAll());assert.equal(fs.readFileSync(file,'utf8'),'{');});fs.writeFileSync(file,original);
   const write=v=>fs.writeFileSync(file,JSON.stringify(v));
   write({...record,version:2});check('unknown future version refuses and preserves bytes',()=>{assert.throws(()=>other.readAll());assert.equal(JSON.parse(fs.readFileSync(file)).version,2);});fs.writeFileSync(file,original);

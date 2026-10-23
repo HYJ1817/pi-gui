@@ -65,6 +65,16 @@ async function main(){
  const qualified=JSON.parse(fs.readFileSync(path.join(data,'candidate-runs',evidenceFiles[0]),'utf8')).result;
  if(!qualified.reliable)console.error('Evidence qualification: '+JSON.stringify(qualified.unconfirmedReasons));
  check('guarded real write has matching intended-byte proof',qualified.reliable===true);
+ async function checkAdoption(label){
+  await click('检查采纳条件（只读）','.candidate-flow');
+  await until("document.querySelector('.candidate-flow')?.textContent.includes('暂不可采纳')",label+' read-only plan');
+  check(label+' checks real source and output without offering write',await read("document.querySelector('.candidate-flow').textContent.includes('暂存区保持原状')&&![...document.querySelectorAll('.candidate-flow button')].some(b=>b.textContent==='确认采纳')"));
+  check(label+' leaves source bytes and index unchanged',original.equals(fs.readFileSync(path.join(repo,'src/app.js')))&&originalIndex.equals(fs.readFileSync(path.join(repo,'.git/index'))));
+  for(const width of [720,900,1200,1536]){win.setContentSize(width,850);await sleep(120);check(`${label} read-only plan fits ${width}px`,await read("document.documentElement.scrollWidth<=innerWidth+1&&document.querySelector('#modalCard').getBoundingClientRect().right<=innerWidth+1"));}
+  win.setContentSize(1200,850);await shot('t4c-'+label+'-readonly');
+  await click('返回候选 Diff','.candidate-flow');await until("!!document.querySelector('.candidate-file')",'back to actual Diff');
+ }
+ if(process.env.T4C_CHECK_ADOPTION==='1')await checkAdoption('source');
  async function closePreview(){await click('返回修改任务','.candidate-flow');await click('关闭','.review-task');}
  async function openResult(){await read("document.querySelector('#btnChangesReview').click()");await click('准备修改任务');await click('候选修改');await until("[...document.querySelectorAll('.candidate-flow button')].some(b=>b.textContent.startsWith('已完成'))",'retained result');await read("[...document.querySelectorAll('.candidate-flow button')].find(b=>b.textContent.startsWith('已完成')).click()");await until("!!document.querySelector('.candidate-file')",'candidate result');await read("document.querySelector('.candidate-file').open=true");}
  await closePreview();await read("document.querySelector('#btnChangesSplit').click()");await until("!!document.querySelector('#workbenchChangesPane #btnChangesReview')",'Specs Changes split');await openResult();
@@ -74,6 +84,13 @@ async function main(){
  await read("document.querySelector('#btnBrowser').click()");await until("!!document.querySelector('#browserSplit')",'Browser opened');await read("document.querySelector('#browserSplit').click()");await until("!!document.querySelector('#workbenchChangesPane #btnChangesReview')",'Browser Changes split');
  for(let i=0;i<100&&win.contentView.children.length===0;i++)await sleep(50);check('real native Browser view attached before modal',win.contentView.children.length>0);
  await openResult();for(let i=0;i<100&&win.contentView.children.length;i++)await sleep(50);check('native Browser cannot cover candidate Diff modal',win.contentView.children.length===0);await shot('05-browser-diff');
+ if(process.env.T4C_CHECK_ADOPTION==='1'){
+  await checkAdoption('browser');check('native Browser cannot cover read-only adoption',win.contentView.children.length===0);
+  fs.writeFileSync(path.join(repo,'src/app.js'),'export const value = 999;\n');
+  await click('检查采纳条件（只读）','.candidate-flow');await until("document.querySelector('.candidate-flow')?.textContent.includes('来源工作区内容或身份已变化')",'source conflict');
+  check('real source conflict never overwrites newer bytes',fs.readFileSync(path.join(repo,'src/app.js'),'utf8').includes('999'));await shot('t4c-source-conflict');
+  fs.writeFileSync(path.join(repo,'src/app.js'),original);await click('返回候选 Diff','.candidate-flow');await until("!!document.querySelector('.candidate-file')",'source restored Diff');
+ }
  await closePreview();for(let i=0;i<100&&!win.contentView.children.length;i++)await sleep(50);check('native Browser restored after closing preview',win.contentView.children.length>0);
  const trace=fs.readFileSync(path.join(world,'trace.jsonl'),'utf8').trim().split('\n').map(v=>JSON.parse(v));check('exactly one prompt and only to candidate',trace.filter(v=>v.type==='prompt').length===1&&trace.filter(v=>v.type==='prompt').every(v=>v.candidate));
  console.log('stage restart backend');await stopBackend();await start();await win.loadURL(base+'/');await until("document.querySelector('#connText')?.textContent.includes('已连接')",'restart');
@@ -81,6 +98,9 @@ async function main(){
  await read("document.querySelector('#navChanges').click()");await until("!!document.querySelector('#btnChangesReview')",'restored Changes');await until("import('/review-comment-persistence.js').then(m=>m.reviewPersistenceState().status==='ready')",'restored comment authority');await read("document.querySelector('#btnChangesReview').click()");await click('准备修改任务');await click('候选修改');
  await until("[...document.querySelectorAll('.candidate-flow button')].some(b=>b.textContent.startsWith('已完成'))",'recovered history');
  check('restart restores retained result without another Agent run',fs.readFileSync(path.join(world,'trace.jsonl'),'utf8').split('"prompt"').length===2);
+ if(process.env.T4C_CHECK_ADOPTION==='1'){
+  await read("[...document.querySelectorAll('.candidate-flow button')].find(b=>b.textContent.startsWith('已完成')).click()");await until("!!document.querySelector('.candidate-file')",'restored candidate Diff');await checkAdoption('restart');
+ }
  await click('返回修改任务','.candidate-flow');await click('关闭','.review-task');await read("document.querySelector('.chg-main').click()");await until("!!document.querySelector('.d-row.has-comment')",'revalidated source comment');
  await read("document.querySelector('#btnChangesReview').click()");await click('准备修改任务');await click('预览修改任务');await click('在隔离工作区生成修改');await until("[...document.querySelectorAll('.candidate-flow button')].some(b=>b.textContent==='确认创建并执行')",'second preflight');await click('确认创建并执行');await until("[...document.querySelectorAll('.candidate-flow button')].some(b=>b.textContent==='停止候选执行')&&document.querySelector('.candidate-flow').textContent.includes('执行中')",'second run');
  // The UI can show running just before prompt transport is acknowledged. This

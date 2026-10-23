@@ -24,6 +24,7 @@ const waitFor=async(test,label)=>{for(let i=0;i<1200;i++){if(test())return;await
  controller=createCandidateRuns(options);
  const body={selectedIds:['comment'],revision,scope:scope.key};
  let originalFailure=null;try{
+  await check('candidate controller exposes a read-only adoption check',()=>assert.equal(typeof controller.checkAdoption,'function'));
   const plan=await controller.prepare(scope,body,{conversationId:'source',sessionId:'native'});
   await check('preflight creates no worktree or Agent',()=>{assert.equal(sends,0);assert(!fs.existsSync(path.join(data,'worktrees')));assert(plan.nonce);});
   let retired=false;const previousScope={...scope,token:'owner-A',assertCurrent(){if(retired)throw Error('old owner');}};
@@ -112,6 +113,21 @@ const waitFor=async(test,label)=>{for(let i=0;i<1200;i++){if(test())return;await
   closeHook=current=>fs.writeFileSync(path.join(current.root,'file.txt'),'late cleanup write\n');
   await controller.observe({type:'runtime_event',owner:live.owner,event:{type:'agent_settled'}});closeHook=null;
   await check('result includes late cleanup writes and refuses their attribution',()=>{const result=controller.get(scope,cleanupRun.run.id).result;assert.match(result.files[0]?.patch||'',/late cleanup write/);assert.equal(result.reliable,false);});
+  const qualifiedPlan=await controller.prepare(scope,body,{conversationId:'source',sessionId:'native'}),qualifiedRun=await controller.confirm(scope,qualifiedPlan.nonce);
+  await waitFor(()=>sends>=8,'qualified prompt');const qualifiedOwner=live.owner;
+  await controller.audit(qualifiedOwner,{phase:'begin',callId:'qualified',audit:{kind:'write',path:'file.txt',expectedHash:require('node:crypto').createHash('sha256').update('qualified result\n').digest('hex')}});
+  fs.writeFileSync(path.join(live.root,'file.txt'),'qualified result\n');await controller.audit(qualifiedOwner,{phase:'end',callId:'qualified'});live.active=false;
+  await controller.observe({type:'runtime_event',owner:qualifiedOwner,event:{type:'agent_settled'}});
+  const recordFile=path.join(data,'candidate-runs',qualifiedRun.run.id+'.json'),historical=fs.readFileSync(recordFile),history=JSON.parse(historical),sourceIndex=fs.readFileSync(path.join(root,'.git/index'));
+  await check('new reliable history persists original source and actual output identities',()=>{assert.equal(history.result.reliable,true);assert.equal(history.adoptionEvidence.source.root,root);assert.equal(history.adoptionEvidence.output.root,history.run.workspace.path);assert(history.adoptionEvidence.digest);});
+  await check('trusted run checks read-only without changing source index or history',async()=>{const r=await controller.checkAdoption(scope,qualifiedRun.run.id);assert.equal(r.state,'checked_readonly');assert.equal(r.canApply,false);assert(!r.nonce);assert.deepEqual(fs.readFileSync(recordFile),historical);assert.deepEqual(fs.readFileSync(path.join(root,'.git/index')),sourceIndex);assert.equal(fs.readFileSync(path.join(root,'file.txt'),'utf8'),'dirty\n');});
+  const restoredController=createCandidateRuns(options);
+  await check('restart retains new evidence and never replays Agent',async()=>{assert.equal((await restoredController.checkAdoption(scope,qualifiedRun.run.id)).state,'checked_readonly');assert.equal(sends,8);});
+  await check('concurrent checks have a backend single-flight gate',async()=>{const first=controller.checkAdoption(scope,qualifiedRun.run.id);await assert.rejects(controller.checkAdoption(scope,qualifiedRun.run.id),e=>e.code==='candidate_busy');assert.equal((await first).canApply,false);});
+  const {createCandidateStore}=await import('../server/candidate-store.js'),locker=createCandidateStore({dataDir:data});locker.acquire();
+  try{await check('unresolved cross-instance writer lock refuses checks without deletion',()=>assert.rejects(restoredController.checkAdoption(scope,qualifiedRun.run.id),e=>e.code==='candidate_storage_busy'));}finally{locker.release();}
+  await check('source conflict preserves newer bytes and original candidate history',async()=>{fs.writeFileSync(path.join(root,'file.txt'),'new user bytes\n');try{await assert.rejects(restoredController.checkAdoption(scope,qualifiedRun.run.id),e=>e.code==='candidate_source_changed');assert.equal(fs.readFileSync(path.join(root,'file.txt'),'utf8'),'new user bytes\n');assert.deepEqual(fs.readFileSync(recordFile),historical);}finally{fs.writeFileSync(path.join(root,'file.txt'),'dirty\n');}});
+  await check('legacy and future supplemental evidence remain viewable but never adoptable',async()=>{try{for(const e of [undefined,{version:99}]){const value=JSON.parse(historical);value.adoptionEvidence=e;fs.writeFileSync(recordFile,JSON.stringify(value));const legacy=createCandidateRuns(options);assert.equal(legacy.get(scope,qualifiedRun.run.id).result.reliable,true);await assert.rejects(legacy.checkAdoption(scope,qualifiedRun.run.id),err=>err.code==='candidate_adoption_unsupported');}}finally{fs.writeFileSync(recordFile,historical);}});
   const stalePlan=await controller.prepare(scope,body,{conversationId:'source',sessionId:'native'});stale=true;
   await check('source owner change refuses confirmation',()=>assert.rejects(controller.confirm(scope,stalePlan.nonce)));
   stale=false;

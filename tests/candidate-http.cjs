@@ -3,9 +3,9 @@ const check=async(name,fn)=>{await fn();count++;console.log('ok '+name);};
 (async()=>{
  const {createCandidateRoutes}=await import('../server/candidate-routes.js');
  const {createRouter}=await import('../server/router.js'),{createAuth}=await import('../server/auth.js');
- let handled=0,started=0;
+ let handled=0,started=0,checked=0;
  const routes=createCandidateRoutes({withAuthority:async(req,action)=>{if(req.headers['x-pi-gui-owner']!==JSON.stringify({id:'A'}))throw Error('private /outside/path task text');handled++;return action({key:'a',assertCurrent(){}});},
-  runs:{list:()=>({ok:true,runs:[]}),prepare:async()=>({ok:true,nonce:'one'}),confirm:async()=>{started++;return{ok:true,run:{id:'run'}};},get:()=>({ok:true,run:{id:'run'}}),stop:async()=>{throw Error('secret raw error');}}});
+  runs:{list:()=>({ok:true,runs:[]}),prepare:async()=>({ok:true,nonce:'one'}),confirm:async()=>{started++;return{ok:true,run:{id:'run'}};},get:()=>({ok:true,run:{id:'run'}}),checkAdoption:async()=>{checked++;return{ok:true,state:'checked_readonly',canApply:false};},stop:async()=>{throw Error('secret raw error');}}});
  const server=http.createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port,base=`http://127.0.0.1:${port}`;
  server.on('request',createRouter({auth:createAuth({port,token:'fixture'}),candidateRuns:routes}));
  const send=async(body,headers={},suffix='')=>{const response=await fetch(base+'/api/candidate-runs'+suffix,{method:body===undefined?'GET':'POST',headers:{'x-pi-gui-token':'fixture','x-pi-gui-owner':JSON.stringify({id:'A'}),...headers},...(body===undefined?{}:{body:typeof body==='string'?body:JSON.stringify(body)})});return{status:response.status,body:await response.json()};};
@@ -19,6 +19,9 @@ const check=async(name,fn)=>{await fn();count++;console.log('ok '+name);};
   await check('malformed and oversize body refused',async()=>{assert.equal((await send('{')).body.ok,false);assert.equal((await send(' '.repeat(17000))).body.ok,false);});
   await check('unknown action and query rejected',async()=>{assert.equal((await send({action:'apply'})).body.ok,false);assert.equal((await send(undefined,{},'?path=x')).body.ok,false);});
   await check('explicit confirmation reaches controller once',async()=>{assert.equal((await send({action:'confirm',nonce:'one'})).body.ok,true);assert.equal(started,1);});
+  await check('adoption check is authenticated and never starts execution',async()=>{const r=await send({action:'adoption-check',id:'run'});assert.equal(r.body.state,'checked_readonly');assert.equal(r.body.canApply,false);assert(!r.body.nonce);assert.equal(checked,1);assert.equal(started,1);});
+  await check('read-only check accepts only action and id',async()=>{for(const extra of [{path:'../outside'},{contents:'source'},{nonce:'old'},{selectedIds:['x']}])assert.equal((await send({action:'adoption-check',id:'run',...extra})).body.ok,false);assert.equal(checked,1);});
+  await check('no apply or recovery action can be invoked',async()=>{for(const action of ['adoption-confirm','apply','recover','force'])assert.equal((await send({action,id:'run',nonce:'old'})).body.ok,false);assert.equal(started,1);assert.equal(checked,1);});
   await check('failure response never contains upstream text',async()=>{const r=await send({action:'stop',id:'run'});assert.equal(r.body.ok,false);assert(!JSON.stringify(r.body).includes('secret'));});
  }finally{await new Promise(r=>server.close(r));}
  console.log(`Candidate HTTP: ${count}/${count}`);
