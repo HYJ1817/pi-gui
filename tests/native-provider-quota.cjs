@@ -133,7 +133,10 @@ export class ModelRuntime{
     try { const q = await unavailable.quota('deepseek'); check('missing public SDK is unknown capability, not not-found', () => { assert.equal(q.quota.status, 'unavailable'); assert.equal(q.providerExists, null); assert.equal(q.quotaSupported, null); }); } finally { unavailable.dispose(); }
     // Same esbuild CJS bundling as the packaged backend; worker has no source
     // imports and must survive bundler-renamed adapter/helper bindings.
-    require('esbuild').buildSync({ entryPoints: [path.resolve(__dirname, '../server/provider-auth-sdk.js')], outfile: path.join(dir, 'bundled-sdk.cjs'), bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent' });
+    const compiled=require('esbuild').buildSync({ entryPoints: [path.resolve(__dirname, '../server/provider-auth-sdk.js')], outfile: path.join(dir, 'bundled-sdk.cjs'), bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent',write:false });
+    // Match the real SEA builder: native esbuild compiles; the Node owner writes
+    // its own TEMP fixture without relaxing host ACLs or changing the bytes.
+    fs.writeFileSync(path.join(dir,'bundled-sdk.cjs'),compiled.outputFiles[0].contents);
     const bundled = require(path.join(dir, 'bundled-sdk.cjs')).createAuthSdk({ resolvePackageDir: () => dir, identityKey: () => 'bundled' });
     try { state(); const q = await bundled.quota('deepseek'); check('packaged CJS adapters run inside actual native Worker', () => { assert.equal(q.quota.status, 'ok'); assert.equal(q.quota.balance.amount, 0); }); } finally { bundled.dispose(); }
     const bounded = createAuthSdk({ resolvePackageDir: () => dir, identityKey: () => 'bounded', quotaTimeoutMs: 50 });
