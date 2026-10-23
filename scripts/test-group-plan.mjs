@@ -29,6 +29,7 @@ const FAULT_TESTS = new Set([
   'runtime-processes.cjs',
   'candidate-write-faults.cjs',
   'candidate-transactions.cjs',
+  'candidate-recovery-errors.cjs',
   'session-revert-windows-faults.cjs',
   'session-revert-inplace-safety.cjs',
   'session-revert-recovery.cjs',
