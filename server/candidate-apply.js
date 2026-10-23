@@ -59,7 +59,7 @@ export function createCandidateApply({dataDir,worktrees,assertIdle,admission,pro
    const current=await verifyRecoveryScope(scope,tx);writer=await openCandidateWriter({root:scope.projectRoot,recovery,gate:path.join(path.dirname(tx.directory),'active.lock'),files,pins:pinsFor(current,new Set(files.map(f=>f.path)))});recoveryFiles(tx);await verifyRecoveryScope(scope,tx);store.append(tx.id,{state:'recovering'});
    for(let i=0;i<files.length;i++){scope.assertCurrent();lease?.assertCurrent();store.append(tx.id,{state:'recovering',step:i});await writer.apply(i);store.append(tx.id,{state:'recovery_step_verified',step:i});await hooks.afterRecoveryStep?.(i,tx.id);}
    const restored=await captureCandidateInput(scope.projectRoot,{includeNew:true});if(restored.contentId!==tx.plan.inputId)candidateFail('candidate_recovery_uncertain');store.append(tx.id,{state:'recovered'});return{ok:true,...summary(store.read(tx.id))};
-  }catch{try{store.append(tx.id,{state:'recovery_required',uncertain:true});}catch{}return{ok:true,id:tx.id,state:'recovery_required',uncertain:true};}
+ }catch(e){if(!tx)throw e;try{store.append(tx.id,{state:'recovery_required',uncertain:true});}catch{}return{ok:true,id:tx.id,state:'recovery_required',uncertain:true};}
   finally{await writer?.close().catch(()=>{});lease?.release();execution?.release();active=false;}}
  return{prepare,confirm,prepareRecovery,confirmRecovery,status,busy:()=>active,cancel(scope,nonce){const p=nonces.get(nonce);if(p?.scope.key!==scope.key)candidateFail('candidate_scope');nonces.delete(nonce);return{ok:true};}};
 }
