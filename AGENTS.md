@@ -9,6 +9,8 @@
 [文档导航](docs/README.md) 选择任务相关的设计、测试与安全文档，不要求通读整个 `docs/`。
 本文件规定开发规则，`REVIEW.md` 规定代码审查与验收；产品内 Planner 人工审阅另见
 [docs/reviews.md](docs/reviews.md)。
+代码风格与模块组织见 [docs/coding-style.md](docs/coding-style.md)，
+开发者提交证据的结构与模板见 [docs/acceptance.md](docs/acceptance.md)。
 
 ## 二、动手之前
 

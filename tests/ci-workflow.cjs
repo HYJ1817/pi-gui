@@ -31,7 +31,7 @@ function permissionLines(text) {
 }
 
 for (const [name, text] of Object.entries({ ci, release, releaseCheck, signpath })) {
-  assert.match(text, /NODE_VERSION:\s*['"]24\.14\.0['"]/, `${name} must pin Node 24.14.0`);
+  assert.match(text, /NODE_VERSION:\s*['"]24\.22\.1['"]/, `${name} must pin Node 24.22.1`);
   assert.doesNotMatch(text, /node-version:\s*22(?:\b|\.)|matrix:\s*\n\s+node:\s*\[22/s, `${name} still runs Node 22`);
 }
 

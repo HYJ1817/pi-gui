@@ -548,7 +548,7 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 
 | workflow | 触发 | 内容 | 为什么这样分 |
 |---|---|---|---|
-| `ci.yml` | main push、PR 到 main、手动 | `test-plan` → Node 24.14.0 的五组测试 matrix（`core` / `ui` / `security` / `native` / `faults`）→ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`）→ 最终 `ci-gate` | 完整 canonical 检查。Native 组内串行、组间独立 runner；任何组失败、取消、跳过或未执行均不得提供成功 gate |
+| `ci.yml` | main push、PR 到 main、手动 | `test-plan` → Node 24.22.1 的五组测试 matrix（`core` / `ui` / `security` / `native` / `faults`）→ `build-check`（`build:app --rebuild` → `test:app` → `test:exe`）→ 最终 `ci-gate` | 完整 canonical 检查。Native 组内串行、组间独立 runner；任何组失败、取消、跳过或未执行均不得提供成功 gate |
 | `release-check.yml` | **手动**（`workflow_dispatch`） | 始终运行完整 `npm test` 和 App/SEA 打包检查；可选 installer job 再构建并验证 portable/安装程序与正式资产 | 不创建 Release；安装验证以手动输入 `installer` 为条件，默认 true，实际耗时以运行记录为准 |
 | `release.yml` | **推送 tag `v*`** | 精确 SHA 的 main push CI 证明 → `release:check`（含 `--ci-sha`、`--with-installer`）→ 已验证资产 → 独立 publish job | 正式发布复用已成功的完整测试证明，其余验证和 draft/上传/发布守卫见 [releasing.md](releasing.md) |
 
@@ -558,7 +558,7 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 `ci.yml` 的 `build-check` 只验两条打包链路能出产物；安装程序 / 便携版的真装真跑
 放在后面两个 workflow 里，因为那要 NSIS 与 ~430MB 产物。见下一节。
 
-### Node 版本：产品最低 22.19，CI 固定 24.14.0
+### Node 版本：产品最低 22.19，CI 固定 24.22.1
 
 `package.json` 的 `engines.node` 是 **`>=22.19`** —— 这个下限由依赖链决定，
 不是随手定的：
@@ -571,10 +571,10 @@ Retry 冻结新值、两次互不覆盖、老 attempt 走 fallback 且**标记�
 
 取其中最严的一条 ⇒ **22.19**。
 
-CI 固定 Node **24.14.0**，与当前开发机一致。Node 22 已从持续集成移除，不再作为
+CI 固定 Node **24.22.1**，与当前开发机一致（2026 年 10 月 Node.js 安全修复版本）。Node 22 已从持续集成移除，不再作为
 每次提交的兼容性门；这不改变 `engines.node >=22.19` 的产品声明。原因是 Electron、
 pdfjs 和开发依赖仍允许该下限，而移除 CI 覆盖本身不构成提高产品最低版本的依据。
-Release 与 Release Check 也固定 24.14.0。手动 Release Check 仍完整串行测试；
+Release 与 Release Check 也固定 24.22.1。手动 Release Check 仍完整串行测试；
 正式 Release 复用同一 SHA 的成功 main 完整 CI，不再重复这次 `npm test`，证明缺失或失败即阻断。
 
 ## 四、不进默认 CI 的测试
