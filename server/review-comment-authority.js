@@ -30,7 +30,7 @@ export function createReviewCommentAuthority({ classic, registry, withWorkspace 
     const repo = await repository(cwd), admin = await adminDirectory(repo.root);
     const directories = [...new Set([canonicalPath(cwd), repo.root, repo.common, admin])];
     const evidence = directories.map(p => fileFact(p, true));
-    return { root: repo.root, common: repo.common, evidence,
+    return { root: repo.root, cwd: canonicalPath(cwd), common: repo.common, evidence,
       verify() { if (JSON.stringify(directories.map(p => fileFact(p, true))) !== JSON.stringify(evidence)) fail(); } };
   }
   function sessionFacts(file) {
@@ -41,7 +41,7 @@ export function createReviewCommentAuthority({ classic, registry, withWorkspace 
     const key = digest(['review-comments-v1', stable, workspace.evidence, native, session.evidence]);
     const token = createHmac('sha256', secret).update(JSON.stringify([key,
       Object.keys(requestOwner).sort().map(k => [k, requestOwner[k]]), revision])).digest('hex');
-    return { key, token, projectRoot: workspace.root, gitCommon: workspace.common,
+    return { key, token, projectRoot: workspace.root, workspaceCwd: workspace.cwd, gitCommon: workspace.common,
       assertCurrent() { current(); workspace.verify(); session.verify(); } };
   }
   return async function withAuthority(req, action) {

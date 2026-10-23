@@ -13,7 +13,7 @@ const canonical = p => { const v = fs.realpathSync.native(p); return process.pla
 
 // One private capability per launched child. Renderer never chooses a root or
 // supplies a lock owner. A failed/unknown cleanup retains active write leases.
-export function createSessionToolBridge({ scheduler, launch, getCwd, getRoot = getCwd, readState, supported, onEvent = () => {} } = {}) {
+export function createSessionToolBridge({ scheduler, launch, getCwd, getRoot = getCwd, readState, supported, onEvent = () => {}, audit = null } = {}) {
   let server = null, token = null, channel = null, root = null, native = null, disposed = false;
   const channels = new Set(), calls = new Map();
   async function capable() {
@@ -42,19 +42,22 @@ export function createSessionToolBridge({ scheduler, launch, getCwd, getRoot = g
       }
       if (body.sessionId !== native || !text(native)) fail('stale_runtime');
       if (req.url === '/begin') {
-        if (!closed(body,['sessionId','callId','toolCallId','readOnly']) || !text(body.callId) || !text(body.toolCallId) || typeof body.readOnly !== 'boolean') fail('invalid_request');
+        if (!closed(body,['sessionId','callId','toolCallId','readOnly',...(audit?['audit']:[])]) || !text(body.callId) || !text(body.toolCallId) || typeof body.readOnly !== 'boolean') fail('invalid_request');
+        if(body.audit!==undefined&&(!closed(body.audit,['kind','path','expectedHash'])||!['read','write','edit','unknown'].includes(body.audit.kind)
+          ||body.audit.path!==null&&(typeof body.audit.path!=='string'||body.audit.path.length>512)
+          ||body.audit.expectedHash!==null&&!/^[a-f0-9]{64}$/.test(body.audit.expectedHash)))fail('invalid_request');
         await current(native);
         if (admitted !== token) fail('stale_runtime');
         calls.set(body.callId,body.toolCallId);
         const disconnected = () => target.cancel(body.callId);
         res.once('close',disconnected);
-        try { await target.acquire(body.callId,{readOnly:body.readOnly}); }
-        catch (e) { calls.delete(body.callId); throw e; }
+        try { await target.acquire(body.callId,{readOnly:body.readOnly}); await audit?.({phase:'begin',callId:body.callId,audit:body.audit}); }
+        catch (e) { target.release(body.callId); calls.delete(body.callId); throw e; }
         finally { res.off('close',disconnected); }
         if (admitted !== token) fail('stale_runtime');
       } else if (req.url === '/end') {
         if (!closed(body,['sessionId','callId']) || !text(body.callId)) fail('invalid_request');
-        target.release(body.callId); calls.delete(body.callId);
+        try {await audit?.({phase:'end',callId:body.callId});}finally{target.release(body.callId); calls.delete(body.callId);}
       } else fail('invalid_request');
       return json(res,200,{ok:true});
     } catch(e) { return json(res,409,{ok:false,code:['stale_runtime','invalid_request','tool_wait_cancelled','stale_workspace','workspace_revert_busy'].includes(e.code)?e.code:'tool_guard_unavailable'}); }
@@ -72,7 +75,8 @@ export function createSessionToolBridge({ scheduler, launch, getCwd, getRoot = g
         await new Promise((resolve,reject) => {server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
       }
       token = randomUUID();
-      return {args:['--extension',path.join(materializeDir('extensions/pi-gui-tool-guard'),'index.js')],env:{PI_GUI_TOOL_URL:`http://127.0.0.1:${server.address().port}`,PI_GUI_TOOL_TOKEN:token}};
+      return {args:['--extension',path.join(materializeDir('extensions/pi-gui-tool-guard'),'index.js')],env:{PI_GUI_TOOL_URL:`http://127.0.0.1:${server.address().port}`,PI_GUI_TOOL_TOKEN:token,
+        ...(audit?{PI_GUI_CANDIDATE_AUDIT:'1',PI_GUI_TOOL_REVERT_SOURCE:path.join(materializeDir('extensions/pi-gui-revert'),'index.js')}:{})}};
     },
     ready(cwd = getCwd(), sessionId = native) { try { return Boolean(token && native && sessionId === native && root === canonical(cwd)); } catch { return false; } },
     status: () => ({installed:Boolean(token),verified:Boolean(native)}),

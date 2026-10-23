@@ -139,7 +139,7 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
     if (r.health !== 'healthy') throw failure('workspace_unavailable');
     safeParent(r);
   }
-  async function prepareImpl(args) {
+  async function prepareImpl(args, readOnly = false) {
     if (!closed(args, ['project', 'source', 'branch'])) throw failure('invalid_request');
     if (entries.length >= 256) throw failure('workspace_limit');
     const repo = await projectInfo(args.project), id = randomUUID();
@@ -149,14 +149,20 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
     const status = await dirtyStatus(repo.root), integration = await branchName(repo.root);
     const r = { id, epoch: randomUUID(), repoId: repo.repoId, project: repo.project, prefix: repo.prefix, anchor: repo.root, common: repo.common,
       source: args.source || 'HEAD', sourceHash, integration, branch, health: 'creating', archived: false };
-    safeParent(r, true); if (fs.existsSync(target(r))) throw failure('path_occupied');
+    if (readOnly) {
+      baseGuard();
+      for (const dir of [root, path.join(root,r.repoId)]) if (fs.existsSync(dir)
+        && (fs.lstatSync(dir).isSymbolicLink() || !samePath(fs.realpathSync(dir),dir))) throw failure('unsafe_path');
+    } else safeParent(r, true);
+    if (fs.existsSync(target(r))) throw failure('path_occupied');
     for (const [key, item] of confirmations) if (now() > item.expires) confirmations.delete(key);
     if (confirmations.size >= 32) confirmations.delete(confirmations.keys().next().value);
     const nonce = randomUUID(); confirmations.set(nonce, { record: r, status, context: getContext().generation, expires: now() + 300000 });
-    return { ok: true, nonce, plan: { id, repoId: r.repoId, projectId: repo.projectId, sourceHash, branch, mainDirty: Boolean(status), name: repo.name } };
+    return { ok: true, nonce, plan: { id, repoId: r.repoId, projectId: repo.projectId, sourceHash, branch, mainDirty: Boolean(status), name: repo.name,
+      ...(readOnly ? {path:target(r)} : {}) } };
   }
   const prepare = (args, expected) => serialize(() => prepareImpl(args), expected);
-  const create = (args, expected) => serialize(async guard => {
+  const createImpl = (args, expected, verify = async () => {}) => serialize(async guard => {
     if (!closed(args, ['nonce'])) throw failure('invalid_request');
     const confirmation = confirmations.get(args.nonce); confirmations.delete(args.nonce);
     if (!confirmation || confirmation.expires < now()) throw failure('confirmation_expired');
@@ -164,7 +170,8 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
     checkBusy(); const r = confirmation.record, repo = await projectInfo(r.project);
     if (!samePath(repo.common, r.common) || !samePath(repo.root, r.anchor) || await sourceCommit(repo.root, r.source) !== r.sourceHash
       || await dirtyStatus(repo.root) !== confirmation.status || await branchName(repo.root) !== r.integration) throw failure('confirmation_changed');
-    await validBranch(repo.root, r.branch); safeParent(r); if (fs.existsSync(target(r))) throw failure('path_occupied');
+    await validBranch(repo.root, r.branch); await verify(); guard(); checkBusy();
+    safeParent(r, true); if (fs.existsSync(target(r))) throw failure('path_occupied');
     guard(); checkBusy();
     entries.push(r); save();
     try {
@@ -173,6 +180,7 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
       r.health = 'healthy'; await owned(r); save(); return { ok: true, workspace: summary(r) };
     } catch (e) { r.health = 'unavailable'; save(); throw failure(e.code === 'metadata_write_failed' ? e.code : 'partial_creation'); }
   }, expected);
+  const create = (args, expected) => createImpl(args,expected);
   const list = args => serialize(async () => {
     if (!closed(args, ['project'])) throw failure('invalid_request');
     const repo = await projectInfo(args.project), found = await inventory(repo.root);
@@ -267,6 +275,8 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
     } catch (e) { const code = Object.hasOwn(MESSAGES, e.code) ? e.code : 'invalid_request'; return json(res, 409, { ok: false, code, error: MESSAGES[code] }); }
   }
   return { prepare, create, list, open, archive, remove, projectFor, validateCurrent, withActivation, withWorkspace, handle,
+    prepareCandidate:(args,expected)=>serialize(()=>prepareImpl(args,true),expected),
+    createCandidate:(args,expected,verify)=>createImpl(args,expected,verify),
     monitor() { if (!timer) { timer = setInterval(() => { void validateCurrent().catch(() => {}); }, 5000); timer.unref(); } },
     dispose() { disposed = true; clearInterval(timer); confirmations.clear(); } };
 }

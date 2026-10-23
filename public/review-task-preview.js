@@ -7,6 +7,7 @@ import { S } from './state.js';
 import { workspaceView } from './ui/workspace-surface.js';
 import { gitConversationScope } from './api.js';
 import { runtimeStore } from './runtime-state.js';
+import { createCandidateFlow } from './candidate-review.js';
 
 function node(tag, className, text) {
   const element=document.createElement(tag);
@@ -52,7 +53,7 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
     const result=createReviewTask({comments:source(),selectedIds:[...selectedIds],context:context()});
     if (!result.ok) {status.textContent=result.error;return;}
     task=result; invalidated=false; mode='preview'; root.dataset.step=mode;
-    copy.disabled=fill.disabled=false;
+    copy.disabled=fill.disabled=candidate.disabled=false;candidate.hidden=false;
     title.textContent='确认修改任务'; body.hidden=true; preview.hidden=false; preview.value=task.text;
     all.hidden=none.hidden=next.hidden=true; copy.hidden=fill.hidden=false;
     back.textContent='返回选择';back.onclick=()=>{mode='select';task=null;drawSelection();next.focus();};
@@ -83,16 +84,21 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
     status.textContent=result.ok ? '已追加到当前会话草稿；不会自动发送。' : result.error;
     if (result.ok) close();
   });
+  const candidate=button('在隔离工作区生成修改',()=>{if(ensureFresh())void candidateFlow.open();});candidate.hidden=true;
+  const history=button('候选修改',()=>void candidateFlow.history());
   const done=button('关闭',close);
-  tools.append(back,all,none,next,copy,fill,done);
+  tools.append(back,all,none,next,copy,fill,candidate,history,done);
   root.append(title,note,warning,tools,status,counts,body,preview);card.append(root);
+  const candidateFlow=createCandidateFlow({root,isCurrent:()=>active(),isFresh:()=>ensureFresh(),
+    headers:()=>{const c=context();return{'X-Pi-Gui-Owner':JSON.stringify(c.owner),...(gitConversationScope()?{'X-Pi-Gui-Conversation':gitConversationScope()}:{})};},
+    selection:()=>{const s=reviewPersistenceState(scope);return{selectedIds:task.selectedIds,scope:s.scope,revision:s.revision};}});
 
   function drawSelection(focusId) {
     const comments=source();
     selectedIds=new Set([...selectedIds].filter(id=>comments.some(c=>c.id===id&&eligible(c))));
     mode='select';root.dataset.step=mode;title.textContent='选择需要处理的审查意见';
     body.hidden=false;preview.hidden=true;preview.value='';task=null;
-    all.hidden=none.hidden=next.hidden=false;copy.hidden=fill.hidden=true;
+    all.hidden=none.hidden=next.hidden=false;copy.hidden=fill.hidden=candidate.hidden=true;
     back.textContent='返回审查意见';back.onclick=()=>{root.hidden=true;onVisibility(false);};
     body.replaceChildren();
     const groups=new Map();
@@ -131,7 +137,7 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
     if(focusId) [...body.querySelectorAll('input[data-comment-id]')].find(box=>box.dataset.commentId===focusId)?.focus();
   }
   function invalidate() {
-    invalidated=true;copy.disabled=fill.disabled=true;preview.value='';
+    invalidated=true;copy.disabled=fill.disabled=candidate.disabled=true;preview.value='';
     status.textContent='作用域、评论或 Diff 证据已变化，请返回选择并重新生成任务。';
   }
   function changed(event) {
@@ -146,6 +152,6 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
       onVisibility(true);root.hidden=false;selectedIds=new Set(source().filter(eligible).map(c=>c.id));
       copy.disabled=fill.disabled=false;drawSelection();next.focus();
     },
-    dispose() {disposed=true;task=null;preview.value='';for(const name of events)document.removeEventListener(name,changed);},
+    dispose() {disposed=true;candidateFlow.dispose();task=null;preview.value='';for(const name of events)document.removeEventListener(name,changed);},
   };
 }

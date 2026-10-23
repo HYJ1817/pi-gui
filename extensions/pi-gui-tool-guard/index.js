@@ -1,7 +1,11 @@
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
 
-// Tool arguments, command text and file contents never enter this transport.
+// No raw arguments, command text or contents enter this transport. Candidate
+// evidence adds only a validated target and an intended-result hash.
 export function toolTransport(connection, action, body) {
   return new Promise((resolve,reject) => {
     let target; try {target=new URL(connection.url);if(target.protocol!=='http:'||target.hostname!=='127.0.0.1'||!connection.token)throw Error();}
@@ -30,7 +34,23 @@ export function installToolGuard(pi, connection) {
     await hello(ctx);
     const readOnly=['read','ls','find','grep'].includes(event.toolName) && pi.getAllTools().find(t=>t.name===event.toolName)?.sourceInfo?.source==='builtin';
     const leaseId=randomUUID();leases.set(event.toolCallId,leaseId);
-    try {await post('begin',{callId:leaseId,toolCallId:event.toolCallId,readOnly});}
+    let audit;
+    if(connection.audit){
+      audit={kind:readOnly?'read':'unknown',path:null,expectedHash:null};
+      const source=pi.getAllTools().find(t=>t.name===event.toolName)?.sourceInfo;
+      const normalize=v=>{let p=String(v||'');try{if(p.startsWith('file:'))p=fileURLToPath(p);}catch{return'';}p=p.replaceAll('\\','/');return process.platform==='win32'?p.toLowerCase():p;};
+      if(['write','edit'].includes(event.toolName)&&(source?.source==='builtin'||connection.revertSource&&normalize(source?.path)===normalize(connection.revertSource))&&typeof event.input?.path==='string'){
+        const target=path.resolve(ctx.cwd,event.input.path),relative=path.relative(ctx.cwd,target).replaceAll('\\','/');
+        audit.kind=event.toolName;audit.path=relative;
+        if(relative&&relative!=='..'&&!relative.startsWith('../')&&!path.isAbsolute(relative)){
+          if(event.toolName==='write'&&typeof event.input.content==='string')audit.expectedHash=createHash('sha256').update(event.input.content).digest('hex');
+          if(event.toolName==='edit'&&typeof event.input.oldText==='string'&&typeof event.input.newText==='string'){
+            try{const s=await fs.lstat(target);if(s.isFile()&&!s.isSymbolicLink()&&s.size<=1024*1024){const before=await fs.readFile(target,'utf8');if(before.includes(event.input.oldText)&&before.split(event.input.oldText).length===2)audit.expectedHash=createHash('sha256').update(before.replace(event.input.oldText,event.input.newText)).digest('hex');}}catch{/* unknown intended bytes stays unconfirmed */}
+          }
+        }
+      }
+    }
+    try {await post('begin',{callId:leaseId,toolCallId:event.toolCallId,readOnly,...(audit?{audit}:{})});}
     catch(error){leases.delete(event.toolCallId);throw error;}
   });
   const end = async id => {const lease=leases.get(id);if(!lease)return;await post('end',{callId:lease});leases.delete(id);};
@@ -42,6 +62,6 @@ export function installToolGuard(pi, connection) {
 }
 
 export default function toolGuardExtension(pi) {
-  const connection={url:process.env.PI_GUI_TOOL_URL,token:process.env.PI_GUI_TOOL_TOKEN};
+  const connection={url:process.env.PI_GUI_TOOL_URL,token:process.env.PI_GUI_TOOL_TOKEN,audit:process.env.PI_GUI_CANDIDATE_AUDIT==='1',revertSource:process.env.PI_GUI_TOOL_REVERT_SOURCE};
   if(connection.url&&connection.token)installToolGuard(pi,connection);
 }

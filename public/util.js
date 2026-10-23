@@ -10,8 +10,8 @@ import { S } from './state.js';
  * 这是整个前端 XSS 防线的地基：**所有**来自 pi / 模型的文本在拼进 innerHTML
  * 之前都必须先过这里。注意 markdown.js 的做法是「先整体转义，再把自己生成的
  * 白名单标签插回去」，所以模型输出里的 <script> 在语法层面就没有机会成立。 */
-export const esc = (s) =>
-  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+import { esc } from './html-escape.js';
+export { esc };
 
 export function fmt(n) {
   if (n == null || n === 0) return '0';

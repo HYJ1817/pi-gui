@@ -7,7 +7,7 @@ const CODES = new Set(['stale_runtime', 'stale_workspace', 'unknown_workspace', 
   'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args', 'unknown_project', 'session_in_use', 'tool_guard_unavailable']);
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const fail = () => { throw Object.assign(Error('invalid_request'), { code: 'invalid_request' }); };
-export function createRuntimeRoutes({ registry, validateWorkspace = async () => {}, readHistory = null, openSession = null } = {}) {
+export function createRuntimeRoutes({ registry, validateWorkspace = async () => {}, readHistory = null, openSession = null, beforeAction = () => {} } = {}) {
   return { async handle(req, res) {
     try {
       if (req.method === 'GET') {
@@ -28,6 +28,7 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
       if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'invalid_request' });
       const body = JSON.parse((await readRawBody(req, 96 * 1024 * 1024)).toString('utf8'));
       if (!closed(body, ['action', 'owner', 'args', 'conversationId', 'allowThird', 'command', 'cursor'])) fail();
+      beforeAction(body);
       let result;
       switch (body.action) {
         case 'open-session': if (!openSession) fail(); result = await openSession(body.args); break;
