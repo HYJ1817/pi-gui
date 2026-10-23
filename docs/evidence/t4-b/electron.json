@@ -1,0 +1,15 @@
+{
+  "checks": 25,
+  "failed": 0,
+  "skip": 0,
+  "sandbox": true,
+  "screenshots": [
+    "01-preflight.png",
+    "02-approval.png",
+    "03-browser-diff.png"
+  ],
+  "electron": "44.4.3",
+  "behaviorSha": "16fd026657e7272532afec1ef94be7eb3c1aeaa8",
+  "verificationSha": "e76ca6c6171f7005b74ded2aa887ad0de368a618",
+  "fixture": "isolated temporary Git + fake Pi; production renderer/server/Worktree/Runtime/approval and native Browser"
+}

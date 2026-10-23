@@ -1,107 +1,143 @@
-# T4-B：安全勘察与受阻交付记录
+# T4-B：候选修改开发与验收记录
 
-## 结论与提交范围
+## 结论和追溯
 
-**结论：T4-B 功能未完成，验收不通过；本轮交付设计与隔离临时实验。**
-未增加候选创建/执行 API、按钮、写入器或自动任务；没有将作者自审写成独立审查。
-阻塞依据是 [设计](T4-B-design.md) 中可复现的输入授权/完整性和结果归因缺口，不是测试耗时或缺少 OS 沙箱。
-按用户第十四节允许的受阻交付路径停止可写产品实现，没有降低约束继续启动 Agent。
+本地开发与验证已完成；独立外部功能、安全和故障审查仍未完成。作者自审不能代替独立审查，
+本记录不构成允许合并或发布。只在独立 Worktree 本地开发，未推送、合并、修改 main、tag 或版本。
 
-- 开发基线及未变的最终产品行为 SHA：`03a223d7ac5f69f33a359e51f95905bfb07253b8`。
-  本轮没有新的产品行为提交；后续本地提交仅包含下列文档和 opt-in 实验材料。
-- T4-A PR #20 已正式合并，head `139f5de617af60f4fbf86760372b286186f6faed` 的
-  [PR CI](https://github.com/HYJ1817/pi-gui/actions/runs/39817859759) attempt 1 成功。
-- 最新 origin/main 正是上述基线；[main CI](https://github.com/HYJ1817/pi-gui/actions/runs/39823004520)
-  为 push / attempt 1 / completed / success，8 个 job 均 success（含五组测试、测试计划、build、gate）。
-  这证明基线，不是尚未实现的 T4-B 功能证明。
-- 独立 Worktree：`C:\Users\21022\.codex\worktrees\t4-b-candidate-diff\pi-GUI`；
-  分支 `codex/t4-b-candidate-diff`。主工作区保持原 HEAD `724bd48119dd7ba5ba7e1327da12353bd0339ea7`，
-  原有四项未跟踪内容保留。不推送、不合并、不改版本/tag、不发布。
+- 开发基线：`03a223d7ac5f69f33a359e51f95905bfb07253b8`。
+- [T4-A PR #20](https://github.com/HYJ1817/pi-gui/pull/20) 已合并，head
+  `139f5de617af60f4fbf86760372b286186f6faed` 的
+  [PR CI 39817859759](https://github.com/HYJ1817/pi-gui/actions/runs/39817859759) attempt 1 成功。
+- [main CI 39823004520](https://github.com/HYJ1817/pi-gui/actions/runs/39823004520)：准确基线 SHA，push、attempt 1、completed/success，8 job 成功。
+  以上只证明基线，不冒充新增功能证明。
+- 产品提交 `9edd29c`，测试与入口提交 `9bcc1fd`；最终行为提交
+  `16fd026657e7272532afec1ef94be7eb3c1aeaa8`（`e2b3516` 修复旧 owner，最终沿用静态导航入口）。后续文档提交不改变行为。
+- `f88aeb7` 只稳定慢启动夹具，`c82d7d7` / `fdfe3ea` 只补旧 Stop 夹具装配依赖；均不改产品行为或测试链。
+- 分支 `codex/t4-b-candidate-diff`；工作区 `C:\Users\21022\.codex\worktrees\t4-b-candidate-diff\pi-GUI`。
+- 主工作区保持 `724bd48119dd7ba5ba7e1327da12353bd0339ea7` 及原有四项未跟踪文件。
+- 初始设计提交 `4bb1199` 及 [旧勘察实验](evidence/t4-b-feasibility/observations.json) 保留为历史；本次完成后不再以历史阻塞文字代表当前能力。
 
-## 真实修改文件
+## 实际改动文件
 
-| 文件 | 内容 |
+| 文件 | 作用 |
 | --- | --- |
-| [T4-B-design.md](T4-B-design.md) | 模块复用、输入事务/身份/运行/真实 Diff/恢复设计和停止边界；明确区分拟议能力 |
-| [README.md](README.md) | 增加未开放的 T4-B 勘察入口，避免误读为当前功能 |
-| [probe.mjs](evidence/t4-b-feasibility/probe.mjs) | 显式 opt-in 的安全勘察实验，只创建自有 TEMP 仓库，不接受项目路径，不调用模型 |
-| [observations.json](evidence/t4-b-feasibility/observations.json) | 19 项实际边界观察；不含源码、任务正文或绝对路径 |
-| [validation.json](evidence/t4-b-feasibility/validation.json) | 准确 CI、定向回归、初始环境失败及未运行项目 |
-| 本文件 | 受阻交付、未验证项、审查状态及回滚 |
+| `lib/candidate-snapshot.js` | 原始输入、Git/文件身份、候选输入落地、实际前后 Diff |
+| `lib/candidate-review-model.js`、`public/html-escape.js`、`public/diff.js`、`public/util.js` | 复用原 Diff/区间/任务纯模型及转义，不复制第二套锚点算法 |
+| `lib/git.js`、`lib/git-worktree.js` | 既有 Git runner 支持有界 stdin；默认行为不变 |
+| `server/candidate-runs.js`、`server/candidate-store.js`、`server/candidate-routes.js` | 预检、单次确认、既有生命周期编排、私有材料、权限路由、恢复与结果资格 |
+| `server/worktrees.js` | 后端只读候选 prepare、创建前内容重验回调，沿用原 Registry |
+| `server.js`、`server/router.js`、`server/runtime-routes.js` | 组合根接线、同源/owner 授权、忙碌闸门、shutdown |
+| `server/review-comment-authority.js` | 私有 scope 附带 workspace cwd；稳定 scope key 不变 |
+| `server/session-runtime.js`、`server/session-tool-bridge.js`、`extensions/pi-gui-tool-guard/index.js` | 在原工具 lease 内核对目标/预期结果，不改 Pi 或自动批准 |
+| `public/candidate-review.js`、`public/review-task-preview.js`、`public/api.js`、`public/styles.css` | 原弹窗预检/确认/真实 Diff/保留、审批资源同步、失效响应防护 |
+| `tests/candidate-{snapshot,store,runs,http,ui,electron}.cjs`、`tests/fixtures/candidate-pi.cjs` | 隔离临时 Git、fake Pi、故障/安全及正常沙箱 Electron |
+| `tests/session-tool-bridge.cjs`、`tests/gui-browser-stop.cjs`、`tests/stop-barrier.cjs`、`package.json` | 保留旧断言并补原生包装器、审计顺序及 Stop 夹具依赖；五个候选套件纳入 canonical |
+| `docs/T4-B-design.md`、`docs/README.md`、`docs/git-changes.md`、`docs/security.md`、`docs/testing.md`、本文件及 `docs/evidence/t4-b/` | 当前行为、安全、测试入口、导航及少量可追溯证据 |
 
-没有修改 public/、server/、lib/、extensions/、tests/、package.json、锁文件、CI/release 或产物。
-实验不是新增 canonical 套件，不改变测试入口，不计入功能通过数；完整日志保留在本 Worktree `.probe/`。
+不改评论 v1/v2、T4-A 语义、Planner 人工验收、Pi RPC schema、原 Stop/审批、Browser 权限、
+Git 撤销、安全移除、CI/workflow、release、版本或依赖。
 
-## 设计结果与阻塞证据
+## 数据流、输入和证据
 
-| 编号 | 已验证事实与代码入口 | T4-B 影响及处理 |
-| --- | --- | --- |
-| B1 输入内容确认 | `server/worktrees.js:142` 的 prepare 和 `:166` 的确认比较 HEAD/branch/dirty 状态；P01～P06 中 dirty 文件内容变了但状态字符串未变，仍可创建，候选只有 HEAD | 这是原“从提交创建”的既有契约，不是本轮引入的产品回归；不能当成 T4-B dirty 输入确认。需有界原始字节/index/路径对象证据和落地事务，当前未实施 |
-| B2 未授权内容和 Git 转换 | `lib/git.js:933` 的 worktreeTree 用临时 index + add -A；P08～P11 验证真实 index 未动，但一棵树只含 working、自动包含未选 untracked；P16～P18 验证 clean/smudge 确实执行，tree 可与原字节不同 | 不能直接作为经用户选择的输入材料；须先审查整棵 checkout 树、转换及文件类型，并拒绝无法无损表示/需额外授权内容。当前未开放复制或 checkout 产品路径 |
-| B3 外部变化来源 | `server/session-tool-scheduler.js:8` 只协调协作写者；P12/P13 让外部进程在 lease 期间实际写入，`server/planner/evidence.js:183` 返回 available；`session-change-bridge.js:251` 仍标外部并发未排除 | 前后树能证明时间窗口变化，不能证明均为候选 Agent 所写。现有契约不能满足“真正产生的修改”及并发失效判断；不将其包装成可靠归因结果 |
+完整设计见 [T4-B-design.md](T4-B-design.md)。选中评论经过后端原 authority/CAS 和完整 Diff 再验证，
+绑定 revision、owner、generation、来源原始输入摘要；只读预检不创建任何候选或 Agent。
+明确确认后消费一次 nonce，创建前/落地后/发送前重验；原 Registry 提供 workspace ID/epoch，
+原 Runtime 提供独立 conversation/native session，run UUID 绑定本次执行。
 
-B1/B2 是可继续补强的工程缺口；B3 还涉及结果语义和证据契约。
-弱 Worktree 隔离本身不是额外门槛：设计明确允许复用现有审批并披露剩余权限风险，
-但不能把“无外部写者证据”推断成“没有外部写入”。没有擅自把规格改成仅提供来源未确认的时间窗口 Diff。
-若按原规格继续，应先补可验证的来源/并发失效能力；另一种结果语义需用户另行决定。
+原 HEAD、index blob/mode、working 原字节分开。仅写候选恢复输入，不改原 source/index。
+初始 dirty 为输入而不是 Agent 修改。原 untracked 拒绝，ignored 不复制；边界/链接/属性/凭据/冲突/
+容量不明均拒绝。上限为 512 文件、1 MiB/文件、总 8 MiB、遍历 20,000 项。
 
-已确认可复用的安全部分：P07 的一次性 nonce 拒绝重放、P08 的真实 index 不变、
-P14 的初始 dirty 不计入 pre→post、P15 的改回输入快照得到空 Diff、P19 的真实 junction 越界拒绝。
-实验过滤器是只在自有 TEMP 写 marker 的确定性 fixture，不是恶意命令或真实项目测试。
-没有启动真实 Pi、发 Agent 消息、使用用户会话文件或复制账户数据。
+候选 cwd、原工具审批、Scheduler 和 Stop 均沿既有机制；一次确认只发送一次 prompt，无自动重试。
+原生工具的目标、预期字节和实际前后文件可核对，未知 shell、外部/身份变化或证据缺口标为
+「结果无法可靠确认」。Worktree 不能阻止同用户进程访问原项目，不是 OS 沙箱，也不声称任意写者完整归因。
 
-## 要求覆盖与未交付能力
+Diff 来自输入到清理确认后实际磁盘的 Git 文件比较，含新增/删除/重命名/二进制/权限模式及明确截断。
+执行成功与结果资格分开。测试中的 HEAD `1 → 2` 已是 dirty 输入，候选真实结果为 `2 → 3`。
+原项目 SHA、原 index 字节、原 Composer 草稿保留；不存在应用/合并按钮。
 
-- **受控 Worktree/运行身份**：已设计复用现有 Registry、epoch、完整 owner、独立 run ID；候选产品记录/确认事务未实现。
-- **dirty 输入**：已证实现有原语不足并定义拒绝规则；实际 dirty 输入导入未实现，不能宣称 staged/working/untracked 全覆盖。
-- **执行权限/隔离**：沿现有 Pi RPC、工具审批和 Stop 的复用路径已核对；Worktree 不阻止同权限工具访问原项目。
-  不新增全批准、shell 入口、权限旁路或 OS 沙箱承诺。未启动候选 Agent，故无候选权限实测通过结论。
-- **真实 Diff**：临时实验采用真实 Git pre/post tree，验证初始 dirty 排除和外部写入混入；没有向用户提供可用的候选 Diff 功能。
-- **Stop/崩溃/冲突/恢复**：设计列出中断而非成功、未知应答不重发、身份失效、清理屏障及保留结果；仅原机制的定向回归通过，
-  候选关闭面板/跨重启端到端尚未实现验证。
-- **UI/兼容**：没有 UI 变更；T3-B/C schema、T4-A 预览、原审批/Stop/Browser/Planner 状态均未修改。
-  不引用旧阶段截图或通过数冒充本轮 Electron 证据。
+私有 `candidate-runs` 材料限 20 记录、24 MiB/记录，排他锁、格式/摘要和原子替换，不能作为诊断上传。
+关闭面板不删除或停止已批准执行。Stop 要等原屏障，清理未知不显示完成。
+重启恢复已持久结果，活跃旧记录改中断，不重发、不补造 post。崩溃 writer lock 不自动清除。
 
-## 本轮实际验证
+## 验证
 
-Windows / Node `v24.22.1`。所有写入试验在 `os.tmpdir()` 自有 fixture；运行完清理 fixture，未保留产品候选工作区。
-新开发 Worktree 仅建立指向既有离线 node_modules 的 junction，没有安装或下载依赖。
+| 层次与入口 | 当前结果 |
+| --- | --- |
+| `node tests/candidate-snapshot.cjs` | 25/25，通过；0 失败、0 skip |
+| `node tests/candidate-store.cjs` | 13/13，通过；0 失败、0 skip |
+| `node tests/candidate-runs.cjs` | 最终行为 26/26，通过；0 失败、0 skip |
+| `node tests/candidate-http.cjs` | 10/10，通过；0 失败、0 skip |
+| `node tests/candidate-ui.cjs` | 9/9，通过；0 失败、0 skip |
+| `node tests/session-tool-bridge.cjs` | 6/6，通过；原四条保留，增加两条 |
+| `node tests/candidate-electron.cjs` | 最终行为 25/25，0 失败、0 skip，正常沙箱 |
+| 完整 canonical | **184/184 叶命令成功退出**：core 113/113（第 1～69 项成功记录 + 第 70～113 项续跑）、UI 24/24、security 27/27、native 2/2、faults 18/18。首次失败及补跑过程见下文；其中 8 条环境断言按测试自身规则跳过，不计为通过。这不是宣称此前失败的串行 `npm test` 已通过 |
+| 离线 `npm run build:app -- --rebuild` | 最终行为重建成功；同时生成 SEA，325 资源，SEA 97.9 MB、App 整包 328.8 MB |
+| `npm run fixtures`、`node tests/app-check.cjs`、`node tests/exe-check.cjs` | 最终 App 26/26、SEA 49/49，0 失败、0 skip |
+| `node tests/candidate-packaged.cjs` | App/SEA 实际 HTTP 静态资源摘要、API 授权及随包 guard：21/21，0 失败、0 skip |
+| `python docs/evidence/t4-b/check-links.py`、产物摘要 | 六份文档 172/172 相对文件/锚点检查，0 失败；`git diff --check` 通过。产物与新模块摘要见 [结构化记录](evidence/t4-b/artifacts.json) |
 
-| 命令 | 本轮结果 | 证明范围 |
-| --- | --- | --- |
-| `node docs/evidence/t4-b-feasibility/probe.mjs --temporary-fixtures` | 19/19 观察，失败 0、skip 0，退出 0 | 上述缺口及现有正向能力，不是功能验收 |
-| `node tests/worktrees.cjs` | 56/56，失败 0、skip 0，退出 0 | 真实临时 Git、身份/nonce/安全移除；本机 8.3 检查实际执行 |
-| `node tests/runtime-registry.cjs` | 35/35，失败 0、skip 0，退出 0 | 原 Registry/owner/生命周期 |
-| `node tests/evidence.cjs` | 100/100，失败 0、skip 0，退出 0 | 原前后 Diff 与 bounded evidence |
-| `node tests/stop-barrier.cjs` | 最终 17/17，失败 0、skip 0，退出 0 | 原 fake RPC/停止与发送屏障 |
-| `node --check docs/evidence/t4-b-feasibility/probe.mjs` | 退出 0 | 实验语法 |
-| Markdown 相对链接/锚点、`git diff --check` | 120/120 链接/锚点，失败 0；空白检查通过 | 文件导航和空白，不验证候选功能 |
+所有写入测试仅使用临时 fixture，未用真实用户项目或真 Pi/模型。
+Windows 的共享 Electron 位置在 JS 前异常退出；同版本 44.4.3 本地缓存离线解压至本 Worktree 的私有运行目录，
+字节摘要一致，通过 command-local `ELECTRON_OVERRIDE_DIST_PATH` 使用，未改共享依赖、ACL、产品沙箱或下载依赖。
+正常沙箱为 `sandbox: true`，未使用 `--no-sandbox`。独立 NSIS/真实模型端到端不属于本轮验证，不冒充通过。
 
-四套现有回归合计 **208 项断言**，未修改/删减旧断言。另计 19 项观察，不合并为功能总数。
-首轮 Stop 命令因新 Worktree 缺少 jsdom 在加载阶段退出 1，**0 项断言运行**；
-确认原因为本地依赖未连接后复用离线依赖并重跑 17/17。初始失败单列，未当成通过或 skip。
+Electron 走完整路径：存评论 → T4-A 选择/预览 → 预检 → 明确确认 → 原工具审批 → fake Pi 实际写候选 →
+真实 Diff → 重启后恢复 → 再次明确执行 → Stop → 两份候选保留。验证 720/900/1200/1536px，
+Specs + Changes、Browser + Changes，原生 WebContentsView 在弹窗期间脱离、关闭后恢复。
+代表截图：[预检](evidence/t4-b/01-preflight.png)、[原工具审批](evidence/t4-b/02-approval.png)、
+[Browser 分屏实际 Diff](evidence/t4-b/03-browser-diff.png)。
+结构化 [Electron 结果](evidence/t4-b/electron.json) 和 [最终产物字节数/摘要](evidence/t4-b/artifacts.json) 可复核；
+摘要检查通过不替代真实执行证明。
 
-**未运行**：T4-B 完整 canonical、候选功能真实 Electron、候选启动/执行/重启/Stop 完整流程、
-Browser/Specs/四档窗口布局、App/SEA 重建和产物验证、POSIX。没有 UI/业务/构建输入变更，
-按 [纯文档政策](testing.md#测试执行政策) 不重复本地完整 npm test 或重建；
-勘察实验不构成功能行为提交，不以基线 CI 替代未实现功能的证明。无截图，因为没有可诚实展示的候选 UI。
+## 自审发现与处置
 
-## 自审与独立审查
+本节是作者功能/安全/故障自审，非独立审查。已补失败复现后修复：
 
-作者自审：3 项已验证的 T4-B 复用阻塞，0 项被本轮引入并确认的产品回归；全部保持未解决/不开放状态。
-核对了 nonce/内容漂移、原 index 和源字节、filter 执行、外部写入混入、路径越界与无 Agent 副作用。
-没有将“现有机制按原设计工作”误报成 T4-A 产品缺陷；没有要求用户授权后即可忽略安全缺口。
+1. 后端创建的 Runtime 未先同步资源时，前端按原安全规则丢弃未知帧，审批不可见；改为原资源同步与事件回放。
+2. 清理未确认就先显示 completed；改为等待既有执行线清理并持锁到结束。
+3. Stop 的 settled 早于权威停止回执；pending Stop 不凭 settled 解除。
+4. 最终快照取在清理前会漏掉收尾写入；移到清理确认后，晚写入为不可归因结果。
+5. 快照读取期间新出现的 untracked 会遗漏；末次重新枚举和复读（包括缺失文件）后才认为完整。
+6. 原生撤销包装器使用 file URL 路径，工具来源识别需标准 fileURLToPath 并只在 Windows 折叠大小写。
+7. 仅哈希内容漏掉同字节文件替换和权限位变化；加入文件身份/模式及 Diff mode 头。
+8. promisor 配置可能隐式补对象，非 UTF-8 可能渲染替换字符；前者拒绝，后者只显示非文本变化。
+9. Git 查询会刷新 index stat/cache 字节；改为执行证据比较完整逻辑 index 和文件身份，缓存刷新不误报，真实暂存变化仍失效。
+10. 持久 scope 相同不意味着 owner 相同；确认同时比较后端 HMAC token 并复核原 scope 的完整 owner。
+    guarded 复现先失败「old nonce reached create」，修复后在创建之前拒绝。首次完整验证因此主动中止，不计为通过。
+11. 已完成记录缺少身份字段不能恢复成功；读取时要求完整 retained 身份，查看时还需既有 Registry 仍登记该候选。
+12. 完整 canonical 在 UI3 集成失败：新增动态导入不符合既有测试链接器契约。改为既有静态导航入口，
+    不修改链接器或旧断言；UI3 23/23、原 smoke 1338/1338、UI2 48/48 定向通过后重新完整验证。
 
-**独立功能审查：未进行。独立安全/故障审查：未进行。**
-沿用户不自行启动子代理/自动并行审查 Agent 的要求，未调用这类审查，也未调用旧的独立 Agent。
-本报告不是独立验收；完整 T4-B 未具备合并门槛。
+验证夹具修正另列：等待评论权威 ready 后再打开恢复弹窗；重载用 await loadURL；活动 Stop 先确认 fake Pi
+实际收到 prompt，不能把发送前已安全停止误判为漏发；Electron 主进程显式保留失败退出码。
+模块检查曾拒绝 server 直接 import public，改由 lib 纯模型入口复用，119/119 回归通过。
+截图曾出现帧尚未就绪的 `UnknownVizError`，夹具等待两帧后采集；禁止窗口关闭时覆盖失败退出码。
+冻结行为后的串行测试曾因启动等待仅五秒而断言 0 次发送，并被夹具清理 EPERM 掩盖；
+用确定的 7.5 秒延迟复现，改为有界状态等待、保留原异常、等待未决操作收口后清理，发送次数断言不变。
+分组故障套件还发现两份生产装配 VM 缺新候选依赖，补空闲候选的同形依赖，不扫描共享 TEMP 数据、不改 Stop 守卫；
+原浏览器 Stop 12/12、权威 Stop 17/17 定向通过，再续验故障组。
 
-## 回滚、保留和下一步
+canonical 叶命令全部成功退出，但 security 组的 SACL witness 在本机因缺少 `SeSecurityPrivilege` 跳过 8 条环境断言；
+它们不计入通过，也没有被写成已验能力。
 
-本轮设计、实验材料及验收说明属同一回滚边界，作为一次本地提交；用 `git log origin/main..HEAD` 定位。
-需要撤销时，撤销该文档/勘察提交即可，没有评论 schema、用户文件或版本迁移。
-保留开发 Worktree、分支、`.probe/` 原始记录；本轮临时 fixture 已清理，不存在待采纳的候选代码。
-未来候选若已写入，关闭预览必须保留，归档/移除继续走原受控确认；dirty/未知身份不得强删。
+完整 canonical 首轮在 core 第 50 项 `native-provider-quota.cjs` 和 faults 第 2、3 项旧 Stop 夹具处失败；
+修复测试夹具后，core 从第 1 项重新建立连续 69 项成功前缀，再由 resume 脚本完成第 70～113 项；
+security、native、faults 同样只补主日志未完成的断点，最终组内 184 项全部到达成功终态。
+早先的 Windows `spawn EINVAL` 是续跑辅助脚本参数问题，修复后重跑该断点，不是产品测试失败；所有原始日志保留。
+完整失败/通过日志保留 Worktree `.probe/`，只提交少量结构化摘要和截图。最终验证 SHA `e76ca6c6171f7005b74ded2aa887ad0de368a618` 只包含夹具对齐；产品行为 SHA 仍为 `16fd026657e7272532afec1ef94be7eb3c1aeaa8`。
 
-继续顺序见 [设计第 8 节](T4-B-design.md#8-安全停止边界与继续顺序)。先解决输入事务与结果证据契约，
-再实现候选执行/UI，完成独立审查及对应行为 SHA 的完整证明；不能把这份受阻报告当作允许推送、合并或发布。
+## 限制、独立审查与回滚
+
+未支持：来源 untracked、非根项目、特殊 Git/属性/链接/凭据/超容量输入；任意 shell/模糊 edit 的可靠写者归因；
+自动解除崩溃锁、自动续跑、实时多实例协作、应用到来源项目。只有 Windows/fake Pi 实测，其他 OS/真实模型不冒充验证。
+同用户绝对路径/shell 风险继续存在，提示词不是强制权限隔离。
+
+独立功能、安全及恢复审查：**待外部验收**。遵从用户「不用子代理」，没有启动独立 Agent，也没有自审冒名。
+代码验收/允许合并/允许发布均尚未取得，不因测试通过自动升级。
+
+回滚：按本地产品、测试入口、文档提交分别 revert，随后重建 App/SEA。候选 Worktree、分支、私有材料保留，
+不随代码回滚删除。恢复前先核实 registry/root/admin 身份及不存在运行子进程；未知身份保留不动。
+writer lock 只在人工确认相关实例/子进程全部退出并保全证据后处理。候选清理沿既有预检和明确确认，
+不得强删 dirty/ignored 或使用危险 reset/clean/force remove。后续采纳/冲突处理留给 T4-C。

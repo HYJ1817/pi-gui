@@ -1,0 +1,66 @@
+{
+  "behaviorSha": "16fd026657e7272532afec1ef94be7eb3c1aeaa8",
+  "verificationSha": "e76ca6c6171f7005b74ded2aa887ad0de368a618",
+  "build": "npm run build:app -- --rebuild; offline cached Electron 44.4.3",
+  "appChecks": 26,
+  "seaChecks": 49,
+  "candidatePackagedChecks": 21,
+  "failed": 0,
+  "skip": 0,
+  "artifacts": [
+    {
+      "file": "build/Pi GUI.exe",
+      "bytes": 102627840,
+      "sha256": "befe2c02a67f0aaf0a7a3645b37e48d70fd53c67e15bc5cf71fb78b4083bdb63"
+    },
+    {
+      "file": "build/server.cjs",
+      "bytes": 2396806,
+      "sha256": "d4217a17d68c5e4bcb23308fedebadcc33554897c48fc930913018d1d8cd09d3"
+    },
+    {
+      "file": "dist-app/Pi GUI-win32-x64/Pi GUI.exe",
+      "bytes": 246324736,
+      "sha256": "e1eeea64c53f99b3fff1c1b5956b33ce1815092bc67351b76e07c8eef3c087ab"
+    },
+    {
+      "file": "dist-app/Pi GUI-win32-x64/resources/app/server.cjs",
+      "bytes": 2396806,
+      "sha256": "d4217a17d68c5e4bcb23308fedebadcc33554897c48fc930913018d1d8cd09d3"
+    }
+  ],
+  "source": [
+    {
+      "file": "public/candidate-review.js",
+      "sha256": "9b6556a0b87d4ccbc553721db888cd6ca36be056f2dc99e460ad030ce9dfa8ce"
+    },
+    {
+      "file": "public/review-task-preview.js",
+      "sha256": "ec09edf8f4b7135e7559dee8d6ea7b9b9e9d8490c31cffdf7ed7e3304b8b995a"
+    },
+    {
+      "file": "public/api.js",
+      "sha256": "279e355a332e906c1e8ff29f4a45741d8c0ac1fb484dad61b65774cc5156eef5"
+    },
+    {
+      "file": "public/html-escape.js",
+      "sha256": "4754312ae99ecbbd62219f29f0a97d9f2e3efa8ef61f0dd7ee336c5f2b0ae403"
+    },
+    {
+      "file": "public/diff.js",
+      "sha256": "f26387a87a775c36174f98a84cd126f6ba52ad686bad164798855e921cf3f4cd"
+    },
+    {
+      "file": "public/util.js",
+      "sha256": "c352b019ba0a949887e1877959943cf13f28a42e84b46d16c49498745ab9ce41"
+    },
+    {
+      "file": "public/styles.css",
+      "sha256": "4a941187402a4cadf256020941756641d46e9ed7c091152f636e534d8a3cb606"
+    },
+    {
+      "file": "extensions/pi-gui-tool-guard/index.js",
+      "sha256": "aa455b84001e523fea077625f981851be7c2cfe799572d39441b2e2f71163e37"
+    }
+  ]
+}
