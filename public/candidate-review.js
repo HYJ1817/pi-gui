@@ -8,7 +8,7 @@ const states={pending:'待启动',running:'执行中',completed:'已完成',fail
 const element=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,action=candidateRunAction}={}){
   const pane=element('section','candidate-flow');pane.hidden=true;root.append(pane);
-  let epoch=0,disposed=false,timer=null,runId=null,confirming=false,preparedNonce=null,preparedHeaders=null;
+  let epoch=0,disposed=false,timer=null,runId=null,confirming=false,checkingAdoption=false,preparedNonce=null,preparedHeaders=null;
   const alive=()=>!disposed&&!pane.hidden&&root.isConnected&&isCurrent();
   const clearTimer=()=>{if(timer)clearTimeout(timer);timer=null;};
   function cancelPlan(){if(preparedNonce){void action({action:'cancel',nonce:preparedNonce},preparedHeaders).catch(()=>{});preparedNonce=null;}}
@@ -73,6 +73,7 @@ export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,ac
       timer=setTimeout(()=>void refresh(),1500);timer.unref?.();
     }else bar.append(button('保留候选结果',()=>{status.textContent='候选工作区已保留；未应用到原项目，结束预览不会删除。';}));
     if(!result.result){pane.append(element('p','review-summary-note','尚无可核实的执行前后 Diff。'));return;}
+    if(!['pending','running'].includes(run.state))bar.append(button('检查采纳条件（只读）',checkAdoption));
     const evidence=result.result;pane.append(element('p','review-summary-note',evidence.notice||(!evidence.reliable?'结果无法可靠确认':'执行前后真实 Diff')));
     if(evidence.truncated)pane.append(element('p','review-summary-note','Diff 超出容量，以下为明确截断的结果。'));
     if(!evidence.files.length)pane.append(element('p','review-summary-empty','相对输入快照未观察到文件变化。'));
@@ -81,6 +82,24 @@ export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,ac
       if(file.binary)detail.append(element('p','','二进制文件已变化，不展示文本 Diff。'));
       else{const diff=element('div','candidate-diff');diff.innerHTML=diffHtml(file.patch);bindDiffToggles(diff);detail.append(diff);}
       if(file.truncated)detail.append(element('p','','该文件 Diff 已截断。'));pane.append(detail);}
+  }
+  async function checkAdoption(){
+    if(checkingAdoption||!alive()||!runId)return;
+    checkingAdoption=true;const id=runId,sourceHeaders=headers(),token=begin(),{status,bar}=shell('采纳条件检查');
+    bar.replaceChildren(button('返回候选 Diff',()=>{epoch++;void refresh();}),button('取消',back));
+    status.textContent='正在只读核对来源和候选，尚未采纳…';
+    try{
+      const result=await action({action:'adoption-check',id},sourceHeaders);
+      if(token!==epoch||!alive())return;
+      if(!result.ok){status.textContent=result.error||'采纳条件无法确认，已拒绝采纳。';return;}
+      status.textContent='暂不可采纳：当前只完成只读检查，受控写入与失败恢复尚未开放。';
+      pane.append(element('p','review-summary-note','本次读取未发现快照冲突。检查结果只表示此次观察，不授权后续写入。源文件未修改，暂存区保持原状。'));
+      const p=result.plan,info=element('dl','candidate-facts');
+      for(const[k,v]of [['候选运行',p.runId],['来源工作区',p.source],['候选分支',p.branch],['输入快照',p.inputId],['输出快照',p.outputId],['完整范围',`${p.files.length} 个文件；整次候选`],['当前状态',`staged ${p.counts.staged} · working ${p.counts.working}`],['暂存区影响','暂存区保持原状，不创建提交']])info.append(element('dt','',k),element('dd','',String(v)));
+      pane.append(info);const files=element('ul','candidate-files'),changes={added:'新增',modified:'修改',deleted:'删除'};
+      for(const f of p.files)files.append(element('li','',`${changes[f.change]||'待确认'} · ${f.path} · ${f.beforeBytes} → ${f.afterBytes} 字节`));pane.append(files);
+    }catch{if(token===epoch&&alive())status.textContent='采纳条件检查未得到确认，未执行采纳；请返回候选 Diff 后重新检查。';}
+    finally{checkingAdoption=false;}
   }
   async function history(){const token=begin(),{status,bar}=shell('保留的候选修改');const result=await action({action:'list'},headers());if(token!==epoch||!alive())return;
     if(!result.ok){status.textContent=result.error||'候选记录不可用。';return;}status.textContent=result.runs.length?'候选结果与当前来源作用域关联；不会自动恢复 Agent。':'当前作用域没有候选结果。';
