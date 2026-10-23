@@ -22,6 +22,7 @@
 | 任务 | 优先阅读 | 按影响追加 |
 | --- | --- | --- |
 | 代码规范与开发验收材料 | [代码规范](coding-style.md)、[验收材料](acceptance.md) | [开发约束](../AGENTS.md)、[审查规则](../REVIEW.md)、[测试政策](testing.md#测试执行政策) |
+| 日常交付工具 | [PR 模板](../.github/PULL_REQUEST_TEMPLATE.md)、[EditorConfig](../.editorconfig)、[文件规模报告](../scripts/report-file-size.mjs) | [代码规范](coding-style.md)、[验收材料](acceptance.md)、[审查规则](../REVIEW.md) |
 | UI 与布局 | [工作区与生命周期](work-surfaces.md)、[应用外壳](app-shell.md) | [会话界面](conversation-ui.md)、[输入区](composer-ui.md)、[能力展示](capability-ux.md) |
 | Git Changes 与 Diff | [Git Changes](git-changes.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)；行级评论当前设计见 [持久化说明](git-changes.md#九行级评论持久化t3-b)，历史 [T3-A 验收](T3-A-acceptance.md) 与 [T3-B 验收](T3-B-acceptance.md) 仅证明各自提交 |
 | Planner、Review、Verification | [Planner](planner.md)、[工作流与数据契约](workflows.md)、[人工审阅](reviews.md) | [审批](approvals.md)、[测试政策](testing.md#测试执行政策) |
@@ -37,7 +38,7 @@
 - **当前设计入口**是上表中的功能文档。文档若包含历史段落，先读其当前实现说明，再核对正在使用的代码与边界。
 - **历史方案**记录当时的设想，不代表已实现或已批准。例如 [P32 设计探索](p32-design-spike.md)、[T2-B 计划](T2-B-plan.md)、[Windows 更新计划](windows-in-app-update-plan.md)。
 - **验收记录**绑定当时的提交、环境和验证范围。例如 [T2-A](T2-A-acceptance.md)、[T2-B](T2-B-acceptance.md)、[T3-A](T3-A-acceptance.md) 和 [CI 优化验收](ci-optimization-acceptance.md)。其中的数字和通过结论不能直接用于新的行为提交。
-- **治理阶段记录**见 [G0-A](G0-A-acceptance.md) 与 [G0-B](G0-B-acceptance.md)；当前规范以上方权威入口为准，阶段报告保留各自证据范围。
+- **治理阶段记录**见 [G0-A](G0-A-acceptance.md)、[G0-B](G0-B-acceptance.md) 与 [G1](G1-acceptance.md)；当前规范以上方权威入口为准，阶段报告保留各自证据范围。
 - **P33 写入/撤销边界**涉及长期安全资格：[安全回退设计](p33-1-safe-session-revert-design.md)、[安全验证记录](p33-4b-safety-validation.md)、[后续安全契约提案](p33-4d-security-contract-proposal.md) 与 [D6 最终验收](p33-d6-final-acceptance.md) 均保留各自阶段范围。后续修改须沿代码核对当前资格，不能凭设计或旧报告推定已开放写入能力。
 
 本导航只提供阅读路径，不赋予推送、合并、修改仓库设置或发布权限；授权以 [AGENTS.md](../AGENTS.md) 为准。
