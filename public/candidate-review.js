@@ -3,6 +3,7 @@ import {candidateRunAction,runtimeSessionAction} from './api.js';
 import {diffHtml,bindDiffToggles} from './diff.js';
 import {runtimeStore,observeRuntimeFrame,refreshRuntimeViews} from './runtime-state.js';
 import {refreshRuntimeResources} from './runtime-resources.js';
+import {focusRuntimeById} from './runtime-nav.js';
 const states={pending:'待启动',running:'执行中',completed:'已完成',failed:'失败',stopped:'已停止',interrupted:'中断'};
 const element=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,action=candidateRunAction}={}){
@@ -65,7 +66,7 @@ export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,ac
     pane.append(element('p','review-summary-note',run.warning||'关闭预览会保留候选工作区。'));
     pane.append(element('p','candidate-snapshot','输入快照：'+(run.inputId||'待确认')));
     if(run.workspace)pane.append(element('p','candidate-snapshot','候选分支：'+run.workspace.branch));
-    if(run.conversationId)bar.append(button('打开候选会话查看审批',async()=>{if(!alive())return;const {focusRuntimeById}=await import('./runtime-nav.js');if(alive())await focusRuntimeById(run.conversationId);}));
+    if(run.conversationId)bar.append(button('打开候选会话查看审批',async()=>{if(alive())await focusRuntimeById(run.conversationId);}));
     if(['pending','running'].includes(run.state)){
       const stop=button('停止候选执行',async()=>{if(!alive())return;stop.disabled=true;const result=await action({action:'stop',id:runId},headers());if(!alive())return;if(!result.ok)status.textContent=result.error||'停止尚未确认。';else await refresh();});bar.append(stop);
       pane.append(element('p','review-summary-note','执行由独立会话持有。关闭面板不会停止、删除或重发任务；审批可在候选会话处理。'));

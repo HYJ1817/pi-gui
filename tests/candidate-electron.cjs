@@ -3,13 +3,14 @@ const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spa
 const ROOT=path.resolve(__dirname,'..'),OUT=path.resolve(process.env.T4B_EVIDENCE_DIR||path.join(ROOT,'.probe/t4b-electron'));
 if(!process.versions.electron){const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;const r=spawnSync(require('electron'),[__filename],{env,stdio:'inherit',windowsHide:true,timeout:360000});process.exit(r.status??1);}
 const {app,BrowserWindow,ipcMain}=require('electron'),assert=require('node:assert/strict');
+app.on('window-all-closed',()=>{}); // Preserve the explicit result/exit during fixture cleanup.
 const world=fs.mkdtempSync(path.join(os.tmpdir(),'t4b-electron-'));let backend,win,browser,legacyHost,runtimeHost,base,checks=0;const shots=[];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const check=(name,ok)=>{assert(ok,name);checks++;console.log('ok '+name);};
 const read=async code=>{try{return await win.webContents.executeJavaScript(code,true);}catch(e){console.error('Failed fixture renderer step: '+code.slice(0,160));throw e;}};
 async function until(code,label){for(let i=0;i<500;i++){if(await read(code))return;await sleep(100);}throw Error('timeout: '+label);}
 async function click(text,selector='#modalCard'){await read(`(()=>{const b=[...document.querySelectorAll(${JSON.stringify(selector)}+' button')].find(b=>b.textContent===${JSON.stringify(text)}&&!b.hidden&&!b.disabled);if(!b)throw Error('button unavailable');b.scrollIntoView({block:'center'});b.click()})()`);}
-async function shot(name){fs.writeFileSync(path.join(OUT,name+'.png'),(await win.webContents.capturePage()).toPNG());shots.push(name+'.png');}
+async function shot(name){await read('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await sleep(100);fs.writeFileSync(path.join(OUT,name+'.png'),(await win.webContents.capturePage()).toPNG());shots.push(name+'.png');}
 async function main(){
  app.setPath('userData',path.join(world,'electron'));await app.whenReady();fs.mkdirSync(OUT,{recursive:true});
  const repo=path.join(world,'source'),data=path.join(world,'data'),home=path.join(world,'home'),pkg=path.join(world,'node_modules/@earendil-works/pi-coding-agent');
