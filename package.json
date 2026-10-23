@@ -7,7 +7,7 @@
   "description": "Pi Coding Agent 鐨?Web GUI 鈥斺€?閫氳繃 pi --mode rpc 椹卞姩锛屼笉淇敼鍏ㄥ眬 pi 瀹夎",
   "main": "electron/main.cjs",
   "scripts": {
-    "test:candidates": "node tests/candidate-snapshot.cjs && node tests/candidate-store.cjs && node tests/candidate-runs.cjs && node tests/candidate-http.cjs && node tests/candidate-ui.cjs && node tests/candidate-adoption.cjs && node tests/candidate-adoption-ui.cjs",
+    "test:candidates": "node tests/candidate-snapshot.cjs && node tests/candidate-store.cjs && node tests/candidate-runs.cjs && node tests/candidate-http.cjs && node tests/candidate-ui.cjs && node tests/candidate-adoption.cjs && node tests/candidate-adoption-ui.cjs && node tests/candidate-writer.cjs && node tests/candidate-write-faults.cjs && node tests/candidate-transactions.cjs && node tests/candidate-apply.cjs && node tests/candidate-apply-ui.cjs",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "app": "electron .",
