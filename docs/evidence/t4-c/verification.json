@@ -1,444 +1,46 @@
 {
-  "version": 2,
-  "baseline": "092716e24d739a7857ab338604e9084f1b0f0bd3",
-  "scope": "T4-C2 controlled Windows NTFS apply and separately authorized recovery; author verification, independent acceptance pending",
-  "worktreeDirty": true,
+  "version": 3,
+  "scope": "T4-C review corrections after v0.28.0/G0-B integration; author verification only",
+  "baseline": "2dfde8629bb864fa1d59a5f93ec7096a47142e89",
+  "integratedMain": "fbbaec7ab7998b5cb7cf08bb185b3287121194e1",
+  "packageVersion": "0.28.0",
+  "previousVerification": {
+    "commit": "d256dd81f0eec60d5dbe156a2821d7a7c154959a",
+    "file": "docs/evidence/t4-c/verification.json",
+    "note": "Initial C2 proof is historical; new proof below binds the merged tree and review fixes"
+  },
+  "recoveryRegression": {
+    "command": "node tests/candidate-recovery-errors.cjs",
+    "redExit": 1,
+    "redError": "TypeError: Cannot read properties of null (reading id)",
+    "greenExit": 0,
+    "passed": 3,
+    "failed": 0,
+    "skip": 0,
+    "redLog": ".probe/t4c3-recovery-red.log",
+    "greenLog": ".probe/t4c3-recovery-green.log"
+  },
   "canonical": {
-    "source": "package.json test and lifecycle expanded by existing test-group-plan",
-    "totalLeaves": 191,
-    "serialNpmTestExit": 1,
-    "failure": {
-      "command": "node tests/server-security.cjs",
-      "index": 124,
-      "port": 7797,
-      "code": "EACCES"
+    "status": "passed",
+    "command": "npm test",
+    "totalLeaves": 192,
+    "environment": {
+      "SEC_PORT": "39818",
+      "HARNESS_PORT": "0"
     },
-    "priorPassedLeaves": 123,
-    "resume": "completed",
-    "resumeLog": ".probe/t4c2-canonical-resume.log",
-    "serialNpmTestClaim": false,
-    "resumeEnvironment": {
-      "SEC_PORT": 39818,
-      "HARNESS_PORT": 0
-    },
-    "resumeExitCode": 0,
-    "successfulLeaves": 191,
-    "failedFinalLeaves": 0,
-    "failedAttempts": 1,
-    "resumedRecords": [
-      {
-        "index": 124,
-        "command": "node tests/server-security.cjs",
-        "startedAt": "2026-10-23T14:58:54.635Z",
-        "status": 0
-      },
-      {
-        "index": 125,
-        "command": "node tests/diagnostics.cjs",
-        "startedAt": "2026-10-23T14:58:59.577Z",
-        "status": 0
-      },
-      {
-        "index": 126,
-        "command": "node tests/update-check.cjs",
-        "startedAt": "2026-10-23T14:58:59.705Z",
-        "status": 0
-      },
-      {
-        "index": 127,
-        "command": "node tests/version-consistency.cjs",
-        "startedAt": "2026-10-23T14:59:00.182Z",
-        "status": 0
-      },
-      {
-        "index": 128,
-        "command": "node tests/release-artifacts.cjs",
-        "startedAt": "2026-10-23T14:59:00.337Z",
-        "status": 0
-      },
-      {
-        "index": 129,
-        "command": "node tests/electron-guard.cjs",
-        "startedAt": "2026-10-23T14:59:00.657Z",
-        "status": 0
-      },
-      {
-        "index": 130,
-        "command": "node tests/gui-browser-policy.cjs",
-        "startedAt": "2026-10-23T14:59:02.149Z",
-        "status": 0
-      },
-      {
-        "index": 131,
-        "command": "node tests/gui-browser-controller.cjs",
-        "startedAt": "2026-10-23T14:59:02.271Z",
-        "status": 0
-      },
-      {
-        "index": 132,
-        "command": "node tests/gui-browser-bridge.cjs",
-        "startedAt": "2026-10-23T14:59:07.608Z",
-        "status": 0
-      },
-      {
-        "index": 133,
-        "command": "node tests/gui-browser-tools.cjs",
-        "startedAt": "2026-10-23T14:59:08.026Z",
-        "status": 0
-      },
-      {
-        "index": 134,
-        "command": "node tests/gui-browser-ui.cjs",
-        "startedAt": "2026-10-23T14:59:08.203Z",
-        "status": 0
-      },
-      {
-        "index": 135,
-        "command": "node tests/gui-browser-host.cjs",
-        "startedAt": "2026-10-23T14:59:08.763Z",
-        "status": 0
-      },
-      {
-        "index": 136,
-        "command": "node tests/gui-browser-stop.cjs",
-        "startedAt": "2026-10-23T14:59:08.868Z",
-        "status": 0
-      },
-      {
-        "index": 137,
-        "command": "node tests/stop-barrier.cjs",
-        "startedAt": "2026-10-23T14:59:09.549Z",
-        "status": 0
-      },
-      {
-        "index": 138,
-        "command": "node tests/managed-processes.cjs",
-        "startedAt": "2026-10-23T14:59:10.566Z",
-        "status": 0
-      },
-      {
-        "index": 139,
-        "command": "node tests/process-tools.cjs",
-        "startedAt": "2026-10-23T14:59:10.713Z",
-        "status": 0
-      },
-      {
-        "index": 140,
-        "command": "node tests/process-stop.cjs",
-        "startedAt": "2026-10-23T14:59:10.998Z",
-        "status": 0
-      },
-      {
-        "index": 141,
-        "command": "node tests/process-ui.cjs",
-        "startedAt": "2026-10-23T14:59:11.155Z",
-        "status": 0
-      },
-      {
-        "index": 142,
-        "command": "node tests/process-runner.cjs",
-        "startedAt": "2026-10-23T14:59:12.850Z",
-        "status": 0
-      },
-      {
-        "index": 143,
-        "command": "node tests/worktrees.cjs",
-        "startedAt": "2026-10-23T14:59:12.969Z",
-        "status": 0
-      },
-      {
-        "index": 144,
-        "command": "node tests/worktrees-http.cjs",
-        "startedAt": "2026-10-23T14:59:54.376Z",
-        "status": 0
-      },
-      {
-        "index": 145,
-        "command": "node tests/worktrees-ui.cjs",
-        "startedAt": "2026-10-23T15:00:00.622Z",
-        "status": 0
-      },
-      {
-        "index": 146,
-        "command": "node tests/runtime-registry.cjs",
-        "startedAt": "2026-10-23T15:00:01.258Z",
-        "status": 0
-      },
-      {
-        "index": 147,
-        "command": "node tests/runtime-http.cjs",
-        "startedAt": "2026-10-23T15:00:01.488Z",
-        "status": 0
-      },
-      {
-        "index": 148,
-        "command": "node tests/runtime-store.cjs",
-        "startedAt": "2026-10-23T15:00:01.708Z",
-        "status": 0
-      },
-      {
-        "index": 149,
-        "command": "node tests/runtime-ui.cjs",
-        "startedAt": "2026-10-23T15:00:02.010Z",
-        "status": 0
-      },
-      {
-        "index": 150,
-        "command": "node tests/runtime-nav.cjs",
-        "startedAt": "2026-10-23T15:00:02.532Z",
-        "status": 0
-      },
-      {
-        "index": 151,
-        "command": "node tests/runtime-conversation.cjs",
-        "startedAt": "2026-10-23T15:00:10.279Z",
-        "status": 0
-      },
-      {
-        "index": 152,
-        "command": "node tests/runtime-changes.cjs",
-        "startedAt": "2026-10-23T15:00:10.823Z",
-        "status": 0
-      },
-      {
-        "index": 153,
-        "command": "node tests/runtime-secondary.cjs",
-        "startedAt": "2026-10-23T15:00:38.845Z",
-        "status": 0
-      },
-      {
-        "index": 154,
-        "command": "node tests/runtime-git-ui.cjs",
-        "startedAt": "2026-10-23T15:00:39.497Z",
-        "status": 0
-      },
-      {
-        "index": 155,
-        "command": "node tests/runtime-resources.cjs",
-        "startedAt": "2026-10-23T15:00:40.034Z",
-        "status": 0
-      },
-      {
-        "index": 156,
-        "command": "node tests/runtime-resource-cleanup.cjs",
-        "startedAt": "2026-10-23T15:00:40.614Z",
-        "status": 0
-      },
-      {
-        "index": 157,
-        "command": "node tests/runtime-history-search.cjs",
-        "startedAt": "2026-10-23T15:00:40.767Z",
-        "status": 0
-      },
-      {
-        "index": 158,
-        "command": "node tests/runtime-finish-ui.cjs",
-        "startedAt": "2026-10-23T15:00:53.801Z",
-        "status": 0
-      },
-      {
-        "index": 159,
-        "command": "node tests/session-runtime.cjs",
-        "startedAt": "2026-10-23T15:00:54.325Z",
-        "status": 0
-      },
-      {
-        "index": 160,
-        "command": "node tests/pi-supervisor.cjs",
-        "startedAt": "2026-10-23T15:00:55.435Z",
-        "status": 0
-      },
-      {
-        "index": 161,
-        "command": "node tests/runtime-browser.cjs",
-        "startedAt": "2026-10-23T15:00:58.767Z",
-        "status": 0
-      },
-      {
-        "index": 162,
-        "command": "node tests/process-budget.cjs",
-        "startedAt": "2026-10-23T15:00:58.965Z",
-        "status": 0
-      },
-      {
-        "index": 163,
-        "command": "node tests/runtime-events.cjs",
-        "startedAt": "2026-10-23T15:00:59.123Z",
-        "status": 0
-      },
-      {
-        "index": 164,
-        "command": "node tests/runtime-processes.cjs",
-        "startedAt": "2026-10-23T15:00:59.234Z",
-        "status": 0
-      },
-      {
-        "index": 165,
-        "command": "node tests/session-revert-object-assets.cjs",
-        "startedAt": "2026-10-23T15:01:01.780Z",
-        "status": 0
-      },
-      {
-        "index": 166,
-        "command": "node tests/session-revert-object-authority.cjs",
-        "startedAt": "2026-10-23T15:01:04.503Z",
-        "status": 0
-      },
-      {
-        "index": 167,
-        "command": "node tests/session-revert-object-history.cjs",
-        "startedAt": "2026-10-23T15:01:10.023Z",
-        "status": 0
-      },
-      {
-        "index": 168,
-        "command": "node tests/session-revert-object-runtime.cjs",
-        "startedAt": "2026-10-23T15:01:32.629Z",
-        "status": 0
-      },
-      {
-        "index": 169,
-        "command": "node tests/session-revert-object-store.cjs",
-        "startedAt": "2026-10-23T15:09:37.762Z",
-        "status": 0
-      },
-      {
-        "index": 170,
-        "command": "node tests/session-revert-object-service.cjs",
-        "startedAt": "2026-10-23T15:09:42.526Z",
-        "status": 0
-      },
-      {
-        "index": 171,
-        "command": "node tests/session-revert-object-recovery.cjs",
-        "startedAt": "2026-10-23T15:14:51.875Z",
-        "status": 0
-      },
-      {
-        "index": 172,
-        "command": "node tests/session-change-store.cjs",
-        "startedAt": "2026-10-23T15:15:10.738Z",
-        "status": 0
-      },
-      {
-        "index": 173,
-        "command": "node tests/session-change-bridge.cjs",
-        "startedAt": "2026-10-23T15:17:37.593Z",
-        "status": 0
-      },
-      {
-        "index": 174,
-        "command": "node tests/session-change-tools.cjs",
-        "startedAt": "2026-10-23T15:17:37.869Z",
-        "status": 0
-      },
-      {
-        "index": 175,
-        "command": "node tests/session-revert.cjs",
-        "startedAt": "2026-10-23T15:17:38.203Z",
-        "status": 0
-      },
-      {
-        "index": 176,
-        "command": "node tests/session-revert-store.cjs",
-        "startedAt": "2026-10-23T15:17:38.333Z",
-        "status": 0
-      },
-      {
-        "index": 177,
-        "command": "node tests/session-revert-http.cjs",
-        "startedAt": "2026-10-23T15:19:30.454Z",
-        "status": 0
-      },
-      {
-        "index": 178,
-        "command": "node tests/session-revert-integration.cjs",
-        "startedAt": "2026-10-23T15:19:34.768Z",
-        "status": 0
-      },
-      {
-        "index": 179,
-        "command": "node tests/session-revert-writer.cjs",
-        "startedAt": "2026-10-23T15:19:35.224Z",
-        "status": 0
-      },
-      {
-        "index": 180,
-        "command": "node tests/session-revert-recovery.cjs",
-        "startedAt": "2026-10-23T15:19:39.698Z",
-        "status": 0
-      },
-      {
-        "index": 181,
-        "command": "node tests/session-revert-admission.cjs",
-        "startedAt": "2026-10-23T15:19:52.322Z",
-        "status": 0
-      },
-      {
-        "index": 182,
-        "command": "node tests/session-revert-apply.cjs",
-        "startedAt": "2026-10-23T15:19:52.662Z",
-        "status": 0
-      },
-      {
-        "index": 183,
-        "command": "node tests/session-revert-windows-faults.cjs",
-        "startedAt": "2026-10-23T15:21:08.995Z",
-        "status": 0
-      },
-      {
-        "index": 184,
-        "command": "node tests/session-revert-inplace.cjs",
-        "startedAt": "2026-10-23T15:21:17.361Z",
-        "status": 0
-      },
-      {
-        "index": 185,
-        "command": "node tests/session-revert-inplace-safety.cjs",
-        "startedAt": "2026-10-23T15:23:26.095Z",
-        "status": 0
-      },
-      {
-        "index": 186,
-        "command": "node tests/session-change-query.cjs",
-        "startedAt": "2026-10-23T15:24:27.078Z",
-        "status": 0
-      },
-      {
-        "index": 187,
-        "command": "node tests/session-change-ui.cjs",
-        "startedAt": "2026-10-23T15:24:32.141Z",
-        "status": 0
-      },
-      {
-        "index": 188,
-        "command": "node tests/session-change-startup.cjs",
-        "startedAt": "2026-10-23T15:24:32.717Z",
-        "status": 0
-      },
-      {
-        "index": 189,
-        "command": "node tests/session-revert-object-writer.cjs",
-        "startedAt": "2026-10-23T15:24:44.138Z",
-        "status": 0
-      },
-      {
-        "index": 190,
-        "command": "node tests/session-revert-object-faults.cjs",
-        "startedAt": "2026-10-23T15:33:01.657Z",
-        "status": 0
-      },
-      {
-        "index": 191,
-        "command": "node tests/session-revert-object-witness.cjs",
-        "startedAt": "2026-10-23T15:45:18.400Z",
-        "status": 0
-      }
-    ],
-    "sourceInputsUnchanged": true,
-    "inputFileCount": 574,
-    "duringRunChange": "preflight explanatory text only; affected UI 9/9, Electron 49/49 and rebuilt artifact checks supplemented",
-    "assertionSkips": [
+    "log": ".probe/t4c3-npm-test.log",
+    "exit": 0,
+    "serialNpmTestClaim": true,
+    "successfulLeaves": 192,
+    "failedLeaves": 0,
+    "resumed": false,
+    "logSha256": "8546f22ba4cad17d321e62feb8b7f0c03aa3f5a0f6ef6afe8881f5680de034df",
+    "canonicalCommandListSha256": "f7d2ab03f061a219bb9acaf7904363d225b869902835e8b578a895a8ebc770de",
+    "logCreatedUtc": "2026-10-23T22:15:28.313862+00:00",
+    "exitRecordedUtc": "2026-10-23T23:21:29.519681+00:00",
+    "elapsedSecondsApprox": 3961,
+    "skippedAssertions": 21,
+    "skips": [
       {
         "suite": "candidate-adoption",
         "count": 1,
@@ -452,38 +54,130 @@
       {
         "suite": "session-search",
         "count": 1,
-        "reason": "case 5i file symlink unavailable"
+        "reason": "file symlink privilege unavailable; 5i unverified"
       },
       {
         "suite": "session-revert-sacl-witness",
         "count": 8,
-        "reason": "existing_token_sacl_unavailable"
+        "reason": "SeSecurityPrivilege unavailable"
       },
       {
         "suite": "session-revert-inplace",
         "count": 2,
-        "reason": "SeSecurityPrivilege unavailable"
+        "reason": "nonempty SACL unavailable"
       },
       {
         "suite": "session-revert-object-witness",
         "count": 8,
-        "reason": "existing_token_sacl_unavailable"
+        "reason": "SeSecurityPrivilege unavailable"
+      }
+    ]
+  },
+  "electronCrash": {
+    "status": "passed",
+    "command": "npm run test:candidates:crash-electron",
+    "log": ".probe/t4c3-crash-final.log",
+    "checkpointInstrumentation": "fixture-only synchronous module loader; production code has no fault switch",
+    "kill": "taskkill /PID <live child> /T /F",
+    "restart": "uninstrumented production server and sandboxed Electron UI; synthetic TEMP data only",
+    "exit": 0,
+    "checks": 40,
+    "failed": 0,
+    "skip": 0,
+    "phases": [
+      {
+        "phase": "before_write",
+        "transaction": "bd5ade6a-a60c-464e-acb3-6b971a98dbd4",
+        "lastState": "prepared",
+        "verifiedFiles": 0,
+        "indexCacheRefreshed": false,
+        "restart": {
+          "checks": 3,
+          "failed": 0,
+          "skip": 0,
+          "sandbox": true,
+          "screenshots": [
+            "restart-refused.png"
+          ],
+          "electron": "44.4.3"
+        }
+      },
+      {
+        "phase": "after_native_write",
+        "transaction": "ccb8296e-d039-40f2-872a-ba9e485a6cbd",
+        "lastState": "applying",
+        "verifiedFiles": 0,
+        "indexCacheRefreshed": false,
+        "restart": {
+          "checks": 3,
+          "failed": 0,
+          "skip": 0,
+          "sandbox": true,
+          "screenshots": [
+            "restart-refused.png"
+          ],
+          "electron": "44.4.3"
+        }
+      },
+      {
+        "phase": "first_verified",
+        "transaction": "8e56cadc-5967-4ba4-8891-a53f99b1cbca",
+        "lastState": "step_verified",
+        "verifiedFiles": 1,
+        "indexCacheRefreshed": false,
+        "restart": {
+          "checks": 3,
+          "failed": 0,
+          "skip": 0,
+          "sandbox": true,
+          "screenshots": [
+            "restart-refused.png"
+          ],
+          "electron": "44.4.3"
+        }
+      },
+      {
+        "phase": "last_verified",
+        "transaction": "fd974dfa-ad33-4842-b1af-9c007fbce5d1",
+        "lastState": "step_verified",
+        "verifiedFiles": 2,
+        "indexCacheRefreshed": false,
+        "restart": {
+          "checks": 3,
+          "failed": 0,
+          "skip": 0,
+          "sandbox": true,
+          "screenshots": [
+            "restart-refused.png"
+          ],
+          "electron": "44.4.3"
+        }
+      },
+      {
+        "phase": "recovering",
+        "transaction": "268aaa85-220e-4426-bd64-a2d236f84861",
+        "lastState": "recovery_step_verified",
+        "verifiedFiles": 1,
+        "indexCacheRefreshed": true,
+        "restart": {
+          "checks": 3,
+          "failed": 0,
+          "skip": 0,
+          "sandbox": true,
+          "screenshots": [
+            "restart-refused.png"
+          ],
+          "electron": "44.4.3"
+        }
       }
     ],
-    "skippedAssertions": 21
+    "restartUiChecks": 15,
+    "stepOrder": [
+      "second.txt",
+      "src/app.js"
+    ]
   },
-  "candidateTests": {
-    "passed": 210,
-    "failed": 0,
-    "skipped": 1,
-    "exitCode": 0
-  },
-  "reviewTaskTests": {
-    "model": 25,
-    "ui": 36,
-    "exitCode": 0
-  },
-  "electron": {
+  "electronApply": {
     "checks": 49,
     "failed": 0,
     "skip": 0,
@@ -502,26 +196,28 @@
       "t4c-stale-source-comment.png"
     ],
     "electron": "44.4.3",
-    "exitCode": 0,
-    "evidenceDirectory": ".probe/t4c2-electron-final-text"
+    "exit": 0,
+    "log": ".probe/t4c3-electron-apply.log"
   },
   "build": {
-    "appExit": 0,
-    "seaExit": 0,
-    "assetCount": 326
+    "command": "npm run build:app -- --rebuild",
+    "exit": 0,
+    "includesSeaRebuild": true,
+    "log": ".probe/t4c3-build-app.log"
   },
-  "independentReview": "not run; single coding agent required",
-  "remainingValidation": [
-    "Full application kill/restart at every native and journal boundary",
-    "Electron failure/recovery and multi-owner rejection matrix",
-    "Real disk-full, writable mapping and power-loss evidence"
-  ],
-  "requiresUserDataRecovery": false,
-  "push": false,
-  "pullRequest": false,
-  "merge": false,
-  "release": false,
-  "historicalC1": "c1-verification.json",
+  "artifactChecks": {
+    "command": "npm run fixtures; node tests/app-check.cjs; node tests/exe-check.cjs; node tests/candidate-packaged.cjs",
+    "exit": 0,
+    "app": 26,
+    "sea": 49,
+    "candidatePackaged": 21,
+    "skip": 0,
+    "environment": {
+      "app_CHECK_PORT": 39812,
+      "sea_CHECK_PORT": 39814
+    },
+    "log": ".probe/t4c3-artifacts.log"
+  },
   "sourceFiles": [
     {
       "file": "lib/assets.js",
@@ -601,7 +297,7 @@
     },
     {
       "file": "package.json",
-      "sha256": "417fa7700bcdc9b54703864fb8ee067834431f931b00b6e9738ac11e54d52e49"
+      "sha256": "fdd45b4673250922bbb2e02c438d9afb1f53718d13f2fd38eed2e02e757e1df6"
     },
     {
       "file": "public/api.js",
@@ -1177,7 +873,7 @@
     },
     {
       "file": "scripts/test-group-plan.mjs",
-      "sha256": "939b5fc1f0febc0c01370b548e1832e937d5789f75bec12db29eed1b4a799108"
+      "sha256": "3809dca3052acf1445e5bc35a50c4e3e1f7c962e7df5b678cc423372ada9f54e"
     },
     {
       "file": "scripts/util.mjs",
@@ -1190,6 +886,10 @@
     {
       "file": "scripts/verify-uploaded-release.mjs",
       "sha256": "7ccbcab484e82c03469f183294b4f86698a82c4eb7cf8bf70cf226352962c6e8"
+    },
+    {
+      "file": "server.js",
+      "sha256": "06226bf8fde601a1cd282e356621fb8fe7cca5ef61201d51afd50871f2d819e7"
     },
     {
       "file": "server/agents/claude.js",
@@ -1237,7 +937,7 @@
     },
     {
       "file": "server/candidate-apply.js",
-      "sha256": "5be36040d30dc2ee894f63242111c9ba40cb5cd1ad6b4f351d60f65788608f70"
+      "sha256": "8aad98bfa3fae3fcd2afddd86eab465b29ff2a075fa730c83eb26b4aa22c1b1e"
     },
     {
       "file": "server/candidate-routes.js",
@@ -1608,10 +1308,6 @@
       "sha256": "6ec2d5ddb264ffc3a17234009083c18a1adc0edc197eb54b5c6a45660be2a653"
     },
     {
-      "file": "server.js",
-      "sha256": "06226bf8fde601a1cd282e356621fb8fe7cca5ef61201d51afd50871f2d819e7"
-    },
-    {
       "file": "tests/agent-browser-live-main.cjs",
       "sha256": "7cbfad09ef81f7ba76d65ba6d883062c71a2e4c0a499a28955525fb164737598"
     },
@@ -1720,6 +1416,10 @@
       "sha256": "a93441a56bf1a3c964b06d95e1b41dc0650f0cf40c95c05e75d40df2c1233790"
     },
     {
+      "file": "tests/candidate-crash-electron.cjs",
+      "sha256": "1da4d9de7ed27ceb038cf49b763856885bba6056c65eb4e8f33ff274b7c39049"
+    },
+    {
       "file": "tests/candidate-electron.cjs",
       "sha256": "9f68d26c196562c41bf7e5358e0baef81a45788846cbacb8df664769b6df1829"
     },
@@ -1730,6 +1430,10 @@
     {
       "file": "tests/candidate-packaged.cjs",
       "sha256": "1374db1faab8aaef1b7274e680433a5fec4a0b83388dca254764b866266817cc"
+    },
+    {
+      "file": "tests/candidate-recovery-errors.cjs",
+      "sha256": "46e0dadbcba68dd7e4be91fbe4d8f1cbb6893f5b2473de82cfceae7f187dca5a"
     },
     {
       "file": "tests/candidate-runs.cjs",
@@ -1777,7 +1481,7 @@
     },
     {
       "file": "tests/ci-workflow.cjs",
-      "sha256": "b1c1fa56d79d7f3b6856c270c01d812de73258e04108d9cccc9b574c9dc8c6fb"
+      "sha256": "7b1fbdf0e700cc92e710f20b2a7c26ed76450ed6f0c79e563e685a5f257c4375"
     },
     {
       "file": "tests/daily-use.cjs",
@@ -1864,6 +1568,22 @@
       "sha256": "09be90d2f3db690eae2bb8573edb0bb5e414f03eb39b30c351d3dd27141befdb"
     },
     {
+      "file": "tests/fixtures.mjs",
+      "sha256": "3f4cccdf4ffe27b46b495e16d36c17111609f91865933ec2dab4879f835069f4"
+    },
+    {
+      "file": "tests/fixtures/README.md",
+      "sha256": "210f211ff2d7e356710e624ea8fd38b7e65ca18e1620861298640447feb6fddf"
+    },
+    {
+      "file": "tests/fixtures/candidate-crash-app.cjs",
+      "sha256": "83fef772446f2b3dbd17b9c688156e7bcbdfd51721dd52d7c4a47b9641b3557a"
+    },
+    {
+      "file": "tests/fixtures/candidate-crash-backend.cjs",
+      "sha256": "1287e22a48f6373460a84c080bb4f319fff18767faa6d17318191058466db668"
+    },
+    {
       "file": "tests/fixtures/candidate-pi.cjs",
       "sha256": "82d943f6bd1b9fd32b44ea725847715ac8fd0449dd7ba834d9c1ea9a0556828e"
     },
@@ -1878,10 +1598,6 @@
     {
       "file": "tests/fixtures/ordinary-session-sdk-rpc.mjs",
       "sha256": "ce0cf1c6a52a0df2a6267eec4d99ed692a31e1aaa83932678189bf2dc3d64c36"
-    },
-    {
-      "file": "tests/fixtures/README.md",
-      "sha256": "210f211ff2d7e356710e624ea8fd38b7e65ca18e1620861298640447feb6fddf"
     },
     {
       "file": "tests/fixtures/review-comment-backend.cjs",
@@ -1986,10 +1702,6 @@
     {
       "file": "tests/fixtures/tool-history.json",
       "sha256": "9d86830b1191ebff311070970d19ea49804e4b0e8e21e16c307f4ed20b4efa14"
-    },
-    {
-      "file": "tests/fixtures.mjs",
-      "sha256": "3f4cccdf4ffe27b46b495e16d36c17111609f91865933ec2dab4879f835069f4"
     },
     {
       "file": "tests/git.cjs",
@@ -2824,22 +2536,22 @@
     {
       "file": "build/Pi GUI.exe",
       "bytes": 102692352,
-      "sha256": "0eb7730a4ecd6696fcbba3c8b6c2444e0c185ed297752d94f5439fcd2cb07d8f"
+      "sha256": "7e0dad6251af963cb196849c89e91cb57086fbc49c6ecbd8d4cbe04aedc512d8"
     },
     {
       "file": "build/server.cjs",
-      "bytes": 2445298,
-      "sha256": "b2569784f21cd8219e3f530099bc9a0be007fa5beceec362d54485b4eddefa89"
+      "bytes": 2445326,
+      "sha256": "31d4be4a4cc95aedf3d2c9b47caa20863082730d4d6becc72d38c21731125eec"
     },
     {
       "file": "dist-app/Pi GUI-win32-x64/Pi GUI.exe",
       "bytes": 246324736,
-      "sha256": "e1eeea64c53f99b3fff1c1b5956b33ce1815092bc67351b76e07c8eef3c087ab"
+      "sha256": "ed741883be1590e3283be7c1d786f1779cd711de3bd1f25f29ed3972a68dee62"
     },
     {
       "file": "dist-app/Pi GUI-win32-x64/resources/app/server.cjs",
-      "bytes": 2445298,
-      "sha256": "b2569784f21cd8219e3f530099bc9a0be007fa5beceec362d54485b4eddefa89"
+      "bytes": 2445326,
+      "sha256": "31d4be4a4cc95aedf3d2c9b47caa20863082730d4d6becc72d38c21731125eec"
     },
     {
       "file": "dist-app/Pi GUI-win32-x64/resources/app/candidate/write.ps1",
@@ -2852,28 +2564,48 @@
       "sha256": "6c06bb546fa9b18dd66e3d1a6312ea8afb2e4fe62594a171b1c9df0d06effd01"
     }
   ],
-  "screenshots": [
+  "independentReview": {
+    "status": "not run",
+    "reason": "User requested one Coding Agent; author self-review does not replace independent functionality and safety review"
+  },
+  "knownFailedAttempts": [
     {
-      "file": "04-apply-preflight.png",
-      "sha256": "fc17164d11f6929a190c90b6d5dd2dff8e621423e186c2e9d25e6d5ea3cfa0cf"
+      "log": ".probe/t4c3-crash-1.log",
+      "cause": "Fixture generated a literal newline inside JavaScript string; fake Pi failed syntax check; no product change",
+      "passed": false
     },
     {
-      "file": "05-applied.png",
-      "sha256": "8dc0b32e7703faec3fd40d23d6113e1136ca22cf9da0456f1a4a613f1d29b482"
+      "log": ".probe/t4c3-crash-2.log",
+      "cause": "Two-file fixture selected the first Diff rather than app.js; selector now checks all rendered Diff content without removing original value assertions",
+      "passed": false
     },
     {
-      "file": "06-conflict.png",
-      "sha256": "27501001caaa22aebe47719d20eba83c6202a4f1cb6946a23e30fa1f3998343c"
+      "log": ".probe/t4c3-crash-3.log",
+      "passedChecks": 38,
+      "failedChecks": 1,
+      "cause": "Recovery restores a clean file; ordinary Git Diff refreshes index stat cache. Source bytes and every logical staged entry remained exact. See index-cache-observation.json. Final suite separately checks raw index after kill and logical index after GUI refresh."
     }
   ],
-  "artifactChecks": {
-    "app": 26,
-    "sea": 49,
-    "packaged": 21,
-    "failed": 0,
-    "exitCode": 0,
-    "logPrefix": ".probe/t4c2-",
-    "rebuilt": true
+  "remainingValidation": [
+    "Independent functionality and safety/fault review before merge",
+    "Arbitrary in-system-call crash positions, real disk-full, writable mappings and power-loss durability",
+    "Packaged or installed Electron main-entry crash matrix and multi-owner rejection matrix"
+  ],
+  "delivery": {
+    "branch": "codex/t4-c-safe-apply",
+    "pushAuthorized": true,
+    "initialPushedCommit": "d256dd81f0eec60d5dbe156a2821d7a7c154959a",
+    "pullRequest": false,
+    "mergeToMain": false,
+    "tag": false,
+    "release": false,
+    "statusAtReportCommit": "Local product/test verification complete; authorized branch push follows report commit",
+    "reportCommitResolution": "git log -1 --format=%H -- docs/T4-C-acceptance.md"
+  },
+  "requiresUserDataRecovery": false,
+  "documentChecks": {
+    "relativeLinks": 135,
+    "missing": 0
   },
   "electronDefault": {
     "checks": 25,
@@ -2888,58 +2620,92 @@
       "05-browser-diff.png"
     ],
     "electron": "44.4.3",
-    "exitCode": 0
+    "exit": 0,
+    "log": ".probe/t4c3-electron-default.log"
   },
-  "knownFailures": [
+  "validationInputChangesDuringRun": {
+    "files": [
+      "tests/candidate-crash-electron.cjs",
+      "tests/fixtures/candidate-crash-app.cjs"
+    ],
+    "effect": "Only supplementary Electron crash harness corrected for index stat-cache semantics; no canonical dependency, product or build input changed. Entire supplementary matrix rerun."
+  },
+  "candidateTests": {
+    "source": "npm test -> test:candidates",
+    "passed": 213,
+    "failed": 0,
+    "skipped": 1,
+    "skipReason": "file symlink permission unavailable",
+    "suites": {
+      "snapshot": 25,
+      "store": 14,
+      "runs": 34,
+      "http": 19,
+      "ui": 9,
+      "adoption": 45,
+      "adoptionUi": 9,
+      "writer": 9,
+      "writeFaults": 9,
+      "transactions": 9,
+      "apply": 19,
+      "recoveryErrors": 3,
+      "applyUi": 9
+    }
+  },
+  "reviewTaskTests": {
+    "model": 25,
+    "ui": 36,
+    "failed": 0,
+    "skip": 0,
+    "source": "npm test -> test:diff-comments -> test:review-tasks"
+  },
+  "screenshots": [
     {
-      "kind": "Electron fixture skipped opening hidden task page; fixed explicit click",
-      "passedBeforeFailure": 43,
-      "logPrefix": ".probe/t4c2-electron-resume"
+      "file": "docs/evidence/t4-c/07-crash-restart-refused.png",
+      "bytes": 83121,
+      "sha256": "bdbf475a4bbf249a712a107f3a9aa52e04c98496f22ec63f190fd10c71269825"
     },
     {
-      "kind": "Electron fixture counted hidden old selection items during delete; fixed current summary empty condition",
-      "passedBeforeFailure": 44,
-      "logPrefix": ".probe/t4c2-electron-final7"
-    },
-    {
-      "kind": "App check default port refused",
-      "code": "EACCES",
-      "port": 7798
-    },
-    {
-      "kind": "App check icon reference missing after explicit SEA rebuild",
-      "passed": 24,
-      "total": 26,
-      "fixed": "regenerate icon and run App check 26/26"
-    },
-    {
-      "kind": "GUI launch without waiting stalled and was terminated after verifying exact command line",
-      "countedAsPass": false
+      "file": "docs/evidence/t4-c/08-recovery-preflight.png",
+      "bytes": 103170,
+      "sha256": "511d643bd3280e88893aa667f177a3b8e958201ed52dddb92c6f0deaad9cb598"
     }
   ],
-  "afterHead": "eafd65bbd1166ca9d750aae0219bcc29b660fd45",
-  "committed": true,
-  "artifactsTotalAppBytes": 344838395,
-  "documentChecks": {
-    "relativeLinks": 87,
-    "missing": 0,
-    "diffWhitespaceCheck": true
+  "productCommit": "0232aa18172e20226a7a6f11dc1307d0b4f79b3f",
+  "testCommit": "e8ac4bb4aa6eb80dd6c26cfc73f137acf6bc8e4a",
+  "verifiedCodeCommit": "e8ac4bb4aa6eb80dd6c26cfc73f137acf6bc8e4a",
+  "sourceFilesMatchBeforeCommit": true,
+  "sourceFileHashKind": "SHA-256 of raw worktree bytes, unchanged across local commits; Git newline normalization may change checkout byte digests",
+  "mainWorktreeObservation": {
+    "head": "724bd48119dd7ba5ba7e1327da12353bd0339ea7",
+    "trackedChanges": 0,
+    "untrackedEntries": 5,
+    "action": "read-only status; no file names or contents retained"
   },
-  "verificationWorkspaceBaseHead": "092716e24d739a7857ab338604e9084f1b0f0bd3",
-  "verifiedCodeCommit": "eafd65bbd1166ca9d750aae0219bcc29b660fd45",
-  "productCommit": "74855022211b18eb8bb9b8ee3392845ba1c8eff0",
-  "testCommit": "eafd65bbd1166ca9d750aae0219bcc29b660fd45",
-  "delivery": {
-    "pushAuthorized": true,
-    "branch": "codex/t4-c-safe-apply",
-    "remote": "origin",
-    "statusAtDocumentationCommit": "prepared for push",
-    "pullRequestAuthorized": false,
-    "mergeAuthorized": false,
-    "releaseAuthorized": false
+  "environment": {
+    "node": "v24.22.1",
+    "git": "git version 2.53.0.windows.2",
+    "electron": "44.4.3",
+    "platform": "Windows local NTFS TEMP fixtures",
+    "realPi": false,
+    "realModel": false,
+    "newDependencies": false
   },
-  "remoteObservationAtPush": {
-    "main": "fbbaec7ab7998b5cb7cf08bb185b3287121194e1",
-    "integrated": false
+  "remoteMainRecheck": {
+    "sha": "fbbaec7ab7998b5cb7cf08bb185b3287121194e1",
+    "isAncestor": true
+  },
+  "indexCacheObservation": "docs/evidence/t4-c/index-cache-observation.json",
+  "selfReview": {
+    "scope": "Known recovery null-transaction error, checkpoint-only test instrumentation, source/index/journal preservation, upstream integration",
+    "finding": "Important: null tx overwrote pre-transaction errors with TypeError",
+    "status": "fixed with red/green real-storage regression",
+    "independentAcceptance": "pending; author review does not authorize merge or release"
+  },
+  "processCleanup": {
+    "taskElectronAppProcessesRemaining": 0,
+    "candidateBackendFakePiFixtureProcessesRemaining": 0,
+    "checkedAfterCanonicalCompletion": true,
+    "checkedAtUtc": "2026-10-23T23:23:09.367583+00:00"
   }
 }

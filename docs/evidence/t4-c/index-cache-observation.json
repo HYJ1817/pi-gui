@@ -1,0 +1,42 @@
+{
+  "gitVersion": "2.53.0.windows.2",
+  "scenario": "GUI status/Diff after a clean file was restored and Electron was killed/restarted",
+  "rawIndexBytesBefore": 325,
+  "rawIndexBytesAfter": 325,
+  "changedOffsets": [
+    95,
+    96,
+    97,
+    98,
+    99,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    313,
+    314,
+    315,
+    316,
+    317,
+    318,
+    319,
+    320,
+    321,
+    322,
+    323,
+    324
+  ],
+  "changes": "second.txt mtime cache plus index SHA-1 checksum only",
+  "allOtherIndexBytesEqual": true,
+  "independentTempReproduction": [
+    "capture sameIndex true error null",
+    "status sameIndex false error null",
+    "diff sameIndex false error null",
+    "diff-numstat sameIndex false error null"
+  ],
+  "resolution": "Require original raw index immediately after kill; require exact paths, object IDs, modes and stages after GUI restart; record stat-cache refresh separately. No product Git behavior changed."
+}

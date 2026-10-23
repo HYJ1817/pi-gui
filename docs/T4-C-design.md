@@ -1,19 +1,20 @@
 # T4-C：候选修改采纳、冲突检测与恢复
 
-C2 续作基线 `092716e24d739a7857ab338604e9084f1b0f0bd3`。以下为当前行为；末尾保留 C1 历史勘察，旧阻塞说明不再代表 C2 状态。
+C2 续作基线 `092716e24d739a7857ab338604e9084f1b0f0bd3`。2026-10-24 复审在 `2dfde86` 合入 v0.28.0/G0-B，并修复恢复确认前置异常。以下为当前行为；末尾保留 C1 历史勘察，旧阻塞说明不再代表 C2 状态。
 
 ## 当前实现
 
 可信材料和来源冲突规则沿用 C1。`checkCandidateAdoption` 默认只读，仅后端内部 `materialize:true` 返回受限原始字节；Renderer 不提供路径、字节或命令。
 候选须 completed、reliable、完整证据及 Registry 身份有效。来源 HEAD、逻辑 index、全部原文件内容/身份/权限、目录、Git admin/common 和 config 必须与输入一致；任一漂移拒绝整次采纳。
 
-`server/candidate-apply.js` 提供两阶段授权。准备返回 120 秒单次 nonce，绑定完整 scope/owner 和计划。确认先消费 nonce，再复核候选、来源和互斥状态。整次候选仅更新 working tree，不写 index，不执行 Git add/commit 或 Agent。
+`server/candidate-apply.js` 提供两阶段授权。准备返回 120 秒单次 nonce，绑定完整 scope/owner 和计划。确认先消费 nonce，再复核候选、来源和互斥状态。整次候选仅更新 working tree，不写暂存内容，不执行 Git add/commit 或 Agent。原生事务期间 Git index 被只读句柄固定；普通 GUI 查询在事务外可能刷新恢复后干净文件的 stat 缓存，逻辑暂存项（路径、mode、OID、stage）保持不变。
 `server/candidate-write-native.ps1` 由固定 stdio 协议调用，不引入任意 shell 入口。它仅支持 Windows 本地 NTFS、已有父目录和有界普通文件；修改保持原文件对象，新增使用 CREATE_NEW，删除以 no-replace 原句柄 rename 保留对象。目标和其他来源文件禁止 write/delete sharing，目录链禁止 delete sharing，固定 Git 文件另持有只读句柄。句柄锁定后重跑来源/候选校验，权限冲突保守拒绝。
 
 ## 事务及恢复
 
 `server/candidate-transactions.js` 在应用数据目录保存独立的追加日志：计划、来源身份、原文、输出、步骤 intent 和实际结果。第一处源码写入前完成文件 flush/readback；每步先记录 intent，再写入/flush/读回，最后保存 verified。全部输出与逻辑 index 验证通过，并持久记录 applied 后才显示成功。
 执行锁使用独占创建；native active.lock 排除跨进程写者。不按 PID 自动清锁。重启看到未完成 intent、损坏记录或遗留执行锁时拒绝继续自动采纳，保留材料供人工核实。
+恢复确认若在取得事务对象前失败，直接保留原始错误码并执行清理，不访问空事务 ID；已取得事务后的错误仍保守记录为恢复待确认。
 多文件不具全局原子性。完整验证步骤之间失败时，可通过单独恢复预检和新 nonce 明确授权恢复；仅恢复身份、当前字节和原来源上下文均符合已记录步骤的对象。发生部分原生写入、结果未知、外部改动、材料损坏或恢复再次失败时，进入 recovery_required/uncertain 并拒绝自动重试。
 
 ## 产品边界
