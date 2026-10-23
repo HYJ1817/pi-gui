@@ -4,6 +4,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {captureCandidateInput,installCandidateInput,compareCandidateInput,candidateHash,candidatePath,candidateFail,assertCandidateTarget} from '../lib/candidate-snapshot.js';
 import {createCandidateStore} from './candidate-store.js';
+import {createCandidateApply} from './candidate-apply.js';
 import {observeAdoptionSnapshot,createAdoptionEvidence,checkCandidateAdoption} from '../lib/candidate-adoption.js';
 import {gitDiff} from '../lib/git.js';
 import {diffHtml,createReviewTask,reconcileReviewRange} from '../lib/candidate-review-model.js';
@@ -27,14 +28,15 @@ function rows(text){
   }
   return result;
 }
-export function createCandidateRuns({dataDir,worktrees,registry,readComments,projectFor,contextGeneration,busy=()=>false,protectedRoots=()=>[],now=Date.now}={}){
+export function createCandidateRuns({dataDir,worktrees,registry,readComments,projectFor,contextGeneration,busy=()=>false,admission,protectedRoots=()=>[],now=Date.now}={}){
   const store=createCandidateStore({dataDir,protectedRoots}),plans=new Map(),records=new Map();let active=null,checkingAdoption=false,disposed=false,storageError=null;
+  const adoption=createCandidateApply({dataDir,worktrees,admission,protectedRoots,now,assertIdle:()=>{if(disposed||storageError)candidateFail(storageError||'candidate_unavailable');store.assertIdle();if(active||busy(true))candidateFail('candidate_busy');}});
   try{for(const saved of store.readAll()){
     if(!terminal.has(saved.run.state)){saved.run.state='interrupted';saved.result=null;saved.run.reason='candidate_interrupted';}
     records.set(saved.run.id,saved);
   }}catch{storageError='candidate_storage_unsafe';}
   function check(scope){if(disposed)candidateFail('candidate_unavailable');if(storageError)candidateFail(storageError);scope.assertCurrent();}
-  function idle(){if(active||checkingAdoption||busy())candidateFail('candidate_busy');}
+  function idle(){if(active||checkingAdoption||adoption.busy()||busy())candidateFail('candidate_busy');}
   function own(owner){return active&&active.owner?.conversationId===owner?.conversationId&&active.owner?.workspaceId===owner?.workspaceId?active:null;}
   function persist(live){const value={version:1,run:live.run,input:encode(live.pre),result:live.result||null,adoptionEvidence:live.adoptionEvidence||null};store.save(value);records.set(live.run.id,{...value,run:structuredClone(live.run)});}
   async function task(scope,body,owner){
@@ -179,7 +181,7 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     if(r.sourceScope!==scope.key&&r.workspace?.path!==scope.projectRoot)candidateFail('candidate_scope');
     try{if(r.workspace&&!worktrees.projectFor(r.workspace.path))candidateFail('candidate_unsafe');if(r.rootIdentity&&(!equal(identity(r.workspace.path),r.rootIdentity)||candidateHash(fs.readFileSync(path.join(r.workspace.path,'.git')))!==r.gitIdentity))candidateFail('candidate_unsafe');}
     catch{return{ok:true,run:{...summary(r),state:'interrupted',reason:'candidate_identity_changed'},result:null};}
-    return{ok:true,run:summary(r),result:terminal.has(r.state)?saved.result||null:null};
+    return{ok:true,run:summary(r),result:terminal.has(r.state)?saved.result||null:null,adoption:adoption.status(scope,id)};
   }
   function list(scope){check(scope);return{ok:true,runs:[...records.values()].filter(v=>v.run.sourceScope===scope.key||v.run.workspace?.path===scope.projectRoot).map(v=>summary(v.run))};}
   async function checkAdoption(scope,id){
@@ -189,8 +191,12 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     try{return await checkCandidateAdoption({saved,scope,worktrees,assertIdle:()=>{check(scope);store.assertIdle();if(active||busy())candidateFail('candidate_busy');}});}
     finally{checkingAdoption=false;}
   }
+  async function prepareAdoption(scope,id){check(scope);idle();get(scope,id);const saved=records.get(id);if(!saved)candidateFail('candidate_missing');checkingAdoption=true;try{return await adoption.prepare(scope,saved);}finally{checkingAdoption=false;}}
+  const confirmAdoption=(scope,nonce)=>{check(scope);idle();return adoption.confirm(scope,nonce);};
+  const prepareRecovery=(scope,id)=>{check(scope);idle();return adoption.prepareRecovery(scope,id);};
+  const confirmRecovery=(scope,nonce)=>{check(scope);idle();return adoption.confirmRecovery(scope,nonce);};
   function cancel(scope,nonce){check(scope);const plan=plans.get(nonce);if(plan&&plan.scope.key!==scope.key)candidateFail('candidate_scope');plans.delete(nonce);return{ok:true};}
   async function stop(scope,id){get(scope,id);const live=active;if(!live||live.run.id!==id||!live.owner)candidateFail('candidate_not_running');live.stopping=true;
     const result=await registry.command(live.owner,{type:'abort'});if(!result?.ok)candidateFail('candidate_stop_pending');await finish(live,'stopped');return get(scope,id);}
-  return{prepare,confirm,cancel,get,list,stop,checkAdoption,audit,observe,busy:()=>Boolean(active||checkingAdoption),owns:owner=>Boolean(own(owner)),async dispose(){disposed=true;plans.clear();if(active?.owner){try{await registry.command(active.owner,{type:'abort'});await finish(active,'interrupted','candidate_shutdown');}catch{}}}};
+  return{prepare,confirm,cancel,get,list,stop,checkAdoption,prepareAdoption,confirmAdoption,prepareRecovery,confirmRecovery,cancelAdoption:adoption.cancel,audit,observe,busy:()=>Boolean(active||checkingAdoption||adoption.busy()),owns:owner=>Boolean(own(owner)),async dispose(){disposed=true;plans.clear();if(active?.owner){try{await registry.command(active.owner,{type:'abort'});await finish(active,'interrupted','candidate_shutdown');}catch{}}}};
 }

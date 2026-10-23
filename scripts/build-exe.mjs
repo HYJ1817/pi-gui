@@ -58,6 +58,7 @@ function main() {
   add('revert-compute/worker.mjs', path.join(ROOT, 'server/session-revert-worker.mjs'));
   add('revert-object/observe.ps1', path.join(ROOT, 'server/session-revert-object-native.ps1'));
   add('revert-object/write.ps1', path.join(ROOT, 'server/session-revert-object-write-native.ps1'));
+  add('candidate/write.ps1', path.join(ROOT, 'server/candidate-write-native.ps1'));
 
   for (const [key, sub] of [
     ['pdfjs/standard_fonts', 'standard_fonts'],

@@ -7,7 +7,14 @@ export const CANDIDATE_MESSAGES=Object.freeze({
   candidate_output_changed:'候选内容或身份与历史结果不一致，已拒绝采纳并保留材料。',
   candidate_adoption_unconfirmed:'候选执行期间存在未确认的对象、权限或目录变化，已拒绝采纳。',
   candidate_adoption_empty:'本次候选没有可采纳的文件变化。',
-  candidate_apply_unavailable:'只读检查已完成；受控写入与失败恢复尚未开放，暂不可采纳。',
+  candidate_apply_unavailable:'只读检查已完成；当前环境不支持受控写入与失败恢复，暂不可采纳。',
+  candidate_platform_unsupported:'受控采纳目前仅支持 Windows 本地 NTFS。',
+  candidate_write_unsupported:'此文件模式或新增父目录超出当前受控写入范围，已拒绝整次采纳。',
+  candidate_native_refused:'文件占用、权限或对象身份无法确认，受控写入已停止；请查看事务状态。',
+  candidate_already_applied:'此候选已经采纳，不能重复写入。',
+  candidate_recovery_required:'存在未决文件事务，请保留材料并检查恢复状态，不能继续采纳。',
+  candidate_recovery_uncertain:'无法确认每一步的文件所有权，请保留事务材料并进行人工恢复。',
+  candidate_recovery_external:'恢复对象、Git 状态或工作区已有外部变化，已拒绝覆盖并保留材料。',
   candidate_busy:'已有 Agent、停止、验证或候选流程正在执行，请先完成该操作。',candidate_changed:'文件内容或 Git 身份已变化，请重新预检。',
   candidate_expired:'确认已失效或已经使用，请重新预检。',candidate_comments_changed:'评论已修改或删除，请重新选择并预览。',
   candidate_anchor_changed:'评论位置未由当前完整 Diff 确认，请返回 Diff 核实。',candidate_untracked:'存在未跟踪文件。本阶段不隐式复制这些文件，请先自行整理并重新预检。',
@@ -32,7 +39,11 @@ export function createCandidateRoutes({runs,withAuthority}={}){
     else if(body.action==='cancel'&&typeof body.nonce==='string')result=runs.cancel(scope,body.nonce);
     else if(body.action==='list')result=runs.list(scope);
     else if(body.action==='get'&&typeof body.id==='string')result=runs.get(scope,body.id);
-    else if(body.action==='adoption-check'&&typeof body.id==='string'&&Object.keys(body).every(k=>['action','id'].includes(k)))result=await runs.checkAdoption(scope,body.id);
+    else if(body.action==='adoption-prepare'&&typeof body.id==='string'&&Object.keys(body).every(k=>['action','id'].includes(k)))result=await runs.prepareAdoption(scope,body.id);
+    else if(body.action==='adoption-confirm'&&typeof body.nonce==='string'&&Object.keys(body).every(k=>['action','nonce'].includes(k)))result=await runs.confirmAdoption(scope,body.nonce);
+    else if(body.action==='adoption-cancel'&&typeof body.nonce==='string'&&Object.keys(body).every(k=>['action','nonce'].includes(k)))result=runs.cancelAdoption(scope,body.nonce);
+    else if(body.action==='adoption-recovery-prepare'&&typeof body.id==='string'&&Object.keys(body).every(k=>['action','id'].includes(k)))result=await runs.prepareRecovery(scope,body.id);
+    else if(body.action==='adoption-recovery-confirm'&&typeof body.nonce==='string'&&Object.keys(body).every(k=>['action','nonce'].includes(k)))result=await runs.confirmRecovery(scope,body.nonce);
     else if(body.action==='stop'&&typeof body.id==='string')result=await runs.stop(scope,body.id);
     else throw Error();
     return json(res,200,result);

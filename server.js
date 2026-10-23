@@ -1005,7 +1005,7 @@ const reviewCommentAuthority=createReviewCommentAuthority({registry:runtimeRegis
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
 const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,worktrees,registry:runtimeRegistry,readComments:scope=>reviewCommentStore.read(scope),
   projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
-  contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:()=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||mutationAdmission.busy()),
+  admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),
   protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
 const route = createRouter({
   reviewComments: createReviewCommentRoutes({store:reviewCommentStore,withAuthority:reviewCommentAuthority}),
