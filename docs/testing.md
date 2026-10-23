@@ -29,11 +29,11 @@
 
 ## T3-B 评论持久化验证
 
-T4-C1 在同一个 `test:candidates` 链中增加 `candidate-adoption.cjs` 和 `candidate-adoption-ui.cjs`，
-原候选运行、存储、HTTP 和 Electron 断言保留并扩展。只使用临时 Git fixture。
-正常沙箱专项：`T4C_CHECK_ADOPTION=1 node tests/candidate-electron.cjs`（PowerShell 用命令局部环境变量设置）；
-覆盖实际只读计划、来源冲突、重启、四档窗口和原生 Browser 遮挡。它不证明 C2 写入/崩溃恢复已实现。
-数字、skip、失败记录及具体运行绑定见 [T4-C 验收](T4-C-acceptance.md)。
+T4-C 在同一个 `test:candidates` 链中增加 adoption、writer、write-faults、transactions、apply 及 UI 套件。
+写入全部使用临时 Git fixture。正常沙箱专项为 `T4C_APPLY_ADOPTION=1 node tests/candidate-electron.cjs`（PowerShell 设置局部环境变量）；
+覆盖只读预检、来源冲突、确认后真实写入、index 保留、重启、stale 评论、第二次有效任务和 Stop、四档窗口与 Browser 遮挡。
+故障与恢复目前另由原生 helper/控制器/UI 套件验证，不能把成功链路当作完整故障 Electron 矩阵。
+数字、跳过、失败历史与未验证项见 [T4-C 验收](T4-C-acceptance.md)。
 
 T4-B 的 `npm run test:candidates` 随 `npm test` 纳入五个候选输入/存储/运行/HTTP/UI 套件。
 正常沙箱专项为 `node tests/candidate-electron.cjs`，使用独立临时 Git 与 fake Pi，覆盖审批、真实文件差分、重启、Stop、

@@ -1,4 +1,39 @@
-# T4-C：候选修改安全采纳设计与技术缺口
+# T4-C：候选修改采纳、冲突检测与恢复
+
+C2 续作基线 `092716e24d739a7857ab338604e9084f1b0f0bd3`。以下为当前行为；末尾保留 C1 历史勘察，旧阻塞说明不再代表 C2 状态。
+
+## 当前实现
+
+可信材料和来源冲突规则沿用 C1。`checkCandidateAdoption` 默认只读，仅后端内部 `materialize:true` 返回受限原始字节；Renderer 不提供路径、字节或命令。
+候选须 completed、reliable、完整证据及 Registry 身份有效。来源 HEAD、逻辑 index、全部原文件内容/身份/权限、目录、Git admin/common 和 config 必须与输入一致；任一漂移拒绝整次采纳。
+
+`server/candidate-apply.js` 提供两阶段授权。准备返回 120 秒单次 nonce，绑定完整 scope/owner 和计划。确认先消费 nonce，再复核候选、来源和互斥状态。整次候选仅更新 working tree，不写 index，不执行 Git add/commit 或 Agent。
+`server/candidate-write-native.ps1` 由固定 stdio 协议调用，不引入任意 shell 入口。它仅支持 Windows 本地 NTFS、已有父目录和有界普通文件；修改保持原文件对象，新增使用 CREATE_NEW，删除以 no-replace 原句柄 rename 保留对象。目标和其他来源文件禁止 write/delete sharing，目录链禁止 delete sharing，固定 Git 文件另持有只读句柄。句柄锁定后重跑来源/候选校验，权限冲突保守拒绝。
+
+## 事务及恢复
+
+`server/candidate-transactions.js` 在应用数据目录保存独立的追加日志：计划、来源身份、原文、输出、步骤 intent 和实际结果。第一处源码写入前完成文件 flush/readback；每步先记录 intent，再写入/flush/读回，最后保存 verified。全部输出与逻辑 index 验证通过，并持久记录 applied 后才显示成功。
+执行锁使用独占创建；native active.lock 排除跨进程写者。不按 PID 自动清锁。重启看到未完成 intent、损坏记录或遗留执行锁时拒绝继续自动采纳，保留材料供人工核实。
+多文件不具全局原子性。完整验证步骤之间失败时，可通过单独恢复预检和新 nonce 明确授权恢复；仅恢复身份、当前字节和原来源上下文均符合已记录步骤的对象。发生部分原生写入、结果未知、外部改动、材料损坏或恢复再次失败时，进入 recovery_required/uncertain 并拒绝自动重试。
+
+## 产品边界
+
+普通文件默认数据流写入保留原对象；不恢复缓存 ACL/SACL/ADS/EA，也不宣称元数据的完整事务性。拒绝链接、多链接、特殊属性、mode 变化、新父目录、远程文件系统。删除保留对象必须同卷。
+FlushFileBuffers 与文件 fsync/readback 用于进程崩溃下的保守恢复，不宣称目录 fsync、断电持久性或跨文件原子性。来源中新增非目标对象可能使最终检查失败，失败后仍须按恢复资格判断，不能覆盖外部数据。
+不修改 P33 生产 allowlist。旧 T4-B 历史缺证据时保持可查看、不可采纳。T3 评论和 T4-A 任务合同不变。采纳后旧评论可变 stale，不能用其启动新任务。
+
+## UI 与接线
+
+原候选弹窗依次展示准备采纳、来源与完整文件范围、确认采纳、已验证数量和事务 ID；恢复是另一轮明确授权。迟到响应按原 epoch/owner 丢弃。真实 Diff、原审批、Stop、Specs 和 Browser 原生遮挡机制复用。
+固定 HTTP 动作为 adoption-prepare / adoption-confirm / adoption-cancel / adoption-recovery-prepare / adoption-recovery-confirm；拒绝额外目标字段及 force 动作。C1 内部只读检查保留，旧只读 HTTP action 不再暴露。
+
+验证、剩余缺口及回滚见 [验收记录](T4-C-acceptance.md)。单 Coding Agent，独立功能与安全验收待外部完成。
+
+---
+
+## C1 历史设计记录
+
+### 原 C1 设计
 
 基线：`6db4159f69630f8f33b1dbaa1a073d8612d90af0`（包含已合并 T4-B）。
 开发分支：`codex/t4-c-safe-apply`，独立 Worktree；不跟随 v0.28.0 发布分支。
