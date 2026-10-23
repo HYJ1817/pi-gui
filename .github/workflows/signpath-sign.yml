@@ -39,7 +39,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '24.14.0'
+  NODE_VERSION: '24.22.1'
 
 concurrency:
   # 按**待签的 tag** 分键，不用 github.ref —— 手动触发时 github.ref 是分支，
