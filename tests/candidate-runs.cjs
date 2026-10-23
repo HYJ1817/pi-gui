@@ -25,6 +25,10 @@ const check=async(name,fn)=>{await fn();n++;console.log('ok '+name);};
  try{
   const plan=await controller.prepare(scope,body,{conversationId:'source',sessionId:'native'});
   await check('preflight creates no worktree or Agent',()=>{assert.equal(sends,0);assert(!fs.existsSync(path.join(data,'worktrees')));assert(plan.nonce);});
+  let retired=false;const previousScope={...scope,token:'owner-A',assertCurrent(){if(retired)throw Error('old owner');}};
+  const oldOwnerPlan=await controller.prepare(previousScope,body,{conversationId:'source',sessionId:'native'});retired=true;
+  const realCreate=manager.createCandidate;manager.createCandidate=async()=>{throw Object.assign(Error('old nonce reached create'),{code:'old_nonce_reached_create'});};
+  try{await check('new owner cannot redeem nonce from same persistent scope',()=>assert.rejects(controller.confirm({...scope,token:'owner-B'},oldOwnerPlan.nonce),e=>e.code==='candidate_expired'));}finally{manager.createCandidate=realCreate;}
   const cancelled=await controller.prepare(scope,body,{conversationId:'source',sessionId:'native'});
   await check('cancelled preflight nonce cannot execute later',async()=>{await controller.cancel(scope,cancelled.nonce);await assert.rejects(controller.confirm(scope,cancelled.nonce),e=>e.code==='candidate_expired');assert.equal(sends,0);});
   fs.writeFileSync(path.join(root,'file.txt'),'other\n');

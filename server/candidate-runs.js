@@ -62,7 +62,8 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     return{ok:true,nonce,plan:{head:input.head,inputId:input.contentId,counts:input.counts,source:scope.projectRoot,conversationId:owner?.conversationId||'classic-chat',commentCount:body.selectedIds.length,files:selected.paths,inputFiles:input.files.length,inputBytes:input.bytes,path:prepared.plan.path,warning,task:candidatePrompt({input,selected}),runtimeCount}};
   }
   async function validate(plan,scope){
-    check(scope);if(scope.key!==plan.scope.key||plan.expires<now()||plan.generation!==contextGeneration())candidateFail('candidate_expired');
+    check(scope);if(scope.key!==plan.scope.key||scope.token!==plan.scope.token||plan.expires<now()||plan.generation!==contextGeneration())candidateFail('candidate_expired');
+    check(plan.scope); // Persistent scope equality must not revive a retired owner.
     const snapshot=await captureCandidateInput(scope.projectRoot);check(scope);
     if(snapshot.id!==plan.input.id)candidateFail('candidate_changed');
     const selected=await task(scope,plan.body,plan.owner);if(selected.commentDigest!==plan.selected.commentDigest)candidateFail('candidate_comments_changed');
