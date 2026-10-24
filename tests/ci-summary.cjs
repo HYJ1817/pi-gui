@@ -69,6 +69,16 @@ async function main() {
     input.native = records().native; input.native.results = [];
     assert.equal(summarize(input).allPassed, false);
   });
+  check('every required group rejects failure, cancellation, skipping or missing evidence', () => {
+    for (const group of groups) {
+      for (const state of ['failed', 'cancelled', 'skipped', 'missing']) {
+        const input = records();
+        if (state === 'missing') delete input[group];
+        else { input[group].status = state; input[group].results[0].status = state; }
+        assert.equal(summarize(input).allPassed, false, `${group}: ${state}`);
+      }
+    }
+  });
   for (const field of ['sha', 'runId', 'runAttempt', 'event', 'planDigest']) {
     check(`mismatched ${field} cannot prove this execution`, () => {
       const input = records(); input.ui[field] = 'mismatch';

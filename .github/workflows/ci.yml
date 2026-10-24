@@ -113,10 +113,11 @@ jobs:
         shell: pwsh
         run: node scripts/summarize-ci-results.mjs --input "$env:PI_GUI_CI_RESULTS" --group "$env:TEST_GROUP" --summary "$env:GITHUB_STEP_SUMMARY"
 
-  # 任何测试组失败时，该 job 因 needs: test 而被跳过，不会浪费打包时间。
+  # 打包不消费测试产物，使用独立 runner/checkout/fixture；计划校验后即可
+  # 与测试并行。测试失败仍由最终 gate 拒绝，不能被打包成功覆盖。
   build-check:
     name: Electron build check
-    needs: test
+    needs: test-plan
     runs-on: windows-latest
     timeout-minutes: 40
     steps:

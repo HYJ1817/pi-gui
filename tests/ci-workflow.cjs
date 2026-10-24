@@ -44,7 +44,29 @@ assert.match(ci, /\$tempBase = Join-Path \$env:USERPROFILE 'AppData\\Local\\Temp
 assert.match(ci, /TEMP=\$temp/);
 assert.doesNotMatch(ci, /TEMP=\$[^\n]*RUNNER_TEMP/);
 assert.match(ci, /PI_GUI_CI_RESULTS=\$results/);
-assert.match(ci, /build-check:[\s\S]*?needs:\s*test\b/);
+const buildJob = section(ci, '  build-check:', '  ci-gate:');
+assert.match(buildJob, /needs:\s*test-plan\s*\r?\n/, 'independent packaging should overlap canonical tests after plan validation');
+assert.match(buildJob, /runs-on:\s*windows-latest/);
+assert.doesNotMatch(buildJob, /download-artifact|needs\.test|continue-on-error|if:\s*\$\{\{/);
+for (const command of ['npm ci', 'npm run fixtures', 'npm run build:app -- --rebuild', 'npm run test:app', 'npm run test:exe']) {
+  assert.ok(buildJob.includes(command), `packaging proof missing ${command}`);
+}
+// Exercise scheduling from the actual job dependency, without sleeps, native
+// fixtures or an independent production scheduler/configuration.
+const buildNeeds = /^    needs: ([\w-]+)$/m.exec(buildJob)?.[1];
+const buildReady = results => results[buildNeeds] === 'success';
+assert.equal(buildReady({ 'test-plan': 'success', test: 'in_progress' }), true);
+for (const result of ['failure', 'cancelled', 'skipped', '']) {
+  assert.equal(buildReady({ 'test-plan': result, test: 'success' }), false);
+}
+assert.doesNotMatch(ci, /classify-doc-pr|docs-candidate|paths-ignore:|paths:\s*\[/, 'documentation classification must not reduce production CI');
+for (const job of [section(ci, '  test-plan:', '  test:'), section(ci, '  test:', '  build-check:'), buildJob]) {
+  assert.doesNotMatch(job, /^    if:/m, 'required job must not be conditionally skipped');
+}
+const gateNames = fs.readdirSync(workflowDir).filter(name => /\.ya?ml$/.test(name))
+  .flatMap(name => read(name).split(/\r?\n/).filter(line => /^    name:\s*CI gate\s*$/.test(line)));
+assert.equal(gateNames.length, 1, 'required CI gate name must be unique across workflows');
+console.log('ci-workflow: independent build readiness 5/5; both code/docs retain full CI; gate name unique');
 assert.match(ci, /ci-gate:[\s\S]*?needs:\s*\[test-plan,\s*test,\s*build-check\]/);
 assert.match(ci, /ci-gate:[\s\S]*?if:\s*\$\{\{\s*always\(\)\s*\}\}/);
 assert.match(ci, /PLAN_RESULT:\s*\$\{\{\s*needs\.test-plan\.result\s*\}\}/);
