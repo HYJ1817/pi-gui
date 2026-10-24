@@ -1,0 +1,2317 @@
+{
+  "schemaVersion": 1,
+  "collectedAt": "2026-10-24T05:52:15.431Z",
+  "uniqueRuns": 20,
+  "attempts": 22,
+  "rerunRuns": 2,
+  "firstAttempt": {
+    "successRate": 0.9,
+    "failureRate": 0.05,
+    "cancelledRate": 0.05,
+    "timedOutRate": 0
+  },
+  "wallTime": {
+    "n": 20,
+    "meanMs": 1622050,
+    "medianMs": 1332000,
+    "maxMs": 5096000,
+    "p90Ms": 1778000,
+    "p95Ms": 3336000
+  },
+  "runnerTime": {
+    "n": 20,
+    "meanMs": 4035250,
+    "medianMs": 3616500,
+    "maxMs": 10118000,
+    "p90Ms": 4251000,
+    "p95Ms": 6310000
+  },
+  "groups": {
+    "CI gate": {
+      "n": 22,
+      "meanMs": 3409.090909090909,
+      "medianMs": 3000,
+      "maxMs": 6000,
+      "p90Ms": 5000,
+      "p95Ms": 5000
+    },
+    "Electron build check": {
+      "n": 20,
+      "meanMs": 98150,
+      "medianMs": 94000,
+      "maxMs": 156000,
+      "p90Ms": 124000,
+      "p95Ms": 128000
+    },
+    "Tests (core)": {
+      "n": 22,
+      "meanMs": 389818.1818181818,
+      "medianMs": 398000,
+      "maxMs": 617000,
+      "p90Ms": 587000,
+      "p95Ms": 608000
+    },
+    "Tests (faults)": {
+      "n": 22,
+      "meanMs": 948500,
+      "medianMs": 842500,
+      "maxMs": 3614000,
+      "p90Ms": 1209000,
+      "p95Ms": 1412000
+    },
+    "Tests (native)": {
+      "n": 22,
+      "meanMs": 849545.4545454546,
+      "medianMs": 831000,
+      "maxMs": 1106000,
+      "p90Ms": 1052000,
+      "p95Ms": 1082000
+    },
+    "Tests (security)": {
+      "n": 22,
+      "meanMs": 1195909.0909090908,
+      "medianMs": 1117000,
+      "maxMs": 1739000,
+      "p90Ms": 1635000,
+      "p95Ms": 1739000
+    },
+    "Tests (ui)": {
+      "n": 22,
+      "meanMs": 159045.45454545456,
+      "medianMs": 157000,
+      "maxMs": 213000,
+      "p90Ms": 197000,
+      "p95Ms": 213000
+    },
+    "Validate complete test plan": {
+      "n": 22,
+      "meanMs": 32954.545454545456,
+      "medianMs": 32000,
+      "maxMs": 50000,
+      "p90Ms": 47000,
+      "p95Ms": 48000
+    }
+  },
+  "firstAttemptGroups": {
+    "CI gate": {
+      "n": 20,
+      "meanMs": 3400,
+      "medianMs": 3000,
+      "maxMs": 6000,
+      "p90Ms": 5000,
+      "p95Ms": 5000
+    },
+    "Electron build check": {
+      "n": 18,
+      "meanMs": 96555.55555555556,
+      "medianMs": 92500,
+      "maxMs": 156000,
+      "p90Ms": null,
+      "p95Ms": null
+    },
+    "Tests (core)": {
+      "n": 20,
+      "meanMs": 393150,
+      "medianMs": 398000,
+      "maxMs": 617000,
+      "p90Ms": 587000,
+      "p95Ms": 608000
+    },
+    "Tests (faults)": {
+      "n": 20,
+      "meanMs": 958900,
+      "medianMs": 842500,
+      "maxMs": 3614000,
+      "p90Ms": 1209000,
+      "p95Ms": 1412000
+    },
+    "Tests (native)": {
+      "n": 20,
+      "meanMs": 863350,
+      "medianMs": 842000,
+      "maxMs": 1106000,
+      "p90Ms": 1052000,
+      "p95Ms": 1082000
+    },
+    "Tests (security)": {
+      "n": 20,
+      "meanMs": 1174850,
+      "medianMs": 1117000,
+      "maxMs": 1739000,
+      "p90Ms": 1546000,
+      "p95Ms": 1635000
+    },
+    "Tests (ui)": {
+      "n": 20,
+      "meanMs": 155950,
+      "medianMs": 153500,
+      "maxMs": 213000,
+      "p90Ms": 168000,
+      "p95Ms": 197000
+    },
+    "Validate complete test plan": {
+      "n": 20,
+      "meanMs": 32000,
+      "medianMs": 31500,
+      "maxMs": 50000,
+      "p90Ms": 47000,
+      "p95Ms": 48000
+    }
+  },
+  "groupOutcomes": {
+    "CI gate": {
+      "success": 20,
+      "failure": 2,
+      "cancelled": 0,
+      "skipped": 0,
+      "timed_out": 0,
+      "unknown": 0
+    },
+    "Electron build check": {
+      "success": 20,
+      "failure": 0,
+      "cancelled": 0,
+      "skipped": 2,
+      "timed_out": 0,
+      "unknown": 0
+    },
+    "Tests (core)": {
+      "success": 22,
+      "failure": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "timed_out": 0,
+      "unknown": 0
+    },
+    "Tests (faults)": {
+      "success": 20,
+      "failure": 1,
+      "cancelled": 1,
+      "skipped": 0,
+      "timed_out": 0,
+      "unknown": 0
+    },
+    "Tests (native)": {
+      "success": 22,
+      "failure": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "timed_out": 0,
+      "unknown": 0
+    },
+    "Tests (security)": {
+      "success": 22,
+      "failure": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "timed_out": 0,
+      "unknown": 0
+    },
+    "Tests (ui)": {
+      "success": 22,
+      "failure": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "timed_out": 0,
+      "unknown": 0
+    },
+    "Validate complete test plan": {
+      "success": 22,
+      "failure": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "timed_out": 0,
+      "unknown": 0
+    }
+  },
+  "quantilePolicy": "P90/P95 unavailable below 20 observations; empirical nearest rank otherwise; descriptive only, no stable-tail claim",
+  "timingPolicy": "wall: first attempt run_started_at to latest observed job completion; runner: sum non-skipped job start/end spans across attempts; retryGap: observed inter-attempt gaps; queue unavailable; skipped job duration unavailable",
+  "runs": [
+    {
+      "id": 40065343782,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40065343782",
+      "sha": "e97ecf36f5bc2babdcd9785f9efbf9324ff34326",
+      "event": "push",
+      "createdAt": "2026-10-24T05:12:24Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-24T05:12:24Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120787297527,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-24T05:12:28Z",
+              "completedAt": "2026-10-24T05:12:49Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 21000
+            },
+            {
+              "id": 120787378077,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-24T05:12:53Z",
+              "completedAt": "2026-10-24T05:22:40Z",
+              "conclusion": "success",
+              "testExecutionMs": 549000,
+              "durationMs": 587000
+            },
+            {
+              "id": 120787378104,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-24T05:12:52Z",
+              "completedAt": "2026-10-24T05:28:47Z",
+              "conclusion": "success",
+              "testExecutionMs": 922000,
+              "durationMs": 955000
+            },
+            {
+              "id": 120787378110,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-24T05:12:52Z",
+              "completedAt": "2026-10-24T05:15:20Z",
+              "conclusion": "success",
+              "testExecutionMs": 108000,
+              "durationMs": 148000
+            },
+            {
+              "id": 120787378130,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-24T05:12:52Z",
+              "completedAt": "2026-10-24T05:22:37Z",
+              "conclusion": "success",
+              "testExecutionMs": 560000,
+              "durationMs": 585000
+            },
+            {
+              "id": 120787378135,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-24T05:12:53Z",
+              "completedAt": "2026-10-24T05:31:35Z",
+              "conclusion": "success",
+              "testExecutionMs": 1085000,
+              "durationMs": 1122000
+            },
+            {
+              "id": 120791042578,
+              "name": "Electron build check",
+              "startedAt": "2026-10-24T05:31:38Z",
+              "completedAt": "2026-10-24T05:33:16Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 98000
+            },
+            {
+              "id": 120791377554,
+              "name": "CI gate",
+              "startedAt": "2026-10-24T05:33:19Z",
+              "completedAt": "2026-10-24T05:33:21Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 2000
+            }
+          ],
+          "completedAt": "2026-10-24T05:33:21Z",
+          "wallTimeMs": 1257000,
+          "runnerTimeMs": 3518000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1257000,
+      "runnerTimeMs": 3518000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 40063960141,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40063960141",
+      "sha": "c0409f3ed477c746d502fce432c7d853cdc4aadf",
+      "event": "pull_request",
+      "createdAt": "2026-10-24T04:51:01Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-24T04:51:01Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120783169075,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-24T04:51:03Z",
+              "completedAt": "2026-10-24T04:51:28Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 25000
+            },
+            {
+              "id": 120783254649,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-24T04:51:30Z",
+              "completedAt": "2026-10-24T05:06:58Z",
+              "conclusion": "success",
+              "testExecutionMs": 895000,
+              "durationMs": 928000
+            },
+            {
+              "id": 120783254655,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-24T04:51:30Z",
+              "completedAt": "2026-10-24T05:09:02Z",
+              "conclusion": "success",
+              "testExecutionMs": 1011000,
+              "durationMs": 1052000
+            },
+            {
+              "id": 120783254671,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-24T04:51:30Z",
+              "completedAt": "2026-10-24T05:07:14Z",
+              "conclusion": "success",
+              "testExecutionMs": 909000,
+              "durationMs": 944000
+            },
+            {
+              "id": 120783254672,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-24T04:51:30Z",
+              "completedAt": "2026-10-24T04:53:44Z",
+              "conclusion": "success",
+              "testExecutionMs": 101000,
+              "durationMs": 134000
+            },
+            {
+              "id": 120783254695,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-24T04:51:31Z",
+              "completedAt": "2026-10-24T05:01:39Z",
+              "conclusion": "success",
+              "testExecutionMs": 574000,
+              "durationMs": 608000
+            },
+            {
+              "id": 120786640237,
+              "name": "Electron build check",
+              "startedAt": "2026-10-24T05:09:04Z",
+              "completedAt": "2026-10-24T05:10:36Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 92000
+            },
+            {
+              "id": 120786945577,
+              "name": "CI gate",
+              "startedAt": "2026-10-24T05:10:39Z",
+              "completedAt": "2026-10-24T05:10:44Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 5000
+            }
+          ],
+          "completedAt": "2026-10-24T05:10:44Z",
+          "wallTimeMs": 1183000,
+          "runnerTimeMs": 3788000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1183000,
+      "runnerTimeMs": 3788000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 40061061150,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40061061150",
+      "sha": "f314ae7794705b44c6b7ca65d67311ae9eabadd0",
+      "event": "push",
+      "createdAt": "2026-10-24T04:07:00Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-24T04:07:00Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120774458222,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-24T04:07:03Z",
+              "completedAt": "2026-10-24T04:07:53Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 50000
+            },
+            {
+              "id": 120774638736,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-24T04:07:57Z",
+              "completedAt": "2026-10-24T04:24:59Z",
+              "conclusion": "success",
+              "testExecutionMs": 987000,
+              "durationMs": 1022000
+            },
+            {
+              "id": 120774638759,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-24T04:07:56Z",
+              "completedAt": "2026-10-24T04:20:12Z",
+              "conclusion": "success",
+              "testExecutionMs": 702000,
+              "durationMs": 736000
+            },
+            {
+              "id": 120774638767,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-24T04:07:56Z",
+              "completedAt": "2026-10-24T04:23:54Z",
+              "conclusion": "success",
+              "testExecutionMs": 921000,
+              "durationMs": 958000
+            },
+            {
+              "id": 120774638778,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-24T04:07:56Z",
+              "completedAt": "2026-10-24T04:18:13Z",
+              "conclusion": "success",
+              "testExecutionMs": 575000,
+              "durationMs": 617000
+            },
+            {
+              "id": 120774638781,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-24T04:08:11Z",
+              "completedAt": "2026-10-24T04:10:41Z",
+              "conclusion": "success",
+              "testExecutionMs": 111000,
+              "durationMs": 150000
+            },
+            {
+              "id": 120778061788,
+              "name": "Electron build check",
+              "startedAt": "2026-10-24T04:25:02Z",
+              "completedAt": "2026-10-24T04:26:35Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 93000
+            },
+            {
+              "id": 120778378075,
+              "name": "CI gate",
+              "startedAt": "2026-10-24T04:26:38Z",
+              "completedAt": "2026-10-24T04:26:40Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 2000
+            }
+          ],
+          "completedAt": "2026-10-24T04:26:40Z",
+          "wallTimeMs": 1180000,
+          "runnerTimeMs": 3628000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1180000,
+      "runnerTimeMs": 3628000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 40060949475,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40060949475",
+      "sha": "7a0f6d5a358bfb480a784ce99605c343666362f9",
+      "event": "pull_request",
+      "createdAt": "2026-10-24T04:05:19Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-24T04:05:19Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120774109768,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-24T04:05:22Z",
+              "completedAt": "2026-10-24T04:05:49Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 27000
+            },
+            {
+              "id": 120774212493,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-24T04:05:52Z",
+              "completedAt": "2026-10-24T04:08:09Z",
+              "conclusion": "success",
+              "testExecutionMs": 105000,
+              "durationMs": 137000
+            },
+            {
+              "id": 120774212526,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-24T04:05:52Z",
+              "completedAt": "2026-10-24T04:12:02Z",
+              "conclusion": "success",
+              "testExecutionMs": 338000,
+              "durationMs": 370000
+            },
+            {
+              "id": 120774212547,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-24T04:05:52Z",
+              "completedAt": "2026-10-24T04:18:50Z",
+              "conclusion": "success",
+              "testExecutionMs": 744000,
+              "durationMs": 778000
+            },
+            {
+              "id": 120774212548,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-24T04:05:52Z",
+              "completedAt": "2026-10-24T04:20:46Z",
+              "conclusion": "success",
+              "testExecutionMs": 855000,
+              "durationMs": 894000
+            },
+            {
+              "id": 120774212559,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-24T04:05:52Z",
+              "completedAt": "2026-10-24T04:20:04Z",
+              "conclusion": "success",
+              "testExecutionMs": 816000,
+              "durationMs": 852000
+            },
+            {
+              "id": 120777232605,
+              "name": "Electron build check",
+              "startedAt": "2026-10-24T04:20:49Z",
+              "completedAt": "2026-10-24T04:22:18Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 89000
+            },
+            {
+              "id": 120777534906,
+              "name": "CI gate",
+              "startedAt": "2026-10-24T04:22:20Z",
+              "completedAt": "2026-10-24T04:22:23Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-24T04:22:23Z",
+          "wallTimeMs": 1024000,
+          "runnerTimeMs": 3150000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1024000,
+      "runnerTimeMs": 3150000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 40059313709,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40059313709",
+      "sha": "18a995a21acd94ecc80c384004eeaf56288b7efd",
+      "event": "pull_request",
+      "createdAt": "2026-10-24T03:41:12Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-24T03:41:12Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120769161433,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-24T03:41:15Z",
+              "completedAt": "2026-10-24T03:41:35Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 20000
+            },
+            {
+              "id": 120769235906,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-24T03:41:38Z",
+              "completedAt": "2026-10-24T04:00:10Z",
+              "conclusion": "success",
+              "testExecutionMs": 1072000,
+              "durationMs": 1112000
+            },
+            {
+              "id": 120769235929,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-24T03:41:37Z",
+              "completedAt": "2026-10-24T03:44:17Z",
+              "conclusion": "success",
+              "testExecutionMs": 125000,
+              "durationMs": 160000
+            },
+            {
+              "id": 120769235957,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-24T03:41:38Z",
+              "completedAt": "2026-10-24T03:51:25Z",
+              "conclusion": "success",
+              "testExecutionMs": 553000,
+              "durationMs": 587000
+            },
+            {
+              "id": 120769235970,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-24T03:41:38Z",
+              "completedAt": "2026-10-24T03:57:11Z",
+              "conclusion": "success",
+              "testExecutionMs": 894000,
+              "durationMs": 933000
+            },
+            {
+              "id": 120769235979,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-24T03:41:38Z",
+              "completedAt": "2026-10-24T03:59:09Z",
+              "conclusion": "success",
+              "testExecutionMs": 1012000,
+              "durationMs": 1051000
+            },
+            {
+              "id": 120773003879,
+              "name": "Electron build check",
+              "startedAt": "2026-10-24T04:00:13Z",
+              "completedAt": "2026-10-24T04:01:41Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 88000
+            },
+            {
+              "id": 120773344197,
+              "name": "CI gate",
+              "startedAt": "2026-10-24T04:01:43Z",
+              "completedAt": "2026-10-24T04:01:46Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-24T04:01:46Z",
+          "wallTimeMs": 1234000,
+          "runnerTimeMs": 3954000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1234000,
+      "runnerTimeMs": 3954000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39976770700,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39976770700",
+      "sha": "fbbaec7ab7998b5cb7cf08bb185b3287121194e1",
+      "event": "push",
+      "createdAt": "2026-10-23T15:15:52Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-23T15:15:52Z",
+          "conclusion": "failure",
+          "jobs": [
+            {
+              "id": 120493283891,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-23T15:15:56Z",
+              "completedAt": "2026-10-23T15:16:43Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 47000
+            },
+            {
+              "id": 120493699299,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-23T15:16:46Z",
+              "completedAt": "2026-10-23T15:30:36Z",
+              "conclusion": "success",
+              "testExecutionMs": 775000,
+              "durationMs": 830000
+            },
+            {
+              "id": 120493699318,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-23T15:16:45Z",
+              "completedAt": "2026-10-23T15:19:32Z",
+              "conclusion": "success",
+              "testExecutionMs": 132000,
+              "durationMs": 167000
+            },
+            {
+              "id": 120493699397,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-23T15:16:46Z",
+              "completedAt": "2026-10-23T15:34:40Z",
+              "conclusion": "success",
+              "testExecutionMs": 1033000,
+              "durationMs": 1074000
+            },
+            {
+              "id": 120493699409,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-23T15:16:46Z",
+              "completedAt": "2026-10-23T15:17:43Z",
+              "conclusion": "failure",
+              "testExecutionMs": 22000,
+              "durationMs": 57000
+            },
+            {
+              "id": 120493699541,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-23T15:16:46Z",
+              "completedAt": "2026-10-23T15:24:55Z",
+              "conclusion": "success",
+              "testExecutionMs": 427000,
+              "durationMs": 489000
+            },
+            {
+              "id": 120502610689,
+              "name": "CI gate",
+              "startedAt": "2026-10-23T15:34:43Z",
+              "completedAt": "2026-10-23T15:34:46Z",
+              "conclusion": "failure",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            },
+            {
+              "id": 120502612489,
+              "name": "Electron build check",
+              "startedAt": "2026-10-23T15:34:40Z",
+              "completedAt": "2026-10-23T15:34:40Z",
+              "conclusion": "skipped",
+              "testExecutionMs": null,
+              "durationMs": null
+            }
+          ],
+          "completedAt": "2026-10-23T15:34:46Z",
+          "wallTimeMs": 1134000,
+          "runnerTimeMs": 2667000,
+          "cause": "unknown"
+        },
+        {
+          "attempt": 2,
+          "startedAt": "2026-10-23T15:53:59Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120512142822,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-23T15:54:04Z",
+              "completedAt": "2026-10-23T16:09:40Z",
+              "conclusion": "success",
+              "testExecutionMs": 888000,
+              "durationMs": 936000
+            },
+            {
+              "id": 120512144256,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-23T15:16:46Z",
+              "completedAt": "2026-10-23T15:34:40Z",
+              "conclusion": "success",
+              "testExecutionMs": 1033000,
+              "durationMs": 1074000
+            },
+            {
+              "id": 120512188303,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-23T15:16:46Z",
+              "completedAt": "2026-10-23T15:24:55Z",
+              "conclusion": "success",
+              "testExecutionMs": 427000,
+              "durationMs": 489000
+            },
+            {
+              "id": 120512192090,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-23T15:16:46Z",
+              "completedAt": "2026-10-23T15:30:36Z",
+              "conclusion": "success",
+              "testExecutionMs": 775000,
+              "durationMs": 830000
+            },
+            {
+              "id": 120512214894,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-23T15:16:45Z",
+              "completedAt": "2026-10-23T15:19:32Z",
+              "conclusion": "success",
+              "testExecutionMs": 132000,
+              "durationMs": 167000
+            },
+            {
+              "id": 120512216463,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-23T15:15:56Z",
+              "completedAt": "2026-10-23T15:16:43Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 47000
+            },
+            {
+              "id": 120519844422,
+              "name": "Electron build check",
+              "startedAt": "2026-10-23T16:09:44Z",
+              "completedAt": "2026-10-23T16:11:21Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 97000
+            },
+            {
+              "id": 120520667013,
+              "name": "CI gate",
+              "startedAt": "2026-10-23T16:11:25Z",
+              "completedAt": "2026-10-23T16:11:28Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-23T16:11:28Z",
+          "wallTimeMs": 1049000,
+          "runnerTimeMs": 3643000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 3336000,
+      "runnerTimeMs": 6310000,
+      "retryGapMs": 1153000,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39972192836,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39972192836",
+      "sha": "d018743e73128cee682d055be610f6317fd0571e",
+      "event": "pull_request",
+      "createdAt": "2026-10-23T14:44:20Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-23T14:44:20Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120477485078,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-23T14:44:24Z",
+              "completedAt": "2026-10-23T14:44:56Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 32000
+            },
+            {
+              "id": 120477781364,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-23T14:44:59Z",
+              "completedAt": "2026-10-23T15:02:22Z",
+              "conclusion": "success",
+              "testExecutionMs": 1006000,
+              "durationMs": 1043000
+            },
+            {
+              "id": 120477781394,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-23T14:44:59Z",
+              "completedAt": "2026-10-23T14:58:49Z",
+              "conclusion": "success",
+              "testExecutionMs": 790000,
+              "durationMs": 830000
+            },
+            {
+              "id": 120477781514,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-23T14:45:00Z",
+              "completedAt": "2026-10-23T14:53:20Z",
+              "conclusion": "success",
+              "testExecutionMs": 338000,
+              "durationMs": 500000
+            },
+            {
+              "id": 120477781585,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-23T14:44:59Z",
+              "completedAt": "2026-10-23T14:47:33Z",
+              "conclusion": "success",
+              "testExecutionMs": 124000,
+              "durationMs": 154000
+            },
+            {
+              "id": 120477781670,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-23T14:45:01Z",
+              "completedAt": "2026-10-23T15:00:44Z",
+              "conclusion": "success",
+              "testExecutionMs": 905000,
+              "durationMs": 943000
+            },
+            {
+              "id": 120486457177,
+              "name": "Electron build check",
+              "startedAt": "2026-10-23T15:02:25Z",
+              "completedAt": "2026-10-23T15:04:06Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 101000
+            },
+            {
+              "id": 120487338550,
+              "name": "CI gate",
+              "startedAt": "2026-10-23T15:04:09Z",
+              "completedAt": "2026-10-23T15:04:11Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 2000
+            }
+          ],
+          "completedAt": "2026-10-23T15:04:11Z",
+          "wallTimeMs": 1191000,
+          "runnerTimeMs": 3605000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1191000,
+      "runnerTimeMs": 3605000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39925918451,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39925918451",
+      "sha": "f542aece54a06eef1cc2d13bf4b93531a47b3997",
+      "event": "push",
+      "createdAt": "2026-10-23T08:37:07Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-23T08:37:07Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120322131045,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-23T08:37:10Z",
+              "completedAt": "2026-10-23T08:37:42Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 32000
+            },
+            {
+              "id": 120322350543,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-23T08:37:45Z",
+              "completedAt": "2026-10-23T08:56:51Z",
+              "conclusion": "success",
+              "testExecutionMs": 1105000,
+              "durationMs": 1146000
+            },
+            {
+              "id": 120322350577,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-23T08:37:45Z",
+              "completedAt": "2026-10-23T08:50:54Z",
+              "conclusion": "success",
+              "testExecutionMs": 750000,
+              "durationMs": 789000
+            },
+            {
+              "id": 120322350693,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-23T08:37:45Z",
+              "completedAt": "2026-10-23T08:44:51Z",
+              "conclusion": "success",
+              "testExecutionMs": 365000,
+              "durationMs": 426000
+            },
+            {
+              "id": 120322350709,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-23T08:37:45Z",
+              "completedAt": "2026-10-23T08:39:55Z",
+              "conclusion": "success",
+              "testExecutionMs": 101000,
+              "durationMs": 130000
+            },
+            {
+              "id": 120322350734,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-23T08:37:46Z",
+              "completedAt": "2026-10-23T08:49:23Z",
+              "conclusion": "success",
+              "testExecutionMs": 660000,
+              "durationMs": 697000
+            },
+            {
+              "id": 120329951382,
+              "name": "Electron build check",
+              "startedAt": "2026-10-23T08:56:54Z",
+              "completedAt": "2026-10-23T08:58:25Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 91000
+            },
+            {
+              "id": 120330564390,
+              "name": "CI gate",
+              "startedAt": "2026-10-23T08:58:28Z",
+              "completedAt": "2026-10-23T08:58:34Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 6000
+            }
+          ],
+          "completedAt": "2026-10-23T08:58:34Z",
+          "wallTimeMs": 1287000,
+          "runnerTimeMs": 3317000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1287000,
+      "runnerTimeMs": 3317000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39922972162,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39922972162",
+      "sha": "98df3763ead6a2e619fd30c56fa11eb892e6fae9",
+      "event": "pull_request",
+      "createdAt": "2026-10-23T08:12:00Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-23T08:12:00Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120312396400,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-23T08:12:03Z",
+              "completedAt": "2026-10-23T08:12:34Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 31000
+            },
+            {
+              "id": 120312612452,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-23T08:12:37Z",
+              "completedAt": "2026-10-23T08:15:54Z",
+              "conclusion": "success",
+              "testExecutionMs": 114000,
+              "durationMs": 197000
+            },
+            {
+              "id": 120312612471,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-23T08:12:36Z",
+              "completedAt": "2026-10-23T08:19:47Z",
+              "conclusion": "success",
+              "testExecutionMs": 388000,
+              "durationMs": 431000
+            },
+            {
+              "id": 120312612548,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-23T08:12:36Z",
+              "completedAt": "2026-10-23T08:32:45Z",
+              "conclusion": "success",
+              "testExecutionMs": 1164000,
+              "durationMs": 1209000
+            },
+            {
+              "id": 120312612698,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-23T08:12:36Z",
+              "completedAt": "2026-10-23T08:26:28Z",
+              "conclusion": "success",
+              "testExecutionMs": 798000,
+              "durationMs": 832000
+            },
+            {
+              "id": 120312612802,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-23T08:12:36Z",
+              "completedAt": "2026-10-23T08:26:17Z",
+              "conclusion": "success",
+              "testExecutionMs": 775000,
+              "durationMs": 821000
+            },
+            {
+              "id": 120320416712,
+              "name": "Electron build check",
+              "startedAt": "2026-10-23T08:32:48Z",
+              "completedAt": "2026-10-23T08:34:52Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 124000
+            },
+            {
+              "id": 120321245030,
+              "name": "CI gate",
+              "startedAt": "2026-10-23T08:34:55Z",
+              "completedAt": "2026-10-23T08:34:58Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-23T08:34:58Z",
+          "wallTimeMs": 1378000,
+          "runnerTimeMs": 3648000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1378000,
+      "runnerTimeMs": 3648000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39915263689,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39915263689",
+      "sha": "6db4159f69630f8f33b1dbaa1a073d8612d90af0",
+      "event": "push",
+      "createdAt": "2026-10-23T07:02:47Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-23T07:02:47Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120287306013,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-23T07:02:51Z",
+              "completedAt": "2026-10-23T07:03:15Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 24000
+            },
+            {
+              "id": 120287460830,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-23T07:03:17Z",
+              "completedAt": "2026-10-23T07:15:01Z",
+              "conclusion": "success",
+              "testExecutionMs": 665000,
+              "durationMs": 704000
+            },
+            {
+              "id": 120287460853,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-23T07:03:17Z",
+              "completedAt": "2026-10-23T07:16:37Z",
+              "conclusion": "success",
+              "testExecutionMs": 764000,
+              "durationMs": 800000
+            },
+            {
+              "id": 120287460894,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-23T07:03:17Z",
+              "completedAt": "2026-10-23T07:14:04Z",
+              "conclusion": "success",
+              "testExecutionMs": 612000,
+              "durationMs": 647000
+            },
+            {
+              "id": 120287460912,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-23T07:03:17Z",
+              "completedAt": "2026-10-23T07:06:02Z",
+              "conclusion": "success",
+              "testExecutionMs": 112000,
+              "durationMs": 165000
+            },
+            {
+              "id": 120287460930,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-23T07:03:18Z",
+              "completedAt": "2026-10-23T07:10:36Z",
+              "conclusion": "success",
+              "testExecutionMs": 396000,
+              "durationMs": 438000
+            },
+            {
+              "id": 120291700446,
+              "name": "Electron build check",
+              "startedAt": "2026-10-23T07:16:40Z",
+              "completedAt": "2026-10-23T07:18:04Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 84000
+            },
+            {
+              "id": 120292145438,
+              "name": "CI gate",
+              "startedAt": "2026-10-23T07:18:07Z",
+              "completedAt": "2026-10-23T07:18:10Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-23T07:18:10Z",
+          "wallTimeMs": 923000,
+          "runnerTimeMs": 2865000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 923000,
+      "runnerTimeMs": 2865000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39912965495,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39912965495",
+      "sha": "9704fa055701fa3400299d33f5a054903f45a09b",
+      "event": "pull_request",
+      "createdAt": "2026-10-23T06:40:44Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-23T06:40:44Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 120279949009,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-23T06:40:50Z",
+              "completedAt": "2026-10-23T06:41:22Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 32000
+            },
+            {
+              "id": 120280155760,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-23T06:41:25Z",
+              "completedAt": "2026-10-23T06:48:51Z",
+              "conclusion": "success",
+              "testExecutionMs": 404000,
+              "durationMs": 446000
+            },
+            {
+              "id": 120280155774,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-23T06:41:24Z",
+              "completedAt": "2026-10-23T06:57:40Z",
+              "conclusion": "success",
+              "testExecutionMs": 944000,
+              "durationMs": 976000
+            },
+            {
+              "id": 120280155779,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-23T06:41:25Z",
+              "completedAt": "2026-10-23T06:58:05Z",
+              "conclusion": "success",
+              "testExecutionMs": 961000,
+              "durationMs": 1000000
+            },
+            {
+              "id": 120280155783,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-23T06:41:25Z",
+              "completedAt": "2026-10-23T06:43:35Z",
+              "conclusion": "success",
+              "testExecutionMs": 100000,
+              "durationMs": 130000
+            },
+            {
+              "id": 120280155865,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-23T06:41:25Z",
+              "completedAt": "2026-10-23T06:59:27Z",
+              "conclusion": "success",
+              "testExecutionMs": 1041000,
+              "durationMs": 1082000
+            },
+            {
+              "id": 120286139711,
+              "name": "Electron build check",
+              "startedAt": "2026-10-23T06:59:30Z",
+              "completedAt": "2026-10-23T07:00:38Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 68000
+            },
+            {
+              "id": 120286556985,
+              "name": "CI gate",
+              "startedAt": "2026-10-23T07:00:41Z",
+              "completedAt": "2026-10-23T07:00:44Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-23T07:00:44Z",
+          "wallTimeMs": 1200000,
+          "runnerTimeMs": 3737000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1200000,
+      "runnerTimeMs": 3737000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39823004520,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39823004520",
+      "sha": "03a223d7ac5f69f33a359e51f95905bfb07253b8",
+      "event": "push",
+      "createdAt": "2026-10-22T17:28:32Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T17:28:32Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119978890469,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T17:28:36Z",
+              "completedAt": "2026-10-22T17:29:07Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 31000
+            },
+            {
+              "id": 119979184948,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T17:29:10Z",
+              "completedAt": "2026-10-22T17:44:39Z",
+              "conclusion": "success",
+              "testExecutionMs": 892000,
+              "durationMs": 929000
+            },
+            {
+              "id": 119979185075,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T17:29:10Z",
+              "completedAt": "2026-10-22T17:33:52Z",
+              "conclusion": "success",
+              "testExecutionMs": 242000,
+              "durationMs": 282000
+            },
+            {
+              "id": 119979185081,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T17:29:10Z",
+              "completedAt": "2026-10-22T17:31:58Z",
+              "conclusion": "success",
+              "testExecutionMs": 126000,
+              "durationMs": 168000
+            },
+            {
+              "id": 119979185125,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T17:29:10Z",
+              "completedAt": "2026-10-22T17:44:16Z",
+              "conclusion": "success",
+              "testExecutionMs": 876000,
+              "durationMs": 906000
+            },
+            {
+              "id": 119979185493,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T17:29:11Z",
+              "completedAt": "2026-10-22T17:43:53Z",
+              "conclusion": "success",
+              "testExecutionMs": 837000,
+              "durationMs": 882000
+            },
+            {
+              "id": 119987058803,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T17:44:42Z",
+              "completedAt": "2026-10-22T17:46:17Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 95000
+            },
+            {
+              "id": 119987880196,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T17:46:21Z",
+              "completedAt": "2026-10-22T17:46:25Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 4000
+            }
+          ],
+          "completedAt": "2026-10-22T17:46:25Z",
+          "wallTimeMs": 1073000,
+          "runnerTimeMs": 3297000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1073000,
+      "runnerTimeMs": 3297000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39817859759,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39817859759",
+      "sha": "139f5de617af60f4fbf86760372b286186f6faed",
+      "event": "pull_request",
+      "createdAt": "2026-10-22T16:53:26Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T16:53:26Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119960966740,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T16:53:30Z",
+              "completedAt": "2026-10-22T16:54:02Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 32000
+            },
+            {
+              "id": 119961254369,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T16:54:04Z",
+              "completedAt": "2026-10-22T17:05:43Z",
+              "conclusion": "success",
+              "testExecutionMs": 669000,
+              "durationMs": 699000
+            },
+            {
+              "id": 119961254390,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T16:54:04Z",
+              "completedAt": "2026-10-22T16:58:59Z",
+              "conclusion": "success",
+              "testExecutionMs": 255000,
+              "durationMs": 295000
+            },
+            {
+              "id": 119961254408,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T16:54:05Z",
+              "completedAt": "2026-10-22T17:21:20Z",
+              "conclusion": "success",
+              "testExecutionMs": 1588000,
+              "durationMs": 1635000
+            },
+            {
+              "id": 119961254484,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T16:54:05Z",
+              "completedAt": "2026-10-22T16:56:48Z",
+              "conclusion": "success",
+              "testExecutionMs": 122000,
+              "durationMs": 163000
+            },
+            {
+              "id": 119961254565,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T16:54:05Z",
+              "completedAt": "2026-10-22T17:07:10Z",
+              "conclusion": "success",
+              "testExecutionMs": 742000,
+              "durationMs": 785000
+            },
+            {
+              "id": 119975055126,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T17:21:23Z",
+              "completedAt": "2026-10-22T17:22:58Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 95000
+            },
+            {
+              "id": 119975980629,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T17:23:02Z",
+              "completedAt": "2026-10-22T17:23:04Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 2000
+            }
+          ],
+          "completedAt": "2026-10-22T17:23:04Z",
+          "wallTimeMs": 1778000,
+          "runnerTimeMs": 3706000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1778000,
+      "runnerTimeMs": 3706000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39796797262,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39796797262",
+      "sha": "062c87c155984ba9bddab52cac59234300fb498d",
+      "event": "push",
+      "createdAt": "2026-10-22T14:34:13Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T14:34:13Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119885936014,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T14:34:17Z",
+              "completedAt": "2026-10-22T14:34:46Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 29000
+            },
+            {
+              "id": 119886227284,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T14:34:48Z",
+              "completedAt": "2026-10-22T14:47:39Z",
+              "conclusion": "success",
+              "testExecutionMs": 740000,
+              "durationMs": 771000
+            },
+            {
+              "id": 119886227318,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T14:34:48Z",
+              "completedAt": "2026-10-22T14:58:38Z",
+              "conclusion": "success",
+              "testExecutionMs": 1388000,
+              "durationMs": 1430000
+            },
+            {
+              "id": 119886227334,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T14:34:49Z",
+              "completedAt": "2026-10-22T14:58:21Z",
+              "conclusion": "success",
+              "testExecutionMs": 1338000,
+              "durationMs": 1412000
+            },
+            {
+              "id": 119886227429,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T14:34:48Z",
+              "completedAt": "2026-10-22T14:39:36Z",
+              "conclusion": "success",
+              "testExecutionMs": 245000,
+              "durationMs": 288000
+            },
+            {
+              "id": 119886329260,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T14:35:00Z",
+              "completedAt": "2026-10-22T14:37:42Z",
+              "conclusion": "success",
+              "testExecutionMs": 124000,
+              "durationMs": 162000
+            },
+            {
+              "id": 119899374526,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T14:58:42Z",
+              "completedAt": "2026-10-22T15:01:18Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 156000
+            },
+            {
+              "id": 119900859964,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T15:01:21Z",
+              "completedAt": "2026-10-22T15:01:24Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-22T15:01:24Z",
+          "wallTimeMs": 1631000,
+          "runnerTimeMs": 4251000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1631000,
+      "runnerTimeMs": 4251000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39789593782,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39789593782",
+      "sha": "40ddc94386f0509f58da9df8efbd5216c93fce79",
+      "event": "pull_request",
+      "createdAt": "2026-10-22T13:44:55Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T13:44:55Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119861753244,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T13:44:59Z",
+              "completedAt": "2026-10-22T13:45:31Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 32000
+            },
+            {
+              "id": 119862081508,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T13:45:34Z",
+              "completedAt": "2026-10-22T13:58:46Z",
+              "conclusion": "success",
+              "testExecutionMs": 741000,
+              "durationMs": 792000
+            },
+            {
+              "id": 119862081543,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T13:45:34Z",
+              "completedAt": "2026-10-22T14:11:20Z",
+              "conclusion": "success",
+              "testExecutionMs": 1500000,
+              "durationMs": 1546000
+            },
+            {
+              "id": 119862081562,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T13:45:34Z",
+              "completedAt": "2026-10-22T14:02:22Z",
+              "conclusion": "success",
+              "testExecutionMs": 962000,
+              "durationMs": 1008000
+            },
+            {
+              "id": 119862081625,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T13:45:34Z",
+              "completedAt": "2026-10-22T13:50:20Z",
+              "conclusion": "success",
+              "testExecutionMs": 250000,
+              "durationMs": 286000
+            },
+            {
+              "id": 119862081773,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T13:45:34Z",
+              "completedAt": "2026-10-22T13:48:02Z",
+              "conclusion": "success",
+              "testExecutionMs": 107000,
+              "durationMs": 148000
+            },
+            {
+              "id": 119875169336,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T14:11:24Z",
+              "completedAt": "2026-10-22T14:12:53Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 89000
+            },
+            {
+              "id": 119875896098,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T14:12:56Z",
+              "completedAt": "2026-10-22T14:13:00Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 4000
+            }
+          ],
+          "completedAt": "2026-10-22T14:13:00Z",
+          "wallTimeMs": 1685000,
+          "runnerTimeMs": 3905000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1685000,
+      "runnerTimeMs": 3905000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39773851353,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39773851353",
+      "sha": "8ae15efa51ad4f7bac907b60b22e06448308929a",
+      "event": "push",
+      "createdAt": "2026-10-22T11:52:20Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T11:52:20Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119807761450,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T11:52:23Z",
+              "completedAt": "2026-10-22T11:52:47Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 24000
+            },
+            {
+              "id": 119807952174,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T11:52:50Z",
+              "completedAt": "2026-10-22T11:55:05Z",
+              "conclusion": "success",
+              "testExecutionMs": 102000,
+              "durationMs": 135000
+            },
+            {
+              "id": 119807952187,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T11:52:50Z",
+              "completedAt": "2026-10-22T12:13:12Z",
+              "conclusion": "success",
+              "testExecutionMs": 1184000,
+              "durationMs": 1222000
+            },
+            {
+              "id": 119807952197,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T11:52:50Z",
+              "completedAt": "2026-10-22T11:56:35Z",
+              "conclusion": "success",
+              "testExecutionMs": 195000,
+              "durationMs": 225000
+            },
+            {
+              "id": 119807952385,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T11:52:52Z",
+              "completedAt": "2026-10-22T12:11:18Z",
+              "conclusion": "success",
+              "testExecutionMs": 1063000,
+              "durationMs": 1106000
+            },
+            {
+              "id": 119807952399,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T11:52:50Z",
+              "completedAt": "2026-10-22T12:03:38Z",
+              "conclusion": "success",
+              "testExecutionMs": 616000,
+              "durationMs": 648000
+            },
+            {
+              "id": 119816848148,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T12:13:17Z",
+              "completedAt": "2026-10-22T12:15:09Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 112000
+            },
+            {
+              "id": 119817725023,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T12:15:14Z",
+              "completedAt": "2026-10-22T12:15:17Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-22T12:15:17Z",
+          "wallTimeMs": 1377000,
+          "runnerTimeMs": 3475000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1377000,
+      "runnerTimeMs": 3475000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39769635804,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39769635804",
+      "sha": "09146173b3ab455cbdca32ccd148b57068aa3584",
+      "event": "pull_request",
+      "createdAt": "2026-10-22T11:18:54Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T11:18:54Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119793639190,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T11:18:57Z",
+              "completedAt": "2026-10-22T11:19:31Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 34000
+            },
+            {
+              "id": 119793891959,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T11:19:33Z",
+              "completedAt": "2026-10-22T11:30:48Z",
+              "conclusion": "success",
+              "testExecutionMs": 642000,
+              "durationMs": 675000
+            },
+            {
+              "id": 119793891967,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T11:19:33Z",
+              "completedAt": "2026-10-22T11:35:15Z",
+              "conclusion": "success",
+              "testExecutionMs": 904000,
+              "durationMs": 942000
+            },
+            {
+              "id": 119793892056,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T11:19:33Z",
+              "completedAt": "2026-10-22T11:42:12Z",
+              "conclusion": "success",
+              "testExecutionMs": 1318000,
+              "durationMs": 1359000
+            },
+            {
+              "id": 119793892082,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T11:19:33Z",
+              "completedAt": "2026-10-22T11:24:31Z",
+              "conclusion": "success",
+              "testExecutionMs": 254000,
+              "durationMs": 298000
+            },
+            {
+              "id": 119793892087,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T11:19:34Z",
+              "completedAt": "2026-10-22T11:22:18Z",
+              "conclusion": "success",
+              "testExecutionMs": 124000,
+              "durationMs": 164000
+            },
+            {
+              "id": 119803484297,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T11:42:15Z",
+              "completedAt": "2026-10-22T11:43:44Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 89000
+            },
+            {
+              "id": 119804133624,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T11:43:47Z",
+              "completedAt": "2026-10-22T11:43:52Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 5000
+            }
+          ],
+          "completedAt": "2026-10-22T11:43:52Z",
+          "wallTimeMs": 1498000,
+          "runnerTimeMs": 3566000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1498000,
+      "runnerTimeMs": 3566000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39746424693,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39746424693",
+      "sha": "d81b3548ad6c93efdba36ee203f37c90f28e7867",
+      "event": "push",
+      "createdAt": "2026-10-22T08:15:39Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T08:15:39Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119715884278,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T08:15:42Z",
+              "completedAt": "2026-10-22T08:16:13Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 31000
+            },
+            {
+              "id": 119716113489,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T08:16:16Z",
+              "completedAt": "2026-10-22T08:29:27Z",
+              "conclusion": "success",
+              "testExecutionMs": 739000,
+              "durationMs": 791000
+            },
+            {
+              "id": 119716113561,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T08:16:16Z",
+              "completedAt": "2026-10-22T08:18:37Z",
+              "conclusion": "success",
+              "testExecutionMs": 105000,
+              "durationMs": 141000
+            },
+            {
+              "id": 119716113623,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T08:16:16Z",
+              "completedAt": "2026-10-22T08:27:31Z",
+              "conclusion": "success",
+              "testExecutionMs": 642000,
+              "durationMs": 675000
+            },
+            {
+              "id": 119716113758,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T08:16:16Z",
+              "completedAt": "2026-10-22T08:39:17Z",
+              "conclusion": "success",
+              "testExecutionMs": 1336000,
+              "durationMs": 1381000
+            },
+            {
+              "id": 119716113848,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T08:16:16Z",
+              "completedAt": "2026-10-22T08:20:22Z",
+              "conclusion": "success",
+              "testExecutionMs": 211000,
+              "durationMs": 246000
+            },
+            {
+              "id": 119725690697,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T08:39:22Z",
+              "completedAt": "2026-10-22T08:40:36Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 74000
+            },
+            {
+              "id": 119726246999,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T08:40:39Z",
+              "completedAt": "2026-10-22T08:40:42Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 3000
+            }
+          ],
+          "completedAt": "2026-10-22T08:40:42Z",
+          "wallTimeMs": 1503000,
+          "runnerTimeMs": 3342000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1503000,
+      "runnerTimeMs": 3342000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39742649727,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39742649727",
+      "sha": "1be506d5bba4d942ae3b3a291f4ce1af165bb2f6",
+      "event": "pull_request",
+      "createdAt": "2026-10-22T07:44:48Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-22T07:44:48Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119703407756,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-22T07:44:51Z",
+              "completedAt": "2026-10-22T07:45:39Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 48000
+            },
+            {
+              "id": 119703761160,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-22T07:45:42Z",
+              "completedAt": "2026-10-22T07:49:22Z",
+              "conclusion": "success",
+              "testExecutionMs": 187000,
+              "durationMs": 220000
+            },
+            {
+              "id": 119703761175,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-22T07:45:42Z",
+              "completedAt": "2026-10-22T08:09:43Z",
+              "conclusion": "success",
+              "testExecutionMs": 1400000,
+              "durationMs": 1441000
+            },
+            {
+              "id": 119703761198,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-22T07:45:42Z",
+              "completedAt": "2026-10-22T07:55:37Z",
+              "conclusion": "success",
+              "testExecutionMs": 564000,
+              "durationMs": 595000
+            },
+            {
+              "id": 119703761205,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-22T07:45:42Z",
+              "completedAt": "2026-10-22T08:01:46Z",
+              "conclusion": "success",
+              "testExecutionMs": 922000,
+              "durationMs": 964000
+            },
+            {
+              "id": 119703761350,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-22T07:45:42Z",
+              "completedAt": "2026-10-22T07:48:15Z",
+              "conclusion": "success",
+              "testExecutionMs": 113000,
+              "durationMs": 153000
+            },
+            {
+              "id": 119713435652,
+              "name": "Electron build check",
+              "startedAt": "2026-10-22T08:09:48Z",
+              "completedAt": "2026-10-22T08:11:28Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 100000
+            },
+            {
+              "id": 119714165421,
+              "name": "CI gate",
+              "startedAt": "2026-10-22T08:11:31Z",
+              "completedAt": "2026-10-22T08:11:35Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 4000
+            }
+          ],
+          "completedAt": "2026-10-22T08:11:35Z",
+          "wallTimeMs": 1607000,
+          "runnerTimeMs": 3525000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 1607000,
+      "runnerTimeMs": 3525000,
+      "retryGapMs": 0,
+      "queueWaitMs": null
+    },
+    {
+      "id": 39643761771,
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/39643761771",
+      "sha": "578d8c9daa6c5c3334ce7d6e74bdddcf00b3c8bf",
+      "event": "push",
+      "createdAt": "2026-10-21T17:26:08Z",
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-10-21T17:26:08Z",
+          "conclusion": "cancelled",
+          "jobs": [
+            {
+              "id": 119373813581,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-21T17:26:11Z",
+              "completedAt": "2026-10-21T17:26:49Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 38000
+            },
+            {
+              "id": 119374161115,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-21T17:26:52Z",
+              "completedAt": "2026-10-21T18:27:06Z",
+              "conclusion": "cancelled",
+              "testExecutionMs": 3521000,
+              "durationMs": 3614000
+            },
+            {
+              "id": 119374161296,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:30:26Z",
+              "conclusion": "success",
+              "testExecutionMs": 123000,
+              "durationMs": 213000
+            },
+            {
+              "id": 119374161501,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:36:46Z",
+              "conclusion": "success",
+              "testExecutionMs": 559000,
+              "durationMs": 593000
+            },
+            {
+              "id": 119374161527,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:55:52Z",
+              "conclusion": "success",
+              "testExecutionMs": 1680000,
+              "durationMs": 1739000
+            },
+            {
+              "id": 119374161599,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:30:37Z",
+              "conclusion": "success",
+              "testExecutionMs": 185000,
+              "durationMs": 224000
+            },
+            {
+              "id": 119405305186,
+              "name": "CI gate",
+              "startedAt": "2026-10-21T18:27:10Z",
+              "completedAt": "2026-10-21T18:27:15Z",
+              "conclusion": "failure",
+              "testExecutionMs": null,
+              "durationMs": 5000
+            },
+            {
+              "id": 119405306107,
+              "name": "Electron build check",
+              "startedAt": "2026-10-21T18:27:07Z",
+              "completedAt": "2026-10-21T18:27:06Z",
+              "conclusion": "skipped",
+              "testExecutionMs": null,
+              "durationMs": null
+            }
+          ],
+          "completedAt": "2026-10-21T18:27:15Z",
+          "wallTimeMs": 3667000,
+          "runnerTimeMs": 6426000,
+          "cause": "cancelled_source_unknown"
+        },
+        {
+          "attempt": 2,
+          "startedAt": "2026-10-21T18:36:06Z",
+          "conclusion": "success",
+          "jobs": [
+            {
+              "id": 119410020088,
+              "name": "Validate complete test plan",
+              "startedAt": "2026-10-21T17:26:11Z",
+              "completedAt": "2026-10-21T17:26:49Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 38000
+            },
+            {
+              "id": 119410020272,
+              "name": "Tests (faults)",
+              "startedAt": "2026-10-21T18:36:11Z",
+              "completedAt": "2026-10-21T18:48:44Z",
+              "conclusion": "success",
+              "testExecutionMs": 720000,
+              "durationMs": 753000
+            },
+            {
+              "id": 119410021934,
+              "name": "Tests (ui)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:30:26Z",
+              "conclusion": "success",
+              "testExecutionMs": 123000,
+              "durationMs": 213000
+            },
+            {
+              "id": 119410022211,
+              "name": "Tests (security)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:55:52Z",
+              "conclusion": "success",
+              "testExecutionMs": 1680000,
+              "durationMs": 1739000
+            },
+            {
+              "id": 119410022415,
+              "name": "Tests (core)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:30:37Z",
+              "conclusion": "success",
+              "testExecutionMs": 185000,
+              "durationMs": 224000
+            },
+            {
+              "id": 119410022429,
+              "name": "Tests (native)",
+              "startedAt": "2026-10-21T17:26:53Z",
+              "completedAt": "2026-10-21T17:36:46Z",
+              "conclusion": "success",
+              "testExecutionMs": 559000,
+              "durationMs": 593000
+            },
+            {
+              "id": 119416547486,
+              "name": "Electron build check",
+              "startedAt": "2026-10-21T18:48:48Z",
+              "completedAt": "2026-10-21T18:50:56Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 128000
+            },
+            {
+              "id": 119417692626,
+              "name": "CI gate",
+              "startedAt": "2026-10-21T18:51:00Z",
+              "completedAt": "2026-10-21T18:51:04Z",
+              "conclusion": "success",
+              "testExecutionMs": null,
+              "durationMs": 4000
+            }
+          ],
+          "completedAt": "2026-10-21T18:51:04Z",
+          "wallTimeMs": 898000,
+          "runnerTimeMs": 3692000,
+          "cause": null
+        }
+      ],
+      "wallTimeMs": 5096000,
+      "runnerTimeMs": 10118000,
+      "retryGapMs": 531000,
+      "queueWaitMs": null
+    }
+  ]
+}

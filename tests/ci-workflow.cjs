@@ -53,6 +53,27 @@ assert.match(ci, /BUILD_RESULT:\s*\$\{\{\s*needs\.build-check\.result\s*\}\}/);
 assert.match(ci, /foreach \(\$entry in \$checks\.GetEnumerator\(\)\)[\s\S]*?if \(\$entry\.Value -ne 'success'\)/);
 assert.doesNotMatch(ci, /continue-on-error:\s*true/);
 
+assert.match(ci, /Summarize group evidence[\s\S]*?if:\s*\$\{\{\s*always\(\)\s*\}\}[\s\S]*?summarize-ci-results\.mjs/);
+assert.match(ci, /actions\/download-artifact@v8[\s\S]*?pattern: test-results-\*/);
+assert.match(ci, /summarize-ci-results\.mjs[^\n]*--require-complete/);
+assert.match(ci, /retention-days: 7/);
+assert.doesNotMatch(ci, /paths-ignore:/);
+assert.match(ci, /GITHUB_STEP_SUMMARY/);
+
+// Execute the actual gate body; source guards alone do not prove fail-closed.
+const { spawnSync } = require('node:child_process');
+const gateBody = ci.slice(ci.indexOf('      - name: Require every upstream job to succeed'));
+const gateScript = gateBody.slice(gateBody.indexOf('        run: |') + '        run: |'.length)
+  .split('\n').map(line => line.replace(/^          /, '')).join('\n');
+for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
+  for (const field of ['PLAN_RESULT', 'TEST_RESULT', 'BUILD_RESULT']) {
+    const env = { ...process.env, PLAN_RESULT: 'success', TEST_RESULT: 'success', BUILD_RESULT: 'success', [field]: result };
+    const tested = spawnSync(process.platform === 'win32' ? 'powershell.exe' : 'pwsh', ['-NoProfile', '-NonInteractive', '-Command', gateScript], { env, encoding: 'utf8', windowsHide: true });
+    assert.equal(tested.status === 0, result === 'success', `${field}=${result}: ${tested.stderr}`);
+  }
+}
+console.log('ci-workflow: actual gate fail-closed matrix 15/15');
+
 assert.match(release, /npm run release:check -- --tag=.*--with-installer/);
 assert.deepEqual(permissionLines(section(release, 'permissions:', 'env:')), ['contents: read'], 'workflow default must be read-only');
 const verifyJob = section(release, '  verify:', '  publish:');

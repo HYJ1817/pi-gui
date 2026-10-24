@@ -27,6 +27,31 @@
 
 以上不改变 CI 触发、测试清单、gate 或发布脚本，也不授予联网模型调用、推送、合并、tag 或发布权限。
 
+## G2 CI 证据与离线桌面 smoke
+
+`scripts/run-test-group.mjs` 仍是唯一分组执行器；每组内顺序、TEMP 隔离、五组及失败短路保持不变。
+`--results` 输出 schema v2：初始化、每个叶命令开始/结束均通过同目录临时文件、flush、rename 保存。
+记录 GitHub SHA/run/attempt/event、Node/OS/arch、完整有序计划摘要及 pending/running/passed/failed/cancelled/interrupted/skipped 状态。
+没有结果不等于成功；强杀留下 running 时，只能解释为未完成。可处理信号尽力存 cancelled，无法保证硬终止后的 artifact 上传。
+
+`scripts/ci-results.mjs` 可只读解析 v1 的数字 status 为 exitCode，但 v1 缺少 run attempt 和计划身份，不能作本轮完整 CI 证明。
+v2 的 sha 为 `GITHUB_SHA`（PR 可能为合成 merge SHA）；历史 Actions API 的 head_sha 另列，不能混为同一身份。
+`scripts/summarize-ci-results.mjs --input <artifact目录> --json <报告路径> --summary <Markdown路径> --require-complete`
+按当前 package 的 canonical 计划核对五组 artifact、命令顺序、SHA、run、attempt 和计划摘要；缺失、错误身份或未完成记录返回非零。
+每组诊断 summary 不改变测试退出码；最终 CI gate 仍检查所有既有上游成功，新增完整证据检查也不得放行缺失结果。
+组 artifact 和汇总保留 7 天，只上传结构化 JSON；不归档凭据、用户会话或原始模型 payload。
+
+定向回归：`npm run test:ci`，包含持久化/中断、汇总和历史统计 fixture；新增三套件已注册在 canonical，旧安全命令及组别保留。
+历史性能采样与口径见 [G2 性能基线](G2-ci-baseline.md)，它只读已有 Actions，不触发大量新运行。
+
+`npm run test:electron-smoke` 是独立 Windows 正常沙箱专项：生产 server/renderer/preload、既有 Browser 控制器及假 Pi，
+临时 Git/userData、loopback 页面、1200/760px 几何、模态遮挡、销毁重开及按创建身份核对进程退出。没有外部 CDP 调试端口。
+通过 `G2_SMOKE_OUTPUT` 指定证据目录；父窗口与原生页面分别截图，不合成像素。该入口不支持静默关闭沙箱；
+不支持的平台或启动环境阻塞必须非零退出并保留未验证结论。本机共享 Electron 路径异常时，可显式指定同版本、同摘要的
+私有离线 `ELECTRON_OVERRIDE_DIST_PATH`，但不能因此声称默认路径或其他环境也已通过。
+当前仅取得本地正常沙箱证据，尚未证明 GitHub Windows runner 稳定性，故保留专项入口，暂不扩展 CI 必需步骤或仓库设置。
+本轮证据与待远端验证项见 [G2 验收材料](G2-acceptance.md)；历史 CI 不替代 G2 新代码的完整证明。
+
 ## T3-B 评论持久化验证
 
 T4-C 在同一个 `test:candidates` 链中增加 adoption、writer、write-faults、transactions、apply、recovery-errors 及 UI 套件。

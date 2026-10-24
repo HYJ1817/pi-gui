@@ -44,6 +44,11 @@ async function main() {
     'approvals.cjs': 'core',
     'browser.cjs': 'core',
     'logging-leaks.cjs': 'core',
+    'candidate-writer.cjs': 'native',
+    'candidate-apply.cjs': 'native',
+    'candidate-write-faults.cjs': 'faults',
+    'candidate-transactions.cjs': 'faults',
+    'candidate-recovery-errors.cjs': 'faults',
   };
   for (const [name, group] of Object.entries(expected)) {
     assert.equal(groupOf(name), group, `${name} assigned to the wrong CI group`);
@@ -87,8 +92,11 @@ async function main() {
       '--group', 'core', '--results', resultFile], { cwd: fixture, encoding: 'utf8', windowsHide: true });
     assert.equal(failed.status, 1, failed.stderr);
     const recorded = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
-    assert.equal(recorded.results.length, 1, 'failure must stop the group');
-    assert.equal(recorded.results[0].status, 17, 'preserve the failing child exit code');
+    assert.equal(recorded.results.length, 2, 'the full plan must remain visible after failure');
+    assert.equal(recorded.results.filter(row => row.startedAt).length, 1, 'failure must stop the group');
+    assert.equal(recorded.results[0].exitCode, 17, 'preserve the failing child exit code');
+    assert.equal(recorded.results[0].status, 'failed');
+    assert.equal(recorded.results[1].status, 'pending');
     assert.equal(fs.existsSync(path.join(fixture, 'unexpected-execution')), false);
   } finally {
     fs.rmSync(fixture, { recursive: true, force: true });
