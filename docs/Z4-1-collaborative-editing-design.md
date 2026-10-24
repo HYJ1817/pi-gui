@@ -5,7 +5,7 @@
 
 - 基线：origin/main `c6a44b2`（含 Z1 合并），分支 `codex/z4-1-collab-design`，独立 Worktree。
 - 与 Z3-A（`codex/z3-interactive-viz`）完全隔离：未读取其 Worktree 内容，未假设其接口已稳定。
-- 运行原型测试：`node prototype/z4-1-collab/collab-test.mjs`（35/35 通过，Node 24，无新增依赖；
+- 运行原型测试：`node prototype/z4-1-collab/collab-test.mjs`（49/49 通过，Node 24，无新增依赖；
   复核方法与逐项对照见 `prototype/z4-1-collab/README.md`）。
 
 **验证状态标注约定**：本文凡标注〔已验证〕的语义均有原型测试证据；标注〔设计约束〕的
@@ -180,7 +180,7 @@ docs/work-surfaces.md、docs/security.md，并核对了相关源码模块。关�
 | node.update | 节点存在；label/x/y 至少改一项 | 就地更新 |
 | node.remove | 节点存在且**无连线引用**（先删边） | 删除节点 |
 | edge.add | 两端节点存在；非自环；同向不重复；id 未占用；连线数未达上限 | 新增连线 |
-| edge.update | 连线存在 | 更新 label |
+| edge.update | 连线存在；label 为 string 或 **null**（null = 清除文字，撤销需要） | 更新或清除 label |
 | edge.remove | 连线存在 | 删除连线 |
 
 ### 5.3 建议（proposal）
@@ -219,7 +219,7 @@ appliedOps 是**有界防重放窗口**（最近 500 条，FIFO 淘汰），**�
 
 | 情形 | 判定 | 处理 |
 |---|---|---|
-| 窗口内，同 opId 同内容 | 内容指纹（type + baseRevision + actor + params）一致 | `duplicate`：幂等无操作，文档与 revision 不变 |
+| 窗口内，同 opId 同内容 | 内容指纹（type + baseRevision + actor + params，**递归键排序的规范化序列化**，与属性插入顺序无关）一致 | `duplicate`：幂等无操作，文档与 revision 不变 |
 | 窗口内，同 opId 不同内容 | 指纹不一致（含 baseRevision 不同——被重定基的操作视为新语义） | `opid-reuse`：拒绝执行，文档不变 |
 | 窗口外（opId 已被 FIFO 淘汰） | 日志不再认识该 opId | **opId 语义唯一性不再保证**；重放由 revision 单调性兜底——旧操作的 baseRevision 永远追不上单调前进的 revision，必然 `stale-base` |
 
@@ -278,12 +278,13 @@ v1 不做 CRDT/OT：冲突一律显式失败并保留双方材料，由人决定
 运行结果（Node v24.22.1，Windows，在本 Worktree 内实测）：
 
 ```
-Z4-1 原型数据层测试：35 通过，0 失败（共 35 项）
+Z4-1 原型数据层测试：49 通过，0 失败（共 49 项）
 ```
 
 独立复核方法、文件清单、真实输出与逐项对照表见
-`prototype/z4-1-collab/README.md`。断言总数 35 = 初版 33 项 + 审查收尾新增的
-4c（同 opId 不同内容拒绝）与 4d（幂等窗口外重放兜底）。
+`prototype/z4-1-collab/README.md`。断言总数 49 = 初版 33 项 + 审查收尾 2 项
+（4c/4d）+ 最终验收修复 14 项（13a–d 批次预览/撤销、14a–d 建议幂等身份、
+15a–e 反序列化上限、16 指纹键序无关）。
 
 对任务 §七/E 与 §九 12 项验收点的覆盖：
 
@@ -301,6 +302,10 @@ Z4-1 原型数据层测试：35 通过，0 失败（共 35 项）
 | 10 超大数据/非法引用 | 10a（201st 节点 limit）、10b（51 操作建议 limit）、10c（2MiB 守卫） |
 | 11 旧 owner/会话/文档 | 11a（document-mismatch）、11b（缺 sessionId）、11c（切会话后旧建议拒）、11d（agent 伪装 user 拒）、11e（重复绑定 fail closed） |
 | 12 可序列化可复现 | 12a（serialize∘deserialize 幂等）、12b（同操作序列产出同字节）、12c（反序列化后续编辑） |
+| 13 同批「先新增、再修改」 | 13a（节点：预览不异常、撤销/重做精确恢复）、13b（无 label 连线加文字：撤销恢复无此连线）、13c（既有无 label 连线两次改文字：撤销恢复为无 label）、13d（带 label 连线改文字：撤销恢复原 label） |
+| 14 建议幂等身份 | 14a（伪造 sessionId 拒）、14b（换 documentId 拒）、14c（非法 schema 拒）、14d（同会话同内容仍幂等） |
+| 15 反序列化上限 | 15a（节点数）、15b（连线数）、15c（连线 ID 重复/同向重复）、15d（输入体积）、15e（含 label 合法文档往返兼容） |
+| 16 指纹键序无关 | 16（同语义不同属性顺序 → duplicate） |
 
 **诚实边界**：以上全部是数据层验证。未做任何真实 GUI 集成、未验证排版或交互，
 不应据此宣称「编辑器已完成」。
@@ -363,13 +368,21 @@ Z4 适配器只转换数据，不要求 Z3-A 改协议。
 
 ## 11. 结论：已验证代码 / 设计约束 / 待实现能力
 
-### 已验证代码（有原型测试证据，35/35）
+### 已验证代码（有原型测试证据，49/49）
 
 - 文档协议 v1 语义：schema 严格校验（含未知字段/未知版本拒绝）、闭集操作、
   revision 冲突检测（stale-base 带冲突明细）、事务化批量应用（失败原文档逐字节不变）、
   建议 schema 与结构校验、预览（只读）/接受（显式 expectedRevision 重验）/拒绝（零状态）。
-- 幂等语义及**明确范围**：窗口内同 ID 同内容重放 → duplicate 无操作；同 ID 不同内容 →
-  opid-reuse 拒绝；窗口外重放 → revision 单调性兜底 stale-base（§5.5，测试 4a/4c/4d）。
+- 批次语义：同批「先新增对象、再修改同一对象」的预览摘要、接受、撤销、重做全程无异常，
+  撤销/重做以精确图结构断言验证（测试 13a–13d）；逆操作按批次逐步模拟的
+  真实修改前状态生成；`edge.update` 支持 `label: null` 使无 label 连线可逆。
+- 建议幂等的身份边界：归属（documentId/schemaVersion/sessionId）与操作 schema
+  校验先于幂等快捷路径，伪造会话/换文档/非法 schema 的重复接受明确拒绝（测试 14a–14d）。
+- 反序列化上限：节点/连线数量、连线 ID 唯一、同向重复拒绝、输入体积上限，
+  合法文档往返兼容（测试 15a–15e）。
+- 幂等语义及**明确范围**：窗口内同 ID 同内容重放 → duplicate 无操作（指纹与
+  属性键序无关，测试 16）；同 ID 不同内容 → opid-reuse 拒绝；窗口外重放 →
+  revision 单调性兜底 stale-base（§5.5，测试 4a/4c/4d）。
 - 撤销/重做：接受的建议与用户操作共用撤销栈；空栈报错且不变；新编辑清空重做栈。
 - 归属拒绝：document-mismatch、缺 sessionId、切会话后旧建议拒绝、agent 伪装 user 拒、
   重复绑定 fail closed（测试 11a–11e）。
