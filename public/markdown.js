@@ -23,6 +23,7 @@
  * 已经把主要收益拿到了；渲染完整度上的差距用增量补齐更划算。 */
 
 import { esc } from './util.js';
+import { parseVizData } from './viz-schema.js';
 
 /* ---------- 链接安全 ---------- */
 
@@ -87,6 +88,32 @@ function diffBody(code) {
 }
 
 function codeBlock(lang, code) {
+  if (lang === 'pi-gui-viz') {
+    const res = parseVizData(code);
+    if (res.ok) {
+      const typeBadge = res.data.type === 'line' ? '折线图' : '柱状图';
+      const metaText = `${res.data.series.length} 个系列 · ${res.data.labels.length} 个数据点`;
+      const svgIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>';
+      return `<div class="viz-card" data-viz-card>` +
+        `<div class="viz-card-header">` +
+        `<div class="viz-card-icon" aria-hidden="true">${svgIcon}</div>` +
+        `<div class="viz-card-info">` +
+        `<div class="viz-card-title">${esc(res.data.title)}</div>` +
+        `<div class="viz-card-meta">` +
+        `<span class="viz-badge">${typeBadge}</span>` +
+        `<span class="viz-meta-text">${metaText}</span>` +
+        `</div>` +
+        `</div>` +
+        `<div class="viz-card-actions">` +
+        `<button type="button" class="btn tiny viz-open-btn" data-viz-open aria-label="打开「${esc(res.data.title)}」可视化图表">打开可视化</button>` +
+        `<button type="button" class="btn tiny viz-toggle-raw" data-viz-toggle-raw aria-expanded="false" title="切换显示原始数据">JSON</button>` +
+        `</div>` +
+        `</div>` +
+        `<pre class="code viz-raw-code" data-lang="pi-gui-viz" hidden><code>${esc(code)}</code></pre>` +
+        `</div>`;
+    }
+  }
+
   const body = lang === 'diff' ? diffBody(code) : esc(code);
   // 语言标签走 data-lang + CSS ::before，不额外包一层 DOM ——
   // 保持 <pre class="code"> 的结构不变，样式与既有断言都不用动。
