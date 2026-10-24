@@ -43,6 +43,8 @@
 
 本导航只提供阅读路径，不赋予推送、合并、修改仓库设置或发布权限；授权以 [AGENTS.md](../AGENTS.md) 为准。
 
+下一正式版本的发布准备、资格限制与分阶段验证记录见 [G4 发布验收](G4-acceptance.md)；正式步骤仍唯一依 [releasing.md](releasing.md)。
+
 Diff 区间评论的当前语义与 v1 兼容见 [T3-C 功能说明](git-changes.md#十多行区间评论t3-c)，
 [T3-C 验收](T3-C-acceptance.md) 仅证明对应提交；不替代后续提交的验证。
 

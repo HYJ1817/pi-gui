@@ -1,0 +1,20 @@
+{
+  "checks": 49,
+  "failed": 0,
+  "skip": 0,
+  "sandbox": true,
+  "screenshots": [
+    "01-preflight.png",
+    "02-approval.png",
+    "03-real-diff.png",
+    "t4c-source-apply-preflight.png",
+    "04-specs-diff.png",
+    "05-browser-diff.png",
+    "t4c-browser-apply-preflight.png",
+    "t4c-source-conflict.png",
+    "t4c-applied.png",
+    "t4c-post-apply-external.png",
+    "t4c-stale-source-comment.png"
+  ],
+  "electron": "44.4.3"
+}
