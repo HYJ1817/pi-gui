@@ -454,6 +454,215 @@ check('12c 反序列化后的文档可直接继续编辑', () => {
   assert.equal(r.ok, true);
 });
 
+// 13. 同批「先新增、再修改」的预览、接受、撤销、重做 ---------------------------
+const graphOf = (doc) => JSON.parse(serialize(doc)).graph;
+
+check('13a 先新增节点再修改它：预览不异常，撤销恢复原状，重做恢复结果', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  doc = bindSession(doc, 'sess-1');
+  const st = createEditorState();
+  const base = doc.revision;
+  const original = serialize(doc);
+  const prop = createProposal({
+    documentId: 'doc-demo', baseRevision: base, sessionId: 'sess-1',
+    ops: [
+      { opId: 'a1', type: 'node.add', baseRevision: base, params: { id: 'n4', label: '缓存层', x: 200, y: 120 } },
+      { opId: 'a2', type: 'node.update', baseRevision: base, params: { id: 'n4', label: '缓存层 L2', x: 260 } },
+    ],
+  });
+  const pv = previewProposalReadonly(doc, prop); // 修复前这里抛 TypeError
+  assert.equal(pv.ok, true);
+  assert.match(pv.preview.diff[1].summary, /修改节点 n4：文字「缓存层」→「缓存层 L2」/);
+  const acc = acceptProposal(doc, st, prop, { expectedRevision: doc.revision });
+  assert.equal(acc.ok, true);
+  doc = acc.doc;
+  const afterAccept = serialize(doc);
+  const u = undo(doc, st);
+  assert.equal(u.ok, true);
+  assert.deepEqual(graphOf(u.doc), graphOf(JSON.parse(original))); // 精确恢复原状
+  const r = redo(u.doc, st);
+  assert.equal(r.ok, true);
+  assert.deepEqual(graphOf(r.doc), graphOf(JSON.parse(afterAccept))); // 精确恢复修改结果
+});
+
+check('13b 先新增无 label 连线再改 label：撤销恢复无此连线，重做恢复带 label', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  doc = bindSession(doc, 'sess-1');
+  const st = createEditorState();
+  const base = doc.revision;
+  const original = serialize(doc);
+  const prop = createProposal({
+    documentId: 'doc-demo', baseRevision: base, sessionId: 'sess-1',
+    ops: [
+      { opId: 'a1', type: 'edge.add', baseRevision: base, params: { id: 'e4', from: 'n1', to: 'n3' } },
+      { opId: 'a2', type: 'edge.update', baseRevision: base, params: { id: 'e4', label: '回执' } },
+    ],
+  });
+  const pv = previewProposalReadonly(doc, prop); // 修复前抛 TypeError
+  assert.equal(pv.ok, true);
+  assert.match(pv.preview.diff[1].summary, /修改连线 e4 文字「」→「回执」/);
+  const acc = acceptProposal(doc, st, prop, { expectedRevision: doc.revision });
+  assert.equal(acc.ok, true);
+  doc = acc.doc;
+  const afterAccept = serialize(doc);
+  const u = undo(doc, st);
+  assert.equal(u.ok, true);
+  assert.deepEqual(graphOf(u.doc), graphOf(JSON.parse(original)));
+  const r = redo(u.doc, st);
+  assert.equal(r.ok, true);
+  assert.deepEqual(graphOf(r.doc), graphOf(JSON.parse(afterAccept)));
+  assert.equal(graphOf(JSON.parse(afterAccept)).edges.find((e) => e.id === 'e4').label, '回执');
+});
+
+check('13c 既有无 label 连线两次改 label 后撤销：恢复为无 label（而非报错）', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  const st = createEditorState();
+  const original = serialize(doc);
+  const r1 = commitOperations(doc, st, [
+    userOp('u1', 'edge.update', doc.revision, { id: 'e1', label: '回执' }),
+    userOp('u2', 'edge.update', doc.revision, { id: 'e1', label: '确认' }),
+  ]);
+  assert.equal(r1.ok, true);
+  doc = r1.doc;
+  const u = undo(doc, st);
+  assert.equal(u.ok, true);
+  const restored = graphOf(u.doc).edges.find((e) => e.id === 'e1');
+  assert.equal('label' in restored, false); // 精确回到「无 label」状态
+  assert.deepEqual(graphOf(u.doc), graphOf(JSON.parse(original)));
+  const r = redo(u.doc, st);
+  assert.equal(r.ok, true);
+  assert.equal(graphOf(r.doc).edges.find((e) => e.id === 'e1').label, '确认');
+});
+
+check('13d 同批先新增连线（带 label）再改 label：撤销恢复带原 label 的连线', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  const st = createEditorState();
+  const original = serialize(doc);
+  const r1 = commitOperations(doc, st, [
+    userOp('u1', 'edge.add', doc.revision, { id: 'e4', from: 'n1', to: 'n3', label: '初审' }),
+    userOp('u2', 'edge.update', doc.revision, { id: 'e4', label: '终审' }),
+  ]);
+  assert.equal(r1.ok, true);
+  doc = r1.doc;
+  const u = undo(doc, st);
+  assert.equal(u.ok, true);
+  assert.deepEqual(graphOf(u.doc), graphOf(JSON.parse(original)));
+  const r = redo(u.doc, st);
+  assert.equal(r.ok, true);
+  assert.equal(graphOf(r.doc).edges.find((e) => e.id === 'e4').label, '终审');
+});
+
+// 14. 建议幂等路径不得绕过身份验证 ---------------------------------------------
+function appliedProposal(doc, sessionId) {
+  const bound = bindSession(doc, sessionId);
+  const prop = createProposal({
+    documentId: doc.documentId, baseRevision: doc.revision, sessionId,
+    ops: [{ opId: 'a1', type: 'node.update', baseRevision: doc.revision, params: { id: 'n1', label: '已应用' } }],
+  });
+  const acc = acceptProposal(bound, createEditorState(), prop, { expectedRevision: bound.revision });
+  assert.equal(acc.ok, true);
+  return { doc: acc.doc, prop };
+}
+
+check('14a 伪造错误 sessionId 的重复接受被拒绝（即使 opId 已记录）', () => {
+  const doc0 = createFlowchartDocument({ documentId: 'doc-demo' });
+  const { doc, prop } = appliedProposal(doc0, 'sess-1');
+  const before = serialize(doc);
+  const forged = { ...prop, sessionId: 'sess-evil' };
+  const r = acceptProposal(doc, createEditorState(), forged, { expectedRevision: doc.revision });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'session-mismatch');
+  assert.equal(serialize(doc), before);
+});
+
+check('14b 不同 documentId 的重复接受被拒绝', () => {
+  const doc0 = createFlowchartDocument({ documentId: 'doc-demo' });
+  const { doc, prop } = appliedProposal(doc0, 'sess-1');
+  const forged = { ...prop, documentId: 'doc-other' };
+  const r = acceptProposal(doc, createEditorState(), forged, { expectedRevision: doc.revision });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'document-mismatch');
+});
+
+check('14c 非法 schema 的建议即使 opId 已记录也被拒绝', () => {
+  const doc0 = createFlowchartDocument({ documentId: 'doc-demo' });
+  const { doc, prop } = appliedProposal(doc0, 'sess-1');
+  const malformed = { ...prop, ops: 'not-an-array' };
+  const r = acceptProposal(doc, createEditorState(), malformed, { expectedRevision: doc.revision });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'schema');
+});
+
+check('14d 同会话、同文档、同内容的重复接受仍幂等成功', () => {
+  const doc0 = createFlowchartDocument({ documentId: 'doc-demo' });
+  const { doc, prop } = appliedProposal(doc0, 'sess-1');
+  const before = serialize(doc);
+  const r = acceptProposal(doc, createEditorState(), prop, { expectedRevision: doc.revision });
+  assert.equal(r.ok, true);
+  assert.equal(r.status, 'duplicate');
+  assert.equal(serialize(doc), before);
+});
+
+// 15. 反序列化上限 ------------------------------------------------------------
+check('15a 节点数超限的反序列化被拒绝', () => {
+  const doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  const json = JSON.parse(serialize(doc));
+  json.graph.nodes.push({ id: 'nX', label: 'X', x: 0, y: 0 });
+  json.graph.nodes.length = LIMITS.maxNodes + 1;
+  assert.throws(() => deserialize(JSON.stringify(json)), /limit/);
+});
+
+check('15b 连线数超限的反序列化被拒绝', () => {
+  const doc = createDocument({ documentId: 'doc-many' });
+  const nodes = [];
+  for (let i = 0; i < LIMITS.maxNodes; i += 1) nodes.push({ id: `n${i}`, label: `N${i}`, x: 0, y: 0 });
+  const edges = [];
+  for (let i = 0; i < LIMITS.maxNodes && edges.length < LIMITS.maxEdges + 1; i += 1) {
+    for (let j = 0; j < LIMITS.maxNodes && edges.length < LIMITS.maxEdges + 1; j += 1) {
+      if (i === j) continue;
+      edges.push({ id: `e${i}_${j}`, from: `n${i}`, to: `n${j}` });
+    }
+  }
+  const json = { documentId: 'doc-many', schemaVersion: 1, revision: 1, title: '', boundSessionId: null, graph: { nodes, edges } };
+  assert.throws(() => deserialize(JSON.stringify(json)), /limit/);
+});
+
+check('15c 连线 ID 重复与同向重复连线的反序列化被拒绝', () => {
+  const doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  const json = JSON.parse(serialize(doc));
+  json.graph.edges.push({ id: 'e1', from: 'n1', to: 'n3' });
+  assert.throws(() => deserialize(JSON.stringify(json)), /schema/); // CollabError.message 只含错误码
+  const json2 = JSON.parse(serialize(doc));
+  json2.graph.edges.push({ id: 'e9', from: 'n1', to: 'n2' }); // 与 e1 同向
+  assert.throws(() => deserialize(JSON.stringify(json2)), /duplicate-edge/);
+});
+
+check('15d 超大输入的反序列化被拒绝', () => {
+  const fat = `{"pad":"${'x'.repeat(LIMITS.serializedMaxBytes)}"}`;
+  assert.throws(() => deserialize(fat), /too-large/);
+});
+
+check('15e 合法文档（含 label 与边界规模）序列化-反序列化兼容', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-round' });
+  doc = applyUserOperation(doc, userOp('u1', 'edge.update', doc.revision, { id: 'e1', label: '回执' })).doc;
+  const json = serialize(doc);
+  assert.equal(serialize(deserialize(json)), json);
+});
+
+// 16. 指纹与键序无关 ----------------------------------------------------------
+check('16 同语义但键序不同的操作视为同一操作（duplicate，而非 reuse）', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  const base = doc.revision; // 重放 = 字节级重发：baseRevision 也必须一致
+  const op1 = { opId: 'k1', type: 'node.update', baseRevision: base, actor: 'user', params: { id: 'n1', label: '新' } };
+  doc = applyUserOperation(doc, op1).doc;
+  const before = serialize(doc);
+  const op2 = { actor: 'user', baseRevision: base, type: 'node.update', opId: 'k1', params: { label: '新', id: 'n1' } };
+  const r = applyUserOperation(doc, op2);
+  assert.equal(r.ok, true);
+  assert.equal(r.status, 'duplicate');
+  assert.equal(serialize(doc), before);
+});
+
 // ----------------------------------------------------------------------------
 console.log(`\nZ4-1 原型数据层测试：${passed} 通过，${failed} 失败（共 ${passed + failed} 项）`);
 if (failed > 0) process.exit(1);

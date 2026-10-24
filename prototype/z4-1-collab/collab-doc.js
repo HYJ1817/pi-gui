@@ -138,6 +138,9 @@ export function serialize(doc) {
 }
 
 export function deserialize(json) {
+  if (typeof json !== 'string' || Buffer.byteLength(json) > LIMITS.serializedMaxBytes) {
+    fail('too-large', '输入超出体积上限');
+  }
   let raw;
   try { raw = JSON.parse(json); } catch { fail('schema', '不是合法 JSON'); }
   exactKeys(raw, ['documentId', 'schemaVersion', 'revision', 'title', 'boundSessionId', 'graph'], 'document');
@@ -157,6 +160,8 @@ export function deserialize(json) {
   };
   exactKeys(raw.graph, ['nodes', 'edges'], 'graph');
   if (!Array.isArray(raw.graph.nodes) || !Array.isArray(raw.graph.edges)) fail('schema', 'graph 字段类型非法');
+  if (raw.graph.nodes.length > LIMITS.maxNodes) fail('limit', `节点数超过上限 ${LIMITS.maxNodes}`);
+  if (raw.graph.edges.length > LIMITS.maxEdges) fail('limit', `连线数超过上限 ${LIMITS.maxEdges}`);
   const nodeIds = new Set();
   for (const n of raw.graph.nodes) {
     exactKeys(n, ['id', 'label', 'x', 'y'], 'node');
@@ -167,13 +172,20 @@ export function deserialize(json) {
     nodeIds.add(n.id);
     doc.graph.nodes.push({ id: n.id, label: n.label, x: n.x, y: n.y });
   }
+  const edgeIds = new Set();
+  const edgePairs = new Set();
   for (const e of raw.graph.edges) {
     exactKeys(e, ['id', 'from', 'to', ...(e.label === undefined ? [] : ['label'])], 'edge');
     if (!validId(e.id) || !validId(e.from) || !validId(e.to)) fail('schema', `edge ${String(e.id)} 字段非法`);
     if (e.label !== undefined && !validLabel(e.label)) fail('schema', `edge ${e.id} label 非法`);
     if (nodeIds.has(e.id)) fail('schema', `edge id 与 node id 冲突: ${e.id}`);
+    if (edgeIds.has(e.id)) fail('schema', `edge id 重复: ${e.id}`);
+    edgeIds.add(e.id);
     if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) fail('schema', `edge ${e.id} 引用了不存在的节点`);
     if (e.from === e.to) fail('schema', `edge ${e.id} 是自环`);
+    const pair = `${e.from}->${e.to}`;
+    if (edgePairs.has(pair)) fail('duplicate-edge', `${pair} 同向重复连线`);
+    edgePairs.add(pair);
     doc.graph.edges.push(e.label === undefined
       ? { id: e.id, from: e.from, to: e.to }
       : { id: e.id, from: e.from, to: e.to, label: e.label });
@@ -245,7 +257,9 @@ function validateAgainstState(state, op) {
     }
     case 'edge.update': {
       exactKeys(p, ['id', 'label'], 'edge.update');
-      if (!validId(p.id) || !validLabel(p.label)) fail('schema', 'edge.update 字段非法');
+      if (!validId(p.id)) fail('schema', 'edge.update 字段非法');
+      // label: string 设置文字；null 清除文字（撤销「给无 label 连线加文字」需要它）
+      if (p.label !== null && !validLabel(p.label)) fail('schema', 'label 非法');
       if (!state.graph.edges.some((e) => e.id === p.id)) fail('missing', `连线 ${p.id} 不存在`);
       break;
     }
@@ -283,7 +297,8 @@ function mutate(state, op) {
       break;
     case 'edge.update': {
       const e = state.graph.edges.find((x) => x.id === p.id);
-      e.label = p.label;
+      if (p.label === null) delete e.label;
+      else e.label = p.label;
       break;
     }
     case 'edge.remove':
@@ -303,9 +318,25 @@ const clone = (doc) => JSON.parse(JSON.stringify(doc));
 /**
  * 操作内容指纹：opId 之外的全部语义字段。
  * 幂等日志用它区分「同一操作重放」与「复用 opId 夹带不同内容」。
+ * 规范化：对象键递归排序后再序列化，键插入顺序不同的同语义操作指纹一致。
  */
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value).sort()) out[k] = canonicalize(value[k]);
+    return out;
+  }
+  return value;
+}
+
 function opFingerprint(op) {
-  return JSON.stringify({ type: op.type, baseRevision: op.baseRevision, actor: op.actor, params: op.params });
+  return JSON.stringify(canonicalize({
+    type: op.type,
+    baseRevision: op.baseRevision,
+    actor: op.actor,
+    params: op.params,
+  }));
 }
 
 /** 在幂等日志里查一个操作：'exact'（同 ID 同内容）| 'reuse'（同 ID 不同内容）| 'none'。 */
@@ -412,8 +443,22 @@ export function createProposal({ documentId, baseRevision, sessionId, ops, ratio
   };
 }
 
-/** 可解释差异：每个操作一条人类可读摘要。 */
-export function describeOperation(op, state) {
+/**
+ * 可解释差异：逐条人类可读摘要。
+ * 以批次内逐步模拟的状态为参照 —— 同一批里「先新增节点、再修改该节点」时，
+ * 摘要看得到前一步的结果，而不是在批次初始文档里找不到对象。
+ */
+export function describeBatch(before, ops) {
+  const sim = clone(before);
+  const diff = [];
+  for (const op of ops) {
+    diff.push({ opId: op.opId, type: op.type, summary: describeOperation(op, sim) });
+    mutate(sim, op);
+  }
+  return diff;
+}
+
+function describeOperation(op, state) {
   const p = op.params;
   switch (op.type) {
     case 'node.add': return `新增节点 ${p.id}「${p.label}」位置(${p.x},${p.y})`;
@@ -429,11 +474,46 @@ export function describeOperation(op, state) {
     case 'edge.add': return `新增连线 ${p.id}（${p.from}→${p.to}）`;
     case 'edge.update': {
       const e = state.graph.edges.find((x) => x.id === p.id);
+      if (p.label === null) return `清除连线 ${p.id} 文字`;
       return `修改连线 ${p.id} 文字「${e.label ?? ''}」→「${p.label}」`;
     }
     case 'edge.remove': return `删除连线 ${p.id}`;
     default: return `未知操作 ${op.type}`;
   }
+}
+
+/**
+ * 建议信封校验：归属与 schema 先于一切（含幂等快捷路径）。
+ * 返回错误结果或 null。
+ */
+function validateProposalEnvelope(doc, proposal) {
+  if (typeof proposal !== 'object' || proposal === null || Array.isArray(proposal)) {
+    return { ok: false, code: 'schema', detail: 'proposal 必须是对象' };
+  }
+  if (!Array.isArray(proposal.ops) || proposal.ops.length === 0) {
+    return { ok: false, code: 'schema', detail: 'ops 必须是非空数组' };
+  }
+  for (const op of proposal.ops) {
+    try {
+      validateOperationSchema(op);
+    } catch (err) {
+      if (err instanceof CollabError) return { ok: false, code: err.code, detail: err.detail };
+      throw err;
+    }
+  }
+  if (proposal.documentId !== doc.documentId) {
+    return { ok: false, code: 'document-mismatch', detail: `建议针对 ${proposal.documentId}，当前文档 ${doc.documentId}` };
+  }
+  if (proposal.schemaVersion !== SCHEMA_VERSION) {
+    return { ok: false, code: 'schema-version', detail: `建议 schemaVersion ${proposal.schemaVersion}` };
+  }
+  if (!proposal.sessionId || !validId(proposal.sessionId)) {
+    return { ok: false, code: 'session-mismatch', detail: 'Agent 建议缺少会话标识' };
+  }
+  if (doc.boundSessionId !== null && proposal.sessionId !== doc.boundSessionId) {
+    return { ok: false, code: 'session-mismatch', detail: `建议来自旧会话 ${proposal.sessionId}，当前会话 ${doc.boundSessionId}` };
+  }
+  return null;
 }
 
 /**
@@ -443,25 +523,8 @@ export function describeOperation(op, state) {
  * session-mismatch / duplicate / 各类 schema 与结构错误）。
  */
 export function previewProposal(doc, proposal) {
-  if (typeof proposal !== 'object' || proposal === null) {
-    return { ok: false, code: 'schema', detail: 'proposal 必须是对象' };
-  }
-  if (proposal.documentId !== doc.documentId) {
-    return { ok: false, code: 'document-mismatch', detail: `建议针对 ${proposal.documentId}，当前文档 ${doc.documentId}` };
-  }
-  if (proposal.schemaVersion !== SCHEMA_VERSION) {
-    return { ok: false, code: 'schema-version', detail: `建议 schemaVersion ${proposal.schemaVersion}` };
-  }
-  if (doc.boundSessionId !== null) {
-    if (!proposal.sessionId) {
-      return { ok: false, code: 'session-mismatch', detail: 'Agent 建议缺少会话标识' };
-    }
-    if (proposal.sessionId !== doc.boundSessionId) {
-      return { ok: false, code: 'session-mismatch', detail: `建议来自旧会话 ${proposal.sessionId}，当前会话 ${doc.boundSessionId}` };
-    }
-  } else if (!proposal.sessionId) {
-    return { ok: false, code: 'session-mismatch', detail: 'Agent 建议缺少会话标识' };
-  }
+  const envErr = validateProposalEnvelope(doc, proposal);
+  if (envErr) return envErr;
   if (proposal.baseRevision !== doc.revision) {
     return {
       ok: false,
@@ -481,10 +544,7 @@ export function previewProposalReadonly(doc, proposal) {
 }
 
 function buildPreview(before, after, appliedOpIds, proposal) {
-  const diff = [];
-  for (const op of proposal.ops) {
-    diff.push({ opId: op.opId, type: op.type, summary: describeOperation(op, before) });
-  }
+  const diff = describeBatch(before, proposal.ops);
   return {
     diff,
     appliedOpIds,
@@ -500,12 +560,13 @@ function buildPreview(before, after, appliedOpIds, proposal) {
  * 文档尚未绑定会话时，接受动作把文档绑定到建议来源会话（先到先得）。
  */
 export function acceptProposal(doc, editorState, proposal, { expectedRevision } = {}) {
-  // 幂等优先：建议的全部操作已在幂等日志中（同 ID 同内容）⇒ 已应用过，重复接受是无操作。
+  // 归属与 schema 校验先于幂等快捷路径：不同文档/会话或非法 schema 的建议，
+  // 即使 opId 已在幂等日志里也必须明确拒绝，不能被 duplicate 吞掉。
+  const envErr = validateProposalEnvelope(doc, proposal);
+  if (envErr) return envErr;
+  // 幂等（同文档、同会话、同内容）：建议的全部操作已在日志中 ⇒ 已应用过，重复接受是无操作。
   // 该判断先于 revision 比对 —— 建议落盘后的后续编辑不改变「它已被应用」的事实。
-  // 同 ID 不同内容的建议不算已应用，走正常校验（会被 opid-reuse / stale-base 拒绝）。
-  if (proposal && Array.isArray(proposal.ops)
-    && proposal.ops.length > 0
-    && proposal.ops.every((op) => journalLookup(doc, op) === 'exact')) {
+  if (proposal.ops.every((op) => journalLookup(doc, op) === 'exact')) {
     return { ok: true, status: 'duplicate', doc, revision: doc.revision, preview: null };
   }
   if (!positiveInt(expectedRevision)) {
@@ -567,50 +628,55 @@ export function createEditorState() {
   return { undoStack: [], redoStack: [] };
 }
 
-/** 由「应用前文档 + 已提交操作」计算逆操作（逆序、取应用前旧值）。 */
-export function computeInverse(beforeDoc, ops) {
-  const inverse = [];
-  for (let i = ops.length - 1; i >= 0; i -= 1) {
-    const op = ops[i];
-    const p = op.params;
-    switch (op.type) {
-      case 'node.add':
-        inverse.push({ type: 'node.remove', params: { id: p.id } });
-        break;
-      case 'node.remove': {
-        const n = beforeDoc.graph.nodes.find((x) => x.id === p.id);
-        inverse.push({ type: 'node.add', params: { id: n.id, label: n.label, x: n.x, y: n.y } });
-        break;
-      }
-      case 'node.update': {
-        const n = beforeDoc.graph.nodes.find((x) => x.id === p.id);
-        const params = { id: p.id };
-        if ('label' in p) params.label = n.label;
-        if ('x' in p) params.x = n.x;
-        if ('y' in p) params.y = n.y;
-        inverse.push({ type: 'node.update', params });
-        break;
-      }
-      case 'edge.add':
-        inverse.push({ type: 'edge.remove', params: { id: p.id } });
-        break;
-      case 'edge.remove': {
-        const e = beforeDoc.graph.edges.find((x) => x.id === p.id);
-        inverse.push({ type: 'edge.add', params: e.label === undefined
-          ? { id: e.id, from: e.from, to: e.to }
-          : { id: e.id, from: e.from, to: e.to, label: e.label } });
-        break;
-      }
-      case 'edge.update': {
-        const e = beforeDoc.graph.edges.find((x) => x.id === p.id);
-        inverse.push({ type: 'edge.update', params: { id: p.id, label: e.label } });
-        break;
-      }
-      default:
-        break;
+/** 单个操作的逆操作：stateBefore 必须是该操作执行前的真实状态（逐步模拟得到）。 */
+function inverseOf(op, stateBefore) {
+  const p = op.params;
+  switch (op.type) {
+    case 'node.add':
+      return { type: 'node.remove', params: { id: p.id } };
+    case 'node.remove': {
+      const n = stateBefore.graph.nodes.find((x) => x.id === p.id);
+      return { type: 'node.add', params: { id: n.id, label: n.label, x: n.x, y: n.y } };
     }
+    case 'node.update': {
+      const n = stateBefore.graph.nodes.find((x) => x.id === p.id);
+      const params = { id: p.id };
+      if ('label' in p) params.label = n.label;
+      if ('x' in p) params.x = n.x;
+      if ('y' in p) params.y = n.y;
+      return { type: 'node.update', params };
+    }
+    case 'edge.add':
+      return { type: 'edge.remove', params: { id: p.id } };
+    case 'edge.remove': {
+      const e = stateBefore.graph.edges.find((x) => x.id === p.id);
+      return { type: 'edge.add', params: e.label === undefined
+        ? { id: e.id, from: e.from, to: e.to }
+        : { id: e.id, from: e.from, to: e.to, label: e.label } };
+    }
+    case 'edge.update': {
+      const e = stateBefore.graph.edges.find((x) => x.id === p.id);
+      // 执行前无 label 就用 null 清除（edge.update 支持 label:null），保证可逆
+      return { type: 'edge.update', params: { id: p.id, label: e.label === undefined ? null : e.label } };
+    }
+    default:
+      fail('unknown-type', `未知操作类型 ${op.type}`);
   }
-  return inverse;
+}
+
+/**
+ * 由「应用前文档 + 已提交操作」计算逆操作。
+ * 逐 op 模拟推进，每个逆操作依据该 op 执行前的真实状态生成，
+ * 逆序返回 —— 因此支持「先新增对象、再修改同一对象」的批次。
+ */
+export function computeInverse(beforeDoc, ops) {
+  const sim = clone(beforeDoc);
+  const inverse = [];
+  for (const op of ops) {
+    inverse.push(inverseOf(op, sim));
+    mutate(sim, op);
+  }
+  return inverse.reverse();
 }
 
 /**
