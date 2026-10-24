@@ -106,7 +106,12 @@ jobs:
           name: test-results-${{ matrix.group }}
           if-no-files-found: error
           retention-days: 7
-          path: ${{ runner.temp }}/pi-gui-ci-${{ matrix.group }}/results
+          path: ${{ runner.temp }}/pi-gui-ci-${{ matrix.group }}/results/results.json
+
+      - name: Summarize group evidence
+        if: ${{ always() }}
+        shell: pwsh
+        run: node scripts/summarize-ci-results.mjs --input "$env:PI_GUI_CI_RESULTS" --group "$env:TEST_GROUP" --summary "$env:GITHUB_STEP_SUMMARY"
 
   # 任何测试组失败时，该 job 因 needs: test 而被跳过，不会浪费打包时间。
   build-check:
@@ -150,7 +155,37 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download group evidence
+        if: ${{ always() }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: test-results-*
+          path: ci-evidence
+
+      - name: Summarize complete test evidence
+        if: ${{ always() }}
+        shell: pwsh
+        run: node scripts/summarize-ci-results.mjs --input ci-evidence --json ci-summary.json --summary "$env:GITHUB_STEP_SUMMARY" --require-complete
+
+      - name: Upload evidence summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-evidence-summary
+          path: ci-summary.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Require every upstream job to succeed
+        if: ${{ always() }}
         shell: pwsh
         env:
           PLAN_RESULT: ${{ needs.test-plan.result }}
