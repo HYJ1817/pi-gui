@@ -7,11 +7,13 @@
  *    - 图表类型切换（折线图 ↔ 柱状图）
  *    - 数据系列开关（多选 Chip 筛选，至少保留 1 个激活）
  *    - 数据范围调整（滑动条截取最近 N 项）
- *    - 阈值调节（告警参考线与超标标记）
- * 3. 引用到对话：复用 fillReviewComposer，将当前图表名、参数与统计摘要追加至草稿。
- * 4. 会话与生命周期隔离：
- *    - 严格绑定 sessionId、workspaceGeneration 与 messageId
- *    - 会话切换或工作区变化时自动失效关闭
+ *    - 阈值调节（告警参考线与超标标记，安全自适应上下限）
+ * 3. 统计摘要精确计算：严格按照当前显示的截取范围（rangeLimit）计算均值、极值与超标数。
+ * 4. 引用到对话：复用 fillReviewComposer，将当前图表名、参数与当前可视范围统计摘要追加至草稿。
+ * 5. 会话与生命周期隔离：
+ *    - 统一 Classic（S.state.sessionId）与 Runtime（gitConversationScope + runtimeStore）身份来源
+ *    - 绝不让 S.state.sessionId 覆盖 Runtime 会话
+ *    - 原消息删除、历史重建或工作区/会话变更时，严格拒绝引用
  *    - onDispose 释放所有图表与 DOM 资源，防止泄漏
  */
 
@@ -22,10 +24,97 @@ import { renderVizChart, VIZ_COLORS } from './viz-chart.js';
 import { fillReviewComposer } from './review-fill.js';
 import { toast } from './ui/toast.js';
 import { gitConversationScope } from './api.js';
+import { workspaceView } from './ui/workspace-surface.js';
+import { runtimeStore } from './runtime-state.js';
 
 let activeVizInstance = null;
 
-function calculateSeriesStats(s, labels, threshold) {
+export function captureSessionScope(sourceElement = null) {
+  const view = workspaceView();
+  const workspaceGen = S.workspaceGeneration;
+  const projectCwd = S.cwd;
+
+  const sourceNode = sourceElement && typeof sourceElement.closest === 'function'
+    ? sourceElement.closest('.message, [data-history-message-id], .runtime-conversation')
+    : null;
+
+  if (view === 'runtime') {
+    const runtimeId = gitConversationScope();
+    const record = runtimeId ? runtimeStore.get(runtimeId) : null;
+    return {
+      view: 'runtime',
+      sessionId: runtimeId || null,
+      runtimeOwner: record?.owner || null,
+      runtimeGeneration: (typeof record?.owner === 'object' ? record?.owner?.runtimeGeneration : record?.generation) ?? null,
+      workspaceGeneration: workspaceGen,
+      projectCwd,
+      sourceNode,
+    };
+  }
+
+  // Classic view ('chat')
+  const classicSessionId = S.state?.sessionId || null;
+  return {
+    view: 'chat',
+    sessionId: classicSessionId,
+    runtimeOwner: null,
+    runtimeGeneration: null,
+    workspaceGeneration: workspaceGen,
+    projectCwd,
+    sourceNode,
+  };
+}
+
+export function validateSessionScope(scope) {
+  if (!scope) return { ok: false, error: '缺少会话上下文身份。' };
+
+  // 1. 检查源消息节点是否仍挂在 DOM 上
+  if (scope.sourceNode && !scope.sourceNode.isConnected) {
+    return { ok: false, error: '原图表消息已被清理或删除，无法引用过期图表。' };
+  }
+
+  // 2. 检查工作区代数与项目根路径
+  if (S.cwd !== scope.projectCwd || S.workspaceGeneration !== scope.workspaceGeneration) {
+    return { ok: false, error: '工作区或项目已切换，旧图表配置已失效。' };
+  }
+
+  // 3. 检查当前视图
+  const curView = workspaceView();
+  if (curView !== scope.view) {
+    return { ok: false, error: '当前工作区视图与图表所属视图不一致，无法引用。' };
+  }
+
+  // 4. Runtime 检查：绝不能用 S.state.sessionId 覆盖
+  if (curView === 'runtime') {
+    const curId = gitConversationScope();
+    if (!curId || curId !== scope.sessionId) {
+      return { ok: false, error: '当前并行会话已切换，无法将旧会话图表配置填入当前会话。' };
+    }
+    const record = runtimeStore.get(curId);
+    if (!record?.owner) {
+      return { ok: false, error: '当前并行会话 Agent 拥有者已变更或失效，无法引用。' };
+    }
+    const curOwnerId = typeof record.owner === 'object' ? record.owner.runtimeId : record.owner;
+    const expOwnerId = typeof scope.runtimeOwner === 'object' ? scope.runtimeOwner.runtimeId : scope.runtimeOwner;
+    if (curOwnerId !== expOwnerId) {
+      return { ok: false, error: '当前并行会话 Agent 拥有者已变更或失效，无法引用。' };
+    }
+    const curGen = (typeof record.owner === 'object' ? record.owner.runtimeGeneration : record.generation) ?? null;
+    if (scope.runtimeGeneration !== null && curGen !== scope.runtimeGeneration) {
+      return { ok: false, error: '当前会话已重置，无法引用旧图表配置。' };
+    }
+    return { ok: true };
+  }
+
+  // 5. Classic 检查
+  const curClassicId = S.state?.sessionId || null;
+  if (!curClassicId || curClassicId !== scope.sessionId) {
+    return { ok: false, error: '当前会话已切换，无法将旧会话图表配置填入当前会话。' };
+  }
+  return { ok: true };
+}
+
+export function calculateSeriesStats(s, labels, threshold) {
   let min = Infinity;
   let max = -Infinity;
   let sum = 0;
@@ -33,21 +122,30 @@ function calculateSeriesStats(s, labels, threshold) {
 
   for (let i = 0; i < s.data.length; i++) {
     const v = s.data[i];
-    if (v < min) min = v;
-    if (v > max) max = v;
-    sum += v;
-    if (typeof threshold === 'number' && Number.isFinite(threshold) && v > threshold) {
-      overCount++;
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+      sum += v;
+      if (typeof threshold === 'number' && Number.isFinite(threshold) && v > threshold) {
+        overCount++;
+      }
     }
   }
 
-  const avg = s.data.length ? (sum / s.data.length).toFixed(1) : 0;
+  if (min === Infinity) { min = 0; max = 0; }
+  const avg = s.data.length ? Number((sum / s.data.length).toFixed(1)) : 0;
   return { min, max, avg, overCount, count: s.data.length };
 }
 
 export function buildVizSummaryMarkdown(data, state) {
   const lines = [`[图表配置引用：${data.title}]`];
   lines.push(`- 图表类型：${state.type === 'line' ? '折线图' : '柱状图'}`);
+
+  // 严格根据当前 state.rangeLimit 切片计算当前可见数据范围
+  const totalLabels = data.labels.length;
+  const sliceCount = state.rangeLimit > 0 && state.rangeLimit < totalLabels ? state.rangeLimit : totalLabels;
+  const startIndex = totalLabels - sliceCount;
+  const visibleLabels = data.labels.slice(startIndex);
 
   const activeNames = [];
   const statSnippets = [];
@@ -56,7 +154,8 @@ export function buildVizSummaryMarkdown(data, state) {
     const s = data.series[idx];
     if (!s) continue;
     activeNames.push(s.name);
-    const st = calculateSeriesStats(s, data.labels, state.threshold);
+    const visibleData = s.data.slice(startIndex);
+    const st = calculateSeriesStats({ ...s, data: visibleData }, visibleLabels, state.threshold);
     const unit = data.unit ? data.unit : '';
     let snip = `${s.name}: 均值 ${st.avg}${unit}, 极值 [${st.min} ~ ${st.max}]${unit}`;
     if (st.overCount > 0) snip += ` (${st.overCount} 处超过阈值)`;
@@ -87,12 +186,10 @@ export function buildVizSummaryMarkdown(data, state) {
 /** 打开交互可视化面板。
  *
  * @param {Object} data 经 parseVizData 校验的图表数据对象
- * @param {Object} context 会话与消息上下文
+ * @param {Object} [context] 会话与消息上下文
  */
 export function openVizPanel(data, context = {}) {
-  const initialSessionId = context.sessionId || S.state?.sessionId || gitConversationScope() || null;
-  const initialGen = context.workspaceGeneration ?? S.workspaceGeneration;
-  const initialMessageId = context.messageId || null;
+  const initialScope = context.scope || captureSessionScope(context.sourceNode || null);
 
   // 初始参数状态
   const state = {
@@ -245,24 +342,35 @@ export function openVizPanel(data, context = {}) {
       controls.append(rangeRow);
     }
 
-    // (4) 告警阈值调节滑块
+    // (4) 告警阈值调节滑块（自适应负数、常量与跨零极值）
     let threshSlider = null;
     let threshValLabel = null;
     let threshCheck = null;
 
-    // 计算数据极值以便确定阈值调节范围
     let dataMin = Infinity;
     let dataMax = -Infinity;
     for (const s of data.series) {
       for (const v of s.data) {
-        if (v < dataMin) dataMin = v;
-        if (v > dataMax) dataMax = v;
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          if (v < dataMin) dataMin = v;
+          if (v > dataMax) dataMax = v;
+        }
       }
     }
-    if (dataMin === dataMax) { dataMin = 0; dataMax = dataMax || 100; }
-    const threshMin = Math.floor(dataMin);
-    const threshMax = Math.ceil(dataMax * 1.25);
-    const threshStep = (threshMax - threshMin) > 100 ? 5 : 1;
+    if (!Number.isFinite(dataMin) || !Number.isFinite(dataMax)) {
+      dataMin = 0;
+      dataMax = 100;
+    }
+    const span = Math.abs(dataMax - dataMin);
+    const padding = span > 0 ? span * 0.25 : (Math.abs(dataMax) > 0 ? Math.abs(dataMax) * 0.25 : 10);
+    let threshMin = Math.floor(dataMin - padding);
+    let threshMax = Math.ceil(dataMax + padding);
+    if (threshMin >= threshMax) {
+      threshMin = Math.floor(dataMin - 10);
+      threshMax = Math.ceil(dataMax + 10);
+    }
+    const threshSpan = threshMax - threshMin;
+    const threshStep = threshSpan > 200 ? 5 : (threshSpan > 50 ? 1 : (threshSpan > 5 ? 0.5 : 0.1));
 
     const threshRow = document.createElement('div');
     threshRow.className = 'viz-ctrl-row viz-thresh-row';
@@ -366,7 +474,7 @@ export function openVizPanel(data, context = {}) {
       btnBar.classList.toggle('is-active', state.type === 'bar');
       btnBar.setAttribute('aria-pressed', state.type === 'bar' ? 'true' : 'false');
 
-      Array.from(seriesPills.children).forEach((child, i) => {
+      Array.from(seriesPills.children).forEach((child) => {
         child.classList.add('is-active');
         child.setAttribute('aria-pressed', 'true');
       });
@@ -388,14 +496,9 @@ export function openVizPanel(data, context = {}) {
 
     // 绑定引用到对话
     quoteBtn.onclick = () => {
-      // 会话身份核验
-      const curSession = S.state?.sessionId || gitConversationScope() || null;
-      if (initialSessionId && curSession && curSession !== initialSessionId) {
-        toast('会话已切换，无法引用旧图表配置到当前输入框。', 'err');
-        return;
-      }
-      if (initialGen !== undefined && S.workspaceGeneration !== initialGen) {
-        toast('工作区已切换，引用已失效。', 'err');
+      const scopeCheck = validateSessionScope(initialScope);
+      if (!scopeCheck.ok) {
+        toast(scopeCheck.error, 'err');
         return;
       }
 

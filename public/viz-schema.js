@@ -7,8 +7,9 @@
  *    - JSON 源码最大 128KB
  *    - 标签（labels）最多 100 个，每个最长 50 字符
  *    - 数据系列（series）最多 8 个，名称最长 50 字符
- *    - 系列数据点必须全为有限数值（Number.isFinite），长度与 labels 一致
- *    - 参数（params）最多 5 个，仅支持 number / range / select
+ *    - 系列数据点必须严格为原生有限数值（typeof === 'number' && Number.isFinite），拒绝 null / boolean / 空字符串转换
+ *    - 数值绝对值不得超过安全量级 1e12，避免极端溢出
+ *    - 参数（params）最多 5 个，仅支持 number / range / select，严格校验数值界限
  * 3. 严格禁止代码执行：不包含任何函数、脚本、事件或表达式字段。
  * 4. 零异常抛出：解析或校验失败统一返回 { ok: false, error }，确保安全降级。
  */
@@ -27,6 +28,7 @@ export const VIZ_LIMITS = Object.freeze({
   MAX_PARAM_NAME_LENGTH: 50,
   MAX_SELECT_OPTIONS: 10,
   MAX_OPTION_LENGTH: 50,
+  MAX_NUMERIC_MAGNITUDE: 1e12,
   SUPPORTED_VERSIONS: Object.freeze(['1', 1]),
   SUPPORTED_TYPES: Object.freeze(['line', 'bar']),
 });
@@ -34,14 +36,13 @@ export const VIZ_LIMITS = Object.freeze({
 const PARAM_ID_RE = /^[a-zA-Z0-9_-]{1,30}$/;
 
 function sanitizeString(value, maxLength, fallback = '') {
-  if (typeof value !== 'string' && typeof value !== 'number') return fallback;
-  const s = String(value).trim();
+  if (typeof value !== 'string') return fallback;
+  const s = value.trim();
   return s.length > maxLength ? s.slice(0, maxLength) : s;
 }
 
-function sanitizeNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+export function isStrictFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 export function parseVizData(raw) {
@@ -90,10 +91,18 @@ export function parseVizData(raw) {
   if (obj.labels.length > VIZ_LIMITS.MAX_LABELS) {
     return { ok: false, error: `数据点标签过多（最多 ${VIZ_LIMITS.MAX_LABELS} 个）` };
   }
-  const labels = obj.labels.map((l, i) => {
-    const s = sanitizeString(l, VIZ_LIMITS.MAX_LABEL_LENGTH);
-    return s || String(i + 1);
-  });
+  const labels = [];
+  for (let i = 0; i < obj.labels.length; i++) {
+    const l = obj.labels[i];
+    if (typeof l !== 'string' && typeof l !== 'number') {
+      return { ok: false, error: `第 ${i + 1} 个标签格式无效（必须为文本或数字）` };
+    }
+    const s = String(l).trim();
+    if (!s) {
+      return { ok: false, error: `第 ${i + 1} 个标签不能为空` };
+    }
+    labels.push(s.length > VIZ_LIMITS.MAX_LABEL_LENGTH ? s.slice(0, VIZ_LIMITS.MAX_LABEL_LENGTH) : s);
+  }
 
   // 5. 数据系列 series
   if (!Array.isArray(obj.series) || obj.series.length === 0) {
@@ -119,9 +128,13 @@ export function parseVizData(raw) {
 
     const data = [];
     for (let di = 0; di < s.data.length; di++) {
-      const v = Number(s.data[di]);
-      if (!Number.isFinite(v)) {
-        return { ok: false, error: `系列「${name}」包含非法非数值数据: ${s.data[di]}` };
+      const v = s.data[di];
+      // 严格检查：必须为原生数值，拒绝 null / boolean / string 经 Number() 产生的假数值
+      if (!isStrictFiniteNumber(v)) {
+        return { ok: false, error: `系列「${name}」包含非法非数值数据 (索引 ${di}): ${v}` };
+      }
+      if (Math.abs(v) > VIZ_LIMITS.MAX_NUMERIC_MAGNITUDE) {
+        return { ok: false, error: `系列「${name}」数值过大，超出安全计算范围: ${v}` };
       }
       data.push(v);
     }
@@ -152,11 +165,16 @@ export function parseVizData(raw) {
       const pType = String(p.type || '').toLowerCase();
 
       if (pType === 'number' || pType === 'range') {
-        const min = sanitizeNumber(p.min, 0);
-        const max = sanitizeNumber(p.max, 100);
-        if (max <= min) continue;
-        const step = p.step && Number.isFinite(Number(p.step)) && Number(p.step) > 0 ? Number(p.step) : 1;
-        let def = sanitizeNumber(p.default, min);
+        if (!isStrictFiniteNumber(p.min) || !isStrictFiniteNumber(p.max) || p.max <= p.min) {
+          continue;
+        }
+        if (Math.abs(p.min) > VIZ_LIMITS.MAX_NUMERIC_MAGNITUDE || Math.abs(p.max) > VIZ_LIMITS.MAX_NUMERIC_MAGNITUDE) {
+          continue;
+        }
+        const min = p.min;
+        const max = p.max;
+        const step = isStrictFiniteNumber(p.step) && p.step > 0 ? p.step : 1;
+        let def = isStrictFiniteNumber(p.default) ? p.default : min;
         def = Math.min(Math.max(def, min), max);
         params.push(Object.freeze({
           id,

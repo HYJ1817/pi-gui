@@ -87,8 +87,8 @@ function diffBody(code) {
     .join('\n');
 }
 
-function codeBlock(lang, code) {
-  if (lang === 'pi-gui-viz') {
+function codeBlock(lang, code, { closed = true } = {}) {
+  if (lang === 'pi-gui-viz' && closed === true) {
     const res = parseVizData(code);
     if (res.ok) {
       const typeBadge = res.data.type === 'line' ? '折线图' : '柱状图';
@@ -265,12 +265,19 @@ function renderBlocks(lines, ctx) {
       const lang = fence[2].toLowerCase();
       const buf = [];
       i++;
-      while (i < lines.length && !FENCE_CLOSE.test(lines[i].trim())) {
+      let closed = false;
+      while (i < lines.length) {
+        if (FENCE_CLOSE.test(lines[i].trim())) {
+          closed = true;
+          break;
+        }
         buf.push(lines[i]);
         i++;
       }
-      i++; // 吃掉闭合围栏（未闭合时 i 越界，循环自然结束）
-      out.push(codeBlock(lang, buf.join('\n')));
+      if (closed) {
+        i++; // 吃掉闭合围栏
+      }
+      out.push(codeBlock(lang, buf.join('\n'), { closed }));
       continue;
     }
 

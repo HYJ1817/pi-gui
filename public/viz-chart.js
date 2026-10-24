@@ -2,7 +2,8 @@
  *
  * 支持折线图（line）与柱状图（bar）：
  * - 纯 SVG DOM 节点构建，严禁 eval 与 innerHTML 注入模型原文
- * - 自适应 viewBox 比例缩放
+ * - 自适应 viewBox 比例缩放与安全坐标换算，杜绝 NaN / Infinity 溢出
+ * - 严格遵循零基线规则（柱状图绝不截断基线以夸大差异，支持全负数、常量负数与跨零数据）
  * - 支持图例、系列开关联动、阈值辅助线与超标标记
  * - 鼠标悬停及键盘聚焦 Tooltip 查看详细数值与单位
  * - 无障碍图形语义（role="graphics-document" / aria-label）
@@ -29,7 +30,7 @@ function svgEl(tag, attrs = {}) {
   return node;
 }
 
-function calculateBounds(seriesList, activeIndices, threshold) {
+export function calculateBounds(seriesList, activeIndices, threshold, chartType = 'line') {
   let min = Infinity;
   let max = -Infinity;
 
@@ -38,46 +39,69 @@ function calculateBounds(seriesList, activeIndices, threshold) {
     const s = seriesList[idx];
     if (!s) continue;
     for (const v of s.data) {
-      if (v < min) min = v;
-      if (v > max) max = v;
-      hasData = true;
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        if (v < min) min = v;
+        if (v > max) max = v;
+        hasData = true;
+      }
     }
   }
 
   if (typeof threshold === 'number' && Number.isFinite(threshold)) {
     if (threshold < min) min = threshold;
     if (threshold > max) max = threshold;
+    hasData = true;
   }
 
   if (!hasData) {
-    return { min: 0, max: 10, range: 10, ticks: [0, 5, 10] };
+    return { min: 0, max: 10, range: 10, ticks: [0, 2.5, 5, 7.5, 10] };
   }
 
-  if (min === max) {
-    min = min > 0 ? 0 : min - 1;
-    max = max + 1;
+  let niceMin;
+  let niceMax;
+
+  if (chartType === 'bar') {
+    // 柱状图零基线规则：绝不使用截断基线夸大数值差异
+    if (min >= 0 && max >= 0) {
+      // 全正数或零：零基线固定在 0
+      niceMin = 0;
+      const topVal = max > 0 ? max : 1;
+      niceMax = topVal * 1.1;
+    } else if (min <= 0 && max <= 0) {
+      // 全负数或零（含常量负数）：零基线固定在 0
+      niceMax = 0;
+      const bottomVal = min < 0 ? min : -1;
+      niceMin = bottomVal * 1.1;
+    } else {
+      // 跨零数据（正负兼有）：零基线包含在坐标系内部，两侧均留白
+      const span = max - min;
+      niceMin = min - span * 0.08;
+      niceMax = max + span * 0.08;
+    }
+  } else {
+    // 折线图规则
+    if (min === max) {
+      const delta = Math.abs(min) * 0.1 || 1;
+      min -= delta;
+      max += delta;
+    }
+    const rawRange = max - min;
+    const padding = rawRange * 0.08 || 1;
+    niceMin = min - padding;
+    niceMax = max + padding;
   }
 
-  // 柱状图若全为正数，底边从 0 开始更符合直觉
-  if (min > 0 && min < max * 0.3) {
-    min = 0;
-  }
+  const range = niceMax - niceMin;
+  const safeRange = Number.isFinite(range) && range > 0 ? range : 1;
 
-  // 扩充 5% 留白，防止极值贴边
-  const rawRange = max - min;
-  const padding = rawRange * 0.08;
-  const niceMin = min < 0 ? min - padding : Math.max(0, min - padding);
-  const niceMax = max + padding;
-  const range = niceMax - niceMin || 1;
-
-  // 生成 4 个基准刻度
+  // 生成 5 个基准刻度
   const tickCount = 4;
   const ticks = [];
   for (let i = 0; i <= tickCount; i++) {
-    ticks.push(niceMin + (range / tickCount) * i);
+    ticks.push(niceMin + (safeRange / tickCount) * i);
   }
 
-  return { min: niceMin, max: niceMax, range, ticks };
+  return { min: niceMin, max: niceMax, range: safeRange, ticks };
 }
 
 function formatNumber(num) {
@@ -96,7 +120,7 @@ function formatNumber(num) {
  * @param {Set<number>} [options.activeSeries] 激活展示的系列索引集合
  * @param {number} [options.rangeLimit] 显示数据范围（取最近 N 项，或 0 代表全量）
  * @param {number} [options.threshold] 阈值告警线
- * @returns {{ dispose: Function, update: Function }} 控制句柄
+ * @returns {{ dispose: Function, update: Function, bounds: Object }} 控制句柄
  */
 export function renderVizChart(container, {
   data,
@@ -154,7 +178,7 @@ export function renderVizChart(container, {
   descEl.textContent = data.description || `${labels.length} 个数据点，${activeIndices.length} 个显示系列`;
   svg.append(descEl);
 
-  const bounds = calculateBounds(series, activeIndices, threshold);
+  const bounds = calculateBounds(series, activeIndices, threshold, chartType);
 
   const coordX = (index) => {
     if (labels.length <= 1) return MARGIN.left + W / 2;
@@ -165,8 +189,12 @@ export function renderVizChart(container, {
   };
 
   const coordY = (val) => {
+    if (!Number.isFinite(val) || bounds.range <= 0 || !Number.isFinite(bounds.range)) {
+      return MARGIN.top + H / 2;
+    }
     const ratio = (val - bounds.min) / bounds.range;
-    return MARGIN.top + H - ratio * H;
+    const clampedRatio = Math.max(-0.5, Math.min(1.5, ratio));
+    return MARGIN.top + H - clampedRatio * H;
   };
 
   // 1. 背景水平网格线与 Y 轴刻度
@@ -189,12 +217,27 @@ export function renderVizChart(container, {
     label.textContent = formatNumber(tickVal) + unit;
     gridGroup.append(line, label);
   }
+
+  // 柱状图零基线高亮线（当数据跨越零点时绘制明确的零刻度线）
+  const zeroY = coordY(0);
+  if (chartType === 'bar' && bounds.min < 0 && bounds.max > 0) {
+    const zeroLine = svgEl('line', {
+      x1: MARGIN.left,
+      y1: zeroY,
+      x2: MARGIN.left + W,
+      y2: zeroY,
+      class: 'viz-zero-line',
+      stroke: 'var(--border, #888)',
+      'stroke-width': '1.2',
+    });
+    gridGroup.append(zeroLine);
+  }
   svg.append(gridGroup);
 
   // 2. 阈值辅助线（如果提供且在数值有效范围内）
   if (typeof threshold === 'number' && Number.isFinite(threshold)) {
     const threshY = coordY(threshold);
-    if (threshY >= MARGIN.top && threshY <= MARGIN.top + H) {
+    if (threshY >= MARGIN.top - 10 && threshY <= MARGIN.top + H + 10) {
       const threshGroup = svgEl('g', { class: 'viz-threshold-group' });
       const tLine = svgEl('line', {
         x1: MARGIN.left,
@@ -338,7 +381,7 @@ export function renderVizChart(container, {
       });
     });
   } else {
-    // 柱状图
+    // 柱状图：严格锚定 zeroY 绘制柱条
     const activeCount = activeIndices.length || 1;
     const catWidth = labels.length > 0 ? W / labels.length : W;
     const groupPadding = Math.min(16, catWidth * 0.2);
@@ -347,7 +390,6 @@ export function renderVizChart(container, {
 
     labels.forEach((lab, lIdx) => {
       const groupLeft = MARGIN.left + lIdx * catWidth + groupPadding;
-      const zeroY = coordY(Math.max(0, bounds.min));
 
       activeIndices.forEach((sIdx, subIdx) => {
         const s = series[sIdx];
@@ -358,7 +400,7 @@ export function renderVizChart(container, {
         const barX = groupLeft + subIdx * barWidth;
         const targetY = coordY(val);
         const barY = Math.min(zeroY, targetY);
-        const barH = Math.max(2, Math.abs(zeroY - targetY));
+        const barH = Math.max(1, Math.abs(zeroY - targetY));
 
         const rect = svgEl('rect', {
           x: barX,
@@ -390,6 +432,7 @@ export function renderVizChart(container, {
 
   return {
     svg,
+    bounds,
     dispose: () => {
       hideTip();
       container.replaceChildren();

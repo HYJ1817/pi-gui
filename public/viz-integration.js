@@ -35,16 +35,12 @@ export function handleVizCardClick(event) {
       return;
     }
 
-    // 绑定当前会话与消息上下文
-    const messageNode = card.closest('[data-history-message-id], .message[data-id]');
-    const messageId = messageNode?.dataset?.historyMessageId || messageNode?.dataset?.id || null;
-    const sessionId = gitConversationScope() || S.state?.sessionId || null;
+    // 绑定当前会话与真实消息 DOM 宿主
+    const messageNode = card.closest('.message, [data-history-message-id], .runtime-conversation');
 
     openVizPanel(res.data, {
       triggerId: openBtn.id || null,
-      sessionId,
-      workspaceGeneration: S.workspaceGeneration,
-      messageId,
+      sourceNode: messageNode,
     });
     return;
   }
