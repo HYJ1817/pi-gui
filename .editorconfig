@@ -1,0 +1,33 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{js,cjs,mjs}]
+indent_style = space
+indent_size = 2
+
+[*.{json,jsonc,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+# Markdown hard line breaks use trailing spaces intentionally.
+trim_trailing_whitespace = false
+
+[*.{cmd,bat}]
+end_of_line = crlf
+
+[*.ps1]
+indent_style = space
+indent_size = 2
+
+# This native helper has a byte-sensitive resource hash; keep its existing
+# CRLF/whitespace behavior. .gitattributes remains the transport authority.
+[server/session-revert-object-write-native.ps1]
+end_of_line = crlf
+insert_final_newline = unset
+trim_trailing_whitespace = false
