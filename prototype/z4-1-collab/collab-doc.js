@@ -300,12 +300,24 @@ function mutate(state, op) {
 
 const clone = (doc) => JSON.parse(JSON.stringify(doc));
 
-function opIdAlreadyApplied(doc, opId) {
-  return doc.appliedOps.includes(opId);
+/**
+ * 操作内容指纹：opId 之外的全部语义字段。
+ * 幂等日志用它区分「同一操作重放」与「复用 opId 夹带不同内容」。
+ */
+function opFingerprint(op) {
+  return JSON.stringify({ type: op.type, baseRevision: op.baseRevision, actor: op.actor, params: op.params });
 }
 
-function pushJournal(doc, opIds) {
-  doc.appliedOps.push(...opIds);
+/** 在幂等日志里查一个操作：'exact'（同 ID 同内容）| 'reuse'（同 ID 不同内容）| 'none'。 */
+function journalLookup(doc, op) {
+  const fp = opFingerprint(op);
+  const entry = doc.appliedOps.find((e) => e.id === op.opId);
+  if (!entry) return 'none';
+  return entry.fp === fp ? 'exact' : 'reuse';
+}
+
+function pushJournal(doc, ops) {
+  doc.appliedOps.push(...ops.map((op) => ({ id: op.opId, fp: opFingerprint(op) })));
   if (doc.appliedOps.length > LIMITS.journalMax) {
     doc.appliedOps.splice(0, doc.appliedOps.length - LIMITS.journalMax);
   }
@@ -328,7 +340,9 @@ export function applyOperations(doc, ops) {
       validateOperationSchema(op);
       if (seenOpIds.has(op.opId)) fail('schema', `批次内 opId 重复: ${op.opId}`);
       seenOpIds.add(op.opId);
-      if (opIdAlreadyApplied(doc, op.opId)) fail('duplicate', `操作 ${op.opId} 已应用过`);
+      const journalled = journalLookup(doc, op);
+      if (journalled === 'exact') fail('duplicate', `操作 ${op.opId} 已应用过（同内容重放，无操作）`);
+      if (journalled === 'reuse') fail('opid-reuse', `操作 ${op.opId} 已被不同内容占用，拒绝执行`);
       if (op.baseRevision !== doc.revision) {
         fail('stale-base', `操作基于 revision ${op.baseRevision}，当前是 ${doc.revision}`);
       }
@@ -341,7 +355,7 @@ export function applyOperations(doc, ops) {
   }
   // 第二阶段：整体通过后一次性提交。
   work.revision = doc.revision + 1;
-  pushJournal(work, [...seenOpIds]);
+  pushJournal(work, ops);
   return { ok: true, doc: work, revision: work.revision, appliedOpIds: [...seenOpIds] };
 }
 
@@ -486,11 +500,12 @@ function buildPreview(before, after, appliedOpIds, proposal) {
  * 文档尚未绑定会话时，接受动作把文档绑定到建议来源会话（先到先得）。
  */
 export function acceptProposal(doc, editorState, proposal, { expectedRevision } = {}) {
-  // 幂等优先：建议的全部操作已在操作日志中 ⇒ 已应用过，重复接受是无操作。
+  // 幂等优先：建议的全部操作已在幂等日志中（同 ID 同内容）⇒ 已应用过，重复接受是无操作。
   // 该判断先于 revision 比对 —— 建议落盘后的后续编辑不改变「它已被应用」的事实。
+  // 同 ID 不同内容的建议不算已应用，走正常校验（会被 opid-reuse / stale-base 拒绝）。
   if (proposal && Array.isArray(proposal.ops)
     && proposal.ops.length > 0
-    && proposal.ops.every((op) => doc.appliedOps.includes(op.opId))) {
+    && proposal.ops.every((op) => journalLookup(doc, op) === 'exact')) {
     return { ok: true, status: 'duplicate', doc, revision: doc.revision, preview: null };
   }
   if (!positiveInt(expectedRevision)) {

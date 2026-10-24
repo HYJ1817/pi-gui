@@ -146,6 +146,36 @@ check('4a 同一 opId 重复提交不产生重复修改', () => {
   assert.equal(serialize(doc), before);
 });
 
+check('4c 同 opId 夹带不同内容被拒绝（opid-reuse）', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-demo' });
+  const op = userOp('dup-1', 'node.add', doc.revision, { id: 'n9', label: '缓存', x: 0, y: 100 });
+  doc = applyUserOperation(doc, op).doc;
+  const before = serialize(doc);
+  // 同一 opId，内容换成更新操作（伪装成「已应用」的重放）
+  const forged = userOp('dup-1', 'node.update', doc.revision, { id: 'n1', label: '被篡改' });
+  const r = applyUserOperation(doc, forged);
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'opid-reuse');
+  assert.equal(serialize(doc), before);
+});
+
+check('4d 幂等窗口外的重放由 revision 单调性兜底（stale-base）', () => {
+  let doc = createFlowchartDocument({ documentId: 'doc-demo' }); // revision 2，日志含 5 条种子
+  const ops = [];
+  for (let i = 0; i < LIMITS.journalMax; i += 1) {
+    ops.push(userOp(`evict-${i}`, 'node.update', doc.revision, { id: 'n1', label: `L${i}` }));
+  }
+  doc = applyOperations(doc, ops).doc; // 日志达到 505 条，5 条种子被 FIFO 淘汰
+  assert.equal(doc.appliedOps.length, LIMITS.journalMax);
+  assert.equal(doc.appliedOps.some((e) => e.id === 'seed-n1'), false);
+  const before = serialize(doc);
+  const r = applyUserOperation(doc, userOp('seed-n1', 'node.add', 1, { id: 'n1', label: '开始', x: 0, y: 0 }));
+  // 种子 opId 已被淘汰，日志不再认识它；但它的 baseRevision 1 永远追不上单调前进的 revision
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'stale-base');
+  assert.equal(serialize(doc), before);
+});
+
 check('4b 建议重复接受幂等', () => {
   let doc = createFlowchartDocument({ documentId: 'doc-demo' });
   doc = bindSession(doc, 'sess-1');
