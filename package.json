@@ -124,6 +124,7 @@
     "test:runtime-live": "node tests/runtime-live.cjs",
     "test:runtime-soak": "node tests/runtime-soak.cjs",
     "test:runtime-electron": "node tests/runtime-electron.cjs",
+    "test:z1:electron": "node tests/z1-electron.cjs",
     "test:session-changes-ui": "node tests/session-change-query.cjs && node tests/session-change-ui.cjs && node tests/session-change-startup.cjs",
     "test:session-revert-object-writer": "node tests/session-revert-object-writer.cjs",
     "test:session-revert-object-faults": "node tests/session-revert-object-faults.cjs",

@@ -25,13 +25,7 @@ const until = async (fn, label = 'state') => {
 async function main() {
   const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
   const dom = new JSDOM(html, { url: 'http://127.0.0.1/' });
-  /* jsdom 没有布局，scrollTop 永远是 0；这里给它一个可读写的存根，
-   * 只证明「赋值/读取」这条代码路径，不证明真实渲染几何。 */
-  Object.defineProperty(dom.window.Element.prototype, 'scrollTop', {
-    configurable: true,
-    get() { return this._scrollTopValue || 0; },
-    set(value) { this._scrollTopValue = Number(value) || 0; },
-  });
+  // Actual overflow and clamping are covered by z1-electron.cjs with real CSS.
   Object.assign(global, {
     window: dom.window,
     document: dom.window.document,
@@ -123,7 +117,7 @@ async function main() {
     const row = document.querySelector('#rightPane .chg-row');
     row.querySelector('.chg-main').click();
     await until(() => row.querySelector('.d-row'));
-    const scroller = pane.root.querySelector('.chg-body');
+    const scroller = pane.root.querySelector('.chg-list');
     scroller.scrollTop = 40;
     scroller.dispatchEvent(new window.Event('scroll', { bubbles: false }));
     ok('diff row is expanded before the panel switch', () => !row.querySelector('.chg-diff').hidden);
@@ -138,7 +132,9 @@ async function main() {
     const reopenedRow = pane.root.querySelector('#rightPane .chg-row');
     ok('reopening Changes restores the expanded diff for the same scope', () =>
       Boolean(reopenedRow) && !reopenedRow.querySelector('.chg-diff').hidden);
-    await until(() => pane.root.querySelector('.chg-body')?.scrollTop > 0, 'list scroll restore');
+    await until(() => pane.root.querySelector('.chg-list')?.scrollTop === 40, 'list scroll restore');
+    ok('list restoration targets .chg-list rather than the non-scrolling body', () =>
+      pane.root.querySelector('.chg-body').scrollTop === 0 && pane.root.querySelector('.chg-list').scrollTop === 40);
 
     /* A scope switch must still drop the retained state. */
     document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));

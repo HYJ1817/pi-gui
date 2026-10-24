@@ -89,6 +89,53 @@ function fixture() {
       assert.equal(f.d.querySelector('img'), null);
     });
 
+    await check('Z1-2 概览 Classic 引用显示行内成功反馈且保留草稿', async () => {
+      Object.assign(f.w.S, { hasProject: true, switching: false, stopping: false, submitting: false, bridgeState: 'ready' });
+      const input = f.d.getElementById('input'); input.value = 'existing draft';
+      f.d.querySelector('.ui5-log-ref').click();
+      assert.match(f.d.querySelector('.ui5-logs-recent-error [role=status]').textContent, /已引用.*不会自动发送/);
+      assert.match(input.value, /^existing draft\n\n日志引用/);
+      assert.doesNotMatch(input.value, /get_state|corr-fixture|durationMs/);
+      f.d.querySelector('.ui5-log-ref').click();
+      assert.equal(input.value.split('日志引用').length, 3, 'one append per deliberate click');
+    });
+
+    await check('Z1-2 未就绪引用显示失败，不改草稿、不新增 Toast', async () => {
+      const input = f.d.getElementById('input'), before = input.value;
+      const toasts = f.d.querySelector('#toasts').childElementCount;
+      f.w.S.bridgeState = 'disconnected';
+      f.d.querySelector('.ui5-log-ref').click();
+      assert.match(f.d.querySelector('.ui5-logs-recent-error [role=status]').textContent, /尚未就绪.*复制/);
+      assert.equal(input.value, before);
+      assert.equal(f.d.querySelector('#toasts').childElementCount, toasts);
+      f.w.S.bridgeState = 'ready';
+    });
+
+    await check('Z1-2 Runtime 引用只填当前 owner 的输入框并显示反馈', async () => {
+      f.w.showRuntimeConversation(); f.w.setGitConversationScope('A');
+      f.w.runtimeStore.seed({ backendInstance: 'fixture', items: [{ conversationId: 'A',
+        owner: { backendInstance: 'fixture', conversationId: 'A', runtimeId: 'ra', runtimeGeneration: '1', sessionId: 'sa' }, lifecycle: 'ready' }] });
+      f.d.getElementById('runtimeView').innerHTML = '<section class="runtime-conversation" data-conversation-id="A"><textarea aria-label="给当前会话的任务">runtime draft</textarea></section>';
+      const classic = f.d.getElementById('input').value;
+      f.d.querySelector('.ui5-log-ref').click();
+      assert.match(f.d.querySelector('#runtimeView textarea').value, /^runtime draft\n\n日志引用/);
+      assert.equal(f.d.getElementById('input').value, classic);
+      assert.match(f.d.querySelector('.ui5-logs-recent-error [role=status]').textContent, /已引用/);
+    });
+
+    await check('Z1-2 Runtime 身份不匹配与未就绪均显示拒绝反馈', async () => {
+      const root = f.d.querySelector('.runtime-conversation'), input = root.querySelector('textarea'), before = input.value;
+      root.dataset.conversationId = 'B'; f.d.querySelector('.ui5-log-ref').click();
+      assert.match(f.d.querySelector('.ui5-logs-recent-error [role=status]').textContent, /身份不一致/);
+      assert.equal(input.value, before);
+      root.dataset.conversationId = 'A'; f.w.runtimeStore.get('A').item.lifecycle = 'starting';
+      f.d.querySelector('.ui5-log-ref').click();
+      assert.match(f.d.querySelector('.ui5-logs-recent-error [role=status]').textContent, /未就绪/);
+      assert.equal(input.value, before);
+      f.w.setGitConversationScope(null); f.w.showChat();
+      assert.ok(!f.calls.some(c => /prompt|steer|follow.up|command|execute/.test(c.url)));
+    });
+
     await check('设置修改走 API 并更新状态，非法路径没有被发送', async () => {
       const mode = [...f.d.querySelectorAll('select')].find((s) => s.getAttribute('aria-label') === '日志级别');
       assert.ok(mode);
