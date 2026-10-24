@@ -358,6 +358,25 @@
   margin-top: 4px;
 }
 
+.ui5-log-actions {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  flex-wrap: wrap;
+}
+
+.ui5-log-ref-status {
+  font-size: 11px;
+  color: var(--ui-text-secondary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ui5-log-ref {
+  margin-left: auto;
+}
+
 .ui5-logs-export-intro {
   padding: var(--ui-space-3);
   border: 1px solid var(--ui-info-border);

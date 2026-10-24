@@ -11,7 +11,8 @@ import {
   fetchLogsStatus, fetchLogEntries, updateLogSettings, clearLogs,
   previewLogExport, downloadLogReport, fetchDiagnostics,
 } from './api.js';
-import { buildDiagnosticSummary } from './diagnostics.js';
+import { buildDiagnosticSummary, buildLogReference } from './diagnostics.js';
+import { fillReviewComposer } from './review-fill.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { logRendererEvent, setRendererLoggingEnabled } from './log-client.js';
@@ -68,6 +69,20 @@ function safeCopy(text, message = '已复制') {
     toast('复制失败，请手工选中', 'warn');
     return false;
   });
+}
+
+/* 「引用到对话」只做一次追加式填入；填不进（未就绪/不属于该会话）时提示原因，
+ * 摘要仍由「复制这一条」兜底，绝不自动发送。 */
+function referenceEntryToComposer(entry, statusNode) {
+  const summary = buildLogReference(entry);
+  if (!summary) {
+    if (statusNode) statusNode.textContent = '这条日志缺少可引用的字段。';
+    return;
+  }
+  const result = fillReviewComposer(summary);
+  if (statusNode) statusNode.textContent = result.ok
+    ? `已引用到当前会话${result.appended ? '（追加在原有输入之后）' : ''}；不会自动发送。`
+    : `${result.error} 摘要仍在，可用「复制这一条」粘贴。`;
 }
 
 function statusRow(label, value, cls = '') {
@@ -391,9 +406,16 @@ export function openLogs() {
         meta.appendChild(pre);
       }
       details.appendChild(meta);
+      const entryStatus = node('span', 'ui5-log-ref-status');
+      entryStatus.setAttribute('role', 'status');
+      const actions = node('div', 'ui5-log-actions');
       const copy = button('复制这一条', 'btn ui5-log-copy');
       copy.onclick = () => void safeCopy(safeEntryText(entry), '已复制脱敏日志摘要');
-      details.appendChild(copy);
+      const reference = button('引用到对话', 'btn ui5-log-copy');
+      reference.title = '把脱敏摘要追加到当前会话输入框；不会自动发送';
+      reference.onclick = () => referenceEntryToComposer(entry, entryStatus);
+      actions.append(copy, reference, entryStatus);
+      details.appendChild(actions);
       article.appendChild(details);
       return article;
     }
@@ -406,6 +428,12 @@ export function openLogs() {
         node('span', 'ui5-log-level', LEVEL_TEXT[entry.level] || entry.level || '未知'),
         node('span', '', `${entry.source || '未知'} · ${entry.event || '未知事件'}${entry.code ? ' · ' + entry.code : ''}`),
       );
+      if (entry.level === 'ERROR' || entry.level === 'WARN') {
+        const reference = button('引用', 'btn tiny ui5-log-ref');
+        reference.title = '把脱敏摘要追加到当前会话输入框；不会自动发送';
+        reference.onclick = () => referenceEntryToComposer(entry, null);
+        row.appendChild(reference);
+      }
       return row;
     }
 

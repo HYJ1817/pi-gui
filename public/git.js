@@ -76,15 +76,26 @@ document.addEventListener('pi-gui:git-scope', () => {
   scopeRevision++; statusRequest++;
   S.changes = blankChanges(); view.sessionOnly = false;
   dropReviewDraftSurface();
+  /* 换会话/作用域后旧 diff 视图状态不再属于新作用域。 */
+  diffViewState.clear();
+  diffViewStateEpoch++;
+  lastChangesListScroll = 0;
   renderChangesBody();
 });
 document.addEventListener('pi-gui:workspace-generation', () => {
   dropReviewDraftSurface();
+  /* 项目 / Worktree 切换：旧作用域的展开状态与滚动位置一并丢弃。 */
+  diffViewState.clear();
+  diffViewStateEpoch++;
+  lastChangesListScroll = 0;
 });
 document.addEventListener('pi-gui:session-switch', () => {
   /* Classic session switch: the comment bucket changes with S.state.sessionId,
    * so unsaved text and expanded-diff state must not survive the switch. */
   dropReviewDraftSurface();
+  diffViewState.clear();
+  diffViewStateEpoch++;
+  lastChangesListScroll = 0;
   suspendReviewSurface();
 });
 
@@ -126,6 +137,14 @@ let reviewScopeSuspended = false;
 let restoringAll = false;
 /* Expanded diff state survives a list redraw caused by an external Git refresh. */
 const diffViewState = new Map();
+/* Bumped on every clear (scope/session/workspace switch). Async rememberDiffView
+ * callers compare against the epoch captured in dstate, so an in-flight
+ * reloadDiff cannot resurrect retained state for a dropped scope. */
+let diffViewStateEpoch = 0;
+/* The same map also survives closing and reopening the panel: entries are
+ * keyed by workspace+conversation+path and every restore re-proves the anchor
+ * against a freshly rendered diff. Scope/session/workspace switches clear it. */
+let lastChangesListScroll = 0;
 /* Unsaved comment text is captured before a destructive redraw and restored
  * only inside the same workspace/conversation scope. */
 const pendingReviewDrafts = new Map();
@@ -149,10 +168,10 @@ function clearReviewRangeSelection(forget = true) {
  * stay available when the user comes back; only the transient surface is
  * dropped here.
  */
+/* 换作用域时同时清掉跨面板保留的 diff 展开状态（调用方各自 clear）。 */
 function dropReviewDraftSurface() {
   clearReviewRangeSelection();
   pendingReviewDrafts.clear();
-  diffViewState.clear();
   reviewSummaryClose?.();
   reviewSummaryClose = null;
 }
@@ -463,6 +482,22 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   const body = document.createElement('div');
   body.className = 'chg-body';
   card.appendChild(body);
+  /* 只有「重开面板」这一次渲染才恢复滚动；随后的正常刷新沿用 DOM 自身行为。 */
+  const reopenScroll = lastChangesListScroll;
+  lastChangesListScroll = 0;
+  /* 重开面板后的第一次「拿到最新状态的重绘」仍然属于这次恢复；之后的
+   * 刷新重绘（自动防抖、手动刷新）沿用原有行为，不自动展开任何 diff。 */
+  const reopenSerial = ++statusRequest;
+  if (reopenScroll) {
+    queueMicrotask(() => {
+      /* panels.changes 就是 .chg-body 滚动容器本身；浏览器会把超过内容
+       * 高度的值自动 clamp 回可滚范围。 */
+      if (panels.changes) panels.changes.scrollTop = reopenScroll;
+    });
+  }
+  body.addEventListener('scroll', () => {
+    if (panels.changes === body) lastChangesListScroll = body.scrollTop;
+  }, { passive: true });
 
   /* 弹层里的动态容器。关闭时 modal.js 会把它置回 null，
    * 于是「异步结果晚到」的情况会自然落空，不会往已卸载的节点里写。 */
@@ -472,12 +507,13 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
 
   // 打开就用最新数据重画一次（先用已有状态垫一帧，避免空白等待）
   loadGitStatus().then(() => {
-    if (instance.isCurrent()) { renderChangesBody(); void restoreReviewComments(); }
+    if (instance.isCurrent()) { renderChangesBody(reopenSerial); void restoreReviewComments(); }
   });
 }
 
-/** 重画面板内容。`panels.changes` 为空（面板没开 / 已关）时直接返回。 */
-export function renderChangesBody() {
+/** 重画面板内容。`panels.changes` 为空（面板没开 / 已关）时直接返回。
+ *  `reopenSerial` 只在面板重开后第一次加载完成时传入。 */
+export function renderChangesBody(reopenSerial = 0) {
   const box = panels.changes;
   if (!box || !box.isConnected) return;
 
@@ -539,7 +575,7 @@ export function renderChangesBody() {
 
   const list = document.createElement('div');
   list.className = 'chg-list';
-  for (const f of shown) list.appendChild(changeRow(f, session.has(f.path)));
+  for (const f of shown) list.appendChild(changeRow(f, session.has(f.path), reopenSerial));
   box.appendChild(list);
 
   if (c.truncated) box.appendChild(hint('变更列表过长，已截断显示。', 'warn'));
@@ -683,7 +719,7 @@ function fillStat(span, add, del) {
   }
 }
 
-function changeRow(f, inSession) {
+function changeRow(f, inSession, reopenSerial = 0) {
   const surface = activeChangesSurface;
   const revision = scopeRevision;
   const row = document.createElement('div');
@@ -751,9 +787,16 @@ function changeRow(f, inSession) {
   const retained = diffViewState.get(stateKey);
   const hasPendingDraft = [...pendingReviewDrafts.values()].some((draft) => draft.path === f.path);
   const reopen = Boolean(retained?.open && (hasPendingDraft || retained.loading));
+  /* A panel reopen retains open diffs across the rebuild: the state entry
+   * carries no content, and the reload below re-proves the anchor the same
+   * way a manual re-open would. */
+  /* 「重开面板保留展开状态」只发生在挂载后的第一次状态加载渲染里；
+   * 普通刷新重绘沿用既有行为 —— 折叠的就保持折叠，避免刷新悄悄
+   * 复活用户刚刚手动收起的区块。 */
+  const restoreOpen = Boolean(retained?.open && !reopen && reopenSerial);
   if (retained) diffBox.scrollTop = retained.scrollTop || 0;
-  diffBox.hidden = !reopen;
-  if (reopen) row.classList.add('open');
+  diffBox.hidden = !(reopen || restoreOpen);
+  if (reopen || restoreOpen) row.classList.add('open');
   row.appendChild(diffBox);
 
   /* 这一个文件的 diff 视图状态。context 是**按文件**记的：想细看某个文件的
@@ -764,6 +807,9 @@ function changeRow(f, inSession) {
     busy: false,
     request: 0,
     stateKey,
+    scope: currentReviewScope(),
+    revision: scopeRevision,
+    epoch: diffViewStateEpoch,
   };
 
   async function reloadDiff() {
@@ -817,12 +863,19 @@ function changeRow(f, inSession) {
 
   diffBox.addEventListener('scroll', () => rememberDiffView(dstate, diffBox, !diffBox.hidden), { passive: true });
   if (reopen) queueMicrotask(() => { void reloadDiff().then(() => { diffBox.scrollTop = retained.scrollTop || 0; }); });
+  if (restoreOpen) queueMicrotask(() => { void reloadDiff(); });
 
   return row;
 }
 
 function rememberDiffView(dstate, box, open) {
   if (!dstate?.stateKey) return;
+  /* dstate is created during a changeRow render; an async rememberDiffView
+   * (in-flight reloadDiff, scroll on a detached node) that lands after a
+   * scope/session/workspace switch must not resurrect retained state for the
+   * previous scope. */
+  if (dstate.scope !== currentReviewScope() || dstate.revision !== scopeRevision
+    || dstate.epoch !== diffViewStateEpoch) return;
   diffViewState.set(dstate.stateKey, {
     open: Boolean(open),
     context: dstate.context,
