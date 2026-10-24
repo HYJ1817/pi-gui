@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40074245381",
+    "headSha": "3ced819f2abd51fb73d8244f7e172e57d49b1b5d",
+    "event": "push",
+    "attempt": 1,
+    "conclusion": "success"
+  },
+  "wallTimeMs": 1350000,
+  "wallDefinition": "first observed job start to last job end; queue unavailable",
+  "runnerOccupancyMs": 3940000,
+  "queueWaitMs": null,
+  "afterMeasurement": null,
+  "summary": {
+    "allPassed": true,
+    "dataComplete": true,
+    "passed": 196
+  },
+  "jobs": [
+    {
+      "name": "Validate complete test plan",
+      "startedAt": "2026-10-24T07:28:11Z",
+      "completedAt": "2026-10-24T07:28:38Z",
+      "conclusion": "success",
+      "durationMs": 27000,
+      "steps": []
+    },
+    {
+      "name": "Tests (ui)",
+      "startedAt": "2026-10-24T07:28:41Z",
+      "completedAt": "2026-10-24T07:31:08Z",
+      "conclusion": "success",
+      "durationMs": 147000,
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "startedAt": "2026-10-24T07:29:04Z",
+          "completedAt": "2026-10-24T07:29:13Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run canonical test group",
+          "startedAt": "2026-10-24T07:29:13Z",
+          "completedAt": "2026-10-24T07:31:02Z",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "Tests (security)",
+      "startedAt": "2026-10-24T07:28:41Z",
+      "completedAt": "2026-10-24T07:48:25Z",
+      "conclusion": "success",
+      "durationMs": 1184000,
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "startedAt": "2026-10-24T07:29:10Z",
+          "completedAt": "2026-10-24T07:29:19Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run canonical test group",
+          "startedAt": "2026-10-24T07:29:19Z",
+          "completedAt": "2026-10-24T07:48:18Z",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "Tests (core)",
+      "startedAt": "2026-10-24T07:28:41Z",
+      "completedAt": "2026-10-24T07:36:36Z",
+      "conclusion": "success",
+      "durationMs": 475000,
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "startedAt": "2026-10-24T07:28:59Z",
+          "completedAt": "2026-10-24T07:29:04Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run canonical test group",
+          "startedAt": "2026-10-24T07:29:04Z",
+          "completedAt": "2026-10-24T07:36:30Z",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "Tests (native)",
+      "startedAt": "2026-10-24T07:28:41Z",
+      "completedAt": "2026-10-24T07:46:12Z",
+      "conclusion": "success",
+      "durationMs": 1051000,
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "startedAt": "2026-10-24T07:29:03Z",
+          "completedAt": "2026-10-24T07:29:13Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run canonical test group",
+          "startedAt": "2026-10-24T07:29:14Z",
+          "completedAt": "2026-10-24T07:46:06Z",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "Tests (faults)",
+      "startedAt": "2026-10-24T07:28:41Z",
+      "completedAt": "2026-10-24T07:44:07Z",
+      "conclusion": "success",
+      "durationMs": 926000,
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "startedAt": "2026-10-24T07:29:12Z",
+          "completedAt": "2026-10-24T07:29:22Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run canonical test group",
+          "startedAt": "2026-10-24T07:29:22Z",
+          "completedAt": "2026-10-24T07:44:02Z",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "Electron build check",
+      "startedAt": "2026-10-24T07:48:28Z",
+      "completedAt": "2026-10-24T07:50:06Z",
+      "conclusion": "success",
+      "durationMs": 98000,
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "startedAt": "2026-10-24T07:48:54Z",
+          "completedAt": "2026-10-24T07:49:03Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Generate test fixtures",
+          "startedAt": "2026-10-24T07:49:03Z",
+          "completedAt": "2026-10-24T07:49:09Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build Electron app",
+          "startedAt": "2026-10-24T07:49:09Z",
+          "completedAt": "2026-10-24T07:49:39Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify packaged app",
+          "startedAt": "2026-10-24T07:49:39Z",
+          "completedAt": "2026-10-24T07:49:52Z",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify single-file exe",
+          "startedAt": "2026-10-24T07:49:52Z",
+          "completedAt": "2026-10-24T07:50:02Z",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "CI gate",
+      "startedAt": "2026-10-24T07:50:09Z",
+      "completedAt": "2026-10-24T07:50:41Z",
+      "conclusion": "success",
+      "durationMs": 32000,
+      "steps": []
+    }
+  ],
+  "groups": [
+    {
+      "group": "core",
+      "count": 120,
+      "executionMs": 444552.853,
+      "slowest": [
+        {
+          "command": "node tests/candidate-runs.cjs",
+          "durationMs": 112189.787
+        },
+        {
+          "command": "node tests/candidate-adoption.cjs",
+          "durationMs": 107409.979
+        },
+        {
+          "command": "node tests/worktrees.cjs",
+          "durationMs": 17493.848
+        },
+        {
+          "command": "node tests/planner.cjs",
+          "durationMs": 15012.796
+        },
+        {
+          "command": "node tests/evidence.cjs",
+          "durationMs": 14844.035
+        }
+      ]
+    },
+    {
+      "group": "faults",
+      "count": 21,
+      "executionMs": 878819.488,
+      "slowest": [
+        {
+          "command": "node tests/session-revert-object-faults.cjs",
+          "durationMs": 634864.458
+        },
+        {
+          "command": "node tests/session-change-store.cjs",
+          "durationMs": 122488.887
+        },
+        {
+          "command": "node tests/session-revert-inplace-safety.cjs",
+          "durationMs": 57928.497
+        },
+        {
+          "command": "node tests/session-revert-object-recovery.cjs",
+          "durationMs": 15619.861
+        },
+        {
+          "command": "node tests/session-revert-recovery.cjs",
+          "durationMs": 10785.181
+        }
+      ]
+    },
+    {
+      "group": "native",
+      "count": 4,
+      "executionMs": 1012086.676,
+      "slowest": [
+        {
+          "command": "node tests/session-revert-object-writer.cjs",
+          "durationMs": 424962.487
+        },
+        {
+          "command": "node tests/session-revert-object-runtime.cjs",
+          "durationMs": 393491.561
+        },
+        {
+          "command": "node tests/candidate-apply.cjs",
+          "durationMs": 187195.207
+        },
+        {
+          "command": "node tests/candidate-writer.cjs",
+          "durationMs": 6437.421
+        }
+      ]
+    },
+    {
+      "group": "security",
+      "count": 27,
+      "executionMs": 1138257.174,
+      "slowest": [
+        {
+          "command": "node tests/session-revert-sacl-witness.cjs",
+          "durationMs": 346757.314
+        },
+        {
+          "command": "node tests/session-revert-object-service.cjs",
+          "durationMs": 277701.403
+        },
+        {
+          "command": "node tests/session-revert-inplace.cjs",
+          "durationMs": 120537.519
+        },
+        {
+          "command": "node tests/session-revert-object-confirmation.cjs",
+          "durationMs": 119741.549
+        },
+        {
+          "command": "node tests/session-revert-store.cjs",
+          "durationMs": 102763.865
+        }
+      ]
+    },
+    {
+      "group": "ui",
+      "count": 24,
+      "executionMs": 107973.85,
+      "slowest": [
+        {
+          "command": "node tests/smoke.cjs",
+          "durationMs": 69260.683
+        },
+        {
+          "command": "node tests/ui2-visual.cjs",
+          "durationMs": 16543.657
+        },
+        {
+          "command": "node tests/ui4-integration.cjs",
+          "durationMs": 3200.022
+        },
+        {
+          "command": "node tests/process-ui.cjs",
+          "durationMs": 1712.821
+        },
+        {
+          "command": "node tests/ui4-approval.cjs",
+          "durationMs": 1662.266
+        }
+      ]
+    }
+  ]
+}

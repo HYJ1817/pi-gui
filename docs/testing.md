@@ -27,6 +27,18 @@
 
 以上不改变 CI 触发、测试清单、gate 或发布脚本，也不授予联网模型调用、推送、合并、tag 或发布权限。
 
+## G3 调度与文档候选分类
+
+打包检查在 test-plan 成功后与五组测试运行于不同 runner，各自 checkout、准备依赖和 fixture；
+不共享测试组产物。最终 CI gate 仍同时要求计划、完整测试矩阵和打包成功，G2 证据完整性检查保持。
+组内顺序、C: profile TEMP、端口与 Native 安全标准不变；实际 wall 收益须由同状态 PR CI 证明。
+
+`node scripts/classify-doc-pr.mjs --event pull_request --base <完整SHA> --head <完整SHA>` 仅作只读候选诊断。
+白名单精确限定两篇历史视觉报告，见 [G3 验收报告](G3-acceptance.md)；混合/未知/敏感、删除/重命名/类型变化或范围异常不减测。
+候选结果不验证调用者提供 SHA 的 PR 来源，也不等于文档检查通过。生产 CI 未调用分类器，始终完整 canonical 和构建，
+包括 main push 和合格文档 PR；`requiredMode` 始终为 full。回归入口仍为 `npm run test:ci`。
+保护方案只是 [disabled 配置草案](G3-main-ruleset.proposed.json)，另需用户管理授权才可启用，不由 CI 自动应用。
+
 ## G2 CI 证据与离线桌面 smoke
 
 `scripts/run-test-group.mjs` 仍是唯一分组执行器；每组内顺序、TEMP 隔离、五组及失败短路保持不变。
