@@ -1,8 +1,10 @@
 'use strict';
-/* Z3-A: Real Electron layout, interaction, themes and screenshots.
+/* Z3-A: Real Electron layout, interaction, themes, sandbox security and screenshots.
  *
- * Runs without real Pi or network access; mounts the UI in Electron BrowserWindow,
- * tests chart rendering, parameter interaction, theme adaptation, and captures real PNG screenshots.
+ * Runs with Electron normal sandbox (NO --no-sandbox); mounts the UI in Electron BrowserWindow,
+ * verifies context isolation and absence of node integration, tests chart rendering,
+ * parameter interaction, theme adaptation, captures real PNG screenshots,
+ * and guarantees a non-zero exit code on any check failure or error.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -22,22 +24,29 @@ if (!process.versions.electron) {
     (fs.existsSync('C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-g2-electron-44.4.3\\electron.exe')
       ? 'C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-g2-electron-44.4.3\\electron.exe'
       : require('electron'));
-  const run = spawnSync(electronBin, [__filename, '--no-sandbox', '--in-process-gpu', '--disable-gpu'], {
+
+  // 严格使用正常沙箱，严禁使用 --no-sandbox
+  const args = [__filename, ...process.argv.slice(2)];
+  const run = spawnSync(electronBin, args, {
     env,
     stdio: 'inherit',
     windowsHide: true,
     timeout: 120000,
   });
-  if (run.status !== 0) {
-    console.error('Electron exit:', run.status, run.signal, run.error?.message || '');
-  }
+
   if (path.dirname(world) === path.resolve(os.tmpdir()) && path.basename(world).startsWith('pi-gui-z3-')) {
     fs.rmSync(world, { recursive: true, force: true, maxRetries: 5 });
+  }
+
+  if (run.status !== 0) {
+    console.error('Electron exit:', run.status, run.signal, run.error?.message || '');
   }
   process.exitCode = run.status ?? 1;
 } else {
   const { app, BrowserWindow } = require('electron');
   const http = require('node:http');
+
+  const simulateFailure = process.argv.includes('--simulate-failure');
 
   app.setPath('userData', path.join(process.env.Z3_WORLD, 'profile'));
   let win, server, checks = 0, failed = 0;
@@ -46,13 +55,35 @@ if (!process.versions.electron) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const check = (name, value) => {
     checks++;
-    if (!value) failed++;
+    if (!value) {
+      failed++;
+      process.exitCode = 1;
+    }
     evidence.push({ name, passed: Boolean(value) });
     console.log(`${value ? 'PASS' : 'FAIL'} ${name}`);
   };
 
+  process.on('uncaughtException', (err) => {
+    console.error('Electron uncaughtException:', err);
+    process.exitCode = 1;
+    app.exit(1);
+  });
+
+  process.on('unhandledRejection', (err) => {
+    console.error('Electron unhandledRejection:', err);
+    process.exitCode = 1;
+    app.exit(1);
+  });
+
   app.whenReady().then(async () => {
     fs.mkdirSync(OUT, { recursive: true });
+
+    // 1. 若触发了故意失败测试，验证退出码确实为非零并提前退出
+    if (simulateFailure) {
+      check('deliberate simulated check failure for non-zero exit code test', false);
+      app.exit(1);
+      return;
+    }
 
     server = http.createServer((req, res) => {
       const rel = decodeURIComponent(new URL(req.url, 'http://fixture.invalid').pathname).replace(/^\//, '') || 'index.html';
@@ -110,7 +141,17 @@ if (!process.versions.electron) {
 
     await win.loadURL(`http://127.0.0.1:${port}/`);
 
-    // 初始化环境与渲染多图表消息
+    // 2. 严格核对 Electron 正常沙箱与隔离安全状态
+    const secState = await read(`({
+      hasProcess: typeof window.process !== 'undefined',
+      hasRequire: typeof window.require !== 'undefined',
+      hasBuffer: typeof window.Buffer !== 'undefined',
+    })`);
+    check('renderer normal sandbox enabled (process is undefined)', secState.hasProcess === false);
+    check('renderer contextIsolation enabled (require is undefined)', secState.hasRequire === false);
+    check('renderer nodeIntegration disabled (Buffer is undefined)', secState.hasBuffer === false);
+
+    // 3. 初始化环境与渲染多图表消息
     await read(`(async () => {
       const { S } = await import('/state.js');
       const { md } = await import('/markdown.js');
@@ -182,13 +223,13 @@ if (!process.versions.electron) {
       return true;
     })()`);
 
-    // 1. 验证流内图表卡片渲染
+    // 4. 验证流内图表卡片渲染
     const cardCount = await read('document.querySelectorAll(".viz-card").length');
     check('stream contains 2 interactive viz cards', cardCount === 2);
 
     await shot('01-chat-stream-viz-cards');
 
-    // 2. 点击打开第一个图表（折线图）
+    // 5. 点击打开第一个图表（折线图）
     await read('document.querySelectorAll("[data-viz-open]")[0].click()');
     const paneOpen = await read('window.__testPane.isOpen()');
     check('clicking open opens right pane', paneOpen === true);
@@ -198,14 +239,14 @@ if (!process.versions.electron) {
 
     await shot('02-line-chart-in-right-pane');
 
-    // 3. 参数交互：切换为柱状图形态
+    // 6. 参数交互：切换为柱状图形态
     await read('document.querySelector(".viz-type-row button:last-child").click()');
     const isBar = await read('document.querySelector("#rightPane svg.viz-chart-bar") !== null');
     check('switched to bar chart presentation in Electron', isBar === true);
 
     await shot('03-bar-chart-switched');
 
-    // 4. 调整阈值并高亮超标
+    // 7. 调整阈值并高亮超标
     await read(`(() => {
       const slider = document.querySelector(".viz-thresh-row .viz-slider");
       slider.value = "50";
@@ -216,21 +257,21 @@ if (!process.versions.electron) {
 
     await shot('04-threshold-highlight');
 
-    // 5. 引用到输入框草稿
+    // 8. 引用到输入框草稿
     await read('document.querySelector(".viz-quote-btn").click()');
     const composerText = await read('document.getElementById("input").value');
     check('composer is populated with chart summary', composerText.includes('[图表配置引用：CPU 核心负载对比]'));
 
     await shot('05-quoted-to-composer');
 
-    // 6. 浅色主题适配
+    // 9. 浅色主题适配
     await read('document.documentElement.setAttribute("data-theme", "light")');
     await shot('06-light-theme-adaptation');
 
     // 恢复深色主题
     await read('document.documentElement.setAttribute("data-theme", "dark")');
 
-    // 7. 窄窗口布局自适应（760px 宽度）
+    // 10. 窄窗口布局自适应（760px 宽度）
     win.setSize(760, 700);
     await sleep(200);
     const mode = await read('document.getElementById("rightPane").dataset.mode');
@@ -238,7 +279,7 @@ if (!process.versions.electron) {
 
     await shot('07-narrow-window-responsive');
 
-    // 8. 打开第二个图表（多图表切换）
+    // 11. 打开第二个图表（多图表切换）
     await read('document.querySelectorAll("[data-viz-open]")[1].click()');
     const chart2Title = await read('document.querySelector(".rp-head-title").textContent');
     check('switching to second chart updates panel title', chart2Title === '各模块编译耗时');
@@ -248,6 +289,13 @@ if (!process.versions.electron) {
     console.log(`\nElectron Viz: ${checks - failed}/${checks} passed.`);
     server.close();
     win.destroy();
-    app.quit();
+
+    if (failed > 0) {
+      process.exitCode = 1;
+      app.exit(1);
+    } else {
+      process.exitCode = 0;
+      app.quit();
+    }
   });
 }

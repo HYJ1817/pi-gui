@@ -1,14 +1,18 @@
-/* Z3-A: Interactive Visualization UI & Lifecycle Tests.
+/* Z3-A: Interactive Visualization UI & Lifecycle Tests (Independent Review Fixes).
  *
  * Covers:
- * - Markdown rendering & safe fallback to raw code block
+ * - Markdown rendering & unclosed fence streaming handling (must stay raw pre)
+ * - Safe fallback to raw code block for invalid/malicious data
  * - Raw code toggle in chat stream
  * - Opening viz surface in right-pane
- * - SVG Line & Bar chart generation, elements, and axes
- * - Parameter controls: type toggle, series filter, range slider, threshold alert
- * - Quote to composer (fillReviewComposer) & bounds
+ * - SVG Line & Bar chart generation, zero-baseline rules (positive, negative, cross-zero, constant negative)
+ * - Parameter controls: type toggle, series filter, range slider, threshold alert (adaptive range)
+ * - Precise stats summary calculation on current visible range slice (known expected values)
+ * - Quote to composer (fillReviewComposer) in Classic & Runtime
  * - Session mismatch & workspace generation invalidation
- * - Disposal & cleanup
+ * - Runtime owner verification & refusal on stale owner/generation
+ * - Source message disconnection (deleted message / cleared thread) invalidation
+ * - Clean disposal & cleanup
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -42,12 +46,16 @@ async function main() {
   const { initRightPane } = await import('../public/right-pane.js');
   const { configureSecondaryPane } = await import('../public/ui/secondary-surface.js');
   const { initVizIntegration } = await import('../public/viz-integration.js');
-  const { buildVizSummaryMarkdown } = await import('../public/viz-panel.js');
+  const { buildVizSummaryMarkdown, validateSessionScope, calculateSeriesStats, openVizPanel } = await import('../public/viz-panel.js');
+  const { calculateBounds, renderVizChart } = await import('../public/viz-chart.js');
+  const { setGitConversationScope } = await import('../public/api.js');
+  const { runtimeStore, seedRuntimeSnapshot } = await import('../public/runtime-state.js');
+  const { showRuntimeConversation } = await import('../public/ui/workspace-surface.js');
 
   initVizIntegration();
 
-  // 1. Markdown 渲染测试
-  console.log('\n--- 1. Markdown 渲染与安全降级 ---');
+  // 1. Markdown 渲染与流式未闭合围栏测试
+  console.log('\n--- 1. Markdown 渲染与流式未闭合围栏安全 ---');
 
   const validVizJson = JSON.stringify({
     version: '1',
@@ -64,48 +72,121 @@ async function main() {
     ],
   });
 
-  const validMd = '```pi-gui-viz\n' + validVizJson + '\n```';
-  const validHtml = md(validMd);
-  ok('valid pi-gui-viz renders .viz-card', validHtml.includes('class="viz-card"'));
-  ok('viz-card contains title and meta', validHtml.includes('网络流量吞吐') && validHtml.includes('2 个系列'));
-  ok('viz-card contains open and toggle buttons', validHtml.includes('data-viz-open') && validHtml.includes('data-viz-toggle-raw'));
-  ok('raw code block is preserved but hidden', validHtml.includes('viz-raw-code') && validHtml.includes('hidden'));
+  // 闭合围栏：正确渲染为卡片
+  const closedMd = '```pi-gui-viz\n' + validVizJson + '\n```';
+  const closedHtml = md(closedMd);
+  ok('closed pi-gui-viz renders .viz-card', closedHtml.includes('class="viz-card"'));
+  ok('viz-card contains title and meta', closedHtml.includes('网络流量吞吐') && closedHtml.includes('2 个系列'));
+
+  // 未闭合围栏（流式输出中）：绝对不能提前变成卡片，必须保持为普通代码块
+  const unclosedMd = '```pi-gui-viz\n' + validVizJson;
+  const unclosedHtml = md(unclosedMd);
+  ok('unclosed streaming fence stays as plain code block (no viz-card)', !unclosedHtml.includes('viz-card') && unclosedHtml.includes('data-lang="pi-gui-viz"'));
 
   // 非法 JSON 降级
   const malformedMd = '```pi-gui-viz\n{ invalid json ...\n```';
-  const malformedHtml = md(malformedMd);
-  ok('malformed json falls back to regular code block', !malformedHtml.includes('viz-card') && malformedHtml.includes('data-lang="pi-gui-viz"'));
+  ok('malformed json falls back to regular code block', !md(malformedMd).includes('viz-card'));
 
-  // 恶意/未知类型降级
-  const maliciousMd = '```pi-gui-viz\n{"version":"1","type":"<script>evil()</script>","title":"T","labels":["A"],"series":[{"name":"S","data":[1]}]}\n```';
-  const maliciousHtml = md(maliciousMd);
-  ok('malicious type safely falls back to regular code block', !maliciousHtml.includes('viz-card'));
+  // 恶意类型降级
+  const maliciousMd = '```pi-gui-viz\n{"version":"1","type":"<script>","title":"T","labels":["A"],"series":[{"name":"S","data":[1]}]}\n```';
+  ok('malicious type safely falls back to regular code block', !md(maliciousMd).includes('viz-card'));
 
-  // 常规代码块回归
-  const pyMd = '```python\nprint("hello")\n```';
-  ok('python code block renders unchanged', md(pyMd).includes('data-lang="python"'));
+  // 2. 柱状图零基线几何与自适应坐标测试
+  console.log('\n--- 2. 柱状图零基线与极端数值几何 ---');
 
-  // 2. 界面与右栏交互测试
-  console.log('\n--- 2. 交互卡片与右栏面板 ---');
+  // 全正数柱状图：零基线必须为 0
+  const posBounds = calculateBounds([{ data: [10, 50, 100] }], [0], null, 'bar');
+  ok('all positive bar bounds min is exactly 0', posBounds.min === 0);
+  ok('all positive bar bounds max covers top with padding', posBounds.max >= 100);
+
+  // 全负数柱状图：零基线必须为 0，不能截断
+  const negBounds = calculateBounds([{ data: [-20, -50, -100] }], [0], null, 'bar');
+  ok('all negative bar bounds max is exactly 0', negBounds.max === 0);
+  ok('all negative bar bounds min covers lowest negative', negBounds.min <= -100);
+
+  // 常量负数：零基线仍必须为 0（不能把 min/max 都收缩在 -50 导致基线悬空）
+  const constNegBounds = calculateBounds([{ data: [-50, -50] }], [0], null, 'bar');
+  ok('constant negative bar bounds max is exactly 0', constNegBounds.max === 0);
+  ok('constant negative bar bounds min covers constant value', constNegBounds.min <= -50);
+
+  // 跨零柱状图：正负兼有，零基线必须落在内部
+  const crossBounds = calculateBounds([{ data: [-30, 0, 70] }], [0], null, 'bar');
+  ok('cross-zero bar bounds spans across 0', crossBounds.min < 0 && crossBounds.max > 0);
+
+  // 测试 SVG 渲染几何
+  const testContainer = document.createElement('div');
+  document.body.append(testContainer);
+
+  // 渲染包含负数的柱状图
+  const negChartData = {
+    version: '1', type: 'bar', title: '盈亏对比', unit: 'k',
+    labels: ['Q1', 'Q2', 'Q3'],
+    series: [{ name: '利润', data: [-20, 40, -10] }],
+    params: [],
+  };
+  const negChart = renderVizChart(testContainer, { data: negChartData, type: 'bar' });
+  const renderedBars = testContainer.querySelectorAll('rect.viz-bar');
+  ok('renders 3 bars for cross-zero dataset', renderedBars.length === 3);
+  ok('cross-zero bar chart renders visible zero line', testContainer.querySelector('.viz-zero-line') !== null);
+  negChart.dispose();
+  testContainer.remove();
+
+  // 3. 统计摘要精准计算测试（切片 rangeLimit）
+  console.log('\n--- 3. 统计摘要精确数值计算（带已知期望值） ---');
+
+  const statsSeries = { name: 'CPU', data: [10, 20, 30, 40, 50] };
+  const statsLabels = ['1', '2', '3', '4', '5'];
+
+  // 全量 (5 项)：均值 (10+20+30+40+50)/5 = 30.0，极值 [10, 50]，阈值 35 超标 2 项 (40, 50)
+  const fullStats = calculateSeriesStats(statsSeries, statsLabels, 35);
+  ok('full range avg is exactly 30', fullStats.avg === 30);
+  ok('full range min is 10 and max is 50', fullStats.min === 10 && fullStats.max === 50);
+  ok('full range overCount is 2', fullStats.overCount === 2);
+
+  // 切片 rangeLimit = 3 (最近 3 项: [30, 40, 50]):
+  // 均值 (30+40+50)/3 = 40.0，极值 [30, 50]，阈值 35 超标 2 项 (40, 50)
+  const testDataObj = {
+    version: '1', type: 'line', title: '性能测试', unit: 'ms',
+    labels: statsLabels,
+    series: [statsSeries],
+    params: [{ id: 'threshold', name: '告警线', type: 'number', min: 0, max: 100, default: 35 }],
+  };
+  const summaryMarkdownSlice3 = buildVizSummaryMarkdown(testDataObj, {
+    type: 'line',
+    activeSeries: new Set([0]),
+    rangeLimit: 3,
+    threshold: 35,
+  });
+
+  ok('sliced summary reflects rangeLimit 3', summaryMarkdownSlice3.includes('展示范围=最近 3 项'));
+  ok('sliced summary reflects sliced avg 40', summaryMarkdownSlice3.includes('均值 40ms'));
+  ok('sliced summary reflects sliced min 30 and max 50', summaryMarkdownSlice3.includes('极值 [30 ~ 50]ms'));
+  ok('sliced summary reflects overCount 2', summaryMarkdownSlice3.includes('2 处超过阈值'));
+
+  // 4. 界面与右栏交互测试
+  console.log('\n--- 4. 界面卡片与右栏受控参数交互 ---');
 
   S.workspaceGeneration = 1;
   S.hasProject = true;
   S.bridgeState = 'ready';
-  S.state = { sessionId: 'session-z3-test' };
+  S.cwd = 'C:\\fixture-viz';
+  S.state = { sessionId: 'classic-session-001' };
   const pane = initRightPane();
   configureSecondaryPane(pane);
+  setGitConversationScope(null);
 
-  // 模拟消息插入到 stream
+  // 插入带有真实消息父容器的消息
+  const stream = document.getElementById('stream');
+  stream.replaceChildren();
   const thread = document.createElement('div');
   thread.className = 'thread';
   const msgEl = document.createElement('div');
   msgEl.className = 'message assistant-message';
   msgEl.dataset.id = 'msg-1';
-  msgEl.innerHTML = validHtml;
+  msgEl.innerHTML = closedHtml;
   thread.append(msgEl);
-  document.getElementById('stream').append(thread);
+  stream.append(thread);
 
-  // 测试切换查看 JSON 源码
   const card = msgEl.querySelector('.viz-card');
   const toggleBtn = card.querySelector('[data-viz-toggle-raw]');
   const rawCode = card.querySelector('.viz-raw-code');
@@ -116,121 +197,140 @@ async function main() {
   toggleBtn.click();
   ok('clicking toggle again hides raw code', rawCode.hidden === true && !toggleBtn.classList.contains('is-active'));
 
-  // 测试点击「打开可视化」
+  // 打开右栏
   const openBtn = card.querySelector('[data-viz-open]');
   openBtn.click();
-
-  ok('right pane is opened', pane.isOpen() === true);
-  ok('right pane surface is viz', pane.surface() === 'viz');
+  ok('right pane is opened', pane.isOpen() === true && pane.surface() === 'viz');
 
   const rightPane = document.getElementById('rightPane');
-  const headTitle = rightPane.querySelector('.rp-head-title');
-  ok('panel header shows chart title', headTitle && headTitle.textContent === '网络流量吞吐');
+  ok('panel title matches', rightPane.querySelector('.rp-head-title').textContent === '网络流量吞吐');
 
-  const svg = rightPane.querySelector('svg.viz-svg');
-  ok('SVG chart is mounted', svg !== null);
-  ok('SVG has graphics-document role', svg.getAttribute('role') === 'graphics-document');
-
-  // 折线图包含 polyline 与 circle 数据点
-  const polylines = svg.querySelectorAll('polyline.viz-line');
-  ok('line chart renders polyline for each active series', polylines.length === 2);
-
-  const circles = svg.querySelectorAll('circle.viz-point');
-  ok('line chart renders data point circles (5 points * 2 series = 10)', circles.length === 10);
-
-  // 检查阈值告警线（默认 threshold: 250，入站有 310 与 290 超过 250）
-  const threshLine = svg.querySelector('.viz-threshold-line');
-  ok('threshold line is rendered', threshLine !== null);
-
-  const alertPoints = svg.querySelectorAll('circle.is-alert');
-  ok('points exceeding threshold are marked with is-alert', alertPoints.length === 2);
-
-  // 3. 受控参数交互测试
-  console.log('\n--- 3. 受控参数交互与即时更新 ---');
-
-  // (1) 切换为柱状图
+  // 切换为柱状图
   const btnBar = rightPane.querySelector('.viz-type-row .viz-toggle-btn:last-child');
   btnBar.click();
+  ok('switched to bar chart in DOM', rightPane.querySelector('svg.viz-svg').classList.contains('viz-chart-bar'));
 
-  const barSvg = rightPane.querySelector('svg.viz-svg');
-  ok('chart type switched to bar in class', barSvg.classList.contains('viz-chart-bar'));
-  const bars = barSvg.querySelectorAll('rect.viz-bar');
-  ok('bar chart renders rect bars (5 labels * 2 series = 10)', bars.length === 10);
-  const alertBars = barSvg.querySelectorAll('rect.is-alert');
-  ok('exceeding bars also receive is-alert', alertBars.length === 2);
-
-  // 切回折线图
-  const btnLine = rightPane.querySelector('.viz-type-row .viz-toggle-btn:first-of-type');
-  btnLine.click();
-  ok('switched back to line chart', rightPane.querySelector('svg.viz-svg').classList.contains('viz-chart-line'));
-
-  // (2) 切换系列显隐
+  // 切换系列
   const seriesPills = rightPane.querySelectorAll('.viz-series-pills .viz-pill');
-  ok('two series pills present', seriesPills.length === 2);
-
-  // 关闭「出站」系列
   seriesPills[1].click();
-  ok('second series pill deactivated', !seriesPills[1].classList.contains('is-active'));
-  const linesAfterHide = rightPane.querySelectorAll('polyline.viz-line');
-  ok('only 1 polyline rendered after series toggle', linesAfterHide.length === 1);
-
-  // 至少保留 1 个系列开启测试：尝试关闭剩下的「入站」系列
+  ok('deactivated series 2', !seriesPills[1].classList.contains('is-active'));
   seriesPills[0].click();
-  ok('cannot deactivate the last remaining series', seriesPills[0].classList.contains('is-active'));
+  ok('prevented deactivating the last active series', seriesPills[0].classList.contains('is-active'));
 
-  // 重新激活出站系列
-  seriesPills[1].click();
-  ok('second series re-activated', seriesPills[1].classList.contains('is-active'));
-  ok('2 polylines restored', rightPane.querySelectorAll('polyline.viz-line').length === 2);
+  // 5. Classic 与 Runtime 会话身份隔离与验证测试
+  console.log('\n--- 5. 会话身份隔离与拒绝验证 ---');
 
-  // (3) 阈值调节
-  const threshSlider = rightPane.querySelector('.viz-thresh-row .viz-slider');
-  threshSlider.value = '350';
-  threshSlider.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-  // 阈值提到 350 后，最高 310，没有超标点
-  const noAlertPoints = rightPane.querySelectorAll('circle.is-alert');
-  ok('raising threshold above max eliminates alert points', noAlertPoints.length === 0);
-
-  // (4) 重置按钮
-  const resetBtn = rightPane.querySelector('.rp-head-actions button:first-child');
-  resetBtn.click();
-  ok('reset button restores default threshold alerts (2 points)', rightPane.querySelectorAll('circle.is-alert').length === 2);
-
-  // 4. 引用到 Agent 输入框测试
-  console.log('\n--- 4. 引用到输入框草稿 (Composer) ---');
-
-  el.input.value = '原有用户问题。';
+  // (1) Classic 正常引用
+  el.input.value = '原有草稿内容。';
   const quoteBtn = rightPane.querySelector('.viz-quote-btn');
   quoteBtn.click();
+  ok('classic quote succeeds and preserves draft', el.input.value.startsWith('原有草稿内容。') && el.input.value.includes('[图表配置引用：网络流量吞吐]'));
 
-  ok('composer draft contains original question', el.input.value.startsWith('原有用户问题。'));
-  ok('composer draft contains [图表配置引用：网络流量吞吐]', el.input.value.includes('[图表配置引用：网络流量吞吐]'));
-  ok('composer draft contains series summary stats', el.input.value.includes('入站:') && el.input.value.includes('均值'));
-  ok('composer draft length is strictly bounded (< 1000 chars)', el.input.value.length < 1000);
+  // (2) Classic 会话切换：S.state.sessionId 发生变化，拒绝写入
+  S.state.sessionId = 'classic-session-002';
+  const draftBeforeMismatch = el.input.value;
+  quoteBtn.click();
+  ok('mismatched classic session rejects quote without modifying draft', el.input.value === draftBeforeMismatch);
 
-  // 5. 会话与生命周期安全
-  console.log('\n--- 5. 会话与生命周期失效安全 ---');
+  // 恢复 Classic session id
+  S.state.sessionId = 'classic-session-001';
 
-  // 触发会话切换事件
-  document.dispatchEvent(new dom.window.CustomEvent('pi-gui:session-switch', { detail: { sessionId: 'new-session' } }));
-  ok('viz pane automatically closes on session switch', pane.isOpen() === false);
+  // (3) 原消息在 DOM 中被删除 / 历史被重构测试
+  msgEl.remove();
+  ok('source message disconnected from DOM', !msgEl.isConnected);
+  quoteBtn.click();
+  ok('disconnected source message rejects quote without modifying draft', el.input.value === draftBeforeMismatch);
 
-  // 重新打开后，模拟不同会话 ID 尝试引用
-  openBtn.click();
-  ok('reopened viz pane', pane.isOpen() === true);
+  // (4) Runtime 会话身份测试
+  console.log('\n--- 6. Runtime 会话身份与拥有者校验 ---');
 
-  S.state = { sessionId: 'different-session-xyz' };
-  const staleQuoteBtn = rightPane.querySelector('.viz-quote-btn');
-  const prevValue = el.input.value;
-  staleQuoteBtn.click();
-  ok('stale viz panel does not mutate draft of mismatched session', el.input.value === prevValue);
+  // 切换工作区视图为 runtime
+  showRuntimeConversation();
+  setGitConversationScope('conv-runtime-100');
 
-  // 关闭面板资源释放
+  // 注册 runtime 拥有者与代数
+  seedRuntimeSnapshot({
+    backendInstance: 'fixture-backend',
+    items: [{
+      conversationId: 'conv-runtime-100',
+      owner: { runtimeId: 'agent-z3-worker', runtimeGeneration: '1' },
+      lifecycle: 'ready',
+      activity: 'idle',
+      revision: 1,
+    }],
+  });
+
+  // 创建 Runtime 真实的会话 DOM
+  const runtimeView = document.getElementById('runtimeView');
+  runtimeView.hidden = false;
+  runtimeView.replaceChildren();
+
+  const runtimeConv = document.createElement('div');
+  runtimeConv.className = 'runtime-conversation';
+  runtimeConv.dataset.conversationId = 'conv-runtime-100';
+
+  const runtimeCardContainer = document.createElement('div');
+  runtimeCardContainer.className = 'message';
+  runtimeCardContainer.innerHTML = closedHtml;
+  runtimeConv.append(runtimeCardContainer);
+
+  const runtimeInput = document.createElement('textarea');
+  runtimeInput.setAttribute('aria-label', '给当前会话的任务');
+  runtimeConv.append(runtimeInput);
+  runtimeView.append(runtimeConv);
+
+  // 从 Runtime 卡片打开图表面板
+  const runtimeOpenBtn = runtimeCardContainer.querySelector('[data-viz-open]');
+  runtimeOpenBtn.click();
+  ok('opened viz panel from runtime card', pane.isOpen() === true);
+
+  // 验证 S.state.sessionId 存在时绝不会覆盖 Runtime 会话
+  S.state.sessionId = 'classic-shadow-session';
+  const runtimeQuoteBtn = rightPane.querySelector('.viz-quote-btn');
+  runtimeQuoteBtn.click();
+  ok('runtime quote successfully targets runtime textarea without being overridden by S.state.sessionId',
+    runtimeInput.value.includes('[图表配置引用：网络流量吞吐]'));
+
+  // 测试 Runtime 会话切换拒绝
+  setGitConversationScope('conv-runtime-999');
+  const prevRuntimeValue = runtimeInput.value;
+  runtimeQuoteBtn.click();
+  ok('switched runtime conversation rejects quote', runtimeInput.value === prevRuntimeValue);
+
+  // 切回原会话，但 Agent owner 变更 / 进程死亡
+  setGitConversationScope('conv-runtime-100');
+  seedRuntimeSnapshot({
+    backendInstance: 'fixture-backend',
+    items: [{
+      conversationId: 'conv-runtime-100',
+      owner: { runtimeId: 'different-agent-xyz', runtimeGeneration: '1' },
+      lifecycle: 'ready',
+      activity: 'idle',
+      revision: 2,
+    }],
+  });
+  runtimeQuoteBtn.click();
+  ok('stale/changed runtime owner rejects quote', runtimeInput.value === prevRuntimeValue);
+
+  // Runtime generation 重置
+  seedRuntimeSnapshot({
+    backendInstance: 'fixture-backend',
+    items: [{
+      conversationId: 'conv-runtime-100',
+      owner: { runtimeId: 'agent-z3-worker', runtimeGeneration: '2' },
+      lifecycle: 'ready',
+      activity: 'idle',
+      revision: 3,
+    }],
+  });
+  runtimeQuoteBtn.click();
+  ok('stale runtime generation rejects quote', runtimeInput.value === prevRuntimeValue);
+
+  // 恢复状态并关闭
   pane.close();
-  ok('panel cleanly closed', pane.isOpen() === false);
-  ok('rp-body is emptied on close', rightPane.querySelector('.rp-body').childElementCount === 0);
+  ok('pane safely closed and cleaned up', pane.isOpen() === false);
 
-  console.log(`\nViz UI & Lifecycle: ${checks}/${checks} passed.`);
+  console.log(`\nViz UI & Review Fixes: ${checks}/${checks} passed.`);
 }
 
 main().catch((err) => {

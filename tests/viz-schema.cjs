@@ -112,13 +112,36 @@ async function main() {
       { id: 'thresh', name: '阈值', type: 'range', min: 10, max: 100, default: 5 }, // default clamped to 10
       { id: 'mode', name: '模式', type: 'select', options: ['A', 'B'], default: 'B' },
       { id: 'invalid id!', type: 'number' }, // invalid ID should be dropped
-      { id: 'thresh', name: '重复', type: 'number' }, // duplicate ID should be dropped
+      { id: 'badMin', name: '非法Min', type: 'range', min: null, max: 100 }, // min is null, should be dropped
+      { id: 'boolMax', name: '布尔Max', type: 'number', min: 0, max: false }, // max is bool, should be dropped
     ],
   });
   const res12 = parseVizData(withParams);
   ok('parameters sanitize and clamp defaults', res12.ok === true && res12.data.params.length === 2);
   ok('param 0 min/max/default clamped correctly', res12.data.params[0].default === 10);
   ok('param 1 select options retained', res12.data.params[1].options[1] === 'B');
+
+  // 12b. Duplicate param ID
+  const dupParams = JSON.stringify({
+    version: '1', type: 'line', title: 'T', labels: ['1'], series: [{ name: 'S', data: [1] }],
+    params: [{ id: 'p1', type: 'number', min: 0, max: 10 }, { id: 'p1', type: 'number', min: 0, max: 10 }],
+  });
+  ok('duplicate param id is deduplicated', parseVizData(dupParams).data.params.length === 1);
+
+  // 13. Rejection of null, boolean, empty string in data points (instead of coerced to 0)
+  const nullData = JSON.stringify({ version: '1', type: 'line', title: 'T', labels: ['A'], series: [{ name: 'S', data: [null] }] });
+  const falseData = JSON.stringify({ version: '1', type: 'line', title: 'T', labels: ['A'], series: [{ name: 'S', data: [false] }] });
+  const trueData = JSON.stringify({ version: '1', type: 'line', title: 'T', labels: ['A'], series: [{ name: 'S', data: [true] }] });
+  const strData = JSON.stringify({ version: '1', type: 'line', title: 'T', labels: ['A'], series: [{ name: 'S', data: [''] }] });
+
+  ok('data with null is rejected (not coerced to 0)', parseVizData(nullData).ok === false);
+  ok('data with false is rejected (not coerced to 0)', parseVizData(falseData).ok === false);
+  ok('data with true is rejected (not coerced to 1)', parseVizData(trueData).ok === false);
+  ok('data with empty string is rejected (not coerced to 0)', parseVizData(strData).ok === false);
+
+  // 14. Rejection of extreme magnitude numbers (> 1e12)
+  const extremeData = JSON.stringify({ version: '1', type: 'line', title: 'T', labels: ['A'], series: [{ name: 'S', data: [1e15] }] });
+  ok('extreme magnitude number is rejected', parseVizData(extremeData).ok === false && parseVizData(extremeData).error.includes('超出安全计算范围'));
 
   console.log(`\nViz Schema: ${checks}/${checks} passed.`);
 }
