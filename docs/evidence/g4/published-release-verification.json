@@ -1,0 +1,60 @@
+{
+  "version": "0.29.0",
+  "releaseSha": "fd45b7789c395bdb7a776496a93cf0eb5d9e5cc4",
+  "tagObject": "4520e08cb170d542b4ca60be8659122d2d910201",
+  "pullRequest": 28,
+  "prCiRun": 40084907371,
+  "mainCiRun": 40086277137,
+  "releaseRun": 40087718091,
+  "attempts": { "pr": 1, "main": 1, "release": 1 },
+  "releaseUrl": "https://github.com/HYJ1817/pi-gui/releases/tag/v0.29.0",
+  "publishedAt": "2026-10-24T11:01:54Z",
+  "isDraft": false,
+  "isPrerelease": false,
+  "latestTag": "v0.29.0",
+  "canonical": { "passed": 197, "failed": 0, "commandSkipped": 0, "dataComplete": true },
+  "releaseChecks": { "app": "26/26", "sea": "49/49", "portable": "12/12", "installer": "20/20" },
+  "publicDownloadMatchesGitHubDigestAndSize": true,
+  "assets": [
+    {
+      "name": "Pi-GUI-0.29.0-portable.zip",
+      "size": 149063478,
+      "sha256": "92cf61c9e7adadfa25d78acd0246c5b0b46a34a95e6a891b701580c887f2f6db"
+    },
+    {
+      "name": "Pi-GUI-Setup-0.29.0.exe",
+      "size": 105538963,
+      "sha256": "608800d46429e8e95bba393263a19d1d09f3f4c4d37484c5dfade806eb07642c"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "size": 183,
+      "sha256": "e7a077889f1efdded7548668043c6c76d65e421b770b419b8fec89546cb17b4f"
+    }
+  ],
+  "independentReadOnlyChecks": {
+    "releaseArtifactGuard": "passed",
+    "checksumFileMatchesBothBinaries": true,
+    "installerMzPe": true,
+    "installerProductVersion": "0.29.0",
+    "installerSignature": "NotSigned",
+    "zipEntries": 388,
+    "zipCrcAllEntries": true,
+    "unsafeZipPaths": 0,
+    "forbiddenArtifactsByName": 0,
+    "portableAppVersion": "0.29.0",
+    "candidateWriterMatchesTag": true,
+    "candidateWriterSha256": "cef8cdc0f1ef49d49d224a23a62d6c83c0585d6b62534fe808d61e0af5a3ed8e",
+    "old028UpdaterWithActualLatestResponse": "new version, all three asset classes and installer selection passed",
+    "notesSummaryOnceAndCorrectChangelogRange": true
+  },
+  "notProven": [
+    "independent T4-C functional and security qualification",
+    "real v0.28.0 original-install-location overwrite upgrade and user data acceptance",
+    "power-loss recovery, arbitrary syscall interruption and cross-file atomicity",
+    "P33 original-object production qualification"
+  ],
+  "localInstallerExecuted": false,
+  "repositoryProtectionModified": false,
+  "personalPatBypassUsed": false
+}

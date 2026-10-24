@@ -1,6 +1,6 @@
 # G4 下一正式版本发布前审查与验收材料
 
-日期：2026-10-24（Asia/Shanghai）。**第 1～15 节保留首轮只读审查；后续用户已批准 v0.29.0 并要求发布。当前执行状态和最终证据见第 16 节，不能将首轮授权状态误读为当前状态。**
+日期：2026-10-24（Asia/Shanghai）。**v0.29.0 已按用户批准正式发布，最终证据见第 16 节。第 1～15 节保留首轮只读审查，不代表发布后的当前授权/执行状态；发布完成也不代表未验证的生产安全资格已取得。**
 
 ## 1. 授权、工作区与精确身份
 
@@ -257,11 +257,64 @@ R2 的“未取得用户发布决策”已由本次批准处置，独立审查�
 从重新核对的 `efa6933963fde0552c6830099abff4c4dcfe13ef` 创建。首轮报告和本次截图/结构化证据迁入本仓库，未修改其他 Worktree。
 使用 `npm run version:set -- 0.29.0` 同步 package/lock，再更新唯一正式摘要为 6 条及 0.29.0 marker；不改变产品、依赖、Release workflow。
 
-本节执行中：准备提交、PR CI、合并后的精确 main CI、正式 tag/Release、真实三个附件和安装/portable 结果分别在完成后记录。
-未取得的证据仍是未验证，不能使用初始 main 的成功替代新版本提交。
+下文按实际完成结果记录准备提交、PR CI、合并后的精确 main CI、正式 tag/Release、真实三个附件和安装/portable 结果。
+前 15 节保留授权前的历史审查状态；最终完成情况及仍未验证的限制以本节为准，初始 main 的成功不替代新版本提交证明。
 
 批准后的本地版本树验证：version:check 退出 0（package/lock 两处/摘要均 0.29.0）；
 test:version 34/34、test:release 77/77、test:ci 的 8 套件均退出 0（持久化 10、汇总 30、历史 21、分类 28、实际 gate 15、调度 5、发布证明 16、NSIS 12）。
 canonical 仍为 197，五组 121/24/27/4/21；git diff --check 退出 0；JSON 逐字段对照确认仅三个应用版本字段改变，依赖与 lock 条目完全一致。
 本地日志位于 `%TEMP%\pi-gui-g4-prep-tests-21ec85023e3445088ecfc55a13424cbe`；未运行真实安装或 publish dry-run。
 版本/正式摘要提交：`4fe96afd53e3580bf7af73336fc2cd5dc36321a0`；随后报告/证据提交可用 `git log -1 --format=%H -- docs/G4-acceptance.md` 定位。
+
+### 最终版本身份及远端验证
+
+- 准备 PR：[28](https://github.com/HYJ1817/pi-gui/pull/28)，head `58de92930683d93ef1bd4cd5df48524ac938fbd9`。
+  [PR CI 40084907371](https://github.com/HYJ1817/pi-gui/actions/runs/40084907371) attempt 1，8 job 成功、197/197，
+  [下载 summary](evidence/g4/pr-ci-summary.json) 对应合成 merge ref `a3f82866cd14b2d86859d6d10ec78f347a131782`。
+- 版本准备合并提交 / 正式发布源码 SHA：**`fd45b7789c395bdb7a776496a93cf0eb5d9e5cc4`**。
+  [main push CI 40086277137](https://github.com/HYJ1817/pi-gui/actions/runs/40086277137) attempt 1，completed/success，8 job 全部成功；
+  [精确 main summary](evidence/g4/release-main-ci-summary.json) 的 SHA/event/run/attempt/计划均复核通过，197/197、dataComplete/allPassed=true，无命令级失败/取消/skip/未完成。
+  下载五组原结果后再次执行 summarize-ci-results --require-complete，退出 0。
+- annotated tag `v0.29.0`：对象 `4520e08cb170d542b4ca60be8659122d2d910201`，peeled commit 正确指向上述发布 SHA。
+  推 tag 前工作树干净，version:check --tag=v0.29.0 退出 0；仅在该 SHA 的 main CI/G2 证据完整成功后推送。
+- [正式 Release workflow 40087718091](https://github.com/HYJ1817/pi-gui/actions/runs/40087718091) attempt 1，两个 job 均成功。
+  verify job 先证明 tag/checkout/main CI/gate，才复用源码测试；日志明确跳过已证明的 npm test，继续所有构建/安装/校验步骤。
+  新构建的 App **26/26**、SEA **49/49**、portable **12/12**、一次性 Windows runner 安装/卸载 **20/20**，最后 READY TO RELEASE。
+  publish job 再验下载资产及精确 SHA 证明，核对上传后的大小/digest 后才解除 draft；没有手动 publish CLI、PAT 绕过或覆盖旧资产。
+- [公开 Release v0.29.0](https://github.com/HYJ1817/pi-gui/releases/tag/v0.29.0)：2026-10-24 19:01:54（北京时间）发布，
+  isDraft=false、isPrerelease=false，公开 latest API 返回 v0.29.0，恰好三个正式附件。
+
+### 正式资产与独立公开下载核对
+
+| 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| Pi-GUI-Setup-0.29.0.exe | 105538963 | `608800d46429e8e95bba393263a19d1d09f3f4c4d37484c5dfade806eb07642c` |
+| Pi-GUI-0.29.0-portable.zip | 149063478 | `92cf61c9e7adadfa25d78acd0246c5b0b46a34a95e6a891b701580c887f2f6db` |
+| SHA256SUMS.txt | 183 | `e7a077889f1efdded7548668043c6c76d65e421b770b419b8fec89546cb17b4f` |
+
+三个文件从公开 Release 重新下载至 `%TEMP%\pi-gui-v0290-public-a207d392e026415aa88b987d66c50c6d`，未执行安装程序。
+在该目录运行现有 check-release-artifacts（显式 version=0.29.0），退出 0；独立复算三个文件 hash/大小，与 GitHub assets API 逐项一致，
+SHA256SUMS 的两个二进制记录也一致。Python zipfile.testzip 检查 **388** 个条目，CRC 全通过；无路径穿越或按文件名检查发现的测试/fixture/fake-pi/环境文件/日志/调试产物。
+未将这项文件名扫描夸大为通用秘密检测。ZIP 中 resources/app/package.json 为 0.29.0；candidate/write.ps1 字节与 tag 源码完全一致，
+SHA256 `cef8cdc0f1ef49d49d224a23a62d6c83c0585d6b62534fe808d61e0af5a3ed8e`。
+安装包 MZ/PE 结构与 ProductVersion/FileVersion 0.29.0 均正确；Authenticode 状态 **NotSigned**，未宣称已签名。
+[结构化独立核对结果](evidence/g4/published-release-verification.json) 保留上述身份、指标及限制，不包含二进制或原始 payload。
+
+公开说明已复核：本版摘要和固定交付块各仅一份，Full Changelog 为 v0.28.0...v0.29.0，实验性/独立安全/覆盖升级限制存在，未残留“采纳能力尚未实现”的旧摘要。
+用 v0.28.0 tag 的实际更新检查模块重放真实公开 latest 响应，成功识别 0.29.0、installer/portable/checksums，现有安装版选择也正确。
+这是实际旧代码加真实公开响应的只读验证，不声称已在旧版安装 UI 点击或完成原位置升级。
+
+### 完成结论、失败历史及保留限制
+
+准备 PR、精确 main CI、正式 Release 均为 **首次 attempt 成功，未重跑**。曾在总 workflow 尚未结束时读取 verify job 日志，CLI 暂不可用；
+工作流完成后同一 job 日志可读，未因此重跑测试或更改发布代码。下载和独立公开核对均首次成功。
+本轮没有在本机安装/卸载、使用真实用户数据、触发额外 release-check.yml、修改保护或提前进入后续阶段。
+
+R1 已由用户批准 0.29.0 处置；R3 的精确提交、正式构建/安装和三资产证明已完成。
+R2 的独立功能/安全验收仍未执行；R4 的真实旧版原位置覆盖升级和活跃手工安装/卸载边界仍未补验；R5 的 P33/断电/任意中断/跨平台资格保持受限。
+这几项不被“CI 全绿”或本次用户发布决定改写为已验证。公开说明已保留，未放宽产品守卫。
+
+最终结论：**用户授权范围内的 v0.29.0 正式发布及现有发布流程验收完成**；没有未解决的新增代码 Blocker。
+“完整生产安全资格/独立 T4-C 安全验收/真实旧版覆盖升级已通过”不在结论内。
+本段为发布后的纯文档/证据回填，沿同一版本准备分支提交；它不属于已发布 tag 的文件树，不能把该回填提交称作发布源码或借旧 CI 宣称其新 SHA 已测试。
+不重写发布 tag/main，不覆盖正式附件，不为回填额外创建第二个开发 PR。
