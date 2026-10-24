@@ -7,6 +7,8 @@ export const GROUPS = Object.freeze(['core', 'ui', 'security', 'native', 'faults
 // mutable fixture. Keep each suite intact; isolate their expensive Native work
 // on a separate runner instead of running assertions concurrently.
 const NATIVE_TESTS = new Set([
+  'candidate-writer.cjs',
+  'candidate-apply.cjs',
   'session-revert-object-runtime.cjs',
   'session-revert-object-writer.cjs',
 ]);
@@ -25,6 +27,9 @@ const FAULT_TESTS = new Set([
   'pi-supervisor.cjs',
   'runtime-resource-cleanup.cjs',
   'runtime-processes.cjs',
+  'candidate-write-faults.cjs',
+  'candidate-transactions.cjs',
+  'candidate-recovery-errors.cjs',
   'session-revert-windows-faults.cjs',
   'session-revert-inplace-safety.cjs',
   'session-revert-recovery.cjs',

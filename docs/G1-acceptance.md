@@ -75,3 +75,34 @@
 - 开发完成：是。代码验收：待独立验收（用户要求只使用一个 Coding Agent，故本轮没有把作者自查冒充独立审查）。合并许可：未授权。发布许可：未授权。
 
 作者判断：G1 已满足 PR 模板、EditorConfig、只读规模报告、隔离测试、历史案例演练和证据归档的完成标准；停止在本地提交，等待独立验收，不进入 G2。
+
+## 最终同步补记（2026-10-24）
+
+本节追加最终同步证据，以上 185 leaves 等数字仍是原 G1 交付的历史记录，不作同步后的现状。原 G1 文档提交固定为 `7a0f6d5a358bfb480a784ce99605c343666362f9`，工具提交为 `fce305c6ff00397b3cd79068b716c86874b98055`。
+
+- 同步前 G1 HEAD：`7a0f6d5a358bfb480a784ce99605c343666362f9`，工作树干净；仅在原 G1 独立 Worktree 操作。
+- `git fetch origin --prune` 后 main：`f314ae7794705b44c6b7ca65d67311ae9eabadd0`；`git merge-base --is-ancestor 18a995a21acd94ecc80c384004eeaf56288b7efd origin/main` 退出 0，确认包含 T4-C。
+- [T4-C PR #24](https://github.com/HYJ1817/pi-gui/pull/24) 已合并，merge commit 为上述 main；其 [main push CI 40061061150](https://github.com/HYJ1817/pi-gui/actions/runs/40061061150) 成功。原 G1 [PR CI 40060949475](https://github.com/HYJ1817/pi-gui/actions/runs/40060949475) 的 8 项检查均成功，均不替代本次更新的完整 CI。
+- 使用 `git merge --no-ff --no-commit origin/main`；`package.json` 与 `docs/README.md` 自动逐块合并成功，无冲突、无人工整文件替换。T4-C 的 13 条候选套件注册（含新增采纳、写入、事务、恢复与 UI）和专项脚本完整保留；G0-A/G0-B、T4-C、G1 导航同时存在。
+- 同步后交付身份：包含本节的 merge commit；提交后用 `git log -1 --format=%H -- docs/G1-acceptance.md` 解析，在本次最终交付消息固定完整 SHA。其两个父提交分别为原 G1 HEAD 与上述 main；后续修订不得改变这些历史身份。
+
+### 本次定向验证与清单比对
+
+以下命令在合并后的同一工作树执行，退出码均为 0；之后仅追加本节文字。
+
+| 命令/检查 | 本次实测结果 |
+| --- | --- |
+| `git diff --check`、`git diff --cached --check` | 无格式问题；`git ls-files -u` 无输出 |
+| `npm run test:file-size-report` | 11/11，通过 11，失败 0，跳过 0 |
+| `npm run test:ci` | 4 个套件完成；测试清单精确覆盖，workflow 结构验证通过，release CI proof 16/16，NSIS bootstrap 12/12 |
+| `node scripts/run-test-group.mjs --validate` | 193 leaves；core 117、ui 24、security 27、native 4、faults 21；无重复或遗漏 |
+| `npm run report:files` | 589 文件；业务 272 个/69,935 行、测试 273 个/73,602 行、fixture 33 个/3,718 行、CSS 11 个/5,526 行；业务超过 500/800/1000 行仍为 38/16/12，软告警退出 0 |
+| `node scripts/report-file-size.mjs --json --base f314ae7794705b44c6b7ca65d67311ae9eabadd0` | 原生 `JSON.parse` 成功，base 完整 SHA 匹配，统计与文本一致；本机单次约 1,052 ms（并行检查期间） |
+
+清单比对使用现有 `createTestGroupPlan` 分别展开 `git show origin/main:package.json` 和工作树的 package；两者均通过 `validateTestGroupPlan`。main 为 192，G1 为 193；删除集合为空，新增集合恰为 `node tests/file-size-report.cjs`。main 每条既有命令的分组均相同；core 从 116 到 117，其他组数量不变。main 的所有 scripts（除预期追加的 pretest）逐项字符串一致，pretest 恰为 `npm run test:file-size-report && npm run test:ci`，新增 `report:files` 正确；版本和依赖对象一致。
+
+相对最新 main 的最终差异仍只有原 G1 的 7 个文件：`.editorconfig`、`.github/PULL_REQUEST_TEMPLATE.md`、`scripts/report-file-size.mjs`、`tests/file-size-report.cjs`、`package.json`、`docs/README.md`、本报告。产品、T4-C 源码/测试、测试分组脚本、workflow、锁文件和版本均无额外差异。本次只新增 main 合并及本节证据，不扩展功能；增量自查未发现可证实的新增 Blocker/Important。
+
+本地完整 `npm test` 未运行：按本次用户选择，由更新后的 PR #25 完整 CI 提供最终回归；推送时状态为待验证，最终 run URL、精确 head SHA 和 8 项检查结论在 PR 描述及最终交付消息记录。用户声明 G1 功能开发与代码验收已通过，本次仅验同步增量；本节不将作者自查写成新增独立审查。
+
+已授权提交同步并正常推送现有 PR #25；未授权合并 main、删除分支、tag 或发布。CI 全绿、无冲突且无新增阻断后停止，等待用户下一步指令。回退此次同步时须保留已合并的 T4-C，可在 G1 分支经授权对本次 merge commit 使用 `git revert -m 1 <同步提交SHA>`；不回退 main 上的 T4-C。G1 合入 main 后若需撤销，则按届时实际合并方式只回退 G1 差异，保留 T4-C 与后续无关改动。

@@ -40,6 +40,7 @@ async function until(fn){for(let i=0;i<200;i++){if(fn())return;await tick();}thr
   const open=()=>{document.querySelector('#btnChangesReview').click();action('准备修改任务',document.querySelector('#modalCard')).click();};
   const boxes=()=>[...document.querySelectorAll('.review-task input[data-comment-id]')];
   const box=id=>boxes().find(e=>e.dataset.commentId===id);
+  const bodyText=()=>document.querySelector('.review-task .review-summary-body')?.textContent||'';
   const preview=()=>document.querySelector('.review-task textarea');
   const generate=()=>action('预览修改任务').click();
   writes.length=0;
@@ -77,6 +78,13 @@ async function until(fn){for(let i=0;i<200;i++){if(fn())return;await tick();}thr
   a.verified=r.verified=true;m.invalidateReviewEvidence();
   action('全选有效评论').click();generate();m.deleteComment(r.id);check('deletion invalidates old preview',()=>action('复制修改任务').disabled);
   action('返回选择').click();generate();
+  // A reconciliation emits evidence before change in the same call stack. The
+  // selection must remain complete rather than the second event erasing it.
+  m.reconcileSection('a.js','working',[{type:'add',oldLine:null,newLine:1,codeHash:'22222222',
+    hunkIndex:0,hunkHeader:'11111111'}],'33333333');
+  check('same-turn evidence and change keep the selection list usable',()=>boxes().length>0&&bodyText().includes('edited'));
+  action('返回选择').click();
+  generate();
   const input=document.querySelector('#input');input.disabled=true;input.value='draft  \n';action('填入当前会话').click();
   check('unavailable composer refuses fill with reason',()=>!document.querySelector('#modal').hidden&&input.value==='draft  \n'&&document.querySelector('.review-task [role=status]').textContent.includes('不可写入'));
   input.disabled=false;action('填入当前会话').click();check('fill appends preserving exact draft without sending',()=>input.value.startsWith('draft  \n\n\n')&&input.value.includes('edited')&&document.querySelector('#modal').hidden&&writes.length===0);

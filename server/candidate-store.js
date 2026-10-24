@@ -35,7 +35,8 @@ export function createCandidateStore({dataDir,protectedRoots=()=>[]}={}){
         if(bytes.toString('base64')!==f.bytes||bytes.length>1024*1024||total>8*1024*1024||candidateHash(bytes)!==f.digest)candidateFail('candidate_storage_unsafe');}
       if(v.result&&(!Array.isArray(v.result.files)||v.result.files.length>50))candidateFail('candidate_storage_unsafe');
       for(const f of v.result?.files||[]){candidatePath(f.path);if(f.oldPath)candidatePath(f.oldPath);if(typeof f.patch!=='string'||f.patch.length>24*1024)candidateFail('candidate_storage_unsafe');}
-      return{version:1,run:v.run,result:v.result,input:{files:[]}};});
+      let adoptionEvidence=null;try{if(v.adoptionEvidence&&Buffer.byteLength(JSON.stringify(v.adoptionEvidence))<=1024*1024)adoptionEvidence=v.adoptionEvidence;}catch{/* Optional evidence must not hide otherwise valid T4-B history. */}
+      return{version:1,run:v.run,result:v.result,input:{files:[]},adoptionEvidence};});
   }
   function acquire(){
     guard(true);if(readAll().length>=20)candidateFail('candidate_limit');
@@ -49,5 +50,6 @@ export function createCandidateStore({dataDir,protectedRoots=()=>[]}={}){
     let fd;try{fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,text);fs.fsyncSync(fd);fs.closeSync(fd);fd=null;guard();fs.renameSync(temp,target);}finally{if(fd!=null)fs.closeSync(fd);if(fs.existsSync(temp)&&fs.lstatSync(temp).isFile())fs.unlinkSync(temp);}
   }
   function release(){if(lock===null)return;const file=path.join(root,'writer.lock');guard();if(identity(plain(file,4096))!==lockId)candidateFail('candidate_storage_unsafe');fs.closeSync(lock);lock=null;fs.unlinkSync(file);lockId=null;}
-  return{readAll,acquire,save,release};
+  function assertIdle(){if(!guard())return;try{fs.lstatSync(path.join(root,'writer.lock'));}catch(e){if(e.code==='ENOENT')return;throw e;}candidateFail('candidate_storage_busy');}
+  return{readAll,acquire,save,release,assertIdle};
 }

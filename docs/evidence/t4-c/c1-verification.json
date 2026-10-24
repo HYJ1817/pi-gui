@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "baseline": "6db4159f69630f8f33b1dbaa1a073d8612d90af0",
+  "productCommit": "41b356b21f7a40abe2a6cc7b8e1de1f17b17b87d",
+  "verifiedHead": "b866b385dc16ee1c8e91bcb2f3077dfa36e031ad",
+  "scope": "T4-C1 read-only; C2 blocked; no source apply transaction",
+  "canApply": false,
+  "sourceTransactions": 0,
+  "frozenInputs": {
+    "count": 588,
+    "sha256": "d606ac521157f8b8bae1bf15cbe7f00d73eed590564c5b6417c3ad4a91bcd13d",
+    "unchanged": true,
+    "compositionRootMatchesHead": true
+  },
+  "canonical": {
+    "source": "package.json test and npm lifecycle expanded by existing test-group-plan",
+    "commands": 186,
+    "successfulCommands": 186,
+    "failedCommands": 0,
+    "groups": [
+      {
+        "name": "core",
+        "commands": 115,
+        "exitCode": 0,
+        "startedAt": "2026-10-23T09:38:36.310Z",
+        "finishedAt": "2026-10-23T09:54:31.902Z"
+      },
+      {
+        "name": "ui",
+        "commands": 24,
+        "exitCode": 0,
+        "startedAt": "2026-10-23T09:38:36.289Z",
+        "finishedAt": "2026-10-23T09:40:17.879Z"
+      },
+      {
+        "name": "security",
+        "commands": 27,
+        "exitCode": 0,
+        "startedAt": "2026-10-23T09:38:36.262Z",
+        "finishedAt": "2026-10-23T09:53:58.797Z"
+      },
+      {
+        "name": "native",
+        "commands": 2,
+        "exitCode": 0,
+        "startedAt": "2026-10-23T09:38:36.292Z",
+        "finishedAt": "2026-10-23T09:55:58.344Z"
+      },
+      {
+        "name": "faults",
+        "commands": 18,
+        "exitCode": 0,
+        "startedAt": "2026-10-23T09:38:36.313Z",
+        "finishedAt": "2026-10-23T09:56:15.029Z"
+      }
+    ],
+    "assertionSkips": [
+      {
+        "suite": "candidate-adoption.cjs",
+        "count": 1,
+        "reason": "existing token cannot create file symlink"
+      },
+      {
+        "suite": "logging-leaks.cjs",
+        "count": 1,
+        "reason": "existing token cannot create file symlink"
+      },
+      {
+        "suite": "session-search.cjs",
+        "count": 1,
+        "reason": "case 5i symlink unavailable"
+      },
+      {
+        "suite": "session-revert-sacl-witness.cjs",
+        "count": 8,
+        "reason": "existing_token_sacl_unavailable"
+      },
+      {
+        "suite": "session-revert-inplace.cjs",
+        "count": 2,
+        "reason": "SeSecurityPrivilege unavailable"
+      },
+      {
+        "suite": "session-revert-object-witness.cjs",
+        "count": 8,
+        "reason": "existing_token_sacl_unavailable"
+      }
+    ],
+    "skippedAssertions": 21,
+    "serialNpmTestClaim": false
+  },
+  "electron": {
+    "checks": 45,
+    "failed": 0,
+    "skip": 0,
+    "sandbox": true,
+    "screenshots": [
+      "01-preflight.png",
+      "02-approval.png",
+      "03-real-diff.png",
+      "t4c-source-readonly.png",
+      "04-specs-diff.png",
+      "05-browser-diff.png",
+      "t4c-browser-readonly.png",
+      "t4c-source-conflict.png",
+      "t4c-restart-readonly.png"
+    ],
+    "electron": "44.4.3"
+  },
+  "appChecks": {
+    "passed": 26,
+    "failed": 0
+  },
+  "seaChecks": {
+    "passed": 49,
+    "failed": 0
+  },
+  "packagedChecks": {
+    "passed": 21,
+    "failed": 0
+  },
+  "artifacts": {
+    "head": "b866b385dc16ee1c8e91bcb2f3077dfa36e031ad",
+    "files": [
+      {
+        "file": "build/Pi GUI.exe",
+        "bytes": 102647296,
+        "sha256": "6fce2f4969c0c0260c12eb9e763b56465c7336c8ce1dafab9ff11a31a1fc0337"
+      },
+      {
+        "file": "build/server.cjs",
+        "bytes": 2414372,
+        "sha256": "530e55face12f8dd47bc4481829e7e22604dcbaeefb30ab1a76e6c6dd9644404"
+      },
+      {
+        "file": "dist-app/Pi GUI-win32-x64/Pi GUI.exe",
+        "bytes": 246324736,
+        "sha256": "e1eeea64c53f99b3fff1c1b5956b33ce1815092bc67351b76e07c8eef3c087ab"
+      },
+      {
+        "file": "dist-app/Pi GUI-win32-x64/resources/app/server.cjs",
+        "bytes": 2414372,
+        "sha256": "530e55face12f8dd47bc4481829e7e22604dcbaeefb30ab1a76e6c6dd9644404"
+      },
+      {
+        "file": "dist-app/Pi GUI-win32-x64/resources/app/public/candidate-review.js",
+        "bytes": 11219,
+        "sha256": "9e9e88144cd78084751dd81ac27bf643abaeb94ca2c8cb9e2e5a8d81ed773d86"
+      }
+    ],
+    "appBytes": 344793574,
+    "assetCount": 324
+  },
+  "screenshots": [
+    {
+      "file": "01-readonly-plan.png",
+      "sha256": "4941ed414dc8010eba030cbefb99294bf16e8880d52c841f1dbcbcf0293fff6b"
+    },
+    {
+      "file": "02-browser-readonly.png",
+      "sha256": "af2bf9e47af978f704dfadddee55a7c1d84376e059f3bdc0f0ade35bd43e3870"
+    },
+    {
+      "file": "03-source-conflict.png",
+      "sha256": "e3d72804879c23e2ef1112be745b83bff47ab2b2d5ab96480d09127719584c1a"
+    }
+  ],
+  "knownFailures": [
+    {
+      "kind": "expected red",
+      "log": ".probe/t4c-red.log",
+      "exitCode": 1
+    },
+    {
+      "kind": "expected red",
+      "log": ".probe/t4c-controller-red.log",
+      "exitCode": 1
+    },
+    {
+      "kind": "expected red",
+      "log": ".probe/t4c-ui-red.log",
+      "exitCode": 1
+    },
+    {
+      "kind": "optional extension RangeError, fixed",
+      "log": ".probe/t4c-store-red.log",
+      "exitCode": 1
+    },
+    {
+      "kind": "initial UI fixture missing product index, fixed",
+      "log": null,
+      "record": "conversation tool output",
+      "exitCode": 1
+    },
+    {
+      "kind": "accidental duplicate run cancelled, excluded",
+      "log": ".probe/t4c-alias.log",
+      "exitCode": 1
+    }
+  ],
+  "remoteObservation": {
+    "main": "f542aece54a06eef1cc2d13bf4b93531a47b3997",
+    "release": "v0.28.0",
+    "tagObject": "74de49217a587c0867eb21e01a5aef7416e46950",
+    "tagCommit": "f542aece54a06eef1cc2d13bf4b93531a47b3997",
+    "publishedAt": "2026-10-23T09:12:43Z",
+    "integrated": false
+  },
+  "independentReview": "pending; single coding agent requested",
+  "requiresUserDataRecovery": false,
+  "push": false,
+  "pullRequest": false,
+  "merge": false,
+  "release": false
+}
