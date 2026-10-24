@@ -52,6 +52,8 @@ export function summarizeResults(plan, records, identity = {}, selectedGroups = 
       });
     }
     let status = STATES.includes(record.status) ? record.status : 'interrupted';
+    if (!timestamp(record.startedAt) || (!['pending', 'running'].includes(status) && elapsed(record.startedAt, record.finishedAt) === null)) issues.push('group lacks valid start/finish timestamps');
+    if (!Number.isInteger(record.completedCount) || record.completedCount !== completed) issues.push('completed count mismatch');
     if (status === 'passed' && (!timestamp(record.finishedAt) || rows.some(row => row.status !== 'passed'))) issues.push('passed group has unfinished leaves');
     if (issues.length) status = 'interrupted';
     groups.push({ group, status, durationMs: elapsed(record.startedAt, record.finishedAt), planned: expected.length, completed, issues, valid: issues.length === 0 });
@@ -92,7 +94,7 @@ export function renderSummary(summary) {
     ...summary.slowest.map(row => `| ${row.group} | ${escape(row.command)} | ${duration(row.durationMs)} |`),
     '', '## Failed or interrupted commands',
     ...summary.failures.map(row => `- ${row.group}: ${escape(row.command)}; ${row.status}; exit=${row.exitCode ?? 'unavailable'}; signal=${row.signal ?? 'unavailable'}; error=${row.error ?? 'unavailable'}`),
-    '', summary.allPassed ? 'Retry guidance: none needed; all required test evidence is complete.' : summary.failures.length ? 'Retry guidance: inspect the listed failure/interruption before any manual rerun; this tool never retries.' : 'Retry guidance: diagnose missing/incomplete evidence first; absence of a failure is not success.',
+    '', summary.allPassed && summary.dataComplete ? 'Retry guidance: none needed; all required test evidence is complete.' : summary.failures.length ? 'Retry guidance: inspect the listed failure/interruption before any manual rerun; this tool never retries.' : 'Retry guidance: diagnose missing/incomplete evidence first; absence of a failure is not success.',
     '', 'This is diagnostic evidence; the CI gate also requires every upstream job to succeed. Missing or unfinished evidence cannot certify success.', '',
   ].join('\n');
 }
@@ -125,7 +127,7 @@ function main() {
   if (options.json) atomicWriteJson(options.json, report);
   if (options.summary) fs.appendFileSync(options.summary, markdown, 'utf8');
   console.log(markdown);
-  if (options.requireComplete && !report.allPassed) process.exitCode = 1;
+  if (options.requireComplete && (!report.allPassed || !report.dataComplete)) process.exitCode = 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

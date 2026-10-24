@@ -16,7 +16,7 @@ async function main() {
   function records() {
     return Object.fromEntries(groups.map((group, index) => {
       const record = createGroupRecord(group, plan, env);
-      Object.assign(record, { status: 'passed', startedAt: '2026-10-24T00:00:00Z', finishedAt: '2026-10-24T00:00:05Z' });
+      Object.assign(record, { status: 'passed', completedCount: 1, startedAt: '2026-10-24T00:00:00Z', finishedAt: '2026-10-24T00:00:05Z' });
       Object.assign(record.results[0], { status: 'passed', startedAt: record.startedAt, finishedAt: record.finishedAt, durationMs: 1000 + index, exitCode: 0 });
       return [group, record];
     }));
@@ -27,11 +27,33 @@ async function main() {
     assert.equal(summary.allPassed, true); assert.equal(summary.dataComplete, true);
     assert.equal(summary.counts.passed, 5); assert.equal(summary.unexecuted, 0);
   });
+  for (const [name, change] of [
+    ['missing group start', { startedAt: null }],
+    ['missing group finish', { finishedAt: null }],
+    ['invalid group start', { startedAt: 'invalid' }],
+    ['invalid group finish', { finishedAt: 'invalid' }],
+    ['reversed group timestamps', { finishedAt: '2026-10-23T23:59:59Z' }],
+    ['missing completed count', { completedCount: undefined }],
+    ['too few completed leaves', { completedCount: 0 }],
+    ['too many completed leaves', { completedCount: 2 }],
+    ['noninteger completed count', { completedCount: 0.5 }],
+    ['string completed count', { completedCount: '1' }],
+  ]) {
+    check(`${name} cannot certify complete success`, () => {
+      const input = records(); Object.assign(input.core, change);
+      const summary = summarize(input);
+      assert.equal(summary.dataComplete, false);
+      assert.equal(summary.allPassed, false);
+      assert.equal(summary.groups.find(row => row.group === 'core').valid, false);
+      assert.ok(!renderSummary(summary).includes('all required test evidence is complete.'));
+    });
+  }
   for (const state of ['failed', 'cancelled', 'skipped', 'interrupted', 'running', 'pending']) {
     check(`${state} is never promoted to success`, () => {
       const input = records(); input.core.status = state; input.core.results[0].status = state;
       if (state !== 'passed') input.core.results[0].exitCode = state === 'failed' ? 17 : null;
       if (state === 'running' || state === 'pending') input.core.finishedAt = null;
+      input.core.completedCount = state === 'running' || state === 'pending' ? 0 : 1;
       const summary = summarize(input);
       assert.equal(summary.allPassed, false);
       assert.equal(summary.counts[state], 1);
@@ -102,7 +124,7 @@ async function main() {
       const fixturePlan = { groups, leaves: names.map(name => `node tests/${name}`), byGroup: new Map(digestAndGroups) };
       for (const group of groups) {
         const record = createGroupRecord(group, fixturePlan, env);
-        record.status = 'passed'; record.finishedAt = record.startedAt;
+        record.status = 'passed'; record.finishedAt = record.startedAt; record.completedCount = 1;
         Object.assign(record.results[0], { status: 'passed', startedAt: record.startedAt, finishedAt: record.finishedAt, durationMs: 1, exitCode: 0 });
         const dir = path.join(fixture, 'artifacts', 'test-results-' + group);
         fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'results.json'), JSON.stringify(record));
@@ -111,6 +133,21 @@ async function main() {
       const options = { cwd: fixture, env: { ...process.env, ...env, SECRET_TEST: 'DO_NOT_RECORD_ME' }, encoding: 'utf8', windowsHide: true };
       assert.equal(spawnSync(process.execPath, args, options).status, 0);
       assert.equal(JSON.parse(fs.readFileSync(path.join(fixture, 'summary.json'))).allPassed, true);
+      const coreFile = path.join(fixture, 'artifacts/test-results-core/results.json');
+      const coreRecord = JSON.parse(fs.readFileSync(coreFile, 'utf8'));
+      for (const change of [
+        { startedAt: null }, { finishedAt: null },
+        { startedAt: 'invalid' }, { finishedAt: '2000-01-01T00:00:00Z' },
+        { completedCount: 0 }, { completedCount: 2 }, { completedCount: '1' },
+      ]) {
+        fs.writeFileSync(coreFile, JSON.stringify({ ...coreRecord, ...change }));
+        assert.equal(spawnSync(process.execPath, args, options).status, 1, JSON.stringify(change));
+        const summary = JSON.parse(fs.readFileSync(path.join(fixture, 'summary.json')));
+        assert.equal(summary.dataComplete, false);
+        assert.equal(summary.allPassed, false);
+      }
+      fs.writeFileSync(coreFile, JSON.stringify(coreRecord));
+      assert.equal(spawnSync(process.execPath, args, options).status, 0);
       fs.unlinkSync(path.join(fixture, 'artifacts/test-results-native/results.json'));
       assert.equal(spawnSync(process.execPath, args, options).status, 1);
       assert.equal(JSON.parse(fs.readFileSync(path.join(fixture, 'summary.json'))).allPassed, false);

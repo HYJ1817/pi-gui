@@ -97,3 +97,34 @@ Windows x64、Electron 44.4.3（内嵌 Node 24.21.0）、宿主 Node 24.22.1；�
 回滚边界：经授权先 revert 本报告所在文档/证据提交，再 `git revert 5e36a1991732e7d545b6f5040056fc4b25224093` 撤销 CI、脚本和测试；保留后续无关改动。无用户数据迁移或安装恢复，不使用全仓 reset/clean。
 
 开发本地交付：具备；G2 最终完成/代码验收：待真实 PR CI 与独立审查；允许合并：未授权；正式发版：不需要，未授权。此处停止，等待推送及后续独立验收指令。
+
+## 独立审查反馈修复：证据完整性（2026-10-24）
+
+本节为首轮交付后的增量证据，保留上文历史结果及当时授权状态。修复前 HEAD 为
+`a9471f763048194d386d82e591bbc741bbe960bf`，已按随后取得的用户授权推送；本次修复提交可用
+`git log -1 --format=%H --grep='修复 CI 汇总证据完整性校验'` 定位。执行前工作树干净，重新 fetch 后
+origin/main 仍为 `e97ecf36f5bc2babdcd9785f9efbf9324ff34326`，其成功 CI 仍为上述 main 基线运行。
+
+截图反馈的 Important 已核实：组级 startedAt 缺失时，旧汇总可能同时产生 allPassed=true、
+dataComplete=false，但 `--require-complete` 仍退出 0；completedCount 也未与叶终态数量核对。
+补测先复现失败（退出 1，实际 allPassed=true），再修复：
+
+- 强制检查同时要求 allPassed 和 dataComplete；诊断文本使用相同条件，避免把不完整证据描述为完整。
+- 校验组级开始时间以及终态组的有效、非倒序起止时间；completedCount 必须为整数且等于实际终态叶数量。
+- 原测试 fixture 补齐真实保存器会写入的完成数量；原有状态、身份、覆盖范围和故障断言均保留。
+
+本次只修改 `scripts/summarize-ci-results.mjs`、`tests/ci-summary.cjs` 和本报告。
+没有修改执行器、workflow、测试注册、依赖、版本或产品功能。
+
+| 命令 | 本次实际结果 |
+| --- | --- |
+| `node tests/ci-summary.cjs` | 退出 0，29/29（原 19 项加 10 项时间戳/完成数量回归），失败 0、跳过 0 |
+| 汇总 CLI 隔离 fixture（含于上述测试） | 7 种不完整时间/计数证据均退出 1；完整及恢复后的证据退出 0，缺失 artifact 仍退出 1；JSON 可解析 |
+| `npm run test:ci` | 退出 0，7 套件；持久化 10/10、汇总 29/29、历史统计 21 条断言、实际 gate 15/15、发布证明 16/16、NSIS 12/12，失败 0 |
+| `node scripts/run-test-group.mjs --validate` | 退出 0，仍为 196 条 canonical，五组 120/24/27/4/21 |
+| `git diff --check` | 退出 0 |
+
+本次未重跑完整 `npm test` 或 Electron smoke：增量仅收紧汇总证据校验，受影响基建套件已覆盖；
+完整 G2 canonical 仍须由后续真实 PR CI 证明。本节不是修复后的独立复审或合并授权。
+回滚可 `git revert <本节定位的修复提交>`，将一起回退这三份文件；无用户数据恢复要求。
+本次完成本地提交后停止，未推送该修复、创建 PR、合并或发布。
