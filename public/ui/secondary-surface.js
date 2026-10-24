@@ -5,6 +5,33 @@ let secondaryPane = null;
 let secondaryCurrent = null;
 let secondaryToken = 0;
 
+/* ---------- 面板重开时的轻量状态暂存 ----------
+ *
+ * 切换右栏 surface 会销毁业务面板；这里只暂存「重开同一个视图时值得还原」的
+ * 小块 UI 状态（展开目录、滚动位置），不保存 DOM、不保存业务数据。
+ * 键 = surface 名；换 workspace/会话的失效与清空由各业务模块自己负责 ——
+ * 它们恢复时会重新校验身份，对不上的数据直接丢弃。 */
+const paneState = new Map();
+const PANE_STATE_LIMIT = 8;
+
+export function readPaneState(view) {
+  return paneState.get(view) || null;
+}
+
+export function writePaneState(view, state) {
+  paneState.delete(view);
+  if (!state) return;
+  paneState.set(view, state);
+  while (paneState.size > PANE_STATE_LIMIT) {
+    paneState.delete(paneState.keys().next().value);
+  }
+}
+
+export function clearPaneState(view) {
+  if (view) paneState.delete(view);
+  else paneState.clear();
+}
+
 export function configureSecondaryPane(pane) {
   secondaryPane = pane;
   pane?.onSurfaceChange(next => {

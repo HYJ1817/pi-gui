@@ -2,7 +2,7 @@
 import { S } from './state.js';
 import { fetchSpecs, fetchSpecDocument } from './api.js';
 import { createPaneHeader } from './right-pane.js';
-import { openSecondarySurface } from './ui/secondary-surface.js';
+import { openSecondarySurface, readPaneState, writePaneState } from './ui/secondary-surface.js';
 import { md } from './markdown.js';
 import { buildSpecTree, specDirectoryPaths, resolveSpecLink } from './specs-tree.js';
 
@@ -63,6 +63,7 @@ export function mountSpecsPanel(host, view, {
   let loadedOnce = false;
   let expanded = new Set();
   let knownDirectories = new Set();
+  let restored = readPaneState('specs');
   let switchTimer = 0;
   let header;
   let refresh;
@@ -175,6 +176,18 @@ export function mountSpecsPanel(host, view, {
     }
   }
 
+  function rememberPaneState() {
+    if (!workspace) return;
+    writePaneState('specs', {
+      workspaceId: workspace.id,
+      workspaceGeneration: workspace.generation,
+      selectedPath,
+      expanded: [...expanded],
+      treeScroll: treeList?.scrollTop || 0,
+      docScroll: docPane?.querySelector('.specs-markdown')?.scrollTop || 0,
+    });
+  }
+
   function renderDocumentHeader(documentEntry) {
     const head = node('div', 'specs-doc-head');
     head.append(
@@ -244,6 +257,11 @@ export function mountSpecsPanel(host, view, {
     }
     const fresh = result.document || documentEntry;
     renderDocument(fresh);
+    if (!anchor && restored?.docScroll && selectedPath === restored.selectedPath) {
+      const body = docPane.querySelector('.specs-markdown');
+      if (body) body.scrollTop = restored.docScroll;
+    }
+    restored = null;
     if (anchor) requestAnimationFrame(() => {
       if (isCurrent() && request === documentSerial && signature === currentSignature()) jumpToAnchor(anchor);
     });
@@ -288,10 +306,16 @@ export function mountSpecsPanel(host, view, {
     }
 
     const previousPath = selectedPath;
+    /* 重开面板时按 workspace 身份恢复视图状态；对不上就丢弃，绝不复活旧数据。 */
+    const snapshot = restored && restored.workspaceId === result.workspace.id
+      && restored.workspaceGeneration === result.workspace.generation ? restored : null;
+    if (restored && !snapshot) restored = null;
     workspace = result.workspace;
     documents = Array.isArray(result.documents) ? result.documents : [];
     const directories = new Set(specDirectoryPaths(documents));
-    if (!loadedOnce) expanded = new Set(directories);
+    if (snapshot?.expanded) {
+      expanded = new Set(snapshot.expanded.filter((directory) => directories.has(directory)));
+    } else if (!loadedOnce) expanded = new Set(directories);
     else for (const directory of directories) if (!knownDirectories.has(directory)) expanded.add(directory);
     for (const directory of [...expanded]) if (!directories.has(directory)) expanded.delete(directory);
     knownDirectories = directories;
@@ -308,10 +332,11 @@ export function mountSpecsPanel(host, view, {
       renderEmpty('这个项目还没有 Specs', '新建根目录的 SPEC.md，或在 specs/ 下添加 Markdown 文档，然后点刷新。');
       return;
     }
-    const selected = documents.find((doc) => doc.path === previousPath)
+    const selected = documents.find((doc) => doc.path === (snapshot?.selectedPath || previousPath))
       || documents.find((doc) => doc.main)
       || documents[0];
     await openDocument(selected);
+    if (snapshot?.treeScroll && treeList) treeList.scrollTop = snapshot.treeScroll;
   }
 
   function handleDocumentClick(event) {
@@ -412,6 +437,7 @@ export function mountSpecsPanel(host, view, {
     document.addEventListener('pi-gui:git-scope', onScope);
 
     view.onDispose(() => {
+      rememberPaneState();
       alive = false;
       indexSerial++;
       documentSerial++;

@@ -220,6 +220,21 @@ export function buildDiagnosticSummary(d, drift = []) {
   return lines.join('\n');
 }
 
+/* 日志「引用到对话」的安全摘要。只使用 safeEntryText 同一套白名单字段
+ * （时间·级别·来源·事件·代码），不携带 details JSON、正文或原始 payload；
+ * 缺字段就省略，不编造「未知」。 */
+export function buildLogReference(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  const date = new Date(entry.timestamp);
+  const stamp = Number.isFinite(date.getTime()) ? date.toISOString() : String(entry.timestamp || '未知时间');
+  const lines = [`日志引用（${stamp}）`];
+  if (entry.level) lines.push(`级别：${entry.level}`);
+  if (entry.source) lines.push(`来源：${entry.source}`);
+  if (entry.event) lines.push(`事件：${entry.event}`);
+  if (entry.code) lines.push(`代码：${entry.code}`);
+  return lines.join('\n');
+}
+
 async function copyText(text, message = '已复制') {
   try {
     await navigator.clipboard.writeText(text);

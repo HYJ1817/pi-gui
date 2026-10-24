@@ -1,0 +1,358 @@
+{
+  "checks": 25,
+  "passed": 12,
+  "failed": 13,
+  "skipped": 0,
+  "electron": "44.4.3",
+  "chromium": "152.0.7977.130",
+  "evidence": [
+    {
+      "single": {
+        ".chg-body": {
+          "top": 0,
+          "left": 0,
+          "client": 695,
+          "height": 695,
+          "width": 419,
+          "fullWidth": 419,
+          "overflow": "auto"
+        },
+        ".chg-list": {
+          "top": 0,
+          "left": 0,
+          "client": 640,
+          "height": 3597,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "auto"
+        },
+        ".chg-diff": {
+          "top": 0,
+          "left": 0,
+          "client": 0,
+          "height": 0,
+          "width": 0,
+          "fullWidth": 0,
+          "overflow": "visible"
+        },
+        ".diff": null
+      }
+    },
+    {
+      "name": "single panel has a genuinely scrollable .chg-list",
+      "passed": true
+    },
+    {
+      "beforeSingleReopen": {
+        ".chg-body": {
+          "top": 0,
+          "left": 0,
+          "client": 695,
+          "height": 695,
+          "width": 419,
+          "fullWidth": 419,
+          "overflow": "auto"
+        },
+        ".chg-list": {
+          "top": 650,
+          "left": 0,
+          "client": 640,
+          "height": 3597,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "auto"
+        },
+        ".chg-diff": {
+          "top": 0,
+          "left": 0,
+          "client": 0,
+          "height": 0,
+          "width": 0,
+          "fullWidth": 0,
+          "overflow": "visible"
+        },
+        ".diff": null
+      }
+    },
+    {
+      "afterSingleReopen": {
+        ".chg-body": {
+          "top": 0,
+          "left": 0,
+          "client": 695,
+          "height": 695,
+          "width": 419,
+          "fullWidth": 419,
+          "overflow": "auto"
+        },
+        ".chg-list": {
+          "top": 0,
+          "left": 0,
+          "client": 640,
+          "height": 3597,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "auto"
+        },
+        ".chg-diff": {
+          "top": 0,
+          "left": 0,
+          "client": 0,
+          "height": 0,
+          "width": 0,
+          "fullWidth": 0,
+          "overflow": "visible"
+        },
+        ".diff": null
+      }
+    },
+    {
+      "name": "single-panel reopen restores real list scroll after status redraw",
+      "passed": false
+    },
+    {
+      "name": "Diff uses real horizontal scrollers for staged and working sections",
+      "passed": true
+    },
+    {
+      "name": "reopen restores expanded Diff and both horizontal positions",
+      "passed": false
+    },
+    {
+      "name": "delayed status and Diff loading retain requested list scroll",
+      "passed": false
+    },
+    {
+      "name": "ordinary status refresh preserves actual list scroll after DOM replacement",
+      "passed": false
+    },
+    {
+      "shortenedList": {
+        ".chg-body": {
+          "top": 0,
+          "left": 0,
+          "client": 695,
+          "height": 695,
+          "width": 419,
+          "fullWidth": 419,
+          "overflow": "auto"
+        },
+        ".chg-list": {
+          "top": 0,
+          "left": 0,
+          "client": 640,
+          "height": 1122,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "auto"
+        },
+        ".chg-diff": {
+          "top": 0,
+          "left": 0,
+          "client": 0,
+          "height": 0,
+          "width": 0,
+          "fullWidth": 0,
+          "overflow": "visible"
+        },
+        ".diff": null
+      }
+    },
+    {
+      "name": "shortened list clamps saved position to actual scroll range",
+      "passed": false
+    },
+    {
+      "name": "an empty refresh resets scroll before files reappear",
+      "passed": true
+    },
+    {
+      "name": "failed Git status renders an explicit error",
+      "passed": true
+    },
+    {
+      "name": "retry restores list position after a status failure",
+      "passed": false
+    },
+    {
+      "split": {
+        ".chg-body": {
+          "top": 0,
+          "left": 0,
+          "client": 276,
+          "height": 276,
+          "width": 419,
+          "fullWidth": 419,
+          "overflow": "auto"
+        },
+        ".chg-list": {
+          "top": 0,
+          "left": 0,
+          "client": 221,
+          "height": 4516,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "auto"
+        },
+        ".chg-diff": {
+          "top": 0,
+          "left": 0,
+          "client": 919,
+          "height": 919,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "visible"
+        },
+        ".diff": {
+          "top": 0,
+          "left": 0,
+          "client": 84,
+          "height": 84,
+          "width": 388,
+          "fullWidth": 3577,
+          "overflow": "auto"
+        }
+      }
+    },
+    {
+      "name": "split panel also scrolls the actual .chg-list",
+      "passed": true
+    },
+    {
+      "beforeSplitReopen": {
+        ".chg-body": {
+          "top": 0,
+          "left": 0,
+          "client": 276,
+          "height": 276,
+          "width": 419,
+          "fullWidth": 419,
+          "overflow": "auto"
+        },
+        ".chg-list": {
+          "top": 400,
+          "left": 0,
+          "client": 221,
+          "height": 4516,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "auto"
+        },
+        ".chg-diff": {
+          "top": 0,
+          "left": 0,
+          "client": 919,
+          "height": 919,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "visible"
+        },
+        ".diff": {
+          "top": 0,
+          "left": 0,
+          "client": 84,
+          "height": 84,
+          "width": 388,
+          "fullWidth": 3577,
+          "overflow": "auto"
+        }
+      }
+    },
+    {
+      "afterSplitReopen": {
+        ".chg-body": {
+          "top": 0,
+          "left": 0,
+          "client": 276,
+          "height": 276,
+          "width": 419,
+          "fullWidth": 419,
+          "overflow": "auto"
+        },
+        ".chg-list": {
+          "top": 0,
+          "left": 0,
+          "client": 221,
+          "height": 4516,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "auto"
+        },
+        ".chg-diff": {
+          "top": 0,
+          "left": 0,
+          "client": 919,
+          "height": 919,
+          "width": 409,
+          "fullWidth": 409,
+          "overflow": "visible"
+        },
+        ".diff": {
+          "top": 0,
+          "left": 0,
+          "client": 84,
+          "height": 84,
+          "width": 388,
+          "fullWidth": 3577,
+          "overflow": "auto"
+        }
+      }
+    },
+    {
+      "name": "split reopen restores actual list position",
+      "passed": false
+    },
+    {
+      "name": "split-to-single transition preserves list scroll",
+      "passed": false
+    },
+    {
+      "name": "late old-workspace status cannot restore old rows or scroll",
+      "passed": true
+    },
+    {
+      "name": "session switch drops previous scroll and expanded Diff",
+      "passed": true
+    },
+    {
+      "name": "workspace switch drops previous list position",
+      "passed": true
+    },
+    {
+      "name": "late old-session Diff cannot reopen a file or restore its horizontal state",
+      "passed": true
+    },
+    {
+      "name": "overview Classic success is visible and preserves draft",
+      "passed": false
+    },
+    {
+      "name": "keyboard activates overview reference once and keeps inline feedback",
+      "passed": false
+    },
+    {
+      "name": "overview not-ready failure is visible and does not append",
+      "passed": false
+    },
+    {
+      "name": "overview Runtime success fills only its owned composer",
+      "passed": false
+    },
+    {
+      "name": "overview mismatched Runtime identity reports failure without filling B",
+      "passed": false
+    },
+    {
+      "name": "reference contains only safe fields and never sends or executes",
+      "passed": true
+    },
+    {
+      "name": "narrow log feedback stays within the modal",
+      "passed": true
+    },
+    {
+      "name": "Chromium ran with normal sandbox and context isolation",
+      "passed": true
+    }
+  ]
+}
