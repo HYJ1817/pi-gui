@@ -37,6 +37,7 @@ async function main() {
     MutationObserver: dom.window.MutationObserver,
     CustomEvent: dom.window.CustomEvent,
     Event: dom.window.Event,
+    Node: dom.window.Node,
     requestAnimationFrame: (fn) => setTimeout(fn, 0),
     cancelAnimationFrame: clearTimeout,
   });
@@ -50,7 +51,9 @@ async function main() {
   const { calculateBounds, renderVizChart } = await import('../public/viz-chart.js');
   const { setGitConversationScope } = await import('../public/api.js');
   const { runtimeStore, seedRuntimeSnapshot } = await import('../public/runtime-state.js');
-  const { showRuntimeConversation } = await import('../public/ui/workspace-surface.js');
+  const { showRuntimeConversation, showChat } = await import('../public/ui/workspace-surface.js');
+  const { rebuildFromMessages } = await import('../public/messages.js');
+  const { createRuntimeConversation } = await import('../public/runtime-conversation.js');
 
   initVizIntegration();
 
@@ -163,9 +166,10 @@ async function main() {
   ok('sliced summary reflects sliced min 30 and max 50', summaryMarkdownSlice3.includes('极值 [30 ~ 50]ms'));
   ok('sliced summary reflects overCount 2', summaryMarkdownSlice3.includes('2 处超过阈值'));
 
-  // 4. 界面与右栏交互测试
-  console.log('\n--- 4. 界面卡片与右栏受控参数交互 ---');
+  // 4. 界面与右栏交互测试（真实 Classic 链路）
+  console.log('\n--- 4. 界面卡片与右栏受控参数交互（真实 Classic 消息） ---');
 
+  showChat();
   S.workspaceGeneration = 1;
   S.hasProject = true;
   S.bridgeState = 'ready';
@@ -175,19 +179,22 @@ async function main() {
   configureSecondaryPane(pane);
   setGitConversationScope(null);
 
-  // 插入带有真实消息父容器的消息
-  const stream = document.getElementById('stream');
-  stream.replaceChildren();
-  const thread = document.createElement('div');
-  thread.className = 'thread';
-  const msgEl = document.createElement('div');
-  msgEl.className = 'message assistant-message';
-  msgEl.dataset.id = 'msg-1';
-  msgEl.innerHTML = closedHtml;
-  thread.append(msgEl);
-  stream.append(thread);
+  // 使用真实 messages.js 的 rebuildFromMessages 创建真实助手消息 article.msg.assistant
+  rebuildFromMessages({
+    messages: [
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: '网络监控报告：\n' + closedMd }],
+      },
+    ],
+  });
+
+  const msgEl = document.querySelector('#stream .thread article.msg.assistant');
+  ok('real classic assistant message article.msg.assistant created via messages.js', Boolean(msgEl));
 
   const card = msgEl.querySelector('.viz-card');
+  ok('viz card is inside real article.msg.assistant', Boolean(card));
+
   const toggleBtn = card.querySelector('[data-viz-toggle-raw]');
   const rawCode = card.querySelector('.viz-raw-code');
 
@@ -218,7 +225,7 @@ async function main() {
   ok('prevented deactivating the last active series', seriesPills[0].classList.contains('is-active'));
 
   // 5. Classic 与 Runtime 会话身份隔离与验证测试
-  console.log('\n--- 5. 会话身份隔离与拒绝验证 ---');
+  console.log('\n--- 5. 会话身份隔离与拒绝验证（Classic 真实环境） ---');
 
   // (1) Classic 正常引用
   el.input.value = '原有草稿内容。';
@@ -235,18 +242,53 @@ async function main() {
   // 恢复 Classic session id
   S.state.sessionId = 'classic-session-001';
 
-  // (3) 原消息在 DOM 中被删除 / 历史被重构测试
+  // (3) 原消息在 DOM 中被删除测试
   msgEl.remove();
   ok('source message disconnected from DOM', !msgEl.isConnected);
   quoteBtn.click();
   ok('disconnected source message rejects quote without modifying draft', el.input.value === draftBeforeMismatch);
 
-  // (4) Runtime 会话身份测试
-  console.log('\n--- 6. Runtime 会话身份与拥有者校验 ---');
+  // (4) 历史重建测试：重新生成后打开，再用空消息重建，旧节点脱离 DOM
+  rebuildFromMessages({
+    messages: [
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: '重新生成的监控：\n' + closedMd }],
+      },
+    ],
+  });
+  const reloadedMsg = document.querySelector('#stream .thread article.msg.assistant');
+  const reloadedOpenBtn = reloadedMsg.querySelector('[data-viz-open]');
+  reloadedOpenBtn.click();
+  ok('re-opened viz panel from newly rebuilt message', pane.isOpen() === true);
+
+  // 历史被再次清空/重建（如切换分支或收到新历史）
+  rebuildFromMessages([]);
+  ok('message cleared on history rebuild', !reloadedMsg.isConnected);
+  quoteBtn.click();
+  ok('stale message after history rebuild rejects quote', el.input.value === draftBeforeMismatch);
+
+  // (5) 禁止 sourceNode=null 或脱卸节点打开面板
+  const invalidOpenResult = openVizPanel(testDataObj, { sourceNode: null });
+  ok('openVizPanel rejects when sourceNode is null', invalidOpenResult === null);
+
+  const detachedMsg = document.createElement('article');
+  detachedMsg.className = 'msg assistant';
+  const detachedOpenResult = openVizPanel(testDataObj, { sourceNode: detachedMsg });
+  ok('openVizPanel rejects when sourceNode is detached from DOM', detachedOpenResult === null);
+
+  // 6. Runtime 真实渲染链路与身份隔离测试
+  console.log('\n--- 6. Runtime 真实渲染链路与拥有者校验 ---');
 
   // 切换工作区视图为 runtime
   showRuntimeConversation();
   setGitConversationScope('conv-runtime-100');
+
+  // 挂载真实 Runtime Conversation 组件到 #runtimeView
+  const runtimeView = document.getElementById('runtimeView');
+  runtimeView.hidden = false;
+  runtimeView.replaceChildren();
+  const runtimeComponent = createRuntimeConversation({ host: runtimeView });
 
   // 注册 runtime 拥有者与代数
   seedRuntimeSnapshot({
@@ -260,45 +302,54 @@ async function main() {
     }],
   });
 
-  // 创建 Runtime 真实的会话 DOM
-  const runtimeView = document.getElementById('runtimeView');
-  runtimeView.hidden = false;
-  runtimeView.replaceChildren();
+  // 在 Live 模式下存入带有 pi-gui-viz 的正文并通过真实 draw 链路渲染
+  const recordA = runtimeStore.get('conv-runtime-100');
+  recordA.text = 'Runtime 实时负载：\n' + closedMd + '\n数据推送完毕。';
+  runtimeComponent.show('conv-runtime-100');
 
-  const runtimeConv = document.createElement('div');
-  runtimeConv.className = 'runtime-conversation';
-  runtimeConv.dataset.conversationId = 'conv-runtime-100';
+  const rtcOutput = runtimeView.querySelector('.rtc-output');
+  ok('real runtime rtc-output exists', Boolean(rtcOutput));
 
-  const runtimeCardContainer = document.createElement('div');
-  runtimeCardContainer.className = 'message';
-  runtimeCardContainer.innerHTML = closedHtml;
-  runtimeConv.append(runtimeCardContainer);
+  const runtimeCard = rtcOutput.querySelector('.viz-card');
+  ok('real runtime rtc-output renders viz-card', Boolean(runtimeCard));
 
-  const runtimeInput = document.createElement('textarea');
-  runtimeInput.setAttribute('aria-label', '给当前会话的任务');
-  runtimeConv.append(runtimeInput);
-  runtimeView.append(runtimeConv);
+  const liveBlock = runtimeCard.closest('.rtc-output-block');
+  ok('runtime card is inside .rtc-output-block', Boolean(liveBlock));
 
-  // 从 Runtime 卡片打开图表面板
-  const runtimeOpenBtn = runtimeCardContainer.querySelector('[data-viz-open]');
+  // 从真实 Runtime 卡片打开图表面板
+  const runtimeOpenBtn = runtimeCard.querySelector('[data-viz-open]');
   runtimeOpenBtn.click();
-  ok('opened viz panel from runtime card', pane.isOpen() === true);
+  ok('opened viz panel from real runtime card', pane.isOpen() === true);
 
-  // 验证 S.state.sessionId 存在时绝不会覆盖 Runtime 会话
+  // 验证 S.state.sessionId 存在时绝不会覆盖 Runtime 会话，且能正确填入 runtime 输入框
   S.state.sessionId = 'classic-shadow-session';
+  const runtimeInput = runtimeView.querySelector('textarea');
   const runtimeQuoteBtn = rightPane.querySelector('.viz-quote-btn');
   runtimeQuoteBtn.click();
   ok('runtime quote successfully targets runtime textarea without being overridden by S.state.sessionId',
     runtimeInput.value.includes('[图表配置引用：网络流量吞吐]'));
 
-  // 测试 Runtime 会话切换拒绝
-  setGitConversationScope('conv-runtime-999');
+  // (1) 测试 Runtime 会话切换拒绝
+  seedRuntimeSnapshot({
+    backendInstance: 'fixture-backend',
+    items: [{
+      conversationId: 'conv-runtime-200',
+      owner: { runtimeId: 'agent-z3-worker-2', runtimeGeneration: '1' },
+      lifecycle: 'ready',
+      activity: 'idle',
+      revision: 1,
+    }],
+  });
+  runtimeComponent.show('conv-runtime-200');
+  setGitConversationScope('conv-runtime-200');
   const prevRuntimeValue = runtimeInput.value;
   runtimeQuoteBtn.click();
   ok('switched runtime conversation rejects quote', runtimeInput.value === prevRuntimeValue);
 
-  // 切回原会话，但 Agent owner 变更 / 进程死亡
+  // (2) 切回原会话，但 Agent owner 变更 / 进程死亡拒绝
+  runtimeComponent.show('conv-runtime-100');
   setGitConversationScope('conv-runtime-100');
+  const valBeforeOwnerChange = runtimeInput.value;
   seedRuntimeSnapshot({
     backendInstance: 'fixture-backend',
     items: [{
@@ -310,9 +361,9 @@ async function main() {
     }],
   });
   runtimeQuoteBtn.click();
-  ok('stale/changed runtime owner rejects quote', runtimeInput.value === prevRuntimeValue);
+  ok('stale/changed runtime owner rejects quote', runtimeInput.value === valBeforeOwnerChange);
 
-  // Runtime generation 重置
+  // (3) Runtime generation 重置拒绝
   seedRuntimeSnapshot({
     backendInstance: 'fixture-backend',
     items: [{
@@ -324,11 +375,67 @@ async function main() {
     }],
   });
   runtimeQuoteBtn.click();
-  ok('stale runtime generation rejects quote', runtimeInput.value === prevRuntimeValue);
+  ok('stale runtime generation rejects quote', runtimeInput.value === valBeforeOwnerChange);
 
-  // 恢复状态并关闭
+  // (4) 来源消息块被删除拒绝
+  liveBlock.remove();
+  ok('runtime live source block disconnected from DOM', !liveBlock.isConnected);
+  runtimeQuoteBtn.click();
+  ok('disconnected runtime source block rejects quote', runtimeInput.value === valBeforeOwnerChange);
+
+  // (5) Runtime 历史视图下的真实卡片渲染与删除来源测试
+  const histLocator = {
+    conversationId: 'conv-runtime-100',
+    nativeSessionId: 'fixture-backend',
+    projectId: 'project',
+    workspaceId: 'ws',
+    workspaceEpoch: 'epoch',
+  };
+  global.fetch = async () => ({
+    json: async () => ({
+      ok: true,
+      locator: histLocator,
+      messages: [
+        { messageId: 'hist-msg-1', role: 'user', text: '请给出历史报表' },
+        { messageId: 'hist-msg-2', role: 'assistant', text: '历史报表：\n' + closedMd },
+      ],
+    }),
+  });
+  // 恢复可用的 owner 并写入 locator
+  seedRuntimeSnapshot({
+    backendInstance: 'fixture-backend',
+    items: [{
+      conversationId: 'conv-runtime-100',
+      nativeSessionId: 'fixture-backend',
+      workspace: { projectId: 'project', workspaceId: 'ws', workspaceEpoch: 'epoch' },
+      owner: { runtimeId: 'agent-z3-worker', runtimeGeneration: '1' },
+      lifecycle: 'ready',
+      activity: 'idle',
+      revision: 4,
+    }],
+  });
+  await runtimeComponent.openHistory(histLocator);
+
+  const historyCard = rtcOutput.querySelector('.viz-card');
+  ok('runtime history renders viz-card', Boolean(historyCard));
+  const historyRow = historyCard.closest('[data-history-message-id]');
+  ok('history viz-card is inside [data-history-message-id]', Boolean(historyRow));
+
+  // 从历史卡片打开面板
+  historyCard.querySelector('[data-viz-open]').click();
+  ok('opened viz panel from runtime history card', pane.isOpen() === true);
+
+  // 历史消息行脱离 DOM 测试
+  const valBeforeHistoryRemove = runtimeInput.value;
+  historyRow.remove();
+  ok('history message row disconnected', !historyRow.isConnected);
+  runtimeQuoteBtn.click();
+  ok('disconnected history message rejects quote', runtimeInput.value === valBeforeHistoryRemove);
+
+  // 恢复状态并清理
   pane.close();
-  ok('pane safely closed and cleaned up', pane.isOpen() === false);
+  runtimeComponent.dispose();
+  ok('pane and runtime component safely closed and cleaned up', pane.isOpen() === false);
 
   console.log(`\nViz UI & Review Fixes: ${checks}/${checks} passed.`);
 }

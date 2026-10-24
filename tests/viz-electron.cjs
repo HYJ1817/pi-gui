@@ -211,14 +211,12 @@ if (!process.versions.electron) {
         "\`\`\`pi-gui-viz\\n" + chart2Json + "\\n\`\`\`\\n\\n" +
         "请查看详细指标。";
 
-      const stream = document.getElementById('stream');
-      const thread = document.createElement('div');
-      thread.className = 'thread';
-      const msg = document.createElement('div');
-      msg.className = 'message assistant-message';
-      msg.innerHTML = md(msgMd);
-      thread.append(msg);
-      stream.append(thread);
+      const { rebuildFromMessages } = await import('/messages.js');
+      rebuildFromMessages({
+        messages: [
+          { role: 'assistant', content: [{ type: 'text', text: msgMd }] },
+        ],
+      });
 
       return true;
     })()`);
