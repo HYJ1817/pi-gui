@@ -142,7 +142,8 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
   }
   function changed(event) {
     if (!active() || event?.detail?.scope && event.detail.scope!==scope) return;
-    if(mode==='preview') invalidate();else drawSelection();
+    if(mode==='preview') invalidate();
+    else drawSelection();
   }
   const events=['pi-gui:review-change','pi-gui:review-storage','pi-gui:review-evidence'];
   for(const name of events)document.addEventListener(name,changed);

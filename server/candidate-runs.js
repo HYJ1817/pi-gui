@@ -4,6 +4,8 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {captureCandidateInput,installCandidateInput,compareCandidateInput,candidateHash,candidatePath,candidateFail,assertCandidateTarget} from '../lib/candidate-snapshot.js';
 import {createCandidateStore} from './candidate-store.js';
+import {createCandidateApply} from './candidate-apply.js';
+import {observeAdoptionSnapshot,createAdoptionEvidence,checkCandidateAdoption} from '../lib/candidate-adoption.js';
 import {gitDiff} from '../lib/git.js';
 import {diffHtml,createReviewTask,reconcileReviewRange} from '../lib/candidate-review-model.js';
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -26,16 +28,17 @@ function rows(text){
   }
   return result;
 }
-export function createCandidateRuns({dataDir,worktrees,registry,readComments,projectFor,contextGeneration,busy=()=>false,protectedRoots=()=>[],now=Date.now}={}){
-  const store=createCandidateStore({dataDir,protectedRoots}),plans=new Map(),records=new Map();let active=null,disposed=false,storageError=null;
+export function createCandidateRuns({dataDir,worktrees,registry,readComments,projectFor,contextGeneration,busy=()=>false,admission,protectedRoots=()=>[],now=Date.now}={}){
+  const store=createCandidateStore({dataDir,protectedRoots}),plans=new Map(),records=new Map();let active=null,checkingAdoption=false,disposed=false,storageError=null;
+  const adoption=createCandidateApply({dataDir,worktrees,admission,protectedRoots,now,assertIdle:()=>{if(disposed||storageError)candidateFail(storageError||'candidate_unavailable');store.assertIdle();if(active||busy(true))candidateFail('candidate_busy');}});
   try{for(const saved of store.readAll()){
     if(!terminal.has(saved.run.state)){saved.run.state='interrupted';saved.result=null;saved.run.reason='candidate_interrupted';}
     records.set(saved.run.id,saved);
   }}catch{storageError='candidate_storage_unsafe';}
   function check(scope){if(disposed)candidateFail('candidate_unavailable');if(storageError)candidateFail(storageError);scope.assertCurrent();}
-  function idle(){if(active||busy())candidateFail('candidate_busy');}
+  function idle(){if(active||checkingAdoption||adoption.busy()||busy())candidateFail('candidate_busy');}
   function own(owner){return active&&active.owner?.conversationId===owner?.conversationId&&active.owner?.workspaceId===owner?.workspaceId?active:null;}
-  function persist(live){store.save({version:1,run:live.run,input:encode(live.pre),result:live.result||null});records.set(live.run.id,{version:1,run:structuredClone(live.run),input:encode(live.pre),result:live.result||null});}
+  function persist(live){const value={version:1,run:live.run,input:encode(live.pre),result:live.result||null,adoptionEvidence:live.adoptionEvidence||null};store.save(value);records.set(live.run.id,{...value,run:structuredClone(live.run)});}
   async function task(scope,body,owner){
     check(scope);const data=readComments(scope);
     if(body.scope!==scope.key||data.revision!==body.revision||!Array.isArray(body.selectedIds)||!body.selectedIds.length||new Set(body.selectedIds).size!==body.selectedIds.length)candidateFail('candidate_comments_changed');
@@ -58,7 +61,8 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     if(runtimeCount>=3)candidateFail('candidate_busy');
     const prepared=await worktrees.prepareCandidate({project,source:input.head,branch:`pi-gui/t4b/${randomUUID()}`},generation);check(scope);idle();
     if(plans.size>=8)plans.delete(plans.keys().next().value);
-    const nonce=randomUUID();plans.set(nonce,{scope,body,owner,input,selected,prepared,generation,allowThird:runtimeCount>=2,expires:now()+300000});
+    let sourceObservation=null;try{sourceObservation=observeAdoptionSnapshot(input);}catch{/* Optional C1 evidence must not change T4-B execution eligibility. */}
+    const nonce=randomUUID();plans.set(nonce,{scope,body,owner,input,sourceObservation,selected,prepared,generation,allowThird:runtimeCount>=2,expires:now()+300000});
     return{ok:true,nonce,plan:{head:input.head,inputId:input.contentId,counts:input.counts,source:scope.projectRoot,conversationId:owner?.conversationId||'classic-chat',commentCount:body.selectedIds.length,files:selected.paths,inputFiles:input.files.length,inputBytes:input.bytes,path:prepared.plan.path,warning,task:candidatePrompt({input,selected}),runtimeCount}};
   }
   async function validate(plan,scope){
@@ -71,7 +75,7 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
   async function confirm(scope,nonce){
     const plan=plans.get(nonce);plans.delete(nonce);if(!plan)candidateFail('candidate_expired');idle();
     await validate(plan,scope);idle();store.acquire();
-    const live={run:{id:randomUUID(),sourceScope:scope.key,sourceConversation:plan.owner?.conversationId||'classic-chat',state:'pending',createdAt:now(),inputId:plan.input.contentId,warning},source:plan.input,pre:plan.input,result:null,owner:null,queue:Promise.resolve(),calls:new Map(),uncertain:false,sending:false,started:false};
+    const live={run:{id:randomUUID(),sourceScope:scope.key,sourceConversation:plan.owner?.conversationId||'classic-chat',state:'pending',createdAt:now(),inputId:plan.input.contentId,warning},source:plan.input,sourceObservation:plan.sourceObservation,pre:plan.input,result:null,owner:null,queue:Promise.resolve(),calls:new Map(),uncertain:false,sending:false,started:false};
     active=live;
     try{
       persist(live);
@@ -98,6 +102,7 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     await registry.getAdapter(live.owner).toolGuard.assertReady();
     await validate(plan,scope);const before=await captureCandidateInput(live.root,{includeNew:true});
     if(before.contentId!==live.pre.contentId)candidateFail('candidate_changed');
+    try{live.inputObservation=observeAdoptionSnapshot(before);}catch{/* Optional C1 evidence; never infer missing object identities after execution. */}
     live.pre=before;live.latest=before;live.run.rootIdentity=identity(live.root);live.run.gitIdentity=candidateHash(fs.readFileSync(path.join(live.root,'.git')));
     live.run.state='running';live.started=true;persist(live);check(scope);
     const instruction=candidatePrompt(plan);
@@ -150,6 +155,7 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
         live.result.unconfirmedReasons=[...(live.problems||[])];
         if(post.counts.ignored)live.result.reliable=false;
         live.result.notice=live.result.reliable?'已核对输入、受控工具目标及执行前后文件；不是操作系统级写者隔离证明。':'结果无法可靠确认：检测到未核实工具、外部变化、失败或证据缺口。';
+        if(live.sourceObservation&&live.inputObservation)try{live.adoptionEvidence=createAdoptionEvidence({run:{...live.run,state:live.stopping?'stopped':state},source:live.sourceObservation,input:live.inputObservation,output:observeAdoptionSnapshot(post),result:live.result});}catch{/* Missing new evidence keeps T4-B history viewable, but cannot authorize adoption. */}
       }
       live.run.state=live.stopping?'stopped':state;live.run.reason=reason||null;live.run.endedAt=now();persist(live);
       store.release();active=null;
@@ -175,11 +181,22 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     if(r.sourceScope!==scope.key&&r.workspace?.path!==scope.projectRoot)candidateFail('candidate_scope');
     try{if(r.workspace&&!worktrees.projectFor(r.workspace.path))candidateFail('candidate_unsafe');if(r.rootIdentity&&(!equal(identity(r.workspace.path),r.rootIdentity)||candidateHash(fs.readFileSync(path.join(r.workspace.path,'.git')))!==r.gitIdentity))candidateFail('candidate_unsafe');}
     catch{return{ok:true,run:{...summary(r),state:'interrupted',reason:'candidate_identity_changed'},result:null};}
-    return{ok:true,run:summary(r),result:terminal.has(r.state)?saved.result||null:null};
+    return{ok:true,run:summary(r),result:terminal.has(r.state)?saved.result||null:null,adoption:adoption.status(scope,id)};
   }
   function list(scope){check(scope);return{ok:true,runs:[...records.values()].filter(v=>v.run.sourceScope===scope.key||v.run.workspace?.path===scope.projectRoot).map(v=>summary(v.run))};}
+  async function checkAdoption(scope,id){
+    check(scope);idle();store.assertIdle();if(get(scope,id).run.reason==='candidate_identity_changed')candidateFail('candidate_output_changed');
+    const saved=records.get(id);if(!saved)candidateFail('candidate_missing');
+    checkingAdoption=true;
+    try{return await checkCandidateAdoption({saved,scope,worktrees,assertIdle:()=>{check(scope);store.assertIdle();if(active||busy())candidateFail('candidate_busy');}});}
+    finally{checkingAdoption=false;}
+  }
+  async function prepareAdoption(scope,id){check(scope);idle();get(scope,id);const saved=records.get(id);if(!saved)candidateFail('candidate_missing');checkingAdoption=true;try{return await adoption.prepare(scope,saved);}finally{checkingAdoption=false;}}
+  const confirmAdoption=(scope,nonce)=>{check(scope);idle();return adoption.confirm(scope,nonce);};
+  const prepareRecovery=(scope,id)=>{check(scope);idle();return adoption.prepareRecovery(scope,id);};
+  const confirmRecovery=(scope,nonce)=>{check(scope);idle();return adoption.confirmRecovery(scope,nonce);};
   function cancel(scope,nonce){check(scope);const plan=plans.get(nonce);if(plan&&plan.scope.key!==scope.key)candidateFail('candidate_scope');plans.delete(nonce);return{ok:true};}
   async function stop(scope,id){get(scope,id);const live=active;if(!live||live.run.id!==id||!live.owner)candidateFail('candidate_not_running');live.stopping=true;
     const result=await registry.command(live.owner,{type:'abort'});if(!result?.ok)candidateFail('candidate_stop_pending');await finish(live,'stopped');return get(scope,id);}
-  return{prepare,confirm,cancel,get,list,stop,audit,observe,busy:()=>Boolean(active),owns:owner=>Boolean(own(owner)),async dispose(){disposed=true;plans.clear();if(active?.owner){try{await registry.command(active.owner,{type:'abort'});await finish(active,'interrupted','candidate_shutdown');}catch{}}}};
+  return{prepare,confirm,cancel,get,list,stop,checkAdoption,prepareAdoption,confirmAdoption,prepareRecovery,confirmRecovery,cancelAdoption:adoption.cancel,audit,observe,busy:()=>Boolean(active||checkingAdoption||adoption.busy()),owns:owner=>Boolean(own(owner)),async dispose(){disposed=true;plans.clear();if(active?.owner){try{await registry.command(active.owner,{type:'abort'});await finish(active,'interrupted','candidate_shutdown');}catch{}}}};
 }
