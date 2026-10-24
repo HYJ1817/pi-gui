@@ -615,7 +615,8 @@ function captureChangesListScroll() {
 
 function restoreChangesListScroll(restore) {
   if (!ownsChangesList(restore) || restore.pending || restore.frame) return;
-  restore.frame = requestAnimationFrame(() => {
+  const schedule = window.requestAnimationFrame?.bind(window) || (callback => setTimeout(callback, 0));
+  restore.frame = schedule(() => {
     restore.frame = 0;
     if (!ownsChangesList(restore) || restore.pending || restore.top === null) return;
     // Apply only after expanded diffs have rendered; the browser clamps shorter lists.
