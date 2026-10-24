@@ -80,6 +80,7 @@ document.addEventListener('pi-gui:git-scope', () => {
   diffViewState.clear();
   diffViewStateEpoch++;
   lastChangesListScroll = 0;
+  changesListRestore = null;
   renderChangesBody();
 });
 document.addEventListener('pi-gui:workspace-generation', () => {
@@ -88,6 +89,7 @@ document.addEventListener('pi-gui:workspace-generation', () => {
   diffViewState.clear();
   diffViewStateEpoch++;
   lastChangesListScroll = 0;
+  changesListRestore = null;
 });
 document.addEventListener('pi-gui:session-switch', () => {
   /* Classic session switch: the comment bucket changes with S.state.sessionId,
@@ -96,6 +98,7 @@ document.addEventListener('pi-gui:session-switch', () => {
   diffViewState.clear();
   diffViewStateEpoch++;
   lastChangesListScroll = 0;
+  changesListRestore = null;
   suspendReviewSurface();
 });
 
@@ -145,6 +148,7 @@ let diffViewStateEpoch = 0;
  * keyed by workspace+conversation+path and every restore re-proves the anchor
  * against a freshly rendered diff. Scope/session/workspace switches clear it. */
 let lastChangesListScroll = 0;
+let changesListRestore = null;
 /* Unsaved comment text is captured before a destructive redraw and restored
  * only inside the same workspace/conversation scope. */
 const pendingReviewDrafts = new Map();
@@ -417,6 +421,8 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   card.classList.add('changes');
   activeChangesSurface = instance;
   instance.onDispose(() => {
+    captureChangesListScroll();
+    changesListRestore = null;
     panels.changes = null;
     restoreAllBtn = null;
     reviewButton = null;
@@ -482,22 +488,10 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   const body = document.createElement('div');
   body.className = 'chg-body';
   card.appendChild(body);
-  /* 只有「重开面板」这一次渲染才恢复滚动；随后的正常刷新沿用 DOM 自身行为。 */
-  const reopenScroll = lastChangesListScroll;
-  lastChangesListScroll = 0;
   /* 重开面板后的第一次「拿到最新状态的重绘」仍然属于这次恢复；之后的
    * 刷新重绘（自动防抖、手动刷新）沿用原有行为，不自动展开任何 diff。 */
   const reopenSerial = ++statusRequest;
-  if (reopenScroll) {
-    queueMicrotask(() => {
-      /* panels.changes 就是 .chg-body 滚动容器本身；浏览器会把超过内容
-       * 高度的值自动 clamp 回可滚范围。 */
-      if (panels.changes) panels.changes.scrollTop = reopenScroll;
-    });
-  }
-  body.addEventListener('scroll', () => {
-    if (panels.changes === body) lastChangesListScroll = body.scrollTop;
-  }, { passive: true });
+  const reopenEpoch = diffViewStateEpoch;
 
   /* 弹层里的动态容器。关闭时 modal.js 会把它置回 null，
    * 于是「异步结果晚到」的情况会自然落空，不会往已卸载的节点里写。 */
@@ -506,8 +500,10 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   renderChangesBody();
 
   // 打开就用最新数据重画一次（先用已有状态垫一帧，避免空白等待）
-  loadGitStatus().then(() => {
-    if (instance.isCurrent()) { renderChangesBody(reopenSerial); void restoreReviewComments(); }
+  loadGitStatus().then(result => {
+    if (result && instance.isCurrent() && reopenEpoch === diffViewStateEpoch) {
+      renderChangesBody(reopenSerial); void restoreReviewComments();
+    }
   });
 }
 
@@ -517,6 +513,8 @@ export function renderChangesBody(reopenSerial = 0) {
   const box = panels.changes;
   if (!box || !box.isConnected) return;
 
+  captureChangesListScroll();
+  changesListRestore = null;
   preserveReviewDrafts();
   clearReviewRangeSelection();
   box.innerHTML = '';
@@ -549,6 +547,7 @@ export function renderChangesBody(reopenSerial = 0) {
     return;
   }
   if (!c.files.length) {
+    lastChangesListScroll = 0;
     markMissingPathsStale([]);
     box.appendChild(hint('没有文件变更。工作区是干净的。'));
     return;
@@ -575,10 +574,54 @@ export function renderChangesBody(reopenSerial = 0) {
 
   const list = document.createElement('div');
   list.className = 'chg-list';
-  for (const f of shown) list.appendChild(changeRow(f, session.has(f.path), reopenSerial));
+  const restore = changesListRestore = {
+    list, top: lastChangesListScroll, pending: 0, frame: 0,
+    epoch: diffViewStateEpoch, surface: activeChangesSurface,
+  };
+  for (const f of shown) list.appendChild(changeRow(f, session.has(f.path), reopenSerial, restore));
   box.appendChild(list);
+  list.addEventListener('scroll', () => {
+    if (ownsChangesList(restore) && !restore.pending && !restore.frame) lastChangesListScroll = list.scrollTop;
+  }, { passive: true });
+  // A user scroll during a slow reload takes precedence over the saved position.
+  const interrupt = () => {
+    if (!ownsChangesList(restore)) return;
+    restore.top = null;
+    lastChangesListScroll = list.scrollTop;
+  };
+  list.addEventListener('wheel', interrupt, { passive: true });
+  list.addEventListener('pointerdown', interrupt, { passive: true });
+  list.addEventListener('keydown', event => {
+    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) interrupt();
+  });
+  restoreChangesListScroll(restore);
 
   if (c.truncated) box.appendChild(hint('变更列表过长，已截断显示。', 'warn'));
+}
+
+function ownsChangesList(restore) {
+  return changesListRestore === restore && restore.epoch === diffViewStateEpoch
+    && restore.surface?.isCurrent() && restore.list.isConnected;
+}
+
+function captureChangesListScroll() {
+  const restore = changesListRestore;
+  // Disposers run after the surface has lost isCurrent(), but before DOM removal.
+  if (restore && restore.epoch === diffViewStateEpoch && restore.list.isConnected
+    && !restore.pending && !restore.frame) {
+    lastChangesListScroll = restore.list.scrollTop;
+  }
+}
+
+function restoreChangesListScroll(restore) {
+  if (!ownsChangesList(restore) || restore.pending || restore.frame) return;
+  restore.frame = requestAnimationFrame(() => {
+    restore.frame = 0;
+    if (!ownsChangesList(restore) || restore.pending || restore.top === null) return;
+    // Apply only after expanded diffs have rendered; the browser clamps shorter lists.
+    restore.list.scrollTop = restore.top;
+    lastChangesListScroll = restore.list.scrollTop;
+  });
 }
 
 /** 「全部 / 仅本次会话」切换。 */
@@ -719,7 +762,7 @@ function fillStat(span, add, del) {
   }
 }
 
-function changeRow(f, inSession, reopenSerial = 0) {
+function changeRow(f, inSession, reopenSerial = 0, listRestore = null) {
   const surface = activeChangesSurface;
   const revision = scopeRevision;
   const row = document.createElement('div');
@@ -794,7 +837,6 @@ function changeRow(f, inSession, reopenSerial = 0) {
    * 普通刷新重绘沿用既有行为 —— 折叠的就保持折叠，避免刷新悄悄
    * 复活用户刚刚手动收起的区块。 */
   const restoreOpen = Boolean(retained?.open && !reopen && reopenSerial);
-  if (retained) diffBox.scrollTop = retained.scrollTop || 0;
   diffBox.hidden = !(reopen || restoreOpen);
   if (reopen || restoreOpen) row.classList.add('open');
   row.appendChild(diffBox);
@@ -810,6 +852,7 @@ function changeRow(f, inSession, reopenSerial = 0) {
     scope: currentReviewScope(),
     revision: scopeRevision,
     epoch: diffViewStateEpoch,
+    horizontal: { ...retained?.horizontal },
   };
 
   async function reloadDiff() {
@@ -823,7 +866,6 @@ function changeRow(f, inSession, reopenSerial = 0) {
     diffBox.innerHTML = '';
     diffBox.appendChild(hint('正在读取差异…'));
 
-    const reviewScroll = diffBox.scrollTop;
     let r;
     try { r = await fetchGitDiff(f.path, dstate.context); }
     finally { finishEvidence(Boolean(surface?.isCurrent() && revision === scopeRevision && request === dstate.request
@@ -840,7 +882,12 @@ function changeRow(f, inSession, reopenSerial = 0) {
       if (n.add || n.del) fillStat(stat, n.add, n.del);
     }
 
-    renderDiffInto(diffBox, r, f, dstate, reloadDiff, reviewScroll);
+    renderDiffInto(diffBox, r, f, dstate, reloadDiff);
+    for (const block of diffBox.querySelectorAll('.chg-block')) {
+      const section = reviewBlockMeta.get(block)?.section;
+      const scroller = block.querySelector('.diff');
+      if (scroller && section) scroller.scrollLeft = dstate.horizontal[section] || 0;
+    }
   }
 
   /* 点击行 = 就地展开 unified diff。
@@ -861,9 +908,17 @@ function changeRow(f, inSession, reopenSerial = 0) {
     await reloadDiff();
   };
 
-  diffBox.addEventListener('scroll', () => rememberDiffView(dstate, diffBox, !diffBox.hidden), { passive: true });
-  if (reopen) queueMicrotask(() => { void reloadDiff().then(() => { diffBox.scrollTop = retained.scrollTop || 0; }); });
-  if (restoreOpen) queueMicrotask(() => { void reloadDiff(); });
+  diffBox.addEventListener('scroll', () => rememberDiffView(dstate, diffBox, !diffBox.hidden), { passive: true, capture: true });
+  if (reopen || restoreOpen) {
+    if (listRestore) listRestore.pending++;
+    queueMicrotask(async () => {
+      try {
+        if (surface?.isCurrent() && diffBox.isConnected && dstate.epoch === diffViewStateEpoch) await reloadDiff();
+      } finally {
+        if (listRestore) { listRestore.pending--; restoreChangesListScroll(listRestore); }
+      }
+    });
+  }
 
   return row;
 }
@@ -876,12 +931,18 @@ function rememberDiffView(dstate, box, open) {
    * previous scope. */
   if (dstate.scope !== currentReviewScope() || dstate.revision !== scopeRevision
     || dstate.epoch !== diffViewStateEpoch) return;
+  for (const block of box?.querySelectorAll('.chg-block') || []) {
+    const section = reviewBlockMeta.get(block)?.section;
+    const scroller = block.querySelector('.diff');
+    if (scroller && section) dstate.horizontal[section] = scroller.scrollLeft;
+  }
   diffViewState.set(dstate.stateKey, {
     open: Boolean(open),
     context: dstate.context,
     loading: Boolean(dstate.busy),
-    scrollTop: Number(box?.scrollTop) || 0,
+    horizontal: { ...dstate.horizontal },
   });
+  while (diffViewState.size > 200) diffViewState.delete(diffViewState.keys().next().value);
 }
 
 /* ---------- Diff 渲染 ---------- */
@@ -1268,7 +1329,7 @@ function decorateReviewBlocks() {
  *                diff 正文是 git 按 -U 现算的，前端没法从已截断的文本里
  *                「补出」被裁掉的上下文行。
  */
-function renderDiffInto(box, r, f, dstate, reload, restoreScroll = 0) {
+function renderDiffInto(box, r, f, dstate, reload) {
   box.innerHTML = '';
 
   // 所有内容塞进一个**每次重画都新建**的容器里挂事件。
@@ -1330,7 +1391,6 @@ function renderDiffInto(box, r, f, dstate, reload, restoreScroll = 0) {
   tools.sync();
 
   if (r.truncated) wrap.appendChild(truncatedHint(r));
-  if (restoreScroll) box.scrollTop = restoreScroll;
 }
 
 /* ---------- 审查意见汇总 ---------- */
