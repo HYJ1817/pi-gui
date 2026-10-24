@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 2,
+  "group": "native",
+  "sha": "d494386686a19cbc08bbee6a077f5237932e6914",
+  "runId": "40104517608",
+  "runAttempt": "1",
+  "event": "pull_request",
+  "nodeVersion": "v24.22.1",
+  "os": "win32",
+  "arch": "x64",
+  "planDigest": "04b71c8cde4113cc7baa1635526750ec0e202812d96744539b886ab9cc69e322",
+  "planTotal": 198,
+  "startedAt": "2026-10-24T14:56:30.765Z",
+  "updatedAt": "2026-10-24T15:13:37.376Z",
+  "finishedAt": "2026-10-24T15:13:37.376Z",
+  "completedCount": 4,
+  "status": "passed",
+  "results": [
+    {
+      "index": 1,
+      "command": "node tests/candidate-writer.cjs",
+      "startedAt": "2026-10-24T14:56:30.770Z",
+      "finishedAt": "2026-10-24T14:56:36.957Z",
+      "durationMs": 6185.8125,
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "status": "passed"
+    },
+    {
+      "index": 2,
+      "command": "node tests/candidate-apply.cjs",
+      "startedAt": "2026-10-24T14:56:36.958Z",
+      "finishedAt": "2026-10-24T14:59:45.451Z",
+      "durationMs": 188491.9288,
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "status": "passed"
+    },
+    {
+      "index": 3,
+      "command": "node tests/session-revert-object-runtime.cjs",
+      "startedAt": "2026-10-24T14:59:45.452Z",
+      "finishedAt": "2026-10-24T15:06:17.466Z",
+      "durationMs": 392012.0166,
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "status": "passed"
+    },
+    {
+      "index": 4,
+      "command": "node tests/session-revert-object-writer.cjs",
+      "startedAt": "2026-10-24T15:06:17.467Z",
+      "finishedAt": "2026-10-24T15:13:37.370Z",
+      "durationMs": 439901.0816,
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "status": "passed"
+    }
+  ]
+}

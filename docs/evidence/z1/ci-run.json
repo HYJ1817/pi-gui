@@ -1,0 +1,79 @@
+{
+  "runId": 40104517608,
+  "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608",
+  "event": "pull_request",
+  "attempt": 1,
+  "headSha": "528aa05564cfe222462db50c2c8c41f349febaf2",
+  "testedMergeSha": "d494386686a19cbc08bbee6a077f5237932e6914",
+  "tree": "c6c4755c0397532c48facd22cb08d63bb799ee5a",
+  "status": "completed",
+  "conclusion": "success",
+  "startedAt": "2026-10-24T14:53:36Z",
+  "updatedAt": "2026-10-24T15:14:09Z",
+  "jobs": [
+    {
+      "name": "Validate complete test plan",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120903682829"
+    },
+    {
+      "name": "Tests (faults)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120903795724"
+    },
+    {
+      "name": "Tests (native)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120903795727"
+    },
+    {
+      "name": "Electron build check",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120903795735"
+    },
+    {
+      "name": "Tests (security)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120903795755"
+    },
+    {
+      "name": "Tests (ui)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120903795760"
+    },
+    {
+      "name": "Tests (core)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120903795807"
+    },
+    {
+      "name": "CI gate",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40104517608/job/120907714530"
+    }
+  ],
+  "internalSkips": [
+    {
+      "failed": 0,
+      "skipped": 1,
+      "passed": 42,
+      "reason": "missing-privilege case not applicable to token with privilege",
+      "suite": "session-revert-inplace-safety"
+    },
+    {
+      "failed": 0,
+      "skipped": 8,
+      "passed": 0,
+      "reason": "existing_token_sacl_unavailable; productionQualified=false",
+      "suite": "session-revert-object-witness"
+    }
+  ]
+}

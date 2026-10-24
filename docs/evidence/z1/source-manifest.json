@@ -1,0 +1,31 @@
+{
+  "behaviorHead": "528aa05564cfe222462db50c2c8c41f349febaf2",
+  "baselineHead": "bc8a143e3efda029db93d75a81bf2cb4244fe27d",
+  "generatedAt": "2026-10-24T14:56:01.984Z",
+  "files": {
+    "package.json": "9b8114e7dd74539e62908378175d5ae2c606d72cd78c781163b87eed76b0e59c",
+    "public/git.js": "cdc19b8d79426b35a2652639d82a2fdbf5ab0563b0e66a73b9143e9b62dc3d0b",
+    "public/logs.js": "5af93bf82f6b3b2959f4a6befd6c5bb19a96b0729aace356dcbc0517bf1859e2",
+    "public/ui5-logs.css": "9c6243d95e0e05203510facf04bd77cc4e0d0a56b829f9f66991881060fff475",
+    "tests/context-reference-ui.cjs": "4c1173b622c6134924676d3bd994cd9180821fb4c987e03704f9bb7abb0747ae",
+    "tests/logging-ui.cjs": "58dd376a6209428199fa919f2cccf3760421f470f4cdf4fb2e893ec2b8ce126c",
+    "tests/z1-electron.cjs": "0c77821adb21072a5c024b44978c154de0b2864b7567a42d9a957c50e5afa968"
+  },
+  "electronCommand": "npm run test:z1:electron",
+  "localCanonical": {
+    "command": "npm test",
+    "status": "interrupted",
+    "exitCode": 1,
+    "proof": false
+  },
+  "packagedCheck": {
+    "command": "node tests/exe-check.cjs",
+    "passed": 49,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "artifact": {
+    "bytes": 102703104,
+    "sha256": "a87f8aa73ef2739e77bfb6e0f83d5f79c893d28d1fc50445d0b33d4670b83d40"
+  }
+}
