@@ -429,10 +429,15 @@ export function openLogs() {
         node('span', '', `${entry.source || '未知'} · ${entry.event || '未知事件'}${entry.code ? ' · ' + entry.code : ''}`),
       );
       if (entry.level === 'ERROR' || entry.level === 'WARN') {
+        const feedback = node('span', 'ui5-log-ref-status');
+        feedback.setAttribute('role', 'status');
+        feedback.setAttribute('aria-live', 'polite');
         const reference = button('引用', 'btn tiny ui5-log-ref');
         reference.title = '把脱敏摘要追加到当前会话输入框；不会自动发送';
-        reference.onclick = () => referenceEntryToComposer(entry, null);
-        row.appendChild(reference);
+        reference.onclick = () => referenceEntryToComposer(entry, feedback);
+        const actions = node('div', 'ui5-log-actions');
+        actions.append(reference, feedback);
+        row.appendChild(actions);
       }
       return row;
     }
