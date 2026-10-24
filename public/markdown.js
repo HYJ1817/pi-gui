@@ -87,31 +87,35 @@ function diffBody(code) {
     .join('\n');
 }
 
+export function renderVizCardHtml(code) {
+  const res = parseVizData(code);
+  if (!res.ok) return null;
+  const typeBadge = res.data.type === 'line' ? '折线图' : '柱状图';
+  const metaText = `${res.data.series.length} 个系列 · ${res.data.labels.length} 个数据点`;
+  const svgIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>';
+  return `<div class="viz-card" data-viz-card>` +
+    `<div class="viz-card-header">` +
+    `<div class="viz-card-icon" aria-hidden="true">${svgIcon}</div>` +
+    `<div class="viz-card-info">` +
+    `<div class="viz-card-title">${esc(res.data.title)}</div>` +
+    `<div class="viz-card-meta">` +
+    `<span class="viz-badge">${typeBadge}</span>` +
+    `<span class="viz-meta-text">${metaText}</span>` +
+    `</div>` +
+    `</div>` +
+    `<div class="viz-card-actions">` +
+    `<button type="button" class="btn tiny viz-open-btn" data-viz-open aria-label="打开「${esc(res.data.title)}」可视化图表">打开可视化</button>` +
+    `<button type="button" class="btn tiny viz-toggle-raw" data-viz-toggle-raw aria-expanded="false" title="切换显示原始数据">JSON</button>` +
+    `</div>` +
+    `</div>` +
+    `<pre class="code viz-raw-code" data-lang="pi-gui-viz" hidden><code>${esc(code)}</code></pre>` +
+    `</div>`;
+}
+
 function codeBlock(lang, code, { closed = true } = {}) {
   if (lang === 'pi-gui-viz' && closed === true) {
-    const res = parseVizData(code);
-    if (res.ok) {
-      const typeBadge = res.data.type === 'line' ? '折线图' : '柱状图';
-      const metaText = `${res.data.series.length} 个系列 · ${res.data.labels.length} 个数据点`;
-      const svgIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>';
-      return `<div class="viz-card" data-viz-card>` +
-        `<div class="viz-card-header">` +
-        `<div class="viz-card-icon" aria-hidden="true">${svgIcon}</div>` +
-        `<div class="viz-card-info">` +
-        `<div class="viz-card-title">${esc(res.data.title)}</div>` +
-        `<div class="viz-card-meta">` +
-        `<span class="viz-badge">${typeBadge}</span>` +
-        `<span class="viz-meta-text">${metaText}</span>` +
-        `</div>` +
-        `</div>` +
-        `<div class="viz-card-actions">` +
-        `<button type="button" class="btn tiny viz-open-btn" data-viz-open aria-label="打开「${esc(res.data.title)}」可视化图表">打开可视化</button>` +
-        `<button type="button" class="btn tiny viz-toggle-raw" data-viz-toggle-raw aria-expanded="false" title="切换显示原始数据">JSON</button>` +
-        `</div>` +
-        `</div>` +
-        `<pre class="code viz-raw-code" data-lang="pi-gui-viz" hidden><code>${esc(code)}</code></pre>` +
-        `</div>`;
-    }
+    const cardHtml = renderVizCardHtml(code);
+    if (cardHtml) return cardHtml;
   }
 
   const body = lang === 'diff' ? diffBody(code) : esc(code);

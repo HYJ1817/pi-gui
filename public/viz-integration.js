@@ -35,8 +35,14 @@ export function handleVizCardClick(event) {
       return;
     }
 
-    // 绑定当前会话与真实消息 DOM 宿主
-    const messageNode = card.closest('.message, [data-history-message-id], .runtime-conversation');
+    // 绑定当前会话与真实消息 DOM 宿主：
+    // Classic 消息为 article.msg.assistant（或 article.msg）；
+    // Runtime 为带有 [data-history-message-id] 的消息行，或 .rtc-output-block 输出块
+    const messageNode = card.closest('article.msg.assistant, article.msg, [data-history-message-id], .rtc-output-block');
+    if (!messageNode || !messageNode.isConnected) {
+      console.warn('可视化卡片没有有效的消息宿主或已脱离界面');
+      return;
+    }
 
     openVizPanel(res.data, {
       triggerId: openBtn.id || null,
