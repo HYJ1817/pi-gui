@@ -1,14 +1,14 @@
 # Z4-2 接口契约与执行计划
 
-基线 `c9ac555a43c7b72216f347a63ddeeb52afa6c72c`。Z3 schema 不变；无新增依赖、Pi 修改、项目文件写入或外部模型调用。
+基线 `c9ac555a43c7b72216f347a63ddeeb52afa6c72c`。Z3 schema 不变；无新增依赖、Pi 修改或项目文件写入。产品验证只用离线 fake Pi；外部协作应用代码审查按用户授权执行。
 
 ## C0：冻结的公共协议
 
-纯数据模块 `lib/collab-doc.js` 从原型提炼，保留原型导出及 document/operation/proposal 形状。它不依赖 server/public/DOM/IO。document 为 `{documentId,schemaVersion:1,revision,title,boundSessionId,graph:{nodes,edges},appliedOps}`；revision 从 1 开始，每次非重复事务加 1，必须 safe integer。节点 `{id,label,x,y}`；连线 `{id,from,to,label?}`。ID 最多 64 字符，节点 200、边 400、标签 200 字符、批次 50、日志 500、文档 2 MiB。节点/边共用 ID 空间，无自环/同向重复。删除节点必须先删引用边。
+纯数据模块 `lib/collab-doc.js` 从原型提炼，保留原型导出及 document/operation/proposal 形状。它不依赖 server/public/DOM/IO。document 为 `{documentId,schemaVersion:1,revision,title,boundSessionId,graph:{nodes,edges},appliedOps}`；revision 从 1 开始，每次非重复事务加 1，必须 safe integer。节点 `{id,label,x,y}`；连线 `{id,from,to,label?}`。ID 最多 64 字符，节点 200、边 400、标签 1–200 字符且非纯空白、批次 50、日志 500、文档 2 MiB。节点/边共用 ID 空间，无自环/同向重复。删除节点必须先删引用边。未绑定 session 的文档仅为纯数据层构造状态；生产创建在服务端绑定已验证 scope.sessionId 后才允许持久化，存储读写均拒绝 null/异 session。
 
 操作 `{opId,type,baseRevision,actor,params}`，type 闭集 `node.add/update/remove`、`edge.add/update/remove`，沿用原型 params；edge.update 以 label:null 清除文字，改端点使用 remove+add 的原子批次。整个批次 baseRevision 必须等于文档 revision；一项失败全部不变。规范指纹与键顺序无关；全批同内容重放返回 duplicate，混合重放拒绝。日志持久化且有界；窗口外由旧 revision 拒绝。
 
-proposal `{proposalId,schemaVersion:1,documentId,baseRevision,sessionId,rationale,ops}`。preview/accept/reject 各自完整校验信封、ID、schema、session、1..50 条操作、agent actor、批内唯一 opId 和每项一致的 baseRevision；包括 duplicate 快径之前。预览只返回 diff，不提交。accept 另核 expectedRevision。模型不能通过自述取得来源权限。
+proposal `{proposalId,schemaVersion:1,documentId,baseRevision,sessionId,rationale,ops}`。proposalId 由构造入口生成不透明 UUID，不截断操作 ID 拼接。preview/accept/reject 各自完整校验信封、ID、schema、session、1..50 条操作、agent actor、批内唯一 opId 和每项一致的 baseRevision；包括 duplicate 快径之前。预览只返回 diff，不提交。accept 先校验 expectedRevision 是显式有效整数；完全一致的已接受建议允许在后续 revision 重复确认而不修改状态。模型不能通过自述取得来源权限。
 
 `serialize/deserialize` 为严格规范持久化格式，包含校验后的 appliedOps；拒绝未知字段、损坏日志、未知版本和越界。原型旧无日志格式不自动迁移。`validateDocument(doc)` 返回经严格校验的副本或抛 CollabError；`applyUserOperations(doc,ops)` 校验全批 actor=user 并返回结果。其他结果沿用 `{ok,doc,revision,...}` / `{ok:false,code,detail?,conflict?}`；对外 HTTP 不回传 detail、原始错误或路径。
 

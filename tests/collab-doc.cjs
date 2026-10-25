@@ -74,6 +74,25 @@ const check = (name, fn) => { try { fn(); passed++; console.log('ok ' + name); }
     const corrupt=structuredClone(p);corrupt.ops[0].params.extra=1;
     assert.equal(m.acceptProposal(d,null,corrupt,{expectedRevision:d.revision}).ok,false);
   });
+  check('duplicate acceptance still requires explicit valid expectedRevision', () => {
+    let d=fresh();const p=proposal(d);d=m.acceptProposal(d,null,p,{expectedRevision:d.revision}).doc;
+    for(const value of [undefined,null,NaN,Infinity,0,Number.MAX_SAFE_INTEGER+1]) assert.equal(m.acceptProposal(d,null,p,{expectedRevision:value}).ok,false);
+  });
+  check('proposal constructor enforces production actor session and operation revision', () => {
+    const p=proposal(fresh());assert.equal(m.createProposal(p).ops[0].actor,'agent');
+    for(const mutate of [p=>{p.ops[0].actor='user';},p=>{delete p.sessionId;},p=>{p.ops[0].baseRevision++;}]) {
+      const bad=proposal(fresh());mutate(bad);assert.throws(()=>m.createProposal(bad));
+    }
+  });
+  check('long operation IDs cannot collide in generated proposal IDs', () => {
+    const a=proposal(fresh()),b=proposal(fresh());a.ops[0].opId='a'.repeat(63)+'1';b.ops[0].opId='a'.repeat(63)+'2';
+    assert.notEqual(m.createProposal(a).proposalId,m.createProposal(b).proposalId);
+  });
+  check('mixed previously accepted and new proposal operations never report duplicate success', () => {
+    let d=fresh();const p=proposal(d);d=m.acceptProposal(d,null,p,{expectedRevision:d.revision}).doc;
+    const mixed=structuredClone(p);mixed.ops.push({...mixed.ops[0],opId:'new-agent-op',params:{id:'n2',label:'未应用'}});
+    unchanged(d,()=>{const result=m.acceptProposal(d,null,mixed,{expectedRevision:d.revision});assert.equal(result.ok,false);assert.equal(result.code,'stale-base');});
+  });
   check('production module has no prototype frontend backend IO or dependency imports', () => {
     const src=fs.readFileSync(require('node:path').join(__dirname,'../lib/collab-doc.js'),'utf8');
     assert.equal(/\b(?:import|require)\s*(?:\(|.*?from\s*['"])/.test(src),false);
