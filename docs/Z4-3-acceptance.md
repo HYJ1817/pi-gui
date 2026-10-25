@@ -353,7 +353,8 @@ pi 1.4.0 官方文档核对过的真实事件形状（`agent_start`/`message_end
 
 | 提交 | 内容 |
 | --- | --- |
-| （本轮修复提交） | 缺陷 1-4 修复 + 红绿回归 + Electron Runtime 场景 + 文档 |
+| `11cf168` | 缺陷 1-4 修复 + 红绿回归 + Electron Runtime 场景 + 本报告 13 节 |
+| （本行所在跟进提交） | 13.7 表格补写 `11cf168`；最终 HEAD 以 `git log -1 --format=%H -- docs/Z4-3-acceptance.md` 解析 |
 
 实际修改：`server/collab-service.js`、`server/collab-proposal-source.js`、
 `server/collab-proposal-queue.js`、`server/collab-routes.js`、`server.js`、
