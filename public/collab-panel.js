@@ -11,9 +11,10 @@ import { confirmModal, confirmSurfaceMeta, dismissConfirm } from './ui/modal.js'
 const node=(tag,className,text)=>{const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;};
 function context() {
   const conversationId=gitConversationScope(),view=workspaceView();
-  const owner=conversationId?runtimeStore.get(conversationId)?.owner:S.legacyOwner;
+  const record=conversationId?runtimeStore.get(conversationId):null;
+  const owner=conversationId?record?.owner:S.legacyOwner;
   const headers={...(conversationId?{'X-Pi-Gui-Conversation':conversationId}:{}),'X-Pi-Gui-Owner':JSON.stringify(owner??null)};
-  return {valid:Boolean(owner?.sessionId && !S.switching && (view==='chat'&&!conversationId || view==='runtime'&&conversationId)),headers,
+  return {valid:Boolean(owner?.sessionId && !S.switching && (view==='chat'&&!conversationId || view==='runtime'&&conversationId&&record?.item?.lifecycle==='ready')),headers,
     signature:JSON.stringify([S.workspaceGeneration,S.cwd,S.bridgeRun,view,conversationId,headers])};
 }
 
@@ -75,8 +76,9 @@ export function mountCollabPanel(host,view) {
     }
     snapshot=result;render();
   }
-  function invalidate() {
-    if(!alive||context().signature===captured.signature && context().valid)return;
+  function invalidate(event) {
+    const hardBoundary=['pi-gui:session-switch','pi-gui:workspace-generation'].includes(event?.type);
+    if(!alive||!hardBoundary&&context().signature===captured.signature && context().valid)return;
     invalid=true;sequence++;closeEditor(snapshot?.editorId);snapshot=null;busy=false;
     dismissOwnedConfirmation();
     canvas?.destroy();proposal?.destroy();canvas=proposal=null;

@@ -15,7 +15,7 @@ export const COLLAB_MESSAGES = Object.freeze({
   collab_scope_unavailable: '会话或工作区已变化，请重新打开协同文档。',
   collab_editor_expired: '编辑器已关闭或过期，请重新打开。',
   collab_proposal_unavailable: '尚无来自可信 Agent 来源的建议。',
-  collab_storage_busy: '文档存储正在使用，请稍后重试。',
+  collab_storage_busy: '文档存储被锁定。若刚发生异常退出，需关闭所有 Pi GUI 后由维护者检查遗留锁；不会自动删除锁或覆盖文档。',
   collab_storage_unsafe: '存储身份发生变化，已停止写入。',
   collab_storage_inside_project: '应用数据目录不能位于项目中。',
   collab_storage_corrupt: '文档文件损坏，已保留原文件并停止写入。',

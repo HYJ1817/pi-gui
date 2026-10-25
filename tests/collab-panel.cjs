@@ -64,6 +64,11 @@ const check=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
     panel.close();assert.equal(document.querySelector('#confirmLayer').hidden,false);assert.equal(modal.confirmSurfaceMeta().other,'approval');
     modal.dismissConfirm();assert.equal(await decision,false);panel=mount();await tick();
   });
+  await check('session-switch invalidates synchronously before legacy owner fields change',async()=>{
+    const owner=JSON.stringify(S.legacyOwner);document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
+    assert.equal(JSON.stringify(S.legacyOwner),owner);assert.equal(panel.host.querySelectorAll('[data-node-id]').length,0);
+    panel.close();panel=mount();await tick();
+  });
   await check('workspace change synchronously clears graph; late save cannot repaint',async()=>{
     hold='operations';button(panel.host,'新增节点').click();await tick();S.workspaceGeneration++;
     document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-generation'));
@@ -80,11 +85,13 @@ const check=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
     assert.equal(document.querySelector('.collab-canvas'),null);assert.equal(calls.at(-1).body.action,'close');
   });
   await check('focused runtime headers use runtime owner and never classic owner',async()=>{
-    const {runtimeStore}=await import('../public/runtime-state.js');
-    const original=runtimeStore.get;runtimeStore.get=id=>id==='runtime-a'?{owner:{sessionId:'native-runtime',runtimeGeneration:'5'}}:original.call(runtimeStore,id);
+    const {runtimeStore,refreshRuntimeViews}=await import('../public/runtime-state.js');
+    const record={owner:{sessionId:'native-runtime',runtimeGeneration:'5'},item:{lifecycle:'ready'}};
+    const original=runtimeStore.get;runtimeStore.get=id=>id==='runtime-a'?record:original.call(runtimeStore,id);
     const {showRuntimeConversation,showChat}=await import('../public/ui/workspace-surface.js');
     api.setGitConversationScope('runtime-a');showRuntimeConversation();panel=mount();await tick();
     const last=calls.findLast(c=>c.body.action==='open');assert.equal(last.headers['X-Pi-Gui-Conversation'],'runtime-a');assert.match(last.headers['X-Pi-Gui-Owner'],/native-runtime/);
+    record.item.lifecycle='dormant';refreshRuntimeViews();assert.equal(panel.host.querySelectorAll('[data-node-id]').length,0);
     api.setGitConversationScope('runtime-b');assert.equal(panel.host.querySelectorAll('[data-node-id]').length,0);
     panel.close();runtimeStore.get=original;api.setGitConversationScope(null);showChat();
   });

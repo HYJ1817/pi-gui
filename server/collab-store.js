@@ -1,13 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { canonicalPath, isInside, normalizeForCompare } from '../lib/safe-path.js';
+import { canonicalPath, isInside } from '../lib/safe-path.js';
 import { LIMITS, validateDocument, serialize, deserialize } from '../lib/collab-doc.js';
 
 export const COLLAB_STORE_LIMITS = Object.freeze({ fileBytes: LIMITS.serializedMaxBytes + 256, scopes: 20, entries: 512 });
 const fail = code => { throw Object.assign(Error(code), { code }); };
 const identity = stat => `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
-const samePath = (a, b) => normalizeForCompare(a) === normalizeForCompare(b);
 const CODES = new Set(['collab_invalid', 'collab_conflict', 'collab_scope_unavailable', 'collab_storage_unsafe',
   'collab_storage_inside_project', 'collab_storage_corrupt', 'collab_storage_unavailable', 'collab_storage_write_failed',
   'collab_storage_busy', 'collab_storage_limit']);
@@ -31,7 +30,10 @@ export function createCollabStore({ dataDir, protectedRoots = () => [], io = fs,
       const stat = io.lstatSync(p);
       if (!stat.isDirectory() || stat.isSymbolicLink()) fail('collab_storage_unsafe');
     }
-    if (!samePath(canonicalPath(target), target)) fail('collab_storage_unsafe');
+    // Short and long Windows names may identify the same directory. Preserve
+    // the raw-spelling ancestry scan above (never normalize away a junction),
+    // then compare actual identities rather than rejecting valid 8.3 aliases.
+    if (identity(io.lstatSync(canonicalPath(target))) !== identity(io.lstatSync(target))) fail('collab_storage_unsafe');
   }
   function guard(scope, create = false) {
     if (!scope || !/^[a-f0-9]{64}$/.test(scope.key) || !/^[a-f0-9]{64}$/.test(scope.token)
@@ -61,7 +63,8 @@ export function createCollabStore({ dataDir, protectedRoots = () => [], io = fs,
   function plainFile(file, max = COLLAB_STORE_LIMITS.fileBytes) {
     const stat = statMaybe(file);
     if (!stat) return null;
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || !samePath(canonicalPath(file), file)) fail('collab_storage_unsafe');
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1
+      || identity(io.lstatSync(canonicalPath(file))) !== identity(stat)) fail('collab_storage_unsafe');
     if (stat.size > max) fail('collab_storage_corrupt');
     return stat;
   }

@@ -37,6 +37,19 @@ const check=async(name,action)=>{await action();checks++;console.log('  ok '+nam
     await check('absent read is empty and creates no directories',()=>{assert.deepEqual(f.store.read(f.scope),{doc:null});assert.equal(fs.existsSync(path.dirname(f.file)),false);});
     await check('real persisted document reopens with identical graph log and revision',()=>{const expected=saved(f);assert.deepEqual(createCollabStore(f.options).read(f.scope),expected);assert.equal(expected.doc.revision,1);assert.equal(bytes(f).includes(Buffer.from(project)),false);});
     await check('update CAS persists a strictly advanced revision',()=>{assert.deepEqual(f.store.write(f.scope,1,next(f)),{doc:next(f)});assert.deepEqual(createCollabStore(f.options).read(f.scope),{doc:next(f)});});
+    if(process.platform==='win32') {
+      const g=fixture();
+      const result=spawnSync('cmd.exe',['/d','/c',`for %I in ("${g.dataDir}") do @echo %~sI`],{encoding:'utf8',windowsHide:true,windowsVerbatimArguments:true});
+      const short=result.stdout?.trim();
+      if(result.status===0 && short && short.toLowerCase()!==g.dataDir.toLowerCase()) {
+        await check('real Windows 8.3 alias and long spelling address the same safe app storage',()=>{
+          assert.equal(fs.existsSync(short),true,'short-path fixture must be a real existing directory');
+          const aliasStore=createCollabStore({...g.options,dataDir:short});const expected=aliasStore.write(g.scope,null,document(g.scope.sessionId));
+          assert.deepEqual(aliasStore.read(g.scope),expected);assert.deepEqual(createCollabStore(g.options).read(g.scope),expected);
+          assert.equal(fs.statSync(path.join(short,'collab-documents')).ino,fs.statSync(path.dirname(g.file)).ino);
+        });
+      } else {skipped++;console.log('  SKIP 8.3 aliases unavailable on fixture volume');}
+    } else {skipped++;console.log('  SKIP Windows 8.3 alias qualification');}
     await check('production operation journal graph and duplicate replay survive a store restart',()=>{const g=fixture();saved(g);const op={opId:'user-node',type:'node.add',baseRevision:1,actor:'user',params:{id:'n1',label:'节点',x:2,y:3}};const applied=applyUserOperations(document(g.scope.sessionId),[op]);assert.equal(applied.ok,true);g.store.write(g.scope,1,applied.doc);const restored=createCollabStore(g.options).read(g.scope).doc;assert.deepEqual(restored,applied.doc);assert.equal(restored.appliedOps.length,1);assert.equal(restored.graph.nodes.length,1);assert.equal(applyUserOperations(restored,[op]).status,'duplicate');});
     await check('same committed snapshot retry does not rewrite or rename the file',()=>{const stat=fs.statSync(f.file),before=bytes(f);const io=Object.create(fs);io.renameSync=()=>assert.fail('duplicate must not rename');const store=createCollabStore({...f.options,io});assert.deepEqual(store.write(f.scope,1,next(f)),{doc:next(f)});assert.deepEqual(bytes(f),before);assert.equal(fs.statSync(f.file).ino,stat.ino);});
     await check('first creation retry with null CAS is idempotent',()=>{const g=fixture();const result=saved(g);const before=bytes(g);assert.deepEqual(g.store.write(g.scope,null,result.doc),result);assert.deepEqual(bytes(g),before);});
