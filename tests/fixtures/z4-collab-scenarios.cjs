@@ -176,6 +176,15 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
     check('Classic and Runtime persist separate session documents',allDocuments().length===2&&new Set(allDocuments().map(d=>d.boundSessionId)).size===2);
     await click('[data-node-id="n1"]');await read("document.querySelector('.collab-edit-form input').value='Runtime 独立编辑'");await action('保存文字');await until(saved,'runtime user edit');
     check('Runtime edit leaves complete Classic document bytes unchanged',fs.readFileSync(classicFile).equals(classicBytes));
+    // Z4-3 验收修复：Runtime 生成不依赖 Classic capture 就绪——真实组合根全链路。
+    await read("document.querySelector('.collab-agent-input').value='Runtime 侧让 Agent 修改开始节点'");
+    await read("document.querySelector('.collab-agent-input').dispatchEvent(new Event('input',{bubbles:true}))");
+    await read("Array.from(document.querySelectorAll('.collab-agent-row button')).find(b=>b.textContent==='让 Agent 修改').click()");
+    await until(()=>read("!!document.querySelector('.collab-proposal-diff li')"),'runtime agent proposal previewed');
+    check('Runtime agent generation completes via registry command without Classic capture',await read("document.querySelector('.collab-rationale').textContent.includes('Fixture 建议')"));
+    await read("Array.from(document.querySelectorAll('.collab-proposal-actions button')).find(b=>b.textContent==='接受建议').click()");
+    await until(()=>{const names=fs.readdirSync(path.join(data,'collab-documents')).filter(n=>n.endsWith('.json'));return names.length===2&&names.some(n=>JSON.parse(fs.readFileSync(path.join(data,'collab-documents',n),'utf8')).doc.graph.nodes.find(x=>x.id==='n1')?.label==='Agent 修改的开始');},'runtime agent suggestion applied');
+    check('Runtime agent suggestion applies through CAS and Classic bytes stay unchanged',fs.readFileSync(classicFile).equals(classicBytes));
     await read(`(async()=>{const {runtimeStore}=await import('/runtime-state.js');const {collabDocumentAction,runtimeSessionAction}=await import('/api.js');
       window.z4OldRuntimeOwner=structuredClone(runtimeStore.get(window.z4RuntimeId).owner);
       const headers={'X-Pi-Gui-Conversation':window.z4RuntimeId,'X-Pi-Gui-Owner':JSON.stringify(window.z4OldRuntimeOwner)};
@@ -191,7 +200,7 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
     await read("import('/runtime-nav.js').then(m=>m.focusRuntimeById(window.z4RuntimeId))");
     await until(()=>read("import('/runtime-state.js').then(m=>m.runtimeStore.get(window.z4RuntimeId)?.owner?.runtimeGeneration!==window.z4OldRuntimeOwner.runtimeGeneration)"),'new runtime generation');
     if(await read("!!document.querySelector('#rightPaneClose')"))await click('#rightPaneClose');await click('#btnCollab');await until(saved,'resumed Runtime doc restored');
-    check('resumed Runtime restores document with a fresh empty undo stack',await read("document.querySelector('[data-node-id=\"n1\"]').getAttribute('aria-label').includes('Runtime 独立编辑')&&Array.from(document.querySelectorAll('.collab-canvas button')).find(b=>b.textContent==='撤销').disabled"));
+    check('resumed Runtime restores document with a fresh empty undo stack',await read("document.querySelector('[data-node-id=\"n1\"]').getAttribute('aria-label').includes('Agent 修改的开始')&&Array.from(document.querySelectorAll('.collab-canvas button')).find(b=>b.textContent==='撤销').disabled"));
     fs.writeFileSync(path.join(out,'collab-runtime.png'),(await win.capturePage()).toPNG());screenshots.push('collab-runtime.png');
     await read("(async()=>{const {runtimeStore}=await import('/runtime-state.js');const {runtimeSessionAction}=await import('/api.js');await runtimeSessionAction({action:'close',owner:runtimeStore.get(window.z4RuntimeId).owner});})()");
     await click('#navHome');

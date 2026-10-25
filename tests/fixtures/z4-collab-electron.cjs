@@ -67,6 +67,9 @@ async function main() {
   const env = { ...process.env, PORT: String(port), PI_GUI_DATA: data, PI_CWD: repo, PI_BIN: shim,
     PI_GUI_TOKEN: '', PI_GUI_OPEN: '0', PI_GUI_OFFLINE: '1', PI_OFFLINE: '1', PI_CODING_AGENT_DIR: path.join(home, 'agent'),
     Z4_NETWORK_TRACE: networkTrace, Z4_NETWORK_ROLE: 'backend',
+    /* Z4-3：Runtime 会话由 supervisor 直接以 node 启动 fake pi（不经 pi.cmd shim），
+     * 围栏应答开关必须进后端进程 env 才能被 Runtime rpc 继承。 */
+    PI_FAKE_COLLAB: '1',
   };
   delete env.ELECTRON_RUN_AS_NODE;
   backend = spawn(process.env.Z4_NODE_EXECUTABLE, ['--require', networkGuardPath, path.join(ROOT, 'server.js'), '--g2-fixture-root', world], { cwd: ROOT, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });

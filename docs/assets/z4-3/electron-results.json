@@ -1,7 +1,7 @@
 {
   "qualification": "normal-sandbox",
   "sandbox": true,
-  "checks": 52,
+  "checks": 54,
   "failed": 0,
   "skipped": 0,
   "rows": [
@@ -36,6 +36,8 @@
     "focusing actual Runtime invalidates Classic canvas synchronously",
     "Classic and Runtime persist separate session documents",
     "Runtime edit leaves complete Classic document bytes unchanged",
+    "Runtime agent generation completes via registry command without Classic capture",
+    "Runtime agent suggestion applies through CAS and Classic bytes stay unchanged",
     "closing actual Runtime clears document controls",
     "closed Runtime old owner cannot submit a document operation",
     "resumed Runtime restores document with a fresh empty undo stack",
@@ -108,7 +110,7 @@
       "kind": "performance",
       "nodes": 100,
       "edges": 200,
-      "renderMilliseconds": 629
+      "renderMilliseconds": 620
     },
     {
       "requestedWidth": 1200,

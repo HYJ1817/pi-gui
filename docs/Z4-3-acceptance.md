@@ -1,7 +1,7 @@
 # Z4-3 真实 Pi Agent 协同编辑链路 · 验收材料
 
-状态：**开发与本地自动验证已完成；完整 canonical `npm test` 见第 7 节标注；独立审查未进行**。
-本报告不表示代码验收通过、允许合并或允许发布（未 push、未提 PR、未合并、未发版）。
+状态：**第一轮交付后经独立验收提出 4 项发现（1 Blocker + 3 Important），已全部修复并红绿回归（见第 13 节）；完整 canonical 本轮交给 PR CI，结论为待验证**。
+本报告不表示代码验收通过、允许合并或允许发布（未提 PR、未合并、未发版）。
 审查标准唯一见 [REVIEW.md](../REVIEW.md)；来源协议事实见
 [Z4-3-agent-source-contract.md](Z4-3-agent-source-contract.md)；证据分层依 [acceptance.md](acceptance.md)。
 
@@ -249,3 +249,115 @@ pi 1.4.0 官方文档核对过的真实事件形状（`agent_start`/`message_end
 | 代码验收通过 | **未定**——待独立功能/安全审查 + 用户审批（未进行） |
 | 允许合并 | **未授权**（未 push、未 PR、未合并） |
 | 允许发布 | **未授权**（未打 tag、未发版） |
+
+## 13. 独立验收修复（第二轮，2026-10-26）
+
+验收 HEAD `c5e7021` 的独立审查报告 1 项 Blocker 与 3 项 Important，全部修复。
+本轮只修缺陷，未重做 Z4-3；每项先写红测试（在修复前确认失败）再修复转绿。
+
+### 13.1 缺陷一（Blocker）：已拒绝建议仍可被接受
+
+- **触发路径**：`generate → reject`（queue 状态 rejected）后，同一 proposalId 再次
+  `accept` —— `queue.get` 允许读取 rejected 证据，`service.accept` 未按终局状态
+  拦截，`acceptProposal` 直接把 ops 应用落盘。
+- **修复**：`server/collab-service.js` accept/reject 分支按 `evidence.status` 执行
+  终局转换矩阵：pending→accepted/rejected 正常；accepted→accepted 走 lib 幂等
+  duplicate；rejected→rejected 幂等；**rejected→accepted 与 accepted→rejected 一律
+  `collab_proposal_unavailable`**；superseded/expired 在 `queue.get` 不可见。全部由
+  服务端控制，不依赖 UI。
+- **回归**：`tests/collab-agent-flow.cjs` 新增「终局状态转换矩阵」（含字节不变断言）
+  与「superseded 不可接受/重新激活」；红测确认旧代码下 rejected→accept 不抛异常。
+
+### 13.2 缺陷二（Important）：旧 Owner 生成状态隔离
+
+- **触发路径**：同一 scopeKey 下 token 轮换（会话代次变化）后，新 Owner 的
+  `proposal_status` 会消费旧 Owner attempt 的信箱结果；旧 Owner 的未完成 attempt
+  阻塞新 Owner 合法生成（判重只按 scopeKey）。
+- **修复**：`server/collab-proposal-source.js` `generationStatus(scopeKey, scopeToken)`
+  双键过滤；`beginGeneration` 运行中判重改为同 key **同 token**；注册始终绑定 attempt
+  捕获的 token（旧结果对新 Owner 永不可见）；`server/collab-service.js` 传
+  `scope.token`。不删除任何其他有效会话的建议（dropScope 语义不变）。
+- **回归**：`tests/collab-proposal-source.cjs` 新增 5 项 token 隔离检查（26/26，144 断言），
+  覆盖信箱不可见、旧任务不阻塞、同 token 并发拒绝、迟到旧结果不注册、失败清理。
+
+### 13.3 缺陷三（Important）：Runtime 生成不应依赖 Classic 就绪
+
+- **触发路径**：`beforeAuthority` 对**全部** generate 调用
+  `sessionChanges.assertReady()`（Classic capture 生命周期）；且真实的 Runtime
+  生成在 collab authority 持 worktrees 生命周期锁期间经 `registry.command →
+  validateWorkspace → worktrees.withWorkspace` 取**同一把锁**——Runtime 生成请求
+  永久挂起（Electron run8 复现「正在保存…」）。
+- **修复**：
+  - `server/collab-routes.js` `beforeAuthority(request, req)`：仅 Classic 请求（无
+    已验证会话头）做 capture 就绪检查；Runtime 复用 `registry.command` 既有
+    admission/工具安全/停止屏障。身份仍全部经 collab authority 核验。
+  - `server/collab-service.js`：generate 在锁内只校验并返回 `pendingGenerate`；
+    新增 `dispatchPendingGenerate` 由 routes 在 **authority 锁释放后** 执行真实
+    发送（Classic 与 Runtime 都不再嵌锁）。
+  - `server.js`：Classic `sendPrompt` 在 get_state 后、prompt 应答后两次复核
+    bridgeRun/cwd；Runtime `sendPrompt` 在 command 后复核 owner 代次。
+- **回归**：`tests/collab-http.cjs` 新增 Router 级检查（8/8，41 断言）：带会话头
+  的 generate 不触发 Classic 就绪检查；Classic capture 故障时 Classic 生成被拒而
+  Runtime 生成正常发起。Electron 专项新增 Runtime 生成全链路场景（见 13.5）。
+  夹具修复：`PI_FAKE_COLLAB` 进入后端 env（Runtime 由 supervisor 直接以 node 启动
+  fake pi，不经 pi.cmd shim）。
+
+### 13.4 缺陷四（Important）：prompt 接受结果与事件归属竞态
+
+- **触发路径**：只凭「同 bridgeRun 内出现过 agent_start」开启采集——sendPrompt
+  未确认期间别的运行事件可能被采为本建议；反之确认响应与事件同批到达时
+  （微任务时序）合法完成会丢失。
+- **修复**：`server/collab-proposal-source.js` 引入显式状态机
+  **armed（缓冲，上限 16，溢出即失败收口）→ prompted（确认后回放缓冲；sawStart
+  门控采集，未见 start 的 settled 属其他运行被忽略）→ ready/failed**。
+  `queued/handled/rejected/发送异常` 连同缓冲一起丢弃；失败清理同时移除 attempt
+  与可能注册过的队列项（`collab-proposal-queue.js` 新增 `drop`）。不伪造 runId——
+  归属靠「Classic get_state 无运行 + disposition==='started'」「Runtime registry
+  admission」的可验证 admission 与窗口关联。
+- **回归**：`tests/collab-proposal-source.cjs` 新增可控 Promise 竞态检查
+  （确认前完整运行不注册 / 快速完成回放不丢失 / 缓冲溢出失败）；套件执行器加
+  单检查 5s 超时（旧实现下挂起显式红而非静默退出）。
+
+### 13.5 本轮实测（全部实际运行，退出码 0）
+
+| 命令 | 结果 |
+| --- | --- |
+| `node tests/collab-proposal-queue.cjs` | 10/10（53 断言） |
+| `node tests/collab-proposal-source.cjs` | 26/26（144 断言） |
+| `node tests/collab-agent-flow.cjs` | 12/12（73 断言） |
+| `node tests/collab-panel-agent.cjs` | 8/8（88 断言） |
+| `node tests/collab-http.cjs` | 8/8（41 断言，含 Router 级 Classic/Runtime 分流） |
+| `node tests/collab-{doc,store,authority,service,canvas,panel}.cjs` | 56/53/24/13/72/11 全保持 |
+| `node tests/{runtime-registry,session-runtime,runtime-http}.cjs` | 全部通过 |
+| `node tests/{gui-browser-stop,stop-barrier}.cjs` | 12/12、17/17 cases |
+| `node tests/modules.cjs` / `node tests/smoke.cjs` | 120/120、1338/1338 |
+| `ELECTRON_OVERRIDE_DIST_PATH=<离线 44.4.3> node tests/collab-electron.cjs` | **55/55**（54 业务 + 1 进程清理；残留 0/9；新增 Runtime 生成 2 项检查） |
+| `npm run build:app -- --rebuild`（离线 zip） | exit 0 |
+| `node tests/app-check.cjs` / `exe-check.cjs` / `test:collab:packaged` | 26/26、49/49、28/28 |
+
+### 13.6 Classic / Runtime 验证范围与新边界
+
+- **Classic**：Router 级 capture 分流、锁外 dispatch、异步边界复核（源码层）；
+  Electron 真实组合根 Classic 生成→预览→接受→撤销（既有场景保持）。
+- **Runtime**：source 级帧归属/token 隔离；service 级 Runtime scope 端到端；
+  **Electron 真实组合根 Runtime 生成→预览→接受（registry.command 通道、
+  Classic 字节不变）**——本轮新增。
+- 完整 canonical 本轮不本地执行（按验收指示交给 PR CI）；上一轮
+  `c5e7021` 的本地完整通过（208 叶 exit 0）不冒充本轮新代码状态的证明，
+  结论记为**待 PR CI**。
+
+### 13.7 本轮修复提交与文件
+
+修复提交见下表；包含本轮修复的最终 HEAD 以
+`git log -1 --format=%H -- docs/Z4-3-acceptance.md` 解析。
+
+| 提交 | 内容 |
+| --- | --- |
+| （本轮修复提交） | 缺陷 1-4 修复 + 红绿回归 + Electron Runtime 场景 + 文档 |
+
+实际修改：`server/collab-service.js`、`server/collab-proposal-source.js`、
+`server/collab-proposal-queue.js`、`server/collab-routes.js`、`server.js`、
+`tests/collab-proposal-source.cjs`、`tests/collab-agent-flow.cjs`、
+`tests/collab-panel-agent.cjs`、`tests/collab-http.cjs`、
+`tests/fixtures/z4-collab-electron.cjs`、`tests/fixtures/z4-collab-scenarios.cjs`、
+`docs/Z4-3-acceptance.md`、`docs/assets/z4-3/`（证据更新）。

@@ -57,8 +57,17 @@ const check = (name, fn) => { checksToRun.push([name, fn]); };
     const open = service.execute(scope, { action: 'open' });
     return service.execute(scope, { action: 'create', editorId: open.editorId, expectedRevision: null });
   };
-  const generate = async (service, scope, editorId, revision, instruction = '增加一个异常处理节点') =>
-    service.execute(scope, { action: 'generate', editorId, expectedRevision: revision, instruction });
+  // generate 现在分两段：execute 在 authority 锁内校验并返回 pendingGenerate，
+  // dispatchPendingGenerate 在锁外真实发起（与生产 routes 行为一致）。
+  const generate = async (service, scope, editorId, revision, instruction = '增加一个异常处理节点') => {
+    const result = service.execute(scope, { action: 'generate', editorId, expectedRevision: revision, instruction });
+    if (result?.pendingGenerate) {
+      const outcome = await service.dispatchPendingGenerate(result.pendingGenerate);
+      if (!outcome.ok) throw Object.assign(Error(outcome.code), { code: outcome.code });
+      return { ...result, ...outcome };
+    }
+    return result;
+  };
   const feedRun = (source, fenceJson, { bridgeRun = 7, role = 'assistant', aborted = false, textContent = null } = {}) => {
     source.observeClassic(start(bridgeRun));
     if (fenceJson !== null || textContent !== null) source.observeClassic(end(bridgeRun, role, textContent ?? FENCE(fenceJson)));
@@ -282,6 +291,61 @@ const check = (name, fn) => { checksToRun.push([name, fn]); };
     const status = service.execute(scopeR, { action: 'proposal_status', editorId: editor.editorId, expectedRevision: 1 });
     assert.equal(status.generation.state, 'ready');
     const accepted = await service.execute(scopeR, { action: 'accept', editorId: editor.editorId, expectedRevision: 1, proposalId: status.proposal.proposalId });
+    assert.equal(accepted.ok, true);
+    cleanup();
+  });
+
+  check('终局状态转换矩阵：rejected→accepted 与 accepted→rejected 均被服务端拒绝', async () => {
+    const { service, source, dataDir, cleanup } = makeHarness();
+    const scope = A();
+    const editor = openAndCreate(service, scope);
+    const docPath = path.join(dataDir, 'collab-documents', `${scope.key}.json`);
+    // rejected → accepted：拒绝后的建议不能再被应用
+    await generate(service, scope, editor.editorId, 1);
+    feedRun(source, ADD_N9);
+    const rejectedStatus = service.execute(scope, { action: 'proposal_status', editorId: editor.editorId, expectedRevision: 1 });
+    const rejectedId = rejectedStatus.proposal.proposalId;
+    await service.execute(scope, { action: 'reject', editorId: editor.editorId, expectedRevision: 1, proposalId: rejectedId });
+    const bytesAfterReject = fs.readFileSync(docPath);
+    assert.throws(() => service.execute(scope, { action: 'accept', editorId: editor.editorId, expectedRevision: 1, proposalId: rejectedId }),
+      e => e.code === 'collab_proposal_unavailable');
+    assert.deepEqual(fs.readFileSync(docPath), bytesAfterReject, '拒绝后再接受不得改变文档字节');
+    // accepted → rejected：接受成功后反向终局必须拒绝
+    await generate(service, scope, editor.editorId, 1, '第二条建议');
+    feedRun(source, ADD_N8);
+    const acceptedStatus = service.execute(scope, { action: 'proposal_status', editorId: editor.editorId, expectedRevision: 1 });
+    const acceptedId = acceptedStatus.proposal.proposalId;
+    const accepted = await service.execute(scope, { action: 'accept', editorId: editor.editorId, expectedRevision: 1, proposalId: acceptedId });
+    assert.equal(accepted.ok, true);
+    assert.equal(accepted.document.revision, 2);
+    const bytesAfterAccept = fs.readFileSync(docPath);
+    assert.throws(() => service.execute(scope, { action: 'reject', editorId: editor.editorId, expectedRevision: 2, proposalId: acceptedId }),
+      e => e.code === 'collab_proposal_unavailable');
+    assert.deepEqual(fs.readFileSync(docPath), bytesAfterAccept, '接受后反向拒绝不得改变文档字节');
+    // 同一建议重复接受仍是幂等 duplicate（合法迁移的重复确认）
+    const again = await service.execute(scope, { action: 'accept', editorId: editor.editorId, expectedRevision: 2, proposalId: acceptedId });
+    assert.equal(again.ok, true);
+    assert.equal(again.status, 'duplicate');
+    // rejected → rejected：幂等重复拒绝
+    await service.execute(scope, { action: 'reject', editorId: editor.editorId, expectedRevision: 2, proposalId: rejectedId });
+    cleanup();
+  });
+
+  check('superseded 建议不可接受或重新激活', async () => {
+    const { service, source, cleanup } = makeHarness();
+    const scope = A();
+    const editor = openAndCreate(service, scope);
+    await generate(service, scope, editor.editorId, 1);
+    feedRun(source, ADD_N9);
+    const first = service.execute(scope, { action: 'proposal_status', editorId: editor.editorId, expectedRevision: 1 });
+    await generate(service, scope, editor.editorId, 1, '替代生成');
+    feedRun(source, ADD_N8);
+    const second = service.execute(scope, { action: 'proposal_status', editorId: editor.editorId, expectedRevision: 1 });
+    assert.throws(() => service.execute(scope, { action: 'accept', editorId: editor.editorId, expectedRevision: 1, proposalId: first.proposal.proposalId }),
+      e => e.code === 'collab_proposal_unavailable');
+    assert.throws(() => service.execute(scope, { action: 'reject', editorId: editor.editorId, expectedRevision: 1, proposalId: first.proposal.proposalId }),
+      e => e.code === 'collab_proposal_unavailable');
+    const accepted = await service.execute(scope, { action: 'accept', editorId: editor.editorId, expectedRevision: 1, proposalId: second.proposal.proposalId });
     assert.equal(accepted.ok, true);
     cleanup();
   });

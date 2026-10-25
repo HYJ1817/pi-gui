@@ -73,6 +73,65 @@ const check=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
       const result=await send({action:'open'});assert.equal(result.code,'collab_storage_corrupt');assert.equal(result.status,409);assert.deepEqual(fs.readFileSync(file),bytes);
       assert.equal(JSON.stringify(result).includes(world),false);
     });
+    await check('generate routes Classic-only capture readiness; Runtime requests bypass it',async()=>{
+      // 独立小路由：spy 记录 beforeAuthority 调用；Classic 模式下抛错模拟 capture 未就绪。
+      let classicReadyCalls=0,classicReadyBroken=false,generated=[];
+      const proposalsStub={beginGeneration:async call=>{generated.push(call);return {ok:true,attemptId:'ga-fixture'};},
+        generationStatus:()=>({state:'idle'}),head:()=>null,get:()=>null,settle:()=>{}};
+      // 独立数据目录：外层检查会故意损坏共享 store 的文档，这里必须隔离。
+      const data2=path.join(world,'data-2');fs.mkdirSync(data2);
+      const store2=createCollabStore({dataDir:data2});
+      const svc2=createCollabService({store:store2,proposals:proposalsStub});
+      let auth2=null;
+      const runtimeScope={...scope,origin:'runtime',conversationId:'conv-fixture',
+        key:'e'.repeat(64),token:'f'.repeat(64),sessionId:'9'.repeat(64)};
+      const seenScopes=[];
+      const routes2=createCollabRoutes({service:svc2,
+        withAuthority:async(req,fn)=>{
+          if(req.headers['x-pi-gui-conversation']!==undefined)return fn(runtimeScope);
+          return fn(scope);
+        },
+        beforeAuthority:async(request,req)=>{
+          if(request?.action!=='generate')return;
+          if(req?.headers?.['x-pi-gui-conversation']!==undefined)return;
+          classicReadyCalls++;
+          if(classicReadyBroken)throw Object.assign(Error('capture not ready'),{code:'collab_generate_unavailable'});
+        }});
+      const server2=http.createServer(createRouter({
+        auth:{denyRequest:req=>auth2.denyRequest(req)},collabDocuments:routes2,
+        requireLegacyScope:()=>true,legacyScope:()=>({classic:'deliberately-different'})}));
+      await new Promise(r=>server2.listen(0,'127.0.0.1',r));
+      try{
+        const p2=server2.address().port,o2='http://127.0.0.1:'+p2;
+        auth2=createAuth({token,port:p2,appId:'pi-gui',protocol:1,version:'fixture'});
+        const h2=(extra={})=>({'Content-Type':'application/json','X-Pi-Gui-Token':token,'X-Pi-Gui-Owner':'owner-a',Origin:o2,...extra});
+        const post=async(body,extra={})=>{const r=await fetch(o2+'/api/collab-documents',{method:'POST',headers:h2(extra.headers),body:JSON.stringify(body)});return {status:r.status,...await r.json()};};
+        // Classic 生成：capture 就绪检查被调用
+        let open2=await post({action:'open'});
+        const created2=await post({action:'create',editorId:open2.editorId,expectedRevision:null});
+        assert.equal(created2.ok,true);
+        const classicGen=await post({action:'generate',editorId:created2.editorId,expectedRevision:1,instruction:'classic 生成'});
+        assert.equal(classicGen.ok,true);assert.equal(classicReadyCalls,1);
+        // Runtime 生成（带会话头）：不调用 Classic capture 检查
+        const runtimeOpen=await post({action:'open'},{headers:{'X-Pi-Gui-Conversation':'conv-fixture'}});
+        const runtimeCreated=await post({action:'create',editorId:runtimeOpen.editorId,expectedRevision:null},{headers:{'X-Pi-Gui-Conversation':'conv-fixture'}});
+        assert.equal(runtimeCreated.ok,true);
+        const runtimeGen=await post({action:'generate',editorId:runtimeCreated.editorId,expectedRevision:1,instruction:'runtime 生成'},{headers:{'X-Pi-Gui-Conversation':'conv-fixture'}});
+        assert.equal(runtimeGen.ok,true,'Runtime 生成不得依赖 Classic capture 就绪');
+        assert.equal(classicReadyCalls,1,'Runtime 请求不触发 Classic 就绪检查');
+        assert.equal(generated.length,2);
+        assert.equal(generated[1].scope.origin,'runtime');
+        assert.equal(generated[1].scope.conversationId,'conv-fixture');
+        // Classic capture 故障时：Classic 生成被拒，Runtime 生成不受影响
+        classicReadyBroken=true;
+        const classicBlocked=await post({action:'generate',editorId:created2.editorId,expectedRevision:1,instruction:'再试'});
+        assert.equal(classicBlocked.ok,false);
+        assert.equal(classicBlocked.code,'collab_generate_unavailable');
+        const runtimeStill=await post({action:'generate',editorId:runtimeCreated.editorId,expectedRevision:1,instruction:'runtime 再试'},{headers:{'X-Pi-Gui-Conversation':'conv-fixture'}});
+        assert.equal(runtimeStill.ok,true,'Classic 未就绪不得阻塞 Runtime 合法生成');
+        assert.equal(classicReadyCalls,2);
+      }finally{await new Promise(r=>server2.close(r));}
+    });
   } finally {await new Promise(r=>server.close(r));fs.rmSync(world,{recursive:true,force:true});}
   console.log(`Collab HTTP: ${checks}/${checks}; assertions=${assertions}`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

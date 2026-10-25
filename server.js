@@ -1027,19 +1027,27 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
     classic: {
       captureIdentity: () => ({ bridgeRun: rpc.getState().bridgeRun }),
       sendPrompt: async (_conversationId, message) => {
+        const cwdAtStart = runtime.getCurrentCwd();
         const status = rpc.getState();
-        if (!runtime.getCurrentCwd() || status.bridgeState !== 'ready' || !status.piRunning) {
+        if (!cwdAtStart || status.bridgeState !== 'ready' || !status.piRunning) {
           throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
         }
         if (status.stop?.pending) throw Object.assign(Error(), { code: 'collab_agent_busy' });
         if (candidateRunsRef?.busy()) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        const runAtStart = status.bridgeRun;
         // capture 就绪检查由 collab 路由的 beforeAuthority 在取工作区锁之前完成，
         // 这里不能嵌套 withActivation（与 authority 的 withWorkspace 同锁会自锁）。
         const state = await rpc.request({ type: 'get_state' }, { timeoutMs: 15000 });
+        // 异步边界后复核：bridge 换代或切项目 = 归属身份已失效，不发起。
+        if (rpc.getState().bridgeRun !== runAtStart || runtime.getCurrentCwd() !== cwdAtStart) {
+          throw Object.assign(Error(), { code: 'collab_generate_failed' });
+        }
         if (!state || state.__error) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
         if (state.isStreaming || state.isCompacting) throw Object.assign(Error(), { code: 'collab_agent_busy' });
         const response = await rpc.request({ type: 'prompt', message }, { timeoutMs: 30000 });
         if (!response || response.__error) throw Object.assign(Error(), { code: 'collab_generate_rejected' });
+        // 应答后再次复核：prompt 已接受但 bridge 换代 = 事件归属不可判定，按失败收口。
+        if (rpc.getState().bridgeRun !== runAtStart) throw Object.assign(Error(), { code: 'collab_generate_failed' });
         // handled = 被扩展消费（没有本次 run）；queued = 已有 run 在跑。都不视为发起成功。
         if (response.disposition !== 'started') throw Object.assign(Error(), { code: 'collab_generate_rejected' });
       },
@@ -1057,6 +1065,11 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
         // registry.command 内部完成 owner 逐项核验、runtime_busy/stop_in_progress
         // 拒绝与 pendingTurns 记账 —— 完全复用既有执行队列，不新建第二个 Pi。
         await runtimeRegistryRef.command(owner, { type: 'prompt', message });
+        // 异步边界后复核：命令已写入但代次已变（会话重启）= 事件归属不可判定。
+        const after = runtimeRegistryRef?.getOwner(conversationId);
+        if (!after || after.runtimeGeneration !== owner.runtimeGeneration) {
+          throw Object.assign(Error(), { code: 'collab_generate_failed' });
+        }
       },
     },
   },
@@ -1069,7 +1082,14 @@ const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,workt
   protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
 const route = createRouter({
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
-    beforeAuthority: async request => { if (request?.action === 'generate') await sessionChanges.assertReady(); }}),
+    /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。
+     * Runtime 生成（带已验证会话头）复用 registry.command 的既有 admission、
+     * 工具安全校验与停止屏障，不依赖 Classic capture 状态。 */
+    beforeAuthority: async (request, req) => {
+      if (request?.action === 'generate' && req?.headers?.['x-pi-gui-conversation'] === undefined) {
+        await sessionChanges.assertReady();
+      }
+    }}),
   reviewComments: createReviewCommentRoutes({store:reviewCommentStore,withAuthority:reviewCommentAuthority}),
   candidateRuns: createCandidateRoutes({runs:candidateRuns,withAuthority:reviewCommentAuthority}),
   sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,

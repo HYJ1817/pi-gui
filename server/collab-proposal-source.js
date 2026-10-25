@@ -101,6 +101,7 @@ export function createCollabProposalSource({
   maxFenceBytes = 64 * 1024,
   maxCandidateBytes = 512 * 1024,
   attemptTtlMs = 10 * 60 * 1000,
+  maxArmedBuffer = 16,
   now = () => Date.now(),
   randomId = () => globalThis.crypto.randomUUID(),
   logEvent = null,
@@ -108,12 +109,21 @@ export function createCollabProposalSource({
   const safeLog = (event, details = {}) => { try { logEvent?.(event, details); } catch { /* observation only */ } };
   const attempts = new Map(); // attemptId → attempt（插入序 = 创建序）
 
+  /* ---------- attempt 状态机 ----------
+   * armed   ：sendPrompt 在途。事件只缓冲不采纳（上限 maxArmedBuffer，超限 overflow）。
+   *           未确认前出现的任何运行（包括别人的完整 run）都不构成合法建议；
+   *           通道拒绝/异常时连同缓冲一起丢弃。
+   * prompted：prompt 已被通道接受（Classic 要求 disposition==='started'，Runtime 要求
+   *           registry.command 完整 admission 通过）。回放缓冲后等待事件流。
+   *           sawStart 门控采集：agent_start 之前到达的 settled 属于其他运行，忽略。
+   * ready/failed：终局。失败清理同时移除 attempt 与它可能注册过的队列项。 */
+  const RUNNING_STATES = new Set(['armed', 'prompted']);
+
   function prune() {
     for (const [key, attempt] of attempts) {
-      if (attempt.state === 'running') {
+      if (RUNNING_STATES.has(attempt.state)) {
         if (now() - attempt.startedAt > attemptTtlMs) {
-          attempt.state = 'failed'; attempt.failCode = 'collab_generate_timeout';
-          safeLog('collab.attempt_timeout', { attemptId: attempt.attemptId });
+          failAttempt(attempt, 'collab_generate_timeout');
         }
         continue;
       }
@@ -121,22 +131,24 @@ export function createCollabProposalSource({
       if (attempt.consumed && now() - attempt.startedAt > attemptTtlMs) attempts.delete(key);
     }
     while (attempts.size > 32) {
-      const oldest = [...attempts.values()].find(a => a.state !== 'running');
+      const oldest = [...attempts.values()].find(a => !RUNNING_STATES.has(a.state));
       if (!oldest) break;
       attempts.delete(oldest.attemptId);
     }
   }
 
   function failAttempt(attempt, code) {
-    if (attempt.state !== 'running') return;
+    if (!RUNNING_STATES.has(attempt.state)) return;
     attempt.state = 'failed'; attempt.failCode = code;
-    attempt.candidates = [];
+    attempt.candidates = []; attempt.buffer = [];
+    // 防御：终局前若已注册过队列项（正常路径不会），一并移除，避免幽灵建议。
+    if (attempt.proposalId && typeof queue.drop === 'function') queue.drop(attempt.proposalId);
     safeLog('collab.attempt_failed', { attemptId: attempt.attemptId, code });
   }
 
   /** message_end 采集：只收含围栏标记的 assistant 终值消息，容量有界。 */
   function recordCandidate(attempt, message) {
-    if (!message || message.role !== 'assistant' || attempt.state !== 'running') return;
+    if (!message || message.role !== 'assistant' || attempt.state !== 'prompted' || !attempt.sawStart) return;
     if (!ASSISTANT_TERMINAL.has(message.stopReason)) return;
     const content = Array.isArray(message.content) ? message.content : [];
     const text = content.filter(block => block?.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n');
@@ -148,7 +160,7 @@ export function createCollabProposalSource({
 
   /** agent_settled 收口：aborted → 丢弃；否则从最后一条含围栏消息提取并注册。 */
   function settleAttempt(attempt, aborted) {
-    if (attempt.state !== 'running') return;
+    if (attempt.state !== 'prompted' || !attempt.sawStart) return;
     if (aborted) { failAttempt(attempt, 'collab_generate_aborted'); return; }
     try {
       const last = attempt.candidates[attempt.candidates.length - 1];
@@ -183,12 +195,42 @@ export function createCollabProposalSource({
           ? 'collab_generate_invalid_output'
           : 'collab_generate_failed');
     } finally {
-      attempt.candidates = [];
+      attempt.candidates = []; attempt.buffer = [];
+    }
+  }
+
+  /** prompted 阶段的事件处理（也用于 armed 缓冲的回放）。 */
+  function handleEvent(attempt, event) {
+    if (!RUNNING_STATES.has(attempt.state)) return;
+    if (event.type === 'agent_start') { attempt.sawStart = true; return; }
+    if (event.type === 'message_end') { recordCandidate(attempt, event.message); return; }
+    if (event.type === 'agent_settled') { settleAttempt(attempt, event.aborted === true); return; }
+  }
+
+  /** armed 阶段缓冲；溢出标记（确认后按失败收口，不采纳不可判定的内容）。 */
+  function bufferOrHandle(attempt, event) {
+    if (attempt.state === 'armed') {
+      if (attempt.buffer.length >= maxArmedBuffer) { attempt.overflow = true; return; }
+      attempt.buffer.push(event);
+      return;
+    }
+    handleEvent(attempt, event);
+  }
+
+  /** sendPrompt 确认后：进入 prompted 并按序回放缓冲（快速完成场景不丢失）。 */
+  function confirmPrompt(attempt) {
+    if (attempt.state !== 'armed') return;
+    if (attempt.overflow) { attempt.buffer = []; failAttempt(attempt, 'collab_generate_failed'); return; }
+    attempt.state = 'prompted';
+    const replay = attempt.buffer.splice(0);
+    for (const event of replay) {
+      handleEvent(attempt, event);
+      if (!RUNNING_STATES.has(attempt.state)) break;
     }
   }
 
   function attemptsFor(origin) {
-    return [...attempts.values()].filter(a => a.origin === origin && a.state === 'running');
+    return [...attempts.values()].filter(a => a.origin === origin && RUNNING_STATES.has(a.state));
   }
 
   /* ---------- 事件入口（服务端 tap，见 docs 契约 §6） ---------- */
@@ -203,12 +245,7 @@ export function createCollabProposalSource({
     if (!Number.isInteger(event.bridgeRun)) return;
     for (const attempt of attemptsFor('classic')) {
       if (attempt.identity.bridgeRun !== event.bridgeRun) continue;
-      if (!attempt.sawStart) {
-        if (event.type === 'agent_start') attempt.sawStart = true;
-        continue; // 窗口未开启：武装前后残留的旧 run 事件一概不采
-      }
-      if (event.type === 'message_end') recordCandidate(attempt, event.message);
-      else if (event.type === 'agent_settled') settleAttempt(attempt, event.aborted === true);
+      bufferOrHandle(attempt, event);
     }
   }
 
@@ -228,12 +265,7 @@ export function createCollabProposalSource({
       const identity = attempt.identity;
       if (owner.backendInstance !== identity.backendInstance || owner.conversationId !== identity.conversationId
         || owner.runtimeId !== identity.runtimeId || owner.runtimeGeneration !== identity.runtimeGeneration) continue;
-      if (!attempt.sawStart) {
-        if (event.type === 'agent_start') attempt.sawStart = true;
-        continue;
-      }
-      if (event.type === 'message_end') recordCandidate(attempt, event.message);
-      else if (event.type === 'agent_settled') settleAttempt(attempt, event.aborted === true);
+      bufferOrHandle(attempt, event);
     }
   }
 
@@ -251,8 +283,12 @@ export function createCollabProposalSource({
       return { ok: false, code: 'collab_invalid' };
     }
     prune();
+    // 运行中判重按 scopeKey + scopeToken：旧 Owner 的未完成 attempt 不阻塞
+    // 同 scope 新 token 的合法生成；同 token 并发仍拒绝。
     for (const attempt of attempts.values()) {
-      if (attempt.scopeKey === scope.key && attempt.state === 'running') return { ok: false, code: 'collab_generation_active' };
+      if (attempt.scopeKey === scope.key && attempt.scopeToken === scope.token && RUNNING_STATES.has(attempt.state)) {
+        return { ok: false, code: 'collab_generation_active' };
+      }
     }
     const channel = channels[scope.origin];
     if (!channel || typeof channel.sendPrompt !== 'function' || typeof channel.captureIdentity !== 'function') {
@@ -269,29 +305,37 @@ export function createCollabProposalSource({
     const attempt = {
       attemptId: `ga-${randomId()}`, scopeKey: scope.key, scopeToken: scope.token, sessionId: scope.sessionId,
       documentId: document.documentId, baseRevision: document.revision, origin: scope.origin,
-      conversationId: scope.conversationId ?? null, identity, state: 'running', startedAt: now(),
-      candidates: [], failCode: null, proposalId: null, consumed: false, sawStart: false,
+      conversationId: scope.conversationId ?? null, identity, state: 'armed', startedAt: now(),
+      candidates: [], buffer: [], overflow: false, sawStart: false, failCode: null, proposalId: null, consumed: false,
     };
     attempts.set(attempt.attemptId, attempt);
     try {
-      // 先武装再写 prompt：官方要求订阅先于发送，避免漏掉快速完成的 run。
+      // 先武装（armed）再写 prompt：armed 期间到达的事件只缓冲不采纳——
+      // 官方要求订阅先于发送，快速完成的 run 全部落在缓冲里，确认后回放。
       await channel.sendPrompt(scope.origin === 'runtime' ? scope.conversationId : null,
         buildGenerationPrompt({ document, instruction: text }));
     } catch (error) {
       attempts.delete(attempt.attemptId);
+      attempt.buffer = [];
+      if (attempt.proposalId && typeof queue.drop === 'function') queue.drop(attempt.proposalId);
       safeLog('collab.generate_rejected', { origin: scope.origin, code: mapChannelError(error) });
       return { ok: false, code: mapChannelError(error) };
     }
+    confirmPrompt(attempt);
     return { ok: true, attemptId: attempt.attemptId };
   }
 
-  /** 状态信箱：running 持续可见；终局结果只投递一次，之后回到 idle。 */
-  function generationStatus(scopeKey) {
+  /** 状态信箱：按 scopeKey + scopeToken 过滤（旧 Owner 读不到新 Owner 的状态，
+   *  反之亦然）；running 持续可见；终局结果只投递一次，之后回到 idle。 */
+  function generationStatus(scopeKey, scopeToken) {
     prune();
     let latest = null;
-    for (const attempt of attempts.values()) if (attempt.scopeKey === scopeKey) latest = attempt;
+    for (const attempt of attempts.values()) {
+      if (attempt.scopeKey !== scopeKey || attempt.scopeToken !== scopeToken) continue;
+      latest = attempt;
+    }
     if (!latest) return { state: 'idle' };
-    if (latest.state === 'running') return { state: 'running' };
+    if (RUNNING_STATES.has(latest.state)) return { state: 'running' };
     if (latest.consumed) return { state: 'idle' };
     latest.consumed = true;
     return { state: latest.state, ...(latest.failCode ? { code: latest.failCode } : {}), ...(latest.proposalId ? { proposalId: latest.proposalId } : {}) };

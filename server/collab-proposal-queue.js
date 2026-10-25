@@ -155,6 +155,13 @@ export function createProposalQueue({
     return true;
   }
 
+  /** 移除单个条目：仅供来源侧失败清理（正常终局走 settle）。
+   *  返回是否确实移除；不存在的 ID 是无害 no-op。 */
+  function drop(proposalId) {
+    if (!id(proposalId)) return false;
+    return entries.delete(proposalId);
+  }
+
   function dropScope(scopeKey) {
     for (const [key, entry] of entries) if (entry.scopeKey === scopeKey) entries.delete(key);
   }
@@ -165,5 +172,5 @@ export function createProposalQueue({
     return { size: entries.size, pending };
   }
 
-  return { register, get, head, settle, dropScope, dropAll, stats };
+  return { register, get, head, settle, drop, dropScope, dropAll, stats };
 }

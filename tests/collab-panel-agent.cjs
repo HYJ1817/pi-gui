@@ -49,7 +49,16 @@ const check = async (name, fn) => { await fn(); checks++; console.log('ok ' + na
     assert.equal(url, '/api/collab-documents');
     const body = JSON.parse(options.body); calls.push({ body, headers: options.headers });
     let answer;
-    try { answer = await service.execute(scope, body); calls.at(-1).answer = answer; }
+    try {
+      answer = await service.execute(scope, body); calls.at(-1).answer = answer;
+      // 与生产 routes 一致：generate 的发送发生在「authority 锁外」。
+      if (answer?.ok && answer.pendingGenerate) {
+        const outcome = await service.dispatchPendingGenerate(answer.pendingGenerate);
+        if (!outcome.ok) answer = { ok: false, code: outcome.code, error: COLLAB_MESSAGES[outcome.code] ?? '操作未确认' };
+        else { delete answer.pendingGenerate; answer.generating = true; }
+        calls.at(-1).answer = answer;
+      }
+    }
     catch (e) { answer = { ok: false, code: e.code, error: COLLAB_MESSAGES[e.code] ?? '操作未确认' }; }
     return { json: async () => answer };
   };

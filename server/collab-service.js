@@ -91,7 +91,7 @@ export function createCollabService({ store, proposals = null, now = () => Date.
     if (doc && doc.boundSessionId!==scope.sessionId) fail('collab_scope_unavailable');
     // 状态轮询是只读信箱：不参与 revision 冲突闸门，否则文档一变轮询即死。
     if (action==='proposal_status') {
-      const generating=proposals && typeof proposals.generationStatus==='function' ? proposals.generationStatus(scope.key) : null;
+      const generating=proposals && typeof proposals.generationStatus==='function' ? proposals.generationStatus(scope.key,scope.token) : null;
       const head=proposals && doc && typeof proposals.head==='function' ? proposals.head(scope,doc.documentId) : null;
       return {...snapshot(entry,doc),generating:generating?.state==='running',
         generation:generating && (generating.state==='ready'||generating.state==='failed')
@@ -135,21 +135,24 @@ export function createCollabService({ store, proposals = null, now = () => Date.
     } else if (action==='undo') result=undo(doc,history);
     else if (action==='redo') result=redo(doc,history);
     else if (action==='generate') {
-      // beginGeneration 是异步的（等 Pi 接受 prompt）；execute 对该动作返回
-      // Promise，由路由层 await。发起后再次核对 scope：owner 已变化时旧
-      // attempt 绑定旧 token，自然失效（fail-closed）。
-      const pending=Promise.resolve(proposals.beginGeneration({scope:{key:scope.key,token:scope.token,
-        sessionId:scope.sessionId,origin:scope.origin,conversationId:scope.conversationId},document:clone(doc),instruction:request.instruction.trim()}));
-      return pending.then(outcome => {
-        if (!outcome.ok) fail(outcome.code);
-        scope.assertCurrent();
-        return {...snapshot(entry,doc),generating:true,attemptId:outcome.attemptId};
-      });
+      // Z4-3 验收修复：生成通道的发送必须发生在 collab authority 工作区锁之外
+      // （Runtime 通道经 registry.command → validateWorkspace 取同一把
+      // worktrees 生命周期锁，锁内发送会自锁）。锁内只做校验并返回待发任务，
+      // 由路由层在 withAuthority 返回后调用 dispatchPendingGenerate。
+      return {...snapshot(entry,doc),generating:true,pendingGenerate:{
+        scope:{key:scope.key,token:scope.token,sessionId:scope.sessionId,origin:scope.origin,conversationId:scope.conversationId},
+        document:clone(doc),instruction:request.instruction.trim()}};
     }
     else {
       if (!id(request.proposalId) || !proposals) fail('collab_proposal_unavailable');
       const evidence=proposals.get(scope,request.proposalId);
       if (!evidence || evidence.scopeToken!==scope.token) fail('collab_proposal_unavailable');
+      // 终局状态转换矩阵（服务端控制，不依赖 UI 隐藏按钮）：
+      //   pending → accepted/rejected 正常；accepted→accepted 走 lib 幂等 duplicate；
+      //   rejected→rejected 幂等；rejected→accepted 与 accepted→rejected 一律拒绝；
+      //   superseded/expired 在 queue.get 已不可见（collab_proposal_unavailable）。
+      if (evidence.status==='rejected' && action==='accept') fail('collab_proposal_unavailable');
+      if (evidence.status==='accepted' && action==='reject') fail('collab_proposal_unavailable');
       if(action==='preview') {
         const preview=previewProposalReadonly(doc,evidence.proposal);
         return preview.ok ? {...snapshot(entry,doc),proposal:clone(evidence.proposal),preview:preview.preview} : invalidResult(preview);
@@ -172,5 +175,10 @@ export function createCollabService({ store, proposals = null, now = () => Date.
     }
     return snapshot(entry,stored);
   }
-  return {execute};
+  /** 路由层在 authority 锁外调用：真实发起生成（校验+武装+发送全在 source 内）。 */
+  async function dispatchPendingGenerate(pending) {
+    if (!pending || !proposals || typeof proposals.beginGeneration!=='function') return { ok:false, code:'collab_proposal_unavailable' };
+    return proposals.beginGeneration(pending);
+  }
+  return {execute,dispatchPendingGenerate};
 }
