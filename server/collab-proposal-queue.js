@@ -142,7 +142,7 @@ export function createProposalQueue({
       expireIfDue(entry);
       if (entry.status === 'pending' && (!found || entry.createdAt >= found.createdAt)) found = entry;
     }
-    return found ? { proposalId: found.proposalId, baseRevision: found.baseRevision, rationale: found.rationale,
+    return found ? { proposalId: found.proposalId, baseRevision: found.baseRevision, rationale: found.proposal.rationale,
       opCount: found.proposal.ops.length, createdAt: found.createdAt, digest: found.digest } : null;
   }
 
