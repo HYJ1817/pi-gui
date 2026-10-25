@@ -149,6 +149,7 @@
     "test:diff-comment-ranges:split": "node tests/diff-comment-ranges-split-electron.cjs",
     "test:collab": "node prototype/z4-1-collab/collab-test.mjs && node tests/collab-doc.cjs && node tests/collab-store.cjs && node tests/collab-authority.cjs && node tests/collab-service.cjs && node tests/collab-http.cjs && node tests/collab-canvas.cjs && node tests/collab-panel.cjs",
     "test:collab:electron": "node tests/collab-electron.cjs",
+    "test:collab:packaged": "node tests/collab-packaged.cjs",
     "test:viz": "node tests/viz-schema.cjs && node tests/viz-ui.cjs",
     "test:viz:electron": "node tests/viz-electron.cjs"
   },
