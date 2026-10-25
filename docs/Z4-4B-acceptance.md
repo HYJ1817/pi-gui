@@ -99,6 +99,22 @@ onExport 用户下载、提示合成、生命周期销毁）；adapter 增加布
 - 完整 canonical `npm test` 未运行（任务约定留待合并后/CI）。
 - 大图（>50 移动）自动整理仍为明确 over-limit 状态（Z4-4A 既定边界，未变）。
 
+## 六·补：Z4-3 合并后的集成核对（2026-10-26 追记）
+
+Z4-3 已经 PR #32 合入 main（`942fe6f`）。按第五节步骤执行集成核对：
+
+- 从 `942fe6f` 建 Worktree 与分支 `codex/z4-4b-main-merge`，`git merge codex/z4-4b-integration`。
+- 冲突与预测完全一致，仅 `package.json` 与 `public/collab-panel.js` 两处，按第四节方案解决
+  （测试链并集；agentRow 与 productivityHost 并存、状态变量与销毁行并集），合并提交 `fb8896a`。
+- 合并代码上 `npm run test:collab` **退出码 0**，三套面板视角并存全绿：
+  Collab panel 11/11(58)、Collab panel agent 8/8(87)、Collab panel productivity 14/14(58)；
+  另 Collab production document 56/56(135)、store 53/53(149,skip 1)、authority 24/24(68)、
+  service 13/13(58)、HTTP 8/8(41)、canvas 72/72(72)、auto-layout 51/51、layout-preview 44/44、
+  export 48/48、productivity 39/39，以及链前段的 prototype/doc/proposal-queue/source/agent-flow 全绿。
+- Electron 在核对会话中仍无法启动（`electron --version` 退出码 3，与 3340dce 取证相同），
+  专项重跑指引不变；完整 canonical `npm test` 仍按约定留待 PR CI 或用户指示。
+- 该分支仅为本地集成核对，未 push、未合并 main；用户合并/发布决策另行。
+
 ## 七、回滚方法
 
 - 合并前：删除 Worktree 与分支即可，main 与 Z4-3 不受影响。
