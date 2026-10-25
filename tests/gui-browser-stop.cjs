@@ -57,6 +57,8 @@ async function main() {
   const { createCollabStore } = await import('../server/collab-store.js');
   const { createCollabAuthority } = await import('../server/collab-authority.js');
   const { createCollabService } = await import('../server/collab-service.js');
+  const { createCollabProposalSource } = await import('../server/collab-proposal-source.js');
+  const { createProposalQueue } = await import('../server/collab-proposal-queue.js');
   const { createCollabRoutes } = await import('../server/collab-routes.js');
   let ack, entered, stopped = false, writeError = null, lastSendResult;
   let abortReply = true;
@@ -109,6 +111,7 @@ async function main() {
     // calls comment routes, so constructing the lazy store performs no I/O.
     createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
     createCollabStore, createCollabAuthority, createCollabService, createCollabRoutes,
+    createCollabProposalSource, createProposalQueue,
     // This fixture has no candidate run. Preserve the production facade shape
     // without scanning a shared TEMP data directory; candidate Stop has its own
     // isolated lifecycle and real Electron coverage.

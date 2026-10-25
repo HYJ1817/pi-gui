@@ -5,3 +5,10 @@
 .collab-panel-actions button:disabled { opacity: .5; cursor: default; }
 .collab-panel-actions button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 .collab-canvas-host, .collab-proposal-host { min-width: 0; }
+.collab-agent-row { display: flex; gap: 8px; margin-block: 8px; }
+.collab-agent-input { flex: 1; min-width: 0; border: 1px solid var(--ui-border); border-radius: 6px; background: var(--ui-panel-surface); color: var(--ui-text-primary); padding: 6px 10px; font: inherit; }
+.collab-agent-input:disabled { opacity: .5; }
+.collab-agent-input:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.collab-agent-row button { border: 1px solid var(--ui-border); border-radius: 6px; background: var(--ui-panel-surface); color: var(--ui-text-primary); padding: 6px 10px; font: inherit; cursor: pointer; white-space: nowrap; }
+.collab-agent-row button:disabled { opacity: .5; cursor: default; }
+.collab-agent-row button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }

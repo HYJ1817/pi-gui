@@ -207,7 +207,9 @@ async function main() {
   check('proposal explicit callbacks only', actions.splice(0), [['accept', 'p1'], ['reject', 'p1'], ['regenerate', 'p1']]);
   check('preview never mutates inputs', JSON.stringify({ doc, suggestion, preview }), snapshot);
   proposal.update({ document: doc, proposal: suggestion, preview, readOnly: true });
-  check('readonly disables proposal actions', [...proposalHost.querySelectorAll('button')].every(el => el.disabled));
+  // Z4-3：重新生成是冲突后的恢复入口，只读下保持可用；接受/拒绝仍被禁用。
+  check('readonly disables accept and reject, keeps regenerate entry',
+    pbutton('接受建议').disabled && pbutton('拒绝建议').disabled && !pbutton('重新生成').disabled);
   proposal.update({ document: { ...doc, revision: 3 }, proposal: suggestion, preview, readOnly: false });
   check('stale suggestion conflict visible', proposalHost.textContent.includes('版本冲突'));
   check('stale suggestion accept disabled', pbutton('接受建议').disabled);

@@ -23,7 +23,7 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
   await until(saved,'initial document saved');
   check('real production panel creates three nodes and two edges',graph().graph.nodes.length===3&&graph().graph.edges.length===2);
   check('graph labels are not stroked by global SVG icon styles',await read("getComputedStyle(document.querySelector('.collab-node text')).stroke==='none'"));
-  check('production panel explicitly reports unavailable Agent proposal source',await read("document.querySelector('.collab-panel-source').textContent.includes('尚未接入')"));
+  check('production panel reports the qualified Agent proposal source and preview-first contract',await read("document.querySelector('.collab-panel-source').textContent.includes('建议由当前 Pi 会话生成')"));
   await click('[data-node-id="n2"]');
   await read("document.querySelector('.collab-edit-form input').value='用户修改处理节点'");
   await action('保存文字');await until(()=>graph().graph.nodes.find(n=>n.id==='n2').label==='用户修改处理节点','label durable');
@@ -44,6 +44,29 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
   await until(saved,'redo ack');await action('新增节点');await until(()=>graph().graph.nodes.length===4,'new node');
   check('new node persisted with stable id',graph().graph.nodes.length===4);
   await until(saved,'add ack');
+  // Z4-3：真实 Agent 建议链路——fake Pi 以真实协议形状应答生成请求。
+  await read("document.querySelector('.collab-agent-input').value='把开始节点文字改成 Agent 修改的开始'");
+  await read("document.querySelector('.collab-agent-input').dispatchEvent(new Event('input',{bubbles:true}))");
+  await read("Array.from(document.querySelectorAll('.collab-agent-row button')).find(b=>b.textContent==='让 Agent 修改').click()");
+  try {
+    await until(()=>read("!!document.querySelector('.collab-proposal-diff li')"),'agent proposal previewed');
+  } catch (error) {
+    const diag=await read(`(()=>({status:document.querySelector('.collab-panel-status')?.textContent,
+      source:document.querySelector('.collab-panel-source')?.textContent,
+      proposal:document.querySelector('.collab-proposal')?.textContent?.slice(0,120)}))()`);
+    console.error('Z43-DIAG '+JSON.stringify(diag));
+    throw error;
+  }
+  check('agent suggestion card shows rationale and one diff entry',await read("document.querySelector('.collab-rationale').textContent.includes('Fixture 建议')&&document.querySelectorAll('.collab-proposal-diff li').length===1"));
+  check('preview does not change the persisted document',graph().graph.nodes.find(n=>n.id==='n1').label!=='Agent 修改的开始');
+  fs.writeFileSync(path.join(out,'collab-agent-proposal.png'),(await win.capturePage()).toPNG());screenshots.push('collab-agent-proposal.png');
+  await read("Array.from(document.querySelectorAll('.collab-proposal-actions button')).find(b=>b.textContent==='接受建议').click()");
+  await until(()=>graph().graph.nodes.find(n=>n.id==='n1').label==='Agent 修改的开始','agent suggestion applied');
+  await until(saved,'agent accept ack');
+  check('accepted agent suggestion applies through CAS and enables undo',await read("Array.from(document.querySelectorAll('.collab-canvas button')).find(b=>b.textContent==='撤销').disabled===false")&&graph().graph.nodes.find(n=>n.id==='n1').label==='Agent 修改的开始');
+  await action('撤销');await until(()=>graph().graph.nodes.find(n=>n.id==='n1').label!=='Agent 修改的开始','agent suggestion undo');
+  check('accepted agent suggestion is undoable like user edits',graph().graph.nodes.find(n=>n.id==='n1').label!=='Agent 修改的开始');
+  await until(saved,'agent undo ack');
   const added=graph().graph.nodes.find(n=>!['n1','n2','n3'].includes(n.id));
   await click('[data-node-id="n3"]');
   await read(`document.querySelector('.collab-connect-form select').value=${JSON.stringify(added.id)}`);
@@ -153,6 +176,15 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
     check('Classic and Runtime persist separate session documents',allDocuments().length===2&&new Set(allDocuments().map(d=>d.boundSessionId)).size===2);
     await click('[data-node-id="n1"]');await read("document.querySelector('.collab-edit-form input').value='Runtime 独立编辑'");await action('保存文字');await until(saved,'runtime user edit');
     check('Runtime edit leaves complete Classic document bytes unchanged',fs.readFileSync(classicFile).equals(classicBytes));
+    // Z4-3 验收修复：Runtime 生成不依赖 Classic capture 就绪——真实组合根全链路。
+    await read("document.querySelector('.collab-agent-input').value='Runtime 侧让 Agent 修改开始节点'");
+    await read("document.querySelector('.collab-agent-input').dispatchEvent(new Event('input',{bubbles:true}))");
+    await read("Array.from(document.querySelectorAll('.collab-agent-row button')).find(b=>b.textContent==='让 Agent 修改').click()");
+    await until(()=>read("!!document.querySelector('.collab-proposal-diff li')"),'runtime agent proposal previewed');
+    check('Runtime agent generation completes via registry command without Classic capture',await read("document.querySelector('.collab-rationale').textContent.includes('Fixture 建议')"));
+    await read("Array.from(document.querySelectorAll('.collab-proposal-actions button')).find(b=>b.textContent==='接受建议').click()");
+    await until(()=>{const names=fs.readdirSync(path.join(data,'collab-documents')).filter(n=>n.endsWith('.json'));return names.length===2&&names.some(n=>JSON.parse(fs.readFileSync(path.join(data,'collab-documents',n),'utf8')).doc.graph.nodes.find(x=>x.id==='n1')?.label==='Agent 修改的开始');},'runtime agent suggestion applied');
+    check('Runtime agent suggestion applies through CAS and Classic bytes stay unchanged',fs.readFileSync(classicFile).equals(classicBytes));
     await read(`(async()=>{const {runtimeStore}=await import('/runtime-state.js');const {collabDocumentAction,runtimeSessionAction}=await import('/api.js');
       window.z4OldRuntimeOwner=structuredClone(runtimeStore.get(window.z4RuntimeId).owner);
       const headers={'X-Pi-Gui-Conversation':window.z4RuntimeId,'X-Pi-Gui-Owner':JSON.stringify(window.z4OldRuntimeOwner)};
@@ -168,7 +200,7 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
     await read("import('/runtime-nav.js').then(m=>m.focusRuntimeById(window.z4RuntimeId))");
     await until(()=>read("import('/runtime-state.js').then(m=>m.runtimeStore.get(window.z4RuntimeId)?.owner?.runtimeGeneration!==window.z4OldRuntimeOwner.runtimeGeneration)"),'new runtime generation');
     if(await read("!!document.querySelector('#rightPaneClose')"))await click('#rightPaneClose');await click('#btnCollab');await until(saved,'resumed Runtime doc restored');
-    check('resumed Runtime restores document with a fresh empty undo stack',await read("document.querySelector('[data-node-id=\"n1\"]').getAttribute('aria-label').includes('Runtime 独立编辑')&&Array.from(document.querySelectorAll('.collab-canvas button')).find(b=>b.textContent==='撤销').disabled"));
+    check('resumed Runtime restores document with a fresh empty undo stack',await read("document.querySelector('[data-node-id=\"n1\"]').getAttribute('aria-label').includes('Agent 修改的开始')&&Array.from(document.querySelectorAll('.collab-canvas button')).find(b=>b.textContent==='撤销').disabled"));
     fs.writeFileSync(path.join(out,'collab-runtime.png'),(await win.capturePage()).toPNG());screenshots.push('collab-runtime.png');
     await read("(async()=>{const {runtimeStore}=await import('/runtime-state.js');const {runtimeSessionAction}=await import('/api.js');await runtimeSessionAction({action:'close',owner:runtimeStore.get(window.z4RuntimeId).owner});})()");
     await click('#navHome');

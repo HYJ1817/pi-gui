@@ -24,25 +24,38 @@ export function openCollabPanel() {
 
 /* Only this adapter holds the current server snapshot. Canvas emits intents;
  * request failures preserve that snapshot, and context changes synchronously
- * remove it before any pending response can repaint or enable a new owner. */
+ * remove it before any pending response can repaint or enable a new owner.
+ * Z4-3：Agent 建议轮询使用独立序号与 busy 旁路，不会让用户请求的迟到响应
+ * 被误判为过期，也不与用户操作争用 busy。 */
 export function mountCollabPanel(host,view) {
   const captured=context();
   const head=createPaneHeader({title:'协同文档',subtitle:'结构化流程图 · 自动保存到应用数据目录'}).el;head.classList.add('collab-head');
   const body=node('div','collab-panel-body'),status=node('p','collab-panel-status','正在读取文档…');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const controls=node('div','collab-panel-actions'),create=node('button','','新建流程图'),reload=node('button','','重新打开');
   create.type=reload.type='button';create.hidden=true;reload.hidden=true;controls.append(create,reload);
+  const agentRow=node('div','collab-agent-row');
+  const instruction=node('input','collab-agent-input');instruction.type='text';instruction.maxLength=2000;
+  instruction.placeholder='描述要让 Agent 修改的内容，例如：把流程拆成三个分支，再增加一个异常处理节点。';
+  const generateBtn=node('button','','让 Agent 修改');generateBtn.type='button';generateBtn.hidden=true;
+  agentRow.append(instruction,generateBtn);
   const canvasHost=node('div','collab-canvas-host'),proposalHost=node('div','collab-proposal-host');
   const source=node('p','collab-panel-source','Agent 建议来源尚未接入；当前支持用户编辑与保存。');
-  body.append(status,controls,canvasHost,proposalHost,source);host.append(head,body);
-  let alive=true,invalid=false,busy=false,sequence=0,snapshot=null,canvas=null,proposal=null;
+  body.append(status,controls,agentRow,canvasHost,proposalHost,source);host.append(head,body);
+  let alive=true,invalid=false,busy=false,generating=false,sequence=0,pollSequence=0,snapshot=null,canvas=null,proposal=null;
+  let polling=null,lastInstruction='';
   const confirmationOwner=crypto.randomUUID();
   const dismissOwnedConfirmation=()=>{if(confirmSurfaceMeta()?.collabSurface===confirmationOwner)dismissConfirm();};
   const current=()=>alive && !invalid && view.isCurrent() && context().valid && context().signature===captured.signature;
   const closeEditor=id=>{if(id)void collabDocumentAction({action:'close',editorId:id},captured.headers);};
   function render(error='') {
     const doc=snapshot?.document;
-    status.textContent=error || (busy?'正在保存…':doc?`版本 ${doc.revision} · 已保存`:'当前会话还没有协同文档。');
-    create.hidden=Boolean(doc)||!snapshot;create.disabled=busy||!current();reload.disabled=busy;
+    status.textContent=error || (busy?'正在保存…':generating?'正在生成建议…（可在会话工具栏停止 Agent 取消）':doc?`版本 ${doc.revision} · 已保存`:'当前会话还没有协同文档。');
+    source.textContent=snapshot?.proposalSourceAvailable===false
+      ?'Agent 建议来源尚未接入；当前支持用户编辑与保存。'
+      :'建议由当前 Pi 会话生成；预览确认后才会应用，生成不会直接修改文档。';
+    create.hidden=Boolean(doc)||!snapshot;create.disabled=busy||generating||!current();reload.disabled=busy;
+    generateBtn.hidden=!doc||!snapshot;generateBtn.disabled=busy||generating||!current()||!instruction.value.trim();
+    instruction.disabled=!current()||generating;
     if(!doc)return;
     if(!canvas)canvas=mountCollabCanvas(canvasHost,{document:doc,onOperations:intents=>{
       if(!current()||busy||!snapshot?.document)return;
@@ -53,9 +66,49 @@ export function mountCollabPanel(host,view) {
       surface:'collab-delete',meta:{collabSurface:confirmationOwner}})});
     canvas.update({document:doc,readOnly:!current(),busy,error,canUndo:!!snapshot.canUndo,canRedo:!!snapshot.canRedo});
     if(!proposal)proposal=mountCollabProposal(proposalHost,{onAccept:proposalId=>void request('accept',{proposalId}),onReject:proposalId=>void request('reject',{proposalId}),
-      onRegenerate:()=>{if(current())status.textContent='可信 Agent 建议来源尚未接入。';}});
+      onRegenerate:()=>void regenerate()});
     proposal.update({document:doc,proposal:snapshot.proposal??null,preview:snapshot.preview??null,busy,error,readOnly:!current()});
   }
+  /* ---------- Z4-3：Agent 建议生成与轮询 ----------
+   * 轮询只在「生成终局」或「拾取到建议」时停止；idle 继续轮询，
+   * 因为 generate 返回成功时 Pi 的 run 往往尚未产出任何事件。 */
+  function stopPolling(){ if(polling!==null){window.clearInterval(polling);polling=null;} }
+  function startPolling(){ stopPolling(); polling=window.setInterval(()=>void pollStatus(),1500); }
+  async function pollStatus() {
+    if(!current()||busy)return false;
+    const myPoll=++pollSequence;
+    const result=await collabDocumentAction({action:'proposal_status',editorId:snapshot?.editorId,expectedRevision:snapshot?.document?.revision??null},captured.headers);
+    if(!current()||myPoll!==pollSequence)return false;
+    if(!result?.ok){stopPolling();generating=false;reload.hidden=false;render(result?.error||'建议状态查询失败。');return false;}
+    if(result.generating){generating=true;render();return true;}
+    const generation=result.generation||null;
+    const proposalId=generation?.proposalId??result.proposal?.proposalId??null;
+    if(proposalId&&busy)return true;
+    if(generation){stopPolling();generating=false;}
+    if(generation?.state==='failed'){render(generation.error||'生成失败，请重试。');return false;}
+    if(proposalId){stopPolling();void request('preview',{proposalId});return false;}
+    render();
+    return false;
+  }
+  async function regenerate() {
+    if(!alive||busy||generating)return;
+    const text=instruction.value.trim()||lastInstruction;
+    if(!text){status.textContent='请先输入修改需求，再重新生成。';return;}
+    lastInstruction=text;stopPolling();generating=false;
+    // 冲突或旧版本建议的重新生成 = 新的受控任务：先按最新 revision 重开编辑器。
+    closeEditor(snapshot?.editorId);snapshot=null;invalid=false;busy=false;
+    await request('open');
+    if(snapshot?.editorId)void request('generate',{instruction:text});
+  }
+  generateBtn.onclick=()=>{
+    if(!current()||busy||generating)return;
+    const text=instruction.value.trim();
+    if(!text){status.textContent='请先输入修改需求。';return;}
+    lastInstruction=text;
+    void request('generate',{instruction:text});
+  };
+  instruction.addEventListener('input',()=>{generateBtn.disabled=busy||generating||!current()||!instruction.value.trim();});
+  instruction.addEventListener('keydown',event=>{if(event.key==='Enter'&&!generateBtn.disabled)generateBtn.onclick();});
   async function request(action,extra={}) {
     if(!current()||busy)return;
     const requestSequence=++sequence;
@@ -75,11 +128,13 @@ export function mountCollabPanel(host,view) {
       return;
     }
     snapshot=result;render();
+    if(action==='generate'&&result.generating){generating=true;startPolling();void pollStatus();}
+    else if(action==='open'&&result.proposalSourceAvailable){void pollStatus().then(stillGenerating=>{if(stillGenerating)startPolling();});}
   }
   function invalidate(event) {
     const hardBoundary=['pi-gui:session-switch','pi-gui:workspace-generation'].includes(event?.type);
     if(!alive||!hardBoundary&&context().signature===captured.signature && context().valid)return;
-    invalid=true;sequence++;closeEditor(snapshot?.editorId);snapshot=null;busy=false;
+    invalid=true;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;busy=false;
     dismissOwnedConfirmation();
     canvas?.destroy();proposal?.destroy();canvas=proposal=null;
     canvasHost.replaceChildren();proposalHost.replaceChildren();create.hidden=true;reload.hidden=false;
@@ -90,10 +145,10 @@ export function mountCollabPanel(host,view) {
   for(const event of events)document.addEventListener(event,invalidate);
   const offRuntime=onRuntimeChange(invalidate);
   view.onDispose(()=>{
-    alive=false;sequence++;closeEditor(snapshot?.editorId);snapshot=null;
+    alive=false;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;
     dismissOwnedConfirmation();
     offRuntime();for(const event of events)document.removeEventListener(event,invalidate);
-    canvas?.destroy();proposal?.destroy();create.onclick=reload.onclick=null;
+    canvas?.destroy();proposal?.destroy();create.onclick=reload.onclick=null;generateBtn.onclick=null;
   });
   if(captured.valid)void request('open');
   else {invalid=true;status.textContent='请先打开一个已就绪的会话。';reload.hidden=false;}

@@ -63,6 +63,8 @@ import { createCollabStore } from './server/collab-store.js';
 import { createCollabAuthority } from './server/collab-authority.js';
 import { createCollabService } from './server/collab-service.js';
 import { createCollabRoutes } from './server/collab-routes.js';
+import { createCollabProposalSource } from './server/collab-proposal-source.js';
+import { createProposalQueue } from './server/collab-proposal-queue.js';
 import { createSessionExport } from './server/session-export.js';
 import { readSessionMessages, readSessionText } from './server/session-history.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
@@ -303,6 +305,9 @@ let extensionRegistryRef = null;
  * 回调在那之前就装好了 —— 所以同样用「先声明、运行期回填」的引用占位。 */
 let probesRef = null;
 let providerAuthRef = null;
+/* Z4-3：Agent 建议来源的事件 tap 与生成通道。collab 区块在后面才创建实例，
+ * 这里先声明、运行期回填（与 probesRef 同一模式）。 */
+let collabProposalsRef = null;
 const authRuntimeListeners = new Set();
 /* Pi 更新的后端闸门要用的两个「后端自己的」忙信号（不信前端的 disabled）：
  *   - piActivity：主会话有没有在干活（规则在 server/pi-activity.js —— 按 Pi 1.0.0
@@ -377,6 +382,9 @@ const rpc = createRpcBridge({
   logEvent: (event, details) => logging.log('pi-bridge', event, details),
   publish: (event) => {
     try { observeForStructuredLog(event); } catch { /* observation only */ }
+    /* Z4-3：建议提取只认这里的原始事件（rpc-bridge 已盖服务端 bridgeRun）。
+     * 无进行中生成时是 O(1) 快速返回，不影响普通聊天路径。 */
+    try { collabProposalsRef?.observeClassic(event); } catch { /* observation only */ }
     if (event.type === 'bridge_status' && event.state !== 'ready') primaryNativeSession = null;
     if (event.type === 'response' && event.command === 'get_state' && typeof event.data?.sessionId === 'string') primaryNativeSession = event.data.sessionId;
     event = projectProcessEvent(event);
@@ -914,7 +922,7 @@ function withWorkspaceIdentity(identity, action) {
 }
 const conversationWorkspaces = {withWorkspace:withWorkspaceIdentity};
 const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
-  dataDir: DATA_DIR, publish: event => { sse.publish(event); void candidateRunsRef?.observe(event).catch(() => {}); },
+  dataDir: DATA_DIR, publish: event => { sse.publish(event); try { collabProposalsRef?.observeRuntime(event); } catch { /* observation only */ } void candidateRunsRef?.observe(event).catch(() => {}); },
   logEvent: (event, details) => logging.log('runtime', event, details),
   externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
@@ -1011,14 +1019,87 @@ const collabStore=createCollabStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirn
 const collabAuthority=createCollabAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
   classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
-// No unqualified RPC/text/renderer source is installed for Agent proposals.
-const collabService=createCollabService({store:collabStore});
+// Z4-3：Agent 建议唯一可信来源 = 服务端已验证事件入口（docs/Z4-3-agent-source-contract.md）。
+// 生成复用当前 Pi RPC 通道与既有执行队列/停止屏障；HTTP 只引用后端 proposalId。
+const collabProposals = collabProposalsRef = createCollabProposalSource({
+  queue: createProposalQueue(),
+  channels: {
+    classic: {
+      /* 完整通道身份（与 authority 的 expectedIdentity 同形状逐项比对）：
+       * dispatch 前项目/会话已切换的旧请求在此 fail closed。 */
+      captureIdentity: () => ({ kind: 'classic', bridgeRun: rpc.getState().bridgeRun,
+        cwd: runtime.getCurrentCwd(), workspaceGeneration: String(runtime.getWorkspaceGeneration()),
+        sessionId: primaryOwner().sessionId }),
+      sendPrompt: async (_conversationId, message, verify) => {
+        const cwdAtStart = runtime.getCurrentCwd();
+        const status = rpc.getState();
+        if (!cwdAtStart || status.bridgeState !== 'ready' || !status.piRunning) {
+          throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        }
+        if (status.stop?.pending) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        if (candidateRunsRef?.busy()) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        verify?.();
+        const runAtStart = status.bridgeRun;
+        // capture 就绪检查由 collab 路由的 beforeAuthority 在取工作区锁之前完成，
+        // 这里不能嵌套 withActivation（与 authority 的 withWorkspace 同锁会自锁）。
+        const state = await rpc.request({ type: 'get_state' }, { timeoutMs: 15000 });
+        // 异步边界后复核：bridge 换代或切项目 = 归属身份已失效，不发起。
+        if (rpc.getState().bridgeRun !== runAtStart || runtime.getCurrentCwd() !== cwdAtStart) {
+          throw Object.assign(Error(), { code: 'collab_generate_failed' });
+        }
+        verify?.();
+        if (!state || state.__error) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        if (state.isStreaming || state.isCompacting) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        // 写 stdin 前的最后一次 Owner 生命周期验证。
+        verify?.();
+        const response = await rpc.request({ type: 'prompt', message }, { timeoutMs: 30000 });
+        if (!response || response.__error) throw Object.assign(Error(), { code: 'collab_generate_rejected' });
+        // 应答后再次复核：prompt 已接受但 bridge 换代 = 事件归属不可判定，按失败收口。
+        if (rpc.getState().bridgeRun !== runAtStart) throw Object.assign(Error(), { code: 'collab_generate_failed' });
+        verify?.();
+        // handled = 被扩展消费（没有本次 run）；queued = 已有 run 在跑。都不视为发起成功。
+        if (response.disposition !== 'started') throw Object.assign(Error(), { code: 'collab_generate_rejected' });
+      },
+    },
+    runtime: {
+      captureIdentity: conversationId => {
+        const owner = runtimeRegistryRef?.getOwner(conversationId);
+        if (!owner) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        return { kind: 'runtime', ...owner };
+      },
+      sendPrompt: async (conversationId, message, verify) => {
+        const owner = runtimeRegistryRef?.getOwner(conversationId);
+        if (!owner) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        verify?.();
+        // registry.command 内部完成 owner 逐项核验、runtime_busy/stop_in_progress
+        // 拒绝与 pendingTurns 记账 —— 完全复用既有执行队列，不新建第二个 Pi。
+        await runtimeRegistryRef.command(owner, { type: 'prompt', message });
+        // 异步边界后复核：命令已写入但代次已变（会话重启）= 事件归属不可判定。
+        const after = runtimeRegistryRef?.getOwner(conversationId);
+        if (!after || after.runtimeGeneration !== owner.runtimeGeneration) {
+          throw Object.assign(Error(), { code: 'collab_generate_failed' });
+        }
+        verify?.();
+      },
+    },
+  },
+  logEvent: (event, details) => logging.log('collab', event, details),
+});
+const collabService=createCollabService({store:collabStore,proposals:collabProposals});
 const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,worktrees,registry:runtimeRegistry,readComments:scope=>reviewCommentStore.read(scope),
   projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
   admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),
   protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
 const route = createRouter({
-  collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority}),
+  collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
+    /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。
+     * Runtime 生成（带已验证会话头）复用 registry.command 的既有 admission、
+     * 工具安全校验与停止屏障，不依赖 Classic capture 状态。 */
+    beforeAuthority: async (request, req) => {
+      if (request?.action === 'generate' && req?.headers?.['x-pi-gui-conversation'] === undefined) {
+        await sessionChanges.assertReady();
+      }
+    }}),
   reviewComments: createReviewCommentRoutes({store:reviewCommentStore,withAuthority:reviewCommentAuthority}),
   candidateRuns: createCandidateRoutes({runs:candidateRuns,withAuthority:reviewCommentAuthority}),
   sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,
