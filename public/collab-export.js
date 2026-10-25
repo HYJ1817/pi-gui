@@ -83,6 +83,10 @@ function serializeElement(node, indent) {
   const attrs = Object.entries(node.attrs)
     .map(([key, value]) => `${key}="${escapeAttr(value)}"`).join(' ');
   const open = attrs ? `<${node.tag} ${attrs}>` : `<${node.tag}>`;
+  // 纯文本子元素单行序列化：textContent 不混入排版空白，下游读取得到原文。
+  if (node.children.length === 1 && 'text' in node.children[0]) {
+    return `${indent}${open}${escapeText(node.children[0].text)}</${node.tag}>`;
+  }
   if (!node.children.length) return `${indent}${open.replace('>', ' />')}`;
   const inner = node.children.map(child => serializeElement(child, `${indent}  `)).join('\n');
   return `${indent}${open}\n${inner}\n${indent}</${node.tag}>`;
