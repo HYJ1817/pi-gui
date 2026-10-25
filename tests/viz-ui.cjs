@@ -262,11 +262,52 @@ async function main() {
   reloadedOpenBtn.click();
   ok('re-opened viz panel from newly rebuilt message', pane.isOpen() === true);
 
+  // 从当前最新打开的面板获取引用按钮（不复用已销毁面板的旧按钮）
+  const reloadedQuoteBtn = rightPane.querySelector('.viz-quote-btn');
+
   // 历史被再次清空/重建（如切换分支或收到新历史）
   rebuildFromMessages([]);
   ok('message cleared on history rebuild', !reloadedMsg.isConnected);
-  quoteBtn.click();
-  ok('stale message after history rebuild rejects quote', el.input.value === draftBeforeMismatch);
+  reloadedQuoteBtn.click();
+  ok('stale message after history rebuild rejects quote using current panel button', el.input.value === draftBeforeMismatch);
+
+  // (4b) Classic 流式更新替换原卡片测试：
+  // article.msg.assistant 保持连接，但流式更新（paint）替换了 innerHTML 中的旧 .viz-card
+  rebuildFromMessages({
+    messages: [
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: '流式阶段一：\n' + closedMd }],
+      },
+    ],
+  });
+  const streamMsg = document.querySelector('#stream .thread article.msg.assistant');
+  const oldCard = streamMsg.querySelector('.viz-card');
+  oldCard.querySelector('[data-viz-open]').click();
+  ok('opened viz panel from initial streaming card', pane.isOpen() === true);
+  const streamStage1QuoteBtn = rightPane.querySelector('.viz-quote-btn');
+
+  // 模拟 messages.js 中流式 delta 到达时的 paint()：替换 innerHTML
+  const streamBody = streamMsg.querySelector('.msg-body .assistant-text');
+  streamBody.innerHTML = md('流式阶段二更新：\n' + closedMd);
+
+  // 此时 article.msg.assistant 仍然连接，但旧 .viz-card 已脱离 DOM
+  ok('article.msg.assistant still connected to DOM', streamMsg.isConnected);
+  ok('old viz-card detached from DOM after message repaint', !oldCard.isConnected);
+
+  // 验证原图表面板的引用按钮被拒绝（因为旧卡片已被替换）
+  const draftBeforeStreamRepaint = el.input.value;
+  streamStage1QuoteBtn.click();
+  ok('replaced old viz-card rejects quote even when article is still connected', el.input.value === draftBeforeStreamRepaint);
+
+  // 验证新生成的图表卡片可以正常打开和引用
+  const newCard = streamMsg.querySelector('.viz-card');
+  ok('new viz-card exists in updated message', Boolean(newCard) && newCard !== oldCard);
+  newCard.querySelector('[data-viz-open]').click();
+  ok('new viz-card can open new panel', pane.isOpen() === true);
+  const streamStage2QuoteBtn = rightPane.querySelector('.viz-quote-btn');
+  streamStage2QuoteBtn.click();
+  ok('new viz-card quote succeeds', el.input.value.includes('[图表配置引用：网络流量吞吐]'));
 
   // (5) 禁止 sourceNode=null 或脱卸节点打开面板
   const invalidOpenResult = openVizPanel(testDataObj, { sourceNode: null });
@@ -377,10 +418,27 @@ async function main() {
   runtimeQuoteBtn.click();
   ok('stale runtime generation rejects quote', runtimeInput.value === valBeforeOwnerChange);
 
-  // (4) 来源消息块被删除拒绝
-  liveBlock.remove();
-  ok('runtime live source block disconnected from DOM', !liveBlock.isConnected);
+  // (4a) 验证 Runtime Live 输出刷新后，旧卡片的引用正确失效
+  const oldLiveCard = runtimeCard;
+  const currentLiveRecord = runtimeStore.get('conv-runtime-100');
+  currentLiveRecord.text = 'Runtime 实时负载刷新后：\n' + closedMd;
+  runtimeComponent.draw();
+
+  const refreshedLiveCard = rtcOutput.querySelector('.viz-card');
+  ok('refreshed runtime live card created in rtc-output', Boolean(refreshedLiveCard) && refreshedLiveCard !== oldLiveCard);
+  ok('old runtime live card detached from DOM', !oldLiveCard.isConnected);
+
+  // 旧卡片打开的面板在引用时必须被拒绝
   runtimeQuoteBtn.click();
+  ok('refreshed live output invalidates quote from previous live card', runtimeInput.value === valBeforeOwnerChange);
+
+  // (4b) 来源消息块被删除拒绝
+  const refreshedLiveBlock = refreshedLiveCard.closest('.rtc-output-block');
+  refreshedLiveCard.querySelector('[data-viz-open]').click();
+  const refreshedQuoteBtn = rightPane.querySelector('.viz-quote-btn');
+  refreshedLiveBlock.remove();
+  ok('runtime live source block disconnected from DOM', !refreshedLiveBlock.isConnected);
+  refreshedQuoteBtn.click();
   ok('disconnected runtime source block rejects quote', runtimeInput.value === valBeforeOwnerChange);
 
   // (5) Runtime 历史视图下的真实卡片渲染与删除来源测试
@@ -425,12 +483,15 @@ async function main() {
   historyCard.querySelector('[data-viz-open]').click();
   ok('opened viz panel from runtime history card', pane.isOpen() === true);
 
+  // 从当前最新打开的 History 面板获取引用按钮（不复用已销毁的旧面板按钮）
+  const historyQuoteBtn = rightPane.querySelector('.viz-quote-btn');
+
   // 历史消息行脱离 DOM 测试
   const valBeforeHistoryRemove = runtimeInput.value;
   historyRow.remove();
   ok('history message row disconnected', !historyRow.isConnected);
-  runtimeQuoteBtn.click();
-  ok('disconnected history message rejects quote', runtimeInput.value === valBeforeHistoryRemove);
+  historyQuoteBtn.click();
+  ok('disconnected history message rejects quote using history panel button', runtimeInput.value === valBeforeHistoryRemove);
 
   // 恢复状态并清理
   pane.close();
