@@ -28,6 +28,16 @@ export function createCollabAuthority(options = {}) {
           origin: conversationHeader !== undefined ? 'runtime' : 'classic',
           conversationId: conversationHeader ?? null,
           projectRoot: verified.projectRoot, workspaceCwd: verified.workspaceCwd, gitCommon: verified.gitCommon,
+          /* Z4-3 安全收口：在验证通过的工作区锁内捕获服务端身份快照。
+           * dispatch（锁外发送）前 source 会把「当前通道身份」与该快照逐项
+           * 比对，并反复调用 assertCurrent——项目/会话/代次变化的旧请求
+           * fail closed，不得向新 Pi 会话发送指令。 */
+          expectedIdentity: conversationHeader !== undefined
+            ? (options.registry?.getOwner?.(conversationHeader)
+              ? { kind: 'runtime', owner: options.registry.getOwner(conversationHeader) } : null)
+            : { kind: 'classic', bridgeRun: options.classic.owner().runtimeGeneration,
+              cwd: options.classic.cwd(), workspaceGeneration: options.classic.generation(),
+              sessionId: options.classic.owner().sessionId },
           assertCurrent() {
             try { verified.assertCurrent(); }
             catch { throw fail('collab_scope_unavailable'); }

@@ -36,7 +36,7 @@ const check = async (name, fn) => { await fn(); checks++; console.log('ok ' + na
   let doc = null, prompts = [], failNextGenerate = false;
   const scope = { key: 'a'.repeat(64), token: 'b'.repeat(64), sessionId: 'scope-session', origin: 'classic', conversationId: null, assertCurrent() {} };
   const channels = {
-    classic: { captureIdentity: () => ({ bridgeRun: 7 }),
+    classic: { captureIdentity: () => ({ kind: 'classic', bridgeRun: 7, cwd: 'C:\\fixture-project', workspaceGeneration: '1', sessionId: 'native-fixture' }),
       sendPrompt: async (_key, message) => { if (failNextGenerate) { failNextGenerate = false; throw Object.assign(Error(), { code: 'runtime_busy' }); } prompts.push(message); } },
     runtime: { captureIdentity: () => { throw Object.assign(Error(), { code: 'collab_generate_unavailable' }); }, sendPrompt: async () => {} },
   };

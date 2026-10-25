@@ -18,10 +18,10 @@ const check = (name, fn) => { checksToRun.push([name, fn]); };
 
   const SCOPE_KEY = 'a'.repeat(64), TOKEN = 'b'.repeat(64), SESSION = 'session-a';
   const scope = { key: SCOPE_KEY, token: TOKEN, sessionId: SESSION };
-  const runtimeOwner = { backendInstance: 'be-1', conversationId: 'conv-1', runtimeId: 'rt-1', runtimeGeneration: 'gen-1' };
+  const runtimeOwner = { backendInstance: 'be', projectId: 'p', repoId: null, workspaceId: 'w', workspaceEpoch: 'e1', conversationId: 'conv-1', runtimeId: 'rt', runtimeGeneration: 'g1', sessionId: 's1' };
   const channels = {
-    classic: { captureIdentity: () => ({ bridgeRun: 7 }), sendPrompt: async () => {} },
-    runtime: { captureIdentity: id => ({ ...runtimeOwner, conversationId: id }), sendPrompt: async () => {} },
+    classic: { captureIdentity: () => ({ kind: 'classic', bridgeRun: 7, cwd: 'C:\\fixture-project', workspaceGeneration: '1', sessionId: 'native-fixture' }), sendPrompt: async () => {} },
+    runtime: { captureIdentity: id => ({ kind: 'runtime', backendInstance: 'be', projectId: 'p', repoId: null, workspaceId: 'w', workspaceEpoch: 'e1', conversationId: id, runtimeId: 'rt', runtimeGeneration: 'g1', sessionId: 's1' }), sendPrompt: async () => {} },
   };
   const makeSource = (overrides = {}) => createCollabProposalSource({
     queue: createProposalQueue(), channels, ...overrides });
@@ -37,6 +37,7 @@ const check = (name, fn) => { checksToRun.push([name, fn]); };
 
   const fenceDoc = json => `已分析流程图。\n\`\`\`pi-gui-collab\n${JSON.stringify(json, null, 2)}\n\`\`\`\n以上是建议。`;
   const addN9 = { version: 1, rationale: '增加异常处理节点', ops: [{ type: 'node.add', params: { id: 'n9', label: '异常处理', x: 600, y: 0 } }] };
+  const addN8 = { version: 1, rationale: '第二段运行的建议', ops: [{ type: 'node.add', params: { id: 'n8', label: '第二段', x: 300, y: 100 } }] };
   const classicDocument = () => createDocument({ documentId: 'diagram', title: '流程图' });
   const begin = async (source, overrides = {}) => source.beginGeneration({
     scope: { ...scope, origin: 'classic' }, document: { documentId: 'diagram', revision: 1, title: '流程图',
@@ -436,6 +437,133 @@ const check = (name, fn) => { checksToRun.push([name, fn]); };
     assert.equal(status.state, 'failed');
     assert.equal(status.code, 'collab_generate_failed');
     assert.equal(source.head(scope, 'diagram'), null);
+  });
+
+  // ---- Z4-3 最终安全收口：pendingGenerate 权限竞态（TOCTOU）----
+  const classicExpected = { kind: 'classic', bridgeRun: 7, cwd: 'C:\\project-a', workspaceGeneration: '3', sessionId: 'native-a' };
+  const runtimeExpectedOwner = { backendInstance: 'be', projectId: 'p', repoId: null, workspaceId: 'w', workspaceEpoch: 'e1',
+    conversationId: 'conv-1', runtimeId: 'rt-1', runtimeGeneration: 'g1', sessionId: 's1' };
+  const raceHarness = ({ classicIdentity, runtimeIdentity, assertCurrent, failVerifyAt } = {}) => {
+    const prompts = [];
+    let verifyCalls = 0;
+    const channel = key => ({
+      captureIdentity: () => key === 'classic' ? classicIdentity : runtimeIdentity,
+      sendPrompt: async (_key, message, verify) => {
+        prompts.push(message);
+        if (failVerifyAt !== undefined && verifyCalls >= failVerifyAt) throw Object.assign(Error('stale owner'), { code: 'collab_generate_failed' });
+        verify?.();
+        if (failVerifyAt !== undefined && verifyCalls > failVerifyAt) throw Object.assign(Error('stale owner after boundary'), { code: 'collab_generate_failed' });
+      },
+      __verifySpy: () => verifyCalls,
+    });
+    // verify 包装同时暴露计数：sendPrompt 调 verify 时计数。
+    const wrapped = (key) => {
+      const base = channel(key);
+      return { ...base, sendPrompt: async (k, m, verify) => base.sendPrompt(k, m, () => { verifyCalls++; verify?.(); }) };
+    };
+    const source = makeSource({ channels: { classic: wrapped('classic'), runtime: wrapped('runtime') } });
+    return { source, prompts };
+  };
+
+  check('Classic 交叉身份：captureIdentity 与 authority 快照不一致时拒绝发送', async () => {
+    // authority 在项目 A 验证；dispatch 前已切到项目 B（bridgeRun/owner 全变）
+    const { source, prompts } = raceHarness({ classicIdentity: { kind: 'classic', bridgeRun: 9, cwd: 'C:\\project-b', workspaceGeneration: '4', sessionId: 'native-b' } });
+    const outcome = await source.beginGeneration({ scope: { ...scope, origin: 'classic', assertCurrent() {}, expectedIdentity: classicExpected },
+      document: docFixture, instruction: '项目 A 的生成' });
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.code, 'collab_generate_failed');
+    assert.deepEqual(prompts, [], '不得向项目 B 的 Pi 发送项目 A 的 prompt');
+    assert.equal(source.head(scope, 'diagram'), null);
+    assert.deepEqual(source.stats(), { size: 0, pending: 0, attempts: 0 });
+  });
+
+  check('Classic dispatch 前切换：assertCurrent 失效即拒绝，不发送不注册', async () => {
+    let revoked = false;
+    const { source, prompts } = raceHarness({
+      classicIdentity: { kind: 'classic', bridgeRun: 7, cwd: 'C:\\project-a', workspaceGeneration: '3', sessionId: 'native-a' },
+      assertCurrent: () => { if (revoked) throw Object.assign(Error(), { code: 'collab_scope_unavailable' }); },
+    });
+    // authority 验证时有效；dispatch 前项目切换 → revoked
+    revoked = true;
+    const outcome = await source.beginGeneration({ scope: { ...scope, origin: 'classic',
+      assertCurrent() { if (revoked) throw Object.assign(Error(), { code: 'collab_scope_unavailable' }); },
+      expectedIdentity: classicExpected },
+      document: docFixture, instruction: '已失效的生成' });
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.code, 'collab_generate_failed');
+    assert.deepEqual(prompts, []);
+    assert.equal(source.head(scope, 'diagram'), null);
+  });
+
+  check('Classic 发送边界后身份失效：prompt 未写出、无幽灵建议，随后合法请求可生成', async () => {
+    // 首个异步边界（sendPrompt 入口 verify）即失效
+    const { source, prompts } = raceHarness({
+      classicIdentity: { kind: 'classic', bridgeRun: 7, cwd: 'C:\\project-a', workspaceGeneration: '3', sessionId: 'native-a' },
+      failVerifyAt: 0,
+    });
+    const blocked = await source.beginGeneration({ scope: { ...scope, origin: 'classic', assertCurrent() {}, expectedIdentity: classicExpected },
+      document: docFixture, instruction: '边界后失效' });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.code, 'collab_generate_failed');
+    assert.equal(prompts.length <= 1, true);
+    // 旧请求失败后，合法的新请求（身份一致）可以继续生成
+    const fresh = raceHarness({ classicIdentity: { kind: 'classic', bridgeRun: 7, cwd: 'C:\\project-a', workspaceGeneration: '3', sessionId: 'native-a' } });
+    const okOutcome = await fresh.source.beginGeneration({ scope: { ...scope, origin: 'classic', assertCurrent() {}, expectedIdentity: classicExpected },
+      document: docFixture, instruction: '合法新请求' });
+    assert.equal(okOutcome.ok, true);
+    assert.equal(fresh.prompts.length, 1);
+  });
+
+  check('Runtime 锁外发送前关闭或换代：身份不一致拒绝', async () => {
+    const nextGenerationOwner = { kind: 'runtime', ...runtimeExpectedOwner, runtimeGeneration: 'g2' };
+    const { source, prompts } = raceHarness({ runtimeIdentity: nextGenerationOwner });
+    const outcome = await source.beginGeneration({ scope: { ...scope, origin: 'runtime', conversationId: 'conv-1', assertCurrent() {},
+      expectedIdentity: { kind: 'runtime', owner: runtimeExpectedOwner } },
+      document: docFixture, instruction: 'Runtime 生成' });
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.code, 'collab_generate_failed');
+    assert.deepEqual(prompts, [], '换代后的 Runtime 会话不得收到旧请求 prompt');
+    assert.equal(source.head(scope, 'diagram'), null);
+  });
+
+  check('armed 缓冲含多段运行时归属不可判定：确认后拒绝且不注册', async () => {
+    const gated = () => { const pendings = [];
+      return { pendings, sendPrompt: (key, message, verify) => new Promise((resolve, reject) => pendings.push({ resolve, reject, verify })) }; };
+    const gate = gated();
+    const source = makeSource({ channels: { ...channels,
+      classic: { captureIdentity: () => ({ ...classicExpected }), sendPrompt: gate.sendPrompt } } });
+    const startedPromise = source.beginGeneration({ scope: { ...scope, origin: 'classic', assertCurrent() {}, expectedIdentity: classicExpected }, document: docFixture, instruction: 'x' });
+    await new Promise(resolve => setImmediate(resolve));
+    // 确认前缓冲：第一段完整 run + 第二段 run 开始——归属无法证明
+    source.observeClassic(classicStart(7));
+    source.observeClassic(classicEnd(7, 'assistant', text(fenceDoc(addN9))));
+    source.observeClassic(classicSettled(7));
+    source.observeClassic(classicStart(7));
+    source.observeClassic(classicEnd(7, 'assistant', text(fenceDoc(addN8))));
+    source.observeClassic(classicSettled(7));
+    gate.pendings[0].resolve();
+    gate.pendings[0].verify?.();
+    const started = await startedPromise;
+    assert.equal(started.ok, true, '发起成功（发送已确认）');
+    const status = source.generationStatus(SCOPE_KEY, TOKEN);
+    assert.equal(status.state, 'failed');
+    assert.equal(status.code, 'collab_generate_failed', '多段运行归属不可判定必须拒绝');
+    assert.equal(source.head(scope, 'diagram'), null);
+  });
+
+  check('未切换的正常请求：身份一致仍能生成，快速完成事件正确登记', async () => {
+    const { source, prompts } = raceHarness({ classicIdentity: { kind: 'classic', bridgeRun: 7, cwd: 'C:\\project-a', workspaceGeneration: '3', sessionId: 'native-a' } });
+    const outcome = await source.beginGeneration({ scope: { ...scope, origin: 'classic', assertCurrent() {}, expectedIdentity: classicExpected },
+      document: docFixture, instruction: '正常生成' });
+    assert.equal(outcome.ok, true);
+    assert.equal(prompts.length, 1);
+    source.observeClassic(classicStart(7));
+    source.observeClassic(classicEnd(7, 'assistant', text(fenceDoc(addN9))));
+    source.observeClassic(classicSettled(7));
+    const status = source.generationStatus(SCOPE_KEY, TOKEN);
+    assert.equal(status.state, 'ready');
+    const evidence = source.get(scope, status.proposalId);
+    assert.notEqual(evidence, null);
   });
 
   for (const [name, fn] of checksToRun) {

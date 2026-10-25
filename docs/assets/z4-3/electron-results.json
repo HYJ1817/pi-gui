@@ -110,7 +110,7 @@
       "kind": "performance",
       "nodes": 100,
       "edges": 200,
-      "renderMilliseconds": 620
+      "renderMilliseconds": 485
     },
     {
       "requestedWidth": 1200,

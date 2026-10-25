@@ -84,6 +84,8 @@ function mapChannelError(error) {
   const code = error?.code;
   if (code === 'collab_agent_busy' || CHANNEL_BUSY_CODES.has(code)) return 'collab_agent_busy';
   if (code === 'collab_generate_rejected') return 'collab_generate_rejected';
+  // 身份失效等自有生成安全码原样透传（fail closed 语义不得降级为通道不可用）。
+  if (typeof code === 'string' && code.startsWith('collab_generate_')) return code;
   if (CHANNEL_STALE_CODES.has(code)) return 'collab_generate_unavailable';
   return 'collab_generate_unavailable';
 }
@@ -162,6 +164,8 @@ export function createCollabProposalSource({
   function settleAttempt(attempt, aborted) {
     if (attempt.state !== 'prompted' || !attempt.sawStart) return;
     if (aborted) { failAttempt(attempt, 'collab_generate_aborted'); return; }
+    // 注册前最后一道闸：Owner 生命周期已失效的迟到结果不得进入可信队列。
+    if (!scopeStillCurrent(attempt.scopeRef)) { failAttempt(attempt, 'collab_generate_failed'); return; }
     try {
       const last = attempt.candidates[attempt.candidates.length - 1];
       if (!last) fail('collab_generate_no_output');
@@ -221,12 +225,52 @@ export function createCollabProposalSource({
   function confirmPrompt(attempt) {
     if (attempt.state !== 'armed') return;
     if (attempt.overflow) { attempt.buffer = []; failAttempt(attempt, 'collab_generate_failed'); return; }
+    // 归属证明检查：缓冲中出现「settled 之后又有 start」的第二段运行时，
+    // 无法证明哪一段属于本次 prompt——fail closed，不采纳任何内容。
+    let sawSettled = false;
+    for (const event of attempt.buffer) {
+      if (event.type === 'agent_settled') sawSettled = true;
+      else if (event.type === 'agent_start' && sawSettled) {
+        attempt.buffer = [];
+        failAttempt(attempt, 'collab_generate_failed');
+        safeLog('collab.buffer_ambiguous', { attemptId: attempt.attemptId });
+        return;
+      }
+    }
     attempt.state = 'prompted';
     const replay = attempt.buffer.splice(0);
     for (const event of replay) {
       handleEvent(attempt, event);
       if (!RUNNING_STATES.has(attempt.state)) break;
     }
+  }
+
+  /* ---------- Z4-3 安全收口：身份与生命周期校验 ----------
+   * pendingGenerate 的 scope 携带 authority 在验证时捕获的 expectedIdentity
+   * 与 assertCurrent 闭包；发送前与每个异步边界后都必须复核。 */
+  const RUNTIME_IDENTITY_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch',
+    'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
+
+  function identityMatches(expected, current) {
+    if (!expected) return true; // 生产 authority 恒提供；缺失仅出现在进程内测试 stub
+    if (expected.kind === 'classic') {
+      return current && current.kind === 'classic'
+        && String(current.bridgeRun) === String(expected.bridgeRun)
+        && current.cwd === expected.cwd
+        && String(current.workspaceGeneration) === String(expected.workspaceGeneration)
+        && current.sessionId === expected.sessionId;
+    }
+    if (expected.kind === 'runtime') {
+      return current && current.kind === 'runtime' && expected.owner
+        && RUNTIME_IDENTITY_KEYS.every(k => current[k] === expected.owner[k]);
+    }
+    return false;
+  }
+
+  function scopeStillCurrent(scope) {
+    if (typeof scope?.assertCurrent !== 'function') return true;
+    try { scope.assertCurrent(); return true; }
+    catch { return false; }
   }
 
   function attemptsFor(origin) {
@@ -294,26 +338,46 @@ export function createCollabProposalSource({
     if (!channel || typeof channel.sendPrompt !== 'function' || typeof channel.captureIdentity !== 'function') {
       return { ok: false, code: 'collab_generate_unavailable' };
     }
+    // 锁外发送前的第一道闸：authority 验证时的 Owner 生命周期必须仍然有效。
+    if (!scopeStillCurrent(scope)) return { ok: false, code: 'collab_generate_failed' };
     let identity;
     try { identity = channel.captureIdentity(scope.origin === 'runtime' ? scope.conversationId : null); }
     catch { return { ok: false, code: 'collab_generate_unavailable' }; }
     const identityValid = scope.origin === 'classic'
-      ? identity && Number.isInteger(identity.bridgeRun) && identity.bridgeRun >= 0
-      : identity && ['backendInstance', 'conversationId', 'runtimeId', 'runtimeGeneration'].every(k => typeof identity[k] === 'string' && identity[k]);
+      ? identity && identity.kind === 'classic' && Number.isInteger(identity.bridgeRun) && identity.bridgeRun >= 0
+        && typeof identity.cwd === 'string' && identity.cwd
+        && typeof identity.workspaceGeneration === 'string' && identity.workspaceGeneration
+        && typeof identity.sessionId === 'string' && identity.sessionId
+      : identity && identity.kind === 'runtime'
+        && RUNTIME_IDENTITY_KEYS.every(k => k === 'repoId'
+          ? identity[k] === null || typeof identity[k] === 'string'
+          : typeof identity[k] === 'string' && identity[k]);
     if (!identityValid) return { ok: false, code: 'collab_generate_unavailable' };
+    // 第二道闸：当前通道身份必须与 authority 验证时的快照完全一致——
+    // 项目/会话在 dispatch 前切换过的旧请求在这里 fail closed，不发送。
+    if (!identityMatches(scope.expectedIdentity, identity)) {
+      safeLog('collab.identity_mismatch', { origin: scope.origin });
+      return { ok: false, code: 'collab_generate_failed' };
+    }
 
     const attempt = {
       attemptId: `ga-${randomId()}`, scopeKey: scope.key, scopeToken: scope.token, sessionId: scope.sessionId,
       documentId: document.documentId, baseRevision: document.revision, origin: scope.origin,
-      conversationId: scope.conversationId ?? null, identity, state: 'armed', startedAt: now(),
+      conversationId: scope.conversationId ?? null, identity, scopeRef: scope,
+      state: 'armed', startedAt: now(),
       candidates: [], buffer: [], overflow: false, sawStart: false, failCode: null, proposalId: null, consumed: false,
     };
     attempts.set(attempt.attemptId, attempt);
     try {
       // 先武装（armed）再写 prompt：armed 期间到达的事件只缓冲不采纳——
       // 官方要求订阅先于发送，快速完成的 run 全部落在缓冲里，确认后回放。
+      // verify 由通道在每个异步边界（写 stdin 前、应答后）调用：Owner 失效
+      // 即抛错，sendPrompt 以失败收场，attempt 连同缓冲一起丢弃。
+      const verify = () => { if (!scopeStillCurrent(attempt.scopeRef)) {
+        throw Object.assign(Error('collab_generate_failed'), { code: 'collab_generate_failed' });
+      } };
       await channel.sendPrompt(scope.origin === 'runtime' ? scope.conversationId : null,
-        buildGenerationPrompt({ document, instruction: text }));
+        buildGenerationPrompt({ document, instruction: text }), verify);
     } catch (error) {
       attempts.delete(attempt.attemptId);
       attempt.buffer = [];

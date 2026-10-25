@@ -1,6 +1,6 @@
 # Z4-3 真实 Pi Agent 协同编辑链路 · 验收材料
 
-状态：**第一轮交付后经独立验收提出 4 项发现（1 Blocker + 3 Important），已全部修复并红绿回归（见第 13 节）；完整 canonical 本轮交给 PR CI，结论为待验证**。
+状态：**第一轮验收的 4 项发现已修复（第 13 节）；第二轮安全收口修复 pendingGenerate 权限竞态（第 14 节）；完整 canonical 保留给 PR CI，结论为待验证**。
 本报告不表示代码验收通过、允许合并或允许发布（未提 PR、未合并、未发版）。
 审查标准唯一见 [REVIEW.md](../REVIEW.md)；来源协议事实见
 [Z4-3-agent-source-contract.md](Z4-3-agent-source-contract.md)；证据分层依 [acceptance.md](acceptance.md)。
@@ -362,3 +362,53 @@ pi 1.4.0 官方文档核对过的真实事件形状（`agent_start`/`message_end
 `tests/collab-panel-agent.cjs`、`tests/collab-http.cjs`、
 `tests/fixtures/z4-collab-electron.cjs`、`tests/fixtures/z4-collab-scenarios.cjs`、
 `docs/Z4-3-acceptance.md`、`docs/assets/z4-3/`（证据更新）。
+
+## 14. 最终安全收口：pendingGenerate 权限竞态（第三轮，2026-10-26）
+
+### 14.1 缺陷触发路径
+
+上一轮把 generate 拆为「锁内校验 → pendingGenerate → 锁外 dispatch」后出现新竞态：
+authority 验证项目 A 的 Owner → 锁释放 → 项目/会话切换 → dispatch 时
+`captureIdentity` 从**当前**（项目 B）通道取身份——旧请求（A 的文档快照与 scope）
+可向 B 的 Pi 发送指令。红测试确认：旧代码下交叉身份请求 `ok:true` 且 prompt 已发出。
+
+### 14.2 修复（fail closed，不重构）
+
+| 位置 | 内容 |
+| --- | --- |
+| `server/collab-authority.js` | 在验证通过的工作区锁内捕获**服务端身份快照** `expectedIdentity`：Classic `{kind,bridgeRun,cwd,workspaceGeneration,sessionId}`（取自 classic.owner()/cwd()/generation()）；Runtime `{kind:'runtime',owner:<registry 九字段>}`。Renderer 不接触该字段。 |
+| `server/collab-service.js` | `pendingGenerate.scope` 携带 authority 的 `assertCurrent` 闭包与 `expectedIdentity`（进程内传递，不过网络）。 |
+| `server/collab-proposal-source.js` | 三道闸：① `beginGeneration` 入口 `assertCurrent`；② `captureIdentity` 结果与 `expectedIdentity` 逐项比对（Classic 五项 / Runtime 九项，`repoId` 允许 null）——不一致即 `collab_generate_failed` **不发送**；③ `settleAttempt` 注册前再复核 Owner 生命周期（迟到建议不得越权落库）。`mapChannelError` 透传自有生成安全码（不降级为通道不可用）。 |
+| `server.js` 通道 | Classic `captureIdentity` 返回完整身份；`sendPrompt(key,message,verify)` 在写 stdin 前最后一步与每个异步边界（get_state 后、prompt 应答后）调 `verify`（= `assertCurrent`，失效即抛、attempt 连缓冲丢弃）；Runtime 在 `registry.command` 前后调 `verify` 并复核代次。未重新嵌套任何生命周期锁。 |
+| armed 缓冲归属 | `confirmPrompt` 回放前扫描缓冲：出现「settled 之后又有 start」的第二段运行 → 归属不可证明 → `collab_generate_failed` 拒绝且不注册（单段完整 run = 快速完成，仍正常采纳）。 |
+
+旧文档快照不可能提交到新会话：发送前三道闸全部要求身份与 authority 快照一致；
+注册前第四道闸要求 Owner 生命周期仍有效。
+
+### 14.3 回归测试（`tests/collab-proposal-source.cjs`，先红后绿）
+
+新增 6 项（套件 32/32，170 断言，退出码 0）：
+
+1. Classic 交叉身份（A 验证、B 身份）→ 拒绝发送，prompts 空，无 attempt/建议。
+2. dispatch 前 `assertCurrent` 失效（项目切换）→ 拒绝，不发送不注册。
+3. 发送边界后身份失效 → prompt 未写出、无幽灵建议；**随后合法新请求可继续生成**。
+4. Runtime 锁外发送前换代（generation 不一致）→ 拒绝，B 会话不收旧 prompt。
+5. armed 缓冲含两段完整运行 → 确认后按归属不可判定拒绝且不注册。
+6. 未切换的正常请求 → 生成成功，快速完成事件正确登记为建议。
+
+（A、B 文档字节不变由 1/2/4 的 `head()===null` + `stats()` 全空与既有 CAS 测试覆盖。）
+
+### 14.4 本轮实测（退出码 0）
+
+- 定向：source **32/32**（170 断言）；queue 10/10、flow 12/12、http 8/8、authority 24/24、
+  service 13/13、panel 11/11、panel-agent 8/8、canvas 72/72、doc 56/56、store 53/53；
+  modules 120/120。
+- 正常沙箱 Electron：**55/55**（残留 0/9）——Classic/Runtime 正常生成行为保持；
+  证据已刷新 [electron-results.json](assets/z4-3/electron-results.json)。
+- 产物：离线重建后 app-check 26/26、exe-check 49/49、collab-packaged 28/28。
+- 完整 canonical 保留给 PR CI（未本地执行）。
+
+### 14.5 提交
+
+本轮修复与测试为一个提交；最终 HEAD 以
+`git log -1 --format=%H -- docs/Z4-3-acceptance.md` 解析。

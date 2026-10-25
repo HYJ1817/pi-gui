@@ -140,7 +140,10 @@ export function createCollabService({ store, proposals = null, now = () => Date.
       // worktrees 生命周期锁，锁内发送会自锁）。锁内只做校验并返回待发任务，
       // 由路由层在 withAuthority 返回后调用 dispatchPendingGenerate。
       return {...snapshot(entry,doc),generating:true,pendingGenerate:{
-        scope:{key:scope.key,token:scope.token,sessionId:scope.sessionId,origin:scope.origin,conversationId:scope.conversationId},
+        scope:{key:scope.key,token:scope.token,sessionId:scope.sessionId,origin:scope.origin,conversationId:scope.conversationId,
+          // 闭包与身份快照随 pending 传递（进程内，不过网络）：dispatch 前与
+          // 各异步边界由 source 反复复核；失效即 fail closed。
+          assertCurrent:scope.assertCurrent,expectedIdentity:scope.expectedIdentity||null},
         document:clone(doc),instruction:request.instruction.trim()}};
     }
     else {

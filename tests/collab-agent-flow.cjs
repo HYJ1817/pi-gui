@@ -31,8 +31,8 @@ const check = (name, fn) => { checksToRun.push([name, fn]); };
 
   let promptLog = [];
   const channels = {
-    classic: { captureIdentity: () => ({ bridgeRun: 7 }), sendPrompt: async (_key, message) => { promptLog.push(message); } },
-    runtime: { captureIdentity: id => ({ backendInstance: 'be', conversationId: id, runtimeId: 'rt', runtimeGeneration: 'g1' }),
+    classic: { captureIdentity: () => ({ kind: 'classic', bridgeRun: 7, cwd: 'C:\\fixture-project', workspaceGeneration: '1', sessionId: 'native-fixture' }), sendPrompt: async (_key, message) => { promptLog.push(message); } },
+    runtime: { captureIdentity: id => ({ kind: 'runtime', backendInstance: 'be', projectId: 'p', repoId: null, workspaceId: 'w', workspaceEpoch: 'e1', conversationId: id, runtimeId: 'rt', runtimeGeneration: 'g1', sessionId: 's1' }),
       sendPrompt: async () => {} },
   };
   const makeHarness = () => {
@@ -284,7 +284,7 @@ const check = (name, fn) => { checksToRun.push([name, fn]); };
     await generate(service, scopeR, editor.editorId, 1);
     // Runtime 帧到达
     let seq = 0;
-    const owner = { backendInstance: 'be', conversationId: 'conv-1', runtimeId: 'rt', runtimeGeneration: 'g1' };
+    const owner = { backendInstance: 'be', projectId: 'p', repoId: null, workspaceId: 'w', workspaceEpoch: 'e1', conversationId: 'conv-1', runtimeId: 'rt', runtimeGeneration: 'g1', sessionId: 's1' };
     source.observeRuntime({ type: 'runtime_event', owner, eventSequence: ++seq, event: start(2) });
     source.observeRuntime({ type: 'runtime_event', owner, eventSequence: ++seq, event: end(2, 'assistant', FENCE(ADD_N9)) });
     source.observeRuntime({ type: 'runtime_event', owner, eventSequence: ++seq, event: settled(2) });

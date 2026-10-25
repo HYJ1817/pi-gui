@@ -1025,8 +1025,12 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
   queue: createProposalQueue(),
   channels: {
     classic: {
-      captureIdentity: () => ({ bridgeRun: rpc.getState().bridgeRun }),
-      sendPrompt: async (_conversationId, message) => {
+      /* 完整通道身份（与 authority 的 expectedIdentity 同形状逐项比对）：
+       * dispatch 前项目/会话已切换的旧请求在此 fail closed。 */
+      captureIdentity: () => ({ kind: 'classic', bridgeRun: rpc.getState().bridgeRun,
+        cwd: runtime.getCurrentCwd(), workspaceGeneration: String(runtime.getWorkspaceGeneration()),
+        sessionId: primaryOwner().sessionId }),
+      sendPrompt: async (_conversationId, message, verify) => {
         const cwdAtStart = runtime.getCurrentCwd();
         const status = rpc.getState();
         if (!cwdAtStart || status.bridgeState !== 'ready' || !status.piRunning) {
@@ -1034,6 +1038,7 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
         }
         if (status.stop?.pending) throw Object.assign(Error(), { code: 'collab_agent_busy' });
         if (candidateRunsRef?.busy()) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        verify?.();
         const runAtStart = status.bridgeRun;
         // capture 就绪检查由 collab 路由的 beforeAuthority 在取工作区锁之前完成，
         // 这里不能嵌套 withActivation（与 authority 的 withWorkspace 同锁会自锁）。
@@ -1042,12 +1047,16 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
         if (rpc.getState().bridgeRun !== runAtStart || runtime.getCurrentCwd() !== cwdAtStart) {
           throw Object.assign(Error(), { code: 'collab_generate_failed' });
         }
+        verify?.();
         if (!state || state.__error) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
         if (state.isStreaming || state.isCompacting) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        // 写 stdin 前的最后一次 Owner 生命周期验证。
+        verify?.();
         const response = await rpc.request({ type: 'prompt', message }, { timeoutMs: 30000 });
         if (!response || response.__error) throw Object.assign(Error(), { code: 'collab_generate_rejected' });
         // 应答后再次复核：prompt 已接受但 bridge 换代 = 事件归属不可判定，按失败收口。
         if (rpc.getState().bridgeRun !== runAtStart) throw Object.assign(Error(), { code: 'collab_generate_failed' });
+        verify?.();
         // handled = 被扩展消费（没有本次 run）；queued = 已有 run 在跑。都不视为发起成功。
         if (response.disposition !== 'started') throw Object.assign(Error(), { code: 'collab_generate_rejected' });
       },
@@ -1056,12 +1065,12 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
       captureIdentity: conversationId => {
         const owner = runtimeRegistryRef?.getOwner(conversationId);
         if (!owner) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
-        return { backendInstance: owner.backendInstance, conversationId: owner.conversationId,
-          runtimeId: owner.runtimeId, runtimeGeneration: owner.runtimeGeneration };
+        return { kind: 'runtime', ...owner };
       },
-      sendPrompt: async (conversationId, message) => {
+      sendPrompt: async (conversationId, message, verify) => {
         const owner = runtimeRegistryRef?.getOwner(conversationId);
         if (!owner) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        verify?.();
         // registry.command 内部完成 owner 逐项核验、runtime_busy/stop_in_progress
         // 拒绝与 pendingTurns 记账 —— 完全复用既有执行队列，不新建第二个 Pi。
         await runtimeRegistryRef.command(owner, { type: 'prompt', message });
@@ -1070,6 +1079,7 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
         if (!after || after.runtimeGeneration !== owner.runtimeGeneration) {
           throw Object.assign(Error(), { code: 'collab_generate_failed' });
         }
+        verify?.();
       },
     },
   },
