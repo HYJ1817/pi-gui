@@ -46,6 +46,64 @@ import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval } from
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
 import { openModal } from './ui/modal.js';
+import { renderVizCardHtml } from './markdown.js';
+
+const VIZ_BLOCK_RE = /(?:^|\n)```pi-gui-viz\r?\n([\s\S]*?)\r?\n```(?=\n|$)/g;
+
+function createVizCardNode(code) {
+  const html = renderVizCardHtml(code);
+  if (!html) return null;
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  return temp.firstElementChild;
+}
+
+function hasVizBlock(text) {
+  if (typeof text !== 'string' || !text.includes('```pi-gui-viz')) return false;
+  VIZ_BLOCK_RE.lastIndex = 0;
+  return VIZ_BLOCK_RE.test(text);
+}
+
+function appendRuntimeContent(container, text, { isBlock = false } = {}) {
+  VIZ_BLOCK_RE.lastIndex = 0;
+  let lastIndex = 0;
+  let match;
+  let hasCard = false;
+
+  while ((match = VIZ_BLOCK_RE.exec(text)) !== null) {
+    const fullMatch = match[0];
+    const code = match[1];
+    const cardNode = createVizCardNode(code);
+
+    if (cardNode) {
+      hasCard = true;
+      const beforeText = text.slice(lastIndex, match.index);
+      if (beforeText) {
+        container.append(document.createTextNode(beforeText));
+      }
+      if (fullMatch.startsWith('\n')) {
+        container.append(document.createTextNode('\n'));
+      }
+      if (isBlock) {
+        const wrap = el('div', 'rtc-output-block');
+        wrap.append(cardNode);
+        container.append(wrap);
+      } else {
+        container.append(cardNode);
+      }
+      lastIndex = match.index + fullMatch.length;
+    }
+  }
+
+  if (hasCard) {
+    const remaining = text.slice(lastIndex);
+    if (remaining) {
+      container.append(document.createTextNode(remaining));
+    }
+  } else {
+    container.append(document.createTextNode(text));
+  }
+}
 
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
@@ -377,13 +435,20 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (view.history) {
       if (renderedHistory !== view.history || renderedId !== id) {
         output.replaceChildren(); let userIndex = 0;
+        delete output.dataset.renderedText;
         for (const message of view.history.messages) {
-          const row = el('span', '', `${message.role === 'user' ? '我' : '助手'}：${message.text}\n\n`);
+          const row = el('span', '', `${message.role === 'user' ? '我' : '助手'}：`);
           if (message.messageId) row.dataset.historyMessageId = message.messageId;
           if (message.role === 'user') {
             const index = Object.hasOwn(message, 'userIndex') ? message.userIndex : userIndex;
             if (Number.isInteger(index)) row.dataset.historyUserIndex = String(index);
             userIndex++;
+          }
+          if (message.role === 'assistant' && hasVizBlock(message.text)) {
+            appendRuntimeContent(row, message.text);
+            row.append(document.createTextNode('\n\n'));
+          } else {
+            row.append(document.createTextNode(`${message.text}\n\n`));
           }
           output.append(row);
         }
@@ -392,7 +457,18 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       }
     } else {
       renderedHistory = null;
-      output.textContent = r?.text || '等待任务';
+      const curText = r?.text || '';
+      if (output.dataset.renderedText !== curText || renderedId !== id) {
+        output.dataset.renderedText = curText;
+        if (!curText) {
+          output.textContent = '等待任务';
+        } else if (hasVizBlock(curText)) {
+          output.replaceChildren();
+          appendRuntimeContent(output, curText, { isBlock: true });
+        } else {
+          output.textContent = curText;
+        }
+      }
     }
     drawTools(r, view);
 

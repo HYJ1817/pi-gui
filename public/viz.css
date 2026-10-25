@@ -1,0 +1,357 @@
+/* 交互图表与可视化样式（Z3 受控 Gen UI）。
+ *
+ * 遵循 pi-GUI 灰阶、低饱和度、高对比度的设计语言。
+ * 兼容浅色与深色主题、高 DPI 及 320px 窄面板模式。
+ */
+
+/* ---------- 1. 消息流内图表入口卡片 ---------- */
+
+.viz-card {
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-card, rgba(255, 255, 255, 0.03));
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.viz-card:hover {
+  border-color: var(--accent, #6e84a3);
+}
+
+.viz-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.viz-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--bg-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.viz-card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.viz-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.viz-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.viz-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-dim, #888);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-subtle, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-sub, #aaa);
+}
+
+.viz-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.viz-open-btn {
+  font-weight: 500;
+  background: var(--bg-subtle, #2a2a2e);
+  color: var(--text);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.viz-open-btn:hover {
+  background: var(--hover, #333);
+  border-color: var(--accent, #6e84a3);
+}
+
+.viz-toggle-raw {
+  cursor: pointer;
+  color: var(--text-dim, #888);
+}
+
+.viz-toggle-raw.is-active {
+  background: var(--hover, #333);
+  color: var(--text);
+}
+
+.viz-raw-code {
+  margin: 0 !important;
+  border-top: 1px solid var(--border);
+  border-radius: 0 !important;
+}
+
+/* ---------- 2. 右栏图表面板与控制栏 ---------- */
+
+.viz-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.viz-controls {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card, rgba(255, 255, 255, 0.02));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.viz-ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.viz-ctrl-label {
+  color: var(--text-dim, #888);
+  font-size: 12px;
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.viz-check-label {
+  cursor: pointer;
+  min-width: unset;
+}
+
+.viz-toggle-btn {
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.viz-toggle-btn.is-active {
+  background: var(--accent, #4a72b2);
+  color: #fff;
+  border-color: transparent;
+}
+
+.viz-series-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.viz-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim, #888);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viz-pill:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.05));
+  color: var(--text);
+}
+
+.viz-pill.is-active {
+  background: var(--bg-subtle, rgba(255, 255, 255, 0.08));
+  border-color: var(--text-sub, #aaa);
+  color: var(--text);
+}
+
+.viz-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.viz-pill:not(.is-active) .viz-pill-dot {
+  opacity: 0.35;
+}
+
+.viz-slider {
+  flex: 1;
+  min-width: 80px;
+  max-width: 160px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--accent, #4a72b2);
+}
+
+.viz-val-text {
+  font-size: 11px;
+  color: var(--text-sub, #aaa);
+  font-family: var(--font-mono, monospace);
+  min-width: 50px;
+}
+
+/* ---------- 3. SVG 画布与图形 ---------- */
+
+.viz-chart-area {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+}
+
+.viz-svg-wrapper {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 260px;
+}
+
+.viz-svg {
+  width: 100%;
+  height: auto;
+  max-height: 480px;
+  overflow: visible;
+}
+
+.viz-grid-line {
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+  stroke-width: 0.8;
+  opacity: 0.6;
+}
+
+.viz-axis-line {
+  stroke: var(--border);
+  stroke-width: 1.2;
+}
+
+.viz-tick-mark {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.viz-axis-text {
+  fill: var(--text-dim, #888);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  user-select: none;
+}
+
+.viz-threshold-line {
+  stroke: #e76f51;
+  stroke-dasharray: 4 3;
+  stroke-width: 1.4;
+}
+
+.viz-threshold-badge {
+  fill: #e76f51;
+  font-size: 10.5px;
+  font-weight: 500;
+  font-family: var(--font-mono, monospace);
+  user-select: none;
+}
+
+.viz-point {
+  cursor: pointer;
+  transition: transform 0.15s ease, r 0.15s ease;
+}
+
+.viz-point:hover,
+.viz-point:focus {
+  r: 6 !important;
+  outline: none;
+}
+
+.viz-point.is-alert {
+  filter: drop-shadow(0 0 3px rgba(231, 111, 81, 0.6));
+}
+
+.viz-bar {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.viz-bar:hover,
+.viz-bar:focus {
+  opacity: 0.85;
+  outline: none;
+}
+
+.viz-bar.is-alert {
+  stroke: #e76f51;
+  stroke-width: 1.2;
+}
+
+/* ---------- 4. Tooltip 浮层 ---------- */
+
+.viz-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--bg-card, #202024);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  z-index: 10;
+  min-width: 100px;
+  max-width: 220px;
+  transition: opacity 0.1s ease;
+}
+
+.viz-tip-header {
+  color: var(--text-dim, #888);
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.viz-tip-body {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.viz-tip-warn {
+  color: #e76f51;
+  font-size: 10px;
+  font-weight: 500;
+  margin-top: 3px;
+}

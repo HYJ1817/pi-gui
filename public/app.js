@@ -113,6 +113,7 @@ import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
 import { openAppUpdates, openAppearance } from './settings.js';
+import { initVizIntegration } from './viz-integration.js';
 
 /* 日志只做观察：未捕获异常、网络失败与 SSE 断连在这里接入，
  * 不改变任何业务状态机。 */
@@ -260,6 +261,7 @@ configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation,
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane, { openWorkbench: openSplitWorkbench }) : null;
 initGuiBrowserState();
+initVizIntegration();
 
 const btnSpecs = $('btnSpecs');
 if (btnSpecs) {
