@@ -2,16 +2,22 @@ import { createHash } from 'node:crypto';
 import { createReviewCommentAuthority } from './review-comment-authority.js';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const fail = code => Object.assign(Error(code), { code });
+const fail = code => { throw Object.assign(Error(code), { code }); };
 const ACTION_CODES = new Set(['collab_invalid', 'collab_conflict', 'collab_scope_unavailable', 'collab_storage_unsafe',
   'collab_storage_inside_project', 'collab_storage_corrupt', 'collab_storage_unavailable', 'collab_storage_write_failed',
-  'collab_storage_busy', 'collab_storage_limit', 'collab_editor_expired', 'collab_proposal_unavailable']);
+  'collab_storage_busy', 'collab_storage_limit', 'collab_editor_expired', 'collab_proposal_unavailable',
+  'collab_generation_active', 'collab_agent_busy', 'collab_generate_unavailable', 'collab_generate_rejected',
+  'collab_generate_failed', 'collab_generate_aborted', 'collab_generate_invalid_output', 'collab_generate_no_output',
+  'collab_generate_timeout', 'collab_queue_full']);
 
 /* Reuse the complete backend evidence acquisition and lifecycle lock. Neither
  * the native session locator nor a client-selected namespace crosses this API. */
 export function createCollabAuthority(options = {}) {
   const withReviewAuthority = createReviewCommentAuthority(options);
   return async function withAuthority(req, action) {
+    // 生成通道选择只看「是否带已验证的会话头」：带 = Runtime，否则 Classic。
+    // 值本身仍由 review authority 对焦点会话核验，这里不重复信任。
+    const conversationHeader = req.headers?.['x-pi-gui-conversation'];
     let outcome;
     try {
       outcome = await withReviewAuthority(req, async verified => {
@@ -19,6 +25,8 @@ export function createCollabAuthority(options = {}) {
           key: digest(['collab-documents-v1', verified.key]),
           token: digest(['collab-owner-v1', verified.token]),
           sessionId: digest(['collab-session-v1', verified.key]),
+          origin: conversationHeader !== undefined ? 'runtime' : 'classic',
+          conversationId: conversationHeader ?? null,
           projectRoot: verified.projectRoot, workspaceCwd: verified.workspaceCwd, gitCommon: verified.gitCommon,
           assertCurrent() {
             try { verified.assertCurrent(); }

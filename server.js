@@ -63,6 +63,8 @@ import { createCollabStore } from './server/collab-store.js';
 import { createCollabAuthority } from './server/collab-authority.js';
 import { createCollabService } from './server/collab-service.js';
 import { createCollabRoutes } from './server/collab-routes.js';
+import { createCollabProposalSource } from './server/collab-proposal-source.js';
+import { createProposalQueue } from './server/collab-proposal-queue.js';
 import { createSessionExport } from './server/session-export.js';
 import { readSessionMessages, readSessionText } from './server/session-history.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
@@ -303,6 +305,9 @@ let extensionRegistryRef = null;
  * 回调在那之前就装好了 —— 所以同样用「先声明、运行期回填」的引用占位。 */
 let probesRef = null;
 let providerAuthRef = null;
+/* Z4-3：Agent 建议来源的事件 tap 与生成通道。collab 区块在后面才创建实例，
+ * 这里先声明、运行期回填（与 probesRef 同一模式）。 */
+let collabProposalsRef = null;
 const authRuntimeListeners = new Set();
 /* Pi 更新的后端闸门要用的两个「后端自己的」忙信号（不信前端的 disabled）：
  *   - piActivity：主会话有没有在干活（规则在 server/pi-activity.js —— 按 Pi 1.0.0
@@ -377,6 +382,9 @@ const rpc = createRpcBridge({
   logEvent: (event, details) => logging.log('pi-bridge', event, details),
   publish: (event) => {
     try { observeForStructuredLog(event); } catch { /* observation only */ }
+    /* Z4-3：建议提取只认这里的原始事件（rpc-bridge 已盖服务端 bridgeRun）。
+     * 无进行中生成时是 O(1) 快速返回，不影响普通聊天路径。 */
+    try { collabProposalsRef?.observeClassic(event); } catch { /* observation only */ }
     if (event.type === 'bridge_status' && event.state !== 'ready') primaryNativeSession = null;
     if (event.type === 'response' && event.command === 'get_state' && typeof event.data?.sessionId === 'string') primaryNativeSession = event.data.sessionId;
     event = projectProcessEvent(event);
@@ -914,7 +922,7 @@ function withWorkspaceIdentity(identity, action) {
 }
 const conversationWorkspaces = {withWorkspace:withWorkspaceIdentity};
 const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
-  dataDir: DATA_DIR, publish: event => { sse.publish(event); void candidateRunsRef?.observe(event).catch(() => {}); },
+  dataDir: DATA_DIR, publish: event => { sse.publish(event); try { collabProposalsRef?.observeRuntime(event); } catch { /* observation only */ } void candidateRunsRef?.observe(event).catch(() => {}); },
   logEvent: (event, details) => logging.log('runtime', event, details),
   externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
@@ -1011,8 +1019,49 @@ const collabStore=createCollabStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirn
 const collabAuthority=createCollabAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
   classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
-// No unqualified RPC/text/renderer source is installed for Agent proposals.
-const collabService=createCollabService({store:collabStore});
+// Z4-3：Agent 建议唯一可信来源 = 服务端已验证事件入口（docs/Z4-3-agent-source-contract.md）。
+// 生成复用当前 Pi RPC 通道与既有执行队列/停止屏障；HTTP 只引用后端 proposalId。
+const collabProposals = collabProposalsRef = createCollabProposalSource({
+  queue: createProposalQueue(),
+  channels: {
+    classic: {
+      captureIdentity: () => ({ bridgeRun: rpc.getState().bridgeRun }),
+      sendPrompt: async (_conversationId, message) => {
+        const status = rpc.getState();
+        if (!runtime.getCurrentCwd() || status.bridgeState !== 'ready' || !status.piRunning) {
+          throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        }
+        if (status.stop?.pending) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        if (candidateRunsRef?.busy()) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        await sessionChanges.assertReady();
+        const state = await rpc.request({ type: 'get_state' }, { timeoutMs: 15000 });
+        if (!state || state.__error) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        if (state.isStreaming || state.isCompacting) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        const response = await rpc.request({ type: 'prompt', message }, { timeoutMs: 30000 });
+        if (!response || response.__error) throw Object.assign(Error(), { code: 'collab_generate_rejected' });
+        // handled = 被扩展消费（没有本次 run）；queued = 已有 run 在跑。都不视为发起成功。
+        if (response.disposition !== 'started') throw Object.assign(Error(), { code: 'collab_generate_rejected' });
+      },
+    },
+    runtime: {
+      captureIdentity: conversationId => {
+        const owner = runtimeRegistryRef?.getOwner(conversationId);
+        if (!owner) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        return { backendInstance: owner.backendInstance, conversationId: owner.conversationId,
+          runtimeId: owner.runtimeId, runtimeGeneration: owner.runtimeGeneration };
+      },
+      sendPrompt: async (conversationId, message) => {
+        const owner = runtimeRegistryRef?.getOwner(conversationId);
+        if (!owner) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
+        // registry.command 内部完成 owner 逐项核验、runtime_busy/stop_in_progress
+        // 拒绝与 pendingTurns 记账 —— 完全复用既有执行队列，不新建第二个 Pi。
+        await runtimeRegistryRef.command(owner, { type: 'prompt', message });
+      },
+    },
+  },
+  logEvent: (event, details) => logging.log('collab', event, details),
+});
+const collabService=createCollabService({store:collabStore,proposals:collabProposals});
 const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,worktrees,registry:runtimeRegistry,readComments:scope=>reviewCommentStore.read(scope),
   projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
   admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),

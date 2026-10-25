@@ -24,6 +24,16 @@ export const COLLAB_MESSAGES = Object.freeze({
   collab_storage_write_failed: '文档保存失败，当前内容未提交。',
   collab_undo_empty: '没有可撤销的操作。',
   collab_redo_empty: '没有可重做的操作。',
+  collab_generation_active: '已有一项 Agent 生成正在进行，请等待完成或在会话中停止。',
+  collab_agent_busy: 'Pi 正在执行任务，请先停止当前任务，再发起生成。',
+  collab_generate_unavailable: 'Pi 通道暂不可用，无法发起生成。',
+  collab_generate_rejected: 'Pi 未接受本次生成请求。',
+  collab_generate_failed: '生成已中断（Pi 重启或会话已变化）。',
+  collab_generate_aborted: '生成已取消。',
+  collab_generate_invalid_output: 'Agent 未产出有效的修改建议。',
+  collab_generate_no_output: 'Agent 未输出修改建议。',
+  collab_generate_timeout: '生成超时，请重试。',
+  collab_queue_full: '建议队列已满，请稍后再试。',
 });
 
 const invalidResult = result => ({ ok: false, code: result.code === 'stale-base' ? 'collab_conflict'
@@ -73,10 +83,29 @@ export function createCollabService({ store, proposals = null, now = () => Date.
     const keys=['action','editorId','expectedRevision'];
     if (action==='operations') keys.push('ops');
     if (['preview','accept','reject'].includes(action)) keys.push('proposalId');
-    if (!['create','operations','undo','redo','preview','accept','reject'].includes(action) || !exact(request,keys)
+    if (action==='generate') keys.push('instruction');
+    if (!['create','operations','undo','redo','preview','accept','reject','generate','proposal_status'].includes(action) || !exact(request,keys)
       || !(request.expectedRevision===null || revision(request.expectedRevision))) fail('collab_invalid');
     const {doc}=store.read(scope);
     if (doc && doc.boundSessionId!==scope.sessionId) fail('collab_scope_unavailable');
+    // 状态轮询是只读信箱：不参与 revision 冲突闸门，否则文档一变轮询即死。
+    if (action==='proposal_status') {
+      const generating=proposals && typeof proposals.generationStatus==='function' ? proposals.generationStatus(scope.key) : null;
+      const head=proposals && doc && typeof proposals.head==='function' ? proposals.head(scope,doc.documentId) : null;
+      return {...snapshot(entry,doc),generating:generating?.state==='running',
+        generation:generating && (generating.state==='ready'||generating.state==='failed')
+          ? {state:generating.state,...(generating.code?{code:generating.code}:{})} : null,
+        proposal:head,proposalSourceAvailable:Boolean(proposals)};
+    }
+    if (action==='generate') {
+      // 生成只改「进行中」状态，不改文档；但仍要求编辑器看到的就是当前版本，
+      // 保证发起时捕获的 baseRevision 与用户界面一致。
+      if (!proposals || typeof proposals.beginGeneration!=='function') fail('collab_proposal_unavailable');
+      if (!doc) fail('collab_invalid');
+      if (typeof request.instruction!=='string') fail('collab_invalid');
+      const instruction=request.instruction.trim();
+      if (!instruction || instruction.length>2000) fail('collab_invalid');
+    }
     let userResult;
     if(action==='operations') {
       if(!doc || !Array.isArray(request.ops) || request.ops.some(op=>op?.baseRevision!==request.expectedRevision)) fail('collab_invalid');
@@ -103,6 +132,18 @@ export function createCollabService({ store, proposals = null, now = () => Date.
       if (result.ok && result.status!=='duplicate') result=commitOperations(doc,history,request.ops);
     } else if (action==='undo') result=undo(doc,history);
     else if (action==='redo') result=redo(doc,history);
+    else if (action==='generate') {
+      // beginGeneration 是异步的（等 Pi 接受 prompt）；execute 对该动作返回
+      // Promise，由路由层 await。发起后再次核对 scope：owner 已变化时旧
+      // attempt 绑定旧 token，自然失效（fail-closed）。
+      const pending=Promise.resolve(proposals.beginGeneration({scope:{key:scope.key,token:scope.token,
+        sessionId:scope.sessionId,origin:scope.origin,conversationId:scope.conversationId},document:clone(doc),instruction:request.instruction.trim()}));
+      return pending.then(outcome => {
+        if (!outcome.ok) fail(outcome.code);
+        scope.assertCurrent();
+        return {...snapshot(entry,doc),generating:true,attemptId:outcome.attemptId};
+      });
+    }
     else {
       if (!id(request.proposalId) || !proposals) fail('collab_proposal_unavailable');
       const evidence=proposals.get(scope,request.proposalId);
@@ -114,10 +155,19 @@ export function createCollabService({ store, proposals = null, now = () => Date.
       result=action==='accept' ? acceptProposal(doc,history,evidence.proposal,{expectedRevision:request.expectedRevision}) : rejectProposal(doc,evidence.proposal);
     }
     if (!result.ok) return invalidResult(result);
-    if (result.status==='duplicate' || result.status==='rejected') return {...snapshot(entry,doc),status:result.status};
+    if (result.status==='duplicate' || result.status==='rejected') {
+      // 队列终局化：仅 pending 可迁移，重复调用为无害 no-op。
+      if (proposals && typeof proposals.settle==='function') {
+        proposals.settle(scope.key,request.proposalId,result.status==='rejected'?'rejected':'accepted');
+      }
+      return {...snapshot(entry,doc),status:result.status};
+    }
     scope.assertCurrent();
     const stored=store.write(scope,doc.revision,result.doc).doc;
     entry.history=history;entry.revision=stored.revision;
+    if (action==='accept' && proposals && typeof proposals.settle==='function') {
+      proposals.settle(scope.key,request.proposalId,'accepted');
+    }
     return snapshot(entry,stored);
   }
   return {execute};
