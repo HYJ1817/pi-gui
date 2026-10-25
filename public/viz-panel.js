@@ -29,18 +29,27 @@ import { runtimeStore } from './runtime-state.js';
 
 let activeVizInstance = null;
 
-export function captureSessionScope(sourceElement = null) {
+export function captureSessionScope(sourceElement = null, cardElement = null) {
   const view = workspaceView();
   const workspaceGen = S.workspaceGeneration;
   const projectCwd = S.cwd;
 
+  let cardNode = cardElement || null;
   let sourceNode = null;
-  if (sourceElement && typeof sourceElement.closest === 'function') {
-    // 优先匹配真实 Classic 助手消息节点 article.msg.assistant（或 article.msg）
-    sourceNode = sourceElement.closest('article.msg.assistant, article.msg');
+
+  // 定位原始 .viz-card 卡片节点
+  if (!cardNode && sourceElement && typeof sourceElement.closest === 'function') {
+    cardNode = sourceElement.closest('.viz-card');
+  } else if (!cardNode && sourceElement && typeof sourceElement.matches === 'function' && sourceElement.matches('.viz-card')) {
+    cardNode = sourceElement;
+  }
+
+  // 捕获宿主消息节点
+  const hostProbe = cardNode || sourceElement;
+  if (hostProbe && typeof hostProbe.closest === 'function') {
+    sourceNode = hostProbe.closest('article.msg.assistant, article.msg');
     if (!sourceNode) {
-      // 其次匹配 Runtime 历史消息节点 [data-history-message-id] 或 Live 输出块 .rtc-output-block
-      sourceNode = sourceElement.closest('[data-history-message-id], .rtc-output-block');
+      sourceNode = hostProbe.closest('[data-history-message-id], .rtc-output-block');
     }
   } else if (sourceElement && typeof sourceElement.nodeType === 'number') {
     if (typeof sourceElement.matches === 'function' && sourceElement.matches('article.msg.assistant, article.msg, [data-history-message-id], .rtc-output-block')) {
@@ -48,6 +57,11 @@ export function captureSessionScope(sourceElement = null) {
     } else if (typeof sourceElement.closest === 'function') {
       sourceNode = sourceElement.closest('article.msg.assistant, article.msg, [data-history-message-id], .rtc-output-block') || null;
     }
+  }
+
+  // 若传入的是消息节点本身，尝试在其中寻找 .viz-card
+  if (!cardNode && sourceNode && typeof sourceNode.querySelector === 'function') {
+    cardNode = sourceNode.querySelector('.viz-card');
   }
 
   if (view === 'runtime') {
@@ -61,6 +75,7 @@ export function captureSessionScope(sourceElement = null) {
       workspaceGeneration: workspaceGen,
       projectCwd,
       sourceNode,
+      cardNode,
     };
   }
 
@@ -74,15 +89,22 @@ export function captureSessionScope(sourceElement = null) {
     workspaceGeneration: workspaceGen,
     projectCwd,
     sourceNode,
+    cardNode,
   };
 }
 
 export function validateSessionScope(scope) {
   if (!scope) return { ok: false, error: '缺少会话上下文身份。' };
 
-  // 1. 严格检查源消息节点：绝不接受 null/undefined 或未挂载节点
+  // 1. 严格检查源消息节点与原始图表卡片节点
   if (!scope.sourceNode || !scope.sourceNode.isConnected) {
     return { ok: false, error: '原图表消息已被清理、删除或未挂载，无法引用过期图表。' };
+  }
+  if (!scope.cardNode || !scope.cardNode.isConnected) {
+    return { ok: false, error: '原图表已被重新渲染、替换或移除，无法引用过期图表。' };
+  }
+  if (typeof scope.sourceNode.contains === 'function' && !scope.sourceNode.contains(scope.cardNode)) {
+    return { ok: false, error: '原图表已脱离所属消息，无法引用过期图表。' };
   }
 
   // 2. 检查工作区代数与项目根路径
@@ -204,11 +226,16 @@ export function buildVizSummaryMarkdown(data, state) {
  * @param {Object} [context] 会话与消息上下文
  */
 export function openVizPanel(data, context = {}) {
-  const initialScope = context.scope || captureSessionScope(context.sourceNode || null);
+  const initialScope = context.scope || captureSessionScope(context.sourceNode || null, context.cardNode || null);
 
-  // 严格要求来源节点存在且挂载在 DOM 上，禁止 sourceNode=null 或已脱钩节点打开面板
-  if (!initialScope.sourceNode || !initialScope.sourceNode.isConnected) {
-    toast('无法打开图表：来源消息不存在或已脱离界面。');
+  // 严格要求来源节点与图表卡片节点均存在且挂载在 DOM 上，禁止 null 或已脱钩节点打开面板
+  if (!initialScope.sourceNode || !initialScope.sourceNode.isConnected ||
+      !initialScope.cardNode || !initialScope.cardNode.isConnected) {
+    toast('无法打开图表：来源消息或图表卡片不存在或已脱离界面。');
+    return null;
+  }
+  if (typeof initialScope.sourceNode.contains === 'function' && !initialScope.sourceNode.contains(initialScope.cardNode)) {
+    toast('无法打开图表：图表卡片不属于当前来源消息。');
     return null;
   }
 

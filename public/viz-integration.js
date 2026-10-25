@@ -47,6 +47,7 @@ export function handleVizCardClick(event) {
     openVizPanel(res.data, {
       triggerId: openBtn.id || null,
       sourceNode: messageNode,
+      cardNode: card,
     });
     return;
   }
