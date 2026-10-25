@@ -49,8 +49,10 @@ async function main() {
     onExport: result => exports.push(result),
     onNotice: notice => notices.push(notice),
   });
-  check('原型标注可见', host.textContent.includes('尚未正式接入'), true);
+  check('正式工具条标题可见', host.textContent.includes('自动整理与导出'), true);
   check('三个操作按钮', ['自动整理', '导出 SVG', '导出 PNG'].every(name => !!button(name)), true);
+  check('布局方向默认从左到右', q('[name="layoutDirection"]').value, 'LR');
+  check('导出背景默认浅色', q('[name="exportTheme"]').value, 'light');
   check('初始不显示预览', q('.collab-prod-preview').hidden, true);
 
   // 自动整理：预览期间零提交
@@ -115,6 +117,23 @@ async function main() {
   check('SVG 产物包含节点文字', exports[0].svg.includes('开始'), true);
   check('SVG 导出不改文档', JSON.stringify(messy), frozen);
 
+  // 布局方向选择器：TB 生成纵向意图（同列 x、递增 y）
+  q('[name="layoutDirection"]').value = 'TB';
+  fire(button('自动整理'));
+  fire(button('确认应用布局'));
+  const tbIntents = operations.at(-1);
+  check('TB 方向意图生效（同列递增）',
+    tbIntents.length === 3 && new Set(tbIntents.map(op => op.params.x)).size === 1 &&
+    tbIntents.every((op, index) => index === 0 || op.params.y > tbIntents[index - 1].params.y), true);
+  q('[name="layoutDirection"]').value = 'LR';
+
+  // 导出主题选择器：深色背景进入产物
+  q('[name="exportTheme"]').value = 'dark';
+  fire(button('导出 SVG'));
+  await new Promise(resolve => setImmediate(resolve));
+  check('主题选择器深色背景生效', exports[1].svg.includes('fill="#151515"'), true);
+  q('[name="exportTheme"]').value = 'light';
+
   // 导出 PNG：注入 renderer（exportOptions 透传），产物透出
   const rendererCalls = [];
   const fakeRenderer = async (svg, options) => {
@@ -132,7 +151,7 @@ async function main() {
   });
   fire([...host.querySelectorAll('button')].find(el => el.textContent === '导出 PNG'));
   await new Promise(resolve => setImmediate(resolve));
-  check('用户取消导出无产物', [exports.length, rendererCalls.length], [1, 0]);
+  check('用户取消导出无产物', [exports.length, rendererCalls.length], [2, 0]);
   bar2.destroy();
   const bar3 = mountCollabProductivity(host, {
     document: messy, onExport: result => exports.push(result), onNotice: () => {},
@@ -140,7 +159,7 @@ async function main() {
   });
   fire([...host.querySelectorAll('button')].find(el => el.textContent === '导出 PNG'));
   await new Promise(resolve => setImmediate(resolve));
-  check('确认后 PNG 透出', [exports.length, exports[1].format, exports[1].image.dataUrl], [2, 'png', 'data:image/png;base64,QUJD']);
+  check('确认后 PNG 透出', [exports.length, exports[2].format, exports[2].image.dataUrl], [3, 'png', 'data:image/png;base64,QUJD']);
   check('renderer 收到注入的 scale', rendererCalls, [3]);
 
   // 只读与忙碌禁用
@@ -155,7 +174,7 @@ async function main() {
   bar3.destroy();
   check('destroy 清空 DOM', host.childNodes.length, 0);
   fire(win.document);
-  check('destroy 后回调静默', [operations.length, exports.length], [1, 2]);
+  check('destroy 后回调静默', [operations.length, exports.length], [2, 3]);
 
   dom.window.close();
   console.log(`\ncollab-productivity: ${checks}/${checks} passed; assertions=${assertions}`);

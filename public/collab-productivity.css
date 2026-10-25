@@ -1,5 +1,5 @@
-/* Z4-4A 任务 E 原型样式：独立文件，不复用/不改写 collab.css 与 collab-panel.css。
- * 视觉跟随 collab.css 的 token fallback，正式接入时可并入主题体系。 */
+/* Z4-4B 正式接入样式：独立文件，不改写 collab.css 与 collab-panel.css。
+ * 视觉跟随 collab.css 的 token fallback；由 index.html 引入。 */
 .collab-productivity {
   color: var(--ui-text-primary, #f0efec);
   font-family: var(--ui-font-sans, sans-serif);
@@ -13,7 +13,18 @@
   font-size: 11px;
   letter-spacing: .04em;
 }
-.collab-prod-toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
+.collab-prod-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.collab-prod-field { display: flex; align-items: center; gap: 4px; color: var(--ui-text-secondary, #c3c2b7); font-size: 12px; }
+.collab-productivity select {
+  min-height: 32px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-primary, #f0efec);
+  background: var(--ui-input-surface, #20201f);
+  border: 1px solid var(--ui-border-strong, #777);
+  border-radius: 6px;
+}
 .collab-productivity button {
   font: inherit;
   min-height: 32px;

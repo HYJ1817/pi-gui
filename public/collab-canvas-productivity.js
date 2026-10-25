@@ -1,9 +1,9 @@
-// 协同画布生产力工具条 —— 自动整理 / 导出 SVG / 导出 PNG（Z4-4A 任务 E）。
+// 协同画布生产力工具条 —— 自动整理 / 导出 SVG / 导出 PNG。
 //
-// 【原型：尚未正式接入】本模块未在 public/collab-panel.js / index.html 挂载，
-// 未进入任何生产入口；正式接入是 Z4-4B 的最小改动（见 docs/Z4-4A-acceptance.md 任务 E 一节）。
+// Z4-4B 起正式接入：public/collab-panel.js 在协同文档面板挂载本模块（紧邻画布下方），
+// 样式 public/collab-productivity.css 由 index.html 引入。
 //
-// 最小集成方式：与 mountCollabCanvas 同宿主并排挂载（不动 collab-canvas.js，
+// 集成方式：与 mountCollabCanvas 同宿主并排挂载（不动 collab-canvas.js，
 // 不新增图形协议，不加多用户协作）。与画布说同一种操作方言：
 //   onOperations 只发 [{type,params}] 意图；上层（collab-panel）补 opId/baseRevision/actor=user，
 //   与 Z4-2 契约「UI 边界」一致。applyLayoutPreview 生成的完整信封在此剥壳为意图，
@@ -47,13 +47,26 @@ export function mountCollabProductivity(host, {
   };
 
   const root = element('section', 'collab-productivity');
-  root.setAttribute('aria-label', '画布生产力工具（Z4-4A 原型，未正式接入）');
-  const badge = element('p', 'collab-prod-badge', 'Z4-4A 原型 · 尚未正式接入生产面板');
+  root.setAttribute('aria-label', '画布生产力工具');
+  const badge = element('p', 'collab-prod-badge', '自动整理与导出');
   const toolbar = element('div', 'collab-prod-toolbar');
   toolbar.setAttribute('role', 'group'); toolbar.setAttribute('aria-label', '自动整理与导出');
   const autoButton = button(toolbar, '自动整理', startAutoLayout);
   const svgButton = button(toolbar, '导出 SVG', () => runExport('svg'));
   const pngButton = button(toolbar, '导出 PNG', () => runExport('png'));
+  const directionWrap = element('label', 'collab-prod-field', '布局方向');
+  const directionSelect = element('select'); directionSelect.name = 'layoutDirection';
+  for (const [value, label] of [['LR', '从左到右'], ['TB', '从上到下']]) {
+    const option = element('option', '', label); option.value = value; directionSelect.append(option);
+  }
+  directionWrap.append(directionSelect);
+  const themeWrap = element('label', 'collab-prod-field', '导出背景');
+  const themeSelect = element('select'); themeSelect.name = 'exportTheme';
+  for (const [value, label] of [['light', '浅色'], ['dark', '深色'], ['transparent', '透明']]) {
+    const option = element('option', '', label); option.value = value; themeSelect.append(option);
+  }
+  themeWrap.append(themeSelect);
+  toolbar.append(directionWrap, themeWrap);
   const status = element('p', 'collab-prod-status'); status.setAttribute('role', 'status');
   const previewPanel = element('div', 'collab-prod-preview'); previewPanel.hidden = true;
   previewPanel.setAttribute('role', 'group'); previewPanel.setAttribute('aria-label', '自动布局预览');
@@ -67,7 +80,7 @@ export function mountCollabProductivity(host, {
 
   function startAutoLayout() {
     if (!usable()) { notice('当前状态不可自动整理。', 'warn'); return; }
-    const created = createLayoutPreview(document, layoutOptions);
+    const created = createLayoutPreview(document, { ...layoutOptions, direction: directionSelect.value });
     if (!created.ok) { notice(`自动布局失败：${created.code}`, 'error'); return; }
     if (created.status === 'clean') { notice('画布已经是整理后的状态，无需移动节点。'); return; }
     preview = created;
@@ -110,7 +123,7 @@ export function mountCollabProductivity(host, {
     if (working) return;
     working = true; renderControls();
     try {
-      const result = await exportFlowchart(document, { format, ...exportOptions, confirm: confirmExport });
+      const result = await exportFlowchart(document, { format, ...exportOptions, theme: themeSelect.value, confirm: confirmExport });
       if (!alive) return;
       if (!result.ok) { notice(`导出失败：${result.code}`, 'error'); return; }
       if (result.status === 'cancelled') { notice('已取消导出。'); return; }
