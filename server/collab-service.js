@@ -42,8 +42,9 @@ const invalidResult = result => ({ ok: false, code: result.code === 'stale-base'
 
 /* The store is the document authority. Editor histories are ephemeral, scoped
  * capabilities: clone before edits, publish only after a durable CAS succeeds.
- * proposals is a backend-only source adapter; production deliberately leaves it
- * null until RPC provenance is qualified. HTTP can only name a known proposal. */
+ * proposals is the backend-only trusted source adapter (Z4-3); tests may inject
+ * a stub or omit it (actions then fail with collab_proposal_unavailable). HTTP
+ * can only name a known proposal, never submit proposal content. */
 export function createCollabService({ store, proposals = null, now = () => Date.now() } = {}) {
   const editors = new Map();
   const maxEditors = 32, ttl = 30 * 60 * 1000;
