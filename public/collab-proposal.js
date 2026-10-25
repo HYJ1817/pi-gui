@@ -78,8 +78,10 @@ export function mountCollabProposal(host, { onAccept = () => {}, onReject = () =
       item.append(type, summary); list.append(item);
     }
     const disabled = !alive || !valid || !matches || busy || readOnly;
+    // 重新生成是冲突后的恢复入口：只读或版本冲突时仍保持可用（由上层发起新的受控任务）。
     accept.disabled = disabled || !!conflict || !previewValid || !!failed;
-    reject.disabled = regenerate.disabled = disabled;
+    reject.disabled = disabled;
+    regenerate.disabled = !alive || !valid || !matches || busy;
     actions.hidden = !proposal;
   }
   render();

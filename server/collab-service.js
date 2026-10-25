@@ -94,7 +94,8 @@ export function createCollabService({ store, proposals = null, now = () => Date.
       const head=proposals && doc && typeof proposals.head==='function' ? proposals.head(scope,doc.documentId) : null;
       return {...snapshot(entry,doc),generating:generating?.state==='running',
         generation:generating && (generating.state==='ready'||generating.state==='failed')
-          ? {state:generating.state,...(generating.code?{code:generating.code}:{})} : null,
+          ? {state:generating.state,...(generating.code?{code:generating.code,error:COLLAB_MESSAGES[generating.code]??'生成失败，请重试。'}:{}),
+            ...(generating.proposalId?{proposalId:generating.proposalId}:{})} : null,
         proposal:head,proposalSourceAvailable:Boolean(proposals)};
     }
     if (action==='generate') {
