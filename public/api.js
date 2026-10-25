@@ -300,6 +300,7 @@ export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders()
 export const fetchReviewComments = headers => getJSON('/api/review-comments', headers);
 export const persistReviewComments = (body, headers) => sendJSON('/api/review-comments', { body, headers });
 export const candidateRunAction = (body, headers) => sendJSON('/api/candidate-runs', {body,headers});
+export const collabDocumentAction = (body, headers) => sendJSON('/api/collab-documents', {body,headers});
 
 /** 拉某个文件的 diff。`context` 为 undefined 时不传，由 git 用默认上下文；
  *  传数字或 'all' 则是用户显式要求展开更多上下文 —— 这必须重新问后端，
