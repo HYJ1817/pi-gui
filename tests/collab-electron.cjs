@@ -7,7 +7,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-z4-collab-'));
 const out = path.resolve(process.env.Z4_COLLAB_OUTPUT || path.join(world, 'evidence'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-let child, spawnError, snapshot = [];
+let child, spawnError, snapshot = [], guardPreflight = null;
 
 function processes() {
   // Only process identities are retained, never ambient command lines.
@@ -27,6 +27,17 @@ function descendants(all, parent) {
 async function main() {
   if (process.platform !== 'win32') throw new Error('environment-blocked: this smoke currently qualifies Windows desktop only');
   fs.mkdirSync(out, { recursive: true });
+  /* Guard preflight before Electron: the probe verifies the preload guard's
+   * decisions with spies (zero real sockets, its own TEMP trace). A failure
+   * aborts the run before any desktop evidence is produced. */
+  const probe = spawnSync(process.execPath, [path.join(__dirname, 'fixtures/z4-network-guard-probe.cjs')], { encoding: 'utf8', windowsHide: true, timeout: 120000 });
+  try {
+    const lines = String(probe.stdout || '').split('\n').filter(line => line.startsWith('{'));
+    guardPreflight = JSON.parse(lines[lines.length - 1]);
+  } catch { guardPreflight = null; }
+  if (!(probe.status === 0 && guardPreflight && guardPreflight.ok === true)) {
+    throw new Error('environment-blocked: offline network guard preflight failed');
+  }
   const env = {};
   for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'ELECTRON_OVERRIDE_DIST_PATH']) if (process.env[key]) env[key] = process.env[key];
   Object.assign(env, { Z4_COLLAB_WORLD: world, Z4_COLLAB_OUTPUT: out, Z4_NODE_EXECUTABLE: process.execPath,
@@ -58,7 +69,7 @@ async function main() {
   }
   const file = path.join(out, 'results.json');
   const report = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : { qualification: 'unverified', checks: 0, failed: 1 };
-  Object.assign(report, { processCleanup: { observed: snapshot.length, residual: residual.length }, exit });
+  Object.assign(report, { processCleanup: { observed: snapshot.length, residual: residual.length }, exit, guardPreflight });
   fs.writeFileSync(file, JSON.stringify(report, null, 2) + '\n');
   assert.equal(exit.code, 0, 'Electron fixture must finish explicitly');
   assert.equal(report.qualification, 'normal-sandbox');
@@ -73,6 +84,7 @@ main().catch(error => {
   const file = path.join(out, 'results.json');
   const report = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : { qualification: 'environment-blocked', checks: 0 };
   report.failed = 1; report.failureReason = error.message;
+  if (guardPreflight) report.guardPreflight = guardPreflight;
   fs.writeFileSync(file, JSON.stringify(report, null, 2) + '\n');
 }).finally(() => {
   if (Number.isInteger(child?.pid) && child.exitCode === null) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });

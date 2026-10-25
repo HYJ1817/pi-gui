@@ -8,6 +8,8 @@ const { createBrowserController } = require('../../electron/browser-view.cjs');
 
 const ROOT = path.resolve(__dirname, '../..');
 const world = process.env.Z4_COLLAB_WORLD, out = process.env.Z4_COLLAB_OUTPUT;
+const networkGuardPath = path.join(__dirname, 'z4-offline-network.cjs');
+let networkTrace = null;
 const rows = [], screenshots = [], geometry = [], errors = [];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const check = (name, value) => { assert.ok(value, name); rows.push(name); console.log('ok ' + name); };
@@ -19,6 +21,25 @@ async function until(action, name) {
   throw new Error('timeout: ' + name);
 }
 const read = code => win.webContents.executeJavaScript(code, true);
+/* Aggregates the guard's bounded JSONL trace: roles, API kinds and fixed
+ * events only — never URLs, hostnames, payloads or local paths. */
+const readNetworkTrace = () => {
+  const summary = { installed: { backend: {}, pi: {} }, blocked: { fetch: 0, http: 0, https: 0 }, traceLines: 0 };
+  try {
+    const text = fs.readFileSync(networkTrace, 'utf8');
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      let entry; try { entry = JSON.parse(line); } catch { continue; }
+      summary.traceLines++;
+      if (entry.event === 'installed' && typeof entry.api === 'string' && (entry.role === 'backend' || entry.role === 'pi')) {
+        summary.installed[entry.role][entry.api] = (summary.installed[entry.role][entry.api] || 0) + 1;
+      } else if (entry.event === 'blocked' && typeof entry.api === 'string' && entry.api in summary.blocked) {
+        summary.blocked[entry.api]++;
+      }
+    }
+  } catch { /* trace may not exist yet */ }
+  return summary;
+};
 async function main() {
   assert.ok(world && path.isAbsolute(world));
   assert.ok(!process.argv.includes('--no-sandbox') && !app.commandLine.hasSwitch('no-sandbox'));
@@ -36,17 +57,19 @@ async function main() {
   fs.writeFileSync(path.join(pkg, 'dist/cli/args.js'), 'if (arg === "--extension") {}');
   fs.copyFileSync(path.join(ROOT, 'tests/fixtures/candidate-pi.cjs'), path.join(pkg, 'cli.cjs'));
   const shim = path.join(world, 'pi.cmd');
-  fs.writeFileSync(shim, `@echo off\r\n"${process.env.Z4_NODE_EXECUTABLE}" "${path.join(pkg, 'cli.cjs')}" %*\r\n`);
+  fs.writeFileSync(shim, `@echo off\r\nset "Z4_NETWORK_ROLE=pi"\r\n"${process.env.Z4_NODE_EXECUTABLE}" --require "${networkGuardPath}" "${path.join(pkg, 'cli.cjs')}" %*\r\n`);
   const socket = require('node:net').createServer();
   await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
   const port = socket.address().port;
   await new Promise(resolve => socket.close(resolve));
   origin = `http://127.0.0.1:${port}`;
+  networkTrace = path.join(world, 'network-trace.jsonl');
   const env = { ...process.env, PORT: String(port), PI_GUI_DATA: data, PI_CWD: repo, PI_BIN: shim,
     PI_GUI_TOKEN: '', PI_GUI_OPEN: '0', PI_GUI_OFFLINE: '1', PI_OFFLINE: '1', PI_CODING_AGENT_DIR: path.join(home, 'agent'),
+    Z4_NETWORK_TRACE: networkTrace, Z4_NETWORK_ROLE: 'backend',
   };
   delete env.ELECTRON_RUN_AS_NODE;
-  backend = spawn(process.env.Z4_NODE_EXECUTABLE, [path.join(ROOT, 'server.js'), '--g2-fixture-root', world], { cwd: ROOT, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  backend = spawn(process.env.Z4_NODE_EXECUTABLE, ['--require', networkGuardPath, path.join(ROOT, 'server.js'), '--g2-fixture-root', world], { cwd: ROOT, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   backend.stdout.resume(); backend.stderr.on('data', () => {});
   await until(async () => { try { return (await (await fetch(origin + '/api/health')).json()).app === 'pi-gui'; } catch { return false; } }, 'production health');
   await app.whenReady();
@@ -123,6 +146,15 @@ async function main() {
   await read("document.querySelector('#browserClose').click()");
   await until(() => browser.getWebContents() === null, 'final panel cleanup');
   check('no renderer errors during smoke', errors.length === 0);
+  /* The GUI auto update check fires ~8 seconds after renderer load through the
+   * backend's real globalThis.fetch. The smoke window above plus this bounded
+   * wait must expose it; if it never appears the run fails here rather than
+   * claiming loopback-only evidence. */
+  await until(() => readNetworkTrace().blocked.fetch > 0, 'real automatic update fetch attempt');
+  const networkSummary = readNetworkTrace();
+  const preloaded = role => ['fetch', 'http.request', 'https.request'].every(api => (networkSummary.installed[role][api] || 0) >= 1);
+  check('offline guard preloaded before business modules in backend and fake Pi', preloaded('backend') && preloaded('pi'));
+  check('real automatic GUI update check attempted an external fetch and was blocked', networkSummary.blocked.fetch >= 1);
 }
 async function cleanup() {
   await agent?.stop();
@@ -152,7 +184,13 @@ main().catch(async error => {
   } catch (error) { failed = 1; console.error(error.message); }
   fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ qualification: failed ? 'failed-normal-sandbox' : 'normal-sandbox', sandbox: true, checks: rows.length, failed, skipped: 0, rows, screenshots, geometry, errors,
     electron: process.versions.electron, node: process.versions.node, platform: process.platform,
-    fixture: 'temporary Git, production server/renderer/preload/Browser, existing fake Pi; loopback only; no external CDP port',
+    networkGuard: {
+      preload: 'node --require tests/fixtures/z4-offline-network.cjs before server.js and before the fake Pi cli in pi.cmd',
+      covered: ['globalThis.fetch in backend and fake Pi', 'node:http request/get (CJS exports)', 'node:https request/get (CJS exports)', 'renderer: session webRequest cancels non-loopback'],
+      observed: readNetworkTrace(),
+      limits: 'test-only preload guard, not an OS sandbox; does not intercept ESM named imports of node:http(s), the Electron main fixture process, or APIs outside fetch/http/https',
+    },
+    fixture: 'temporary Git, production server/renderer/preload/Browser, existing fake Pi; guarded loopback-only by tests/fixtures/z4-offline-network.cjs; no external CDP port',
   }, null, 2) + '\n');
   app.exit(failed);
 });
