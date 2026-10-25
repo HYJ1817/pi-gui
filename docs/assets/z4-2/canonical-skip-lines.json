@@ -1,0 +1,52 @@
+[
+  {
+    "sourceLog": "pi-gui-z4-2-final-canonical-run2.log",
+    "line": 536,
+    "text": "  SKIP file symlink privilege unavailable"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-final-canonical-run2.log",
+    "line": 544,
+    "text": "Collab store: 53/53; assertions=149; skipped=1"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-final-canonical-run2.log",
+    "line": 805,
+    "text": "SKIP file symlink: existing token cannot create symbolic links"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-final-canonical-run2.log",
+    "line": 834,
+    "text": "Candidate adoption: 45/45; failed=0; skipped=1"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-final-canonical-run2.log",
+    "line": 986,
+    "text": "  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-final-canonical-run2.log",
+    "line": 2339,
+    "text": "session-revert-sacl-witness: 0/0; failed=0; skipped=8; real audit environment only"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-canonical-continuation.log",
+    "line": 1256,
+    "text": "SKIP protected nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-canonical-continuation.log",
+    "line": 1259,
+    "text": "SKIP inherited nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-canonical-continuation.log",
+    "line": 1290,
+    "text": "session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility"
+  },
+  {
+    "sourceLog": "pi-gui-z4-2-canonical-continuation.log",
+    "line": 1518,
+    "text": "Object witness: 0/0; failed=0; skipped=8"
+  }
+]

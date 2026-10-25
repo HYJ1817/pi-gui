@@ -1,0 +1,67 @@
+{
+  "ok": true,
+  "checks": 28,
+  "failed": 0,
+  "forms": {
+    "app": {
+      "checks": 14,
+      "backendVersion": "0.29.0",
+      "manifestVersion": "0.29.0",
+      "resources": {
+        "collab-canvas.js": "c754d55118b8a9dfb4eed82e13369f9146c338b4464c4f00e05e2fb82e350e8e",
+        "collab-proposal.js": "e3d6b27573e4106ee7f30efb32ed91e279e747c738d762edfe09fedab1a79b31",
+        "collab-panel.js": "ad8bb509dc06b633a802d98bb280791bb5cda41032e9a950270cf7c6b5851885",
+        "collab.css": "8ddaecd4527cec43851ffc44a03f1a8ce746eebddfe0504b429d267aad5c94bb",
+        "collab-panel.css": "78fa387f1eafa33ffe10b46c8df1a906b0184190106f6523f00f44d812cb5d07",
+        "app.js": "096bc73e8d53ca40d192e7942be656ceb4d08c78099c67c8db8d53d3a2b1ed4e",
+        "index.html": "431b114439a1223f1d9a763a481778bdfa9fe6900888076e4dccb654f91608e1",
+        "api.js": "e88e10ac073615460dd6dabe901824e665c1b36f919ae0e5e20c89b5dd1e8d19"
+      }
+    },
+    "sea": {
+      "checks": 14,
+      "backendVersion": "0.29.0",
+      "manifestVersion": "unknown",
+      "resources": {
+        "collab-canvas.js": "c754d55118b8a9dfb4eed82e13369f9146c338b4464c4f00e05e2fb82e350e8e",
+        "collab-proposal.js": "e3d6b27573e4106ee7f30efb32ed91e279e747c738d762edfe09fedab1a79b31",
+        "collab-panel.js": "ad8bb509dc06b633a802d98bb280791bb5cda41032e9a950270cf7c6b5851885",
+        "collab.css": "8ddaecd4527cec43851ffc44a03f1a8ce746eebddfe0504b429d267aad5c94bb",
+        "collab-panel.css": "78fa387f1eafa33ffe10b46c8df1a906b0184190106f6523f00f44d812cb5d07",
+        "app.js": "096bc73e8d53ca40d192e7942be656ceb4d08c78099c67c8db8d53d3a2b1ed4e",
+        "index.html": "431b114439a1223f1d9a763a481778bdfa9fe6900888076e4dccb654f91608e1",
+        "api.js": "e88e10ac073615460dd6dabe901824e665c1b36f919ae0e5e20c89b5dd1e8d19"
+      }
+    }
+  },
+  "rows": [
+    "app live backend",
+    "app token authentication",
+    "app Origin precedes owner authority",
+    "app exact resource collab-canvas.js",
+    "app exact resource collab-proposal.js",
+    "app exact resource collab-panel.js",
+    "app exact resource collab.css",
+    "app exact resource collab-panel.css",
+    "app exact resource app.js",
+    "app exact resource index.html",
+    "app exact resource api.js",
+    "app POST-only route",
+    "app trusted owner refusal",
+    "app refusal creates no document",
+    "sea live backend",
+    "sea token authentication",
+    "sea Origin precedes owner authority",
+    "sea exact resource collab-canvas.js",
+    "sea exact resource collab-proposal.js",
+    "sea exact resource collab-panel.js",
+    "sea exact resource collab.css",
+    "sea exact resource collab-panel.css",
+    "sea exact resource app.js",
+    "sea exact resource index.html",
+    "sea exact resource api.js",
+    "sea POST-only route",
+    "sea trusted owner refusal",
+    "sea refusal creates no document"
+  ]
+}

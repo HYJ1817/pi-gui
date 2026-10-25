@@ -1,6 +1,7 @@
 # Z4-2 A4：Agent 建议来源研究与后端专项证据
 
-本轮实际执行者为 **Codex 内置协作 Agent**；没有调用外部 Antigravity，也不将任务包文件名视为其执行证明。
+本 A4 研究材料的实际执行者为 **Codex 内置协作 Agent**；该研究阶段没有调用外部 Antigravity，也不将任务包文件名视为其执行证明。
+后续桌面 Antigravity/ZCode 的独立审查与测试协作另见 [审查记录](Z4-2-reviews.md) 和 [总验收](Z4-2-acceptance.md)。
 只读源码研究以冻结契约 `0f2340ee6bfd492bc5dea4adb2008bb7cbe40b0f` 为基础；数据协议依赖主 Agent 的
 `183aa39b38fc2d937c99655dd3783d625313e486`，本工作树 cherry-pick 对应 `797594d`。
 本报告不声称真实 Pi、模型、外部 Antigravity、生产建议闭环或完整安全资格已通过。
@@ -43,6 +44,8 @@ Z4-2 应保持生产建议队列为空，明确显示未接入；fixture 只能�
    建议信封中的 session/actor 由此后端上下文派生/核对，不能由模型文本获得权限。
 3. 完整建议进入有界后端队列，先校验冻结信封及全部 agent 操作，再做只读 preview。
    不接整文档覆盖、不自动 accept、不写项目文件；HTTP 只引用后端 proposalId。
+   队列注册后 proposalId 对应内容必须不可变，预览与接受应绑定同一内容摘要；拒绝 ID 复用或预览后换内容。
+   当前 `collab-service` 的 source 注入仅是 fixture/接口准备，不具备这一真实队列来源与不可变性资格，生产保持 null。
 4. 项目/会话/focus/owner/backend/run/generation/epoch 改变即废弃旧排队和未完成生成结果；关闭面板也不保留旧 undo。
    重试保留可判定的 opId 内容与请求身份；混合重放/同 opId 异内容必须拒绝。
 5. 接受动作重新取得 authority、核对 expectedRevision 与磁盘 CAS；冲突时返回明确冲突并保留原文档。

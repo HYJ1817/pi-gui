@@ -1,7 +1,8 @@
 # Z4-1 隔离原型：协同编辑数据层
 
 本目录是 Z4-1 设计任务的隔离原型，**不是生产模块**：不接入 `server/`、`public/`、
-生产启动入口，也不在 `package.json` 的 npm test 链内。设计说明见
+生产启动入口。Z4-2 将其原有 49 项测试纳入 `npm test`，作为历史基线回归；
+生产模块与其独立，新增严格协议测试另见 `tests/collab-doc.cjs`。设计说明见
 `docs/Z4-1-collaborative-editing-design.md`。
 
 ## 文件

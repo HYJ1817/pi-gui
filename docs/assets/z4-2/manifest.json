@@ -1,0 +1,82 @@
+{
+  "sourceCommit": "5388c1be155a0b86f9ed2c903669d31d63ce50d1",
+  "testCommit": "bfb9a2afc19a5de8f9ba5b6273713047e661df76",
+  "electronChecks": 49,
+  "electronCheckDefinition": "48 scenario checks plus 1 process-family cleanup; separate preflight 21 input cases and two trace refusals; file symlink preflight skipped, error code not retained",
+  "canonicalLeafCommands": 208,
+  "canonicalQualification": "cumulative-not-single-npm-test; skips remain unverified, see canonical-skip-lines.json",
+  "files": {
+    "canonical-continuation.mjs": {
+      "bytes": 9987,
+      "sha256": "dbcf03c9ff44424d49ecebfc11da21ba262f9d694cef4c6176ae15997438ee33"
+    },
+    "canonical-cumulative.json": {
+      "bytes": 33410,
+      "sha256": "7d77ba4cb89e9874bc78797be2e253ffe79916f31d73301905f91e5e920a44ce"
+    },
+    "canonical-skip-lines.json": {
+      "bytes": 1659,
+      "sha256": "10f7a71e1ae4df93c2e070df93c0dcdb546f5b5e99fac2195b2ae4e60568274d"
+    },
+    "code-file-list.txt": {
+      "bytes": 915,
+      "sha256": "bf439f5117b7ebae66ee74c910ad43fdb3112938dc9da9ab5b674bb1d0f178d0"
+    },
+    "collab-100-nodes.png": {
+      "bytes": 142881,
+      "sha256": "2520b8d9af882fb7ef8a456fda49813804be21467ec06766bb0e81e08114815e"
+    },
+    "collab-1200.png": {
+      "bytes": 95837,
+      "sha256": "75b0fc06e693b9b589b81db6f7b2b3342b867b2cf50c3d1903228beb9ece4950"
+    },
+    "collab-1536.png": {
+      "bytes": 99982,
+      "sha256": "713438c7beb0d71d621b21032fca5f9fd941df2d08925a82b3e6d6b76b26569b"
+    },
+    "collab-760.png": {
+      "bytes": 76257,
+      "sha256": "b3a009294cd8001cff0b61bf6195cd2d015f5a41626127af2404b656a87b3c3d"
+    },
+    "collab-browser-occlusion.png": {
+      "bytes": 151891,
+      "sha256": "92bd65aca2fa48b12c871dcc15622609b9db0551d1860eeb1960cb05b2915053"
+    },
+    "collab-conflict.png": {
+      "bytes": 102818,
+      "sha256": "2efabc94f23df99e0f3a85b7eecbc345cd49ee6bcfb460b78995ade531b18a34"
+    },
+    "collab-light.png": {
+      "bytes": 98434,
+      "sha256": "284c2f8d6e7083bd4d22f751a6d91ede4e19786138871dd83d9b2683d58de2b8"
+    },
+    "collab-runtime.png": {
+      "bytes": 116057,
+      "sha256": "797b502f09f4f82f4e241b201d339f49fedb26b96403b3f1c8b9fb2e319f50a3"
+    },
+    "electron-results.json": {
+      "bytes": 9119,
+      "sha256": "243832227e5b0364536ca1a8cbe224cd581c3cc3a0bd2bd73edbb18a87c439d3"
+    },
+    "packaged-results.json": {
+      "bytes": 2851,
+      "sha256": "f53448580973b67603df9936933a4dc20642257177ab185b8c97ddde2ee94460"
+    },
+    "smoke-1200.png": {
+      "bytes": 69173,
+      "sha256": "84021f696777cf15c98ad75a626f2e622d16004b23adaaaa1ec88c35e2ee4c3c"
+    },
+    "smoke-760.png": {
+      "bytes": 48917,
+      "sha256": "a2307fb71c043d10a3e7da844d37ae6065852e941e9f5aaf3148a9238d0b95d8"
+    },
+    "smoke-modal.png": {
+      "bytes": 49629,
+      "sha256": "066ea99f96ea50c5b3f4672c3e2c385eb2f364071efc44bc902416f0d3173e1d"
+    },
+    "smoke-native.png": {
+      "bytes": 9947,
+      "sha256": "fa981d7bfb60d9c3564d962c02cb5cdd091360e4fa888246c6ce4703c69e5c65"
+    }
+  }
+}

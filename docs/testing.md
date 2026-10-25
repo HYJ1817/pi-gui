@@ -64,6 +64,16 @@ v2 的 sha 为 `GITHUB_SHA`（PR 可能为合成 merge SHA）；历史 Actions A
 当前仅取得本地正常沙箱证据，尚未证明 GitHub Windows runner 稳定性，故保留专项入口，暂不扩展 CI 必需步骤或仓库设置。
 本轮证据与待远端验证项见 [G2 验收材料](G2-acceptance.md)；历史 CI 不替代 G2 新代码的完整证明。
 
+## Z4-2 协同文档验证
+
+Z4-2 的 `npm run test:collab` 随 `npm test` 运行原型 49 项历史基线及生产数据、存储、
+完整 Owner、服务、真实 Router HTTP、画布与面板套件。原型没有被生产入口导入。
+`npm run test:collab:electron` 是需离线桌面运行时的正常沙箱专项，使用 TEMP Git/fake Pi、
+生产 server/renderer/preload，独立验证交互、持久化、Runtime 与项目隔离和原生 Browser 遮挡；
+不属于无桌面 canonical，未执行或失败时必须单列。证据范围与当前状态见 [Z4-2 验收](Z4-2-acceptance.md)。
+
+`npm run test:collab:packaged` 在离线重建后实际启动 App 内嵌后端和 SEA，核对八项前端资源摘要、认证和无 Owner 拒写；它只证明产物后端，不冒充完整桌面 UI。
+
 ## T3-B 评论持久化验证
 
 T4-C 在同一个 `test:candidates` 链中增加 adoption、writer、write-faults、transactions、apply、recovery-errors 及 UI 套件。

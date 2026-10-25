@@ -76,3 +76,44 @@
 | 真实 Agent 闭环 | 阶段 3 | 按 Z4-2-agent-source-research.md:38-54 另立任务；本轮不做 |
 
 无其他实质缺口；未发现需要修改生产代码的问题。本审计不修改任何生产/集成文件（本轮仅新增 tests/collab-packaged.cjs 与本文件）。
+
+> 2026-10-25 状态更新：§九 中「产物探针」「Electron 专项」两项已由主 Agent 实跑收口（见 §十）；「canonical 收口」「acceptance 补字段」的最终状态见本节末尾与总验收；前文表格仅保留历史快照。
+
+## 十、run7 收口证据核对（2026-10-25 附录）
+
+**范围声明**：本节核对基于只读阅读集成树的 [electron-results.json](assets/z4-2/electron-results.json)、[packaged-results.json](assets/z4-2/packaged-results.json)、[manifest.json](assets/z4-2/manifest.json)、集成源码（含 `tests/fixtures/z4-offline-network.cjs`）与主 Agent 提供的提交映射；全部测试数字仍为**主 Agent 实测记录**，本审计未运行任何命令或测试。§一至§九保留为 f66ef8b 时点的只读快照结论，不因本节改写。canonical 已按主 Agent 的最终 ledger 累计完成 208/208，见本节末尾。
+
+**产品冻结与提交映射**（主 Agent 提供，manifest 交叉一致）：
+- 最终生产行为固定于 `5388c1be155a0b86f9ed2c903669d31d63ce50d1`（完整 SHA，与 manifest.sourceCommit 逐字符一致）；其后集成提交仅触碰 6 个纯测试文件（collab-electron、fixtures/z4-collab-electron、fixtures/z4-network-guard-probe、fixtures/z4-offline-network、gui-browser-stop、stop-barrier），与续跑 runner 的 6 文件白名单一致。
+- 守卫来源 `401eacbcb2c01d6ed1d4c7ada33ec236dddaee81` → 集成 `b772e0eb5150b7ab1d06fce6d897391245013451`；Stop 夹具 `2e04a04ad0e4349341ef06d7558bde95b6c45bf0` → 集成 `bfb9a2afc19a5de8f9ba5b6273713047e661df76`（= manifest.testCommit）。已通读集成树守卫文件，与 401eacb 源内容一致（fetch 形状白名单、精确 hostname 解析、TRACE 固定拒载、安装失败即中止）。
+
+**run7 真实沙箱 Electron（主 Agent 实测，与 electron-results.json / manifest.json 逐项核对一致）**：
+- exit 0；48 项场景检查 + 1 项进程家族清理 = 49/49（electron-results.json `checks:48` 与 manifest `electronChecks:49` 的定义注记一致，非矛盾）；9 个受控进程残留 0；100 节点/200 边渲染 1179ms（断言上限 5s）；UI 场景 **0 失败 0 跳过**（electron-results.json `skipped:0`，与本节后述 preflight 的 symlink skip 分列）。
+- 截图与 JSON 均按 manifest 相对链接登记，索引共 **12 张 PNG**（下表）；`smoke-native.png` 为独立原生页原图——父窗口 `capturePage` 不含原生子视图（Browser WebContentsView）像素，故单列而不冒充合成截图。
+
+| 截图（相对链接） | 记录内容 |
+|---|---|
+| [collab-760.png](assets/z4-2/collab-760.png) | 760px 画布有界布局 |
+| [collab-1200.png](assets/z4-2/collab-1200.png) | 1200px 画布有界布局 |
+| [collab-1536.png](assets/z4-2/collab-1536.png) | 1536px 画布有界布局 |
+| [collab-light.png](assets/z4-2/collab-light.png) | 浅色主题（computed 颜色 + 截图） |
+| [collab-conflict.png](assets/z4-2/collab-conflict.png) | 冲突拒绝状态 |
+| [collab-100-nodes.png](assets/z4-2/collab-100-nodes.png) | 100 节点/200 边渲染 |
+| [collab-runtime.png](assets/z4-2/collab-runtime.png) | Runtime/Classic 隔离 |
+| [collab-browser-occlusion.png](assets/z4-2/collab-browser-occlusion.png) | Browser 与编辑器互斥遮挡 |
+| [smoke-native.png](assets/z4-2/smoke-native.png) | 原生 Browser 页独立原图（非合成） |
+| [smoke-1200.png](assets/z4-2/smoke-1200.png) | Browser 原生几何对齐 1200px |
+| [smoke-760.png](assets/z4-2/smoke-760.png) | Browser 原生几何对齐 760px |
+| [smoke-modal.png](assets/z4-2/smoke-modal.png) | Modal 置顶防原生遮挡 |
+
+每个 PNG 与两份 JSON 的字节/SHA256 见 [manifest.json](assets/z4-2/manifest.json) 的 `files` 索引；结果数据本体为 [electron-results.json](assets/z4-2/electron-results.json) 与 [packaged-results.json](assets/z4-2/packaged-results.json)。
+
+- 网络守卫资格：spy 预检 21/21 输入用例符合预期；`missingTrace`/`unsafeTrace` 固定拒载（refused）；**`linkedTrace` 仅记 `skipped`，preflight 结果未包含具体错误码，本审计不断言其为 EPERM**。该 preflight skip 与 UI 场景 `skipped:0` 分列；存储套件 tests/collab-store.cjs 另有独立 `skip 1`（Windows 文件 symlink 创建权限受限，作者记录有 EPERM 证据），三者互不混算。真实 E2E 中 GUI 自动更新外网 fetch **阻断 1 次**（trace 21 行；backend 与 fake Pi 的安装计数在 observed 中分列）。边界为 Node `globalThis.fetch` + CommonJS `http(s).request/get` + renderer `webRequest` 三层，**不是 OS 级网络沙箱**（与 electron-results.json `networkGuard.limits` 同文）；预检阻止事件不冒充真实自动更新证据。
+
+**产物验证（主 Agent 实测）**：App 自检 26/26、SEA 自检 49/49、`test:collab:packaged`（tests/collab-packaged.cjs，package.json:152）28/28 均 exit 0；packaged-results.json 中 app/sea 两 form 的 8 资源逐字节 SHA256 完全一致，后端/manifest 版本 0.29.0（SEA 侧 manifest 如实记 unknown）。产物内静态上传路径检查不冒充真实上传 E2E。
+
+**检查数口径（更正）**：原附录曾按主 Agent 早期汇总写 **385**，经算术核对有误：八套件为 prototype 49 + doc 56 + store 53 + authority 24 + service 13 + HTTP 7 + canvas 72 + panel 11 = **285 checks**。主 Agent 已向用户明确纠正并在 integration/reviews 与历史任务包加勘误，测试项没有减少。本节以 **285** 为最终口径，不保留 385 结论；不含 modules 120、smoke 1338、Stop 12+17；不跨套件加总 assert 调用次数，也不把 285/49/28 等定向结果加总为 canonical 证明。
+
+**canonical 累计 208：已完成（累计口径）**。[canonical-cumulative.json](assets/z4-2/canonical-cumulative.json) 实录 `complete=true`、`failure=null`、唯一通过 **208/208**：本次续跑 65 叶（前置 9 + 剩余 56）全部 exit 0，加上 run2 已成功的前缀 152 叶，重复的 9 叶经 Set 去重后恰好覆盖 208 个规范索引。主 Agent 已收集全部进程，退出码 0。运行窗口为 2026-10-25 上海时间 19:17:02 → 20:16:44，续跑耗时 59m42.262s；测试 HEAD 精确为 `bfb9a2afc19a5de8f9ba5b6273713047e661df76`，产品仍固定 `5388c1be155a0b86f9ed2c903669d31d63ce50d1`，其后差异仅文档；前缀日志 SHA256 `fa81a6e2588430d8eaec58583971d46fd410873cfa80a349db6acbdc7e28a84b`。runner 与记录文件：[canonical-continuation.mjs](assets/z4-2/canonical-continuation.mjs)、[canonical-skip-lines.json](assets/z4-2/canonical-skip-lines.json)、[canonical-cumulative.json](assets/z4-2/canonical-cumulative.json)。
+
+**这是累计 canonical，不是单次 `npm test` 通过，也不是新的远端 CI**：152 叶复用自第二次运行的已成功前缀（首次 f66 运行止于 smoke 1337/1338，第二次止于第 153 叶 gui-browser-stop 缺构造器，两次失败历史保留见 acceptance/reviews 勘误）。末段 skip 明细：Object writer **19/19**、faults **45/45**、object witness **0/0（skip 8：existing_token_sacl_unavailable）**；其余套件另有各自 skip，**以 [canonical-skip-lines.json](assets/z4-2/canonical-skip-lines.json) 明细为准，不得概括为总共仅此 8 项**。既有 Native 回归的资格仅限其原有范围，不能升级为 Z4 Node 存储层对同用户恶意竞态的独占证明。用户验收、允许合并、允许发布均保持**未授权**。
