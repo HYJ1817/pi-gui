@@ -1,4 +1,9 @@
-const assert = require('node:assert/strict');
+const baseAssert = require('node:assert/strict');
+let assertions = 0;
+const assert = new Proxy(baseAssert, {
+  apply(target, receiver, args) { assertions++; return Reflect.apply(target, receiver, args); },
+  get(target, key) { const value = target[key]; return typeof value === 'function' ? (...args) => { assertions++; return value(...args); } : value; },
+});
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
@@ -228,6 +233,6 @@ async function main() {
   check('late proposal failure cannot overwrite new projection', proposalHost.querySelector('[role="alert"]').hidden);
   asyncProposal.destroy();
   dom.window.close();
-  console.log(`\ncollab-canvas: ${checks}/${checks} passed`);
+  console.log(`\ncollab-canvas: ${checks}/${checks} passed; assertions=${assertions}`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

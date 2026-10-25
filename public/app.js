@@ -107,6 +107,7 @@ import { showNotice, hideNotice } from './ui/notice.js';
 import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
 import { openSpecsPanel } from './specs-panel.js';
+import { openCollabPanel } from './collab-panel.js';
 import { openSplitWorkbench } from './ui/split-workbench.js';
 import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
@@ -264,6 +265,20 @@ initGuiBrowserState();
 initVizIntegration();
 
 const btnSpecs = $('btnSpecs');
+const btnCollab = $('btnCollab');
+if (btnCollab) {
+  btnCollab.hidden = !rightPane;
+  btnCollab.addEventListener('click', () => {
+    if (!rightPane) return;
+    if (rightPane.isOpen() && rightPane.surface() === 'collab') rightPane.close();
+    else openCollabPanel();
+  });
+  document.addEventListener('pi-gui:right-pane', event => {
+    const open = event.detail?.open === true && event.detail?.surface === 'collab';
+    btnCollab.setAttribute('aria-pressed', String(open));
+    btnCollab.classList.toggle('is-active', open);
+  });
+}
 if (btnSpecs) {
   if (!rightPane) {
     btnSpecs.hidden = true;

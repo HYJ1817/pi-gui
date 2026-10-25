@@ -1,4 +1,9 @@
-const assert=require('node:assert/strict');
+const baseAssert = require('node:assert/strict');
+let assertions = 0;
+const assert = new Proxy(baseAssert, {
+  apply(target, receiver, args) { assertions++; return Reflect.apply(target, receiver, args); },
+  get(target, key) { const value = target[key]; return typeof value === 'function' ? (...args) => { assertions++; return value(...args); } : value; },
+});
 const fs=require('node:fs');
 const path=require('node:path');
 const {JSDOM}=require('jsdom');
@@ -91,9 +96,12 @@ const check=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
     const {showRuntimeConversation,showChat}=await import('../public/ui/workspace-surface.js');
     api.setGitConversationScope('runtime-a');showRuntimeConversation();panel=mount();await tick();
     const last=calls.findLast(c=>c.body.action==='open');assert.equal(last.headers['X-Pi-Gui-Conversation'],'runtime-a');assert.match(last.headers['X-Pi-Gui-Owner'],/native-runtime/);
+    S.bridgeRun++;S.legacyOwner={...S.legacyOwner,sessionId:'unrelated-classic-restart'};
+    document.dispatchEvent(new window.CustomEvent('pi-gui:session-evidence-context'));
+    assert.notEqual(panel.host.querySelectorAll('[data-node-id]').length,0,'Classic bridge changes must not invalidate a different Runtime owner');
     record.item.lifecycle='dormant';refreshRuntimeViews();assert.equal(panel.host.querySelectorAll('[data-node-id]').length,0);
     api.setGitConversationScope('runtime-b');assert.equal(panel.host.querySelectorAll('[data-node-id]').length,0);
     panel.close();runtimeStore.get=original;api.setGitConversationScope(null);showChat();
   });
-  dom.window.close();console.log(`Collab panel: ${checks}/${checks}`);
+  dom.window.close();console.log(`Collab panel: ${checks}/${checks}; assertions=${assertions}`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

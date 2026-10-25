@@ -111,6 +111,7 @@ export function createRouter({
   worktrees = null,
   runtimeSessions = null,
   reviewComments = null,
+  collabDocuments = null,
   candidateRuns = null,
   sessionChanges = null,
   sessionRevert = null,
@@ -177,6 +178,7 @@ export function createRouter({
     }
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
     if (url.pathname === '/api/review-comments') return reviewComments ? reviewComments.handle(req, res, url) : json(res,503,{ok:false,code:'comment_storage_unavailable'});
+    if (url.pathname === '/api/collab-documents') return collabDocuments ? collabDocuments.handle(req,res,url) : json(res,503,{ok:false,code:'collab_storage_unavailable'});
     if (url.pathname === '/api/candidate-runs') return candidateRuns ? candidateRuns.handle(req,res,url) : json(res,503,{ok:false,code:'candidate_unavailable'});
     if (url.pathname === '/api/session-change/evidence') return sessionChanges ? sessionChanges.handle(req, res, url) : json(res,503,{ok:false,code:'capture_unavailable'});
     if (url.pathname.startsWith('/api/session-revert/')) return sessionRevert ? sessionRevert.handle(req, res, url) : json(res,503,{ok:false,code:'preview_unavailable'});

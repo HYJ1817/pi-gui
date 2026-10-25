@@ -1,4 +1,9 @@
-const assert=require('node:assert/strict');
+const baseAssert = require('node:assert/strict');
+let assertions = 0;
+const assert = new Proxy(baseAssert, {
+  apply(target, receiver, args) { assertions++; return Reflect.apply(target, receiver, args); },
+  get(target, key) { const value = target[key]; return typeof value === 'function' ? (...args) => { assertions++; return value(...args); } : value; },
+});
 const http=require('node:http');
 const fs=require('node:fs');
 const os=require('node:os');
@@ -69,5 +74,5 @@ const check=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
       assert.equal(JSON.stringify(result).includes(world),false);
     });
   } finally {await new Promise(r=>server.close(r));fs.rmSync(world,{recursive:true,force:true});}
-  console.log(`Collab HTTP: ${checks}/${checks}`);
+  console.log(`Collab HTTP: ${checks}/${checks}; assertions=${assertions}`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

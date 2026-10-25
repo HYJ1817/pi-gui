@@ -1,4 +1,9 @@
-const assert = require('node:assert/strict');
+const baseAssert = require('node:assert/strict');
+let assertions = 0;
+const assert = new Proxy(baseAssert, {
+  apply(target, receiver, args) { assertions++; return Reflect.apply(target, receiver, args); },
+  get(target, key) { const value = target[key]; return typeof value === 'function' ? (...args) => { assertions++; return value(...args); } : value; },
+});
 const fs = require('node:fs');
 let passed = 0, failed = 0;
 const check = (name, fn) => { try { fn(); passed++; console.log('ok ' + name); } catch (e) { failed++; console.error('FAIL ' + name + ': ' + e.message); } };
@@ -97,5 +102,5 @@ const check = (name, fn) => { try { fn(); passed++; console.log('ok ' + name); }
     const src=fs.readFileSync(require('node:path').join(__dirname,'../lib/collab-doc.js'),'utf8');
     assert.equal(/\b(?:import|require)\s*(?:\(|.*?from\s*['"])/.test(src),false);
   });
-  console.log(`Collab production document: ${passed}/${passed+failed}`);process.exitCode=failed?1:0;
+  console.log(`Collab production document: ${passed}/${passed+failed}; assertions=${assertions}`);process.exitCode=failed?1:0;
 })().catch(e=>{console.error(e);process.exitCode=1;});

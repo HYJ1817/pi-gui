@@ -15,7 +15,7 @@ function context() {
   const owner=conversationId?record?.owner:S.legacyOwner;
   const headers={...(conversationId?{'X-Pi-Gui-Conversation':conversationId}:{}),'X-Pi-Gui-Owner':JSON.stringify(owner??null)};
   return {valid:Boolean(owner?.sessionId && !S.switching && (view==='chat'&&!conversationId || view==='runtime'&&conversationId&&record?.item?.lifecycle==='ready')),headers,
-    signature:JSON.stringify([S.workspaceGeneration,S.cwd,S.bridgeRun,view,conversationId,headers])};
+    signature:JSON.stringify([S.workspaceGeneration,S.cwd,conversationId?null:S.bridgeRun,view,conversationId,headers])};
 }
 
 export function openCollabPanel() {

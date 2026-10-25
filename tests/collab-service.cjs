@@ -1,4 +1,9 @@
-const assert=require('node:assert/strict');
+const baseAssert = require('node:assert/strict');
+let assertions = 0;
+const assert = new Proxy(baseAssert, {
+  apply(target, receiver, args) { assertions++; return Reflect.apply(target, receiver, args); },
+  get(target, key) { const value = target[key]; return typeof value === 'function' ? (...args) => { assertions++; return value(...args); } : value; },
+});
 let checks=0;
 const check=(name,fn)=>{fn();checks++;console.log('ok '+name);};
 (async()=>{
@@ -83,5 +88,5 @@ const check=(name,fn)=>{fn();checks++;console.log('ok '+name);};
     assert.equal(bounded.execute(scope,request).code,'collab_undo_empty');
     assert.throws(()=>bounded.execute(scope,{...request,editorId:entries[1].editorId}),e=>e.code==='collab_editor_expired');
   });
-  console.log(`Collab service: ${checks}/${checks}`);
+  console.log(`Collab service: ${checks}/${checks}; assertions=${assertions}`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

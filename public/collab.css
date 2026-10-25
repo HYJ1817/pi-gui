@@ -53,6 +53,7 @@
   white-space: pre-wrap;
 }
 .collab-stage {
+  stroke: none;
   display: block;
   width: 100%;
   height: clamp(220px, 38vh, 420px);
@@ -75,7 +76,7 @@
   vector-effect: non-scaling-stroke;
 }
 .collab-node text,
-.collab-edge text { fill: var(--ui-text-primary, #f0efec); font: inherit; font-size: 12px; pointer-events: none; }
+.collab-edge text { fill: var(--ui-text-primary, #f0efec); stroke: none; font: inherit; font-size: 12px; pointer-events: none; }
 .collab-node.is-selected rect,
 .collab-node:focus-visible rect { fill: var(--ui-selected, #444); stroke: var(--ui-focus, #86b6ef); stroke-width: 2.5; }
 .collab-edge { cursor: pointer; }
