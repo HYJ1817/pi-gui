@@ -1,0 +1,48 @@
+/* Z4-4B 正式接入样式：独立文件，不改写 collab.css 与 collab-panel.css。
+ * 视觉跟随 collab.css 的 token fallback；由 index.html 引入。 */
+.collab-productivity {
+  color: var(--ui-text-primary, #f0efec);
+  font-family: var(--ui-font-sans, sans-serif);
+  font-size: 13px;
+  padding: 8px 0;
+}
+.collab-productivity [hidden] { display: none !important; }
+.collab-prod-badge {
+  margin: 0 0 6px;
+  color: var(--ui-text-secondary, #c3c2b7);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+.collab-prod-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.collab-prod-field { display: flex; align-items: center; gap: 4px; color: var(--ui-text-secondary, #c3c2b7); font-size: 12px; }
+.collab-productivity select {
+  min-height: 32px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-primary, #f0efec);
+  background: var(--ui-input-surface, #20201f);
+  border: 1px solid var(--ui-border-strong, #777);
+  border-radius: 6px;
+}
+.collab-productivity button {
+  font: inherit;
+  min-height: 32px;
+  padding: 5px 9px;
+  color: var(--ui-text-primary, #f0efec);
+  background: var(--ui-input-surface, #20201f);
+  border: 1px solid var(--ui-border-strong, #777);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.collab-productivity button:hover:not(:disabled) { background: var(--ui-hover, #333); }
+.collab-productivity button:disabled { opacity: .45; cursor: default; }
+.collab-prod-status { color: var(--ui-text-secondary, #c3c2b7); font-size: 12px; margin: 8px 0; }
+.collab-prod-preview {
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--ui-border-strong, #777);
+  border-radius: 6px;
+}
+.collab-prod-preview p { margin: 0 0 8px; }
+.collab-productivity :focus-visible { outline: 2px solid var(--ui-focus, #86b6ef); outline-offset: 3px; }
