@@ -59,6 +59,10 @@ import { createRouter } from './server/router.js';
 import { createReviewCommentStore } from './server/review-comment-store.js';
 import { createReviewCommentAuthority } from './server/review-comment-authority.js';
 import { createReviewCommentRoutes } from './server/review-comment-routes.js';
+import { createCollabStore } from './server/collab-store.js';
+import { createCollabAuthority } from './server/collab-authority.js';
+import { createCollabService } from './server/collab-service.js';
+import { createCollabRoutes } from './server/collab-routes.js';
 import { createSessionExport } from './server/session-export.js';
 import { readSessionMessages, readSessionText } from './server/session-history.js';
 import { createRpcBridge } from './server/rpc-bridge.js';
@@ -1003,11 +1007,18 @@ const reviewCommentStore=createReviewCommentStore({dataDir:DATA_DIR,protectedRoo
 const reviewCommentAuthority=createReviewCommentAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
   classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
+const collabStore=createCollabStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+const collabAuthority=createCollabAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
+  classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
+    resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
+// No unqualified RPC/text/renderer source is installed for Agent proposals.
+const collabService=createCollabService({store:collabStore});
 const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,worktrees,registry:runtimeRegistry,readComments:scope=>reviewCommentStore.read(scope),
   projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
   admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),
   protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
 const route = createRouter({
+  collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority}),
   reviewComments: createReviewCommentRoutes({store:reviewCommentStore,withAuthority:reviewCommentAuthority}),
   candidateRuns: createCandidateRoutes({runs:candidateRuns,withAuthority:reviewCommentAuthority}),
   sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,

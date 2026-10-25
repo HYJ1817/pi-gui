@@ -1,0 +1,134 @@
+/* Local graph surface; colors and fonts follow the app theme tokens. */
+.collab-canvas,
+.collab-proposal {
+  min-width: 0;
+  color: var(--ui-text-primary, #f0efec);
+  background: var(--ui-panel-surface, #1a1a19);
+  font-family: var(--ui-font-sans, sans-serif);
+  font-size: 13px;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+.collab-canvas *,
+.collab-proposal * { box-sizing: border-box; }
+.collab-canvas [hidden],
+.collab-proposal [hidden] { display: none !important; }
+.collab-toolbar,
+.collab-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.collab-canvas button,
+.collab-proposal button {
+  font: inherit;
+  min-height: 32px;
+  padding: 5px 9px;
+  color: var(--ui-text-primary, #f0efec);
+  background: var(--ui-input-surface, #20201f);
+  border: 1px solid var(--ui-border-strong, #777);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: normal;
+}
+.collab-canvas button:hover:not(:disabled),
+.collab-proposal button:hover:not(:disabled) { background: var(--ui-hover, #333); }
+.collab-canvas button:disabled,
+.collab-proposal button:disabled { opacity: .45; cursor: default; }
+.collab-canvas :focus-visible,
+.collab-proposal :focus-visible { outline: 2px solid var(--ui-focus, #86b6ef); outline-offset: 3px; }
+.collab-status,
+.collab-proposal-meta,
+.collab-help,
+.collab-selection { color: var(--ui-text-secondary, #c3c2b7); font-size: 12px; margin: 10px 0; }
+.collab-help { line-height: 1.6; }
+.collab-zoom { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.collab-error {
+  color: var(--ui-danger, #f87171);
+  border-inline-start: 3px solid currentColor;
+  padding: 8px;
+  margin: 10px 0;
+  white-space: pre-wrap;
+}
+.collab-stage {
+  stroke: none;
+  display: block;
+  width: 100%;
+  height: clamp(220px, 38vh, 420px);
+  min-width: 0;
+  border: 1px solid var(--ui-border-strong, #777);
+  border-radius: 8px;
+  background: var(--ui-canvas, #151515);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.collab-stage:active { cursor: grabbing; }
+.collab-node { cursor: move; }
+.collab-canvas[data-readonly="true"] .collab-node { cursor: pointer; }
+.collab-node rect {
+  fill: var(--ui-panel-surface, #1a1a19);
+  stroke: var(--ui-border-control, #7b7971);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.collab-node text,
+.collab-edge text { fill: var(--ui-text-primary, #f0efec); stroke: none; font: inherit; font-size: 12px; pointer-events: none; }
+.collab-node.is-selected rect,
+.collab-node:focus-visible rect { fill: var(--ui-selected, #444); stroke: var(--ui-focus, #86b6ef); stroke-width: 2.5; }
+.collab-edge { cursor: pointer; }
+.collab-edge-line { stroke: var(--ui-text-secondary, #c3c2b7); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.collab-edge-hit { stroke: transparent; stroke-width: 16; vector-effect: non-scaling-stroke; }
+.collab-edge text {
+  paint-order: stroke;
+  stroke: var(--ui-canvas, #151515);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.collab-edge.is-selected .collab-edge-line,
+.collab-edge:focus-visible .collab-edge-line { stroke: var(--ui-focus, #86b6ef); stroke-width: 3; }
+.collab-stage marker path { fill: var(--ui-text-secondary, #c3c2b7); }
+.collab-inspector { margin-top: 12px; border-top: 1px solid var(--ui-border, #555); }
+.collab-edit-form,
+.collab-connect-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 8px 0; }
+.collab-canvas label { display: flex; flex: 1 1 150px; flex-direction: column; gap: 5px; min-width: 0; color: var(--ui-text-secondary, #c3c2b7); }
+.collab-canvas input,
+.collab-canvas select {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px;
+  font: inherit;
+  color: var(--ui-text-primary, #f0efec);
+  background: var(--ui-input-surface, #20201f);
+  border: 1px solid var(--ui-border-control, #7b7971);
+  border-radius: 6px;
+}
+.collab-canvas input:disabled,
+.collab-canvas select:disabled { opacity: .6; }
+.collab-confirm { margin: 12px 0; padding: 10px; border: 1px solid var(--ui-danger, #f87171); border-radius: 6px; }
+.collab-confirm p { margin-top: 0; }
+.collab-confirm button { margin: 3px; }
+.collab-proposal { border-top: 1px solid var(--ui-border, #555); }
+.collab-proposal h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+.collab-proposal-state { line-height: 1.6; }
+.collab-rationale { white-space: pre-wrap; line-height: 1.6; }
+.collab-proposal-diff { padding-left: 22px; max-height: 240px; overflow: auto; }
+.collab-proposal-diff li { margin: 8px 0; white-space: pre-wrap; }
+.collab-operation-type { display: block; color: var(--ui-text-secondary, #c3c2b7); font: 11px var(--ui-font-mono, monospace); margin-bottom: 3px; }
+@media (max-width: 540px) {
+  .collab-canvas, .collab-proposal { padding: 8px; }
+  .collab-toolbar button { flex: 1 1 auto; }
+  .collab-edit-form label, .collab-connect-form label { flex-basis: 100%; }
+  .collab-stage { height: 260px; }
+}
+@media (forced-colors: active) {
+  .collab-node rect { fill: Canvas; stroke: ButtonText; }
+  .collab-node text, .collab-edge text { fill: CanvasText; }
+  .collab-edge-line, .collab-node.is-selected rect { stroke: Highlight; }
+  .collab-stage marker path { fill: CanvasText; }
+}

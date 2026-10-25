@@ -828,6 +828,11 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     const bad = d.filter((x) => x !== 'server/http-utils.js');
     return bad.length === 0 || bad.join(', ');
   });
+  check('协同文档协议独立于原型、Z3、server 和 DOM/IO 模块', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'lib/collab-doc.js'), 'utf8');
+    return !/^\s*import\s|\brequire\s*\(/m.test(src)
+      && !/from\s*['"][^'"]*(?:prototype|viz-schema|server\/|public\/)/.test(src);
+  });
 
   console.log('');
   console.log(`${pass}/${pass + fail} 通过`);
