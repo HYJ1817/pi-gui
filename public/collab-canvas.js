@@ -40,15 +40,15 @@ export function mountCollabCanvas(host, {
   let zoom = 1, pan = { x: 24, y: 24 };
   const markerId = `collab-arrow-${++instanceNumber}`;
   const element = (tag, className, text) => {
-    const el = dom.createElement(tag);
-    if (className) el.className = className;
-    if (text !== undefined) el.textContent = text;
-    return el;
+    const domNode = dom.createElement(tag);
+    if (className) domNode.className = className;
+    if (text !== undefined) domNode.textContent = text;
+    return domNode;
   };
   const svgElement = (tag, attrs = {}) => {
-    const el = dom.createElementNS(SVG, tag);
-    for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
-    return el;
+    const domNode = dom.createElementNS(SVG, tag);
+    for (const [key, value] of Object.entries(attrs)) domNode.setAttribute(key, value);
+    return domNode;
   };
   const listen = (target, type, handler, options) => {
     target.addEventListener(type, handler, options);
@@ -59,9 +59,9 @@ export function mountCollabCanvas(host, {
   const toolbar = element('div', 'collab-toolbar');
   toolbar.setAttribute('role', 'group'); toolbar.setAttribute('aria-label', '画布操作');
   const button = (parent, text, handler) => {
-    const el = element('button', '', text); el.type = 'button';
-    listen(el, 'click', () => { if (alive && !el.disabled) handler(); });
-    parent.append(el); return el;
+    const domNode = element('button', '', text); domNode.type = 'button';
+    listen(domNode, 'click', () => { if (alive && !domNode.disabled) handler(); });
+    parent.append(domNode); return domNode;
   };
   const add = button(toolbar, '新增节点', addNode);
   const undo = button(toolbar, '撤销', () => invoke(onUndo));
@@ -229,14 +229,14 @@ export function mountCollabCanvas(host, {
   }
   function renderPositions() {
     if (!valid) return;
-    for (const el of viewport.querySelectorAll('[data-node-id]')) {
-      const node = position(document.graph.nodes.find(item => item.id === el.dataset.nodeId));
-      el.setAttribute('transform', `translate(${node.x} ${node.y})`);
+    for (const domNode of viewport.querySelectorAll('[data-node-id]')) {
+      const node = position(document.graph.nodes.find(item => item.id === domNode.dataset.nodeId));
+      domNode.setAttribute('transform', `translate(${node.x} ${node.y})`);
     }
-    for (const el of viewport.querySelectorAll('[data-edge-id]')) {
-      const edge = document.graph.edges.find(item => item.id === el.dataset.edgeId), points = edgePoints(edge);
-      for (const line of el.querySelectorAll('line')) for (const [key, value] of Object.entries(points)) line.setAttribute(key, value);
-      const text = el.querySelector('text');
+    for (const domNode of viewport.querySelectorAll('[data-edge-id]')) {
+      const edge = document.graph.edges.find(item => item.id === domNode.dataset.edgeId), points = edgePoints(edge);
+      for (const line of domNode.querySelectorAll('line')) for (const [key, value] of Object.entries(points)) line.setAttribute(key, value);
+      const text = domNode.querySelector('text');
       if (text) { text.setAttribute('x', (points.x1 + points.x2) / 2); text.setAttribute('y', (points.y1 + points.y2) / 2 - 8); }
     }
   }
@@ -263,9 +263,9 @@ export function mountCollabCanvas(host, {
     renderPositions(); renderSelection();
   }
   function renderSelection() {
-    for (const el of viewport.querySelectorAll('[data-node-id],[data-edge-id]')) {
-      const active = selected?.id === (el.dataset.nodeId || el.dataset.edgeId);
-      el.classList.toggle('is-selected', active); el.setAttribute('aria-pressed', String(active));
+    for (const domNode of viewport.querySelectorAll('[data-node-id],[data-edge-id]')) {
+      const active = selected?.id === (domNode.dataset.nodeId || domNode.dataset.edgeId);
+      domNode.classList.toggle('is-selected', active); domNode.setAttribute('aria-pressed', String(active));
     }
     const item = currentItem();
     selectionLabel.textContent = item ? `${selected.kind === 'node' ? '节点' : '连线'} · ${item.id}` : '选择节点或连线以编辑';
@@ -383,7 +383,7 @@ export function mountCollabCanvas(host, {
     if (valid && (firstRender || oldId !== document.documentId)) fit();
     firstRender = false;
     if (focusId) {
-      const replacement = [...viewport.querySelectorAll('[data-node-id],[data-edge-id]')].find(el => (el.dataset.nodeId || el.dataset.edgeId) === focusId);
+      const replacement = [...viewport.querySelectorAll('[data-node-id],[data-edge-id]')].find(domNode => (domNode.dataset.nodeId || domNode.dataset.edgeId) === focusId);
       (replacement || svg).focus();
     }
   }

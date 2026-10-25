@@ -36,9 +36,9 @@ export function mountCollabProposal(host, { onAccept = () => {}, onReject = () =
   let generation = 0;
   const callbacks = [];
   const button = (text, callback) => {
-    const el = dom.createElement('button'); el.type = 'button'; el.textContent = text;
+    const domNode = dom.createElement('button'); domNode.type = 'button'; domNode.textContent = text;
     const handler = () => {
-      if (!alive || el.disabled || !validProposal(proposal)) return;
+      if (!alive || domNode.disabled || !validProposal(proposal)) return;
       const id = proposal.proposalId;
       const expectedGeneration = generation;
       try {
@@ -50,8 +50,8 @@ export function mountCollabProposal(host, { onAccept = () => {}, onReject = () =
         });
       } catch { localError = '建议操作失败，请重新预览。'; render(); }
     };
-    el.addEventListener('click', handler); callbacks.push(() => el.removeEventListener('click', handler));
-    actions.append(el); return el;
+    domNode.addEventListener('click', handler); callbacks.push(() => domNode.removeEventListener('click', handler));
+    actions.append(domNode); return domNode;
   };
   const accept = button('接受建议', onAccept);
   const reject = button('拒绝建议', onReject);

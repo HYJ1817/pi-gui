@@ -8,7 +8,7 @@ import { mountCollabCanvas } from './collab-canvas.js';
 import { mountCollabProposal } from './collab-proposal.js';
 import { confirmModal, confirmSurfaceMeta, dismissConfirm } from './ui/modal.js';
 
-const node=(tag,className,text)=>{const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;};
+const node=(tag,className,text)=>{const domNode=document.createElement(tag);if(className)domNode.className=className;if(text!==undefined)domNode.textContent=text;return domNode;};
 function context() {
   const conversationId=gitConversationScope(),view=workspaceView();
   const record=conversationId?runtimeStore.get(conversationId):null;
