@@ -6,9 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
-const { app, BrowserWindow, session } = require('electron');
-
-const ROOT = path.resolve(__dirname, '../..');
+/* electron 仅在作为 Electron 主进程运行时加载；被测试脚本 require 复用装配页时不可引入。 */
 const world = process.env.Z44B_WORLD;
 const out = process.env.Z44B_OUTPUT;
 const rows = [], screenshots = [], artifacts = [];
@@ -27,53 +25,89 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8">
 <script type="module">
 import { mountCollabCanvas } from '/collab-canvas.js';
 import { mountCollabProductivity } from '/collab-canvas-productivity.js';
-import { createFlowchartDocument, applyUserOperations, createEditorState, commitOperations, undo as libUndo } from '/lib/collab-doc.js';
 
-// 与 collab-panel.js 同型的迷你装配：意图补全信封 → 受控事务 → 快照回投。
-let doc = createFlowchartDocument({ documentId: 'z44b-electron' });
-doc = applyUserOperations(doc, [
-  { opId: 'seed-s1', type: 'node.update', baseRevision: doc.revision, actor: 'user', params: { id: 'n1', x: 8100, y: -4200 } },
-  { opId: 'seed-s2', type: 'node.update', baseRevision: doc.revision, actor: 'user', params: { id: 'n3', x: -9100, y: 7600 } },
-]).doc;
-const editor = createEditorState();
-const submissions = [];
-const submit = intents => {
+/* 浏览器侧不导入 lib/collab-doc.js（Node 模块，含 Buffer；生产客户端也不在页内执行事务，
+ * 服务端才是权威）。这里用手写迷你快照 + 逆操作栈模拟服务端可见语义：
+ * 意图补全信封 → 一次快照前进 → 撤销按栈恢复。事务引擎的正确性由 jsdom 套件覆盖。 */
+let doc = {
+  documentId: 'z44b-electron', schemaVersion: 1, revision: 3, title: '流程图', boundSessionId: null,
+  graph: {
+    nodes: [
+      { id: 'n1', label: '开始', x: 8100, y: -4200 },
+      { id: 'n2', label: '处理', x: 200, y: 0 },
+      { id: 'n3', label: '结束', x: -9100, y: 7600 },
+    ],
+    edges: [{ id: 'e1', from: 'n1', to: 'n2' }, { id: 'e2', from: 'n2', to: 'n3' }],
+  }, appliedOps: [],
+};
+const history = [], submissions = [];
+const applyIntents = intents => {
+  if (!intents.length) return;
   const baseRevision = doc.revision;
   const ops = intents.map(intent => ({ opId: crypto.randomUUID(), type: intent.type, params: intent.params, baseRevision, actor: 'user' }));
   submissions.push(ops);
-  const result = commitOperations(doc, editor, ops);
-  if (result.ok) { doc = result.doc; sync(); }
+  const before = doc.graph.nodes.map(node => ({ id: node.id, x: node.x, y: node.y }));
+  doc = { ...doc, revision: doc.revision + 1, graph: { ...doc.graph,
+    nodes: doc.graph.nodes.map(node => {
+      const op = ops.find(candidate => candidate.params.id === node.id && candidate.type === 'node.update');
+      return op ? { ...node, x: op.params.x ?? node.x, y: op.params.y ?? node.y } : node;
+    }) } };
+  history.push(before);
+  sync();
+};
+const undoOnce = () => {
+  const before = history.pop();
+  if (!before) return;
+  doc = { ...doc, revision: doc.revision + 1, graph: { ...doc.graph,
+    nodes: doc.graph.nodes.map(node => { const prior = before.find(entry => entry.id === node.id); return prior ? { ...node, x: prior.x, y: prior.y } : node; }) } };
+  sync();
 };
 const canvas = mountCollabCanvas(document.querySelector('#canvas'), { document: doc,
-  onOperations: submit, onUndo: () => { const r = libUndo(doc, editor); if (r.ok) { doc = r.doc; sync(); } },
-  onRedo: () => {} });
+  onOperations: applyIntents, onUndo: undoOnce, onRedo: () => {} });
 window.__z44bExports = []; window.__z44bDownloads = [];
 const originCreate = URL.createObjectURL.bind(URL);
 URL.createObjectURL = blob => { const url = originCreate(blob); window.__z44bDownloads.push(url); return url; };
 const bar = mountCollabProductivity(document.querySelector('#bar'), { document: doc,
-  onOperations: submit,
+  onOperations: applyIntents,
   onExport: result => {
+    // 镜像 collab-panel.js downloadExport 的用户触发下载路径（Blob + a[download]）。
     window.__z44bExports.push(result);
     const anchor = document.createElement('a');
     anchor.download = 'z44b-' + result.format + '-r' + doc.revision + '.' + result.format;
-    anchor.href = result.format === 'png' ? result.image.dataUrl : window.__z44bDownloads.at(-1);
+    if (result.format === 'png' && result.image?.dataUrl) anchor.href = result.image.dataUrl;
+    else anchor.href = URL.createObjectURL(new Blob([result.svg], { type: 'image/svg+xml;charset=utf-8' }));
     document.body.append(anchor); anchor.click(); anchor.remove();
   } });
-function sync() { canvas.update({ document: doc, canUndo: editor.undoStack.length > 0 }); bar.update({ document: doc }); }
+function sync() { canvas.update({ document: doc, canUndo: history.length > 0 }); bar.update({ document: doc }); }
 sync(); window.__z44bReady = true;
 window.__z44bState = () => ({ revision: doc.revision, submissions: submissions.length,
   nodes: doc.graph.nodes.map(node => ({ id: node.id, x: node.x, y: node.y })) });
 </script></body></html>`;
 
-let win, server;
-app.on('window-all-closed', () => {});
-async function main() {
-  assert.ok(world && out && path.isAbsolute(out));
-  assert.ok(!process.argv.includes('--no-sandbox') && !app.commandLine.hasSwitch('no-sandbox'));
-  fs.mkdirSync(out, { recursive: true });
+const ROOT = path.resolve(__dirname, '../..');
+
+/** 供 Electron 夹具与浏览器复用脚本共享的 loopback 静态服务（装配页 + public/ + lib/）。
+ * 可选 POST /__z44b/report：把浏览器运行取得的导出产物落盘到 Z44B_OUTPUT 证据目录；
+ * 文件名走白名单（^[\w.-]+$），内容仅接受纯文本或 dataUrl（PNG base64 解码后写入）。 */
+function createFixtureServer() {
   const types = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' };
-  server = http.createServer((request, response) => {
+  return http.createServer((request, response) => {
     const send = (status, type, body) => { response.writeHead(status, { 'content-type': type }); response.end(body); };
+    if (request.method === 'POST' && request.url === '/__z44b/report') {
+      if (!out || !/^[A-Za-z0-9._-]+$/.test(String(request.headers['x-z44b-name'] || ''))) return send(400, 'text/plain', 'bad name');
+      const chunks = [];
+      request.on('data', chunk => { chunks.push(chunk); if (Buffer.concat(chunks).length > 24 * 1024 * 1024) request.destroy(); });
+      request.on('end', () => {
+        try {
+          const body = Buffer.concat(chunks).toString('utf8');
+          // 文件名已过 ^[\w.-]+$ 白名单（不含分隔符与 ..），join 后必然落在 out 内。
+          fs.writeFileSync(path.join(out, request.headers['x-z44b-name']), body.startsWith('data:image/png;base64,')
+            ? Buffer.from(body.split(',')[1], 'base64') : body);
+          send(200, 'text/plain', 'ok');
+        } catch { send(500, 'text/plain', 'write failed'); }
+      });
+      return;
+    }
     try {
       if (request.url === '/' || request.url === '/index.html') return send(200, 'text/html', PAGE);
       const base = request.url.startsWith('/lib/') ? path.join(ROOT, 'lib') : path.join(ROOT, 'public');
@@ -82,6 +116,20 @@ async function main() {
       return send(200, types[path.extname(file)] || 'application/octet-stream', fs.readFileSync(file));
     } catch { return send(500, 'text/plain', 'error'); }
   });
+}
+
+module.exports = { PAGE, createFixtureServer };
+
+/* 作为 Electron 主进程运行时的完整验收流程。 */
+if (require.main === module) void (async () => {
+const { app, BrowserWindow, session } = require('electron');
+let win, server;
+app.on('window-all-closed', () => {});
+async function main() {
+  assert.ok(world && out && path.isAbsolute(out));
+  assert.ok(!process.argv.includes('--no-sandbox') && !app.commandLine.hasSwitch('no-sandbox'));
+  fs.mkdirSync(out, { recursive: true });
+  server = createFixtureServer();
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   await app.whenReady();
@@ -161,3 +209,4 @@ main().then(result => { report = result; }).catch(async error => {
   fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify(report || { qualification: 'failed', rows, failed: 1, failure: 'see runner log' }, null, 2) + '\n');
   app.exit(failed);
 });
+})();
