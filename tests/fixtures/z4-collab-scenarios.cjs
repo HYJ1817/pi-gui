@@ -23,7 +23,7 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
   await until(saved,'initial document saved');
   check('real production panel creates three nodes and two edges',graph().graph.nodes.length===3&&graph().graph.edges.length===2);
   check('graph labels are not stroked by global SVG icon styles',await read("getComputedStyle(document.querySelector('.collab-node text')).stroke==='none'"));
-  check('production panel explicitly reports unavailable Agent proposal source',await read("document.querySelector('.collab-panel-source').textContent.includes('尚未接入')"));
+  check('production panel reports the qualified Agent proposal source and preview-first contract',await read("document.querySelector('.collab-panel-source').textContent.includes('建议由当前 Pi 会话生成')"));
   await click('[data-node-id="n2"]');
   await read("document.querySelector('.collab-edit-form input').value='用户修改处理节点'");
   await action('保存文字');await until(()=>graph().graph.nodes.find(n=>n.id==='n2').label==='用户修改处理节点','label durable');
@@ -44,6 +44,29 @@ module.exports=async function({win,repo,data,out,read,until,check,screenshots,ge
   await until(saved,'redo ack');await action('新增节点');await until(()=>graph().graph.nodes.length===4,'new node');
   check('new node persisted with stable id',graph().graph.nodes.length===4);
   await until(saved,'add ack');
+  // Z4-3：真实 Agent 建议链路——fake Pi 以真实协议形状应答生成请求。
+  await read("document.querySelector('.collab-agent-input').value='把开始节点文字改成 Agent 修改的开始'");
+  await read("document.querySelector('.collab-agent-input').dispatchEvent(new Event('input',{bubbles:true}))");
+  await read("Array.from(document.querySelectorAll('.collab-agent-row button')).find(b=>b.textContent==='让 Agent 修改').click()");
+  try {
+    await until(()=>read("!!document.querySelector('.collab-proposal-diff li')"),'agent proposal previewed');
+  } catch (error) {
+    const diag=await read(`(()=>({status:document.querySelector('.collab-panel-status')?.textContent,
+      source:document.querySelector('.collab-panel-source')?.textContent,
+      proposal:document.querySelector('.collab-proposal')?.textContent?.slice(0,120)}))()`);
+    console.error('Z43-DIAG '+JSON.stringify(diag));
+    throw error;
+  }
+  check('agent suggestion card shows rationale and one diff entry',await read("document.querySelector('.collab-rationale').textContent.includes('Fixture 建议')&&document.querySelectorAll('.collab-proposal-diff li').length===1"));
+  check('preview does not change the persisted document',graph().graph.nodes.find(n=>n.id==='n1').label!=='Agent 修改的开始');
+  fs.writeFileSync(path.join(out,'collab-agent-proposal.png'),(await win.capturePage()).toPNG());screenshots.push('collab-agent-proposal.png');
+  await read("Array.from(document.querySelectorAll('.collab-proposal-actions button')).find(b=>b.textContent==='接受建议').click()");
+  await until(()=>graph().graph.nodes.find(n=>n.id==='n1').label==='Agent 修改的开始','agent suggestion applied');
+  await until(saved,'agent accept ack');
+  check('accepted agent suggestion applies through CAS and enables undo',await read("Array.from(document.querySelectorAll('.collab-canvas button')).find(b=>b.textContent==='撤销').disabled===false")&&graph().graph.nodes.find(n=>n.id==='n1').label==='Agent 修改的开始');
+  await action('撤销');await until(()=>graph().graph.nodes.find(n=>n.id==='n1').label!=='Agent 修改的开始','agent suggestion undo');
+  check('accepted agent suggestion is undoable like user edits',graph().graph.nodes.find(n=>n.id==='n1').label!=='Agent 修改的开始');
+  await until(saved,'agent undo ack');
   const added=graph().graph.nodes.find(n=>!['n1','n2','n3'].includes(n.id));
   await click('[data-node-id="n3"]');
   await read(`document.querySelector('.collab-connect-form select').value=${JSON.stringify(added.id)}`);

@@ -167,6 +167,8 @@ async function main() {
   const { createCollabStore } = await import('../server/collab-store.js');
   const { createCollabAuthority } = await import('../server/collab-authority.js');
   const { createCollabService } = await import('../server/collab-service.js');
+  const { createCollabProposalSource } = await import('../server/collab-proposal-source.js');
+  const { createProposalQueue } = await import('../server/collab-proposal-queue.js');
   const { createCollabRoutes } = await import('../server/collab-routes.js');
 
   const cwd = os.tmpdir();
@@ -197,6 +199,7 @@ async function main() {
     // never enters their routes and must not hide production assembly drift.
     createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
     createCollabStore, createCollabAuthority, createCollabService, createCollabRoutes,
+    createCollabProposalSource, createProposalQueue,
     // No candidate exists in this Stop facade fixture. Its independent real
     // lifecycle is covered by candidate-runs and normal-sandbox Electron.
     createCandidateRuns: () => ({busy: () => false}), createCandidateRoutes: () => null, candidateRunsRef: null,

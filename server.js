@@ -1033,7 +1033,8 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
         }
         if (status.stop?.pending) throw Object.assign(Error(), { code: 'collab_agent_busy' });
         if (candidateRunsRef?.busy()) throw Object.assign(Error(), { code: 'collab_agent_busy' });
-        await sessionChanges.assertReady();
+        // capture 就绪检查由 collab 路由的 beforeAuthority 在取工作区锁之前完成，
+        // 这里不能嵌套 withActivation（与 authority 的 withWorkspace 同锁会自锁）。
         const state = await rpc.request({ type: 'get_state' }, { timeoutMs: 15000 });
         if (!state || state.__error) throw Object.assign(Error(), { code: 'collab_generate_unavailable' });
         if (state.isStreaming || state.isCompacting) throw Object.assign(Error(), { code: 'collab_agent_busy' });
@@ -1067,7 +1068,8 @@ const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,workt
   admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),
   protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
 const route = createRouter({
-  collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority}),
+  collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
+    beforeAuthority: async request => { if (request?.action === 'generate') await sessionChanges.assertReady(); }}),
   reviewComments: createReviewCommentRoutes({store:reviewCommentStore,withAuthority:reviewCommentAuthority}),
   candidateRuns: createCandidateRoutes({runs:candidateRuns,withAuthority:reviewCommentAuthority}),
   sessionRevert: createSessionRevertRoutes({ store:getEvidenceStore, withAuthority:revertAuthority, withMutationAuthority:revertMutationAuthority,

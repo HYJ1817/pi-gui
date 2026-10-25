@@ -27,7 +27,18 @@ async function run(cmd){const current=++turn;streaming=true;send({type:'agent_st
 require('node:readline').createInterface({input:process.stdin}).on('line',async line=>{
  let cmd;try{cmd=JSON.parse(line);}catch{return;}
  if(process.env.CANDIDATE_TRACE)fs.appendFileSync(process.env.CANDIDATE_TRACE,JSON.stringify({type:cmd.type,candidate:process.env.PI_GUI_CANDIDATE_AUDIT==='1'})+'\n');
- if(cmd.type==='prompt'){void run(cmd).catch(()=>{streaming=false;send({type:'response',id:cmd.id,command:cmd.type,success:false});send({type:'agent_settled'});});return;}
+ if(cmd.type==='prompt'){
+  // Z4-3：以真实 RPC 事件形状（agent_start → message_end 终值 → agent_settled）
+  // 应答协同文档生成请求；仅 PI_FAKE_COLLAB=1 时启用，不影响其他套件。
+  if(process.env.PI_FAKE_COLLAB==='1'&&typeof cmd.message==='string'&&cmd.message.includes('```pi-gui-collab')){
+    streaming=true;
+    send({type:'response',id:cmd.id,command:'prompt',success:true,data:{disposition:'started'}});
+    send({type:'agent_start'});
+    send({type:'message_end',message:{role:'assistant',stopReason:'stop',timestamp:1,content:[{type:'text',text:'已分析流程图。'+String.fromCharCode(10)+'```pi-gui-collab'+String.fromCharCode(10)+JSON.stringify({version:1,rationale:'Fixture 建议：修改开始节点文字',ops:[{type:'node.update',params:{id:'n1',label:'Agent 修改的开始'}}]})+String.fromCharCode(10)+'```'+String.fromCharCode(10)+'以上是建议。'}]}});
+    streaming=false;send({type:'agent_settled',aborted:false});
+    return;
+  }
+  void run(cmd).catch(()=>{streaming=false;send({type:'response',id:cmd.id,command:cmd.type,success:false});send({type:'agent_settled'});});return;}
  if(cmd.type==='extension_ui_response'){const resolve=pendingApproval;pendingApproval=null;resolve?.(cmd.confirmed===true);}
  if(cmd.type==='abort'){turn++;streaming=false;pendingApproval?.(false);pendingApproval=null;send({type:'agent_settled'});}
  const data=cmd.type==='get_state'?{sessionId,sessionFile,isStreaming:streaming,pendingMessageCount:0,messageCount:0,model:{provider:'fixture',id:'fake'}}:cmd.type==='get_messages'?{messages:[]}:cmd.type==='get_tree'?{tree:[]}:cmd.type==='get_available_models'?{models:[]}:cmd.type==='get_commands'?{commands:[]}:{};

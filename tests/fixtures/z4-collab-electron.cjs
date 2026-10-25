@@ -57,7 +57,7 @@ async function main() {
   fs.writeFileSync(path.join(pkg, 'dist/cli/args.js'), 'if (arg === "--extension") {}');
   fs.copyFileSync(path.join(ROOT, 'tests/fixtures/candidate-pi.cjs'), path.join(pkg, 'cli.cjs'));
   const shim = path.join(world, 'pi.cmd');
-  fs.writeFileSync(shim, `@echo off\r\nset "Z4_NETWORK_ROLE=pi"\r\n"${process.env.Z4_NODE_EXECUTABLE}" --require "${networkGuardPath}" "${path.join(pkg, 'cli.cjs')}" %*\r\n`);
+  fs.writeFileSync(shim, `@echo off\r\nset "Z4_NETWORK_ROLE=pi"\r\nset "PI_FAKE_COLLAB=1"\r\n"${process.env.Z4_NODE_EXECUTABLE}" --require "${networkGuardPath}" "${path.join(pkg, 'cli.cjs')}" %*\r\n`);
   const socket = require('node:net').createServer();
   await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
   const port = socket.address().port;
