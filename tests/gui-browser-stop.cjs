@@ -54,6 +54,10 @@ async function main() {
   const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
   const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
   const { createSessionRevertStopAndDrain } = await import('../server/session-revert-object-runtime-authority.js');
+  const { createCollabStore } = await import('../server/collab-store.js');
+  const { createCollabAuthority } = await import('../server/collab-authority.js');
+  const { createCollabService } = await import('../server/collab-service.js');
+  const { createCollabRoutes } = await import('../server/collab-routes.js');
   let ack, entered, stopped = false, writeError = null, lastSendResult;
   let abortReply = true;
   const writes = [], guarded = [], modelAccepted = [], activityAccepted = [];
@@ -104,6 +108,7 @@ async function main() {
     // Keep the real composition dependency shape. This Stop fixture never
     // calls comment routes, so constructing the lazy store performs no I/O.
     createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
+    createCollabStore, createCollabAuthority, createCollabService, createCollabRoutes,
     // This fixture has no candidate run. Preserve the production facade shape
     // without scanning a shared TEMP data directory; candidate Stop has its own
     // isolated lifecycle and real Electron coverage.

@@ -164,6 +164,10 @@ async function main() {
   const { createSessionRevertAuthority, createSessionRevertMutationAuthority } = await import('../server/session-revert-authority.js');
   const { createSessionRevertStopAndDrain } = await import('../server/session-revert-object-runtime-authority.js');
   const { createSessionRevertAdmission } = await import('../server/session-revert-admission.js');
+  const { createCollabStore } = await import('../server/collab-store.js');
+  const { createCollabAuthority } = await import('../server/collab-authority.js');
+  const { createCollabService } = await import('../server/collab-service.js');
+  const { createCollabRoutes } = await import('../server/collab-routes.js');
 
   const cwd = os.tmpdir();
   const pi = createFakePi();
@@ -192,6 +196,7 @@ async function main() {
     // Construct the actual lazy comment dependencies; this Stop-only fixture
     // never enters their routes and must not hide production assembly drift.
     createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
+    createCollabStore, createCollabAuthority, createCollabService, createCollabRoutes,
     // No candidate exists in this Stop facade fixture. Its independent real
     // lifecycle is covered by candidate-runs and normal-sandbox Electron.
     createCandidateRuns: () => ({busy: () => false}), createCandidateRoutes: () => null, candidateRunsRef: null,
