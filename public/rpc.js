@@ -22,6 +22,7 @@ import { clearChanges } from './changes.js';
 import { showChat } from './ui/workspace-surface.js';
 import { clearDraft, draftSync } from './draft.js';
 import { closePop, currentAnchor } from './ui/popover.js';
+import { thinkingAvailability } from './thinking-availability.js';
 import { startFallbackRequest, cancelFallback, setFallbackModelSwitcher } from './fallback.js';
 
 /** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
@@ -56,6 +57,7 @@ function readState() {
 
 function pendingModel() {
   S.thinkingLevels = [];
+  S.thinkingReadStatus = 'unconfirmed';
   S.modelSwitchPending = true;
   renderModelControls();
   if (currentAnchor() === el.btnThink) closePop();
@@ -63,6 +65,7 @@ function pendingModel() {
 
 export function refreshModelState({ pending = true, completion = null } = {}) {
   S.thinkingLevels = [];
+  S.thinkingReadStatus = 'pending';
   S.modelSwitchPending = pending;
   renderModelControls();
   const generation = ++modelGeneration;
@@ -124,6 +127,7 @@ function acceptModelResponse(evt) {
       S.modelSwitchPending = false;
       if (refresh.stateResult.success) applyState(refresh.stateResult.data || {});
       if (refresh.stateResult.success && refresh.levelsResult.success) onThinkingLevels(refresh.levelsResult.data || {});
+      else S.thinkingReadStatus = 'error';
       modelRefresh = null;
       renderModelControls();
       const c = refresh.completion;
@@ -154,6 +158,9 @@ export function onResponse(evt) {
     // 设置类命令失败后，之前乐观更新的显示会与 pi 不一致，回读一次纠正
     if (evt.command === 'set_model') refreshModelState();
     if (evt.command === 'set_thinking_level') readState();
+    if (evt.command === 'get_available_thinking_levels') {
+      S.thinkingLevels = []; S.thinkingReadStatus = 'error'; renderModelControls();
+    }
     return;
   }
   const d = evt.data || {};
@@ -432,7 +439,9 @@ export function setModel(provider, modelId, options = null) {
 setFallbackModelSwitcher((identity, fallbackOwner) => setModel(identity.providerId, identity.modelId, { fallbackOwner }));
 
 export function setThinkingLevel(level) {
-  if (S.modelSwitchPending || !S.thinkingLevels.includes(level) || !S.thinkingLevels.some(v => v !== 'off')) return;
+  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels,
+    pending: S.modelSwitchPending, readStatus: S.thinkingReadStatus });
+  if (availability.state !== 'ready' || !availability.levels.includes(level)) return;
   sendCommand({ type: 'set_thinking_level', level });
   readState();
 }

@@ -7,6 +7,7 @@
 
 import { el, S } from './state.js';
 import { modelCapability } from './model-capabilities.js';
+import { thinkingAvailability } from './thinking-availability.js';
 
 export function imageInputBlocked() {
   return !S.modelSwitchPending && !S.switching && S.bridgeState === 'ready'
@@ -15,13 +16,15 @@ export function imageInputBlocked() {
 
 export function renderModelControls() {
   const canUse = S.hasProject && !S.switching && (S.bridgeState === 'ready' || S.bridgeState === 'maintenance');
-  const levels = S.thinkingLevels;
-  const available = !!S.state?.model && levels.some(level => level !== 'off');
+  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels,
+    pending: S.modelSwitchPending, readStatus: S.thinkingReadStatus });
+  const levels = availability.levels;
+  const available = availability.state === 'ready';
   el.btnThink.disabled = !canUse || S.modelSwitchPending || !available;
   const level = S.state?.thinkingLevel;
-  const label = S.modelSwitchPending ? '思考同步中…' : !available ? '思考不可用' : levels.includes(level) ? '思考 ' + level : '思考 —';
+  const label = availability.state === 'pending' ? '思考同步中…' : !available ? '思考不可用' : levels.includes(level) ? '思考 ' + level : '思考 —';
   el.thinkText.textContent = label;
-  el.btnThink.title = S.modelSwitchPending ? '正在读取当前模型支持的思考等级' : !available ? 'Pi 未提供可选思考等级' : `思考强度：${level || '—'}`;
+  el.btnThink.title = availability.detail || `思考强度：${level || '—'}`;
   el.btnThink.setAttribute('aria-label', el.btnThink.title);
   const imageBlocked = imageInputBlocked();
   el.btnAttach.title = imageBlocked ? '添加文件：当前模型不支持图片，普通文件仍可用' : '添加文件：图片 / PDF / Word / 文本';

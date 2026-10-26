@@ -27,7 +27,7 @@
     "test:agent-browser": "node tests/gui-browser-policy.cjs && node tests/gui-browser-controller.cjs && node tests/gui-browser-bridge.cjs && node tests/gui-browser-tools.cjs && node tests/gui-browser-ui.cjs && node tests/gui-browser-host.cjs && node tests/gui-browser-stop.cjs",
     "test:agent-browser-live": "node tests/agent-browser-live.cjs && node tests/agent-browser-ui-live.cjs",
     "test:model-fallback": "node tests/model-fallback.cjs",
-    "test:model-capabilities": "node tests/model-capabilities.cjs",
+    "test:model-capabilities": "node tests/model-capabilities.cjs && node tests/thinking-availability.cjs",
     "test:auth": "node tests/provider-auth.cjs",
     "test:ui": "node tests/smoke.cjs",
     "test:session-background:electron": "node tests/session-background-electron.cjs",

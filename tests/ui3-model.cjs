@@ -215,11 +215,13 @@ async function main() {
   });
   await check('选择后弹层关闭', () => assert.equal(pop().hidden, true));
   await check('视图模块自身不发 RPC，也不 import 任何传输层', () => {
-    /* 结构保证：模块的 import 只有 popover 与 model-capabilities 两个纯模块，
+    /* 结构保证：模块只依赖 popover 与两个纯策略模块，
        没有任何 api/rpc/state 依赖 —— 所以它不可能发命令，也不可能读全局状态。 */
     const src = fs.readFileSync(path.join(PUB, 'ui3-model-picker.js'), 'utf8');
     const specs = [...src.matchAll(/^\s*import\s*\{[^}]*\}\s*from\s*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
-    assert.deepEqual(specs.sort(), ['./model-capabilities.js', './ui/popover.js']);
+    assert.deepEqual(specs.sort(), ['./model-capabilities.js', './thinking-availability.js', './ui/popover.js']);
+    const policy = fs.readFileSync(path.join(PUB, 'thinking-availability.js'), 'utf8');
+    assert.ok(!/\b(sendCommand|fetch|EventSource|XMLHttpRequest|WebSocket|document|window)\b/.test(policy));
     assert.ok(!/\b(sendCommand|fetch|EventSource|XMLHttpRequest|WebSocket)\b/.test(src), '视图层不该出现传输调用');
     /* 也不该反向依赖装配层。 */
     assert.ok(!/from\s*['"]\.\/app\.js['"]/.test(src), '视图模块不能 import app.js');
