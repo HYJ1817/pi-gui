@@ -16,8 +16,8 @@ function stableIdentity(item, owner) {
   const nativeSessionId = item?.nativeSessionId || owner?.sessionId || null;
   return { conversationId, projectId, workspaceId, workspaceEpoch, nativeSessionId };
 }
-function canInheritDraft(prior, nextItem) {
-  if (!prior || !prior.draft) return false;
+function isSameIdentity(prior, nextItem) {
+  if (!prior || !nextItem) return false;
   const id1 = stableIdentity(prior.item, prior.owner);
   const id2 = stableIdentity(nextItem, nextItem.owner);
   if (!id1 || !id2) return false;
@@ -28,6 +28,9 @@ function canInheritDraft(prior, nextItem) {
   if (!id1.nativeSessionId && !id2.nativeSessionId) return true;
   return false;
 }
+function canInheritDraft(prior, nextItem) {
+  return Boolean(prior?.draft) && isSameIdentity(prior, nextItem);
+}
 export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   let backend = null, resources = null, resourceReadSequence = 0; const records = new Map();
   let rejectObserver = null;
@@ -37,7 +40,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (bytes.length <= limit) return text;
     return new TextDecoder().decode(bytes.slice(-limit)).replace(/^\uFFFD+/, '');
   };
-  function fresh(item) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', draftRevision: 0, approvals: [], truncated: false }; }
+  function fresh(item, baseRevision = 0) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', draftRevision: baseRevision, approvals: [], truncated: false }; }
   function seed(snapshot) {
     if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
     const sequence = snapshot._runtimeReadSequence;
@@ -59,15 +62,25 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       if (!ownerUnchanged) {
         if (prior?.owner && item.owner && prior.owner.runtimeId === item.owner.runtimeId && prior.owner.runtimeGeneration === item.owner.runtimeGeneration) {
           if (prior.owner.sessionId && !item.owner.sessionId) continue;
-          if (!canInheritDraft(prior, item)) { prior.draft = ''; prior.draftRevision = 0; }
+          if (!isSameIdentity(prior, item)) {
+            prior.draft = '';
+            prior.draftRevision = (prior.draftRevision || 0) + 1;
+          }
           prior.owner = item.owner; prior.item = item;
         } else {
-          const next = fresh(item);
-          if (prior && canInheritDraft(prior, item)) { next.draft = prior.draft; next.draftRevision = prior.draftRevision; }
+          const sameIdentity = prior && isSameIdentity(prior, item);
+          const nextRevision = prior ? (sameIdentity ? prior.draftRevision : (prior.draftRevision || 0) + 1) : 0;
+          const next = fresh(item, nextRevision);
+          if (sameIdentity) {
+            next.draft = prior.draft;
+          }
           records.set(item.conversationId, next);
         }
       } else {
-        if (prior && !canInheritDraft(prior, item)) { prior.draft = ''; prior.draftRevision = 0; }
+        if (prior && !isSameIdentity(prior, item)) {
+          prior.draft = '';
+          prior.draftRevision = (prior.draftRevision || 0) + 1;
+        }
         prior.item = item;
       }
     }

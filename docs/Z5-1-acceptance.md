@@ -144,6 +144,29 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   2. **全分支隔离判定**：在 `ownerUnchanged` 命中分支中，同样补齐 `if (prior && !canInheritDraft(prior, item)) { prior.draft = ''; prior.draftRevision = 0; }`，确保任何无法证明身份完全一致的情况均强制隔离清空旧草稿。
   3. **测试覆盖**：验证同一会话同 Owner 下 `nativeSessionId` 改变、`workspaceEpoch` 改变及工作区字段冲突路径（`tests/runtime-store.cjs` 增至 33/33）。
 
+#### 问题三：Runtime Store 的 draftRevision 可能倒退与旧 ACK 碰撞
+- **红测复现**：
+  1. `draftRevision` 重置红测：相同 Owner、相同稳定 locator 的会话在草稿为空时，因原实现 `canInheritDraft()` 判定 `!prior.draft` 为 false，导致普通快照误将 `prior.draftRevision` 重置为 0：
+  ```text
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  0 !== 7
+      at C:\Users\21022\.codex\worktrees\z5-1-runtime-input\pi-GUI\tests\runtime-store.cjs:227:10
+  ```
+  2. 竞态碰撞红测：用户提交文本 A（捕获 `draftRevision=1`），随后清空输入框，同 Owner/locator 快照插入其间将 `draftRevision` 错误重置为 0；用户再次输入完全相同的文本 A（`draftRevision` 重新变为 1），迟到的旧 ACK 到达时，错误匹配了 `owner`、`draftRevision` 与文本 A，导致新草稿被误删：
+  ```text
+  AssertionError [ERR_ASSERTION]: 相同文本与Owner下状态快照插入后旧ACK绝不清空新草稿
+      at ok (C:\Users\21022\.codex\worktrees\z5-1-runtime-input\pi-GUI\tests\runtime-conversation.cjs:10:41)
+  ```
+- **最小修复**：
+  1. **解耦身份判定与草稿内容**：拆分 `isSameIdentity(prior, nextItem)` 与 `canInheritDraft(prior, nextItem)`，`isSameIdentity` 仅依据 `conversationId`、`projectId`、`workspaceId`、`workspaceEpoch` 与 `nativeSessionId` 验证稳定身份一致性，完全不检查草稿是否为空。
+  2. **相同可信身份禁止重置版本号**：在相同身份快照到达时，完整保留 `prior.draftRevision` 与 `prior.draft`，草稿为空时版本号绝不倒退。
+  3. **身份变化单调递增避免版本碰撞**：当身份发生变化（如 `nativeSessionId` 或 `workspaceEpoch` 改变）或存在字段冲突时，清空旧草稿并将 `draftRevision` 单调递增（`(prior.draftRevision || 0) + 1`），绝不重置为 0，彻底杜绝新会话从 0 递增与旧 ACK 产生版本号碰撞。
+  4. **发送回调稳定 locator 强一致性校验**：在 `runtime-conversation.js` 的发送回调中，引入 `sameStableLocator(stillLoc, loc)` 校验，确保不仅完整 Owner、版本号、文本内容一致，提交时的稳定 locator 也必须与应答时强一致。
+- **测试覆盖**：
+  - `tests/runtime-conversation.cjs` 增至 78/78（覆盖文本完全相同、Owner 不变、快照插入其间的旧 ACK 隔离验证）；
+  - `tests/runtime-store.cjs` 增至 34/34（覆盖空草稿下快照不重置版本号、身份变化单调递增验证）；
+  - `tests/runtime-draft.cjs` 增至 42/42（覆盖 `extractStableLocator` 工作区字段冲突校验）。
+
 ---
 
 ## 四、测试执行与断言证据
@@ -152,9 +175,9 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 | 测试套件 | 退出码 | 结果与断言数 | 覆盖要点 |
 | --- | --- | --- | --- |
-| `tests/runtime-conversation.cjs` | 0 | 75/75（原 48，首轮 66，现 75） | IME 事件序列、keyCode 229、A/B 隔离、重启恢复、旧 ACK 隔离、超限提示、清空防抖重绘不复活、身份切换输入框移走旧稿 |
-| `tests/runtime-store.cjs` | 0 | 33/33（原 25，首轮 30，现 33） | 稳定 locator 进程重启保留、nativeSessionId 变化隔离、epoch 变化隔离、同 Owner 下 item 身份变化隔离、字段冲突隔离 |
-| `tests/runtime-draft.cjs` | 0 | 41/41（新增套件） | 身份提取、安全编码、20000 字符边界、超限清除旧副本、损坏 JSON 容错、防抖调度 |
+| `tests/runtime-conversation.cjs` | 0 | 78/78（原 48，首轮 66，二轮 75，现 78） | IME 事件序列、keyCode 229、A/B 隔离、重启恢复、旧 ACK 隔离、超限提示、清空防抖重绘不复活、身份切换输入框移走旧稿、同文本/Owner下状态快照插入旧ACK不误删 |
+| `tests/runtime-store.cjs` | 0 | 34/34（原 25，首轮 30，二轮 33，现 34） | 稳定 locator 进程重启保留、nativeSessionId 变化隔离、epoch 变化隔离、同 Owner 下 item 身份变化单调递增隔离、字段冲突隔离、空草稿下快照不重置版本号 |
+| `tests/runtime-draft.cjs` | 0 | 42/42（新增套件，原 41，现 42） | 身份提取、安全编码、工作区与Owner字段冲突校验、20000 字符边界、超限清除旧副本、损坏 JSON 容错、防抖调度 |
 | `tests/daily-use.cjs` | 0 | 31/31 | 快捷键注册、命令模型、连接状态文案 |
 | `tests/session-background-ui.cjs` | 0 | 9/9 | 侧栏/后台会话隔离、流式保护、草稿隔离 |
 | `tests/session-background-recovery.cjs` | 0 | 6/6 | 后台恢复、工具标签、迟到历史、审批清理 |
@@ -208,8 +231,8 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 运行 `node scripts/run-test-group.mjs --validate`：
 ```text
-test-plan: 222 canonical leaves; groups core, ui, security, native, faults
-core: 146 (原 145，新增 tests/runtime-draft.cjs)
+test-plan: 220 canonical leaves; groups core, ui, security, native, faults
+core: 144
 ui: 24
 security: 27
 native: 4
@@ -223,7 +246,7 @@ faults: 21
 ## 七、风险、安全与回滚方案
 
 ### 7.1 安全与隔离分析
-- **无敏感信息落盘**：草稿持久化严格限定为纯文本，不记录 Token、Cookie、文件路径、附件二进制或模型思考；
+- **本地明文草稿安全边界与敏感内容提示**：草稿持久化以纯文本形式保存在本地 localStorage 中，不自动提取或存储认证 Token、Cookie、外部文件绝对路径、附件二进制或模型思考过程；**但用户在输入框中输入的文本本身可能包含敏感信息（如代码、凭据或私密内容），草稿为本地明文存储，属于受信任单用户宿主环境，宿主环境安全由操作系统用户权限隔离保证**；
 - **执行授权不降级**：草稿持久化 key 仅用于本地文本恢复，不赋予任何发送执行权限；所有发送动作仍必须携带完整有效的 Owner；
 - **跨会话防泄露**：当 `nativeSessionId` 或 `workspaceEpoch` 变化时，内存和本地持久存储强制隔离，旧草稿绝对不泄露到新会话。
 

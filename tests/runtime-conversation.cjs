@@ -504,5 +504,70 @@ const { JSDOM } = require('jsdom');
 
   draftView2.dispose();
 
+  /* ---- R2-Bug3: 旧 ACK 尚未返回，用户清空草稿，相同 Owner/locator 快照插入其间，
+   * 用户随后输入与先前完全相同的文本，旧 ACK 到达时绝不能清除新草稿！ ---- */
+  const raceOwner = {
+    backendInstance: 'backend-new',
+    projectId: 'p-race',
+    repoId: 'r-race',
+    workspaceId: 'ws-race',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'RACE-1',
+    runtimeId: 'rt-race-1',
+    runtimeGeneration: 'g1',
+    sessionId: 'native-race-1',
+  };
+  const raceItem = {
+    conversationId: 'RACE-1',
+    nativeSessionId: 'native-race-1',
+    workspace: { projectId: 'p-race', workspaceId: 'ws-race', workspaceEpoch: 'epoch-1' },
+    owner: raceOwner,
+    lifecycle: 'ready',
+    activity: 'idle',
+    revision: 1,
+  };
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [raceItem] });
+
+  let finishRaceSend;
+  global.fetch = async (url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend-new', items: [] };
+    const body = JSON.parse(opts.body); requests.push(body);
+    return new Promise(resolve => { finishRaceSend = resolve; });
+  } });
+
+  requests.length = 0;
+  const draftView3 = createRuntimeConversation({ host });
+  draftView3.show('RACE-1');
+
+  // 1. 首次输入文本 A 并点击发送（捕获 draftRevision = 1, draft = "文本A"）
+  input().value = '文本A';
+  input().dispatchEvent(new dom.window.Event('input'));
+  btn('发送').click();
+  await tick();
+  ok('文本A已发出待ACK', requests.length === 1 && requests[0].command?.message === '文本A');
+
+  // 2. 用户清空输入框（draftRevision 增至 2）
+  input().value = '';
+  input().dispatchEvent(new dom.window.Event('input'));
+
+  // 3. 相同 Owner、相同稳定 locator 的状态快照插入其间
+  // （在有 Bug 的实现中，因 draft 为空导致 draftRevision 被错误重置为 0）
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [{ ...raceItem, revision: 2 }] });
+
+  // 4. 用户重新输入完全相同的文本 A
+  // （在有 Bug 的实现中，0++ 导致 draftRevision 重新变为 1，与旧 ACK 捕获的 revision=1 碰撞）
+  input().value = '文本A';
+  input().dispatchEvent(new dom.window.Event('input'));
+
+  // 5. 迟到的旧 ACK 此时到达
+  finishRaceSend({ ok: true });
+  await tick();
+
+  // 验证新输入的文本 A 绝不能被旧 ACK 清除！
+  ok('相同文本与Owner下状态快照插入后旧ACK绝不清空新草稿', input().value === '文本A');
+  ok('store中新草稿同样完整保留', runtimeStore.get('RACE-1').draft === '文本A');
+
+  draftView3.dispose();
+
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

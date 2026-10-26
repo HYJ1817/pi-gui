@@ -53,6 +53,7 @@ const { JSDOM } = require('jsdom');
   // 身份冲突：item.nativeSessionId !== owner.sessionId
   const conflictItem = { ...validItem, nativeSessionId: 'native-conflict' };
   ok('nativeSessionId 冲突时返回 null', extractStableLocator(conflictItem, validOwner) === null);
+  ok('workspace 字段与 owner 冲突时返回 null', extractStableLocator({ ...validItem, workspace: { ...validItem.workspace, projectId: 'proj-diff' } }, validOwner) === null);
 
   // 缺少字段
   ok('缺少 projectId 返回 null', extractStableLocator({ ...validItem, workspace: { ...validItem.workspace, projectId: '' } }, { ...validOwner, projectId: '' }) === null);

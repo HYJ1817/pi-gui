@@ -38,9 +38,15 @@ function isValidIdentity(str) {
 export function extractStableLocator(item, owner) {
   if (!item && !owner) return null;
   const conversationId = item?.conversationId || owner?.conversationId;
-  const projectId = item?.workspace?.projectId || owner?.projectId;
-  const workspaceId = item?.workspace?.workspaceId || owner?.workspaceId;
-  const workspaceEpoch = item?.workspace?.workspaceEpoch || owner?.workspaceEpoch;
+  const itemWs = item?.workspace;
+  if (itemWs && owner) {
+    if (itemWs.projectId && owner.projectId && itemWs.projectId !== owner.projectId) return null;
+    if (itemWs.workspaceId && owner.workspaceId && itemWs.workspaceId !== owner.workspaceId) return null;
+    if (itemWs.workspaceEpoch && owner.workspaceEpoch && itemWs.workspaceEpoch !== owner.workspaceEpoch) return null;
+  }
+  const projectId = itemWs?.projectId || owner?.projectId;
+  const workspaceId = itemWs?.workspaceId || owner?.workspaceId;
+  const workspaceEpoch = itemWs?.workspaceEpoch || owner?.workspaceEpoch;
 
   if (item?.nativeSessionId && owner?.sessionId && item.nativeSessionId !== owner.sessionId) {
     return null; // 身份冲突

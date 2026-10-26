@@ -49,6 +49,7 @@ import { openModal } from './ui/modal.js';
 import { renderVizCardHtml } from './markdown.js';
 import {
   extractStableLocator,
+  sameStableLocator,
   runtimeDraftKey,
   saveRuntimeDraft,
   restoreRuntimeDraft,
@@ -349,8 +350,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const draftKey = runtimeDraftKey(loc);
     void action(target, { action: 'command', owner, command: { type: 'prompt', message: text } }, (result) => {
       const still = store.get(target);
+      const stillLoc = extractStableLocator(still?.item, still?.owner);
+      const locatorMatched = (!loc && !stillLoc) || (loc && stillLoc && sameStableLocator(loc, stillLoc));
       // An acknowledgement owns the submitted version, not later user edits.
-      if (result.ok && same(still?.owner, owner) && still.draftRevision === draftRevision && still.draft === draft) {
+      if (result.ok && same(still?.owner, owner) && locatorMatched && still.draftRevision === draftRevision && still.draft === draft) {
         still.draft = ''; still.draftRevision++;
         if (id === target && input.value === draft) {
           input.value = '';
