@@ -38,6 +38,7 @@ export function mountCollabCanvas(host, {
   let document = initialDocument, busy = false, error = null, canUndo = false, canRedo = false;
   let alive = true, generation = 0, drag = null, pendingDelete = null, confirming = false;
   let valid = false, suppressClick = false, localError = '';
+  let pointerAction = null, restoringFocus = false;
   let firstRender = true;
   let zoom = 1, pan = { x: 24, y: 24 };
   const markerId = `collab-arrow-${++instanceNumber}`;
@@ -468,6 +469,35 @@ export function mountCollabCanvas(host, {
   }
 
   function clamp(value) { return Math.max(-100000, Math.min(100000, value)); }
+
+  function computeGroupDelta(nodes, requestedDeltaX, requestedDeltaY) {
+    if (!nodes || nodes.length === 0) return { effectiveDeltaX: 0, effectiveDeltaY: 0 };
+    const minX = Math.min(...nodes.map(n => n.startX !== undefined ? n.startX : n.x));
+    const maxX = Math.max(...nodes.map(n => n.startX !== undefined ? n.startX : n.x));
+    const minY = Math.min(...nodes.map(n => n.startY !== undefined ? n.startY : n.y));
+    const maxY = Math.max(...nodes.map(n => n.startY !== undefined ? n.startY : n.y));
+
+    const minAllowedDeltaX = -100000 - minX;
+    const maxAllowedDeltaX = 100000 - maxX;
+    const minAllowedDeltaY = -100000 - minY;
+    const maxAllowedDeltaY = 100000 - maxY;
+
+    let effectiveDeltaX = requestedDeltaX;
+    if (minAllowedDeltaX <= maxAllowedDeltaX) {
+      effectiveDeltaX = Math.max(minAllowedDeltaX, Math.min(maxAllowedDeltaX, requestedDeltaX));
+    } else {
+      effectiveDeltaX = 0;
+    }
+
+    let effectiveDeltaY = requestedDeltaY;
+    if (minAllowedDeltaY <= maxAllowedDeltaY) {
+      effectiveDeltaY = Math.max(minAllowedDeltaY, Math.min(maxAllowedDeltaY, requestedDeltaY));
+    } else {
+      effectiveDeltaY = 0;
+    }
+
+    return { effectiveDeltaX, effectiveDeltaY };
+  }
   function transform() {
     viewport.setAttribute('transform', `translate(${pan.x} ${pan.y}) scale(${zoom})`);
     zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
@@ -632,14 +662,42 @@ export function mountCollabCanvas(host, {
   listen(alignForm, 'submit', event => { event.preventDefault(); applyAlignment(); });
 
   listen(svg, 'click', event => {
-    if (!alive || suppressClick) { suppressClick = false; return; }
+    if (!alive) return;
+    if (suppressClick) {
+      suppressClick = false;
+      pointerAction = null;
+      return;
+    }
+    const action = pointerAction;
+    pointerAction = null;
+
+    if (action?.type === 'handled') {
+      return;
+    }
+    if (action?.type === 'deferSingleSelect') {
+      selection.selectOne(action.kind, action.id);
+      renderSelection();
+      return;
+    }
+
     const isToggle = event.ctrlKey || event.metaKey;
     choose(event.target, { toggle: isToggle });
   });
 
   listen(svg, 'focusin', event => {
-    if (event.target.closest?.('[data-node-id],[data-edge-id]')) {
-      choose(event.target);
+    if (restoringFocus) return;
+    const node = event.target.closest?.('[data-node-id]');
+    const edge = event.target.closest?.('[data-edge-id]');
+    if (node) {
+      const id = node.dataset.nodeId;
+      if (!selection.has('node', id)) {
+        choose(event.target);
+      }
+    } else if (edge) {
+      const id = edge.dataset.edgeId;
+      if (!selection.has('edge', id)) {
+        choose(event.target);
+      }
     }
   });
 
@@ -652,6 +710,7 @@ export function mountCollabCanvas(host, {
   listen(svg, 'pointerdown', event => {
     if (!alive || !valid || event.button !== 0 || confirming) return;
     suppressClick = false;
+    pointerAction = null;
 
     const targetNode = event.target.closest?.('[data-node-id]');
     const targetEdge = event.target.closest?.('[data-edge-id]');
@@ -659,7 +718,14 @@ export function mountCollabCanvas(host, {
     const isShift = event.shiftKey;
 
     if (targetEdge) {
-      choose(event.target, { toggle: isToggle });
+      const edgeId = targetEdge.dataset.edgeId;
+      if (isToggle) {
+        selection.toggle('edge', edgeId);
+      } else {
+        selection.selectOne('edge', edgeId);
+      }
+      renderSelection();
+      pointerAction = { type: 'handled' };
       return;
     }
 
@@ -670,9 +736,13 @@ export function mountCollabCanvas(host, {
       if (isToggle) {
         selection.toggle('node', nodeId);
         renderSelection();
+        pointerAction = { type: 'handled' };
       } else if (!selection.has('node', nodeId)) {
         selection.selectOne('node', nodeId);
         renderSelection();
+        pointerAction = { type: 'handled' };
+      } else {
+        pointerAction = { type: 'deferSingleSelect', kind: 'node', id: nodeId };
       }
 
       // 如果当前选中包含节点，准备批量拖拽
@@ -708,6 +778,7 @@ export function mountCollabCanvas(host, {
         startGraphY,
         generation,
         pointerId: event.pointerId,
+        moved: false,
       };
       marquee.hidden = false;
       marquee.setAttribute('x', event.clientX - (rect.left || 0));
@@ -723,6 +794,7 @@ export function mountCollabCanvas(host, {
     if (!isToggle) {
       selection.clear();
       renderSelection();
+      pointerAction = { type: 'handled' };
     }
     drag = {
       kind: 'pan',
@@ -742,6 +814,9 @@ export function mountCollabCanvas(host, {
     const dx = event.clientX - drag.startX, dy = event.clientY - drag.startY;
 
     if (drag.kind === 'box') {
+      if (Math.hypot(dx, dy) >= 3) {
+        drag.moved = true;
+      }
       const rect = svg.getBoundingClientRect();
       const curX = event.clientX - (rect.left || 0);
       const curY = event.clientY - (rect.top || 0);
@@ -765,10 +840,11 @@ export function mountCollabCanvas(host, {
     } else if (drag.kind === 'nodes') {
       const deltaX = Math.round(dx / zoom);
       const deltaY = Math.round(dy / zoom);
+      const { effectiveDeltaX, effectiveDeltaY } = computeGroupDelta(drag.nodes, deltaX, deltaY);
       for (const node of drag.nodes) {
         drag.preview[node.id] = {
-          x: clamp(node.startX + deltaX),
-          y: clamp(node.startY + deltaY),
+          x: node.startX + effectiveDeltaX,
+          y: node.startY + effectiveDeltaY,
         };
       }
       renderPositions();
@@ -780,6 +856,7 @@ export function mountCollabCanvas(host, {
     const finished = drag; drag = null; suppressClick = finished.moved;
 
     if (finished.kind === 'box') {
+      suppressClick = true;
       marquee.hidden = true;
       const rect = svg.getBoundingClientRect();
       const endGraphX = (event.clientX - (rect.left || 0) - pan.x) / zoom;
@@ -819,11 +896,11 @@ export function mountCollabCanvas(host, {
 
   listen(dom, 'pointercancel', () => {
     if (drag?.kind === 'box') marquee.hidden = true;
-    drag = null; suppressClick = false; renderPositions();
+    drag = null; suppressClick = false; pointerAction = null; renderPositions();
   });
   listen(dom.defaultView, 'blur', () => {
     if (drag?.kind === 'box') marquee.hidden = true;
-    drag = null; renderPositions();
+    drag = null; pointerAction = null; renderPositions();
   });
 
   listen(svg, 'wheel', event => {
@@ -878,6 +955,7 @@ export function mountCollabCanvas(host, {
     if (event.key === 'Escape') {
       if (drag?.kind === 'box') marquee.hidden = true;
       drag = null;
+      pointerAction = null;
       renderPositions();
       if (confirming) { cancelDelete(); return; }
       if (selection.count() > 0) { selection.clear(); renderSelection(); return; }
@@ -917,9 +995,17 @@ export function mountCollabCanvas(host, {
         if (nodesToMove.length > 50) {
           localError = '单次最多 50 项操作，无法批量移动。'; renderControls(); return;
         }
+        const { effectiveDeltaX, effectiveDeltaY } = computeGroupDelta(
+          nodesToMove.map(n => ({ startX: n.x, startY: n.y })),
+          direction[0] * step,
+          direction[1] * step
+        );
+        if (effectiveDeltaX === 0 && effectiveDeltaY === 0) {
+          return;
+        }
         const ops = nodesToMove.map(node => ({
           type: 'node.update',
-          params: { id: node.id, x: clamp(node.x + direction[0] * step), y: clamp(node.y + direction[1] * step) },
+          params: { id: node.id, x: node.x + effectiveDeltaX, y: node.y + effectiveDeltaY },
         }));
         if (writable()) emit(ops);
       } else {
@@ -932,7 +1018,7 @@ export function mountCollabCanvas(host, {
 
   function update(next = {}) {
     if (!alive) return;
-    generation++; drag = null; pendingDelete = null; confirming = false; confirmation.hidden = true; localError = ''; suppressClick = false;
+    generation++; drag = null; pendingDelete = null; confirming = false; confirmation.hidden = true; localError = ''; suppressClick = false; pointerAction = null;
     const focused = dom.activeElement;
     const focusId = focused?.dataset?.nodeId || focused?.dataset?.edgeId;
     const oldId = document?.documentId;
@@ -960,9 +1046,14 @@ export function mountCollabCanvas(host, {
     renderGraph(); renderSelection(); transform();
     if (valid && (firstRender || oldId !== document.documentId)) fit();
     firstRender = false;
-    if (focusId) {
+    if (focusId && oldId === document?.documentId) {
       const replacement = [...viewport.querySelectorAll('[data-node-id],[data-edge-id]')].find(domNode => (domNode.dataset.nodeId || domNode.dataset.edgeId) === focusId);
-      (replacement || svg).focus();
+      restoringFocus = true;
+      try {
+        (replacement || svg).focus();
+      } finally {
+        restoringFocus = false;
+      }
     }
   }
 
@@ -971,7 +1062,7 @@ export function mountCollabCanvas(host, {
     update,
     destroy() {
       if (!alive) return;
-      alive = false; generation++; drag = null; pendingDelete = null;
+      alive = false; generation++; drag = null; pendingDelete = null; pointerAction = null;
       for (const dispose of listeners.splice(0)) dispose();
       root.remove(); document = null; selection.clear(); clipboard = null;
     },
