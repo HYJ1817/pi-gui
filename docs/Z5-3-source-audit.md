@@ -9,6 +9,11 @@
 以下路径以该安装包为根；这是实际安装源码的静态证据，不是仅凭文档或用户真实 JSONL 推断。
 人工 TEMP fixture 按这些代码构造，不要求测试机器安装 Pi。
 
+本轮核对文件 SHA256：session-manager.js `046b6a1109ac3f0ed893bb85bf0648709362fa926a5da75761216cf2fcf9d926`；
+agent-session.js `436e8be3bbab2db475ce30bb5d0bb30f0046b19a3476f8cd57b8133e68891162`；
+pi-agent-core/dist/agent-loop.js `22ee81f9977e211044c1ad41a763876c793ca7fc1c5b39b9fa7f76f3cb281129`。
+同安装包实际 CLI bundle 的 `dist/bundle/chunks/chunk-MM3LKT73.js` 也包含 createToolResultMessage / appendMessage 实现，未仅核对文档。
+
 | 问题 | 结论与可复核证据 |
 | --- | --- |
 | 1 原生记录有可辨识调用吗 | 有。`node_modules/@earendil-works/pi-ai/dist/types.d.ts:271` 定义 `ToolCall`；`dist/core/agent-session.js:755-767` 将 assistant 和 toolResult 的 message_end 存入 SessionManager；`dist/core/session-manager.js:831-840` 以嵌套 `message` 写入 JSONL。 |
@@ -60,6 +65,7 @@
 - `returned` 是实际项数，`limit=100`；仅返回最近最多 100 次调用。`truncated` 表示摘要行/调用预算截断；`historyTruncated` 继承正文原标志。`uncertain` 表示存在未知终态或记录/窗口缺口。空历史 `unavailableReason=no_tool_calls`，损坏/不支持/孤儿/预算缺口使用受控原因，不伪造工具调用。
 - 摘要每项只含三个短字段，JSON 摘要预算 < 12 KiB（测试精确核对）；原正文上限与 JSON 转义后的既有体积合同不变。无额外索引、后台任务、数据库、依赖或新网络行为。
 - 结果的 parentId 必须沿窗口内更早条目回溯至该调用的 assistant 条目，遇到另一条 assistant/user 或损坏/重复节点即停止。关联不修复旧记录、不迁移 schema、不证明 Agent 的 Git 归因。
+- 原生结果还须有数组 content（只核对形状、不读其正文）；缺失/畸形 content 不把单独 isError=false 当成完成证据。异常记录置 uncertain。最终源码与 fixture 红绿结果见 [验收材料](Z5-3-acceptance.md)。
 
 ## 4. 证据资格与缺口
 
