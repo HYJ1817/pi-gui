@@ -34,7 +34,8 @@ async function main() {
   fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '1.3.0', bin: { pi: 'cli.cjs' } }));
   fs.writeFileSync(path.join(pkg, 'dist/core/extensions/types.d.ts'), '"tool_call" "tool_execution_end" getAllTools() registerTool<');
   fs.writeFileSync(path.join(pkg, 'dist/cli/args.js'), 'if (arg === "--extension") {}');
-  fs.copyFileSync(path.join(ROOT, 'tests/fixtures/candidate-pi.cjs'), path.join(pkg, 'cli.cjs'));
+  fs.copyFileSync(path.join(ROOT, process.env.G2_SMOKE_THINKING === '1'
+    ? 'tests/fixtures/z52-thinking-pi.cjs' : 'tests/fixtures/candidate-pi.cjs'), path.join(pkg, 'cli.cjs'));
   const shim = path.join(world, 'pi.cmd');
   fs.writeFileSync(shim, `@echo off\r\n"${process.env.G2_NODE_EXECUTABLE}" "${path.join(pkg, 'cli.cjs')}" %*\r\n`);
   const socket = require('node:net').createServer();
@@ -65,9 +66,17 @@ async function main() {
   await win.loadURL(origin);
   await until(() => read("document.querySelector('#connText')?.textContent.includes('已连接')"), 'renderer connection');
   check('Electron starts with normal sandbox, isolated context and no Node integration', win.webContents.getLastWebPreferences().sandbox === true && win.webContents.getLastWebPreferences().contextIsolation === true && win.webContents.getLastWebPreferences().nodeIntegration === false);
-  const identity = await read("import('/state.js').then(({S})=>({cwd:S.cwd,owner:S.legacyOwner,run:S.bridgeRun}))");
+  let identity;
+  await until(async () => {
+    identity = await read("import('/state.js').then(({S})=>({cwd:S.cwd,owner:S.legacyOwner,run:S.bridgeRun}))");
+    return path.resolve(identity.cwd || '.') === repo && identity.owner?.workspaceId && identity.owner?.workspaceEpoch && identity.owner?.sessionId && identity.owner?.backendInstance;
+  }, 'native owner bound after renderer connection');
   check('renderer connects to the production backend and fake Pi', Number.isInteger(identity.run));
   check('workspace and owner identity belong to the temporary Git repository', path.resolve(identity.cwd) === repo && identity.owner?.workspaceId && identity.owner?.workspaceEpoch && identity.owner?.sessionId && identity.owner?.backendInstance);
+  if (process.env.G2_SMOKE_THINKING === '1') {
+    await require('./z52-thinking-scenarios.cjs')({ win, read, check, until, origin, out, screenshots, errors });
+    return;
+  }
   page = http.createServer((_request, response) => response.end('<!doctype html><title>G2 loopback fixture</title><h1>G2 Offline Browser</h1><input id="draft">'));
   await new Promise(resolve => page.listen(0, '127.0.0.1', resolve));
   await read("document.querySelector('#btnBrowser').click()");
