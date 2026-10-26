@@ -327,3 +327,16 @@ P7 给了一个**只用于精确定位**的入口：注入的 `extraSessionRoots
 全程在 `os.tmpdir()` 里造 fixture，**绝不碰真实的 `~/.pi/agent/sessions`** ——
 这一点是硬要求：开发这个模块时就是因为拿真实项目测「改名」，把用户的一个
 会话文件追加了一行。**会写盘的用例一律用临时 fixture。**
+
+## 十六、Runtime 并行会话输入可靠性与草稿隔离（Z5-1）
+
+对于右侧多会话与并行执行视图（Runtime Conversation），输入与草稿遵循以下独立隔离契约：
+
+1. **中文输入法（IME）防护**：
+   在 Runtime Composer 的本地作用域中监听 `compositionstart` 与 `compositionend`，守卫 `isComposing`、`keyCode === 229` 与组合状态。输入法候选词确认不误识别为 Enter 发送；`Shift+Enter` 换行不发送；会话切换和视图销毁时重置 composition 状态。
+2. **草稿身份隔离**：
+   持久化 key 只取后端快照已证明的稳定 locator：`projectId`、`workspaceId`、`workspaceEpoch`、`conversationId`、`nativeSessionId`。易变执行身份（`runtimeId`、`runtimeGeneration`）不进入 key，以支持同原生会话进程重启后的草稿恢复；`nativeSessionId` 或 `workspaceEpoch` 改变时严格隔离旧草稿。
+3. **Owner 变化与 ACK 清理**：
+   旧 Owner 的迟到 ACK 绝不清理新会话或用户新输入的草稿；仅当 ACK 属于当前目标会话、完整 Owner 匹配、draftRevision 与正文均等于提交版本时，才同步清除对应持久副本。
+4. **容量与降级**：
+   恢复上限为 20000 字符（`DRAFT_MAX_CHARS`）；超过 20000 字符时内存保留完整文本、清除持久副本并给出内联提示，不静默截断。存储配额不足或隐私模式时降级为仅内存保留并内联提示。
