@@ -178,7 +178,7 @@ export function mountCollabProductivity(host, {
     try {
       const result = await exportFlowchart(document, { format, ...exportOptions, theme: themeSelect.value, confirm: confirmExport });
       if (!alive) return;
-      if (!result.ok) { notice(`导出失败：${result.code}`, 'error'); return; }
+      if (!result.ok) { notice(result.code==='png-size-limit'?'图形范围过大，请先自动整理布局或导出 SVG。':`导出失败：${result.code}`, 'error'); return; }
       if (result.status === 'cancelled') { notice('已取消导出。'); return; }
       onExport({ ...result, source });
       notice(`导出完成（${format.toUpperCase()}，${result.width}×${result.height}）。`);
