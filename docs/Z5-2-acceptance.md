@@ -168,3 +168,25 @@ Z5-2 没有 push/PR，故不存在 Z5-2 PR CI/gate 成功记录。基线成功 C
 
 交付状态：开发完成；本轮定向、窗口、构建证据已提供；独立代码验收与完整canonical待验证。
 未 push、未创建 PR、未合并远端、未打 tag、未发布；未开始 Z5-3。
+
+## 9. PR #38 合并前 CI 补验（后续授权阶段）
+
+初始交付之后，用户依次授权推送、创建 PR 和合并；第 8 节末尾保留初始交付时点。
+PR 为 [#38](https://github.com/HYJ1817/pi-gui/pull/38)，初始 head `7810626d527faef865be1d0f2a4a54f1cc6c16b6`。
+
+首次完整 [CI 40364383360](https://github.com/HYJ1817/pi-gui/actions/runs/40364383360) 失败，未绕过 gate：
+
+- UI 在 `tests/ui2-runtime-display.cjs` 的未知能力断言失败。本地先复现同一红测，
+  原因是其 injected Models 夹具仍返回旧结构，没有控制器新增的 availability 投影。
+  修复为成功原生空列表、显式 readStatus 和共享策略派生结果，保留未知三值及全部原断言。
+  最终该套件 **82/82**，Runtime finishing UI **34/34**，thinking availability **34/34**，均 exit0。
+- core 的 `tests/high-risk-regressions.cjs` 为 **27/28**：真实 bridge/guardian 的 fake Pi 用例
+  报 `owned_bridge_fixture_timeout`。本地复验 **28/28**、exit0。
+  该套件及其25秒等待未被本 PR 修改；尚不能单凭本地通过归因，交新一轮完整 CI 复验。
+- security/native/faults 和 Electron build check 已成功，但不能把部分组通过当作完整证明。
+
+此次仅改测试夹具和本报告，public 生产 tree 仍为 `232582ff8a831a35cb8950b4be1b9e34beec4496`，
+因此复用第 7 节已有构建/字节校验证据，无需为测试夹具重建用户产物。
+canonical 清单仍为223叶命令，未改 CI、timeout、断言、skip 或减测规则。
+后续完整 CI 的精确 head/run/attempt/gate 以 PR #38 检查记录及 PR 描述为准；通过前仍为待验证。
+独立复审尚无记录，不能将用户的合并授权表述为独立审查已通过。
