@@ -1,0 +1,36 @@
+ok 40 mixed Classic/Runtime cycles over four documents: reject/accept/undo/redo, restart and bounded queues
+FAIL 40 panel SVG exports and disposal leave no URLs, timers, polling or lifecycle listeners AssertionError [ERR_ASSERTION]: disposed panel must cancel deferred download revocation timers
+
+1 !== 0
+
+    at Proxy.<anonymous> (C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:7:145)
+    at C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:99:20
+    at async check (C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:8:43)
+    at async C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:90:9 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+FAIL oversized PNG refuses before Blob/Image/canvas allocation AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'png-render-failed'
+- 'png-size-limit'
+       ^
+
+    at Proxy.<anonymous> (C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:7:145)
+    at C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:112:18
+    at async check (C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:8:43)
+    at async C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-stability.cjs:104:7 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'png-render-failed',
+  expected: 'png-size-limit',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+{"rounds":40,"elapsedMs":22047,"rssBefore":114094080,"rssAfter":141492224,"qualification":"bounded-short-soak-only"}
+Collab stability: 1/3; assertions=367; failed=2

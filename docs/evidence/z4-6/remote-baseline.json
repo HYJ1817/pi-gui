@@ -1,0 +1,28 @@
+{
+  "checkedAtShanghai": "2026-10-26T15:17:11.814381+08:00",
+  "run": {
+    "id": 40278098767,
+    "event": "pull_request",
+    "head_sha": "d919fc90a59d8d83aebabfd6bddbc727f9e4ee90",
+    "run_attempt": 5,
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/HYJ1817/pi-gui/actions/runs/40278098767"
+  },
+  "pr34": {
+    "baseRefOid": "0ec517a17b041b857fc1f83afc1040d0c9fb90e0",
+    "headRefOid": "d919fc90a59d8d83aebabfd6bddbc727f9e4ee90",
+    "mergedAt": "2026-10-26T07:10:50Z",
+    "state": "MERGED"
+  },
+  "latestMain": "adbff9da03350623e4e81e5b11bf9b75cdbbe923",
+  "verifiedTree": "626f23b5003ee89223c30ff1de8aaf0eb9b94a93",
+  "prMergeCheckout": {
+    "sha": "1a813c302e9c4ddcd7e3ceecd88131b0553dd1ae",
+    "tree": "626f23b5003ee89223c30ff1de8aaf0eb9b94a93",
+    "parents": [
+      "0ec517a17b041b857fc1f83afc1040d0c9fb90e0",
+      "d919fc90a59d8d83aebabfd6bddbc727f9e4ee90"
+    ]
+  }
+}
