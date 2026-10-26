@@ -213,6 +213,20 @@ async function runUiChecks() {
     w.onResponse({ command: 'get_available_thinking_levels', id: lv.id, success: true, data: { levels: ['high'] } });
     assert.notEqual(w.S.state.model.providerId, 'old-session'); assert.equal(w.S.thinkingLevels.length, 0); assert.equal(w.S.modelSwitchPending, true);
   });
+  await check('Classic chip exposes failed and invalid read reasons instead of stale options', () => {
+    w.S.modelSwitchPending = false; state({ provider: 'fixture', id: 'z52', reasoning: false });
+    w.onThinkingLevels({ levels: ['off', 'low', 'low', ' high', ' '] });
+    assert.equal(w.document.getElementById('btnThink').disabled, false); assert.equal(w.S.state.model.capability.capabilities.reasoning, false);
+    assert.equal(w.S.thinkingLevels.join(','), 'off,low');
+    w.onResponse({ command: 'get_available_thinking_levels', success: false });
+    assert.equal(w.document.getElementById('btnThink').disabled, true); assert.ok(w.document.getElementById('btnThink').title.includes('未能读取'));
+    w.onThinkingLevels({ levels: [' ', ' high'] });
+    assert.equal(w.document.getElementById('btnThink').disabled, true); assert.ok(w.document.getElementById('btnThink').title.includes('有效'));
+  });
+  await check('Classic initial native refresh uses pending without inventing levels', () => {
+    w.refreshModelState({ pending: false });
+    assert.equal(w.document.getElementById('thinkText').textContent, '思考同步中…'); assert.equal(w.document.getElementById('btnThink').disabled, true);
+  });
   dom.window.close();
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });
