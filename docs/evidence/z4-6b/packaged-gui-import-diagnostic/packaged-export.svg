@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="756" height="296" viewBox="0 0 756 296" role="img" aria-label="流程图导出：5 个节点">
+  <title>流程图</title>
+  <rect x="0" y="0" width="756" height="296" fill="#ffffff" />
+  <defs>
+    <marker id="export-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" fill="#6f6e66">
+      <path d="M 0 0 L 10 5 L 0 10 z" />
+    </marker>
+  </defs>
+  <g stroke="#6f6e66" stroke-width="1.5" fill="none">
+    <g>
+      <line x1="204" y1="80" x2="300" y2="80" marker-end="url(#export-arrow)" />
+      <title>n-8e47b3c7-b177-422c-90d3-61b3bd0346b8 → n-1d3f4e87-455b-4880-abd0-48422e48445f</title>
+    </g>
+    <g>
+      <line x1="204" y1="216" x2="300" y2="216" marker-end="url(#export-arrow)" />
+      <title>n1 → n2</title>
+    </g>
+    <g>
+      <line x1="456" y1="216" x2="552" y2="216" marker-end="url(#export-arrow)" />
+      <title>n2 → n3</title>
+    </g>
+  </g>
+  <g font-family="system-ui, &#39;Segoe UI&#39;, &#39;Microsoft YaHei&#39;, &#39;PingFang SC&#39;, sans-serif">
+    <g>
+      <rect x="300" y="48" width="156" height="64" rx="7" fill="#f7f7f5" stroke="#7b7971" stroke-width="1.5" />
+      <title>打包窗口编辑</title>
+      <text x="378" y="74" text-anchor="middle" font-size="12" fill="#1f1f1e" stroke="none">
+        <tspan x="378" dy="0">打包窗口编辑</tspan>
+      </text>
+    </g>
+    <g>
+      <rect x="48" y="48" width="156" height="64" rx="7" fill="#f7f7f5" stroke="#7b7971" stroke-width="1.5" />
+      <title>开始</title>
+      <text x="126" y="74" text-anchor="middle" font-size="12" fill="#1f1f1e" stroke="none">
+        <tspan x="126" dy="0">开始</tspan>
+      </text>
+    </g>
+    <g>
+      <rect x="48" y="184" width="156" height="64" rx="7" fill="#f7f7f5" stroke="#7b7971" stroke-width="1.5" />
+      <title>开始</title>
+      <text x="126" y="210" text-anchor="middle" font-size="12" fill="#1f1f1e" stroke="none">
+        <tspan x="126" dy="0">开始</tspan>
+      </text>
+    </g>
+    <g>
+      <rect x="300" y="184" width="156" height="64" rx="7" fill="#f7f7f5" stroke="#7b7971" stroke-width="1.5" />
+      <title>打包窗口编辑</title>
+      <text x="378" y="210" text-anchor="middle" font-size="12" fill="#1f1f1e" stroke="none">
+        <tspan x="378" dy="0">打包窗口编辑</tspan>
+      </text>
+    </g>
+    <g>
+      <rect x="552" y="184" width="156" height="64" rx="7" fill="#f7f7f5" stroke="#7b7971" stroke-width="1.5" />
+      <title>结束</title>
+      <text x="630" y="210" text-anchor="middle" font-size="12" fill="#1f1f1e" stroke="none">
+        <tspan x="630" dy="0">结束</tspan>
+      </text>
+    </g>
+  </g>
+</svg>

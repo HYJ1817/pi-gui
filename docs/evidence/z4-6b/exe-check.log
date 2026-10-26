@@ -1,0 +1,52 @@
+EXE diagnostic observation {"optionalCanvasWarningObserved":false,"classification":null,"exitedBeforeCleanup":false}
+  ok   exe 能启动并监听端口
+  ok   pi 子进程已拉起
+  ok   私有 RPC 确认单文件 EXE bridge ready
+  ok   内嵌 index.html 与磁盘一致
+  ok   内嵌 styles.css 与磁盘一致
+  ok   内嵌 app.js 与磁盘一致
+  ok   首页根路径返回 index.html
+  ok   根路径内容正确
+  ok   目录穿越被挡
+  ok   编码后的穿越也被挡
+  ok   exe 内 GET /api/project-config 通（模块进包了）
+  ok   exe 内认得出当前项目（hasProject + cwd）
+  ok   exe 内没有配置文件时给默认值，不报错
+  ok   exe 内 PUT 项目配置成功
+  ok   exe 内只改 ignore / commands 时不触发重启
+  ok   exe 内配置文件真的落到磁盘上
+  ok   exe 内配置是合法 JSON
+  ok   exe 内配置写上了 version
+  ok   exe 内未知字段被丢弃（没落盘）
+  ok   exe 内错误类型被丢弃（thinking 是数字）
+  ok   exe 内 ignore / commands 原样保存
+  ok   exe 内配置文件里没有出现 apiKey（密钥边界）
+  ok   exe 内配置文件里没有出现传入的密钥值
+  ok   exe 内保存项目指令成功
+  ok   exe 内指令落成了可注入的文件
+  ok   exe 内改指令会要求重启 pi（走启动参数生效）
+  ok   exe 内回读拿到刚保存的内容（读-写闭环）
+  ok   exe 内带 projectPath / 穿越参数不改变目标项目（唯一来源是 runtime 的 cwd）
+  ok   exe 内 GET /api/skills 通（模块进包了）
+  ok   exe 内 skills 列表是数组、counts 齐全
+  ok   exe 内 skills 报出四个发现根
+  ok   exe 内认得出 agentDir（PI_CODING_AGENT_DIR 被 exe 读到了）
+  ok   exe 内 skills 负载里没有密钥字段
+  ok   exe 内未知 skill ID → 404（不崩）
+  ok   exe 内 DELETE /api/skills → 405
+  ok   exe 内 GET /api/mcp 通（模块进包了）
+  ok   exe 内 mcp 报告带 supported / servers / extensionRoute 三个字段
+  ok   exe 内 mcp 不假装有 Server（servers 为空）
+  ok   exe 内 mcp 报告里没有「已连接」这类没数据支撑的状态
+  ok   exe 内 PDF 抽取成功
+  ok   PDF 正文含文档内容
+  ok   PDF 正文无乱码
+  ok   PDF 页数正确
+  ok   exe 内 docx 抽取成功
+  ok   exe 内图片识别为 image
+  ok   运行期没有崩栈输出
+  ok   运行期没有意外退出
+  ok   数据目录用的是 PI_GUI_DATA 指的地方
+  ok   产物目录没有被写入（没有在 build/ 里生成 projects.json）
+
+49/49 通过

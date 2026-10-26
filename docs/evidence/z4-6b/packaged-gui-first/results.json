@@ -1,0 +1,19 @@
+{
+  "qualification": "packaged-gui-fake-pi",
+  "startedAt": "2026-10-26T07:54:06.181Z",
+  "checks": [],
+  "failed": 1,
+  "screenshots": [],
+  "launches": [],
+  "modelCalls": 0,
+  "input": "Chromium CDP Input dispatch; trusted DOM events, not physical OS HID input",
+  "limits": [
+    "fake Pi, not real model",
+    "test preload guard is not an OS network sandbox",
+    "no installation or upgrade qualification"
+  ],
+  "executableSha256": "c8755f70993aecf1da95a2557234a3fa2b59c876f7419ca62fab41147f01d81b",
+  "failureStage": "packaged main inspector",
+  "failureCode": "evaluation_failed",
+  "finishedAt": "2026-10-26T07:54:12.732Z"
+}

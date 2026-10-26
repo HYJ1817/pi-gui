@@ -1,0 +1,70 @@
+{
+  "pr35": {
+    "url": "https://github.com/HYJ1817/pi-gui/pull/35",
+    "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+    "merged": true,
+    "mergedAt": "2026-10-26T11:32:42Z",
+    "mergeSha": "c7fbad65500e1c20b6084f421c7920d8f77ffbc6"
+  },
+  "mainRun": {
+    "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40315861760",
+    "id": 40315861760,
+    "head": "c7fbad65500e1c20b6084f421c7920d8f77ffbc6",
+    "event": "push",
+    "attempt": 1,
+    "status": "in_progress",
+    "conclusion": null
+  },
+  "latestRelease": {
+    "url": "https://github.com/HYJ1817/pi-gui/releases/tag/v0.29.0",
+    "tag": "v0.29.0",
+    "draft": false,
+    "publishedAt": "2026-10-24T11:01:54Z"
+  },
+  "observedAt": "2026-10-26 11:46:32 UTC",
+  "mainJobs": [
+    {
+      "id": 121548167781,
+      "name": "Validate complete test plan",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 121548377808,
+      "name": "Electron build check",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 121548377849,
+      "name": "Tests (native)",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 121548377869,
+      "name": "Tests (security)",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 121548377905,
+      "name": "Tests (ui)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 121548378000,
+      "name": "Tests (faults)",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 121548378040,
+      "name": "Tests (core)",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "mainJobsObservedAt": "2026-10-26 11:47:52 UTC"
+}

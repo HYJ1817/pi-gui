@@ -1,0 +1,21 @@
+{
+  "qualification": "electron-chromium-passed",
+  "sandbox": true,
+  "failed": 0,
+  "rows": [
+    "装配页加载正常",
+    "1200px 宽窗口截图已保存",
+    "多选两个节点生效",
+    "对齐表单出现",
+    "多选状态高亮截图已保存",
+    "760px 窄窗口截图已保存"
+  ],
+  "screenshots": [
+    "z45-advanced-wide-1200.png",
+    "z45-multiselect-active.png",
+    "z45-narrow-760.png"
+  ],
+  "artifacts": [],
+  "chromium": "152.0.7977.130",
+  "attemptedAt": "2026-10-26T07:50:48.993Z"
+}

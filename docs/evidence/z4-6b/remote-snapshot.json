@@ -1,0 +1,129 @@
+{
+  "observedAtUtc": "2026-10-26 08:05:40 UTC",
+  "main": "adbff9da03350623e4e81e5b11bf9b75cdbbe923",
+  "acceptedHead": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+  "prs": [
+    {
+      "number": 35,
+      "state": "open",
+      "mergedAt": null,
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "base": "adbff9da03350623e4e81e5b11bf9b75cdbbe923",
+      "url": "https://github.com/HYJ1817/pi-gui/pull/35"
+    }
+  ],
+  "ci": {
+    "runId": 40287018398,
+    "attempt": 1,
+    "event": "pull_request",
+    "prHead": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+    "checkout": "a4a13b168219abc48694b30e0f02d8dfc80a4ad1",
+    "tree": "c2a8b1ae49ac759690ebf355bff8f4946aede514",
+    "parents": [
+      "adbff9da03350623e4e81e5b11bf9b75cdbbe923",
+      "db2bbf2e88801c01940484e6ba4ea920e0256722"
+    ],
+    "url": "https://github.com/HYJ1817/pi-gui/actions/runs/40287018398",
+    "jobs": [
+      {
+        "id": 121452963241,
+        "name": "Validate complete test plan",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 121453101291,
+        "name": "Tests (ui)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 121453101292,
+        "name": "Tests (native)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 121453101302,
+        "name": "Tests (security)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 121453101308,
+        "name": "Tests (faults)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 121453101330,
+        "name": "Electron build check",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 121453101478,
+        "name": "Tests (core)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 121458926529,
+        "name": "CI gate",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 12635153457,
+        "name": "test-results-native",
+        "digest": "sha256:3cd5565fd0b8eb3f9880c9fc3762c8841bcc6747251bdcfc65ae7fa35a4c6368",
+        "size": 681,
+        "sha": "db2bbf2e88801c01940484e6ba4ea920e0256722"
+      },
+      {
+        "id": 12635152677,
+        "name": "test-results-security",
+        "digest": "sha256:5cabbb0a77e5432fed7484f588dfb2bb955fdc9c41c5e1f1d59994f875be4348",
+        "size": 1336,
+        "sha": "db2bbf2e88801c01940484e6ba4ea920e0256722"
+      },
+      {
+        "id": 12634920511,
+        "name": "test-results-ui",
+        "digest": "sha256:1d9fa289b91c720111cff17252071e47f809e0c3fadce714dd36377a936d6160",
+        "size": 1216,
+        "sha": "db2bbf2e88801c01940484e6ba4ea920e0256722"
+      },
+      {
+        "id": 12634887140,
+        "name": "test-results-core",
+        "digest": "sha256:3779ce131f1301020981711e888a997ae2252b25c68fa3060cf085c219445e26",
+        "size": 4622,
+        "sha": "db2bbf2e88801c01940484e6ba4ea920e0256722"
+      },
+      {
+        "id": 12634824536,
+        "name": "ci-evidence-summary",
+        "digest": "sha256:790f4fd21cfd77d9a3046056c52179becf37232d88556a7fb86d51fdbca22b95",
+        "size": 917,
+        "sha": "db2bbf2e88801c01940484e6ba4ea920e0256722"
+      },
+      {
+        "id": 12634249416,
+        "name": "test-results-faults",
+        "digest": "sha256:392cb3c9fccddf903c44d5018ed1ffc5f6cb057b9991a2e3984de3c0982b303c",
+        "size": 1208,
+        "sha": "db2bbf2e88801c01940484e6ba4ea920e0256722"
+      }
+    ]
+  },
+  "release": {
+    "tag": "v0.29.0",
+    "url": "https://github.com/HYJ1817/pi-gui/releases/tag/v0.29.0",
+    "publishedAt": "2026-10-24T11:01:54Z",
+    "draft": false,
+    "prerelease": false
+  }
+}

@@ -1,0 +1,29 @@
+ok test guard attached before bundled backend launch
+ok actual packaged window has sandbox/contextIsolation and no Node integration
+ok actual packaged main uses independent artifact and TEMP userData
+ok packaged backend rejects collab without Owner
+ok no Owner request created no document
+ok packaged panel creates durable three-node document
+ok Windows system mouse and Right key move the temporary node through CAS
+ok packaged native text input saves through authoritative store
+ok trusted Shift drag marquee selects the three visible nodes
+ok trusted Ctrl click selects two nodes
+ok multi-node drag preserves relative displacement
+ok two-node alignment uses a single persisted batch
+ok native Ctrl C/V copies internal selection atomically
+ok batch delete and undo restore exact nodes and edges together
+ok layout preview does not commit document
+ok layout commits one authoritative batch
+ok packaged SVG actual download bytes
+ok packaged PNG actual download bytes
+ok mouse and keyboard reached trusted DOM handlers
+ok panel reopen restores document and empties undo history
+ok packaged owned process identities all exited
+ok test guard attached before bundled backend launch
+ok actual packaged window has sandbox/contextIsolation and no Node integration
+ok actual packaged main uses independent artifact and TEMP userData
+ok real app restart recovers exact document
+ok packaged owned process identities all exited
+ok synthetic project source bytes unchanged
+ok offline preload was installed in packaged backend
+{"checks":28,"failed":0}

@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-10-26T11:47:55.957520+00:00",
+  "integrationBase": "c7fbad65500e1c20b6084f421c7920d8f77ffbc6",
+  "integrationTree": "c2a8b1ae49ac759690ebf355bff8f4946aede514",
+  "acceptedHead": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+  "acceptedTree": "c2a8b1ae49ac759690ebf355bff8f4946aede514",
+  "verificationEntryCommit": "c209832314b4f52ff9225c24ae3cdf01acb7d24e",
+  "fastForwardWasContentIdentical": true,
+  "primaryWorkspace": {
+    "head": "d919fc90a59d8d83aebabfd6bddbc727f9e4ee90",
+    "status": [
+      "?? $null",
+      "?? .p25-1-release-a2b10ddfebd7413789311029f931a3ca/",
+      "?? .t3a-run/",
+      "?? docs/superpowers/plans/2026-10-22-project-development-governance.md"
+    ]
+  },
+  "z46aWorkspace": {
+    "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+    "status": []
+  }
+}
