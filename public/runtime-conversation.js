@@ -216,10 +216,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
    * 每个工具一项、带 `data-state`，Agent C 可以按状态着色而不必解析文本。 */
   const tools = el('div', 'rtc-state ui2-runtime-tools'); root.append(tools);
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
+  let composing = false;
   const input = el('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前会话的任务'); root.append(input);
+  input.addEventListener('compositionstart', () => { composing = true; });
+  input.addEventListener('compositionend', () => { composing = false; });
   input.oninput = () => { const r = store.get(id); if (r && !current().history) { r.draft = input.value; r.draftRevision++; } };
   input.onkeydown = event => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    if (event.isComposing || event.keyCode === 229 || composing) return;
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault(); if (!send.disabled) send.click();
     }
   };
@@ -563,6 +567,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     show(next) {
       focusEpoch++;
       active = true;
+      composing = false;
       if (next === id) { ensureModels(); draw(); return; }
       saveScroll();
       if (id) viewOf(id).focusOnReady = null;
@@ -580,9 +585,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       return alive && id === locator.conversationId && Boolean(current().history);
     },
     /** 离开中央视图时记下滚动位置。 */
-    leave() { active = false; focusEpoch++; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
+    leave() { active = false; composing = false; focusEpoch++; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
     dispose() {
-      alive = false; unsubscribe(); root.remove();
+      alive = false; composing = false; unsubscribe(); root.remove();
       /* 只拆自己建的那一份投影；外部传进来的（`display`）归外部管。 */
       if (ownsProjection) projection.dispose();
     },

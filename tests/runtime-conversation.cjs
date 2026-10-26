@@ -259,5 +259,86 @@ const { JSDOM } = require('jsdom');
     ok(leave ? '离开经典视图再返回不恢复迟到 focus 意图' : '切走再切回不重新创建迟到 focus 意图', !focusCalls.some(c => c.action === 'focus' && c.owner.conversationId === target));
     returningView.dispose();
   }
+
+  /* ---- R1: 输入法及 Enter 发送保护 ---- */
+  const imeView = createRuntimeConversation({ host });
+  const imeOwner = owner('IME-1');
+  global.fetch = async (url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend', items: [] };
+    const body = JSON.parse(opts.body); requests.push(body);
+    return { ok: true };
+  } });
+  runtimeStore.seed({ backendInstance: 'backend', items: [
+    { conversationId: 'IME-1', createdAt: '2026-01-01T00:00:00.000Z', workspace: { branch: 'branch-ime', projectId: 'project' }, owner: imeOwner, lifecycle: 'ready', activity: 'idle', attention: false, error: null, stop: null },
+    { conversationId: 'IME-2', createdAt: '2026-01-01T00:00:00.000Z', workspace: { branch: 'branch-ime-2', projectId: 'project' }, owner: owner('IME-2'), lifecycle: 'ready', activity: 'idle', attention: false, error: null, stop: null },
+  ] });
+  imeView.show('IME-1');
+  const imeInput = input();
+  const imeSend = btn('发送');
+  ok('初始状态发送按钮启用', !imeSend.disabled);
+
+  requests.length = 0;
+  // 1. keyCode=229 (即使 key 是 Enter, isComposing 是 false) 不发送
+  imeInput.value = '测试输入法';
+  imeInput.dispatchEvent(new dom.window.Event('input'));
+  const ev229 = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(ev229);
+  await tick();
+  ok('keyCode=229 不发送', requests.length === 0);
+
+  // 2. isComposing=true 不发送
+  const evComposing = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: true, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evComposing);
+  await tick();
+  ok('isComposing=true 不发送', requests.length === 0);
+
+  // 3. compositionstart 后的兼容 Enter 不发送
+  imeInput.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { bubbles: true }));
+  const evCompEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evCompEnter);
+  await tick();
+  ok('compositionstart 后的兼容 Enter 不发送', requests.length === 0);
+
+  // 4. compositionend 后下一次正常 Enter 可以发送
+  imeInput.dispatchEvent(new dom.window.CompositionEvent('compositionend', { bubbles: true }));
+  const evNormalEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evNormalEnter);
+  await tick();
+  ok('compositionend 后下一次正常 Enter 发送恰好一次', requests.length === 1 && requests[0].command?.message === '测试输入法');
+
+  // 5. Shift+Enter 只换行不发送
+  requests.length = 0;
+  imeInput.value = '第二行前缀';
+  imeInput.dispatchEvent(new dom.window.Event('input'));
+  let shiftPrevented = false;
+  const evShiftEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, shiftKey: true, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evShiftEnter);
+  await tick();
+  ok('Shift+Enter 不发送且不 preventDefault', requests.length === 0 && !evShiftEnter.defaultPrevented);
+
+  // 6. 切换 A/B 会话不继承错误 composition 状态
+  imeInput.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { bubbles: true }));
+  imeView.show('IME-2');
+  input().value = 'B 正常输入';
+  input().dispatchEvent(new dom.window.Event('input'));
+  const evBEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true });
+  input().dispatchEvent(evBEnter);
+  await tick();
+  ok('切换 A/B 会话不继承错误 composition 状态且能正常发送', requests.length === 1 && requests[0].command?.message === 'B 正常输入');
+
+  // 7. busy / history / disabled 状态不产生误发送
+  requests.length = 0;
+  imeView.show('IME-1');
+  const rIme1 = runtimeStore.get('IME-1');
+  rIme1.item.activity = 'running'; // busy
+  imeView.draw();
+  imeInput.value = 'busy 时不发';
+  imeInput.dispatchEvent(new dom.window.Event('input'));
+  imeInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true }));
+  await tick();
+  ok('busy 状态按 Enter 不产生误发送', requests.length === 0);
+
+  imeView.dispose();
+
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
