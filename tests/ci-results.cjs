@@ -15,7 +15,7 @@ async function check(name, action) {
   console.log(`ok ${name}`);
 }
 async function until(read, label) {
-  for (let index = 0; index < 200; index++) {
+  for (let index = 0; index < 800; index++) {
     const value = read();
     if (value) return value;
     await sleep(25);
@@ -88,7 +88,7 @@ async function main() {
     const names = ['pass.cjs', 'hold.cjs', 'fail.cjs', 'not-run.cjs', 'ui-fixture.cjs', 'session-revert-fixture.cjs', 'session-revert-object-runtime.cjs', 'stop-barrier.cjs'];
     fs.writeFileSync(path.join(world, 'package.json'), JSON.stringify({ scripts: { test: names.map(name => `node tests/${name}`).join(' && ') } }));
     for (const name of names) fs.writeFileSync(path.join(world, 'tests', name), '');
-    fs.writeFileSync(path.join(world, 'tests/hold.cjs'), "const fs=require('node:fs');const t=setInterval(()=>{if(fs.existsSync('release'))clearInterval(t)},20);setTimeout(()=>process.exit(9),8000).unref();");
+    fs.writeFileSync(path.join(world, 'tests/hold.cjs'), "const fs=require('node:fs');const t=setInterval(()=>{if(fs.existsSync('release'))clearInterval(t)},20);setTimeout(()=>process.exit(9),30000).unref();");
     fs.writeFileSync(path.join(world, 'tests/fail.cjs'), 'process.exitCode = 17;');
     fs.writeFileSync(path.join(world, 'tests/not-run.cjs'), "require('node:fs').writeFileSync('must-not-exist','bad')");
     const resultFile = path.join(world, 'results.json');

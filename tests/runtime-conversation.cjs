@@ -259,5 +259,315 @@ const { JSDOM } = require('jsdom');
     ok(leave ? '离开经典视图再返回不恢复迟到 focus 意图' : '切走再切回不重新创建迟到 focus 意图', !focusCalls.some(c => c.action === 'focus' && c.owner.conversationId === target));
     returningView.dispose();
   }
+
+  /* ---- R1: 输入法及 Enter 发送保护 ---- */
+  const imeView = createRuntimeConversation({ host });
+  const imeOwner = owner('IME-1');
+  global.fetch = async (url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend', items: [] };
+    const body = JSON.parse(opts.body); requests.push(body);
+    return { ok: true };
+  } });
+  runtimeStore.seed({ backendInstance: 'backend', items: [
+    { conversationId: 'IME-1', createdAt: '2026-01-01T00:00:00.000Z', workspace: { branch: 'branch-ime', projectId: 'project' }, owner: imeOwner, lifecycle: 'ready', activity: 'idle', attention: false, error: null, stop: null },
+    { conversationId: 'IME-2', createdAt: '2026-01-01T00:00:00.000Z', workspace: { branch: 'branch-ime-2', projectId: 'project' }, owner: owner('IME-2'), lifecycle: 'ready', activity: 'idle', attention: false, error: null, stop: null },
+  ] });
+  imeView.show('IME-1');
+  const imeInput = input();
+  const imeSend = btn('发送');
+  ok('初始状态发送按钮启用', !imeSend.disabled);
+
+  requests.length = 0;
+  // 1. keyCode=229 (即使 key 是 Enter, isComposing 是 false) 不发送
+  imeInput.value = '测试输入法';
+  imeInput.dispatchEvent(new dom.window.Event('input'));
+  const ev229 = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(ev229);
+  await tick();
+  ok('keyCode=229 不发送', requests.length === 0);
+
+  // 2. isComposing=true 不发送
+  const evComposing = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: true, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evComposing);
+  await tick();
+  ok('isComposing=true 不发送', requests.length === 0);
+
+  // 3. compositionstart 后的兼容 Enter 不发送
+  imeInput.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { bubbles: true }));
+  const evCompEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evCompEnter);
+  await tick();
+  ok('compositionstart 后的兼容 Enter 不发送', requests.length === 0);
+
+  // 4. compositionend 后下一次正常 Enter 可以发送
+  imeInput.dispatchEvent(new dom.window.CompositionEvent('compositionend', { bubbles: true }));
+  const evNormalEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evNormalEnter);
+  await tick();
+  ok('compositionend 后下一次正常 Enter 发送恰好一次', requests.length === 1 && requests[0].command?.message === '测试输入法');
+
+  // 5. Shift+Enter 只换行不发送
+  requests.length = 0;
+  imeInput.value = '第二行前缀';
+  imeInput.dispatchEvent(new dom.window.Event('input'));
+  let shiftPrevented = false;
+  const evShiftEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, shiftKey: true, isComposing: false, bubbles: true, cancelable: true });
+  imeInput.dispatchEvent(evShiftEnter);
+  await tick();
+  ok('Shift+Enter 不发送且不 preventDefault', requests.length === 0 && !evShiftEnter.defaultPrevented);
+
+  // 6. 切换 A/B 会话不继承错误 composition 状态
+  imeInput.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { bubbles: true }));
+  imeView.show('IME-2');
+  input().value = 'B 正常输入';
+  input().dispatchEvent(new dom.window.Event('input'));
+  const evBEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true });
+  input().dispatchEvent(evBEnter);
+  await tick();
+  ok('切换 A/B 会话不继承错误 composition 状态且能正常发送', requests.length === 1 && requests[0].command?.message === 'B 正常输入');
+
+  // 7. busy / history / disabled 状态不产生误发送
+  requests.length = 0;
+  imeView.show('IME-1');
+  const rIme1 = runtimeStore.get('IME-1');
+  rIme1.item.activity = 'running'; // busy
+  imeView.draw();
+  imeInput.value = 'busy 时不发';
+  imeInput.dispatchEvent(new dom.window.Event('input'));
+  imeInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, isComposing: false, bubbles: true, cancelable: true }));
+  await tick();
+  ok('busy 状态按 Enter 不产生误发送', requests.length === 0);
+
+  imeView.dispose();
+
+  /* ---- R2: Runtime 未发送纯文本草稿持久化与安全恢复集成测试 ---- */
+  localStorage.clear();
+  const draftView1 = createRuntimeConversation({ host });
+  const draftOwnerA = {
+    backendInstance: 'backend',
+    projectId: 'p-draft',
+    repoId: 'r-draft',
+    workspaceId: 'ws-draft-a',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'DRAFT-A',
+    runtimeId: 'rt-a',
+    runtimeGeneration: 'g-a',
+    sessionId: 'native-draft-a',
+  };
+  const draftOwnerB = {
+    backendInstance: 'backend',
+    projectId: 'p-draft',
+    repoId: 'r-draft',
+    workspaceId: 'ws-draft-b',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'DRAFT-B',
+    runtimeId: 'rt-b',
+    runtimeGeneration: 'g-b',
+    sessionId: 'native-draft-b',
+  };
+  runtimeStore.seed({ backendInstance: 'backend', items: [
+    { conversationId: 'DRAFT-A', nativeSessionId: 'native-draft-a', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-a', workspaceEpoch: 'epoch-1' }, owner: draftOwnerA, lifecycle: 'ready', activity: 'idle', revision: 1 },
+    { conversationId: 'DRAFT-B', nativeSessionId: 'native-draft-b', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-b', workspaceEpoch: 'epoch-1' }, owner: draftOwnerB, lifecycle: 'ready', activity: 'idle', revision: 1 },
+  ] });
+
+  // 1. A/B 会话分别输入草稿，离开时 flush 到持久存储
+  draftView1.show('DRAFT-A');
+  input().value = '持久草稿 A';
+  input().dispatchEvent(new dom.window.Event('input'));
+  draftView1.show('DRAFT-B');
+  ok('切到 B 后输入框为空', input().value === '');
+  input().value = '持久草稿 B';
+  input().dispatchEvent(new dom.window.Event('input'));
+  draftView1.leave();
+  draftView1.dispose();
+
+  // 2. 模拟重开：相同稳定 locator 重新 seed
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [
+    { conversationId: 'DRAFT-A', nativeSessionId: 'native-draft-a', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-a', workspaceEpoch: 'epoch-1' }, owner: { ...draftOwnerA, backendInstance: 'backend-new', runtimeId: 'rt-a2' }, lifecycle: 'ready', activity: 'idle', revision: 2 },
+    { conversationId: 'DRAFT-B', nativeSessionId: 'native-draft-b', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-b', workspaceEpoch: 'epoch-1' }, owner: { ...draftOwnerB, backendInstance: 'backend-new', runtimeId: 'rt-b2' }, lifecycle: 'ready', activity: 'idle', revision: 2 },
+  ] });
+
+  requests.length = 0;
+  const draftView2 = createRuntimeConversation({ host });
+  draftView2.show('DRAFT-A');
+  ok('重开后自动恢复 A 草稿', input().value === '持久草稿 A');
+  ok('恢复草稿绝不自动触发网络发送', requests.length === 0);
+
+  draftView2.show('DRAFT-B');
+  ok('切到 B 后自动恢复 B 草稿', input().value === '持久草稿 B');
+
+  // 3. 发送成功 ACK 清除草稿
+  let finishSend;
+  global.fetch = async (url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend-new', items: [] };
+    const body = JSON.parse(opts.body); requests.push(body);
+    return new Promise(resolve => { finishSend = resolve; });
+  } });
+
+  requests.length = 0;
+  draftView2.show('DRAFT-A');
+  btn('发送').click();
+  await tick();
+  ok('点击发送发出 prompt', requests.length === 1 && requests[0].command?.message === '持久草稿 A');
+
+  // 3.1 用户在等待 ACK 期间输入新文本
+  input().value = '发送后的新思考';
+  input().dispatchEvent(new dom.window.Event('input'));
+
+  // ACK 此时返回
+  finishSend({ ok: true });
+  await tick();
+  ok('旧 ACK 不清除用户新输入的草稿', input().value === '发送后的新思考');
+
+  // 3.2 正常发送并成功清除
+  requests.length = 0;
+  btn('发送').click();
+  await tick();
+  finishSend({ ok: true });
+  await tick();
+  ok('成功发送后草稿被清除', input().value === '');
+
+  // 验证重新打开 A 时也是空的
+  draftView2.leave();
+  draftView2.show('DRAFT-A');
+  ok('清空后再次打开草稿为空', input().value === '');
+
+  // 4. 超限 20000 字符内联提示
+  const hugeText = 'H'.repeat(20005);
+  input().value = hugeText;
+  input().dispatchEvent(new dom.window.Event('input'));
+  const noticeEl = host.querySelector('.rtc-draft-notice');
+  ok('超限显示内联提示', !noticeEl.hidden && noticeEl.textContent.includes('超过本地恢复上限'));
+
+  // 缩短后提示消失
+  input().value = '缩短后的安全草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  ok('缩短后内联提示隐藏', noticeEl.hidden);
+
+  /* ---- R2-Bug1: 清空草稿后，400ms防抖前状态重绘不得恢复旧草稿 ---- */
+  const clearOwner = {
+    backendInstance: 'backend-new',
+    projectId: 'p-clear',
+    repoId: 'r-clear',
+    workspaceId: 'ws-clear',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'CLEAR-1',
+    runtimeId: 'rt-c1',
+    runtimeGeneration: 'g-c1',
+    sessionId: 'native-clear-1',
+  };
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [
+    { conversationId: 'CLEAR-1', nativeSessionId: 'native-clear-1', workspace: { projectId: 'p-clear', workspaceId: 'ws-clear', workspaceEpoch: 'epoch-1' }, owner: clearOwner, lifecycle: 'ready', activity: 'idle', revision: 1 },
+  ] });
+  draftView2.show('CLEAR-1');
+  input().value = '即将被清空的旧草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  await new Promise(r => setTimeout(r, 450)); // 确保已防抖持久化
+  ok('旧草稿已持久化', localStorage.getItem('pi-gui.draft.v1:runtime:p-clear:ws-clear:epoch-1:CLEAR-1:native-clear-1')?.includes('即将被清空的旧草稿'));
+
+  // 用户主动清空输入框并派发 input 事件
+  input().value = '';
+  input().dispatchEvent(new dom.window.Event('input'));
+  ok('清空后输入框立即为空', input().value === '');
+  ok('清空后内存草稿立即为空', runtimeStore.get('CLEAR-1').draft === '');
+
+  // 关键步骤：在400ms防抖删除完成前，后台推来一帧事件触发 draw()
+  observeRuntimeFrame({ type: 'runtime_event', owner: clearOwner, eventSequence: 1,
+    event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'live' } } });
+  draftView2.draw();
+
+  // 此时预期草稿仍然保持为空，绝不能被旧持久副本反向冲刷复活！
+  ok('防抖期间触发 draw 绝不恢复旧草稿到输入框', input().value === '');
+  ok('防抖期间触发 draw 绝不恢复旧草稿到 store', runtimeStore.get('CLEAR-1').draft === '');
+
+  // 验证后续重新输入仍能正常保存
+  input().value = '清空后重新输入的有效草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  await new Promise(r => setTimeout(r, 450));
+  ok('清空后重新输入的草稿能正常持久化保存', localStorage.getItem('pi-gui.draft.v1:runtime:p-clear:ws-clear:epoch-1:CLEAR-1:native-clear-1')?.includes('清空后重新输入的有效草稿'));
+
+  // 再次清空，验证持久副本被立即删除
+  input().value = '';
+  input().dispatchEvent(new dom.window.Event('input'));
+  ok('清空后持久副本被立即删除', localStorage.getItem('pi-gui.draft.v1:runtime:p-clear:ws-clear:epoch-1:CLEAR-1:native-clear-1') === null);
+
+  // 验证旧会话存在草稿，随后切换到不同稳定 locator 时，UI 立即移走旧草稿
+  input().value = '发生身份变化前的草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  const newSessionOwner = { ...clearOwner, sessionId: 'native-clear-2' };
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [
+    { conversationId: 'CLEAR-1', nativeSessionId: 'native-clear-2', workspace: { projectId: 'p-clear', workspaceId: 'ws-clear', workspaceEpoch: 'epoch-1' }, owner: newSessionOwner, lifecycle: 'ready', activity: 'idle', revision: 2 },
+  ] });
+  draftView2.draw();
+  ok('会话切换到不同稳定 locator 后输入框移走旧草稿', input().value === '');
+  ok('新身份下 store 草稿为空', runtimeStore.get('CLEAR-1').draft === '');
+
+  draftView2.dispose();
+
+  /* ---- R2-Bug3: 旧 ACK 尚未返回，用户清空草稿，相同 Owner/locator 快照插入其间，
+   * 用户随后输入与先前完全相同的文本，旧 ACK 到达时绝不能清除新草稿！ ---- */
+  const raceOwner = {
+    backendInstance: 'backend-new',
+    projectId: 'p-race',
+    repoId: 'r-race',
+    workspaceId: 'ws-race',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'RACE-1',
+    runtimeId: 'rt-race-1',
+    runtimeGeneration: 'g1',
+    sessionId: 'native-race-1',
+  };
+  const raceItem = {
+    conversationId: 'RACE-1',
+    nativeSessionId: 'native-race-1',
+    workspace: { projectId: 'p-race', workspaceId: 'ws-race', workspaceEpoch: 'epoch-1' },
+    owner: raceOwner,
+    lifecycle: 'ready',
+    activity: 'idle',
+    revision: 1,
+  };
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [raceItem] });
+
+  let finishRaceSend;
+  global.fetch = async (url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend-new', items: [] };
+    const body = JSON.parse(opts.body); requests.push(body);
+    return new Promise(resolve => { finishRaceSend = resolve; });
+  } });
+
+  requests.length = 0;
+  const draftView3 = createRuntimeConversation({ host });
+  draftView3.show('RACE-1');
+
+  // 1. 首次输入文本 A 并点击发送（捕获 draftRevision = 1, draft = "文本A"）
+  input().value = '文本A';
+  input().dispatchEvent(new dom.window.Event('input'));
+  btn('发送').click();
+  await tick();
+  ok('文本A已发出待ACK', requests.length === 1 && requests[0].command?.message === '文本A');
+
+  // 2. 用户清空输入框（draftRevision 增至 2）
+  input().value = '';
+  input().dispatchEvent(new dom.window.Event('input'));
+
+  // 3. 相同 Owner、相同稳定 locator 的状态快照插入其间
+  // （在有 Bug 的实现中，因 draft 为空导致 draftRevision 被错误重置为 0）
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [{ ...raceItem, revision: 2 }] });
+
+  // 4. 用户重新输入完全相同的文本 A
+  // （在有 Bug 的实现中，0++ 导致 draftRevision 重新变为 1，与旧 ACK 捕获的 revision=1 碰撞）
+  input().value = '文本A';
+  input().dispatchEvent(new dom.window.Event('input'));
+
+  // 5. 迟到的旧 ACK 此时到达
+  finishRaceSend({ ok: true });
+  await tick();
+
+  // 验证新输入的文本 A 绝不能被旧 ACK 清除！
+  ok('相同文本与Owner下状态快照插入后旧ACK绝不清空新草稿', input().value === '文本A');
+  ok('store中新草稿同样完整保留', runtimeStore.get('RACE-1').draft === '文本A');
+
+  draftView3.dispose();
+
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
