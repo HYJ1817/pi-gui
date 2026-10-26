@@ -91,9 +91,17 @@
 .collab-edge.is-selected .collab-edge-line,
 .collab-edge:focus-visible .collab-edge-line { stroke: var(--ui-focus, #86b6ef); stroke-width: 3; }
 .collab-stage marker path { fill: var(--ui-text-secondary, #c3c2b7); }
+.collab-marquee {
+  fill: rgba(134, 182, 239, 0.15);
+  stroke: var(--ui-focus, #86b6ef);
+  stroke-width: 1;
+  stroke-dasharray: 4 2;
+  pointer-events: none;
+}
 .collab-inspector { margin-top: 12px; border-top: 1px solid var(--ui-border, #555); }
 .collab-edit-form,
-.collab-connect-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 8px 0; }
+.collab-connect-form,
+.collab-align-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 8px 0; }
 .collab-canvas label { display: flex; flex: 1 1 150px; flex-direction: column; gap: 5px; min-width: 0; color: var(--ui-text-secondary, #c3c2b7); }
 .collab-canvas input,
 .collab-canvas select {
