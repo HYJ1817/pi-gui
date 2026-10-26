@@ -1,0 +1,7 @@
+{
+  "qualification": "environment-blocked",
+  "failed": 1,
+  "failureReason": "Electron 子进程退出码 2147483651 且未产出 results.json（夹具未能启动）",
+  "hint": "在可启动 Electron 的普通终端重跑：npm run test:collab:advanced-electron",
+  "attemptedAt": "2026-10-26T05:27:33.764Z"
+}
