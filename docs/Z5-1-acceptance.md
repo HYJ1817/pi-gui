@@ -231,8 +231,8 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 运行 `node scripts/run-test-group.mjs --validate`：
 ```text
-test-plan: 220 canonical leaves; groups core, ui, security, native, faults
-core: 144
+test-plan: 222 canonical leaves; groups core, ui, security, native, faults
+core: 146 (原 145，新增 tests/runtime-draft.cjs)
 ui: 24
 security: 27
 native: 4
