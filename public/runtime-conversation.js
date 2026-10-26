@@ -128,7 +128,7 @@ function el(tag, cls, text) {
   return node;
 }
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
-const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0 };
+const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0, draftRestored: false };
 
 export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null, display = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
@@ -259,6 +259,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
 
   function maybeRestoreDraft(targetId) {
     if (!targetId) return;
+    const view = viewOf(targetId);
+    if (view.draftRestored) return;
+    view.draftRestored = true;
     const r = store.get(targetId);
     if (!r || r.draft) return;
     const loc = extractStableLocator(r.item, r.owner);
@@ -285,12 +288,21 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       r.draftRevision++;
       const loc = extractStableLocator(r.item, r.owner);
       const key = runtimeDraftKey(loc);
-      if (key) draftCoordinator.schedule(key, input.value);
-      else draftNotice.hidden = true;
-      if (input.value.length > DRAFT_MAX_CHARS) {
-        updateDraftNotice({ status: 'exceeded', notice: '草稿超过本地恢复上限，请复制保存完整文本' });
-      } else if (draftNotice.textContent.includes('超过本地恢复上限')) {
-        draftNotice.hidden = true; draftNotice.textContent = '';
+      if (key) {
+        if (!input.value.trim()) {
+          draftCoordinator.cancel();
+          clearRuntimeDraft(key);
+          draftNotice.hidden = true; draftNotice.textContent = '';
+        } else {
+          draftCoordinator.schedule(key, input.value);
+          if (input.value.length > DRAFT_MAX_CHARS) {
+            updateDraftNotice({ status: 'exceeded', notice: '草稿超过本地恢复上限，请复制保存完整文本' });
+          } else if (draftNotice.textContent.includes('超过本地恢复上限')) {
+            draftNotice.hidden = true; draftNotice.textContent = '';
+          }
+        }
+      } else {
+        draftNotice.hidden = true;
       }
     }
   };
@@ -573,7 +585,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const locatorChanged = curLocKey !== renderedLocatorKey;
     renderedLocatorKey = curLocKey;
 
-    if (r && !r.draft && !view.history) {
+    if (locatorChanged) {
+      view.draftRestored = false;
+    }
+
+    if (!view.draftRestored && !view.history) {
       maybeRestoreDraft(id);
     }
 

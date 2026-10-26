@@ -444,6 +444,64 @@ const { JSDOM } = require('jsdom');
   input().dispatchEvent(new dom.window.Event('input'));
   ok('缩短后内联提示隐藏', noticeEl.hidden);
 
+  /* ---- R2-Bug1: 清空草稿后，400ms防抖前状态重绘不得恢复旧草稿 ---- */
+  const clearOwner = {
+    backendInstance: 'backend-new',
+    projectId: 'p-clear',
+    repoId: 'r-clear',
+    workspaceId: 'ws-clear',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'CLEAR-1',
+    runtimeId: 'rt-c1',
+    runtimeGeneration: 'g-c1',
+    sessionId: 'native-clear-1',
+  };
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [
+    { conversationId: 'CLEAR-1', nativeSessionId: 'native-clear-1', workspace: { projectId: 'p-clear', workspaceId: 'ws-clear', workspaceEpoch: 'epoch-1' }, owner: clearOwner, lifecycle: 'ready', activity: 'idle', revision: 1 },
+  ] });
+  draftView2.show('CLEAR-1');
+  input().value = '即将被清空的旧草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  await new Promise(r => setTimeout(r, 450)); // 确保已防抖持久化
+  ok('旧草稿已持久化', localStorage.getItem('pi-gui.draft.v1:runtime:p-clear:ws-clear:epoch-1:CLEAR-1:native-clear-1')?.includes('即将被清空的旧草稿'));
+
+  // 用户主动清空输入框并派发 input 事件
+  input().value = '';
+  input().dispatchEvent(new dom.window.Event('input'));
+  ok('清空后输入框立即为空', input().value === '');
+  ok('清空后内存草稿立即为空', runtimeStore.get('CLEAR-1').draft === '');
+
+  // 关键步骤：在400ms防抖删除完成前，后台推来一帧事件触发 draw()
+  observeRuntimeFrame({ type: 'runtime_event', owner: clearOwner, eventSequence: 1,
+    event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'live' } } });
+  draftView2.draw();
+
+  // 此时预期草稿仍然保持为空，绝不能被旧持久副本反向冲刷复活！
+  ok('防抖期间触发 draw 绝不恢复旧草稿到输入框', input().value === '');
+  ok('防抖期间触发 draw 绝不恢复旧草稿到 store', runtimeStore.get('CLEAR-1').draft === '');
+
+  // 验证后续重新输入仍能正常保存
+  input().value = '清空后重新输入的有效草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  await new Promise(r => setTimeout(r, 450));
+  ok('清空后重新输入的草稿能正常持久化保存', localStorage.getItem('pi-gui.draft.v1:runtime:p-clear:ws-clear:epoch-1:CLEAR-1:native-clear-1')?.includes('清空后重新输入的有效草稿'));
+
+  // 再次清空，验证持久副本被立即删除
+  input().value = '';
+  input().dispatchEvent(new dom.window.Event('input'));
+  ok('清空后持久副本被立即删除', localStorage.getItem('pi-gui.draft.v1:runtime:p-clear:ws-clear:epoch-1:CLEAR-1:native-clear-1') === null);
+
+  // 验证旧会话存在草稿，随后切换到不同稳定 locator 时，UI 立即移走旧草稿
+  input().value = '发生身份变化前的草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  const newSessionOwner = { ...clearOwner, sessionId: 'native-clear-2' };
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [
+    { conversationId: 'CLEAR-1', nativeSessionId: 'native-clear-2', workspace: { projectId: 'p-clear', workspaceId: 'ws-clear', workspaceEpoch: 'epoch-1' }, owner: newSessionOwner, lifecycle: 'ready', activity: 'idle', revision: 2 },
+  ] });
+  draftView2.draw();
+  ok('会话切换到不同稳定 locator 后输入框移走旧草稿', input().value === '');
+  ok('新身份下 store 草稿为空', runtimeStore.get('CLEAR-1').draft === '');
+
   draftView2.dispose();
 
   console.log(`Runtime conversation: ${checks}/${checks}`);

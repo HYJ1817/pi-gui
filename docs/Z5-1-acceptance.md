@@ -114,6 +114,36 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   - 发送失败或未决：保留文本，不自动重新发送；
   - 跨刷新恢复：仅当内存草稿为空时从匹配 key 恢复纯文本，恢复过程绝对不发起任何网络请求。
 
+### 3.4 独立验收发现项修复与先红后绿证据
+
+#### 问题一：清空草稿后状态重绘可能恢复旧文本
+- **红测复现**：
+  在输入“旧草稿”并确认已持久化后，用户主动清空输入框。若在 400ms 防抖删除完成前后台推来状态帧触发 `draw()`，由于旧实现无条件在 `!r.draft` 时调用 `maybeRestoreDraft(id)`，直接将未删除的旧持久副本重新恢复到内存和输入框中，造成幽灵草稿复活：
+  ```text
+  AssertionError [ERR_ASSERTION]: 防抖期间触发 draw 绝不恢复旧草稿到输入框
+      at ok (C:\Users\21022\.codex\worktrees\z5-1-runtime-input\pi-GUI\tests\runtime-conversation.cjs:10:41)
+      at C:\Users\21022\.codex\worktrees\z5-1-runtime-input\pi-GUI\tests\runtime-conversation.cjs:480:3
+  ```
+- **最小修复**：
+  1. **明确清空立即删除**：在 `input.oninput` 中判定 `!input.value.trim()` 时，立即 `draftCoordinator.cancel()` 取消待执行写入，并直接同步调用 `clearRuntimeDraft(key)` 清除持久存储，消除 400ms 时间差。
+  2. **恢复时机守卫**：在 `viewOf(id)` 维护 `draftRestored` 标志。持久草稿恢复仅在首次绑定或稳定 locator 发生变更（`locatorChanged`）时尝试恢复一次；普通状态重绘绝不反复调用 `maybeRestoreDraft`。
+  3. **测试覆盖**：验证清空后防抖期间触发 `draw()` 不恢复、清空后持久副本立即删除、后续重新打字可重新持久化，以及旧草稿未保存时切换到新 locator 立即移走旧文本（`tests/runtime-conversation.cjs` 增至 75/75）。
+
+#### 问题二：Owner 不变但 item 身份变化或身份冲突时旧草稿隔离
+- **红测复现**：
+  `public/runtime-store.js` 现有 `seed()` 在 `ownerUnchanged` 为 true 时直接执行 `prior.item = item;`，导致同一 `conversationId` 下即使 `item.nativeSessionId` 改变、`item.workspace.workspaceEpoch` 改变，旧草稿依然被原样保留：
+  ```text
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  + 'draft to be isolated'
+  - ''
+      at C:\Users\21022\.codex\worktrees\z5-1-runtime-input\pi-GUI\tests\runtime-store.cjs:171:10
+  ```
+- **最小修复**：
+  1. **字段冲突校验**：`stableIdentity` 补充对 `item.workspace` 与 `owner` 对应字段（`projectId`、`workspaceId`、`workspaceEpoch`）的一致性检查，发生冲突时直接返回 `null`（身份不可信）。
+  2. **全分支隔离判定**：在 `ownerUnchanged` 命中分支中，同样补齐 `if (prior && !canInheritDraft(prior, item)) { prior.draft = ''; prior.draftRevision = 0; }`，确保任何无法证明身份完全一致的情况均强制隔离清空旧草稿。
+  3. **测试覆盖**：验证同一会话同 Owner 下 `nativeSessionId` 改变、`workspaceEpoch` 改变及工作区字段冲突路径（`tests/runtime-store.cjs` 增至 33/33）。
+
 ---
 
 ## 四、测试执行与断言证据
@@ -122,8 +152,8 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 | 测试套件 | 退出码 | 结果与断言数 | 覆盖要点 |
 | --- | --- | --- | --- |
-| `tests/runtime-conversation.cjs` | 0 | 66/66（原 48，净增 18） | IME 事件序列、keyCode 229、A/B 隔离、重启恢复、旧 ACK 隔离、超限提示 |
-| `tests/runtime-store.cjs` | 0 | 30/30（原 25，净增 5） | 稳定 locator 进程重启保留、nativeSessionId 变化隔离、epoch 变化隔离、首次绑定接续 |
+| `tests/runtime-conversation.cjs` | 0 | 75/75（原 48，首轮 66，现 75） | IME 事件序列、keyCode 229、A/B 隔离、重启恢复、旧 ACK 隔离、超限提示、清空防抖重绘不复活、身份切换输入框移走旧稿 |
+| `tests/runtime-store.cjs` | 0 | 33/33（原 25，首轮 30，现 33） | 稳定 locator 进程重启保留、nativeSessionId 变化隔离、epoch 变化隔离、同 Owner 下 item 身份变化隔离、字段冲突隔离 |
 | `tests/runtime-draft.cjs` | 0 | 41/41（新增套件） | 身份提取、安全编码、20000 字符边界、超限清除旧副本、损坏 JSON 容错、防抖调度 |
 | `tests/daily-use.cjs` | 0 | 31/31 | 快捷键注册、命令模型、连接状态文案 |
 | `tests/session-background-ui.cjs` | 0 | 9/9 | 侧栏/后台会话隔离、流式保护、草稿隔离 |

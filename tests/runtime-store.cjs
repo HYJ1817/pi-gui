@@ -136,5 +136,67 @@ const assert = require('node:assert/strict');
   assert.equal(storeA.get('conv-unbound').draft, '');
   checks++;
 
+  /* ---- R2-Bug2: Owner 不变但 item 身份变化或身份冲突时，禁止保留旧草稿 ---- */
+  const storeB = createRuntimeStore();
+  const sharedOwner = {
+    backendInstance: 'backend',
+    projectId: 'p2',
+    repoId: 'r2',
+    workspaceId: 'w2',
+    workspaceEpoch: 'e1',
+    conversationId: 'conv-same-owner',
+    runtimeId: 'rt-shared',
+    runtimeGeneration: 'g1',
+    sessionId: 'native-1',
+  };
+  const item1 = {
+    conversationId: 'conv-same-owner',
+    nativeSessionId: 'native-1',
+    workspace: { projectId: 'p2', workspaceId: 'w2', workspaceEpoch: 'e1' },
+    owner: sharedOwner,
+    revision: 1,
+  };
+  storeB.seed({ backendInstance: 'backend', items: [item1] });
+  storeB.get('conv-same-owner').draft = 'draft to be isolated';
+  storeB.get('conv-same-owner').draftRevision = 3;
+
+  // 2.1 同一 conversationId、Owner 引用或值完全不变，但 item.nativeSessionId 改变
+  const itemDiffNative = {
+    ...item1,
+    nativeSessionId: 'native-2', // nativeSessionId 变了！
+    owner: sharedOwner,          // owner 完全不变！
+    revision: 2,
+  };
+  storeB.seed({ backendInstance: 'backend', items: [itemDiffNative] });
+  assert.equal(storeB.get('conv-same-owner').draft, '');
+  assert.equal(storeB.get('conv-same-owner').draftRevision, 0);
+  checks++;
+
+  // 2.2 同一 conversationId、Owner 不变，但 item.workspaceEpoch 改变
+  storeB.get('conv-same-owner').draft = 'draft before epoch change';
+  storeB.get('conv-same-owner').draftRevision = 1;
+  const itemDiffEpoch = {
+    ...item1,
+    nativeSessionId: 'native-1',
+    workspace: { projectId: 'p2', workspaceId: 'w2', workspaceEpoch: 'e2' }, // epoch 变了！
+    owner: sharedOwner,
+    revision: 3,
+  };
+  storeB.seed({ backendInstance: 'backend', items: [itemDiffEpoch] });
+  assert.equal(storeB.get('conv-same-owner').draft, '');
+  checks++;
+
+  // 2.3 item.workspace 与 owner 对应身份字段不一致（身份冲突）
+  storeB.get('conv-same-owner').draft = 'draft before workspace conflict';
+  const itemConflictWorkspace = {
+    ...item1,
+    workspace: { projectId: 'p2-conflict', workspaceId: 'w2', workspaceEpoch: 'e1' }, // 与 owner.projectId 冲突！
+    owner: sharedOwner,
+    revision: 4,
+  };
+  storeB.seed({ backendInstance: 'backend', items: [itemConflictWorkspace] });
+  assert.equal(storeB.get('conv-same-owner').draft, '');
+  checks++;
+
   console.log(`Runtime conversation store: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
