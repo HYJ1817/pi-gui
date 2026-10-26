@@ -1,0 +1,13 @@
+{
+  "source": "package.json test chain and npm lifecycles",
+  "leaves": 221,
+  "groups": {
+    "core": 145,
+    "ui": 24,
+    "security": 27,
+    "native": 4,
+    "faults": 21
+  },
+  "planDigest": "4107868905bd69489a6f04b105d99170e944a0545d83f49ac043beda5b29a3fc",
+  "testChainChanged": false
+}

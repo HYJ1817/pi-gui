@@ -1,0 +1,104 @@
+{
+  "qualification": "real-pi-control-only",
+  "modelCalls": 0,
+  "checks": [
+    "installed Pi Node entry proven",
+    "installed Pi --version exits successfully",
+    "Classic real RPC state has session identity and is idle",
+    "Classic idle stop is acknowledged",
+    "Classic new_session produces distinct identity",
+    "Classic process recovery advances bridgeRun and responds",
+    "Runtime real supervised Pi has independent idle session",
+    "Runtime idle stop is acknowledged",
+    "Runtime guardian cleanup is confirmed"
+  ],
+  "modes": {
+    "classic": {
+      "events": [
+        {
+          "type": "bridge_status",
+          "state": "starting",
+          "bridgeRun": 1
+        },
+        {
+          "type": "bridge_status",
+          "state": "ready",
+          "bridgeRun": 1
+        },
+        {
+          "type": "queue_update",
+          "bridgeRun": 1
+        },
+        {
+          "type": "stop_state",
+          "state": "stopped",
+          "bridgeRun": 1
+        },
+        {
+          "type": "bridge_status",
+          "state": "exited",
+          "bridgeRun": 1
+        },
+        {
+          "type": "bridge_status",
+          "state": "starting",
+          "bridgeRun": 2
+        },
+        {
+          "type": "bridge_status",
+          "state": "ready",
+          "bridgeRun": 2
+        },
+        {
+          "type": "bridge_status",
+          "state": "exited",
+          "bridgeRun": 2
+        }
+      ],
+      "modelEventsObserved": 0
+    },
+    "runtime": {
+      "events": [
+        {
+          "type": "bridge_status",
+          "state": "starting",
+          "bridgeRun": 1
+        },
+        {
+          "type": "bridge_status",
+          "state": "ready",
+          "bridgeRun": 1
+        },
+        {
+          "type": "queue_update",
+          "bridgeRun": 1
+        },
+        {
+          "type": "stop_state",
+          "state": "stopped",
+          "bridgeRun": 1
+        }
+      ],
+      "scope": "production session-runtime adapter; no registry or model generation"
+    }
+  },
+  "failed": 0,
+  "versionProbe": {
+    "exitCode": 0,
+    "stderrCode": null
+  },
+  "piVersion": "1.4.0",
+  "unverified": [
+    "active generation event order",
+    "active model cancellation",
+    "real model proposal parsing",
+    "production Classic/Runtime registry model E2E"
+  ],
+  "elapsedMs": 3710,
+  "classicChildrenExited": true,
+  "networkGuard": {
+    "installed": 20,
+    "blocked": 0,
+    "traceLines": 20
+  }
+}

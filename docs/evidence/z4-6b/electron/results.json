@@ -1,0 +1,308 @@
+{
+  "qualification": "normal-sandbox",
+  "sandbox": true,
+  "checks": 54,
+  "failed": 0,
+  "skipped": 0,
+  "rows": [
+    "Electron starts with normal sandbox, isolated context and no Node integration",
+    "renderer connects to the production backend and fake Pi",
+    "workspace and owner identity belong to the temporary Git repository",
+    "opening editor performs no persistent document creation",
+    "real production panel creates three nodes and two edges",
+    "graph labels are not stroked by global SVG icon styles",
+    "production panel reports the qualified Agent proposal source and preview-first contract",
+    "real user text edit reaches safe store",
+    "native pointer drag changes coordinates through operations",
+    "server undo restores exact pre-drag coordinates",
+    "server redo persists new revision",
+    "new node persisted with stable id",
+    "agent suggestion card shows rationale and one diff entry",
+    "preview does not change the persisted document",
+    "accepted agent suggestion applies through CAS and enables undo",
+    "accepted agent suggestion is undoable like user edits",
+    "new directed edge references existing endpoints",
+    "delete requires explicit confirmation before storage changes",
+    "confirmed edge deletion persists",
+    "editing documents preserves Classic composer node and unsent draft",
+    "canvas has visible bounded layout at 760",
+    "canvas has visible bounded layout at 1200",
+    "canvas has visible bounded layout at 1536",
+    "light theme graph remains visible",
+    "light theme graph renders light canvas with dark node text and no stroke",
+    "reopen keeps graph and clears undo history",
+    "real stale UI operation refuses without changing the newer persisted graph",
+    "100 persisted nodes and at least 180 directed edges render within 5 seconds",
+    "focusing actual Runtime invalidates Classic canvas synchronously",
+    "Classic and Runtime persist separate session documents",
+    "Runtime edit leaves complete Classic document bytes unchanged",
+    "Runtime agent generation completes via registry command without Classic capture",
+    "Runtime agent suggestion applies through CAS and Classic bytes stay unchanged",
+    "closing actual Runtime clears document controls",
+    "closed Runtime old owner cannot submit a document operation",
+    "resumed Runtime restores document with a fresh empty undo stack",
+    "returning to Classic restores the original 100-node document",
+    "Runtime close and resume preserve Classic bytes exactly",
+    "actual project activation removes prior document controls",
+    "second actual project cannot borrow first project document",
+    "A-B-A project activation restores saved graph with empty history",
+    "project switching preserves both source files and saved document bytes",
+    "workspace switch synchronously clears old graph controls",
+    "collab editing never writes source project bytes",
+    "opening collab follows exclusive Browser cleanup and native view cannot cover the editor",
+    "Browser reopens after collab with its existing fresh-generation semantics",
+    "real native Browser geometry matches renderer at 1200px",
+    "real native Browser geometry matches renderer at 760px",
+    "real native Browser cannot cover the visible modal",
+    "panel close destroys the native page and detaches its view",
+    "reopen creates a fresh generation with no stale URL or document",
+    "no renderer errors during smoke",
+    "offline guard preloaded before business modules in backend and fake Pi",
+    "real automatic GUI update check attempted an external fetch and was blocked"
+  ],
+  "screenshots": [
+    "collab-agent-proposal.png",
+    "collab-760.png",
+    "collab-1200.png",
+    "collab-1536.png",
+    "collab-light.png",
+    "collab-conflict.png",
+    "collab-100-nodes.png",
+    "collab-runtime.png",
+    "collab-browser-occlusion.png",
+    "smoke-native.png",
+    "smoke-1200.png",
+    "smoke-760.png",
+    "smoke-modal.png"
+  ],
+  "geometry": [
+    {
+      "kind": "collab",
+      "requestedWidth": 760,
+      "x": 364.66668701171875,
+      "y": 305.3333435058594,
+      "width": 361.3333435058594,
+      "height": 342,
+      "viewport": 760,
+      "overflow": false
+    },
+    {
+      "kind": "collab",
+      "requestedWidth": 1200,
+      "x": 804.6666870117188,
+      "y": 305.3333435058594,
+      "width": 361.3333435058594,
+      "height": 342,
+      "viewport": 1200,
+      "overflow": false
+    },
+    {
+      "kind": "collab",
+      "requestedWidth": 1536,
+      "x": 1140.666748046875,
+      "y": 305.3333435058594,
+      "width": 361.3333435058594,
+      "height": 342,
+      "viewport": 1536,
+      "overflow": false
+    },
+    {
+      "kind": "performance",
+      "nodes": 100,
+      "edges": 200,
+      "renderMilliseconds": 575
+    },
+    {
+      "requestedWidth": 1200,
+      "contentBounds": {
+        "x": 253,
+        "y": 110,
+        "width": 1200,
+        "height": 820
+      },
+      "viewport": {
+        "x": 780.6666870117188,
+        "y": 132.6666717529297,
+        "width": 419.3333435058594,
+        "height": 687.3333740234375
+      },
+      "nativeBounds": {
+        "x": 781,
+        "y": 133,
+        "width": 419,
+        "height": 687
+      },
+      "zoom": 1
+    },
+    {
+      "requestedWidth": 760,
+      "contentBounds": {
+        "x": 253,
+        "y": 110,
+        "width": 760,
+        "height": 820
+      },
+      "viewport": {
+        "x": 340.66668701171875,
+        "y": 132.6666717529297,
+        "width": 419.3333435058594,
+        "height": 687.3333740234375
+      },
+      "nativeBounds": {
+        "x": 341,
+        "y": 133,
+        "width": 419,
+        "height": 687
+      },
+      "zoom": 1
+    }
+  ],
+  "errors": [],
+  "electron": "44.4.3",
+  "node": "24.21.0",
+  "platform": "win32",
+  "networkGuard": {
+    "preload": "node --require tests/fixtures/z4-offline-network.cjs before server.js and before the fake Pi cli in pi.cmd",
+    "covered": [
+      "globalThis.fetch in backend and fake Pi",
+      "node:http request/get (CJS exports)",
+      "node:https request/get (CJS exports)",
+      "renderer: session webRequest cancels non-loopback"
+    ],
+    "observed": {
+      "installed": {
+        "backend": {
+          "fetch": 1,
+          "http.request": 1,
+          "http.get": 1,
+          "https.request": 1,
+          "https.get": 1
+        },
+        "pi": {
+          "fetch": 3,
+          "http.request": 3,
+          "http.get": 3,
+          "https.request": 3,
+          "https.get": 3
+        }
+      },
+      "blocked": {
+        "fetch": 1,
+        "http": 0,
+        "https": 0
+      },
+      "traceLines": 21
+    },
+    "limits": "test-only preload guard, not an OS sandbox; does not intercept ESM named imports of node:http(s), the Electron main fixture process, or APIs outside fetch/http/https"
+  },
+  "fixture": "temporary Git, production server/renderer/preload/Browser, existing fake Pi; guarded loopback-only by tests/fixtures/z4-offline-network.cjs; no external CDP port",
+  "processCleanup": {
+    "observed": 9,
+    "residual": 0
+  },
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "guardPreflight": {
+    "ok": true,
+    "installed": {
+      "fetch": 1,
+      "http.request": 1,
+      "http.get": 1,
+      "https.request": 1,
+      "https.get": 1
+    },
+    "cases": {
+      "disguisedFetchObject": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "fetchIPv6BracketSuffixHost": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "fetchValidIPv6": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "externalString": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "externalURL": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "externalRequest": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "loopbackString": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "loopbackURL": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "loopbackRequest": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "httpExternalString": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "httpExternalURL": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "httpUrlOptionsOverrideExternal": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "httpUrlOptionsOverrideLoopback": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "httpIPv6BracketSuffixHost": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "httpUnclosedBracketHost": {
+        "expected": "blocked",
+        "actual": "blocked"
+      },
+      "httpIPv6BareHostname": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "httpIPv6BracketedHostname": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "httpLoopbackOptionsOnly": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "httpLoopbackHostWithPort": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "httpGetLoopbackString": {
+        "expected": "delegated",
+        "actual": "delegated"
+      },
+      "httpsGetExternalString": {
+        "expected": "blocked",
+        "actual": "blocked"
+      }
+    },
+    "refused": {
+      "missingTrace": "refused",
+      "unsafeTrace": "refused",
+      "linkedTrace": "skipped"
+    }
+  }
+}

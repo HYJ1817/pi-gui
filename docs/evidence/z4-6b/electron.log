@@ -1,0 +1,61 @@
+
+> pi-gui@0.29.0 test:collab:electron
+> node tests/collab-electron.cjs
+
+Downloading Electron binary...
+
+ok Electron starts with normal sandbox, isolated context and no Node integration
+ok renderer connects to the production backend and fake Pi
+ok workspace and owner identity belong to the temporary Git repository
+ok opening editor performs no persistent document creation
+ok real production panel creates three nodes and two edges
+ok graph labels are not stroked by global SVG icon styles
+ok production panel reports the qualified Agent proposal source and preview-first contract
+ok real user text edit reaches safe store
+ok native pointer drag changes coordinates through operations
+ok server undo restores exact pre-drag coordinates
+ok server redo persists new revision
+ok new node persisted with stable id
+ok agent suggestion card shows rationale and one diff entry
+ok preview does not change the persisted document
+ok accepted agent suggestion applies through CAS and enables undo
+ok accepted agent suggestion is undoable like user edits
+ok new directed edge references existing endpoints
+ok delete requires explicit confirmation before storage changes
+ok confirmed edge deletion persists
+ok editing documents preserves Classic composer node and unsent draft
+ok canvas has visible bounded layout at 760
+ok canvas has visible bounded layout at 1200
+ok canvas has visible bounded layout at 1536
+ok light theme graph remains visible
+ok light theme graph renders light canvas with dark node text and no stroke
+ok reopen keeps graph and clears undo history
+ok real stale UI operation refuses without changing the newer persisted graph
+ok 100 persisted nodes and at least 180 directed edges render within 5 seconds
+ok focusing actual Runtime invalidates Classic canvas synchronously
+ok Classic and Runtime persist separate session documents
+ok Runtime edit leaves complete Classic document bytes unchanged
+ok Runtime agent generation completes via registry command without Classic capture
+ok Runtime agent suggestion applies through CAS and Classic bytes stay unchanged
+ok closing actual Runtime clears document controls
+ok closed Runtime old owner cannot submit a document operation
+ok resumed Runtime restores document with a fresh empty undo stack
+ok returning to Classic restores the original 100-node document
+ok Runtime close and resume preserve Classic bytes exactly
+ok actual project activation removes prior document controls
+ok second actual project cannot borrow first project document
+ok A-B-A project activation restores saved graph with empty history
+ok project switching preserves both source files and saved document bytes
+ok workspace switch synchronously clears old graph controls
+ok collab editing never writes source project bytes
+ok opening collab follows exclusive Browser cleanup and native view cannot cover the editor
+ok Browser reopens after collab with its existing fresh-generation semantics
+ok real native Browser geometry matches renderer at 1200px
+ok real native Browser geometry matches renderer at 760px
+ok real native Browser cannot cover the visible modal
+ok panel close destroys the native page and detaches its view
+ok reopen creates a fresh generation with no stale URL or document
+ok no renderer errors during smoke
+ok offline guard preloaded before business modules in backend and fake Pi
+ok real automatic GUI update check attempted an external fetch and was blocked
+Z4 Electron: 55/55; normal sandbox; residual processes 0; C:\Users\21022\.codex\worktrees\z4-6b-final-integration\pi-GUI\docs\evidence\z4-6b\electron

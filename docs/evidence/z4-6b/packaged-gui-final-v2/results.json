@@ -1,0 +1,54 @@
+{
+  "qualification": "packaged-gui-fake-pi",
+  "startedAt": "2026-10-26T11:35:05.723Z",
+  "checks": [
+    "test guard attached before bundled backend launch",
+    "actual packaged window has sandbox/contextIsolation and no Node integration",
+    "actual packaged main uses independent artifact and TEMP userData",
+    "packaged backend rejects collab without Owner",
+    "no Owner request created no document",
+    "packaged panel creates durable three-node document"
+  ],
+  "failed": 1,
+  "screenshots": [],
+  "launches": [],
+  "modelCalls": 0,
+  "input": "Chromium CDP Input dispatch; optional Windows Computer Use SendInput smoke recorded separately; not physical hardware input",
+  "limits": [
+    "fake Pi, not real model",
+    "test preload guard is not an OS network sandbox",
+    "no installation or upgrade qualification"
+  ],
+  "executableSha256": "c8755f70993aecf1da95a2557234a3fa2b59c876f7419ca62fab41147f01d81b",
+  "lastDebugCommand": {
+    "method": "Runtime.evaluate",
+    "awaitPromise": true,
+    "pausedObserved": true
+  },
+  "guardInjection": "main inspector before entry: prepend existing --require guard only to exact bundled server.cjs spawn; Chromium uses loopback-only proxy",
+  "inspectorBindings": {
+    "require": "undefined",
+    "mainModule": "object",
+    "mainModuleRequire": "function"
+  },
+  "preferences": {
+    "sandbox": true,
+    "contextIsolation": true,
+    "nodeIntegration": false
+  },
+  "versions": {
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130",
+    "node": "24.21.0",
+    "app": "0.29.0"
+  },
+  "failedDebugCommand": {
+    "method": "Runtime.evaluate",
+    "awaitPromise": true,
+    "pausedObserved": true
+  },
+  "failureStage": "Windows input durable operation",
+  "failureCode": "verification_timeout",
+  "finalResidual": 0,
+  "finishedAt": "2026-10-26T11:36:35.511Z"
+}

@@ -1,0 +1,45 @@
+
+> pi-gui@0.29.0 test:collab:packaged
+> node tests/collab-packaged.cjs
+
+ok app live backend
+ok app token authentication
+ok app Origin precedes owner authority
+ok app exact resource collab-canvas.js
+ok app exact resource collab-proposal.js
+ok app exact resource collab-panel.js
+ok app exact resource collab-selection.js
+ok app exact resource collab.css
+ok app exact resource collab-panel.css
+ok app exact resource app.js
+ok app exact resource index.html
+ok app exact resource api.js
+ok app exact resource collab-export.js
+ok app exact resource collab-canvas-productivity.js
+ok app exact resource collab-auto-layout.js
+ok app exact resource collab-layout-preview.js
+ok app exact resource collab-productivity.css
+ok app POST-only route
+ok app trusted owner refusal
+ok app refusal creates no document
+ok sea live backend
+ok sea token authentication
+ok sea Origin precedes owner authority
+ok sea exact resource collab-canvas.js
+ok sea exact resource collab-proposal.js
+ok sea exact resource collab-panel.js
+ok sea exact resource collab-selection.js
+ok sea exact resource collab.css
+ok sea exact resource collab-panel.css
+ok sea exact resource app.js
+ok sea exact resource index.html
+ok sea exact resource api.js
+ok sea exact resource collab-export.js
+ok sea exact resource collab-canvas-productivity.js
+ok sea exact resource collab-auto-layout.js
+ok sea exact resource collab-layout-preview.js
+ok sea exact resource collab-productivity.css
+ok sea POST-only route
+ok sea trusted owner refusal
+ok sea refusal creates no document
+Z4 packaged: 40/40

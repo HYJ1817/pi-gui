@@ -1,0 +1,17 @@
+ok actual packaged window has sandbox/contextIsolation and no Node integration
+ok actual packaged main uses independent artifact and TEMP userData
+ok packaged backend rejects collab without Owner
+ok no Owner request created no document
+ok packaged panel creates durable three-node document
+ok packaged native text input saves through authoritative store
+ok trusted Ctrl click selects two nodes
+ok multi-node drag preserves relative displacement
+ok native Ctrl C/V copies internal selection atomically
+ok batch delete and undo restore both nodes together
+ok layout preview does not commit document
+ok layout commits one authoritative batch
+ok packaged SVG actual download bytes
+ok packaged PNG actual download bytes
+ok mouse and keyboard reached trusted DOM handlers
+ok panel reopen restores document and empties undo history
+{"checks":16,"failed":1,"stage":"packaged normal app exit"}

@@ -1,0 +1,731 @@
+
+> pi-gui@0.29.0 test:collab
+> node prototype/z4-1-collab/collab-test.mjs && node tests/collab-doc.cjs && node tests/collab-store.cjs && node tests/collab-authority.cjs && node tests/collab-service.cjs && node tests/collab-proposal-queue.cjs && node tests/collab-proposal-source.cjs && node tests/collab-agent-flow.cjs && node tests/collab-http.cjs && node tests/collab-canvas.cjs && node tests/collab-panel.cjs && node tests/collab-panel-agent.cjs && node tests/collab-auto-layout.cjs && node tests/collab-layout-preview.cjs && node tests/collab-export.cjs && node tests/collab-productivity.cjs && node tests/collab-panel-productivity.cjs && node tests/collab-selection.cjs && node tests/collab-advanced-editing.cjs && node tests/collab-z45-regressions.cjs && node tests/collab-stability.cjs
+
+
+Z4-1 原型数据层测试：49 通过，0 失败（共 49 项）
+ok previewProposal independently rejects user actor
+ok previewProposal independently rejects oversize batch
+ok previewProposal independently rejects duplicate opId
+ok previewProposal independently rejects mismatched operation revision
+ok previewProposal independently rejects missing revision
+ok previewProposal independently rejects missing proposalId
+ok previewProposal independently rejects unknown envelope field
+ok previewProposal independently rejects missing session
+ok previewProposal independently rejects bad document id
+ok previewProposal independently rejects unknown version
+ok previewProposal independently rejects bad params
+ok previewProposalReadonly independently rejects user actor
+ok previewProposalReadonly independently rejects oversize batch
+ok previewProposalReadonly independently rejects duplicate opId
+ok previewProposalReadonly independently rejects mismatched operation revision
+ok previewProposalReadonly independently rejects missing revision
+ok previewProposalReadonly independently rejects missing proposalId
+ok previewProposalReadonly independently rejects unknown envelope field
+ok previewProposalReadonly independently rejects missing session
+ok previewProposalReadonly independently rejects bad document id
+ok previewProposalReadonly independently rejects unknown version
+ok previewProposalReadonly independently rejects bad params
+ok acceptProposal independently rejects user actor
+ok acceptProposal independently rejects oversize batch
+ok acceptProposal independently rejects duplicate opId
+ok acceptProposal independently rejects mismatched operation revision
+ok acceptProposal independently rejects missing revision
+ok acceptProposal independently rejects missing proposalId
+ok acceptProposal independently rejects unknown envelope field
+ok acceptProposal independently rejects missing session
+ok acceptProposal independently rejects bad document id
+ok acceptProposal independently rejects unknown version
+ok acceptProposal independently rejects bad params
+ok rejectProposal independently rejects user actor
+ok rejectProposal independently rejects oversize batch
+ok rejectProposal independently rejects duplicate opId
+ok rejectProposal independently rejects mismatched operation revision
+ok rejectProposal independently rejects missing revision
+ok rejectProposal independently rejects missing proposalId
+ok rejectProposal independently rejects unknown envelope field
+ok rejectProposal independently rejects missing session
+ok rejectProposal independently rejects bad document id
+ok rejectProposal independently rejects unknown version
+ok rejectProposal independently rejects bad params
+ok valid raw proposal read-only diff and accept/duplicate after reload
+ok strict serialize rejects corrupt document rather than normalizing it away
+ok strict deserialize validates persistent journal bounds identity and fingerprint
+ok invalid in-memory document fails all mutation entrances without throwing TypeError
+ok user batch refuses agent and transaction rolls back entire failing batch
+ok undo redo is reversible for sequential changes and bounded
+ok corrupt operations rejected even before duplicate idempotent path
+ok duplicate acceptance still requires explicit valid expectedRevision
+ok proposal constructor enforces production actor session and operation revision
+ok long operation IDs cannot collide in generated proposal IDs
+ok mixed previously accepted and new proposal operations never report duplicate success
+ok production module has no prototype frontend backend IO or dependency imports
+Collab production document: 56/56; assertions=135
+  ok absent read is empty and creates no directories
+  ok real persisted document reopens with identical graph log and revision
+  ok update CAS persists a strictly advanced revision
+  ok real Windows 8.3 alias and long spelling address the same safe app storage
+  ok production operation journal graph and duplicate replay survive a store restart
+  ok same committed snapshot retry does not rewrite or rename the file
+  ok first creation retry with null CAS is idempotent
+  ok stale revision refuses overwrite and preserves last bytes
+  ok two independent stores cannot overwrite a newer revision
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok document id session id revision and CAS types are independently checked
+  ok scope key paths and incomplete scopes cannot choose storage
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok invalid UTF8 is corruption and preserves original bytes
+  ok corrupt persisted operation journal is refused without migration or data loss
+  ok disappearance of an observed document is corruption
+  ok data cannot be stored under project worktree or Git roots
+  ok writeFileSync EACCES preserves prior bytes and removes owned artifacts
+  ok writeFileSync ENOSPC preserves prior bytes and removes owned artifacts
+  ok fsyncSync EACCES preserves prior bytes and removes owned artifacts
+  ok fsyncSync ENOSPC preserves prior bytes and removes owned artifacts
+  ok renameSync EACCES preserves prior bytes and removes owned artifacts
+  ok renameSync ENOSPC preserves prior bytes and removes owned artifacts
+  ok transaction lock excludes another process and retains abandoned lock bytes
+  ok foreign temporary files are retained and never adopted
+  ok late owner invalidation after flush prevents commit
+  ok same-revision target replacement after flush is never overwritten
+  ok same-identity same-revision content mutation after flush is never overwritten
+  ok same-identity temp content tampering after flush cannot corrupt the last commit
+  ok temp path replacement after flush is never adopted or removed
+  ok lock replacement after flush refuses commit and preserves the foreign lock
+  ok target path replacement while open refuses read
+  ok hardlinks cannot redirect writes or reads
+  ok storage directory replacement between operations is refused
+  ok storage directory replacement after flush preserves old and replacement bytes
+  ok data directory replacement is refused without touching new storage
+  ok root symlink or junction cannot redirect document storage
+  ok ancestry symlink or junction cannot redirect document storage
+  SKIP file symlink privilege unavailable
+  ok bounded namespace capacity refuses additional scope without changing existing bytes
+  ok entry budget includes foreign files and refuses before committing
+  ok abrupt process exit after flush retains original commit and abandoned artifacts
+  ok external process kill at the flushed checkpoint preserves original bytes and stale lock
+  ok two real processes racing one CAS have exactly one winner
+  ok real Windows FileShare.Read target refuses atomic rename without altering bytes
+  ok releasing real Windows file holder permits the next CAS write
+Collab store: 53/53; assertions=149; skipped=1
+  ok classic scope has opaque independent namespace and verified workspace
+  ok reopening keeps key and opaque session identity but changes token on backend restart
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok missing malformed and oversized owner are safely refused
+  ok renderer scopeHash and path do not select identity
+  ok focused conversation prevents classic fallback
+  ok captured scope rejects late context or owner mutation
+  ok captured scope rejects late context or owner mutation
+  ok captured scope rejects late context or owner mutation
+  ok captured scope rejects late context or owner mutation
+  ok session replacement invalidates captured scope and changes durable identity
+  ok workspace replacement invalidates captured scope and key
+  ok conversation scope reopens across backend generations
+  ok forged conversation and stale runtime cannot fall back
+  ok native session readback and registered identity must match
+  ok focus and workspace epoch invalidate live conversation scopes
+  ok unknown backend failures expose only a fixed safe error
+  ok domain errors retain a safe fixed code through authority callback
+  ok service expiration and source unavailable retain their fixed safe codes
+  ok service expiration and source unavailable retain their fixed safe codes
+Collab authority: 24/24; assertions=68; skipped=0
+ok open creates no document or write; explicit create binds verified scope
+ok user change persists; undo/redo are server controlled
+ok failed durable write preserves document and undo stack
+ok invalid actor and full document overwrite refused without persistence
+ok unknown and renderer forged proposals never preview or apply
+ok backend-only sourced proposal preview is readonly and explicit accept is reversible
+ok old proposal conflicts and leaves current user edit intact
+ok external revision clears history; stale editor cannot overwrite
+ok close and reopen discard undo state without losing saved document
+ok old owner token and wrong scope cannot reuse an editor
+ok scope invalidation prevents even readonly open
+ok unconfigured production source remains honestly unavailable
+ok capacity eviction keeps a recently active editor and expires the least active
+Collab service: 13/13; assertions=58
+ok register/get 往返：信封不可变且摘要一致
+ok 摘要对键顺序不敏感
+ok proposalId 复用：同内容幂等、异内容拒绝
+ok 同 scope+document 的新建议使旧 pending 作废（supersede）
+ok scope/token 失效后旧建议不可见
+ok settle 终局迁移；accepted 证据保留供重复接受幂等
+ok pending TTL 过期后不可解析
+ok 容量有界：满时拒绝并优先淘汰终局条目
+ok 结构性输入校验拒绝非法信封
+ok dropScope/dropAll/stats 只暴露结构计数
+
+10/10 通过，53 次断言
+ok 正常链路：真实形状事件 → 注册建议 → 预览可应用
+ok 用户消息伪装建议：含围栏的 user message_end 不采纳
+ok 工具输出与 custom 消息伪装：toolResult/custom 角色不采纳
+ok 流式片段不采纳：text_delta/message_update/Z3 viz 围栏均无效
+ok stopReason pending 的 message_end 不作为终值采集
+ok 非法 JSON / 未知字段 / 模型伪造身份键 / 超大围栏一律拒绝
+ok 混合合法与非法操作：整批拒绝，无部分注册
+ok 多条消息时取最后一条含围栏消息；同消息取最后一处围栏
+ok 旧 bridgeRun / 窗口前事件不归属本次运行
+ok agent_settled 先于 agent_start（残留收口）被忽略，不影响后续真实运行
+ok 取消（aborted）丢弃；bridge 异常终止丢弃
+ok Runtime 帧归属：owner 五项匹配才采集；runtime_closed 丢弃
+ok 并发限制：同 scope 运行中再发起被拒绝；终局后可重新发起
+ok 指令与文档校验：空/超长指令、非法文档拒绝
+ok 通道失败映射：busy/未知错误码，且不留幽灵 attempt
+ok 运行超时：TTL 到点后 attempt 失败且信箱投递一次
+ok 生成 prompt 由服务端组合：含文档快照、指令与围栏契约，不含身份泄漏
+ok parseCollabFence 直接校验：取最后一处围栏并严格解析
+ok 候选容量有界：超长消息标记失败，历史候选被淘汰
+ok 空事件流与无关帧不崩溃
+ok 旧 token 的生成结果对新 token 信箱不可见
+ok 旧 token 未完成的 attempt 不阻塞新 token 合法生成；同 token 并发仍拒绝
+ok token 失效后迟到的旧结果不能注册为新 owner 可用的建议
+ok sendPrompt 未确认期间出现的完整运行不注册为建议（失败清理）
+ok 快速完成：确认响应与全部事件同批到达时不丢失合法完成
+ok armed 缓冲超限时生成失败且不注册
+ok Classic 交叉身份：captureIdentity 与 authority 快照不一致时拒绝发送
+ok Classic dispatch 前切换：assertCurrent 失效即拒绝，不发送不注册
+ok Classic 发送边界后身份失效：prompt 未写出、无幽灵建议，随后合法请求可生成
+ok Runtime 锁外发送前关闭或换代：身份不一致拒绝
+ok armed 缓冲含多段运行时归属不可判定：确认后拒绝且不注册
+ok 未切换的正常请求：身份一致仍能生成，快速完成事件正确登记
+
+32/32 通过，170 次断言
+ok generate 请求形状与前置校验：未建文档/空指令/超长指令/缺字段
+ok 全链路：generate → 事件 → 队列 → proposal_status → preview → accept → 撤销
+ok 生成期间用户编辑：接受时返回冲突，保留用户当前文档
+ok 重新生成发起新受控任务：旧 pending 被 supersede，旧 proposalId 不可用
+ok 跨 scope/owner 隔离：B 的 scope 看不到 A 的建议；token 变化后不可见
+ok 迟到的旧 run 建议：bridge 异常后事件不再归属；aborted 丢弃
+ok 保存失败：文档字节不变，建议保持 pending 可重试
+ok 后端重启等价：新 service+source 实例无任何在途生成与建议
+ok 重复接受与重复拒绝：终局后幂等或明确拒绝，不重复修改文档
+ok Runtime scope：conversationId 进入来源； Classic/Runtime 生成互不串扰
+ok 终局状态转换矩阵：rejected→accepted 与 accepted→rejected 均被服务端拒绝
+ok superseded 建议不可接受或重新激活
+
+12/12 通过，73 次断言
+ok Origin and Token protect all new actions
+ok POST-only bounded strict request envelope
+ok open no-write then explicit create with real atomic store
+ok controlled edit persists and raw snapshot replacement is refused
+ok old revision and owner reject while original bytes remain
+ok production cannot invent Agent source through request JSON
+ok damaged persisted file is preserved on read and subsequent request
+ok generate routes Classic-only capture readiness; Runtime requests bypass it
+Collab HTTP: 8/8; assertions=41
+  ok three nodes
+  ok two directed edges
+  ok arrow marker present
+  ok canvas keyboard focus
+  ok narrow toolbar wraps
+  ok narrow inspector permits shrinking
+  ok light theme token differs
+  ok dark theme token restored
+  ok mount never writes
+  ok selection accessible
+  ok Enter edits pointer-selected node
+  ok label edit emits intent only
+  ok blank node label refused
+  ok add has correct type
+  ok add valid bounded id
+  ok no op authority assigned
+  ok drag preview emits nothing
+  ok drag emits once at end in graph coordinates
+  ok input graph unchanged
+  ok cancel emits nothing
+  ok edge intent endpoints
+  ok duplicate edge refused
+  ok edge label clear intent
+  ok delete awaits confirmation
+  ok cancel deletion does not write
+  ok edge deletion intent
+  ok node delete atomic edges first
+  ok controlled undo callback
+  ok controlled redo callback
+  ok cleared history disables callback
+  ok zoom changes viewport
+  ok keyboard pan
+  ok keyboard node move
+  ok readonly visible
+  ok readonly edit disabled
+  ok readonly blocks mutations and history
+  ok busy accessible
+  ok busy blocks add
+  ok error alert
+  ok error does not enable writes
+  ok invalid input fails closed
+  ok invalid input not rendered
+  ok markup rendered as text
+  ok full label accessible
+  ok edit focus
+  ok typing delete not intercepted
+  ok whitespace-only label fails closed
+  ok 100 nodes render
+  ok long text bounded in SVG
+  ok destroy clears DOM
+  ok destroy detaches callbacks
+  ok late delete confirmation invalidated by update
+  ok late callback failure cannot affect new document
+  ok null document safely disabled
+  ok over-limit atomic deletion blocked
+  ok over-limit deletion explains batching
+  ok honest no source empty state
+  ok proposal update never writes
+  ok proposal safely renders text
+  ok proposal diff visible
+  ok proposal explicit callbacks only
+  ok preview never mutates inputs
+  ok readonly disables accept and reject, keeps regenerate entry
+  ok stale suggestion conflict visible
+  ok stale suggestion accept disabled
+  ok missing preview accept disabled
+  ok wrong session actions disabled
+  ok mismatched preview not accepted
+  ok proposal busy blocks actions
+  ok proposal destroy clears DOM
+  ok proposal destroyed action inert
+  ok late proposal failure cannot overwrite new projection
+
+collab-canvas: 72/72 passed; assertions=72
+ok open does not create; explicit template create reaches real service adapter
+ok pending durable update keeps visible prior document until acknowledged
+ok failed save keeps current graph and exposes error
+ok close and reopen preserves document but clears server history
+ok closing panel dismisses only its own pending deletion confirmation
+ok closing editor leaves unrelated approval confirmation in place
+ok session-switch invalidates synchronously before legacy owner fields change
+ok workspace change synchronously clears graph; late save cannot repaint
+ok owner changed without response cannot send a fresh edit
+ok late open after close is disposed and closes orphan capability
+ok focused runtime headers use runtime owner and never classic owner
+Collab panel: 11/11; assertions=58
+ok 生成入口：输入与按钮随文档与当前性启停
+ok 发起生成：generate 请求携带指令；轮询拾取 ready 并自动预览
+ok 接受建议：CAS 提交成功并更新画布，可撤销
+ok 拒绝路径与失败文案：通道 busy 显示安全提示且可再次发起
+ok 冲突后重新生成：卡片保持入口可用，重开编辑器并发起新受控任务
+ok 生命周期：会话切换同步停轮并失效面板
+ok 来源未接入：无 proposals 的服务显示原文案并拒绝生成
+ok 重开面板拾取未决建议：open 后自动 preview 展示
+ok 慢于轮询间隔的状态请求不重叠且最终展示建议
+Collab panel agent: 9/9; assertions=98
+  ok 默认方向从左到右
+  ok 直线布局成功
+  ok 直线沿 x 轴前进
+  ok 直线同层共线
+  ok 直线层数为 3
+  ok 直线零交叉
+  ok 分支布局成功
+  ok 分支源在最左
+  ok 分支不重叠
+  ok 分支同层并列
+  ok 菱形布局成功
+  ok 菱形汇合在源右侧
+  ok 菱形不重叠
+  ok 菱形零交叉
+  ok 环路布局成功（不无限循环）
+  ok 环路坐标完整
+  ok 环路不重叠
+  ok 30 节点全环布局成功
+  ok 孤立节点获得坐标
+  ok 孤立节点不与链重叠
+  ok 独立分量数
+  ok 无连线布局成功
+  ok 无连线不重叠
+  ok 无连线分量数等于节点数
+  ok 15 孤立节点换列打包不重叠
+  ok 空图返回空坐标
+  ok 200 节点布局成功
+  ok 200 节点坐标齐全
+  ok 200 节点不重叠
+  ok 200 节点在 5 秒内完成（实测 2ms）
+  ok 200 节点最长链不越界
+  ok 极限间距选项仍在协议边界内
+  ok 同样输入重复运行结果一致
+  ok 节点/连线输入顺序不影响结果
+  ok TB 方向确定性
+  ok 布局不修改输入文档
+  ok 坐标全部为整数
+  ok 坐标全部在 ±100000 内
+  ok LR 方向无倒退边
+  ok TB 方向沿 y 轴前进
+  ok 引用不存在节点的边被拒绝
+  ok 自环被拒绝
+  ok 重复节点 ID 被拒绝
+  ok 同向重复边被拒绝
+  ok 空白标签被拒绝
+  ok 越界坐标节点被拒绝
+  ok 超过 200 节点被拒绝
+  ok schemaVersion 错误被拒绝
+  ok 空文档对象被拒绝
+  ok 未知方向回落到 LR
+  ok 长中文标签布局成功
+
+collab-auto-layout: 51/51 passed; assertions=51
+  ok 单批上限与协议一致
+  ok 预览创建成功
+  ok 预览状态为 ready
+  ok 预览记录基线 revision
+  ok 预览记录文档标识
+  ok 预览不修改原图
+  ok 预览只含坐标变化的节点
+  ok 移动项包含前后坐标
+  ok 确认后生成操作
+  ok 操作数与移动数一致
+  ok 操作为完整信封形状
+  ok 操作类型均为 node.update
+  ok 操作 actor 为 user
+  ok 操作 baseRevision 等于文档 revision
+  ok 生成操作不改原文档
+  ok 生成操作通过既有受控协议
+  ok 协议应用后 revision 前进
+  ok 应用后再次布局无变化（不动点性质）
+  ok 取消返回明确状态
+  ok 取消后原文档不变
+  ok 取消不返回任何操作
+  ok 种子批次 seed@0 构造成功
+  ok 种子批次 seed@40 构造成功
+  ok 种子批次 seed@80 构造成功
+  ok 超过 50 个移动节点的预览状态为 over-limit
+  ok over-limit 预览仍带完整移动清单
+  ok over-limit 拒绝直接应用
+  ok 拒绝信息包含明确上限说明
+  ok over-limit 路径不产生操作
+  ok over-limit 预览不改文档
+  ok 恰好 50 个移动节点状态为 ready
+  ok 恰好 50 条可单批应用
+  ok revision 前进后预览过期
+  ok 过期信息带冲突详情
+  ok 跨文档应用被拒绝
+  ok 非法预览形状被拒绝
+  ok 取消路径校验形状
+  ok opId 重复显式失败
+  ok opId 非法显式失败
+  ok 已对齐文档预览为 clean
+  ok clean 预览返回 unchanged
+  ok 非法图预览失败
+  ok 空图预览为 clean
+  ok 预览确定性
+
+collab-layout-preview: 44/44 passed; assertions=44
+  ok 主题闭集
+  ok 长文本导出成功
+  ok 长文本产物是合法 XML
+  ok 每个节点文字最多两行
+  ok 长标签节点恰为两行
+  ok 第二行以省略号结尾
+  ok 折行不超过每行 11 字符
+  ok 连线长文字截断到 24 字符内
+  ok 中文完整保留
+  ok 含敌意文本的文档导出成功
+  ok 产物是合法 XML
+  ok 产物无脚本与事件属性
+  ok 敌意标签被转义为文本
+  ok 敌意闭合标签被转义
+  ok 节点 title 完整保留敌意文本
+  ok 连线 title 完整保留敌意文本
+  ok 无外部样式或字体引用
+  ok 只使用系统字体栈
+  ok 尺寸包含默认留白
+  ok 留白选项生效
+  ok 所有节点都在画布边界内
+  ok viewBox 与尺寸一致
+  ok 浅色主题背景
+  ok 深色主题背景
+  ok 透明主题不画背景矩形
+  ok 未知主题回落浅色
+  ok 取消导出返回 cancelled
+  ok 取消时不调用 renderer
+  ok 取消不产出图像
+  ok SVG 导出同样尊重取消
+  ok 确认后 PNG 导出成功
+  ok renderer 恰好调用一次
+  ok renderer 收到画布尺寸
+  ok PNG 尺寸按 scale 放大
+  ok PNG 数据透传
+  ok PNG 路径同样包含安全 SVG
+  ok SVG 导出成功
+  ok SVG 产物与直构一致
+  ok renderer 失败原样透出
+  ok renderer 抛错转为显式失败
+  ok Node 环境无浏览器能力显式失败
+  ok 不支持格式拒绝
+  ok scale 越界拒绝
+  ok 空图拒绝导出
+  ok 非法文档拒绝导出
+  ok 引用缺失节点的边拒绝导出
+  ok 导出不修改输入文档
+  ok SVG 导出确定性
+
+collab-export: 48/48 passed; assertions=48
+  ok 正式工具条标题可见
+  ok 三个操作按钮
+  ok 布局方向默认从左到右
+  ok 导出背景默认浅色
+  ok 初始不显示预览
+  ok 点击整理出现预览
+  ok 预览文案含移动数与版本
+  ok 预览期间不保存（零操作）
+  ok 预览期间文档不变
+  ok 取消隐藏预览
+  ok 取消零提交
+  ok 取消后文档不变
+  ok 取消通知
+  ok 确认提交一次意图
+  ok 意图为画布方言（只有 type 与 params）
+  ok 意图全部为 node.update
+  ok 意图数量与预览一致
+  ok 提交后文档对象仍不变（意图交由上层）
+  ok 提交后预览关闭
+  ok 文档更新隐藏预览
+  ok 文档更新通知作废
+  ok 作废后确认零提交
+  ok over-limit 显示明确状态
+  ok over-limit 禁用确认
+  ok over-limit 全程零提交
+  ok SVG 导出经 onExport
+  ok SVG 导出格式
+  ok SVG 产物包含节点文字
+  ok SVG 导出不改文档
+  ok TB 方向意图生效（同列递增）
+  ok 主题选择器深色背景生效
+  ok 用户取消导出无产物
+  ok 确认后 PNG 透出
+  ok renderer 收到注入的 scale
+  ok 超大 PNG 不调用 renderer 且不产出部分导出
+  ok 只读禁用自动整理
+  ok 忙碌禁用导出
+  ok 恢复后可用
+  ok 拒收后预览保留
+  ok 拒收后零成功提示
+  ok 拒收给出保留原因
+  ok 拒收时回调仍收到一次意图
+  ok busy 期间确认禁用
+  ok busy 期间取消仍可用
+  ok busy 期间点击确认零提交
+  ok 解除 busy 后确认恢复
+  ok 只读时确认禁用
+  ok 只读点击确认零提交
+  ok 预览包含只读 SVG
+  ok 预览 SVG 节点数与文档一致
+  ok 预览 SVG 连线数与文档一致
+  ok 预览 SVG 保留节点文字
+  ok 预览 SVG 无交互与脚本元素
+  ok 预览 SVG 有可访问角色
+  ok 取消后预览 SVG 清理
+  ok 文档更新后预览 SVG 作废清理
+  ok 销毁后预览 DOM 清理
+  ok 导出结果绑定开始时版本与标题
+  ok 导出内容来自开始时快照
+  ok destroy 清空 DOM
+  ok destroy 后回调静默
+
+collab-productivity: 61/61 passed; assertions=61
+ok 面板挂载生产力工具条（画布与建议区之间）
+ok 自动整理先出预览且不保存
+ok 确认后单批原子保存且带 Owner 头
+ok 布局后现有撤销可用并恢复原坐标
+ok 取消预览不提交且文档不变
+ok 预览清除后重复点击确认零提交
+ok 导出 SVG 触发用户下载且不改文档
+ok 下载环境缺失时报错且可恢复
+ok busy 期间确认禁用且零提交，解除后预览按新版本作废
+ok 会话切换销毁工具条并释放未决下载 URL
+ok 60 节点自动整理给出明确超限提示
+ok 超限路径零提交零部分保存
+ok 外部修订后确认布局触发 CAS 冲突
+ok 冲突后文档只含外部修订且工具条只读
+Collab panel productivity: 14/14; assertions=71
+  ok init empty count
+  ok init nodeCount
+  ok init edgeCount
+  ok init describe
+  ok init primary
+  ok single select count
+  ok has n1
+  ok has n2 false
+  ok nodeIds
+  ok primary is n1
+  ok describe single
+  ok selectOne replaces count
+  ok has n1 false after replace
+  ok has n2 true after replace
+  ok toggle add n1 count
+  ok has n1 and n2
+  ok describe 2 nodes
+  ok toggle remove n2 count
+  ok has n2 false
+  ok mixed count
+  ok nodeCount 2
+  ok edgeCount 1
+  ok edgeIds
+  ok describe mixed
+  ok selectAllNodes count
+  ok selectAllNodes nodeIds
+  ok prune reported change
+  ok prune count 2
+  ok has n2 false after prune
+  ok has n1 and n3 true
+  ok prune with same graph returns false
+  ok hitTestRect hits n1 and n2
+  ok hitTestRect reverse drag
+  ok hitTestRect empty
+  ok clear returns true when items existed
+  ok clear returns false when already empty
+  ok count after clear
+
+collab-selection: 37/37 passed; assertions=37
+  ok A1: 单选 n1
+  ok A1: n2 未选中
+  ok A1: 选中标签显示单选
+  ok A2: n1 仍选中
+  ok A2: n2 现已选中
+  ok A2: 选中标签显示数量
+  ok A3: n1 已取消选中
+  ok A3: n2 仍选中
+  ok A3: 恢复单选标签
+  ok A4: 连线选中
+  ok A4: n2 不再选中
+  ok A4: 连线标签
+  ok A5: Ctrl+A 全选 4 个节点
+  ok A5: 所有节点均 is-selected
+  ok A6: 输入框内 Ctrl+A 不改变画布
+  ok A7: Escape 清空选择
+  ok A7: 无 is-selected 节点
+  ok A8: 框选矩形显示
+  ok A8: 框选结束矩形隐藏
+  ok A8: 命中 n1 和 n2
+  ok A8: n1 选中状态
+  ok A8: n2 选中状态
+  ok A9: 更新后修剪，只剩 n1
+  ok A9: n1 仍保持选中
+  ok A10: 会话切换清空选择
+  ok B1: 选中两个节点
+  ok B1: 拖拽中不提交
+  ok B1: 提交了一批操作
+  ok B1: 批次包含两个节点的更新
+  ok B1: 相对位移相同
+  ok B1-Cancel: 取消不提交
+  ok B2: 删除确认弹窗显示
+  ok B2: 弹窗包含对象与连线计数
+  ok B2: 取消删除隐藏弹窗
+  ok B2: 取消无操作提交
+  ok B2: 提交了删除操作
+  ok B2: 总操作数 5 条
+  ok B2: 先删除 3 条边
+  ok B2: 再删除 2 个节点
+  ok B2: 边去重无重复 id
+  ok C2: 粘贴提交了一批操作
+  ok C2: 包含 2 个节点和 1 条连线
+  ok C2: 前两条为 node.add
+  ok C2: 第三条为 edge.add
+  ok C2: 粘贴节点相对位移保持
+  ok C2: 内部连线连接新节点
+  ok C2: 首次粘贴偏移 30
+  ok C3: 连续粘贴偏移 60
+  ok C3: 两次粘贴的节点 ID 互不相同
+  ok C4: Duplicate 提交单次原子添加
+  ok C4: 复制单个节点产生 1 条操作
+  ok C4: 副本节点标签相同
+  ok C5: 超过 50 条操作拒绝直接粘贴
+  ok C5: 超限错误提示
+  ok D1: 左对齐提交 2 条更新（忽略无变化的 n1）
+  ok D1: 只有 n2 和 n3
+  ok D1: n2 与 n3 的 x 均被设为 10
+  ok D2: 水平居中坐标为整数
+  ok D3: 水平等间距调整 n2 坐标
+  ok D4: 零变化对齐不提交
+  ok D4: 提示无须调整
+  ok D5: 方向键批量移动 2 个节点
+  ok D5: n1 从 10 移动到 20
+  ok D5: n2 从 200 移动到 210
+  ok D6: 只读下复制按钮禁用
+  ok D6: 只读下对齐按钮禁用
+  ok E1: 选中 49 个节点
+  ok E1: 49 个节点操作成功提交
+  ok E1: 批次包含 49 条
+  ok E1: 选中 50 个节点
+  ok E1: 恰好 50 个节点操作成功提交
+  ok E1: 批次恰好包含 50 条
+  ok E1: 选中 51 个节点
+  ok E1: 51 个节点超过 50 上限拒绝提交
+  ok E1: 显示超限错误
+  ok E2: 批量移动提交成功
+  ok E2: 版本前进到 2
+  ok E2: 3 个节点全部更新到新坐标
+  ok E2: 单次撤销成功
+  ok E2: 3 个节点一次撤销全部恢复初始坐标
+  ok E2: 单次重做成功
+  ok E2: 3 个节点一次重做全部恢复移动坐标
+  ok E2: 批量删除原子提交成功
+  ok E2: 边被清空且只剩 2 个节点
+  ok E2: 单次撤销批量删除成功
+  ok E2: 恢复后拥有 3 个节点和 2 条边
+  ok E2: 恢复的节点 n2 存在
+  ok E2: 恢复的两条边存在
+  ok E3: CAS 冲突拒绝提交且原文档字节未变
+
+collab-advanced-editing: 89/89 passed; assertions=96
+--- 测试 1：鼠标事件序列与交互 ---
+  ok 1.1: 真实 Ctrl+点击序列后 n1 必须处于选中状态
+  ok 1.2: 再次 Ctrl+点击取消选中
+  ok 1.3: 普通点击单选成功
+  ok 1.4 前置: n1 与 n2 均被多选
+  ok 1.4: 拖动多选节点后保持多选，不被随后的 click 破坏
+  ok 1.4: 拖拽产生了批量更新操作
+  ok 1.5: 多选状态下直接点击单个节点收敛为单选
+  ok 1.5: 唯独 n1 保持选中
+  ok 1.6: 框选结束后随后的 click 不能清空选区
+  ok 1.7: 点击空白区域清空选区
+  ok 1.8: pointercancel 不产生操作提交
+--- 测试 2：焦点恢复与 Tab 导航 ---
+  ok 2.1 前置: 此时 n1 与 n2 均被多选
+  ok 2.1: update() 恢复焦点后保持多选
+  ok 2.2: update() 剔除已删除的 n2
+  ok 2.2: 现存的 n1 仍处于选中
+  ok 2.3: 切换 documentId 时清空选区
+  ok 2.4: 用户主动聚焦未选节点选中该节点
+  ok 2.5 前置: n1 与 n2 均被选中
+  ok 2.5: 用户聚焦已选节点保留既有多选
+--- 测试 3：批量移动严格保持相对位移与边界控制 ---
+  ok 3.1: 产生了批量移动提交
+  ok 3.1: 集合整体夹紧为移动 +5 像素 (nA 触碰 100000)
+  ok 3.1: nB 同步只移动 +5 像素 (105)
+  ok 3.1: 相对坐标差严格不变
+  ok 3.2: 产生了批量移动提交
+  ok 3.2: 负边界整体夹紧为移动 -5 像素 (nNegA 触碰 -100000)
+  ok 3.2: nNegB 同步只移动 -5 像素 (-105)
+  ok 3.2: 负边界相对坐标差严格不变
+  ok 3.3: 向右移动时右极限制全组最大 +5
+  ok 3.3: 左极跟随 +5 到达 -99990
+  ok 3.3: 两极间距严格守恒
+  ok 3.4: 边界处无法再位移时零提交
+  ok 3.5 前置: 成功选中 55 个节点
+  ok 3.5: 超过 50 个节点批量移动拒绝提交 (零提交)
+  ok 3.5: 展示单次最多 50 项操作错误提示
+  ok 3.6 前置: dClampA 与 dClampB 被多选
+  ok 3.6: 拖拽产生批量提交
+  ok 3.6: dClampA 触碰边界 100000
+  ok 3.6: dClampB 同步移动 +5 至 205
+  ok 3.6: 拖拽批量移动相对位移严格不变
+  ok 3.7: 拖拽超过 50 个节点拒绝提交 (零提交)
+  ok 3.7: 拖拽超过上限提示错误
+
+collab-z45-regressions: 41/41 passed; assertions=41
+ok 40 mixed Classic/Runtime cycles over four documents: reject/accept/undo/redo, restart and bounded queues
+ok 40 panel SVG exports and disposal leave no URLs, timers, polling or lifecycle listeners
+ok 40 canvas cycles: copy/paste, layout confirmation and destruction block detached controls
+ok oversized PNG refuses before Blob/Image/canvas allocation
+{"rounds":40,"elapsedMs":26933,"rssBefore":114384896,"rssAfter":270721024,"heapSamples":[{"canvasRounds":10,"heapUsed":66440744,"gcRequested":false},{"canvasRounds":20,"heapUsed":81626776,"gcRequested":false},{"canvasRounds":30,"heapUsed":95043880,"gcRequested":false},{"canvasRounds":40,"heapUsed":108205216,"gcRequested":false}],"qualification":"bounded-short-soak-only"}
+Collab stability: 4/4; assertions=843; failed=0

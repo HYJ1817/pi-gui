@@ -1,0 +1,91 @@
+{
+  "qualification": "packaged-gui-fake-pi",
+  "startedAt": "2026-10-26T11:37:15.167Z",
+  "checks": [
+    "test guard attached before bundled backend launch",
+    "actual packaged window has sandbox/contextIsolation and no Node integration",
+    "actual packaged main uses independent artifact and TEMP userData",
+    "packaged backend rejects collab without Owner",
+    "no Owner request created no document",
+    "packaged panel creates durable three-node document",
+    "packaged native text input saves through authoritative store",
+    "trusted Shift drag marquee selects the three visible nodes",
+    "trusted Ctrl click selects two nodes",
+    "multi-node drag preserves relative displacement",
+    "two-node alignment uses a single persisted batch",
+    "native Ctrl C/V copies internal selection atomically",
+    "batch delete and undo restore exact nodes and edges together",
+    "layout preview does not commit document",
+    "layout commits one authoritative batch",
+    "packaged SVG actual download bytes",
+    "packaged PNG actual download bytes",
+    "mouse and keyboard reached trusted DOM handlers",
+    "panel reopen restores document and empties undo history",
+    "packaged owned process identities all exited",
+    "test guard attached before bundled backend launch",
+    "actual packaged window has sandbox/contextIsolation and no Node integration",
+    "actual packaged main uses independent artifact and TEMP userData",
+    "real app restart recovers exact document",
+    "packaged owned process identities all exited",
+    "synthetic project source bytes unchanged",
+    "offline preload was installed in packaged backend"
+  ],
+  "failed": 0,
+  "screenshots": [
+    "packaged-layout-preview.png",
+    "packaged-editor.png",
+    "packaged-restarted.png"
+  ],
+  "launches": [
+    {
+      "observed": 8,
+      "residual": 0,
+      "exitCode": 0
+    },
+    {
+      "observed": 10,
+      "residual": 0,
+      "exitCode": 0
+    }
+  ],
+  "modelCalls": 0,
+  "input": "Chromium CDP Input dispatch; optional Windows Computer Use SendInput smoke recorded separately; not physical hardware input",
+  "limits": [
+    "fake Pi, not real model",
+    "test preload guard is not an OS network sandbox",
+    "no installation or upgrade qualification"
+  ],
+  "executableSha256": "c8755f70993aecf1da95a2557234a3fa2b59c876f7419ca62fab41147f01d81b",
+  "lastDebugCommand": {
+    "method": "Runtime.evaluate",
+    "awaitPromise": true,
+    "pausedObserved": true
+  },
+  "guardInjection": "main inspector before entry: prepend existing --require guard only to exact bundled server.cjs spawn; Chromium uses loopback-only proxy",
+  "inspectorBindings": {
+    "require": "undefined",
+    "mainModule": "object",
+    "mainModuleRequire": "function"
+  },
+  "preferences": {
+    "sandbox": true,
+    "contextIsolation": true,
+    "nodeIntegration": false
+  },
+  "versions": {
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130",
+    "node": "24.21.0",
+    "app": "0.29.0"
+  },
+  "trustedInput": {
+    "mouse": 17,
+    "key": 4
+  },
+  "networkGuard": {
+    "installed": 20,
+    "blocked": 1
+  },
+  "finalResidual": 0,
+  "finishedAt": "2026-10-26T11:37:39.321Z"
+}
