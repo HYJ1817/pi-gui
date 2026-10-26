@@ -225,6 +225,32 @@ const check = async (name, fn) => { await fn(); checks++; console.log('ok ' + na
     panel.close();
   });
 
+  await check('慢于轮询间隔的状态请求不重叠且最终展示建议', async () => {
+    const originalFetch = global.fetch;
+    let inFlight = 0, peak = 0;
+    global.fetch = async (url, options) => {
+      const isPoll = JSON.parse(options.body).action === 'proposal_status';
+      if (!isPoll) return originalFetch(url, options);
+      inFlight++; peak = Math.max(peak, inFlight);
+      try {
+        const result = await originalFetch(url, options);
+        await new Promise(resolve => setTimeout(resolve, 40)); // interval is 10ms
+        return result;
+      } finally { inFlight--; }
+    };
+    const slow = mount();
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const input = slow.host.querySelector('.collab-agent-input'); input.value = 'slow fixture';
+      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      button(slow.host, '让 Agent 修改').click(); await tick(3);
+      feedRun({ version: 1, rationale: '慢响应建议', ops: [{ type: 'node.update', params: { id: 'n1', label: '慢响应仍可预览' } }] });
+      const end = Date.now() + 500;
+      while (Date.now() < end && !slow.host.querySelector('.collab-rationale')?.textContent.includes('慢响应建议')) await tick();
+      assert.match(slow.host.querySelector('.collab-rationale')?.textContent ?? '', /慢响应建议/);
+      assert.equal(peak, 1, 'one outstanding status request per panel');
+    } finally { slow.close(); await new Promise(resolve => setTimeout(resolve, 60)); global.fetch = originalFetch; }
+  });
   dom.window.close();
   console.log(`Collab panel agent: ${checks}/${checks}; assertions=${assertions}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

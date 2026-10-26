@@ -64,11 +64,15 @@ const undoOnce = () => {
 };
 const canvas = mountCollabCanvas(document.querySelector('#canvas'), { document: doc,
   onOperations: applyIntents, onUndo: undoOnce, onRedo: () => {} });
-window.__z44bExports = []; window.__z44bDownloads = [];
+window.__z44bExports = []; window.__z44bDownloads = []; window.__z44bNotices = [];
+window.__z44bLiveUrls = new Set();
 const originCreate = URL.createObjectURL.bind(URL);
-URL.createObjectURL = blob => { const url = originCreate(blob); window.__z44bDownloads.push(url); return url; };
+const originRevoke = URL.revokeObjectURL.bind(URL);
+URL.createObjectURL = blob => { const url = originCreate(blob); window.__z44bDownloads.push(url); window.__z44bLiveUrls.add(url); return url; };
+URL.revokeObjectURL = url => { window.__z44bLiveUrls.delete(url); originRevoke(url); };
 const bar = mountCollabProductivity(document.querySelector('#bar'), { document: doc,
   onOperations: applyIntents,
+  onNotice: notice => window.__z44bNotices.push(notice),
   onExport: result => {
     // 镜像 collab-panel.js downloadExport 的用户触发下载路径（Blob + a[download]）。
     window.__z44bExports.push(result);
@@ -121,7 +125,8 @@ function createFixtureServer() {
 module.exports = { PAGE, createFixtureServer };
 
 /* 作为 Electron 主进程运行时的完整验收流程。 */
-if (require.main === module) void (async () => {
+// Electron's CJS bootstrap does not set require.main to the fixture module.
+if (process.type === 'browser') void (async () => {
 const { app, BrowserWindow, session } = require('electron');
 let win, server;
 app.on('window-all-closed', () => {});
@@ -170,17 +175,23 @@ async function main() {
   await read("document.querySelector('[name=exportTheme]').value='dark'");
   await click('导出 SVG');
   await until(() => read('window.__z44bExports.length===1'), '深色 SVG 导出');
-  const dark = await read('(await fetch(window.__z44bDownloads[0]).then(r=>r.text()))');
+  const dark = await read('(async()=>await fetch(window.__z44bDownloads[0]).then(r=>r.text()))()');
   check('深色 SVG 含背景与中文长文本', dark.includes('fill="#151515"') && dark.includes('开始') && dark.includes('流程图'));
   fs.writeFileSync(path.join(out, 'z44b-export-dark.svg'), dark); artifacts.push('z44b-export-dark.svg');
 
   await read("document.querySelector('[name=exportTheme]').value='light'");
   await click('导出 SVG');
   await until(() => read('window.__z44bExports.length===2'), '浅色 SVG 导出');
-  const light = await read('(await fetch(window.__z44bDownloads.at(-1)).then(r=>r.text()))');
+  const light = await read('(async()=>await fetch(window.__z44bDownloads.at(-1)).then(r=>r.text()))()');
   check('浅色 SVG 白底且无外部资源', light.includes('fill="#ffffff"') && !/@import|https?:\/\/(?!www\.w3\.org)/.test(light));
   fs.writeFileSync(path.join(out, 'z44b-export-light.svg'), light); artifacts.push('z44b-export-light.svg');
 
+  check('SVG 导出不改变撤销后的文档', (await read('window.__z44bState()')).revision === 5 && (await read('window.__z44bState()')).submissions === 1);
+  await click('导出 PNG');
+  await until(() => read("window.__z44bNotices.some(n=>n.message.includes('图形范围过大'))"), '大范围 PNG 明确拒绝');
+  check('大范围 PNG 在分配前拒绝且不产生文件', await read('window.__z44bExports.length===2&&window.__z44bLiveUrls.size===2'));
+  await click('自动整理'); await click('确认应用布局');
+  await until(async () => (await read('window.__z44bState()')).revision === 6, '整理后默认 PNG');
   await click('导出 PNG');
   await until(() => read('window.__z44bExports.length===3'), 'PNG 光栅化');
   const png = await read('window.__z44bExports.at(-1).image.dataUrl');
@@ -191,7 +202,14 @@ async function main() {
   check('PNG IHDR 尺寸与导出声明一致', width === (await read('window.__z44bExports.at(-1).image.width')) && width > 0 && height > 0);
   fs.writeFileSync(path.join(out, 'z44b-export-light.png'), bytes); artifacts.push('z44b-export-light.png');
 
-  check('文档在导出全程未被修改', (await read('window.__z44bState()')).revision === 5 && (await read('window.__z44bState()')).submissions === 1);
+  for (let round = 0; round < 20; round++) {
+    await click('导出 PNG');
+    await until(() => read(`window.__z44bExports.length===${round + 4}`), '重复 PNG ' + round);
+    check('PNG 轮次 ' + round + ' 释放内部 Blob URL 且文档不变', await read('window.__z44bLiveUrls.size===2&&window.__z44bState().revision===6&&window.__z44bState().submissions===2'));
+  }
+  await read('for(const url of [...window.__z44bLiveUrls])URL.revokeObjectURL(url)');
+  check('SVG 与 PNG 导出全部 URL 已释放', await read('window.__z44bLiveUrls.size===0'));
+  check('文档在导出全程未被修改', (await read('window.__z44bState()')).revision === 6 && (await read('window.__z44bState()')).submissions === 2);
   check('装配页无渲染错误', errors.length === 0);
 
   win.setContentSize(760, 860);

@@ -10,20 +10,23 @@ const assert = require('node:assert/strict');
 const { spawn, spawnSync } = require('node:child_process');
 
 const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-z44b-'));
-const out = path.resolve(__dirname, '../docs/assets/z4-4b');
+const out = path.resolve(process.env.Z44B_OUTPUT || path.join(__dirname, '../docs/assets/z4-4b'));
 const fixture = path.join(__dirname, 'fixtures/z4-4b-productivity-electron.cjs');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+let child;
 
 async function main() {
   fs.mkdirSync(out, { recursive: true });
+  const reportPath = path.join(out, 'results.json');
+  if (fs.existsSync(reportPath)) fs.unlinkSync(reportPath);
   const env = {};
-  for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP']) if (process.env[key]) env[key] = process.env[key];
+  for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'ELECTRON_OVERRIDE_DIST_PATH']) if (process.env[key]) env[key] = process.env[key];
   Object.assign(env, { Z44B_WORLD: world, Z44B_OUTPUT: out,
     HOME: path.join(world, 'home'), USERPROFILE: path.join(world, 'home'),
     APPDATA: path.join(world, 'home/AppData/Roaming'), LOCALAPPDATA: path.join(world, 'home/AppData/Local'),
   });
   let spawnError = null;
-  const child = spawn(require('electron'), [fixture, '--user-data-dir=' + path.join(world, 'electron')], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  child = spawn(require('electron'), [fixture, '--user-data-dir=' + path.join(world, 'electron')], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   child.once('error', error => { spawnError = error.code || 'spawn_error'; });
   child.stdout.on('data', data => process.stdout.write(data));
   child.stderr.on('data', data => process.stderr.write(data));
@@ -34,7 +37,6 @@ async function main() {
     spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
     throw new Error('Electron fixture 超时未退出');
   }
-  const reportPath = path.join(out, 'results.json');
   if (!fs.existsSync(reportPath)) {
     // 夹具未跑起来（本会话沙箱可能禁止 Electron 启窗：最小 electron --version 亦崩）。
     // 按仓库惯例落 environment-blocked 证据；退出码保持非 0，不得宣称通过。
@@ -57,4 +59,9 @@ async function main() {
   console.log(`Z4-4B Electron: ${report.rows.length}/${report.rows.length}; Chromium ${report.chromium}; 产物 ${out}`);
   fs.rmSync(world, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {
+  if (Number.isInteger(child?.pid) && child.exitCode === null) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+  const relative = path.relative(os.tmpdir(), world);
+  assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+  fs.rmSync(world, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+});

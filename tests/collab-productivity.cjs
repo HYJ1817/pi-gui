@@ -153,14 +153,20 @@ async function main() {
   await new Promise(resolve => setImmediate(resolve));
   check('用户取消导出无产物', [exports.length, rendererCalls.length], [2, 0]);
   bar2.destroy();
+  // Renderer forwarding uses a rasterizable graph; the scattered graph above
+  // exceeds the production allocation budget at scale=3.
   const bar3 = mountCollabProductivity(host, {
-    document: messy, onExport: result => exports.push(result), onNotice: () => {},
+    document: seed, onExport: result => exports.push(result), onNotice: () => {},
     exportOptions: { renderer: fakeRenderer, scale: 3 }, confirmExport: () => true,
   });
   fire([...host.querySelectorAll('button')].find(el => el.textContent === '导出 PNG'));
   await new Promise(resolve => setImmediate(resolve));
   check('确认后 PNG 透出', [exports.length, exports[2].format, exports[2].image.dataUrl], [3, 'png', 'data:image/png;base64,QUJD']);
   check('renderer 收到注入的 scale', rendererCalls, [3]);
+  bar3.update({ document: messy });
+  fire([...host.querySelectorAll('button')].find(el => el.textContent === '导出 PNG'));
+  await new Promise(resolve => setImmediate(resolve));
+  check('超大 PNG 不调用 renderer 且不产出部分导出', [exports.length, rendererCalls.length], [3, 1]);
 
   // 只读与忙碌禁用
   bar3.update({ readOnly: true });
@@ -225,17 +231,17 @@ async function main() {
   const lateRenderer = () => new Promise(resolve => { releaseRenderer = resolve; });
   const lateExports = [];
   const bar5 = mountCollabProductivity(host, {
-    document: messy, onOperations: () => true,
+    document: seed, onOperations: () => true,
     onExport: result => lateExports.push(result), onNotice: () => {},
     exportOptions: { renderer: lateRenderer },
   });
   fire(button('导出 PNG'));
   await new Promise(resolve => setImmediate(resolve));
-  bar5.update({ document: { ...messy, revision: messy.revision + 5, title: '导出期间改掉的标题' } });
+  bar5.update({ document: { ...seed, revision: seed.revision + 5, title: '导出期间改掉的标题' } });
   releaseRenderer({ ok: true, dataUrl: 'data:image/png;base64,QUJD', width: 10, height: 10 });
   await new Promise(resolve => setImmediate(resolve));
   await new Promise(resolve => setImmediate(resolve));
-  check('导出结果绑定开始时版本与标题', [lateExports[0].source.revision, lateExports[0].source.title], [messy.revision, messy.title]);
+  check('导出结果绑定开始时版本与标题', [lateExports[0].source.revision, lateExports[0].source.title], [seed.revision, seed.title]);
   check('导出内容来自开始时快照', lateExports[0].svg.includes('开始') && !lateExports[0].svg.includes('导出期间改掉的标题'), true);
   bar5.destroy();
 
