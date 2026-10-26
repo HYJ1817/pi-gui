@@ -113,6 +113,44 @@ Z4-3 已经 PR #32 合入 main（`942fe6f`）。按第五节步骤执行集成�
   export 48/48、productivity 39/39，以及链前段的 prototype/doc/proposal-queue/source/agent-flow 全绿。
 - Electron 在核对会话中仍无法启动（`electron --version` 退出码 3，与 3340dce 取证相同），
   专项重跑指引不变；完整 canonical `npm test` 仍按约定留待 PR CI 或用户指示。
+
+## 六·补 2：最后一轮定向修复（2026-10-26，提交 `2bacb30`）
+
+修复提交 `2bacb30`（基于 `f56ea8d`），四项修复均以红绿回归驱动（新断言修复前红、修复后绿）：
+
+1. **布局确认门控**：确认按钮受 busy/只读/会话状态禁用；`confirmLayout` 增加 usable 守卫；
+   `onOperations` 返回 `false`（宿主未受理，panel `submitIntents` 现返回受理布尔）时保留预览、
+   给出 warn 提示、不显示提交成功。回归：busy/只读期间确认禁用且点击零提交、解除后恢复；
+   拒收后预览保留且回调仍收到一次意图。
+2. **导出版本绑定**：`runExport` 开始时绑定 `{documentId,revision,title}` 快照随结果透出，
+   面板文件名改用该快照（策略：使用原始快照而非取消旧导出）。回归：异步 renderer 挂起期间
+   文档 revision+5 且改标题，结果与文件名仍绑定开始时快照，内容不含改后标题。
+3. **Blob URL 生命周期**：不在 click 内同步 revoke；登记后 60 秒定时器兜底释放，
+   `invalidate`/`onDispose` 立即释放全部未决 URL。回归：导出后 URL 未提前释放、
+   存在 ≥30s 清理定时器且回调最终释放、会话切换立即释放第二个未决 URL。
+4. **只读图形预览**：预览面板按建议坐标渲染静态 SVG（节点矩形+文字、连线，纯 textContent，
+   无事件、无新协议、不改权威文档）；取消/确认/版本变化/销毁时随预览清理。回归：
+   预览 SVG 3 节点 2 连线含文字与 aria-label、无交互元素，取消/版本变化/销毁均清理。
+
+实测（HEAD `2bacb30`）：
+
+- `npm run test:collab` 退出码 **0**：Collab panel 11/11(58)、**Collab panel agent 8/8(87)**（Z4-3
+  流程无回归）、Collab panel productivity **14/14(断言 71，原 58)**、collab-productivity
+  **60/60(60，原 39)**、canvas 72/72、auto-layout 51/51、layout-preview 44/44、export 48/48，
+  及链前段 prototype/doc/store/authority/service/HTTP/proposal-queue/proposal-source/agent-flow 全绿。
+- 真实 Chromium 浏览器：新图形预览渲染正确（3 矩形 2 连线、aria-label「自动布局预览图」、
+  含节点文字），取消后即时清理；截图 [z44b-graph-preview-1200.png](assets/z4-4b/z44b-graph-preview-1200.png)。
+- `npm run build:app -- --rebuild` 退出码 0；dist-app 产物核验含 `renderPreviewGraph`/
+  `scheduleRevoke` 修复代码。
+- **Electron 专项：环境阻断（未通过）**——本轮再次尝试 `npm run test:collab:productivity-electron`
+  （exit 1，夹具未能启动，results.json 已更新 environment-blocked 取证）与既有
+  `npm run test:collab:electron`（exit 1，同样 0x8000003 崩溃）；最小 `electron --version`
+  亦退出码 3。两个 runner 在本会话的失败形态一致且发生在进程启动前，属环境阻断而非本轮代码
+  问题；按任务要求不以普通 Chromium 浏览器结果替代 Electron 结论，Electron 版仍需在可正常
+  启动 Electron 的终端重跑上述两条命令。
+- 完整 canonical `npm test` 依任务约定留给 PR CI。
+
+剩余风险：与第六·补一致（Electron 真窗口实测、完整 canonical、大图 over-limit 边界）。
 - 该分支仅为本地集成核对，未 push、未合并 main；用户合并/发布决策另行。
 
 ## 七、回滚方法
