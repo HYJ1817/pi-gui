@@ -62,24 +62,36 @@ export function mountCollabPanel(host,view) {
   };
   /* Canvas and productivity toolbar speak the same intent dialect; one shared
    * completion path adds the envelope and submits through the guarded request
-   * channel — Owner/CAS authority stays entirely server-side. */
+   * channel — Owner/CAS authority stays entirely server-side.
+   * 返回是否实际受理：busy/只读/会话失效时返回 false，生产力工具条据此保留预览。 */
   const submitIntents=intents=>{
-    if(!current()||busy||!snapshot?.document)return;
+    if(!current()||busy||!snapshot?.document)return false;
     const baseRevision=snapshot.document.revision;
     const ops=intents.map(intent=>({opId:crypto.randomUUID(),type:intent.type,params:intent.params,baseRevision,actor:'user'}));
     void request('operations',{ops});
+    return true;
   };
+  /* Blob URL 生命周期：不在 click 事件里同步释放（会与浏览器启动下载竞争），
+   * 改为登记后由定时器延后释放；面板失效/销毁时立即释放全部未决 URL。 */
+  const liveDownloadUrls=new Set();
+  const scheduleRevoke=url=>{
+    liveDownloadUrls.add(url);
+    window.setTimeout(()=>{if(liveDownloadUrls.delete(url))URL.revokeObjectURL(url);},60000);
+  };
+  const revokeDownloads=()=>{for(const url of liveDownloadUrls)URL.revokeObjectURL(url);liveDownloadUrls.clear();};
   const downloadExport=result=>{
-    const doc=snapshot?.document;
-    const safe=(doc?.title||doc?.documentId||'flowchart').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'-').slice(0,60)||'flowchart';
-    const name=`${safe}-r${doc?.revision??0}.${result.format==='png'?'png':'svg'}`;
+    // 文件名绑定导出开始时的快照（adapter 附带的 source）；异步导出期间文档变化
+    // 不会造成文件名与内容版本不一致。
+    const source=result.source??{documentId:snapshot?.document?.documentId,revision:snapshot?.document?.revision,title:snapshot?.document?.title};
+    const safe=(source.title||source.documentId||'flowchart').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'-').slice(0,60)||'flowchart';
+    const name=`${safe}-r${source.revision??0}.${result.format==='png'?'png':'svg'}`;
     try{
       const anchor=document.createElement('a');anchor.download=name;
       if(result.format==='png'&&result.image?.dataUrl){anchor.href=result.image.dataUrl;}
       else{
         if(typeof URL?.createObjectURL!=='function'){downloadFailed='当前环境不支持文件下载';return;}
         anchor.href=URL.createObjectURL(new Blob([result.svg],{type:'image/svg+xml;charset=utf-8'}));
-        anchor.addEventListener('click',()=>URL.revokeObjectURL(anchor.href),{once:true});
+        scheduleRevoke(anchor.href);
       }
       document.body.append(anchor);anchor.click();anchor.remove();
       downloadPending=name;
@@ -176,6 +188,7 @@ export function mountCollabPanel(host,view) {
     if(!alive||!hardBoundary&&context().signature===captured.signature && context().valid)return;
     invalid=true;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;busy=false;
     dismissOwnedConfirmation();
+    revokeDownloads();
     canvas?.destroy();productivity?.destroy();proposal?.destroy();canvas=productivity=proposal=null;
     canvasHost.replaceChildren();productivityHost.replaceChildren();proposalHost.replaceChildren();
     create.hidden=true;reload.hidden=false;
@@ -188,6 +201,7 @@ export function mountCollabPanel(host,view) {
   view.onDispose(()=>{
     alive=false;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;
     dismissOwnedConfirmation();
+    revokeDownloads();
     offRuntime();for(const event of events)document.removeEventListener(event,invalidate);
     canvas?.destroy();productivity?.destroy();proposal?.destroy();create.onclick=reload.onclick=null;generateBtn.onclick=null;
   });

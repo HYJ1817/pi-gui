@@ -45,4 +45,25 @@
   border-radius: 6px;
 }
 .collab-prod-preview p { margin: 0 0 8px; }
+.collab-prod-preview-graph {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  margin: 0 0 8px;
+  background: var(--ui-canvas, #151515);
+  border: 1px solid var(--ui-border, #555);
+  border-radius: 6px;
+}
+.collab-prod-preview-graph .collab-prod-preview-edge { stroke: var(--ui-text-secondary, #c3c2b7); stroke-width: 1.5; }
+.collab-prod-preview-graph .collab-prod-preview-node rect {
+  fill: var(--ui-panel-surface, #1a1a19);
+  stroke: var(--ui-border-control, #7b7971);
+  stroke-width: 1.5;
+}
+.collab-prod-preview-graph .collab-prod-preview-node text {
+  fill: var(--ui-text-primary, #f0efec);
+  stroke: none;
+  font-size: 12px;
+  pointer-events: none;
+}
 .collab-productivity :focus-visible { outline: 2px solid var(--ui-focus, #86b6ef); outline-offset: 3px; }

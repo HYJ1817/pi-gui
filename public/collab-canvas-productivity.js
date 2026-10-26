@@ -87,33 +87,83 @@ export function mountCollabProductivity(host, {
     if (created.status === 'over-limit') {
       previewText.textContent = `需要移动 ${created.moveCount} 个节点，超过单批 50 条操作上限；` +
         '为避免部分静默保存，本轮不提供自动分批，请手动分区整理或等待大图事务方案。';
-      confirmButton.disabled = true;
     } else {
       previewText.textContent = `自动整理预览：将移动 ${created.moveCount} 个节点（基于版本 ${created.baseRevision}）。预览期间不保存。`;
-      confirmButton.disabled = false;
     }
+    renderPreviewGraph();
     previewPanel.hidden = false;
     renderControls();
   }
 
+  /* 只读图形预览：按建议坐标渲染节点与连线的静态 SVG（纯 DOM/textContent，无事件、
+   * 不触碰权威文档、不引入新协议）。取消、确认、版本变化与销毁时随预览一并清理。 */
+  function renderPreviewGraph() {
+    previewPanel.querySelector('.collab-prod-preview-graph')?.remove();
+    if (!preview || !document) return;
+    const nodes = document.graph.nodes
+      .map(node => ({ node, target: preview.positions[node.id] }))
+      .filter(entry => entry.target);
+    if (!nodes.length) return;
+    const SVG = 'http://www.w3.org/2000/svg';
+    const svgElement = (tag, className) => {
+      const domNode = dom.createElementNS(SVG, tag);
+      if (className) domNode.setAttribute('class', className);
+      return domNode;
+    };
+    const minX = Math.min(...nodes.map(entry => entry.target.x)), minY = Math.min(...nodes.map(entry => entry.target.y));
+    const maxX = Math.max(...nodes.map(entry => entry.target.x)) + 156, maxY = Math.max(...nodes.map(entry => entry.target.y)) + 64;
+    const pad = 24;
+    const svg = svgElement('svg', 'collab-prod-preview-graph');
+    svg.setAttribute('viewBox', `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', '自动布局预览图');
+    for (const edge of document.graph.edges) {
+      const from = preview.positions[edge.from], to = preview.positions[edge.to];
+      if (!from || !to) continue;
+      const line = svgElement('line', 'collab-prod-preview-edge');
+      line.setAttribute('x1', from.x + 78); line.setAttribute('y1', from.y + 32);
+      line.setAttribute('x2', to.x + 78); line.setAttribute('y2', to.y + 32);
+      svg.append(line);
+    }
+    for (const { node, target } of nodes) {
+      const group = svgElement('g', 'collab-prod-preview-node');
+      group.setAttribute('transform', `translate(${target.x} ${target.y})`);
+      const rect = svgElement('rect');
+      rect.setAttribute('width', '156'); rect.setAttribute('height', '64'); rect.setAttribute('rx', '7');
+      const text = svgElement('text');
+      text.setAttribute('x', '78'); text.setAttribute('y', '36'); text.setAttribute('text-anchor', 'middle');
+      const characters = Array.from(node.label);
+      text.textContent = characters.length > 12 ? `${characters.slice(0, 11).join('')}…` : node.label;
+      group.append(rect, text);
+      svg.append(group);
+    }
+    previewText.after(svg);
+  }
+
   function confirmLayout() {
-    if (!alive || !preview || confirmButton.disabled) return;
+    if (!alive || !preview || !usable()) return;
     const intent = applyLayoutPreview(preview, document, { makeOpId: () => `prod-${globalThis.crypto.randomUUID()}` });
     if (!intent.ok) { notice(`应用布局失败：${intent.code}`, 'error'); return; }
     if (intent.status === 'unchanged' || !intent.ops.length) { notice('没有需要移动的节点。'); }
     else {
       // 与画布 onOperations 同方言：只发意图，信封由上层补全。
-      onOperations(intent.ops.map(({ type, params }) => ({ type, params })));
+      // 宿主返回 false 表示本轮未实际接受（busy/只读/会话失效）：保留预览，不报成功。
+      const accepted = onOperations(intent.ops.map(({ type, params }) => ({ type, params })));
+      if (accepted === false) {
+        notice('当前状态不可提交（保存中、只读或会话已变化），预览已保留。', 'warn');
+        renderControls();
+        return;
+      }
       notice(`已提交 ${intent.opCount} 个节点的移动意图。`);
     }
-    preview = null; previewPanel.hidden = true;
+    preview = null; previewPanel.hidden = true; renderPreviewGraph();
     renderControls();
   }
 
   function cancelLayout() {
     if (!alive) return;
     if (preview) dismissLayoutPreview(preview);
-    preview = null; previewPanel.hidden = true;
+    preview = null; previewPanel.hidden = true; renderPreviewGraph();
     notice('已取消自动整理，文档保持不变。');
     renderControls();
   }
@@ -121,13 +171,16 @@ export function mountCollabProductivity(host, {
   async function runExport(format) {
     if (!alive || !document) { notice('当前没有可导出的文档。', 'warn'); return; }
     if (working) return;
+    // 绑定导出开始时的文档身份：异步导出期间文档变化时，产物与文件名都使用这份快照，
+    // 保证内容与版本号一致（选择「使用原始快照」而非取消旧导出）。
+    const source = { documentId: document.documentId, revision: document.revision, title: document.title };
     working = true; renderControls();
     try {
       const result = await exportFlowchart(document, { format, ...exportOptions, theme: themeSelect.value, confirm: confirmExport });
       if (!alive) return;
       if (!result.ok) { notice(`导出失败：${result.code}`, 'error'); return; }
       if (result.status === 'cancelled') { notice('已取消导出。'); return; }
-      onExport(result);
+      onExport({ ...result, source });
       notice(`导出完成（${format.toUpperCase()}，${result.width}×${result.height}）。`);
     } finally {
       working = false;
@@ -140,6 +193,8 @@ export function mountCollabProductivity(host, {
     autoButton.disabled = disabled;
     svgButton.disabled = !alive || !document || isBusy || working;
     pngButton.disabled = svgButton.disabled;
+    // 确认按钮同样受 busy/只读/会话状态门控（over-limit 由 preview 状态表达）。
+    confirmButton.disabled = disabled || preview?.status === 'over-limit';
     status.textContent = preview ? '预览中：确认前不会保存任何修改。' : '';
   }
 
@@ -150,7 +205,7 @@ export function mountCollabProductivity(host, {
       const changed = document?.documentId !== next.document?.documentId ||
         document?.revision !== next.document?.revision;
       document = next.document;
-      if (changed && preview) { preview = null; previewPanel.hidden = true; notice('文档已更新，布局预览已作废。', 'warn'); }
+      if (changed && preview) { preview = null; previewPanel.hidden = true; renderPreviewGraph(); notice('文档已更新，布局预览已作废。', 'warn'); }
     }
     if (Object.hasOwn(next, 'readOnly')) isReadOnly = !!next.readOnly;
     if (Object.hasOwn(next, 'busy')) isBusy = !!next.busy;

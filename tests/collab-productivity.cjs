@@ -169,9 +169,77 @@ async function main() {
   check('忙碌禁用导出', [...host.querySelectorAll('button')].find(el => el.textContent === '导出 SVG').disabled, true);
   bar3.update({ busy: false });
   check('恢复后可用', [...host.querySelectorAll('button')].find(el => el.textContent === '自动整理').disabled, false);
+  bar3.destroy();
+
+  // —— 修复回归 1：onOperations 拒收（返回 false）时不得显示成功或丢弃预览 ——
+  const rejectedOps = [];
+  const rejectionNotices = [];
+  const bar4 = mountCollabProductivity(host, {
+    document: messy,
+    onOperations: ops => { rejectedOps.push(ops); return false; },
+    onExport: () => {}, onNotice: notice => rejectionNotices.push(notice),
+  });
+  fire(button('自动整理'));
+  fire(button('确认应用布局'));
+  check('拒收后预览保留', q('.collab-prod-preview').hidden, false);
+  check('拒收后零成功提示', rejectionNotices.some(notice => notice.message.includes('已提交')), false);
+  check('拒收给出保留原因', rejectionNotices.some(notice => notice.level === 'warn' && notice.message.includes('预览已保留')), true);
+  check('拒收时回调仍收到一次意图', rejectedOps.length, 1);
+  fire(button('取消预览'));
+
+  // —— 修复回归 1：busy / 只读期间确认必须禁用且点击零提交 ——
+  fire(button('自动整理'));
+  bar4.update({ busy: true });
+  check('busy 期间确认禁用', button('确认应用布局').disabled, true);
+  check('busy 期间取消仍可用', button('取消预览').disabled, false);
+  fire(button('确认应用布局'));
+  check('busy 期间点击确认零提交', rejectedOps.length, 1);
+  bar4.update({ busy: false });
+  check('解除 busy 后确认恢复', button('确认应用布局').disabled, false);
+  bar4.update({ readOnly: true });
+  check('只读时确认禁用', button('确认应用布局').disabled, true);
+  fire(button('确认应用布局'));
+  check('只读点击确认零提交', rejectedOps.length, 1);
+  bar4.update({ readOnly: false });
+  fire(button('取消预览'));
+
+  // —— 修复回归 4：只读图形预览（节点 + 连线），取消/版本变化/销毁时清理 ——
+  fire(button('自动整理'));
+  const previewSvg = q('.collab-prod-preview svg');
+  check('预览包含只读 SVG', !!previewSvg, true);
+  check('预览 SVG 节点数与文档一致', previewSvg.querySelectorAll('rect').length, 3);
+  check('预览 SVG 连线数与文档一致', previewSvg.querySelectorAll('line').length, 2);
+  check('预览 SVG 保留节点文字', previewSvg.textContent.includes('开始'), true);
+  check('预览 SVG 无交互与脚本元素', previewSvg.querySelectorAll('button,input,select,script,[onclick]').length, 0);
+  check('预览 SVG 有可访问角色', previewSvg.getAttribute('role'), 'img');
+  fire(button('取消预览'));
+  check('取消后预览 SVG 清理', q('.collab-prod-preview svg'), null);
+  fire(button('自动整理'));
+  bar4.update({ document: { ...messy, revision: messy.revision + 1 } });
+  check('文档更新后预览 SVG 作废清理', q('.collab-prod-preview svg'), null);
+  bar4.destroy();
+  check('销毁后预览 DOM 清理', host.querySelectorAll('.collab-prod-preview svg').length, 0);
+
+  // —— 修复回归 2：异步导出期间文档变化，结果与文件版本绑定开始时快照 ——
+  let releaseRenderer;
+  const lateRenderer = () => new Promise(resolve => { releaseRenderer = resolve; });
+  const lateExports = [];
+  const bar5 = mountCollabProductivity(host, {
+    document: messy, onOperations: () => true,
+    onExport: result => lateExports.push(result), onNotice: () => {},
+    exportOptions: { renderer: lateRenderer },
+  });
+  fire(button('导出 PNG'));
+  await new Promise(resolve => setImmediate(resolve));
+  bar5.update({ document: { ...messy, revision: messy.revision + 5, title: '导出期间改掉的标题' } });
+  releaseRenderer({ ok: true, dataUrl: 'data:image/png;base64,QUJD', width: 10, height: 10 });
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  check('导出结果绑定开始时版本与标题', [lateExports[0].source.revision, lateExports[0].source.title], [messy.revision, messy.title]);
+  check('导出内容来自开始时快照', lateExports[0].svg.includes('开始') && !lateExports[0].svg.includes('导出期间改掉的标题'), true);
+  bar5.destroy();
 
   // destroy 清理
-  bar3.destroy();
   check('destroy 清空 DOM', host.childNodes.length, 0);
   fire(win.document);
   check('destroy 后回调静默', [operations.length, exports.length], [2, 3]);

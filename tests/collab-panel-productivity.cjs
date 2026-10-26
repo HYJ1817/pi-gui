@@ -79,6 +79,11 @@ const check = async (name, fn) => { await fn(); checks++; console.log('ok ' + na
     button(host, '自动整理').click(); await tick();
     assert.equal(host.querySelector('.collab-prod-preview').hidden, false);
     assert.match(host.querySelector('.collab-prod-preview p').textContent, /将移动 3 个节点/);
+    const previewSvg = host.querySelector('.collab-prod-preview svg');
+    assert.ok(previewSvg, '预览必须包含只读图形');
+    assert.equal(previewSvg.querySelectorAll('rect').length, 3);
+    assert.equal(previewSvg.querySelectorAll('line').length, 2);
+    assert.ok(previewSvg.textContent.includes('开始'));
     assert.equal(calls.filter(c => c.body.action === 'operations').length, 0);
     assert.equal(JSON.stringify(doc), before);
   });
@@ -114,13 +119,23 @@ const check = async (name, fn) => { await fn(); checks++; console.log('ok ' + na
   const downloads = [];
   URL.createObjectURL = blob => { downloads.push({ blob, revoked: false }); return 'blob:z44b-' + downloads.length; };
   URL.revokeObjectURL = url => { const entry = downloads.find(d => 'blob:z44b-' + (downloads.indexOf(d) + 1) === url); if (entry) entry.revoked = true; };
+  // —— 修复回归 3：Blob URL 不得在 click 内同步释放；定时器兜底 + 面板销毁释放 ——
+  const scheduledTimers = [];
+  const originalSetTimeout = window.setTimeout.bind(window);
+  window.setTimeout = (fn, ms, ...rest) => { scheduledTimers.push({ fn, ms: ms || 0 }); return originalSetTimeout(fn, ms, ...rest); };
   await check('导出 SVG 触发用户下载且不改文档', async () => {
     const before = JSON.stringify(doc);
+    const revisionAtClick = doc.revision;
     button(host, '导出 SVG').click(); await tick();
     assert.equal(downloads.length, 1);
     const svg = await downloads[0].blob.text();
     assert.ok(svg.includes('<svg') && svg.includes('开始') && svg.includes('流程图'));
-    assert.match(host.textContent, /已开始下载 .*\.svg/);
+    assert.match(host.textContent, new RegExp(`已开始下载 流程图-r${revisionAtClick}\\.svg`), '文件名版本必须绑定导出开始时快照');
+    assert.equal(downloads[0].revoked, false, 'click 期间不得同步释放 Blob URL');
+    const cleanup = scheduledTimers.filter(timer => timer.ms >= 30000);
+    assert.ok(cleanup.length >= 1, '必须调度可靠的延后释放定时器');
+    for (const timer of cleanup) timer.fn();
+    assert.equal(downloads[0].revoked, true, '延后释放回调最终释放 URL');
     assert.equal(JSON.stringify(doc), before);
     assert.equal(calls.filter(c => c.body.action === 'operations').length, 1);
   });
@@ -132,19 +147,27 @@ const check = async (name, fn) => { await fn(); checks++; console.log('ok ' + na
     button(host, '导出 SVG').click(); await tick();
     assert.equal(downloads.length, 2);
     assert.match(host.textContent, /已开始下载/);
+    assert.equal(downloads[1].revoked, false, '第二个下载 URL 同样不提前释放');
   });
-  await check('保存期间 busy 禁用自动整理', async () => {
-    hold = 'operations';
+  await check('busy 期间确认禁用且零提交，解除后预览按新版本作废', async () => {
     button(host, '自动整理').click(); await tick();
+    assert.equal(host.querySelector('.collab-prod-preview').hidden, false);
+    hold = 'operations';
+    button(host, '新增节点').click(); await tick();
+    assert.equal(button(host, '确认应用布局').disabled, true, '保存期间确认必须禁用');
+    const before = calls.filter(c => c.body.action === 'operations').length;
     button(host, '确认应用布局').click(); await tick();
-    assert.equal(button(host, '自动整理').disabled, true);
+    assert.equal(calls.filter(c => c.body.action === 'operations').length, before, '状态变化期间点击确认不得产生提交');
     pending(); await tick();
+    assert.equal(host.querySelector('.collab-prod-preview').hidden, true, '版本前进后预览作废');
+    assert.match(host.textContent, /预览已作废/);
     assert.equal(button(host, '自动整理').disabled, false);
   });
-  await check('会话切换同步销毁工具条', async () => {
+  await check('会话切换销毁工具条并释放未决下载 URL', async () => {
     document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
     assert.equal(host.querySelectorAll('.collab-productivity').length, 0);
     assert.equal(host.querySelectorAll('.collab-canvas').length, 0);
+    assert.equal(downloads[1].revoked, true, '面板失效必须释放全部未决 Blob URL');
   });
   panel.close();
 
