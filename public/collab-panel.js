@@ -5,6 +5,7 @@ import { workspaceView } from './ui/workspace-surface.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
 import { createPaneHeader } from './right-pane.js';
 import { mountCollabCanvas } from './collab-canvas.js';
+import { mountCollabProductivity } from './collab-canvas-productivity.js';
 import { mountCollabProposal } from './collab-proposal.js';
 import { confirmModal, confirmSurfaceMeta, dismissConfirm } from './ui/modal.js';
 
@@ -38,15 +39,64 @@ export function mountCollabPanel(host,view) {
   instruction.placeholder='描述要让 Agent 修改的内容，例如：把流程拆成三个分支，再增加一个异常处理节点。';
   const generateBtn=node('button','','让 Agent 修改');generateBtn.type='button';generateBtn.hidden=true;
   agentRow.append(instruction,generateBtn);
-  const canvasHost=node('div','collab-canvas-host'),proposalHost=node('div','collab-proposal-host');
+  const canvasHost=node('div','collab-canvas-host'),productivityHost=node('div','collab-productivity-host'),proposalHost=node('div','collab-proposal-host');
   const source=node('p','collab-panel-source','Agent 建议来源尚未接入；当前支持用户编辑与保存。');
-  body.append(status,controls,agentRow,canvasHost,proposalHost,source);host.append(head,body);
-  let alive=true,invalid=false,busy=false,generating=false,sequence=0,pollSequence=0,snapshot=null,canvas=null,proposal=null;
+  body.append(status,controls,agentRow,canvasHost,productivityHost,proposalHost,source);host.append(head,body);
+  let alive=true,invalid=false,busy=false,generating=false,sequence=0,pollSequence=0,snapshot=null,canvas=null,productivity=null,proposal=null;
   let polling=null,lastInstruction='';
   const confirmationOwner=crypto.randomUUID();
   const dismissOwnedConfirmation=()=>{if(confirmSurfaceMeta()?.collabSurface===confirmationOwner)dismissConfirm();};
   const current=()=>alive && !invalid && view.isCurrent() && context().valid && context().signature===captured.signature;
   const closeEditor=id=>{if(id)void collabDocumentAction({action:'close',editorId:id},captured.headers);};
+  /* 导出结果提示合成：adapter 在 onExport 之后还会发「导出完成」通知，
+   * 面板把下载去向并入同一条状态，避免下载提示被立即覆盖。 */
+  let downloadPending=null,downloadFailed=null;
+  const productivityNotice=notice=>{
+    if(!alive)return;
+    let text=notice.message;
+    if(notice.level!=='error'&&(downloadPending||downloadFailed)&&notice.message.includes('导出完成')){
+      if(downloadPending){text=`${notice.message} 已开始下载 ${downloadPending}。`;downloadPending=null;}
+      else{text=`${notice.message}（${downloadFailed}）`;downloadFailed=null;}
+    }
+    status.textContent=text;
+  };
+  /* Canvas and productivity toolbar speak the same intent dialect; one shared
+   * completion path adds the envelope and submits through the guarded request
+   * channel — Owner/CAS authority stays entirely server-side.
+   * 返回是否实际受理：busy/只读/会话失效时返回 false，生产力工具条据此保留预览。 */
+  const submitIntents=intents=>{
+    if(!current()||busy||!snapshot?.document)return false;
+    const baseRevision=snapshot.document.revision;
+    const ops=intents.map(intent=>({opId:crypto.randomUUID(),type:intent.type,params:intent.params,baseRevision,actor:'user'}));
+    void request('operations',{ops});
+    return true;
+  };
+  /* Blob URL 生命周期：不在 click 事件里同步释放（会与浏览器启动下载竞争），
+   * 改为登记后由定时器延后释放；面板失效/销毁时立即释放全部未决 URL。 */
+  const liveDownloadUrls=new Set();
+  const scheduleRevoke=url=>{
+    liveDownloadUrls.add(url);
+    window.setTimeout(()=>{if(liveDownloadUrls.delete(url))URL.revokeObjectURL(url);},60000);
+  };
+  const revokeDownloads=()=>{for(const url of liveDownloadUrls)URL.revokeObjectURL(url);liveDownloadUrls.clear();};
+  const downloadExport=result=>{
+    // 文件名绑定导出开始时的快照（adapter 附带的 source）；异步导出期间文档变化
+    // 不会造成文件名与内容版本不一致。
+    const source=result.source??{documentId:snapshot?.document?.documentId,revision:snapshot?.document?.revision,title:snapshot?.document?.title};
+    const safe=(source.title||source.documentId||'flowchart').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'-').slice(0,60)||'flowchart';
+    const name=`${safe}-r${source.revision??0}.${result.format==='png'?'png':'svg'}`;
+    try{
+      const anchor=document.createElement('a');anchor.download=name;
+      if(result.format==='png'&&result.image?.dataUrl){anchor.href=result.image.dataUrl;}
+      else{
+        if(typeof URL?.createObjectURL!=='function'){downloadFailed='当前环境不支持文件下载';return;}
+        anchor.href=URL.createObjectURL(new Blob([result.svg],{type:'image/svg+xml;charset=utf-8'}));
+        scheduleRevoke(anchor.href);
+      }
+      document.body.append(anchor);anchor.click();anchor.remove();
+      downloadPending=name;
+    }catch{downloadFailed='导出下载失败，请重试';}
+  };
   function render(error='') {
     const doc=snapshot?.document;
     status.textContent=error || (busy?'正在保存…':generating?'正在生成建议…（可在会话工具栏停止 Agent 取消）':doc?`版本 ${doc.revision} · 已保存`:'当前会话还没有协同文档。');
@@ -58,13 +108,15 @@ export function mountCollabPanel(host,view) {
     instruction.disabled=!current()||generating;
     if(!doc)return;
     if(!canvas)canvas=mountCollabCanvas(canvasHost,{document:doc,onOperations:intents=>{
-      if(!current()||busy||!snapshot?.document)return;
-      const baseRevision=snapshot.document.revision;
-      const ops=intents.map(intent=>({opId:crypto.randomUUID(),type:intent.type,params:intent.params,baseRevision,actor:'user'}));
-      void request('operations',{ops});
+      submitIntents(intents);
     },onUndo:()=>void request('undo'),onRedo:()=>void request('redo'),confirmDelete:message=>confirmModal({title:'删除图形',message,okText:'删除',danger:true,
       surface:'collab-delete',meta:{collabSurface:confirmationOwner}})});
     canvas.update({document:doc,readOnly:!current(),busy,error,canUndo:!!snapshot.canUndo,canRedo:!!snapshot.canRedo});
+    if(!productivity)productivity=mountCollabProductivity(productivityHost,{document:doc,
+      onOperations:submitIntents,
+      onExport:downloadExport,
+      onNotice:productivityNotice});
+    productivity.update({document:doc,readOnly:!current(),busy});
     if(!proposal)proposal=mountCollabProposal(proposalHost,{onAccept:proposalId=>void request('accept',{proposalId}),onReject:proposalId=>void request('reject',{proposalId}),
       onRegenerate:()=>void regenerate()});
     proposal.update({document:doc,proposal:snapshot.proposal??null,preview:snapshot.preview??null,busy,error,readOnly:!current()});
@@ -136,8 +188,10 @@ export function mountCollabPanel(host,view) {
     if(!alive||!hardBoundary&&context().signature===captured.signature && context().valid)return;
     invalid=true;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;busy=false;
     dismissOwnedConfirmation();
-    canvas?.destroy();proposal?.destroy();canvas=proposal=null;
-    canvasHost.replaceChildren();proposalHost.replaceChildren();create.hidden=true;reload.hidden=false;
+    revokeDownloads();
+    canvas?.destroy();productivity?.destroy();proposal?.destroy();canvas=productivity=proposal=null;
+    canvasHost.replaceChildren();productivityHost.replaceChildren();proposalHost.replaceChildren();
+    create.hidden=true;reload.hidden=false;
     status.textContent='会话或工作区已变化，旧编辑器已失效。请重新打开。';
   }
   create.onclick=()=>void request('create');reload.onclick=()=>{if(alive)openCollabPanel();};
@@ -147,8 +201,9 @@ export function mountCollabPanel(host,view) {
   view.onDispose(()=>{
     alive=false;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;
     dismissOwnedConfirmation();
+    revokeDownloads();
     offRuntime();for(const event of events)document.removeEventListener(event,invalidate);
-    canvas?.destroy();proposal?.destroy();create.onclick=reload.onclick=null;generateBtn.onclick=null;
+    canvas?.destroy();productivity?.destroy();proposal?.destroy();create.onclick=reload.onclick=null;generateBtn.onclick=null;
   });
   if(captured.valid)void request('open');
   else {invalid=true;status.textContent='请先打开一个已就绪的会话。';reload.hidden=false;}

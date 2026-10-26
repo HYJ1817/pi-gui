@@ -1,0 +1,25 @@
+{
+  "qualification": "real-chromium-browser-passed",
+  "note": "真实 Chromium（ZCode 内置浏览器，非 Electron）补充验证；Electron 专项仍待可启动环境重跑 npm run test:collab:productivity-electron",
+  "chromium": "ZCode In-app Browser (Chromium)",
+  "fixture": "tests/fixtures/z4-4b-productivity-electron.cjs 的共享装配页（loopback 127.0.0.1:47831，页面手写迷你快照模拟服务端可见语义，不导入 Node 专用的 lib/）",
+  "checks": [
+    "装配页加载：__z44bReady，画布 + 工具条 + 方向/主题选择器渲染",
+    "自动整理预览：『将移动 3 个节点（基于版本 3）。预览期间不保存。』，文档零变化（revision 3，坐标仍为散乱值，submissions 0）",
+    "确认应用：单批提交（submissions 1），revision 3→4，坐标变为 (40,40)/(292,40)/(544,40)",
+    "既有撤销：画布『撤销』按钮恢复散乱坐标 (8100,-4200)/(200,0)/(-9100,7600)，revision→5",
+    "深色 SVG：#151515 背景 + 中文标签（开始/流程图），blob 下载 URL 内容与产物一致",
+    "浅色 SVG：#ffffff 背景，无 @import/外部 http(s) 引用",
+    "PNG（默认浏览器 renderer，真实 canvas 光栅化）：PNG 魔数 89 50 4E 47 0D 0A 1A 0A，IHDR 1512x320（紧凑布局 752x160 × scale 2），20338 字节",
+    "超大画布 PNG：散乱文档（17452x11960）导出正确失败（canvas 面积上限），先整理后导出成功",
+    "窄窗口 760px：工具条换行正常（截图）"
+  ],
+  "artifacts": [
+    "z44b-chromium-preview-wide.png",
+    "z44b-chromium-narrow-760.png",
+    "z44b-chromium-export-dark.svg",
+    "z44b-chromium-export-light.svg",
+    "z44b-chromium-export-light.png"
+  ],
+  "attemptedAt": "2026-10-26"
+}
