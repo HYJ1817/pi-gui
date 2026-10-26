@@ -7,7 +7,7 @@
  * ephemeral loopback port opens. Not part of the npm test chain. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),net=require('node:net'),{spawn}=require('node:child_process'),{once}=require('node:events'),{randomUUID,createHash}=require('node:crypto');
 const root=path.resolve(__dirname,'..'),digest=b=>createHash('sha256').update(b).digest('hex');
-const RESOURCES=['collab-canvas.js','collab-proposal.js','collab-panel.js','collab.css','collab-panel.css','app.js','index.html','api.js'];
+const RESOURCES=['collab-canvas.js','collab-proposal.js','collab-panel.js','collab-selection.js','collab.css','collab-panel.css','app.js','index.html','api.js'];
 const REQUEST_MS=15000,READY_MS=2000,READY_DEADLINE_MS=15000,STOP_MS=5000,wait=ms=>new Promise(r=>setTimeout(r,ms));
 /* Resolves true when the promise settles, false after ms. The timer is always
  * cleared so an already-exited backend never keeps the loop alive for the rest. */
