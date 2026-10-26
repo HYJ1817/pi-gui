@@ -118,10 +118,20 @@ async function runElectron() {
     screenshots.push(wideShotName);
     check('1200px 宽窗口截图已保存', true);
 
-    // 2. 多选测试：通过脚本触发 Ctrl+点击选中两个节点
+    // 2. 多选测试：使用完整事件序列 (pointerdown -> pointerup -> click) 选中两个节点
     await win.webContents.executeJavaScript(`(() => {
-      document.querySelector('[data-node-id="n1"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      document.querySelector('[data-node-id="n2"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+      const n1 = document.querySelector('[data-node-id="n1"]');
+      const n2 = document.querySelector('[data-node-id="n2"]');
+      if (n1) {
+        n1.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+        document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+        n1.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }));
+      }
+      if (n2) {
+        n2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: true }));
+        document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, ctrlKey: true }));
+        n2.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0, ctrlKey: true }));
+      }
     })()`);
     const multiSelectState = await win.webContents.executeJavaScript('window.__z45State()');
     check('多选两个节点生效', multiSelectState.selectedCount === 2);

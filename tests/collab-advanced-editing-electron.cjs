@@ -16,6 +16,8 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function main() {
   fs.mkdirSync(out, { recursive: true });
+  const reportPath = path.join(out, 'results.json');
+  if (fs.existsSync(reportPath)) fs.unlinkSync(reportPath);
   const env = {};
   for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP']) if (process.env[key]) env[key] = process.env[key];
   Object.assign(env, { Z45_WORLD: world, Z45_OUTPUT: out,
@@ -34,7 +36,6 @@ async function main() {
     spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
     throw new Error('Electron fixture 超时未退出');
   }
-  const reportPath = path.join(out, 'results.json');
   if (!fs.existsSync(reportPath)) {
     // 夹具未跑起来（本会话沙箱可能禁止 Electron 启窗：最小 electron --version 亦崩）。
     // 按仓库惯例落 environment-blocked 证据；退出码保持非 0，不得宣称通过。
