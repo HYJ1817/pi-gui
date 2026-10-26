@@ -31,9 +31,9 @@ async function main() {
   child.stdout.on('data', data => process.stdout.write(data));
   child.stderr.on('data', data => process.stderr.write(data));
   const deadline = Date.now() + 180000;
-  while (child.exitCode === null && !spawnError && Date.now() < deadline) await sleep(100);
+  while (child.exitCode === null && child.signalCode === null && !spawnError && Date.now() < deadline) await sleep(100);
   if (spawnError) throw new Error('environment-blocked: Electron ' + spawnError);
-  if (child.exitCode === null) {
+  if (child.exitCode === null && child.signalCode === null) {
     spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
     throw new Error('Electron fixture 超时未退出');
   }
@@ -60,7 +60,7 @@ async function main() {
   fs.rmSync(world, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {
-  if (Number.isInteger(child?.pid) && child.exitCode === null) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+  if (Number.isInteger(child?.pid) && child.exitCode === null && child.signalCode === null) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
   const relative = path.relative(os.tmpdir(), world);
   assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
   fs.rmSync(world, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
