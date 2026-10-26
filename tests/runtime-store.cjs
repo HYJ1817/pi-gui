@@ -67,5 +67,74 @@ const assert = require('node:assert/strict');
   dormant.seed(snapshot({...dormantItem,owner:{...A,conversationId:'closed'},revision:4,lifecycle:'ready'}));
   assert.doesNotThrow(()=>dormant.seed(snapshot({...dormantItem,revision:5})));
   assert.equal(dormant.get('closed').owner,null);assert.equal(dormant.get('closed').item.revision,5);checks++;
+
+  // 验证同一 conversationId 下 Owner/sessionId/workspaceEpoch 变化的草稿继承隔离合同
+  const storeA = createRuntimeStore();
+  const baseOwnerA = {
+    backendInstance: 'backend',
+    projectId: 'p1',
+    repoId: 'r1',
+    workspaceId: 'w1',
+    workspaceEpoch: 'e1',
+    conversationId: 'conv-A',
+    runtimeId: 'rt-1',
+    runtimeGeneration: 'g1',
+    sessionId: 'native-1'
+  };
+  const baseItemA = {
+    conversationId: 'conv-A',
+    nativeSessionId: 'native-1',
+    workspace: { projectId: 'p1', workspaceId: 'w1', workspaceEpoch: 'e1' },
+    owner: baseOwnerA,
+    revision: 1
+  };
+  storeA.seed({ backendInstance: 'backend', items: [baseItemA] });
+  storeA.get('conv-A').draft = 'draft before change';
+  storeA.get('conv-A').draftRevision = 5;
+
+  // 1. 同一 conversationId，仅 runtimeId/runtimeGeneration 变化（进程重启），稳定 locator 相同 -> 允许保留草稿
+  const restartedOwnerA = { ...baseOwnerA, runtimeId: 'rt-2', runtimeGeneration: 'g2' };
+  const restartedItemA = { ...baseItemA, owner: restartedOwnerA, revision: 2 };
+  storeA.seed({ backendInstance: 'backend', items: [restartedItemA] });
+  assert.equal(storeA.get('conv-A').draft, 'draft before change');
+  assert.equal(storeA.get('conv-A').draftRevision, 5);
+  checks++;
+
+  // 2. 同一 conversationId，nativeSessionId 变化 -> 禁止继承旧草稿！
+  const diffSessionOwner = { ...baseOwnerA, runtimeId: 'rt-3', runtimeGeneration: 'g3', sessionId: 'native-2' };
+  const diffSessionItem = { ...baseItemA, nativeSessionId: 'native-2', owner: diffSessionOwner, revision: 3 };
+  storeA.seed({ backendInstance: 'backend', items: [diffSessionItem] });
+  assert.equal(storeA.get('conv-A').draft, '');
+  assert.equal(storeA.get('conv-A').draftRevision, 0);
+  checks++;
+
+  // 3. 同一 conversationId，workspaceEpoch 变化 -> 禁止继承旧草稿！
+  storeA.get('conv-A').draft = 'draft before epoch change';
+  storeA.get('conv-A').draftRevision = 2;
+  const diffEpochOwner = { ...diffSessionOwner, workspaceEpoch: 'epoch-2', runtimeId: 'rt-4', runtimeGeneration: 'g4' };
+  const diffEpochItem = { ...diffSessionItem, workspace: { ...diffSessionItem.workspace, workspaceEpoch: 'epoch-2' }, owner: diffEpochOwner, revision: 4 };
+  storeA.seed({ backendInstance: 'backend', items: [diffEpochItem] });
+  assert.equal(storeA.get('conv-A').draft, '');
+  assert.equal(storeA.get('conv-A').draftRevision, 0);
+  checks++;
+
+  // 4. 首次未绑定（sessionId 为 null）-> 首次获得已证明 sessionId：允许接续内存草稿
+  const unboundItem = { conversationId: 'conv-unbound', workspace: { projectId: 'p1', workspaceId: 'w1', workspaceEpoch: 'e1' }, owner: null, revision: 1 };
+  storeA.seed({ backendInstance: 'backend', items: [unboundItem] });
+  storeA.get('conv-unbound').draft = 'unbound input';
+  storeA.get('conv-unbound').draftRevision = 1;
+  const boundItem = { ...unboundItem, nativeSessionId: 'native-bound', owner: { ...baseOwnerA, conversationId: 'conv-unbound', sessionId: 'native-bound' }, revision: 2 };
+  storeA.seed({ backendInstance: 'backend', items: [boundItem] });
+  assert.equal(storeA.get('conv-unbound').draft, 'unbound input');
+  assert.equal(storeA.get('conv-unbound').draftRevision, 1);
+  checks++;
+
+  // 5. 身份冲突（item.nativeSessionId !== owner.sessionId）-> 拒绝继承
+  storeA.get('conv-unbound').draft = 'text before conflict';
+  const conflictItem = { ...boundItem, nativeSessionId: 'native-one', owner: { ...boundItem.owner, sessionId: 'native-two' }, revision: 3 };
+  storeA.seed({ backendInstance: 'backend', items: [conflictItem] });
+  assert.equal(storeA.get('conv-unbound').draft, '');
+  checks++;
+
   console.log(`Runtime conversation store: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

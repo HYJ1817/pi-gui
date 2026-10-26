@@ -340,5 +340,111 @@ const { JSDOM } = require('jsdom');
 
   imeView.dispose();
 
+  /* ---- R2: Runtime 未发送纯文本草稿持久化与安全恢复集成测试 ---- */
+  localStorage.clear();
+  const draftView1 = createRuntimeConversation({ host });
+  const draftOwnerA = {
+    backendInstance: 'backend',
+    projectId: 'p-draft',
+    repoId: 'r-draft',
+    workspaceId: 'ws-draft-a',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'DRAFT-A',
+    runtimeId: 'rt-a',
+    runtimeGeneration: 'g-a',
+    sessionId: 'native-draft-a',
+  };
+  const draftOwnerB = {
+    backendInstance: 'backend',
+    projectId: 'p-draft',
+    repoId: 'r-draft',
+    workspaceId: 'ws-draft-b',
+    workspaceEpoch: 'epoch-1',
+    conversationId: 'DRAFT-B',
+    runtimeId: 'rt-b',
+    runtimeGeneration: 'g-b',
+    sessionId: 'native-draft-b',
+  };
+  runtimeStore.seed({ backendInstance: 'backend', items: [
+    { conversationId: 'DRAFT-A', nativeSessionId: 'native-draft-a', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-a', workspaceEpoch: 'epoch-1' }, owner: draftOwnerA, lifecycle: 'ready', activity: 'idle', revision: 1 },
+    { conversationId: 'DRAFT-B', nativeSessionId: 'native-draft-b', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-b', workspaceEpoch: 'epoch-1' }, owner: draftOwnerB, lifecycle: 'ready', activity: 'idle', revision: 1 },
+  ] });
+
+  // 1. A/B 会话分别输入草稿，离开时 flush 到持久存储
+  draftView1.show('DRAFT-A');
+  input().value = '持久草稿 A';
+  input().dispatchEvent(new dom.window.Event('input'));
+  draftView1.show('DRAFT-B');
+  ok('切到 B 后输入框为空', input().value === '');
+  input().value = '持久草稿 B';
+  input().dispatchEvent(new dom.window.Event('input'));
+  draftView1.leave();
+  draftView1.dispose();
+
+  // 2. 模拟重开：相同稳定 locator 重新 seed
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [
+    { conversationId: 'DRAFT-A', nativeSessionId: 'native-draft-a', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-a', workspaceEpoch: 'epoch-1' }, owner: { ...draftOwnerA, backendInstance: 'backend-new', runtimeId: 'rt-a2' }, lifecycle: 'ready', activity: 'idle', revision: 2 },
+    { conversationId: 'DRAFT-B', nativeSessionId: 'native-draft-b', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-b', workspaceEpoch: 'epoch-1' }, owner: { ...draftOwnerB, backendInstance: 'backend-new', runtimeId: 'rt-b2' }, lifecycle: 'ready', activity: 'idle', revision: 2 },
+  ] });
+
+  requests.length = 0;
+  const draftView2 = createRuntimeConversation({ host });
+  draftView2.show('DRAFT-A');
+  ok('重开后自动恢复 A 草稿', input().value === '持久草稿 A');
+  ok('恢复草稿绝不自动触发网络发送', requests.length === 0);
+
+  draftView2.show('DRAFT-B');
+  ok('切到 B 后自动恢复 B 草稿', input().value === '持久草稿 B');
+
+  // 3. 发送成功 ACK 清除草稿
+  let finishSend;
+  global.fetch = async (url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend-new', items: [] };
+    const body = JSON.parse(opts.body); requests.push(body);
+    return new Promise(resolve => { finishSend = resolve; });
+  } });
+
+  requests.length = 0;
+  draftView2.show('DRAFT-A');
+  btn('发送').click();
+  await tick();
+  ok('点击发送发出 prompt', requests.length === 1 && requests[0].command?.message === '持久草稿 A');
+
+  // 3.1 用户在等待 ACK 期间输入新文本
+  input().value = '发送后的新思考';
+  input().dispatchEvent(new dom.window.Event('input'));
+
+  // ACK 此时返回
+  finishSend({ ok: true });
+  await tick();
+  ok('旧 ACK 不清除用户新输入的草稿', input().value === '发送后的新思考');
+
+  // 3.2 正常发送并成功清除
+  requests.length = 0;
+  btn('发送').click();
+  await tick();
+  finishSend({ ok: true });
+  await tick();
+  ok('成功发送后草稿被清除', input().value === '');
+
+  // 验证重新打开 A 时也是空的
+  draftView2.leave();
+  draftView2.show('DRAFT-A');
+  ok('清空后再次打开草稿为空', input().value === '');
+
+  // 4. 超限 20000 字符内联提示
+  const hugeText = 'H'.repeat(20005);
+  input().value = hugeText;
+  input().dispatchEvent(new dom.window.Event('input'));
+  const noticeEl = host.querySelector('.rtc-draft-notice');
+  ok('超限显示内联提示', !noticeEl.hidden && noticeEl.textContent.includes('超过本地恢复上限'));
+
+  // 缩短后提示消失
+  input().value = '缩短后的安全草稿';
+  input().dispatchEvent(new dom.window.Event('input'));
+  ok('缩短后内联提示隐藏', noticeEl.hidden);
+
+  draftView2.dispose();
+
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

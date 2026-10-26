@@ -47,6 +47,15 @@ import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeR
 import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
 import { openModal } from './ui/modal.js';
 import { renderVizCardHtml } from './markdown.js';
+import {
+  extractStableLocator,
+  runtimeDraftKey,
+  saveRuntimeDraft,
+  restoreRuntimeDraft,
+  clearRuntimeDraft,
+  createRuntimeDraftCoordinator,
+  DRAFT_MAX_CHARS,
+} from './runtime-draft.js';
 
 const VIZ_BLOCK_RE = /(?:^|\n)```pi-gui-viz\r?\n([\s\S]*?)\r?\n```(?=\n|$)/g;
 
@@ -129,7 +138,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
    * 会话的视图态），这样每个实例独立 dispose，测试之间也不共享残留记录。 */
   const projection = display || createRuntimeDisplay();
   const ownsProjection = !display;
-  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null;
+  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null, renderedLocatorKey = null;
 
   function viewOf(conversationId) {
     let view = views.get(conversationId);
@@ -218,9 +227,73 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   let composing = false;
   const input = el('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前会话的任务'); root.append(input);
+  const draftNotice = el('div', 'rtc-draft-notice'); draftNotice.hidden = true; root.append(draftNotice);
+
+  function updateDraftNotice(statusObj) {
+    if (!statusObj || statusObj.status === 'saved' || statusObj.status === 'empty' || statusObj.status === 'unbound') {
+      draftNotice.hidden = true; draftNotice.textContent = '';
+    } else if (statusObj.status === 'exceeded' || statusObj.status === 'memory_only') {
+      draftNotice.hidden = false; draftNotice.textContent = statusObj.notice || '';
+    }
+  }
+
+  const draftCoordinator = createRuntimeDraftCoordinator({
+    onStatus: (key, statusObj) => {
+      const currentLoc = id ? extractStableLocator(store.get(id)?.item, store.get(id)?.owner) : null;
+      const currentK = runtimeDraftKey(currentLoc);
+      if (currentK === key) updateDraftNotice(statusObj);
+    },
+  });
+
+  function flushCurrentDraft(targetId = id) {
+    if (!targetId) return;
+    const r = store.get(targetId);
+    if (!r) return;
+    const loc = extractStableLocator(r.item, r.owner);
+    const key = runtimeDraftKey(loc);
+    const text = (targetId === id) ? input.value : (r.draft || '');
+    if (targetId === id) r.draft = text;
+    const res = draftCoordinator.flush();
+    if (!res && key) saveRuntimeDraft(key, text);
+  }
+
+  function maybeRestoreDraft(targetId) {
+    if (!targetId) return;
+    const r = store.get(targetId);
+    if (!r || r.draft) return;
+    const loc = extractStableLocator(r.item, r.owner);
+    const key = runtimeDraftKey(loc);
+    if (!key) return;
+    const saved = restoreRuntimeDraft(key);
+    if (saved && !r.draft) {
+      r.draft = saved;
+      if (targetId === id && !input.value) input.value = saved;
+    }
+  }
+
+  const unloadHandler = () => { flushCurrentDraft(id); };
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('beforeunload', unloadHandler);
+  }
+
   input.addEventListener('compositionstart', () => { composing = true; });
   input.addEventListener('compositionend', () => { composing = false; });
-  input.oninput = () => { const r = store.get(id); if (r && !current().history) { r.draft = input.value; r.draftRevision++; } };
+  input.oninput = () => {
+    const r = store.get(id);
+    if (r && !current().history) {
+      r.draft = input.value;
+      r.draftRevision++;
+      const loc = extractStableLocator(r.item, r.owner);
+      const key = runtimeDraftKey(loc);
+      if (key) draftCoordinator.schedule(key, input.value);
+      else draftNotice.hidden = true;
+      if (input.value.length > DRAFT_MAX_CHARS) {
+        updateDraftNotice({ status: 'exceeded', notice: '草稿超过本地恢复上限，请复制保存完整文本' });
+      } else if (draftNotice.textContent.includes('超过本地恢复上限')) {
+        draftNotice.hidden = true; draftNotice.textContent = '';
+      }
+    }
+  };
   input.onkeydown = event => {
     if (event.isComposing || event.keyCode === 229 || composing) return;
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -254,17 +327,24 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
 
   send.onclick = () => {
     const target = id;
+    flushCurrentDraft(target);
     const r = store.get(target), text = input.value.trim();
     if (!target || !r?.owner || !text || current().pending || r.item.activity !== 'idle') return;
     viewOf(target).history = null;        // 一旦真的要发，就回到实时视图
     const owner = { ...r.owner };
     const draft = input.value, draftRevision = r.draftRevision;
+    const loc = extractStableLocator(r.item, owner);
+    const draftKey = runtimeDraftKey(loc);
     void action(target, { action: 'command', owner, command: { type: 'prompt', message: text } }, (result) => {
       const still = store.get(target);
       // An acknowledgement owns the submitted version, not later user edits.
       if (result.ok && same(still?.owner, owner) && still.draftRevision === draftRevision && still.draft === draft) {
         still.draft = ''; still.draftRevision++;
-        if (id === target && input.value === draft) input.value = '';
+        if (id === target && input.value === draft) {
+          input.value = '';
+          draftNotice.hidden = true;
+        }
+        if (draftKey) clearRuntimeDraft(draftKey, draft);
       }
     });
   };
@@ -488,7 +568,23 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const usageLine = view.history ? '' : usageText(projection.usageOf(id));
     usage.hidden = !usageLine; usage.textContent = usageLine;
 
-    if (renderedId !== id || document.activeElement !== input) input.value = view.history ? '' : (r?.draft || '');
+    const curLoc = r ? extractStableLocator(r?.item, r?.owner) : null;
+    const curLocKey = runtimeDraftKey(curLoc);
+    const locatorChanged = curLocKey !== renderedLocatorKey;
+    renderedLocatorKey = curLocKey;
+
+    if (r && !r.draft && !view.history) {
+      maybeRestoreDraft(id);
+    }
+
+    if (renderedId !== id || locatorChanged || document.activeElement !== input) {
+      input.value = view.history ? '' : (r?.draft || '');
+      if (input.value.length > DRAFT_MAX_CHARS) {
+        updateDraftNotice({ status: 'exceeded', notice: '草稿超过本地恢复上限，请复制保存完整文本' });
+      } else if (draftNotice.textContent.includes('超过本地恢复上限')) {
+        draftNotice.hidden = true; draftNotice.textContent = '';
+      }
+    }
     renderedId = id;
     input.disabled = Boolean(view.history);
     input.placeholder = view.history ? '查看历史时不发送；需要继续请点「恢复会话」' : '';
@@ -569,12 +665,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       active = true;
       composing = false;
       if (next === id) { ensureModels(); draw(); return; }
+      flushCurrentDraft(id);
       saveScroll();
       if (id) viewOf(id).focusOnReady = null;
       id = next || null;
       root.dataset.conversationId = id || '';
       ensureModels();
-      approvalKey = ''; renderedId = null;
+      approvalKey = ''; renderedId = null; renderedLocatorKey = null;
       draw();
     },
     draw,
@@ -585,9 +682,23 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       return alive && id === locator.conversationId && Boolean(current().history);
     },
     /** 离开中央视图时记下滚动位置。 */
-    leave() { active = false; composing = false; focusEpoch++; saveScroll(); if (id) viewOf(id).focusOnReady = null; },
+    leave() {
+      active = false;
+      composing = false;
+      focusEpoch++;
+      flushCurrentDraft(id);
+      saveScroll();
+      if (id) viewOf(id).focusOnReady = null;
+    },
     dispose() {
-      alive = false; composing = false; unsubscribe(); root.remove();
+      alive = false;
+      composing = false;
+      flushCurrentDraft(id);
+      draftCoordinator.dispose();
+      if (typeof window !== 'undefined' && unloadHandler) {
+        window.removeEventListener('beforeunload', unloadHandler);
+      }
+      unsubscribe(); root.remove();
       /* 只拆自己建的那一份投影；外部传进来的（`display`）归外部管。 */
       if (ownsProjection) projection.dispose();
     },

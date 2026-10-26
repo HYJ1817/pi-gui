@@ -1,4 +1,27 @@
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
+function stableIdentity(item, owner) {
+  const conversationId = item?.conversationId || owner?.conversationId;
+  const projectId = item?.workspace?.projectId || owner?.projectId;
+  const workspaceId = item?.workspace?.workspaceId || owner?.workspaceId;
+  const workspaceEpoch = item?.workspace?.workspaceEpoch || owner?.workspaceEpoch;
+  if (item?.nativeSessionId && owner?.sessionId && item.nativeSessionId !== owner.sessionId) {
+    return null; // 身份冲突
+  }
+  const nativeSessionId = item?.nativeSessionId || owner?.sessionId || null;
+  return { conversationId, projectId, workspaceId, workspaceEpoch, nativeSessionId };
+}
+function canInheritDraft(prior, nextItem) {
+  if (!prior || !prior.draft) return false;
+  const id1 = stableIdentity(prior.item, prior.owner);
+  const id2 = stableIdentity(nextItem, nextItem.owner);
+  if (!id1 || !id2) return false;
+  if (id1.conversationId !== id2.conversationId) return false;
+  if (id1.projectId !== id2.projectId || id1.workspaceId !== id2.workspaceId || id1.workspaceEpoch !== id2.workspaceEpoch) return false;
+  if (id1.nativeSessionId && id1.nativeSessionId === id2.nativeSessionId) return true;
+  if (!id1.nativeSessionId && id2.nativeSessionId) return true;
+  if (!id1.nativeSessionId && !id2.nativeSessionId) return true;
+  return false;
+}
 export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   let backend = null, resources = null, resourceReadSequence = 0; const records = new Map();
   let rejectObserver = null;
@@ -30,8 +53,13 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       if (!ownerUnchanged) {
         if (prior?.owner && item.owner && prior.owner.runtimeId === item.owner.runtimeId && prior.owner.runtimeGeneration === item.owner.runtimeGeneration) {
           if (prior.owner.sessionId && !item.owner.sessionId) continue;
+          if (!canInheritDraft(prior, item)) { prior.draft = ''; prior.draftRevision = 0; }
           prior.owner = item.owner; prior.item = item;
-        } else { const next = fresh(item); if (prior) { next.draft = prior.draft; next.draftRevision = prior.draftRevision; } records.set(item.conversationId, next); }
+        } else {
+          const next = fresh(item);
+          if (prior && canInheritDraft(prior, item)) { next.draft = prior.draft; next.draftRevision = prior.draftRevision; }
+          records.set(item.conversationId, next);
+        }
       } else prior.item = item;
     }
     return true;
