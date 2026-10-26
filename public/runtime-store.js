@@ -1,4 +1,36 @@
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
+function stableIdentity(item, owner) {
+  const conversationId = item?.conversationId || owner?.conversationId;
+  const itemWs = item?.workspace;
+  if (itemWs && owner) {
+    if (itemWs.projectId && owner.projectId && itemWs.projectId !== owner.projectId) return null;
+    if (itemWs.workspaceId && owner.workspaceId && itemWs.workspaceId !== owner.workspaceId) return null;
+    if (itemWs.workspaceEpoch && owner.workspaceEpoch && itemWs.workspaceEpoch !== owner.workspaceEpoch) return null;
+  }
+  const projectId = itemWs?.projectId || owner?.projectId;
+  const workspaceId = itemWs?.workspaceId || owner?.workspaceId;
+  const workspaceEpoch = itemWs?.workspaceEpoch || owner?.workspaceEpoch;
+  if (item?.nativeSessionId && owner?.sessionId && item.nativeSessionId !== owner.sessionId) {
+    return null; // 身份冲突
+  }
+  const nativeSessionId = item?.nativeSessionId || owner?.sessionId || null;
+  return { conversationId, projectId, workspaceId, workspaceEpoch, nativeSessionId };
+}
+function isSameIdentity(prior, nextItem) {
+  if (!prior || !nextItem) return false;
+  const id1 = stableIdentity(prior.item, prior.owner);
+  const id2 = stableIdentity(nextItem, nextItem.owner);
+  if (!id1 || !id2) return false;
+  if (id1.conversationId !== id2.conversationId) return false;
+  if (id1.projectId !== id2.projectId || id1.workspaceId !== id2.workspaceId || id1.workspaceEpoch !== id2.workspaceEpoch) return false;
+  if (id1.nativeSessionId && id1.nativeSessionId === id2.nativeSessionId) return true;
+  if (!id1.nativeSessionId && id2.nativeSessionId) return true;
+  if (!id1.nativeSessionId && !id2.nativeSessionId) return true;
+  return false;
+}
+function canInheritDraft(prior, nextItem) {
+  return Boolean(prior?.draft) && isSameIdentity(prior, nextItem);
+}
 export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   let backend = null, resources = null, resourceReadSequence = 0; const records = new Map();
   let rejectObserver = null;
@@ -8,7 +40,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (bytes.length <= limit) return text;
     return new TextDecoder().decode(bytes.slice(-limit)).replace(/^\uFFFD+/, '');
   };
-  function fresh(item) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', draftRevision: 0, approvals: [], truncated: false }; }
+  function fresh(item, baseRevision = 0) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', draftRevision: baseRevision, approvals: [], truncated: false }; }
   function seed(snapshot) {
     if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
     const sequence = snapshot._runtimeReadSequence;
@@ -30,9 +62,27 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       if (!ownerUnchanged) {
         if (prior?.owner && item.owner && prior.owner.runtimeId === item.owner.runtimeId && prior.owner.runtimeGeneration === item.owner.runtimeGeneration) {
           if (prior.owner.sessionId && !item.owner.sessionId) continue;
+          if (!isSameIdentity(prior, item)) {
+            prior.draft = '';
+            prior.draftRevision = (prior.draftRevision || 0) + 1;
+          }
           prior.owner = item.owner; prior.item = item;
-        } else { const next = fresh(item); if (prior) { next.draft = prior.draft; next.draftRevision = prior.draftRevision; } records.set(item.conversationId, next); }
-      } else prior.item = item;
+        } else {
+          const sameIdentity = prior && isSameIdentity(prior, item);
+          const nextRevision = prior ? (sameIdentity ? prior.draftRevision : (prior.draftRevision || 0) + 1) : 0;
+          const next = fresh(item, nextRevision);
+          if (sameIdentity) {
+            next.draft = prior.draft;
+          }
+          records.set(item.conversationId, next);
+        }
+      } else {
+        if (prior && !isSameIdentity(prior, item)) {
+          prior.draft = '';
+          prior.draftRevision = (prior.draftRevision || 0) + 1;
+        }
+        prior.item = item;
+      }
     }
     return true;
   }

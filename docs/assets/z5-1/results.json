@@ -1,0 +1,32 @@
+{
+  "qualification": "electron-chromium-passed",
+  "sandbox": true,
+  "contextIsolation": true,
+  "nodeIntegration": false,
+  "failed": 0,
+  "rows": [
+    "正常沙箱装配页加载成功",
+    "会话 B 初始输入为空且隔离",
+    "切回会话 A 草稿保留",
+    "Shift+Enter 不发送 prompt",
+    "keyCode 229 不发送 prompt",
+    "compositionstart 期间 Enter 不发送",
+    "compositionend 后正常 Enter 发送恰好一次",
+    "窗口重新加载成功",
+    "刷新后成功恢复会话 A 持久化草稿",
+    "刷新后成功恢复会话 B 持久化草稿",
+    "超过 20000 字符显示内联提示",
+    "1200px 宽窗口截图已保存",
+    "900px 中窗口截图已保存",
+    "700px 窄窗口截图已保存",
+    "缩短文本后内联提示隐藏"
+  ],
+  "screenshots": [
+    "z5-1-runtime-input-wide-1200.png",
+    "z5-1-runtime-input-mid-900.png",
+    "z5-1-runtime-input-narrow-700.png"
+  ],
+  "artifacts": [],
+  "chromium": "152.0.7977.130",
+  "attemptedAt": "2026-10-26T14:54:09.688Z"
+}

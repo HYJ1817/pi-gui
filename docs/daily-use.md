@@ -85,6 +85,8 @@ Ctrl/Alt/Meta 的组合才会触发。**
 
 ### key 怎么组成
 
+Classic 会话草稿 key：
+
 ```
 pi-gui.draft.v1:<workspaceHash>:<sessionHash>
 ```
@@ -93,17 +95,29 @@ pi-gui.draft.v1:<workspaceHash>:<sessionHash>
 - `sessionHash` = pi 会话 id 的哈希；拿不到身份时是 `nosession`
 - `v1` 是格式版本：将来改结构时能一次性丢弃旧格式，而不是把两种格式混着读
 
+Runtime 并行会话草稿 key（Z5-1 独立命名空间）：
+
+```
+pi-gui.draft.v1:runtime:<projectId>:<workspaceId>:<workspaceEpoch>:<conversationId>:<nativeSessionId>
+```
+
+- 各字段取自后端已证明的稳定 locator（非空、有界、`encodeURIComponent` 编码）；
+- 排除易变的 `backendInstance`、`runtimeId`、`runtimeGeneration`，支持进程重启后草稿恢复；
+- `nativeSessionId` 或工作区证明缺失时不写入共享 key，仅在当前窗口内存保留；
+- `nativeSessionId` 改变或 `workspaceEpoch` 改变时严格隔离，禁止旧草稿泄露。
+
 ### 什么时候写、什么时候清
 
 | 时机 | 行为 |
 |---|---|
 | 输入 | 防抖 400ms 写一次 |
-| 关页面 | `beforeunload` 里 flush（防抖窗口里的最后几个字不该丢） |
-| 发送成功 | 清掉当前身份的草稿（否则刷新后会把已发出的内容再填回来，像「发重了」） |
+| 关页面 / 切会话 | `beforeunload` 与切换前同步 flush 已捕获的文本（防抖窗口内的最后几个字不丢） |
+| 发送成功 | 清掉当前提交版本的草稿副本（满足 target、完整 Owner、draftRevision 与提交文本完全一致，旧 ACK 不清用户新输入，也不清切换后的其它会话草稿） |
 | 手动清空输入框 | 空文本**不落盘**，同时删掉旧 key（不留幽灵草稿） |
-| 换项目 / 换会话 | 旧身份的字先归档，再读新身份的草稿 |
-| 上限 | 单条 20000 字符，超出部分不存 |
-| 存不下（隐私模式 / 配额满） | 静默降级为「不持久化」—— 功能照常，只是刷新后不恢复，**绝不弹错** |
+| 换项目 / 换会话 | 旧身份的字先归档，再读新身份的草稿；新身份无草稿则为空 |
+| 上限 | 单条 20000 字符恢复上限；超过 20000 字符不截断，内存保留完整输入并清除持久副本，内联提示「草稿超过本地恢复上限，请复制保存完整文本」 |
+| 存不下（隐私模式 / 配额满） | 降级为仅内存保留，内联轻量提示「草稿仅在本次窗口保留」，功能照常，绝不弹窗打扰 |
+| 中文输入法（IME） | 维护 composition 状态；候选确认期间（keyCode 229 或 isComposing）不误触发发送，Shift+Enter 换行，仅正常 Enter 触发发送 |
 
 ### 换身份时的边界（容易出错的地方）
 
