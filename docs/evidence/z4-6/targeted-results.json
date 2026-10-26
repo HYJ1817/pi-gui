@@ -1,0 +1,44 @@
+[
+  {
+    "suite": "test:collab",
+    "exitCode": 1,
+    "elapsedMs": 18813,
+    "log": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-z46-evidence\\test-collab-final.log"
+  },
+  {
+    "suite": "test:runtime",
+    "exitCode": 0,
+    "elapsedMs": 85013,
+    "log": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-z46-evidence\\test-runtime-final.log"
+  },
+  {
+    "suite": "test:stop",
+    "exitCode": 0,
+    "elapsedMs": 2398,
+    "log": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-z46-evidence\\test-stop-final.log"
+  },
+  {
+    "suite": "test:logging",
+    "exitCode": 0,
+    "elapsedMs": 5577,
+    "log": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-z46-evidence\\test-logging-final.log"
+  },
+  {
+    "suite": "test:session-concurrency",
+    "exitCode": 0,
+    "elapsedMs": 1138,
+    "log": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-z46-evidence\\test-session-concurrency-final.log"
+  },
+  {
+    "suite": "test:ci",
+    "exitCode": 0,
+    "elapsedMs": 60634,
+    "log": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-z46-evidence\\test-ci-final.log"
+  },
+  {
+    "suite": "test:collab",
+    "exitCode": 0,
+    "log": "test-collab-final-green.log",
+    "note": "rerun after correcting oversized positive PNG fixtures; original failures retained"
+  }
+]

@@ -1,0 +1,67 @@
+[
+  {
+    "log": "electron.log",
+    "evidence": [
+      "Error: timeout: runtime agent proposal previewed",
+      "false !== true",
+      "1 !== 0"
+    ]
+  },
+  {
+    "log": "electron-diagnostic.log",
+    "evidence": [
+      "Error: UnknownVizError",
+      "1 !== 0"
+    ]
+  },
+  {
+    "log": "electron-final.log",
+    "evidence": [
+      "{\"stage\":\"runtime agent proposal previewed\",\"requests\":[{\"action\":\"operations\",\"ok\":true},{\"action\":\"operations\",\"ok\":true},{\"action\":\"operations\",\"ok\":true},{\"action\":\"operations\",\"ok\":true},{\"action\":\"operations\",\"ok\":true},{\"action\":\"close\",\"ok\":true},{\"action\":\"operations\",\"ok\":false,\"code\":\"collab_conflict\"},{\"action\":\"close\",\"ok\":true},{\"action\":\"open\",\"ok\":true},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false},{\"action\":\"close\",\"ok\":false,\"code\":\"collab_scope_unavailable\"},{\"action\":\"open\",\"ok\":true},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false},{\"action\":\"create\",\"ok\":true},{\"action\":\"operations\",\"ok\":true},{\"action\":\"generate\",\"ok\":true,\"generating\":true},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false,\"generationState\":\"ready\"},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false}],\"status\":\"版本 2 · 已保存\"}",
+      "Error: timeout: runtime agent proposal previewed",
+      "false !== true",
+      "1 !== 0"
+    ]
+  },
+  {
+    "log": "electron-race-diagnostic.log",
+    "evidence": [
+      "{\"stage\":\"runtime agent proposal previewed\",\"requests\":[{\"action\":\"operations\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"operations\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"operations\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"operations\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"operations\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"close\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[],\"hasPreviewButton\":false},{\"action\":\"operations\",\"ok\":false,\"code\":\"collab_conflict\",\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[],\"hasPreviewButton\":false},{\"action\":\"close\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[],\"hasPreviewButton\":false},{\"action\":\"open\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"close\",\"ok\":false,\"code\":\"collab_scope_unavailable\",\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[],\"hasPreviewButton\":false},{\"action\":\"open\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[],\"hasPreviewButton\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[],\"hasPreviewButton\":false},{\"action\":\"create\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"operations\",\"ok\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"generate\",\"ok\":true,\"generating\":true,\"hasGenerationId\":false,\"hasHeadId\":false,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false,\"generationState\":\"ready\",\"hasGenerationId\":true,\"hasHeadId\":true,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false,\"hasGenerationId\":false,\"hasHeadId\":true,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false,\"hasGenerationId\":false,\"hasHeadId\":true,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false},{\"action\":\"proposal_status\",\"ok\":true,\"generating\":false,\"hasGenerationId\":false,\"hasHeadId\":true,\"documentKeys\":[\"documentId\",\"schemaVersion\",\"revision\",\"title\",\"boundSessionId\",\"graph\"],\"hasPreviewButton\":false}],\"status\":\"版本 2 · 已保存\"}",
+      "Error: timeout: runtime agent proposal previewed",
+      "false !== true",
+      "1 !== 0"
+    ]
+  },
+  {
+    "log": "productivity-electron.log",
+    "evidence": [
+      "Error: Electron fixture 超时未退出"
+    ]
+  },
+  {
+    "log": "productivity-electron-fixed.log",
+    "evidence": [
+      "Error: Script failed to execute, this normally means an error was thrown. Check the renderer console for the error.",
+      "1 !== 0"
+    ]
+  },
+  {
+    "log": "productivity-electron-final.log",
+    "evidence": [
+      "Error: timeout: PNG 光栅化",
+      "1 !== 0"
+    ]
+  },
+  {
+    "log": "test-collab-final.log",
+    "evidence": [
+      "TypeError: Cannot read properties of undefined (reading 'format')"
+    ]
+  },
+  {
+    "log": "test-collab-fixed.log",
+    "evidence": [
+      "TypeError: releaseRenderer is not a function"
+    ]
+  }
+]

@@ -10,29 +10,30 @@ const assert = require('node:assert/strict');
 const { spawn, spawnSync } = require('node:child_process');
 
 const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-z45-'));
-const out = path.resolve(__dirname, '../docs/assets/z4-5');
+const out = path.resolve(process.env.Z45_OUTPUT || path.join(__dirname, '../docs/assets/z4-5'));
 const fixture = path.join(__dirname, 'fixtures/z4-5-advanced-editing-electron.cjs');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+let child;
 
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const reportPath = path.join(out, 'results.json');
   if (fs.existsSync(reportPath)) fs.unlinkSync(reportPath);
   const env = {};
-  for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP']) if (process.env[key]) env[key] = process.env[key];
+  for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'ELECTRON_OVERRIDE_DIST_PATH']) if (process.env[key]) env[key] = process.env[key];
   Object.assign(env, { Z45_WORLD: world, Z45_OUTPUT: out,
     HOME: path.join(world, 'home'), USERPROFILE: path.join(world, 'home'),
     APPDATA: path.join(world, 'home/AppData/Roaming'), LOCALAPPDATA: path.join(world, 'home/AppData/Local'),
   });
   let spawnError = null;
-  const child = spawn(require('electron'), [fixture, '--user-data-dir=' + path.join(world, 'electron')], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  child = spawn(require('electron'), [fixture, '--user-data-dir=' + path.join(world, 'electron')], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   child.once('error', error => { spawnError = error.code || 'spawn_error'; });
   child.stdout.on('data', data => process.stdout.write(data));
   child.stderr.on('data', data => process.stderr.write(data));
   const deadline = Date.now() + 60000;
-  while (child.exitCode === null && !spawnError && Date.now() < deadline) await sleep(100);
+  while (child.exitCode === null && child.signalCode === null && !spawnError && Date.now() < deadline) await sleep(100);
   if (spawnError) throw new Error('environment-blocked: Electron ' + spawnError);
-  if (child.exitCode === null) {
+  if (child.exitCode === null && child.signalCode === null) {
     spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
     throw new Error('Electron fixture 超时未退出');
   }
@@ -57,4 +58,9 @@ async function main() {
   fs.rmSync(world, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {
+  if (Number.isInteger(child?.pid) && child.exitCode === null && child.signalCode === null) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+  const relative = path.relative(os.tmpdir(), world);
+  assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+  fs.rmSync(world, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+});

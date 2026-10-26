@@ -66,6 +66,16 @@ v2 的 sha 为 `GITHUB_SHA`（PR 可能为合成 merge SHA）；历史 Actions A
 
 ## Z4-2 协同文档验证
 
+Z4-6 稳定性补验见 [验收矩阵](Z4-6-test-matrix.md) 与 [验收报告](Z4-6A-acceptance.md)。
+`test:collab` 复用原套件并增加有90秒总上限的 `tests/collab-stability.cjs`：40轮混合通道
+存储/建议历史、40轮面板导出销毁、40轮画布复制布局及PNG资源上限；只证明TEMP离线状态机。
+可用 `node --expose-gc tests/collab-stability.cjs` 补充短程GC后heap取样，不等于长时内存资格。
+三个既有Electron专项继续独立于无桌面canonical；生产力与高级编辑runner分别支持
+`Z44B_OUTPUT`、`Z45_OUTPUT`，避免覆盖历史验收素材。
+`node scripts/verify-collab-real-pi.mjs <absolute-pi.cmd> <absolute-result.json>` 是显式调用的
+本机Pi控制面探针，不纳入canonical、不发送模型prompt；使用临时HOME/agent/session及既有网络守卫。
+真实模型、运行中取消和打包窗口仍须单列证明，不从控制面或fake Pi结果推断。
+
 Z4-2 的 `npm run test:collab` 随 `npm test` 运行原型 49 项历史基线及生产数据、存储、
 完整 Owner、服务、真实 Router HTTP、画布与面板套件。原型没有被生产入口导入。
 `npm run test:collab:electron` 是需离线桌面运行时的正常沙箱专项，使用 TEMP Git/fake Pi、
