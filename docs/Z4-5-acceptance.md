@@ -11,10 +11,11 @@
   - Electron 真窗口实测（本会话沙箱禁止启动 Electron 窗口，按仓库惯例落 [results.json](assets/z4-5/results.json) 记录 environment-blocked 状态）；
   - 完整 canonical `npm test` 按约定留待 PR CI。
 - 身份：
-  - before HEAD: `0ec517a17b041b857fc1f83afc1040d0c9fb90e0`（main 分支上 Z4-4B 的合并提交，包含 `b1e6752` 最新开发提交）；
-  - after HEAD: 见最终本地交付提交；解析命令：`git log -1 --format=%H -- docs/Z4-5-acceptance.md`；
+  - 初始基线 HEAD: `0ec517a17b041b857fc1f83afc1040d0c9fb90e0`（main 分支上 Z4-4B 的合并提交，包含 `b1e6752` 最新开发提交）；
+  - 独立验收修复基线 HEAD: `b468afc6e2da00e4fce18f82284816d7799d84df`；
+  - 最终交付 HEAD: 见最新提交；解析命令：`git log -1 --format=%H -- docs/Z4-5-acceptance.md`；
   - 分支：`codex/z4-5-advanced-editing`；
-  - 本轮遵循硬约束：仅本地提交，未 push、未开 PR、未合并 main、未发版。
+  - 本轮遵循硬约束：本地提交并推送至开发分支，禁止创建 PR、合并 main、打 tag 或发版。
 
 ---
 
@@ -25,15 +26,16 @@
 | 文件 | 变更类型 | 目标与说明 |
 | --- | --- | --- |
 | `public/collab-selection.js` | 新增 | 任务 A：独立的多选与选区管理模型，提供单选、toggle、框选碰撞检测、全选、修剪与状态描述 |
-| `public/collab-canvas.js` | 修改 | 任务 A/B/C/D：集成多选系统、批量拖动、批量删除、复制/粘贴/副本、节点对齐与间距表单、快捷键与帮助文案 |
+| `public/collab-canvas.js` | 修改 | 任务 A/B/C/D：集成多选系统、批量拖动、批量删除、复制/粘贴/副本、节点对齐与间距表单、快捷键与帮助文案；修复鼠标事件重复修改选区、焦点恢复与批量移动相对位移保持 |
 | `public/collab.css` | 修改 | 样式：添加 `.collab-marquee` 选框样式与 `.collab-align-form` 布局样式 |
 | `docs/Z4-5-large-transaction-design.md` | 新增 | 任务 E：大图事务协议审计与原子布局阻断分析报告 |
 | `tests/collab-selection.cjs` | 新增 | 测试：多选与框选几何计算单元测试（37 项通过） |
 | `tests/collab-advanced-editing.cjs` | 新增 | 测试：高级编辑交互与服务端集成测试（89 项通过，96 断言） |
-| `tests/fixtures/z4-5-advanced-editing-electron.cjs` | 新增 | 专项：真实 Chromium 正常沙箱装配页与自动化取证夹具 |
+| `tests/collab-z45-regressions.cjs` | 新增 | 回归：独立审查缺陷红绿回归测试（41 项通过，覆盖事件序列、焦点恢复与边界位移） |
+| `tests/fixtures/z4-5-advanced-editing-electron.cjs` | 新增 | 专项：真实 Chromium 正常沙箱装配页与自动化取证夹具（含真实完整事件序列） |
 | `tests/collab-advanced-editing-electron.cjs` | 新增 | 专项：Electron runner 与 environment-blocked 取证记录器 |
 | `tests/collab-packaged.cjs` | 修改 | 打包校验：增加 `collab-selection.js` 资源一致性检查 |
-| `package.json` | 修改 | 测试注册：`test:collab` 链注册两个新套件，并增加 `test:collab:advanced-electron` |
+| `package.json` | 修改 | 测试注册：`test:collab` 链注册三个新套件，并增加 `test:collab:advanced-electron` |
 | `docs/assets/z4-5/results.json` | 新增 | 证据：Electron 专项环境阻断记录 |
 | `docs/Z4-5-acceptance.md` | 新增 | 本验收材料文件 |
 
@@ -45,10 +47,11 @@
 
 | 证据层 | 命令 | 退出码 | 实测数量 / 结果 |
 | --- | --- | --- | --- |
-| 协同全套件定向测试 | `npm run test:collab` | 0 | 19 套件全绿：Z4-1 原型 49/49、Collab doc 56/56(135)、store 53/53(149,skip 1)、authority 24/24(68)、service 13/13(58)、proposal-queue 12/12(73)、proposal-source 21/21(110)、agent-flow 32/32(170)、HTTP 8/8(41)、canvas 72/72(72)、panel 11/11(58)、panel-agent 8/8(87)、auto-layout 51/51(51)、layout-preview 44/44(44)、export 48/48(48)、productivity 60/60(60)、panel-productivity 14/14(71)、**collab-selection 37/37(37)**、**collab-advanced-editing 89/89(96)** |
+| 协同全套件定向测试 | `npm run test:collab` | 0 | 20 套件全绿：Z4-1 原型 49/49、Collab doc 56/56(135)、store 53/53(149,skip 1)、authority 24/24(68)、service 13/13(58)、proposal-queue 12/12(73)、proposal-source 21/21(110)、agent-flow 32/32(170)、HTTP 8/8(41)、canvas 72/72(72)、panel 11/11(58)、panel-agent 8/8(87)、auto-layout 51/51(51)、layout-preview 44/44(44)、export 48/48(48)、productivity 60/60(60)、panel-productivity 14/14(71)、**collab-selection 37/37(37)**、**collab-advanced-editing 89/89(96)**、**collab-z45-regressions 41/41(41)** |
 | 独立选区单元测试 | `node tests/collab-selection.cjs` | 0 | 37/37 passed; assertions=37 |
 | 高级编辑集成测试 | `node tests/collab-advanced-editing.cjs` | 0 | 89/89 passed; assertions=96 |
-| CI 测试编排核对 | `npm run test:ci` | 0 | ci-test-plan 219 leaves exact; ci-workflow 5/5, 15/15; ci-results 10/10; ci-summary 30/30; ci-history 21; ci-doc-scope 28/28; release-ci-proof 16/16; nsis 12/12 |
+| 验收缺陷专项回归测试 | `node tests/collab-z45-regressions.cjs` | 0 | 41/41 passed; assertions=41 |
+| CI 测试编排核对 | `npm run test:ci` | 0 | ci-test-plan 220 leaves exact; ci-workflow 5/5, 15/15; ci-results 10/10; ci-summary 30/30; ci-history 21; ci-doc-scope 28/28; release-ci-proof 16/16; nsis 12/12 |
 | 打包产物静态校验 | `npm run test:collab:packaged` | 0 (app 部分) | `app` 内嵌所有 9 个前端资源摘要一致，权限与路由断言全部通过 |
 | 产物构建更新 | `npm run build:app` | 0 | dist-app 产物刷新成功 |
 | Electron 专项交互 | `node tests/collab-advanced-editing-electron.cjs` | 1 (environment-blocked) | 夹具退出码 2147483651（沙箱环境禁止启动任何 Electron 子进程），按规范已落 `docs/assets/z4-5/results.json` 留存阻断证据，未冒充通过 |
@@ -150,9 +153,68 @@
 
 ---
 
-## 六、交付结论
+## 六、独立验收修复记录（1 Blocker、2 Important）
 
-- 开发完成：**是**（任务 A、B、C、D、E 全部门槛达成，代码、测试与文档齐备）。
+根据独立审查发现的 1 个 Blocker 与 2 个 Important 问题，进行了针对性修复与红绿回归闭环验证：
+
+### 1. Blocker：鼠标事件序列重复修改选区
+- **问题根因**：
+  - 浏览器原生鼠标交互完整序列为 `pointerdown` -> `pointerup` -> `click`；
+  - 原实现在 `pointerdown` 处理了 `selection.toggle`，而后续 `click` 又再次调用 `choose({ toggle: true })`，造成 Ctrl+点击在单次用户动作中被重复 toggle 导致反选抵消；
+  - 框选（`kind === 'box'`）在拖动时未记录 `drag.moved = true`，导致松开鼠标后紧随其后的 `click` 事件未被抑制，冒泡至 SVG 视口清空了框选结果；
+  - 选区中已有多个节点时，若用户仅拖动已选节点，原实现在 `pointerdown` 或后续 `click` 中容易丢失其他已选节点。
+- **修复措施**（`public/collab-canvas.js`）：
+  - 引入交互追踪态 `pointerAction`（`handled` / `deferSingleSelect`）与精确的 `suppressClick` 门控；
+  - Ctrl+点击在 `pointerdown` 立即执行 toggle 并置 `pointerAction = { type: 'handled' }`，后续 `click` 识别已处理直接放行不重复执行；
+  - 多选状态下单选点击节点暂缓降级（`deferSingleSelect`），若发生拖拽（位移 ≥3px）则 `suppressClick = true` 完整保留多选拖动；仅在未发生拖动的纯点击时收敛为单选；
+  - 框选在 `pointerup` 中显式设置 `suppressClick = true`，杜绝随后的 `click` 冲刷选区；
+  - 点击空白区域在 `pointerdown` 清空并记录 `handled`，不再在 `click` 重复清空；
+  - 针对 `pointercancel`、`Escape` 与窗口 `blur` 统一重置交互态与预览。
+
+### 2. Important：焦点恢复不能清空多选
+- **问题根因**：
+  - 画布在调用 `update()` 更新文档时，会依据原先活跃元素重新通过 `replacement.focus()` 恢复焦点；
+  - 调用 `.focus()` 触发了 SVG 的 `focusin` 监听器，原 `focusin` 无条件调用了 `choose(event.target)`，进而退化为 `selectOne()`，抹除了已有多选集合。
+- **修复措施**（`public/collab-canvas.js`）：
+  - 增加 `restoringFocus` 布尔防护门控，在 `update()` 进行内部程序化恢复焦点期间锁定，忽略因此触发的内部 `focusin` 事件；
+  - 用户主动通过 Tab 键盘导航触发 `focusin` 时：若目标节点已在选中集合内，保留既有多选；仅当目标节点未被选中时，才将其选为焦点对象；
+  - `update()` 期间通过 `selection.prune(document.graph)` 剔除已被服务端或协作方删除的孤立节点/连线，完整保留存续节点的选中态；
+  - 会话切换（`oldId !== document.documentId`）时彻底清空选择与剪贴板，且不向新会话恢复旧会话节点焦点。
+
+### 3. Important：批量移动保持相对位移与边界控制
+- **问题根因**：
+  - 原实现在拖拽与方向键移动时，对集合内每个节点独立进行 `clamp(node.x + delta)`；
+  - 当集合内某节点接近坐标边界（`[-100000, 100000]`）时被夹紧截断，而其余节点继续移动，导致图形相对结构被拉伸变形。
+- **修复措施**（`public/collab-canvas.js`）：
+  - 抽取集合边界计算函数 `computeGroupDelta(nodes, deltaX, deltaY)`；
+  - 先计算整个选中节点集合在 X/Y 轴允许的公共位移范围（`[-100000 - minX, 100000 - maxX]`）；
+  - 将位移量整体夹紧，使选中集合内全部节点使用严格相同的 `effectiveDeltaX` 与 `effectiveDeltaY`；
+  - 相对坐标差严格保持恒定（`nodeA.x - nodeB.x` 在位移前后绝对不变）；
+  - 若已触碰边界无法移动（`effectiveDelta === 0`），直接返回，实现**零提交**（不产生无效空操作）；
+  - 无论是拖拽还是方向键，单批超过 50 个节点统一拦截拒绝并给出明确错误文案。
+
+### 4. 红绿测试反证与证据
+- **专用回归测试套件**：`tests/collab-z45-regressions.cjs`（覆盖 3 组共 41 项断言）。
+- **红态反证（旧代码复现）**：
+  - 运行 `node tests/collab-z45-regressions.cjs`，在未应用修复的代码上于 1.1 立即失败：
+    ```
+    反证失败证据 (预期红): 1.1: 真实 Ctrl+点击序列后 n1 必须处于选中状态
+    false !== true
+    ```
+    明确证实旧代码中真实浏览器事件序列导致 Ctrl+点击反选失效。
+- **绿态通过（修复后验证）**：
+  - 运行 `node tests/collab-z45-regressions.cjs`：**41/41 passed; assertions=41** 全部绿过。
+  - 运行 `node tests/collab-selection.cjs`：**37/37 passed; assertions=37**。
+  - 运行 `node tests/collab-advanced-editing.cjs`：**89/89 passed; assertions=96**。
+  - 运行 `npm run test:collab`：**20 套件全绿**。
+  - 运行 `npm run test:ci`：**220 leaves exact**，CI 测试入口验证完全吻合。
+  - 产物构建 `npm run build:app` 成功刷新 `dist-app`。
+
+---
+
+## 七、交付结论
+
+- 开发完成：**是**（任务 A、B、C、D、E 全部门槛达成，独立审查缺陷已全部修复并闭环）。
 - 代码验收通过：**待验证**（等待独立评审）。
 - 允许合并：**未授权**（本轮禁止未经授权 push/merge）。
-- 允许发布：**未授权**（本轮仅本地提交）。
+- 允许发布：**未授权**（本轮仅本地提交并推送开发分支）。
