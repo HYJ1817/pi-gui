@@ -67,11 +67,13 @@ const path = require('node:path'), http = require('node:http');
       assert.equal(response.body.toolSummary.items[0].status, 'completed');
       assert.deepEqual(response.body.locator, target.locator);
       assert.deepEqual(response.body.messages.map(m => m.text), ['question', 'answer']);
+      assert.equal(response.body.toolSummary.items[0].messagePosition, 2);
     });
     await check('same call ID is isolated by native session and project/workspace', async () => {
       const response = await get(b.conversationId); assert.equal(response.body.toolSummary.items[0].status, 'error');
       assert.notEqual(response.body.locator.projectId, target.locator.projectId);
       assert.notEqual(response.body.locator.nativeSessionId, target.locator.nativeSessionId);
+      assert.equal(response.body.toolSummary.items[0].messagePosition, response.body.messages.length);
     });
     await check('no token cannot read text or tool evidence', async () => {
       const response = await get(a.conversationId, '', {}); assert.equal(response.status, 401);

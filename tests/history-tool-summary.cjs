@@ -26,8 +26,71 @@ const path = require('node:path');
   };
   const read = (entries, options) => { write(entries); return readSessionMessages(file, options); };
   const summary = (entries, options) => read(entries, options).toolSummary;
-  const expected = (toolName, status) => ({ toolName, status, source: status === 'unknown' ? 'unconfirmed' : 'confirmed' });
+  const expected = (toolName, status, messagePosition = 0) => ({ toolName, status,
+    source: status === 'unknown' ? 'unconfirmed' : 'confirmed', messagePosition });
   try {
+    check('tool positions identify insertion boundaries without exposing native IDs', () => {
+      const a = call(); a.message.content.unshift({ type: 'text', text: 'before tools' });
+      a.message.content.push({ type: 'toolCall', id: 'c2', name: 'write', arguments: {} });
+      const next = entry('u2', 'r2', { role: 'user', content: 'after tools' });
+      const value = read([user, a, result('c', false, 'r1'), result('c2', false, 'r2', 'r1', 'write'), next]);
+      assert.deepEqual(value.toolSummary.items.map(i => i.messagePosition), [2, 2]);
+      assert.equal(value.messages[1].text, 'before tools'); assert.equal(value.messages[2].text, 'after tools');
+      assert.ok(value.toolSummary.items.every(i => Number.isInteger(i.messagePosition)
+        && i.messagePosition >= 0 && i.messagePosition <= value.messages.length));
+    });
+    check('tool-only and thinking-only assistant entries retain their physical insertion boundary', () => {
+      const a = call(); a.message.content.unshift({ type: 'thinking', thinking: 'PRIVATE_THINKING' });
+      const value = read([user, a, result(), answer]);
+      assert.deepEqual(value.messages.map(m => m.messageId), ['u', 'answer']);
+      assert.equal(value.toolSummary.items[0].messagePosition, 1);
+      const noBody = read([call(), result()]);
+      assert.deepEqual(noBody.messages, []); assert.equal(noBody.toolSummary.items[0].messagePosition, 0);
+      assert.equal(summary([call(), user]).items[0].messagePosition, 0);
+    });
+    check('800-body and 100-tool limits rebase retained positions independently', () => {
+      const entries = Array.from({ length: 850 }, (_, i) => [
+        entry('u' + i, null, { role: 'user', content: 'body ' + i }), call('c' + i, 'read', 'a' + i, 'u' + i),
+      ]).flat();
+      const value = read(entries);
+      assert.equal(value.messages.length, 800); assert.equal(value.messages[0].messageId, 'u50');
+      assert.equal(value.messages[0].userIndex, 50); assert.equal(value.messages.at(-1).messageId, 'u849');
+      assert.equal(value.toolSummary.returned, 100); assert.equal(value.toolSummary.truncated, true);
+      assert.deepEqual(value.toolSummary.items.map(i => i.messagePosition), Array.from({ length: 100 }, (_, i) => 701 + i));
+      assert.ok(Buffer.byteLength(JSON.stringify(value.toolSummary)) < 12 * 1024);
+    });
+    check('a call whose body context was discarded has no fabricated current-message anchor', () => {
+      const entries = [user, call(), result(), ...Array.from({ length: 801 }, (_, i) =>
+        entry('new' + i, null, { role: 'user', content: 'new turn ' + i })), call('late', 'write', 'late')];
+      const value = read(entries);
+      assert.equal(value.messages.length, 800); assert.equal(value.messages[0].messageId, 'new1');
+      assert.deepEqual(value.toolSummary.items.map(i => i.messagePosition), [null, 800]);
+      assert.equal(value.toolSummary.items[0].status, 'completed');
+      assert.equal(value.toolSummary.historyTruncated, true);
+    });
+    check('branch-local text positions never use duplicate call IDs as message anchors', () => {
+      const a = call(); a.message.content.unshift({ type: 'text', text: 'branch A' });
+      const b = call('c', 'write', 'b', 'u'); b.message.content.unshift({ type: 'text', text: 'branch B' });
+      const value = read([user, a, result(), b, result('c', false, 'rb', 'b', 'write')]);
+      assert.deepEqual(value.toolSummary.items.map(i => i.messagePosition), [2, 3]);
+      assert.deepEqual(value.toolSummary.items.map(i => i.status), ['unknown', 'unknown']);
+      assert.deepEqual(value.messages.map(m => m.text), ['question', 'branch A', 'branch B']);
+      assert.equal(value.messages[1].messageId, 'a'); assert.equal(value.messages[2].messageId, 'b');
+    });
+    check('summary line truncation cannot reset positions of body messages retained outside it', () => {
+      const entries = [user, answer, ...Array.from({ length: 4100 }, (_, i) =>
+        ({ type: 'custom', id: 'm' + i, parentId: null })), call()];
+      const value = read(entries); assert.equal(value.toolSummary.truncated, true);
+      assert.equal(value.toolSummary.items[0].messagePosition, 2);
+      assert.deepEqual(value.messages.map(m => m.messageId), ['u', 'answer']);
+    });
+    check('byte-truncated positions refer only to the same returned body window', () => {
+      const a = call(); a.message.content.unshift({ type: 'text', text: 'visible answer' });
+      const value = read([entry('large', null, { role: 'user', content: 'X'.repeat(5000) }), user, a, result()], { maxBytes: 900 });
+      assert.equal(value.truncated, true); assert.deepEqual(value.messages.map(m => m.text), ['question', 'visible answer']);
+      assert.equal(value.toolSummary.items[0].messagePosition, 2);
+      assert.equal(value.messages[0].userIndex, null); assert.equal(value.messages[0].messageId, 'u');
+    });
     check('body-only history remains identical and explains no tool calls', () => {
       const value = read([user, answer]);
       assert.deepEqual(value.messages.map(m => [m.role, m.text, m.messageId, m.userIndex]),
@@ -78,7 +141,7 @@ const path = require('node:path');
     });
     check('same ID on a different branch cannot establish completion', () => {
       assert.deepEqual(summary([user, call('c', 'read', 'a', 'u'), result('c', false, 'r', 'u')]).items,
-        [expected('read', 'unknown')]);
+        [expected('read', 'unknown', 1)]);
     });
     check('result name mismatch cannot establish completion', () => {
       assert.equal(summary([call(), result('c', false, 'r', 'a', 'write')]).items[0].status, 'unknown');
@@ -109,7 +172,7 @@ const path = require('node:path');
       const s = summary([a, r, { type: 'custom', id: 'approval', parentId: 'r', data: { approval: 'PRIVATE_APPROVAL' } }]);
       assert.equal(JSON.stringify(s).includes('PRIVATE'), false);
       assert.deepEqual(s.items, [expected('bash', 'completed')]);
-      assert.deepEqual(Object.keys(s.items[0]).sort(), ['source', 'status', 'toolName']);
+      assert.deepEqual(Object.keys(s.items[0]).sort(), ['messagePosition', 'source', 'status', 'toolName']);
     });
     check('malicious, huge and unknown legal tool names use a fixed safe label', () => {
       for (const name of ['<img src=x onerror=alert(1)>', 'read<script>', 'x'.repeat(50000), 'read\n',
@@ -159,7 +222,11 @@ const path = require('node:path');
       const largest = summary(Array.from({ length: 100 }, (_, i) => call('c' + i, 'unknown_name', 'a' + i)));
       const confirmed = summary(Array.from({ length: 100 }, (_, i) => [call('c' + i, 'unknown_name', 'a' + i),
         result('c' + i, false, 'r' + i, 'a' + i, 'unknown_name')]).flat());
-      metrics.maxSummaryBytes = Math.max(Buffer.byteLength(JSON.stringify(largest)), Buffer.byteLength(JSON.stringify(confirmed)));
+      const positioned = summary([...Array.from({ length: 800 }, (_, i) =>
+        entry('u' + i, null, { role: 'user', content: 'body' })),
+        ...Array.from({ length: 100 }, (_, i) => [call('c' + i, 'unknown_name', 'a' + i),
+          result('c' + i, false, 'r' + i, 'a' + i, 'unknown_name')]).flat()]);
+      metrics.maxSummaryBytes = Math.max(...[largest, confirmed, positioned].map(value => Buffer.byteLength(JSON.stringify(value))));
       assert.ok(metrics.maxSummaryBytes < 12 * 1024);
     });
     check('line cap is independent of the existing text message cap', () => {

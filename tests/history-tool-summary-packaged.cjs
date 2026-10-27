@@ -66,12 +66,14 @@ const check = (name, condition) => { assert.ok(condition, name); checks++; conso
           && value.toolSummary.items[0].status === 'completed' && value.toolSummary.items[0].source === 'confirmed');
         check(form + ' original body order/identity retained', value.messages?.[0]?.text === 'fixture answer'
           && value.messages[0].messageId === 'a' && value.locator?.nativeSessionId === sessionId);
+        check(form + ' safe tool position indexes the same returned body array', value.toolSummary?.items[0]?.messagePosition === 1);
         const text = JSON.stringify(value);
         check(form + ' credentials/paths/raw data absent', !text.includes('PRIVATE') && !text.includes(world) && !text.includes('.jsonl'));
         const snap = await (await fetch(base + '/api/runtime-sessions', { headers: { 'x-pi-gui-token': token } })).json();
         check(form + ' read does not start Runtime or Pi', snap.liveCount === 0 && !fs.existsSync(marker));
         check(form + ' native session is byte-identical', fs.readFileSync(native).equals(nativeBytes));
         evidence.push({ form, responseBytes: Buffer.byteLength(text), summaryBytes: Buffer.byteLength(JSON.stringify(value.toolSummary)),
+          messagePosition: value.toolSummary.items[0].messagePosition,
           nativeDigest: digest(nativeBytes), nativeUnchanged: true, liveCount: snap.liveCount, piStarts: 0 });
       } finally {
         if (child.exitCode === null) child.kill();
