@@ -2,6 +2,8 @@
 
 日期：2026-10-27（Asia/Shanghai）。单一执行 Agent，无子 Agent。结论：**来源审计 GO，后端与定向验证完成；PR #38 未合并，按约定停在后端，UI 未集成。** 待用户独立验收，不进入下一阶段。
 
+以上及第1～8节记录首轮 `ade68c1` 交付时的状态。**最新位置合同修复、提交与验证以第9节为准**；原证据保留，不把旧 SHA 的结果当作新行为验证。
+
 ## 1. 基线、Worktree 与提交
 
 - 最新 main / 开发基线：`ec336ad348f3af70e2bf4fd5e3a22dbd70d4c32a`，本轮多次 fetch 核对未变化。
@@ -129,3 +131,50 @@ Electron44.4.3从本机既有缓存 ZIP 解压到本 Worktree node_modules；通
 - 原生JSONL非签名审计账本；可信表示通过本地身份/形状/关联证明的记录，不是防本地恶意修改的执行证明。自定义工具真实名称被隐藏；部分可合法关联的重复/旧记录仍会保守 unknown。这些限制不影响原正文。
 - 回滚：在本分支逆序回退最终文档证据提交、测试提交2745f60、行为提交08069d1及审计提交94a458b，或在将来集成时只撤回对应业务/测试/文档改动；不要 reset main 或删除其他 Worktree。回退生产改动后重建 App/SEA。无用户数据迁移或原生记录写回。
 - 开发完成：后端阶段是，UI阶段暂缓；代码验收通过：待独立审查与canonical；允许推送/PR/合并/tag/发布：本轮均无授权且未执行。保留本 Worktree 和分支供用户独立验收。
+
+## 9. 位置关联 Important 反馈处置（2026-10-27）
+
+**结论：已验证并局部修复。** 用户转交反馈指出每项只有工具名/状态/source，无法为未来按消息附近展示工具提供位置。旧生产代码跑新增回归失败：两条调用预期位置 `[2,2]`，实际 `[undefined,undefined]`。原需求确实允许“正文后紧凑只读区”，因此末尾布局本身不构成违约；本次修复的是安全位置合同能力，不改 UI 布局。
+
+### 身份与范围
+
+- 修复基线 / 已推送分支 HEAD：`ade68c1a64fe2fb6f6bef77147946e83bfda7b15`，本轮开始工作区干净。
+- 行为提交：`fbdd1443b5e09e910478837367696fabffb3c43a`；测试提交：`c01c05635965b7e7d9ed2bbc2d5de3fcf4ce0b03`；最终交付为包含本节的文档/证据提交，可通过本报告 git log 查询。
+- fetch 核对最新 main 为 `300717f6b59a106d1dd01910d82d3096cdb0a182`；PR #38 已由外部于2026-10-27 11:01:06（上海）合并，head 当时为 `ccd6484b409dd98e144d013c2f6abc27109fef33`。这是首轮之后的新状态，本次没有合并动作、未将其未审阅改动混入位置修复。
+- 在原 Worktree 单 Agent 顺序修改，仅两个生产文件及对应测试；未调用子 Agent、未写其他 Worktree、未改 public/。后端读取、权限、状态配对及容量预算不扩展。Jev category=backend(0.41)、risk=medium(0.3)，低置信分类不替代实际边界核对。
+
+### 新合同
+
+每项新增 `messagePosition: integer | null`。整数是**当前响应** `messages[]` 的插入边界：0表示首条正文之前，N表示 messages[N] 之前，等于 messages.length 表示末尾；同位置保持原工具顺序。无正文调用仍有物理插入位置，同条 assistant 内的 text 不拆开，所有工具在该条聚合正文后。
+
+正文读取循环只另记私有数字行位置；同一 fd/同一 text 窗口产生正文与摘要，无额外读盘。对实际返回的最后800条正文重算位置；已被裁掉正文范围内的工具返回 null，不附着于第一个新轮次。100条摘要上限不改变位置含义；4096行摘要窗口不重置正文序号。位置不表示父子/分支归属，状态配对仍执行原 ID/名称/顺序/父链证明。
+
+不输出原生调用 ID、原始文件行号或任何新增路径/参数/输出；仅本响应内有效，不作为跨请求/跨会话身份。原正文的顺序、messageId、userIndex 及搜索定位不变；原消费者可忽略新字段。完整说明见 [来源与合同](Z5-3-source-audit.md)。
+
+### 本轮验证（均 exit0，skip0）
+
+[15套定向结果](assets/z5-3/position/targeted-results.json)，验证生产字节对应 fbdd144，后续仅测试和文档：
+
+| 套件 | 当前结果 | 与首轮比较 |
+| --- | ---: | --- |
+| history-tool-summary | 36/36场景，161/161实际断言 | 原29场景/126断言保留，新增7场景/35断言 |
+| history-tool-summary-http | 14/14场景，49/49实际断言 | 原47断言保留，新增2条响应位置断言 |
+| runtime-history-search | 37/37 | 原35保留，新增2条真实搜索定位/正文不增行检查 |
+| review-regressions / session-search / pi-compat / runtime-http | 32/32、72/72、57/57、12/12 | 保留 |
+| runtime-conversation / runtime-draft / runtime-models / runtime-finish-ui | 78/78、42/42、51/51、27/27 | 当前分支原合同，非合并后Z5-2新合同验证 |
+| session-background / server-security / runtime-registry / modules | 5/5、39/39、35/35、120/120 | 保留 |
+
+新增场景覆盖同条多工具及顺序、工具/思考无正文、800正文与100摘要双重截断、旧正文已丢失、跨分支重复 ID、4096行窗口、字节窗口，真实搜索命中继续使用原messageId/userIndex。未删除旧断言；原三字段精确白名单断言扩大为四字段。
+
+[容量实测](assets/z5-3/position/projection-results.json)：100项未知工具及三位正文位置的摘要9,324字节，仍小于12 KiB；5,243,551字节文件实际读4,194,304字节，单次本机样本4.178ms。无为补位置扫描全文件。
+
+最终生产修改后离线 `npm run build:app -- --rebuild` exit0（包含SEA），使用原同版本本机Electron ZIP；`npm run fixtures` exit0；App检查26/26、SEA检查49/49。
+打包后端专项由16增加到 **18/18**，新增App/SEA各一条位置断言；[结果](assets/z5-3/position/packaged-results.json)中 messagePosition=1，对应同一响应的一条正文，liveCount=0、Pi启动数0、原生文件字节不变。产物摘要与字节数见 [build-digests](assets/z5-3/position/build-digests.json)。
+正常沙箱生产窗口 smoke **10/10**、renderer errors=[]、残留进程0，[报告及同目录截图](assets/z5-3/position/electron-smoke/results.json)。没有摘要 UI 改动，不把基础 smoke 当成新布局证明。
+
+### 验收边界与回滚
+
+本次只有后端位置反馈修复。PR #38 合并后主线同步、摘要 UI、前端新位置消费与新合同集成均未在本修复中执行；原Owner/token迟到保护继续由既有回归验证。完整 canonical 依原约定留待未来PR CI，当前仍待验证；未重新执行完整npm test，不拿旧smoke1338/1338当本次新行为证明。用户提供的反馈不等于已完成全部独立功能/安全审查。
+
+本地分阶段提交后保持干净工作区；本次未自动追加推送、创建PR、合并、tag或发布。先前“推送”已针对 ade68c1 完成，不用于推定新修复的远端授权。
+回滚本节文档证据提交、c01c056与fbdd144，重建App/SEA即可回到已推送的ade68c1；无数据迁移或会话写回。不要重置主线或其他Worktree。

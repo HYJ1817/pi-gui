@@ -4,7 +4,7 @@
 
 ## 1. 审计结论：GO（有限的记录结果摘要）
 
-基线 `ec336ad348f3af70e2bf4fd5e3a22dbd70d4c32a`。PR #38 当前 open / 未合并，因此本阶段只做后端及测试，禁止修改 `public/runtime-conversation.js`。
+基线 `ec336ad348f3af70e2bf4fd5e3a22dbd70d4c32a`。首轮审计时 PR #38 open / 未合并，因此先交付后端及测试，未修改 `public/runtime-conversation.js`。位置合同补充期间核对到 #38 已合并；本次反馈修复仍只涉及后端，当前证据见验收第9节。
 本机 `pi.cmd` 指向 `@earendil-works/pi-coding-agent/dist/bundle/cli.js`，包版本 1.4.0。
 以下路径以该安装包为根；这是实际安装源码的静态证据，不是仅凭文档或用户真实 JSONL 推断。
 人工 TEMP fixture 按这些代码构造，不要求测试机器安装 Pi。
@@ -57,13 +57,16 @@ pi-agent-core/dist/agent-loop.js `22ee81f9977e211044c1ad41a763876c793ca7fc1c5b39
 返回 `toolSummary`：
 
 ```json
-{"items":[{"toolName":"read","status":"completed","source":"confirmed"}],"returned":1,"limit":100,"truncated":false,"historyTruncated":false,"unavailableReason":null,"uncertain":false}
+{"items":[{"toolName":"read","status":"completed","source":"confirmed","messagePosition":0}],"returned":1,"limit":100,"truncated":false,"historyTruncated":false,"unavailableReason":null,"uncertain":false}
 ```
 
 - status `completed`：唯一可信配对结果 `isError=false`；`error`：同条件 `isError=true`，包括失败、取消、拦截，不能进一步细分；`unknown`：最终结果不明。source 分别为 `confirmed` 或 `unconfirmed`，仅表示记录证据。
 - 工具名须 ASCII 字符白名单、1～32 字符且在已核实的内置闭集中：read/bash/powershell/edit/write/grep/find/ls（安装包 `dist/core/tools/index.js:1-34`）。其他一律固定 `unknown_tool`，即使未知名称字符合法也不回显；不截短或改写恶意字符串成另一个真实工具。
 - `returned` 是实际项数，`limit=100`；仅返回最近最多 100 次调用。`truncated` 表示摘要行/调用预算截断；`historyTruncated` 继承正文原标志。`uncertain` 表示存在未知终态或记录/窗口缺口。空历史 `unavailableReason=no_tool_calls`，损坏/不支持/孤儿/预算缺口使用受控原因，不伪造工具调用。
-- 摘要每项只含三个短字段，JSON 摘要预算 < 12 KiB（测试精确核对）；原正文上限与 JSON 转义后的既有体积合同不变。无额外索引、后台任务、数据库、依赖或新网络行为。
+- 摘要每项只含四个受控字段，JSON 摘要预算 < 12 KiB（测试精确核对）；原正文上限与 JSON 转义后的既有体积合同不变。无额外索引、后台任务、数据库、依赖或新网络行为。
+- `messagePosition` 是本次返回 `messages[]` 中的插入边界：整数0～messages.length，位于 messages[position] 之前，等于 length 时位于末尾。同一 assistant 的工具都位于其聚合正文之后，同位置按 items 原顺序；不拆分原正文。一条无正文的工具调用按物理记录顺序插入现有正文之间，并不声称属于邻近消息的分支。
+- 位置由同一有界读取中正文实际输出行的位置导出，正文裁为最后800条后重新计算；调用在首条保留正文之前且已有正文被条数上限裁掉时，位置为 null，不把旧工具挂到较新的会话轮次。100条摘要上限只裁摘要，不重新编号正文位置。4 MiB/4096行截断继续明确标记。
+- 位置仅在当前响应内有效，不是原生 ID、文件行号、跨请求身份或可持久化锚点；后续 UI 仍必须执行已有 locator/Owner/token/stamp 的迟到拒绝。新增字段不改变 messages[].messageId/userIndex 或搜索定位，原UI可继续忽略它。原需求允许末尾紧凑摘要，此补充增加安全分布展示能力，不强制改变布局。
 - 结果的 parentId 必须沿窗口内更早条目回溯至该调用的 assistant 条目，遇到另一条 assistant/user 或损坏/重复节点即停止。关联不修复旧记录、不迁移 schema、不证明 Agent 的 Git 归因。
 - 原生结果还须有数组 content（只核对形状、不读其正文）；缺失/畸形 content 不把单独 isError=false 当成完成证据。异常记录置 uncertain。最终源码与 fixture 红绿结果见 [验收材料](Z5-3-acceptance.md)。
 
