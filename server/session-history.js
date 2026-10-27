@@ -84,6 +84,7 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
    * 被切掉的那一行本来就是半行，同样被这一跳丢掉 —— 两种情况下 start 都是 1。 */
   const start = 1;
   const messages = [];
+  const messageLines = [];
   let userCount = 0;
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
@@ -98,8 +99,12 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
     if (!value) continue;
     messages.push({ role: body.role, text: value, timestamp: entry.timestamp || null,
       messageId: typeof entry.id === 'string' ? entry.id : null, userIndex: truncatedBySize ? null : userIndex });
+    messageLines.push(i);
   }
   const truncated = truncatedBySize || messages.length > maxMessages;
-  return { ok: true, messages: messages.slice(-maxMessages), truncated,
-    toolSummary: projectHistoryTools(lines, { historyTruncated: truncated }) };
+  const retainedMessages = messages.slice(-maxMessages);
+  const discardedMessages = messages.length - retainedMessages.length;
+  return { ok: true, messages: retainedMessages, truncated,
+    toolSummary: projectHistoryTools(lines, { historyTruncated: truncated,
+      messageLines: messageLines.slice(discardedMessages), discardedMessages }) };
 }

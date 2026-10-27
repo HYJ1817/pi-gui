@@ -9,8 +9,8 @@ const validId = value => typeof value === 'string' && value.length > 0 && value.
 const safeName = value => typeof value === 'string' && /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/.test(value)
   && NAMES.has(value) ? value : 'unknown_tool';
 
-/** lines are the existing same-fd read window, including its skipped first line. */
-export function projectHistoryTools(lines, { historyTruncated = false } = {}) {
+/** lines and messageLines come from the same fd window; source positions stay private. */
+export function projectHistoryTools(lines, { historyTruncated = false, messageLines = [], discardedMessages = 0 } = {}) {
   const end = lines.length - (lines.at(-1) === '' ? 1 : 0);
   const start = Math.max(1, end - MAX_LINES);
   const nodes = new Map(), calls = [], callCounts = new Map(), results = new Map();
@@ -67,12 +67,23 @@ export function projectHistoryTools(lines, { historyTruncated = false } = {}) {
   };
   const orphan = [...results.keys()].some(id => !callCounts.has(id));
   const truncated = start > 1 || calls.length > MAX_ITEMS;
+  const messagePosition = line => {
+    // Do not attach an old call to a newer turn after the 800-body-message cut.
+    if (discardedMessages > 0 && line < messageLines[0]) return null;
+    let low = 0, high = messageLines.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (messageLines[middle] <= line) low = middle + 1;
+      else high = middle;
+    }
+    return low; // Insert before messages[low], or append when low === messages.length.
+  };
   const items = foreignHeader ? [] : calls.slice(-MAX_ITEMS).map(call => {
     const result = results.get(call.id);
     const confirmed = call.id && call.name && callCounts.get(call.id) === 1 && result?.count === 1
       && result.name === call.name && typeof result.isError === 'boolean' && linked(call, result);
     return { toolName: safeName(call.name), status: confirmed ? (result.isError ? 'error' : 'completed') : 'unknown',
-      source: confirmed ? 'confirmed' : 'unconfirmed' };
+      source: confirmed ? 'confirmed' : 'unconfirmed', messagePosition: messagePosition(call.node.index) };
   });
   return { items, returned: items.length, limit: MAX_ITEMS, truncated, historyTruncated,
     unavailableReason: items.length ? null : invalid || foreignHeader ? 'invalid_records'
