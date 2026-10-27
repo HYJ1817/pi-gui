@@ -123,20 +123,9 @@ import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
 import { json } from './server/http-utils.js';
-import { resolveDataDir } from './server/data-dir.js';
+import { resolveDataDir, isSeaRuntime } from './server/data-dir.js';
 
-// 数据目录：projects.json 和上传缓存放这里。
-//
-// 默认使用独立的用户数据目录（%APPDATA%/pi-gui、~/Library/Application Support/pi-gui
-// 或 ~/.local/share/pi-gui），彻底脱离代码仓库与项目目录，避免 safe-path 冲突与
-// 真实用户数据意外受 git 追踪或清理影响。
-// 支持显式环境变量 PI_GUI_DATA 覆盖；首次迁移会自动将旧代码目录下的已有数据平滑复制，
-// 绝不静默覆盖已有文件，防止数据丢失。
-//
-// 这是**唯一**计算数据目录的地方，其余模块一律由这里注入 —— 打包形态
-// （源码 / SEA / Electron）变化时只改这一处。
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = resolveDataDir({ env: process.env, appRoot: __dirname });
 const PORT = Number(process.env.PORT || 7788);
 const PI_BIN = process.env.PI_BIN || 'pi';
 const IS_WIN = process.platform === 'win32';
@@ -176,6 +165,31 @@ const logging = createLogService({
   getDiagnostics: () => diagnosticsRef?.readSnapshot?.() || null,
 });
 logging.installCrashMonitor();
+
+// 数据目录：projects.json 和上传缓存放这里。
+//
+// 默认使用独立的用户数据目录（%APPDATA%/pi-gui、~/Library/Application Support/pi-gui
+// 或 ~/.local/share/pi-gui），彻底脱离代码仓库与项目目录，避免 safe-path 冲突与
+// 真实用户数据意外受 git 追踪或清理影响。
+// 支持显式环境变量 PI_GUI_DATA 覆盖；首次迁移会自动将旧代码目录下的已有数据平滑复制，
+// 绝不静默覆盖已有文件，防止数据丢失。
+//
+// 这是**唯一**计算数据目录的地方，其余模块一律由这里注入 —— 打包形态
+// （源码 / SEA / Electron）变化时只改这一处。
+const runningInSea = isSea();
+// SEA 模式为自包含二进制，无源码树 appRoot；源码开发与 Electron 模式下 __dirname 为应用/源码根。
+const sourceRoot = runningInSea ? null : __dirname;
+const DATA_DIR = resolveDataDir({
+  env: process.env,
+  appRoot: sourceRoot,
+  sourceRoot,
+  isSea: runningInSea,
+  log: (event, details) => {
+    try {
+      logging.log('app', event, details);
+    } catch {}
+  },
+});
 
 // pi 的用户级自定义供应商配置。
 // 注意：这是「用户配置」，与 pi 自身的 models-store.json（模型目录缓存）不是一回事。
@@ -1334,6 +1348,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('');
   console.log('  Pi GUI 已启动');
   console.log(`  → http://127.0.0.1:${PORT}`);
+  console.log(`  → 数据目录: ${DATA_DIR}`);
   console.log(`  → 工作目录: ${currentCwd || '（未选择 —— 在界面里「添加文件夹」）'}`);
   if (currentCwd) console.log(`  → pi 子进程: ${PI_BIN} ${rpc.buildArgs().join(' ')}`);
   if (currentCwd) {

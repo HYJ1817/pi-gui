@@ -64,14 +64,49 @@ export function sanitizePath(p) {
 }
 
 /**
+ * Verifies whether a given directory is a checked-out pi-gui source repository.
+ */
+export function isPiGuiSourceRepo(dir, io = fs) {
+  if (!dir || typeof dir !== 'string') return false;
+  try {
+    const pkgPath = path.join(dir, 'package.json');
+    const serverPath = path.join(dir, 'server.js');
+    if (!io.existsSync(pkgPath) || !io.existsSync(serverPath)) return false;
+    const pkg = JSON.parse(io.readFileSync(pkgPath, 'utf8'));
+    return pkg?.name === 'pi-gui';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Maps an error code to a sanitized, actionable user recovery recommendation.
+ */
+export function getRecoveryAction(code) {
+  switch (code) {
+    case 'EACCES':
+    case 'EPERM':
+      return 'check_permissions';
+    case 'EBUSY':
+      return 'retry_after_closing_file';
+    case 'EXDEV':
+      return 'manual_copy_across_devices';
+    case 'already_exists':
+      return 'manual_merge_or_backup';
+    default:
+      return 'inspect_disk_and_retry';
+  }
+}
+
+/**
  * Standard user data directory for pi-gui.
  * - Explicit env.PI_GUI_DATA is always authoritative.
  * - Portable SEA: preserves access to existing portable data directory if present.
  *   - If projects.json exists in exeDir, returns exeDir (legacy v1).
  *   - If projects.json exists in exeDir/data, returns exeDir/data (portable v2).
  *   - For brand new portable SEA, defaults to exeDir/data.
- *   - If exeDir is inside a project repository or projectRoot, safely falls back
- *     to standard platform user data directory to prevent project contamination.
+ *   - If exeDir is inside a verified pi-gui source repository or user projectRoot, safely falls back
+ *     to standard platform user data directory to prevent repo/project contamination.
  * - Source Web / Default: standard platform user application data directory outside repository trees:
  *   - Windows: %APPDATA%\pi-gui
  *   - macOS: ~/Library/Application Support/pi-gui
@@ -80,6 +115,7 @@ export function sanitizePath(p) {
 export function defaultDataDir({
   env = process.env,
   appRoot = null,
+  sourceRoot = null,
   execPath = process.execPath,
   io = fs,
   isSea = null,
@@ -90,8 +126,12 @@ export function defaultDataDir({
   const mode = detectExecutionMode({ env, execPath, isSea });
   if (mode === 'portable-sea') {
     const exeDir = path.dirname(path.resolve(execPath));
-    const resolvedAppRoot = appRoot ? path.resolve(appRoot) : null;
-    const isRepoBuild = resolvedAppRoot && (exeDir === resolvedAppRoot || exeDir.startsWith(resolvedAppRoot + path.sep));
+
+    // Determine candidate source repository root (if any)
+    const rawSourceRoot = sourceRoot || appRoot;
+    const candidateSource = rawSourceRoot ? path.resolve(rawSourceRoot) : null;
+    const isVerifiedSource = candidateSource && isPiGuiSourceRepo(candidateSource, io);
+    const isRepoBuild = isVerifiedSource && (exeDir === candidateSource || exeDir.startsWith(candidateSource + path.sep));
 
     // Ensure we do not contaminate active user project directories
     const activeProject = projectRoot ? path.resolve(projectRoot) : null;
@@ -122,7 +162,7 @@ export function defaultDataDir({
 /**
  * Validates path security between source and destination directories.
  */
-export function validatePathSafety(srcRoot, dstRoot) {
+export function validatePathSafety(srcRoot, dstRoot, legacyEntries = MIGRATION_LEGACY_ENTRIES) {
   if (typeof srcRoot !== 'string' || typeof dstRoot !== 'string') {
     throw new Error('invalid_path_type');
   }
@@ -134,12 +174,25 @@ export function validatePathSafety(srcRoot, dstRoot) {
   if (resolvedSrc === resolvedDst) {
     throw new Error('source_and_destination_identical');
   }
-  // Prevent destination from being inside source or source inside destination
   const srcPrefix = resolvedSrc.endsWith(path.sep) ? resolvedSrc : resolvedSrc + path.sep;
   const dstPrefix = resolvedDst.endsWith(path.sep) ? resolvedDst : resolvedDst + path.sep;
-  if (resolvedDst.startsWith(srcPrefix) || resolvedSrc.startsWith(dstPrefix)) {
+
+  // Source directory cannot be inside destination directory
+  if (resolvedSrc.startsWith(dstPrefix)) {
     throw new Error('nested_path_prohibited');
   }
+
+  // If destination is inside source directory:
+  // Prohibited if destination collides with or nests inside any entry being migrated (e.g. plans/).
+  // Allowed if destination is a dedicated subfolder (such as data/) not belonging to legacyEntries.
+  if (resolvedDst.startsWith(srcPrefix)) {
+    const relToSrc = path.relative(resolvedSrc, resolvedDst);
+    const topSegment = relToSrc.split(path.sep)[0];
+    if (legacyEntries.includes(topSegment)) {
+      throw new Error('nested_path_prohibited');
+    }
+  }
+
   return { src: resolvedSrc, dst: resolvedDst };
 }
 
@@ -323,13 +376,24 @@ export function migrateLegacyData({
     } catch (entryErr) {
       report.ok = false;
       const code = entryErr.code || 'entry_migration_failed';
+      const action = getRecoveryAction(code);
       report.errors.push({
         entry: name,
         code,
+        action,
         message: `Failed to migrate ${name}: ${entryErr.message || code}`,
         recoverable: ['EACCES', 'EBUSY', 'EPERM', 'EXDEV'].includes(code),
       });
-      try { log('data_migration_error', { entry: name, code }); } catch {}
+      try {
+        log('app.data_migration', {
+          role: 'backend',
+          entry: name,
+          code,
+          status: 'failed',
+          action,
+          reason: 'entry_migration_failed',
+        });
+      } catch {}
     }
   }
 
@@ -368,6 +432,7 @@ export function migrateLegacyData({
 export function resolveDataDir({
   env = process.env,
   appRoot,
+  sourceRoot = null,
   execPath = process.execPath,
   io = fs,
   log = () => {},
@@ -390,7 +455,16 @@ export function resolveDataDir({
     return resolved;
   }
 
-  const targetDir = defaultDataDir({ env, appRoot, execPath, io, isSea, projectRoot });
+  const effectiveSourceRoot = sourceRoot || appRoot;
+  const targetDir = defaultDataDir({
+    env,
+    appRoot: effectiveSourceRoot,
+    sourceRoot: effectiveSourceRoot,
+    execPath,
+    io,
+    isSea,
+    projectRoot,
+  });
   try {
     io.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
   } catch (err) {
@@ -401,8 +475,8 @@ export function resolveDataDir({
     throw error;
   }
 
-  if (appRoot && path.resolve(appRoot) !== path.resolve(targetDir)) {
-    const report = migrateLegacyData({ sourceDir: appRoot, targetDir, io, log, isProcessAlive });
+  if (effectiveSourceRoot && path.resolve(effectiveSourceRoot) !== path.resolve(targetDir)) {
+    const report = migrateLegacyData({ sourceDir: effectiveSourceRoot, targetDir, io, log, isProcessAlive });
     if (!report.ok) {
       const fatalErrors = report.errors.filter(e =>
         e.fatal || ['target_mkdir_failed', 'path_validation_failed', 'nul_byte_detected', 'nested_path_prohibited'].includes(e.code)
@@ -416,15 +490,20 @@ export function resolveDataDir({
       }
 
       // Structured sanitized diagnostic log for recoverable issues
+      for (const err of report.errors) {
+        try {
+          log('app.data_migration', {
+            role: 'backend',
+            entry: err.entry || '*',
+            code: err.code || 'unknown_error',
+            status: report.status,
+            action: err.action || getRecoveryAction(err.code),
+            reason: 'recoverable_migration_warning',
+          });
+        } catch {}
+      }
       try {
-        log('data_migration_warning', {
-          targetDir: sanitizePath(targetDir),
-          migratedCount: report.migrated.length,
-          skippedCount: report.skipped.length,
-          errorCount: report.errors.length,
-          status: report.status,
-          errors: report.errors.map(e => ({ entry: e.entry, code: e.code })),
-        });
+        console.warn(`[data-migration] 迁移警告：部分项目未完成迁移（状态: ${report.status}）。建议操作：${report.errors[0]?.action || 'check_permissions'}`);
       } catch {}
 
       if (throwOnFatal && report.migrated.length === 0 && report.errors.length > 0) {
