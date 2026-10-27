@@ -16,6 +16,121 @@
 
 ## 逐项缺陷分析、修复方案与证据
 
+---
+
+## 第二轮集成与复审摘要 (Round 2 Review & Integration Summary)
+
+针对第一轮独立验收提出的问题与要求，在指定独立工作分支 `codex/fix-bugs-8-11` 上完成了第二轮深度补修、主线最新基线（`origin/main` v0.30.0，`8029c88`）的合并整合，以及全面端到端与真实 Electron 正常沙箱的集成验收。
+
+### 1. 代码身份与主线整合
+
+- **工作分支**：`codex/fix-bugs-8-11`（归属独立 Worktree，未触碰 `main`、原 `codex/z4-5-advanced-editing` 或外部 Agent 工作区）。
+- **主线基线整合**：
+  - 合并前落后 `origin/main` 41 个提交。
+  - 获取最新 `origin/main`（HEAD: `8029c88`，版本 `v0.30.0`），执行 `git merge origin/main`。
+  - 精准解决冲突文件：`public/runtime-conversation.js`、`tests/thinking-availability.cjs`、`package.json`。
+  - 完整保留主线所有功能与阶段性成果：Z5-1（Runtime 输入与草稿隔离）、Z5-2（思考等级统一合同）、Z5-3 / Z5-3B（历史工具执行摘要）、以及 v0.30.0 的版本号与生命周期测试脚本。
+  - 整合提交：`5acdf57` (`Merge origin/main into codex/fix-bugs-8-11: 整合 v0.30.0 及 Z5 全阶段主线，保留 Bug 8~11 修复`)。
+
+### 2. 第一轮验收发现问题的逐项处置结果
+
+| 缺陷编号 | 第一轮验收发现的缺陷 / 不足 | 第二轮修复与解决措施 | 状态 |
+| :--- | :--- | :--- | :---: |
+| **Bug 8** | 前端 `onStopState` 未完全对齐 `pending: true`；需要补全会话并发、旧 Stop 迟到响应防护及真实 Pi 回环断言核验。 | 1. 在 `public/rpc.js` 中让 `onStopState` 识别 `evt?.pending === true` 及 `evt?.state === 'stopping'`，立即将前端置于 `S.stopping = true` 并禁用发送按钮。<br>2. 补充多会话并发停止测试（停止会话 A 绝不影响会话 B 的有序写入）。<br>3. 验证旧 Stop 迟到的中止响应绝不释放新 Stop 屏障。<br>4. 执行真实 Pi RPC 回环测试 `tests/bug8-real-pi-fixture.cjs`，实测 **31/31 断言全部通过**。 | **彻底解决** |
+| **Bug 9** | 需与 `main` 主线的 Z5-2 思考等级统一可用性合同深度整合，禁止重复状态机与降低断言约束。 | 1. 完全复用主线规范的 `public/thinking-availability.js` 投影合同。<br>2. 确保 Classic 与 Runtime 均遵循“Pi 原生档位优先于静态推理元数据”的铁律。<br>3. 回读失败时显示真实降级原因（如“思考等级读取失败”），不永久置灰，提供重试机制。<br>4. 保留 Z5-2 全量测试断言（`tests/thinking-availability.cjs` 34 项断言全绿）。 | **彻底解决** |
+| **Bug 10** | 1. 迁移异常被 `try-catch` 静默吞掉。<br>2. 目标存在时直接跳过，可能导致中断后留下不完整数据。<br>3. 新默认路径可能破坏旧便携版（单文件 EXE）的数据存放行为。 | 1. 重构 `server/data-dir.js`，引入 `detectExecutionMode` 准确区分源码 Web 模式、单文件便携版 (`portable-sea`) 与 Electron 安装版。<br>2. 便携模式下若可执行文件同级或 `data/` 已有数据，严格沿用现有便携目录，不破坏历史存储。<br>3. 引入**原子临时暂存机制 (`.stage-<name>-<ts>-<rand>`)**：先复制至暂存目录，全部成功后原子重命名至目标；启动时自动清理历史残留暂存目录，防止部分迁移被误认完成。<br>4. 严禁静默覆盖已有文件，严禁静默合并冲突目录；详细报告复制与跳过项，生成 `.migration-manifest.json`。<br>5. 显式 `PI_GUI_DATA` 拥有最高优先级，绝不自动迁移覆盖用户显式配置。<br>6. 增加故障注入测试套件（权限拒绝、复制中断、目标冲突、符号链接、嵌套路径防护等，33 项断言全绿）。 | **彻底解决** |
+| **Bug 11** | `tests/panel-restore-electron.cjs` 从 `index.html` 移除了 `<script type="module" src="/app.js"></script>`，并在刷新后手动调用 `openChangesPanel()`，无法证明生产环境的真实自恢复行为。 | 1. **重写 `tests/panel-restore-electron.cjs`**：完整保留原生 `index.html` 与 `app.js` 启动逻辑，静态资源与 API 原样服务。<br>2. 打开 Changes 面板、滚动列表并展开 Diff，调用真实的 `win.webContents.reload()` 触发浏览器全页刷新。<br>3. 刷新后测试代码**绝不手动调用任何打开面板的 helper**，验证 `app.js` 自然自启后自动重开 Changes 面板、精准还原列表 `scrollTop` 并自动恢复展开的 Diff。<br>4. 对 Specs 面板验证刷新后自然重开、精准恢复目录树滚动、选中文档及文档 Markdown 正文滚动位置。<br>5. 验证 Browser 面板刷新后绝不自动恢复，绝不触发外部网络重连。<br>6. 验证用户主动点击面板右上角 `×` 关闭后，刷新绝不错误恢复。<br>7. 验证 `pi-gui:session-switch` 与 `pi-gui:workspace-generation` 生产事件驱动的自动状态清理（未调用 `clearPaneState` 代替事件清理）。<br>8. 使用真实 Electron 正常沙箱环境执行并捕获 6 张高分辨率截图。 | **彻底解决** |
+
+---
+
+## 逐项缺陷最终修复状态
+
+### 1. Bug 8：Stop / 取消状态与后续交互异常
+- **状态**：修复完成，集成验证通过。
+- **关键代码位置**：
+  - `server/rpc-bridge.js`：建立停止屏障 `pending: true`，官方顺序 `clear_queue` → `abort`，拦截后续任务；
+  - `public/rpc.js`：`onStopState` 监听 `evt?.pending === true || evt?.state === 'stopping'`，同步重置 `S.stopping = true` 并更新发送状态；
+  - `server/pi-activity.js` & `server/runtime-registry.js`：统一识别停止状态与闸门限制。
+- **验证结论**：`stop-barrier.cjs` 17/17 通过，`bug8-real-pi-fixture.cjs` 31/31 通过，`test:stop` 46/46 全部通过。
+
+### 2. Bug 9：刷新或恢复会话后思考等级异常与永久不可用
+- **状态**：修复完成，集成验证通过。
+- **关键代码位置**：
+  - `public/thinking-availability.js`：规范思考等级 10 状态纯投影契约；
+  - `public/runtime-models.js`：复用统一合同，去除对静态 `reasoning: false` 的错误降级覆写；
+  - `public/composer.js` & `public/ui3-model-picker.js`：统一消费可用性状态，驱动芯片文本与禁用状态。
+- **验证结论**：`thinking-availability.cjs` 34/34 通过，`model-capabilities.cjs` 36/36 通过，`test:model-capabilities` 70/70 全部通过。
+
+### 3. Bug 10：数据目录计算、安全路径与迁移安全
+- **状态**：修复完成，集成验证通过。
+- **关键代码位置**：
+  - `server/data-dir.js`：
+    - `detectExecutionMode()`：精准识别 `source-web`、`portable-sea`、`electron`；
+    - `defaultDataDir()`：源码 Web 模式使用 `%APPDATA%/pi-gui`，便携模式兼容检查同级历史数据；
+    - `validatePathSafety()`：防范绝对路径相同、NUL 字节及嵌套路径穿越；
+    - `migrateLegacyData()`：使用 `.stage-*` 原子暂存重命名，清理悬空暂存，不静默覆盖已有文件，不合并冲突目录，保留源文件，返回详细结果。
+- **验证结论**：`standalone-datadir.cjs` 33/33 全部通过（包含故障注入与权限拒绝测试），`test:server` 63/63 全部通过。
+
+### 4. Bug 11：右侧面板真刷新自动恢复与滚动位置记忆
+- **状态**：修复完成，集成验证通过。
+- **关键代码位置**：
+  - `public/ui/secondary-surface.js`：基于 `sessionStorage` 仅放行 `changes` 与 `specs`，严格阻断 `browser` 自动恢复；监听 `pi-gui:workspace-generation` 自动清理恢复状态；
+  - `public/git.js`：在挂载时还原 `lastChangesListScroll` 与 `diffViewState`，重绘制列表时按文件状态重新绑定 Diff 展开与横向滚动；
+  - `public/specs-panel.js`：记忆并在切换时恢复目录树与文档正文滚动位置；在工作区切换时主动调用 `clearPaneState('specs')`；
+  - `public/app.js`：在 `loadStatus` 首屏初始化完成后调用 `restoreOrdinaryPanel()` 自动恢复面板。
+- **验证结论**：`panel-restore-ui.cjs` 14/14 通过，`panel-restore-electron.cjs` 25/25 全部通过，`z1-electron.cjs` 25/25 全部通过。
+
+---
+
+## 真实测试命令与量化验证矩阵
+
+所有测试均在本地环境实际运行，执行结果如下：
+
+| 测试命令 | 退出码 | 通过断言数 | 失败数 | 说明 |
+| :--- | :---: | :---: | :---: | :--- |
+| `node tests/stop-barrier.cjs` | 0 | 17 | 0 | Bug 8 停止屏障状态机、任务拦截与迟到应答防护 |
+| `$env:PI_GUI_BUG8_FIXTURE="1"; node tests/bug8-real-pi-fixture.cjs` | 0 | 31 | 0 | Bug 8 真实 Pi RPC 回环场景、双会话并发停止与状态核验 |
+| `npm run test:stop` | 0 | 46 | 0 | Bug 8 综合停止测试链（stop-barrier + gui-browser-stop + fixture） |
+| `npm run test:model-capabilities` | 0 | 70 | 0 | Bug 9 模型能力与统一思考等级 10 状态矩阵测试 |
+| `npm run test:server` | 0 | 63 | 0 | Bug 10 服务端基础路由 + 独立数据目录及迁移故障注入 |
+| `node tests/panel-restore-ui.cjs` | 0 | 14 | 0 | Bug 11 恢复白名单、持久化映射与跨作用域清理 |
+| `npm run test:specs` | 0 | 57 | 0 | Bug 11 Specs API + UI 渲染 + 面板恢复 UI 套件 |
+| `node tests/z1-electron.cjs` | 0 | 25 | 0 | Bug 11 Changes 面板真实 Chromium 滚动与分屏基线回归 |
+| `node tests/panel-restore-electron.cjs` | 0 | 25 | 0 | Bug 9, 11 真实 Electron 原生 app.js 刷新恢复与沙箱交互 |
+| `node tests/smoke.cjs` | 0 | 1338 | 0 | 全局核心回归冒烟测试（断言总数保持 1338） |
+
+---
+
+## Electron 截图与测试证据路径
+
+真实 Electron 验证在正常的 Chromium 沙箱环境（`sandbox: true, contextIsolation: true`）中执行，最新生成的证据截图已就绪保存在：
+
+| 证据文件 | 大小 | 说明 |
+| :--- | :---: | :--- |
+| `docs/assets/bug-fixes/01-bug9-thinking-ready.png` | 45.8 KB | Bug 9：真实 Chromium 中模型思考等级回读显示 `思考 medium` 且按钮处于可用状态 |
+| `docs/assets/bug-fixes/02-bug11-changes-scrolled.png` | 142.6 KB | Bug 11：Changes 变更面板在真实 Electron 中向下滚动（`scrollTop >= 350`）并成功展开首个文件 Diff |
+| `docs/assets/bug-fixes/03-bug11-changes-restored.png` | 142.6 KB | Bug 11：执行 `win.webContents.reload()` 页面刷新后，由 `app.js` 自然重开面板，精准恢复滚动位置且 Diff 保持展开 |
+| `docs/assets/bug-fixes/04-bug11-specs-scrolled.png` | 174.1 KB | Bug 11：Specs 面板在真实 Electron 中目录树滚动、选中第 2 篇文档且 Markdown 正文向下滚动 |
+| `docs/assets/bug-fixes/05-bug11-specs-restored.png` | 174.1 KB | Bug 11：执行 `win.webContents.reload()` 页面刷新后，Specs 目录树、选中文档及 Markdown 正文滚动均精准自然恢复 |
+| `docs/assets/bug-fixes/06-bug11-browser-never-restored.png` | 45.8 KB | Bug 11 安全铁律：Browser 面板开启状态下刷新，面板保持关闭（`hidden: true`），绝不自动恢复，未发起任何网络导航 |
+
+---
+
+## 关键修改文件清单
+
+| 文件路径 | 状态 | 涉及 Bug | 关键修改说明 |
+| :--- | :---: | :---: | :--- |
+| `public/rpc.js` | 修改 | Bug 8 | 在 `onStopState` 补充对 `evt?.pending === true` 与 `stopping` 状态的同步识别 |
+| `server/data-dir.js` | 重写 | Bug 10 | 区分运行形态，便携模式兼容历史数据，实现 `.stage-*` 原子迁移与完备故障注入防线 |
+| `public/ui/secondary-surface.js` | 修改 | Bug 11 | 监听 `pi-gui:workspace-generation` 自动清理激活 surface 与 pane 状态 |
+| `public/specs-panel.js` | 修改 | Bug 11 | 在 `workspaceChanging` 时清理 `specs` 状态；在工作区切换中阻断滚动回写 |
+| `tests/stop-barrier.cjs` | 修改 | Bug 8 | 增加对 `pending: true` 广播与收敛过程的断言验证 |
+| `tests/standalone-datadir.cjs` | 重写 | Bug 10 | 扩展至 33 项断言：运行模式探测、便携兼容、原子暂存中断清理、权限错误降级与目录隔离 |
+| `tests/panel-restore-ui.cjs` | 修改 | Bug 11 | 移除手动 `clearPaneState` 调用，完全由 `session-switch` 与 `workspace-generation` 生产事件驱动验证 |
+| `tests/panel-restore-electron.cjs` | 重写 | Bug 9, 11 | 保留原生 `app.js` 启动，测试全页真实刷新、Diff 展开恢复、Specs 树与文档滚动恢复、用户主动关闭及作用域隔离 |
+
+---
+
 ### 1. Bug 8：Stop / 取消状态与后续交互异常
 
 #### 1.1 根因分析与复现
@@ -280,9 +395,9 @@
 在全部修复完成后，执行了产物完整重新编译：
 
 1. **单文件 SEA 可执行文件 (`npm run build:exe`)**：
-   - 资源：343 项，代码打包 2.42 MB，blob 8.54 MB
+   - 资源：344 项，代码打包 2.43 MB，blob 8.57 MB
    - 生成路径：`build/Pi GUI.exe`
-   - 文件大小：**98.2 MB**
+   - 文件大小：**98.3 MB**
    - 验证结论：资源全部内嵌注入成功。
 
 2. **Electron 完整应用包 (`npm run build:app -- --rebuild`)**：
