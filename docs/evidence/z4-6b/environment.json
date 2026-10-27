@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-10-26T08:12:29.527Z",
+  "platform": "win32",
+  "arch": "x64",
+  "os": "10.0.26200",
+  "hostNode": "v24.22.1",
+  "electron": "44.4.3",
+  "packageVersion": "0.29.0",
+  "packageLockSha256": "b5164c08f433569897549fb13bd9474a6d2c44f94f9acfe4ce66ee5a511f7a80",
+  "appExeBytes": 246324736,
+  "appExeSha256": "c8755f70993aecf1da95a2557234a3fa2b59c876f7419ca62fab41147f01d81b",
+  "seaExeBytes": 102983680,
+  "seaExeSha256": "fa8d5802299a8ff5e873ef6723bc312c18ccf300cd989361f9768d675f2a79b5",
+  "productionSubtrees": {
+    "public": "f9d7f597dceaeaac1c189d2528144a9adf7bfe22",
+    "server": "2bbf092e6feb24af366c73dd1fd0b62b959d4e48",
+    "lib": "72681a358ce794611207f9669ad90337c3664e85",
+    "electron": "31f607afffb28dd57a99ba94cec3e26466140321",
+    "package.json": "6e8d9218c35a0fe336cb57119828c3049d303d42",
+    "package-lock.json": "d97869164706575efdc819f0efe9220a2b0d967e"
+  }
+}

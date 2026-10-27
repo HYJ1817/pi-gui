@@ -18,6 +18,10 @@ app.on('window-all-closed', () => {});
 app.commandLine.appendSwitch('disable-background-networking');
 async function until(action, name) {
   for (let index = 0; index < 250; index++) { if (await action()) return; await sleep(50); }
+  if (win && !win.isDestroyed()) {
+    const diagnostics = await read("({requests:window.z46CollabRequests||[],status:document.querySelector('.collab-panel-status')?.textContent})");
+    console.error(JSON.stringify({ stage: name, ...diagnostics }));
+  }
   throw new Error('timeout: ' + name);
 }
 const read = code => win.webContents.executeJavaScript(code, true);
@@ -91,6 +95,7 @@ async function main() {
   await win.loadURL(origin);
   await until(() => read("document.querySelector('#connText')?.textContent.includes('已连接')"), 'renderer connection');
   await until(() => read("import('/state.js').then(({S})=>S.bridgeState==='ready'&&!!S.legacyOwner?.sessionId)"), 'native session owner ready');
+  await read(`(()=>{const original=window.fetch;window.z46CollabRequests=[];window.fetch=async(...args)=>{const response=await original(...args);if(String(args[0])==='/api/collab-documents'){const body=JSON.parse(args[1].body),result=await response.clone().json();window.z46CollabRequests.push({action:body.action,ok:result.ok,code:result.code,generating:result.generating,generationState:result.generation?.state,hasGenerationId:typeof result.generation?.proposalId==='string',hasHeadId:typeof result.proposal?.proposalId==='string',documentKeys:Object.keys(result.document||{}),hasPreviewButton:!!document.querySelector('.collab-proposal-diff li')});if(window.z46CollabRequests.length>20)window.z46CollabRequests.shift();}return response;};})()`);
   check('Electron starts with normal sandbox, isolated context and no Node integration', win.webContents.getLastWebPreferences().sandbox === true && win.webContents.getLastWebPreferences().contextIsolation === true && win.webContents.getLastWebPreferences().nodeIntegration === false);
   const identity = await read("import('/state.js').then(({S})=>({cwd:S.cwd,owner:S.legacyOwner,run:S.bridgeRun}))");
   check('renderer connects to the production backend and fake Pi', Number.isInteger(identity.run));

@@ -1,0 +1,12 @@
+
+> pi-gui@0.29.0 test:collab:advanced-electron
+> node tests/collab-advanced-editing-electron.cjs
+
+
+ok 装配页加载正常
+ok 1200px 宽窗口截图已保存
+ok 多选两个节点生效
+ok 对齐表单出现
+ok 多选状态高亮截图已保存
+ok 760px 窄窗口截图已保存
+Z4-5 Electron: 6/6; Chromium 152.0.7977.130; 产物 C:\Users\21022\.codex\worktrees\z4-6b-final-integration\pi-GUI\docs\evidence\z4-6b\advanced-electron

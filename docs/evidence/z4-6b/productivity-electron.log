@@ -1,0 +1,41 @@
+
+> pi-gui@0.29.0 test:collab:productivity-electron
+> node tests/collab-productivity-electron.cjs
+
+
+ok 真实 Chromium 正常沙箱装配页加载完成
+ok 初始凌乱文档版本与坐标
+ok 自动整理先展示预览
+ok 确认后单批提交且坐标分层排列
+ok 布局后现有撤销恢复原坐标
+ok 深色 SVG 含背景与中文长文本
+ok 浅色 SVG 白底且无外部资源
+ok SVG 导出不改变撤销后的文档
+ok 大范围 PNG 在分配前拒绝且不产生文件
+ok 默认 renderer 在真实 Chromium 产出 PNG（魔数与尺寸）
+ok PNG IHDR 尺寸与导出声明一致
+ok PNG 轮次 0 释放内部 Blob URL 且文档不变
+ok PNG 轮次 1 释放内部 Blob URL 且文档不变
+ok PNG 轮次 2 释放内部 Blob URL 且文档不变
+ok PNG 轮次 3 释放内部 Blob URL 且文档不变
+ok PNG 轮次 4 释放内部 Blob URL 且文档不变
+ok PNG 轮次 5 释放内部 Blob URL 且文档不变
+ok PNG 轮次 6 释放内部 Blob URL 且文档不变
+ok PNG 轮次 7 释放内部 Blob URL 且文档不变
+ok PNG 轮次 8 释放内部 Blob URL 且文档不变
+ok PNG 轮次 9 释放内部 Blob URL 且文档不变
+ok PNG 轮次 10 释放内部 Blob URL 且文档不变
+ok PNG 轮次 11 释放内部 Blob URL 且文档不变
+ok PNG 轮次 12 释放内部 Blob URL 且文档不变
+ok PNG 轮次 13 释放内部 Blob URL 且文档不变
+ok PNG 轮次 14 释放内部 Blob URL 且文档不变
+ok PNG 轮次 15 释放内部 Blob URL 且文档不变
+ok PNG 轮次 16 释放内部 Blob URL 且文档不变
+ok PNG 轮次 17 释放内部 Blob URL 且文档不变
+ok PNG 轮次 18 释放内部 Blob URL 且文档不变
+ok PNG 轮次 19 释放内部 Blob URL 且文档不变
+ok SVG 与 PNG 导出全部 URL 已释放
+ok 文档在导出全程未被修改
+ok 装配页无渲染错误
+ok 窄窗口截图已留存（工具条换行）
+Z4-4B Electron: 35/35; Chromium 152.0.7977.130; 产物 C:\Users\21022\.codex\worktrees\z4-6b-final-integration\pi-GUI\docs\evidence\z4-6b\productivity-electron

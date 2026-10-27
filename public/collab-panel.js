@@ -43,7 +43,7 @@ export function mountCollabPanel(host,view) {
   const source=node('p','collab-panel-source','Agent 建议来源尚未接入；当前支持用户编辑与保存。');
   body.append(status,controls,agentRow,canvasHost,productivityHost,proposalHost,source);host.append(head,body);
   let alive=true,invalid=false,busy=false,generating=false,sequence=0,pollSequence=0,snapshot=null,canvas=null,productivity=null,proposal=null;
-  let polling=null,lastInstruction='';
+  let polling=null,pollPending=false,lastInstruction='';
   const confirmationOwner=crypto.randomUUID();
   const dismissOwnedConfirmation=()=>{if(confirmSurfaceMeta()?.collabSurface===confirmationOwner)dismissConfirm();};
   const current=()=>alive && !invalid && view.isCurrent() && context().valid && context().signature===captured.signature;
@@ -73,12 +73,12 @@ export function mountCollabPanel(host,view) {
   };
   /* Blob URL 生命周期：不在 click 事件里同步释放（会与浏览器启动下载竞争），
    * 改为登记后由定时器延后释放；面板失效/销毁时立即释放全部未决 URL。 */
-  const liveDownloadUrls=new Set();
+  const liveDownloadUrls=new Map();
   const scheduleRevoke=url=>{
-    liveDownloadUrls.add(url);
-    window.setTimeout(()=>{if(liveDownloadUrls.delete(url))URL.revokeObjectURL(url);},60000);
+    const timer=window.setTimeout(()=>{if(liveDownloadUrls.delete(url))URL.revokeObjectURL(url);},60000);
+    liveDownloadUrls.set(url,timer);
   };
-  const revokeDownloads=()=>{for(const url of liveDownloadUrls)URL.revokeObjectURL(url);liveDownloadUrls.clear();};
+  const revokeDownloads=()=>{for(const [url,timer] of liveDownloadUrls){window.clearTimeout(timer);URL.revokeObjectURL(url);}liveDownloadUrls.clear();};
   const downloadExport=result=>{
     // 文件名绑定导出开始时的快照（adapter 附带的 source）；异步导出期间文档变化
     // 不会造成文件名与内容版本不一致。
@@ -127,20 +127,23 @@ export function mountCollabPanel(host,view) {
   function stopPolling(){ if(polling!==null){window.clearInterval(polling);polling=null;} }
   function startPolling(){ stopPolling(); polling=window.setInterval(()=>void pollStatus(),1500); }
   async function pollStatus() {
-    if(!current()||busy)return false;
-    const myPoll=++pollSequence;
-    const result=await collabDocumentAction({action:'proposal_status',editorId:snapshot?.editorId,expectedRevision:snapshot?.document?.revision??null},captured.headers);
-    if(!current()||myPoll!==pollSequence)return false;
-    if(!result?.ok){stopPolling();generating=false;reload.hidden=false;render(result?.error||'建议状态查询失败。');return false;}
-    if(result.generating){generating=true;render();return true;}
-    const generation=result.generation||null;
-    const proposalId=generation?.proposalId??result.proposal?.proposalId??null;
-    if(proposalId&&busy)return true;
-    if(generation){stopPolling();generating=false;}
-    if(generation?.state==='failed'){render(generation.error||'生成失败，请重试。');return false;}
-    if(proposalId){stopPolling();void request('preview',{proposalId});return false;}
-    render();
-    return false;
+    if(!current()||busy||pollPending)return false;
+    pollPending=true;
+    try {
+      const myPoll=++pollSequence;
+      const result=await collabDocumentAction({action:'proposal_status',editorId:snapshot?.editorId,expectedRevision:snapshot?.document?.revision??null},captured.headers);
+      if(!current()||myPoll!==pollSequence)return false;
+      if(!result?.ok){stopPolling();generating=false;reload.hidden=false;render(result?.error||'建议状态查询失败。');return false;}
+      if(result.generating){generating=true;render();return true;}
+      const generation=result.generation||null;
+      const proposalId=generation?.proposalId??result.proposal?.proposalId??null;
+      if(proposalId&&busy)return true;
+      if(generation){stopPolling();generating=false;}
+      if(generation?.state==='failed'){render(generation.error||'生成失败，请重试。');return false;}
+      if(proposalId){stopPolling();void request('preview',{proposalId});return false;}
+      render();
+      return false;
+    } finally { pollPending=false; }
   }
   async function regenerate() {
     if(!alive||busy||generating)return;

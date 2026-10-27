@@ -1,0 +1,7 @@
+ok test guard attached before bundled backend launch
+ok actual packaged window has sandbox/contextIsolation and no Node integration
+ok actual packaged main uses independent artifact and TEMP userData
+ok packaged backend rejects collab without Owner
+ok no Owner request created no document
+ok packaged panel creates durable three-node document
+{"checks":6,"failed":1,"stage":"Windows input durable operation"}

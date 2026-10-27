@@ -1,0 +1,6 @@
+ok 40 mixed Classic/Runtime cycles over four documents: reject/accept/undo/redo, restart and bounded queues
+ok 40 panel SVG exports and disposal leave no URLs, timers, polling or lifecycle listeners
+ok 40 canvas cycles: copy/paste, layout confirmation and destruction block detached controls
+ok oversized PNG refuses before Blob/Image/canvas allocation
+{"rounds":40,"elapsedMs":16825,"rssBefore":111222784,"rssAfter":217497600,"heapSamples":[{"canvasRounds":10,"heapUsed":27633936,"gcRequested":true},{"canvasRounds":20,"heapUsed":27484144,"gcRequested":true},{"canvasRounds":30,"heapUsed":27635048,"gcRequested":true},{"canvasRounds":40,"heapUsed":27602768,"gcRequested":true}],"qualification":"bounded-short-soak-only"}
+Collab stability: 4/4; assertions=843; failed=0

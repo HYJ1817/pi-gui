@@ -1,0 +1,43 @@
+{
+  "integrationHead": "086d2e07b354419dce1cfc4a6e8e31f244572e6c",
+  "main": "300717f6b59a106d1dd01910d82d3096cdb0a182",
+  "sourceServerTree": "70bc3e892faf5a6dbb12af0d1ff64db174a26c6b",
+  "sourcePublicTree": "232582ff8a831a35cb8950b4be1b9e34beec4496",
+  "records": [
+    {
+      "path": "package.json",
+      "bytes": 18751,
+      "sha256": "5eddeac865b4a2afc1e2398f143d06bcad8bb3e79f17af44b9c5e8ec5929d369"
+    },
+    {
+      "path": "server/history-tool-summary.js",
+      "bytes": 5376,
+      "sha256": "a95a0441cf8441b7bdaa860ea02b296866ab137c5d335900f6066b1f99ca574f"
+    },
+    {
+      "path": "server/session-history.js",
+      "bytes": 6212,
+      "sha256": "9ecab00e935a55d6c569bb51bbc2023641697a74f271adadcc31a81ba62f82ce"
+    },
+    {
+      "path": "server/runtime-routes.js",
+      "bytes": 5190,
+      "sha256": "485dda35e4dd07bf6b9916567d3dcc0c85872eb4b324df78eb7313be834ea56a"
+    },
+    {
+      "path": "build/server.cjs",
+      "bytes": 2541791,
+      "sha256": "b331a411ec6f3c99f4e9263cc3253ec04e252a40eac1a77fd2d3c32eddd6eb0d"
+    },
+    {
+      "path": "build/Pi GUI.exe",
+      "bytes": 103007232,
+      "sha256": "a8b0f0868a782258e442dabbb658d8ee3d0dbe3543ea3c6deba271b0ba9eab13"
+    },
+    {
+      "path": "dist-app/Pi GUI-win32-x64/resources/app/server.cjs",
+      "bytes": 2541791,
+      "sha256": "b331a411ec6f3c99f4e9263cc3253ec04e252a40eac1a77fd2d3c32eddd6eb0d"
+    }
+  ]
+}

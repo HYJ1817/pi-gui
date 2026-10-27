@@ -1,0 +1,15 @@
+{
+  "note": "final canonical run; assertion skips are distinct from CI leaf execution statuses",
+  "observed": [
+    "  SKIP file symlink privilege unavailable",
+    "Collab store: 53/53; assertions=149; skipped=1",
+    "SKIP file symlink: existing token cannot create symbolic links",
+    "Candidate adoption: 45/45; failed=0; skipped=1",
+    "  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）",
+    "session-revert-sacl-witness: 0/0; failed=0; skipped=8; real audit environment only",
+    "SKIP protected nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL",
+    "SKIP inherited nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL",
+    "session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility",
+    "Object witness: 0/0; failed=0; skipped=8"
+  ]
+}

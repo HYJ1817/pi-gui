@@ -22,12 +22,13 @@
  *
  * 只取 user / assistant 的 text 片段。toolResult 的大块输出、图片 base64、附件、
  * thinking、toolCall 参数一概不进 —— 与 `session-search.js` 同一条取舍：
- * 这些要么噪声大、要么根本不是「面向用户显示的正文」。因此**只读历史里看不到
- * 工具调用**，这是已知限制，不是 bug（活动中的会话由 runtime store 另外记工具）。
+ * 这些要么噪声大、要么根本不是「面向用户显示的正文」。Z5-3 的 toolSummary
+ * 仅从同一有界窗口投影安全工具名/记录结果；不暴露原参数/输出，也不改变正文。
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { sessionMessageBody } from './pi-compat.js';
+import { projectHistoryTools } from './history-tool-summary.js';
 
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_MESSAGES = 800;
@@ -83,6 +84,7 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
    * 被切掉的那一行本来就是半行，同样被这一跳丢掉 —— 两种情况下 start 都是 1。 */
   const start = 1;
   const messages = [];
+  const messageLines = [];
   let userCount = 0;
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
@@ -97,6 +99,12 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
     if (!value) continue;
     messages.push({ role: body.role, text: value, timestamp: entry.timestamp || null,
       messageId: typeof entry.id === 'string' ? entry.id : null, userIndex: truncatedBySize ? null : userIndex });
+    messageLines.push(i);
   }
-  return { ok: true, messages: messages.slice(-maxMessages), truncated: truncatedBySize || messages.length > maxMessages };
+  const truncated = truncatedBySize || messages.length > maxMessages;
+  const retainedMessages = messages.slice(-maxMessages);
+  const discardedMessages = messages.length - retainedMessages.length;
+  return { ok: true, messages: retainedMessages, truncated,
+    toolSummary: projectHistoryTools(lines, { historyTruncated: truncated,
+      messageLines: messageLines.slice(discardedMessages), discardedMessages }) };
 }

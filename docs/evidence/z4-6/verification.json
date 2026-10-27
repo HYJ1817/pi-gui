@@ -1,0 +1,15 @@
+{
+  "checkedAtShanghai": "2026-10-26T15:16:36.339157+08:00",
+  "base": "d919fc90a59d8d83aebabfd6bddbc727f9e4ee90",
+  "productionCommit": "b54fd253f7e7325342ca780b9998df4e1fec0b20",
+  "testCommit": "c115c16fe569fafba8a4281637715bb7d6a661bf",
+  "testFollowup": "d4e8a336898df4046bd35f7f7e219bc5f1f6e1e9",
+  "links": {
+    "checked": 61,
+    "missing": []
+  },
+  "canonical": "not-run; final PR CI pending",
+  "model": "not-run; zero prompts",
+  "baselineCanonical": "attempt5 220/220, PR merge checkout 1a813c3; tree-equivalent to d919fc9 and adbff9d",
+  "integration": "read-only Z4-6B preparation; no merge or rebase"
+}

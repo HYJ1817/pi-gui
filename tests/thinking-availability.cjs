@@ -1,4 +1,4 @@
-﻿// Offline production-policy/controller tests. No model requests or user data.
+// Offline production-policy/controller tests. No model requests or user data.
 const assert = require('node:assert/strict');
 (async () => {
   const { JSDOM } = require('jsdom');

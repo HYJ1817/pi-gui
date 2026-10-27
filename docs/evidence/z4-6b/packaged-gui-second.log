@@ -1,0 +1,3 @@
+ok actual packaged window has sandbox/contextIsolation and no Node integration
+ok actual packaged main uses independent artifact and TEMP userData
+{"checks":2,"failed":1,"stage":"packaged native owner ready"}

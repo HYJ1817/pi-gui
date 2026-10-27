@@ -246,6 +246,12 @@ export async function exportFlowchart(document, {
   if (format === 'svg') {
     return { ok: true, status: 'exported', format, svg: built.svg, width: built.width, height: built.height, theme: built.theme };
   }
+  // Valid graph coordinates can span 200,000 units. Refuse unbounded raster
+  // allocation before creating a Blob/Image/canvas (16 Mi pixels = 64 MiB RGBA).
+  const pixelWidth = Math.round(built.width * scale), pixelHeight = Math.round(built.height * scale);
+  if (pixelWidth < 1 || pixelHeight < 1 || pixelWidth > 16384 || pixelHeight > 16384 || pixelWidth * pixelHeight > 16 * 1024 * 1024) {
+    return fail('png-size-limit', '图形范围超过 PNG 导出容量；请先自动整理布局或导出 SVG。');
+  }
   const render = typeof renderer === 'function' ? renderer : browserPngRenderer;
   let image;
   try { image = await render(built.svg, { width: built.width, height: built.height, scale }); }

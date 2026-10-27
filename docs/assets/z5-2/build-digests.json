@@ -1,0 +1,76 @@
+{
+  "productionModules": [
+    {
+      "file": "public/app.js",
+      "bytes": 63391,
+      "sha256": "12e8f33f1b7368ad1126929705eac2513bd091e444ee6863e3cac159c9185e52",
+      "packagedSha256": "12e8f33f1b7368ad1126929705eac2513bd091e444ee6863e3cac159c9185e52"
+    },
+    {
+      "file": "public/composer.js",
+      "bytes": 5723,
+      "sha256": "1ecfa2095e4c2567d61d175c4493e23e5da97c5dbb61d4df99c6e3bb32954822",
+      "packagedSha256": "1ecfa2095e4c2567d61d175c4493e23e5da97c5dbb61d4df99c6e3bb32954822"
+    },
+    {
+      "file": "public/rpc.js",
+      "bytes": 20898,
+      "sha256": "9e781c7dfe5d7a81d631e5e18289d68465f6ae06424fe39e70f171e61f30387d",
+      "packagedSha256": "9e781c7dfe5d7a81d631e5e18289d68465f6ae06424fe39e70f171e61f30387d"
+    },
+    {
+      "file": "public/runtime-models.js",
+      "bytes": 8701,
+      "sha256": "c817712afa37b7f59199bf284de284fda619ef57797a63ea9b94ae3202ec0f55",
+      "packagedSha256": "c817712afa37b7f59199bf284de284fda619ef57797a63ea9b94ae3202ec0f55"
+    },
+    {
+      "file": "public/runtime-conversation.js",
+      "bytes": 38958,
+      "sha256": "b16336018c909094950aa99364051f3ad3674f63851bd91e06aab9789a245e94",
+      "packagedSha256": "b16336018c909094950aa99364051f3ad3674f63851bd91e06aab9789a245e94"
+    },
+    {
+      "file": "public/state.js",
+      "bytes": 9691,
+      "sha256": "afc3471c5ef4cab79aee488cb1122a5e98baed15ccdde5bccb1f1b0531437186",
+      "packagedSha256": "afc3471c5ef4cab79aee488cb1122a5e98baed15ccdde5bccb1f1b0531437186"
+    },
+    {
+      "file": "public/ui3-model-picker.js",
+      "bytes": 19475,
+      "sha256": "08e8a108656e85cf39a6a69761b646c617394eb80d3fee31d1759d6543ad7759",
+      "packagedSha256": "08e8a108656e85cf39a6a69761b646c617394eb80d3fee31d1759d6543ad7759"
+    },
+    {
+      "file": "public/usage.js",
+      "bytes": 28448,
+      "sha256": "1c9ccb1067d5a3d546fb3aeb6f5bcf38b984dc4014ff5c09bb90fdc7984012d3",
+      "packagedSha256": "1c9ccb1067d5a3d546fb3aeb6f5bcf38b984dc4014ff5c09bb90fdc7984012d3"
+    },
+    {
+      "file": "public/thinking-availability.js",
+      "bytes": 2715,
+      "sha256": "33f77cbdd0b44f4a51d3dc496f70a2519079cb2337c2bb5b301778dd9ed59e48",
+      "packagedSha256": "33f77cbdd0b44f4a51d3dc496f70a2519079cb2337c2bb5b301778dd9ed59e48"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "build/Pi GUI.exe",
+      "bytes": 103001600,
+      "sha256": "b2f30efa7e5dd212597662222cb24680c3bb4d9b5a2aa31d19f7eaeb921ac939"
+    },
+    {
+      "file": "dist-app/Pi GUI-win32-x64/Pi GUI.exe",
+      "bytes": 246324736,
+      "sha256": "c8755f70993aecf1da95a2557234a3fa2b59c876f7419ca62fab41147f01d81b"
+    },
+    {
+      "file": "dist-app/Pi GUI-win32-x64/resources/app/server.cjs",
+      "bytes": 2536352,
+      "sha256": "1fd94c25697a1bb83137e047ede272df199f4f5c618890dbab951e97d7ae2f5a"
+    }
+  ],
+  "qualification": "module-bytes-and-packaged-backend; not packaged-window or installer"
+}

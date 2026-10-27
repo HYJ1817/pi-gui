@@ -1,0 +1,107 @@
+[
+  {
+    "suite": "history-tool-summary",
+    "command": "node tests/history-tool-summary.cjs",
+    "exitCode": 0,
+    "durationMs": 348,
+    "summary": "History tool summary: 36/36 cases; 161/161 assertions; skipped=0"
+  },
+  {
+    "suite": "history-tool-summary-http",
+    "command": "node tests/history-tool-summary-http.cjs",
+    "exitCode": 0,
+    "durationMs": 254,
+    "summary": "History tool summary HTTP: 14/14 cases; 49/49 assertions; skipped=0"
+  },
+  {
+    "suite": "runtime-history-search",
+    "command": "node tests/runtime-history-search.cjs",
+    "exitCode": 0,
+    "durationMs": 15619,
+    "summary": "Runtime history/search: 37/37"
+  },
+  {
+    "suite": "review-regressions",
+    "command": "node tests/review-regressions.cjs",
+    "exitCode": 0,
+    "durationMs": 2736,
+    "summary": "Review regressions: 32/32; failed=0; skipped=0"
+  },
+  {
+    "suite": "session-search",
+    "command": "node tests/session-search.cjs",
+    "exitCode": 0,
+    "durationMs": 1951,
+    "summary": "72/72 通过"
+  },
+  {
+    "suite": "pi-compat",
+    "command": "node tests/pi-compat.cjs",
+    "exitCode": 0,
+    "durationMs": 115,
+    "summary": "57/57 通过"
+  },
+  {
+    "suite": "runtime-http",
+    "command": "node tests/runtime-http.cjs",
+    "exitCode": 0,
+    "durationMs": 223,
+    "summary": "Runtime HTTP: 12/12"
+  },
+  {
+    "suite": "runtime-conversation",
+    "command": "node tests/runtime-conversation.cjs",
+    "exitCode": 0,
+    "durationMs": 1642,
+    "summary": "Runtime conversation: 78/78"
+  },
+  {
+    "suite": "runtime-draft",
+    "command": "node tests/runtime-draft.cjs",
+    "exitCode": 0,
+    "durationMs": 1073,
+    "summary": "Runtime draft tests: 42/42"
+  },
+  {
+    "suite": "runtime-models",
+    "command": "node tests/runtime-models.cjs",
+    "exitCode": 0,
+    "durationMs": 2017,
+    "summary": "Runtime models: 51/51"
+  },
+  {
+    "suite": "runtime-finish-ui",
+    "command": "node tests/runtime-finish-ui.cjs",
+    "exitCode": 0,
+    "durationMs": 605,
+    "summary": "Runtime finishing UI: 27/27"
+  },
+  {
+    "suite": "session-background",
+    "command": "node tests/session-background.cjs",
+    "exitCode": 0,
+    "durationMs": 167,
+    "summary": "Session background: 5/5; failed=0"
+  },
+  {
+    "suite": "server-security",
+    "command": "node tests/server-security.cjs",
+    "exitCode": 0,
+    "durationMs": 4966,
+    "summary": "39/39 通过"
+  },
+  {
+    "suite": "runtime-registry",
+    "command": "node tests/runtime-registry.cjs",
+    "exitCode": 0,
+    "durationMs": 280,
+    "summary": "Runtime registry: 35/35"
+  },
+  {
+    "suite": "modules",
+    "command": "node tests/modules.cjs",
+    "exitCode": 0,
+    "durationMs": 147,
+    "summary": "120/120 通过"
+  }
+]

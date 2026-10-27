@@ -1,0 +1,173 @@
+{
+  "codeCommit": "c209832314b4f52ff9225c24ae3cdf01acb7d24e",
+  "supplementScriptSha256": "2ce8897f79a5ad40f5d889e18de27be3b0262945bbd50d103e991b8cb2f99ed4",
+  "committedBytesEqualTestedBytes": true,
+  "productionDiffFromIntegratedMain": [],
+  "brokenLocalLinks": [],
+  "successfulCommands": [
+    {
+      "name": "electron",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 58671
+    },
+    {
+      "name": "productivity-electron",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 3851
+    },
+    {
+      "name": "advanced-electron",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 2423
+    },
+    {
+      "name": "real-pi",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 4241
+    },
+    {
+      "name": "build-app",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 14733
+    },
+    {
+      "name": "fixtures",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 3768
+    },
+    {
+      "name": "app-check",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 12160
+    },
+    {
+      "name": "exe-check",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 11792
+    },
+    {
+      "name": "packaged",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 1522
+    },
+    {
+      "name": "canonical",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 4790986
+    },
+    {
+      "name": "stability-gc",
+      "head": "db2bbf2e88801c01940484e6ba4ea920e0256722",
+      "exitCode": 0,
+      "elapsedMs": 19720
+    },
+    {
+      "name": "integrated-collab",
+      "head": "c7fbad65500e1c20b6084f421c7920d8f77ffbc6",
+      "exitCode": 0,
+      "elapsedMs": 50486
+    },
+    {
+      "name": "packaged-gui-verified",
+      "head": "c7fbad65500e1c20b6084f421c7920d8f77ffbc6",
+      "exitCode": 0,
+      "elapsedMs": 24766
+    },
+    {
+      "name": "packaged-os-input",
+      "head": "c7fbad65500e1c20b6084f421c7920d8f77ffbc6",
+      "exitCode": 0,
+      "elapsedMs": 72212
+    },
+    {
+      "name": "integrated-packaged",
+      "head": "c7fbad65500e1c20b6084f421c7920d8f77ffbc6",
+      "exitCode": 0,
+      "elapsedMs": 2001
+    }
+  ],
+  "failedProbeCommands": [
+    {
+      "name": "packaged-gui-first",
+      "exitCode": 1
+    },
+    {
+      "name": "packaged-gui-diagnostic",
+      "exitCode": 1
+    },
+    {
+      "name": "packaged-gui-second",
+      "exitCode": 1
+    },
+    {
+      "name": "packaged-gui-import-diagnostic",
+      "exitCode": 1
+    },
+    {
+      "name": "packaged-gui",
+      "exitCode": 1
+    },
+    {
+      "name": "packaged-gui-final",
+      "exitCode": 1
+    },
+    {
+      "name": "packaged-gui-final-v2",
+      "exitCode": 1
+    }
+  ],
+  "ciArtifactZipDigests": [
+    {
+      "artifactId": 12635153457,
+      "name": "test-results-native",
+      "expected": "sha256:3cd5565fd0b8eb3f9880c9fc3762c8841bcc6747251bdcfc65ae7fa35a4c6368",
+      "actual": "sha256:3cd5565fd0b8eb3f9880c9fc3762c8841bcc6747251bdcfc65ae7fa35a4c6368",
+      "matches": true
+    },
+    {
+      "artifactId": 12635152677,
+      "name": "test-results-security",
+      "expected": "sha256:5cabbb0a77e5432fed7484f588dfb2bb955fdc9c41c5e1f1d59994f875be4348",
+      "actual": "sha256:5cabbb0a77e5432fed7484f588dfb2bb955fdc9c41c5e1f1d59994f875be4348",
+      "matches": true
+    },
+    {
+      "artifactId": 12634920511,
+      "name": "test-results-ui",
+      "expected": "sha256:1d9fa289b91c720111cff17252071e47f809e0c3fadce714dd36377a936d6160",
+      "actual": "sha256:1d9fa289b91c720111cff17252071e47f809e0c3fadce714dd36377a936d6160",
+      "matches": true
+    },
+    {
+      "artifactId": 12634887140,
+      "name": "test-results-core",
+      "expected": "sha256:3779ce131f1301020981711e888a997ae2252b25c68fa3060cf085c219445e26",
+      "actual": "sha256:3779ce131f1301020981711e888a997ae2252b25c68fa3060cf085c219445e26",
+      "matches": true
+    },
+    {
+      "artifactId": 12634824536,
+      "name": "ci-evidence-summary",
+      "expected": "sha256:790f4fd21cfd77d9a3046056c52179becf37232d88556a7fb86d51fdbca22b95",
+      "actual": "sha256:790f4fd21cfd77d9a3046056c52179becf37232d88556a7fb86d51fdbca22b95",
+      "matches": true
+    },
+    {
+      "artifactId": 12634249416,
+      "name": "test-results-faults",
+      "expected": "sha256:392cb3c9fccddf903c44d5018ed1ffc5f6cb057b9991a2e3984de3c0982b303c",
+      "actual": "sha256:392cb3c9fccddf903c44d5018ed1ffc5f6cb057b9991a2e3984de3c0982b303c",
+      "matches": true
+    }
+  ]
+}

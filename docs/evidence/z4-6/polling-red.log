@@ -1,0 +1,23 @@
+ok 生成入口：输入与按钮随文档与当前性启停
+ok 发起生成：generate 请求携带指令；轮询拾取 ready 并自动预览
+ok 接受建议：CAS 提交成功并更新画布，可撤销
+ok 拒绝路径与失败文案：通道 busy 显示安全提示且可再次发起
+ok 冲突后重新生成：卡片保持入口可用，重开编辑器并发起新受控任务
+ok 生命周期：会话切换同步停轮并失效面板
+ok 来源未接入：无 proposals 的服务显示原文案并拒绝生成
+ok 重开面板拾取未决建议：open 后自动 preview 展示
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /慢响应建议/. Input:
+
+''
+
+    at Proxy.<anonymous> (C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-panel-agent.cjs:8:122)
+    at C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-panel-agent.cjs:250:14
+    at async check (C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-panel-agent.cjs:14:37)
+    at async C:\Users\21022\.codex\worktrees\z4-6-stability\pi-GUI\tests\collab-panel-agent.cjs:228:3 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: '',
+  expected: /慢响应建议/,
+  operator: 'match',
+  diff: 'simple'
+}
