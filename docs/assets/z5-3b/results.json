@@ -1,0 +1,39 @@
+{
+  "qualification": "electron-chromium-passed",
+  "sandbox": true,
+  "contextIsolation": true,
+  "nodeIntegration": false,
+  "failed": 0,
+  "checks": 16,
+  "rows": [
+    "正常沙箱装配页加载成功",
+    "只读状态行包含历史工具说明与截断不完整提示",
+    "只读浏览不启动 Pi，不增加运行名额",
+    "工具摘要行全部正确呈现",
+    "completed 状态映射为“已记录完成”",
+    "error 状态映射为“结果报错”",
+    "unknown 状态映射为“状态未知”",
+    "messagePosition=null 放在独立的位置未确认区域",
+    "1200px 宽度下无横向溢出",
+    "900px 宽度下无横向溢出",
+    "700px 宽度下无横向溢出",
+    "历史搜索定位能按 messageId 正确标记匹配目标",
+    "没有工具调用的会话不显示空工具列表及未确认区域",
+    "没有工具调用时状态行正常且不报错",
+    "A/B 会话快速切换回 conv-tools 正确恢复自己的工具摘要",
+    "Renderer 无新增控制台错误"
+  ],
+  "screenshots": [
+    "z5-3b-history-wide-1200.png",
+    "z5-3b-history-mid-900.png",
+    "z5-3b-history-narrow-700.png",
+    "z5-3b-history-search-jump.png",
+    "z5-3b-history-clean-no-tools.png"
+  ],
+  "artifacts": [],
+  "rendererErrors": [],
+  "piStarted": false,
+  "chromium": "152.0.7977.130",
+  "electron": "44.4.3",
+  "attemptedAt": "2026-10-27T05:25:03.328Z"
+}
