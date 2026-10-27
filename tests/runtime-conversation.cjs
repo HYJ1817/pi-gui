@@ -13,7 +13,7 @@ const { JSDOM } = require('jsdom');
     + '<div id="confirmLayer" hidden><div id="confirmCard"></div></div><div id="toasts"></div>', { url: 'http://127.0.0.1/' });
   global.window = dom.window; global.document = dom.window.document; global.localStorage = dom.window.localStorage;
 
-  const { runtimeStore, observeRuntimeFrame } = await import('../public/runtime-state.js');
+  const { runtimeStore, observeRuntimeFrame, seedRuntimeSnapshot } = await import('../public/runtime-state.js');
   const { createRuntimeConversation } = await import('../public/runtime-conversation.js');
 
   const owner = (id, gen = 'one') => ({ backendInstance: 'backend', projectId: 'project', repoId: 'repo', workspaceId: 'ws-' + id,
@@ -568,6 +568,431 @@ const { JSDOM } = require('jsdom');
   ok('store中新草稿同样完整保留', runtimeStore.get('RACE-1').draft === '文本A');
 
   draftView3.dispose();
+
+  /* ========================================================================
+   * ---- Z5-3B: 历史工具摘要 UI 集成与回归测试 ----
+   * ======================================================================== */
+  const z53bView = createRuntimeConversation({ host });
+  const z53bOwner = id => ({
+    backendInstance: 'backend-z53b', projectId: 'p-z53b', repoId: 'r-z53b',
+    workspaceId: 'ws-' + id, workspaceEpoch: 'epoch-1', conversationId: id,
+    runtimeId: 'rt-' + id, runtimeGeneration: 'g1', sessionId: 'native-' + id
+  });
+  runtimeStore.seed({ backendInstance: 'backend-z53b', items: [
+    { conversationId: 'Z-1', nativeSessionId: 'native-Z-1', workspace: { projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' }, owner: null, lifecycle: 'dormant', activity: 'idle', revision: 1 },
+    { conversationId: 'Z-2', nativeSessionId: 'native-Z-2', workspace: { projectId: 'p-z53b', workspaceId: 'ws-Z-2', workspaceEpoch: 'epoch-1' }, owner: null, lifecycle: 'dormant', activity: 'idle', revision: 1 },
+    { conversationId: 'Z-LIVE', nativeSessionId: 'native-Z-LIVE', workspace: { projectId: 'p-z53b', workspaceId: 'ws-Z-LIVE', workspaceEpoch: 'epoch-1' }, owner: z53bOwner('Z-LIVE'), lifecycle: 'ready', activity: 'idle', revision: 1 }
+  ] });
+
+  const zLocator = id => ({
+    conversationId: id,
+    nativeSessionId: 'native-' + id,
+    projectId: 'p-z53b',
+    workspaceId: 'ws-' + id,
+    workspaceEpoch: 'epoch-1'
+  });
+
+  let zHistoryMock = null;
+  global.fetch = async (url, opts = {}) => ({
+    json: async () => {
+      const u = String(url);
+      if (!opts.body) {
+        if (u.includes('conversationId=')) {
+          const matchId = u.match(/conversationId=([^&]+)/)?.[1] || 'Z-1';
+          const mock = typeof zHistoryMock === 'function' ? await zHistoryMock(u) : zHistoryMock;
+          if (mock && !Object.hasOwn(mock, 'locator')) {
+            return { locator: zLocator(matchId), ...mock };
+          }
+          return mock;
+        }
+        return { ok: true, backendInstance: 'backend-z53b', items: [] };
+      }
+      const body = JSON.parse(opts.body);
+      requests.push(body);
+      return { ok: true };
+    }
+  });
+
+  // 1 & 7. 正文之间正确插入工具行，及 completed/error/unknown 状态文案
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [
+      { role: 'user', text: '问题1', messageId: 'm-u1' },
+      { role: 'assistant', text: '回答1', messageId: 'm-a1' }
+    ],
+    truncated: false,
+    toolSummary: {
+      items: [
+        { toolName: 'read', status: 'completed', source: 'confirmed', messagePosition: 1 },
+        { toolName: 'bash', status: 'error', source: 'confirmed', messagePosition: 1 },
+        { toolName: 'write', status: 'unknown', source: 'unconfirmed', messagePosition: 1 }
+      ],
+      returned: 3, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: true
+    }
+  };
+  z53bView.show('Z-1');
+  btn('打开历史').click();
+  await tick();
+
+  const toolRows = () => [...host.querySelectorAll('.rtc-history-tool')];
+  const msgRows = () => [...host.querySelectorAll('.rtc-history-message')];
+  ok('1. 正文之间正确插入工具行', toolRows().length === 3 && msgRows().length === 2);
+  ok('7. completed/error/unknown 状态文案映射准确',
+    toolRows()[0].textContent === 'read · 已记录完成' && toolRows()[0].dataset.status === 'completed' &&
+    toolRows()[1].textContent === 'bash · 结果报错' && toolRows()[1].dataset.status === 'error' &&
+    toolRows()[2].textContent === 'write · 状态未知' && toolRows()[2].dataset.status === 'unknown');
+  ok('5. 新版 API 状态行包含只读工具摘要说明及不完整提示',
+    stateLine().includes('历史正文与只读工具摘要；不含思考及用量') && stateLine().includes('状态证据不完整'));
+
+  // 2. 多个工具共享一个位置，严格保持后端顺序
+  const outputChildren = [...output().children];
+  const toolIndices = toolRows().map(r => outputChildren.indexOf(r));
+  const u1Index = outputChildren.indexOf(msgRows()[0]);
+  const a1Index = outputChildren.indexOf(msgRows()[1]);
+  ok('2. 多个工具共享一个位置并保持后端顺序插在正文之间',
+    u1Index < toolIndices[0] && toolIndices[0] < toolIndices[1] && toolIndices[1] < toolIndices[2] && toolIndices[2] < a1Index);
+
+  // 3 & 4. messagePosition=0 与 messagePosition=messages.length
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [
+      { role: 'user', text: '首条正文', messageId: 'm-u' },
+      { role: 'assistant', text: '末条正文', messageId: 'm-a' }
+    ],
+    truncated: false,
+    toolSummary: {
+      items: [
+        { toolName: 'find', status: 'completed', source: 'confirmed', messagePosition: 0 },
+        { toolName: 'edit', status: 'completed', source: 'confirmed', messagePosition: 2 }
+      ],
+      returned: 2, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false
+    }
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  const currentChildren = [...output().children];
+  const headTool = host.querySelector('.rtc-history-tool[data-tool-name="find"]');
+  const tailTool = host.querySelector('.rtc-history-tool[data-tool-name="edit"]');
+  const currentMsgs = msgRows();
+  ok('3. messagePosition=0 插入在首条正文之前', headTool && currentChildren.indexOf(headTool) < currentChildren.indexOf(currentMsgs[0]));
+  ok('4. messagePosition=messages.length 插入在正文末尾', tailTool && currentChildren.indexOf(tailTool) > currentChildren.indexOf(currentMsgs[1]));
+
+  // 5. messagePosition=null 放在独立的“位置未确认”只读区域
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '单条正文', messageId: 'm-single' }],
+    truncated: false,
+    toolSummary: {
+      items: [
+        { toolName: 'ls', status: 'unknown', source: 'unconfirmed', messagePosition: null }
+      ],
+      returned: 1, limit: 100, truncated: false, historyTruncated: true, unavailableReason: null, uncertain: true
+    }
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  const unconfirmedZone = host.querySelector('.rtc-history-unconfirmed');
+  ok('5. messagePosition=null 位于独立的“位置未确认”只读区域',
+    unconfirmedZone && unconfirmedZone.textContent.includes('ls · 状态未知') && unconfirmedZone.textContent.includes('位置未确认'));
+
+  // 6. 非法位置安全降级
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '正文', messageId: 'm-valid' }],
+    truncated: false,
+    toolSummary: {
+      items: [
+        { toolName: 'grep', status: 'completed', source: 'confirmed', messagePosition: -1 },
+        { toolName: 'bash', status: 'completed', source: 'confirmed', messagePosition: 999 },
+        { toolName: 'read', status: 'completed', source: 'confirmed', messagePosition: 'not_a_number' }
+      ],
+      returned: 3, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false
+    }
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  const degradedZone = host.querySelector('.rtc-history-unconfirmed');
+  ok('6. 非法位置安全降级至未确认区域，正文正常显示',
+    msgRows().length === 1 && degradedZone && degradedZone.querySelectorAll('.rtc-history-tool').length === 3);
+
+  // 8. 旧 API 不含 toolSummary
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '旧版问题' }],
+    truncated: false
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  ok('8. 旧 API 不含 toolSummary 时保持正文-only 兼容提示且无工具行',
+    stateLine().includes('历史只含正文（无工具、思考、用量）') && toolRows().length === 0);
+
+  // 9. 空摘要不产生多余元素
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '仅正文' }],
+    truncated: false,
+    toolSummary: {
+      items: [],
+      returned: 0, limit: 100, truncated: false, historyTruncated: false, unavailableReason: 'no_tool_calls', uncertain: false
+    }
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  ok('9. 空摘要不产生多余元素，状态行正常',
+    toolRows().length === 0 && !host.querySelector('.rtc-history-unconfirmed') &&
+    stateLine().includes('历史正文与只读工具摘要；不含思考及用量') && !stateLine().includes('无法解析'));
+
+  // 10. 100项摘要容量边界
+  const hundredItems = Array.from({ length: 100 }, (_, i) => ({
+    toolName: 'read', status: 'completed', source: 'confirmed', messagePosition: i % 2
+  }));
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '轮次1' }, { role: 'assistant', text: '轮次2' }],
+    truncated: false,
+    toolSummary: {
+      items: hundredItems,
+      returned: 100, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false
+    }
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  ok('10. 100项摘要容量边界正常渲染且数量完全吻合', toolRows().length === 100);
+
+  // 11. 正文800项与摘要100项分别截断
+  const eightHundredMessages = Array.from({ length: 800 }, (_, i) => ({
+    role: i % 2 === 0 ? 'user' : 'assistant', text: 'msg ' + i, messageId: 'm-' + i, userIndex: i % 2 === 0 ? i / 2 : undefined
+  }));
+  const hundredTruncatedItems = [
+    { toolName: 'read', status: 'completed', source: 'confirmed', messagePosition: null },
+    ...Array.from({ length: 99 }, (_, i) => ({
+      toolName: 'read', status: 'completed', source: 'confirmed', messagePosition: 701 + i
+    }))
+  ];
+  zHistoryMock = {
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: eightHundredMessages,
+    truncated: true,
+    toolSummary: {
+      items: hundredTruncatedItems,
+      returned: 100, limit: 100, truncated: true, historyTruncated: true, unavailableReason: null, uncertain: true
+    }
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  ok('11. 正文800项截断与摘要100项截断并存时提示清晰且未确认区域正常隔离',
+    msgRows().length === 800 && toolRows().length === 100 &&
+    stateLine().includes('800 条（仅显示最近部分）') && stateLine().includes('仅显示部分工具') &&
+    Boolean(host.querySelector('.rtc-history-unconfirmed')));
+
+  // 12 & 13. 历史搜索按 messageId 与 userIndex 精确定位，不受插入的工具行干扰
+  let scrolledElements = [];
+  const origScrollIntoView = dom.window.HTMLElement.prototype.scrollIntoView;
+  dom.window.HTMLElement.prototype.scrollIntoView = function (opts) {
+    scrolledElements.push(this);
+  };
+  try {
+    zHistoryMock = {
+      ok: true,
+      sessionId: 'native-Z-1',
+      messages: [
+        { role: 'user', text: '搜索问', messageId: 'search-u', userIndex: 0 },
+        { role: 'assistant', text: '搜索答', messageId: 'search-a' }
+      ],
+      truncated: false,
+      toolSummary: {
+        items: [
+          { toolName: 'read', status: 'completed', source: 'confirmed', messagePosition: 0 },
+          { toolName: 'bash', status: 'completed', source: 'confirmed', messagePosition: 1 },
+          { toolName: 'write', status: 'completed', source: 'confirmed', messagePosition: 2 }
+        ],
+        returned: 3, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false
+      }
+    };
+    scrolledElements = [];
+    await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' }, { messageId: 'search-a' });
+    await tick();
+
+    ok('12. 历史搜索按 messageId 精确定位到正文行而非工具行',
+      scrolledElements.length === 1 && scrolledElements[0].dataset.historyMessageId === 'search-a' &&
+      scrolledElements[0].classList.contains('rtc-history-message'));
+
+    scrolledElements = [];
+    await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' }, { userIndex: 0 });
+    await tick();
+
+    ok('13. 历史搜索按 userIndex 精确定位到正文行而非工具行',
+      scrolledElements.length === 1 && scrolledElements[0].dataset.historyUserIndex === '0' &&
+      scrolledElements[0].classList.contains('rtc-history-message'));
+  } finally {
+    dom.window.HTMLElement.prototype.scrollIntoView = origScrollIntoView;
+  }
+
+  // 14. A 请求迟到不能覆盖 B
+  let finishGateA;
+  const gateAPromise = new Promise(r => { finishGateA = r; });
+  zHistoryMock = url => {
+    if (url.includes('conversationId=Z-1')) return gateAPromise;
+    return {
+      ok: true,
+      sessionId: 'native-Z-2',
+      messages: [{ role: 'user', text: 'B正文' }],
+      truncated: false,
+      toolSummary: { items: [{ toolName: 'find', status: 'completed', source: 'confirmed', messagePosition: 0 }], returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false }
+    };
+  };
+  z53bView.show('Z-1');
+  const aPromise = z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  z53bView.show('Z-2');
+  await z53bView.openHistory({ conversationId: 'Z-2', nativeSessionId: 'native-Z-2', projectId: 'p-z53b', workspaceId: 'ws-Z-2', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  ok('切到 B 显示 B 自己的历史与工具', toolRows().length === 1 && toolRows()[0].dataset.toolName === 'find');
+  finishGateA({
+    ok: true,
+    sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: 'A正文' }],
+    truncated: false,
+    toolSummary: { items: [{ toolName: 'bash', status: 'completed', source: 'confirmed', messagePosition: 0 }], returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false }
+  });
+  await aPromise;
+  await tick();
+
+  ok('14. A 请求迟到不覆盖当前会话 B 的工具摘要与正文',
+    toolRows().length === 1 && toolRows()[0].dataset.toolName === 'find' && output().textContent.includes('B正文'));
+
+  // 15. 同一会话较旧响应不能覆盖新响应（代次保护）
+  let finishOld, finishNew;
+  const pOld = new Promise(r => { finishOld = r; });
+  const pNew = new Promise(r => { finishNew = r; });
+  let reqCount = 0;
+  zHistoryMock = () => {
+    reqCount++;
+    return reqCount === 1 ? pOld : pNew;
+  };
+  z53bView.show('Z-1');
+  const call1 = z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  // 会话状态更新使代次推进且允许新请求
+  seedRuntimeSnapshot({ backendInstance: 'backend-z53b', items: [
+    { conversationId: 'Z-1', nativeSessionId: 'native-Z-1', workspace: { projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' }, owner: null, lifecycle: 'dormant', activity: 'idle', revision: 2 },
+    { conversationId: 'Z-2', nativeSessionId: 'native-Z-2', workspace: { projectId: 'p-z53b', workspaceId: 'ws-Z-2', workspaceEpoch: 'epoch-1' }, owner: null, lifecycle: 'dormant', activity: 'idle', revision: 1 },
+    { conversationId: 'Z-LIVE', nativeSessionId: 'native-Z-LIVE', workspace: { projectId: 'p-z53b', workspaceId: 'ws-Z-LIVE', workspaceEpoch: 'epoch-1' }, owner: z53bOwner('Z-LIVE'), lifecycle: 'ready', activity: 'idle', revision: 1 }
+  ] });
+  await tick();
+
+  const call2 = z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  finishNew({
+    ok: true, sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '新响应' }],
+    truncated: false,
+    toolSummary: { items: [{ toolName: 'write', status: 'completed', messagePosition: 0 }], returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false }
+  });
+  await call2; await tick();
+  ok('新响应正常呈现', toolRows()[0]?.dataset.toolName === 'write');
+
+  finishOld({
+    ok: true, sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '旧响应' }],
+    truncated: false,
+    toolSummary: { items: [{ toolName: 'read', status: 'completed', messagePosition: 0 }], returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false }
+  });
+  await call1; await tick();
+  ok('15. 同一会话较旧响应因代次被丢弃，不覆盖新响应',
+    toolRows()[0]?.dataset.toolName === 'write' && output().textContent.includes('新响应'));
+
+  // 16. locator 变化拒绝显示旧摘要
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-1',
+    locator: { conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-DIFF' },
+    messages: [{ role: 'user', text: '陈旧定位' }],
+    truncated: false,
+    toolSummary: { items: [{ toolName: 'grep', status: 'completed', messagePosition: 0 }], returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false }
+  };
+  await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' });
+  await tick();
+
+  ok('16. locator 变化拒绝显示旧摘要并给出 notice',
+    toolRows().length === 0 && host.querySelector('.rtc-notice').textContent.includes('会话历史身份已变化'));
+
+  // 17. 返回实时会话后不残留历史工具行
+  z53bView.show('Z-LIVE');
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-LIVE',
+    messages: [{ role: 'user', text: 'LIVE历史' }],
+    truncated: false,
+    toolSummary: { items: [{ toolName: 'bash', status: 'completed', messagePosition: 0 }], returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false }
+  };
+  await z53bView.openHistory(zLocator('Z-LIVE'));
+  await tick();
+  ok('LIVE 会话已显示历史工具行', toolRows().length === 1);
+  btn('返回实时会话').click();
+  await tick();
+  ok('17. 返回实时会话后历史工具行与未确认区域完全清除',
+    toolRows().length === 0 && !host.querySelector('.rtc-history-unconfirmed') && output().textContent === '等待任务');
+
+  // 18. 显式恢复后不继承陈旧的历史摘要
+  z53bView.show('Z-1');
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '待恢复历史' }],
+    truncated: false,
+    toolSummary: { items: [{ toolName: 'read', status: 'completed', messagePosition: 0 }], returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false }
+  };
+  btn('打开历史').click();
+  await tick();
+  ok('恢复前历史工具已呈现', toolRows().length === 1);
+  requests.length = 0;
+  btn('恢复会话').click();
+  await tick();
+  ok('18. 显式恢复会话发起了 resume 且历史摘要被清空',
+    requests.length === 1 && requests[0].action === 'resume' && toolRows().length === 0);
+
+  // 19. 恶意工具名称或状态无法注入 HTML
+  z53bView.show('Z-2');
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-2',
+    messages: [{ role: 'user', text: '注入测试' }],
+    truncated: false,
+    toolSummary: {
+      items: [
+        { toolName: '<img src=x onerror=alert(1)>', status: '<script>alert(2)</script>', messagePosition: 0 }
+      ],
+      returned: 1, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false
+    }
+  };
+  btn('打开历史').click();
+  await tick();
+  ok('19. 恶意工具名称及状态转义为纯文本，无 HTML 标签注入',
+    host.querySelector('img, script') === null && toolRows().length === 1 &&
+    toolRows()[0].textContent.includes('<img src=x onerror=alert(1)>'));
+
+  // 20. 只读历史操作绝不调用工具、审批或 prompt
+  requests.length = 0;
+  ok('只读历史下发送按钮与输入框禁用', btn('发送').disabled && input().disabled);
+  toolRows()[0]?.click();
+  await tick();
+  ok('20. 只读历史界面交互绝不产生工具、审批或 prompt 动作', requests.length === 0);
+
+  z53bView.dispose();
 
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
