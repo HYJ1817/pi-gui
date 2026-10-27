@@ -8,12 +8,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 
 (async () => {
+  const { createCollabStore } = await import('../server/collab-store.js');
+  const { createReviewCommentStore } = await import('../server/review-comment-store.js');
+  const { createCandidateStore } = await import('../server/candidate-store.js');
+  const { createCandidateTransactions } = await import('../server/candidate-transactions.js');
+  const { getProtectedRoots } = await import('../server/data-dir.js');
+
   const ROOT = path.resolve(__dirname, '..');
   const BUILD_EXE = path.join(ROOT, 'build', 'Pi GUI.exe');
-  if (!fs.existsSync(BUILD_EXE)) {
-    console.log('Building Pi GUI.exe first...');
-    execFileSync('node', ['scripts/build-exe.mjs'], { cwd: ROOT, stdio: 'inherit' });
-  }
+  console.log('Building fresh Pi GUI.exe to ensure binary matches current commit...');
+  execFileSync('node', ['scripts/build-exe.mjs'], { cwd: ROOT, stdio: 'inherit' });
   assert.ok(fs.existsSync(BUILD_EXE), 'Pi GUI.exe must exist in build/');
 
   let checks = 0;
@@ -299,6 +303,209 @@ const os = require('node:os');
     ok('失败输出包含 TARGET_DATA_DIR_UNAVAILABLE 错误或清晰原因',
       failErrorOutput.includes('TARGET_DATA_DIR_UNAVAILABLE') || failErrorOutput.includes('Target data directory cannot be created'));
     ok('原始冲突文件未被盲目破坏', fs.readFileSync(path.join(blockedDir, 'data'), 'utf8') === 'regular file blocking mkdirSync');
+
+    // ================= Scenario 7: Real SEA portable storage with external user project =================
+    console.log('\n--- Scenario 7: 便携版 SEA 协同、评论与候选存储测试（项目在 EXE 外部） ---');
+    const extStoreDir = path.join(tempRoot, 'sea-store-portable');
+    fs.mkdirSync(extStoreDir, { recursive: true });
+    const extStoreExe = path.join(extStoreDir, 'Pi GUI.exe');
+    fs.copyFileSync(BUILD_EXE, extStoreExe);
+
+    const extUserProject = path.join(tempRoot, 'external-sea-project');
+    fs.mkdirSync(extUserProject, { recursive: true });
+    fs.mkdirSync(path.join(extUserProject, '.git'), { recursive: true });
+
+    const inst7 = await startSeaInstance(extStoreExe, { port: 7817 });
+    try {
+      const seaDataDir = inst7.dataDir;
+      ok('便携版启动成功并分配 exeDir/data', seaDataDir === path.join(extStoreDir, 'data'));
+
+      // Register external project
+      const regRes = await httpPost(7817, '/api/projects', { path: extUserProject, name: 'External SEA Project' });
+      ok('POST /api/projects 成功注册外部用户项目', regRes.status === 200 && regRes.data.ok === true);
+
+      // Verify protectedRoots does not contain exeDir
+      const roots = getProtectedRoots({
+        isSea: true,
+        execPath: extStoreExe,
+        projects: [{ path: extUserProject }],
+        activeCwd: extUserProject,
+      });
+      ok('getProtectedRoots 包含外部项目且不包含 exeDir', roots.includes(path.resolve(extUserProject)) && !roots.includes(path.resolve(extStoreDir)));
+
+      // 1. Collab document write & read
+      const collabScope = {
+        key: 'a'.repeat(64),
+        token: 'b'.repeat(64),
+        sessionId: 'c'.repeat(64),
+        projectRoot: extUserProject,
+        workspaceCwd: extUserProject,
+        gitCommon: path.join(extUserProject, '.git'),
+        assertCurrent() {},
+      };
+      const cStore = createCollabStore({ dataDir: seaDataDir, protectedRoots: () => roots });
+      const docToSave = {
+        documentId: 'doc-sea-1',
+        schemaVersion: 1,
+        boundSessionId: collabScope.sessionId,
+        revision: 1,
+        title: 'SEA Collab Doc',
+        graph: { nodes: [], edges: [] },
+        appliedOps: [],
+      };
+      const savedDoc = cStore.write(collabScope, null, docToSave);
+      ok('便携版协同文档写入成功', savedDoc.doc.revision === 1);
+      const readDoc = cStore.read(collabScope);
+      ok('便携版协同文档回读一致', readDoc.doc.title === 'SEA Collab Doc');
+      ok('协同文档正确落盘在 exeDir/data/collab-documents 下', fs.existsSync(path.join(seaDataDir, 'collab-documents', collabScope.key + '.json')));
+
+      // 2. Review comments write & read
+      const reviewScope = {
+        key: 'd'.repeat(64),
+        token: 'e'.repeat(64),
+        projectRoot: extUserProject,
+        gitCommon: path.join(extUserProject, '.git'),
+        assertCurrent() {},
+      };
+      const rStore = createReviewCommentStore({ dataDir: seaDataDir, protectedRoots: () => roots });
+      const commentId = '00000000-0000-4000-8000-000000000001';
+      const commentsToSave = [{
+        id: commentId,
+        path: 'src/a.js',
+        text: 'SEA review comment test',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+        anchor: {
+          path: 'src/a.js',
+          section: 'working',
+          type: 'add',
+          oldLine: null,
+          newLine: 2,
+          hunkIndex: 0,
+          hunkHeader: '12345678',
+          codeHash: 'abcdef01',
+          diffFingerprint: '01234567',
+        },
+      }];
+      const savedComments = rStore.write(reviewScope, null, commentsToSave);
+      ok('便携版评论写入成功', typeof savedComments.revision === 'string');
+      const readComments = rStore.read(reviewScope);
+      ok('便携版评论回读一致', readComments.comments[0].text === 'SEA review comment test');
+      ok('评论正确落盘在 exeDir/data/review-comments 下', fs.existsSync(path.join(seaDataDir, 'review-comments', reviewScope.key + '.json')));
+
+      // 3. Candidate runs write & read
+      const candStore = createCandidateStore({ dataDir: seaDataDir, protectedRoots: () => roots });
+      candStore.acquire();
+      const candRunId = '00000000-0000-4000-8000-000000000010';
+      candStore.save({
+        version: 1,
+        run: {
+          id: candRunId,
+          sourceScope: 'f'.repeat(64),
+          state: 'completed',
+          rootIdentity: [1, 2, 3],
+          gitIdentity: '0'.repeat(64),
+          workspace: {
+            id: '00000000-0000-4000-8000-000000000020',
+            repoId: '1'.repeat(24),
+            path: path.join(seaDataDir, 'worktrees', '1'.repeat(24), '00000000-0000-4000-8000-000000000020'),
+          },
+        },
+        input: { files: [] },
+        result: { files: [] },
+      });
+      candStore.release();
+      const allCandRuns = candStore.readAll();
+      ok('便携版候选任务记录写入并读取成功', allCandRuns.some(r => r.run.id === candRunId));
+      ok('候选记录正确落盘在 exeDir/data/candidate-runs 下', fs.existsSync(path.join(seaDataDir, 'candidate-runs', candRunId + '.json')));
+
+      const candTx = createCandidateTransactions({ dataDir: seaDataDir, protectedRoots: () => roots });
+      const lease = candTx.acquire();
+      ok('便携版候选事务顺利获取锁', lease !== null);
+      lease.release();
+
+      // 4. HTTP endpoint validation
+      const candHttp = await httpGet(7817, '/api/candidate-runs');
+      ok('便携版 HTTP GET /api/candidate-runs 正常响应 (409/401 权限校验拦截，非 503 存储故障)',
+        candHttp.status === 409 || candHttp.status === 401);
+    } finally {
+      inst7.close();
+    }
+
+    // ================= Scenario 8: User places EXE inside user project directory =================
+    console.log('\n--- Scenario 8: 便携版 EXE 放置于用户项目内部边界安全测试 ---');
+    const insideProjectDir = path.join(tempRoot, 'inside-user-project');
+    const toolsDir = path.join(insideProjectDir, 'tools');
+    fs.mkdirSync(toolsDir, { recursive: true });
+    fs.mkdirSync(path.join(insideProjectDir, '.git'), { recursive: true });
+
+    const toolsExe = path.join(toolsDir, 'Pi GUI.exe');
+    fs.copyFileSync(BUILD_EXE, toolsExe);
+
+    const insideDataDir = path.join(toolsDir, 'data');
+    fs.mkdirSync(insideDataDir, { recursive: true });
+
+    const insideRoots = getProtectedRoots({
+      isSea: true,
+      execPath: toolsExe,
+      projects: [{ path: insideProjectDir }],
+      activeCwd: insideProjectDir,
+    });
+    ok('getProtectedRoots 包含用户项目目录', insideRoots.includes(path.resolve(insideProjectDir)));
+
+    const insideScope = {
+      key: '2'.repeat(64),
+      token: '3'.repeat(64),
+      sessionId: '4'.repeat(64),
+      projectRoot: insideProjectDir,
+      workspaceCwd: insideProjectDir,
+      gitCommon: path.join(insideProjectDir, '.git'),
+      assertCurrent() {},
+    };
+
+    let collabInsideFailed = false;
+    try {
+      const cs = createCollabStore({ dataDir: insideDataDir, protectedRoots: () => insideRoots });
+      cs.write(insideScope, null, {
+        documentId: 'doc-danger',
+        schemaVersion: 1,
+        boundSessionId: insideScope.sessionId,
+        revision: 1,
+        title: 'Danger Doc',
+        graph: { nodes: [], edges: [] },
+        appliedOps: [],
+      });
+    } catch (e) {
+      if (e.code === 'collab_storage_inside_project') collabInsideFailed = true;
+    }
+    ok('EXE 放置于项目内部时 collabStore 严格拦截拒绝 (collab_storage_inside_project)', collabInsideFailed);
+
+    let reviewInsideFailed = false;
+    try {
+      const rs = createReviewCommentStore({ dataDir: insideDataDir, protectedRoots: () => insideRoots });
+      rs.write(insideScope, null, []);
+    } catch (e) {
+      if (e.code === 'comment_storage_inside_project') reviewInsideFailed = true;
+    }
+    ok('EXE 放置于项目内部时 reviewCommentStore 严格拦截拒绝 (comment_storage_inside_project)', reviewInsideFailed);
+
+    let candidateInsideFailed = false;
+    try {
+      const cand = createCandidateStore({ dataDir: insideDataDir, protectedRoots: () => insideRoots });
+      cand.acquire();
+    } catch (e) {
+      if (e.code === 'candidate_storage_unsafe') candidateInsideFailed = true;
+    }
+    ok('EXE 放置于项目内部时 candidateStore 严格拦截拒绝 (candidate_storage_unsafe)', candidateInsideFailed);
+
+    let txInsideFailed = false;
+    try {
+      const tx = createCandidateTransactions({ dataDir: insideDataDir, protectedRoots: () => insideRoots });
+      tx.acquire();
+    } catch (e) {
+      if (e.code === 'candidate_storage_unsafe') txInsideFailed = true;
+    }
+    ok('EXE 放置于项目内部时 candidateTransactions 严格拦截拒绝 (candidate_storage_unsafe)', txInsideFailed);
 
     console.log(`\nReal SEA packaged verification: ${checks}/${checks} passed\n`);
   } finally {

@@ -15,11 +15,13 @@ const os = require('node:os');
     isSeaRuntime,
     isPiGuiSourceRepo,
     getRecoveryAction,
+    getProtectedRoots,
     parseStageName,
     STAGE_PREFIX,
   } = await import('../server/data-dir.js');
   const { createCollabStore } = await import('../server/collab-store.js');
   const { createReviewCommentStore } = await import('../server/review-comment-store.js');
+  const { createCandidateStore } = await import('../server/candidate-store.js');
 
   let checks = 0;
   const ok = (name, cond) => {
@@ -419,6 +421,126 @@ const os = require('node:os');
     });
     const reviewResult = reviewStoreSafe.read(reviewScope);
     ok('reviewCommentStore succeeds with safe independent dataDir', Array.isArray(reviewResult.comments));
+
+    // ================= 16. getProtectedRoots & Store compatibility in SEA =================
+    // 16.1 Standalone SEA mode with external user project
+    const seaPortableDir = path.join(tempRoot, 'sea-portable-test');
+    const seaPortableExe = path.join(seaPortableDir, 'Pi GUI.exe');
+    fs.mkdirSync(seaPortableDir, { recursive: true });
+    const externalUserProject = path.join(tempRoot, 'ext-proj-1');
+    fs.mkdirSync(externalUserProject, { recursive: true });
+
+    const seaProtectedRoots = getProtectedRoots({
+      sourceRoot: null,
+      isSea: true,
+      execPath: seaPortableExe,
+      io: fs,
+      projects: [{ path: externalUserProject }],
+      activeCwd: externalUserProject,
+    });
+    ok('getProtectedRoots does NOT include portable exeDir', !seaProtectedRoots.includes(path.resolve(seaPortableDir)));
+    ok('getProtectedRoots includes external user project', seaProtectedRoots.includes(path.resolve(externalUserProject)));
+
+    // 16.2 Source mode with verified repo
+    const sourceProtectedRoots = getProtectedRoots({
+      sourceRoot: fakeRepoDir,
+      isSea: false,
+      execPath: 'node.exe',
+      io: fs,
+      projects: [externalUserProject],
+    });
+    ok('getProtectedRoots includes verified sourceRoot in source mode', sourceProtectedRoots.includes(path.resolve(fakeRepoDir)));
+
+    // 16.3 Stores with SEA portable exeDir/data and external user project
+    const seaDataDir = path.join(seaPortableDir, 'data');
+    fs.mkdirSync(seaDataDir, { recursive: true });
+    const extCollabScope = {
+      key: '1'.repeat(64),
+      token: '2'.repeat(64),
+      sessionId: '3'.repeat(64),
+      projectRoot: externalUserProject,
+      workspaceCwd: externalUserProject,
+      gitCommon: path.join(externalUserProject, '.git'),
+      assertCurrent() {},
+    };
+
+    const seaCollab = createCollabStore({
+      dataDir: seaDataDir,
+      protectedRoots: () => seaProtectedRoots,
+    });
+    const seaCollabDoc = seaCollab.read(extCollabScope);
+    ok('collabStore succeeds with portable exeDir/data and external project', seaCollabDoc.doc === null);
+
+    const extReviewScope = {
+      key: '1'.repeat(64),
+      projectRoot: externalUserProject,
+      gitCommon: path.join(externalUserProject, '.git'),
+      assertCurrent() {},
+    };
+    const seaReview = createReviewCommentStore({
+      dataDir: seaDataDir,
+      protectedRoots: () => seaProtectedRoots,
+    });
+    const seaReviewRes = seaReview.read(extReviewScope);
+    ok('reviewCommentStore succeeds with portable exeDir/data and external project', Array.isArray(seaReviewRes.comments));
+
+    const seaCandidate = createCandidateStore({
+      dataDir: seaDataDir,
+      protectedRoots: () => seaProtectedRoots,
+    });
+    const seaCandidateRuns = seaCandidate.readAll();
+    ok('candidateStore succeeds with portable exeDir/data and external project', Array.isArray(seaCandidateRuns));
+
+    // 16.4 User places EXE inside user project boundary rejection
+    const projectWithExe = path.join(tempRoot, 'proj-with-exe');
+    const exeInsideProject = path.join(projectWithExe, 'tools', 'Pi GUI.exe');
+    const dataInsideProject = path.join(projectWithExe, 'tools', 'data');
+    fs.mkdirSync(dataInsideProject, { recursive: true });
+
+    const insideProtectedRoots = getProtectedRoots({
+      sourceRoot: null,
+      isSea: true,
+      execPath: exeInsideProject,
+      io: fs,
+      projects: [projectWithExe],
+    });
+
+    const insideScope = {
+      key: '5'.repeat(64),
+      token: '6'.repeat(64),
+      sessionId: '7'.repeat(64),
+      projectRoot: projectWithExe,
+      workspaceCwd: projectWithExe,
+      gitCommon: path.join(projectWithExe, '.git'),
+      assertCurrent() {},
+    };
+
+    let collabInsideProjFail = false;
+    try {
+      const csInside = createCollabStore({ dataDir: dataInsideProject, protectedRoots: () => insideProtectedRoots });
+      csInside.read(insideScope);
+    } catch (e) {
+      if (e.code === 'collab_storage_inside_project') collabInsideProjFail = true;
+    }
+    ok('collabStore strictly rejects when dataDir is inside user project', collabInsideProjFail);
+
+    let reviewInsideProjFail = false;
+    try {
+      const rsInside = createReviewCommentStore({ dataDir: dataInsideProject, protectedRoots: () => insideProtectedRoots });
+      rsInside.read(insideScope);
+    } catch (e) {
+      if (e.code === 'comment_storage_inside_project') reviewInsideProjFail = true;
+    }
+    ok('reviewCommentStore strictly rejects when dataDir is inside user project', reviewInsideProjFail);
+
+    let candidateInsideProjFail = false;
+    try {
+      const candInside = createCandidateStore({ dataDir: dataInsideProject, protectedRoots: () => insideProtectedRoots });
+      candInside.readAll();
+    } catch (e) {
+      if (e.code === 'candidate_storage_unsafe') candidateInsideProjFail = true;
+    }
+    ok('candidateStore strictly rejects when dataDir is inside user project', candidateInsideProjFail);
 
     console.log(`Standalone data directory: ${checks}/${checks} passed`);
   } finally {
