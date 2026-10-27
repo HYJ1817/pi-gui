@@ -123,7 +123,7 @@ import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
 import { json } from './server/http-utils.js';
-import { resolveDataDir, isSeaRuntime } from './server/data-dir.js';
+import { resolveDataDir, isSeaRuntime, isPiGuiSourceRepo, getProtectedRoots } from './server/data-dir.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 7788);
@@ -1028,11 +1028,20 @@ const revertMutationAuthority = createSessionRevertMutationAuthority({ withAutho
   stopAndDrain: createSessionRevertStopAndDrain({ admission:mutationAdmission, registry:runtimeRegistry, worktrees:conversationWorkspaces,
     classic:{ root:()=>runtime.getCurrentCwd(), blocked:()=>Boolean(plannerRef?.projectSwitchBlockReason()||cliInFlight),
       manager:managedProcesses.manager, abort:command=>rpc.abortAndWait(command) } }) });
-const reviewCommentStore=createReviewCommentStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+// 受保护根目录装配：区分应用可执行文件目录 (exeDir)、真正的源码仓库根目录 (verifiedSourceRoot) 和用户项目根目录。
+// 便携版 exeDir/data 正常作为应用存储，严禁将 exeDir 误作为受保护根；若用户将 EXE 放入项目目录，该项目由 projects/currentCwd 覆盖拦截。
+const resolveStoreProtectedRoots = () => getProtectedRoots({
+  sourceRoot,
+  isSea: runningInSea,
+  execPath: process.execPath,
+  projects: projects?.read?.()?.items || [],
+  activeCwd: runtime?.getCurrentCwd(),
+});
+const reviewCommentStore=createReviewCommentStore({dataDir:DATA_DIR,protectedRoots:resolveStoreProtectedRoots});
 const reviewCommentAuthority=createReviewCommentAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
   classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
-const collabStore=createCollabStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+const collabStore=createCollabStore({dataDir:DATA_DIR,protectedRoots:resolveStoreProtectedRoots});
 const collabAuthority=createCollabAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
   classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
@@ -1106,7 +1115,7 @@ const collabService=createCollabService({store:collabStore,proposals:collabPropo
 const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,worktrees,registry:runtimeRegistry,readComments:scope=>reviewCommentStore.read(scope),
   projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
   admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),
-  protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+  protectedRoots:resolveStoreProtectedRoots});
 const route = createRouter({
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
     /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。

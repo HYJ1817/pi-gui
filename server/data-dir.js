@@ -99,6 +99,54 @@ export function getRecoveryAction(code) {
 }
 
 /**
+ * Assembles protected roots for application stores (collabStore, reviewCommentStore, candidateRuns).
+ * Strictly distinguishes:
+ * - Application executable directory (exeDir): in portable mode, exeDir hosts exeDir/data and is NOT protected.
+ * - Genuine pi-gui source repository (verifiedSourceRoot): protected if running from source or within source tree.
+ * - User project roots (userProjectRoots): all registered user projects and active CWD are protected.
+ */
+export function getProtectedRoots({
+  sourceRoot = null,
+  isSea = null,
+  execPath = process.execPath,
+  io = fs,
+  projects = [],
+  activeCwd = null,
+} = {}) {
+  const roots = [];
+  const runningInSea = isSea !== null ? Boolean(isSea) : isSeaRuntime();
+
+  // 1. 真正的源码仓库根目录（若处于源码环境或源码构建目录中）
+  if (sourceRoot && isPiGuiSourceRepo(sourceRoot, io)) {
+    roots.push(path.resolve(sourceRoot));
+  } else if (runningInSea) {
+    const exeDir = path.dirname(path.resolve(execPath));
+    const candidateSource = path.resolve(exeDir, '..');
+    if (isPiGuiSourceRepo(candidateSource, io)) {
+      roots.push(candidateSource);
+    }
+  }
+
+  // 2. 用户项目根目录列表
+  if (Array.isArray(projects)) {
+    for (const p of projects) {
+      if (typeof p === 'string' && p) {
+        roots.push(path.resolve(p));
+      } else if (typeof p?.path === 'string' && p.path) {
+        roots.push(path.resolve(p.path));
+      }
+    }
+  }
+
+  // 3. 当前运行时工作目录（若提供且非空）
+  if (activeCwd && typeof activeCwd === 'string') {
+    roots.push(path.resolve(activeCwd));
+  }
+
+  return [...new Set(roots)];
+}
+
+/**
  * Standard user data directory for pi-gui.
  * - Explicit env.PI_GUI_DATA is always authoritative.
  * - Portable SEA: preserves access to existing portable data directory if present.
