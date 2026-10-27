@@ -243,8 +243,11 @@ const { JSDOM } = require('jsdom');
   /* ================= 11. 模型能力未知 ================= */
 
   const catalogue = [{ providerId: 'fixture', modelId: 'plain', name: 'Plain' }];
-  const unknownValues = new Map([['X', { model: catalogue[0], models: catalogue, reasoning: null, thinkingLevel: null, levels: null, pending: false, notice: '' }]]);
-  const unknownModels = { get: id => unknownValues.get(id), refresh: async () => true, setModel: async () => true, setThinking: async () => true };
+  const { thinkingAvailability } = await import('../public/thinking-availability.js');
+  // Match Runtime Models' current projection: a successful native empty list
+  // still has unknown static capability, plus an explicit availability result.
+  const unknownValues = new Map([['X', { model: catalogue[0], models: catalogue, reasoning: null, thinkingLevel: null, levels: [], readStatus: 'success', pending: false, notice: '' }]]);
+  const unknownModels = { get: id => { const data = unknownValues.get(id); return { ...data, availability: thinkingAvailability(data) }; }, refresh: async () => true, setModel: async () => true, setThinking: async () => true };
   const unknownHost = document.createElement('div'); host.append(unknownHost);
   const unknownView = createRuntimeConversation({ host: unknownHost, models: unknownModels });
   runtimeStore.seed({ backendInstance: 'backend', items: [item('X')] });
