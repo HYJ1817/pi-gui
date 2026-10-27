@@ -1,40 +1,103 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import * as nodeSea from 'node:sea';
+
+/**
+ * Checks whether the current process is running inside a Node.js SEA (Single Executable Application).
+ */
+export function isSeaRuntime() {
+  try {
+    if (typeof nodeSea?.isSea === 'function') {
+      return nodeSea.isSea();
+    }
+    if (typeof process.features?.sea === 'boolean') {
+      return process.features.sea;
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * Checks if a process with the given PID is currently alive on the system.
+ */
+export function isProcessRunning(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code === 'EPERM'; // EPERM indicates process exists but belongs to another user
+  }
+}
 
 /**
  * Detects the execution shape of the application.
  * Returns: 'electron' | 'portable-sea' | 'source-web'
  */
-export function detectExecutionMode({ env = process.env, execPath = process.execPath } = {}) {
+export function detectExecutionMode({ env = process.env, execPath = process.execPath, isSea = null } = {}) {
   if (Boolean(process.versions?.electron) || Boolean(env.ELECTRON_RUN_AS_NODE)) {
     return 'electron';
   }
-  const isExe = process.platform === 'win32' && path.basename(execPath).toLowerCase() === 'pi gui.exe';
-  if (Boolean(process.versions?.sea) || Boolean(env.PI_GUI_PORTABLE === '1') || Boolean(env.PI_GUI_EXE === '1') || isExe) {
+  const sea = typeof isSea === 'boolean' ? isSea : isSeaRuntime();
+  if (sea || Boolean(process.versions?.sea) || env.PI_GUI_PORTABLE === '1' || env.PI_GUI_EXE === '1') {
+    return 'portable-sea';
+  }
+  // Fallback: check if executable name indicates portable exe (backward compatibility)
+  if (process.platform === 'win32' && path.basename(execPath).toLowerCase() === 'pi gui.exe') {
     return 'portable-sea';
   }
   return 'source-web';
 }
 
 /**
+ * Sanitizes a file path for diagnostic logging, replacing user home directory with '~'
+ * and stripping sensitive substrings.
+ */
+export function sanitizePath(p) {
+  if (typeof p !== 'string' || !p) return '';
+  const home = os.homedir();
+  if (home && p.startsWith(home)) {
+    return '~' + p.slice(home.length);
+  }
+  return p;
+}
+
+/**
  * Standard user data directory for pi-gui.
  * - Explicit env.PI_GUI_DATA is always authoritative.
  * - Portable SEA: preserves access to existing portable data directory if present.
+ *   - If projects.json exists in exeDir, returns exeDir (legacy v1).
+ *   - If projects.json exists in exeDir/data, returns exeDir/data (portable v2).
+ *   - For brand new portable SEA, defaults to exeDir/data.
+ *   - If exeDir is inside a project repository or projectRoot, safely falls back
+ *     to standard platform user data directory to prevent project contamination.
  * - Source Web / Default: standard platform user application data directory outside repository trees:
  *   - Windows: %APPDATA%\pi-gui
  *   - macOS: ~/Library/Application Support/pi-gui
  *   - Linux / POSIX: $XDG_DATA_HOME/pi-gui or ~/.local/share/pi-gui
  */
-export function defaultDataDir({ env = process.env, appRoot = null, execPath = process.execPath, io = fs } = {}) {
+export function defaultDataDir({
+  env = process.env,
+  appRoot = null,
+  execPath = process.execPath,
+  io = fs,
+  isSea = null,
+  projectRoot = null,
+} = {}) {
   if (env.PI_GUI_DATA) return path.resolve(env.PI_GUI_DATA);
 
-  const mode = detectExecutionMode({ env, execPath });
+  const mode = detectExecutionMode({ env, execPath, isSea });
   if (mode === 'portable-sea') {
     const exeDir = path.dirname(path.resolve(execPath));
-    const isRepoBuild = appRoot && path.resolve(exeDir).startsWith(path.resolve(appRoot));
-    if (!isRepoBuild) {
-      // Check for legacy portable data adjacent to exe
+    const resolvedAppRoot = appRoot ? path.resolve(appRoot) : null;
+    const isRepoBuild = resolvedAppRoot && (exeDir === resolvedAppRoot || exeDir.startsWith(resolvedAppRoot + path.sep));
+
+    // Ensure we do not contaminate active user project directories
+    const activeProject = projectRoot ? path.resolve(projectRoot) : null;
+    const isInsideProject = activeProject && (exeDir === activeProject || exeDir.startsWith(activeProject + path.sep));
+
+    if (!isRepoBuild && !isInsideProject) {
       const exeDataDir = path.join(exeDir, 'data');
       if (io.existsSync(path.join(exeDir, 'projects.json'))) {
         return exeDir;
@@ -42,9 +105,8 @@ export function defaultDataDir({ env = process.env, appRoot = null, execPath = p
       if (io.existsSync(path.join(exeDataDir, 'projects.json'))) {
         return exeDataDir;
       }
-      if (env.PI_GUI_PORTABLE === '1') {
-        return exeDataDir;
-      }
+      // Brand new portable SEA default
+      return exeDataDir;
     }
   }
 
@@ -60,7 +122,7 @@ export function defaultDataDir({ env = process.env, appRoot = null, execPath = p
 /**
  * Validates path security between source and destination directories.
  */
-function validatePathSafety(srcRoot, dstRoot) {
+export function validatePathSafety(srcRoot, dstRoot) {
   if (typeof srcRoot !== 'string' || typeof dstRoot !== 'string') {
     throw new Error('invalid_path_type');
   }
@@ -91,7 +153,6 @@ function safeCopyDirRecursively(srcDir, dstDir, io) {
     const srcChild = path.join(srcDir, entry.name);
     const dstChild = path.join(dstDir, entry.name);
     if (entry.isSymbolicLink()) {
-      // Never follow symlinks for security
       continue;
     }
     if (entry.isDirectory()) {
@@ -102,18 +163,55 @@ function safeCopyDirRecursively(srcDir, dstDir, io) {
   }
 }
 
+export const STAGE_PREFIX = '.stage-mig-';
+export const STAGE_PATTERN = /^\.stage-mig-([a-zA-Z0-9_.-]+)-(\d+)-(\d+)-([a-z0-9]+)$/;
+
+export function parseStageName(filename) {
+  if (typeof filename !== 'string') return null;
+  const match = filename.match(STAGE_PATTERN);
+  if (!match) return null;
+  return {
+    entry: match[1],
+    pid: parseInt(match[2], 10),
+    timestamp: parseInt(match[3], 10),
+    rand: match[4],
+  };
+}
+
+export const MIGRATION_LEGACY_ENTRIES = Object.freeze([
+  'projects.json',
+  'session-flags.json',
+  'plans',
+  'planner-sessions',
+  'trash-sessions',
+  'collab',
+  'review-comments',
+  'review-evidence',
+  'candidate-runs',
+  'uploads',
+  'diff-comments',
+]);
+
 /**
  * Safely migrates legacy standalone data files and directories from the repository root
  * to the independent data directory.
  * - Atomic: uses staging directories/files before final commit so partial copies never look complete.
  * - Idempotent: safe to run multiple times or after interruption.
  * - Non-destructive: never overwrites existing target data, never deletes source data.
+ * - Multi-instance safe: verifies staging attribution, skips active instances, only cleans abandoned residue.
  * - Symlink-safe: rejects symlinks.
  * - Transparent: returns complete migration ledger with sanitized error reporting.
  */
-export function migrateLegacyData({ sourceDir, targetDir, io = fs, log = () => {} } = {}) {
+export function migrateLegacyData({
+  sourceDir,
+  targetDir,
+  io = fs,
+  log = () => {},
+  isProcessAlive = isProcessRunning,
+} = {}) {
   const report = {
     ok: true,
+    status: 'completed',
     migrated: [],
     skipped: [],
     errors: [],
@@ -126,7 +224,10 @@ export function migrateLegacyData({ sourceDir, targetDir, io = fs, log = () => {
     safePaths = validatePathSafety(sourceDir, targetDir);
   } catch (err) {
     report.ok = false;
-    report.errors.push({ entry: '*', code: err.message || 'path_validation_failed', message: 'Path validation failed' });
+    report.status = 'failed';
+    const code = err.message || 'path_validation_failed';
+    report.errors.push({ entry: '*', code, fatal: true, message: 'Path validation failed' });
+    try { log('data_migration_error', { entry: '*', code, sanitizedTarget: sanitizePath(targetDir) }); } catch {}
     return report;
   }
 
@@ -137,40 +238,48 @@ export function migrateLegacyData({ sourceDir, targetDir, io = fs, log = () => {
     io.mkdirSync(dstRoot, { recursive: true, mode: 0o700 });
   } catch (err) {
     report.ok = false;
-    report.errors.push({ entry: '*', code: 'target_mkdir_failed', message: 'Cannot create target directory' });
+    report.status = 'failed';
+    report.errors.push({ entry: '*', code: 'target_mkdir_failed', fatal: true, message: 'Cannot create target directory' });
+    try { log('data_migration_error', { entry: '*', code: 'target_mkdir_failed', sanitizedTarget: sanitizePath(targetDir) }); } catch {}
     return report;
   }
 
-  // Clean up any dangling staging folders from previous interrupted runs
+  // Safe staging cleanup:
+  // ONLY cleans staging directories that:
+  // 1. Match our exact migration pattern (.stage-mig-<entry>-<pid>-<timestamp>-<rand>)
+  // 2. Belong to a recognized legacy migration entry
+  // 3. Belong to a terminated process (pid is not running)
+  // NEVER touches unrelated user files or in-flight staging owned by active instances!
   try {
     const existingTargetFiles = io.readdirSync(dstRoot);
     for (const file of existingTargetFiles) {
-      if (file.startsWith('.stage-')) {
-        const stagePath = path.join(dstRoot, file);
-        try {
-          const st = io.lstatSync(stagePath);
-          if (st.isDirectory()) io.rmSync(stagePath, { recursive: true, force: true });
-          else io.unlinkSync(stagePath);
-        } catch {}
+      if (!file.startsWith(STAGE_PREFIX)) continue;
+      const parsed = parseStageName(file);
+      if (!parsed) continue; // Not a pi-gui migration staging file; DO NOT TOUCH!
+      if (!MIGRATION_LEGACY_ENTRIES.includes(parsed.entry)) continue; // Unknown entry; DO NOT TOUCH!
+
+      const active = isProcessAlive(parsed.pid);
+      if (parsed.pid !== process.pid && active) {
+        // Owned by another actively running instance; DO NOT TOUCH!
+        try { log('data_migration_staging_active', { entry: parsed.entry, pid: parsed.pid }); } catch {}
+        continue;
       }
+
+      // Staging belongs to dead process or past interrupted run of this process; clean it up safely
+      const stagePath = path.join(dstRoot, file);
+      try {
+        const st = io.lstatSync(stagePath);
+        if (st.isDirectory()) {
+          io.rmSync(stagePath, { recursive: true, force: true });
+        } else {
+          io.unlinkSync(stagePath);
+        }
+        try { log('data_migration_staging_cleaned', { entry: parsed.entry, pid: parsed.pid }); } catch {}
+      } catch {}
     }
   } catch {}
 
-  const legacyEntries = [
-    'projects.json',
-    'session-flags.json',
-    'plans',
-    'planner-sessions',
-    'trash-sessions',
-    'collab',
-    'review-comments',
-    'review-evidence',
-    'candidate-runs',
-    'uploads',
-    'diff-comments',
-  ];
-
-  for (const name of legacyEntries) {
+  for (const name of MIGRATION_LEGACY_ENTRIES) {
     const src = path.join(srcRoot, name);
     const dst = path.join(dstRoot, name);
 
@@ -189,7 +298,8 @@ export function migrateLegacyData({ sourceDir, targetDir, io = fs, log = () => {
         continue;
       }
 
-      const stageDst = path.join(dstRoot, `.stage-${name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+      const randToken = Math.random().toString(36).slice(2, 7);
+      const stageDst = path.join(dstRoot, `${STAGE_PREFIX}${name}-${process.pid}-${Date.now()}-${randToken}`);
 
       if (stat.isFile()) {
         try {
@@ -213,17 +323,30 @@ export function migrateLegacyData({ sourceDir, targetDir, io = fs, log = () => {
     } catch (entryErr) {
       report.ok = false;
       const code = entryErr.code || 'entry_migration_failed';
-      report.errors.push({ entry: name, code, message: `Failed to migrate ${name}` });
+      report.errors.push({
+        entry: name,
+        code,
+        message: `Failed to migrate ${name}: ${entryErr.message || code}`,
+        recoverable: ['EACCES', 'EBUSY', 'EPERM', 'EXDEV'].includes(code),
+      });
       try { log('data_migration_error', { entry: name, code }); } catch {}
     }
   }
 
-  // Record migration manifest if any migration was performed or attempted
-  if (report.migrated.length > 0 || report.errors.length > 0) {
+  if (report.errors.length > 0) {
+    report.status = report.migrated.length > 0 ? 'partial' : 'failed';
+  } else {
+    report.status = 'completed';
+  }
+
+  // Record migration manifest
+  if (report.migrated.length > 0 || report.errors.length > 0 || report.skipped.length > 0) {
     try {
       const manifestPath = path.join(dstRoot, '.migration-manifest.json');
       const manifest = {
         updatedAt: new Date().toISOString(),
+        ok: report.ok,
+        status: report.status,
         migrated: report.migrated,
         skipped: report.skipped,
         errors: report.errors,
@@ -239,20 +362,82 @@ export function migrateLegacyData({ sourceDir, targetDir, io = fs, log = () => {
  * Resolves the active data directory.
  * - Explicit env.PI_GUI_DATA is authoritative and NEVER auto-migrated into.
  * - In default mode, ensures safe independent data directory and performs safe migration from appRoot.
+ * - Does NOT swallow migration failures: fatal failures throw structured errors; recoverable
+ *   failures log sanitized diagnostics and record accurate manifest status without claiming success.
  */
-export function resolveDataDir({ env = process.env, appRoot, execPath = process.execPath, io = fs, log = () => {} } = {}) {
+export function resolveDataDir({
+  env = process.env,
+  appRoot,
+  execPath = process.execPath,
+  io = fs,
+  log = () => {},
+  isSea = null,
+  projectRoot = null,
+  isProcessAlive = isProcessRunning,
+  throwOnFatal = true,
+} = {}) {
   const explicit = env.PI_GUI_DATA;
   if (explicit) {
     const resolved = path.resolve(explicit);
-    try { io.mkdirSync(resolved, { recursive: true, mode: 0o700 }); } catch {}
+    try {
+      io.mkdirSync(resolved, { recursive: true, mode: 0o700 });
+    } catch (err) {
+      const error = new Error(`Explicit PI_GUI_DATA directory cannot be created: ${sanitizePath(resolved)}`);
+      error.code = 'EXPLICIT_DATA_DIR_UNAVAILABLE';
+      error.fatal = true;
+      throw error;
+    }
     return resolved;
   }
 
-  const targetDir = defaultDataDir({ env, appRoot, execPath, io });
-  try { io.mkdirSync(targetDir, { recursive: true, mode: 0o700 }); } catch {}
+  const targetDir = defaultDataDir({ env, appRoot, execPath, io, isSea, projectRoot });
+  try {
+    io.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+  } catch (err) {
+    const error = new Error(`Target data directory cannot be created: ${sanitizePath(targetDir)}`);
+    error.code = 'TARGET_DATA_DIR_UNAVAILABLE';
+    error.fatal = true;
+    error.targetDir = targetDir;
+    throw error;
+  }
 
   if (appRoot && path.resolve(appRoot) !== path.resolve(targetDir)) {
-    migrateLegacyData({ sourceDir: appRoot, targetDir, io, log });
+    const report = migrateLegacyData({ sourceDir: appRoot, targetDir, io, log, isProcessAlive });
+    if (!report.ok) {
+      const fatalErrors = report.errors.filter(e =>
+        e.fatal || ['target_mkdir_failed', 'path_validation_failed', 'nul_byte_detected', 'nested_path_prohibited'].includes(e.code)
+      );
+      if (fatalErrors.length > 0) {
+        const error = new Error(`Fatal migration error: ${fatalErrors.map(e => e.code).join(', ')}`);
+        error.code = fatalErrors[0]?.code || 'MIGRATION_FATAL';
+        error.report = report;
+        error.fatal = true;
+        throw error;
+      }
+
+      // Structured sanitized diagnostic log for recoverable issues
+      try {
+        log('data_migration_warning', {
+          targetDir: sanitizePath(targetDir),
+          migratedCount: report.migrated.length,
+          skippedCount: report.skipped.length,
+          errorCount: report.errors.length,
+          status: report.status,
+          errors: report.errors.map(e => ({ entry: e.entry, code: e.code })),
+        });
+      } catch {}
+
+      if (throwOnFatal && report.migrated.length === 0 && report.errors.length > 0) {
+        // If every attempted item failed and caller strictly requires migration
+        const allRecoverable = report.errors.every(e => e.recoverable);
+        if (!allRecoverable) {
+          const error = new Error(`Migration failed with unrecoverable errors: ${report.errors.map(e => e.code).join(', ')}`);
+          error.code = 'MIGRATION_UNRECOVERABLE';
+          error.report = report;
+          throw error;
+        }
+      }
+    }
   }
 
   return targetDir;
