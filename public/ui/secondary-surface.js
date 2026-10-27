@@ -89,6 +89,13 @@ export function clearRestoredSurface() {
   } catch {}
 }
 
+if (typeof document !== 'undefined') {
+  document.addEventListener('pi-gui:workspace-generation', () => {
+    clearRestoredSurface();
+    clearPaneState();
+  });
+}
+
 export function configureSecondaryPane(pane) {
   secondaryPane = pane;
   pane?.onSurfaceChange(next => {

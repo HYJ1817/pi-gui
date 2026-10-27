@@ -2,7 +2,7 @@
 import { S } from './state.js';
 import { fetchSpecs, fetchSpecDocument } from './api.js';
 import { createPaneHeader } from './right-pane.js';
-import { openSecondarySurface, readPaneState, writePaneState } from './ui/secondary-surface.js';
+import { openSecondarySurface, readPaneState, writePaneState, clearPaneState } from './ui/secondary-surface.js';
 import { md } from './markdown.js';
 import { buildSpecTree, specDirectoryPaths, resolveSpecLink } from './specs-tree.js';
 
@@ -177,7 +177,7 @@ export function mountSpecsPanel(host, view, {
   }
 
   function rememberPaneState() {
-    if (!workspace) return;
+    if (!workspace || S.switching) return;
     writePaneState('specs', {
       workspaceId: workspace.id,
       workspaceGeneration: workspace.generation,
@@ -355,6 +355,8 @@ export function mountSpecsPanel(host, view, {
 
   function workspaceChanging() {
     if (!isCurrent()) return;
+    restored = null;
+    clearPaneState('specs');
     const generation = S.workspaceGeneration;
     indexSerial++;
     documentSerial++;

@@ -292,6 +292,12 @@ export function onStopState(evt) {
   /* 断线重连会补发 backlog：那时候的「已停止」是历史，不是现在 ——
    * 不能拿它往刚打开的界面上写状态栏。 */
   if (evt?._replay) return;
+  if (evt?.pending === true || evt?.state === 'stopping') {
+    S.stopping = true;
+    updateSendState();
+    setStatus('正在停止…');
+    return;
+  }
   if (evt?.state === 'stopped') applyStopConfirmed();
   else if (evt?.state === 'reset') invalidateStop();
 }
