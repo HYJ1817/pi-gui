@@ -1,0 +1,116 @@
+[
+  {
+    "source": "electron/app-update-desktop.cjs",
+    "sourceSha256": "e12cc8a5ad001b373f837b7f125b058fffcc3a851f343bd8bf4c05fb6c7fa3a0",
+    "packagedSha256": "e12cc8a5ad001b373f837b7f125b058fffcc3a851f343bd8bf4c05fb6c7fa3a0",
+    "equal": true
+  },
+  {
+    "source": "electron/app-update-recovery.cjs",
+    "sourceSha256": "b00c1f41b71cd57696f579637653c5c91009907f72b84c56a953b0226dace6be",
+    "packagedSha256": "b00c1f41b71cd57696f579637653c5c91009907f72b84c56a953b0226dace6be",
+    "equal": true
+  },
+  {
+    "source": "electron/app-update.cjs",
+    "sourceSha256": "7ab006f7c71272c8eef3e5971fee34dea7c2909acdc2722f0e91f930bff05989",
+    "packagedSha256": "7ab006f7c71272c8eef3e5971fee34dea7c2909acdc2722f0e91f930bff05989",
+    "equal": true
+  },
+  {
+    "source": "electron/browser-agent-bridge.cjs",
+    "sourceSha256": "552111d70dad53069bc3c1dbb621f485afe526fe0331d3ef8429865dbe4edb38",
+    "packagedSha256": "552111d70dad53069bc3c1dbb621f485afe526fe0331d3ef8429865dbe4edb38",
+    "equal": true
+  },
+  {
+    "source": "electron/browser-agent-host.cjs",
+    "sourceSha256": "4f6c605dc2dd5b06f7af92f975c749574fda7c5d4a239d3bea104fa19e4e1507",
+    "packagedSha256": "4f6c605dc2dd5b06f7af92f975c749574fda7c5d4a239d3bea104fa19e4e1507",
+    "equal": true
+  },
+  {
+    "source": "electron/browser-agent-policy.cjs",
+    "sourceSha256": "1dc5d38fe87de857cd0e47e49c83d6ba4d03b62184e490353eff89feabd0df83",
+    "packagedSha256": "1dc5d38fe87de857cd0e47e49c83d6ba4d03b62184e490353eff89feabd0df83",
+    "equal": true
+  },
+  {
+    "source": "electron/browser-agent.cjs",
+    "sourceSha256": "65c22552de4afbe21f5ad16371ed835d93e27fdadec971cc9e749a92c6118124",
+    "packagedSha256": "65c22552de4afbe21f5ad16371ed835d93e27fdadec971cc9e749a92c6118124",
+    "equal": true
+  },
+  {
+    "source": "electron/browser-policy.cjs",
+    "sourceSha256": "aef6418b30bc24c5540e99af828f080f4eb537bd24b28909b0f8dfa7f14289c7",
+    "packagedSha256": "aef6418b30bc24c5540e99af828f080f4eb537bd24b28909b0f8dfa7f14289c7",
+    "equal": true
+  },
+  {
+    "source": "electron/browser-runtime-host.cjs",
+    "sourceSha256": "b279898b5f85e8533705450340db4ed0d166e7725b6d3440892c6af130236f67",
+    "packagedSha256": "b279898b5f85e8533705450340db4ed0d166e7725b6d3440892c6af130236f67",
+    "equal": true
+  },
+  {
+    "source": "electron/browser-view.cjs",
+    "sourceSha256": "69945698e6c320cce5b73543bb08450e39fb3a6ccb036c8044d72ddf6edfb718",
+    "packagedSha256": "69945698e6c320cce5b73543bb08450e39fb3a6ccb036c8044d72ddf6edfb718",
+    "equal": true
+  },
+  {
+    "source": "electron/logging.cjs",
+    "sourceSha256": "b55a58f99c69b83a08cf6a7decee99fb20e908106f11c6a1c52131eb950ba5c7",
+    "packagedSha256": "b55a58f99c69b83a08cf6a7decee99fb20e908106f11c6a1c52131eb950ba5c7",
+    "equal": true
+  },
+  {
+    "source": "electron/main.cjs",
+    "sourceSha256": "b1275c87973d07c7b6eae79447a178c0ab859e4bcfe1d3d19bc158ec51eeff59",
+    "packagedSha256": "b1275c87973d07c7b6eae79447a178c0ab859e4bcfe1d3d19bc158ec51eeff59",
+    "equal": true
+  },
+  {
+    "source": "electron/net-probe.cjs",
+    "sourceSha256": "d2eb60ccf1095007475cb7ec3df25531c1a4e3f98234e9f195f1fe7915d0e2b8",
+    "packagedSha256": "d2eb60ccf1095007475cb7ec3df25531c1a4e3f98234e9f195f1fe7915d0e2b8",
+    "equal": true
+  },
+  {
+    "source": "electron/preload.cjs",
+    "sourceSha256": "bc3b6c84a83d0439680f04af94c5ec7a6dfe48a5d797610f82df15d20a9e12e4",
+    "packagedSha256": "bc3b6c84a83d0439680f04af94c5ec7a6dfe48a5d797610f82df15d20a9e12e4",
+    "equal": true
+  },
+  {
+    "source": "electron/theme.cjs",
+    "sourceSha256": "b74117110488b4ff1c9bfc258602e407a5ded28efd252c268d3a7ab0459e7346",
+    "packagedSha256": "b74117110488b4ff1c9bfc258602e407a5ded28efd252c268d3a7ab0459e7346",
+    "equal": true
+  },
+  {
+    "source": "electron/update-helper.ps1",
+    "sourceSha256": "0f0dab322ec9a9262e0a1fec73e66d62ce644454a21b5794f1a2b38ea57511c9",
+    "packagedSha256": "0f0dab322ec9a9262e0a1fec73e66d62ce644454a21b5794f1a2b38ea57511c9",
+    "equal": true
+  },
+  {
+    "source": "public/update.js",
+    "sourceSha256": "01cd15ae53fc4c7214c0ded50e9fcd1ed8b9ebb19c2a5d31add7936087dbb888",
+    "packagedSha256": "01cd15ae53fc4c7214c0ded50e9fcd1ed8b9ebb19c2a5d31add7936087dbb888",
+    "equal": true
+  },
+  {
+    "source": "public/app-update.js",
+    "sourceSha256": "2adf257f204a5e6c209d5ed596655a6e06f03d4a12dd797f96b81de3811aa409",
+    "packagedSha256": "2adf257f204a5e6c209d5ed596655a6e06f03d4a12dd797f96b81de3811aa409",
+    "equal": true
+  },
+  {
+    "source": "public/styles.css",
+    "sourceSha256": "ad8064bf8d10e1c8b1a285f89db02e885f7005d224691265fbfc669099f9117c",
+    "packagedSha256": "ad8064bf8d10e1c8b1a285f89db02e885f7005d224691265fbfc669099f9117c",
+    "equal": true
+  }
+]

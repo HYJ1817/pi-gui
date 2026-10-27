@@ -1,0 +1,14 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-helper-startup-VW6oHC",
+  "checks": [
+    {
+      "name": "production launcher executes PowerShell helper before exit",
+      "pass": true
+    },
+    {
+      "name": "helper survives exact Electron parent exit and finishes its work",
+      "pass": true
+    }
+  ],
+  "normalSandbox": true
+}

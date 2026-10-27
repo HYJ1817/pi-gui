@@ -1,0 +1,57 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-lPGtbE",
+  "checks": [
+    {
+      "name": "rebuilt starting Electron version is 0.30.0",
+      "pass": true
+    },
+    {
+      "name": "real NSIS creates isolated installed program and uninstaller",
+      "pass": true
+    },
+    {
+      "name": "real updater recognizes owned installed shape and running version",
+      "pass": true
+    },
+    {
+      "name": "corrupted real installer bytes rejected; old application remains usable",
+      "pass": true
+    },
+    {
+      "name": "full installer downloaded and SHA256 verified",
+      "pass": true
+    },
+    {
+      "name": "post-shutdown failure cancels helper and relaunches actual old version",
+      "pass": true
+    },
+    {
+      "name": "browser capability is usable after full old-app recovery",
+      "pass": true
+    },
+    {
+      "name": "restarted app.getVersion and recovery confirm actual target version",
+      "pass": true
+    },
+    {
+      "name": "restarted compiled backend independently confirms target version",
+      "pass": true
+    },
+    {
+      "name": "new program payload was actually installed",
+      "pass": true
+    },
+    {
+      "name": "Electron local settings survive restart",
+      "pass": true
+    },
+    {
+      "name": "all seven synthetic user data digests unchanged",
+      "pass": true
+    },
+    {
+      "name": "normal sandbox used before and after restart",
+      "pass": true
+    }
+  ]
+}

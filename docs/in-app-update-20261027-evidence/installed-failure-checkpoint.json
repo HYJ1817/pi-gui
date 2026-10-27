@@ -1,0 +1,41 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-lPGtbE",
+  "checks": [
+    {
+      "name": "real partial-write NSIS package passes complete download and integrity checks",
+      "pass": true
+    },
+    {
+      "name": "real loading Browser refuses update before native confirmation or shutdown",
+      "pass": true
+    },
+    {
+      "name": "nonzero real NSIS exit after partial write restores backup and restarts",
+      "pass": true
+    },
+    {
+      "name": "restarted Electron reports actual previous version after rollback",
+      "pass": true
+    },
+    {
+      "name": "actual previous backend remains usable",
+      "pass": true
+    },
+    {
+      "name": "original program bundle and package restored",
+      "pass": true
+    },
+    {
+      "name": "all seven synthetic user data hashes preserved after failed installation",
+      "pass": true
+    },
+    {
+      "name": "browser capability available after rollback restart",
+      "pass": true
+    },
+    {
+      "name": "failure offers retry and manual recovery entries after startup restoration finishes",
+      "pass": true
+    }
+  ]
+}
