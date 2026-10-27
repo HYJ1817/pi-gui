@@ -1,25 +1,12 @@
 // Regression test for Bug 11: Right pane ordinary panel auto-restore and scroll retention
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
 (async () => {
-  const dom = new JSDOM(`
-    <!DOCTYPE html>
-    <html>
-      <body>
-        <div class="app">
-          <aside class="right-pane" id="rightPane" hidden>
-            <div id="rightPaneResizer"></div>
-            <div class="rp-body"></div>
-          </aside>
-          <div id="workspace" data-workspace-view="chat"></div>
-          <button id="navChanges" type="button"></button>
-          <button id="btnSpecs" type="button"></button>
-          <button id="btnBrowser" type="button"></button>
-        </div>
-      </body>
-    </html>
-  `, { url: 'http://127.0.0.1/' });
+  const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const dom = new JSDOM(indexHtml, { url: 'http://127.0.0.1/' });
 
   global.window = dom.window;
   global.document = dom.window.document;
@@ -41,6 +28,7 @@ const { JSDOM } = require('jsdom');
     writeRestoredSurface,
     clearRestoredSurface,
   } = await import('../public/ui/secondary-surface.js');
+  await import('../public/git.js');
 
   let checks = 0;
   const ok = (name, cond) => {
@@ -115,20 +103,17 @@ const { JSDOM } = require('jsdom');
   });
   ok('pre-switch changes state exists', readPaneState('changes') !== null);
 
-  // Simulate session switch
+  // Dispatch session switch event (production event, no manual clearPaneState call)
   document.dispatchEvent(new dom.window.CustomEvent('pi-gui:session-switch'));
-  // Session switch clears changes pane state
-  clearPaneState('changes');
-  ok('session switch clears changes pane state', readPaneState('changes') === null);
+  ok('session switch automatically clears changes pane state', readPaneState('changes') === null);
 
-  // 6. Workspace switch clears all pane state and restored surface
+  // 6. Workspace switch clears all pane state and restored surface automatically
   writeRestoredSurface('changes');
   writePaneState('specs', { treeScroll: 100 });
+  // Dispatch workspace generation event (production event, no manual clearPaneState call)
   document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
-  clearPaneState();
-  clearRestoredSurface();
-  ok('workspace generation clears restored surface', readRestoredSurface() === null);
-  ok('workspace generation clears specs pane state', readPaneState('specs') === null);
+  ok('workspace generation automatically clears restored surface', readRestoredSurface() === null);
+  ok('workspace generation automatically clears specs pane state', readPaneState('specs') === null);
 
   console.log(`Panel restore UI: ${checks}/${checks} passed`);
 })();

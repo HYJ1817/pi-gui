@@ -533,6 +533,13 @@ async function main() {
         assert.equal(frontend.S.stopping, false);
         assert.equal(frontend.S.streaming, false);
         assert.equal(frontend.el.statusText.textContent, '已停止');
+        /* SSE 广播 pending:true 同样进入 stopping 保护并由 stopped 收口 */
+        frontend.onStopState({ state: 'stopping', pending: true });
+        assert.equal(frontend.S.stopping, true);
+        assert.equal(frontend.el.statusText.textContent, '正在停止…');
+        frontend.onStopState({ state: 'stopped', evidence: 'abort-response' });
+        assert.equal(frontend.S.stopping, false);
+        assert.equal(frontend.el.statusText.textContent, '已停止');
         /* 断线重连补发的历史事件不许写状态。 */
         frontend.el.statusText.textContent = '';
         frontend.onStopState({ state: 'stopped', evidence: 'abort-response', _replay: true });
