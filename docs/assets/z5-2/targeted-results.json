@@ -1,0 +1,62 @@
+[
+  {
+    "command": "node tests/runtime-models.cjs",
+    "exitCode": 0,
+    "ms": 1811,
+    "summary": "Runtime models: 52/52"
+  },
+  {
+    "command": "node tests/ui3-model.cjs",
+    "exitCode": 0,
+    "ms": 651,
+    "summary": "UI-3B 模型选择器: 50/50 通过"
+  },
+  {
+    "command": "node tests/model-capabilities.cjs",
+    "exitCode": 0,
+    "ms": 750,
+    "summary": "Model capabilities: 36/36 通过"
+  },
+  {
+    "command": "node tests/model-fallback.cjs",
+    "exitCode": 0,
+    "ms": 1913,
+    "summary": "Model fallback: 74/74 通过"
+  },
+  {
+    "command": "node tests/thinking-availability.cjs",
+    "exitCode": 0,
+    "ms": 516,
+    "summary": "Thinking availability: 34/34 passed"
+  },
+  {
+    "command": "node tests/runtime-finish-ui.cjs",
+    "exitCode": 0,
+    "ms": 574,
+    "summary": "Runtime finishing UI: 34/34"
+  },
+  {
+    "command": "node tests/runtime-conversation.cjs",
+    "exitCode": 0,
+    "ms": 1516,
+    "summary": "Runtime conversation: 78/78"
+  },
+  {
+    "command": "node tests/runtime-store.cjs",
+    "exitCode": 0,
+    "ms": 311,
+    "summary": "Runtime conversation store: 34/34"
+  },
+  {
+    "command": "node tests/runtime-draft.cjs",
+    "exitCode": 0,
+    "ms": 1019,
+    "summary": "Runtime draft tests: 42/42"
+  },
+  {
+    "command": "node tests/ui3-integration.cjs",
+    "exitCode": 0,
+    "ms": 1013,
+    "summary": "UI3 integration 23/23; failed=0; skipped=0"
+  }
+]

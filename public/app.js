@@ -725,6 +725,7 @@ function openThinkPicker() {
   renderThinkingPicker({
     levels: S.thinkingLevels, current: S.state?.thinkingLevel || null,
     model: S.state?.model || null, pending: S.modelSwitchPending,
+    readStatus: S.thinkingReadStatus,
     onSelect: level => { if (!el.btnThink.disabled) setThinkingLevel(level); },
   });
 }
@@ -747,7 +748,7 @@ thinkingInfo.onclick = () => {
 };
 let thinkingInfoFacts = '';
 function syncThinkingInfo() {
-  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels, pending: S.modelSwitchPending });
+  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels, pending: S.modelSwitchPending, readStatus: S.thinkingReadStatus });
   applyChipState(el.btnThink, availability.state);
   thinkingInfo.hidden = !el.btnThink.disabled || !S.hasProject || S.switching
     || !['ready', 'maintenance'].includes(S.bridgeState);

@@ -105,6 +105,7 @@ export const S = {
   working: null,
   models: [],
   thinkingLevels: [],
+  thinkingReadStatus: 'unconfirmed',
   modelSwitchPending: false,
   state: null,
   stats: null,
@@ -176,6 +177,7 @@ export function beginWorkspaceSwitch(cwd) {
   invalidateStop();
   S.switching = true;
   S.thinkingLevels = [];
+  S.thinkingReadStatus = 'unconfirmed';
   S.modelSwitchPending = true;
   resetUsageState();
   S.desiredCwd = cwd;

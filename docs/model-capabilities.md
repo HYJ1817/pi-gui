@@ -71,6 +71,31 @@ Pi 若给出了多个等级，以该列表为准，静态 reasoning=false 不覆
 「思考同步中…」。当前等级只有在 Pi 回读且包含于候选列表时才显示，设置不再乐观显示。
 模型、项目和会话切换会清掉旧候选；Pi 重启后重新 boot 回读。
 
+### Z5-2：Classic / Runtime 统一操作合同
+
+共享纯策略 `public/thinking-availability.js` 接收已确认的当前模型、原生等级、pending 和
+读取状态；不请求 HTTP、不持有 Owner 或模型状态。Classic 的 picker 保留兼容导出和原有
+提示，composer 与 RPC 门禁调用同一策略；Runtime Models 输出同形的 `availability`，
+Runtime UI 据此显示选项和具体原因。
+
+只有当前模型有完整 Provider/model 身份，且当前原生读取成功、有效、未因身份或请求变化
+失效，并包含至少一个非 `off` 等级时才可调整。`reasoning=false/unknown` 不覆盖原生清单，
+`reasoning=true` 也不生成档位；capability 原始三值及 evidence 不被改写。
+等级逐项校验为 1–32 字符的小写名称（首字符字母，后续字母/数字/下划线/短横线），按原顺序去重；
+不 trim、不去掉控制字符后再发送，也不依赖固定预设清单。非法项不进入候选，全部非法或非数组
+显示数据无效；空列表或仅 off 不可调。缺少模型、读取中、失败和未确认分别显示原因。
+
+读取的新鲜度由原有请求和身份生命周期保证，不新增 TTL/全局缓存：Classic 仍校验模型代次、
+工作区代次和 request ID，模型/会话变化清候选和读取状态；Runtime 仍校验完整九字段 Owner、
+当前 entry/token，旧 Owner/generation/请求的迟到结果不得发布。
+Runtime 的 state/levels 配对成功后才提交新模型和值；失败保留之前可靠显示，撤销其可写资格。
+pending 不接受第二次思考写入，只发送原生清单中的值。HTTP ACK 仅代表传输，必须再等匹配的
+Pi response 和实际回读；思考值与原模型身份、请求值都须吻合，模型切换也核对目标身份。
+失败或夹档/忽略不报告成功。
+
+此合同取代 [P32.4 §11](p32-4-acceptance.md#11-model-isolation) 当时的保守操作规则，
+不追溯修改历史验收结论。验证、窗口截图与边界见 [Z5-2 验收](Z5-2-acceptance.md)。
+
 ## UI 与安全边界
 
 模型列表保持 Provider 折叠交互，第二行最多展示推理、图片、Tools、Context；

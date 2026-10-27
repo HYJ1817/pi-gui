@@ -33,7 +33,7 @@ const pause=()=>new Promise(r=>setTimeout(r,30));
  w.S.models=[{provider:'a',id:'same',name:'Same'},{provider:'b',id:'same',name:'Same'}];d.getElementById('btnModel').click();
  check('production model view selects only matching Provider identity',()=>{const selected=d.querySelectorAll('.ui3-model-item.on');assert.equal(selected.length,1);assert.equal(selected[0].dataset.provider,'a');assert.ok(d.querySelector('.ui3-current').textContent.includes('a / same'));});w.closePop();
  for(const [reasoning,expected] of [[false,'unsupported'],[null,'unknown'],[true,'unavailable']]){
-   w.S.state.model={provider:'a',id:'same',reasoning};w.S.thinkingLevels=[];w.renderModelControls();await pause();
+   w.S.state.model={provider:'a',id:'same',reasoning};w.onThinkingLevels({levels:[]});await pause();
    const info=d.getElementById('btnThinkInfo');info.focus();info.click();
    check('unavailable Thinking explanation reachable: '+expected,()=>{assert.equal(w.el.btnThink.disabled,true);assert.equal(info.hidden,false);assert.equal(d.querySelector('.ui3-think-state').dataset.state,expected);assert.equal(d.querySelectorAll('.ui3-think-item:not(:disabled)').length,0);});
    d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
@@ -41,7 +41,7 @@ const pause=()=>new Promise(r=>setTimeout(r,30));
  }
  w.S.modelSwitchPending=true;w.S.thinkingLevels=['off','high'];w.renderModelControls();await pause();d.getElementById('btnThinkInfo').click();
  check('pending explanation cannot enable selection or send',()=>{assert.equal(d.querySelector('.ui3-think-state').dataset.state,'pending');assert.equal(d.querySelectorAll('.ui3-think-item:not(:disabled)').length,0);assert.equal(w.el.btnSend.disabled,true);});
- w.S.modelSwitchPending=false;w.S.thinkingLevels=['off','high'];w.renderModelControls();await pause();
+ w.S.modelSwitchPending=false;w.onThinkingLevels({levels:['off','high']});await pause();
  check('real returned levels enable existing button and hide explanation entry',()=>{assert.equal(w.el.btnThink.disabled,false);assert.equal(d.getElementById('btnThinkInfo').hidden,true);});
  check('readback closes obsolete pending explanation and restores enabled trigger',()=>{assert.equal(d.getElementById('composerPopover').hidden,true);assert.equal(d.activeElement,w.el.btnThink);});
  set('ordinary message');const prompts=calls.filter(c=>c.type==='prompt').length;key('Enter');await pause();

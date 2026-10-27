@@ -47,6 +47,7 @@ import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeR
 import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
 import { openModal } from './ui/modal.js';
 import { renderVizCardHtml } from './markdown.js';
+import { thinkingAvailability } from './thinking-availability.js';
 import {
   extractStableLocator,
   sameStableLocator,
@@ -472,18 +473,21 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       for (const model of options) { const option = el('option', '', `${model.name || model.id || model.modelId} · ${model.providerId || model.provider}`); option.value = identity(model); modelSelect.append(option); }
     }
     modelSelect.value = selected;
-    const levels = data?.reasoning === true ? data.levels || [] : [];
+    const availability = data?.availability || thinkingAvailability();
+    const levels = availability.levels;
     if (thinkingSelect.dataset.options !== JSON.stringify(levels)) {
       thinkingSelect.dataset.options = JSON.stringify(levels); thinkingSelect.replaceChildren();
       const empty = el('option', '', '暂不可用'); empty.value = ''; thinkingSelect.append(empty);
       for (const level of levels) { const option = el('option', '', level); option.value = level; thinkingSelect.append(option); }
     }
-    thinkingSelect.value = data?.thinkingLevel || '';
+    thinkingSelect.value = levels.includes(data?.thinkingLevel) ? data.thinkingLevel : '';
+    thinkingSelect.options[0].textContent = availability.label || '暂不可用';
+    thinkingSelect.title = availability.detail;
     const disabled = !record?.owner || record.item.lifecycle !== 'ready' || view.pending || data?.pending || Boolean(view.history);
     modelSelect.disabled = disabled || !options.length;
-    thinkingSelect.disabled = disabled || data?.reasoning !== true || !levels.length;
+    thinkingSelect.disabled = disabled || availability.state !== 'ready';
     modelRefresh.disabled = disabled;
-    modelNotice.textContent = data?.notice || (data?.pending ? '等待 Pi 确认…' : data?.reasoning === false ? '此模型不支持推理' : data?.reasoning !== true ? '推理能力未知' : !levels.length ? '推理强度暂不可用' : '');
+    modelNotice.textContent = [data?.notice, availability.detail].filter(Boolean).join(' ');
   }
 
   /* 工具行：每项一个 span，`data-state` 用 store 的原值（running/done/error）。
