@@ -7,7 +7,7 @@
 
 ## 交付概要与代码身份
 
-- **工作分支**：`codex/z4-5-advanced-editing`
+- **工作分支**：`codex/fix-bugs-8-11` (已从 `codex/z4-5-advanced-editing` 分离隔离)
 - **基线提交（before HEAD）**：`d919fc9` (`docs(z4-5): 更新独立验收修复记录、红绿测试证据与交付状态`)
 - **交付范围**：Bug 8、Bug 9、Bug 10、Bug 11 的针对性修复，新增回归测试，更新 `package.json` 测试链，重建 Windows SEA 可执行程序及 Electron 完整包。
 - **操作边界**：不自动合并、不推送到远端仓库、不打 tag 或发布版本。代码与产物就绪，等待独立验收。
