@@ -2830,6 +2830,16 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .ui2-runtime-tool[data-state=done]{color:var(--ok)}
 .ui2-runtime-tool[data-state=error]{color:var(--err)}
 
+/* Z5-3B: 只读历史工具摘要紧凑行与未确认区域 */
+.rtc-history-message{display:inline}
+.rtc-history-tool{display:block;font-size:12px;line-height:1.5;color:var(--t3);margin:2px 0 3px;user-select:text}
+.rtc-history-tool[data-status=completed]{color:var(--ok)}
+.rtc-history-tool[data-status=error]{color:var(--err)}
+.rtc-history-tool[data-status=unknown]{color:var(--t3)}
+.rtc-history-unconfirmed{display:block;margin:4px 0 10px;padding:6px 10px;border-left:2px solid var(--line);background:var(--bg-hover,rgba(0,0,0,.03));border-radius:0 4px 4px 0;font-size:12px}
+.rtc-history-unconfirmed-title{font-weight:600;margin-bottom:4px;color:var(--t2);font-size:11.5px}
+.rtc-history-empty{color:var(--t3);font-style:italic}
+
 /* ---------- UI-2C 预留：未使用的兼容扩展 ----------
  * B 的 DOM 实际用的是 .ui2-runtime-usage / -tools / -tool，**没有**使用下面两个类。
  * 保留为兼容扩展（未知 data-state 回落 t2），不代表 B 已经适配。 */

@@ -120,8 +120,54 @@ const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪'
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
 /* 工具状态只映射 store 真实记过的状态；别的取值原样显示，不猜。 */
 const TOOL_STATE = { running: '运行中', waiting: '等待写入', done: '完成', error: '失败', interrupted: '未完成' };
-/* 历史接口不含这些字段（见文件头）。写在状态行里，用户才知道「这里为什么没有」。 */
-const HISTORY_NOTE = '历史只含正文（无工具、思考、用量）';
+/* 历史状态提示与文案映射 */
+const HISTORY_NOTE_LEGACY = '历史只含正文（无工具、思考、用量）';
+const HISTORY_NOTE_WITH_TOOLS = '历史正文与只读工具摘要；不含思考及用量';
+const TOOL_UNAVAILABLE_REASONS = {
+  invalid_records: '工具记录格式无法解析',
+  unmatched_results: '工具结果关联不完整',
+  summary_limit: '工具记录超出摘要预算',
+  history_window: '工具记录超出历史保留窗口',
+  history_unavailable: '历史记录不可用'
+};
+const TOOL_HISTORY_STATUS = {
+  completed: '已记录完成',
+  error: '结果报错',
+  unknown: '状态未知'
+};
+
+function formatHistoryState(history, owner) {
+  const count = Array.isArray(history?.messages) ? history.messages.length : 0;
+  const truncatedMsg = history?.truncated ? '（仅显示最近部分）' : '';
+  let note = '';
+  if (!history?.toolSummary) {
+    note = HISTORY_NOTE_LEGACY;
+  } else {
+    const ts = history.toolSummary;
+    const badges = [];
+    if (ts.truncated) badges.push('仅显示部分工具');
+    if (ts.uncertain || (Array.isArray(ts.items) && ts.items.some(i => i.status === 'unknown'))) {
+      badges.push('状态证据不完整');
+    }
+    if (ts.unavailableReason && ts.unavailableReason !== 'no_tool_calls') {
+      badges.push(TOOL_UNAVAILABLE_REASONS[ts.unavailableReason] || '工具记录不可用');
+    }
+    const badgeText = badges.length ? `（${badges.join('，')}）` : '';
+    note = `${HISTORY_NOTE_WITH_TOOLS}${badgeText}`;
+  }
+  const quotaText = owner ? '查看记录不增加运行名额' : '未被启动，不占运行名额';
+  return `只读历史 · ${count} 条${truncatedMsg} · ${note} · ${quotaText}`;
+}
+
+function createHistoryToolRow(item) {
+  const row = el('span', 'rtc-history-tool');
+  const toolName = (typeof item?.toolName === 'string' && item.toolName.trim()) ? item.toolName : 'unknown_tool';
+  const status = (typeof item?.status === 'string' && TOOL_HISTORY_STATUS[item.status]) ? item.status : 'unknown';
+  row.dataset.toolName = toolName;
+  row.dataset.status = status;
+  row.textContent = `${toolName} · ${TOOL_HISTORY_STATUS[status]}`;
+  return row;
+}
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -436,7 +482,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         view.notice = result.code === 'history_unavailable' ? '这条会话没有可读的历史（原生记录已失效），只能新建会话。' : '读取历史失败。';
         return;
       }
-      const payload = { messages: result.messages || [], truncated: result.truncated === true, match };
+      const payload = { messages: result.messages || [], truncated: result.truncated === true, toolSummary: result.toolSummary || null, match };
       /* 只写 **target** 的历史：中央已经切到别的会话时，B 的 DOM 一个字都不动。 */
       view.history = payload;
     } catch { if (alive && view.historyToken === token) view.notice = '读取历史失败。'; }
@@ -527,7 +573,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     drawModels(r, view);
     resources.textContent = resourceText();
     notice.textContent = view.notice;
-    if (view.history) state.textContent = `只读历史 · ${view.history.messages.length} 条${view.history.truncated ? '（仅显示最近部分）' : ''} · ${HISTORY_NOTE} · ${r?.owner ? '查看记录不增加运行名额' : '未被启动，不占运行名额'}`;
+    if (view.history) state.textContent = formatHistoryState(view.history, r?.owner);
     else if (view.pendingHistory) state.textContent = '读取历史…';
     else {
       /* 正文流被截断时说出来 —— 不声不响地少显示一段，用户会以为那就是全部。 */
@@ -539,23 +585,62 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       if (renderedHistory !== view.history || renderedId !== id) {
         output.replaceChildren(); let userIndex = 0;
         delete output.dataset.renderedText;
-        for (const message of view.history.messages) {
-          const row = el('span', '', `${message.role === 'user' ? '我' : '助手'}：`);
-          if (message.messageId) row.dataset.historyMessageId = message.messageId;
-          if (message.role === 'user') {
-            const index = Object.hasOwn(message, 'userIndex') ? message.userIndex : userIndex;
-            if (Number.isInteger(index)) row.dataset.historyUserIndex = String(index);
-            userIndex++;
-          }
-          if (message.role === 'assistant' && hasVizBlock(message.text)) {
-            appendRuntimeContent(row, message.text);
-            row.append(document.createTextNode('\n\n'));
+        const messages = Array.isArray(view.history.messages) ? view.history.messages : [];
+        const toolSummary = view.history.toolSummary;
+        const toolItems = Array.isArray(toolSummary?.items) ? toolSummary.items : [];
+
+        const placedTools = new Map();
+        const unconfirmedTools = [];
+        for (const item of toolItems) {
+          const pos = item?.messagePosition;
+          if (typeof pos === 'number' && Number.isInteger(pos) && pos >= 0 && pos <= messages.length) {
+            let list = placedTools.get(pos);
+            if (!list) { list = []; placedTools.set(pos, list); }
+            list.push(item);
           } else {
-            row.append(document.createTextNode(`${message.text}\n\n`));
+            unconfirmedTools.push(item);
           }
-          output.append(row);
         }
-        if (!view.history.messages.length) output.textContent = '（没有可显示的正文）';
+
+        if (unconfirmedTools.length) {
+          const unconfirmedBox = el('div', 'rtc-history-unconfirmed');
+          unconfirmedBox.append(el('div', 'rtc-history-unconfirmed-title', '位置未确认'));
+          for (const item of unconfirmedTools) {
+            unconfirmedBox.append(createHistoryToolRow(item), document.createTextNode('\n'));
+          }
+          output.append(unconfirmedBox);
+        }
+
+        for (let i = 0; i <= messages.length; i++) {
+          const toolsAtPos = placedTools.get(i);
+          if (toolsAtPos) {
+            for (const item of toolsAtPos) {
+              output.append(createHistoryToolRow(item), document.createTextNode('\n'));
+            }
+          }
+          if (i < messages.length) {
+            const message = messages[i];
+            const row = el('span', 'rtc-history-message', `${message.role === 'user' ? '我' : '助手'}：`);
+            if (message.messageId) row.dataset.historyMessageId = message.messageId;
+            if (message.role === 'user') {
+              const index = Object.hasOwn(message, 'userIndex') ? message.userIndex : userIndex;
+              if (Number.isInteger(index)) row.dataset.historyUserIndex = String(index);
+              userIndex++;
+            }
+            if (message.role === 'assistant' && hasVizBlock(message.text)) {
+              appendRuntimeContent(row, message.text);
+              row.append(document.createTextNode('\n\n'));
+            } else {
+              row.append(document.createTextNode(`${message.text}\n\n`));
+            }
+            output.append(row);
+          }
+        }
+        if (!messages.length && !toolItems.length) {
+          output.textContent = '（没有可显示的正文）';
+        } else if (!messages.length) {
+          output.append(el('span', 'rtc-history-empty', '（没有可显示的正文）'));
+        }
         renderedHistory = view.history; delete output.dataset.historyMatch;
       }
     } else {
@@ -665,7 +750,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       const match = view.history.match, index = match?.userIndex, messageId = match?.messageId;
       const matchKey = JSON.stringify([messageId, index]);
       if (active && match && output.dataset.historyMatch !== matchKey) {
-        const rows = [...output.children];
+        const rows = [...output.querySelectorAll('.rtc-history-message')];
         const row = messageId ? rows.find(r => r.dataset.historyMessageId === messageId)
           : Number.isInteger(index) && index >= 0 ? rows.find(r => r.dataset.historyUserIndex === String(index)) : null;
         row?.scrollIntoView?.({ block: 'center' });
