@@ -26,6 +26,7 @@
 | UI 与布局 | [工作区与生命周期](work-surfaces.md)、[应用外壳](app-shell.md) | [会话界面](conversation-ui.md)、[输入区](composer-ui.md)、[能力展示](capability-ux.md) |
 | Git Changes 与 Diff | [Git Changes](git-changes.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)；行级评论当前设计见 [持久化说明](git-changes.md#九行级评论持久化t3-b)，历史 [T3-A 验收](T3-A-acceptance.md) 与 [T3-B 验收](T3-B-acceptance.md) 仅证明各自提交 |
 | 协同流程图编辑 | [Z4-2 契约](Z4-2-contract.md)、[验收状态](Z4-2-acceptance.md) | [独立审查](Z4-2-reviews.md)、[Agent 来源研究](Z4-2-agent-source-research.md)；Z4-3 接入真实 Agent 建议来源：[来源契约](Z4-3-agent-source-contract.md)、[验收状态](Z4-3-acceptance.md) |
+| 并行输入、思考等级与历史工具摘要 | [Z5 规划](Z5-roadmap.md)、[Z5 审计](Z5-0-product-audit.md) | [Z5-1 验收](Z5-1-acceptance.md)、[Z5-2 验收](Z5-2-acceptance.md)、[Z5-3 验收](Z5-3-acceptance.md)、[Z5-3B 验收](Z5-3B-acceptance.md)、[Z5-Final 验收](Z5-final-acceptance.md) |
 | Planner、Review、Verification | [Planner](planner.md)、[工作流与数据契约](workflows.md)、[人工审阅](reviews.md) | [审批](approvals.md)、[测试政策](testing.md#测试执行政策) |
 | Runtime、Worktree、多会话 | [会话](sessions.md)、[Worktree](worktrees.md)、[架构](architecture.md) | [运行恢复](runtime-recovery.md)、[进程管理](p31-managed-process.md)、[安全](security.md) |
 | Browser 与 Electron | [Browser](browser.md)、[Agent Control](agent-browser.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)、[构建](development.md) |
@@ -44,7 +45,7 @@
 
 本导航只提供阅读路径，不赋予推送、合并、修改仓库设置或发布权限；授权以 [AGENTS.md](../AGENTS.md) 为准。
 
-下一正式版本的发布准备、资格限制与分阶段验证记录见 [G4 发布验收](G4-acceptance.md)；正式步骤仍唯一依 [releasing.md](releasing.md)。
+v0.30.0 正式版本的发布准备与全阶段联合验证记录见 [Z5-Final 发布验收](Z5-final-acceptance.md)；正式步骤仍唯一依 [releasing.md](releasing.md)。历史 v0.29.0 见 [G4 发布验收](G4-acceptance.md)。
 
 Diff 区间评论的当前语义与 v1 兼容见 [T3-C 功能说明](git-changes.md#十多行区间评论t3-c)，
 [T3-C 验收](T3-C-acceptance.md) 仅证明对应提交；不替代后续提交的验证。
