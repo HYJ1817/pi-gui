@@ -1,5 +1,6 @@
 // Regression test for Bug 10: Standalone Web mode default data directory,
-// safe-path isolation, execution mode detection, atomic staging, and fault injection.
+// safe-path isolation, execution mode detection, atomic staging, concurrent instance safety,
+// and fault injection.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -11,6 +12,9 @@ const os = require('node:os');
     defaultDataDir,
     resolveDataDir,
     migrateLegacyData,
+    isSeaRuntime,
+    parseStageName,
+    STAGE_PREFIX,
   } = await import('../server/data-dir.js');
   const { createCollabStore } = await import('../server/collab-store.js');
   const { createReviewCommentStore } = await import('../server/review-comment-store.js');
@@ -25,19 +29,22 @@ const os = require('node:os');
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-datadir-test-'));
 
   try {
-    // 1. Execution mode detection
+    // ================= 1. Execution mode & Node SEA detection =================
     ok('detectExecutionMode detects source-web by default',
-      detectExecutionMode({ env: {}, execPath: 'node.exe' }) === 'source-web');
+      detectExecutionMode({ env: {}, execPath: 'node.exe', isSea: false }) === 'source-web');
     ok('detectExecutionMode detects portable-sea via PI_GUI_PORTABLE',
       detectExecutionMode({ env: { PI_GUI_PORTABLE: '1' }, execPath: 'node.exe' }) === 'portable-sea');
     ok('detectExecutionMode detects portable-sea via execPath name',
       detectExecutionMode({ env: {}, execPath: 'C:\\Tools\\Pi GUI.exe' }) === 'portable-sea');
     ok('detectExecutionMode detects electron via ELECTRON_RUN_AS_NODE',
       detectExecutionMode({ env: { ELECTRON_RUN_AS_NODE: '1' }, execPath: 'electron.exe' }) === 'electron');
+    // Renamed SEA executable detection via isSea runtime flag
+    ok('detectExecutionMode detects renamed SEA binary via isSea runtime capability',
+      detectExecutionMode({ env: {}, execPath: 'D:\\CustomApps\\RenamedLauncher.exe', isSea: true }) === 'portable-sea');
 
-    // 2. Default data dir resolution (no PI_GUI_DATA)
+    // ================= 2. Default data dir resolution (Source Web mode) =================
     const emptyEnv = {};
-    const defaultDir = defaultDataDir({ env: emptyEnv, execPath: 'node.exe' });
+    const defaultDir = defaultDataDir({ env: emptyEnv, execPath: 'node.exe', isSea: false });
     ok('default data dir is defined and non-empty', typeof defaultDir === 'string' && defaultDir.length > 0);
     ok('default data dir ends with pi-gui', path.basename(defaultDir) === 'pi-gui');
     if (process.platform === 'win32') {
@@ -45,7 +52,8 @@ const os = require('node:os');
       ok('Windows default uses AppData/Roaming', defaultDir === path.join(expectedBase, 'pi-gui'));
     }
 
-    // 3. Portable mode with existing portable data preserved
+    // ================= 3. Portable mode scenarios =================
+    // Scenario A: Existing legacy portable data adjacent to exe (exeDir)
     const fakePortableDir = path.join(tempRoot, 'fake-portable-app');
     const fakePortableExe = path.join(fakePortableDir, 'Pi GUI.exe');
     fs.mkdirSync(fakePortableDir, { recursive: true });
@@ -56,9 +64,11 @@ const os = require('node:os');
       appRoot: path.join(tempRoot, 'other-root'),
       execPath: fakePortableExe,
       io: fs,
+      isSea: true,
     });
     ok('portable mode preserves existing portable directory next to exe', portableDataDir === fakePortableDir);
 
+    // Scenario B: Existing portable data in exeDir/data subdirectory
     const fakePortableSubdataDir = path.join(tempRoot, 'fake-portable-subdata');
     const fakeSubdataExe = path.join(fakePortableSubdataDir, 'Pi GUI.exe');
     fs.mkdirSync(path.join(fakePortableSubdataDir, 'data'), { recursive: true });
@@ -68,10 +78,39 @@ const os = require('node:os');
       appRoot: path.join(tempRoot, 'other-root'),
       execPath: fakeSubdataExe,
       io: fs,
+      isSea: true,
     });
     ok('portable mode preserves existing data/ subdirectory', portableSubdataResult === path.join(fakePortableSubdataDir, 'data'));
 
-    // 4. Explicit PI_GUI_DATA override and immunity from auto-migration
+    // Scenario C: Brand new portable SEA (no existing data in either location) -> defaults to exeDir/data
+    const brandNewPortableDir = path.join(tempRoot, 'brand-new-portable');
+    const brandNewExe = path.join(brandNewPortableDir, 'CustomApp.exe'); // renamed executable
+    fs.mkdirSync(brandNewPortableDir, { recursive: true });
+    const brandNewResult = defaultDataDir({
+      env: {},
+      appRoot: path.join(tempRoot, 'other-root'),
+      execPath: brandNewExe,
+      io: fs,
+      isSea: true,
+    });
+    ok('brand new portable SEA defaults to dedicated exeDir/data', brandNewResult === path.join(brandNewPortableDir, 'data'));
+
+    // Scenario D: Portable SEA placed inside user project repository -> safely avoids contaminating project
+    const userProjectDir = path.join(tempRoot, 'user-project-repo');
+    const portableInsideProject = path.join(userProjectDir, 'Pi GUI.exe');
+    fs.mkdirSync(userProjectDir, { recursive: true });
+    const projectFallbackResult = defaultDataDir({
+      env: {},
+      appRoot: path.join(tempRoot, 'other-root'),
+      execPath: portableInsideProject,
+      io: fs,
+      isSea: true,
+      projectRoot: userProjectDir,
+    });
+    ok('portable SEA inside user project safely falls back to standard user profile',
+      !projectFallbackResult.startsWith(userProjectDir));
+
+    // ================= 4. Explicit PI_GUI_DATA override =================
     const customData = path.join(tempRoot, 'custom-data');
     const customEnv = { PI_GUI_DATA: customData };
     const fakeLegacyApp = path.join(tempRoot, 'fake-legacy-app');
@@ -83,12 +122,48 @@ const os = require('node:os');
     ok('explicit PI_GUI_DATA directory is created', fs.existsSync(resolvedCustom));
     ok('explicit PI_GUI_DATA is NEVER auto-migrated into', !fs.existsSync(path.join(resolvedCustom, 'projects.json')));
 
-    // 5. Normal safe migration from legacy appRoot with atomic staging
+    // ================= 5. Staging naming, multi-instance concurrency & cleanup =================
+    const testStageName = `${STAGE_PREFIX}projects.json-12345-1700000000-abcd1`;
+    const parsed = parseStageName(testStageName);
+    ok('parseStageName extracts entry, pid, timestamp',
+      parsed && parsed.entry === 'projects.json' && parsed.pid === 12345 && parsed.timestamp === 1700000000);
+    ok('parseStageName rejects non-matching filenames', parseStageName('.stage-my-notes.txt') === null);
+
+    const concurrentTarget = path.join(tempRoot, 'concurrent-target');
+    fs.mkdirSync(concurrentTarget, { recursive: true });
+
+    // Instance 1 is currently active with PID 11111
+    const activePid = 11111;
+    const deadPid = 99999;
+    const activeStageDir = path.join(concurrentTarget, `${STAGE_PREFIX}plans-${activePid}-1700000000-act11`);
+    const deadStageDir = path.join(concurrentTarget, `${STAGE_PREFIX}collab-${deadPid}-1600000000-dead1`);
+    const userProtectedFile = path.join(concurrentTarget, '.stage-user-backup.txt');
+
+    fs.mkdirSync(activeStageDir, { recursive: true });
+    fs.writeFileSync(path.join(activeStageDir, 'active.json'), '{"active":true}', 'utf8');
+    fs.mkdirSync(deadStageDir, { recursive: true });
+    fs.writeFileSync(path.join(deadStageDir, 'dead.json'), '{"dead":true}', 'utf8');
+    fs.writeFileSync(userProtectedFile, 'user notes not belonging to migration', 'utf8');
+
+    // Simulate Instance 2 starting migration with mock process tracker:
+    // PID 11111 is alive; PID 99999 is dead
+    const mockProcessAlive = pid => pid === activePid;
+    migrateLegacyData({
+      sourceDir: fakeLegacyApp,
+      targetDir: concurrentTarget,
+      io: fs,
+      isProcessAlive: mockProcessAlive,
+    });
+
+    ok('concurrent active staging folder is strictly preserved and not deleted', fs.existsSync(activeStageDir));
+    ok('abandoned staging folder from dead process is cleaned up safely', !fs.existsSync(deadStageDir));
+    ok('unrelated user file with .stage- prefix is strictly protected', fs.existsSync(userProtectedFile));
+
+    // ================= 6. Normal safe migration with atomic staging =================
     const fakeAppRoot = path.join(tempRoot, 'fake-repo-root');
     const fakeTargetData = path.join(tempRoot, 'migrated-data');
     fs.mkdirSync(fakeAppRoot, { recursive: true });
 
-    // Seed legacy files in fake repo root
     const sampleProjects = JSON.stringify({ items: [{ id: 'p1', name: 'Legacy Project', path: fakeAppRoot }] });
     fs.writeFileSync(path.join(fakeAppRoot, 'projects.json'), sampleProjects, 'utf8');
     fs.writeFileSync(path.join(fakeAppRoot, 'session-flags.json'), '{"flag":true}', 'utf8');
@@ -96,17 +171,17 @@ const os = require('node:os');
     fs.mkdirSync(fakePlansDir, { recursive: true });
     fs.writeFileSync(path.join(fakePlansDir, 'plan1.json'), '{"step":1}', 'utf8');
 
-    // Run migration
     const migReport = migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: fakeTargetData, io: fs });
-
-    ok('migration report reports success', migReport.ok === true);
+    ok('migration report reports success and completed status', migReport.ok === true && migReport.status === 'completed');
     ok('projects.json migrated', fs.existsSync(path.join(fakeTargetData, 'projects.json')));
     ok('projects.json content preserved', fs.readFileSync(path.join(fakeTargetData, 'projects.json'), 'utf8') === sampleProjects);
     ok('session-flags.json migrated', fs.existsSync(path.join(fakeTargetData, 'session-flags.json')));
     ok('plans directory migrated', fs.existsSync(path.join(fakeTargetData, 'plans', 'plan1.json')));
-    ok('migration manifest generated', fs.existsSync(path.join(fakeTargetData, '.migration-manifest.json')));
+    ok('migration manifest generated with completed status',
+      fs.existsSync(path.join(fakeTargetData, '.migration-manifest.json')) &&
+      JSON.parse(fs.readFileSync(path.join(fakeTargetData, '.migration-manifest.json'), 'utf8')).status === 'completed');
 
-    // 6. Existing data is NEVER overwritten or silently merged
+    // ================= 7. Data conflicts: destination already exists =================
     const existingTargetProjects = JSON.stringify({ items: [{ id: 'p2', name: 'Authoritative Target' }] });
     const targetWithData = path.join(tempRoot, 'target-with-data');
     fs.mkdirSync(targetWithData, { recursive: true });
@@ -119,18 +194,60 @@ const os = require('node:os');
     ok('existing directory is not merged into', !fs.existsSync(path.join(targetWithData, 'plans', 'plan1.json')));
     ok('existing items recorded as skipped', skipReport.skipped.some(s => s.entry === 'projects.json' && s.reason === 'already_exists'));
 
-    // 7. Fault injection: cleanup of interrupted staging folders on retry
-    const interruptedTarget = path.join(tempRoot, 'interrupted-target');
-    fs.mkdirSync(interruptedTarget, { recursive: true });
-    const danglingStageDir = path.join(interruptedTarget, '.stage-plans-12345');
-    fs.mkdirSync(danglingStageDir, { recursive: true });
-    fs.writeFileSync(path.join(danglingStageDir, 'half-copied.json'), '{"partial":true}', 'utf8');
+    // ================= 8. Fault injection: atomic rename failure =================
+    const renameFaultIo = {
+      ...fs,
+      renameSync() {
+        const err = new Error('Cross-device link or rename locked');
+        err.code = 'EXDEV';
+        throw err;
+      },
+    };
+    const renameFaultTarget = path.join(tempRoot, 'rename-fault-target');
+    const renameFaultReport = migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: renameFaultTarget, io: renameFaultIo });
+    ok('atomic rename failure reports non-ok status', renameFaultReport.ok === false);
+    ok('atomic rename failure reports partial or failed status', renameFaultReport.status === 'failed');
+    ok('staging file cleaned up on rename failure', fs.readdirSync(renameFaultTarget).filter(f => f.startsWith(STAGE_PREFIX)).length === 0);
+    ok('manifest records failed status',
+      JSON.parse(fs.readFileSync(path.join(renameFaultTarget, '.migration-manifest.json'), 'utf8')).status === 'failed');
 
-    migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: interruptedTarget, io: fs });
-    ok('dangling staging directory cleaned up', !fs.existsSync(danglingStageDir));
-    ok('clean plans directory migrated after staging cleanup', fs.existsSync(path.join(interruptedTarget, 'plans', 'plan1.json')));
+    // ================= 9. Fault injection: partial directory copy failure =================
+    let copyCount = 0;
+    const partialDirFaultIo = {
+      ...fs,
+      copyFileSync(src, dst) {
+        copyCount++;
+        if (copyCount > 1) {
+          const err = new Error('Simulated disk full halfway');
+          err.code = 'ENOSPC';
+          throw err;
+        }
+        return fs.copyFileSync(src, dst);
+      },
+    };
+    const partialFaultTarget = path.join(tempRoot, 'partial-dir-fault-target');
+    const partialFaultReport = migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: partialFaultTarget, io: partialDirFaultIo });
+    ok('partial directory copy failure reports error', partialFaultReport.ok === false && partialFaultReport.errors.some(e => e.code === 'ENOSPC'));
+    ok('interrupted staging directory cleaned up on partial failure',
+      fs.readdirSync(partialFaultTarget).filter(f => f.startsWith(STAGE_PREFIX)).length === 0);
+    ok('source data preserved completely after partial failure', fs.existsSync(path.join(fakeAppRoot, 'plans', 'plan1.json')));
 
-    // 8. Security: Symbolic links in source are rejected
+    // ================= 10. Fault injection: Permission denied (EACCES) =================
+    const faultEaccesIo = {
+      ...fs,
+      copyFileSync() {
+        const err = new Error('Permission denied');
+        err.code = 'EACCES';
+        throw err;
+      },
+    };
+    const faultTarget = path.join(tempRoot, 'fault-target');
+    const faultReport = migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: faultTarget, io: faultEaccesIo });
+    ok('faulty migration reports failure without crashing', faultReport.ok === false && faultReport.status === 'failed');
+    ok('error recorded with code EACCES', faultReport.errors.some(e => e.entry === 'projects.json' && e.code === 'EACCES'));
+    ok('source data preserved after fault', fs.existsSync(path.join(fakeAppRoot, 'projects.json')));
+
+    // ================= 11. Security: Symbolic links in source are rejected =================
     const symlinkSrcDir = path.join(tempRoot, 'symlink-src');
     const symlinkTargetDir = path.join(tempRoot, 'symlink-target');
     fs.mkdirSync(symlinkSrcDir, { recursive: true });
@@ -143,39 +260,54 @@ const os = require('node:os');
       ok('symlink rejected and not copied', !fs.existsSync(path.join(symlinkTargetDir, 'projects.json')));
       ok('symlink recorded in skipped list', symlinkReport.skipped.some(s => s.entry === 'projects.json' && s.reason === 'symlink_rejected'));
     } catch (e) {
-      // Windows without SeCreateSymbolicLinkPrivilege may fail to create symlink in non-elevated mode
       ok('symlink handling verified or skipped on restricted Windows', true);
     }
 
-    // 9. Path traversal & dangerous nesting checks
+    // ================= 12. Path traversal & dangerous nesting checks =================
     const nestA = path.join(tempRoot, 'nest-parent');
     const nestB = path.join(nestA, 'nest-child');
     fs.mkdirSync(nestB, { recursive: true });
     const nestReport = migrateLegacyData({ sourceDir: nestA, targetDir: nestB, io: fs });
     ok('nested path prohibited', nestReport.ok === false && nestReport.errors.some(e => e.code === 'nested_path_prohibited'));
 
-    // 10. Fault injection: Read/Write failure preserves source and returns clean error
-    const faultyIo = {
+    // ================= 13. resolveDataDir fatal error handling =================
+    let fatalThrown = false;
+    try {
+      resolveDataDir({
+        env: {},
+        appRoot: nestA,
+        execPath: 'node.exe',
+        io: fs,
+        projectRoot: null,
+        // Passing nested paths will trigger fatal path validation failure in migration
+      });
+    } catch (e) {
+      // not thrown because defaultDataDir is in AppData, not nested
+    }
+
+    // Now test explicit fatal target mkdir failure in resolveDataDir
+    const uncreatableIo = {
       ...fs,
-      copyFileSync() {
-        const err = new Error('Permission denied');
+      mkdirSync() {
+        const err = new Error('Cannot create target data dir');
         err.code = 'EACCES';
         throw err;
       },
     };
-    const faultTarget = path.join(tempRoot, 'fault-target');
-    const faultReport = migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: faultTarget, io: faultyIo });
-    ok('faulty migration reports failure without crashing', faultReport.ok === false);
-    ok('error recorded with code EACCES', faultReport.errors.some(e => e.entry === 'projects.json' && e.code === 'EACCES'));
-    ok('source data preserved after fault', fs.existsSync(path.join(fakeAppRoot, 'projects.json')));
+    let targetMkdirFailed = false;
+    try {
+      resolveDataDir({ env: {}, appRoot: fakeAppRoot, io: uncreatableIo });
+    } catch (e) {
+      if (e.code === 'TARGET_DATA_DIR_UNAVAILABLE') targetMkdirFailed = true;
+    }
+    ok('resolveDataDir throws TARGET_DATA_DIR_UNAVAILABLE on uncreatable target directory', targetMkdirFailed);
 
-    // 11. Repeated startup idempotence
+    // ================= 14. Repeated startup idempotence =================
     const run1 = migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: fakeTargetData, io: fs });
     const run2 = migrateLegacyData({ sourceDir: fakeAppRoot, targetDir: fakeTargetData, io: fs });
     ok('second migration run succeeds idempotently', run2.ok === true && run2.migrated.length === 0);
 
-    // 12. Safe-path boundary check with stores:
-    // When dataDir == repoRoot, stores MUST reject operation
+    // ================= 15. Safe-path boundary check with stores =================
     const collabScope = {
       key: 'a'.repeat(64),
       token: 'b'.repeat(64),
@@ -217,7 +349,6 @@ const os = require('node:os');
     }
     ok('reviewCommentStore rejects data directory inside project root', reviewInsideFailed);
 
-    // When dataDir is independent (fakeTargetData) outside fakeAppRoot, stores SUCCEED safely
     const storeSafe = createCollabStore({
       dataDir: fakeTargetData,
       protectedRoots: () => [fakeAppRoot],
