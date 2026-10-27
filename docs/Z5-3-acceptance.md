@@ -2,7 +2,7 @@
 
 日期：2026-10-27（Asia/Shanghai）。单一执行 Agent，无子 Agent。结论：**来源审计 GO，后端与定向验证完成；PR #38 未合并，按约定停在后端，UI 未集成。** 待用户独立验收，不进入下一阶段。
 
-以上及第1～8节记录首轮 `ade68c1` 交付时的状态。**最新位置合同修复、提交与验证以第9节为准**；原证据保留，不把旧 SHA 的结果当作新行为验证。
+以上及第1～8节记录首轮 `ade68c1` 交付时的状态。**位置合同修复见第9节；创建PR后的主线集成与最新验证以第10节为准**。原证据保留，不把旧 SHA 的结果当作新行为验证。
 
 ## 1. 基线、Worktree 与提交
 
@@ -178,3 +178,17 @@ Electron44.4.3从本机既有缓存 ZIP 解压到本 Worktree node_modules；通
 
 本地分阶段提交后保持干净工作区；本次未自动追加推送、创建PR、合并、tag或发布。先前“推送”已针对 ade68c1 完成，不用于推定新修复的远端授权。
 回滚本节文档证据提交、c01c056与fbdd144，重建App/SEA即可回到已推送的ade68c1；无数据迁移或会话写回。不要重置主线或其他Worktree。
+
+## 10. PR #39 主线集成与冲突处理（2026-10-27）
+
+用户先后明确授权推送位置修复、创建PR。已创建 [PR #39](https://github.com/HYJ1817/pi-gui/pull/39)，初始head为30c850f；GitHub报告CONFLICTING，尚无CI。只读merge-tree确认唯一冲突为package.json：Z5-2与Z5-3都追加同一行test链。为使PR能执行约定CI，在本分支同步已合并main；未合并GitHub PR、未改主线分支。
+
+- 集成提交：`086d2e07b354419dce1cfc4a6e8e31f244572e6c`，包含main `300717f6b59a106d1dd01910d82d3096cdb0a182`；后续只补本节与证据。
+- 冲突以main的package.json为基础，仅追加Z5-3两套canonical/Runtime入口及打包专项alias，保留Z5-2思考策略全部测试。`node scripts/run-test-group.mjs --validate`为**225叶**（core149/ui24/security27/native4/faults21）；未缩减CI清单。
+- public/与该main逐字节相同；集成继承Z5-2，不新增Z5-3 UI或修改其模型/思考/输入合同。后端摘要与位置仍为fbdd144实现，权限边界未扩展。
+- [12套集成定向](assets/z5-3/pr-integration/targeted-results.json)，全部exit0、skip0：摘要36场景/161断言、HTTP14场景/49断言、历史搜索37/37、conversation78/78、draft42/42、models52/52、thinking-availability34/34、finish-ui34/34、ui3-model50/50、ui3-integration23/23、model-capabilities36/36、modules120/120。
+- `npm run test:ci`八叶exit0，[输出](assets/z5-3/pr-integration/ci-tests.txt)。这是测试调度器回归；225叶计划校验不等于完整canonical执行。
+- 合并后重新离线 `npm run build:app -- --rebuild` exit0；fixtures exit0；App26/26、SEA49/49、打包后端18/18。摘要/位置、鉴权、liveCount=0、Pi启动数0、原生文件不变均通过。[打包结果](assets/z5-3/pr-integration/packaged-results.json)、[源代码/产物摘要](assets/z5-3/pr-integration/build-digests.json)。
+- 正常沙箱生产窗口smoke10/10，renderer errors=[]、残留进程0；[报告与同目录截图](assets/z5-3/pr-integration/electron-smoke/results.json)。没有新增摘要布局，不作摘要UI证明。
+
+完整canonical仍等待本PR CI，独立功能/安全审查、摘要UI及其前端隔离专项仍待验证。当前授权含推送及建PR，不含GitHub合并、tag或发布；无数据迁移。未来回退本PR应保留main已合并的Z5-2，按PR相对main的增量撤回Z5-3并重建产物，不能用整体文件还原覆盖Z5-2。
