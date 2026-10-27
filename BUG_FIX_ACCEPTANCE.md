@@ -43,6 +43,46 @@
 
 ---
 
+## 第三轮定向补修与终审摘要 (Round 3 Targeted Fixes & Final Acceptance)
+
+针对第二轮集成后关于 Bug 10 的遗留审查意见，在 `codex/fix-bugs-8-11` 上完成了专项定向补修，不改动已稳定的 Bug 8、9、11：
+
+### 1. 暂存目录精准归属与多实例保护 (`server/data-dir.js`)
+- **根除全量误删**：禁止无差别删除所有 `.stage-*` 文件。
+- **命名结构化**：定义 `STAGE_PREFIX = '.stage-mig-'`，格式严格遵循 `.stage-mig-<entry>-<pid>-<timestamp>-<rand>`，并通过 `parseStageName` 校验 entry 归属合法的迁移项。
+- **并发与存活探测**：清理前提取 PID，调用 `isProcessRunning(pid)`（通过 `process.kill(pid, 0)` 探测并兼容 `EPERM`）。若创建该暂存的实例仍处于运行状态（且 PID != 当前进程），严格保留，绝不误伤并发运行实例的进行中迁移。
+- **安全清理孤儿暂存**：仅当暂存目录的所属 PID 明确已终止退出时，才作为历史遗留孤儿安全清理。
+- **用户文件绝对隔离**：对于不匹配迁移正则的非迁移文件（例如用户自行创建的 `.stage-notes.txt` 或第三方同名前缀），一律忽略并严密保护。
+
+### 2. 便携版默认数据目录完备兼容
+- **Node SEA 原生能力识别**：通过 `node:sea` 的 `isSea()` 及 `process.features.sea` 检测 SEA 运行态，摆脱单一 `Pi GUI.exe` 文件名依赖，即使单文件可执行程序被用户任意重命名仍能精准识别。
+- **四种情形完备覆盖**：
+  1. **显式 `PI_GUI_DATA`**：最高优先级，直接采纳，绝不被迁移覆盖；
+  2. **已有历史便携数据 (v1 同级)**：若同级存在 `projects.json`，返回同级目录，历史数据零漂移；
+  3. **已有历史便携数据 (v2 `data/` 子目录)**：若同级 `data/projects.json` 存在，返回 `data/` 子目录；
+  4. **全新便携版**：默认分配独立规范的 `exeDir/data` 子目录；
+  5. **项目目录防污染安全回退**：若便携可执行文件被放置在仓库根目录（`appRoot`）或用户项目目录（`projectRoot`）内部，自动回退到操作系统标准的用户应用数据目录（Windows 下为 `%APPDATA%/pi-gui`），彻底杜绝仓库污染与 `collab_storage_inside_project` 安全拦截。
+
+### 3. 迁移失败全链路严密处理与诊断脱敏
+- **禁止静默忽略**：`resolveDataDir` 接收 `migrateLegacyData` 返回的完整报告，绝不吞掉迁移异常。
+- **异常分级处置**：
+  - **严重阻断性错误**：目标目录无法创建（`TARGET_DATA_DIR_UNAVAILABLE`）、显式配置目录不可用（`EXPLICIT_DATA_DIR_UNAVAILABLE`）、致命路径非法（`NUL 字节`、`绝对路径相同`、`跨层级目录穿越`），立即抛出结构化错误，阻断非安全启动。
+  - **可恢复性非阻断异常**：如特定文件权限拒绝（`EACCES` / `EBUSY` / `EPERM` / `EXDEV`），记录脱敏诊断告警（路径脱敏，隐藏用户主目录），并在 `.migration-manifest.json` 中如实标记 `status: "partial"` 或 `status: "failed"`，绝不将不完整迁移虚假报告为 `completed`。
+- **原子重命名与源数据保全**：任何中间复制失败或权限异常均安全回滚清理当前失败暂存，原始数据完好保留在源目录。
+
+### 4. 故障注入与回归测试矩阵扩展
+- `tests/standalone-datadir.cjs` 测试用例与断言由 33 项大幅扩展至 **47 项**，覆盖：
+  - 双实例并发活跃暂存保护；
+  - 异常崩溃后的孤儿暂存清理；
+  - 用户无关 `.stage-*` 文件的严格保护；
+  - 重命名 SEA 可执行程序的 `isSea` 识别；
+  - 便携版放置于项目内部时的安全降级回退；
+  - 复制中断、权限不足、数据冲突、原子重命名失败、重复幂等迁移；
+  - 目录无法创建时的结构化错误阻断。
+- 实测 **47/47 全部通过**。
+
+---
+
 ## 逐项缺陷最终修复状态
 
 ### 1. Bug 8：Stop / 取消状态与后续交互异常
@@ -65,11 +105,21 @@
 - **状态**：修复完成，集成验证通过。
 - **关键代码位置**：
   - `server/data-dir.js`：
-    - `detectExecutionMode()`：精准识别 `source-web`、`portable-sea`、`electron`；
-    - `defaultDataDir()`：源码 Web 模式使用 `%APPDATA%/pi-gui`，便携模式兼容检查同级历史数据；
+    - `isSeaRuntime()` & `detectExecutionMode()`：基于原生 `node:sea` 精准识别重命名 SEA 二进制与运行模式；
+    - `defaultDataDir()`：源码 Web 模式使用 `%APPDATA%/pi-gui`，便携模式兼容检查同级历史数据与项目防污染回退；
+    - `STAGE_PREFIX` & `parseStageName()` & `isProcessRunning()`：基于 PID 存活的多实例活跃暂存保护与孤儿清理；
     - `validatePathSafety()`：防范绝对路径相同、NUL 字节及嵌套路径穿越；
-    - `migrateLegacyData()`：使用 `.stage-*` 原子暂存重命名，清理悬空暂存，不静默覆盖已有文件，不合并冲突目录，保留源文件，返回详细结果。
-- **验证结论**：`standalone-datadir.cjs` 33/33 全部通过（包含故障注入与权限拒绝测试），`test:server` 63/63 全部通过。
+    - `migrateLegacyData()` & `resolveDataDir()`：无损原子暂存迁移、明确失败分级与脱敏诊断。
+- **验证结论**：`standalone-datadir.cjs` 47/47 全部通过（包含多实例并发暂存、孤儿清理、故障注入与权限拒绝测试），`npm run test:server` 77/77 全部通过。
+
+### 4. Bug 11：右侧面板真刷新自动恢复与滚动位置记忆
+- **状态**：修复完成，集成验证通过。
+- **关键代码位置**：
+  - `public/ui/secondary-surface.js`：基于 `sessionStorage` 仅放行 `changes` 与 `specs`，严格阻断 `browser` 自动恢复；监听 `pi-gui:workspace-generation` 自动清理恢复状态；
+  - `public/git.js`：在挂载时还原 `lastChangesListScroll` 与 `diffViewState`，重绘制列表时按文件状态重新绑定 Diff 展开与横向滚动；
+  - `public/specs-panel.js`：记忆并在切换时恢复目录树与文档正文滚动位置；在工作区切换时主动调用 `clearPaneState('specs')`；
+  - `public/app.js`：在 `loadStatus` 首屏初始化完成后调用 `restoreOrdinaryPanel()` 自动恢复面板。
+- **验证结论**：`panel-restore-ui.cjs` 14/14 通过，`panel-restore-electron.cjs` 25/25 全部通过，`z1-electron.cjs` 25/25 全部通过。
 
 ### 4. Bug 11：右侧面板真刷新自动恢复与滚动位置记忆
 - **状态**：修复完成，集成验证通过。
@@ -92,7 +142,7 @@
 | `$env:PI_GUI_BUG8_FIXTURE="1"; node tests/bug8-real-pi-fixture.cjs` | 0 | 31 | 0 | Bug 8 真实 Pi RPC 回环场景、双会话并发停止与状态核验 |
 | `npm run test:stop` | 0 | 46 | 0 | Bug 8 综合停止测试链（stop-barrier + gui-browser-stop + fixture） |
 | `npm run test:model-capabilities` | 0 | 70 | 0 | Bug 9 模型能力与统一思考等级 10 状态矩阵测试 |
-| `npm run test:server` | 0 | 63 | 0 | Bug 10 服务端基础路由 + 独立数据目录及迁移故障注入 |
+| `npm run test:server` | 0 | 77 | 0 | Bug 10 服务端基础路由(30) + 独立数据目录及并发迁移故障注入(47) |
 | `node tests/panel-restore-ui.cjs` | 0 | 14 | 0 | Bug 11 恢复白名单、持久化映射与跨作用域清理 |
 | `npm run test:specs` | 0 | 57 | 0 | Bug 11 Specs API + UI 渲染 + 面板恢复 UI 套件 |
 | `node tests/z1-electron.cjs` | 0 | 25 | 0 | Bug 11 Changes 面板真实 Chromium 滚动与分屏基线回归 |
@@ -121,11 +171,11 @@
 | 文件路径 | 状态 | 涉及 Bug | 关键修改说明 |
 | :--- | :---: | :---: | :--- |
 | `public/rpc.js` | 修改 | Bug 8 | 在 `onStopState` 补充对 `evt?.pending === true` 与 `stopping` 状态的同步识别 |
-| `server/data-dir.js` | 重写 | Bug 10 | 区分运行形态，便携模式兼容历史数据，实现 `.stage-*` 原子迁移与完备故障注入防线 |
+| `server/data-dir.js` | 重写 | Bug 10 | 区分运行形态，SEA 原生检测，便携模式兼容历史数据与防污染回退，实现基于 PID 的多实例暂存保护与孤儿清理、异常分级与脱敏诊断 |
 | `public/ui/secondary-surface.js` | 修改 | Bug 11 | 监听 `pi-gui:workspace-generation` 自动清理激活 surface 与 pane 状态 |
 | `public/specs-panel.js` | 修改 | Bug 11 | 在 `workspaceChanging` 时清理 `specs` 状态；在工作区切换中阻断滚动回写 |
 | `tests/stop-barrier.cjs` | 修改 | Bug 8 | 增加对 `pending: true` 广播与收敛过程的断言验证 |
-| `tests/standalone-datadir.cjs` | 重写 | Bug 10 | 扩展至 33 项断言：运行模式探测、便携兼容、原子暂存中断清理、权限错误降级与目录隔离 |
+| `tests/standalone-datadir.cjs` | 重写 | Bug 10 | 扩展至 47 项断言：运行模式探测、SEA 原生识别、多实例活跃暂存保护与孤儿清理、便携防污染回退、权限降级与目录隔离 |
 | `tests/panel-restore-ui.cjs` | 修改 | Bug 11 | 移除手动 `clearPaneState` 调用，完全由 `session-switch` 与 `workspace-generation` 生产事件驱动验证 |
 | `tests/panel-restore-electron.cjs` | 重写 | Bug 9, 11 | 保留原生 `app.js` 启动，测试全页真实刷新、Diff 展开恢复、Specs 树与文档滚动恢复、用户主动关闭及作用域隔离 |
 
@@ -251,37 +301,77 @@
   3. 当用户未显式设置 `PI_GUI_DATA` 启动独立 Web 服务时，`DATA_DIR` 指向了仓库根目录，直接触发安全防御断言 `storage_inside_project`，导致存储层拒绝初始化。
 
 #### 3.2 修复方案
-- **平台化独立数据目录与自动迁移 (`server/data-dir.js`)**：
-  - 新增 `defaultDataDir(env)`：在未配置环境变量时，遵循操作系统标准的用户应用数据目录规范：
-    - Windows：`%APPDATA%/pi-gui`（例如 `C:\Users\<user>\AppData\Roaming\pi-gui`）；
-    - macOS：`~/Library/Application Support/pi-gui`；
-    - Linux：`$XDG_DATA_HOME/pi-gui` 或 `~/.local/share/pi-gui`。
-  - 新增 `resolveDataDir({ env, appRoot, io })`：优先采纳显式指定的 `env.PI_GUI_DATA`；若未指定则采用标准独立的 `defaultDataDir`，并在初次创建时自动执行旧数据迁移。
-  - 新增 `migrateLegacyData({ sourceDir, targetDir, io })`：平滑将历史存在于 `appRoot` 下的现有业务数据文件（`projects.json`、`session-flags.json`、`plans/`、`planner-sessions/`、`trash-sessions/`、`collab/`、`review-comments/`、`uploads/`、`diff-comments/`）自动安全迁移至独立目标目录，严格遵守**不覆盖目标目录已有数据**的原则，防止用户数据丢失。
+- **运行形态探测与平台化独立数据目录 (`server/data-dir.js`)**：
+  - 新增 `detectExecutionMode()`：原生导入 `node:sea` 的 `isSea()` 及检测 `process.features.sea`，结合环境变量与执行路径，精准识别 `portable-sea`、`electron` 和 `source-web`；即使 SEA 可执行程序被用户重命名仍可可靠识别。
+  - 新增 `defaultDataDir()`：
+    - 源码 Web 模式：标准操作系统用户数据目录（Windows: `%APPDATA%/pi-gui`；macOS: `~/Library/Application Support/pi-gui`；Linux: `$XDG_DATA_HOME/pi-gui`）；
+    - 便携版兼容：若同级存在历史 `projects.json`（v1 便携）返回同级；若 `data/projects.json` 存在（v2 便携）返回 `data/`；全新便携版默认分配 `exeDir/data`；
+    - 项目防污染回退：若便携版放置于仓库（`appRoot`）或用户项目（`projectRoot`）内部，自动回退到系统标准数据目录，避免仓库污染与 `collab_storage_inside_project` 拦截；
+    - 显式 `PI_GUI_DATA`：最高优先级，始终优先。
+  - 新增 `resolveDataDir()`：负责目录创建与安全迁移接驳；对不可创建的目标目录抛出结构化严重错误（`TARGET_DATA_DIR_UNAVAILABLE`），不静默继续。
+- **原子暂存与多实例并发防护 (`server/data-dir.js`)**：
+  - 命名规范：`STAGE_PREFIX = '.stage-mig-'`，格式为 `.stage-mig-<entry>-<pid>-<timestamp>-<rand>`；
+  - 暂存安全清理：通过 `parseStageName` 严格验证归属合法迁移项，提取 PID 调用 `isProcessRunning(pid)`；若其他实例进程存活则严格跳过，仅在进程已死时清理孤儿暂存；用户非迁移文件（如 `.stage-notes.txt`）受严格保护；
+  - 迁移流程：复制到专用暂存目录，全部成功后原子重命名至目标目录；发生错误时立即回滚清理临时暂存，源数据完好无损；
+  - 冲突防御：已有目标文件绝不静默覆盖，冲突目录绝不静默合并，作为 `skipped` 记录在 `.migration-manifest.json`；
+  - 异常分级与诊断脱敏：区分阻断性严重错误与可恢复权限错误（`EACCES`/`EBUSY`），诊断日志调用 `sanitizePath()` 替换用户主目录，脱敏记录。
 - **服务端接驳 (`server.js`)**：
   - 将 `DATA_DIR` 改为通过 `resolveDataDir({ env: process.env, appRoot: __dirname })` 解析，并在启动日志中输出脱敏的数据目录位置。
   - 完全保留现有的 `safe-path` 访问拦截与项目保护规则。
 
 #### 3.3 验证证据与测试结果
-- **针对性回归测试**：
-  - `tests/standalone-datadir.cjs`：**14/14 全部通过**
+- **针对性回归与故障注入测试**：
+  - `tests/standalone-datadir.cjs`：**47/47 全部通过**
     ```
+    ok  detectExecutionMode detects source-web by default
+    ok  detectExecutionMode detects portable-sea via PI_GUI_PORTABLE
+    ok  detectExecutionMode detects portable-sea via execPath name
+    ok  detectExecutionMode detects electron via ELECTRON_RUN_AS_NODE
+    ok  detectExecutionMode detects renamed SEA binary via isSea runtime capability
     ok  default data dir is defined and non-empty
     ok  default data dir ends with pi-gui
     ok  Windows default uses AppData/Roaming
+    ok  portable mode preserves existing portable directory next to exe
+    ok  portable mode preserves existing data/ subdirectory
+    ok  brand new portable SEA defaults to dedicated exeDir/data
+    ok  portable SEA inside user project safely falls back to standard user profile
     ok  explicit PI_GUI_DATA is respected
     ok  explicit PI_GUI_DATA directory is created
+    ok  explicit PI_GUI_DATA is NEVER auto-migrated into
+    ok  parseStageName extracts entry, pid, timestamp
+    ok  parseStageName rejects non-matching filenames
+    ok  concurrent active staging folder is strictly preserved and not deleted
+    ok  abandoned staging folder from dead process is cleaned up safely
+    ok  unrelated user file with .stage- prefix is strictly protected
+    ok  migration report reports success and completed status
     ok  projects.json migrated
     ok  projects.json content preserved
     ok  session-flags.json migrated
     ok  plans directory migrated
+    ok  migration manifest generated with completed status
     ok  existing destination data is not overwritten
+    ok  existing directory is not merged into
+    ok  existing items recorded as skipped
+    ok  atomic rename failure reports non-ok status
+    ok  atomic rename failure reports partial or failed status
+    ok  staging file cleaned up on rename failure
+    ok  manifest records failed status
+    ok  partial directory copy failure reports error
+    ok  interrupted staging directory cleaned up on partial failure
+    ok  source data preserved completely after partial failure
+    ok  faulty migration reports failure without crashing
+    ok  error recorded with code EACCES
+    ok  source data preserved after fault
+    ok  symlink handling verified or skipped on restricted Windows
+    ok  nested path prohibited
+    ok  resolveDataDir throws TARGET_DATA_DIR_UNAVAILABLE on uncreatable target directory
+    ok  second migration run succeeds idempotently
     ok  collabStore rejects data directory inside project root
     ok  reviewCommentStore rejects data directory inside project root
     ok  collabStore succeeds with safe independent dataDir
     ok  reviewCommentStore succeeds with safe independent dataDir
     ```
-  - `npm run test:server`（含 `dev-server.cjs` 与 `standalone-datadir.cjs`）：**30/30 + 14/14 全部通过**
+  - `npm run test:server`（含 `dev-server.cjs` 30 项 + `standalone-datadir.cjs` 47 项）：**77/77 全部通过**
   - 受影响存储层测试：
     - `tests/collab-store.cjs`：**53/53 通过**
     - `tests/review-comment-store.cjs`：**49/49 通过**
@@ -330,20 +420,34 @@
   - `tests/specs.cjs`：**18/18 通过**
   - `tests/specs-ui.cjs`：**25/25 通过**
 - **Electron 真实 Chromium 环境验证**：
-  - `tests/panel-restore-electron.cjs`：**11/11 全部通过**
+  - `tests/panel-restore-electron.cjs`：**25/25 全部通过**
     ```
-    PASS Bug 9: thinking chip reflects active level
+    PASS Bug 9: thinking chip reflects active level (思考 medium)
     PASS Bug 9: thinking button is enabled with valid levels
     PASS Bug 11: changes list scrolled before reload
+    PASS Bug 11: diff expanded before reload
     PASS Bug 11: active surface recorded in sessionStorage as changes
+    PASS Bug 11: right pane automatically reopened after reload
+    PASS Bug 11: right pane surface restored to changes
     PASS Bug 11: changes list scroll position restored after reload
+    PASS Bug 11: expanded diff automatically restored after reload
     PASS Bug 11: specs tree scrolled before reload
-    PASS Bug 11: active surface recorded as specs
+    PASS Bug 11: specs markdown content scrolled before reload
+    PASS Bug 11: active surface recorded in sessionStorage as specs
+    PASS Bug 11: right pane surface restored to specs
     PASS Bug 11: specs tree scroll position restored after reload
+    PASS Bug 11: specs doc markdown scroll position restored after reload
     PASS Bug 11: browser surface is NEVER written to sessionStorage
-    PASS Bug 11: readRestoredSurface is null after browser was active
+    PASS Bug 11: active surface in sessionStorage remains null after browser reload
     PASS Bug 11: right pane remains closed after browser reload
-    Electron UI Verification: 11/11 passed; failed=0
+    PASS Bug 11: browser never auto-reconnected or triggered network navigation
+    PASS Bug 11: right pane closed by user close button
+    PASS Bug 11: user close button cleared active surface key
+    PASS Bug 11: panel does NOT restore after user explicitly closed it
+    PASS Bug 11: session-switch automatically clears changes pane state without manual call
+    PASS Bug 11: workspace-generation automatically clears restored surface
+    PASS Bug 11: workspace-generation automatically clears all pane states
+    Electron UI Verification: 25/25 passed; failed=0
     ```
   - `tests/z1-electron.cjs`：**25/25 全部通过**
 - **真实 Chromium 截图证据（存放在 [docs/assets/bug-fixes/](file:///c:/pi-GUI/docs/assets/bug-fixes/)）**：
@@ -378,9 +482,9 @@
 | `tests/bug8-acceptance-live.cjs` | **新增** | Bug 8 | 真实 Pi 交互与取消屏障实时套件 |
 | `tests/bug8-real-pi-fixture.cjs` | **新增** | Bug 8 | 真实 Pi RPC + 本地回环模型 fixture 回归测试（31 项断言） |
 | `tests/thinking-availability.cjs` | **新增** | Bug 9 | 纯投影 10 状态矩阵与降级原因测试（34 项断言） |
-| `tests/standalone-datadir.cjs` | **新增** | Bug 10 | 独立数据目录计算、迁移保护与安全路径防护测试（14 项断言） |
+| `tests/standalone-datadir.cjs` | **新增** | Bug 10 | 独立数据目录计算、SEA 原生识别、多实例暂存保护与故障注入测试（47 项断言） |
 | `tests/panel-restore-ui.cjs` | **新增** | Bug 11 | 面板恢复白名单、持久化与防串线测试（14 项断言） |
-| `tests/panel-restore-electron.cjs`| **新增** | Bug 9, 11| 真实 Electron / Chromium 渲染与交互取证测试（11 项断言） |
+| `tests/panel-restore-electron.cjs`| **新增** | Bug 9, 11| 真实 Electron / Chromium 渲染与交互取证测试（25 项断言） |
 | `tests/runtime-models.cjs` | 修改 | Bug 9 | 纠正为新契约（原生档位优先于静态 false） |
 | `tests/smoke.cjs` | 修改 | 通用 | 补充模型回读与配额隔离测试 fixture |
 | `tests/runtime-finish-ui.cjs` | 修改 | Bug 9 | 适配统一可用性投影断言 |
