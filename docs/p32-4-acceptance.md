@@ -79,6 +79,11 @@ Process 使用真实 Node HTTP 服务和 Windows 进程树，由 fixture Pi 经�
 
 ## 11. Model isolation
 
+> 历史合同说明：以下 reasoning=true 门禁是 P32.4 当时的验收范围。
+> Z5-2 经用户明确选择，改为已确认当前模型 + 有效原生非 off 等级的统一操作合同，
+> 静态 capability 仍保留三值；当前规则见 [模型能力合同](model-capabilities.md#z5-2classic--runtime-统一操作合同)
+> 和 [Z5-2 验收](Z5-2-acceptance.md)。本节原始历史证据保留。
+
 复用 modelIdentity/modelCapability，保留 true/false/unknown，不从名字猜 reasoning。只有 reasoning=true 且 native Pi levels 明确返回时允许 thinking；false/unknown 禁用。
 
 先注册等待者再发 scoped mutation。HTTP ack≠成功；需 store 已接受的 native SSE response 匹配 full owner/id/command/success，再 get_state/readback。切 A→B、旧 generation、失败/超时不得污染 B 或替换已确认旧选择。

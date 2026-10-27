@@ -1264,7 +1264,7 @@ staticCheck();
   // --- get_state ---
   es.emit({
     type: 'response', command: 'get_state', success: true,
-    data: { model: { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }, thinkingLevel: 'high', isStreaming: false, sessionName: 'pi-gui-work' },
+    data: { model: { provider: 'deepseek', id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }, thinkingLevel: 'high', isStreaming: false, sessionName: 'pi-gui-work' },
   });
   check('标题 = 会话名', () => $('title').textContent === 'pi-gui-work');
   check('底部 = 会话名', () => $('footName').textContent === 'pi-gui-work');
@@ -2680,6 +2680,9 @@ staticCheck();
   $('modal').click();
 
   // --- 弹层：统计 ---
+  // The preceding full Provider identity can hydrate optional remote quota rows.
+  // This assertion isolates the nine native session-stat rows, as before.
+  const savedStatsQuota = window.S.remoteQuota; window.S.remoteQuota = null;
   $('btnMore').click();
   $('btnStats').click();
   await new Promise((r) => setTimeout(r, 10));
@@ -2689,6 +2692,7 @@ staticCheck();
   });
   await new Promise((r) => setTimeout(r, 10));
   check('统计弹层有数据行', () => window.document.querySelectorAll('#modalCard .stat-rows > div').length === 9);
+  window.S.remoteQuota = savedStatsQuota;
   $('modal').click();
 
   // --- 弹层：更多 ---
@@ -2782,7 +2786,7 @@ staticCheck();
   // pi 对非法档位也回 ok（实测 medium 被静默映射成 high），失败分支要能纠正显示
   es.emit({ type: 'response', command: 'set_thinking_level', success: false, error: '不支持的档位' });
   check('设置失败后再次回读状态', () => commands.filter((c) => c.type === 'get_state').length === gsBefore + 3);
-  es.emit({ type: 'response', command: 'get_state', success: true, data: { model: { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }, thinkingLevel: 'off', sessionName: 'pi-gui-work' } });
+  es.emit({ type: 'response', command: 'get_state', success: true, data: { model: { provider: 'deepseek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }, thinkingLevel: 'off', sessionName: 'pi-gui-work' } });
   check('回读后档位被纠正', () => $('thinkText').textContent === '思考 off');
   const oldThinkingState = commands.filter((c) => c.type === 'get_state').at(-1);
 
@@ -7751,9 +7755,13 @@ staticCheck();
     const savedComposerModels = window.S.models;
     const savedComposerState = window.S.state;
     window.boot();
-    window.onThinkingLevels({ levels: ['off', 'low', 'high'] });
     window.S.models = [{ provider: 'fixture', id: 'composer-model', name: 'Composer Model' }];
-    window.S.state = { ...savedComposerState, model: { provider: 'fixture', id: 'composer-model', name: 'Composer Model' } };
+    // Establish the current model and its native levels in the same boot read.
+    // A bare levels injection before replacing S.state is not current evidence.
+    window.onResponse({ command: 'get_state', id: commands.filter(c => c.type === 'get_state').at(-1).id, success: true,
+      data: { ...savedComposerState, model: { provider: 'fixture', id: 'composer-model', name: 'Composer Model' } } });
+    window.onResponse({ command: 'get_available_thinking_levels', id: commands.filter(c => c.type === 'get_available_thinking_levels').at(-1).id,
+      success: true, data: { levels: ['off', 'low', 'high'] } });
     window.renderModelControls();
     $('btnModel').click();
     const pop = window.document.querySelector('.pop');

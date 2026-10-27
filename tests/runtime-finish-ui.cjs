@@ -6,6 +6,7 @@ const { JSDOM } = require('jsdom');
   global.window = dom.window; global.document = dom.window.document; global.localStorage = dom.window.localStorage;
   const { runtimeStore, seedRuntimeSnapshot, observeRuntimeFrame } = await import('../public/runtime-state.js');
   const { createRuntimeConversation } = await import('../public/runtime-conversation.js');
+  const { thinkingAvailability } = await import('../public/thinking-availability.js');
   const { setTitleText, setRuntimeTitle } = await import('../public/shell.js');
   let checks = 0;
   const ok = (name, value) => { assert.ok(value, name); checks++; console.log('  ok ' + name); };
@@ -19,7 +20,8 @@ const { JSDOM } = require('jsdom');
     ['B', { model: catalogue[1], models: catalogue, reasoning: false, thinkingLevel: 'off', levels: null, pending: false, notice: '' }],
   ]);
   const modelCalls = [], requests = [];
-  const models = { get: id => values.get(id), refresh: async id => { modelCalls.push({ refresh: id }); return true; },
+  const models = { get: id => { const data = values.get(id); return { ...data, availability: thinkingAvailability({ ...data,
+    model: data.model && { ...data.model, reasoning: data.reasoning }, levels: data.levels || [] }) }; }, refresh: async id => { modelCalls.push({ refresh: id }); return true; },
     setModel: async (id, selected) => { modelCalls.push({ id, selected }); values.get(id).pending = true; return true; },
     setThinking: async (id, level) => { modelCalls.push({ id, level }); values.get(id).pending = true; return true; } };
   let resolveHistory;
@@ -51,6 +53,20 @@ const { JSDOM } = require('jsdom');
   ok('explicit unsupported reasoning disabled', thinking().disabled && host.querySelector('.rtc-model-notice').textContent.includes('不支持'));
   values.get('B').reasoning = null; view.draw();
   ok('unknown reasoning is not guessed', thinking().disabled && thinking().options.length === 1 && host.querySelector('.rtc-model-notice').textContent.includes('未知'));
+  for (const reasoning of [false, null]) {
+    Object.assign(values.get('B'), { reasoning, levels: ['off', 'low', 'high'] }); view.draw();
+    ok('native levels enable Runtime UI despite static ' + reasoning, !thinking().disabled && [...thinking().options].slice(1).map(o => o.value).join(',') === 'off,low,high' && !host.querySelector('.rtc-model-notice').textContent);
+  }
+  values.get('B').levels = ['off']; view.draw();
+  ok('off-only UI is disabled with specific native reason', thinking().disabled && host.querySelector('.rtc-model-notice').textContent.includes('仅提供 off'));
+  Object.assign(values.get('B'), { levels: ['off', 'low'], readStatus: 'error' }); view.draw();
+  ok('failed read cannot enable stale options and explains retry', thinking().disabled && thinking().options.length === 1 && host.querySelector('.rtc-model-notice').textContent.includes('未能读取'));
+  ok('failed read selects its reason instead of an absent old value', thinking().selectedIndex === 0 && thinking().selectedOptions[0].textContent.includes('读取失败'));
+  Object.assign(values.get('B'), { readStatus: 'success', pending: true }); view.draw();
+  ok('native read pending is explicit in Runtime UI', thinking().disabled && host.querySelector('.rtc-model-notice').textContent.includes('正在读取'));
+  Object.assign(values.get('B'), { pending: false, model: null }); view.draw();
+  ok('no-model UI discards even valid levels', thinking().disabled && thinking().options.length === 1 && host.querySelector('.rtc-model-notice').textContent.includes('当前模型'));
+  Object.assign(values.get('B'), { model: catalogue[1], levels: null });
   values.get('A').pending = false; values.get('A').model = catalogue[1];
   view.draw(); ok('A confirmation cannot change visible B selector', JSON.parse(select().value).modelId === 'plain');
   view.show('A'); ok('return A shows readback model', JSON.parse(select().value).modelId === 'plain');

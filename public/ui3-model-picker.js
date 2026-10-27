@@ -37,6 +37,7 @@
 
 import { pop, openPop, closePop, currentAnchor, popTitle, popItem } from './ui/popover.js';
 import { modelIdentity, modelCapability, modelCapabilitySummary } from './model-capabilities.js';
+import { thinkingAvailability as sharedThinkingAvailability } from './thinking-availability.js';
 
 /* Thinking 档位的说明文案。这是**展示文案**不是档位清单 —— 档位一律来自 Pi 的
  * get_available_thinking_levels；这里只是给已知的名字配一句人话，配不上就不配。 */
@@ -100,34 +101,8 @@ export function modelDisplayLabel(model) {
  *   3. 没有可用档位时才回头解释原因，且区分三种：明确不支持 / 能力未知 / Pi 没给。
  *
  * 只有 off 的清单视为不可用：全是 off 等于没有可调的推理强度。 */
-export function thinkingAvailability({ model = null, levels = [], pending = false } = {}) {
-  const list = Array.isArray(levels)
-    ? [...new Set(levels.filter((l) => typeof l === 'string' && l))]
-    : [];
-  const usable = list.filter((l) => l !== 'off');
-
-  if (pending) {
-    return { state: 'pending', levels: list, usable: [], label: '思考同步中…',
-      detail: '正在读取当前模型支持的思考等级' };
-  }
-  if (!model) {
-    return { state: 'no-model', levels: list, usable: [], label: '思考不可用',
-      detail: '还没有读到当前模型' };
-  }
-  if (usable.length) {
-    return { state: 'ready', levels: list, usable, label: '', detail: '' };
-  }
-  const reasoning = modelCapability(model).capabilities.reasoning;
-  if (reasoning === false) {
-    return { state: 'unsupported', levels: list, usable: [], label: '此模型不支持推理',
-      detail: '当前模型的能力里明确写了不支持推理' };
-  }
-  if (reasoning === null) {
-    return { state: 'unknown', levels: list, usable: [], label: '推理能力未知',
-      detail: '没有拿到这个模型的推理能力证据，按未知处理' };
-  }
-  return { state: 'unavailable', levels: list, usable: [], label: 'Pi 未提供可选思考等级',
-    detail: '当前模型报告支持推理，但 Pi 没有给出可选的档位' };
+export function thinkingAvailability(input = {}) {
+  return sharedThinkingAvailability(input);
 }
 
 /* ---------- 键盘导航 ---------- */
@@ -415,6 +390,7 @@ export function renderThinkingPicker({
   current = null,
   model = null,
   pending = false,
+  readStatus = 'success',
   onSelect = () => {},
   onClose = () => {},
   descriptions = THINK_DESC,
@@ -423,7 +399,7 @@ export function renderThinkingPicker({
   activeExpanded = null;
   activeOptions = {};
 
-  const availability = thinkingAvailability({ model, levels, pending });
+  const availability = thinkingAvailability({ model, levels, pending, readStatus });
 
   pop.innerHTML = '';
   pop.appendChild(popTitle(title));
