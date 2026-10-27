@@ -31,10 +31,14 @@ function selectAsset(info, portable=false) {
   if(a.url!==`${REPO}v${v}/${name}`||!allowedDownload(a.url)||!Number.isSafeInteger(a.size)||a.size<1||a.size>1024*1024*1024)throw fail('invalid_asset');
   return {name,url:a.url,size:a.size,version:v,digest:/^sha256:[a-f0-9]{64}$/.test(a.digest)?a.digest.slice(7):null};
 }
-function readInstall() {
+function readInstall({run=execFileSync}={}) {
   try {
-    const s=execFileSync(path.join(process.env.SystemRoot,'System32','reg.exe'),['query','HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Pi GUI','/v','InstallLocation'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']});
-    return /InstallLocation\s+REG_SZ\s+(.+)/.exec(s)?.[1].trim();
+    // reg.exe uses the active Windows code page when stdout is redirected.
+    // Read Unicode directly and choose the pipe encoding explicitly.
+    const script="[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false); $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Pi GUI'); if ($key) { try { [Console]::WriteLine($key.GetValue('InstallLocation', '')) } finally { $key.Dispose() } }";
+    const s=run(path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),
+      ['-NoProfile','-NonInteractive','-Command',script],{encoding:'utf8',windowsHide:true,timeout:5000,stdio:['ignore','pipe','ignore']});
+    return s.trim()||null;
   } catch { return null; }
 }
 function detectMode({packaged,exe,readInstall:read=readInstall}) {
@@ -63,7 +67,7 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
   }
   const view=()=>({...state});
   function set(next){state={...state,...next};for(const cb of listeners)cb(view());}
-  function error(e){const code=e?.code||'network';return {ok:false,code,error:TEXT[code]||TEXT.install};}
+  function error(e,fallback='network'){const code=e?.code||fallback;return {ok:false,code,error:TEXT[code]||TEXT.install};}
   async function response(url,signal) {
     for(let i=0;i<5;i++) {
       if(!allowedDownload(url,i>0))throw fail('untrusted');
@@ -146,18 +150,24 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
     if(request.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return error(fail('untrusted'));
     if(mode!=='installed')return error(fail('unsupported'));
     if(installing||job||state.phase!=='ready'||!asset)return error(fail('busy'));
-    installing=true;let prepared=false;
+    installing=true;let preparing=false;
+    set({phase:'preparing',error:''});
     try {
       const p=await verify(asset);
       const info=await readUpdate();const fresh=selectAsset(info);
       if(fresh.version!==asset.version||fresh.size!==asset.size)throw fail('invalid_asset');
       if(await trustedDigest(info,fresh,AbortSignal.timeout(15000))!==asset.sha256)throw fail('checksum');
-      const r=await prepare();if(!r?.ok)return {ok:false,code:r?.code||'busy',error:TEXT.busy};
-      prepared=true;await verify(asset);
-      await launch({...asset,path:p});set({phase:'installing'});await quit();return {ok:true};
-    } catch(e){set({phase:'ready',error:error(e).error});return error(e);}
-    finally {if(state.phase!=='installing'){installing=false;if(prepared)await release();}}
+      preparing=true;
+      const r=await prepare();if(!r?.ok)throw Object.assign(fail(r?.code||'busy'),{publicError:r?.error||TEXT.busy});
+      await verify(asset);
+      await launch({...asset,path:p});await quit();set({phase:'installing'});return {ok:true};
+    } catch(e){
+      const r=error(e,'install');if(e?.publicError)r.error=e.publicError;
+      const damaged=['checksum','cache','invalid_asset','ENOENT','EACCES','EPERM'].includes(r.code);
+      set({phase:damaged?'failed':'ready',error:r.error});return r;
+    }
+    finally {if(state.phase!=='installing'){try{if(preparing)await release();}finally{installing=false;}}}
   }
   return {state:view,download,restore,install,cancel(){ctl?.abort();return {ok:true};},onChange(cb){listeners.add(cb);return()=>listeners.delete(cb);}};
 }
-module.exports={createAppUpdate,selectAsset,detectMode,allowedDownload};
+module.exports={createAppUpdate,selectAsset,detectMode,allowedDownload,readInstall};

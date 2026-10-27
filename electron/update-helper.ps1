@@ -36,7 +36,7 @@ try {
   $lockPath = Join-Path (Split-Path -Parent $runDir) 'install.lock'
   if (Test-Path -LiteralPath $lockPath) { No-Reparse $lockPath }
   $installLock = [IO.File]::Open($lockPath,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
-  $config = Get-Content -LiteralPath $Request -Raw | ConvertFrom-Json
+  $config = Get-Content -LiteralPath $Request -Raw -Encoding UTF8 | ConvertFrom-Json
   if ($config.version -notmatch '^\d+\.\d+\.\d+$' -or $config.sha256 -notmatch '^[a-f0-9]{64}$') { throw 'manifest' }
   $installDir = [IO.Path]::GetFullPath($config.installDir).TrimEnd('\')
   $installer = [IO.Path]::GetFullPath($config.installer)
@@ -61,10 +61,15 @@ try {
   $actual = ([BitConverter]::ToString($sha.ComputeHash($package))).Replace('-','').ToLowerInvariant()
   if ($actual -cne $config.sha256) { throw 'checksum' }
   [IO.File]::WriteAllText((Join-Path $runDir 'ready'),'ready')
-  if (-not $parent.WaitForExit(120000)) { throw 'exit_timeout' }
+  $exitDeadline = [DateTime]::UtcNow.AddSeconds(120)
+  while (-not $parent.WaitForExit(200)) {
+    if (Test-Path -LiteralPath (Join-Path $runDir 'cancelled')) { Save-Result 'cancelled'; exit 1 }
+    if ([DateTime]::UtcNow -ge $exitDeadline) { throw 'exit_timeout' }
+  }
   $parentExited = $true
   $parent.Dispose()
   if (-not (Test-Path -LiteralPath (Join-Path $runDir 'armed'))) { throw 'not_armed' }
+  if (Test-Path -LiteralPath (Join-Path $runDir 'cancelled')) { Save-Result 'cancelled'; exit 1 }
   # A signalled main-process handle alone does not prove Chromium/backend image
   # mappings are gone. Prove the executable can be exclusively opened for write
   # before touching program files; never force-kill a lingering process.
@@ -98,7 +103,7 @@ try {
     exit 2
   }
   if ($setup.ExitCode -ne 0) { throw 'installer_failed' }
-  $installed = Get-Content -LiteralPath (Join-Path $installDir 'resources\app\package.json') -Raw | ConvertFrom-Json
+  $installed = Get-Content -LiteralPath (Join-Path $installDir 'resources\app\package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
   if ($installed.version -cne $config.version) { throw 'version_mismatch' }
   $success = $true
   Save-Result 'installed'
