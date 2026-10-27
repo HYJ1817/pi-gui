@@ -11,7 +11,32 @@ let secondaryToken = 0;
  * 小块 UI 状态（展开目录、滚动位置），不保存 DOM、不保存业务数据。
  * 键 = surface 名；换 workspace/会话的失效与清空由各业务模块自己负责 ——
  * 它们恢复时会重新校验身份，对不上的数据直接丢弃。 */
-const paneState = new Map();
+const ALLOWED_RESTORE_SURFACES = new Set(['changes', 'specs']);
+const ACTIVE_SURFACE_KEY = 'pi-gui:secondary-active-surface';
+const PANE_STATE_KEY = 'pi-gui:secondary-pane-state';
+
+function readStoredPaneStateMap() {
+  try {
+    if (typeof sessionStorage === 'undefined') return new Map();
+    const raw = sessionStorage.getItem(PANE_STATE_KEY);
+    if (!raw) return new Map();
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return new Map(Object.entries(parsed));
+    }
+  } catch {}
+  return new Map();
+}
+
+function persistPaneStateMap(map) {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    const obj = Object.fromEntries(map.entries());
+    sessionStorage.setItem(PANE_STATE_KEY, JSON.stringify(obj));
+  } catch {}
+}
+
+const paneState = readStoredPaneStateMap();
 const PANE_STATE_LIMIT = 8;
 
 export function readPaneState(view) {
@@ -20,21 +45,56 @@ export function readPaneState(view) {
 
 export function writePaneState(view, state) {
   paneState.delete(view);
-  if (!state) return;
+  if (!state) {
+    persistPaneStateMap(paneState);
+    return;
+  }
   paneState.set(view, state);
   while (paneState.size > PANE_STATE_LIMIT) {
     paneState.delete(paneState.keys().next().value);
   }
+  persistPaneStateMap(paneState);
 }
 
 export function clearPaneState(view) {
   if (view) paneState.delete(view);
   else paneState.clear();
+  persistPaneStateMap(paneState);
+}
+
+export function readRestoredSurface() {
+  try {
+    if (typeof sessionStorage === 'undefined') return null;
+    const s = sessionStorage.getItem(ACTIVE_SURFACE_KEY);
+    if (s && ALLOWED_RESTORE_SURFACES.has(s)) return s;
+  } catch {}
+  return null;
+}
+
+export function writeRestoredSurface(surface) {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    if (surface && ALLOWED_RESTORE_SURFACES.has(surface)) {
+      sessionStorage.setItem(ACTIVE_SURFACE_KEY, surface);
+    } else {
+      sessionStorage.removeItem(ACTIVE_SURFACE_KEY);
+    }
+  } catch {}
+}
+
+export function clearRestoredSurface() {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.removeItem(ACTIVE_SURFACE_KEY);
+  } catch {}
 }
 
 export function configureSecondaryPane(pane) {
   secondaryPane = pane;
   pane?.onSurfaceChange(next => {
+    if (!next || !ALLOWED_RESTORE_SURFACES.has(next)) {
+      clearRestoredSurface();
+    }
     if (!secondaryCurrent || next === secondaryCurrent.view) return;
     const old = secondaryCurrent;
     secondaryCurrent = null;
@@ -47,6 +107,11 @@ export function openSecondarySurface(view, mount, {label='文件变更',headerSe
   const hadFocus = secondaryPane.root.contains(document.activeElement);
   secondaryCurrent?.dispose?.();
   secondaryCurrent = null;
+  if (ALLOWED_RESTORE_SURFACES.has(view)) {
+    writeRestoredSurface(view);
+  } else {
+    clearRestoredSurface();
+  }
   secondaryPane.open(view);
   const host = document.createElement('section');
   host.className = 'rp-surface secondary-surface';
@@ -78,6 +143,7 @@ export function openSecondarySurface(view, mount, {label='文件变更',headerSe
       disposers.clear();
     },
     close() {
+      clearRestoredSurface();
       secondaryPane.close();
     },
   };

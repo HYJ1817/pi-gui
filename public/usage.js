@@ -14,6 +14,7 @@ import { openPop, pop } from './ui/popover.js';
 import { setStreaming } from './messages.js';
 import { draftSync } from './draft.js';
 import { withModelCapability, modelIdentity } from './model-capabilities.js';
+import { thinkingAvailability } from './thinking-availability.js';
 import { renderModelControls } from './composer.js';
 import { renderAttachments } from './attachments.js';
 import { observeFallbackState } from './fallback.js';
@@ -231,7 +232,7 @@ export function applyState(d) {
   const nextModel = modelIdentity(d.model);
   const changedModel = previousModel.modelId !== nextModel.modelId
     || (previousModel.providerId && nextModel.providerId && previousModel.providerId !== nextModel.providerId);
-  if (changedModel) S.thinkingLevels = [];
+  if (changedModel) { S.thinkingLevels = []; S.thinkingReadStatus = 'unconfirmed'; }
 
   /* 覆盖旧 state **之前**先比 sessionId：Session A 的统计绝不能留到 Session B。
    * 不等随后的 get_session_stats —— 那一刻界面就该已经干净了。 */
@@ -239,6 +240,7 @@ export function applyState(d) {
   const nextSessionId = typeof d?.sessionId === 'string' && d.sessionId ? d.sessionId : null;
   if (previousSessionId && nextSessionId && previousSessionId !== nextSessionId) {
     S.thinkingLevels = [];
+    S.thinkingReadStatus = 'unconfirmed';
     clearSessionUsage();
   }
 
@@ -703,8 +705,9 @@ export function whenModels(timeoutMs = 4000) {
 
 export function onThinkingLevels(d) {
   const list = Array.isArray(d) ? d : d?.levels;
-  S.thinkingLevels = [...new Set((Array.isArray(list) ? list : []).map(v => typeof v === 'string' ? v : v?.level || v?.name)
-    .filter(v => typeof v === 'string' && /^[a-z][a-z0-9_-]{0,31}$/.test(v)))];
+  const availability = thinkingAvailability({ model: S.state?.model, levels: list });
+  S.thinkingLevels = availability.levels;
+  S.thinkingReadStatus = !Array.isArray(list) || availability.state === 'invalid' ? 'invalid' : 'success';
   renderModelControls();
 }
 

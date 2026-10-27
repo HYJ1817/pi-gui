@@ -111,7 +111,7 @@ import { openCollabPanel } from './collab-panel.js';
 import { openSplitWorkbench } from './ui/split-workbench.js';
 import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
-import { configureSecondaryPane } from './ui/secondary-surface.js';
+import { configureSecondaryPane, readRestoredSurface } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
 import { openAppUpdates, openAppearance } from './settings.js';
 import { initVizIntegration } from './viz-integration.js';
@@ -725,6 +725,7 @@ function openThinkPicker() {
   renderThinkingPicker({
     levels: S.thinkingLevels, current: S.state?.thinkingLevel || null,
     model: S.state?.model || null, pending: S.modelSwitchPending,
+    readStatus: S.thinkingReadStatus,
     onSelect: level => { if (!el.btnThink.disabled) setThinkingLevel(level); },
   });
 }
@@ -747,7 +748,7 @@ thinkingInfo.onclick = () => {
 };
 let thinkingInfoFacts = '';
 function syncThinkingInfo() {
-  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels, pending: S.modelSwitchPending });
+  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels, pending: S.modelSwitchPending, readStatus: S.thinkingReadStatus });
   applyChipState(el.btnThink, availability.state);
   thinkingInfo.hidden = !el.btnThink.disabled || !S.hasProject || S.switching
     || !['ready', 'maintenance'].includes(S.bridgeState);
@@ -1355,7 +1356,18 @@ loadStatus().then(() => {
   draftSync();
   syncNotice();
   connect();
+  restoreOrdinaryPanel();
 });
+
+function restoreOrdinaryPanel() {
+  if (!S.hasProject) return;
+  const surface = readRestoredSurface();
+  if (surface === 'changes') {
+    openChangesPanel();
+  } else if (surface === 'specs') {
+    openSpecsPanel();
+  }
+}
 
 /* 版本检查：启动后**延迟**跑一次，不阻塞启动、不在启动瞬间请求
  * （那时 pi 桥接正在拉起，任何并发都只会互相干扰）。

@@ -36,7 +36,7 @@ import {
 import { listChanges, onChanges } from './changes.js';
 import { toast } from './ui/toast.js';
 import { confirmModal, openModal } from './ui/modal.js';
-import { openSecondarySurface } from './ui/secondary-surface.js';
+import { openSecondarySurface, readPaneState, writePaneState, clearPaneState } from './ui/secondary-surface.js';
 import { allHunksOpen, bindDiffToggles, countDiffLines, diffHtml, setAllHunks } from './diff.js';
 import {
   REVIEW_LIMITS,
@@ -90,6 +90,7 @@ document.addEventListener('pi-gui:workspace-generation', () => {
   diffViewStateEpoch++;
   lastChangesListScroll = 0;
   changesListRestore = null;
+  clearPaneState('changes');
 });
 document.addEventListener('pi-gui:session-switch', () => {
   /* Classic session switch: the comment bucket changes with S.state.sessionId,
@@ -100,6 +101,7 @@ document.addEventListener('pi-gui:session-switch', () => {
   lastChangesListScroll = 0;
   changesListRestore = null;
   suspendReviewSurface();
+  clearPaneState('changes');
 });
 
 const STATUS_LABEL = {
@@ -149,6 +151,34 @@ let diffViewStateEpoch = 0;
  * against a freshly rendered diff. Scope/session/workspace switches clear it. */
 let lastChangesListScroll = 0;
 let changesListRestore = null;
+
+function rememberChangesPaneState() {
+  writePaneState('changes', {
+    lastChangesListScroll,
+    diffViewState: Array.from(diffViewState.entries()),
+  });
+}
+
+function restoreChangesPaneState() {
+  const restored = readPaneState('changes');
+  if (restored) {
+    if (typeof restored.lastChangesListScroll === 'number') {
+      lastChangesListScroll = restored.lastChangesListScroll;
+    }
+    if (Array.isArray(restored.diffViewState)) {
+      for (const [k, v] of restored.diffViewState) {
+        if (!diffViewState.has(k)) diffViewState.set(k, v);
+      }
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    captureChangesListScroll();
+    rememberChangesPaneState();
+  });
+}
 /* Unsaved comment text is captured before a destructive redraw and restored
  * only inside the same workspace/conversation scope. */
 const pendingReviewDrafts = new Map();
@@ -418,10 +448,12 @@ export function openChangesPanel(options = {}) {
 }
 
 export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
+  restoreChangesPaneState();
   card.classList.add('changes');
   activeChangesSurface = instance;
   instance.onDispose(() => {
     captureChangesListScroll();
+    rememberChangesPaneState();
     changesListRestore = null;
     panels.changes = null;
     restoreAllBtn = null;
@@ -581,13 +613,17 @@ export function renderChangesBody(reopenSerial = 0) {
   for (const f of shown) list.appendChild(changeRow(f, session.has(f.path), reopenSerial, restore));
   box.appendChild(list);
   list.addEventListener('scroll', () => {
-    if (ownsChangesList(restore) && !restore.pending && !restore.frame) lastChangesListScroll = list.scrollTop;
+    if (ownsChangesList(restore) && !restore.pending && !restore.frame) {
+      lastChangesListScroll = list.scrollTop;
+      rememberChangesPaneState();
+    }
   }, { passive: true });
   // A user scroll during a slow reload takes precedence over the saved position.
   const interrupt = () => {
     if (!ownsChangesList(restore)) return;
     restore.top = null;
     lastChangesListScroll = list.scrollTop;
+    rememberChangesPaneState();
   };
   list.addEventListener('wheel', interrupt, { passive: true });
   list.addEventListener('pointerdown', interrupt, { passive: true });
@@ -610,6 +646,7 @@ function captureChangesListScroll() {
   if (restore && restore.epoch === diffViewStateEpoch && restore.list.isConnected
     && !restore.pending && !restore.frame) {
     lastChangesListScroll = restore.list.scrollTop;
+    rememberChangesPaneState();
   }
 }
 
@@ -944,6 +981,7 @@ function rememberDiffView(dstate, box, open) {
     horizontal: { ...dstate.horizontal },
   });
   while (diffViewState.size > 200) diffViewState.delete(diffViewState.keys().next().value);
+  rememberChangesPaneState();
 }
 
 /* ---------- Diff 渲染 ---------- */

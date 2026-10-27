@@ -430,11 +430,15 @@ export function mountSpecsPanel(host, view, {
     layout.append(treePane, docPane);
     host.append(layout);
     docPane.addEventListener('click', handleDocumentClick);
+    treeList.addEventListener('scroll', () => { if (alive) rememberPaneState(); }, { passive: true });
+    docPane.addEventListener('scroll', () => { if (alive) rememberPaneState(); }, { passive: true, capture: true });
 
     const onWorkspace = () => workspaceChanging();
     const onScope = () => scopeChanged();
+    const onBeforeUnload = () => { if (alive) rememberPaneState(); };
     document.addEventListener('pi-gui:workspace-generation', onWorkspace);
     document.addEventListener('pi-gui:git-scope', onScope);
+    if (typeof window !== 'undefined') window.addEventListener('beforeunload', onBeforeUnload);
 
     view.onDispose(() => {
       rememberPaneState();
@@ -444,6 +448,7 @@ export function mountSpecsPanel(host, view, {
       clearTimeout(switchTimer);
       document.removeEventListener('pi-gui:workspace-generation', onWorkspace);
       document.removeEventListener('pi-gui:git-scope', onScope);
+      if (typeof window !== 'undefined') window.removeEventListener('beforeunload', onBeforeUnload);
       docPane.replaceChildren();
     });
     queueMicrotask(() => { if (isCurrent()) void loadIndex(); });
