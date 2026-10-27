@@ -93,6 +93,8 @@ test('tampered package after download cannot be launched',async t=>{
   let launched=0;const {u,root}=setup(t,{launch:async()=>launched++});await u.download({confirm:true});
   fs.writeFileSync(path.join(root,'Pi-GUI-Setup-0.27.0.exe'),Buffer.alloc(bytes.length));
   assert.equal((await u.install({confirm:true})).ok,false);assert.equal(launched,0);
+  assert.equal(u.state().phase,'failed','changed cached bytes require a fresh download, not another restart');
+  assert.equal((await u.download({confirm:true})).ok,true,'corrupt cache is recoverable through download');
 });
 test('installed detection needs registered exact executable plus uninstaller, copied portable is refused',t=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'pi-update-mode-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));

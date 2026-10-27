@@ -33,7 +33,7 @@ async function until(fn){for(let i=0;i<150;i++){if(fn())return;await sleep(40);}
   checks.push({name:'install mutex remains held during timeout wait',pass:lock==='locked'});
   const code=await exited;checks.push({name:'timeout exits only after actual installer completion',pass:code===2&&fs.existsSync(path.join(install,'finished'))});
   checks.push({name:'user data unaffected',pass:fs.readFileSync(path.join(data,'data.txt'),'utf8')==='preserve'});
-  const out=path.join(ROOT,'docs/windows-update-evidence');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'timeout-fault-results.json'),JSON.stringify({checks,code,world},null,2));
+  const out=process.env.APP_UPDATE_EVIDENCE||path.join(world,'evidence');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'timeout-fault-results.json'),JSON.stringify({checks,code,world},null,2));
   for(const c of checks)console.log((c.pass?'PASS ':'FAIL ')+c.name);console.log(`Windows timeout fault: ${checks.filter(c=>c.pass).length}/${checks.length}`);
   process.exitCode=checks.every(c=>c.pass)?0:1;
 })().catch(e=>{console.error(e);process.exitCode=1;});
