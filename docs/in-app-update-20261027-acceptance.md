@@ -47,7 +47,7 @@
 | 检测器 / Electron 边界 | 87/87 / 123/123 | canonical 日志；本报告末尾记录 |
 | Runtime Browser / Browser host / Stop | 48/48 / 18/18 / 17/17 | canonical 日志；本报告末尾记录 |
 | 精确基线本地完整 canonical | 退出码 0，先于业务改动完成 | `%TEMP%\pi-update-7573-baseline.txt`（609,499 bytes） |
-| 修改后完整 canonical | 退出码 0；17 个 npm 套件入口；2026-10-27 20:48:13–22:20:44；5,551.3 秒；日志 611,033 bytes；另有 21 个明确 skip：两组 SACL witness 各 8 项、非空 SACL 2 项、symlink 3 项（collab/candidate/logging 各 1） | `%TEMP%\pi-update-7573-final-code-canonical-20261027.txt` |
+| 修改后完整 canonical | 命令运行器报告退出码 0；17 个 npm 套件入口；2026-10-27 20:48:13–22:20:44；5,551.3 秒。保留日志包含完整测试正文且无硬失败，但没有追加 `canonicalExit`/耗时元数据；另有 21 个明确 skip：两组 SACL witness 各 8 项、非空 SACL 2 项、symlink 3 项（collab/candidate/logging 各 1） | 退出码与耗时来自命令运行器输出；测试正文见 `%TEMP%\pi-update-7573-final-code-canonical-20261027.txt`（611,033 bytes） |
 | 源码版打包检查 `npm run test:app` | 26/26，退出码 0；内嵌后端、Pi 子进程、RPC、资源和上传缓存通过 | `%TEMP%\pi-update-7573-test-app-20261027.txt` |
 | 单文件 EXE `npm run test:exe` | 49/49，退出码 0；启动、内嵌资源、配置、工具、上传和目录穿越检查通过 | `%TEMP%\pi-update-7573-test-exe-20261027.txt` |
 | NSIS 安装、失败后旧版恢复、再次升级、实际版本 | 13/13 + 9/9；真实 NSIS、真实 Electron/backend/helper；损坏包重下、退出失败恢复、成功升级、部分写失败回滚 | [成功升级](in-app-update-20261027-evidence/installed-e2e.json)、[失败回滚](in-app-update-20261027-evidence/installed-failure.json) |
