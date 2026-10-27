@@ -9,8 +9,8 @@
 
 - **工作分支**：`codex/fix-bugs-8-11` (已从 `codex/z4-5-advanced-editing` 分离隔离)
 - **基线提交（before HEAD）**：`d919fc9` (`docs(z4-5): 更新独立验收修复记录、红绿测试证据与交付状态`)
-- **审查基线 HEAD**：`a37fc9e`（第三轮定向补修基线）
-- **交付范围**：Bug 8、Bug 9、Bug 10、Bug 11 的针对性修复，第四轮针对 Node SEA 数据目录判断、目录嵌套与结构化告警日志的定向修复，新增真实打包 SEA 运行时测试套件 `tests/sea-datadir-live.cjs`，更新 `package.json` 测试链，重建 Windows SEA 可执行程序及 Electron 完整包。
+- **审查基线 HEAD**：`e04b92d`（第四轮补修基线）
+- **交付范围**：Bug 8、Bug 9、Bug 10、Bug 11 的针对性修复，第五轮针对便携版 Node SEA 受保护根目录隔离与存储校验（`collabStore`、`reviewCommentStore`、`candidateRuns`）的最终定向修复，新增真实打包 SEA 协同与评审存储场景（Scenario 7 & 8），更新测试矩阵与断言记录，重建 Windows SEA 可执行程序及 Electron 完整包。
 - **操作边界**：不自动合并、不推送到远端仓库、不打 tag 或发布版本。代码与产物就绪，等待独立验收。
 
 ---
@@ -117,6 +117,42 @@
 
 ---
 
+## 第五轮定向补修与终验摘要 (Round 5 Final Targeted Fix: Portable SEA Storage ProtectedRoots & Isolation)
+
+针对审查 HEAD（`e04b92d`）发现的 Bug 10 核心阻断项（Blocker），在 `codex/fix-bugs-8-11` 上完成了关于便携版 SEA 运行模式下受保护根目录装配与存储层边界校验的最终定向修复，不改动已稳定的 Bug 8、9、11：
+
+### 1. 根因分析与阻断问题定位
+- **现象**：在真实 Node SEA 便携模式（`build/Pi GUI.exe`）中，默认数据目录解析为 `exeDir/data`。但在 `server.js` 中，装配 `collabStore`、`reviewCommentStore` 和 `candidateRuns` 时，直接将 `__dirname`（在 SEA 打包后等于 `exeDir`）作为受保护根目录之一传入。
+- **冲突机制**：存储层在执行存储安全检查时调用 `isInside(resolvedRoot, canonicalPath(dataDir))`。由于 `isInside(exeDir, exeDir/data)` 判定为真，便携版自身的专用数据目录被误判为“位于受保护项目根目录内部”，从而触发 `collab_storage_inside_project`、`comment_storage_inside_project` 和 `candidate_storage_unsafe` 错误，导致便携版下协同文档、代码评审评论和候选任务无法使用。
+
+### 2. 区分三层目录与装配 `getProtectedRoots`
+- **严格区分三种目录**：
+  1. **应用程序可执行文件目录 (`exeDir`)**：在便携版 SEA 下承载 `exeDir/data` 应用数据，严禁直接将其列为受保护根；
+  2. **真正的源码仓库根目录 (`verifiedSourceRoot`)**：仅在源码开发模式或处于验证属实的 pi-gui 源码仓库构建输出目录（如 `<repo>/build/`）时加入受保护列表；
+  3. **真实用户项目根目录 (`userProjectRoots`)**：来自已注册的项目列表（`projects`）以及当前运行时工作目录（`activeCwd`）。
+- **受保护根装配函数 (`server/data-dir.js` & `server.js`)**：
+  - 在 `server/data-dir.js` 中实现并导出 `getProtectedRoots({ sourceRoot, isSea, execPath, io, projects, activeCwd })`；
+  - 便携版 SEA 下将 `exeDir` 排除在受保护根之外，使 `exeDir/data` 作为独立应用存储正常合法运作；
+  - 严禁通过删除 `protectedRoots`、全局跳过 `isInside` 或降低安全拦截规则来规避问题。
+- **用户将 EXE 放置于项目目录内部的边界防范**：
+  - 若用户将 SEA 可执行文件放入其被注册或活跃的用户项目目录中（如 `<userProject>/tools/Pi GUI.exe`），该用户项目依然由 `projects` / `activeCwd` 覆盖并纳入 `protectedRoots`；
+  - 存储层的 `isInside(userProject, exeInsideProject/data)` 会严格拦截并拒绝（分别报 `collab_storage_inside_project`、`comment_storage_inside_project`、`candidate_storage_unsafe`），彻底杜绝用户项目被应用数据目录污染。
+
+### 3. 真实打包 Node SEA 协同与评审存储场景扩展 (`tests/sea-datadir-live.cjs`)
+- 确保测试脚本无条件即时重新编译生成最新的 `build/Pi GUI.exe`，保证被测二进制严格对应当前代码提交，避免使用陈旧产物。
+- 新增 **Scenario 7（项目在 EXE 外部）**：
+  - 便携版启动并分配 `exeDir/data`；
+  - 成功注册外部用户项目；
+  - 协同文档写入、回读并落盘至 `exeDir/data/collab-documents/`；
+  - 代码评审评论写入、回读并落盘至 `exeDir/data/review-comments/`；
+  - 候选任务记录与事务写入、读取并落盘至 `exeDir/data/candidate-runs/`；
+  - HTTP 端点验证权限拦截与存储健康。
+- 新增 **Scenario 8（EXE 放置于项目内部）**：
+  - 验证 `collabStore`、`reviewCommentStore`、`candidateStore` 和 `candidateTransactions` 严格拦截拒绝。
+- 实测 **41/41 项全部通过**。
+
+---
+
 ## 逐项缺陷最终修复状态
 
 ### 1. Bug 8：Stop / 取消状态与后续交互异常
@@ -141,19 +177,12 @@
   - `server/data-dir.js`：
     - `isSeaRuntime()` & `detectExecutionMode()`：基于原生 `node:sea` 精准识别重命名 SEA 二进制与运行模式；
     - `defaultDataDir()`：源码 Web 模式使用 `%APPDATA%/pi-gui`，便携模式兼容检查同级历史数据与项目防污染回退；
+    - `getProtectedRoots()`：区分便携可执行文件目录（`exeDir`）、验证源码根目录（`verifiedSourceRoot`）与用户项目根目录（`userProjectRoots`），支持便携版 `exeDir/data` 作为独立应用存储；
     - `STAGE_PREFIX` & `parseStageName()` & `isProcessRunning()`：基于 PID 存活的多实例活跃暂存保护与孤儿清理；
     - `validatePathSafety()`：防范绝对路径相同、NUL 字节及嵌套路径穿越；
     - `migrateLegacyData()` & `resolveDataDir()`：无损原子暂存迁移、明确失败分级与脱敏诊断。
-- **验证结论**：`standalone-datadir.cjs` 47/47 全部通过（包含多实例并发暂存、孤儿清理、故障注入与权限拒绝测试），`npm run test:server` 77/77 全部通过。
-
-### 4. Bug 11：右侧面板真刷新自动恢复与滚动位置记忆
-- **状态**：修复完成，集成验证通过。
-- **关键代码位置**：
-  - `public/ui/secondary-surface.js`：基于 `sessionStorage` 仅放行 `changes` 与 `specs`，严格阻断 `browser` 自动恢复；监听 `pi-gui:workspace-generation` 自动清理恢复状态；
-  - `public/git.js`：在挂载时还原 `lastChangesListScroll` 与 `diffViewState`，重绘制列表时按文件状态重新绑定 Diff 展开与横向滚动；
-  - `public/specs-panel.js`：记忆并在切换时恢复目录树与文档正文滚动位置；在工作区切换时主动调用 `clearPaneState('specs')`；
-  - `public/app.js`：在 `loadStatus` 首屏初始化完成后调用 `restoreOrdinaryPanel()` 自动恢复面板。
-- **验证结论**：`panel-restore-ui.cjs` 14/14 通过，`panel-restore-electron.cjs` 25/25 全部通过，`z1-electron.cjs` 25/25 全部通过。
+  - `server.js`：装配动态 `resolveStoreProtectedRoots`，供 `collabStore`、`reviewCommentStore`、`candidateRuns` 使用，彻底消除便携版误将 `exeDir` 视作受保护项目的问题。
+- **验证结论**：`standalone-datadir.cjs` 63/63 全部通过（包含多实例并发暂存、孤儿清理、故障注入、权限拒绝与存储隔离测试），`npm run test:server` 93/93 全部通过，`tests/sea-datadir-live.cjs` 41/41 全部通过。
 
 ### 4. Bug 11：右侧面板真刷新自动恢复与滚动位置记忆
 - **状态**：修复完成，集成验证通过。
@@ -176,11 +205,16 @@
 | `$env:PI_GUI_BUG8_FIXTURE="1"; node tests/bug8-real-pi-fixture.cjs` | 0 | 31 | 0 | Bug 8 真实 Pi RPC 回环场景、双会话并发停止与状态核验 |
 | `npm run test:stop` | 0 | 46 | 0 | Bug 8 综合停止测试链（stop-barrier + gui-browser-stop + fixture） |
 | `npm run test:model-capabilities` | 0 | 70 | 0 | Bug 9 模型能力与统一思考等级 10 状态矩阵测试 |
-| `npm run test:server` | 0 | 77 | 0 | Bug 10 服务端基础路由(30) + 独立数据目录及并发迁移故障注入(47) |
+| `node tests/standalone-datadir.cjs` | 0 | 63 | 0 | Bug 10 独立数据目录、SEA 识别、并发暂存保护与受保护根隔离 |
+| `npm run test:server` | 0 | 93 | 0 | Bug 10 服务端基础路由(30) + 独立数据目录及并发迁移故障注入(63) |
+| `node tests/sea-datadir-live.cjs` | 0 | 41 | 0 | Bug 10 真实打包 Node SEA 二进制 8 大持久化、协同与评审场景运行时测试 |
+| `npm run test:collab` | 0 | 21 套件 | 0 | Z4-1 / Bug 10 协同文档全链路数据与端点测试 (0 失败) |
+| `npm run test:candidates` | 0 | 13 套件 | 0 | 候选变更与事务全链路存储测试 (0 失败) |
 | `node tests/panel-restore-ui.cjs` | 0 | 14 | 0 | Bug 11 恢复白名单、持久化映射与跨作用域清理 |
 | `npm run test:specs` | 0 | 57 | 0 | Bug 11 Specs API + UI 渲染 + 面板恢复 UI 套件 |
 | `node tests/z1-electron.cjs` | 0 | 25 | 0 | Bug 11 Changes 面板真实 Chromium 滚动与分屏基线回归 |
 | `node tests/panel-restore-electron.cjs` | 0 | 25 | 0 | Bug 9, 11 真实 Electron 原生 app.js 刷新恢复与沙箱交互 |
+| `npm run pretest` | 0 | 11+CI | 0 | 文件大小审计 (11 项) 与完整 CI 计划矩阵与执行门控验证 |
 | `node tests/smoke.cjs` | 0 | 1338 | 0 | 全局核心回归冒烟测试（断言总数保持 1338） |
 
 ---
@@ -411,10 +445,22 @@
     ok  reviewCommentStore rejects data directory inside project root
     ok  collabStore succeeds with safe independent dataDir
     ok  reviewCommentStore succeeds with safe independent dataDir
+    ok  getProtectedRoots does NOT include portable exeDir
+    ok  getProtectedRoots includes external user project
+    ok  getProtectedRoots includes verified sourceRoot in source mode
+    ok  collabStore succeeds with portable exeDir/data and external project
+    ok  reviewCommentStore succeeds with portable exeDir/data and external project
+    ok  candidateStore succeeds with portable exeDir/data and external project
+    ok  collabStore strictly rejects when dataDir is inside user project
+    ok  reviewCommentStore strictly rejects when dataDir is inside user project
+    ok  candidateStore strictly rejects when dataDir is inside user project
     ```
-  - `npm run test:server`（含 `dev-server.cjs` 30 项 + `standalone-datadir.cjs` 54 项）：**84/84 全部通过**
-  - `npm run test:sea-datadir`（真实 `build/Pi GUI.exe` 打包二进制运行时集成测试）：**23/23 全部通过**
-  - 受影响存储层测试：
+  - `tests/standalone-datadir.cjs`：**63/63 全部通过**
+  - `npm run test:server`（含 `dev-server.cjs` 30 项 + `standalone-datadir.cjs` 63 项）：**93/93 全部通过**
+  - `node tests/sea-datadir-live.cjs`（真实 `build/Pi GUI.exe` 打包二进制运行时集成测试，覆盖 8 大持久化、协同与评审场景）：**41/41 全部通过**
+  - 受影响协同、评论与候选存储层套件验证：
+    - `npm run test:collab`：**21 个测试套件全部通过** (0 失败)
+    - `npm run test:candidates`：**13 个测试套件全部通过** (0 失败)
     - `tests/collab-store.cjs`：**53/53 通过**
     - `tests/review-comment-store.cjs`：**49/49 通过**
     - `tests/project-config.cjs`：**115/115 通过**
@@ -507,8 +553,8 @@
 | --- | --- | --- | --- |
 | `lib/log-contract.cjs` | 修改 | Bug 10 | 注册 `app.data_migration` WARN 事件，并在 `TOKEN_KEYS` 中补充 `entry` 和 `status` 字段 |
 | `server/rpc-bridge.js` | 修改 | Bug 8 | 在 `startStop()` 和 `releaseStop()` 中增加明确的 `pending: true/false` 状态发布，确保停止屏障二元状态一致 |
-| `server/data-dir.js` | **新增** | Bug 10 | 实现 `defaultDataDir`、`resolveDataDir` 及平滑无损迁移 `migrateLegacyData`；实现 `isPiGuiSourceRepo` 严格验证源码仓库，分离 `sourceRoot`/`exeDir`/`projectRoot`，放宽 `data/` 专用子目录嵌套，生成结构化脱敏告警 |
-| `server.js` | 修改 | Bug 10 | 准确区分 `runningInSea` 与 `sourceRoot`，在日志系统装配后调用 `resolveDataDir` 并注入 `app.data_migration` 结构化 logger |
+| `server/data-dir.js` | **新增** | Bug 10 | 实现 `defaultDataDir`、`resolveDataDir` 及平滑无损迁移 `migrateLegacyData`；实现 `isPiGuiSourceRepo` 严格验证源码仓库，分离 `sourceRoot`/`exeDir`/`projectRoot`，实现 `getProtectedRoots` 正确隔离便携版 `exeDir` 与受保护根，放宽 `data/` 专用子目录嵌套，生成结构化脱敏告警 |
+| `server.js` | 修改 | Bug 10 | 准确区分 `runningInSea` 与 `sourceRoot`，装配动态 `resolveStoreProtectedRoots` 供协同、评论与候选存储层使用，在日志系统装配后调用 `resolveDataDir` 并注入 `app.data_migration` 结构化 logger |
 | `public/thinking-availability.js` | **新增** | Bug 9 | 导出统一思考状态投影 `thinkingAvailability`，确立 Pi 原生能力优先原则 |
 | `public/ui3-model-picker.js` | 修改 | Bug 9 | 接入 `thinkingAvailability` 与 `readStatus`，纠正档位展示与禁用逻辑 |
 | `public/runtime-models.js` | 修改 | Bug 9 | 移除静态覆盖逻辑，接入统一思考投影契约 |
@@ -525,8 +571,8 @@
 | `tests/bug8-acceptance-live.cjs` | **新增** | Bug 8 | 真实 Pi 交互与取消屏障实时套件 |
 | `tests/bug8-real-pi-fixture.cjs` | **新增** | Bug 8 | 真实 Pi RPC + 本地回环模型 fixture 回归测试（31 项断言） |
 | `tests/thinking-availability.cjs` | **新增** | Bug 9 | 纯投影 10 状态矩阵与降级原因测试（34 项断言） |
-| `tests/standalone-datadir.cjs` | **新增** | Bug 10 | 独立数据目录计算、SEA 原生识别、多实例暂存保护与故障注入测试（54 项断言） |
-| `tests/sea-datadir-live.cjs` | **新增** | Bug 10 | 真实打包 Node SEA 二进制启动测试，覆盖 6 大运行与持久化场景（23 项断言） |
+| `tests/standalone-datadir.cjs` | **新增** | Bug 10 | 独立数据目录计算、SEA 原生识别、多实例暂存保护、受保护根隔离与故障注入测试（63 项断言） |
+| `tests/sea-datadir-live.cjs` | **新增** | Bug 10 | 真实打包 Node SEA 二进制启动测试，覆盖 8 大运行、持久化、协同与评审场景（41 项断言） |
 | `tests/panel-restore-ui.cjs` | **新增** | Bug 11 | 面板恢复白名单、持久化与防串线测试（14 项断言） |
 | `tests/panel-restore-electron.cjs`| **新增** | Bug 9, 11| 真实 Electron / Chromium 渲染与交互取证测试（25 项断言） |
 | `tests/runtime-models.cjs` | 修改 | Bug 9 | 纠正为新契约（原生档位优先于静态 false） |
@@ -546,7 +592,7 @@
    - 资源：344 项，代码打包 2.44 MB，blob 8.57 MB
    - 生成路径：`build/Pi GUI.exe`
    - 文件大小：**98.3 MB**
-   - 真实打包启动测试：`npm run test:sea-datadir` 实测 **23/23 项全部通过**（覆盖全新便携版持久化、同级已有数据保持、data/ 数据保持、重命名 SEA、显式环境变量、冲突文件阻断 6 大真实运行时场景）。
+   - 真实打包启动测试：`node tests/sea-datadir-live.cjs` 实测 **41/41 项全部通过**（覆盖全新便携版持久化、同级已有数据保持、data/ 数据保持、重命名 SEA、显式环境变量、冲突文件阻断、协同与评审读写落盘、用户项目内 EXE 安全拦截 8 大真实运行时场景）。
    - 验证结论：资源内嵌注入成功，自包含二进制可在无 Node 环境下独立运作。
 
 2. **Electron 完整应用包 (`npm run build:app -- --rebuild`)**：
