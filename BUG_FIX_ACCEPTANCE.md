@@ -9,7 +9,8 @@
 
 - **工作分支**：`codex/fix-bugs-8-11` (已从 `codex/z4-5-advanced-editing` 分离隔离)
 - **基线提交（before HEAD）**：`d919fc9` (`docs(z4-5): 更新独立验收修复记录、红绿测试证据与交付状态`)
-- **交付范围**：Bug 8、Bug 9、Bug 10、Bug 11 的针对性修复，新增回归测试，更新 `package.json` 测试链，重建 Windows SEA 可执行程序及 Electron 完整包。
+- **审查基线 HEAD**：`a37fc9e`（第三轮定向补修基线）
+- **交付范围**：Bug 8、Bug 9、Bug 10、Bug 11 的针对性修复，第四轮针对 Node SEA 数据目录判断、目录嵌套与结构化告警日志的定向修复，新增真实打包 SEA 运行时测试套件 `tests/sea-datadir-live.cjs`，更新 `package.json` 测试链，重建 Windows SEA 可执行程序及 Electron 完整包。
 - **操作边界**：不自动合并、不推送到远端仓库、不打 tag 或发布版本。代码与产物就绪，等待独立验收。
 
 ---
@@ -80,6 +81,39 @@
   - 复制中断、权限不足、数据冲突、原子重命名失败、重复幂等迁移；
   - 目录无法创建时的结构化错误阻断。
 - 实测 **47/47 全部通过**。
+
+---
+
+## 第四轮定向补修与终验摘要 (Round 4 Targeted SEA & Migration Fixes & Final Verification)
+
+针对审查 HEAD（`a37fc9e`）提出的定向修复要求，在 `codex/fix-bugs-8-11` 上完成了关于实际 Node SEA 数据目录判断、目录嵌套与结构化告警日志的终验补修，不改动已稳定的 Bug 8、9、11：
+
+### 1. 分离三层目录概念与修复实际 SEA 数据目录判断
+- **分离概念**：源码根目录（`sourceRoot`，仅在非 SEA 源码/开发模式存在）、可执行文件目录（`exeDir = path.dirname(process.execPath)`）与真实用户项目目录（`projectRoot`）。
+- **根除 `exeDir === appRoot` 误判**：
+  - 在实际 Node SEA 单文件运行时中，打包脚本生成的 CJS 中 `__dirname` 恒等于 `exeDir`。若直接将 `__dirname` 视作 `appRoot`，会导致 `exeDir === appRoot` 恒成立，便携版被错误识别为“运行在源码仓库内部”，从而错误回退到系统 `%APPDATA%/pi-gui`。
+  - 引入 `isPiGuiSourceRepo(dir, io)` 函数，严格校验目录下的 `package.json`（必须为 `name === 'pi-gui'`）和 `server.js`。只有经过验证确属 pi-gui 源码仓库构建目录时才判定为 repo build。
+  - 全新便携版 SEA 默认使用独立规范的 `exeDir/data` 子目录；同级已有历史数据保持原位置；显式 `PI_GUI_DATA` 始终最高优先级。
+
+### 2. 解决 `exeDir/data` 迁移源目录与目标目录嵌套冲突
+- 在迁移至 `exeDir/data` 时，目标目录 `dst` 位于源目录 `src` 的子路径下。原先严格的 `dst.startsWith(src)` 判定会导致抛出 `nested_path_prohibited` 导致启动阻断。
+- 重构 `validatePathSafety`：
+  - 严禁源目录在目标目录内部（防止无限递归）；
+  - 当目标目录在源目录内部时，只要目标目录不与待迁移项（`projects.json`, `plans/`, `worktrees/` 等）重名碰撞，且为独立子文件夹（如 `data/`），安全放行；若与迁移项发生碰撞或嵌套在迁移项内部，则严格拦截阻断。
+
+### 3. 迁移告警规范接入结构化日志系统
+- **严格遵循日志契约**：在 `lib/log-contract.cjs` 中注册 `app.data_migration` WARN 事件，并在 `TOKEN_KEYS` 中补充 `entry` 和 `status` 字段。
+- **可恢复异常上报**：在 `migrateLegacyData` 与 `resolveDataDir` 中，当遭遇 `EACCES`、`EBUSY`、`EPERM`、`EXDEV` 等可恢复异常时，统一生成脱敏诊断事件（包含 `role: 'backend'`, `code`, `entry`, `status`, `action`, `reason`），并根据错误码提供明确的用户恢复操作指引（如 `check_permissions`, `retry_after_closing_file`, `manual_copy_across_devices`），同步输出控制台脱敏告警。
+
+### 4. 真实打包 Node SEA 运行时集成测试 (`tests/sea-datadir-live.cjs`)
+- 新增 `tests/sea-datadir-live.cjs`，真正编译并启动 `build/Pi GUI.exe`（98.3 MB 二进制），在独立临时沙箱环境中验证 6 大真实场景：
+  1. **全新便携版**：启动输出数据目录为 `exeDir/data`，通过 `POST /api/projects` 写入项目，确认数据落盘至 `exeDir/data/projects.json`；
+  2. **同级已有 `projects.json` (v1 便携版)**：启动后保持在同级原位置，通过 `GET /api/projects` 读出已有项目，`exeDir/data` 绝不被意外创建；
+  3. **`data/` 下已有历史数据 (v2 便携版)**：保持在 `exeDir/data`，正确读出已有项目；
+  4. **重命名后的 SEA 可执行程序**：重命名为任意自定义文件名（`MyCustomStandaloneAssistant.exe`），仍精准识别便携模式，分配并写入 `exeDir/data`；
+  5. **显式 `PI_GUI_DATA`**：环境变量最高优先级，从指定自定义目录读取与写入，宿主 `exeDir/data` 绝不被创建或污染；
+  6. **目标目录冲突/不可创建错误记录**：当目标目录为普通冲突文件导致无法创建时，进程安全退出并输出 `TARGET_DATA_DIR_UNAVAILABLE`，原始冲突文件未被破坏。
+- 实测 **23/23 项全部通过**。
 
 ---
 
@@ -334,6 +368,10 @@
     ok  portable mode preserves existing portable directory next to exe
     ok  portable mode preserves existing data/ subdirectory
     ok  brand new portable SEA defaults to dedicated exeDir/data
+    ok  portable SEA with appRoot === exeDir in normal folder defaults to exeDir/data and is NOT falsely flagged as repo build
+    ok  isPiGuiSourceRepo correctly detects pi-gui repository
+    ok  isPiGuiSourceRepo rejects directory without server.js or name pi-gui
+    ok  portable SEA inside verified source repo build directory falls back to user profile
     ok  portable SEA inside user project safely falls back to standard user profile
     ok  explicit PI_GUI_DATA is respected
     ok  explicit PI_GUI_DATA directory is created
@@ -362,8 +400,11 @@
     ok  faulty migration reports failure without crashing
     ok  error recorded with code EACCES
     ok  source data preserved after fault
+    ok  recoverable error emits app.data_migration log event
     ok  symlink handling verified or skipped on restricted Windows
-    ok  nested path prohibited
+    ok  nested path inside legacy entry prohibited
+    ok  source inside destination prohibited
+    ok  dedicated subfolder data/ inside source is allowed for migration
     ok  resolveDataDir throws TARGET_DATA_DIR_UNAVAILABLE on uncreatable target directory
     ok  second migration run succeeds idempotently
     ok  collabStore rejects data directory inside project root
@@ -371,7 +412,8 @@
     ok  collabStore succeeds with safe independent dataDir
     ok  reviewCommentStore succeeds with safe independent dataDir
     ```
-  - `npm run test:server`（含 `dev-server.cjs` 30 项 + `standalone-datadir.cjs` 47 项）：**77/77 全部通过**
+  - `npm run test:server`（含 `dev-server.cjs` 30 项 + `standalone-datadir.cjs` 54 项）：**84/84 全部通过**
+  - `npm run test:sea-datadir`（真实 `build/Pi GUI.exe` 打包二进制运行时集成测试）：**23/23 全部通过**
   - 受影响存储层测试：
     - `tests/collab-store.cjs`：**53/53 通过**
     - `tests/review-comment-store.cjs`：**49/49 通过**
@@ -463,9 +505,10 @@
 
 | 文件路径 | 状态 | 涉及 Bug | 核心修改说明 |
 | --- | --- | --- | --- |
+| `lib/log-contract.cjs` | 修改 | Bug 10 | 注册 `app.data_migration` WARN 事件，并在 `TOKEN_KEYS` 中补充 `entry` 和 `status` 字段 |
 | `server/rpc-bridge.js` | 修改 | Bug 8 | 在 `startStop()` 和 `releaseStop()` 中增加明确的 `pending: true/false` 状态发布，确保停止屏障二元状态一致 |
-| `server/data-dir.js` | **新增** | Bug 10 | 实现 `defaultDataDir`、`resolveDataDir` 及平滑无损迁移 `migrateLegacyData` |
-| `server.js` | 修改 | Bug 10 | 引用 `server/data-dir.js` 解析独立安全数据目录，消除 `storage_inside_project` 冲突 |
+| `server/data-dir.js` | **新增** | Bug 10 | 实现 `defaultDataDir`、`resolveDataDir` 及平滑无损迁移 `migrateLegacyData`；实现 `isPiGuiSourceRepo` 严格验证源码仓库，分离 `sourceRoot`/`exeDir`/`projectRoot`，放宽 `data/` 专用子目录嵌套，生成结构化脱敏告警 |
+| `server.js` | 修改 | Bug 10 | 准确区分 `runningInSea` 与 `sourceRoot`，在日志系统装配后调用 `resolveDataDir` 并注入 `app.data_migration` 结构化 logger |
 | `public/thinking-availability.js` | **新增** | Bug 9 | 导出统一思考状态投影 `thinkingAvailability`，确立 Pi 原生能力优先原则 |
 | `public/ui3-model-picker.js` | 修改 | Bug 9 | 接入 `thinkingAvailability` 与 `readStatus`，纠正档位展示与禁用逻辑 |
 | `public/runtime-models.js` | 修改 | Bug 9 | 移除静态覆盖逻辑，接入统一思考投影契约 |
@@ -478,11 +521,12 @@
 | `public/ui/secondary-surface.js` | 修改 | Bug 11 | 基于 `sessionStorage` 实现 `changes`/`specs` 恢复白名单机制，严格阻断 `browser` 自动恢复 |
 | `public/git.js` | 修改 | Bug 11 | 实现 `changes` 列表与 Diff 展开状态记忆与跨会话清理 |
 | `public/specs-panel.js` | 修改 | Bug 11 | 实现 `specs` 目录树与文档视图滚动记忆与跨工作区清理 |
-| `package.json` | 修改 | 通用 | 在 `"test"` 链中集成新增回归套件（`standalone-datadir.cjs`、`thinking-availability.cjs`、`bug8-real-pi-fixture.cjs`） |
+| `package.json` | 修改 | 通用 | 在 `"test"` 链中集成新增回归套件（`standalone-datadir.cjs`、`thinking-availability.cjs`、`bug8-real-pi-fixture.cjs`），新增 `test:sea-datadir` 打包运行时测试脚本 |
 | `tests/bug8-acceptance-live.cjs` | **新增** | Bug 8 | 真实 Pi 交互与取消屏障实时套件 |
 | `tests/bug8-real-pi-fixture.cjs` | **新增** | Bug 8 | 真实 Pi RPC + 本地回环模型 fixture 回归测试（31 项断言） |
 | `tests/thinking-availability.cjs` | **新增** | Bug 9 | 纯投影 10 状态矩阵与降级原因测试（34 项断言） |
-| `tests/standalone-datadir.cjs` | **新增** | Bug 10 | 独立数据目录计算、SEA 原生识别、多实例暂存保护与故障注入测试（47 项断言） |
+| `tests/standalone-datadir.cjs` | **新增** | Bug 10 | 独立数据目录计算、SEA 原生识别、多实例暂存保护与故障注入测试（54 项断言） |
+| `tests/sea-datadir-live.cjs` | **新增** | Bug 10 | 真实打包 Node SEA 二进制启动测试，覆盖 6 大运行与持久化场景（23 项断言） |
 | `tests/panel-restore-ui.cjs` | **新增** | Bug 11 | 面板恢复白名单、持久化与防串线测试（14 项断言） |
 | `tests/panel-restore-electron.cjs`| **新增** | Bug 9, 11| 真实 Electron / Chromium 渲染与交互取证测试（25 项断言） |
 | `tests/runtime-models.cjs` | 修改 | Bug 9 | 纠正为新契约（原生档位优先于静态 false） |
@@ -496,20 +540,26 @@
 ## 构建产物验证
 
 根据 [AGENTS.md](AGENTS.md) 第三节硬约束：*“改完 public/ 或 server/ 必须重建产物，否则用户打开看到的还是旧的排版”*。
-在全部修复完成后，执行了产物完整重新编译：
+在全部修复完成后，执行了产物完整重新编译与真实二进制验证：
 
 1. **单文件 SEA 可执行文件 (`npm run build:exe`)**：
-   - 资源：344 项，代码打包 2.43 MB，blob 8.57 MB
+   - 资源：344 项，代码打包 2.44 MB，blob 8.57 MB
    - 生成路径：`build/Pi GUI.exe`
    - 文件大小：**98.3 MB**
-   - 验证结论：资源全部内嵌注入成功。
+   - 真实打包启动测试：`npm run test:sea-datadir` 实测 **23/23 项全部通过**（覆盖全新便携版持久化、同级已有数据保持、data/ 数据保持、重命名 SEA、显式环境变量、冲突文件阻断 6 大真实运行时场景）。
+   - 验证结论：资源内嵌注入成功，自包含二进制可在无 Node 环境下独立运作。
 
 2. **Electron 完整应用包 (`npm run build:app -- --rebuild`)**：
    - 后端二进制重新注入生成；
    - 应用目录组装 8.8 MB，精简语言包移除 47.2 MB；
    - 生成路径：`dist-app\Pi GUI-win32-x64\Pi GUI.exe`
    - 入口大小：**234.9 MB**，整包大小：**329.2 MB**
+   - 真实 Electron UI 自动化验证：`node tests/panel-restore-electron.cjs` 实测 **25/25 全部通过**。
    - 验证结论：双击即可启动运行，不依赖系统全局 Node。
+
+3. **冒烟与基线全量测试**：
+   - `node tests/smoke.cjs`：**1338/1338 全部通过**。
+   - `npm run pretest`（文件大小报告与 CI 测试矩阵）：**全部通过**。
 
 ---
 
