@@ -1,0 +1,11 @@
+{
+  "checks": 36,
+  "assertions": 161,
+  "failed": 0,
+  "metrics": {
+    "maxSummaryBytes": 9324,
+    "largeFileReadMs": 4.178,
+    "largeFileBytes": 5243551,
+    "largeFileReadBytes": 4194304
+  }
+}

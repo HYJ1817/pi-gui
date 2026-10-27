@@ -1,0 +1,27 @@
+{
+  "checks": 18,
+  "failed": 0,
+  "mode": "packaged-backend-only",
+  "evidence": [
+    {
+      "form": "app",
+      "responseBytes": 626,
+      "summaryBytes": 204,
+      "messagePosition": 1,
+      "nativeDigest": "d98984967c2f0c1aa4075b61d25426ca1c9941a49a6891cb0953960ccbdde652",
+      "nativeUnchanged": true,
+      "liveCount": 0,
+      "piStarts": 0
+    },
+    {
+      "form": "sea",
+      "responseBytes": 626,
+      "summaryBytes": 204,
+      "messagePosition": 1,
+      "nativeDigest": "ec37c2aa24190fb11b44cd748ad7394367b59ef0854c63191605074a78b84054",
+      "nativeUnchanged": true,
+      "liveCount": 0,
+      "piStarts": 0
+    }
+  ]
+}

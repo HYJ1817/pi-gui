@@ -58,6 +58,14 @@ const { execFileSync } = require('node:child_process');
     check('runtime search never exposes path or fileproof', !JSON.stringify(hit).includes(root) && !JSON.stringify(hit).includes('sessionIdentity') && !JSON.stringify(hit).includes('.jsonl'));
     check('search parser excludes thinking and raw tool args', (await search.search('SECRET')).results.length === 0);
     check('runtime body match retains user turn index', hit.matches.some(m => m.type === 'user' && m.userIndex === 0));
+    const historyWithTools = read(a.id), userMatch = hit.matches.find(m => m.type === 'user');
+    check('tool insertion metadata preserves the searched native message identity and user index',
+      historyWithTools.messages[0].messageId === userMatch.messageId
+      && historyWithTools.messages[0].userIndex === userMatch.userIndex
+      && historyWithTools.toolSummary.items[0].messagePosition === 2);
+    check('tool insertion metadata does not create another searchable body message',
+      historyWithTools.messages.length === 2 && historyWithTools.messages[1].text === 'answer needle'
+      && !JSON.stringify(historyWithTools.toolSummary).includes('SECRET'));
     check('classic archived scope remains separate', !(await search.search('needle', 'archived')).results.some(r => r.locator));
     await registry.close(registry.getOwner(a.id)); const before = children;
     check('dormant history consumes no child', read(a.id).ok && children === before && !registry.getOwner(a.id));

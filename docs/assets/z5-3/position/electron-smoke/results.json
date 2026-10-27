@@ -1,0 +1,83 @@
+{
+  "qualification": "normal-sandbox",
+  "sandbox": true,
+  "checks": 9,
+  "failed": 0,
+  "skipped": 0,
+  "rows": [
+    "Electron starts with normal sandbox, isolated context and no Node integration",
+    "renderer connects to the production backend and fake Pi",
+    "workspace and owner identity belong to the temporary Git repository",
+    "real native Browser geometry matches renderer at 1200px",
+    "real native Browser geometry matches renderer at 760px",
+    "real native Browser cannot cover the visible modal",
+    "panel close destroys the native page and detaches its view",
+    "reopen creates a fresh generation with no stale URL or document",
+    "no renderer errors during smoke"
+  ],
+  "screenshots": [
+    "smoke-native.png",
+    "smoke-1200.png",
+    "smoke-760.png",
+    "smoke-modal.png"
+  ],
+  "geometry": [
+    {
+      "requestedWidth": 1200,
+      "contentBounds": {
+        "x": 253,
+        "y": 110,
+        "width": 1200,
+        "height": 820
+      },
+      "viewport": {
+        "x": 780.6666870117188,
+        "y": 132.6666717529297,
+        "width": 419.3333435058594,
+        "height": 687.3333740234375
+      },
+      "nativeBounds": {
+        "x": 781,
+        "y": 133,
+        "width": 419,
+        "height": 687
+      },
+      "zoom": 1
+    },
+    {
+      "requestedWidth": 760,
+      "contentBounds": {
+        "x": 253,
+        "y": 110,
+        "width": 760,
+        "height": 820
+      },
+      "viewport": {
+        "x": 340.66668701171875,
+        "y": 132.6666717529297,
+        "width": 419.3333435058594,
+        "height": 687.3333740234375
+      },
+      "nativeBounds": {
+        "x": 341,
+        "y": 133,
+        "width": 419,
+        "height": 687
+      },
+      "zoom": 1
+    }
+  ],
+  "errors": [],
+  "electron": "44.4.3",
+  "node": "24.21.0",
+  "platform": "win32",
+  "fixture": "temporary Git, production server/renderer/preload/Browser, existing fake Pi; loopback only; no external CDP port",
+  "processCleanup": {
+    "observed": 11,
+    "residual": 0
+  },
+  "exit": {
+    "code": 0,
+    "signal": null
+  }
+}

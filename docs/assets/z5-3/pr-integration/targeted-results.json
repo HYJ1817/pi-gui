@@ -1,0 +1,74 @@
+[
+  {
+    "suite": "history-tool-summary",
+    "exitCode": 0,
+    "durationMs": 341,
+    "summary": "History tool summary: 36/36 cases; 161/161 assertions; skipped=0"
+  },
+  {
+    "suite": "history-tool-summary-http",
+    "exitCode": 0,
+    "durationMs": 263,
+    "summary": "History tool summary HTTP: 14/14 cases; 49/49 assertions; skipped=0"
+  },
+  {
+    "suite": "runtime-history-search",
+    "exitCode": 0,
+    "durationMs": 17599,
+    "summary": "Runtime history/search: 37/37"
+  },
+  {
+    "suite": "runtime-conversation",
+    "exitCode": 0,
+    "durationMs": 1773,
+    "summary": "Runtime conversation: 78/78"
+  },
+  {
+    "suite": "runtime-draft",
+    "exitCode": 0,
+    "durationMs": 1014,
+    "summary": "Runtime draft tests: 42/42"
+  },
+  {
+    "suite": "runtime-models",
+    "exitCode": 0,
+    "durationMs": 2157,
+    "summary": "Runtime models: 52/52"
+  },
+  {
+    "suite": "thinking-availability",
+    "exitCode": 0,
+    "durationMs": 523,
+    "summary": "Thinking availability: 34/34 passed"
+  },
+  {
+    "suite": "runtime-finish-ui",
+    "exitCode": 0,
+    "durationMs": 618,
+    "summary": "Runtime finishing UI: 34/34"
+  },
+  {
+    "suite": "ui3-model",
+    "exitCode": 0,
+    "durationMs": 715,
+    "summary": "UI-3B 模型选择器: 50/50 通过"
+  },
+  {
+    "suite": "ui3-integration",
+    "exitCode": 0,
+    "durationMs": 1059,
+    "summary": "UI3 integration 23/23; failed=0; skipped=0"
+  },
+  {
+    "suite": "model-capabilities",
+    "exitCode": 0,
+    "durationMs": 826,
+    "summary": "Model capabilities: 36/36 通过"
+  },
+  {
+    "suite": "modules",
+    "exitCode": 0,
+    "durationMs": 199,
+    "summary": "120/120 通过"
+  }
+]
