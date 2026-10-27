@@ -47,6 +47,7 @@
     "test:quota": "node tests/usage-quota.cjs",
     "test:body": "node tests/body-integrity.cjs",
     "test:server": "node tests/dev-server.cjs && node tests/standalone-datadir.cjs",
+    "test:sea-datadir": "node tests/sea-datadir-live.cjs",
     "test:models": "node tests/models-api.cjs",
     "test:git": "node tests/git.cjs",
     "test:modules": "node tests/modules.cjs",

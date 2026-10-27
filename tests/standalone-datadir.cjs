@@ -13,6 +13,8 @@ const os = require('node:os');
     resolveDataDir,
     migrateLegacyData,
     isSeaRuntime,
+    isPiGuiSourceRepo,
+    getRecoveryAction,
     parseStageName,
     STAGE_PREFIX,
   } = await import('../server/data-dir.js');
@@ -94,6 +96,38 @@ const os = require('node:os');
       isSea: true,
     });
     ok('brand new portable SEA defaults to dedicated exeDir/data', brandNewResult === path.join(brandNewPortableDir, 'data'));
+
+    // Scenario C2: Portable SEA with appRoot === exeDir (normal folder, not pi-gui repo) -> still defaults to exeDir/data!
+    const brandNewWithAppRoot = defaultDataDir({
+      env: {},
+      appRoot: brandNewPortableDir,
+      execPath: brandNewExe,
+      io: fs,
+      isSea: true,
+    });
+    ok('portable SEA with appRoot === exeDir in normal folder defaults to exeDir/data and is NOT falsely flagged as repo build',
+      brandNewWithAppRoot === path.join(brandNewPortableDir, 'data'));
+
+    // Scenario C3: Verified pi-gui source repo detection
+    const fakeRepoDir = path.join(tempRoot, 'fake-pi-repo');
+    fs.mkdirSync(fakeRepoDir, { recursive: true });
+    fs.writeFileSync(path.join(fakeRepoDir, 'package.json'), '{"name":"pi-gui","version":"1.0.0"}', 'utf8');
+    fs.writeFileSync(path.join(fakeRepoDir, 'server.js'), '// server', 'utf8');
+    ok('isPiGuiSourceRepo correctly detects pi-gui repository', isPiGuiSourceRepo(fakeRepoDir, fs));
+    ok('isPiGuiSourceRepo rejects directory without server.js or name pi-gui', !isPiGuiSourceRepo(brandNewPortableDir, fs));
+
+    // Scenario C4: Portable SEA located inside a verified pi-gui repository (e.g. <repo>/build/Pi GUI.exe)
+    const repoExe = path.join(fakeRepoDir, 'build', 'Pi GUI.exe');
+    fs.mkdirSync(path.join(fakeRepoDir, 'build'), { recursive: true });
+    const repoBuildResult = defaultDataDir({
+      env: {},
+      appRoot: fakeRepoDir,
+      execPath: repoExe,
+      io: fs,
+      isSea: true,
+    });
+    ok('portable SEA inside verified source repo build directory falls back to user profile',
+      !repoBuildResult.startsWith(fakeRepoDir));
 
     // Scenario D: Portable SEA placed inside user project repository -> safely avoids contaminating project
     const userProjectDir = path.join(tempRoot, 'user-project-repo');
@@ -247,6 +281,18 @@ const os = require('node:os');
     ok('error recorded with code EACCES', faultReport.errors.some(e => e.entry === 'projects.json' && e.code === 'EACCES'));
     ok('source data preserved after fault', fs.existsSync(path.join(fakeAppRoot, 'projects.json')));
 
+    // Structured logging verification: recoverable errors must pass actionable recovery recommendations
+    const migrationLogs = [];
+    const logFaultTarget = path.join(tempRoot, 'log-fault-target');
+    migrateLegacyData({
+      sourceDir: fakeAppRoot,
+      targetDir: logFaultTarget,
+      io: faultEaccesIo,
+      log: (event, details) => migrationLogs.push({ event, details }),
+    });
+    ok('recoverable error emits app.data_migration log event',
+      migrationLogs.some(l => l.event === 'app.data_migration' && l.details.code === 'EACCES' && l.details.action === 'check_permissions'));
+
     // ================= 11. Security: Symbolic links in source are rejected =================
     const symlinkSrcDir = path.join(tempRoot, 'symlink-src');
     const symlinkTargetDir = path.join(tempRoot, 'symlink-target');
@@ -264,11 +310,22 @@ const os = require('node:os');
     }
 
     // ================= 12. Path traversal & dangerous nesting checks =================
+    // Nesting inside legacy entries (like plans/) is prohibited
     const nestA = path.join(tempRoot, 'nest-parent');
-    const nestB = path.join(nestA, 'nest-child');
-    fs.mkdirSync(nestB, { recursive: true });
-    const nestReport = migrateLegacyData({ sourceDir: nestA, targetDir: nestB, io: fs });
-    ok('nested path prohibited', nestReport.ok === false && nestReport.errors.some(e => e.code === 'nested_path_prohibited'));
+    const nestPlans = path.join(nestA, 'plans');
+    fs.mkdirSync(nestPlans, { recursive: true });
+    const nestReport = migrateLegacyData({ sourceDir: nestA, targetDir: nestPlans, io: fs });
+    ok('nested path inside legacy entry prohibited', nestReport.ok === false && nestReport.errors.some(e => e.code === 'nested_path_prohibited'));
+
+    // Nesting source inside destination is prohibited
+    const reverseNestReport = migrateLegacyData({ sourceDir: nestPlans, targetDir: nestA, io: fs });
+    ok('source inside destination prohibited', reverseNestReport.ok === false && reverseNestReport.errors.some(e => e.code === 'nested_path_prohibited'));
+
+    // Non-colliding dedicated subfolder (like exeDir/data) is ALLOWED
+    const nestData = path.join(nestA, 'data');
+    fs.mkdirSync(nestData, { recursive: true });
+    const allowedSubfolderReport = migrateLegacyData({ sourceDir: nestA, targetDir: nestData, io: fs });
+    ok('dedicated subfolder data/ inside source is allowed for migration', allowedSubfolderReport.ok === true);
 
     // ================= 13. resolveDataDir fatal error handling =================
     let fatalThrown = false;
