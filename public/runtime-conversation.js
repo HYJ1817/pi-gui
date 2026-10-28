@@ -519,7 +519,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       for (const model of options) { const option = el('option', '', `${model.name || model.id || model.modelId} · ${model.providerId || model.provider}`); option.value = identity(model); modelSelect.append(option); }
     }
     modelSelect.value = selected;
-    const availability = data?.availability || thinkingAvailability();
+    const availability = data?.availability || thinkingAvailability(data);
     const levels = availability.levels;
     if (thinkingSelect.dataset.options !== JSON.stringify(levels)) {
       thinkingSelect.dataset.options = JSON.stringify(levels); thinkingSelect.replaceChildren();

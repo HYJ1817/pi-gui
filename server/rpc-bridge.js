@@ -724,6 +724,7 @@ export function createRpcBridge({
     publish({
       type: 'stop_state',
       state: result.ok ? 'stopped' : 'reset',
+      pending: false,
       evidence,
       queue: run.queue,
       bridgeRun: run.run,
@@ -870,6 +871,13 @@ export function createRpcBridge({
       resolveDone: (value) => resolveDone(value),
     };
     stopRun = run;
+    publish({
+      type: 'stop_state',
+      state: 'stopping',
+      pending: true,
+      bridgeRun: run.run,
+      cwd: runtime.getCurrentCwd(),
+    });
     runStop(run);
     return run;
   }

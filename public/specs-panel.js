@@ -2,7 +2,7 @@
 import { S } from './state.js';
 import { fetchSpecs, fetchSpecDocument } from './api.js';
 import { createPaneHeader } from './right-pane.js';
-import { openSecondarySurface, readPaneState, writePaneState } from './ui/secondary-surface.js';
+import { openSecondarySurface, readPaneState, writePaneState, clearPaneState } from './ui/secondary-surface.js';
 import { md } from './markdown.js';
 import { buildSpecTree, specDirectoryPaths, resolveSpecLink } from './specs-tree.js';
 
@@ -177,7 +177,7 @@ export function mountSpecsPanel(host, view, {
   }
 
   function rememberPaneState() {
-    if (!workspace) return;
+    if (!workspace || S.switching) return;
     writePaneState('specs', {
       workspaceId: workspace.id,
       workspaceGeneration: workspace.generation,
@@ -355,6 +355,8 @@ export function mountSpecsPanel(host, view, {
 
   function workspaceChanging() {
     if (!isCurrent()) return;
+    restored = null;
+    clearPaneState('specs');
     const generation = S.workspaceGeneration;
     indexSerial++;
     documentSerial++;
@@ -430,11 +432,15 @@ export function mountSpecsPanel(host, view, {
     layout.append(treePane, docPane);
     host.append(layout);
     docPane.addEventListener('click', handleDocumentClick);
+    treeList.addEventListener('scroll', () => { if (alive) rememberPaneState(); }, { passive: true });
+    docPane.addEventListener('scroll', () => { if (alive) rememberPaneState(); }, { passive: true, capture: true });
 
     const onWorkspace = () => workspaceChanging();
     const onScope = () => scopeChanged();
+    const onBeforeUnload = () => { if (alive) rememberPaneState(); };
     document.addEventListener('pi-gui:workspace-generation', onWorkspace);
     document.addEventListener('pi-gui:git-scope', onScope);
+    if (typeof window !== 'undefined') window.addEventListener('beforeunload', onBeforeUnload);
 
     view.onDispose(() => {
       rememberPaneState();
@@ -444,6 +450,7 @@ export function mountSpecsPanel(host, view, {
       clearTimeout(switchTimer);
       document.removeEventListener('pi-gui:workspace-generation', onWorkspace);
       document.removeEventListener('pi-gui:git-scope', onScope);
+      if (typeof window !== 'undefined') window.removeEventListener('beforeunload', onBeforeUnload);
       docPane.replaceChildren();
     });
     queueMicrotask(() => { if (isCurrent()) void loadIndex(); });

@@ -123,17 +123,9 @@ import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
 import { json } from './server/http-utils.js';
+import { resolveDataDir, isSeaRuntime, isPiGuiSourceRepo, getProtectedRoots } from './server/data-dir.js';
 
-// 数据目录：projects.json 和上传缓存放这里。
-//
-// 默认用「代码/exe 所在目录」—— 开发时是项目根；单文件 exe 是便携模式，
-// 拷走 exe 数据一起带走。但桌面版（Electron）装在 Program Files 之类的地方
-// 时那个目录不可写，所以主进程会用 PI_GUI_DATA 指到用户数据目录去。
-//
-// 这是**唯一**计算数据目录的地方，其余模块一律由这里注入 —— 打包形态
-// （源码 / SEA / Electron）变化时只改这一处。
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.PI_GUI_DATA || __dirname;
 const PORT = Number(process.env.PORT || 7788);
 const PI_BIN = process.env.PI_BIN || 'pi';
 const IS_WIN = process.platform === 'win32';
@@ -173,6 +165,31 @@ const logging = createLogService({
   getDiagnostics: () => diagnosticsRef?.readSnapshot?.() || null,
 });
 logging.installCrashMonitor();
+
+// 数据目录：projects.json 和上传缓存放这里。
+//
+// 默认使用独立的用户数据目录（%APPDATA%/pi-gui、~/Library/Application Support/pi-gui
+// 或 ~/.local/share/pi-gui），彻底脱离代码仓库与项目目录，避免 safe-path 冲突与
+// 真实用户数据意外受 git 追踪或清理影响。
+// 支持显式环境变量 PI_GUI_DATA 覆盖；首次迁移会自动将旧代码目录下的已有数据平滑复制，
+// 绝不静默覆盖已有文件，防止数据丢失。
+//
+// 这是**唯一**计算数据目录的地方，其余模块一律由这里注入 —— 打包形态
+// （源码 / SEA / Electron）变化时只改这一处。
+const runningInSea = isSea();
+// SEA 模式为自包含二进制，无源码树 appRoot；源码开发与 Electron 模式下 __dirname 为应用/源码根。
+const sourceRoot = runningInSea ? null : __dirname;
+const DATA_DIR = resolveDataDir({
+  env: process.env,
+  appRoot: sourceRoot,
+  sourceRoot,
+  isSea: runningInSea,
+  log: (event, details) => {
+    try {
+      logging.log('app', event, details);
+    } catch {}
+  },
+});
 
 // pi 的用户级自定义供应商配置。
 // 注意：这是「用户配置」，与 pi 自身的 models-store.json（模型目录缓存）不是一回事。
@@ -1011,11 +1028,20 @@ const revertMutationAuthority = createSessionRevertMutationAuthority({ withAutho
   stopAndDrain: createSessionRevertStopAndDrain({ admission:mutationAdmission, registry:runtimeRegistry, worktrees:conversationWorkspaces,
     classic:{ root:()=>runtime.getCurrentCwd(), blocked:()=>Boolean(plannerRef?.projectSwitchBlockReason()||cliInFlight),
       manager:managedProcesses.manager, abort:command=>rpc.abortAndWait(command) } }) });
-const reviewCommentStore=createReviewCommentStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+// 受保护根目录装配：区分应用可执行文件目录 (exeDir)、真正的源码仓库根目录 (verifiedSourceRoot) 和用户项目根目录。
+// 便携版 exeDir/data 正常作为应用存储，严禁将 exeDir 误作为受保护根；若用户将 EXE 放入项目目录，该项目由 projects/currentCwd 覆盖拦截。
+const resolveStoreProtectedRoots = () => getProtectedRoots({
+  sourceRoot,
+  isSea: runningInSea,
+  execPath: process.execPath,
+  projects: projects?.read?.()?.items || [],
+  activeCwd: runtime?.getCurrentCwd(),
+});
+const reviewCommentStore=createReviewCommentStore({dataDir:DATA_DIR,protectedRoots:resolveStoreProtectedRoots});
 const reviewCommentAuthority=createReviewCommentAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
   classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
-const collabStore=createCollabStore({dataDir:DATA_DIR,protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+const collabStore=createCollabStore({dataDir:DATA_DIR,protectedRoots:resolveStoreProtectedRoots});
 const collabAuthority=createCollabAuthority({registry:runtimeRegistry,withWorkspace:withWorkspaceIdentity,
   classic:{cwd:()=>runtime.getCurrentCwd(),generation:()=>runtime.getWorkspaceGeneration(),owner:primaryOwner,state:()=>rpc.request({type:'get_state'}),
     resolveSession:id=>sessions.resolveByUuid(id),withWorkspace:(cwd,action)=>worktrees.withActivation(cwd,action)}});
@@ -1089,7 +1115,7 @@ const collabService=createCollabService({store:collabStore,proposals:collabPropo
 const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,worktrees,registry:runtimeRegistry,readComments:scope=>reviewCommentStore.read(scope),
   projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
   admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),
-  protectedRoots:()=>[__dirname,...projects.read().items.map(p=>p.path)]});
+  protectedRoots:resolveStoreProtectedRoots});
 const route = createRouter({
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
     /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。
@@ -1331,6 +1357,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('');
   console.log('  Pi GUI 已启动');
   console.log(`  → http://127.0.0.1:${PORT}`);
+  console.log(`  → 数据目录: ${DATA_DIR}`);
   console.log(`  → 工作目录: ${currentCwd || '（未选择 —— 在界面里「添加文件夹」）'}`);
   if (currentCwd) console.log(`  → pi 子进程: ${PI_BIN} ${rpc.buildArgs().join(' ')}`);
   if (currentCwd) {
