@@ -113,11 +113,19 @@ async function compile(appDir,version,setup){
     check(Object.entries(dataHashes).every(([file,digest])=>hash(file)===digest),'all seven synthetic user data digests unchanged');
     check(JSON.parse(fs.readFileSync(path.join(world,'window-'+NEXT+'.json'))).sandbox,'normal sandbox used before and after restart');
     await client.screenshot('installed-completed.png');
-    await client.read('window.close()');active=null;
+    await client.read('window.close()');await until(async()=>{try{await fetch(`http://127.0.0.1:${cdpPort}/json/list`);return false;}catch{return true;}},'installed app exit');active=null;
     const evidence={world,previousVersion:CURRENT,targetVersion:NEXT,installerBytes:fs.statSync(targetSetup).size,installerSha256:hash(targetSetup),checks,
       confirmation:process.env.PI_UPDATE_E2E_AUTOMATED_CONFIRM==='1'?'explicit test-only dialog response fixture':'actual native dialog accepted by operator',
       isolation:'TEMP-only real NSIS and packaged Electron; test copy removes registry/shortcut writes, uses unique exe, zlib compression, local official transport fixture and owned installation lookup. Two separately built versions; no production version change. No sandbox override. Not official v0.29.0 to published v0.30.0 or user original-location qualification.'};
     fs.writeFileSync(path.join(out,'installed-e2e.json'),JSON.stringify(evidence,null,2));console.log(`Installed E2E: ${checks.filter(c=>c.pass).length}/${checks.length}`);
+    if(process.env.PI_UPDATE_E2E_CONTINUE_FAILURE==='1'){
+      for(const fault of ['exit','version']){
+        await new Promise((resolve,reject)=>{
+          const child=spawn(process.execPath,[path.join(__dirname,'app-update-installed-failure.cjs'),'--world='+world,'--failure='+fault],{env:{...process.env,APP_UPDATE_EVIDENCE:path.join(out,'failure-'+fault)},stdio:'inherit',windowsHide:true});
+          child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('installed failure suite exited '+code)));
+        });
+      }
+    }
   }finally{
     client?.ws.close();if(active&&active.exitCode===null)active.kill();
     fs.writeFileSync(path.join(out,'installed-e2e-checkpoint.json'),JSON.stringify({world,checks},null,2));
