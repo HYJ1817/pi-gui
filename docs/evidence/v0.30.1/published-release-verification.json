@@ -1,0 +1,30 @@
+{
+  "tag": "v0.30.1",
+  "url": "https://github.com/HYJ1817/pi-gui/releases/tag/v0.30.1",
+  "isDraft": false,
+  "isPrerelease": false,
+  "latestTag": "v0.30.1",
+  "assets": [
+    {
+      "name": "Pi-GUI-0.30.1-portable.zip",
+      "bytes": 149173229,
+      "sha256": "53c2c61bfab8968a311602f405e110edf048e53b7419fb23afdf9716f1f4f0a0"
+    },
+    {
+      "name": "Pi-GUI-Setup-0.30.1.exe",
+      "bytes": 105592104,
+      "sha256": "4f38ea954d51c84b61b3170feb3c9c132aa7474429a090465554949409284807"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 183,
+      "sha256": "36b25bc589da38b472e0ba83b05ed230f2fccbb65c27f00f196b1cca37ab6645"
+    }
+  ],
+  "zipEntries": 406,
+  "zipCrcValid": true,
+  "zipPathsSafe": true,
+  "appVersion": "0.30.1",
+  "productionEntry": "main.cjs",
+  "publishedHelperSha256": "8d8d2953ca580c1d6042b2a08900a25903f1f22b4b95e15acebe052479ed09c4"
+}

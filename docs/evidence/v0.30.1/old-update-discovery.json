@@ -1,0 +1,21 @@
+{
+  "oldSourceTag": "v0.30.0",
+  "currentVersion": "0.30.0",
+  "latestVersion": "0.30.1",
+  "updateAvailable": true,
+  "assets": [
+    {
+      "kind": "portable",
+      "name": "Pi-GUI-0.30.1-portable.zip"
+    },
+    {
+      "kind": "installer",
+      "name": "Pi-GUI-Setup-0.30.1.exe"
+    },
+    {
+      "kind": "checksums",
+      "name": "SHA256SUMS.txt"
+    }
+  ],
+  "scope": "Unmodified v0.30.0 update checker executed against actual public latest Release JSON collected by gh; transport fixture only. Does not claim native UI click or original-install upgrade."
+}

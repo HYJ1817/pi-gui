@@ -1,0 +1,34 @@
+{
+  "runId": "40680788304",
+  "attempt": 1,
+  "event": "push",
+  "tag": "v0.30.1",
+  "sha": "eac79cab793cff26c6cb6aa01cc9d9276ce06606",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "databaseId": 122790661709,
+      "name": "Prove CI, build and verify release",
+      "startedAt": "2026-10-28T11:32:53Z",
+      "completedAt": "2026-10-28T11:39:23Z",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 122793546826,
+      "name": "Publish verified release",
+      "startedAt": "2026-10-28T11:39:26Z",
+      "completedAt": "2026-10-28T11:40:24Z",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "checks": {
+    "exe": 49,
+    "installer": 20,
+    "portable": 12,
+    "app": 26
+  },
+  "logUrl": "https://github.com/HYJ1817/pi-gui/actions/runs/40680788304"
+}

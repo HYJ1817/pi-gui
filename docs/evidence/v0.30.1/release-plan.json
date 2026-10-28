@@ -1,0 +1,30 @@
+{
+  "version": "0.30.1",
+  "baseSha": "8ebe0ad97003955dbb30e70909d2c5d86f538821",
+  "preparationSha": "3ac05db75547380f690898c03239f06bf054450f",
+  "preparationPr": 44,
+  "prCiRun": "40675946532",
+  "baselineCiRun": "40647270442",
+  "versionTests": 34,
+  "releaseTests": 77,
+  "canonicalLeaves": 231,
+  "canonicalGroups": {
+    "faults": 21,
+    "ui": 24,
+    "native": 4,
+    "security": 27,
+    "core": 155
+  },
+  "auth": "user: 发一版",
+  "signaturePolicy": "existing unsigned release flow retained",
+  "unverified": [
+    "signed production package",
+    "original user installation upgrade",
+    "power loss",
+    "manual native confirmation click"
+  ],
+  "releaseMainSha": "eac79cab793cff26c6cb6aa01cc9d9276ce06606",
+  "releaseMainCiRun": "40678496026",
+  "releaseRun": "40680788304",
+  "tagObject": "6f2cea2d09471057c688f4eb57cd3ec72dd1cb82"
+}
