@@ -1264,6 +1264,9 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .update-notes .update-link:hover{border-bottom-color:var(--t1)}
 .update-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.update-manual-downloads{flex-shrink:0;margin-top:10px;font-size:12px;color:var(--t2)}
+.update-manual-downloads summary{cursor:pointer;width:fit-content;padding:4px 0}
+.update-manual-downloads summary:focus-visible{outline:2px solid var(--t1);outline-offset:2px}
 .update-fixed-actions{position:sticky;bottom:0;background:var(--ui-popover-surface);padding:12px 0 4px;margin-top:8px}
 .update-sec progress{display:block;width:100%;height:6px;margin:12px 0;accent-color:var(--t1)}
 .modal-card.app-updates-card{display:flex;flex-direction:column;overflow:hidden;max-width:640px;max-height:88vh}

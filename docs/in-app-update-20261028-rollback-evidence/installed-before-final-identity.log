@@ -1,0 +1,49 @@
+
+> pi-gui@0.30.0 test:app-update:installed
+> node tests/app-update-installed.cjs
+
+E2E fixture: C:\Users\21022\AppData\Local\Temp\pi-update-installed-e2e-EH42tI
+PASS rebuilt starting Electron version is 0.30.0
+PASS real NSIS creates isolated installed program and uninstaller
+PASS real updater recognizes owned installed shape and running version
+PASS corrupted real installer bytes rejected; old application remains usable
+PASS full installer downloaded and SHA256 verified
+CONFIRMATION_FIXTURE recovery C:\Users\21022\AppData\Local\Temp\pi-update-installed-e2e-EH42tI
+PASS post-shutdown failure cancels helper and relaunches actual old version
+PASS browser capability is usable after full old-app recovery
+CONFIRMATION_FIXTURE install C:\Users\21022\AppData\Local\Temp\pi-update-installed-e2e-EH42tI
+PASS restarted app.getVersion and recovery confirm actual target version
+PASS restarted compiled backend independently confirms target version
+PASS new program payload was actually installed
+PASS Electron local settings survive restart
+PASS all seven synthetic user data digests unchanged
+PASS normal sandbox used before and after restart
+Installed E2E: 13/13
+PASS real partial-write NSIS package passes complete download and integrity checks
+PASS real loading Browser refuses update before native confirmation or shutdown
+PASS real NSIS nonzero exit restores backup and restarts
+PASS NSIS actually executed new file and nested payload writes before failure
+PASS restarted Electron reports actual previous version after rollback
+PASS actual previous backend remains usable
+PASS complete program directory inventory and all 392 file digests restored
+PASS failed installation file was removed during rollback
+PASS new nested program directory removed without clearing installation
+PASS pre-existing custom project inside program directory preserved
+PASS all seven synthetic user data hashes preserved after failed installation
+PASS browser capability available after rollback restart
+PASS failure offers retry and manual recovery entries after startup restoration finishes
+Installed exit failure recovery: 13/13
+PASS real partial-write NSIS package passes complete download and integrity checks
+PASS real loading Browser refuses update before native confirmation or shutdown
+PASS real NSIS zero exit with version mismatch restores backup and restarts
+PASS NSIS actually executed new file and nested payload writes before failure
+PASS restarted Electron reports actual previous version after rollback
+PASS actual previous backend remains usable
+PASS complete program directory inventory and all 392 file digests restored
+PASS failed installation file was removed during rollback
+PASS new nested program directory removed without clearing installation
+PASS pre-existing custom project inside program directory preserved
+PASS all seven synthetic user data hashes preserved after failed installation
+PASS browser capability available after rollback restart
+PASS failure offers retry and manual recovery entries after startup restoration finishes
+Installed version failure recovery: 13/13

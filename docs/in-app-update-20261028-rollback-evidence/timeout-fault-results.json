@@ -1,0 +1,53 @@
+{
+  "checks": [
+    {
+      "name": "diagnostic path is unwritable",
+      "pass": true
+    },
+    {
+      "name": "helper still waits for live installer after timeout",
+      "pass": true
+    },
+    {
+      "name": "no rollback while NSIS owns destination",
+      "pass": true
+    },
+    {
+      "name": "install mutex remains held during timeout wait",
+      "pass": true
+    },
+    {
+      "name": "timeout exits only after actual installer completion",
+      "pass": true
+    },
+    {
+      "name": "user data unaffected",
+      "pass": true
+    },
+    {
+      "name": "real NSIS creates a hardlink to protected fixture data",
+      "pass": true
+    },
+    {
+      "name": "uncertain rollback identity fails closed",
+      "pass": true
+    },
+    {
+      "name": "uncertain rollback never claims rolled_back",
+      "pass": true
+    },
+    {
+      "name": "uncertain rollback leaves user data intact",
+      "pass": true
+    }
+  ],
+  "code": 2,
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-timeout-NrEscx",
+  "secondCode": 3,
+  "secondResult": {
+    "phase": "recovery_required",
+    "expectedVersion": "0.27.0",
+    "previousVersion": "0.26.2",
+    "restartPid": null
+  }
+}

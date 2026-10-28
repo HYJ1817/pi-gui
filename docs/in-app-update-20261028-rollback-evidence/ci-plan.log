@@ -1,0 +1,119 @@
+
+> pi-gui@0.30.0 test:ci
+> node tests/ci-test-plan.cjs && node tests/ci-workflow.cjs && node tests/ci-results.cjs && node tests/ci-summary.cjs && node tests/ci-history.cjs && node tests/ci-doc-scope.cjs && node tests/release-ci-proof.cjs && node tests/nsis-bootstrap.cjs
+
+ci-test-plan: 228 leaves across 5 groups; coverage exact
+ci-workflow: independent build readiness 5/5; both code/docs retain full CI; gate name unique
+ci-workflow: actual gate fail-closed matrix 15/15
+ci-workflow: Node pin, dynamic matrix, final CI gate, exact-SHA release proof and permissions verified
+ok initial record includes identity, plan, environment and pending leaves
+ok partial running record is not successful, repeated reads do not mutate bytes
+ok atomic replacement failure preserves the last valid JSON
+ok v1 numeric statuses retain success/failure without inventing completeness
+ok unsupported schema is refused
+ok first success is durable while second command is still running
+ok failure keeps preceding successes and never starts following command
+ok forced termination retains valid incomplete evidence without promoting it on read
+ok handled cancellation records cancelled, preserves success, and exits nonzero
+ok only a complete successful group writes final passed
+ci-results: 10/10 passed
+ok all required groups with exact provenance pass and preserve counts
+ok missing group start cannot certify complete success
+ok missing group finish cannot certify complete success
+ok invalid group start cannot certify complete success
+ok invalid group finish cannot certify complete success
+ok reversed group timestamps cannot certify complete success
+ok missing completed count cannot certify complete success
+ok too few completed leaves cannot certify complete success
+ok too many completed leaves cannot certify complete success
+ok noninteger completed count cannot certify complete success
+ok string completed count cannot certify complete success
+ok failed is never promoted to success
+ok cancelled is never promoted to success
+ok skipped is never promoted to success
+ok interrupted is never promoted to success
+ok running is never promoted to success
+ok pending is never promoted to success
+ok missing artifacts and commands are explicit incomplete evidence
+ok every required group rejects failure, cancellation, skipping or missing evidence
+ok mismatched sha cannot prove this execution
+ok mismatched runId cannot prove this execution
+ok mismatched runAttempt cannot prove this execution
+ok mismatched event cannot prove this execution
+ok mismatched planDigest cannot prove this execution
+ok lying passed status with a nonzero exit, missing finish, signal or error is rejected
+ok slowest commands are sorted by actual duration, unknown time remains unavailable
+ok failure details are structural and never include arbitrary payload or environment
+ok legacy evidence is readable but cannot prove run attempt or exact plan
+ok duplicate or reordered commands cannot replace canonical coverage
+ok CLI writes parseable JSON and fails closed for a missing artifact
+ci-summary: 30/30 passed
+ci-history: 21 assertions passed (unique runs, attempts, timing and unavailable quantiles)
+ok only an exact audited document modification is a candidate, production remains full
+ok main push, dispatch and unknown events always require full CI
+ok empty diff is not a documentation exemption
+ok branch names, abbreviated SHAs and option-like revisions are refused
+ok working tree and forged labels/environment cannot change Git object scope
+ok mixed code and documentation uses full CI
+ok every allowlisted document is classified using its own Git object
+ok sensitive or unknown input AGENTS.md stays full
+ok sensitive or unknown input REVIEW.md stays full
+ok sensitive or unknown input README.md stays full
+ok sensitive or unknown input docs/testing.md stays full
+ok sensitive or unknown input docs/usage-quota.md stays full
+ok sensitive or unknown input docs/releasing.md stays full
+ok sensitive or unknown input docs/security.md stays full
+ok sensitive or unknown input scripts/input.md stays full
+ok sensitive or unknown input tests/fixtures/input.md stays full
+ok sensitive or unknown input .github/workflows/ci.yml stays full
+ok sensitive or unknown input package-lock.json stays full
+ok rename and Chinese/spaced unknown path require full CI
+ok added document cannot impersonate an audited modification
+ok deleted document requires full CI
+ok nonancestor change range fails conservatively
+ok file mode changes are not prose-only
+ok symlink Git blob is refused without following its target
+ok NUL bytes and malformed UTF-8 are not documentation candidates
+ok empty and oversized documents conservatively require full CI
+ok CLI emits JSON, is read-only and rejects errors rather than certifying success
+ok all audited allowlist entries exist as ordinary tracked files in this checkout
+ci-doc-scope: 28/28 passed
+  ok   exact tag commit with successful push CI and CI gate passes
+  ok   annotated tag is resolved to its commit before matching CI
+  ok   tag commit different from checked-out SHA is blocked
+  ok   no push CI run for the exact SHA is blocked
+  ok   queued or in-progress push CI is blocked
+  ok   failed or cancelled push CI is blocked
+  ok   wrong SHA, branch, event, or workflow returned by CI API is blocked
+  ok   the newest exact-SHA run wins; an older success cannot hide a newer failure
+  ok   missing, incomplete, failed, or duplicate CI gate is blocked
+  ok   API failure blocks release and is not treated as missing or success
+  ok   invalid paged schema fails closed
+  ok   invalid run identity cannot choose a winner or become successful
+  ok   pagination total must remain consistent and account for every item
+  ok   event SHA must match the checkout SHA and tag commit
+  ok   GitHub API reader uses bounded authentication headers and never mutates the token
+  ok   missing token blocks CI proof before any network call
+
+release-ci-proof: 16/16; failed=0
+ok CLI refuses developer machines before downloading or installing
+ok official installer and digest are pinned
+NSIS installer SHA256 verified: bb43c2e945e913600f618f98b7fd78b997fe3a87a4f342d22b6dcab611e290cb
+ok verified bytes only are written
+NSIS download attempt 1 failed; retrying
+NSIS download attempt 2 failed; retrying
+NSIS installer SHA256 verified: bb43c2e945e913600f618f98b7fd78b997fe3a87a4f342d22b6dcab611e290cb
+ok transient HTTP failure retries then succeeds
+NSIS download attempt 1 failed; retrying
+NSIS download attempt 2 failed; retrying
+ok network errors are bounded to three attempts
+ok wrong digest fails without writing or retrying
+ok oversized response is rejected
+ok installer failure never probes or exports a compiler
+ok compiler must return expected version
+ok compiler probe failure is fatal
+NSIS compiler verified: v3.13
+ok silent install and compiler probe succeed
+NSIS compiler verified: v3.13
+ok verified compiler directory is exported only after success
+12/12 passed

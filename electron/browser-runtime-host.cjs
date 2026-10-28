@@ -94,6 +94,7 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
     async start(){if(server)return;server=http.createServer((req,res)=>{route(req,res).catch(()=>reply(res,500,{ok:false,code:'browser_unavailable'}));});server.requestTimeout=5000;server.headersTimeout=5000;server.maxConnections=16;await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});url=`http://127.0.0.1:${server.address().port}`;},
     environment:()=>({PI_GUI_RUNTIME_BROWSER_URL:url,PI_GUI_RUNTIME_BROWSER_TOKEN:token}),
     isLegacyVisible:()=>focused===null&&!disposed,
+    async prepareUpdate(){await chain;await Promise.all([...records.values()].map(r=>r.bridge.invalidate(true)));},
     stop(){if(stopPromise)return stopPromise;disposed=true;stopPromise=(async()=>{await chain.catch(()=>{});const results=await Promise.allSettled([...records.values()].map(r=>disposeScope(r.scope)));if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));server=null;}url='';if(results.some(r=>r.status==='rejected'))throw Error('browser_cleanup_failed');})();return stopPromise;},
     syncBounds(){for(const r of records.values())r.controller.syncBounds();},
     // Main-process fixture inspection only; never exported by preload.

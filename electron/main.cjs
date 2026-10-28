@@ -84,6 +84,7 @@ let browserAgent = null;
 let runtimeBrowserHost = null;
 let quitting = false;
 let mainLog = null;
+let appUpdate = null;
 let serverStartedAt = 0;
 const bootAt = Date.now();
 const log = [];
@@ -663,7 +664,7 @@ function createWindow() {
   /* 正常关闭（点 X、WM_CLOSE）时立刻落盘，不等防抖。
      注意这只是「快一步」，不是唯一保障 —— 窗口被 destroy 时这个事件不会发，
      真正兜底的是下面 before-quit / window-all-closed 那两处。 */
-  win.on('close', saveWindowState);
+  win.on('close', event=>{if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}saveWindowState();});
 
   /* 渲染进程挂了必须说出来。
    *
@@ -811,13 +812,24 @@ if (!app.requestSingleInstanceLock()) {
     // "No handler registered"。
     installOpenPathHandler();
     installOpenExternalHandler();
-    try { installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
+    try { appUpdate=installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
+      inspectDesktop:()=>{
+        const states=[browserAgent?.agent.status(),...[...(runtimeBrowserHost?.records.values()||[])].map(r=>r.agent.status())].filter(Boolean);
+        return states.some(s=>s.busy||s.loading)?{ok:false,code:'busy-browser',error:'浏览器仍在执行操作或加载页面，请等待完成后重试。'}
+          :{ok:true,browsers:states.filter(s=>s.open).length};
+      },
+      prepareDesktop:async()=>{
+        await browserAgent?.bridge.invalidate(true);
+        await runtimeBrowserHost?.prepareUpdate();
+      },
+      // A shutdown disposes Browser gateways. Restart the whole old application
+      // after the helper has cancelled, so all capabilities are rebuilt.
+      resumeBackend:()=>{app.relaunch();app.quit();},
       readUpdate:async()=>{
         const r=await getJson(`${ORIGIN}/api/update?force=1`,10000,{[TOKEN_HEADER]:AUTH_TOKEN});
         return r.body;
       },
       quit:async()=>{
-        await browserAgent?.stop();await runtimeBrowserHost?.stop();
         app.quit();
       },
     }); } catch {
@@ -881,7 +893,8 @@ if (!app.requestSingleInstanceLock()) {
     app.quit();
   });
 
-  app.on('before-quit', () => {
+  app.on('before-quit', event => {
+    if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
     // 再兜一层：Ctrl+Q、系统关机等直接触发 quit 的情况，窗口可能还活着也可能已经没了
     saveWindowState();
     quitting = true;

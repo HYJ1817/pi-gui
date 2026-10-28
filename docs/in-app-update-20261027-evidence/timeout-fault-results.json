@@ -1,0 +1,30 @@
+{
+  "checks": [
+    {
+      "name": "diagnostic path is unwritable",
+      "pass": true
+    },
+    {
+      "name": "helper still waits for live installer after timeout",
+      "pass": true
+    },
+    {
+      "name": "no rollback while NSIS owns destination",
+      "pass": true
+    },
+    {
+      "name": "install mutex remains held during timeout wait",
+      "pass": true
+    },
+    {
+      "name": "timeout exits only after actual installer completion",
+      "pass": true
+    },
+    {
+      "name": "user data unaffected",
+      "pass": true
+    }
+  ],
+  "code": 2,
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-timeout-0hiEQY"
+}

@@ -1230,6 +1230,7 @@ const updateMaintenance = createAppUpdateMaintenance({
   busyReason: piBusyReason,
   otherBusy: () => rpc.stopState()?.pending || ['starting','restarting','maintenance'].includes(rpc.getState().state)
     || rpc.updateBusy() || runtimeRegistry.updateBusy()
+    || candidateRuns.busy()
     || toolScheduler.busy() || mutationAdmission.busy()
     || [...processManagers].some(manager => manager.snapshot().activeCount || manager.snapshot().cleanupPending),
   closeSessions: () => runtimeRegistry.closeAll(),
@@ -1252,6 +1253,7 @@ if (process.send) process.on('message', async message => {
   if (!message || message.type !== 'app-update' || !Number.isSafeInteger(message.id)) return;
   let result={ok:false,code:'invalid_action'};
   try {
+    if(message.action==='inspect') result=updateMaintenance.inspect();
     if(message.action==='prepare') result=await updateMaintenance.prepare();
     if(message.action==='release') result=await updateMaintenance.release();
     if(message.action==='shutdown' && updateMaintenance.locked()) {

@@ -1,0 +1,29 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-Y1Unx6",
+  "checks": [
+    {
+      "name": "real partial-write NSIS package passes complete download and integrity checks",
+      "pass": true
+    },
+    {
+      "name": "real loading Browser refuses update before native confirmation or shutdown",
+      "pass": true
+    },
+    {
+      "name": "nonzero real NSIS exit after partial write restores backup and restarts",
+      "pass": true
+    },
+    {
+      "name": "restarted Electron reports actual previous version after rollback",
+      "pass": true
+    },
+    {
+      "name": "actual previous backend remains usable",
+      "pass": true
+    },
+    {
+      "name": "complete program directory inventory and all 391 file digests restored",
+      "pass": false
+    }
+  ]
+}

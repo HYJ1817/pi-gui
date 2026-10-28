@@ -1,0 +1,2052 @@
+[
+  {
+    "type": "file",
+    "path": "chrome_100_percent.pak",
+    "sha256": "ab7c4b7b6cb8832a31d44b95ec50ce52294f49422a3bdde4e21968eca2930cbe"
+  },
+  {
+    "type": "file",
+    "path": "chrome_200_percent.pak",
+    "sha256": "30fa4a6e27c9ff2fb0f939f01158477e621a67d86e9ecb84cf11b3947db8eb9d"
+  },
+  {
+    "type": "file",
+    "path": "d3dcompiler_47.dll",
+    "sha256": "a05f99734f7c4822fefc12b367af21fd0976ed6608752fb1e1e80b6ece7ecbbb"
+  },
+  {
+    "type": "file",
+    "path": "dxcompiler.dll",
+    "sha256": "a7314b7f1f87b34067ad157a4ea97b69e046bdb567f491ae3c6aabb0ac4ca89e"
+  },
+  {
+    "type": "file",
+    "path": "dxil.dll",
+    "sha256": "77e039c905030a641e53658a008b74e90635a5ea9b6b79eabd0f2003bdfca59a"
+  },
+  {
+    "type": "file",
+    "path": "ffmpeg.dll",
+    "sha256": "6c6bca4e7d14df5429fc0392d2613662b5a585133681e285dbaeefe4f90fcad3"
+  },
+  {
+    "type": "file",
+    "path": "icudtl.dat",
+    "sha256": "9f48c7f9c7c94d516a14870707e910ab94d75ae640ff6842c4af53276cd26ebe"
+  },
+  {
+    "type": "file",
+    "path": "LICENSE",
+    "sha256": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d"
+  },
+  {
+    "type": "file",
+    "path": "LICENSES.chromium.html",
+    "sha256": "7b328b8c7463ac9bfc7dc648c751533517c8441a0b5b21047d6c0b2620e60d70"
+  },
+  {
+    "type": "directory",
+    "path": "locales",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "locales\\en-US.pak",
+    "sha256": "23b271e8009bfa14783700cd0712b4ecaa5b8f2ea28a4d81ae1d7e05bc0c96b1"
+  },
+  {
+    "type": "file",
+    "path": "locales\\zh-CN.pak",
+    "sha256": "7887bd3d01e12306e32a11d9a20566ca0e93688a0375e6ff59da04cf782b1681"
+  },
+  {
+    "type": "file",
+    "path": "pi-update-7573-fixture.exe",
+    "sha256": "02d8a5e9bd1171eb8780ba04ecd2facbaf2e98baef0785be50ac250c299f5180"
+  },
+  {
+    "type": "directory",
+    "path": "pre-existing-custom-project",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "pre-existing-custom-project\\keep.txt",
+    "sha256": "3aaf1b79decdb27d4293040ccfc2a92947bc5aec58cd8ada882d28f49c05e4b2"
+  },
+  {
+    "type": "directory",
+    "path": "resources",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources.pak",
+    "sha256": "af662ae4ced464da2ba661c98644ff1e2cf88c49af12337921f2a645cd4d5314"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\app-update-desktop.cjs",
+    "sha256": "e12cc8a5ad001b373f837b7f125b058fffcc3a851f343bd8bf4c05fb6c7fa3a0"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\app-update-recovery.cjs",
+    "sha256": "b00c1f41b71cd57696f579637653c5c91009907f72b84c56a953b0226dace6be"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\app-update.cjs",
+    "sha256": "ed4634725fd6cafd98fedc59f23e5b24260024c4c7f1f23ce45fb66e2943b35f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\asset-manifest.json",
+    "sha256": "6cddc20aa66121cb94c571914d825c6e6028acda3c80beef997cdaad35a8e5ec"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\browser-agent-bridge.cjs",
+    "sha256": "552111d70dad53069bc3c1dbb621f485afe526fe0331d3ef8429865dbe4edb38"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\browser-agent-host.cjs",
+    "sha256": "4f6c605dc2dd5b06f7af92f975c749574fda7c5d4a239d3bea104fa19e4e1507"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\browser-agent-policy.cjs",
+    "sha256": "1dc5d38fe87de857cd0e47e49c83d6ba4d03b62184e490353eff89feabd0df83"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\browser-agent.cjs",
+    "sha256": "65c22552de4afbe21f5ad16371ed835d93e27fdadec971cc9e749a92c6118124"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\browser-policy.cjs",
+    "sha256": "aef6418b30bc24c5540e99af828f080f4eb537bd24b28909b0f8dfa7f14289c7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\browser-runtime-host.cjs",
+    "sha256": "b279898b5f85e8533705450340db4ed0d166e7725b6d3440892c6af130236f67"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\browser-view.cjs",
+    "sha256": "69945698e6c320cce5b73543bb08450e39fb3a6ccb036c8044d72ddf6edfb718"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\candidate",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\candidate\\write.ps1",
+    "sha256": "cef8cdc0f1ef49d49d224a23a62d6c83c0585d6b62534fe808d61e0af5a3ed8e"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\extensions",
+    "sha256": null
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\extensions\\pi-gui-browser",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-browser\\index.js",
+    "sha256": "de8f3203ecc097464d82e1eba4424e6d6824bf8a404255ee3818da1fd4e78336"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-browser\\package.json",
+    "sha256": "202e5e4656e7d9ca72903a6fa63f5e640e2475f25b44ad51383e3dc6240a27ed"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\extensions\\pi-gui-process",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-process\\index.js",
+    "sha256": "a45c8233e0ea21e666ee4bf5ef0c3aee1ec1f6bc5beab94890ba66316ae57c97"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-process\\runner-posix.cjs",
+    "sha256": "4a10d5caa71082e874e9d591270294107b5830dcff786a63123c2dd8bbd4cb71"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-process\\runner-win.ps1",
+    "sha256": "1205b513b242d835ecd18bca5b312aa8cb4eaf7dac01f0b79127f880a77132d5"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-process\\runtime-child.cjs",
+    "sha256": "6ede39445054da62cac340ef49f3e2415e6e90088d323956ca492bac5e1a54fd"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\extensions\\pi-gui-revert",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-revert\\index.js",
+    "sha256": "7f39bb434bbb93d84e0ff9d5690191287fa9b5e71a0e8b856da438a1d06609b0"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\extensions\\pi-gui-tool-guard",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\extensions\\pi-gui-tool-guard\\index.js",
+    "sha256": "aa455b84001e523fea077625f981851be7c2cfe799572d39441b2e2f71163e37"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\fixture-entry.cjs",
+    "sha256": "3debc51e2afa1122894397ab20301bf9d93f5e25065e8ca6157b569d5bd3554e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\installed-target.txt",
+    "sha256": "2ba3d5f3d317add38873895f27c1b9cc945c4609142f862ee618f405fb2f4df8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\LICENSE",
+    "sha256": "2c4c448a53295390639748d53489554b7b4268c5d8d17a826b1517807b094388"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\log-contract.cjs",
+    "sha256": "dd7915d06fd6747406ee6b6dccd1a6ecfbd15a75604ab076f3220b984ee41e76"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\log-core.cjs",
+    "sha256": "b04fa08ebd6357bb87d57c451407a9f0bc697672a5ef8d788fd2cd55971849e0"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\logging.cjs",
+    "sha256": "b55a58f99c69b83a08cf6a7decee99fb20e908106f11c6a1c52131eb950ba5c7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\main.cjs",
+    "sha256": "b1275c87973d07c7b6eae79447a178c0ab859e4bcfe1d3d19bc158ec51eeff59"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\net-probe.cjs",
+    "sha256": "d2eb60ccf1095007475cb7ec3df25531c1a4e3f98234e9f195f1fe7915d0e2b8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\package.json",
+    "sha256": "109ed9c81c3839fe0a267f2d31483a298d68b684404d5deb5184fed0045e1d55"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\pdfjs",
+    "sha256": null
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\pdfjs\\cmaps",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78-EUC-H.bcmap",
+    "sha256": "d92a261336dc18b8c03a46eb4d462382d33f4338fa195d303256b2031434c874"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78-EUC-V.bcmap",
+    "sha256": "61670bebc4e4827b67230c054fd0d820d6e30c3584d02e386804e62bbedc032a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78-H.bcmap",
+    "sha256": "ece6415b853d61e1b2560165151407d35cf16e6556932b85a13ea75276b77402"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78-RKSJ-H.bcmap",
+    "sha256": "696b1f973c97623496703809eaaa5f9b40696c77540057413f4b826a08edfa7b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78-RKSJ-V.bcmap",
+    "sha256": "53cb6d560ab377da48cf65d6dcacb0bdb31f13fab7066c580de38c12a73a7ff9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78-V.bcmap",
+    "sha256": "289000f02fd34872b6975503217f33abae6bee676e7d28f640473a67c8db1712"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78ms-RKSJ-H.bcmap",
+    "sha256": "a2442595218f5f8bd8e1b42188e368587d876cfe0cc4cd87196f077c878f72e2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\78ms-RKSJ-V.bcmap",
+    "sha256": "f8ddceba96bfd9d3740bd1789ee30d1f47c78371520a8084f71f7df58f19be0b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\83pv-RKSJ-H.bcmap",
+    "sha256": "44040051ec818fe09b9703472bea72efd2759d5eeb5ff0d77c718d6bb5e6d1df"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\90ms-RKSJ-H.bcmap",
+    "sha256": "c13e043e85ff715b75bb03801e8fd0fb8f3a75e4a48496faa6baaf92b5b48ba1"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\90ms-RKSJ-V.bcmap",
+    "sha256": "499bb916ce1adbe4289b6e5811f4dc20eb238cdc2ffad20cf26ae56716885bab"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\90msp-RKSJ-H.bcmap",
+    "sha256": "7b8b3b8bbf821702e9a4df9f3596ce292380c8c1b0925dedadbb4e4b2d80498b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\90msp-RKSJ-V.bcmap",
+    "sha256": "6296c2b5c07dca8128e96d5296d621a3268803d4fa0e5812a21e52fe2802aacb"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\90pv-RKSJ-H.bcmap",
+    "sha256": "fb5103f03d3a34547e18d316e52b6d9b26e485c662999222f84d2ba54c2e4fa8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\90pv-RKSJ-V.bcmap",
+    "sha256": "7bcb5ad2ba55b9662ce379e16c2d9cc2b82d621a579807353741172e4af615c2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Add-H.bcmap",
+    "sha256": "a2ffab28b990998181bcca9b0e914bb2207820f100ae31d5c469444892e5ad8e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Add-RKSJ-H.bcmap",
+    "sha256": "b29f4b52e2465d0485856d5e69f1ba69927deb2848d8fd328c8035583b35bb7e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Add-RKSJ-V.bcmap",
+    "sha256": "2aa2232c283a3f5d0997c2834a36cead0b79ce2657944cfeed08140c293460ff"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Add-V.bcmap",
+    "sha256": "25125d3b1be64e86b2df5b3344170b45a42bcaa0b46e43a34314ef73c166e542"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-0.bcmap",
+    "sha256": "8c65be9d51a9f269a547dc12460707aaf4031ab67ebe8a2900f4b4cc6b3e450e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-1.bcmap",
+    "sha256": "73152bc1a59cc594b414ac6068be48e5512b96ae85920c40e32a99269fdb0c04"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-2.bcmap",
+    "sha256": "a1b8d353bdef9584c820464e8f1c9e2013d64ebf433cba0aa831dddf515818c2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-3.bcmap",
+    "sha256": "2ffc0c75c79fafde506163d3c08c390d183251009f3fbf6ae50d1167d14b9570"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-4.bcmap",
+    "sha256": "98a1f470c878c6b9691a4d7aef776af8ac9b55f5587c9fafa00547f3bf655716"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-5.bcmap",
+    "sha256": "ddd6e29955eb8cb545f2ebd09c628c3bbda5023256eda1b728f743c75fb77829"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-6.bcmap",
+    "sha256": "317bb2db71e0e5b7b0c47b75de1da915c2e22f65f0c0861507f9ca7ba238f8a2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-CNS1-UCS2.bcmap",
+    "sha256": "e665837f2197c6bd08cd8955ad4d6932cee2398e2e328b25b00e6bfb3bd72af9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-GB1-0.bcmap",
+    "sha256": "8b81cce8a11d510e505704953cfa4e4ab080c1a0cab991145a3512ee433946b9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-GB1-1.bcmap",
+    "sha256": "0426983081788ec7202703e71f1efa4b860f75b936994236010b39d89251a81e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-GB1-2.bcmap",
+    "sha256": "e67b37a83b160ab3831306a71a605893b24454ee81ac9b6123bf2d3984d268d5"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-GB1-3.bcmap",
+    "sha256": "aa299afc3e12a28726147305f191be28c7498078c8b182ece7886ac79cd99078"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-GB1-4.bcmap",
+    "sha256": "8fbd7d74c2ddb1350c1cecce54a73fde3f5453093d4bed445283ec0033d2097f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-GB1-5.bcmap",
+    "sha256": "c22cb2fcff24112fa31dab2111bdc51957006576d31aad5a25e67793ac01428c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-GB1-UCS2.bcmap",
+    "sha256": "20507620260c0c935c35afc1e70e5888aa7125d5ec7ffc03cef1959feb2c1641"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-0.bcmap",
+    "sha256": "464f08905236f5703b1f5cf8358767c8b18e6bcc808840d081f1de2c7ab38134"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-1.bcmap",
+    "sha256": "4c823848722187d1ffe75ae3f5f9126ccd2d7895a05fad14c919fb119e037008"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-2.bcmap",
+    "sha256": "7810fb808e367e70429e90a9478fe6a3fdc3e214f25c7582ce9c2da6a242315c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-3.bcmap",
+    "sha256": "84deb1828711ad3d390c9899c38abce1bf619d65ff7bf1a326ec95acc45f08f8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-4.bcmap",
+    "sha256": "3f8a4f974919c2b8bae5d10175ffa2673be140481e00840542c85d48ef184067"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-5.bcmap",
+    "sha256": "1d3ce4ff28d977f8cf37a912ae4ec811f4175c3167b1ec0b2567feec3e79e1db"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-6.bcmap",
+    "sha256": "5609797b9401b30be72ef9645da62a87829f058c3be4b5c623383119f584b1d9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Japan1-UCS2.bcmap",
+    "sha256": "66c5d0dc4964f4093e77b194023f3a0f689324028ec8330e1e1d0570bcba7c2f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Korea1-0.bcmap",
+    "sha256": "dfb8c3874f0e5a8c3acf597d2c12d2b63e90bc5e4f0fce990ec4c56077d80b32"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Korea1-1.bcmap",
+    "sha256": "62f277b7b1c441c007797ae707d5c37258d029ce4661a2b911e2e1ee35e6adc1"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Korea1-2.bcmap",
+    "sha256": "1d77068af462f96d7ad28ad7e7d43eef6423c685b479d7dc25ff5df38db0380d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Adobe-Korea1-UCS2.bcmap",
+    "sha256": "857b723088be97255053562bfa41bd1075a7f7910d3bab59a0645c8bbc7060ff"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\B5-H.bcmap",
+    "sha256": "718ad0ffbef4c34f8f3f31292c462e519cd567a5511fc8b346c60010d64f4ef9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\B5-V.bcmap",
+    "sha256": "b5c37383517477620ced927b6b4ffd4f4cc6230d8051b5b46a21d6768e07f7d8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\B5pc-H.bcmap",
+    "sha256": "bab6028aead1d6149400e904ab10cfd319082d826473ed4c582c8eeed920f17e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\B5pc-V.bcmap",
+    "sha256": "41543142b9767f3b76133899fc8453282b01ad3c653acaeea42d78c5a7d08c63"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\CNS-EUC-H.bcmap",
+    "sha256": "e8f89cd61e6486b948205da46499d659ed0aed949b7095fd3c8e95ffe2b0e7a9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\CNS-EUC-V.bcmap",
+    "sha256": "cae422bec2ac6dbe86bf921cec942bacd2d0b733ffcca5f91b3ba14e917025a0"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\CNS1-H.bcmap",
+    "sha256": "e8487971ab20cd16f3de3e8ac56ec994b72b658ad113f2818239dfd5108f501a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\CNS1-V.bcmap",
+    "sha256": "42df8076aaa7574505e7304af83a3323ec032c4177d64b1309db8c043d594a8a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\CNS2-H.bcmap",
+    "sha256": "bc6024d274d440f0625c69e25f37036ef6cb6689432ceaa160d3432a2a716ca7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\CNS2-V.bcmap",
+    "sha256": "2e4f70a8afd23a121030fc2e5b5f3816e903b11e7ba8b8c09654b31c80399c38"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\ETen-B5-H.bcmap",
+    "sha256": "87ee6b3f5bfda5fe26fa35431264c7d73070d10dbbf398a75185d63ae322c18d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\ETen-B5-V.bcmap",
+    "sha256": "47dc0d2c21e3bde317947aec1675ceabc1d5460a60bf9c24334b8c407a17172c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\ETenms-B5-H.bcmap",
+    "sha256": "d5f5a73da4173b7da9a3a20e16f26f9cd5d12deb1553409919e0cec6fd37fdee"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\ETenms-B5-V.bcmap",
+    "sha256": "18252fca90f472f479af1bddd60d6ab51c8e1b55dcf6845951426504934543e0"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\ETHK-B5-H.bcmap",
+    "sha256": "d2f10fa519336bc4efcc7b6deb9604b75429946b40d82e311cb3a97a1994c89a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\ETHK-B5-V.bcmap",
+    "sha256": "1fea3fd0d9f0f679f80505800851ef2e4131d81127e18c006938ffa2f4c8b247"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\EUC-H.bcmap",
+    "sha256": "f9939cd57fccdc65c5d9f4c205fd497ebdbd283643308da5663801a8c1d9c595"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\EUC-V.bcmap",
+    "sha256": "1283a50a706507c4436da83ede9ad7a4440be25378f2e96f6c81a430081426a3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Ext-H.bcmap",
+    "sha256": "4000ed4e61a1c668ef453bbd0603cfa383defa793abd46a57ed870d7f527350b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Ext-RKSJ-H.bcmap",
+    "sha256": "e0d2f0df337660e73813238dd4a725f11f0621b90f3273857db253d0e7694caa"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Ext-RKSJ-V.bcmap",
+    "sha256": "f617a22b6d67febb187990952006c91a9f5a4db21155d268c656252d0c21985d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Ext-V.bcmap",
+    "sha256": "c2087fb845a9e3acea0c2922cd40e6af67e11957bec74dcd597f1285edd490ce"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GB-EUC-H.bcmap",
+    "sha256": "928bad06fd84a48f5ba7150d7716609119fb660f2aaa73eccad81ddab9b9d203"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GB-EUC-V.bcmap",
+    "sha256": "a9ad88ac2479da529b16dc48abc5952332e27bc355335f91df5729a587533324"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GB-H.bcmap",
+    "sha256": "1018c777a8910b5bb46d7d54a4aee9d51ca5cff8addb2b41c969d9101cb3fd1c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GB-V.bcmap",
+    "sha256": "0b96789143c0bbf9f1641ae7165b3456dccd14dabffcbb0bd654d5bf6f94f863"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBK-EUC-H.bcmap",
+    "sha256": "2103fed28650ede096a2281104a1a8a4304dae0db414342c636867522307123b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBK-EUC-V.bcmap",
+    "sha256": "a7fd35dd14d9dbdb955f34e6c0630618b6620dfd09d4283b2f65a65ce77fcaea"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBK2K-H.bcmap",
+    "sha256": "3d919ae72af16c5cc6846ec87a4326a9f125e493c59d3628429d35c2c95fe8c4"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBK2K-V.bcmap",
+    "sha256": "b927fdfd595c07ce9158bf2ec13f4641b2e83b01c70989dadfabd6ed7c6ac2dc"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBKp-EUC-H.bcmap",
+    "sha256": "d15ebd8e81fb4fe8a244f1b1e877922e03500ac69eddf5001093e502430451d2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBKp-EUC-V.bcmap",
+    "sha256": "fdc736d46e642625dccc8ad8c59f2c69fc7db7a13f2e799c6c6b779e707bb97a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBpc-EUC-H.bcmap",
+    "sha256": "3c4a4eb82f05abe51f6650985c630e180438bfdd491318f5d20d2ec29236e1c3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBpc-EUC-V.bcmap",
+    "sha256": "215bdfa2842705624b4cf4cd29b8e3c720f1e192365e0305c11030a424c84d7c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBT-EUC-H.bcmap",
+    "sha256": "dc5f44e48a39f3367ae28665027d8ab1d8cedb5a9dcc5068a900acd6709f60f9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBT-EUC-V.bcmap",
+    "sha256": "a1ad24e63653b8aa388c18fa5e498f007564e43dde699a9f91ccb4645c999be8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBT-H.bcmap",
+    "sha256": "8afda745a505763f3ff54c8126eeb48ef376ea9ed07d9f42ff9a22c5c547ec57"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBT-V.bcmap",
+    "sha256": "cdc2ec5c3c7c7033290c9a8894878202f08674eb9b1ae7d36218430326768771"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBTpc-EUC-H.bcmap",
+    "sha256": "7b23e2f7bfdb6c918f567b7324bf858f398bd8cd5f268d74ece19a3c91bf4f32"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\GBTpc-EUC-V.bcmap",
+    "sha256": "d7a1b13ead9ab511cf2cd01de6ce8b02aa8e8767e84895337d7a3b67f039f93b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\H.bcmap",
+    "sha256": "a0233e21047ec00b852125b243cbcf30abee511155b6d8159c24f944384bc9ee"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Hankaku.bcmap",
+    "sha256": "b454701f7aecd7856769016dfd04ca64280a060f2c67a2466d50b4395d24974e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Hiragana.bcmap",
+    "sha256": "2ed669394756dd9458651cd9995ab29ab691ecb7686659003306cdf22767a414"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKdla-B5-H.bcmap",
+    "sha256": "5242bce18fb13ab4cc59b146a03eba36e4ce42667eeff09e10981a9d2aa4996b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKdla-B5-V.bcmap",
+    "sha256": "2e0537f786c0791d41a925f72bad2d4e7268aa6cbf15a1400a722672cec38e2c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKdlb-B5-H.bcmap",
+    "sha256": "fdc8159984bf5dbe475c0d5dfcb621ecee4dea07c38c668bd77f4c679e23b9b3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKdlb-B5-V.bcmap",
+    "sha256": "b249eb9dcb915ab45057c5d4d7aa55ef88d0efbb092af6bae0b2d4705d139abf"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKgccs-B5-H.bcmap",
+    "sha256": "ab64c7fc5e9b2e97750cc4f269b0da14fd8649e49151b7598c8df86599bac591"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKgccs-B5-V.bcmap",
+    "sha256": "02ebdf7cdffb5395fb21091cd58a013a18ae5388922822f9dc6292ef16b98956"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKm314-B5-H.bcmap",
+    "sha256": "bfd8bbde6b36a9da4c1c902c74121a30d9807a7079a00eeea218be6adc223cef"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKm314-B5-V.bcmap",
+    "sha256": "2a64a815cfb6fdd480674a868762e3d161fda17543b20c9209978559f0667164"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKm471-B5-H.bcmap",
+    "sha256": "49d7c037758826b5b6c0fa329c35bbf25d3943197754e72ecd30c6fb04d745e6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKm471-B5-V.bcmap",
+    "sha256": "be24c109e78aa4fe3c1f27d30aab3ed0741e783fa1b6b6c2719741072b54b132"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKscs-B5-H.bcmap",
+    "sha256": "08599378f41d96b40537adef6e6edcc4a787bc63f5accf47c026df4905a13914"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\HKscs-B5-V.bcmap",
+    "sha256": "d073542b7dad1c4cbf01c1af5f0cd13218d1281a491956e310c55702fc8705c4"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Katakana.bcmap",
+    "sha256": "3b6ca6642fbf8822da00d5e58a8aa275216d5c32dbf2bd73e934197fc9fc5c53"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSC-EUC-H.bcmap",
+    "sha256": "6784e16dbc5861c036c23d3e55f0d4ba0975a3e464da0ee8e49bcfff0be070c4"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSC-EUC-V.bcmap",
+    "sha256": "fdb36bad85e9924823d49db374067988e024cf80fc894711f2c9178951cbbe95"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSC-H.bcmap",
+    "sha256": "c1f6d61f1d3304fd539a65ae72624fa567ecc3853bf52e283958a7a2515b3eee"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSC-Johab-H.bcmap",
+    "sha256": "939993d213f68db763bf156217c217ae23af082b91a0eacecf3d11eb4ff8ef8c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSC-Johab-V.bcmap",
+    "sha256": "5d61967aac0e666def721e8b8d0fed8f95a879a14f2e76ce516c3d11c621e519"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSC-V.bcmap",
+    "sha256": "d7da5afd9f1fe74816d79c9325f0139a4efb6438664ebfdf9a7aa92f3034360f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSCms-UHC-H.bcmap",
+    "sha256": "5b70d8f6a4fa9e2283dc649f0ff95d906d56efbee50a20e8d2faec3a8fed078e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSCms-UHC-HW-H.bcmap",
+    "sha256": "a5e6ba22aceb02fdedee11bfb9ed138463d89e85b87810b9f075b469d936f8ec"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSCms-UHC-HW-V.bcmap",
+    "sha256": "890332a6a26880d463a12f2a6ff048bf9cf7e45077cfb1ca8815b89baa7bf411"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSCms-UHC-V.bcmap",
+    "sha256": "1631b531c9a40c8cbe24c2317dba107362e49fa6e18af620414d627c111d570c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSCpc-EUC-H.bcmap",
+    "sha256": "709480682c55cedbb0124b9960d78e28febeee0df2e34607d61aac6601647ec7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\KSCpc-EUC-V.bcmap",
+    "sha256": "031707887d6fc2378a36cdb6775334fd7a236c3f95048d8436abf43fe26fc49d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\LICENSE",
+    "sha256": "aa92ab5a472974865a96fd4a4e9c13bb41bf6fe1b309cb6b8da48bc9e19839a2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\NWP-H.bcmap",
+    "sha256": "286c6c9e335da330928a01edc3c97a3a623f1f7f3c42762b0a7dc2f651b1a78f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\NWP-V.bcmap",
+    "sha256": "3a75fb7b59adfb172710758c425d8ac6c93fd5360a64dd4afd5dd04e60ab4b4d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\RKSJ-H.bcmap",
+    "sha256": "a70de61a22a898f693f02cc011c3e3cff2e10aaa7cddb4661e456a21ae859f78"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\RKSJ-V.bcmap",
+    "sha256": "68c1a64506471a524ea5cfc3b3a9f8f70031989a6bd95427b1351f33ccf50b06"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\Roman.bcmap",
+    "sha256": "1c6b3ef9d9e5cb1aa329142ce9414b90f9b6d7f9182a2a9e927378dab8f0d43f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UCS2-H.bcmap",
+    "sha256": "779428116752f34e2490a1941d24e4634c71e3c22d053b811d2090ae2fb3c704"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UCS2-V.bcmap",
+    "sha256": "1e5cc184b850ea44abc2df8ae5674279df668e8edf5e2a1a2ea2bd77adbd280f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UTF16-H.bcmap",
+    "sha256": "32ff139b3c7b91d6ad25f994701f3ce7b242906022c418fd73e6493fc228bfe5"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UTF16-V.bcmap",
+    "sha256": "278eb1e68d1a236c60ef59472cf0176ee0d45f364285e76ca12419a08d46fb9a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UTF32-H.bcmap",
+    "sha256": "bf26eb67fe19ee5ba915799e80ca72408400aa8342fdf6a244a4f44de8f97336"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UTF32-V.bcmap",
+    "sha256": "f7da3caf83ceb1cb37936fa10700d9ba6e9c3f72c5bc9724e3ac79bff0c0179e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UTF8-H.bcmap",
+    "sha256": "2f2a742bcd1a84a148a4a518b9eed51a8f9c6ca5ed3bc5e2e41fff97de5dc2d8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniCNS-UTF8-V.bcmap",
+    "sha256": "b7c3f10780a8c62dd1c8ff6c30dc1e4e23b6cdc87c3a96fcd514cc98ffd3af9d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UCS2-H.bcmap",
+    "sha256": "9201569b402e81ad8860650bd86350c4fa28e5dd5971f05fcacaf40f51de18ed"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UCS2-V.bcmap",
+    "sha256": "f10282335e4d64203bc2a653a3a47d745ec76c8ae04549f4d50180c1899be216"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UTF16-H.bcmap",
+    "sha256": "386fd39581245c034da016a92d23f3df1117d169f996100050b264fc09a84e35"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UTF16-V.bcmap",
+    "sha256": "0473cfbba612b92dd9918f0ff8aee9112897c48e0ffdc0eb82da3144ed8ea84a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UTF32-H.bcmap",
+    "sha256": "f48a145dc4e3ed1dca1dde7111716a72306a2a4191ab05c6bae3a5c3a961cd2f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UTF32-V.bcmap",
+    "sha256": "106acc49b7118bdef944e32107b4f348238f3929a0a15d3b7aab7b9101535993"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UTF8-H.bcmap",
+    "sha256": "f217b439c80ee5fa1bc2cf6d1defcc319f8d84483d166a00ee199e05a68588df"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniGB-UTF8-V.bcmap",
+    "sha256": "a64df947632878eacc532fa193c735c92a383b7d66e6f8374ac193af7c64fc63"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UCS2-H.bcmap",
+    "sha256": "ad2352f40870880fbf7f8ee5abadff743fbd025fbf9830b8ada472d1c5e4da0b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UCS2-HW-H.bcmap",
+    "sha256": "16e87edca954177c0881c874859d6783220925d821b5cdfb8755b61ebd93f9ce"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UCS2-HW-V.bcmap",
+    "sha256": "1973457e2c0192819947e56068625b34fb9a72ecc8a476ce6d7eaae5f73e2e5c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UCS2-V.bcmap",
+    "sha256": "42a133d8e2ce9dd6d2288018e01592d2bf2435b326d39b94ea0b6e6a44ac33d3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UTF16-H.bcmap",
+    "sha256": "f6a89c5688978548c83fcee990e205bc63c74274d5c69b49032a3bd4c49a05ee"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UTF16-V.bcmap",
+    "sha256": "c67126fc7c73850855186bb0d6482ac0a365057e0b58778c4ab9f234683fef53"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UTF32-H.bcmap",
+    "sha256": "96195950ce0fe24443d8eb426fa6b88534ec421d7bef9046f0b2362809cfba73"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UTF32-V.bcmap",
+    "sha256": "ed4dafda402bdd19c4d5d8bf2ab41473c0f86f384552b4c7b963d6627daedeb1"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UTF8-H.bcmap",
+    "sha256": "798fb0bf06ab0788d1f6a91c2db7de581612eef03c628f10e8f7ecd8f70ab448"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS-UTF8-V.bcmap",
+    "sha256": "1021611424f913b2df0bfdbe94bd327c04e224ec89d8e821c6501ea3d21f4265"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS2004-UTF16-H.bcmap",
+    "sha256": "710a32d7cb43fd6bd9dbf30da5971f8c941590f74441e208d852c2be0e74cc97"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS2004-UTF16-V.bcmap",
+    "sha256": "3b149aff5c5707b57fb3215d1775852c8b1f413ec0f679ea628f25cf87fe098d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS2004-UTF32-H.bcmap",
+    "sha256": "8d2658e18741af7937d586a57c89729a6fec0d86121197c1f8518aa58b29cdfb"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS2004-UTF32-V.bcmap",
+    "sha256": "6dd475782f2897648a683c48b2fa015a15b8f06856760bddc8a17a63f418bacb"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS2004-UTF8-H.bcmap",
+    "sha256": "691c614ce432b3e62486efb54e5c84c6da5afe9b51b21253bde4758feb484183"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJIS2004-UTF8-V.bcmap",
+    "sha256": "40a8c7ea2d46711c5f78fc9a878a7db68b1543ba5cd60ecf14f519a2deb829b7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJISPro-UCS2-HW-V.bcmap",
+    "sha256": "6826f94d789d7bf1960668c1c5819c34c9585c1b23152fbc19ee81c7df08524b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJISPro-UCS2-V.bcmap",
+    "sha256": "493de9fd1a08f7946065d8ab58f0c3c9fe489f5a0f109f2d05a3169b4bd5789f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJISPro-UTF8-V.bcmap",
+    "sha256": "6181d382cf736c5e09492e8be9f26f31fa25b7462253f23ab16646af432cad81"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJISX0213-UTF32-H.bcmap",
+    "sha256": "692044e1fb33445668632bc9fe7386805c624864be1ddeb29d65bb0c99fc630c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJISX0213-UTF32-V.bcmap",
+    "sha256": "dd54e16ca7bffb3a886242549b2bf7d78a277087f7c60d2636f118c21a5b0646"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJISX02132004-UTF32-H.bcmap",
+    "sha256": "f80ea5a989be30ccda5a8804baef6d3b4b044d2b339bf8b31c671b2466171cf6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniJISX02132004-UTF32-V.bcmap",
+    "sha256": "94c22bd99e771c5fbe0dd8dc39850570d4db0075074aca13e272813edd7cc57f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UCS2-H.bcmap",
+    "sha256": "a1081396ab4adb6f4a5b6c15f896963c244c1c9bcb65ce5616d06096a1b9811c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UCS2-V.bcmap",
+    "sha256": "6cab547431958fbdc1d401d06ebd4dd61a73f5509a10f974df32bcbca11a2e43"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UTF16-H.bcmap",
+    "sha256": "42d35b396286499dfae1737a07adb3a64500df37b426580bfb1d3ea872938519"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UTF16-V.bcmap",
+    "sha256": "5bdb7390c80dcc136cb47d41dc7460082560969c17322ee739fe3020fb642410"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UTF32-H.bcmap",
+    "sha256": "3a01ec51ed1b828101351e337ffb8250abe11880032e5210f881170fed2588de"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UTF32-V.bcmap",
+    "sha256": "dfda895eceaed081af030dbbb962b49629eea817fc3c02bae15db93d0c68acd7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UTF8-H.bcmap",
+    "sha256": "3fac9c65145f72d7d42157a3b9c5ed6904632184e6a0888f2b828699afd2002f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\UniKS-UTF8-V.bcmap",
+    "sha256": "9ecc6cf30dd354b9778ddba163b6cc7302b087ce9f39d1ba73472d2b75ed13ca"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\V.bcmap",
+    "sha256": "b9ad1c0c09ff14bca52f9a28a9767eb857ad0e8946e64ba14c7387a7eb69866a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\cmaps\\WP-Symbol.bcmap",
+    "sha256": "543923bead225732aba30976690ee89095a19628277b5863efecc2c728d5d7bf"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\pdfjs\\standard_fonts",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitDingbats.pfb",
+    "sha256": "845c752392b6c914fb989c75a08b7792b88f542d2499042ef2889f8c814a16ed"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitFixed.pfb",
+    "sha256": "b6c8fe53f134b8b6d4578cd2d544df4cee9624c4efa8d51a560fb40ea296101b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitFixedBold.pfb",
+    "sha256": "f1b7159702973f54fc86254ea38bcf3712b2a736eb3a0995751e9f4bb45ad603"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitFixedBoldItalic.pfb",
+    "sha256": "8a000945843bd31add06aee63bf9fd41b7578b4f3242a4b7cd46349ad9d24d4d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitFixedItalic.pfb",
+    "sha256": "5007faf8320fa1fcc08b8894b356ad976f60b992ba29ee5272578bbdebaf3876"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitSerif.pfb",
+    "sha256": "4f57d2b9d884af8f907bf22df6019b52d86cbf6214fdbd02b1ae05472a543f35"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitSerifBold.pfb",
+    "sha256": "0bdf4b04e964139818d51eda03d566ba999fc3ba2421b1c6c51f9dc969022e80"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitSerifBoldItalic.pfb",
+    "sha256": "a406cac82583bf98175cb62c87ed5e95c45fbb34eece63a10b0a13e793cb2e10"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitSerifItalic.pfb",
+    "sha256": "610ae0687198045c4db5d1a6650fd5e92536631706382eb8b72e38df578d0ae9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\FoxitSymbol.pfb",
+    "sha256": "47967d055530e7357088a08403115425643ec2cdfd6201ba8af0fbd7116c1539"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\LiberationSans-Bold.ttf",
+    "sha256": "361c61b82d575c5c35fd9157fda8b0194bcfcd0d88ea8521a4fb5dd53d33dddc"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\LiberationSans-BoldItalic.ttf",
+    "sha256": "a224075ac17495ad0a3af3bc0a419ac0704a8b3fd1095456201fb9b095fc281d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\LiberationSans-Italic.ttf",
+    "sha256": "832b4406dbef23628800d3aaad21048534ac84d7e3ad955be83b8172ed8ef512"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\LiberationSans-Regular.ttf",
+    "sha256": "f8ace1f892b2bd9dc1792ba7f097fa7588f84fed48321480e04de5390828221f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\LICENSE_FOXIT",
+    "sha256": "b578cdd2345840ada550bd12519533812320d5f1d21cf4c1c7e1b1b0a31c98b7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\standard_fonts\\LICENSE_LIBERATION",
+    "sha256": "d2c4d5b3e115a519cb58eb691aa64538397e2611f9ebe801392cf9667997e7dc"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\pdfjs\\worker",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\pdfjs\\worker\\pdf.worker.mjs",
+    "sha256": "df3bf6bf6b8b8dac8a4042d8c4ecf1cf21e1d197e0fe231c192122409eba656b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\preload.cjs",
+    "sha256": "bc3b6c84a83d0439680f04af94c5ec7a6dfe48a5d797610f82df15d20a9e12e4"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\public",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\api.js",
+    "sha256": "e88e10ac073615460dd6dabe901824e665c1b36f919ae0e5e20c89b5dd1e8d19"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\app-update.js",
+    "sha256": "2adf257f204a5e6c209d5ed596655a6e06f03d4a12dd797f96b81de3811aa409"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\app.js",
+    "sha256": "12e8f33f1b7368ad1126929705eac2513bd091e444ee6863e3cac159c9185e52"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\approval-model.js",
+    "sha256": "d915b5b66f6cd38f7912be4eb7e40b219137ccbfa51fb1eebfc96e14569e0564"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\approval.js",
+    "sha256": "92c38a3ad44a701660ad45904704bd0e96205de87ae30610431348933da25d3d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\attachments.js",
+    "sha256": "cb37a8459dd28e18b98012cdb6468bb1c0de00da6feaf4bf3a7e05d1390f2a0b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\bridge-recovery.js",
+    "sha256": "5770bb4d16e1268d415b3cc07b642893a5c8d430dafc3e0aa1bcd92bb7f6ebb5"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\browser-activity.js",
+    "sha256": "0f131e2291e2b903b482820d85cb814a9fb187ae284a3c311449f604d8fda7db"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\browser-capabilities.js",
+    "sha256": "4b77e168e98ccb261cd1b68b19d031de5775e1638c87f52515eb4f72f793421e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\browser-pane.js",
+    "sha256": "f1cd0e961b08351ca535823f66cb0ef4c095f91e886924ccde48b0cee185e4e2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\browser.js",
+    "sha256": "c29fdd429c646cf188d9dcb24b4aeee8d4ebb4c291a79f72a90bf5163ca09bfe"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\candidate-review.js",
+    "sha256": "6c06bb546fa9b18dd66e3d1a6312ea8afb2e4fe62594a171b1c9df0d06effd01"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\capability-model.js",
+    "sha256": "6cd6638f2a4a922f8ed4e0780377005055cdaecb2c1337e96cd3a674e7d2c8fd"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\capability-view.js",
+    "sha256": "41d1f7d97f30d2d57c5bf5cb30562934b445670f48701882a0d4c75218a813f3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\changes.js",
+    "sha256": "14100196966d454e1fdc4a67361ed73759968b59a04e34443171dce58ecf0f19"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-auto-layout.js",
+    "sha256": "d52691ac1c83d6943a5e1238eeb1c88bb7579330171a4fdd38e05b9aa054168b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-canvas-productivity.js",
+    "sha256": "ffb573093edb16fd8df7cc5ddb64e1d1d73529ba29aecccd7f6c82b950c4784e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-canvas.js",
+    "sha256": "f610bc406aea47333c7934dec245c6fb4a6c6ec6f2f806b223514a9c185ff707"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-export.js",
+    "sha256": "4ccf5eecafd3268ca0122f0d08aa34cd7b128d0b5b9f26921495913dc9d89a7c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-layout-preview.js",
+    "sha256": "95192a9b262fc389d3e56d9a6d98fb027d7988aab28e5de49ae445944fca2b2e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-panel.css",
+    "sha256": "c7355fccc4940e57b6ecc86c5a127ca84ff003688b8db3489314304199531e04"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-panel.js",
+    "sha256": "8fbdff6b1e3c1a60f1e7abe960923f41601cea5aadbbb724ff26c865ddd0277d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-productivity.css",
+    "sha256": "05c2d49e4c0facc9f6b157f6abe57597b2467854772892c163fc4f0f147f71b2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-proposal.js",
+    "sha256": "4200b257144b141328893442830893d47d890a7066fe91ef4e007d4fb53ca368"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab-selection.js",
+    "sha256": "b648a5063769830e38f280227b0388eb715b866d3837bff6c3edd586fc2065b4"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\collab.css",
+    "sha256": "3acfacd5f651a7655e9757b97ee2bbd4a064ec04d41463cd04f624348a68f3e2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\composer.js",
+    "sha256": "1ecfa2095e4c2567d61d175c4493e23e5da97c5dbb61d4df99c6e3bb32954822"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\conversation-nav.js",
+    "sha256": "36468f6c654eca167e97bba277c086fa7939f78249e431008ad13d40330ab9c6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\diagnostics.js",
+    "sha256": "53913dfa820d19076ade52df8e31eae2d8c21c0ac5aaf5e52572b044e7612c6c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\diff-comments.js",
+    "sha256": "64906c26c5ee143e13e2153ca744a53a7e8acc6ef8b8f80f036ecd0263138afc"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\diff.js",
+    "sha256": "f26387a87a775c36174f98a84cd126f6ba52ad686bad164798855e921cf3f4cd"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\draft.js",
+    "sha256": "f3b2e8da81659a4b3c38e6d9bf43903bee48b9db8370537505f06a1715810b7c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\extension-notices.js",
+    "sha256": "6edd4f91b7ab24e7b600b402c04f4fa94d57ec002dbaa8ade06680fce92ee5fe"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\extensions.js",
+    "sha256": "79ba56ff7ab64ed2d39dcee74cc004663896236b9344257e8108511293031e3a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\fallback.js",
+    "sha256": "fef0e93402773fc046160ecaf4f95e3fdd6f801a37f100f25078b4bdf869668c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\git.js",
+    "sha256": "cdc19b8d79426b35a2652639d82a2fdbf5ab0563b0e66a73b9143e9b62dc3d0b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\gui-browser-activity.js",
+    "sha256": "60276f01495ff693e6f8b296785cd7243ee842d9ae419eacb810347555155184"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\gui-browser-capabilities.js",
+    "sha256": "6e864fcdd958b9f973cec4fd99b86cacd979981a8b7fce2f44b638a1966059ef"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\html-escape.js",
+    "sha256": "4754312ae99ecbbd62219f29f0a97d9f2e3efa8ef61f0dd7ee336c5f2b0ae403"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\index.html",
+    "sha256": "1809b1fd2da361d9d1e61236603af58acad95fc7c2c1641d94df8c5f46ad5ace"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\log-client.js",
+    "sha256": "28f6eca8e6100949e571d022260f89f8ab4beb15e2d8cefb0d03282a1271336d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\logs.js",
+    "sha256": "5af93bf82f6b3b2959f4a6befd6c5bb19a96b0729aace356dcbc0517bf1859e2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\markdown.js",
+    "sha256": "a7f89ad7a5da8869d6d4d6f9c331d90565adaa451959e3cee9290544b47415b1"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\mcp-activity.js",
+    "sha256": "947f07ac5ccfdd5db31f88dcf6fc599dd5175bb4e8a17cc28b1284f71e6b4f7b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\mcp-capabilities.js",
+    "sha256": "8781bf70b55364403c43212cc9ebca782e3c459990ededd454ac3affece6ef78"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\mcp-observer.js",
+    "sha256": "9b3528ccbf35fa6779d90eb6841edc5e7de5d1b1d26df432b921f93205609733"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\memory-activity.js",
+    "sha256": "b4e61d81a9d218f16d8c1eb4627198019c0d7f49915d46a8c8c69be9125bad49"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\memory-capabilities.js",
+    "sha256": "8f761575ed6563d0afcbcb5d7085586b51ee36106807e624d081bcd5148d27f9"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\memory.js",
+    "sha256": "e1d8d6c01c058207c88ba0ebb507445d151425723c05735a6742e15dfafb5e8a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\message-meta.js",
+    "sha256": "220c1f8b9815fa3d296c1a2de9998c0c7fd761d1bb4408d118e67a7b6e6eb0ed"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\messages.js",
+    "sha256": "9d0df0b64b14c4295b398786854145f107ba3f47c103f2713ec277ee4ceb8267"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\model-capabilities.js",
+    "sha256": "85950be4a4c699f0a6bde0a0733179dc4deb67aac3b6bb04478476a241b50486"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\model-fallback.js",
+    "sha256": "e942ee6feebd248e39f7e9a32f358886bea690238c4f2c637adbcedfe4594d2a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\palette-model.js",
+    "sha256": "d07bfcca25ac9a3698c8b00083fa77e0a2841b85cce4d995a76d60a4624fbbfd"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\palette.js",
+    "sha256": "26ca6b8d9d96a2f49d25c8b952867c940a32847521548f04bfe06c0004061f36"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\pi-update.js",
+    "sha256": "78c89c0590651182ea5cde77ce7716292b3ce19844a447e9773f5f5d95d925c3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\planner.js",
+    "sha256": "9aeedf9a43f65a4e841413aa8721a0bda027c38fcf7c4a15b6f8d45c86f5ef04"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\process-activity.js",
+    "sha256": "ec6cc4afbcd730951019cf6d41418ea192ac4ec0cdd22f9b967c96b786a58fad"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\process-panel.js",
+    "sha256": "eaf9aee85deddd2cabfe277c1dc22405de97d45c8d9b0bf64eed0ec0ceab061e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\process.css",
+    "sha256": "f5c78ea0fbcf0fc11ee7f606ccfb133f928e17ee56839467aa3500082025e517"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\project-config.js",
+    "sha256": "601a5da4480aa05d150124da861be711e8e5f58e8c379df47c9721f1e13e086b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\projects.js",
+    "sha256": "369a1c593a8c603b0954bfa1306a40512d3430bcecd69c3e3d5f1b13f495dba6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\provider-auth.js",
+    "sha256": "3d742ec046d6bfb3bebd37e0779d9fd72051601bed5990c32ac39777741560b6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\providers.js",
+    "sha256": "ce1bc8b7eb14fede007323f4a2120eef3f9bbf01bdf06093036a242d7eea7a73"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\review-comment-data.js",
+    "sha256": "88a52f5d581511da12fcbb21193cdfd1720ae576be4b179b2b068c4140199c59"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\review-comment-limits.js",
+    "sha256": "3bcdf3cb1eeadb9f6bdd5c1501c28f09b45b1644a74481d23a56be0007953575"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\review-comment-persistence.js",
+    "sha256": "4867ee04e1a5d2a9b761758eba88a4efa32ea296dda9977d7892d27be506364e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\review-comment-range.js",
+    "sha256": "ccc634b7fac41b4e4ae98afa6603c71e6250c2f13fc5672ed67bfcfaf8844bf4"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\review-fill.js",
+    "sha256": "0027e2a5f4ff5f54b32b5f9025d52a8c79dc9a9bc93373a06a8c5ab20bfbf7fe"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\review-task-preview.js",
+    "sha256": "3d9f6a1a42ba2d6b73a5b89d4b6678ea8c13a7d6c1646517da965b44750c746e"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\review-task.js",
+    "sha256": "07eb25f8580f6394539edd0c5cf1adb1b67e36937bef54c080fc634d08fcb87c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\right-pane.js",
+    "sha256": "e03de02d970b3f95744cd7deafa28edc6d02275a9a2f5a5fb16973cbb6b59f83"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\rpc.js",
+    "sha256": "9e781c7dfe5d7a81d631e5e18289d68465f6ae06424fe39e70f171e61f30387d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-conversation.js",
+    "sha256": "079cff0acb14f5bb26878165dc0be7d86bb462885707a21000888433d9450506"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-display.js",
+    "sha256": "6326ad0e48f0c6a4d6f1cd73a64c4e17c0d9c32e54fb5d6fffd96786cb658d73"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-draft.js",
+    "sha256": "47a4c74b9e625a17938a85b565645d039a3aca7b09add20e4583b309b0e2cee1"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-models.js",
+    "sha256": "c817712afa37b7f59199bf284de284fda619ef57797a63ea9b94ae3202ec0f55"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-nav.js",
+    "sha256": "dbd3968966fdad8c60074688d2cee27ce862909f1678ca078de846369383b982"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-recovery.js",
+    "sha256": "b646ea9d311bef25b5d0100aadf5babf1cc9e0d67fc73f72dab8cd1cbb0eb64d"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-resources.js",
+    "sha256": "70b3147e9f3a3f0e620de80a901282ceaf3808ab330acee7be9c4aaa248f99e8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-secondary.js",
+    "sha256": "94f1daf34f495c785d06396c01a65f94723c33f27198a321530f42a4a1165250"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-sessions.js",
+    "sha256": "c02f5bbb4ffc3d07dab979601b76132481b6228775bf78346133e68552a20056"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-state.js",
+    "sha256": "83482963e1885bc088af1d49ba55456578ec8bb645874efdeed5d1b8cf2c3abd"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\runtime-store.js",
+    "sha256": "e60cd91236d513ed544b11117e045ccd27a45d9c609248e6896e326b15634a78"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\schema-drift.js",
+    "sha256": "341c5dc5e857c17667dfa167c1a20fc98a90fd13d44ce9f8ce102e8224d1c5c6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\session-changes-panel.js",
+    "sha256": "85bd9bc0b011fd207eaf9e41a916fd7d94ea2b04d197da914eebfcd7fdba45c8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\session-navigation.js",
+    "sha256": "78d474a49de14a3b99bccaa090829f7c4601c09d4b59f3b7766bc736286ebe69"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\session-plans.js",
+    "sha256": "067a71adfb8718417a0c45b6ec1f3d1af1eaddae18a91eebca8672bc0e19e8d7"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\session-revert-object-api.js",
+    "sha256": "dff09e708b73482c899ab205415950603fce3a2549b04f1fe0cfb74be8172ee6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\session-revert-object-ui.js",
+    "sha256": "c344454fdef64a97b1198bdfb06355f3b61f9974d024397042f58ad8cdad9cbb"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\session-search.js",
+    "sha256": "5c25ab23d2936f297e4d30645fdc76aeff68c8b70af490ab5f1c3baa9d4f6430"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\sessions.js",
+    "sha256": "17f750386c003582547018a1aca14d9bfce950eb35cc70035a519105edff5581"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\settings.js",
+    "sha256": "302daee596171a1de5418e72bb8dfe6bb9977c89f9d1c76f5396a946caa73cad"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\shell.js",
+    "sha256": "3d130704bb520df805dd04d1e29fc3a1e25cb42d89d3625a334eeaedd4d1e528"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\shortcuts.js",
+    "sha256": "344c896a1d9cd0c624dc40bf4c144e054e4366a8cf3c0568da4dd9e8726f1600"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\sidebar-expansion.js",
+    "sha256": "979fe0c60527db6b2f540f10a292a0e822d9387981a7d37d8920e64d858ec874"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\specs-panel.js",
+    "sha256": "9a2614dd399369782039bab78cab0ba145e1da3efe8853a0f3d652beaa25d335"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\specs-tree.js",
+    "sha256": "9464d19c0015e674c5fb0016e52da6c711f54558d37f758f3b1fd969bced2cfb"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\specs.css",
+    "sha256": "83aa2d297c3c1ce8c04586dfb21489d557e8ea5fd144c45edc723b2c57d6a1a6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\state.js",
+    "sha256": "afc3471c5ef4cab79aee488cb1122a5e98baed15ccdde5bccb1f1b0531437186"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\status-copy.js",
+    "sha256": "275462397acdbb205b0949f6a480d7eb6be6b014add8027d9d769665e46dac31"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\styles.css",
+    "sha256": "ad8064bf8d10e1c8b1a285f89db02e885f7005d224691265fbfc669099f9117c"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\subagent-activity.js",
+    "sha256": "2364bb2787df14bc7e318b104b3ea6d8155840363b97e8a900772eaab34541ec"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\subagent-capabilities.js",
+    "sha256": "d8315475255fff99c331109e2f43546c7d341fea1c7d2747e3cec846ad010829"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\subagents.js",
+    "sha256": "3a2c5840a69362f8754e327dfe6432c062777a035b7d7cca5b1f0be0e758bd66"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\theme-init.js",
+    "sha256": "915493fbf871a5c9fa1b7016415483f8da408b74e8ec213c75c4f80bf1c17ae0"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\theme.js",
+    "sha256": "3e2f40b758656855fbf45b06287a0028d5fd384c1563af7a3f4d7cadd25b88c0"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\thinking-availability.js",
+    "sha256": "33f77cbdd0b44f4a51d3dc496f70a2519079cb2337c2bb5b301778dd9ed59e48"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\tokens.css",
+    "sha256": "95bf8d5c4b6a89d07d52f3f70d3e0716794db1630fb7c0c67cdea160f46c285a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\tool-history.js",
+    "sha256": "3f68aa7067852b730b7c6606a934b644cab5212b0e7988a89397876b376bcf79"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\tool-model.js",
+    "sha256": "26813a1c3ea67d397c4e2291bf34c9fc0a18119143cfbcfdcb40d71ee19b1385"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\tool-view.js",
+    "sha256": "d00e409269280a5c37b286ef596e297245c7ad3a1db78f705c6c3a56fc3a2a67"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\tools.js",
+    "sha256": "2675aa37f06b21cf49b15e0d6194d2ffb929ee7e758311d7318f07d126efeb02"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\tree.js",
+    "sha256": "8dacd66c68ec72b08f461422a34f3fff930b39bf69e21e9439ac934c4ecabc75"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\public\\ui",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\action-menu.js",
+    "sha256": "eb4d0e902f05265538467ca70dd3e3a2f0cdafe426e7c6d274b85a02b7bc7cd4"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\capability-setup.js",
+    "sha256": "f3989d6233f5f4db4a57034d6e90b1bf50388963b2472d9819fe03b6209bccee"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\fallback-settings.js",
+    "sha256": "9ef43934060af41b8ee9fb3cbb03a74000833a519ce4253c1a49befe0246e8b4"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\inline-command-menu.js",
+    "sha256": "e720393b98ea77da574969dd768e5c00059e65b5e2e18cd516cbade22ffdfdbf"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\modal.js",
+    "sha256": "d707cbbd6470adf1ba3b531a352383f85b85e874421e941cfbce08a4acf179bf"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\notice.js",
+    "sha256": "6891734577cf03f4f4fc80e8f0697b054efadf8f57ffab77c0eaf07fd324dc48"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\popover.js",
+    "sha256": "d163cafb41853deff05d8766516a60bf51059749eb8d7f071f55a6d0422ff9e1"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\secondary-surface.js",
+    "sha256": "81b6e2257351f7478fb6c936c834924f981b9c10b35c7d56acfe45941db73e0f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\shortcut-help.js",
+    "sha256": "696e652908327e1741dc92768e750c994de1d5c25651b8977e8026b9bcc88295"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\split-workbench.js",
+    "sha256": "60377b67742c0602eafa8b7512e4c92ac127e26ac37ea7cb4b40a26079fd4617"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\toast.js",
+    "sha256": "1cf5b83ee9f744cb56a949853acbe98e6484216e885249bcaaa0b1b0c72c54ba"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui\\workspace-surface.js",
+    "sha256": "b55b6151c68423802996d8057451e5417978d7c7194237a1c668652c44558f3a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui3-composer.css",
+    "sha256": "6f6245a54de36dbc3d476f93a46eedf92c1eea9a50e02427e87ca27e41e5eda6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui3-inline-commands.css",
+    "sha256": "8c41064fecb14245cbfcc3181a49d3299b391ab7b65c3f9544c9aa79131d42d3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui3-model-picker.js",
+    "sha256": "08e8a108656e85cf39a6a69761b646c617394eb80d3fee31d1759d6543ad7759"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui3-model.css",
+    "sha256": "bd1fd61decc9cbe108737a7b7569891c1f0cfd40f7a9dafbb80b08187732011b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui4-approval.css",
+    "sha256": "cba7ddf3768001481265570f070d41a72fc72f4b5536fef546a3cc471d3b0cc6"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui4-feedback.css",
+    "sha256": "da1c51e66ad58e033453cf98311bec439ab3d8ddff06951619a42d00adebd07f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui4-pane.css",
+    "sha256": "c96c0f72b82e2e4aeab1759b6281570eacf323573cd5ff2525be5b95ed771942"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\ui5-logs.css",
+    "sha256": "9c6243d95e0e05203510facf04bd77cc4e0d0a56b829f9f66991881060fff475"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\update.js",
+    "sha256": "01cd15ae53fc4c7214c0ded50e9fcd1ed8b9ebb19c2a5d31add7936087dbb888"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\usage.js",
+    "sha256": "1c9ccb1067d5a3d546fb3aeb6f5bcf38b984dc4014ff5c09bb90fdc7984012d3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\util.js",
+    "sha256": "c352b019ba0a949887e1877959943cf13f28a42e84b46d16c49498745ab9ce41"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\viz-chart.js",
+    "sha256": "54809c8f7b5d76e8198da7ae9a2ce58168838880d6fec5ea6b0786275178eb86"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\viz-integration.js",
+    "sha256": "062530e5ea781172c9d6ad6defda2e5e4fcf1f9e534069e6ab459da88be0ffdf"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\viz-panel.js",
+    "sha256": "2686c57fc565babba447b10f8cc1a8db628bfa2a1837452a222d7fadf6315f27"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\viz-schema.js",
+    "sha256": "5f57dab79b1c341ec2b98b9350f00304c466ffc583af4b0f803f9fe004110d1a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\viz.css",
+    "sha256": "a4edb3fb4e20efc0264e9caa93b435478dc04d14c02fb90095062508b856ffc2"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\web-access.js",
+    "sha256": "6f731113764ef0d1c253094ccedd6485827006c4157c0e35f9dd5231f1525d9a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\web-activity.js",
+    "sha256": "e99446ce9a1832f4e0925f87fd469770b164e916a42a85879f9d131af7963fd8"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\web-capabilities.js",
+    "sha256": "79afbc96d31fbbf6466ecb36e4b85440a4648629f4bd9b94165a43a08249142a"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\public\\worktrees.js",
+    "sha256": "1eac93f7a8b71f250d8162f44874895579f7e135cc1a5d43aeefe731520b2a70"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\revert-compute",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\revert-compute\\algorithm.mjs",
+    "sha256": "af0b68e6b4d8c54a6ce90ca1f1b321cd8c2d08ac1be5ac6bb0185399bef0a3ae"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\revert-compute\\worker.mjs",
+    "sha256": "6437cc8d28599c0d83f870bd54076fdda845dc8162ef19907949ced7a6d274c8"
+  },
+  {
+    "type": "directory",
+    "path": "resources\\app\\revert-object",
+    "sha256": null
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\revert-object\\observe.ps1",
+    "sha256": "230eade3a3611f2340b8ecb3d536b61d2adb88deabc44b44d7c59ec065a2063f"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\revert-object\\write.ps1",
+    "sha256": "7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\server.cjs",
+    "sha256": "528fc281fc6db21d9f347e224e09eb538acd78d1296c93e20662f45ffb109582"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\theme.cjs",
+    "sha256": "b74117110488b4ff1c9bfc258602e407a5ded28efd252c268d3a7ab0459e7346"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\THIRD-PARTY-NOTICES.txt",
+    "sha256": "28d8d395a47cb314fbc09c76049e37d8670121c5d7c6493e2c75b433dcfd51d3"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\update-helper.ps1",
+    "sha256": "f0daa3709f8c164f537f8208ba0cfa1160fedae63514f57f56ebb693104fb87b"
+  },
+  {
+    "type": "file",
+    "path": "resources\\app\\zip.cjs",
+    "sha256": "4ef9898626c0c1fac84876ad67c9ee05e794d4327a73c62f25a90e208a0493a1"
+  },
+  {
+    "type": "file",
+    "path": "snapshot_blob.bin",
+    "sha256": "37e92c70c4fca0669566afc47f6d1958c30d2d6188faef95bfc34c5a51308c88"
+  },
+  {
+    "type": "file",
+    "path": "Uninstall Pi GUI Update Fixture.exe",
+    "sha256": "3679ffc2c54ed5da5c0bad978932fa9160448baf0bfe94c99f9b487ed4d9e8cc"
+  },
+  {
+    "type": "file",
+    "path": "v8_context_snapshot.bin",
+    "sha256": "f6ca5b2d3e64bf2f59980017aff33cf473edc379cfead2dab651a21c01fc95c3"
+  },
+  {
+    "type": "file",
+    "path": "version",
+    "sha256": "16b920d4bf144f494b7e66fc70a82bfadb1f036710dacca982917044be1aa83e"
+  },
+  {
+    "type": "file",
+    "path": "vk_swiftshader_icd.json",
+    "sha256": "32d83ff113fef532a9f97e0d2831f8656628ab1c99e9060f0332b1532839afd9"
+  },
+  {
+    "type": "file",
+    "path": "vk_swiftshader.dll",
+    "sha256": "86fe47036fb92c3ad14ec5c97d0ff41ea457d0784f25dc0fc67f7ef17a2dd8bc"
+  },
+  {
+    "type": "file",
+    "path": "vulkan-1.dll",
+    "sha256": "72d4b679e0e70f8f024063f745e408e21158bd73f51f779694b90ef59762fa94"
+  }
+]

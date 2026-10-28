@@ -1,8 +1,8 @@
 /* 版本检查与更新体验（P5）。
  *
  * 只做**发现**：查 GitHub 上有没有新的稳定 Release → 展示版本与发布说明 →
- * 用户自己点开 Release / 下载页。**不下载、不安装、不静默升级、不重启。**
- * 下载交给系统浏览器（安全边界最简单，见 docs/updates.md）。
+ * 发现层展示 Release；桌面下载、验证和重启由 app-update.js 的具名能力转发
+ * 给主进程。网页版继续提供手动下载链接（见 docs/updates.md）。
  *
  * ---------- 状态只有一个 ----------
  *
@@ -34,7 +34,7 @@ import { fetchUpdate } from './api.js';
 import { md } from './markdown.js';
 import { $ } from './state.js';
 import { toast } from './ui/toast.js';
-import { connectAppUpdate, paintAppUpdate } from './app-update.js';
+import { connectAppUpdate, paintAppUpdate, appUpdateSnapshot } from './app-update.js';
 
 /** 与后端 server/update-check.js 的 MAX_NOTES_CHARS 一致（后端已截断，这里兜底）。 */
 const MAX_NOTES = 4000;
@@ -309,13 +309,14 @@ export function renderUpdateSection(container, fallbackVersion = '') {
 function paint(box, fallbackVersion = fallbackVersionText) {
   const scroll = box.querySelector('.update-notes')?.scrollTop || 0;
   box.innerHTML = '';
-  const shown = currentVersion || fallbackVersion || '';
+  const desktop=appUpdateSnapshot();
+  const shown = desktop?.currentVersion || currentVersion || fallbackVersion || '';
   applyDot();
 
   const head = node('div', 'update-head');
   head.appendChild(node('div', 'update-title', shown ? `Pi GUI v${shown}` : 'Pi GUI'));
 
-  const busy = status === 'checking';
+  const busy = status === 'checking'||['downloading','verifying','preparing','recovering','installing'].includes(desktop?.phase);
   const btn = button(busy ? '检查中…' : status === 'error' ? '重试' : '检查更新');
   btn.disabled = busy;
   btn.onclick = () => {
@@ -403,17 +404,22 @@ function paintAvailable(box, shownVersion) {
   /* 只给**识别出来**的资产下载按钮（安装版 / 便携版 / 校验和）。
    * 认不出来的不给按钮 —— 宁可只留「查看 Release」，也不猜一个可能错的下载文件。 */
   const assets = Array.isArray(release.assets) ? release.assets : [];
+  const desktop=Boolean(globalThis.piGuiDesktop?.appUpdate);
+  const manual=desktop?node('details','update-manual-downloads'):null;
+  const downloads=desktop?node('div','update-acts'):acts;
+  if(manual){manual.appendChild(node('summary','','手动下载与校验和'));manual.appendChild(downloads);}
   let shownAssets = 0;
   for (const a of assets) {
     const label = ASSET_LABELS[a && a.kind];
     if (!label || !a.url) continue;
     shownAssets += 1;
-    const b = button(label, 'btn primary');
+    const b = button(label, desktop?'btn':'btn primary');
     b.title = a.name || label;
     b.onclick = () => openExternal(a.url);
-    acts.appendChild(b);
+    downloads.appendChild(b);
   }
   if (acts.children.length) box.appendChild(acts);
+  if(manual&&downloads.children.length)box.appendChild(manual);
 
   if (assets.length > shownAssets) {
     box.appendChild(
