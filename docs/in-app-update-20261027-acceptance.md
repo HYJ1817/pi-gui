@@ -2,7 +2,7 @@
 
 日期：2026-10-27。开发分支 `codex/windows-in-app-update-7573`，独立 worktree `C:\Users\21022\.codex\worktrees\windows-in-app-update-7573\pi-GUI`。
 
-当前阶段：实现、定向验证、最终 canonical、打包检查和本地自审已完成。高风险功能的独立复审仍待完成；未推送、合并、打 tag 或发布。
+本报告保留 2026-10-27、截至 `edefe7c` 的历史证据；该提交随后已获授权推送。安装失败回滚完整性的新改动及本轮验证状态见 [2026-10-28 定向补修验收](in-app-update-20261028-rollback-acceptance.md)。下文旧 canonical、产物与审查结论只证明原代码状态，不能替代本轮 PR CI；未合并、打 tag 或发布。
 
 ## 身份与范围
 

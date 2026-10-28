@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-28",
+  "branch": "codex/windows-in-app-update-7573",
+  "before": "edefe7c19915674bd8233d7431ab482eba4e52b3",
+  "business": "0237f7abf1b376b72549c418f4c44e177131f4e4",
+  "tests": "74c2967ce81fbc2ef3a36e94bc7a3c895630b893",
+  "helperSha256": "8d8d2953ca580c1d6042b2a08900a25903f1f22b4b95e15acebe052479ed09c4",
+  "targetedPassed": 43,
+  "targetedFailed": 0,
+  "targetedSkipped": 0,
+  "installedPassed": 13,
+  "nsisFailurePassed": 13,
+  "versionFailurePassed": 13,
+  "windowsFaultPassed": 10,
+  "helperStartupPassed": 2,
+  "packagedPassed": 26,
+  "canonicalLeaves": 228,
+  "fullCanonical": "pending PR CI",
+  "inventory": {
+    "files": 392,
+    "directories": 18,
+    "sha256": "a888ae2c02065e0c2f1c74f279f05a5a220e8cb789eb9f24c23b66b6de47b86b"
+  },
+  "installerBytes": 148939994,
+  "installerSha256": "c5bfcb269e243adf70122c7171679dcca32a2ad9c9d317f7c5dca075113f8936"
+}

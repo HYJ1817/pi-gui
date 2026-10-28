@@ -1,0 +1,15 @@
+
+> pi-gui@0.30.0 test:app-update:windows-faults
+> node tests/app-update-windows-faults.cjs
+
+PASS diagnostic path is unwritable
+PASS helper still waits for live installer after timeout
+PASS no rollback while NSIS owns destination
+PASS install mutex remains held during timeout wait
+PASS timeout exits only after actual installer completion
+PASS user data unaffected
+PASS real NSIS creates a hardlink to protected fixture data
+PASS uncertain rollback identity fails closed
+PASS uncertain rollback never claims rolled_back
+PASS uncertain rollback leaves user data intact
+Windows timeout fault: 10/10

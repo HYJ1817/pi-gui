@@ -1,0 +1,42 @@
+
+> pi-gui@0.30.0 build:app
+> node scripts/build-app.mjs --rebuild
+
+
+[1] 构建后端产物
+  资源 344 项
+  代码打包 2.42 MB
+Wrote single executable preparation blob to build/sea-prep.blob
+  blob 8.56 MB
+  基础 node.exe 89.6 MB
+[36mStart injection of NODE_SEA_BLOB in C:\Users\21022\.codex\worktrees\windows-in-app-update-7573\pi-GUI\build\Pi GUI.exe...[0m
+warning: The signature seems corrupted!
+[32m💉 Injection done![0m
+
+  完成 → build/Pi GUI.exe  (98.2 MB)
+  双击即可运行；资源全部内嵌，可单独拷走。
+
+[2] 生成图标
+母图  assets/icon-src.png（512px）
+icon.ico  122.8 KB
+   16px  1128 B
+   24px  2440 B
+   32px  4264 B
+   48px  9640 B
+   64px  16936 B
+  128px  21244 B
+  256px  70009 B
+
+[3] 组装应用目录
+  应用目录 8.8 MB
+
+[4] 打包 Electron 应用
+
+[5] 精简语言包
+  保留 zh-CN.pak / en-US.pak，清掉 47.2 MB
+
+  完成 → dist-app\Pi GUI-win32-x64
+  入口 → Pi GUI.exe  (234.9 MB)
+  整包 329.2 MB
+
+  双击其中的 Pi GUI.exe 即可启动，不需要 Node，也不会打开浏览器。

@@ -1,0 +1,63 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-cu14y2",
+  "previousVersion": "0.30.0",
+  "targetVersion": "0.30.1",
+  "installerBytes": 148939994,
+  "installerSha256": "c5bfcb269e243adf70122c7171679dcca32a2ad9c9d317f7c5dca075113f8936",
+  "checks": [
+    {
+      "name": "rebuilt starting Electron version is 0.30.0",
+      "pass": true
+    },
+    {
+      "name": "real NSIS creates isolated installed program and uninstaller",
+      "pass": true
+    },
+    {
+      "name": "real updater recognizes owned installed shape and running version",
+      "pass": true
+    },
+    {
+      "name": "corrupted real installer bytes rejected; old application remains usable",
+      "pass": true
+    },
+    {
+      "name": "full installer downloaded and SHA256 verified",
+      "pass": true
+    },
+    {
+      "name": "post-shutdown failure cancels helper and relaunches actual old version",
+      "pass": true
+    },
+    {
+      "name": "browser capability is usable after full old-app recovery",
+      "pass": true
+    },
+    {
+      "name": "restarted app.getVersion and recovery confirm actual target version",
+      "pass": true
+    },
+    {
+      "name": "restarted compiled backend independently confirms target version",
+      "pass": true
+    },
+    {
+      "name": "new program payload was actually installed",
+      "pass": true
+    },
+    {
+      "name": "Electron local settings survive restart",
+      "pass": true
+    },
+    {
+      "name": "all seven synthetic user data digests unchanged",
+      "pass": true
+    },
+    {
+      "name": "normal sandbox used before and after restart",
+      "pass": true
+    }
+  ],
+  "confirmation": "explicit test-only dialog response fixture",
+  "isolation": "TEMP-only real NSIS and packaged Electron; test copy removes registry/shortcut writes, uses unique exe, zlib compression, local official transport fixture and owned installation lookup. Two separately built versions; no production version change. No sandbox override. Not official v0.29.0 to published v0.30.0 or user original-location qualification."
+}

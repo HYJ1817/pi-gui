@@ -1,0 +1,103 @@
+
+> pi-gui@0.30.0 test:app-update
+> node tests/app-update.cjs && node tests/app-update-maintenance.cjs && node tests/app-update-activity.cjs && node tests/app-update-backend.cjs && node tests/app-update-desktop-regressions.cjs && node tests/app-update-ui.cjs && node tests/app-update-rollback.cjs
+
+✔ Windows updater module is implemented (0.9426ms)
+✔ exact official repository, version, name and size binding (0.8365ms)
+✔ download requires explicit confirmation and never trusts renderer URL/path (2.9306ms)
+✔ download progress, ready persistence and rehash on next launch (35.1913ms)
+✔ SHA256 mismatch, failure retry and no executable admission (9.8215ms)
+✔ busy multiple sessions refuse install without launching or quitting (12.5314ms)
+✔ install ordered after prepare and verified package; duplicate install denied (15.634ms)
+✔ portable/development never install and development never downloads (2.9558ms)
+✔ download cancellation removes partial file and supports retry (18.2506ms)
+✔ missing digest falls back to exact official checksum entry (11.6033ms)
+✔ foreign redirect, wrong size, duplicate checksum entries never become ready (11.5665ms)
+✔ install failure releases maintenance and permits retry with old application intact (22.3658ms)
+✔ tampered package after download cannot be launched (19.2996ms)
+✔ installed detection needs registered exact executable plus uninstaller, copied portable is refused (10.7133ms)
+✔ modified fallback manifest and package must still match official checksum before install (20.6689ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 202.5667
+✔ private maintenance refuses active work, drains and freezes atomically (3.0635ms)
+✔ cleanup failure unlocks and resumes without claiming shutdown (0.2765ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7.6816
+✔ classic bridge tracks pending approvals, commands and RPC before update (17.3377ms)
+✔ idle runtime with pending approval cannot pass app update maintenance (17.0397ms)
+✔ main IPC denies foreign window, subframe and wrong origin; startup version is rechecked (12.5037ms)
+✔ terminal recovery is reported once; missing and unsuccessful results fail safely (31.8845ms)
+✔ active helper remains waiting, blocks another update, then publishes and consumes its result (974.9571ms)
+✔ recovery rejects traversal and linked pending files without deleting their targets (10.9293ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1068.7864
+✔ real backend private IPC freezes HTTP mutations, releases, then exits normally (348.9256ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 352.2086
+✔ registry path is read through explicit UTF-8 output, including Chinese and spaces (5.9308ms)
+✔ cache initialization failure keeps authenticated IPC available and can retry (475.2377ms)
+✔ prepare timeout releases a late maintenance acquisition before allowing retry (34.183ms)
+✔ Windows helper reads BOM-less UTF-8 request paths losslessly (571.4835ms)
+✔ cancelled install preparation releases helper lock while parent stays usable (1550.5911ms)
+✔ cancel IO failure releases backend and waits for real helper lock even if broker exits early (229.5825ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4317.8138
+✔ desktop has one primary download with manual assets under an explicit disclosure (77.398ms)
+✔ ready package exposes restart as the sole primary action and displays the running Electron version (24.9048ms)
+✔ unavailable desktop IPC is visible with a retry instead of silent manual-only downgrade (16.8393ms)
+✔ download, verify and prepare hide download operations and indicate one active phase (20.1414ms)
+✔ portable explains manual replacement and never offers restart installation (16.7663ms)
+✔ failed installation retains explicit retry and manual recovery; actual version mismatch never says completed (21.5033ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 181.2698
+✔ rollback removes nested additions and restores complete pre-existing file set (775.7499ms)
+✔ modified backup is rejected before destination changes (761.6377ms)
+✔ recovery refuses junction traversal and preserves external user data (767.8626ms)
+✔ recovery refuses hardlinks instead of overwriting external data (811.0392ms)
+✔ deletion binds file identity and digest and refuses a replacement object (817.8373ms)
+✔ files added after the installer observation are preserved and recovery refused (789.5068ms)
+✔ restore refuses a destination with a different identity before writing (723.8291ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5452.381

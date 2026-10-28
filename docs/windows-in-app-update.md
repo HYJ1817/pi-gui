@@ -46,7 +46,11 @@ Windows PowerShell 由固定参数的隐藏 `Start-Process` 宿主启动。真�
 
 助手先重新计算 SHA256 并保持安装包只读句柄，再等旧应用完全退出。复制程序目录到该次临时更新目录下的 `backup`，然后使用固定参数 `/S /D=<当前安装目录>` 调用 NSIS。NSIS 静默路径遇仍运行实例返回 20，不强杀；无法覆盖文件返回 21，不出现隐藏确认框。
 
-安装非零退出或安装后 package 版本不匹配时，用备份恢复原程序文件并重新启动旧版本。备份失败且程序文件未动时，确认旧 exe 的 hash 和路径未变再重启。保持原 userData 路径和数据相关环境；项目、会话、供应商、OAuth、草稿、设置及 Runtime 数据不被迁移或清空，AppData 不在备份/替换范围。新进程再将实际 `app.getVersion()` 与预期目标比较，只有匹配才显示完成。
+备份前记录整个程序目录的相对路径、类型、大小和 SHA256，复制后逐项验证，只有完整备份成功才启动 NSIS。安装非零退出或安装后 package 版本不匹配时，在同一安装锁内恢复这份清单：只移除相对备份新增、且在安装器退出后的观察中身份和内容仍一致的普通文件；新增目录按最深层优先逐个删除，操作系统拒绝删除非空目录。所有更新前已有路径均从备份恢复，末尾重新比较整个目录集合和摘要，完全匹配才记录 `rolled_back` 并启动旧版。
+
+恢复使用 Windows 原生句柄核对最终路径、卷/文件 ID、重解析点和硬链接数量；目录句柄防止恢复中被改名，删除通过同一文件句柄执行，已有目标文件通过排他句柄核对身份和内容后写回。备份损坏、链接、路径/身份改变、额外并发变更或清单不符均返回 `recovery_required`，保留备份并停止自动启动，绝不清空安装目录。这里的“新增”以已持锁的程序目录在安装前后观察的差集为范围；安装锁协调本应用的安装助手，不是同权限第三方程序的系统级隔离边界。
+
+备份失败且程序文件未动时，确认旧 exe 的 hash 和路径未变再重启。保持原 userData 路径和数据相关环境；项目、会话、供应商、OAuth、草稿、设置及 Runtime 数据不被迁移或清空，AppData 不在备份/替换范围；userData 与安装目录相同或位于安装目录内时拒绝安装。新进程再将实际 `app.getVersion()` 与预期目标比较，只有匹配才显示完成。
 
 助手尽力写固定错误阶段，不写底层异常原文或用户 payload；诊断写入失败不能改变等待或回滚顺序。启动恢复分为等待、成功、失败：助手持有排他安装锁（或无法确认锁已释放）时显示等待，主进程拒绝再次下载或安装，每 500 ms 离线复查；锁释放后，只有结果为 `installed` 且实际版本匹配才显示成功，缺少结果、版本不符或错误阶段显示失败。结果确认后仅清理对应 `pending.json`，提示保留在本次应用状态，下次启动不再重复。失败 UI 保留 Release 手动安装入口。程序文件备份和结果保留在该次临时目录，便于故障恢复；系统清理临时目录后需重新下载。
 
@@ -59,11 +63,15 @@ npm run test:app-update
 npm run test:app-update:electron
 npm run test:app-update:installed
 npm run test:app-update:helper-startup
-npm run test:app-update:windows -- --previous-zip=<官方 v0.26.0 便携 ZIP 绝对路径>
+npm run test:app-update:installed-failure -- --world=<上一项成功安装专项的 TEMP 目录> --failure=exit
+npm run test:app-update:installed-failure -- --world=<同一 TEMP 目录> --failure=version
+npm run test:app-update:windows -- --previous-zip=<官方 v0.29.0 便携 ZIP 绝对路径>
 node tests/app-update-windows-faults.cjs
 ```
 
 默认专项完全离线，已纳入 `npm test` 的唯一测试链。Windows 验收不下载资产；输入 ZIP 必须匹配脚本内记录的官方 SHA256。所有写用例使用 `os.tmpdir()` 夹具；受限 Windows 测试仅给新夹具设置 Low 完整性标签，沙箱开关也仅存在于测试环境。
+
+设置 `PI_UPDATE_E2E_CONTINUE_FAILURE=1` 可在成功安装专项后按顺序执行两种失败回滚，输出目录分别为 `failure-exit` 和 `failure-version`。真实故障 NSIS 实际写入旧版不存在的文件和嵌套目录，并保留执行凭据；回滚后比较完整程序目录清单和每个文件的 SHA256。默认 canonical 中的 `tests/app-update-rollback.cjs` 使用真实 Win32 句柄与 TEMP 文件覆盖嵌套恢复、备份损坏、junction、hardlink、身份替换及安装后外部新增的拒绝恢复行为，不依赖 NSIS 下载。
 
 `test:app-update:installed` 是补充专项：需要现有离线 Electron ZIP、NSIS 和先重建的 `dist-app`，从 TEMP 源码副本分别构建当前版与下一补丁测试版，实际运行主进程、preload、后端、下载器、助手和 NSIS。测试版不修改仓库版本或正式 Release。默认等待操作者确认真实原生窗口；无人值守可显式设置 `PI_UPDATE_E2E_AUTOMATED_CONFIRM=1`，报告会记录确认应答为测试夹具，不能声称完成原生点击验收。设置 `APP_UPDATE_EVIDENCE` 可指定证据输出目录。测试安装器副本使用独立 exe 身份、较快压缩并去掉全局注册表/快捷方式写入；安装位置识别和公开 Release 传输是隔离夹具，不能冒充正式发布包原位置升级证明。`test:app-update:helper-startup` 独立验证生产启动器执行脚本并跨真实 Electron 父进程退出继续工作，路径包含中文、空格和单引号。当前结果见 [2026-10-27 验收](in-app-update-20261027-acceptance.md)。
 

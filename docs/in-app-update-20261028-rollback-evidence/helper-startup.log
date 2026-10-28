@@ -1,0 +1,5 @@
+
+> pi-gui@0.30.0 test:app-update:helper-startup
+> node tests/app-update-helper-startup.cjs
+
+Windows Electron helper startup/survival: 2/2

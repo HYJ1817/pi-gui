@@ -1,0 +1,57 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-cu14y2",
+  "checks": [
+    {
+      "name": "real partial-write NSIS package passes complete download and integrity checks",
+      "pass": true
+    },
+    {
+      "name": "real loading Browser refuses update before native confirmation or shutdown",
+      "pass": true
+    },
+    {
+      "name": "real NSIS nonzero exit restores backup and restarts",
+      "pass": true
+    },
+    {
+      "name": "NSIS actually executed new file and nested payload writes before failure",
+      "pass": true
+    },
+    {
+      "name": "restarted Electron reports actual previous version after rollback",
+      "pass": true
+    },
+    {
+      "name": "actual previous backend remains usable",
+      "pass": true
+    },
+    {
+      "name": "complete program directory inventory and all 392 file digests restored",
+      "pass": true
+    },
+    {
+      "name": "failed installation file was removed during rollback",
+      "pass": true
+    },
+    {
+      "name": "new nested program directory removed without clearing installation",
+      "pass": true
+    },
+    {
+      "name": "pre-existing custom project inside program directory preserved",
+      "pass": true
+    },
+    {
+      "name": "all seven synthetic user data hashes preserved after failed installation",
+      "pass": true
+    },
+    {
+      "name": "browser capability available after rollback restart",
+      "pass": true
+    },
+    {
+      "name": "failure offers retry and manual recovery entries after startup restoration finishes",
+      "pass": true
+    }
+  ]
+}
