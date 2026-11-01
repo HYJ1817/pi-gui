@@ -1,0 +1,72 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-31T06:00:00Z"
+  },
+  "title": "pi-GUI · Workbench 设计探索",
+  "launch": {
+    "view": "focused",
+    "file": "Refined.dc.html"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "A · 工作台 / 正常会话",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Reading.dc.html": {
+      "title": "B · 阅读空间 / 正常会话",
+      "w": 1440,
+      "y": 0,
+      "h": 900,
+      "x": 1520,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    "Refined.dc.html": {
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "统一修订版 · 中性单侧栏",
+      "expand": "fill",
+      "is_interactive": true
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Reading.dc.html",
+    "Refined.dc.html"
+  ],
+  "notes": {
+    "overview": {
+      "x": 0,
+      "y": -280,
+      "text": "pi-GUI · 两种工作方式，同一套能力边界",
+      "kind": "title1",
+      "maxW": 2960
+    }
+  },
+  "designSystems": [
+    {
+      "title": "Pi Workbench",
+      "namespace": "pi-workbench",
+      "artifact": "C:/pi-GUI/designs/ui-ux-2026-10-31/system",
+      "version": null,
+      "copiedAt": "2026-10-31T06:00:00Z"
+    },
+    {
+      "title": "Pi Workbench · 修订",
+      "namespace": "pi-workbench-refined",
+      "artifact": "C:/pi-GUI/designs/ui-ux-2026-10-31/system",
+      "version": null,
+      "copiedAt": "2026-10-31T16:13:36.387Z"
+    }
+  ]
+}

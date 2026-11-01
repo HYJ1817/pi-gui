@@ -1,0 +1,732 @@
+{
+  "entry": "production electron/main.cjs + public renderer",
+  "backend": "existing tests/visual-harness.cjs, offline TEMP fixtures",
+  "shots": [
+    "dark-1440-empty.png",
+    "dark-1440-chat.png",
+    "dark-1440-tools.png",
+    "dark-1440-btnModel.png",
+    "dark-1440-btnThink.png",
+    "dark-1440-navChanges.png",
+    "dark-1440-btnBrowser.png",
+    "dark-1440-btnSpecs.png",
+    "dark-1440-btnCollabDocs.png",
+    "dark-1440-navPlanner.png",
+    "dark-1440-navExtensions.png",
+    "dark-1440-settings-menu.png",
+    "dark-1440-navProviders.png",
+    "dark-1440-navDiagnostics.png",
+    "dark-1440-navLogs.png",
+    "light-1280-overview.png",
+    "light-1440-overview.png",
+    "light-1920-overview.png",
+    "dark-1280-overview.png",
+    "dark-1440-overview.png",
+    "dark-1920-overview.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-1440-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 480,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1248,
+        "bottom": 882,
+        "left": 480
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-chat",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 480,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1248,
+        "bottom": 882,
+        "left": 480
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-tools",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-btnModel",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": {
+        "x": 749,
+        "y": 555,
+        "width": 420,
+        "height": 243.59375,
+        "top": 555,
+        "right": 1169,
+        "bottom": 798.59375,
+        "left": 749
+      },
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\n选择模型\ndeepseek / deepseek-v4-pro\ndeepseek\n2\nDeepSeek V4 Pro\n能力未知\nDeepSeek V4 Flash\n推理\n共 2 个可用模型"
+    },
+    {
+      "name": "dark-1440-btnThink",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": {
+        "x": 1007,
+        "y": 658,
+        "width": 232,
+        "height": 140.95834350585938,
+        "top": 658,
+        "right": 1239,
+        "bottom": 798.9583435058594,
+        "left": 1007
+      },
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\n思考等级\noff\n不思考，最快\nhigh\n深度思考\nmax\n最大思考预算"
+    },
+    {
+      "name": "dark-1440-navChanges",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 320,
+        "y": 807,
+        "width": 658,
+        "height": 75,
+        "top": 807,
+        "right": 978,
+        "bottom": 882,
+        "left": 320
+      },
+      "panel": {
+        "x": 1020,
+        "y": 0,
+        "width": 420,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1020
+      },
+      "popover": null,
+      "active": "btnThink",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "dark-1440-btnBrowser",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 320,
+        "y": 807,
+        "width": 658,
+        "height": 75,
+        "top": 807,
+        "right": 978,
+        "bottom": 882,
+        "left": 320
+      },
+      "panel": {
+        "x": 1020,
+        "y": 0,
+        "width": 420,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1020
+      },
+      "popover": null,
+      "active": "browserAddress",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "dark-1440-btnSpecs",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 320,
+        "y": 807,
+        "width": 658,
+        "height": 75,
+        "top": 807,
+        "right": 978,
+        "bottom": 882,
+        "left": 320
+      },
+      "panel": {
+        "x": 1020,
+        "y": 0,
+        "width": 420,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1020
+      },
+      "popover": null,
+      "active": "navChanges",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\nSpecs\n\n项目文档 · 只读\n\n刷新\n分屏\n×\n无法读取项目 Specs。\n重试\n无法读取 Specs\n\n请检查项目目录后重试。"
+    },
+    {
+      "name": "dark-1440-btnCollabDocs",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "btnSpecs",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-navPlanner",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "btnSpecs",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n任务\n3\n计划\nAgent\n生成计划\n新建空计划\n当前项目的计划（5）\n已暂停\n修复 SSE 重连问题\n6 个任务 · 成功 4 · 失败 1\n已完成\n压力场景：长说明 / 多文件 / 多次尝试\n2 个任务 · 成功 1 · 失败 1\n已暂停\n人工验收门控：等待 / 通过 / 需修改\n7 个任务 · 成功 4 · 失败 0\n待执行\nP13 下一步：可执行\n2 个任务 · 成功 1 · 失败 0\n已暂停\nP13 下一步：等人工验收\n2 个任务 · 成功 1 · 失败 0\n左侧选一个计划，或先生成一个。"
+    },
+    {
+      "name": "dark-1440-navExtensions",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "btnSpecs",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\nSkills 与扩展\n3\n扩展与能力\n能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。\nAll\nCapabilities\nExtensions\nSkills\nMCP\n全部作用域\n项目\n用户\n临时\n全部状态\n已启用\n未启用\n有问题\n刷新\n共 3 个　·　已启用 1　·　项目 1　·　用户 2\n当前项目未被信任，pi 在非交互模式下不会加载项目级 Skills / Extensions —— 所以项目里那些会显示成「未加载（项目未信任）」。这是 pi 的默认行为，不是配置丢了。\ncode-review\n用户\n审查源代码中的问题\npdf-tools\n用户\n读取与整理 PDF\n已停用 · 已停用\nproj-only\n项目\n当前项目的技能\n未加载（项目未信任） · 项目未被信任\n选一个 Skill 看详情"
+    },
+    {
+      "name": "dark-1440-settings-menu",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navProviders",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-navProviders",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\Users\\21022\\.pi\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\ndeepseek\n2 个模型 · openai-completions\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "dark-1440-navDiagnostics",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "modalCard",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\n诊断\n这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。\n版本\nPi GUI v0.15.0\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv0.15.0\nPi\nPi 0.99.2\n检查 Pi 更新\n更新到 1.0.0\n新版本 1.0.0 可用\n该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。\n系统\nWindows_NT 10.0.26100 x64\nNode\nv24.14.0\n项目\npi-GUI\npi\n0.99.2\nBridge\n运行中\nMCP\n检测到相关模块\n版本真值\npi\n0.99.2\n版本来源\npackage.json\n版本核对\n已核对\n核对基线\n0.99.2 · 2026-10-01 · historical\nPi 兼容性\nPi 版本\n0.99.2\n兼容状态\n正常\nRPC\n支持\n会话状态\n支持\n历史消息\n支持\n新会话\n支持\n会话切换\n支持\n会话重命名\n支持\nTool Events\n支持\n扩展 UI\n支持\n会话文件\n支持\n能力 probe\n共 14 条 · 支持 8 · 不支持 0 · 未知 6（求值于 2026-10-02T00:00:00.000Z）\nRPC 命令集\n支持 · dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\nRPC 无工具清单命令\n支持 · 33 条里没有 *tool*\n扩展 UI 对话框子协议\n支持 · docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\ntool_call 可阻断\n支持 · block?: boolean;；tool_call can mutate input or block execution.\n核心自带审批闸门\n未知 · docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\nbuiltin:mcp\n支持 · builtInExtensions: llama.cpp / codemode / tool-search / mcp\nMCP 运行时状态闭集\n支持 · closed / connected / connecting / disconnected / failed / needs-auth\nRPC 通道真的通了\n支持 · 来自 pi-compat 的能力三值\nNative MCP 生效\n支持 · 原生状态：active\n还没法下结论的核心 probe：rpc（未知 ≠ 不支持）\n前端观察到的 schema 漂移（只有来源 / 字段名 / 类型，没有值）：\ntool.name · unknown-tool · string\n兼容矩阵（我们核对过什么）\n当前验证基线\n1.0.0\nPi 0.87.0\n历史基线 · 核对于 2026-09-30\nPi 0.99.1\n历史基线 · 核对于 2026-10-01\nPi 0.99.2\n历史基线 · 核对于 2026-10-01\nPi 1.0.0\n当前基线 · 核对于 2026-10-02\n已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：\npi-web-access\n0.33.0 · 核对于 2026-09-30\npi-subagents\n0.73.1 · 核对于 2026-09-30\npi-memory\n0.4.2 · 核对于 2026-09-30\npi-browser-harness\n0.11.0 · 核对于 2026-10-01\n已知上游差异（升级时逐条复核）：\napproval-doc-wording · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 Approval 能力报告\ndialog-doc-moved · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 / P23 契约 probe\niserror-propagation · 0.87.0 → 0.99.1 · 影响 P18 / P20 成功证据\nNative MCP\n原生状态\n生效中\nserver 条目\n2\n项目信任\n已信任\nbuiltin:mcp 在包里、未被禁用、未被接管\n关键 Extension 版本\npi-web-access@1.4.0\n用户 · 已加载\npi-memory@0.4.2\n用户 · 加载未知\n只有 package.json 里读到版本号的才列出来；版本是否与兼容矩阵一致，见上面的矩阵一节。\n健康检查\ndata-readable\n正常\ndata-writable\n正常\nproject-readable\n正常\nproject-writable\n正常\npi-running\n正常\nAgent\npi\n可用 · 0.99.2\n脱敏后的诊断 JSON\n{\n  \"schemaVersion\": 1,\n  \"generatedAt\": \"2026-10-02T00:00:00.000Z\",\n  \"app\": {\n    \"id\": \"pi-gui\",\n    \"version\": \"0.15.0\"\n  },\n  \"system\": {\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"node\": \"v24.14.0\",\n    \"os\": \"Windows_NT\",\n    \"release\": \"10.0.26100\"\n  },\n  \"project\": {\n    \"selected\": true,\n    \"name\": \"pi-GUI\",\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"data\": {\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"bridge\": {\n    \"piRunning\": true,\n    \"bridgeRun\": 12,\n    \"hasProject\": true,\n    \"args\": [\n      \"--mode\",\n      \"rpc\"\n    ]\n  },\n  \"pi\": {\n    \"configuredBin\": \"pi\",\n    \"available\": true,\n    \"version\": \"0.99.2\",\n    \"versionSource\": \"package.json\",\n    \"verification\": {\n      \"status\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"launch\": {\n      \"source\": \"path\",\n      \"binName\": \"pi.cmd\",\n      \"entryKnown\": true,\n      \"packageDirKnown\": true\n    }\n  },\n  \"agents\": [\n    {\n      \"id\": \"pi\",\n      \"available\": true,\n      \"version\": \"0.99.2\",\n      \"reason\": null,\n      \"capabilities\": null\n    }\n  ],\n  \"mcp\": {\n    \"supported\": true,\n    \"piVersion\": \"0.99.2\",\n    \"error\": null,\n    \"native\": {\n      \"fresh\": true,\n      \"state\": \"active\",\n      \"reason\": \"builtin:mcp 在包里、未被禁用、未被接管\",\n      \"replaced\": false,\n      \"disabled\": null,\n      \"builtinPresent\": true,\n      \"serverCount\": 2,\n      \"trust\": true\n    }\n  },\n  \"probes\": {\n    \"at\": \"2026-10-02T00:00:00.000Z\",\n    \"packageKnown\": true,\n    \"summary\": {\n      \"total\": 14,\n      \"supported\": 8,\n      \"unsupported\": 0,\n      \"unknown\": 6,\n      \"unverified\": [\n        \"rpc\"\n      ]\n    },\n    \"items\": [\n      {\n        \"id\": \"rpc-commands\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 命令集\",\n        \"state\": true,\n        \"evidence\": \"dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\"\n      },\n      {\n        \"id\": \"rpc-no-tool-list\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 无工具清单命令\",\n        \"state\": true,\n        \"evidence\": \"33 条里没有 *tool*\"\n      },\n      {\n        \"id\": \"extension-ui\",\n        \"kind\": \"source\",\n        \"label\": \"扩展 UI 对话框子协议\",\n        \"state\": true,\n        \"evidence\": \"docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\"\n      },\n      {\n        \"id\": \"approval-hook\",\n        \"kind\": \"source\",\n        \"label\": \"tool_call 可阻断\",\n        \"state\": true,\n        \"evidence\": \"block?: boolean;；tool_call can mutate input or block execution.\"\n      },\n      {\n        \"id\": \"core-approval\",\n        \"kind\": \"source\",\n        \"label\": \"核心自带审批闸门\",\n        \"state\": null,\n        \"evidence\": \"docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\"\n      },\n      {\n        \"id\": \"builtin-mcp\",\n        \"kind\": \"source\",\n        \"label\": \"builtin:mcp\",\n        \"state\": true,\n        \"evidence\": \"builtInExtensions: llama.cpp / codemode / tool-search / mcp\"\n      },\n      {\n        \"id\": \"mcp-runtime-states\",\n        \"kind\": \"source\",\n        \"label\": \"MCP 运行时状态闭集\",\n        \"state\": true,\n        \"evidence\": \"closed / connected / connecting / disconnected / failed / needs-auth\"\n      },\n      {\n        \"id\": \"rpc\",\n        \"kind\": \"runtime\",\n        \"label\": \"RPC 通道真的通了\",\n        \"state\": true,\n        \"evidence\": \"来自 pi-compat 的能力三值\"\n      },\n      {\n        \"id\": \"mcp-native\",\n        \"kind\": \"runtime\",\n        \"label\": \"Native MCP 生效\",\n        \"state\": true,\n        \"evidence\": \"原生状态：active\"\n      }\n    ]\n  },\n  \"matrix\": {\n    \"piBaselines\": [\n      {\n        \"version\": \"0.87.0\",\n        \"verifiedAt\": \"2026-09-30\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.1\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"1.0.0\",\n        \"verifiedAt\": \"2026-10-02\",\n        \"scope\": \"current\"\n      }\n    ],\n    \"currentBaseline\": \"1.0.0\",\n    \"extensionBaselines\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"0.33.0\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-subagents\",\n        \"version\": \"0.73.1\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-browser-harness\",\n        \"version\": \"0.11.0\",\n        \"verifiedAt\": \"2026-10-01\"\n      }\n    ],\n    \"nativeMcp\": {\n      \"builtinId\": \"mcp\",\n      \"replaceable\": true,\n      \"serverStates\": [],\n      \"exposures\": [],\n      \"cliSubcommands\": []\n    },\n    \"knownDifferences\": [\n      {\n        \"id\": \"approval-doc-wording\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 Approval 能力报告\"\n      },\n      {\n        \"id\": \"dialog-doc-moved\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 / P23 契约 probe\"\n      },\n      {\n        \"id\": \"iserror-propagation\",\n        \"between\": \"0.87.0 → 0.99.1\",\n        \"affects\": \"P18 / P20 成功证据\"\n      }\n    ]\n  },\n  \"extensions\": {\n    \"discovered\": 5,\n    \"items\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"1.4.0\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": true\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": null\n      }\n    ]\n  },\n  \"checks\": [\n    {\n      \"id\": \"data-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"data-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"pi-running\",\n      \"ok\": true\n    }\n  ],\n  \"compatibility\": {\n    \"status\": \"compatible\",\n    \"detected\": true,\n    \"piVersion\": \"0.99.2\",\n    \"versionKnown\": true,\n    \"versionSource\": {\n      \"source\": \"package.json\",\n      \"status\": \"known\",\n      \"updatedAt\": \"2026-10-02T00:00:00.000Z\"\n    },\n    \"versionVerification\": {\n      \"verification\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"capabilities\": {\n      \"rpc\": true,\n      \"getState\": true,\n      \"getMessages\": true,\n      \"newSession\": true,\n      \"switchSession\": true,\n      \"sessionNaming\": true,\n      \"toolEvents\": true,\n      \"extensionUi\": true,\n      \"sessionJsonl\": true\n    },\n    \"missing\": [],\n    \"unverified\": [],\n    \"protocol\": {\n      \"expected\": 1,\n      \"observed\": 1\n    },\n    \"schema\": {\n      \"unknownFields\": [],\n      \"unknownEnums\": []\n    },\n    \"issues\": []\n  },\n  \"privacy\": {\n    \"absolutePathsIncluded\": false,\n    \"conversationContentIncluded\": false,\n    \"configFileContentIncluded\": false,\n    \"environmentIncluded\": false,\n    \"protocolPayloadsIncluded\": false,\n    \"schemaDriftValuesIncluded\": false,\n    \"redactionApplied\": true\n  }\n}\n复制诊断摘要\n复制诊断 JSON\n导出 JSON\n刷新\n关闭"
+    },
+    {
+      "name": "dark-1440-navLogs",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "ui5-log-tab-overview",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high\n日志与故障报告\n本地日志只保存在这台机器上，不会自动上传。这里显示的是后端再次脱敏后的结构化事件；复制/导出前请自行检查。\n概览\n日志查看\n导出故障报告\n打开日志查看\n复制诊断摘要\n导出故障报告\n状态\n已开启\n模式\n标准\n保留\n7 天 · 总上限 20 MB\n磁盘占用\n72.0 KB · 3 个文件 · 崩溃 1\n上次运行\n正常或首次运行\n写入状态\n正常\n日志设置\n启用本地日志\n日志级别\n标准（INFO 及以上）\n详细（含临时技术元信息）\n保留天数\n1 天\n3 天\n7 天\n14 天\n30 天\n空间上限\n10 MB\n20 MB\n50 MB\n清理日志\n最近错误\n2026/10/17 19:59:00\n错误\npi-bridge · bridge.request_timeout · BRIDGE_TIMEOUT\n引用\n2026/10/17 19:58:00\n警告\nruntime · runtime.owner_rejected · OWNER_STALE\n引用\n最近日志文件\napp-20261017.jsonl\n57.0 KB\nmain-20261017.jsonl\n7.0 KB\napp-crash-20261017.jsonl\n8.0 KB\n刷新\n关闭"
+    },
+    {
+      "unavailable": "navAppUpdate"
+    },
+    {
+      "unavailable": "navPiUpdate"
+    },
+    {
+      "name": "light-1280-overview",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 800,
+        "top": 0,
+        "right": 288,
+        "bottom": 800,
+        "left": 52
+      },
+      "composer": {
+        "x": 395,
+        "y": 707,
+        "width": 768,
+        "height": 75,
+        "top": 707,
+        "right": 1163,
+        "bottom": 782,
+        "left": 395
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navGlobalMore",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "light-1440-overview",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navGlobalMore",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "light-1920-overview",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 1080,
+        "top": 0,
+        "right": 288,
+        "bottom": 1080,
+        "left": 52
+      },
+      "composer": {
+        "x": 720,
+        "y": 987,
+        "width": 768,
+        "height": 75,
+        "top": 987,
+        "right": 1488,
+        "bottom": 1062,
+        "left": 720
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navGlobalMore",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1280-overview",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 800,
+        "top": 0,
+        "right": 288,
+        "bottom": 800,
+        "left": 52
+      },
+      "composer": {
+        "x": 395,
+        "y": 707,
+        "width": 768,
+        "height": 75,
+        "top": 707,
+        "right": 1163,
+        "bottom": 782,
+        "left": 395
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navGlobalMore",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-overview",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navGlobalMore",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1920-overview",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 1080,
+        "top": 0,
+        "right": 288,
+        "bottom": 1080,
+        "left": 52
+      },
+      "composer": {
+        "x": 720,
+        "y": 987,
+        "width": 768,
+        "height": 75,
+        "top": 987,
+        "right": 1488,
+        "bottom": 1062,
+        "left": 720
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navGlobalMore",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n请核对会话恢复与右侧面板的交互。\n\nPi\n\n已核对现有的会话恢复路径。\n\n建议\n\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\n\n场景\t预期\n切换会话\t恢复草稿\n展开面板\t保留阅读位置\nconst session = await restoreSession(id);\nreturn session.draft;\n操作 5 项\n失败 1 · 成功 4\n读取文件\n成功\npublic/session-0.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-1.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-2.js\n0.0s\n展开输出\n1 行\n读取文件\n成功\npublic/session-3.js\n0.0s\n展开输出\n1 行\n执行命令\n失败\nnode fixture-check.cjs\n0.0s\n展开输出\nFixture validation failed\n请核对会话恢复与右侧面板的交互。\n6%\nDeepSeek V4 Pro\n思考 high"
+    }
+  ],
+  "errors": []
+}

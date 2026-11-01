@@ -1,0 +1,132 @@
+{
+  "manifestVersion": 3,
+  "name": "Pi Workbench",
+  "namespace": "PiWorkbench",
+  "files": [
+    "Component-Coverage.md",
+    "Contrast-Checks.md",
+    "Original-Inventory.md",
+    "components/Button/README.md",
+    "components/ChatMessage/README.md",
+    "components/Dialog/README.md",
+    "components/EmptyState/README.md",
+    "components/ErrorState/README.md",
+    "components/IconButton/README.md",
+    "components/Input/README.md",
+    "components/Menu/README.md",
+    "components/ModelPicker/README.md",
+    "components/Popover/README.md",
+    "components/Progress/README.md",
+    "components/Sidebar/README.md",
+    "components/StatusIndicator/README.md",
+    "components/Tabs/README.md",
+    "components/Textarea/README.md",
+    "components/Toast/README.md",
+    "components/ToolActivity/README.md",
+    "components/Tooltip/README.md",
+    "components/WorkPanel/README.md",
+    "components/bundle.css",
+    "source-inventory.json",
+    "tokens.css",
+    "verify-editor.cjs"
+  ],
+  "libraries": [],
+  "components": [
+    {
+      "name": "Button",
+      "group": "Actions",
+      "summary": "按钮以稳定尺寸表达单次操作，只保留一个主要动作。"
+    },
+    {
+      "name": "ChatMessage",
+      "group": "Conversation",
+      "summary": "聊天消息以角色、正文和可收拢活动建立可长读的信息层级。"
+    },
+    {
+      "name": "Dialog",
+      "group": "Overlays",
+      "summary": "模态对话框只用于需要中断当前工作的确认或独立编辑。"
+    },
+    {
+      "name": "EmptyState",
+      "group": "Feedback",
+      "summary": "空状态解释当前上下文并提供一个真实可执行的下一步。"
+    },
+    {
+      "name": "ErrorState",
+      "group": "Feedback",
+      "summary": "错误状态保留上下文、说明影响范围，并提供可验证的恢复动作。"
+    },
+    {
+      "name": "IconButton",
+      "group": "Actions",
+      "summary": "图标按钮提供紧凑且有可访问名称的辅助操作。"
+    },
+    {
+      "name": "Input",
+      "group": "Inputs",
+      "summary": "单行输入通过标签、提示和内联错误完整表达字段含义。"
+    },
+    {
+      "name": "Menu",
+      "group": "Overlays",
+      "summary": "Dropdown 和右键菜单共用动作列表、锚点边界和键盘规则。"
+    },
+    {
+      "name": "ModelPicker",
+      "group": "Inputs",
+      "summary": "模型选择器同时呈现供应商、模型身份与权威回读状态。"
+    },
+    {
+      "name": "Popover",
+      "group": "Overlays",
+      "summary": "非模态浮层承载当前操作的补充信息，不改变输入区布局。"
+    },
+    {
+      "name": "Progress",
+      "group": "Feedback",
+      "summary": "进度条仅在有可靠分母时显示百分比，否则显示活动和阶段文字。"
+    },
+    {
+      "name": "Sidebar",
+      "group": "Navigation",
+      "summary": "会话侧栏使用固定行序和项目层级，让选择动作保持空间稳定。"
+    },
+    {
+      "name": "StatusIndicator",
+      "group": "Feedback",
+      "summary": "状态标识以文字和形状共同表达系统状态，颜色只作补充。"
+    },
+    {
+      "name": "Tabs",
+      "group": "Navigation",
+      "summary": "页签切换同一工作面板内的兄弟视图并保留各自状态。"
+    },
+    {
+      "name": "Textarea",
+      "group": "Inputs",
+      "summary": "多行输入固定宽度并按内容增高，超出上限后内部滚动。"
+    },
+    {
+      "name": "Toast",
+      "group": "Feedback",
+      "summary": "Toast 对非阻断操作提供短暂、去重且不打断焦点的确认。"
+    },
+    {
+      "name": "ToolActivity",
+      "group": "Conversation",
+      "summary": "工具活动默认压缩为可扫描的阶段与结果，需要时再展开细节。"
+    },
+    {
+      "name": "Tooltip",
+      "group": "Overlays",
+      "summary": "Tooltip 解释图标操作与快捷键，不承载必要操作或错误原因。"
+    },
+    {
+      "name": "WorkPanel",
+      "group": "Workspace",
+      "summary": "右侧工作面板共用标题、页签、尺寸和关闭规则，并保留业务实例。"
+    }
+  ],
+  "assetGroups": []
+}

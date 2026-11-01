@@ -1,0 +1,776 @@
+{
+  "fixture": "actual packaged executable, bundled renderer/preload; existing offline visual harness; TEMP user data; not production backend E2E",
+  "checks": [
+    {
+      "name": "all packaged renderer assets match final source",
+      "ok": true
+    },
+    {
+      "name": "real packaged desktop preload and Electron renderer",
+      "ok": true
+    },
+    {
+      "name": "single sidebar and real model search render from bundled assets",
+      "ok": true
+    },
+    {
+      "name": "bundled model search is reachable",
+      "ok": true
+    },
+    {
+      "name": "bundled Settings opens real workspace surface",
+      "ok": true
+    }
+  ],
+  "assets": [
+    {
+      "file": "api.js",
+      "digest": "e88e10ac073615460dd6dabe901824e665c1b36f919ae0e5e20c89b5dd1e8d19",
+      "match": true
+    },
+    {
+      "file": "app-update.js",
+      "digest": "2adf257f204a5e6c209d5ed596655a6e06f03d4a12dd797f96b81de3811aa409",
+      "match": true
+    },
+    {
+      "file": "app.js",
+      "digest": "f72221781dcc00edf4090614eebdd9494510c2f61cdd9cb5d1cd0a3d9c44516c",
+      "match": true
+    },
+    {
+      "file": "approval-model.js",
+      "digest": "d915b5b66f6cd38f7912be4eb7e40b219137ccbfa51fb1eebfc96e14569e0564",
+      "match": true
+    },
+    {
+      "file": "approval.js",
+      "digest": "92c38a3ad44a701660ad45904704bd0e96205de87ae30610431348933da25d3d",
+      "match": true
+    },
+    {
+      "file": "attachments.js",
+      "digest": "cb37a8459dd28e18b98012cdb6468bb1c0de00da6feaf4bf3a7e05d1390f2a0b",
+      "match": true
+    },
+    {
+      "file": "bridge-recovery.js",
+      "digest": "5770bb4d16e1268d415b3cc07b642893a5c8d430dafc3e0aa1bcd92bb7f6ebb5",
+      "match": true
+    },
+    {
+      "file": "browser-activity.js",
+      "digest": "0f131e2291e2b903b482820d85cb814a9fb187ae284a3c311449f604d8fda7db",
+      "match": true
+    },
+    {
+      "file": "browser-capabilities.js",
+      "digest": "4b77e168e98ccb261cd1b68b19d031de5775e1638c87f52515eb4f72f793421e",
+      "match": true
+    },
+    {
+      "file": "browser-pane.js",
+      "digest": "f1cd0e961b08351ca535823f66cb0ef4c095f91e886924ccde48b0cee185e4e2",
+      "match": true
+    },
+    {
+      "file": "browser.js",
+      "digest": "c29fdd429c646cf188d9dcb24b4aeee8d4ebb4c291a79f72a90bf5163ca09bfe",
+      "match": true
+    },
+    {
+      "file": "candidate-review.js",
+      "digest": "6c06bb546fa9b18dd66e3d1a6312ea8afb2e4fe62594a171b1c9df0d06effd01",
+      "match": true
+    },
+    {
+      "file": "capability-model.js",
+      "digest": "6cd6638f2a4a922f8ed4e0780377005055cdaecb2c1337e96cd3a674e7d2c8fd",
+      "match": true
+    },
+    {
+      "file": "capability-view.js",
+      "digest": "41d1f7d97f30d2d57c5bf5cb30562934b445670f48701882a0d4c75218a813f3",
+      "match": true
+    },
+    {
+      "file": "changes.js",
+      "digest": "14100196966d454e1fdc4a67361ed73759968b59a04e34443171dce58ecf0f19",
+      "match": true
+    },
+    {
+      "file": "collab-auto-layout.js",
+      "digest": "d52691ac1c83d6943a5e1238eeb1c88bb7579330171a4fdd38e05b9aa054168b",
+      "match": true
+    },
+    {
+      "file": "collab-canvas-productivity.js",
+      "digest": "ffb573093edb16fd8df7cc5ddb64e1d1d73529ba29aecccd7f6c82b950c4784e",
+      "match": true
+    },
+    {
+      "file": "collab-canvas.js",
+      "digest": "f610bc406aea47333c7934dec245c6fb4a6c6ec6f2f806b223514a9c185ff707",
+      "match": true
+    },
+    {
+      "file": "collab-export.js",
+      "digest": "4ccf5eecafd3268ca0122f0d08aa34cd7b128d0b5b9f26921495913dc9d89a7c",
+      "match": true
+    },
+    {
+      "file": "collab-layout-preview.js",
+      "digest": "95192a9b262fc389d3e56d9a6d98fb027d7988aab28e5de49ae445944fca2b2e",
+      "match": true
+    },
+    {
+      "file": "collab-panel.css",
+      "digest": "c7355fccc4940e57b6ecc86c5a127ca84ff003688b8db3489314304199531e04",
+      "match": true
+    },
+    {
+      "file": "collab-panel.js",
+      "digest": "8fbdff6b1e3c1a60f1e7abe960923f41601cea5aadbbb724ff26c865ddd0277d",
+      "match": true
+    },
+    {
+      "file": "collab-productivity.css",
+      "digest": "05c2d49e4c0facc9f6b157f6abe57597b2467854772892c163fc4f0f147f71b2",
+      "match": true
+    },
+    {
+      "file": "collab-proposal.js",
+      "digest": "4200b257144b141328893442830893d47d890a7066fe91ef4e007d4fb53ca368",
+      "match": true
+    },
+    {
+      "file": "collab-selection.js",
+      "digest": "b648a5063769830e38f280227b0388eb715b866d3837bff6c3edd586fc2065b4",
+      "match": true
+    },
+    {
+      "file": "collab.css",
+      "digest": "3acfacd5f651a7655e9757b97ee2bbd4a064ec04d41463cd04f624348a68f3e2",
+      "match": true
+    },
+    {
+      "file": "composer.js",
+      "digest": "1ecfa2095e4c2567d61d175c4493e23e5da97c5dbb61d4df99c6e3bb32954822",
+      "match": true
+    },
+    {
+      "file": "conversation-nav.js",
+      "digest": "36468f6c654eca167e97bba277c086fa7939f78249e431008ad13d40330ab9c6",
+      "match": true
+    },
+    {
+      "file": "diagnostics.js",
+      "digest": "53913dfa820d19076ade52df8e31eae2d8c21c0ac5aaf5e52572b044e7612c6c",
+      "match": true
+    },
+    {
+      "file": "diff-comments.js",
+      "digest": "64906c26c5ee143e13e2153ca744a53a7e8acc6ef8b8f80f036ecd0263138afc",
+      "match": true
+    },
+    {
+      "file": "diff.js",
+      "digest": "f26387a87a775c36174f98a84cd126f6ba52ad686bad164798855e921cf3f4cd",
+      "match": true
+    },
+    {
+      "file": "draft.js",
+      "digest": "f3b2e8da81659a4b3c38e6d9bf43903bee48b9db8370537505f06a1715810b7c",
+      "match": true
+    },
+    {
+      "file": "extension-notices.js",
+      "digest": "6edd4f91b7ab24e7b600b402c04f4fa94d57ec002dbaa8ade06680fce92ee5fe",
+      "match": true
+    },
+    {
+      "file": "extensions.js",
+      "digest": "79ba56ff7ab64ed2d39dcee74cc004663896236b9344257e8108511293031e3a",
+      "match": true
+    },
+    {
+      "file": "fallback.js",
+      "digest": "fef0e93402773fc046160ecaf4f95e3fdd6f801a37f100f25078b4bdf869668c",
+      "match": true
+    },
+    {
+      "file": "git.js",
+      "digest": "7fb1d833437c4dd94babd70db4b0833d66c52a96969fe889808fa7a144cc2ce9",
+      "match": true
+    },
+    {
+      "file": "gui-browser-activity.js",
+      "digest": "60276f01495ff693e6f8b296785cd7243ee842d9ae419eacb810347555155184",
+      "match": true
+    },
+    {
+      "file": "gui-browser-capabilities.js",
+      "digest": "6e864fcdd958b9f973cec4fd99b86cacd979981a8b7fce2f44b638a1966059ef",
+      "match": true
+    },
+    {
+      "file": "html-escape.js",
+      "digest": "4754312ae99ecbbd62219f29f0a97d9f2e3efa8ef61f0dd7ee336c5f2b0ae403",
+      "match": true
+    },
+    {
+      "file": "index.html",
+      "digest": "e5606261dce7f500d753503fc725d0968fb05243e87a6494b634f327fd6c023b",
+      "match": true
+    },
+    {
+      "file": "log-client.js",
+      "digest": "28f6eca8e6100949e571d022260f89f8ab4beb15e2d8cefb0d03282a1271336d",
+      "match": true
+    },
+    {
+      "file": "logs.js",
+      "digest": "5af93bf82f6b3b2959f4a6befd6c5bb19a96b0729aace356dcbc0517bf1859e2",
+      "match": true
+    },
+    {
+      "file": "markdown.js",
+      "digest": "a7f89ad7a5da8869d6d4d6f9c331d90565adaa451959e3cee9290544b47415b1",
+      "match": true
+    },
+    {
+      "file": "mcp-activity.js",
+      "digest": "947f07ac5ccfdd5db31f88dcf6fc599dd5175bb4e8a17cc28b1284f71e6b4f7b",
+      "match": true
+    },
+    {
+      "file": "mcp-capabilities.js",
+      "digest": "8781bf70b55364403c43212cc9ebca782e3c459990ededd454ac3affece6ef78",
+      "match": true
+    },
+    {
+      "file": "mcp-observer.js",
+      "digest": "9b3528ccbf35fa6779d90eb6841edc5e7de5d1b1d26df432b921f93205609733",
+      "match": true
+    },
+    {
+      "file": "memory-activity.js",
+      "digest": "b4e61d81a9d218f16d8c1eb4627198019c0d7f49915d46a8c8c69be9125bad49",
+      "match": true
+    },
+    {
+      "file": "memory-capabilities.js",
+      "digest": "8f761575ed6563d0afcbcb5d7085586b51ee36106807e624d081bcd5148d27f9",
+      "match": true
+    },
+    {
+      "file": "memory.js",
+      "digest": "e1d8d6c01c058207c88ba0ebb507445d151425723c05735a6742e15dfafb5e8a",
+      "match": true
+    },
+    {
+      "file": "message-meta.js",
+      "digest": "220c1f8b9815fa3d296c1a2de9998c0c7fd761d1bb4408d118e67a7b6e6eb0ed",
+      "match": true
+    },
+    {
+      "file": "messages.js",
+      "digest": "9d0df0b64b14c4295b398786854145f107ba3f47c103f2713ec277ee4ceb8267",
+      "match": true
+    },
+    {
+      "file": "model-capabilities.js",
+      "digest": "85950be4a4c699f0a6bde0a0733179dc4deb67aac3b6bb04478476a241b50486",
+      "match": true
+    },
+    {
+      "file": "model-fallback.js",
+      "digest": "e942ee6feebd248e39f7e9a32f358886bea690238c4f2c637adbcedfe4594d2a",
+      "match": true
+    },
+    {
+      "file": "palette-model.js",
+      "digest": "d07bfcca25ac9a3698c8b00083fa77e0a2841b85cce4d995a76d60a4624fbbfd",
+      "match": true
+    },
+    {
+      "file": "palette.js",
+      "digest": "26ca6b8d9d96a2f49d25c8b952867c940a32847521548f04bfe06c0004061f36",
+      "match": true
+    },
+    {
+      "file": "pi-update.js",
+      "digest": "78c89c0590651182ea5cde77ce7716292b3ce19844a447e9773f5f5d95d925c3",
+      "match": true
+    },
+    {
+      "file": "planner.js",
+      "digest": "9aeedf9a43f65a4e841413aa8721a0bda027c38fcf7c4a15b6f8d45c86f5ef04",
+      "match": true
+    },
+    {
+      "file": "process-activity.js",
+      "digest": "ec6cc4afbcd730951019cf6d41418ea192ac4ec0cdd22f9b967c96b786a58fad",
+      "match": true
+    },
+    {
+      "file": "process-panel.js",
+      "digest": "eaf9aee85deddd2cabfe277c1dc22405de97d45c8d9b0bf64eed0ec0ceab061e",
+      "match": true
+    },
+    {
+      "file": "process.css",
+      "digest": "f5c78ea0fbcf0fc11ee7f606ccfb133f928e17ee56839467aa3500082025e517",
+      "match": true
+    },
+    {
+      "file": "project-config.js",
+      "digest": "601a5da4480aa05d150124da861be711e8e5f58e8c379df47c9721f1e13e086b",
+      "match": true
+    },
+    {
+      "file": "projects.js",
+      "digest": "369a1c593a8c603b0954bfa1306a40512d3430bcecd69c3e3d5f1b13f495dba6",
+      "match": true
+    },
+    {
+      "file": "provider-auth.js",
+      "digest": "3d742ec046d6bfb3bebd37e0779d9fd72051601bed5990c32ac39777741560b6",
+      "match": true
+    },
+    {
+      "file": "providers.js",
+      "digest": "ce1bc8b7eb14fede007323f4a2120eef3f9bbf01bdf06093036a242d7eea7a73",
+      "match": true
+    },
+    {
+      "file": "review-comment-data.js",
+      "digest": "88a52f5d581511da12fcbb21193cdfd1720ae576be4b179b2b068c4140199c59",
+      "match": true
+    },
+    {
+      "file": "review-comment-limits.js",
+      "digest": "3bcdf3cb1eeadb9f6bdd5c1501c28f09b45b1644a74481d23a56be0007953575",
+      "match": true
+    },
+    {
+      "file": "review-comment-persistence.js",
+      "digest": "4867ee04e1a5d2a9b761758eba88a4efa32ea296dda9977d7892d27be506364e",
+      "match": true
+    },
+    {
+      "file": "review-comment-range.js",
+      "digest": "ccc634b7fac41b4e4ae98afa6603c71e6250c2f13fc5672ed67bfcfaf8844bf4",
+      "match": true
+    },
+    {
+      "file": "review-fill.js",
+      "digest": "0027e2a5f4ff5f54b32b5f9025d52a8c79dc9a9bc93373a06a8c5ab20bfbf7fe",
+      "match": true
+    },
+    {
+      "file": "review-task-preview.js",
+      "digest": "3d9f6a1a42ba2d6b73a5b89d4b6678ea8c13a7d6c1646517da965b44750c746e",
+      "match": true
+    },
+    {
+      "file": "review-task.js",
+      "digest": "07eb25f8580f6394539edd0c5cf1adb1b67e36937bef54c080fc634d08fcb87c",
+      "match": true
+    },
+    {
+      "file": "right-pane.js",
+      "digest": "1cb17802033170e504d3f336e1ca2c57f8ef1a137bb3c585564a4f61d5b6a07c",
+      "match": true
+    },
+    {
+      "file": "rpc.js",
+      "digest": "276941bd7f6401f4b4c5ea5432f4c62b35c98bd2616c924b87c05d125a19c847",
+      "match": true
+    },
+    {
+      "file": "runtime-conversation.js",
+      "digest": "76d98eb8a3662ace2ac4709b093ccf4b5555988a2eabdd7f632e90761632facb",
+      "match": true
+    },
+    {
+      "file": "runtime-display.js",
+      "digest": "6326ad0e48f0c6a4d6f1cd73a64c4e17c0d9c32e54fb5d6fffd96786cb658d73",
+      "match": true
+    },
+    {
+      "file": "runtime-draft.js",
+      "digest": "47a4c74b9e625a17938a85b565645d039a3aca7b09add20e4583b309b0e2cee1",
+      "match": true
+    },
+    {
+      "file": "runtime-models.js",
+      "digest": "c817712afa37b7f59199bf284de284fda619ef57797a63ea9b94ae3202ec0f55",
+      "match": true
+    },
+    {
+      "file": "runtime-nav.js",
+      "digest": "41fd8a08c3aeb1633d28e84f3292ebd2e9f764cb8556105cc69b10f3c88d2f51",
+      "match": true
+    },
+    {
+      "file": "runtime-recovery.js",
+      "digest": "b646ea9d311bef25b5d0100aadf5babf1cc9e0d67fc73f72dab8cd1cbb0eb64d",
+      "match": true
+    },
+    {
+      "file": "runtime-resources.js",
+      "digest": "70b3147e9f3a3f0e620de80a901282ceaf3808ab330acee7be9c4aaa248f99e8",
+      "match": true
+    },
+    {
+      "file": "runtime-secondary.js",
+      "digest": "94f1daf34f495c785d06396c01a65f94723c33f27198a321530f42a4a1165250",
+      "match": true
+    },
+    {
+      "file": "runtime-sessions.js",
+      "digest": "c02f5bbb4ffc3d07dab979601b76132481b6228775bf78346133e68552a20056",
+      "match": true
+    },
+    {
+      "file": "runtime-state.js",
+      "digest": "83482963e1885bc088af1d49ba55456578ec8bb645874efdeed5d1b8cf2c3abd",
+      "match": true
+    },
+    {
+      "file": "runtime-store.js",
+      "digest": "e60cd91236d513ed544b11117e045ccd27a45d9c609248e6896e326b15634a78",
+      "match": true
+    },
+    {
+      "file": "schema-drift.js",
+      "digest": "341c5dc5e857c17667dfa167c1a20fc98a90fd13d44ce9f8ce102e8224d1c5c6",
+      "match": true
+    },
+    {
+      "file": "session-changes-panel.js",
+      "digest": "85bd9bc0b011fd207eaf9e41a916fd7d94ea2b04d197da914eebfcd7fdba45c8",
+      "match": true
+    },
+    {
+      "file": "session-navigation.js",
+      "digest": "78d474a49de14a3b99bccaa090829f7c4601c09d4b59f3b7766bc736286ebe69",
+      "match": true
+    },
+    {
+      "file": "session-plans.js",
+      "digest": "067a71adfb8718417a0c45b6ec1f3d1af1eaddae18a91eebca8672bc0e19e8d7",
+      "match": true
+    },
+    {
+      "file": "session-revert-object-api.js",
+      "digest": "dff09e708b73482c899ab205415950603fce3a2549b04f1fe0cfb74be8172ee6",
+      "match": true
+    },
+    {
+      "file": "session-revert-object-ui.js",
+      "digest": "c344454fdef64a97b1198bdfb06355f3b61f9974d024397042f58ad8cdad9cbb",
+      "match": true
+    },
+    {
+      "file": "session-search.js",
+      "digest": "5c25ab23d2936f297e4d30645fdc76aeff68c8b70af490ab5f1c3baa9d4f6430",
+      "match": true
+    },
+    {
+      "file": "sessions.js",
+      "digest": "17f750386c003582547018a1aca14d9bfce950eb35cc70035a519105edff5581",
+      "match": true
+    },
+    {
+      "file": "settings.js",
+      "digest": "302daee596171a1de5418e72bb8dfe6bb9977c89f9d1c76f5396a946caa73cad",
+      "match": true
+    },
+    {
+      "file": "shell.js",
+      "digest": "3d130704bb520df805dd04d1e29fc3a1e25cb42d89d3625a334eeaedd4d1e528",
+      "match": true
+    },
+    {
+      "file": "shortcuts.js",
+      "digest": "344c896a1d9cd0c624dc40bf4c144e054e4366a8cf3c0568da4dd9e8726f1600",
+      "match": true
+    },
+    {
+      "file": "sidebar-expansion.js",
+      "digest": "979fe0c60527db6b2f540f10a292a0e822d9387981a7d37d8920e64d858ec874",
+      "match": true
+    },
+    {
+      "file": "specs-panel.js",
+      "digest": "831784d96ec5dd9cd39e2f7b4d9a1b2fca331e5bf7934bae7a4f3c7f0d566a40",
+      "match": true
+    },
+    {
+      "file": "specs-tree.js",
+      "digest": "9464d19c0015e674c5fb0016e52da6c711f54558d37f758f3b1fd969bced2cfb",
+      "match": true
+    },
+    {
+      "file": "specs.css",
+      "digest": "83aa2d297c3c1ce8c04586dfb21489d557e8ea5fd144c45edc723b2c57d6a1a6",
+      "match": true
+    },
+    {
+      "file": "state.js",
+      "digest": "afc3471c5ef4cab79aee488cb1122a5e98baed15ccdde5bccb1f1b0531437186",
+      "match": true
+    },
+    {
+      "file": "status-copy.js",
+      "digest": "275462397acdbb205b0949f6a480d7eb6be6b014add8027d9d769665e46dac31",
+      "match": true
+    },
+    {
+      "file": "styles.css",
+      "digest": "cc5393f4a8bf19ec3084cca6f3179e7e150d301df3d1f18500ad7eb39dd4f655",
+      "match": true
+    },
+    {
+      "file": "subagent-activity.js",
+      "digest": "2364bb2787df14bc7e318b104b3ea6d8155840363b97e8a900772eaab34541ec",
+      "match": true
+    },
+    {
+      "file": "subagent-capabilities.js",
+      "digest": "d8315475255fff99c331109e2f43546c7d341fea1c7d2747e3cec846ad010829",
+      "match": true
+    },
+    {
+      "file": "subagents.js",
+      "digest": "3a2c5840a69362f8754e327dfe6432c062777a035b7d7cca5b1f0be0e758bd66",
+      "match": true
+    },
+    {
+      "file": "theme-init.js",
+      "digest": "915493fbf871a5c9fa1b7016415483f8da408b74e8ec213c75c4f80bf1c17ae0",
+      "match": true
+    },
+    {
+      "file": "theme.js",
+      "digest": "3e2f40b758656855fbf45b06287a0028d5fd384c1563af7a3f4d7cadd25b88c0",
+      "match": true
+    },
+    {
+      "file": "thinking-availability.js",
+      "digest": "33f77cbdd0b44f4a51d3dc496f70a2519079cb2337c2bb5b301778dd9ed59e48",
+      "match": true
+    },
+    {
+      "file": "tokens.css",
+      "digest": "583a0844b352603afe976b70e48a4aada394a0661f71d27e11cd3aeb3965906f",
+      "match": true
+    },
+    {
+      "file": "tool-history.js",
+      "digest": "3f68aa7067852b730b7c6606a934b644cab5212b0e7988a89397876b376bcf79",
+      "match": true
+    },
+    {
+      "file": "tool-model.js",
+      "digest": "26813a1c3ea67d397c4e2291bf34c9fc0a18119143cfbcfdcb40d71ee19b1385",
+      "match": true
+    },
+    {
+      "file": "tool-view.js",
+      "digest": "7de956645697877c51bb2daa20cd44e1cc8d29b8665782dfff77b025cf767a8f",
+      "match": true
+    },
+    {
+      "file": "tools.js",
+      "digest": "2675aa37f06b21cf49b15e0d6194d2ffb929ee7e758311d7318f07d126efeb02",
+      "match": true
+    },
+    {
+      "file": "tree.js",
+      "digest": "8dacd66c68ec72b08f461422a34f3fff930b39bf69e21e9439ac934c4ecabc75",
+      "match": true
+    },
+    {
+      "file": "ui/action-menu.js",
+      "digest": "eb4d0e902f05265538467ca70dd3e3a2f0cdafe426e7c6d274b85a02b7bc7cd4",
+      "match": true
+    },
+    {
+      "file": "ui/capability-setup.js",
+      "digest": "f3989d6233f5f4db4a57034d6e90b1bf50388963b2472d9819fe03b6209bccee",
+      "match": true
+    },
+    {
+      "file": "ui/fallback-settings.js",
+      "digest": "9ef43934060af41b8ee9fb3cbb03a74000833a519ce4253c1a49befe0246e8b4",
+      "match": true
+    },
+    {
+      "file": "ui/inline-command-menu.js",
+      "digest": "e720393b98ea77da574969dd768e5c00059e65b5e2e18cd516cbade22ffdfdbf",
+      "match": true
+    },
+    {
+      "file": "ui/modal.js",
+      "digest": "d707cbbd6470adf1ba3b531a352383f85b85e874421e941cfbce08a4acf179bf",
+      "match": true
+    },
+    {
+      "file": "ui/notice.js",
+      "digest": "6891734577cf03f4f4fc80e8f0697b054efadf8f57ffab77c0eaf07fd324dc48",
+      "match": true
+    },
+    {
+      "file": "ui/popover.js",
+      "digest": "d163cafb41853deff05d8766516a60bf51059749eb8d7f071f55a6d0422ff9e1",
+      "match": true
+    },
+    {
+      "file": "ui/secondary-surface.js",
+      "digest": "6c68e733c1a28ead0511b20b423844761f3e51696ae0d8f66dc65224eab0a064",
+      "match": true
+    },
+    {
+      "file": "ui/settings-surface.js",
+      "digest": "18edefe77baabc3032d156696cd4c70a52aaa0718c1a97828f3f068a7b112fc5",
+      "match": true
+    },
+    {
+      "file": "ui/shortcut-help.js",
+      "digest": "696e652908327e1741dc92768e750c994de1d5c25651b8977e8026b9bcc88295",
+      "match": true
+    },
+    {
+      "file": "ui/split-workbench.js",
+      "digest": "60377b67742c0602eafa8b7512e4c92ac127e26ac37ea7cb4b40a26079fd4617",
+      "match": true
+    },
+    {
+      "file": "ui/toast.js",
+      "digest": "1cf5b83ee9f744cb56a949853acbe98e6484216e885249bcaaa0b1b0c72c54ba",
+      "match": true
+    },
+    {
+      "file": "ui/workspace-surface.js",
+      "digest": "398144e3dc90333a4a5e77b136fd4c29c33c1ad4ae3b5c091b1b8700040c86b7",
+      "match": true
+    },
+    {
+      "file": "ui3-composer.css",
+      "digest": "4e349669ed0990b7d90739169e3f87c979d6141a1dc7e31f3d16e1302f304766",
+      "match": true
+    },
+    {
+      "file": "ui3-inline-commands.css",
+      "digest": "8c41064fecb14245cbfcc3181a49d3299b391ab7b65c3f9544c9aa79131d42d3",
+      "match": true
+    },
+    {
+      "file": "ui3-model-picker.js",
+      "digest": "c88ba2bbd47095af9385f01c1994a1dc0de000562ccb29fad43e34634d20f54c",
+      "match": true
+    },
+    {
+      "file": "ui3-model.css",
+      "digest": "094167a99e65b0ee87ff28e7fd65a853911e5c5a86aa7703fe1dbc4fb0fb6a48",
+      "match": true
+    },
+    {
+      "file": "ui4-approval.css",
+      "digest": "cba7ddf3768001481265570f070d41a72fc72f4b5536fef546a3cc471d3b0cc6",
+      "match": true
+    },
+    {
+      "file": "ui4-feedback.css",
+      "digest": "da1c51e66ad58e033453cf98311bec439ab3d8ddff06951619a42d00adebd07f",
+      "match": true
+    },
+    {
+      "file": "ui4-pane.css",
+      "digest": "d15320a6040d9caf07b3d71bae46cff01d443fbd7931e6ec75e7b5171d583657",
+      "match": true
+    },
+    {
+      "file": "ui5-logs.css",
+      "digest": "9c6243d95e0e05203510facf04bd77cc4e0d0a56b829f9f66991881060fff475",
+      "match": true
+    },
+    {
+      "file": "update.js",
+      "digest": "01cd15ae53fc4c7214c0ded50e9fcd1ed8b9ebb19c2a5d31add7936087dbb888",
+      "match": true
+    },
+    {
+      "file": "usage.js",
+      "digest": "1c9ccb1067d5a3d546fb3aeb6f5bcf38b984dc4014ff5c09bb90fdc7984012d3",
+      "match": true
+    },
+    {
+      "file": "util.js",
+      "digest": "c352b019ba0a949887e1877959943cf13f28a42e84b46d16c49498745ab9ce41",
+      "match": true
+    },
+    {
+      "file": "viz-chart.js",
+      "digest": "54809c8f7b5d76e8198da7ae9a2ce58168838880d6fec5ea6b0786275178eb86",
+      "match": true
+    },
+    {
+      "file": "viz-integration.js",
+      "digest": "062530e5ea781172c9d6ad6defda2e5e4fcf1f9e534069e6ab459da88be0ffdf",
+      "match": true
+    },
+    {
+      "file": "viz-panel.js",
+      "digest": "2686c57fc565babba447b10f8cc1a8db628bfa2a1837452a222d7fadf6315f27",
+      "match": true
+    },
+    {
+      "file": "viz-schema.js",
+      "digest": "5f57dab79b1c341ec2b98b9350f00304c466ffc583af4b0f803f9fe004110d1a",
+      "match": true
+    },
+    {
+      "file": "viz.css",
+      "digest": "a4edb3fb4e20efc0264e9caa93b435478dc04d14c02fb90095062508b856ffc2",
+      "match": true
+    },
+    {
+      "file": "web-access.js",
+      "digest": "6f731113764ef0d1c253094ccedd6485827006c4157c0e35f9dd5231f1525d9a",
+      "match": true
+    },
+    {
+      "file": "web-activity.js",
+      "digest": "e99446ce9a1832f4e0925f87fd469770b164e916a42a85879f9d131af7963fd8",
+      "match": true
+    },
+    {
+      "file": "web-capabilities.js",
+      "digest": "79afbc96d31fbbf6466ecb36e4b85440a4648629f4bd9b94165a43a08249142a",
+      "match": true
+    },
+    {
+      "file": "worktrees.js",
+      "digest": "1eac93f7a8b71f250d8162f44874895579f7e135cc1a5d43aeefe731520b2a70",
+      "match": true
+    }
+  ],
+  "screenshots": [
+    "packaged-empty.png",
+    "packaged-model.png",
+    "packaged-settings.png"
+  ],
+  "errors": [],
+  "runtime": {
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) PiGUI/0.30.1 Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36",
+    "desktop": true,
+    "width": 1320,
+    "height": 882,
+    "dpr": 1.5,
+    "theme": "dark"
+  }
+}

@@ -1,0 +1,98 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+Captured dark-1440-empty
+Captured dark-1280-chat
+PASS dark/1280 no page overflow
+PASS dark/1280 sidebar single column
+Captured dark-1280-model
+PASS dark/1280 menu in viewport
+PASS dark/1280 Escape closes model menu
+Captured dark-1280-panel-launcher
+PASS dark/1280 Changes is mounted
+Captured dark-1280-changes
+PASS dark/1280 pane close focus
+Captured dark-1280-settings
+Captured dark-1280-tasks
+PASS dark/1280 chat draft retained
+Captured dark-1440-chat
+PASS dark/1440 no page overflow
+PASS dark/1440 sidebar single column
+Captured dark-1440-model
+PASS dark/1440 menu in viewport
+PASS dark/1440 Escape closes model menu
+Captured dark-1440-panel-launcher
+PASS dark/1440 Changes is mounted
+Captured dark-1440-changes
+PASS dark/1440 pane close focus
+Captured dark-1440-settings
+Captured dark-1440-tasks
+PASS dark/1440 chat draft retained
+Captured dark-1920-chat
+PASS dark/1920 no page overflow
+PASS dark/1920 sidebar single column
+Captured dark-1920-model
+PASS dark/1920 menu in viewport
+PASS dark/1920 Escape closes model menu
+Captured dark-1920-panel-launcher
+PASS dark/1920 Changes is mounted
+Captured dark-1920-changes
+PASS dark/1920 pane close focus
+Captured dark-1920-settings
+Captured dark-1920-tasks
+PASS dark/1920 chat draft retained
+Captured light-1280-chat
+PASS light/1280 no page overflow
+PASS light/1280 sidebar single column
+Captured light-1280-model
+PASS light/1280 menu in viewport
+PASS light/1280 Escape closes model menu
+Captured light-1280-panel-launcher
+PASS light/1280 Changes is mounted
+Captured light-1280-changes
+PASS light/1280 pane close focus
+Captured light-1280-settings
+Captured light-1280-tasks
+PASS light/1280 chat draft retained
+Captured light-1440-chat
+PASS light/1440 no page overflow
+PASS light/1440 sidebar single column
+Captured light-1440-model
+PASS light/1440 menu in viewport
+PASS light/1440 Escape closes model menu
+Captured light-1440-panel-launcher
+PASS light/1440 Changes is mounted
+Captured light-1440-changes
+PASS light/1440 pane close focus
+Captured light-1440-settings
+Captured light-1440-tasks
+PASS light/1440 chat draft retained
+Captured light-1920-chat
+PASS light/1920 no page overflow
+PASS light/1920 sidebar single column
+Captured light-1920-model
+PASS light/1920 menu in viewport
+PASS light/1920 Escape closes model menu
+Captured light-1920-panel-launcher
+PASS light/1920 Changes is mounted
+Captured light-1920-changes
+PASS light/1920 pane close focus
+Captured light-1920-settings
+Captured light-1920-tasks
+PASS light/1920 chat draft retained
+Captured light-1440-extensions
+Captured light-1440-provider-dialog
+Captured light-1440-inline-commands
+Captured light-1440-context
+Captured light-1440-native-browser-shell
+Captured light-1440-settings-after-native
+Captured light-1440-zoom-1.25
+PASS zoom 1.25 no page overflow
+Captured light-1440-zoom-1.5
+PASS zoom 1.5 no page overflow
+Captured dark-1440-typical-chat
+Captured light-1440-typical-chat
+Captured light-1440-tool-summary
+PASS tool activity starts collapsed
+PASS tool activity expands on click
+Captured light-1440-tool-expanded
+Fixture retained in TEMP: C:\Users\21022\AppData\Local\Temp\pi-design-current-nyRDN1

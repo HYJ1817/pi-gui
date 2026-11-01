@@ -1,0 +1,14 @@
+{
+  "command": "npm test",
+  "cwd": "C:\\pi-GUI",
+  "head": "eac79cab793cff26c6cb6aa01cc9d9276ce06606",
+  "branch": "codex/ui-refined-implementation",
+  "node": "v24.22.1",
+  "platform": "win32",
+  "started": "2026-11-01T06:06:35.063Z",
+  "pid": 48008,
+  "state": "cancelled_for_final_ui_fix",
+  "inputDigest": "351985b9066ef3d620e1f177e3eebc7ce9669d3d06c4f42f46b5f0ad6df87298",
+  "launcherPid": 39584,
+  "interruptionReason": "Freeze final work-panel visibility/focus correction before complete canonical proof"
+}

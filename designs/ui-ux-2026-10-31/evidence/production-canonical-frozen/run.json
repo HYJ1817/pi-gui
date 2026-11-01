@@ -1,0 +1,19 @@
+{
+  "command": "npm test",
+  "cwd": "C:\\pi-GUI",
+  "head": "eac79cab793cff26c6cb6aa01cc9d9276ce06606",
+  "branch": "codex/ui-refined-implementation",
+  "node": "v24.22.1",
+  "platform": "win32",
+  "started": "2026-11-01T06:16:00.379Z",
+  "pid": 48236,
+  "state": "failed",
+  "inputDigest": "44e7249e06cd142ccff3da71edfa1c5e9f32f71da077e630ac896d6561610b5f",
+  "launcherPid": 50152,
+  "exitCode": 1,
+  "signal": null,
+  "ended": "2026-11-01T06:36:16.260Z",
+  "elapsedSeconds": 1215.881,
+  "finalDigest": "44e7249e06cd142ccff3da71edfa1c5e9f32f71da077e630ac896d6561610b5f",
+  "unchangedInputs": true
+}

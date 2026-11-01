@@ -1,0 +1,298 @@
+{
+  "passed": 73,
+  "total": 73,
+  "checks": [
+    {
+      "name": "v2 contrast 78 pairings",
+      "pass": true
+    },
+    {
+      "name": "current source matches export",
+      "pass": true
+    },
+    {
+      "name": "current ZIP hash",
+      "pass": true
+    },
+    {
+      "name": "prior workbench source preserved",
+      "pass": true
+    },
+    {
+      "name": "prior workbench ZIP preserved",
+      "pass": true
+    },
+    {
+      "name": "prior reading source preserved",
+      "pass": true
+    },
+    {
+      "name": "prior reading ZIP preserved",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → exports/refined/Refined.dc.html",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → exports/refined.zip",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → reports/11-refinement-validation.md",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → index.html",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → reports/09-user-reference-chat-comparison.md",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → reports/12-refinement-review.md",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → system/project/README.md",
+      "pass": true
+    },
+    {
+      "name": "review-refined.html → reports/05-feature-map.md",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../canvas/project/Refined.dc.html",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../exports/refined.zip",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../exports/refined-manifest.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../system/project/README.md",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../system/project/tokens.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/results.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/round1-results.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../system/project/verification-v2/results.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/contrast-results.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/delivery-results.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-overview.jpg",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-overview.jpg",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/final-font-smoke.json",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-chat.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-chat.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1920-empty.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1920-empty.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1280-running.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1280-tools.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1280-running.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1280-tools.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1920-long.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1920-long.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1280-changes.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1280-changes.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-browser.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-browser.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-model.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-model.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-menu.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-dialog.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-menu.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-dialog.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-settings.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-settings-models.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-settings.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-settings-models.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-resources.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-resource-loading.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-resources.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-resource-loading.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-1440-error.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-1440-error.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-zoom-1.5-model.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/dark-zoom-1.5-changes.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-zoom-1.5-model.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/light-zoom-1.5-changes.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → ../evidence/refined/review-portal.png",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → 05-feature-map.md",
+      "pass": true
+    },
+    {
+      "name": "reports/11-refinement-validation.md → 06-implementation-plan.md",
+      "pass": true
+    },
+    {
+      "name": "reports/12-refinement-review.md → 11-refinement-validation.md",
+      "pass": true
+    },
+    {
+      "name": "system/project/README.md → Original-Inventory.md",
+      "pass": true
+    },
+    {
+      "name": "system/project/README.md → source-inventory.json",
+      "pass": true
+    },
+    {
+      "name": "system/project/README.md → tokens.json",
+      "pass": true
+    },
+    {
+      "name": "system/project/README.md → Component-Coverage.md",
+      "pass": true
+    },
+    {
+      "name": "system/project/README.md → Contrast-Checks.md",
+      "pass": true
+    },
+    {
+      "name": "system/project/README.md → Visual-Verification.md",
+      "pass": true
+    },
+    {
+      "name": "system/project/README.md → ../../reports/11-refinement-validation.md",
+      "pass": true
+    }
+  ]
+}

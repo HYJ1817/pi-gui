@@ -1,0 +1,476 @@
+{
+  "entry": "production electron/main.cjs + public renderer",
+  "backend": "existing tests/visual-harness.cjs, offline TEMP fixtures",
+  "shots": [
+    "dark-1440-empty.png",
+    "dark-1280-diff.png",
+    "dark-1440-diff.png",
+    "dark-1920-diff.png",
+    "light-1280-diff.png",
+    "light-1440-diff.png",
+    "light-1920-diff.png",
+    "dark-1440-agent-running.png",
+    "dark-1440-tool-error.png",
+    "dark-1440-model-search.png",
+    "dark-1440-model-search-empty.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-1440-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1280-diff",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 672.6666870117188,
+        "width": 550,
+        "height": 109.33333587646484,
+        "top": 672.6666870117188,
+        "right": 846,
+        "bottom": 782.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 888,
+        "y": 0,
+        "width": 392,
+        "height": 800,
+        "top": 0,
+        "right": 1280,
+        "bottom": 800,
+        "left": 888
+      },
+      "popover": null,
+      "active": "qaDiffRow",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n3\n3\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\n上下文\n默认\n20 行\n全部\n折叠全部块\n工作区（尚未 git add）\ndiff --git a/public/app.js b/public/app.js\n▾\n@@ -1,2 +1,2 @@\n+1\n−1\n1\n-old line\n1\n+new line\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "dark-1440-diff",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 772.6666870117188,
+        "width": 710,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1006,
+        "bottom": 882.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 1048,
+        "y": 0,
+        "width": 392,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1048
+      },
+      "popover": null,
+      "active": "rightPaneClose",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\n上下文\n默认\n20 行\n全部\n折叠全部块\n工作区（尚未 git add）\ndiff --git a/public/app.js b/public/app.js\n▾\n@@ -1,2 +1,2 @@\n+1\n−1\n1\n-old line\n1\n+new line\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "dark-1920-diff",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 511,
+        "y": 952.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 952.6666870117188,
+        "right": 1271,
+        "bottom": 1062.0000228881836,
+        "left": 511
+      },
+      "panel": {
+        "x": 1528,
+        "y": 0,
+        "width": 392,
+        "height": 1080,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 1528
+      },
+      "popover": null,
+      "active": "rightPaneClose",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\n上下文\n默认\n20 行\n全部\n折叠全部块\n工作区（尚未 git add）\ndiff --git a/public/app.js b/public/app.js\n▾\n@@ -1,2 +1,2 @@\n+1\n−1\n1\n-old line\n1\n+new line\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "light-1280-diff",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 672.6666870117188,
+        "width": 550,
+        "height": 109.33333587646484,
+        "top": 672.6666870117188,
+        "right": 846,
+        "bottom": 782.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 888,
+        "y": 0,
+        "width": 392,
+        "height": 800,
+        "top": 0,
+        "right": 1280,
+        "bottom": 800,
+        "left": 888
+      },
+      "popover": null,
+      "active": "rightPaneClose",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n3\n3\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\n上下文\n默认\n20 行\n全部\n折叠全部块\n工作区（尚未 git add）\ndiff --git a/public/app.js b/public/app.js\n▾\n@@ -1,2 +1,2 @@\n+1\n−1\n1\n-old line\n1\n+new line\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "light-1440-diff",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 772.6666870117188,
+        "width": 710,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1006,
+        "bottom": 882.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 1048,
+        "y": 0,
+        "width": 392,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1048
+      },
+      "popover": null,
+      "active": "rightPaneClose",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\n上下文\n默认\n20 行\n全部\n折叠全部块\n工作区（尚未 git add）\ndiff --git a/public/app.js b/public/app.js\n▾\n@@ -1,2 +1,2 @@\n+1\n−1\n1\n-old line\n1\n+new line\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "light-1920-diff",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 511,
+        "y": 952.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 952.6666870117188,
+        "right": 1271,
+        "bottom": 1062.0000228881836,
+        "left": 511
+      },
+      "panel": {
+        "x": 1528,
+        "y": 0,
+        "width": 392,
+        "height": 1080,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 1528
+      },
+      "popover": null,
+      "active": "rightPaneClose",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\n上下文\n默认\n20 行\n全部\n折叠全部块\n工作区（尚未 git add）\ndiff --git a/public/app.js b/public/app.js\n▾\n@@ -1,2 +1,2 @@\n+1\n−1\n1\n-old line\n1\n+new line\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "dark-1440-agent-running",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": null,
+      "active": "btnWorkPanel",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\n运行与失败状态 · 离线fixture\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n检查测试输出，告诉我当前执行状态。\n\nPi\n\n正在检查定向回归。工具输出会保留在本次活动中。\n\n执行命令\n运行中\nnode --test tests/offline-fixture.cjs\n0.3s\n详细信息\n检查测试输出，告诉我当前执行状态。\n6%\nDeepSeek V4 Pro\n思考 high\n停止"
+    },
+    {
+      "name": "dark-1440-tool-error",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": null,
+      "active": "input",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n检查测试输出，告诉我当前执行状态。\n\nPi\n\n正在检查定向回归。工具输出会保留在本次活动中。\n\n执行命令\n失败\nnode --test tests/offline-fixture.cjs\n0.3s\n展开输出\nOffline fixture: one expected check failed; no real command was executed.\n检查测试输出，告诉我当前执行状态。\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-model-search",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": {
+        "x": 691,
+        "y": 525,
+        "width": 420,
+        "height": 239.375,
+        "top": 525,
+        "right": 1111,
+        "bottom": 764.375,
+        "left": 691
+      },
+      "active": "qaModelSearch",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n检查测试输出，告诉我当前执行状态。\n\nPi\n\n正在检查定向回归。工具输出会保留在本次活动中。\n\n执行命令\n失败\nnode --test tests/offline-fixture.cjs\n0.3s\n展开输出\nOffline fixture: one expected check failed; no real command was executed.\n检查测试输出，告诉我当前执行状态。\n6%\nDeepSeek V4 Pro\n思考 high\n选择模型\ndeepseek / deepseek-v4-pro\ndeepseek\n2\nDeepSeek V4 Flash\n推理\n1 个匹配模型 / 共 2 个"
+    },
+    {
+      "name": "dark-1440-model-search-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": {
+        "x": 691,
+        "y": 566,
+        "width": 420,
+        "height": 199,
+        "top": 566,
+        "right": 1111,
+        "bottom": 765,
+        "left": 691
+      },
+      "active": "qaModelSearch",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n你\n\n检查测试输出，告诉我当前执行状态。\n\nPi\n\n正在检查定向回归。工具输出会保留在本次活动中。\n\n执行命令\n失败\nnode --test tests/offline-fixture.cjs\n0.3s\n展开输出\nOffline fixture: one expected check failed; no real command was executed.\n检查测试输出，告诉我当前执行状态。\n6%\nDeepSeek V4 Pro\n思考 high\n选择模型\ndeepseek / deepseek-v4-pro\n没有匹配的模型\n0 个匹配模型 / 共 2 个"
+    }
+  ],
+  "checks": [
+    {
+      "name": "dark/1280 actual Diff opens",
+      "ok": true
+    },
+    {
+      "name": "dark/1440 actual Diff opens",
+      "ok": true
+    },
+    {
+      "name": "dark/1920 actual Diff opens",
+      "ok": true
+    },
+    {
+      "name": "light/1280 actual Diff opens",
+      "ok": true
+    },
+    {
+      "name": "light/1440 actual Diff opens",
+      "ok": true
+    },
+    {
+      "name": "light/1920 actual Diff opens",
+      "ok": true
+    },
+    {
+      "name": "running composer exposes real Stop control",
+      "ok": true
+    },
+    {
+      "name": "failed tool keeps explicit error state",
+      "ok": true
+    },
+    {
+      "name": "native typed model query filters actual menu",
+      "ok": true
+    },
+    {
+      "name": "native typed missing model has empty feedback",
+      "ok": true
+    }
+  ],
+  "nativeEvidence": {},
+  "errors": []
+}

@@ -1,0 +1,253 @@
+{
+  "passed": 24,
+  "failed": 0,
+  "checks": [
+    {
+      "pass": true,
+      "name": "a zoom 1.25 picker really opens"
+    },
+    {
+      "pass": true,
+      "name": "a zoom 1.25 picker bounded",
+      "detail": {
+        "dpr": 1.25,
+        "exists": true,
+        "h": 721,
+        "rect": {
+          "bottom": 555.2000122070312,
+          "height": 353.70001220703125,
+          "left": 336,
+          "right": 696,
+          "top": 201.5,
+          "width": 360,
+          "x": 336,
+          "y": 201.5
+        },
+        "theme": "dark",
+        "w": 1152
+      }
+    },
+    {
+      "pass": true,
+      "name": "a zoom 1.25 Escape focus"
+    },
+    {
+      "pass": true,
+      "name": "a zoom 1.5 picker really opens"
+    },
+    {
+      "pass": true,
+      "name": "a zoom 1.5 picker bounded",
+      "detail": {
+        "dpr": 1.5,
+        "exists": true,
+        "h": 601,
+        "rect": {
+          "bottom": 435.33335876464844,
+          "height": 353.16668701171875,
+          "left": 290,
+          "right": 650,
+          "top": 82.16667175292969,
+          "width": 360,
+          "x": 290,
+          "y": 82.16667175292969
+        },
+        "theme": "dark",
+        "w": 960
+      }
+    },
+    {
+      "pass": true,
+      "name": "a zoom 1.5 Escape focus"
+    },
+    {
+      "pass": true,
+      "name": "a thinking summary expands"
+    },
+    {
+      "pass": true,
+      "name": "a keyboard resizes panel by 16px",
+      "detail": {
+        "before": 420,
+        "after": 436
+      }
+    },
+    {
+      "pass": true,
+      "name": "a settings 模型与账户 reachable"
+    },
+    {
+      "pass": true,
+      "name": "a settings 应用与更新 reachable"
+    },
+    {
+      "pass": true,
+      "name": "a settings 诊断 reachable"
+    },
+    {
+      "pass": true,
+      "name": "a settings 日志与故障报告 reachable"
+    },
+    {
+      "pass": true,
+      "name": "b zoom 1.25 picker really opens"
+    },
+    {
+      "pass": true,
+      "name": "b zoom 1.25 picker bounded",
+      "detail": {
+        "dpr": 1.25,
+        "exists": true,
+        "h": 721,
+        "rect": {
+          "bottom": 537.2000122070312,
+          "height": 353.70001220703125,
+          "left": 344,
+          "right": 704,
+          "top": 183.5,
+          "width": 360,
+          "x": 344,
+          "y": 183.5
+        },
+        "theme": "light",
+        "w": 1152
+      }
+    },
+    {
+      "pass": true,
+      "name": "b zoom 1.25 Escape focus"
+    },
+    {
+      "pass": true,
+      "name": "b zoom 1.5 picker really opens"
+    },
+    {
+      "pass": true,
+      "name": "b zoom 1.5 picker bounded",
+      "detail": {
+        "dpr": 1.5,
+        "exists": true,
+        "h": 601,
+        "rect": {
+          "bottom": 417.33335876464844,
+          "height": 353.16668701171875,
+          "left": 338,
+          "right": 698,
+          "top": 64.16667175292969,
+          "width": 360,
+          "x": 338,
+          "y": 64.16667175292969
+        },
+        "theme": "light",
+        "w": 960
+      }
+    },
+    {
+      "pass": true,
+      "name": "b zoom 1.5 Escape focus"
+    },
+    {
+      "pass": true,
+      "name": "b thinking summary expands"
+    },
+    {
+      "pass": true,
+      "name": "b keyboard resizes panel by 16px",
+      "detail": {
+        "before": 420,
+        "after": 436
+      }
+    },
+    {
+      "pass": true,
+      "name": "b settings 模型与账户 reachable"
+    },
+    {
+      "pass": true,
+      "name": "b settings 应用与更新 reachable"
+    },
+    {
+      "pass": true,
+      "name": "b settings 诊断 reachable"
+    },
+    {
+      "pass": true,
+      "name": "b settings 日志与故障报告 reachable"
+    }
+  ],
+  "shots": [
+    {
+      "name": "a-zoom-1.25-model",
+      "dpr": 1.25,
+      "exists": true,
+      "h": 721,
+      "rect": {
+        "bottom": 555.2000122070312,
+        "height": 353.70001220703125,
+        "left": 336,
+        "right": 696,
+        "top": 201.5,
+        "width": 360,
+        "x": 336,
+        "y": 201.5
+      },
+      "theme": "dark",
+      "w": 1152
+    },
+    {
+      "name": "a-zoom-1.5-model",
+      "dpr": 1.5,
+      "exists": true,
+      "h": 601,
+      "rect": {
+        "bottom": 435.33335876464844,
+        "height": 353.16668701171875,
+        "left": 290,
+        "right": 650,
+        "top": 82.16667175292969,
+        "width": 360,
+        "x": 290,
+        "y": 82.16667175292969
+      },
+      "theme": "dark",
+      "w": 960
+    },
+    {
+      "name": "b-zoom-1.25-model",
+      "dpr": 1.25,
+      "exists": true,
+      "h": 721,
+      "rect": {
+        "bottom": 537.2000122070312,
+        "height": 353.70001220703125,
+        "left": 344,
+        "right": 704,
+        "top": 183.5,
+        "width": 360,
+        "x": 344,
+        "y": 183.5
+      },
+      "theme": "light",
+      "w": 1152
+    },
+    {
+      "name": "b-zoom-1.5-model",
+      "dpr": 1.5,
+      "exists": true,
+      "h": 601,
+      "rect": {
+        "bottom": 417.33335876464844,
+        "height": 353.16668701171875,
+        "left": 338,
+        "right": 698,
+        "top": 64.16667175292969,
+        "width": 360,
+        "x": 338,
+        "y": 64.16667175292969
+      },
+      "theme": "light",
+      "w": 960
+    }
+  ],
+  "note": "Supplement: wait for resize event before opening picker; earlier zoom snapshots could close the picker during resize. These new PNGs replace those four screenshot files."
+}

@@ -1,0 +1,6 @@
+test-plan: 231 canonical leaves; groups core, ui, security, native, faults
+core: 155
+ui: 24
+security: 27
+native: 4
+faults: 21

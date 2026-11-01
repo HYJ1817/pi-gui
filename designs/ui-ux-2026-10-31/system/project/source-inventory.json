@@ -1,0 +1,939 @@
+{
+  "commit": "9694339ecee18383c34897fdd98fa79457598a83",
+  "scope": "CSS custom property declarations in public/*.css, comments excluded; does not classify usages or imply active styles",
+  "declarations": 155,
+  "unique": 115,
+  "fonts": [],
+  "tokens": [
+    {
+      "name": "ui-prose-width",
+      "value": "768px",
+      "file": "public/styles.css",
+      "line": 34
+    },
+    {
+      "name": "conversation-max-width",
+      "value": "var(--ui-prose-width)",
+      "file": "public/styles.css",
+      "line": 35
+    },
+    {
+      "name": "composer-max-width",
+      "value": "var(--ui-prose-width)",
+      "file": "public/styles.css",
+      "line": 36
+    },
+    {
+      "name": "turn-gap",
+      "value": "36px",
+      "file": "public/styles.css",
+      "line": 37
+    },
+    {
+      "name": "tool-row-height",
+      "value": "30px",
+      "file": "public/styles.css",
+      "line": 38
+    },
+    {
+      "name": "work-surface-padding",
+      "value": "24px",
+      "file": "public/styles.css",
+      "line": 286
+    },
+    {
+      "name": "work-sidebar-width",
+      "value": "260px",
+      "file": "public/styles.css",
+      "line": 286
+    },
+    {
+      "name": "work-toolbar-height",
+      "value": "48px",
+      "file": "public/styles.css",
+      "line": 286
+    },
+    {
+      "name": "work-surface-padding",
+      "value": "16px",
+      "file": "public/styles.css",
+      "line": 313
+    },
+    {
+      "name": "work-sidebar-width",
+      "value": "210px",
+      "file": "public/styles.css",
+      "line": 313
+    },
+    {
+      "name": "work-surface-padding",
+      "value": "12px",
+      "file": "public/styles.css",
+      "line": 315
+    },
+    {
+      "name": "global-rail-width",
+      "value": "52px",
+      "file": "public/styles.css",
+      "line": 2427
+    },
+    {
+      "name": "global-rail-width",
+      "value": "46px",
+      "file": "public/styles.css",
+      "line": 2557
+    },
+    {
+      "name": "rp-width",
+      "value": "420px",
+      "file": "public/styles.css",
+      "line": 2598
+    },
+    {
+      "name": "sidebar-row-height",
+      "value": "30px",
+      "file": "public/styles.css",
+      "line": 2687
+    },
+    {
+      "name": "sidebar-icon-size",
+      "value": "16px",
+      "file": "public/styles.css",
+      "line": 2687
+    },
+    {
+      "name": "session-change-row-gap",
+      "value": "12px",
+      "file": "public/styles.css",
+      "line": 2852
+    },
+    {
+      "name": "ui-canvas",
+      "value": "#151515",
+      "file": "public/tokens.css",
+      "line": 5
+    },
+    {
+      "name": "ui-nav-surface",
+      "value": "#111111",
+      "file": "public/tokens.css",
+      "line": 6
+    },
+    {
+      "name": "ui-panel-surface",
+      "value": "#1a1a19",
+      "file": "public/tokens.css",
+      "line": 7
+    },
+    {
+      "name": "ui-input-surface",
+      "value": "#20201f",
+      "file": "public/tokens.css",
+      "line": 8
+    },
+    {
+      "name": "ui-popover-surface",
+      "value": "#20201f",
+      "file": "public/tokens.css",
+      "line": 9
+    },
+    {
+      "name": "ui-titlebar",
+      "value": "#111111",
+      "file": "public/tokens.css",
+      "line": 10
+    },
+    {
+      "name": "ui-code-surface",
+      "value": "#1a1a19",
+      "file": "public/tokens.css",
+      "line": 11
+    },
+    {
+      "name": "ui-text-primary",
+      "value": "#f0efec",
+      "file": "public/tokens.css",
+      "line": 12
+    },
+    {
+      "name": "ui-text-secondary",
+      "value": "#c3c2b7",
+      "file": "public/tokens.css",
+      "line": 13
+    },
+    {
+      "name": "ui-text-muted",
+      "value": "#a6a39b",
+      "file": "public/tokens.css",
+      "line": 14
+    },
+    {
+      "name": "ui-border",
+      "value": "rgba(255,255,255,.10)",
+      "file": "public/tokens.css",
+      "line": 15
+    },
+    {
+      "name": "ui-border-strong",
+      "value": "rgba(255,255,255,.20)",
+      "file": "public/tokens.css",
+      "line": 16
+    },
+    {
+      "name": "ui-border-control",
+      "value": "#7b7971",
+      "file": "public/tokens.css",
+      "line": 17
+    },
+    {
+      "name": "ui-hover",
+      "value": "rgba(255,255,255,.075)",
+      "file": "public/tokens.css",
+      "line": 18
+    },
+    {
+      "name": "ui-selected",
+      "value": "rgba(255,255,255,.15)",
+      "file": "public/tokens.css",
+      "line": 19
+    },
+    {
+      "name": "ui-brand",
+      "value": "#c6613f",
+      "file": "public/tokens.css",
+      "line": 20
+    },
+    {
+      "name": "ui-brand-hover",
+      "value": "#d97757",
+      "file": "public/tokens.css",
+      "line": 21
+    },
+    {
+      "name": "ui-link",
+      "value": "#86b6ef",
+      "file": "public/tokens.css",
+      "line": 22
+    },
+    {
+      "name": "ui-focus",
+      "value": "#86b6ef",
+      "file": "public/tokens.css",
+      "line": 23
+    },
+    {
+      "name": "ui-user-surface",
+      "value": "rgba(255,255,255,.05)",
+      "file": "public/tokens.css",
+      "line": 24
+    },
+    {
+      "name": "ui-primary-surface",
+      "value": "#d6d4cd",
+      "file": "public/tokens.css",
+      "line": 25
+    },
+    {
+      "name": "ui-primary-hover",
+      "value": "#ebe9e2",
+      "file": "public/tokens.css",
+      "line": 26
+    },
+    {
+      "name": "ui-primary-active",
+      "value": "#c3c2b7",
+      "file": "public/tokens.css",
+      "line": 27
+    },
+    {
+      "name": "ui-on-primary",
+      "value": "#151515",
+      "file": "public/tokens.css",
+      "line": 28
+    },
+    {
+      "name": "ui-success",
+      "value": "#4ade80",
+      "file": "public/tokens.css",
+      "line": 29
+    },
+    {
+      "name": "ui-warning",
+      "value": "#fbbf24",
+      "file": "public/tokens.css",
+      "line": 30
+    },
+    {
+      "name": "ui-danger",
+      "value": "#f87171",
+      "file": "public/tokens.css",
+      "line": 31
+    },
+    {
+      "name": "ui-running",
+      "value": "#22d3ee",
+      "file": "public/tokens.css",
+      "line": 32
+    },
+    {
+      "name": "ui-diff-add",
+      "value": "#4ade80",
+      "file": "public/tokens.css",
+      "line": 33
+    },
+    {
+      "name": "ui-diff-delete",
+      "value": "#f87171",
+      "file": "public/tokens.css",
+      "line": 34
+    },
+    {
+      "name": "ui-diff-hunk",
+      "value": "#9dbaf8",
+      "file": "public/tokens.css",
+      "line": 35
+    },
+    {
+      "name": "ui-scrollbar",
+      "value": "#55534e",
+      "file": "public/tokens.css",
+      "line": 36
+    },
+    {
+      "name": "ui-scrollbar-hover",
+      "value": "#737069",
+      "file": "public/tokens.css",
+      "line": 37
+    },
+    {
+      "name": "ui-scrollbar-active",
+      "value": "#a6a39b",
+      "file": "public/tokens.css",
+      "line": 38
+    },
+    {
+      "name": "ui-backdrop",
+      "value": "rgba(0,0,0,.62)",
+      "file": "public/tokens.css",
+      "line": 39
+    },
+    {
+      "name": "ui-shadow-popover",
+      "value": "0 8px 24px #00000052, 0 2px 6px #0003",
+      "file": "public/tokens.css",
+      "line": 40
+    },
+    {
+      "name": "ui-shadow-panel",
+      "value": "-18px 0 34px rgba(0,0,0,.45)",
+      "file": "public/tokens.css",
+      "line": 41
+    },
+    {
+      "name": "ui-font-sans",
+      "value": "-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"PingFang SC\",\"Hiragino Sans GB\",\"Microsoft YaHei\",Roboto,sans-serif",
+      "file": "public/tokens.css",
+      "line": 42
+    },
+    {
+      "name": "ui-font-mono",
+      "value": "ui-monospace,SFMono-Regular,Menlo,Consolas,\"Cascadia Mono\",monospace",
+      "file": "public/tokens.css",
+      "line": 43
+    },
+    {
+      "name": "ui-font-caption",
+      "value": "11px",
+      "file": "public/tokens.css",
+      "line": 44
+    },
+    {
+      "name": "ui-font-body",
+      "value": "13px",
+      "file": "public/tokens.css",
+      "line": 45
+    },
+    {
+      "name": "ui-font-prose",
+      "value": "14px",
+      "file": "public/tokens.css",
+      "line": 46
+    },
+    {
+      "name": "ui-font-title",
+      "value": "20px",
+      "file": "public/tokens.css",
+      "line": 47
+    },
+    {
+      "name": "ui-weight-normal",
+      "value": "400",
+      "file": "public/tokens.css",
+      "line": 48
+    },
+    {
+      "name": "ui-weight-medium",
+      "value": "500",
+      "file": "public/tokens.css",
+      "line": 49
+    },
+    {
+      "name": "ui-weight-strong",
+      "value": "600",
+      "file": "public/tokens.css",
+      "line": 50
+    },
+    {
+      "name": "ui-space-1",
+      "value": "4px",
+      "file": "public/tokens.css",
+      "line": 51
+    },
+    {
+      "name": "ui-space-2",
+      "value": "8px",
+      "file": "public/tokens.css",
+      "line": 52
+    },
+    {
+      "name": "ui-space-3",
+      "value": "12px",
+      "file": "public/tokens.css",
+      "line": 53
+    },
+    {
+      "name": "ui-space-4",
+      "value": "16px",
+      "file": "public/tokens.css",
+      "line": 54
+    },
+    {
+      "name": "ui-space-5",
+      "value": "24px",
+      "file": "public/tokens.css",
+      "line": 55
+    },
+    {
+      "name": "ui-space-6",
+      "value": "32px",
+      "file": "public/tokens.css",
+      "line": 56
+    },
+    {
+      "name": "ui-radius-control",
+      "value": "6px",
+      "file": "public/tokens.css",
+      "line": 57
+    },
+    {
+      "name": "ui-radius-card",
+      "value": "8px",
+      "file": "public/tokens.css",
+      "line": 58
+    },
+    {
+      "name": "ui-radius-composer",
+      "value": "14px",
+      "file": "public/tokens.css",
+      "line": 59
+    },
+    {
+      "name": "ui-radius-bubble",
+      "value": "18px",
+      "file": "public/tokens.css",
+      "line": 60
+    },
+    {
+      "name": "ui-radius-pill",
+      "value": "999px",
+      "file": "public/tokens.css",
+      "line": 61
+    },
+    {
+      "name": "ui-duration-fast",
+      "value": "60ms",
+      "file": "public/tokens.css",
+      "line": 62
+    },
+    {
+      "name": "ui-duration-snap",
+      "value": "120ms",
+      "file": "public/tokens.css",
+      "line": 63
+    },
+    {
+      "name": "ui-duration-base",
+      "value": "200ms",
+      "file": "public/tokens.css",
+      "line": 64
+    },
+    {
+      "name": "ui-duration-sheet",
+      "value": "300ms",
+      "file": "public/tokens.css",
+      "line": 65
+    },
+    {
+      "name": "ui-ease-out",
+      "value": "cubic-bezier(.165,.84,.44,1)",
+      "file": "public/tokens.css",
+      "line": 66
+    },
+    {
+      "name": "shell",
+      "value": "var(--ui-nav-surface)",
+      "file": "public/tokens.css",
+      "line": 70
+    },
+    {
+      "name": "main",
+      "value": "var(--ui-canvas)",
+      "file": "public/tokens.css",
+      "line": 71
+    },
+    {
+      "name": "titlebar",
+      "value": "var(--ui-titlebar)",
+      "file": "public/tokens.css",
+      "line": 72
+    },
+    {
+      "name": "card",
+      "value": "var(--ui-panel-surface)",
+      "file": "public/tokens.css",
+      "line": 73
+    },
+    {
+      "name": "input",
+      "value": "var(--ui-input-surface)",
+      "file": "public/tokens.css",
+      "line": 74
+    },
+    {
+      "name": "hover",
+      "value": "var(--ui-hover)",
+      "file": "public/tokens.css",
+      "line": 75
+    },
+    {
+      "name": "line",
+      "value": "var(--ui-border)",
+      "file": "public/tokens.css",
+      "line": 76
+    },
+    {
+      "name": "line-soft",
+      "value": "var(--ui-border)",
+      "file": "public/tokens.css",
+      "line": 77
+    },
+    {
+      "name": "t1",
+      "value": "var(--ui-text-primary)",
+      "file": "public/tokens.css",
+      "line": 78
+    },
+    {
+      "name": "t2",
+      "value": "var(--ui-text-secondary)",
+      "file": "public/tokens.css",
+      "line": 79
+    },
+    {
+      "name": "t3",
+      "value": "var(--ui-text-muted)",
+      "file": "public/tokens.css",
+      "line": 80
+    },
+    {
+      "name": "control-active",
+      "value": "var(--ui-selected)",
+      "file": "public/tokens.css",
+      "line": 81
+    },
+    {
+      "name": "control-hover",
+      "value": "var(--ui-hover)",
+      "file": "public/tokens.css",
+      "line": 82
+    },
+    {
+      "name": "control-border",
+      "value": "var(--ui-border-control)",
+      "file": "public/tokens.css",
+      "line": 83
+    },
+    {
+      "name": "control-primary",
+      "value": "var(--ui-primary-surface)",
+      "file": "public/tokens.css",
+      "line": 84
+    },
+    {
+      "name": "control-primary-hover",
+      "value": "var(--ui-primary-hover)",
+      "file": "public/tokens.css",
+      "line": 85
+    },
+    {
+      "name": "focus-ring",
+      "value": "var(--ui-focus)",
+      "file": "public/tokens.css",
+      "line": 86
+    },
+    {
+      "name": "ok",
+      "value": "var(--ui-success)",
+      "file": "public/tokens.css",
+      "line": 87
+    },
+    {
+      "name": "warn",
+      "value": "var(--ui-warning)",
+      "file": "public/tokens.css",
+      "line": 88
+    },
+    {
+      "name": "err",
+      "value": "var(--ui-danger)",
+      "file": "public/tokens.css",
+      "line": 89
+    },
+    {
+      "name": "run",
+      "value": "var(--ui-running)",
+      "file": "public/tokens.css",
+      "line": 90
+    },
+    {
+      "name": "font",
+      "value": "var(--ui-font-sans)",
+      "file": "public/tokens.css",
+      "line": 91
+    },
+    {
+      "name": "mono",
+      "value": "var(--ui-font-mono)",
+      "file": "public/tokens.css",
+      "line": 92
+    },
+    {
+      "name": "bubble-bg",
+      "value": "var(--ui-user-surface)",
+      "file": "public/tokens.css",
+      "line": 93
+    },
+    {
+      "name": "bg",
+      "value": "var(--ui-input-surface)",
+      "file": "public/tokens.css",
+      "line": 94
+    },
+    {
+      "name": "bg-soft",
+      "value": "var(--ui-panel-surface)",
+      "file": "public/tokens.css",
+      "line": 95
+    },
+    {
+      "name": "fg",
+      "value": "var(--ui-text-primary)",
+      "file": "public/tokens.css",
+      "line": 96
+    },
+    {
+      "name": "fg-dim",
+      "value": "var(--ui-text-secondary)",
+      "file": "public/tokens.css",
+      "line": 97
+    },
+    {
+      "name": "text",
+      "value": "var(--ui-text-primary)",
+      "file": "public/tokens.css",
+      "line": 98
+    },
+    {
+      "name": "ui-canvas",
+      "value": "#fcfcfb",
+      "file": "public/tokens.css",
+      "line": 103
+    },
+    {
+      "name": "ui-nav-surface",
+      "value": "#fbfbf9",
+      "file": "public/tokens.css",
+      "line": 104
+    },
+    {
+      "name": "ui-panel-surface",
+      "value": "#ffffff",
+      "file": "public/tokens.css",
+      "line": 105
+    },
+    {
+      "name": "ui-input-surface",
+      "value": "#ffffff",
+      "file": "public/tokens.css",
+      "line": 106
+    },
+    {
+      "name": "ui-popover-surface",
+      "value": "#ffffff",
+      "file": "public/tokens.css",
+      "line": 107
+    },
+    {
+      "name": "ui-titlebar",
+      "value": "#fbfbf9",
+      "file": "public/tokens.css",
+      "line": 108
+    },
+    {
+      "name": "ui-code-surface",
+      "value": "#f3f2ef",
+      "file": "public/tokens.css",
+      "line": 109
+    },
+    {
+      "name": "ui-text-primary",
+      "value": "#0b0b0b",
+      "file": "public/tokens.css",
+      "line": 110
+    },
+    {
+      "name": "ui-text-secondary",
+      "value": "#52514e",
+      "file": "public/tokens.css",
+      "line": 111
+    },
+    {
+      "name": "ui-text-muted",
+      "value": "#6d6b67",
+      "file": "public/tokens.css",
+      "line": 112
+    },
+    {
+      "name": "ui-border",
+      "value": "rgba(11,11,11,.10)",
+      "file": "public/tokens.css",
+      "line": 113
+    },
+    {
+      "name": "ui-border-strong",
+      "value": "rgba(11,11,11,.20)",
+      "file": "public/tokens.css",
+      "line": 114
+    },
+    {
+      "name": "ui-border-control",
+      "value": "#8a8880",
+      "file": "public/tokens.css",
+      "line": 115
+    },
+    {
+      "name": "ui-hover",
+      "value": "rgba(11,11,11,.05)",
+      "file": "public/tokens.css",
+      "line": 116
+    },
+    {
+      "name": "ui-selected",
+      "value": "rgba(11,11,11,.10)",
+      "file": "public/tokens.css",
+      "line": 117
+    },
+    {
+      "name": "ui-link",
+      "value": "#184f95",
+      "file": "public/tokens.css",
+      "line": 118
+    },
+    {
+      "name": "ui-focus",
+      "value": "#2a78d6",
+      "file": "public/tokens.css",
+      "line": 119
+    },
+    {
+      "name": "ui-user-surface",
+      "value": "rgba(11,11,11,.05)",
+      "file": "public/tokens.css",
+      "line": 120
+    },
+    {
+      "name": "ui-primary-surface",
+      "value": "#35342f",
+      "file": "public/tokens.css",
+      "line": 121
+    },
+    {
+      "name": "ui-primary-hover",
+      "value": "#4c4a44",
+      "file": "public/tokens.css",
+      "line": 122
+    },
+    {
+      "name": "ui-primary-active",
+      "value": "#22211e",
+      "file": "public/tokens.css",
+      "line": 123
+    },
+    {
+      "name": "ui-on-primary",
+      "value": "#ffffff",
+      "file": "public/tokens.css",
+      "line": 124
+    },
+    {
+      "name": "ui-success",
+      "value": "#166534",
+      "file": "public/tokens.css",
+      "line": 125
+    },
+    {
+      "name": "ui-warning",
+      "value": "#854d0e",
+      "file": "public/tokens.css",
+      "line": 126
+    },
+    {
+      "name": "ui-danger",
+      "value": "#b91c1c",
+      "file": "public/tokens.css",
+      "line": 127
+    },
+    {
+      "name": "ui-running",
+      "value": "#0e7490",
+      "file": "public/tokens.css",
+      "line": 128
+    },
+    {
+      "name": "ui-diff-add",
+      "value": "#166534",
+      "file": "public/tokens.css",
+      "line": 129
+    },
+    {
+      "name": "ui-diff-delete",
+      "value": "#b91c1c",
+      "file": "public/tokens.css",
+      "line": 130
+    },
+    {
+      "name": "ui-diff-hunk",
+      "value": "#184f95",
+      "file": "public/tokens.css",
+      "line": 131
+    },
+    {
+      "name": "ui-scrollbar",
+      "value": "#b4b1a9",
+      "file": "public/tokens.css",
+      "line": 132
+    },
+    {
+      "name": "ui-scrollbar-hover",
+      "value": "#8a8880",
+      "file": "public/tokens.css",
+      "line": 133
+    },
+    {
+      "name": "ui-scrollbar-active",
+      "value": "#6d6b67",
+      "file": "public/tokens.css",
+      "line": 134
+    },
+    {
+      "name": "ui-backdrop",
+      "value": "rgba(11,11,11,.32)",
+      "file": "public/tokens.css",
+      "line": 135
+    },
+    {
+      "name": "ui-shadow-popover",
+      "value": "0 8px 24px #0000001f, 0 2px 6px #00000014",
+      "file": "public/tokens.css",
+      "line": 136
+    },
+    {
+      "name": "ui-shadow-panel",
+      "value": "-18px 0 34px rgba(11,11,11,.12)",
+      "file": "public/tokens.css",
+      "line": 137
+    },
+    {
+      "name": "ui-success-surface",
+      "value": "color-mix(in srgb, var(--ui-success) 10%, transparent)",
+      "file": "public/tokens.css",
+      "line": 141
+    },
+    {
+      "name": "ui-success-border",
+      "value": "color-mix(in srgb, var(--ui-success) 35%, transparent)",
+      "file": "public/tokens.css",
+      "line": 142
+    },
+    {
+      "name": "ui-warning-surface",
+      "value": "color-mix(in srgb, var(--ui-warning) 10%, transparent)",
+      "file": "public/tokens.css",
+      "line": 143
+    },
+    {
+      "name": "ui-warning-border",
+      "value": "color-mix(in srgb, var(--ui-warning) 35%, transparent)",
+      "file": "public/tokens.css",
+      "line": 144
+    },
+    {
+      "name": "ui-danger-surface",
+      "value": "color-mix(in srgb, var(--ui-danger) 10%, transparent)",
+      "file": "public/tokens.css",
+      "line": 145
+    },
+    {
+      "name": "ui-danger-border",
+      "value": "color-mix(in srgb, var(--ui-danger) 35%, transparent)",
+      "file": "public/tokens.css",
+      "line": 146
+    },
+    {
+      "name": "ui-info-surface",
+      "value": "color-mix(in srgb, var(--ui-diff-hunk) 10%, transparent)",
+      "file": "public/tokens.css",
+      "line": 147
+    },
+    {
+      "name": "ui-info-border",
+      "value": "color-mix(in srgb, var(--ui-diff-hunk) 35%, transparent)",
+      "file": "public/tokens.css",
+      "line": 148
+    },
+    {
+      "name": "ui-focus-glow",
+      "value": "color-mix(in srgb, var(--ui-focus) 18%, transparent)",
+      "file": "public/tokens.css",
+      "line": 149
+    },
+    {
+      "name": "rp-head-h",
+      "value": "46px",
+      "file": "public/ui4-pane.css",
+      "line": 34
+    },
+    {
+      "name": "rp-pad",
+      "value": "12px",
+      "file": "public/ui4-pane.css",
+      "line": 35
+    },
+    {
+      "name": "rp-pad",
+      "value": "10px",
+      "file": "public/ui4-pane.css",
+      "line": 377
+    }
+  ]
+}

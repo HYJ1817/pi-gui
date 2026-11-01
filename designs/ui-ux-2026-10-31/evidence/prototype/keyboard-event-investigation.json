@@ -1,0 +1,17 @@
+{
+  "observed": [
+    {
+      "code": "",
+      "key": "",
+      "target": "",
+      "type": "keydown"
+    },
+    {
+      "code": "ArrowDown",
+      "key": "ArrowDown",
+      "target": "",
+      "type": "keydown"
+    }
+  ],
+  "finding": "Electron ArrowDown keyCode produced an empty DOM key/code; Down produced DOM ArrowDown. Enter also requires a char event. This is a QA-driver correction."
+}

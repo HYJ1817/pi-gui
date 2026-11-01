@@ -1,0 +1,81 @@
+{
+  "platform": [
+    {
+      "node": "ARTICLE",
+      "fonts": [
+        {
+          "familyName": "Segoe UI Variable",
+          "glyphCount": 6,
+          "isCustomFont": false,
+          "postScriptName": "Segoe-UI-Variable-Text"
+        },
+        {
+          "familyName": "Microsoft YaHei UI",
+          "glyphCount": 85,
+          "isCustomFont": false,
+          "postScriptName": "MicrosoftYaHeiUI"
+        },
+        {
+          "familyName": "Microsoft YaHei UI",
+          "glyphCount": 13,
+          "isCustomFont": false,
+          "postScriptName": "MicrosoftYaHeiUI-Bold"
+        }
+      ]
+    },
+    {
+      "node": "TEXTAREA",
+      "fonts": [
+        {
+          "familyName": "Segoe UI Variable",
+          "glyphCount": 4,
+          "isCustomFont": false,
+          "postScriptName": "Segoe-UI-Variable-Text"
+        },
+        {
+          "familyName": "Microsoft YaHei UI",
+          "glyphCount": 12,
+          "isCustomFont": false,
+          "postScriptName": "MicrosoftYaHeiUI"
+        }
+      ]
+    }
+  ],
+  "computed": [
+    {
+      "family": "\"Segoe UI Variable Text\", \"Segoe UI\", \"Microsoft YaHei UI\", sans-serif",
+      "lineHeight": "19.5px",
+      "selector": ".pg-app",
+      "size": "13px"
+    },
+    {
+      "family": "\"Segoe UI Variable Text\", \"Segoe UI\", \"Microsoft YaHei UI\", sans-serif",
+      "lineHeight": "27px",
+      "selector": ".pg-assistant",
+      "size": "15px"
+    },
+    {
+      "family": "\"Segoe UI Variable Text\", \"Segoe UI\", \"Microsoft YaHei UI\", sans-serif",
+      "lineHeight": "23.1px",
+      "selector": "#message-input",
+      "size": "14px"
+    }
+  ],
+  "state": {
+    "title": "pi-GUI · 统一修订版",
+    "size": [
+      1440,
+      902
+    ],
+    "zoom": 1,
+    "frames": [
+      {
+        "url": "http://127.0.0.1:8120/exports/refined/Refined.dc.html",
+        "name": "",
+        "processId": 5,
+        "routingId": 8
+      }
+    ],
+    "errors": []
+  }
+}

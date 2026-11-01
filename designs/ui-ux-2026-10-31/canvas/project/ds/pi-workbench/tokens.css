@@ -1,0 +1,212 @@
+/* Pi Workbench — generated from tokens.json */
+:root, [data-theme="light"] {
+  --surface-canvas: #f7f8fa; /* 工作区主背景；正文 primary/secondary/muted 均可读。 */
+  --surface-nav: #eef0f3; /* 全局 Rail 与会话侧栏；不使用阴影分隔。 */
+  --surface-panel: #ffffff; /* 右栏、浮层与对话框。 */
+  --surface-input: #ffffff; /* 输入框与 Composer 内部。 */
+  --surface-code: #f0f2f6; /* 代码、命令与 Diff 上下文；有界横向滚动。 */
+  --surface-hover: #e5e9ef; /* 控件悬停，几何不变。 */
+  --surface-pressed: #d8dfe9; /* 按下态；不缩放控件。 */
+  --surface-user: #e9edf3; /* 用户消息轻背景，避免气泡套卡片。 */
+  --text-primary: #202631; /* 主文本，位于所有 surface-* 实色底。 */
+  --text-secondary: #4f5b6b; /* 辅助信息，位于所有基础背景；不得通过 opacity 再淡化。 */
+  --text-muted: #536171; /* 时间、元数据与未激活标签，保持 4.5:1。 */
+  --text-on-primary: #ffffff; /* 中性 primary 按钮唯一前景。 */
+  --border-subtle: #dce1e8; /* 装饰性区域分隔；不承担唯一可操作边界。 */
+  --border-control: #7c8796; /* Input/Select 默认边界，至少 3:1。 */
+  --accent: #315f9e; /* 链接、焦点、活动标签文字；不作为大面积背景。 */
+  --accent-soft: #e5edf8; /* 选中项轻背景，文字为 accent 或 text-primary。 */
+  --focus: #315f9e; /* 2px focus-visible 轮廓，偏移 2px。 */
+  --primary: #283346; /* 主按钮中性填充，只配 text-on-primary。 */
+  --primary-hover: #35465e; /* 主按钮悬停填充，尺寸不变。 */
+  --primary-pressed: #1c2635; /* 主按钮按下填充。 */
+  --success: #236b45; /* 完成文字/图标，与文字或勾号同时使用。 */
+  --success-soft: #e9f3ec; /* 完成或 Diff 新增轻背景。 */
+  --warning: #86520b; /* 等待审批、上下文过高，始终搭配状态文字。 */
+  --warning-soft: #fff2db; /* 警告轻背景，搭配 warning 文字。 */
+  --danger: #ad3345; /* 错误和删除，始终搭配错误说明/减号。 */
+  --danger-soft: #fbecef; /* 错误轻背景，不用 Toast 隐藏阻断原因。 */
+  --running: #315f9e; /* 运行状态；与状态文字、简短 spinner 同时出现。 */
+  --scrollbar: #7c8796; /* 滚动条；仅可滚动区域显示。 */
+  --backdrop: #10182666; /* 模态遮罩；仅 overlay 使用。 */
+  --transparent: #00000000; /* 透明控制背景，不承担信息对比。 */
+  --shadow-popover: 0 8px 24px #14213a1a, 0 1px 4px #14213a14; /* 菜单、选择器。只有浮层使用阴影。 */
+  --shadow-dialog: 0 20px 64px #14213a33; /* 模态对话框。 */
+  --shadow-none: none; /* 常驻 Rail、侧栏、面板和消息没有阴影。 */
+}
+[data-theme="dark"] {
+  --surface-canvas: #181b20;
+  --surface-nav: #14171c;
+  --surface-panel: #20242b;
+  --surface-input: #252a32;
+  --surface-code: #161b22;
+  --surface-hover: #303741;
+  --surface-pressed: #3b4553;
+  --surface-user: #282e38;
+  --text-primary: #e9edf4;
+  --text-secondary: #b0bbc9;
+  --text-muted: #a7b4c4;
+  --text-on-primary: #1b2432;
+  --border-subtle: #343d49;
+  --border-control: #778496;
+  --accent: #9abbed;
+  --accent-soft: #2b3e59;
+  --focus: #9abbed;
+  --primary: #e0e7f1;
+  --primary-hover: #f1f4f9;
+  --primary-pressed: #cbd6e5;
+  --success: #8ad0a3;
+  --success-soft: #23382e;
+  --warning: #efbf75;
+  --warning-soft: #42331e;
+  --danger: #ff9bab;
+  --danger-soft: #43262d;
+  --running: #9abbed;
+  --scrollbar: #778496;
+  --backdrop: #05080db3;
+  --transparent: #00000000;
+  --shadow-popover: 0 8px 24px #0000004d, 0 1px 4px #00000066;
+  --shadow-dialog: 0 20px 64px #00000066;
+}
+:root {
+  --space-2: 2px; /* 间距刻度 2px；优先选择相邻层级而非添加近似值。 */
+  --space-4: 4px; /* 基础网格；小图标到文字间距。 */
+  --space-8: 8px; /* 间距刻度 8px；优先选择相邻层级而非添加近似值。 */
+  --space-12: 12px; /* 间距刻度 12px；优先选择相邻层级而非添加近似值。 */
+  --space-16: 16px; /* 间距刻度 16px；优先选择相邻层级而非添加近似值。 */
+  --space-20: 20px; /* 间距刻度 20px；优先选择相邻层级而非添加近似值。 */
+  --space-24: 24px; /* 间距刻度 24px；优先选择相邻层级而非添加近似值。 */
+  --space-32: 32px; /* 间距刻度 32px；优先选择相邻层级而非添加近似值。 */
+  --space-40: 40px; /* 间距刻度 40px；优先选择相邻层级而非添加近似值。 */
+  --space-48: 48px; /* 间距刻度 48px；优先选择相邻层级而非添加近似值。 */
+  --space-64: 64px; /* 间距刻度 64px；优先选择相邻层级而非添加近似值。 */
+  --radius-none: 0px; /* 阅读区、Diff 行不套圆角容器。 */
+  --radius-control: 6px; /* 按钮、输入框、菜单项。 */
+  --radius-panel: 8px; /* 浮层、对话框、代码块。 */
+  --radius-composer: 10px; /* 单一 Composer 外壳。 */
+  --radius-pill: 999px; /* 仅小型计数与状态点。 */
+  --rail-width: 52px; /* 布局提案 rail-width；CSS px，受容器可用尺寸约束。 */
+  --sidebar-width: 248px; /* 布局提案 sidebar-width；CSS px，受容器可用尺寸约束。 */
+  --sidebar-min: 216px; /* 布局提案 sidebar-min；CSS px，受容器可用尺寸约束。 */
+  --sidebar-max: 320px; /* 布局提案 sidebar-max；CSS px，受容器可用尺寸约束。 */
+  --header-height: 52px; /* 布局提案 header-height；CSS px，受容器可用尺寸约束。 */
+  --status-height: 28px; /* 布局提案 status-height；CSS px，受容器可用尺寸约束。 */
+  --reading-width: 780px; /* 布局提案 reading-width；CSS px，受容器可用尺寸约束。 */
+  --pane-width: 420px; /* 布局提案 pane-width；CSS px，受容器可用尺寸约束。 */
+  --pane-min: 360px; /* 布局提案 pane-min；CSS px，受容器可用尺寸约束。 */
+  --pane-max: 640px; /* 布局提案 pane-max；CSS px，受容器可用尺寸约束。 */
+  --control-height: 32px; /* 布局提案 control-height；CSS px，受容器可用尺寸约束。 */
+  --control-target: 36px; /* 布局提案 control-target；CSS px，受容器可用尺寸约束。 */
+  --touch-target: 44px; /* 布局提案 touch-target；CSS px，受容器可用尺寸约束。 */
+  --row-height: 36px; /* 布局提案 row-height；CSS px，受容器可用尺寸约束。 */
+  --composer-min: 112px; /* 布局提案 composer-min；CSS px，受容器可用尺寸约束。 */
+  --composer-max: 240px; /* 布局提案 composer-max；CSS px，受容器可用尺寸约束。 */
+  --dialog-width: 480px; /* 布局提案 dialog-width；CSS px，受容器可用尺寸约束。 */
+  --popover-width: 360px; /* 布局提案 popover-width；CSS px，受容器可用尺寸约束。 */
+  --viewport-inset: 8px; /* 布局提案 viewport-inset；CSS px，受容器可用尺寸约束。 */
+  --breakpoint-dock: 1180px; /* 布局提案 breakpoint-dock；CSS px，受容器可用尺寸约束。 */
+  --breakpoint-compact: 900px; /* 布局提案 breakpoint-compact；CSS px，受容器可用尺寸约束。 */
+  --icon-small: 14px; /* 同一套描边 SVG；不混用 emoji、实心图标和字体图标。 */
+  --icon-default: 16px; /* 同一套描边 SVG；不混用 emoji、实心图标和字体图标。 */
+  --icon-large: 20px; /* 同一套描边 SVG；不混用 emoji、实心图标和字体图标。 */
+  --icon-stroke: 1.5px; /* 同一套描边 SVG；不混用 emoji、实心图标和字体图标。 */
+  --border-width: 1px; /* 装饰和控件边界的统一宽度。 */
+  --focus-width: 2px; /* 键盘焦点宽度。 */
+  --focus-offset: 2px; /* 焦点外偏移，不改变布局。 */
+  --layer-base: 0; /* 工作区。 */
+  --layer-sticky: 10; /* 消息页头与固定输入区。 */
+  --layer-pane: 20; /* 常驻右栏。 */
+  --layer-popover: 100; /* Dropdown/Context Menu，禁止显示在模态之上。 */
+  --layer-modal: 200; /* Dialog/backdrop 组合层。 */
+  --layer-toast: 300; /* 非阻断反馈，不能遮住当前焦点。 */
+  --layer-tooltip: 400; /* 仅短文本解释。 */
+  --duration-instant: 0ms; /* 仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。 */
+  --duration-fast: 80ms; /* 仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。 */
+  --duration-menu: 120ms; /* 仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。 */
+  --duration-panel: 160ms; /* 仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。 */
+  --duration-max: 200ms; /* 仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。 */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* 仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。 */
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1); /* 仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。 */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  --font-mono: "Cascadia Code", Consolas, monospace;
+  --text-caption: 400 12px/18px var(--font-sans); /* 时间、状态与辅助字段；不小于12px。 */
+  --text-label: 600 12px/18px var(--font-sans); /* 分组名、表单标签。 */
+  --text-ui-body: 400 13px/20px var(--font-sans); /* 侧栏、菜单、设置字段。 */
+  --text-ui-strong: 600 13px/20px var(--font-sans); /* 选中行、主要按钮。 */
+  --text-prose: 400 14px/24px var(--font-sans); /* 中文与英文聊天正文。 */
+  --text-section: 600 16px/24px var(--font-sans); /* 消息小标题、面板章节。 */
+  --text-title: 600 20px/28px var(--font-sans); /* 页面与对话框标题。 */
+  --text-display: 600 28px/36px var(--font-sans); /* 空会话引导，禁止营销 hero 大标题。 */
+  --text-code: 400 12px/20px var(--font-mono); /* 代码块、路径、命令。 */
+  --text-code-small: 400 12px/18px var(--font-mono); /* Diff 行号、工具元数据。 */
+}
+.caption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.ui-body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.ui-strong {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.prose {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 24px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.section {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.title {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.display {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.code-small {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  letter-spacing: 0;
+}

@@ -1,0 +1,21 @@
+{
+  "via": "claude-design editor HTML (.zip), local resources",
+  "records": [
+    {
+      "file": "Main.dc.html",
+      "slug": "workbench",
+      "bytes": 357903,
+      "sha256": "abf78b9adae332995fec5c270da459e74c8425fe873d1387fbb26e2d2ff79c3d",
+      "sourceSha256": "9afb2bf370570b772279c26f44b1c940ec8780b9ee389bcb70f323e90f7a9b39",
+      "route": "/exports/workbench/Main.dc.html"
+    },
+    {
+      "file": "Reading.dc.html",
+      "slug": "reading",
+      "bytes": 357923,
+      "sha256": "6bb1f3f9087b862cf60e7c6caae1631ae51e3cdb3d83eb77d80acc7bc23fbad2",
+      "sourceSha256": "a1728a347272afffa78ffea97b24fa1328dbee25ee0f21eabeae0c395e1e5187",
+      "route": "/exports/reading/Reading.dc.html"
+    }
+  ]
+}

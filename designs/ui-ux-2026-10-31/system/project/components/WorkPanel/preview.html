@@ -1,0 +1,16 @@
+<!-- @dsCard group="Workspace" height=430 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>WorkPanel · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<section id="example" class="pw-panel"><header class="pw-panel-head"><span class="pw-grow">文件变更</span><span class="pw-badge">3</span><button id="closePanel" class="pw-icon-button" aria-label="关闭演示工作面板"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="pw-panel-body"><div class="pw-tabs" role="tablist" aria-label="变更范围"><button role="tab" aria-selected="true" class="pw-tab">工作区</button><button role="tab" aria-selected="false" class="pw-tab">当前会话</button></div><p class="pw-mono" style="margin-top:16px">public/session-list.js</p><pre class="pw-code">  const rows = snapshot.order;
++ selectWithoutResorting(id);</pre><p class="pw-help">演示 Diff · 不读写真实文件</p></div></section><button id="openPanel" class="pw-button" hidden>重新打开</button>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+const reopen=document.getElementById('openPanel');document.getElementById('closePanel').addEventListener('click',()=>{example.hidden=true;reopen.hidden=false;reopen.focus();result.textContent='演示：已隐藏，同一节点和滚动容器保留。';});reopen.addEventListener('click',()=>{example.hidden=false;reopen.hidden=true;document.getElementById('closePanel').focus();result.textContent='演示：已重新打开，同一节点和滚动位置保留。';});example.querySelectorAll('[role=tab]').forEach(b=>b.addEventListener('click',()=>{example.querySelectorAll('[role=tab]').forEach(t=>t.setAttribute('aria-selected',String(t===b)));result.textContent='演示：'+b.textContent+'范围；不执行真实查询。';}));
+
+})();
+</script>
+</body></html>

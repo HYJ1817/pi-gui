@@ -1,0 +1,17 @@
+{
+  "scope": "offline design prototype only",
+  "passed": 0,
+  "total": 2,
+  "failed": 2,
+  "checks": [
+    {
+      "name": "slash menu opens",
+      "pass": false
+    },
+    {
+      "name": "context entry is interactive",
+      "pass": false
+    }
+  ],
+  "shots": []
+}

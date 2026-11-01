@@ -1,0 +1,12 @@
+# 本机预览进程状态与日志
+**/.artifact-server.json
+**/.artifact-server.log
+ui-ux-2026-10-31/evidence/preview-server*
+# 用户提供的实机参考截图仅用于本地设计审阅
+ui-ux-2026-10-31/evidence/reference-user/
+# 可再生的完整交付压缩包含本地参考资料；不上传
+/ui-ux-2026-10-31.zip
+# 第三方工具缓存；保留来源说明与许可证
+ui-ux-2026-10-31/tooling/*.zip
+# 已由源码提交完整记录的本地 diff 备份
+ui-ux-2026-10-31/evidence/production-changes.patch

@@ -1,0 +1,23 @@
+{
+  "version": "0.30.1",
+  "head": "eac79cab793cff26c6cb6aa01cc9d9276ce06606",
+  "inputDigest": "44e7249e06cd142ccff3da71edfa1c5e9f32f71da077e630ac896d6561610b5f",
+  "root": "C:\\pi-GUI\\dist-app\\refined-review-20261101-final",
+  "files": [
+    {
+      "relative": "dist-app/Pi GUI-win32-x64/Pi GUI.exe",
+      "bytes": 246324736,
+      "sha256": "0db81cc39790afd84ac5905bebbe6be157d0f14636e7bb0c4b0e3412b0f35018"
+    },
+    {
+      "relative": "dist-app/Pi GUI-win32-x64/resources/app/server.cjs",
+      "bytes": 2559995,
+      "sha256": "1cce072dd87e4ef4c273d7aa960bcd154d42b023b83f1d9d19175cb7285a4d1f"
+    },
+    {
+      "relative": "dist-app/Pi GUI-win32-x64/resources/app/main.cjs",
+      "bytes": 43679,
+      "sha256": "b1275c87973d07c7b6eae79447a178c0ab859e4bcfe1d3d19bc158ec51eeff59"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+<!-- @dsCard group="Navigation" height=330 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Tabs · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<div id="example" class="pw-tabs" role="tablist" aria-label="工作面板"><button id="tabChanges" class="pw-tab" role="tab" aria-selected="true" aria-controls="tabPanel" tabindex="0">文件变更</button><button id="tabSpecs" class="pw-tab" role="tab" aria-selected="false" aria-controls="tabPanel" tabindex="-1">规范</button><button class="pw-tab" role="tab" aria-selected="false" disabled>浏览器不可用</button></div><section id="tabPanel" role="tabpanel" aria-labelledby="tabChanges" tabindex="0" style="padding-top:16px">当前项目有 3 个文件变更 · 演示</section>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+const tabs=[...example.querySelectorAll('[role=tab]:not(:disabled)')],panel=document.getElementById('tabPanel');function activate(t){tabs.forEach(x=>{x.setAttribute('aria-selected',String(x===t));x.tabIndex=x===t?0:-1});panel.setAttribute('aria-labelledby',t.id);panel.textContent=t.id==='tabChanges'?'当前项目有 3 个文件变更 · 演示':'规范：侧栏切换保留草稿，点击不触发重新排序。';}tabs.forEach(t=>t.addEventListener('click',()=>activate(t)));example.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const n=tabs.indexOf(document.activeElement),i=e.key==='Home'?0:e.key==='End'?tabs.length-1:(n+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;activate(tabs[i]);tabs[i].focus();});
+
+})();
+</script>
+</body></html>

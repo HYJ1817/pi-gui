@@ -1,0 +1,3890 @@
+{
+  "scope": "offline design prototype only",
+  "passed": 196,
+  "total": 200,
+  "failed": 4,
+  "checks": [
+    {
+      "name": "slash menu opens",
+      "pass": true
+    },
+    {
+      "name": "context entry is interactive",
+      "pass": true
+    },
+    {
+      "name": "dark-1280-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-1280-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 440,
+          "left": 392,
+          "right": 1152,
+          "top": 199,
+          "width": 760,
+          "x": 392,
+          "y": 199
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "dark-1280-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 440,
+          "left": 392,
+          "right": 1152,
+          "top": 199,
+          "width": 760,
+          "x": 392,
+          "y": 199
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "dark-1280-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 440,
+          "left": 392,
+          "right": 1152,
+          "top": 199,
+          "width": 760,
+          "x": 392,
+          "y": 199
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "dark 1280 slash retains input focus",
+      "pass": true
+    },
+    {
+      "name": "dark 1280 context closes commands",
+      "pass": true
+    },
+    {
+      "name": "dark-1280-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-1280-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 514.453125,
+          "left": 792,
+          "right": 1152,
+          "top": 124.546875,
+          "width": 360,
+          "x": 792,
+          "y": 124.546875
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "dark-1280-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 514.453125,
+          "left": 792,
+          "right": 1152,
+          "top": 124.546875,
+          "width": 360,
+          "x": 792,
+          "y": 124.546875
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "dark-1280-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 514.453125,
+          "left": 792,
+          "right": 1152,
+          "top": 124.546875,
+          "width": 360,
+          "x": 792,
+          "y": 124.546875
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "dark 1280 context Escape restores trigger",
+      "pass": true
+    },
+    {
+      "name": "dark-1440-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-1440-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 440,
+          "left": 472,
+          "right": 1232,
+          "top": 299,
+          "width": 760,
+          "x": 472,
+          "y": 299
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-1440-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 440,
+          "left": 472,
+          "right": 1232,
+          "top": 299,
+          "width": 760,
+          "x": 472,
+          "y": 299
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-1440-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 440,
+          "left": 472,
+          "right": 1232,
+          "top": 299,
+          "width": 760,
+          "x": 472,
+          "y": 299
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark 1440 slash retains input focus",
+      "pass": true
+    },
+    {
+      "name": "dark 1440 context closes commands",
+      "pass": true
+    },
+    {
+      "name": "dark-1440-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-1440-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 514.453125,
+          "left": 872,
+          "right": 1232,
+          "top": 224.546875,
+          "width": 360,
+          "x": 872,
+          "y": 224.546875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-1440-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 514.453125,
+          "left": 872,
+          "right": 1232,
+          "top": 224.546875,
+          "width": 360,
+          "x": 872,
+          "y": 224.546875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-1440-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 514.453125,
+          "left": 872,
+          "right": 1232,
+          "top": 224.546875,
+          "width": 360,
+          "x": 872,
+          "y": 224.546875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark 1440 context Escape restores trigger",
+      "pass": true
+    },
+    {
+      "name": "dark-1920-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-1920-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 440,
+          "left": 712,
+          "right": 1472,
+          "top": 479,
+          "width": 760,
+          "x": 712,
+          "y": 479
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "dark-1920-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 440,
+          "left": 712,
+          "right": 1472,
+          "top": 479,
+          "width": 760,
+          "x": 712,
+          "y": 479
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "dark-1920-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 440,
+          "left": 712,
+          "right": 1472,
+          "top": 479,
+          "width": 760,
+          "x": 712,
+          "y": 479
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "dark 1920 slash retains input focus",
+      "pass": true
+    },
+    {
+      "name": "dark 1920 context closes commands",
+      "pass": true
+    },
+    {
+      "name": "dark-1920-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-1920-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 514.453125,
+          "left": 1112,
+          "right": 1472,
+          "top": 404.546875,
+          "width": 360,
+          "x": 1112,
+          "y": 404.546875
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "dark-1920-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 514.453125,
+          "left": 1112,
+          "right": 1472,
+          "top": 404.546875,
+          "width": 360,
+          "x": 1112,
+          "y": 404.546875
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "dark-1920-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 514.453125,
+          "left": 1112,
+          "right": 1472,
+          "top": 404.546875,
+          "width": 360,
+          "x": 1112,
+          "y": 404.546875
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "dark 1920 context Escape restores trigger",
+      "pass": true
+    },
+    {
+      "name": "light-1280-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-1280-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 440,
+          "left": 392,
+          "right": 1152,
+          "top": 199,
+          "width": 760,
+          "x": 392,
+          "y": 199
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "light-1280-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 440,
+          "left": 392,
+          "right": 1152,
+          "top": 199,
+          "width": 760,
+          "x": 392,
+          "y": 199
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "light-1280-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 440,
+          "left": 392,
+          "right": 1152,
+          "top": 199,
+          "width": 760,
+          "x": 392,
+          "y": 199
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "light 1280 slash retains input focus",
+      "pass": true
+    },
+    {
+      "name": "light 1280 context closes commands",
+      "pass": true
+    },
+    {
+      "name": "light-1280-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-1280-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 514.453125,
+          "left": 792,
+          "right": 1152,
+          "top": 124.546875,
+          "width": 360,
+          "x": 792,
+          "y": 124.546875
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "light-1280-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 514.453125,
+          "left": 792,
+          "right": 1152,
+          "top": 124.546875,
+          "width": 360,
+          "x": 792,
+          "y": 124.546875
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "light-1280-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 759,
+          "height": 112,
+          "left": 392,
+          "right": 1152,
+          "top": 647,
+          "width": 760,
+          "x": 392,
+          "y": 647
+        },
+        "dpr": 1,
+        "h": 801,
+        "page": 1280,
+        "popup": {
+          "bottom": 639,
+          "height": 514.453125,
+          "left": 792,
+          "right": 1152,
+          "top": 124.546875,
+          "width": 360,
+          "x": 792,
+          "y": 124.546875
+        },
+        "w": 1280
+      }
+    },
+    {
+      "name": "light 1280 context Escape restores trigger",
+      "pass": true
+    },
+    {
+      "name": "light-1440-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-1440-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 440,
+          "left": 472,
+          "right": 1232,
+          "top": 299,
+          "width": 760,
+          "x": 472,
+          "y": 299
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-1440-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 440,
+          "left": 472,
+          "right": 1232,
+          "top": 299,
+          "width": 760,
+          "x": 472,
+          "y": 299
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-1440-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 440,
+          "left": 472,
+          "right": 1232,
+          "top": 299,
+          "width": 760,
+          "x": 472,
+          "y": 299
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light 1440 slash retains input focus",
+      "pass": true
+    },
+    {
+      "name": "light 1440 context closes commands",
+      "pass": true
+    },
+    {
+      "name": "light-1440-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-1440-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 514.453125,
+          "left": 872,
+          "right": 1232,
+          "top": 224.546875,
+          "width": 360,
+          "x": 872,
+          "y": 224.546875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-1440-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 514.453125,
+          "left": 872,
+          "right": 1232,
+          "top": 224.546875,
+          "width": 360,
+          "x": 872,
+          "y": 224.546875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-1440-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 514.453125,
+          "left": 872,
+          "right": 1232,
+          "top": 224.546875,
+          "width": 360,
+          "x": 872,
+          "y": 224.546875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light 1440 context Escape restores trigger",
+      "pass": true
+    },
+    {
+      "name": "light-1920-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-1920-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 440,
+          "left": 712,
+          "right": 1472,
+          "top": 479,
+          "width": 760,
+          "x": 712,
+          "y": 479
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "light-1920-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 440,
+          "left": 712,
+          "right": 1472,
+          "top": 479,
+          "width": 760,
+          "x": 712,
+          "y": 479
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "light-1920-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 440,
+          "left": 712,
+          "right": 1472,
+          "top": 479,
+          "width": 760,
+          "x": 712,
+          "y": 479
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "light 1920 slash retains input focus",
+      "pass": true
+    },
+    {
+      "name": "light 1920 context closes commands",
+      "pass": true
+    },
+    {
+      "name": "light-1920-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-1920-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 514.453125,
+          "left": 1112,
+          "right": 1472,
+          "top": 404.546875,
+          "width": 360,
+          "x": 1112,
+          "y": 404.546875
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "light-1920-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 514.453125,
+          "left": 1112,
+          "right": 1472,
+          "top": 404.546875,
+          "width": 360,
+          "x": 1112,
+          "y": 404.546875
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "light-1920-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 1039,
+          "height": 112,
+          "left": 712,
+          "right": 1472,
+          "top": 927,
+          "width": 760,
+          "x": 712,
+          "y": 927
+        },
+        "dpr": 1,
+        "h": 1081,
+        "page": 1920,
+        "popup": {
+          "bottom": 919,
+          "height": 514.453125,
+          "left": 1112,
+          "right": 1472,
+          "top": 404.546875,
+          "width": 360,
+          "x": 1112,
+          "y": 404.546875
+        },
+        "w": 1920
+      }
+    },
+    {
+      "name": "light 1920 context Escape restores trigger",
+      "pass": true
+    },
+    {
+      "name": "dark slash replaces old action menu",
+      "pass": true
+    },
+    {
+      "name": "dark input click dismisses usage and retains focus",
+      "pass": true
+    },
+    {
+      "name": "dark ArrowDown moves active descendant",
+      "pass": true
+    },
+    {
+      "name": "dark active last item scrolls inside menu",
+      "pass": true
+    },
+    {
+      "name": "dark Home restores first active option",
+      "pass": true
+    },
+    {
+      "name": "dark Escape closes only candidates and keeps draft",
+      "pass": true
+    },
+    {
+      "name": "dark non-trigger https://example.com/a",
+      "pass": true
+    },
+    {
+      "name": "dark non-trigger C:\\demo\\src",
+      "pass": true
+    },
+    {
+      "name": "dark non-trigger /usr/bin",
+      "pass": true
+    },
+    {
+      "name": "dark non-trigger hello /new",
+      "pass": true
+    },
+    {
+      "name": "dark non-trigger @",
+      "pass": true
+    },
+    {
+      "name": "dark command empty feedback",
+      "pass": true
+    },
+    {
+      "name": "dark-empty-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-empty-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 120,
+          "left": 472,
+          "right": 1232,
+          "top": 619,
+          "width": 760,
+          "x": 472,
+          "y": 619
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-empty-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 120,
+          "left": 472,
+          "right": 1232,
+          "top": 619,
+          "width": 760,
+          "x": 472,
+          "y": 619
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-empty-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 120,
+          "left": 472,
+          "right": 1232,
+          "top": 619,
+          "width": 760,
+          "x": 472,
+          "y": 619
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark empty candidates never send",
+      "pass": true
+    },
+    {
+      "name": "dark Tab chooses existing changes action without sending",
+      "pass": true
+    },
+    {
+      "name": "dark command removes only trigger fragment",
+      "pass": true
+    },
+    {
+      "name": "dark caret inside token is not accepted",
+      "pass": true
+    },
+    {
+      "name": "dark composition suppresses command accept and send",
+      "pass": true
+    },
+    {
+      "name": "dark composition end recomputes candidates",
+      "pass": true
+    },
+    {
+      "name": "dark new command opens empty session",
+      "pass": true
+    },
+    {
+      "name": "dark usage loading feedback",
+      "pass": true
+    },
+    {
+      "name": "dark-context-loading popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-context-loading popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 135.59375,
+          "left": 872,
+          "right": 1232,
+          "top": 603.40625,
+          "width": 360,
+          "x": 872,
+          "y": 603.40625
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-context-loading popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 135.59375,
+          "left": 872,
+          "right": 1232,
+          "top": 603.40625,
+          "width": 360,
+          "x": 872,
+          "y": 603.40625
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-context-loading no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 135.59375,
+          "left": 872,
+          "right": 1232,
+          "top": 603.40625,
+          "width": 360,
+          "x": 872,
+          "y": 603.40625
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark missing usage is unknown not zero",
+      "pass": true
+    },
+    {
+      "name": "dark-context-unknown popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-context-unknown popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 265.28125,
+          "left": 872,
+          "right": 1232,
+          "top": 473.71875,
+          "width": 360,
+          "x": 872,
+          "y": 473.71875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-context-unknown popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 265.28125,
+          "left": 872,
+          "right": 1232,
+          "top": 473.71875,
+          "width": 360,
+          "x": 872,
+          "y": 473.71875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-context-unknown no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 265.28125,
+          "left": 872,
+          "right": 1232,
+          "top": 473.71875,
+          "width": 360,
+          "x": 872,
+          "y": 473.71875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark loading detail never shifts composer",
+      "pass": true
+    },
+    {
+      "name": "dark context semantics and independent unknown quota",
+      "pass": true
+    },
+    {
+      "name": "dark model replaces usage",
+      "pass": true
+    },
+    {
+      "name": "dark slash usage opens detail without message",
+      "pass": true
+    },
+    {
+      "name": "dark slash usage close restores composer",
+      "pass": true
+    },
+    {
+      "name": "dark outside closes usage without stealing focus",
+      "pass": true
+    },
+    {
+      "name": "dark outside closes command candidates",
+      "pass": true
+    },
+    {
+      "name": "dark usage failure has retry",
+      "pass": true
+    },
+    {
+      "name": "dark-context-error popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-context-error popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 213.78125,
+          "left": 872,
+          "right": 1232,
+          "top": 525.21875,
+          "width": 360,
+          "x": 872,
+          "y": 525.21875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-context-error popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 213.78125,
+          "left": 872,
+          "right": 1232,
+          "top": 525.21875,
+          "width": 360,
+          "x": 872,
+          "y": 525.21875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark-context-error no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 213.78125,
+          "left": 872,
+          "right": 1232,
+          "top": 525.21875,
+          "width": 360,
+          "x": 872,
+          "y": 525.21875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "dark stale usage callback never reopens or changes other session",
+      "pass": true
+    },
+    {
+      "name": "dark retry recovers to explicit no data",
+      "pass": true
+    },
+    {
+      "name": "dark slash Escape does not stop agent",
+      "pass": true
+    },
+    {
+      "name": "dark slash stop waits for acknowledgement",
+      "pass": false
+    },
+    {
+      "name": "dark slash stop completes",
+      "pass": false
+    },
+    {
+      "name": "dark-zoom-1.25-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-zoom-1.25-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000045776367,
+          "height": 440,
+          "left": 298,
+          "right": 726,
+          "top": 119.20000457763672,
+          "width": 428,
+          "x": 298,
+          "y": 119.20000457763672
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "dark-zoom-1.25-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000045776367,
+          "height": 440,
+          "left": 298,
+          "right": 726,
+          "top": 119.20000457763672,
+          "width": 428,
+          "x": 298,
+          "y": 119.20000457763672
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "dark-zoom-1.25-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000045776367,
+          "height": 440,
+          "left": 298,
+          "right": 726,
+          "top": 119.20000457763672,
+          "width": 428,
+          "x": 298,
+          "y": 119.20000457763672
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "dark-zoom-1.25-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-zoom-1.25-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000007629395,
+          "height": 513.5,
+          "left": 366,
+          "right": 726,
+          "top": 45.70000076293945,
+          "width": 360,
+          "x": 366,
+          "y": 45.70000076293945
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "dark-zoom-1.25-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000007629395,
+          "height": 513.5,
+          "left": 366,
+          "right": 726,
+          "top": 45.70000076293945,
+          "width": 360,
+          "x": 366,
+          "y": 45.70000076293945
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "dark-zoom-1.25-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000007629395,
+          "height": 513.5,
+          "left": 366,
+          "right": 726,
+          "top": 45.70000076293945,
+          "width": 360,
+          "x": 366,
+          "y": 45.70000076293945
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-zoom-1.5-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 400.66668701171875,
+          "left": 248,
+          "right": 576,
+          "top": 38.66666793823242,
+          "width": 328,
+          "x": 248,
+          "y": 38.66666793823242
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 400.66668701171875,
+          "left": 248,
+          "right": 576,
+          "top": 38.66666793823242,
+          "width": 328,
+          "x": 248,
+          "y": 38.66666793823242
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 400.66668701171875,
+          "left": 248,
+          "right": 576,
+          "top": 38.66666793823242,
+          "width": 328,
+          "x": 248,
+          "y": 38.66666793823242
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "dark-zoom-1.5-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 410.66668701171875,
+          "left": 216,
+          "right": 576,
+          "top": 28.666667938232422,
+          "width": 360,
+          "x": 216,
+          "y": 28.666667938232422
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 410.66668701171875,
+          "left": 216,
+          "right": 576,
+          "top": 28.666667938232422,
+          "width": 360,
+          "x": 216,
+          "y": 28.666667938232422
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 410.66668701171875,
+          "left": 216,
+          "right": 576,
+          "top": 28.666667938232422,
+          "width": 360,
+          "x": 216,
+          "y": 28.666667938232422
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "light slash replaces old action menu",
+      "pass": true
+    },
+    {
+      "name": "light input click dismisses usage and retains focus",
+      "pass": true
+    },
+    {
+      "name": "light ArrowDown moves active descendant",
+      "pass": true
+    },
+    {
+      "name": "light active last item scrolls inside menu",
+      "pass": true
+    },
+    {
+      "name": "light Home restores first active option",
+      "pass": true
+    },
+    {
+      "name": "light Escape closes only candidates and keeps draft",
+      "pass": true
+    },
+    {
+      "name": "light non-trigger https://example.com/a",
+      "pass": true
+    },
+    {
+      "name": "light non-trigger C:\\demo\\src",
+      "pass": true
+    },
+    {
+      "name": "light non-trigger /usr/bin",
+      "pass": true
+    },
+    {
+      "name": "light non-trigger hello /new",
+      "pass": true
+    },
+    {
+      "name": "light non-trigger @",
+      "pass": true
+    },
+    {
+      "name": "light command empty feedback",
+      "pass": true
+    },
+    {
+      "name": "light-empty-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-empty-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 120,
+          "left": 472,
+          "right": 1232,
+          "top": 619,
+          "width": 760,
+          "x": 472,
+          "y": 619
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-empty-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 120,
+          "left": 472,
+          "right": 1232,
+          "top": 619,
+          "width": 760,
+          "x": 472,
+          "y": 619
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-empty-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 120,
+          "left": 472,
+          "right": 1232,
+          "top": 619,
+          "width": 760,
+          "x": 472,
+          "y": 619
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light empty candidates never send",
+      "pass": true
+    },
+    {
+      "name": "light Tab chooses existing changes action without sending",
+      "pass": true
+    },
+    {
+      "name": "light command removes only trigger fragment",
+      "pass": true
+    },
+    {
+      "name": "light caret inside token is not accepted",
+      "pass": true
+    },
+    {
+      "name": "light composition suppresses command accept and send",
+      "pass": true
+    },
+    {
+      "name": "light composition end recomputes candidates",
+      "pass": true
+    },
+    {
+      "name": "light new command opens empty session",
+      "pass": true
+    },
+    {
+      "name": "light usage loading feedback",
+      "pass": true
+    },
+    {
+      "name": "light-context-loading popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-context-loading popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 135.59375,
+          "left": 872,
+          "right": 1232,
+          "top": 603.40625,
+          "width": 360,
+          "x": 872,
+          "y": 603.40625
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-context-loading popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 135.59375,
+          "left": 872,
+          "right": 1232,
+          "top": 603.40625,
+          "width": 360,
+          "x": 872,
+          "y": 603.40625
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-context-loading no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 135.59375,
+          "left": 872,
+          "right": 1232,
+          "top": 603.40625,
+          "width": 360,
+          "x": 872,
+          "y": 603.40625
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light missing usage is unknown not zero",
+      "pass": true
+    },
+    {
+      "name": "light-context-unknown popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-context-unknown popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 265.28125,
+          "left": 872,
+          "right": 1232,
+          "top": 473.71875,
+          "width": 360,
+          "x": 872,
+          "y": 473.71875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-context-unknown popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 265.28125,
+          "left": 872,
+          "right": 1232,
+          "top": 473.71875,
+          "width": 360,
+          "x": 872,
+          "y": 473.71875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-context-unknown no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 265.28125,
+          "left": 872,
+          "right": 1232,
+          "top": 473.71875,
+          "width": 360,
+          "x": 872,
+          "y": 473.71875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light loading detail never shifts composer",
+      "pass": true
+    },
+    {
+      "name": "light context semantics and independent unknown quota",
+      "pass": true
+    },
+    {
+      "name": "light model replaces usage",
+      "pass": true
+    },
+    {
+      "name": "light slash usage opens detail without message",
+      "pass": true
+    },
+    {
+      "name": "light slash usage close restores composer",
+      "pass": true
+    },
+    {
+      "name": "light outside closes usage without stealing focus",
+      "pass": true
+    },
+    {
+      "name": "light outside closes command candidates",
+      "pass": true
+    },
+    {
+      "name": "light usage failure has retry",
+      "pass": true
+    },
+    {
+      "name": "light-context-error popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-context-error popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 213.78125,
+          "left": 872,
+          "right": 1232,
+          "top": 525.21875,
+          "width": 360,
+          "x": 872,
+          "y": 525.21875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-context-error popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 213.78125,
+          "left": 872,
+          "right": 1232,
+          "top": 525.21875,
+          "width": 360,
+          "x": 872,
+          "y": 525.21875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light-context-error no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 859,
+          "height": 112,
+          "left": 472,
+          "right": 1232,
+          "top": 747,
+          "width": 760,
+          "x": 472,
+          "y": 747
+        },
+        "dpr": 1,
+        "h": 901,
+        "page": 1440,
+        "popup": {
+          "bottom": 739,
+          "height": 213.78125,
+          "left": 872,
+          "right": 1232,
+          "top": 525.21875,
+          "width": 360,
+          "x": 872,
+          "y": 525.21875
+        },
+        "w": 1440
+      }
+    },
+    {
+      "name": "light stale usage callback never reopens or changes other session",
+      "pass": true
+    },
+    {
+      "name": "light retry recovers to explicit no data",
+      "pass": true
+    },
+    {
+      "name": "light slash Escape does not stop agent",
+      "pass": true
+    },
+    {
+      "name": "light slash stop waits for acknowledgement",
+      "pass": false
+    },
+    {
+      "name": "light slash stop completes",
+      "pass": false
+    },
+    {
+      "name": "light-zoom-1.25-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-zoom-1.25-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000045776367,
+          "height": 440,
+          "left": 298,
+          "right": 726,
+          "top": 119.20000457763672,
+          "width": 428,
+          "x": 298,
+          "y": 119.20000457763672
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "light-zoom-1.25-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000045776367,
+          "height": 440,
+          "left": 298,
+          "right": 726,
+          "top": 119.20000457763672,
+          "width": 428,
+          "x": 298,
+          "y": 119.20000457763672
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "light-zoom-1.25-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000045776367,
+          "height": 440,
+          "left": 298,
+          "right": 726,
+          "top": 119.20000457763672,
+          "width": 428,
+          "x": 298,
+          "y": 119.20000457763672
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "light-zoom-1.25-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-zoom-1.25-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000007629395,
+          "height": 513.5,
+          "left": 366,
+          "right": 726,
+          "top": 45.70000076293945,
+          "width": 360,
+          "x": 366,
+          "y": 45.70000076293945
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "light-zoom-1.25-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000007629395,
+          "height": 513.5,
+          "left": 366,
+          "right": 726,
+          "top": 45.70000076293945,
+          "width": 360,
+          "x": 366,
+          "y": 45.70000076293945
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "light-zoom-1.25-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 678.8000106811523,
+          "height": 111.5999984741211,
+          "left": 298,
+          "right": 726,
+          "top": 567.2000122070312,
+          "width": 428,
+          "x": 298,
+          "y": 567.2000122070312
+        },
+        "dpr": 1.25,
+        "h": 721,
+        "page": 1152,
+        "popup": {
+          "bottom": 559.2000007629395,
+          "height": 513.5,
+          "left": 366,
+          "right": 726,
+          "top": 45.70000076293945,
+          "width": 360,
+          "x": 366,
+          "y": 45.70000076293945
+        },
+        "w": 1152
+      }
+    },
+    {
+      "name": "light-zoom-1.5-commands popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-zoom-1.5-commands popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 400.66668701171875,
+          "left": 248,
+          "right": 576,
+          "top": 38.66666793823242,
+          "width": 328,
+          "x": 248,
+          "y": 38.66666793823242
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "light-zoom-1.5-commands popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 400.66668701171875,
+          "left": 248,
+          "right": 576,
+          "top": 38.66666793823242,
+          "width": 328,
+          "x": 248,
+          "y": 38.66666793823242
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "light-zoom-1.5-commands no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 400.66668701171875,
+          "left": 248,
+          "right": 576,
+          "top": 38.66666793823242,
+          "width": 328,
+          "x": 248,
+          "y": 38.66666793823242
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "light-zoom-1.5-context popup exists",
+      "pass": true
+    },
+    {
+      "name": "light-zoom-1.5-context popup in viewport",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 410.66668701171875,
+          "left": 216,
+          "right": 576,
+          "top": 28.666667938232422,
+          "width": 360,
+          "x": 216,
+          "y": 28.666667938232422
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "light-zoom-1.5-context popup above composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 410.66668701171875,
+          "left": 216,
+          "right": 576,
+          "top": 28.666667938232422,
+          "width": 360,
+          "x": 216,
+          "y": 28.666667938232422
+        },
+        "w": 960
+      }
+    },
+    {
+      "name": "light-zoom-1.5-context no page overflow",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "bottom": 558.6666793823242,
+          "height": 111.33333587646484,
+          "left": 248,
+          "right": 576,
+          "top": 447.3333435058594,
+          "width": 328,
+          "x": 248,
+          "y": 447.3333435058594
+        },
+        "dpr": 1.5,
+        "h": 601,
+        "page": 960,
+        "popup": {
+          "bottom": 439.3333549499512,
+          "height": 410.66668701171875,
+          "left": 216,
+          "right": 576,
+          "top": 28.666667938232422,
+          "width": 360,
+          "x": 216,
+          "y": 28.666667938232422
+        },
+        "w": 960
+      }
+    }
+  ],
+  "shots": [
+    {
+      "name": "dark-1280-commands",
+      "file": "dark-1280-commands.png",
+      "composer": {
+        "bottom": 759,
+        "height": 112,
+        "left": 392,
+        "right": 1152,
+        "top": 647,
+        "width": 760,
+        "x": 392,
+        "y": 647
+      },
+      "dpr": 1,
+      "h": 801,
+      "page": 1280,
+      "popup": {
+        "bottom": 639,
+        "height": 440,
+        "left": 392,
+        "right": 1152,
+        "top": 199,
+        "width": 760,
+        "x": 392,
+        "y": 199
+      },
+      "w": 1280,
+      "pixels": {
+        "width": 1280,
+        "height": 801
+      }
+    },
+    {
+      "name": "dark-1280-context",
+      "file": "dark-1280-context.png",
+      "composer": {
+        "bottom": 759,
+        "height": 112,
+        "left": 392,
+        "right": 1152,
+        "top": 647,
+        "width": 760,
+        "x": 392,
+        "y": 647
+      },
+      "dpr": 1,
+      "h": 801,
+      "page": 1280,
+      "popup": {
+        "bottom": 639,
+        "height": 514.453125,
+        "left": 792,
+        "right": 1152,
+        "top": 124.546875,
+        "width": 360,
+        "x": 792,
+        "y": 124.546875
+      },
+      "w": 1280,
+      "pixels": {
+        "width": 1280,
+        "height": 801
+      }
+    },
+    {
+      "name": "dark-1440-commands",
+      "file": "dark-1440-commands.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 440,
+        "left": 472,
+        "right": 1232,
+        "top": 299,
+        "width": 760,
+        "x": 472,
+        "y": 299
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-1440-context",
+      "file": "dark-1440-context.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 514.453125,
+        "left": 872,
+        "right": 1232,
+        "top": 224.546875,
+        "width": 360,
+        "x": 872,
+        "y": 224.546875
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-1920-commands",
+      "file": "dark-1920-commands.png",
+      "composer": {
+        "bottom": 1039,
+        "height": 112,
+        "left": 712,
+        "right": 1472,
+        "top": 927,
+        "width": 760,
+        "x": 712,
+        "y": 927
+      },
+      "dpr": 1,
+      "h": 1081,
+      "page": 1920,
+      "popup": {
+        "bottom": 919,
+        "height": 440,
+        "left": 712,
+        "right": 1472,
+        "top": 479,
+        "width": 760,
+        "x": 712,
+        "y": 479
+      },
+      "w": 1920,
+      "pixels": {
+        "width": 1920,
+        "height": 1081
+      }
+    },
+    {
+      "name": "dark-1920-context",
+      "file": "dark-1920-context.png",
+      "composer": {
+        "bottom": 1039,
+        "height": 112,
+        "left": 712,
+        "right": 1472,
+        "top": 927,
+        "width": 760,
+        "x": 712,
+        "y": 927
+      },
+      "dpr": 1,
+      "h": 1081,
+      "page": 1920,
+      "popup": {
+        "bottom": 919,
+        "height": 514.453125,
+        "left": 1112,
+        "right": 1472,
+        "top": 404.546875,
+        "width": 360,
+        "x": 1112,
+        "y": 404.546875
+      },
+      "w": 1920,
+      "pixels": {
+        "width": 1920,
+        "height": 1081
+      }
+    },
+    {
+      "name": "light-1280-commands",
+      "file": "light-1280-commands.png",
+      "composer": {
+        "bottom": 759,
+        "height": 112,
+        "left": 392,
+        "right": 1152,
+        "top": 647,
+        "width": 760,
+        "x": 392,
+        "y": 647
+      },
+      "dpr": 1,
+      "h": 801,
+      "page": 1280,
+      "popup": {
+        "bottom": 639,
+        "height": 440,
+        "left": 392,
+        "right": 1152,
+        "top": 199,
+        "width": 760,
+        "x": 392,
+        "y": 199
+      },
+      "w": 1280,
+      "pixels": {
+        "width": 1280,
+        "height": 801
+      }
+    },
+    {
+      "name": "light-1280-context",
+      "file": "light-1280-context.png",
+      "composer": {
+        "bottom": 759,
+        "height": 112,
+        "left": 392,
+        "right": 1152,
+        "top": 647,
+        "width": 760,
+        "x": 392,
+        "y": 647
+      },
+      "dpr": 1,
+      "h": 801,
+      "page": 1280,
+      "popup": {
+        "bottom": 639,
+        "height": 514.453125,
+        "left": 792,
+        "right": 1152,
+        "top": 124.546875,
+        "width": 360,
+        "x": 792,
+        "y": 124.546875
+      },
+      "w": 1280,
+      "pixels": {
+        "width": 1280,
+        "height": 801
+      }
+    },
+    {
+      "name": "light-1440-commands",
+      "file": "light-1440-commands.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 440,
+        "left": 472,
+        "right": 1232,
+        "top": 299,
+        "width": 760,
+        "x": 472,
+        "y": 299
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-1440-context",
+      "file": "light-1440-context.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 514.453125,
+        "left": 872,
+        "right": 1232,
+        "top": 224.546875,
+        "width": 360,
+        "x": 872,
+        "y": 224.546875
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-1920-commands",
+      "file": "light-1920-commands.png",
+      "composer": {
+        "bottom": 1039,
+        "height": 112,
+        "left": 712,
+        "right": 1472,
+        "top": 927,
+        "width": 760,
+        "x": 712,
+        "y": 927
+      },
+      "dpr": 1,
+      "h": 1081,
+      "page": 1920,
+      "popup": {
+        "bottom": 919,
+        "height": 440,
+        "left": 712,
+        "right": 1472,
+        "top": 479,
+        "width": 760,
+        "x": 712,
+        "y": 479
+      },
+      "w": 1920,
+      "pixels": {
+        "width": 1920,
+        "height": 1081
+      }
+    },
+    {
+      "name": "light-1920-context",
+      "file": "light-1920-context.png",
+      "composer": {
+        "bottom": 1039,
+        "height": 112,
+        "left": 712,
+        "right": 1472,
+        "top": 927,
+        "width": 760,
+        "x": 712,
+        "y": 927
+      },
+      "dpr": 1,
+      "h": 1081,
+      "page": 1920,
+      "popup": {
+        "bottom": 919,
+        "height": 514.453125,
+        "left": 1112,
+        "right": 1472,
+        "top": 404.546875,
+        "width": 360,
+        "x": 1112,
+        "y": 404.546875
+      },
+      "w": 1920,
+      "pixels": {
+        "width": 1920,
+        "height": 1081
+      }
+    },
+    {
+      "name": "dark-empty-commands",
+      "file": "dark-empty-commands.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 120,
+        "left": 472,
+        "right": 1232,
+        "top": 619,
+        "width": 760,
+        "x": 472,
+        "y": 619
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-context-loading",
+      "file": "dark-context-loading.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 135.59375,
+        "left": 872,
+        "right": 1232,
+        "top": 603.40625,
+        "width": 360,
+        "x": 872,
+        "y": 603.40625
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-context-unknown",
+      "file": "dark-context-unknown.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 265.28125,
+        "left": 872,
+        "right": 1232,
+        "top": 473.71875,
+        "width": 360,
+        "x": 872,
+        "y": 473.71875
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-context-error",
+      "file": "dark-context-error.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 213.78125,
+        "left": 872,
+        "right": 1232,
+        "top": 525.21875,
+        "width": 360,
+        "x": 872,
+        "y": 525.21875
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-zoom-1.25-commands",
+      "file": "dark-zoom-1.25-commands.png",
+      "composer": {
+        "bottom": 678.8000106811523,
+        "height": 111.5999984741211,
+        "left": 298,
+        "right": 726,
+        "top": 567.2000122070312,
+        "width": 428,
+        "x": 298,
+        "y": 567.2000122070312
+      },
+      "dpr": 1.25,
+      "h": 721,
+      "page": 1152,
+      "popup": {
+        "bottom": 559.2000045776367,
+        "height": 440,
+        "left": 298,
+        "right": 726,
+        "top": 119.20000457763672,
+        "width": 428,
+        "x": 298,
+        "y": 119.20000457763672
+      },
+      "w": 1152,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-zoom-1.25-context",
+      "file": "dark-zoom-1.25-context.png",
+      "composer": {
+        "bottom": 678.8000106811523,
+        "height": 111.5999984741211,
+        "left": 298,
+        "right": 726,
+        "top": 567.2000122070312,
+        "width": 428,
+        "x": 298,
+        "y": 567.2000122070312
+      },
+      "dpr": 1.25,
+      "h": 721,
+      "page": 1152,
+      "popup": {
+        "bottom": 559.2000007629395,
+        "height": 513.5,
+        "left": 366,
+        "right": 726,
+        "top": 45.70000076293945,
+        "width": 360,
+        "x": 366,
+        "y": 45.70000076293945
+      },
+      "w": 1152,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-commands",
+      "file": "dark-zoom-1.5-commands.png",
+      "composer": {
+        "bottom": 558.6666793823242,
+        "height": 111.33333587646484,
+        "left": 248,
+        "right": 576,
+        "top": 447.3333435058594,
+        "width": 328,
+        "x": 248,
+        "y": 447.3333435058594
+      },
+      "dpr": 1.5,
+      "h": 601,
+      "page": 960,
+      "popup": {
+        "bottom": 439.3333549499512,
+        "height": 400.66668701171875,
+        "left": 248,
+        "right": 576,
+        "top": 38.66666793823242,
+        "width": 328,
+        "x": 248,
+        "y": 38.66666793823242
+      },
+      "w": 960,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "dark-zoom-1.5-context",
+      "file": "dark-zoom-1.5-context.png",
+      "composer": {
+        "bottom": 558.6666793823242,
+        "height": 111.33333587646484,
+        "left": 248,
+        "right": 576,
+        "top": 447.3333435058594,
+        "width": 328,
+        "x": 248,
+        "y": 447.3333435058594
+      },
+      "dpr": 1.5,
+      "h": 601,
+      "page": 960,
+      "popup": {
+        "bottom": 439.3333549499512,
+        "height": 410.66668701171875,
+        "left": 216,
+        "right": 576,
+        "top": 28.666667938232422,
+        "width": 360,
+        "x": 216,
+        "y": 28.666667938232422
+      },
+      "w": 960,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-empty-commands",
+      "file": "light-empty-commands.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 120,
+        "left": 472,
+        "right": 1232,
+        "top": 619,
+        "width": 760,
+        "x": 472,
+        "y": 619
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-context-loading",
+      "file": "light-context-loading.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 135.59375,
+        "left": 872,
+        "right": 1232,
+        "top": 603.40625,
+        "width": 360,
+        "x": 872,
+        "y": 603.40625
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-context-unknown",
+      "file": "light-context-unknown.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 265.28125,
+        "left": 872,
+        "right": 1232,
+        "top": 473.71875,
+        "width": 360,
+        "x": 872,
+        "y": 473.71875
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-context-error",
+      "file": "light-context-error.png",
+      "composer": {
+        "bottom": 859,
+        "height": 112,
+        "left": 472,
+        "right": 1232,
+        "top": 747,
+        "width": 760,
+        "x": 472,
+        "y": 747
+      },
+      "dpr": 1,
+      "h": 901,
+      "page": 1440,
+      "popup": {
+        "bottom": 739,
+        "height": 213.78125,
+        "left": 872,
+        "right": 1232,
+        "top": 525.21875,
+        "width": 360,
+        "x": 872,
+        "y": 525.21875
+      },
+      "w": 1440,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-zoom-1.25-commands",
+      "file": "light-zoom-1.25-commands.png",
+      "composer": {
+        "bottom": 678.8000106811523,
+        "height": 111.5999984741211,
+        "left": 298,
+        "right": 726,
+        "top": 567.2000122070312,
+        "width": 428,
+        "x": 298,
+        "y": 567.2000122070312
+      },
+      "dpr": 1.25,
+      "h": 721,
+      "page": 1152,
+      "popup": {
+        "bottom": 559.2000045776367,
+        "height": 440,
+        "left": 298,
+        "right": 726,
+        "top": 119.20000457763672,
+        "width": 428,
+        "x": 298,
+        "y": 119.20000457763672
+      },
+      "w": 1152,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-zoom-1.25-context",
+      "file": "light-zoom-1.25-context.png",
+      "composer": {
+        "bottom": 678.8000106811523,
+        "height": 111.5999984741211,
+        "left": 298,
+        "right": 726,
+        "top": 567.2000122070312,
+        "width": 428,
+        "x": 298,
+        "y": 567.2000122070312
+      },
+      "dpr": 1.25,
+      "h": 721,
+      "page": 1152,
+      "popup": {
+        "bottom": 559.2000007629395,
+        "height": 513.5,
+        "left": 366,
+        "right": 726,
+        "top": 45.70000076293945,
+        "width": 360,
+        "x": 366,
+        "y": 45.70000076293945
+      },
+      "w": 1152,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-zoom-1.5-commands",
+      "file": "light-zoom-1.5-commands.png",
+      "composer": {
+        "bottom": 558.6666793823242,
+        "height": 111.33333587646484,
+        "left": 248,
+        "right": 576,
+        "top": 447.3333435058594,
+        "width": 328,
+        "x": 248,
+        "y": 447.3333435058594
+      },
+      "dpr": 1.5,
+      "h": 601,
+      "page": 960,
+      "popup": {
+        "bottom": 439.3333549499512,
+        "height": 400.66668701171875,
+        "left": 248,
+        "right": 576,
+        "top": 38.66666793823242,
+        "width": 328,
+        "x": 248,
+        "y": 38.66666793823242
+      },
+      "w": 960,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    },
+    {
+      "name": "light-zoom-1.5-context",
+      "file": "light-zoom-1.5-context.png",
+      "composer": {
+        "bottom": 558.6666793823242,
+        "height": 111.33333587646484,
+        "left": 248,
+        "right": 576,
+        "top": 447.3333435058594,
+        "width": 328,
+        "x": 248,
+        "y": 447.3333435058594
+      },
+      "dpr": 1.5,
+      "h": 601,
+      "page": 960,
+      "popup": {
+        "bottom": 439.3333549499512,
+        "height": 410.66668701171875,
+        "left": 216,
+        "right": 576,
+        "top": 28.666667938232422,
+        "width": 360,
+        "x": 216,
+        "y": 28.666667938232422
+      },
+      "w": 960,
+      "pixels": {
+        "width": 1440,
+        "height": 901
+      }
+    }
+  ]
+}

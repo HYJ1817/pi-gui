@@ -1,0 +1,61 @@
+﻿ID,原有能力,实际生产入口,既有owner（源行号为勘察定位）,保留约束,证明范围
+F01,对话主页：Global Rail,侧栏 会话,`index.html:31`；`app.js:1063`；`ui/workspace-surface.js:38`,隐藏并保留现有 Chat DOM、草稿与流式输出，不反复重建,入口/既有owner复用；实际专项与未验证资格见17报告
+F02,项目列表、展开/折叠与切换,左侧项目分组,"`projects.js:152,167,364`；`sidebar-expansion.js:2`",名称、chevron、三点分别操作；激活仍遵循原 lifecycle/generation,入口/既有owner复用；实际专项与未验证资格见17报告
+F03,添加文件夹：项目菜单、无项目欢迎区,项目三点菜单 添加文件夹 / 无项目欢迎 CTA,"`index.html:53,156`；`projects.js:405`",由用户选择 Pi 读写/执行目录，不擅自猜目录,入口/既有owner复用；实际专项与未验证资格见17报告
+F04,项目设置：当前项目三点菜单,当前项目菜单「项目设置」,`projects.js:250-263`；`project-config.js`,非当前项目不能直接修改当前项目配置；项目切换不是菜单副作用,入口/既有owner复用；实际专项与未验证资格见17报告
+F05,移除项目,项目三点菜单危险项,`projects.js:308-346`,只从 GUI 列表移除；不删除磁盘项目文件，运行中仍由既有闸门判定,入口/既有owner复用；实际专项与未验证资格见17报告
+F06,工作区 / Worktree 管理,项目菜单「工作区管理」,`projects.js:260`；`worktrees.js:14-92`,保留 prepare→确认→nonce；外部工作区只读；移除受健康、干净、合并状态约束,入口/既有owner复用；实际专项与未验证资格见17报告
+F07,新建并行会话 / 独立会话管理,项目会话列表末项及工作区管理,"`runtime-nav.js:202,208-286`；`worktrees.js:24`",真实 Git 归属才有入口；新 worktree 不带未提交改动；不新增 spawn 路径,入口/既有owner复用；实际专项与未验证资格见17报告
+F08,新建会话,侧栏顶部「新对话」,`index.html:47`；`app.js:1280`；`session-navigation.js`,不删除旧会话；pending→落盘身份交接沿原实现,入口/既有owner复用；实际专项与未验证资格见17报告
+F09,历史会话列表、选中、稳定排序,项目下固定顺序会话行,"`sessions.js:392-464`；`server/sessions.js:83-104,370`；`runtime-nav.js:94-95`",点击与后台事件不重排；保持 Classic sessionId 与 Runtime conversationId 的独立身份,入口/既有owner复用；实际专项与未验证资格见17报告
+F10,会话搜索与结果定位,侧栏「搜索会话」,"`session-search.js:44,113,326`；`app.js:1232`",保留作用域、查询状态、结果定位；空查询恢复列表；不新建内容索引,入口/既有owner复用；实际专项与未验证资格见17报告
+F11,会话归档、还原、软删除、改名,行三点 / 右键菜单,"`sessions.js:254,512,605,623`",归档不改 Pi 文件；软删除保留可恢复语义；危险项单独确认,入口/既有owner复用；实际专项与未验证资格见17报告
+F12,分支树及分叉,工作面板 分支树；原生分叉逻辑不变,`index.html:93`；`tree.js`；`app.js:1054`,复用原生会话分支，不改 session schema,入口/既有owner复用；实际专项与未验证资格见17报告
+F13,Classic 正常聊天与 Markdown,主阅读区,"`messages.js:323,367,440,474,606,665`；`markdown.js`",保留段落、列表、代码、表格、引用、链接、附件语义；长行局部滚动,入口/既有owner复用；实际专项与未验证资格见17报告
+F14,空会话、无项目、工作区恢复,主阅读区空状态,`index.html:130-160`；`messages.js:56`；`shell.js`,恢复中、已就绪、无项目不能混为一种状态；无项目禁用发送,入口/既有owner复用；实际专项与未验证资格见17报告
+F15,Thinking 文本折叠,消息内「思考过程」折叠行,"`messages.js`；`docs/conversation-ui.md`；`runtime-conversation.js:258-264,663-670`",没有真实文本就不造内容；流式结束保留手动展开；历史缺失不补造,入口/既有owner复用；实际专项与未验证资格见17报告
+F16,工具执行与复杂时间线,多项工具活动摘要默认折叠 → 列表 → 单项详情,"`tool-view.js:76,159,336,374`；`tools.js`；`tool-history.js:43`",实时/历史复用 ToolEntry；成功、失败、运行、未完成、未知有文本/形状，不只颜色,入口/既有owner复用；实际专项与未验证资格见17报告
+F17,Web Activity,工具时间线对应类型,`web-activity.js`；`web-access.js`；`web-capabilities.js`,仍来自既有 Pi Extension；不为原型新增联网/安装,入口/既有owner复用；实际专项与未验证资格见17报告
+F18,外部 Browser Use Activity,工具时间线对应类型,`browser-activity.js`；`browser.js`；`browser-capabilities.js`,与内置 Browser Agent Control 分开；无审批协议时不画允许/拒绝,入口/既有owner复用；实际专项与未验证资格见17报告
+F19,Subagent Activity,工具时间线子任务展开,`subagent-activity.js`；`subagents.js`,与 Planner 的 DAG / Attempt 分开；不虚构子代理来源,入口/既有owner复用；实际专项与未验证资格见17报告
+F20,Pi Memory Activity,工具时间线对应类型,`memory-activity.js`；`memory.js`,长期记忆与会话搜索分开，不增加 Memory browser,入口/既有owner复用；实际专项与未验证资格见17报告
+F21,MCP Activity 与资源活动,工具时间线对应类型,`mcp-activity.js`；`mcp-observer.js`,保留 server 与来源证据；不建立第二套 MCP runtime,入口/既有owner复用；实际专项与未验证资格见17报告
+F22,Approval / Permission,原请求所属会话中的确认内容,"`approval.js:313,571`；`approval-model.js`；`ui/modal.js:246`",只有真实 Extension 协议请求可应答；不伪造全局权限开关,入口/既有owner复用；实际专项与未验证资格见17报告
+F23,多行输入、键盘、IME,稳定底部 Composer,`index.html:166-200`；`composer.js`；`app.js:955-979`,Enter发送、Shift+Enter换行、合成输入不发送；textarea有界增长,入口/既有owner复用；实际专项与未验证资格见17报告
+F24,附件、图片/PDF/Word/文本解析,Composer 附件按钮与托盘,"`attachments.js:43,103,109,202`",Classic既有 loading/error/blocked/unreadable/truncated；Runtime未接相同附件链路，不给假功能,入口/既有owner复用；实际专项与未验证资格见17报告
+F25,模型选择,Classic 输入区模型浮层（名称/ID/Provider本地过滤）；Runtime 保留原生select,`app.js:709`；`ui3-model-picker.js:259`；`runtime-models.js`,providerId+modelId；切换等待 Pi 回读；未知能力不当“不支持”,入口/既有owner复用；实际专项与未验证资格见17报告
+F26,思考等级选择,Composer Thinking Picker,`app.js:723`；`ui3-model-picker.js:388`；`thinking-availability.js`,候选仅来自 Pi；pending/unknown/unsupported/no-model有区别；切模型清旧候选,入口/既有owner复用；实际专项与未验证资格见17报告
+F27,上下文、用量、远端额度、会话统计,输入区已用百分比→真实上下文详情；侧栏用量/远端额度与会话More统计保留,"`index.html:59,179`；`usage.js`；`app.js:832,921`",会话统计与Provider额度不同owner；数字未知保留未知；避免侧栏重复常驻同摘要,入口/既有owner复用；实际专项与未验证资格见17报告
+F28,Agent运行、追加指令、停止与停止待确认,Composer主要动作+消息内状态,`docs/composer-ui.md`；`app.js:955-979`；`state.js:199-210`,Classic运行中支持steer；Runtime运行中send禁用；停止未确认不解除保护，草稿保留,入口/既有owner复用；实际专项与未验证资格见17报告
+F29,提问导航 / Minimap,阅读列边缘提问目录,`index.html:163`；`conversation-nav.js:341-378`,只索引User turn；只滚动stream；不创建正文副本,入口/既有owner复用；实际专项与未验证资格见17报告
+F30,Classic草稿恢复,对应会话Composer,"`draft.js:37-42,67,86-132,157-245`","workspace/session键、20,000字、400ms debounce、本地存储降级",入口/既有owner复用；实际专项与未验证资格见17报告
+F31,Runtime实时视图、历史与恢复,Runtime 原中央视图，保留实时/只读区别并消费统一tokens,"`runtime-conversation.js:181,462,560,584-707`",独立owner；历史可有只读工具摘要但无Thinking/usage；位置未确认单列；不补完整执行记录,入口/既有owner复用；实际专项与未验证资格见17报告
+F32,Runtime草稿、滚动、模型、生命周期,Runtime 原输入、模型select与会话操作；保留能力差异,"`runtime-draft.js:38,80,104,185`；`runtime-conversation.js:182-191,243-253,504,697-763`",稳定locator与易变owner分开；运行时不可发送；当前无Classic附件链路,入口/既有owner复用；实际专项与未验证资格见17报告
+F33,Git工作区文件变更,顶栏 工作面板 → 右栏 文件变更,"`index.html:103`；`git.js:429,450,544`",Git为事实源；badge始终总数；全部/本会话过滤含义不改；非Git不是错误,入口/既有owner复用；实际专项与未验证资格见17报告
+F34,文件列表、Diff、hunk折叠与上下文,变更右栏文件列表/详情,"`diff.js:180,270,275,297`；`git.js:1371`",长行仅Diff内部滚动；改变上下文仍问后端，前端不补裁掉行,入口/既有owner复用；实际专项与未验证资格见17报告
+F35,单文件/全部撤销及未跟踪/暂存权限,变更面板二级操作→计划确认,`git.js:488`；既有Git API与确认模块,维持计划、授权、冲突与写闸门；不能改成无确认的一键应用或撤销,入口/既有owner复用；实际专项与未验证资格见17报告
+F36,Diff单行/多行评论与持久化,Diff gutter与评论区域,"`diff-comments.js:150,199,254,384`；`review-comment-persistence.js`",保留scope、anchor、fingerprint、stale、版本兼容与草稿；不改评论存储,入口/既有owner复用；实际专项与未验证资格见17报告
+F37,准备修改任务、候选执行、审查、采纳,评论工具条有条件入口,`review-task.js:47`；`review-task-preview.js:22`；`candidate-review.js:9`,固定输入快照、受控worktree、真实diff、采纳确认与恢复许可独立,入口/既有owner复用；实际专项与未验证资格见17报告
+F38,本会话变更及撤销对象,会话More「本会话变更」,`app.js:916`；`session-changes-panel.js:47`；`session-revert-object-ui.js`,当前资格、目标身份、清单与确认不丢；不扩大支持平台/对象,入口/既有owner复用；实际专项与未验证资格见17报告
+F39,Specs只读浏览,顶栏 工作面板 → 右栏 Specs,"`index.html:104`；`specs-panel.js:33,50`",根SPEC.md/specs Markdown，保留安全路径、锚点与只读边界,入口/既有owner复用；实际专项与未验证资格见17报告
+F40,内置Browser及历史/地址/刷新,顶栏 工作面板 → 右栏 浏览器,"`index.html:112`；`browser-pane.js:24,108,337`",仅Electron bridge可用；原型页面是本地演示，不能算实际导航或网页执行,入口/既有owner复用；实际专项与未验证资格见17报告
+F41,内置Browser Agent Control,Browser面板内独立控制,`gui-browser-activity.js`；`gui-browser-capabilities.js`；Electron Browser owner,默认关闭、loopback-only、独立授权，不控制用户Chrome；与外部Browser Use分开,入口/既有owner复用；实际专项与未验证资格见17报告
+F42,开发进程与脱敏日志,会话 More 开发进程 / Runtime 原开发进程入口 → 右栏,"`app.js:917,1266`；`process-panel.js:23`；`runtime-secondary.js:78`",独立授权、按工作区清理，日志脱敏；不扩大Browser权限,入口/既有owner复用；实际专项与未验证资格见17报告
+F43,Specs+Changes / Browser+Changes分屏,右栏标题布局操作,`ui/split-workbench.js`；`app.js:298`；`browser-pane.js:277`,复用原mount/controller；低高度单面板tab回退；不是任意三面板IDE,入口/既有owner复用；实际专项与未验证资格见17报告
+F44,协同流程图与建议/撤销/导出,顶栏 工作面板 → 右栏 协同文档,"`index.html:107`；`collab-panel.js:22,31`；`collab-canvas.js`",自动保存、来源revision、undo/redo、导出保留；不造真实Agent建议来源,入口/既有owner复用；实际专项与未验证资格见17报告
+F45,消息交互图表与参数引用,消息图表卡「打开」→右栏；More可放仅当有当前图表的别名,"`viz-integration.js:19-47`；`viz-panel.js:228,256`",当前实际入口是[data-viz-open]；不是现有全局命令。保留来源消息/scope校验，不加空图表入口,入口/既有owner复用；实际专项与未验证资格见17报告
+F46,Planner创建/编辑/DAG/执行,设置 → 工作区 → 任务与审阅,"`index.html:32`；`planner.js:424,579,718,1881,2092`",保留计划草稿、未保存确认、依赖与执行闸门；原型不能触发真实CLI,入口/既有owner复用；实际专项与未验证资格见17报告
+F47,Planner Attempt/会话关联/人工Review/Verification/Evidence,任务详情分区与关联会话链接,"`planner.js:974,1127,1289,1340,1459,1551,1774,1808`；`session-plans.js`",接受、需修改、验证通过、证据与允许合并不是同一状态，不把它们合为绿色成功,入口/既有owner复用；实际专项与未验证资格见17报告
+F48,Skills发现、详情、启用/停用,设置 → 工作区 → Skills与扩展（默认Skills）,"`extensions.js:155-216,272,1012`",installed/configured/loaded/observed区分；必要重启确认；不把目录发现等于已加载,入口/既有owner复用；实际专项与未验证资格见17报告
+F49,Extensions Registry、Capabilities与固定安装,设置资源页五过滤器：All/Capabilities/Extensions/Skills/MCP,"`extensions.js:880,944,1012`；`capability-view.js`；`ui/capability-setup.js`",未知扩展仍显示；四个固定allowlist安装，不是Marketplace，不加评分/任意包搜索,入口/既有owner复用；实际专项与未验证资格见17报告
+F50,Native MCP管理,设置 → MCP配置 / Skills与扩展 → MCP,`extensions.js:441-835`；`mcp-capabilities.js`,官方CLI add/remove/login/logout；enable/reconnect/exposure无接口时提示Pi管理器，不画假开关,入口/既有owner复用；实际专项与未验证资格见17报告
+F51,自定义模型供应商/模型列表,设置→模型与账户→供应商,"`index.html:65`；`providers.js:197,275`",复用现有配置与模型读取，不新建账户后端,入口/既有owner复用；实际专项与未验证资格见17报告
+F52,OAuth/API Key/环境变量认证,设置→模型与账户→认证,`index.html:66`；`providers.js:248`；`provider-auth.js:27`,Pi公开SDK负责OAuth、凭据与刷新；GUI不回显原始密钥；未知能力如实说明,入口/既有owner复用；实际专项与未验证资格见17报告
+F53,自动备用模型,项目设置→模型备用,`project-config.js`；`fallback.js`；`model-fallback.js`,默认关闭；未输出且可靠生成故障才重放；模型以Pi回读为准，不静默覆盖用户选择,入口/既有owner复用；实际专项与未验证资格见17报告
+F54,Pi GUI与Pi检查/更新,设置→应用与更新，分开两段,"`settings.js:31`；`app-update.js:14`；`pi-update.js:437,472`",版本、缓存、下载/安装/重启与Pi runtime维护各自独立；不弱化确认与忙闸门,入口/既有owner复用；实际专项与未验证资格见17报告
+F55,运行诊断、兼容探测、复制摘要,设置→诊断,"`diagnostics.js:377,541,554`；`schema-drift.js`",保留结构化脱敏，缺证据为未知，不存原payload,入口/既有owner复用；实际专项与未验证资格见17报告
+F56,日志浏览、筛选、故障报告导出,设置→日志与故障报告,"`logs.js:100,445,533`",保留范围/预览/隐私选项，不上传真实数据；导出也是写操作,入口/既有owner复用；实际专项与未验证资格见17报告
+F57,主题、系统偏好、浅色/深色,侧栏 外观与主题 / 设置 → 外观,`settings.js:7`；`theme.js:19-30`；`tokens.css`,系统/浅/深；Electron titlebar与主题同步需后续桌面验收,入口/既有owner复用；实际专项与未验证资格见17报告
+F58,命令面板、行内Slash、键盘帮助、导航快捷键,行内 / 菜单；Ctrl+K/Ctrl+Shift+P及设置→键盘与命令,"`app.js:961,1251-1295,1319`；`ui/inline-command-menu.js`；`palette.js`；`shortcuts.js`",复用注册表与handler；候选键盘先于发送；保留IME和焦点边界,入口/既有owner复用；实际专项与未验证资格见17报告
+F59,会话导出HTML、压缩上下文、统计、重命名,会话More高级操作,`app.js:915-924`,实际导出/压缩不在原型执行；已有能力不删除，只调整层级,入口/既有owner复用；实际专项与未验证资格见17报告
+F60,Toast、持续状态条、加载/失败/重试,原操作就地反馈；跨页需要处理的问题用全局状态,"`ui/toast.js:7-9,84-105`；`index.html:121-124`；`ui/notice.js`",replay不重发、30s去重；普通成功静默；跨会话旧通知动作失效,入口/既有owner复用；实际专项与未验证资格见17报告
