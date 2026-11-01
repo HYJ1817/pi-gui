@@ -31,7 +31,6 @@
    *   docs/claude-ui-redesign/UI-2C-acceptance.md 的对照截图里。
    * 窄屏溢出由「一直存在」的 min 姿势兜底：所有消费点写的都是 max-width，
    * .thread/composer 还有 900px 断点直接回 100%。 */
-  --ui-prose-width:768px;
   --conversation-max-width:var(--ui-prose-width);
   --composer-max-width:var(--ui-prose-width);
   --turn-gap:36px;
@@ -358,7 +357,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .welcome{max-width:760px;margin:0 auto;padding:92px 32px 40px;text-align:center;color:var(--t2)}
 .welcome-mark{width:32px;height:32px;margin:0 auto 18px;color:var(--ui-brand);stroke-width:1.5;opacity:.9}
 .welcome h2{font-size:15px;font-weight:500;color:var(--t1);margin-bottom:9px}
-.welcome p{font-size:13px;color:var(--t3);max-width:420px;margin:0 auto;line-height:1.75}
+.welcome p{font-size:13px;color:var(--t3);max-width:420px;margin:0 auto;line-height:1.8}
 .welcome-keys{display:flex;justify-content:center;gap:18px;margin-top:22px;font-size:11.5px;color:var(--t3)}
 .welcome-keys kbd{
   font-family:var(--mono);font-size:10.5px;background:var(--card);border:1px solid var(--line);
@@ -376,7 +375,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .welcome-cta:hover{background:var(--control-primary-hover)}
 .welcome-cta svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 
-.thread{width:100%;max-width:calc(var(--conversation-max-width) + 72px);margin:0 auto;padding:26px 36px calc(var(--composer-reserved-height, 112px) + 22px);display:flex;flex-direction:column;gap:0;min-width:0}
+.thread{width:100%;max-width:calc(var(--conversation-max-width) + 64px);margin:0 auto;padding:32px 32px calc(var(--composer-reserved-height, 112px) + 22px);display:flex;flex-direction:column;gap:0;min-width:0}
 
 .msg{display:flex;flex-direction:column;gap:0;min-width:0}
 /* UI-2C：聊天正文用 UI-1 的 prose 字级（tokens.css --ui-font-prose），
@@ -399,7 +398,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .msg.user .msg-body>div+div{margin-top:8px}
 .msg.user .msg-body p{margin:0}
 .msg.assistant{margin-bottom:18px}
-.msg.assistant .msg-body{color:var(--t1);overflow-wrap:anywhere;min-width:0;font-size:var(--ui-font-prose);line-height:1.75}
+.msg.assistant .msg-body{color:var(--t1);overflow-wrap:anywhere;min-width:0;font-size:var(--ui-font-prose);line-height:1.8}
 .msg.assistant .assistant-text+.assistant-text{margin-top:12px}
 .msg.assistant .assistant-text p{margin:0 0 13px}
 .msg.assistant .assistant-text>*:last-child{margin-bottom:0}
@@ -2427,7 +2426,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 
 /* P14-A: global navigation, project tree, and workspace shell. */
-:root{--global-rail-width:52px}
+:root{--global-rail-width:48px}
 .app{min-width:0}
 .global-rail{width:var(--global-rail-width);flex:0 0 var(--global-rail-width);display:flex;flex-direction:column;align-items:center;background:var(--shell);border-right:1px solid var(--line-soft);padding:6px 0 10px;z-index:3}
 .global-rail-brand{height:40px;display:grid;place-items:center;color:var(--ui-brand);font-size:21px;font-weight:600}
@@ -2437,18 +2436,20 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .rail-icon svg{width:18px;height:18px}
 .rail-icon:hover{background:var(--hover);color:var(--t1)}
 .rail-icon.is-active{background:var(--control-active);color:var(--t1)}
-.rail-icon.is-active:before{content:"";position:absolute;left:-8px;top:10px;width:3px;height:16px;border-radius:3px;background:var(--t1)}
+.rail-icon.is-active:before{content:none;position:absolute;left:-8px;top:10px;width:3px;height:16px;border-radius:3px;background:var(--t1)}
 .rail-badge{position:absolute;right:0;bottom:0;font-size:9px;line-height:13px;min-width:13px;border-radius:8px;background:var(--control-active);color:var(--t1);text-align:center}
 .rail-badge:empty{display:none}
 .global-rail .rp-dot{position:absolute;top:4px;right:4px;box-shadow:none}
-.project-sidebar{width:236px;flex:0 0 236px;min-width:0;overflow:hidden}
-.project-sidebar .rail-head{padding:0 12px 0 16px}
-.project-sidebar .brand{font-size:14px;font-weight:500}
+.project-sidebar{width:var(--ui-sidebar-width);flex:0 0 var(--ui-sidebar-width);min-width:0;overflow:hidden}
+.project-sidebar .rail-head{padding:0 16px 0 24px}
+.project-sidebar .brand{font-size:18px;font-weight:600;gap:12px}
+.brand-mark{font-family:Georgia,serif;font-size:25px;color:var(--t1)}
 .brand-sub{font-size:11px;color:var(--t3);font-weight:400}
-.project-sidebar .rail-nav{padding:9px 9px 8px}
-.project-sidebar .nav-item{width:100%;height:34px;font:inherit;font-size:12.5px;border:0;text-align:left;background:transparent}
+.project-sidebar .rail-nav{padding:28px 16px 16px;gap:4px}
+.project-sidebar .nav-item{display:flex;width:100%;height:36px;font:inherit;font-size:12.5px;border:0;text-align:left;background:transparent}
 .project-sidebar .nav-item:hover{background:var(--hover)}
-.project-sidebar .rail-group{margin:3px 0 0;padding:0 9px;flex:1;min-height:0;overflow-y:auto}
+.project-sidebar .nav-item.is-active{background:var(--ui-selected);color:var(--t1)}
+.project-sidebar .rail-group{margin:3px 0 0;padding:0 16px;flex:1;min-height:0;overflow-y:auto}
 .project-sidebar .rail-spacer{display:none}
 .group-bar{display:flex;align-items:center}
 .project-sidebar .group-head{flex:1;text-align:left;font:inherit;font-size:11px;letter-spacing:0;text-transform:none;border:0;background:transparent}
@@ -2464,7 +2465,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .project:focus-within .pj-row-menu-trigger{opacity:1}
 .project-sidebar .project.active{background:transparent}
 .project-sidebar .project .pj-icon{display:none}
-.project-sidebar .project .pj-name{color:var(--t3);font-size:12px;font-weight:400}
+.project-sidebar .project .pj-name{color:var(--t1);font-size:13px;font-weight:500}
 .pj-header-action{display:flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;height:24px;padding:4px;border:0;border-radius:5px;background:transparent;color:var(--t2);cursor:pointer}
 .pj-header-action svg{width:16px;height:16px}
 .pj-header-action:hover{background:var(--hover);color:var(--t1)}
@@ -2473,7 +2474,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .project-sidebar .project .pj-chev[aria-expanded="false"]{opacity:1}
 .project-sidebar .pj-sessions{border-left:0;margin:0 0 8px;padding-left:0}
 .project-sidebar:not(.search-open) .pj-search{display:none}
-.project-sidebar .pj-sess{min-height:30px;padding:2px 10px;border-radius:7px;font-size:13px;color:var(--t1)}
+.project-sidebar .pj-sess{min-height:36px;padding:4px 10px;border-radius:7px;font-size:13px;color:var(--t1)}
 .project-sidebar .pj-sess-primary{gap:12px}
 .pj-sess-dot{width:6px;height:6px;flex:0 0 6px;border:1px solid var(--t3);border-radius:50%;opacity:.65}
 .project-sidebar .pj-sess-time{display:none}
@@ -2493,12 +2494,27 @@ button.pj-sess-primary{cursor:pointer}
 .quota>summary:hover{background:var(--hover)}
 .quota-detail{padding:0 10px 10px}
 .project-sidebar .rail-foot{border-top:0;height:35px;flex-basis:35px}
-.global-more-menu{position:fixed;z-index:30;left:var(--global-rail-width);bottom:43px;width:270px;max-width:calc(100vw - var(--global-rail-width) - 12px);max-height:calc(100vh - 64px);overflow-y:auto;padding:8px;background:var(--ui-popover-surface);border:1px solid var(--control-border);border-radius:9px;box-shadow:var(--ui-shadow-popover)}
-.global-more-menu button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:32px;padding:0 9px;border:0;border-radius:5px;background:transparent;color:var(--t1);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.sidebar-preferences{display:flex;align-items:center;gap:8px;padding:8px 20px}
+.sidebar-preferences .rail-icon{display:flex;width:auto;gap:10px;flex:1;padding:0 8px;font:inherit;text-align:left}
+.sidebar-preferences .rail-icon .rp-dot{position:static}
+.settings-return{margin:20px 16px 12px;width:calc(100% - 32px)!important;flex-shrink:0;border:0;background:transparent;font:inherit}
+.settings-mode>.rail-nav,.settings-mode>.rail-group,.settings-mode>.quota{display:none}
+.settings-menu .rail-badge{position:static;margin-left:auto}
+.settings-menu button.is-active{background:var(--ui-selected)}
+.settings-surface{max-width:900px;width:100%;align-self:center;padding:32px clamp(20px,5vw,64px)}
+.settings-surface h2{font-size:24px;font-weight:600;margin:0 0 6px}
+.settings-description{color:var(--t3);margin:0 0 28px}
+.settings-section{margin:0 0 28px}
+.settings-section h3{font-size:12px;color:var(--t3);font-weight:500;margin-bottom:8px}
+.settings-row{display:block;width:100%;text-align:left;padding:12px 0;border:0;border-bottom:1px solid var(--line-soft);background:transparent;color:var(--t1);font:inherit;cursor:pointer}
+.settings-row:hover{background:var(--hover)}
+.settings-row:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.global-more-menu{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 20px;overscroll-behavior:contain}
+.global-more-menu button{display:flex;align-items:center;gap:8px;justify-content:flex-start;width:100%;min-height:32px;padding:0 9px;border:0;border-radius:5px;background:transparent;color:var(--t1);font:inherit;font-size:12px;text-align:left;cursor:pointer}
 .global-more-menu button:hover,.global-more-menu button:focus-visible{background:var(--hover)}
 .global-more-menu .rp-dot{position:static}
-.settings-menu section+section{margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft)}
-.settings-menu h3{padding:2px 9px 4px;font-size:11px;font-weight:500;color:var(--t3);margin:0}
+.settings-menu section+section{margin-top:16px}
+.settings-menu h3{padding:4px 9px 8px;font-size:11px;font-weight:500;color:var(--t3);margin:0}
 .settings-menu button:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
 
 /* ---------- 侧栏行动作菜单（P24 收口：项目行与会话行共用一套） ----------
@@ -2551,7 +2567,7 @@ button.pj-sess-primary{cursor:pointer}
 /* .stage 的 overflow 在前面的基础规则里是 overflow:clip（带原因说明），
    这里不再用 overflow:hidden 覆盖 —— hidden 会让它重新变成「可被脚本滚动的
    滚动容器」，那正是顶栏被 scrollIntoView 推出视口的原因。 */
-.stage-head{border-color:var(--line-soft)}
+.stage-head{border-color:transparent}
 
 .stage-head h1{font-weight:500}
 .head-count{font-size:9px;color:var(--t3);position:absolute;right:-3px;bottom:-4px}
@@ -2779,8 +2795,8 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .runtime-conversation{width:100%;max-width:var(--conversation-max-width);display:flex;flex-direction:column;gap:12px;min-height:0}
 .runtime-conversation .rtc-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 /* 会话转录是「整段文本」，按聊天正文字级呈现而不是表单字级 */
-.runtime-conversation .rtc-output{flex:1;min-height:120px;max-height:none;margin:0;padding:14px 2px 16px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:var(--ui-font-prose);line-height:1.75}
-.runtime-conversation textarea{width:100%;min-height:86px;max-height:240px;resize:vertical;font:inherit;background:var(--input);color:var(--t1);border:1px solid var(--line);border-radius:12px;padding:12px 14px;transition:border-color var(--ui-duration-snap) var(--ui-ease-out);flex-shrink:0}
+.runtime-conversation .rtc-output{flex:1;min-height:120px;max-height:none;margin:0;padding:14px 2px 16px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:var(--ui-font-prose);line-height:1.8}
+.runtime-conversation textarea{width:100%;min-height:86px;max-height:240px;resize:vertical;font:inherit;background:var(--input);color:var(--t1);border:1px solid var(--line);border-radius:var(--ui-radius-composer);padding:12px 14px;transition:border-color var(--ui-duration-snap) var(--ui-ease-out);flex-shrink:0}
 .runtime-conversation textarea:focus-visible,.rtc-models select:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
 .runtime-conversation textarea::placeholder{color:var(--t2)}
 .runtime-conversation textarea:disabled{opacity:.65}

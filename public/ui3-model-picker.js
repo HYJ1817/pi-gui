@@ -298,6 +298,12 @@ export function renderModelPicker({
     return;
   }
 
+  const search = document.createElement('input');
+  search.className = 'ui3-model-search'; search.type = 'search';
+  search.placeholder = '搜索模型或供应商…'; search.setAttribute('aria-label', '搜索模型或供应商');
+  pop.appendChild(search);
+  const filterGroups = [];
+
   const pick = (provider, id) => {
     closePop({ restoreFocus: true });
     onClose();
@@ -343,6 +349,8 @@ export function renderModelPicker({
 
     group.append(header, models_);
     pop.appendChild(group);
+    const rows = [];
+    filterGroups.push({ group, header, models: models_, rows, expanded: isExpanded });
 
     for (const model of list) {
       const { providerId, modelId } = modelIdentity(model);
@@ -351,12 +359,14 @@ export function renderModelPicker({
       const on = currentProvider
         ? rowProvider === currentProvider && id === currentId
         : Boolean(currentId) && id === currentId;
-      models_.appendChild(modelItem({
+      const node = modelItem({
         model,
         on,
         capabilitySummary,
         onPick: () => pick(rowProvider, id),
-      }));
+      });
+      models_.appendChild(node);
+      rows.push({ node, key: [rowProvider, id, model.name || ''].join(' ').toLocaleLowerCase() });
     }
   }
 
@@ -366,6 +376,38 @@ export function renderModelPicker({
   total.textContent = '共 ' + models.length + ' 个可用模型';
   foot.appendChild(total);
   pop.appendChild(foot);
+
+  const noMatch = document.createElement('div'); noMatch.className = 'ui3-empty ui3-model-no-match';
+  noMatch.setAttribute('role', 'status'); noMatch.textContent = '没有匹配的模型'; noMatch.hidden = true;
+  pop.insertBefore(noMatch, foot);
+  search.addEventListener('input', () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    let count = 0;
+    for (const entry of filterGroups) {
+      let matching = 0;
+      for (const row of entry.rows) {
+        row.node.hidden = Boolean(query) && !row.key.includes(query);
+        if (!row.node.hidden) matching++;
+      }
+      count += matching;
+      entry.group.hidden = matching === 0;
+      const open = query ? true : expanded ? expanded.has(entry.group.dataset.provider) : entry.expanded;
+      entry.models.hidden = !open;
+      entry.header.setAttribute('aria-expanded', String(open));
+    }
+    noMatch.hidden = count !== 0;
+    total.textContent = query ? `${count} 个匹配模型 / 共 ${models.length} 个` : `共 ${models.length} 个可用模型`;
+    reposition(); search.focus();
+  });
+  search.addEventListener('keydown', event => {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const target = navigables().find(node => node.classList.contains('pop-item')) || navigables()[0];
+      if (target) focusNav(target);
+    }
+    if (event.key === 'Enter') event.preventDefault();
+  });
 
   openPop(anchorFor('model'), { model: true });
   syncRoving();

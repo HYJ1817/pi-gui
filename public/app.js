@@ -1,3 +1,4 @@
+import { initSettingsSurface } from './ui/settings-surface.js';
 /* Pi GUI — 前端入口。
  *
  * 这个文件只做三件事：
@@ -261,6 +262,21 @@ const openProcessPanel = () => conversationScopeActive() ? runtimeSecondary?.ope
 configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation, openBrowser: () => runtimeSecondary?.openBrowser() });
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane, { openWorkbench: openSplitWorkbench }) : null;
+const workPanelToggle = $('btnWorkPanel');
+workPanelToggle.onclick = () => {
+  if (rightPane.isOpen()) { rightPane.close(); workPanelToggle.focus(); return; }
+  rightPane.open('work-tools');
+  const intro = document.createElement('section'); intro.className = 'work-panel-empty';
+  const title = document.createElement('h2'); title.textContent = '工作面板';
+  const text = document.createElement('p'); text.textContent = '选择上方的工具，查看文件变更、项目文档或浏览器。';
+  intro.append(title, text); rightPane.root.querySelector('.rp-body').append(intro);
+};
+$('workPanelClose').onclick = () => { rightPane.close(); workPanelToggle.focus(); };
+document.addEventListener('pi-gui:right-pane', event => {
+  workPanelToggle.setAttribute('aria-expanded', String(event.detail?.open === true));
+  workPanelToggle.classList.toggle('is-active', event.detail?.open === true);
+  $('workPanelClose').hidden = event.detail?.surface !== 'work-tools';
+});
 initGuiBrowserState();
 initVizIntegration();
 
@@ -1062,8 +1078,6 @@ $('navSearch').onclick = openSessionSearch;
  * 各写一份迟早会出现「从某条路回去焦点不对」。 */
 function goChat() {
   if (!$('modal').hidden) closeModal();
-  $('globalMoreMenu').hidden = true;
-  $('navGlobalMore').setAttribute('aria-expanded', 'false');
   showChat();
   el.input.focus();
 }
@@ -1086,13 +1100,9 @@ $('navAppearance').onclick = () => { $('navGlobalMore').focus(); openAppearance(
 $('navRestartPi').onclick = restartPi;
 /* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
 $('navPalette').onclick = () => {
-  $('globalMoreMenu').hidden = true;
-  $('navGlobalMore').setAttribute('aria-expanded', 'false');
   openPalette();
 };
 $('navShortcutHelp').onclick = () => {
-  $('globalMoreMenu').hidden = true;
-  $('navGlobalMore').setAttribute('aria-expanded', 'false');
   openShortcutHelp();
 };
 
@@ -1108,36 +1118,21 @@ $('navPlanner').onclick = () => openPlanner();
 
 const globalMenu = $('globalMoreMenu');
 const globalMore = $('navGlobalMore');
-globalMore.onclick = () => {
-  globalMenu.hidden = !globalMenu.hidden;
-  globalMore.setAttribute('aria-expanded', String(!globalMenu.hidden));
-  if (!globalMenu.hidden) globalMenu.querySelector('button')?.focus();
-};
-globalMenu.addEventListener('keydown', (event) => {
-  const buttons = [...globalMenu.querySelectorAll('button:not([disabled])')];
-  const index = buttons.indexOf(document.activeElement);
-  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    event.preventDefault();
-    buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
-  }
-  if (event.key === 'Tab' && (event.shiftKey && index === 0 || !event.shiftKey && index === buttons.length - 1)) {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-  }
+const settingsSurface = initSettingsSurface({
+  captureRuntimeReturn: () => {
+    const id = runtimeConversation.conversationId;
+    const identity = item => item && JSON.stringify([item.nativeSessionId, item.workspace?.projectId, item.workspace?.workspaceId, item.workspace?.workspaceEpoch]);
+    const captured = identity(runtimeStore.get(id)?.item);
+    return async ({ isCurrent }) => {
+      if (!captured || identity(runtimeStore.get(id)?.item) !== captured) return 'missing';
+      await focusRuntimeById(id, { isCurrent });
+      if (workspaceView() === 'runtime' && gitConversationScope() === id) return 'restored';
+      return isCurrent() ? 'failed' : 'cancelled';
+    };
+  },
 });
-for (const entry of globalMenu.querySelectorAll('button')) {
-  entry.addEventListener('click', () => {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-  });
-}
-document.addEventListener('click', (event) => {
-  if (!globalMenu.hidden && !globalMenu.contains(event.target) && !globalMore.contains(event.target)) {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-  }
-});
-document.addEventListener('keydown', (event) => {
+$('btnTheme').onclick = openAppearance;
+document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !projectMenu.hidden) {
     projectMenu.hidden = true;
     projectMenuButton.setAttribute('aria-expanded', 'false');
@@ -1147,11 +1142,6 @@ document.addEventListener('keydown', (event) => {
     $('projectSidebar').classList.remove('search-open');
     $('navSearch').setAttribute('aria-expanded', 'false');
     $('navSearch').focus();
-  }
-  if (event.key === 'Escape' && !globalMenu.hidden) {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-    globalMore.focus();
   }
 });
 
@@ -1171,6 +1161,7 @@ const expandSidebar = $('btnSidebarExpand');
 const collapseSidebar = $('btnSidebarCollapse');
 function setSidebarCollapsed(collapsed) {
   sidebar.hidden = collapsed;
+  $('globalRail').hidden = !collapsed;
   expandSidebar.hidden = !collapsed;
   collapseSidebar.setAttribute('aria-expanded', String(!collapsed));
   expandSidebar.setAttribute('aria-expanded', String(!collapsed));
@@ -1264,7 +1255,7 @@ installShortcuts({});
 
 defineCommands([
   { id:'view.processes',title:'开发进程',group:'视图',keywords:'process dev server 服务 进程 日志',run:openProcessPanel },
-  { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => { if (globalMenu.hidden) globalMore.click(); } },
+  { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => settingsSurface.open() },
   { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: openAppUpdates },
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', run: goChat },
   { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', run: () => openPlanner() },

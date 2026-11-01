@@ -74,7 +74,10 @@
   color:var(--ui-text-primary);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;
 }
-.secondary-surface .chg-head{flex-wrap:nowrap;overflow:hidden}
+.secondary-surface .chg-head{position:relative;height:auto;min-height:var(--rp-head-h);flex-wrap:wrap;overflow:visible;padding-block:8px}
+.secondary-surface .chg-head h3{flex:1 0 100%;max-width:100%;padding-right:32px}
+.secondary-surface .chg-head>.secondary-close{position:absolute;right:var(--rp-pad);top:8px}
+.secondary-surface .chg-head>.grow{display:none}
 .secondary-surface .chg-head > .btn,
 .secondary-surface .chg-head > .icon-btn,
 .secondary-surface .chg-head > .secondary-close{flex:0 0 auto;white-space:nowrap}
@@ -493,3 +496,18 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
   .workbench-modebar{padding-inline:8px}
   .workbench-tab{padding-inline:7px}
 }
+
+/* Persistent tool navigation is outside rp-body, so switching surfaces cannot
+   orphan the entrance or duplicate business mounts. */
+.work-panel-nav{display:flex;align-items:center;gap:4px;padding:8px 10px;flex:0 0 auto;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.work-panel-nav .icon-btn{width:auto;min-width:30px;gap:6px;padding:0 8px;height:30px;font:inherit;font-size:12px;position:relative}
+.work-panel-nav .icon-btn.is-active{background:var(--ui-selected);color:var(--t1)}
+.work-panel-nav .work-tool-label{white-space:nowrap}
+.work-panel-nav :is(#btnTree,#btnSpecs,#btnCollab) .work-tool-label{display:none}
+.work-panel-nav .head-count{position:static;font-size:11px}
+.work-panel-nav #workPanelClose{margin-left:auto;font-size:20px}
+.work-panel-nav .icon-btn svg{width:16px;height:16px}
+.work-panel-empty{padding:32px 24px;color:var(--t2)}
+.work-panel-empty h2{font-size:16px;color:var(--t1);font-weight:500;margin-bottom:8px}
+.work-panel-empty p{font-size:13px;line-height:1.7}
+@media(max-width:1280px){.work-panel-nav .work-tool-label{display:none}.work-panel-nav .icon-btn{width:32px;padding:0}}

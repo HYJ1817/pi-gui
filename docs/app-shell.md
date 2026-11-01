@@ -1,5 +1,22 @@
 # P14-A App Shell
 
+## Refined 当前实施（2026-11-01，待人工验收）
+
+`codex/ui-refined-implementation` 工作区已从 main `eac79ca` 接入 Refined。
+展开时只有一列 264px 项目/会话侧栏，窄窗 224px；原 Global Rail 只在侧栏折叠时承载展开按钮。
+任务与审阅、Skills 与扩展移入设置的工作区分组；设置目录替换会话列表，Chat DOM 保持挂载。
+设置返回 Runtime 必须通过原 `focusRuntimeById` captured-owner 路径恢复后端焦点、模型活跃态、右栏 owner 和 Git scope；失败保留设置并允许重试，迟到恢复不得覆盖新导航。
+模型、认证、更新、诊断等叶子保持原 Modal 与确认层，未重定向其生命周期或写入接口。
+
+会话标题右侧保留工作面板总开关与 More。Changes、Browser、Specs、协同与分支树在右面板导航内，仍调用原 handler。
+面板默认 392px、最小 320px、最大 560px 且不超过窗口一半；dock/overlay 继续按真实剩余聊天宽度计算。
+模型浮层增加本地过滤，只使用 Pi 已返回的名称、ID 与 Provider，不发送查询或改变模型事实源。
+多项工具活动默认折叠，汇总保留真实运行/失败/未知计数，用户手动展开状态不会被后续事件重置。
+
+实际截图、定向测试、完整测试状态和打包证据见
+[生产实施验收记录](../designs/ui-ux-2026-10-31/reports/17-production-acceptance.md)。
+以下为旧阶段记录，不覆盖上述新入口。
+
 当前入口经过 P30 收敛：Global Rail 为对话、任务、Skills 与扩展、设置；Changes 与 Browser 是顶栏按需右栏，不再替换中央对话。
 设置分组提供模型与账户、Agent 能力、扩展与 MCP、应用与更新、诊断、键盘与命令。
 当前项目的新对话/搜索复用侧栏入口，导出/统计收进会话 More。

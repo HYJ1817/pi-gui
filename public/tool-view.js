@@ -317,6 +317,11 @@ function syncGroup(group) {
   const g = group?._tlGroup;
   if (!g) return;
   const multiple = g.count >= 2;
+  if (multiple && !g.userToggled && !g.list.contains(document.activeElement)) {
+    g.list.hidden = true;
+    g.head.setAttribute('aria-expanded', 'false');
+    group.classList.add('is-collapsed');
+  }
   g.head.hidden = !multiple;
   g.state.hidden = !multiple;
   setText(g.head, multiple ? `操作 ${g.count} 项` : '');
@@ -361,6 +366,7 @@ export function createGroup() {
 
   g._tlGroup = { head, list, state, count: 0 };
   head.addEventListener('click', () => {
+    g._tlGroup.userToggled = true;
     const open = list.hidden;
     if (!open && list.contains(document.activeElement)) head.focus();
     list.hidden = !open;

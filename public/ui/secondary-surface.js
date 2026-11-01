@@ -127,7 +127,7 @@ export function openSecondarySurface(view, mount, {label='文件变更',headerSe
   close.id = 'rightPaneClose';
   close.type = 'button'; close.className = 'icon-btn secondary-close';
   close.textContent = '×'; close.setAttribute('aria-label', `关闭${label}`);
-  close.onclick = () => { secondaryPane.close(); $(triggerId)?.focus(); };
+  close.onclick = () => { secondaryPane.close(); ($('btnWorkPanel') || $(triggerId))?.focus(); };
   const disposers = new Set();
   let disposed = false;
   const instance = {

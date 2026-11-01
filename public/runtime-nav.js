@@ -138,7 +138,7 @@ function stateClass(item) {
   return item.lifecycle;
 }
 
-async function focusConversation(conversationId) {
+async function focusConversation(conversationId, { isCurrent = () => true } = {}) {
   const intent = ++focusIntent;
   const project = projectId;
   const record = store.get(conversationId);
@@ -146,7 +146,7 @@ async function focusConversation(conversationId) {
     /* dormant：没有 live runtime，**不能**发 focus（后端也没有 owner 可校验），
      * 更不能顺手 spawn 一个。只把意图交给中央视图（P32.4-B 的「打开历史」），
      * 需要继续执行时由用户显式恢复。 */
-    focusHandler?.(conversationId);
+    if (isCurrent()) focusHandler?.(conversationId);
     return;
   }
   /* captured owner：动作触发时取一次，迟到响应不改别的会话。 */
@@ -155,11 +155,11 @@ async function focusConversation(conversationId) {
     const result = await runtimeSessionAction({ action: 'focus', owner });
     if (result?.ok === false) return;
   } catch { return; }
-  if (intent !== focusIntent || project !== projectId || !store.get(conversationId)?.owner
+  if (!isCurrent() || intent !== focusIntent || project !== projectId || !store.get(conversationId)?.owner
     || Object.keys(owner).some(key => store.get(conversationId).owner[key] !== owner[key])) return;
   focusHandler?.(conversationId);
 }
-export const focusRuntimeById = conversationId => focusConversation(conversationId);
+export const focusRuntimeById = (conversationId, options) => focusConversation(conversationId, options);
 
 function row(member) {
   const item = store.get(member.conversationId)?.item || null;
