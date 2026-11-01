@@ -2509,6 +2509,12 @@ button.pj-sess-primary{cursor:pointer}
 .settings-row{display:block;width:100%;text-align:left;padding:12px 0;border:0;border-bottom:1px solid var(--line-soft);background:transparent;color:var(--t1);font:inherit;cursor:pointer}
 .settings-row:hover{background:var(--hover)}
 .settings-row:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.settings-detail{align-items:center;padding:32px clamp(20px,5vw,64px);overflow:hidden}
+.settings-detail>.settings-detail-card.modal-card{flex:1 1 auto;min-height:0;width:100%;max-width:900px;max-height:none;margin:0;padding:0;background:transparent;border:0;border-radius:0;box-shadow:none;overflow:auto}
+.settings-detail-card>h3:first-child{font-size:24px;font-weight:600;line-height:1.4;margin:0 0 12px}
+.settings-detail-card>.modal-actions{margin-top:24px;flex-wrap:wrap}
+.settings-detail-card:focus{outline:none}
+.settings-detail-card.ui5-logs-modal{overflow:hidden}
 .global-more-menu{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 20px;overscroll-behavior:contain}
 .global-more-menu button{display:flex;align-items:center;gap:8px;justify-content:flex-start;width:100%;min-height:32px;padding:0 9px;border:0;border-radius:5px;background:transparent;color:var(--t1);font:inherit;font-size:12px;text-align:left;cursor:pointer}
 .global-more-menu button:hover,.global-more-menu button:focus-visible{background:var(--hover)}

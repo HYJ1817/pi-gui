@@ -194,8 +194,9 @@ export function renderProviders(box) {
   }
 }
 
-export function openProvidersPanel() {
-  openModal((card, close) => {
+export function openProvidersPanel({ present = openModal } = {}) {
+  let ownedBox = null;
+  present((card, close) => {
     card.classList.add('wide');
 
     const h = document.createElement('h3');
@@ -215,6 +216,7 @@ export function openProvidersPanel() {
     card.appendChild(box);
 
     panels.providers = box;
+    ownedBox = box;
     box.innerHTML = '<div class="hint-empty">加载中…</div>';
 
     const actions = document.createElement('div');
@@ -223,7 +225,7 @@ export function openProvidersPanel() {
     const add = document.createElement('button');
     add.className = 'btn primary';
     add.textContent = '添加供应商';
-    add.onclick = openAddProvider;
+    add.onclick = () => openAddProvider({ present });
 
     const reload = document.createElement('button');
     reload.className = 'btn';
@@ -240,14 +242,14 @@ export function openProvidersPanel() {
 
     actions.append(add, reload, done);
     card.appendChild(actions);
-  });
+  }, () => { if (panels.providers === ownedBox) panels.providers = null; });
 
   loadProviders();
 }
 
-export function openProviderAuthPanel() {
+export function openProviderAuthPanel({ present = openModal } = {}) {
   let dispose = () => {};
-  openModal((card, close) => {
+  present((card, close) => {
     card.classList.add('wide');
     const heading = document.createElement('h3');
     heading.textContent = '供应商与认证';
@@ -272,8 +274,9 @@ export async function removeProvider(name) {
   await loadProviders();
 }
 
-export function openAddProvider() {
-  openModal((card, close) => {
+export function openAddProvider({ present = openModal } = {}) {
+  let alive = true;
+  present((card, close) => {
     card.classList.add('wide');
 
     const mk = (tag, cls, attrs = {}) => {
@@ -525,17 +528,17 @@ export function openAddProvider() {
         .filter(Boolean);
 
       const j = await saveProvider(name, { baseUrl, api: sApi.value, ...(keyRef ? { apiKey: keyRef } : {}), models });
+      if (!alive || !card.isConnected) return;
       if (!j.ok) return toast(j.error || '保存失败', 'error');
-      close();
       if (j.warning) toast(j.warning, 'warn');
       toast(`已保存供应商 ${name}。重载 pi 后即可选用。`, 'info');
       await loadProviders();
-      openProvidersPanel();
+      if (alive && card.isConnected) openProvidersPanel({ present });
     };
 
     actions.append(cancel, save);
     card.appendChild(actions);
-  });
+  }, () => { alive = false; });
 }
 
 export async function reloadPi() {

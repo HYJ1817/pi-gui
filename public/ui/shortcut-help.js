@@ -30,8 +30,8 @@ function keyRows(pairs) {
   return rows;
 }
 
-export function openShortcutHelp() {
-  openModal((card, close) => {
+export function openShortcutHelp({ present = openModal } = {}) {
+  present((card, close) => {
     card.classList.add('wide');
     card.appendChild(node('h3', '', '键盘快捷键'));
 

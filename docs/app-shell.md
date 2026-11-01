@@ -1,12 +1,12 @@
 # P14-A App Shell
 
-## Refined 当前实施（2026-11-01，待人工验收）
+## Refined 当前实施（2026-11-01，已完成本地视觉与专项验证，待人工验收）
 
 `codex/ui-refined-implementation` 工作区已从 main `eac79ca` 接入 Refined。
 展开时只有一列 264px 项目/会话侧栏，窄窗 224px；原 Global Rail 只在侧栏折叠时承载展开按钮。
 任务与审阅、Skills 与扩展移入设置的工作区分组；设置目录替换会话列表，Chat DOM 保持挂载。
 设置返回 Runtime 必须通过原 `focusRuntimeById` captured-owner 路径恢复后端焦点、模型活跃态、右栏 owner 和 Git scope；失败保留设置并允许重试，迟到恢复不得覆盖新导航。
-模型、认证、更新、诊断等叶子保持原 Modal 与确认层，未重定向其生命周期或写入接口。
+模型供应商、认证、更新、诊断、日志、外观和快捷键叶子在中央设置页复用原表单 build/close/dispose；危险确认与需要模态遮挡的操作继续使用确认层。离开详情会按实例 dispose，迟到响应不能重写新页面。
 
 会话标题右侧保留工作面板总开关与 More。Changes、Browser、Specs、协同与分支树在右面板导航内，仍调用原 handler。
 面板默认 392px、最小 320px、最大 560px 且不超过窗口一半；dock/overlay 继续按真实剩余聊天宽度计算。

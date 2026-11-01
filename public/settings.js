@@ -4,9 +4,9 @@ import { renderUpdateSection } from './update.js';
 import { renderPiUpdateSection } from './pi-update.js';
 import { themePreference, setThemePreference, onThemeChange } from './theme.js';
 
-export function openAppearance() {
+export function openAppearance({ present = openModal } = {}) {
   let unsubscribe = null;
-  openModal((card, close) => {
+  present((card, close) => {
     const heading = document.createElement('h3'); heading.textContent = '外观与主题';
     const body = document.createElement('fieldset'); body.className = 'appearance-body';
     const legend = document.createElement('legend'); legend.textContent = '主题'; body.append(legend);
@@ -28,8 +28,8 @@ export function openAppearance() {
   }, () => unsubscribe?.());
 }
 
-export function openAppUpdates() {
-  openModal((card, close) => {
+export function openAppUpdates({ present = openModal } = {}) {
+  present((card, close) => {
     card.classList.add('wide', 'app-updates-card');
     const heading = document.createElement('h3');
     heading.textContent = '应用与更新';

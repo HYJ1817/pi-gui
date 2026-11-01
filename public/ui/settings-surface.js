@@ -1,5 +1,5 @@
-/* Settings owns navigation only. Forms, approvals and persistence keep their
- * existing modal/module lifetimes; Chat is hidden by workspace-surface. */
+/* Settings owns page lifetimes. Form builders retain persistence/auth ownership;
+ * each detail has its own card and disposal, separate from the global modal. */
 import { $ } from '../state.js';
 import { openWorkSurface, showChat, workspaceView } from './workspace-surface.js';
 
@@ -12,6 +12,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
   let previousView = workspaceView();
   let resumeRuntime = null;
   let returnRequest = 0;
+  let detailButton = null;
   const returnStatus = document.createElement('p');
   returnStatus.className = 'settings-return-status'; returnStatus.setAttribute('role', 'status');
   returnStatus.hidden = true; back.after(returnStatus);
@@ -23,7 +24,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     back.setAttribute('aria-busy', 'true');
     const result = await resumeRuntime({ isCurrent });
     if (result === 'restored' && workspaceView() === 'runtime') {
-      $('runtimeView').querySelector('.runtime-conversation > textarea:not([disabled])')?.focus();
+      $('runtimeView').querySelector('textarea[aria-label="给当前会话的任务"]:not([disabled])')?.focus();
     } else if (isCurrent()) {
       if (result === 'missing') showChat({ focusComposer: true });
       else { returnStatus.hidden = false; returnStatus.textContent = '暂时无法返回会话，请重试。'; }
@@ -44,6 +45,9 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     back.hidden = !open;
     trigger.setAttribute('aria-expanded', String(open));
     trigger.classList.toggle('is-active', open);
+    if (detailButton) {
+      detailButton.removeAttribute('aria-current'); detailButton.classList.remove('is-active'); detailButton = null;
+    }
   }
 
   function open() {
@@ -72,6 +76,44 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     $('navProviders').focus();
   }
 
+  function presentDetail(destination, build, onClose, options = {}) {
+    if (sidebar.hidden) $('btnSidebarExpand').click();
+    const target = $(destination);
+    const instance = openWorkSurface('settings', (host, life) => {
+      host.classList.add('settings-detail');
+      const card = document.createElement('section');
+      card.className = 'modal-card settings-detail-card' + (options.className ? ' ' + options.className : '');
+      card.setAttribute('role', 'region'); card.tabIndex = -1;
+      card.setAttribute('aria-label', target?.textContent.trim() || '设置详情');
+      host.append(card);
+      let disposed = false;
+      const escape = event => {
+        if (event.key !== 'Escape' || event.defaultPrevented || !life.isCurrent()) return;
+        if (!$('modal').hidden || !$('confirmLayer').hidden || !$('paletteLayer').hidden) return;
+        event.preventDefault(); event.stopPropagation(); close();
+      };
+      const close = () => {
+        if (!life.isCurrent()) return;
+        open(); target?.focus();
+      };
+      life.onDispose(() => {
+        if (disposed) return;
+        disposed = true; document.removeEventListener('keydown', escape);
+        try { if (typeof onClose === 'function') onClose(); } catch { /* Same cleanup isolation as modal close. */ }
+        card.remove();
+      });
+      build(card, close);
+      if (!life.isCurrent()) return;
+      document.addEventListener('keydown', escape);
+      (options.initialFocus || card).focus();
+    });
+    if (instance.isCurrent()) {
+      detailButton = target;
+      target?.setAttribute('aria-current', 'page'); target?.classList.add('is-active');
+    }
+    return instance;
+  }
+
   trigger.onclick = open;
   back.onclick = returnToWorkspace;
   document.addEventListener('pi-gui:workspace-view', sync);
@@ -88,5 +130,5 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     buttons[next]?.focus();
   });
   sync();
-  return { open };
+  return { open, presentDetail };
 }

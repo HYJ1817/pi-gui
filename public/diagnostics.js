@@ -538,8 +538,8 @@ async function loadInto(card, close) {
   render(card, close, payload);
 }
 
-export function openDiagnostics() {
-  openModal((card, close) => {
+export function openDiagnostics({ present = openModal } = {}) {
+  present((card, close) => {
     loadInto(card, close);
   });
 }
