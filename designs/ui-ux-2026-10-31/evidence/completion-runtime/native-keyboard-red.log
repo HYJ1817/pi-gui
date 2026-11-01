@@ -1,0 +1,19 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS A scoped child start
+PASS B explicit third total child
+PASS Refined Runtime uses normal sandbox and isolated renderer
+PASS visible Runtime chips show A native readback
+PASS native select implementations are hidden from layout and focus
+PASS visible model search filters native owner catalogue
+PASS model chip keeps confirmed A value while native setter is pending
+PASS A pending model does not disable or replace B
+PASS return to A shows confirmed native model readback
+PASS thinking chip keeps native low value until confirmation
+Error: Electron fixture timeout
+    at until (C:\pi-GUI\tests\runtime-electron.cjs:25:157)
+    at async module.exports (C:\pi-GUI\tests\fixtures\runtime-refined-scenarios.cjs:54:3)
+    at async main (C:\pi-GUI\tests\runtime-electron.cjs:145:7)
+renderer console errors: []
+state: {"open":false,"listBtns":0,"view":"runtime","navRows":2,"appBooted":true,"processUi":{}}
+attached scoped native views: 0

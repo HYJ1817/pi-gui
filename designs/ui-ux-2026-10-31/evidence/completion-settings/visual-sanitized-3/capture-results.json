@@ -1,0 +1,2448 @@
+{
+  "entry": "production electron/main.cjs + public renderer",
+  "backend": "existing tests/visual-harness.cjs, offline TEMP fixtures",
+  "shots": [
+    "dark-1440-empty.png",
+    "dark-1280-navProviders.png",
+    "dark-1280-provider-form.png",
+    "dark-1280-navProviderAuth.png",
+    "dark-1280-navAppUpdates.png",
+    "dark-1280-navDiagnostics.png",
+    "dark-1280-navLogs.png",
+    "dark-1280-navAppearance.png",
+    "dark-1280-navShortcutHelp.png",
+    "dark-1440-navProviders.png",
+    "dark-1440-provider-form.png",
+    "dark-1440-navProviderAuth.png",
+    "dark-1440-navAppUpdates.png",
+    "dark-1440-navDiagnostics.png",
+    "dark-1440-navLogs.png",
+    "dark-1440-navAppearance.png",
+    "dark-1440-navShortcutHelp.png",
+    "dark-1920-navProviders.png",
+    "dark-1920-provider-form.png",
+    "dark-1920-navProviderAuth.png",
+    "dark-1920-navAppUpdates.png",
+    "dark-1920-navDiagnostics.png",
+    "dark-1920-navLogs.png",
+    "dark-1920-navAppearance.png",
+    "dark-1920-navShortcutHelp.png",
+    "light-1280-navProviders.png",
+    "light-1280-provider-form.png",
+    "light-1280-navProviderAuth.png",
+    "light-1280-navAppUpdates.png",
+    "light-1280-navDiagnostics.png",
+    "light-1280-navLogs.png",
+    "light-1280-navAppearance.png",
+    "light-1280-navShortcutHelp.png",
+    "light-1440-navProviders.png",
+    "light-1440-provider-form.png",
+    "light-1440-navProviderAuth.png",
+    "light-1440-navAppUpdates.png",
+    "light-1440-navDiagnostics.png",
+    "light-1440-navLogs.png",
+    "light-1440-navAppearance.png",
+    "light-1440-navShortcutHelp.png",
+    "light-1920-navProviders.png",
+    "light-1920-provider-form.png",
+    "light-1920-navProviderAuth.png",
+    "light-1920-navAppUpdates.png",
+    "light-1920-navDiagnostics.png",
+    "light-1920-navLogs.png",
+    "light-1920-navAppearance.png",
+    "light-1920-navShortcutHelp.png",
+    "light-1440-provider-error.png",
+    "light-1440-settings-zoom-1.25.png",
+    "light-1440-settings-zoom-1.5.png",
+    "light-1440-settings-zoom-2.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-1440-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1280-navProviders",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\Users\\21022\\.pi\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\ndeepseek\n2 个模型 · openai-completions\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "dark-1280-provider-form",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n添加模型供应商\n配置写入 pi 的 C:\\fixture\\agent\\models.json。已有供应商不会被覆盖。\nOpenRouter\nOllama 本地\nDeepSeek\nMoonshot 中国\n硅基流动\n智谱 GLM\n阿里百炼\nAnthropic\nGoogle Gemini\n供应商 ID\nAPI 类型\nopenai-completions（兼容性最好）\nopenai-responses\nanthropic-messages\ngoogle-generative-ai\nBase URL\n认证环境变量引用（可选）\n仅接受 $NAME 或 ${NAME}。API Key 请先运行官方交互式 pi，再使用 /login <provider> 配置。环境变量未设置时 pi 可能忽略该供应商。\n模型列表\n拉取\n每行一个模型：id 或 id|显示名，后面可跟 contextWindow=… / maxTokens=… / reasoning=true / input=text,image。点「拉取」可直接从供应商读取。\n取消\n保存"
+    },
+    {
+      "name": "dark-1280-navProviderAuth",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n供应商与认证\n状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。\n刷新认证状态\n其他 Pi 支持的供应商（2）\n关闭"
+    },
+    {
+      "name": "dark-1280-navAppUpdates",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n应用与更新\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n在应用内检查 GitHub 上有没有新版本。只读取公开的发布信息，不上传任何使用数据。\nPi 运行时更新\n关闭"
+    },
+    {
+      "name": "dark-1280-navDiagnostics",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n诊断\n这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n在应用内检查 GitHub 上有没有新版本。只读取公开的发布信息，不上传任何使用数据。\nPi\nPi 0.99.2\n检查 Pi 更新\n更新到 1.0.0\n新版本 1.0.0 可用\n该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。\n系统\nWindows_NT 10.0.26100 x64\nNode\nv24.14.0\n项目\npi-GUI\npi\n0.99.2\nBridge\n运行中\nMCP\n检测到相关模块\n版本真值\npi\n0.99.2\n版本来源\npackage.json\n版本核对\n已核对\n核对基线\n0.99.2 · 2026-10-01 · historical\nPi 兼容性\nPi 版本\n0.99.2\n兼容状态\n正常\nRPC\n支持\n会话状态\n支持\n历史消息\n支持\n新会话\n支持\n会话切换\n支持\n会话重命名\n支持\nTool Events\n支持\n扩展 UI\n支持\n会话文件\n支持\n能力 probe\n共 14 条 · 支持 8 · 不支持 0 · 未知 6（求值于 2026-10-02T00:00:00.000Z）\nRPC 命令集\n支持 · dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\nRPC 无工具清单命令\n支持 · 33 条里没有 *tool*\n扩展 UI 对话框子协议\n支持 · docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\ntool_call 可阻断\n支持 · block?: boolean;；tool_call can mutate input or block execution.\n核心自带审批闸门\n未知 · docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\nbuiltin:mcp\n支持 · builtInExtensions: llama.cpp / codemode / tool-search / mcp\nMCP 运行时状态闭集\n支持 · closed / connected / connecting / disconnected / failed / needs-auth\nRPC 通道真的通了\n支持 · 来自 pi-compat 的能力三值\nNative MCP 生效\n支持 · 原生状态：active\n还没法下结论的核心 probe：rpc（未知 ≠ 不支持）\n前端观察到的 schema 漂移（只有来源 / 字段名 / 类型，没有值）：\ntool.name · unknown-tool · string\n兼容矩阵（我们核对过什么）\n当前验证基线\n1.0.0\nPi 0.87.0\n历史基线 · 核对于 2026-09-30\nPi 0.99.1\n历史基线 · 核对于 2026-10-01\nPi 0.99.2\n历史基线 · 核对于 2026-10-01\nPi 1.0.0\n当前基线 · 核对于 2026-10-02\n已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：\npi-web-access\n0.33.0 · 核对于 2026-09-30\npi-subagents\n0.73.1 · 核对于 2026-09-30\npi-memory\n0.4.2 · 核对于 2026-09-30\npi-browser-harness\n0.11.0 · 核对于 2026-10-01\n已知上游差异（升级时逐条复核）：\napproval-doc-wording · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 Approval 能力报告\ndialog-doc-moved · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 / P23 契约 probe\niserror-propagation · 0.87.0 → 0.99.1 · 影响 P18 / P20 成功证据\nNative MCP\n原生状态\n生效中\nserver 条目\n2\n项目信任\n已信任\nbuiltin:mcp 在包里、未被禁用、未被接管\n关键 Extension 版本\npi-web-access@1.4.0\n用户 · 已加载\npi-memory@0.4.2\n用户 · 加载未知\n只有 package.json 里读到版本号的才列出来；版本是否与兼容矩阵一致，见上面的矩阵一节。\n健康检查\ndata-readable\n正常\ndata-writable\n正常\nproject-readable\n正常\nproject-writable\n正常\npi-running\n正常\nAgent\npi\n可用 · 0.99.2\n脱敏后的诊断 JSON\n{\n  \"schemaVersion\": 1,\n  \"generatedAt\": \"2026-10-02T00:00:00.000Z\",\n  \"app\": {\n    \"id\": \"pi-gui\",\n    \"version\": \"0.15.0\"\n  },\n  \"system\": {\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"node\": \"v24.14.0\",\n    \"os\": \"Windows_NT\",\n    \"release\": \"10.0.26100\"\n  },\n  \"project\": {\n    \"selected\": true,\n    \"name\": \"pi-GUI\",\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"data\": {\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"bridge\": {\n    \"piRunning\": true,\n    \"bridgeRun\": 12,\n    \"hasProject\": true,\n    \"args\": [\n      \"--mode\",\n      \"rpc\"\n    ]\n  },\n  \"pi\": {\n    \"configuredBin\": \"pi\",\n    \"available\": true,\n    \"version\": \"0.99.2\",\n    \"versionSource\": \"package.json\",\n    \"verification\": {\n      \"status\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"launch\": {\n      \"source\": \"path\",\n      \"binName\": \"pi.cmd\",\n      \"entryKnown\": true,\n      \"packageDirKnown\": true\n    }\n  },\n  \"agents\": [\n    {\n      \"id\": \"pi\",\n      \"available\": true,\n      \"version\": \"0.99.2\",\n      \"reason\": null,\n      \"capabilities\": null\n    }\n  ],\n  \"mcp\": {\n    \"supported\": true,\n    \"piVersion\": \"0.99.2\",\n    \"error\": null,\n    \"native\": {\n      \"fresh\": true,\n      \"state\": \"active\",\n      \"reason\": \"builtin:mcp 在包里、未被禁用、未被接管\",\n      \"replaced\": false,\n      \"disabled\": null,\n      \"builtinPresent\": true,\n      \"serverCount\": 2,\n      \"trust\": true\n    }\n  },\n  \"probes\": {\n    \"at\": \"2026-10-02T00:00:00.000Z\",\n    \"packageKnown\": true,\n    \"summary\": {\n      \"total\": 14,\n      \"supported\": 8,\n      \"unsupported\": 0,\n      \"unknown\": 6,\n      \"unverified\": [\n        \"rpc\"\n      ]\n    },\n    \"items\": [\n      {\n        \"id\": \"rpc-commands\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 命令集\",\n        \"state\": true,\n        \"evidence\": \"dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\"\n      },\n      {\n        \"id\": \"rpc-no-tool-list\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 无工具清单命令\",\n        \"state\": true,\n        \"evidence\": \"33 条里没有 *tool*\"\n      },\n      {\n        \"id\": \"extension-ui\",\n        \"kind\": \"source\",\n        \"label\": \"扩展 UI 对话框子协议\",\n        \"state\": true,\n        \"evidence\": \"docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\"\n      },\n      {\n        \"id\": \"approval-hook\",\n        \"kind\": \"source\",\n        \"label\": \"tool_call 可阻断\",\n        \"state\": true,\n        \"evidence\": \"block?: boolean;；tool_call can mutate input or block execution.\"\n      },\n      {\n        \"id\": \"core-approval\",\n        \"kind\": \"source\",\n        \"label\": \"核心自带审批闸门\",\n        \"state\": null,\n        \"evidence\": \"docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\"\n      },\n      {\n        \"id\": \"builtin-mcp\",\n        \"kind\": \"source\",\n        \"label\": \"builtin:mcp\",\n        \"state\": true,\n        \"evidence\": \"builtInExtensions: llama.cpp / codemode / tool-search / mcp\"\n      },\n      {\n        \"id\": \"mcp-runtime-states\",\n        \"kind\": \"source\",\n        \"label\": \"MCP 运行时状态闭集\",\n        \"state\": true,\n        \"evidence\": \"closed / connected / connecting / disconnected / failed / needs-auth\"\n      },\n      {\n        \"id\": \"rpc\",\n        \"kind\": \"runtime\",\n        \"label\": \"RPC 通道真的通了\",\n        \"state\": true,\n        \"evidence\": \"来自 pi-compat 的能力三值\"\n      },\n      {\n        \"id\": \"mcp-native\",\n        \"kind\": \"runtime\",\n        \"label\": \"Native MCP 生效\",\n        \"state\": true,\n        \"evidence\": \"原生状态：active\"\n      }\n    ]\n  },\n  \"matrix\": {\n    \"piBaselines\": [\n      {\n        \"version\": \"0.87.0\",\n        \"verifiedAt\": \"2026-09-30\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.1\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"1.0.0\",\n        \"verifiedAt\": \"2026-10-02\",\n        \"scope\": \"current\"\n      }\n    ],\n    \"currentBaseline\": \"1.0.0\",\n    \"extensionBaselines\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"0.33.0\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-subagents\",\n        \"version\": \"0.73.1\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-browser-harness\",\n        \"version\": \"0.11.0\",\n        \"verifiedAt\": \"2026-10-01\"\n      }\n    ],\n    \"nativeMcp\": {\n      \"builtinId\": \"mcp\",\n      \"replaceable\": true,\n      \"serverStates\": [],\n      \"exposures\": [],\n      \"cliSubcommands\": []\n    },\n    \"knownDifferences\": [\n      {\n        \"id\": \"approval-doc-wording\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 Approval 能力报告\"\n      },\n      {\n        \"id\": \"dialog-doc-moved\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 / P23 契约 probe\"\n      },\n      {\n        \"id\": \"iserror-propagation\",\n        \"between\": \"0.87.0 → 0.99.1\",\n        \"affects\": \"P18 / P20 成功证据\"\n      }\n    ]\n  },\n  \"extensions\": {\n    \"discovered\": 5,\n    \"items\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"1.4.0\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": true\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": null\n      }\n    ]\n  },\n  \"checks\": [\n    {\n      \"id\": \"data-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"data-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"pi-running\",\n      \"ok\": true\n    }\n  ],\n  \"compatibility\": {\n    \"status\": \"compatible\",\n    \"detected\": true,\n    \"piVersion\": \"0.99.2\",\n    \"versionKnown\": true,\n    \"versionSource\": {\n      \"source\": \"package.json\",\n      \"status\": \"known\",\n      \"updatedAt\": \"2026-10-02T00:00:00.000Z\"\n    },\n    \"versionVerification\": {\n      \"verification\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"capabilities\": {\n      \"rpc\": true,\n      \"getState\": true,\n      \"getMessages\": true,\n      \"newSession\": true,\n      \"switchSession\": true,\n      \"sessionNaming\": true,\n      \"toolEvents\": true,\n      \"extensionUi\": true,\n      \"sessionJsonl\": true\n    },\n    \"missing\": [],\n    \"unverified\": [],\n    \"protocol\": {\n      \"expected\": 1,\n      \"observed\": 1\n    },\n    \"schema\": {\n      \"unknownFields\": [],\n      \"unknownEnums\": []\n    },\n    \"issues\": []\n  },\n  \"privacy\": {\n    \"absolutePathsIncluded\": false,\n    \"conversationContentIncluded\": false,\n    \"configFileContentIncluded\": false,\n    \"environmentIncluded\": false,\n    \"protocolPayloadsIncluded\": false,\n    \"schemaDriftValuesIncluded\": false,\n    \"redactionApplied\": true\n  }\n}\n复制诊断摘要\n复制诊断 JSON\n导出 JSON\n刷新\n关闭"
+    },
+    {
+      "name": "dark-1280-navLogs",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n日志与故障报告\n本地日志只保存在这台机器上，不会自动上传。这里显示的是后端再次脱敏后的结构化事件；复制/导出前请自行检查。\n概览\n日志查看\n导出故障报告\n打开日志查看\n复制诊断摘要\n导出故障报告\n状态\n已开启\n模式\n标准\n保留\n7 天 · 总上限 20 MB\n磁盘占用\n72.0 KB · 3 个文件 · 崩溃 1\n上次运行\n正常或首次运行\n写入状态\n正常\n日志设置\n启用本地日志\n日志级别\n标准（INFO 及以上）\n详细（含临时技术元信息）\n保留天数\n1 天\n3 天\n7 天\n14 天\n30 天\n空间上限\n10 MB\n20 MB\n50 MB\n清理日志\n最近错误\n2026/10/17 19:59:00\n错误\npi-bridge · bridge.request_timeout · BRIDGE_TIMEOUT\n引用\n2026/10/17 19:58:00\n警告\nruntime · runtime.owner_rejected · OWNER_STALE\n引用\n最近日志文件\napp-20261017.jsonl\n57.0 KB\nmain-20261017.jsonl\n7.0 KB\napp-crash-20261017.jsonl\n8.0 KB\n刷新\n关闭"
+    },
+    {
+      "name": "dark-1280-navAppearance",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "dark-1280-navShortcutHelp",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n键盘快捷键\nWindows / Linux 映射。在输入框里打字时不会被抢 —— 不带修饰键的组合一律让给文本输入。\n通用\n打开命令面板\nCtrl+K\n打开命令面板（备用键）\nCtrl+Shift+P\n键盘快捷键帮助\nCtrl+/\n视图\n切到对话\nAlt+1\n切到任务\nAlt+2\n切到文件变更\nAlt+3\n切到扩展与能力\nAlt+4\n输入与弹层\n发送消息\nEnter\n换行\nShift+Enter\n停止生成 / 关闭浮层\nEsc\n列表与面板内移动\n↑ ↓ · Tab\n危险确认框\nTab / Enter（主操作需显式点击）\n关闭"
+    },
+    {
+      "name": "dark-1440-navProviders",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\fixture\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\ndeepseek\n2 个模型 · openai-completions\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "dark-1440-provider-form",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n添加模型供应商\n配置写入 pi 的 C:\\fixture\\agent\\models.json。已有供应商不会被覆盖。\nOpenRouter\nOllama 本地\nDeepSeek\nMoonshot 中国\n硅基流动\n智谱 GLM\n阿里百炼\nAnthropic\nGoogle Gemini\n供应商 ID\nAPI 类型\nopenai-completions（兼容性最好）\nopenai-responses\nanthropic-messages\ngoogle-generative-ai\nBase URL\n认证环境变量引用（可选）\n仅接受 $NAME 或 ${NAME}。API Key 请先运行官方交互式 pi，再使用 /login <provider> 配置。环境变量未设置时 pi 可能忽略该供应商。\n模型列表\n拉取\n每行一个模型：id 或 id|显示名，后面可跟 contextWindow=… / maxTokens=… / reasoning=true / input=text,image。点「拉取」可直接从供应商读取。\n取消\n保存"
+    },
+    {
+      "name": "dark-1440-navProviderAuth",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n供应商与认证\n状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。\n刷新认证状态\n其他 Pi 支持的供应商（2）\n关闭"
+    },
+    {
+      "name": "dark-1440-navAppUpdates",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n应用与更新\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi 运行时更新\n关闭"
+    },
+    {
+      "name": "dark-1440-navDiagnostics",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n诊断\n这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi\nPi 0.99.2\n检查 Pi 更新\n更新到 1.0.0\n新版本 1.0.0 可用\n该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。\n系统\nWindows_NT 10.0.26100 x64\nNode\nv24.14.0\n项目\npi-GUI\npi\n0.99.2\nBridge\n运行中\nMCP\n检测到相关模块\n版本真值\npi\n0.99.2\n版本来源\npackage.json\n版本核对\n已核对\n核对基线\n0.99.2 · 2026-10-01 · historical\nPi 兼容性\nPi 版本\n0.99.2\n兼容状态\n正常\nRPC\n支持\n会话状态\n支持\n历史消息\n支持\n新会话\n支持\n会话切换\n支持\n会话重命名\n支持\nTool Events\n支持\n扩展 UI\n支持\n会话文件\n支持\n能力 probe\n共 14 条 · 支持 8 · 不支持 0 · 未知 6（求值于 2026-10-02T00:00:00.000Z）\nRPC 命令集\n支持 · dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\nRPC 无工具清单命令\n支持 · 33 条里没有 *tool*\n扩展 UI 对话框子协议\n支持 · docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\ntool_call 可阻断\n支持 · block?: boolean;；tool_call can mutate input or block execution.\n核心自带审批闸门\n未知 · docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\nbuiltin:mcp\n支持 · builtInExtensions: llama.cpp / codemode / tool-search / mcp\nMCP 运行时状态闭集\n支持 · closed / connected / connecting / disconnected / failed / needs-auth\nRPC 通道真的通了\n支持 · 来自 pi-compat 的能力三值\nNative MCP 生效\n支持 · 原生状态：active\n还没法下结论的核心 probe：rpc（未知 ≠ 不支持）\n前端观察到的 schema 漂移（只有来源 / 字段名 / 类型，没有值）：\ntool.name · unknown-tool · string\n兼容矩阵（我们核对过什么）\n当前验证基线\n1.0.0\nPi 0.87.0\n历史基线 · 核对于 2026-09-30\nPi 0.99.1\n历史基线 · 核对于 2026-10-01\nPi 0.99.2\n历史基线 · 核对于 2026-10-01\nPi 1.0.0\n当前基线 · 核对于 2026-10-02\n已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：\npi-web-access\n0.33.0 · 核对于 2026-09-30\npi-subagents\n0.73.1 · 核对于 2026-09-30\npi-memory\n0.4.2 · 核对于 2026-09-30\npi-browser-harness\n0.11.0 · 核对于 2026-10-01\n已知上游差异（升级时逐条复核）：\napproval-doc-wording · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 Approval 能力报告\ndialog-doc-moved · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 / P23 契约 probe\niserror-propagation · 0.87.0 → 0.99.1 · 影响 P18 / P20 成功证据\nNative MCP\n原生状态\n生效中\nserver 条目\n2\n项目信任\n已信任\nbuiltin:mcp 在包里、未被禁用、未被接管\n关键 Extension 版本\npi-web-access@1.4.0\n用户 · 已加载\npi-memory@0.4.2\n用户 · 加载未知\n只有 package.json 里读到版本号的才列出来；版本是否与兼容矩阵一致，见上面的矩阵一节。\n健康检查\ndata-readable\n正常\ndata-writable\n正常\nproject-readable\n正常\nproject-writable\n正常\npi-running\n正常\nAgent\npi\n可用 · 0.99.2\n脱敏后的诊断 JSON\n{\n  \"schemaVersion\": 1,\n  \"generatedAt\": \"2026-10-02T00:00:00.000Z\",\n  \"app\": {\n    \"id\": \"pi-gui\",\n    \"version\": \"0.15.0\"\n  },\n  \"system\": {\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"node\": \"v24.14.0\",\n    \"os\": \"Windows_NT\",\n    \"release\": \"10.0.26100\"\n  },\n  \"project\": {\n    \"selected\": true,\n    \"name\": \"pi-GUI\",\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"data\": {\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"bridge\": {\n    \"piRunning\": true,\n    \"bridgeRun\": 12,\n    \"hasProject\": true,\n    \"args\": [\n      \"--mode\",\n      \"rpc\"\n    ]\n  },\n  \"pi\": {\n    \"configuredBin\": \"pi\",\n    \"available\": true,\n    \"version\": \"0.99.2\",\n    \"versionSource\": \"package.json\",\n    \"verification\": {\n      \"status\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"launch\": {\n      \"source\": \"path\",\n      \"binName\": \"pi.cmd\",\n      \"entryKnown\": true,\n      \"packageDirKnown\": true\n    }\n  },\n  \"agents\": [\n    {\n      \"id\": \"pi\",\n      \"available\": true,\n      \"version\": \"0.99.2\",\n      \"reason\": null,\n      \"capabilities\": null\n    }\n  ],\n  \"mcp\": {\n    \"supported\": true,\n    \"piVersion\": \"0.99.2\",\n    \"error\": null,\n    \"native\": {\n      \"fresh\": true,\n      \"state\": \"active\",\n      \"reason\": \"builtin:mcp 在包里、未被禁用、未被接管\",\n      \"replaced\": false,\n      \"disabled\": null,\n      \"builtinPresent\": true,\n      \"serverCount\": 2,\n      \"trust\": true\n    }\n  },\n  \"probes\": {\n    \"at\": \"2026-10-02T00:00:00.000Z\",\n    \"packageKnown\": true,\n    \"summary\": {\n      \"total\": 14,\n      \"supported\": 8,\n      \"unsupported\": 0,\n      \"unknown\": 6,\n      \"unverified\": [\n        \"rpc\"\n      ]\n    },\n    \"items\": [\n      {\n        \"id\": \"rpc-commands\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 命令集\",\n        \"state\": true,\n        \"evidence\": \"dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\"\n      },\n      {\n        \"id\": \"rpc-no-tool-list\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 无工具清单命令\",\n        \"state\": true,\n        \"evidence\": \"33 条里没有 *tool*\"\n      },\n      {\n        \"id\": \"extension-ui\",\n        \"kind\": \"source\",\n        \"label\": \"扩展 UI 对话框子协议\",\n        \"state\": true,\n        \"evidence\": \"docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\"\n      },\n      {\n        \"id\": \"approval-hook\",\n        \"kind\": \"source\",\n        \"label\": \"tool_call 可阻断\",\n        \"state\": true,\n        \"evidence\": \"block?: boolean;；tool_call can mutate input or block execution.\"\n      },\n      {\n        \"id\": \"core-approval\",\n        \"kind\": \"source\",\n        \"label\": \"核心自带审批闸门\",\n        \"state\": null,\n        \"evidence\": \"docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\"\n      },\n      {\n        \"id\": \"builtin-mcp\",\n        \"kind\": \"source\",\n        \"label\": \"builtin:mcp\",\n        \"state\": true,\n        \"evidence\": \"builtInExtensions: llama.cpp / codemode / tool-search / mcp\"\n      },\n      {\n        \"id\": \"mcp-runtime-states\",\n        \"kind\": \"source\",\n        \"label\": \"MCP 运行时状态闭集\",\n        \"state\": true,\n        \"evidence\": \"closed / connected / connecting / disconnected / failed / needs-auth\"\n      },\n      {\n        \"id\": \"rpc\",\n        \"kind\": \"runtime\",\n        \"label\": \"RPC 通道真的通了\",\n        \"state\": true,\n        \"evidence\": \"来自 pi-compat 的能力三值\"\n      },\n      {\n        \"id\": \"mcp-native\",\n        \"kind\": \"runtime\",\n        \"label\": \"Native MCP 生效\",\n        \"state\": true,\n        \"evidence\": \"原生状态：active\"\n      }\n    ]\n  },\n  \"matrix\": {\n    \"piBaselines\": [\n      {\n        \"version\": \"0.87.0\",\n        \"verifiedAt\": \"2026-09-30\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.1\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"1.0.0\",\n        \"verifiedAt\": \"2026-10-02\",\n        \"scope\": \"current\"\n      }\n    ],\n    \"currentBaseline\": \"1.0.0\",\n    \"extensionBaselines\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"0.33.0\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-subagents\",\n        \"version\": \"0.73.1\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-browser-harness\",\n        \"version\": \"0.11.0\",\n        \"verifiedAt\": \"2026-10-01\"\n      }\n    ],\n    \"nativeMcp\": {\n      \"builtinId\": \"mcp\",\n      \"replaceable\": true,\n      \"serverStates\": [],\n      \"exposures\": [],\n      \"cliSubcommands\": []\n    },\n    \"knownDifferences\": [\n      {\n        \"id\": \"approval-doc-wording\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 Approval 能力报告\"\n      },\n      {\n        \"id\": \"dialog-doc-moved\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 / P23 契约 probe\"\n      },\n      {\n        \"id\": \"iserror-propagation\",\n        \"between\": \"0.87.0 → 0.99.1\",\n        \"affects\": \"P18 / P20 成功证据\"\n      }\n    ]\n  },\n  \"extensions\": {\n    \"discovered\": 5,\n    \"items\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"1.4.0\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": true\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": null\n      }\n    ]\n  },\n  \"checks\": [\n    {\n      \"id\": \"data-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"data-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"pi-running\",\n      \"ok\": true\n    }\n  ],\n  \"compatibility\": {\n    \"status\": \"compatible\",\n    \"detected\": true,\n    \"piVersion\": \"0.99.2\",\n    \"versionKnown\": true,\n    \"versionSource\": {\n      \"source\": \"package.json\",\n      \"status\": \"known\",\n      \"updatedAt\": \"2026-10-02T00:00:00.000Z\"\n    },\n    \"versionVerification\": {\n      \"verification\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"capabilities\": {\n      \"rpc\": true,\n      \"getState\": true,\n      \"getMessages\": true,\n      \"newSession\": true,\n      \"switchSession\": true,\n      \"sessionNaming\": true,\n      \"toolEvents\": true,\n      \"extensionUi\": true,\n      \"sessionJsonl\": true\n    },\n    \"missing\": [],\n    \"unverified\": [],\n    \"protocol\": {\n      \"expected\": 1,\n      \"observed\": 1\n    },\n    \"schema\": {\n      \"unknownFields\": [],\n      \"unknownEnums\": []\n    },\n    \"issues\": []\n  },\n  \"privacy\": {\n    \"absolutePathsIncluded\": false,\n    \"conversationContentIncluded\": false,\n    \"configFileContentIncluded\": false,\n    \"environmentIncluded\": false,\n    \"protocolPayloadsIncluded\": false,\n    \"schemaDriftValuesIncluded\": false,\n    \"redactionApplied\": true\n  }\n}\n复制诊断摘要\n复制诊断 JSON\n导出 JSON\n刷新\n关闭"
+    },
+    {
+      "name": "dark-1440-navLogs",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n日志与故障报告\n本地日志只保存在这台机器上，不会自动上传。这里显示的是后端再次脱敏后的结构化事件；复制/导出前请自行检查。\n概览\n日志查看\n导出故障报告\n打开日志查看\n复制诊断摘要\n导出故障报告\n状态\n已开启\n模式\n标准\n保留\n7 天 · 总上限 20 MB\n磁盘占用\n72.0 KB · 3 个文件 · 崩溃 1\n上次运行\n正常或首次运行\n写入状态\n正常\n日志设置\n启用本地日志\n日志级别\n标准（INFO 及以上）\n详细（含临时技术元信息）\n保留天数\n1 天\n3 天\n7 天\n14 天\n30 天\n空间上限\n10 MB\n20 MB\n50 MB\n清理日志\n最近错误\n2026/10/17 19:59:00\n错误\npi-bridge · bridge.request_timeout · BRIDGE_TIMEOUT\n引用\n2026/10/17 19:58:00\n警告\nruntime · runtime.owner_rejected · OWNER_STALE\n引用\n最近日志文件\napp-20261017.jsonl\n57.0 KB\nmain-20261017.jsonl\n7.0 KB\napp-crash-20261017.jsonl\n8.0 KB\n刷新\n关闭"
+    },
+    {
+      "name": "dark-1440-navAppearance",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "dark-1440-navShortcutHelp",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n键盘快捷键\nWindows / Linux 映射。在输入框里打字时不会被抢 —— 不带修饰键的组合一律让给文本输入。\n通用\n打开命令面板\nCtrl+K\n打开命令面板（备用键）\nCtrl+Shift+P\n键盘快捷键帮助\nCtrl+/\n视图\n切到对话\nAlt+1\n切到任务\nAlt+2\n切到文件变更\nAlt+3\n切到扩展与能力\nAlt+4\n输入与弹层\n发送消息\nEnter\n换行\nShift+Enter\n停止生成 / 关闭浮层\nEsc\n列表与面板内移动\n↑ ↓ · Tab\n危险确认框\nTab / Enter（主操作需显式点击）\n关闭"
+    },
+    {
+      "name": "dark-1920-navProviders",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\fixture\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\ndeepseek\n2 个模型 · openai-completions\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "dark-1920-provider-form",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n添加模型供应商\n配置写入 pi 的 C:\\fixture\\agent\\models.json。已有供应商不会被覆盖。\nOpenRouter\nOllama 本地\nDeepSeek\nMoonshot 中国\n硅基流动\n智谱 GLM\n阿里百炼\nAnthropic\nGoogle Gemini\n供应商 ID\nAPI 类型\nopenai-completions（兼容性最好）\nopenai-responses\nanthropic-messages\ngoogle-generative-ai\nBase URL\n认证环境变量引用（可选）\n仅接受 $NAME 或 ${NAME}。API Key 请先运行官方交互式 pi，再使用 /login <provider> 配置。环境变量未设置时 pi 可能忽略该供应商。\n模型列表\n拉取\n每行一个模型：id 或 id|显示名，后面可跟 contextWindow=… / maxTokens=… / reasoning=true / input=text,image。点「拉取」可直接从供应商读取。\n取消\n保存"
+    },
+    {
+      "name": "dark-1920-navProviderAuth",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n供应商与认证\n状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。\n刷新认证状态\n其他 Pi 支持的供应商（2）\n关闭"
+    },
+    {
+      "name": "dark-1920-navAppUpdates",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n应用与更新\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi 运行时更新\n关闭"
+    },
+    {
+      "name": "dark-1920-navDiagnostics",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n诊断\n这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi\nPi 0.99.2\n检查 Pi 更新\n更新到 1.0.0\n新版本 1.0.0 可用\n该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。\n系统\nWindows_NT 10.0.26100 x64\nNode\nv24.14.0\n项目\npi-GUI\npi\n0.99.2\nBridge\n运行中\nMCP\n检测到相关模块\n版本真值\npi\n0.99.2\n版本来源\npackage.json\n版本核对\n已核对\n核对基线\n0.99.2 · 2026-10-01 · historical\nPi 兼容性\nPi 版本\n0.99.2\n兼容状态\n正常\nRPC\n支持\n会话状态\n支持\n历史消息\n支持\n新会话\n支持\n会话切换\n支持\n会话重命名\n支持\nTool Events\n支持\n扩展 UI\n支持\n会话文件\n支持\n能力 probe\n共 14 条 · 支持 8 · 不支持 0 · 未知 6（求值于 2026-10-02T00:00:00.000Z）\nRPC 命令集\n支持 · dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\nRPC 无工具清单命令\n支持 · 33 条里没有 *tool*\n扩展 UI 对话框子协议\n支持 · docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\ntool_call 可阻断\n支持 · block?: boolean;；tool_call can mutate input or block execution.\n核心自带审批闸门\n未知 · docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\nbuiltin:mcp\n支持 · builtInExtensions: llama.cpp / codemode / tool-search / mcp\nMCP 运行时状态闭集\n支持 · closed / connected / connecting / disconnected / failed / needs-auth\nRPC 通道真的通了\n支持 · 来自 pi-compat 的能力三值\nNative MCP 生效\n支持 · 原生状态：active\n还没法下结论的核心 probe：rpc（未知 ≠ 不支持）\n前端观察到的 schema 漂移（只有来源 / 字段名 / 类型，没有值）：\ntool.name · unknown-tool · string\n兼容矩阵（我们核对过什么）\n当前验证基线\n1.0.0\nPi 0.87.0\n历史基线 · 核对于 2026-09-30\nPi 0.99.1\n历史基线 · 核对于 2026-10-01\nPi 0.99.2\n历史基线 · 核对于 2026-10-01\nPi 1.0.0\n当前基线 · 核对于 2026-10-02\n已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：\npi-web-access\n0.33.0 · 核对于 2026-09-30\npi-subagents\n0.73.1 · 核对于 2026-09-30\npi-memory\n0.4.2 · 核对于 2026-09-30\npi-browser-harness\n0.11.0 · 核对于 2026-10-01\n已知上游差异（升级时逐条复核）：\napproval-doc-wording · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 Approval 能力报告\ndialog-doc-moved · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 / P23 契约 probe\niserror-propagation · 0.87.0 → 0.99.1 · 影响 P18 / P20 成功证据\nNative MCP\n原生状态\n生效中\nserver 条目\n2\n项目信任\n已信任\nbuiltin:mcp 在包里、未被禁用、未被接管\n关键 Extension 版本\npi-web-access@1.4.0\n用户 · 已加载\npi-memory@0.4.2\n用户 · 加载未知\n只有 package.json 里读到版本号的才列出来；版本是否与兼容矩阵一致，见上面的矩阵一节。\n健康检查\ndata-readable\n正常\ndata-writable\n正常\nproject-readable\n正常\nproject-writable\n正常\npi-running\n正常\nAgent\npi\n可用 · 0.99.2\n脱敏后的诊断 JSON\n{\n  \"schemaVersion\": 1,\n  \"generatedAt\": \"2026-10-02T00:00:00.000Z\",\n  \"app\": {\n    \"id\": \"pi-gui\",\n    \"version\": \"0.15.0\"\n  },\n  \"system\": {\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"node\": \"v24.14.0\",\n    \"os\": \"Windows_NT\",\n    \"release\": \"10.0.26100\"\n  },\n  \"project\": {\n    \"selected\": true,\n    \"name\": \"pi-GUI\",\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"data\": {\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"bridge\": {\n    \"piRunning\": true,\n    \"bridgeRun\": 12,\n    \"hasProject\": true,\n    \"args\": [\n      \"--mode\",\n      \"rpc\"\n    ]\n  },\n  \"pi\": {\n    \"configuredBin\": \"pi\",\n    \"available\": true,\n    \"version\": \"0.99.2\",\n    \"versionSource\": \"package.json\",\n    \"verification\": {\n      \"status\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"launch\": {\n      \"source\": \"path\",\n      \"binName\": \"pi.cmd\",\n      \"entryKnown\": true,\n      \"packageDirKnown\": true\n    }\n  },\n  \"agents\": [\n    {\n      \"id\": \"pi\",\n      \"available\": true,\n      \"version\": \"0.99.2\",\n      \"reason\": null,\n      \"capabilities\": null\n    }\n  ],\n  \"mcp\": {\n    \"supported\": true,\n    \"piVersion\": \"0.99.2\",\n    \"error\": null,\n    \"native\": {\n      \"fresh\": true,\n      \"state\": \"active\",\n      \"reason\": \"builtin:mcp 在包里、未被禁用、未被接管\",\n      \"replaced\": false,\n      \"disabled\": null,\n      \"builtinPresent\": true,\n      \"serverCount\": 2,\n      \"trust\": true\n    }\n  },\n  \"probes\": {\n    \"at\": \"2026-10-02T00:00:00.000Z\",\n    \"packageKnown\": true,\n    \"summary\": {\n      \"total\": 14,\n      \"supported\": 8,\n      \"unsupported\": 0,\n      \"unknown\": 6,\n      \"unverified\": [\n        \"rpc\"\n      ]\n    },\n    \"items\": [\n      {\n        \"id\": \"rpc-commands\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 命令集\",\n        \"state\": true,\n        \"evidence\": \"dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\"\n      },\n      {\n        \"id\": \"rpc-no-tool-list\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 无工具清单命令\",\n        \"state\": true,\n        \"evidence\": \"33 条里没有 *tool*\"\n      },\n      {\n        \"id\": \"extension-ui\",\n        \"kind\": \"source\",\n        \"label\": \"扩展 UI 对话框子协议\",\n        \"state\": true,\n        \"evidence\": \"docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\"\n      },\n      {\n        \"id\": \"approval-hook\",\n        \"kind\": \"source\",\n        \"label\": \"tool_call 可阻断\",\n        \"state\": true,\n        \"evidence\": \"block?: boolean;；tool_call can mutate input or block execution.\"\n      },\n      {\n        \"id\": \"core-approval\",\n        \"kind\": \"source\",\n        \"label\": \"核心自带审批闸门\",\n        \"state\": null,\n        \"evidence\": \"docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\"\n      },\n      {\n        \"id\": \"builtin-mcp\",\n        \"kind\": \"source\",\n        \"label\": \"builtin:mcp\",\n        \"state\": true,\n        \"evidence\": \"builtInExtensions: llama.cpp / codemode / tool-search / mcp\"\n      },\n      {\n        \"id\": \"mcp-runtime-states\",\n        \"kind\": \"source\",\n        \"label\": \"MCP 运行时状态闭集\",\n        \"state\": true,\n        \"evidence\": \"closed / connected / connecting / disconnected / failed / needs-auth\"\n      },\n      {\n        \"id\": \"rpc\",\n        \"kind\": \"runtime\",\n        \"label\": \"RPC 通道真的通了\",\n        \"state\": true,\n        \"evidence\": \"来自 pi-compat 的能力三值\"\n      },\n      {\n        \"id\": \"mcp-native\",\n        \"kind\": \"runtime\",\n        \"label\": \"Native MCP 生效\",\n        \"state\": true,\n        \"evidence\": \"原生状态：active\"\n      }\n    ]\n  },\n  \"matrix\": {\n    \"piBaselines\": [\n      {\n        \"version\": \"0.87.0\",\n        \"verifiedAt\": \"2026-09-30\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.1\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"1.0.0\",\n        \"verifiedAt\": \"2026-10-02\",\n        \"scope\": \"current\"\n      }\n    ],\n    \"currentBaseline\": \"1.0.0\",\n    \"extensionBaselines\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"0.33.0\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-subagents\",\n        \"version\": \"0.73.1\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-browser-harness\",\n        \"version\": \"0.11.0\",\n        \"verifiedAt\": \"2026-10-01\"\n      }\n    ],\n    \"nativeMcp\": {\n      \"builtinId\": \"mcp\",\n      \"replaceable\": true,\n      \"serverStates\": [],\n      \"exposures\": [],\n      \"cliSubcommands\": []\n    },\n    \"knownDifferences\": [\n      {\n        \"id\": \"approval-doc-wording\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 Approval 能力报告\"\n      },\n      {\n        \"id\": \"dialog-doc-moved\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 / P23 契约 probe\"\n      },\n      {\n        \"id\": \"iserror-propagation\",\n        \"between\": \"0.87.0 → 0.99.1\",\n        \"affects\": \"P18 / P20 成功证据\"\n      }\n    ]\n  },\n  \"extensions\": {\n    \"discovered\": 5,\n    \"items\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"1.4.0\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": true\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": null\n      }\n    ]\n  },\n  \"checks\": [\n    {\n      \"id\": \"data-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"data-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"pi-running\",\n      \"ok\": true\n    }\n  ],\n  \"compatibility\": {\n    \"status\": \"compatible\",\n    \"detected\": true,\n    \"piVersion\": \"0.99.2\",\n    \"versionKnown\": true,\n    \"versionSource\": {\n      \"source\": \"package.json\",\n      \"status\": \"known\",\n      \"updatedAt\": \"2026-10-02T00:00:00.000Z\"\n    },\n    \"versionVerification\": {\n      \"verification\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"capabilities\": {\n      \"rpc\": true,\n      \"getState\": true,\n      \"getMessages\": true,\n      \"newSession\": true,\n      \"switchSession\": true,\n      \"sessionNaming\": true,\n      \"toolEvents\": true,\n      \"extensionUi\": true,\n      \"sessionJsonl\": true\n    },\n    \"missing\": [],\n    \"unverified\": [],\n    \"protocol\": {\n      \"expected\": 1,\n      \"observed\": 1\n    },\n    \"schema\": {\n      \"unknownFields\": [],\n      \"unknownEnums\": []\n    },\n    \"issues\": []\n  },\n  \"privacy\": {\n    \"absolutePathsIncluded\": false,\n    \"conversationContentIncluded\": false,\n    \"configFileContentIncluded\": false,\n    \"environmentIncluded\": false,\n    \"protocolPayloadsIncluded\": false,\n    \"schemaDriftValuesIncluded\": false,\n    \"redactionApplied\": true\n  }\n}\n复制诊断摘要\n复制诊断 JSON\n导出 JSON\n刷新\n关闭"
+    },
+    {
+      "name": "dark-1920-navLogs",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n日志与故障报告\n本地日志只保存在这台机器上，不会自动上传。这里显示的是后端再次脱敏后的结构化事件；复制/导出前请自行检查。\n概览\n日志查看\n导出故障报告\n打开日志查看\n复制诊断摘要\n导出故障报告\n状态\n已开启\n模式\n标准\n保留\n7 天 · 总上限 20 MB\n磁盘占用\n72.0 KB · 3 个文件 · 崩溃 1\n上次运行\n正常或首次运行\n写入状态\n正常\n日志设置\n启用本地日志\n日志级别\n标准（INFO 及以上）\n详细（含临时技术元信息）\n保留天数\n1 天\n3 天\n7 天\n14 天\n30 天\n空间上限\n10 MB\n20 MB\n50 MB\n清理日志\n最近错误\n2026/10/17 19:59:00\n错误\npi-bridge · bridge.request_timeout · BRIDGE_TIMEOUT\n引用\n2026/10/17 19:58:00\n警告\nruntime · runtime.owner_rejected · OWNER_STALE\n引用\n最近日志文件\napp-20261017.jsonl\n57.0 KB\nmain-20261017.jsonl\n7.0 KB\napp-crash-20261017.jsonl\n8.0 KB\n刷新\n关闭"
+    },
+    {
+      "name": "dark-1920-navAppearance",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "dark-1920-navShortcutHelp",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n键盘快捷键\nWindows / Linux 映射。在输入框里打字时不会被抢 —— 不带修饰键的组合一律让给文本输入。\n通用\n打开命令面板\nCtrl+K\n打开命令面板（备用键）\nCtrl+Shift+P\n键盘快捷键帮助\nCtrl+/\n视图\n切到对话\nAlt+1\n切到任务\nAlt+2\n切到文件变更\nAlt+3\n切到扩展与能力\nAlt+4\n输入与弹层\n发送消息\nEnter\n换行\nShift+Enter\n停止生成 / 关闭浮层\nEsc\n列表与面板内移动\n↑ ↓ · Tab\n危险确认框\nTab / Enter（主操作需显式点击）\n关闭"
+    },
+    {
+      "name": "light-1280-navProviders",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\fixture\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\ndeepseek\n2 个模型 · openai-completions\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "light-1280-provider-form",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n添加模型供应商\n配置写入 pi 的 C:\\fixture\\agent\\models.json。已有供应商不会被覆盖。\nOpenRouter\nOllama 本地\nDeepSeek\nMoonshot 中国\n硅基流动\n智谱 GLM\n阿里百炼\nAnthropic\nGoogle Gemini\n供应商 ID\nAPI 类型\nopenai-completions（兼容性最好）\nopenai-responses\nanthropic-messages\ngoogle-generative-ai\nBase URL\n认证环境变量引用（可选）\n仅接受 $NAME 或 ${NAME}。API Key 请先运行官方交互式 pi，再使用 /login <provider> 配置。环境变量未设置时 pi 可能忽略该供应商。\n模型列表\n拉取\n每行一个模型：id 或 id|显示名，后面可跟 contextWindow=… / maxTokens=… / reasoning=true / input=text,image。点「拉取」可直接从供应商读取。\n取消\n保存"
+    },
+    {
+      "name": "light-1280-navProviderAuth",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n供应商与认证\n状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。\n刷新认证状态\n其他 Pi 支持的供应商（2）\n关闭"
+    },
+    {
+      "name": "light-1280-navAppUpdates",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n应用与更新\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi 运行时更新\n关闭"
+    },
+    {
+      "name": "light-1280-navDiagnostics",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n诊断\n这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi\nPi 0.99.2\n检查 Pi 更新\n更新到 1.0.0\n新版本 1.0.0 可用\n该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。\n系统\nWindows_NT 10.0.26100 x64\nNode\nv24.14.0\n项目\npi-GUI\npi\n0.99.2\nBridge\n运行中\nMCP\n检测到相关模块\n版本真值\npi\n0.99.2\n版本来源\npackage.json\n版本核对\n已核对\n核对基线\n0.99.2 · 2026-10-01 · historical\nPi 兼容性\nPi 版本\n0.99.2\n兼容状态\n正常\nRPC\n支持\n会话状态\n支持\n历史消息\n支持\n新会话\n支持\n会话切换\n支持\n会话重命名\n支持\nTool Events\n支持\n扩展 UI\n支持\n会话文件\n支持\n能力 probe\n共 14 条 · 支持 8 · 不支持 0 · 未知 6（求值于 2026-10-02T00:00:00.000Z）\nRPC 命令集\n支持 · dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\nRPC 无工具清单命令\n支持 · 33 条里没有 *tool*\n扩展 UI 对话框子协议\n支持 · docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\ntool_call 可阻断\n支持 · block?: boolean;；tool_call can mutate input or block execution.\n核心自带审批闸门\n未知 · docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\nbuiltin:mcp\n支持 · builtInExtensions: llama.cpp / codemode / tool-search / mcp\nMCP 运行时状态闭集\n支持 · closed / connected / connecting / disconnected / failed / needs-auth\nRPC 通道真的通了\n支持 · 来自 pi-compat 的能力三值\nNative MCP 生效\n支持 · 原生状态：active\n还没法下结论的核心 probe：rpc（未知 ≠ 不支持）\n前端观察到的 schema 漂移（只有来源 / 字段名 / 类型，没有值）：\ntool.name · unknown-tool · string\n兼容矩阵（我们核对过什么）\n当前验证基线\n1.0.0\nPi 0.87.0\n历史基线 · 核对于 2026-09-30\nPi 0.99.1\n历史基线 · 核对于 2026-10-01\nPi 0.99.2\n历史基线 · 核对于 2026-10-01\nPi 1.0.0\n当前基线 · 核对于 2026-10-02\n已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：\npi-web-access\n0.33.0 · 核对于 2026-09-30\npi-subagents\n0.73.1 · 核对于 2026-09-30\npi-memory\n0.4.2 · 核对于 2026-09-30\npi-browser-harness\n0.11.0 · 核对于 2026-10-01\n已知上游差异（升级时逐条复核）：\napproval-doc-wording · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 Approval 能力报告\ndialog-doc-moved · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 / P23 契约 probe\niserror-propagation · 0.87.0 → 0.99.1 · 影响 P18 / P20 成功证据\nNative MCP\n原生状态\n生效中\nserver 条目\n2\n项目信任\n已信任\nbuiltin:mcp 在包里、未被禁用、未被接管\n关键 Extension 版本\npi-web-access@1.4.0\n用户 · 已加载\npi-memory@0.4.2\n用户 · 加载未知\n只有 package.json 里读到版本号的才列出来；版本是否与兼容矩阵一致，见上面的矩阵一节。\n健康检查\ndata-readable\n正常\ndata-writable\n正常\nproject-readable\n正常\nproject-writable\n正常\npi-running\n正常\nAgent\npi\n可用 · 0.99.2\n脱敏后的诊断 JSON\n{\n  \"schemaVersion\": 1,\n  \"generatedAt\": \"2026-10-02T00:00:00.000Z\",\n  \"app\": {\n    \"id\": \"pi-gui\",\n    \"version\": \"0.15.0\"\n  },\n  \"system\": {\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"node\": \"v24.14.0\",\n    \"os\": \"Windows_NT\",\n    \"release\": \"10.0.26100\"\n  },\n  \"project\": {\n    \"selected\": true,\n    \"name\": \"pi-GUI\",\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"data\": {\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"bridge\": {\n    \"piRunning\": true,\n    \"bridgeRun\": 12,\n    \"hasProject\": true,\n    \"args\": [\n      \"--mode\",\n      \"rpc\"\n    ]\n  },\n  \"pi\": {\n    \"configuredBin\": \"pi\",\n    \"available\": true,\n    \"version\": \"0.99.2\",\n    \"versionSource\": \"package.json\",\n    \"verification\": {\n      \"status\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"launch\": {\n      \"source\": \"path\",\n      \"binName\": \"pi.cmd\",\n      \"entryKnown\": true,\n      \"packageDirKnown\": true\n    }\n  },\n  \"agents\": [\n    {\n      \"id\": \"pi\",\n      \"available\": true,\n      \"version\": \"0.99.2\",\n      \"reason\": null,\n      \"capabilities\": null\n    }\n  ],\n  \"mcp\": {\n    \"supported\": true,\n    \"piVersion\": \"0.99.2\",\n    \"error\": null,\n    \"native\": {\n      \"fresh\": true,\n      \"state\": \"active\",\n      \"reason\": \"builtin:mcp 在包里、未被禁用、未被接管\",\n      \"replaced\": false,\n      \"disabled\": null,\n      \"builtinPresent\": true,\n      \"serverCount\": 2,\n      \"trust\": true\n    }\n  },\n  \"probes\": {\n    \"at\": \"2026-10-02T00:00:00.000Z\",\n    \"packageKnown\": true,\n    \"summary\": {\n      \"total\": 14,\n      \"supported\": 8,\n      \"unsupported\": 0,\n      \"unknown\": 6,\n      \"unverified\": [\n        \"rpc\"\n      ]\n    },\n    \"items\": [\n      {\n        \"id\": \"rpc-commands\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 命令集\",\n        \"state\": true,\n        \"evidence\": \"dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\"\n      },\n      {\n        \"id\": \"rpc-no-tool-list\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 无工具清单命令\",\n        \"state\": true,\n        \"evidence\": \"33 条里没有 *tool*\"\n      },\n      {\n        \"id\": \"extension-ui\",\n        \"kind\": \"source\",\n        \"label\": \"扩展 UI 对话框子协议\",\n        \"state\": true,\n        \"evidence\": \"docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\"\n      },\n      {\n        \"id\": \"approval-hook\",\n        \"kind\": \"source\",\n        \"label\": \"tool_call 可阻断\",\n        \"state\": true,\n        \"evidence\": \"block?: boolean;；tool_call can mutate input or block execution.\"\n      },\n      {\n        \"id\": \"core-approval\",\n        \"kind\": \"source\",\n        \"label\": \"核心自带审批闸门\",\n        \"state\": null,\n        \"evidence\": \"docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\"\n      },\n      {\n        \"id\": \"builtin-mcp\",\n        \"kind\": \"source\",\n        \"label\": \"builtin:mcp\",\n        \"state\": true,\n        \"evidence\": \"builtInExtensions: llama.cpp / codemode / tool-search / mcp\"\n      },\n      {\n        \"id\": \"mcp-runtime-states\",\n        \"kind\": \"source\",\n        \"label\": \"MCP 运行时状态闭集\",\n        \"state\": true,\n        \"evidence\": \"closed / connected / connecting / disconnected / failed / needs-auth\"\n      },\n      {\n        \"id\": \"rpc\",\n        \"kind\": \"runtime\",\n        \"label\": \"RPC 通道真的通了\",\n        \"state\": true,\n        \"evidence\": \"来自 pi-compat 的能力三值\"\n      },\n      {\n        \"id\": \"mcp-native\",\n        \"kind\": \"runtime\",\n        \"label\": \"Native MCP 生效\",\n        \"state\": true,\n        \"evidence\": \"原生状态：active\"\n      }\n    ]\n  },\n  \"matrix\": {\n    \"piBaselines\": [\n      {\n        \"version\": \"0.87.0\",\n        \"verifiedAt\": \"2026-09-30\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.1\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"1.0.0\",\n        \"verifiedAt\": \"2026-10-02\",\n        \"scope\": \"current\"\n      }\n    ],\n    \"currentBaseline\": \"1.0.0\",\n    \"extensionBaselines\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"0.33.0\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-subagents\",\n        \"version\": \"0.73.1\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-browser-harness\",\n        \"version\": \"0.11.0\",\n        \"verifiedAt\": \"2026-10-01\"\n      }\n    ],\n    \"nativeMcp\": {\n      \"builtinId\": \"mcp\",\n      \"replaceable\": true,\n      \"serverStates\": [],\n      \"exposures\": [],\n      \"cliSubcommands\": []\n    },\n    \"knownDifferences\": [\n      {\n        \"id\": \"approval-doc-wording\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 Approval 能力报告\"\n      },\n      {\n        \"id\": \"dialog-doc-moved\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 / P23 契约 probe\"\n      },\n      {\n        \"id\": \"iserror-propagation\",\n        \"between\": \"0.87.0 → 0.99.1\",\n        \"affects\": \"P18 / P20 成功证据\"\n      }\n    ]\n  },\n  \"extensions\": {\n    \"discovered\": 5,\n    \"items\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"1.4.0\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": true\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": null\n      }\n    ]\n  },\n  \"checks\": [\n    {\n      \"id\": \"data-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"data-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"pi-running\",\n      \"ok\": true\n    }\n  ],\n  \"compatibility\": {\n    \"status\": \"compatible\",\n    \"detected\": true,\n    \"piVersion\": \"0.99.2\",\n    \"versionKnown\": true,\n    \"versionSource\": {\n      \"source\": \"package.json\",\n      \"status\": \"known\",\n      \"updatedAt\": \"2026-10-02T00:00:00.000Z\"\n    },\n    \"versionVerification\": {\n      \"verification\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"capabilities\": {\n      \"rpc\": true,\n      \"getState\": true,\n      \"getMessages\": true,\n      \"newSession\": true,\n      \"switchSession\": true,\n      \"sessionNaming\": true,\n      \"toolEvents\": true,\n      \"extensionUi\": true,\n      \"sessionJsonl\": true\n    },\n    \"missing\": [],\n    \"unverified\": [],\n    \"protocol\": {\n      \"expected\": 1,\n      \"observed\": 1\n    },\n    \"schema\": {\n      \"unknownFields\": [],\n      \"unknownEnums\": []\n    },\n    \"issues\": []\n  },\n  \"privacy\": {\n    \"absolutePathsIncluded\": false,\n    \"conversationContentIncluded\": false,\n    \"configFileContentIncluded\": false,\n    \"environmentIncluded\": false,\n    \"protocolPayloadsIncluded\": false,\n    \"schemaDriftValuesIncluded\": false,\n    \"redactionApplied\": true\n  }\n}\n复制诊断摘要\n复制诊断 JSON\n导出 JSON\n刷新\n关闭"
+    },
+    {
+      "name": "light-1280-navLogs",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n日志与故障报告\n本地日志只保存在这台机器上，不会自动上传。这里显示的是后端再次脱敏后的结构化事件；复制/导出前请自行检查。\n概览\n日志查看\n导出故障报告\n打开日志查看\n复制诊断摘要\n导出故障报告\n状态\n已开启\n模式\n标准\n保留\n7 天 · 总上限 20 MB\n磁盘占用\n72.0 KB · 3 个文件 · 崩溃 1\n上次运行\n正常或首次运行\n写入状态\n正常\n日志设置\n启用本地日志\n日志级别\n标准（INFO 及以上）\n详细（含临时技术元信息）\n保留天数\n1 天\n3 天\n7 天\n14 天\n30 天\n空间上限\n10 MB\n20 MB\n50 MB\n清理日志\n最近错误\n2026/10/17 19:59:00\n错误\npi-bridge · bridge.request_timeout · BRIDGE_TIMEOUT\n引用\n2026/10/17 19:58:00\n警告\nruntime · runtime.owner_rejected · OWNER_STALE\n引用\n最近日志文件\napp-20261017.jsonl\n57.0 KB\nmain-20261017.jsonl\n7.0 KB\napp-crash-20261017.jsonl\n8.0 KB\n刷新\n关闭"
+    },
+    {
+      "name": "light-1280-navAppearance",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "light-1280-navShortcutHelp",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n键盘快捷键\nWindows / Linux 映射。在输入框里打字时不会被抢 —— 不带修饰键的组合一律让给文本输入。\n通用\n打开命令面板\nCtrl+K\n打开命令面板（备用键）\nCtrl+Shift+P\n键盘快捷键帮助\nCtrl+/\n视图\n切到对话\nAlt+1\n切到任务\nAlt+2\n切到文件变更\nAlt+3\n切到扩展与能力\nAlt+4\n输入与弹层\n发送消息\nEnter\n换行\nShift+Enter\n停止生成 / 关闭浮层\nEsc\n列表与面板内移动\n↑ ↓ · Tab\n危险确认框\nTab / Enter（主操作需显式点击）\n关闭"
+    },
+    {
+      "name": "light-1440-navProviders",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\fixture\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\ndeepseek\n2 个模型 · openai-completions\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "light-1440-provider-form",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n添加模型供应商\n配置写入 pi 的 C:\\fixture\\agent\\models.json。已有供应商不会被覆盖。\nOpenRouter\nOllama 本地\nDeepSeek\nMoonshot 中国\n硅基流动\n智谱 GLM\n阿里百炼\nAnthropic\nGoogle Gemini\n供应商 ID\nAPI 类型\nopenai-completions（兼容性最好）\nopenai-responses\nanthropic-messages\ngoogle-generative-ai\nBase URL\n认证环境变量引用（可选）\n仅接受 $NAME 或 ${NAME}。API Key 请先运行官方交互式 pi，再使用 /login <provider> 配置。环境变量未设置时 pi 可能忽略该供应商。\n模型列表\n拉取\n每行一个模型：id 或 id|显示名，后面可跟 contextWindow=… / maxTokens=… / reasoning=true / input=text,image。点「拉取」可直接从供应商读取。\n取消\n保存"
+    },
+    {
+      "name": "light-1440-navProviderAuth",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n供应商与认证\n状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。\n刷新认证状态\n其他 Pi 支持的供应商（2）\n关闭"
+    },
+    {
+      "name": "light-1440-navAppUpdates",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n应用与更新\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi 运行时更新\n关闭"
+    },
+    {
+      "name": "light-1440-navDiagnostics",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n诊断\n这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi\nPi 0.99.2\n检查 Pi 更新\n更新到 1.0.0\n新版本 1.0.0 可用\n该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。\n系统\nWindows_NT 10.0.26100 x64\nNode\nv24.14.0\n项目\npi-GUI\npi\n0.99.2\nBridge\n运行中\nMCP\n检测到相关模块\n版本真值\npi\n0.99.2\n版本来源\npackage.json\n版本核对\n已核对\n核对基线\n0.99.2 · 2026-10-01 · historical\nPi 兼容性\nPi 版本\n0.99.2\n兼容状态\n正常\nRPC\n支持\n会话状态\n支持\n历史消息\n支持\n新会话\n支持\n会话切换\n支持\n会话重命名\n支持\nTool Events\n支持\n扩展 UI\n支持\n会话文件\n支持\n能力 probe\n共 14 条 · 支持 8 · 不支持 0 · 未知 6（求值于 2026-10-02T00:00:00.000Z）\nRPC 命令集\n支持 · dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\nRPC 无工具清单命令\n支持 · 33 条里没有 *tool*\n扩展 UI 对话框子协议\n支持 · docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\ntool_call 可阻断\n支持 · block?: boolean;；tool_call can mutate input or block execution.\n核心自带审批闸门\n未知 · docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\nbuiltin:mcp\n支持 · builtInExtensions: llama.cpp / codemode / tool-search / mcp\nMCP 运行时状态闭集\n支持 · closed / connected / connecting / disconnected / failed / needs-auth\nRPC 通道真的通了\n支持 · 来自 pi-compat 的能力三值\nNative MCP 生效\n支持 · 原生状态：active\n还没法下结论的核心 probe：rpc（未知 ≠ 不支持）\n前端观察到的 schema 漂移（只有来源 / 字段名 / 类型，没有值）：\ntool.name · unknown-tool · string\n兼容矩阵（我们核对过什么）\n当前验证基线\n1.0.0\nPi 0.87.0\n历史基线 · 核对于 2026-09-30\nPi 0.99.1\n历史基线 · 核对于 2026-10-01\nPi 0.99.2\n历史基线 · 核对于 2026-10-01\nPi 1.0.0\n当前基线 · 核对于 2026-10-02\n已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：\npi-web-access\n0.33.0 · 核对于 2026-09-30\npi-subagents\n0.73.1 · 核对于 2026-09-30\npi-memory\n0.4.2 · 核对于 2026-09-30\npi-browser-harness\n0.11.0 · 核对于 2026-10-01\n已知上游差异（升级时逐条复核）：\napproval-doc-wording · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 Approval 能力报告\ndialog-doc-moved · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 / P23 契约 probe\niserror-propagation · 0.87.0 → 0.99.1 · 影响 P18 / P20 成功证据\nNative MCP\n原生状态\n生效中\nserver 条目\n2\n项目信任\n已信任\nbuiltin:mcp 在包里、未被禁用、未被接管\n关键 Extension 版本\npi-web-access@1.4.0\n用户 · 已加载\npi-memory@0.4.2\n用户 · 加载未知\n只有 package.json 里读到版本号的才列出来；版本是否与兼容矩阵一致，见上面的矩阵一节。\n健康检查\ndata-readable\n正常\ndata-writable\n正常\nproject-readable\n正常\nproject-writable\n正常\npi-running\n正常\nAgent\npi\n可用 · 0.99.2\n脱敏后的诊断 JSON\n{\n  \"schemaVersion\": 1,\n  \"generatedAt\": \"2026-10-02T00:00:00.000Z\",\n  \"app\": {\n    \"id\": \"pi-gui\",\n    \"version\": \"0.15.0\"\n  },\n  \"system\": {\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"node\": \"v24.14.0\",\n    \"os\": \"Windows_NT\",\n    \"release\": \"10.0.26100\"\n  },\n  \"project\": {\n    \"selected\": true,\n    \"name\": \"pi-GUI\",\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"data\": {\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"bridge\": {\n    \"piRunning\": true,\n    \"bridgeRun\": 12,\n    \"hasProject\": true,\n    \"args\": [\n      \"--mode\",\n      \"rpc\"\n    ]\n  },\n  \"pi\": {\n    \"configuredBin\": \"pi\",\n    \"available\": true,\n    \"version\": \"0.99.2\",\n    \"versionSource\": \"package.json\",\n    \"verification\": {\n      \"status\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"launch\": {\n      \"source\": \"path\",\n      \"binName\": \"pi.cmd\",\n      \"entryKnown\": true,\n      \"packageDirKnown\": true\n    }\n  },\n  \"agents\": [\n    {\n      \"id\": \"pi\",\n      \"available\": true,\n      \"version\": \"0.99.2\",\n      \"reason\": null,\n      \"capabilities\": null\n    }\n  ],\n  \"mcp\": {\n    \"supported\": true,\n    \"piVersion\": \"0.99.2\",\n    \"error\": null,\n    \"native\": {\n      \"fresh\": true,\n      \"state\": \"active\",\n      \"reason\": \"builtin:mcp 在包里、未被禁用、未被接管\",\n      \"replaced\": false,\n      \"disabled\": null,\n      \"builtinPresent\": true,\n      \"serverCount\": 2,\n      \"trust\": true\n    }\n  },\n  \"probes\": {\n    \"at\": \"2026-10-02T00:00:00.000Z\",\n    \"packageKnown\": true,\n    \"summary\": {\n      \"total\": 14,\n      \"supported\": 8,\n      \"unsupported\": 0,\n      \"unknown\": 6,\n      \"unverified\": [\n        \"rpc\"\n      ]\n    },\n    \"items\": [\n      {\n        \"id\": \"rpc-commands\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 命令集\",\n        \"state\": true,\n        \"evidence\": \"dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\"\n      },\n      {\n        \"id\": \"rpc-no-tool-list\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 无工具清单命令\",\n        \"state\": true,\n        \"evidence\": \"33 条里没有 *tool*\"\n      },\n      {\n        \"id\": \"extension-ui\",\n        \"kind\": \"source\",\n        \"label\": \"扩展 UI 对话框子协议\",\n        \"state\": true,\n        \"evidence\": \"docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\"\n      },\n      {\n        \"id\": \"approval-hook\",\n        \"kind\": \"source\",\n        \"label\": \"tool_call 可阻断\",\n        \"state\": true,\n        \"evidence\": \"block?: boolean;；tool_call can mutate input or block execution.\"\n      },\n      {\n        \"id\": \"core-approval\",\n        \"kind\": \"source\",\n        \"label\": \"核心自带审批闸门\",\n        \"state\": null,\n        \"evidence\": \"docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\"\n      },\n      {\n        \"id\": \"builtin-mcp\",\n        \"kind\": \"source\",\n        \"label\": \"builtin:mcp\",\n        \"state\": true,\n        \"evidence\": \"builtInExtensions: llama.cpp / codemode / tool-search / mcp\"\n      },\n      {\n        \"id\": \"mcp-runtime-states\",\n        \"kind\": \"source\",\n        \"label\": \"MCP 运行时状态闭集\",\n        \"state\": true,\n        \"evidence\": \"closed / connected / connecting / disconnected / failed / needs-auth\"\n      },\n      {\n        \"id\": \"rpc\",\n        \"kind\": \"runtime\",\n        \"label\": \"RPC 通道真的通了\",\n        \"state\": true,\n        \"evidence\": \"来自 pi-compat 的能力三值\"\n      },\n      {\n        \"id\": \"mcp-native\",\n        \"kind\": \"runtime\",\n        \"label\": \"Native MCP 生效\",\n        \"state\": true,\n        \"evidence\": \"原生状态：active\"\n      }\n    ]\n  },\n  \"matrix\": {\n    \"piBaselines\": [\n      {\n        \"version\": \"0.87.0\",\n        \"verifiedAt\": \"2026-09-30\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.1\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"1.0.0\",\n        \"verifiedAt\": \"2026-10-02\",\n        \"scope\": \"current\"\n      }\n    ],\n    \"currentBaseline\": \"1.0.0\",\n    \"extensionBaselines\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"0.33.0\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-subagents\",\n        \"version\": \"0.73.1\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-browser-harness\",\n        \"version\": \"0.11.0\",\n        \"verifiedAt\": \"2026-10-01\"\n      }\n    ],\n    \"nativeMcp\": {\n      \"builtinId\": \"mcp\",\n      \"replaceable\": true,\n      \"serverStates\": [],\n      \"exposures\": [],\n      \"cliSubcommands\": []\n    },\n    \"knownDifferences\": [\n      {\n        \"id\": \"approval-doc-wording\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 Approval 能力报告\"\n      },\n      {\n        \"id\": \"dialog-doc-moved\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 / P23 契约 probe\"\n      },\n      {\n        \"id\": \"iserror-propagation\",\n        \"between\": \"0.87.0 → 0.99.1\",\n        \"affects\": \"P18 / P20 成功证据\"\n      }\n    ]\n  },\n  \"extensions\": {\n    \"discovered\": 5,\n    \"items\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"1.4.0\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": true\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": null\n      }\n    ]\n  },\n  \"checks\": [\n    {\n      \"id\": \"data-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"data-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"pi-running\",\n      \"ok\": true\n    }\n  ],\n  \"compatibility\": {\n    \"status\": \"compatible\",\n    \"detected\": true,\n    \"piVersion\": \"0.99.2\",\n    \"versionKnown\": true,\n    \"versionSource\": {\n      \"source\": \"package.json\",\n      \"status\": \"known\",\n      \"updatedAt\": \"2026-10-02T00:00:00.000Z\"\n    },\n    \"versionVerification\": {\n      \"verification\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"capabilities\": {\n      \"rpc\": true,\n      \"getState\": true,\n      \"getMessages\": true,\n      \"newSession\": true,\n      \"switchSession\": true,\n      \"sessionNaming\": true,\n      \"toolEvents\": true,\n      \"extensionUi\": true,\n      \"sessionJsonl\": true\n    },\n    \"missing\": [],\n    \"unverified\": [],\n    \"protocol\": {\n      \"expected\": 1,\n      \"observed\": 1\n    },\n    \"schema\": {\n      \"unknownFields\": [],\n      \"unknownEnums\": []\n    },\n    \"issues\": []\n  },\n  \"privacy\": {\n    \"absolutePathsIncluded\": false,\n    \"conversationContentIncluded\": false,\n    \"configFileContentIncluded\": false,\n    \"environmentIncluded\": false,\n    \"protocolPayloadsIncluded\": false,\n    \"schemaDriftValuesIncluded\": false,\n    \"redactionApplied\": true\n  }\n}\n复制诊断摘要\n复制诊断 JSON\n导出 JSON\n刷新\n关闭"
+    },
+    {
+      "name": "light-1440-navLogs",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n日志与故障报告\n本地日志只保存在这台机器上，不会自动上传。这里显示的是后端再次脱敏后的结构化事件；复制/导出前请自行检查。\n概览\n日志查看\n导出故障报告\n打开日志查看\n复制诊断摘要\n导出故障报告\n状态\n已开启\n模式\n标准\n保留\n7 天 · 总上限 20 MB\n磁盘占用\n72.0 KB · 3 个文件 · 崩溃 1\n上次运行\n正常或首次运行\n写入状态\n正常\n日志设置\n启用本地日志\n日志级别\n标准（INFO 及以上）\n详细（含临时技术元信息）\n保留天数\n1 天\n3 天\n7 天\n14 天\n30 天\n空间上限\n10 MB\n20 MB\n50 MB\n清理日志\n最近错误\n2026/10/17 19:59:00\n错误\npi-bridge · bridge.request_timeout · BRIDGE_TIMEOUT\n引用\n2026/10/17 19:58:00\n警告\nruntime · runtime.owner_rejected · OWNER_STALE\n引用\n最近日志文件\napp-20261017.jsonl\n57.0 KB\nmain-20261017.jsonl\n7.0 KB\napp-crash-20261017.jsonl\n8.0 KB\n刷新\n关闭"
+    },
+    {
+      "name": "light-1440-navAppearance",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "light-1440-navShortcutHelp",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n键盘快捷键\nWindows / Linux 映射。在输入框里打字时不会被抢 —— 不带修饰键的组合一律让给文本输入。\n通用\n打开命令面板\nCtrl+K\n打开命令面板（备用键）\nCtrl+Shift+P\n键盘快捷键帮助\nCtrl+/\n视图\n切到对话\nAlt+1\n切到任务\nAlt+2\n切到文件变更\nAlt+3\n切到扩展与能力\nAlt+4\n输入与弹层\n发送消息\nEnter\n换行\nShift+Enter\n停止生成 / 关闭浮层\nEsc\n列表与面板内移动\n↑ ↓ · Tab\n危险确认框\nTab / Enter（主操作需显式点击）\n关闭"
+    },
+    {
+      "name": "light-1920-navProviders",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\fixture\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\ndeepseek\n2 个模型 · openai-completions\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "light-1920-provider-form",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n添加模型供应商\n配置写入 pi 的 C:\\fixture\\agent\\models.json。已有供应商不会被覆盖。\nOpenRouter\nOllama 本地\nDeepSeek\nMoonshot 中国\n硅基流动\n智谱 GLM\n阿里百炼\nAnthropic\nGoogle Gemini\n供应商 ID\nAPI 类型\nopenai-completions（兼容性最好）\nopenai-responses\nanthropic-messages\ngoogle-generative-ai\nBase URL\n认证环境变量引用（可选）\n仅接受 $NAME 或 ${NAME}。API Key 请先运行官方交互式 pi，再使用 /login <provider> 配置。环境变量未设置时 pi 可能忽略该供应商。\n模型列表\n拉取\n每行一个模型：id 或 id|显示名，后面可跟 contextWindow=… / maxTokens=… / reasoning=true / input=text,image。点「拉取」可直接从供应商读取。\n取消\n保存"
+    },
+    {
+      "name": "light-1920-navProviderAuth",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n供应商与认证\n状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。\n刷新认证状态\n其他 Pi 支持的供应商（2）\n关闭"
+    },
+    {
+      "name": "light-1920-navAppUpdates",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n应用与更新\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi 运行时更新\n关闭"
+    },
+    {
+      "name": "light-1920-navDiagnostics",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n诊断\n这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。\n版本\nPi GUI v44.4.3\n检查更新\n开发模式仅支持检查更新。\n当前已是最新版本\nv44.4.3\nPi\nPi 0.99.2\n检查 Pi 更新\n更新到 1.0.0\n新版本 1.0.0 可用\n该版本尚未经过 Pi GUI 的完整兼容验收（unverified）；更新后会重新做能力探测。\n系统\nWindows_NT 10.0.26100 x64\nNode\nv24.14.0\n项目\npi-GUI\npi\n0.99.2\nBridge\n运行中\nMCP\n检测到相关模块\n版本真值\npi\n0.99.2\n版本来源\npackage.json\n版本核对\n已核对\n核对基线\n0.99.2 · 2026-10-01 · historical\nPi 兼容性\nPi 版本\n0.99.2\n兼容状态\n正常\nRPC\n支持\n会话状态\n支持\n历史消息\n支持\n新会话\n支持\n会话切换\n支持\n会话重命名\n支持\nTool Events\n支持\n扩展 UI\n支持\n会话文件\n支持\n能力 probe\n共 14 条 · 支持 8 · 不支持 0 · 未知 6（求值于 2026-10-02T00:00:00.000Z）\nRPC 命令集\n支持 · dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\nRPC 无工具清单命令\n支持 · 33 条里没有 *tool*\n扩展 UI 对话框子协议\n支持 · docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\ntool_call 可阻断\n支持 · block?: boolean;；tool_call can mutate input or block execution.\n核心自带审批闸门\n未知 · docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\nbuiltin:mcp\n支持 · builtInExtensions: llama.cpp / codemode / tool-search / mcp\nMCP 运行时状态闭集\n支持 · closed / connected / connecting / disconnected / failed / needs-auth\nRPC 通道真的通了\n支持 · 来自 pi-compat 的能力三值\nNative MCP 生效\n支持 · 原生状态：active\n还没法下结论的核心 probe：rpc（未知 ≠ 不支持）\n前端观察到的 schema 漂移（只有来源 / 字段名 / 类型，没有值）：\ntool.name · unknown-tool · string\n兼容矩阵（我们核对过什么）\n当前验证基线\n1.0.0\nPi 0.87.0\n历史基线 · 核对于 2026-09-30\nPi 0.99.1\n历史基线 · 核对于 2026-10-01\nPi 0.99.2\n历史基线 · 核对于 2026-10-01\nPi 1.0.0\n当前基线 · 核对于 2026-10-02\n已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：\npi-web-access\n0.33.0 · 核对于 2026-09-30\npi-subagents\n0.73.1 · 核对于 2026-09-30\npi-memory\n0.4.2 · 核对于 2026-09-30\npi-browser-harness\n0.11.0 · 核对于 2026-10-01\n已知上游差异（升级时逐条复核）：\napproval-doc-wording · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 Approval 能力报告\ndialog-doc-moved · 0.87.0 / 0.99.1 → 0.99.2 · 影响 P19 / P23 契约 probe\niserror-propagation · 0.87.0 → 0.99.1 · 影响 P18 / P20 成功证据\nNative MCP\n原生状态\n生效中\nserver 条目\n2\n项目信任\n已信任\nbuiltin:mcp 在包里、未被禁用、未被接管\n关键 Extension 版本\npi-web-access@1.4.0\n用户 · 已加载\npi-memory@0.4.2\n用户 · 加载未知\n只有 package.json 里读到版本号的才列出来；版本是否与兼容矩阵一致，见上面的矩阵一节。\n健康检查\ndata-readable\n正常\ndata-writable\n正常\nproject-readable\n正常\nproject-writable\n正常\npi-running\n正常\nAgent\npi\n可用 · 0.99.2\n脱敏后的诊断 JSON\n{\n  \"schemaVersion\": 1,\n  \"generatedAt\": \"2026-10-02T00:00:00.000Z\",\n  \"app\": {\n    \"id\": \"pi-gui\",\n    \"version\": \"0.15.0\"\n  },\n  \"system\": {\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"node\": \"v24.14.0\",\n    \"os\": \"Windows_NT\",\n    \"release\": \"10.0.26100\"\n  },\n  \"project\": {\n    \"selected\": true,\n    \"name\": \"pi-GUI\",\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"data\": {\n    \"readable\": true,\n    \"writable\": true\n  },\n  \"bridge\": {\n    \"piRunning\": true,\n    \"bridgeRun\": 12,\n    \"hasProject\": true,\n    \"args\": [\n      \"--mode\",\n      \"rpc\"\n    ]\n  },\n  \"pi\": {\n    \"configuredBin\": \"pi\",\n    \"available\": true,\n    \"version\": \"0.99.2\",\n    \"versionSource\": \"package.json\",\n    \"verification\": {\n      \"status\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"launch\": {\n      \"source\": \"path\",\n      \"binName\": \"pi.cmd\",\n      \"entryKnown\": true,\n      \"packageDirKnown\": true\n    }\n  },\n  \"agents\": [\n    {\n      \"id\": \"pi\",\n      \"available\": true,\n      \"version\": \"0.99.2\",\n      \"reason\": null,\n      \"capabilities\": null\n    }\n  ],\n  \"mcp\": {\n    \"supported\": true,\n    \"piVersion\": \"0.99.2\",\n    \"error\": null,\n    \"native\": {\n      \"fresh\": true,\n      \"state\": \"active\",\n      \"reason\": \"builtin:mcp 在包里、未被禁用、未被接管\",\n      \"replaced\": false,\n      \"disabled\": null,\n      \"builtinPresent\": true,\n      \"serverCount\": 2,\n      \"trust\": true\n    }\n  },\n  \"probes\": {\n    \"at\": \"2026-10-02T00:00:00.000Z\",\n    \"packageKnown\": true,\n    \"summary\": {\n      \"total\": 14,\n      \"supported\": 8,\n      \"unsupported\": 0,\n      \"unknown\": 6,\n      \"unverified\": [\n        \"rpc\"\n      ]\n    },\n    \"items\": [\n      {\n        \"id\": \"rpc-commands\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 命令集\",\n        \"state\": true,\n        \"evidence\": \"dist/modes/rpc/rpc-types.d.ts: RpcCommand 联合共 33 条\"\n      },\n      {\n        \"id\": \"rpc-no-tool-list\",\n        \"kind\": \"source\",\n        \"label\": \"RPC 无工具清单命令\",\n        \"state\": true,\n        \"evidence\": \"33 条里没有 *tool*\"\n      },\n      {\n        \"id\": \"extension-ui\",\n        \"kind\": \"source\",\n        \"label\": \"扩展 UI 对话框子协议\",\n        \"state\": true,\n        \"evidence\": \"docs/rpc-extension-ui.md: block until the client sends back an extension_ui_response\"\n      },\n      {\n        \"id\": \"approval-hook\",\n        \"kind\": \"source\",\n        \"label\": \"tool_call 可阻断\",\n        \"state\": true,\n        \"evidence\": \"block?: boolean;；tool_call can mutate input or block execution.\"\n      },\n      {\n        \"id\": \"core-approval\",\n        \"kind\": \"source\",\n        \"label\": \"核心自带审批闸门\",\n        \"state\": null,\n        \"evidence\": \"docs/usage.md 里没有明确说法，不能据此断言核心有没有审批\"\n      },\n      {\n        \"id\": \"builtin-mcp\",\n        \"kind\": \"source\",\n        \"label\": \"builtin:mcp\",\n        \"state\": true,\n        \"evidence\": \"builtInExtensions: llama.cpp / codemode / tool-search / mcp\"\n      },\n      {\n        \"id\": \"mcp-runtime-states\",\n        \"kind\": \"source\",\n        \"label\": \"MCP 运行时状态闭集\",\n        \"state\": true,\n        \"evidence\": \"closed / connected / connecting / disconnected / failed / needs-auth\"\n      },\n      {\n        \"id\": \"rpc\",\n        \"kind\": \"runtime\",\n        \"label\": \"RPC 通道真的通了\",\n        \"state\": true,\n        \"evidence\": \"来自 pi-compat 的能力三值\"\n      },\n      {\n        \"id\": \"mcp-native\",\n        \"kind\": \"runtime\",\n        \"label\": \"Native MCP 生效\",\n        \"state\": true,\n        \"evidence\": \"原生状态：active\"\n      }\n    ]\n  },\n  \"matrix\": {\n    \"piBaselines\": [\n      {\n        \"version\": \"0.87.0\",\n        \"verifiedAt\": \"2026-09-30\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.1\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      {\n        \"version\": \"1.0.0\",\n        \"verifiedAt\": \"2026-10-02\",\n        \"scope\": \"current\"\n      }\n    ],\n    \"currentBaseline\": \"1.0.0\",\n    \"extensionBaselines\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"0.33.0\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-subagents\",\n        \"version\": \"0.73.1\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"verifiedAt\": \"2026-09-30\"\n      },\n      {\n        \"name\": \"pi-browser-harness\",\n        \"version\": \"0.11.0\",\n        \"verifiedAt\": \"2026-10-01\"\n      }\n    ],\n    \"nativeMcp\": {\n      \"builtinId\": \"mcp\",\n      \"replaceable\": true,\n      \"serverStates\": [],\n      \"exposures\": [],\n      \"cliSubcommands\": []\n    },\n    \"knownDifferences\": [\n      {\n        \"id\": \"approval-doc-wording\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 Approval 能力报告\"\n      },\n      {\n        \"id\": \"dialog-doc-moved\",\n        \"between\": \"0.87.0 / 0.99.1 → 0.99.2\",\n        \"affects\": \"P19 / P23 契约 probe\"\n      },\n      {\n        \"id\": \"iserror-propagation\",\n        \"between\": \"0.87.0 → 0.99.1\",\n        \"affects\": \"P18 / P20 成功证据\"\n      }\n    ]\n  },\n  \"extensions\": {\n    \"discovered\": 5,\n    \"items\": [\n      {\n        \"name\": \"pi-web-access\",\n        \"version\": \"1.4.0\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": true\n      },\n      {\n        \"name\": \"pi-memory\",\n        \"version\": \"0.4.2\",\n        \"scope\": \"global\",\n        \"installed\": true,\n        \"loaded\": null\n      }\n    ]\n  },\n  \"checks\": [\n    {\n      \"id\": \"data-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"data-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-readable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"project-writable\",\n      \"ok\": true\n    },\n    {\n      \"id\": \"pi-running\",\n      \"ok\": true\n    }\n  ],\n  \"compatibility\": {\n    \"status\": \"compatible\",\n    \"detected\": true,\n    \"piVersion\": \"0.99.2\",\n    \"versionKnown\": true,\n    \"versionSource\": {\n      \"source\": \"package.json\",\n      \"status\": \"known\",\n      \"updatedAt\": \"2026-10-02T00:00:00.000Z\"\n    },\n    \"versionVerification\": {\n      \"verification\": \"verified\",\n      \"verifiedAgainst\": {\n        \"version\": \"0.99.2\",\n        \"verifiedAt\": \"2026-10-01\",\n        \"scope\": \"historical\"\n      },\n      \"relative\": \"same\"\n    },\n    \"capabilities\": {\n      \"rpc\": true,\n      \"getState\": true,\n      \"getMessages\": true,\n      \"newSession\": true,\n      \"switchSession\": true,\n      \"sessionNaming\": true,\n      \"toolEvents\": true,\n      \"extensionUi\": true,\n      \"sessionJsonl\": true\n    },\n    \"missing\": [],\n    \"unverified\": [],\n    \"protocol\": {\n      \"expected\": 1,\n      \"observed\": 1\n    },\n    \"schema\": {\n      \"unknownFields\": [],\n      \"unknownEnums\": []\n    },\n    \"issues\": []\n  },\n  \"privacy\": {\n    \"absolutePathsIncluded\": false,\n    \"conversationContentIncluded\": false,\n    \"configFileContentIncluded\": false,\n    \"environmentIncluded\": false,\n    \"protocolPayloadsIncluded\": false,\n    \"schemaDriftValuesIncluded\": false,\n    \"redactionApplied\": true\n  }\n}\n复制诊断摘要\n复制诊断 JSON\n导出 JSON\n刷新\n关闭"
+    },
+    {
+      "name": "light-1920-navLogs",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n日志与故障报告\n本地日志只保存在这台机器上，不会自动上传。这里显示的是后端再次脱敏后的结构化事件；复制/导出前请自行检查。\n概览\n日志查看\n导出故障报告\n打开日志查看\n复制诊断摘要\n导出故障报告\n状态\n已开启\n模式\n标准\n保留\n7 天 · 总上限 20 MB\n磁盘占用\n72.0 KB · 3 个文件 · 崩溃 1\n上次运行\n正常或首次运行\n写入状态\n正常\n日志设置\n启用本地日志\n日志级别\n标准（INFO 及以上）\n详细（含临时技术元信息）\n保留天数\n1 天\n3 天\n7 天\n14 天\n30 天\n空间上限\n10 MB\n20 MB\n50 MB\n清理日志\n最近错误\n2026/10/17 19:59:00\n错误\npi-bridge · bridge.request_timeout · BRIDGE_TIMEOUT\n引用\n2026/10/17 19:58:00\n警告\nruntime · runtime.owner_rejected · OWNER_STALE\n引用\n最近日志文件\napp-20261017.jsonl\n57.0 KB\nmain-20261017.jsonl\n7.0 KB\napp-crash-20261017.jsonl\n8.0 KB\n刷新\n关闭"
+    },
+    {
+      "name": "light-1920-navAppearance",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "light-1920-navShortcutHelp",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n键盘快捷键\nWindows / Linux 映射。在输入框里打字时不会被抢 —— 不带修饰键的组合一律让给文本输入。\n通用\n打开命令面板\nCtrl+K\n打开命令面板（备用键）\nCtrl+Shift+P\n键盘快捷键帮助\nCtrl+/\n视图\n切到对话\nAlt+1\n切到任务\nAlt+2\n切到文件变更\nAlt+3\n切到扩展与能力\nAlt+4\n输入与弹层\n发送消息\nEnter\n换行\nShift+Enter\n停止生成 / 关闭浮层\nEsc\n列表与面板内移动\n↑ ↓ · Tab\n危险确认框\nTab / Enter（主操作需显式点击）\n关闭"
+    },
+    {
+      "name": "light-1440-provider-error",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n模型供应商\n这里添加的供应商会写进 pi 的 C:\\fixture\\agent\\models.json，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。\n离线fixture：供应商读取失败，请重试。重试\n添加供应商\n重载 pi 配置\n关闭"
+    },
+    {
+      "name": "light-1440-settings-zoom-1.25",
+      "width": 1152,
+      "height": 720,
+      "dpr": 1.875,
+      "pageWidth": 1152,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 720.0000610351562,
+        "top": 0,
+        "right": 264,
+        "bottom": 720.0000610351562,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "light-1440-settings-zoom-1.5",
+      "width": 960,
+      "height": 600,
+      "dpr": 2.25,
+      "pageWidth": 960,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 600,
+        "top": 0,
+        "right": 264,
+        "bottom": 600,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "light-1440-settings-zoom-2",
+      "width": 720,
+      "height": 450,
+      "dpr": 3,
+      "pageWidth": 720,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 190,
+        "height": 450,
+        "top": 0,
+        "right": 190,
+        "bottom": 450,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    }
+  ],
+  "checks": [
+    {
+      "name": "dark/1280/navProviders central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navProviders fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1280 provider form owns page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navProviders keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navProviders Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navProviderAuth central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navProviderAuth fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navProviderAuth keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navProviderAuth Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppUpdates central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppUpdates fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppUpdates keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppUpdates Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navDiagnostics central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navDiagnostics fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navDiagnostics keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navDiagnostics Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navLogs central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navLogs fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navLogs keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navLogs Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppearance central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppearance fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppearance keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navAppearance Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navShortcutHelp central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navShortcutHelp fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navShortcutHelp keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1280/navShortcutHelp Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1280 details retain chat draft",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviders central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviders fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1440 provider form owns page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviders keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviders Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviderAuth central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviderAuth fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviderAuth keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navProviderAuth Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppUpdates central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppUpdates fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppUpdates keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppUpdates Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navDiagnostics central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navDiagnostics fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navDiagnostics keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navDiagnostics Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navLogs central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navLogs fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navLogs keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navLogs Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppearance central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppearance fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppearance keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navAppearance Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navShortcutHelp central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navShortcutHelp fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navShortcutHelp keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1440/navShortcutHelp Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1440 details retain chat draft",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviders central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviders fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1920 provider form owns page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviders keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviders Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviderAuth central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviderAuth fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviderAuth keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navProviderAuth Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppUpdates central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppUpdates fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppUpdates keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppUpdates Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navDiagnostics central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navDiagnostics fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navDiagnostics keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navDiagnostics Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navLogs central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navLogs fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navLogs keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navLogs Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppearance central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppearance fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppearance keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navAppearance Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navShortcutHelp central isolated page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navShortcutHelp fits viewport",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navShortcutHelp keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "dark/1920/navShortcutHelp Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "dark/1920 details retain chat draft",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviders central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviders fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1280 provider form owns page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviders keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviders Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviderAuth central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviderAuth fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviderAuth keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navProviderAuth Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppUpdates central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppUpdates fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppUpdates keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppUpdates Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navDiagnostics central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navDiagnostics fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navDiagnostics keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navDiagnostics Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navLogs central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navLogs fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navLogs keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navLogs Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppearance central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppearance fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppearance keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navAppearance Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navShortcutHelp central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navShortcutHelp fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navShortcutHelp keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1280/navShortcutHelp Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1280 details retain chat draft",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviders central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviders fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1440 provider form owns page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviders keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviders Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviderAuth central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviderAuth fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviderAuth keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navProviderAuth Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppUpdates central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppUpdates fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppUpdates keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppUpdates Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navDiagnostics central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navDiagnostics fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navDiagnostics keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navDiagnostics Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navLogs central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navLogs fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navLogs keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navLogs Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppearance central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppearance fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppearance keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navAppearance Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navShortcutHelp central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navShortcutHelp fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navShortcutHelp keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1440/navShortcutHelp Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1440 details retain chat draft",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviders central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviders fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1920 provider form owns page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviders keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviders Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviderAuth central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviderAuth fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviderAuth keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navProviderAuth Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppUpdates central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppUpdates fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppUpdates keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppUpdates Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navDiagnostics central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navDiagnostics fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navDiagnostics keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navDiagnostics Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navLogs central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navLogs fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navLogs keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navLogs Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppearance central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppearance fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppearance keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navAppearance Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navShortcutHelp central isolated page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navShortcutHelp fits viewport",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navShortcutHelp keyboard reaches page",
+      "ok": true
+    },
+    {
+      "name": "light/1920/navShortcutHelp Escape returns settings",
+      "ok": true
+    },
+    {
+      "name": "light/1920 details retain chat draft",
+      "ok": true
+    },
+    {
+      "name": "provider error feedback",
+      "ok": true
+    },
+    {
+      "name": "provider retry recovers current page",
+      "ok": true
+    },
+    {
+      "name": "settings page zoom 1.25 fits",
+      "ok": true
+    },
+    {
+      "name": "settings page zoom 1.5 fits",
+      "ok": true
+    },
+    {
+      "name": "settings page zoom 2 fits",
+      "ok": true
+    }
+  ],
+  "nativeEvidence": {},
+  "errors": []
+}

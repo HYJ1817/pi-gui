@@ -1,0 +1,43 @@
+  ok  提取完整稳定 locator
+  ok  nativeSessionId 冲突时返回 null
+  ok  workspace 字段与 owner 冲突时返回 null
+  ok  缺少 projectId 返回 null
+  ok  缺少 workspaceId 返回 null
+  ok  缺少 workspaceEpoch 返回 null
+  ok  缺少 conversationId 返回 null
+  ok  缺少 nativeSessionId 返回 null
+  ok  dormant 会话提取 nativeSessionId
+  ok  超过 512 字符的非法身份返回 null
+  ok  生成合规 key 前缀与结构
+  ok  无效 locator 返回 null
+  ok  部分空字段 locator 返回 null
+  ok  特殊字符安全 encodeURIComponent 编码
+  ok  相同 locator 判定一致
+  ok  nativeSessionId 不同判定不一致
+  ok  workspaceEpoch 不同判定不一致
+  ok  conversationId 不同判定不一致
+  ok  正常保存返回 saved
+  ok  正常恢复纯文本
+  ok  空文本返回 empty
+  ok  空文本后持久副本已清除
+  ok  20000 字符正常保存
+  ok  20000 字符正常恢复
+  ok  超限返回 exceeded
+  ok  超限保留内存完整文本
+  ok  超限清除了持久副本防止旧稿残留
+  ok  超限后缩短可重新保存
+  ok  缩短后恢复正常
+  ok  无 key 保存返回 unbound
+  ok  文本不匹配时拒绝清除
+  ok  拒绝清除后草稿仍在
+  ok  文本匹配时成功清除
+  ok  清除后草稿为空
+  ok  损坏 JSON 恢复为空字符串且不抛错
+  ok  恢复时若发现超长文本拒绝恢复并清除
+  ok  调度后尚未触发 flush
+  ok  防抖时间到达后触发保存
+  ok  恢复防抖保存文本
+  ok  flush 立即同步保存
+  ok  恢复 flush 文本
+  ok  flush 后 pending 已清空
+Runtime draft tests: 42/42

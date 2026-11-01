@@ -1,0 +1,80 @@
+
+--- 1. Markdown 渲染与流式未闭合围栏安全 ---
+  ok   closed pi-gui-viz renders .viz-card
+  ok   viz-card contains title and meta
+  ok   unclosed streaming fence stays as plain code block (no viz-card)
+  ok   malformed json falls back to regular code block
+  ok   malicious type safely falls back to regular code block
+
+--- 2. 柱状图零基线与极端数值几何 ---
+  ok   all positive bar bounds min is exactly 0
+  ok   all positive bar bounds max covers top with padding
+  ok   all negative bar bounds max is exactly 0
+  ok   all negative bar bounds min covers lowest negative
+  ok   constant negative bar bounds max is exactly 0
+  ok   constant negative bar bounds min covers constant value
+  ok   cross-zero bar bounds spans across 0
+  ok   renders 3 bars for cross-zero dataset
+  ok   cross-zero bar chart renders visible zero line
+
+--- 3. 统计摘要精确数值计算（带已知期望值） ---
+  ok   full range avg is exactly 30
+  ok   full range min is 10 and max is 50
+  ok   full range overCount is 2
+  ok   sliced summary reflects rangeLimit 3
+  ok   sliced summary reflects sliced avg 40
+  ok   sliced summary reflects sliced min 30 and max 50
+  ok   sliced summary reflects overCount 2
+
+--- 4. 界面卡片与右栏受控参数交互（真实 Classic 消息） ---
+  ok   real classic assistant message article.msg.assistant created via messages.js
+  ok   viz card is inside real article.msg.assistant
+  ok   raw code is initially hidden
+  ok   clicking toggle reveals raw code
+  ok   clicking toggle again hides raw code
+  ok   right pane is opened
+  ok   panel title matches
+  ok   switched to bar chart in DOM
+  ok   deactivated series 2
+  ok   prevented deactivating the last active series
+
+--- 5. 会话身份隔离与拒绝验证（Classic 真实环境） ---
+  ok   classic quote succeeds and preserves draft
+  ok   mismatched classic session rejects quote without modifying draft
+  ok   source message disconnected from DOM
+  ok   disconnected source message rejects quote without modifying draft
+  ok   re-opened viz panel from newly rebuilt message
+  ok   message cleared on history rebuild
+  ok   stale message after history rebuild rejects quote using current panel button
+  ok   opened viz panel from initial streaming card
+  ok   article.msg.assistant still connected to DOM
+  ok   old viz-card detached from DOM after message repaint
+  ok   replaced old viz-card rejects quote even when article is still connected
+  ok   new viz-card exists in updated message
+  ok   new viz-card can open new panel
+  ok   new viz-card quote succeeds
+  ok   openVizPanel rejects when sourceNode is null
+  ok   openVizPanel rejects when sourceNode is detached from DOM
+
+--- 6. Runtime 真实渲染链路与拥有者校验 ---
+  ok   real runtime rtc-output exists
+  ok   real runtime rtc-output renders viz-card
+  ok   runtime card is inside .rtc-output-block
+  ok   opened viz panel from real runtime card
+  ok   runtime quote successfully targets runtime textarea without being overridden by S.state.sessionId
+  ok   switched runtime conversation rejects quote
+  ok   stale/changed runtime owner rejects quote
+  ok   stale runtime generation rejects quote
+  ok   refreshed runtime live card created in rtc-output
+  ok   old runtime live card detached from DOM
+  ok   refreshed live output invalidates quote from previous live card
+  ok   runtime live source block disconnected from DOM
+  ok   disconnected runtime source block rejects quote
+  ok   runtime history renders viz-card
+  ok   history viz-card is inside [data-history-message-id]
+  ok   opened viz panel from runtime history card
+  ok   history message row disconnected
+  ok   disconnected history message rejects quote using history panel button
+  ok   pane and runtime component safely closed and cleaned up
+
+Viz UI & Review Fixes: 66/66 passed.

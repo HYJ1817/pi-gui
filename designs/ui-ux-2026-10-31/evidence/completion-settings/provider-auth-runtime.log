@@ -1,0 +1,38 @@
+  ok  real readback confirms new runtime
+  ok  restart receives authoritative current session
+  ok  new state models and thinking levels all read back
+  ok  lifecycle subscription removed after ready
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  failed initial state readback refuses restart
+  ok  cwd change during initial read does not restart new workspace
+  ok  busy check rejects restart after state read
+  ok  cwd change during restart fails old synchronization
+  ok  changed workspace receives no old follow-up RPC reads
+  ok  changed workspace removes lifecycle listener
+  ok  failed restart has no false success: error
+  ok  failed restart has no false success: exited
+  ok  failed restart has no false success: no-project
+  ok  spawn ready cannot conceal failed model readback
+  ok  late RPC results from replaced bridge cannot confirm synchronization
+  ok  missing ready event times out rather than reporting success
+  ok  timeout removes lifecycle subscriber
+  ok  old bridge ready cannot complete restart
+  ok  new bridge ready followed by readback completes
+  ok  actual bridge fake RPC session reload succeeds
+  ok  auth readback uses Promise results without broadcasting SSE responses
+  ok  actual bridge passes exact current session launch argv
+  ok  session override consumed once and never leaks to next cwd
+  ok  fake bridge spawned exactly three runs
+  ok  no-project auth synchronization succeeds without restarting a workspace
+  ok  no-project needs no chat readback for user-level auth
+  ok  auth synchronization reserves single flight before lifecycle reentry
+  ok  synchronization exposes busy runtime state
+  ok  second authentication cannot enter during model synchronization
+  ok  concurrent synchronization joins existing operation
+  ok  confirmed synchronization releases guard
+
+36/36 通过

@@ -1,0 +1,225 @@
+[
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 642
+    }
+  },
+  {
+    "event": "capture-start",
+    "attached": true,
+    "bounds": {
+      "x": 809,
+      "y": 179,
+      "width": 391,
+      "height": 642
+    },
+    "loading": false
+  },
+  {
+    "event": "capture-result",
+    "size": {
+      "width": 587,
+      "height": 963
+    },
+    "empty": false
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 808.6666870117188,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "capture-start",
+    "attached": false,
+    "bounds": null,
+    "loading": false
+  },
+  {
+    "event": "capture-result",
+    "size": {
+      "width": 1800,
+      "height": 1230
+    },
+    "empty": false
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 368.66668701171875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 368.66668701171875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "capture-start",
+    "attached": false,
+    "bounds": null,
+    "loading": false
+  },
+  {
+    "event": "capture-result",
+    "size": {
+      "width": 1140,
+      "height": 1230
+    },
+    "empty": false
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 368.66668701171875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "capture-start",
+    "attached": false,
+    "bounds": null,
+    "loading": false
+  },
+  {
+    "event": "capture-result",
+    "size": {
+      "width": 1140,
+      "height": 1230
+    },
+    "empty": false
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 368.66668701171875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 368.66668701171875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 368.66668701171875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  },
+  {
+    "event": "bounds-delayed",
+    "rect": {
+      "x": 368.66668701171875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 640.6666870117188
+    }
+  }
+]

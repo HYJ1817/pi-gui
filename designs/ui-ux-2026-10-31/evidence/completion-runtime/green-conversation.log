@@ -1,0 +1,107 @@
+  ok  切到 A 显示 A 自己的输出
+  ok  切到 B 后不显示 A 的输出
+  ok  切到 B 后输入框为空（草稿不串）
+  ok  切回 A 草稿仍在
+  ok  切回 B 草稿仍在
+  ok  A 的滚动位置被恢复（不串到 B）
+  ok  B 的滚动位置被恢复
+  ok  切到 B 后 A 的新 delta 不进 B 的 DOM
+  ok  切回 A 能看到 A 的迟到 delta（后台确实继续在跑）
+  ok  Stop 带 A 的完整 owner
+  ok  迟到的 A Stop 响应不改 B 的草稿
+  ok  迟到的 A Stop 响应不改 B 的输出
+  ok  A 的审批出现在 A 的视图里
+  ok  切到 B 后显示的是 B 的审批
+  ok  捕获 A 的审批后切 B，应答仍只发给 A 的完整 owner
+  ok  A 的审批应答不清掉 B 自己的审批
+  ok  切到 dormant 只显示已关闭，不自动 spawn、不自动读历史
+  ok  dormant 时不显示发送，显示「恢复会话」与「打开历史」
+  ok  打开历史只发只读请求，不 spawn
+  ok  历史视图明确标注未启动、不占名额
+  ok  历史视图禁止发送
+  ok  只有显式「恢复会话」才发 resume
+  ok  关闭会话带 A 的 captured owner
+  ok  关闭后视图回到已关闭、并给出恢复入口
+  ok  旧 generation 的 delta 不进入重启后的 A
+  ok  新 generation 的 delta 正常进入
+  ok  dormant D 发出历史请求
+  ok  D 的历史返回后，当前会话 E 不显示 D 的历史
+  ok  D 的历史返回不改 E 的状态行
+  ok  D 的历史返回不改 E 的 notice
+  ok  切回 D 能看到自己的历史
+  ok  后回的 D 历史不覆盖当前 E 的历史
+  ok  切到 D 看到的是 D 自己的历史
+  ok  A 的 Stop 已发出且仍未完成
+  ok  A pending 时切到 B，B 的控件不被 A 的 busy 禁用
+  ok  A 的 Stop 失败响应不改 B 的 notice
+  ok  A 的 Stop 失败响应不改 B 的 state
+  ok  A 的 Stop 失败响应不改 B 的 output
+  ok  A 的 Stop 失败响应不改 B 的草稿
+  ok  A 的 Stop 失败响应不禁用 B 的控件
+  ok  A 的迟到失败只记在 A 自己身上
+  ok  切回 B 后 B 的 notice 仍为空（A 的错误不跟过来）
+  ok  恢复请求接收确认时还不 focus 未就绪的 owner
+  ok  ready 尚未绑定原生 sessionId 时不消耗 focus 意图
+  ok  当前历史会话恢复就绪后 focus 完整 ready owner
+  ok  切走后的恢复就绪不会抢走 B 焦点
+  ok  切走再切回不重新创建迟到 focus 意图
+  ok  离开经典视图再返回不恢复迟到 focus 意图
+  ok  初始状态发送按钮启用
+  ok  keyCode=229 不发送
+  ok  isComposing=true 不发送
+  ok  compositionstart 后的兼容 Enter 不发送
+  ok  compositionend 后下一次正常 Enter 发送恰好一次
+  ok  Shift+Enter 不发送且不 preventDefault
+  ok  切换 A/B 会话不继承错误 composition 状态且能正常发送
+  ok  busy 状态按 Enter 不产生误发送
+  ok  切到 B 后输入框为空
+  ok  重开后自动恢复 A 草稿
+  ok  恢复草稿绝不自动触发网络发送
+  ok  切到 B 后自动恢复 B 草稿
+  ok  点击发送发出 prompt
+  ok  旧 ACK 不清除用户新输入的草稿
+  ok  成功发送后草稿被清除
+  ok  清空后再次打开草稿为空
+  ok  超限显示内联提示
+  ok  缩短后内联提示隐藏
+  ok  旧草稿已持久化
+  ok  清空后输入框立即为空
+  ok  清空后内存草稿立即为空
+  ok  防抖期间触发 draw 绝不恢复旧草稿到输入框
+  ok  防抖期间触发 draw 绝不恢复旧草稿到 store
+  ok  清空后重新输入的草稿能正常持久化保存
+  ok  清空后持久副本被立即删除
+  ok  会话切换到不同稳定 locator 后输入框移走旧草稿
+  ok  新身份下 store 草稿为空
+  ok  文本A已发出待ACK
+  ok  相同文本与Owner下状态快照插入后旧ACK绝不清空新草稿
+  ok  store中新草稿同样完整保留
+  ok  1. 正文之间正确插入工具行
+  ok  7. completed/error/unknown 状态文案映射准确
+  ok  5. 新版 API 状态行包含只读工具摘要说明及不完整提示
+  ok  2. 多个工具共享一个位置并保持后端顺序插在正文之间
+  ok  3. messagePosition=0 插入在首条正文之前
+  ok  4. messagePosition=messages.length 插入在正文末尾
+  ok  5. messagePosition=null 位于独立的“位置未确认”只读区域
+  ok  6. 非法位置安全降级至未确认区域，正文正常显示
+  ok  8. 旧 API 不含 toolSummary 时保持正文-only 兼容提示且无工具行
+  ok  9. 空摘要不产生多余元素，状态行正常
+  ok  10. 100项摘要容量边界正常渲染且数量完全吻合
+  ok  11. 正文800项截断与摘要100项截断并存时提示清晰且未确认区域正常隔离
+  ok  12. 历史搜索按 messageId 精确定位到正文行而非工具行
+  ok  13. 历史搜索按 userIndex 精确定位到正文行而非工具行
+  ok  切到 B 显示 B 自己的历史与工具
+  ok  14. A 请求迟到不覆盖当前会话 B 的工具摘要与正文
+  ok  新响应正常呈现
+  ok  15. 同一会话较旧响应因代次被丢弃，不覆盖新响应
+  ok  16. locator 变化拒绝显示旧摘要并给出 notice
+  ok  LIVE 会话已显示历史工具行
+  ok  17. 返回实时会话后历史工具行与未确认区域完全清除
+  ok  恢复前历史工具已呈现
+  ok  18. 显式恢复会话发起了 resume 且历史摘要被清空
+  ok  19. 恶意工具名称及状态转义为纯文本，无 HTML 标签注入
+  ok  只读历史下发送按钮与输入框禁用
+  ok  20. 只读历史界面交互绝不产生工具、审批或 prompt 动作
+  ok  Runtime output uses semantic Markdown headings, lists and code without fabricated live roles
+  ok  Runtime Markdown keeps raw HTML inert and rejects unsafe links
+Runtime conversation: 106/106

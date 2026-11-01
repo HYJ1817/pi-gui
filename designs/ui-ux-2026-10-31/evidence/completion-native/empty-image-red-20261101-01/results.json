@@ -1,0 +1,41 @@
+{
+  "qualification": "failed-normal-sandbox",
+  "sandbox": true,
+  "checks": 3,
+  "failed": 1,
+  "skipped": 0,
+  "rows": [
+    "Electron starts with normal sandbox, isolated context and no Node integration",
+    "renderer connects to the production backend and fake Pi",
+    "workspace and owner identity belong to the temporary Git repository"
+  ],
+  "screenshots": [],
+  "geometry": [],
+  "nativeCaptures": [
+    {
+      "attached": false,
+      "bounds": null,
+      "loading": false,
+      "size": {
+        "width": 0,
+        "height": 0
+      },
+      "empty": true,
+      "bytes": 0
+    }
+  ],
+  "errors": [],
+  "electron": "44.4.3",
+  "node": "24.21.0",
+  "platform": "win32",
+  "fixture": "temporary Git, production server/renderer/preload/Browser, existing fake Pi; loopback only; no external CDP port",
+  "processCleanup": {
+    "observed": 12,
+    "residual": 0
+  },
+  "exit": {
+    "code": 1,
+    "signal": null
+  },
+  "failureReason": "Electron fixture must finish explicitly\n\n1 !== 0\n"
+}

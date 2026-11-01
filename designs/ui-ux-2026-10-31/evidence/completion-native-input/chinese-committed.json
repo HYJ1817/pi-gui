@@ -1,0 +1,245 @@
+{
+  "events": [
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": false,
+      "length": 0
+    },
+    {
+      "type": "compositionstart",
+      "composing": false,
+      "length": 0
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 0
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 1
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 1
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 2
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 2
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 4
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 4
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 4
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 5
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 5
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 5
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 6
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 6
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 6
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 5
+    },
+    {
+      "type": "compositionend",
+      "composing": false,
+      "length": 5
+    },
+    {
+      "type": "keydown",
+      "key": "Control",
+      "composing": false,
+      "length": 5
+    },
+    {
+      "type": "keydown",
+      "key": "a",
+      "composing": false,
+      "length": 5
+    },
+    {
+      "type": "keydown",
+      "key": "Backspace",
+      "composing": false,
+      "length": 5
+    },
+    {
+      "type": "input",
+      "composing": false,
+      "length": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": false,
+      "length": 0
+    },
+    {
+      "type": "compositionstart",
+      "composing": false,
+      "length": 0
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 0
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 1
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 1
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 2
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 2
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 4
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 4
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 4
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 5
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 5
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 5
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 6
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "composing": true,
+      "length": 6
+    },
+    {
+      "type": "compositionupdate",
+      "composing": false,
+      "length": 6
+    },
+    {
+      "type": "input",
+      "composing": true,
+      "length": 2
+    },
+    {
+      "type": "compositionend",
+      "composing": false,
+      "length": 2
+    }
+  ],
+  "requests": 0,
+  "length": 2,
+  "matchesChineseFixture": true,
+  "dpr": 1.5,
+  "zoom": 1,
+  "active": "input"
+}

@@ -4,10 +4,10 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const http = require('node:http'), net = require('node:net'), crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const root = path.resolve(__dirname, '../../..');
-const build = path.resolve(fs.readFileSync(path.join(__dirname, '../evidence/production-build-final-path.txt'), 'utf8').trim());
+const build = path.resolve(process.env.DESIGN_PACKAGE_BUILD_ROOT || fs.readFileSync(path.join(__dirname, '../evidence/production-build-final-path.txt'), 'utf8').trim());
 const appDir = path.join(build, 'dist-app/Pi GUI-win32-x64');
 const assets = path.join(appDir, 'resources/app/public');
-const out = path.resolve(__dirname, '../evidence/production-package');
+const out = path.resolve(process.env.DESIGN_PACKAGE_OUTPUT_ROOT || path.resolve(__dirname, '../evidence/production-package'));
 const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-refined-package-'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const facts = { fixture: 'actual packaged executable, bundled renderer/preload; existing offline visual harness; TEMP user data; not production backend E2E', checks: [], assets: [], screenshots: [], errors: [] };
@@ -56,6 +56,12 @@ async function main() {
   check('bundled model search is reachable', await read(`Boolean(document.querySelector('.ui3-model-search'))`)); await shot('packaged-model');
   await read(`document.getElementById('btnModel').focus();document.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));document.getElementById('navGlobalMore').click()`);
   check('bundled Settings opens real workspace surface', await read(`document.getElementById('workspace').dataset.workspaceView==='settings'`)); await shot('packaged-settings');
+  if (process.env.DESIGN_PACKAGE_BUILD_ROOT) {
+    await read(`document.getElementById('navAppearance').click()`);
+    check('bundled Settings detail uses central form and keeps modal separate', await read(`document.getElementById('modal').hidden&&!!document.querySelector('#workSurface .settings-detail-card select')`));
+    await shot('packaged-settings-appearance');
+    check('bundled Runtime includes dedicated Refined stylesheet', await read(`!![...document.styleSheets].find(sheet=>sheet.href?.endsWith('/runtime-conversation.css'))`));
+  }
   await send('Browser.close').catch(() => {});
 }
 main().catch(error => { facts.errors.push(error.stack); process.exitCode = 1; }).finally(async () => {

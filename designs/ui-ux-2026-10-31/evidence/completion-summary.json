@@ -1,0 +1,126 @@
+{
+  "recordedAt": "2026-11-01T14:43:58.105Z",
+  "canonical": {
+    "state": "passed",
+    "exitCode": 0,
+    "elapsedSeconds": 4639.44,
+    "unchangedInputs": true,
+    "inputDigest": "8ef4ec46eb746509b22bf37ab9da3b8820690a33966fc41044d0b8c61de14931",
+    "log": "completion-canonical-final-3/npm-test.log",
+    "totalCommands": 231,
+    "environmentSkipped": 21
+  },
+  "ui": {
+    "smoke": "1338/1338",
+    "uiIa": "26/26",
+    "runtimeSource": "430/430",
+    "runtimeElectron": {
+      "checks": 168,
+      "screenshots": 24,
+      "errors": 0
+    },
+    "settings": {
+      "checks": 185,
+      "screenshots": 53,
+      "errors": 0
+    },
+    "modelRender": "140/140",
+    "nativeInput": "6/6"
+  },
+  "nativeBrowser": {
+    "failedAttempt": "completion-native/final-exact/results.json",
+    "passedRetry": "completion-native/final-exact-retry/results.json",
+    "passedChecks": "11/11",
+    "rootCauseUnknown": true
+  },
+  "package": [
+    {
+      "name": "all packaged renderer assets match final source",
+      "ok": true
+    },
+    {
+      "name": "real packaged desktop preload and Electron renderer",
+      "ok": true
+    },
+    {
+      "name": "single sidebar and real model search render from bundled assets",
+      "ok": true
+    },
+    {
+      "name": "bundled model search is reachable",
+      "ok": true
+    },
+    {
+      "name": "bundled Settings opens real workspace surface",
+      "ok": true
+    },
+    {
+      "name": "bundled Settings detail uses central form and keeps modal separate",
+      "ok": true
+    },
+    {
+      "name": "bundled Runtime includes dedicated Refined stylesheet",
+      "ok": true
+    }
+  ],
+  "rendererAssets": {
+    "count": 149,
+    "mismatches": 0
+  },
+  "appCheck": "26/26",
+  "oneModelCall": {
+    "qualification": "one real model generation through existing SessionRuntime RPC; not complete GUI/model/tool E2E",
+    "started": "2026-11-01T11:55:02.929Z",
+    "modelCalls": 1,
+    "toolEvents": 0,
+    "checks": [
+      {
+        "name": "installed official Pi Node entry is proven",
+        "ok": true
+      },
+      {
+        "name": "Pi confirms selected default provider and model",
+        "ok": true
+      },
+      {
+        "name": "one native agent started and returned assistant message",
+        "ok": true
+      },
+      {
+        "name": "response matches the fixed fixture phrase",
+        "ok": false
+      }
+    ],
+    "rawPayloadsStored": false,
+    "provider": "magpie",
+    "model": "workbuddy/hy4-preview-f",
+    "promptSha256": "318d1e036b4e1c41c21399ea8d2f396289b72b4208f8a0e571300614ec84445c",
+    "ok": false,
+    "errorKind": "check_failed",
+    "cleanupConfirmed": true,
+    "ended": "2026-11-01T11:55:04.599Z",
+    "tempRemoved": true
+  },
+  "environmentSkipped": 21,
+  "notVerified": [
+    "historical UnknownVizError root cause",
+    "other IMEs and assistive technology",
+    "every physical DPI/display combination",
+    "full GUI-driven real-model/tool E2E"
+  ],
+  "submitted": false,
+  "pushed": false,
+  "merged": false,
+  "published": false,
+  "installed": false,
+  "gallery": {
+    "images": 95,
+    "comparisons": 6,
+    "missing": 0
+  },
+  "reports": [
+    "designs/ui-ux-2026-10-31/reports/21-completion-acceptance.md",
+    "designs/ui-ux-2026-10-31/completion-review.html",
+    "designs/ui-ux-2026-10-31/evidence/completion-build-manifest.json"
+  ]
+}

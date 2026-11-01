@@ -1,0 +1,35 @@
+  ok  native levels beat static reasoning=false
+  ok  native levels beat static reasoning=null
+  ok  native levels beat static reasoning=true
+  ok  no model
+  ok  pending
+  ok  initial native read pending
+  ok  read failed with old valid levels
+  ok  unconfirmed read
+  ok  expired read
+  ok  invalid model
+  ok  empty
+  ok  only off
+  ok  malformed list
+  ok  dedup/filter without inventing or repairing native tokens
+  ok  invalid tokens cannot enable adjustment
+  ok  Classic/Runtime availability agrees for static false and unknown
+  ok  failed native levels revoke adjustment without changing reliable model/value
+  ok  pending rejects duplicate thinking writes and unlisted levels
+  ok  native thinking failure preserves confirmed value
+  ok  HTTP ACK and native success wait for actual state/levels readback
+  ok  clamped/ignored native thinking command cannot report success
+  ok  model mismatch after native success cannot confirm switch
+  ok  thinking confirmation requires the model captured before writing
+  ok  malformed current level is never repaired into native confirmation
+  ok  Classic/Runtime matrix: false valid
+  ok  Classic/Runtime matrix: unknown valid
+  ok  Classic/Runtime matrix: true empty
+  ok  Classic/Runtime matrix: false empty
+  ok  Classic/Runtime matrix: unknown empty
+  ok  Classic/Runtime matrix: only off
+  ok  Classic/Runtime matrix: no model
+  ok  Classic/Runtime matrix: dedup and invalid
+  ok  A delayed levels cannot pollute B or overwrite a newer A read
+  ok  Owner/generation replacement rejects late levels and requires fresh evidence
+Thinking availability: 34/34 passed

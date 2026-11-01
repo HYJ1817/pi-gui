@@ -1,0 +1,16 @@
+✓ 递归脱敏 secret key 与 Bearer/sk token
+✓ 诊断快照包含稳定 schema 与基础版本信息
+✓ Pi 更新投影只带白名单字段（没有命令 / 参数 / 路径 / 原始输出）
+✓ 维护态只投影 reason（时间戳不进快照）
+✓ 项目只暴露目录名，不暴露绝对路径或 PID
+✓ 诊断快照不包含环境变量或 secret
+✓ 兼容性块存在，且状态与三值能力正确
+✓ 兼容性异常只记结构：不带 secret、不带绝对路径、不带 payload 值
+✓ 未注入兼容层时该块为 null（老调用方不受影响）
+✓ 目录健康检查是只读 access 检查
+✓ PI_BIN 只暴露 basename
+✓ launch identity 进诊断（只有枚举与 basename，无绝对路径）
+✓ 规范版本状态优先于 agent 与 MCP 报告，且带出处
+✓ 没注入 launch / 版本源时字段为 null（老调用方不受影响）
+✓ 无项目时项目与 pi-running 检查返回不可适用
+diagnostics: 15 passed

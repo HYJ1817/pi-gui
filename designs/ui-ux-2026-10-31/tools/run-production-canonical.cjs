@@ -20,10 +20,12 @@ function snapshot() {
 const started = new Date(), before = snapshot();
 fs.writeFileSync(path.join(out, 'input-snapshot.json'), JSON.stringify(before, null, 2));
 const record = { command: 'npm test', cwd: root, head: git('rev-parse', 'HEAD'), branch: git('branch', '--show-current'), node: process.version, platform: process.platform, started: started.toISOString(), pid: process.pid, state: 'running', inputDigest: before.digest };
+const fixtureBypass = process.argv.includes('--fixture-powershell-bypass');
+record.environmentAdjustment = fixtureBypass ? 'PSExecutionPolicyPreference=Bypass only in owned npm test child process tree; no persisted policy modification; no privilege elevation' : 'default inherited environment';
 const save = () => fs.writeFileSync(path.join(out, 'run.json'), JSON.stringify(record, null, 2));
 save();
 const log = fs.openSync(path.join(out, 'npm-test.log'), 'wx');
-const child = spawn('cmd.exe', ['/d', '/s', '/c', 'npm.cmd test'], { cwd: root, env: process.env, windowsHide: true, stdio: ['ignore', log, log] });
+const child = spawn('cmd.exe', ['/d', '/s', '/c', 'npm.cmd test'], { cwd: root, env: { ...process.env, ...(fixtureBypass ? { PSExecutionPolicyPreference: 'Bypass' } : {}) }, windowsHide: true, stdio: ['ignore', log, log] });
 record.launcherPid = child.pid; save();
 child.on('error', error => { record.state = 'failed'; record.error = error.code || 'spawn_error'; record.ended = new Date().toISOString(); save(); fs.closeSync(log); process.exitCode = 1; });
 child.on('exit', (code, signal) => {

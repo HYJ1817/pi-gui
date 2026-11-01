@@ -1,0 +1,21 @@
+{
+  "qualification": "one real model generation through existing SessionRuntime RPC; not complete GUI/model/tool E2E",
+  "started": "2026-11-01T11:53:24.972Z",
+  "modelCalls": 0,
+  "toolEvents": 0,
+  "checks": [
+    {
+      "name": "installed official Pi Node entry is proven",
+      "ok": true
+    }
+  ],
+  "rawPayloadsStored": false,
+  "provider": "magpie",
+  "model": "workbuddy/hy4-preview-f",
+  "promptSha256": "318d1e036b4e1c41c21399ea8d2f396289b72b4208f8a0e571300614ec84445c",
+  "ok": false,
+  "errorKind": "probe_timeout",
+  "cleanupConfirmed": true,
+  "ended": "2026-11-01T11:54:25.031Z",
+  "tempRemoved": true
+}

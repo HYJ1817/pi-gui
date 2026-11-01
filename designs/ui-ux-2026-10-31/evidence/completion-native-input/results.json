@@ -1,0 +1,37 @@
+{
+  "qualification": "Windows native SendInput through Computer Use and real Pinyin composition; offline TEMP visual backend, no model call",
+  "checks": [
+    {
+      "name": "real native composition events observed",
+      "ok": true
+    },
+    {
+      "name": "IME confirmation Enter does not send",
+      "ok": true
+    },
+    {
+      "name": "space confirms Chinese fixture without send",
+      "ok": true
+    },
+    {
+      "name": "Shift Enter creates a newline only",
+      "ok": true
+    },
+    {
+      "name": "ordinary Enter sends exactly once and clears composer",
+      "ok": true
+    },
+    {
+      "name": "real window device scale observed",
+      "ok": true
+    }
+  ],
+  "passed": 6,
+  "failed": 0,
+  "screenshot": "windows-ime-chinese.png",
+  "notProven": [
+    "physical hardware keyboard diversity",
+    "other OS IMEs",
+    "all physical DPI scales"
+  ]
+}

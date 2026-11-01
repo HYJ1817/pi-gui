@@ -1,0 +1,49 @@
+  ok native session title precedes branch
+  ok shell heading matches focused native conversation
+  ok classic background title cannot overwrite runtime heading
+  ok A displays its own selected model
+  ok reasoning uses only provided native levels
+  ok A thinking readback selected
+  ok Runtime composer groups the stable textarea, model controls and send action
+  ok native implementation controls are hidden and excluded from keyboard navigation
+  ok Runtime chips show confirmed native model and thinking values
+  ok Runtime model picker is an accessible local dialog
+  ok Runtime picker filters its actual owner model catalogue
+  ok Runtime picker arrow key reaches the filtered native candidate
+  ok Escape closes Runtime picker and restores chip focus
+  ok Runtime thinking menu exposes exactly the Pi levels with current value marked
+  ok switching conversations invalidates a retained Runtime menu action
+  ok Runtime model chip submits its captured owner choice but displays native readback until confirmation
+  ok Runtime thinking chip submits only a native level while retaining the confirmed value
+  ok Runtime menu Enter activates its focused native candidate exactly once
+  ok an owner replacement invalidates a retained Runtime choice even before a redraw
+  ok selection dispatch captures A identity
+  ok pending setter retains old confirmed selection
+  ok A pending never disables B model
+  ok explicit unsupported reasoning disabled
+  ok unknown reasoning is not guessed
+  ok native levels enable Runtime UI despite static false
+  ok native levels enable Runtime UI despite static null
+  ok off-only UI is disabled with specific native reason
+  ok failed read cannot enable stale options and explains retry
+  ok failed read selects its reason instead of an absent old value
+  ok native read pending is explicit in Runtime UI
+  ok no-model UI discards even valid levels
+  ok A confirmation cannot change visible B selector
+  ok return A shows readback model
+  ok activity does not repeatedly fetch models
+  ok Shift Enter does not submit
+  ok IME Enter does not submit
+  ok Enter submits captured A owner
+  ok search opens matching explicit native history
+  ok history match identifies target user turn
+  ok live readonly history adds no launch request
+  ok readonly history disables model mutation and prompt
+  ok live readonly offers return without resume
+  ok return live preserves runtime output
+  ok late A search navigation does not show A in B
+  ok wrong workspace identity rejected before fetch
+  ok native identity changed during read rejects body
+  ok retired Runtime clears unavailable model controls without retaining stale choices
+  ok return classic restores its own latest title
+Runtime finishing UI: 48/48

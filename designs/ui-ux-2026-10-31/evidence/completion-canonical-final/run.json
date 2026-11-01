@@ -1,0 +1,20 @@
+{
+  "command": "npm test",
+  "cwd": "C:\\pi-GUI",
+  "head": "8908ff56c2e4e1b9d4658798c35cf0829796819a",
+  "branch": "codex/ui-refined-implementation",
+  "node": "v24.22.1",
+  "platform": "win32",
+  "started": "2026-11-01T12:21:36.494Z",
+  "pid": 948,
+  "state": "failed",
+  "inputDigest": "5582ba7504b5fb44a838e269256d4d6e367357585f898a1e75a883844cb1f388",
+  "environmentAdjustment": "PSExecutionPolicyPreference=Bypass only in owned npm test child process tree; no persisted policy modification; no privilege elevation",
+  "launcherPid": 5680,
+  "exitCode": 1,
+  "signal": null,
+  "ended": "2026-11-01T12:22:13.111Z",
+  "elapsedSeconds": 36.617,
+  "finalDigest": "5582ba7504b5fb44a838e269256d4d6e367357585f898a1e75a883844cb1f388",
+  "unchangedInputs": true
+}
