@@ -20,7 +20,7 @@ const { JSDOM } = require('jsdom');
     ['B', { model: catalogue[1], models: catalogue, reasoning: false, thinkingLevel: 'off', levels: null, pending: false, notice: '' }],
   ]);
   const modelCalls = [], requests = [];
-  const models = { get: id => { const data = values.get(id); return { ...data, availability: thinkingAvailability({ ...data,
+  const models = { get: id => { const data = values.get(id); if (!data) return null; return { ...data, availability: thinkingAvailability({ ...data,
     model: data.model && { ...data.model, reasoning: data.reasoning }, levels: data.levels || [] }) }; }, refresh: async id => { modelCalls.push({ refresh: id }); return true; },
     setModel: async (id, selected) => { modelCalls.push({ id, selected }); values.get(id).pending = true; return true; },
     setThinking: async (id, level) => { modelCalls.push({ id, level }); values.get(id).pending = true; return true; } };
@@ -45,6 +45,56 @@ const { JSDOM } = require('jsdom');
   ok('A displays its own selected model', JSON.parse(select().value).modelId === 'reasoning');
   ok('reasoning uses only provided native levels', [...thinking().options].slice(1).map(o => o.value).join(',') === 'off,low,high');
   ok('A thinking readback selected', thinking().value === 'low' && !thinking().disabled);
+  const modelTrigger = () => host.querySelector('.rtc-model-trigger');
+  const thinkingTrigger = () => host.querySelector('.rtc-thinking-trigger');
+  const picker = () => document.querySelector('.rtc-picker-menu:not([hidden])');
+  ok('Runtime composer groups the stable textarea, model controls and send action',
+    input().closest('.rtc-composer') && host.querySelector('.rtc-composer .rtc-models') && button('发送').closest('.rtc-composer'));
+  ok('native implementation controls are hidden and excluded from keyboard navigation',
+    select().hidden && thinking().hidden && select().tabIndex === -1 && thinking().tabIndex === -1);
+  ok('Runtime chips show confirmed native model and thinking values',
+    modelTrigger().textContent.includes('Reasoning') && thinkingTrigger().textContent.includes('low'));
+  modelTrigger().click();
+  ok('Runtime model picker is an accessible local dialog', picker()?.getAttribute('role') === 'dialog' && modelTrigger().getAttribute('aria-expanded') === 'true');
+  const search = picker().querySelector('input[type="search"]');
+  search.value = 'plain'; search.dispatchEvent(new dom.window.Event('input'));
+  ok('Runtime picker filters its actual owner model catalogue', picker().querySelectorAll('[data-picker-value]').length === 1 && picker().textContent.includes('Plain'));
+  search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  ok('Runtime picker arrow key reaches the filtered native candidate', document.activeElement.dataset.pickerValue?.includes('plain'));
+  picker().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  ok('Escape closes Runtime picker and restores chip focus', !picker() && document.activeElement === modelTrigger());
+  thinkingTrigger().click();
+  ok('Runtime thinking menu exposes exactly the Pi levels with current value marked',
+    [...picker().querySelectorAll('[data-picker-value]')].map(node => node.dataset.pickerValue).join(',') === 'off,low,high' && picker().querySelector('[aria-current="true"]').dataset.pickerValue === 'low');
+  const retainedLevel = picker().querySelector('[data-picker-value="high"]');
+  const modelCallsBeforeSwitch = modelCalls.length;
+  view.show('B'); retainedLevel.click();
+  ok('switching conversations invalidates a retained Runtime menu action', !picker() && modelCalls.length === modelCallsBeforeSwitch + 1 && !modelCalls.some(call => call.level === 'high'));
+  view.show('A');
+
+  modelTrigger().click();
+  picker().querySelector('[data-picker-value*="plain"]').click(); view.draw();
+  ok('Runtime model chip submits its captured owner choice but displays native readback until confirmation',
+    modelCalls.some(call => call.id === 'A' && call.selected?.modelId === 'plain') && modelTrigger().disabled && modelTrigger().textContent.includes('Reasoning'));
+  values.get('A').pending = false; view.draw();
+  thinkingTrigger().click(); picker().querySelector('[data-picker-value="high"]').click(); view.draw();
+  ok('Runtime thinking chip submits only a native level while retaining the confirmed value',
+    modelCalls.some(call => call.id === 'A' && call.level === 'high') && thinkingTrigger().disabled && thinkingTrigger().textContent.includes('low'));
+  values.get('A').pending = false; view.draw();
+  thinkingTrigger().click();
+  const keyboardChoice = picker().querySelector('[data-picker-value="off"]');
+  keyboardChoice.focus();
+  const beforeKeyboardChoice = modelCalls.length;
+  keyboardChoice.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  ok('Runtime menu Enter activates its focused native candidate exactly once', modelCalls.length === beforeKeyboardChoice + 1 && modelCalls.at(-1).level === 'off' && !picker());
+  values.get('A').pending = false; view.draw();
+  thinkingTrigger().click();
+  const oldOwnerChoice = picker().querySelector('[data-picker-value="off"]');
+  const priorOwner = runtimeStore.get('A').owner, beforeOwnerChange = modelCalls.length;
+  runtimeStore.get('A').owner = { ...priorOwner, runtimeGeneration: 'replacement' };
+  oldOwnerChoice.click();
+  ok('an owner replacement invalidates a retained Runtime choice even before a redraw', modelCalls.length === beforeOwnerChange);
+  runtimeStore.get('A').owner = priorOwner; thinkingTrigger().click();
   select().value = JSON.stringify({ providerId: 'fixture', modelId: 'plain' }); select().dispatchEvent(new dom.window.Event('change')); view.draw();
   ok('selection dispatch captures A identity', modelCalls.some(call => call.id === 'A' && call.selected.modelId === 'plain'));
   ok('pending setter retains old confirmed selection', JSON.parse(select().value).modelId === 'reasoning' && select().disabled);
@@ -98,6 +148,9 @@ const { JSDOM } = require('jsdom');
   seedRuntimeSnapshot({ backendInstance: 'backend', items: [{ ...item('B'), nativeSessionId: 'changed', revision: 2 }] });
   resolveHistory({ ok: true, locator: locator('B'), messages: [{ role: 'user', text: 'wrong-native-body' }] });
   ok('native identity changed during read rejects body', await replaced === false && !host.textContent.includes('wrong-native-body') && host.querySelector('.rtc-notice').textContent.includes('身份'));
+  values.delete('B');
+  assert.doesNotThrow(() => view.draw(), 'retired Runtime may have no model readback');
+  ok('retired Runtime clears unavailable model controls without retaining stale choices', select().disabled && thinking().disabled && !host.querySelector('.rtc-model-trigger').textContent.includes('Plain'));
   view.leave(); document.querySelector('#workspace').dataset.workspaceView = 'chat';
   document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-view', { detail: { view: 'chat' } }));
   ok('return classic restores its own latest title', document.querySelector('#title').textContent === '经典后台标题');

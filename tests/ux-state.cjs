@@ -96,9 +96,11 @@ async function main() {
   clear();
   await check('live extension error still produces exactly one toast', () => { sources[0].emit({ type: 'extension_error', error: 'live unique error' }); assert.equal(toasts().length, 1); });
   await check('custom provider management contains no Pi auth catalog', async () => { w.document.querySelector('#navProviders').click(); await wait(); assert.equal(w.document.querySelector('.provider-auth'), null); });
-  await check('add provider opens existing creation form only', async () => {
-    [...w.document.querySelectorAll('#modalCard button')].find(b => b.textContent === '添加供应商').click(); await wait();
-    const card = w.document.querySelector('#modalCard');
+  await check('add provider opens existing creation form in central settings only', async () => {
+    const page = w.document.querySelector('#workSurface .settings-detail-card');
+    [...page.querySelectorAll('button')].find(b => b.textContent === '添加供应商').click(); await wait();
+    const card = w.document.querySelector('#workSurface .settings-detail-card');
+    assert.equal(w.document.querySelector('#modal').hidden, true);
     assert.ok(card.textContent.includes('供应商 ID') && card.textContent.includes('Base URL'));
     assert.equal(card.querySelector('.auth-provider'), null);
     assert.ok(!card.textContent.includes('Amazon Bedrock'));

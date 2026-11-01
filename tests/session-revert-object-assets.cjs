@@ -15,14 +15,22 @@ async function fixture(fn){
   return await fn(root);
  }finally{assert.equal(path.dirname(path.resolve(root)),path.resolve(os.tmpdir()));assert.match(path.basename(root),/^p33-d4-assets-/);await fs.rm(root,{recursive:true,force:true});}
 }
+function envWith(overrides={}){
+ const env={...process.env};
+ for(const [key,value] of Object.entries(overrides)){
+  for(const current of Object.keys(env))if(current.toLowerCase()===key.toLowerCase())delete env[current];
+  env[key]=value;
+ }
+ return env;
+}
 function load(root,kind,expected,{cwd=path.join(root,'project'),env={}}={}){
  const code=`import {loadObjectHelper} from ${JSON.stringify(require('node:url').pathToFileURL(path.join(root,'server/session-revert-object-resources.js')).href)};try{const r=loadObjectHelper(${JSON.stringify(kind)});console.log(JSON.stringify({kind:r.kind,helperHash:r.helperHash,helperVersion:r.helperVersion,source:r.source,bytes:r.bytes.length}));}catch(e){console.log(JSON.stringify({code:e.code}));}`;
- const r=spawnSync(process.execPath,['--input-type=module','-e',code],{cwd,env:{...process.env,...env},encoding:'utf8',timeout:10000});assert.equal(r.status,0);const row=JSON.parse(r.stdout.trim());if(expected)assert.equal(row.code,expected);return row;
+ const r=spawnSync(process.execPath,['--input-type=module','-e',code],{cwd,env:envWith(env),encoding:'utf8',timeout:10000});assert.equal(r.status,0);const row=JSON.parse(r.stdout.trim());if(expected)assert.equal(row.code,expected);return row;
 }
 function observe(root,env={}){
  const scope={runtimeOwner:{backendInstance:'d4',projectId:'fixture',repoId:null,workspaceId:'w',workspaceEpoch:'e',conversationId:'c',runtimeId:'r',runtimeGeneration:'g',sessionId:'s'},workspaceId:'w',workspaceEpoch:'e',conversationId:'c',nativeSessionId:'s'};
  const code=`import {observeFileObject} from ${JSON.stringify(require('node:url').pathToFileURL(path.join(root,'server/session-revert-object-observer.js')).href)};const r=await observeFileObject({root:${JSON.stringify(path.join(root,'project'))},relativePath:'file.txt',scope:${JSON.stringify(scope)},operationId:'d4'});console.log(JSON.stringify({status:r.status,reason:r.reason,helperHash:r.source.helperHash}));`;
- const r=spawnSync(process.execPath,['--input-type=module','-e',code],{cwd:path.join(root,'project'),env:{...process.env,...env},encoding:'utf8',timeout:40000});assert.equal(r.status,0);return JSON.parse(r.stdout.trim());
+ const r=spawnSync(process.execPath,['--input-type=module','-e',code],{cwd:path.join(root,'project'),env:envWith(env),encoding:'utf8',timeout:40000});assert.equal(r.status,0);return JSON.parse(r.stdout.trim());
 }
 (async()=>{
  let m;try{m=await import('../server/session-revert-object-resources.js');}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}

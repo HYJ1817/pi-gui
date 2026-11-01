@@ -2643,41 +2643,42 @@ staticCheck();
   $('modal').click();
 
   // --- 弹层：供应商 ---
+  const providerPage = () => window.document.querySelector('#workSurface .settings-detail-card');
   $('navProviders').click();
   await new Promise((r) => setTimeout(r, 20));
-  check('供应商弹层打开', () => $('modal').hidden === false);
-  check('P14-E 新 Modal 不继承上一弹层的布局类', () => $('modalCard').classList.contains('wide') && !$('modalCard').classList.contains('tree-modal'));
-  check('供应商列表渲染', () => window.document.querySelectorAll('#modalCard .prov').length === 1);
+  check('供应商中央设置页打开', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && Boolean(providerPage()));
+  check('P14-E 设置详情不继承上一弹层的布局类', () => providerPage().classList.contains('wide') && !providerPage().classList.contains('tree-modal'));
+  check('供应商列表渲染', () => providerPage().querySelectorAll('.prov').length === 1);
   check('未解析的 $ENV_VAR 有告警', () => {
-    const w = window.document.querySelector('#modalCard .prov-warn');
+    const w = providerPage().querySelector('.prov-warn');
     return w && w.textContent.includes('DEEPSEEK_API_KEY') ? true : '告警缺失';
   });
-  $('modal').click();
+  $('settingsReturn').click();
 
   // --- 添加供应商：保存后提示告警 ---
   $('navProviders').click();
   await new Promise((r) => setTimeout(r, 20));
-  [...window.document.querySelectorAll('#modalCard .btn')].find((b) => b.textContent === '添加供应商').click();
-  check('添加表单打开', () => window.document.querySelectorAll('#modalCard .preset').length === 9);
-  const fields = window.document.querySelectorAll('#modalCard .field input, #modalCard .field textarea');
+  [...providerPage().querySelectorAll('.btn')].find((b) => b.textContent === '添加供应商').click();
+  check('添加表单打开', () => providerPage().querySelectorAll('.preset').length === 9);
+  const fields = providerPage().querySelectorAll('.field input, .field textarea');
   fields[0].value = 'newprov';
   fields[1].value = 'https://api.example.com/v1';
   fields[2].value = '$NEW_KEY';
   fields[3].value = 'model-a|Model A';
   const beforeRawKey = providerConfigCalls.length;
   fields[2].value = 'raw-fixture-key';
-  [...$('modalCard').querySelectorAll('button')].find((b) => b.textContent === '保存').click();
+  [...providerPage().querySelectorAll('button')].find((b) => b.textContent === '保存').click();
   await new Promise((r) => setTimeout(r, 10));
   check('P25 原文密钥被表单拦截，不发送配置写请求', () => providerConfigCalls.length === beforeRawKey);
-  check('P25 表单只提示环境变量引用与官方登录', () => fields[2].placeholder === '$MY_API_KEY 或 ${MY_API_KEY}' && $('modalCard').textContent.includes('/login <provider>'));
+  check('P25 表单只提示环境变量引用与官方登录', () => fields[2].placeholder === '$MY_API_KEY 或 ${MY_API_KEY}' && providerPage().textContent.includes('/login <provider>'));
   fields[2].value = '$NEW_KEY';
-  [...window.document.querySelectorAll('#modalCard .btn')].find((b) => b.textContent === '保存').click();
+  [...providerPage().querySelectorAll('.btn')].find((b) => b.textContent === '保存').click();
   await new Promise((r) => setTimeout(r, 30));
   check('保存后弹出 key 告警', () => {
     const t = [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | ');
     return t.includes('NEW_KEY') ? true : '未提示：' + t;
   });
-  $('modal').click();
+  $('settingsReturn').click();
 
   // --- 弹层：统计 ---
   // The preceding full Provider identity can hydrate optional remote quota rows.
@@ -7844,9 +7845,9 @@ staticCheck();
     check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
     check('设置目录在扩展工作区持续可达', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     $('navDiagnostics').click();
-    check('P14-D 二级 Modal 覆盖 Extensions', () => !$('modal').hidden && $('workspace').dataset.workspaceView === 'extensions');
-    window.closeModal();
-    check('P14-D 关闭二级 Modal 后仍在 Extensions', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'extensions' && $('navExtensions').getAttribute('aria-current') === 'page');
+    check('P14-D 诊断由中央设置详情承载', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && $('navDiagnostics').getAttribute('aria-current') === 'page');
+    $('navExtensions').click();
+    check('P14-D 切回 Extensions 恢复真实页面与目录状态', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'extensions' && $('navExtensions').getAttribute('aria-current') === 'page');
     const scrollBeforeReturn = $('stream').scrollTop;
     $('navHome').click();
     check('P14-D 返回 Chat 保留 Conversation 节点与滚动', () => $('workspace').dataset.workspaceView === 'chat' && $('stream').querySelector('.msg.user') === conversation && $('stream').scrollTop === scrollBeforeReturn && !$('chatView').hidden);
@@ -8830,8 +8831,8 @@ staticCheck();
     window.closePalette();
     check('P24 可发现：点菜单里的「键盘快捷键…」真的能打开帮助', () => {
       $('navShortcutHelp').onclick();
-      const open = !$('modal').hidden && $('modalCard').textContent.includes('键盘快捷键');
-      window.closeModal();
+      const open = $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && Boolean(window.document.querySelector('.settings-detail-card')?.textContent.includes('键盘快捷键'));
+      $('settingsReturn').click();
       return open;
     });
     await sleep(20);
@@ -8957,8 +8958,8 @@ staticCheck();
     [...$('stageNotice').querySelectorAll('.btn')].find((b) => b.textContent === '打开诊断').onclick();
     await sleep(40);
     check('P24 状态条：「打开诊断」走的就是既有诊断面板', () =>
-      $('modal').hidden === false && $('modalCard').textContent.includes('诊断'));
-    $('modal').hidden = true; $('modalCard').innerHTML = '';
+      $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && Boolean(window.document.querySelector('.settings-detail-card')?.textContent.includes('诊断')));
+    $('settingsReturn').click();
     check('P24 状态条：可关闭，且不会被同一条重复重建', () => {
       $('stageNotice').querySelector('.notice-close').onclick();
       return $('stageNotice').hidden;

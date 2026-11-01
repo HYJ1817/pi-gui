@@ -55,6 +55,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.ok($('globalMoreMenu').contains($('navExtensions')));
     $('navPlanner').click(); await tick();
     assert.equal($('workspace').dataset.workspaceView, 'planner');
+    assert.equal($('navPlanner').getAttribute('aria-current'), 'page');
     assert.equal($('globalMoreMenu').hidden, false);
     $('settingsReturn').click();
     assert.equal($('chatView'), chat); assert.equal($('input').value, 'settings round trip');
@@ -75,11 +76,104 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal(d.activeElement, $('btnWorkPanel'));
     $('settingsReturn').click();
   });
+  await check('Settings leaf is a central page with selected directory and no modal', async () => {
+    const chat = $('chatView'); $('input').value = 'detail draft';
+    $('navGlobalMore').click(); $('navProviders').click(); await tick();
+    assert.equal($('workspace').dataset.workspaceView, 'settings');
+    assert.equal($('modal').hidden, true);
+    assert.ok(d.querySelector('#workSurface .settings-detail-card .providers'));
+    assert.equal($('navProviders').getAttribute('aria-current'), 'page');
+    assert.equal($('chatView'), chat); assert.equal($('input').value, 'detail draft');
+    d.querySelector('.settings-detail-card .modal-actions button:last-child').click();
+    assert.ok(d.querySelector('#workSurface .settings-section'));
+    $('settingsReturn').click();
+  });
+  await check('Settings detail disposes once and stale close cannot close a new detail', () => {
+    const isolated = new JSDOM(fs.readFileSync(path.join(pub, 'index.html'), 'utf8'), { url: 'http://localhost:7788', runScripts: 'outside-only', pretendToBeVisual: true });
+    const module = isolated.window.eval(bundle(path.join(pub, 'ui/settings-surface.js')).code);
+    const surface = module.initSettingsSurface();
+    let oldClose, disposed = 0;
+    surface.presentDetail('navProviders', (card, close) => { oldClose = close; card.textContent = 'old'; }, () => disposed++);
+    surface.presentDetail('navLogs', card => { card.textContent = 'current'; });
+    assert.equal(disposed, 1); oldClose(); assert.equal(disposed, 1);
+    assert.equal(isolated.window.document.querySelector('.settings-detail-card').textContent, 'current');
+    module.showChat(); assert.equal(disposed, 1); isolated.window.close();
+  });
+  await check('Late settings diagnostic result cannot replace the appearance page', async () => {
+    const before = w.fetch; let release;
+    try {
+      w.fetch = (url, options) => String(url) === '/api/diagnostics' ? new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ ok: false, error: 'fixture late' }) }); }) : before(url, options);
+      $('navGlobalMore').click(); $('navDiagnostics').click();
+      const oldCard = d.querySelector('.settings-detail-card');
+      $('navAppearance').click(); release(); await tick();
+      assert.equal(oldCard.isConnected, false);
+      assert.equal(d.querySelector('.settings-detail-card h3').textContent, '外观与主题');
+      assert.equal($('modal').hidden, true);
+    } finally { w.fetch = before; $('settingsReturn').click(); }
+  });
+  await check('Danger confirmation Escape keeps settings detail mounted', async () => {
+    $('navGlobalMore').click(); $('navAppearance').click();
+    const card = d.querySelector('.settings-detail-card');
+    const answer = w.confirmModal({ title: 'Fixture confirmation', message: 'No real operation', danger: true });
+    d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(await answer, false); assert.equal(card.isConnected, true);
+    assert.equal($('workspace').dataset.workspaceView, 'settings');
+    $('settingsReturn').click();
+  });
+  await check('Late provider save cannot reopen its page after newer navigation', async () => {
+    const before = w.fetch; let release;
+    try {
+      w.fetch = (url, options) => String(url) === '/api/providers' && options?.body
+        ? new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ ok: true }) }); }) : before(url, options);
+      $('navGlobalMore').click(); $('navProviders').click(); await tick();
+      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '添加供应商').click();
+      const inputs = d.querySelectorAll('.settings-detail-card input'); inputs[0].value = 'fixture-ui'; inputs[1].value = 'http://127.0.0.1:7788';
+      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '保存').click(); await tick();
+      assert.equal(typeof release, 'function');
+      $('navAppearance').click(); const current = d.querySelector('.settings-detail-card');
+      release(); await tick(); await tick();
+      assert.equal(d.querySelector('.settings-detail-card'), current);
+      assert.equal(current.querySelector('h3').textContent, '外观与主题');
+      assert.equal($('modal').hidden, true);
+    } finally { w.fetch = before; $('settingsReturn').click(); }
+  });
+  await check('Settings leaf Escape returns to settings without losing chat draft', () => {
+    $('input').value = 'page escape draft'; $('navGlobalMore').click(); $('navAppearance').click();
+    d.querySelector('.settings-detail-card select').focus();
+    d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.ok(d.querySelector('#workSurface .settings-section'));
+    assert.equal(d.activeElement, $('navAppearance'));
+    $('settingsReturn').click(); assert.equal($('input').value, 'page escape draft');
+  });
+  await check('Ordinary modal cannot invalidate the central provider render owner', async () => {
+    const before = w.fetch; let removed = false;
+    try {
+      w.fetch = (url, options) => String(url) === '/api/providers' ? Promise.resolve({ ok: true, json: async () => ({ ok: true, providers: removed ? {} : { fixture: { models: [] } }, keyStates: {} }) })
+        : String(url) === '/api/providers/fixture' && options?.method === 'DELETE' ? (removed = true, Promise.resolve({ ok: true, json: async () => ({ ok: true }) })) : before(url, options);
+      $('navGlobalMore').click(); $('navProviders').click(); await tick();
+      const box = d.querySelector('.settings-detail-card .providers'); assert.equal(box.querySelectorAll('.prov').length, 1);
+      w.openShortcutHelp(); w.closeModal();
+      assert.equal(w.panels.providers, box);
+      box.querySelector('.prov-del').click(); await tick();
+      assert.equal(removed, true); assert.equal(box.querySelectorAll('.prov').length, 0);
+    } finally { w.fetch = before; $('settingsReturn').click(); }
+  });
+  await check('Keyboard and command settings share the central owner instead of overlapping modals', async () => {
+    $('navGlobalMore').click(); $('navAppUpdates').click(); const previous = d.querySelector('.settings-detail-card');
+    d.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: '/', code: 'Slash', ctrlKey: true, bubbles: true }));
+    assert.equal($('modal').hidden, true); assert.equal(previous.isConnected, false);
+    assert.equal(d.querySelector('.settings-detail-card h3').textContent, '键盘快捷键');
+    w.openPalette(); const query = d.querySelector('.palette-input'); query.value = '诊断'; query.dispatchEvent(new w.Event('input', { bubbles: true }));
+    d.querySelector('[data-command-id="app.diagnostics"]').click(); await tick();
+    assert.equal($('modal').hidden, true); assert.equal(d.querySelectorAll('.settings-detail-card').length, 1);
+    assert.equal($('navDiagnostics').getAttribute('aria-current'), 'page');
+    $('settingsReturn').click();
+  });
   await check('Settings return restores Runtime scope and draft through the composition owner', async () => {
     const owner = { backendInstance: 'fixture', projectId: 'p', repoId: 'repo', workspaceId: 'ws', workspaceEpoch: 'one', conversationId: 'A', runtimeId: 'rt', runtimeGeneration: 'one', sessionId: 'native-A' };
     w.runtimeStore.seed({ backendInstance: 'fixture', items: [{ conversationId: 'A', createdAt: '2026-01-01T00:00:00.000Z', nativeSessionId: 'native-A', owner, workspace: { projectId: 'p', workspaceId: 'ws', workspaceEpoch: 'one', cwd: 'C:\\fixture' }, lifecycle: 'ready', activity: 'idle' }] });
     await w.focusRuntimeById('A'); await tick();
-    const input = d.querySelector('#runtimeView .runtime-conversation > textarea');
+    const input = d.querySelector('#runtimeView textarea[aria-label="给当前会话的任务"]');
     input.value = 'Runtime draft'; input.dispatchEvent(new w.Event('input', { bubbles: true }));
     const fetchBefore = w.fetch; const actions = [];
     w.fetch = (url, options) => { if (options?.body) actions.push(JSON.parse(options.body)); return fetchBefore(url, options); };
