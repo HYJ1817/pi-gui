@@ -67,6 +67,8 @@ async function unit() {
     const group = one('.tl-group'), head = group.querySelector('.tl-group-head'), list = group.querySelector('.tl-list');
     check('real message boundary groups both tools once', () => { equal(all('.tl-group').length, 1); equal(list.children.length, 2); equal(head.textContent, '操作 2 项'); });
     check('batch summary is native keyboard button', () => { equal(head.tagName, 'BUTTON'); equal(head.type, 'button'); assert.ok(head.classList.contains('ui2-tool-summary')); });
+    check('multiple tools start collapsed without hiding their status summary', () => { equal(list.hidden, true); equal(head.getAttribute('aria-expanded'), 'false'); });
+    head.click();
     check('summary controls its unique ARIA list', () => { assert.ok(list.id); equal(head.getAttribute('aria-controls'), list.id); equal(head.getAttribute('aria-expanded'), 'true'); });
     head.click();
     check('batch can collapse without destroying tool nodes', () => { equal(list.hidden, true); equal(head.getAttribute('aria-expanded'), 'false'); equal(list.children.length, 2); });
@@ -90,6 +92,7 @@ async function unit() {
     check('orphan toolResult remains visible at its own position', () => { equal(all('.tl-group')[2].querySelector('.tl-item').dataset.id, 'orphan'); assert.match(all('.tl-group')[2].textContent, /orphan failed/); });
     const direct = w.createGroup(); w.ensureThread().append(direct);
     for (const [id, status] of [['cancel', 'cancelled'], ['interruption', 'interrupted']]) { const entry = w.makeEntry({ toolCallId: id, toolName: 'read', args: {} }); entry.status = status; w.addToGroup(direct, w.renderEntry(entry)); }
+    direct.querySelector('.ui2-tool-summary')?.click();
     direct.querySelector('.ui2-tool-summary')?.click();
     check('explicit cancelled and interrupted presentation states survive collapse', () => assert.match(direct.querySelector('.ui2-tool-state')?.textContent || '', /已中断 1.*已取消 1/));
     const extra = w.makeEntry({ toolCallId: 'later', toolName: 'read', args: {} });

@@ -31,7 +31,9 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   w.S.hasProject = true; w.S.bridgeState = 'ready'; w.S.restoring = false; w.applyProjectState();
   await check('Changes is contextual, absent from global navigation', () => {
     assert.equal(d.querySelector('#globalRail #navChanges'), null);
-    assert.ok(d.querySelector('.head-right #navChanges'));
+    assert.ok(d.querySelector('#workPanelNav #navChanges'));
+    assert.equal(d.querySelector('.head-right #navChanges'), null);
+    assert.ok(d.querySelector('.head-right #btnWorkPanel'));
   });
   await check('Settings has all five logical groups and bound actions', () => {
     $('navGlobalMore').click();
@@ -42,6 +44,77 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   await check('Settings Escape returns focus to its visible trigger', () => {
     d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.equal($('globalMoreMenu').hidden, true); assert.equal(d.activeElement, $('navGlobalMore'));
+  });
+  await check('Tasks and resources live in Settings; returning preserves draft and chat node', async () => {
+    Object.defineProperty($('stream'), 'scrollHeight', { value: 1200, configurable: true });
+    Object.defineProperty($('stream'), 'clientHeight', { value: 400, configurable: true });
+    const chat = $('chatView'); $('input').value = 'settings round trip'; $('stream').scrollTop = 83;
+    $('navGlobalMore').click();
+    assert.equal($('workspace').dataset.workspaceView, 'settings');
+    assert.ok($('globalMoreMenu').contains($('navPlanner')));
+    assert.ok($('globalMoreMenu').contains($('navExtensions')));
+    $('navPlanner').click(); await tick();
+    assert.equal($('workspace').dataset.workspaceView, 'planner');
+    assert.equal($('globalMoreMenu').hidden, false);
+    $('settingsReturn').click();
+    assert.equal($('chatView'), chat); assert.equal($('input').value, 'settings round trip');
+    assert.equal($('stream').scrollTop, 83); assert.equal($('globalMoreMenu').hidden, true);
+  });
+  await check('Work panel launcher contains only live registered tools and preserves chat', () => {
+    $('btnWorkPanel').click();
+    assert.equal($('rightPane').hidden, false);
+    assert.ok($('workPanelNav').contains($('btnBrowser')));
+    assert.equal($('workspace').dataset.workspaceView, 'chat');
+    $('btnWorkPanel').click(); assert.equal($('rightPane').hidden, true);
+  });
+  await check('Settings keeps the work panel entrance visible and close restores it', () => {
+    $('navGlobalMore').click();
+    assert.equal($('btnWorkPanel').hidden, false);
+    $('btnWorkPanel').click(); assert.equal($('rightPane').hidden, false);
+    $('workPanelClose').focus(); $('workPanelClose').click();
+    assert.equal(d.activeElement, $('btnWorkPanel'));
+    $('settingsReturn').click();
+  });
+  await check('Settings return restores Runtime scope and draft through the composition owner', async () => {
+    const owner = { backendInstance: 'fixture', projectId: 'p', repoId: 'repo', workspaceId: 'ws', workspaceEpoch: 'one', conversationId: 'A', runtimeId: 'rt', runtimeGeneration: 'one', sessionId: 'native-A' };
+    w.runtimeStore.seed({ backendInstance: 'fixture', items: [{ conversationId: 'A', createdAt: '2026-01-01T00:00:00.000Z', nativeSessionId: 'native-A', owner, workspace: { projectId: 'p', workspaceId: 'ws', workspaceEpoch: 'one', cwd: 'C:\\fixture' }, lifecycle: 'ready', activity: 'idle' }] });
+    await w.focusRuntimeById('A'); await tick();
+    const input = d.querySelector('#runtimeView .runtime-conversation > textarea');
+    input.value = 'Runtime draft'; input.dispatchEvent(new w.Event('input', { bubbles: true }));
+    const fetchBefore = w.fetch; const actions = [];
+    w.fetch = (url, options) => { if (options?.body) actions.push(JSON.parse(options.body)); return fetchBefore(url, options); };
+    $('navGlobalMore').click(); assert.equal(w.gitConversationScope(), null);
+    $('settingsReturn').click(); await tick();
+    assert.equal($('workspace').dataset.workspaceView, 'runtime');
+    assert.equal(w.gitConversationScope(), 'A');
+    assert.ok(actions.some(action => action.action === 'blur' && action.owner.sessionId === 'native-A'));
+    assert.ok(actions.some(action => action.action === 'focus' && action.owner.sessionId === 'native-A'));
+    assert.equal(input.value, 'Runtime draft'); assert.equal(d.activeElement, input);
+    w.fetch = fetchBefore; $('navHome').click();
+  });
+  await check('Rejected Runtime focus keeps Settings visible and offers retry', async () => {
+    await w.focusRuntimeById('A'); $('navGlobalMore').click();
+    const fetchBefore = w.fetch;
+    try {
+      w.fetch = (url, options) => options?.body && JSON.parse(options.body).action === 'focus'
+        ? Promise.resolve({ ok: true, json: async () => ({ ok: false }) }) : fetchBefore(url, options);
+      $('settingsReturn').click(); await tick();
+      assert.equal($('workspace').dataset.workspaceView, 'settings');
+      assert.equal(d.querySelector('.settings-return-status').hidden, false);
+      assert.equal(w.gitConversationScope(), null);
+    } finally { w.fetch = fetchBefore; $('navHome').click(); }
+  });
+  await check('Late Runtime return cannot replace a newer navigation intent', async () => {
+    await w.focusRuntimeById('A'); $('navGlobalMore').click();
+    const fetchBefore = w.fetch; let release;
+    try {
+      w.fetch = (url, options) => options?.body && JSON.parse(options.body).action === 'focus'
+        ? new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ ok: true }) }); }) : fetchBefore(url, options);
+      $('settingsReturn').click(); $('navPlanner').click();
+      release(); await tick();
+      assert.equal($('workspace').dataset.workspaceView, 'planner'); assert.equal(w.gitConversationScope(), null);
+      assert.equal(d.querySelector('.settings-return-status').hidden, true);
+    } finally { w.fetch = fetchBefore; $('navHome').click(); }
   });
   for (const method of ['click', 'Enter']) await check('Palette Settings hands off menu and focus via ' + method, async () => {
     $('input').focus(); w.openPalette();
@@ -67,7 +140,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   await check('Changes close releases content and restores contextual focus', () => {
     $('rightPaneClose').click();
     assert.equal($('rightPane').hidden, true); assert.equal(d.querySelector('#rightPane .chg-row'), null);
-    assert.equal($('navChanges').getAttribute('aria-pressed'), 'false'); assert.equal(d.activeElement, $('navChanges'));
+    assert.equal($('navChanges').getAttribute('aria-pressed'), 'false'); assert.equal(d.activeElement, $('btnWorkPanel'));
   });
   await check('Browser → Changes disposes native view; no duplicate surfaces', async () => {
     $('btnBrowser').click(); await tick(); assert.ok(d.querySelector('#browserViewport'));

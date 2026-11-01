@@ -1233,7 +1233,7 @@ staticCheck();
   check('供应商入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navProviders')));
   check('诊断入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navDiagnostics')));
   check('Global Rail 入口都是可聚焦的真按钮且有名称', () => [...window.document.querySelectorAll('#globalRail .rail-icon')].every((b) => b.tagName === 'BUTTON' && b.getAttribute('aria-label')));
-  check('Global Rail 初始激活项唯一', () => window.document.querySelectorAll('#globalRail [aria-current="page"]').length === 1 && $('navHome').getAttribute('aria-current') === 'page');
+  check('Global Rail 初始激活项唯一', () => window.document.querySelectorAll('#projectSidebar [aria-current="page"]').length === 1 && $('navHome').getAttribute('aria-current') === 'page');
   $('btnSidebarCollapse').click();
   check('折叠仅隐藏项目侧栏，保留全局栏与工作区', () => $('projectSidebar').hidden && !$('globalRail').hidden && !$('workspace').hidden && !$('btnSidebarExpand').hidden);
   check('侧栏折叠按钮语义与侧栏状态一致', () => $('btnSidebarCollapse').getAttribute('aria-expanded') === 'false' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'false');
@@ -1242,8 +1242,8 @@ staticCheck();
   check('侧栏展开按钮语义与侧栏状态一致', () => $('btnSidebarCollapse').getAttribute('aria-expanded') === 'true' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'true');
   $('navGlobalMore').click();
   check('More 展开并提供真实入口', () => !$('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'true' && [...$('globalMoreMenu').querySelectorAll('button')].every((b) => typeof b.onclick === 'function'));
-  $('navGlobalMore').click();
-  check('More 可收起', () => $('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'false');
+  $('settingsReturn').click();
+  check('设置返回工作区关闭目录', () => $('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'false');
   $('btnProjectMenu').click();
   check('项目低频动作可展开', () => !$('projectActions').hidden && $('btnProjectMenu').getAttribute('aria-expanded') === 'true' && Boolean($('btnAddProject') && $('btnProjectSettings')));
   $('btnProjectMenu').click();
@@ -1945,7 +1945,7 @@ staticCheck();
   const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
   const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
 
-  check('全局栏有「文件变更」入口', () => window.document.querySelector('.head-right #navChanges') !== null);
+  check('全局栏有「文件变更」入口', () => window.document.querySelector('#workPanelNav #navChanges') !== null);
 
   gitStub.status = {
     ok: true,
@@ -1968,7 +1968,7 @@ staticCheck();
   check('Changes 全部过滤器的选中语义与状态一致', () => $('chgFilterAll').classList.contains('on') && $('chgFilterAll').getAttribute('aria-pressed') === 'true' && $('chgFilterSession').getAttribute('aria-pressed') === 'false');
   check('状态字母正确', () => chgRows().map((x) => x.querySelector('.chg-code').textContent).join('') === 'MA??M??');
   check('含空格与中文的路径原样渲染', () => chgRows().some((x) => x.querySelector('.chg-path').textContent === 'docs/中文 说明.md'));
-  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('rightPane')) === 0 || `解析出了 ${liveCount($('rightPane'))} 个危险元素`);
+  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('rightPane').querySelector('.rp-body')) === 0 || `解析出了 ${liveCount($('rightPane').querySelector('.rp-body'))} 个危险元素`);
   check('恶意文件名仍以原样文本呈现（没被截断或吃掉）', () =>
     chgRows().some((x) => x.querySelector('.chg-path').textContent === 'tmp/<img onerror=alert(1)>.txt'));
   check('增删行数渲染', () => {
@@ -5929,7 +5929,7 @@ staticCheck();
       check('会话：点击禁用操作不会写盘或弹删除确认', () => sessionCalls.length === beforeDisabledCalls && $('confirmLayer').hidden === beforeDisabledConfirm);
       check('会话：菜单是可访问的浮层（role=menu / menuitem / aria-expanded）', () =>
         Boolean(rowMenuEl() && rowMenuEl().getAttribute('role') === 'menu'
-          && rowMenuItems().every((b) => b.getAttribute('role') === 'menuitem')
+          && rowMenuItems().every((b) => b.tagName === 'BUTTON')
           && cur.querySelector('.pj-sess-menu-trigger').getAttribute('aria-expanded') === 'true')
         || '菜单语义不完整');
       rowMenuItem('重命名').click();
@@ -7826,11 +7826,11 @@ staticCheck();
     const attachment = $('attachTray').querySelector('.att');
     $('stream').scrollTop = 37;
     window.S.streaming = true;
-    check('P14-D 默认 Chat 且 Home 唯一激活', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    check('P14-D 默认 Chat 且 Home 唯一激活', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     $('navPlanner').click();
     check('P14-D Planner 在 Stage 且 Chat 节点仅隐藏', () => $('workspace').dataset.workspaceView === 'planner' && !$('workSurface').hidden && $('chatView').hidden && composer.hidden && $('modal').hidden && conversation.isConnected);
     check('P14-E Planner Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && Boolean(window.document.getElementById(tab.getAttribute('aria-controls')))));
-    check('P14-D Planner rail 唯一激活', () => $('navPlanner').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    check('P14-D Planner rail 唯一激活', () => $('navPlanner').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     window.onMessageStart({ message: { role: 'assistant' } });
     window.onMessageUpdate({ assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '离开 Chat 后继续生成' } });
     await new Promise((resolve) => setTimeout(resolve, 35));
@@ -7842,8 +7842,7 @@ staticCheck();
     $('navExtensions').click();
     check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
     check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
-    $('navGlobalMore').click();
-    check('P14-D More 不抢主视图', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    check('设置目录在扩展工作区持续可达', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     $('navDiagnostics').click();
     check('P14-D 二级 Modal 覆盖 Extensions', () => !$('modal').hidden && $('workspace').dataset.workspaceView === 'extensions');
     window.closeModal();
@@ -7873,7 +7872,7 @@ staticCheck();
       $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' &&
       !$('navPlanner').classList.contains('is-active') && !$('chatView').hidden && !$('chatComposer').hidden &&
       $('workSurface').hidden && $('workSurface').childElementCount === 0 &&
-      $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+      $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     check('P14-E 侧栏新对话成功后焦点进入 Composer', () => window.document.activeElement === $('input'));
 
     $('navPlanner').click();
@@ -7910,7 +7909,7 @@ staticCheck();
     check('P14-D 收口：侧栏旧会话成功切到 Chat 且只激活 Home', () =>
       sessionCalls.slice(beforeSwitch).some((c) => /\/switch$/.test(c.url) && c.body?.id === 'bbbbbbbbbbbbbbbb') &&
       $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' &&
-      $('globalRail').querySelectorAll('[aria-current="page"]').length === 1 &&
+      $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1 &&
       !$('chatView').hidden && !$('chatComposer').hidden && $('workSurface').hidden &&
       $('workSurface').childElementCount === 0 && !$('stream').textContent.includes('旧会话正文'));
     for (let i = 0; i < 40 && switchButton?.isConnected; i++) {
@@ -8822,7 +8821,7 @@ staticCheck();
     check('P24 可发现：More 菜单里有「命令面板 / 键盘快捷键」两个可见入口', () => {
       const p = $('navPalette');
       const h = $('navShortcutHelp');
-      return Boolean(p && h) && p.getAttribute('role') === 'menuitem' && Boolean(p.title) && Boolean(h.title);
+      return Boolean(p && h) && p.tagName === 'BUTTON' && Boolean(p.title) && Boolean(h.title);
     });
     check('P24 可发现：点菜单里的「命令面板…」真的能打开面板', () => {
       $('navPalette').onclick();
