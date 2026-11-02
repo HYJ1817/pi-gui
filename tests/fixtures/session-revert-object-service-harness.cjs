@@ -11,6 +11,23 @@ async function internal(file,name){
 async function loadWriter(){return writerCore??=await internal('session-revert-object-writer.js','createIsolatedWriter');}
 async function loadService(){return serviceCore??=await internal('session-revert-object-service.js','createObjectServiceCore, readObservedOriginal');}
 
+// Same clone boundary and Buffer restoration as server/session-revert-worker.mjs,
+// without the worker thread and its 2s wall-clock timer: a loaded CI runner can
+// exhaust that timer before the worker starts (reported as diff_budget_exceeded).
+// Worker timeout/busy semantics stay covered by session-revert-integration/http.
+async function computeInProcess(input){
+ const {computeSessionRevert}=await import(pathToFileURL(path.join(base,'lib/session-revert.js')).href);
+ let result;
+ try{
+  const copy=structuredClone(input);
+  copy.current=copy.current===null?null:Buffer.from(copy.current);
+  for(const record of copy.records)for(const key of ['before','intendedAfter','observedAfter'])record[key]=record[key]===null?null:Buffer.from(record[key]);
+  result=structuredClone(computeSessionRevert(copy));
+ }catch{return {status:'refused',reason:'compute_unavailable',candidate:null,contentEligible:false,action:'none'};}
+ if(result?.candidate!=null)result.candidate=Buffer.from(result.candidate);
+ return result;
+}
+
 async function observeAclProcess(action){
  const processes=require('node:child_process'),{syncBuiltinESMExports}=require('node:module'),original=processes.execFile;
  processes.execFile=function(file,args,options,callback){
@@ -97,7 +114,7 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
    return {proofId:'p33-d2-isolated',helperHash:OBJECT_WRITER_HASH};
   };
   const dependencies={store:()=>store,withAuthority,withMutationAuthority,capability,qualify,openAttempt,now,ttlMs};
-  const createService=async overrides=>{const core=(await loadService()).createObjectServiceCore;service=core({...dependencies,...serviceOptions,...overrides});return service;};
+  const createService=async overrides=>{const core=(await loadService()).createObjectServiceCore;service=core({compute:computeInProcess,...dependencies,...serviceOptions,...overrides});return service;};
   service=await createService();
   const evidenceRevision=(await store.previewRevision(scope)).revision,fileId=objectFileId(scope,relativePath);
   const body={owner,conversationId:scope.conversationId,evidenceIds:[evidenceId],fileId,evidenceRevision};
@@ -115,4 +132,4 @@ async function fixture(fn,{before=Buffer.from('base\nanchor\nuser\n'),after=Buff
   if(!retainedRoots.has(root))await fs.rm(root,{recursive:true,force:true});
  }
 }
-module.exports={fixture,loadService,loadWriter,hash,base};
+module.exports={fixture,loadService,loadWriter,hash,base,computeInProcess};
