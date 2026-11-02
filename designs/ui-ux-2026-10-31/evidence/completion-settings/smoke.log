@@ -1,0 +1,28 @@
+
+--- Tool Timeline：实时 ---
+
+--- Tool Timeline：历史重建 ---
+
+--- Tool Timeline：中断收尾 ---
+
+--- Tool Timeline：真实会话 fixture ---
+
+--- 会话过滤 ---
+
+--- hunk 折叠 ---
+
+--- 上下文切换 ---
+
+--- 全部撤销 ---
+
+--- 取消暂存（单文件） ---
+
+--- Tool Timeline：Git 回填 ---
+C:\pi-GUI\tests\smoke.cjs:2660
+  [...window.document.querySelectorAll('#modalCard .btn')].find((b) => b.textContent === '添加供应商').click();
+                                                                                                 ^
+
+TypeError: Cannot read properties of undefined (reading 'click')
+    at C:\pi-GUI\tests\smoke.cjs:2660:98
+
+Node.js v24.22.1

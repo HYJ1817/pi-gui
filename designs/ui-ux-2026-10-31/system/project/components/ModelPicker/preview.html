@@ -1,0 +1,15 @@
+<!-- @dsCard group="Inputs" height=330 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ModelPicker · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<div class="pw-field"><label for="example">模型 · 演示目录</label><select id="example" class="pw-select"><optgroup label="Anthropic · 演示"><option>Claude Sonnet · 演示</option><option>Claude Opus · 演示</option></optgroup><optgroup label="OpenAI · 演示"><option>GPT · 演示</option></optgroup></select><span class="pw-help" id="modelReadback">已读取演示模型；不代表可用账户。</span></div>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+example.addEventListener('change',()=>{document.getElementById('modelReadback').textContent='正在读取演示状态…';result.textContent='演示：读取期间思考档位不可用。';setTimeout(()=>{document.getElementById('modelReadback').textContent='演示回读完成：'+example.value;result.textContent='演示回读确认；真实实现继续复用 provider+id、generation 和 Pi 回读。';},450);});
+
+})();
+</script>
+</body></html>

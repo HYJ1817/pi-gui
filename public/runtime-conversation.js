@@ -46,7 +46,8 @@ import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval } from
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
 import { openModal } from './ui/modal.js';
-import { renderVizCardHtml } from './markdown.js';
+import { md, renderVizCardHtml } from './markdown.js';
+import { createRuntimePicker } from './runtime-picker.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import {
   extractStableLocator,
@@ -69,13 +70,13 @@ function createVizCardNode(code) {
   return temp.firstElementChild;
 }
 
-function hasVizBlock(text) {
-  if (typeof text !== 'string' || !text.includes('```pi-gui-viz')) return false;
-  VIZ_BLOCK_RE.lastIndex = 0;
-  return VIZ_BLOCK_RE.test(text);
-}
-
 function appendRuntimeContent(container, text, { isBlock = false } = {}) {
+  const appendMarkdown = value => {
+    if (!value) return;
+    const body = el('div', 'rtc-markdown msg-body');
+    body.innerHTML = md(value); // Existing escape-first renderer; never raw model HTML.
+    container.append(body);
+  };
   VIZ_BLOCK_RE.lastIndex = 0;
   let lastIndex = 0;
   let match;
@@ -90,10 +91,7 @@ function appendRuntimeContent(container, text, { isBlock = false } = {}) {
       hasCard = true;
       const beforeText = text.slice(lastIndex, match.index);
       if (beforeText) {
-        container.append(document.createTextNode(beforeText));
-      }
-      if (fullMatch.startsWith('\n')) {
-        container.append(document.createTextNode('\n'));
+        appendMarkdown(beforeText);
       }
       if (isBlock) {
         const wrap = el('div', 'rtc-output-block');
@@ -109,10 +107,10 @@ function appendRuntimeContent(container, text, { isBlock = false } = {}) {
   if (hasCard) {
     const remaining = text.slice(lastIndex);
     if (remaining) {
-      container.append(document.createTextNode(remaining));
+      appendMarkdown(remaining);
     }
   } else {
-    container.append(document.createTextNode(text));
+    appendMarkdown(text);
   }
 }
 
@@ -241,9 +239,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const controls = el('div', 'rtc-controls');
   head.append(title, state, resources, controls); root.append(head);
   const modelRow = el('div', 'rtc-models'); modelRow.hidden = !models;
-  const modelLabel = el('label', 'rtc-model-field', '模型');
+  const modelLabel = el('div', 'rtc-model-field');
   const modelSelect = el('select'); modelSelect.setAttribute('aria-label', '当前会话模型'); modelLabel.append(modelSelect);
-  const thinkingLabel = el('label', 'rtc-model-field', '推理强度');
+  const thinkingLabel = el('div', 'rtc-model-field');
   const thinkingSelect = el('select'); thinkingSelect.setAttribute('aria-label', '当前会话推理强度'); thinkingLabel.append(thinkingSelect);
   const modelRefresh = el('button', 'btn', '刷新模型'); modelRefresh.type = 'button';
   const modelNotice = el('span', 'rtc-model-notice'); modelNotice.setAttribute('role', 'status');
@@ -251,6 +249,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   modelSelect.onchange = () => { const target = id, choice = modelSelect.value; draw(); if (target && choice) void models?.setModel(target, JSON.parse(choice)); };
   thinkingSelect.onchange = () => { const target = id, level = thinkingSelect.value; draw(); if (target && level) void models?.setThinking(target, level); };
   modelRefresh.onclick = () => { if (id) void models?.refresh(id); };
+  const pickerScope = () => JSON.stringify([active, id, focusEpoch, store.get(id)?.owner]);
+  const modelPicker = createRuntimePicker({ select: modelSelect, label: '当前会话模型', className: 'rtc-model-trigger', searchable: true, scope: pickerScope, onOpen: () => thinkingPicker.close() });
+  const thinkingPicker = createRuntimePicker({ select: thinkingSelect, label: '当前会话推理强度', className: 'rtc-thinking-trigger', scope: pickerScope, onOpen: () => modelPicker.close() });
+  modelLabel.append(modelPicker.button); thinkingLabel.append(thinkingPicker.button);
+
   const notice = el('p', 'rtc-notice'); notice.setAttribute('role', 'status'); root.append(notice);
   /* 类名**故意与 modal 的 `.runtime-output` 不同**：官方 modal 用的是全局选择器
    * （测试也这么取），中央再挂一个同名元素会让 `document.querySelector('.runtime-output')`
@@ -263,7 +266,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const thinkingBody = el('pre', 'ui2-runtime-thinking-body');
   thinking.append(thinkingHead, thinkingBody); root.append(thinking);
 
-  const output = el('pre', 'rtc-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前会话输出'); root.append(output);
+  const output = el('div', 'rtc-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前会话输出'); root.append(output);
 
   /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
    * 它每帧都在变，做成 live region 会不停打断读屏。 */
@@ -369,7 +372,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const historyBtn = el('button', 'btn', '打开历史'); historyBtn.type = 'button';
   const liveBtn = el('button', 'btn', '返回实时会话'); liveBtn.type = 'button';
   liveBtn.onclick = () => { if (id) { current().history = null; draw(); } };
-  controls.append(send, stop, restart, end, resume, historyBtn, liveBtn);
+  controls.append(restart, end, resume, historyBtn, liveBtn);
+  const composer = el('div', 'rtc-composer');
+  const composerBar = el('div', 'rtc-composer-bar');
+  const composerActions = el('div', 'rtc-composer-actions');
+  const composerNote = el('div', 'rtc-composer-note', 'Enter 发送 · Shift+Enter 换行');
+  composerActions.append(stop, send); composerBar.append(modelRow, composerActions);
+  composer.append(input, composerBar, modelNotice, draftNotice, composerNote); root.append(composer);
   const browserBtn = el('button', 'btn', 'Browser'), processBtn = el('button', 'btn', '开发进程');
   browserBtn.type = processBtn.type = 'button';
   browserBtn.hidden = !openBrowser || !window.piGuiDesktop?.runtimeBrowser;
@@ -519,7 +528,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       for (const model of options) { const option = el('option', '', `${model.name || model.id || model.modelId} · ${model.providerId || model.provider}`); option.value = identity(model); modelSelect.append(option); }
     }
     modelSelect.value = selected;
-    const availability = data?.availability || thinkingAvailability(data);
+    const availability = data?.availability || thinkingAvailability(data || {});
     const levels = availability.levels;
     if (thinkingSelect.dataset.options !== JSON.stringify(levels)) {
       thinkingSelect.dataset.options = JSON.stringify(levels); thinkingSelect.replaceChildren();
@@ -534,6 +543,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     thinkingSelect.disabled = disabled || availability.state !== 'ready';
     modelRefresh.disabled = disabled;
     modelNotice.textContent = [data?.notice, availability.detail].filter(Boolean).join(' ');
+    modelPicker.sync(); thinkingPicker.sync();
   }
 
   /* 工具行：每项一个 span，`data-state` 用 store 的原值（running/done/error）。
@@ -620,18 +630,19 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           }
           if (i < messages.length) {
             const message = messages[i];
-            const row = el('span', 'rtc-history-message', `${message.role === 'user' ? '我' : '助手'}：`);
+            const row = el('div', 'rtc-history-message');
+            row.dataset.role = message.role;
+            row.append(el('div', 'rtc-history-role', message.role === 'user' ? '我' : '助手'));
             if (message.messageId) row.dataset.historyMessageId = message.messageId;
             if (message.role === 'user') {
               const index = Object.hasOwn(message, 'userIndex') ? message.userIndex : userIndex;
               if (Number.isInteger(index)) row.dataset.historyUserIndex = String(index);
               userIndex++;
             }
-            if (message.role === 'assistant' && hasVizBlock(message.text)) {
+            if (message.role === 'assistant') {
               appendRuntimeContent(row, message.text);
-              row.append(document.createTextNode('\n\n'));
             } else {
-              row.append(document.createTextNode(`${message.text}\n\n`));
+              row.append(el('div', 'rtc-history-user-text', message.text));
             }
             output.append(row);
           }
@@ -650,11 +661,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         output.dataset.renderedText = curText;
         if (!curText) {
           output.textContent = '等待任务';
-        } else if (hasVizBlock(curText)) {
+        } else {
           output.replaceChildren();
           appendRuntimeContent(output, curText, { isBlock: true });
-        } else {
-          output.textContent = curText;
         }
       }
     }
@@ -695,7 +704,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     }
     renderedId = id;
     input.disabled = Boolean(view.history);
-    input.placeholder = view.history ? '查看历史时不发送；需要继续请点「恢复会话」' : '';
+    input.placeholder = view.history ? '查看历史时不发送；需要继续请点「恢复会话」' : '给当前会话发送任务…';
 
     /* 这些判据全部来自**当前会话自己的**视图态 —— A 的 pending 不会禁用 B 的控件。 */
     const live = Boolean(r?.owner), busy = view.pending;
@@ -770,6 +779,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     /** 切到某条会话。dormant 时只清历史缓存，**不**自动去读、更不 spawn。 */
     show(next) {
       focusEpoch++;
+      modelPicker.close(); thinkingPicker.close();
       active = true;
       composing = false;
       if (next === id) { ensureModels(); draw(); return; }
@@ -792,6 +802,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     /** 离开中央视图时记下滚动位置。 */
     leave() {
       active = false;
+      modelPicker.close(); thinkingPicker.close();
       composing = false;
       focusEpoch++;
       flushCurrentDraft(id);
@@ -800,6 +811,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     },
     dispose() {
       alive = false;
+      modelPicker.dispose(); thinkingPicker.dispose();
       composing = false;
       flushCurrentDraft(id);
       draftCoordinator.dispose();

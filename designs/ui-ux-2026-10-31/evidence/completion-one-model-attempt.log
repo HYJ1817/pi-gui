@@ -1,0 +1,1 @@
+{"ok":false,"modelCalls":0,"checks":[{"name":"installed official Pi Node entry is proven","ok":true}],"toolEvents":0,"cleanupConfirmed":true,"tempRemoved":true,"errorKind":"probe_timeout"}

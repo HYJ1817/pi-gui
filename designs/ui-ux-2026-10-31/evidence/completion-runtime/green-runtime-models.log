@@ -1,0 +1,54 @@
+  ok  A and B show independent native models
+  ok  native thinking levels and values are per conversation
+  ok  capability projection uses shared reasoning evidence
+  ok  native sessionName is projected
+  ok  model command captures complete A owner and unique string ID
+  ok  HTTP ack keeps old selection pending without optimistic reads
+  ok  wrong id command and stale owner never trigger readback
+  ok  successful delayed A does not change B
+  ok  matching native success performs readback
+  ok  selection updates only after authoritative state
+  ok  setter readback includes native thinking levels
+  ok  native model error is not HTTP success
+  ok  native failure leaves prior model and no readback
+  ok  safe notice never renders raw native error
+  ok  thinking captures B and exact requested level
+  ok  thinking native success is read back
+  ok  B thinking does not change A
+  conflict probe: Classic=ready, Runtime levels=["off","low","high"]
+  ok  same native readback is adjustable in Classic and Runtime despite static false
+  ok  static false is preserved while native levels remain available
+  ok  native levels permit confirmed thinking despite static false
+  ok  unknown reasoning remains unknown while native levels are available
+  ok  failed native levels never become guessed defaults
+  ok  failed native readback does not confirm selection
+  ok  same-owner late refresh cannot overwrite newer readback
+  ok  same-owner concurrent mutations invalidate older waiter
+  ok  native success before delayed transport ack waits for both
+  ok  delayed HTTP ack then native readback succeeds
+  ok  combined ack/native wait timeout clears pending without success
+  ok  owner retirement cancels pending and clears model UI
+  ok  dormant refresh does not spawn or issue reads
+  ok  async state changes notify captured conversation IDs
+  ok  transport rejection requires no native wait or readback
+  ok  incomplete owner cannot render active model controls
+  ok  incomplete owner never issues model reads
+  ok  dispose unsubscribes accepted frame observer
+  ok  set_thinking_level failure keeps correlation but drops all raw payloads
+  ok  cycle_thinking_level failure keeps correlation but drops all raw payloads
+  ok  unstarted native read is unconfirmed rather than fake success
+  ok  real native child state read preserves model shape
+  ok  native private __error is rejected before success projection
+  ok  real native set_thinking_level error is safe before SSE publication
+  ok  real native cycle_thinking_level error is safe before SSE publication
+  ok  disposed adapter read is stale
+  ok  registry reads native available thinking levels under captured owner
+  ok  native levels read rejects stale owner
+  ok  ready identity failure produces zero unhandled rejections
+  ok  failed identity stays occupied and blocks commands
+  ok  failed identity error is safe in runtime state publication
+  ok  unconfirmed native identity fails command admission
+  ok  explicit close reclaims lease and later launch works
+  ok  late prior-generation identity rejection cannot poison new owner
+  ok  retired child identity rejection cannot resurrect error or slot
+Runtime models: 52/52

@@ -5,6 +5,12 @@
 
 ## 当前右栏工作区（T2-A / T2-B）
 
+2026-11-01 Refined 工作区将会话顶栏的 Changes、Specs、Browser 等按钮移入右栏内的持久导航，
+顶栏只保留总开关。导航在 `.rp-body` 外，业务 Surface 切换不会卸载入口；关闭后焦点回到顶栏总开关。
+Settings 现为 `workspace-surface` 的一种视图，任务、资源与普通设置叶子都在中央详情承载；各表单保留原 persistence/auth owner，确认框仍使用独立模态层。
+详见 [App Shell](app-shell.md) 的当前实施记录。
+下方 T2-A / T2-B 的入口位置为历史描述；原有 split、dispose 和 Browser 几何合同仍适用。
+
 下方 P14-D 记录为历史设计。当前 Changes 和 Specs 从会话顶栏进入右栏，
 默认单面板；标题内可开启 Specs（上）+ Changes（下）分屏，没有新增全局导航。
 `ui/secondary-surface.js` 保留一个外层 surface 实例，用 dispose 集合释放两个业务面板；

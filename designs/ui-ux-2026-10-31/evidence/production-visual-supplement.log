@@ -1,0 +1,24 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+Captured dark-1440-empty
+PASS dark/1280 actual Diff opens
+Captured dark-1280-diff
+PASS dark/1440 actual Diff opens
+Captured dark-1440-diff
+PASS dark/1920 actual Diff opens
+Captured dark-1920-diff
+PASS light/1280 actual Diff opens
+Captured light-1280-diff
+PASS light/1440 actual Diff opens
+Captured light-1440-diff
+PASS light/1920 actual Diff opens
+Captured light-1920-diff
+PASS running composer exposes real Stop control
+Captured dark-1440-agent-running
+PASS failed tool keeps explicit error state
+Captured dark-1440-tool-error
+PASS native typed model query filters actual menu
+Captured dark-1440-model-search
+PASS native typed missing model has empty feedback
+Captured dark-1440-model-search-empty
+Fixture retained in TEMP: C:\Users\21022\AppData\Local\Temp\pi-design-current-zIep1F

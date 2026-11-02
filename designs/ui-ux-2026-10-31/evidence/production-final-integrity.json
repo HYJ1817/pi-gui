@@ -1,0 +1,24 @@
+{
+  "checked": "2026-11-01T07:14:04.065Z",
+  "head": "eac79cab793cff26c6cb6aa01cc9d9276ce06606",
+  "inputDigest": "44e7249e06cd142ccff3da71edfa1c5e9f32f71da077e630ac896d6561610b5f",
+  "sourceFiles": 699,
+  "changedSourceFiles": [],
+  "buildFiles": [
+    {
+      "file": "dist-app/Pi GUI-win32-x64/Pi GUI.exe",
+      "match": true
+    },
+    {
+      "file": "dist-app/Pi GUI-win32-x64/resources/app/server.cjs",
+      "match": true
+    },
+    {
+      "file": "dist-app/Pi GUI-win32-x64/resources/app/main.cjs",
+      "match": true
+    }
+  ],
+  "rendererAssets": 147,
+  "changedRendererAssets": [],
+  "scope": "Read-only integrity check; not another GUI or backend test"
+}

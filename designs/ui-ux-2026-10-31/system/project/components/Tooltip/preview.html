@@ -1,0 +1,15 @@
+<!-- @dsCard group="Overlays" height=330 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Tooltip · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<span class="pw-tooltip-anchor" style="margin-bottom:40px"><button id="example" class="pw-icon-button" aria-label="附加文件" aria-describedby="attachTip"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 13 6-6a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9"/><path d="m6 15 9-9"/></svg></button><span class="pw-tooltip" id="attachTip" role="tooltip">附加文件 · Ctrl+U</span></span>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+example.addEventListener('click',()=>result.textContent='演示：附件按钮可用；此预览不打开真实文件选择器。');
+const tip=document.getElementById('attachTip');example.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();tip.hidden=true;}});example.addEventListener('pointerenter',()=>tip.hidden=false);example.addEventListener('focus',()=>tip.hidden=false);
+})();
+</script>
+</body></html>

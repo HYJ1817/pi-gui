@@ -41,6 +41,8 @@
 .ui3-empty{
   padding:10px;font-size:12.5px;color:var(--ui-text-muted);text-align:center;
 }
+.ui3-model-search{display:block;width:calc(100% - 16px);margin:4px 8px 8px;min-height:34px;padding:6px 10px;border:1px solid var(--ui-border-control);border-radius:var(--ui-radius-control);background:var(--ui-input-surface);color:var(--ui-text-primary);font:inherit}
+.ui3-model-search:focus-visible{outline:2px solid var(--ui-focus);outline-offset:2px}
 
 /* ---------- 模型条目 ---------- */
 
@@ -51,7 +53,7 @@
 }
 /* 当前项只用右侧中性对勾，键盘焦点独立呈现。 */
 .pop .ui3-model-item.on{
-  background:transparent;
+  background:var(--ui-selected);
   box-shadow:none;
 }
 /* 推理能力的三值：只有明确 false 才降调，unknown 保持中性。 */
@@ -93,7 +95,7 @@
 .ui3-think-state[data-state="no-model"]{color:var(--ui-text-muted)}
 
 .pop .ui3-think-item .pi-sub{font-family:inherit;color:var(--ui-text-muted)}
-.pop .ui3-think-item.on{background:transparent;box-shadow:none}
+.pop .ui3-think-item.on{background:var(--ui-selected);box-shadow:none}
 .pop .ui3-model-item:hover,.pop .ui3-think-item:hover{background:var(--ui-hover)}
 .pop .ui3-model-item .pi-check,.pop .ui3-think-item .pi-check{color:var(--ui-text-secondary)}
 .pop .ui3-think-item:disabled{opacity:.4;cursor:default}

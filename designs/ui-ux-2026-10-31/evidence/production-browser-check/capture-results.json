@@ -1,0 +1,47 @@
+{
+  "entry": "production electron/main.cjs + public renderer",
+  "backend": "existing tests/visual-harness.cjs, offline TEMP fixtures",
+  "shots": [
+    "dark-1440-empty.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-1440-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high"
+    }
+  ],
+  "checks": [],
+  "nativeEvidence": {
+    "addressInput": "DOM keydown dispatched to the existing field handler"
+  },
+  "errors": [
+    "Error: Native Browser loopback navigation not confirmed\n    at nativeCheck (C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\tools\\verify-production-ui.cjs:36:78)\n    at async run (C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\tools\\verify-production-ui.cjs:50:102)"
+  ]
+}

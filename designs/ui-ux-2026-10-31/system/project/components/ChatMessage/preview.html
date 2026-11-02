@@ -1,0 +1,17 @@
+<!-- @dsCard group="Conversation" height=430 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ChatMessage · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<article id="example" class="pw-message"><header><strong>Pi</strong><span>10:24 · 演示会话</span></header><p>侧栏点击应只改变选中状态。排序由会话创建或明确的新活动驱动，不能由选择动作重新计算。</p><pre class="pw-code">selectSession(id);
+restoreDraft(id);
+restoreScroll(id);</pre><button id="selectMessage" class="pw-button pw-button--quiet">选择这段说明</button></article>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+document.getElementById('selectMessage').addEventListener('click',()=>{const range=document.createRange();range.selectNodeContents(example.querySelector('p'));const selection=getSelection();selection.removeAllRanges();selection.addRange(range);result.textContent='演示：正文已选中，可使用 Ctrl+C。';});
+
+})();
+</script>
+</body></html>

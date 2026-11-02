@@ -299,15 +299,15 @@ async function suite(send) {
 
   /* ---- C1 · 阅读轴 与 排版（1440 默认窗，三列布局） ---- */
   await shot('c1-thread-layout');
-  await expect('C1 · 阅读轴变量解析为 768px',
-    `getComputedStyle(document.documentElement).getPropertyValue('--ui-prose-width').trim() === '768px'`);
+  await expect('C1 · 阅读轴变量解析为 760px',
+    `getComputedStyle(document.documentElement).getPropertyValue('--ui-prose-width').trim() === '760px'`);
   await expect('C1 · 输入框宽=正文轴（920/888 的 32px 历史差取消）',
     `(() => { const c = document.querySelector('.composer-box').getBoundingClientRect();
-      const col = Math.min(768, innerWidth);
+      const col = Math.min(760, innerWidth);
       return Math.abs(c.width - col) <= 1; })()`);
-  await expect('C1 · 正文字级=UI-1 prose 档（14px）且行高放宽到 1.75',
+  await expect('C1 · 正文字级=UI-1 prose 档（15px）且行高放宽到 1.8',
     `(() => { const s = getComputedStyle(document.querySelector('.msg.assistant .msg-body'));
-      return s.fontSize === '14px' && parseFloat(s.lineHeight) >= 14 * 1.74; })()`);
+      return s.fontSize === '15px' && parseFloat(s.lineHeight) >= 15 * 1.79; })()`);
   await expect('C1 · 用户气泡 18px 圆角 + 端点内距 ≥16px（圆角不吃字）',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-short .msg-body'));
       return ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius']
@@ -360,6 +360,7 @@ async function suite(send) {
   await expect('C2 · 行最小高度保持 30px 紧凑体量',
     `(() => { const it = document.querySelector('.tl-group .tl-item');
       return getComputedStyle(it).minHeight === '30px'; })()`);
+  await evalJs(`document.querySelector('.tl-group .tl-group-head')?.click()`);
   const expanded = await evalJs(`(() => { const h = document.querySelector('.tl-group .tl-item.has-more .tl-head');
     if (!h) return 'no-item'; h.click(); return 'ok'; })()`);
   if (expanded === 'ok') {
@@ -404,18 +405,18 @@ async function suite(send) {
     `getComputedStyle(document.querySelector('#u2c-probes .ui2-chev')).transform !== 'none'`);
   await expect('预留 · .ui2-msg-meta 11.5px 弱化条',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .ui2-msg-meta'));
-      return s.fontSize === '11.5px' && s.color === 'rgb(166, 163, 155)'; })()`);
+      return s.fontSize === '11.5px' && s.color === 'rgb(176, 176, 176)'; })()`);
   await expect('预留 · .ui2-runtime-status[data-state=running] = running 语义色',
     `(() => { return getComputedStyle(document.querySelector('#u2c-probes .ui2-runtime-status')).color === 'rgb(34, 211, 238)'; })()`);
   await expect('预留 · .ui2-runtime-meta 弱化小字',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .ui2-runtime-meta'));
       return s.fontSize === '11.5px'; })()`);
-  await expect('C3 · runtime 转录跟随正文字级（14px / 行高 ≥1.7）',
+  await expect('C3 · runtime 转录跟随正文字级（15px / 行高 ≥1.7）',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .rtc-output'));
-      return s.fontSize === '14px' && parseFloat(s.lineHeight) > 21; })()`);
-  await expect('C3 · runtime 会话跟随 768 阅读轴',
+      return s.fontSize === '15px' && parseFloat(s.lineHeight) > 21; })()`);
+  await expect('C3 · runtime 会话跟随 760 阅读轴',
     `(() => { const r = document.querySelector('#u2c-probes .runtime-conversation').getBoundingClientRect();
-      return Math.abs(r.width - Math.min(768, innerWidth)) <= 2; })()`);
+      return Math.abs(r.width - Math.min(760, innerWidth)) <= 2; })()`);
   await shot('c3-reserved-probes');
   await evalJs(`document.querySelector('#u2c-probes').remove()`);
 
@@ -486,7 +487,7 @@ async function suite(send) {
     `${JSON.stringify(chevCollapsed)} !== 'none' && ${JSON.stringify(chevExpanded)} !== 'none' && ${JSON.stringify(chevCollapsed)} !== ${JSON.stringify(chevExpanded)}`);
   await expect('A · .ui2-tool-state 组状态弱化小字（10.5px / t3）',
     `(() => { const s = getComputedStyle(document.getElementById('u2c-st'));
-      return s.fontSize === '10.5px' && s.color === 'rgb(166, 163, 155)'; })()`);
+      return s.fontSize === '10.5px' && s.color === 'rgb(176, 176, 176)'; })()`);
   await expect('A · .ui2-msg-meta-item 等宽数字对齐（tabular-nums）',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-ab .ui2-msg-meta-item'));
       return s.fontVariantNumeric.includes('tabular'); })()`);
@@ -502,7 +503,7 @@ async function suite(send) {
       return b.scrollWidth <= b.clientWidth + 1; })()`);
   await expect('B · .ui2-runtime-usage 弱化小字（11.5px / t3）',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-ab .ui2-runtime-usage'));
-      return s.fontSize === '11.5px' && s.color === 'rgb(166, 163, 155)'; })()`);
+      return s.fontSize === '11.5px' && s.color === 'rgb(176, 176, 176)'; })()`);
   await expect('B · .ui2-runtime-tools 每项一行（flex 纵排）',
     `getComputedStyle(document.querySelector('#u2c-ab .ui2-runtime-tools')).flexDirection === 'column'`);
   await expect('B · .ui2-runtime-tool[data-state=running] = run 色',
@@ -516,7 +517,7 @@ async function suite(send) {
       return getComputedStyle(t.find(e => e.dataset.state === 'error')).color === 'rgb(248, 113, 113)'; })()`);
   await expect('B · 未知 data-state 不为任何真实状态着色（回落 t2）',
     `(() => { const t = [...document.querySelectorAll('#u2c-ab .ui2-runtime-tool')];
-      return getComputedStyle(t.find(e => e.dataset.state === 'bogus')).color === 'rgb(195, 194, 183)'; })()`);
+      return getComputedStyle(t.find(e => e.dataset.state === 'bogus')).color === 'rgb(189, 189, 189)'; })()`);
   if (process.env.UI2C_AB_SHOT !== '0') await shot('c6-ab-dom', '#u2c-ab');
   await evalJs(`document.getElementById('u2c-ab').remove()`);
 

@@ -1,0 +1,12 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS A scoped child start
+PASS B explicit third total child
+PASS Refined Runtime uses normal sandbox and isolated renderer
+PASS true
+PASS true
+PASS true
+PASS true
+PASS true
+PASS true
+PASS true

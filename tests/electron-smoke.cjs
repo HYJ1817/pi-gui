@@ -33,7 +33,8 @@ async function main() {
     HOME: path.join(world, 'home'), USERPROFILE: path.join(world, 'home'), APPDATA: path.join(world, 'home/AppData/Roaming'), LOCALAPPDATA: path.join(world, 'home/AppData/Local'),
   });
   if (process.env.G2_SMOKE_THINKING === '1') env.G2_SMOKE_THINKING = '1';
-  child = spawn(require('electron'), [path.join(__dirname, 'fixtures/g2-electron-smoke.cjs'), '--user-data-dir=' + path.join(world, 'electron')], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const fixture = process.env.G2_SMOKE_NATIVE_PROBE === '1' ? 'g2-native-capture-probe.cjs' : 'g2-electron-smoke.cjs';
+  child = spawn(require('electron'), [path.join(__dirname, 'fixtures', fixture), '--user-data-dir=' + path.join(world, 'electron')], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   child.once('error', error => { spawnError = error.code || 'spawn_error'; });
   const exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
   child.stdout.on('data', data => process.stdout.write(data));

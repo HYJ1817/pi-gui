@@ -8,7 +8,7 @@ const { createBrowserController } = require('../../electron/browser-view.cjs');
 
 const ROOT = path.resolve(__dirname, '../..');
 const world = process.env.G2_SMOKE_WORLD, out = process.env.G2_SMOKE_OUTPUT;
-const rows = [], screenshots = [], geometry = [], errors = [];
+const rows = [], screenshots = [], geometry = [], errors = [], nativeCaptures = [];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const check = (name, value) => { assert.ok(value, name); rows.push(name); console.log('ok ' + name); };
 let win, browser, agent, backend, page, origin;
@@ -19,6 +19,14 @@ async function until(action, name) {
   throw new Error('timeout: ' + name);
 }
 const read = code => win.webContents.executeJavaScript(code, true);
+async function nativeGeometry() {
+  const rect = await read("(()=>{const r=document.querySelector('#browserViewport')?.getBoundingClientRect();return r&&{x:r.x,y:r.y,width:r.width,height:r.height}})()");
+  const native = win.contentView.children.find(view => view.webContents === browser.getWebContents());
+  if (!rect || !native) return null;
+  const bounds = native.getBounds(), zoom = win.webContents.getZoomFactor();
+  const matches = bounds.width > 0 && bounds.height > 0 && ['x', 'y', 'width', 'height'].every(key => Math.abs(bounds[key] - rect[key] * zoom) <= 1);
+  return matches ? { contentBounds: win.getContentBounds(), viewport: rect, nativeBounds: bounds, zoom } : null;
+}
 async function main() {
   assert.ok(world && path.isAbsolute(world));
   assert.ok(!process.argv.includes('--no-sandbox') && !app.commandLine.hasSwitch('no-sandbox'));
@@ -83,20 +91,28 @@ async function main() {
   await until(() => browser.getWebContents(), 'native browser created');
   browser.navigate(`http://127.0.0.1:${page.address().port}`);
   await until(() => !browser.getState().loading && browser.getState().title === 'G2 loopback fixture', 'local page');
-  // Parent capturePage does not include native child pixels. Retain the actual
-  // native-page capture separately; do not fabricate a composite screenshot.
-  fs.writeFileSync(path.join(out, 'smoke-native.png'), (await browser.getWebContents().capturePage()).toPNG());
+  // Native navigation readiness does not imply that the child is attached or
+  // sized. Reuse the same geometry predicate before requesting its pixels.
+  await until(nativeGeometry, 'native capture attachment and geometry');
+  // Parent capturePage omits native child pixels; retain a separate image.
+  const nativeContents = browser.getWebContents();
+  const nativeView = win.contentView.children.find(view => view.webContents === nativeContents);
+  const capture = { attached: !!nativeView, bounds: nativeView?.getBounds() || null, loading: nativeContents.isLoading() };
+  nativeCaptures.push(capture);
+  let nativeImage;
+  try { nativeImage = await nativeContents.capturePage(); }
+  catch (error) { capture.errorName = error.name; capture.reason = error.message === 'UnknownVizError' ? 'UnknownVizError' : 'capture_failed'; throw error; }
+  const nativePNG = nativeImage.toPNG();
+  Object.assign(capture, { size: nativeImage.getSize(), empty: nativeImage.isEmpty(), bytes: nativePNG.length });
+  check('native Browser screenshot contains nonempty pixels', !capture.empty && capture.size.width > 0 && capture.size.height > 0 && capture.bytes > 0);
+  fs.writeFileSync(path.join(out, 'smoke-native.png'), nativePNG);
   screenshots.push('smoke-native.png');
   for (const width of [1200, 760]) {
     win.setContentSize(width, 820);
     await until(async () => {
-      const rect = await read("(()=>{const r=document.querySelector('#browserViewport')?.getBoundingClientRect();return r&&{x:r.x,y:r.y,width:r.width,height:r.height}})()");
-      const native = win.contentView.children.find(view => view.webContents === browser.getWebContents());
-      if (!rect || !native) return false;
-      const bounds = native.getBounds(), zoom = win.webContents.getZoomFactor();
-      const matches = ['x', 'y', 'width', 'height'].every(key => Math.abs(bounds[key] - rect[key] * zoom) <= 1);
-      if (matches) geometry.push({ requestedWidth: width, contentBounds: win.getContentBounds(), viewport: rect, nativeBounds: bounds, zoom });
-      return matches && bounds.width > 0 && bounds.height > 0;
+      const measured = await nativeGeometry();
+      if (measured) geometry.push({ requestedWidth: width, ...measured });
+      return measured;
     }, 'real Browser bounds ' + width);
     check(`real native Browser geometry matches renderer at ${width}px`, true);
     const name = `smoke-${width}.png`;
@@ -146,7 +162,8 @@ main().catch(async error => {
     await until(() => fs.existsSync(path.join(world, 'processes-observed')), 'parent process observation');
     await cleanup();
   } catch (error) { failed = 1; console.error(error.message); }
-  fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ qualification: failed ? 'failed-normal-sandbox' : 'normal-sandbox', sandbox: true, checks: rows.length, failed, skipped: 0, rows, screenshots, geometry, errors,
+  fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ qualification: failed ? 'failed-normal-sandbox' : 'normal-sandbox', sandbox: true, checks: rows.length, failed, skipped: 0, rows, screenshots, geometry, nativeCaptures, errors,
+    faultInjection: process.env.G2_SMOKE_NATIVE_PROBE === '1' ? 'native bounds IPC delayed 1500ms' : null,
     electron: process.versions.electron, node: process.versions.node, platform: process.platform,
     fixture: 'temporary Git, production server/renderer/preload/Browser, existing fake Pi; loopback only; no external CDP port',
   }, null, 2) + '\n');

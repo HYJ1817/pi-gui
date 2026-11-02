@@ -1233,7 +1233,7 @@ staticCheck();
   check('供应商入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navProviders')));
   check('诊断入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navDiagnostics')));
   check('Global Rail 入口都是可聚焦的真按钮且有名称', () => [...window.document.querySelectorAll('#globalRail .rail-icon')].every((b) => b.tagName === 'BUTTON' && b.getAttribute('aria-label')));
-  check('Global Rail 初始激活项唯一', () => window.document.querySelectorAll('#globalRail [aria-current="page"]').length === 1 && $('navHome').getAttribute('aria-current') === 'page');
+  check('Global Rail 初始激活项唯一', () => window.document.querySelectorAll('#projectSidebar [aria-current="page"]').length === 1 && $('navHome').getAttribute('aria-current') === 'page');
   $('btnSidebarCollapse').click();
   check('折叠仅隐藏项目侧栏，保留全局栏与工作区', () => $('projectSidebar').hidden && !$('globalRail').hidden && !$('workspace').hidden && !$('btnSidebarExpand').hidden);
   check('侧栏折叠按钮语义与侧栏状态一致', () => $('btnSidebarCollapse').getAttribute('aria-expanded') === 'false' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'false');
@@ -1242,8 +1242,8 @@ staticCheck();
   check('侧栏展开按钮语义与侧栏状态一致', () => $('btnSidebarCollapse').getAttribute('aria-expanded') === 'true' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'true');
   $('navGlobalMore').click();
   check('More 展开并提供真实入口', () => !$('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'true' && [...$('globalMoreMenu').querySelectorAll('button')].every((b) => typeof b.onclick === 'function'));
-  $('navGlobalMore').click();
-  check('More 可收起', () => $('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'false');
+  $('settingsReturn').click();
+  check('设置返回工作区关闭目录', () => $('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'false');
   $('btnProjectMenu').click();
   check('项目低频动作可展开', () => !$('projectActions').hidden && $('btnProjectMenu').getAttribute('aria-expanded') === 'true' && Boolean($('btnAddProject') && $('btnProjectSettings')));
   $('btnProjectMenu').click();
@@ -1945,7 +1945,7 @@ staticCheck();
   const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
   const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
 
-  check('全局栏有「文件变更」入口', () => window.document.querySelector('.head-right #navChanges') !== null);
+  check('全局栏有「文件变更」入口', () => window.document.querySelector('#workPanelNav #navChanges') !== null);
 
   gitStub.status = {
     ok: true,
@@ -1968,7 +1968,7 @@ staticCheck();
   check('Changes 全部过滤器的选中语义与状态一致', () => $('chgFilterAll').classList.contains('on') && $('chgFilterAll').getAttribute('aria-pressed') === 'true' && $('chgFilterSession').getAttribute('aria-pressed') === 'false');
   check('状态字母正确', () => chgRows().map((x) => x.querySelector('.chg-code').textContent).join('') === 'MA??M??');
   check('含空格与中文的路径原样渲染', () => chgRows().some((x) => x.querySelector('.chg-path').textContent === 'docs/中文 说明.md'));
-  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('rightPane')) === 0 || `解析出了 ${liveCount($('rightPane'))} 个危险元素`);
+  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('rightPane').querySelector('.rp-body')) === 0 || `解析出了 ${liveCount($('rightPane').querySelector('.rp-body'))} 个危险元素`);
   check('恶意文件名仍以原样文本呈现（没被截断或吃掉）', () =>
     chgRows().some((x) => x.querySelector('.chg-path').textContent === 'tmp/<img onerror=alert(1)>.txt'));
   check('增删行数渲染', () => {
@@ -2643,41 +2643,42 @@ staticCheck();
   $('modal').click();
 
   // --- 弹层：供应商 ---
+  const providerPage = () => window.document.querySelector('#workSurface .settings-detail-card');
   $('navProviders').click();
   await new Promise((r) => setTimeout(r, 20));
-  check('供应商弹层打开', () => $('modal').hidden === false);
-  check('P14-E 新 Modal 不继承上一弹层的布局类', () => $('modalCard').classList.contains('wide') && !$('modalCard').classList.contains('tree-modal'));
-  check('供应商列表渲染', () => window.document.querySelectorAll('#modalCard .prov').length === 1);
+  check('供应商中央设置页打开', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && Boolean(providerPage()));
+  check('P14-E 设置详情不继承上一弹层的布局类', () => providerPage().classList.contains('wide') && !providerPage().classList.contains('tree-modal'));
+  check('供应商列表渲染', () => providerPage().querySelectorAll('.prov').length === 1);
   check('未解析的 $ENV_VAR 有告警', () => {
-    const w = window.document.querySelector('#modalCard .prov-warn');
+    const w = providerPage().querySelector('.prov-warn');
     return w && w.textContent.includes('DEEPSEEK_API_KEY') ? true : '告警缺失';
   });
-  $('modal').click();
+  $('settingsReturn').click();
 
   // --- 添加供应商：保存后提示告警 ---
   $('navProviders').click();
   await new Promise((r) => setTimeout(r, 20));
-  [...window.document.querySelectorAll('#modalCard .btn')].find((b) => b.textContent === '添加供应商').click();
-  check('添加表单打开', () => window.document.querySelectorAll('#modalCard .preset').length === 9);
-  const fields = window.document.querySelectorAll('#modalCard .field input, #modalCard .field textarea');
+  [...providerPage().querySelectorAll('.btn')].find((b) => b.textContent === '添加供应商').click();
+  check('添加表单打开', () => providerPage().querySelectorAll('.preset').length === 9);
+  const fields = providerPage().querySelectorAll('.field input, .field textarea');
   fields[0].value = 'newprov';
   fields[1].value = 'https://api.example.com/v1';
   fields[2].value = '$NEW_KEY';
   fields[3].value = 'model-a|Model A';
   const beforeRawKey = providerConfigCalls.length;
   fields[2].value = 'raw-fixture-key';
-  [...$('modalCard').querySelectorAll('button')].find((b) => b.textContent === '保存').click();
+  [...providerPage().querySelectorAll('button')].find((b) => b.textContent === '保存').click();
   await new Promise((r) => setTimeout(r, 10));
   check('P25 原文密钥被表单拦截，不发送配置写请求', () => providerConfigCalls.length === beforeRawKey);
-  check('P25 表单只提示环境变量引用与官方登录', () => fields[2].placeholder === '$MY_API_KEY 或 ${MY_API_KEY}' && $('modalCard').textContent.includes('/login <provider>'));
+  check('P25 表单只提示环境变量引用与官方登录', () => fields[2].placeholder === '$MY_API_KEY 或 ${MY_API_KEY}' && providerPage().textContent.includes('/login <provider>'));
   fields[2].value = '$NEW_KEY';
-  [...window.document.querySelectorAll('#modalCard .btn')].find((b) => b.textContent === '保存').click();
+  [...providerPage().querySelectorAll('.btn')].find((b) => b.textContent === '保存').click();
   await new Promise((r) => setTimeout(r, 30));
   check('保存后弹出 key 告警', () => {
     const t = [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | ');
     return t.includes('NEW_KEY') ? true : '未提示：' + t;
   });
-  $('modal').click();
+  $('settingsReturn').click();
 
   // --- 弹层：统计 ---
   // The preceding full Provider identity can hydrate optional remote quota rows.
@@ -5929,7 +5930,7 @@ staticCheck();
       check('会话：点击禁用操作不会写盘或弹删除确认', () => sessionCalls.length === beforeDisabledCalls && $('confirmLayer').hidden === beforeDisabledConfirm);
       check('会话：菜单是可访问的浮层（role=menu / menuitem / aria-expanded）', () =>
         Boolean(rowMenuEl() && rowMenuEl().getAttribute('role') === 'menu'
-          && rowMenuItems().every((b) => b.getAttribute('role') === 'menuitem')
+          && rowMenuItems().every((b) => b.tagName === 'BUTTON')
           && cur.querySelector('.pj-sess-menu-trigger').getAttribute('aria-expanded') === 'true')
         || '菜单语义不完整');
       rowMenuItem('重命名').click();
@@ -7826,11 +7827,11 @@ staticCheck();
     const attachment = $('attachTray').querySelector('.att');
     $('stream').scrollTop = 37;
     window.S.streaming = true;
-    check('P14-D 默认 Chat 且 Home 唯一激活', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    check('P14-D 默认 Chat 且 Home 唯一激活', () => $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     $('navPlanner').click();
     check('P14-D Planner 在 Stage 且 Chat 节点仅隐藏', () => $('workspace').dataset.workspaceView === 'planner' && !$('workSurface').hidden && $('chatView').hidden && composer.hidden && $('modal').hidden && conversation.isConnected);
     check('P14-E Planner Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && Boolean(window.document.getElementById(tab.getAttribute('aria-controls')))));
-    check('P14-D Planner rail 唯一激活', () => $('navPlanner').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    check('P14-D Planner rail 唯一激活', () => $('navPlanner').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     window.onMessageStart({ message: { role: 'assistant' } });
     window.onMessageUpdate({ assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '离开 Chat 后继续生成' } });
     await new Promise((resolve) => setTimeout(resolve, 35));
@@ -7842,12 +7843,11 @@ staticCheck();
     $('navExtensions').click();
     check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
     check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
-    $('navGlobalMore').click();
-    check('P14-D More 不抢主视图', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+    check('设置目录在扩展工作区持续可达', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     $('navDiagnostics').click();
-    check('P14-D 二级 Modal 覆盖 Extensions', () => !$('modal').hidden && $('workspace').dataset.workspaceView === 'extensions');
-    window.closeModal();
-    check('P14-D 关闭二级 Modal 后仍在 Extensions', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'extensions' && $('navExtensions').getAttribute('aria-current') === 'page');
+    check('P14-D 诊断由中央设置详情承载', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && $('navDiagnostics').getAttribute('aria-current') === 'page');
+    $('navExtensions').click();
+    check('P14-D 切回 Extensions 恢复真实页面与目录状态', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'extensions' && $('navExtensions').getAttribute('aria-current') === 'page');
     const scrollBeforeReturn = $('stream').scrollTop;
     $('navHome').click();
     check('P14-D 返回 Chat 保留 Conversation 节点与滚动', () => $('workspace').dataset.workspaceView === 'chat' && $('stream').querySelector('.msg.user') === conversation && $('stream').scrollTop === scrollBeforeReturn && !$('chatView').hidden);
@@ -7873,7 +7873,7 @@ staticCheck();
       $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' &&
       !$('navPlanner').classList.contains('is-active') && !$('chatView').hidden && !$('chatComposer').hidden &&
       $('workSurface').hidden && $('workSurface').childElementCount === 0 &&
-      $('globalRail').querySelectorAll('[aria-current="page"]').length === 1);
+      $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
     check('P14-E 侧栏新对话成功后焦点进入 Composer', () => window.document.activeElement === $('input'));
 
     $('navPlanner').click();
@@ -7910,7 +7910,7 @@ staticCheck();
     check('P14-D 收口：侧栏旧会话成功切到 Chat 且只激活 Home', () =>
       sessionCalls.slice(beforeSwitch).some((c) => /\/switch$/.test(c.url) && c.body?.id === 'bbbbbbbbbbbbbbbb') &&
       $('workspace').dataset.workspaceView === 'chat' && $('navHome').getAttribute('aria-current') === 'page' &&
-      $('globalRail').querySelectorAll('[aria-current="page"]').length === 1 &&
+      $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1 &&
       !$('chatView').hidden && !$('chatComposer').hidden && $('workSurface').hidden &&
       $('workSurface').childElementCount === 0 && !$('stream').textContent.includes('旧会话正文'));
     for (let i = 0; i < 40 && switchButton?.isConnected; i++) {
@@ -8822,7 +8822,7 @@ staticCheck();
     check('P24 可发现：More 菜单里有「命令面板 / 键盘快捷键」两个可见入口', () => {
       const p = $('navPalette');
       const h = $('navShortcutHelp');
-      return Boolean(p && h) && p.getAttribute('role') === 'menuitem' && Boolean(p.title) && Boolean(h.title);
+      return Boolean(p && h) && p.tagName === 'BUTTON' && Boolean(p.title) && Boolean(h.title);
     });
     check('P24 可发现：点菜单里的「命令面板…」真的能打开面板', () => {
       $('navPalette').onclick();
@@ -8831,8 +8831,8 @@ staticCheck();
     window.closePalette();
     check('P24 可发现：点菜单里的「键盘快捷键…」真的能打开帮助', () => {
       $('navShortcutHelp').onclick();
-      const open = !$('modal').hidden && $('modalCard').textContent.includes('键盘快捷键');
-      window.closeModal();
+      const open = $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && Boolean(window.document.querySelector('.settings-detail-card')?.textContent.includes('键盘快捷键'));
+      $('settingsReturn').click();
       return open;
     });
     await sleep(20);
@@ -8958,8 +8958,8 @@ staticCheck();
     [...$('stageNotice').querySelectorAll('.btn')].find((b) => b.textContent === '打开诊断').onclick();
     await sleep(40);
     check('P24 状态条：「打开诊断」走的就是既有诊断面板', () =>
-      $('modal').hidden === false && $('modalCard').textContent.includes('诊断'));
-    $('modal').hidden = true; $('modalCard').innerHTML = '';
+      $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && Boolean(window.document.querySelector('.settings-detail-card')?.textContent.includes('诊断')));
+    $('settingsReturn').click();
     check('P24 状态条：可关闭，且不会被同一条重复重建', () => {
       $('stageNotice').querySelector('.notice-close').onclick();
       return $('stageNotice').hidden;

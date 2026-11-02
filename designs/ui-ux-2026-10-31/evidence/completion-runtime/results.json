@@ -1,0 +1,104 @@
+{
+  "head": "8908ff5",
+  "sourceSuites": [
+    {
+      "command": "node tests/runtime-finish-ui.cjs",
+      "passed": 48,
+      "total": 48,
+      "log": "green-runtime-finish-ui.log"
+    },
+    {
+      "command": "node tests/runtime-conversation.cjs",
+      "passed": 106,
+      "total": 106,
+      "log": "green-runtime-conversation.log"
+    },
+    {
+      "command": "node tests/runtime-models.cjs",
+      "passed": 52,
+      "total": 52,
+      "log": "green-runtime-models.log"
+    },
+    {
+      "command": "node tests/runtime-draft.cjs",
+      "passed": 42,
+      "total": 42,
+      "log": "green-runtime-draft.log"
+    },
+    {
+      "command": "node tests/ui2-runtime-display.cjs",
+      "passed": 82,
+      "total": 82,
+      "log": "green-ui2-runtime-display.log"
+    },
+    {
+      "command": "node tests/viz-ui.cjs",
+      "passed": 66,
+      "total": 66,
+      "log": "green-viz-ui.log"
+    },
+    {
+      "command": "node tests/thinking-availability.cjs",
+      "passed": 34,
+      "total": 34,
+      "log": "green-thinking-availability.log"
+    }
+  ],
+  "sourcePassed": 430,
+  "sourceTotal": 430,
+  "native": {
+    "command": "P32_REFINED_RUNTIME=1 P32_RUNTIME_EVIDENCE=<absolute completion-runtime/native-20261101-final-owner-retirement> PI_GUI_OFFLINE=1 PI_OFFLINE=1 node tests/runtime-electron.cjs",
+    "checks": 168,
+    "qualification": "normal-sandbox",
+    "screenshots": 24,
+    "rendererErrors": [],
+    "report": "native-20261101-final-owner-retirement/p32-4/refined-report.json",
+    "geometry": "native-20261101-final-owner-retirement/p32-4/refined-geometry.json",
+    "log": "native-20261101-final-owner-retirement.log",
+    "postExitFixtureProcessQuery": 0
+  },
+  "digests": [
+    {
+      "path": "public/runtime-conversation.js",
+      "bytes": 43553,
+      "sha256": "92420bb7d517125439574b2872787d794a45ed11968682973b2985abf060c77e"
+    },
+    {
+      "path": "public/runtime-picker.js",
+      "bytes": 7366,
+      "sha256": "4163f37caf8f9a73d562c2d2f328ac4d47219a724f99c66c010844405582c492"
+    },
+    {
+      "path": "public/runtime-conversation.css",
+      "bytes": 6083,
+      "sha256": "97422aa1c997764496be17ac2f5667dc323b6c7e159a7e01661f4465fe5f6c6d"
+    },
+    {
+      "path": "tests/runtime-conversation.cjs",
+      "bytes": 56128,
+      "sha256": "8ff5513360900853dbd3c3474fcad2d353fcd54bc7e1492c41ee8ed441fd7dbf"
+    },
+    {
+      "path": "tests/runtime-finish-ui.cjs",
+      "bytes": 16049,
+      "sha256": "c78e2893f06d15044e54b3c8c553447508833a414fdf2ec963174f562a0ab8f7"
+    },
+    {
+      "path": "tests/runtime-electron.cjs",
+      "bytes": 85564,
+      "sha256": "55a6b52b7ec78aa4af533cad503725d8c99f81170c01ff03ac3df9b213d04365"
+    },
+    {
+      "path": "tests/fixtures/runtime-refined-scenarios.cjs",
+      "bytes": 12474,
+      "sha256": "b888e505a8a9f2076c7d3d1134d258a5e18479f7ffb3e85b46ac7510ad7f745c"
+    }
+  ],
+  "notRun": [
+    "default full runtime-electron mode",
+    "complete canonical npm test in this subtask",
+    "packaged GUI in this subtask",
+    "real Pi/model in this subtask"
+  ],
+  "status": "source and focused native verified; parent owns rebuild and integration review"
+}

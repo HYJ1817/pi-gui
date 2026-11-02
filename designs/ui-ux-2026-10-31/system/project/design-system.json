@@ -1,0 +1,30 @@
+{
+  "v": 3,
+  "assetGroups": {},
+  "blobs": {},
+  "createdOnFiles": {
+    "at": "2026-10-31T06:48:07Z",
+    "v": 1
+  },
+  "docs": {
+    "readme": "project/README.md",
+    "sections": [
+      "project/Component-Coverage.md",
+      "project/Contrast-Checks.md",
+      "project/Original-Inventory.md",
+      "project/Visual-Verification.md"
+    ]
+  },
+  "groups": [],
+  "lastChange": {
+    "by": "Codex",
+    "at": "2026-11-01T03:23:42.664Z",
+    "via": "Codex",
+    "note": "2026-11-01 input assistance proposal: Slash and context details; Menu/Popover/Textarea guidelines updated. Author input checks 200/200 with 28 images; existing prototype regression 435/435 with 90 images. Tokens and production unchanged."
+  },
+  "layout": "files",
+  "libraries": [],
+  "namespace": "PiWorkbench",
+  "sections": {},
+  "title": "Pi Workbench"
+}

@@ -1,0 +1,57 @@
+{
+  "ended": "2026-11-01T07:35:58.460Z",
+  "head": "eac79cab793cff26c6cb6aa01cc9d9276ce06606",
+  "inputDigest": "44e7249e06cd142ccff3da71edfa1c5e9f32f71da077e630ac896d6561610b5f",
+  "canonical": {
+    "mode": "cumulative continuation, not a single successful npm test",
+    "totalCommands": 231,
+    "originalCompleted": 106,
+    "continuationCompleted": 125,
+    "continuationNonzero": 0,
+    "unchangedInputs": true,
+    "originalSingleRunExitCode": 1
+  },
+  "environmentSkipped": [
+    {
+      "suite": "collab-store",
+      "count": 1
+    },
+    {
+      "suite": "candidate-adoption",
+      "count": 1
+    },
+    {
+      "suite": "logging-leaks",
+      "count": 1
+    },
+    {
+      "suite": "session-revert-sacl-witness",
+      "count": 8
+    },
+    {
+      "suite": "session-revert-inplace",
+      "count": 2
+    },
+    {
+      "suite": "session-revert-object-witness",
+      "count": 8
+    }
+  ],
+  "screenshots": 63,
+  "missingImages": [],
+  "reportLinks": 13,
+  "missingLinks": [],
+  "knownFailedOptionalProof": [
+    "electron-smoke native capture: UnknownVizError, 2 attempts",
+    "ui3-model --real: 124/132; 8 baseline stale arrow assertions"
+  ],
+  "notVerified": [
+    "real model E2E",
+    "physical Chinese IME",
+    "all physical DPI scales",
+    "installation upgrade"
+  ],
+  "submitted": false,
+  "pushed": false,
+  "installed": false
+}

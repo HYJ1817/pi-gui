@@ -59,12 +59,20 @@ function trapTab(card, e) {
   }
 }
 
+function releaseOwnedPanels() {
+  for (const key of ['tree', 'providers']) {
+    const node = panels[key];
+    if (!node || !node.isConnected || el.modalCard.contains(node)) panels[key] = null;
+  }
+}
+
 export function closeModal() {
   const hook = closeHook;
   closeHook = null;
   modalInstance = null;
 
   el.modal.hidden = true;
+  releaseOwnedPanels();
   el.modalCard.innerHTML = '';
   el.modalCard.className = 'modal-card';
   el.modalCard.removeAttribute('data-surface');
@@ -73,8 +81,6 @@ export function closeModal() {
   el.modalCard.removeAttribute('aria-busy');
   modalMeta = null;
   modalCancelPath = null;
-  panels.tree = null;
-  panels.providers = null;
   const returnFocus = modalReturnFocus;
   modalReturnFocus = null;
 
@@ -94,6 +100,7 @@ export function openModal(build, onClose, options = {}) {
   modalInstance = instance;
   modalReturnFocus = document.activeElement;
   closeHook = null;
+  releaseOwnedPanels();
   el.modalCard.innerHTML = '';
   el.modalCard.className = 'modal-card' + (options.className ? ' ' + options.className : '');
   if (options.surface) el.modalCard.setAttribute('data-surface', String(options.surface));
@@ -104,9 +111,7 @@ export function openModal(build, onClose, options = {}) {
   else el.modalCard.removeAttribute('aria-describedby');
   modalMeta = options.meta && typeof options.meta === 'object' ? { ...options.meta } : null;
   modalCancelPath = typeof options.onCancel === 'function' ? options.onCancel : null;
-  // 弹层里的动态区域在关闭时失效，避免继续往已卸载的节点里写
-  panels.tree = null;
-  panels.providers = null;
+  // The modal releases its own nodes; mounted workspace pages retain theirs.
 
   build(el.modalCard, () => { if (modalInstance === instance) closeModal(); });
   if (modalInstance !== instance) return;

@@ -1,0 +1,2144 @@
+{
+  "scope": "design-system native HTML previews rendered in existing Electron Chromium; temporary profile; no real Pi or user project",
+  "date": "2026-10-31T16:34:57.320Z",
+  "passed": 388,
+  "failed": 0,
+  "checks": [
+    {
+      "pass": true,
+      "label": "render light/Button"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Button"
+    },
+    {
+      "pass": true,
+      "label": "state light/Button/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Button/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Button/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Button/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Button/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Button/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Button/error"
+    },
+    {
+      "pass": true,
+      "label": "button feedback light/Button"
+    },
+    {
+      "pass": true,
+      "label": "render light/IconButton"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/IconButton"
+    },
+    {
+      "pass": true,
+      "label": "state light/IconButton/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/IconButton/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/IconButton/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/IconButton/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/IconButton/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/IconButton/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/IconButton/error"
+    },
+    {
+      "pass": true,
+      "label": "icon selected light/IconButton"
+    },
+    {
+      "pass": true,
+      "label": "render light/Input"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Input"
+    },
+    {
+      "pass": true,
+      "label": "state light/Input/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Input/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Input/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Input/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Input/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Input/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Input/error"
+    },
+    {
+      "pass": true,
+      "label": "input validation light/Input"
+    },
+    {
+      "pass": true,
+      "label": "render light/Textarea"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Textarea"
+    },
+    {
+      "pass": true,
+      "label": "state light/Textarea/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Textarea/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Textarea/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Textarea/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Textarea/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Textarea/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Textarea/error"
+    },
+    {
+      "pass": true,
+      "label": "textarea height bound light/Textarea"
+    },
+    {
+      "pass": true,
+      "label": "render light/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "state light/ModelPicker/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/ModelPicker/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/ModelPicker/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/ModelPicker/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/ModelPicker/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/ModelPicker/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/ModelPicker/error"
+    },
+    {
+      "pass": true,
+      "label": "model pending light/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "model readback light/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "render light/Menu"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Menu"
+    },
+    {
+      "pass": true,
+      "label": "state light/Menu/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Menu/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Menu/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Menu/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Menu/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Menu/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Menu/error"
+    },
+    {
+      "pass": true,
+      "label": "menu viewport light/Menu"
+    },
+    {
+      "pass": true,
+      "label": "menu return focus light/Menu"
+    },
+    {
+      "pass": true,
+      "label": "render light/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "state light/Dialog/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Dialog/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Dialog/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Dialog/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Dialog/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Dialog/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Dialog/error"
+    },
+    {
+      "pass": true,
+      "label": "dialog native modal light/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "dialog close focus light/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "render light/Popover"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Popover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Popover/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Popover/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Popover/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Popover/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Popover/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Popover/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Popover/error"
+    },
+    {
+      "pass": true,
+      "label": "popover open light/Popover"
+    },
+    {
+      "pass": true,
+      "label": "render light/Tabs"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Tabs"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tabs/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tabs/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tabs/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tabs/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tabs/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tabs/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tabs/error"
+    },
+    {
+      "pass": true,
+      "label": "tab association light/Tabs"
+    },
+    {
+      "pass": true,
+      "label": "render light/Sidebar"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Sidebar"
+    },
+    {
+      "pass": true,
+      "label": "state light/Sidebar/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Sidebar/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Sidebar/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Sidebar/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Sidebar/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Sidebar/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Sidebar/error"
+    },
+    {
+      "pass": true,
+      "label": "sidebar order stable light/Sidebar"
+    },
+    {
+      "pass": true,
+      "label": "render light/Tooltip"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Tooltip"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tooltip/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tooltip/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tooltip/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tooltip/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tooltip/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tooltip/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Tooltip/error"
+    },
+    {
+      "pass": true,
+      "label": "tooltip keyboard focus light/Tooltip",
+      "data": {
+        "active": "example",
+        "focus": false,
+        "within": true,
+        "hidden": false,
+        "opacity": "1"
+      }
+    },
+    {
+      "pass": true,
+      "label": "render light/StatusIndicator"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/StatusIndicator"
+    },
+    {
+      "pass": true,
+      "label": "state light/StatusIndicator/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/StatusIndicator/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/StatusIndicator/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/StatusIndicator/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/StatusIndicator/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/StatusIndicator/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/StatusIndicator/error"
+    },
+    {
+      "pass": true,
+      "label": "status text light/StatusIndicator"
+    },
+    {
+      "pass": true,
+      "label": "render light/Progress"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Progress"
+    },
+    {
+      "pass": true,
+      "label": "state light/Progress/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Progress/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Progress/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Progress/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Progress/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Progress/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Progress/error"
+    },
+    {
+      "pass": true,
+      "label": "progress completion light/Progress"
+    },
+    {
+      "pass": true,
+      "label": "render light/EmptyState"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/EmptyState"
+    },
+    {
+      "pass": true,
+      "label": "state light/EmptyState/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/EmptyState/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/EmptyState/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/EmptyState/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/EmptyState/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/EmptyState/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/EmptyState/error"
+    },
+    {
+      "pass": true,
+      "label": "empty action light/EmptyState"
+    },
+    {
+      "pass": true,
+      "label": "render light/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "state light/ErrorState/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/ErrorState/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/ErrorState/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/ErrorState/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/ErrorState/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/ErrorState/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/ErrorState/error"
+    },
+    {
+      "pass": true,
+      "label": "error pending light/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "error recovery light/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "render light/Toast"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/Toast"
+    },
+    {
+      "pass": true,
+      "label": "state light/Toast/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/Toast/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/Toast/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/Toast/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/Toast/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/Toast/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/Toast/error"
+    },
+    {
+      "pass": true,
+      "label": "toast deduplicates light/Toast"
+    },
+    {
+      "pass": true,
+      "label": "render light/ChatMessage"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/ChatMessage"
+    },
+    {
+      "pass": true,
+      "label": "state light/ChatMessage/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/ChatMessage/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/ChatMessage/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/ChatMessage/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/ChatMessage/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/ChatMessage/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/ChatMessage/error"
+    },
+    {
+      "pass": true,
+      "label": "message selectable light/ChatMessage"
+    },
+    {
+      "pass": true,
+      "label": "render light/ToolActivity"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/ToolActivity"
+    },
+    {
+      "pass": true,
+      "label": "state light/ToolActivity/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/ToolActivity/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/ToolActivity/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/ToolActivity/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/ToolActivity/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/ToolActivity/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/ToolActivity/error"
+    },
+    {
+      "pass": true,
+      "label": "tool expansion light/ToolActivity"
+    },
+    {
+      "pass": true,
+      "label": "render light/WorkPanel"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds light/WorkPanel"
+    },
+    {
+      "pass": true,
+      "label": "state light/WorkPanel/default"
+    },
+    {
+      "pass": true,
+      "label": "state light/WorkPanel/hover"
+    },
+    {
+      "pass": true,
+      "label": "state light/WorkPanel/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state light/WorkPanel/selected"
+    },
+    {
+      "pass": true,
+      "label": "state light/WorkPanel/focus"
+    },
+    {
+      "pass": true,
+      "label": "state light/WorkPanel/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state light/WorkPanel/error"
+    },
+    {
+      "pass": true,
+      "label": "panel identity preserved light/WorkPanel"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Button"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Button"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Button/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Button/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Button/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Button/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Button/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Button/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Button/error"
+    },
+    {
+      "pass": true,
+      "label": "button feedback dark/Button"
+    },
+    {
+      "pass": true,
+      "label": "render dark/IconButton"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/IconButton"
+    },
+    {
+      "pass": true,
+      "label": "state dark/IconButton/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/IconButton/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/IconButton/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/IconButton/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/IconButton/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/IconButton/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/IconButton/error"
+    },
+    {
+      "pass": true,
+      "label": "icon selected dark/IconButton"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Input"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Input"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Input/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Input/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Input/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Input/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Input/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Input/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Input/error"
+    },
+    {
+      "pass": true,
+      "label": "input validation dark/Input"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Textarea"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Textarea"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Textarea/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Textarea/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Textarea/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Textarea/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Textarea/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Textarea/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Textarea/error"
+    },
+    {
+      "pass": true,
+      "label": "textarea height bound dark/Textarea"
+    },
+    {
+      "pass": true,
+      "label": "render dark/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ModelPicker/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ModelPicker/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ModelPicker/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ModelPicker/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ModelPicker/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ModelPicker/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ModelPicker/error"
+    },
+    {
+      "pass": true,
+      "label": "model pending dark/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "model readback dark/ModelPicker"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Menu"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Menu"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Menu/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Menu/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Menu/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Menu/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Menu/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Menu/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Menu/error"
+    },
+    {
+      "pass": true,
+      "label": "menu viewport dark/Menu"
+    },
+    {
+      "pass": true,
+      "label": "menu return focus dark/Menu"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Dialog/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Dialog/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Dialog/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Dialog/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Dialog/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Dialog/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Dialog/error"
+    },
+    {
+      "pass": true,
+      "label": "dialog native modal dark/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "dialog close focus dark/Dialog"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Popover"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Popover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Popover/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Popover/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Popover/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Popover/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Popover/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Popover/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Popover/error"
+    },
+    {
+      "pass": true,
+      "label": "popover open dark/Popover"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Tabs"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Tabs"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tabs/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tabs/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tabs/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tabs/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tabs/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tabs/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tabs/error"
+    },
+    {
+      "pass": true,
+      "label": "tab association dark/Tabs"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Sidebar"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Sidebar"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Sidebar/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Sidebar/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Sidebar/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Sidebar/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Sidebar/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Sidebar/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Sidebar/error"
+    },
+    {
+      "pass": true,
+      "label": "sidebar order stable dark/Sidebar"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Tooltip"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Tooltip"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tooltip/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tooltip/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tooltip/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tooltip/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tooltip/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tooltip/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Tooltip/error"
+    },
+    {
+      "pass": true,
+      "label": "tooltip keyboard focus dark/Tooltip",
+      "data": {
+        "active": "example",
+        "focus": false,
+        "within": true,
+        "hidden": false,
+        "opacity": "1"
+      }
+    },
+    {
+      "pass": true,
+      "label": "render dark/StatusIndicator"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/StatusIndicator"
+    },
+    {
+      "pass": true,
+      "label": "state dark/StatusIndicator/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/StatusIndicator/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/StatusIndicator/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/StatusIndicator/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/StatusIndicator/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/StatusIndicator/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/StatusIndicator/error"
+    },
+    {
+      "pass": true,
+      "label": "status text dark/StatusIndicator"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Progress"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Progress"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Progress/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Progress/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Progress/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Progress/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Progress/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Progress/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Progress/error"
+    },
+    {
+      "pass": true,
+      "label": "progress completion dark/Progress"
+    },
+    {
+      "pass": true,
+      "label": "render dark/EmptyState"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/EmptyState"
+    },
+    {
+      "pass": true,
+      "label": "state dark/EmptyState/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/EmptyState/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/EmptyState/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/EmptyState/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/EmptyState/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/EmptyState/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/EmptyState/error"
+    },
+    {
+      "pass": true,
+      "label": "empty action dark/EmptyState"
+    },
+    {
+      "pass": true,
+      "label": "render dark/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ErrorState/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ErrorState/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ErrorState/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ErrorState/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ErrorState/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ErrorState/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ErrorState/error"
+    },
+    {
+      "pass": true,
+      "label": "error pending dark/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "error recovery dark/ErrorState"
+    },
+    {
+      "pass": true,
+      "label": "render dark/Toast"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/Toast"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Toast/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Toast/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Toast/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Toast/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Toast/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Toast/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/Toast/error"
+    },
+    {
+      "pass": true,
+      "label": "toast deduplicates dark/Toast"
+    },
+    {
+      "pass": true,
+      "label": "render dark/ChatMessage"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/ChatMessage"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ChatMessage/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ChatMessage/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ChatMessage/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ChatMessage/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ChatMessage/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ChatMessage/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ChatMessage/error"
+    },
+    {
+      "pass": true,
+      "label": "message selectable dark/ChatMessage"
+    },
+    {
+      "pass": true,
+      "label": "render dark/ToolActivity"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/ToolActivity"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ToolActivity/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ToolActivity/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ToolActivity/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ToolActivity/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ToolActivity/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ToolActivity/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/ToolActivity/error"
+    },
+    {
+      "pass": true,
+      "label": "tool expansion dark/ToolActivity"
+    },
+    {
+      "pass": true,
+      "label": "render dark/WorkPanel"
+    },
+    {
+      "pass": true,
+      "label": "horizontal bounds dark/WorkPanel"
+    },
+    {
+      "pass": true,
+      "label": "state dark/WorkPanel/default"
+    },
+    {
+      "pass": true,
+      "label": "state dark/WorkPanel/hover"
+    },
+    {
+      "pass": true,
+      "label": "state dark/WorkPanel/pressed"
+    },
+    {
+      "pass": true,
+      "label": "state dark/WorkPanel/selected"
+    },
+    {
+      "pass": true,
+      "label": "state dark/WorkPanel/focus"
+    },
+    {
+      "pass": true,
+      "label": "state dark/WorkPanel/disabled"
+    },
+    {
+      "pass": true,
+      "label": "state dark/WorkPanel/error"
+    },
+    {
+      "pass": true,
+      "label": "panel identity preserved dark/WorkPanel"
+    }
+  ],
+  "shots": [
+    {
+      "file": "Cover-light.png",
+      "width": 960,
+      "height": 288,
+      "facts": {
+        "state": null,
+        "componentState": null,
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Button-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "IconButton-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Input-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Textarea-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ModelPicker-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Menu-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Dialog-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Popover-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Tabs-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Sidebar-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Tooltip-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "StatusIndicator-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Progress-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "EmptyState-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ErrorState-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Toast-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ChatMessage-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ToolActivity-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "WorkPanel-light.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Cover-dark.png",
+      "width": 960,
+      "height": 288,
+      "facts": {
+        "state": null,
+        "componentState": null,
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Button-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "IconButton-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Input-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Textarea-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ModelPicker-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Menu-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Dialog-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Popover-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Tabs-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Sidebar-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Tooltip-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "StatusIndicator-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Progress-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "EmptyState-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ErrorState-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "Toast-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ChatMessage-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "ToolActivity-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    },
+    {
+      "file": "WorkPanel-dark.png",
+      "width": 1000,
+      "height": 622,
+      "facts": {
+        "state": "default",
+        "componentState": "default",
+        "viewport": {
+          "width": 1000,
+          "height": 622,
+          "dpr": 1
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "notVerified": [
+    "Production integration",
+    "Physical Windows DPI",
+    "Entity IME",
+    "Real provider/model behavior",
+    "Native Browser WebContentsView"
+  ]
+}

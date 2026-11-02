@@ -1,0 +1,468 @@
+{
+  "mode": "refined-runtime",
+  "checks": 124,
+  "platform": "win32",
+  "electron": "44.4.3",
+  "qualification": "normal-sandbox",
+  "screenshots": [
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1280-conversation.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1280-model.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1280-thinking.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1440-conversation.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1440-model.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1440-thinking.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1920-conversation.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1920-model.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-1920-thinking.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-760-conversation.png",
+      "box": {
+        "w": 760,
+        "h": 820,
+        "sw": 760,
+        "sh": 820,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-760-model.png",
+      "box": {
+        "w": 760,
+        "h": 820,
+        "sw": 760,
+        "sh": 820,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\light-760-thinking.png",
+      "box": {
+        "w": 760,
+        "h": 820,
+        "sw": 760,
+        "sh": 820,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1280-conversation.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1280-model.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1280-thinking.png",
+      "box": {
+        "w": 1280,
+        "h": 800,
+        "sw": 1280,
+        "sh": 800,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1440-conversation.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1440-model.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1440-thinking.png",
+      "box": {
+        "w": 1440,
+        "h": 900,
+        "sw": 1440,
+        "sh": 900,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1920-conversation.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1920-model.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-1920-thinking.png",
+      "box": {
+        "w": 1920,
+        "h": 1080,
+        "sw": 1920,
+        "sh": 1080,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-760-conversation.png",
+      "box": {
+        "w": 760,
+        "h": 820,
+        "sw": 760,
+        "sh": 820,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-760-model.png",
+      "box": {
+        "w": 760,
+        "h": 820,
+        "sw": 760,
+        "sh": 820,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "file": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\evidence\\completion-runtime\\native-final\\p32-4\\dark-760-thinking.png",
+      "box": {
+        "w": 760,
+        "h": 820,
+        "sw": 760,
+        "sh": 820,
+        "card": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    }
+  ],
+  "errors": [
+    "Uncaught TypeError: Cannot read properties of null (reading 'model')"
+  ]
+}

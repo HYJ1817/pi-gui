@@ -28,7 +28,7 @@
  * 会把主进程淹掉。 */
 
 const WIDTH_KEY = 'pi-gui.rightpane.v1';
-const DEFAULT_WIDTH = 420;
+const DEFAULT_WIDTH = 392;
 const MIN_WIDTH = 320;
 
 /** 聊天列的可用地板。
@@ -202,7 +202,7 @@ export function initRightPane() {
     const railW = rail ? rail.getBoundingClientRect().width : 0;
     const sideW = sidebar && !sidebar.hidden ? sidebar.getBoundingClientRect().width : 0;
     // 上限取工作区的 60%，但至少留出 MIN_WIDTH —— 窗口很窄时也别算出个比下限还小的上限
-    const maxByRatio = Math.round(app.clientWidth * 0.6);
+    const maxByRatio = Math.round(Math.min(560, app.clientWidth * 0.5));
     const maxByRoom = Math.max(MIN_WIDTH, Math.round(app.clientWidth - railW - sideW - 200));
     return Math.min(Math.max(next, MIN_WIDTH), Math.max(MIN_WIDTH, Math.min(maxByRatio, maxByRoom)));
   }
@@ -289,7 +289,7 @@ export function initRightPane() {
    * 各自去调一遍：弹层有三个（#modal / #confirmLayer / #paletteLayer），
    * 而且以后还可能加新的。集中一处判断，就不会出现「新加的弹层忘了通知」。
    * 这也正是「一个事实只有一个 owner」。 */
-  const overlays = ['modal', 'confirmLayer', 'paletteLayer', 'globalMoreMenu'].map(byId).filter(Boolean);
+  const overlays = ['modal', 'confirmLayer', 'paletteLayer'].map(byId).filter(Boolean);
 
   function overlaysVisible() {
     return overlays.some((n) => !n.hidden);
@@ -357,7 +357,7 @@ export function initRightPane() {
     const remembered = lastTrigger && lastTrigger.isConnected ? lastTrigger : null;
     lastTrigger = null;
     const fallback = byId(previous === 'session-changes' && byId('workspace')?.dataset.workspaceView === 'runtime' ? 'runtimeSessionMore' : previous === 'browser' ? 'btnBrowser' : ['process','session-changes'].includes(previous) ? 'btnMore' : 'navChanges');
-    const target = remembered || fallback;
+    const target = byId('btnWorkPanel') || remembered || fallback;
     if (target && typeof target.focus === 'function') target.focus();
   }
 

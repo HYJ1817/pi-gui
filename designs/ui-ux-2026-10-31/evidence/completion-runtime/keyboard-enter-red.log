@@ -1,0 +1,28 @@
+  ok native session title precedes branch
+  ok shell heading matches focused native conversation
+  ok classic background title cannot overwrite runtime heading
+  ok A displays its own selected model
+  ok reasoning uses only provided native levels
+  ok A thinking readback selected
+  ok Runtime composer groups the stable textarea, model controls and send action
+  ok native implementation controls are hidden and excluded from keyboard navigation
+  ok Runtime chips show confirmed native model and thinking values
+  ok Runtime model picker is an accessible local dialog
+  ok Runtime picker filters its actual owner model catalogue
+  ok Runtime picker arrow key reaches the filtered native candidate
+  ok Escape closes Runtime picker and restores chip focus
+  ok Runtime thinking menu exposes exactly the Pi levels with current value marked
+  ok switching conversations invalidates a retained Runtime menu action
+  ok Runtime model chip submits its captured owner choice but displays native readback until confirmation
+  ok Runtime thinking chip submits only a native level while retaining the confirmed value
+AssertionError [ERR_ASSERTION]: Runtime menu Enter activates its focused native candidate exactly once
+    at ok (C:\pi-GUI\tests\runtime-finish-ui.cjs:12:40)
+    at C:\pi-GUI\tests\runtime-finish-ui.cjs:89:3
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

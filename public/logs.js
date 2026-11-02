@@ -97,7 +97,7 @@ function moduleLink(text, run) {
   return b;
 }
 
-export function openLogs() {
+export function openLogs({ present = openModal } = {}) {
   let alive = true;
   let status = null;
   let statusError = null;
@@ -117,7 +117,7 @@ export function openLogs() {
   let settingsRequest = 0;
   let previewRequest = 0;
 
-  openModal((card, close) => {
+  present((card, close) => {
     card.classList.add('ui5-logs-modal');
     const tabs = node('div', 'ui5-logs-tabs');
     tabs.setAttribute('role', 'tablist');

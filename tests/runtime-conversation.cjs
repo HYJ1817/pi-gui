@@ -994,5 +994,15 @@ const { JSDOM } = require('jsdom');
 
   z53bView.dispose();
 
+  // Refined renders one truthful live assistant surface, never invents turns.
+  runtimeStore.seed({ backendInstance: 'backend', items: [{ conversationId: 'MD', owner: owner('MD'), lifecycle: 'ready', activity: 'idle' }] });
+  const markdownView = createRuntimeConversation({ host });
+  runtimeStore.get('MD').text = '# Native output\n\n**Confirmed** and `code`\n\n- first\n- second\n\n```js\nconst value = 1;\n```\n\n<img src=x onerror=alert(1)> [unsafe](javascript:alert(1))';
+  markdownView.show('MD');
+  ok('Runtime output uses semantic Markdown headings, lists and code without fabricated live roles',
+    output().tagName === 'DIV' && output().querySelector('h4')?.textContent === 'Native output' && output().querySelector('strong')?.textContent === 'Confirmed' && output().querySelectorAll('li').length === 2 && output().querySelector('pre.code code')?.textContent.includes('const value = 1;') && !output().querySelector('.rtc-history-message'));
+  ok('Runtime Markdown keeps raw HTML inert and rejects unsafe links', !output().querySelector('img,script,a[href^="javascript:"]') && output().textContent.includes('<img src=x onerror=alert(1)>'));
+  markdownView.dispose();
+
   console.log(`Runtime conversation: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

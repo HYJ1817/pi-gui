@@ -1,0 +1,44 @@
+{
+  "source": "C:\\pi-GUI\\designs\\ui-ux-2026-10-31\\canvas\\project\\Main.dc.html",
+  "passed": 9,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "stop enters stopping",
+      "pass": true
+    },
+    {
+      "name": "old retry cannot release stop barrier",
+      "pass": true,
+      "detail": "stopping"
+    },
+    {
+      "name": "stop confirmation releases barrier",
+      "pass": true
+    },
+    {
+      "name": "background retry cannot change another session",
+      "pass": true
+    },
+    {
+      "name": "retry writes its own session",
+      "pass": true
+    },
+    {
+      "name": "background stop cannot change active session",
+      "pass": true
+    },
+    {
+      "name": "stop completes for its own session",
+      "pass": true
+    },
+    {
+      "name": "completed stop survives switching",
+      "pass": true
+    },
+    {
+      "name": "sidebar follows stopped state",
+      "pass": true
+    }
+  ]
+}

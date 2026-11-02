@@ -1,0 +1,15 @@
+<!-- @dsCard group="Overlays" height=430 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dialog · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<button id="example" class="pw-button">打开重命名对话框</button><dialog id="demoDialog" class="pw-dialog" aria-labelledby="dialogTitle"><form method="dialog"><h2 id="dialogTitle">重命名会话</h2><div class="pw-field"><label for="sessionTitle">会话名称</label><input class="pw-input" id="sessionTitle" value="核对右栏状态恢复" autofocus required></div><p class="pw-help">演示数据，不写入真实会话。</p><footer><button class="pw-button" value="cancel">取消</button><button class="pw-button pw-button--primary" value="save">保存</button></footer></form></dialog>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+const dialog=document.getElementById('demoDialog');example.addEventListener('click',()=>dialog.showModal());dialog.addEventListener('close',()=>{result.textContent='演示：'+(dialog.returnValue==='save'?'已保存 '+document.getElementById('sessionTitle').value:'已取消，内容保留。');example.focus();});
+
+})();
+</script>
+</body></html>

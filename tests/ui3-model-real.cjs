@@ -217,12 +217,41 @@ async function realRender({ out }) {
         await check(`${theme} ${width}: Provider 折叠标题可见`, async () => {
           const r = await evaluate(`(()=>{const h=document.querySelector('.pop-provider');`
             + `const b=h.getBoundingClientRect();const n=h.querySelector('.pop-provider-name');`
+            + `const panel=document.getElementById(h.getAttribute('aria-controls'));`
             + `return {h:b.height,w:b.width,name:n.textContent,expanded:h.getAttribute('aria-expanded'),`
-            + `chev:h.querySelector('.pop-provider-chev').textContent}})()`);
+            + `controlsOwnPanel:h.parentElement.querySelector('.pop-provider-models')===panel,`
+            + `panelHidden:panel.hidden,panelHeight:panel.getBoundingClientRect().height}})()`);
           assert.ok(r.h > 0 && r.w > 0, '组头不可见');
           assert.equal(r.name, 'deepseek');
           assert.equal(r.expanded, 'true');
-          assert.ok(r.chev.length > 0, '折叠箭头没画出来');
+          /* 组头不画装饰箭头；折叠契约是 aria-controls/aria-expanded 与受控面板的可见性。 */
+          assert.equal(r.controlsOwnPanel, true, '组头没有控制自己的模型面板');
+          assert.equal(r.panelHidden, false, '展开的模型面板仍是 hidden');
+          assert.ok(r.panelHeight > 0, '展开的模型面板没有实际布局');
+        });
+
+        await check(`${theme} ${width}: 真实点击折叠与展开同步语义和可见模型`, async () => {
+          const header = '.pop-model-group[data-provider="deepseek"] > .pop-provider';
+          const state = () => evaluate(`(()=>{const h=document.querySelector(${JSON.stringify(header)});`
+            + `const panel=document.getElementById(h.getAttribute('aria-controls'));`
+            + `return {expanded:h.getAttribute('aria-expanded'),hidden:panel.hidden,`
+            + `height:panel.getBoundingClientRect().height,remembered:ui3.expanded.has('deepseek'),`
+            + `visible:[...panel.querySelectorAll('.ui3-model-item')]`
+            + `.filter(n=>n.getBoundingClientRect().height>0).length}})()`);
+          await click(header);
+          const closed = await state();
+          assert.equal(closed.expanded, 'false', '折叠后 aria-expanded 没更新');
+          assert.equal(closed.hidden, true, '折叠后面板未隐藏');
+          assert.equal(closed.height, 0, '折叠后面板仍占布局空间');
+          assert.equal(closed.visible, 0, '折叠后的模型仍可见');
+          assert.equal(closed.remembered, false, '折叠后调用方记忆未更新');
+          await click(header);
+          const opened = await state();
+          assert.equal(opened.expanded, 'true', '展开后 aria-expanded 没更新');
+          assert.equal(opened.hidden, false, '展开后面板仍隐藏');
+          assert.ok(opened.height > 0, '展开后的面板没有实际布局');
+          assert.equal(opened.visible, 2, '展开后没有恢复本组的两个模型');
+          assert.equal(opened.remembered, true, '展开后调用方记忆未更新');
         });
 
         await shot(`models-${theme}-${width}`);

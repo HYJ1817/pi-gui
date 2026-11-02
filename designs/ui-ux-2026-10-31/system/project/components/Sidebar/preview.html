@@ -1,0 +1,15 @@
+<!-- @dsCard group="Navigation" height=330 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sidebar · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<nav id="example" class="pw-sidebar" aria-label="演示会话"><div class="pw-row" style="padding:4px 8px 12px"><strong>pi-GUI</strong><span class="pw-badge">项目</span></div><button class="pw-nav-item" aria-current="page" data-id="audit"><span class="pw-truncate">核对侧栏与草稿恢复</span></button><button class="pw-nav-item" data-id="diff"><span class="pw-truncate">审阅右栏 Diff 的长路径</span><span class="pw-dot" aria-label="运行中"></span></button><button class="pw-nav-item" data-id="model"><span class="pw-truncate">模型与思考档位回读</span></button></nav>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+example.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;example.querySelectorAll('button').forEach(x=>x.removeAttribute('aria-current'));b.setAttribute('aria-current','page');result.textContent='演示：选中 '+b.textContent.trim()+'；DOM 顺序保持 audit → diff → model。';});
+
+})();
+</script>
+</body></html>

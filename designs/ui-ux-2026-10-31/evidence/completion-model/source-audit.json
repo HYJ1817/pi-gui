@@ -1,0 +1,20 @@
+{
+  "recordedAt": "2026-11-01T08:23:51.2296458Z",
+  "head": "8908ff56c2e4e1b9d4658798c35cf0829796819a",
+  "scope": [
+    "tests/ui3-model-real.cjs"
+  ],
+  "renderer": "public/ui3-model-picker.js",
+  "baseline": "eac79ca",
+  "priorEvidence": "designs/ui-ux-2026-10-31/evidence/production-model-real.log",
+  "priorReportedCounts": {
+    "combinedPass": 124,
+    "realPass": 71,
+    "contractPass": 53,
+    "realTotal": 79,
+    "combinedTotal": 132
+  },
+  "cause": "Both eac79ca and current renderer append name and count only. The real-render test dereferences absent .pop-provider-chev before its visibility assertions. The collapse contract is aria-controls, aria-expanded, panel.hidden and caller-owned expanded Set.",
+  "proposedChange": "Keep every original check and meaningful assertion; replace invalid decorative caret assertion with controlled-panel layout visibility. Add one native mouse collapse-expand check per theme/width (8 new checks).",
+  "boundaries": "Offline visual harness and temporary Chrome profile only. Existing headless Chrome --no-sandbox is not normal Electron sandbox proof. No production changes, dependencies, real Pi or model calls."
+}

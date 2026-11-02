@@ -1,0 +1,151 @@
+{
+  "entry": "production electron/main.cjs + public renderer",
+  "backend": "existing tests/visual-harness.cjs, offline TEMP fixtures",
+  "shots": [
+    "dark-1440-empty.png",
+    "light-1440-native-browser-shell.png",
+    "light-1440-settings-after-native.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-1440-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "light-1440-native-browser-shell",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 772.6666870117188,
+        "width": 720,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1016,
+        "bottom": 882.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 1048,
+        "y": 0,
+        "width": 392,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1048
+      },
+      "popover": null,
+      "active": "browserAddress",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "light-1440-settings-after-native",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "btnSidebarCollapse",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n设置\n\n管理工作区、模型与应用偏好。\n\n工作区\n任务与审阅\nSkills 与扩展\n模型与账户\n模型供应商\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…"
+    }
+  ],
+  "checks": [
+    {
+      "name": "native Browser actually loads local fixture",
+      "ok": true
+    },
+    {
+      "name": "native Browser geometry matches renderer",
+      "ok": true
+    },
+    {
+      "name": "settings detaches native Browser",
+      "ok": true
+    }
+  ],
+  "nativeEvidence": {
+    "addressInput": "DOM keydown dispatched to the existing field handler",
+    "version": "44.4.3",
+    "title": "Refined Offline Browser",
+    "bounds": {
+      "x": 1049,
+      "y": 179,
+      "width": 391,
+      "height": 721
+    },
+    "viewport": {
+      "x": 1048.666748046875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 720.6666870117188,
+      "top": 179.33334350585938,
+      "right": 1440.0000915527344,
+      "bottom": 900.0000305175781,
+      "left": 1048.666748046875
+    },
+    "zoom": 1,
+    "pageCapture": "captured"
+  },
+  "errors": []
+}

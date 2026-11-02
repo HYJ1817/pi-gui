@@ -1,0 +1,19 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>Pi Workbench</title></head><body style="margin:0">
+<div style="position:relative;width:960px;height:288px;overflow:hidden;box-sizing:border-box;background:var(--surface-canvas);color:var(--text-primary);font-family:var(--font-sans)">
+<!-- Derivation:
+blocks: accent 256x128; primary 160x256; accent-soft 256x112, all space-16 multiples.
+arrangement: right-side workspace columns mirror rail/sidebar/reading/pane proportions, no equal swatch row.
+pattern: technical 4px-grid principle in README; 16 plus signs on the accent field.
+steps/radii: space-16 pitch with space-32/48 intervals; radius-panel8; border-width1. -->
+<svg aria-hidden="true" viewBox="0 0 960 288" width="960" height="288" style="position:absolute;inset:0">
+<style>.cover-accent{fill:var(--accent)}.cover-primary{fill:var(--primary)}.cover-tint{fill:var(--accent-soft)}.cover-tile{rx:var(--radius-panel)}.cover-grid{stroke:var(--surface-panel);stroke-width:var(--border-width);fill:none}</style>
+<rect class="cover-accent cover-tile" x="512" y="16" width="256" height="128"/>
+<rect class="cover-primary cover-tile" x="784" y="16" width="160" height="256"/>
+<rect class="cover-tint cover-tile" x="512" y="160" width="256" height="112"/>
+<g class="cover-grid"><path d="M541 40h6m-3 -3v6"/><path d="M597 40h6m-3 -3v6"/><path d="M653 40h6m-3 -3v6"/><path d="M709 40h6m-3 -3v6"/><path d="M541 68h6m-3 -3v6"/><path d="M597 68h6m-3 -3v6"/><path d="M653 68h6m-3 -3v6"/><path d="M709 68h6m-3 -3v6"/><path d="M541 96h6m-3 -3v6"/><path d="M597 96h6m-3 -3v6"/><path d="M653 96h6m-3 -3v6"/><path d="M709 96h6m-3 -3v6"/><path d="M541 124h6m-3 -3v6"/><path d="M597 124h6m-3 -3v6"/><path d="M653 124h6m-3 -3v6"/><path d="M709 124h6m-3 -3v6"/></g>
+</svg>
+<h1 style="position:absolute;left:32px;bottom:64px;margin:0;font-size:64px;line-height:1;font-weight:600;letter-spacing:-1.5px;max-width:440px">Pi<br>Workbench</h1>
+<p style="position:absolute;left:36px;bottom:28px;margin:0;font-size:13px;line-height:20px;color:var(--text-muted)">让会话、工具与工作面板稳定地协作。</p>
+</div></body></html>

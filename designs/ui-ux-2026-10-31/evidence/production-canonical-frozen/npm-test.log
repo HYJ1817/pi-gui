@@ -1,0 +1,2879 @@
+
+> pi-gui@0.30.1 pretest
+> npm run test:file-size-report && npm run test:ci
+
+
+> pi-gui@0.30.1 test:file-size-report
+> node tests/file-size-report.cjs
+
+  ok   ordinary report succeeds despite a historical large file
+  ok   human output reports the scanned total and soft thresholds
+  ok   ordinary files and missing final newline use physical line counts
+  ok   CRLF and LF files have the same physical line count
+  ok   UTF-8 and paths containing spaces or Chinese are preserved
+  ok   generated directories are excluded while tests and CSS are classified separately
+  ok   historical business files warn without blocking
+  ok   JSON output is parseable and reports all classifications
+  ok   a newly added large business file reports a warning and explicit growth
+  ok   invalid arguments and Git failures return nonzero
+  ok   the report never changes tracked fixture files
+file-size-report: 11/11 passed
+
+> pi-gui@0.30.1 test:ci
+> node tests/ci-test-plan.cjs && node tests/ci-workflow.cjs && node tests/ci-results.cjs && node tests/ci-summary.cjs && node tests/ci-history.cjs && node tests/ci-doc-scope.cjs && node tests/release-ci-proof.cjs && node tests/nsis-bootstrap.cjs
+
+ci-test-plan: 231 leaves across 5 groups; coverage exact
+ci-workflow: independent build readiness 5/5; both code/docs retain full CI; gate name unique
+ci-workflow: actual gate fail-closed matrix 15/15
+ci-workflow: Node pin, dynamic matrix, final CI gate, exact-SHA release proof and permissions verified
+ok initial record includes identity, plan, environment and pending leaves
+ok partial running record is not successful, repeated reads do not mutate bytes
+ok atomic replacement failure preserves the last valid JSON
+ok v1 numeric statuses retain success/failure without inventing completeness
+ok unsupported schema is refused
+ok first success is durable while second command is still running
+ok failure keeps preceding successes and never starts following command
+ok forced termination retains valid incomplete evidence without promoting it on read
+ok handled cancellation records cancelled, preserves success, and exits nonzero
+ok only a complete successful group writes final passed
+ci-results: 10/10 passed
+ok all required groups with exact provenance pass and preserve counts
+ok missing group start cannot certify complete success
+ok missing group finish cannot certify complete success
+ok invalid group start cannot certify complete success
+ok invalid group finish cannot certify complete success
+ok reversed group timestamps cannot certify complete success
+ok missing completed count cannot certify complete success
+ok too few completed leaves cannot certify complete success
+ok too many completed leaves cannot certify complete success
+ok noninteger completed count cannot certify complete success
+ok string completed count cannot certify complete success
+ok failed is never promoted to success
+ok cancelled is never promoted to success
+ok skipped is never promoted to success
+ok interrupted is never promoted to success
+ok running is never promoted to success
+ok pending is never promoted to success
+ok missing artifacts and commands are explicit incomplete evidence
+ok every required group rejects failure, cancellation, skipping or missing evidence
+ok mismatched sha cannot prove this execution
+ok mismatched runId cannot prove this execution
+ok mismatched runAttempt cannot prove this execution
+ok mismatched event cannot prove this execution
+ok mismatched planDigest cannot prove this execution
+ok lying passed status with a nonzero exit, missing finish, signal or error is rejected
+ok slowest commands are sorted by actual duration, unknown time remains unavailable
+ok failure details are structural and never include arbitrary payload or environment
+ok legacy evidence is readable but cannot prove run attempt or exact plan
+ok duplicate or reordered commands cannot replace canonical coverage
+ok CLI writes parseable JSON and fails closed for a missing artifact
+ci-summary: 30/30 passed
+ci-history: 21 assertions passed (unique runs, attempts, timing and unavailable quantiles)
+ok only an exact audited document modification is a candidate, production remains full
+ok main push, dispatch and unknown events always require full CI
+ok empty diff is not a documentation exemption
+ok branch names, abbreviated SHAs and option-like revisions are refused
+ok working tree and forged labels/environment cannot change Git object scope
+ok mixed code and documentation uses full CI
+ok every allowlisted document is classified using its own Git object
+ok sensitive or unknown input AGENTS.md stays full
+ok sensitive or unknown input REVIEW.md stays full
+ok sensitive or unknown input README.md stays full
+ok sensitive or unknown input docs/testing.md stays full
+ok sensitive or unknown input docs/usage-quota.md stays full
+ok sensitive or unknown input docs/releasing.md stays full
+ok sensitive or unknown input docs/security.md stays full
+ok sensitive or unknown input scripts/input.md stays full
+ok sensitive or unknown input tests/fixtures/input.md stays full
+ok sensitive or unknown input .github/workflows/ci.yml stays full
+ok sensitive or unknown input package-lock.json stays full
+ok rename and Chinese/spaced unknown path require full CI
+ok added document cannot impersonate an audited modification
+ok deleted document requires full CI
+ok nonancestor change range fails conservatively
+ok file mode changes are not prose-only
+ok symlink Git blob is refused without following its target
+ok NUL bytes and malformed UTF-8 are not documentation candidates
+ok empty and oversized documents conservatively require full CI
+ok CLI emits JSON, is read-only and rejects errors rather than certifying success
+ok all audited allowlist entries exist as ordinary tracked files in this checkout
+ci-doc-scope: 28/28 passed
+  ok   exact tag commit with successful push CI and CI gate passes
+  ok   annotated tag is resolved to its commit before matching CI
+  ok   tag commit different from checked-out SHA is blocked
+  ok   no push CI run for the exact SHA is blocked
+  ok   queued or in-progress push CI is blocked
+  ok   failed or cancelled push CI is blocked
+  ok   wrong SHA, branch, event, or workflow returned by CI API is blocked
+  ok   the newest exact-SHA run wins; an older success cannot hide a newer failure
+  ok   missing, incomplete, failed, or duplicate CI gate is blocked
+  ok   API failure blocks release and is not treated as missing or success
+  ok   invalid paged schema fails closed
+  ok   invalid run identity cannot choose a winner or become successful
+  ok   pagination total must remain consistent and account for every item
+  ok   event SHA must match the checkout SHA and tag commit
+  ok   GitHub API reader uses bounded authentication headers and never mutates the token
+  ok   missing token blocks CI proof before any network call
+
+release-ci-proof: 16/16; failed=0
+ok CLI refuses developer machines before downloading or installing
+ok official installer and digest are pinned
+NSIS installer SHA256 verified: bb43c2e945e913600f618f98b7fd78b997fe3a87a4f342d22b6dcab611e290cb
+ok verified bytes only are written
+NSIS download attempt 1 failed; retrying
+NSIS download attempt 2 failed; retrying
+NSIS installer SHA256 verified: bb43c2e945e913600f618f98b7fd78b997fe3a87a4f342d22b6dcab611e290cb
+ok transient HTTP failure retries then succeeds
+NSIS download attempt 1 failed; retrying
+NSIS download attempt 2 failed; retrying
+ok network errors are bounded to three attempts
+ok wrong digest fails without writing or retrying
+ok oversized response is rejected
+ok installer failure never probes or exports a compiler
+ok compiler must return expected version
+ok compiler probe failure is fatal
+NSIS compiler verified: v3.13
+ok silent install and compiler probe succeed
+NSIS compiler verified: v3.13
+ok verified compiler directory is exported only after success
+12/12 passed
+
+> pi-gui@0.30.1 test
+> npm run test:app-update && npm run test:session-concurrency && node tests/session-background.cjs && node tests/session-background-ui.cjs && node tests/session-background-recovery.cjs && node tests/ui-visual-finish.cjs && node tests/review-regressions.cjs && node tests/context-reference-ui.cjs && npm run test:viz && npm run test:collab && npm run test:candidates && node tests/high-risk-regressions.cjs && npm run test:logging && npm run test:ui4 && npm run test:specs && npm run test:diff-comments && npm run test:review-comments && node tests/split-workbench-ui.cjs && npm run test:browser-workbench && node tests/ui3-composer.cjs && node tests/ui3-model.cjs && node tests/ui3-inline-commands.cjs && node tests/ui3-integration.cjs && node tests/ui2-classic.cjs && node tests/ui2-runtime-display.cjs && node tests/ui2-visual.cjs && node tests/theme.cjs && node tests/session-revert-fixture-retention.cjs && node tests/session-revert-object-session-binding.cjs && node tests/session-revert-object-d6final-classic.cjs && node tests/exe-diagnostics.cjs && node tests/session-revert-object-qualification.cjs && node tests/session-revert-object-presentation.cjs && node tests/session-revert-object-ui.cjs && node tests/session-revert-object-confirmation.cjs && node tests/session-revert-sacl-witness.cjs && node tests/session-revert-object-profile.cjs && node tests/session-revert-object-evidence.cjs && node tests/runtime-models.cjs && node tests/model-fallback.cjs && node tests/model-capabilities.cjs && node tests/thinking-availability.cjs && node tests/ux-state.cjs && node tests/bridge-state-recovery.cjs && node tests/native-provider-quota.cjs && node tests/stable-session-order.cjs && node tests/hotfix.cjs && node tests/hotfix-ui.cjs && node tests/provider-auth.cjs && node tests/provider-auth-runtime.cjs && node tests/ui-ia.cjs && node tests/smoke.cjs && node tests/daily-use.cjs && node tests/git.cjs && node tests/modules.cjs && node tests/reliability.cjs && node tests/interactions.cjs && node tests/sidebar-menu.cjs && node tests/port-owner.cjs && node tests/project-config.cjs && node tests/skills.cjs && node tests/extensions.cjs && node tests/capability.cjs && node tests/capability-install.cjs && node tests/web-access.cjs && node tests/subagents.cjs && node tests/memory.cjs && node tests/browser.cjs && node tests/approvals.cjs && node tests/planner.cjs && node tests/workflow-relations.cjs && node tests/reviews.cjs && node tests/review-gate.cjs && node tests/verification.cjs && node tests/evidence.cjs && node tests/attempt-lifecycle.cjs && node tests/sessions.cjs && node tests/session-search.cjs && node tests/pi-compat.cjs && node tests/pi-probes.cjs && node tests/pi-update.cjs && node tests/pi-version.cjs && node tests/mcp-native.cjs && node tests/usage-quota.cjs && node tests/body-integrity.cjs && node tests/dev-server.cjs && node tests/standalone-datadir.cjs && node tests/models-api.cjs && node tests/server-security.cjs && node tests/diagnostics.cjs && node tests/update-check.cjs && node tests/version-consistency.cjs && node tests/release-artifacts.cjs && node tests/electron-guard.cjs && node tests/gui-browser-policy.cjs && node tests/gui-browser-controller.cjs && node tests/gui-browser-bridge.cjs && node tests/gui-browser-tools.cjs && node tests/gui-browser-ui.cjs && node tests/gui-browser-host.cjs && node tests/gui-browser-stop.cjs && node tests/stop-barrier.cjs && node tests/bug8-real-pi-fixture.cjs && node tests/managed-processes.cjs && node tests/process-tools.cjs && node tests/process-stop.cjs && node tests/process-ui.cjs && node tests/process-runner.cjs && node tests/worktrees.cjs && node tests/worktrees-http.cjs && node tests/worktrees-ui.cjs && node tests/runtime-registry.cjs && node tests/runtime-http.cjs && node tests/runtime-store.cjs && node tests/runtime-draft.cjs && node tests/runtime-ui.cjs && node tests/runtime-nav.cjs && node tests/runtime-conversation.cjs && node tests/runtime-changes.cjs && node tests/runtime-secondary.cjs && node tests/runtime-git-ui.cjs && node tests/runtime-resources.cjs && node tests/runtime-resource-cleanup.cjs && node tests/runtime-history-search.cjs && node tests/history-tool-summary.cjs && node tests/history-tool-summary-http.cjs && node tests/runtime-finish-ui.cjs && node tests/session-runtime.cjs && node tests/pi-supervisor.cjs && node tests/runtime-browser.cjs && node tests/process-budget.cjs && node tests/runtime-events.cjs && node tests/runtime-processes.cjs && node tests/session-revert-object-assets.cjs && node tests/session-revert-object-authority.cjs && node tests/session-revert-object-history.cjs && node tests/session-revert-object-runtime.cjs && node tests/session-revert-object-store.cjs && node tests/session-revert-object-service.cjs && node tests/session-revert-object-recovery.cjs && node tests/session-change-store.cjs && node tests/session-change-bridge.cjs && node tests/session-change-tools.cjs && node tests/session-revert.cjs && node tests/session-revert-store.cjs && node tests/session-revert-http.cjs && node tests/session-revert-integration.cjs && node tests/session-revert-writer.cjs && node tests/session-revert-recovery.cjs && node tests/session-revert-admission.cjs && node tests/session-revert-apply.cjs && node tests/session-revert-windows-faults.cjs && node tests/session-revert-inplace.cjs && node tests/session-revert-inplace-safety.cjs && node tests/session-change-query.cjs && node tests/session-change-ui.cjs && node tests/session-change-startup.cjs && npm run test:session-revert-object-writer && npm run test:session-revert-object-faults && npm run test:session-revert-object-witness
+
+
+> pi-gui@0.30.1 test:app-update
+> node tests/app-update.cjs && node tests/app-update-maintenance.cjs && node tests/app-update-activity.cjs && node tests/app-update-backend.cjs && node tests/app-update-desktop-regressions.cjs && node tests/app-update-ui.cjs && node tests/app-update-rollback.cjs
+
+✔ Windows updater module is implemented (0.8639ms)
+✔ exact official repository, version, name and size binding (0.8381ms)
+✔ download requires explicit confirmation and never trusts renderer URL/path (2.5722ms)
+✔ download progress, ready persistence and rehash on next launch (35.8848ms)
+✔ SHA256 mismatch, failure retry and no executable admission (10.6555ms)
+✔ busy multiple sessions refuse install without launching or quitting (8.9925ms)
+✔ install ordered after prepare and verified package; duplicate install denied (10.5001ms)
+✔ portable/development never install and development never downloads (2.6633ms)
+✔ download cancellation removes partial file and supports retry (20.885ms)
+✔ missing digest falls back to exact official checksum entry (6.9642ms)
+✔ foreign redirect, wrong size, duplicate checksum entries never become ready (8.3912ms)
+✔ install failure releases maintenance and permits retry with old application intact (14.0113ms)
+✔ tampered package after download cannot be launched (15.0879ms)
+✔ installed detection needs registered exact executable plus uninstaller, copied portable is refused (7.5747ms)
+✔ modified fallback manifest and package must still match official checksum before install (13.0018ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 166.3933
+✔ private maintenance refuses active work, drains and freezes atomically (2.9571ms)
+✔ cleanup failure unlocks and resumes without claiming shutdown (0.2589ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7.7675
+✔ classic bridge tracks pending approvals, commands and RPC before update (14.542ms)
+✔ idle runtime with pending approval cannot pass app update maintenance (15.7862ms)
+✔ main IPC denies foreign window, subframe and wrong origin; startup version is rechecked (11.8856ms)
+✔ terminal recovery is reported once; missing and unsuccessful results fail safely (26.7035ms)
+✔ active helper remains waiting, blocks another update, then publishes and consumes its result (836.3923ms)
+✔ recovery rejects traversal and linked pending files without deleting their targets (11.6169ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 920.8806
+✔ real backend private IPC freezes HTTP mutations, releases, then exits normally (336.7384ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 340.0759
+✔ registry path is read through explicit UTF-8 output, including Chinese and spaces (6.0074ms)
+✔ cache initialization failure keeps authenticated IPC available and can retry (463.9124ms)
+✔ prepare timeout releases a late maintenance acquisition before allowing retry (37.4143ms)
+✔ Windows helper reads BOM-less UTF-8 request paths losslessly (634.653ms)
+✔ cancelled install preparation releases helper lock while parent stays usable (1621.5585ms)
+✔ cancel IO failure releases backend and waits for real helper lock even if broker exits early (247.4951ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4444.2813
+✔ desktop has one primary download with manual assets under an explicit disclosure (96.0823ms)
+✔ ready package exposes restart as the sole primary action and displays the running Electron version (27.7682ms)
+✔ unavailable desktop IPC is visible with a retry instead of silent manual-only downgrade (18.6614ms)
+✔ download, verify and prepare hide download operations and indicate one active phase (24.3338ms)
+✔ portable explains manual replacement and never offers restart installation (16.1686ms)
+✔ failed installation retains explicit retry and manual recovery; actual version mismatch never says completed (16.9916ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 204.3599
+✔ rollback removes nested additions and restores complete pre-existing file set (742.5985ms)
+✔ modified backup is rejected before destination changes (688.4997ms)
+✔ recovery refuses junction traversal and preserves external user data (791.3833ms)
+✔ recovery refuses hardlinks instead of overwriting external data (865.2063ms)
+✔ deletion binds file identity and digest and refuses a replacement object (654.8839ms)
+✔ files added after the installer observation are preserved and recovery refused (739.5602ms)
+✔ restore refuses a destination with a different identity before writing (722.5011ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5209.7056
+
+> pi-gui@0.30.1 test:session-concurrency
+> node tests/session-tool-scheduler.cjs && node tests/session-tool-bridge.cjs && node tests/ordinary-session-resolver.cjs && node tests/ordinary-session-runtime.cjs
+
+PASS A write holds B write while another project can execute
+PASS proven read-only tools do not wait on write coordination
+PASS nested/same-child writes are reentrant without admitting another child
+PASS Stop cancels only its own queued work, active writer remains held
+PASS unconfirmed cleanup cannot release an active writer
+PASS parent and child project paths share the same write exclusion
+PASS pending queue is bounded and duplicate call IDs are rejected
+PASS authoritative settled clears only that child and permits the next writer
+PASS changed directory identity is refused before execution
+Session tool scheduler: 9/9
+PASS private endpoint refuses browser origins, foreign tokens and claimed paths
+PASS handshake binds authoritative native session and never exposes capability
+PASS same-directory private calls queue and Stop cancels only waiting B
+PASS native session drift and rotated capability reject stale requests
+PASS candidate evidence hook is awaited and never creates approval decisions
+PASS bundled write wrapper file URL retains intended-byte evidence
+Session tool bridge: 6/6
+PASS stable ID is resolved to its native file at the exact registered cwd
+PASS paths, native UUIDs and cross-project stable IDs cannot be substituted
+PASS a native session already owned by classic cannot be opened by another child
+PASS new ordinary session keeps project cwd and bounded retry identity
+PASS directory replacement invalidates recorded workspace epoch
+PASS removing project registration revokes later workspace operations
+PASS ordinary startup instructions use a private file instead of mutating the shared project
+Ordinary session resolver: 7/7
+PASS ordinary A/B get independent native sessions at the exact same cwd
+PASS opening the same native session twice returns its existing owner
+PASS two same-cwd tasks enter separate children; duplicate prompt remains blocked per session
+PASS closing A retains B workspace occupancy and live control
+PASS sharing requires guard admission, not a deleted lease check
+Ordinary session runtime: 5/5
+PASS busy legacy switch is rejected before writing switch_session
+PASS read-only background history keeps the original runtime and cwd untouched
+PASS a valid session ID cannot read a different registered project
+PASS background completion remains on the same native file and is visible on reread
+PASS idle handoff still uses the original native switch protocol
+Session background: 5/5; failed=0
+PASS A running -> B view does not clear messages, stop or switch the original session
+PASS fallback without a Runtime launcher cannot submit B into A
+PASS B draft is isolated and persistent in the existing draft store
+PASS rapid B/C switch rejects the late B response
+PASS browsing another project preserves A cwd and the original stream
+PASS fallback without a Runtime launcher preserves draft and explicit isolated launch
+PASS search results without native IDs use distinct persistent draft keys
+PASS new draft transfer requires its acknowledgement and a new native session in the same workspace generation
+PASS ordinary B auto-opens its own Runtime while A runs; late launch cannot steal C
+Session background UI: 9/9; failed=0
+PASS reload hydrates A/B persisted text and tool state without mixing equal IDs
+PASS recovery retains only authoritative pending approvals and sends no decisions
+PASS an older approvals snapshot cannot clear a newer live request
+PASS interrupted tasks are never left with running tool labels
+PASS late history cannot overwrite newer streaming or a replaced owner
+PASS confirmed Stop settles only its own remaining approvals and tools
+Session background recovery: 6/6; failed=0
+PASS routine successes and information do not create a popup
+PASS actionable failures stay visible and duplicate live errors never stack
+PASS an explicit action can still surface an important status
+PASS suppressed and visible notifications log only declared structural metadata
+PASS error has one announcement and preserves its exact detail as text
+PASS optional qmd dependency is retained once in Memory status without a popup
+PASS unknown extension errors remain visible, ordinary warnings go to status
+PASS replay, stale runs and switched workspace do not retain stale status
+PASS extension status is bounded, inert text and stores no duplicate payload copies
+PASS 500 navigation targets have distinct 12px hit areas and retain exact scroll targets
+Visual finish: 10/10; failed=0
+PASS DOCX preserves tabs and soft breaks
+PASS DOCX preserves runs, paragraphs and entities
+PASS history keeps latest 800 of 799 and exact truncation
+PASS history keeps latest 800 of 800 and exact truncation
+PASS history keeps latest 800 of 805 and exact truncation
+PASS history tail byte limit keeps final messages and never invents absolute turn indices
+PASS message cap preserves search turn indices across empty user and assistant messages
+PASS loading attachments disable button and direct/keyboard submit without clearing draft
+PASS direct submit cannot bypass pending attachment guard
+PASS image FileReader stage blocks submission before upload starts
+PASS actual upload completion restores sending with parsed content
+PASS failed parse is distinct from loading and remains explicitly sendable
+PASS classic applyState isolates A/B drafts after debounce
+PASS classic applyState isolates A/B drafts before debounce
+PASS classic identity switch retains unsent text when storage write is denied
+PASS approval native-owner enrichment during submission releases only the old pending marker
+PASS history reload after resume/new messages/close never reuses stale body
+PASS late history response cannot reopen old history after runtime identity changes
+PASS resume acknowledgement invalidates in-flight history before lifecycle SSE arrives
+PASS history search locates retained message by absolute user index after cap
+PASS history search locates retained message by native ID with byte-tail unknown index
+PASS central approval success: settles only captured request; failure retries
+PASS central approval failure: settles only captured request; failure retries
+PASS central approval owner change: settles only captured request; failure retries
+PASS modal approval success: settles only captured request; failure retries
+PASS modal approval failure: settles only captured request; failure retries
+PASS modal approval owner change: settles only captured request; failure retries
+PASS shared approval blocks duplicate across central/modal and survives sender disposal
+PASS central responding to one approval preserves another approval input
+PASS modal responding to one approval preserves another approval input
+PASS central approval captures enriched native owner instead of retaining stale controls
+PASS modal approval captures enriched native owner instead of retaining stale controls
+Review regressions: 32/32; failed=0; skipped=0
+  ok   log reference carries whitelisted identity fields only
+  ok   log reference fills the focused classic composer without sending
+  ok   diff row is expanded before the panel switch
+  ok   switching surfaces clears the Changes DOM
+  ok   reopening Changes restores the expanded diff for the same scope
+  ok   list restoration targets .chg-list rather than the non-scrolling body
+  ok   session switch drops the retained expanded-diff state
+  ok   specs document opens after the surface swap
+  ok   specs state only snapshots after real content exists
+  ok   specs reopen keeps the selected document and snapshot identity
+
+Z1 context reference UI: 10/10
+
+> pi-gui@0.30.1 test:viz
+> node tests/viz-schema.cjs && node tests/viz-ui.cjs
+
+  ok   valid line chart parses successfully
+  ok   valid line chart properties match
+  ok   valid line chart is frozen
+  ok   valid bar chart with numeric version parses successfully
+  ok   invalid json returns ok:false with error message
+  ok   unsupported version is rejected
+  ok   unsupported/malicious chart type is rejected
+  ok   missing title is rejected
+  ok   non-numeric data point is rejected
+  ok   length mismatch is rejected
+  ok   payload over 128KB is rejected
+  ok   over 100 labels is rejected
+  ok   over 8 series is rejected
+  ok   parameters sanitize and clamp defaults
+  ok   param 0 min/max/default clamped correctly
+  ok   param 1 select options retained
+  ok   duplicate param id is deduplicated
+  ok   data with null is rejected (not coerced to 0)
+  ok   data with false is rejected (not coerced to 0)
+  ok   data with true is rejected (not coerced to 1)
+  ok   data with empty string is rejected (not coerced to 0)
+  ok   extreme magnitude number is rejected
+
+Viz Schema: 22/22 passed.
+
+--- 1. Markdown 渲染与流式未闭合围栏安全 ---
+  ok   closed pi-gui-viz renders .viz-card
+  ok   viz-card contains title and meta
+  ok   unclosed streaming fence stays as plain code block (no viz-card)
+  ok   malformed json falls back to regular code block
+  ok   malicious type safely falls back to regular code block
+
+--- 2. 柱状图零基线与极端数值几何 ---
+  ok   all positive bar bounds min is exactly 0
+  ok   all positive bar bounds max covers top with padding
+  ok   all negative bar bounds max is exactly 0
+  ok   all negative bar bounds min covers lowest negative
+  ok   constant negative bar bounds max is exactly 0
+  ok   constant negative bar bounds min covers constant value
+  ok   cross-zero bar bounds spans across 0
+  ok   renders 3 bars for cross-zero dataset
+  ok   cross-zero bar chart renders visible zero line
+
+--- 3. 统计摘要精确数值计算（带已知期望值） ---
+  ok   full range avg is exactly 30
+  ok   full range min is 10 and max is 50
+  ok   full range overCount is 2
+  ok   sliced summary reflects rangeLimit 3
+  ok   sliced summary reflects sliced avg 40
+  ok   sliced summary reflects sliced min 30 and max 50
+  ok   sliced summary reflects overCount 2
+
+--- 4. 界面卡片与右栏受控参数交互（真实 Classic 消息） ---
+  ok   real classic assistant message article.msg.assistant created via messages.js
+  ok   viz card is inside real article.msg.assistant
+  ok   raw code is initially hidden
+  ok   clicking toggle reveals raw code
+  ok   clicking toggle again hides raw code
+  ok   right pane is opened
+  ok   panel title matches
+  ok   switched to bar chart in DOM
+  ok   deactivated series 2
+  ok   prevented deactivating the last active series
+
+--- 5. 会话身份隔离与拒绝验证（Classic 真实环境） ---
+  ok   classic quote succeeds and preserves draft
+  ok   mismatched classic session rejects quote without modifying draft
+  ok   source message disconnected from DOM
+  ok   disconnected source message rejects quote without modifying draft
+  ok   re-opened viz panel from newly rebuilt message
+  ok   message cleared on history rebuild
+  ok   stale message after history rebuild rejects quote using current panel button
+  ok   opened viz panel from initial streaming card
+  ok   article.msg.assistant still connected to DOM
+  ok   old viz-card detached from DOM after message repaint
+  ok   replaced old viz-card rejects quote even when article is still connected
+  ok   new viz-card exists in updated message
+  ok   new viz-card can open new panel
+  ok   new viz-card quote succeeds
+  ok   openVizPanel rejects when sourceNode is null
+  ok   openVizPanel rejects when sourceNode is detached from DOM
+
+--- 6. Runtime 真实渲染链路与拥有者校验 ---
+  ok   real runtime rtc-output exists
+  ok   real runtime rtc-output renders viz-card
+  ok   runtime card is inside .rtc-output-block
+  ok   opened viz panel from real runtime card
+  ok   runtime quote successfully targets runtime textarea without being overridden by S.state.sessionId
+  ok   switched runtime conversation rejects quote
+  ok   stale/changed runtime owner rejects quote
+  ok   stale runtime generation rejects quote
+  ok   refreshed runtime live card created in rtc-output
+  ok   old runtime live card detached from DOM
+  ok   refreshed live output invalidates quote from previous live card
+  ok   runtime live source block disconnected from DOM
+  ok   disconnected runtime source block rejects quote
+  ok   runtime history renders viz-card
+  ok   history viz-card is inside [data-history-message-id]
+  ok   opened viz panel from runtime history card
+  ok   history message row disconnected
+  ok   disconnected history message rejects quote using history panel button
+  ok   pane and runtime component safely closed and cleaned up
+
+Viz UI & Review Fixes: 66/66 passed.
+
+> pi-gui@0.30.1 test:collab
+> node prototype/z4-1-collab/collab-test.mjs && node tests/collab-doc.cjs && node tests/collab-store.cjs && node tests/collab-authority.cjs && node tests/collab-service.cjs && node tests/collab-proposal-queue.cjs && node tests/collab-proposal-source.cjs && node tests/collab-agent-flow.cjs && node tests/collab-http.cjs && node tests/collab-canvas.cjs && node tests/collab-panel.cjs && node tests/collab-panel-agent.cjs && node tests/collab-auto-layout.cjs && node tests/collab-layout-preview.cjs && node tests/collab-export.cjs && node tests/collab-productivity.cjs && node tests/collab-panel-productivity.cjs && node tests/collab-selection.cjs && node tests/collab-advanced-editing.cjs && node tests/collab-z45-regressions.cjs && node tests/collab-stability.cjs
+
+
+Z4-1 原型数据层测试：49 通过，0 失败（共 49 项）
+ok previewProposal independently rejects user actor
+ok previewProposal independently rejects oversize batch
+ok previewProposal independently rejects duplicate opId
+ok previewProposal independently rejects mismatched operation revision
+ok previewProposal independently rejects missing revision
+ok previewProposal independently rejects missing proposalId
+ok previewProposal independently rejects unknown envelope field
+ok previewProposal independently rejects missing session
+ok previewProposal independently rejects bad document id
+ok previewProposal independently rejects unknown version
+ok previewProposal independently rejects bad params
+ok previewProposalReadonly independently rejects user actor
+ok previewProposalReadonly independently rejects oversize batch
+ok previewProposalReadonly independently rejects duplicate opId
+ok previewProposalReadonly independently rejects mismatched operation revision
+ok previewProposalReadonly independently rejects missing revision
+ok previewProposalReadonly independently rejects missing proposalId
+ok previewProposalReadonly independently rejects unknown envelope field
+ok previewProposalReadonly independently rejects missing session
+ok previewProposalReadonly independently rejects bad document id
+ok previewProposalReadonly independently rejects unknown version
+ok previewProposalReadonly independently rejects bad params
+ok acceptProposal independently rejects user actor
+ok acceptProposal independently rejects oversize batch
+ok acceptProposal independently rejects duplicate opId
+ok acceptProposal independently rejects mismatched operation revision
+ok acceptProposal independently rejects missing revision
+ok acceptProposal independently rejects missing proposalId
+ok acceptProposal independently rejects unknown envelope field
+ok acceptProposal independently rejects missing session
+ok acceptProposal independently rejects bad document id
+ok acceptProposal independently rejects unknown version
+ok acceptProposal independently rejects bad params
+ok rejectProposal independently rejects user actor
+ok rejectProposal independently rejects oversize batch
+ok rejectProposal independently rejects duplicate opId
+ok rejectProposal independently rejects mismatched operation revision
+ok rejectProposal independently rejects missing revision
+ok rejectProposal independently rejects missing proposalId
+ok rejectProposal independently rejects unknown envelope field
+ok rejectProposal independently rejects missing session
+ok rejectProposal independently rejects bad document id
+ok rejectProposal independently rejects unknown version
+ok rejectProposal independently rejects bad params
+ok valid raw proposal read-only diff and accept/duplicate after reload
+ok strict serialize rejects corrupt document rather than normalizing it away
+ok strict deserialize validates persistent journal bounds identity and fingerprint
+ok invalid in-memory document fails all mutation entrances without throwing TypeError
+ok user batch refuses agent and transaction rolls back entire failing batch
+ok undo redo is reversible for sequential changes and bounded
+ok corrupt operations rejected even before duplicate idempotent path
+ok duplicate acceptance still requires explicit valid expectedRevision
+ok proposal constructor enforces production actor session and operation revision
+ok long operation IDs cannot collide in generated proposal IDs
+ok mixed previously accepted and new proposal operations never report duplicate success
+ok production module has no prototype frontend backend IO or dependency imports
+Collab production document: 56/56; assertions=135
+  ok absent read is empty and creates no directories
+  ok real persisted document reopens with identical graph log and revision
+  ok update CAS persists a strictly advanced revision
+  ok real Windows 8.3 alias and long spelling address the same safe app storage
+  ok production operation journal graph and duplicate replay survive a store restart
+  ok same committed snapshot retry does not rewrite or rename the file
+  ok first creation retry with null CAS is idempotent
+  ok stale revision refuses overwrite and preserves last bytes
+  ok two independent stores cannot overwrite a newer revision
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok invalid document cannot change persisted bytes
+  ok document id session id revision and CAS types are independently checked
+  ok scope key paths and incomplete scopes cannot choose storage
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok corrupt unknown-version foreign-scope and oversized disk bytes refuse replacement
+  ok invalid UTF8 is corruption and preserves original bytes
+  ok corrupt persisted operation journal is refused without migration or data loss
+  ok disappearance of an observed document is corruption
+  ok data cannot be stored under project worktree or Git roots
+  ok writeFileSync EACCES preserves prior bytes and removes owned artifacts
+  ok writeFileSync ENOSPC preserves prior bytes and removes owned artifacts
+  ok fsyncSync EACCES preserves prior bytes and removes owned artifacts
+  ok fsyncSync ENOSPC preserves prior bytes and removes owned artifacts
+  ok renameSync EACCES preserves prior bytes and removes owned artifacts
+  ok renameSync ENOSPC preserves prior bytes and removes owned artifacts
+  ok transaction lock excludes another process and retains abandoned lock bytes
+  ok foreign temporary files are retained and never adopted
+  ok late owner invalidation after flush prevents commit
+  ok same-revision target replacement after flush is never overwritten
+  ok same-identity same-revision content mutation after flush is never overwritten
+  ok same-identity temp content tampering after flush cannot corrupt the last commit
+  ok temp path replacement after flush is never adopted or removed
+  ok lock replacement after flush refuses commit and preserves the foreign lock
+  ok target path replacement while open refuses read
+  ok hardlinks cannot redirect writes or reads
+  ok storage directory replacement between operations is refused
+  ok storage directory replacement after flush preserves old and replacement bytes
+  ok data directory replacement is refused without touching new storage
+  ok root symlink or junction cannot redirect document storage
+  ok ancestry symlink or junction cannot redirect document storage
+  SKIP file symlink privilege unavailable
+  ok bounded namespace capacity refuses additional scope without changing existing bytes
+  ok entry budget includes foreign files and refuses before committing
+  ok abrupt process exit after flush retains original commit and abandoned artifacts
+  ok external process kill at the flushed checkpoint preserves original bytes and stale lock
+  ok two real processes racing one CAS have exactly one winner
+  ok real Windows FileShare.Read target refuses atomic rename without altering bytes
+  ok releasing real Windows file holder permits the next CAS write
+Collab store: 53/53; assertions=149; skipped=1
+  ok classic scope has opaque independent namespace and verified workspace
+  ok reopening keeps key and opaque session identity but changes token on backend restart
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok forged incomplete or stale owner cannot choose a session
+  ok missing malformed and oversized owner are safely refused
+  ok renderer scopeHash and path do not select identity
+  ok focused conversation prevents classic fallback
+  ok captured scope rejects late context or owner mutation
+  ok captured scope rejects late context or owner mutation
+  ok captured scope rejects late context or owner mutation
+  ok captured scope rejects late context or owner mutation
+  ok session replacement invalidates captured scope and changes durable identity
+  ok workspace replacement invalidates captured scope and key
+  ok conversation scope reopens across backend generations
+  ok forged conversation and stale runtime cannot fall back
+  ok native session readback and registered identity must match
+  ok focus and workspace epoch invalidate live conversation scopes
+  ok unknown backend failures expose only a fixed safe error
+  ok domain errors retain a safe fixed code through authority callback
+  ok service expiration and source unavailable retain their fixed safe codes
+  ok service expiration and source unavailable retain their fixed safe codes
+Collab authority: 24/24; assertions=68; skipped=0
+ok open creates no document or write; explicit create binds verified scope
+ok user change persists; undo/redo are server controlled
+ok failed durable write preserves document and undo stack
+ok invalid actor and full document overwrite refused without persistence
+ok unknown and renderer forged proposals never preview or apply
+ok backend-only sourced proposal preview is readonly and explicit accept is reversible
+ok old proposal conflicts and leaves current user edit intact
+ok external revision clears history; stale editor cannot overwrite
+ok close and reopen discard undo state without losing saved document
+ok old owner token and wrong scope cannot reuse an editor
+ok scope invalidation prevents even readonly open
+ok unconfigured production source remains honestly unavailable
+ok capacity eviction keeps a recently active editor and expires the least active
+Collab service: 13/13; assertions=58
+ok register/get 往返：信封不可变且摘要一致
+ok 摘要对键顺序不敏感
+ok proposalId 复用：同内容幂等、异内容拒绝
+ok 同 scope+document 的新建议使旧 pending 作废（supersede）
+ok scope/token 失效后旧建议不可见
+ok settle 终局迁移；accepted 证据保留供重复接受幂等
+ok pending TTL 过期后不可解析
+ok 容量有界：满时拒绝并优先淘汰终局条目
+ok 结构性输入校验拒绝非法信封
+ok dropScope/dropAll/stats 只暴露结构计数
+
+10/10 通过，53 次断言
+ok 正常链路：真实形状事件 → 注册建议 → 预览可应用
+ok 用户消息伪装建议：含围栏的 user message_end 不采纳
+ok 工具输出与 custom 消息伪装：toolResult/custom 角色不采纳
+ok 流式片段不采纳：text_delta/message_update/Z3 viz 围栏均无效
+ok stopReason pending 的 message_end 不作为终值采集
+ok 非法 JSON / 未知字段 / 模型伪造身份键 / 超大围栏一律拒绝
+ok 混合合法与非法操作：整批拒绝，无部分注册
+ok 多条消息时取最后一条含围栏消息；同消息取最后一处围栏
+ok 旧 bridgeRun / 窗口前事件不归属本次运行
+ok agent_settled 先于 agent_start（残留收口）被忽略，不影响后续真实运行
+ok 取消（aborted）丢弃；bridge 异常终止丢弃
+ok Runtime 帧归属：owner 五项匹配才采集；runtime_closed 丢弃
+ok 并发限制：同 scope 运行中再发起被拒绝；终局后可重新发起
+ok 指令与文档校验：空/超长指令、非法文档拒绝
+ok 通道失败映射：busy/未知错误码，且不留幽灵 attempt
+ok 运行超时：TTL 到点后 attempt 失败且信箱投递一次
+ok 生成 prompt 由服务端组合：含文档快照、指令与围栏契约，不含身份泄漏
+ok parseCollabFence 直接校验：取最后一处围栏并严格解析
+ok 候选容量有界：超长消息标记失败，历史候选被淘汰
+ok 空事件流与无关帧不崩溃
+ok 旧 token 的生成结果对新 token 信箱不可见
+ok 旧 token 未完成的 attempt 不阻塞新 token 合法生成；同 token 并发仍拒绝
+ok token 失效后迟到的旧结果不能注册为新 owner 可用的建议
+ok sendPrompt 未确认期间出现的完整运行不注册为建议（失败清理）
+ok 快速完成：确认响应与全部事件同批到达时不丢失合法完成
+ok armed 缓冲超限时生成失败且不注册
+ok Classic 交叉身份：captureIdentity 与 authority 快照不一致时拒绝发送
+ok Classic dispatch 前切换：assertCurrent 失效即拒绝，不发送不注册
+ok Classic 发送边界后身份失效：prompt 未写出、无幽灵建议，随后合法请求可生成
+ok Runtime 锁外发送前关闭或换代：身份不一致拒绝
+ok armed 缓冲含多段运行时归属不可判定：确认后拒绝且不注册
+ok 未切换的正常请求：身份一致仍能生成，快速完成事件正确登记
+
+32/32 通过，170 次断言
+ok generate 请求形状与前置校验：未建文档/空指令/超长指令/缺字段
+ok 全链路：generate → 事件 → 队列 → proposal_status → preview → accept → 撤销
+ok 生成期间用户编辑：接受时返回冲突，保留用户当前文档
+ok 重新生成发起新受控任务：旧 pending 被 supersede，旧 proposalId 不可用
+ok 跨 scope/owner 隔离：B 的 scope 看不到 A 的建议；token 变化后不可见
+ok 迟到的旧 run 建议：bridge 异常后事件不再归属；aborted 丢弃
+ok 保存失败：文档字节不变，建议保持 pending 可重试
+ok 后端重启等价：新 service+source 实例无任何在途生成与建议
+ok 重复接受与重复拒绝：终局后幂等或明确拒绝，不重复修改文档
+ok Runtime scope：conversationId 进入来源； Classic/Runtime 生成互不串扰
+ok 终局状态转换矩阵：rejected→accepted 与 accepted→rejected 均被服务端拒绝
+ok superseded 建议不可接受或重新激活
+
+12/12 通过，73 次断言
+ok Origin and Token protect all new actions
+ok POST-only bounded strict request envelope
+ok open no-write then explicit create with real atomic store
+ok controlled edit persists and raw snapshot replacement is refused
+ok old revision and owner reject while original bytes remain
+ok production cannot invent Agent source through request JSON
+ok damaged persisted file is preserved on read and subsequent request
+ok generate routes Classic-only capture readiness; Runtime requests bypass it
+Collab HTTP: 8/8; assertions=41
+  ok three nodes
+  ok two directed edges
+  ok arrow marker present
+  ok canvas keyboard focus
+  ok narrow toolbar wraps
+  ok narrow inspector permits shrinking
+  ok light theme token differs
+  ok dark theme token restored
+  ok mount never writes
+  ok selection accessible
+  ok Enter edits pointer-selected node
+  ok label edit emits intent only
+  ok blank node label refused
+  ok add has correct type
+  ok add valid bounded id
+  ok no op authority assigned
+  ok drag preview emits nothing
+  ok drag emits once at end in graph coordinates
+  ok input graph unchanged
+  ok cancel emits nothing
+  ok edge intent endpoints
+  ok duplicate edge refused
+  ok edge label clear intent
+  ok delete awaits confirmation
+  ok cancel deletion does not write
+  ok edge deletion intent
+  ok node delete atomic edges first
+  ok controlled undo callback
+  ok controlled redo callback
+  ok cleared history disables callback
+  ok zoom changes viewport
+  ok keyboard pan
+  ok keyboard node move
+  ok readonly visible
+  ok readonly edit disabled
+  ok readonly blocks mutations and history
+  ok busy accessible
+  ok busy blocks add
+  ok error alert
+  ok error does not enable writes
+  ok invalid input fails closed
+  ok invalid input not rendered
+  ok markup rendered as text
+  ok full label accessible
+  ok edit focus
+  ok typing delete not intercepted
+  ok whitespace-only label fails closed
+  ok 100 nodes render
+  ok long text bounded in SVG
+  ok destroy clears DOM
+  ok destroy detaches callbacks
+  ok late delete confirmation invalidated by update
+  ok late callback failure cannot affect new document
+  ok null document safely disabled
+  ok over-limit atomic deletion blocked
+  ok over-limit deletion explains batching
+  ok honest no source empty state
+  ok proposal update never writes
+  ok proposal safely renders text
+  ok proposal diff visible
+  ok proposal explicit callbacks only
+  ok preview never mutates inputs
+  ok readonly disables accept and reject, keeps regenerate entry
+  ok stale suggestion conflict visible
+  ok stale suggestion accept disabled
+  ok missing preview accept disabled
+  ok wrong session actions disabled
+  ok mismatched preview not accepted
+  ok proposal busy blocks actions
+  ok proposal destroy clears DOM
+  ok proposal destroyed action inert
+  ok late proposal failure cannot overwrite new projection
+
+collab-canvas: 72/72 passed; assertions=72
+ok open does not create; explicit template create reaches real service adapter
+ok pending durable update keeps visible prior document until acknowledged
+ok failed save keeps current graph and exposes error
+ok close and reopen preserves document but clears server history
+ok closing panel dismisses only its own pending deletion confirmation
+ok closing editor leaves unrelated approval confirmation in place
+ok session-switch invalidates synchronously before legacy owner fields change
+ok workspace change synchronously clears graph; late save cannot repaint
+ok owner changed without response cannot send a fresh edit
+ok late open after close is disposed and closes orphan capability
+ok focused runtime headers use runtime owner and never classic owner
+Collab panel: 11/11; assertions=58
+ok 生成入口：输入与按钮随文档与当前性启停
+ok 发起生成：generate 请求携带指令；轮询拾取 ready 并自动预览
+ok 接受建议：CAS 提交成功并更新画布，可撤销
+ok 拒绝路径与失败文案：通道 busy 显示安全提示且可再次发起
+ok 冲突后重新生成：卡片保持入口可用，重开编辑器并发起新受控任务
+ok 生命周期：会话切换同步停轮并失效面板
+ok 来源未接入：无 proposals 的服务显示原文案并拒绝生成
+ok 重开面板拾取未决建议：open 后自动 preview 展示
+ok 慢于轮询间隔的状态请求不重叠且最终展示建议
+Collab panel agent: 9/9; assertions=97
+  ok 默认方向从左到右
+  ok 直线布局成功
+  ok 直线沿 x 轴前进
+  ok 直线同层共线
+  ok 直线层数为 3
+  ok 直线零交叉
+  ok 分支布局成功
+  ok 分支源在最左
+  ok 分支不重叠
+  ok 分支同层并列
+  ok 菱形布局成功
+  ok 菱形汇合在源右侧
+  ok 菱形不重叠
+  ok 菱形零交叉
+  ok 环路布局成功（不无限循环）
+  ok 环路坐标完整
+  ok 环路不重叠
+  ok 30 节点全环布局成功
+  ok 孤立节点获得坐标
+  ok 孤立节点不与链重叠
+  ok 独立分量数
+  ok 无连线布局成功
+  ok 无连线不重叠
+  ok 无连线分量数等于节点数
+  ok 15 孤立节点换列打包不重叠
+  ok 空图返回空坐标
+  ok 200 节点布局成功
+  ok 200 节点坐标齐全
+  ok 200 节点不重叠
+  ok 200 节点在 5 秒内完成（实测 2ms）
+  ok 200 节点最长链不越界
+  ok 极限间距选项仍在协议边界内
+  ok 同样输入重复运行结果一致
+  ok 节点/连线输入顺序不影响结果
+  ok TB 方向确定性
+  ok 布局不修改输入文档
+  ok 坐标全部为整数
+  ok 坐标全部在 ±100000 内
+  ok LR 方向无倒退边
+  ok TB 方向沿 y 轴前进
+  ok 引用不存在节点的边被拒绝
+  ok 自环被拒绝
+  ok 重复节点 ID 被拒绝
+  ok 同向重复边被拒绝
+  ok 空白标签被拒绝
+  ok 越界坐标节点被拒绝
+  ok 超过 200 节点被拒绝
+  ok schemaVersion 错误被拒绝
+  ok 空文档对象被拒绝
+  ok 未知方向回落到 LR
+  ok 长中文标签布局成功
+
+collab-auto-layout: 51/51 passed; assertions=51
+  ok 单批上限与协议一致
+  ok 预览创建成功
+  ok 预览状态为 ready
+  ok 预览记录基线 revision
+  ok 预览记录文档标识
+  ok 预览不修改原图
+  ok 预览只含坐标变化的节点
+  ok 移动项包含前后坐标
+  ok 确认后生成操作
+  ok 操作数与移动数一致
+  ok 操作为完整信封形状
+  ok 操作类型均为 node.update
+  ok 操作 actor 为 user
+  ok 操作 baseRevision 等于文档 revision
+  ok 生成操作不改原文档
+  ok 生成操作通过既有受控协议
+  ok 协议应用后 revision 前进
+  ok 应用后再次布局无变化（不动点性质）
+  ok 取消返回明确状态
+  ok 取消后原文档不变
+  ok 取消不返回任何操作
+  ok 种子批次 seed@0 构造成功
+  ok 种子批次 seed@40 构造成功
+  ok 种子批次 seed@80 构造成功
+  ok 超过 50 个移动节点的预览状态为 over-limit
+  ok over-limit 预览仍带完整移动清单
+  ok over-limit 拒绝直接应用
+  ok 拒绝信息包含明确上限说明
+  ok over-limit 路径不产生操作
+  ok over-limit 预览不改文档
+  ok 恰好 50 个移动节点状态为 ready
+  ok 恰好 50 条可单批应用
+  ok revision 前进后预览过期
+  ok 过期信息带冲突详情
+  ok 跨文档应用被拒绝
+  ok 非法预览形状被拒绝
+  ok 取消路径校验形状
+  ok opId 重复显式失败
+  ok opId 非法显式失败
+  ok 已对齐文档预览为 clean
+  ok clean 预览返回 unchanged
+  ok 非法图预览失败
+  ok 空图预览为 clean
+  ok 预览确定性
+
+collab-layout-preview: 44/44 passed; assertions=44
+  ok 主题闭集
+  ok 长文本导出成功
+  ok 长文本产物是合法 XML
+  ok 每个节点文字最多两行
+  ok 长标签节点恰为两行
+  ok 第二行以省略号结尾
+  ok 折行不超过每行 11 字符
+  ok 连线长文字截断到 24 字符内
+  ok 中文完整保留
+  ok 含敌意文本的文档导出成功
+  ok 产物是合法 XML
+  ok 产物无脚本与事件属性
+  ok 敌意标签被转义为文本
+  ok 敌意闭合标签被转义
+  ok 节点 title 完整保留敌意文本
+  ok 连线 title 完整保留敌意文本
+  ok 无外部样式或字体引用
+  ok 只使用系统字体栈
+  ok 尺寸包含默认留白
+  ok 留白选项生效
+  ok 所有节点都在画布边界内
+  ok viewBox 与尺寸一致
+  ok 浅色主题背景
+  ok 深色主题背景
+  ok 透明主题不画背景矩形
+  ok 未知主题回落浅色
+  ok 取消导出返回 cancelled
+  ok 取消时不调用 renderer
+  ok 取消不产出图像
+  ok SVG 导出同样尊重取消
+  ok 确认后 PNG 导出成功
+  ok renderer 恰好调用一次
+  ok renderer 收到画布尺寸
+  ok PNG 尺寸按 scale 放大
+  ok PNG 数据透传
+  ok PNG 路径同样包含安全 SVG
+  ok SVG 导出成功
+  ok SVG 产物与直构一致
+  ok renderer 失败原样透出
+  ok renderer 抛错转为显式失败
+  ok Node 环境无浏览器能力显式失败
+  ok 不支持格式拒绝
+  ok scale 越界拒绝
+  ok 空图拒绝导出
+  ok 非法文档拒绝导出
+  ok 引用缺失节点的边拒绝导出
+  ok 导出不修改输入文档
+  ok SVG 导出确定性
+
+collab-export: 48/48 passed; assertions=48
+  ok 正式工具条标题可见
+  ok 三个操作按钮
+  ok 布局方向默认从左到右
+  ok 导出背景默认浅色
+  ok 初始不显示预览
+  ok 点击整理出现预览
+  ok 预览文案含移动数与版本
+  ok 预览期间不保存（零操作）
+  ok 预览期间文档不变
+  ok 取消隐藏预览
+  ok 取消零提交
+  ok 取消后文档不变
+  ok 取消通知
+  ok 确认提交一次意图
+  ok 意图为画布方言（只有 type 与 params）
+  ok 意图全部为 node.update
+  ok 意图数量与预览一致
+  ok 提交后文档对象仍不变（意图交由上层）
+  ok 提交后预览关闭
+  ok 文档更新隐藏预览
+  ok 文档更新通知作废
+  ok 作废后确认零提交
+  ok over-limit 显示明确状态
+  ok over-limit 禁用确认
+  ok over-limit 全程零提交
+  ok SVG 导出经 onExport
+  ok SVG 导出格式
+  ok SVG 产物包含节点文字
+  ok SVG 导出不改文档
+  ok TB 方向意图生效（同列递增）
+  ok 主题选择器深色背景生效
+  ok 用户取消导出无产物
+  ok 确认后 PNG 透出
+  ok renderer 收到注入的 scale
+  ok 超大 PNG 不调用 renderer 且不产出部分导出
+  ok 只读禁用自动整理
+  ok 忙碌禁用导出
+  ok 恢复后可用
+  ok 拒收后预览保留
+  ok 拒收后零成功提示
+  ok 拒收给出保留原因
+  ok 拒收时回调仍收到一次意图
+  ok busy 期间确认禁用
+  ok busy 期间取消仍可用
+  ok busy 期间点击确认零提交
+  ok 解除 busy 后确认恢复
+  ok 只读时确认禁用
+  ok 只读点击确认零提交
+  ok 预览包含只读 SVG
+  ok 预览 SVG 节点数与文档一致
+  ok 预览 SVG 连线数与文档一致
+  ok 预览 SVG 保留节点文字
+  ok 预览 SVG 无交互与脚本元素
+  ok 预览 SVG 有可访问角色
+  ok 取消后预览 SVG 清理
+  ok 文档更新后预览 SVG 作废清理
+  ok 销毁后预览 DOM 清理
+  ok 导出结果绑定开始时版本与标题
+  ok 导出内容来自开始时快照
+  ok destroy 清空 DOM
+  ok destroy 后回调静默
+
+collab-productivity: 61/61 passed; assertions=61
+ok 面板挂载生产力工具条（画布与建议区之间）
+ok 自动整理先出预览且不保存
+ok 确认后单批原子保存且带 Owner 头
+ok 布局后现有撤销可用并恢复原坐标
+ok 取消预览不提交且文档不变
+ok 预览清除后重复点击确认零提交
+ok 导出 SVG 触发用户下载且不改文档
+ok 下载环境缺失时报错且可恢复
+ok busy 期间确认禁用且零提交，解除后预览按新版本作废
+ok 会话切换销毁工具条并释放未决下载 URL
+ok 60 节点自动整理给出明确超限提示
+ok 超限路径零提交零部分保存
+ok 外部修订后确认布局触发 CAS 冲突
+ok 冲突后文档只含外部修订且工具条只读
+Collab panel productivity: 14/14; assertions=71
+  ok init empty count
+  ok init nodeCount
+  ok init edgeCount
+  ok init describe
+  ok init primary
+  ok single select count
+  ok has n1
+  ok has n2 false
+  ok nodeIds
+  ok primary is n1
+  ok describe single
+  ok selectOne replaces count
+  ok has n1 false after replace
+  ok has n2 true after replace
+  ok toggle add n1 count
+  ok has n1 and n2
+  ok describe 2 nodes
+  ok toggle remove n2 count
+  ok has n2 false
+  ok mixed count
+  ok nodeCount 2
+  ok edgeCount 1
+  ok edgeIds
+  ok describe mixed
+  ok selectAllNodes count
+  ok selectAllNodes nodeIds
+  ok prune reported change
+  ok prune count 2
+  ok has n2 false after prune
+  ok has n1 and n3 true
+  ok prune with same graph returns false
+  ok hitTestRect hits n1 and n2
+  ok hitTestRect reverse drag
+  ok hitTestRect empty
+  ok clear returns true when items existed
+  ok clear returns false when already empty
+  ok count after clear
+
+collab-selection: 37/37 passed; assertions=37
+  ok A1: 单选 n1
+  ok A1: n2 未选中
+  ok A1: 选中标签显示单选
+  ok A2: n1 仍选中
+  ok A2: n2 现已选中
+  ok A2: 选中标签显示数量
+  ok A3: n1 已取消选中
+  ok A3: n2 仍选中
+  ok A3: 恢复单选标签
+  ok A4: 连线选中
+  ok A4: n2 不再选中
+  ok A4: 连线标签
+  ok A5: Ctrl+A 全选 4 个节点
+  ok A5: 所有节点均 is-selected
+  ok A6: 输入框内 Ctrl+A 不改变画布
+  ok A7: Escape 清空选择
+  ok A7: 无 is-selected 节点
+  ok A8: 框选矩形显示
+  ok A8: 框选结束矩形隐藏
+  ok A8: 命中 n1 和 n2
+  ok A8: n1 选中状态
+  ok A8: n2 选中状态
+  ok A9: 更新后修剪，只剩 n1
+  ok A9: n1 仍保持选中
+  ok A10: 会话切换清空选择
+  ok B1: 选中两个节点
+  ok B1: 拖拽中不提交
+  ok B1: 提交了一批操作
+  ok B1: 批次包含两个节点的更新
+  ok B1: 相对位移相同
+  ok B1-Cancel: 取消不提交
+  ok B2: 删除确认弹窗显示
+  ok B2: 弹窗包含对象与连线计数
+  ok B2: 取消删除隐藏弹窗
+  ok B2: 取消无操作提交
+  ok B2: 提交了删除操作
+  ok B2: 总操作数 5 条
+  ok B2: 先删除 3 条边
+  ok B2: 再删除 2 个节点
+  ok B2: 边去重无重复 id
+  ok C2: 粘贴提交了一批操作
+  ok C2: 包含 2 个节点和 1 条连线
+  ok C2: 前两条为 node.add
+  ok C2: 第三条为 edge.add
+  ok C2: 粘贴节点相对位移保持
+  ok C2: 内部连线连接新节点
+  ok C2: 首次粘贴偏移 30
+  ok C3: 连续粘贴偏移 60
+  ok C3: 两次粘贴的节点 ID 互不相同
+  ok C4: Duplicate 提交单次原子添加
+  ok C4: 复制单个节点产生 1 条操作
+  ok C4: 副本节点标签相同
+  ok C5: 超过 50 条操作拒绝直接粘贴
+  ok C5: 超限错误提示
+  ok D1: 左对齐提交 2 条更新（忽略无变化的 n1）
+  ok D1: 只有 n2 和 n3
+  ok D1: n2 与 n3 的 x 均被设为 10
+  ok D2: 水平居中坐标为整数
+  ok D3: 水平等间距调整 n2 坐标
+  ok D4: 零变化对齐不提交
+  ok D4: 提示无须调整
+  ok D5: 方向键批量移动 2 个节点
+  ok D5: n1 从 10 移动到 20
+  ok D5: n2 从 200 移动到 210
+  ok D6: 只读下复制按钮禁用
+  ok D6: 只读下对齐按钮禁用
+  ok E1: 选中 49 个节点
+  ok E1: 49 个节点操作成功提交
+  ok E1: 批次包含 49 条
+  ok E1: 选中 50 个节点
+  ok E1: 恰好 50 个节点操作成功提交
+  ok E1: 批次恰好包含 50 条
+  ok E1: 选中 51 个节点
+  ok E1: 51 个节点超过 50 上限拒绝提交
+  ok E1: 显示超限错误
+  ok E2: 批量移动提交成功
+  ok E2: 版本前进到 2
+  ok E2: 3 个节点全部更新到新坐标
+  ok E2: 单次撤销成功
+  ok E2: 3 个节点一次撤销全部恢复初始坐标
+  ok E2: 单次重做成功
+  ok E2: 3 个节点一次重做全部恢复移动坐标
+  ok E2: 批量删除原子提交成功
+  ok E2: 边被清空且只剩 2 个节点
+  ok E2: 单次撤销批量删除成功
+  ok E2: 恢复后拥有 3 个节点和 2 条边
+  ok E2: 恢复的节点 n2 存在
+  ok E2: 恢复的两条边存在
+  ok E3: CAS 冲突拒绝提交且原文档字节未变
+
+collab-advanced-editing: 89/89 passed; assertions=96
+--- 测试 1：鼠标事件序列与交互 ---
+  ok 1.1: 真实 Ctrl+点击序列后 n1 必须处于选中状态
+  ok 1.2: 再次 Ctrl+点击取消选中
+  ok 1.3: 普通点击单选成功
+  ok 1.4 前置: n1 与 n2 均被多选
+  ok 1.4: 拖动多选节点后保持多选，不被随后的 click 破坏
+  ok 1.4: 拖拽产生了批量更新操作
+  ok 1.5: 多选状态下直接点击单个节点收敛为单选
+  ok 1.5: 唯独 n1 保持选中
+  ok 1.6: 框选结束后随后的 click 不能清空选区
+  ok 1.7: 点击空白区域清空选区
+  ok 1.8: pointercancel 不产生操作提交
+--- 测试 2：焦点恢复与 Tab 导航 ---
+  ok 2.1 前置: 此时 n1 与 n2 均被多选
+  ok 2.1: update() 恢复焦点后保持多选
+  ok 2.2: update() 剔除已删除的 n2
+  ok 2.2: 现存的 n1 仍处于选中
+  ok 2.3: 切换 documentId 时清空选区
+  ok 2.4: 用户主动聚焦未选节点选中该节点
+  ok 2.5 前置: n1 与 n2 均被选中
+  ok 2.5: 用户聚焦已选节点保留既有多选
+--- 测试 3：批量移动严格保持相对位移与边界控制 ---
+  ok 3.1: 产生了批量移动提交
+  ok 3.1: 集合整体夹紧为移动 +5 像素 (nA 触碰 100000)
+  ok 3.1: nB 同步只移动 +5 像素 (105)
+  ok 3.1: 相对坐标差严格不变
+  ok 3.2: 产生了批量移动提交
+  ok 3.2: 负边界整体夹紧为移动 -5 像素 (nNegA 触碰 -100000)
+  ok 3.2: nNegB 同步只移动 -5 像素 (-105)
+  ok 3.2: 负边界相对坐标差严格不变
+  ok 3.3: 向右移动时右极限制全组最大 +5
+  ok 3.3: 左极跟随 +5 到达 -99990
+  ok 3.3: 两极间距严格守恒
+  ok 3.4: 边界处无法再位移时零提交
+  ok 3.5 前置: 成功选中 55 个节点
+  ok 3.5: 超过 50 个节点批量移动拒绝提交 (零提交)
+  ok 3.5: 展示单次最多 50 项操作错误提示
+  ok 3.6 前置: dClampA 与 dClampB 被多选
+  ok 3.6: 拖拽产生批量提交
+  ok 3.6: dClampA 触碰边界 100000
+  ok 3.6: dClampB 同步移动 +5 至 205
+  ok 3.6: 拖拽批量移动相对位移严格不变
+  ok 3.7: 拖拽超过 50 个节点拒绝提交 (零提交)
+  ok 3.7: 拖拽超过上限提示错误
+
+collab-z45-regressions: 41/41 passed; assertions=41
+ok 40 mixed Classic/Runtime cycles over four documents: reject/accept/undo/redo, restart and bounded queues
+ok 40 panel SVG exports and disposal leave no URLs, timers, polling or lifecycle listeners
+ok 40 canvas cycles: copy/paste, layout confirmation and destruction block detached controls
+ok oversized PNG refuses before Blob/Image/canvas allocation
+{"rounds":40,"elapsedMs":20161,"rssBefore":112652288,"rssAfter":278261760,"heapSamples":[{"canvasRounds":10,"heapUsed":86391864,"gcRequested":false},{"canvasRounds":20,"heapUsed":102412664,"gcRequested":false},{"canvasRounds":30,"heapUsed":115408288,"gcRequested":false},{"canvasRounds":40,"heapUsed":128603392,"gcRequested":false}],"qualification":"bounded-short-soak-only"}
+Collab stability: 4/4; assertions=843; failed=0
+
+> pi-gui@0.30.1 test:candidates
+> node tests/candidate-snapshot.cjs && node tests/candidate-store.cjs && node tests/candidate-runs.cjs && node tests/candidate-http.cjs && node tests/candidate-ui.cjs && node tests/candidate-adoption.cjs && node tests/candidate-adoption-ui.cjs && node tests/candidate-writer.cjs && node tests/candidate-write-faults.cjs && node tests/candidate-transactions.cjs && node tests/candidate-apply.cjs && node tests/candidate-recovery-errors.cjs && node tests/candidate-apply-ui.cjs
+
+ok bounded raw snapshot API exists
+ok promisor repositories cannot trigger implicit object downloads
+ok staged and working remain distinct
+ok same status content change invalidates digest
+ok capture never changes real index
+ok ignored not copied
+ok unconfirmed untracked rejected
+ok explicit untracked snapshot records evidence
+ok wrong extra choice rejects
+ok dirty working input copied exactly
+ok staged bytes copied separately
+ok input content identity survives candidate copy
+ok true before-after diff excludes initial dirty
+ok mode-only changes have real mode headers
+ok non UTF-8 bytes are never rendered as replacement text
+ok reverted candidate has empty diff
+ok pure rename is represented
+ok binary no fake text diff
+ok attributes reject before checkout/capture
+ok credential file refuses copying
+ok junction rejected
+ok candidate tool target guard exists
+ok ignored parent links cannot escape through approved write
+ok input capacity fails closed
+ok new untracked file during capture invalidates complete-input claim
+Candidate snapshot: 25/25
+ok read-only empty inspection creates no storage
+ok cross-instance writer lock refuses overlap
+ok saved record is readable without exposing input in memory
+ok corrupt optional adoption extension cannot hide legacy history
+ok corrupt JSON remains intact after refusal
+ok unknown future version refuses and preserves bytes
+ok completion without retained identity proof refuses recovery
+ok input hash mismatch refuses recovery
+ok arbitrary workspace path refuses recovery
+ok unsafe retained Diff path refuses recovery
+ok hardlinked records refuse reads
+ok materials inside protected source cannot be created
+ok confirmed release permits next instance without deleting result
+ok replaced material directory identity refuses access
+Candidate store: 14/14
+ok candidate controller exists
+ok candidate controller exposes a read-only adoption check
+ok preflight creates no worktree or Agent
+ok new owner cannot redeem nonce from same persistent scope
+ok cancelled preflight nonce cannot execute later
+ok same status content drift rejects confirmation
+ok confirmed action sends exactly once
+ok nonce replay cannot create or send again
+ok source bytes remain unchanged
+ok unconfirmed runtime cleanup cannot advertise completion
+ok true completion and actual disk diff
+ok read-only tool cannot hide same-byte file identity replacement
+ok index cache or format alone is not a source-code change
+ok closing view does not delete candidate
+ok restart recovers retained actual result without sending
+ok cross scope cannot read result
+ok comment revision change refuses old nonce
+ok restart labels live historical record interrupted without resend
+ok cross instance lock blocks second start
+ok Stop uses existing abort and preserves candidate
+ok external unbracketed write cannot become reliable result
+ok unknown tool does not bypass result qualification
+ok RPC crash cannot be completed
+ok settled cannot bypass the existing pending Stop barrier
+ok authoritative Stop confirmation closes as stopped
+ok result includes late cleanup writes and refuses their attribution
+ok new reliable history persists original source and actual output identities
+ok trusted run checks read-only without changing source index or history
+ok restart retains new evidence and never replays Agent
+ok concurrent checks have a backend single-flight gate
+ok unresolved cross-instance writer lock refuses checks without deletion
+ok source conflict preserves newer bytes and original candidate history
+ok legacy and future supplemental evidence remain viewable but never adoptable
+ok source owner change refuses confirmation
+Candidate runs: 34/34
+ok auth precedes candidate authority
+ok cross origin write denied
+ok wrong owner denied without private error
+ok read has no execution side effect
+ok preflight does not imply consent
+ok arbitrary path or command fields refused
+ok malformed and oversize body refused
+ok unknown action and query rejected
+ok explicit confirmation reaches controller once
+ok legacy read-only action is not exposed
+ok adoption preparation returns a single-use confirmation without writing
+ok adoption preparation accepts only action and id
+ok explicit adoption confirmation reaches controller once
+ok adoption confirmation accepts only action and nonce
+ok adoption cancellation only accepts its own nonce
+ok recovery preparation and confirmation are separate actions
+ok recovery actions reject path contents cwd and id mixing
+ok unknown and force actions remain unavailable
+ok failure response never contains upstream text
+Candidate HTTP: 19/19
+ok candidate UI is available
+ok preflight never starts task
+ok paths rendered as inert text
+ok confirmation explicit and enabled
+ok stale selection never confirms
+ok double click confirms once
+ok actual Diff shown safely
+ok back only closes view
+ok dispose removes flow nodes
+Candidate UI: 9/9
+ok read-only adoption API exists
+ok clean input checks exact dirty bytes and keeps index unchanged
+ok preflight performs no application-side filesystem mutation
+ok working input checks exact dirty bytes and keeps index unchanged
+ok staged input checks exact dirty bytes and keeps index unchanged
+ok both input checks exact dirty bytes and keeps index unchanged
+ok observation refuses traversal before filesystem inspection
+ok same status but different bytes conflicts
+ok logical staged changes conflict
+ok index cache format alone does not change logical input
+ok new target occupied refuses overwrite
+ok empty directory occupying creation target refuses
+ok deleted target with new user content conflicts
+ok untracked unrelated file refuses whole run
+ok ignored input conservatively refuses
+ok hardlinked target refuses
+ok junction refuses
+SKIP file symlink: existing token cannot create symbolic links
+ok Git lock refuses
+ok filesystem permission mode drift conflicts
+ok parent replacement conflicts even with original file objects
+ok same-byte source replacement conflicts
+ok source HEAD drift conflicts
+ok candidate content changed after result refuses
+ok same-byte candidate replacement refuses
+ok unconfirmed empty-directory side effect never inherits reliable file diff
+ok candidate parent object replacement during execution refuses
+ok candidate Git pointer replacement during execution refuses
+ok old retained record lacks safe adoption evidence
+ok corrupt or future evidence does not regain eligibility
+ok completed is insufficient without reliable evidence
+ok unconfirmed effects refuse
+ok all non-completed states refuse
+ok truncated Diff refuses
+ok historical Diff tampering refuses
+ok qualification cannot be upgraded independently of frozen evidence
+ok terminal state cannot be upgraded independently of frozen evidence
+ok oversize optional evidence refuses before persistence
+ok source scope mismatch refuses
+ok same repository other Worktree cannot become source
+ok owner change during awaited validation refuses
+ok busy Stop or tool operation refuses
+ok repeat checks never apply or mutate historical result
+ok Git admin and common object replacement conflicts
+ok missing candidate refuses
+ok completed empty delta has no adoption operation
+Candidate adoption: 45/45; failed=0; skipped=1
+ok completed candidate offers adoption preparation
+ok double check click sends one read-only request
+ok plan shows source and snapshots and index policy
+ok untrusted file name is inert text
+ok no write confirmation or nonce implied
+ok request carries current authority and only run id
+ok conflict remains refusal without force or confirmation
+ok returning to Diff discards late read-only plan
+ok late scope response cannot restore a disposed plan
+Candidate adoption UI: 9/9
+ok candidate native writer exists
+ok opening writer is read-only
+ok independent process cannot write held original
+ok independent process cannot replace held original
+ok pinned parent cannot be replaced
+ok raw bytes verified on held original object
+ok delete retains exact original object for recovery
+ok create uses exact bytes
+ok late create occupant is never overwritten
+Candidate writer: 9/9
+ok write failure never returns verified success
+ok write retains source object for conservative recovery
+ok partial failure never returns verified success
+ok partial retains source object for conservative recovery
+ok flush failure never returns verified success
+ok flush retains source object for conservative recovery
+ok rename API failure keeps deletion target
+ok read-only target refuses before writing
+ok native process termination never becomes success
+Candidate write faults: 9/9
+ok transaction store exists
+ok reading empty state never creates storage
+ok transaction mutation requires exclusive store lock
+ok owner can inspect its own execution lock
+ok intent is readable before source mutation
+ok restart preserves unconfirmed intent instead of success
+ok terminal success requires explicit durable record
+ok stale execution lock blocks reads and new mutations
+ok corrupt journal is refused and preserved
+Candidate transactions: 9/9
+ok controlled candidate apply exists
+ok second apply instance cannot enter while transaction lock is held
+ok completed apply releases lock for another instance
+ok preflight returns single-use nonce without source writes
+ok wrong owner cannot redeem confirmation
+ok confirmed whole candidate writes modifies creates deletes
+ok nonce replay refuses
+ok restart remembers adoption independently of original run
+ok same candidate cannot apply twice
+ok source change between prepare and confirm is refused
+ok partial multi-file failure never reports success
+ok failed apply releases lock and restart recovery is a new explicit confirmation
+ok verified recovery restores original working bytes and logical staged index
+ok consumed recovery confirmation cannot be replayed
+ok completed recovery cannot prepare a second recovery
+ok external changes after failure block recovery without data loss
+ok wrong scope cannot prepare or redeem recovery
+ok corrupt recovery material is refused and retained
+ok recovery failure remains uncertain and blocks automatic retry
+Candidate apply: 19/19
+ok lock acquisition failure preserves original storage error without transaction or writes
+ok failed lock confirmation remains single use
+ok transaction read failure preserves storage error and corrupt evidence
+Candidate recovery errors: 3/3; failed=0; skipped=0
+ok completed candidate exposes adoption preparation
+ok preflight alone never sends confirmation
+ok plan shows target and staged preservation
+ok double click submits nonce once
+ok success displays actual count and transaction
+ok success ends the used confirmation flow
+ok confirmation never carries renderer paths or bytes
+ok recovery requires a second explicit confirmation
+ok recovery double click submits one nonce
+Candidate apply UI: 9/9
+PASS isolated percent filename does not terminate actual upload router
+PASS filename preserved exactly: 中文附件.txt
+PASS filename preserved exactly: report%20final.txt
+PASS filename preserved exactly: literal%25.txt
+PASS same-millisecond uploads keep every path and original body
+PASS previously valid long Chinese filename stays within portable component limit
+PASS exclusive file creation retries collision and preserves previous upload
+PASS persistent allocation collisions fail without overwriting files
+PASS central: pending send preserves correct draft: unchanged
+PASS central: pending send preserves correct draft: new draft
+PASS central: pending send preserves correct draft: edit back to same text
+PASS central: pending send preserves correct draft: switch target
+PASS central: pending send preserves correct draft: failure
+PASS central: pending send preserves correct draft: new owner
+PASS modal: pending send preserves correct draft: unchanged
+PASS modal: pending send preserves correct draft: new draft
+PASS modal: pending send preserves correct draft: edit back to same text
+PASS modal: pending send preserves correct draft: switch target
+PASS modal: pending send preserves correct draft: failure
+PASS modal: pending send preserves correct draft: new owner
+PASS steer rejected leaves original task running and stoppable
+PASS steer handled leaves original task running and stoppable
+PASS follow_up rejected leaves original task running and stoppable
+PASS follow_up handled leaves original task running and stoppable
+PASS prompt cannot create a second turn while the original task runs
+PASS preflight failure returns idle; late response cannot release Stop barrier
+PASS out-of-order responses retain the accepted original turn and reject a second prompt
+PASS real bridge and guardian retain original fake-Pi task after rejected additions
+High-risk regressions: 28/28; failed=0; offline fixtures
+
+> pi-gui@0.30.1 test:logging
+> node tests/logging.cjs && node tests/logging-leaks.cjs && node tests/logging-secret-state.cjs && node tests/logging-client.cjs && node tests/logging-ui.cjs
+
+=== 日志核心 ===
+  ok   启动产生结构化 app.start，且默认目录在注入的临时目录
+  ok   标准模式不写 DEBUG，详细模式写 DEBUG
+  ok   未知事件与未知字段直接丢弃
+  ok   开始/失败/耗时使用同一 correlationId
+  ok   禁用后不再写日志；重新启用后恢复
+  ok   设置文件拒绝非法值，并保留有效设置
+  ok   清理只删日志文件，不删设置/会话标记
+  ok   保留期清理只保留窗口内的文件
+  ok   详细模式到期自动回标准并持久化
+  ok   文件超过上限后轮转，旧文件保留且可读
+  ok   损坏行被跳过，后续日志仍可读取
+  ok   分页不重复（cursor 向前翻页）
+  ok   崩溃进入独立 crash 文件，且不记录异常 message
+  ok   未正常关闭后重启可看到上次异常退出线索
+  ok   正常关闭后下一次启动不再误报异常退出
+  ok   不可写目录只降级，不把异常抛给业务
+  ok   高频写入仍保持每行合法 JSON，且有界批处理不阻塞调用方
+  ok   磁盘空间不足（ENOSPC）只进入降级状态，不影响调用方
+  ok   后端与主进程并发写不同文件，事件保持各自进程身份
+  ok   同一次操作跨后端/Renderer 用 correlationId 关联
+=== 导出 ZIP ===
+  ok   导出含固定五文件，目录/内容可解压，错误单独列出
+  ok   导出不调用网络
+  ok   导出失败明确返回固定错误码，不抛出
+=== HTTP 服务契约 ===
+  ok   GET /api/logs/status 返回状态且不含绝对路径
+  ok   POST /api/logs/events 只接受白名单事件与字段
+  ok   POST /api/logs/settings 校验并返回状态
+  ok   导出需要显式确认，预览返回清单与计数
+  ok   导出 ZIP 可直接解压，且不再向日志写入用户描述原文
+  ok   清理需要确认；确认后状态回到空
+=== Electron 主进程适配 ===
+  ok   主进程写独立 main-* 文件，不与后端同名
+  ok   主进程按 mtime 重新读取后端写入的日志设置
+  ok   主进程默认目录由 userData / PI_GUI_DATA 决定，不使用项目目录
+logging: 32 passed, 0 failed, 0 skipped
+  ok   普通/详细日志只接收白名单字段，秘密与聊天正文不落盘
+  ok   异常 message / 原始 stack 不进崩溃文件，只保留安全错误名与自身帧
+  ok   设置更改/清理等系统事件同样不含注入秘密
+  ok   Renderer HTTP 入口拒绝未知事件并把已知字段收敛
+  ok   导出预览/状态不泄露日志目录或秘密
+  ok   ZIP 每个文件都不含注入秘密，描述也经过复核
+  ok   状态/条目在最终导出前仍不含秘密
+  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）
+logging-leaks: 7 passed, 0 failed, 1 skipped
+=== 敏感判定状态 ===
+  ok   token/code/id 连续检测同一 secret 时不会交替放行
+  ok   不同函数/安全值交错调用时状态不串扰
+  ok   normalizeEvent 连续同值 secret 不会在第二次放行
+  ok   不同字段顺序：secret 先经过 token，也不会让后面的 errorName 放行
+  ok   normalizeStored 连续多条事件同样拒绝 secret 字段
+=== 端到端落盘 / 崩溃 / ZIP ===
+  ok   原始 JSONL 与崩溃记录不包含连续事件里的 secret
+  ok   ZIP 的每个文件都不包含 secret
+=== HTTP 日志 API / 崩溃记录 / ZIP ===
+  ok   POST 连续/交错 secret 后，日志 API 与原始文件都不含 secret
+  ok   HTTP 导出的 ZIP 每个文件都不含 secret
+logging-secret-state: 9 passed, 0 failed
+=== Renderer 日志断线恢复 ===
+  ok   暂时网络失败：只丢已发出未确认的批次，退避后恢复并补报丢弃计数
+  ok   连续网络失败：退避有上限，队列空时不发请求
+  ok   队列达到上限：保留最新事件、丢弃最旧事件并保持有界
+  ok   日志被用户关闭：停止上报，重新启用后新事件恢复
+  ok   不可恢复错误：停止重试；显式恢复后才重新尝试
+  ok   无效 200 响应按不可恢复处理，不无限重试
+  ok   页面重新加载：新的客户端不继承旧的失败状态
+  ok   后端重启：恢复后的事件真实落盘并进入 ZIP，断线期间批次不重放
+logging-client: 8 passed, 0 failed
+PASS 打开日志面板：状态、文件、最近错误与隐私说明都在同一弹层
+PASS Z1-2 概览 Classic 引用显示行内成功反馈且保留草稿
+PASS Z1-2 未就绪引用显示失败，不改草稿、不新增 Toast
+PASS Z1-2 Runtime 引用只填当前 owner 的输入框并显示反馈
+PASS Z1-2 Runtime 身份不匹配与未就绪均显示拒绝反馈
+PASS 设置修改走 API 并更新状态，非法路径没有被发送
+PASS 日志查看：按级别/来源/搜索加载真实条目并分页，所有内容走 textContent
+PASS 恶意 HTML 与长中文只作为文本呈现
+PASS 空日志和读取失败都有明确状态
+PASS 清理日志必须经过二次确认，取消不发请求
+PASS 导出前先预览；失败时给出提示并提供复制的降级路径
+logging-ui: 11 passed, 0 failed
+
+> pi-gui@0.30.1 test:ui4
+> node tests/ui4-approval.cjs && node tests/ui4-feedback.cjs && node tests/ui4-integration.cjs
+
+  ok  confirm 请求走统一确认层并显示来源 / 类型
+  ok  风险只陈述「协议没有结构化字段」，不猜危险等级
+  ok  确认卡只有一次性和延期出口，没有 Always / Bypass / Auto
+  ok  长命令完整渲染，不在 UI 层二次截断
+  ok  空字段使用可读兜底，不渲染 undefined
+  ok  恶意 HTML / 额外字段不进 DOM
+  ok  允许一次只发一条 extension_ui_response{confirmed:true}
+  ok  拒绝只发 confirmed:false，不伪装成取消
+  ok  Esc 发 cancelled:true（fail-closed 的取消）
+  ok  点遮罩取消同样走协议应答
+  ok  提交中重复点击只发一条命令
+  ok  提交中 Esc / 点遮罩 / Enter 都不会补发第二条应答
+  ok  迟到结果不覆盖已作废状态，也不再弹卡
+  ok  SSE 重放已结算请求不会再次弹卡
+  ok  工作区切换：旧审批本地作废且不发应答
+  ok  会话切换：旧审批本地作废且不发应答
+  ok  卡片残留时点允许：本地作废、不发应答、卡片收掉
+  ok  Stop：pending 收到取消、卡片收掉、不留关不掉的卡
+  ok  Stop 打断提交中：不补发取消，卡片仍收掉
+  ok  超时：卡片收掉、不发应答、状态 expired
+  ok  桥接重启：本地作废且不向死进程发应答
+  ok  后端拒绝：卡片保留、原因可见、可重试且只重发一次
+  ok  网络层失败：结果未知，不声称未送达、不重发决定
+  ok  失败后用 Esc 取消：取消也走真实投递，成功后收卡
+  ok  初始焦点在「拒绝」，Tab / Shift+Tab 在按钮间循环
+  ok  卡片本身获得焦点时 Enter 不会替你允许
+  ok  审批确认卡叠在普通弹层之上，关闭审批不关掉下面的弹层
+  ok  审批超时只收自己的卡，不关别人的弹层
+  ok  select：真实选项、选择后只发 value
+  ok  select 提交中重复点击只发一次
+  ok  select 投递失败：卡片保留、可重试
+  ok  input：保留 placeholder，提交真实输入
+  ok  editor：prefill 真实值，取消发 cancelled
+  ok  input 的 Esc / 点遮罩走取消且失败时保留卡片
+  ok  Runtime 接口：确认点击只发一次，成功后不再可点
+  ok  Runtime 接口：失败可见并可重试
+  ok  Runtime 接口：owner 变化返回 null → 明确失效、不伪造取消
+  ok  Runtime 接口：select / input 真实值，恶意标题按文本
+  ok  approvalCardModel 不发明 scope / action / 持久化
+  ok  样式表幂等注入：只有一份，且复用已有 link
+  ok  CSS 只用 UI-1 语义 token，且覆盖三种审批 DOM
+  ok  approval.js 不再 fire-and-forget respond，也不拼 innerHTML
+  ok  modal.js 默认行为未变：没有 onDecide 时点击即关闭
+  ok  modal.js 危险确认仍然禁用 Enter 快捷确认
+
+ui4-approval: 44/44 通过
+PASS stylesheet injected once and served from the owned file
+PASS explicit important info toast auto closes after its short duration
+PASS success and ok aliases share one success treatment
+PASS warning and warn aliases keep the legacy .toast.warn hook
+PASS error toast is persistent by default and never becomes invisible silently
+PASS persistent=false opts back into the timed error path
+PASS multiple notifications queue without replacing each other
+PASS duplicate notification inside the dedupe window is suppressed
+PASS long Chinese and long English text stay complete and wrapped
+PASS untrusted text is inert in toasts and action labels
+PASS Escape closes the focused toast and returns focus to the composer
+PASS toast host exposes a named region and each toast a live role
+PASS historical replay does not create notifications
+PASS legacy toast call sites keep working unchanged
+PASS notice tones cover success, failure, warning, loading and unknown
+PASS unknown notice is neutral, never success or failure
+PASS notice shows title, multi-line detail, actions and a close control
+PASS notice actions call only the injected handler once
+PASS notice with the same identity/signature is not rebuilt
+PASS notice close hides it and clears the current id
+PASS notice text and action labels are inert under XSS-shaped input
+PASS long Chinese and English notice content remains complete
+PASS workspace switch is represented as busy, not success or failure
+PASS state matrix copy is rendered from the supplied model only
+PASS real startupNotice models keep their existing truth and actions
+PASS CSS is owned, prefixed and respects theme/reduced-motion/motion contracts
+PASS CSS keeps the legacy notice/toast hooks used by existing suites
+UI4 Feedback: 27/27, failed=0, skipped=0
+PASS late 允许一次 success cannot authorize replacement after expired
+PASS late 允许一次 success cannot authorize replacement after stop
+PASS late 允许一次 success cannot authorize replacement after workspace
+PASS late 允许一次 success cannot authorize replacement after session
+PASS late 允许一次 success cannot authorize replacement after bridge
+PASS late 允许一次 success cannot authorize replacement after timeout
+PASS late 拒绝 success cannot authorize replacement after expired
+PASS late 拒绝 success cannot authorize replacement after stop
+PASS late 拒绝 success cannot authorize replacement after workspace
+PASS late 拒绝 success cannot authorize replacement after session
+PASS late 拒绝 success cannot authorize replacement after bridge
+PASS late 拒绝 success cannot authorize replacement after timeout
+PASS old failure cannot unlock or alter replacement submitting confirmation
+PASS late select success cannot close an unrelated replacement modal
+PASS replaced confirm retains visible late refusal without touching replacement
+PASS replaced confirm retains visible late unknown without touching replacement
+PASS replaced select retains visible late refusal without touching replacement
+PASS replaced select retains visible late unknown without touching replacement
+PASS lost response after acceptance is unknown and cannot send a second decision
+PASS identical errors in different workspace generations are not deduplicated
+PASS ordinary command errors retain existing notification and wire behaviour
+PASS malformed acknowledgement is unknown and cannot authorize a retry
+PASS Notice same text updates callbacks and cannot retain a stale workspace action
+PASS Notice same-context handler refresh preserves DOM and focus
+PASS Runtime A to B same-text feedback is not deduplicated and old action is disabled
+PASS Classic global Notice survives Runtime owner navigation but expires with its real Classic context
+PASS Toast pointer leave cannot resume a timer while its button has focus
+PASS runtime-A unknown owner cannot match explicit foreign workspace
+PASS classic-chat unknown owner cannot match explicit foreign workspace
+PASS Runtime missing owner and workspace never consumes missing-identity Classic evidence
+PASS only identity-free Classic evidence invalidates the identity-free Classic preview
+PASS known Runtime workspace invalidation requires both matching id and epoch
+PASS cancelled loading clears busy immediately and ignores late result: pi-gui:session-evidence-changed
+PASS cancelled loading clears busy immediately and ignores late result: pi-gui:session-switch
+PASS process polling stays serial across manual refresh and pending logs
+PASS process revision resets cursor and Stop retains real generation/id/revision transport
+PASS process dispose clears polling and rejects late log writes to replacement surface
+PASS process logs stay bounded and render untrusted text without HTML execution
+PASS unknown confirm closes locally without contradictory response: Escape
+PASS unknown confirm closes locally without contradictory response: backdrop
+PASS unknown confirm closes locally without contradictory response: replace
+PASS unknown confirm closes locally without contradictory response: Stop
+PASS unknown select closes locally without contradictory response: Escape
+PASS unknown select closes locally without contradictory response: backdrop
+PASS unknown select closes locally without contradictory response: replace
+PASS unknown select closes locally without contradictory response: Stop
+PASS ordinary modal bound close cannot close a replacement instance
+PASS view navigation suspends Classic pending and resumes it only from the Classic entry
+PASS late old-owner approval rejection cannot change new-owner notice: Runtime conversation
+PASS late old-owner approval rejection cannot change new-owner notice: Runtime dialog
+PASS current-owner approval outcome remains visible and refreshed: false/false
+PASS current-owner approval outcome remains visible and refreshed: false/true
+PASS current-owner approval outcome remains visible and refreshed: true/false
+PASS current-owner approval outcome remains visible and refreshed: true/true
+PASS unrelated toast scroll cannot close an open action menu; anchor/document scroll still does
+UI4 integration: 55/55; failed=0; skipped=0
+
+> pi-gui@0.30.1 test:specs
+> node tests/specs.cjs && node tests/specs-ui.cjs && node tests/panel-restore-ui.cjs
+
+  ok  Specs API keeps the router-wide token authentication
+  ok  discovers root SPEC.md and Markdown recursively under specs/
+  ok  does not discover README, docs/, or non-Markdown files
+  ok  does not follow a directory junction out of the project
+  ok  returns opaque IDs and no absolute project path
+  ok  marks oversized Markdown without reading it during indexing
+  ok  reads only the indexed Markdown document
+  ok  serves .markdown siblings
+  ok  malformed Markdown remains readable text
+  ok  oversized files fail as a bounded document response
+  ok  invalid UTF-8 and NUL content degrade safely
+  ok  an arbitrary query path is never accepted as a document
+  ok  a deleted indexed document returns a safe not-found response
+  ok  a stale workspace token cannot read another worktree checkout
+  ok  a stale generation is rejected even for the same conversation scope
+  ok  another worktree index contains only its own documents
+  ok  no project is an empty state, not a filesystem error
+  ok  unknown deferred scope fails closed
+Specs: 18/18; skipped=0
+  ok  Markdown heading IDs are opt-in and preserve existing chat rendering
+  ok  duplicate Markdown headings receive stable unique anchors
+  ok  tree keeps SPEC.md first and nests specs directories
+  ok  relative Markdown links resolve only to indexed paths
+  ok  Specs opens inside the existing right pane without global navigation
+  ok  document tree renders SPEC.md and expandable directories
+  ok  SPEC.md is selected without requiring a second click
+  ok  directory collapse hides its descendants
+  ok  directory expand restores its descendants
+  ok  clicking a document fetches and renders Markdown in the same pane
+  ok  malicious Markdown remains inert text
+  ok  relative document links navigate inside the allowlisted index
+  ok  duplicate headings get distinct same-document anchors
+  ok  a relative link outside the indexed Specs set is blocked with a visible reason
+  ok  manual refresh discovers newly added documents
+  ok  an incomplete scan is disclosed instead of silently presenting a partial tree
+  ok  a failed refresh keeps the previous tree usable
+  ok  oversized or failed document reads preserve the tree and explain the degradation
+  ok  workspace change immediately removes the previous workspace content
+  ok  Specs auto-reloads for the new workspace generation
+  ok  focused conversation scope changes clear the previous tree immediately
+  ok  focused conversation scope changes reload Specs from the backend
+  ok  a late document response cannot overwrite the new workspace
+  ok  leaving Specs disposes its listeners and in-flight work
+  ok  an empty project has a compact state and leaves chat DOM untouched
+Specs UI: 25/25; skipped=0
+  ok  changes surface is recorded for restore
+  ok  pane is open
+  ok  changes state has saved scroll
+  ok  changes state has diff view state
+  ok  browser surface is NOT recorded in restored surface
+  ok  writeRestoredSurface rejects browser
+  ok  specs surface is recorded for restore
+  ok  specs state has treeScroll and docScroll
+  ok  specs state has selectedPath
+  ok  closing pane clears restored surface
+  ok  pre-switch changes state exists
+  ok  session switch automatically clears changes pane state
+  ok  workspace generation automatically clears restored surface
+  ok  workspace generation automatically clears specs pane state
+Panel restore UI: 14/14 passed
+
+> pi-gui@0.30.1 test:diff-comments
+> node tests/diff-comments.cjs && node tests/diff-comments-ui.cjs && node tests/diff-comments-split.cjs && node tests/diff-comment-ranges.cjs && node tests/diff-comment-ranges-ui.cjs && npm run test:review-tasks
+
+
+--- Unified Diff 行号 ---
+  ok   context rows keep both old and new line numbers
+  ok   deleted rows expose only the old line number
+  ok   added rows expose only the new line number
+  ok   line numbers continue past the first hunk
+  ok   hunk headers and code stay byte-for-byte visible
+  ok   every rendered code row has a keyboard-accessible gutter
+  ok   pure additions start at new line 1 with no invented old line
+  ok   pure deletions keep old line numbers and no new line
+  ok   CRLF diffs render canonical rows and do not leak carriage returns
+  ok   no-newline markers never receive a synthetic comment anchor
+  ok   malformed hunk headers fail closed and produce no comment anchors
+  ok   non-commentable callers keep the legacy diff shape
+  ok   hostile file names and code remain inert text
+  ok   hostile hunk text is not serialized into an HTML attribute
+
+--- 指纹 ---
+  ok   changing only context depth preserves the diff fingerprint
+  ok   changing a changed line changes the fingerprint
+  ok   line hashes are stable and distinguish code text
+  ok   diff counts still match the existing +N/-N contract
+
+--- 评论作用域与锚点 ---
+  ok   scope identity includes the workspace and classic session
+  ok   empty comments are rejected
+  ok   a comment is stored in the current scope
+  ok   one line can only hold one comment
+  ok   a stale comment still blocks a new comment on the same line
+  ok   position identity ignores the code hash but keeps path/section/line
+  ok   line identity includes the project-relative path
+  ok   comments in different files do not collide
+  ok   comments can be edited in place
+  ok   unchanged diffs keep the comment live after refresh
+  ok   a visible context row is verified
+  ok   a hidden context row keeps the comment but marks it unverified
+  ok   an unverified comment never reports the position as valid
+  ok   a reappearing context row becomes verified again
+  ok   beginReviewRefresh marks every anchor unverified before the next render
+  ok   a context row missing from a changed diff goes stale instead of unverified
+  ok   an unverified comment still blocks the same line
+  ok   a truncated diff leaves both validity and staleness unproven
+  ok   a changed diff marks an unrecoverable anchor stale instead of rebinding it
+  ok   comments for files removed from status become stale without being deleted
+  ok   a focused conversation gets its own empty comment scope
+  ok   workspace B comments cannot be addressed through workspace A scope
+  ok   scope reads do not evict an existing comment bucket
+  ok   a full scope table refuses a new scope instead of dropping comments
+  ok   the oldest comment survives the refused overflow
+
+--- 边界与反馈 ---
+  ok   comment count is bounded per scope
+  ok   per-comment text length is bounded
+  ok   deleted comments disappear from the scope
+  ok   feedback includes path, section, line, snippet and stale state
+  ok   feedback is deterministic for the same comments
+  ok   feedback truncates at the configured bound
+  ok   feedback never embeds absolute workspace paths
+  ok   feedback ignores unrelated scopes
+
+Diff comments: 51/51
+  ok   Changes renders real add rows with new line numbers
+  ok   clicking a gutter opens an inline textarea without collapsing the diff
+  ok   saving a comment closes the editor and marks the row
+  ok   saving does not auto-send into the chat composer
+  ok   comment is stored only in the current review scope
+  ok   a failed save keeps the actual editor text and confirmed comment unchanged
+  ok   a revision conflict leaves the draft visible with an explicit error
+  ok   explicit reload preserves the editor draft for the user to decide
+  ok   an unacknowledged save stays pending without closing the editor
+  ok   only the acknowledged retry closes the editor and retains the marker
+  ok   failed deletion keeps both confirmed comment and editor available
+  ok   collapsing the diff preserves the comment
+  ok   reopening the same diff restores the comment marker
+  ok   one file can hold multiple line comments
+  ok   an existing comment can be edited
+  ok   a comment can be deleted
+  ok   cancel discards the unsaved editor text
+  ok   review summary groups comments and exposes a feedback preview
+  ok   copy exports bounded plain-text feedback
+  ok   fill appends to the existing classic draft instead of overwriting it
+  ok   fill only targets the focused classic composer
+  ok   refresh preserves an unsaved draft on the same anchor
+  ok   a changed diff marks the old anchor stale instead of rebinding it
+  ok   stale comments stay visible and copyable in the summary
+  ok   a failed diff request degrades inside the panel without dropping the comment scope
+  ok   a truncated diff explains that comment anchors are unproven
+  ok   a truncated diff leaves the previous stale verdict untouched
+  ok   staged and working diffs are labelled with a fixed section value
+  ok   a comment on the staged section does not mark the working row
+  ok   editing from the summary opens the editor in the matching section
+  ok   deleting the staged comment leaves the working comment intact
+  ok   switching focused conversations replaces the file list and hides A comments
+  ok   switching scope drops the unsaved editor of the previous scope
+  ok   the discarded draft is not resurrected on returning to that scope
+  ok   switching back to the classic scope restores only its own comments
+  ok   classic sessions get their own comment scope
+  ok   a session switch closes the old editor synchronously
+  ok   a session switch disables the old diff gutters until the new scope is painted
+  ok   a stale gutter or save button cannot open an editor in the switch window
+  ok   the unsaved classic draft was discarded, not stored
+  ok   a classic session switch removes the previous review counts immediately
+  ok   a classic session switch clears the previous session editor and comments
+  ok   a detached old Save cannot write after the next session has fully recovered
+  ok   closing and reopening the panel keeps saved comments but drops the draft
+  ok   a late status response cannot repaint the newer scope
+  ok   closing a panel while saving never resurrects its editor after the acknowledgement
+  ok   a mount status redraw preserves the pending open on a connected row
+  ok   reopening after a pending save exposes the confirmed comment without restoring its draft
+  ok   opening Browser closes the Changes surface without touching chat draft
+  ok   a workspace generation change clears the old Changes DOM
+  ok   fill refuses when the page is not on a conversation view
+
+Diff comments UI: 51/51
+  ok  the Changes pane inside the split exposes commentable diff rows
+  ok  the inline editor opens inside the split pane, not as a dialog
+  ok  a comment is saved to the focused scope from the split pane
+  ok  resizing the split keeps the comment marker and the expanded diff
+  ok  switching Specs documents keeps the Changes comment visible
+  ok  the review summary works from the split Changes header
+  ok  switching the focused conversation hides A comments in the split
+  ok  returning to A restores only its own comment
+  ok  repeated split open/close does not accumulate document or window listeners (none)
+  ok  comments remain in the scope after the split is disposed and reopened
+Diff comments in split: 10/10
+  ok complete mixed hunk explicitly permits ranges
+  ok mixed range carries every old/new coordinate without invented numbers
+  ok reverse selection produces the same anchor
+  ok range feedback describes both accurate file sides
+  ok pure addition and deletion have one-sided range labels
+  ok CRLF and no-newline markers preserve only real code rows
+  ok incomplete hunk cannot create a range
+  ok overflow hunk cannot create a range
+  ok invalid hunk cannot create a range
+  ok zero hunk cannot create a range
+  ok truncated/binary rendering yields no selectable rows
+  ok range rejects hunk, section, file and coordinate discontinuities
+  ok 20 row cap and distinct endpoints are enforced
+  ok rename metadata does not become selectable code
+  ok range wire roundtrips with a closed versioned hash-only schema
+  ok old single-line wire still validates unchanged
+  ok malicious and oversized range evidence fails closed
+  ok overlapping ranges are rejected but a single line may coexist
+  ok restored ranges need fresh evidence
+  ok whole ordered evidence confirms the range
+  ok changing an interior line invalidates unchanged endpoints
+  ok similar content at different coordinates never attracts the range
+  ok missing only context with unchanged fingerprint remains pending
+  ok same-position changed context is stale, not hidden
+  ok ambiguous duplicated evidence is stale
+  ok partial Diff cannot claim confirmation
+  ok hidden context uses the last fully confirmed fingerprint after unrelated changes
+  ok missing changed rows never masquerade as hidden context
+  ok feedback keeps stale range text and both sides
+Diff comment ranges: 29/29; failed=0; skipped=0
+  ok Shift click selects five code rows with a lightweight action
+  ok selection does not overwrite a single-line draft
+  ok selected gutters expose an accessible pressed state
+  ok range editor keeps the other draft and receives focus
+  ok a blank range editor and its focus survive an asynchronous list refresh
+  ok failed range save preserves both drafts
+  ok range saves once and leaves the single-line draft intact
+  ok every selected row receives a saved range marker background
+  ok single line and range can share their first coordinate
+  ok overlapping range refuses saving with an explicit error
+  ok refresh restores a valid range draft and retains its full anchor
+  ok editing from range marker updates only that comment
+  ok Shift Enter offers the same keyboard range
+  ok Esc cancels selection without closing existing editor or panel
+  ok summary includes range and single line feedback
+  ok fill appends without sending or changing user draft prefix
+  ok interior changes mark range stale while its single remains live
+  ok an older detached Diff response cannot revalidate a changed range
+  ok an older detached response cannot clear newer confirmation evidence
+  ok stale ranges remain deletable from summary
+  ok oversized selection is refused with a live explanation
+  ok cross-section Shift click cannot create a range
+Diff range UI: 22/22; failed=0; skipped=0
+
+> pi-gui@0.30.1 test:review-tasks
+> node tests/review-task.cjs && node tests/review-task-ui.cjs
+
+  ok empty selection is refused
+  ok multiple files and mixed sections retain all distinct opinions
+  ok single context shows accurate old and new coordinates
+  ok overlapping single and range are not deduplicated
+  ok deletion has no invented new coordinate
+  ok pure addition has no invented old coordinate
+  ok range uses both exact sides
+  ok multiple ranges remain independent
+  ok mixed additions and deletions describe exact sides and Diff row count
+  ok pending evidence cannot be selected
+  ok stale evidence cannot be selected
+  ok unknown verification fails closed
+  ok foreign scope cannot be selected
+  ok missing and duplicate IDs are refused
+  ok identity or storage unavailable is refused
+  ok capacity rejects without silently truncating
+  ok fresh preview validates
+  ok edited comment invalidates even with unchanged timestamp
+  ok deleted comment invalidates
+  ok revalidated equal evidence invalidates by generation
+  ok storage revision and workspace generation invalidate
+  ok different project and session invalidate
+  ok untrusted path and every opinion line are JSON quoted data
+  ok task distinguishes preview from a patch and permission isolation
+  ok formatting never mutates original data
+Review task model: 25/25; failed=0; skipped=0
+  ok default selects verified single and range only
+  ok unverified reasons and original opinions remain visible as inert text
+  ok selected counts are explicit
+  ok toggle retains keyboard focus and updates count
+  ok preview contains exactly selected range
+  ok preview receives focus and distinguishes real workspace risk
+  ok last visible preview control wraps Tab to the visible first action
+  ok Shift Tab wraps back to the visible preview instead of hidden controls
+  ok back retains selection
+  ok empty selection disables preview
+  ok select all excludes stale and pending
+  ok per-file selection can deselect
+  ok copy produces complete task without writes
+  ok selection and preview never change saved records
+  ok editing invalidates and clears the old preview
+  ok regeneration uses edited content
+  ok unchanged Diff revalidation still invalidates
+  ok refresh invalidates before a slow status response
+  ok pending refresh cannot regenerate from the previous Diff
+  ok late confirmation cannot bypass an in-flight Diff evidence read
+  ok deletion invalidates old preview
+  ok same-turn evidence and change keep the selection list usable
+  ok unavailable composer refuses fill with reason
+  ok fill appends preserving exact draft without sending
+  ok focus switch synchronously closes old task
+  ok detached old fill cannot write another conversation
+  ok workspace event immediately closes preview
+  ok session switch immediately closes preview
+  ok repeated open and close release every review listener
+  ok unavailable storage prevents task submission and explains why
+  ok empty review list cannot generate task
+  ok runtime preview names its actual Worktree
+  ok runtime fill uses focused draft owner and persists append
+  ok owner replacement without a scope event rejects copy
+  ok runtime A preview cannot fill B and B keeps its own draft
+  ok full interaction never posts agent or comment writes
+Review task UI: 36/36; failed=0; skipped=0
+
+> pi-gui@0.30.1 test:review-comments
+> node tests/review-comment-store.cjs && node tests/review-comment-authority.cjs && node tests/review-comment-runtime.cjs && node tests/review-comment-http.cjs && node tests/review-comment-persistence-ui.cjs && node tests/review-comment-ranges-store.cjs
+
+  ok reading an absent scope is empty without creating a storage directory
+  ok confirmed save is readable from a new store instance
+  ok disk format has an explicit version and contains no absolute workspace path
+  ok editing survives another store restart
+  ok deleting persists a tombstone revision and never resurrects through an old write
+  ok other scopes cannot see the saved records
+  ok two store instances cannot silently overwrite a newer disk revision
+  ok invalid disk 0 is preserved and blocks empty overwrite
+  ok invalid disk 1 is preserved and blocks empty overwrite
+  ok invalid disk 2 is preserved and blocks empty overwrite
+  ok invalid disk 3 is preserved and blocks empty overwrite
+  ok invalid disk 4 is preserved and blocks empty overwrite
+  ok invalid disk 5 is preserved and blocks empty overwrite
+  ok invalid disk 6 is preserved and blocks empty overwrite
+  ok truncated/malicious/oversized disk remains untouched
+  ok truncated/malicious/oversized disk remains untouched
+  ok truncated/malicious/oversized disk remains untouched
+  ok truncated/malicious/oversized disk remains untouched
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok invalid mutation cannot alter last valid data
+  ok duplicate ids and duplicate line positions are rejected
+  ok scope keys cannot select arbitrary filenames
+  ok comment capacity refuses an oversized snapshot
+  ok storage inside a project is refused before creating directories
+  ok all registered project roots protect application storage
+  ok atomic replacement failure EACCES preserves valid file and cleans owned temp
+  ok atomic replacement failure EPERM preserves valid file and cleans owned temp
+  ok atomic replacement failure ENOSPC preserves valid file and cleans owned temp
+  ok write interruption before commit preserves the previous valid revision
+  ok exclusive transaction rejects another writer and retains abandoned locks
+  ok a stale owner cannot commit after temp data was flushed
+  ok hardlinked data files cannot cause source code replacement
+  ok junction/symlink storage roots are rejected
+  ok a replaced storage directory does not receive old writes
+  ok a junction in the data-directory ancestry is refused
+  ok directory replacement after flushing cannot redirect the commit
+  ok scope capacity includes empty revision tombstones and never evicts data
+  ok malformed UTF-8 is corruption rather than silently rewritten replacement characters
+  ok real Windows occupied target refuses replacement and preserves the last commit
+  ok release of the occupied file permits a subsequent confirmed write
+Review comment store: 49/49; skipped=0
+  ok classic scope comes from private state and a verified native session
+  ok backend restart changes request token but preserves permanent scope
+  ok client cannot choose another native session or owner
+  ok missing owner is refused even without a parallel runtime
+  ok additional owner fields do not become authority
+  ok classic requests are refused while a parallel conversation is focused
+  ok a native session without recoverable disk identity is refused
+  ok a late operation is invalidated by workspace generation change
+  ok conversation scope uses durable registry identity
+  ok forged conversation ids cannot fall back to classic data
+  ok another focused conversation invalidates the requested scope
+  ok a stale runtime owner is refused
+  ok session readback must match the registered session
+  ok a new workspace epoch cannot recover the old comment scope
+  ok workspace replacement at the same path changes the permanent scope
+Review comment authority: 15/15; skipped=0
+  ok real linked worktrees share a repository but have separate comment identities
+  ok an unfocused real registry conversation cannot read its old comments
+  ok persisted conversation restores the same scope after manager/registry recreation
+  ok restored Worktree v2 contains both original single and range evidence
+  ok the old owner guard is invalid after backend recreation
+  ok the main workspace cannot inherit a linked worktree comment
+  ok archiving a registered worktree blocks restoration rather than rebinding
+  ok identity checks issue only private get_state requests
+Review comment runtime: 8/8; skipped=0
+  ok router authenticates reads before resolving any scope
+  ok cross-origin writes are denied by the existing auth boundary
+  ok GET returns a backend-issued scope and revision
+  ok caller cannot supply another conversation authority
+  ok POST persists bounded comments and returns the committed revision
+  ok unknown request fields cannot expand file or session authority
+  ok unknown request fields cannot expand file or session authority
+  ok unknown request fields cannot expand file or session authority
+  ok unknown request fields cannot expand file or session authority
+  ok unknown request fields cannot expand file or session authority
+  ok forged permanent scope and stale context tokens are refused
+  ok revision conflicts do not delete confirmed comments
+  ok malformed and oversized JSON are bounded and never echoed
+  ok malformed UTF-8 cannot silently alter a submitted comment
+  ok authenticated range roundtrip preserves the single and rejects forged row evidence
+  ok switching scope cannot read or delete the previous scope
+  ok corrupt storage is reported without echoing comments or overwriting original data
+  ok unsupported methods never create files
+Review comment HTTP: 18/18; skipped=0
+  ok lazy restore reports loading before accepting current scope
+  ok save waits for durable acknowledgement before changing saved comments
+  ok outbound payload contains bounded metadata rather than code snippets or UI scope
+  ok restore never claims the old anchor is already verified
+  ok a failed edit preserves the last saved comment
+  ok explicit reload and retry saves the edited content
+  ok revision conflict is explicit and never last-write-wins
+  ok confirmed delete remains absent after reloading
+  ok late loading response cannot land after switching conversations
+  ok late save acknowledgement cannot change the next conversation
+  ok project and classic session invalidation stops old responses
+  ok corrupt storage is unavailable and does not issue writes
+  ok owner replacement without a scope event releases a pending load for explicit retry
+  ok owner replacement releases pending save without accepting the old acknowledgement
+  ok the coordinator never uses localStorage or sends Agent commands
+  ok range write confirmation obeys the same old-response owner barrier
+Review comment persistence UI: 16/16; skipped=0
+  ok reading v1 leaves bytes and revision unchanged
+  ok adding range atomically upgrades v1 while preserving original singles
+  ok v2 survives a store restart and retains the original scope key
+  ok an old instance with v1 revision cannot overwrite the upgrade
+  ok editing v1 and range together preserves anchors and ids
+  ok deleting range retains v2 and old single
+  ok deleting all preserves v2 revision tombstone
+  ok write failure preserves exact v1 bytes and allows explicit retry
+  ok flush failure preserves exact v1 bytes and allows explicit retry
+  ok rename failure preserves exact v1 bytes and allows explicit retry
+  ok upgrade holds the same cross-instance writer lock
+  ok future refuses read and overwrite, preserves original
+  ok v1 range refuses read and overwrite, preserves original
+  ok unknown range version refuses read and overwrite, preserves original
+  ok source leakage refuses read and overwrite, preserves original
+  ok corrupt v2 bytes remain intact
+  ok same data root still isolates authoritative scope keys
+Review range storage: 17/17; failed=0; skipped=0
+  ok  split ratio helpers clamp persisted values and pointer positions
+  ok  a single Changes panel can switch to split without a second source of Git state
+  ok  exiting split restores the originating single-panel mode
+  ok  the split entry in the single Specs header opens the same workbench
+  ok  Specs and Changes mount together in one workbench instance
+  ok  split mode exposes a real horizontal separator and independent headers
+  ok  changing the selected Specs document leaves the expanded diff untouched
+  ok  refreshing Changes keeps the selected Specs document
+  ok  refreshing Specs keeps the Changes diff expanded
+  ok  keyboard adjusts the split ratio and persists it
+  ok  double-click restores the default split ratio
+  ok  Home and End keep both panes above their minimum heights
+  ok  mouse drag changes the split ratio without rebuilding either child
+  ok  ratio survives reopening while document content is not persisted
+  ok  short workbenches fall back to one visible panel instead of compressing both
+  ok  fallback tabs switch panels and retain both live child instances
+  ok  growing the window restores the two-pane layout with state intact
+  ok  growing out of fallback moves focus from the hidden mode bar to the splitter
+  ok  720px windows fall back without changing right-pane width or chat draft
+  ok  restoring width resumes both panels
+  ok  a Specs failure keeps the Changes state usable
+  ok  a Changes failure degrades independently without clearing Specs
+  ok  workspace generation changes immediately remove both old panes from view
+  ok  a late old-scope Changes response cannot overwrite the new workbench scope
+  ok  late document and diff responses cannot display A in focused B
+  ok  switching to Browser disposes the workbench without touching the chat draft
+  ok  entering fallback moves focus out of the now-hidden pane
+  ok  shrinking while splitter is focused transfers focus to a visible fallback tab
+  ok  repeated open/close releases split observers and leaves the right pane empty
+  ok  repeated open/close leaves no split scope, resize or drag listeners behind
+Split workbench UI: 30/30; skipped=0
+
+> pi-gui@0.30.1 test:browser-workbench
+> node tests/browser-workbench-ui.cjs && node tests/browser-viewport-safety.cjs
+
+PASS single Browser opens with one state subscription
+PASS Browser offers controlled split entry
+PASS Browser and Changes mount together
+PASS layout transition keeps same Browser chrome and current URL
+PASS right pane delivers Browser viewport rather than whole workbench
+PASS fallback Changes truly occludes hidden native Browser
+PASS fallback Browser restores viewport after measuring
+PASS ending drag cannot clear modal occlusion
+PASS closing modal reveals correctly scoped viewport
+PASS interrupted width drag releases native occlusion without mouseup
+PASS exit split restores same Browser without native close
+PASS twenty layout transitions keep one instance/subscription
+PASS classic project change closes old browser and workbench
+PASS closing workbench releases browser instance and listeners
+Browser workbench UI: 14/14
+✔ open creates a live but detached page until valid geometry arrives (4.7242ms)
+✔ CSS geometry becomes DIP exactly once at zoom 1 (0.9146ms)
+✔ CSS geometry becomes DIP exactly once at zoom 1.25 (1.1367ms)
+✔ CSS geometry becomes DIP exactly once at zoom 0.8 (0.6252ms)
+✔ syncBounds reads current GUI zoom from retained CSS geometry (0.6497ms)
+✔ NaN in x detaches instead of clamping invalid input into a page (0.6304ms)
+✔ NaN in y detaches instead of clamping invalid input into a page (0.5493ms)
+✔ NaN in width detaches instead of clamping invalid input into a page (0.4852ms)
+✔ NaN in height detaches instead of clamping invalid input into a page (0.6058ms)
+✔ positive infinity in x detaches instead of clamping invalid input into a page (0.4977ms)
+✔ positive infinity in y detaches instead of clamping invalid input into a page (0.4382ms)
+✔ positive infinity in width detaches instead of clamping invalid input into a page (0.4347ms)
+✔ positive infinity in height detaches instead of clamping invalid input into a page (0.3958ms)
+✔ negative infinity in x detaches instead of clamping invalid input into a page (0.3984ms)
+✔ negative infinity in y detaches instead of clamping invalid input into a page (0.4007ms)
+✔ negative infinity in width detaches instead of clamping invalid input into a page (0.4265ms)
+✔ negative infinity in height detaches instead of clamping invalid input into a page (0.441ms)
+✔ width=0 leaves no usable native rectangle (0.5108ms)
+✔ height=0 leaves no usable native rectangle (0.62ms)
+✔ width=-1 leaves no usable native rectangle (0.4077ms)
+✔ height=-1 leaves no usable native rectangle (0.8289ms)
+✔ width=0.01 leaves no usable native rectangle (0.4491ms)
+✔ negative origins and oversize dimensions retain client-area clamping after zoom (0.481ms)
+✔ fully outside or zero-size client area detaches the native view (0.5799ms)
+✔ invalid GUI zoom 0 detaches fail-closed (0.3982ms)
+✔ invalid GUI zoom NaN detaches fail-closed (0.3944ms)
+✔ invalid GUI zoom Infinity detaches fail-closed (0.397ms)
+✔ invalid GUI zoom -1 detaches fail-closed (0.3769ms)
+✔ occlusion invalidates old geometry; unocclusion and open cannot reuse it (0.4812ms)
+✔ occluded geometry updates stay detached and apply latest bounds before add (0.8911ms)
+✔ invalid geometry while occluded cannot restore the previous valid bounds (1.0414ms)
+✔ background visibility never exposes a view (0.8062ms)
+✔ close clears the previous rectangle even when the next view is opened (0.448ms)
+✔ IPC open, bounds and occlusion use the same guarded geometry path (0.6048ms)
+✔ 20 open, relocate and close cycles leave no native views or live pages (1.2358ms)
+✔ geometry does not change navigation, session isolation or lifecycle semantics (1.0294ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 33.7311
+PASS switching blocks actual send and mirrors disabled state
+PASS modelSwitchPending blocks actual send and mirrors disabled state
+PASS submitting blocks actual send and mirrors disabled state
+PASS stopping blocks actual send and mirrors disabled state
+PASS fallbackActive blocks actual send and mirrors disabled state
+PASS no project cannot send
+PASS bridge not ready cannot send
+PASS ready text sends without changing draft
+PASS empty composer disabled
+PASS attachment send policy distinguishes pending and failed: load
+PASS attachment send policy distinguishes pending and failed: err
+PASS all attachments render without content mutation
+PASS explicit states distinguish ready/loading/error/unreadable
+PASS thumbnail and size shown, long filename retains full path
+PASS untrusted name and error are inert text
+PASS loading exposes busy state and truncation stays explicit
+PASS image capability ["text"]
+PASS image capability ["text","image"]
+PASS image capability null
+PASS presentation preserves message and image wire format
+PASS async redraw retains focused removal button
+PASS remove transfers focus and removes only selected file
+PASS last removal returns focus to attach control
+PASS zero file size is real while missing file size stays hidden
+PASS actual upload pipeline exposes loading without changing file body
+PASS actual extraction result exposes truncation and original text
+PASS actual failed extraction never presents success
+PASS actual file selection obeys image capability false
+PASS long input caps at 184px
+PASS short viewport caps at 24vh
+PASS input shrinks after text removal
+PASS single measured reserved height
+PASS side pane width change recalculates input height
+PASS window resize refreshes reservation and preserves draft
+UI3 Composer: 34/34, failed=0, skipped=0
+  ok  视图模块导出契约完整
+  ok  模块写法能被 esm-bundle 链接器接受
+  ok  thinkingAvailability 区分五种状态，不把它们压成一句
+  ok  Pi 的实时档位优先于静态 reasoning=false
+  ok  只有 off 的清单视为不可用
+  ok  能力未知不显示成不支持
+  ok  明确 false 与 unknown 在能力行里是不同的值
+  ok  Runtime 标签能分辨同名不同 Provider 的模型
+  ok  按 Provider 分组且顺序与来源一致
+  ok  每个 Provider 的模型数量准确
+  ok  模型条目总数等于列表长度
+  ok  当前 Provider 默认展开、其余收起
+  ok  组头是原生按钮且 aria-controls 指向自己的容器
+  ok  身份行显示 Provider/modelId
+  ok  当前模型恰好一个选中项
+  ok  两个 Provider 的同名模型只有真正当前的那个被选中
+  ok  当前组被强制展开，用户折叠记忆不掩盖当前位置
+  ok  选择后回调带 Provider + modelId，且只触发一次
+  ok  选择后弹层关闭
+  ok  视图模块自身不发 RPC，也不 import 任何传输层
+  ok  400+ 模型与超长名不抛错且计数正确
+  ok  模型搜索按名称、ID、Provider过滤，清空后恢复折叠记忆
+  ok  模型搜索 ArrowDown 进入匹配项，Enter 不擅自选择
+  ok  无匹配时 ArrowDown 保留搜索焦点，Escape 返回真实触发器
+  ok  长名写入 textContent，不产生元素注入
+  ok  消失的 Provider 不保留折叠记忆
+  ok  展开组内 ↑↓ 在可见项之间移动
+  ok  漫游跳过折叠起来的条目
+  ok  End / Home 跳到首末
+  ok  ↑ 从首项回绕到末项
+  ok  roving tabindex：只有一个停靠点
+  ok  → / ← 折叠展开 Provider，焦点留在组头
+  ok  键盘 Enter 走原生按钮行为，回调仍只触发一次
+  ok  Escape 关闭并把焦点还给触发按钮
+  ok  可用档位按 Pi 返回原样渲染，不加也不减
+  ok  不存在的档位不会凭空出现（不硬编码 off..max）
+  ok  档位说明来自展示文案，未知档位不编造说明
+  ok  推理能力 false：明确不可用，档位画出来但不可点
+  ok  推理能力 unknown：不显示成已支持
+  ok  Pi 没给档位：说明是「没给」而不是「不支持」
+  ok  pending 优先于其它一切判断
+  ok  pending 时点击档位不产生回调
+  ok  可用时选档位回调一次并关闭
+  ok  可用时不画状态行（「有 3 档」不是信息）
+  ok  Thinking 弹层不套 model-mode（不受模型高度钳制）
+  ok  pending 期间选中态只反映调用方传入的 current，且条目不可点
+  ok  无乐观选择：点击后视图不自己改选中态
+  ok  设置失败后回读纠正：视图只反映传入的 current
+  ok  空列表 + 无当前模型不抛错
+  ok  非字符串 / 重复档位被过滤，不污染渲染
+  ok  空模型列表不抛错
+  ok  applyChipState 写 data-ui3-state，清空时移除属性
+  ok  弹层沿用既有 ID 契约，未另建一套全局弹层
+
+UI-3B 模型选择器: 53/53 通过
+
+--- 1. 输入 `/` 打开全部可执行命令 ---
+  ok  行首 `/` 打开菜单，候选 = allCommands({query:""})
+  ok  前导空白的行首也能触发
+  ok  换行后的行首能触发（多行输入）
+  ok  失去命令前缀后自动关闭
+
+--- 2. 输入 `/query` 实时筛选 ---
+  ok  `/al` 只留 alpha；`/zzz` 无候选
+  ok  无候选展示明确空状态
+  ok  有候选时空状态隐藏
+
+--- 3. URL 与路径不误触发 ---
+  ok  https URL 不触发菜单
+  ok  scheme 后斜杠 不触发菜单
+  ok  Windows 绝对路径 不触发菜单
+  ok  普通正文里的斜杠 不触发菜单
+  ok  行内（非行首）斜杠 不触发菜单
+  ok  行首 POSIX 路径：第二个 `/` 立即关闭且从不执行
+  ok  parseSlashTrigger 直接判据
+
+--- 4. 仅展示 when(ctx) 可执行的命令 ---
+  ok  when 为假不进候选，为真才进
+  ok  与独立 Palette 用同一份 when 判定
+
+--- 5. ArrowUp / ArrowDown 移动活动项 ---
+  ok  ArrowDown/Up 移动并 preventDefault，且不发送消息
+  ok  环形移动（首尾相接）
+
+--- 6. Enter / Tab 接受当前命令 ---
+  ok  Enter 执行选中命令、清理输入片段、关闭菜单
+  ok  Tab 也接受（契约规定适用时）
+  ok  Shift+Tab 不接受（保留给反向焦点）
+
+--- 7. Escape 只关闭菜单，不触发 stop ---
+  ok  Escape 关闭菜单、不执行命令、不触发既有 Escape(stop)
+  ok  菜单没开时 Escape 照常走既有行为
+
+--- 8. 中文输入法 composition 不误确认 ---
+  ok  composition 期间不触发；compositionend 后再判断
+  ok  isComposing 的 Enter 不被接受（交给输入法上屏）
+  ok  keyCode 229（IME 占位键）不被接受
+
+--- 9. Enter 不会同时执行命令并发送聊天 ---
+  ok  一次 Enter：命令执行 1 次、聊天发送 0 次
+  ok  Shift+Enter 不执行命令（交给 Composer 换行）
+  ok  菜单关闭后 Enter 仍是原有发送行为
+
+--- 10. 独立命令面板完整保留 ---
+  ok  palette.openPalette() 仍能打开、内容来自同一注册表
+
+--- 11. 项目 / 会话切换关闭菜单并清上下文 ---
+  ok  pi-gui:workspace-generation 事件关闭菜单
+  ok  关闭后不会用旧候选在新上下文执行
+
+--- 11b. session-switch / workspace-view 生命周期 ---
+  ok  pi-gui:session-switch 关闭菜单（同一 workspaceGeneration 内）
+  ok  会话切换后旧候选不能被执行、不发 RPC
+  ok  workspace-view 离开 Chat（planner/runtime/extensions）时关闭
+  ok  返回 Chat（workspace-view detail=chat）不自动弹出
+
+--- 12/13. 过期与未知候选不可执行、不发伪造指令 ---
+  ok  打开后命令变得不可用 → 接受时按 when 重新判定，不执行
+  ok  候选 id 从注册表消失（未知命令）→ 不执行、不发 RPC
+  ok  模块从不调用 fetch / 不拼 RPC（只调 cmd.run）
+
+--- 可访问性契约 ---
+  ok  listbox / option / aria-expanded / aria-activedescendant
+  ok  候选行显示名称 / 分组 / 快捷键提示
+  ok  鼠标点击候选执行
+
+--- 14. destroy 后无重复监听 / 无残留 DOM ---
+  ok  destroy 移除 DOM、监听与 aria；重挂后不重复
+  ok  ensureStylesheet 幂等且指向 ui3-inline-commands.css
+  ok  生命周期监听随 destroy 解绑、重挂不重复绑定
+
+--- 15. 样式表类名契约（排版证据见 Electron 截图） ---
+  ok  CSS 含约定类名与 reduced-motion 分支
+
+46/46 通过
+PASS production styles loaded once each
+PASS production input opens real registered slash candidate
+PASS Enter runs exactly once, consumes command token, no send
+PASS command removes only token and preserves surrounding draft
+PASS Escape closes slash without abort or losing draft
+PASS IME ordinary Enter guarded {"isComposing":true}
+PASS IME ordinary Enter guarded {"keyCode":229}
+PASS composition lifecycle closes menu and prevents submit
+PASS Ctrl+K target opens independent panel with slash closed
+PASS lifecycle pi-gui:session-switch preserves draft and closes menu
+PASS lifecycle pi-gui:workspace-view preserves draft and closes menu
+PASS lifecycle pi-gui:workspace-view preserves draft and closes menu
+PASS production model view selects only matching Provider identity
+PASS unavailable Thinking explanation reachable: unsupported
+PASS explanation Escape restores actual trigger focus: unsupported
+PASS unavailable Thinking explanation reachable: unknown
+PASS explanation Escape restores actual trigger focus: unknown
+PASS unavailable Thinking explanation reachable: unavailable
+PASS explanation Escape restores actual trigger focus: unavailable
+PASS pending explanation cannot enable selection or send
+PASS real returned levels enable existing button and hide explanation entry
+PASS readback closes obsolete pending explanation and restores enabled trigger
+PASS ordinary Enter reaches original submit exactly once
+UI3 integration 23/23; failed=0; skipped=0
+PASS message-specific metadata exists for three known usages
+PASS two assistant messages keep different input usage
+PASS missing usage stays absent despite global lastTurn
+PASS zero reasoning is distinct from unknown
+PASS all seven actual zero fields remain visible
+PASS global or inferred time never enters metadata
+PASS live final authoritative usage equals historical usage
+PASS live authoritative body replaces streamed draft
+PASS malformed usage cannot create numeric metadata
+PASS total is not invented by adding input/output
+PASS user and malformed array usage have no assistant metadata
+PASS tool-only usage does not resurrect empty assistant shell
+PASS tool-only tool entry is retained
+PASS pending update usage is not promoted to authoritative metadata
+PASS live tool-only final removes shell even with usage and streamed draft
+PASS thinking-only message keeps actual metadata
+PASS single tool has no duplicate batch title
+PASS real message boundary groups both tools once
+PASS batch summary is native keyboard button
+PASS multiple tools start collapsed without hiding their status summary
+PASS summary controls its unique ARIA list
+PASS batch can collapse without destroying tool nodes
+PASS running tools are discoverable while collapsed
+PASS failure stays discoverable while collapsed
+PASS provider cancellation error is not silently reclassified
+PASS status updates preserve chosen collapsed state
+PASS settled running tool becomes discoverable incomplete
+PASS batch expands same list and tool ids
+PASS collapsing transfers focus out of the hidden list
+PASS history uses same grouped status semantics
+PASS history uses same interactive batch summary
+PASS separate assistant and orphan boundaries are retained
+PASS orphan toolResult remains visible at its own position
+PASS explicit cancelled and interrupted presentation states survive collapse
+PASS late tool keeps chosen collapse state and increments real count
+PASS thinking exposes actual streaming state
+PASS thinking region has explicit accessible label
+PASS thinking end state comes from actual event
+PASS final authority reuses expanded thinking node
+PASS final thinking is complete without invented duration/token
+PASS interruption updates unfinished thinking state
+PASS error without final content retains thinking and marks its true state
+PASS error before the next animation frame preserves pending thinking text
+PASS owned cancellation remains neutral with real usage
+PASS unowned cancellation with error stays visible as error
+PASS error message preserves real zero metadata and safe text
+PASS retry removes error-only shell even with sibling metadata
+PASS untrusted message/thinking/tool text never becomes active HTML
+PASS untrusted usage cannot leak into metadata
+UI-2A Classic 49/49; failed=0; skipped=0; DOM/fixture, not layout evidence
+  ok  usage：没有有效数字就是 null（缺字段 ≠ 0）
+  ok  usage：真实 0 保留，缺的字段不出现
+  ok  usage 文案：只列有的字段，且**不带**货币符号（线上没有单位）
+  ok  usage 文案：流式中的数字标注「仍在累计」，不当终值
+  ok  usage 文案：一个数字都没有时是空串（整块隐藏）
+  ok  thinkingText：没有 thinking 块返回 null（与「空思考」区分开）
+  ok  thinkingText：多个 thinking 块按顺序拼接
+  ok  集成：负数/小数Token与负成本不是有效用量
+  ok  集成：真实零Token和非负小数成本仍保留
+  ok  A 显示自己的正文
+  ok  A 显示自己的 thinking 文本
+  ok  A 的思考块默认折叠（用户展开后不被流式收回）
+  ok  A 显示自己的工具与运行状态
+  ok  A 的状态行是自己的生命周期
+  ok  工具项之间只有空白文本节点（换成 flex+gap 时不会留下分隔符）
+  ok  B 显示自己的正文、工具与完成状态
+  ok  B 的思考是自己的，不与 A 混
+  ok  B 的状态行反映空闲（两会话状态确实不同）
+  ok  切到 B 后 A 的迟到 delta 不进 B 的 DOM
+  ok  切到 B 后 A 的迟到 thinking 不进 B 的思考块
+  ok  切回 A 看到自己的迟到正文与迟到思考
+  ok  重放同一 eventSequence 被拒（不重复追加）
+  ok  旧 runtimeGeneration 的迟到帧被拒
+  ok  流式 usage 显示，并标注仍在累计
+  ok  usage 文案不含货币符号与凭据
+  ok  message_end 的 thinking 是权威值（覆盖流式累积）
+  ok  message_end 的 usage 是终值（不再标「仍在累计」）
+  ok  usage 缺的字段不出现（没有缓存/推理这一轮）
+  ok  thinking 展示有界：字节数不超上限
+  ok  thinking 截断后不出现半个字符（无替换符）
+  ok  thinking 截断在标题里说明，不静默少显示
+  ok  正文超过 1MiB 上限后 store 标记截断
+  ok  正文截断时状态行说明「仅显示最近输出」
+  ok  正文展示同样有界（不绕过 store 的 1MiB 上限）
+  ok  停止带 A 的完整 owner
+  ok  关闭后回到已关闭并给出恢复入口
+  ok  关闭后控件按休眠态禁用
+  ok  关闭后正文与工具与 store 保持一致（store 保留，视图也保留）
+  ok  关闭后 thinking 与 usage 同样保留（与 store 的保留语义一致）
+  ok  关闭后审批被清掉（store 关掉时清 approvals）
+  ok  换代后不再显示上一个 runtime 的 thinking 与 usage（那是另一条运行）
+  ok  恢复后显示新 runtime 自己的正文与思考
+  ok  恢复后不残留上一个 runtime 的 usage
+  ok  旧代次的迟到正文与思考都不进新 runtime 的视图
+  ok  历史显示正文
+  ok  历史里没有 thinking（接口不提供，就不显示）
+  ok  历史里没有 usage（接口不提供，就不显示）
+  ok  历史里没有工具块（接口不提供，就不显示）
+  ok  历史状态行说明「只含正文」，用户知道为什么没有
+  ok  历史视图禁止发送
+  ok  历史消息缺字段时按空正文处理，不崩、不造内容
+  ok  A 的审批出现在 A 的视图里
+  ok  切到 B 显示 B 自己的审批
+  ok  捕获 A 的审批后切 B，应答仍只发给 A 的完整 owner
+  ok  A 的审批应答不清掉 B 自己的审批
+  ok  审批文本走 textContent（不可信标题不成为节点）
+  ok  不可信文本不产生任何注入节点
+  ok  不可信文本作为**文本**原样显示（不是被静默吞掉）
+  ok  工具名与审批标题同样只作为文本
+  ok  推理能力未知时，Thinking 控件禁用且明说「未知」（不猜成 false）
+  ok  能力未知不影响正文/思考展示（那是两件事）
+  ok  销毁前正常渲染
+  ok  销毁后 DOM 已摘除
+  ok  销毁后再来帧不抛异常、不重建 DOM
+  ok  外部传入的投影可用
+  ok  视图销毁后外部投影仍持有数据（所有权在外部）
+  ok  外部投影 dispose 后不再返回数据
+  ok  快照之前：G 有自己的 thinking 与 usage
+  ok  快照换代（不带帧）后不残留上一个 runtime 的 thinking 与 usage
+  ok  快照换代后新 runtime 的 thinking 正常进入
+  ok  切回 S1 恢复 S1 自己的滚动位置（不串到 S2）
+  ok  切回 S2 恢复 S2 自己的滚动位置
+  ok  近底 160 以内算贴底（跟随新内容）
+  ok  上滚超过 160 就不再跟随（视口归用户）
+  ok  恰好 160 边界不跟随（与 Classic 的 < 160 严格同一规则）
+  ok  投影只保留最近 N 条会话记录（有界内存）
+  ok  集成：流式用量明确为临时观察值
+  ok  集成：终值usage缺失时省略，不继续声称仍在累计
+  ok  集成：展示投影只读已接受的fixture记录
+  ok  集成：原位关闭仍保留本次已观察展示
+  ok  集成：后端换代同id dormant不继承旧thinking或usage
+  ok  集成：当前store记录已移除时读取不能返回残留展示
+Runtime display projection: 82/82
+夹具: http://127.0.0.1:5932/
+浏览器: C:/Program Files/Google/Chrome/Application/chrome.exe
+CDP: http://127.0.0.1:5933/
+CDP native prefers-reduced-motion: no-preference
+  截图: c1-thread-layout.png
+PASS C1 · 阅读轴变量解析为 760px
+PASS C1 · 输入框宽=正文轴（920/888 的 32px 历史差取消）
+PASS C1 · 正文字级=UI-1 prose 档（15px）且行高放宽到 1.8
+PASS C1 · 用户气泡 18px 圆角 + 端点内距 ≥16px（圆角不吃字）
+PASS C1 · 短气泡按内容收缩且贴正文右缘
+PASS C1 · 长气泡不超过阅读列 76%
+PASS C1 · 视口无横向溢出
+PASS C1 · 代码块 prt 圆角 8px + 1 hairline 框
+PASS C5 · 落场动画挂着（消息新进场的一次性 3px 上浮）
+PASS C2 · thinking 展开可见
+PASS C5 · 展开淡入（display:none→block 重播 animation，JS 零改动）
+  截图: c2-think-expanded.png
+  截图: c2-tool-running.png
+PASS C5 · 运行态呼吸保留（状态指示属必要动效）
+  截图: c2-tool-group.png
+PASS C2 · 连续调用收进一个 hairline 卡片（8px 圆角）
+PASS C2 · 行间用 1px 分隔线（替代左竖线列）
+PASS C2 · 行最小高度保持 30px 紧凑体量
+  截图: c2-tl-more-expanded.png
+PASS C2 · 工具详情展开态有内容高度
+PASS C5 · 工具详情展开走同一拍淡入
+PASS 预留 · .ui2-tool-summary 12px 次级色 + 120ms 过渡
+PASS 预留 · .ui2-chev 展开态旋转（与 .think-head 同构）
+PASS 预留 · .ui2-msg-meta 11.5px 弱化条
+PASS 预留 · .ui2-runtime-status[data-state=running] = running 语义色
+PASS 预留 · .ui2-runtime-meta 弱化小字
+PASS C3 · runtime 转录跟随正文字级（15px / 行高 ≥1.7）
+PASS C3 · runtime 会话跟随 760 阅读轴
+  截图: c3-reserved-probes.png
+PASS A · .ui2-tool-summary 原生 button 重置（无边框、透明底）
+PASS A · .ui2-tool-summary:focus-visible 存在 2px 焦点环规则
+PASS A · .ui2-tool-summary 折叠图标随 aria-expanded 旋转
+PASS A · .ui2-tool-state 组状态弱化小字（10.5px / t3）
+PASS A · .ui2-msg-meta-item 等宽数字对齐（tabular-nums）
+PASS A · .think[data-state=error] 状态文字用 err 色
+PASS B · .ui2-runtime-thinking-body 用 pre-wrap + overflow-wrap:anywhere
+PASS B · 长思考文本不产生容器横向滚动
+PASS B · .ui2-runtime-usage 弱化小字（11.5px / t3）
+PASS B · .ui2-runtime-tools 每项一行（flex 纵排）
+PASS B · .ui2-runtime-tool[data-state=running] = run 色
+PASS B · .ui2-runtime-tool[data-state=done] = ok 色
+PASS B · .ui2-runtime-tool[data-state=error] = err 色
+PASS B · 未知 data-state 不为任何真实状态着色（回落 t2）
+  截图: c6-ab-dom.png
+  截图: c4-width-700.png
+PASS C4 · 700px：视口无横向溢出
+PASS C4 · 700px：阅读列居中并收在轴内
+PASS C4 · 700px：长代码块内部滚动不出列
+PASS C4 · 700px：用户气泡仍在正文列内
+  截图: c4-width-900.png
+PASS C4 · 900px：视口无横向溢出
+PASS C4 · 900px：阅读列居中并收在轴内
+PASS C4 · 900px：长代码块内部滚动不出列
+PASS C4 · 900px：用户气泡仍在正文列内
+  截图: c4-width-1200.png
+PASS C4 · 1200px：视口无横向溢出
+PASS C4 · 1200px：阅读列居中并收在轴内
+PASS C4 · 1200px：长代码块内部滚动不出列
+PASS C4 · 1200px：用户气泡仍在正文列内
+  截图: c4-width-1536.png
+PASS C4 · 1536px：视口无横向溢出
+PASS C4 · 1536px：阅读列居中并收在轴内
+PASS C4 · 1536px：长代码块内部滚动不出列
+PASS C4 · 1536px：用户气泡仍在正文列内
+PASS C5 · reduced-motion：落场动画关闭
+PASS C5 · reduced-motion：展开淡入关闭（内容仍可直接显示）
+PASS C5 · 移除模拟后落场动画恢复
+  截图: c5-final.png
+
+UI-2C 视觉自检: 57/57 通过 —— 报告: C:\pi-GUI\.shots\ui2-visual\report.json
+ok desktop theme controller exists
+ok default stays dark even on light OS
+ok native initial window and overlay share background
+ok trusted preload receives only bounded snapshot fields
+ok fixed enum accepted light
+ok fixed enum accepted dark
+ok fixed enum accepted system
+ok invalid input rejected null
+ok invalid input rejected true
+ok invalid input rejected 1
+ok invalid input rejected {}
+ok invalid input rejected ["light"]
+ok invalid input rejected "Light"
+ok invalid input rejected "#fff"
+ok invalid input rejected "system "
+ok invalid input rejected "../../x"
+ok untrusted snapshot refused
+ok untrusted mutation cannot persist
+ok untrusted snapshot refused
+ok untrusted mutation cannot persist
+ok untrusted snapshot refused
+ok untrusted mutation cannot persist
+ok origin prefix spoof refused
+ok system OS update repaints native overlay
+ok explicit light ignores OS change
+ok restart restores preference before window creation
+ok dispose removes owned IPC and native listener
+ok corrupt preference defaults dark without overwriting file
+ok storage failure keeps display usable and reports persistence status
+ok blocking web initializer resolves dark/false
+ok blocking web initializer resolves light/true
+ok blocking web initializer resolves system/true
+ok blocking web initializer resolves system/false
+ok blocking web initializer resolves nonsense/false
+ok desktop startup authority wins over renderer storage
+ok real renderer System responds to media updates
+ok real renderer explicit light ignores media update and persists
+ok real renderer refuses invalid preference
+ok real renderer persistence failure reports memory-only display
+ok renderer unsubscribe releases listener
+ok renderer receives replay newer than initial snapshot
+ok late IPC response cannot overwrite newer system event
+ok stale preference request reports not applied
+ok preload opt-in avoids unknown synchronous channel false
+ok preload opt-in avoids unknown synchronous channel true
+ok preload caches event before module subscription and replays it
+ok preload ignores delayed event revision
+Theme display: 47/47; failed=0; fixture persistence and IPC; not layout evidence
+ok clean checkout creates missing evidence index directory
+ok retained evidence records append without overwriting
+ok D2 retained materials initialize on a clean checkout
+ok D3 durable retention also initializes a fresh directory
+ok unknown or escaping index names are refused
+ok successful failure indexing preserves original error identity
+ok index failure cannot mask original error or remove material
+Fixture retention: 7/7; failed=0; skipped=0; real TEMP filesystem, no Native writer
+ok bounded native owner synchronizer exists
+ok hello before registry binding waits for identity and ready
+ok already bound identity returns without arbitrary delay
+ok backendInstance change while waiting refuses
+ok projectId change while waiting refuses
+ok repoId change while waiting refuses
+ok workspaceId change while waiting refuses
+ok workspaceEpoch change while waiting refuses
+ok conversationId change while waiting refuses
+ok runtimeId change while waiting refuses
+ok runtimeGeneration change while waiting refuses
+ok native session changes during confirmation refuses
+ok foreign bound owner session is never replaced by state
+ok workspace root switch rejects same final owner
+ok workspace descriptor replacement rejects
+ok process exit during binding refuses
+ok runtime dispose during binding refuses
+ok missing identity times out without manufacturing an owner
+ok ready remains required after session binding
+ok duplicate hello validates current identity independently
+ok history session requires current generation and native readback
+ok generation change during first private read refuses
+ok disposal during confirmation cannot return identity
+Object session binding: 23/23; failed=0; skipped=0; layer=deterministic lifecycle DI; no model or writer
+PASS reproduce old two-plan assertion against legal cancellation
+PASS retain all three independently bound transactions
+PASS duplicate plan
+PASS wrong source
+PASS shared request
+PASS shared attempt
+PASS lost cancellation
+PASS wrong D
+PASS wrong R
+PASS wrong ready identity
+PASS intent mismatch
+PASS reproduce old cleanup masking original error
+PASS cleanup records all releases, remains idempotent, preserves original
+PASS failure retains frames without exception values paths payloads
+PASS persist initial HEAD refs index target bytes and identity before edits
+PASS later target edits preserve Git and identity exact comparison
+PASS changed workspace identity rejected
+PASS changed index rejected
+PASS initial snapshot cannot be overwritten
+{"passed":19,"failed":0,"skipped":0,"modelRequests":0,"credentialsRead":false,"layer":"offline-contract","realModel":"REAL_MODEL_RETEST_PENDING","root":"C:\\Users\\21022\\AppData\\Local\\Temp\\p33-D6final-contract-TnLBGi"}
+ok clean outputs
+ok exact caught optional canvas warning in stderr
+ok CRLF warning
+ok identical repeated known warning
+ok known warning cannot whitelist stdout
+ok unknown missing dependency
+ok wrong executable stack
+ok extra stack frame
+ok different caught exception
+ok malformed warning
+ok real stderr error alongside known warning
+ok real stdout error alongside known warning
+ok old throw detection retained
+ok native fatal error
+ok unhandled rejection without Error colon
+ok premature success exit
+ok premature nonzero exit
+ok premature signal exit
+ok real error still detected with premature exit
+EXE diagnostics: 19/19; pure classification, not packaged evidence
+ok current built-in observer and writer bytes match reviewed identities
+ok formal exports contain no TEMP issuer or executable core
+ok ordinary parameters and risk approval cannot open the formal writer
+ok formal prepareObjectRevert refuses caller-supplied qualification
+ok formal applyObjectRevert refuses caller-supplied qualification
+ok formal cancelObjectRevert refuses caller-supplied qualification
+ok formal inspectObjectRecovery refuses caller-supplied qualification
+ok formal prepareObjectRecovery refuses caller-supplied qualification
+ok formal exportVerifiedRecoveryMaterial refuses caller-supplied qualification
+qualification observation {"osVersion":"10.0.26200.0","architecture":"x64","fileSystem":"NTFS","driveType":3,"saclState":"unavailable","observerHash":"230eade3a3611f2340b8ecb3d536b61d2adb88deabc44b44d7c59ec065a2063f","writerHash":"7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef","productionEligible":false}
+ok fresh current-token TEMP evidence remains unqualified for production
+ok foreign privileged witness label cannot upgrade a fresh current observation
+ok changed owner refuses without using file identity as metadata proof
+ok changed group refuses without using file identity as metadata proof
+ok changed dacl refuses without using file identity as metadata proof
+ok unavailable SACL remains unknown even when all visible observations match
+ok old capture cannot gain object evidence from the current observation
+ok qualification audit never opens Native writer and leaves prepared TEMP target unchanged
+Object qualification: 17/17; failed=0; skipped=0 (real read-only Windows observation; synthetic capture and explicit metadata DI; NO production proof)
+ok safe plan fields do not disclose private authority
+ok raw metadata and root cannot enter projection
+ok old risk plan has no UI execution projection
+ok oversized diff fails closed
+ok multiple files cannot enter single-file UI
+ok verified result is narrowly projected
+ok undurable verified is not shown as success
+ok unknown durability cannot be verified success undefined
+ok unknown durability cannot be verified success null
+ok unknown completion cannot become success
+ok legacy history remains display only without private material
+ok production qualification is definitively disabled
+ok client root rejected
+ok client path rejected
+ok client candidateBytes rejected
+ok client supported rejected
+ok client riskNoticeVersion rejected
+ok client confirmationToken rejected
+ok history filters unrelated scope and never qualifies old plans
+Object presentation: 25/25; read-only projection and DI authority
+  ok  restricted UI controller exists
+  ok  production backend denies restricted action despite candidate
+  ok  only explicit backend qualification enables prepare
+  ok  prepare opens four fresh unchecked confirmations
+  ok  cancel receives initial focus, apply is disabled
+  ok  Shift Tab wraps within modal excluding disabled confirm
+  ok  private token and helper never enter DOM
+  ok  Enter with unchecked risks never submits
+  ok  Escape cancels without apply and returns focus
+  ok  double confirm sends exactly one apply
+  ok  apply binds plan provider file object request and all four risks
+  ok  verified completion displays durability and object result
+  ok  generation switch rejects cached modal before apply
+  ok  evidence invalidation closes modal and clears confirmation
+  ok  late old selection prepare cannot open modal
+  ok  already expired plan cannot open confirmation
+  ok  unverified backup blocks confirmation
+  ok  invalid prepared binding scope
+  ok  invalid prepared binding riskNoticeVersion
+  ok  invalid prepared binding fileId
+  ok  invalid prepared binding scope
+  ok  changed conversationId rejects old confirm
+  ok  changed workspaceId rejects old confirm
+  ok  changed workspaceEpoch rejects old confirm
+  ok  changed workspaceFingerprint rejects old confirm
+  ok  live TTL expiry removes confirmation
+  ok  late qualification cannot enable stale session button
+  ok  backend stale closes and clears risks
+  ok  SSE and Approval replay cannot trigger apply
+  ok  missing durability is recovery required without verified success claim
+  ok  null durability is recovery required without verified success claim
+  ok  contradictory failed verification is recovery required without verified success claim
+  ok  unknown completion is not applied with no verified claim
+  ok  not applied incomplete durability is explicitly displayed
+  ok  safe prepare refusal material_unavailable has readable reason and no native submission
+  ok  safe prepare refusal journal_corrupt has readable reason and no native submission
+  ok  safe prepare refusal workspace_invalid has readable reason and no native submission
+  ok  safe prepare refusal backup_invalid has readable reason and no native submission
+  ok  uncertain native result opens dedicated recovery without retry
+  ok  uncertain result never auto retries
+  ok  inspection is read only and enables explicit new recovery plan
+  ok  only verified available C and R export actions are advertised
+  ok  new D backup must be ready before recovery confirmation
+  ok  recovery preparation cannot change target object binding
+  ok  new recovery plan has fresh independent unchecked risks
+  ok  new recovery preparation carries current evidence revision
+  ok  stale export result cannot create a download
+  ok  reopening persistent record displays recovery with no automatic apply or modal
+  ok  material availability cannot grant recovery eligibility false
+  ok  material availability cannot grant recovery eligibility undefined
+  ok  legacy risk record remains read only even backend offers recovery
+  ok  closing controller removes all confirmation UI
+Object revert UI: 52/52; failed=0; skipped=0 (DI interaction only)
+ok risk contract has distinct v3 semantics
+ok prepare safely projects v3 file sizes and runtime identity
+ok externalWritersPaused rejects false
+ok externalWritersPaused rejects 1
+ok externalWritersPaused rejects true
+ok externalWritersPaused rejects undefined
+ok lastCheckRaceAccepted rejects false
+ok lastCheckRaceAccepted rejects 1
+ok lastCheckRaceAccepted rejects true
+ok lastCheckRaceAccepted rejects undefined
+ok partialOverwriteAccepted rejects false
+ok partialOverwriteAccepted rejects 1
+ok partialOverwriteAccepted rejects true
+ok partialOverwriteAccepted rejects undefined
+ok metadataLimitsAccepted rejects false
+ok metadataLimitsAccepted rejects 1
+ok metadataLimitsAccepted rejects true
+ok metadataLimitsAccepted rejects undefined
+ok confirmation rejects extra partialWriteRiskAccepted
+ok confirmation rejects extra riskNoticeVersion
+ok confirmation rejects extra supported
+ok confirmation rejects extra __proto__
+ok request rejects extra supported
+ok request rejects extra fileId
+ok request rejects extra root
+ok request rejects extra candidateBytes
+ok request rejects extra capability
+ok old version and old two-checkbox confirmation rejected before native
+ok valid four confirmations reach apply with persistent verified result
+ok v2 prepared persisted and conservatively reconciled
+ok v2 prepared read-only reader preserves material access
+ok v2 prepared service permits only verified material inspection and export
+ok v2 prepared old token cannot execute or upgrade recovery
+ok v2 replacing persisted and conservatively reconciled
+ok v2 replacing read-only reader preserves material access
+ok v2 replacing service permits only verified material inspection and export
+ok v2 replacing old token cannot execute or upgrade recovery
+ok v2 applied_verified persisted and conservatively reconciled
+ok v2 applied_verified read-only reader preserves material access
+ok v2 applied_verified service permits only verified material inspection and export
+ok v2 applied_verified old token cannot execute or upgrade recovery
+ok v2 recovery_required persisted and conservatively reconciled
+ok v2 recovery_required read-only reader preserves material access
+ok v2 recovery_required service permits only verified material inspection and export
+ok v2 recovery_required old token cannot execute or upgrade recovery
+Object confirmation: 45/45; failed=0; skipped=0; v3 Native confirmation and v2 persisted migration
+witness_unavailable

@@ -1,0 +1,767 @@
+{
+  "version": 1,
+  "color": {
+    "themes": [
+      {
+        "id": "light",
+        "name": "浅色 · Workbench"
+      },
+      {
+        "id": "dark",
+        "name": "深色 · Workbench"
+      }
+    ],
+    "tokens": [
+      {
+        "name": "surface-canvas",
+        "value": {
+          "light": "#f7f8fa",
+          "dark": "#181b20"
+        },
+        "usage": "工作区主背景；正文 primary/secondary/muted 均可读。"
+      },
+      {
+        "name": "surface-nav",
+        "value": {
+          "light": "#eef0f3",
+          "dark": "#14171c"
+        },
+        "usage": "全局 Rail 与会话侧栏；不使用阴影分隔。"
+      },
+      {
+        "name": "surface-panel",
+        "value": {
+          "light": "#ffffff",
+          "dark": "#20242b"
+        },
+        "usage": "右栏、浮层与对话框。"
+      },
+      {
+        "name": "surface-input",
+        "value": {
+          "light": "#ffffff",
+          "dark": "#252a32"
+        },
+        "usage": "输入框与 Composer 内部。"
+      },
+      {
+        "name": "surface-code",
+        "value": {
+          "light": "#f0f2f6",
+          "dark": "#161b22"
+        },
+        "usage": "代码、命令与 Diff 上下文；有界横向滚动。"
+      },
+      {
+        "name": "surface-hover",
+        "value": {
+          "light": "#e5e9ef",
+          "dark": "#303741"
+        },
+        "usage": "控件悬停，几何不变。"
+      },
+      {
+        "name": "surface-pressed",
+        "value": {
+          "light": "#d8dfe9",
+          "dark": "#3b4553"
+        },
+        "usage": "按下态；不缩放控件。"
+      },
+      {
+        "name": "surface-user",
+        "value": {
+          "light": "#e9edf3",
+          "dark": "#282e38"
+        },
+        "usage": "用户消息轻背景，避免气泡套卡片。"
+      },
+      {
+        "name": "text-primary",
+        "value": {
+          "light": "#202631",
+          "dark": "#e9edf4"
+        },
+        "usage": "主文本，位于所有 surface-* 实色底。"
+      },
+      {
+        "name": "text-secondary",
+        "value": {
+          "light": "#4f5b6b",
+          "dark": "#b0bbc9"
+        },
+        "usage": "辅助信息，位于所有基础背景；不得通过 opacity 再淡化。"
+      },
+      {
+        "name": "text-muted",
+        "value": {
+          "light": "#536171",
+          "dark": "#a7b4c4"
+        },
+        "usage": "时间、元数据与未激活标签，保持 4.5:1。"
+      },
+      {
+        "name": "text-on-primary",
+        "value": {
+          "light": "#ffffff",
+          "dark": "#1b2432"
+        },
+        "usage": "中性 primary 按钮唯一前景。"
+      },
+      {
+        "name": "border-subtle",
+        "value": {
+          "light": "#dce1e8",
+          "dark": "#343d49"
+        },
+        "usage": "装饰性区域分隔；不承担唯一可操作边界。"
+      },
+      {
+        "name": "border-control",
+        "value": {
+          "light": "#7c8796",
+          "dark": "#778496"
+        },
+        "usage": "Input/Select 默认边界，至少 3:1。"
+      },
+      {
+        "name": "accent",
+        "value": {
+          "light": "#315f9e",
+          "dark": "#9abbed"
+        },
+        "usage": "链接、焦点、活动标签文字；不作为大面积背景。"
+      },
+      {
+        "name": "accent-soft",
+        "value": {
+          "light": "#e5edf8",
+          "dark": "#2b3e59"
+        },
+        "usage": "选中项轻背景，文字为 accent 或 text-primary。"
+      },
+      {
+        "name": "focus",
+        "value": {
+          "light": "#315f9e",
+          "dark": "#9abbed"
+        },
+        "usage": "2px focus-visible 轮廓，偏移 2px。"
+      },
+      {
+        "name": "primary",
+        "value": {
+          "light": "#283346",
+          "dark": "#e0e7f1"
+        },
+        "usage": "主按钮中性填充，只配 text-on-primary。"
+      },
+      {
+        "name": "primary-hover",
+        "value": {
+          "light": "#35465e",
+          "dark": "#f1f4f9"
+        },
+        "usage": "主按钮悬停填充，尺寸不变。"
+      },
+      {
+        "name": "primary-pressed",
+        "value": {
+          "light": "#1c2635",
+          "dark": "#cbd6e5"
+        },
+        "usage": "主按钮按下填充。"
+      },
+      {
+        "name": "success",
+        "value": {
+          "light": "#236b45",
+          "dark": "#8ad0a3"
+        },
+        "usage": "完成文字/图标，与文字或勾号同时使用。"
+      },
+      {
+        "name": "success-soft",
+        "value": {
+          "light": "#e9f3ec",
+          "dark": "#23382e"
+        },
+        "usage": "完成或 Diff 新增轻背景。"
+      },
+      {
+        "name": "warning",
+        "value": {
+          "light": "#86520b",
+          "dark": "#efbf75"
+        },
+        "usage": "等待审批、上下文过高，始终搭配状态文字。"
+      },
+      {
+        "name": "warning-soft",
+        "value": {
+          "light": "#fff2db",
+          "dark": "#42331e"
+        },
+        "usage": "警告轻背景，搭配 warning 文字。"
+      },
+      {
+        "name": "danger",
+        "value": {
+          "light": "#ad3345",
+          "dark": "#ff9bab"
+        },
+        "usage": "错误和删除，始终搭配错误说明/减号。"
+      },
+      {
+        "name": "danger-soft",
+        "value": {
+          "light": "#fbecef",
+          "dark": "#43262d"
+        },
+        "usage": "错误轻背景，不用 Toast 隐藏阻断原因。"
+      },
+      {
+        "name": "running",
+        "value": {
+          "light": "#315f9e",
+          "dark": "#9abbed"
+        },
+        "usage": "运行状态；与状态文字、简短 spinner 同时出现。"
+      },
+      {
+        "name": "scrollbar",
+        "value": {
+          "light": "#7c8796",
+          "dark": "#778496"
+        },
+        "usage": "滚动条；仅可滚动区域显示。"
+      },
+      {
+        "name": "backdrop",
+        "value": {
+          "light": "#10182666",
+          "dark": "#05080db3"
+        },
+        "usage": "模态遮罩；仅 overlay 使用。"
+      },
+      {
+        "name": "transparent",
+        "value": {
+          "light": "#00000000",
+          "dark": "#00000000"
+        },
+        "usage": "透明控制背景，不承担信息对比。"
+      }
+    ]
+  },
+  "type": {
+    "fonts": [],
+    "families": {
+      "sans": "\"Segoe UI Variable Text\", \"Segoe UI\", \"Microsoft YaHei UI\", sans-serif",
+      "mono": "\"Cascadia Code\", Consolas, monospace"
+    },
+    "groups": [
+      {
+        "name": "Interface",
+        "family": "sans",
+        "note": "",
+        "styles": [
+          {
+            "name": "caption",
+            "fontSize": "12px",
+            "lineHeight": "18px",
+            "fontWeight": "400",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "时间、状态与辅助字段；不小于12px。"
+          },
+          {
+            "name": "label",
+            "fontSize": "12px",
+            "lineHeight": "18px",
+            "fontWeight": "600",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "分组名、表单标签。"
+          },
+          {
+            "name": "ui-body",
+            "fontSize": "13px",
+            "lineHeight": "20px",
+            "fontWeight": "400",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "侧栏、菜单、设置字段。"
+          },
+          {
+            "name": "ui-strong",
+            "fontSize": "13px",
+            "lineHeight": "20px",
+            "fontWeight": "600",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "选中行、主要按钮。"
+          },
+          {
+            "name": "prose",
+            "fontSize": "14px",
+            "lineHeight": "24px",
+            "fontWeight": "400",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "中文与英文聊天正文。"
+          },
+          {
+            "name": "section",
+            "fontSize": "16px",
+            "lineHeight": "24px",
+            "fontWeight": "600",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "消息小标题、面板章节。"
+          },
+          {
+            "name": "title",
+            "fontSize": "20px",
+            "lineHeight": "28px",
+            "fontWeight": "600",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "页面与对话框标题。"
+          },
+          {
+            "name": "display",
+            "fontSize": "28px",
+            "lineHeight": "36px",
+            "fontWeight": "600",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "空会话引导，禁止营销 hero 大标题。"
+          }
+        ]
+      },
+      {
+        "name": "Code",
+        "family": "mono",
+        "note": "",
+        "styles": [
+          {
+            "name": "code",
+            "fontSize": "12px",
+            "lineHeight": "20px",
+            "fontWeight": "400",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "代码块、路径、命令。"
+          },
+          {
+            "name": "code-small",
+            "fontSize": "12px",
+            "lineHeight": "18px",
+            "fontWeight": "400",
+            "letterSpacing": "0",
+            "fontStyle": "normal",
+            "opticalSize": null,
+            "family": "",
+            "sample": "",
+            "usage": "Diff 行号、工具元数据。"
+          }
+        ]
+      }
+    ]
+  },
+  "spacing": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "space-2",
+        "value": "2px",
+        "usage": "间距刻度 2px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-4",
+        "value": "4px",
+        "usage": "基础网格；小图标到文字间距。"
+      },
+      {
+        "name": "space-8",
+        "value": "8px",
+        "usage": "间距刻度 8px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-12",
+        "value": "12px",
+        "usage": "间距刻度 12px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-16",
+        "value": "16px",
+        "usage": "间距刻度 16px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-20",
+        "value": "20px",
+        "usage": "间距刻度 20px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-24",
+        "value": "24px",
+        "usage": "间距刻度 24px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-32",
+        "value": "32px",
+        "usage": "间距刻度 32px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-40",
+        "value": "40px",
+        "usage": "间距刻度 40px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-48",
+        "value": "48px",
+        "usage": "间距刻度 48px；优先选择相邻层级而非添加近似值。"
+      },
+      {
+        "name": "space-64",
+        "value": "64px",
+        "usage": "间距刻度 64px；优先选择相邻层级而非添加近似值。"
+      }
+    ]
+  },
+  "radius": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "radius-none",
+        "value": "0px",
+        "usage": "阅读区、Diff 行不套圆角容器。"
+      },
+      {
+        "name": "radius-control",
+        "value": "6px",
+        "usage": "按钮、输入框、菜单项。"
+      },
+      {
+        "name": "radius-panel",
+        "value": "8px",
+        "usage": "浮层、对话框、代码块。"
+      },
+      {
+        "name": "radius-composer",
+        "value": "10px",
+        "usage": "单一 Composer 外壳。"
+      },
+      {
+        "name": "radius-pill",
+        "value": "999px",
+        "usage": "仅小型计数与状态点。"
+      }
+    ]
+  },
+  "shadow": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "shadow-popover",
+        "value": {
+          "light": "0 8px 24px #14213a1a, 0 1px 4px #14213a14",
+          "dark": "0 8px 24px #0000004d, 0 1px 4px #00000066"
+        },
+        "usage": "菜单、选择器。只有浮层使用阴影。"
+      },
+      {
+        "name": "shadow-dialog",
+        "value": {
+          "light": "0 20px 64px #14213a33",
+          "dark": "0 20px 64px #00000066"
+        },
+        "usage": "模态对话框。"
+      },
+      {
+        "name": "shadow-none",
+        "value": {
+          "light": "none"
+        },
+        "usage": "常驻 Rail、侧栏、面板和消息没有阴影。"
+      }
+    ]
+  },
+  "layout": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "rail-width",
+        "value": "52px",
+        "usage": "布局提案 rail-width；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "sidebar-width",
+        "value": "248px",
+        "usage": "布局提案 sidebar-width；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "sidebar-min",
+        "value": "216px",
+        "usage": "布局提案 sidebar-min；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "sidebar-max",
+        "value": "320px",
+        "usage": "布局提案 sidebar-max；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "header-height",
+        "value": "52px",
+        "usage": "布局提案 header-height；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "status-height",
+        "value": "28px",
+        "usage": "布局提案 status-height；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "reading-width",
+        "value": "780px",
+        "usage": "布局提案 reading-width；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "pane-width",
+        "value": "420px",
+        "usage": "布局提案 pane-width；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "pane-min",
+        "value": "360px",
+        "usage": "布局提案 pane-min；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "pane-max",
+        "value": "640px",
+        "usage": "布局提案 pane-max；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "control-height",
+        "value": "32px",
+        "usage": "布局提案 control-height；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "control-target",
+        "value": "36px",
+        "usage": "布局提案 control-target；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "touch-target",
+        "value": "44px",
+        "usage": "布局提案 touch-target；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "row-height",
+        "value": "36px",
+        "usage": "布局提案 row-height；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "composer-min",
+        "value": "112px",
+        "usage": "布局提案 composer-min；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "composer-max",
+        "value": "240px",
+        "usage": "布局提案 composer-max；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "dialog-width",
+        "value": "480px",
+        "usage": "布局提案 dialog-width；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "popover-width",
+        "value": "360px",
+        "usage": "布局提案 popover-width；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "viewport-inset",
+        "value": "8px",
+        "usage": "布局提案 viewport-inset；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "breakpoint-dock",
+        "value": "1180px",
+        "usage": "布局提案 breakpoint-dock；CSS px，受容器可用尺寸约束。"
+      },
+      {
+        "name": "breakpoint-compact",
+        "value": "900px",
+        "usage": "布局提案 breakpoint-compact；CSS px，受容器可用尺寸约束。"
+      }
+    ]
+  },
+  "icon": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "icon-small",
+        "value": "14px",
+        "usage": "同一套描边 SVG；不混用 emoji、实心图标和字体图标。"
+      },
+      {
+        "name": "icon-default",
+        "value": "16px",
+        "usage": "同一套描边 SVG；不混用 emoji、实心图标和字体图标。"
+      },
+      {
+        "name": "icon-large",
+        "value": "20px",
+        "usage": "同一套描边 SVG；不混用 emoji、实心图标和字体图标。"
+      },
+      {
+        "name": "icon-stroke",
+        "value": "1.5px",
+        "usage": "同一套描边 SVG；不混用 emoji、实心图标和字体图标。"
+      }
+    ]
+  },
+  "border": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "border-width",
+        "value": "1px",
+        "usage": "装饰和控件边界的统一宽度。"
+      },
+      {
+        "name": "focus-width",
+        "value": "2px",
+        "usage": "键盘焦点宽度。"
+      },
+      {
+        "name": "focus-offset",
+        "value": "2px",
+        "usage": "焦点外偏移，不改变布局。"
+      }
+    ]
+  },
+  "zIndex": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "layer-base",
+        "value": "0",
+        "usage": "工作区。"
+      },
+      {
+        "name": "layer-sticky",
+        "value": "10",
+        "usage": "消息页头与固定输入区。"
+      },
+      {
+        "name": "layer-pane",
+        "value": "20",
+        "usage": "常驻右栏。"
+      },
+      {
+        "name": "layer-popover",
+        "value": "100",
+        "usage": "Dropdown/Context Menu，禁止显示在模态之上。"
+      },
+      {
+        "name": "layer-modal",
+        "value": "200",
+        "usage": "Dialog/backdrop 组合层。"
+      },
+      {
+        "name": "layer-toast",
+        "value": "300",
+        "usage": "非阻断反馈，不能遮住当前焦点。"
+      },
+      {
+        "name": "layer-tooltip",
+        "value": "400",
+        "usage": "仅短文本解释。"
+      }
+    ]
+  },
+  "timing": {
+    "note": "",
+    "tokens": [
+      {
+        "name": "duration-instant",
+        "value": "0ms",
+        "usage": "仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。"
+      },
+      {
+        "name": "duration-fast",
+        "value": "80ms",
+        "usage": "仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。"
+      },
+      {
+        "name": "duration-menu",
+        "value": "120ms",
+        "usage": "仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。"
+      },
+      {
+        "name": "duration-panel",
+        "value": "160ms",
+        "usage": "仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。"
+      },
+      {
+        "name": "duration-max",
+        "value": "200ms",
+        "usage": "仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。"
+      },
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "usage": "仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。"
+      },
+      {
+        "name": "ease-exit",
+        "value": "cubic-bezier(0.4, 0, 1, 1)",
+        "usage": "仅状态反馈；prefers-reduced-motion 时置零，不用动画承担唯一信息。"
+      }
+    ]
+  },
+  "name": "Pi Workbench",
+  "meta": {
+    "source": "design-proposal",
+    "repo": "HYJ1817/pi-gui",
+    "ref": "codex/fix-bugs-8-11@9694339",
+    "derivedFrom": [
+      "public/tokens.css",
+      "public/styles.css",
+      "public/ui3-composer.css",
+      "public/ui4-pane.css"
+    ],
+    "status": "Proposed redesign; not production values",
+    "synced": "2026-10-31"
+  }
+}

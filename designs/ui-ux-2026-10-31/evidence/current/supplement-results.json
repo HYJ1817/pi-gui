@@ -1,0 +1,306 @@
+{
+  "entry": "production electron/main.cjs + public renderer",
+  "backend": "existing tests/visual-harness.cjs, offline TEMP fixtures",
+  "shots": [
+    "dark-1440-empty.png",
+    "dark-1440-full-fixture.png",
+    "dark-1440-diff.png",
+    "dark-1440-navAppUpdates.png",
+    "dark-1440-navMcp.png",
+    "dark-1440-navProviderAuth.png",
+    "dark-1440-navCapabilities.png",
+    "dark-1440-navAppearance.png",
+    "dark-1440-session-switch.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-1440-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 480,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1248,
+        "bottom": 882,
+        "left": 480
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-full-fixture",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\n读取文件\n成功\nsrc/fermenter/sizing.js\n0.3s\n展开输出\n6 行\n执行命令\n失败\nnpm test -- fermenter\n10.0s\n展开输出\nexit code 1\n修改文件\n成功\nsrc/fermenter/sizing.js\n+1\n−1\n11.4s\n展开输出\n已替换 1 处\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "dark-1440-diff",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 320,
+        "y": 807,
+        "width": 658,
+        "height": 75,
+        "top": 807,
+        "right": 978,
+        "bottom": 882,
+        "left": 320
+      },
+      "panel": {
+        "x": 1020,
+        "y": 0,
+        "width": 420,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1020
+      },
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\n读取文件\n成功\nsrc/fermenter/sizing.js\n0.3s\n展开输出\n6 行\n执行命令\n失败\nnpm test -- fermenter\n10.0s\n展开输出\nexit code 1\n修改文件\n成功\nsrc/fermenter/sizing.js\n+1\n−1\n11.4s\n展开输出\n已替换 1 处\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n文件变更\n全部撤销\n审查意见\n重新加载评论\n刷新\n⇅\n×\n全部\n3\n本会话编辑\n0\n记录 Pi 的 write / edit 工具；终端命令产生的文件修改请在「全部」中查看。\nM\npublic/app.js\n已修改\n+12\n−3\n打开\n撤销\n上下文\n默认\n20 行\n全部\n折叠全部块\n工作区（尚未 git add）\ndiff --git a/public/app.js b/public/app.js\n▾\n@@ -1,2 +1,2 @@\n+1\n−1\n1\n-old line\n1\n+new line\nA\ndocs/说明.md\n新增 · 已暂存\n+4\n打开\n撤销\n??\nnew/fixture.txt\n未跟踪\n+2\n打开\n删除"
+    },
+    {
+      "name": "dark-1440-navAppUpdates",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\n读取文件\n成功\nsrc/fermenter/sizing.js\n0.3s\n展开输出\n6 行\n执行命令\n失败\nnpm test -- fermenter\n10.0s\n展开输出\nexit code 1\n修改文件\n成功\nsrc/fermenter/sizing.js\n+1\n−1\n11.4s\n展开输出\n已替换 1 处\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high\n应用与更新\n版本\nPi GUI\n检查更新\n开发模式仅支持检查更新。\n在应用内检查 GitHub 上有没有新版本。只读取公开的发布信息，不上传任何使用数据。\nPi 运行时更新\n关闭"
+    },
+    {
+      "name": "dark-1440-navMcp",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navChanges",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\nSkills 与扩展\n3\n扩展与能力\n能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。\nAll\nCapabilities\nExtensions\nSkills\nMCP\n这个 pi 带 MCP 能力\n检测到的 pi 版本：0.99.1（来源 package.json · 2026-10-01T03:00:00.000Z）\n这个 pi 包自带 built-in 扩展 `mcp`（配置走 pi 自己的 mcp.json，命令行是 pi mcp add / remove）\n出处\ndist/extensions/index.js: { name: \"mcp\", factory: mcpExtension, replaceable: true, builtin: true }\nbuilt-in 能力（pi 自带）\nbuiltin:llama.cpp\nbuiltin:codemode可被替换\nbuiltin:tool-search可被替换\nbuiltin:mcp可被替换\nexport const builtInExtensions = [ … ]\nbuilt-in 扩展编译在 pi 包里，不由 Extension Registry 的目录扫描发现；「包里带了它」不等于「当前会话启用了它」。\nMCP Servers（pi 原生）\n原生 MCP 生效中\nbuiltin:mcp 在包里、未被禁用、未被接管\nfilesystem\n用户\n启用：是 · exposure：direct · 传输：本地命令\n生效中\n运行：已连接\n12 个工具\n登录\n退出登录\n移除\nsentry\n项目\n启用：是 · exposure：codemode · 传输：远端 · 单工具 exposure 1 条\n生效中\n运行：需要登录\n0 个工具\n登录\n退出登录\n移除\n刷新状态\n上次刷新：2026-10-01T06:00:00.000Z\n运行时状态属于当前项目：切换项目后会回到「尚未获取」，不会沿用上一个项目的结果。\n添加 Server（无凭据）\n用户级\n项目级\n本地命令\n远端 URL\ncodemode（默认）\ncodemode-deferred\ndeferred\ndirect\nhidden\n添加\n含凭据（env / headers / OAuth）的 server 请走终端 pi mcp add（支持 ${VAR} 与 !command 引用）或直接编辑 mcp.json —— 凭据值不进 Pi GUI。\n这次运行尚未观察到 MCP 工具调用（没调用过≠不支持）。\n启用 / 停用 / 重连 / 改 exposure 没有官方自动化接口 —— 请用 pi 的 /mcp 管理器（TUI）或直接编辑 mcp.json。这里不伪造这些开关。\nPi GUI 的 MCP 接口不接收任何凭据值（env / headers / OAuth / auth 一律在接口边界拒绝）。含凭据的 server 请走终端 pi mcp add 或直接编辑 pi 的 mcp.json；OAuth 的 token 全程由 pi 自己管理（Pi GUI 不读、不存、不转发）。\nRPC 事实\nRpcCommand 联合共 33 条命令，其中没有一条返回已注册工具清单。\nPi RPC 没有已注册工具清单命令：ExtensionAPI 有 getAllTools()，但那是扩展进程内的 API，RPC 不暴露它。所以 GUI 不伪造工具注册表。\nExtensionAPI：registerMcpServer 有 · getMcpServers 有 · getAllTools 有（这些是扩展进程内的 API，RPC 客户端拿不到）\npi 的做法：扩展（extension）\n请通过 pi extension 提供能力。\n用户级（目录不存在）\n项目级（目录不存在）\nPi GUI 只列出这些扩展，不安装、不启用、也不执行它们 —— 扩展是能执行代码的，装什么由你在 pi 那边决定。"
+    },
+    {
+      "name": "dark-1440-navProviderAuth",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\nSkills 与扩展\n3\n扩展与能力\n能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。\nAll\nCapabilities\nExtensions\nSkills\nMCP\n这个 pi 带 MCP 能力\n检测到的 pi 版本：0.99.1（来源 package.json · 2026-10-01T03:00:00.000Z）\n这个 pi 包自带 built-in 扩展 `mcp`（配置走 pi 自己的 mcp.json，命令行是 pi mcp add / remove）\n出处\ndist/extensions/index.js: { name: \"mcp\", factory: mcpExtension, replaceable: true, builtin: true }\nbuilt-in 能力（pi 自带）\nbuiltin:llama.cpp\nbuiltin:codemode可被替换\nbuiltin:tool-search可被替换\nbuiltin:mcp可被替换\nexport const builtInExtensions = [ … ]\nbuilt-in 扩展编译在 pi 包里，不由 Extension Registry 的目录扫描发现；「包里带了它」不等于「当前会话启用了它」。\nMCP Servers（pi 原生）\n原生 MCP 生效中\nbuiltin:mcp 在包里、未被禁用、未被接管\nfilesystem\n用户\n启用：是 · exposure：direct · 传输：本地命令\n生效中\n运行：已连接\n12 个工具\n登录\n退出登录\n移除\nsentry\n项目\n启用：是 · exposure：codemode · 传输：远端 · 单工具 exposure 1 条\n生效中\n运行：需要登录\n0 个工具\n登录\n退出登录\n移除\n刷新状态\n上次刷新：2026-10-01T06:00:00.000Z\n运行时状态属于当前项目：切换项目后会回到「尚未获取」，不会沿用上一个项目的结果。\n添加 Server（无凭据）\n用户级\n项目级\n本地命令\n远端 URL\ncodemode（默认）\ncodemode-deferred\ndeferred\ndirect\nhidden\n添加\n含凭据（env / headers / OAuth）的 server 请走终端 pi mcp add（支持 ${VAR} 与 !command 引用）或直接编辑 mcp.json —— 凭据值不进 Pi GUI。\n这次运行尚未观察到 MCP 工具调用（没调用过≠不支持）。\n启用 / 停用 / 重连 / 改 exposure 没有官方自动化接口 —— 请用 pi 的 /mcp 管理器（TUI）或直接编辑 mcp.json。这里不伪造这些开关。\nPi GUI 的 MCP 接口不接收任何凭据值（env / headers / OAuth / auth 一律在接口边界拒绝）。含凭据的 server 请走终端 pi mcp add 或直接编辑 pi 的 mcp.json；OAuth 的 token 全程由 pi 自己管理（Pi GUI 不读、不存、不转发）。\nRPC 事实\nRpcCommand 联合共 33 条命令，其中没有一条返回已注册工具清单。\nPi RPC 没有已注册工具清单命令：ExtensionAPI 有 getAllTools()，但那是扩展进程内的 API，RPC 不暴露它。所以 GUI 不伪造工具注册表。\nExtensionAPI：registerMcpServer 有 · getMcpServers 有 · getAllTools 有（这些是扩展进程内的 API，RPC 客户端拿不到）\npi 的做法：扩展（extension）\n请通过 pi extension 提供能力。\n用户级（目录不存在）\n项目级（目录不存在）\nPi GUI 只列出这些扩展，不安装、不启用、也不执行它们 —— 扩展是能执行代码的，装什么由你在 pi 那边决定。\n供应商与认证\n状态来自本机 Pi；已存凭据不代表远端凭据仍有效。退出会移除已存凭据，环境变量认证可能仍然有效。\n刷新认证状态\n其他 Pi 支持的供应商（2）\n关闭"
+    },
+    {
+      "name": "dark-1440-navCapabilities",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navChanges",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\nSkills 与扩展\n3\n扩展与能力\n能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。\nAll\nCapabilities\nExtensions\nSkills\nMCP\n刷新\n共 20 项　·　已加载 8　·　未加载/不可用 3　·　未知 9　·　当前筛选 8\n「未知（无法确认）」不是「否」：没观察到调用不等于没有这个能力，Pi RPC 也没有权威的已注册工具清单。运行观察只说明这次 bridge run 真的见过调用。\nWeb Access\n联网搜索与抓取网页正文：web_search / fetch_content / get_search_content。\n已加载\nSubagents\n在当前对话内把工作委派给子 Agent：subagent / subagents_enable / bg_wait / subagent_supervisor。\n未安装\nPi Memory（长期记忆）\n跨会话的长期记忆检索与写入，由第三方 Extension 提供工具。\n已安装，加载状态未知 · 需重启 Pi\nBrowser Use（真实浏览器自动化）\n通过 CDP 驱动你正在用的浏览器：打开页面、点击、输入、截图、读正文（40 个 browser_* 工具）。\n未安装\nBuilt-in Browser Agent Control\n通过 gui_browser_* 控制 pi-GUI 内置浏览器，验证 localhost 页面。\n状态未知（无法确认）\nNative MCP（pi 内置）\npi 原生 MCP 集成：把外部 MCP server 的工具注册进 Pi，配置走 pi 自己的 mcp.json。\n原生 MCP 生效中\nApproval / Permission\n装了会「先问一句」的 permission Extension 时，用本界面的一次性确认把请求接住，并把允许 / 拒绝作为明确的协议应答回给 Pi。\nExtension 可以在工具执行前阻断\nUsage / Quota（用量与额度）\n会话 token / 成本 / 上下文占用，以及 Provider 的远端配额。\n随会话提供（不是 Extension，没有安装状态）\n选一个能力看它的安装 / 加载 / 运行观察。"
+    },
+    {
+      "name": "dark-1440-navAppearance",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\nSkills 与扩展\n3\n扩展与能力\n能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。\nAll\nCapabilities\nExtensions\nSkills\nMCP\n刷新\n共 20 项　·　已加载 8　·　未加载/不可用 3　·　未知 9　·　当前筛选 8\n「未知（无法确认）」不是「否」：没观察到调用不等于没有这个能力，Pi RPC 也没有权威的已注册工具清单。运行观察只说明这次 bridge run 真的见过调用。\nWeb Access\n联网搜索与抓取网页正文：web_search / fetch_content / get_search_content。\n已加载\nSubagents\n在当前对话内把工作委派给子 Agent：subagent / subagents_enable / bg_wait / subagent_supervisor。\n未安装\nPi Memory（长期记忆）\n跨会话的长期记忆检索与写入，由第三方 Extension 提供工具。\n已安装，加载状态未知 · 需重启 Pi\nBrowser Use（真实浏览器自动化）\n通过 CDP 驱动你正在用的浏览器：打开页面、点击、输入、截图、读正文（40 个 browser_* 工具）。\n未安装\nBuilt-in Browser Agent Control\n通过 gui_browser_* 控制 pi-GUI 内置浏览器，验证 localhost 页面。\n状态未知（无法确认）\nNative MCP（pi 内置）\npi 原生 MCP 集成：把外部 MCP server 的工具注册进 Pi，配置走 pi 自己的 mcp.json。\n原生 MCP 生效中\nApproval / Permission\n装了会「先问一句」的 permission Extension 时，用本界面的一次性确认把请求接住，并把允许 / 拒绝作为明确的协议应答回给 Pi。\nExtension 可以在工具执行前阻断\nUsage / Quota（用量与额度）\n会话 token / 成本 / 上下文占用，以及 Provider 的远端配额。\n随会话提供（不是 Extension，没有安装状态）\n选一个能力看它的安装 / 加载 / 运行观察。\n外观与主题\n主题\nClaude Dark\nClaude Light\nSystem（跟随系统）\n\n仅改变界面外观；System 随系统主题变化。\n\n关闭"
+    },
+    {
+      "name": "dark-1440-session-switch",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 52,
+        "y": 0,
+        "width": 236,
+        "height": 900,
+        "top": 0,
+        "right": 288,
+        "bottom": 900,
+        "left": 52
+      },
+      "composer": {
+        "x": 475,
+        "y": 807,
+        "width": 768,
+        "height": 75,
+        "top": 807,
+        "right": 1243,
+        "bottom": 882,
+        "left": 475
+      },
+      "panel": null,
+      "popover": null,
+      "active": "input",
+      "text": "π\n5\n3\nPi\n项目\n新对话\n＋\n搜索会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\nπ\npi-GUI\n已连接\n3\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n3\n你\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。\n\n发酵罐空气分布器设计.pdf\n1 页 · 386 字\nPi\n思考过程 · 35 字\n· 已完成\n\n核对结果如下：\n\n1. 通气量 罐体 50 m³、装料系数 0.75，实际装液量 37.5 m³。按 1.2 vvm 计，标准状态空气流量 0.75 m³/s，与文档一致。\n\n2. 出口内径 取 v = 12 m/s 时代入 d = √(4Q / (π·v))：\n\nd = sqrt(4 × 0.75 / (3.1416 × 12)) = 0.2821 m\n\n计算值与文档的 0.282 m 吻合，圆整取 DN300 合适。\n\n3. 需要补充的地方\n\n出口气速取 12 m/s 落在 10～15 m/s 区间内，但没有说明该值的选取依据；\n管口距罐底 40 mm 与下层叶轮的相对位置未给出，建议补一张布置简图；\n防冲刷钢板的尺寸和固定方式缺失。\nPi\n思考过程 · 19 字\n· 已完成\n\n我核对一下仓库里的实现。\n\n操作 3 项\n失败 1 · 成功 2\n读取文件\n成功\nsrc/fermenter/sizing.js\n0.3s\n展开输出\n6 行\n执行命令\n失败\nnpm test -- fermenter\n10.0s\n展开输出\nexit code 1\n修改文件\n成功\nsrc/fermenter/sizing.js\n+1\n−1\n11.4s\n展开输出\n已替换 1 处\nPi\n\n对完了：\n\nairFlow / outletDiameter 与文档公式一致；\n单测挂在圆整这一步：find() 找不到比 0.282 m 大的 DN 时返回 undefined，已补上兜底并重新跑通。\n你\n\n好，继续。\n\nPi\n思考过程 · 17 字\n· 已完成\n\n我会沿着现有实现继续检查。\n\n当前结论\n\n段落、列表和 inlineCode 都保持原有 Markdown 语义。\n\n你\n\n请保留完整路径、换行和长链接。\npublic/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/public/very-long-conversation-example/\nhttps://example.test/unbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segmentunbroken-segment\n\nPi\n\n下面是长代码块，仅代码区横向滚动：\n\nconst veryLongLine = \"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\";\n文件\t状态\napp.js\t已读取\n你\n设备图全套_6张A2.pdf\n文档 · PDF\n核对记录.docx\n文档 · Word\nPi\n\n两份附件已列在上方，仍可展开查看已有文本内容。\n\n帮我核对一下这份设计说明里的通气量和管径，另外这张是现场照片。发酵罐空气分布器设…\n好，继续。\n请保留完整路径、换行和长链接。public/very-long-conversa…\n设备图全套_6张A2.pdf文档 · PDF附件一正文核对记录.docx文档 ·…\n6%\nDeepSeek V4 Pro\n思考 high"
+    }
+  ],
+  "errors": []
+}

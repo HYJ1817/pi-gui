@@ -1,0 +1,68 @@
+{
+  "recordedAt": "2026-11-01T08:28:49.1686045Z",
+  "head": "8908ff56c2e4e1b9d4658798c35cf0829796819a",
+  "command": "node tests/ui3-model.cjs --real",
+  "environment": {
+    "UI3_CDP_PORT": 19361,
+    "fixture": "tests/visual-harness.cjs",
+    "chromeMode": "headless=new --no-sandbox",
+    "chrome": "157.0.8103.26",
+    "node": "v24.22.1"
+  },
+  "red": {
+    "realTotal": 79,
+    "contractTotal": 53,
+    "combinedTotal": 132,
+    "realPass": 71,
+    "contractPass": 53,
+    "combinedPass": 124,
+    "exitCode": 1
+  },
+  "green": {
+    "realTotal": 87,
+    "contractTotal": 53,
+    "combinedTotal": 140,
+    "realPass": 87,
+    "contractPass": 53,
+    "combinedPass": 140,
+    "exitCode": 0
+  },
+  "coverage": {
+    "addedLabels": [
+      "dark 700: 真实点击折叠与展开同步语义和可见模型",
+      "dark 900: 真实点击折叠与展开同步语义和可见模型",
+      "dark 1200: 真实点击折叠与展开同步语义和可见模型",
+      "dark 1536: 真实点击折叠与展开同步语义和可见模型",
+      "light 700: 真实点击折叠与展开同步语义和可见模型",
+      "light 900: 真实点击折叠与展开同步语义和可见模型",
+      "light 1200: 真实点击折叠与展开同步语义和可见模型",
+      "light 1536: 真实点击折叠与展开同步语义和可见模型"
+    ],
+    "preservedOriginalLabels": 79,
+    "skippedChecks": 0,
+    "removedLabels": [],
+    "originalRealChecks": 79
+  },
+  "screenshots": {
+    "archived": [
+      "models-dark-1200.png",
+      "models-dark-1536.png",
+      "models-dark-700.png",
+      "models-dark-900.png",
+      "models-light-1200.png",
+      "models-light-1536.png",
+      "models-light-700.png",
+      "models-light-900.png"
+    ],
+    "captured": 32,
+    "visuallyInspected": [
+      "models-dark-700.png",
+      "models-light-1536.png"
+    ]
+  },
+  "limitations": [
+    "Existing headless --no-sandbox evidence does not prove normal Electron sandbox or packaged GUI.",
+    "No production source changed; full canonical validation is coordinated by the parent task."
+  ],
+  "testSha256": "66BD53B4B955E1BD0C2C6BF37FEC20D0A7CCCF295C5213B3FB427230DA48C2EC"
+}

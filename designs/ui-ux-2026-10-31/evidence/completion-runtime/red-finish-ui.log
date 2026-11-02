@@ -1,0 +1,17 @@
+  ok native session title precedes branch
+  ok shell heading matches focused native conversation
+  ok classic background title cannot overwrite runtime heading
+  ok A displays its own selected model
+  ok reasoning uses only provided native levels
+  ok A thinking readback selected
+AssertionError [ERR_ASSERTION]: Runtime composer groups the stable textarea, model controls and send action
+    at ok (C:\pi-GUI\tests\runtime-finish-ui.cjs:12:40)
+    at C:\pi-GUI\tests\runtime-finish-ui.cjs:51:3
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: null,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

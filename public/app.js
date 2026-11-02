@@ -1,3 +1,4 @@
+import { initSettingsSurface } from './ui/settings-surface.js';
 /* Pi GUI — 前端入口。
  *
  * 这个文件只做三件事：
@@ -261,6 +262,21 @@ const openProcessPanel = () => conversationScopeActive() ? runtimeSecondary?.ope
 configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation, openBrowser: () => runtimeSecondary?.openBrowser() });
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane, { openWorkbench: openSplitWorkbench }) : null;
+const workPanelToggle = $('btnWorkPanel');
+workPanelToggle.onclick = () => {
+  if (rightPane.isOpen()) { rightPane.close(); workPanelToggle.focus(); return; }
+  rightPane.open('work-tools');
+  const intro = document.createElement('section'); intro.className = 'work-panel-empty';
+  const title = document.createElement('h2'); title.textContent = '工作面板';
+  const text = document.createElement('p'); text.textContent = '选择上方的工具，查看文件变更、项目文档或浏览器。';
+  intro.append(title, text); rightPane.root.querySelector('.rp-body').append(intro);
+};
+$('workPanelClose').onclick = () => { rightPane.close(); workPanelToggle.focus(); };
+document.addEventListener('pi-gui:right-pane', event => {
+  workPanelToggle.setAttribute('aria-expanded', String(event.detail?.open === true));
+  workPanelToggle.classList.toggle('is-active', event.detail?.open === true);
+  $('workPanelClose').hidden = event.detail?.surface !== 'work-tools';
+});
 initGuiBrowserState();
 initVizIntegration();
 
@@ -487,7 +503,7 @@ let bridgeHintText = '';
 const NOTICE_HANDLERS = {
   resync: () => loadStatus(),
   restart: () => restartPi(),
-  diagnostics: () => openDiagnostics(),
+  diagnostics: () => $('navDiagnostics').click(),
 };
 
 function noticeActions(ids) {
@@ -1062,8 +1078,6 @@ $('navSearch').onclick = openSessionSearch;
  * 各写一份迟早会出现「从某条路回去焦点不对」。 */
 function goChat() {
   if (!$('modal').hidden) closeModal();
-  $('globalMoreMenu').hidden = true;
-  $('navGlobalMore').setAttribute('aria-expanded', 'false');
   showChat();
   el.input.focus();
 }
@@ -1075,25 +1089,12 @@ document.addEventListener('pi-gui:right-pane', (event) => {
   $('navChanges').setAttribute('aria-pressed', String(open));
   $('navChanges').classList.toggle('is-active', open);
 });
-$('navProviders').onclick = openProvidersPanel;
-$('navProviderAuth').onclick = openProviderAuthPanel;
-$('navDiagnostics').onclick = openDiagnostics;
-$('navLogs').onclick = openLogs;
 $('navCapabilities').onclick = () => openExtensions({ tab: 'capabilities' });
 $('navMcp').onclick = () => openExtensions({ tab: 'mcp' });
-$('navAppUpdates').onclick = openAppUpdates;
-$('navAppearance').onclick = () => { $('navGlobalMore').focus(); openAppearance(); };
 $('navRestartPi').onclick = restartPi;
 /* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
 $('navPalette').onclick = () => {
-  $('globalMoreMenu').hidden = true;
-  $('navGlobalMore').setAttribute('aria-expanded', 'false');
   openPalette();
-};
-$('navShortcutHelp').onclick = () => {
-  $('globalMoreMenu').hidden = true;
-  $('navGlobalMore').setAttribute('aria-expanded', 'false');
-  openShortcutHelp();
 };
 
 // 侧栏头部 / 项目
@@ -1108,36 +1109,29 @@ $('navPlanner').onclick = () => openPlanner();
 
 const globalMenu = $('globalMoreMenu');
 const globalMore = $('navGlobalMore');
-globalMore.onclick = () => {
-  globalMenu.hidden = !globalMenu.hidden;
-  globalMore.setAttribute('aria-expanded', String(!globalMenu.hidden));
-  if (!globalMenu.hidden) globalMenu.querySelector('button')?.focus();
-};
-globalMenu.addEventListener('keydown', (event) => {
-  const buttons = [...globalMenu.querySelectorAll('button:not([disabled])')];
-  const index = buttons.indexOf(document.activeElement);
-  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    event.preventDefault();
-    buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
-  }
-  if (event.key === 'Tab' && (event.shiftKey && index === 0 || !event.shiftKey && index === buttons.length - 1)) {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-  }
+const settingsSurface = initSettingsSurface({
+  captureRuntimeReturn: () => {
+    const id = runtimeConversation.conversationId;
+    const identity = item => item && JSON.stringify([item.nativeSessionId, item.workspace?.projectId, item.workspace?.workspaceId, item.workspace?.workspaceEpoch]);
+    const captured = identity(runtimeStore.get(id)?.item);
+    return async ({ isCurrent }) => {
+      if (!captured || identity(runtimeStore.get(id)?.item) !== captured) return 'missing';
+      await focusRuntimeById(id, { isCurrent });
+      if (workspaceView() === 'runtime' && gitConversationScope() === id) return 'restored';
+      return isCurrent() ? 'failed' : 'cancelled';
+    };
+  },
 });
-for (const entry of globalMenu.querySelectorAll('button')) {
-  entry.addEventListener('click', () => {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-  });
+for (const [id, render] of [
+  ['navProviders', openProvidersPanel], ['navProviderAuth', openProviderAuthPanel],
+  ['navDiagnostics', openDiagnostics], ['navLogs', openLogs],
+  ['navAppUpdates', openAppUpdates], ['navAppearance', openAppearance],
+  ['navShortcutHelp', openShortcutHelp],
+]) {
+  $(id).onclick = () => render({ present: (build, dispose, options) => settingsSurface.presentDetail(id, build, dispose, options) });
 }
-document.addEventListener('click', (event) => {
-  if (!globalMenu.hidden && !globalMenu.contains(event.target) && !globalMore.contains(event.target)) {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-  }
-});
-document.addEventListener('keydown', (event) => {
+$('btnTheme').onclick = () => $('navAppearance').click();
+document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !projectMenu.hidden) {
     projectMenu.hidden = true;
     projectMenuButton.setAttribute('aria-expanded', 'false');
@@ -1147,11 +1141,6 @@ document.addEventListener('keydown', (event) => {
     $('projectSidebar').classList.remove('search-open');
     $('navSearch').setAttribute('aria-expanded', 'false');
     $('navSearch').focus();
-  }
-  if (event.key === 'Escape' && !globalMenu.hidden) {
-    globalMenu.hidden = true;
-    globalMore.setAttribute('aria-expanded', 'false');
-    globalMore.focus();
   }
 });
 
@@ -1171,6 +1160,7 @@ const expandSidebar = $('btnSidebarExpand');
 const collapseSidebar = $('btnSidebarCollapse');
 function setSidebarCollapsed(collapsed) {
   sidebar.hidden = collapsed;
+  $('globalRail').hidden = !collapsed;
   expandSidebar.hidden = !collapsed;
   collapseSidebar.setAttribute('aria-expanded', String(!collapsed));
   expandSidebar.setAttribute('aria-expanded', String(!collapsed));
@@ -1252,7 +1242,7 @@ registerShortcut({ id: 'palette', combo: 'primary+k', label: '打开命令面板
 /* 第二个绑定：浏览器里 Ctrl+K 常被地址栏吃掉，Ctrl+Shift+P 是各编辑器通用的备选。
  * 两条绑同一个动作 —— 不是两个功能。 */
 registerShortcut({ id: 'palette-alt', combo: 'primary+shift+p', label: '打开命令面板（备用键）', group: '通用', when: canRun, run: () => openPalette() });
-registerShortcut({ id: 'shortcut-help', combo: 'primary+/', label: '键盘快捷键帮助', group: '通用', when: canRun, run: () => openShortcutHelp() });
+registerShortcut({ id: 'shortcut-help', combo: 'primary+/', label: '键盘快捷键帮助', group: '通用', when: canRun, run: () => $('navShortcutHelp').click() });
 registerShortcut({ id: 'view-chat', combo: 'alt+1', label: '切到对话', group: '视图', when: canRun, run: openView('chat') });
 registerShortcut({ id: 'view-planner', combo: 'alt+2', label: '切到任务', group: '视图', when: canRun, run: openView('planner') });
 registerShortcut({ id: 'view-changes', combo: 'alt+3', label: '切到文件变更', group: '视图', when: canRun, run: openView('changes') });
@@ -1264,8 +1254,8 @@ installShortcuts({});
 
 defineCommands([
   { id:'view.processes',title:'开发进程',group:'视图',keywords:'process dev server 服务 进程 日志',run:openProcessPanel },
-  { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => { if (globalMenu.hidden) globalMore.click(); } },
-  { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: openAppUpdates },
+  { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => settingsSurface.open() },
+  { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: () => $('navAppUpdates').click() },
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', run: goChat },
   { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', run: () => openPlanner() },
   { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', run: () => openChangesPanel() },
@@ -1287,12 +1277,12 @@ defineCommands([
   /* 重启仍然走 restartPi()（唯一入口 + 确认）—— 面板不提供跳过确认的路径。 */
   { id: 'run.restart', title: '重启 Pi', group: '执行', keywords: 'restart 重载 reload pi', when: () => S.hasProject, run: () => restartPi() },
   { id: 'app.settings', title: '项目设置', group: '全局', keywords: 'settings 设置 配置', when: () => S.hasProject, run: () => openProjectSettings() },
-  { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => openProvidersPanel() },
-  { id: 'app.providerAuth', title: '供应商与认证', group: '全局', keywords: 'provider authentication OAuth login 认证', run: () => openProviderAuthPanel() },
-  { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => openDiagnostics() },
-  { id: 'app.logs', title: '日志与故障报告', group: '全局', keywords: 'logs 日志 故障报告 bug report zip 导出', run: () => openLogs() },
+  { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => $('navProviders').click() },
+  { id: 'app.providerAuth', title: '供应商与认证', group: '全局', keywords: 'provider authentication OAuth login 认证', run: () => $('navProviderAuth').click() },
+  { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => $('navDiagnostics').click() },
+  { id: 'app.logs', title: '日志与故障报告', group: '全局', keywords: 'logs 日志 故障报告 bug report zip 导出', run: () => $('navLogs').click() },
   { id: 'app.copy-diagnostics', title: '复制诊断摘要', group: '全局', keywords: 'copy diagnostics 复制 摘要 issue', run: () => copyDiagnosticsSummary() },
-  { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', run: () => openShortcutHelp() },
+  { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', run: () => $('navShortcutHelp').click() },
 ]);
 
 /* 动态条目：已加载的会话列表（复用侧栏那一份数据，不重新拉）。

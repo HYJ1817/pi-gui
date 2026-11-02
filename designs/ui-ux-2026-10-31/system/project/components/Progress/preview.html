@@ -1,0 +1,15 @@
+<!-- @dsCard group="Feedback" height=330 subtitle="原生可交互预览 · 演示数据" -->
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Progress · Pi Workbench</title></head><body class="pw-preview">
+<div class="pw-state-controls"><label for="stateSwitch">模拟组件状态</label><select id="stateSwitch" class="pw-select" aria-label="模拟组件状态"><option value="default">default</option><option value="hover">hover</option><option value="pressed">pressed</option><option value="selected">selected</option><option value="focus">focus</option><option value="disabled">disabled</option><option value="error">error</option></select><span>演示组件 · 不连接应用</span></div>
+<div id="example" class="pw-stack"><div class="pw-row"><strong id="progressLabel">演示下载 · 尚未开始</strong><button id="startProgress" class="pw-button">开始演示</button></div><progress id="progressBar" class="pw-progress" value="0" max="100" aria-labelledby="progressLabel"></progress><span class="pw-help">数字仅为原型动画，不检查更新或下载文件。</span></div>
+<output id="result" class="pw-result" aria-live="polite">可操作预览。真实应用行为以功能映射与后续验收为准。</output>
+<script>
+(()=>{
+const example=document.getElementById('example'),result=document.getElementById('result'),stateSwitch=document.getElementById('stateSwitch');
+stateSwitch.addEventListener('change',()=>{const state=stateSwitch.value;example.dataset.state=state;if('disabled' in example)example.disabled=state==='disabled';if(state==='focus'&&typeof example.focus==='function')example.focus();if(['INPUT','TEXTAREA','SELECT'].includes(example.tagName))example.setAttribute('aria-invalid',String(state==='error'));result.textContent='模拟 '+state+'；复合组件状态作用于可交互子项，具体语义见组件规范。';});
+let timer;document.getElementById('startProgress').addEventListener('click',()=>{clearInterval(timer);const bar=document.getElementById('progressBar'),label=document.getElementById('progressLabel');bar.value=0;timer=setInterval(()=>{bar.value=Math.min(100,bar.value+10);label.textContent='演示下载 · '+bar.value+'%';if(bar.value===100){clearInterval(timer);label.textContent='演示完成 · 仍未执行安装';result.textContent='真实更新继续经过校验、活跃任务阻塞与重启确认。';}},120);});
+
+})();
+</script>
+</body></html>

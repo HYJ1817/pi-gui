@@ -1,0 +1,604 @@
+{
+  "entry": "production electron/main.cjs + public renderer",
+  "backend": "existing tests/visual-harness.cjs, offline TEMP fixtures",
+  "shots": [
+    "dark-1440-empty.png",
+    "native-1280-zoom-1.png",
+    "native-1440-zoom-1.png",
+    "native-1920-zoom-1.png",
+    "native-760-zoom-1.png",
+    "native-1440-zoom-1.25.png",
+    "native-1440-zoom-1.5.png",
+    "native-modal-occlusion.png",
+    "light-1440-native-browser-shell.png",
+    "light-1440-settings-after-native.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-1440-empty",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 472,
+        "y": 772.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1232,
+        "bottom": 882.0000228881836,
+        "left": 472
+      },
+      "panel": null,
+      "popover": null,
+      "active": "",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high"
+    },
+    {
+      "name": "native-1280-zoom-1",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1.5,
+      "pageWidth": 1280,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 800,
+        "top": 0,
+        "right": 264,
+        "bottom": 800,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 672.6666870117188,
+        "width": 560,
+        "height": 109.33333587646484,
+        "top": 672.6666870117188,
+        "right": 856,
+        "bottom": 782.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 888,
+        "y": 0,
+        "width": 392,
+        "height": 800,
+        "top": 0,
+        "right": 1280,
+        "bottom": 800,
+        "left": 888
+      },
+      "popover": null,
+      "active": "browserAddress",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n3\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "native-1440-zoom-1",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 772.6666870117188,
+        "width": 720,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1016,
+        "bottom": 882.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 1048,
+        "y": 0,
+        "width": 392,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1048
+      },
+      "popover": null,
+      "active": "browserAddress",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "native-1920-zoom-1",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1.5,
+      "pageWidth": 1920,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 1080,
+        "top": 0,
+        "right": 264,
+        "bottom": 1080,
+        "left": 0
+      },
+      "composer": {
+        "x": 516,
+        "y": 952.6666870117188,
+        "width": 760,
+        "height": 109.33333587646484,
+        "top": 952.6666870117188,
+        "right": 1276,
+        "bottom": 1062.0000228881836,
+        "left": 516
+      },
+      "panel": {
+        "x": 1528,
+        "y": 0,
+        "width": 392,
+        "height": 1080,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 1528
+      },
+      "popover": null,
+      "active": "browserAddress",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "native-760-zoom-1",
+      "width": 760,
+      "height": 820,
+      "dpr": 1.5,
+      "pageWidth": 760,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 224,
+        "height": 820,
+        "top": 0,
+        "right": 224,
+        "bottom": 820,
+        "left": 0
+      },
+      "composer": {
+        "x": 240,
+        "y": 696.6666870117188,
+        "width": 504,
+        "height": 109.33333587646484,
+        "top": 696.6666870117188,
+        "right": 744,
+        "bottom": 806.0000228881836,
+        "left": 240
+      },
+      "panel": {
+        "x": 368,
+        "y": 0,
+        "width": 392,
+        "height": 820,
+        "top": 0,
+        "right": 760,
+        "bottom": 820,
+        "left": 368
+      },
+      "popover": null,
+      "active": "btnSidebarCollapse",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n3\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "native-1440-zoom-1.25",
+      "width": 1152,
+      "height": 720,
+      "dpr": 1.875,
+      "pageWidth": 1152,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 720.0000610351562,
+        "top": 0,
+        "right": 264,
+        "bottom": 720.0000610351562,
+        "left": 0
+      },
+      "composer": {
+        "x": 296.0000305175781,
+        "y": 592.933349609375,
+        "width": 432.0000305175781,
+        "height": 109.0666732788086,
+        "top": 592.933349609375,
+        "right": 728.0000610351562,
+        "bottom": 702.0000228881836,
+        "left": 296.0000305175781
+      },
+      "panel": {
+        "x": 760.0000610351562,
+        "y": 0,
+        "width": 392.0000305175781,
+        "height": 720.0000610351562,
+        "top": 0,
+        "right": 1152.0000915527344,
+        "bottom": 720.0000610351562,
+        "left": 760.0000610351562
+      },
+      "popover": null,
+      "active": "btnSidebarCollapse",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n3\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "native-1440-zoom-1.5",
+      "width": 960,
+      "height": 600,
+      "dpr": 2.25,
+      "pageWidth": 960,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 600,
+        "top": 0,
+        "right": 264,
+        "bottom": 600,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 472.22222900390625,
+        "width": 632,
+        "height": 109.77777862548828,
+        "top": 472.22222900390625,
+        "right": 928,
+        "bottom": 582.0000076293945,
+        "left": 296
+      },
+      "panel": {
+        "x": 568,
+        "y": 0,
+        "width": 392,
+        "height": 600,
+        "top": 0,
+        "right": 960,
+        "bottom": 600,
+        "left": 568
+      },
+      "popover": null,
+      "active": "btnSidebarCollapse",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n3\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "native-modal-occlusion",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 772.6666870117188,
+        "width": 720,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1016,
+        "bottom": 882.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 1048,
+        "y": 0,
+        "width": 392,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1048
+      },
+      "popover": null,
+      "active": "modalCard",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用\n离线 fixture：验证原生页不会遮挡对话框"
+    },
+    {
+      "name": "light-1440-native-browser-shell",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 296,
+        "y": 772.6666870117188,
+        "width": 720,
+        "height": 109.33333587646484,
+        "top": 772.6666870117188,
+        "right": 1016,
+        "bottom": 882.0000228881836,
+        "left": 296
+      },
+      "panel": {
+        "x": 1048,
+        "y": 0,
+        "width": 392,
+        "height": 900,
+        "top": 0,
+        "right": 1440,
+        "bottom": 900,
+        "left": 1048
+      },
+      "popover": null,
+      "active": "btnSidebarCollapse",
+      "text": "π\npi-GUI\n新对话\n＋\n搜索会话\n会话\n项目\n···\npi-GUI\n发酵罐空气分布器设计核算\n帮我把 README 的测试那节补全\n检查 server.js 的路由顺序\n已归档 1 条\nfermenter-notes\n上下文\n6%\n设置\nπ\npi-GUI\n已连接\npi-GUI\n关联 2 个任务\n修复 SSE 重连问题\n修改后端 · 第 2 次\n查看任务\n展开全部 2 条\n开始一个任务\n\n在下方输入你想完成的事。\n\n6%\nDeepSeek V4 Pro\n思考 high\n3\n文件变更\n3\n浏览器\n浏览器\n⇅\nAgent 控制\nAgent 控制不可用"
+    },
+    {
+      "name": "light-1440-settings-after-native",
+      "width": 1440,
+      "height": 900,
+      "dpr": 1.5,
+      "pageWidth": 1440,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 264,
+        "height": 900,
+        "top": 0,
+        "right": 264,
+        "bottom": 900,
+        "left": 0
+      },
+      "composer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "panel": null,
+      "popover": null,
+      "active": "navProviders",
+      "text": "π\npi-GUI\n← 返回工作区\n工作区\n任务与审阅\n5\nSkills 与扩展\n3\n模型与账户\n模型供应商\n1\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…\n设置\nπ\npi-GUI\n已连接\n设置\n设置\n\n管理工作区、模型与应用偏好。\n\n工作区\n任务与审阅\nSkills 与扩展\n模型与账户\n模型供应商\n供应商与认证\nAgent 能力\n能力状态\n扩展与 MCP\nMCP 配置\n应用与更新\nPi GUI 与 Pi 更新\n重启 Pi\n诊断\n运行状态与诊断\n日志与故障报告…\n键盘与命令\n命令面板…\n键盘快捷键…\n界面\n外观与主题…"
+    }
+  ],
+  "checks": [
+    {
+      "name": "native Browser actually loads local fixture",
+      "ok": true
+    },
+    {
+      "name": "native geometry 1280 zoom 1",
+      "ok": true
+    },
+    {
+      "name": "native geometry 1440 zoom 1",
+      "ok": true
+    },
+    {
+      "name": "native geometry 1920 zoom 1",
+      "ok": true
+    },
+    {
+      "name": "native geometry 760 zoom 1",
+      "ok": true
+    },
+    {
+      "name": "native geometry 1440 zoom 1.25",
+      "ok": true
+    },
+    {
+      "name": "native geometry 1440 zoom 1.5",
+      "ok": true
+    },
+    {
+      "name": "modal detaches actual native page",
+      "ok": true
+    },
+    {
+      "name": "modal return preserves native form and attachment",
+      "ok": true
+    },
+    {
+      "name": "native Browser geometry matches renderer",
+      "ok": true
+    },
+    {
+      "name": "settings detaches native Browser",
+      "ok": true
+    }
+  ],
+  "nativeEvidence": {
+    "addressInput": "DOM keydown dispatched to the existing field handler",
+    "matrix": [
+      {
+        "width": 1280,
+        "height": 800,
+        "zoom": 1,
+        "viewport": {
+          "x": 888.6666870117188,
+          "y": 179.33334350585938,
+          "width": 391.3333435058594,
+          "height": 620.6666870117188,
+          "top": 179.33334350585938,
+          "right": 1280.0000305175781,
+          "bottom": 800.0000305175781,
+          "left": 888.6666870117188
+        },
+        "bounds": {
+          "x": 889,
+          "y": 179,
+          "width": 391,
+          "height": 621
+        },
+        "mode": "dock"
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "zoom": 1,
+        "viewport": {
+          "x": 1048.666748046875,
+          "y": 179.33334350585938,
+          "width": 391.3333435058594,
+          "height": 720.6666870117188,
+          "top": 179.33334350585938,
+          "right": 1440.0000915527344,
+          "bottom": 900.0000305175781,
+          "left": 1048.666748046875
+        },
+        "bounds": {
+          "x": 1049,
+          "y": 179,
+          "width": 391,
+          "height": 721
+        },
+        "mode": "dock"
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "zoom": 1,
+        "viewport": {
+          "x": 1528.666748046875,
+          "y": 179.33334350585938,
+          "width": 391.3333435058594,
+          "height": 900.6666870117188,
+          "top": 179.33334350585938,
+          "right": 1920.0000915527344,
+          "bottom": 1080.0000305175781,
+          "left": 1528.666748046875
+        },
+        "bounds": {
+          "x": 1529,
+          "y": 179,
+          "width": 391,
+          "height": 901
+        },
+        "mode": "dock"
+      },
+      {
+        "width": 760,
+        "height": 820,
+        "zoom": 1,
+        "viewport": {
+          "x": 368.66668701171875,
+          "y": 179.33334350585938,
+          "width": 391.3333435058594,
+          "height": 640.6666870117188,
+          "top": 179.33334350585938,
+          "right": 760.0000305175781,
+          "bottom": 820.0000305175781,
+          "left": 368.66668701171875
+        },
+        "bounds": {
+          "x": 369,
+          "y": 179,
+          "width": 391,
+          "height": 641
+        },
+        "mode": "overlay"
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "zoom": 1.25,
+        "viewport": {
+          "x": 760.5333862304688,
+          "y": 179.06668090820312,
+          "width": 391.4666748046875,
+          "height": 540.933349609375,
+          "top": 179.06668090820312,
+          "right": 1152.0000610351562,
+          "bottom": 720.0000305175781,
+          "left": 760.5333862304688
+        },
+        "bounds": {
+          "x": 951,
+          "y": 224,
+          "width": 489,
+          "height": 676
+        },
+        "mode": "dock"
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "zoom": 1.5,
+        "viewport": {
+          "x": 568.888916015625,
+          "y": 179.7777862548828,
+          "width": 391.1111145019531,
+          "height": 420.22222900390625,
+          "top": 179.7777862548828,
+          "right": 960.0000305175781,
+          "bottom": 600.0000152587891,
+          "left": 568.888916015625
+        },
+        "bounds": {
+          "x": 853,
+          "y": 270,
+          "width": 587,
+          "height": 630
+        },
+        "mode": "overlay"
+      }
+    ],
+    "version": "44.4.3",
+    "title": "Refined Offline Browser",
+    "bounds": {
+      "x": 1049,
+      "y": 179,
+      "width": 391,
+      "height": 721
+    },
+    "viewport": {
+      "x": 1048.666748046875,
+      "y": 179.33334350585938,
+      "width": 391.3333435058594,
+      "height": 720.6666870117188,
+      "top": 179.33334350585938,
+      "right": 1440.0000915527344,
+      "bottom": 900.0000305175781,
+      "left": 1048.666748046875
+    },
+    "zoom": 1,
+    "pageCapture": "captured"
+  },
+  "errors": []
+}

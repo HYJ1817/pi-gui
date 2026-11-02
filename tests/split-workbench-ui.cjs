@@ -276,7 +276,7 @@ function indexPayload(workspaceId, generation, label) {
     window.innerWidth = 720;
     window.dispatchEvent(new window.Event('resize'));
     ok('720px windows fall back without changing right-pane width or chat draft', () =>
-      reopened.dataset.workbenchMode === 'fallback' && pane.width() === 420);
+      reopened.dataset.workbenchMode === 'fallback' && pane.width() === 392);
     window.innerWidth = 1200;
     window.dispatchEvent(new window.Event('resize'));
     ok('restoring width resumes both panels', () => reopened.dataset.workbenchMode === 'split');

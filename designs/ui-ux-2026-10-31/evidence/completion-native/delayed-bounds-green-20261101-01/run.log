@@ -1,0 +1,16 @@
+
+> pi-gui@0.30.1 test:electron-smoke
+> node tests/electron-smoke.cjs
+
+
+ok Electron starts with normal sandbox, isolated context and no Node integration
+ok renderer connects to the production backend and fake Pi
+ok workspace and owner identity belong to the temporary Git repository
+ok native Browser screenshot contains nonempty pixels
+ok real native Browser geometry matches renderer at 1200px
+ok real native Browser geometry matches renderer at 760px
+ok real native Browser cannot cover the visible modal
+ok panel close destroys the native page and detaches its view
+ok reopen creates a fresh generation with no stale URL or document
+ok no renderer errors during smoke
+Electron smoke: 11/11; normal sandbox; residual processes 0; C:\pi-GUI\designs\ui-ux-2026-10-31\evidence\completion-native\delayed-bounds-green-20261101-01

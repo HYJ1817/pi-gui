@@ -1,0 +1,24 @@
+{
+  "version": "0.30.1",
+  "buildRoot": "C:/pi-GUI/dist-app/refined-complete-20261101",
+  "created": "2026-11-01T12:29:06.754Z",
+  "files": [
+    {
+      "relative": "Pi GUI.exe",
+      "bytes": 246324736,
+      "sha256": "0db81cc39790afd84ac5905bebbe6be157d0f14636e7bb0c4b0e3412b0f35018"
+    },
+    {
+      "relative": "resources/app/server.cjs",
+      "bytes": 2559995,
+      "sha256": "1cce072dd87e4ef4c273d7aa960bcd154d42b023b83f1d9d19175cb7285a4d1f"
+    },
+    {
+      "relative": "resources/app/main.cjs",
+      "bytes": 43679,
+      "sha256": "b1275c87973d07c7b6eae79447a178c0ab859e4bcfe1d3d19bc158ec51eeff59"
+    }
+  ],
+  "rendererFiles": 149,
+  "rendererMismatches": []
+}

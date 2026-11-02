@@ -1,0 +1,19 @@
+{
+  "scope": "browser comments presentation acceptance only",
+  "passed": 3,
+  "total": 3,
+  "checks": [
+    {
+      "name": "任务和资源退出聊天侧栏",
+      "pass": true
+    },
+    {
+      "name": "选择器没有装饰下箭头",
+      "pass": true
+    },
+    {
+      "name": "变更与浏览器退出顶栏",
+      "pass": true
+    }
+  ]
+}

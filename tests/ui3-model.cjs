@@ -238,6 +238,41 @@ async function main() {
     const long = [...pop().querySelectorAll('.ui3-model-item')].at(-1);
     assert.ok(long.querySelector('.pi-text').textContent.length > 200);
   });
+  await check('模型搜索按名称、ID、Provider过滤，清空后恢复折叠记忆', () => {
+    openModels(currentModel, MODELS);
+    const callsBefore = picked.length;
+    const before = [...expanded];
+    const search = pop().querySelector('.ui3-model-search');
+    assert.ok(search);
+    search.value = 'GLM'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    const visible = [...pop().querySelectorAll('.ui3-model-item')].filter(item => !item.closest('[hidden]'));
+    assert.equal(visible.length, 1); assert.equal(visible[0].dataset.provider, 'zhipu');
+    assert.equal(doc.activeElement, search);
+    assert.deepEqual([...expanded], before);
+    search.value = ''; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.deepEqual([...expanded], before);
+    assert.equal(pop().querySelector('[data-provider="zhipu"] .pop-provider-models').hidden, !expanded.has('zhipu'));
+    search.value = 'does-not-exist'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.equal(pop().querySelector('.ui3-model-no-match').hidden, false);
+    assert.equal(picked.length, callsBefore);
+  });
+  await check('模型搜索 ArrowDown 进入匹配项，Enter 不擅自选择', () => {
+    openModels(currentModel);
+    const search = pop().querySelector('.ui3-model-search'), before = picked.length;
+    search.value = 'glm'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    assert.equal(doc.activeElement.dataset.modelId, 'glm-4.6');
+    search.focus(); const event = new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    search.dispatchEvent(event); assert.equal(event.defaultPrevented, true); assert.equal(picked.length, before);
+  });
+  await check('无匹配时 ArrowDown 保留搜索焦点，Escape 返回真实触发器', () => {
+    const search = pop().querySelector('.ui3-model-search'); search.value = 'no-match';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    assert.equal(doc.activeElement, search);
+    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(pop().hidden, true); assert.equal(doc.activeElement.id, 'btnModel');
+  });
   await check('长名写入 textContent，不产生元素注入', () => {
     const html = many.at(-1).name;
     openModels({ provider: 'evil', id: '<img src=x onerror=alert(1)>', name: '<img src=x onerror=alert(1)>' },

@@ -4,7 +4,7 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { spawn, execFileSync } = require('node:child_process');
 if (!process.versions.electron) {
   const world = fs.mkdtempSync(path.join(os.tmpdir(), 'p32-runtime-electron-')), env = { ...process.env, P32_RUNTIME_WORLD: world }; delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn(require('electron'), [__filename, ...(env.UI4_RUNTIME_INTEGRATION ? [] : ['--no-sandbox']), '--in-process-gpu'], { env, stdio: 'inherit', windowsHide: true });
+  const child = spawn(require('electron'), [__filename, ...((env.UI4_RUNTIME_INTEGRATION || env.P32_REFINED_RUNTIME) ? [] : ['--no-sandbox']), '--in-process-gpu'], { env, stdio: 'inherit', windowsHide: true });
   child.on('error', () => { process.exitCode = 1; }); child.on('exit', code => { process.exitCode = code ?? 1; fs.rm(world, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {}); });
 } else {
   const { app, BrowserWindow, ipcMain } = require('electron'); app.on('window-all-closed', () => {});
@@ -98,6 +98,11 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     assert.ok(fs.existsSync(trace), 'fixture probe must execute the owned entry, not an installed pi');
     const reserve = require('node:net').createServer(); await new Promise(r => reserve.listen(0, '127.0.0.1', r)); const port = reserve.address().port; await new Promise(r => reserve.close(r)); origin = `http://127.0.0.1:${port}`;
     win = new BrowserWindow({ width: 1440, height: 900, useContentSize: true, show: true, autoHideMenuBar: true, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(ROOT, 'electron/preload.cjs') } });
+    if (process.env.P32_REFINED_RUNTIME === '1') {
+      require('electron').session.defaultSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, done) => {
+        done({ cancel: !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(details.url).hostname) });
+      });
+    }
     browser = require('../electron/browser-view.cjs').createBrowserController({ origin, getWindow: () => win, ipcMain, isVisible: () => !host || host.isLegacyVisible() }); browser.register();
     legacyHost = require('../electron/browser-agent-host.cjs').createBrowserAgentHost({ browser, origin, getWindow: () => win, ipcMain, extensionPath: path.join(ROOT, 'extensions/pi-gui-browser/index.js') }); await legacyHost.start();
     host = require('../electron/browser-runtime-host.cjs').createRuntimeBrowserHost({ origin, getWindow: () => win, ipcMain, extensionPath: path.join(ROOT, 'extensions/pi-gui-browser/index.js'), onFocus: active => browser.setOccluded(active) }); await host.start();
@@ -135,6 +140,16 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     started = await api({ action: 'start', args: { id: workspaces[1].id, epoch: workspaces[1].epoch, allowThird: true } }); check(started.ok, 'B explicit third total child');
     let state; await until(async () => { state = await api(); return state.items.every(r => r.lifecycle === 'ready' && r.owner.sessionId); });
     const owners = workspaces.map(w => state.items.find(r => r.owner.workspaceId === w.id).owner);
+    if (process.env.P32_REFINED_RUNTIME === '1') {
+      check(!app.commandLine.hasSwitch('no-sandbox') && win.webContents.getLastWebPreferences().sandbox === true && win.webContents.getLastWebPreferences().contextIsolation === true && win.webContents.getLastWebPreferences().nodeIntegration === false, 'Refined Runtime uses normal sandbox and isolated renderer');
+      await require('./fixtures/runtime-refined-scenarios.cjs')({ win, read, api, until, check: (label, value) => check(value, label), click, key, shot, owners, OUT: OUT4 });
+      assert.deepEqual(errors, [], 'Refined Runtime renderer errors');
+      for (const owner of owners) check((await api({ action: 'close', owner })).ok, 'Refined fixture closes owned Runtime');
+      await until(() => read("document.querySelector('#runtimeView .rtc-model-trigger').disabled"));
+      check(errors.length === 0, 'Refined Runtime owner retirement produces no renderer errors');
+      fs.writeFileSync(path.join(OUT4, 'refined-report.json'), JSON.stringify({ mode: 'refined-runtime', checks, platform: process.platform, electron: process.versions.electron, qualification: 'normal-sandbox', screenshots, errors }, null, 2));
+      console.log(`Refined Runtime Electron ${checks}/${checks}; ${screenshots.length} screenshots`); return;
+    }
     await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}}))`); await until(() => read(`document.querySelectorAll('#modalCard .runtime-list .btn').length===2`));
     await api({ action: 'command', owner: owners[0], command: { type: 'prompt', message: 'TASK_A' } });
     await read(`document.querySelector('#modalCard .runtime-list .btn:nth-child(2)').click()`);
@@ -558,9 +573,9 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     await read(`(()=>{const s=document.querySelector(${JSON.stringify(thinkingSel)});s.value='high';s.dispatchEvent(new Event('change'))})()`);
     await until(() => read(`!document.querySelector(${JSON.stringify(thinkingSel)}).disabled&&document.querySelector(${JSON.stringify(thinkingSel)}).value==='high'`));
     check(true, 'P32.4-E A thinking setter confirmed by native readback');
-    await read(`document.querySelector(${JSON.stringify(thinkingSel)}).focus()`); key('Up');
+    await click('#runtimeView .rtc-thinking-trigger'); key('Up'); key('Enter');
     await until(() => read(`!document.querySelector(${JSON.stringify(thinkingSel)}).disabled&&document.querySelector(${JSON.stringify(thinkingSel)}).value==='low'`));
-    check(true, 'P32.4-E physical Arrow navigation selects a native allowed thinking level');
+    check(true, 'P32.4-E physical Arrow and Enter navigation selects a native allowed thinking level');
     await clickRow(idB); await until(async () => (await modelId()) === 'text-b');
     check(await read(`document.querySelector(${JSON.stringify(thinkingSel)}).disabled`), 'P32.4-E A thinking change leaves B unsupported capability intact');
 

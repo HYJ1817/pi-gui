@@ -1,0 +1,13 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+Captured dark-1440-empty
+Captured native-1280-zoom-1
+Captured native-1440-zoom-1
+Captured native-1920-zoom-1
+Captured native-760-zoom-1
+Captured native-1440-zoom-1.25
+Captured native-1440-zoom-1.5
+Captured native-modal-occlusion
+Captured light-1440-native-browser-shell
+Captured light-1440-settings-after-native
+Fixture retained in TEMP: C:\Users\21022\AppData\Local\Temp\pi-design-current-eKfUj6
