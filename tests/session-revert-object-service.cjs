@@ -74,7 +74,7 @@ const quick={storeOptions:{privacyCheck:async()=>true}};
  },quick);
  await h.fixture(async x=>{
   let entered,unblock;const waiting=new Promise(r=>entered=r),gate=new Promise(r=>unblock=r);
-  const {runSessionRevert}=await import('../server/session-revert-compute.js');await x.createService({compute:async input=>{entered();await gate;return runSessionRevert(input);}});
+  await x.createService({compute:async input=>{entered();await gate;return h.computeInProcess(input);}});
   await check('dispose waits for pending prepare and cannot return a fresh token/retained lease',async()=>{const preparing=x.service.prepareObjectRevert({},x.body);const rejection=reject(()=>preparing,'service_disposed');await waiting;let closed=false;const disposal=x.service.dispose().then(()=>closed=true);await new Promise(r=>setImmediate(r));assert.equal(closed,false);unblock();await rejection;await disposal;x.admission.assertAllowed(x.root);});
  },quick);
  await h.fixture(async x=>{
