@@ -253,6 +253,55 @@ const pub = path.join(root, 'public');
     });
   }
 
+  // Test Group 6: Settings Page Titles and Titlebar Continuity Specification
+  {
+    const css = fs.readFileSync(path.join(pub, 'styles.css'), 'utf8');
+
+    check('styles.css renders seamless stage-head in settings mode and hides redundant workViewTitle', () => {
+      assert.ok(css.includes('.stage[data-workspace-view="settings"] .stage-head'));
+      assert.ok(css.includes('.stage[data-workspace-view="settings"] #workViewTitle'));
+    });
+
+    check('styles.css suppresses redundant occluding settings-titlebar', () => {
+      assert.ok(css.includes('.settings-titlebar {\n  display: none !important;\n}') || css.includes('.settings-titlebar{display:none!important}'));
+    });
+
+    check('settings pages maintain visible 30px page-level headings in the DOM', () => {
+      // 1. Overview heading
+      window.document.querySelector('#navGlobalMore').click();
+      const overview = window.document.querySelector('.settings-surface');
+      assert.ok(overview, 'settings-surface must be present');
+      const overviewH2 = overview.querySelector('h2');
+      assert.ok(overviewH2, 'Overview h2 must exist');
+      assert.equal(overviewH2.textContent, '设置');
+      assert.equal(overviewH2.hidden, false);
+
+      // 2. Appearance heading
+      let appCard = null;
+      window.openAppearance({ present: (build) => { appCard = window.document.createElement('div'); build(appCard, () => {}); } });
+      const appH3 = appCard.querySelector('h3');
+      assert.ok(appH3, 'Appearance page h3 must exist');
+      assert.equal(appH3.textContent, '外观与主题');
+      assert.equal(appH3.hidden, false);
+
+      // 3. Providers heading
+      let provCard = null;
+      window.openProvidersPanel({ present: (build) => { provCard = window.document.createElement('div'); build(provCard, () => {}); } });
+      const provH3 = provCard.querySelector('.settings-page-title');
+      assert.ok(provH3, 'Providers page title must exist');
+      assert.equal(provH3.textContent, '模型配置');
+      assert.equal(provH3.hidden, false);
+
+      // 4. App Updates heading
+      let updateCard = null;
+      window.openAppUpdates({ present: (build) => { updateCard = window.document.createElement('div'); build(updateCard, () => {}); } });
+      const updateH3 = updateCard.querySelector('h3');
+      assert.ok(updateH3, 'App updates h3 must exist');
+      assert.equal(updateH3.textContent, '应用与更新');
+      assert.equal(updateH3.hidden, false);
+    });
+  }
+
   console.log(`\nAll ${checks} settings acceptance checks passed successfully!`);
   process.exit(0);
 })().catch(err => {
