@@ -4,8 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { JSDOM } = require('jsdom');
+const { bundle } = require('./esm-bundle.cjs');
 
-console.log('Running tests/settings-acceptance.cjs (Phase A & B Acceptance Tests)...');
+console.log('Running tests/settings-acceptance.cjs (Phase A & B Real Module Integration Tests)...');
 
 let checks = 0;
 function check(name, fn) {
@@ -21,11 +22,12 @@ async function checkAsync(name, fn) {
 }
 
 const root = path.resolve(__dirname, '..');
+const pub = path.join(root, 'public');
 
 (async () => {
   // Test Group 1: Theme Init Startup Hydration for Font Scale and Font Family
   {
-    const initCode = fs.readFileSync(path.join(root, 'public/theme-init.js'), 'utf8');
+    const initCode = fs.readFileSync(path.join(pub, 'theme-init.js'), 'utf8');
 
     check('startup hydration restores font-scale from localStorage before paint', () => {
       const dom = new JSDOM('<html><head></head><body></body></html>', { url: 'http://fixture', runScripts: 'outside-only' });
@@ -65,7 +67,7 @@ const root = path.resolve(__dirname, '..');
 
   // Test Group 2: D297 & D601 Primitives Specification
   {
-    const primitivesCode = fs.readFileSync(path.join(root, 'public/ui/primitives.js'), 'utf8')
+    const primitivesCode = fs.readFileSync(path.join(pub, 'ui/primitives.js'), 'utf8')
       .replace(/export function /g, 'function ');
     
     const dom = new JSDOM('<html><body></body></html>');
@@ -115,144 +117,136 @@ const root = path.resolve(__dirname, '..');
     });
   }
 
-  // Test Group 3: Keyboard Navigation & Search Filter Skipping Hidden Items
+  // Real App Bundle Execution Setup for Integration Tests
+  const html = fs.readFileSync(path.join(pub, 'index.html'), 'utf8');
+  const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
+  const { window } = dom;
+
+  window.EventSource = class { constructor() {} close() {} };
+  window.fetch = async () => ({ json: async () => ({ ok: true, providers: {}, keyStates: {} }) });
+
+  const bundled = bundle(path.join(pub, 'app.js'));
+  window.eval(bundled.code);
+
+  // Test Group 3: Real Module Search Filtering & Keyboard Navigation in Settings Menu
   {
-    const dom = new JSDOM(`
-      <html>
-        <body>
-          <nav id="globalMoreMenu">
-            <input id="settingsSearchInput" type="text" />
-            <section id="secPref">
-              <h3>偏好</h3>
-              <button id="btnAppearance">常规</button>
-              <button id="btnShortcuts">快捷键</button>
-            </section>
-            <section id="secModels">
-              <h3>模型</h3>
-              <button id="btnProviders">模型供应商</button>
-              <button id="btnAuth">认证</button>
-            </section>
-          </nav>
-        </body>
-      </html>
-    `);
+    const searchInput = window.document.querySelector('#settingsSearchInput');
+    const menu = window.document.querySelector('#globalMoreMenu');
+    const btnAppearance = window.document.querySelector('#navAppearance');
+    const btnShortcuts = window.document.querySelector('#navShortcutHelp');
+    const btnProviders = window.document.querySelector('#navProviders');
 
-    const menu = dom.window.document.querySelector('#globalMoreMenu');
-    const input = dom.window.document.querySelector('#settingsSearchInput');
-    const btnApp = dom.window.document.querySelector('#btnAppearance');
-    const btnShort = dom.window.document.querySelector('#btnShortcuts');
-    const btnProv = dom.window.document.querySelector('#btnProviders');
-    const btnAuth = dom.window.document.querySelector('#btnAuth');
-    const secPref = dom.window.document.querySelector('#secPref');
-    const secModels = dom.window.document.querySelector('#secModels');
+    check('real settingsSearchInput input event filters navigation items and sections', () => {
+      assert.ok(searchInput, 'searchInput element must exist');
+      assert.ok(menu, 'globalMoreMenu must exist');
 
-    // Simulate search filter: search '快捷' hides btnAppearance and secModels
-    btnApp.hidden = true;
-    secModels.hidden = true;
-    btnProv.hidden = true;
-    btnAuth.hidden = true;
+      // Filter by "快捷"
+      searchInput.value = '快捷';
+      searchInput.oninput();
 
-    // Attach keyboard listener mimicking settings-surface.js
-    menu.addEventListener('keydown', event => {
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const visibleButtons = [...menu.querySelectorAll('button:not([disabled])')].filter(btn => {
-        if (btn.hidden || btn.closest('section')?.hidden) return false;
-        return true;
+      assert.equal(btnShortcuts.hidden, false, 'navShortcutHelp must be visible');
+      assert.equal(btnAppearance.hidden, true, 'navAppearance must be hidden');
+      assert.equal(btnProviders.hidden, true, 'navProviders must be hidden');
+      assert.equal(btnProviders.closest('section').hidden, true, 'Model section must be hidden');
+    });
+
+    check('real keyboard navigation strictly skips hidden items during search', () => {
+      // Focus the only visible item in preference section
+      btnShortcuts.focus();
+      assert.equal(window.document.activeElement, btnShortcuts);
+
+      // ArrowDown should stay on the only visible item (wrapping around), never focusing hidden items
+      menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      assert.equal(window.document.activeElement, btnShortcuts, 'ArrowDown must not focus hidden items');
+
+      // ArrowUp from first visible button returns focus to search input
+      menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      assert.equal(window.document.activeElement, searchInput, 'ArrowUp from first visible item must focus search input');
+
+      // Clear search restores all items
+      searchInput.value = '';
+      searchInput.oninput();
+      assert.equal(btnAppearance.hidden, false, 'navAppearance restored after search clear');
+      assert.equal(btnProviders.hidden, false, 'navProviders restored after search clear');
+    });
+  }
+
+  // Test Group 4: Real Module Provider Count, Empty State, and Catalog Synchronization
+  {
+    check('real setProvidersData synchronizes providerCount, empty state card, and catalog count to 0', () => {
+      // Mount providers panel via real openProvidersPanel
+      window.openProvidersPanel({
+        present: (build) => {
+          const card = window.document.createElement('div');
+          build(card, () => {});
+          window.document.body.appendChild(card);
+        }
       });
-      if (visibleButtons.length === 0) return;
-      const index = visibleButtons.indexOf(dom.window.document.activeElement);
-      if (index === 0 && event.key === 'ArrowUp' && input && !input.hidden) {
-        input.focus();
-        return;
-      }
-      const next = event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? visibleButtons.length - 1
-          : index === -1
-            ? (event.key === 'ArrowUp' ? visibleButtons.length - 1 : 0)
-            : (index + (event.key === 'ArrowDown' ? 1 : -1) + visibleButtons.length) % visibleButtons.length;
-      visibleButtons[next]?.focus();
+
+      // Deliver empty data
+      window.setProvidersData({ path: '~/.pi/agent/models.json', providers: {}, keyStates: {} });
+
+      const badge = window.document.querySelector('#providerCount').textContent;
+      const emptyCard = window.document.querySelector('.prov-empty-card');
+      const catalogSpan = window.document.querySelector('.prov-catalog-info span').textContent;
+
+      assert.equal(badge, '', 'Badge should be empty string when 0 providers');
+      assert.ok(emptyCard, 'Empty card must be present');
+      assert.ok(catalogSpan.includes('0 个自定义服务'), `Footer catalog info must show 0 custom services, got: ${catalogSpan}`);
     });
 
-    check('search filtering strictly excludes hidden buttons and hidden sections from arrow navigation', () => {
-      btnShort.focus();
-      assert.equal(dom.window.document.activeElement, btnShort);
-      // Pressing ArrowDown when btnShort is the only visible button wraps back to btnShort
-      menu.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-      assert.equal(dom.window.document.activeElement, btnShort, 'Must stay on btnShort, must NOT focus hidden btnProv or btnApp');
-    });
+    check('real setProvidersData synchronizes providerCount, card list, and catalog count to 2', () => {
+      // Deliver 2 providers
+      window.setProvidersData({
+        path: '~/.pi/agent/models.json',
+        providers: {
+          deepseek: { models: [{ id: 'deepseek-chat' }], api: 'openai-completions' },
+          openai: { models: [{ id: 'gpt-4o' }], api: 'openai-completions' }
+        },
+        keyStates: {}
+      });
 
-    check('arrow up from first visible item returns focus to search input', () => {
-      btnShort.focus();
-      menu.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
-      assert.equal(dom.window.document.activeElement, input, 'Focus must return to search input');
-    });
-  }
+      const badge = window.document.querySelector('#providerCount').textContent;
+      const provCards = window.document.querySelectorAll('.prov');
+      const emptyCard = window.document.querySelector('.prov-empty-card');
+      const catalogSpan = window.document.querySelector('.prov-catalog-info span').textContent;
 
-  // Test Group 4: Provider Count, Empty State, and Catalog Footer Synchronization
-  {
-    const dom = new JSDOM(`
-      <html>
-        <body>
-          <span id="providerCount"></span>
-          <div id="parentCard">
-            <div id="provBox"></div>
-            <div class="prov-catalog-footer">
-              <div class="prov-catalog-info"><span></span></div>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
-
-    const el = { providerCount: dom.window.document.querySelector('#providerCount') };
-    const box = dom.window.document.querySelector('#provBox');
-    const catalogSpan = dom.window.document.querySelector('.prov-catalog-info span');
-
-    function syncProviders(data) {
-      const names = Object.keys(data.providers || {});
-      el.providerCount.textContent = names.length ? String(names.length) : '';
-      if (!box) return;
-      box.innerHTML = '';
-      if (!names.length) {
-        const empty = dom.window.document.createElement('div');
-        empty.className = 'hint-empty prov-empty-card ds-settings-card';
-        box.appendChild(empty);
-      } else {
-        names.forEach(name => {
-          const item = dom.window.document.createElement('div');
-          item.className = 'prov ds-settings-card';
-          box.appendChild(item);
-        });
-      }
-      const footerSpan = box.parentElement?.querySelector('.prov-catalog-info span');
-      if (footerSpan) {
-        footerSpan.textContent = `目录: 内置快照 · ${names.length} 个自定义服务 · 更新于 本地`;
-      }
-    }
-
-    check('empty state synchronizes providerCount, emptyCard, and catalog footer count to 0', () => {
-      syncProviders({ providers: {} });
-      assert.equal(el.providerCount.textContent, '', 'providerCount badge empty when 0');
-      assert.ok(box.querySelector('.prov-empty-card'), 'Empty card must be present');
-      assert.ok(catalogSpan.textContent.includes('0 个自定义服务'), `Expected 0 custom services, got ${catalogSpan.textContent}`);
-    });
-
-    check('populated state synchronizes providerCount, card items, and catalog footer count to 3', () => {
-      syncProviders({ providers: { openrouter: {}, anthropic: {}, ollama: {} } });
-      assert.equal(el.providerCount.textContent, '3');
-      assert.equal(box.querySelectorAll('.prov').length, 3);
-      assert.equal(box.querySelector('.prov-empty-card'), null);
-      assert.ok(catalogSpan.textContent.includes('3 个自定义服务'), `Expected 3 custom services, got ${catalogSpan.textContent}`);
+      assert.equal(badge, '2', 'Badge must show 2');
+      assert.equal(provCards.length, 2, 'Must render exactly 2 provider cards');
+      assert.equal(emptyCard, null, 'Empty card must not exist when providers are present');
+      assert.ok(catalogSpan.includes('2 个自定义服务'), `Footer catalog info must show 2 custom services, got: ${catalogSpan}`);
     });
   }
 
-  // Test Group 5: Appearance Status Error Display
+  // Test Group 5: Real Appearance Status & Error Reporting
+  await checkAsync('real openAppearance displays status and reflects save error states', async () => {
+    window.openAppearance({
+      present: (build) => {
+        const card = window.document.createElement('div');
+        build(card, () => {});
+        window.document.body.appendChild(card);
+      }
+    });
+
+    const status = window.document.querySelector('.appearance-status');
+    assert.ok(status, 'appearance-status element must be rendered');
+    assert.ok(!status.classList.contains('is-error'), 'Initial status must not have error class');
+
+    // Trigger save failure by passing invalid theme mode to select onchange
+    const select = window.document.querySelector('.appearance-theme-row select');
+    assert.ok(select, 'Theme select must be rendered');
+
+    select.value = 'invalid-mode';
+    await select.onchange();
+
+    assert.ok(status.classList.contains('is-error'), 'Status must have .is-error class on failure');
+    assert.equal(status.textContent, '主题未能保存，请重试。', 'Status text must explain save failure');
+  });
+
+  // Verify CSS does not suppress appearance status
   {
-    const css = fs.readFileSync(path.join(root, 'public/styles.css'), 'utf8');
-    check('styles.css does not hide .appearance-status with display:none !important', () => {
+    const css = fs.readFileSync(path.join(pub, 'styles.css'), 'utf8');
+    check('styles.css does not suppress .appearance-status with display:none !important', () => {
       assert.ok(!css.includes('.appearance-status {\n  display: none !important;\n}'));
       assert.ok(!css.includes('.appearance-status{display:none!important}'));
       assert.ok(css.includes('.appearance-status'));
@@ -260,7 +254,8 @@ const root = path.resolve(__dirname, '..');
   }
 
   console.log(`\nAll ${checks} settings acceptance checks passed successfully!`);
+  process.exit(0);
 })().catch(err => {
   console.error(err);
-  process.exitCode = 1;
+  process.exit(1);
 });
