@@ -2,8 +2,7 @@
    Keep this file before styles.css; geometry stays in the component styles.
    Audited & fully reconciled with PI-Desktop Design Tokens Specification. */
 
-:root,
-:root[data-theme="dark"] {
+:root {
   color-scheme: dark;
 
   /* ==========================================================================
