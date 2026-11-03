@@ -54,10 +54,6 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     if (sidebar.hidden) $('btnSidebarExpand').click();
     openWorkSurface('settings', host => {
       host.classList.add('settings-surface');
-      const titlebar = document.createElement('div');
-      titlebar.className = 'settings-titlebar';
-      titlebar.setAttribute('aria-hidden', 'true');
-      host.append(titlebar);
 
       const head = document.createElement('div');
       head.className = 'settings-surface-head';
@@ -100,10 +96,6 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     const target = $(destination);
     const instance = openWorkSurface('settings', (host, life) => {
       host.classList.add('settings-detail');
-      const titlebar = document.createElement('div');
-      titlebar.className = 'settings-titlebar';
-      titlebar.setAttribute('aria-hidden', 'true');
-      host.append(titlebar);
 
       const card = document.createElement('section');
       card.className = 'modal-card settings-detail-card' + (options.className ? ' ' + options.className : '');

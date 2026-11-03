@@ -2850,23 +2850,26 @@ button.pj-sess-primary{cursor:pointer}
   position: static;
 }
 
-/* Work Surface in Settings mode: seamless edge-to-edge canvas matching PI-Desktop */
-.work-surface:has(> .settings-surface),
-.work-surface:has(> .settings-detail),
-.work-surface.settings-surface,
-.work-surface.settings-detail {
-  padding: 0 !important;
+/* Work Surface & Titlebar in Settings mode: seamless edge-to-edge canvas matching PI-Desktop */
+.stage[data-workspace-view="settings"] .stage-head {
   background: var(--ds-bg-primary) !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+.stage[data-workspace-view="settings"] #workViewTitle,
+.stage[data-workspace-view="settings"] #btnWorkPanel {
+  display: none !important;
 }
 
 /* Settings Surface (Overview) */
-.settings-surface {
+.settings-surface,
+.work-surface.settings-surface {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
-  padding: calc(var(--ds-toolbar-height, 46px) + 16px) clamp(24px, 5vw, 56px) 56px;
+  padding: 20px clamp(24px, 5vw, 56px) 56px !important;
   background: var(--ds-bg-primary) !important;
   min-height: 100%;
   box-sizing: border-box;
@@ -2980,11 +2983,12 @@ button.pj-sess-primary{cursor:pointer}
 }
 
 /* Settings Detail Canvas */
-.settings-detail {
+.settings-detail,
+.work-surface.settings-detail {
   position: relative;
   display: flex;
   justify-content: center;
-  padding: calc(var(--ds-toolbar-height, 46px) + 16px) clamp(24px, 5vw, 56px) 56px;
+  padding: 20px clamp(24px, 5vw, 56px) 56px !important;
   background: var(--ds-bg-primary) !important;
   min-height: 100%;
   box-sizing: border-box;
@@ -3073,20 +3077,7 @@ fieldset.appearance-body {
   letter-spacing: 0.01em;
 }
 .settings-titlebar {
-  pointer-events: none;
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: 10;
-  height: var(--ds-toolbar-height, 46px);
-  background: var(--ds-bg-primary);
-  border-bottom: 0;
-  -webkit-app-region: drag;
-}
-:root[data-platform="win32"] .settings-titlebar,
-:root[data-platform="linux"] .settings-titlebar {
-  right: var(--ds-window-controls-width, 138px);
+  display: none !important;
 }
 .global-more-menu button.is-active,
 .global-more-menu button[aria-current="page"],
