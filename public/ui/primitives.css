@@ -185,25 +185,37 @@
 /* ==========================================================================
    Settings Card & Rows (D297 / D601 Specification)
    ========================================================================== */
-.ds-settings-card {
-  background: var(--ds-tile);
-  border-radius: var(--radius-md-plus);
-  padding: 16px 20px;
-  margin-bottom: 16px;
-  border: 0;
-  box-shadow: none;
-  box-sizing: border-box;
+.settings-card-block,
+.ds-settings-card-block {
+  margin-bottom: 28px;
+}
+
+.settings-card-heading,
+.ds-settings-card-title {
+  margin: 0;
+  color: var(--ds-text-primary);
+  font-size: var(--text-md-plus);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--leading-compact);
+}
+
+.settings-card-heading-help {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.settings-card-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .ds-settings-card-header {
-  margin-bottom: 12px;
-}
-
-.ds-settings-card-title {
-  font-size: var(--text-base);
-  font-weight: var(--font-weight-strong);
-  color: var(--ds-text-primary);
-  margin: 0 0 4px;
+  margin-bottom: 10px;
 }
 
 .ds-settings-card-desc {
@@ -213,45 +225,94 @@
   line-height: var(--leading-normal);
 }
 
+.settings-panel,
 .ds-settings-card-body {
   display: flex;
   flex-direction: column;
 }
 
+/* Standalone container fallback when not dissolving into tile rows */
+.ds-settings-card:not(.settings-card-block) {
+  background: var(--ds-tile);
+  border-radius: var(--radius-md-plus);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  border: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+/*
+  D297: Panels that are a stack of rows dissolve into the page.
+  Each row becomes its own rounded tile with 6px gap between them.
+*/
+.settings-panel:has(> .settings-row),
+.settings-panel:has(> .ds-settings-row),
+.ds-settings-card-body:has(> .settings-row),
+.ds-settings-card-body:has(> .ds-settings-row) {
+  gap: 6px;
+  background: transparent !important;
+  overflow: visible;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+/* Independent rounded setting row tile */
+.settings-row,
 .ds-settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: var(--ds-field-height);
-  padding: 10px 0;
-  border-bottom: 1px solid color-mix(in oklab, var(--ds-text-primary) 5%, transparent);
-  gap: 16px;
+  gap: 24px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  border: 0;
   box-sizing: border-box;
+  transition: background var(--motion-duration-fast) var(--motion-ease-out);
 }
 
-.ds-settings-row:last-child {
-  border-bottom: 0;
-}
-
+.settings-row-copy,
 .ds-settings-row-lead {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row-title,
+.ds-settings-row-label {
   display: flex;
   align-items: center;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.ds-settings-row-label {
-  font-size: var(--text-base);
+  gap: 6px;
   color: var(--ds-text-primary);
-  font-weight: var(--font-weight-normal);
-  line-height: var(--leading-normal);
+  font-size: var(--text-md-plus);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-compact);
 }
 
+.settings-row-detail,
+.ds-settings-row-desc {
+  margin-top: 3px;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.settings-row-control,
 .ds-settings-row-tail {
   flex: 0 0 auto;
+  min-width: 0;
+  max-width: 280px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+}
+
+.settings-row:has(> .settings-row-control > .ds-segmented),
+.ds-settings-row:has(> .ds-settings-row-tail > .ds-segmented) {
+  flex-wrap: wrap;
+  gap: 8px 24px;
 }
 
 /* Universal Input & Select Overrides in Settings */

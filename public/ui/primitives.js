@@ -131,59 +131,75 @@ export function createBadge({ text = '', tone = 'neutral' } = {}) {
 }
 
 /**
- * Creates a D297 SettingsCard container.
+ * Creates a D297 SettingsCard container matching PI-Desktop structure.
  */
-export function createSettingsCard({ title = '', description = '', children = [], id } = {}) {
+export function createSettingsCard({ title = '', description = '', action = null, children = [], id } = {}) {
   const section = document.createElement('section');
-  section.className = 'ds-settings-card';
+  section.className = 'settings-card-block ds-settings-card-block ds-settings-card';
   if (id) section.id = id;
   if (title) {
     const header = document.createElement('div');
-    header.className = 'ds-settings-card-header';
-    const h4 = document.createElement('h4');
-    h4.className = 'ds-settings-card-title';
-    h4.textContent = title;
-    header.appendChild(h4);
+    header.className = action
+      ? 'settings-card-heading-row settings-card-heading-with-action ds-settings-card-header'
+      : 'settings-card-heading-help ds-settings-card-header';
+
+    const headingWrap = document.createElement('div');
+    headingWrap.className = 'settings-card-heading-help';
+    const h3 = document.createElement('h3');
+    h3.className = 'settings-card-heading ds-settings-card-title';
+    h3.textContent = title;
+    headingWrap.appendChild(h3);
     if (description) {
-      const p = document.createElement('p');
-      p.className = 'ds-settings-card-desc';
-      p.textContent = description;
-      header.appendChild(p);
+      const help = createHelpIcon({ tooltipText: description, ariaLabel: `${title}提示` });
+      headingWrap.appendChild(help);
     }
+    header.appendChild(headingWrap);
+    if (action) header.appendChild(action);
     section.appendChild(header);
   }
-  const body = document.createElement('div');
-  body.className = 'ds-settings-card-body';
+  const panel = document.createElement('div');
+  panel.className = 'settings-panel ds-settings-card-body';
   children.forEach(child => {
-    if (child) body.appendChild(child);
+    if (child) panel.appendChild(child.nodeType ? child : (child.element || child));
   });
-  section.appendChild(body);
+  section.appendChild(panel);
   return section;
 }
 
 /**
- * Creates a D601 single-line SettingsRow.
+ * Creates a D601 single-line SettingsRow matching PI-Desktop structure.
  */
-export function createSettingsRow({ label = '', help = '', control = null, extraClass = '', id } = {}) {
+export function createSettingsRow({ label = '', help = '', detail = null, control = null, extraClass = '', id } = {}) {
   const row = document.createElement('div');
-  row.className = 'ds-settings-row' + (extraClass ? ' ' + extraClass : '');
+  row.className = 'settings-row ds-settings-row' + (extraClass ? ' ' + extraClass : '');
   if (id) row.id = id;
 
-  const labelCol = document.createElement('div');
-  labelCol.className = 'ds-settings-row-lead';
+  const copy = document.createElement('div');
+  copy.className = 'settings-row-copy ds-settings-row-lead';
+  
+  const title = document.createElement('div');
+  title.className = 'settings-row-title ds-settings-row-label';
   const labelSpan = document.createElement('span');
-  labelSpan.className = 'ds-settings-row-label';
   labelSpan.textContent = label;
-  labelCol.appendChild(labelSpan);
+  title.appendChild(labelSpan);
   if (help) {
-    const helpIcon = createHelpIcon({ tooltipText: help });
-    labelCol.appendChild(helpIcon);
+    const helpIcon = createHelpIcon({ tooltipText: help, ariaLabel: `${label}提示` });
+    title.appendChild(helpIcon);
   }
-  row.appendChild(labelCol);
+  copy.appendChild(title);
+
+  if (detail) {
+    const detailDiv = document.createElement('div');
+    detailDiv.className = 'settings-row-detail ds-settings-row-desc';
+    if (typeof detail === 'string') detailDiv.textContent = detail;
+    else detailDiv.appendChild(detail.nodeType ? detail : (detail.element || detail));
+    copy.appendChild(detailDiv);
+  }
+  row.appendChild(copy);
 
   if (control) {
     const ctrlCol = document.createElement('div');
-    ctrlCol.className = 'ds-settings-row-tail';
+    ctrlCol.className = 'settings-row-control ds-settings-row-tail';
     ctrlCol.appendChild(control.nodeType ? control : (control.element || control));
     row.appendChild(ctrlCol);
   }

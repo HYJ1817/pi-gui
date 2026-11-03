@@ -2968,11 +2968,23 @@ button.pj-sess-primary{cursor:pointer}
 fieldset.appearance-body {
   border: 0 !important;
   outline: none !important;
-  margin: 0 0 20px 0 !important;
-  padding: 4px 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 .appearance-status {
-  display: none !important;
+  display: block;
+  margin-top: 18px;
+  font-size: var(--text-xs);
+  color: var(--ds-text-muted);
+  line-height: var(--leading-normal);
+  transition: color var(--motion-duration-fast) var(--motion-ease-out);
+}
+.appearance-status.is-error {
+  color: var(--ds-error-text, #f87171);
+  font-weight: var(--font-weight-medium);
+}
+.appearance-status.is-warning {
+  color: var(--ds-warning-text, #fbbf24);
 }
 .settings-detail-card > .modal-actions {
   display: none !important;
@@ -2999,13 +3011,33 @@ fieldset.appearance-body {
   margin: 24px 0 10px 2px;
   letter-spacing: 0.01em;
 }
-.appearance-body.ds-settings-card,
-.sidebar-prefs-card.ds-settings-card {
-  border-radius: 16px;
-  background: var(--ds-tile);
-  padding: 4px 20px;
-  margin-bottom: 20px;
-  border: 0;
+.settings-titlebar {
+  pointer-events: none;
+  position: absolute;
+  left: var(--ds-settings-nav-width, 275px);
+  right: 0;
+  top: 0;
+  z-index: 10;
+  height: var(--ds-toolbar-height, 46px);
+  background: var(--ds-bg-primary);
+  border-bottom: 0;
+  -webkit-app-region: drag;
+}
+:root[data-platform="win32"] .settings-titlebar,
+:root[data-platform="linux"] .settings-titlebar {
+  right: var(--ds-window-controls-width, 138px);
+}
+.global-more-menu button.is-active,
+.global-more-menu button[aria-current="page"],
+.settings-nav-item.active {
+  background: var(--ds-settings-nav-active) !important;
+  color: var(--ds-text-primary) !important;
+  font-weight: var(--font-weight-medium);
+}
+.global-more-menu button:focus-visible,
+.settings-nav-item:focus-visible {
+  outline: 2px solid var(--ds-focus) !important;
+  outline-offset: -1px;
 }
 .ds-settings-row-multiline {
   align-items: flex-start;

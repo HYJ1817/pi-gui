@@ -54,6 +54,11 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     if (sidebar.hidden) $('btnSidebarExpand').click();
     openWorkSurface('settings', host => {
       host.classList.add('settings-surface');
+      const titlebar = document.createElement('div');
+      titlebar.className = 'settings-titlebar';
+      titlebar.setAttribute('aria-hidden', 'true');
+      host.append(titlebar);
+
       const head = document.createElement('div');
       head.className = 'settings-surface-head';
       const heading = document.createElement('h2'); heading.textContent = '设置';
@@ -83,7 +88,9 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
       host.append(grid);
     });
     sync();
-    $('navProviders').focus();
+    const search = $('settingsSearchInput');
+    if (search && !search.hidden) search.focus();
+    else menu.querySelector('button:not([disabled])')?.focus();
   }
 
   function presentDetail(destination, build, onClose, options = {}) {
@@ -91,6 +98,11 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     const target = $(destination);
     const instance = openWorkSurface('settings', (host, life) => {
       host.classList.add('settings-detail');
+      const titlebar = document.createElement('div');
+      titlebar.className = 'settings-titlebar';
+      titlebar.setAttribute('aria-hidden', 'true');
+      host.append(titlebar);
+
       const card = document.createElement('section');
       card.className = 'modal-card settings-detail-card' + (options.className ? ' ' + options.className : '');
       card.setAttribute('role', 'region'); card.tabIndex = -1;
@@ -140,6 +152,19 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
         section.hidden = !hasMatch;
       }
     };
+    searchInput.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        const visibleButtons = [...menu.querySelectorAll('button:not([disabled])')].filter(btn => {
+          if (btn.hidden || btn.closest('section')?.hidden) return false;
+          if (typeof btn.checkVisibility === 'function') return btn.checkVisibility();
+          return btn.offsetParent !== null || btn.style.display !== 'none';
+        });
+        if (visibleButtons.length) {
+          event.preventDefault();
+          visibleButtons[0].focus();
+        }
+      }
+    });
   }
   document.addEventListener('pi-gui:workspace-view', sync);
   menu.addEventListener('keydown', event => {
@@ -149,10 +174,25 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const buttons = [...menu.querySelectorAll('button:not([disabled])')];
-    const index = buttons.indexOf(document.activeElement);
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
-    buttons[next]?.focus();
+    const visibleButtons = [...menu.querySelectorAll('button:not([disabled])')].filter(btn => {
+      if (btn.hidden || btn.closest('section')?.hidden) return false;
+      if (typeof btn.checkVisibility === 'function') return btn.checkVisibility();
+      return btn.offsetParent !== null || btn.style.display !== 'none';
+    });
+    if (visibleButtons.length === 0) return;
+    const index = visibleButtons.indexOf(document.activeElement);
+    if (index === 0 && event.key === 'ArrowUp' && searchInput && !searchInput.hidden) {
+      searchInput.focus();
+      return;
+    }
+    const next = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? visibleButtons.length - 1
+        : index === -1
+          ? (event.key === 'ArrowUp' ? visibleButtons.length - 1 : 0)
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + visibleButtons.length) % visibleButtons.length;
+    visibleButtons[next]?.focus();
   });
   sync();
   return { open, presentDetail };

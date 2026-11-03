@@ -132,6 +132,11 @@ export function renderProviders(box) {
   el.providerCount.textContent = names.length ? String(names.length) : '';
   if (!box) return;
 
+  const catalogSpan = box.parentElement?.querySelector('.prov-catalog-info span');
+  if (catalogSpan) {
+    catalogSpan.textContent = `目录: 内置快照 · ${names.length} 个自定义服务 · 更新于 本地`;
+  }
+
   box.innerHTML = '';
 
   if (providerError) {
