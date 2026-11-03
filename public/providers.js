@@ -149,8 +149,27 @@ export function renderProviders(box) {
   }
 
   if (!names.length) {
-    box.innerHTML =
-      '<div class="hint-empty">还没有自定义供应商。<br>内置供应商由 pi 自己管理，这里只放你自己添加的。</div>';
+    const emptyCard = document.createElement('div');
+    emptyCard.className = 'hint-empty prov-empty-card ds-settings-card';
+    emptyCard.innerHTML = `
+      <div class="prov-empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="4" width="18" height="6" rx="2"/>
+          <rect x="3" y="14" width="18" height="6" rx="2"/>
+          <circle cx="7" cy="7" r="1.2" fill="currentColor"/>
+          <circle cx="7" cy="17" r="1.2" fill="currentColor"/>
+        </svg>
+      </div>
+      <h4 class="prov-empty-title">还没有 AI 服务</h4>
+      <p class="prov-empty-desc">添加 AI 服务即可开始。</p>
+    `;
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn primary prov-empty-btn';
+    addBtn.textContent = '+ 添加服务';
+    addBtn.onclick = () => openAddProvider();
+    emptyCard.appendChild(addBtn);
+    box.appendChild(emptyCard);
     return;
   }
 
@@ -159,23 +178,36 @@ export function renderProviders(box) {
     const count = Array.isArray(cfg.models) ? cfg.models.length : 0;
 
     const item = document.createElement('div');
-    item.className = 'prov';
+    item.className = 'prov ds-settings-card';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'prov-avatar';
+    avatar.textContent = (name.charAt(0) || 'P').toUpperCase();
+    avatar.setAttribute('aria-hidden', 'true');
 
     const main = document.createElement('div');
     main.className = 'prov-main';
+    
+    const titleRow = document.createElement('div');
+    titleRow.className = 'prov-title-row';
     const n = document.createElement('span');
     n.className = 'prov-name';
     n.textContent = name;
+    const statusDot = document.createElement('span');
+    statusDot.className = 'prov-status-dot';
+    statusDot.title = '已配置';
+    titleRow.append(n, statusDot);
+
     const m = document.createElement('span');
     m.className = 'prov-meta';
     m.textContent = `${count} 个模型 · ${cfg.api || 'openai-completions'}`;
     m.title = cfg.baseUrl || '';
-    main.append(n, m);
+    main.append(titleRow, m);
 
     const ks = providerData.keyStates[name];
     if (ks && !ks.ok) {
       const warn = document.createElement('span');
-      warn.className = 'prov-warn';
+      warn.className = 'prov-warn ds-badge ds-badge-warning';
       warn.textContent = ks.note;
       main.appendChild(warn);
     }
@@ -183,13 +215,14 @@ export function renderProviders(box) {
     const del = document.createElement('button');
     del.className = 'prov-del';
     del.title = '删除该供应商';
+    del.setAttribute('aria-label', `删除供应商 ${name}`);
     del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg>';
     del.onclick = (e) => {
       e.stopPropagation();
       removeProvider(name);
     };
 
-    item.append(main, del);
+    item.append(avatar, main, del);
     box.appendChild(item);
   }
 }
@@ -197,18 +230,45 @@ export function renderProviders(box) {
 export function openProvidersPanel({ present = openModal } = {}) {
   let ownedBox = null;
   present((card, close) => {
-    card.classList.add('wide');
+    card.classList.add('wide', 'prov-settings-page');
 
+    const topHeader = document.createElement('div');
+    topHeader.className = 'settings-detail-header-row';
+
+    const titleCol = document.createElement('div');
     const h = document.createElement('h3');
-    h.textContent = '模型供应商';
-    card.appendChild(h);
+    h.className = 'settings-page-title';
+    h.textContent = '模型配置';
+    const subLabel = document.createElement('div');
+    subLabel.className = 'ds-settings-group-header';
+    subLabel.style.marginTop = '14px';
+    subLabel.textContent = 'AI 服务';
+    titleCol.append(h, subLabel);
+
+    const actionCol = document.createElement('div');
+    actionCol.className = 'prov-header-actions';
+    const importBtn = document.createElement('button');
+    importBtn.type = 'button';
+    importBtn.className = 'btn ds-btn-secondary prov-import-btn';
+    importBtn.innerHTML = `<svg viewBox="0 0 24 24" class="btn-ic"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg><span>从其他工具导入</span>`;
+    importBtn.onclick = () => toast('暂无其他工具的配置文件', 'info');
+
+    const addTopBtn = document.createElement('button');
+    addTopBtn.type = 'button';
+    addTopBtn.className = 'btn primary prov-btn-main';
+    addTopBtn.textContent = '+ 添加服务';
+    addTopBtn.onclick = () => openAddProvider({ present });
+
+    actionCol.append(importBtn, addTopBtn);
+    topHeader.append(titleCol, actionCol);
+    card.appendChild(topHeader);
 
     const desc = document.createElement('div');
-    desc.className = 'modal-desc';
+    desc.className = 'modal-desc settings-page-desc';
     desc.textContent =
-      '这里添加的供应商会写进 pi 的 ' +
+      '自定义 AI 模型供应商配置（写入 ' +
       (providerData.path || '~/.pi/agent/models.json') +
-      '，已有的配置不会被覆盖。保存后需要重载 pi 才会生效。';
+      '），保存后重载生效。';
     card.appendChild(desc);
 
     const box = document.createElement('div');
@@ -218,6 +278,26 @@ export function openProvidersPanel({ present = openModal } = {}) {
     panels.providers = box;
     ownedBox = box;
     box.innerHTML = '<div class="hint-empty">加载中…</div>';
+
+    // Catalog footer strip (matching REF-007)
+    const catalogFooter = document.createElement('div');
+    catalogFooter.className = 'prov-catalog-footer ds-settings-card';
+    const names = Object.keys(providerData.providers || {});
+    catalogFooter.innerHTML = `
+      <div class="prov-catalog-info">
+        <span>目录: 内置快照 · ${names.length} 个自定义服务 · 更新于 本地</span>
+      </div>
+    `;
+    const reloadBtn = document.createElement('button');
+    reloadBtn.type = 'button';
+    reloadBtn.className = 'btn tiny ds-btn-secondary prov-reload-btn';
+    reloadBtn.innerHTML = `<svg viewBox="0 0 24 24" class="btn-ic"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg><span>重载 pi 配置</span>`;
+    reloadBtn.onclick = () => {
+      close();
+      reloadPi();
+    };
+    catalogFooter.appendChild(reloadBtn);
+    card.appendChild(catalogFooter);
 
     const actions = document.createElement('div');
     actions.className = 'modal-actions';

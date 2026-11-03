@@ -6,6 +6,7 @@
 <title>Pi GUI</title>
 <script src="/theme-init.js"></script>
 <link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/ui/primitives.css">
 <link rel="stylesheet" href="/styles.css">
 <link rel="stylesheet" href="/runtime-conversation.css">
 <link rel="stylesheet" href="/ui3-composer.css">
@@ -35,7 +36,7 @@
       <div class="brand"><span class="brand-mark">π</span><span>pi-GUI</span></div>
       <button type="button" class="icon-btn" id="btnSidebarCollapse" aria-label="折叠项目侧栏" aria-controls="projectSidebar" aria-expanded="true" title="折叠项目侧栏"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM10 5v14M17 12h-5m2-2-2 2 2 2"/></svg></button>
     </header>
-    <button type="button" class="settings-return nav-item" id="settingsReturn" hidden>← 返回工作区</button>
+    <button type="button" class="settings-return nav-item" id="settingsReturn" hidden><svg viewBox="0 0 24 24" class="return-ic"><path d="M15 18l-6-6 6-6"/></svg><span>返回应用</span></button>
     <nav class="rail-nav" aria-label="会话操作">
       <button type="button" class="nav-item" id="navNew"><svg class="ni-ic" viewBox="0 0 24 24"><path d="M20 12.5a2.5 2.5 0 0 1-2.5 2.5H8l-4 3.5V5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5z"/></svg><span class="ni-label">新对话</span><span aria-hidden="true">＋</span></button>
       <button type="button" class="nav-item" id="navSearch" aria-controls="groupBody" aria-expanded="false"><svg class="ni-ic" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg><span class="ni-label">搜索会话</span></button>
@@ -50,39 +51,41 @@
       <div class="group-body" id="groupBody"><div class="projects" id="projects"><div class="hint-empty">加载中…</div></div></div>
     </div>
     <nav class="global-more-menu settings-menu" id="globalMoreMenu" hidden aria-label="设置">
-    <section role="group" aria-labelledby="settingsWorkspace"><h3 id="settingsWorkspace">工作区</h3>
-      <button type="button" class="settings-destination" id="navPlanner" aria-label="任务" title="任务"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 5.5h2.5v3H4zM4 11.5h2.5v3H4zM4 17.5h2.5v3H4z"/></svg><span>任务与审阅</span><span class="rail-badge" id="planCount"></span></button>
-      <button type="button" class="settings-destination" id="navExtensions" aria-label="Skills 与扩展" title="Skills 与扩展"><svg viewBox="0 0 24 24"><path d="M10 4.5H6.5A2 2 0 0 0 4.5 6.5V10M14 4.5h3.5a2 2 0 0 1 2 2V10M10 19.5H6.5a2 2 0 0 1-2-2V14M14 19.5h3.5a2 2 0 0 0 2-2V14"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2"/></svg><span>Skills 与扩展</span><span class="rail-badge" id="extCount"></span></button>
-    </section>
-    <section role="group" aria-labelledby="settingsAccounts"><h3 id="settingsAccounts">模型与账户</h3>
-      <button type="button" id="navProviders">模型供应商<span class="rp-count" id="providerCount"></span></button>
-      <button type="button" id="navProviderAuth">供应商与认证</button>
-    </section>
-    <section role="group" aria-labelledby="settingsCapabilities"><h3 id="settingsCapabilities">Agent 能力</h3>
-      <button type="button" id="navCapabilities">能力状态</button>
-    </section>
-    <section role="group" aria-labelledby="settingsExtensions"><h3 id="settingsExtensions">扩展与 MCP</h3>
-      <button type="button" id="navMcp">MCP 配置</button>
-    </section>
-    <section role="group" aria-labelledby="settingsApp"><h3 id="settingsApp">应用与更新</h3>
-      <button type="button" id="navAppUpdates">Pi GUI 与 Pi 更新<span class="rp-dot" id="menuUpdateDot" hidden></span><span class="rp-dot" id="piUpdateDot" hidden></span></button>
-      <button type="button" id="navRestartPi">重启 Pi</button>
-    </section>
-    <section role="group" aria-labelledby="settingsDiagnostics"><h3 id="settingsDiagnostics">诊断</h3>
-      <button type="button" id="navDiagnostics">运行状态与诊断</button>
-      <button type="button" id="navLogs">日志与故障报告…</button>
-    </section>
-    <section role="group" aria-labelledby="settingsKeyboard"><h3 id="settingsKeyboard">键盘与命令</h3>
-      <button type="button" id="navPalette" title="打开命令面板">命令面板…</button>
-      <button type="button" id="navShortcutHelp" title="查看键盘快捷键">键盘快捷键…</button>
-    </section>
-    <section role="group" aria-labelledby="settingsAppearance"><h3 id="settingsAppearance">界面</h3>
-      <button type="button" id="navAppearance">外观与主题…</button>
-    </section>
-  </nav>
+      <div class="settings-search-bar" id="settingsSearchBar">
+        <svg viewBox="0 0 24 24" class="search-ic"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
+        <input type="text" class="settings-search-input" id="settingsSearchInput" placeholder="搜索设置..." aria-label="搜索设置">
+      </div>
+      <section role="group" aria-labelledby="settingsAppearance"><h3 id="settingsAppearance">常规与界面</h3>
+        <button type="button" id="navAppearance"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>常规</span></button>
+        <button type="button" id="navShortcutHelp" title="查看键盘快捷键"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h.01M11 9h.01M15 9h.01M7 13h.01M11 13h.01M15 13h.01M7 16h10"/></svg><span>快捷键</span></button>
+        <button type="button" id="navPalette" title="打开命令面板"><svg viewBox="0 0 24 24"><polyline points="4 17 10 12 4 7"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span>命令面板</span></button>
+      </section>
+      <section role="group" aria-labelledby="settingsWorkspace"><h3 id="settingsWorkspace">工作区</h3>
+        <button type="button" class="settings-destination" id="navPlanner" aria-label="任务" title="任务"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>任务与审阅</span><span class="rail-badge" id="planCount"></span></button>
+      </section>
+      <section role="group" aria-labelledby="settingsAccounts"><h3 id="settingsAccounts">模型与账户</h3>
+        <button type="button" id="navProviders"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg><span>模型供应商</span><span class="rp-count" id="providerCount"></span></button>
+        <button type="button" id="navProviderAuth"><svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-1.5 1.5L14 9l-3 3-2-2-4 4 3 3 7-7 1.5-1.5M16 8l2 2"/></svg><span>供应商与认证</span></button>
+      </section>
+      <section role="group" aria-labelledby="settingsCapabilities"><h3 id="settingsCapabilities">Agent 能力</h3>
+        <button type="button" id="navCapabilities"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg><span>能力状态</span></button>
+      </section>
+      <section role="group" aria-labelledby="settingsExtensions"><h3 id="settingsExtensions">扩展与 MCP</h3>
+        <button type="button" class="settings-destination" id="navExtensions" aria-label="Skills 与扩展" title="Skills 与扩展"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg><span>Skills 与扩展</span><span class="rail-badge" id="extCount"></span></button>
+        <button type="button" id="navMcp"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MCP 配置</span></button>
+      </section>
+      <section role="group" aria-labelledby="settingsApp"><h3 id="settingsApp">应用与更新</h3>
+        <button type="button" id="navAppUpdates"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4M12 16V8"/></svg><span>Pi GUI 与 Pi 更新</span><span class="rp-dot" id="menuUpdateDot" hidden></span><span class="rp-dot" id="piUpdateDot" hidden></span></button>
+        <button type="button" id="navRestartPi"><svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg><span>重启 Pi</span></button>
+      </section>
+      <section role="group" aria-labelledby="settingsDiagnostics"><h3 id="settingsDiagnostics">诊断</h3>
+        <button type="button" id="navDiagnostics"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>运行状态与诊断</span></button>
+        <button type="button" id="navLogs"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg><span>日志与故障报告…</span></button>
+      </section>
+    </nav>
     <div class="rail-spacer"></div>
     <details class="quota" id="usageDetails"><summary class="quota-head"><svg class="quota-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.5-4.5"/></svg><span>上下文</span><b id="uPct">—</b></summary><div class="quota-detail"><div class="bar"><span id="uCtxBar"></span></div><div class="quota-note" id="uNote">上下文 —</div><div class="quota-rows"><div><span>输入 / 输出</span><b id="uTok">—</b></div><div><span>缓存读取</span><b id="uCache">—</b></div><div><span>累计成本</span><b id="uCost">—</b></div><div><span>远端额度</span><b id="uQuota">—</b></div></div></div></details>
-    <div class="sidebar-preferences"><button type="button" class="rail-icon" id="navGlobalMore" aria-label="设置" aria-controls="globalMoreMenu" aria-expanded="false" title="设置"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 3 3 1v6l-3 1-1 3H9l-1-3-3-1V8l3-1z"/><circle cx="12" cy="11" r="3"/></svg><span class="rp-dot" id="updateDot" hidden></span><span>设置</span></button><button type="button" class="icon-btn" id="btnTheme" aria-label="外观与主题" title="外观与主题"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg></button></div>
+    <div class="sidebar-preferences"><button type="button" class="rail-icon nav-item" id="navGlobalMore" aria-label="设置" aria-controls="globalMoreMenu" aria-expanded="false" title="设置"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 3 3 1v6l-3 1-1 3H9l-1-3-3-1V8l3-1z"/><circle cx="12" cy="11" r="3"/></svg><span class="rp-dot" id="updateDot" hidden></span><span>设置</span></button><button type="button" class="icon-btn" id="btnTheme" aria-label="外观与主题" title="外观与主题"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg></button></div>
     <footer class="rail-foot"><span class="avatar">π</span><span class="foot-name" id="footName">—</span><span class="grow"></span><span class="conn" id="conn"></span><span class="foot-state" id="connText">连接中</span></footer>
   </aside>
 
