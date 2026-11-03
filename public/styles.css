@@ -2850,17 +2850,31 @@ button.pj-sess-primary{cursor:pointer}
   position: static;
 }
 
+/* Work Surface in Settings mode: seamless edge-to-edge canvas matching PI-Desktop */
+.work-surface:has(> .settings-surface),
+.work-surface:has(> .settings-detail),
+.work-surface.settings-surface,
+.work-surface.settings-detail {
+  padding: 0 !important;
+  background: var(--ds-bg-primary) !important;
+}
+
 /* Settings Surface (Overview) */
 .settings-surface {
-  max-width: 840px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
-  align-self: center;
-  padding: 40px clamp(24px, 5vw, 56px);
-  background: var(--ds-surface-canvas);
+  padding: calc(var(--ds-toolbar-height, 46px) + 16px) clamp(24px, 5vw, 56px) 56px;
+  background: var(--ds-bg-primary) !important;
   min-height: 100%;
   box-sizing: border-box;
+  overflow-y: auto;
 }
 .settings-surface-head {
+  max-width: 840px;
+  width: 100%;
   margin-bottom: 28px;
 }
 .settings-surface h2 {
@@ -2881,6 +2895,8 @@ button.pj-sess-primary{cursor:pointer}
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 16px;
+  max-width: 840px;
+  width: 100%;
 }
 .settings-section.ds-settings-card {
   padding: 16px;
@@ -2896,13 +2912,15 @@ button.pj-sess-primary{cursor:pointer}
   letter-spacing: 0.01em;
   text-transform: none;
 }
-.settings-row {
+
+/* Settings Overview Navigation Item (Scoped independently from .settings-row) */
+.settings-overview-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 42px;
+  padding: 8px 12px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -2914,32 +2932,60 @@ button.pj-sess-primary{cursor:pointer}
   margin-bottom: 4px;
   transition: background var(--motion-duration-fast) var(--motion-ease-out);
 }
-.settings-row:hover {
+.settings-overview-item:hover {
   background: var(--ds-tile-hover);
 }
-.settings-row-icon svg {
+.settings-overview-item:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
+}
+.settings-overview-item-lead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.settings-overview-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--ds-text-muted);
+  flex-shrink: 0;
+}
+.settings-overview-item-icon svg {
   width: 16px;
   height: 16px;
-  stroke: var(--ds-text-muted);
+  stroke: currentColor;
   fill: none;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 8px;
+  stroke-width: 2;
 }
-.settings-row-arrow {
+.settings-overview-item-label {
+  font-size: var(--text-sm-plus);
+  font-weight: var(--font-weight-medium);
+  color: var(--ds-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-overview-item-arrow {
   width: 14px;
   height: 14px;
   stroke: var(--ds-text-muted);
   fill: none;
-  opacity: 0.5;
+  opacity: 0.6;
+  flex-shrink: 0;
 }
 
 /* Settings Detail Canvas */
 .settings-detail {
+  position: relative;
   display: flex;
   justify-content: center;
-  padding: 40px clamp(24px, 5vw, 56px);
-  background: var(--ds-surface-canvas);
+  padding: calc(var(--ds-toolbar-height, 46px) + 16px) clamp(24px, 5vw, 56px) 56px;
+  background: var(--ds-bg-primary) !important;
   min-height: 100%;
   box-sizing: border-box;
   overflow-y: auto;
@@ -2989,8 +3035,12 @@ fieldset.appearance-body {
 .settings-detail-card > .modal-actions {
   display: none !important;
 }
-.settings-detail-card h3,
-.settings-page-title {
+
+/* Page Level Title strictly scoped to top heading (not nested card headings) */
+.settings-detail-card > h3,
+.settings-detail-header-row h3,
+.settings-page-title,
+.settings-section-title {
   font-size: 30px !important;
   font-weight: 700 !important;
   line-height: 1.25 !important;
@@ -3004,6 +3054,17 @@ fieldset.appearance-body {
   line-height: 1.5 !important;
   margin: 0 0 28px !important;
 }
+
+/* Card Heading strictly preserved at 13.5px / 600 weight */
+.settings-card-heading,
+.ds-settings-card-title {
+  margin: 0 !important;
+  color: var(--ds-text-primary) !important;
+  font-size: var(--text-md-plus, 13.5px) !important;
+  font-weight: 600 !important;
+  line-height: var(--leading-compact, 18px) !important;
+}
+
 .ds-settings-group-header {
   font-size: 13px;
   font-weight: 600;
@@ -3014,7 +3075,7 @@ fieldset.appearance-body {
 .settings-titlebar {
   pointer-events: none;
   position: absolute;
-  left: var(--ds-settings-nav-width, 275px);
+  left: 0;
   right: 0;
   top: 0;
   z-index: 10;

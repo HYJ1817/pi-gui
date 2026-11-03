@@ -76,10 +76,12 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
         const title = document.createElement('h3'); title.textContent = section.querySelector('h3').textContent;
         group.append(title);
         for (const target of section.querySelectorAll('button')) {
-          const button = document.createElement('button'); button.type = 'button'; button.className = 'settings-row';
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'settings-overview-item';
           const label = target.querySelector('span')?.textContent || target.childNodes[0]?.textContent || target.textContent;
           const svg = target.querySelector('svg')?.outerHTML || '';
-          button.innerHTML = `<span class="settings-row-icon">${svg}</span><span class="settings-row-label">${label}</span><svg class="settings-row-arrow" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>`;
+          button.innerHTML = `<div class="settings-overview-item-lead"><span class="settings-overview-item-icon">${svg}</span><span class="settings-overview-item-label">${label}</span></div><svg class="settings-overview-item-arrow" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>`;
           button.onclick = () => { target.focus(); target.click(); };
           group.append(button);
         }

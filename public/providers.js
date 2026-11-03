@@ -232,6 +232,16 @@ export function renderProviders(box) {
   }
 }
 
+export function setProvidersData(data) {
+  providerData = {
+    path: data?.path || '',
+    providers: data?.providers || {},
+    keyStates: data?.keyStates || {}
+  };
+  providerError = data?.error || '';
+  renderProviders(panels.providers || (typeof document !== 'undefined' ? document.querySelector('.providers') : null));
+}
+
 export function openProvidersPanel({ present = openModal } = {}) {
   let ownedBox = null;
   present((card, close) => {
@@ -252,11 +262,6 @@ export function openProvidersPanel({ present = openModal } = {}) {
 
     const actionCol = document.createElement('div');
     actionCol.className = 'prov-header-actions';
-    const importBtn = document.createElement('button');
-    importBtn.type = 'button';
-    importBtn.className = 'btn ds-btn-secondary prov-import-btn';
-    importBtn.innerHTML = `<svg viewBox="0 0 24 24" class="btn-ic"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg><span>从其他工具导入</span>`;
-    importBtn.onclick = () => toast('暂无其他工具的配置文件', 'info');
 
     const addTopBtn = document.createElement('button');
     addTopBtn.type = 'button';
@@ -264,7 +269,7 @@ export function openProvidersPanel({ present = openModal } = {}) {
     addTopBtn.textContent = '+ 添加服务';
     addTopBtn.onclick = () => openAddProvider({ present });
 
-    actionCol.append(importBtn, addTopBtn);
+    actionCol.append(addTopBtn);
     topHeader.append(titleCol, actionCol);
     card.appendChild(topHeader);
 
