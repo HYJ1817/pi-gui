@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const assert = require('node:assert/strict');
 
+const ROOT = path.resolve(__dirname, '..');
+
 if (!process.versions.electron) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   const tempWorld = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-headings-'));
   env.HEADINGS_WORLD = tempWorld;
-  const electronPath = require('c:\\pi-GUI\\node_modules\\electron');
-  const child = spawn(electronPath, [__filename, '--no-sandbox'], { env, stdio: 'inherit' });
+  const child = spawn(require('electron'), [__filename, '--no-sandbox'], { env, stdio: 'inherit', windowsHide: true });
   child.on('exit', code => {
     fs.rm(tempWorld, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }, () => {});
     process.exit(code ?? 0);
@@ -26,7 +27,6 @@ if (!process.versions.electron) {
     app.setPath('userData', world);
     await app.whenReady();
 
-    const ROOT = 'c:\\pi-GUI';
     const harness = spawn(process.execPath, [path.join(ROOT, 'tests/visual-harness.cjs')], {
       cwd: world,
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HARNESS_PORT: '0' },
@@ -159,8 +159,35 @@ if (!process.versions.electron) {
     assert.ok(appUpdates.top >= 46, `App Updates H3 top (${appUpdates.top}) must be below top titlebar`);
     console.log('✓ App Updates H3 is completely visible at y=' + appUpdates.top);
 
+    // 5. Verify Stage Head drag region and window controls integrity
+    const stageHead = await win.webContents.executeJavaScript(`(()=>{
+      const head = document.querySelector('.stage-head');
+      if (!head) return null;
+      const cs = getComputedStyle(head);
+      const rect = head.getBoundingClientRect();
+      const title = document.querySelector('#workViewTitle');
+      const btnPanel = document.querySelector('#btnWorkPanel');
+      const titleDisplay = title ? getComputedStyle(title).display : 'none';
+      const btnPanelDisplay = btnPanel ? getComputedStyle(btnPanel).display : 'none';
+      return {
+        appRegion: cs.webkitAppRegion,
+        top: rect.top,
+        height: rect.height,
+        titleDisplay,
+        btnPanelDisplay
+      };
+    })()`);
+
+    assert.ok(stageHead, 'Stage head must exist');
+    assert.equal(stageHead.appRegion, 'drag', 'Stage head must retain -webkit-app-region: drag');
+    assert.equal(stageHead.top, 0, 'Stage head must be at top 0');
+    assert.equal(stageHead.height, 46, 'Stage head height must be 46px');
+    assert.equal(stageHead.titleDisplay, 'none', 'workViewTitle must be hidden in settings view');
+    assert.equal(stageHead.btnPanelDisplay, 'none', 'btnWorkPanel must be hidden in settings view');
+    console.log('✓ Stage head drag region and window controls integrity verified');
+
     harness.kill();
-    console.log('\nAll Real Electron page title visibility assertions PASSED!\n');
+    console.log('\nAll Real Electron page title & window control assertions PASSED!\n');
     app.exit(0);
   }
 

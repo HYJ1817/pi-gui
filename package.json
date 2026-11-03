@@ -37,6 +37,7 @@
     "test:auth": "node tests/provider-auth.cjs",
     "test:ui": "node tests/smoke.cjs",
     "test:session-background:electron": "node tests/session-background-electron.cjs",
+    "test:settings:electron": "node tests/settings-headings-electron.cjs",
     "test:theme": "node tests/theme.cjs",
     "pretest": "npm run test:file-size-report && npm run test:ci",
     "test:file-size-report": "node tests/file-size-report.cjs",
