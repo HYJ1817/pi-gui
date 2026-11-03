@@ -217,7 +217,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     if (method === 'click') d.querySelector('[data-command-id="app.preferences"]').click();
     else query.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await tick(); assert.equal($('globalMoreMenu').hidden, false);
-    assert.equal(d.activeElement, $('navProviders'));
+    assert.equal(d.activeElement, $('settingsSearchInput'));
     d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   });
   await check('Changes preserves mounted conversation, scroll and draft', async () => {

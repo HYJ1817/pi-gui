@@ -54,26 +54,41 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     if (sidebar.hidden) $('btnSidebarExpand').click();
     openWorkSurface('settings', host => {
       host.classList.add('settings-surface');
+
+      const head = document.createElement('div');
+      head.className = 'settings-surface-head';
       const heading = document.createElement('h2'); heading.textContent = '设置';
       const description = document.createElement('p');
       description.className = 'settings-description';
-      description.textContent = '管理工作区、模型与应用偏好。';
-      host.append(heading, description);
+      description.textContent = '管理工作区、AI 模型与应用偏好。';
+      head.append(heading, description);
+      host.append(head);
+
+      const grid = document.createElement('div');
+      grid.className = 'settings-grid';
+
       for (const section of menu.querySelectorAll('section')) {
-        const group = document.createElement('section'); group.className = 'settings-section';
+        const group = document.createElement('section'); group.className = 'settings-section ds-settings-card';
         const title = document.createElement('h3'); title.textContent = section.querySelector('h3').textContent;
         group.append(title);
         for (const target of section.querySelectorAll('button')) {
-          const button = document.createElement('button'); button.type = 'button'; button.className = 'settings-row';
-          button.textContent = target.id === 'navPlanner' ? '任务与审阅' : target.id === 'navExtensions' ? 'Skills 与扩展' : target.childNodes[0].textContent;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'settings-overview-item';
+          const label = target.querySelector('span')?.textContent || target.childNodes[0]?.textContent || target.textContent;
+          const svg = target.querySelector('svg')?.outerHTML || '';
+          button.innerHTML = `<div class="settings-overview-item-lead"><span class="settings-overview-item-icon">${svg}</span><span class="settings-overview-item-label">${label}</span></div><svg class="settings-overview-item-arrow" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>`;
           button.onclick = () => { target.focus(); target.click(); };
           group.append(button);
         }
-        host.append(group);
+        grid.append(group);
       }
+      host.append(grid);
     });
     sync();
-    $('navProviders').focus();
+    const search = $('settingsSearchInput');
+    if (search && !search.hidden) search.focus();
+    else menu.querySelector('button:not([disabled])')?.focus();
   }
 
   function presentDetail(destination, build, onClose, options = {}) {
@@ -81,6 +96,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     const target = $(destination);
     const instance = openWorkSurface('settings', (host, life) => {
       host.classList.add('settings-detail');
+
       const card = document.createElement('section');
       card.className = 'modal-card settings-detail-card' + (options.className ? ' ' + options.className : '');
       card.setAttribute('role', 'region'); card.tabIndex = -1;
@@ -105,7 +121,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
       build(card, close);
       if (!life.isCurrent()) return;
       document.addEventListener('keydown', escape);
-      (options.initialFocus || card).focus();
+      (options.initialFocus || (card.contains(document.activeElement) ? document.activeElement : card)).focus();
     });
     if (instance.isCurrent()) {
       detailButton = target;
@@ -116,6 +132,34 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
 
   trigger.onclick = open;
   back.onclick = returnToWorkspace;
+  const searchInput = $('settingsSearchInput');
+  if (searchInput) {
+    searchInput.oninput = () => {
+      const q = searchInput.value.trim().toLowerCase();
+      for (const section of menu.querySelectorAll('section')) {
+        let hasMatch = false;
+        for (const btn of section.querySelectorAll('button')) {
+          const match = !q || btn.textContent.toLowerCase().includes(q);
+          btn.hidden = !match;
+          if (match) hasMatch = true;
+        }
+        section.hidden = !hasMatch;
+      }
+    };
+    searchInput.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        const visibleButtons = [...menu.querySelectorAll('button:not([disabled])')].filter(btn => {
+          if (btn.hidden || btn.closest('section')?.hidden) return false;
+          if (typeof btn.checkVisibility === 'function') return btn.checkVisibility();
+          return btn.offsetParent !== null || btn.style.display !== 'none';
+        });
+        if (visibleButtons.length) {
+          event.preventDefault();
+          visibleButtons[0].focus();
+        }
+      }
+    });
+  }
   document.addEventListener('pi-gui:workspace-view', sync);
   menu.addEventListener('keydown', event => {
     if (event.key === 'Escape' && $('modal').hidden && $('confirmLayer').hidden) {
@@ -124,10 +168,25 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const buttons = [...menu.querySelectorAll('button:not([disabled])')];
-    const index = buttons.indexOf(document.activeElement);
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
-    buttons[next]?.focus();
+    const visibleButtons = [...menu.querySelectorAll('button:not([disabled])')].filter(btn => {
+      if (btn.hidden || btn.closest('section')?.hidden) return false;
+      if (typeof btn.checkVisibility === 'function') return btn.checkVisibility();
+      return btn.offsetParent !== null || btn.style.display !== 'none';
+    });
+    if (visibleButtons.length === 0) return;
+    const index = visibleButtons.indexOf(document.activeElement);
+    if (index === 0 && event.key === 'ArrowUp' && searchInput && !searchInput.hidden) {
+      searchInput.focus();
+      return;
+    }
+    const next = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? visibleButtons.length - 1
+        : index === -1
+          ? (event.key === 'ArrowUp' ? visibleButtons.length - 1 : 0)
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + visibleButtons.length) % visibleButtons.length;
+    visibleButtons[next]?.focus();
   });
   sync();
   return { open, presentDetail };

@@ -1,0 +1,358 @@
+/**
+ * UI Primitives Stylesheet for pi-GUI
+ * Strictly adhering to PI-Desktop Token Architecture (--ds-*) and Component Specifications.
+ */
+
+/* ==========================================================================
+   Switch Toggle (.ds-switch)
+   ========================================================================== */
+.ds-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 38px;
+  height: 22px;
+  padding: 2px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--ds-switch-ring-off);
+  background-color: var(--ds-switch-track-off);
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-out),
+              border-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ds-switch:hover:not(:disabled) {
+  background-color: var(--ds-switch-track-off-hover);
+}
+
+.ds-switch:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.ds-switch.is-on {
+  background-color: var(--ds-accent);
+  border-color: var(--ds-accent);
+}
+
+.ds-switch-knob {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background-color: var(--ds-switch-knob-off);
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out),
+              background-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ds-switch.is-on .ds-switch-knob {
+  transform: translateX(16px);
+  background-color: var(--ds-switch-knob-on);
+}
+
+.ds-switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Segmented Control (.ds-segmented)
+   ========================================================================== */
+.ds-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--ds-tile);
+  gap: 2px;
+  box-sizing: border-box;
+}
+
+.ds-segment-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 12px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ds-text-secondary);
+  font-family: inherit;
+  font-size: var(--text-sm-plus);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  white-space: nowrap;
+  transition: all var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ds-segment-item:hover:not(.is-active) {
+  color: var(--ds-text-primary);
+  background: var(--ds-bg-hover);
+}
+
+.ds-segment-item:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 1px;
+}
+
+.ds-segment-item.is-active {
+  color: var(--ds-text-primary);
+  background: var(--ds-raised);
+  box-shadow: var(--ds-raised-shadow);
+  font-weight: var(--font-weight-strong);
+}
+
+/* ==========================================================================
+   Help Icon (.ds-help-icon, D601 Specification)
+   ========================================================================== */
+.ds-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--ds-tile-hover);
+  color: var(--ds-text-muted);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: help;
+  vertical-align: middle;
+  margin-left: 6px;
+  user-select: none;
+  outline: none;
+  transition: color var(--motion-duration-fast) var(--motion-ease-out),
+              background var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ds-help-icon:hover,
+.ds-help-icon:focus-visible {
+  color: var(--ds-text-primary);
+  background: var(--ds-tile-deep);
+}
+
+/* ==========================================================================
+   Badge (.ds-badge)
+   ========================================================================== */
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-2xs);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ds-badge-neutral {
+  background: var(--ds-tile-deep);
+  color: var(--ds-text-secondary);
+}
+
+.ds-badge-success {
+  background: color-mix(in srgb, var(--ds-success) 14%, transparent);
+  color: var(--ds-success);
+}
+
+.ds-badge-warning {
+  background: color-mix(in srgb, var(--ds-warning) 14%, transparent);
+  color: var(--ds-warning);
+}
+
+.ds-badge-error {
+  background: color-mix(in srgb, var(--ds-error) 14%, transparent);
+  color: var(--ds-error);
+}
+
+.ds-badge-purple {
+  background: color-mix(in srgb, var(--ds-purple) 14%, transparent);
+  color: var(--ds-purple);
+}
+
+/* ==========================================================================
+   Settings Card & Rows (D297 / D601 Specification)
+   ========================================================================== */
+.settings-card-block,
+.ds-settings-card-block {
+  margin-bottom: 28px;
+}
+
+.settings-card-heading,
+.ds-settings-card-title {
+  margin: 0;
+  color: var(--ds-text-primary);
+  font-size: var(--text-md-plus);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--leading-compact);
+}
+
+.settings-card-heading-help {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.settings-card-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ds-settings-card-header {
+  margin-bottom: 10px;
+}
+
+.ds-settings-card-desc {
+  font-size: var(--text-xs-plus);
+  color: var(--ds-text-muted);
+  margin: 0;
+  line-height: var(--leading-normal);
+}
+
+.settings-panel,
+.ds-settings-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Standalone container fallback when not dissolving into tile rows */
+.ds-settings-card:not(.settings-card-block) {
+  background: var(--ds-tile);
+  border-radius: var(--radius-md-plus);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  border: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+/*
+  D297: Panels that are a stack of rows dissolve into the page.
+  Each row becomes its own rounded tile with 6px gap between them.
+*/
+.settings-panel:has(> .settings-row),
+.settings-panel:has(> .ds-settings-row),
+.ds-settings-card-body:has(> .settings-row),
+.ds-settings-card-body:has(> .ds-settings-row) {
+  gap: 6px;
+  background: transparent !important;
+  overflow: visible;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+/* Independent rounded setting row tile */
+.settings-row,
+.ds-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  border: 0;
+  box-sizing: border-box;
+  transition: background var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.settings-row-copy,
+.ds-settings-row-lead {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row-title,
+.ds-settings-row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ds-text-primary);
+  font-size: var(--text-md-plus);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-compact);
+}
+
+.settings-row-detail,
+.ds-settings-row-desc {
+  margin-top: 3px;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.settings-row-control,
+.ds-settings-row-tail {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settings-row:has(> .settings-row-control > .ds-segmented),
+.ds-settings-row:has(> .ds-settings-row-tail > .ds-segmented) {
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+/* Universal Input & Select Overrides in Settings */
+.ds-select {
+  height: var(--ds-settings-picker-height, 32px);
+  padding: 0 10px;
+  background: var(--ds-field-inset-bg);
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--ds-text-primary);
+  font-family: inherit;
+  font-size: var(--text-sm-plus);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ds-select:hover {
+  border-color: var(--ds-border-strong);
+}
+
+.ds-select:focus {
+  border-color: var(--ds-focus);
+}
+
+.ds-input {
+  height: var(--ds-settings-picker-height, 32px);
+  padding: 0 10px;
+  background: var(--ds-field-inset-bg);
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--ds-text-primary);
+  font-family: inherit;
+  font-size: var(--text-sm-plus);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ds-input:focus {
+  border-color: var(--ds-focus);
+  background: var(--ds-field-inset-focus-bg);
+}
