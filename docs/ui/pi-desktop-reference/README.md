@@ -45,6 +45,8 @@
 | **11** | [`11-phase-ab-wrapup.md`](11-phase-ab-wrapup.md) | A/B 收尾、PR #49 基线与已验收边界 |
 | **12** | [`12-phase-c-implementation.md`](12-phase-c-implementation.md) | 阶段 C 源码勘察、复用取舍与执行记录 |
 | **13** | [`13-phase-c-acceptance.md`](13-phase-c-acceptance.md) | 阶段 C 测试、真实 Electron 截图、逐区域视觉差异与交付状态 |
+| **14** | [`14-phase-d-implementation.md`](14-phase-d-implementation.md) | 阶段 D 源码勘察、业务取舍与单代理实施记录 |
+| **15** | [`15-phase-d-acceptance.md`](15-phase-d-acceptance.md) | 阶段 D 实测、逐区域视觉对照、构建及未验证边界 |
 | **附录** | [`tokens.reference.css`](tokens.reference.css) | 提取自 PI-Desktop 源码并完成审计补齐的独立纯 CSS 代币表，附带完备分类与工程说明 |
 
 ---

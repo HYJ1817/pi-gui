@@ -1,0 +1,65 @@
+{
+  "command": "npm run build:app -- --rebuild --output-root C:/pi-GUI/.shots/phase-d-scoped-final-output-20261105",
+  "exitCode": 0,
+  "electron": "44.4.3",
+  "exe": "C:/pi-GUI/.shots/phase-d-scoped-final-output-20261105/dist-app/Pi GUI-win32-x64/Pi GUI.exe",
+  "changedProductionFilesVerified": 9,
+  "cachedElectronExeSha256": "bf0fe749904ca9f713ccfb2427c519fa39d0bbd0337ba411ba08785802e8d548",
+  "files": [
+    {
+      "path": "public/messages.js",
+      "sourceSha256": "61ec680d9420e3565ca4f87380bba963048be063108c5e07a25f2b5b3d719939",
+      "packagedSha256": "61ec680d9420e3565ca4f87380bba963048be063108c5e07a25f2b5b3d719939",
+      "match": true
+    },
+    {
+      "path": "public/runtime-conversation.css",
+      "sourceSha256": "7348c9cbdec5f2de75ecb0c7faf8b57d885e6b862f3a10f7b659fd791d131002",
+      "packagedSha256": "7348c9cbdec5f2de75ecb0c7faf8b57d885e6b862f3a10f7b659fd791d131002",
+      "match": true
+    },
+    {
+      "path": "public/runtime-conversation.js",
+      "sourceSha256": "99db47ee94bdc43d8c5f9247925b1c31c053d124c75aa2896a2aa020b027ca94",
+      "packagedSha256": "99db47ee94bdc43d8c5f9247925b1c31c053d124c75aa2896a2aa020b027ca94",
+      "match": true
+    },
+    {
+      "path": "public/styles.css",
+      "sourceSha256": "a0f63e41c98c318dea1b7aef7242bb5fc61900e54ed94803e5059292fd8c51aa",
+      "packagedSha256": "a0f63e41c98c318dea1b7aef7242bb5fc61900e54ed94803e5059292fd8c51aa",
+      "match": true
+    },
+    {
+      "path": "public/ui/message-actions.js",
+      "sourceSha256": "2e647d53d0e0689f29de8e77e53b7ae9a64282c1ff43720b505d2e3ae1daa133",
+      "packagedSha256": "2e647d53d0e0689f29de8e77e53b7ae9a64282c1ff43720b505d2e3ae1daa133",
+      "match": true
+    },
+    {
+      "path": "public/ui/popover.js",
+      "sourceSha256": "11282bb66e325ded2d2292b990f90b72925b0a167104aa773979dac325fe627b",
+      "packagedSha256": "11282bb66e325ded2d2292b990f90b72925b0a167104aa773979dac325fe627b",
+      "match": true
+    },
+    {
+      "path": "public/ui3-composer.css",
+      "sourceSha256": "5e49b43ece54e74489f73d4648dd367e616e44f5107034b6f7e0158c690dec19",
+      "packagedSha256": "5e49b43ece54e74489f73d4648dd367e616e44f5107034b6f7e0158c690dec19",
+      "match": true
+    },
+    {
+      "path": "public/ui3-inline-commands.css",
+      "sourceSha256": "184666a3a36bd7f54e5d6996adf43efee9a19ca6188ddff82608467fef57d311",
+      "packagedSha256": "184666a3a36bd7f54e5d6996adf43efee9a19ca6188ddff82608467fef57d311",
+      "match": true
+    },
+    {
+      "path": "public/ui3-model.css",
+      "sourceSha256": "6a1dcf049b9d0fcf7f23791aa3527786311e50d8bed50fff961b30ba4d26f083",
+      "packagedSha256": "6a1dcf049b9d0fcf7f23791aa3527786311e50d8bed50fff961b30ba4d26f083",
+      "match": true
+    }
+  ],
+  "verifiedAt": "2026-11-04T16:14:36.156245+00:00"
+}

@@ -1,0 +1,77 @@
+{
+  "base": "5214c4368d740e41bb7dc6adb9c7e889ee55c1c2",
+  "scope": "Final behavior, test and package files; evidence/doco commits may follow without behavior changes",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "f34316ff8196c023cab63436d6f80fe1d3c948cf63c28dcba617c5501cff023d"
+    },
+    {
+      "path": "public/messages.js",
+      "sha256": "61ec680d9420e3565ca4f87380bba963048be063108c5e07a25f2b5b3d719939"
+    },
+    {
+      "path": "public/runtime-conversation.css",
+      "sha256": "7348c9cbdec5f2de75ecb0c7faf8b57d885e6b862f3a10f7b659fd791d131002"
+    },
+    {
+      "path": "public/runtime-conversation.js",
+      "sha256": "99db47ee94bdc43d8c5f9247925b1c31c053d124c75aa2896a2aa020b027ca94"
+    },
+    {
+      "path": "public/styles.css",
+      "sha256": "a0f63e41c98c318dea1b7aef7242bb5fc61900e54ed94803e5059292fd8c51aa"
+    },
+    {
+      "path": "public/ui/message-actions.js",
+      "sha256": "2e647d53d0e0689f29de8e77e53b7ae9a64282c1ff43720b505d2e3ae1daa133"
+    },
+    {
+      "path": "public/ui/popover.js",
+      "sha256": "11282bb66e325ded2d2292b990f90b72925b0a167104aa773979dac325fe627b"
+    },
+    {
+      "path": "public/ui3-composer.css",
+      "sha256": "5e49b43ece54e74489f73d4648dd367e616e44f5107034b6f7e0158c690dec19"
+    },
+    {
+      "path": "public/ui3-inline-commands.css",
+      "sha256": "184666a3a36bd7f54e5d6996adf43efee9a19ca6188ddff82608467fef57d311"
+    },
+    {
+      "path": "public/ui3-model.css",
+      "sha256": "6a1dcf049b9d0fcf7f23791aa3527786311e50d8bed50fff961b30ba4d26f083"
+    },
+    {
+      "path": "tests/app-shell-electron.cjs",
+      "sha256": "6b95c408704cfe9caaad015c91bad53224850068a293a622fda2a2b0e0ab4cd6"
+    },
+    {
+      "path": "tests/conversation-electron.cjs",
+      "sha256": "76400ca8dbf983abf4914b7065380731925ade732e1f567cf9dcbdccc79d6290"
+    },
+    {
+      "path": "tests/fixtures/conversation-scenarios.cjs",
+      "sha256": "29a7a15f99a4f6298e3166de9a42f663689e1bb6ca5e5146f5293269ca70a73b"
+    },
+    {
+      "path": "tests/ui2-classic.cjs",
+      "sha256": "df11896bf193a0d4f7676108022dfd17fa2fb1917a25135eed90c10b2c35d79e"
+    },
+    {
+      "path": "tests/ui2-runtime-display.cjs",
+      "sha256": "ef2dc69aa0b14b74a707e74723022263608e61b2a5e0900c40bd1562f8c5f93c"
+    },
+    {
+      "path": "tests/ui2-visual.cjs",
+      "sha256": "7ba3ee3e63346cbf07001b74b2e1976e6051b127e729934487235597ef61fff2"
+    },
+    {
+      "path": "tests/ui3-model.cjs",
+      "sha256": "d5c821ef3c9bd94d908202be765ce80535e265a39957a5b45aee71a72db72717"
+    }
+  ],
+  "verifiedAt": "2026-11-04T16:14:36.151981+00:00",
+  "productionAndRegressionCommit": "c218d9e6f6aa7bb12fcc942448d161ed6d76368f",
+  "electronInfrastructureCommit": "18f77352ab3ba0eb2e4bb910c90c764591e0261d"
+}

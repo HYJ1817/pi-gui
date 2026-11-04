@@ -1,0 +1,173 @@
+{
+  "basis": "Supplied 1.5 DPR condition; reference PNG metadata is consistent, not an independent probe of reference OS settings",
+  "referenceCommit": "92ae661f1e399e69d514086b46029b4c34ba1a92",
+  "actualCssViewport": [
+    1205,
+    803
+  ],
+  "actualDpr": 1.5,
+  "narrowCssViewport": [
+    700,
+    600
+  ],
+  "references": {
+    "REF-015": {
+      "file": "Snipaste_2026-10-31_23-57-55.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "994f0a8cc84156301c2d4f52e1746c1ff4e9286fff8017fed59ba6533c40d871",
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-016": {
+      "file": "Snipaste_2026-10-31_23-58-36.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "937561ddc133687192877b97621df3222c05d6ec618a0692c50cbcbf140554ac",
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-017": {
+      "file": "Snipaste_2026-10-31_23-58-53.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "6d4150114feaf7b4ceacde4b0424a4bd4d9894412c8f74033c0effceed7a7156",
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-021": {
+      "file": "Snipaste_2026-11-01_00-00-22.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "8e9f6d84ad9d87683b8dd29657b4839c61f1785185efe874115f7fb0d8ee793e",
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-022": {
+      "file": "Snipaste_2026-11-01_10-41-57.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "dc5f72d456cc96cf1b0dc28cb2668ac8226ead1f4c1c95290f35e20402da2557",
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-023": {
+      "file": "Snipaste_2026-11-01_10-42-10.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "ed8dac282dffe5a8b44173abc4b793b2823cef3fdf211f7aba760013c631d2aa",
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-024": {
+      "file": "Snipaste_2026-11-01_10-42-22.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "20ed103c7ff5f56fe449c20850eb9c8f0aedf28941469f8f650c6d2abe600016",
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    }
+  },
+  "screenshotCount": 33,
+  "nativeCount": 2,
+  "perShotGeometrySource": "results.json shots[].geometry.viewport and shots[].pixels",
+  "inheritedShellRegressionExceptions": {
+    "01-07": {
+      "cssViewport": [
+        1206,
+        803
+      ],
+      "pixels": [
+        1809,
+        1205
+      ]
+    },
+    "08": {
+      "cssViewport": [
+        700,
+        650
+      ],
+      "pixels": [
+        1050,
+        975
+      ]
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # P14-C Floating Composer
 
-Composer 保留原有的 `composerBox`、`input` 和所有控制按钮 ID。它是 `.stage` 底部的单个浮动面板，与对话阅读列共用中央轴；最大宽度由 `--composer-max-width: calc(var(--conversation-max-width) - 32px)` 得出，底部留 18px。对话仍由 `#stream` 独立滚动。
+Composer 保留原有的 `composerBox`、`input` 和所有控制按钮 ID。它是 `.stage` 底部的单个浮动面板，与对话阅读列共用中央轴；阶段 D 改为消费既有 `--ds-composer-width`（760px），底部留 16px。20px 圆角、表面与阴影使用 A 阶段的 `--ds-*` 变量，发送/停止为 28px 圆形控件。对话仍由 `#stream` 独立滚动，底部渐隐不改变滚动或消息状态。
 
 ## 高度与滚动
 
@@ -31,6 +31,8 @@ steer。界面用 `S.stopping`：点击那一刻置真（发送键禁用、Enter
 ## 弹层、键盘和窄屏
 
 Model、Thinking 和 Context 共用 `ui/popover.js`，优先放在 Composer 上方。选项是可聚焦的 button；触发按钮维护 `aria-expanded` 和 `aria-controls`，当前项有 `aria-current`。Escape 关闭选择器并把焦点还给触发按钮。输入框原有的 Enter 发送、Shift+Enter 换行、IME 合成时不发送、Escape 停止行为不变。700px 下各控件仍在同一行，通过缩小间距和模型名截断保持可用；700×600 下 textarea 高度受视口约束。
+
+阶段 D 修复了 Context 焦点仍在触发按钮时 Escape 无法关闭的问题，继续使用同一个 Popover。Runtime 保留自己的 owner、原生选择器及草稿通道，只统一表面、字体和动作尺寸；只读历史中的发送保护不变。详细源码与实测证据见 [阶段 D 记录](ui/pi-desktop-reference/14-phase-d-implementation.md)。
 
 ## 验证与边界
 
