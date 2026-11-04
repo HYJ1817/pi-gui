@@ -293,6 +293,14 @@ function makeRowMenu(s, row, titleEl, preview = false) {
     openActionMenu(trigger, items);
   };
   acts.append(trigger);
+  row.oncontextmenu = e => {
+    // Reuse the exact same permissions and callbacks as the overflow button.
+    // The row anchor keeps both pointer and keyboard menus in the viewport.
+    if (e.target.closest('input,textarea')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    trigger.click();
+  };
   return acts;
 }
 
@@ -486,6 +494,7 @@ function makeRow(s, onPick = null) {
   }
   if (s.current) row.setAttribute('aria-current', 'true');
   if (s.current) row.dataset.classicCurrent = 'true';
+  if (s.current) row.dataset.activity = S.streaming ? 'running' : 'idle';
   const dot = el('span', 'pj-sess-dot');
   dot.setAttribute('aria-hidden', 'true');
   const title = el('span', 'pj-sess-title', s.title || '（无标题）');
@@ -545,6 +554,7 @@ function startRename(row, titleEl, s) {
 
 let busy = false;
 document.addEventListener('pi-gui:classic-activity', () => {
+  for (const row of document.querySelectorAll('[data-classic-current]')) row.dataset.activity = S.streaming ? 'running' : 'idle';
   for (const time of document.querySelectorAll('[data-classic-current] .pj-sess-time')) time.textContent = S.streaming ? '运行中' : time.dataset.idleLabel || '';
 });
 

@@ -354,7 +354,7 @@ function section(title) {
   const sessionsSrc = read('public/sessions.js');
   const sessionsCode = stripComments(sessionsSrc);
   const projectsCode = stripComments(projectsSrc);
-  const styles = read('public/styles.css');
+  const styles = read('public/styles.css') + read('public/app-shell.css');
 
   check('D1. 项目行不再有 .pj-del，改成唯一的 .pj-row-menu-trigger', () =>
     (!projectsCode.includes('pj-del') && !styles.includes('.pj-del')

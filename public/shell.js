@@ -7,6 +7,7 @@
 import { $, el, S, ownsWorkspace } from './state.js';
 import { fetchStatus } from './api.js';
 import { maintenanceCopy } from './status-copy.js';
+import { samePath } from './util.js';
 import { updateSendState, renderModelControls } from './composer.js';
 import { toast } from './ui/toast.js';
 
@@ -54,17 +55,36 @@ export function setBridgeState(state, detail = '', maintenanceReason = null) {
 }
 
 let classicTitle = el.title?.textContent || '新会话', runtimeTitle = null;
+let runtimeProjectPath = '';
+/* Display projection only. Runtime's workspace travels with its title; the
+ * classic status/cwd must never label a different conversation's topbar. */
+export function syncTitleProject() {
+  const context = $('titleProjectContext'), label = $('titleProject');
+  if (!context || !label) return;
+  const runtime = $('workspace')?.dataset.workspaceView === 'runtime';
+  const path = runtime ? runtimeProjectPath : S.hasProject ? S.cwd : '';
+  const row = [...document.querySelectorAll('#projects .project')]
+    .find(node => samePath(node.dataset.projectPath, path));
+  label.textContent = path ? row?.querySelector('.pj-name')?.textContent || path.split(/[\\/]/).filter(Boolean).pop() || path : '';
+  context.hidden = !path;
+  context.title = path;
+  if (el.title) el.title.title = el.title.textContent;
+}
 export function setTitleText(t) {
   if (!t) return;
   classicTitle = t;
   if ($('workspace')?.dataset.workspaceView !== 'runtime') el.title.textContent = t;
+  syncTitleProject();
 }
-export function setRuntimeTitle(t) {
+export function setRuntimeTitle(t, projectPath = '') {
   runtimeTitle = t || null;
+  runtimeProjectPath = projectPath;
   if ($('workspace')?.dataset.workspaceView === 'runtime' && el.title) el.title.textContent = runtimeTitle || classicTitle;
+  syncTitleProject();
 }
 document.addEventListener('pi-gui:workspace-view', event => {
   if (el.title) el.title.textContent = event.detail?.view === 'runtime' ? runtimeTitle || classicTitle : classicTitle;
+  syncTitleProject();
 });
 
 /** 「有没有项目」决定整块界面的形态。
@@ -75,6 +95,7 @@ document.addEventListener('pi-gui:workspace-view', event => {
  *
  * 幂等：loadStatus / 增删项目后都会调，重复调用无副作用。 */
 export function applyProjectState() {
+  syncTitleProject();
   const ready = S.hasProject;
   /* 维护态（Pi 正在被 self-update 替换，或在装扩展）**不是错误态**：进程是
    * GUI 自己停的，完成后会自动重启，会话与草稿都还在。所以输入区不锁死 ——
