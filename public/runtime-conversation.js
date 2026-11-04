@@ -579,7 +579,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (!id) return;
     title.textContent = r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
     title.title = title.textContent;
-    if (active) onTitle(title.textContent);
+    if (active) onTitle(title.textContent, r?.item?.workspace?.cwd || '');
     drawModels(r, view);
     resources.textContent = resourceText();
     notice.textContent = view.notice;

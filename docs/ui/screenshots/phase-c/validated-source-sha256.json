@@ -1,0 +1,43 @@
+{
+  "baseline": "6036ceb9d5303eb9653f39b9c54a4c9405a3a815",
+  "files": {
+    "package.json": "2c409ecc8e0152ca984a6d5ba31fe2d88441ca9aac1737b07f90700b8c1bbb64",
+    "electron/theme.cjs": "9fc359752929cda029fa9a3507beac3f1e2700cfa4428619730d31f07000da8d",
+    "public/app-shell.css": "f43bd76fd37072ad6ab5be42fc1f39d180e6484cee37f42d9a73980d5bb7e050",
+    "public/app.js": "daf309b415d41574714f1cbcffa1dfd7f882e0e59881803cb4f888fa6b2d267c",
+    "public/index.html": "f3f00adb34caae06ba12fc3a3a63af39f3ddcd3e9dfb7142d18bca6fca0e3f0c",
+    "public/projects.js": "d517819938887c1e160b0ce8b9781525080ead2fc397579f824e7d75e90860dc",
+    "public/runtime-conversation.js": "ea6b7611f93f93c00dd7810a3f4c3057c0b47a1d00f36ea369591d83d8bd3681",
+    "public/sessions.js": "c64fed5736b98335b8e88f536d446e466a575de73806940c09dfea17227d7a3d",
+    "public/shell.js": "92bc08e2754a0afaa6996e525d91e9019fdfa934148f4d964c8608f3acaa2d23",
+    "public/styles.css": "a13dff1c443c274a38c24fe567d55e4612e3bc53bb10b89bd635502ba40eb7a1",
+    "public/tokens.css": "a164d78d1ccd859f9748ddcc97e138917b1e7efe7fa8c469ffe850263e47a5d7",
+    "tests/app-shell.cjs": "dabfb3f993f5bfa2154f1d5c44f3dd13b7fdaf4e3f518bc94f9b8ac35538a4b9",
+    "tests/app-shell-electron.cjs": "82252139aad9cb1a5ef94ab3a8c0b4bf03fcbe1c5087fc8c15df01a0bffb0bfa",
+    "tests/sidebar-menu.cjs": "933b98a930a34d0ccb62ac6a473e22213c75b292280a6b02b72d1e4d80ffbd57",
+    "tests/session-background-electron.cjs": "97762d978705076f7db7f3a26d82cef84f6f99ba1885e192cc8b0d184338f3da"
+  },
+  "beforeNativeDragFix": {
+    "public/app-shell.css": "25bb7024624730044ae29c87a82c2e05c7e73c775bad6dc47cd51e9d6239fba5",
+    "tests/app-shell-electron.cjs": "d4a357f005c597716a41e1ba5c6391831d1af48ea4bc0fcc5c7df682d72ce21d"
+  },
+  "finalCssChange": "Collapsed restore no-drag plus source-confirmed existing corner aliases (rows 10px, controls 12px, menu 14px) and ds-tile topbar seat; no business JS/authority change. Collapsed lead uses fixed reference 12px inset (previous actual 8px recorded as failing calibration); final real Electron guard confirms 12px.",
+  "finalCssRevalidatedBy": [
+    "tests/app-shell-electron.cjs 26/26 including reference corner aliases and 12px collapsed lead inset",
+    "tests/sidebar-menu.cjs 37/37",
+    "tests/ui2-visual.cjs 57/57",
+    "tests/settings-headings-electron.cjs exit 0",
+    "tests/dev-server.cjs 30/30",
+    "test:file-size-report exit 0",
+    "build:app --rebuild phase-c-final-app-20261104; 10/10 copied source hashes match"
+  ],
+  "beforeReferenceCornerAlignment": {
+    "public/app-shell.css": "f1995e84c8136c43f7ad2cd1255a33f90e1ad87af565cc06c751c3092ff9b7d6",
+    "public/styles.css": "140d0baca67d43d28445131ea1626e555adbe6d9ef5a786e0897e7e35e0722b2",
+    "tests/app-shell-electron.cjs": "ac610cb0146d1ffe07be48f377c8dbf2f6e6722fa0d90145ad5727e05bdb280c"
+  },
+  "beforeReferenceRestoreInset": {
+    "public/app-shell.css": "8bb8e731f36a7a2129a838b7246c81575dd5d65f4d16a94366d2bf5ada1d858b",
+    "tests/app-shell-electron.cjs": "753130ca77d3996b1e9bcbde1a240cffa0d26c8c513d065fa826f7a1216829a8"
+  }
+}

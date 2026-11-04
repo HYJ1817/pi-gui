@@ -1,0 +1,1352 @@
+{
+  "schemaVersion": 1,
+  "mode": "cumulative continuation after recorded npm test failure",
+  "baseline": "6036ceb9d5303eb9653f39b9c54a4c9405a3a815",
+  "planSha256": "227e2a4402a95e7c134e0ed6638ad5ff4f83eee4cdf934aaba62696b8b9f2251",
+  "total": 234,
+  "firstRunPassedPrefix": 106,
+  "startCommand": "node tests/session-revert-sacl-witness.cjs",
+  "processEnvironment": {
+    "PSExecutionPolicyPreference": "Bypass",
+    "scope": "test child only; no persistent settings or elevation"
+  },
+  "started": "2026-11-04T09:56:05.795Z",
+  "commands": [
+    {
+      "index": 107,
+      "command": "node tests/session-revert-sacl-witness.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:05.797Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:06.579Z"
+    },
+    {
+      "index": 108,
+      "command": "node tests/session-revert-object-profile.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:06.580Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:12.705Z"
+    },
+    {
+      "index": 109,
+      "command": "node tests/session-revert-object-evidence.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:12.706Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:23.249Z"
+    },
+    {
+      "index": 110,
+      "command": "node tests/runtime-models.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:23.250Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:24.861Z"
+    },
+    {
+      "index": 111,
+      "command": "node tests/model-fallback.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:24.862Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:26.524Z"
+    },
+    {
+      "index": 112,
+      "command": "node tests/model-capabilities.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:26.525Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:27.284Z"
+    },
+    {
+      "index": 113,
+      "command": "node tests/thinking-availability.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:27.285Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:27.784Z"
+    },
+    {
+      "index": 114,
+      "command": "node tests/ux-state.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:27.784Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:35.412Z"
+    },
+    {
+      "index": 115,
+      "command": "node tests/bridge-state-recovery.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:35.413Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:36.670Z"
+    },
+    {
+      "index": 116,
+      "command": "node tests/native-provider-quota.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:36.671Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:37.352Z"
+    },
+    {
+      "index": 117,
+      "command": "node tests/stable-session-order.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:37.353Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:37.526Z"
+    },
+    {
+      "index": 118,
+      "command": "node tests/hotfix.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:37.527Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:38.345Z"
+    },
+    {
+      "index": 119,
+      "command": "node tests/hotfix-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:38.346Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:39.349Z"
+    },
+    {
+      "index": 120,
+      "command": "node tests/provider-auth.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:39.351Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:40.431Z"
+    },
+    {
+      "index": 121,
+      "command": "node tests/provider-auth-runtime.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:40.431Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:40.645Z"
+    },
+    {
+      "index": 122,
+      "command": "node tests/ui-ia.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:40.646Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:42.746Z"
+    },
+    {
+      "index": 123,
+      "command": "node tests/primitives.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:42.747Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:42.838Z"
+    },
+    {
+      "index": 124,
+      "command": "node tests/settings-acceptance.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:42.839Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:56:43.561Z"
+    },
+    {
+      "index": 125,
+      "command": "node tests/smoke.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:56:43.562Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:57:53.202Z"
+    },
+    {
+      "index": 126,
+      "command": "node tests/daily-use.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:57:53.202Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:57:53.305Z"
+    },
+    {
+      "index": 127,
+      "command": "node tests/git.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:57:53.306Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:27.477Z"
+    },
+    {
+      "index": 128,
+      "command": "node tests/modules.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:27.478Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:27.622Z"
+    },
+    {
+      "index": 129,
+      "command": "node tests/reliability.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:27.622Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:27.806Z"
+    },
+    {
+      "index": 130,
+      "command": "node tests/interactions.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:27.806Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:28.295Z"
+    },
+    {
+      "index": 131,
+      "command": "node tests/sidebar-menu.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:28.296Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:28.845Z"
+    },
+    {
+      "index": 132,
+      "command": "node tests/app-shell.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:28.845Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:29.411Z"
+    },
+    {
+      "index": 133,
+      "command": "node tests/port-owner.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:29.412Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:30.484Z"
+    },
+    {
+      "index": 134,
+      "command": "node tests/project-config.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:30.484Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:31.009Z"
+    },
+    {
+      "index": 135,
+      "command": "node tests/skills.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:31.010Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:31.482Z"
+    },
+    {
+      "index": 136,
+      "command": "node tests/extensions.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:31.482Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:32.227Z"
+    },
+    {
+      "index": 137,
+      "command": "node tests/capability.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:32.227Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:32.346Z"
+    },
+    {
+      "index": 138,
+      "command": "node tests/capability-install.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:32.347Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:32.451Z"
+    },
+    {
+      "index": 139,
+      "command": "node tests/web-access.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:32.452Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:32.992Z"
+    },
+    {
+      "index": 140,
+      "command": "node tests/subagents.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:32.993Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:33.564Z"
+    },
+    {
+      "index": 141,
+      "command": "node tests/memory.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:33.565Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:34.125Z"
+    },
+    {
+      "index": 142,
+      "command": "node tests/browser.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:34.125Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:34.655Z"
+    },
+    {
+      "index": 143,
+      "command": "node tests/approvals.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:34.656Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:58:35.522Z"
+    },
+    {
+      "index": 144,
+      "command": "node tests/planner.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:58:35.523Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:59:11.110Z"
+    },
+    {
+      "index": 145,
+      "command": "node tests/workflow-relations.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:59:11.111Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:59:27.300Z"
+    },
+    {
+      "index": 146,
+      "command": "node tests/reviews.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:59:27.301Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T09:59:41.739Z"
+    },
+    {
+      "index": 147,
+      "command": "node tests/review-gate.cjs",
+      "status": "passed",
+      "started": "2026-11-04T09:59:41.740Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:00:07.989Z"
+    },
+    {
+      "index": 148,
+      "command": "node tests/verification.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:00:07.990Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:00:20.359Z"
+    },
+    {
+      "index": 149,
+      "command": "node tests/evidence.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:00:20.360Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:00:58.885Z"
+    },
+    {
+      "index": 150,
+      "command": "node tests/attempt-lifecycle.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:00:58.886Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:18.843Z"
+    },
+    {
+      "index": 151,
+      "command": "node tests/sessions.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:18.844Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:19.412Z"
+    },
+    {
+      "index": 152,
+      "command": "node tests/session-search.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:19.413Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:21.346Z"
+    },
+    {
+      "index": 153,
+      "command": "node tests/pi-compat.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:21.347Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:21.437Z"
+    },
+    {
+      "index": 154,
+      "command": "node tests/pi-probes.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:21.437Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:21.893Z"
+    },
+    {
+      "index": 155,
+      "command": "node tests/pi-update.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:21.894Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:22.344Z"
+    },
+    {
+      "index": 156,
+      "command": "node tests/pi-version.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:22.344Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:22.941Z"
+    },
+    {
+      "index": 157,
+      "command": "node tests/mcp-native.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:22.942Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:23.231Z"
+    },
+    {
+      "index": 158,
+      "command": "node tests/usage-quota.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:23.232Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:23.819Z"
+    },
+    {
+      "index": 159,
+      "command": "node tests/body-integrity.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:23.820Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:23.978Z"
+    },
+    {
+      "index": 160,
+      "command": "node tests/dev-server.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:23.979Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:25.349Z"
+    },
+    {
+      "index": 161,
+      "command": "node tests/standalone-datadir.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:25.350Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:25.577Z"
+    },
+    {
+      "index": 162,
+      "command": "node tests/models-api.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:25.578Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:27.106Z"
+    },
+    {
+      "index": 163,
+      "command": "node tests/server-security.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:27.107Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:32.340Z"
+    },
+    {
+      "index": 164,
+      "command": "node tests/diagnostics.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:32.341Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:32.441Z"
+    },
+    {
+      "index": 165,
+      "command": "node tests/update-check.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:32.441Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:32.924Z"
+    },
+    {
+      "index": 166,
+      "command": "node tests/version-consistency.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:32.925Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:33.059Z"
+    },
+    {
+      "index": 167,
+      "command": "node tests/release-artifacts.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:33.060Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:33.404Z"
+    },
+    {
+      "index": 168,
+      "command": "node tests/electron-guard.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:33.405Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:34.887Z"
+    },
+    {
+      "index": 169,
+      "command": "node tests/gui-browser-policy.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:34.888Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:34.975Z"
+    },
+    {
+      "index": 170,
+      "command": "node tests/gui-browser-controller.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:34.976Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:40.289Z"
+    },
+    {
+      "index": 171,
+      "command": "node tests/gui-browser-bridge.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:40.291Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:40.676Z"
+    },
+    {
+      "index": 172,
+      "command": "node tests/gui-browser-tools.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:40.677Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:40.821Z"
+    },
+    {
+      "index": 173,
+      "command": "node tests/gui-browser-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:40.822Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:41.362Z"
+    },
+    {
+      "index": 174,
+      "command": "node tests/gui-browser-host.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:41.363Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:41.449Z"
+    },
+    {
+      "index": 175,
+      "command": "node tests/gui-browser-stop.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:41.450Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:42.169Z"
+    },
+    {
+      "index": 176,
+      "command": "node tests/stop-barrier.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:42.169Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:43.209Z"
+    },
+    {
+      "index": 177,
+      "command": "node tests/bug8-real-pi-fixture.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:43.209Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:43.291Z"
+    },
+    {
+      "index": 178,
+      "command": "node tests/managed-processes.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:43.292Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:43.417Z"
+    },
+    {
+      "index": 179,
+      "command": "node tests/process-tools.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:43.418Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:43.661Z"
+    },
+    {
+      "index": 180,
+      "command": "node tests/process-stop.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:43.662Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:43.836Z"
+    },
+    {
+      "index": 181,
+      "command": "node tests/process-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:43.837Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:45.551Z"
+    },
+    {
+      "index": 182,
+      "command": "node tests/process-runner.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:45.555Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:01:45.698Z"
+    },
+    {
+      "index": 183,
+      "command": "node tests/worktrees.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:01:45.699Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:31.863Z"
+    },
+    {
+      "index": 184,
+      "command": "node tests/worktrees-http.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:31.864Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:39.398Z"
+    },
+    {
+      "index": 185,
+      "command": "node tests/worktrees-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:39.399Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:40.020Z"
+    },
+    {
+      "index": 186,
+      "command": "node tests/runtime-registry.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:40.021Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:40.262Z"
+    },
+    {
+      "index": 187,
+      "command": "node tests/runtime-http.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:40.262Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:40.458Z"
+    },
+    {
+      "index": 188,
+      "command": "node tests/runtime-store.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:40.458Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:40.724Z"
+    },
+    {
+      "index": 189,
+      "command": "node tests/runtime-draft.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:40.724Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:41.688Z"
+    },
+    {
+      "index": 190,
+      "command": "node tests/runtime-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:41.689Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:42.259Z"
+    },
+    {
+      "index": 191,
+      "command": "node tests/runtime-nav.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:42.260Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:50.064Z"
+    },
+    {
+      "index": 192,
+      "command": "node tests/runtime-conversation.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:50.065Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:02:51.713Z"
+    },
+    {
+      "index": 193,
+      "command": "node tests/runtime-changes.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:02:51.714Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:22.991Z"
+    },
+    {
+      "index": 194,
+      "command": "node tests/runtime-secondary.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:22.991Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:23.682Z"
+    },
+    {
+      "index": 195,
+      "command": "node tests/runtime-git-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:23.683Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:24.327Z"
+    },
+    {
+      "index": 196,
+      "command": "node tests/runtime-resources.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:24.328Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:24.965Z"
+    },
+    {
+      "index": 197,
+      "command": "node tests/runtime-resource-cleanup.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:24.966Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:25.119Z"
+    },
+    {
+      "index": 198,
+      "command": "node tests/runtime-history-search.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:25.120Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:40.600Z"
+    },
+    {
+      "index": 199,
+      "command": "node tests/history-tool-summary.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:40.601Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:40.880Z"
+    },
+    {
+      "index": 200,
+      "command": "node tests/history-tool-summary-http.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:40.881Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:41.149Z"
+    },
+    {
+      "index": 201,
+      "command": "node tests/runtime-finish-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:41.150Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:41.760Z"
+    },
+    {
+      "index": 202,
+      "command": "node tests/session-runtime.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:41.761Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:43.141Z"
+    },
+    {
+      "index": 203,
+      "command": "node tests/pi-supervisor.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:43.142Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:46.866Z"
+    },
+    {
+      "index": 204,
+      "command": "node tests/runtime-browser.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:46.867Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:47.025Z"
+    },
+    {
+      "index": 205,
+      "command": "node tests/process-budget.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:47.026Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:47.151Z"
+    },
+    {
+      "index": 206,
+      "command": "node tests/runtime-events.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:47.152Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:47.234Z"
+    },
+    {
+      "index": 207,
+      "command": "node tests/runtime-processes.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:47.235Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:49.956Z"
+    },
+    {
+      "index": 208,
+      "command": "node tests/session-revert-object-assets.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:49.957Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:53.159Z"
+    },
+    {
+      "index": 209,
+      "command": "node tests/session-revert-object-authority.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:53.160Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:03:59.805Z"
+    },
+    {
+      "index": 210,
+      "command": "node tests/session-revert-object-history.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:03:59.806Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:04:26.185Z"
+    },
+    {
+      "index": 211,
+      "command": "node tests/session-revert-object-runtime.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:04:26.186Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:13:02.549Z"
+    },
+    {
+      "index": 212,
+      "command": "node tests/session-revert-object-store.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:13:02.550Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:13:07.912Z"
+    },
+    {
+      "index": 213,
+      "command": "node tests/session-revert-object-service.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:13:07.913Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:18:38.197Z"
+    },
+    {
+      "index": 214,
+      "command": "node tests/session-revert-object-recovery.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:18:38.198Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:18:57.550Z"
+    },
+    {
+      "index": 215,
+      "command": "node tests/session-change-store.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:18:57.551Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:21:37.515Z"
+    },
+    {
+      "index": 216,
+      "command": "node tests/session-change-bridge.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:21:37.517Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:21:37.765Z"
+    },
+    {
+      "index": 217,
+      "command": "node tests/session-change-tools.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:21:37.766Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:21:38.061Z"
+    },
+    {
+      "index": 218,
+      "command": "node tests/session-revert.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:21:38.062Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:21:38.177Z"
+    },
+    {
+      "index": 219,
+      "command": "node tests/session-revert-store.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:21:38.178Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:23:46.083Z"
+    },
+    {
+      "index": 220,
+      "command": "node tests/session-revert-http.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:23:46.084Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:23:50.677Z"
+    },
+    {
+      "index": 221,
+      "command": "node tests/session-revert-integration.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:23:50.679Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:23:51.152Z"
+    },
+    {
+      "index": 222,
+      "command": "node tests/session-revert-writer.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:23:51.153Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:23:56.083Z"
+    },
+    {
+      "index": 223,
+      "command": "node tests/session-revert-recovery.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:23:56.084Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:24:10.531Z"
+    },
+    {
+      "index": 224,
+      "command": "node tests/session-revert-admission.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:24:10.532Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:24:10.882Z"
+    },
+    {
+      "index": 225,
+      "command": "node tests/session-revert-apply.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:24:10.884Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:25:36.878Z"
+    },
+    {
+      "index": 226,
+      "command": "node tests/session-revert-windows-faults.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:25:36.879Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:25:45.941Z"
+    },
+    {
+      "index": 227,
+      "command": "node tests/session-revert-inplace.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:25:45.942Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:28:02.723Z"
+    },
+    {
+      "index": 228,
+      "command": "node tests/session-revert-inplace-safety.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:28:02.724Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:29:08.805Z"
+    },
+    {
+      "index": 229,
+      "command": "node tests/session-change-query.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:29:08.806Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:29:14.852Z"
+    },
+    {
+      "index": 230,
+      "command": "node tests/session-change-ui.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:29:14.853Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:29:15.466Z"
+    },
+    {
+      "index": 231,
+      "command": "node tests/session-change-startup.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:29:15.467Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:29:27.334Z"
+    },
+    {
+      "index": 232,
+      "command": "node tests/session-revert-object-writer.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:29:27.335Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:38:58.439Z"
+    },
+    {
+      "index": 233,
+      "command": "node tests/session-revert-object-faults.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:38:58.446Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:52:51.802Z"
+    },
+    {
+      "index": 234,
+      "command": "node tests/session-revert-object-witness.cjs",
+      "status": "passed",
+      "started": "2026-11-04T10:52:51.804Z",
+      "exitCode": 0,
+      "ended": "2026-11-04T10:52:52.762Z"
+    }
+  ],
+  "status": "complete",
+  "finished": "2026-11-04T10:52:52.764Z",
+  "firstAttempt": {
+    "command": "npm test",
+    "exitCode": 1,
+    "passedPrefix": 106,
+    "failedAt": 107,
+    "failedCommand": "node tests/session-revert-sacl-witness.cjs",
+    "reason": "Windows rejected unsigned fixture script before native execution; original log retained"
+  },
+  "qualification": "Cumulative canonical validation plus renewed final CSS checks; not a successful single npm test invocation; audit skips are not passed assertions.",
+  "auditUnverified": [
+    {
+      "suite": "session-revert-sacl-witness",
+      "skipped": 8,
+      "reason": "audit_privilege_unavailable"
+    },
+    {
+      "suite": "session-revert-object-witness",
+      "skipped": 8,
+      "reason": "existing_token_sacl_unavailable"
+    }
+  ],
+  "finalVisualChecks": {
+    "electronShell": {
+      "passed": 26,
+      "failed": 0,
+      "sandbox": true,
+      "dpr": 1.5
+    },
+    "electronBackground": {
+      "passed": 16,
+      "failed": 0,
+      "sandbox": false
+    },
+    "ui2Visual": {
+      "passed": 57,
+      "failed": 0
+    },
+    "menu": {
+      "passed": 37,
+      "failed": 0
+    },
+    "settingsElectron": {
+      "exitCode": 0
+    },
+    "devServer": {
+      "passed": 30,
+      "failed": 0
+    },
+    "buildCopiedFiles": {
+      "passed": 10,
+      "failed": 0
+    }
+  },
+  "localLogDirectory": "C:\\pi-GUI\\.shots\\phase-c-validation-d7j_iaqa",
+  "logFiles": [
+    {
+      "file": "background-electron-final.log",
+      "bytes": 1349,
+      "sha256": "25ce2941ee0042e25306ecbe15e582baeb811fd6e5e48e34a0f95e38ac3676bc"
+    },
+    {
+      "file": "background-electron.log",
+      "bytes": 1296,
+      "sha256": "22c0654141f2483ce811aa8d8afa9947cd9615445f2b8cd558b2a90fbdda930d"
+    },
+    {
+      "file": "baseline-primitives.log",
+      "bytes": 248,
+      "sha256": "d19e05485da60b46f6f99e907a6b51d773187d0042263421e74e5f295c2ca1ac"
+    },
+    {
+      "file": "baseline-runtime-nav.log",
+      "bytes": 1841,
+      "sha256": "13ec84690b681908d2ad06babd0d11086fb686ea0511db4f69caae6d80676702"
+    },
+    {
+      "file": "baseline-session-background-ui.log",
+      "bytes": 740,
+      "sha256": "3f338d243faf57dc3feb5794188772c1da10dbff1211bb458d78cd94adbb67b6"
+    },
+    {
+      "file": "baseline-settings-acceptance.log",
+      "bytes": 1361,
+      "sha256": "4aabc23e446109227b553b8056fa0564523587aa89a5deb61bbbc0a54224d462"
+    },
+    {
+      "file": "baseline-sidebar-menu.log",
+      "bytes": 2944,
+      "sha256": "92ab261bbb22cc0ba79b30dd6fa358bdb3883daed9850d340734b712b8c4aca8"
+    },
+    {
+      "file": "baseline-stable-session-order.log",
+      "bytes": 2124,
+      "sha256": "2c90fe04a00e501d448d4f60d00f93f2fd2458e40ae0c8c9d9dad507984ca29f"
+    },
+    {
+      "file": "baseline-theme.log",
+      "bytes": 2198,
+      "sha256": "7ff88298f5474cab5e8c368b535ebbfb1e022ad5ad106bc9ba238da5e6f301c2"
+    },
+    {
+      "file": "baseline-ui-ia.log",
+      "bytes": 1794,
+      "sha256": "aa99a5034a3d22346d0ca9c3d855f7324ea59bc63bb53168078f13779d0c7b9c"
+    },
+    {
+      "file": "baseline-ui2-visual.log",
+      "bytes": 3915,
+      "sha256": "d3e6c7a97862ba34ed1af4f76c95256ee5e7cbfee33f3b1d26c65c87ecb37b59"
+    },
+    {
+      "file": "build-delivery.log",
+      "bytes": 1348,
+      "sha256": "ac0c1864f564381d3eb3d93c9b06e240b819049b5b11b5bf71f88e8d26d68645"
+    },
+    {
+      "file": "build-final-app.log",
+      "bytes": 1352,
+      "sha256": "8f8677cf80c812b1af23c6e0344263ddb0d19ebe00a5436dac47963f25ebcf86"
+    },
+    {
+      "file": "build-final.log",
+      "bytes": 1360,
+      "sha256": "a2433c9b8153f2e635660f7c67df50d4eb5ee64984f9d5fbf6e375920b2c6cb0"
+    },
+    {
+      "file": "build.log",
+      "bytes": 1336,
+      "sha256": "f7a30dbb721b5b00593a739db5a522a789b55b120e04f870a4c33e9c3ffe7a36"
+    },
+    {
+      "file": "canonical-continuation.log",
+      "bytes": 467248,
+      "sha256": "9ec74a5c1a9f469bfb286fa05e393157ecc831545f1847eacc6fd6241f5a3351"
+    },
+    {
+      "file": "canonical.log",
+      "bytes": 162299,
+      "sha256": "64b6c9027dc1ea1b839eb10ebe6e2f67abb331882bd5a8c8e3a247738d53f93c"
+    },
+    {
+      "file": "delivery-dev-server.log",
+      "bytes": 1537,
+      "sha256": "05cf24dc66958afbcdd66b022be964c7c55d91b36165ce41bdeefbb1fac719df"
+    },
+    {
+      "file": "delivery-file-size.log",
+      "bytes": 846,
+      "sha256": "eb9af0ac90d268b214a195e13e13025cf43eb73843bf73f4285b92706e134d94"
+    },
+    {
+      "file": "delivery-settings-electron.log",
+      "bytes": 523,
+      "sha256": "2c20c030cf44104d2a247f6e079e6027b30466f5a3eec38ee3c6423e86652d90"
+    },
+    {
+      "file": "delivery-sidebar-menu.log",
+      "bytes": 2944,
+      "sha256": "92ab261bbb22cc0ba79b30dd6fa358bdb3883daed9850d340734b712b8c4aca8"
+    },
+    {
+      "file": "delivery-ui2-visual.log",
+      "bytes": 3915,
+      "sha256": "3054a3d2dcbfef10e8d88a5a0f8beb2da72cad2d9545cf51737540c1bc5253b7"
+    },
+    {
+      "file": "electron-delivery-final.log",
+      "bytes": 1684,
+      "sha256": "c34d18f5379a3bc4f26d6dd76b7eccd4f7319d73e8720fbd9d3ba0e3cc29cfad"
+    },
+    {
+      "file": "electron-delivery.log",
+      "bytes": 1673,
+      "sha256": "08d1b01c8c704069a596e5ae0f993267d8b5d500eca6c7e2d0ab803de1885135"
+    },
+    {
+      "file": "electron-fifth.log",
+      "bytes": 1915,
+      "sha256": "1e6755a79813e2c04a5dec036d599b25d0abc8d4a0deaa8f853896e1de97adfe"
+    },
+    {
+      "file": "electron-final.log",
+      "bytes": 1556,
+      "sha256": "215df3046397c26c8e51d391fe75edbbd06bef7c4370907a4abe8edf82e3fcae"
+    },
+    {
+      "file": "electron-first.log",
+      "bytes": 988,
+      "sha256": "8744518d09277f67cc8e5a914a51dd5e0b806886913ee3369b03192c5761863a"
+    },
+    {
+      "file": "electron-fourth.log",
+      "bytes": 1915,
+      "sha256": "d393fa999b8a1311656d46cbae8f472ce2da48453cefc15fac4b6274b2e16dc2"
+    },
+    {
+      "file": "electron-second.log",
+      "bytes": 1467,
+      "sha256": "d23646e9ff8564c7b261d37633263a3c443c98f49614dea6be5db75ca8bd3156"
+    },
+    {
+      "file": "electron-sixth.log",
+      "bytes": 1423,
+      "sha256": "f6a8de5eb8b40bc005e02639914a71a51606790e4fb5a86b7a869870065efea6"
+    },
+    {
+      "file": "electron-third.log",
+      "bytes": 1204,
+      "sha256": "7d0c46d797b3e99b9b544a050f64c31fc0349054e8ce92a725e2262a3785a282"
+    },
+    {
+      "file": "final-app-ui2-visual.log",
+      "bytes": 3915,
+      "sha256": "81b45fbb6a618a8b5a43991da4a0a11d5f25358a0679febc77552d3560bdb803"
+    },
+    {
+      "file": "final-dev-server.log",
+      "bytes": 1537,
+      "sha256": "05cf24dc66958afbcdd66b022be964c7c55d91b36165ce41bdeefbb1fac719df"
+    },
+    {
+      "file": "final-settings-electron.log",
+      "bytes": 523,
+      "sha256": "2c20c030cf44104d2a247f6e079e6027b30466f5a3eec38ee3c6423e86652d90"
+    },
+    {
+      "file": "post-drag-dev-server.log",
+      "bytes": 1537,
+      "sha256": "05cf24dc66958afbcdd66b022be964c7c55d91b36165ce41bdeefbb1fac719df"
+    },
+    {
+      "file": "post-drag-file-size.log",
+      "bytes": 846,
+      "sha256": "eb9af0ac90d268b214a195e13e13025cf43eb73843bf73f4285b92706e134d94"
+    },
+    {
+      "file": "post-drag-settings-electron.log",
+      "bytes": 523,
+      "sha256": "2c20c030cf44104d2a247f6e079e6027b30466f5a3eec38ee3c6423e86652d90"
+    },
+    {
+      "file": "post-drag-ui2-visual.log",
+      "bytes": 3915,
+      "sha256": "09692ee7229b549192b89a82ea8b300920f8d6d375dd2e35ce172e78b9b3e0a3"
+    },
+    {
+      "file": "red-collapse-drag.log",
+      "bytes": 1802,
+      "sha256": "fd11c04780ee74ebac5d0a307b01dd88f0630cbd6757b783c9e638b379b60e5d"
+    },
+    {
+      "file": "red-corner-alias.log",
+      "bytes": 1730,
+      "sha256": "1a13d9473d98d26fb4ee8eb8926d2a8774dc29e7f4d6fa00cd09c5adb7345dd0"
+    },
+    {
+      "file": "target-primitives.log",
+      "bytes": 248,
+      "sha256": "d19e05485da60b46f6f99e907a6b51d773187d0042263421e74e5f295c2ca1ac"
+    },
+    {
+      "file": "target-runtime-conversation.log",
+      "bytes": 5825,
+      "sha256": "c807359618e15623c7de7f32f38e66eb89591a9c18b31455e0cbf6d587e6c66e"
+    },
+    {
+      "file": "target-runtime-nav.log",
+      "bytes": 1841,
+      "sha256": "13ec84690b681908d2ad06babd0d11086fb686ea0511db4f69caae6d80676702"
+    },
+    {
+      "file": "target-session-background-ui.log",
+      "bytes": 740,
+      "sha256": "3f338d243faf57dc3feb5794188772c1da10dbff1211bb458d78cd94adbb67b6"
+    },
+    {
+      "file": "target-settings-acceptance.log",
+      "bytes": 1361,
+      "sha256": "4aabc23e446109227b553b8056fa0564523587aa89a5deb61bbbc0a54224d462"
+    },
+    {
+      "file": "target-smoke.log",
+      "bytes": 82365,
+      "sha256": "f2859a0e8cdb203a9680df9498d4cc65a84995445dc57cb7cae69ab276fc3fc6"
+    },
+    {
+      "file": "target-stable-session-order.log",
+      "bytes": 2124,
+      "sha256": "2c90fe04a00e501d448d4f60d00f93f2fd2458e40ae0c8c9d9dad507984ca29f"
+    },
+    {
+      "file": "target-theme.log",
+      "bytes": 2198,
+      "sha256": "7ff88298f5474cab5e8c368b535ebbfb1e022ad5ad106bc9ba238da5e6f301c2"
+    },
+    {
+      "file": "target-ui-ia.log",
+      "bytes": 1794,
+      "sha256": "aa99a5034a3d22346d0ca9c3d855f7324ea59bc63bb53168078f13779d0c7b9c"
+    },
+    {
+      "file": "target-ui2-visual.log",
+      "bytes": 3917,
+      "sha256": "09218cb59dad12cad7ed8ab23858ba45464189183bdbeac2ecfe9f9f4113a8d1"
+    }
+  ],
+  "sourceCommits": {
+    "production": "5b1f954e0e3a37bf8a39e81c3f6f40bc40b4ecf6",
+    "testFixtureRepair": "5fcdc6681407a5b6917b1e613e0c11a39e89b3ff"
+  }
+}

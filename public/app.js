@@ -1159,6 +1159,7 @@ const sidebar = $('projectSidebar');
 const expandSidebar = $('btnSidebarExpand');
 const collapseSidebar = $('btnSidebarCollapse');
 function setSidebarCollapsed(collapsed) {
+  sidebar.closest('.app').classList.toggle('sidebar-collapsed', collapsed);
   sidebar.hidden = collapsed;
   $('globalRail').hidden = !collapsed;
   expandSidebar.hidden = !collapsed;
@@ -1167,6 +1168,8 @@ function setSidebarCollapsed(collapsed) {
 }
 collapseSidebar.onclick = () => { setSidebarCollapsed(true); expandSidebar.focus(); };
 expandSidebar.onclick = () => { setSidebarCollapsed(false); collapseSidebar.focus(); };
+$('btnTopbarNew').onclick = () => $('navNew').click();
+$('btnTopbarSearch').onclick = () => $('navSearch').click();
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').closest('.rail-group');

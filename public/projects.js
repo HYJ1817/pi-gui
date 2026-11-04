@@ -20,7 +20,7 @@ import { openModal, confirmModal } from './ui/modal.js';
 import { openActionMenu, MENU_ICONS } from './ui/action-menu.js';
 import { openProjectSettings } from './project-config.js';
 import { toast } from './ui/toast.js';
-import { applyProjectState, loadStatus, setBridgeState } from './shell.js';
+import { applyProjectState, loadStatus, setBridgeState, syncTitleProject } from './shell.js';
 import { refreshGitNow, resetChanges } from './git.js';
 import { clearThread, setStreaming } from './messages.js';
 import { clearSessionPlans } from './session-plans.js';
@@ -203,6 +203,7 @@ export function renderProjects() {
 
     const item = document.createElement('div');
     item.className = 'project' + (isActive ? ' active' : '');
+    item.dataset.projectPath = p.path;
     /* 绝对路径挂在这里（以及下面 select 的 aria-label 上）。
      * 以前它还常驻一行 .pj-path 副标题，把项目行撑成会话行的近两倍高；
      * 现在行内显示项目名、展开箭头与操作入口。 */
@@ -267,6 +268,11 @@ export function renderProjects() {
         { label: '移除项目', icon: MENU_ICONS.trash, danger: true, onClick: () => confirmRemoveProject(p.path, label) },
       ]);
     };
+    item.oncontextmenu = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      menuTrigger.click();
+    };
 
     select.append(icon, body);
     item.append(select);
@@ -288,6 +294,7 @@ export function renderProjects() {
     if (isActive && sessionsSlot) sessionsSlot(item, p);
     if (!isActive) attachPreview(item, p, el.projects.querySelectorAll('.project').length);
   }
+  syncTitleProject();
 }
 
 export async function addProject(target, name) {

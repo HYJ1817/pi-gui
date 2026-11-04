@@ -3,13 +3,8 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { spawn } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 if (!process.versions.electron) {
-  // Electron's profile/screenshot writes can fail with EPERM when Windows
-  // carries a redirected TEMP ACL into the child. Keep this disposable world
-  // under the repository's ignored .shots directory, like the other Electron
-  // harnesses, so the test exercises the app rather than the host temp policy.
-  const shots = path.join(ROOT, '.shots');
-  fs.mkdirSync(shots, { recursive: true });
-  const world = fs.mkdtempSync(path.join(shots, 'session-background-'));
+  // Disposable project/profile writes must stay outside the real checkout.
+  const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-session-background-'));
   const env = { ...process.env, BACKGROUND_WORLD: world }; delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(require('electron'), [__filename, '--no-sandbox'], { env, stdio: 'inherit', windowsHide: true });
   child.on('exit', code => { process.exitCode = code === 0 ? 0 : 1; });
@@ -142,7 +137,7 @@ async function run() {
     await click('.pj-runtime[data-conversation-id="RA"] .pj-sess-primary');
     await waitFor(`WS.workspaceView()==='runtime'&&document.querySelector('.rtc-title').textContent.includes('RA')`);
     check(await read(`document.querySelector('.rtc-output').textContent==='RA output'&&document.querySelector('.ui2-runtime-usage').textContent.includes('输入 11')&&document.querySelector('.ui2-runtime-tools').textContent.includes('RA tool')&&document.querySelector('.rtc-approvals').textContent.includes('RA approval')`), 'RA output, tokens, tool and approval are owner-scoped');
-    await read(`document.querySelectorAll('.rtc-controls button').forEach(b=>{if(b.textContent==='停止')b.id='stopRA'})`); await click('#stopRA');
+    await read(`document.querySelectorAll('.rtc-composer-actions button').forEach(b=>{if(b.textContent==='停止')b.id='stopRA'})`); await click('#stopRA');
     await click('.pj-runtime[data-conversation-id="RB"] .pj-sess-primary');
     check(await read(`runtimeActions.filter(a=>a.command?.type==='abort').length===1&&runtimeActions.find(a=>a.command?.type==='abort').owner.conversationId==='RA'&&RS.runtimeStore.get('RB').item.activity==='running'&&document.querySelector('.rtc-output').textContent==='RB output'&&document.querySelector('.ui2-runtime-usage').textContent.includes('输入 22')`), 'Stop RA does not stop or mix RB');
     await read(`document.querySelectorAll('.rtc-approvals button').forEach(b=>{if(b.textContent==='确认')b.id='allowRB'})`); await click('#allowRB');

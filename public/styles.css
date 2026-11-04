@@ -2598,12 +2598,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 
 /* P14-A: global navigation, project tree, and workspace shell. */
-:root{--global-rail-width:48px}
 .app{min-width:0}
-.global-rail{width:var(--global-rail-width);flex:0 0 var(--global-rail-width);display:flex;flex-direction:column;align-items:center;background:var(--shell);border-right:1px solid var(--line-soft);padding:6px 0 10px;z-index:3}
-.global-rail-brand{height:40px;display:grid;place-items:center;color:var(--ui-brand);font-size:21px;font-weight:600}
-.global-rail-links,.global-rail-bottom{display:flex;flex-direction:column;align-items:center;gap:5px;width:100%}
-.global-rail-bottom{margin-top:auto}
 .rail-icon{width:36px;height:36px;position:relative;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--t3);cursor:pointer}
 .rail-icon svg{width:18px;height:18px}
 .rail-icon:hover{background:var(--hover);color:var(--t1)}
@@ -2611,64 +2606,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .rail-icon.is-active:before{content:none;position:absolute;left:-8px;top:10px;width:3px;height:16px;border-radius:3px;background:var(--t1)}
 .rail-badge{position:absolute;right:0;bottom:0;font-size:9px;line-height:13px;min-width:13px;border-radius:8px;background:var(--control-active);color:var(--t1);text-align:center}
 .rail-badge:empty{display:none}
-.global-rail .rp-dot{position:absolute;top:4px;right:4px;box-shadow:none}
-.project-sidebar{width:var(--ui-sidebar-width);flex:0 0 var(--ui-sidebar-width);min-width:0;overflow:hidden}
-.project-sidebar .rail-head{padding:0 16px 0 24px}
-.project-sidebar .brand{font-size:18px;font-weight:600;gap:12px}
-.brand-mark{font-family:Georgia,serif;font-size:25px;color:var(--t1)}
-.brand-sub{font-size:11px;color:var(--t3);font-weight:400}
-.project-sidebar .rail-nav{padding:28px 16px 16px;gap:4px}
-.project-sidebar .nav-item{display:flex;width:100%;height:36px;font:inherit;font-size:12.5px;border:0;text-align:left;background:transparent}
-.project-sidebar .nav-item:hover{background:var(--hover)}
-.project-sidebar .nav-item.is-active{background:var(--ui-selected);color:var(--t1)}
-.project-sidebar .rail-group{margin:3px 0 0;padding:0 16px;flex:1;min-height:0;overflow-y:auto}
-.project-sidebar .rail-spacer{display:none}
-.group-bar{display:flex;align-items:center}
-.project-sidebar .group-head{flex:1;text-align:left;font:inherit;font-size:11px;letter-spacing:0;text-transform:none;border:0;background:transparent}
-.project-actions-toggle{font-size:18px;line-height:1}
-.project-actions{margin:0 0 8px;padding:3px;background:var(--ui-user-surface);border:1px solid var(--line-soft);border-radius:7px}
-.project-actions .group-add{display:block;width:100%;height:29px;text-align:left;border:0;background:transparent;font:inherit;font-size:12px}
-/* 项目行对齐会话行的高度：会话行是 34px（标题 + 悬停才显形的那组 26px 动作
-   按钮撑起来的），项目行就用同一个 34px。以前项目行是「名字 + 绝对路径」
-   两行（约 44px），比会话行高出一大截 —— 那正是「项目像大卡片」的来源。 */
-.project-sidebar .project{position:relative;min-height:34px;padding:3px 6px;margin-top:12px}
-.pj-select{display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
-.project.active,.project.active .pj-select{cursor:default}
-.project:focus-within .pj-row-menu-trigger{opacity:1}
-.project-sidebar .project.active{background:transparent}
-.project-sidebar .project .pj-icon{display:none}
-.project-sidebar .project .pj-name{color:var(--t1);font-size:13px;font-weight:500}
-.pj-header-action{display:flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;height:24px;padding:4px;border:0;border-radius:5px;background:transparent;color:var(--t2);cursor:pointer}
-.pj-header-action svg{width:16px;height:16px}
-.pj-header-action:hover{background:var(--hover);color:var(--t1)}
-.project-sidebar .project .pj-chev{position:absolute;left:-7px;width:12px;opacity:.65}
-.project-sidebar .project:hover .pj-chev,.project-sidebar .project:focus-within .pj-chev{opacity:1}
-.project-sidebar .project .pj-chev[aria-expanded="false"]{opacity:1}
-.project-sidebar .pj-sessions{border-left:0;margin:0 0 8px;padding-left:0}
-.project-sidebar:not(.search-open) .pj-search{display:none}
-.project-sidebar .pj-sess{min-height:36px;padding:4px 10px;border-radius:7px;font-size:13px;color:var(--t1)}
-.project-sidebar .pj-sess-primary{gap:12px}
-.pj-sess-dot{width:6px;height:6px;flex:0 0 6px;border:1px solid var(--t3);border-radius:50%;opacity:.65}
-.project-sidebar .pj-sess-time{display:none}
-.pj-sess-primary{display:flex;align-items:center;gap:6px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:inherit}
-button.pj-sess-primary{cursor:pointer}
-.pj-sess-more{display:block;width:100%;border:0;background:transparent;text-align:left;font:inherit}
-.pj-sr-head,.pj-sr-hit{width:100%;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
-.pj-sr-head:hover,.pj-sr-hit:hover{color:var(--t1)}
-.project-sidebar .pj-sess.on{background:var(--ui-selected);color:var(--t1)}
-.project-sidebar .pj-sess.on .pj-sess-time{color:var(--t3)}
-.project-sidebar .pj-sess-acts{opacity:0}
-.project-sidebar .pj-sess:hover .pj-sess-acts,.project-sidebar .pj-sess:focus-within .pj-sess-acts{opacity:1}
-.project-sidebar .pj-sess:hover .pj-sess-time,.project-sidebar .pj-sess:focus-within .pj-sess-time{display:none}
-.project-sidebar .quota{margin:5px 9px 9px;border:0;background:transparent;border-radius:7px;padding:0}
-.quota>summary{list-style:none;padding:6px 9px;border-radius:7px;cursor:pointer}
-.quota>summary::-webkit-details-marker{display:none}
-.quota>summary:hover{background:var(--hover)}
-.quota-detail{padding:0 10px 10px}
-.project-sidebar .rail-foot{border-top:0;height:35px;flex-basis:35px}
-.sidebar-preferences{display:flex;align-items:center;gap:8px;padding:8px 20px}
-.sidebar-preferences .rail-icon{display:flex;width:auto;gap:10px;flex:1;padding:0 8px;font:inherit;text-align:left}
-.sidebar-preferences .rail-icon .rp-dot{position:static}
 /* ==========================================================================
    Settings Navigation Rail & Surfaces (Phase B / REF-004 ~ REF-014)
    ========================================================================== */
@@ -3392,14 +3329,14 @@ fieldset.appearance-body {
 .wt-form .primary{grid-column:1/-1;justify-self:end}
 @media(max-width:560px){.wt-form{grid-template-columns:1fr}.wt-row{gap:6px}}
 .action-menu{
-  position:fixed;z-index:30;min-width:190px;max-width:240px;padding:5px;
-  background:var(--ui-popover-surface);border:1px solid var(--control-border);border-radius:9px;
-  box-shadow:var(--ui-shadow-popover);
+  position:fixed;z-index:30;min-width:184px;max-width:min(280px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow-y:auto;padding:5px;
+  background:var(--ds-bg-elevated-opaque);border:1px solid var(--ds-border-subtle);border-radius:var(--radius-md-plus);
+  box-shadow:var(--ds-shadow-dialog);
 }
 .action-menu-item{
   display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:0 9px;
-  border:0;border-radius:6px;background:transparent;color:var(--t1);
-  font:inherit;font-size:12px;text-align:left;cursor:pointer;
+  border:0;border-radius:var(--radius-sm);background:transparent;color:var(--t1);
+  font:inherit;font-size:var(--text-sm-plus);text-align:left;cursor:pointer;
 }
 .action-menu-item:hover,.action-menu-item:focus-visible{background:var(--hover);outline:none}
 /* 图标：细线、单色、比文字略暗；hover 时和文字一起提亮。 */
@@ -3425,8 +3362,7 @@ fieldset.appearance-body {
 .stage-head h1{font-weight:500}
 .head-count{font-size:9px;color:var(--t3);position:absolute;right:-3px;bottom:-4px}
 .global-rail button:focus-visible,.project-sidebar button:focus-visible,.pj-sess:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-@media (max-width:900px){.project-sidebar{width:224px;flex-basis:224px}}
-@media (max-width:720px){:root{--global-rail-width:46px}.project-sidebar{width:190px;flex-basis:190px}.stage-head h1{font-size:12px}.share-btn{padding:0 6px}}
+@media (max-width:720px){.share-btn{padding:0 6px}}
 @media (max-width:720px) and (max-height:650px){
   .work-surface.ext>.modal-desc{font-size:11.5px;line-height:1.4;margin-bottom:8px}
   .work-surface.ext>.ext-tabs{margin-bottom:8px}
@@ -3556,12 +3492,6 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .head-right .icon-btn.is-active{background:var(--control-active);color:var(--t1)}
 
 /* P30: shared row rhythm and contextual work; existing control tokens stay authoritative. */
-:root{--sidebar-row-height:30px;--sidebar-icon-size:16px}
-.project-sidebar .nav-item,.project-sidebar .project,.project-sidebar .pj-sess{min-height:var(--sidebar-row-height)}
-.project-sidebar .nav-item .ni-ic,.project-sidebar .pj-header-action svg{width:var(--sidebar-icon-size);height:var(--sidebar-icon-size)}
-.project-sidebar .rail-nav{gap:2px;padding-bottom:12px}
-.project-sidebar .project .pj-name{color:var(--t2);font-size:12px;font-weight:500}
-.project-sidebar .project{margin-top:10px}
 .welcome{padding-top:clamp(48px,12vh,120px)}
 .welcome h2{font-size:20px;font-weight:500}
 .welcome p{line-height:1.6}

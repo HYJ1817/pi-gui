@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const THEME_PALETTE = Object.freeze({
-  dark: Object.freeze({ background: '#111111', symbol: '#bdbdbd' }),
-  light: Object.freeze({ background: '#f4f4f4', symbol: '#565656' }),
+  dark: Object.freeze({ background: '#181818', symbol: '#bdbdbd' }),
+  light: Object.freeze({ background: '#ffffff', symbol: '#565656' }),
 });
 const valid = value => typeof value === 'string' && ['dark', 'light', 'system'].includes(value);
 

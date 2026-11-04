@@ -90,14 +90,16 @@
 ---
 
 ### 阶段 C：重构主界面外壳、连续顶栏与侧边栏 (App Shell & Sidebar)
-- **目标概述**：将主舞台顶栏规范为 46px 连续无分割线标准栏 (`--ds-toolbar-height`)，侧边栏对齐极黑通透底色（`#000000` / 浅色 `#f3f3f3`），增加橙色呼吸运行圆点与固定 4 键底部工具条，支持右键上下文菜单。
+- **本轮实施说明**：以固定源码和真实生产边界修正以下早期设想，见 [源码勘察](12-phase-c-implementation.md) 与 [验收记录](13-phase-c-acceptance.md)。
+- **目标概述**：46px 连续无分割线顶栏、275px 侧栏、深浅语义背景、折叠至 0 与项目/会话导航。运行点读取既有活动状态；底栏只保留真实设置、外观及连接状态，不硬造四个无业务按钮，不新增呼吸动画。
 - **复用模块**：
   - `public/app.js` (`updateTitle()`, `bindSidebarEvents()`)
   - `public/projects.js`, `public/sessions.js`, `public/tree.js`
   - `public/index.html` 中的主容器结构
-- **新增模块**：
-  - `public/ui/topbar-breadcrumb.js` (处理 `IconFolder` + 项目名 + `/` + 会话标题的面包屑与就地重命名)
-  - `public/ui/context-menu-popup.js` (实现对齐 `REF-020` 的浮动上下文右键菜单)
+- **实际复用与样式归属**：
+  - `public/shell.js` 的 Classic/Runtime 标题投影增加所属项目显示；改名继续使用已有侧栏编辑器及其能力限制。
+  - `public/ui/action-menu.js` 继续作为唯一菜单系统；项目和经典会话右键复用同一入口与权限。
+  - `public/app-shell.css` 集中外壳样式，清理 `styles.css` 内已取代的侧栏覆盖规则；设置 A/B 的布局继续由原规则持有。
 - **废弃/清理的旧样式**：
   - 移除侧边栏右边缘突兀的 1px 亮灰竖线；
   - 移除侧边栏底部旧的折叠式 `设置` 下拉容器样式。
@@ -106,6 +108,8 @@
 - **功能回归测试**：
   - `node tests/sidebar-menu.cjs`
   - `node tests/stable-session-order.cjs`
+  - `node tests/app-shell.cjs`、`npm run test:shell:electron`
+  - 会话后台执行、Runtime、主题、设置定向检查与完整 canonical，实际数字见验收记录。
 - **验收截图交付**：
   - 截图 1：聊天主界面空状态 · 侧边栏展开态（对标 `REF-001`）。
   - 截图 2：聊天主界面空状态 · 侧边栏完全折叠态（对标 `REF-002`）。

@@ -1,0 +1,69 @@
+{
+  "basis": "PNG metadata is consistent with supplied 1.5 DPR calibration; not an independent OS-settings probe",
+  "references": {
+    "REF-001": {
+      "file": "Snipaste_2026-10-31_23-10-09.png",
+      "physicalPixels": [
+        1808,
+        1204
+      ],
+      "pixelsPerMeter": [
+        5669,
+        5669
+      ],
+      "pngDpi": [
+        143.993,
+        143.993
+      ],
+      "unit": 1
+    },
+    "REF-002": {
+      "file": "Snipaste_2026-10-31_23-10-37.png",
+      "physicalPixels": [
+        1808,
+        1204
+      ],
+      "pixelsPerMeter": [
+        5669,
+        5669
+      ],
+      "pngDpi": [
+        143.993,
+        143.993
+      ],
+      "unit": 1
+    },
+    "REF-020": {
+      "file": "Snipaste_2026-10-31_23-59-53.png",
+      "physicalPixels": [
+        1808,
+        1205
+      ],
+      "pixelsPerMeter": [
+        5669,
+        5669
+      ],
+      "pngDpi": [
+        143.993,
+        143.993
+      ],
+      "unit": 1
+    },
+    "REF-021": {
+      "file": "Snipaste_2026-11-01_00-00-22.png",
+      "physicalPixels": [
+        1808,
+        1205
+      ],
+      "pixelsPerMeter": [
+        5669,
+        5669
+      ],
+      "pngDpi": [
+        143.993,
+        143.993
+      ],
+      "unit": 1
+    }
+  }
+}

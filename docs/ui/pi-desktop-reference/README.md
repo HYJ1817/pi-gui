@@ -42,13 +42,16 @@
 | **08** | [`08-implementation-roadmap.md`](08-implementation-roadmap.md) | 六阶段渐进重构路线图，详尽规定复用模块、新增模块、废弃旧样式、状态影响、回归测试与截图验收 |
 | **09** | [`09-visual-acceptance-criteria.md`](09-visual-acceptance-criteria.md) | 确认环境参数 vs 估算参数区分、浅色模式双轨验收准则（截图比对 vs 源码规范比对）、阻断性判定 |
 | **10** | [`10-audit-resolution.md`](10-audit-resolution.md) | 人工审查（含终审源码一致性与工程事实核验）逐项核查处置记录与统计表 |
+| **11** | [`11-phase-ab-wrapup.md`](11-phase-ab-wrapup.md) | A/B 收尾、PR #49 基线与已验收边界 |
+| **12** | [`12-phase-c-implementation.md`](12-phase-c-implementation.md) | 阶段 C 源码勘察、复用取舍与执行记录 |
+| **13** | [`13-phase-c-acceptance.md`](13-phase-c-acceptance.md) | 阶段 C 测试、真实 Electron 截图、逐区域视觉差异与交付状态 |
 | **附录** | [`tokens.reference.css`](tokens.reference.css) | 提取自 PI-Desktop 源码并完成审计补齐的独立纯 CSS 代币表，附带完备分类与工程说明 |
 
 ---
 
 ## 4. 后续开发 Agent 使用指南
 
-1. **绝对禁止修改业务代码**：当前阶段产物为规范与设计依据，不得在当前阶段变动任何业务 JS/CSS。
+1. **设计采集与正式实施分开**：本目录最初的采集阶段只交付规范；A/B 已通过 PR #49 合并，阶段 C 按用户正式授权实施。后续阶段仍须有明确任务范围，不能从本目录推导额外业务、推送、合并或发布许可。
 2. **严格按序分阶段推进**：
    - 必须先完成 `Phase A`（代币与基础原语），方可开启 `Phase B`（设置中心）与 `Phase C`（主外壳）；
    - 禁止在未建立 `--ds-*` 代币体系前去零敲碎打地修改某个按钮颜色。
