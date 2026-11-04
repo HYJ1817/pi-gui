@@ -1,0 +1,62 @@
+{
+  "public/app-shell.css": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\app-shell.css",
+    "same": true,
+    "sourceBytes": 11063,
+    "sha256": "f43bd76fd37072ad6ab5be42fc1f39d180e6484cee37f42d9a73980d5bb7e050"
+  },
+  "public/index.html": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\index.html",
+    "same": true,
+    "sourceBytes": 22272,
+    "sha256": "f3f00adb34caae06ba12fc3a3a63af39f3ddcd3e9dfb7142d18bca6fca0e3f0c"
+  },
+  "public/shell.js": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\shell.js",
+    "same": true,
+    "sourceBytes": 8217,
+    "sha256": "92bc08e2754a0afaa6996e525d91e9019fdfa934148f4d964c8608f3acaa2d23"
+  },
+  "public/projects.js": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\projects.js",
+    "same": true,
+    "sourceBytes": 20945,
+    "sha256": "d517819938887c1e160b0ce8b9781525080ead2fc397579f824e7d75e90860dc"
+  },
+  "public/sessions.js": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\sessions.js",
+    "same": true,
+    "sourceBytes": 28968,
+    "sha256": "c64fed5736b98335b8e88f536d446e466a575de73806940c09dfea17227d7a3d"
+  },
+  "public/app.js": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\app.js",
+    "same": true,
+    "sourceBytes": 64070,
+    "sha256": "daf309b415d41574714f1cbcffa1dfd7f882e0e59881803cb4f888fa6b2d267c"
+  },
+  "public/styles.css": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\styles.css",
+    "same": true,
+    "sourceBytes": 172822,
+    "sha256": "a13dff1c443c274a38c24fe567d55e4612e3bc53bb10b89bd635502ba40eb7a1"
+  },
+  "public/tokens.css": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\tokens.css",
+    "same": true,
+    "sourceBytes": 20916,
+    "sha256": "a164d78d1ccd859f9748ddcc97e138917b1e7efe7fa8c469ffe850263e47a5d7"
+  },
+  "public/runtime-conversation.js": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\public\\runtime-conversation.js",
+    "same": true,
+    "sourceBytes": 43584,
+    "sha256": "ea6b7611f93f93c00dd7810a3f4c3057c0b47a1d00f36ea369591d83d8bd3681"
+  },
+  "electron/theme.cjs": {
+    "packagedPath": ".shots\\phase-c-final-app-20261104\\dist-app\\Pi GUI-win32-x64\\resources\\app\\theme.cjs",
+    "same": true,
+    "sourceBytes": 3747,
+    "sha256": "9fc359752929cda029fa9a3507beac3f1e2700cfa4428619730d31f07000da8d"
+  }
+}
