@@ -31,6 +31,7 @@ import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
 import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, renderEntry } from './tool-view.js';
 import { renderMessageMeta } from './message-meta.js';
+import { messageActions } from './ui/message-actions.js';
 
 /* ---------- 线程与滚动 ---------- */
 
@@ -333,7 +334,7 @@ function renderUser(msg) {
   role.className = 'msg-role';
   role.textContent = '你';
 
-  wrap.append(role, userBody(msg));
+  wrap.append(role, userBody(msg), messageActions(textOf(msg)));
   t.appendChild(wrap);
   /* 立刻注册导航点（§11）：不等 assistant 回复完 —— 用户刚发完就该能
    * 在左边看到自己这一条的位置。 */
@@ -679,6 +680,7 @@ export function rebuildFromMessages(data) {
       wrap.className = 'msg user';
       wrap.innerHTML = '<div class="msg-role">你</div>';
       wrap.appendChild(userBody(item.message));
+      wrap.appendChild(messageActions(textOf(item.message)));
       frag.appendChild(wrap);
       continue;
     }

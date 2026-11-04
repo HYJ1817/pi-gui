@@ -24,6 +24,20 @@
 
 /* ---------- 当前模型身份行 ---------- */
 
+#composerPopover.model-mode,#composerPopover.tip-mode {
+  border:0;border-radius:var(--ds-composer-radius);padding:5px;
+  background:var(--ds-bg-elevated-opaque);box-shadow:var(--ds-shadow-model-menu);
+}
+#composerPopover.model-mode {width:320px}
+#composerPopover.tip-mode>div {padding:12px}
+#composerPopover.tip-mode .tip-big {font-size:var(--text-xl);font-weight:500;margin:6px 0}
+#composerPopover.tip-mode .tip-head {color:var(--ds-text-muted);font-size:var(--text-sm)}
+#composerPopover .ui3-model-search {
+  border:0;border-radius:var(--radius-md);background:var(--ds-bg-inset);
+}
+#composerPopover .pop-item {border-radius:var(--radius-sm);min-height:28px}
+#composerPopover .ui3-current,#composerPopover .ui3-think-state {border:0}
+
 .ui3-current{
   display:flex;align-items:center;gap:6px;
   padding:6px 10px 7px;margin:0 0 2px;
@@ -42,7 +56,7 @@
   padding:10px;font-size:12.5px;color:var(--ui-text-muted);text-align:center;
 }
 .ui3-model-search{display:block;width:calc(100% - 16px);margin:4px 8px 8px;min-height:34px;padding:6px 10px;border:1px solid var(--ui-border-control);border-radius:var(--ui-radius-control);background:var(--ui-input-surface);color:var(--ui-text-primary);font:inherit}
-.ui3-model-search:focus-visible{outline:2px solid var(--ui-focus);outline-offset:2px}
+.ui3-model-search:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
 
 /* ---------- 模型条目 ---------- */
 

@@ -45,6 +45,7 @@ import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
 import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
+import { messageActions } from './ui/message-actions.js';
 import { openModal } from './ui/modal.js';
 import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
@@ -366,6 +367,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
 
   const send = el('button', 'btn primary', '发送'); send.type = 'button';
   const stop = el('button', 'btn', '停止'); stop.type = 'button';
+  send.classList.add('rtc-send'); send.setAttribute('aria-label', '发送消息'); send.title = '发送消息';
+  stop.classList.add('rtc-stop'); stop.setAttribute('aria-label', '停止当前会话'); stop.title = '停止当前会话';
+  send.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span>发送</span>';
+  stop.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg><span>停止</span>';
   const restart = el('button', 'btn', '重启'); restart.type = 'button';
   const end = el('button', 'btn', '关闭会话'); end.type = 'button';
   const resume = el('button', 'btn', '恢复会话'); resume.type = 'button';
@@ -643,6 +648,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
               appendRuntimeContent(row, message.text);
             } else {
               row.append(el('div', 'rtc-history-user-text', message.text));
+              if (message.role === 'user') row.append(messageActions(message.text));
             }
             output.append(row);
           }

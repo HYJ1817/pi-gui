@@ -74,19 +74,9 @@
 [hidden]{display:none !important}
 
 :root{
-  /* ---- UI-2C 校准：聊天阅读轴 ----
-   * 共同上限从 920px 收到 768px：
-   *  - Claude Code 实机截图里正文列与输入框几乎同宽（输入实测 767px），
-   *    旧的 --composer-max-width:920-32=888 与正文轴差了 32px 不是设计而是历史；
-   *  - 768px 下长段落的行长更接近母文档排版的舒适区间（66-76ch）。
-   * 消费点只有这几个（改值全部跟随，不需要另改）：
-   *   .thread（+72px 装订距）、.composer-box、.convo-nav 的左贴边、
-   *   .runtime-conversation。没有别处在断言具体数值 —— 旧值 920 保留在
-   *   docs/claude-ui-redesign/UI-2C-acceptance.md 的对照截图里。
-   * 窄屏溢出由「一直存在」的 min 姿势兜底：所有消费点写的都是 max-width，
-   * .thread/composer 还有 900px 断点直接回 100%。 */
-  --conversation-max-width:var(--ui-prose-width);
-  --composer-max-width:var(--ui-prose-width);
+  /* Phase D: one 760px reference content band; the transcript owns its 32px inset. */
+  --conversation-max-width:var(--ds-composer-width);
+  --composer-max-width:var(--ds-composer-width);
   --turn-gap:36px;
   --tool-row-height:30px;
 }
@@ -429,7 +419,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .welcome-cta:hover{background:var(--control-primary-hover)}
 .welcome-cta svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 
-.thread{width:100%;max-width:calc(var(--conversation-max-width) + 64px);margin:0 auto;padding:32px 32px calc(var(--composer-reserved-height, 112px) + 22px);display:flex;flex-direction:column;gap:0;min-width:0}
+.thread{width:100%;max-width:var(--conversation-max-width);margin:0 auto;padding:20px 32px calc(var(--composer-reserved-height, 112px) + 16px);display:flex;flex-direction:column;gap:0;min-width:0}
 
 .msg{display:flex;flex-direction:column;gap:0;min-width:0}
 /* UI-2C：聊天正文用 UI-1 的 prose 字级（tokens.css --ui-font-prose），
@@ -441,18 +431,28 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .thread>.msg.user:not(:first-child){margin-top:var(--turn-gap)}
 .msg.user .msg-role{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .msg.user .msg-body{
-  width:fit-content;max-width:76%;min-width:0;
-  background:var(--bubble-bg);border:0;border-radius:var(--ui-radius-bubble);
-  /* 18px 圆角需要水平内距明显大于圆角，否则端点会「粘」在一起 —— Claude 候选一致 */
-  padding:10px 16px;
+  width:fit-content;max-width:min(82%,600px);min-width:0;
+  background:var(--ds-tile-deep);border:0;border-radius:var(--radius-lg-plus);border-bottom-right-radius:var(--radius-xs);
+  /* Effective chat-shell user rule overrides the generic message bubble. */
+  padding:10px 15px;
   color:var(--t1);
-  font-size:var(--ui-font-prose);line-height:1.75;
+  font-size:var(--text-base);line-height:var(--leading-chat);
   overflow-wrap:anywhere;
 }
 .msg.user .msg-body>div+div{margin-top:8px}
 .msg.user .msg-body p{margin:0}
+/* Shared read-only actions; keyboard focus reveals the same bar as hover. */
+:is(#stream,#runtimeView) .message-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-height:26px;padding-top:2px;opacity:0;color:var(--ds-text-muted)}
+:is(#stream .msg.user,#runtimeView .rtc-history-message):is(:hover,:focus-within) .message-actions,
+:is(#stream,#runtimeView) .message-actions:has(.message-copy-feedback:not(:empty)){opacity:1}
+:is(#stream,#runtimeView) .message-copy{display:grid;place-items:center;flex:none;width:24px;height:24px;padding:4px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ds-text-muted);cursor:pointer}
+:is(#stream,#runtimeView) .message-copy:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
+:is(#stream,#runtimeView) .message-copy:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
+:is(#stream,#runtimeView) .message-copy svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+:is(#stream,#runtimeView) .message-copy-feedback{font-size:var(--text-xs)}
+@media(hover:none){:is(#stream,#runtimeView) .message-actions{opacity:1}}
 .msg.assistant{margin-bottom:18px}
-.msg.assistant .msg-body{color:var(--t1);overflow-wrap:anywhere;min-width:0;font-size:var(--ui-font-prose);line-height:1.8}
+.msg.assistant .msg-body{color:var(--ds-text-primary);overflow-wrap:anywhere;min-width:0;font-size:var(--text-base);line-height:var(--leading-prose)}
 .msg.assistant .assistant-text+.assistant-text{margin-top:12px}
 .msg.assistant .assistant-text p{margin:0 0 13px}
 .msg.assistant .assistant-text>*:last-child{margin-bottom:0}
@@ -490,6 +490,13 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 /* 链接：只可能是本文件生成的白名单链接（见 markdown.js 的安全模型） */
 .msg-body a{color:var(--ui-link);text-decoration:none;border-bottom:1px solid var(--control-border)}
 .msg-body a:hover{color:var(--ui-link);border-bottom-color:var(--ui-link)}
+/* Specs and update notes share the base prose rules above. Phase D is chat-only. */
+:is(#stream,#runtimeView) .msg-body h4{font-size:var(--text-base);color:var(--ds-text-primary)}
+:is(#stream,#runtimeView) .msg-body code{background:var(--ds-tile);border:0}
+:is(#stream,#runtimeView) .msg-body pre.code{border:0;border-radius:var(--radius-md)}
+:is(#stream,#runtimeView) .msg-body pre.code code{background:none}
+:is(#stream,#runtimeView) .msg-body a{color:var(--ds-text-primary);border:0;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:color-mix(in oklab,var(--ds-text-primary) 32%,transparent)}
+:is(#stream,#runtimeView) .msg-body a:hover{color:var(--ds-text-primary);text-decoration-color:color-mix(in oklab,var(--ds-text-primary) 85%,transparent)}
 .msg-body em{font-style:italic;color:var(--t1)}
 .msg-body del{color:var(--t3)}
 .msg-body hr{border:0;border-top:1px solid var(--line);margin:14px 0}

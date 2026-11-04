@@ -78,6 +78,13 @@ pop.addEventListener('keydown', (e) => {
   closePop({ restoreFocus: true });
 });
 
+// Usage tips keep focus on their trigger; Escape must work there as well.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || pop.hidden) return;
+  e.preventDefault(); e.stopPropagation();
+  closePop({ restoreFocus: true });
+});
+
 document.addEventListener('mousedown', (e) => {
   if (pop.hidden) return;
   if (pop.contains(e.target)) return;

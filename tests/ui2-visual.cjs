@@ -305,26 +305,26 @@ async function suite(send) {
     `(() => { const c = document.querySelector('.composer-box').getBoundingClientRect();
       const col = Math.min(760, innerWidth);
       return Math.abs(c.width - col) <= 1; })()`);
-  await expect('C1 · 正文字级=UI-1 prose 档（15px）且行高放宽到 1.8',
+  await expect('C1 · Phase D 参考正文 14px / 1.6 行高',
     `(() => { const s = getComputedStyle(document.querySelector('.msg.assistant .msg-body'));
-      return s.fontSize === '15px' && parseFloat(s.lineHeight) >= 15 * 1.79; })()`);
-  await expect('C1 · 用户气泡 18px 圆角 + 端点内距 ≥16px（圆角不吃字）',
+      return s.fontSize === '14px' && Math.abs(parseFloat(s.lineHeight) - 14 * 1.6) < .1; })()`);
+  await expect('C1 · 用户气泡有效级联为 18/8px 圆角 / 15px 水平内距',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-short .msg-body'));
-      return ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius']
-        .every(k => s[k] === '18px') && parseFloat(s.paddingLeft) >= 16; })()`);
+      return ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius']
+        .every(k => s[k] === '18px') && s.borderBottomRightRadius === '8px' && parseFloat(s.paddingLeft) === 15; })()`);
   await expect('C1 · 短气泡按内容收缩且贴正文右缘',
     `(() => { const b = document.querySelector('#u2c-short .msg-body').getBoundingClientRect();
       const t = document.querySelector('.thread').getBoundingClientRect(); const s = getComputedStyle(document.querySelector('.thread'));
       return b.width > 0 && b.width < 220 && Math.abs(b.right - (t.right - parseFloat(s.paddingRight))) <= 2; })()`);
-  await expect('C1 · 长气泡不超过阅读列 76%',
+  await expect('C1 · 长气泡不超过参考 82% / 600px 上限',
     `(() => { const b = document.querySelector('#u2c-long .msg-body').getBoundingClientRect();
       const t = document.querySelector('.thread').getBoundingClientRect(); const s = getComputedStyle(document.querySelector('.thread'));
-      return b.width <= (t.width - parseFloat(s.paddingLeft) * 2) * .76 + 2; })()`);
+      return b.width <= Math.min(600,(t.width - parseFloat(s.paddingLeft) * 2) * .82) + 2; })()`);
   await expect('C1 · 视口无横向溢出',
     `document.documentElement.scrollWidth <= innerWidth + 1`);
-  await expect('C1 · 代码块 prt 圆角 8px + 1 hairline 框', `(() => {
+  await expect('C1 · 代码块参考 12px 圆角且无外描边', `(() => {
     const s = getComputedStyle(document.querySelector('.msg-body pre.code'));
-    return s.borderTopLeftRadius === '8px' && s.borderTopWidth === '1px'; })()`);
+    return s.borderTopLeftRadius === '12px' && s.borderTopWidth === '0px'; })()`);
   await expect('C5 · 落场动画挂着（消息新进场的一次性 3px 上浮）',
     `(() => { const m = document.querySelector('.thread > .msg');
       return getComputedStyle(m).animationName === ${JSON.stringify(KEYFRAME_RISE)}; })()`);
@@ -411,9 +411,9 @@ async function suite(send) {
   await expect('预留 · .ui2-runtime-meta 弱化小字',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .ui2-runtime-meta'));
       return s.fontSize === '11.5px'; })()`);
-  await expect('C3 · runtime 转录跟随正文字级（15px / 行高 ≥1.7）',
+  await expect('C3 · Runtime 参考正文 14px / 1.6 行高',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .rtc-output'));
-      return s.fontSize === '15px' && parseFloat(s.lineHeight) > 21; })()`);
+      return s.fontSize === '14px' && Math.abs(parseFloat(s.lineHeight) - 14 * 1.6) < .1; })()`);
   await expect('C3 · runtime 会话跟随 760 阅读轴',
     `(() => { const r = document.querySelector('#u2c-probes .runtime-conversation').getBoundingClientRect();
       return Math.abs(r.width - Math.min(760, innerWidth)) <= 2; })()`);

@@ -1,23 +1,29 @@
 /* UI-3A component sheet. Integration loads this after styles.css; no global controls. */
-#chatComposer {right:var(--ui3-composer-scrollbar-width,0px);background:var(--ui-canvas)}
+#chatComposer {right:var(--ui3-composer-scrollbar-width,0px);background:transparent;padding:0 24px 16px}
 #chatComposer .composer-box {
-  border:1px solid var(--ui-border);border-radius:var(--ui-radius-composer);
-  background:var(--ui-input-surface);padding:14px 14px 10px;
-  transition:border-color var(--ui-duration-snap) var(--ui-ease-out);
+  border:0;border-radius:var(--ds-composer-radius);
+  background:var(--ds-bg-composer);padding:10px 12px 8px;box-shadow:var(--ds-shadow-composer);
 }
-#chatComposer .composer-box:focus-within {border-color:var(--ui-border-strong)}
-#chatComposer .composer-box:has(#input:focus-visible) {outline:2px solid var(--ui-focus);outline-offset:2px}
-#chatComposer .composer-box.drop {border-color:var(--ui-focus)}
+#chatComposer .composer-box.drop {outline:2px solid var(--ds-focus);outline-offset:3px}
 #chatComposer #input {
-  display:block;font-family:var(--ui-font-sans);font-size:var(--ui-font-prose);
-  color:var(--ui-text-primary);line-height:1.8;min-height:52px;padding:2px 4px 12px;
+  display:block;font-family:var(--ui-font-sans);font-size:var(--text-base);
+  color:var(--ds-text-primary);line-height:var(--leading-body);min-height:62px;padding:2px 0 10px;
   background:transparent;border-radius:0;outline:none;
   overflow-wrap:anywhere;white-space:pre-wrap;
 }
-#chatComposer #input::placeholder {color:var(--ui-text-muted)}
+#chatComposer #input::placeholder {color:var(--ds-placeholder-ink,var(--ds-text-muted))}
 #chatComposer #input:focus-visible {outline:none}
+#chatComposer #input {scrollbar-width:thin;scrollbar-color:var(--ds-bg-active) transparent}
+#stream {mask-image:linear-gradient(to bottom,#000 calc(100% - var(--composer-reserved-height,112px) - 16px),transparent calc(100% - var(--composer-reserved-height,112px) + 2px))}
 #chatComposer .composer-bar {position:relative;gap:var(--ui-space-2);flex-wrap:wrap;padding:0}
-#chatComposer #btnSend {position:static;width:32px;height:32px}
+#chatComposer #btnSend {position:static;width:28px;height:28px;background:var(--ds-accent);color:var(--ds-bg-primary)}
+#chatComposer #btnSend:disabled {background:var(--ds-send-disabled-bg);color:var(--ds-send-disabled-fg)}
+#chatComposer #btnStop {width:28px;height:28px;padding:0;border:0;border-radius:var(--radius-full);justify-content:center;background:var(--ds-bg-active)}
+#chatComposer #btnStop span {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#chatComposer .chip-dot {display:none}
+#chatComposer .chip {font-size:var(--text-sm-plus);border-radius:var(--radius-md)}
+#chatComposer #btnModel {font-weight:var(--font-weight-semibold)}
+#chatComposer #btnThink {background:var(--ds-tile);border-radius:var(--radius-full)}
 #chatComposer .cb-left {flex:1 1 var(--ui-space-6)}
 #chatComposer .cb-right {
   margin-left:auto;flex-wrap:wrap;justify-content:flex-end;gap:var(--ui-space-1);
@@ -25,9 +31,9 @@
   max-width:calc(100% - var(--ui-space-6) - var(--ui-space-2));
 }
 #chatComposer .status-text {color:var(--ui-text-muted);font-size:var(--ui-font-caption)}
-#chatComposer button:focus-visible {outline:2px solid var(--ui-focus);outline-offset:2px}
+#chatComposer button:focus-visible {outline:2px solid var(--ds-focus);outline-offset:2px}
 #chatComposer button:disabled {cursor:not-allowed}
-#chatComposer #btnSend:not(:disabled):hover {background:var(--ui-primary-hover)}
+#chatComposer #btnSend:not(:disabled):hover {background:var(--ds-accent);opacity:.9}
 #chatComposer .ui3-composer-stopping #btnStop {color:var(--ui-text-muted);background:var(--ui-selected)}
 #chatComposer .ui3-attachment-tray {
   gap:var(--ui-space-2);padding:var(--ui-space-1) var(--ui-space-1) var(--ui-space-3);

@@ -229,13 +229,18 @@ const { JSDOM } = require('jsdom');
 
   runtimeStore.seed({ backendInstance: 'backend', items: [item('X')] });
   view.show('X'); await tick();
-  const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
+  const evil = '<img src=x onerror=alert(1)><script>alert(2)</script><svg onload=alert(3)></svg>';
   delta('X', 1, evil); thinkDelta('X', 2, evil);
   frame('X', 3, { type: 'tool_execution_start', toolCallId: 't-x', toolName: evil });
   frame('X', 4, { type: 'extension_ui_request', id: 'a-x', method: 'confirm', title: evil });
   frame('X', 5, { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'thinking', thinking: evil }, { type: 'text', text: evil }] } });
   await tick();
-  ok('不可信文本不产生任何注入节点', host.querySelectorAll('img, script, iframe, object, embed, svg').length === 0);
+  const staticIcons = host.querySelectorAll('.rtc-composer-actions > .rtc-send > svg[aria-hidden="true"], .rtc-composer-actions > .rtc-stop > svg[aria-hidden="true"]');
+  ok('不可信文本不产生任何注入节点，静态动作图标保留', host.querySelectorAll('img, script, iframe, object, embed').length === 0
+    && staticIcons.length === 2 && host.querySelectorAll('svg').length === staticIcons.length
+    && [...staticIcons].every(node => !node.hasAttribute('onload')));
+  ok('SVG 载荷与事件属性仍作为原文显示', output().textContent.includes('<svg onload=alert(3)>')
+    && thinkingBlock().querySelector('.ui2-runtime-thinking-body').textContent.includes('<svg onload=alert(3)>'));
   ok('不可信文本作为**文本**原样显示（不是被静默吞掉）', output().textContent.includes('onerror=alert(1)')
     && thinkingBlock().querySelector('.ui2-runtime-thinking-body').textContent.includes('onerror=alert(1)'));
   ok('工具名与审批标题同样只作为文本', host.textContent.includes('<script>alert(2)</script>'));

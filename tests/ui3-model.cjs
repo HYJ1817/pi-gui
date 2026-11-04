@@ -490,6 +490,14 @@ async function main() {
     assert.equal(doc.getElementById('btnThink').getAttribute('aria-controls'), 'composerPopover');
   });
 
+  await check('上下文浮层在触发按钮保留焦点时 Escape 关闭并还原焦点', async () => {
+    const { openPop } = await import('../public/ui/popover.js');
+    const anchor = doc.createElement('button'); anchor.type = 'button'; doc.body.append(anchor);
+    openPop(anchor, { tip: true }); anchor.focus();
+    anchor.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(pop().hidden, true); assert.equal(doc.activeElement, anchor);
+    assert.equal(anchor.getAttribute('aria-expanded'), 'false');
+  });
   console.log(`\nUI-3B 模型选择器: ${pass}/${pass + fail} 通过`);
 
   /* ---------- 真实渲染（可选） ---------- */
