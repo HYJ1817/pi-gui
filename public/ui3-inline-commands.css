@@ -17,10 +17,10 @@
   overflow: hidden;
   /* Runtime inline width still bounds the available space beside native panes. */
   max-width: min(320px, calc(100vw - 16px));
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-popover-surface);
-  box-shadow: var(--ui-shadow-popover);
+  border: 0;
+  border-radius: var(--ds-composer-radius);
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: var(--ds-shadow-model-menu);
   color: var(--ui-text-primary);
   font-family: var(--ui-font-sans);
 }

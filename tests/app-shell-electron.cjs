@@ -205,6 +205,9 @@ async function run() {
     await click('#settingsReturn'); await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='chat'`);
     await read('shellWrites.length=0'); await click('#btnTopbarNew'); await sleep(350);
     check('topbar new conversation delegates to the real command path', await read(`shellWrites.some(w=>w.route==='/api/command'&&w.body?.type==='new_session')`));
+    if (process.env.CONVERSATION_ACCEPTANCE === '1') {
+      await require('./fixtures/conversation-scenarios.cjs')({ read, click, key, shot, paint, check, win, waitFor });
+    }
     check('no renderer process crash', errors.length === 0, errors);
   } catch (error) {
     check('Electron scenarios completed', false, error.stack);

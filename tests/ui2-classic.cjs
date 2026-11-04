@@ -134,6 +134,28 @@ async function unit() {
     w.rebuildFromMessages([assistant(evil, { input: evil }), { role: 'assistant', content: [{ type: 'thinking', thinking: evil }, call('evil-tool', evil), call('safe')] }, result('evil-tool', true, evil)]);
     check('untrusted message/thinking/tool text never becomes active HTML', () => { equal(one('script'), null); equal(one('img[onerror]'), null); equal(one('[onerror]'), null); assert.ok(one('.think-body').textContent.includes('<img')); });
     check('untrusted usage cannot leak into metadata', () => equal(one('.msg.assistant .ui2-msg-meta'), null));
+    const copied = [];
+    Object.defineProperty(w.navigator, 'clipboard', { configurable: true, value: { writeText: async value => copied.push(value) } });
+    const userText = '原始 **Markdown**\n<img src=x onerror=alert(1)>';
+    w.rebuildFromMessages([{ role: 'user', content: [text(userText)] }]);
+    check('history user exposes only a real copy action', () => equal(all('.msg.user .message-actions button').length, 1));
+    one('.message-copy')?.click(); await pause();
+    check('copy uses original message text without rendered labels or markup changes', () => equal(copied[0], userText));
+    w.onMessageStart({ message: { role: 'user', content: [text('live user text')] } });
+    check('live user and history share the copy action', () => equal(all('.msg.user .message-copy').length, 2));
+    all('.message-copy')[1]?.click(); await pause();
+    check('live copy belongs to its own message', () => equal(copied[1], 'live user text'));
+    w.navigator.clipboard.writeText = async () => { throw Error('denied'); };
+    one('.message-copy')?.click(); await pause();
+    check('clipboard rejection remains visible and permits retry', () => {
+      assert.match(one('.message-actions')?.textContent || '', /复制失败/);
+      equal(one('.message-copy')?.disabled, false);
+    });
+    w.rebuildFromMessages([{ role: 'user', content: [{ type: 'image', mimeType: 'image/png', data: 'fixture' }] }]);
+    check('image-only message has no empty-text copy action', () => {
+      equal(all('.message-copy').length, 0);
+      equal(one('.message-actions')?.hidden, true);
+    });
     console.log(`UI-2A Classic ${passed}/${passed + failed}; failed=${failed}; skipped=0; DOM/fixture, not layout evidence`);
     return failed ? 1 : 0;
   } finally { reset(); dom.window.close(); }

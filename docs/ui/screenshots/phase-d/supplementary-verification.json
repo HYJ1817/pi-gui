@@ -1,0 +1,144 @@
+{
+  "scope": "Supplementary affected tests, not a single successful npm test or CI",
+  "logRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-phase-d-718da565091f4d8ab660e7a1c67ef65c",
+  "sourceFingerprints": "validated-source-sha256.json",
+  "checks": [
+    {
+      "command": "node tests/ui2-classic.cjs",
+      "passed": 55,
+      "failed": 0,
+      "observedExitCode": 0,
+      "log": "classic-final.log",
+      "logSha256": "5b6f08e0925667e1f10edb969689bc1a0f702f3f199fbcba969439eec60a4c18",
+      "logModifiedAt": "2026-11-04T15:50:54.238137+00:00"
+    },
+    {
+      "command": "node tests/runtime-conversation.cjs",
+      "passed": 106,
+      "failed": 0,
+      "observedExitCode": 0,
+      "log": "runtime-final.log",
+      "logSha256": "c807359618e15623c7de7f32f38e66eb89591a9c18b31455e0cbf6d587e6c66e",
+      "logModifiedAt": "2026-11-04T15:50:56.098453+00:00"
+    },
+    {
+      "command": "node tests/ui2-runtime-display.cjs",
+      "passed": 83,
+      "failed": 0,
+      "observedExitCode": 0,
+      "log": "runtime-display-final.log",
+      "logSha256": "5bd89bd3881f6c4db37096006ecc126053ea0f7154c0e031e5b745bc4f98d853",
+      "logModifiedAt": "2026-11-04T15:51:03.602710+00:00"
+    },
+    {
+      "command": "node tests/ui2-visual.cjs",
+      "passed": 57,
+      "failed": 0,
+      "observedExitCode": 0,
+      "log": "ui2-visual-scoped-final.log",
+      "logSha256": "4e83e1ce8b7965c031cad9da832a6956fec464d6dbc59e2de6708ae2438a0917",
+      "logModifiedAt": "2026-11-04T16:12:06.174566+00:00"
+    },
+    {
+      "command": "npm run test:ui3",
+      "passed": 243,
+      "failed": 0,
+      "observedExitCode": 0,
+      "log": "ui3-scoped-final.log",
+      "logSha256": "2e1af9e70f751c3ee0d9ce825472c272b3712145d6e522629007738017f788a7",
+      "logModifiedAt": "2026-11-04T16:13:08.474160+00:00"
+    },
+    {
+      "command": "npm run test:conversation:electron",
+      "passed": 47,
+      "failed": 0,
+      "observedExitCode": 0,
+      "log": "electron-scoped-final.log",
+      "logSha256": "53a65ff68487ac3e8ed3e6118aa581a3684531cc3888b634101cfb515b6d6c38",
+      "logModifiedAt": "2026-11-04T16:13:44.217258+00:00"
+    },
+    {
+      "command": "node tests/session-background-electron.cjs",
+      "passed": 16,
+      "failed": 0,
+      "observedExitCode": 0,
+      "log": "background-final.log",
+      "logSha256": "18c0e248311c114f45e060c0225de19f7e2b8b5d09bbe47e659b6b3865a6b0d4",
+      "logModifiedAt": "2026-11-04T13:27:04.615653+00:00"
+    }
+  ],
+  "settingsScopeVerification": {
+    "command": "node tests/settings-acceptance.cjs",
+    "passed": 15,
+    "failed": 0,
+    "observedExitCode": 0,
+    "evidence": "tool output after final CSS scoping; all 15 settings acceptance checks passed"
+  },
+  "canonicalInitialSourceFingerprints": [
+    {
+      "path": "package.json",
+      "sha256": "f34316ff8196c023cab63436d6f80fe1d3c948cf63c28dcba617c5501cff023d"
+    },
+    {
+      "path": "public/messages.js",
+      "sha256": "61ec680d9420e3565ca4f87380bba963048be063108c5e07a25f2b5b3d719939"
+    },
+    {
+      "path": "public/runtime-conversation.css",
+      "sha256": "fe5456b4e26c872fd1839d43133ae3bec4b29962196dbcc4420965df567599ce"
+    },
+    {
+      "path": "public/runtime-conversation.js",
+      "sha256": "99db47ee94bdc43d8c5f9247925b1c31c053d124c75aa2896a2aa020b027ca94"
+    },
+    {
+      "path": "public/styles.css",
+      "sha256": "7d249b6ec63514babb31542badcb6f54f9c5ca69a1179edacf3774572907bc8a"
+    },
+    {
+      "path": "public/ui/message-actions.js",
+      "sha256": "57812a4a624a2807a9b926b1c4186581b53efbeaff15f46e67e8345915a344cb"
+    },
+    {
+      "path": "public/ui/popover.js",
+      "sha256": "11282bb66e325ded2d2292b990f90b72925b0a167104aa773979dac325fe627b"
+    },
+    {
+      "path": "public/ui3-composer.css",
+      "sha256": "acabf11cd243a7546657770bfd211a506caa5b935b8ab833b3cc953b13a0423f"
+    },
+    {
+      "path": "public/ui3-inline-commands.css",
+      "sha256": "184666a3a36bd7f54e5d6996adf43efee9a19ca6188ddff82608467fef57d311"
+    },
+    {
+      "path": "public/ui3-model.css",
+      "sha256": "6a1dcf049b9d0fcf7f23791aa3527786311e50d8bed50fff961b30ba4d26f083"
+    },
+    {
+      "path": "tests/app-shell-electron.cjs",
+      "sha256": "6b95c408704cfe9caaad015c91bad53224850068a293a622fda2a2b0e0ab4cd6"
+    },
+    {
+      "path": "tests/conversation-electron.cjs",
+      "sha256": "76400ca8dbf983abf4914b7065380731925ade732e1f567cf9dcbdccc79d6290"
+    },
+    {
+      "path": "tests/fixtures/conversation-scenarios.cjs",
+      "sha256": "73d4b2fa2417443e443ec8b7ff1c5cf4f770b8fedff88f523fd42128c036f6de"
+    },
+    {
+      "path": "tests/ui2-classic.cjs",
+      "sha256": "42f6fe5a44b5b319235fcac48270445ae139b88f3935a58a2110465fc6c8e8fb"
+    },
+    {
+      "path": "tests/ui2-visual.cjs",
+      "sha256": "863ea63a62a73e09dc10025dfeffdb9dcae8539c5c36733d2f3b8150227a5bbe"
+    },
+    {
+      "path": "tests/ui3-model.cjs",
+      "sha256": "d5c821ef3c9bd94d908202be765ce80535e265a39957a5b45aee71a72db72717"
+    }
+  ],
+  "sourceStateCaveat": "Initial npm test plus same ordered canonical continuation; changed visual/test/copy files were verified again by the supplementary checks; not one immutable SHA npm test pass."
+}

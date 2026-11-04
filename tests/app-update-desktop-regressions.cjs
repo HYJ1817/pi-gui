@@ -92,8 +92,10 @@ test('cancelled install preparation releases helper lock while parent stays usab
   const helper=spawn(ps,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(__dirname,'../electron/update-helper.ps1'),'-Request',request],{stdio:'ignore',windowsHide:true});
   const exited=new Promise(r=>helper.once('exit',r));
   t.after(async()=>{if(helper.exitCode===null)helper.kill();parent.stdin.end();await exited;await new Promise(r=>parent.exitCode!==null?r():parent.once('exit',r));fs.rmSync(root,{recursive:true,force:true});});
-  for(let i=0;i<100&&!fs.existsSync(path.join(run,'ready'));i++)await new Promise(r=>setTimeout(r,30));
-  assert.ok(fs.existsSync(path.join(run,'ready')),'helper validates real UTF-8 request and becomes ready');
+  // Match the desktop owner's 15s startup budget: cold PowerShell/Add-Type can exceed 3s on CI.
+  const readyDeadline=Date.now()+15000;
+  while(!fs.existsSync(path.join(run,'ready'))&&helper.exitCode===null&&helper.signalCode===null&&Date.now()<readyDeadline)await new Promise(r=>setTimeout(r,30));
+  assert.ok(fs.existsSync(path.join(run,'ready')),`helper validates real UTF-8 request and becomes ready (exit=${helper.exitCode}, signal=${helper.signalCode})`);
   fs.writeFileSync(path.join(run,'cancelled'),'cancelled');
   const stopped=await Promise.race([exited.then(()=>true),new Promise(r=>setTimeout(()=>r(false),2000))]);
   assert.equal(stopped,true,'helper must honor cancellation without waiting for application exit');

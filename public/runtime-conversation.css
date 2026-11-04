@@ -1,6 +1,6 @@
 /* Refined Runtime surface. The transcript remains the original scroll owner;
  * this composer keeps the existing textarea node and session-local drafts. */
-.runtime-conversation-view{overflow:hidden;align-items:stretch}
+.runtime-conversation-view{overflow:hidden;align-items:stretch;padding:0 24px 16px}
 .runtime-conversation{height:100%;gap:10px;min-width:0}
 .runtime-conversation .rtc-head{flex-shrink:0;gap:4px 10px}
 .runtime-conversation .rtc-title{font-size:13px;font-weight:500}
@@ -9,25 +9,24 @@
 .runtime-conversation .rtc-controls{gap:4px;padding-top:2px}
 .runtime-conversation .rtc-controls>.btn{min-height:28px;padding:3px 8px;font-size:11px;color:var(--t2);background:transparent;border-color:transparent}
 .runtime-conversation .rtc-controls>.btn:hover{color:var(--t1);background:var(--hover)}
-.runtime-conversation .rtc-output{min-height:0;padding:12px 2px 20px;white-space:normal;overscroll-behavior:contain;scrollbar-gutter:stable;font-size:var(--ui-font-prose);line-height:1.8}
+.runtime-conversation .rtc-output{min-height:0;padding:20px 32px;white-space:normal;overscroll-behavior:contain;scrollbar-gutter:stable;font-size:var(--text-base);line-height:var(--leading-prose)}
 .rtc-markdown{min-width:0;white-space:normal;overflow-wrap:anywhere}
 .rtc-markdown p{margin:0 0 13px;white-space:pre-wrap}
 .rtc-markdown>:first-child{margin-top:0}
 .rtc-markdown>:last-child{margin-bottom:0}
 .runtime-conversation .rtc-history-message{display:block;margin-bottom:24px;min-width:0}
 .rtc-history-role{font-size:11px;color:var(--t3);margin-bottom:6px}
-.rtc-history-user-text{white-space:pre-wrap;overflow-wrap:anywhere}
-.rtc-history-message[data-role="user"]{margin-left:auto;max-width:90%;width:fit-content;padding:10px 16px;border:1px solid var(--line);border-radius:16px;background:var(--bubble-bg)}
+.rtc-history-user-text{white-space:pre-wrap;overflow-wrap:anywhere;max-width:min(82%,600px);padding:10px 15px;border-radius:var(--radius-lg-plus);border-bottom-right-radius:var(--radius-xs);background:var(--ds-tile-deep);line-height:var(--leading-chat)}
+.runtime-conversation .rtc-history-message[data-role="user"]{display:flex;flex-direction:column;align-items:flex-end;width:100%;padding:0;border:0;background:transparent}
 .rtc-history-message[data-role="user"]>.rtc-history-role{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .runtime-conversation>.ui2-runtime-thinking{flex-shrink:0;max-height:24vh;overflow:auto}
 .runtime-conversation>.ui2-runtime-tools{flex-shrink:0;max-height:100px;overflow:auto}
 .runtime-conversation>.rtc-approvals{flex-shrink:0;max-height:30vh;overflow:auto}
-.rtc-composer{flex-shrink:0;min-width:0;padding:10px 12px 8px;border:1px solid var(--control-border,var(--line));border-radius:var(--ui-radius-composer);background:var(--input);box-shadow:none}
-.rtc-composer:focus-within{border-color:var(--focus-ring)}
-.runtime-conversation .rtc-composer>textarea{display:block;min-height:52px;max-height:min(200px,25vh);height:64px;padding:2px 4px 8px;border:0;border-radius:0;resize:vertical;background:transparent;font-size:13px;line-height:1.65;outline:none}
+.rtc-composer{flex-shrink:0;min-width:0;padding:10px 12px 8px;border:0;border-radius:var(--ds-composer-radius);background:var(--ds-bg-composer);box-shadow:var(--ds-shadow-composer)}
+.runtime-conversation .rtc-composer>textarea{display:block;min-height:62px;max-height:min(200px,25vh);height:64px;padding:2px 4px 8px;border:0;border-radius:0;resize:vertical;background:transparent;font-size:var(--text-base);line-height:var(--leading-body);outline:none}
 .runtime-conversation .rtc-composer>textarea:focus-visible{outline:none}
 .rtc-composer-bar{display:flex;align-items:center;gap:8px;min-width:0}
-.rtc-composer .rtc-models{display:flex;flex:1;align-items:center;flex-wrap:nowrap;gap:6px;min-width:0}
+.rtc-composer .rtc-models{display:flex;flex:1;align-items:center;flex-wrap:nowrap;justify-content:flex-end;gap:6px;min-width:0}
 .rtc-composer .rtc-model-field{display:block;flex:0 1 auto;min-width:0;max-width:100%}
 .rtc-composer .rtc-model-field:first-child{flex:0 1 auto}
 .rtc-composer .rtc-model-notice{display:block;margin-top:6px;font-size:11px;line-height:1.5}
@@ -36,6 +35,19 @@
 .rtc-composer-note{font-size:10px;color:var(--t3);line-height:1.5;padding:5px 4px 0}
 .rtc-composer-actions{display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0}
 .rtc-composer-actions>.btn{min-height:30px;padding:4px 11px;font-size:12px;border-radius:9px}
+.rtc-composer-actions>.rtc-send,.rtc-composer-actions>.rtc-stop{display:grid;place-items:center;width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:var(--radius-full)}
+.rtc-composer-actions>.rtc-send{background:var(--ds-accent);color:var(--ds-bg-primary)}
+.rtc-composer-actions>.rtc-send:disabled{opacity:1;background:var(--ds-send-disabled-bg);color:var(--ds-send-disabled-fg)}
+.rtc-composer-actions>.rtc-stop{background:var(--ds-bg-active);color:var(--ds-text-primary)}
+.rtc-composer-actions>.btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.rtc-composer-actions>.btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.runtime-conversation .rtc-model-trigger{font-size:var(--text-sm-plus);font-weight:var(--font-weight-semibold)}
+.rtc-markdown pre.code{max-width:100%;overflow:auto;padding:12px 14px;border-radius:var(--radius-md);background:var(--ds-tile);font:12px/1.6 var(--font-mono)}
+.rtc-markdown :is(ul,ol){padding-left:22px;margin:12px 0}
+.rtc-markdown h4{font-size:var(--text-base);margin:16px 0 8px}
+.rtc-markdown code{overflow-wrap:anywhere}
+.rtc-markdown a{color:var(--ds-text-primary);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:color-mix(in oklab,var(--ds-text-primary) 32%,transparent)}
+.rtc-markdown a:hover{text-decoration-color:color-mix(in oklab,var(--ds-text-primary) 85%,transparent)}
 .rtc-composer .rtc-models>.btn{font-size:10px;min-height:26px;white-space:nowrap;padding:3px 7px;color:var(--t3);background:transparent;border-color:transparent}
 .rtc-picker-trigger{display:flex;align-items:center;gap:6px;min-height:28px;max-width:100%;padding:4px 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--t2);font:inherit;font-size:11px;line-height:1.4;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .rtc-model-trigger{max-width:260px}
@@ -43,14 +55,15 @@
 .rtc-picker-label{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .rtc-picker-trigger:hover:not(:disabled),.rtc-picker-trigger[aria-expanded="true"]{background:var(--hover);color:var(--t1)}
 .rtc-picker-trigger:disabled{opacity:.5;cursor:default}
-.rtc-picker-trigger:focus-visible,.rtc-picker-menu button:focus-visible,.rtc-picker-search:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-.rtc-picker-menu{position:fixed;z-index:50;display:flex;flex-direction:column;gap:4px;padding:8px;overflow:hidden;background:var(--ui-popover-surface);color:var(--t1);border:1px solid var(--line);border-radius:12px;box-shadow:var(--ui-shadow-popover)}
+.rtc-picker-trigger:focus-visible,.rtc-picker-menu button:focus-visible,.rtc-picker-search:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
+.runtime-conversation :is(.rtc-output,.rtc-composer>textarea){scrollbar-width:thin;scrollbar-color:var(--ds-bg-active) transparent}
+.rtc-picker-menu{position:fixed;z-index:50;display:flex;flex-direction:column;gap:4px;padding:5px;overflow:hidden;background:var(--ds-bg-elevated-opaque);color:var(--t1);border:0;border-radius:var(--ds-composer-radius);box-shadow:var(--ds-shadow-model-menu)}
 .rtc-picker-title{font-size:11px;color:var(--t3);padding:3px 6px 5px;flex-shrink:0}
-.rtc-picker-search{width:100%;min-width:0;min-height:32px;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--input);color:var(--t1);font:inherit;font-size:12px;flex-shrink:0}
+.rtc-picker-search{width:100%;min-width:0;min-height:32px;padding:6px 9px;border:0;border-radius:var(--radius-md);background:var(--ds-bg-inset);color:var(--t1);font:inherit;font-size:12px;flex-shrink:0}
 .rtc-picker-list{min-height:0;overflow:auto;overscroll-behavior:contain}
-.rtc-picker-menu .rtc-picker-option{display:block;width:100%;padding:8px 10px;font-size:12px;line-height:1.5;white-space:normal;overflow-wrap:anywhere;text-align:left;border:0;border-radius:6px;background:transparent;color:var(--t2);cursor:pointer}
+.rtc-picker-menu .rtc-picker-option{display:block;width:100%;padding:8px 10px;font-size:var(--text-sm-plus);line-height:1.5;white-space:normal;overflow-wrap:anywhere;text-align:left;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--t2);cursor:pointer}
 .rtc-picker-menu .rtc-picker-option:hover,.rtc-picker-menu .rtc-picker-option[aria-current="true"]{background:var(--hover);color:var(--t1)}
-.rtc-picker-menu .rtc-picker-option[aria-current="true"]{font-weight:500;box-shadow:inset 2px 0 var(--t2)}
+.rtc-picker-menu .rtc-picker-option[aria-current="true"]{font-weight:500;box-shadow:none}
 .rtc-picker-empty{padding:16px 10px;color:var(--t3);font-size:12px;text-align:center}
 @media(max-width:900px){.rtc-model-trigger{max-width:190px}.rtc-thinking-trigger{max-width:110px}.rtc-composer .rtc-models{gap:2px}.rtc-composer{padding:9px 9px 7px}}
 @media(max-width:700px){.runtime-conversation-view{padding:10px}.runtime-conversation .rtc-head>.runtime-resource-count{display:none}.rtc-model-trigger{max-width:140px}.rtc-composer-bar{flex-wrap:wrap;gap:4px}.rtc-composer .rtc-models{flex-basis:100%}.rtc-composer-actions{margin-top:-1px}.rtc-composer-note{padding-top:3px}}

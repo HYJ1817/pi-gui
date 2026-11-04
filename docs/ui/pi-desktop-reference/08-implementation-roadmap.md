@@ -118,6 +118,7 @@
 ---
 
 ### 阶段 D：重构核心对话流与完善 Composer (Conversation & Composer)
+- **实施修订**：真实源码与现有能力以 [阶段 D 勘察](14-phase-d-implementation.md) 为准，实际结果见 [阶段 D 验收](15-phase-d-acceptance.md)。助手正文原本已透明；不重做消息状态，不增加无业务支撑的删除或编辑重发按钮。
 - **目标概述**：剥离助手回复的外围灰色气泡框，改为纯净 Prose 直排；用户消息改为右侧大圆角卡片并增加悬停浮动工具条；将既有 `ui3-composer` 的圆角、阴影与发送按钮全面接入 `--ds-*` 规范（20px 圆角 `--ds-composer-radius`，阴影 `--ds-shadow-composer`）；将既有 `ui3-model-picker` 卡片应用 `--ds-shadow-model-menu`。
 - **复用模块**：
   - `public/messages.js` (消息流追加、Markdown 渲染与代码高亮)
@@ -128,8 +129,8 @@
   - `public/ui/inline-command-menu.js` (既有斜杠命令自动补全)
   - `public/ui3-inline-commands.css`
 - **新增模块**：
-  - `public/ui/message-actions.js` (消息悬停浮动工具条：复制、编辑重发、删除)
-  - `public/ui/context-inspector.js` (Token 环点击弹出的用量卡片，对标 `REF-023`)
+  - `public/ui/message-actions.js`（Classic 实时/历史与 Runtime 历史共用的只读复制动作）
+  - 不新增 `context-inspector.js`：复用 `usage.js` 与唯一 `ui/popover.js`；保留真实用量，未提供的数据不伪造。
 - **废弃/清理的旧样式**：
   - 移除 `public/styles.css` 中包裹在 AI 消息外层的卡片边框与灰色背景；
   - 清理 `ui3-composer.css` 与 `ui3-model.css` 中残留的旧版 `--ui-*` 临时参数。
