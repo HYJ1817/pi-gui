@@ -42,6 +42,26 @@ const click = (d, text, id = 'confirmCard') => {
 };
 
 (async () => {
+  await check('work panel launcher delegates real tools, follows availability and disposes', async () => {
+    const f = fixture('work-panel', 'ui/work-panel-launcher.js');
+    try {
+      const { w, d } = f;
+      const source = d.getElementById('navChanges'), browser = d.getElementById('btnBrowser');
+      source.setAttribute('aria-label', '<Files & review>'); browser.hidden = true;
+      let runs = 0; source.onclick = () => { runs++; };
+      const host = d.querySelector('#rightPane .rp-body');
+      const dispose = w.mountWorkPanelLauncher(host, [source, browser]);
+      const rows = host.querySelectorAll('.work-panel-launcher-row');
+      assert.equal(rows.length, 2); assert.equal(rows[1].hidden, true);
+      assert.ok(rows[0].textContent.includes('<Files & review>')); assert.equal(rows[0].querySelector('files'), null);
+      rows[0].click(); assert.equal(runs, 1); assert.equal(d.activeElement, source);
+      source.disabled = true; browser.hidden = false; await tick();
+      assert.equal(rows[0].disabled, true); assert.equal(rows[1].hidden, false);
+      rows[0].click(); assert.equal(runs, 1);
+      dispose(); source.disabled = false; await tick(); rows[0].click();
+      assert.equal(runs, 1); assert.equal(rows[0].disabled, true);
+    } finally { f.close(); }
+  });
   for (const decision of ['允许一次', '拒绝']) for (const lifecycle of ['expired', 'stop', 'workspace', 'session', 'bridge', 'timeout']) {
     await check('late ' + decision + ' success cannot authorize replacement after ' + lifecycle, async () => {
       const f = fixture('B', 'approval.js');

@@ -2,10 +2,10 @@
  *
  * ---------- 边界 ----------
  *
- * 这个文件**只消费** public/tokens.css 的语义 Token（--ui-*）与它的兼容别名
+ * 这个文件**只消费** public/tokens.css 的语义 Token（--ds-* / --ui-*）与兼容别名
  * （--t1/--t2/--t3/--line/--hover/--focus-ring…）。它不定义任何新的颜色来源：
- * 要改配色去改 tokens.css。这里只新增两个**布局**自定义属性（--rp-head-h /
- * --rp-pad），并且声明在 .right-pane 上，不外溢到全局。
+ * 要改配色去改 tokens.css。标题高度、内距与原生 caption 预留仅是布局变量，
+ * 声明在 .right-pane 上，不外溢到全局。
  *
  * ---------- 它统一了什么 ----------
  *
@@ -16,7 +16,7 @@
  *                    「本会话变更」「开发进程」两面用它
  *   .process-head —— runtime-secondary.js 的空态标题行
  * 它们的 DOM 来源不同，但**语义结构相同**：标题 → 说明 → 弹性空白 → 工具按钮 → 关闭。
- * 所以这里只对齐尺寸与节奏（46px 带高、同样的内边距、同样的字号、同一条分隔线），
+ * 所以这里只对齐尺寸与节奏（46px 带高、同样的内边距、同样的字号、无外壳分隔线），
  * 不去重写任何一面的 DOM，也不新增第二套按钮/页签/空态组件。
  *
  * 面板内容自己滚（.rp-scroll / .chg-body），标题带用 sticky 固定；
@@ -31,16 +31,17 @@
 
 .right-pane{
   /* 右栏内部的节奏：一个标题带高度 + 一个内容内边距，别的都从这里派生。 */
-  --rp-head-h:46px;
+  --rp-head-h:var(--ds-toolbar-height);
+  --rp-caption-inset:max(0px,calc(100vw - env(titlebar-area-x,0px) - env(titlebar-area-width,100vw)));
   --rp-pad:12px;
-  background:var(--ui-panel-surface);
-  border-left:1px solid var(--ui-border);
+  background:var(--ds-bg-dock);
+  border-left:0;
   color:var(--ui-text-primary);
   font-family:var(--ui-font-sans);
   font-size:var(--ui-font-body);
 }
 /* 覆盖式抽屉：阴影回答「它浮在对话上面」，边框回答「边界在哪」。 */
-.right-pane[data-mode="overlay"]{box-shadow:var(--ui-shadow-panel);border-left-color:var(--ui-border-strong)}
+.right-pane[data-mode="overlay"]{box-shadow:var(--ui-shadow-panel)}
 .right-pane[hidden]{display:none}
 
 .rp-body{overflow:hidden}
@@ -56,8 +57,8 @@
   box-sizing:border-box;
   height:var(--rp-head-h);min-height:var(--rp-head-h);flex:0 0 auto;
   margin:0;padding:0 var(--rp-pad);
-  background:var(--ui-panel-surface);
-  border-bottom:1px solid var(--ui-border);
+  background:var(--ds-bg-dock);
+  border-bottom:0;
   -webkit-app-region:drag;        /* 标题带的空白处仍然可以拖动窗口 */
 }
 .rp-toolbar button,
@@ -70,7 +71,7 @@
 .rp-head-title,
 .secondary-surface .chg-head h3{
   flex:0 0 auto;margin:0;
-  font-size:13px;font-weight:var(--ui-weight-strong);line-height:1.3;
+  font-size:13px;font-weight:var(--font-weight-medium);line-height:1.3;
   color:var(--ui-text-primary);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;
 }
@@ -95,12 +96,12 @@
 .secondary-surface .chg-head .rp-head-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0}
 .rp-head .icon-btn,
 .secondary-surface .chg-head .icon-btn,
-.secondary-surface .process-head .icon-btn{width:26px;height:26px;flex:0 0 26px}
+.secondary-surface .process-head .icon-btn{width:28px;height:28px;flex:0 0 28px}
 
 /* 关闭按钮：浏览器面是 .icon-btn（SVG ×），二级面是 .secondary-close（文本 ×）。
  * 统一成同一个 26px 方块与同一个位置（最右），否则两个面的 × 会一大一小。 */
 .secondary-close{
-  flex:0 0 auto;width:26px;height:26px;padding:0;
+  flex:0 0 auto;width:28px;height:28px;padding:0;
   display:flex;align-items:center;justify-content:center;
   font-size:17px;line-height:1;color:var(--ui-text-secondary);
   background:transparent;border:0;border-radius:6px;cursor:pointer;
@@ -109,7 +110,7 @@
 .changes-split-icon{font-size:15px;line-height:1}
 
 /* 工具条里的小按钮（刷新/页签/行内动作）用同一套高度与圆角。 */
-.rp-btn{height:26px;padding:0 9px;border-radius:6px;font-size:11.5px;line-height:1}
+.rp-btn{height:28px;padding:0 9px;border-radius:var(--radius-sm);font-size:11.5px;line-height:1}
 .rp-btn:disabled{opacity:.45;cursor:not-allowed}
 
 /* 页签行：独占一行，因为它两个中文标签加工具按钮在 320px 放不进标题带。 */
@@ -119,20 +120,20 @@
 }
 .rp-tabs{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
 .rp-tab{
-  height:26px;padding:0 10px;border-radius:7px;
-  border:1px solid var(--ui-border);background:transparent;
+  height:28px;padding:0 10px;border-radius:var(--radius-sm);
+  border:0;background:transparent;
   color:var(--ui-text-secondary);font-family:inherit;font-size:11.5px;cursor:pointer;
   white-space:nowrap;
 }
 .rp-tab:hover{background:var(--ui-hover);color:var(--ui-text-primary)}
-.rp-tab[aria-pressed="true"]{background:var(--ui-selected);border-color:var(--ui-border-strong);color:var(--ui-text-primary)}
+.rp-tab[aria-pressed="true"]{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
 
 /* ================= 滚动容器 ================= */
 
 .secondary-surface{
   display:flex;flex-direction:column;min-height:0;min-width:0;
   padding:0;overflow:auto;overscroll-behavior:contain;
-  background:var(--ui-canvas);
+  background:var(--ds-bg-dock);
 }
 /* 标题带固定：滚内容时「这是哪一面、怎么关」始终在视野里。 */
 .secondary-surface > .rp-head,
@@ -194,8 +195,8 @@
 
 .rp-empty{
   display:flex;flex-direction:column;gap:4px;
-  margin:4px 0;padding:14px 12px;
-  border:1px dashed var(--ui-border);border-radius:var(--ui-radius-card);
+  margin:0;padding:28px 24px;align-items:center;justify-content:center;text-align:center;
+  border:0;
   background:transparent;min-width:0;
 }
 .rp-empty-title{margin:0;font-size:12.5px;font-weight:var(--ui-weight-medium);color:var(--ui-text-secondary)}
@@ -335,10 +336,10 @@
 .rp-toolbar{background:var(--ui-panel-surface)}
 .rp-surface-browser{container-type:inline-size}
 .ui4-browser-title{max-width:none}
-@container (max-width:360px){
+@container (max-width:500px){
   .ui4-browser-title{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 }
-.rp-toolbar .icon-btn{width:26px;height:26px;flex:0 0 26px}
+.rp-toolbar .icon-btn{width:28px;height:28px;flex:0 0 28px}
 .rp-address{height:28px;border-radius:8px;font-size:12px}
 .browser-agent-bar{
   display:flex;flex-wrap:wrap;align-items:center;gap:8px;
@@ -429,27 +430,26 @@
 
 .workbench-modebar{
   display:flex;align-items:center;gap:5px;
-  flex:0 0 34px;min-width:0;height:34px;
+  flex:0 0 var(--ds-toolbar-height);min-width:0;height:var(--ds-toolbar-height);
   box-sizing:border-box;padding:4px var(--rp-pad);
-  background:var(--ui-panel-surface);
-  border-bottom:1px solid var(--ui-border);
+  background:var(--ds-bg-dock);
+  border-bottom:0;
 }
 .workbench-tab{
-  flex:0 0 auto;height:25px;padding:0 9px;
-  border:1px solid transparent;border-radius:6px;
+  flex:0 0 auto;height:28px;padding:0 9px;
+  border:0;border-radius:var(--radius-sm);
   background:transparent;color:var(--ui-text-secondary);
   font:inherit;font-size:11px;cursor:pointer;
 }
 .workbench-tab:hover{background:var(--ui-hover);color:var(--ui-text-primary)}
 .workbench-tab[aria-pressed="true"]{
-  border-color:var(--ui-border-strong);
-  background:var(--ui-selected);
+  background:var(--ds-bg-hover);
   color:var(--ui-text-primary);
 }
 .workbench-grow{flex:1 1 auto;min-width:0}
 .workbench-exit{flex:0 0 auto}
 .workbench-close{
-  flex:0 0 26px;width:26px;height:26px;padding:0;
+  flex:0 0 28px;width:28px;height:28px;padding:0;
   display:flex;align-items:center;justify-content:center;
   font-size:17px;line-height:1;
 }
@@ -458,9 +458,8 @@
   position:relative;z-index:2;flex:0 0 8px;min-height:8px;
   box-sizing:border-box;
   cursor:row-resize;touch-action:none;
-  background:var(--ui-panel-surface);
-  border-top:1px solid var(--ui-border);
-  border-bottom:1px solid var(--ui-border);
+  background:var(--ds-bg-dock);
+  border:0;
 }
 .workbench-splitter-grip{
   position:absolute;left:50%;top:50%;
@@ -499,15 +498,28 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 
 /* Persistent tool navigation is outside rp-body, so switching surfaces cannot
    orphan the entrance or duplicate business mounts. */
-.work-panel-nav{display:flex;align-items:center;gap:4px;padding:8px 10px;flex:0 0 auto;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
-.work-panel-nav .icon-btn{width:auto;min-width:30px;gap:6px;padding:0 8px;height:30px;font:inherit;font-size:12px;position:relative}
-.work-panel-nav .icon-btn.is-active{background:var(--ui-selected);color:var(--t1)}
-.work-panel-nav .work-tool-label{white-space:nowrap}
-.work-panel-nav :is(#btnTree,#btnSpecs,#btnCollab) .work-tool-label{display:none}
-.work-panel-nav .head-count{position:static;font-size:11px}
-.work-panel-nav #workPanelClose{margin-left:auto;font-size:20px}
-.work-panel-nav .icon-btn svg{width:16px;height:16px}
-.work-panel-empty{padding:32px 24px;color:var(--t2)}
-.work-panel-empty h2{font-size:16px;color:var(--t1);font-weight:500;margin-bottom:8px}
-.work-panel-empty p{font-size:13px;line-height:1.7}
-@media(max-width:1280px){.work-panel-nav .work-tool-label{display:none}.work-panel-nav .icon-btn{width:32px;padding:0}}
+/* Keep the drag rectangle outside native caption controls. The persistent
+   strip reuses existing actions; it is not a second tab/session owner. */
+.work-panel-nav{display:flex;align-items:center;gap:var(--ds-work-panel-control-gap);height:var(--ds-toolbar-height);flex:0 0 var(--ds-toolbar-height);min-width:0;margin-right:var(--rp-caption-inset);padding:0 12px;border:0;background:var(--ds-bg-primary)}
+.work-panel-tool-strip{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;scrollbar-width:none;-webkit-app-region:no-drag}
+.work-panel-tool-strip::-webkit-scrollbar{display:none}
+.work-panel-nav .icon-btn{flex:0 0 auto;width:28px;min-width:28px;height:28px;gap:6px;padding:0;border:0;border-radius:var(--radius-sm);font:inherit;font-size:var(--text-sm-plus);position:relative;color:var(--ds-text-muted);-webkit-app-region:no-drag}
+.work-panel-nav .icon-btn:hover,.work-panel-nav .icon-btn.is-active{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
+.work-panel-nav .work-tool-label{display:none;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-panel-nav .icon-btn.is-active{width:auto;min-width:92px;max-width:180px;padding:0 10px}
+.work-panel-nav .icon-btn.is-active .work-tool-label{display:block}
+.work-panel-nav .icon-btn:has(.head-count:not(:empty)){width:auto;padding-inline:6px}
+.work-panel-nav .head-count{position:static;font-size:var(--text-xs)}
+.work-panel-nav #workPanelClose{font-size:20px}
+.work-panel-nav .icon-btn svg{width:16px;height:16px;flex:none}
+.work-panel-nav .icon-btn:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
+.right-pane .work-panel-empty{display:flex;flex-direction:column;flex:1;min-height:0;gap:8px;padding:14px 10px;color:var(--ds-text-muted);overflow:hidden;background:var(--ds-bg-dock)}
+.right-pane .work-panel-empty h2{flex:none;margin:0;padding:0 8px 4px;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--ds-text-muted)}
+.work-panel-launcher-list{display:flex;flex:1;min-height:0;flex-direction:column;gap:2px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.work-panel-launcher-row{display:flex;flex-shrink:0;align-items:center;gap:10px;height:40px;min-width:0;padding:0 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ds-text-primary);font:inherit;font-size:var(--text-md);text-align:left;cursor:pointer}
+.work-panel-launcher-row:hover{background:var(--ds-bg-hover)}
+.work-panel-launcher-row:disabled{opacity:.45;cursor:default}
+.work-panel-launcher-row:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
+.work-panel-launcher-row>span:last-child{min-width:0;overflow-wrap:anywhere}
+.work-panel-launcher-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;flex:none;color:var(--ds-text-secondary)}
+.work-panel-launcher-icon svg{width:18px;height:18px}

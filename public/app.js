@@ -19,6 +19,7 @@ import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
 import { renderModelPicker, renderThinkingPicker, thinkingAvailability, applyChipState, setTriggers } from './ui3-model-picker.js';
 import { createInlineCommandMenu } from './ui/inline-command-menu.js';
+import { mountWorkPanelLauncher } from './ui/work-panel-launcher.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
 import { sendCommand, runtimeSessionAction, setRequestFailureReporter, switchSession, fetchRuntimeSessions } from './api.js';
 import { installRendererLogging, logRendererEvent } from './log-client.js';
@@ -263,19 +264,32 @@ configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation,
 configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane, { openWorkbench: openSplitWorkbench }) : null;
 const workPanelToggle = $('btnWorkPanel');
+let disposeWorkPanelLauncher = null;
+rightPane.onSurfaceChange(() => { disposeWorkPanelLauncher?.(); disposeWorkPanelLauncher = null; });
+function openWorkPanelTools() {
+  if (rightPane.surface() === 'work-tools') return;
+  rightPane.open('work-tools');
+  disposeWorkPanelLauncher = mountWorkPanelLauncher(rightPane.root.querySelector('.rp-body'),
+    ['navChanges', 'btnBrowser', 'btnSpecs', 'btnCollab', 'btnTree'].map($));
+}
 workPanelToggle.onclick = () => {
   if (rightPane.isOpen()) { rightPane.close(); workPanelToggle.focus(); return; }
-  rightPane.open('work-tools');
-  const intro = document.createElement('section'); intro.className = 'work-panel-empty';
-  const title = document.createElement('h2'); title.textContent = '工作面板';
-  const text = document.createElement('p'); text.textContent = '选择上方的工具，查看文件变更、项目文档或浏览器。';
-  intro.append(title, text); rightPane.root.querySelector('.rp-body').append(intro);
+  openWorkPanelTools();
 };
+$('workPanelHome').onclick = openWorkPanelTools;
 $('workPanelClose').onclick = () => { rightPane.close(); workPanelToggle.focus(); };
 document.addEventListener('pi-gui:right-pane', event => {
   workPanelToggle.setAttribute('aria-expanded', String(event.detail?.open === true));
   workPanelToggle.classList.toggle('is-active', event.detail?.open === true);
   $('workPanelClose').hidden = event.detail?.surface !== 'work-tools';
+  $('workPanelHome').hidden = event.detail?.surface === 'work-tools';
+  // Tool owners update their active classes in this same event dispatch.
+  // Wait for those projections before revealing the selected label's full width.
+  queueMicrotask(() => {
+    if (!rightPane.isOpen()) return;
+    const active = [...$('workPanelNav').querySelectorAll('.work-panel-tool-strip .is-active')].at(-1);
+    active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  });
 });
 initGuiBrowserState();
 initVizIntegration();

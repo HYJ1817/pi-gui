@@ -104,7 +104,10 @@ export function mountSpecsPanel(host, view, {
     layout?.classList.add('is-empty');
     docPane.replaceChildren();
     const empty = node('section', 'specs-empty');
-    empty.append(node('h4', 'specs-empty-title', title), node('p', 'specs-empty-text', text));
+    const icon = node('span', 'specs-empty-icon');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6"/></svg>';
+    empty.append(icon, node('h4', 'specs-empty-title', title), node('p', 'specs-empty-text', text));
     docPane.append(empty);
   }
 
