@@ -27,15 +27,19 @@
 #composerPopover.model-mode,#composerPopover.tip-mode {
   border:0;border-radius:var(--ds-composer-radius);padding:5px;
   background:var(--ds-bg-elevated-opaque);box-shadow:var(--ds-shadow-model-menu);
+  color:var(--ds-text-primary);
 }
 #composerPopover.model-mode {width:320px}
 #composerPopover.tip-mode>div {padding:12px}
-#composerPopover.tip-mode .tip-big {font-size:var(--text-xl);font-weight:500;margin:6px 0}
+#composerPopover.tip-mode .tip-big {font-size:var(--text-xl);font-weight:500;margin:6px 0;color:var(--ds-text-primary)}
 #composerPopover.tip-mode .tip-head {color:var(--ds-text-muted);font-size:var(--text-sm)}
+#composerPopover.tip-mode :is(.tip-dim:not(.tip-warn),.tip-row) {color:var(--ds-text-muted)}
+#composerPopover.tip-mode .tip-row span:last-child {color:var(--ds-text-primary)}
 #composerPopover .ui3-model-search {
   border:0;border-radius:var(--radius-md);background:var(--ds-bg-inset);
 }
-#composerPopover .pop-item {border-radius:var(--radius-sm);min-height:28px}
+#composerPopover .pop-item {border-radius:var(--radius-sm);min-height:28px;color:var(--ds-text-primary)}
+#composerPopover .pop-item.on {background:var(--ds-bg-hover)}
 #composerPopover .ui3-current,#composerPopover .ui3-think-state {border:0}
 
 .ui3-current{

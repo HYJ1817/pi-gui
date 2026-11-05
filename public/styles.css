@@ -2727,7 +2727,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: none;
-  color: var(--ds-text-faint);
+  color: var(--ds-text-muted);
   margin: 0;
 }
 .settings-menu button {
@@ -2974,11 +2974,11 @@ fieldset.appearance-body {
   transition: color var(--motion-duration-fast) var(--motion-ease-out);
 }
 .appearance-status.is-error {
-  color: var(--ds-error-text, #f87171);
+  color: var(--ui-danger);
   font-weight: var(--font-weight-medium);
 }
 .appearance-status.is-warning {
-  color: var(--ds-warning-text, #fbbf24);
+  color: var(--ui-warning);
 }
 .settings-detail-card > .modal-actions {
   display: none !important;
@@ -3078,50 +3078,6 @@ fieldset.appearance-body {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.ds-switch {
-  width: 38px;
-  height: 22px;
-  padding: 2px;
-  border-radius: 9999px;
-  background: #27272a;
-  border: 1px solid transparent;
-  cursor: pointer;
-  outline: none;
-  display: inline-flex;
-  align-items: center;
-  box-sizing: border-box;
-  flex-shrink: 0;
-  transition: all var(--motion-duration-fast) var(--motion-ease-out);
-}
-.ds-switch.is-on {
-  background: #ffffff;
-}
-.ds-switch-knob {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #71717a;
-  display: block;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  transition: transform var(--motion-duration-fast) var(--motion-ease-out),
-              background var(--motion-duration-fast) var(--motion-ease-out);
-}
-.ds-switch.is-on .ds-switch-knob {
-  transform: translateX(16px);
-  background: #000000;
-}
-[data-theme="light"] .ds-switch.is-on {
-  background: #000000;
-}
-[data-theme="light"] .ds-switch.is-on .ds-switch-knob {
-  background: #ffffff;
-}
-[data-theme="light"] .ds-switch:not(.is-on) {
-  background: #e4e4e7;
-}
-[data-theme="light"] .ds-switch:not(.is-on) .ds-switch-knob {
-  background: #a1a1aa;
-}
 .settings-detail-card > .modal-actions {
   margin-top: 32px;
   display: flex;
@@ -3167,19 +3123,14 @@ fieldset.appearance-body {
 .btn.primary.prov-empty-btn {
   height: 32px;
   padding: 0 16px;
-  background: #ffffff;
+  background: var(--ds-accent);
   border: 0;
   border-radius: var(--radius-full);
-  color: #000000;
+  color: var(--ui-on-primary);
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   transition: opacity var(--motion-duration-fast) var(--motion-ease-out);
-}
-[data-theme="light"] .btn.primary.prov-btn-main,
-[data-theme="light"] .btn.primary.prov-empty-btn {
-  background: #000000;
-  color: #ffffff;
 }
 .btn.primary.prov-btn-main:hover,
 .btn.primary.prov-empty-btn:hover {
