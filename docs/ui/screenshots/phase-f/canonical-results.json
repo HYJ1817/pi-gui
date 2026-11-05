@@ -1,0 +1,2473 @@
+{
+  "status": "complete_cumulative",
+  "kind": "Cumulative canonical verification; no single npm test exit 0 observed. Attempt 1 interrupted, attempt 2 failed on occupied port at leaf 160; its successful 1-159 prefix plus actual continuation 160-234 cover the original plan without changing source.",
+  "head": "d7261986e3b9ea2a299c044d7dfb484036d1a80a",
+  "completeNpmTestExit0Observed": false,
+  "allCanonicalCommandsSucceeded": true,
+  "totalCanonicalCommands": 234,
+  "canonicalPlanDigest": "617b6ca0abdaf1cc7b1a16e3fcae1b0414b126254bf74fcf02fc514a4f2edf4c",
+  "orderedCanonicalCommands": [
+    "node tests/file-size-report.cjs",
+    "node tests/ci-test-plan.cjs",
+    "node tests/ci-workflow.cjs",
+    "node tests/ci-results.cjs",
+    "node tests/ci-summary.cjs",
+    "node tests/ci-history.cjs",
+    "node tests/ci-doc-scope.cjs",
+    "node tests/release-ci-proof.cjs",
+    "node tests/nsis-bootstrap.cjs",
+    "node tests/app-update.cjs",
+    "node tests/app-update-maintenance.cjs",
+    "node tests/app-update-activity.cjs",
+    "node tests/app-update-backend.cjs",
+    "node tests/app-update-desktop-regressions.cjs",
+    "node tests/app-update-ui.cjs",
+    "node tests/app-update-rollback.cjs",
+    "node tests/session-tool-scheduler.cjs",
+    "node tests/session-tool-bridge.cjs",
+    "node tests/ordinary-session-resolver.cjs",
+    "node tests/ordinary-session-runtime.cjs",
+    "node tests/session-background.cjs",
+    "node tests/session-background-ui.cjs",
+    "node tests/session-background-recovery.cjs",
+    "node tests/ui-visual-finish.cjs",
+    "node tests/review-regressions.cjs",
+    "node tests/context-reference-ui.cjs",
+    "node tests/viz-schema.cjs",
+    "node tests/viz-ui.cjs",
+    "node prototype/z4-1-collab/collab-test.mjs",
+    "node tests/collab-doc.cjs",
+    "node tests/collab-store.cjs",
+    "node tests/collab-authority.cjs",
+    "node tests/collab-service.cjs",
+    "node tests/collab-proposal-queue.cjs",
+    "node tests/collab-proposal-source.cjs",
+    "node tests/collab-agent-flow.cjs",
+    "node tests/collab-http.cjs",
+    "node tests/collab-canvas.cjs",
+    "node tests/collab-panel.cjs",
+    "node tests/collab-panel-agent.cjs",
+    "node tests/collab-auto-layout.cjs",
+    "node tests/collab-layout-preview.cjs",
+    "node tests/collab-export.cjs",
+    "node tests/collab-productivity.cjs",
+    "node tests/collab-panel-productivity.cjs",
+    "node tests/collab-selection.cjs",
+    "node tests/collab-advanced-editing.cjs",
+    "node tests/collab-z45-regressions.cjs",
+    "node tests/collab-stability.cjs",
+    "node tests/candidate-snapshot.cjs",
+    "node tests/candidate-store.cjs",
+    "node tests/candidate-runs.cjs",
+    "node tests/candidate-http.cjs",
+    "node tests/candidate-ui.cjs",
+    "node tests/candidate-adoption.cjs",
+    "node tests/candidate-adoption-ui.cjs",
+    "node tests/candidate-writer.cjs",
+    "node tests/candidate-write-faults.cjs",
+    "node tests/candidate-transactions.cjs",
+    "node tests/candidate-apply.cjs",
+    "node tests/candidate-recovery-errors.cjs",
+    "node tests/candidate-apply-ui.cjs",
+    "node tests/high-risk-regressions.cjs",
+    "node tests/logging.cjs",
+    "node tests/logging-leaks.cjs",
+    "node tests/logging-secret-state.cjs",
+    "node tests/logging-client.cjs",
+    "node tests/logging-ui.cjs",
+    "node tests/ui4-approval.cjs",
+    "node tests/ui4-feedback.cjs",
+    "node tests/ui4-integration.cjs",
+    "node tests/specs.cjs",
+    "node tests/specs-ui.cjs",
+    "node tests/panel-restore-ui.cjs",
+    "node tests/diff-comments.cjs",
+    "node tests/diff-comments-ui.cjs",
+    "node tests/diff-comments-split.cjs",
+    "node tests/diff-comment-ranges.cjs",
+    "node tests/diff-comment-ranges-ui.cjs",
+    "node tests/review-task.cjs",
+    "node tests/review-task-ui.cjs",
+    "node tests/review-comment-store.cjs",
+    "node tests/review-comment-authority.cjs",
+    "node tests/review-comment-runtime.cjs",
+    "node tests/review-comment-http.cjs",
+    "node tests/review-comment-persistence-ui.cjs",
+    "node tests/review-comment-ranges-store.cjs",
+    "node tests/split-workbench-ui.cjs",
+    "node tests/browser-workbench-ui.cjs",
+    "node tests/browser-viewport-safety.cjs",
+    "node tests/ui3-composer.cjs",
+    "node tests/ui3-model.cjs",
+    "node tests/ui3-inline-commands.cjs",
+    "node tests/ui3-integration.cjs",
+    "node tests/ui2-classic.cjs",
+    "node tests/ui2-runtime-display.cjs",
+    "node tests/ui2-visual.cjs",
+    "node tests/theme.cjs",
+    "node tests/session-revert-fixture-retention.cjs",
+    "node tests/session-revert-object-session-binding.cjs",
+    "node tests/session-revert-object-d6final-classic.cjs",
+    "node tests/exe-diagnostics.cjs",
+    "node tests/session-revert-object-qualification.cjs",
+    "node tests/session-revert-object-presentation.cjs",
+    "node tests/session-revert-object-ui.cjs",
+    "node tests/session-revert-object-confirmation.cjs",
+    "node tests/session-revert-sacl-witness.cjs",
+    "node tests/session-revert-object-profile.cjs",
+    "node tests/session-revert-object-evidence.cjs",
+    "node tests/runtime-models.cjs",
+    "node tests/model-fallback.cjs",
+    "node tests/model-capabilities.cjs",
+    "node tests/thinking-availability.cjs",
+    "node tests/ux-state.cjs",
+    "node tests/bridge-state-recovery.cjs",
+    "node tests/native-provider-quota.cjs",
+    "node tests/stable-session-order.cjs",
+    "node tests/hotfix.cjs",
+    "node tests/hotfix-ui.cjs",
+    "node tests/provider-auth.cjs",
+    "node tests/provider-auth-runtime.cjs",
+    "node tests/ui-ia.cjs",
+    "node tests/primitives.cjs",
+    "node tests/settings-acceptance.cjs",
+    "node tests/smoke.cjs",
+    "node tests/daily-use.cjs",
+    "node tests/git.cjs",
+    "node tests/modules.cjs",
+    "node tests/reliability.cjs",
+    "node tests/interactions.cjs",
+    "node tests/sidebar-menu.cjs",
+    "node tests/app-shell.cjs",
+    "node tests/port-owner.cjs",
+    "node tests/project-config.cjs",
+    "node tests/skills.cjs",
+    "node tests/extensions.cjs",
+    "node tests/capability.cjs",
+    "node tests/capability-install.cjs",
+    "node tests/web-access.cjs",
+    "node tests/subagents.cjs",
+    "node tests/memory.cjs",
+    "node tests/browser.cjs",
+    "node tests/approvals.cjs",
+    "node tests/planner.cjs",
+    "node tests/workflow-relations.cjs",
+    "node tests/reviews.cjs",
+    "node tests/review-gate.cjs",
+    "node tests/verification.cjs",
+    "node tests/evidence.cjs",
+    "node tests/attempt-lifecycle.cjs",
+    "node tests/sessions.cjs",
+    "node tests/session-search.cjs",
+    "node tests/pi-compat.cjs",
+    "node tests/pi-probes.cjs",
+    "node tests/pi-update.cjs",
+    "node tests/pi-version.cjs",
+    "node tests/mcp-native.cjs",
+    "node tests/usage-quota.cjs",
+    "node tests/body-integrity.cjs",
+    "node tests/dev-server.cjs",
+    "node tests/standalone-datadir.cjs",
+    "node tests/models-api.cjs",
+    "node tests/server-security.cjs",
+    "node tests/diagnostics.cjs",
+    "node tests/update-check.cjs",
+    "node tests/version-consistency.cjs",
+    "node tests/release-artifacts.cjs",
+    "node tests/electron-guard.cjs",
+    "node tests/gui-browser-policy.cjs",
+    "node tests/gui-browser-controller.cjs",
+    "node tests/gui-browser-bridge.cjs",
+    "node tests/gui-browser-tools.cjs",
+    "node tests/gui-browser-ui.cjs",
+    "node tests/gui-browser-host.cjs",
+    "node tests/gui-browser-stop.cjs",
+    "node tests/stop-barrier.cjs",
+    "node tests/bug8-real-pi-fixture.cjs",
+    "node tests/managed-processes.cjs",
+    "node tests/process-tools.cjs",
+    "node tests/process-stop.cjs",
+    "node tests/process-ui.cjs",
+    "node tests/process-runner.cjs",
+    "node tests/worktrees.cjs",
+    "node tests/worktrees-http.cjs",
+    "node tests/worktrees-ui.cjs",
+    "node tests/runtime-registry.cjs",
+    "node tests/runtime-http.cjs",
+    "node tests/runtime-store.cjs",
+    "node tests/runtime-draft.cjs",
+    "node tests/runtime-ui.cjs",
+    "node tests/runtime-nav.cjs",
+    "node tests/runtime-conversation.cjs",
+    "node tests/runtime-changes.cjs",
+    "node tests/runtime-secondary.cjs",
+    "node tests/runtime-git-ui.cjs",
+    "node tests/runtime-resources.cjs",
+    "node tests/runtime-resource-cleanup.cjs",
+    "node tests/runtime-history-search.cjs",
+    "node tests/history-tool-summary.cjs",
+    "node tests/history-tool-summary-http.cjs",
+    "node tests/runtime-finish-ui.cjs",
+    "node tests/session-runtime.cjs",
+    "node tests/pi-supervisor.cjs",
+    "node tests/runtime-browser.cjs",
+    "node tests/process-budget.cjs",
+    "node tests/runtime-events.cjs",
+    "node tests/runtime-processes.cjs",
+    "node tests/session-revert-object-assets.cjs",
+    "node tests/session-revert-object-authority.cjs",
+    "node tests/session-revert-object-history.cjs",
+    "node tests/session-revert-object-runtime.cjs",
+    "node tests/session-revert-object-store.cjs",
+    "node tests/session-revert-object-service.cjs",
+    "node tests/session-revert-object-recovery.cjs",
+    "node tests/session-change-store.cjs",
+    "node tests/session-change-bridge.cjs",
+    "node tests/session-change-tools.cjs",
+    "node tests/session-revert.cjs",
+    "node tests/session-revert-store.cjs",
+    "node tests/session-revert-http.cjs",
+    "node tests/session-revert-integration.cjs",
+    "node tests/session-revert-writer.cjs",
+    "node tests/session-revert-recovery.cjs",
+    "node tests/session-revert-admission.cjs",
+    "node tests/session-revert-apply.cjs",
+    "node tests/session-revert-windows-faults.cjs",
+    "node tests/session-revert-inplace.cjs",
+    "node tests/session-revert-inplace-safety.cjs",
+    "node tests/session-change-query.cjs",
+    "node tests/session-change-ui.cjs",
+    "node tests/session-change-startup.cjs",
+    "node tests/session-revert-object-writer.cjs",
+    "node tests/session-revert-object-faults.cjs",
+    "node tests/session-revert-object-witness.cjs"
+  ],
+  "coverage": [
+    {
+      "ordinal": 1,
+      "command": "node tests/file-size-report.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 2,
+      "command": "node tests/ci-test-plan.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 3,
+      "command": "node tests/ci-workflow.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 4,
+      "command": "node tests/ci-results.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 5,
+      "command": "node tests/ci-summary.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 6,
+      "command": "node tests/ci-history.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 7,
+      "command": "node tests/ci-doc-scope.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 8,
+      "command": "node tests/release-ci-proof.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 9,
+      "command": "node tests/nsis-bootstrap.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 10,
+      "command": "node tests/app-update.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 11,
+      "command": "node tests/app-update-maintenance.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 12,
+      "command": "node tests/app-update-activity.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 13,
+      "command": "node tests/app-update-backend.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 14,
+      "command": "node tests/app-update-desktop-regressions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 15,
+      "command": "node tests/app-update-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 16,
+      "command": "node tests/app-update-rollback.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 17,
+      "command": "node tests/session-tool-scheduler.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 18,
+      "command": "node tests/session-tool-bridge.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 19,
+      "command": "node tests/ordinary-session-resolver.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 20,
+      "command": "node tests/ordinary-session-runtime.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 21,
+      "command": "node tests/session-background.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 22,
+      "command": "node tests/session-background-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 23,
+      "command": "node tests/session-background-recovery.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 24,
+      "command": "node tests/ui-visual-finish.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 25,
+      "command": "node tests/review-regressions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 26,
+      "command": "node tests/context-reference-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 27,
+      "command": "node tests/viz-schema.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 28,
+      "command": "node tests/viz-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 29,
+      "command": "node prototype/z4-1-collab/collab-test.mjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 30,
+      "command": "node tests/collab-doc.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 31,
+      "command": "node tests/collab-store.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 32,
+      "command": "node tests/collab-authority.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 33,
+      "command": "node tests/collab-service.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 34,
+      "command": "node tests/collab-proposal-queue.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 35,
+      "command": "node tests/collab-proposal-source.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 36,
+      "command": "node tests/collab-agent-flow.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 37,
+      "command": "node tests/collab-http.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 38,
+      "command": "node tests/collab-canvas.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 39,
+      "command": "node tests/collab-panel.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 40,
+      "command": "node tests/collab-panel-agent.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 41,
+      "command": "node tests/collab-auto-layout.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 42,
+      "command": "node tests/collab-layout-preview.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 43,
+      "command": "node tests/collab-export.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 44,
+      "command": "node tests/collab-productivity.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 45,
+      "command": "node tests/collab-panel-productivity.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 46,
+      "command": "node tests/collab-selection.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 47,
+      "command": "node tests/collab-advanced-editing.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 48,
+      "command": "node tests/collab-z45-regressions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 49,
+      "command": "node tests/collab-stability.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 50,
+      "command": "node tests/candidate-snapshot.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 51,
+      "command": "node tests/candidate-store.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 52,
+      "command": "node tests/candidate-runs.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 53,
+      "command": "node tests/candidate-http.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 54,
+      "command": "node tests/candidate-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 55,
+      "command": "node tests/candidate-adoption.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 56,
+      "command": "node tests/candidate-adoption-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 57,
+      "command": "node tests/candidate-writer.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 58,
+      "command": "node tests/candidate-write-faults.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 59,
+      "command": "node tests/candidate-transactions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 60,
+      "command": "node tests/candidate-apply.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 61,
+      "command": "node tests/candidate-recovery-errors.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 62,
+      "command": "node tests/candidate-apply-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 63,
+      "command": "node tests/high-risk-regressions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 64,
+      "command": "node tests/logging.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 65,
+      "command": "node tests/logging-leaks.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 66,
+      "command": "node tests/logging-secret-state.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 67,
+      "command": "node tests/logging-client.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 68,
+      "command": "node tests/logging-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 69,
+      "command": "node tests/ui4-approval.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 70,
+      "command": "node tests/ui4-feedback.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 71,
+      "command": "node tests/ui4-integration.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 72,
+      "command": "node tests/specs.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 73,
+      "command": "node tests/specs-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 74,
+      "command": "node tests/panel-restore-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 75,
+      "command": "node tests/diff-comments.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 76,
+      "command": "node tests/diff-comments-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 77,
+      "command": "node tests/diff-comments-split.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 78,
+      "command": "node tests/diff-comment-ranges.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 79,
+      "command": "node tests/diff-comment-ranges-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 80,
+      "command": "node tests/review-task.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 81,
+      "command": "node tests/review-task-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 82,
+      "command": "node tests/review-comment-store.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 83,
+      "command": "node tests/review-comment-authority.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 84,
+      "command": "node tests/review-comment-runtime.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 85,
+      "command": "node tests/review-comment-http.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 86,
+      "command": "node tests/review-comment-persistence-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 87,
+      "command": "node tests/review-comment-ranges-store.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 88,
+      "command": "node tests/split-workbench-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 89,
+      "command": "node tests/browser-workbench-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 90,
+      "command": "node tests/browser-viewport-safety.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 91,
+      "command": "node tests/ui3-composer.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 92,
+      "command": "node tests/ui3-model.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 93,
+      "command": "node tests/ui3-inline-commands.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 94,
+      "command": "node tests/ui3-integration.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 95,
+      "command": "node tests/ui2-classic.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 96,
+      "command": "node tests/ui2-runtime-display.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 97,
+      "command": "node tests/ui2-visual.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 98,
+      "command": "node tests/theme.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 99,
+      "command": "node tests/session-revert-fixture-retention.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 100,
+      "command": "node tests/session-revert-object-session-binding.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 101,
+      "command": "node tests/session-revert-object-d6final-classic.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 102,
+      "command": "node tests/exe-diagnostics.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 103,
+      "command": "node tests/session-revert-object-qualification.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 104,
+      "command": "node tests/session-revert-object-presentation.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 105,
+      "command": "node tests/session-revert-object-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 106,
+      "command": "node tests/session-revert-object-confirmation.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 107,
+      "command": "node tests/session-revert-sacl-witness.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 108,
+      "command": "node tests/session-revert-object-profile.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 109,
+      "command": "node tests/session-revert-object-evidence.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 110,
+      "command": "node tests/runtime-models.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 111,
+      "command": "node tests/model-fallback.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 112,
+      "command": "node tests/model-capabilities.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 113,
+      "command": "node tests/thinking-availability.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 114,
+      "command": "node tests/ux-state.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 115,
+      "command": "node tests/bridge-state-recovery.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 116,
+      "command": "node tests/native-provider-quota.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 117,
+      "command": "node tests/stable-session-order.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 118,
+      "command": "node tests/hotfix.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 119,
+      "command": "node tests/hotfix-ui.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 120,
+      "command": "node tests/provider-auth.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 121,
+      "command": "node tests/provider-auth-runtime.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 122,
+      "command": "node tests/ui-ia.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 123,
+      "command": "node tests/primitives.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 124,
+      "command": "node tests/settings-acceptance.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 125,
+      "command": "node tests/smoke.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 126,
+      "command": "node tests/daily-use.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 127,
+      "command": "node tests/git.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 128,
+      "command": "node tests/modules.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 129,
+      "command": "node tests/reliability.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 130,
+      "command": "node tests/interactions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 131,
+      "command": "node tests/sidebar-menu.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 132,
+      "command": "node tests/app-shell.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 133,
+      "command": "node tests/port-owner.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 134,
+      "command": "node tests/project-config.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 135,
+      "command": "node tests/skills.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 136,
+      "command": "node tests/extensions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 137,
+      "command": "node tests/capability.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 138,
+      "command": "node tests/capability-install.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 139,
+      "command": "node tests/web-access.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 140,
+      "command": "node tests/subagents.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 141,
+      "command": "node tests/memory.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 142,
+      "command": "node tests/browser.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 143,
+      "command": "node tests/approvals.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 144,
+      "command": "node tests/planner.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 145,
+      "command": "node tests/workflow-relations.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 146,
+      "command": "node tests/reviews.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 147,
+      "command": "node tests/review-gate.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 148,
+      "command": "node tests/verification.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 149,
+      "command": "node tests/evidence.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 150,
+      "command": "node tests/attempt-lifecycle.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 151,
+      "command": "node tests/sessions.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 152,
+      "command": "node tests/session-search.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 153,
+      "command": "node tests/pi-compat.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 154,
+      "command": "node tests/pi-probes.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 155,
+      "command": "node tests/pi-update.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 156,
+      "command": "node tests/pi-version.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 157,
+      "command": "node tests/mcp-native.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 158,
+      "command": "node tests/usage-quota.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 159,
+      "command": "node tests/body-integrity.cjs",
+      "provenance": "successful prefix of attempt 2; inferred from validated && chain reaching failing leaf 160, not individual timing records"
+    },
+    {
+      "ordinal": 160,
+      "command": "node tests/dev-server.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:08.843Z",
+      "finishedAt": "2026-11-05T15:04:10.470Z",
+      "durationMs": 1627
+    },
+    {
+      "ordinal": 161,
+      "command": "node tests/standalone-datadir.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:10.472Z",
+      "finishedAt": "2026-11-05T15:04:10.778Z",
+      "durationMs": 306
+    },
+    {
+      "ordinal": 162,
+      "command": "node tests/models-api.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:10.779Z",
+      "finishedAt": "2026-11-05T15:04:12.339Z",
+      "durationMs": 1560
+    },
+    {
+      "ordinal": 163,
+      "command": "node tests/server-security.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:12.340Z",
+      "finishedAt": "2026-11-05T15:04:17.542Z",
+      "durationMs": 5202
+    },
+    {
+      "ordinal": 164,
+      "command": "node tests/diagnostics.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:17.545Z",
+      "finishedAt": "2026-11-05T15:04:17.739Z",
+      "durationMs": 194
+    },
+    {
+      "ordinal": 165,
+      "command": "node tests/update-check.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:17.742Z",
+      "finishedAt": "2026-11-05T15:04:18.257Z",
+      "durationMs": 515
+    },
+    {
+      "ordinal": 166,
+      "command": "node tests/version-consistency.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:18.260Z",
+      "finishedAt": "2026-11-05T15:04:18.494Z",
+      "durationMs": 234
+    },
+    {
+      "ordinal": 167,
+      "command": "node tests/release-artifacts.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:18.496Z",
+      "finishedAt": "2026-11-05T15:04:18.881Z",
+      "durationMs": 385
+    },
+    {
+      "ordinal": 168,
+      "command": "node tests/electron-guard.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:18.883Z",
+      "finishedAt": "2026-11-05T15:04:20.423Z",
+      "durationMs": 1540
+    },
+    {
+      "ordinal": 169,
+      "command": "node tests/gui-browser-policy.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:20.424Z",
+      "finishedAt": "2026-11-05T15:04:20.563Z",
+      "durationMs": 139
+    },
+    {
+      "ordinal": 170,
+      "command": "node tests/gui-browser-controller.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:20.564Z",
+      "finishedAt": "2026-11-05T15:04:25.944Z",
+      "durationMs": 5380
+    },
+    {
+      "ordinal": 171,
+      "command": "node tests/gui-browser-bridge.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:25.946Z",
+      "finishedAt": "2026-11-05T15:04:26.381Z",
+      "durationMs": 435
+    },
+    {
+      "ordinal": 172,
+      "command": "node tests/gui-browser-tools.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:26.382Z",
+      "finishedAt": "2026-11-05T15:04:26.589Z",
+      "durationMs": 207
+    },
+    {
+      "ordinal": 173,
+      "command": "node tests/gui-browser-ui.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:26.590Z",
+      "finishedAt": "2026-11-05T15:04:27.311Z",
+      "durationMs": 721
+    },
+    {
+      "ordinal": 174,
+      "command": "node tests/gui-browser-host.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:27.312Z",
+      "finishedAt": "2026-11-05T15:04:27.436Z",
+      "durationMs": 124
+    },
+    {
+      "ordinal": 175,
+      "command": "node tests/gui-browser-stop.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:27.436Z",
+      "finishedAt": "2026-11-05T15:04:28.191Z",
+      "durationMs": 755
+    },
+    {
+      "ordinal": 176,
+      "command": "node tests/stop-barrier.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:28.193Z",
+      "finishedAt": "2026-11-05T15:04:29.257Z",
+      "durationMs": 1064
+    },
+    {
+      "ordinal": 177,
+      "command": "node tests/bug8-real-pi-fixture.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:29.260Z",
+      "finishedAt": "2026-11-05T15:04:29.408Z",
+      "durationMs": 148
+    },
+    {
+      "ordinal": 178,
+      "command": "node tests/managed-processes.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:29.410Z",
+      "finishedAt": "2026-11-05T15:04:29.598Z",
+      "durationMs": 188
+    },
+    {
+      "ordinal": 179,
+      "command": "node tests/process-tools.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:29.599Z",
+      "finishedAt": "2026-11-05T15:04:29.902Z",
+      "durationMs": 303
+    },
+    {
+      "ordinal": 180,
+      "command": "node tests/process-stop.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:29.904Z",
+      "finishedAt": "2026-11-05T15:04:30.078Z",
+      "durationMs": 174
+    },
+    {
+      "ordinal": 181,
+      "command": "node tests/process-ui.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:30.079Z",
+      "finishedAt": "2026-11-05T15:04:31.762Z",
+      "durationMs": 1683
+    },
+    {
+      "ordinal": 182,
+      "command": "node tests/process-runner.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:31.765Z",
+      "finishedAt": "2026-11-05T15:04:31.945Z",
+      "durationMs": 180
+    },
+    {
+      "ordinal": 183,
+      "command": "node tests/worktrees.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:04:31.947Z",
+      "finishedAt": "2026-11-05T15:05:21.768Z",
+      "durationMs": 49821
+    },
+    {
+      "ordinal": 184,
+      "command": "node tests/worktrees-http.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:21.771Z",
+      "finishedAt": "2026-11-05T15:05:28.665Z",
+      "durationMs": 6894
+    },
+    {
+      "ordinal": 185,
+      "command": "node tests/worktrees-ui.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:28.668Z",
+      "finishedAt": "2026-11-05T15:05:29.310Z",
+      "durationMs": 642
+    },
+    {
+      "ordinal": 186,
+      "command": "node tests/runtime-registry.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:29.312Z",
+      "finishedAt": "2026-11-05T15:05:29.583Z",
+      "durationMs": 271
+    },
+    {
+      "ordinal": 187,
+      "command": "node tests/runtime-http.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:29.586Z",
+      "finishedAt": "2026-11-05T15:05:29.827Z",
+      "durationMs": 241
+    },
+    {
+      "ordinal": 188,
+      "command": "node tests/runtime-store.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:29.829Z",
+      "finishedAt": "2026-11-05T15:05:30.158Z",
+      "durationMs": 329
+    },
+    {
+      "ordinal": 189,
+      "command": "node tests/runtime-draft.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:30.159Z",
+      "finishedAt": "2026-11-05T15:05:31.197Z",
+      "durationMs": 1038
+    },
+    {
+      "ordinal": 190,
+      "command": "node tests/runtime-ui.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:31.198Z",
+      "finishedAt": "2026-11-05T15:05:31.778Z",
+      "durationMs": 580
+    },
+    {
+      "ordinal": 191,
+      "command": "node tests/runtime-nav.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:31.779Z",
+      "finishedAt": "2026-11-05T15:05:39.578Z",
+      "durationMs": 7799
+    },
+    {
+      "ordinal": 192,
+      "command": "node tests/runtime-conversation.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:39.580Z",
+      "finishedAt": "2026-11-05T15:05:41.367Z",
+      "durationMs": 1787
+    },
+    {
+      "ordinal": 193,
+      "command": "node tests/runtime-changes.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:05:41.370Z",
+      "finishedAt": "2026-11-05T15:06:14.530Z",
+      "durationMs": 33160
+    },
+    {
+      "ordinal": 194,
+      "command": "node tests/runtime-secondary.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:14.533Z",
+      "finishedAt": "2026-11-05T15:06:15.293Z",
+      "durationMs": 760
+    },
+    {
+      "ordinal": 195,
+      "command": "node tests/runtime-git-ui.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:15.295Z",
+      "finishedAt": "2026-11-05T15:06:15.887Z",
+      "durationMs": 592
+    },
+    {
+      "ordinal": 196,
+      "command": "node tests/runtime-resources.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:15.888Z",
+      "finishedAt": "2026-11-05T15:06:16.487Z",
+      "durationMs": 599
+    },
+    {
+      "ordinal": 197,
+      "command": "node tests/runtime-resource-cleanup.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:16.489Z",
+      "finishedAt": "2026-11-05T15:06:16.703Z",
+      "durationMs": 214
+    },
+    {
+      "ordinal": 198,
+      "command": "node tests/runtime-history-search.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:16.705Z",
+      "finishedAt": "2026-11-05T15:06:31.580Z",
+      "durationMs": 14875
+    },
+    {
+      "ordinal": 199,
+      "command": "node tests/history-tool-summary.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:31.585Z",
+      "finishedAt": "2026-11-05T15:06:31.901Z",
+      "durationMs": 316
+    },
+    {
+      "ordinal": 200,
+      "command": "node tests/history-tool-summary-http.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:31.902Z",
+      "finishedAt": "2026-11-05T15:06:32.173Z",
+      "durationMs": 271
+    },
+    {
+      "ordinal": 201,
+      "command": "node tests/runtime-finish-ui.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:32.174Z",
+      "finishedAt": "2026-11-05T15:06:32.765Z",
+      "durationMs": 591
+    },
+    {
+      "ordinal": 202,
+      "command": "node tests/session-runtime.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:32.767Z",
+      "finishedAt": "2026-11-05T15:06:34.040Z",
+      "durationMs": 1273
+    },
+    {
+      "ordinal": 203,
+      "command": "node tests/pi-supervisor.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:34.042Z",
+      "finishedAt": "2026-11-05T15:06:37.470Z",
+      "durationMs": 3428
+    },
+    {
+      "ordinal": 204,
+      "command": "node tests/runtime-browser.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:37.473Z",
+      "finishedAt": "2026-11-05T15:06:37.702Z",
+      "durationMs": 229
+    },
+    {
+      "ordinal": 205,
+      "command": "node tests/process-budget.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:37.704Z",
+      "finishedAt": "2026-11-05T15:06:37.891Z",
+      "durationMs": 187
+    },
+    {
+      "ordinal": 206,
+      "command": "node tests/runtime-events.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:37.894Z",
+      "finishedAt": "2026-11-05T15:06:38.041Z",
+      "durationMs": 147
+    },
+    {
+      "ordinal": 207,
+      "command": "node tests/runtime-processes.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:38.043Z",
+      "finishedAt": "2026-11-05T15:06:40.815Z",
+      "durationMs": 2772
+    },
+    {
+      "ordinal": 208,
+      "command": "node tests/session-revert-object-assets.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:40.818Z",
+      "finishedAt": "2026-11-05T15:06:43.837Z",
+      "durationMs": 3019
+    },
+    {
+      "ordinal": 209,
+      "command": "node tests/session-revert-object-authority.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:43.841Z",
+      "finishedAt": "2026-11-05T15:06:50.581Z",
+      "durationMs": 6740
+    },
+    {
+      "ordinal": 210,
+      "command": "node tests/session-revert-object-history.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:06:50.583Z",
+      "finishedAt": "2026-11-05T15:07:19.190Z",
+      "durationMs": 28607
+    },
+    {
+      "ordinal": 211,
+      "command": "node tests/session-revert-object-runtime.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:07:19.191Z",
+      "finishedAt": "2026-11-05T15:16:09.183Z",
+      "durationMs": 529992
+    },
+    {
+      "ordinal": 212,
+      "command": "node tests/session-revert-object-store.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:16:09.184Z",
+      "finishedAt": "2026-11-05T15:16:20.583Z",
+      "durationMs": 11399
+    },
+    {
+      "ordinal": 213,
+      "command": "node tests/session-revert-object-service.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:16:20.586Z",
+      "finishedAt": "2026-11-05T15:22:10.586Z",
+      "durationMs": 350000
+    },
+    {
+      "ordinal": 214,
+      "command": "node tests/session-revert-object-recovery.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:22:10.587Z",
+      "finishedAt": "2026-11-05T15:22:36.764Z",
+      "durationMs": 26177
+    },
+    {
+      "ordinal": 215,
+      "command": "node tests/session-change-store.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:22:36.766Z",
+      "finishedAt": "2026-11-05T15:25:32.576Z",
+      "durationMs": 175810
+    },
+    {
+      "ordinal": 216,
+      "command": "node tests/session-change-bridge.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:25:32.577Z",
+      "finishedAt": "2026-11-05T15:25:32.886Z",
+      "durationMs": 309
+    },
+    {
+      "ordinal": 217,
+      "command": "node tests/session-change-tools.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:25:32.888Z",
+      "finishedAt": "2026-11-05T15:25:33.253Z",
+      "durationMs": 365
+    },
+    {
+      "ordinal": 218,
+      "command": "node tests/session-revert.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:25:33.255Z",
+      "finishedAt": "2026-11-05T15:25:33.420Z",
+      "durationMs": 165
+    },
+    {
+      "ordinal": 219,
+      "command": "node tests/session-revert-store.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:25:33.421Z",
+      "finishedAt": "2026-11-05T15:27:51.552Z",
+      "durationMs": 138131
+    },
+    {
+      "ordinal": 220,
+      "command": "node tests/session-revert-http.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:27:51.555Z",
+      "finishedAt": "2026-11-05T15:27:56.248Z",
+      "durationMs": 4693
+    },
+    {
+      "ordinal": 221,
+      "command": "node tests/session-revert-integration.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:27:56.249Z",
+      "finishedAt": "2026-11-05T15:27:56.772Z",
+      "durationMs": 523
+    },
+    {
+      "ordinal": 222,
+      "command": "node tests/session-revert-writer.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:27:56.774Z",
+      "finishedAt": "2026-11-05T15:28:01.925Z",
+      "durationMs": 5151
+    },
+    {
+      "ordinal": 223,
+      "command": "node tests/session-revert-recovery.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:28:01.928Z",
+      "finishedAt": "2026-11-05T15:28:18.572Z",
+      "durationMs": 16644
+    },
+    {
+      "ordinal": 224,
+      "command": "node tests/session-revert-admission.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:28:18.573Z",
+      "finishedAt": "2026-11-05T15:28:18.971Z",
+      "durationMs": 398
+    },
+    {
+      "ordinal": 225,
+      "command": "node tests/session-revert-apply.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:28:18.972Z",
+      "finishedAt": "2026-11-05T15:29:56.846Z",
+      "durationMs": 97874
+    },
+    {
+      "ordinal": 226,
+      "command": "node tests/session-revert-windows-faults.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:29:56.848Z",
+      "finishedAt": "2026-11-05T15:30:06.291Z",
+      "durationMs": 9443
+    },
+    {
+      "ordinal": 227,
+      "command": "node tests/session-revert-inplace.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:30:06.292Z",
+      "finishedAt": "2026-11-05T15:32:27.210Z",
+      "durationMs": 140918
+    },
+    {
+      "ordinal": 228,
+      "command": "node tests/session-revert-inplace-safety.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:32:27.213Z",
+      "finishedAt": "2026-11-05T15:33:36.820Z",
+      "durationMs": 69607
+    },
+    {
+      "ordinal": 229,
+      "command": "node tests/session-change-query.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:33:36.822Z",
+      "finishedAt": "2026-11-05T15:33:42.976Z",
+      "durationMs": 6154
+    },
+    {
+      "ordinal": 230,
+      "command": "node tests/session-change-ui.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:33:42.979Z",
+      "finishedAt": "2026-11-05T15:33:43.746Z",
+      "durationMs": 767
+    },
+    {
+      "ordinal": 231,
+      "command": "node tests/session-change-startup.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:33:43.747Z",
+      "finishedAt": "2026-11-05T15:33:55.814Z",
+      "durationMs": 12067
+    },
+    {
+      "ordinal": 232,
+      "command": "node tests/session-revert-object-writer.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:33:55.817Z",
+      "finishedAt": "2026-11-05T15:42:43.894Z",
+      "durationMs": 528077
+    },
+    {
+      "ordinal": 233,
+      "command": "node tests/session-revert-object-faults.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:42:43.895Z",
+      "finishedAt": "2026-11-05T15:55:37.577Z",
+      "durationMs": 773682
+    },
+    {
+      "ordinal": 234,
+      "command": "node tests/session-revert-object-witness.cjs",
+      "provenance": "continuation actual per-command exit record",
+      "exitCode": 0,
+      "startedAt": "2026-11-05T15:55:37.580Z",
+      "finishedAt": "2026-11-05T15:55:38.446Z",
+      "durationMs": 866
+    }
+  ],
+  "priorAttempts": [
+    {
+      "attempt": 1,
+      "head": "d7261986e3b9ea2a299c044d7dfb484036d1a80a",
+      "command": "npm test",
+      "status": "interrupted_no_exit_record",
+      "exitCode": null,
+      "observedAt": "2026-11-05T14:29:42.6373373Z",
+      "lastLogWriteUtc": "2026-11-05T12:21:14.8603365Z",
+      "log": "canonical-attempt-1-interrupted.log",
+      "logSha256": "1a5e2fbae2ceb0367ce9b25ac09c81a50c4c65b52d96fbdde16095671cd3ce12",
+      "qualification": "No exit record and no remaining test worker observed; not counted as a pass, failure cause not established"
+    },
+    {
+      "head": "d7261986e3b9ea2a299c044d7dfb484036d1a80a",
+      "command": "npm test",
+      "attempt": 2,
+      "exitCode": 1,
+      "startedAt": "2026-11-05T14:29:43.2321415Z",
+      "finishedAt": "2026-11-05T14:57:41.5091297Z",
+      "durationSeconds": 1678.2769882,
+      "environment": "PSExecutionPolicyPreference=Bypass in test child process only; no elevation or persistent policy changes",
+      "log": "canonical-attempt-2-port-failed.log",
+      "logSha256": "8e537a2ca0c16ec85ff468b2e4a7a6ce81594ff7f2bf7b235d71c77f9eb9d76b"
+    }
+  ],
+  "continuation": {
+    "head": "d7261986e3b9ea2a299c044d7dfb484036d1a80a",
+    "kind": "Cumulative canonical continuation, not a single npm test pass",
+    "planDigest": "617b6ca0abdaf1cc7b1a16e3fcae1b0414b126254bf74fcf02fc514a4f2edf4c",
+    "totalCanonicalCommands": 234,
+    "startOrdinal": 160,
+    "endOrdinal": 234,
+    "startedAt": "2026-11-05T15:04:08.840Z",
+    "environment": {
+      "PSExecutionPolicyPreference": "Bypass",
+      "TEST_PORT": "14825",
+      "GUARD_PORT": "14826",
+      "SEC_PORT": "14827",
+      "GIT_PORT": "14828"
+    },
+    "rows": [
+      {
+        "ordinal": 160,
+        "command": "node tests/dev-server.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:08.843Z",
+        "finishedAt": "2026-11-05T15:04:10.470Z",
+        "durationMs": 1627
+      },
+      {
+        "ordinal": 161,
+        "command": "node tests/standalone-datadir.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:10.472Z",
+        "finishedAt": "2026-11-05T15:04:10.778Z",
+        "durationMs": 306
+      },
+      {
+        "ordinal": 162,
+        "command": "node tests/models-api.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:10.779Z",
+        "finishedAt": "2026-11-05T15:04:12.339Z",
+        "durationMs": 1560
+      },
+      {
+        "ordinal": 163,
+        "command": "node tests/server-security.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:12.340Z",
+        "finishedAt": "2026-11-05T15:04:17.542Z",
+        "durationMs": 5202
+      },
+      {
+        "ordinal": 164,
+        "command": "node tests/diagnostics.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:17.545Z",
+        "finishedAt": "2026-11-05T15:04:17.739Z",
+        "durationMs": 194
+      },
+      {
+        "ordinal": 165,
+        "command": "node tests/update-check.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:17.742Z",
+        "finishedAt": "2026-11-05T15:04:18.257Z",
+        "durationMs": 515
+      },
+      {
+        "ordinal": 166,
+        "command": "node tests/version-consistency.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:18.260Z",
+        "finishedAt": "2026-11-05T15:04:18.494Z",
+        "durationMs": 234
+      },
+      {
+        "ordinal": 167,
+        "command": "node tests/release-artifacts.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:18.496Z",
+        "finishedAt": "2026-11-05T15:04:18.881Z",
+        "durationMs": 385
+      },
+      {
+        "ordinal": 168,
+        "command": "node tests/electron-guard.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:18.883Z",
+        "finishedAt": "2026-11-05T15:04:20.423Z",
+        "durationMs": 1540
+      },
+      {
+        "ordinal": 169,
+        "command": "node tests/gui-browser-policy.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:20.424Z",
+        "finishedAt": "2026-11-05T15:04:20.563Z",
+        "durationMs": 139
+      },
+      {
+        "ordinal": 170,
+        "command": "node tests/gui-browser-controller.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:20.564Z",
+        "finishedAt": "2026-11-05T15:04:25.944Z",
+        "durationMs": 5380
+      },
+      {
+        "ordinal": 171,
+        "command": "node tests/gui-browser-bridge.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:25.946Z",
+        "finishedAt": "2026-11-05T15:04:26.381Z",
+        "durationMs": 435
+      },
+      {
+        "ordinal": 172,
+        "command": "node tests/gui-browser-tools.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:26.382Z",
+        "finishedAt": "2026-11-05T15:04:26.589Z",
+        "durationMs": 207
+      },
+      {
+        "ordinal": 173,
+        "command": "node tests/gui-browser-ui.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:26.590Z",
+        "finishedAt": "2026-11-05T15:04:27.311Z",
+        "durationMs": 721
+      },
+      {
+        "ordinal": 174,
+        "command": "node tests/gui-browser-host.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:27.312Z",
+        "finishedAt": "2026-11-05T15:04:27.436Z",
+        "durationMs": 124
+      },
+      {
+        "ordinal": 175,
+        "command": "node tests/gui-browser-stop.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:27.436Z",
+        "finishedAt": "2026-11-05T15:04:28.191Z",
+        "durationMs": 755
+      },
+      {
+        "ordinal": 176,
+        "command": "node tests/stop-barrier.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:28.193Z",
+        "finishedAt": "2026-11-05T15:04:29.257Z",
+        "durationMs": 1064
+      },
+      {
+        "ordinal": 177,
+        "command": "node tests/bug8-real-pi-fixture.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:29.260Z",
+        "finishedAt": "2026-11-05T15:04:29.408Z",
+        "durationMs": 148
+      },
+      {
+        "ordinal": 178,
+        "command": "node tests/managed-processes.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:29.410Z",
+        "finishedAt": "2026-11-05T15:04:29.598Z",
+        "durationMs": 188
+      },
+      {
+        "ordinal": 179,
+        "command": "node tests/process-tools.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:29.599Z",
+        "finishedAt": "2026-11-05T15:04:29.902Z",
+        "durationMs": 303
+      },
+      {
+        "ordinal": 180,
+        "command": "node tests/process-stop.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:29.904Z",
+        "finishedAt": "2026-11-05T15:04:30.078Z",
+        "durationMs": 174
+      },
+      {
+        "ordinal": 181,
+        "command": "node tests/process-ui.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:30.079Z",
+        "finishedAt": "2026-11-05T15:04:31.762Z",
+        "durationMs": 1683
+      },
+      {
+        "ordinal": 182,
+        "command": "node tests/process-runner.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:31.765Z",
+        "finishedAt": "2026-11-05T15:04:31.945Z",
+        "durationMs": 180
+      },
+      {
+        "ordinal": 183,
+        "command": "node tests/worktrees.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:04:31.947Z",
+        "finishedAt": "2026-11-05T15:05:21.768Z",
+        "durationMs": 49821
+      },
+      {
+        "ordinal": 184,
+        "command": "node tests/worktrees-http.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:21.771Z",
+        "finishedAt": "2026-11-05T15:05:28.665Z",
+        "durationMs": 6894
+      },
+      {
+        "ordinal": 185,
+        "command": "node tests/worktrees-ui.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:28.668Z",
+        "finishedAt": "2026-11-05T15:05:29.310Z",
+        "durationMs": 642
+      },
+      {
+        "ordinal": 186,
+        "command": "node tests/runtime-registry.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:29.312Z",
+        "finishedAt": "2026-11-05T15:05:29.583Z",
+        "durationMs": 271
+      },
+      {
+        "ordinal": 187,
+        "command": "node tests/runtime-http.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:29.586Z",
+        "finishedAt": "2026-11-05T15:05:29.827Z",
+        "durationMs": 241
+      },
+      {
+        "ordinal": 188,
+        "command": "node tests/runtime-store.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:29.829Z",
+        "finishedAt": "2026-11-05T15:05:30.158Z",
+        "durationMs": 329
+      },
+      {
+        "ordinal": 189,
+        "command": "node tests/runtime-draft.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:30.159Z",
+        "finishedAt": "2026-11-05T15:05:31.197Z",
+        "durationMs": 1038
+      },
+      {
+        "ordinal": 190,
+        "command": "node tests/runtime-ui.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:31.198Z",
+        "finishedAt": "2026-11-05T15:05:31.778Z",
+        "durationMs": 580
+      },
+      {
+        "ordinal": 191,
+        "command": "node tests/runtime-nav.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:31.779Z",
+        "finishedAt": "2026-11-05T15:05:39.578Z",
+        "durationMs": 7799
+      },
+      {
+        "ordinal": 192,
+        "command": "node tests/runtime-conversation.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:39.580Z",
+        "finishedAt": "2026-11-05T15:05:41.367Z",
+        "durationMs": 1787
+      },
+      {
+        "ordinal": 193,
+        "command": "node tests/runtime-changes.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:05:41.370Z",
+        "finishedAt": "2026-11-05T15:06:14.530Z",
+        "durationMs": 33160
+      },
+      {
+        "ordinal": 194,
+        "command": "node tests/runtime-secondary.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:14.533Z",
+        "finishedAt": "2026-11-05T15:06:15.293Z",
+        "durationMs": 760
+      },
+      {
+        "ordinal": 195,
+        "command": "node tests/runtime-git-ui.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:15.295Z",
+        "finishedAt": "2026-11-05T15:06:15.887Z",
+        "durationMs": 592
+      },
+      {
+        "ordinal": 196,
+        "command": "node tests/runtime-resources.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:15.888Z",
+        "finishedAt": "2026-11-05T15:06:16.487Z",
+        "durationMs": 599
+      },
+      {
+        "ordinal": 197,
+        "command": "node tests/runtime-resource-cleanup.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:16.489Z",
+        "finishedAt": "2026-11-05T15:06:16.703Z",
+        "durationMs": 214
+      },
+      {
+        "ordinal": 198,
+        "command": "node tests/runtime-history-search.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:16.705Z",
+        "finishedAt": "2026-11-05T15:06:31.580Z",
+        "durationMs": 14875
+      },
+      {
+        "ordinal": 199,
+        "command": "node tests/history-tool-summary.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:31.585Z",
+        "finishedAt": "2026-11-05T15:06:31.901Z",
+        "durationMs": 316
+      },
+      {
+        "ordinal": 200,
+        "command": "node tests/history-tool-summary-http.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:31.902Z",
+        "finishedAt": "2026-11-05T15:06:32.173Z",
+        "durationMs": 271
+      },
+      {
+        "ordinal": 201,
+        "command": "node tests/runtime-finish-ui.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:32.174Z",
+        "finishedAt": "2026-11-05T15:06:32.765Z",
+        "durationMs": 591
+      },
+      {
+        "ordinal": 202,
+        "command": "node tests/session-runtime.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:32.767Z",
+        "finishedAt": "2026-11-05T15:06:34.040Z",
+        "durationMs": 1273
+      },
+      {
+        "ordinal": 203,
+        "command": "node tests/pi-supervisor.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:34.042Z",
+        "finishedAt": "2026-11-05T15:06:37.470Z",
+        "durationMs": 3428
+      },
+      {
+        "ordinal": 204,
+        "command": "node tests/runtime-browser.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:37.473Z",
+        "finishedAt": "2026-11-05T15:06:37.702Z",
+        "durationMs": 229
+      },
+      {
+        "ordinal": 205,
+        "command": "node tests/process-budget.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:37.704Z",
+        "finishedAt": "2026-11-05T15:06:37.891Z",
+        "durationMs": 187
+      },
+      {
+        "ordinal": 206,
+        "command": "node tests/runtime-events.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:37.894Z",
+        "finishedAt": "2026-11-05T15:06:38.041Z",
+        "durationMs": 147
+      },
+      {
+        "ordinal": 207,
+        "command": "node tests/runtime-processes.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:38.043Z",
+        "finishedAt": "2026-11-05T15:06:40.815Z",
+        "durationMs": 2772
+      },
+      {
+        "ordinal": 208,
+        "command": "node tests/session-revert-object-assets.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:40.818Z",
+        "finishedAt": "2026-11-05T15:06:43.837Z",
+        "durationMs": 3019
+      },
+      {
+        "ordinal": 209,
+        "command": "node tests/session-revert-object-authority.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:43.841Z",
+        "finishedAt": "2026-11-05T15:06:50.581Z",
+        "durationMs": 6740
+      },
+      {
+        "ordinal": 210,
+        "command": "node tests/session-revert-object-history.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:06:50.583Z",
+        "finishedAt": "2026-11-05T15:07:19.190Z",
+        "durationMs": 28607
+      },
+      {
+        "ordinal": 211,
+        "command": "node tests/session-revert-object-runtime.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:07:19.191Z",
+        "finishedAt": "2026-11-05T15:16:09.183Z",
+        "durationMs": 529992
+      },
+      {
+        "ordinal": 212,
+        "command": "node tests/session-revert-object-store.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:16:09.184Z",
+        "finishedAt": "2026-11-05T15:16:20.583Z",
+        "durationMs": 11399
+      },
+      {
+        "ordinal": 213,
+        "command": "node tests/session-revert-object-service.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:16:20.586Z",
+        "finishedAt": "2026-11-05T15:22:10.586Z",
+        "durationMs": 350000
+      },
+      {
+        "ordinal": 214,
+        "command": "node tests/session-revert-object-recovery.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:22:10.587Z",
+        "finishedAt": "2026-11-05T15:22:36.764Z",
+        "durationMs": 26177
+      },
+      {
+        "ordinal": 215,
+        "command": "node tests/session-change-store.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:22:36.766Z",
+        "finishedAt": "2026-11-05T15:25:32.576Z",
+        "durationMs": 175810
+      },
+      {
+        "ordinal": 216,
+        "command": "node tests/session-change-bridge.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:25:32.577Z",
+        "finishedAt": "2026-11-05T15:25:32.886Z",
+        "durationMs": 309
+      },
+      {
+        "ordinal": 217,
+        "command": "node tests/session-change-tools.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:25:32.888Z",
+        "finishedAt": "2026-11-05T15:25:33.253Z",
+        "durationMs": 365
+      },
+      {
+        "ordinal": 218,
+        "command": "node tests/session-revert.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:25:33.255Z",
+        "finishedAt": "2026-11-05T15:25:33.420Z",
+        "durationMs": 165
+      },
+      {
+        "ordinal": 219,
+        "command": "node tests/session-revert-store.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:25:33.421Z",
+        "finishedAt": "2026-11-05T15:27:51.552Z",
+        "durationMs": 138131
+      },
+      {
+        "ordinal": 220,
+        "command": "node tests/session-revert-http.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:27:51.555Z",
+        "finishedAt": "2026-11-05T15:27:56.248Z",
+        "durationMs": 4693
+      },
+      {
+        "ordinal": 221,
+        "command": "node tests/session-revert-integration.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:27:56.249Z",
+        "finishedAt": "2026-11-05T15:27:56.772Z",
+        "durationMs": 523
+      },
+      {
+        "ordinal": 222,
+        "command": "node tests/session-revert-writer.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:27:56.774Z",
+        "finishedAt": "2026-11-05T15:28:01.925Z",
+        "durationMs": 5151
+      },
+      {
+        "ordinal": 223,
+        "command": "node tests/session-revert-recovery.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:28:01.928Z",
+        "finishedAt": "2026-11-05T15:28:18.572Z",
+        "durationMs": 16644
+      },
+      {
+        "ordinal": 224,
+        "command": "node tests/session-revert-admission.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:28:18.573Z",
+        "finishedAt": "2026-11-05T15:28:18.971Z",
+        "durationMs": 398
+      },
+      {
+        "ordinal": 225,
+        "command": "node tests/session-revert-apply.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:28:18.972Z",
+        "finishedAt": "2026-11-05T15:29:56.846Z",
+        "durationMs": 97874
+      },
+      {
+        "ordinal": 226,
+        "command": "node tests/session-revert-windows-faults.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:29:56.848Z",
+        "finishedAt": "2026-11-05T15:30:06.291Z",
+        "durationMs": 9443
+      },
+      {
+        "ordinal": 227,
+        "command": "node tests/session-revert-inplace.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:30:06.292Z",
+        "finishedAt": "2026-11-05T15:32:27.210Z",
+        "durationMs": 140918
+      },
+      {
+        "ordinal": 228,
+        "command": "node tests/session-revert-inplace-safety.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:32:27.213Z",
+        "finishedAt": "2026-11-05T15:33:36.820Z",
+        "durationMs": 69607
+      },
+      {
+        "ordinal": 229,
+        "command": "node tests/session-change-query.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:33:36.822Z",
+        "finishedAt": "2026-11-05T15:33:42.976Z",
+        "durationMs": 6154
+      },
+      {
+        "ordinal": 230,
+        "command": "node tests/session-change-ui.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:33:42.979Z",
+        "finishedAt": "2026-11-05T15:33:43.746Z",
+        "durationMs": 767
+      },
+      {
+        "ordinal": 231,
+        "command": "node tests/session-change-startup.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:33:43.747Z",
+        "finishedAt": "2026-11-05T15:33:55.814Z",
+        "durationMs": 12067
+      },
+      {
+        "ordinal": 232,
+        "command": "node tests/session-revert-object-writer.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:33:55.817Z",
+        "finishedAt": "2026-11-05T15:42:43.894Z",
+        "durationMs": 528077
+      },
+      {
+        "ordinal": 233,
+        "command": "node tests/session-revert-object-faults.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:42:43.895Z",
+        "finishedAt": "2026-11-05T15:55:37.577Z",
+        "durationMs": 773682
+      },
+      {
+        "ordinal": 234,
+        "command": "node tests/session-revert-object-witness.cjs",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T15:55:37.580Z",
+        "finishedAt": "2026-11-05T15:55:38.446Z",
+        "durationMs": 866
+      }
+    ],
+    "active": null,
+    "finishedAt": "2026-11-05T15:55:38.448Z",
+    "exitCode": 0,
+    "durationSeconds": 3089.608
+  },
+  "logs": [
+    {
+      "file": "canonical-attempt-2-port-failed.log",
+      "sha256": "8e537a2ca0c16ec85ff468b2e4a7a6ce81594ff7f2bf7b235d71c77f9eb9d76b"
+    },
+    {
+      "file": "canonical-resume.log",
+      "sha256": "736b8f93b4d1415c2dad65b1a9a024e7b825979a4332e0efa2be2641bb9c069e"
+    }
+  ],
+  "codeAndTestSource": {
+    "head": "d7261986e3b9ea2a299c044d7dfb484036d1a80a",
+    "files": [
+      {
+        "path": "package.json",
+        "sha256": "262b49fc41485779ee84238e480b33b1cd3cc273e613b20504485e236c37735d"
+      },
+      {
+        "path": "public/styles.css",
+        "sha256": "87ea0979138aa0756cc8f612a58e9c1f5826bc852061c96d0cf19f0a30036908"
+      },
+      {
+        "path": "public/ui3-inline-commands.css",
+        "sha256": "408919799a4484305c35b611456e4e5718418533feb31fda9635f12820808d25"
+      },
+      {
+        "path": "public/ui3-model.css",
+        "sha256": "16a698d4b0b665b7e3b805104c45a17ec4dae19c6bfa6fa69603e226f7c27a8f"
+      },
+      {
+        "path": "tests/app-shell-electron.cjs",
+        "sha256": "14c8aaa78269014c4e187ac475319f28152cb3ff1e3f1f20200d4062f4c1f0d5"
+      },
+      {
+        "path": "tests/theme-convergence-electron.cjs",
+        "sha256": "066954b6fd7585285a2fc66bfb50bb14976db795c7b60e33ca331dfa4930ec9d"
+      },
+      {
+        "path": "tests/fixtures/theme-convergence-scenarios.cjs",
+        "sha256": "cd693b3a9d582748248cea631e9d08820cab7f39b67519b462aee41aec489e49"
+      }
+    ]
+  },
+  "finalSourceHashesUnchanged": true,
+  "portConflict": {
+    "port": 7791,
+    "observedError": "listen EACCES 127.0.0.1:7791",
+    "observedOwningProcess": "mihomo",
+    "ownerStartTime": "2026-11-04T22:00:00.8277783+08:00",
+    "action": "Existing process preserved; use supported test port environment overrides",
+    "failedCommand": "node tests/dev-server.cjs",
+    "failedOrdinal": 160,
+    "sourceUnchanged": true
+  },
+  "logEncodingQualification": "Attempt 2 has Chinese transcoding artifacts; raw log unchanged. Continuation captures native byte streams without text conversion. ASCII command names, counters, JSON keys and exit metadata remain evidence; lost characters are not reconstructed.",
+  "skipEvidence": [
+    {
+      "log": "canonical-attempt-2-port-failed.log",
+      "line": "  SKIP file symlink privilege unavailable"
+    },
+    {
+      "log": "canonical-attempt-2-port-failed.log",
+      "line": "Collab store: 53/53; assertions=149; skipped=1"
+    },
+    {
+      "log": "canonical-attempt-2-port-failed.log",
+      "line": "SKIP file symlink: existing token cannot create symbolic links"
+    },
+    {
+      "log": "canonical-attempt-2-port-failed.log",
+      "line": "Candidate adoption: 45/45; failed=0; skipped=1"
+    },
+    {
+      "log": "canonical-attempt-2-port-failed.log",
+      "line": "  ok   瀵煎嚭棰勮/鐘舵€佷笉娉勯湶鏃ュ織鐩綍鎴栫瀵?  ok   ZIP 姣忎釜鏂囦欢閮戒笉鍚敞鍏ョ瀵嗭紝鎻忚堪涔熺粡杩囧鏍?  ok   鐘舵€?鏉＄洰鍦ㄦ渶缁堝鍑哄墠浠嶄笉鍚瀵?  SKIP 绗﹀彿閾炬帴鏃ュ織鏂囦欢锛堝綋鍓嶇幆澧冧笉鑳藉垱寤?symlink: EPERM锛?logging-leaks: 7 passed, 0 failed, 1 skipped"
+    },
+    {
+      "log": "canonical-attempt-2-port-failed.log",
+      "line": "session-revert-sacl-witness: 0/0; failed=0; skipped=8; real audit environment only"
+    },
+    {
+      "log": "canonical-resume.log",
+      "line": "SKIP protected nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL"
+    },
+    {
+      "log": "canonical-resume.log",
+      "line": "SKIP inherited nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL"
+    },
+    {
+      "log": "canonical-resume.log",
+      "line": "session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility"
+    },
+    {
+      "log": "canonical-resume.log",
+      "line": "Object witness: 0/0; failed=0; skipped=8"
+    }
+  ],
+  "assertionQualification": "Command count is not an assertion count. Internal assertion skips remain unverified and are excluded from pass counts.",
+  "additionalDirectedEvidence": [
+    {
+      "command": "node tests/session-search.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "72/72; file symlink 5i unverified",
+      "log": "session-search-verified.log",
+      "logSha256": "d584ef5fcedac39e63d86c505cf50bf4b62b60f3e20a2c5dabc09ba6d7702a41",
+      "qualification": "Additional directed clarification of skip evidence; not counted again in 234 unique canonical commands"
+    }
+  ]
+}

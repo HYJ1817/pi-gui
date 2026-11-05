@@ -1,0 +1,33 @@
+{
+  "head": "d7261986e3b9ea2a299c044d7dfb484036d1a80a",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "262b49fc41485779ee84238e480b33b1cd3cc273e613b20504485e236c37735d"
+    },
+    {
+      "path": "public/styles.css",
+      "sha256": "87ea0979138aa0756cc8f612a58e9c1f5826bc852061c96d0cf19f0a30036908"
+    },
+    {
+      "path": "public/ui3-inline-commands.css",
+      "sha256": "408919799a4484305c35b611456e4e5718418533feb31fda9635f12820808d25"
+    },
+    {
+      "path": "public/ui3-model.css",
+      "sha256": "16a698d4b0b665b7e3b805104c45a17ec4dae19c6bfa6fa69603e226f7c27a8f"
+    },
+    {
+      "path": "tests/app-shell-electron.cjs",
+      "sha256": "14c8aaa78269014c4e187ac475319f28152cb3ff1e3f1f20200d4062f4c1f0d5"
+    },
+    {
+      "path": "tests/theme-convergence-electron.cjs",
+      "sha256": "066954b6fd7585285a2fc66bfb50bb14976db795c7b60e33ca331dfa4930ec9d"
+    },
+    {
+      "path": "tests/fixtures/theme-convergence-scenarios.cjs",
+      "sha256": "cd693b3a9d582748248cea631e9d08820cab7f39b67519b462aee41aec489e49"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "command": "npm run build:app -- --rebuild --output-root C:/pi-GUI/.shots/phase-f-verified-output-20261105",
+  "observedExitCode": 0,
+  "logSha256": "59bf3c01d23fe8a64cb61065660333af26ab6766ada8981908cac507d70b03d3",
+  "exe": "C:\\pi-GUI\\.shots\\phase-f-verified-output-20261105\\dist-app\\Pi GUI-win32-x64\\Pi GUI.exe",
+  "files": [
+    {
+      "path": "public/styles.css",
+      "sourceSha256": "87ea0979138aa0756cc8f612a58e9c1f5826bc852061c96d0cf19f0a30036908",
+      "packagedSha256": "87ea0979138aa0756cc8f612a58e9c1f5826bc852061c96d0cf19f0a30036908",
+      "match": true
+    },
+    {
+      "path": "public/ui3-inline-commands.css",
+      "sourceSha256": "408919799a4484305c35b611456e4e5718418533feb31fda9635f12820808d25",
+      "packagedSha256": "408919799a4484305c35b611456e4e5718418533feb31fda9635f12820808d25",
+      "match": true
+    },
+    {
+      "path": "public/ui3-model.css",
+      "sourceSha256": "16a698d4b0b665b7e3b805104c45a17ec4dae19c6bfa6fa69603e226f7c27a8f",
+      "packagedSha256": "16a698d4b0b665b7e3b805104c45a17ec4dae19c6bfa6fa69603e226f7c27a8f",
+      "match": true
+    }
+  ],
+  "scope": "Final source stylesheet equality, 3/3. Normal-sandbox acceptance uses source app; packaged GUI and installed upgrade not tested."
+}

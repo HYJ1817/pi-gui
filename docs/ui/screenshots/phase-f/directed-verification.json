@@ -1,0 +1,139 @@
+{
+  "sourceCommit": "d7261986e3b9ea2a299c044d7dfb484036d1a80a",
+  "tempEvidenceRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-phase-f-f91c4bb28f1f4ac0892b953dda663225",
+  "runs": [
+    {
+      "command": "node tests/primitives.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "No unified assertion total printed; production factory checks",
+      "log": "primitives-directed.log",
+      "logSha256": "d19e05485da60b46f6f99e907a6b51d773187d0042263421e74e5f295c2ca1ac"
+    },
+    {
+      "command": "node tests/theme.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "47/47",
+      "log": "theme-directed.log",
+      "logSha256": "7ff88298f5474cab5e8c368b535ebbfb1e022ad5ad106bc9ba238da5e6f301c2"
+    },
+    {
+      "command": "node tests/settings-acceptance.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "15/15",
+      "log": "settings-acceptance-directed.log",
+      "logSha256": "4aabc23e446109227b553b8056fa0564523587aa89a5deb61bbbc0a54224d462"
+    },
+    {
+      "command": "node tests/ui3-inline-commands.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "46/46",
+      "log": "ui3-inline-commands-directed.log",
+      "logSha256": "47ff46fe7a9296e8d9f0b166a431af3acc62953ee6baf20b5716b3a40b75b38d"
+    },
+    {
+      "command": "node tests/ui3-integration.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "23/23",
+      "log": "ui3-integration-directed.log",
+      "logSha256": "a650b25aa0d8f824b3a4ca32b26f2b6d72a1bb2fa3858190629f59b8e9bbd7ad"
+    },
+    {
+      "command": "node tests/runtime-conversation.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "106/106",
+      "log": "runtime-conversation-directed.log",
+      "logSha256": "c807359618e15623c7de7f32f38e66eb89591a9c18b31455e0cbf6d587e6c66e"
+    },
+    {
+      "command": "node tests/context-reference-ui.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "10/10",
+      "log": "context-reference-ui-directed.log",
+      "logSha256": "0a6fe4fe8b9a1bbd1d3773784051fb297a242307c2310fd76685cae1044ecb71"
+    },
+    {
+      "command": "node tests/ui-visual-finish.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "10/10",
+      "log": "ui-visual-finish-directed.log",
+      "logSha256": "44f8f2f8ff6708c9c3e4e61f06e5e77479b51823e2ea9e20b64a6692602b3c89"
+    },
+    {
+      "command": "node tests/app-shell.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "10/10",
+      "log": "app-shell-directed.log",
+      "logSha256": "7909106a1582025b53559fa298df403be0606a948ce57267a148f140a0b03ea9"
+    },
+    {
+      "command": "node tests/split-workbench-ui.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "30/30",
+      "log": "split-workbench-ui-directed.log",
+      "logSha256": "090f4338a829af9e051d8eb40728f549fe0fd65e9086981f37ec414960f205c5"
+    },
+    {
+      "command": "node tests/specs-ui.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "25/25",
+      "log": "specs-ui-directed.log",
+      "logSha256": "07a18f0609cd2b1a259fabc2a0c2aa74a72fbcc3aa7c9cfac528de6cb7dcf1c4"
+    },
+    {
+      "command": "node tests/browser-workbench-ui.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "14/14",
+      "log": "browser-workbench-ui-directed.log",
+      "logSha256": "614ef8a17d9a79936cef070e1479e313bcbf6f576c270a7baf539acddb31569a"
+    },
+    {
+      "command": "npm run test:theme-convergence:electron",
+      "observedExitCode": 0,
+      "actualSummary": "97/97, failed=0, 66 renderer and 7 native images",
+      "log": "electron-verified.log",
+      "logSha256": "ce00e8c39ba9e13916b0a0d93a43ae778d71f082c05dbb0d1e80d81b82719432"
+    },
+    {
+      "command": "npm run test:ui3",
+      "observedExitCode": 0,
+      "actualSummary": "243/243, failed=0, skipped=0",
+      "log": "ui3-electron-verified.log",
+      "logSha256": "2e1af9e70f751c3ee0d9ce825472c272b3712145d6e522629007738017f788a7"
+    },
+    {
+      "command": "node tests/session-search.cjs",
+      "observedExitCode": 0,
+      "actualSummary": "72/72; file symlink 5i unverified",
+      "log": "session-search-verified.log",
+      "logSha256": "d584ef5fcedac39e63d86c505cf50bf4b62b60f3e20a2c5dabc09ba6d7702a41",
+      "qualification": "Additional directed clarification of skip evidence; not counted again in 234 unique canonical commands"
+    }
+  ],
+  "retainedFailures": [
+    {
+      "log": "electron-red.log",
+      "sha256": "2615ad97217c304923d53212e51dbeedb827985cbaca5689f1202b5eabfbd964"
+    },
+    {
+      "log": "electron-red-2.log",
+      "sha256": "e8f9dc01a0cd314555c36815be345098c40a1f49207f1f3c1b085f5b9c37691f"
+    },
+    {
+      "log": "electron-group-red.log",
+      "sha256": "d34a4aafdb592d785d3543a7ac6b5307931b20a0c47ffe78b280b092119fedf5"
+    },
+    {
+      "log": "electron-warning-red.log",
+      "sha256": "b59d98ae44ecead5f3ba86a24f8e70c42e0410339edefbb04a935fe983344903"
+    },
+    {
+      "log": "electron-warning-red-2.log",
+      "sha256": "0f9c46156819944d080f84448a6783fc567aac94393be9d095fb784d0349ab3d"
+    },
+    {
+      "log": "build-verified.log",
+      "sha256": "7d8a0c1bf6f9b49db0d236d1aaa3d47e32b34ab45922015ac483db41533a833b"
+    }
+  ],
+  "scope": "Observed standalone runs; not a replacement for complete npm test. UI-3 and final Electron proof collected before commits with identical final source inputs."
+}
