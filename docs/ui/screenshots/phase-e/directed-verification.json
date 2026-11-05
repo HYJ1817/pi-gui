@@ -1,0 +1,108 @@
+{
+  "logRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-phase-e-5be034af7c824cf2a09938c0464ed805",
+  "scope": "Actual directed tests, canonical proof is separate; no skipped assertion counted as passed",
+  "checks": [
+    {
+      "command": "node tests/split-workbench-ui.cjs",
+      "observedExitCode": 0,
+      "summaries": [
+        "Split workbench UI: 30/30; skipped=0"
+      ],
+      "log": "split-workbench-ui-directed.log",
+      "logSha256": "090f4338a829af9e051d8eb40728f549fe0fd65e9086981f37ec414960f205c5"
+    },
+    {
+      "command": "node tests/browser-workbench-ui.cjs",
+      "observedExitCode": 0,
+      "summaries": [
+        "Browser workbench UI: 14/14"
+      ],
+      "log": "browser-workbench-ui-directed.log",
+      "logSha256": "614ef8a17d9a79936cef070e1479e313bcbf6f576c270a7baf539acddb31569a"
+    },
+    {
+      "command": "node tests/specs-ui.cjs",
+      "observedExitCode": 0,
+      "summaries": [
+        "Specs UI: 25/25; skipped=0"
+      ],
+      "log": "specs-ui-directed.log",
+      "logSha256": "07a18f0609cd2b1a259fabc2a0c2aa74a72fbcc3aa7c9cfac528de6cb7dcf1c4"
+    },
+    {
+      "command": "node tests/settings-acceptance.cjs",
+      "observedExitCode": 0,
+      "summaries": [
+        "All 15 settings acceptance checks passed successfully!"
+      ],
+      "log": "settings-acceptance-directed.log",
+      "logSha256": "4aabc23e446109227b553b8056fa0564523587aa89a5deb61bbbc0a54224d462"
+    },
+    {
+      "command": "node tests/app-shell.cjs",
+      "observedExitCode": 0,
+      "summaries": [
+        "App shell: 10/10; failed=0"
+      ],
+      "log": "app-shell-directed.log",
+      "logSha256": "7909106a1582025b53559fa298df403be0606a948ce57267a148f140a0b03ea9"
+    },
+    {
+      "command": "node tests/ui4-integration.cjs",
+      "observedExitCode": 0,
+      "summaries": [
+        "UI4 integration: 56/56; failed=0; skipped=0"
+      ],
+      "log": "launcher-green.log",
+      "logSha256": "995f37ba38843e476638c4135ada5e11f40da669398cf2bd43e8b8a10d11bcee"
+    },
+    {
+      "command": "npm run test:diff-comments",
+      "observedExitCode": 0,
+      "summaries": [
+        "Diff comments: 51/51",
+        "Diff comments UI: 51/51",
+        "Diff comments in split: 10/10",
+        "Diff comment ranges: 29/29; failed=0; skipped=0",
+        "Diff range UI: 22/22; failed=0; skipped=0",
+        "Review task model: 25/25; failed=0; skipped=0",
+        "Review task UI: 36/36; failed=0; skipped=0"
+      ],
+      "log": "diff-comments-directed.log",
+      "logSha256": "d1574e8419fe61336002bfeba187374589e846965d195d61c2c0fe6aa9b48e35"
+    },
+    {
+      "command": "npm run test:ui3",
+      "observedExitCode": 0,
+      "summaries": [
+        "UI3 joint Electron 243/243; failed=0; skipped=0"
+      ],
+      "log": "ui3-electron-verified.log",
+      "logSha256": "2e1af9e70f751c3ee0d9ce825472c272b3712145d6e522629007738017f788a7"
+    },
+    {
+      "command": "node tests/browser-workbench-electron.cjs",
+      "observedExitCode": 0,
+      "summaries": [
+        "Browser workbench Electron: 64/64; C:\\pi-GUI\\.shots\\phase-e-browser-20261105"
+      ],
+      "log": "browser-electron-final.log",
+      "logSha256": "fd7e2cebe91d7feb292e4429f94a21ce615c37b68352e04eaa6a89d69e477395"
+    },
+    {
+      "command": "npm run test:workbench:electron",
+      "observedExitCode": 0,
+      "summaries": [
+        "Shell Electron: 71/71; failed=0; screenshots=51; output=C:\\pi-GUI\\docs\\ui\\screenshots\\phase-e"
+      ],
+      "log": "workbench-final.log",
+      "logSha256": "aaa4bea427d2ec167b4b6d843be946dca57140aed015286e9fb41d137ad9c8f5"
+    }
+  ],
+  "failureLogs": [
+    "ui4-pane-baseline.log",
+    "launcher-red.log",
+    "active-label-red.log",
+    "workbench-copy-focus-failure.log"
+  ]
+}

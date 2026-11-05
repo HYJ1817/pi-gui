@@ -25,7 +25,7 @@ async function run() {
   app.setPath('userData', path.join(world, 'profile'));
   app.commandLine.appendSwitch('force-device-scale-factor', '1.5');
   app.on('window-all-closed', () => {});
-  let win, harness, theme;
+  let win, harness, theme, browser;
   const checks = [], shots = [], nativeShots = [], errors = [];
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const read = source => win.webContents.executeJavaScript(source, true);
@@ -39,6 +39,8 @@ async function run() {
   }
   async function paint() { await sleep(160); }
   async function click(selector, button = 'left') {
+    win.focus(); win.webContents.focus();
+    await waitFor('document.hasFocus()');
     const point = await read(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('Missing ${selector}');const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...point });
     win.webContents.sendInputEvent({ type: 'mouseDown', ...point, button, clickCount: 1 });
@@ -46,6 +48,8 @@ async function run() {
     await paint();
   }
   async function key(keyCode) {
+    win.focus(); win.webContents.focus();
+    await waitFor('document.hasFocus()');
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode }); await paint();
   }
@@ -109,6 +113,11 @@ async function run() {
     // Browser is outside stage C. The production preload probes its status on
     // boot, so explicitly supply the offline/unavailable fixture response.
     ipcMain.handle('pi-gui:browser-agent-status', () => ({ ok: false, error: 'offline_fixture' }));
+    if (process.env.WORKBENCH_ACCEPTANCE === '1') {
+      const { createBrowserController } = require('../electron/browser-view.cjs');
+      browser = createBrowserController({ origin, getWindow: () => win, ipcMain });
+      browser.register();
+    }
     win = new BrowserWindow({ width: 1205, height: 803, useContentSize: true, show: true,
       ...theme.windowOptions(), titleBarStyle: 'hidden',
       webPreferences: { preload: path.join(ROOT, 'electron/preload.cjs'), additionalArguments: ['--pi-gui-theme-bridge'], sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
@@ -208,6 +217,9 @@ async function run() {
     if (process.env.CONVERSATION_ACCEPTANCE === '1') {
       await require('./fixtures/conversation-scenarios.cjs')({ read, click, key, shot, paint, check, win, waitFor });
     }
+    if (process.env.WORKBENCH_ACCEPTANCE === '1') {
+      await require('./fixtures/workbench-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, browser, waitFor });
+    }
     check('no renderer process crash', errors.length === 0, errors);
   } catch (error) {
     check('Electron scenarios completed', false, error.stack);
@@ -217,6 +229,6 @@ async function run() {
     const passed = checks.filter(check => check.passed).length;
     fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ electron: process.versions.electron, sandbox: true, world, checks, passed, failed: checks.length - passed, shots, nativeShots, errors }, null, 2));
     console.log(`Shell Electron: ${passed}/${checks.length}; failed=${checks.length - passed}; screenshots=${shots.length}; output=${out}`);
-    theme?.dispose(); win?.destroy(); harness?.kill(); app.exit(passed === checks.length ? 0 : 1);
+    browser?.destroy(); theme?.dispose(); win?.destroy(); harness?.kill(); app.exit(passed === checks.length ? 0 : 1);
   }
 }

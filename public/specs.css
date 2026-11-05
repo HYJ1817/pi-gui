@@ -229,30 +229,11 @@
   color:var(--ui-danger);
 }
 
-.specs-empty{
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  gap:5px;
-  flex:1 1 auto;
-  min-height:120px;
-  padding:24px var(--rp-pad);
-  color:var(--ui-text-muted);
-}
-
-.specs-empty-title{
-  margin:0;
-  color:var(--ui-text-secondary);
-  font-size:12.5px;
-  font-weight:var(--ui-weight-medium);
-}
-
-.specs-empty-text{
-  margin:0;
-  max-width:42ch;
-  font-size:11.5px;
-  line-height:1.65;
-}
+.right-pane .specs-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;flex:1 1 auto;min-height:0;padding:28px 24px;color:var(--ds-text-muted);text-align:center}
+.right-pane .specs-empty-icon{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;margin-bottom:4px;flex:none;border-radius:var(--radius-full);background:color-mix(in oklab,var(--ds-text-primary) 7%,transparent);color:var(--ds-text-secondary)}
+.right-pane .specs-empty-icon svg{width:18px;height:18px}
+.right-pane .specs-empty-title{margin:0;color:var(--ds-text-primary);font-size:var(--text-base-plus);font-weight:var(--font-weight-medium-plus)}
+.right-pane .specs-empty-text{margin:0;max-width:34ch;font-size:var(--text-md);line-height:var(--leading-body)}
 
 .specs-error{
   display:flex;
