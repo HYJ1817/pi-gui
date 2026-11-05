@@ -1,0 +1,44 @@
+{
+  "command": "npm run build:app -- --rebuild --output-root C:/pi-GUI/.shots/phase-e-final-output-20261105",
+  "observedExitCode": 0,
+  "exe": "C:\\pi-GUI\\.shots\\phase-e-final-output-20261105\\dist-app\\Pi GUI-win32-x64\\Pi GUI.exe",
+  "files": [
+    {
+      "path": "public/app.js",
+      "sourceSha256": "ca671cdc39ba2f0ce03f2f6a50cce3a2a93a98c4e92108e6501921db75022bb2",
+      "packagedSha256": "ca671cdc39ba2f0ce03f2f6a50cce3a2a93a98c4e92108e6501921db75022bb2",
+      "match": true
+    },
+    {
+      "path": "public/index.html",
+      "sourceSha256": "3363e70f1ccd84e1224921f84f33f630d64fb854cf91ce9d3ae9082309ce9f67",
+      "packagedSha256": "3363e70f1ccd84e1224921f84f33f630d64fb854cf91ce9d3ae9082309ce9f67",
+      "match": true
+    },
+    {
+      "path": "public/specs-panel.js",
+      "sourceSha256": "f4c20e2b50c6ee5464ebc40a03c29ff3cb15ffaa97e82a92056801f32e868a8c",
+      "packagedSha256": "f4c20e2b50c6ee5464ebc40a03c29ff3cb15ffaa97e82a92056801f32e868a8c",
+      "match": true
+    },
+    {
+      "path": "public/specs.css",
+      "sourceSha256": "3e771c8144cb864cc68f22bea586c76ba6578cc8ab5064d10101fbba41718efb",
+      "packagedSha256": "3e771c8144cb864cc68f22bea586c76ba6578cc8ab5064d10101fbba41718efb",
+      "match": true
+    },
+    {
+      "path": "public/ui/work-panel-launcher.js",
+      "sourceSha256": "85a858ee32fae1e210b1f0a7410a51da3188a170e407085fdfa05b08a93ef58f",
+      "packagedSha256": "85a858ee32fae1e210b1f0a7410a51da3188a170e407085fdfa05b08a93ef58f",
+      "match": true
+    },
+    {
+      "path": "public/ui4-pane.css",
+      "sourceSha256": "27de589ecb5ce2d9312273108f8bd81a6d68ed5010fb4a3b516b104fcacdc433",
+      "packagedSha256": "27de589ecb5ce2d9312273108f8bd81a6d68ed5010fb4a3b516b104fcacdc433",
+      "match": true
+    }
+  ],
+  "scope": "Packaged public file equality; normal sandbox UI acceptance uses source renderer. Not an installed upgrade acceptance."
+}

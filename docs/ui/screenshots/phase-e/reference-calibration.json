@@ -1,0 +1,74 @@
+{
+  "referenceCommit": "92ae661f1e399e69d514086b46029b4c34ba1a92",
+  "referenceScaleBasis": "Supplied 1.5 DPR condition; not an independent reference OS probe",
+  "references": {
+    "REF-003": {
+      "file": "Snipaste_2026-10-31_23-10-45.png",
+      "sha256": "5f14d4254b773897e2eabecd90958b4955851e07ebc87d284374d800376ca59a",
+      "pixels": [
+        1808,
+        1204
+      ],
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-018": {
+      "file": "Snipaste_2026-10-31_23-59-20.png",
+      "sha256": "c3d2c1269160ce0a77662c9d95efc738d3f62972bea53d28a5441d63a0ed54fe",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    },
+    "REF-019": {
+      "file": "Snipaste_2026-10-31_23-59-41.png",
+      "sha256": "be8c699bd512fe4d07fb5d976c101df905ddd700d7a80d986fa039aea15d7314",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "density": {
+        "pixelsPerMeter": [
+          5669,
+          5669
+        ],
+        "unit": 1,
+        "dpi": [
+          143.993,
+          143.993
+        ]
+      }
+    }
+  },
+  "actualPerShotGeometry": "results.json: shots[].geometry.viewport and shots[].pixels",
+  "mainViewport": [
+    1205,
+    803
+  ],
+  "narrowViewport": [
+    700,
+    600
+  ],
+  "actualDpr": 1.5,
+  "inheritedCases": "C 01-07 use 1206x803, C 08 uses 700x650; native captures include DWM; compare each recorded geometry separately"
+}

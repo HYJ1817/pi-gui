@@ -149,6 +149,7 @@
 ---
 
 ### 阶段 E：规范化右侧多标签工作台 (WorkPanel Alignment)
+- **实施修订**：以 [阶段 E 勘察](16-phase-e-implementation.md) 与真实 `WorkPanel.tsx` 为准。REF-003 是工具 launcher，复用现有按钮和唯一右栏；pi-GUI 并无任意多标签 owner，不新增伪标签、重排、最大化或文件管理器权限。
 - **目标概述**：将 pi-GUI 现有已高度完备的右侧工作台（`#workPanelNav` 中的分支树、文件变更/审阅、项目 Specs、协同文档、内置浏览器）的顶栏与标签样式对齐为 PI-Desktop 规范（46px 顶栏、28px 方形控制簇、D297 无分割线、`WorkTabEmpty` 空状态）。
 - **复用模块**：
   - `public/right-pane.js` (`initRightPane()`, `createPaneHeader()`, `RIGHT_PANE_LIMITS`)
@@ -159,7 +160,7 @@
   - `public/browser-pane.js` (浏览器标签)
   - `public/collab-panel.js` (协同标签)
 - **新增模块**：
-  - `public/ui/work-tab-empty.js` (封装规范化的空状态卡片原语：居中图标 + 标题 + 弱化正文)
+  - `public/ui/work-panel-launcher.js`（只负责工具选择页，委托现有入口并同步可用性，释放观察器）；Specs 空态复用原 `renderEmpty`，不新建第二套空态系统。
 - **废弃/清理的旧样式**：
   - 移除工作面板顶栏与标签项多余的硬编码边框；
   - 统一工作台内部背景为 `--ds-bg-dock` (`#212121` / 浅色 `#fafafa`)。
