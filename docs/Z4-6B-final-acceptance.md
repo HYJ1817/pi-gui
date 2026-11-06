@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # Z4-6B 最终集成、完整验收与发布准备
 
 本报告是作者自验材料。**独立代码复验、Z4-6A 合并后的正式集成、最终提交的 PR CI 与发布决策分别独立。**
@@ -133,7 +135,7 @@ E正常退出自有进程残留0；P全部内部URL释放。补充`node --expose
 
 合计 **221/221**，0 failed/cancelled/interrupted/skipped/unexecuted，allPassed/dataComplete=true，计划digest `4107868905bd69489a6f04b105d99170e944a0545d83f49ac043beda5b29a3fc`。8个job包括build和gate全部success。没有拼接attempt。
 临时merge父为main adbff9d与Z4-6A db2bbf2，tree=c2a8b1ae49ac759690ebf355bff8f4946aede514，与本轮生产基线完全相同。不是Z4-6B最终SHA的CI，更不是正式main push。
-本地完整`npm test`本轮**一次运行退出0**，4,790,986ms（79分50.986秒），未中断/续跑/拼接。唯一清单仍为package.json的test链及生命周期，递归展开**221叶**；本轮未删断言、未改canonical配置。完整日志和命令身份见[canonical.log](evidence/z4-6b/canonical.log)、[commands.jsonl](evidence/z4-6b/commands.jsonl)。运行起点db2bbf2；随后实际main合并树相同，新增opt-in脚本另以27/28项及文件摘要验证。
+本地完整`npm test`本轮**一次运行退出0**，4,790,986ms（79分50.986秒），未中断/续跑/拼接。唯一清单仍为package.json的test链及生命周期，递归展开**221叶**；本轮未删断言、未改canonical配置。完整日志和命令身份见[canonical.log](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z4-6b/canonical.log)、[commands.jsonl](evidence/z4-6b/commands.jsonl)。运行起点db2bbf2；随后实际main合并树相同，新增opt-in脚本另以27/28项及文件摘要验证。
 **内部断言skip不是叶命令未执行。** 本机明确记录：collab-store symlink1、candidate-adoption symlink1、日志symlink1、旧SACL witness8、inplace非空SACL2、新Object witness8；均不计入各套件通过分子分母。两个witness各0/0、skip8，未取得真实审计资格，未调整权限或将非空SACL冒充空SACL。详见[skip摘要](evidence/z4-6b/local-skip-observations.json)。其他实测包含Object writer19/19、Object faults45/45、Object service30/30、Runtime真实组合26/26；不据此授予P33生产资格。
 最新main push CI [run40315861760](https://github.com/HYJ1817/pi-gui/actions/runs/40315861760)绑定精确`c7fbad6`、attempt1，最后核对仍进行中，**未验证**。最终B PR尚未创建，其实际checkout同attempt完整canonical与gate仍须执行。未自行创建PR或触发远端重跑。
 

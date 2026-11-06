@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # 阶段 F：浅色与全局视觉收尾验收
 
 ## 提交、范围与状态
@@ -49,12 +51,12 @@
 
 | 场景 | 实际截图 |
 | --- | --- |
-| 浅色主界面 / REF-021、折叠 | [f01](../screenshots/phase-f/f01-conversation-light.png)、[原生整窗](../screenshots/phase-f/f01-conversation-light-native.png)、[f12](../screenshots/phase-f/f12-collapsed-light.png) |
-| Slash / REF-022、窄窗、深色回归 | [f02](../screenshots/phase-f/f02-slash-light.png)、[f10](../screenshots/phase-f/f10-slash-narrow-light.png)、[f13](../screenshots/phase-f/f13-slash-dark.png) |
-| 上下文 / REF-023、unknown、窄窗、真实警告投影 | [f03](../screenshots/phase-f/f03-context-light.png)、[f04](../screenshots/phase-f/f04-context-unknown-light.png)、[f11](../screenshots/phase-f/f11-context-narrow-light.png)、[f14](../screenshots/phase-f/f14-quota-warning-light.png) |
-| REF-024 未实现的普通草稿、实际附件与模型 | [f05](../screenshots/phase-f/f05-at-draft-light.png)、[f06](../screenshots/phase-f/f06-attachment-light.png)、[f07](../screenshots/phase-f/f07-model-light.png) |
-| 设置/供应商浅色规范核对 | [f08](../screenshots/phase-f/f08-appearance-light.png)、[f09](../screenshots/phase-f/f09-providers-light.png) |
-| 真实 native Browser 与 slash 边界 | [f15](../screenshots/phase-f/f15-slash-browser-light.png)、[原生整窗](../screenshots/phase-f/f15-slash-browser-light-native.png) |
+| 浅色主界面 / REF-021、折叠 | [f01](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f01-conversation-light.png)、[原生整窗](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f01-conversation-light-native.png)、[f12](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f12-collapsed-light.png) |
+| Slash / REF-022、窄窗、深色回归 | [f02](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f02-slash-light.png)、[f10](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f10-slash-narrow-light.png)、[f13](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f13-slash-dark.png) |
+| 上下文 / REF-023、unknown、窄窗、真实警告投影 | [f03](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f03-context-light.png)、[f04](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f04-context-unknown-light.png)、[f11](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f11-context-narrow-light.png)、[f14](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f14-quota-warning-light.png) |
+| REF-024 未实现的普通草稿、实际附件与模型 | [f05](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f05-at-draft-light.png)、[f06](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f06-attachment-light.png)、[f07](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f07-model-light.png) |
+| 设置/供应商浅色规范核对 | [f08](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f08-appearance-light.png)、[f09](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f09-providers-light.png) |
+| 真实 native Browser 与 slash 边界 | [f15](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f15-slash-browser-light.png)、[原生整窗](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-f/f15-slash-browser-light-native.png) |
 | 既有界面回归 | 同目录 01–14（C/A/B）、d01–d19（D）、e01–e18（E）；均由本轮最终运行新采，不改历史证据目录 |
 
 ## 测试、失败历史与完整证明

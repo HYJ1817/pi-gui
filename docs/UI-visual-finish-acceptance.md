@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # UI 细节收尾验收记录（2026-10-20）
 
 基线：最新核对的 `origin/main` 为 `3c7a8ac`，版本 v0.26.2。
@@ -60,14 +62,14 @@
 | `npm run fixtures`，然后 `node tests/app-check.cjs` | 最终 26/26，退出 0；使用动态探测端口 CHECK_PORT，fixture 在系统临时目录 |
 | `git diff --check` | 无空白错误 |
 
-源码视觉证据：[报告](evidence/ui-visual-finish/source/report.json)、[亮色模型菜单](evidence/ui-visual-finish/source/light-models.png)、[暗色 Thinking](evidence/ui-visual-finish/source/dark-thinking.png)、[简洁错误](evidence/ui-visual-finish/source/light-error.png)、[长会话导航](evidence/ui-visual-finish/source/long-navigation.png)、[扩展状态](evidence/ui-visual-finish/source/extension-status.png)。
+源码视觉证据：[报告](evidence/ui-visual-finish/source/report.json)、[亮色模型菜单](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/ui-visual-finish/source/light-models.png)、[暗色 Thinking](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/ui-visual-finish/source/dark-thinking.png)、[简洁错误](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/ui-visual-finish/source/light-error.png)、[长会话导航](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/ui-visual-finish/source/long-navigation.png)、[扩展状态](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/ui-visual-finish/source/extension-status.png)。
 
 打包视觉证据：[报告](evidence/ui-visual-finish/packaged/report.json)。
 构建：[日志](evidence/ui-visual-finish/visual-build-final.log)。打包后端：[日志](evidence/ui-visual-finish/visual-app-check-final.log)。
 
 ## 未通过及证据边界
 
-- 基线及最终 `npm test` 均在未修改的 `session-revert-sacl-witness.cjs` 停止，输出 `witness_unavailable`，退出 1。额外检查其 PowerShell helper 返回 1 且无 JSON；不把它包装成纯粹缺少审计权限，具体原生原因本轮未解决。[最终日志](evidence/ui-visual-finish/visual-final-npm-test.log)
+- 基线及最终 `npm test` 均在未修改的 `session-revert-sacl-witness.cjs` 停止，输出 `witness_unavailable`，退出 1。额外检查其 PowerShell helper 返回 1 且无 JSON；不把它包装成纯粹缺少审计权限，具体原生原因本轮未解决。[最终日志](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/ui-visual-finish/visual-final-npm-test.log)
 - 补充分组运行时，系统 TEMP 的 esbuild 输出曾报 Access denied；改用仓库内测试 TEMP 可消除该输出权限问题，但 Git 的 plain 目录会向上发现主仓库，因此 Git 套件出现 2 个 fixture 环境失败（159/161），不是本轮 Git 产品代码变化。[日志](evidence/ui-visual-finish/visual-core-final.log)
 - 额外原生专项并未全过：`session-revert-inplace-safety.cjs` 的 attribute identity 断言失败；`session-revert-object-runtime.cjs:121` 预期 applied_verified、实际 not_applied。这些文件/执行路径未修改；未完成独立基线归因，不声称它们已经排除。
 - 首次把 app-check fixture 放在仓库内 TEMP 导致“没有 node_modules”断言失败；改回系统临时目录并避开被拒绝的固定 7798 端口后，最终 26/26。没有删除或放宽断言。

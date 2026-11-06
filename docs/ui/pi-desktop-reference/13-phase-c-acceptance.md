@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # 阶段 C 实施与视觉验收记录
 
 ## 交付身份与范围
@@ -58,16 +60,16 @@
 | 场景 | 实际截图 | 对照及目视结论 |
 | --- | --- | --- |
 | 深色展开 | [01 渲染](../screenshots/phase-c/01-dark-expanded.png)、[原生整窗](../screenshots/phase-c/01-dark-expanded-native.png) | REF-001：侧栏/主区比例、连续顶栏、项目位置接近；原生三键均可见且避让。欢迎正文与 Composer 属 D，保持旧布局 |
-| 深色折叠 | [02](../screenshots/phase-c/02-dark-collapsed.png) | REF-002：无残留全高 rail，标题左侧恢复按钮；主区自适应全宽 |
-| 项目与会话展开 | [03](../screenshots/phase-c/03-project-sessions.png) | REF-020/021：项目树层级、28px 行、选中与截断可辨；保留归档折叠入口 |
-| 项目菜单 | [04](../screenshots/phase-c/04-project-context-menu.png) | REF-020：实底细边菜单、不被侧栏裁切，危险项文字红色；条目为工作区管理/项目设置/移除，没有假功能 |
-| 会话菜单 | [05](../screenshots/phase-c/05-session-context-menu.png) | REF-020：共用同一菜单；当前会话归档/删除受限并说明原因，键盘关闭归还焦点 |
-| 正在运行 | [06](../screenshots/phase-c/06-running.png) | REF-016：真实活动事件驱动橙点与文字；没有无依据动画；任务结束后清除 |
-| 浅色展开 | [07 渲染](../screenshots/phase-c/07-light-expanded.png)、[原生整窗](../screenshots/phase-c/07-light-expanded-native.png) | REF-021：#f3f3f3 侧栏、#fff 主区、语义文字/状态反转正常；原生标题栏同色 |
-| 窄窗 | [08](../screenshots/phase-c/08-narrow-light.png) | CSS 700×650：侧栏 240px，标题截断，四个真实顶栏动作仍在原生按钮左侧，文档无横向溢出；该尺寸无原始参考图，不宣称像素对照通过 |
-| A/B 设置 | [09 总览](../screenshots/phase-c/09-settings-overview-dark.png)、[10 外观深色](../screenshots/phase-c/10-settings-appearance-dark.png)、[11 供应商](../screenshots/phase-c/11-settings-providers-dark.png)、[12 外观浅色](../screenshots/phase-c/12-settings-appearance-light.png) | REF-004/007/021及 A/B 基线：分类轨、标题、卡片未被 C 外壳覆盖；表单与返回导航正常。供应商非空态对照 A/B 已验收基线；REF-008 实为技能列表，不将其当作供应商逐图证明 |
-| 关联任务压力 | [13](../screenshots/phase-c/13-linked-tasks-dark.png) | pi-GUI 特有业务差异：长任务条受 45% 宽度约束，标题仍≥80px，没有与右侧动作重叠 |
-| 长会话列表滚动 | [14](../screenshots/phase-c/14-sidebar-scroll-dark.png) | 真实生产列表加 28 条 fixture 后可独立滚动；底部工具带与顶栏位置不动，没有文档横向滚动 |
+| 深色折叠 | [02](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/02-dark-collapsed.png) | REF-002：无残留全高 rail，标题左侧恢复按钮；主区自适应全宽 |
+| 项目与会话展开 | [03](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/03-project-sessions.png) | REF-020/021：项目树层级、28px 行、选中与截断可辨；保留归档折叠入口 |
+| 项目菜单 | [04](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/04-project-context-menu.png) | REF-020：实底细边菜单、不被侧栏裁切，危险项文字红色；条目为工作区管理/项目设置/移除，没有假功能 |
+| 会话菜单 | [05](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/05-session-context-menu.png) | REF-020：共用同一菜单；当前会话归档/删除受限并说明原因，键盘关闭归还焦点 |
+| 正在运行 | [06](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/06-running.png) | REF-016：真实活动事件驱动橙点与文字；没有无依据动画；任务结束后清除 |
+| 浅色展开 | [07 渲染](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/07-light-expanded.png)、[原生整窗](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/07-light-expanded-native.png) | REF-021：#f3f3f3 侧栏、#fff 主区、语义文字/状态反转正常；原生标题栏同色 |
+| 窄窗 | [08](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/08-narrow-light.png) | CSS 700×650：侧栏 240px，标题截断，四个真实顶栏动作仍在原生按钮左侧，文档无横向溢出；该尺寸无原始参考图，不宣称像素对照通过 |
+| A/B 设置 | [09 总览](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/09-settings-overview-dark.png)、[10 外观深色](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/10-settings-appearance-dark.png)、[11 供应商](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/11-settings-providers-dark.png)、[12 外观浅色](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/12-settings-appearance-light.png) | REF-004/007/021及 A/B 基线：分类轨、标题、卡片未被 C 外壳覆盖；表单与返回导航正常。供应商非空态对照 A/B 已验收基线；REF-008 实为技能列表，不将其当作供应商逐图证明 |
+| 关联任务压力 | [13](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/13-linked-tasks-dark.png) | pi-GUI 特有业务差异：长任务条受 45% 宽度约束，标题仍≥80px，没有与右侧动作重叠 |
+| 长会话列表滚动 | [14](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/14-sidebar-scroll-dark.png) | 真实生产列表加 28 条 fixture 后可独立滚动；底部工具带与顶栏位置不动，没有文档横向滚动 |
 
 机器实测记录见 [results.json](../screenshots/phase-c/results.json)，原图 pHYs 元数据约 143.993 DPI，核对记录见 [reference-calibration.json](../screenshots/phase-c/reference-calibration.json)，与规范给出的 1.5 DPR 校准一致。已逐张查看上述图片；截图存在本身不等于符合参考，结论按表逐项给出。
 

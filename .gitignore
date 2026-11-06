@@ -28,3 +28,20 @@ dist-release/
 
 # 历史 UI-1 至 UI-5 验收的可再生截图/日志已归档至 Git 历史
 /docs/claude-ui-redesign/*evidence/
+
+# 本地/CI 可再生证据。已跟踪的精选记录仍保留；新基准须显式审阅后添加。
+/test-results/
+/playwright-report/
+/ci-evidence/
+/ci-results*.json
+/ci-summary.json
+/docs/evidence/**/*.png
+/docs/evidence/**/*.log
+/docs/evidence/**/results*.json
+/docs/assets/**/*.png
+/docs/assets/**/*.log
+/docs/assets/**/results*.json
+/docs/ui/screenshots/**/*.png
+/docs/ui/screenshots/**/*.log
+/docs/ui/screenshots/**/results*.json
+/designs/ui-ux-2026-10-31/evidence/

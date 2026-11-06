@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # 阶段 E：右侧工作台验收记录
 
 ## 身份、范围与状态
@@ -54,15 +56,15 @@
 
 | 图片 | 场景 |
 | --- | --- |
-| [e01](../screenshots/phase-e/e01-launcher-dark.png)、[原生整窗](../screenshots/phase-e/e01-launcher-dark-native.png)、[e16](../screenshots/phase-e/e16-launcher-collapsed-dark.png) | 深色 launcher、实际窗口按钮、侧栏折叠，REF-003 |
-| [e06](../screenshots/phase-e/e06-launcher-light.png)、[原生整窗](../screenshots/phase-e/e06-launcher-light-native.png) | 浅色 launcher |
-| [e02](../screenshots/phase-e/e02-specs-dark.png)、[e08](../screenshots/phase-e/e08-specs-light.png)、[e07](../screenshots/phase-e/e07-specs-empty-light.png) | Specs 深浅/空态 |
-| [e03](../screenshots/phase-e/e03-split-dark.png)、[e09](../screenshots/phase-e/e09-narrow-fallback-light.png)、[e10](../screenshots/phase-e/e10-narrow-changes-light.png) | 分屏与窄窗回退 |
-| [e04](../screenshots/phase-e/e04-changes-dark.png)、[e05](../screenshots/phase-e/e05-changes-light.png) | Changes 深浅 |
-| [e11](../screenshots/phase-e/e11-narrow-launcher-light.png)、[e12](../screenshots/phase-e/e12-resized-launcher-light.png)、[e13](../screenshots/phase-e/e13-resized-launcher-dark.png) | 窄窗与真实宽度调整 |
-| [e14](../screenshots/phase-e/e14-browser-dark.png)、[原生整窗](../screenshots/phase-e/e14-browser-dark-native.png)、[e15](../screenshots/phase-e/e15-browser-light.png) | 完整应用真实 Browser，REF-018 |
-| [e17](../screenshots/phase-e/e17-branch-dialog-dark.png)、[e18](../screenshots/phase-e/e18-collab-surface-dark.png) | 既有分支 Modal 与 Collab 的真实可用性提示，不冒称验证完整协同画布 |
-| [设置深色](../screenshots/phase-e/09-settings-overview-dark.png)、[设置浅色](../screenshots/phase-e/12-settings-appearance-light.png) | A/B 回归；D 的 d01–d19 同目录 |
+| [e01](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e01-launcher-dark.png)、[原生整窗](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e01-launcher-dark-native.png)、[e16](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e16-launcher-collapsed-dark.png) | 深色 launcher、实际窗口按钮、侧栏折叠，REF-003 |
+| [e06](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e06-launcher-light.png)、[原生整窗](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e06-launcher-light-native.png) | 浅色 launcher |
+| [e02](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e02-specs-dark.png)、[e08](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e08-specs-light.png)、[e07](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e07-specs-empty-light.png) | Specs 深浅/空态 |
+| [e03](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e03-split-dark.png)、[e09](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e09-narrow-fallback-light.png)、[e10](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e10-narrow-changes-light.png) | 分屏与窄窗回退 |
+| [e04](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e04-changes-dark.png)、[e05](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e05-changes-light.png) | Changes 深浅 |
+| [e11](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e11-narrow-launcher-light.png)、[e12](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e12-resized-launcher-light.png)、[e13](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e13-resized-launcher-dark.png) | 窄窗与真实宽度调整 |
+| [e14](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e14-browser-dark.png)、[原生整窗](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e14-browser-dark-native.png)、[e15](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e15-browser-light.png) | 完整应用真实 Browser，REF-018 |
+| [e17](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e17-branch-dialog-dark.png)、[e18](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/e18-collab-surface-dark.png) | 既有分支 Modal 与 Collab 的真实可用性提示，不冒称验证完整协同画布 |
+| [设置深色](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/09-settings-overview-dark.png)、[设置浅色](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-e/12-settings-appearance-light.png) | A/B 回归；D 的 d01–d19 同目录 |
 
 另有 [Browser 专项结果](../screenshots/phase-e-browser/results.json) 与独立 renderer/native-page 捕获，未合成页面。原工具记录 22 次捕获，其中返回 A 时使用同名路径，实际保留 20 个唯一 PNG，不能计作 22 张独立图片。它用生产 controller 与 TEMP Git、loopback 页面及两份真实隔离 Runtime Browser session；不证明真实 Pi/模型、供应商或远端网站资格。
 

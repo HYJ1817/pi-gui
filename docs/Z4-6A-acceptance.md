@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # Z4-6A 真实环境验证与稳定性收口
 
 状态：**本地开发与可运行的离线定向/窗口/产物后端验证完成，等待独立验收。真实模型、完整canonical、打包后完整窗口流程未验证；不能宣布Z4系列全面验收通过。**
@@ -96,8 +98,8 @@ TEMP HOME/agent/session，白名单子进程env、禁用资源发现/MCP、`--of
 
 | 命令 | 实测 | 证据 |
 | --- | --- | --- |
-| npm run test:collab:electron | **55/55**（54业务+1进程清理），observed9/residual0；errors=[] | [结果](evidence/z4-6/electron/results.json)、[Runtime截图](evidence/z4-6/electron/collab-runtime.png) |
-| npm run test:collab:productivity-electron | **35/35**，含21次成功PNG、超大图拒绝、URL回收 | [结果](evidence/z4-6/productivity-electron/results.json)、[PNG](evidence/z4-6/productivity-electron/z44b-export-light.png) |
+| npm run test:collab:electron | **55/55**（54业务+1进程清理），observed9/residual0；errors=[] | [结果](evidence/z4-6/electron/results.json)、[Runtime截图](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z4-6/electron/collab-runtime.png) |
+| npm run test:collab:productivity-electron | **35/35**，含21次成功PNG、超大图拒绝、URL回收 | [结果](evidence/z4-6/productivity-electron/results.json)、[PNG](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z4-6/productivity-electron/z44b-export-light.png) |
 | npm run test:collab:advanced-electron | **6/6**，宽窗/多选/760px实际窗口 | [结果](evidence/z4-6/advanced-electron/results.json)、[多选截图](evidence/z4-6/advanced-electron/z45-multiselect-active.png) |
 
 曾有一次原生Browser capturePage的UnknownVizError；未改截图或加重试，后续完整运行通过。此项保留“尚未确定”风险，未冒称修复。窗口循环不等于小时级长期运行。

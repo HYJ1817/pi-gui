@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # Z4-1—Z4-6B 完整功能审计
 
 审计日期：2026-10-26（上海时间）。作者：本轮唯一 Codex；不是独立代码验收。
@@ -7,7 +9,7 @@
 
 ## 证据索引和判读
 
-- `C`：[本地 canonical 日志](evidence/z4-6b/canonical.log) 一次npm test退出0（4,790,986ms），221叶；协同21套全部通过，集成后[21套再验](evidence/z4-6b/integrated-collab.log)。测试文件均在 `tests/`，原型例外在 `prototype/z4-1-collab/`。
+- `C`：[本地 canonical 日志](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z4-6b/canonical.log) 一次npm test退出0（4,790,986ms），221叶；协同21套全部通过，集成后[21套再验](evidence/z4-6b/integrated-collab.log)。测试文件均在 `tests/`，原型例外在 `prototype/z4-1-collab/`。
 - `E`：[正常沙箱生产组合根窗口](evidence/z4-6b/electron/results.json)，55/55（54 场景 + 1 进程清理），fake Pi；`tests/collab-electron.cjs` → `fixtures/z4-collab-electron.cjs` → `z4-collab-scenarios.cjs`。
 - `P`：[正常沙箱生产力装配窗口](evidence/z4-6b/productivity-electron/results.json)，35/35；不是生产后端组合根，Pi 未参与。
 - `A`：[正常沙箱高级编辑装配窗口](evidence/z4-6b/advanced-electron/results.json)，6/6；多选用人工 PointerEvent/MouseEvent，不能称系统输入。

@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # 阶段 D：对话流与 Composer 验收记录
 
 ## 身份与边界
@@ -56,16 +58,16 @@
 
 | 实际图片 | 场景与对照 |
 | --- | --- |
-| [d01](../screenshots/phase-d/d01-dark-completed.png)、[d08](../screenshots/phase-d/d08-light-completed.png) | 深/浅对话完成，REF-017/021 |
-| [d02](../screenshots/phase-d/d02-user-actions.png)、[d03](../screenshots/phase-d/d03-thinking-expanded.png) | 原始文本复制与 Thinking 展开，REF-017 |
-| [d04](../screenshots/phase-d/d04-model-picker-dark.png)、[d05](../screenshots/phase-d/d05-thinking-picker.png) | 模型菜单与真实档位，REF-015 |
-| [d06](../screenshots/phase-d/d06-context-dark.png)、[d19](../screenshots/phase-d/d19-context-light.png) | 用量浮层，REF-023；深色按同一语义规范核对，不冒称存在同场景原始深色截图 |
-| [d07](../screenshots/phase-d/d07-streaming-dark.png) | 流式正文、Thinking 与 Stop，REF-016 |
-| [d09](../screenshots/phase-d/d09-slash-light.png) | 命令补全与保留焦点，REF-022 |
-| [d10](../screenshots/phase-d/d10-multiline-light.png)、[d11](../screenshots/phase-d/d11-narrow-light.png)、[d12](../screenshots/phase-d/d12-model-narrow-light.png) | 多行输入、700px 窄窗、菜单边界 |
-| [d13](../screenshots/phase-d/d13-runtime-running-dark.png)、[d14](../screenshots/phase-d/d14-runtime-model-dark.png)、[d15](../screenshots/phase-d/d15-runtime-light.png) | Runtime 实时与模型菜单 |
-| [d16](../screenshots/phase-d/d16-attachment-dark.png)、[d17](../screenshots/phase-d/d17-runtime-narrow-light.png)、[d18](../screenshots/phase-d/d18-runtime-history-light.png) | 附件、Runtime 窄窗、只读历史与复制 |
-| [09-settings](../screenshots/phase-d/09-settings-overview-dark.png)、[12-settings](../screenshots/phase-d/12-settings-appearance-light.png) | A/B 设置回归；其余 C 场景保留在同目录 |
+| [d01](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d01-dark-completed.png)、[d08](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d08-light-completed.png) | 深/浅对话完成，REF-017/021 |
+| [d02](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d02-user-actions.png)、[d03](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d03-thinking-expanded.png) | 原始文本复制与 Thinking 展开，REF-017 |
+| [d04](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d04-model-picker-dark.png)、[d05](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d05-thinking-picker.png) | 模型菜单与真实档位，REF-015 |
+| [d06](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d06-context-dark.png)、[d19](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d19-context-light.png) | 用量浮层，REF-023；深色按同一语义规范核对，不冒称存在同场景原始深色截图 |
+| [d07](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d07-streaming-dark.png) | 流式正文、Thinking 与 Stop，REF-016 |
+| [d09](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d09-slash-light.png) | 命令补全与保留焦点，REF-022 |
+| [d10](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d10-multiline-light.png)、[d11](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d11-narrow-light.png)、[d12](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d12-model-narrow-light.png) | 多行输入、700px 窄窗、菜单边界 |
+| [d13](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d13-runtime-running-dark.png)、[d14](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d14-runtime-model-dark.png)、[d15](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d15-runtime-light.png) | Runtime 实时与模型菜单 |
+| [d16](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d16-attachment-dark.png)、[d17](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d17-runtime-narrow-light.png)、[d18](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/d18-runtime-history-light.png) | 附件、Runtime 窄窗、只读历史与复制 |
+| [09-settings](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/09-settings-overview-dark.png)、[12-settings](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-d/12-settings-appearance-light.png) | A/B 设置回归；其余 C 场景保留在同目录 |
 
 这些截图由实际生产 renderer/CSS/preload 在 Electron 内运行并采集，不是静态重绘。测试使用 TEMP 项目与离线协议 fixture；截图和通过数字不证明真实模型、外部供应商或长期负载资格。
 

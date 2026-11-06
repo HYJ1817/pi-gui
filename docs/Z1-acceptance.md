@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # Z1 交互增强与上下文引用 验收材料
 
 ## 本轮验收修复（取代初版的当前结论）
@@ -67,8 +69,8 @@ Diff 横向容器是内部 `.diff`，`.chg-diff` 本身没有对应纵向滚动�
 不加入无桌面 canonical；普通离线回归已在现有 test 链中。
 
 截图：[单面板恢复](evidence/z1/01-single-reopen.png)、[Diff 横向](evidence/z1/02-diff-horizontal.png)、
-[分屏恢复](evidence/z1/03-split-reopen.png)、[引用成功](evidence/z1/04-log-success.png)、
-[未就绪失败](evidence/z1/05-log-failure.png)、[窄窗口身份不匹配](evidence/z1/06-narrow-feedback.png)。
+[分屏恢复](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z1/03-split-reopen.png)、[引用成功](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z1/04-log-success.png)、
+[未就绪失败](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z1/05-log-failure.png)、[窄窗口身份不匹配](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z1/06-narrow-feedback.png)。
 截图均经实际查看，无用户项目内容。未使用 --no-sandbox；本机已安装 Electron 在进入测试前以
 0x80000003 退出，改用已有缓存的同版本 44.4.3 ZIP 解压到 TEMP 后正常通过，未下载依赖。
 初步验证在缓存 41.1.1 上也通过；最终证据以上述 44.4.3 为准。

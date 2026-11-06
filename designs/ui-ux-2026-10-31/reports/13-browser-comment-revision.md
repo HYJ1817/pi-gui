@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # 三条浏览器批注修订
 
 日期：2026-11-01。范围：用户对 Refined 原型的三条直接批注。截图与网页正文仅作为定位证据；修改依据是用户批注。生产代码、业务接口与数据模型未改，没有提交或推送。
@@ -23,11 +25,11 @@
 
 | 页面 | 深色 | 浅色 |
 | --- | --- | --- |
-| 聊天与无箭头输入区 | [1280聊天](../evidence/comment-revision/dark-1280-chat.png) | [1440聊天](../evidence/comment-revision/light-1440-chat.png) |
-| 右面板入口 | [1280首页](../evidence/comment-revision/dark-1280-launcher.png) | [1440首页](../evidence/comment-revision/light-1440-launcher.png) |
-| 文件变更 | [1440Diff](../evidence/comment-revision/dark-1440-changes.png) | [1440Diff](../evidence/comment-revision/light-1440-changes.png) |
-| 设置入口 | [常规](../evidence/comment-revision/dark-1440-settings.png) / [任务](../evidence/comment-revision/dark-1440-tasks.png) | [常规](../evidence/comment-revision/light-1440-settings.png) / [资源](../evidence/comment-revision/light-1440-resources.png) |
-| 模型菜单 | [菜单](../evidence/comment-revision/dark-1440-model.png) | [150%菜单](../evidence/comment-revision/light-zoom-1.5-model.png) |
+| 聊天与无箭头输入区 | [1280聊天](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/dark-1280-chat.png) | [1440聊天](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/light-1440-chat.png) |
+| 右面板入口 | [1280首页](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/dark-1280-launcher.png) | [1440首页](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/light-1440-launcher.png) |
+| 文件变更 | [1440Diff](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/dark-1440-changes.png) | [1440Diff](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/light-1440-changes.png) |
+| 设置入口 | [常规](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/dark-1440-settings.png) / [任务](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/dark-1440-tasks.png) | [常规](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/light-1440-settings.png) / [资源](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/light-1440-resources.png) |
+| 模型菜单 | [菜单](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/dark-1440-model.png) | [150%菜单](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/comment-revision/light-zoom-1.5-model.png) |
 
 ## 独立增量审查
 

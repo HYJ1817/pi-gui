@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # P32.4 Multi Session UI：最终实施与复验记录
 
 日期：2026-10-07。完成实施，等待 ChatGPT 最终验收。passed、failed、not executed、environment blocked 与 fixture / real Electron / real Git / real Pi 分别标记。
@@ -144,21 +146,21 @@ SEA 辅产物 injector 的既有 signature warning 保留；成功注入不等�
 
 | 场景 | 图片 |
 |---|---|
-| 单经典会话 | [classic](evidence/p32-4/classic-ui.png) |
-| A/B、attention | [central](evidence/p32-4/e-central-1280x800.png) |
-| A running / B focused | [running-focused](evidence/p32-4/sidebar-a-running-b-focused.png) |
-| error / dormant | [error](evidence/p32-4/A-crashed-B-running.png)、[dormant](evidence/p32-4/sidebar-dormant.png) |
-| A/B Browser | [native A](evidence/p32-4/c-browser-native-a.png)、[native B](evidence/p32-4/c-browser-native-b.png)、[B chrome](evidence/p32-4/c-browser-b-native-owner.png) |
-| Process A/B | [A](evidence/p32-4/c-process-a.png)、[B](evidence/p32-4/c-process-b.png) |
-| Changes A/B | [A](evidence/p32-4/c-changes-a.png)、[B](evidence/p32-4/c-changes-b.png) |
-| 2/2 resource | [two](evidence/p32-4/d-two-regular-slots.png) |
-| third confirmation / active | [confirm](evidence/p32-4/d-third-confirmation.png)、[active](evidence/p32-4/d-third-active.png) |
-| fourth rejection | [fourth](evidence/p32-4/d-fourth-rejected.png) |
-| A/B different model | [reasoning A](evidence/p32-4/e-model-a-reasoning.png)、[text B](evidence/p32-4/e-model-b-text.png) |
-| 1280×800 / 1440×900 / 1920×1080 | [1280](evidence/p32-4/e-central-1280x800.png)、[1440](evidence/p32-4/e-central-1440x900.png)、[1920](evidence/p32-4/e-central-1920x1080.png) |
-| 125% / 150% | [125](evidence/p32-4/e-central-zoom125.png)、[150](evidence/p32-4/e-central-zoom150.png) |
-| Browser 150% bounds | [chrome](evidence/p32-4/e-browser-zoom150.png)、[native](evidence/p32-4/e-browser-native-zoom150.png) |
-| live / dormant search | [live](evidence/p32-4/e-search-live-history-a.png)、[dormant](evidence/p32-4/e-search-dormant-history-b.png) |
+| 单经典会话 | [classic](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/classic-ui.png) |
+| A/B、attention | [central](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-central-1280x800.png) |
+| A running / B focused | [running-focused](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/sidebar-a-running-b-focused.png) |
+| error / dormant | [error](evidence/p32-4/A-crashed-B-running.png)、[dormant](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/sidebar-dormant.png) |
+| A/B Browser | [native A](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/c-browser-native-a.png)、[native B](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/c-browser-native-b.png)、[B chrome](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/c-browser-b-native-owner.png) |
+| Process A/B | [A](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/c-process-a.png)、[B](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/c-process-b.png) |
+| Changes A/B | [A](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/c-changes-a.png)、[B](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/c-changes-b.png) |
+| 2/2 resource | [two](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/d-two-regular-slots.png) |
+| third confirmation / active | [confirm](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/d-third-confirmation.png)、[active](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/d-third-active.png) |
+| fourth rejection | [fourth](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/d-fourth-rejected.png) |
+| A/B different model | [reasoning A](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-model-a-reasoning.png)、[text B](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-model-b-text.png) |
+| 1280×800 / 1440×900 / 1920×1080 | [1280](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-central-1280x800.png)、[1440](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-central-1440x900.png)、[1920](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-central-1920x1080.png) |
+| 125% / 150% | [125](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-central-zoom125.png)、[150](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-central-zoom150.png) |
+| Browser 150% bounds | [chrome](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-browser-zoom150.png)、[native](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-browser-native-zoom150.png) |
+| live / dormant search | [live](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-search-live-history-a.png)、[dormant](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/p32-4/e-search-dormant-history-b.png) |
 
 原始本机日志在 `.shots/p32-4/electron-{c,d,e}-run.log`、electron-report.json、classic-report.json，未跟踪。提交中的 [delivery index](evidence/p32-4/delivery.md) 保留安全摘要和图片清单；harness 可复现完整日志。main capture 不含 native view，原生内容须看配对图片。
 
