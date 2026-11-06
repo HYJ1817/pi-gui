@@ -1,0 +1,56 @@
+ok skipped is never promoted to success
+ok every required group rejects failure, cancellation, skipping or missing evidence
+  SKIP file symlink privilege unavailable
+Collab store: 53/53; assertions=149; skipped=1
+SKIP file symlink: existing token cannot create symbolic links
+Candidate adoption: 45/45; failed=0; skipped=1
+  ok   损坏行被跳过，后续日志仍可读取
+logging: 32 passed, 0 failed, 0 skipped
+  SKIP 符号链接日志文件（当前环境不能创建 symlink: EPERM）
+logging-leaks: 7 passed, 0 failed, 1 skipped
+  ok  漫游跳过折叠起来的条目
+{"passed":19,"failed":0,"skipped":0,"modelRequests":0,"credentialsRead":false,"layer":"offline-contract","realModel":"REAL_MODEL_RETEST_PENDING","root":"C:\\Users\\21022\\AppData\\Local\\Temp\\p33-D6final-contract-dEJASW"}
+{"schemaVersion":1,"tool":"p33-4b-sacl-witness","platform":"win32","productionQualified":false,"privileges":{"required":"SeSecurityPrivilege","enabled":false,"error":1300},"status":"unavailable","passed":0,"failed":0,"skipped":8,"cases":[{"auditProfile":"explicit","metadataKind":"protected","status":"unverified","reason":"audit_privilege_unavailable"},{"auditProfile":"explicit","metadataKind":"inherited","status":"unverified","reason":"audit_privilege_unavailable"},{"auditProfile":"inherited","metadataKind":"protected","status":"unverified","reason":"audit_privilege_unavailable"},{"auditProfile":"inherited","metadataKind":"inherited","status":"unverified","reason":"audit_privilege_unavailable"},{"auditProfile":"protected","metadataKind":"protected","status":"unverified","reason":"audit_privilege_unavailable"},{"auditProfile":"protected","metadataKind":"inherited","status":"unverified","reason":"audit_privilege_unavailable"},{"auditProfile":"mixed","metadataKind":"protected","status":"unverified","reason":"audit_privilege_unavailable"},{"auditProfile":"mixed","metadataKind":"inherited","status":"unverified","reason":"audit_privilege_unavailable"}],"reason":"audit_privilege_unavailable"}
+session-revert-sacl-witness: 0/0; failed=0; skipped=8; real audit environment only
+  ok image false skipped unknown allowed and no cross-provider capability
+  ok missing models skipped
+ok 8 - real keyboard navigation strictly skips hidden items during search
+  ok   恢复偏好：没有项目时安静跳过、不发命令、不抛错
+  ok   §26. 暂停时明确提示要用户选「重试 / 跳过 / 停止」
+  ok   重建历史时跳过只有工具调用的助手消息
+  ok   重命名归入 skipped 而不是 staged/plain
+  ok   执行阶段也确实跳过了重命名
+  ok   B1. pi 模式：根级 .md + 子目录 SKILL.md 都收，跳过点开头与 node_modules
+  ok   L30. 跳过点开头文件
+  ok   7j. computeReadyStates：依赖失败 → blocked；依赖被跳过 → blocked
+  ok   13. 有失败 → plan=paused（不自动跳过、不自动重试）
+  ok   26. 跳过任务 → 依赖它的仍然 blocked（不自动放行）
+--- H2. 被跳过的任务保留结论 ---
+  ok   H2. 改计划标题不会把 skipped 的任务退回 pending
+  ok   B6. 依赖被跳过 → dependency-skipped
+  ok   F4. 依赖 skipped → dependency-skipped（不是 waiting-review）
+--- I. Gate required：失败 / 取消 / 中断 / 跳过都不算「等验收」 ---
+  ok   I5. skipped → required=false（沿用原执行语义）
+  ok   I20. gated 任务被跳过 → Plan = completed（沿用原 skipped 语义）
+  ok   O10. skipped + 旧 accepted → 没通过（true）
+  ok   A7. skipped 仍允许重试（保持既有行为）
+  ok   G6. active Plan 里 skip 未开始的 Task → ok
+  ok   G6b. 响应里的 plan 反映了 skipped
+  ok   G7. Scheduler 收尾整份写盘之后，B 仍然是 skipped（没被冲回 pending）
+  ok   G8. 被跳过的 Task 从未执行 → 0 条 attempt
+  ok   G10. 非 active Plan：skip 仍然作用于传入的那份 plan 并落盘
+  ok   G10b. inactive 时 cancel/skip 的返回值同样带 plan
+  --   跳过：本机建不了符号链接（需要权限或开发者模式），5i 未验
+  ok   7c. 读不出来的文件被计入 skipped（可见，不是静默）
+  ok  G4. trusted=true 但项目同名项 invalid → 用户级继续生效（与上游 skip 一致）
+  ok  existing items recorded as skipped
+  ok  symlink handling verified or skipped on restricted Windows
+  ok   12d. 校验和格式不合法 → 失败（不静默跳过）
+  ok   26b1. formal publish refuses to skip proof when no verifier exists
+ok unknown B schema stops prefix and never skips ahead
+ok invalid bounded event is not skipped to later B plan
+SKIP protected nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL
+SKIP inherited nonempty SACL preservation SeSecurityPrivilege unavailable; not empty SACL
+session-revert-inplace: 28/28; failed=0; skipped=2; research only; no production eligibility
+{"version":1,"tool":"p33-d2-object-witness","helperHash":"7d773b63777d97a6a78d9a81c37cf946929062b22028425889258becd3aa39ef","targetAccessMask":"0x12008b","apis":["CreateFileW","GetFileInformationByHandle","ReadFile","WriteFile","SetFilePointerEx","SetEndOfFile","FlushFileBuffers"],"productionQualified":false,"passed":0,"failed":0,"skipped":8,"cases":[{"auditProfile":"explicit","metadataKind":"protected","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"},{"auditProfile":"explicit","metadataKind":"inherited","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"},{"auditProfile":"inherited","metadataKind":"protected","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"},{"auditProfile":"inherited","metadataKind":"inherited","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"},{"auditProfile":"protected","metadataKind":"protected","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"},{"auditProfile":"protected","metadataKind":"inherited","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"},{"auditProfile":"mixed","metadataKind":"protected","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"},{"auditProfile":"mixed","metadataKind":"inherited","status":"unverified","stage":"privilege","reason":"existing_token_sacl_unavailable"}],"osVersion":"10.0.26200.0","fileSystem":"NTFS","reason":"existing_token_sacl_unavailable"}
+Object witness: 0/0; failed=0; skipped=8

@@ -90,6 +90,9 @@
 }
 .project-sidebar .rail-spacer { display: none; }
 .group-bar { display: flex; align-items: center; }
+.project-sidebar:not(.settings-mode) .rail-group > .group-bar {
+  position:sticky;top:0;z-index:1;background:var(--ds-bg-sidebar);
+}
 .project-sidebar .group-bar .icon-btn { width: 22px; height: 22px; border-radius: var(--radius-2xs); }
 .project-sidebar .group-head {
   flex: 1;

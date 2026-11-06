@@ -1,0 +1,930 @@
+{
+  "images": 132,
+  "bytes": 10161850,
+  "items": [
+    {
+      "file": "browser/00-browser-empty.png",
+      "width": 1800,
+      "height": 1278,
+      "bytes": 38323,
+      "sha256": "f1a4d7d8b5550454b5dd7bfffba59dcf592085c5930607fb701036ef16db8348"
+    },
+    {
+      "file": "browser/01-browser-single-native-page.png",
+      "width": 588,
+      "height": 1079,
+      "bytes": 29126,
+      "sha256": "d572d73dda2cc329b3164b23af9380be76849e7b7ca2e7220c95493d2b2335b9"
+    },
+    {
+      "file": "browser/01-browser-single.png",
+      "width": 1800,
+      "height": 1278,
+      "bytes": 31867,
+      "sha256": "bea9b8a538bd6900205907819a638d8ea66de11d7f1648c6bb6ac39f13e6dee1"
+    },
+    {
+      "file": "browser/02-browser-changes-1200-native-page.png",
+      "width": 588,
+      "height": 539,
+      "bytes": 29896,
+      "sha256": "900ebc80e511f917620d72dea62379009696057c5e54456fe76137a92bb73c9c"
+    },
+    {
+      "file": "browser/02-browser-changes-1200.png",
+      "width": 1800,
+      "height": 1275,
+      "bytes": 79644,
+      "sha256": "9ec2f4d328d4da7645bab93a9f71317a28e1870438cb11645e384dcbbce9d6ab"
+    },
+    {
+      "file": "browser/02-browser-changes-1536-native-page.png",
+      "width": 588,
+      "height": 539,
+      "bytes": 29896,
+      "sha256": "900ebc80e511f917620d72dea62379009696057c5e54456fe76137a92bb73c9c"
+    },
+    {
+      "file": "browser/02-browser-changes-1536.png",
+      "width": 2304,
+      "height": 1275,
+      "bytes": 83237,
+      "sha256": "a478e7d7a318e50a6cf6f65b65b2990ae7351c7904b3eecd8bddde3477fedf5d"
+    },
+    {
+      "file": "browser/02-browser-changes-720-native-page.png",
+      "width": 588,
+      "height": 1007,
+      "bytes": 32718,
+      "sha256": "5c301be270e770bde0df0e5fed99bb0fd9a35bb8bdc46f741baa6cd8e9566668"
+    },
+    {
+      "file": "browser/02-browser-changes-720.png",
+      "width": 1080,
+      "height": 1275,
+      "bytes": 29364,
+      "sha256": "c171b443a510e8ad421e1ec209e481ebae082f711cf5c9e6fd8f24968cbc0ebc"
+    },
+    {
+      "file": "browser/02-browser-changes-900-native-page.png",
+      "width": 588,
+      "height": 539,
+      "bytes": 29896,
+      "sha256": "900ebc80e511f917620d72dea62379009696057c5e54456fe76137a92bb73c9c"
+    },
+    {
+      "file": "browser/02-browser-changes-900.png",
+      "width": 1350,
+      "height": 1275,
+      "bytes": 76816,
+      "sha256": "3e9ab539615c2c5c2c97efd7d8b1b639b58634ca8b9c66dbb1f66ba51f9b70cb"
+    },
+    {
+      "file": "browser/03-narrow-changes.png",
+      "width": 1080,
+      "height": 1275,
+      "bytes": 67919,
+      "sha256": "cf64e7745f8c1d8da82fea798a6dccca0fdf5e7f11736cf658389c4944223219"
+    },
+    {
+      "file": "browser/04-modal-occlusion.png",
+      "width": 1800,
+      "height": 1275,
+      "bytes": 72629,
+      "sha256": "2f932a4f680bc2e9347068e36c37efeb05b2e2050cf42a6e4ad5c2275a115840"
+    },
+    {
+      "file": "browser/05-zoom-125-native-page.png",
+      "width": 735,
+      "height": 494,
+      "bytes": 30209,
+      "sha256": "861afeb2bc136f46ba21485e957fe73706ca32128765c50d6eabcde1e035839e"
+    },
+    {
+      "file": "browser/05-zoom-125.png",
+      "width": 1800,
+      "height": 1275,
+      "bytes": 103833,
+      "sha256": "7259a56dd2db04bc32581cc2a81159f7b9c4f9741abcfc8f918200ba154340fa"
+    },
+    {
+      "file": "browser/06-short-window-native-page.png",
+      "width": 588,
+      "height": 362,
+      "bytes": 22933,
+      "sha256": "b99071a7e37ffe6cbf83f62110f91cbb96f59c7301d9b01a02562d2821730678"
+    },
+    {
+      "file": "browser/06-short-window.png",
+      "width": 1800,
+      "height": 630,
+      "bytes": 32819,
+      "sha256": "49387813e4160233b8a1e6e3f2bbe053073ed1b4336dd1299ce35d193dd86e47"
+    },
+    {
+      "file": "browser/07-focused-A-native-page.png",
+      "width": 588,
+      "height": 537,
+      "bytes": 59284,
+      "sha256": "e954178f9e46ac87c7d1ab4d0a6ffdd92eb8f7f8cdd1b13527331eca9d67ad8b"
+    },
+    {
+      "file": "browser/07-focused-A.png",
+      "width": 1800,
+      "height": 1275,
+      "bytes": 54351,
+      "sha256": "bae69b0693ff31db2cc2fef74ed524256596e54376a038f81faee40705dee043"
+    },
+    {
+      "file": "browser/07-focused-B-native-page.png",
+      "width": 588,
+      "height": 537,
+      "bytes": 26075,
+      "sha256": "92bbdeac3dffeb31db49c414d9cd905b3df79422354ddd98296904d64ef53f0a"
+    },
+    {
+      "file": "browser/07-focused-B.png",
+      "width": 1800,
+      "height": 1275,
+      "bytes": 54309,
+      "sha256": "7cfb42f0516336459b2b328457b908f63c82e6ea24bd31cc815068b1d5360f96"
+    },
+    {
+      "file": "electron/01-dark-expanded-native.png",
+      "width": 1810,
+      "height": 1205,
+      "bytes": 54443,
+      "sha256": "7e50a752a99a68e6eeba5bd597c4cc1ea4103bf9931c68963b8decd614f528da"
+    },
+    {
+      "file": "electron/01-dark-expanded.png",
+      "width": 1809,
+      "height": 1205,
+      "bytes": 46182,
+      "sha256": "11457a3f90df603c7027b6e9954437abba62dd868a451dd4858df7739da81296"
+    },
+    {
+      "file": "electron/02-dark-collapsed.png",
+      "width": 1809,
+      "height": 1205,
+      "bytes": 32278,
+      "sha256": "6ceea9f335fafc3272f33ffeb0626865272c4be1b4866863465bc9e28ed1628d"
+    },
+    {
+      "file": "electron/03-project-sessions.png",
+      "width": 1809,
+      "height": 1205,
+      "bytes": 56249,
+      "sha256": "0105547cfca805b3191af4401113ad6bea2588bae550c0673bbae6ec99eee624"
+    },
+    {
+      "file": "electron/04-project-context-menu.png",
+      "width": 1809,
+      "height": 1205,
+      "bytes": 60343,
+      "sha256": "7e2cbbe4402ac89616ed5ccc1beb339e12ad6a8aa334cca2af76020fd4aca8c9"
+    },
+    {
+      "file": "electron/05-session-context-menu.png",
+      "width": 1809,
+      "height": 1205,
+      "bytes": 57066,
+      "sha256": "9171bed6ed150014e6c02754b39d0a954aaa8385ee51402692433787d4d43ea0"
+    },
+    {
+      "file": "electron/06-running.png",
+      "width": 1809,
+      "height": 1205,
+      "bytes": 59225,
+      "sha256": "584d2c8d4a0f6f9f83fb82de370e344745d47c525c1d0a21459d8815da298566"
+    },
+    {
+      "file": "electron/07-light-expanded-native.png",
+      "width": 1810,
+      "height": 1205,
+      "bytes": 67486,
+      "sha256": "cb408dfd539d2099b61ba1e2d8ed803b3dd4dc62cebcc42028a40fa91bb2839c"
+    },
+    {
+      "file": "electron/07-light-expanded.png",
+      "width": 1809,
+      "height": 1205,
+      "bytes": 54918,
+      "sha256": "2f25a0e214db5b06c7f8bd6d63bcd9037a5c5c749dcf444666288f306021ef4e"
+    },
+    {
+      "file": "electron/08-narrow-light.png",
+      "width": 1050,
+      "height": 975,
+      "bytes": 48186,
+      "sha256": "cff7a75ff4e32a6a17873f61e09c70e80f431bb1b694970943ea6c2e87551f0e"
+    },
+    {
+      "file": "electron/09-settings-overview-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 91154,
+      "sha256": "52b831b1342b3252efe07cb69818e97c43b2a5fab7fe22498a7d57fa1bfa3b49"
+    },
+    {
+      "file": "electron/10-settings-appearance-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 76459,
+      "sha256": "413ad3a1dd97688239618b3453202ecc5a67889aada762995c831ba99852f845"
+    },
+    {
+      "file": "electron/11-settings-providers-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 85219,
+      "sha256": "c4de2603d4c17270e6758ec3cfd505ca16c6180ebcba7c11d990dd17aeb630c0"
+    },
+    {
+      "file": "electron/12-settings-appearance-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 75233,
+      "sha256": "f7a68276ca97ca721ce40ec60c112f9ed56d31efb5b09662274206052531a71a"
+    },
+    {
+      "file": "electron/13-linked-tasks-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 57464,
+      "sha256": "9acf95b89220dd70eb29c19095017fd7a5671cae43905b9c774c714d17359399"
+    },
+    {
+      "file": "electron/14-sidebar-scroll-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 78649,
+      "sha256": "9a436bdb0a2d9b574bb0273dfd82f51ef4ab19f43fbed9c734f1aa3079265fe6"
+    },
+    {
+      "file": "electron/d01-dark-completed.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 81766,
+      "sha256": "ab5d48f87da02b1f2c7de765452a4d96bcfa39d714263f93e478bbca39e97ae5"
+    },
+    {
+      "file": "electron/d02-user-actions.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 82634,
+      "sha256": "629d9df7b0f3f7a1c67bbefe18d0fef33dabd7161f6308415cf910031e199d46"
+    },
+    {
+      "file": "electron/d03-thinking-expanded.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 85083,
+      "sha256": "8f172cfa661458f59a63dff83930070c73480ede3cdac59aedd1e89d57720c5c"
+    },
+    {
+      "file": "electron/d04-model-picker-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 109599,
+      "sha256": "d902d103c7c3b0364527b4d62702718a12cc5b46ce3249c1c318e2f11ac32973"
+    },
+    {
+      "file": "electron/d05-thinking-picker.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 96812,
+      "sha256": "c1bf5fa6c5b31f10e855180ef8db4d1313b77ebcda045f1622502310f753ee29"
+    },
+    {
+      "file": "electron/d06-context-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 111082,
+      "sha256": "bac927eb860252628dc48ef05727bee9f037d9903d31a9e41734da35b5a70697"
+    },
+    {
+      "file": "electron/d07-streaming-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 95023,
+      "sha256": "68cbe4a4f1a8b2c14a288451272fa105db2bee515863d8b849e966603a0174c8"
+    },
+    {
+      "file": "electron/d08-light-completed.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 94594,
+      "sha256": "12e8760efb3869159d735a24bdb72129cc73e07c1beefab2b271b72f634e9e2e"
+    },
+    {
+      "file": "electron/d09-slash-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 89375,
+      "sha256": "a0203d7f21d222c6d0c4621f50a5eb19c80c5a9d67bcc3957a6d1f625acc080e"
+    },
+    {
+      "file": "electron/d10-multiline-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 100221,
+      "sha256": "de06a42c3eee9e2cb06725af9c19e00a5adc8449019856354bfd5b05d11249e2"
+    },
+    {
+      "file": "electron/d11-narrow-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 80172,
+      "sha256": "e7dca3cd305c75151c28e3e4e481f5cab19e25d977dd753cb5755d0520ede694"
+    },
+    {
+      "file": "electron/d12-model-narrow-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 76522,
+      "sha256": "69b0bdacddfc73743adfae874c1936320bb6b73cce0873dd3334a9ddc646ae41"
+    },
+    {
+      "file": "electron/d13-runtime-running-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 78714,
+      "sha256": "7dfd9ac77d7e3a6e9272d1a63cc1326e9f847e5adb237c5572f71627a3ed9450"
+    },
+    {
+      "file": "electron/d14-runtime-model-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 93186,
+      "sha256": "9a7aa27c2adb85b11f7c753740cb58d304da02942f55f68e79b566afbe8be53d"
+    },
+    {
+      "file": "electron/d15-runtime-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 83074,
+      "sha256": "8678515ad3a712a3d2d5e1e089b823358f34773daadf0598807ee2aa01f5e6d0"
+    },
+    {
+      "file": "electron/d16-attachment-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 94385,
+      "sha256": "076973b9046c964e2c19ea5ffc935f3b91d5e1e4fbf48866e4aae212f24cd3e5"
+    },
+    {
+      "file": "electron/d17-runtime-narrow-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 71702,
+      "sha256": "004fb57020a66a4156672a842a68f9b2653a201a651f48c59e10a45b0671210e"
+    },
+    {
+      "file": "electron/d18-runtime-history-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 93830,
+      "sha256": "c1a60228625b0ce4daaddbbd3f66d080d37e1e7ac9e9039b6c292d480a233379"
+    },
+    {
+      "file": "electron/d19-context-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 122190,
+      "sha256": "28715fc12b7b400cb7887181f71212fbb4e0068eeaa7152903401a1b69d1ffb9"
+    },
+    {
+      "file": "electron/e01-launcher-dark-native.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 71092,
+      "sha256": "6d343c3abd4f188db3d16a97234f0f994c886f2ad9d72ba1fc75431a87879e23"
+    },
+    {
+      "file": "electron/e01-launcher-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 70839,
+      "sha256": "5ed461cbf1bbef50c8e780b4d25d3f22b9a283ebee6babeeabb68dd26aa1fde3"
+    },
+    {
+      "file": "electron/e02-specs-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 96285,
+      "sha256": "47fb5570cf1e12d0413aef2cbb71c90abac0267f28ad7b1c2c45de5581d67871"
+    },
+    {
+      "file": "electron/e03-split-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 132878,
+      "sha256": "82eef77fda80cad56e0c29c414e5acca3c123bea5e3e305886539930d1abf933"
+    },
+    {
+      "file": "electron/e04-changes-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 95944,
+      "sha256": "dcad5a72dbd2f56ed6389b90dcd940c7a5afdbf770284627f3b8012c51a1d939"
+    },
+    {
+      "file": "electron/e05-changes-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 99033,
+      "sha256": "864483476d485fcc535de693f77846e56adec30dd27be2c99024c59f28633c87"
+    },
+    {
+      "file": "electron/e06-launcher-light-native.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 74496,
+      "sha256": "a963c4ef78ab084fbeeba7c4036d3707dff792f2f6bea8a5a9e218cd21a86d2a"
+    },
+    {
+      "file": "electron/e06-launcher-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 74252,
+      "sha256": "e46eabc58f91d295a2cb758ffe39b9b7b0fd01108acf340e9e0b014b7fc6c793"
+    },
+    {
+      "file": "electron/e07-specs-empty-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 84425,
+      "sha256": "950782c36a789dac4ef6027b203e177a0fee81899af85c60a93dd2f2ce08c05d"
+    },
+    {
+      "file": "electron/e08-specs-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 96759,
+      "sha256": "6d31cc78a345f024bf22524a50df4c89c1122c9c1ce274fe67fa64ab354a5d18"
+    },
+    {
+      "file": "electron/e09-narrow-fallback-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 71637,
+      "sha256": "6947b184350df087d76abd1bf3fb621be9aeb708545add7ccd797490edd40a47"
+    },
+    {
+      "file": "electron/e10-narrow-changes-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 73613,
+      "sha256": "d161f95b203464d469ee73fc73cb11043b661030f4869d450f1bdf8a5e56bdfd"
+    },
+    {
+      "file": "electron/e11-narrow-launcher-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 46714,
+      "sha256": "f0cf4cd2baaea0d686b1afc5eb3d9726c9e67c10e4d4411ad2615601227940cb"
+    },
+    {
+      "file": "electron/e12-resized-launcher-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 74061,
+      "sha256": "abdfd666b2a972c8ea589f58ef3a09d2d325f87433735a5c8915a7953191fb70"
+    },
+    {
+      "file": "electron/e13-resized-launcher-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 70939,
+      "sha256": "545fcca80cb489d826b220a4969e780e56c4d0345ee38cbf981fcf27af0bcffe"
+    },
+    {
+      "file": "electron/e14-browser-dark-native.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 83766,
+      "sha256": "a1295c6724c90bf6b1f6aecb12ad450bf4c6dd329208d446a225884007febf20"
+    },
+    {
+      "file": "electron/e14-browser-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 72167,
+      "sha256": "6c6fe3c903fd500a7d5387e2128bf565b55e72582bbf6f6f86125ff0b43c2fba"
+    },
+    {
+      "file": "electron/e15-browser-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 72167,
+      "sha256": "6c6fe3c903fd500a7d5387e2128bf565b55e72582bbf6f6f86125ff0b43c2fba"
+    },
+    {
+      "file": "electron/e16-launcher-collapsed-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 49111,
+      "sha256": "c8f49d401b7e5ad35ad1b2b9b6163eeca70567c90c1753e08c4fb04af7cae9e7"
+    },
+    {
+      "file": "electron/e17-branch-dialog-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 87111,
+      "sha256": "92257decd98d674833bb324381fc1b99f1bb8b4d595b4bfe2067612c9196b27a"
+    },
+    {
+      "file": "electron/e18-collab-surface-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 79865,
+      "sha256": "b278be09e410f24e92e8c0e137729e93fb3e924c562c760247c0fe5c22f643aa"
+    },
+    {
+      "file": "electron/f01-conversation-light-native.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 69674,
+      "sha256": "78027bc329ecac5d449917aab73a2d071d2a807b433e991ca47aa92f77a2bcfc"
+    },
+    {
+      "file": "electron/f01-conversation-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 69437,
+      "sha256": "b5a1b43bc7d07315c315991c38b4c4d74f01a3eb47338829975988f66d9a433f"
+    },
+    {
+      "file": "electron/f02-slash-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 88718,
+      "sha256": "c712f54458060d375d53d872b99fdc1bba1c72d32ad6a297959c1f6a7a885e0e"
+    },
+    {
+      "file": "electron/f03-context-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 95383,
+      "sha256": "5df4e3ad9d6eb61c5632f1b9490710f070f4c15b55b2e65944da050ad59251f3"
+    },
+    {
+      "file": "electron/f04-context-unknown-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 82363,
+      "sha256": "0b381f3c2286110df937a1e43a35f56bb59d1889db9d3f8098f60badfc3f7b61"
+    },
+    {
+      "file": "electron/f05-at-draft-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 65635,
+      "sha256": "399fb31397bfcb72dad066080a18200513b1352c51f3453f2209a0c98025773f"
+    },
+    {
+      "file": "electron/f06-attachment-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 71462,
+      "sha256": "0a338c0720e34e20c86638644620d9b5740dcefd9132beaef316e0c0f22fdfd6"
+    },
+    {
+      "file": "electron/f07-model-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 91276,
+      "sha256": "277059e38f28800b7bd9f8696af4edc93f79a5c285da8d35346a8885e9cab935"
+    },
+    {
+      "file": "electron/f08-appearance-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 78288,
+      "sha256": "bac7fdebca5f848289b2b521040740220b78d8f5c1a11c89865358879328f817"
+    },
+    {
+      "file": "electron/f09-providers-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 86520,
+      "sha256": "12ea9195ba3b9b6393fb21c14ab81e3489a796b5044ae8de4384462c7a43ac63"
+    },
+    {
+      "file": "electron/f10-slash-narrow-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 62125,
+      "sha256": "606be6cef43740d3ad3cdfe889f4203029fadcb1e609b8c5e7d62283ea3e0665"
+    },
+    {
+      "file": "electron/f11-context-narrow-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 72244,
+      "sha256": "16fd75314df64441cc3d0e7c04e9c119606826eb1a5336ef83e601a709c4f5b6"
+    },
+    {
+      "file": "electron/f12-collapsed-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 44786,
+      "sha256": "8a3c65172e8637558dd07ed9c19e46a1138fab756035082a4cc8d13bdd3981c3"
+    },
+    {
+      "file": "electron/f13-slash-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 84104,
+      "sha256": "1c3c3fcf7a7a664eade350546b30b712520e6f0d45660addc4aa78e6f2ab7a83"
+    },
+    {
+      "file": "electron/f14-quota-warning-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 97595,
+      "sha256": "1130a30bedd52741671929f92e6c932e4d4a2ca30c248c4546c035b968c3aef3"
+    },
+    {
+      "file": "electron/f15-slash-browser-light-native.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 112785,
+      "sha256": "5e1fc3400d4b36810455e931a862c3f67dc5dcd94eb561d9839aba417a65f1bc"
+    },
+    {
+      "file": "electron/f15-slash-browser-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 101367,
+      "sha256": "291720ea712eee403a41e54830e4b47bdcee921f46f4bc5df1d986445b7e8967"
+    },
+    {
+      "file": "electron/r01-settings-narrow.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 59552,
+      "sha256": "3b15e36e4ea5ab77176c10aba0ef976e5db8e99f94c73c70bdd223110b786ec0"
+    },
+    {
+      "file": "electron/r02-provider-add-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 132170,
+      "sha256": "4745b9154eb3dd3cb6173cf68dfea95ecf996a47800cdbe1e3935cb63b4eff9a"
+    },
+    {
+      "file": "electron/r03-viz-light-keyboard.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 102334,
+      "sha256": "2bd9946beb314d2269771a4ee458363792847fbebbc73551eee11de522adf641"
+    },
+    {
+      "file": "electron/r04-slash-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 100607,
+      "sha256": "cdf9ab50567331a0b887adce07e2013062f0b9174bc3effc31685f089f532968"
+    },
+    {
+      "file": "electron/r05-context-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 88857,
+      "sha256": "ec88ce6c8f01b2f6c3216c18525466d014925ce24c0cc2bf985945d1b11098ce"
+    },
+    {
+      "file": "electron/r06-sticky-projects-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 93859,
+      "sha256": "edcf622279e466582a5f0120f16b4f5d39ed6296f6d8f0feae935c290eb6ee90"
+    },
+    {
+      "file": "electron/r07-browser-empty-dark-native.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 76464,
+      "sha256": "8deeaa4dcb4165ca3c8f6bb5e63515113613b0c8e7c00022f776e932947b9124"
+    },
+    {
+      "file": "electron/r07-browser-empty-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 76251,
+      "sha256": "f7267e70875220b4142ecb092dcf32bf9332933b840e0cb1bbd482525734f10d"
+    },
+    {
+      "file": "electron/r08-browser-empty-light.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 79186,
+      "sha256": "1e2721da001e93b5b5c127434a3b478eb0d55b5bf11c2c0f1fe12e483bb2a63f"
+    },
+    {
+      "file": "electron/r09-appearance-130-narrow-light.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 82209,
+      "sha256": "fbb14f47ac843e9670f1cec0c0c3f3a00c371962c8ae7c3f90f55937a9b9222c"
+    },
+    {
+      "file": "electron/r10-diagnostics-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 128420,
+      "sha256": "e9495ec0f954fa62333abc812b8e6c30b03fcb8a915b3d81f3e9c0e32dacb844"
+    },
+    {
+      "file": "electron/r11-settings-auth-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 80012,
+      "sha256": "e4edfd7f8289fdc29b81da2adab500ec2011253b7b5148e8a75a185677eba977"
+    },
+    {
+      "file": "electron/r11-settings-capabilities-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 147562,
+      "sha256": "f5025d797a436c55033778c7ef9598d1c4d45b8f4e6d1d89e5372304aa4f4513"
+    },
+    {
+      "file": "electron/r11-settings-mcp-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 149554,
+      "sha256": "403403fe6c0da42ec228c05ac4fa14b4ade5284926c6a50ba7f2e512c3ab2868"
+    },
+    {
+      "file": "electron/r11-settings-shortcuts-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 110614,
+      "sha256": "c83b674c3ed7fb2e34b2d72bfc08d9f33cf38cf461ea5fee2d60ed557ebf276f"
+    },
+    {
+      "file": "electron/r11-settings-skills-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 119237,
+      "sha256": "79997f9b8eac0bb99661f694079e3bcad1b5a4abeed1c1dba8f7617f4153e4a0"
+    },
+    {
+      "file": "electron/r11-settings-updates-dark.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 80978,
+      "sha256": "8c040f601442147a6e2c8d6adb3e1cdbbd38bd10d1847142e80e4eb4e08c6793"
+    },
+    {
+      "file": "packaged/p01-main-dark.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 45803,
+      "sha256": "1b51dd462ca45074ee2eb107417ba9f75c36561d7fc3926a80bf53075b812b60"
+    },
+    {
+      "file": "packaged/p02-main-collapsed-dark.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 31667,
+      "sha256": "d0ca3b5ca1394d371d115f6ba3e14e7d63b2932ef68be3b9daf3e9a38ec756af"
+    },
+    {
+      "file": "packaged/p03-main-light.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 48000,
+      "sha256": "896821b2e693f2d20ca909b258341313d98c0d8f84f080458b79b356847e4b88"
+    },
+    {
+      "file": "packaged/p04-appearance-light.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 77242,
+      "sha256": "75ed700b13c82e230df28db728e0723a83839bc70084f82077f89272036342bc"
+    },
+    {
+      "file": "packaged/p05-provider-form-light.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 137465,
+      "sha256": "3a7020b3e203c3fdd255034e626c300feef9907a89a2c5830d42fd96b4b13e49"
+    },
+    {
+      "file": "packaged/p06-mcp-light.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 153473,
+      "sha256": "7184a4e10169e32a9602170416570a68e43240ea3083e9db21176828b7f4d8e3"
+    },
+    {
+      "file": "packaged/p07-browser-empty-light.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 67828,
+      "sha256": "b19c36de7e095b987cc8440a3fb8c334860d8d6dd7d34a866799000a9823bdf7"
+    },
+    {
+      "file": "packaged/p08-browser-empty-dark-native.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 60352,
+      "sha256": "b61bceae9508cefb19810a647658fa273ab5fe265c9a514f5c16e41b0eeddb3a"
+    },
+    {
+      "file": "packaged/p08-browser-empty-dark.png",
+      "width": 1809,
+      "height": 1206,
+      "bytes": 65225,
+      "sha256": "35a98f1b15b9ec29697315dac48eb6eba6cf8c34cfd6e1bd8b3ab117bb0898f8"
+    },
+    {
+      "file": "welcome/welcome-noProject-dark-1205-130.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 90820,
+      "sha256": "e41c6a20fcab386694df6e910d1c6949adc1cc2ed61a0e564b70059d6a468485"
+    },
+    {
+      "file": "welcome/welcome-noProject-dark-700-130.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 72616,
+      "sha256": "f379e516274c74a13ae82c835ee414f50efad77203085a24d3bf1f57a23f0c54"
+    },
+    {
+      "file": "welcome/welcome-noProject-light-1205-130.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 94964,
+      "sha256": "42cef67748d1c729b5c9227cd6a0995ffc040ef43e0e2f5023c61c4c6d242310"
+    },
+    {
+      "file": "welcome/welcome-noProject-light-700-130.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 76632,
+      "sha256": "08337b6a5526d6394bad19cda3bc980d1199c8c5b512b8101d777142923042b4"
+    },
+    {
+      "file": "welcome/welcome-ready-dark-1205-130.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 85150,
+      "sha256": "6cdc7d7b32cefed2b5929fbc9e7d46b516b89d6e4924cd06afabf1892bb45a24"
+    },
+    {
+      "file": "welcome/welcome-ready-dark-700-130.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 69002,
+      "sha256": "041abc553106ffd460e4090da2950fbd30a159330b9ce3150fb0520b12cc3a2e"
+    },
+    {
+      "file": "welcome/welcome-ready-light-1205-130.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 88278,
+      "sha256": "031644e3a57520d1f34edbd70466aada39425aedf4e33edf93a4219734aad4cd"
+    },
+    {
+      "file": "welcome/welcome-ready-light-700-130.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 71643,
+      "sha256": "8961b3e218be1c93f78fe858c07e627c4120e3e883590ea11f2a33801dc3e625"
+    },
+    {
+      "file": "welcome/welcome-restore-dark-1205-130.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 84785,
+      "sha256": "afa8f239d3267eede4d086b8570a05aefbfea82c50cb81155c461053f8d8e734"
+    },
+    {
+      "file": "welcome/welcome-restore-dark-700-130.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 67842,
+      "sha256": "86f8d9877f56138bf1768f2be8a438af6d2ce514111de0219dae8f64f1fda015"
+    },
+    {
+      "file": "welcome/welcome-restore-light-1205-130.png",
+      "width": 1808,
+      "height": 1205,
+      "bytes": 87785,
+      "sha256": "8cd2d7c7eb295a598bcfac5476510b2ed742afd504f3c9c6b8685f5697e9a6af"
+    },
+    {
+      "file": "welcome/welcome-restore-light-700-130.png",
+      "width": 1050,
+      "height": 900,
+      "bytes": 70834,
+      "sha256": "f058c60a2af3a6b19f984e5b3298fe50d346de6ec22364b8825f389bd4e14ce7"
+    }
+  ]
+}

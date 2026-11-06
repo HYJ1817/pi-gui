@@ -172,6 +172,14 @@ const pub = path.join(root, 'public');
   }
 
   // Test Group 4: Real Module Provider Count, Empty State, and Catalog Synchronization
+  check('search Down is consumed once before the menu handles the same event', () => {
+    window.document.querySelector('#navGlobalMore').click();
+    const search = window.document.querySelector('#settingsSearchInput');
+    search.value = ''; search.oninput(); search.focus();
+    search.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    assert.equal(window.document.activeElement.id, 'navAppearance');
+  });
+
   {
     check('real setProvidersData synchronizes providerCount, empty state card, and catalog count to 0', () => {
       // Mount providers panel via real openProvidersPanel

@@ -101,7 +101,7 @@ async function run() {
   const paneFacts = () => read(`(()=>{
     const pane=document.getElementById('rightPane'), r=pane.getBoundingClientRect();
     const body=pane.querySelector('.rp-body');
-    const head=pane.querySelector('.rp-head, .chg-head, .rp-toolbar, .process-head');
+    const head=pane.querySelector('.work-panel-nav');
     const close=pane.querySelector('#rightPaneClose, #browserClose');
     const cs=getComputedStyle(document.documentElement);
     return {
@@ -189,17 +189,18 @@ async function run() {
     /* ---------- 1. 初始状态与右栏开关 ---------- */
     const limits = await read(`(async()=>{const m=await import('/right-pane.js');return m.RIGHT_PANE_LIMITS})()`);
     facts.push({ limits });
-    check(limits.min === 320 && limits.default === 420, '右栏宽度边界由 right-pane.js 单点导出', limits);
+    check(limits.min === 320 && limits.default === 392, '右栏宽度边界由 right-pane.js 单点导出', limits);
 
     let facts0 = await paneFacts();
     check(facts0.hidden && facts0.width === 0, '启动时右栏是关着的', facts0);
-    check(facts0.cssWidth === 420, '--rp-width 缺省值仍是 420（既有 browser-pane 断言依赖）', facts0);
+    check(facts0.cssWidth === limits.default, '--rp-width 缺省值为参考重构后的 392px', facts0);
 
-    await click('#navChanges');
+    await click('#btnWorkPanel');
+    await click('.work-panel-launcher-row[data-tool="navChanges"]');
     await until(async () => (await paneFacts()).surface === 'changes');
     facts0 = await paneFacts();
     check(!facts0.hidden && facts0.surface === 'changes' && facts0.mode === 'dock', '「文件变更」在 dock 模式打开', facts0);
-    check(facts0.width === 420 && facts0.cssWidth === 420, '打开宽度 = 持久化宽度 = --rp-width', facts0);
+    check(facts0.width === limits.default && facts0.cssWidth === limits.default, '打开宽度 = 持久化宽度 = --rp-width', facts0);
     check(Math.abs(facts0.headHeight - 46) <= 1, 'Changes 顶部条与 46px 带高一致', facts0);
     check(facts0.closeLabel === '关闭文件变更', 'Changes 的关闭按钮带可读标签', facts0);
     check(facts0.closeRight >= facts0.right - 16, '关闭按钮落在标题带最右端', facts0);
@@ -207,10 +208,11 @@ async function run() {
     /* 顶部条的统一：先把 46px 记下来，后面每个面都要对得上。 */
     const headerHeight = facts0.headHeight;
 
+    await read(`document.querySelector('#btnWorkPanel').focus()`);
     await key('Escape', 'Escape', 27);
     check(!(await paneFacts()).hidden, '焦点还在顶栏入口时 Escape 不关闭右栏（既有行为，如实记录）');
     await escapeFromInside();
-    check(await read(`document.activeElement && document.activeElement.id==='navChanges'`), 'Escape 关闭后焦点回到打开的入口按钮');
+    check(await read(`document.activeElement && document.activeElement.id==='btnWorkPanel'`), 'Escape 关闭后焦点回到可见工作面板入口');
     check(await read(`!document.querySelector('#rightPane .rp-surface')`), '关闭后不留下任何 surface 内容');
 
     /* ---------- 2. 宽度：鼠标拖动 / 键盘 / 双击复位 / aria ---------- */
@@ -218,7 +220,7 @@ async function run() {
     await until(async () => (await paneFacts()).surface === 'changes');
     const resizerAria = await read(`(()=>{const r=document.getElementById('rightPaneResizer');return {min:r.getAttribute('aria-valuemin'),max:r.getAttribute('aria-valuemax'),now:r.getAttribute('aria-valuenow'),text:r.getAttribute('aria-valuetext'),controls:r.getAttribute('aria-controls')}})()`);
     facts.push({ resizerAria });
-    check(resizerAria.controls === 'rightPane' && resizerAria.min === '320' && Number(resizerAria.now) === 420,
+    check(resizerAria.controls === 'rightPane' && resizerAria.min === '320' && Number(resizerAria.now) === limits.default,
       '分隔条把宽度如实报给读屏（min/now/aria-controls）', resizerAria);
 
     const resizer = await center('#rightPaneResizer');
@@ -228,7 +230,7 @@ async function run() {
     await sleep(180);
     const dragged = await paneFacts();
     facts.push({ draggedWidth: dragged.width });
-    check(dragged.width >= 500 && dragged.width <= 520, '鼠标拖动分隔条把右栏拖宽 ~90px', dragged);
+    check(Math.abs(dragged.width - (limits.default + 90)) <= 2, '鼠标拖动分隔条把右栏拖宽 ~90px', dragged);
     check(Math.abs(dragged.cssWidth - dragged.width) <= 1, '拖动时 --rp-width 与真实宽度同步（Toast 让位依赖它）', dragged);
     check(Number(await read(`document.getElementById('rightPaneResizer').getAttribute('aria-valuenow')`)) === Math.round(dragged.width), '拖动后 aria-valuenow 跟着变');
     check(await read(`(JSON.parse(localStorage.getItem('pi-gui.rightpane.v1')||'{}').width||0)===${Math.round(dragged.width)}`), '拖动后的宽度写入既有 localStorage 键');
@@ -251,7 +253,7 @@ async function run() {
     await mouse('mousePressed', dbl.x, dbl.y, { clickCount: 2 });
     await mouse('mouseReleased', dbl.x, dbl.y, { clickCount: 2 });
     await sleep(180);
-    check((await paneFacts()).width === 420, '双击分隔条复位到默认宽 420');
+    check((await paneFacts()).width === limits.default, '双击分隔条复位到默认宽 392');
 
     /* ---------- 3. Browser：显示、原生 view 归属、切换、关闭 ---------- */
     const beforeBrowser = await paneFacts();
@@ -267,17 +269,18 @@ async function run() {
     check(await read(`(()=>{const back=document.getElementById('browserBack'),forward=document.getElementById('browserForward');return back.disabled&&forward.disabled})()`), '未导航时后退/前进如实禁用（不猜状态）');
     check(await read(`document.activeElement===document.getElementById('browserAddress')`), '打开后焦点落在地址栏');
 
-    await until(() => nativeView().attached);
-    const attached = nativeView();
-    facts.push({ nativeAttached: attached });
-    check(attached.attached, '原生 WebContentsView 已挂到窗口上');
-    check(attached.bounds && Math.abs(attached.bounds.width - (await read(`document.getElementById('browserViewport').getBoundingClientRect().width`))) <= 2,
-      '原生 view 的宽度 = #browserViewport 的实测宽度', attached.bounds);
+    check(!nativeView().attached&&await read(`!document.querySelector('.browser-empty').hidden`), '未导航时原生空页撤离并显示真实引导');
 
     /* 工具栏导航到本地 fixture：证明地址栏这条既有路径仍然通。 */
     await read(`(()=>{const a=document.getElementById('browserAddress');a.focus();a.value=${JSON.stringify(fixtureOrigin + '/')};a.dispatchEvent(new Event('input',{bubbles:true}));})()`);
     await key('Enter', 'Enter', 13);
     await until(() => browser.getWebContents() && String(browser.getWebContents().getURL()).startsWith(fixtureOrigin), 15000);
+    await until(() => nativeView().attached);
+    const attached = nativeView();
+    facts.push({ nativeAttached: attached });
+    check(attached.attached, '导航后原生 WebContentsView 已挂到窗口上');
+    check(attached.bounds && Math.abs(attached.bounds.width - (await read(`document.getElementById('browserViewport').getBoundingClientRect().width`))) <= 2,
+      '原生 view 的宽度 = #browserViewport 的实测宽度', attached.bounds);
     check(true, '地址栏导航到本地 fixture 页（既有桥接未被改动）');
     await until(() => read(`!document.getElementById('browserError') || document.getElementById('browserError').hidden`));
     check(await read(`document.getElementById('browserError').hidden`), '导航成功时错误条保持隐藏（不制造假错误）');
@@ -297,8 +300,13 @@ async function run() {
     const viewportBefore = await read(`document.getElementById('browserViewport').getBoundingClientRect().width`);
     const rz = await center('#rightPaneResizer');
     await mouse('mousePressed', rz.x, rz.y);
-    await mouse('mouseMoved', rz.x + 70, rz.y);
-    await mouse('mouseReleased', rz.x + 70, rz.y);
+    // The native child is detached asynchronously through the existing IPC.
+    // Do not dispatch the rest of a synthetic drag into a still-attached view.
+    await until(() => !nativeView().attached);
+    // Queue the final trusted move/release together. Awaiting two CDP calls
+    // lets pending OS mouse moves from native detachment overwrite the endpoint.
+    win.webContents.sendInputEvent({type:'mouseMove',x:Math.round(rz.x+70),y:Math.round(rz.y)});
+    win.webContents.sendInputEvent({type:'mouseUp',x:Math.round(rz.x+70),y:Math.round(rz.y),button:'left',clickCount:1});
     await sleep(320);
     const narrower = await read(`document.getElementById('browserViewport').getBoundingClientRect().width`);
     const followed = nativeView();
@@ -324,13 +332,15 @@ async function run() {
     /* 再切回 Browser：新 view 重新挂上，宽度仍然沿用。 */
     await click('#btnBrowser');
     await until(async () => (await paneFacts()).surface === 'browser');
+    check(!nativeView().attached&&await read(`!document.querySelector('.browser-empty').hidden`), '关闭后重开 Browser 恢复应用空态');
+    await browser.navigate(fixtureOrigin + '/');
     await until(() => nativeView().attached);
     check(Math.abs((await paneFacts()).width - narrower) <= 1, '切回 Browser 仍沿用用户拖过的宽度', { expected: narrower, got: (await paneFacts()).width });
     await closePane();
     await until(async () => (await paneFacts()).hidden);
     await sleep(200);
     check(browser.getWebContents() === null || !nativeView().attached, '关闭右栏后原生 view 撤离');
-    check(await read(`document.activeElement && document.activeElement.id==='btnBrowser'`), '关闭后焦点回到 Browser 入口');
+    check(await read(`document.activeElement && document.activeElement.id==='btnWorkPanel'`), '关闭后焦点回到可见工作面板入口');
 
     /* ---------- 4. 本会话变更：层级、空/错误/过期、长路径与不可信文本 ---------- */
     await read(`(()=>{
@@ -439,7 +449,7 @@ async function run() {
     check(await read(`(()=>{const t=document.getElementById('rightPane').textContent;return t.includes('会话或工作区正在切换')&&!t.includes('module-9')})()`), '切换会话时旧文件行被清掉，只留切换提示');
 
     await escapeFromInside();
-    check(await read(`document.activeElement && document.activeElement.id==='btnMore'`), '从「更多」菜单打开的面关闭后焦点回到 #btnMore');
+    check(await read(`document.activeElement && document.activeElement.id==='btnWorkPanel'`), '从「更多」菜单打开的面关闭后焦点回到可见工作面板入口');
 
     /* ---------- 5. 开发进程：状态标记、空态、日志、无假终端 ---------- */
     await click('#btnMore');
@@ -474,7 +484,7 @@ async function run() {
     check(await read(`(()=>{const b=[...document.querySelectorAll('#rightPane button')].map(b=>b.textContent);return b.includes('刷新')&&!b.some(t=>/运行|执行|终端/.test(t))})()`), '空态不给假的操作入口');
 
     await escapeFromInside();
-    check(await read(`document.activeElement && document.activeElement.id==='btnMore'`), '开发进程关闭后焦点回到 #btnMore');
+    check(await read(`document.activeElement && document.activeElement.id==='btnWorkPanel'`), '开发进程关闭后焦点回到可见工作面板入口');
 
     /* ---------- 6. 响应式 × 主题矩阵（真实截图） ---------- */
     const openers = {
@@ -500,8 +510,8 @@ async function run() {
     await mouse('mousePressed', rz0.x, rz0.y, { clickCount: 2 });
     await mouse('mouseReleased', rz0.x, rz0.y, { clickCount: 2 });
     await sleep(200);
-    check((await paneFacts()).width === 420, '矩阵开始前宽度复位到默认 420（截图代表默认观感）');
-    check(await read(`(()=>{const s=document.querySelector('#rightPane .rp-head-sub, #rightPane .chg-sub');return Boolean(s)&&!s.hidden&&s.getBoundingClientRect().width>20})()`), '默认宽度下标题带会显示说明行（窄了才让位）');
+    check((await paneFacts()).width === limits.default, '矩阵开始前宽度复位到默认 392（截图代表默认观感）');
+    check(await read(`(()=>{const s=document.querySelector('#rightPane .chg-head h3'),nav=document.querySelector('#workPanelNav');return Boolean(s)&&s.checkVisibility()&&s.getBoundingClientRect().width>20&&nav.getBoundingClientRect().height===46})()`), '默认宽度下工作导航和实际面板标题可读（冗余说明由正文承载）');
     await closePane();
     await until(async () => (await paneFacts()).hidden);
     const matrix = [];

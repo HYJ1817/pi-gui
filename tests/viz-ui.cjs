@@ -131,6 +131,21 @@ async function main() {
   const renderedBars = testContainer.querySelectorAll('rect.viz-bar');
   ok('renders 3 bars for cross-zero dataset', renderedBars.length === 3);
   ok('cross-zero bar chart renders visible zero line', testContainer.querySelector('.viz-zero-line') !== null);
+  const chartWrapper = testContainer.querySelector('.viz-svg-wrapper');
+  const chartTip = testContainer.querySelector('.viz-tooltip');
+  chartWrapper.getBoundingClientRect = () => ({ left: 830, top: 200, width: 360, height: 280 });
+  chartTip.getBoundingClientRect = () => ({ width: 180, height: 60 });
+  renderedBars[0].getBoundingClientRect = () => ({ left: 960, top: 270, width: 20, height: 40 });
+  renderedBars[0].dispatchEvent(new window.FocusEvent('focus'));
+  ok('keyboard chart tooltip remains inside its offset wrapper', () => {
+    const left = parseFloat(chartTip.style.left), top = parseFloat(chartTip.style.top);
+    return !chartTip.hidden && left >= 0 && left + 180 <= 360 && top >= 0 && top + 60 <= 280;
+  });
+  renderedBars[0].dispatchEvent(new window.MouseEvent('mouseenter', { clientX: 1189, clientY: 479 }));
+  ok('pointer chart tooltip measures its real size at the bottom-right boundary', () => {
+    const left = parseFloat(chartTip.style.left), top = parseFloat(chartTip.style.top);
+    return left >= 0 && left + 180 <= 360 && top >= 0 && top + 60 <= 280;
+  });
   negChart.dispose();
   testContainer.remove();
 

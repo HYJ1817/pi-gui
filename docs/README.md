@@ -24,6 +24,7 @@
 | 代码规范与开发验收材料 | [代码规范](coding-style.md)、[验收材料](acceptance.md) | [开发约束](../AGENTS.md)、[审查规则](../REVIEW.md)、[测试政策](testing.md#测试执行政策) |
 | 日常交付工具 | [PR 模板](../.github/PULL_REQUEST_TEMPLATE.md)、[EditorConfig](../.editorconfig)、[文件规模报告](../scripts/report-file-size.mjs) | [代码规范](coding-style.md)、[验收材料](acceptance.md)、[审查规则](../REVIEW.md) |
 | UI 与布局 | [工作区与生命周期](work-surfaces.md)、[应用外壳](app-shell.md) | [会话界面](conversation-ui.md)、[输入区](composer-ui.md)、[能力展示](capability-ux.md) |
+| PI-Desktop 重构最终修复 | [修复与验收材料](ui/pi-desktop-final-remediation-acceptance.md) | [原独立审计](ui/pi-desktop-final-audit.md)、[分批修复计划](ui/pi-desktop-final-remediation-plan.md)、[参考规范](ui/pi-desktop-reference/README.md) |
 | Git Changes 与 Diff | [Git Changes](git-changes.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)；行级评论当前设计见 [持久化说明](git-changes.md#九行级评论持久化t3-b)，历史 [T3-A 验收](T3-A-acceptance.md) 与 [T3-B 验收](T3-B-acceptance.md) 仅证明各自提交 |
 | 协同流程图编辑 | [Z4-2 契约](Z4-2-contract.md)、[验收状态](Z4-2-acceptance.md) | [独立审查](Z4-2-reviews.md)、[Agent 来源研究](Z4-2-agent-source-research.md)；Z4-3 接入真实 Agent 建议来源：[来源契约](Z4-3-agent-source-contract.md)、[验收状态](Z4-3-acceptance.md) |
 | 并行输入、思考等级与历史工具摘要 | [Z5 规划](Z5-roadmap.md)、[Z5 审计](Z5-0-product-audit.md) | [Z5-1 验收](Z5-1-acceptance.md)、[Z5-2 验收](Z5-2-acceptance.md)、[Z5-3 验收](Z5-3-acceptance.md)、[Z5-3B 验收](Z5-3B-acceptance.md)、[Z5-Final 验收](Z5-final-acceptance.md) |

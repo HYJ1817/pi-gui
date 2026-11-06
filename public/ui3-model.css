@@ -30,7 +30,7 @@
   color:var(--ds-text-primary);
 }
 #composerPopover.model-mode {width:320px}
-#composerPopover.tip-mode>div {padding:12px}
+#composerPopover.tip-mode {border:1px solid var(--ds-border-default);border-radius:var(--radius-md-plus);padding:16px;max-height:min(560px,calc(100vh - 32px))}
 #composerPopover.tip-mode .tip-big {font-size:var(--text-xl);font-weight:500;margin:6px 0;color:var(--ds-text-primary)}
 #composerPopover.tip-mode .tip-head {color:var(--ds-text-muted);font-size:var(--text-sm)}
 #composerPopover.tip-mode :is(.tip-dim:not(.tip-warn),.tip-row) {color:var(--ds-text-muted)}

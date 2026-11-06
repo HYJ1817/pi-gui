@@ -1,0 +1,426 @@
+{
+  "summary": [
+    {
+      "file": "app-shell.css",
+      "lines": 206,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "collab-panel.css",
+      "lines": 15,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "collab-productivity.css",
+      "lines": 70,
+      "important": 1,
+      "hex": 19,
+      "importantDeclarations": 1
+    },
+    {
+      "file": "collab.css",
+      "lines": 143,
+      "important": 1,
+      "hex": 29,
+      "importantDeclarations": 1
+    },
+    {
+      "file": "process.css",
+      "lines": 16,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "runtime-conversation.css",
+      "lines": 70,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "specs.css",
+      "lines": 299,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "styles.css",
+      "lines": 3676,
+      "important": 47,
+      "hex": 1,
+      "importantDeclarations": 45
+    },
+    {
+      "file": "tokens.css",
+      "lines": 523,
+      "important": 0,
+      "hex": 174,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "ui\\primitives.css",
+      "lines": 359,
+      "important": 3,
+      "hex": 0,
+      "importantDeclarations": 3
+    },
+    {
+      "file": "ui3-composer.css",
+      "lines": 69,
+      "important": 0,
+      "hex": 1,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "ui3-inline-commands.css",
+      "lines": 125,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "ui3-model.css",
+      "lines": 158,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "ui4-approval.css",
+      "lines": 383,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "ui4-feedback.css",
+      "lines": 507,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "ui4-pane.css",
+      "lines": 526,
+      "important": 2,
+      "hex": 0,
+      "importantDeclarations": 2
+    },
+    {
+      "file": "ui5-logs.css",
+      "lines": 458,
+      "important": 0,
+      "hex": 0,
+      "importantDeclarations": 0
+    },
+    {
+      "file": "viz.css",
+      "lines": 358,
+      "important": 3,
+      "hex": 22,
+      "importantDeclarations": 3
+    }
+  ],
+  "undefinedVars": [
+    {
+      "file": "styles.css",
+      "line": 422,
+      "name": "--composer-reserved-height",
+      "fallback": ", 112px"
+    },
+    {
+      "file": "styles.css",
+      "line": 995,
+      "name": "--line-strong",
+      "fallback": ", var(--line"
+    },
+    {
+      "file": "styles.css",
+      "line": 1002,
+      "name": "--sans",
+      "fallback": ""
+    },
+    {
+      "file": "styles.css",
+      "line": 1011,
+      "name": "--sans",
+      "fallback": ""
+    },
+    {
+      "file": "styles.css",
+      "line": 1027,
+      "name": "--sans",
+      "fallback": ""
+    },
+    {
+      "file": "styles.css",
+      "line": 1648,
+      "name": "--composer-reserved-height",
+      "fallback": ", 112px"
+    },
+    {
+      "file": "styles.css",
+      "line": 2747,
+      "name": "--font-weight-regular",
+      "fallback": ""
+    },
+    {
+      "file": "styles.css",
+      "line": 2877,
+      "name": "--font-weight-regular",
+      "fallback": ""
+    },
+    {
+      "file": "styles.css",
+      "line": 3599,
+      "name": "--bg-hover",
+      "fallback": ",rgba(0,0,0,.03"
+    },
+    {
+      "file": "styles.css",
+      "line": 3670,
+      "name": "--text-muted",
+      "fallback": ""
+    },
+    {
+      "file": "styles.css",
+      "line": 3673,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "ui3-composer.css",
+      "line": 2,
+      "name": "--ui3-composer-scrollbar-width",
+      "fallback": ",0px"
+    },
+    {
+      "file": "ui3-composer.css",
+      "line": 17,
+      "name": "--composer-reserved-height",
+      "fallback": ",112px"
+    },
+    {
+      "file": "ui3-composer.css",
+      "line": 17,
+      "name": "--composer-reserved-height",
+      "fallback": ",112px"
+    },
+    {
+      "file": "ui4-feedback.css",
+      "line": 7,
+      "name": "--ui4-toast-right",
+      "fallback": ", 18px"
+    },
+    {
+      "file": "ui4-feedback.css",
+      "line": 8,
+      "name": "--ui4-toast-bottom",
+      "fallback": ", 18px"
+    },
+    {
+      "file": "ui4-feedback.css",
+      "line": 9,
+      "name": "--ui4-toast-max",
+      "fallback": ", 380px"
+    },
+    {
+      "file": "ui4-feedback.css",
+      "line": 10,
+      "name": "--ui4-toast-height",
+      "fallback": ", 560px"
+    },
+    {
+      "file": "viz.css",
+      "line": 11,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 13,
+      "name": "--bg-card",
+      "fallback": ", rgba(255, 255, 255, 0.03"
+    },
+    {
+      "file": "viz.css",
+      "line": 19,
+      "name": "--accent",
+      "fallback": ", #6e84a3"
+    },
+    {
+      "file": "viz.css",
+      "line": 36,
+      "name": "--bg-subtle",
+      "fallback": ", rgba(255, 255, 255, 0.06"
+    },
+    {
+      "file": "viz.css",
+      "line": 67,
+      "name": "--text-dim",
+      "fallback": ", #888"
+    },
+    {
+      "file": "viz.css",
+      "line": 75,
+      "name": "--bg-subtle",
+      "fallback": ", rgba(255, 255, 255, 0.08"
+    },
+    {
+      "file": "viz.css",
+      "line": 76,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 79,
+      "name": "--text-sub",
+      "fallback": ", #aaa"
+    },
+    {
+      "file": "viz.css",
+      "line": 91,
+      "name": "--bg-subtle",
+      "fallback": ", #2a2a2e"
+    },
+    {
+      "file": "viz.css",
+      "line": 93,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 99,
+      "name": "--accent",
+      "fallback": ", #6e84a3"
+    },
+    {
+      "file": "viz.css",
+      "line": 104,
+      "name": "--text-dim",
+      "fallback": ", #888"
+    },
+    {
+      "file": "viz.css",
+      "line": 114,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 130,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 131,
+      "name": "--bg-card",
+      "fallback": ", rgba(255, 255, 255, 0.02"
+    },
+    {
+      "file": "viz.css",
+      "line": 146,
+      "name": "--text-dim",
+      "fallback": ", #888"
+    },
+    {
+      "file": "viz.css",
+      "line": 163,
+      "name": "--accent",
+      "fallback": ", #4a72b2"
+    },
+    {
+      "file": "viz.css",
+      "line": 181,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 183,
+      "name": "--text-dim",
+      "fallback": ", #888"
+    },
+    {
+      "file": "viz.css",
+      "line": 195,
+      "name": "--bg-subtle",
+      "fallback": ", rgba(255, 255, 255, 0.08"
+    },
+    {
+      "file": "viz.css",
+      "line": 196,
+      "name": "--text-sub",
+      "fallback": ", #aaa"
+    },
+    {
+      "file": "viz.css",
+      "line": 217,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 220,
+      "name": "--accent",
+      "fallback": ", #4a72b2"
+    },
+    {
+      "file": "viz.css",
+      "line": 225,
+      "name": "--text-sub",
+      "fallback": ", #aaa"
+    },
+    {
+      "file": "viz.css",
+      "line": 255,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 262,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 267,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 272,
+      "name": "--text-dim",
+      "fallback": ", #888"
+    },
+    {
+      "file": "viz.css",
+      "line": 328,
+      "name": "--bg-card",
+      "fallback": ", #202024"
+    },
+    {
+      "file": "viz.css",
+      "line": 329,
+      "name": "--border",
+      "fallback": ""
+    },
+    {
+      "file": "viz.css",
+      "line": 341,
+      "name": "--text-dim",
+      "fallback": ", #888"
+    }
+  ]
+}

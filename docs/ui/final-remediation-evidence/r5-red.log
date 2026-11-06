@@ -1,0 +1,48 @@
+
+PASS normal sandbox and DPR 1.5
+PASS 275px sidebar / 46px continuous header
+PASS dark canvas/sidebar and native overlay share semantic palette
+PASS titlebar drag / buttons no-drag / native control clearance
+PASS 28px project and session rows
+PASS reference row and toolbar corner aliases are preserved
+PASS 01-dark-expanded native caption captured from exact own window source
+PASS collapsed sidebar consumes zero width; restore uses reference 12px inset
+PASS collapsed restore excludes native titlebar dragging
+PASS restore retains project expansion state
+PASS sidebar owns scrolling without horizontal document overflow
+PASS project right-click opens the existing singleton without switching
+PASS reference menu uses 14px panel / 10px row corners
+PASS Escape closes menu and restores overflow trigger focus
+PASS session right-click preserves rename/archive/delete and permissions
+PASS running dot reflects the production classic activity event
+PASS completion clears running indication without reordering
+PASS light palette also updates real native titlebar
+PASS 07-light-expanded native caption captured from exact own window source
+PASS narrow header controls remain before the native buttons
+PASS topbar search calls the existing search and expands sessions
+PASS long session list scrolls independently with fixed footer and topbar
+PASS linked tasks leave space for title and actions
+PASS A/B settings rail/headings retain geometry and hide conversation chrome
+PASS topbar new conversation delegates to the real command path
+FAIL R3 welcome uses the centered reference hero hierarchy undefined
+PASS R3 appearance group dissolves into the page without a second card
+PASS R1 appearance completion action is visible in the real stylesheet
+PASS R1 narrow settings keeps the size label readable on one line
+PASS R1 provider primary entry exposes both Save and Cancel
+PASS R1 missing provider ID never reaches save API
+PASS R1 plaintext provider credentials remain rejected
+PASS R1 provider Save is reachable using the native Tab chain
+PASS R1 valid provider form delegates once to the real API wrapper
+PASS R1 empty and primary Add share the same existing presenter
+PASS R1 cancelling provider form performs no writes
+Error occurred in handler for 'pi-gui:app-update-state': Error: No handler registered for 'pi-gui:app-update-state'
+    at Session.<anonymous> (node:electron/js2c/browser_init:1:118275)
+    at Session.emit (node:events:514:28)
+PASS R1 diagnostic export and refresh remain reachable
+PASS R1 keyboard chart tooltip stays in its actual panel
+PASS R1 light chart button and tooltip have readable contrast
+FAIL R5 slash aligns to the outer Composer and exposes existing command groups undefined
+FAIL R5 usage tip uses reference 376px / 14px / 16px geometry undefined
+FAIL R5 project heading stays visible in its existing long-list scroller undefined
+PASS no renderer process crash
+Shell Electron: 39/43; failed=4; screenshots=20; output=C:\Users\21022\AppData\Local\Temp\pi-gui-final-fix-c41a320354784136ac00435c9373432e\r5-red

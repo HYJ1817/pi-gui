@@ -1,0 +1,356 @@
+{
+  "sha": "326cb3284c5bf67398290ca4cd6ea8bfd5ee8496",
+  "rawLogRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-final-audit-b2626d3cd52a4ee8a4b92a96fd186ecb",
+  "records": [
+    {
+      "command": "node tests/theme.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "7ff88298f5474cab5e8c368b535ebbfb1e022ad5ad106bc9ba238da5e6f301c2",
+      "tail": [
+        "ok preload caches event before module subscription and replays it",
+        "ok preload ignores delayed event revision",
+        "Theme display: 47/47; failed=0; fixture persistence and IPC; not layout evidence"
+      ]
+    },
+    {
+      "command": "node tests/primitives.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "d19e05485da60b46f6f99e907a6b51d773187d0042263421e74e5f295c2ca1ac",
+      "tail": [
+        "✓ createBadge passed",
+        "✓ createSettingsCard & createSettingsRow passed",
+        "All primitive tests passed successfully!"
+      ]
+    },
+    {
+      "command": "node tests/settings-acceptance.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "4aabc23e446109227b553b8056fa0564523587aa89a5deb61bbbc0a54224d462",
+      "tail": [
+        "ok 15 - settings pages maintain visible 30px page-level headings in the DOM",
+        "",
+        "All 15 settings acceptance checks passed successfully!"
+      ]
+    },
+    {
+      "command": "node tests/ui3-inline-commands.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "47ff46fe7a9296e8d9f0b166a431af3acc62953ee6baf20b5716b3a40b75b38d",
+      "tail": [
+        "  ok  CSS 含约定类名与 reduced-motion 分支",
+        "",
+        "46/46 通过"
+      ]
+    },
+    {
+      "command": "node tests/ui3-integration.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "a650b25aa0d8f824b3a4ca32b26f2b6d72a1bb2fa3858190629f59b8e9bbd7ad",
+      "tail": [
+        "PASS readback closes obsolete pending explanation and restores enabled trigger",
+        "PASS ordinary Enter reaches original submit exactly once",
+        "UI3 integration 23/23; failed=0; skipped=0"
+      ]
+    },
+    {
+      "command": "node tests/runtime-conversation.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "c807359618e15623c7de7f32f38e66eb89591a9c18b31455e0cbf6d587e6c66e",
+      "tail": [
+        "  ok  Runtime output uses semantic Markdown headings, lists and code without fabricated live roles",
+        "  ok  Runtime Markdown keeps raw HTML inert and rejects unsafe links",
+        "Runtime conversation: 106/106"
+      ]
+    },
+    {
+      "command": "node tests/context-reference-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "0a6fe4fe8b9a1bbd1d3773784051fb297a242307c2310fd76685cae1044ecb71",
+      "tail": [
+        "  ok   specs reopen keeps the selected document and snapshot identity",
+        "",
+        "Z1 context reference UI: 10/10"
+      ]
+    },
+    {
+      "command": "node tests/ui-visual-finish.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "44f8f2f8ff6708c9c3e4e61f06e5e77479b51823e2ea9e20b64a6692602b3c89",
+      "tail": [
+        "PASS extension status is bounded, inert text and stores no duplicate payload copies",
+        "PASS 500 navigation targets have distinct 12px hit areas and retain exact scroll targets",
+        "Visual finish: 10/10; failed=0"
+      ]
+    },
+    {
+      "command": "node tests/app-shell.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "7909106a1582025b53559fa298df403be0606a948ce57267a148f140a0b03ea9",
+      "tail": [
+        "PASS runtime with no workspace never borrows classic project",
+        "PASS title remains a draggable heading, no unsupported rename editor",
+        "App shell: 10/10; failed=0"
+      ]
+    },
+    {
+      "command": "node tests/specs.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "2b262867df4d8890f49068177f781cebcd1538c9a159e229ca89f38fdbe948e5",
+      "tail": [
+        "  ok  no project is an empty state, not a filesystem error",
+        "  ok  unknown deferred scope fails closed",
+        "Specs: 18/18; skipped=0"
+      ]
+    },
+    {
+      "command": "node tests/provider-auth.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "c256a91c518769cd9bbcdffe6e31d819df35fc55876bd6c7633ff3cff63ecd15",
+      "tail": [
+        "  ok  actual unsupported public SDK login fails with unsupported code",
+        "",
+        "105/105 通过"
+      ]
+    },
+    {
+      "command": "node tests/stable-session-order.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "2c90fe04a00e501d448d4f60d00f93f2fd2458e40ae0c8c9d9dad507984ca29f",
+      "tail": [
+        "  ok   legacy lexical fallback survives changed mtime and restart",
+        "",
+        "41 passed, 0 failed"
+      ]
+    },
+    {
+      "command": "node tests/sidebar-menu.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "92ab261bbb22cc0ba79b30dd6fa358bdb3883daed9850d340734b712b8c4aca8",
+      "tail": [
+        "  ok   D11. 菜单样式：单例浮层、在弹层之下、低对比分隔线、danger 只在 hover 变红",
+        "",
+        "37/37 通过"
+      ]
+    },
+    {
+      "command": "node tests/split-workbench-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "090f4338a829af9e051d8eb40728f549fe0fd65e9086981f37ec414960f205c5",
+      "tail": [
+        "  ok  repeated open/close releases split observers and leaves the right pane empty",
+        "  ok  repeated open/close leaves no split scope, resize or drag listeners behind",
+        "Split workbench UI: 30/30; skipped=0"
+      ]
+    },
+    {
+      "command": "node tests/specs-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "07a18f0609cd2b1a259fabc2a0c2aa74a72fbcc3aa7c9cfac528de6cb7dcf1c4",
+      "tail": [
+        "  ok  leaving Specs disposes its listeners and in-flight work",
+        "  ok  an empty project has a compact state and leaves chat DOM untouched",
+        "Specs UI: 25/25; skipped=0"
+      ]
+    },
+    {
+      "command": "node tests/browser-workbench-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "614ef8a17d9a79936cef070e1479e313bcbf6f576c270a7baf539acddb31569a",
+      "tail": [
+        "PASS classic project change closes old browser and workbench",
+        "PASS closing workbench releases browser instance and listeners",
+        "Browser workbench UI: 14/14"
+      ]
+    },
+    {
+      "command": "node tests/ui3-composer.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "e3c37da77dced3e92f6230ad9939c03e68c85c4e2e7ae962a5c1e96da7496206",
+      "tail": [
+        "PASS side pane width change recalculates input height",
+        "PASS window resize refreshes reservation and preserves draft",
+        "UI3 Composer: 34/34, failed=0, skipped=0"
+      ]
+    },
+    {
+      "command": "node tests/ui3-model.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "345714cd8a28f97126c51ab064be7ea6d8cf48c4a01609154104d7b3e30584c0",
+      "tail": [
+        "  ok  上下文浮层在触发按钮保留焦点时 Escape 关闭并还原焦点",
+        "",
+        "UI-3B 模型选择器: 54/54 通过"
+      ]
+    },
+    {
+      "command": "node tests/session-search.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "7e24eeb2cbd39634a1658a248767c01d2b8e701d50b900ba934dfcaf84c8df23",
+      "tail": [
+        "  ok   12h. 清空缓存后重新读取全部会话",
+        "",
+        "72/72 通过"
+      ]
+    },
+    {
+      "command": "node tests/runtime-store.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "6b8ba0f1c46c34d630c21713353e47956fe692b7ef9162a08d6aebebb9750e2f",
+      "tail": [
+        "Runtime conversation store: 34/34"
+      ]
+    },
+    {
+      "command": "node tests/session-background-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "3f338d243faf57dc3feb5794188772c1da10dbff1211bb458d78cd94adbb67b6",
+      "tail": [
+        "PASS new draft transfer requires its acknowledgement and a new native session in the same workspace generation",
+        "PASS ordinary B auto-opens its own Runtime while A runs; late launch cannot steal C",
+        "Session background UI: 9/9; failed=0"
+      ]
+    },
+    {
+      "command": "node tests/session-background.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "7c9128873c44cc2a9efc3cc7656a8b223a6f170d100a69480ec349c3bdbc8941",
+      "tail": [
+        "PASS background completion remains on the same native file and is visible on reread",
+        "PASS idle handoff still uses the original native switch protocol",
+        "Session background: 5/5; failed=0"
+      ]
+    },
+    {
+      "command": "node tests/runtime-nav.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "13ec84690b681908d2ad06babd0d11086fb686ea0511db4f69caae6d80676702",
+      "tail": [
+        "  ok  后台 SSE 不从输入框抢焦点",
+        "  ok  乱序 focus 应答只打开用户最后选择的会话",
+        "Runtime nav: 38/38"
+      ]
+    },
+    {
+      "command": "node tests/runtime-draft.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "68d5c5eb2dfa15dcdc2c4dd242946e1cf1cffd3c3de73d968a4247d0ffbb77b8",
+      "tail": [
+        "  ok  恢复 flush 文本",
+        "  ok  flush 后 pending 已清空",
+        "Runtime draft tests: 42/42"
+      ]
+    },
+    {
+      "command": "node tests/runtime-secondary.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "06d8cd4607b5c1fb69f53bbc79a7b734bf0613a4ef36cdff775a8d45162cc890",
+      "tail": [
+        "PASS closing focused session retains scoped split empty state and no old Browser",
+        "PASS runtime leave closes split and all subscriptions",
+        "Runtime secondary: 24/24"
+      ]
+    },
+    {
+      "command": "node tests/runtime-changes.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "81aaad563b756bb6a317aa0254ef5da4460d9517b64776ebe2e704065a8c6841",
+      "tail": [
+        "  ok  archive runs after restore releases lifecycle lock",
+        "  ok  all scoped failures preserve classic file",
+        "Runtime changes scope: 60/60"
+      ]
+    },
+    {
+      "command": "node tests/diff-comments-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "5e285143107f9eb49eeeca6a21246a557f9609b510bba9b8e52536e967ff52bb",
+      "tail": [
+        "  ok   fill refuses when the page is not on a conversation view",
+        "",
+        "Diff comments UI: 51/51"
+      ]
+    },
+    {
+      "command": "node tests/session-revert-object-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "df46d449b27cbb090057cf6969c617b2f4930cb121abc6af7822f73dd0443ae9",
+      "tail": [
+        "  ok  legacy risk record remains read only even backend offers recovery",
+        "  ok  closing controller removes all confirmation UI",
+        "Object revert UI: 52/52; failed=0; skipped=0 (DI interaction only)"
+      ]
+    },
+    {
+      "command": "node tests/ui-ia.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "aa99a5034a3d22346d0ca9c3d855f7324ea59bc63bb53168078f13779d0c7b9c",
+      "tail": [
+        " ok Stop pending disables its visible control until authoritative confirmation",
+        "",
+        "P30 IA 26/26 passed"
+      ]
+    },
+    {
+      "command": "node tests/ui4-integration.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "995f37ba38843e476638c4135ada5e11f40da669398cf2bd43e8b8a10d11bcee",
+      "tail": [
+        "PASS current-owner approval outcome remains visible and refreshed: true/true",
+        "PASS unrelated toast scroll cannot close an open action menu; anchor/document scroll still does",
+        "UI4 integration: 56/56; failed=0; skipped=0"
+      ]
+    },
+    {
+      "command": "npm run test:session-concurrency",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "9d20bb1d37dc9c980b243d7c5f2cc1a4aa10837d6fd78806a65af3686bb13009",
+      "tail": [
+        "PASS closing A retains B workspace occupancy and live control",
+        "PASS sharing requires guard admission, not a deleted lease check",
+        "Ordinary session runtime: 5/5"
+      ]
+    },
+    {
+      "command": "node tests/viz-ui.cjs",
+      "exitCode": 0,
+      "evidence": "exit code observed in audit tool execution",
+      "logSha256": "53aaf7891c1848b68175df12b34e5e5188c7ab89ef82abe695becb4fc7970978",
+      "tail": [
+        "  ok   pane and runtime component safely closed and cleaned up",
+        "",
+        "Viz UI & Review Fixes: 66/66 passed."
+      ]
+    }
+  ]
+}

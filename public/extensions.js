@@ -27,7 +27,7 @@
 import { S, ownsWorkspace } from './state.js';
 import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchMcpServers, refreshMcpStatus, mcpServerAction, fetchExtensions, restartBackend } from './api.js';
 import { confirmModal } from './ui/modal.js';
-import { openWorkSurface } from './ui/workspace-surface.js';
+import { openWorkSurface, projectWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
 import { capabilityTab } from './capability-view.js';
 import { snapshotMcpObservation } from './mcp-observer.js';
@@ -1012,9 +1012,9 @@ const TABS = [
 export function openExtensions(options = {}) {
   const wanted = TABS.some((tab) => tab.id === options.tab) ? options.tab : 'all';
   openWorkSurface('extensions', (card, instance) => {
-    card.classList.add('wide', 'ext');
+    card.classList.add('wide', 'ext', 'settings-resource-page');
 
-    const h = el('h3', '', '扩展与能力');
+    const h = el('h3', 'settings-page-title', '扩展与能力');
     card.appendChild(h);
     card.appendChild(
       el(
@@ -1039,6 +1039,10 @@ export function openExtensions(options = {}) {
         btn.setAttribute('aria-selected', String(btn.dataset.tab === active));
       }
       const current = TABS.find((tab) => tab.id === active) || TABS[0];
+      const destination = active === 'mcp' ? ['navMcp', 'MCP 配置']
+        : active === 'capabilities' ? ['navCapabilities', '能力状态'] : ['navExtensions', 'Skills 与扩展'];
+      projectWorkSurface('extensions', { navigation: destination[0], title: destination[1] });
+      h.textContent = active === 'all' || active === 'extensions' ? '扩展与能力' : destination[1];
       body.setAttribute('aria-labelledby', current.domId);
       body.innerHTML = '';
       if (!panels[active]) {

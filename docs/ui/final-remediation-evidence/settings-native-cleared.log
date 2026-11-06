@@ -1,0 +1,33 @@
+
+PASS normal sandbox and DPR 1.5
+PASS 275px sidebar / 46px continuous header
+PASS dark canvas/sidebar and native overlay share semantic palette
+PASS titlebar drag / buttons no-drag / native control clearance
+PASS 28px project and session rows
+PASS reference row and toolbar corner aliases are preserved
+PASS 01-dark-expanded native caption captured from exact own window source
+PASS collapsed sidebar consumes zero width; restore uses reference 12px inset
+PASS collapsed restore excludes native titlebar dragging
+PASS restore retains project expansion state
+PASS sidebar owns scrolling without horizontal document overflow
+PASS project right-click opens the existing singleton without switching
+PASS reference menu uses 14px panel / 10px row corners
+PASS Escape closes menu and restores overflow trigger focus
+PASS session right-click preserves rename/archive/delete and permissions
+PASS running dot reflects the production classic activity event
+PASS completion clears running indication without reordering
+PASS light palette also updates real native titlebar
+PASS 07-light-expanded native caption captured from exact own window source
+PASS narrow header controls remain before the native buttons
+PASS topbar search calls the existing search and expands sessions
+PASS long session list scrolls independently with fixed footer and topbar
+PASS linked tasks leave space for title and actions
+PASS A/B settings rail/headings retain geometry and hide conversation chrome
+PASS topbar new conversation delegates to the real command path
+PASS R1 trusted settings search Down reaches the first item exactly once
+PASS R1 trusted Up from the first item returns to settings search
+PASS R1 trusted Down after filtering reaches the actual first match
+PASS R1 trusted Escape closes settings without a stale navigation focus
+PASS R1 missing Base URL remains rejected before the production API wrapper
+PASS no renderer process crash
+Shell Electron: 31/31; failed=0; screenshots=14; output=C:\Users\21022\AppData\Local\Temp\pi-gui-final-fix-c41a320354784136ac00435c9373432e\settings-native-cleared

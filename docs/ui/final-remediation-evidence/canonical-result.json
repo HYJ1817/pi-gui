@@ -1,0 +1,17 @@
+{
+  "command": "npm test",
+  "started": "2026-11-06T03:25:10.583Z",
+  "ended": "2026-11-06T04:45:24.266Z",
+  "elapsedMs": 4813683,
+  "exitCode": 0,
+  "commands": 235,
+  "sourceUnchanged": false,
+  "head": "d7e84c57d87bf02fdde075e6b9a62021819340a3",
+  "log": "canonical.log",
+  "ports": {
+    "TEST_PORT": 17881,
+    "GUARD_PORT": 17882,
+    "SEC_PORT": 17883,
+    "GIT_PORT": 17884
+  }
+}

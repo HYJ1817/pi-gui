@@ -21,17 +21,23 @@ function sync(view) {
    * 用户在并行会话里同样需要点侧栏切走。 */
   $('title').hidden = work;
   $('workViewTitle').hidden = !work;
-  $('workViewTitle').textContent = titles[view] || '';
   $('btnTree').hidden = work;
   $('btnMore').hidden = work;
-  for (const id of new Set(Object.values(rail))) {
+  projectWorkSurface(view);
+  document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-view', { detail: { view } }));
+}
+
+// Projection only: Extensions retains the actual active-tab state.
+export function projectWorkSurface(view, { navigation = rail[view], title = titles[view] || '' } = {}) {
+  if (current.view !== view) return;
+  $('workViewTitle').textContent = title;
+  for (const id of new Set([...Object.values(rail), 'navMcp', 'navCapabilities'])) {
     const button = $(id);
-    const active = button.id === rail[view];
+    const active = button.id === navigation;
     button.classList.toggle('is-active', active);
     if (active) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
-  document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-view', { detail: { view } }));
 }
 
 export function workspaceView() { return current.view; }
@@ -89,7 +95,7 @@ export function openWorkSurface(view, mount) {
   current = { view, token, dispose: null };
   sync(view);
   mount(host, instance);
-  if (focusWasInSurface) $(rail[view]).focus();
+  if (focusWasInSurface) (document.querySelector('#globalMoreMenu [aria-current="page"]') || $(rail[view])).focus();
   return instance;
 }
 

@@ -172,7 +172,11 @@ export function renderProviders(box) {
     addBtn.type = 'button';
     addBtn.className = 'btn primary prov-empty-btn';
     addBtn.textContent = '+ 添加服务';
-    addBtn.onclick = () => openAddProvider();
+    addBtn.onclick = () => {
+      const owner = box.parentElement?.querySelector('.prov-btn-main');
+      if (owner) owner.click();
+      else openAddProvider();
+    };
     emptyCard.appendChild(addBtn);
     box.appendChild(emptyCard);
     return;

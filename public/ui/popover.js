@@ -42,8 +42,8 @@ export function openPop(target, { tip = false, model = false, align = 'right' } 
   // menus on the available side of the existing pane without changing it.
   const pane = document.getElementById('rightPane');
   const edge = pane && !pane.hidden ? Math.max(40, Math.min(window.innerWidth, pane.getBoundingClientRect().left)) : window.innerWidth;
-  pop.style.minWidth = Math.min(232, edge - 16) + 'px';
-  pop.style.maxWidth = Math.min(420, edge - 16) + 'px';
+  pop.style.minWidth = Math.min(tip ? 376 : 232, edge - 16) + 'px';
+  pop.style.maxWidth = Math.min(tip ? 376 : 420, edge - 16) + 'px';
 
   const a = target.getBoundingClientRect();
   const r = pop.getBoundingClientRect();

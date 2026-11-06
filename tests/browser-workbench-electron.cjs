@@ -98,7 +98,14 @@ async function main() {
     const child = win.contentView.children.find(v => v.webContents);
     if (child) { fs.writeFileSync(path.join(OUT, name + '-native-page.png'), (await child.webContents.capturePage()).toPNG()); shots.push(name + '-native-page.png'); }
   };
-  await read('test.browser.open()'); await until(() => browser.getWebContents(), 'native creation'); browser.navigate(page);
+  await read('test.browser.open()'); await until(() => browser.getWebContents(), 'native creation');
+  await until(()=>read(`!document.querySelector('.browser-empty').hidden`),'blank guidance');
+  check('app-owned empty page hides the native blank view', !native());
+  await shot('00-browser-empty');
+  await read(`document.querySelector('#browserAddress').value='file:///not-allowed';document.querySelector('#browserAddress').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))`);
+  await until(()=>read(`!document.querySelector('#browserError').hidden`),'rejected empty URL');
+  check('rejected navigation preserves empty guidance and native occlusion', !native()&&await read(`!document.querySelector('.browser-empty').hidden&&!document.querySelector('#browserError').hidden`));
+  browser.navigate(page);
   await until(() => browser.getState().url === page + '/' && !browser.getState().loading, 'local page');
   await until(boundsMatch, 'single bounds'); check('single Browser has valid native viewport', true);
   await read("document.getElementById('browserAddress').blur()");
@@ -174,7 +181,8 @@ async function main() {
   await read('void test.specs()'); await until(() => !browser.getWebContents(), 'Specs transition closes classic Browser');
   check('Specs workbench remains functional and native Browser removed', await read("!!document.querySelector('#workbenchSpecsPane')"));
   for (let i = 0; i < 20; i++) {
-    await read('test.browser.openSplit()'); await until(boundsMatch, 'reopen cycle');
+    await read('test.browser.openSplit()'); await until(()=>browser.getWebContents(),'reopen creates a view');
+    await browser.navigate(page); await until(boundsMatch, 'reopen cycle');
     check(`native reopen cycle ${i + 1} has one view`, win.contentView.children.length === 1);
     await read("document.getElementById('browserClose').click()");
     await until(() => browser.getWebContents() === null && win.contentView.children.length === 0, 'native close cycle');

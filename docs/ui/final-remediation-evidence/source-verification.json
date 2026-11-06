@@ -1,0 +1,17 @@
+{
+  "changedDuringCanonical": [
+    {
+      "file": "tests/ui4-pane.cjs",
+      "before": "bdf030e32bb1336531fd9a6783e48311d3210f4378df22382966aa25ed3dad7d",
+      "after": "3f80c9af3dfc44b0fdf4f6e793747afa199a4c6bae2065f30c8bdcfb5d5b8650"
+    }
+  ],
+  "canonicalReferencesToChanged": [
+    {
+      "file": "tests/ui4-pane.cjs",
+      "commands": []
+    }
+  ],
+  "productionUnchanged": true,
+  "explanation": "Only the independent non-canonical UI4 desktop runner changed. Production and canonical leaf inputs did not change. Final UI4 runner separately passes 282/282."
+}

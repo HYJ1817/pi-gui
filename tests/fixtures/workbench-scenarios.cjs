@@ -1,5 +1,5 @@
 /* Actual app wiring and owner modules. All HTTP data below is offline fixture data. */
-module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win, browser, waitFor }) => {
+module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win, browser, browserFixtureUrl, waitFor }) => {
   win.setContentSize(1205, 803);
   await read(`(async()=>{
     window.ESt=await import('/state.js');window.ETheme=await import('/theme.js');window.EC=await import('/composer.js');
@@ -80,6 +80,10 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   await click('.work-panel-launcher-row[data-tool="btnBrowser"]');
   await waitFor(`!!document.querySelector('#browserViewport')`);
   const native = () => win.contentView.children.find(view => view.webContents === browser.getWebContents());
+  check('R4 app-owned blank displays theme-aware guidance instead of a native black page',!native()&&await read(`document.querySelector('.browser-empty').checkVisibility()`));
+  await shot('r07-browser-empty-dark');await nativeShot('r07-browser-empty-dark');
+  await read(`ETheme.setThemePreference('light')`);await shot('r08-browser-empty-light');
+  await browser.navigate(browserFixtureUrl);
   for (let i=0;i<40&&!native();i++) await paint();
   check('E full app Browser action mounts the real owned WebContentsView',!!native());
   const r=await read(`document.querySelector('#browserViewport').getBoundingClientRect().toJSON()`),b=native()?.getBounds(),zoom=win.webContents.getZoomFactor();

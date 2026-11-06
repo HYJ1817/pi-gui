@@ -1,0 +1,62 @@
+[
+  {
+    "number": 49,
+    "head": "7da97565e3cf923f80556b7ab673d961b75ebba7",
+    "changed_files": 35,
+    "merge_commit_sha": "6036ceb9d5303eb9653f39b9c54a4c9405a3a815",
+    "base": "main",
+    "state": "closed",
+    "title": "feat(ui): 依据 PI-Desktop 规范完成阶段 A 设计代币与阶段 B 设置中心重构",
+    "merged": true
+  },
+  {
+    "number": 50,
+    "head": "6e0e745baec011fd9bdc497e89800cf48c8dedd1",
+    "changed_files": 45,
+    "merge_commit_sha": "773c1f8157e1bdbfe7328ee79f632ac0954d792d",
+    "base": "main",
+    "state": "closed",
+    "title": "阶段 C：重构主界面外壳、连续顶栏与项目会话侧栏",
+    "merged": true
+  },
+  {
+    "number": 51,
+    "head": "5214c4368d740e41bb7dc6adb9c7e889ee55c1c2",
+    "changed_files": 2,
+    "merge_commit_sha": "5214c4368d740e41bb7dc6adb9c7e889ee55c1c2",
+    "base": "main",
+    "state": "closed",
+    "title": "修正更新助手回归测试的 CI 就绪等待",
+    "merged": true
+  },
+  {
+    "number": 52,
+    "head": "815a76a4000c7c7fc1e7f99b60617349dffc8fb0",
+    "changed_files": 72,
+    "merge_commit_sha": "31b4c4f8ee3165064f710ea6c535a89816478814",
+    "base": "main",
+    "state": "closed",
+    "title": "重构阶段 D 对话流与 Composer",
+    "merged": true
+  },
+  {
+    "number": 53,
+    "head": "8d4cf4b31899f471eae5810688e3a6b4f92124a6",
+    "changed_files": 101,
+    "merge_commit_sha": "5d8d9d02f5f760a17bca3f61042872bba6c85dac",
+    "base": "main",
+    "state": "closed",
+    "title": "重构阶段 E：对齐 PI-Desktop 右侧工作台",
+    "merged": true
+  },
+  {
+    "number": 54,
+    "head": "aa718d6d4f51a90e5c13ee935670cde1fc6856d1",
+    "changed_files": 94,
+    "merge_commit_sha": "326cb3284c5bf67398290ca4cd6ea8bfd5ee8496",
+    "base": "main",
+    "state": "closed",
+    "title": "收敛阶段 F：PI-Desktop 浅色主题与视觉验收",
+    "merged": true
+  }
+]

@@ -1,0 +1,3 @@
+# Preserve raw Windows log bytes, including diagnostic formatting whitespace.
+# This exception applies only to captured evidence, never source code.
+*.log -text -whitespace

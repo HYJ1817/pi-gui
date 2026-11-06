@@ -1,6 +1,6 @@
 /* Presentation audit of production modules in the normal-sandbox app runner.
  * No real Pi, model, project writes, or invented file-completion capability. */
-module.exports = async function ({ read, click, key, shot, nativeShot, paint, check, win, theme, browser, waitFor }) {
+module.exports = async function ({ read, click, key, shot, nativeShot, paint, check, win, theme, browser, browserFixtureUrl, waitFor }) {
   const answer = '### 代码与项目\n- 阅读和修改已有代码\n- 保留会话、项目和工具状态\n\n`inline code` 与 **Markdown** 保持原有行为。';
   win.setContentSize(1205, 803);
   await read(`(async()=>{
@@ -17,10 +17,10 @@ module.exports = async function ({ read, click, key, shot, nativeShot, paint, ch
     await click('#input');
     await read(`fInput.value=${JSON.stringify(value)};fInput.setSelectionRange(fInput.value.length,fInput.value.length);fInput.dispatchEvent(new Event('input',{bubbles:true}));`); await paint();
   }
-  const menuMetrics = () => read(`(()=>{const e=document.querySelector('.ui3-inline-menu'),r=e.getBoundingClientRect(),a=fInput.getBoundingClientRect(),c=getComputedStyle(e);return {width:r.width,anchor:a.width,x:r.x,right:r.right,top:r.y,bottom:r.bottom,vw:innerWidth,vh:innerHeight,ink:c.color,bg:c.backgroundColor,border:c.borderTopWidth,focus:document.activeElement===fInput}})()`);
+  const menuMetrics = () => read(`(()=>{const e=document.querySelector('.ui3-inline-menu'),r=e.getBoundingClientRect(),a=fInput.closest('.composer-box').getBoundingClientRect(),c=getComputedStyle(e);return {width:r.width,anchor:a.width,x:r.x,right:r.right,top:r.y,bottom:r.bottom,vw:innerWidth,vh:innerHeight,ink:c.color,bg:c.backgroundColor,border:c.borderTopWidth,focus:document.activeElement===fInput}})()`);
   await input('/'); await waitFor(`!!document.querySelector('.ui3-inline-menu:not([hidden])')`);
   let m=await menuMetrics();
-  check('F slash menu honors actual input width instead of obsolete 320px cap', Math.abs(m.width-m.anchor)<=1&&m.width>500,m);
+  check('F slash menu honors outer Composer width instead of obsolete 320px cap', Math.abs(m.width-m.anchor)<=1&&m.width>500,m);
   check('F slash light surface uses reference ink and keeps textarea focus', m.ink==='rgb(26, 28, 31)'&&m.bg==='rgb(255, 255, 255)'&&m.border==='0px'&&m.focus,m);
   const selected=await read(`fInput.getAttribute('aria-activedescendant')`); await key('DOWN');
   check('F real slash keyboard navigation preserves draft and source focus', await read(`fInput.getAttribute('aria-activedescendant')!==${JSON.stringify(selected)}&&fInput.value==='/'&&document.activeElement===fInput`));
@@ -79,6 +79,7 @@ module.exports = async function ({ read, click, key, shot, nativeShot, paint, ch
   check('F dark slash retains reference surface and full measured width', m.ink==='rgb(255, 255, 255)'&&Math.abs(m.width-m.anchor)<=1,m);
   await shot('f13-slash-dark'); await key('ESC');
   await read(`TH.setThemePreference('light')`);await click('#btnWorkPanel');await click('.work-panel-launcher-row[data-tool="btnBrowser"]');
+  await browser.navigate(browserFixtureUrl);
   await waitFor(`!!document.querySelector('#browserViewport')`);
   const native=()=>win.contentView.children.find(view=>view.webContents===browser.getWebContents());
   for(let i=0;i<40&&!native();i++)await paint();

@@ -1,0 +1,28 @@
+PASS all production public files match the rebuilt package
+PASS packaged preload uses context isolation without renderer Node
+PASS visible packaged action #btnSidebarCollapse
+PASS visible packaged action #btnSidebarExpand
+PASS visible packaged action #navGlobalMore
+PASS visible packaged action #navAppearance
+PASS packaged appearance keeps real actions and removes nested card
+PASS visible packaged action #navProviders
+PASS visible packaged action .prov-btn-main
+PASS packaged provider Save and Cancel are visible
+PASS visible packaged action .settings-detail-card>.modal-actions button:first-child
+PASS visible packaged action #navMcp
+PASS packaged MCP has correct unique navigation projection
+PASS visible packaged action #settingsReturn
+PASS visible packaged action #btnWorkPanel
+PASS visible packaged action .work-panel-launcher-row[data-tool="btnBrowser"]
+PASS packaged Browser empty guidance is visible in light theme
+FAIL packaged native caption captured from exact owned HWND
+node.exe: 
+Line |
+   2 |  … ath,$text); node $scriptPath *> (Join-Path $fixRoot 'packaged-gui-fin …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot process the XML from the 'Error' stream of 'C:\Program Files\nodejs\node.exe': Data at the root level is invalid. Line 1, position 366.
+node.exe: 
+Line |
+   2 |  … ath,$text); node $scriptPath *> (Join-Path $fixRoot 'packaged-gui-fin …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot process the XML from the 'Error' stream of 'C:\Program Files\nodejs\node.exe': Data at the root level is invalid. Line 1, position 366.

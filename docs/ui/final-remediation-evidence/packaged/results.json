@@ -1,0 +1,163 @@
+{
+  "executable": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-final-fix-c41a320354784136ac00435c9373432e\\rebuilt\\dist-app\\Pi GUI-win32-x64\\Pi GUI.exe",
+  "executableSha256": "0f1a6ab8608b8db6c82bf495575ecf63ffd6ef632e61f8f90e92afd84cb4a87a",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-final-packaged-y1dnnK",
+  "normalSandbox": true,
+  "fixture": "actual packaged main/preload/server/public, fake Pi, TEMP project and profile, loopback CDP only",
+  "rows": [
+    {
+      "name": "all production public files match the rebuilt package",
+      "passed": true,
+      "detail": {
+        "files": 154
+      }
+    },
+    {
+      "name": "packaged preload uses context isolation without renderer Node",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #btnSidebarCollapse",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #btnSidebarExpand",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #navGlobalMore",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #navAppearance",
+      "passed": true
+    },
+    {
+      "name": "packaged appearance keeps real actions and removes nested card",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #navProviders",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action .prov-btn-main",
+      "passed": true
+    },
+    {
+      "name": "packaged provider Save and Cancel are visible",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action .settings-detail-card>.modal-actions button:first-child",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #navMcp",
+      "passed": true
+    },
+    {
+      "name": "packaged MCP has correct unique navigation projection",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #settingsReturn",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action #btnWorkPanel",
+      "passed": true
+    },
+    {
+      "name": "visible packaged action .work-panel-launcher-row[data-tool=\"btnBrowser\"]",
+      "passed": true
+    },
+    {
+      "name": "packaged Browser empty guidance is visible in light theme",
+      "passed": true
+    },
+    {
+      "name": "packaged native caption captured from exact owned HWND",
+      "passed": true,
+      "detail": {
+        "saved": true,
+        "pixelWidth": 1808,
+        "method": "PrintWindow CLIENTONLY RENDERFULLCONTENT",
+        "pixelHeight": 1205,
+        "sampleColors": 58,
+        "expectedPid": 56996
+      }
+    },
+    {
+      "name": "actual packaged application exits after closing its own window",
+      "passed": true
+    }
+  ],
+  "shots": [
+    {
+      "file": "p01-main-dark.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    },
+    {
+      "file": "p02-main-collapsed-dark.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    },
+    {
+      "file": "p03-main-light.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    },
+    {
+      "file": "p04-appearance-light.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    },
+    {
+      "file": "p05-provider-form-light.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    },
+    {
+      "file": "p06-mcp-light.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    },
+    {
+      "file": "p07-browser-empty-light.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    },
+    {
+      "file": "p08-browser-empty-dark.png",
+      "viewport": {
+        "width": 1206,
+        "height": 804,
+        "dpr": 1.5
+      }
+    }
+  ],
+  "exitCode": 0
+}

@@ -1,0 +1,288 @@
+[
+  {
+    "command": "node tests/theme.cjs",
+    "tail": [
+      "ok preload caches event before module subscription and replays it",
+      "ok preload ignores delayed event revision",
+      "Theme display: 47/47; failed=0; fixture persistence and IPC; not layout evidence"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/primitives.cjs",
+    "tail": [
+      "✓ createBadge passed",
+      "✓ createSettingsCard & createSettingsRow passed",
+      "All primitive tests passed successfully!"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/settings-acceptance.cjs",
+    "tail": [
+      "ok 16 - settings pages maintain visible 30px page-level headings in the DOM",
+      "",
+      "All 16 settings acceptance checks passed successfully!"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/ui3-inline-commands.cjs",
+    "tail": [
+      "  ok  CSS 含约定类名与 reduced-motion 分支",
+      "",
+      "46/46 通过"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/ui3-integration.cjs",
+    "tail": [
+      "PASS readback closes obsolete pending explanation and restores enabled trigger",
+      "PASS ordinary Enter reaches original submit exactly once",
+      "UI3 integration 23/23; failed=0; skipped=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/runtime-conversation.cjs",
+    "tail": [
+      "  ok  Runtime output uses semantic Markdown headings, lists and code without fabricated live roles",
+      "  ok  Runtime Markdown keeps raw HTML inert and rejects unsafe links",
+      "Runtime conversation: 106/106"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/context-reference-ui.cjs",
+    "tail": [
+      "  ok   specs reopen keeps the selected document and snapshot identity",
+      "",
+      "Z1 context reference UI: 10/10"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/ui-visual-finish.cjs",
+    "tail": [
+      "PASS extension status is bounded, inert text and stores no duplicate payload copies",
+      "PASS 500 navigation targets have distinct 12px hit areas and retain exact scroll targets",
+      "Visual finish: 10/10; failed=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/app-shell.cjs",
+    "tail": [
+      "PASS runtime with no workspace never borrows classic project",
+      "PASS title remains a draggable heading, no unsupported rename editor",
+      "App shell: 10/10; failed=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/specs.cjs",
+    "tail": [
+      "  ok  no project is an empty state, not a filesystem error",
+      "  ok  unknown deferred scope fails closed",
+      "Specs: 18/18; skipped=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/provider-auth.cjs",
+    "tail": [
+      "  ok  actual unsupported public SDK login fails with unsupported code",
+      "",
+      "105/105 通过"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/stable-session-order.cjs",
+    "tail": [
+      "  ok   legacy lexical fallback survives changed mtime and restart",
+      "",
+      "41 passed, 0 failed"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/sidebar-menu.cjs",
+    "tail": [
+      "  ok   D11. 菜单样式：单例浮层、在弹层之下、低对比分隔线、danger 只在 hover 变红",
+      "",
+      "37/37 通过"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/split-workbench-ui.cjs",
+    "tail": [
+      "  ok  repeated open/close releases split observers and leaves the right pane empty",
+      "  ok  repeated open/close leaves no split scope, resize or drag listeners behind",
+      "Split workbench UI: 30/30; skipped=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/specs-ui.cjs",
+    "tail": [
+      "  ok  leaving Specs disposes its listeners and in-flight work",
+      "  ok  an empty project has a compact state and leaves chat DOM untouched",
+      "Specs UI: 25/25; skipped=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/browser-workbench-ui.cjs",
+    "tail": [
+      "PASS classic project change closes old browser and workbench",
+      "PASS closing workbench releases browser instance and listeners",
+      "Browser workbench UI: 17/17"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/ui3-composer.cjs",
+    "tail": [
+      "PASS side pane width change recalculates input height",
+      "PASS window resize refreshes reservation and preserves draft",
+      "UI3 Composer: 34/34, failed=0, skipped=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/ui3-model.cjs",
+    "tail": [
+      "  ok  上下文浮层在触发按钮保留焦点时 Escape 关闭并还原焦点",
+      "",
+      "UI-3B 模型选择器: 54/54 通过"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/session-search.cjs",
+    "tail": [
+      "  ok   12h. 清空缓存后重新读取全部会话",
+      "",
+      "72/72 通过"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/runtime-store.cjs",
+    "tail": [
+      "Runtime conversation store: 34/34"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/session-background-ui.cjs",
+    "tail": [
+      "PASS new draft transfer requires its acknowledgement and a new native session in the same workspace generation",
+      "PASS ordinary B auto-opens its own Runtime while A runs; late launch cannot steal C",
+      "Session background UI: 9/9; failed=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/session-background.cjs",
+    "tail": [
+      "PASS background completion remains on the same native file and is visible on reread",
+      "PASS idle handoff still uses the original native switch protocol",
+      "Session background: 5/5; failed=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/runtime-nav.cjs",
+    "tail": [
+      "  ok  后台 SSE 不从输入框抢焦点",
+      "  ok  乱序 focus 应答只打开用户最后选择的会话",
+      "Runtime nav: 38/38"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/runtime-draft.cjs",
+    "tail": [
+      "  ok  恢复 flush 文本",
+      "  ok  flush 后 pending 已清空",
+      "Runtime draft tests: 42/42"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/runtime-secondary.cjs",
+    "tail": [
+      "PASS closing focused session retains scoped split empty state and no old Browser",
+      "PASS runtime leave closes split and all subscriptions",
+      "Runtime secondary: 24/24"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/runtime-changes.cjs",
+    "tail": [
+      "  ok  archive runs after restore releases lifecycle lock",
+      "  ok  all scoped failures preserve classic file",
+      "Runtime changes scope: 60/60"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/diff-comments-ui.cjs",
+    "tail": [
+      "  ok   fill refuses when the page is not on a conversation view",
+      "",
+      "Diff comments UI: 51/51"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/session-revert-object-ui.cjs",
+    "tail": [
+      "  ok  legacy risk record remains read only even backend offers recovery",
+      "  ok  closing controller removes all confirmation UI",
+      "Object revert UI: 52/52; failed=0; skipped=0 (DI interaction only)"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/ui-ia.cjs",
+    "tail": [
+      " ok Stop pending disables its visible control until authoritative confirmation",
+      "",
+      "P30 IA 27/27 passed"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": "node tests/ui4-integration.cjs",
+    "tail": [
+      "PASS current-owner approval outcome remains visible and refreshed: true/true",
+      "PASS unrelated toast scroll cannot close an open action menu; anchor/document scroll still does",
+      "UI4 integration: 56/56; failed=0; skipped=0"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tail": [
+      "PASS closing A retains B workspace occupancy and live control",
+      "PASS sharing requires guard admission, not a deleted lease check",
+      "Ordinary session runtime: 5/5"
+    ],
+    "exitCode": 0,
+    "command": "npm run test:session-concurrency"
+  },
+  {
+    "tail": [
+      "  ok   pane and runtime component safely closed and cleaned up",
+      "",
+      "Viz UI & Review Fixes: 68/68 passed."
+    ],
+    "exitCode": 0,
+    "command": "node tests/viz-ui.cjs"
+  }
+]
