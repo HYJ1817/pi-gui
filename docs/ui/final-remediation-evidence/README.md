@@ -1,3 +1,7 @@
+> 第三轮归档：本目录原始截图数量、JSON manifest和结果列表属于历史运行全集；精简后的本地代表图与完整归档地址见[清理报告](../../repository-cleanup-report.md)，原全集固定为 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb`。结构化原始结果未伪装成新运行结果。
+
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](../../repository-cleanup-report.md)。
+
 # 最终修复证据
 
 对应[验收材料](../pi-desktop-final-remediation-acceptance.md)。所有截图是本轮真实Electron/实际包捕获，不是示意图或合成图。PNG原始像素未缩放，尺寸及SHA-256见 `image-manifest.json`。
@@ -8,7 +12,7 @@
 - `welcome/`：38/38（基础26+新增12个三态/主题/宽窄布局检查），仅另存12张新增图；130%字号及产品最小700×600窗口。首次前台条件失败与最终布局复验各有原日志。
 - `settings-native-results.json`：31/31（基础26+新增5个可信键盘与缺Base URL检查）；基础14图在TEMP，不重复归档。
 - `ui3-results.json`：243/243；`ui4-results.json`：282/282，原35图保留在记录中的TEMP目录，不在此重复归档。
-- `canonical-result.json` / `canonical.log` / `canonical-plan.json`：唯一一次完成的 `npm test`，235命令、退出0、80分13.683秒。`sourceUnchanged:false` 原值保留，仅独立UI4专项脚本改变；`source-verification.json`明确范围。
+- `canonical-result.json` / [canonical.log](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/canonical.log) / `canonical-plan.json`：唯一一次完成的 `npm test`，235命令、退出0、80分13.683秒。`sourceUnchanged:false` 原值保留，仅独立UI4专项脚本改变；`source-verification.json`明确范围。
 - `directed-tests.json`：本轮重新运行的32个入口及实际结尾，不引用历史报告代替运行。
 - `frozen-source.json`：启动前生产/测试/构建文件摘要；`css-final.json`：与原审计同口径important统计。
 - `final-code-state.json`：最终代码提交和逐文件摘要；`build-verification.json`：离线缓存运行时与已安装运行时字节核对。

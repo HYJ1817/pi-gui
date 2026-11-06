@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](repository-cleanup-report.md)。
+
 # G2 CI 证据、性能与 Electron smoke 验收材料
 
 日期：2026-10-24。**本地交付已具备，完整 G2 验收待真实 PR CI 和独立审查。** 依 [REVIEW](../REVIEW.md) 为高风险 CI 基建变更；不以作者自查代替独立功能/安全审查或用户合并授权。
@@ -80,7 +82,7 @@ Windows x64、Electron 44.4.3（内嵌 Node 24.21.0）、宿主 Node 24.22.1；�
 - 第二次场景本身通过，但 fixture 漏装 Browser Agent IPC 宿主并出现后端退出超时；补装既有宿主，沿生产父进程专用 prepare/shutdown IPC 关闭 owned guardian 后收口，不再依赖强杀作为成功退出证据。
 - 修复后三次连续 10/10；随后补原生页面独立截图和启动失败记录，最终同一代码树再次 10/10，残留 0。没有通过自动重试掩盖失败；每次均保留本机独立输出目录（evidence-1 为启动失败、evidence-2 为收尾失败、最终为 evidence-final）。
 
-最小入仓证据：[1200px 父窗口](evidence/g2/smoke-1200.png)、[760px 父窗口](evidence/g2/smoke-760.png)、[真实原生页面](evidence/g2/smoke-native.png)、[模态遮挡](evidence/g2/smoke-modal.png)、[结构化结果](evidence/g2/results.json)。parent capturePage 不含原生子页面像素，所以两者分别保留，未合成截图。实际 nativeBounds 与 CSS viewport×zoom 误差不超过 1 像素；关闭后旧 webContents 销毁，重开新 generation 且 URL 为空。进程收尾用 PID+CreationDate 核对本次进程家族，避免单凭 PID 重用作结论。
+最小入仓证据：[1200px 父窗口](evidence/g2/smoke-1200.png)、[760px 父窗口](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/evidence/g2/smoke-760.png)、[真实原生页面](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/evidence/g2/smoke-native.png)、[模态遮挡](evidence/g2/smoke-modal.png)、[结构化结果](evidence/g2/results.json)。parent capturePage 不含原生子页面像素，所以两者分别保留，未合成截图。实际 nativeBounds 与 CSS viewport×zoom 误差不超过 1 像素；关闭后旧 webContents 销毁，重开新 generation 且 URL 为空。进程收尾用 PID+CreationDate 核对本次进程家族，避免单凭 PID 重用作结论。
 
 当前没有降级交互通过记录；不支持的平台或启动失败为 environment-blocked/未验证，非零退出。GitHub Windows runner smoke 稳定性尚未验证，故保留 `test:electron-smoke` 专项入口，暂不改现有 build-check 或新增不可靠 required job。后续授权远端阶段可按最小路径评估，不能将本地三次成功宣称为远端稳定通过。
 

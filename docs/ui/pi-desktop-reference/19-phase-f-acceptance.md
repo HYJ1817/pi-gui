@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](../../repository-cleanup-report.md)。
+
 > 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
 
 # 阶段 F：浅色与全局视觉收尾验收
@@ -45,7 +47,7 @@
 
 ## 真实 Electron 图与尺度
 
-[results.json](../screenshots/phase-f/results.json)：**97/97，66 张 renderer + 7 张原生整窗图**；其中 F 为 15 张 renderer、2 张原生整窗，其余是本轮新采 A/B/C/D/E 回归。Electron 44.4.3，正常 sandbox/contextIsolation 开启、nodeIntegration 关闭。F CSS 1205×803、DPR 1.5、PNG 1808×1205；窄窗 700×600 / 1050×900。继承 C 的部分图为 1206×803 或 700×650，按每图 geometry 区分，原生整窗含 DWM，不与 renderer 捕获混算。
+[results.json](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-f/results.json)：**97/97，66 张 renderer + 7 张原生整窗图**；其中 F 为 15 张 renderer、2 张原生整窗，其余是本轮新采 A/B/C/D/E 回归。Electron 44.4.3，正常 sandbox/contextIsolation 开启、nodeIntegration 关闭。F CSS 1205×803、DPR 1.5、PNG 1808×1205；窄窗 700×600 / 1050×900。继承 C 的部分图为 1206×803 或 700×650，按每图 geometry 区分，原生整窗含 DWM，不与 renderer 捕获混算。
 
 参考 4 张原始图尺寸、pHYs 和摘要见 [reference-calibration.json](../screenshots/phase-f/reference-calibration.json)。1.5 DPR 采用已提供校准条件，不冒称独立探测参考 OS。73 张最终图的身份见 [screenshot-manifest.json](../screenshots/phase-f/screenshot-manifest.json)；摘要只绑定身份，不表示视觉符合。
 
@@ -74,7 +76,7 @@
 | `node tests/ui-visual-finish.cjs`、`node tests/app-shell.cjs` | 各 10/10 |
 | split / Specs / Browser UI | 分别 30/30、25/25、14/14 |
 | `npm run test:theme-convergence:electron` | 最终 97/97，正常沙箱，包含真实 native Browser 菜单边界 |
-| `npm run test:ui3` | 最终 243/243、0 跳过，正常沙箱；[结果](../screenshots/phase-f/ui3-integration-results.json) |
+| `npm run test:ui3` | 最终 243/243、0 跳过，正常沙箱；[结果](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-f/ui3-integration-results.json) |
 | `npm test` / canonical 续跑 | **累计 234 条唯一命令成功**：第二轮原入口前 159 条正常结束，第 160 条因端口占用退出 1；原清单第 160–234 条的 75 条续跑全部退出 0；[完整身份、覆盖来源及失败记录](../screenshots/phase-f/canonical-results.json) |
 
 [directed-verification.json](../screenshots/phase-f/directed-verification.json) 记录实际定向命令、日志摘要与退出码。原始日志及失败图保留在本机 TEMP `pi-gui-phase-f-f91c4bb28f1f4ac0892b953dda663225`。没有减少原有断言；新 Electron 26 项包含 2 项原生捕获检查，原 71 项继续执行。234 是 canonical 命令数，不是断言数。

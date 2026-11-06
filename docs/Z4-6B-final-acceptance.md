@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](repository-cleanup-report.md)。
+
 > 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
 
 # Z4-6B 最终集成、完整验收与发布准备
@@ -68,7 +70,7 @@ canonical中既有的`ui2-visual.cjs`/`cdp-shot.cjs`使用带`--no-sandbox`的he
 
 E覆盖Classic/Runtime编辑保存、生成预览/明确接受、A/B/A、关闭恢复、CAS冲突、760/1200/1536px、深浅主题和真实pointer单节点拖动。P覆盖布局预览/单批确认/撤销、导出与URL。A的6项不能冒称完成系统鼠标框选或批量拖动。
 E本轮100节点/200边载入实测**575ms**（门槛5000ms），仅为该夹具中的窗口载入，不是模型响应或极限压力测量。
-本轮截图：[Runtime](evidence/z4-6b/electron/collab-runtime.png)、[760px](evidence/z4-6b/electron/collab-760.png)、[浅色](evidence/z4-6b/electron/collab-light.png)、[建议预览](evidence/z4-6b/electron/collab-agent-proposal.png)。已实际打开检查窗口截图；P窄窗图仅证明工具条换行，旧夹具恢复的大跨度图处于画外，不将空stage当作可见图形证明。
+本轮截图：[Runtime](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/evidence/z4-6b/electron/collab-runtime.png)、[760px](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/evidence/z4-6b/electron/collab-760.png)、[浅色](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/evidence/z4-6b/electron/collab-light.png)、[建议预览](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/evidence/z4-6b/electron/collab-agent-proposal.png)。已实际打开检查窗口截图；P窄窗图仅证明工具条换行，旧夹具恢复的大跨度图处于画外，不将空stage当作可见图形证明。
 
 ## 8. 真实 Pi 控制面及上游兼容
 

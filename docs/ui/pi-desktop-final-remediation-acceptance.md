@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](../repository-cleanup-report.md)。
+
 # PI-Desktop 最终审计修复与验收材料
 
 日期：2026-11-06。对应 [原审计](pi-desktop-final-audit.md) 和 [R1–R6 修复计划](pi-desktop-final-remediation-plan.md)。原审计保留原结论，不改写历史失败。
@@ -62,13 +64,13 @@ R1 的 provider 校验没有修改；缺 ID、原文 key、有效提交及取消
 
 ### 完整 canonical
 
-**2026-11-06 11:25:10–12:45:24（Asia/Shanghai）单次 `npm test` 退出0，235个递归叶命令，80分13.683秒。** 原234个命令保留，新增 `tests/clipboard-preservation.cjs`。命令数不是断言数；没有累计续跑冒充单次成功。[运行结果](final-remediation-evidence/canonical-result.json)、[实际链](final-remediation-evidence/canonical-plan.json)、[原始日志](final-remediation-evidence/canonical.log)。
+**2026-11-06 11:25:10–12:45:24（Asia/Shanghai）单次 `npm test` 退出0，235个递归叶命令，80分13.683秒。** 原234个命令保留，新增 `tests/clipboard-preservation.cjs`。命令数不是断言数；没有累计续跑冒充单次成功。[运行结果](final-remediation-evidence/canonical-result.json)、[实际链](final-remediation-evidence/canonical-plan.json)、[原始日志](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/canonical.log)。
 
 原始 `sourceUnchanged:false` **保留**：[摘要复核](final-remediation-evidence/source-verification.json) 确认唯一变化为 `tests/ui4-pane.cjs`，该文件经 `ui4-integration-electron.cjs` 在独立桌面专项运行，不在 canonical 链、生命周期或其模块依赖内。修改是上述原生输入时序，最终另跑282/282。生产、package、canonical 测试及依赖输入均未变；因此这次是覆盖最终生产状态的单次 canonical 成功，不能描述成“整棵工作区从头到尾字节冻结”。[启动摘要](final-remediation-evidence/frozen-source.json) 可独立复核。
 
 使用测试已支持的隔离端口 `TEST_PORT=17881/GUARD_PORT=17882/SEC_PORT=17883/GIT_PORT=17884`；未结束用户的7791服务。PowerShell Bypass 仅为测试子进程环境，没有修改机器执行策略。PDF/DOCX TEMP fixture 通过仓库 `npm run fixtures` 准备；实际包检查首次19/21暴露缺 fixture，准备后完整26/26，没有改断言。[准备记录](final-remediation-evidence/fixtures.log)。
 
-**权限 skip 不计入成功断言数**：Collab store/candidate adoption/日志/冒烟中符号链接权限相关分支未验证；`session-revert-inplace` 有2项非空 SACL 跳过；SACL witness 与 object witness 各8项未验证，后者仍 `productionQualified:false`。这次 npm 退出0不增加这些研究路径的生产资格。[完整日志](final-remediation-evidence/canonical.log) 保留原原因；筛选日志含测试文案中的“skip”，不当作可直接相加的总数。
+**权限 skip 不计入成功断言数**：Collab store/candidate adoption/日志/冒烟中符号链接权限相关分支未验证；`session-revert-inplace` 有2项非空 SACL 跳过；SACL witness 与 object witness 各8项未验证，后者仍 `productionQualified:false`。这次 npm 退出0不增加这些研究路径的生产资格。[完整日志](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/canonical.log) 保留原原因；筛选日志含测试文案中的“skip”，不当作可直接相加的总数。
 
 ### 定向与真实 Electron
 
@@ -111,29 +113,29 @@ App 包内154个受版本控制前端文件与当前源码全部 SHA-256 相等�
 | 原图 | 最终实图 | 对比结果 / 保留边界 |
 | --- | --- | --- |
 | REF-001 欢迎展开 | [01](final-remediation-evidence/electron/01-dark-expanded.png) | 275px侧栏、46px连续顶栏、100px居中hero与28px标题对齐；保留π品牌和真实欢迎文案，没有伪造参考 onboarding |
-| REF-002 折叠 | [02](final-remediation-evidence/electron/02-dark-collapsed.png) | 侧栏0宽、12px恢复入口、内容自适应；无参考侧栏动画属既有实现差异 |
-| REF-003 工具区 | [e01](final-remediation-evidence/electron/e01-launcher-dark-native.png) | 392px dock、46px工具带、40px条目/18px图标；固定工具而非多标签扩展，业务差异 |
+| REF-002 折叠 | [02](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/02-dark-collapsed.png) | 侧栏0宽、12px恢复入口、内容自适应；无参考侧栏动画属既有实现差异 |
+| REF-003 工具区 | [e01](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/e01-launcher-dark-native.png) | 392px dock、46px工具带、40px条目/18px图标；固定工具而非多标签扩展，业务差异 |
 | REF-004 常规 | [10](final-remediation-evidence/electron/10-settings-appearance-dark.png)、[130%](final-remediation-evidence/electron/r09-appearance-130-narrow-light.png) | 独立tile、组溶入页面、40/48px横向边界与复合控件换行已达；本项目既有30px设置标题、46px页头后20px内距保留，参考28px标题/8px顶部间距存在细微差异，不宣称像素全同 |
 | REF-005 AI | [配置](final-remediation-evidence/electron/r02-provider-add-dark.png) | 没有独立参考AI偏好页；现有真实模型/认证功能分别位于供应商、认证和Composer，不新增假设置 |
 | REF-006 语音 | — | 未实现/排除项，无业务owner；没有伪页 |
-| REF-007 快捷键 | [shortcuts](final-remediation-evidence/electron/r11-settings-shortcuts-dark.png) | 标题/页面边界一致，保留本项目真实按键，未造参考重绑定能力 |
+| REF-007 快捷键 | [shortcuts](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/r11-settings-shortcuts-dark.png) | 标题/页面边界一致，保留本项目真实按键，未造参考重绑定能力 |
 | REF-008 Skills | [skills](final-remediation-evidence/electron/r11-settings-skills-dark.png) | 设置页标题/tabs/边界统一；保留既有列表+详情、信任闸门与作用域过滤，未改成参考全宽开关卡片。这是有状态/操作依据的业务布局差异，不能称参考原样复制 |
 | REF-009 技能市场 | — | 未实现/排除项；Skills管理不是市场 |
 | REF-010 MCP | [mcp](final-remediation-evidence/electron/r11-settings-mcp-dark.png)、[实际包浅色](final-remediation-evidence/packaged/p06-mcp-light.png) | 当前项/标题正确，页面边界一致；原生MCP来源、状态与显式动作保留，不增加参考市场/代理协议 |
-| REF-011 子智能体声明 | [capabilities](final-remediation-evidence/electron/r11-settings-capabilities-dark.png)仅相关 | 能力状态有正确标题和当前项；独立声明管理器仍排除，unknown保留，不把相关页当等价实现 |
-| REF-012 信息/更新 | [updates](final-remediation-evidence/electron/r11-settings-updates-dark.png) | 页面层级统一、动作可达；Pi与GUI更新两个owner仍独立。离线fixture的 unavailable 不等于远端更新已验证 |
+| REF-011 子智能体声明 | [capabilities](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/r11-settings-capabilities-dark.png)仅相关 | 能力状态有正确标题和当前项；独立声明管理器仍排除，unknown保留，不把相关页当等价实现 |
+| REF-012 信息/更新 | [updates](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/r11-settings-updates-dark.png) | 页面层级统一、动作可达；Pi与GUI更新两个owner仍独立。离线fixture的 unavailable 不等于远端更新已验证 |
 | REF-013 服务选择 | [Add](final-remediation-evidence/electron/r02-provider-add-dark.png) | 两条入口统一现有preset表单，不是参考四列市场；真实认证在认证页，[auth](final-remediation-evidence/electron/r11-settings-auth-dark.png) |
 | REF-014 服务配置 | [实际包](final-remediation-evidence/packaged/p05-provider-form-light.png) | Save/Cancel可见且有效，单列表单与环境变量引用属真实能力/安全差异；没有新增模型拖拽双栏 |
 | REF-015 模型/思考 | [d04](final-remediation-evidence/electron/d04-model-picker-dark.png)、[d14](final-remediation-evidence/electron/d14-runtime-model-dark.png) | 搜索分组/表面保留，Classic/Runtime既有真实档位与可用性通过；独立思考菜单区别于参考滑块 |
-| REF-016 运行/Thinking | [d03](final-remediation-evidence/electron/d03-thinking-expanded.png)、[d07](final-remediation-evidence/electron/d07-streaming-dark.png) | 14px正文、22.4行高及Thinking/Stop正确；未虚构耗时瀑布 |
-| REF-017 完成/操作 | [d01](final-remediation-evidence/electron/d01-dark-completed.png)、[d02](final-remediation-evidence/electron/d02-user-actions.png) | 复制生产原文、历史和Runtime行为保留；角色行/工具时间线与参考不同，编辑/删除/重生成仍未实现 |
+| REF-016 运行/Thinking | [d03](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/d03-thinking-expanded.png)、[d07](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/d07-streaming-dark.png) | 14px正文、22.4行高及Thinking/Stop正确；未虚构耗时瀑布 |
+| REF-017 完成/操作 | [d01](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/d01-dark-completed.png)、[d02](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/d02-user-actions.png) | 复制生产原文、历史和Runtime行为保留；角色行/工具时间线与参考不同，编辑/删除/重生成仍未实现 |
 | REF-018 Browser | [空态](final-remediation-evidence/electron/r08-browser-empty-light.png)、[本机网页](final-remediation-evidence/browser/01-browser-single-native-page.png) | 自有空页随主题、明确引导；实际网页保持自身主题，原生矩形/焦点/销毁通过。Agent行是合理业务差异 |
 | REF-019 Files | [Specs](final-remediation-evidence/electron/e02-specs-dark.png)、[Changes](final-remediation-evidence/electron/e04-changes-dark.png) | 只读Specs上下布局/Changes真实审阅保留；任意文件CRUD与左右Files树排除，未为视觉增加写能力 |
-| REF-020 项目菜单 | [项目](final-remediation-evidence/electron/04-project-context-menu.png)、[会话](final-remediation-evidence/electron/05-session-context-menu.png) | 原单一菜单系统、14px表面/10px条目/8px碰撞边界保留；长列表标题固定；业务条目不同 |
-| REF-021 浅色对话 | [f01](final-remediation-evidence/electron/f01-conversation-light-native.png) | #f3f3f3侧栏/#fff画布、760px Composer、14px正文保持；角色、首条顶距和业务按钮保留，非全像素一致 |
-| REF-022 Slash | [f02](final-remediation-evidence/electron/f02-slash-light.png)、[窄窗](final-remediation-evidence/electron/f10-slash-narrow-light.png) | 已对齐外Composer，分组标题/键盘提示有据；候选按原注册表顺序，分组标签和命令内容不伪装成参考命令集 |
+| REF-020 项目菜单 | [项目](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/04-project-context-menu.png)、[会话](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/05-session-context-menu.png) | 原单一菜单系统、14px表面/10px条目/8px碰撞边界保留；长列表标题固定；业务条目不同 |
+| REF-021 浅色对话 | [f01](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/f01-conversation-light-native.png) | #f3f3f3侧栏/#fff画布、760px Composer、14px正文保持；角色、首条顶距和业务按钮保留，非全像素一致 |
+| REF-022 Slash | [f02](final-remediation-evidence/electron/f02-slash-light.png)、[窄窗](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/f10-slash-narrow-light.png) | 已对齐外Composer，分组标题/键盘提示有据；候选按原注册表顺序，分组标签和命令内容不伪装成参考命令集 |
 | REF-023 用量 | [f03](final-remediation-evidence/electron/f03-context-light.png)、[unknown](final-remediation-evidence/electron/f04-context-unknown-light.png) | 376px/14px/16px对齐，已知/unknown/警告保留；没有原始计时数据的字段继续省略 |
-| REF-024 @文件 | [f05](final-remediation-evidence/electron/f05-at-draft-light.png)、[附件](final-remediation-evidence/electron/f06-attachment-light.png) | **仍未实现文件提及补全**；附件不是补全。单独产品决策，未纳入本轮Bug修复 |
+| REF-024 @文件 | [f05](final-remediation-evidence/electron/f05-at-draft-light.png)、[附件](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/final-remediation-evidence/electron/f06-attachment-light.png) | **仍未实现文件提及补全**；附件不是补全。单独产品决策，未纳入本轮Bug修复 |
 
 上述差异明确存在；本轮没有声称24张全都“通过”，也没有把不适用的参考功能当Bug补伪UI。若产品验收要求消除保留的30px标题、两栏Skills、命令分组差异，应明确改变当前边界后另行实施，不能追溯抹掉这些说明。
 

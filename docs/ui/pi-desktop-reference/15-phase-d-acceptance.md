@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](../../repository-cleanup-report.md)。
+
 > 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
 
 # 阶段 D：对话流与 Composer 验收记录
@@ -52,7 +54,7 @@
 
 ## 实际截图与尺度
 
-[results.json](../screenshots/phase-d/results.json) 包含 **47/47** 正常沙箱检查、**33 张渲染截图 + 2 张原生整窗截图**。Electron 44.4.3，`sandbox:true`、`contextIsolation:true`、`nodeIntegration:false`；D 场景 CSS 视口 1205×803，实测 DPR 1.5，渲染 PNG 1808×1205。D 窄窗 CSS 视口 700×600，对应 1050×900。沿用的 C 回归图 01–07 为 1206×803 / 1809×1205，08 为 700×650 / 1050×975，设置等其余图为 1205×803；以各张 geometry 为准。两张原生整窗图为 1810×1205，含 DWM 外框，不能与网页捕获混算尺寸。
+[results.json](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-d/results.json) 包含 **47/47** 正常沙箱检查、**33 张渲染截图 + 2 张原生整窗截图**。Electron 44.4.3，`sandbox:true`、`contextIsolation:true`、`nodeIntegration:false`；D 场景 CSS 视口 1205×803，实测 DPR 1.5，渲染 PNG 1808×1205。D 窄窗 CSS 视口 700×600，对应 1050×900。沿用的 C 回归图 01–07 为 1206×803 / 1809×1205，08 为 700×650 / 1050×975，设置等其余图为 1205×803；以各张 geometry 为准。两张原生整窗图为 1810×1205，含 DWM 外框，不能与网页捕获混算尺寸。
 
 原始参考 PNG 的大小、pHYs、SHA-256 与本轮尺度见 [reference-calibration.json](../screenshots/phase-d/reference-calibration.json)。元数据与已提供的 1.5 DPR 校准条件一致，不冒称独立探测了参考应用的系统设置。
 
@@ -82,7 +84,7 @@
 | `node tests/runtime-conversation.cjs` | 106/106 |
 | `node tests/ui2-visual.cjs` | 57/57；五项旧视觉参数按固定源码修订，未删除断言 |
 | `npm run test:conversation:electron` | 47/47，正常沙箱；包含原 A/B/C 26 项 |
-| `npm run test:ui3` | 243/243，0 跳过，正常沙箱；最终作用域补验图片在 `.shots/phase-d-ui3-scoped-final-20261105`，原始结果副本见 [ui3-integration-results.json](../screenshots/phase-d/ui3-integration-results.json) |
+| `npm run test:ui3` | 243/243，0 跳过，正常沙箱；最终作用域补验图片在 `.shots/phase-d-ui3-scoped-final-20261105`，原始结果副本见 [ui3-integration-results.json](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-d/ui3-integration-results.json) |
 | `node tests/session-background-electron.cjs` | 16/16；沿用该专项的 `--no-sandbox`，不能代替上方正常沙箱证明；见 [并行专项记录](../screenshots/phase-d-background/report.json) |
 | canonical 234 条命令 | 累计 234/234 唯一命令退出 0，完整有序清单与日志摘要已核验；环境跳过如下，不计入通过断言。见 [canonical-results.json](../screenshots/phase-d/canonical-results.json) |
 
