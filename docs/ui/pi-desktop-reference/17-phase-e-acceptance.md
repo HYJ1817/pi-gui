@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](../../repository-cleanup-report.md)。
+
 > 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
 
 # 阶段 E：右侧工作台验收记录
@@ -50,7 +52,7 @@
 
 ## 实际 Electron 图与尺度
 
-[results.json](../screenshots/phase-e/results.json)：**71/71，正常沙箱，51 张 renderer + 5 张原生整窗图**。其中 E 有 18 张 renderer 与 3 张原生整窗；其余为 A/B/C/D 新采回归图。Electron 44.4.3，sandbox/contextIsolation 开启、nodeIntegration 关闭。E CSS 1205×803、DPR 1.5，PNG 1808×1205；窄窗 700×600 / 1050×900。继承 C 场景的部分尺寸为 1206×803 或 700×650，按每张 geometry 区分，原生整窗含 DWM，不能混算。
+[results.json](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-e/results.json)：**71/71，正常沙箱，51 张 renderer + 5 张原生整窗图**。其中 E 有 18 张 renderer 与 3 张原生整窗；其余为 A/B/C/D 新采回归图。Electron 44.4.3，sandbox/contextIsolation 开启、nodeIntegration 关闭。E CSS 1205×803、DPR 1.5，PNG 1808×1205；窄窗 700×600 / 1050×900。继承 C 场景的部分尺寸为 1206×803 或 700×650，按每张 geometry 区分，原生整窗含 DWM，不能混算。
 
 原图尺寸和摘要见 [reference-calibration.json](../screenshots/phase-e/reference-calibration.json)；1.5 DPR 来自已提供的校准条件，不冒称重新探测参考系统。
 
@@ -79,7 +81,7 @@
 | `node tests/settings-acceptance.cjs` | 15/15 |
 | `node tests/app-shell.cjs` | 10/10 |
 | `npm run test:diff-comments` | 退出 0；七套件分别 51/51、51/51、10/10、29/29、22/22、25/25、36/36 |
-| `npm run test:ui3` | 最终状态 243/243，0 跳过，正常沙箱；[结果](../screenshots/phase-e/ui3-integration-results.json) |
+| `npm run test:ui3` | 最终状态 243/243，0 跳过，正常沙箱；[结果](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-e/ui3-integration-results.json) |
 | `node tests/browser-workbench-electron.cjs` | 64/64，正常沙箱，真实原生视图、loopback 页面与 TEMP Worktree |
 | `npm run test:workbench:electron` | 最终 71/71，正常沙箱；无 renderer 崩溃，包含原 C/D 与 E 场景 |
 | `npm test` 完整 canonical | 一次连续执行退出 0，4841.422 秒；冻结行为/测试提交 `ddf2413`，由当前 package 及生命周期入口展开的 234 条唯一命令全部执行结束；[记录](../screenshots/phase-e/canonical-results.json) |

@@ -45,3 +45,9 @@ dist-release/
 /docs/ui/screenshots/**/*.log
 /docs/ui/screenshots/**/results*.json
 /designs/ui-ux-2026-10-31/evidence/
+
+# 最终审计/修复的生成矩阵也应默认留在 TEMP、.shots 或 CI Artifacts。
+/docs/ui/final-*-evidence/**/*.png
+/docs/ui/final-*-evidence/**/*.log
+/docs/ui/final-*-evidence/**/*.jsonl
+/docs/ui/final-*-evidence/**/*results.json

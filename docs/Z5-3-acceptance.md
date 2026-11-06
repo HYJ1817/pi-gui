@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](repository-cleanup-report.md)。
+
 # Z5-3 历史工具摘要：后端阶段验收
 
 日期：2026-10-27（Asia/Shanghai）。单一执行 Agent，无子 Agent。结论：**来源审计 GO，后端与定向验证完成；PR #38 未合并，按约定停在后端，UI 未集成。** 待用户独立验收，不进入下一阶段。
@@ -104,7 +106,7 @@ PR #38 未合并，**没有修改 runtime-conversation.js 或任何 public 文�
 新摘要的 A/B/迟到/恢复/只读展示/缺失原因等前端专项、Z5-2 新思考合同回归与摘要真实截图均未运行，须等后续安全同步已合并 main 后补齐，不复用 #38 未合并实现。
 
 - `G2_SMOKE_OUTPUT=<TEMP>/pi-gui-z53-evidence/electron-smoke node tests/electron-smoke.cjs`：10/10，exit0，正常沙箱/contextIsolation，无 Node 集成，TEMP Git + fake Pi，生产 server/renderer/preload；renderer errors=[]；观察11个进程身份，残留0。[报告](assets/z5-3/electron-smoke/results.json)、[1200px截图](assets/z5-3/electron-smoke/smoke-1200.png)、[760px截图](assets/z5-3/electron-smoke/smoke-760.png)。
-- `Z51_OUTPUT=<TEMP>/pi-gui-z53-evidence/z5-1-regression node tests/z5-runtime-input-electron.cjs`：15/15，exit0，正常沙箱装配页，Chromium152.0.7977.130；IME事件/229、A/B草稿、刷新、容量提示保留。[报告](assets/z5-3/z5-1-regression/results.json)、[截图](assets/z5-3/z5-1-regression/z5-1-runtime-input-wide-1200.png)。这是合成输入事件，不是实体输入法资格。
+- `Z51_OUTPUT=<TEMP>/pi-gui-z53-evidence/z5-1-regression node tests/z5-runtime-input-electron.cjs`：15/15，exit0，正常沙箱装配页，Chromium152.0.7977.130；IME事件/229、A/B草稿、刷新、容量提示保留。[报告](assets/z5-3/z5-1-regression/results.json)、[截图](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/assets/z5-3/z5-1-regression/z5-1-runtime-input-wide-1200.png)。这是合成输入事件，不是实体输入法资格。
 - 本机 Electron44.4.3，默认基础 smoke 为生产窗口；Z5-1 为已有装配夹具。两者均是回归，不能当摘要 UI、打包完整窗口或 Z5-2 新合同的验证。
 
 ## 7. 离线构建与产物

@@ -1,3 +1,5 @@
+> 第三轮归档：本目录原始截图数量、JSON manifest和结果列表属于历史运行全集；精简后的本地代表图与完整归档地址见[清理报告](../../repository-cleanup-report.md)，原全集固定为 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb`。结构化原始结果未伪装成新运行结果。
+
 # 历史阶段截图
 
 第二轮清理为每个历史阶段保留两张代表图和全部现有 JSON 记录，删除 194 个重复截图/完整日志文件。原始完整矩阵可在固定提交 [2e70463](https://github.com/HYJ1817/pi-gui/tree/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots) 中查看；阶段验收报告的图片链接已改为该历史提交。

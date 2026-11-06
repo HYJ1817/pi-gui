@@ -1,3 +1,5 @@
+> 第三轮归档（2026-11-06）：本页移除的历史矩阵/完整输出使用固定提交 `ff6f22e26caae540cd050cbcd89c78f84c1e05cb` 追溯；保留的JSON记录反映当次捕获全集，图片路径可在该提交解析，不能作为最新代码通过证明。当前代表图及验证见[清理报告](../../repository-cleanup-report.md)。
+
 > 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
 
 # 阶段 C 实施与视觉验收记录
@@ -59,7 +61,7 @@
 
 | 场景 | 实际截图 | 对照及目视结论 |
 | --- | --- | --- |
-| 深色展开 | [01 渲染](../screenshots/phase-c/01-dark-expanded.png)、[原生整窗](../screenshots/phase-c/01-dark-expanded-native.png) | REF-001：侧栏/主区比例、连续顶栏、项目位置接近；原生三键均可见且避让。欢迎正文与 Composer 属 D，保持旧布局 |
+| 深色展开 | [01 渲染](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-c/01-dark-expanded.png)、[原生整窗](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-c/01-dark-expanded-native.png) | REF-001：侧栏/主区比例、连续顶栏、项目位置接近；原生三键均可见且避让。欢迎正文与 Composer 属 D，保持旧布局 |
 | 深色折叠 | [02](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/02-dark-collapsed.png) | REF-002：无残留全高 rail，标题左侧恢复按钮；主区自适应全宽 |
 | 项目与会话展开 | [03](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/03-project-sessions.png) | REF-020/021：项目树层级、28px 行、选中与截断可辨；保留归档折叠入口 |
 | 项目菜单 | [04](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/04-project-context-menu.png) | REF-020：实底细边菜单、不被侧栏裁切，危险项文字红色；条目为工作区管理/项目设置/移除，没有假功能 |
@@ -71,7 +73,7 @@
 | 关联任务压力 | [13](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/13-linked-tasks-dark.png) | pi-GUI 特有业务差异：长任务条受 45% 宽度约束，标题仍≥80px，没有与右侧动作重叠 |
 | 长会话列表滚动 | [14](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/ui/screenshots/phase-c/14-sidebar-scroll-dark.png) | 真实生产列表加 28 条 fixture 后可独立滚动；底部工具带与顶栏位置不动，没有文档横向滚动 |
 
-机器实测记录见 [results.json](../screenshots/phase-c/results.json)，原图 pHYs 元数据约 143.993 DPI，核对记录见 [reference-calibration.json](../screenshots/phase-c/reference-calibration.json)，与规范给出的 1.5 DPR 校准一致。已逐张查看上述图片；截图存在本身不等于符合参考，结论按表逐项给出。
+机器实测记录见 [results.json](https://github.com/HYJ1817/pi-gui/blob/ff6f22e26caae540cd050cbcd89c78f84c1e05cb/docs/ui/screenshots/phase-c/results.json)，原图 pHYs 元数据约 143.993 DPI，核对记录见 [reference-calibration.json](../screenshots/phase-c/reference-calibration.json)，与规范给出的 1.5 DPR 校准一致。已逐张查看上述图片；截图存在本身不等于符合参考，结论按表逐项给出。
 
 本阶段已达到：外壳比例、连续顶栏、标题层级、行节奏、深浅背景、折叠几何、菜单表面和真实状态反馈。
 
