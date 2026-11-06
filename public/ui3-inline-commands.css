@@ -16,12 +16,12 @@
   flex-direction: column;
   overflow: hidden;
   /* Runtime inline width still bounds the available space beside native panes. */
-  max-width: min(320px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
   border: 0;
   border-radius: var(--ds-composer-radius);
   background: var(--ds-bg-elevated-opaque);
   box-shadow: var(--ds-shadow-model-menu);
-  color: var(--ui-text-primary);
+  color: var(--ds-text-primary);
   font-family: var(--ui-font-sans);
 }
 .ui3-inline-menu[hidden] { display: none; }
@@ -42,13 +42,13 @@
   padding: 6px 10px;
   border-radius: var(--ui-radius-control);
   cursor: pointer;
-  color: var(--ui-text-primary);
+  color: var(--ds-text-primary);
   font-size: var(--ui-font-body);
   line-height: 1.4;
 }
 .ui3-inline-item.on,
 .ui3-inline-item[aria-selected="true"] {
-  background: var(--ui-selected);
+  background: var(--ds-bg-hover);
 }
 .ui3-inline-item .ui3-inline-title {
   flex: 1 1 auto;
@@ -61,13 +61,13 @@
   flex: 0 0 auto;
   padding: 1px 6px;
   border-radius: var(--ui-radius-pill);
-  background: var(--ui-hover);
-  color: var(--ui-text-muted);
+  background: var(--ds-tile);
+  color: var(--ds-text-muted);
   font-size: var(--ui-font-caption);
 }
 .ui3-inline-item .ui3-inline-hint {
   flex: 0 0 auto;
-  color: var(--ui-text-muted);
+  color: var(--ds-text-muted);
   font-family: var(--ui-font-mono);
   font-size: var(--ui-font-caption);
   white-space: nowrap;
@@ -76,7 +76,7 @@
 .ui3-inline-empty {
   padding: 14px 12px;
   text-align: center;
-  color: var(--ui-text-muted);
+  color: var(--ds-text-muted);
   font-size: var(--ui-font-body);
 }
 .ui3-inline-empty[hidden] { display: none; }
@@ -85,7 +85,7 @@
  * 不影响布局的内描边，键盘用户一眼能看出活动项。 */
 .ui3-inline-item.on:focus-visible,
 .ui3-inline-item:focus-visible {
-  outline: 2px solid var(--ui-focus);
+  outline: 2px solid var(--ds-focus);
   outline-offset: -2px;
 }
 

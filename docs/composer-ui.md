@@ -2,6 +2,8 @@
 
 Composer 保留原有的 `composerBox`、`input` 和所有控制按钮 ID。它是 `.stage` 底部的单个浮动面板，与对话阅读列共用中央轴；阶段 D 改为消费既有 `--ds-composer-width`（760px），底部留 16px。20px 圆角、表面与阴影使用 A 阶段的 `--ds-*` 变量，发送/停止为 28px 圆形控件。对话仍由 `#stream` 独立滚动，底部渐隐不改变滚动或消息状态。
 
+阶段 F 去除命令菜单的遗留 320px 上限，宽度继续由原 `inline-command-menu.js` 按输入框与原生右栏实测，CSS 只保留视口上限。命令菜单、模型及用量浮层消费既有语义文字与选中色，额度警告保留自己的状态色。当前 Composer 没有 `@` 文件补全入口，输入 `@` 仍是普通草稿；文件继续通过 Attach 原流程处理，不以视觉重构增加文件检索能力。实测及差异见 [阶段 F 验收](ui/pi-desktop-reference/19-phase-f-acceptance.md)。
+
 ## 高度与滚动
 
 `composer.js` 对 `.composer` 外层建立一个 `ResizeObserver`，把实际高度写入 `.stage` 的 `--composer-reserved-height`。`.thread` 的底部 padding 使用这个变量加少量间隙，因此附件和多行输入增加高度时，末条消息仍能滚到面板上方。Observer 只读外层矩形、只写 CSS 变量。textarea 的 `autoGrow` 仍由原来的 input 事件触发，高度不超过 `min(184px, 24vh)`，超出时在 textarea 内滚动。窗口变小时重新计算上限。

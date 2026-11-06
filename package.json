@@ -165,7 +165,8 @@
     "test:collab:productivity-electron": "node tests/collab-productivity-electron.cjs",
     "test:collab:advanced-electron": "node tests/collab-advanced-editing-electron.cjs",
     "test:conversation:electron": "node tests/conversation-electron.cjs",
-    "test:workbench:electron": "node tests/workbench-electron.cjs"
+    "test:workbench:electron": "node tests/workbench-electron.cjs",
+    "test:theme-convergence:electron": "node tests/theme-convergence-electron.cjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

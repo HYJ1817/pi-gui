@@ -220,6 +220,9 @@ async function run() {
     if (process.env.WORKBENCH_ACCEPTANCE === '1') {
       await require('./fixtures/workbench-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, browser, waitFor });
     }
+    if (process.env.THEME_CONVERGENCE_ACCEPTANCE === '1') {
+      await require('./fixtures/theme-convergence-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, theme, browser, waitFor });
+    }
     check('no renderer process crash', errors.length === 0, errors);
   } catch (error) {
     check('Electron scenarios completed', false, error.stack);

@@ -1,0 +1,76 @@
+{
+  "referenceCommit": "92ae661f1e399e69d514086b46029b4c34ba1a92",
+  "references": {
+    "REF-021": {
+      "file": "Snipaste_2026-11-01_00-00-22.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "8e9f6d84ad9d87683b8dd29657b4839c61f1785185efe874115f7fb0d8ee793e",
+      "pHYs": [
+        5669,
+        5669,
+        1
+      ]
+    },
+    "REF-022": {
+      "file": "Snipaste_2026-11-01_10-41-57.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "dc5f72d456cc96cf1b0dc28cb2668ac8226ead1f4c1c95290f35e20402da2557",
+      "pHYs": [
+        5669,
+        5669,
+        1
+      ]
+    },
+    "REF-023": {
+      "file": "Snipaste_2026-11-01_10-42-10.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "ed8dac282dffe5a8b44173abc4b793b2823cef3fdf211f7aba760013c631d2aa",
+      "pHYs": [
+        5669,
+        5669,
+        1
+      ]
+    },
+    "REF-024": {
+      "file": "Snipaste_2026-11-01_10-42-22.png",
+      "pixels": [
+        1808,
+        1205
+      ],
+      "sha256": "20ed103c7ff5f56fe449c20850eb9c8f0aedf28941469f8f650c6d2abe600016",
+      "pHYs": [
+        5669,
+        5669,
+        1
+      ]
+    }
+  },
+  "scaleBasis": "Supplied 1.5 DPR condition, not an independent probe of reference OS",
+  "actualDpr": 1.5,
+  "fCssViewport": [
+    1205,
+    803
+  ],
+  "fPngPixels": [
+    1808,
+    1205
+  ],
+  "fNarrowCssViewport": [
+    700,
+    600
+  ],
+  "fNarrowPngPixels": [
+    1050,
+    900
+  ],
+  "qualification": "Inherited C captures include 1206x803 and 700x650 CSS; each actual geometry is in results.json. Native whole-window images include DWM and are separate from renderer captures. REF-024 file completion not implemented; @ draft capture is not a completion acceptance."
+}

@@ -1,0 +1,53 @@
+{
+  "method": "WCAG sRGB relative luminance ratio using the actual computed colors recorded by Electron checks; opaque neutral/text surfaces only, not anti-aliased pixel samples",
+  "cases": [
+    {
+      "name": "Primary",
+      "foreground": "#1a1c1f",
+      "background": "#ffffff",
+      "ratio": 17.076
+    },
+    {
+      "name": "Muted on canvas",
+      "foreground": "#5d5d5d",
+      "background": "#ffffff",
+      "ratio": 6.585
+    },
+    {
+      "name": "Settings group final",
+      "foreground": "#5d5d5d",
+      "background": "#f3f3f3",
+      "ratio": 5.934
+    },
+    {
+      "name": "Settings group before",
+      "foreground": "#afafaf",
+      "background": "#f3f3f3",
+      "ratio": 1.977
+    },
+    {
+      "name": "Warning final",
+      "foreground": "#854d0e",
+      "background": "#ffffff",
+      "ratio": 6.851
+    },
+    {
+      "name": "Warning before",
+      "foreground": "#fbbf24",
+      "background": "#ffffff",
+      "ratio": 1.669
+    },
+    {
+      "name": "Error final",
+      "foreground": "#b91c1c",
+      "background": "#ffffff",
+      "ratio": 6.47
+    },
+    {
+      "name": "Error before",
+      "foreground": "#f87171",
+      "background": "#ffffff",
+      "ratio": 2.766
+    }
+  ]
+}

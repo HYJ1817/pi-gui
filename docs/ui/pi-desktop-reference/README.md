@@ -49,6 +49,8 @@
 | **15** | [`15-phase-d-acceptance.md`](15-phase-d-acceptance.md) | 阶段 D 实测、逐区域视觉对照、构建及未验证边界 |
 | **16** | [`16-phase-e-implementation.md`](16-phase-e-implementation.md) | 阶段 E 工作台源码勘察、取舍与单代理实施计划 |
 | **17** | [`17-phase-e-acceptance.md`](17-phase-e-acceptance.md) | 阶段 E 真实 Electron、原生 Browser、视觉差异与验证边界 |
+| **18** | [`18-phase-f-implementation.md`](18-phase-f-implementation.md) | 阶段 F 浅色源码勘察、样式冲突及单代理实施计划 |
+| **19** | [`19-phase-f-acceptance.md`](19-phase-f-acceptance.md) | 阶段 F 实测、浅色逐区域差异、完整证明及未实现边界 |
 | **附录** | [`tokens.reference.css`](tokens.reference.css) | 提取自 PI-Desktop 源码并完成审计补齐的独立纯 CSS 代币表，附带完备分类与工程说明 |
 
 ---
