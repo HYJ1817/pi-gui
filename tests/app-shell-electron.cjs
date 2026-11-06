@@ -25,7 +25,7 @@ async function run() {
   app.setPath('userData', path.join(world, 'profile'));
   app.commandLine.appendSwitch('force-device-scale-factor', '1.5');
   app.on('window-all-closed', () => {});
-  let win, harness, theme, browser;
+  let win, harness, theme, browser, restoreClipboard, pageServer, browserFixtureUrl;
   const checks = [], shots = [], nativeShots = [], errors = [];
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const read = source => win.webContents.executeJavaScript(source, true);
@@ -96,7 +96,10 @@ async function run() {
     win.setAlwaysOnTop(false); nativeShots.push({ file, ...capture });
     check(name + ' native caption captured from verified own HWND', capture.saved, capture);
   }
-  const deadline = setTimeout(() => { console.error('Shell Electron timeout'); app.exit(1); }, 180000);
+  const deadline = setTimeout(async () => {
+    console.error('Shell Electron timeout');
+    try { await restoreClipboard?.(); } finally { app.exit(1); }
+  }, 240000);
   try {
     fs.mkdirSync(out, { recursive: true }); await app.whenReady();
     harness = spawn(process.execPath, [path.join(ROOT, 'tests/visual-harness.cjs')], {
@@ -114,6 +117,9 @@ async function run() {
     // boot, so explicitly supply the offline/unavailable fixture response.
     ipcMain.handle('pi-gui:browser-agent-status', () => ({ ok: false, error: 'offline_fixture' }));
     if (process.env.WORKBENCH_ACCEPTANCE === '1') {
+      pageServer = require('node:http').createServer((_req,res)=>{res.setHeader('content-type','text/html; charset=utf-8');res.end('<!doctype html><title>Offline browser fixture</title><body style="background:white;color:#181818"><h1>本机网页预览</h1><input aria-label="网页输入" value="原生页面保持自己的主题"></body>');});
+      await new Promise(resolve=>pageServer.listen(0,'127.0.0.1',resolve));
+      browserFixtureUrl = `http://127.0.0.1:${pageServer.address().port}/`;
       const { createBrowserController } = require('../electron/browser-view.cjs');
       browser = createBrowserController({ origin, getWindow: () => win, ipcMain });
       browser.register();
@@ -215,13 +221,26 @@ async function run() {
     await read('shellWrites.length=0'); await click('#btnTopbarNew'); await sleep(350);
     check('topbar new conversation delegates to the real command path', await read(`shellWrites.some(w=>w.route==='/api/command'&&w.body?.type==='new_session')`));
     if (process.env.CONVERSATION_ACCEPTANCE === '1') {
+      restoreClipboard = await require('./fixtures/preserve-clipboard.cjs').preserveClipboard(require('electron'));
+      const { clipboard, ClipboardItem } = require('electron');
+      await clipboard.write([new ClipboardItem({'text/plain':'fixture clipboard text','text/html':'<b>fixture clipboard text</b>'})]);
+      const restoreFixture = await require('./fixtures/preserve-clipboard.cjs').preserveClipboard(require('electron'));
+      try { await clipboard.writeText('temporary fixture overwrite'); throw Error('expected fixture interruption'); }
+      catch (error) { if(error.message!=='expected fixture interruption') throw error; }
+      finally { await restoreFixture(); }
+      const restoredItems = await clipboard.read();
+      const restoredHTML = await (await restoredItems[0].getType('text/html')).text();
+      check('R2 real clipboard restores text and HTML after an interrupted fixture',await clipboard.readText()==='fixture clipboard text'&&restoredHTML.includes('<b>fixture clipboard text</b>'));
       await require('./fixtures/conversation-scenarios.cjs')({ read, click, key, shot, paint, check, win, waitFor });
     }
     if (process.env.WORKBENCH_ACCEPTANCE === '1') {
-      await require('./fixtures/workbench-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, browser, waitFor });
+      await require('./fixtures/workbench-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, browser, browserFixtureUrl, waitFor });
     }
     if (process.env.THEME_CONVERGENCE_ACCEPTANCE === '1') {
-      await require('./fixtures/theme-convergence-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, theme, browser, waitFor });
+      await require('./fixtures/theme-convergence-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, theme, browser, browserFixtureUrl, waitFor });
+    }
+    if (process.env.FINAL_REMEDIATION_ACCEPTANCE === '1') {
+      await require('./fixtures/final-remediation-scenarios.cjs')({ read, click, key, shot, nativeShot, paint, check, win, theme, browser, waitFor });
     }
     check('no renderer process crash', errors.length === 0, errors);
   } catch (error) {
@@ -229,9 +248,11 @@ async function run() {
     if (win && !win.isDestroyed()) await shot('failure');
   } finally {
     clearTimeout(deadline);
+    try { await restoreClipboard?.(); if(restoreClipboard) check('R2 original clipboard formats restored without persisting payloads',true); }
+    catch { check('clipboard restored after scenarios', false, 'Clipboard restoration unavailable'); }
     const passed = checks.filter(check => check.passed).length;
     fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ electron: process.versions.electron, sandbox: true, world, checks, passed, failed: checks.length - passed, shots, nativeShots, errors }, null, 2));
     console.log(`Shell Electron: ${passed}/${checks.length}; failed=${checks.length - passed}; screenshots=${shots.length}; output=${out}`);
-    browser?.destroy(); theme?.dispose(); win?.destroy(); harness?.kill(); app.exit(passed === checks.length ? 0 : 1);
+    browser?.destroy(); theme?.dispose(); win?.destroy(); harness?.kill(); pageServer?.close(); app.exit(passed === checks.length ? 0 : 1);
   }
 }
